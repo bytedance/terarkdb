@@ -6,6 +6,9 @@
  */
 
 #include "terark_zip_table.h"
+#include <rocksdb/env.h>
+#include <rocksdb/options.h>
+#include <rocksdb/table.h>
 #include <table/table_reader.h>
 #include <table/meta_blocks.h>
 #include <terark/stdtypes.hpp>
@@ -20,6 +23,7 @@
 #include <terark/io/DataIO.hpp>
 #include <random>
 #include <stdlib.h>
+#include <stdint.h>
 
 namespace terark { namespace fsa {
 
@@ -897,6 +901,46 @@ uint64_t TerarkZipTableBuilder::FileSize() const {
 
 /////////////////////////////////////////////////////////////////////////////
 
+class TerarkZipTableFactory : public TableFactory {
+ public:
+  ~TerarkZipTableFactory();
+  explicit
+  TerarkZipTableFactory(const TerarkZipTableOptions& = TerarkZipTableOptions());
+
+  const char* Name() const override;
+
+  Status
+  NewTableReader(const TableReaderOptions& table_reader_options,
+                 unique_ptr<RandomAccessFileReader>&& file,
+                 uint64_t file_size,
+				 unique_ptr<TableReader>* table,
+				 bool prefetch_index_and_filter_in_cache) const override;
+
+  TableBuilder*
+  NewTableBuilder(const TableBuilderOptions& table_builder_options,
+				  uint32_t column_family_id,
+				  WritableFileWriter* file) const override;
+
+  std::string GetPrintableTableOptions() const override;
+
+  const TerarkZipTableOptions& table_options() const;
+
+  static const char kValueTypeSeqId0 = char(0xFF);
+
+  // Sanitizes the specified DB Options.
+  Status SanitizeOptions(const DBOptions& db_opts,
+                         const ColumnFamilyOptions& cf_opts) const override;
+
+  void* GetOptions() override;
+
+ private:
+  TerarkZipTableOptions table_options_;
+};
+
+class TableFactory* NewTerarkZipTableFactory(const TerarkZipTableOptions& opt) {
+	return new TerarkZipTableFactory(opt);
+}
+
 TerarkZipTableFactory::~TerarkZipTableFactory() {
 }
 
@@ -912,8 +956,10 @@ Status
 TerarkZipTableFactory::NewTableReader(
 		const TableReaderOptions& table_reader_options,
 		unique_ptr<RandomAccessFileReader>&& file,
-		uint64_t file_size, unique_ptr<TableReader>* table)
+		uint64_t file_size, unique_ptr<TableReader>* table,
+		bool prefetch_index_and_filter_in_cache)
 const {
+	(void)prefetch_index_and_filter_in_cache; // unused
 	auto& icmp = table_reader_options.internal_comparator;
 	auto cmpName = icmp.user_comparator()->Name();
 	if (strcmp(cmpName, "leveldb.BytewiseComparator") == 0) {
