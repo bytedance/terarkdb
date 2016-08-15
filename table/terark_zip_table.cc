@@ -50,42 +50,9 @@ using terark::var_uint32_t;
 
 static const uint64_t kTerarkZipTableMagicNumber = 0x1122334455667788;
 
-static const std::string kTerarkZipTableIndexBlock = "TerarkZipIndexTrieBlock";
-static const std::string kTerarkZipTableValueTypeBlock = "TerarkZipValueTypeBlock";
-static const std::string kTerarkZipTableValueDictBlock = "TerarkZipValueDictBlock";
-
-struct KeyWithSeqType {
-	valvec<byte_t> ikey;
-
-	Slice userKey() const {
-		assert(ikey.size() >= 8);
-		return Slice(ikey.data(), ikey.size()-8);
-	}
-
-	SequenceNumber seqNum() const {
-		assert(ikey.size() >= 8);
-		auto snt = unaligned_load<uint64_t>(ikey.end()-8);
-		auto sn = snt >> 8;
-		return sn;
-	}
-
-	ValueType valueType() const {
-		assert(ikey.size() >= 8);
-		auto snt = unaligned_load<uint64_t>(ikey.end()-8);
-		auto vt = ValueType(snt & 255);
-		return vt;
-	}
-
-	void setSeqType(SequenceNumber seq, ValueType vt) {
-		assert(ikey.size() >= 8);
-		uint64_t snt = (seq << 8) | vt;
-		unaligned_save(ikey.end()-8, snt);
-	}
-
-	void enlargeForSeqType() {
-		ikey.grow(8);
-	}
-};
+static const std::string kTerarkZipTableIndexBlock = "TerarkZipTableIndexBlock";
+static const std::string kTerarkZipTableValueTypeBlock = "TerarkZipTableValueTypeBlock";
+static const std::string kTerarkZipTableValueDictBlock = "TerarkZipTableValueDictBlock";
 
 class TerarkZipTableIterator;
 
@@ -190,24 +157,15 @@ private:
   const size_t fixed_key_len_;
   static const size_t kNumInternalBytes = 8;
   Slice  file_data_;
-  size_t data_begin_offset_ = 0;
   unique_ptr<RandomAccessFileReader> file_;
 
   const ImmutableCFOptions& ioptions_;
   uint64_t file_size_ = 0;
   std::shared_ptr<const TableProperties> table_properties_;
 
-  bool IsFixedLength() const;
-
-  size_t GetFixedInternalKeyLength() const {
-    return fixed_key_len_ + kNumInternalBytes;
-  }
-
-  Slice GetUserKey(const Slice& key) const {
-    return Slice(key.data(), key.size() - 8);
-  }
-
   friend class TerarkZipTableIterator;
+
+  Status LoadIndex(Slice mem);
 
   // No copying allowed
   explicit TerarkZipTableReader(const TableReader&) = delete;
@@ -373,11 +331,14 @@ public:
   }
 
 private:
+  size_t GetIterRecId() const {
+	  auto dfa = table_->keyIndex_.get();
+	  return dfa->state_to_word_id(iter_->word_state());
+  }
   bool UnzipIterRecord(bool hasRecord) {
 	  validx_ = 0;
 	  if (hasRecord) {
-		  auto dfa = table_->keyIndex_.get();
-		  size_t recId = dfa->state_to_word_id(iter_->word_state());
+		  size_t recId = GetIterRecId();
 		  table_->GetValue(recId, &valueBuf_);
 		  status_ = Status::OK();
 		  auto& typeArray = table_->typeArray_;
@@ -397,8 +358,7 @@ private:
   }
   bool DecodeCurrKeyValue() {
 	assert(status_.ok());
-	auto dfa = table_->keyIndex_.get();
-	size_t recId = dfa->state_to_word_id(iter_->word_state());
+	size_t recId = GetIterRecId();
 	auto valstore = table_->valstore_.get();
 	auto& typeArray = table_->typeArray_;
 	valstore->get_record(recId, &valueBuf_);
@@ -458,8 +418,6 @@ private:
 
 TerarkZipTableReader::~TerarkZipTableReader() {
 	typeArray_.risk_release_ownership();
-//	if (keyIndex_) keyIndex_->risk_release_ownership();
-//	if (valstore_) valstore_->risk_release_ownership();
 }
 
 TerarkZipTableReader::TerarkZipTableReader(size_t user_key_len,
@@ -513,11 +471,21 @@ TerarkZipTableReader::Open(const ImmutableCFOptions& ioptions,
   r->valstore_->load_user_memory(
 		  fstring(valueDictBlock.data),
 		  fstring(file_data.data(), props->data_size));
+  s = r->LoadIndex(indexBlock.data);
+  if (!s.ok()) {
+	  return s;
+  }
+  r->typeArray_.risk_set_data((byte_t*)zValueTypeBlock.data.data(),
+		  zValueTypeBlock.data.size(), kZipValueTypeBits);
+  *table = r.release();
+  return Status::OK();
+}
+
+Status TerarkZipTableReader::LoadIndex(Slice mem) {
   try {
-	  auto trie = terark::MatchingDFA::load_mmap_range(
-			  indexBlock.data.data(), indexBlock.data.size());
-	  r->keyIndex_.reset(dynamic_cast<NestLoudsTrieDAWG_SE_512*>(trie));
-	  if (!r->keyIndex_) {
+	  auto trie = terark::MatchingDFA::load_mmap_range(mem.data(), mem.size());
+	  keyIndex_.reset(dynamic_cast<NestLoudsTrieDAWG_SE_512*>(trie));
+	  if (!keyIndex_) {
 		  return Status::InvalidArgument("TerarkZipTableReader::Open()",
 				  "Index class is not NestLoudsTrieDAWG_SE_512");
 	  }
@@ -525,9 +493,6 @@ TerarkZipTableReader::Open(const ImmutableCFOptions& ioptions,
   catch (const std::exception& ex) {
 	  return Status::InvalidArgument("TerarkZipTableReader::Open()", ex.what());
   }
-  r->typeArray_.risk_set_data((byte_t*)zValueTypeBlock.data.data(),
-		  zValueTypeBlock.data.size(), kZipValueTypeBits);
-  *table = r.release();
   return Status::OK();
 }
 
@@ -658,7 +623,8 @@ TerarkZipTableReader::GetRecId(const Slice& userKey, size_t* pRecId) const {
 
 void
 TerarkZipTableReader::GetValue(size_t recId, valvec<byte_t>* value) const {
-
+	assert(recId < keyIndex_->num_words());
+	valstore_->get_record(recId, value);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
