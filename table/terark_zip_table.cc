@@ -788,6 +788,7 @@ Status TerarkZipTableBuilder::Finish() {
 		return Status::InvalidArgument("TerarkZipTableBuilder::Finish()",
 				"index temp file is broken");
 	}
+#if 0
 	{
 		// reorder word id from byte lex order to LoudsTrie order
 		terark::AutoFree<uint32_t> newToOld(numUserKeys_, UINT32_MAX);
@@ -805,6 +806,32 @@ Status TerarkZipTableBuilder::Finish() {
 		bool keepOldFiles = false;
 		zstore_->reorder_and_load(newToOld.p, newFile, keepOldFiles);
 	}
+#else
+	{
+		// reorder word id from byte lex order to LoudsTrie order without
+		// using mapping array 'newToOld'.
+		// zstore_->reorder_and_load() will call generateMap, generateMap
+		// generate all (newId, oldId) mappings and feed the mappings to
+		// 'doMap', 'doMap' is implemented in dawg->reorder_and_load
+		UintVecMin0 zvType2(numUserKeys_, kZipValueTypeBits);
+		std::string newFile = tmpValueFilePath_ + ".zbs.new";
+		bool keepOldFiles = false;
+		auto generateMap =
+		[&](const std::function<void(size_t newId, size_t oldId)>& doMap) {
+			dawg->tpl_for_each_word(
+					[&](size_t byteLexNth, fstring key, size_t state) {
+				(void)key; // unused
+				size_t newId = dawg->state_to_word_id(state);
+				size_t oldId = byteLexNth;
+				doMap(newId, oldId);
+				zvType2[newId] = zvType[oldId];
+			});
+		};
+		zstore_->reorder_and_load(std::ref(generateMap), newFile, keepOldFiles);
+		zvType.clear();
+		zvType.swap(zvType2);
+	}
+#endif
 	BlockHandle dataBlock, dictBlock, indexBlock, zvTypeBlock;
 	offset_ = 0;
 	Status s = WriteBlock(zstore_->get_data(), file_, &offset_, &dataBlock);
