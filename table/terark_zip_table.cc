@@ -10,6 +10,7 @@
 #include <table/meta_blocks.h>
 #include <terark/stdtypes.hpp>
 #include <terark/util/blob_store.hpp>
+#include <terark/util/throw.hpp>
 #include <terark/fast_zip_blob_store.hpp>
 #include <terark/fsa/nest_louds_trie.hpp>
 #include <terark/fsa/nest_trie_dawg.hpp>
@@ -18,6 +19,7 @@
 #include <terark/io/StreamBuffer.hpp>
 #include <terark/io/DataIO.hpp>
 #include <random>
+#include <stdlib.h>
 
 namespace terark { namespace fsa {
 
@@ -47,6 +49,7 @@ using terark::LittleEndianDataInput;
 using terark::LittleEndianDataOutput;
 using terark::SortableStrVec;
 using terark::var_uint32_t;
+using terark::UintVecMin0;
 
 static const uint64_t kTerarkZipTableMagicNumber = 0x1122334455667788;
 
@@ -230,6 +233,7 @@ private:
   SortableStrVec tmpKeyVec_;
   std::mt19937_64 randomGenerator_;
   uint64_t sampleUpperBound_;
+  size_t numUserKeys_ = 0;
 
   WritableFileWriter* file_;
   uint64_t offset_ = 0;
@@ -644,7 +648,19 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(
   status_ = Status::OK();
   zstore_.reset(new DictZipBlobStore());
   zbuilder_ = zstore_->createZipBuilder();
+  numUserKeys_ = 0;
   sampleUpperBound_ = randomGenerator_.max() * table_options_.sampleRatio;
+  tmpValueFilePath_ = table_options.localTempDir;
+  tmpValueFilePath_.append("/TerarkRocks-XXXXXX");
+  int fd = mkstemp(&tmpValueFilePath_[0]);
+  if (fd < 0) {
+	int err = errno;
+	THROW_STD(invalid_argument
+	  , "ERROR: TerarkZipTableBuilder::TerarkZipTableBuilder(): mkstemp(%s) = %s\n"
+	  , tmpValueFilePath_.c_str(), strerror(err));
+  }
+  tmpValueFile_.dopen(fd, "rb+");
+  tmpValueWriter_.attach(&tmpValueFile_);
 }
 
 TerarkZipTableBuilder::~TerarkZipTableBuilder() {
@@ -663,6 +679,11 @@ void TerarkZipTableBuilder::Add(const Slice& key, const Slice& value) {
 		}
 		prevUserKey_.assign(userKey);
 		valueBits_.push_back(false);
+		numUserKeys_++;
+	}
+	else if (terark_unlikely(0 == numUserKeys_)) {
+		assert(userKey.empty());
+		numUserKeys_++;
 	}
 	if (randomGenerator_() < sampleUpperBound_) {
 		zbuilder_->addSample(fstring(value));
@@ -701,15 +722,19 @@ Status TerarkZipTableBuilder::Finish() {
 	terark::NestLoudsTrieConfig conf;
 	conf.nestLevel = table_options_.indexNestLevel;
 	dawg->build_from(tmpKeyVec_, conf);
+	assert(dawg->num_words() == numUserKeys_);
 	tmpKeyVec_.clear();
+	dawg->save_mmap(tmpValueFilePath_ + ".index");
+	dawg.reset(); // free memory
 	zbuilder_->prepare(properties_.num_entries, tmpValueFilePath_ + ".zbs");
-	NativeDataInput<InputBuffer> input(&tmpValueWriter_);
-	valvec<byte_t> typeArray(properties_.num_entries, valvec_reserve());
+	NativeDataInput<InputBuffer> input(&tmpValueFile_);
+	UintVecMin0 zvType(properties_.num_entries, kZipValueTypeBits);
 	valvec<byte_t> value;
 	valvec<byte_t> mValue;
+	size_t entryId = 0;
 	size_t bitPos = 0;
-	size_t numEntries = size_t(properties_.num_entries);
-	for (; numEntries > 0; numEntries--) {
+	size_t recId = 0;
+	for (; recId < numUserKeys_; recId++) {
 		uint64_t seqType = input.load_as<uint64_t>();
 		uint64_t seqNum;
 		ValueType vType;
@@ -719,18 +744,19 @@ Status TerarkZipTableBuilder::Finish() {
 		assert(oneSeqLen >= 1);
 		if (1==oneSeqLen && (kTypeDeletion==vType || kTypeValue==vType)) {
 			if (0 == seqNum && kTypeValue==vType) {
-				typeArray.push_back(byte_t(ZipValueType::kZeroSeq));
+				zvType.set_wire(recId, size_t(ZipValueType::kZeroSeq));
 			} else {
 				if (kTypeValue==vType) {
-					typeArray.push_back(byte_t(ZipValueType::kValue));
+					zvType.set_wire(recId, size_t(ZipValueType::kValue));
 				} else {
-					typeArray.push_back(byte_t(ZipValueType::kDelete));
+					zvType.set_wire(recId, size_t(ZipValueType::kDelete));
 				}
 				value.insert(0, (byte_t*)seqNum, 7);
 			}
 			zbuilder_->addRecord(value);
 		}
 		else {
+			zvType.set_wire(recId, size_t(ZipValueType::kMulti));
 			size_t headerSize = ZipValueMultiValue::calcHeaderSize(oneSeqLen);
 			mValue.erase_all();
 			mValue.resize(headerSize);
@@ -748,12 +774,37 @@ Status TerarkZipTableBuilder::Finish() {
 			zbuilder_->addRecord(mValue);
 		}
 		bitPos += oneSeqLen + 1;
+		entryId += oneSeqLen;
 	}
+	assert(entryId == properties_.num_entries);
 	zstore_->completeBuild(*zbuilder_);
 	zbuilder_.reset();
-	terark::UintVecMin0 zvType;
-	zvType.build_from(typeArray);
-
+	value.clear();
+	mValue.clear();
+	try{auto trie = terark::MatchingDFA::load_mmap(tmpValueFilePath_ + ".index");
+		dawg.reset(dynamic_cast<NestLoudsTrieDAWG_SE_512*>(trie));
+	} catch (const std::exception&) {}
+	if (!dawg) {
+		return Status::InvalidArgument("TerarkZipTableBuilder::Finish()",
+				"index temp file is broken");
+	}
+	{
+		// reorder word id from byte lex order to LoudsTrie order
+		terark::AutoFree<uint32_t> newToOld(numUserKeys_, UINT32_MAX);
+		UintVecMin0 zvType2(numUserKeys_, kZipValueTypeBits);
+		dawg->tpl_for_each_word([&](size_t nth, fstring key, size_t state) {
+			(void)key; // unused
+			size_t newId = dawg->state_to_word_id(state);
+			size_t oldId = nth;
+			newToOld[newId] = oldId;
+			zvType2[newId] = zvType[oldId];
+		});
+		zvType.clear();
+		zvType.swap(zvType2);
+		std::string newFile = tmpValueFilePath_ + ".zbs.new";
+		bool keepOldFiles = false;
+		zstore_->reorder_and_load(newToOld.p, newFile, keepOldFiles);
+	}
 	BlockHandle dataBlock, dictBlock, indexBlock, zvTypeBlock;
 	offset_ = 0;
 	Status s = WriteBlock(zstore_->get_data(), file_, &offset_, &dataBlock);
