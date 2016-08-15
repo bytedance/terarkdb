@@ -21,6 +21,7 @@
 #include <terark/io/MemStream.hpp>
 #include <terark/io/StreamBuffer.hpp>
 #include <terark/io/DataIO.hpp>
+#include <memory>
 #include <random>
 #include <stdlib.h>
 #include <stdint.h>
@@ -263,6 +264,7 @@ public:
 			  "Not point to a position");
 	  auto dfa = table->keyIndex_.get();
 	  iter_.reset(dfa->adfa_make_iter());
+	  recId_ = size_t(-1);
 	  valnum_ = 0;
 	  validx_ = 0;
   }
@@ -349,16 +351,17 @@ private:
 		  size_t recId = GetIterRecId();
 		  table_->GetValue(recId, &valueBuf_);
 		  status_ = Status::OK();
-		  auto& typeArray = table_->typeArray_;
-		  if (ZipValueType(typeArray[recId]) == ZipValueType::kMulti) {
+		  if (ZipValueType(table_->typeArray_[recId])==ZipValueType::kMulti) {
 			  auto zmValue = (ZipValueMultiValue*)(valueBuf_.data());
 			  valnum_ = zmValue->num;
 		  } else {
 			  valnum_ = 1;
 		  }
+		  recId_ = recId;
 		  return true;
 	  }
 	  else {
+		  recId_ = size_t(-1);
 		  valnum_ = 0;
 		  status_ = Status::NotFound();
 		  return false;
@@ -366,12 +369,9 @@ private:
   }
   bool DecodeCurrKeyValue() {
 	assert(status_.ok());
-	size_t recId = GetIterRecId();
-	auto valstore = table_->valstore_.get();
-	auto& typeArray = table_->typeArray_;
-	valstore->get_record(recId, &valueBuf_);
+	assert(recId_ < table_->keyIndex_->num_words());
 	Slice userKey = SliceOf(iter_->word());
-	switch (ZipValueType(typeArray[recId])) {
+	switch (ZipValueType(table_->typeArray_[recId_])) {
 	default:
 		status_ = Status::Aborted("TerarkZipTableReader::Get()",
 				"Bad ZipValueType");
@@ -416,6 +416,7 @@ private:
   InternalKey    interKey_;
   valvec<byte_t> valueBuf_;
   Slice  userValue_;
+  size_t recId_; // save as member to reduce a rank1(state)
   size_t valnum_;
   size_t validx_;
   Status status_;
@@ -458,7 +459,7 @@ TerarkZipTableReader::Open(const ImmutableCFOptions& ioptions,
   r->file_ = file;
   r->file_data_ = file_data;
   r->file_size_ = file_size;
-  BlockContents indexBlock, zValueTypeBlock, valueDictBlock;
+  BlockContents valueDictBlock, indexBlock, zValueTypeBlock;
   Status s;
   s = ReadMetaBlock(file, file_size, kTerarkZipTableMagicNumber, ioptions,
 		  kTerarkZipTableValueDictBlock, &valueDictBlock);
@@ -702,6 +703,7 @@ Status TerarkZipTableBuilder::status() const {
 }
 
 template<class ByteArray>
+static
 Status WriteBlock(const ByteArray& blockData, WritableFileWriter* file,
                   uint64_t* offset, BlockHandle* block_handle) {
   block_handle->set_offset(*offset);
@@ -755,7 +757,7 @@ Status TerarkZipTableBuilder::Finish() {
 				} else {
 					zvType.set_wire(recId, size_t(ZipValueType::kDelete));
 				}
-				value.insert(0, (byte_t*)seqNum, 7);
+				value.insert(0, (byte_t*)&seqNum, 7);
 			}
 			zbuilder_->addRecord(value);
 		}
@@ -828,10 +830,10 @@ Status TerarkZipTableBuilder::Finish() {
 				size_t newId = dawg->state_to_word_id(state);
 				size_t oldId = byteLexNth;
 				doMap(newId, oldId);
-				zvType2[newId] = zvType[oldId];
+				zvType2.set_wire(newId, zvType[oldId]);
 			});
 		};
-		zstore_->reorder_and_load(std::ref(generateMap), newFile, keepOldFiles);
+		zstore_->reorder_and_load(generateMap, newFile, keepOldFiles);
 		zvType.clear();
 		zvType.swap(zvType2);
 	}

@@ -10,7 +10,6 @@
 #ifndef TERARK_ZIP_TABLE_H_
 #define TERARK_ZIP_TABLE_H_
 
-#include <memory>
 #include <string>
 
 namespace rocksdb {
