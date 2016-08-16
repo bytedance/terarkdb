@@ -249,7 +249,6 @@ public:
 			  "Not point to a position");
 	  auto dfa = table->keyIndex_.get();
 	  iter_.reset(dfa->adfa_make_iter());
-	  seekSeqNum_ = uint64_t(-1);
 	  zValtype_ = ZipValueType::kZeroSeq;
 	  recId_ = size_t(-1);
 	  valnum_ = 0;
@@ -281,8 +280,16 @@ public:
 	  ParseInternalKey(target, &pikey);
 	  fstring userKey(pikey.user_key);
 	  if (UnzipIterRecord(iter_->seek_lower_bound(userKey))) {
-		  DecodeCurrKeyValue();
-		  validx_ = 1;
+		  do {
+			  DecodeCurrKeyValue();
+			  validx_++;
+			  if (pInterKey_.sequence <= pikey.sequence) {
+				  return; // done
+			  }
+		  } while (validx_ < valnum_);
+		  // no visible version/sequence for target, use Next();
+		  // if using Next(), version check is not needed
+		  Next();
 	  }
   }
 
@@ -402,7 +409,6 @@ private:
   ParsedInternalKey pInterKey_;
   valvec<byte_t> valueBuf_;
   Slice  userValue_;
-  uint64_t seekSeqNum_;
   ZipValueType zValtype_;
   size_t recId_; // save as member to reduce a rank1(state)
   size_t valnum_;
