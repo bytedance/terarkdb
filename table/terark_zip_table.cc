@@ -106,21 +106,6 @@ Slice SliceOf(const ByteArray& ba) {
 	return Slice((const char*)ba.data(), ba.size());
 }
 
-struct TerarkZipTableReaderFileInfo {
-  bool   is_mmap_mode;
-  Slice  file_data;
-  size_t data_end_offset;
-  unique_ptr<RandomAccessFileReader> file;
-
-  TerarkZipTableReaderFileInfo(unique_ptr<RandomAccessFileReader>&& _file,
-                         	   const EnvOptions& storage_options,
-							   uint32_t _data_size_offset)
-    : is_mmap_mode(storage_options.use_mmap_reads)
-    , data_end_offset(_data_size_offset)
-  	, file(std::move(_file))
-  {}
-};
-
 /**
  * one user key map to a record id: the index NO. of a key in NestLoudsTrie,
  * the record id is used to direct index a type enum(small integer) array,
@@ -264,6 +249,8 @@ public:
 			  "Not point to a position");
 	  auto dfa = table->keyIndex_.get();
 	  iter_.reset(dfa->adfa_make_iter());
+	  seekSeqNum_ = uint64_t(-1);
+	  zValtype_ = ZipValueType::kZeroSeq;
 	  recId_ = size_t(-1);
 	  valnum_ = 0;
 	  validx_ = 0;
@@ -292,7 +279,6 @@ public:
   void Seek(const Slice& target) override {
 	  ParsedInternalKey pikey;
 	  ParseInternalKey(target, &pikey);
-	  interKey_.DecodeFrom(target);
 	  fstring userKey(pikey.user_key);
 	  if (UnzipIterRecord(iter_->seek_lower_bound(userKey))) {
 		  DecodeCurrKeyValue();
@@ -328,7 +314,7 @@ public:
 
   Slice key() const override {
 	  assert(status_.ok());
-	  return interKey_.user_key();
+	  return pInterKey_.user_key;
   }
 
   Slice value() const override {
@@ -351,19 +337,22 @@ private:
 		  size_t recId = GetIterRecId();
 		  table_->GetValue(recId, &valueBuf_);
 		  status_ = Status::OK();
-		  if (ZipValueType(table_->typeArray_[recId])==ZipValueType::kMulti) {
+		  zValtype_ = ZipValueType(table_->typeArray_[recId]);
+		  if (ZipValueType::kMulti == zValtype_) {
 			  auto zmValue = (ZipValueMultiValue*)(valueBuf_.data());
 			  valnum_ = zmValue->num;
 		  } else {
 			  valnum_ = 1;
 		  }
 		  recId_ = recId;
+		  pInterKey_.user_key = SliceOf(iter_->word());
 		  return true;
 	  }
 	  else {
 		  recId_ = size_t(-1);
 		  valnum_ = 0;
 		  status_ = Status::NotFound();
+		  pInterKey_.user_key = Slice();
 		  return false;
 	  }
   }
@@ -371,25 +360,27 @@ private:
 	assert(status_.ok());
 	assert(recId_ < table_->keyIndex_->num_words());
 	Slice userKey = SliceOf(iter_->word());
-	switch (ZipValueType(table_->typeArray_[recId_])) {
+	switch (zValtype_) {
 	default:
 		status_ = Status::Aborted("TerarkZipTableReader::Get()",
 				"Bad ZipValueType");
+		abort(); // must not goes here, if it does, it should be a bug!!
 		return false;
 	case ZipValueType::kZeroSeq:
-		interKey_.Set(userKey, 0, kTypeValue);
+		pInterKey_.sequence = 0;
+		pInterKey_.type = kTypeValue;
 		userValue_ = Slice(valueBuf_.data(), valueBuf_.size());
 		return true;
 	case ZipValueType::kValue: { // should be a kTypeValue, the normal case
 		// little endian uint64_t
-		uint64_t seq = *(uint64_t*)valueBuf_.data() & kMaxSequenceNumber;
-		interKey_.Set(userKey, seq, kTypeValue);
+		pInterKey_.sequence = *(uint64_t*)valueBuf_.data() & kMaxSequenceNumber;
+		pInterKey_.type = kTypeValue;
 		userValue_ = Slice(valueBuf_.data()+7, valueBuf_.size()-7);
 		return true; }
 	case ZipValueType::kDelete: {
 		// little endian uint64_t
-		uint64_t seq = *(uint64_t*)valueBuf_.data() & kMaxSequenceNumber;
-		interKey_.Set(userKey, seq, kTypeDeletion);
+		pInterKey_.sequence = *(uint64_t*)valueBuf_.data() & kMaxSequenceNumber;
+		pInterKey_.type = kTypeDeletion;
 		userValue_ = Slice((char*)valueBuf_.data()+7, valueBuf_.size()-7);
 		return true; }
 	case ZipValueType::kMulti: { // more than one value
@@ -398,13 +389,8 @@ private:
 		assert(validx_ < valnum_);
 		assert(valnum_ == zmValue->num);
 		Slice d = zmValue->getValueData(validx_);
-		SequenceNumber sn;
-		ValueType valtype;
-		{
-			auto snt = unaligned_load<SequenceNumber>(d.data());
-			UnPackSequenceAndType(snt, &sn, &valtype);
-		}
-		interKey_.Set(userKey, sn, valtype);
+		auto snt = unaligned_load<SequenceNumber>(d.data());
+		UnPackSequenceAndType(snt, &pInterKey_.sequence, &pInterKey_.type);
 		d.remove_prefix(sizeof(SequenceNumber));
 		userValue_ = d;
 		return true; }
@@ -413,9 +399,11 @@ private:
 
   TerarkZipTableReader* table_;
   unique_ptr<terark::ADFA_LexIterator> iter_;
-  InternalKey    interKey_;
+  ParsedInternalKey pInterKey_;
   valvec<byte_t> valueBuf_;
   Slice  userValue_;
+  uint64_t seekSeqNum_;
+  ZipValueType zValtype_;
   size_t recId_; // save as member to reduce a rank1(state)
   size_t valnum_;
   size_t validx_;
@@ -565,12 +553,14 @@ TerarkZipTableReader::Get(const ReadOptions& ro, const Slice& ikey,
 				auto snt = unaligned_load<SequenceNumber>(val.data());
 				UnPackSequenceAndType(snt, &sn, &valtype);
 			}
-			val.remove_prefix(sizeof(SequenceNumber));
-			bool hasMoreValue = get_context->SaveValue(
-				ParsedInternalKey(pikey.user_key, sn, valtype), val);
-			if (!hasMoreValue) {
-				assert(i+1 == num);
-				break;
+			if (sn <= pikey.sequence) {
+				val.remove_prefix(sizeof(SequenceNumber));
+				bool hasMoreValue = get_context->SaveValue(
+					ParsedInternalKey(pikey.user_key, sn, valtype), val);
+				if (!hasMoreValue) {
+					assert(i+1 == num);
+					break;
+				}
 			}
 		}
 		return Status::OK(); }
