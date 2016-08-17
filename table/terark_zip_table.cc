@@ -6,9 +6,13 @@
  */
 
 #include "terark_zip_table.h"
+#include <rocksdb/comparator.h>
 #include <rocksdb/env.h>
 #include <rocksdb/options.h>
 #include <rocksdb/table.h>
+#include <table/get_context.h>
+#include <table/internal_iterator.h>
+#include <table/table_builder.h>
 #include <table/table_reader.h>
 #include <table/meta_blocks.h>
 #include <terark/stdtypes.hpp>
@@ -69,7 +73,8 @@ class TerarkZipTableIterator;
 #elif defined(_WIN32)
   #define MY_THREAD_LOCAL(Type, Var)  __declspec(thread) Type Var
 #else
-  #define MY_THREAD_LOCAL(Type, Var)  __thread Type Var
+//#define MY_THREAD_LOCAL(Type, Var)  __thread Type Var
+  #define MY_THREAD_LOCAL(Type, Var)  thread_local Type Var
 #endif
 
 MY_THREAD_LOCAL(terark::MatchContext, g_mctx);
@@ -104,6 +109,10 @@ template<class ByteArray>
 Slice SliceOf(const ByteArray& ba) {
 	BOOST_STATIC_ASSERT(sizeof(ba[0] == 1));
 	return Slice((const char*)ba.data(), ba.size());
+}
+
+inline static fstring fstringOf(const Slice& x) {
+	return fstring(x.data(), x.size());
 }
 
 /**
@@ -161,8 +170,8 @@ private:
   Status LoadIndex(Slice mem);
 
   // No copying allowed
-  explicit TerarkZipTableReader(const TableReader&) = delete;
-  void operator=(const TableReader&) = delete;
+  explicit TerarkZipTableReader(const TerarkZipTableReader&) = delete;
+  void operator=(const TerarkZipTableReader&) = delete;
 };
 
 class TerarkZipTableBuilder: public TableBuilder {
@@ -250,6 +259,8 @@ public:
 	  auto dfa = table->keyIndex_.get();
 	  iter_.reset(dfa->adfa_make_iter());
 	  zValtype_ = ZipValueType::kZeroSeq;
+	  pInterKey_.sequence = uint64_t(-1);
+	  pInterKey_.type = kMaxValue;
 	  recId_ = size_t(-1);
 	  valnum_ = 0;
 	  validx_ = 0;
@@ -277,9 +288,12 @@ public:
 
   void Seek(const Slice& target) override {
 	  ParsedInternalKey pikey;
-	  ParseInternalKey(target, &pikey);
-	  fstring userKey(pikey.user_key);
-	  if (UnzipIterRecord(iter_->seek_lower_bound(userKey))) {
+	  if (!ParseInternalKey(target, &pikey)) {
+		  status_ = Status::InvalidArgument("TerarkZipTableIterator::Seek()",
+				  "param target.size() < 8");
+		  return;
+	  }
+	  if (UnzipIterRecord(iter_->seek_lower_bound(fstringOf(pikey.user_key)))) {
 		  do {
 			  DecodeCurrKeyValue();
 			  validx_++;
@@ -366,7 +380,6 @@ private:
   bool DecodeCurrKeyValue() {
 	assert(status_.ok());
 	assert(recId_ < table_->keyIndex_->num_words());
-	Slice userKey = SliceOf(iter_->word());
 	switch (zValtype_) {
 	default:
 		status_ = Status::Aborted("TerarkZipTableReader::Get()",
@@ -376,19 +389,19 @@ private:
 	case ZipValueType::kZeroSeq:
 		pInterKey_.sequence = 0;
 		pInterKey_.type = kTypeValue;
-		userValue_ = Slice(valueBuf_.data(), valueBuf_.size());
+		userValue_ = SliceOf(valueBuf_);
 		return true;
 	case ZipValueType::kValue: { // should be a kTypeValue, the normal case
 		// little endian uint64_t
 		pInterKey_.sequence = *(uint64_t*)valueBuf_.data() & kMaxSequenceNumber;
 		pInterKey_.type = kTypeValue;
-		userValue_ = Slice(valueBuf_.data()+7, valueBuf_.size()-7);
+		userValue_ = SliceOf(fstring(valueBuf_).substr(7));
 		return true; }
 	case ZipValueType::kDelete: {
 		// little endian uint64_t
 		pInterKey_.sequence = *(uint64_t*)valueBuf_.data() & kMaxSequenceNumber;
 		pInterKey_.type = kTypeDeletion;
-		userValue_ = Slice((char*)valueBuf_.data()+7, valueBuf_.size()-7);
+		userValue_ = SliceOf(fstring(valueBuf_).substr(7));
 		return true; }
 	case ZipValueType::kMulti: { // more than one value
 		auto zmValue = (const ZipValueMultiValue*)(valueBuf_.data());
@@ -415,8 +428,8 @@ private:
   size_t validx_;
   Status status_;
   // No copying allowed
-  TerarkZipTableIterator(const PlainTableIterator&) = delete;
-  void operator=(const Iterator&) = delete;
+  TerarkZipTableIterator(const TerarkZipTableIterator&) = delete;
+  void operator=(const TerarkZipTableIterator&) = delete;
 };
 
 TerarkZipTableReader::~TerarkZipTableReader() {
@@ -434,14 +447,14 @@ TerarkZipTableReader::Open(const ImmutableCFOptions& ioptions,
 						   uint64_t file_size,
 						   unique_ptr<TableReader>* table) {
   TableProperties* props = nullptr;
-  auto s = ReadTableProperties(file, file_size,
+  Status s = ReadTableProperties(file, file_size,
 		  	  kTerarkZipTableMagicNumber, ioptions, &props);
   if (!s.ok()) {
 	return s;
   }
   Slice file_data;
   if (env_options.use_mmap_reads) {
-	Status s = file->Read(0, file_size, &file_data, nullptr);
+	s = file->Read(0, file_size, &file_data, nullptr);
 	if (!s.ok())
 		return s;
   } else {
@@ -450,11 +463,10 @@ TerarkZipTableReader::Open(const ImmutableCFOptions& ioptions,
   }
   unique_ptr<TerarkZipTableReader>
   r(new TerarkZipTableReader(size_t(props->fixed_key_len), ioptions));
-  r->file_ = file;
+  r->file_.reset(file);
   r->file_data_ = file_data;
   r->file_size_ = file_size;
   BlockContents valueDictBlock, indexBlock, zValueTypeBlock;
-  Status s;
   s = ReadMetaBlock(file, file_size, kTerarkZipTableMagicNumber, ioptions,
 		  kTerarkZipTableValueDictBlock, &valueDictBlock);
   if (!s.ok()) {
@@ -472,7 +484,7 @@ TerarkZipTableReader::Open(const ImmutableCFOptions& ioptions,
   }
   r->valstore_.reset(new DictZipBlobStore());
   r->valstore_->load_user_memory(
-		  fstring(valueDictBlock.data),
+		  fstringOf(valueDictBlock.data),
 		  fstring(file_data.data(), props->data_size));
   s = r->LoadIndex(indexBlock.data);
   if (!s.ok()) {
@@ -480,7 +492,7 @@ TerarkZipTableReader::Open(const ImmutableCFOptions& ioptions,
   }
   r->typeArray_.risk_set_data((byte_t*)zValueTypeBlock.data.data(),
 		  zValueTypeBlock.data.size(), kZipValueTypeBits);
-  *table = r.release();
+  *table = std::move(r);
   return Status::OK();
 }
 
@@ -648,7 +660,7 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(
   file_ = nullptr;
   status_ = Status::OK();
   zstore_.reset(new DictZipBlobStore());
-  zbuilder_ = zstore_->createZipBuilder();
+  zbuilder_.reset(zstore_->createZipBuilder());
   numUserKeys_ = 0;
   sampleUpperBound_ = randomGenerator_.max() * table_options_.sampleRatio;
   tmpValueFilePath_ = table_options.localTempDir;
@@ -687,10 +699,10 @@ void TerarkZipTableBuilder::Add(const Slice& key, const Slice& value) {
 		numUserKeys_++;
 	}
 	if (randomGenerator_() < sampleUpperBound_) {
-		zbuilder_->addSample(fstring(value));
+		zbuilder_->addSample(fstringOf(value));
 	}
 	tmpValueWriter_.ensureWrite(userKey.end(), 8);
-	tmpValueWriter_ << fstring(value);
+	tmpValueWriter_ << fstringOf(value);
 	properties_.num_entries++;
 }
 
@@ -873,7 +885,7 @@ Status TerarkZipTableBuilder::Finish() {
 	if (!s.ok()) {
 		return s;
 	}
-	Footer footer(kLegacyPlainTableMagicNumber, 0);
+	Footer footer(kTerarkZipTableMagicNumber, 0);
 	footer.set_metaindex_handle(metaindexBlock);
 	footer.set_index_handle(BlockHandle::NullBlockHandle());
 	std::string footer_encoding;
