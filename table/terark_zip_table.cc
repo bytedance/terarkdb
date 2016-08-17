@@ -40,7 +40,6 @@ using std::unique_ptr;
 using std::unordered_map;
 using std::vector;
 
-using terark::NestLoudsTrie_SE_512;
 using terark::NestLoudsTrieDAWG_SE_512;
 using terark::DictZipBlobStore;
 using terark::byte_t;
@@ -71,10 +70,10 @@ class TerarkZipTableIterator;
 #if defined(IOS_CROSS_COMPILE)
   #define MY_THREAD_LOCAL(Type, Var)  Type Var
 #elif defined(_WIN32)
-  #define MY_THREAD_LOCAL(Type, Var)  __declspec(thread) Type Var
+  #define MY_THREAD_LOCAL(Type, Var)  static __declspec(thread) Type Var
 #else
-//#define MY_THREAD_LOCAL(Type, Var)  __thread Type Var
-  #define MY_THREAD_LOCAL(Type, Var)  thread_local Type Var
+//#define MY_THREAD_LOCAL(Type, Var)  static __thread Type Var
+  #define MY_THREAD_LOCAL(Type, Var)  static thread_local Type Var
 #endif
 
 MY_THREAD_LOCAL(terark::MatchContext, g_mctx);
@@ -222,8 +221,8 @@ private:
   const ImmutableCFOptions& ioptions_;
   std::vector<unique_ptr<IntTblPropCollector>> table_properties_collectors_;
 
-  unique_ptr<terark::DictZipBlobStore::ZipBuilder> zbuilder_;
-  unique_ptr<terark::DictZipBlobStore> zstore_;
+  unique_ptr<DictZipBlobStore::ZipBuilder> zbuilder_;
+  unique_ptr<DictZipBlobStore> zstore_;
   valvec<byte_t> prevUserKey_;
   terark::febitvec valueBits_;
   std::string tmpValueFilePath_;
@@ -361,6 +360,7 @@ private:
 		  zValtype_ = ZipValueType(table_->typeArray_[recId]);
 		  if (ZipValueType::kMulti == zValtype_) {
 			  auto zmValue = (ZipValueMultiValue*)(valueBuf_.data());
+			  assert(zmValue->num > 0);
 			  valnum_ = zmValue->num;
 		  } else {
 			  valnum_ = 1;
@@ -377,7 +377,7 @@ private:
 		  return false;
 	  }
   }
-  bool DecodeCurrKeyValue() {
+  void DecodeCurrKeyValue() {
 	assert(status_.ok());
 	assert(recId_ < table_->keyIndex_->num_words());
 	switch (zValtype_) {
@@ -385,24 +385,24 @@ private:
 		status_ = Status::Aborted("TerarkZipTableReader::Get()",
 				"Bad ZipValueType");
 		abort(); // must not goes here, if it does, it should be a bug!!
-		return false;
+		break;
 	case ZipValueType::kZeroSeq:
 		pInterKey_.sequence = 0;
 		pInterKey_.type = kTypeValue;
 		userValue_ = SliceOf(valueBuf_);
-		return true;
-	case ZipValueType::kValue: { // should be a kTypeValue, the normal case
+		break;
+	case ZipValueType::kValue: // should be a kTypeValue, the normal case
 		// little endian uint64_t
 		pInterKey_.sequence = *(uint64_t*)valueBuf_.data() & kMaxSequenceNumber;
 		pInterKey_.type = kTypeValue;
 		userValue_ = SliceOf(fstring(valueBuf_).substr(7));
-		return true; }
-	case ZipValueType::kDelete: {
+		break;
+	case ZipValueType::kDelete:
 		// little endian uint64_t
 		pInterKey_.sequence = *(uint64_t*)valueBuf_.data() & kMaxSequenceNumber;
 		pInterKey_.type = kTypeDeletion;
-		userValue_ = SliceOf(fstring(valueBuf_).substr(7));
-		return true; }
+		userValue_ = Slice();
+		break;
 	case ZipValueType::kMulti: { // more than one value
 		auto zmValue = (const ZipValueMultiValue*)(valueBuf_.data());
 		assert(0 != valnum_);
@@ -413,7 +413,7 @@ private:
 		UnPackSequenceAndType(snt, &pInterKey_.sequence, &pInterKey_.type);
 		d.remove_prefix(sizeof(SequenceNumber));
 		userValue_ = d;
-		return true; }
+		break; }
 	}
   }
 
@@ -452,6 +452,8 @@ TerarkZipTableReader::Open(const ImmutableCFOptions& ioptions,
   if (!s.ok()) {
 	return s;
   }
+  assert(nullptr != props);
+  unique_ptr<TableProperties> uniqueProps(props);
   Slice file_data;
   if (env_options.use_mmap_reads) {
 	s = file->Read(0, file_size, &file_data, nullptr);
@@ -466,6 +468,7 @@ TerarkZipTableReader::Open(const ImmutableCFOptions& ioptions,
   r->file_.reset(file);
   r->file_data_ = file_data;
   r->file_size_ = file_size;
+  r->table_properties_.reset(uniqueProps.release());
   BlockContents valueDictBlock, indexBlock, zValueTypeBlock;
   s = ReadMetaBlock(file, file_size, kTerarkZipTableMagicNumber, ioptions,
 		  kTerarkZipTableValueDictBlock, &valueDictBlock);
@@ -498,7 +501,7 @@ TerarkZipTableReader::Open(const ImmutableCFOptions& ioptions,
 
 Status TerarkZipTableReader::LoadIndex(Slice mem) {
   try {
-	  auto trie = terark::MatchingDFA::load_mmap_range(mem.data(), mem.size());
+	  auto trie = terark::BaseDFA::load_mmap_range(mem.data(), mem.size());
 	  keyIndex_.reset(dynamic_cast<NestLoudsTrieDAWG_SE_512*>(trie));
 	  if (!keyIndex_) {
 		  return Status::InvalidArgument("TerarkZipTableReader::Open()",
@@ -551,14 +554,18 @@ TerarkZipTableReader::Get(const ReadOptions& ro, const Slice& ikey,
 	case ZipValueType::kValue: { // should be a kTypeValue, the normal case
 		// little endian uint64_t
 		uint64_t seq = *(uint64_t*)g_tbuf.data() & kMaxSequenceNumber;
-		get_context->SaveValue(Slice((char*)g_tbuf.data()+7, g_tbuf.size()-7), seq);
+		if (seq <= pikey.sequence) {
+			get_context->SaveValue(SliceOf(fstring(g_tbuf).substr(7)), seq);
+		}
 		return Status::OK(); }
 	case ZipValueType::kDelete: {
 		// little endian uint64_t
 		uint64_t seq = *(uint64_t*)g_tbuf.data() & kMaxSequenceNumber;
-		get_context->SaveValue(
+		if (seq <= pikey.sequence) {
+			get_context->SaveValue(
 				ParsedInternalKey(pikey.user_key, seq, kTypeDeletion),
 				Slice());
+		}
 		return Status::OK(); }
 	case ZipValueType::kMulti: { // more than one value
 		auto mVal = (const ZipValueMultiValue*)g_tbuf.data();
@@ -573,10 +580,10 @@ TerarkZipTableReader::Get(const ReadOptions& ro, const Slice& ikey,
 			}
 			if (sn <= pikey.sequence) {
 				val.remove_prefix(sizeof(SequenceNumber));
+				// only kTypeMerge will return true
 				bool hasMoreValue = get_context->SaveValue(
 					ParsedInternalKey(pikey.user_key, sn, valtype), val);
 				if (!hasMoreValue) {
-					assert(i+1 == num);
 					break;
 				}
 			}
@@ -607,6 +614,7 @@ TerarkZipTableReader::GetRecId(const Slice& userKey, size_t* pRecId) const {
 	const size_t  kn = userKey.size();
 	const byte_t* kp = (const byte_t*)userKey.data();
 	size_t state = initial_state;
+	g_mctx.zbuf_state = size_t(-1);
 	for (size_t pos = 0; pos < kn; ++pos) {
 		if (dfa->is_pzip(state)) {
 			fstring zs = dfa->get_zpath_data(state, &g_mctx);
@@ -795,7 +803,7 @@ Status TerarkZipTableBuilder::Finish() {
 	zbuilder_.reset();
 	value.clear();
 	mValue.clear();
-	try{auto trie = terark::MatchingDFA::load_mmap(tmpValueFilePath_ + ".index");
+	try{auto trie = terark::BaseDFA::load_mmap(tmpValueFilePath_ + ".index");
 		dawg.reset(dynamic_cast<NestLoudsTrieDAWG_SE_512*>(trie));
 	} catch (const std::exception&) {}
 	if (!dawg) {
@@ -934,8 +942,6 @@ class TerarkZipTableFactory : public TableFactory {
   std::string GetPrintableTableOptions() const override;
 
   const TerarkZipTableOptions& table_options() const;
-
-  static const char kValueTypeSeqId0 = char(0xFF);
 
   // Sanitizes the specified DB Options.
   Status SanitizeOptions(const DBOptions& db_opts,
