@@ -968,6 +968,19 @@ TerarkZipTableFactory::TerarkZipTableFactory(const TerarkZipTableOptions& tzto)
 const char*
 TerarkZipTableFactory::Name() const { return "TerarkZipTable"; }
 
+inline static
+bool IsBytewiseComparator(const Comparator* cmp) {
+#if 1
+	return fstring(cmp->Name()) == "leveldb.BytewiseComparator";
+#else
+	return BytewiseComparator() == cmp;
+#endif
+}
+inline static
+bool IsBytewiseComparator(const InternalKeyComparator& icmp) {
+	return IsBytewiseComparator(icmp.user_comparator());
+}
+
 Status
 TerarkZipTableFactory::NewTableReader(
 		const TableReaderOptions& table_reader_options,
@@ -976,9 +989,7 @@ TerarkZipTableFactory::NewTableReader(
 		bool prefetch_index_and_filter_in_cache)
 const {
 	(void)prefetch_index_and_filter_in_cache; // unused
-	auto& icmp = table_reader_options.internal_comparator;
-	auto cmpName = icmp.user_comparator()->Name();
-	if (strcmp(cmpName, "leveldb.BytewiseComparator") == 0) {
+	if (!IsBytewiseComparator(table_reader_options.internal_comparator)) {
 		return Status::InvalidArgument("TerarkZipTableFactory::NewTableReader()",
 				"user comparator must be 'leveldb.BytewiseComparator'");
 	}
@@ -996,6 +1007,11 @@ TerarkZipTableFactory::NewTableBuilder(
 		uint32_t column_family_id,
 		WritableFileWriter* file)
 const {
+	if (!IsBytewiseComparator(table_builder_options.internal_comparator)) {
+		THROW_STD(invalid_argument,
+				"TerarkZipTableFactory::NewTableBuilder(): "
+				"user comparator must be 'leveldb.BytewiseComparator'");
+	}
 	return new TerarkZipTableBuilder(
 			table_options_,
 		    table_builder_options.ioptions,
@@ -1028,6 +1044,10 @@ Status
 TerarkZipTableFactory::SanitizeOptions(const DBOptions& db_opts,
                        	   	   	   	   const ColumnFamilyOptions& cf_opts)
 const {
+	if (!IsBytewiseComparator(cf_opts.comparator)) {
+		return Status::InvalidArgument("TerarkZipTableFactory::NewTableReader()",
+				"user comparator must be 'leveldb.BytewiseComparator'");
+	}
 	return Status::OK();
 }
 
