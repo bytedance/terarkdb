@@ -840,9 +840,8 @@ Status TerarkZipTableBuilder::Finish() {
 		bool keepOldFiles = false;
 		auto generateMap =
 		[&](const std::function<void(size_t newId, size_t oldId)>& doMap) {
-			dawg->tpl_for_each_word(
-					[&](size_t byteLexNth, fstring key, size_t state) {
-				(void)key; // unused
+			terark::NonRecursiveDictionaryOrderToStateMapGenerator gen;
+			gen(*dawg, [&](size_t byteLexNth, size_t state) {
 				size_t newId = dawg->state_to_word_id(state);
 				size_t oldId = byteLexNth;
 				doMap(newId, oldId);
