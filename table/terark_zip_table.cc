@@ -668,7 +668,7 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(
   , ioptions_(ioptions)
 {
   huge_page_tlb_size_ = 0;
-  file_ = nullptr;
+  file_ = file;
   status_ = Status::OK();
   zstore_.reset(new DictZipBlobStore());
   zbuilder_.reset(zstore_->createZipBuilder());
@@ -867,6 +867,7 @@ Status TerarkZipTableBuilder::Finish() {
 	if (!s.ok()) {
 		return s;
 	}
+	properties_.data_size = dataBlock.size();
 	s = WriteBlock(zstore_->get_dict(), file_, &offset_, &dictBlock);
 	if (!s.ok()) {
 		return s;
