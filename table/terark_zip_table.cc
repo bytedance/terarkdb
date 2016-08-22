@@ -232,6 +232,7 @@ private:
   std::mt19937_64 randomGenerator_;
   uint64_t sampleUpperBound_;
   size_t numUserKeys_ = 0;
+  size_t sampleLenSum_ = 0;
 
   WritableFileWriter* file_;
   uint64_t offset_ = 0;
@@ -628,6 +629,8 @@ TerarkZipTableReader::GetRecId(const Slice& userKey, size_t* pRecId) const {
 							"zpath match fail");
 				}
 			}
+			if (pos == kn)
+				break;
 		}
 		byte_t c = kp[pos];
 		size_t next = dfa->state_move(state, c);
@@ -706,8 +709,9 @@ void TerarkZipTableBuilder::Add(const Slice& key, const Slice& value) {
 		assert(userKey.empty());
 		numUserKeys_++;
 	}
-	if (randomGenerator_() < sampleUpperBound_) {
+	if (!value.empty() && randomGenerator_() < sampleUpperBound_) {
 		zbuilder_->addSample(fstringOf(value));
+		sampleLenSum_ += value.size();
 	}
 	tmpValueWriter_.ensureWrite(userKey.end(), 8);
 	tmpValueWriter_ << fstringOf(value);
@@ -735,6 +739,10 @@ Status TerarkZipTableBuilder::Finish() {
 	assert(0 == table_options_.fixed_key_len);
 	assert(!closed_);
 	closed_ = true;
+
+	if (0 == sampleLenSum_) { // prevent from empty
+		zbuilder_->addSample("Hello World!");
+	}
 
 	// the guard, if last same key seq is longer than 1, this is required
 	valueBits_.push_back(false);
