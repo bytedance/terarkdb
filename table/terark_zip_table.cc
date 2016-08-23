@@ -1,7 +1,7 @@
 /*
  * terark_zip_table.cc
  *
- *  Created on: 2016Äê8ÔÂ9ÈÕ
+ *  Created on: 2016-08-09
  *      Author: leipeng
  */
 
@@ -16,10 +16,8 @@
 #include <table/table_reader.h>
 #include <table/meta_blocks.h>
 #include <terark/stdtypes.hpp>
-#include <terark/util/blob_store.hpp>
 #include <terark/util/throw.hpp>
 #include <terark/fast_zip_blob_store.hpp>
-#include <terark/fsa/nest_louds_trie.hpp>
 #include <terark/fsa/nest_trie_dawg.hpp>
 #include <terark/io/FileStream.hpp>
 #include <terark/io/MemStream.hpp>
@@ -29,10 +27,6 @@
 #include <random>
 #include <stdlib.h>
 #include <stdint.h>
-
-namespace terark { namespace fsa {
-
-}} // namespace terark::fsa
 
 namespace rocksdb {
 
@@ -48,15 +42,12 @@ using terark::valvec_no_init;
 using terark::valvec_reserve;
 using terark::fstring;
 using terark::initial_state;
-using terark::MemIO;
-using terark::AutoGrownMemIO;
 using terark::FileStream;
 using terark::InputBuffer;
 using terark::OutputBuffer;
 using terark::LittleEndianDataInput;
 using terark::LittleEndianDataOutput;
 using terark::SortableStrVec;
-using terark::var_uint32_t;
 using terark::UintVecMin0;
 
 static const uint64_t kTerarkZipTableMagicNumber = 0x1122334455667788;
@@ -119,8 +110,7 @@ inline static fstring fstringOf(const Slice& x) {
  * the record id is used to direct index a type enum(small integer) array,
  * the record id is also used to access the value store
  */
-
-class TerarkZipTableReader: public TableReader {
+class TerarkZipTableReader: public TableReader, boost::noncopyable {
 public:
   static Status Open(const ImmutableCFOptions& ioptions,
                      const EnvOptions& env_options,
@@ -131,19 +121,18 @@ public:
   InternalIterator*
   NewIterator(const ReadOptions&, Arena*, bool skip_filters) override;
 
-  void Prepare(const Slice& target) override;
+  void Prepare(const Slice& target) override {}
 
   Status Get(const ReadOptions&, const Slice& key, GetContext*,
              bool skip_filters) override;
 
-  uint64_t ApproximateOffsetOf(const Slice& key) override;
-
-  void SetupForCompaction() override;
+  uint64_t ApproximateOffsetOf(const Slice& key) override { return 0; }
+  void SetupForCompaction() override {}
 
   std::shared_ptr<const TableProperties>
-  GetTableProperties() const override;
+  GetTableProperties() const override { return table_properties_; }
 
-  size_t ApproximateMemoryUsage() const override;
+  size_t ApproximateMemoryUsage() const override { return file_size_; }
 
   ~TerarkZipTableReader();
   TerarkZipTableReader(size_t user_key_len, const ImmutableCFOptions& ioptions);
@@ -159,21 +148,14 @@ private:
   static const size_t kNumInternalBytes = 8;
   Slice  file_data_;
   unique_ptr<RandomAccessFileReader> file_;
-
   const ImmutableCFOptions& ioptions_;
   uint64_t file_size_ = 0;
   std::shared_ptr<const TableProperties> table_properties_;
-
   friend class TerarkZipTableIterator;
-
   Status LoadIndex(Slice mem);
-
-  // No copying allowed
-  explicit TerarkZipTableReader(const TerarkZipTableReader&) = delete;
-  void operator=(const TerarkZipTableReader&) = delete;
 };
 
-class TerarkZipTableBuilder: public TableBuilder {
+class TerarkZipTableBuilder: public TableBuilder, boost::noncopyable {
 public:
   TerarkZipTableBuilder(
 		  const TerarkZipTableOptions&,
@@ -192,7 +174,7 @@ public:
   void Add(const Slice& key, const Slice& value) override;
 
   // Return non-ok iff some error has been detected.
-  Status status() const override;
+  Status status() const override { return status_; }
 
   // Finish building the table.  Stops using the file passed to the
   // constructor after this function returns.
@@ -204,14 +186,14 @@ public:
   // If the caller is not going to call Finish(), it must call Abandon()
   // before destroying this builder.
   // REQUIRES: Finish(), Abandon() have not been called
-  void Abandon() override;
+  void Abandon() override { closed_ = true; }
 
   // Number of calls to Add() so far.
-  uint64_t NumEntries() const override;
+  uint64_t NumEntries() const override { return properties_.num_entries; }
 
   // Size of the file generated so far.  If invoked after a successful
   // Finish() call, returns the size of the final generated file.
-  uint64_t FileSize() const override;
+  uint64_t FileSize() const override { return offset_; }
 
   TableProperties GetTableProperties() const override { return properties_; }
 
@@ -242,15 +224,11 @@ private:
 
   std::vector<uint32_t> keys_or_prefixes_hashes_;
   bool closed_ = false;  // Either Finish() or Abandon() has been called.
-
-  // No copying allowed
-  TerarkZipTableBuilder(const TerarkZipTableBuilder&) = delete;
-  void operator=(const TerarkZipTableBuilder&) = delete;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
 
-class TerarkZipTableIterator : public InternalIterator {
+class TerarkZipTableIterator : public InternalIterator, boost::noncopyable {
 public:
   explicit TerarkZipTableIterator(TerarkZipTableReader* table) {
 	  table_ = table;
@@ -258,8 +236,6 @@ public:
 	  iter_.reset(dfa->adfa_make_iter());
 	  zValtype_ = ZipValueType::kZeroSeq;
 	  SetIterInvalid();
-  }
-  ~TerarkZipTableIterator() {
   }
 
   bool Valid() const override {
@@ -427,9 +403,6 @@ private:
   size_t valnum_;
   size_t validx_;
   Status status_;
-  // No copying allowed
-  TerarkZipTableIterator(const TerarkZipTableIterator&) = delete;
-  void operator=(const TerarkZipTableIterator&) = delete;
 };
 
 TerarkZipTableReader::~TerarkZipTableReader() {
@@ -528,10 +501,6 @@ NewIterator(const ReadOptions& ro, Arena* arena, bool skip_filters) {
 	}
 }
 
-void TerarkZipTableReader::Prepare(const Slice& target) {
-	// do nothing
-}
-
 Status
 TerarkZipTableReader::Get(const ReadOptions& ro, const Slice& ikey,
 						  GetContext* get_context, bool skip_filters) {
@@ -591,22 +560,6 @@ TerarkZipTableReader::Get(const ReadOptions& ro, const Slice& ikey,
 		}
 		return Status::OK(); }
 	}
-}
-
-uint64_t TerarkZipTableReader::ApproximateOffsetOf(const Slice& key) {
-	return 0;
-}
-
-void TerarkZipTableReader::SetupForCompaction() {
-}
-
-std::shared_ptr<const TableProperties>
-TerarkZipTableReader::GetTableProperties() const {
-  return table_properties_;
-}
-
-size_t TerarkZipTableReader::ApproximateMemoryUsage() const {
-  return file_size_;
 }
 
 Status
@@ -728,10 +681,6 @@ void TerarkZipTableBuilder::Add(const Slice& key, const Slice& value) {
 	properties_.raw_value_size += value.size();
 }
 
-Status TerarkZipTableBuilder::status() const {
-	return status_;
-}
-
 template<class ByteArray>
 static
 Status WriteBlock(const ByteArray& blockData, WritableFileWriter* file,
@@ -828,25 +777,6 @@ Status TerarkZipTableBuilder::Finish() {
 		return Status::InvalidArgument("TerarkZipTableBuilder::Finish()",
 				"index temp file is broken");
 	}
-#if 0
-	{
-		// reorder word id from byte lex order to LoudsTrie order
-		terark::AutoFree<uint32_t> newToOld(numUserKeys_, UINT32_MAX);
-		UintVecMin0 zvType2(numUserKeys_, kZipValueTypeBits);
-		dawg->tpl_for_each_word([&](size_t nth, fstring key, size_t state) {
-			(void)key; // unused
-			size_t newId = dawg->state_to_word_id(state);
-			size_t oldId = nth;
-			newToOld[newId] = oldId;
-			zvType2[newId] = zvType[oldId];
-		});
-		zvType.clear();
-		zvType.swap(zvType2);
-		std::string newFile = tmpValueFilePath_ + ".zbs.new";
-		bool keepOldFiles = false;
-		zstore_->reorder_and_load(newToOld.p, newFile, keepOldFiles);
-	}
-#else
 	{
 		// reorder word id from byte lex order to LoudsTrie order without
 		// using mapping array 'newToOld'.
@@ -870,7 +800,6 @@ Status TerarkZipTableBuilder::Finish() {
 		zvType.clear();
 		zvType.swap(zvType2);
 	}
-#endif
 	BlockHandle dataBlock, dictBlock, indexBlock, zvTypeBlock;
 	offset_ = 0;
 	Status s = WriteBlock(zstore_->get_data(), file_, &offset_, &dataBlock);
@@ -924,27 +853,15 @@ Status TerarkZipTableBuilder::Finish() {
 	return s;
 }
 
-void TerarkZipTableBuilder::Abandon() {
-	closed_ = true;
-}
-
-uint64_t TerarkZipTableBuilder::NumEntries() const {
-	return properties_.num_entries;
-}
-
-uint64_t TerarkZipTableBuilder::FileSize() const {
-	return offset_;
-}
-
 /////////////////////////////////////////////////////////////////////////////
 
-class TerarkZipTableFactory : public TableFactory {
+class TerarkZipTableFactory : public TableFactory, boost::noncopyable {
  public:
-  ~TerarkZipTableFactory();
   explicit
-  TerarkZipTableFactory(const TerarkZipTableOptions& = TerarkZipTableOptions());
+  TerarkZipTableFactory(const TerarkZipTableOptions& table_options)
+  : table_options_(table_options) {}
 
-  const char* Name() const override;
+  const char* Name() const override { return "TerarkZipTable"; }
 
   Status
   NewTableReader(const TableReaderOptions& table_reader_options,
@@ -960,13 +877,11 @@ class TerarkZipTableFactory : public TableFactory {
 
   std::string GetPrintableTableOptions() const override;
 
-  const TerarkZipTableOptions& table_options() const;
-
   // Sanitizes the specified DB Options.
   Status SanitizeOptions(const DBOptions& db_opts,
                          const ColumnFamilyOptions& cf_opts) const override;
 
-  void* GetOptions() override;
+  void* GetOptions() override { return &table_options_; }
 
  private:
   TerarkZipTableOptions table_options_;
@@ -975,17 +890,6 @@ class TerarkZipTableFactory : public TableFactory {
 class TableFactory* NewTerarkZipTableFactory(const TerarkZipTableOptions& opt) {
 	return new TerarkZipTableFactory(opt);
 }
-
-TerarkZipTableFactory::~TerarkZipTableFactory() {
-}
-
-TerarkZipTableFactory::TerarkZipTableFactory(const TerarkZipTableOptions& tzto)
-  : table_options_(tzto)
-{
-}
-
-const char*
-TerarkZipTableFactory::Name() const { return "TerarkZipTable"; }
 
 inline static
 bool IsBytewiseComparator(const Comparator* cmp) {
@@ -1040,8 +944,7 @@ const {
 		    table_builder_options.column_family_name);
 }
 
-std::string
-TerarkZipTableFactory::GetPrintableTableOptions() const {
+std::string TerarkZipTableFactory::GetPrintableTableOptions() const {
   std::string ret;
   ret.reserve(20000);
   const int kBufferSize = 200;
@@ -1053,12 +956,6 @@ TerarkZipTableFactory::GetPrintableTableOptions() const {
   return ret;
 }
 
-const TerarkZipTableOptions&
-TerarkZipTableFactory::table_options() const {
-	return table_options_;
-}
-
-// Sanitizes the specified DB Options.
 Status
 TerarkZipTableFactory::SanitizeOptions(const DBOptions& db_opts,
                        	   	   	   	   const ColumnFamilyOptions& cf_opts)
@@ -1069,9 +966,5 @@ const {
 	}
 	return Status::OK();
 }
-
-void*
-TerarkZipTableFactory::GetOptions() { return &table_options_; }
-
 
 } /* namespace rocksdb */
