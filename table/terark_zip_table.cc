@@ -493,8 +493,9 @@ TerarkZipTableReader::Open(const ImmutableCFOptions& ioptions,
   if (!s.ok()) {
 	  return s;
   }
+  size_t recNum = r->keyIndex_->num_words();
   r->typeArray_.risk_set_data((byte_t*)zValueTypeBlock.data.data(),
-		  zValueTypeBlock.data.size(), kZipValueTypeBits);
+		  recNum, kZipValueTypeBits);
   *table = std::move(r);
   return Status::OK();
 }
