@@ -684,6 +684,14 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(
   }
   tmpValueFile_.dopen(fd, "rb+");
   tmpValueWriter_.attach(&tmpValueFile_);
+
+  properties_.fixed_key_len = table_options.fixed_key_len;
+  properties_.num_data_blocks = 1;
+  properties_.index_size = 0;
+  properties_.filter_size = 0;
+  properties_.format_version = 0;
+  properties_.column_family_id = column_family_id;
+  properties_.column_family_name = column_family_name;
 }
 
 TerarkZipTableBuilder::~TerarkZipTableBuilder() {
@@ -715,6 +723,8 @@ void TerarkZipTableBuilder::Add(const Slice& key, const Slice& value) {
 	tmpValueWriter_.ensureWrite(userKey.end(), 8);
 	tmpValueWriter_ << fstringOf(value);
 	properties_.num_entries++;
+	properties_.raw_key_size += key.size();
+	properties_.raw_value_size += value.size();
 }
 
 Status TerarkZipTableBuilder::status() const {
@@ -880,6 +890,7 @@ Status TerarkZipTableBuilder::Finish() {
 	if (!s.ok()) {
 		return s;
 	}
+	properties_.index_size = indexBlock.size();
 	MetaIndexBuilder metaindexBuiler;
 	metaindexBuiler.Add(kTerarkZipTableValueDictBlock, dictBlock);
 	metaindexBuiler.Add(kTerarkZipTableIndexBlock, indexBlock);
