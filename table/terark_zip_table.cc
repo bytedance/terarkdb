@@ -254,22 +254,16 @@ class TerarkZipTableIterator : public InternalIterator {
 public:
   explicit TerarkZipTableIterator(TerarkZipTableReader* table) {
 	  table_ = table;
-	  status_ = Status::InvalidArgument("TerarkZipTableIterator",
-			  "Not point to a position");
 	  auto dfa = table->keyIndex_.get();
 	  iter_.reset(dfa->adfa_make_iter());
 	  zValtype_ = ZipValueType::kZeroSeq;
-	  pInterKey_.sequence = uint64_t(-1);
-	  pInterKey_.type = kMaxValue;
-	  recId_ = size_t(-1);
-	  valnum_ = 0;
-	  validx_ = 0;
+	  SetIterInvalid();
   }
   ~TerarkZipTableIterator() {
   }
 
   bool Valid() const override {
-	  return status_.ok();
+	  return size_t(-1) != recId_;
   }
 
   void SeekToFirst() override {
@@ -291,6 +285,7 @@ public:
 	  if (!ParseInternalKey(target, &pikey)) {
 		  status_ = Status::InvalidArgument("TerarkZipTableIterator::Seek()",
 				  "param target.size() < 8");
+		  SetIterInvalid();
 		  return;
 	  }
 	  if (UnzipIterRecord(iter_->seek_lower_bound(fstringOf(pikey.user_key)))) {
@@ -352,12 +347,19 @@ private:
 	  auto dfa = table_->keyIndex_.get();
 	  return dfa->state_to_word_id(iter_->word_state());
   }
+  void SetIterInvalid() {
+	  recId_ = size_t(-1);
+	  validx_ = 0;
+	  valnum_ = 0;
+	  pInterKey_.user_key = Slice();
+	  pInterKey_.sequence = uint64_t(-1);
+	  pInterKey_.type = kMaxValue;
+  }
   bool UnzipIterRecord(bool hasRecord) {
 	  validx_ = 0;
 	  if (hasRecord) {
 		  size_t recId = GetIterRecId();
 		  table_->GetValue(recId, &valueBuf_);
-		  status_ = Status::OK();
 		  zValtype_ = ZipValueType(table_->typeArray_[recId]);
 		  if (ZipValueType::kMulti == zValtype_) {
 			  auto zmValue = (ZipValueMultiValue*)(valueBuf_.data());
@@ -371,10 +373,7 @@ private:
 		  return true;
 	  }
 	  else {
-		  recId_ = size_t(-1);
-		  valnum_ = 0;
-		  status_ = Status::NotFound();
-		  pInterKey_.user_key = Slice();
+		  SetIterInvalid();
 		  return false;
 	  }
   }
