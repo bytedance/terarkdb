@@ -694,6 +694,14 @@ Status TerarkZipTableBuilder::Finish() {
 	assert(!closed_);
 	closed_ = true;
 
+#if !defined(NDEBUG)
+	for (size_t i = 1; i < tmpKeyVec_.size(); ++i) {
+		fstring prev = tmpKeyVec_[i-1];
+		fstring curr = tmpKeyVec_[i];
+		assert(prev < curr);
+	}
+#endif
+
 	if (0 == sampleLenSum_) { // prevent from empty
 		zbuilder_->addSample("Hello World!");
 	}
@@ -772,25 +780,17 @@ Status TerarkZipTableBuilder::Finish() {
 				"index temp file is broken");
 	}
 	{
-		// reorder word id from byte lex order to LoudsTrie order without
-		// using mapping array 'newToOld'.
-		// zstore_->reorder_and_load() will call generateMap, generateMap
-		// generate all (newId, oldId) mappings and feed the mappings to
-		// 'doMap', 'doMap' is implemented in dawg->reorder_and_load
 		UintVecMin0 zvType2(numUserKeys_, kZipValueTypeBits);
 		std::string newFile = tmpValueFilePath_ + ".zbs.new";
+		terark::AutoFree<uint32_t> newToOld(dawg->num_words(), UINT32_MAX);
 		bool keepOldFiles = false;
-		auto generateMap =
-		[&](const std::function<void(size_t newId, size_t oldId)>& doMap) {
-			terark::NonRecursiveDictionaryOrderToStateMapGenerator gen;
-			gen(*dawg, [&](size_t byteLexNth, size_t state) {
-				size_t newId = dawg->state_to_word_id(state);
-				size_t oldId = byteLexNth;
-				doMap(newId, oldId);
-				zvType2.set_wire(newId, zvType[oldId]);
-			});
-		};
-		zstore_->reorder_and_load(generateMap, newFile, keepOldFiles);
+		terark::NonRecursiveDictionaryOrderToStateMapGenerator gen;
+		gen(*dawg, [&](size_t dictOrderOldId, size_t state) {
+			size_t newId = dawg->state_to_word_id(state);
+			newToOld[newId] = uint32_t(dictOrderOldId);
+			zvType2.set_wire(newId, zvType[dictOrderOldId]);
+		});
+		zstore_->reorder_and_load(newToOld, newFile, keepOldFiles);
 		zvType.clear();
 		zvType.swap(zvType2);
 	}
