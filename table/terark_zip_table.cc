@@ -255,6 +255,7 @@ public:
   }
 
   void Next() override {
+	  assert(size_t(-1) != recId_);
 	  if (validx_ < valnum_) {
 		  DecodeCurrKeyValue();
 		  validx_++;
@@ -268,6 +269,7 @@ public:
   }
 
   void Prev() override {
+	  assert(size_t(-1) != recId_);
 	  if (validx_ > 0) {
 		  validx_--;
 		  DecodeCurrKeyValue();
@@ -286,7 +288,7 @@ public:
   }
 
   Slice value() const override {
-	  assert(status_.ok());
+	  assert(size_t(-1) != recId_);
 	  return userValue_;
   }
 
