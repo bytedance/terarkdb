@@ -281,8 +281,8 @@ public:
   }
 
   Slice key() const override {
-	  assert(status_.ok());
-	  return pInterKey_.user_key;
+	  assert(size_t(-1) != recId_);
+	  return interKeyBuf_;
   }
 
   Slice value() const override {
@@ -367,11 +367,14 @@ private:
 		userValue_ = d;
 		break; }
 	}
+	interKeyBuf_.resize(0);
+	AppendInternalKey(&interKeyBuf_, pInterKey_);
   }
 
   TerarkZipTableReader* table_;
   unique_ptr<terark::ADFA_LexIterator> iter_;
   ParsedInternalKey pInterKey_;
+  std::string interKeyBuf_;
   valvec<byte_t> valueBuf_;
   Slice  userValue_;
   ZipValueType zValtype_;
