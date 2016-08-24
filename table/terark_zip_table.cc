@@ -597,10 +597,8 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(
   , ioptions_(ioptions)
 {
   file_ = file;
-  status_ = Status::OK();
   zstore_.reset(new DictZipBlobStore());
   zbuilder_.reset(zstore_->createZipBuilder());
-  numUserKeys_ = 0;
   sampleUpperBound_ = randomGenerator_.max() * table_options_.sampleRatio;
   tmpValueFilePath_ = table_options.localTempDir;
   tmpValueFilePath_.append("/TerarkRocks-XXXXXX");
@@ -616,9 +614,6 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(
 
   properties_.fixed_key_len = table_options.fixed_key_len;
   properties_.num_data_blocks = 1;
-  properties_.index_size = 0;
-  properties_.filter_size = 0;
-  properties_.format_version = 0;
   properties_.column_family_id = column_family_id;
   properties_.column_family_name = column_family_name;
 }
