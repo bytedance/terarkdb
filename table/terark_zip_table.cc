@@ -215,14 +215,10 @@ private:
   uint64_t sampleUpperBound_;
   size_t numUserKeys_ = 0;
   size_t sampleLenSum_ = 0;
-
   WritableFileWriter* file_;
   uint64_t offset_ = 0;
-  size_t huge_page_tlb_size_;
   Status status_;
   TableProperties properties_;
-
-  std::vector<uint32_t> keys_or_prefixes_hashes_;
   bool closed_ = false;  // Either Finish() or Abandon() has been called.
 };
 
@@ -620,7 +616,6 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(
   : table_options_(table_options)
   , ioptions_(ioptions)
 {
-  huge_page_tlb_size_ = 0;
   file_ = file;
   status_ = Status::OK();
   zstore_.reset(new DictZipBlobStore());
@@ -722,8 +717,7 @@ Status TerarkZipTableBuilder::Finish() {
 	valvec<byte_t> mValue;
 	size_t entryId = 0;
 	size_t bitPos = 0;
-	size_t recId = 0;
-	for (; recId < numUserKeys_; recId++) {
+	for (size_t recId = 0; recId < numUserKeys_; recId++) {
 		uint64_t seqType = input.load_as<uint64_t>();
 		uint64_t seqNum;
 		ValueType vType;
