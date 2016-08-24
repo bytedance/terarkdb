@@ -193,7 +193,7 @@ private:
   SortableStrVec tmpKeyVec_;
   std::mt19937_64 randomGenerator_;
   uint64_t sampleUpperBound_;
-  size_t numUserKeys_ = 0;
+  size_t numUserKeys_ = size_t(-1);
   size_t sampleLenSum_ = 0;
   WritableFileWriter* file_;
   uint64_t offset_ = 0;
@@ -629,14 +629,16 @@ TerarkZipTableBuilder::~TerarkZipTableBuilder() {
 void TerarkZipTableBuilder::Add(const Slice& key, const Slice& value) {
 	assert(key.size() >= 8);
 	fstring userKey(key.data(), key.size()-8);
-	if (0 != numUserKeys_ && prevUserKey_ != userKey) {
-		assert(prevUserKey_ < userKey);
-		AddPrevUserKey();
-		prevUserKey_.assign(userKey);
+	if (size_t(-1) != numUserKeys_) {
+		if (prevUserKey_ != userKey) {
+			assert(prevUserKey_ < userKey);
+			AddPrevUserKey();
+			prevUserKey_.assign(userKey);
+		}
 	}
-	else if (0 == numUserKeys_) {
+	else {
 		prevUserKey_.assign(userKey);
-		numUserKeys_++;
+		numUserKeys_ = 0;
 	}
 	valueBits_.push_back(true);
 	if (!value.empty() && randomGenerator_() < sampleUpperBound_) {
