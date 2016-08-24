@@ -165,39 +165,19 @@ public:
 		  WritableFileWriter* file,
 		  const std::string& column_family_name);
 
-  // REQUIRES: Either Finish() or Abandon() has been called.
   ~TerarkZipTableBuilder();
 
-  // Add key,value to the table being constructed.
-  // REQUIRES: key is after any previously added key according to comparator.
-  // REQUIRES: Finish(), Abandon() have not been called
   void Add(const Slice& key, const Slice& value) override;
-
-  // Return non-ok iff some error has been detected.
   Status status() const override { return status_; }
-
-  // Finish building the table.  Stops using the file passed to the
-  // constructor after this function returns.
-  // REQUIRES: Finish(), Abandon() have not been called
   Status Finish() override;
-
-  // Indicate that the contents of this builder should be abandoned.  Stops
-  // using the file passed to the constructor after this function returns.
-  // If the caller is not going to call Finish(), it must call Abandon()
-  // before destroying this builder.
-  // REQUIRES: Finish(), Abandon() have not been called
   void Abandon() override { closed_ = true; }
-
-  // Number of calls to Add() so far.
   uint64_t NumEntries() const override { return properties_.num_entries; }
-
-  // Size of the file generated so far.  If invoked after a successful
-  // Finish() call, returns the size of the final generated file.
   uint64_t FileSize() const override { return offset_; }
-
   TableProperties GetTableProperties() const override { return properties_; }
 
 private:
+  void AddPrevUserKey();
+
   Arena arena_;
   const TerarkZipTableOptions& table_options_;
   const ImmutableCFOptions& ioptions_;
@@ -649,22 +629,12 @@ TerarkZipTableBuilder::~TerarkZipTableBuilder() {
 void TerarkZipTableBuilder::Add(const Slice& key, const Slice& value) {
 	assert(key.size() >= 8);
 	fstring userKey(key.data(), key.size()-8);
-	valueBits_.push_back(true);
-	if (prevUserKey_ != userKey) {
+	if (0 != numUserKeys_ && prevUserKey_ != userKey) {
 		assert(prevUserKey_ < userKey);
-		if (table_options_.fixed_key_len) {
-			tmpKeyVec_.m_strpool.append(userKey);
-		} else {
-			tmpKeyVec_.push_back(userKey);
-		}
+		AddPrevUserKey();
 		prevUserKey_.assign(userKey);
-		valueBits_.push_back(false);
-		numUserKeys_++;
 	}
-	else if (terark_unlikely(0 == numUserKeys_)) {
-		assert(userKey.empty());
-		numUserKeys_++;
-	}
+	valueBits_.push_back(true);
 	if (!value.empty() && randomGenerator_() < sampleUpperBound_) {
 		zbuilder_->addSample(fstringOf(value));
 		sampleLenSum_ += value.size();
@@ -705,9 +675,8 @@ Status TerarkZipTableBuilder::Finish() {
 	if (0 == sampleLenSum_) { // prevent from empty
 		zbuilder_->addSample("Hello World!");
 	}
+	AddPrevUserKey();
 
-	// the guard, if last same key seq is longer than 1, this is required
-	valueBits_.push_back(false);
 	tmpValueWriter_.flush();
 	tmpValueFile_.rewind();
 	unique_ptr<NestLoudsTrieDAWG_SE_512> dawg(new NestLoudsTrieDAWG_SE_512());
@@ -845,6 +814,16 @@ Status TerarkZipTableBuilder::Finish() {
 		offset_ += footer_encoding.size();
 	}
 	return s;
+}
+
+void TerarkZipTableBuilder::AddPrevUserKey() {
+	if (table_options_.fixed_key_len) {
+		tmpKeyVec_.m_strpool.append(prevUserKey_);
+	} else {
+		tmpKeyVec_.push_back(prevUserKey_);
+	}
+	valueBits_.push_back(false);
+	numUserKeys_++;
 }
 
 /////////////////////////////////////////////////////////////////////////////
