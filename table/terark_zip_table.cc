@@ -488,27 +488,25 @@ TerarkZipTableReader::Get(const ReadOptions& ro, const Slice& ikey,
 	ParsedInternalKey pikey;
 	ParseInternalKey(ikey, &pikey);
 	size_t recId;
-	{
-		Status s = GetRecId(pikey.user_key, &recId);
-		if (!s.ok()) {
-			return s;
-		}
+	Status s = GetRecId(pikey.user_key, &recId);
+	if (!s.ok()) {
+		return s;
 	}
 	valstore_->get_record(recId, &g_tbuf);
 	switch (ZipValueType(typeArray_[recId])) {
 	default:
-		return Status::Aborted("TerarkZipTableReader::Get()",
-				"Bad ZipValueType");
+		s = Status::Aborted("TerarkZipTableReader::Get()", "Bad ZipValueType");
+		break;
 	case ZipValueType::kZeroSeq:
 		get_context->SaveValue(Slice((char*)g_tbuf.data(), g_tbuf.size()), 0);
-		return Status::OK();
+		break;
 	case ZipValueType::kValue: { // should be a kTypeValue, the normal case
 		// little endian uint64_t
 		uint64_t seq = *(uint64_t*)g_tbuf.data() & kMaxSequenceNumber;
 		if (seq <= pikey.sequence) {
 			get_context->SaveValue(SliceOf(fstring(g_tbuf).substr(7)), seq);
 		}
-		return Status::OK(); }
+		break; }
 	case ZipValueType::kDelete: {
 		// little endian uint64_t
 		uint64_t seq = *(uint64_t*)g_tbuf.data() & kMaxSequenceNumber;
@@ -517,11 +515,10 @@ TerarkZipTableReader::Get(const ReadOptions& ro, const Slice& ikey,
 				ParsedInternalKey(pikey.user_key, seq, kTypeDeletion),
 				Slice());
 		}
-		return Status::OK(); }
+		break; }
 	case ZipValueType::kMulti: { // more than one value
 		auto mVal = (const ZipValueMultiValue*)g_tbuf.data();
-		const size_t num = mVal->num;
-		for(size_t i = 0; i < num; ++i) {
+		for(size_t i = 0; i < size_t(mVal->num); ++i) {
 			Slice val = mVal->getValueData(i);
 			SequenceNumber sn;
 			ValueType valtype;
@@ -539,8 +536,9 @@ TerarkZipTableReader::Get(const ReadOptions& ro, const Slice& ikey,
 				}
 			}
 		}
-		return Status::OK(); }
+		break; }
 	}
+	return s;
 }
 
 Status
@@ -685,15 +683,19 @@ Status TerarkZipTableBuilder::Finish() {
 
 	tmpValueWriter_.flush();
 	tmpValueFile_.rewind();
+	std::string tmpIndexFile = tmpValueFilePath_ + ".index";
+	std::string tmpStoreFile = tmpValueFilePath_ + ".zbs";
+	std::string newStoreFile = tmpValueFilePath_ + ".zbs.new";
+	std::string newStoreDict = tmpValueFilePath_ + ".zbs.new-dict";
 	unique_ptr<NestLoudsTrieDAWG_SE_512> dawg(new NestLoudsTrieDAWG_SE_512());
 	terark::NestLoudsTrieConfig conf;
 	conf.nestLevel = table_options_.indexNestLevel;
 	dawg->build_from(tmpKeyVec_, conf);
 	assert(dawg->num_words() == numUserKeys_);
 	tmpKeyVec_.clear();
-	dawg->save_mmap(tmpValueFilePath_ + ".index");
+	dawg->save_mmap(tmpIndexFile);
 	dawg.reset(); // free memory
-	zbuilder_->prepare(properties_.num_entries, tmpValueFilePath_ + ".zbs");
+	zbuilder_->prepare(properties_.num_entries, tmpStoreFile);
 	NativeDataInput<InputBuffer> input(&tmpValueFile_);
 	UintVecMin0 zvType(properties_.num_entries, kZipValueTypeBits);
 	valvec<byte_t> value;
@@ -747,7 +749,7 @@ Status TerarkZipTableBuilder::Finish() {
 	zbuilder_.reset();
 	value.clear();
 	mValue.clear();
-	try{auto trie = terark::BaseDFA::load_mmap(tmpValueFilePath_ + ".index");
+	try{auto trie = terark::BaseDFA::load_mmap(tmpIndexFile);
 		dawg.reset(dynamic_cast<NestLoudsTrieDAWG_SE_512*>(trie));
 	} catch (const std::exception&) {}
 	if (!dawg) {
@@ -756,7 +758,6 @@ Status TerarkZipTableBuilder::Finish() {
 	}
 	{
 		UintVecMin0 zvType2(numUserKeys_, kZipValueTypeBits);
-		std::string newFile = tmpValueFilePath_ + ".zbs.new";
 		terark::AutoFree<uint32_t> newToOld(dawg->num_words(), UINT32_MAX);
 		bool keepOldFiles = false;
 		terark::NonRecursiveDictionaryOrderToStateMapGenerator gen;
@@ -765,7 +766,7 @@ Status TerarkZipTableBuilder::Finish() {
 			newToOld[newId] = uint32_t(dictOrderOldId);
 			zvType2.set_wire(newId, zvType[dictOrderOldId]);
 		});
-		zstore_->reorder_and_load(newToOld, newFile, keepOldFiles);
+		zstore_->reorder_and_load(newToOld, newStoreFile, keepOldFiles);
 		zvType.clear();
 		zvType.swap(zvType2);
 	}
@@ -789,6 +790,11 @@ Status TerarkZipTableBuilder::Finish() {
 	if (!s.ok()) {
 		return s;
 	}
+	dawg.reset();
+	zstore_.reset();
+	::remove(newStoreFile.c_str());
+	::remove(newStoreDict.c_str());
+	::remove(tmpIndexFile.c_str());
 	properties_.index_size = indexBlock.size();
 	MetaIndexBuilder metaindexBuiler;
 	metaindexBuiler.Add(kTerarkZipTableValueDictBlock, dictBlock);
