@@ -309,10 +309,17 @@ private:
 	  pInterKey_.type = kMaxValue;
   }
   bool UnzipIterRecord(bool hasRecord) {
-	  validx_ = 0;
 	  if (hasRecord) {
 		  size_t recId = GetIterRecId();
-		  table_->GetValue(recId, &valueBuf_);
+		  try {
+			  table_->GetValue(recId, &valueBuf_);
+		  }
+		  catch (const std::logic_error& ex) { // crc checksum error
+			  SetIterInvalid();
+			  status_ = Status::Corruption(
+				"TerarkZipTableIterator::UnzipIterRecord()", ex.what());
+			  return false;
+		  }
 		  zValtype_ = ZipValueType(table_->typeArray_[recId]);
 		  if (ZipValueType::kMulti == zValtype_) {
 			  auto zmValue = (ZipValueMultiValue*)(valueBuf_.data());
@@ -321,6 +328,7 @@ private:
 		  } else {
 			  valnum_ = 1;
 		  }
+		  validx_ = 0;
 		  recId_ = recId;
 		  pInterKey_.user_key = SliceOf(iter_->word());
 		  return true;
@@ -438,10 +446,15 @@ TerarkZipTableReader::Open(const ImmutableCFOptions& ioptions,
   if (!s.ok()) {
 	  return s;
   }
-  r->valstore_.reset(new DictZipBlobStore());
-  r->valstore_->load_user_memory(
-		  fstringOf(valueDictBlock.data),
-		  fstring(file_data.data(), props->data_size));
+  try {
+	  r->valstore_.reset(new DictZipBlobStore());
+	  r->valstore_->load_user_memory(
+			  fstringOf(valueDictBlock.data),
+			  fstring(file_data.data(), props->data_size));
+  }
+  catch (const std::logic_error& ex) { // crc checksum error
+	  return Status::Corruption("TerarkZipTableReader::Open()", ex.what());
+  }
   s = r->LoadIndex(indexBlock.data);
   if (!s.ok()) {
 	  return s;
@@ -454,6 +467,7 @@ TerarkZipTableReader::Open(const ImmutableCFOptions& ioptions,
 }
 
 Status TerarkZipTableReader::LoadIndex(Slice mem) {
+  auto func = "TerarkZipTableReader::LoadIndex()";
   try {
 	  auto trie = terark::BaseDFA::load_mmap_range(mem.data(), mem.size());
 	  keyIndex_.reset(dynamic_cast<NestLoudsTrieDAWG_SE_512*>(trie));
@@ -462,8 +476,11 @@ Status TerarkZipTableReader::LoadIndex(Slice mem) {
 				  "Index class is not NestLoudsTrieDAWG_SE_512");
 	  }
   }
+  catch (const std::logic_error& ex) { // crc checksum error
+	  return Status::Corruption(func, ex.what());
+  }
   catch (const std::exception& ex) {
-	  return Status::InvalidArgument("TerarkZipTableReader::Open()", ex.what());
+	  return Status::InvalidArgument(func, ex.what());
   }
   return Status::OK();
 }
@@ -491,7 +508,12 @@ TerarkZipTableReader::Get(const ReadOptions& ro, const Slice& ikey,
 	if (!s.ok()) {
 		return s;
 	}
-	valstore_->get_record(recId, &g_tbuf);
+	try {
+		valstore_->get_record(recId, &g_tbuf);
+	}
+	catch (const std::logic_error& ex) { // crc checksum error
+		return Status::Corruption("TerarkZipTableReader::Get()", ex.what());
+	}
 	switch (ZipValueType(typeArray_[recId])) {
 	default:
 		s = Status::Aborted("TerarkZipTableReader::Get()", "Bad ZipValueType");
@@ -600,7 +622,9 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(
 {
   file_ = file;
   zstore_.reset(new DictZipBlobStore());
-  size_t  flags = DictZipBlobStore::Flag_HasOffsetsCRC;
+  size_t  flags = table_options.checkSumLevel < 2
+		  	    ? DictZipBlobStore::Flag_HasOffsetsCRC
+		  	    : DictZipBlobStore::Flag_HasContentCRC;
   zbuilder_.reset(DictZipBlobStore::createZipBuilder(flags));
   sampleUpperBound_ = randomGenerator_.max() * table_options_.sampleRatio;
   tmpValueFilePath_ = table_options.localTempDir;

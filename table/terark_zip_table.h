@@ -17,6 +17,12 @@ namespace rocksdb {
 struct TerarkZipTableOptions {
 	unsigned fixed_key_len = 0;
 	int indexNestLevel = 3;
+
+	/// 0 : check sum nothing
+	/// 1 : check sum meta data and index, check on file load
+	/// 2 : check sum all data, not check on file load, check on record read
+	int checkSumLevel = 1;
+
 	double sampleRatio = 0.03;
 	std::string localTempDir = "/tmp";
 };
