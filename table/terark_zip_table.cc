@@ -63,7 +63,6 @@ class TerarkZipTableIterator;
 #elif defined(_WIN32)
   #define MY_THREAD_LOCAL(Type, Var)  static __declspec(thread) Type Var
 #else
-//#define MY_THREAD_LOCAL(Type, Var)  static __thread Type Var
   #define MY_THREAD_LOCAL(Type, Var)  static thread_local Type Var
 #endif
 
@@ -601,7 +600,8 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(
 {
   file_ = file;
   zstore_.reset(new DictZipBlobStore());
-  zbuilder_.reset(zstore_->createZipBuilder());
+  size_t  flags = DictZipBlobStore::Flag_HasOffsetsCRC;
+  zbuilder_.reset(DictZipBlobStore::createZipBuilder(flags));
   sampleUpperBound_ = randomGenerator_.max() * table_options_.sampleRatio;
   tmpValueFilePath_ = table_options.localTempDir;
   tmpValueFilePath_.append("/TerarkRocks-XXXXXX");
@@ -627,7 +627,7 @@ TerarkZipTableBuilder::~TerarkZipTableBuilder() {
 void TerarkZipTableBuilder::Add(const Slice& key, const Slice& value) {
 	assert(key.size() >= 8);
 	fstring userKey(key.data(), key.size()-8);
-	if (size_t(-1) != numUserKeys_) {
+	if (terark_likely(size_t(-1) != numUserKeys_)) {
 		if (prevUserKey_ != userKey) {
 			assert(prevUserKey_ < userKey);
 			AddPrevUserKey();
