@@ -16,6 +16,7 @@
 #include <table/table_reader.h>
 #include <table/meta_blocks.h>
 #include <terark/stdtypes.hpp>
+#include <terark/util/crc.hpp>
 #include <terark/util/throw.hpp>
 #include <terark/fast_zip_blob_store.hpp>
 #include <terark/fsa/nest_trie_dawg.hpp>
@@ -49,6 +50,7 @@ using terark::LittleEndianDataInput;
 using terark::LittleEndianDataOutput;
 using terark::SortableStrVec;
 using terark::UintVecMin0;
+using terark::BadCrc32cException;
 
 static const uint64_t kTerarkZipTableMagicNumber = 0x1122334455667788;
 
@@ -314,7 +316,7 @@ private:
 		  try {
 			  table_->GetValue(recId, &valueBuf_);
 		  }
-		  catch (const std::logic_error& ex) { // crc checksum error
+		  catch (const BadCrc32cException& ex) { // crc checksum error
 			  SetIterInvalid();
 			  status_ = Status::Corruption(
 				"TerarkZipTableIterator::UnzipIterRecord()", ex.what());
@@ -452,7 +454,7 @@ TerarkZipTableReader::Open(const ImmutableCFOptions& ioptions,
 			  fstringOf(valueDictBlock.data),
 			  fstring(file_data.data(), props->data_size));
   }
-  catch (const std::logic_error& ex) { // crc checksum error
+  catch (const BadCrc32cException& ex) {
 	  return Status::Corruption("TerarkZipTableReader::Open()", ex.what());
   }
   s = r->LoadIndex(indexBlock.data);
@@ -476,7 +478,7 @@ Status TerarkZipTableReader::LoadIndex(Slice mem) {
 				  "Index class is not NestLoudsTrieDAWG_SE_512");
 	  }
   }
-  catch (const std::logic_error& ex) { // crc checksum error
+  catch (const BadCrc32cException& ex) {
 	  return Status::Corruption(func, ex.what());
   }
   catch (const std::exception& ex) {
@@ -511,7 +513,7 @@ TerarkZipTableReader::Get(const ReadOptions& ro, const Slice& ikey,
 	try {
 		valstore_->get_record(recId, &g_tbuf);
 	}
-	catch (const std::logic_error& ex) { // crc checksum error
+	catch (const BadCrc32cException& ex) { // crc checksum error
 		return Status::Corruption("TerarkZipTableReader::Get()", ex.what());
 	}
 	switch (ZipValueType(typeArray_[recId])) {
@@ -622,10 +624,7 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(
 {
   file_ = file;
   zstore_.reset(new DictZipBlobStore());
-  size_t  flags = table_options.checkSumLevel < 2
-		  	    ? DictZipBlobStore::Flag_HasOffsetsCRC
-		  	    : DictZipBlobStore::Flag_HasContentCRC;
-  zbuilder_.reset(DictZipBlobStore::createZipBuilder(flags));
+  zbuilder_.reset(DictZipBlobStore::createZipBuilder(table_options.checkSumLevel));
   sampleUpperBound_ = randomGenerator_.max() * table_options_.sampleRatio;
   tmpValueFilePath_ = table_options.localTempDir;
   tmpValueFilePath_.append("/TerarkRocks-XXXXXX");
