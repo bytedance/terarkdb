@@ -140,7 +140,6 @@ public:
   TerarkZipTableReader(size_t user_key_len, const ImmutableCFOptions& ioptions);
 
   Status GetRecId(const Slice& userKey, size_t* pRecId) const;
-  void GetValue(size_t recId, valvec<byte_t>* value) const;
 
 private:
   unique_ptr<DictZipBlobStore> valstore_;
@@ -186,7 +185,6 @@ private:
   std::vector<unique_ptr<IntTblPropCollector>> table_properties_collectors_;
 
   unique_ptr<DictZipBlobStore::ZipBuilder> zbuilder_;
-  unique_ptr<DictZipBlobStore> zstore_;
   valvec<byte_t> prevUserKey_;
   terark::febitvec valueBits_;
   std::string tmpValueFilePath_;
@@ -315,7 +313,7 @@ private:
 	  if (hasRecord) {
 		  size_t recId = GetIterRecId();
 		  try {
-			  table_->GetValue(recId, &valueBuf_);
+			  table_->valstore_->get_record(recId, &valueBuf_);
 		  }
 		  catch (const BadCrc32cException& ex) { // crc checksum error
 			  SetIterInvalid();
@@ -605,12 +603,6 @@ TerarkZipTableReader::GetRecId(const Slice& userKey, size_t* pRecId) const {
 	return Status::OK();
 }
 
-void
-TerarkZipTableReader::GetValue(size_t recId, valvec<byte_t>* value) const {
-	assert(recId < keyIndex_->num_words());
-	valstore_->get_record(recId, value);
-}
-
 ///////////////////////////////////////////////////////////////////////////////
 
 TerarkZipTableBuilder::TerarkZipTableBuilder(
@@ -624,7 +616,6 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(
   , ioptions_(ioptions)
 {
   file_ = file;
-  zstore_.reset(new DictZipBlobStore());
   zbuilder_.reset(DictZipBlobStore::createZipBuilder(table_options.checksumLevel));
   sampleUpperBound_ = randomGenerator_.max() * table_options_.sampleRatio;
   tmpValueFilePath_ = table_options.localTempDir;
@@ -769,7 +760,7 @@ Status TerarkZipTableBuilder::Finish() {
 		entryId += oneSeqLen;
 	}
 	assert(entryId == properties_.num_entries);
-	zstore_->completeBuild(*zbuilder_);
+	unique_ptr<DictZipBlobStore> zstore(zbuilder_->finish());
 	zbuilder_.reset();
 	value.clear();
 	mValue.clear();
@@ -783,25 +774,25 @@ Status TerarkZipTableBuilder::Finish() {
 	{
 		UintVecMin0 zvType2(numUserKeys_, kZipValueTypeBits);
 		terark::AutoFree<uint32_t> newToOld(dawg->num_words(), UINT32_MAX);
-		bool keepOldFiles = false;
 		terark::NonRecursiveDictionaryOrderToStateMapGenerator gen;
 		gen(*dawg, [&](size_t dictOrderOldId, size_t state) {
 			size_t newId = dawg->state_to_word_id(state);
 			newToOld[newId] = uint32_t(dictOrderOldId);
 			zvType2.set_wire(newId, zvType[dictOrderOldId]);
 		});
-		zstore_->reorder_and_load(newToOld, newStoreFile, keepOldFiles);
+		bool keepOldFiles = false;
+		zstore->reorder_and_load(newToOld, newStoreFile, keepOldFiles);
 		zvType.clear();
 		zvType.swap(zvType2);
 	}
 	BlockHandle dataBlock, dictBlock, indexBlock, zvTypeBlock;
 	offset_ = 0;
-	Status s = WriteBlock(zstore_->get_data(), file_, &offset_, &dataBlock);
+	Status s = WriteBlock(zstore->get_data(), file_, &offset_, &dataBlock);
 	if (!s.ok()) {
 		return s;
 	}
 	properties_.data_size = dataBlock.size();
-	s = WriteBlock(zstore_->get_dict(), file_, &offset_, &dictBlock);
+	s = WriteBlock(zstore->get_dict(), file_, &offset_, &dictBlock);
 	if (!s.ok()) {
 		return s;
 	}
@@ -815,7 +806,7 @@ Status TerarkZipTableBuilder::Finish() {
 		return s;
 	}
 	dawg.reset();
-	zstore_.reset();
+	zstore.reset();
 	::remove(newStoreFile.c_str());
 	::remove(newStoreDict.c_str());
 	::remove(tmpIndexFile.c_str());
