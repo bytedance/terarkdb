@@ -625,7 +625,7 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(
 {
   file_ = file;
   zstore_.reset(new DictZipBlobStore());
-  zbuilder_.reset(DictZipBlobStore::createZipBuilder(table_options.checkSumLevel));
+  zbuilder_.reset(DictZipBlobStore::createZipBuilder(table_options.checksumLevel));
   sampleUpperBound_ = randomGenerator_.max() * table_options_.sampleRatio;
   tmpValueFilePath_ = table_options.localTempDir;
   tmpValueFilePath_.append("/TerarkRocks-XXXXXX");
