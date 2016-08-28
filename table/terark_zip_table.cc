@@ -35,6 +35,7 @@ using std::unique_ptr;
 using std::unordered_map;
 using std::vector;
 
+using terark::BaseDFA;
 using terark::NestLoudsTrieDAWG_SE_512;
 using terark::DictZipBlobStore;
 using terark::byte_t;
@@ -471,7 +472,7 @@ TerarkZipTableReader::Open(const ImmutableCFOptions& ioptions,
 Status TerarkZipTableReader::LoadIndex(Slice mem) {
   auto func = "TerarkZipTableReader::LoadIndex()";
   try {
-	  auto trie = terark::BaseDFA::load_mmap_range(mem.data(), mem.size());
+	  auto trie = BaseDFA::load_mmap_user_mem(mem.data(), mem.size());
 	  keyIndex_.reset(dynamic_cast<NestLoudsTrieDAWG_SE_512*>(trie));
 	  if (!keyIndex_) {
 		  return Status::InvalidArgument("TerarkZipTableReader::Open()",
@@ -772,7 +773,7 @@ Status TerarkZipTableBuilder::Finish() {
 	zbuilder_.reset();
 	value.clear();
 	mValue.clear();
-	try{auto trie = terark::BaseDFA::load_mmap(tmpIndexFile);
+	try{auto trie = BaseDFA::load_mmap(tmpIndexFile);
 		dawg.reset(dynamic_cast<NestLoudsTrieDAWG_SE_512*>(trie));
 	} catch (const std::exception&) {}
 	if (!dawg) {
