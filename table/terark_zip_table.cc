@@ -473,7 +473,7 @@ Status TerarkZipTableReader::LoadIndex(Slice mem) {
 	  auto trie = BaseDFA::load_mmap_user_mem(mem.data(), mem.size());
 	  keyIndex_.reset(dynamic_cast<NestLoudsTrieDAWG_SE_512*>(trie));
 	  if (!keyIndex_) {
-		  return Status::InvalidArgument("TerarkZipTableReader::Open()",
+		  return Status::InvalidArgument("TerarkZipTableReader::LoadIndex()",
 				  "Index class is not NestLoudsTrieDAWG_SE_512");
 	  }
   }
@@ -911,7 +911,12 @@ TerarkZipTableFactory::NewTableReader(
 		uint64_t file_size, unique_ptr<TableReader>* table,
 		bool prefetch_index_and_filter_in_cache)
 const {
-	(void)prefetch_index_and_filter_in_cache; // unused
+	if (!prefetch_index_and_filter_in_cache) {
+		fprintf(stderr
+				, "WARN: TerarkZipTableFactory::NewTableReader(): "
+				  "prefetch_index_and_filter_in_cache = false is ignored, "
+				  "all index and data will be loaded in memory");
+	}
 	if (!IsBytewiseComparator(table_reader_options.internal_comparator)) {
 		return Status::InvalidArgument("TerarkZipTableFactory::NewTableReader()",
 				"user comparator must be 'leveldb.BytewiseComparator'");
