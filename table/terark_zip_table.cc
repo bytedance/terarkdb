@@ -751,6 +751,7 @@ Status TerarkZipTableBuilder::Finish() {
 		bitPos += oneSeqLen + 1;
 		entryId += oneSeqLen;
 	}
+	tmpValueFile_.close();
 	assert(entryId == properties_.num_entries);
 	unique_ptr<DictZipBlobStore> zstore(zbuilder_->finish());
 	zbuilder_.reset();
