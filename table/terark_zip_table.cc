@@ -139,7 +139,7 @@ public:
   ~TerarkZipTableReader();
   TerarkZipTableReader(size_t user_key_len, const ImmutableCFOptions& ioptions);
 
-  Status GetRecId(const Slice& userKey, size_t* pRecId) const;
+  size_t GetRecId(const Slice& userKey) const;
 
 private:
   unique_ptr<DictZipBlobStore> valstore_;
@@ -504,10 +504,9 @@ TerarkZipTableReader::Get(const ReadOptions& ro, const Slice& ikey,
 						  GetContext* get_context, bool skip_filters) {
 	ParsedInternalKey pikey;
 	ParseInternalKey(ikey, &pikey);
-	size_t recId;
-	Status s = GetRecId(pikey.user_key, &recId);
-	if (!s.ok()) {
-		return s;
+	size_t recId = GetRecId(pikey.user_key);
+	if (size_t(-1) == recId) {
+		return Status::OK();
 	}
 	try {
 		valstore_->get_record(recId, &g_tbuf);
@@ -517,8 +516,7 @@ TerarkZipTableReader::Get(const ReadOptions& ro, const Slice& ikey,
 	}
 	switch (ZipValueType(typeArray_[recId])) {
 	default:
-		s = Status::Aborted("TerarkZipTableReader::Get()", "Bad ZipValueType");
-		break;
+		return Status::Aborted("TerarkZipTableReader::Get()", "Bad ZipValueType");
 	case ZipValueType::kZeroSeq:
 		get_context->SaveValue(Slice((char*)g_tbuf.data(), g_tbuf.size()), 0);
 		break;
@@ -560,11 +558,10 @@ TerarkZipTableReader::Get(const ReadOptions& ro, const Slice& ikey,
 		}
 		break; }
 	}
-	return s;
+	return Status::OK();
 }
 
-Status
-TerarkZipTableReader::GetRecId(const Slice& userKey, size_t* pRecId) const {
+size_t TerarkZipTableReader::GetRecId(const Slice& userKey) const {
 	auto dfa = keyIndex_.get();
 	const size_t  kn = userKey.size();
 	const byte_t* kp = (const byte_t*)userKey.data();
@@ -574,8 +571,7 @@ TerarkZipTableReader::GetRecId(const Slice& userKey, size_t* pRecId) const {
 		if (dfa->is_pzip(state)) {
 			fstring zs = dfa->get_zpath_data(state, &g_mctx);
 			if (kn - pos < zs.size()) {
-				return Status::NotFound("TerarkZipTableReader::Get()",
-						"zpath is longer than remaining key");
+				return size_t(-1);
 			}
 			for (size_t j = 0; j < zs.size(); ++j, ++pos) {
 				if (zs[j] != kp[pos]) {
@@ -595,12 +591,10 @@ TerarkZipTableReader::GetRecId(const Slice& userKey, size_t* pRecId) const {
 		assert(next < dfa->total_states());
 		state = next;
 	}
-	if (!dfa->is_term(state)) {
-		return Status::NotFound("TerarkZipTableReader::Get()",
-				"input key is a prefix but is not a dfa key");
+	if (dfa->is_term(state)) {
+		return dfa->state_to_word_id(state);
 	}
-	*pRecId = dfa->state_to_word_id(state);
-	return Status::OK();
+	return size_t(-1);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
