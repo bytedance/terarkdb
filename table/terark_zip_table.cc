@@ -752,6 +752,7 @@ Status TerarkZipTableBuilder::Finish() {
 		entryId += oneSeqLen;
 	}
 	tmpValueFile_.close();
+	::remove(this->tmpValueFilePath_.c_str());
 	assert(entryId == properties_.num_entries);
 	unique_ptr<DictZipBlobStore> zstore(zbuilder_->finish());
 	zbuilder_.reset();
