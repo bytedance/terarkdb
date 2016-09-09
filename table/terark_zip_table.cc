@@ -575,8 +575,7 @@ size_t TerarkZipTableReader::GetRecId(const Slice& userKey) const {
 			}
 			for (size_t j = 0; j < zs.size(); ++j, ++pos) {
 				if (zs[j] != kp[pos]) {
-					return Status::NotFound("TerarkZipTableReader::Get()",
-							"zpath match fail");
+					return size_t(-1);
 				}
 			}
 			if (pos == kn)
@@ -585,8 +584,7 @@ size_t TerarkZipTableReader::GetRecId(const Slice& userKey) const {
 		byte_t c = kp[pos];
 		size_t next = dfa->state_move(state, c);
 		if (dfa->nil_state == next) {
-			return Status::NotFound("TerarkZipTableReader::Get()",
-					"reached nil_state");
+			return size_t(-1);
 		}
 		assert(next < dfa->total_states());
 		state = next;
