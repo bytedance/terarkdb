@@ -694,17 +694,21 @@ Status TerarkZipTableBuilder::Finish() {
 	std::string tmpStoreFile = tmpValueFilePath_ + ".zbs";
 	std::string newStoreFile = tmpValueFilePath_ + ".zbs.new";
 	std::string newStoreDict = tmpValueFilePath_ + ".zbs.new-dict";
-	unique_ptr<NestLoudsTrieDAWG_SE_512> dawg(new NestLoudsTrieDAWG_SE_512());
 	terark::NestLoudsTrieConfig conf;
 	conf.nestLevel = table_options_.indexNestLevel;
+	unique_ptr<NestLoudsTrieDAWG_SE_512> dawg(new NestLoudsTrieDAWG_SE_512());
 	dawg->build_from(tmpKeyVec_, conf);
 	assert(dawg->num_words() == numUserKeys_);
 	tmpKeyVec_.clear();
 	dawg->save_mmap(tmpIndexFile);
 	dawg.reset(); // free memory
+	unique_ptr<DictZipBlobStore> zstore;
+	UintVecMin0 zvType(properties_.num_entries, kZipValueTypeBits);
+{
+	static std::mutex zipMutex;
+	std::unique_lock<std::mutex> zipLock(zipMutex);
 	zbuilder_->prepare(properties_.num_entries, tmpStoreFile);
 	NativeDataInput<InputBuffer> input(&tmpValueFile_);
-	UintVecMin0 zvType(properties_.num_entries, kZipValueTypeBits);
 	valvec<byte_t> value;
 	valvec<byte_t> mValue;
 	size_t entryId = 0;
@@ -752,12 +756,11 @@ Status TerarkZipTableBuilder::Finish() {
 		entryId += oneSeqLen;
 	}
 	tmpValueFile_.close();
-	::remove(tmpValueFilePath_.c_str());
+	::remove(this->tmpValueFilePath_.c_str());
 	assert(entryId == properties_.num_entries);
-	unique_ptr<DictZipBlobStore> zstore(zbuilder_->finish());
+	zstore.reset(zbuilder_->finish());
 	zbuilder_.reset();
-	value.clear();
-	mValue.clear();
+}
 	try{auto trie = BaseDFA::load_mmap(tmpIndexFile);
 		dawg.reset(dynamic_cast<NestLoudsTrieDAWG_SE_512*>(trie));
 	} catch (const std::exception&) {}
