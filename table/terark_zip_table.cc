@@ -717,7 +717,6 @@ Status TerarkZipTableBuilder::Finish() {
 		uint64_t seqNum;
 		ValueType vType;
 		UnPackSequenceAndType(seqType, &seqNum, &vType);
-		value.erase_all();
 		size_t oneSeqLen = valueBits_.one_seq_len(bitPos);
 		assert(oneSeqLen >= 1);
 		if (1==oneSeqLen && (kTypeDeletion==vType || kTypeValue==vType)) {
@@ -730,6 +729,7 @@ Status TerarkZipTableBuilder::Finish() {
 				} else {
 					zvType.set_wire(recId, size_t(ZipValueType::kDelete));
 				}
+				value.erase_all();
 				value.append((byte_t*)&seqNum, 7);
 				input.load_add(value);
 			}
