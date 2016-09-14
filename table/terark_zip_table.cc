@@ -918,7 +918,7 @@ const {
 	if (!s.ok()) {
 		return s;
 	}
-	if (footer.table_magic_number_ != kTerarkZipTableMagicNumber) {
+	if (footer.table_magic_number() != kTerarkZipTableMagicNumber) {
 		return fallback_factory_->NewTableReader(table_reader_options,
 				std::move(file), file_size, table,
 				prefetch_index_and_filter_in_cache);
