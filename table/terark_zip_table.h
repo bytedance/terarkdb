@@ -27,7 +27,9 @@ struct TerarkZipTableOptions {
 	std::string localTempDir = "/tmp";
 };
 
-class TableFactory* NewTerarkZipTableFactory(const TerarkZipTableOptions&);
+class TableFactory*
+NewTerarkZipTableFactory(const TerarkZipTableOptions&,
+						 class TableFactory* fallback);
 
 }  // namespace rocksdb
 

@@ -710,7 +710,6 @@ Status TerarkZipTableBuilder::Finish() {
 	zbuilder_->prepare(properties_.num_entries, tmpStoreFile);
 	NativeDataInput<InputBuffer> input(&tmpValueFile_);
 	valvec<byte_t> value;
-	valvec<byte_t> mValue;
 	size_t entryId = 0;
 	size_t bitPos = 0;
 	for (size_t recId = 0; recId < numUserKeys_; recId++) {
@@ -718,40 +717,39 @@ Status TerarkZipTableBuilder::Finish() {
 		uint64_t seqNum;
 		ValueType vType;
 		UnPackSequenceAndType(seqType, &seqNum, &vType);
-		input >> value;
+		value.erase_all();
 		size_t oneSeqLen = valueBits_.one_seq_len(bitPos);
 		assert(oneSeqLen >= 1);
 		if (1==oneSeqLen && (kTypeDeletion==vType || kTypeValue==vType)) {
 			if (0 == seqNum && kTypeValue==vType) {
 				zvType.set_wire(recId, size_t(ZipValueType::kZeroSeq));
+				input >> value;
 			} else {
 				if (kTypeValue==vType) {
 					zvType.set_wire(recId, size_t(ZipValueType::kValue));
 				} else {
 					zvType.set_wire(recId, size_t(ZipValueType::kDelete));
 				}
-				value.insert(0, (byte_t*)&seqNum, 7);
+				value.append((byte_t*)&seqNum, 7);
+				input.load_add(value);
 			}
-			zbuilder_->addRecord(value);
 		}
 		else {
 			zvType.set_wire(recId, size_t(ZipValueType::kMulti));
 			size_t headerSize = ZipValueMultiValue::calcHeaderSize(oneSeqLen);
-			mValue.erase_all();
-			mValue.resize(headerSize);
-			((ZipValueMultiValue*)mValue.data())->num = oneSeqLen;
-			((ZipValueMultiValue*)mValue.data())->offsets[0] = 0;
+			value.resize(headerSize);
+			((ZipValueMultiValue*)value.data())->num = oneSeqLen;
+			((ZipValueMultiValue*)value.data())->offsets[0] = 0;
 			for (size_t j = 0; j < oneSeqLen; j++) {
 				if (j > 0) {
 					seqType = input.load_as<uint64_t>();
-					input >> value;
 				}
-				mValue.append((byte_t*)&seqType, 8);
-				mValue.append(value);
-				((ZipValueMultiValue*)mValue.data())->offsets[j+1] = mValue.size() - headerSize;
+				value.append((byte_t*)&seqType, 8);
+				input.load_add(value);
+				((ZipValueMultiValue*)value.data())->offsets[j+1] = value.size() - headerSize;
 			}
-			zbuilder_->addRecord(mValue);
 		}
+		zbuilder_->addRecord(value);
 		bitPos += oneSeqLen + 1;
 		entryId += oneSeqLen;
 	}
@@ -855,8 +853,8 @@ void TerarkZipTableBuilder::AddPrevUserKey() {
 class TerarkZipTableFactory : public TableFactory, boost::noncopyable {
  public:
   explicit
-  TerarkZipTableFactory(const TerarkZipTableOptions& table_options)
-  : table_options_(table_options) {}
+  TerarkZipTableFactory(const TerarkZipTableOptions& tzto, TableFactory* fallback)
+  : table_options_(tzto), fallback_factory_(fallback) {}
 
   const char* Name() const override { return "TerarkZipTable"; }
 
@@ -882,10 +880,13 @@ class TerarkZipTableFactory : public TableFactory, boost::noncopyable {
 
  private:
   TerarkZipTableOptions table_options_;
+  TableFactory* fallback_factory_;
 };
 
-class TableFactory* NewTerarkZipTableFactory(const TerarkZipTableOptions& opt) {
-	return new TerarkZipTableFactory(opt);
+class TableFactory*
+NewTerarkZipTableFactory(const TerarkZipTableOptions& tzto,
+						 class TableFactory* fallback) {
+	return new TerarkZipTableFactory(tzto, fallback);
 }
 
 inline static
@@ -908,15 +909,25 @@ TerarkZipTableFactory::NewTableReader(
 		uint64_t file_size, unique_ptr<TableReader>* table,
 		bool prefetch_index_and_filter_in_cache)
 const {
+	if (!IsBytewiseComparator(table_reader_options.internal_comparator)) {
+		return Status::InvalidArgument("TerarkZipTableFactory::NewTableReader()",
+				"user comparator must be 'leveldb.BytewiseComparator'");
+	}
+	Footer footer;
+	Status s = ReadFooterFromFile(file.get(), file_size, &footer);
+	if (!s.ok()) {
+		return s;
+	}
+	if (footer.table_magic_number_ != kTerarkZipTableMagicNumber) {
+		return fallback_factory_->NewTableReader(table_reader_options,
+				std::move(file), file_size, table,
+				prefetch_index_and_filter_in_cache);
+	}
 	if (!prefetch_index_and_filter_in_cache) {
 		fprintf(stderr
 				, "WARN: TerarkZipTableFactory::NewTableReader(): "
 				  "prefetch_index_and_filter_in_cache = false is ignored, "
 				  "all index and data will be loaded in memory");
-	}
-	if (!IsBytewiseComparator(table_reader_options.internal_comparator)) {
-		return Status::InvalidArgument("TerarkZipTableFactory::NewTableReader()",
-				"user comparator must be 'leveldb.BytewiseComparator'");
 	}
 	return TerarkZipTableReader::Open(
 			table_reader_options.ioptions,
@@ -936,6 +947,12 @@ const {
 		THROW_STD(invalid_argument,
 				"TerarkZipTableFactory::NewTableBuilder(): "
 				"user comparator must be 'leveldb.BytewiseComparator'");
+	}
+	int curlevel = table_builder_options.level;
+	int numlevel = table_builder_options.ioptions.num_levels;
+	if (curlevel >= 0 && curlevel < numlevel-1) {
+		return fallback_factory_->NewTableBuilder(table_builder_options,
+				column_family_id, file);
 	}
 	return new TerarkZipTableBuilder(
 			table_options_,
