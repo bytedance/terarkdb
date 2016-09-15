@@ -919,9 +919,15 @@ const {
 		return s;
 	}
 	if (footer.table_magic_number() != kTerarkZipTableMagicNumber) {
-		return fallback_factory_->NewTableReader(table_reader_options,
-				std::move(file), file_size, table,
-				prefetch_index_and_filter_in_cache);
+		if (fallback_factory_) {
+			return fallback_factory_->NewTableReader(table_reader_options,
+					std::move(file), file_size, table,
+					prefetch_index_and_filter_in_cache);
+		}
+		return Status::InvalidArgument(
+			"TerarkZipTableFactory::NewTableReader()",
+			"fallback_factory is null and magic_number is not kTerarkZipTable"
+			);
 	}
 	if (!prefetch_index_and_filter_in_cache) {
 		fprintf(stderr
@@ -948,11 +954,13 @@ const {
 				"TerarkZipTableFactory::NewTableBuilder(): "
 				"user comparator must be 'leveldb.BytewiseComparator'");
 	}
-	int curlevel = table_builder_options.level;
-	int numlevel = table_builder_options.ioptions.num_levels;
-	if (curlevel >= 0 && curlevel < numlevel-1) {
-		return fallback_factory_->NewTableBuilder(table_builder_options,
-				column_family_id, file);
+	if (fallback_factory_) {
+		int curlevel = table_builder_options.level;
+		int numlevel = table_builder_options.ioptions.num_levels;
+		if (curlevel >= 0 && curlevel < numlevel-1) {
+			return fallback_factory_->NewTableBuilder(table_builder_options,
+					column_family_id, file);
+		}
 	}
 	return new TerarkZipTableBuilder(
 			table_options_,
