@@ -23,6 +23,7 @@ struct TerarkZipTableOptions {
 	/// 2 : check sum all data, not check on file load, check on record read
 	int checksumLevel = 1;
 
+	float estimateCompressionRatio = 0.2;
 	double sampleRatio = 0.03;
 	std::string localTempDir = "/tmp";
 };

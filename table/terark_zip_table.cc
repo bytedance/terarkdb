@@ -173,7 +173,7 @@ public:
   Status Finish() override;
   void Abandon() override { closed_ = true; }
   uint64_t NumEntries() const override { return properties_.num_entries; }
-  uint64_t FileSize() const override { return offset_; }
+  uint64_t FileSize() const override;
   TableProperties GetTableProperties() const override { return properties_; }
 
 private:
@@ -629,6 +629,16 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(
 }
 
 TerarkZipTableBuilder::~TerarkZipTableBuilder() {
+}
+
+uint64_t TerarkZipTableBuilder::FileSize() const {
+	if (0 == offset_) {
+		// for compaction caller to split file by increasing size
+		auto kvLen = properties_.raw_key_size +  properties_.raw_value_size;
+		return uint64_t(kvLen * table_options_.estimateCompressionRatio);
+	} else {
+		return offset_;
+	}
 }
 
 void TerarkZipTableBuilder::Add(const Slice& key, const Slice& value) {
