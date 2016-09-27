@@ -693,19 +693,19 @@ Status TerarkZipTableBuilder::Finish() {
 	assert(!closed_);
 	closed_ = true;
 
-#if !defined(NDEBUG)
-	for (size_t i = 1; i < tmpKeyVec_.size(); ++i) {
-		fstring prev = tmpKeyVec_[i-1];
-		fstring curr = tmpKeyVec_[i];
-		assert(prev < curr);
-	}
-	SortableStrVec backupKeys = tmpKeyVec_;
-#endif
-
 	if (0 == sampleLenSum_) { // prevent from empty
 		zbuilder_->addSample("Hello World!");
 	}
 	AddPrevUserKey();
+
+#if !defined(NDEBUG)
+  for (size_t i = 1; i < tmpKeyVec_.size(); ++i) {
+    fstring prev = tmpKeyVec_[i-1];
+    fstring curr = tmpKeyVec_[i];
+    assert(prev < curr);
+  }
+  SortableStrVec backupKeys = tmpKeyVec_;
+#endif
 
 	if (!c_iter_) {
 	  tmpValueWriter_.flush();
