@@ -177,6 +177,9 @@ public:
   uint64_t NumEntries() const override { return properties_.num_entries; }
   uint64_t FileSize() const override;
   TableProperties GetTableProperties() const override { return properties_; }
+  void SetCompactionIterator(CompactionIterator* c_iter) override {
+    c_iter_ = c_iter;
+  }
 
 private:
   void AddPrevUserKey();
@@ -861,12 +864,15 @@ Status TerarkZipTableBuilder::Finish() {
 			zvType2.set_wire(newId, zvType[dictOrderOldId]);
 		});
 		try {
+		  dataBlock.set_offset(offset_);
 		  zstore->reorder_zip_data(newToOld, [&](const void* data, size_t size) {
-		    s = WriteBlock(zstore->get_data(), file_, &offset_, &dataBlock);
+		    s = file_->Append(Slice((const char*)data, size));
 		    if (!s.ok()) {
 		      throw s;
 		    }
+		    offset_ += size;
 		  });
+		  dataBlock.set_size(offset_ - dataBlock.offset());
 		} catch (const Status&) {
 		  return s;
 		}
