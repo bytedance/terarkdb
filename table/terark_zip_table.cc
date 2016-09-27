@@ -696,6 +696,7 @@ Status TerarkZipTableBuilder::Finish() {
 		fstring curr = tmpKeyVec_[i];
 		assert(prev < curr);
 	}
+	SortableStrVec backupKeys = tmpKeyVec_;
 #endif
 
 	if (0 == sampleLenSum_) { // prevent from empty
@@ -795,6 +796,7 @@ Status TerarkZipTableBuilder::Finish() {
     ParseInternalKey(c_iter_->key(), &pikey);
     size_t oneSeqLen = valueBits_.one_seq_len(bitPos);
     assert(oneSeqLen >= 1);
+    assert(fstringOf(pikey.user_key) == backupKeys[recId]);
     if (1==oneSeqLen && (kTypeDeletion==pikey.type || kTypeValue==pikey.type)) {
       if (0 == pikey.sequence && kTypeValue==pikey.type) {
         zvType.set_wire(recId, size_t(ZipValueType::kZeroSeq));
