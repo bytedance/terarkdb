@@ -792,6 +792,7 @@ Status TerarkZipTableBuilder::Finish() {
   size_t bitPos = 0;
   ParsedInternalKey pikey;
   for (size_t recId = 0; recId < numUserKeys_; recId++) {
+    valueMem.erase_all();
     assert(c_iter_->Valid());
     ParseInternalKey(c_iter_->key(), &pikey);
     size_t oneSeqLen = valueBits_.one_seq_len(bitPos);
