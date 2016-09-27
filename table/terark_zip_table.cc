@@ -786,13 +786,12 @@ Status TerarkZipTableBuilder::Finish() {
 	else
 {
   c_iter_->Rewind();
-  valvec<byte_t> valueMem;
-  fstring value;
+  valvec<byte_t> value;
   size_t entryId = 0;
   size_t bitPos = 0;
   ParsedInternalKey pikey;
   for (size_t recId = 0; recId < numUserKeys_; recId++) {
-    valueMem.erase_all();
+    value.erase_all();
     assert(c_iter_->Valid());
     ParseInternalKey(c_iter_->key(), &pikey);
     size_t oneSeqLen = valueBits_.one_seq_len(bitPos);
@@ -801,37 +800,35 @@ Status TerarkZipTableBuilder::Finish() {
     if (1==oneSeqLen && (kTypeDeletion==pikey.type || kTypeValue==pikey.type)) {
       if (0 == pikey.sequence && kTypeValue==pikey.type) {
         zvType.set_wire(recId, size_t(ZipValueType::kZeroSeq));
-        value = fstringOf(c_iter_->value());
+        zbuilder_->addRecord(fstringOf(c_iter_->value()));
       } else {
         if (kTypeValue==pikey.type) {
           zvType.set_wire(recId, size_t(ZipValueType::kValue));
         } else {
           zvType.set_wire(recId, size_t(ZipValueType::kDelete));
         }
-        valueMem.erase_all();
-        valueMem.append((byte_t*)&pikey.sequence, 7);
-        valueMem.append(fstringOf(c_iter_->value()));
-        value = valueMem;
+        value.append((byte_t*)&pikey.sequence, 7);
+        value.append(fstringOf(c_iter_->value()));
+        zbuilder_->addRecord(value);
       }
       c_iter_->Next();
     }
     else {
       zvType.set_wire(recId, size_t(ZipValueType::kMulti));
       size_t headerSize = ZipValueMultiValue::calcHeaderSize(oneSeqLen);
-      valueMem.resize(headerSize);
+      value.resize(headerSize);
       ((ZipValueMultiValue*)value.data())->num = oneSeqLen;
       ((ZipValueMultiValue*)value.data())->offsets[0] = 0;
       for (size_t j = 0; j < oneSeqLen; j++) {
         assert(c_iter_->Valid());
         uint64_t seqType = PackSequenceAndType(pikey.sequence, pikey.type);
-        valueMem.append((byte_t*)&seqType, 8);
-        valueMem.append(fstringOf(c_iter_->value()));
+        value.append((byte_t*)&seqType, 8);
+        value.append(fstringOf(c_iter_->value()));
         ((ZipValueMultiValue*)value.data())->offsets[j+1] = value.size() - headerSize;
         c_iter_->Next();
       }
-      value = valueMem;
+      zbuilder_->addRecord(value);
     }
-    zbuilder_->addRecord(value);
     bitPos += oneSeqLen + 1;
     entryId += oneSeqLen;
   }
