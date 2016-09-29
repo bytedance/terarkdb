@@ -17,6 +17,7 @@
 #include <table/meta_blocks.h>
 #include <db/compaction_iterator.h>
 #include <terark/stdtypes.hpp>
+#include <terark/lcast.hpp>
 #include <terark/util/crc.hpp>
 #include <terark/util/throw.hpp>
 #include <terark/fast_zip_blob_store.hpp>
@@ -191,6 +192,7 @@ private:
 
   unique_ptr<DictZipBlobStore::ZipBuilder> zbuilder_;
   CompactionIterator* c_iter_ = nullptr;
+  std::string startKey_;
   valvec<byte_t> prevUserKey_;
   terark::febitvec valueBits_;
   std::string tmpValueFilePath_;
@@ -658,6 +660,10 @@ void TerarkZipTableBuilder::Add(const Slice& key, const Slice& value) {
 		}
 	}
 	else {
+	  if (c_iter_) {
+	  //  startKey_ = c_iter_->GetPositionInternalKey();
+	    startKey_ = key.ToString();
+	  }
 		prevUserKey_.assign(userKey);
 		numUserKeys_ = 0;
 	}
@@ -704,8 +710,8 @@ Status TerarkZipTableBuilder::Finish() {
     fstring curr = tmpKeyVec_[i];
     assert(prev < curr);
   }
-  SortableStrVec backupKeys = tmpKeyVec_;
 #endif
+  SortableStrVec backupKeys = tmpKeyVec_;
 
 	if (!c_iter_) {
 	  tmpValueWriter_.flush();
@@ -736,7 +742,13 @@ Status TerarkZipTableBuilder::Finish() {
   static std::mutex zipMutex;
   std::unique_lock<std::mutex> zipLock(zipMutex);
   zbuilder_->prepare(properties_.num_entries, tmpStoreFile);
-
+/*
+  fprintf(stderr
+      , "Thread-%012zd this = %p TerarkZipTableBuilder::Finish(): c_iter_ = %p\n"
+      , ioptions_.env->GetThreadID(), this
+      , c_iter_
+      );
+*/
 	if (nullptr == c_iter_)
 {
 	NativeDataInput<InputBuffer> input(&tmpValueFile_);
@@ -788,19 +800,47 @@ Status TerarkZipTableBuilder::Finish() {
 }
 	else
 {
-  c_iter_->Rewind();
+	fprintf(stderr
+	    ,"Thread-%012zd this = %p TerarkZipTableBuilder::Finish(): -----------------------\n"
+      , ioptions_.env->GetThreadID(), this);
+	uint64_t nextCallingNum = c_iter_->MethodNextCallNum();
+	std::string c_iter_lastKey;
+	if (c_iter_->Valid()) {
+	  c_iter_lastKey = c_iter_->key().ToString();
+	}
+	std::string stopKey;// = c_iter_->GetCurrentInternalKey();
+	std::string initKey;// = c_iter_->GetPositionInternalKey();
+  if (!c_iter_->Rewind(&stopKey)) {
+    THROW_STD(invalid_argument, "c_iter_->SeekInternalKey() failed");
+  }
+  using terark::hex_encode;
+  fprintf(stderr
+      , "Thread-%012zd this = %p TerarkZipTableBuilder::Finish(): my_initKey = {%s}\n"
+        "Thread-%012zd this = %p TerarkZipTableBuilder::Finish(): my_lastKey = {%s}\n"
+        "Thread-%012zd this = %p TerarkZipTableBuilder::Finish(): it_lastKey = {%s}\n"
+        "Thread-%012zd this = %p TerarkZipTableBuilder::Finish(): it_stopKey = {%s}\n"
+      , ioptions_.env->GetThreadID(), this, hex_encode(backupKeys[0]).c_str()
+      , ioptions_.env->GetThreadID(), this, hex_encode(backupKeys.back()).c_str()
+      , ioptions_.env->GetThreadID(), this, hex_encode(c_iter_lastKey).c_str()
+      , ioptions_.env->GetThreadID(), this, hex_encode(stopKey).c_str()
+      );
+  fprintf(stderr
+      , "Thread-%012zd this = %p TerarkZipTableBuilder::Finish(): nextCallingNum = %zd properties_.num_entries = %zd\n"
+      , ioptions_.env->GetThreadID(), this
+      , nextCallingNum, properties_.num_entries);
+//	c_iter_->RestorePosition(startKey_);
   valvec<byte_t> value;
   size_t entryId = 0;
   size_t bitPos = 0;
-  ParsedInternalKey pikey;
   for (size_t recId = 0; recId < numUserKeys_; recId++) {
     value.erase_all();
     assert(c_iter_->Valid());
+    ParsedInternalKey pikey;
     ParseInternalKey(c_iter_->key(), &pikey);
     size_t oneSeqLen = valueBits_.one_seq_len(bitPos);
     assert(oneSeqLen >= 1);
-    assert(fstringOf(pikey.user_key) == backupKeys[recId]);
     if (1==oneSeqLen && (kTypeDeletion==pikey.type || kTypeValue==pikey.type)) {
+      assert(fstringOf(pikey.user_key) == backupKeys[recId]);
       if (0 == pikey.sequence && kTypeValue==pikey.type) {
         zvType.set_wire(recId, size_t(ZipValueType::kZeroSeq));
         zbuilder_->addRecord(fstringOf(c_iter_->value()));
@@ -814,7 +854,9 @@ Status TerarkZipTableBuilder::Finish() {
         value.append(fstringOf(c_iter_->value()));
         zbuilder_->addRecord(value);
       }
-      c_iter_->Next();
+    //  if (entryId < nextCallingNum) {
+        c_iter_->Next();
+    //  }
     }
     else {
       zvType.set_wire(recId, size_t(ZipValueType::kMulti));
@@ -824,16 +866,29 @@ Status TerarkZipTableBuilder::Finish() {
       ((ZipValueMultiValue*)value.data())->offsets[0] = 0;
       for (size_t j = 0; j < oneSeqLen; j++) {
         assert(c_iter_->Valid());
+        ParseInternalKey(c_iter_->key(), &pikey);
+        assert(fstringOf(pikey.user_key) == backupKeys[recId]);
         uint64_t seqType = PackSequenceAndType(pikey.sequence, pikey.type);
         value.append((byte_t*)&seqType, 8);
         value.append(fstringOf(c_iter_->value()));
         ((ZipValueMultiValue*)value.data())->offsets[j+1] = value.size() - headerSize;
-        c_iter_->Next();
+     //   if (entryId + j < nextCallingNum) {
+          c_iter_->Next();
+     //   }
       }
       zbuilder_->addRecord(value);
     }
     bitPos += oneSeqLen + 1;
     entryId += oneSeqLen;
+  }
+//  assert(c_iter_->MethodNextCallNum() == nextCallingNum);
+  c_iter_->SetMethodNextCallNum(0);
+  if (!c_iter_lastKey.empty()) {
+    assert(c_iter_->key() == c_iter_lastKey);
+  }
+  if (!stopKey.empty()) {
+//    c_iter_->RestorePosition(stopKey);
+//    assert(c_iter_->key() == stopKey);
   }
   assert(entryId == properties_.num_entries);
 }
