@@ -23,6 +23,14 @@ struct TerarkZipTableOptions {
 	/// 2 : check sum all data, not check on file load, check on record read
 	int checksumLevel = 1;
 
+	///    < 0 : only last level using terarkZip, this is the default
+	///          this is equivalent to terarkZipMinLevel == num_levels-1
+	/// others : use terarkZip when curlevel >= terarkZipMinLevel
+	///          this includes the two special cases:
+	///                   == 0 : all levels using terarkZip
+	///          >= num_levels : all levels using fallback TableFactory
+	int terarkZipMinLevel = -1;
+
 	float estimateCompressionRatio = 0.2;
 	double sampleRatio = 0.03;
 	std::string localTempDir = "/tmp";
