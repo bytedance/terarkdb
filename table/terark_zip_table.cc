@@ -978,6 +978,8 @@ class TerarkZipTableFactory : public TableFactory, boost::noncopyable {
  private:
   TerarkZipTableOptions table_options_;
   TableFactory* fallback_factory_;
+  size_t nth_new_terark_table_ = 0;
+  size_t nth_new_fallback_table_ = 0;
 };
 
 class TableFactory*
@@ -1059,16 +1061,18 @@ const {
   }
 #if 1
   fprintf(stderr
-      , "TerarkZipTableFactory::NewTableBuilder: curlevel = %d minlevel = %d numlevel = %d fallback = %p\n"
-      , curlevel, minlevel, numlevel, fallback_factory_
+      , "nth_new_talbe{ terark = %zd fallback = %zd } curlevel = %d minlevel = %d numlevel = %d fallback = %p\n"
+      , nth_new_terark_table_, nth_new_fallback_table_, curlevel, minlevel, numlevel, fallback_factory_
       );
 #endif
 	if (fallback_factory_) {
     if (curlevel >= 0 && curlevel < minlevel) {
+      nth_new_fallback_table_++;
       return fallback_factory_->NewTableBuilder(table_builder_options,
           column_family_id, file);
     }
 	}
+	nth_new_terark_table_++;
 	return new TerarkZipTableBuilder(
 			table_options_,
 		    table_builder_options.ioptions,
