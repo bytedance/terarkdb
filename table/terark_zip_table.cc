@@ -17,6 +17,7 @@
 #include <table/meta_blocks.h>
 #include <db/compaction_iterator.h>
 #include <terark/stdtypes.hpp>
+#include <terark/lcast.hpp>
 #include <terark/util/crc.hpp>
 #include <terark/util/throw.hpp>
 #include <terark/fast_zip_blob_store.hpp>
@@ -177,6 +178,9 @@ public:
   uint64_t NumEntries() const override { return properties_.num_entries; }
   uint64_t FileSize() const override;
   TableProperties GetTableProperties() const override { return properties_; }
+  void SetSecondPassIterator(InternalIterator* reader) override {
+    second_pass_iter_ = reader;
+  }
 
 private:
   void AddPrevUserKey();
@@ -187,7 +191,7 @@ private:
   std::vector<unique_ptr<IntTblPropCollector>> table_properties_collectors_;
 
   unique_ptr<DictZipBlobStore::ZipBuilder> zbuilder_;
-  CompactionIterator* c_iter_ = nullptr;
+  InternalIterator* second_pass_iter_ = nullptr;
   valvec<byte_t> prevUserKey_;
   terark::febitvec valueBits_;
   std::string tmpValueFilePath_;
@@ -617,10 +621,10 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(
   tmpValueFilePath_.append("/TerarkRocks-XXXXXX");
   int fd = mkstemp(&tmpValueFilePath_[0]);
   if (fd < 0) {
-	int err = errno;
-	THROW_STD(invalid_argument
-	  , "ERROR: TerarkZipTableBuilder::TerarkZipTableBuilder(): mkstemp(%s) = %s\n"
-	  , tmpValueFilePath_.c_str(), strerror(err));
+    int err = errno;
+    THROW_STD(invalid_argument
+        , "ERROR: TerarkZipTableBuilder::TerarkZipTableBuilder(): mkstemp(%s) = %s\n"
+        , tmpValueFilePath_.c_str(), strerror(err));
   }
   tmpValueFile_.dopen(fd, "rb+");
   tmpValueWriter_.attach(&tmpValueFile_);
@@ -663,7 +667,7 @@ void TerarkZipTableBuilder::Add(const Slice& key, const Slice& value) {
 		zbuilder_->addSample(fstringOf(value));
 		sampleLenSum_ += value.size();
 	}
-	if (!c_iter_) {
+	if (!second_pass_iter_) {
 	  tmpValueWriter_.ensureWrite(userKey.end(), 8);
 	  tmpValueWriter_ << fstringOf(value);
 	}
@@ -690,21 +694,21 @@ Status TerarkZipTableBuilder::Finish() {
 	assert(!closed_);
 	closed_ = true;
 
-#if !defined(NDEBUG)
-	for (size_t i = 1; i < tmpKeyVec_.size(); ++i) {
-		fstring prev = tmpKeyVec_[i-1];
-		fstring curr = tmpKeyVec_[i];
-		assert(prev < curr);
-	}
-	SortableStrVec backupKeys = tmpKeyVec_;
-#endif
-
 	if (0 == sampleLenSum_) { // prevent from empty
 		zbuilder_->addSample("Hello World!");
 	}
 	AddPrevUserKey();
 
-	if (!c_iter_) {
+#if !defined(NDEBUG)
+  for (size_t i = 1; i < tmpKeyVec_.size(); ++i) {
+    fstring prev = tmpKeyVec_[i-1];
+    fstring curr = tmpKeyVec_[i];
+    assert(prev < curr);
+  }
+#endif
+  SortableStrVec backupKeys = tmpKeyVec_;
+
+	if (!second_pass_iter_) {
 	  tmpValueWriter_.flush();
 	  tmpValueFile_.rewind();
 	}
@@ -733,8 +737,7 @@ Status TerarkZipTableBuilder::Finish() {
   static std::mutex zipMutex;
   std::unique_lock<std::mutex> zipLock(zipMutex);
   zbuilder_->prepare(properties_.num_entries, tmpStoreFile);
-
-	if (nullptr == c_iter_)
+	if (nullptr == second_pass_iter_)
 {
 	NativeDataInput<InputBuffer> input(&tmpValueFile_);
 	valvec<byte_t> value;
@@ -785,22 +788,23 @@ Status TerarkZipTableBuilder::Finish() {
 }
 	else
 {
-  c_iter_->Rewind();
   valvec<byte_t> value;
   size_t entryId = 0;
   size_t bitPos = 0;
-  ParsedInternalKey pikey;
   for (size_t recId = 0; recId < numUserKeys_; recId++) {
     value.erase_all();
-    assert(c_iter_->Valid());
-    ParseInternalKey(c_iter_->key(), &pikey);
+    assert(second_pass_iter_->Valid());
+    Slice curKey = second_pass_iter_->key();
+    Slice curVal = second_pass_iter_->value();
+    ParsedInternalKey pikey;
+    ParseInternalKey(curKey, &pikey);
     size_t oneSeqLen = valueBits_.one_seq_len(bitPos);
     assert(oneSeqLen >= 1);
-    assert(fstringOf(pikey.user_key) == backupKeys[recId]);
     if (1==oneSeqLen && (kTypeDeletion==pikey.type || kTypeValue==pikey.type)) {
+      assert(fstringOf(pikey.user_key) == backupKeys[recId]);
       if (0 == pikey.sequence && kTypeValue==pikey.type) {
         zvType.set_wire(recId, size_t(ZipValueType::kZeroSeq));
-        zbuilder_->addRecord(fstringOf(c_iter_->value()));
+        zbuilder_->addRecord(fstringOf(curVal));
       } else {
         if (kTypeValue==pikey.type) {
           zvType.set_wire(recId, size_t(ZipValueType::kValue));
@@ -808,10 +812,10 @@ Status TerarkZipTableBuilder::Finish() {
           zvType.set_wire(recId, size_t(ZipValueType::kDelete));
         }
         value.append((byte_t*)&pikey.sequence, 7);
-        value.append(fstringOf(c_iter_->value()));
+        value.append(fstringOf(curVal));
         zbuilder_->addRecord(value);
       }
-      c_iter_->Next();
+      second_pass_iter_->Next();
     }
     else {
       zvType.set_wire(recId, size_t(ZipValueType::kMulti));
@@ -820,12 +824,15 @@ Status TerarkZipTableBuilder::Finish() {
       ((ZipValueMultiValue*)value.data())->num = oneSeqLen;
       ((ZipValueMultiValue*)value.data())->offsets[0] = 0;
       for (size_t j = 0; j < oneSeqLen; j++) {
-        assert(c_iter_->Valid());
+        curKey = second_pass_iter_->key();
+        curVal = second_pass_iter_->value();
+        ParseInternalKey(curKey, &pikey);
+        assert(fstringOf(pikey.user_key) == backupKeys[recId]);
         uint64_t seqType = PackSequenceAndType(pikey.sequence, pikey.type);
         value.append((byte_t*)&seqType, 8);
-        value.append(fstringOf(c_iter_->value()));
+        value.append(fstringOf(curVal));
         ((ZipValueMultiValue*)value.data())->offsets[j+1] = value.size() - headerSize;
-        c_iter_->Next();
+        second_pass_iter_->Next();
       }
       zbuilder_->addRecord(value);
     }
@@ -861,12 +868,15 @@ Status TerarkZipTableBuilder::Finish() {
 			zvType2.set_wire(newId, zvType[dictOrderOldId]);
 		});
 		try {
+		  dataBlock.set_offset(offset_);
 		  zstore->reorder_zip_data(newToOld, [&](const void* data, size_t size) {
-		    s = WriteBlock(zstore->get_data(), file_, &offset_, &dataBlock);
+		    s = file_->Append(Slice((const char*)data, size));
 		    if (!s.ok()) {
 		      throw s;
 		    }
+		    offset_ += size;
 		  });
+		  dataBlock.set_size(offset_ - dataBlock.offset());
 		} catch (const Status&) {
 		  return s;
 		}
