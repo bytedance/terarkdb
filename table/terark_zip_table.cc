@@ -615,7 +615,9 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(
   , ioptions_(ioptions)
 {
   file_ = file;
-  zbuilder_.reset(DictZipBlobStore::createZipBuilder(table_options.checksumLevel));
+  zbuilder_.reset(DictZipBlobStore::createZipBuilder(
+      table_options.checksumLevel,
+      table_options.useSuffixArrayLocalMatch));
   sampleUpperBound_ = randomGenerator_.max() * table_options_.sampleRatio;
   tmpValueFilePath_ = table_options.localTempDir;
   tmpValueFilePath_.append("/TerarkRocks-XXXXXX");
@@ -978,8 +980,8 @@ class TerarkZipTableFactory : public TableFactory, boost::noncopyable {
  private:
   TerarkZipTableOptions table_options_;
   TableFactory* fallback_factory_;
-  size_t nth_new_terark_table_ = 0;
-  size_t nth_new_fallback_table_ = 0;
+  mutable size_t nth_new_terark_table_ = 0;
+  mutable size_t nth_new_fallback_table_ = 0;
 };
 
 class TableFactory*

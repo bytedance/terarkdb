@@ -31,6 +31,8 @@ struct TerarkZipTableOptions {
 	///          >= num_levels : all levels using fallback TableFactory
 	int terarkZipMinLevel = -1;
 
+	bool useSuffixArrayLocalMatch = false;
+
 	float estimateCompressionRatio = 0.2;
 	double sampleRatio = 0.03;
 	std::string localTempDir = "/tmp";
