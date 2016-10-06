@@ -15,6 +15,12 @@
 namespace rocksdb {
 
 struct TerarkZipTableOptions {
+  // copy of DictZipBlobStore::Options::EntropyAlgo
+  enum EntropyAlgo {
+    kNoEntropy,
+    kHuffman,
+    kFSE,
+  };
 	unsigned fixed_key_len = 0;
 	int indexNestLevel = 3;
 
@@ -22,6 +28,8 @@ struct TerarkZipTableOptions {
 	/// 1 : check sum meta data and index, check on file load
 	/// 2 : check sum all data, not check on file load, check on record read
 	int checksumLevel = 1;
+
+	EntropyAlgo entropyAlgo = kNoEntropy;
 
 	///    < 0 : only last level using terarkZip, this is the default
 	///          this is equivalent to terarkZipMinLevel == num_levels-1

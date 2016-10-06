@@ -605,21 +605,23 @@ size_t TerarkZipTableReader::GetRecId(const Slice& userKey) const {
 ///////////////////////////////////////////////////////////////////////////////
 
 TerarkZipTableBuilder::TerarkZipTableBuilder(
-		const TerarkZipTableOptions& table_options,
+		const TerarkZipTableOptions& tzto,
 		const ImmutableCFOptions& ioptions,
 		const std::vector<std::unique_ptr<IntTblPropCollectorFactory>>*,
 		uint32_t column_family_id,
 		WritableFileWriter* file,
 		const std::string& column_family_name)
-  : table_options_(table_options)
+  : table_options_(tzto)
   , ioptions_(ioptions)
 {
   file_ = file;
-  zbuilder_.reset(DictZipBlobStore::createZipBuilder(
-      table_options.checksumLevel,
-      table_options.useSuffixArrayLocalMatch));
+  DictZipBlobStore::Options dzopt;
+  dzopt.entropyAlgo = DictZipBlobStore::Options::EntropyAlgo(tzto.entropyAlgo);
+  dzopt.checksumLevel = tzto.checksumLevel;
+  dzopt.useSuffixArrayLocalMatch = tzto.useSuffixArrayLocalMatch;
+  zbuilder_.reset(DictZipBlobStore::createZipBuilder(dzopt));
   sampleUpperBound_ = randomGenerator_.max() * table_options_.sampleRatio;
-  tmpValueFilePath_ = table_options.localTempDir;
+  tmpValueFilePath_ = tzto.localTempDir;
   tmpValueFilePath_.append("/TerarkRocks-XXXXXX");
   int fd = mkstemp(&tmpValueFilePath_[0]);
   if (fd < 0) {
@@ -631,7 +633,7 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(
   tmpValueFile_.dopen(fd, "rb+");
   tmpValueWriter_.attach(&tmpValueFile_);
 
-  properties_.fixed_key_len = table_options.fixed_key_len;
+  properties_.fixed_key_len = tzto.fixed_key_len;
   properties_.num_data_blocks = 1;
   properties_.column_family_id = column_family_id;
   properties_.column_family_name = column_family_name;
