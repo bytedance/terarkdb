@@ -64,16 +64,13 @@ static const std::string kTerarkZipTableValueDictBlock = "TerarkZipTableValueDic
 
 class TerarkZipTableIterator;
 
-#if defined(IOS_CROSS_COMPILE)
+#if defined(IOS_CROSS_COMPILE) || defined(__DARWIN_C_LEVEL)
   #define MY_THREAD_LOCAL(Type, Var)  Type Var
-#elif defined(_WIN32)
-  #define MY_THREAD_LOCAL(Type, Var)  static __declspec(thread) Type Var
+//#elif defined(_WIN32)
+//  #define MY_THREAD_LOCAL(Type, Var)  static __declspec(thread) Type Var
 #else
   #define MY_THREAD_LOCAL(Type, Var)  static thread_local Type Var
 #endif
-
-MY_THREAD_LOCAL(terark::MatchContext, g_mctx);
-MY_THREAD_LOCAL(valvec<byte_t>, g_tbuf);
 
 enum class ZipValueType : unsigned char {
 	kZeroSeq = 0,
@@ -407,7 +404,12 @@ TerarkZipTableReader::~TerarkZipTableReader() {
 
 TerarkZipTableReader::TerarkZipTableReader(size_t user_key_len,
 							const ImmutableCFOptions& ioptions)
- : fixed_key_len_(user_key_len), ioptions_(ioptions) {}
+ : fixed_key_len_(user_key_len)
+ , ioptions_(ioptions)
+{
+  (void)fixed_key_len_; // unused
+  (void)ioptions_; // unused
+}
 
 Status
 TerarkZipTableReader::Open(const ImmutableCFOptions& ioptions,
@@ -509,6 +511,7 @@ NewIterator(const ReadOptions& ro, Arena* arena, bool skip_filters) {
 Status
 TerarkZipTableReader::Get(const ReadOptions& ro, const Slice& ikey,
 						  GetContext* get_context, bool skip_filters) {
+  MY_THREAD_LOCAL(valvec<byte_t>, g_tbuf);
 	ParsedInternalKey pikey;
 	ParseInternalKey(ikey, &pikey);
 	size_t recId = GetRecId(pikey.user_key);
@@ -573,6 +576,7 @@ size_t TerarkZipTableReader::GetRecId(const Slice& userKey) const {
 	const size_t  kn = userKey.size();
 	const byte_t* kp = (const byte_t*)userKey.data();
 	size_t state = initial_state;
+	MY_THREAD_LOCAL(terark::MatchContext, g_mctx);
 	g_mctx.zbuf_state = size_t(-1);
 	for (size_t pos = 0; pos < kn; ++pos) {
 		if (dfa->is_pzip(state)) {
