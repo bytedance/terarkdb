@@ -568,6 +568,9 @@ TerarkZipTableReader::Get(const ReadOptions& ro, const Slice& ikey,
 		}
 		break; }
 	}
+	if (g_tbuf.capacity() > 512*1024) {
+	  g_tbuf.clear(); // free large thread local memory
+	}
 	return Status::OK();
 }
 
