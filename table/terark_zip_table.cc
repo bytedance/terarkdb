@@ -20,7 +20,7 @@
 #include <terark/lcast.hpp>
 #include <terark/util/crc.hpp>
 #include <terark/util/throw.hpp>
-#include <terark/fsa/fast_zip_blob_store.hpp>
+#include <terark/zbs/fast_zip_blob_store.hpp>
 #include <terark/fsa/nest_trie_dawg.hpp>
 #include <terark/io/FileStream.hpp>
 #include <terark/io/MemStream.hpp>
