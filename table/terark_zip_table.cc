@@ -473,6 +473,12 @@ TerarkZipTableReader::Open(const ImmutableCFOptions& ioptions,
   r->typeArray_.risk_set_data((byte_t*)zValueTypeBlock.data.data(),
 		  recNum, kZipValueTypeBits);
   *table = std::move(r);
+	fprintf(stderr
+		, "TerarkZipTableReader::Open(): fsize=%zd, entries=%zd keys=%zd indexSize=%zd valueSize=%zd\n"
+		, size_t(file_size), size_t(r->table_properties_->num_entries)
+		, r->keyIndex_->num_words()
+		, size_t(r->table_properties_->index_size), size_t(r->table_properties_->data_size)
+	);
   return Status::OK();
 }
 
@@ -943,6 +949,11 @@ Status TerarkZipTableBuilder::Finish() {
 	if (s.ok()) {
 		offset_ += footer_encoding.size();
 	}
+	fprintf(stderr
+		, "TerarkZipTableBuilder::Finish(): fsize=%zd, entries=%zd keys=%zd indexSize=%zd valueSize=%zd\n"
+		, size_t(offset_), size_t(properties_.num_entries), numUserKeys_
+		, size_t(properties_.index_size), size_t(properties_.data_size)
+	);
 	return s;
 }
 
