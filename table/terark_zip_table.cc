@@ -472,13 +472,13 @@ TerarkZipTableReader::Open(const ImmutableCFOptions& ioptions,
   size_t recNum = r->keyIndex_->num_words();
   r->typeArray_.risk_set_data((byte_t*)zValueTypeBlock.data.data(),
 		  recNum, kZipValueTypeBits);
-  *table = std::move(r);
 	fprintf(stderr
 		, "TerarkZipTableReader::Open(): fsize=%zd, entries=%zd keys=%zd indexSize=%zd valueSize=%zd\n"
 		, size_t(file_size), size_t(r->table_properties_->num_entries)
 		, r->keyIndex_->num_words()
 		, size_t(r->table_properties_->index_size), size_t(r->table_properties_->data_size)
 	);
+  *table = std::move(r);
   return Status::OK();
 }
 
@@ -1054,7 +1054,7 @@ const {
 		fprintf(stderr
 				, "WARN: TerarkZipTableFactory::NewTableReader(): "
 				  "prefetch_index_and_filter_in_cache = false is ignored, "
-				  "all index and data will be loaded in memory");
+				  "all index and data will be loaded in memory\n");
 	}
 	return TerarkZipTableReader::Open(
 			table_reader_options.ioptions,
