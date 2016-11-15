@@ -236,6 +236,12 @@ public:
 	  }
   }
 
+  void SeekForPrev(const Slice& target) override {
+    assert(false);
+    status_ =
+        Status::NotSupported("SeekForPrev() is not supported in TerarkZipTableIterator");
+  }
+
   void Seek(const Slice& target) override {
 	  ParsedInternalKey pikey;
 	  if (!ParseInternalKey(target, &pikey)) {
