@@ -728,7 +728,7 @@ Status TerarkZipTableBuilder::Finish() {
 	}
 	AddPrevUserKey();
 
-	long long t1 = g_pf.now();
+	long long t1 = g_pf.now(), t2 = 0;
 	long long rawBytes = properties_.raw_key_size + properties_.raw_value_size;
 
 	fprintf(stderr
@@ -772,6 +772,7 @@ Status TerarkZipTableBuilder::Finish() {
 {
   static std::mutex zipMutex;
   std::unique_lock<std::mutex> zipLock(zipMutex);
+  t2 = g_pf.now();
   zbuilder_->prepare(properties_.num_entries, tmpStoreFile);
 	if (nullptr == second_pass_iter_)
 {
@@ -884,11 +885,11 @@ Status TerarkZipTableBuilder::Finish() {
   zbuilder_.reset();
 }
 
-  long long t2 = g_pf.now();
+  long long t3 = g_pf.now();
 
   fprintf(stderr
       , "TerarkZipTableBuilder::Finish():this=%p: second pass time = %f's, %f'MB/sec\n"
-      , this, g_pf.sf(t1,t2), rawBytes*1.0/g_pf.uf(t1,t2));
+      , this, g_pf.sf(t2,t3), rawBytes*1.0/g_pf.uf(t2,t3));
 
 	try{auto trie = BaseDFA::load_mmap(tmpIndexFile);
 		dawg.reset(dynamic_cast<NestLoudsTrieDAWG_SE_512*>(trie));
