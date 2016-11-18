@@ -728,12 +728,8 @@ Status TerarkZipTableBuilder::Finish() {
 	}
 	AddPrevUserKey();
 
-	long long t1 = g_pf.now(), t2 = 0;
+	long long t1 = g_pf.now();
 	long long rawBytes = properties_.raw_key_size + properties_.raw_value_size;
-
-	fprintf(stderr
-	    , "TerarkZipTableBuilder::Finish():this=%p:  first pass time = %f's, %f'MB/sec\n"
-	    , this, g_pf.sf(t0,t1), rawBytes*1.0/g_pf.uf(t0,t1));
 
 #if !defined(NDEBUG)
   for (size_t i = 1; i < tmpKeyVec_.size(); ++i) {
@@ -759,6 +755,13 @@ Status TerarkZipTableBuilder::Finish() {
 	tmpKeyVec_.clear();
 	dawg->save_mmap(tmpIndexFile);
 	dawg.reset(); // free memory
+  long long t2 = g_pf.now(), t3 = 0;
+	fprintf(stderr
+	    , "TerarkZipTableBuilder::Finish():this=%p:  first pass time =%7.2f's, %8.3f'MB/sec, index time =%6.2f's, %8.3f'MB/sec\n"
+	    , this, g_pf.sf(t0,t1), rawBytes*1.0/g_pf.uf(t0,t1)
+      , g_pf.sf(t1,t2), properties_.raw_key_size*1.0/g_pf.uf(t1,t2)
+      );
+
 #if 0
 	BOOST_SCOPE_EXIT(&tmpIndexFile, &tmpStoreFile, &tmpValueFilePath_){
     ::remove(tmpIndexFile.c_str());
@@ -770,9 +773,9 @@ Status TerarkZipTableBuilder::Finish() {
 	unique_ptr<DictZipBlobStore> zstore;
 	UintVecMin0 zvType(properties_.num_entries, kZipValueTypeBits);
 {
-  static std::mutex zipMutex;
-  std::unique_lock<std::mutex> zipLock(zipMutex);
-  t2 = g_pf.now();
+//  static std::mutex zipMutex;
+//  std::unique_lock<std::mutex> zipLock(zipMutex);
+  t3 = g_pf.now();
   zbuilder_->prepare(properties_.num_entries, tmpStoreFile);
 	if (nullptr == second_pass_iter_)
 {
@@ -885,11 +888,14 @@ Status TerarkZipTableBuilder::Finish() {
   zbuilder_.reset();
 }
 
-  long long t3 = g_pf.now();
+  long long t4 = g_pf.now();
 
   fprintf(stderr
-      , "TerarkZipTableBuilder::Finish():this=%p: second pass time = %f's, %f'MB/sec\n"
-      , this, g_pf.sf(t2,t3), rawBytes*1.0/g_pf.uf(t2,t3));
+      , "TerarkZipTableBuilder::Finish():this=%p: second pass time =%7.2f's, %8.3f'MB/sec, value only(%4.1f%% of KV)\n"
+      , this, g_pf.sf(t3,t4)
+      , properties_.raw_value_size*1.0/g_pf.uf(t3,t4)
+      , properties_.raw_value_size*100.0/rawBytes
+      );
 
 	try{auto trie = BaseDFA::load_mmap(tmpIndexFile);
 		dawg.reset(dynamic_cast<NestLoudsTrieDAWG_SE_512*>(trie));
