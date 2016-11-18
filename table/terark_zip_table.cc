@@ -1105,8 +1105,10 @@ const {
 	if (fallback_factory_) {
     if (curlevel >= 0 && curlevel < minlevel) {
       nth_new_fallback_table_++;
-      return fallback_factory_->NewTableBuilder(table_builder_options,
+      TableBuilder* tb = fallback_factory_->NewTableBuilder(table_builder_options,
           column_family_id, file);
+      fprintf(stderr, "TerarkZipTableFactory::NewTableBuilder() returns class: %s\n", typeid(tb).name());
+      return tb;
     }
 	}
 	nth_new_terark_table_++;
