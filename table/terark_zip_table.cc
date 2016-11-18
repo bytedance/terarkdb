@@ -1107,7 +1107,7 @@ const {
       nth_new_fallback_table_++;
       TableBuilder* tb = fallback_factory_->NewTableBuilder(table_builder_options,
           column_family_id, file);
-      fprintf(stderr, "TerarkZipTableFactory::NewTableBuilder() returns class: %s\n", typeid(tb).name());
+      fprintf(stderr, "TerarkZipTableFactory::NewTableBuilder() returns class: %s\n", typeid(*tb).name());
       return tb;
     }
 	}
