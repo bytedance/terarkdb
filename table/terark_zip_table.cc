@@ -20,6 +20,7 @@
 #include <terark/lcast.hpp>
 #include <terark/util/crc.hpp>
 #include <terark/util/throw.hpp>
+#include <terark/util/profiling.hpp>
 #include <terark/zbs/fast_zip_blob_store.hpp>
 #include <terark/fsa/nest_trie_dawg.hpp>
 #include <terark/io/FileStream.hpp>
@@ -55,6 +56,8 @@ using terark::LittleEndianDataOutput;
 using terark::SortableStrVec;
 using terark::UintVecMin0;
 using terark::BadCrc32cException;
+
+static terark::profiling g_pf;
 
 static const uint64_t kTerarkZipTableMagicNumber = 0x1122334455667788;
 
@@ -204,6 +207,8 @@ private:
   Status status_;
   TableProperties properties_;
   bool closed_ = false;  // Either Finish() or Abandon() has been called.
+
+  long long t0 = 0;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -684,6 +689,7 @@ void TerarkZipTableBuilder::Add(const Slice& key, const Slice& value) {
 	else {
 		prevUserKey_.assign(userKey);
 		numUserKeys_ = 0;
+		t0 = g_pf.now();
 	}
 	valueBits_.push_back(true);
 	if (!value.empty() && randomGenerator_() < sampleUpperBound_) {
@@ -721,6 +727,13 @@ Status TerarkZipTableBuilder::Finish() {
 		zbuilder_->addSample("Hello World!");
 	}
 	AddPrevUserKey();
+
+	long long t1 = g_pf.now();
+	long long rawBytes = properties_.raw_key_size + properties_.raw_value_size;
+
+	fprintf(stderr
+	    , "TerarkZipTableBuilder::Finish():this=%p:  first pass time = %f's, %f'MB/sec\n"
+	    , this, g_pf.sf(t0,t1), rawBytes*1.0/g_pf.uf(t0,t1));
 
 #if !defined(NDEBUG)
   for (size_t i = 1; i < tmpKeyVec_.size(); ++i) {
@@ -871,6 +884,12 @@ Status TerarkZipTableBuilder::Finish() {
   zbuilder_.reset();
 }
 
+  long long t2 = g_pf.now();
+
+  fprintf(stderr
+      , "TerarkZipTableBuilder::Finish():this=%p: second pass time = %f's, %f'MB/sec\n"
+      , this, g_pf.sf(t1,t2), rawBytes*1.0/g_pf.uf(t1,t2));
+
 	try{auto trie = BaseDFA::load_mmap(tmpIndexFile);
 		dawg.reset(dynamic_cast<NestLoudsTrieDAWG_SE_512*>(trie));
 	} catch (const std::exception&) {}
@@ -956,7 +975,8 @@ Status TerarkZipTableBuilder::Finish() {
 		offset_ += footer_encoding.size();
 	}
 	fprintf(stderr
-		, "TerarkZipTableBuilder::Finish(): fsize=%zd, entries=%zd keys=%zd indexSize=%zd valueSize=%zd\n"
+		, "TerarkZipTableBuilder::Finish():this=%p: fsize=%zd, entries=%zd keys=%zd indexSize=%zd valueSize=%zd\n"
+		, this
 		, size_t(offset_), size_t(properties_.num_entries), numUserKeys_
 		, size_t(properties_.index_size), size_t(properties_.data_size)
 	);
