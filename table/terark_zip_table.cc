@@ -979,7 +979,9 @@ class TerarkZipTableFactory : public TableFactory, boost::noncopyable {
  public:
   explicit
   TerarkZipTableFactory(const TerarkZipTableOptions& tzto, TableFactory* fallback)
-  : table_options_(tzto), fallback_factory_(fallback) {}
+  : table_options_(tzto), fallback_factory_(fallback) {
+    adaptive_factory_ = NewAdaptiveTableFactory();
+  }
 
   const char* Name() const override { return "TerarkZipTable"; }
 
@@ -1006,6 +1008,7 @@ class TerarkZipTableFactory : public TableFactory, boost::noncopyable {
  private:
   TerarkZipTableOptions table_options_;
   TableFactory* fallback_factory_;
+  TableFactory* adaptive_factory_; // just for open table
   mutable size_t nth_new_terark_table_ = 0;
   mutable size_t nth_new_fallback_table_ = 0;
 };
@@ -1046,6 +1049,12 @@ const {
 		return s;
 	}
 	if (footer.table_magic_number() != kTerarkZipTableMagicNumber) {
+	  if (adaptive_factory_) {
+	    // just for open table
+	    return adaptive_factory_->NewTableReader(table_reader_options,
+	              std::move(file), file_size, table,
+	              prefetch_index_and_filter_in_cache);
+	  }
 		if (fallback_factory_) {
 			return fallback_factory_->NewTableReader(table_reader_options,
 					std::move(file), file_size, table,
