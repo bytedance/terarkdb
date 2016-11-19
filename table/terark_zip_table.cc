@@ -741,6 +741,13 @@ Status TerarkZipTableBuilder::Finish() {
 	tmpKeyWriter_.flush_buffer();
 	tmpKeyFile_.rewind();
 
+#if !defined(NDEBUG)
+	SortableStrVec backupKeys;
+#endif
+	std::string tmpIndexFile = tmpValueFilePath_ + ".index";
+	std::string tmpStoreFile = tmpValueFilePath_ + ".zbs";
+	std::string tmpStoreDict = tmpValueFilePath_ + ".zbs-dict";
+
 	long long t1 = g_pf.now();
 	long long rawBytes = properties_.raw_key_size + properties_.raw_value_size;
 
@@ -792,16 +799,13 @@ Status TerarkZipTableBuilder::Finish() {
     fstring curr = tmpKeyVec_[i];
     assert(prev < curr);
   }
-  SortableStrVec backupKeys = tmpKeyVec_;
+  backupKeys = tmpKeyVec_;
 #endif
 
 	if (!second_pass_iter_) {
 	  tmpValueWriter_.flush();
 	  tmpValueFile_.rewind();
 	}
-	std::string tmpIndexFile = tmpValueFilePath_ + ".index";
-  std::string tmpStoreFile = tmpValueFilePath_ + ".zbs";
-  std::string tmpStoreDict = tmpValueFilePath_ + ".zbs-dict";
 	terark::NestLoudsTrieConfig conf;
 	conf.nestLevel = table_options_.indexNestLevel;
 	unique_ptr<NestLoudsTrieDAWG_SE_512> dawg(new NestLoudsTrieDAWG_SE_512());
@@ -971,7 +975,7 @@ Status TerarkZipTableBuilder::Finish() {
       , properties_.raw_value_size*1.0/g_pf.uf(t3,t4)
       , properties_.raw_value_size*100.0/rawBytes
       );
-
+	unique_ptr<NestLoudsTrieDAWG_SE_512> dawg;
 	try{auto trie = BaseDFA::load_mmap(tmpIndexFile);
 		dawg.reset(dynamic_cast<NestLoudsTrieDAWG_SE_512*>(trie));
 	} catch (const std::exception&) {}
