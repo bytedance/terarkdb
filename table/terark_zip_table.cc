@@ -1060,7 +1060,7 @@ Status TerarkZipTableBuilder::Finish() {
       "    UnZipSize{ index =%12zd  value =%12zd  all =%12zd }\n"
       "    __ZipSize{ index =%12zd  value =%12zd  all =%12zd }\n"
       "    UnZip/Zip{ index = %7.4f  value = %7.4f  all = %7.4f }\n"
-      "    Zip/UnZip{ index = %7.4f  value = %7.5f  all = %7.5f }\n"
+      "    Zip/UnZip{ index = %7.4f  value = %7.4f  all = %7.4f }\n"
 
     , this, g_pf.sf(t3,t4)
     , properties_.raw_value_size*1.0/g_pf.uf(t3,t4)
