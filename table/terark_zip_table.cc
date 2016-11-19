@@ -194,12 +194,16 @@ private:
   InternalIterator* second_pass_iter_ = nullptr;
   valvec<byte_t> prevUserKey_;
   terark::febitvec valueBits_;
+  std::string tmpKeyFilePath_;
+  FileStream  tmpKeyFile_;
   std::string tmpValueFilePath_;
   FileStream  tmpValueFile_;
+  NativeDataOutput<OutputBuffer> tmpKeyWriter_;
   NativeDataOutput<OutputBuffer> tmpValueWriter_;
   SortableStrVec tmpKeyVec_;
   std::mt19937_64 randomGenerator_;
   uint64_t sampleUpperBound_;
+  size_t lenUserKeys_ = size_t(-1);
   size_t numUserKeys_ = size_t(-1);
   size_t sampleLenSum_ = 0;
   WritableFileWriter* file_;
@@ -655,7 +659,13 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(
         , tmpValueFilePath_.c_str(), strerror(err));
   }
   tmpValueFile_.dopen(fd, "rb+");
+  tmpValueFile_.disbuf();
   tmpValueWriter_.attach(&tmpValueFile_);
+
+  tmpKeyFilePath_ = tmpValueFilePath_ + ".keydata";
+  tmpKeyFile_.open(tmpKeyFilePath_, "wb+");
+  tmpKeyFile_.disbuf();
+  tmpKeyWriter_.attach(&tmpKeyFile_);
 
   properties_.fixed_key_len = tzto.fixed_key_len;
   properties_.num_data_blocks = 1;
@@ -688,6 +698,7 @@ void TerarkZipTableBuilder::Add(const Slice& key, const Slice& value) {
 	}
 	else {
 		prevUserKey_.assign(userKey);
+		lenUserKeys_ = 0;
 		numUserKeys_ = 0;
 		t0 = g_pf.now();
 	}
@@ -727,9 +738,53 @@ Status TerarkZipTableBuilder::Finish() {
 		zbuilder_->addSample("Hello World!");
 	}
 	AddPrevUserKey();
+	tmpKeyWriter_.flush_buffer();
+	tmpKeyFile_.rewind();
 
 	long long t1 = g_pf.now();
 	long long rawBytes = properties_.raw_key_size + properties_.raw_value_size;
+
+  static std::mutex zipMutex;
+  static std::condition_variable zipCond;
+  static size_t sumWorkingMem = 0;
+  const  size_t softMemLimit = table_options_.softZipWorkingMemLimit;
+  const  size_t hardMemLimit = table_options_.hardZipWorkingMemLimit;
+{
+  const size_t myWorkMem = lenUserKeys_ +
+              sizeof(SortableStrVec::SEntry) * numUserKeys_;
+  const size_t smallmem = 500*1024*1024;
+  {
+    std::unique_lock<std::mutex> zipLock(zipMutex);
+    while ( (sumWorkingMem + myWorkMem >= softMemLimit && myWorkMem >= smallmem)
+        ||  (sumWorkingMem + myWorkMem >= hardMemLimit) ) {
+      fprintf(stderr
+          , "TerarkZipTableBuilder::Finish(): wait, sumWorkingMem = %f'GB, indexWorkingMem = %f'GB\n"
+          , sumWorkingMem/1e9, myWorkMem/1e9
+          );
+      zipCond.wait(zipLock);
+    }
+    sumWorkingMem += myWorkMem;
+  }
+  BOOST_SCOPE_EXIT(myWorkMem){
+    std::unique_lock<std::mutex> zipLock(zipMutex);
+    assert(sumWorkingMem >= myWorkMem);
+    sumWorkingMem -= myWorkMem;
+    zipCond.notify_all();
+  }BOOST_SCOPE_EXIT_END;
+
+  tmpKeyVec_.m_index.reserve(numUserKeys_);
+  tmpKeyVec_.m_strpool.reserve(lenUserKeys_);
+  {
+    valvec<byte_t> oneKey;
+    NativeDataInput<InputBuffer> keyReader(&tmpKeyFile_);
+    for (size_t i = 0; i < numUserKeys_; ++i) {
+      keyReader >> oneKey;
+      tmpKeyVec_.push_back(oneKey);
+    }
+  }
+  assert(tmpKeyVec_.str_size() == lenUserKeys_);
+  tmpKeyFile_.close();
+  ::remove(tmpKeyFilePath_.c_str());
 
 #if !defined(NDEBUG)
   for (size_t i = 1; i < tmpKeyVec_.size(); ++i) {
@@ -737,8 +792,8 @@ Status TerarkZipTableBuilder::Finish() {
     fstring curr = tmpKeyVec_[i];
     assert(prev < curr);
   }
-#endif
   SortableStrVec backupKeys = tmpKeyVec_;
+#endif
 
 	if (!second_pass_iter_) {
 	  tmpValueWriter_.flush();
@@ -755,6 +810,7 @@ Status TerarkZipTableBuilder::Finish() {
 	tmpKeyVec_.clear();
 	dawg->save_mmap(tmpIndexFile);
 	dawg.reset(); // free memory
+}
   long long t2 = g_pf.now(), t3 = 0;
 	fprintf(stderr
 	    , "TerarkZipTableBuilder::Finish():this=%p:  first pass time =%7.2f's, %8.3f'MB/sec, index time =%6.2f's, %8.3f'MB/sec\n"
@@ -773,25 +829,24 @@ Status TerarkZipTableBuilder::Finish() {
 	unique_ptr<DictZipBlobStore> zstore;
 	UintVecMin0 zvType(properties_.num_entries, kZipValueTypeBits);
 {
-  static std::mutex zipMutex;
-  static std::condition_variable zipCond;
-  static uint64_t sumDictMem = 0;
-  const  uint64_t softLimit = table_options_.softDictMemLimit;
-  const  uint64_t hardLimit = table_options_.hardDictMemLimit;
-  const  uint64_t smalldictMem = 6*100*1024*1024;
-  const  uint64_t myDictMem = sampleLenSum_ * 6;
+  const  size_t smalldictMem = 6*100*1024*1024;
+  const  size_t myDictMem = sampleLenSum_ * 6;
   {
     std::unique_lock<std::mutex> zipLock(zipMutex);
-    while ( (sumDictMem + myDictMem >= softLimit && myDictMem >= smalldictMem)
-        ||  (sumDictMem + myDictMem >= hardLimit) ) {
+    while ( (sumWorkingMem + myDictMem >= softMemLimit && myDictMem >= smalldictMem)
+        ||  (sumWorkingMem + myDictMem >= hardMemLimit) ) {
+      fprintf(stderr
+          , "TerarkZipTableBuilder::Finish(): wait, sumWorkingMem = %f'GB, dictZipWorkingMem = %f'GB\n"
+          , sumWorkingMem/1e9, myDictMem/1e9
+          );
       zipCond.wait(zipLock);
     }
-    sumDictMem += myDictMem;
+    sumWorkingMem += myDictMem;
   }
   BOOST_SCOPE_EXIT(myDictMem){
     std::unique_lock<std::mutex> zipLock(zipMutex);
-    assert(sumDictMem >= myDictMem);
-    sumDictMem -= myDictMem;
+    assert(sumWorkingMem >= myDictMem);
+    sumWorkingMem -= myDictMem;
     zipCond.notify_all();
   }BOOST_SCOPE_EXIT_END;
 
@@ -1012,11 +1067,14 @@ Status TerarkZipTableBuilder::Finish() {
 
 void TerarkZipTableBuilder::AddPrevUserKey() {
 	if (table_options_.fixed_key_len) {
-		tmpKeyVec_.m_strpool.append(prevUserKey_);
+		// tmpKeyVec_.m_strpool.append(prevUserKey_);
+	  tmpKeyWriter_.ensureWrite(prevUserKey_.data(), prevUserKey_.size());
 	} else {
-		tmpKeyVec_.push_back(prevUserKey_);
+    tmpKeyWriter_ << prevUserKey_;
+		// tmpKeyVec_.push_back(prevUserKey_);
 	}
 	valueBits_.push_back(false);
+	lenUserKeys_ += prevUserKey_.size();
 	numUserKeys_++;
 }
 

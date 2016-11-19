@@ -45,8 +45,8 @@ struct TerarkZipTableOptions {
 	double sampleRatio = 0.03;
 	std::string localTempDir = "/tmp";
 
-  unsigned long long softDictMemLimit = 16ull << 30;
-  unsigned long long hardDictMemLimit = 32ull << 30;
+  size_t softZipWorkingMemLimit = 16ull << 30;
+  size_t hardZipWorkingMemLimit = 32ull << 30;
 };
 
 class TableFactory*
