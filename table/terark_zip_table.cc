@@ -773,8 +773,28 @@ Status TerarkZipTableBuilder::Finish() {
 	unique_ptr<DictZipBlobStore> zstore;
 	UintVecMin0 zvType(properties_.num_entries, kZipValueTypeBits);
 {
-//  static std::mutex zipMutex;
-//  std::unique_lock<std::mutex> zipLock(zipMutex);
+  static std::mutex zipMutex;
+  static std::condition_variable zipCond;
+  static uint64_t sumDictMem = 0;
+  const  uint64_t softLimit = table_options_.softDictMemLimit;
+  const  uint64_t hardLimit = table_options_.hardDictMemLimit;
+  const  uint64_t smalldictMem = 6*100*1024*1024;
+  const  uint64_t myDictMem = sampleLenSum_ * 6;
+  {
+    std::unique_lock<std::mutex> zipLock(zipMutex);
+    while ( (sumDictMem + myDictMem >= softLimit && myDictMem >= smalldictMem)
+        ||  (sumDictMem + myDictMem >= hardLimit) ) {
+      zipCond.wait(zipLock);
+    }
+    sumDictMem += myDictMem;
+  }
+  BOOST_SCOPE_EXIT(myDictMem){
+    std::unique_lock<std::mutex> zipLock(zipMutex);
+    assert(sumDictMem >= myDictMem);
+    sumDictMem -= myDictMem;
+    zipCond.notify_all();
+  }BOOST_SCOPE_EXIT_END;
+
   t3 = g_pf.now();
   zbuilder_->prepare(properties_.num_entries, tmpStoreFile);
 	if (nullptr == second_pass_iter_)
