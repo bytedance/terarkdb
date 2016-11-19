@@ -754,21 +754,28 @@ Status TerarkZipTableBuilder::Finish() {
   static std::mutex zipMutex;
   static std::condition_variable zipCond;
   static size_t sumWorkingMem = 0;
-  const  size_t softMemLimit = table_options_.softZipWorkingMemLimit;
-  const  size_t hardMemLimit = table_options_.hardZipWorkingMemLimit;
+  const  size_t softMemLimit = std::max<size_t>(table_options_.softZipWorkingMemLimit, 14ull<<30);
+  const  size_t hardMemLimit = std::max<size_t>(table_options_.hardZipWorkingMemLimit, 16ull<<30);
 {
   const size_t myWorkMem = lenUserKeys_ +
               sizeof(SortableStrVec::SEntry) * numUserKeys_;
   const size_t smallmem = 500*1024*1024;
   {
     std::unique_lock<std::mutex> zipLock(zipMutex);
-    while ( (sumWorkingMem + myWorkMem >= softMemLimit && myWorkMem >= smallmem)
-        ||  (sumWorkingMem + myWorkMem >= hardMemLimit) ) {
-      fprintf(stderr
-          , "TerarkZipTableBuilder::Finish(): wait, sumWorkingMem = %f'GB, indexWorkingMem = %f'GB\n"
-          , sumWorkingMem/1e9, myWorkMem/1e9
-          );
-      zipCond.wait(zipLock);
+    if (myWorkMem < softMemLimit) {
+      while ( (sumWorkingMem + myWorkMem >= softMemLimit && myWorkMem >= smallmem)
+          ||  (sumWorkingMem + myWorkMem >= hardMemLimit) ) {
+        fprintf(stderr
+            , "TerarkZipTableBuilder::Finish(): wait, sumWorkingMem = %f'GB, indexWorkingMem = %f'GB\n"
+            , sumWorkingMem/1e9, myWorkMem/1e9
+            );
+        zipCond.wait(zipLock);
+      }
+    }
+    else {
+      while (sumWorkingMem > smallmem) {
+        zipCond.wait(zipLock);
+      }
     }
     sumWorkingMem += myWorkMem;
   }
@@ -833,9 +840,13 @@ Status TerarkZipTableBuilder::Finish() {
 	unique_ptr<DictZipBlobStore> zstore;
 	UintVecMin0 zvType(properties_.num_entries, kZipValueTypeBits);
 {
-  const  size_t smalldictMem = 6*100*1024*1024;
-  const  size_t myDictMem = sampleLenSum_ * 6;
+  const  size_t smalldictMem = 5*100*1024*1024;
+  const  size_t myDictMem = sampleLenSum_ * 5; // do not include samples self
   {
+    if (myDictMem > softMemLimit) {
+      THROW_STD(logic_error,
+          "myDictMem(%zd) > softMemLimit(%zd)", myDictMem, softMemLimit);
+    }
     std::unique_lock<std::mutex> zipLock(zipMutex);
     while ( (sumWorkingMem + myDictMem >= softMemLimit && myDictMem >= smalldictMem)
         ||  (sumWorkingMem + myDictMem >= hardMemLimit) ) {
