@@ -969,12 +969,6 @@ Status TerarkZipTableBuilder::Finish() {
 
   long long t4 = g_pf.now();
 
-  fprintf(stderr
-      , "TerarkZipTableBuilder::Finish():this=%p: second pass time =%7.2f's, %8.3f'MB/sec, value only(%4.1f%% of KV)\n"
-      , this, g_pf.sf(t3,t4)
-      , properties_.raw_value_size*1.0/g_pf.uf(t3,t4)
-      , properties_.raw_value_size*100.0/rawBytes
-      );
 	unique_ptr<NestLoudsTrieDAWG_SE_512> dawg;
 	try{auto trie = BaseDFA::load_mmap(tmpIndexFile);
 		dawg.reset(dynamic_cast<NestLoudsTrieDAWG_SE_512*>(trie));
@@ -1060,12 +1054,26 @@ Status TerarkZipTableBuilder::Finish() {
 	if (s.ok()) {
 		offset_ += footer_encoding.size();
 	}
-	fprintf(stderr
-		, "TerarkZipTableBuilder::Finish():this=%p: fsize=%zd, entries=%zd keys=%zd indexSize=%zd valueSize=%zd\n"
-		, this
-		, size_t(offset_), size_t(properties_.num_entries), numUserKeys_
-		, size_t(properties_.index_size), size_t(properties_.data_size)
-	);
+  fprintf(stderr
+    , "TerarkZipTableBuilder::Finish():this=%p: second pass time =%7.2f's, %8.3f'MB/sec, value only(%4.1f%% of KV)\n"
+      "    fsize=%zd, entries=%zd keys=%zd\n"
+      "    UnZipSize{ index =%12zd  value =%12zd }\n"
+      "    __ZipSize{ index =%12zd  value =%12zd }\n"
+      "    UnZip/Zip{ index = %7.4f  value = %7.4f  all = %7.4f }\n"
+      "    Zip/UnZip{ index = %7.4f  value = %7.5f  all = %7.5f }\n"
+    , this, g_pf.sf(t3,t4)
+    , properties_.raw_value_size*1.0/g_pf.uf(t3,t4)
+    , properties_.raw_value_size*100.0/rawBytes
+    , size_t(offset_), size_t(properties_.num_entries), numUserKeys_
+    , size_t(lenUserKeys_), size_t(properties_.raw_value_size)
+    , size_t(properties_.index_size), size_t(properties_.data_size)
+    , double(lenUserKeys_) / properties_.index_size
+    , double(properties_.raw_value_size) / properties_.data_size
+    , double(lenUserKeys_ + properties_.raw_value_size) / offset_
+    , properties_.index_size / double(lenUserKeys_)
+    , properties_.data_size  / double(properties_.raw_value_size)
+    , offset_ / double(lenUserKeys_ + properties_.raw_value_size)
+  );
 	return s;
 }
 
