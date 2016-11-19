@@ -773,7 +773,10 @@ Status TerarkZipTableBuilder::Finish() {
       }
     }
     else {
-      while (sumWorkingMem > smallmem) {
+      // relaxed condition is for preventing large job starvation
+      // and, even for very large index, we should allowing it to be built
+      // because even very large index is unlikely hit NestLoudsTrie limit
+      while (sumWorkingMem > softMemLimit/2) {
         zipCond.wait(zipLock);
       }
     }
