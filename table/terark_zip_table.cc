@@ -1222,12 +1222,14 @@ const {
 			"fallback_factory is null and magic_number is not kTerarkZipTable"
 			);
 	}
+#if 0
 	if (!prefetch_index_and_filter_in_cache) {
 		fprintf(stderr
 				, "WARN: TerarkZipTableFactory::NewTableReader(): "
 				  "prefetch_index_and_filter_in_cache = false is ignored, "
 				  "all index and data will be loaded in memory\n");
 	}
+#endif
 	return TerarkZipTableReader::Open(
 			table_reader_options.ioptions,
 			table_reader_options.env_options,
