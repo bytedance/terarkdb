@@ -28,6 +28,7 @@
 #include <terark/io/StreamBuffer.hpp>
 #include <terark/io/DataIO.hpp>
 #include <boost/scope_exit.hpp>
+#include <future>
 #include <memory>
 #include <random>
 #include <stdlib.h>
@@ -756,6 +757,9 @@ Status TerarkZipTableBuilder::Finish() {
   static size_t sumWorkingMem = 0;
   const  size_t softMemLimit = std::max<size_t>(table_options_.softZipWorkingMemLimit, 14ull<<30);
   const  size_t hardMemLimit = std::max<size_t>(table_options_.hardZipWorkingMemLimit, 16ull<<30);
+
+// indexing is also slow, run it in parallel
+std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
 {
   const size_t myWorkMem = lenUserKeys_ +
               sizeof(SortableStrVec::SEntry) * numUserKeys_;
@@ -824,14 +828,17 @@ Status TerarkZipTableBuilder::Finish() {
 	tmpKeyVec_.clear();
 	dawg->save_mmap(tmpIndexFile);
 	dawg.reset(); // free memory
-}
-  long long t2 = g_pf.now(), t3 = 0;
-	fprintf(stderr
-	    , "TerarkZipTableBuilder::Finish():this=%p:  first pass time =%7.2f's, %8.3f'MB/sec, index time =%6.2f's, %8.3f'MB/sec\n"
-	    , this, g_pf.sf(t0,t1), rawBytes*1.0/g_pf.uf(t0,t1)
-      , g_pf.sf(t1,t2), properties_.raw_key_size*1.0/g_pf.uf(t1,t2)
+  long long tt = g_pf.now();
+  fprintf(stderr
+      , "TerarkZipTableBuilder::Finish():this=%p: indexing time =%6.2f's, %8.3f'MB/sec\n"
+      , this, g_pf.sf(t1,tt), properties_.raw_key_size*1.0/g_pf.uf(t1,tt)
       );
-
+});
+	fprintf(stderr
+	    , "TerarkZipTableBuilder::Finish():this=%p:  first pass time =%7.2f's, %8.3f'MB/sec\n"
+	    , this, g_pf.sf(t0,t1), rawBytes*1.0/g_pf.uf(t0,t1)
+      );
+  long long t3 = 0;
 #if 0
 	BOOST_SCOPE_EXIT(&tmpIndexFile, &tmpStoreFile, &tmpValueFilePath_){
     ::remove(tmpIndexFile.c_str());
@@ -982,6 +989,9 @@ Status TerarkZipTableBuilder::Finish() {
 }
 
   long long t4 = g_pf.now();
+
+  // wait for indexing complete, if indexing is slower than value compressing
+  asyncIndexResult.get();
 
 	unique_ptr<NestLoudsTrieDAWG_SE_512> dawg;
 	try{auto trie = BaseDFA::load_mmap(tmpIndexFile);
