@@ -768,7 +768,7 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
 {
   const size_t myWorkMem = lenUserKeys_ +
               sizeof(SortableStrVec::SEntry) * numUserKeys_;
-  const size_t smallmem = 500*1024*1024;
+  const size_t smallmem = 1000*1024*1024;
   {
     std::unique_lock<std::mutex> zipLock(zipMutex);
     if (myWorkMem < softMemLimit) {
@@ -852,7 +852,7 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
 	unique_ptr<DictZipBlobStore> zstore;
 	UintVecMin0 zvType(properties_.num_entries, kZipValueTypeBits);
 {
-  const  size_t smalldictMem = 5*100*1024*1024;
+  const  size_t smalldictMem = 5*200*1024*1024;
   const  size_t myDictMem = sampleLenSum_ * 5; // do not include samples self
   {
     if (myDictMem > softMemLimit) {
