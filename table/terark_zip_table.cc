@@ -749,9 +749,14 @@ Status TerarkZipTableBuilder::Finish() {
 	std::string tmpStoreFile = tmpValueFilePath_ + ".zbs";
 	std::string tmpStoreDict = tmpValueFilePath_ + ".zbs-dict";
 
-	long long t1 = g_pf.now();
 	long long rawBytes = properties_.raw_key_size + properties_.raw_value_size;
-
+	{
+	  long long tt = g_pf.now();
+	  fprintf(stderr
+	      , "TerarkZipTableBuilder::Finish():this=%p:  first pass time =%7.2f's, %8.3f'MB/sec\n"
+	      , this, g_pf.sf(t0,tt), rawBytes*1.0/g_pf.uf(t0,tt)
+	      );
+	}
   static std::mutex zipMutex;
   static std::condition_variable zipCond;
   static size_t sumWorkingMem = 0;
@@ -793,6 +798,7 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
     zipCond.notify_all();
   }BOOST_SCOPE_EXIT_END;
 
+  long long t1 = g_pf.now();
   tmpKeyVec_.m_index.reserve(numUserKeys_);
   tmpKeyVec_.m_strpool.reserve(lenUserKeys_);
   {
@@ -834,10 +840,6 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
       , this, g_pf.sf(t1,tt), properties_.raw_key_size*1.0/g_pf.uf(t1,tt)
       );
 });
-	fprintf(stderr
-	    , "TerarkZipTableBuilder::Finish():this=%p:  first pass time =%7.2f's, %8.3f'MB/sec\n"
-	    , this, g_pf.sf(t0,t1), rawBytes*1.0/g_pf.uf(t0,t1)
-      );
   long long t3 = 0;
 #if 0
 	BOOST_SCOPE_EXIT(&tmpIndexFile, &tmpStoreFile, &tmpValueFilePath_){
