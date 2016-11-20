@@ -770,8 +770,8 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
       while ( (sumWorkingMem + myWorkMem >= softMemLimit && myWorkMem >= smallmem)
           ||  (sumWorkingMem + myWorkMem >= hardMemLimit) ) {
         fprintf(stderr
-            , "TerarkZipTableBuilder::Finish(): wait, sumWorkingMem = %f'GB, indexWorkingMem = %f'GB\n"
-            , sumWorkingMem/1e9, myWorkMem/1e9
+            , "TerarkZipTableBuilder::Finish():this=%p: wait, sumWorkingMem = %f'GB, indexWorkingMem = %f'GB\n"
+            , this, sumWorkingMem/1e9, myWorkMem/1e9
             );
         zipCond.wait(zipLock);
       }
@@ -861,8 +861,8 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
     while ( (sumWorkingMem + myDictMem >= softMemLimit && myDictMem >= smalldictMem)
         ||  (sumWorkingMem + myDictMem >= hardMemLimit) ) {
       fprintf(stderr
-          , "TerarkZipTableBuilder::Finish(): wait, sumWorkingMem = %f'GB, dictZipWorkingMem = %f'GB\n"
-          , sumWorkingMem/1e9, myDictMem/1e9
+          , "TerarkZipTableBuilder::Finish():this=%p: wait, sumWorkingMem = %f'GB, dictZipWorkingMem = %f'GB\n"
+          , this, sumWorkingMem/1e9, myDictMem/1e9
           );
       zipCond.wait(zipLock);
     }
