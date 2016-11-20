@@ -992,7 +992,7 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
 
   // wait for indexing complete, if indexing is slower than value compressing
   asyncIndexResult.get();
-
+  long long t5 = g_pf.now();
 	unique_ptr<NestLoudsTrieDAWG_SE_512> dawg;
 	try{auto trie = BaseDFA::load_mmap(tmpIndexFile);
 		dawg.reset(dynamic_cast<NestLoudsTrieDAWG_SE_512*>(trie));
@@ -1078,8 +1078,10 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
 	if (s.ok()) {
 		offset_ += footer_encoding.size();
 	}
+  long long t6 = g_pf.now();
   fprintf(stderr
     , "TerarkZipTableBuilder::Finish():this=%p: second pass time =%7.2f's, %8.3f'MB/sec, value only(%4.1f%% of KV)\n"
+      "    wait indexing time = %7.2f's, re-map KeyValue time = %7.2f, %8.3f'MB/sec\n"
       "    entries = %zd  keys = %zd  avg-key = %.2f  avg-zkey = %.2f  avg-val = %.2f  avg-zval = %.2f\n"
       "    UnZipSize{ index =%12zd  value =%12zd  all =%12zd }\n"
       "    __ZipSize{ index =%12zd  value =%12zd  all =%12zd }\n"
@@ -1089,6 +1091,8 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
     , this, g_pf.sf(t3,t4)
     , properties_.raw_value_size*1.0/g_pf.uf(t3,t4)
     , properties_.raw_value_size*100.0/rawBytes
+
+    , g_pf.sf(t4,t5), g_pf.sf(t5,t6), double(offset_) / g_pf.uf(t5,t6)
 
     , size_t(properties_.num_entries), numUserKeys_
     , double(lenUserKeys_) / numUserKeys_
