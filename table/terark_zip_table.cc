@@ -836,7 +836,7 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
 	dawg.reset(); // free memory
   long long tt = g_pf.now();
   fprintf(stderr
-      , "TerarkZipTableBuilder::Finish():this=%p: index build time =%6.2f's, %8.3f'MB/sec\n"
+      , "TerarkZipTableBuilder::Finish():this=%p:  index pass time =%7.2f's, %8.3f'MB/sec\n"
       , this, g_pf.sf(t1,tt), properties_.raw_key_size*1.0/g_pf.uf(t1,tt)
       );
 });
