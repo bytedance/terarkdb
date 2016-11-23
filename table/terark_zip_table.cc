@@ -836,7 +836,7 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
 	dawg.reset(); // free memory
   long long tt = g_pf.now();
   fprintf(stderr
-      , "TerarkZipTableBuilder::Finish():this=%p: indexing time =%6.2f's, %8.3f'MB/sec\n"
+      , "TerarkZipTableBuilder::Finish():this=%p: index build time =%6.2f's, %8.3f'MB/sec\n"
       , this, g_pf.sf(t1,tt), properties_.raw_key_size*1.0/g_pf.uf(t1,tt)
       );
 });
@@ -853,7 +853,7 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
 	UintVecMin0 zvType(properties_.num_entries, kZipValueTypeBits);
 {
   const  size_t smalldictMem = 5*200*1024*1024;
-  const  size_t myDictMem = sampleLenSum_ * 5; // do not include samples self
+  const  size_t myDictMem = std::min<size_t>(sampleLenSum_, INT32_MAX) * 5; // do not include samples self
   {
     if (myDictMem > softMemLimit) {
       THROW_STD(logic_error,
@@ -1087,8 +1087,8 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
       "    entries = %zd  keys = %zd  avg-key = %.2f  avg-zkey = %.2f  avg-val = %.2f  avg-zval = %.2f\n"
       "    UnZipSize{ index =%12zd  value =%12zd  all =%12zd }\n"
       "    __ZipSize{ index =%12zd  value =%12zd  all =%12zd }\n"
-      "    UnZip/Zip{ index = %7.4f  value = %7.4f  all = %7.4f }\n"
-      "    Zip/UnZip{ index = %7.4f  value = %7.4f  all = %7.4f }\n"
+      "    UnZip/Zip{ index = %7.4f      value = %7.4f      all = %7.4f }\n"
+      "    Zip/UnZip{ index = %7.4f      value = %7.4f      all = %7.4f }\n"
 
     , this, g_pf.sf(t3,t4)
     , properties_.raw_value_size*1.0/g_pf.uf(t3,t4)
