@@ -741,6 +741,10 @@ Status TerarkZipTableBuilder::Finish() {
 	AddPrevUserKey();
 	tmpKeyWriter_.flush_buffer();
 	tmpKeyFile_.rewind();
+  if (!second_pass_iter_) {
+    tmpValueWriter_.flush_buffer();
+    tmpValueFile_.rewind();
+  }
 
 #if !defined(NDEBUG)
 	SortableStrVec backupKeys;
@@ -822,12 +826,12 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
   backupKeys = tmpKeyVec_;
 #endif
 
-	if (!second_pass_iter_) {
-	  tmpValueWriter_.flush();
-	  tmpValueFile_.rewind();
-	}
 	terark::NestLoudsTrieConfig conf;
 	conf.nestLevel = table_options_.indexNestLevel;
+	if (myWorkMem > smallmem) {
+	  // use tmp files during index building
+	  conf.tmpDir = table_options_.localTempDir;
+	}
 	unique_ptr<NestLoudsTrieDAWG_SE_512> dawg(new NestLoudsTrieDAWG_SE_512());
 	dawg->build_from(tmpKeyVec_, conf);
 	assert(dawg->num_words() == numUserKeys_);
