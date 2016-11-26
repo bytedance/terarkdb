@@ -831,6 +831,12 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
 	if (myWorkMem > smallmem) {
 	  // use tmp files during index building
 	  conf.tmpDir = table_options_.localTempDir;
+	  if (myWorkMem > 10*smallmem) {
+	    conf.tmpLevel = 3;
+	  }
+	  else if (myWorkMem > 5*smallmem) {
+	    conf.tmpLevel = 2;
+	  }
 	}
 	unique_ptr<NestLoudsTrieDAWG_SE_512> dawg(new NestLoudsTrieDAWG_SE_512());
 	dawg->build_from(tmpKeyVec_, conf);
