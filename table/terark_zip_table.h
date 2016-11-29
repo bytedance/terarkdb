@@ -21,7 +21,6 @@ struct TerarkZipTableOptions {
     kHuffman,
     kFSE,
   };
-	unsigned fixed_key_len = 0;
 	int indexNestLevel = 3;
 
 	/// 0 : check sum nothing
