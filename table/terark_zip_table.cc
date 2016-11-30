@@ -219,7 +219,7 @@ public:
   void Add(const Slice& key, const Slice& value) override;
   Status status() const override { return status_; }
   Status Finish() override;
-  void Abandon() override { closed_ = true; }
+  void Abandon() override;
   uint64_t NumEntries() const override { return properties_.num_entries; }
   uint64_t FileSize() const override;
   TableProperties GetTableProperties() const override { return properties_; }
@@ -1146,6 +1146,12 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
     , offset_ / double(rawBytes)
   );
 	return s;
+}
+
+void TerarkZipTableBuilder::Abandon() {
+  closed_ = true;
+  tmpKeyFile_.complete_write();
+  tmpValueFile_.complete_write();
 }
 
 void TerarkZipTableBuilder::AddPrevUserKey() {
