@@ -859,12 +859,16 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
 	terark::NestLoudsTrieConfig conf;
 	conf.nestLevel = table_options_.indexNestLevel;
 	if (myWorkMem > smallmem) {
-	  // use tmp files during index building
+    // use tmp files during index building
 	  conf.tmpDir = table_options_.localTempDir;
-	  if (myWorkMem > 10*smallmem) {
+    // adjust tmpLevel for linkVec, wihch is proportional to num of keys
+	  if (numUserKeys_ > 1ul<<30) {
+      // not need any mem in BFS, instead 8G file of 4G mem (linkVec)
+      // this reduce 10% peak mem when avg keylen is 24 bytes
 	    conf.tmpLevel = 3;
 	  }
-	  else if (myWorkMem > 5*smallmem) {
+	  else if (myWorkMem > 256ul<<20) {
+      // 1G mem in BFS, swap to 1G file after BFS and before build nextStrVec
 	    conf.tmpLevel = 2;
 	  }
 	}
