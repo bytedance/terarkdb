@@ -219,7 +219,7 @@ public:
   void Add(const Slice& key, const Slice& value) override;
   Status status() const override { return status_; }
   Status Finish() override;
-  void Abandon() override { closed_ = true; }
+  void Abandon() override;
   uint64_t NumEntries() const override { return properties_.num_entries; }
   uint64_t FileSize() const override;
   TableProperties GetTableProperties() const override { return properties_; }
@@ -1120,10 +1120,10 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
     , "TerarkZipTableBuilder::Finish():this=%p: second pass time =%7.2f's, %8.3f'MB/sec, value only(%4.1f%% of KV)\n"
       "    wait indexing time = %7.2f's, re-map KeyValue time = %7.2f, %8.3f'MB/sec\n"
       "    entries = %zd  keys = %zd  avg-key = %.2f  avg-zkey = %.2f  avg-val = %.2f  avg-zval = %.2f\n"
-      "    UnZipSize{ index =%12zd  value =%12zd  all =%12zd }\n"
-      "    __ZipSize{ index =%12zd  value =%12zd  all =%12zd }\n"
-      "    UnZip/Zip{ index = %7.4f      value = %7.4f      all = %7.4f }\n"
-      "    Zip/UnZip{ index = %7.4f      value = %7.4f      all = %7.4f }\n"
+      "    UnZipSize{ index =%9.4f GB  value =%9.4f GB  all =%9.4f GB }\n"
+      "    __ZipSize{ index =%9.4f GB  value =%9.4f GB  all =%9.4f GB }\n"
+      "    UnZip/Zip{ index =%9.4f     value =%9.4f     all =%9.4f    }\n"
+      "    Zip/UnZip{ index =%9.4f     value =%9.4f     all =%9.4f    }\n"
 
     , this, g_pf.sf(t3,t4)
     , properties_.raw_value_size*1.0/g_pf.uf(t3,t4)
@@ -1137,9 +1137,9 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
     , double(properties_.raw_value_size) / numUserKeys_
     , double(properties_.data_size) / numUserKeys_
 
-    , size_t(lenUserKeys_), size_t(properties_.raw_value_size), size_t(rawBytes)
+    , lenUserKeys_/1e9, properties_.raw_value_size/1e9, rawBytes/1e9
 
-    , size_t(properties_.index_size), size_t(properties_.data_size), size_t(offset_)
+    , properties_.index_size/1e9, properties_.data_size/1e9, offset_/1e9
 
     , double(lenUserKeys_) / properties_.index_size
     , double(properties_.raw_value_size) / properties_.data_size
@@ -1150,6 +1150,12 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
     , offset_ / double(rawBytes)
   );
 	return s;
+}
+
+void TerarkZipTableBuilder::Abandon() {
+  closed_ = true;
+  tmpKeyFile_.complete_write();
+  tmpValueFile_.complete_write();
 }
 
 void TerarkZipTableBuilder::AddPrevUserKey() {
