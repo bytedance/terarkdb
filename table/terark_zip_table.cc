@@ -782,6 +782,7 @@ Status TerarkZipTableBuilder::Finish() {
 	AutoDeleteFile tmpIndexFile{tmpValueFile_.path + ".index"};
 	AutoDeleteFile tmpStoreFile{tmpValueFile_.path + ".zbs"};
 	AutoDeleteFile tmpStoreDict{tmpValueFile_.path + ".zbs-dict"};
+  DictZipBlobStore::ZipStat dzstat;
 
 	long long rawBytes = properties_.raw_key_size + properties_.raw_value_size;
 	{
@@ -855,7 +856,6 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
   }
   backupKeys = keyVec;
 #endif
-
 	terark::NestLoudsTrieConfig conf;
 	conf.nestLevel = table_options_.indexNestLevel;
 	if (myWorkMem > smallmem) {
@@ -1022,6 +1022,7 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
 
   tmpValueFile_.close();
   zstore.reset(zbuilder_->finish());
+  dzstat = zbuilder_->getZipStat();
   zbuilder_.reset();
 }
 
@@ -1119,6 +1120,7 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
   fprintf(stderr
     , "TerarkZipTableBuilder::Finish():this=%p: second pass time =%7.2f's, %8.3f'MB/sec, value only(%4.1f%% of KV)\n"
       "    wait indexing time = %7.2f's, re-map KeyValue time = %7.2f, %8.3f'MB/sec\n"
+      "    zip pipeline throughput = %8.3f'MB/sec\n"
       "    entries = %zd  keys = %zd  avg-key = %.2f  avg-zkey = %.2f  avg-val = %.2f  avg-zval = %.2f\n"
       "    UnZipSize{ index =%9.4f GB  value =%9.4f GB  all =%9.4f GB }\n"
       "    __ZipSize{ index =%9.4f GB  value =%9.4f GB  all =%9.4f GB }\n"
@@ -1130,6 +1132,8 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
     , properties_.raw_value_size*100.0/rawBytes
 
     , g_pf.sf(t4,t5), g_pf.sf(t5,t6), double(offset_) / g_pf.uf(t5,t6)
+
+    , dzstat.pipelineThroughBytes / dzstat.dictZipTime / 1e6
 
     , size_t(properties_.num_entries), numUserKeys_
     , double(lenUserKeys_) / numUserKeys_
