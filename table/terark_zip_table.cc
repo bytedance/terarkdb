@@ -40,6 +40,9 @@ using std::unique_ptr;
 using std::unordered_map;
 using std::vector;
 
+template<class T>
+unique_ptr<T> UniquePtrOf(T* p) { return unique_ptr<T>(p); }
+
 using terark::BaseDFA;
 using terark::NestLoudsTrieDAWG_SE_512;
 using terark::DictZipBlobStore;
@@ -235,12 +238,12 @@ private:
   const ImmutableCFOptions& ioptions_;
   std::vector<unique_ptr<IntTblPropCollector>> table_properties_collectors_;
 
-  unique_ptr<DictZipBlobStore::ZipBuilder> zbuilder_;
   InternalIterator* second_pass_iter_ = nullptr;
   valvec<byte_t> prevUserKey_;
   terark::febitvec valueBits_;
   TempFileDeleteOnClose tmpKeyFile_;
   TempFileDeleteOnClose tmpValueFile_;
+  TempFileDeleteOnClose tmpSampleFile_;
   std::mt19937_64 randomGenerator_;
   uint64_t sampleUpperBound_;
   size_t lenUserKeys_ = size_t(-1);
@@ -683,11 +686,6 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(
   , ioptions_(ioptions)
 {
   file_ = file;
-  DictZipBlobStore::Options dzopt;
-  dzopt.entropyAlgo = DictZipBlobStore::Options::EntropyAlgo(tzto.entropyAlgo);
-  dzopt.checksumLevel = tzto.checksumLevel;
-  dzopt.useSuffixArrayLocalMatch = tzto.useSuffixArrayLocalMatch;
-  zbuilder_.reset(DictZipBlobStore::createZipBuilder(dzopt));
   sampleUpperBound_ = randomGenerator_.max() * table_options_.sampleRatio;
   tmpValueFile_.path = tzto.localTempDir + "/TerarkRocks-XXXXXX";
   int fd = mkstemp(&tmpValueFile_.path[0]);
@@ -700,6 +698,8 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(
   tmpValueFile_.dopen(fd);
   tmpKeyFile_.path = tmpValueFile_.path + ".keydata";
   tmpKeyFile_.open();
+  tmpSampleFile_.path = tmpValueFile_.path + ".sample";
+  tmpSampleFile_.open();
 
   properties_.fixed_key_len = 0;
   properties_.num_data_blocks = 1;
@@ -738,7 +738,7 @@ void TerarkZipTableBuilder::Add(const Slice& key, const Slice& value) {
 	}
 	valueBits_.push_back(true);
 	if (!value.empty() && randomGenerator_() < sampleUpperBound_) {
-		zbuilder_->addSample(fstringOf(value));
+	  tmpSampleFile_.writer << fstringOf(value);
 		sampleLenSum_ += value.size();
 	}
 	if (!second_pass_iter_) {
@@ -767,14 +767,12 @@ Status TerarkZipTableBuilder::Finish() {
 	assert(!closed_);
 	closed_ = true;
 
-	if (0 == sampleLenSum_) { // prevent from empty
-		zbuilder_->addSample("Hello World!");
-	}
 	AddPrevUserKey();
 	tmpKeyFile_.complete_write();
   if (!second_pass_iter_) {
     tmpValueFile_.complete_write();
   }
+  tmpSampleFile_.complete_write();
 
 #if !defined(NDEBUG)
 	SortableStrVec backupKeys;
@@ -885,14 +883,16 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
       );
 });
   long long t3 = 0;
+  size_t realsampleLenSum = 0;
 	unique_ptr<DictZipBlobStore> zstore;
 	UintVecMin0 zvType(properties_.num_entries, kZipValueTypeBits);
 {
-  const  size_t smalldictMem = 5*200*1024*1024;
-  const  size_t myDictMem = std::min<size_t>(sampleLenSum_, INT32_MAX) * 5; // do not include samples self
+  const  size_t smalldictMem = 6*200*1024*1024;
+  const  size_t myDictMem = std::min<size_t>(sampleLenSum_, INT32_MAX) * 6; // include samples self
   {
+    assert(myDictMem <= softMemLimit);
     if (myDictMem > softMemLimit) {
-      THROW_STD(logic_error,
+      THROW_STD(runtime_error,
           "myDictMem(%zd) > softMemLimit(%zd)", myDictMem, softMemLimit);
     }
     std::unique_lock<std::mutex> zipLock(zipMutex);
@@ -914,7 +914,41 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
   }BOOST_SCOPE_EXIT_END;
 
   t3 = g_pf.now();
-  zbuilder_->prepare(properties_.num_entries, tmpStoreFile);
+  DictZipBlobStore::Options dzopt;
+  dzopt.entropyAlgo = DictZipBlobStore::Options::EntropyAlgo(table_options_.entropyAlgo);
+  dzopt.checksumLevel = table_options_.checksumLevel;
+  dzopt.useSuffixArrayLocalMatch = table_options_.useSuffixArrayLocalMatch;
+  auto zbuilder = UniquePtrOf(DictZipBlobStore::createZipBuilder(dzopt));
+{
+  valvec<byte_t> sample;
+  NativeDataInput<InputBuffer> input(&tmpSampleFile_.fp);
+  if (sampleLenSum_ < INT32_MAX) {
+    for (size_t len = 0; len < sampleLenSum_; ) {
+      input >> sample;
+      zbuilder->addSample(sample);
+      len += sample.size();
+    }
+    realsampleLenSum = sampleLenSum_;
+  }
+  else {
+    uint64_t upperBound2 = uint64_t(
+        randomGenerator_.max() * double(INT32_MAX) / sampleLenSum_);
+    for (size_t len = 0; len < sampleLenSum_; ) {
+      input >> sample;
+      if (randomGenerator_() < upperBound2) {
+        zbuilder->addSample(sample);
+        realsampleLenSum += sample.size();
+      }
+      len += sample.size();
+    }
+  }
+  tmpSampleFile_.close();
+  if (0 == realsampleLenSum) { // prevent from empty
+    zbuilder->addSample("Hello World!");
+  }
+  zbuilder->finishSample();
+  zbuilder->prepare(properties_.num_entries, tmpStoreFile);
+}
 	if (nullptr == second_pass_iter_)
 {
 	NativeDataInput<InputBuffer> input(&tmpValueFile_.fp);
@@ -958,7 +992,7 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
 				((ZipValueMultiValue*)value.data())->offsets[j+1] = value.size() - headerSize;
 			}
 		}
-		zbuilder_->addRecord(value);
+		zbuilder->addRecord(value);
 		bitPos += oneSeqLen + 1;
 		entryId += oneSeqLen;
 	}
@@ -982,7 +1016,7 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
       assert(fstringOf(pikey.user_key) == backupKeys[recId]);
       if (0 == pikey.sequence && kTypeValue==pikey.type) {
         zvType.set_wire(recId, size_t(ZipValueType::kZeroSeq));
-        zbuilder_->addRecord(fstringOf(curVal));
+        zbuilder->addRecord(fstringOf(curVal));
       } else {
         if (kTypeValue==pikey.type) {
           zvType.set_wire(recId, size_t(ZipValueType::kValue));
@@ -991,7 +1025,7 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
         }
         value.append((byte_t*)&pikey.sequence, 7);
         value.append(fstringOf(curVal));
-        zbuilder_->addRecord(value);
+        zbuilder->addRecord(value);
       }
       second_pass_iter_->Next();
     }
@@ -1012,7 +1046,7 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
         ((ZipValueMultiValue*)value.data())->offsets[j+1] = value.size() - headerSize;
         second_pass_iter_->Next();
       }
-      zbuilder_->addRecord(value);
+      zbuilder->addRecord(value);
     }
     bitPos += oneSeqLen + 1;
     entryId += oneSeqLen;
@@ -1021,9 +1055,9 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
 }
 
   tmpValueFile_.close();
-  zstore.reset(zbuilder_->finish());
-  dzstat = zbuilder_->getZipStat();
-  zbuilder_.reset();
+  zstore.reset(zbuilder->finish());
+  dzstat = zbuilder->getZipStat();
+  zbuilder.reset();
 }
 
   long long t4 = g_pf.now();
@@ -1118,21 +1152,26 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
 	}
   long long t6 = g_pf.now();
   fprintf(stderr
-    , "TerarkZipTableBuilder::Finish():this=%p: second pass time =%7.2f's, %8.3f'MB/sec, value only(%4.1f%% of KV)\n"
-      "    wait indexing time = %7.2f's, re-map KeyValue time = %7.2f, %8.3f'MB/sec\n"
-      "    zip pipeline throughput = %8.3f'MB/sec\n"
-      "    entries = %zd  keys = %zd  avg-key = %.2f  avg-zkey = %.2f  avg-val = %.2f  avg-zval = %.2f\n"
-      "    UnZipSize{ index =%9.4f GB  value =%9.4f GB  all =%9.4f GB }\n"
-      "    __ZipSize{ index =%9.4f GB  value =%9.4f GB  all =%9.4f GB }\n"
-      "    UnZip/Zip{ index =%9.4f     value =%9.4f     all =%9.4f    }\n"
-      "    Zip/UnZip{ index =%9.4f     value =%9.4f     all =%9.4f    }\n"
-
+    ,
+R"EOS(TerarkZipTableBuilder::Finish():this=%p: second pass time =%7.2f's, %8.3f'MB/sec, value only(%4.1f%% of KV)
+    wait indexing time = %7.2f's, re-map KeyValue time = %7.2f, %8.3f'MB/sec
+    z-dict build throughput = %8.3f'MB/sec
+    zip my value throughput = %8.3f'MB/sec
+    zip pipeline throughput = %8.3f'MB/sec
+    entries = %zd  keys = %zd  avg-key = %.2f  avg-zkey = %.2f  avg-val = %.2f  avg-zval = %.2f
+    UnZipSize{ index =%9.4f GB  value =%9.4f GB  all =%9.4f GB }
+    __ZipSize{ index =%9.4f GB  value =%9.4f GB  all =%9.4f GB }
+    UnZip/Zip{ index =%9.4f     value =%9.4f     all =%9.4f    }
+    Zip/UnZip{ index =%9.4f     value =%9.4f     all =%9.4f    }
+)EOS"
     , this, g_pf.sf(t3,t4)
     , properties_.raw_value_size*1.0/g_pf.uf(t3,t4)
     , properties_.raw_value_size*100.0/rawBytes
 
     , g_pf.sf(t4,t5), g_pf.sf(t5,t6), double(offset_) / g_pf.uf(t5,t6)
 
+    , realsampleLenSum / dzstat.dictBuildTime / 1e6
+    , properties_.raw_value_size  / dzstat.dictZipTime / 1e6
     , dzstat.pipelineThroughBytes / dzstat.dictZipTime / 1e6
 
     , size_t(properties_.num_entries), numUserKeys_
