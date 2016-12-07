@@ -1170,7 +1170,7 @@ R"EOS(TerarkZipTableBuilder::Finish():this=%p: second pass time =%7.2f's, %8.3f'
 
     , g_pf.sf(t4,t5), g_pf.sf(t5,t6), double(offset_) / g_pf.uf(t5,t6)
 
-    , dzstat.dictBuildTime, realsampleLenSum
+    , dzstat.dictBuildTime, realsampleLenSum / 1e6
     , realsampleLenSum / dzstat.dictBuildTime / 1e6
 
     , properties_.raw_value_size  / dzstat.dictZipTime / 1e6
