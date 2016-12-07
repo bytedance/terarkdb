@@ -1154,10 +1154,10 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
   fprintf(stderr
     ,
 R"EOS(TerarkZipTableBuilder::Finish():this=%p: second pass time =%7.2f's, %8.3f'MB/sec, value only(%4.1f%% of KV)
-    wait indexing time = %7.2f's, re-map KeyValue time = %7.2f, %8.3f'MB/sec
-    z-dict build throughput = %8.3f'MB/sec
-    zip my value throughput = %8.3f'MB/sec
-    zip pipeline throughput = %8.3f'MB/sec
+   wait indexing time = %7.2f's, re-map KeyValue time = %7.2f, %8.3f'MB/sec
+    z-dict build time = %7.2f's, sample length = %7.3f'MB, throughput = %6.3f'MB/sec
+    zip my value throughput = %7.3f'MB/sec
+    zip pipeline throughput = %7.3f'MB/sec
     entries = %zd  keys = %zd  avg-key = %.2f  avg-zkey = %.2f  avg-val = %.2f  avg-zval = %.2f
     UnZipSize{ index =%9.4f GB  value =%9.4f GB  all =%9.4f GB }
     __ZipSize{ index =%9.4f GB  value =%9.4f GB  all =%9.4f GB }
@@ -1170,7 +1170,9 @@ R"EOS(TerarkZipTableBuilder::Finish():this=%p: second pass time =%7.2f's, %8.3f'
 
     , g_pf.sf(t4,t5), g_pf.sf(t5,t6), double(offset_) / g_pf.uf(t5,t6)
 
+    , dzstat.dictBuildTime, realsampleLenSum
     , realsampleLenSum / dzstat.dictBuildTime / 1e6
+
     , properties_.raw_value_size  / dzstat.dictZipTime / 1e6
     , dzstat.pipelineThroughBytes / dzstat.dictZipTime / 1e6
 
