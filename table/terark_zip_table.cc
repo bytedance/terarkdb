@@ -1199,6 +1199,7 @@ void TerarkZipTableBuilder::Abandon() {
   closed_ = true;
   tmpKeyFile_.complete_write();
   tmpValueFile_.complete_write();
+  tmpSampleFile_.complete_write();
 }
 
 void TerarkZipTableBuilder::AddPrevUserKey() {
