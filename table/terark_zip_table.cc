@@ -793,8 +793,8 @@ Status TerarkZipTableBuilder::Finish() {
   static std::mutex zipMutex;
   static std::condition_variable zipCond;
   static size_t sumWorkingMem = 0;
-  const  size_t softMemLimit = std::max<size_t>(table_options_.softZipWorkingMemLimit, 14ull<<30);
-  const  size_t hardMemLimit = std::max<size_t>(table_options_.hardZipWorkingMemLimit, 16ull<<30);
+  const  size_t softMemLimit = table_options_.softZipWorkingMemLimit;
+  const  size_t hardMemLimit = std::max(table_options_.hardZipWorkingMemLimit, softMemLimit);
 
 // indexing is also slow, run it in parallel
 std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
@@ -890,19 +890,25 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
   const  size_t smalldictMem = 6*200*1024*1024;
   const  size_t myDictMem = std::min<size_t>(sampleLenSum_, INT32_MAX) * 6; // include samples self
   {
-    assert(myDictMem <= softMemLimit);
-    if (myDictMem > softMemLimit) {
-      THROW_STD(runtime_error,
-          "myDictMem(%zd) > softMemLimit(%zd)", myDictMem, softMemLimit);
-    }
     std::unique_lock<std::mutex> zipLock(zipMutex);
-    while ( (sumWorkingMem + myDictMem >= softMemLimit && myDictMem >= smalldictMem)
-        ||  (sumWorkingMem + myDictMem >= hardMemLimit) ) {
-      fprintf(stderr
-          , "TerarkZipTableBuilder::Finish():this=%p: wait, sumWorkingMem = %f'GB, dictZipWorkingMem = %f'GB\n"
-          , this, sumWorkingMem/1e9, myDictMem/1e9
-          );
-      zipCond.wait(zipLock);
+    if (myDictMem < softMemLimit) {
+      while ( (sumWorkingMem + myDictMem >= softMemLimit && myDictMem >= smalldictMem)
+          ||  (sumWorkingMem + myDictMem >= hardMemLimit) ) {
+        fprintf(stderr
+            , "TerarkZipTableBuilder::Finish():this=%p: wait, sumWorkingMem = %f'GB, dictZipWorkingMem = %f'GB\n"
+            , this, sumWorkingMem/1e9, myDictMem/1e9
+            );
+        zipCond.wait(zipLock);
+      }
+    }
+    else {
+      while (sumWorkingMem > 0) {
+        fprintf(stderr
+            , "TerarkZipTableBuilder::Finish():this=%p: wait, sumWorkingMem = %f'GB, dictZipWorkingMem = %f'GB\n"
+            , this, sumWorkingMem/1e9, myDictMem/1e9
+            );
+        zipCond.wait(zipLock);
+      }
     }
     sumWorkingMem += myDictMem;
   }

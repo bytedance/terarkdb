@@ -30,13 +30,16 @@ struct TerarkZipTableOptions {
 
 	EntropyAlgo entropyAlgo = kNoEntropy;
 
-	///    < 0 : only last level using terarkZip, this is the default
+	///    < 0 : only last level using terarkZip
 	///          this is equivalent to terarkZipMinLevel == num_levels-1
 	/// others : use terarkZip when curlevel >= terarkZipMinLevel
 	///          this includes the two special cases:
 	///                   == 0 : all levels using terarkZip
 	///          >= num_levels : all levels using fallback TableFactory
-	int terarkZipMinLevel = -1;
+  /// it shown that set terarkZipMinLevel = 0 is the best choice
+  /// if mixed with rocksdb's native SST, those SSTs may using too much
+  /// memory & SSD, which degrades the performance
+	int terarkZipMinLevel = 0;
 
 	bool useSuffixArrayLocalMatch = false;
 
