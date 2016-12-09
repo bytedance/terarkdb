@@ -82,6 +82,24 @@ class TerarkZipTableIterator;
 #ifdef TERARK_ZIP_TRAIL_VERSION
 const char g_trail_rand_delete = "TERARK_ZIP_TRAIL_VERSION random deleted this row";
 #endif
+#undef INFO
+#undef WARN
+#if defined(NDEBUG) && 0
+  #define INFO(logger, format, ...) Info(logger, format, ##__VA_ARGS__)
+  #define WARN(logger, format, ...) Warn(logger, format, ##__VA_ARGS__)
+#else
+  #define INFO(logger, format, ...) fprintf(stderr, "%s INFO: " format, StrDateTimeNow(), ##__VA_ARGS__)
+  #define WARN(logger, format, ...) fprintf(stderr, "%s WARN: " format, StrDateTimeNow(), ##__VA_ARGS__)
+#endif
+
+static const char* StrDateTimeNow() {
+  thread_local char buf[64];
+  time_t rawtime;
+  time(&rawtime);
+  struct tm* timeinfo = localtime(&rawtime);
+  strftime(buf, sizeof(buf), "%F %T",timeinfo);
+  return buf;
+}
 
 enum class ZipValueType : unsigned char {
 	kZeroSeq = 0,
@@ -534,8 +552,8 @@ TerarkZipTableReader::Open(const ImmutableCFOptions& ioptions,
   size_t recNum = r->keyIndex_->num_words();
   r->typeArray_.risk_set_data((byte_t*)zValueTypeBlock.data.data(),
 		  recNum, kZipValueTypeBits);
-	fprintf(stderr
-		, "TerarkZipTableReader::Open(): fsize=%zd, entries=%zd keys=%zd indexSize=%zd valueSize=%zd\n"
+	INFO(ioptions.info_log
+    , "TerarkZipTableReader::Open(): fsize=%zd, entries=%zd keys=%zd indexSize=%zd valueSize=%zd\n"
 		, size_t(file_size), size_t(r->table_properties_->num_entries)
 		, r->keyIndex_->num_words()
 		, size_t(r->table_properties_->index_size), size_t(r->table_properties_->data_size)
@@ -789,7 +807,7 @@ Status TerarkZipTableBuilder::Finish() {
 	long long rawBytes = properties_.raw_key_size + properties_.raw_value_size;
 	{
 	  long long tt = g_pf.now();
-	  fprintf(stderr
+	  INFO(ioptions_.info_log
 	      , "TerarkZipTableBuilder::Finish():this=%p:  first pass time =%7.2f's, %8.3f'MB/sec\n"
 	      , this, g_pf.sf(t0,tt), rawBytes*1.0/g_pf.uf(t0,tt)
 	      );
@@ -811,7 +829,7 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
     if (myWorkMem < softMemLimit) {
       while ( (sumWorkingMem + myWorkMem >= softMemLimit && myWorkMem >= smallmem)
           ||  (sumWorkingMem + myWorkMem >= hardMemLimit) ) {
-        fprintf(stderr
+        INFO(ioptions_.info_log
             , "TerarkZipTableBuilder::Finish():this=%p: wait, sumWorkingMem = %f'GB, indexWorkingMem = %f'GB\n"
             , this, sumWorkingMem/1e9, myWorkMem/1e9
             );
@@ -881,7 +899,7 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
 	dawg->save_mmap(tmpIndexFile);
 	dawg.reset(); // free memory
   long long tt = g_pf.now();
-  fprintf(stderr
+  INFO(ioptions_.info_log
       , "TerarkZipTableBuilder::Finish():this=%p:  index pass time =%7.2f's, %8.3f'MB/sec\n"
       , this, g_pf.sf(t1,tt), properties_.raw_key_size*1.0/g_pf.uf(t1,tt)
       );
@@ -898,7 +916,7 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
     if (myDictMem < softMemLimit) {
       while ( (sumWorkingMem + myDictMem >= softMemLimit && myDictMem >= smalldictMem)
           ||  (sumWorkingMem + myDictMem >= hardMemLimit) ) {
-        fprintf(stderr
+        INFO(ioptions_.info_log
             , "TerarkZipTableBuilder::Finish():this=%p: wait, sumWorkingMem = %f'GB, dictZipWorkingMem = %f'GB\n"
             , this, sumWorkingMem/1e9, myDictMem/1e9
             );
@@ -907,7 +925,7 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
     }
     else {
       while (sumWorkingMem > 0) {
-        fprintf(stderr
+        INFO(ioptions_.info_log
             , "TerarkZipTableBuilder::Finish():this=%p: wait, sumWorkingMem = %f'GB, dictZipWorkingMem = %f'GB\n"
             , this, sumWorkingMem/1e9, myDictMem/1e9
             );
@@ -1172,7 +1190,7 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
 		offset_ += footer_encoding.size();
 	}
   long long t6 = g_pf.now();
-  fprintf(stderr
+  INFO(ioptions_.info_log
     ,
 R"EOS(TerarkZipTableBuilder::Finish():this=%p: second pass time =%7.2f's, %8.3f'MB/sec, value only(%4.1f%% of KV)
    wait indexing time = %7.2f's, re-map KeyValue time = %7.2f, %8.3f'MB/sec
@@ -1328,8 +1346,8 @@ const {
 	}
 #if 0
 	if (!prefetch_index_and_filter_in_cache) {
-		fprintf(stderr
-				, "WARN: TerarkZipTableFactory::NewTableReader(): "
+		WARN(table_reader_options.ioptions.info_log
+				, "TerarkZipTableFactory::NewTableReader(): "
 				  "prefetch_index_and_filter_in_cache = false is ignored, "
 				  "all index and data will be loaded in memory\n");
 	}
@@ -1360,7 +1378,7 @@ const {
     minlevel = numlevel-1;
   }
 #if 1
-  fprintf(stderr
+  INFO(table_builder_options.ioptions.info_log
       , "nth_new_talbe{ terark = %zd fallback = %zd } curlevel = %d minlevel = %d numlevel = %d fallback = %p\n"
       , nth_new_terark_table_, nth_new_fallback_table_, curlevel, minlevel, numlevel, fallback_factory_
       );
@@ -1370,7 +1388,9 @@ const {
       nth_new_fallback_table_++;
       TableBuilder* tb = fallback_factory_->NewTableBuilder(table_builder_options,
           column_family_id, file);
-      fprintf(stderr, "TerarkZipTableFactory::NewTableBuilder() returns class: %s\n", typeid(*tb).name());
+      INFO(table_builder_options.ioptions.info_log
+          , "TerarkZipTableFactory::NewTableBuilder() returns class: %s\n"
+          , typeid(*tb).name());
       return tb;
     }
 	}
