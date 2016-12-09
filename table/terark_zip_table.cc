@@ -80,7 +80,7 @@ class TerarkZipTableIterator;
 #endif
 
 #ifdef TERARK_ZIP_TRAIL_VERSION
-const char g_trail_rand_delete = "TERARK_ZIP_TRAIL_VERSION random deleted this row";
+const char g_trail_rand_delete[] = "TERARK_ZIP_TRAIL_VERSION random deleted this row";
 #endif
 #undef INFO
 #undef WARN
