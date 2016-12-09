@@ -984,6 +984,9 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
 {
 	NativeDataInput<InputBuffer> input(&tmpValueFile_.fp);
 	valvec<byte_t> value;
+#if defined(TERARK_ZIP_TRAIL_VERSION)
+  valvec<byte_t> tmpValueBuf;
+#endif
 	size_t entryId = 0;
 	size_t bitPos = 0;
 	for (size_t recId = 0; recId < numUserKeys_; recId++) {
@@ -996,7 +999,13 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
 		if (1==oneSeqLen && (kTypeDeletion==vType || kTypeValue==vType)) {
 			if (0 == seqNum && kTypeValue==vType) {
 				zvType.set_wire(recId, size_t(ZipValueType::kZeroSeq));
-				input >> value;
+#if defined(TERARK_ZIP_TRAIL_VERSION)
+				if (randomGenerator_() < randomGenerator_.max()/1000) {
+				  input >> tmpValueBuf;
+				  value.assign(fstring(g_trail_rand_delete));
+				} else
+#endif
+				  input >> value;
 			} else {
 				if (kTypeValue==vType) {
 					zvType.set_wire(recId, size_t(ZipValueType::kValue));
@@ -1023,15 +1032,7 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
 				((ZipValueMultiValue*)value.data())->offsets[j+1] = value.size() - headerSize;
 			}
 		}
-#if defined(TERARK_ZIP_TRAIL_VERSION)
-    if (randomGenerator_() < randomGenerator_.max()/1000) {
-      zbuilder->addRecord(g_trail_rand_delete);
-    }
-    else
-#endif
-    {
-      zbuilder->addRecord(value);
-    }
+    zbuilder->addRecord(value);
 		bitPos += oneSeqLen + 1;
 		entryId += oneSeqLen;
 	}
