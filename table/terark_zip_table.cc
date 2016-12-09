@@ -79,6 +79,10 @@ class TerarkZipTableIterator;
   #define MY_THREAD_LOCAL(Type, Var)  static thread_local Type Var
 #endif
 
+#ifdef TERARK_ZIP_TRAIL_VERSION
+const char g_trail_rand_delete = "TERARK_ZIP_TRAIL_VERSION random deleted this row";
+#endif
+
 enum class ZipValueType : unsigned char {
 	kZeroSeq = 0,
 	kDelete = 1,
@@ -926,6 +930,9 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
   dzopt.useSuffixArrayLocalMatch = table_options_.useSuffixArrayLocalMatch;
   auto zbuilder = UniquePtrOf(DictZipBlobStore::createZipBuilder(dzopt));
 {
+#if defined(TERARK_ZIP_TRAIL_VERSION)
+  zbuilder->addSample(g_trail_rand_delete);
+#endif
   valvec<byte_t> sample;
   NativeDataInput<InputBuffer> input(&tmpSampleFile_.fp);
   if (sampleLenSum_ < INT32_MAX) {
@@ -998,7 +1005,15 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
 				((ZipValueMultiValue*)value.data())->offsets[j+1] = value.size() - headerSize;
 			}
 		}
-		zbuilder->addRecord(value);
+#if defined(TERARK_ZIP_TRAIL_VERSION)
+    if (randomGenerator_() < randomGenerator_.max()/1000) {
+      zbuilder->addRecord(g_trail_rand_delete);
+    }
+    else
+#endif
+    {
+      zbuilder->addRecord(value);
+    }
 		bitPos += oneSeqLen + 1;
 		entryId += oneSeqLen;
 	}
