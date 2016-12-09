@@ -79,8 +79,8 @@ class TerarkZipTableIterator;
   #define MY_THREAD_LOCAL(Type, Var)  static thread_local Type Var
 #endif
 
-#ifdef TERARK_ZIP_TRAIL_VERSION
-const char g_trail_rand_delete[] = "TERARK_ZIP_TRAIL_VERSION random deleted this row";
+#ifdef TERARK_ZIP_TRIAL_VERSION
+const char g_trail_rand_delete[] = "TERARK_ZIP_TRIAL_VERSION random deleted this row";
 #endif
 #undef INFO
 #undef WARN
@@ -948,7 +948,7 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
   dzopt.useSuffixArrayLocalMatch = table_options_.useSuffixArrayLocalMatch;
   auto zbuilder = UniquePtrOf(DictZipBlobStore::createZipBuilder(dzopt));
 {
-#if defined(TERARK_ZIP_TRAIL_VERSION)
+#if defined(TERARK_ZIP_TRIAL_VERSION)
   zbuilder->addSample(g_trail_rand_delete);
 #endif
   valvec<byte_t> sample;
@@ -984,7 +984,7 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
 {
 	NativeDataInput<InputBuffer> input(&tmpValueFile_.fp);
 	valvec<byte_t> value;
-#if defined(TERARK_ZIP_TRAIL_VERSION)
+#if defined(TERARK_ZIP_TRIAL_VERSION)
   valvec<byte_t> tmpValueBuf;
 #endif
 	size_t entryId = 0;
@@ -999,7 +999,7 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
 		if (1==oneSeqLen && (kTypeDeletion==vType || kTypeValue==vType)) {
 			if (0 == seqNum && kTypeValue==vType) {
 				zvType.set_wire(recId, size_t(ZipValueType::kZeroSeq));
-#if defined(TERARK_ZIP_TRAIL_VERSION)
+#if defined(TERARK_ZIP_TRIAL_VERSION)
 				if (randomGenerator_() < randomGenerator_.max()/1000) {
 				  input >> tmpValueBuf;
 				  value.assign(fstring(g_trail_rand_delete));
