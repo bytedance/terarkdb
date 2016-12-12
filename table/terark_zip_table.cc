@@ -892,6 +892,7 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
 	    conf.tmpLevel = 2;
 	  }
 	}
+	conf.isInputSorted = true;
 	unique_ptr<NestLoudsTrieDAWG_SE_512> dawg(new NestLoudsTrieDAWG_SE_512());
 	dawg->build_from(keyVec, conf);
 	assert(dawg->num_words() == numUserKeys_);
