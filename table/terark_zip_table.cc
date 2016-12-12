@@ -491,6 +491,28 @@ TerarkZipTableReader::TerarkZipTableReader(size_t user_key_len,
   (void)ioptions_; // unused
 }
 
+static void MmapWarmUpBytes(const void* addr, size_t len) {
+  auto base = (const byte_t*)(uintptr_t(addr) & uintptr_t(~4095));
+  auto size = terark::align_up((size_t(addr) & 4095) + len, 4096);
+  for (size_t i = 0; i < size; i += 4096) {
+    volatile byte_t unused = ((const volatile byte_t*)base)[i];
+    (void)unused;
+  }
+}
+template<class T>
+static void MmapWarmUp(const T* addr, size_t len) {
+  MmapWarmUpBytes((T*)addr, sizeof(T)*len);
+}
+static void MmapWarmUp(fstring mem) {
+  MmapWarmUpBytes(mem.data(), mem.size());
+}
+//static fstring memBlockOf(const UintVecMin0& uv) {
+//  return fstring(uv.data(), uv.mem_size());
+//}
+static void MmapWarmUp(const UintVecMin0& uv) {
+  MmapWarmUpBytes(uv.data(), uv.mem_size());
+}
+
 Status
 TerarkZipTableReader::Open(const ImmutableCFOptions& ioptions,
 						   const EnvOptions& env_options,
@@ -553,11 +575,14 @@ TerarkZipTableReader::Open(const ImmutableCFOptions& ioptions,
   r->typeArray_.risk_set_data((byte_t*)zValueTypeBlock.data.data(),
 		  recNum, kZipValueTypeBits);
 	INFO(ioptions.info_log
-    , "TerarkZipTableReader::Open(): fsize=%zd, entries=%zd keys=%zd indexSize=%zd valueSize=%zd\n"
+    , "TerarkZipTableReader::Open(): fsize=%zd, entries=%zd keys=%zd indexSize=%zd valueSize=%zd, do warming up...\n"
 		, size_t(file_size), size_t(r->table_properties_->num_entries)
 		, r->keyIndex_->num_words()
 		, size_t(r->table_properties_->index_size), size_t(r->table_properties_->data_size)
 	);
+  MmapWarmUp(r->keyIndex_->get_mmap());
+	MmapWarmUp(r->valstore_->get_dict());
+	MmapWarmUp(r->valstore_->get_index());
   *table = std::move(r);
   return Status::OK();
 }
