@@ -574,15 +574,18 @@ TerarkZipTableReader::Open(const ImmutableCFOptions& ioptions,
   size_t recNum = r->keyIndex_->num_words();
   r->typeArray_.risk_set_data((byte_t*)zValueTypeBlock.data.data(),
 		  recNum, kZipValueTypeBits);
+  long long t0 = g_pf.now();
+  MmapWarmUp(r->keyIndex_->get_mmap());
+  MmapWarmUp(r->valstore_->get_dict());
+  MmapWarmUp(r->valstore_->get_index());
+  long long t1 = g_pf.now();
 	INFO(ioptions.info_log
-    , "TerarkZipTableReader::Open(): fsize=%zd, entries=%zd keys=%zd indexSize=%zd valueSize=%zd, do warming up...\n"
+    , "TerarkZipTableReader::Open(): fsize=%zd, entries=%zd keys=%zd indexSize=%zd valueSize=%zd, warm up time = %6.3f'sec\n"
 		, size_t(file_size), size_t(r->table_properties_->num_entries)
 		, r->keyIndex_->num_words()
 		, size_t(r->table_properties_->index_size), size_t(r->table_properties_->data_size)
+		, g_pf.sf(t0, t1)
 	);
-  MmapWarmUp(r->keyIndex_->get_mmap());
-	MmapWarmUp(r->valstore_->get_dict());
-	MmapWarmUp(r->valstore_->get_index());
   *table = std::move(r);
   return Status::OK();
 }
