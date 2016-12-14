@@ -33,6 +33,7 @@
 #include <random>
 #include <stdlib.h>
 #include <stdint.h>
+#include <util/arena.h> // for #include <sys/mman.h>
 
 namespace rocksdb {
 
@@ -494,6 +495,9 @@ TerarkZipTableReader::TerarkZipTableReader(size_t user_key_len,
 static void MmapWarmUpBytes(const void* addr, size_t len) {
   auto base = (const byte_t*)(uintptr_t(addr) & uintptr_t(~4095));
   auto size = terark::align_up((size_t(addr) & 4095) + len, 4096);
+#ifdef POSIX_MADV_WILLNEED
+  posix_madvise((void*)addr, len, POSIX_MADV_WILLNEED);
+#endif
   for (size_t i = 0; i < size; i += 4096) {
     volatile byte_t unused = ((const volatile byte_t*)base)[i];
     (void)unused;
@@ -523,7 +527,7 @@ TerarkZipTableReader::Open(const ImmutableCFOptions& ioptions,
   Status s = ReadTableProperties(file, file_size,
 		  	  kTerarkZipTableMagicNumber, ioptions, &props);
   if (!s.ok()) {
-	return s;
+    return s;
   }
   assert(nullptr != props);
   unique_ptr<TableProperties> uniqueProps(props);
@@ -533,7 +537,7 @@ TerarkZipTableReader::Open(const ImmutableCFOptions& ioptions,
 	if (!s.ok())
 		return s;
   } else {
-	return Status::InvalidArgument("TerarkZipTableReader::Open()",
+    return Status::InvalidArgument("TerarkZipTableReader::Open()",
 			"EnvOptions::use_mmap_reads must be true");
   }
   unique_ptr<TerarkZipTableReader>
