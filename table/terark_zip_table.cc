@@ -19,6 +19,7 @@
 #include <terark/stdtypes.hpp>
 #include <terark/lcast.hpp>
 #include <terark/util/crc.hpp>
+#include <terark/util/mmap.hpp>
 #include <terark/util/throw.hpp>
 #include <terark/util/profiling.hpp>
 #include <terark/zbs/fast_zip_blob_store.hpp>
@@ -27,6 +28,8 @@
 #include <terark/io/MemStream.hpp>
 #include <terark/io/StreamBuffer.hpp>
 #include <terark/io/DataIO.hpp>
+#include <terark/hash_strmap.hpp>
+#include <terark/fsa/dfa_mmap_header.hpp>
 #include <boost/scope_exit.hpp>
 #include <future>
 #include <memory>
@@ -34,18 +37,21 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <util/arena.h> // for #include <sys/mman.h>
+#include <cxxabi.h>
 
 namespace rocksdb {
 
 using std::unique_ptr;
 using std::unordered_map;
 using std::vector;
+using std::string;
 
 template<class T>
 unique_ptr<T> UniquePtrOf(T* p) { return unique_ptr<T>(p); }
 
 using terark::BaseDFA;
 using terark::NestLoudsTrieDAWG_SE_512;
+using terark::NestLoudsTrieDAWG_IL;
 using terark::DictZipBlobStore;
 using terark::byte_t;
 using terark::valvec;
@@ -69,6 +75,7 @@ static const uint64_t kTerarkZipTableMagicNumber = 0x1122334455667788;
 static const std::string kTerarkZipTableIndexBlock = "TerarkZipTableIndexBlock";
 static const std::string kTerarkZipTableValueTypeBlock = "TerarkZipTableValueTypeBlock";
 static const std::string kTerarkZipTableValueDictBlock = "TerarkZipTableValueDictBlock";
+static const std::string kTerarkZipTableCommonPrefixBlock = "TerarkZipTableCommonPrefixBlock";
 
 class TerarkZipTableIterator;
 
@@ -102,89 +109,35 @@ static const char* StrDateTimeNow() {
   return buf;
 }
 
-enum class ZipValueType : unsigned char {
-	kZeroSeq = 0,
-	kDelete = 1,
-	kValue = 2,
-	kMulti = 3,
-};
-const size_t kZipValueTypeBits = 2;
-
-struct ZipValueMultiValue {
-	uint32_t num;
-	uint32_t offsets[1];
-
-	Slice getValueData(size_t nth) const {
-		assert(nth < num);
-		size_t offset0 = offsets[nth+0];
-		size_t offset1 = offsets[nth+1];
-		size_t dlength = offset1 - offset0;
-		const char* base = (const char*)(offsets + num + 1);
-		return Slice(base + offset0, dlength);
-	}
-	static size_t calcHeaderSize(size_t n) {
-		return sizeof(uint32_t) * (n + 2);
-	}
-};
+static std::string demangle(const char* name) {
+  int status = -4; // some arbitrary value to eliminate the compiler warning
+  terark::AutoFree<char> res(abi::__cxa_demangle(name, NULL, NULL, &status));
+  return (status==0) ? res.p : name ;
+}
+template<class T>
+static std::string ClassName() {
+  return demangle(typeid(T).name());
+}
+template<class T>
+static std::string ClassName(const T& x) {
+  return demangle(typeid(x).name());
+}
 
 template<class ByteArray>
-Slice SliceOf(const ByteArray& ba) {
-	BOOST_STATIC_ASSERT(sizeof(ba[0] == 1));
-	return Slice((const char*)ba.data(), ba.size());
+inline Slice SliceOf(const ByteArray& ba) {
+  BOOST_STATIC_ASSERT(sizeof(ba[0] == 1));
+  return Slice((const char*)ba.data(), ba.size());
 }
 
 inline static fstring fstringOf(const Slice& x) {
-	return fstring(x.data(), x.size());
+  return fstring(x.data(), x.size());
 }
 
-/**
- * one user key map to a record id: the index NO. of a key in NestLoudsTrie,
- * the record id is used to direct index a type enum(small integer) array,
- * the record id is also used to access the value store
- */
-class TerarkZipTableReader: public TableReader, boost::noncopyable {
-public:
-  static Status Open(const ImmutableCFOptions& ioptions,
-                     const EnvOptions& env_options,
-                     RandomAccessFileReader* file,
-                     uint64_t file_size,
-					 unique_ptr<TableReader>* table);
-
-  InternalIterator*
-  NewIterator(const ReadOptions&, Arena*, bool skip_filters) override;
-
-  void Prepare(const Slice& target) override {}
-
-  Status Get(const ReadOptions&, const Slice& key, GetContext*,
-             bool skip_filters) override;
-
-  uint64_t ApproximateOffsetOf(const Slice& key) override { return 0; }
-  void SetupForCompaction() override {}
-
-  std::shared_ptr<const TableProperties>
-  GetTableProperties() const override { return table_properties_; }
-
-  size_t ApproximateMemoryUsage() const override { return file_size_; }
-
-  ~TerarkZipTableReader();
-  TerarkZipTableReader(size_t user_key_len, const ImmutableCFOptions& ioptions);
-
-  size_t GetRecId(const Slice& userKey) const;
-
-private:
-  unique_ptr<DictZipBlobStore> valstore_;
-  unique_ptr<NestLoudsTrieDAWG_SE_512> keyIndex_;
-  terark::UintVecMin0 typeArray_;
-  const size_t fixed_key_len_;
-  static const size_t kNumInternalBytes = 8;
-  Slice  file_data_;
-  unique_ptr<RandomAccessFileReader> file_;
-  const ImmutableCFOptions& ioptions_;
-  uint64_t file_size_ = 0;
-  std::shared_ptr<const TableProperties> table_properties_;
-  friend class TerarkZipTableIterator;
-  Status LoadIndex(Slice mem);
-};
+template<class ByteArrayView>
+inline ByteArrayView SubStr(const ByteArrayView& x, size_t pos) {
+  assert(pos <= x.size());
+  return ByteArrayView(x.data() + pos, x.size() - pos);
+}
 
 class AutoDeleteFile {
 public:
@@ -230,6 +183,334 @@ public:
   }
 };
 
+class TerocksIndex : boost::noncopyable {
+public:
+  class Iterator : boost::noncopyable {
+  protected:
+    size_t m_id = size_t(-1);
+  public:
+    virtual ~Iterator();
+    virtual bool SeekToFirst() = 0;
+    virtual bool SeekToLast() = 0;
+    virtual bool Seek(fstring target) = 0;
+    virtual bool Next() = 0;
+    virtual bool Prev() = 0;
+    inline bool Valid() const { return size_t(-1) != m_id; }
+    inline size_t id() const { return m_id; }
+    virtual Slice key() const = 0;
+    inline void SetInvalid() { m_id = size_t(-1); }
+  };
+  class Factory : boost::noncopyable {
+  public:
+    virtual ~Factory();
+    virtual void Build(TempFileDeleteOnClose& tmpKeyFile,
+                       const TerarkZipTableOptions& tzopt,
+                       fstring tmpFilePath,
+                       size_t commonPrefixLen,
+                       size_t minKeyLen,
+                       size_t maxKeyLen,
+                       size_t numKeys,
+                       size_t sumKeyLen) const = 0;
+    virtual unique_ptr<TerocksIndex> LoadMemory(fstring mem) const = 0;
+    virtual unique_ptr<TerocksIndex> LoadFile(fstring fpath) const = 0;
+    virtual size_t MemSizeForBuild(size_t numKeys, size_t sumKeyLen) const = 0;
+  };
+  struct AutoRegisterFactory {
+    AutoRegisterFactory(std::initializer_list<const char*> names, Factory* factory);
+  };
+  static const Factory* GetFactory(fstring name);
+  static unique_ptr<TerocksIndex> LoadFile(fstring fpath);
+  static unique_ptr<TerocksIndex> LoadMemory(fstring mem);
+  virtual ~TerocksIndex();
+  virtual size_t Find(fstring key) const = 0;
+  virtual size_t NumKeys() const = 0;
+  virtual fstring Memory() const = 0;
+  virtual Iterator* NewIterator() const = 0;
+  virtual bool NeedsReorder() const = 0;
+  virtual void GetOrderMap(uint32_t* newToOld) const = 0;
+};
+static terark::hash_strmap_p<TerocksIndex::Factory> g_TerocksIndexFactroy;
+#define TerocksIndexRegister(clazz, ...) \
+    TerocksIndex::AutoRegisterFactory \
+    g_AutoRegister_##clazz({#clazz,##__VA_ARGS__}, new clazz::MyFactory())
+
+TerocksIndex::AutoRegisterFactory::AutoRegisterFactory(
+    std::initializer_list<const char*> names,
+    Factory* factory) {
+  for (const char* name : names) {
+    g_TerocksIndexFactroy.insert(name, factory);
+  }
+}
+const TerocksIndex::Factory* TerocksIndex::GetFactory(fstring name) {
+  auto factory = g_TerocksIndexFactroy[name];
+  return factory;
+}
+
+TerocksIndex::~TerocksIndex() {}
+TerocksIndex::Factory::~Factory() {}
+TerocksIndex::Iterator::~Iterator() {}
+
+class NestLoudsTrieIterBase : public TerocksIndex::Iterator {
+protected:
+  unique_ptr<terark::ADFA_LexIterator> m_iter;
+  template<class NLTrie>
+  bool Done(const NLTrie* trie, bool ok) {
+    if (ok)
+      m_id = trie->state_to_word_id(m_iter->word_state());
+    else
+      m_id = size_t(-1);
+    return ok;
+  }
+  Slice key() const override {
+    return SliceOf(m_iter->word());
+  }
+  NestLoudsTrieIterBase(terark::ADFA_LexIterator* iter)
+   : m_iter(iter) {}
+};
+template<class NLTrie>
+class NestLoudsTrieIndex : public TerocksIndex {
+  unique_ptr<NLTrie> m_trie;
+  class MyIterator : public NestLoudsTrieIterBase {
+    const NLTrie* m_trie;
+  public:
+    explicit MyIterator(NLTrie* trie)
+     : NestLoudsTrieIterBase(trie->adfa_make_iter(initial_state))
+     , m_trie(trie)
+    {}
+    bool SeekToFirst() override { return Done(m_trie, m_iter->seek_begin()); }
+    bool SeekToLast()  override { return Done(m_trie, m_iter->seek_end()); }
+    bool Seek(fstring key) override {
+        return Done(m_trie, m_iter->seek_lower_bound(key));
+    }
+    bool Next() override { return Done(m_trie, m_iter->incr()); }
+    bool Prev() override { return Done(m_trie, m_iter->decr()); }
+  };
+public:
+  NestLoudsTrieIndex(NLTrie* trie) : m_trie(trie) {}
+  size_t Find(fstring key) const override final {
+    MY_THREAD_LOCAL(terark::MatchContext, ctx);
+    ctx.root = 0;
+    ctx.pos = 0;
+    ctx.zidx = 0;
+  //ctx.zbuf_state = size_t(-1);
+    return m_trie->index(ctx, key);
+  }
+  size_t NumKeys() const override final {
+    return m_trie->num_words();
+  }
+  fstring Memory() const override final {
+    return m_trie->get_mmap();
+  }
+  Iterator* NewIterator() const override final {
+    return new MyIterator(m_trie.get());
+  }
+  bool NeedsReorder() const override final { return true; }
+  void GetOrderMap(uint32_t* newToOld)
+  const override final {
+    terark::NonRecursiveDictionaryOrderToStateMapGenerator gen;
+    gen(*m_trie, [&](size_t dictOrderOldId, size_t state) {
+      size_t newId = m_trie->state_to_word_id(state);
+      newToOld[newId] = uint32_t(dictOrderOldId);
+    });
+  }
+  class MyFactory : public Factory {
+  public:
+    void Build(TempFileDeleteOnClose& tmpKeyFile,
+               const TerarkZipTableOptions& tzopt,
+               fstring tmpFilePath,
+               size_t commonPrefixLen,
+               size_t minKeyLen,
+               size_t maxKeyLen,
+               size_t numKeys,
+               size_t sumKeyLen) const override {
+      NativeDataInput<InputBuffer> reader(&tmpKeyFile.fp);
+#if !defined(NDEBUG)
+      SortableStrVec backupKeys;
+#endif
+      size_t sumPrefixLen = commonPrefixLen * numKeys;
+      SortableStrVec keyVec;
+      keyVec.m_index.reserve(numKeys);
+      keyVec.m_strpool.reserve(sumKeyLen - sumPrefixLen);
+      valvec<byte_t> keyBuf;
+      for (size_t seq_id = 0; seq_id < numKeys; ++seq_id) {
+        reader >> keyBuf;
+        keyVec.push_back(fstring(keyBuf).substr(commonPrefixLen));
+      }
+      tmpKeyFile.close();
+#if !defined(NDEBUG)
+      for (size_t i = 1; i < keyVec.size(); ++i) {
+        fstring prev = keyVec[i-1];
+        fstring curr = keyVec[i];
+        assert(prev < curr);
+      }
+      backupKeys = keyVec;
+#endif
+      terark::NestLoudsTrieConfig conf;
+      conf.nestLevel = tzopt.indexNestLevel;
+      const size_t smallmem = 1000*1024*1024;
+      const size_t myWorkMem = keyVec.mem_size();
+      if (myWorkMem > smallmem) {
+        // use tmp files during index building
+        conf.tmpDir = tzopt.localTempDir;
+        // adjust tmpLevel for linkVec, wihch is proportional to num of keys
+        if (numKeys > 1ul<<30) {
+          // not need any mem in BFS, instead 8G file of 4G mem (linkVec)
+          // this reduce 10% peak mem when avg keylen is 24 bytes
+          conf.tmpLevel = 3;
+        }
+        else if (myWorkMem > 256ul<<20) {
+          // 1G mem in BFS, swap to 1G file after BFS and before build nextStrVec
+          conf.tmpLevel = 2;
+        }
+      }
+      if (keyVec[0] < keyVec.back()) {
+        conf.isInputSorted = true;
+      }
+      std::unique_ptr<NLTrie> trie(new NLTrie());
+      trie->build_from(keyVec, conf);
+      trie->save_mmap(tmpFilePath);
+    }
+    unique_ptr<TerocksIndex> LoadMemory(fstring mem) const override {
+      unique_ptr<BaseDFA>
+      dfa(BaseDFA::load_mmap_user_mem(mem.data(), mem.size()));
+      auto trie = dynamic_cast<NLTrie*>(dfa.get());
+      if (NULL == trie) {
+        throw std::invalid_argument("Bad trie class: " + ClassName(*dfa)
+            + ", should be " + ClassName<NLTrie>());
+      }
+      unique_ptr<TerocksIndex> index(new NestLoudsTrieIndex(trie));
+      dfa.release();
+      return std::move(index);
+    }
+    unique_ptr<TerocksIndex> LoadFile(fstring fpath) const override {
+      unique_ptr<BaseDFA> dfa(BaseDFA::load_mmap(fpath));
+      auto trie = dynamic_cast<NLTrie*>(dfa.get());
+      if (NULL == trie) {
+        throw std::invalid_argument(
+            "File: " + fpath + ", Bad trie class: " + ClassName(*dfa)
+            + ", should be " + ClassName<NLTrie>());
+      }
+      unique_ptr<TerocksIndex> index(new NestLoudsTrieIndex(trie));
+      dfa.release();
+      return std::move(index);
+    }
+    size_t MemSizeForBuild(size_t numKeys, size_t sumKeyLen)
+    const override {
+      return sizeof(SortableStrVec::SEntry) * numKeys + sumKeyLen;
+    }
+  };
+};
+typedef terark::NestLoudsTrieDAWG_IL NestLoudsTrieDAWG_IL_256;
+typedef NestLoudsTrieDAWG_IL_256 NestLoudsTrieDAWG_IL_256_32;
+typedef NestLoudsTrieDAWG_SE_512 NestLoudsTrieDAWG_SE_512_32;
+typedef NestLoudsTrieIndex<NestLoudsTrieDAWG_SE_512_32> TerocksIndex_NestLoudsTrieDAWG_SE_512_32;
+typedef NestLoudsTrieIndex<NestLoudsTrieDAWG_IL_256_32> TerocksIndex_NestLoudsTrieDAWG_IL_256_32;
+TerocksIndexRegister(TerocksIndex_NestLoudsTrieDAWG_SE_512_32, "NestLoudsTrieDAWG_SE_512", "SE_512_32");
+TerocksIndexRegister(TerocksIndex_NestLoudsTrieDAWG_IL_256_32, "NestLoudsTrieDAWG_IL_256", "IL_256_32");
+
+unique_ptr<TerocksIndex> TerocksIndex::LoadFile(fstring fpath) {
+  TerocksIndex::Factory* factory = NULL;
+  {
+    terark::MmapWholeFile mmap(fpath);
+    auto header = (const terark::DFA_MmapHeader*)mmap.base;
+    factory = g_TerocksIndexFactroy[header->dfa_class_name];
+    if (!factory) {
+      throw std::invalid_argument(
+          "TerocksIndex::LoadFile(" + fpath + "): Unknown trie class: "
+          + header->dfa_class_name);
+    }
+  }
+  return factory->LoadFile(fpath);
+}
+
+unique_ptr<TerocksIndex> TerocksIndex::LoadMemory(fstring mem) {
+  auto header = (const terark::DFA_MmapHeader*)mem.data();
+  auto factory = g_TerocksIndexFactroy[header->dfa_class_name];
+  if (!factory) {
+    throw std::invalid_argument(
+        std::string("TerocksIndex::LoadMemory(): Unknown trie class: ")
+        + header->dfa_class_name);
+  }
+  return factory->LoadMemory(mem);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+enum class ZipValueType : unsigned char {
+	kZeroSeq = 0,
+	kDelete = 1,
+	kValue = 2,
+	kMulti = 3,
+};
+const size_t kZipValueTypeBits = 2;
+
+struct ZipValueMultiValue {
+	uint32_t num;
+	uint32_t offsets[1];
+
+	Slice getValueData(size_t nth) const {
+		assert(nth < num);
+		size_t offset0 = offsets[nth+0];
+		size_t offset1 = offsets[nth+1];
+		size_t dlength = offset1 - offset0;
+		const char* base = (const char*)(offsets + num + 1);
+		return Slice(base + offset0, dlength);
+	}
+	static size_t calcHeaderSize(size_t n) {
+		return sizeof(uint32_t) * (n + 2);
+	}
+};
+
+/**
+ * one user key map to a record id: the index NO. of a key in NestLoudsTrie,
+ * the record id is used to direct index a type enum(small integer) array,
+ * the record id is also used to access the value store
+ */
+class TerarkZipTableReader: public TableReader, boost::noncopyable {
+public:
+  static Status Open(const ImmutableCFOptions& ioptions,
+                     const EnvOptions& env_options,
+                     RandomAccessFileReader* file,
+                     uint64_t file_size,
+					 unique_ptr<TableReader>* table);
+
+  InternalIterator*
+  NewIterator(const ReadOptions&, Arena*, bool skip_filters) override;
+
+  void Prepare(const Slice& target) override {}
+
+  Status Get(const ReadOptions&, const Slice& key, GetContext*,
+             bool skip_filters) override;
+
+  uint64_t ApproximateOffsetOf(const Slice& key) override { return 0; }
+  void SetupForCompaction() override {}
+
+  std::shared_ptr<const TableProperties>
+  GetTableProperties() const override { return table_properties_; }
+
+  size_t ApproximateMemoryUsage() const override { return file_size_; }
+
+  ~TerarkZipTableReader();
+  TerarkZipTableReader(size_t user_key_len, const ImmutableCFOptions& ioptions);
+
+private:
+  unique_ptr<DictZipBlobStore> valstore_;
+  unique_ptr<TerocksIndex> keyIndex_;
+  Slice commonPrefix_;
+  terark::UintVecMin0 typeArray_;
+  const size_t fixed_key_len_;
+  static const size_t kNumInternalBytes = 8;
+  Slice  file_data_;
+  unique_ptr<RandomAccessFileReader> file_;
+  const ImmutableCFOptions& ioptions_;
+  uint64_t file_size_ = 0;
+  std::shared_ptr<const TableProperties> table_properties_;
+  bool isReverseBytewiseOrder_;
+  friend class TerarkZipTableIterator;
+  Status LoadIndex(Slice mem);
+};
+
+
 class TerarkZipTableBuilder: public TableBuilder, boost::noncopyable {
 public:
   TerarkZipTableBuilder(
@@ -271,6 +552,9 @@ private:
   uint64_t sampleUpperBound_;
   size_t lenUserKeys_ = size_t(-1);
   size_t numUserKeys_ = size_t(-1);
+  size_t minUserKeyLen_ = 0;
+  size_t maxUserKeyLen_ = size_t(-1);
+  size_t commonPrefixLen_ = 0;
   size_t sampleLenSum_ = 0;
   WritableFileWriter* file_;
   uint64_t offset_ = 0;
@@ -285,27 +569,31 @@ private:
 
 class TerarkZipTableIterator : public InternalIterator, boost::noncopyable {
 public:
-  explicit TerarkZipTableIterator(TerarkZipTableReader* table) {
-	  table_ = table;
-	  auto dfa = table->keyIndex_.get();
-	  iter_.reset(dfa->adfa_make_iter());
+  explicit TerarkZipTableIterator(const TerarkZipTableReader* table)
+	: table_(table), iter_(table->keyIndex_->NewIterator())
+	, commonPrefix_(fstringOf(table->commonPrefix_))
+	, reverse_(table->isReverseBytewiseOrder_)
+  {
+    // isReverseBytewiseOrder_ just reverse key order
+    // do not reverse multi values of a single key
+    // so it can not use a reverse wrapper iterator
 	  zValtype_ = ZipValueType::kZeroSeq;
 	  SetIterInvalid();
   }
 
   bool Valid() const override {
-	  return size_t(-1) != recId_;
+	  return iter_->Valid();
   }
 
   void SeekToFirst() override {
-	  if (UnzipIterRecord(iter_->seek_begin())) {
+	  if (UnzipIterRecord(reverse_?iter_->SeekToLast():iter_->SeekToFirst())) {
 		  DecodeCurrKeyValue();
 		  validx_ = 1;
 	  }
   }
 
   void SeekToLast() override {
-	  if (UnzipIterRecord(iter_->seek_end())) {
+	  if (UnzipIterRecord(reverse_?iter_->SeekToFirst():iter_->SeekToLast())) {
 		  validx_ = valnum_ - 1;
 		  DecodeCurrKeyValue();
 	  }
@@ -325,7 +613,50 @@ public:
 		  SetIterInvalid();
 		  return;
 	  }
-	  if (UnzipIterRecord(iter_->seek_lower_bound(fstringOf(pikey.user_key)))) {
+	  // Damn MySQL-rocksdb may use "rev:" comparator
+	  size_t cplen = commonPrefix_.commonPrefixLen(fstringOf(pikey.user_key));
+    if (commonPrefix_.size() != cplen) {
+      if (pikey.user_key.size() == cplen) {
+        assert(pikey.user_key.size() < commonPrefix_.size());
+        if (reverse_) {
+          SeekToLast();
+          if (iter_->Valid()) {
+            this->Next(); // move  to EOF
+            assert(!this->Valid());
+          }
+        }
+        else {
+          SeekToFirst();
+        }
+      }
+      else {
+        assert(pikey.user_key.size() > cplen);
+        assert(pikey.user_key[cplen] != commonPrefix_[cplen]);
+        if ((byte_t(pikey.user_key[cplen]) < commonPrefix_[cplen]) ^ reverse_) {
+          SeekToFirst();
+        } else {
+          SeekToLast();
+        }
+      }
+      return;
+    }
+    bool ok = iter_->Seek(fstringOf(pikey.user_key).substr(cplen));
+    if (!ok) { // searchKey is bytewise greater than all keys in database
+      if (reverse_) {
+        // searchKey is reverse_bytewise less than all keys in database
+        iter_->SeekToLast();
+        ok = iter_->Valid();
+      }
+    }
+    else { // now iter is at bytewise lower bound position
+      int cmp = iter_->key().compare(SubStr(pikey.user_key, cplen));
+      assert(cmp >= 0); // iterKey >= searchKey
+      if (cmp > 0 && reverse_) {
+        iter_->Prev();
+        ok = iter_->Valid();
+      }
+    }
+	  if (UnzipIterRecord(ok)) {
 		  do {
 			  DecodeCurrKeyValue();
 			  validx_++;
@@ -340,13 +671,13 @@ public:
   }
 
   void Next() override {
-	  assert(size_t(-1) != recId_);
+	  assert(iter_->Valid());
 	  if (validx_ < valnum_) {
 		  DecodeCurrKeyValue();
 		  validx_++;
 	  }
 	  else {
-		  if (UnzipIterRecord(iter_->incr())) {
+		  if (UnzipIterRecord(reverse_?iter_->Prev():iter_->Next())) {
 			  DecodeCurrKeyValue();
 			  validx_ = 1;
 		  }
@@ -354,13 +685,13 @@ public:
   }
 
   void Prev() override {
-	  assert(size_t(-1) != recId_);
+    assert(iter_->Valid());
 	  if (validx_ > 0) {
 		  validx_--;
 		  DecodeCurrKeyValue();
 	  }
 	  else {
-		  if (UnzipIterRecord(iter_->decr())) {
+		  if (UnzipIterRecord(reverse_?iter_->Next():iter_->Prev())) {
 			  validx_ = valnum_ - 1;
 			  DecodeCurrKeyValue();
 		  }
@@ -368,12 +699,12 @@ public:
   }
 
   Slice key() const override {
-	  assert(size_t(-1) != recId_);
+    assert(iter_->Valid());
 	  return interKeyBuf_;
   }
 
   Slice value() const override {
-	  assert(size_t(-1) != recId_);
+    assert(iter_->Valid());
 	  return userValue_;
   }
 
@@ -382,12 +713,8 @@ public:
   }
 
 private:
-  size_t GetIterRecId() const {
-	  auto dfa = table_->keyIndex_.get();
-	  return dfa->state_to_word_id(iter_->word_state());
-  }
   void SetIterInvalid() {
-	  recId_ = size_t(-1);
+    iter_->SetInvalid();
 	  validx_ = 0;
 	  valnum_ = 0;
 	  pInterKey_.user_key = Slice();
@@ -396,7 +723,7 @@ private:
   }
   bool UnzipIterRecord(bool hasRecord) {
 	  if (hasRecord) {
-		  size_t recId = GetIterRecId();
+		  size_t recId = iter_->id();
 		  try {
 			  table_->valstore_->get_record(recId, &valueBuf_);
 		  }
@@ -415,8 +742,7 @@ private:
 			  valnum_ = 1;
 		  }
 		  validx_ = 0;
-		  recId_ = recId;
-		  pInterKey_.user_key = SliceOf(iter_->word());
+		  pInterKey_.user_key = SliceOf(iter_->key());
 		  return true;
 	  }
 	  else {
@@ -426,7 +752,7 @@ private:
   }
   void DecodeCurrKeyValue() {
 	assert(status_.ok());
-	assert(recId_ < table_->keyIndex_->num_words());
+	assert(iter_->id() < table_->keyIndex_->NumKeys());
 	switch (zValtype_) {
 	default:
 		status_ = Status::Aborted("TerarkZipTableReader::Get()",
@@ -462,18 +788,19 @@ private:
 		userValue_ = d;
 		break; }
 	}
-	interKeyBuf_.resize(0);
+	interKeyBuf_.assign(commonPrefix_.data(), commonPrefix_.size());
 	AppendInternalKey(&interKeyBuf_, pInterKey_);
   }
 
-  TerarkZipTableReader* table_;
-  unique_ptr<terark::ADFA_LexIterator> iter_;
+  const TerarkZipTableReader* const table_;
+  const unique_ptr<TerocksIndex::Iterator> iter_;
+  const fstring commonPrefix_;
+  const bool reverse_;
   ParsedInternalKey pInterKey_;
   std::string interKeyBuf_;
   valvec<byte_t> valueBuf_;
   Slice  userValue_;
   ZipValueType zValtype_;
-  size_t recId_; // save as member to reduce a rank1(state)
   size_t valnum_;
   size_t validx_;
   Status status_;
@@ -490,6 +817,7 @@ TerarkZipTableReader::TerarkZipTableReader(size_t user_key_len,
 {
   (void)fixed_key_len_; // unused
   (void)ioptions_; // unused
+  isReverseBytewiseOrder_ = false;
 }
 
 static void MmapWarmUpBytes(const void* addr, size_t len) {
@@ -546,7 +874,10 @@ TerarkZipTableReader::Open(const ImmutableCFOptions& ioptions,
   r->file_data_ = file_data;
   r->file_size_ = file_size;
   r->table_properties_.reset(uniqueProps.release());
+  r->isReverseBytewiseOrder_ =
+      fstring(ioptions.user_comparator->Name()).startsWith("rev:");
   BlockContents valueDictBlock, indexBlock, zValueTypeBlock;
+  BlockContents commonPrefixBlock;
   s = ReadMetaBlock(file, file_size, kTerarkZipTableMagicNumber, ioptions,
 		  kTerarkZipTableValueDictBlock, &valueDictBlock);
   if (!s.ok()) {
@@ -562,6 +893,19 @@ TerarkZipTableReader::Open(const ImmutableCFOptions& ioptions,
   if (!s.ok()) {
 	  return s;
   }
+  s = ReadMetaBlock(file, file_size, kTerarkZipTableMagicNumber, ioptions,
+      kTerarkZipTableCommonPrefixBlock, &commonPrefixBlock);
+  if (s.ok()) {
+    r->commonPrefix_ = commonPrefixBlock.data;
+  }
+  else {
+    // some error, usually is
+    // Status::Corruption("Cannot find the meta block", meta_block_name)
+    WARN(ioptions.info_log
+        , "Read %s block failed, treat as old SST version, error: %s\n"
+        , kTerarkZipTableCommonPrefixBlock.c_str()
+        , s.ToString().c_str());
+  }
   try {
 	  r->valstore_.reset(new DictZipBlobStore());
 	  r->valstore_->load_user_memory(
@@ -575,18 +919,18 @@ TerarkZipTableReader::Open(const ImmutableCFOptions& ioptions,
   if (!s.ok()) {
 	  return s;
   }
-  size_t recNum = r->keyIndex_->num_words();
+  size_t recNum = r->keyIndex_->NumKeys();
   r->typeArray_.risk_set_data((byte_t*)zValueTypeBlock.data.data(),
 		  recNum, kZipValueTypeBits);
   long long t0 = g_pf.now();
-  MmapWarmUp(r->keyIndex_->get_mmap());
+  MmapWarmUp(fstringOf(indexBlock.data));
   MmapWarmUp(r->valstore_->get_dict());
   MmapWarmUp(r->valstore_->get_index());
   long long t1 = g_pf.now();
 	INFO(ioptions.info_log
     , "TerarkZipTableReader::Open(): fsize=%zd, entries=%zd keys=%zd indexSize=%zd valueSize=%zd, warm up time = %6.3f'sec\n"
 		, size_t(file_size), size_t(r->table_properties_->num_entries)
-		, r->keyIndex_->num_words()
+		, r->keyIndex_->NumKeys()
 		, size_t(r->table_properties_->index_size), size_t(r->table_properties_->data_size)
 		, g_pf.sf(t0, t1)
 	);
@@ -597,12 +941,7 @@ TerarkZipTableReader::Open(const ImmutableCFOptions& ioptions,
 Status TerarkZipTableReader::LoadIndex(Slice mem) {
   auto func = "TerarkZipTableReader::LoadIndex()";
   try {
-	  auto trie = BaseDFA::load_mmap_user_mem(mem.data(), mem.size());
-	  keyIndex_.reset(dynamic_cast<NestLoudsTrieDAWG_SE_512*>(trie));
-	  if (!keyIndex_) {
-		  return Status::InvalidArgument("TerarkZipTableReader::LoadIndex()",
-				  "Index class is not NestLoudsTrieDAWG_SE_512");
-	  }
+	  keyIndex_ = TerocksIndex::LoadMemory(fstringOf(mem));
   }
   catch (const BadCrc32cException& ex) {
 	  return Status::Corruption(func, ex.what());
@@ -632,14 +971,18 @@ TerarkZipTableReader::Get(const ReadOptions& ro, const Slice& ikey,
   MY_THREAD_LOCAL(valvec<byte_t>, g_tbuf);
 	ParsedInternalKey pikey;
 	ParseInternalKey(ikey, &pikey);
-	size_t recId = GetRecId(pikey.user_key);
+  size_t cplen = pikey.user_key.difference_offset(commonPrefix_);
+  if (commonPrefix_.size() != cplen) {
+    return Status::OK();
+  }
+	size_t recId = keyIndex_->Find(fstringOf(pikey.user_key).substr(cplen));
 	if (size_t(-1) == recId) {
 		return Status::OK();
 	}
 	try {
 		valstore_->get_record(recId, &g_tbuf);
 	}
-	catch (const BadCrc32cException& ex) { // crc checksum error
+	catch (const terark::BadChecksumException& ex) {
 		return Status::Corruption("TerarkZipTableReader::Get()", ex.what());
 	}
 	switch (ZipValueType(typeArray_[recId])) {
@@ -690,41 +1033,6 @@ TerarkZipTableReader::Get(const ReadOptions& ro, const Slice& ikey,
 	  g_tbuf.clear(); // free large thread local memory
 	}
 	return Status::OK();
-}
-
-size_t TerarkZipTableReader::GetRecId(const Slice& userKey) const {
-	auto dfa = keyIndex_.get();
-	const size_t  kn = userKey.size();
-	const byte_t* kp = (const byte_t*)userKey.data();
-	size_t state = initial_state;
-	MY_THREAD_LOCAL(terark::MatchContext, g_mctx);
-	g_mctx.zbuf_state = size_t(-1);
-	for (size_t pos = 0; pos < kn; ++pos) {
-		if (dfa->is_pzip(state)) {
-			fstring zs = dfa->get_zpath_data(state, &g_mctx);
-			if (kn - pos < zs.size()) {
-				return size_t(-1);
-			}
-			for (size_t j = 0; j < zs.size(); ++j, ++pos) {
-				if (zs[j] != kp[pos]) {
-					return size_t(-1);
-				}
-			}
-			if (pos == kn)
-				break;
-		}
-		byte_t c = kp[pos];
-		size_t next = dfa->state_move(state, c);
-		if (dfa->nil_state == next) {
-			return size_t(-1);
-		}
-		assert(next < dfa->total_states());
-		state = next;
-	}
-	if (dfa->is_term(state)) {
-		return dfa->state_to_word_id(state);
-	}
-	return size_t(-1);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -780,11 +1088,18 @@ void TerarkZipTableBuilder::Add(const Slice& key, const Slice& value) {
 	if (terark_likely(size_t(-1) != numUserKeys_)) {
 		if (prevUserKey_ != userKey) {
 			assert(prevUserKey_ < userKey);
+			commonPrefixLen_ = fstring(prevUserKey_.data(), commonPrefixLen_)
+			                 . commonPrefixLen(userKey);
+      minUserKeyLen_ = std::min(userKey.size(), minUserKeyLen_);
+      maxUserKeyLen_ = std::max(userKey.size(), maxUserKeyLen_);
 			AddPrevUserKey();
 			prevUserKey_.assign(userKey);
 		}
 	}
 	else {
+    commonPrefixLen_ = userKey.size();
+    minUserKeyLen_ = userKey.size();
+    maxUserKeyLen_ = userKey.size();
 		prevUserKey_.assign(userKey);
 		lenUserKeys_ = 0;
 		numUserKeys_ = 0;
@@ -821,6 +1136,7 @@ Status TerarkZipTableBuilder::Finish() {
 	assert(!closed_);
 	closed_ = true;
 
+	valvec<byte_t> commonPrefix(prevUserKey_.data(), commonPrefixLen_);
 	AddPrevUserKey();
 	tmpKeyFile_.complete_write();
   if (!second_pass_iter_) {
@@ -828,9 +1144,6 @@ Status TerarkZipTableBuilder::Finish() {
   }
   tmpSampleFile_.complete_write();
 
-#if !defined(NDEBUG)
-	SortableStrVec backupKeys;
-#endif
 	AutoDeleteFile tmpIndexFile{tmpValueFile_.path + ".index"};
 	AutoDeleteFile tmpStoreFile{tmpValueFile_.path + ".zbs"};
 	AutoDeleteFile tmpStoreDict{tmpValueFile_.path + ".zbs-dict"};
@@ -886,51 +1199,16 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
   }BOOST_SCOPE_EXIT_END;
 
   long long t1 = g_pf.now();
-  SortableStrVec keyVec;
-  keyVec.m_index.reserve(numUserKeys_);
-  keyVec.m_strpool.reserve(lenUserKeys_);
   {
-    valvec<byte_t> oneKey;
-    NativeDataInput<InputBuffer> keyReader(&tmpKeyFile_.fp);
-    for (size_t i = 0; i < numUserKeys_; ++i) {
-      keyReader >> oneKey;
-      keyVec.push_back(oneKey);
+    auto factory = TerocksIndex::GetFactory(table_options_.indexType);
+    if (!factory) {
+      THROW_STD(invalid_argument,
+          "invalid indexType: %s", table_options_.indexType.c_str());
     }
+    factory->Build(tmpKeyFile_, table_options_, tmpIndexFile.fpath
+        , commonPrefixLen_, minUserKeyLen_, maxUserKeyLen_
+        , numUserKeys_, lenUserKeys_);
   }
-  assert(keyVec.str_size() == lenUserKeys_);
-  tmpKeyFile_.close();
-
-#if !defined(NDEBUG)
-  for (size_t i = 1; i < keyVec.size(); ++i) {
-    fstring prev = keyVec[i-1];
-    fstring curr = keyVec[i];
-    assert(prev < curr);
-  }
-  backupKeys = keyVec;
-#endif
-	terark::NestLoudsTrieConfig conf;
-	conf.nestLevel = table_options_.indexNestLevel;
-	if (myWorkMem > smallmem) {
-    // use tmp files during index building
-	  conf.tmpDir = table_options_.localTempDir;
-    // adjust tmpLevel for linkVec, wihch is proportional to num of keys
-	  if (numUserKeys_ > 1ul<<30) {
-      // not need any mem in BFS, instead 8G file of 4G mem (linkVec)
-      // this reduce 10% peak mem when avg keylen is 24 bytes
-	    conf.tmpLevel = 3;
-	  }
-	  else if (myWorkMem > 256ul<<20) {
-      // 1G mem in BFS, swap to 1G file after BFS and before build nextStrVec
-	    conf.tmpLevel = 2;
-	  }
-	}
-	conf.isInputSorted = true;
-	unique_ptr<NestLoudsTrieDAWG_SE_512> dawg(new NestLoudsTrieDAWG_SE_512());
-	dawg->build_from(keyVec, conf);
-	assert(dawg->num_words() == numUserKeys_);
-	keyVec.clear();
-	dawg->save_mmap(tmpIndexFile);
-	dawg.reset(); // free memory
   long long tt = g_pf.now();
   INFO(ioptions_.info_log
       , "TerarkZipTableBuilder::Finish():this=%p:  index pass time =%7.2f's, %8.3f'MB/sec\n"
@@ -1086,7 +1364,7 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
     size_t oneSeqLen = valueBits_.one_seq_len(bitPos);
     assert(oneSeqLen >= 1);
     if (1==oneSeqLen && (kTypeDeletion==pikey.type || kTypeValue==pikey.type)) {
-      assert(fstringOf(pikey.user_key) == backupKeys[recId]);
+    //  assert(fstringOf(pikey.user_key) == backupKeys[recId]);
       if (0 == pikey.sequence && kTypeValue==pikey.type) {
         zvType.set_wire(recId, size_t(ZipValueType::kZeroSeq));
         zbuilder->addRecord(fstringOf(curVal));
@@ -1112,7 +1390,7 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
         curKey = second_pass_iter_->key();
         curVal = second_pass_iter_->value();
         ParseInternalKey(curKey, &pikey);
-        assert(fstringOf(pikey.user_key) == backupKeys[recId]);
+      //  assert(fstringOf(pikey.user_key) == backupKeys[recId]);
         uint64_t seqType = PackSequenceAndType(pikey.sequence, pikey.type);
         value.append((byte_t*)&seqType, 8);
         value.append(fstringOf(curVal));
@@ -1138,26 +1416,31 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
   // wait for indexing complete, if indexing is slower than value compressing
   asyncIndexResult.get();
   long long t5 = g_pf.now();
-	unique_ptr<NestLoudsTrieDAWG_SE_512> dawg;
-	try{auto trie = BaseDFA::load_mmap(tmpIndexFile);
-		dawg.reset(dynamic_cast<NestLoudsTrieDAWG_SE_512*>(trie));
-	} catch (const std::exception&) {}
-	if (!dawg) {
-		return Status::InvalidArgument("TerarkZipTableBuilder::Finish()",
-				"index temp file is broken");
-	}
+	unique_ptr<TerocksIndex> index(TerocksIndex::LoadFile(tmpIndexFile));
+	assert(index->NumKeys() == numUserKeys_);
 	Status s;
   BlockHandle dataBlock, dictBlock, indexBlock, zvTypeBlock;
+  BlockHandle commonPrefixBlock;
   offset_ = 0;
-	{
+  if (index->NeedsReorder()) {
 		UintVecMin0 zvType2(numUserKeys_, kZipValueTypeBits);
-		terark::AutoFree<uint32_t> newToOld(dawg->num_words(), UINT32_MAX);
-		terark::NonRecursiveDictionaryOrderToStateMapGenerator gen;
-		gen(*dawg, [&](size_t dictOrderOldId, size_t state) {
-			size_t newId = dawg->state_to_word_id(state);
-			newToOld[newId] = uint32_t(dictOrderOldId);
-			zvType2.set_wire(newId, zvType[dictOrderOldId]);
-		});
+		terark::AutoFree<uint32_t> newToOld(numUserKeys_, UINT32_MAX);
+		index->GetOrderMap(newToOld.p);
+		if (fstring(ioptions_.user_comparator->Name()).startsWith("rev:")) {
+		  // Damn reverse bytewise order
+      for (size_t newId = 0; newId < numUserKeys_; ++newId) {
+        size_t dictOrderOldId = newToOld.p[newId];
+        size_t reverseOrderId = numUserKeys_ - dictOrderOldId - 1;
+        newToOld.p[newId] = reverseOrderId;
+        zvType2.set_wire(newId, zvType[reverseOrderId]);
+      }
+		}
+		else {
+		  for (size_t newId = 0; newId < numUserKeys_; ++newId) {
+		    size_t dictOrderOldId = newToOld.p[newId];
+		    zvType2.set_wire(newId, zvType[dictOrderOldId]);
+		  }
+		}
 		try {
 		  dataBlock.set_offset(offset_);
 		  zstore->reorder_zip_data(newToOld, [&](const void* data, size_t size) {
@@ -1174,12 +1457,16 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
 		zvType.clear();
 		zvType.swap(zvType2);
 	}
+  else {
+    WriteBlock(index->Memory(), file_, &offset_, &dataBlock);
+  }
+  WriteBlock(commonPrefix, file_, &offset_, &commonPrefixBlock);
 	properties_.data_size = dataBlock.size();
 	s = WriteBlock(zstore->get_dict(), file_, &offset_, &dictBlock);
 	if (!s.ok()) {
 		return s;
 	}
-	s = WriteBlock(dawg->get_mmap(), file_, &offset_, &indexBlock);
+	s = WriteBlock(index->Memory(), file_, &offset_, &indexBlock);
 	if (!s.ok()) {
 		return s;
 	}
@@ -1188,7 +1475,7 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
 	if (!s.ok()) {
 		return s;
 	}
-	dawg.reset();
+	index.reset();
 	zstore.reset();
   tmpStoreFile.Delete();
   tmpStoreDict.Delete();
@@ -1198,6 +1485,7 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
 	metaindexBuiler.Add(kTerarkZipTableValueDictBlock, dictBlock);
 	metaindexBuiler.Add(kTerarkZipTableIndexBlock, indexBlock);
 	metaindexBuiler.Add(kTerarkZipTableValueTypeBlock, zvTypeBlock);
+	metaindexBuiler.Add(kTerarkZipTableCommonPrefixBlock, commonPrefixBlock);
 	PropertyBlockBuilder propBlockBuilder;
 	propBlockBuilder.AddTableProperty(properties_);
 	propBlockBuilder.Add(properties_.user_collected_properties);
@@ -1335,14 +1623,18 @@ NewTerarkZipTableFactory(const TerarkZipTableOptions& tzto,
 inline static
 bool IsBytewiseComparator(const Comparator* cmp) {
 #if 1
+  const fstring name = cmp->Name();
+  if (name.startsWith("RocksDB_SE_")) {
+    return true;
+  }
+  if (name.startsWith("rev:RocksDB_SE_")) {
+    // reverse bytewise compare, needs reverse in iterator
+    return true;
+  }
 	return fstring(cmp->Name()) == "leveldb.BytewiseComparator";
 #else
 	return BytewiseComparator() == cmp;
 #endif
-}
-inline static
-bool IsBytewiseComparator(const InternalKeyComparator& icmp) {
-	return IsBytewiseComparator(icmp.user_comparator());
 }
 
 Status
@@ -1352,10 +1644,17 @@ TerarkZipTableFactory::NewTableReader(
 		uint64_t file_size, unique_ptr<TableReader>* table,
 		bool prefetch_index_and_filter_in_cache)
 const {
-	if (!IsBytewiseComparator(table_reader_options.internal_comparator)) {
+  auto userCmp = table_reader_options.internal_comparator.user_comparator();
+	if (!IsBytewiseComparator(userCmp)) {
 		return Status::InvalidArgument("TerarkZipTableFactory::NewTableReader()",
 				"user comparator must be 'leveldb.BytewiseComparator'");
 	}
+#if 0
+  if (fstring(userCmp->Name()).startsWith("rev:")) {
+    return Status::InvalidArgument("TerarkZipTableFactory::NewTableReader",
+        "Damn, fuck out the reverse bytewise comparator");
+  }
+#endif
 	Footer footer;
 	Status s = ReadFooterFromFile(file.get(), file_size, &footer);
 	if (!s.ok()) {
@@ -1400,11 +1699,19 @@ TerarkZipTableFactory::NewTableBuilder(
 		uint32_t column_family_id,
 		WritableFileWriter* file)
 const {
-	if (!IsBytewiseComparator(table_builder_options.internal_comparator)) {
+  auto userCmp = table_builder_options.internal_comparator.user_comparator();
+	if (!IsBytewiseComparator(userCmp)) {
 		THROW_STD(invalid_argument,
 				"TerarkZipTableFactory::NewTableBuilder(): "
 				"user comparator must be 'leveldb.BytewiseComparator'");
 	}
+#if 0
+  if (fstring(userCmp->Name()).startsWith("rev:")) {
+    THROW_STD(invalid_argument,
+        "TerarkZipTableFactory::NewTableBuilder(): "
+        "user comparator must be 'leveldb.BytewiseComparator'");
+  }
+#endif
   int curlevel = table_builder_options.level;
   int numlevel = table_builder_options.ioptions.num_levels;
   int minlevel = table_options_.terarkZipMinLevel;
@@ -1466,9 +1773,20 @@ TerarkZipTableFactory::SanitizeOptions(const DBOptions& db_opts,
                        	   	   	   	   const ColumnFamilyOptions& cf_opts)
 const {
 	if (!IsBytewiseComparator(cf_opts.comparator)) {
-		return Status::InvalidArgument("TerarkZipTableFactory::NewTableReader()",
+		return Status::InvalidArgument("TerarkZipTableFactory::SanitizeOptions()",
 				"user comparator must be 'leveldb.BytewiseComparator'");
 	}
+#if 0
+	if (fstring(cf_opts.comparator->Name()).startsWith("rev:")) {
+	  return Status::InvalidArgument("TerarkZipTableFactory::SanitizeOptions",
+	      "Damn, fuck out the reverse bytewise comparator");
+	}
+#endif
+  auto indexFactory = TerocksIndex::GetFactory(table_options_.indexType);
+  if (!indexFactory) {
+    std::string msg = "invalid indexType: " + table_options_.indexType;
+    return Status::InvalidArgument(msg);
+  }
 	return Status::OK();
 }
 
