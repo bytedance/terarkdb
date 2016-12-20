@@ -51,7 +51,9 @@ unique_ptr<T> UniquePtrOf(T* p) { return unique_ptr<T>(p); }
 
 using terark::BaseDFA;
 using terark::NestLoudsTrieDAWG_SE_512;
-using terark::NestLoudsTrieDAWG_IL;
+using terark::NestLoudsTrieDAWG_IL_256;
+using terark::NestLoudsTrieDAWG_Mixed_SE_512;
+using terark::NestLoudsTrieDAWG_Mixed_IL_256;
 using terark::DictZipBlobStore;
 using terark::byte_t;
 using terark::valvec;
@@ -400,13 +402,16 @@ public:
     }
   };
 };
-typedef terark::NestLoudsTrieDAWG_IL NestLoudsTrieDAWG_IL_256;
 typedef NestLoudsTrieDAWG_IL_256 NestLoudsTrieDAWG_IL_256_32;
 typedef NestLoudsTrieDAWG_SE_512 NestLoudsTrieDAWG_SE_512_32;
 typedef NestLoudsTrieIndex<NestLoudsTrieDAWG_SE_512_32> TerocksIndex_NestLoudsTrieDAWG_SE_512_32;
 typedef NestLoudsTrieIndex<NestLoudsTrieDAWG_IL_256_32> TerocksIndex_NestLoudsTrieDAWG_IL_256_32;
-TerocksIndexRegister(TerocksIndex_NestLoudsTrieDAWG_SE_512_32, "NestLoudsTrieDAWG_SE_512", "SE_512_32");
-TerocksIndexRegister(TerocksIndex_NestLoudsTrieDAWG_IL_256_32, "NestLoudsTrieDAWG_IL_256", "IL_256_32");
+typedef NestLoudsTrieIndex<NestLoudsTrieDAWG_Mixed_SE_512> TerocksIndex_NestLoudsTrieDAWG_Mixed_SE_512;
+typedef NestLoudsTrieIndex<NestLoudsTrieDAWG_Mixed_IL_256> TerocksIndex_NestLoudsTrieDAWG_Mixed_IL_256;
+TerocksIndexRegister(TerocksIndex_NestLoudsTrieDAWG_SE_512_32, "NestLoudsTrieDAWG_SE_512", "SE_512_32", "SE_512");
+TerocksIndexRegister(TerocksIndex_NestLoudsTrieDAWG_IL_256_32, "NestLoudsTrieDAWG_IL_256", "IL_256_32", "IL_256");
+TerocksIndexRegister(TerocksIndex_NestLoudsTrieDAWG_Mixed_SE_512, "NestLoudsTrieDAWG_Mixed_SE_512", "Mixed_SE_512");
+TerocksIndexRegister(TerocksIndex_NestLoudsTrieDAWG_Mixed_IL_256, "NestLoudsTrieDAWG_Mixed_IL_256", "Mixed_IL_256");
 
 unique_ptr<TerocksIndex> TerocksIndex::LoadFile(fstring fpath) {
   TerocksIndex::Factory* factory = NULL;
@@ -970,7 +975,10 @@ TerarkZipTableReader::Get(const ReadOptions& ro, const Slice& ikey,
 						  GetContext* get_context, bool skip_filters) {
   MY_THREAD_LOCAL(valvec<byte_t>, g_tbuf);
 	ParsedInternalKey pikey;
-	ParseInternalKey(ikey, &pikey);
+	if (!ParseInternalKey(ikey, &pikey)) {
+	  return Status::InvalidArgument("TerarkZipTableReader::Get()",
+	      "bad internal key causing ParseInternalKey() failed");
+	}
   size_t cplen = pikey.user_key.difference_offset(commonPrefix_);
   if (commonPrefix_.size() != cplen) {
     return Status::OK();
