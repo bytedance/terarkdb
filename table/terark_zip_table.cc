@@ -319,10 +319,7 @@ public:
   }
   void BuildCache(double cacheRatio) {
     if (cacheRatio > 1e-8) {
-      auto indexCache = dynamic_cast<terark::FSA_Cache*>(m_trie.get());
-      if (indexCache) {
-        indexCache->build_fsa_cache(cacheRatio, NULL);
-      }
+        m_trie->build_fsa_cache(cacheRatio, NULL);
     }
   }
   class MyFactory : public Factory {
