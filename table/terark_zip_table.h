@@ -50,6 +50,11 @@ struct TerarkZipTableOptions {
 
   size_t softZipWorkingMemLimit = 16ull << 30;
   size_t hardZipWorkingMemLimit = 32ull << 30;
+
+  // should be a small value, typically 0.001
+  // default is to disable indexCache, because the improvement
+  // is about only 10% when set to 0.001
+  double indexCacheRatio = 0;//0.001;
 };
 
 class TableFactory*

@@ -30,6 +30,7 @@
 #include <terark/io/DataIO.hpp>
 #include <terark/hash_strmap.hpp>
 #include <terark/fsa/dfa_mmap_header.hpp>
+#include <terark/fsa/fsa_cache.hpp>
 #include <boost/scope_exit.hpp>
 #include <future>
 #include <memory>
@@ -230,6 +231,7 @@ public:
   virtual Iterator* NewIterator() const = 0;
   virtual bool NeedsReorder() const = 0;
   virtual void GetOrderMap(uint32_t* newToOld) const = 0;
+  virtual void BuildCache(double cacheRatio) = 0;
 };
 static terark::hash_strmap_p<TerocksIndex::Factory> g_TerocksIndexFactroy;
 #define TerocksIndexRegister(clazz, ...) \
@@ -314,6 +316,14 @@ public:
       size_t newId = m_trie->state_to_word_id(state);
       newToOld[newId] = uint32_t(dictOrderOldId);
     });
+  }
+  void BuildCache(double cacheRatio) {
+    if (cacheRatio > 1e-8) {
+      auto indexCache = dynamic_cast<terark::FSA_Cache*>(m_trie.get());
+      if (indexCache) {
+        indexCache->build_fsa_cache(cacheRatio, NULL);
+      }
+    }
   }
   class MyFactory : public Factory {
   public:
@@ -475,6 +485,7 @@ class TerarkZipTableReader: public TableReader, boost::noncopyable {
 public:
   static Status Open(const ImmutableCFOptions& ioptions,
                      const EnvOptions& env_options,
+                     const TerarkZipTableOptions& tzto,
                      RandomAccessFileReader* file,
                      uint64_t file_size,
 					 unique_ptr<TableReader>* table);
@@ -496,20 +507,20 @@ public:
   size_t ApproximateMemoryUsage() const override { return file_size_; }
 
   ~TerarkZipTableReader();
-  TerarkZipTableReader(size_t user_key_len, const ImmutableCFOptions& ioptions);
+  TerarkZipTableReader(const ImmutableCFOptions& ioptions, const TerarkZipTableOptions& tzto);
 
 private:
   unique_ptr<DictZipBlobStore> valstore_;
   unique_ptr<TerocksIndex> keyIndex_;
   Slice commonPrefix_;
   terark::UintVecMin0 typeArray_;
-  const size_t fixed_key_len_;
   static const size_t kNumInternalBytes = 8;
   Slice  file_data_;
   unique_ptr<RandomAccessFileReader> file_;
   const ImmutableCFOptions& ioptions_;
   uint64_t file_size_ = 0;
   std::shared_ptr<const TableProperties> table_properties_;
+  const TerarkZipTableOptions& tzto_;
   bool isReverseBytewiseOrder_;
   friend class TerarkZipTableIterator;
   Status LoadIndex(Slice mem);
@@ -815,13 +826,12 @@ TerarkZipTableReader::~TerarkZipTableReader() {
 	typeArray_.risk_release_ownership();
 }
 
-TerarkZipTableReader::TerarkZipTableReader(size_t user_key_len,
-							const ImmutableCFOptions& ioptions)
- : fixed_key_len_(user_key_len)
- , ioptions_(ioptions)
+TerarkZipTableReader::TerarkZipTableReader(
+							const ImmutableCFOptions& ioptions,
+							const TerarkZipTableOptions& tzto)
+ : ioptions_(ioptions)
+ , tzto_(tzto)
 {
-  (void)fixed_key_len_; // unused
-  (void)ioptions_; // unused
   isReverseBytewiseOrder_ = false;
 }
 
@@ -853,6 +863,7 @@ static void MmapWarmUp(const UintVecMin0& uv) {
 Status
 TerarkZipTableReader::Open(const ImmutableCFOptions& ioptions,
 						   const EnvOptions& env_options,
+						   const TerarkZipTableOptions& tzto,
 						   RandomAccessFileReader* file,
 						   uint64_t file_size,
 						   unique_ptr<TableReader>* table) {
@@ -874,7 +885,7 @@ TerarkZipTableReader::Open(const ImmutableCFOptions& ioptions,
 			"EnvOptions::use_mmap_reads must be true");
   }
   unique_ptr<TerarkZipTableReader>
-  r(new TerarkZipTableReader(size_t(props->fixed_key_len), ioptions));
+  r(new TerarkZipTableReader(ioptions, tzto));
   r->file_.reset(file);
   r->file_data_ = file_data;
   r->file_size_ = file_size;
@@ -932,12 +943,16 @@ TerarkZipTableReader::Open(const ImmutableCFOptions& ioptions,
   MmapWarmUp(r->valstore_->get_dict());
   MmapWarmUp(r->valstore_->get_index());
   long long t1 = g_pf.now();
+  r->keyIndex_->BuildCache(tzto.indexCacheRatio);
+  long long t2 = g_pf.now();
 	INFO(ioptions.info_log
-    , "TerarkZipTableReader::Open(): fsize=%zd, entries=%zd keys=%zd indexSize=%zd valueSize=%zd, warm up time = %6.3f'sec\n"
+    , "TerarkZipTableReader::Open(): fsize=%zd, entries=%zd keys=%zd indexSize=%zd valueSize=%zd, warm up time = %6.3f'sec, build cache time = %6.3f'sec\n"
 		, size_t(file_size), size_t(r->table_properties_->num_entries)
 		, r->keyIndex_->NumKeys()
-		, size_t(r->table_properties_->index_size), size_t(r->table_properties_->data_size)
+		, size_t(r->table_properties_->index_size)
+		, size_t(r->table_properties_->data_size)
 		, g_pf.sf(t0, t1)
+		, g_pf.sf(t1, t2)
 	);
   *table = std::move(r);
   return Status::OK();
@@ -1696,6 +1711,7 @@ const {
 	return TerarkZipTableReader::Open(
 			table_reader_options.ioptions,
 			table_reader_options.env_options,
+			table_options_,
 			file.release(),
 			file_size,
 			table);
