@@ -483,13 +483,6 @@ struct ZipValueMultiValue {
  */
 class TerarkZipTableReader: public TableReader, boost::noncopyable {
 public:
-  static Status Open(const ImmutableCFOptions& ioptions,
-                     const EnvOptions& env_options,
-                     const TerarkZipTableOptions& tzto,
-                     RandomAccessFileReader* file,
-                     uint64_t file_size,
-					 unique_ptr<TableReader>* table);
-
   InternalIterator*
   NewIterator(const ReadOptions&, Arena*, bool skip_filters) override;
 
@@ -504,10 +497,11 @@ public:
   std::shared_ptr<const TableProperties>
   GetTableProperties() const override { return table_properties_; }
 
-  size_t ApproximateMemoryUsage() const override { return file_size_; }
+  size_t ApproximateMemoryUsage() const override { return file_data_.size(); }
 
   ~TerarkZipTableReader();
-  TerarkZipTableReader(const ImmutableCFOptions& ioptions, const TerarkZipTableOptions& tzto);
+  TerarkZipTableReader(const TableReaderOptions&, const TerarkZipTableOptions&);
+  Status Open(RandomAccessFileReader* file, uint64_t file_size);
 
 private:
   unique_ptr<DictZipBlobStore> valstore_;
@@ -517,8 +511,7 @@ private:
   static const size_t kNumInternalBytes = 8;
   Slice  file_data_;
   unique_ptr<RandomAccessFileReader> file_;
-  const ImmutableCFOptions& ioptions_;
-  uint64_t file_size_ = 0;
+  const TableReaderOptions table_reader_options_;
   std::shared_ptr<const TableProperties> table_properties_;
   const TerarkZipTableOptions& tzto_;
   bool isReverseBytewiseOrder_;
@@ -594,7 +587,15 @@ public:
     // do not reverse multi values of a single key
     // so it can not use a reverse wrapper iterator
 	  zValtype_ = ZipValueType::kZeroSeq;
+	  pinned_iters_mgr_ = NULL;
 	  SetIterInvalid();
+  }
+
+  void SetPinnedItersMgr(PinnedIteratorsManager* pinned_iters_mgr) {
+    if (pinned_iters_mgr_ && pinned_iters_mgr_ != pinned_iters_mgr) {
+      pinned_buffer_.clear();
+    }
+    pinned_iters_mgr_ = pinned_iters_mgr;
   }
 
   bool Valid() const override {
@@ -602,23 +603,27 @@ public:
   }
 
   void SeekToFirst() override {
-	  if (UnzipIterRecord(reverse_?iter_->SeekToLast():iter_->SeekToFirst())) {
+	  if (UnzipIterRecord(IndexIterSeekToFirst())) {
 		  DecodeCurrKeyValue();
 		  validx_ = 1;
 	  }
   }
 
   void SeekToLast() override {
-	  if (UnzipIterRecord(reverse_?iter_->SeekToFirst():iter_->SeekToLast())) {
+	  if (UnzipIterRecord(IndexIterSeekToLast())) {
 		  validx_ = valnum_ - 1;
 		  DecodeCurrKeyValue();
 	  }
   }
 
   void SeekForPrev(const Slice& target) override {
+#if 0
     assert(false);
     status_ =
         Status::NotSupported("SeekForPrev() is not supported in TerarkZipTableIterator");
+#else
+    SeekForPrevImpl(target, &table_->table_reader_options_.internal_comparator);
+#endif
   }
 
   void Seek(const Slice& target) override {
@@ -629,6 +634,7 @@ public:
 		  SetIterInvalid();
 		  return;
 	  }
+	  TryPinBuffer(interKeyBuf_xx_);
 	  // Damn MySQL-rocksdb may use "rev:" comparator
 	  size_t cplen = commonPrefix_.commonPrefixLen(fstringOf(pikey.user_key));
     if (commonPrefix_.size() != cplen) {
@@ -693,7 +699,7 @@ public:
 		  validx_++;
 	  }
 	  else {
-		  if (UnzipIterRecord(reverse_?iter_->Prev():iter_->Next())) {
+		  if (UnzipIterRecord(IndexIterNext())) {
 			  DecodeCurrKeyValue();
 			  validx_ = 1;
 		  }
@@ -707,7 +713,7 @@ public:
 		  DecodeCurrKeyValue();
 	  }
 	  else {
-		  if (UnzipIterRecord(reverse_?iter_->Next():iter_->Prev())) {
+		  if (UnzipIterRecord(IndexIterPrev())) {
 			  validx_ = valnum_ - 1;
 			  DecodeCurrKeyValue();
 		  }
@@ -716,7 +722,7 @@ public:
 
   Slice key() const override {
     assert(iter_->Valid());
-	  return interKeyBuf_;
+	  return SliceOf(interKeyBuf_xx_);
   }
 
   Slice value() const override {
@@ -728,8 +734,16 @@ public:
 	  return status_;
   }
 
+  bool IsKeyPinned() const {
+    return pinned_iters_mgr_ && pinned_iters_mgr_->PinningEnabled();
+  }
+  bool IsValuePinned() const {
+    return pinned_iters_mgr_ && pinned_iters_mgr_->PinningEnabled();
+  }
+
 private:
   void SetIterInvalid() {
+    TryPinBuffer(interKeyBuf_xx_);
     iter_->SetInvalid();
 	  validx_ = 0;
 	  valnum_ = 0;
@@ -737,10 +751,45 @@ private:
 	  pInterKey_.sequence = uint64_t(-1);
 	  pInterKey_.type = kMaxValue;
   }
+  bool IndexIterSeekToFirst() {
+    TryPinBuffer(interKeyBuf_xx_);
+    if (reverse_)
+      return iter_->SeekToLast();
+    else
+      return iter_->SeekToFirst();
+  }
+  bool IndexIterSeekToLast() {
+    TryPinBuffer(interKeyBuf_xx_);
+    if (reverse_)
+      return iter_->SeekToFirst();
+    else
+      return iter_->SeekToLast();
+  }
+  bool IndexIterPrev() {
+    TryPinBuffer(interKeyBuf_xx_);
+    if (reverse_)
+      return iter_->Next();
+    else
+      return iter_->Prev();
+  }
+  bool IndexIterNext() {
+    TryPinBuffer(interKeyBuf_xx_);
+    if (reverse_)
+      return iter_->Prev();
+    else
+      return iter_->Next();
+  }
+  void TryPinBuffer(valvec<byte_t>& buf) {
+    if (pinned_iters_mgr_ && pinned_iters_mgr_->PinningEnabled()) {
+      pinned_buffer_.push_back();
+      pinned_buffer_.back().swap(buf);
+    }
+  }
   bool UnzipIterRecord(bool hasRecord) {
 	  if (hasRecord) {
 		  size_t recId = iter_->id();
 		  try {
+		    TryPinBuffer(valueBuf_);
 			  table_->valstore_->get_record(recId, &valueBuf_);
 		  }
 		  catch (const BadCrc32cException& ex) { // crc checksum error
@@ -806,6 +855,7 @@ private:
 	}
 	interKeyBuf_.assign(commonPrefix_.data(), commonPrefix_.size());
 	AppendInternalKey(&interKeyBuf_, pInterKey_);
+	interKeyBuf_xx_.assign((byte_t*)interKeyBuf_.data(), interKeyBuf_.size());
   }
 
   const TerarkZipTableReader* const table_;
@@ -814,22 +864,24 @@ private:
   const bool reverse_;
   ParsedInternalKey pInterKey_;
   std::string interKeyBuf_;
+  valvec<byte_t> interKeyBuf_xx_;
   valvec<byte_t> valueBuf_;
   Slice  userValue_;
   ZipValueType zValtype_;
   size_t valnum_;
   size_t validx_;
   Status status_;
+  PinnedIteratorsManager*  pinned_iters_mgr_;
+  valvec<valvec<byte_t> >  pinned_buffer_;
 };
 
 TerarkZipTableReader::~TerarkZipTableReader() {
 	typeArray_.risk_release_ownership();
 }
 
-TerarkZipTableReader::TerarkZipTableReader(
-							const ImmutableCFOptions& ioptions,
-							const TerarkZipTableOptions& tzto)
- : ioptions_(ioptions)
+TerarkZipTableReader::TerarkZipTableReader(const TableReaderOptions& tro,
+      const TerarkZipTableOptions& tzto)
+ : table_reader_options_(tro)
  , tzto_(tzto)
 {
   isReverseBytewiseOrder_ = false;
@@ -861,12 +913,9 @@ static void MmapWarmUp(const UintVecMin0& uv) {
 }
 
 Status
-TerarkZipTableReader::Open(const ImmutableCFOptions& ioptions,
-						   const EnvOptions& env_options,
-						   const TerarkZipTableOptions& tzto,
-						   RandomAccessFileReader* file,
-						   uint64_t file_size,
-						   unique_ptr<TableReader>* table) {
+TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
+  file_.reset(file); // take ownership
+  const auto& ioptions = table_reader_options_.ioptions;
   TableProperties* props = nullptr;
   Status s = ReadTableProperties(file, file_size,
 		  	  kTerarkZipTableMagicNumber, ioptions, &props);
@@ -876,7 +925,7 @@ TerarkZipTableReader::Open(const ImmutableCFOptions& ioptions,
   assert(nullptr != props);
   unique_ptr<TableProperties> uniqueProps(props);
   Slice file_data;
-  if (env_options.use_mmap_reads) {
+  if (table_reader_options_.env_options.use_mmap_reads) {
 	s = file->Read(0, file_size, &file_data, nullptr);
 	if (!s.ok())
 		return s;
@@ -884,13 +933,9 @@ TerarkZipTableReader::Open(const ImmutableCFOptions& ioptions,
     return Status::InvalidArgument("TerarkZipTableReader::Open()",
 			"EnvOptions::use_mmap_reads must be true");
   }
-  unique_ptr<TerarkZipTableReader>
-  r(new TerarkZipTableReader(ioptions, tzto));
-  r->file_.reset(file);
-  r->file_data_ = file_data;
-  r->file_size_ = file_size;
-  r->table_properties_.reset(uniqueProps.release());
-  r->isReverseBytewiseOrder_ =
+  file_data_ = file_data;
+  table_properties_.reset(uniqueProps.release());
+  isReverseBytewiseOrder_ =
       fstring(ioptions.user_comparator->Name()).startsWith("rev:");
   BlockContents valueDictBlock, indexBlock, zValueTypeBlock;
   BlockContents commonPrefixBlock;
@@ -912,7 +957,7 @@ TerarkZipTableReader::Open(const ImmutableCFOptions& ioptions,
   s = ReadMetaBlock(file, file_size, kTerarkZipTableMagicNumber, ioptions,
       kTerarkZipTableCommonPrefixBlock, &commonPrefixBlock);
   if (s.ok()) {
-    r->commonPrefix_ = commonPrefixBlock.data;
+    commonPrefix_ = commonPrefixBlock.data;
   }
   else {
     // some error, usually is
@@ -923,38 +968,37 @@ TerarkZipTableReader::Open(const ImmutableCFOptions& ioptions,
         , s.ToString().c_str());
   }
   try {
-	  r->valstore_.reset(new DictZipBlobStore());
-	  r->valstore_->load_user_memory(
+	  valstore_.reset(new DictZipBlobStore());
+	  valstore_->load_user_memory(
 			  fstringOf(valueDictBlock.data),
 			  fstring(file_data.data(), props->data_size));
   }
   catch (const BadCrc32cException& ex) {
 	  return Status::Corruption("TerarkZipTableReader::Open()", ex.what());
   }
-  s = r->LoadIndex(indexBlock.data);
+  s = LoadIndex(indexBlock.data);
   if (!s.ok()) {
 	  return s;
   }
-  size_t recNum = r->keyIndex_->NumKeys();
-  r->typeArray_.risk_set_data((byte_t*)zValueTypeBlock.data.data(),
+  size_t recNum = keyIndex_->NumKeys();
+  typeArray_.risk_set_data((byte_t*)zValueTypeBlock.data.data(),
 		  recNum, kZipValueTypeBits);
   long long t0 = g_pf.now();
   MmapWarmUp(fstringOf(indexBlock.data));
-  MmapWarmUp(r->valstore_->get_dict());
-  MmapWarmUp(r->valstore_->get_index());
+  MmapWarmUp(valstore_->get_dict());
+  MmapWarmUp(valstore_->get_index());
   long long t1 = g_pf.now();
-  r->keyIndex_->BuildCache(tzto.indexCacheRatio);
+  keyIndex_->BuildCache(tzto_.indexCacheRatio);
   long long t2 = g_pf.now();
 	INFO(ioptions.info_log
     , "TerarkZipTableReader::Open(): fsize=%zd, entries=%zd keys=%zd indexSize=%zd valueSize=%zd, warm up time = %6.3f'sec, build cache time = %6.3f'sec\n"
-		, size_t(file_size), size_t(r->table_properties_->num_entries)
-		, r->keyIndex_->NumKeys()
-		, size_t(r->table_properties_->index_size)
-		, size_t(r->table_properties_->data_size)
+		, size_t(file_size), size_t(table_properties_->num_entries)
+		, keyIndex_->NumKeys()
+		, size_t(table_properties_->index_size)
+		, size_t(table_properties_->data_size)
 		, g_pf.sf(t0, t1)
 		, g_pf.sf(t1, t2)
 	);
-  *table = std::move(r);
   return Status::OK();
 }
 
@@ -1708,13 +1752,13 @@ const {
 				  "all index and data will be loaded in memory\n");
 	}
 #endif
-	return TerarkZipTableReader::Open(
-			table_reader_options.ioptions,
-			table_reader_options.env_options,
-			table_options_,
-			file.release(),
-			file_size,
-			table);
+	std::unique_ptr<TerarkZipTableReader>
+	t(new TerarkZipTableReader(table_reader_options, table_options_));
+	s = t->Open(file.release(), file_size);
+	if (s.ok()) {
+	  *table = std::move(t);
+	}
+	return s;
 }
 
 TableBuilder*
