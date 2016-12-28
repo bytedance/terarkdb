@@ -204,7 +204,7 @@ public:
     virtual Slice key() const = 0;
     inline void SetInvalid() { m_id = size_t(-1); }
   };
-  class Factory : boost::noncopyable {
+  class Factory : public terark::RefCounter {
   public:
     virtual ~Factory();
     virtual void Build(TempFileDeleteOnClose& tmpKeyFile,
@@ -219,6 +219,7 @@ public:
     virtual unique_ptr<TerocksIndex> LoadFile(fstring fpath) const = 0;
     virtual size_t MemSizeForBuild(size_t numKeys, size_t sumKeyLen) const = 0;
   };
+  typedef boost::intrusive_ptr<Factory> FactoryPtr;
   struct AutoRegisterFactory {
     AutoRegisterFactory(std::initializer_list<const char*> names, Factory* factory);
   };
@@ -234,7 +235,7 @@ public:
   virtual void GetOrderMap(uint32_t* newToOld) const = 0;
   virtual void BuildCache(double cacheRatio) = 0;
 };
-static terark::hash_strmap_p<TerocksIndex::Factory> g_TerocksIndexFactroy;
+static terark::hash_strmap<TerocksIndex::FactoryPtr> g_TerocksIndexFactroy;
 #define TerocksIndexRegister(clazz, ...) \
     TerocksIndex::AutoRegisterFactory \
     g_AutoRegister_##clazz({#clazz,##__VA_ARGS__}, new clazz::MyFactory())
@@ -243,12 +244,17 @@ TerocksIndex::AutoRegisterFactory::AutoRegisterFactory(
     std::initializer_list<const char*> names,
     Factory* factory) {
   for (const char* name : names) {
-    g_TerocksIndexFactroy.insert(name, factory);
+    g_TerocksIndexFactroy.insert_i(name, factory);
   }
 }
+
 const TerocksIndex::Factory* TerocksIndex::GetFactory(fstring name) {
-  auto factory = g_TerocksIndexFactroy[name];
-  return factory;
+  size_t idx = g_TerocksIndexFactroy.find_i(name);
+  if (idx < g_TerocksIndexFactroy.end_i()) {
+    auto factory = g_TerocksIndexFactroy.val(idx).get();
+    return factory;
+  }
+  return NULL;
 }
 
 TerocksIndex::~TerocksIndex() {}
@@ -428,24 +434,26 @@ unique_ptr<TerocksIndex> TerocksIndex::LoadFile(fstring fpath) {
   {
     terark::MmapWholeFile mmap(fpath);
     auto header = (const terark::DFA_MmapHeader*)mmap.base;
-    factory = g_TerocksIndexFactroy[header->dfa_class_name];
-    if (!factory) {
+    size_t idx = g_TerocksIndexFactroy.find_i(header->dfa_class_name);
+    if (idx >= g_TerocksIndexFactroy.end_i()) {
       throw std::invalid_argument(
           "TerocksIndex::LoadFile(" + fpath + "): Unknown trie class: "
           + header->dfa_class_name);
     }
+    factory = g_TerocksIndexFactroy.val(idx).get();
   }
   return factory->LoadFile(fpath);
 }
 
 unique_ptr<TerocksIndex> TerocksIndex::LoadMemory(fstring mem) {
   auto header = (const terark::DFA_MmapHeader*)mem.data();
-  auto factory = g_TerocksIndexFactroy[header->dfa_class_name];
-  if (!factory) {
+  size_t idx = g_TerocksIndexFactroy.find_i(header->dfa_class_name);
+  if (idx >= g_TerocksIndexFactroy.end_i()) {
     throw std::invalid_argument(
         std::string("TerocksIndex::LoadMemory(): Unknown trie class: ")
         + header->dfa_class_name);
   }
+  TerocksIndex::Factory* factory = g_TerocksIndexFactroy.val(idx).get();
   return factory->LoadMemory(mem);
 }
 
