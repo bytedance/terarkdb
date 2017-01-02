@@ -1536,7 +1536,7 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
 		zvType.swap(zvType2);
 	}
   else {
-    WriteBlock(index->Memory(), file_, &offset_, &dataBlock);
+    WriteBlock(zstore->get_data(), file_, &offset_, &dataBlock);
   }
   WriteBlock(commonPrefix, file_, &offset_, &commonPrefixBlock);
 	properties_.data_size = dataBlock.size();
