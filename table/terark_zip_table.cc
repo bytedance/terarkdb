@@ -1496,6 +1496,9 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
 	Status s;
   BlockHandle dataBlock, dictBlock, indexBlock, zvTypeBlock;
   BlockHandle commonPrefixBlock;
+  file_->writable_file()->SetPreallocationBlockSize(4*1024*1024 +
+    index->Memory().size() + zstore->mem_size() + zvType.mem_size()
+  );
   offset_ = 0;
   if (index->NeedsReorder()) {
 		UintVecMin0 zvType2(numUserKeys_, kZipValueTypeBits);
@@ -1552,9 +1555,9 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
 	}
 	index.reset();
 	zstore.reset();
-  tmpStoreFile.Delete();
-  tmpStoreDict.Delete();
-  tmpIndexFile.Delete();
+	tmpStoreFile.Delete();
+	tmpStoreDict.Delete();
+	tmpIndexFile.Delete();
 	properties_.index_size = indexBlock.size();
 	MetaIndexBuilder metaindexBuiler;
 	metaindexBuiler.Add(kTerarkZipTableValueDictBlock, dictBlock);
