@@ -1702,6 +1702,7 @@ class TerarkZipTableFactory : public TableFactory, boost::noncopyable {
 class TableFactory*
 NewTerarkZipTableFactory(const TerarkZipTableOptions& tzto,
 						 class TableFactory* fallback) {
+  fprintf(stderr, "INFO: NewTerarkZipTableFactory()\n");
 	return new TerarkZipTableFactory(tzto, fallback);
 }
 
