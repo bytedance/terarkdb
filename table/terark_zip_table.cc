@@ -1496,9 +1496,16 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
 	Status s;
   BlockHandle dataBlock, dictBlock, indexBlock, zvTypeBlock;
   BlockHandle commonPrefixBlock;
-  file_->writable_file()->SetPreallocationBlockSize(4*1024*1024 +
-    index->Memory().size() + zstore->mem_size() + zvType.mem_size()
-  );
+{
+  size_t real_size = index->Memory().size() + zstore->mem_size() + zvType.mem_size();
+  size_t block_size, last_allocated_block;
+  file_->writable_file()->GetPreallocationStatus(&block_size, &last_allocated_block);
+  INFO(ioptions_.info_log
+    , "TerarkZipTableBuilder::Finish():this=%p: old prealloc_size = %zd, real_size = %zd\n"
+    , this, block_size, real_size
+    );
+  file_->writable_file()->SetPreallocationBlockSize(1*1024*1024 + real_size);
+}
   offset_ = 0;
   if (index->NeedsReorder()) {
 		UintVecMin0 zvType2(numUserKeys_, kZipValueTypeBits);
