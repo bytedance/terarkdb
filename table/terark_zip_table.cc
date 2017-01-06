@@ -94,14 +94,18 @@ class TerarkZipTableIterator;
 #ifdef TERARK_ZIP_TRIAL_VERSION
 const char g_trail_rand_delete[] = "TERARK_ZIP_TRIAL_VERSION random deleted this row";
 #endif
+
+#define STD_INFO(format, ...) fprintf(stderr, "%s INFO: " format, StrDateTimeNow(), ##__VA_ARGS__)
+#define STD_WARN(format, ...) fprintf(stderr, "%s WARN: " format, StrDateTimeNow(), ##__VA_ARGS__)
+
 #undef INFO
 #undef WARN
 #if defined(NDEBUG) && 0
   #define INFO(logger, format, ...) Info(logger, format, ##__VA_ARGS__)
   #define WARN(logger, format, ...) Warn(logger, format, ##__VA_ARGS__)
 #else
-  #define INFO(logger, format, ...) fprintf(stderr, "%s INFO: " format, StrDateTimeNow(), ##__VA_ARGS__)
-  #define WARN(logger, format, ...) fprintf(stderr, "%s WARN: " format, StrDateTimeNow(), ##__VA_ARGS__)
+  #define INFO(logger, format, ...) STD_INFO(format, ##__VA_ARGS__)
+  #define WARN(logger, format, ...) STD_WARN(format, ##__VA_ARGS__)
 #endif
 
 static const char* StrDateTimeNow() {
@@ -244,6 +248,7 @@ TerocksIndex::AutoRegisterFactory::AutoRegisterFactory(
     std::initializer_list<const char*> names,
     Factory* factory) {
   for (const char* name : names) {
+    STD_INFO("AutoRegisterFactory: %s\n", name);
     g_TerocksIndexFactroy.insert_i(name, factory);
   }
 }
@@ -1702,7 +1707,7 @@ class TerarkZipTableFactory : public TableFactory, boost::noncopyable {
 class TableFactory*
 NewTerarkZipTableFactory(const TerarkZipTableOptions& tzto,
 						 class TableFactory* fallback) {
-  fprintf(stderr, "INFO: NewTerarkZipTableFactory()\n");
+  STD_INFO("NewTerarkZipTableFactory()\n");
 	return new TerarkZipTableFactory(tzto, fallback);
 }
 
