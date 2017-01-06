@@ -248,7 +248,7 @@ TerocksIndex::AutoRegisterFactory::AutoRegisterFactory(
     std::initializer_list<const char*> names,
     Factory* factory) {
   for (const char* name : names) {
-    STD_INFO("AutoRegisterFactory: %s\n", name);
+//  STD_INFO("AutoRegisterFactory: %s\n", name);
     g_TerocksIndexFactroy.insert_i(name, factory);
   }
 }
