@@ -1129,7 +1129,7 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(
 {
   file_ = file;
   sampleUpperBound_ = randomGenerator_.max() * table_options_.sampleRatio;
-  tmpValueFile_.path = tzto.localTempDir + "/TerarkRocks-XXXXXX";
+  tmpValueFile_.path = tzto.localTempDir + "/Terocks-XXXXXX";
   int fd = mkstemp(&tmpValueFile_.path[0]);
   if (fd < 0) {
     int err = errno;
