@@ -1511,11 +1511,13 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
     );
   file_->writable_file()->SetPreallocationBlockSize(1*1024*1024 + real_size);
 }
+  long long t6, t7;
   offset_ = 0;
   if (index->NeedsReorder()) {
 		UintVecMin0 zvType2(numUserKeys_, kZipValueTypeBits);
 		terark::AutoFree<uint32_t> newToOld(numUserKeys_, UINT32_MAX);
 		index->GetOrderMap(newToOld.p);
+		t6 = g_pf.now();
 		if (fstring(ioptions_.user_comparator->Name()).startsWith("rev:")) {
 		  // Damn reverse bytewise order
       for (size_t newId = 0; newId < numUserKeys_; ++newId) {
@@ -1531,6 +1533,7 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
 		    zvType2.set_wire(newId, zvType[dictOrderOldId]);
 		  }
 		}
+		t7 = g_pf.now();
 		try {
 		  dataBlock.set_offset(offset_);
 		  zstore->reorder_zip_data(newToOld, [&](const void* data, size_t size) {
@@ -1548,6 +1551,7 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
 		zvType.swap(zvType2);
 	}
   else {
+    t7 = t6 = t5;
     WriteBlock(zstore->get_data(), file_, &offset_, &dataBlock);
   }
   WriteBlock(commonPrefix, file_, &offset_, &commonPrefixBlock);
@@ -1601,11 +1605,15 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
 	if (s.ok()) {
 		offset_ += footer_encoding.size();
 	}
-  long long t6 = g_pf.now();
+  long long t8 = g_pf.now();
   INFO(ioptions_.info_log
     ,
 R"EOS(TerarkZipTableBuilder::Finish():this=%p: second pass time =%7.2f's, %8.3f'MB/sec, value only(%4.1f%% of KV)
-   wait indexing time = %7.2f's, re-map KeyValue time = %7.2f, %8.3f'MB/sec
+   wait indexing time = %7.2f's,
+  remap KeyValue time = %7.2f's, %8.3f'MB/sec (all stages of remap)
+    Get OrderMap time = %7.2f's, %8.3f'MB/sec (index lex walk)
+  rebuild zvType time = %7.2f's, %8.3f'MB/sec
+  write SST data time = %7.2f's, %8.3f'MB/sec
     z-dict build time = %7.2f's, sample length = %7.3f'MB, throughput = %6.3f'MB/sec
     zip my value time = %7.2f's, unzip  length = %7.3f'GB
     zip my value throughput = %7.3f'MB/sec
@@ -1620,7 +1628,14 @@ R"EOS(TerarkZipTableBuilder::Finish():this=%p: second pass time =%7.2f's, %8.3f'
     , properties_.raw_value_size*1.0/g_pf.uf(t3,t4)
     , properties_.raw_value_size*100.0/rawBytes
 
-    , g_pf.sf(t4,t5), g_pf.sf(t5,t6), double(offset_) / g_pf.uf(t5,t6)
+    , g_pf.sf(t4,t5) // wait indexing time
+    , g_pf.sf(t5,t8), double(offset_) / g_pf.uf(t5,t8)
+
+    , g_pf.sf(t5,t6), properties_.index_size/g_pf.uf(t5,t6) // index lex walk
+
+    , g_pf.sf(t6,t7), numUserKeys_*2/8/(g_pf.uf(t6,t7)+1.0) // rebuild zvType
+
+    , g_pf.sf(t7,t8), double(offset_) / g_pf.uf(t7,t8) // write SST data
 
     , dzstat.dictBuildTime, realsampleLenSum / 1e6
     , realsampleLenSum / dzstat.dictBuildTime / 1e6
