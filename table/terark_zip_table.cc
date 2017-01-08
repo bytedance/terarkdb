@@ -1611,7 +1611,7 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
 R"EOS(TerarkZipTableBuilder::Finish():this=%p: second pass time =%7.2f's, %8.3f'MB/sec, value only(%4.1f%% of KV)
    wait indexing time = %7.2f's,
   remap KeyValue time = %7.2f's, %8.3f'MB/sec (all stages of remap)
-    Get OrderMap time = %7.2f's, %8.3f'MB/sec (index lex walk)
+    Get OrderMap time = %7.2f's, %8.3f'MB/sec (index lex order gen)
   rebuild zvType time = %7.2f's, %8.3f'MB/sec
   write SST data time = %7.2f's, %8.3f'MB/sec
     z-dict build time = %7.2f's, sample length = %7.3f'MB, throughput = %6.3f'MB/sec
