@@ -537,11 +537,9 @@ class TerarkZipTableBuilder: public TableBuilder, boost::noncopyable {
 public:
   TerarkZipTableBuilder(
 		  const TerarkZipTableOptions&,
-		  const ImmutableCFOptions& ioptions,
-		  const std::vector<std::unique_ptr<IntTblPropCollectorFactory>>*,
+		  const TableBuilderOptions& tbo,
 		  uint32_t column_family_id,
-		  WritableFileWriter* file,
-		  const std::string& column_family_name);
+		  WritableFileWriter* file);
 
   ~TerarkZipTableBuilder();
 
@@ -561,9 +559,7 @@ private:
 
   Arena arena_;
   const TerarkZipTableOptions& table_options_;
-  const ImmutableCFOptions& ioptions_;
-  std::vector<unique_ptr<IntTblPropCollector>> table_properties_collectors_;
-
+  const TableBuilderOptions& tbo_;
   InternalIterator* second_pass_iter_ = nullptr;
   valvec<byte_t> prevUserKey_;
   terark::febitvec valueBits_;
@@ -1119,13 +1115,11 @@ TerarkZipTableReader::Get(const ReadOptions& ro, const Slice& ikey,
 
 TerarkZipTableBuilder::TerarkZipTableBuilder(
 		const TerarkZipTableOptions& tzto,
-		const ImmutableCFOptions& ioptions,
-		const std::vector<std::unique_ptr<IntTblPropCollectorFactory>>*,
+		const TableBuilderOptions& tbo,
 		uint32_t column_family_id,
-		WritableFileWriter* file,
-		const std::string& column_family_name)
+		WritableFileWriter* file)
   : table_options_(tzto)
-  , ioptions_(ioptions)
+  , tbo_(tbo)
 {
   file_ = file;
   sampleUpperBound_ = randomGenerator_.max() * table_options_.sampleRatio;
@@ -1146,7 +1140,7 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(
   properties_.fixed_key_len = 0;
   properties_.num_data_blocks = 1;
   properties_.column_family_id = column_family_id;
-  properties_.column_family_name = column_family_name;
+  properties_.column_family_name = tbo.column_family_name;
 }
 
 TerarkZipTableBuilder::~TerarkZipTableBuilder() {
@@ -1518,7 +1512,7 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
 		terark::AutoFree<uint32_t> newToOld(numUserKeys_, UINT32_MAX);
 		index->GetOrderMap(newToOld.p);
 		t6 = g_pf.now();
-		if (fstring(ioptions_.user_comparator->Name()).startsWith("rev:")) {
+		if (fstring(tbo_.ioptions.user_comparator->Name()).startsWith("rev:")) {
 		  // Damn reverse bytewise order
       for (size_t newId = 0; newId < numUserKeys_; ++newId) {
         size_t dictOrderOldId = newToOld.p[newId];
@@ -1583,8 +1577,17 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
 	PropertyBlockBuilder propBlockBuilder;
 	propBlockBuilder.AddTableProperty(properties_);
 	propBlockBuilder.Add(properties_.user_collected_properties);
-	NotifyCollectTableCollectorsOnFinish(table_properties_collectors_,
-	                                     ioptions_.info_log,
+	std::vector<std::unique_ptr<IntTblPropCollector>> collectors;
+	if (tbo_.int_tbl_prop_collector_factories) {
+	  const auto& factories = *tbo_.int_tbl_prop_collector_factories;
+	  collectors.resize(factories.size());
+    auto cfId = properties_.column_family_id;
+	  for (size_t i = 0; i < collectors.size(); ++i) {
+	    collectors[i].reset(factories[i]->CreateIntTblPropCollector(cfId));
+	  }
+	}
+	NotifyCollectTableCollectorsOnFinish(collectors,
+	                                     tbo_.ioptions.info_log,
 	                                     &propBlockBuilder);
 	BlockHandle propBlock, metaindexBlock;
 	s = WriteBlock(propBlockBuilder.Finish(), file_, &offset_, &propBlock);
@@ -1844,12 +1847,10 @@ const {
 	}
 	nth_new_terark_table_++;
 	return new TerarkZipTableBuilder(
-			table_options_,
-		    table_builder_options.ioptions,
-		    table_builder_options.int_tbl_prop_collector_factories,
-			column_family_id,
-		    file,
-		    table_builder_options.column_family_name);
+        table_options_,
+		    table_builder_options,
+        column_family_id,
+		    file);
 }
 
 std::string TerarkZipTableFactory::GetPrintableTableOptions() const {
