@@ -42,6 +42,7 @@ struct TerarkZipTableOptions {
 	int terarkZipMinLevel = 0;
 
 	bool useSuffixArrayLocalMatch = false;
+	bool isOfflineBuild = false;
 
 	float estimateCompressionRatio = 0.2;
 	double sampleRatio = 0.03;

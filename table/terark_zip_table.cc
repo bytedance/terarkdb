@@ -556,6 +556,8 @@ public:
 
 private:
   void AddPrevUserKey();
+  void OfflineZipValueData();
+  DictZipBlobStore::ZipBuilder* createZipBuilder() const;
 
   Arena arena_;
   const TerarkZipTableOptions& table_options_;
@@ -566,6 +568,8 @@ private:
   TempFileDeleteOnClose tmpKeyFile_;
   TempFileDeleteOnClose tmpValueFile_;
   TempFileDeleteOnClose tmpSampleFile_;
+  AutoDeleteFile tmpZipDictFile_;
+  AutoDeleteFile tmpZipValueFile_;
   std::mt19937_64 randomGenerator_;
   uint64_t sampleUpperBound_;
   size_t lenUserKeys_ = size_t(-1);
@@ -578,6 +582,9 @@ private:
   uint64_t offset_ = 0;
   Status status_;
   TableProperties properties_;
+  std::unique_ptr<DictZipBlobStore::ZipBuilder> zbuilder_;
+  valvec<byte_t> bzvType_;
+  terark::fstrvec valueBuf_; // collect multiple values for one key
   bool closed_ = false;  // Either Finish() or Abandon() has been called.
 
   long long t0 = 0;
@@ -1141,6 +1148,26 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(
   properties_.num_data_blocks = 1;
   properties_.column_family_id = column_family_id;
   properties_.column_family_name = tbo.column_family_name;
+
+  if (tzto.isOfflineBuild) {
+    if (tbo.compression_dict && tbo.compression_dict->size()) {
+      tmpZipValueFile_.fpath = tmpValueFile_.path + ".zbs";
+      tmpZipDictFile_.fpath  = tmpValueFile_.path + ".zbs-dict";
+      zbuilder_.reset(this->createZipBuilder());
+      zbuilder_->useSample(*tbo.compression_dict);
+    //zbuilder_->finishSample(); // do not call finishSample here
+      zbuilder_->prepare(1024, tmpZipValueFile_.fpath);
+    }
+  }
+}
+
+DictZipBlobStore::ZipBuilder*
+TerarkZipTableBuilder::createZipBuilder() const {
+  DictZipBlobStore::Options dzopt;
+  dzopt.entropyAlgo = DictZipBlobStore::Options::EntropyAlgo(table_options_.entropyAlgo);
+  dzopt.checksumLevel = table_options_.checksumLevel;
+  dzopt.useSuffixArrayLocalMatch = table_options_.useSuffixArrayLocalMatch;
+  return DictZipBlobStore::createZipBuilder(dzopt);
 }
 
 TerarkZipTableBuilder::~TerarkZipTableBuilder() {
@@ -1180,13 +1207,19 @@ void TerarkZipTableBuilder::Add(const Slice& key, const Slice& value) {
 		t0 = g_pf.now();
 	}
 	valueBits_.push_back(true);
-	if (!value.empty() && randomGenerator_() < sampleUpperBound_) {
-	  tmpSampleFile_.writer << fstringOf(value);
-		sampleLenSum_ += value.size();
-	}
-	if (!second_pass_iter_) {
-	  tmpValueFile_.writer.ensureWrite(userKey.end(), 8);
-	  tmpValueFile_.writer << fstringOf(value);
+  if (zbuilder_) {
+    valueBuf_.emplace_back(userKey.end(), 8);
+    valueBuf_.back_append(value.data(), value.size());
+  }
+  else {
+	  if (!value.empty() && randomGenerator_() < sampleUpperBound_) {
+	    tmpSampleFile_.writer << fstringOf(value);
+	    sampleLenSum_ += value.size();
+	  }
+	  if (!second_pass_iter_) {
+	    tmpValueFile_.writer.ensureWrite(userKey.end(), 8);
+	    tmpValueFile_.writer << fstringOf(value);
+	  }
 	}
 	properties_.num_entries++;
 	properties_.raw_key_size += key.size();
@@ -1327,11 +1360,7 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
   }BOOST_SCOPE_EXIT_END;
 
   t3 = g_pf.now();
-  DictZipBlobStore::Options dzopt;
-  dzopt.entropyAlgo = DictZipBlobStore::Options::EntropyAlgo(table_options_.entropyAlgo);
-  dzopt.checksumLevel = table_options_.checksumLevel;
-  dzopt.useSuffixArrayLocalMatch = table_options_.useSuffixArrayLocalMatch;
-  auto zbuilder = UniquePtrOf(DictZipBlobStore::createZipBuilder(dzopt));
+  auto zbuilder = UniquePtrOf(this->createZipBuilder());
 {
 #if defined(TERARK_ZIP_TRIAL_VERSION)
   zbuilder->addSample(g_trail_rand_delete);
@@ -1676,10 +1705,50 @@ void TerarkZipTableBuilder::Abandon() {
 }
 
 void TerarkZipTableBuilder::AddPrevUserKey() {
+  if (zbuilder_) {
+    OfflineZipValueData();
+  }
   tmpKeyFile_.writer << prevUserKey_;
 	valueBits_.push_back(false);
 	lenUserKeys_ += prevUserKey_.size();
 	numUserKeys_++;
+}
+
+void TerarkZipTableBuilder::OfflineZipValueData() {
+  uint64_t seq, seqType = *(uint64_t*)valueBuf_.strpool.data();
+  ValueType type;
+  UnPackSequenceAndType(seqType, &seq, &type);
+  const size_t vNum = valueBuf_.size();
+  if (vNum == 1 && (kTypeDeletion==type || kTypeValue==type)) {
+    if (0 == seq && kTypeValue==type) {
+      bzvType_.push_back(byte_t(ZipValueType::kZeroSeq));
+      zbuilder_->addRecord(fstring(valueBuf_.strpool).substr(8));
+    } else {
+      if (kTypeValue==type) {
+        bzvType_.push_back(byte_t(ZipValueType::kValue));
+      } else {
+        bzvType_.push_back(byte_t(ZipValueType::kDelete));
+      }
+      // use Little Endian upper 7 bytes
+      *(uint64_t*)valueBuf_.strpool.data() <<= 8;
+      zbuilder_->addRecord(fstring(valueBuf_.strpool).substr(1));
+    }
+  }
+  else {
+    bzvType_.push_back(byte_t(ZipValueType::kMulti));
+    size_t valueBytes = valueBuf_.strpool.size();
+    size_t headerSize = ZipValueMultiValue::calcHeaderSize(vNum);
+    valueBuf_.strpool.grow_no_init(headerSize);
+    char* pData = valueBuf_.strpool.data();
+    memmove(pData + headerSize, pData, valueBytes);
+    auto multiVals = (ZipValueMultiValue*)pData;
+    multiVals->num = uint32_t(vNum);
+    for (size_t i = 0; i < vNum+1; ++i) {
+      multiVals->offsets[i] = uint32_t(valueBuf_.offsets[i]);
+    }
+    zbuilder_->addRecord(valueBuf_.strpool);
+  }
+  valueBuf_.erase_all();
 }
 
 /////////////////////////////////////////////////////////////////////////////
