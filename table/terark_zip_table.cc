@@ -557,6 +557,10 @@ public:
 private:
   void AddPrevUserKey();
   void OfflineZipValueData();
+  Status OfflineFinish();
+  Status WriteSSTFile(long long t3, long long t4
+      , fstring tmpIndexFile, DictZipBlobStore* zstore, UintVecMin0& zvType
+      , const DictZipBlobStore::ZipStat& dzstat);
   DictZipBlobStore::ZipBuilder* createZipBuilder() const;
 
   Arena arena_;
@@ -1007,7 +1011,7 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   keyIndex_->BuildCache(tzto_.indexCacheRatio);
   long long t2 = g_pf.now();
 	INFO(ioptions.info_log
-    , "TerarkZipTableReader::Open(): fsize=%zd, entries=%zd keys=%zd indexSize=%zd valueSize=%zd, warm up time = %6.3f'sec, build cache time = %6.3f'sec\n"
+    , "TerarkZipTableReader::Open(): fsize = %zd, entries = %zd keys = %zd indexSize = %zd valueSize=%zd, warm up time = %6.3f'sec, build cache time = %6.3f'sec\n"
 		, size_t(file_size), size_t(table_properties_->num_entries)
 		, keyIndex_->NumKeys()
 		, size_t(table_properties_->index_size)
@@ -1243,7 +1247,10 @@ Status TerarkZipTableBuilder::Finish() {
 	assert(!closed_);
 	closed_ = true;
 
-	valvec<byte_t> commonPrefix(prevUserKey_.data(), commonPrefixLen_);
+	if (zbuilder_) {
+	  return OfflineFinish();
+	}
+
 	AddPrevUserKey();
 	tmpKeyFile_.complete_write();
   if (!second_pass_iter_) {
@@ -1259,7 +1266,7 @@ Status TerarkZipTableBuilder::Finish() {
 	long long rawBytes = properties_.raw_key_size + properties_.raw_value_size;
 	{
 	  long long tt = g_pf.now();
-	  INFO(ioptions_.info_log
+	  INFO(tbo_.ioptions.info_log
 	      , "TerarkZipTableBuilder::Finish():this=%p:  first pass time =%7.2f's, %8.3f'MB/sec\n"
 	      , this, g_pf.sf(t0,tt), rawBytes*1.0/g_pf.uf(t0,tt)
 	      );
@@ -1281,7 +1288,7 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
     if (myWorkMem < softMemLimit) {
       while ( (sumWorkingMem + myWorkMem >= softMemLimit && myWorkMem >= smallmem)
           ||  (sumWorkingMem + myWorkMem >= hardMemLimit) ) {
-        INFO(ioptions_.info_log
+        INFO(tbo_.ioptions.info_log
             , "TerarkZipTableBuilder::Finish():this=%p: wait, sumWorkingMem = %f'GB, indexWorkingMem = %f'GB\n"
             , this, sumWorkingMem/1e9, myWorkMem/1e9
             );
@@ -1317,7 +1324,7 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
         , numUserKeys_, lenUserKeys_);
   }
   long long tt = g_pf.now();
-  INFO(ioptions_.info_log
+  INFO(tbo_.ioptions.info_log
       , "TerarkZipTableBuilder::Finish():this=%p:  index pass time =%7.2f's, %8.3f'MB/sec\n"
       , this, g_pf.sf(t1,tt), properties_.raw_key_size*1.0/g_pf.uf(t1,tt)
       );
@@ -1334,7 +1341,7 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
     if (myDictMem < softMemLimit) {
       while ( (sumWorkingMem + myDictMem >= softMemLimit && myDictMem >= smalldictMem)
           ||  (sumWorkingMem + myDictMem >= hardMemLimit) ) {
-        INFO(ioptions_.info_log
+        INFO(tbo_.ioptions.info_log
             , "TerarkZipTableBuilder::Finish():this=%p: wait, sumWorkingMem = %f'GB, dictZipWorkingMem = %f'GB\n"
             , this, sumWorkingMem/1e9, myDictMem/1e9
             );
@@ -1343,7 +1350,7 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
     }
     else {
       while (sumWorkingMem > 0) {
-        INFO(ioptions_.info_log
+        INFO(tbo_.ioptions.info_log
             , "TerarkZipTableBuilder::Finish():this=%p: wait, sumWorkingMem = %f'GB, dictZipWorkingMem = %f'GB\n"
             , this, sumWorkingMem/1e9, myDictMem/1e9
             );
@@ -1518,6 +1525,16 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
 
   // wait for indexing complete, if indexing is slower than value compressing
   asyncIndexResult.get();
+
+  return WriteSSTFile(t3, t4, tmpIndexFile, zstore.get(), zvType, dzstat);
+}
+
+Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
+    , fstring tmpIndexFile, DictZipBlobStore* zstore, UintVecMin0& zvType
+    , const DictZipBlobStore::ZipStat& dzstat)
+{
+  const size_t realsampleLenSum = zstore->get_dict().size();
+  long long rawBytes = properties_.raw_key_size + properties_.raw_value_size;
   long long t5 = g_pf.now();
 	unique_ptr<TerocksIndex> index(TerocksIndex::LoadFile(tmpIndexFile));
 	assert(index->NumKeys() == numUserKeys_);
@@ -1528,7 +1545,7 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
   size_t real_size = index->Memory().size() + zstore->mem_size() + zvType.mem_size();
   size_t block_size, last_allocated_block;
   file_->writable_file()->GetPreallocationStatus(&block_size, &last_allocated_block);
-  INFO(ioptions_.info_log
+  INFO(tbo_.ioptions.info_log
     , "TerarkZipTableBuilder::Finish():this=%p: old prealloc_size = %zd, real_size = %zd\n"
     , this, block_size, real_size
     );
@@ -1577,6 +1594,7 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
     t7 = t6 = t5;
     WriteBlock(zstore->get_data(), file_, &offset_, &dataBlock);
   }
+  fstring commonPrefix(prevUserKey_.data(), commonPrefixLen_);
   WriteBlock(commonPrefix, file_, &offset_, &commonPrefixBlock);
 	properties_.data_size = dataBlock.size();
 	s = WriteBlock(zstore->get_dict(), file_, &offset_, &dictBlock);
@@ -1593,10 +1611,6 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
 		return s;
 	}
 	index.reset();
-	zstore.reset();
-	tmpStoreFile.Delete();
-	tmpStoreDict.Delete();
-	tmpIndexFile.Delete();
 	properties_.index_size = indexBlock.size();
 	MetaIndexBuilder metaindexBuiler;
 	metaindexBuiler.Add(kTerarkZipTableValueDictBlock, dictBlock);
@@ -1638,7 +1652,7 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
 		offset_ += footer_encoding.size();
 	}
   long long t8 = g_pf.now();
-  INFO(ioptions_.info_log
+  INFO(tbo_.ioptions.info_log
     ,
 R"EOS(TerarkZipTableBuilder::Finish():this=%p: second pass time =%7.2f's, %8.3f'MB/sec, value only(%4.1f%% of KV)
    wait indexing time = %7.2f's,
@@ -1651,10 +1665,10 @@ R"EOS(TerarkZipTableBuilder::Finish():this=%p: second pass time =%7.2f's, %8.3f'
     zip my value throughput = %7.3f'MB/sec
     zip pipeline throughput = %7.3f'MB/sec
     entries = %zd  keys = %zd  avg-key = %.2f  avg-zkey = %.2f  avg-val = %.2f  avg-zval = %.2f
-    UnZipSize{ index =%9.4f GB  value =%9.4f GB  all =%9.4f GB }
-    __ZipSize{ index =%9.4f GB  value =%9.4f GB  all =%9.4f GB }
-    UnZip/Zip{ index =%9.4f     value =%9.4f     all =%9.4f    }
-    Zip/UnZip{ index =%9.4f     value =%9.4f     all =%9.4f    }
+    UnZipSize{ index =%9.4f GB  value =%9.4f GB   all =%9.4f GB }
+    __ZipSize{ index =%9.4f GB  value =%9.4f GB   all =%9.4f GB }
+    UnZip/Zip{ index =%9.4f     value =%9.4f      all =%9.4f    }
+    Zip/UnZip{ index =%9.4f     value =%9.4f      all =%9.4f    }
 )EOS"
     , this, g_pf.sf(t3,t4)
     , properties_.raw_value_size*1.0/g_pf.uf(t3,t4)
@@ -1697,11 +1711,45 @@ R"EOS(TerarkZipTableBuilder::Finish():this=%p: second pass time =%7.2f's, %8.3f'
 	return s;
 }
 
+Status TerarkZipTableBuilder::OfflineFinish() {
+  std::unique_ptr<DictZipBlobStore> zstore(zbuilder_->finish());
+  auto dzstat = zbuilder_->getZipStat();
+  zbuilder_.reset();
+  valvec<byte_t> commonPrefix(prevUserKey_.data(), commonPrefixLen_);
+  AddPrevUserKey();
+  tmpKeyFile_.complete_write();
+  AutoDeleteFile tmpIndexFile{tmpValueFile_.path + ".index"};
+  long long t1 = g_pf.now();
+  {
+    auto factory = TerocksIndex::GetFactory(table_options_.indexType);
+    if (!factory) {
+      THROW_STD(invalid_argument,
+          "invalid indexType: %s", table_options_.indexType.c_str());
+    }
+    factory->Build(tmpKeyFile_, table_options_, tmpIndexFile.fpath
+        , commonPrefixLen_, minUserKeyLen_, maxUserKeyLen_
+        , numUserKeys_, lenUserKeys_);
+  }
+  long long tt = g_pf.now();
+  INFO(tbo_.ioptions.info_log
+      , "TerarkZipTableBuilder::Finish():this=%p:  index pass time =%7.2f's, %8.3f'MB/sec\n"
+      , this, g_pf.sf(t1,tt), properties_.raw_key_size*1.0/g_pf.uf(t1,tt)
+      );
+  UintVecMin0 zvType(bzvType_.size(), 3u);
+  for (size_t i = 0; i < zvType.size(); ++i) {
+    zvType.set_wire(i, bzvType_[i]);
+  }
+  return WriteSSTFile(t1, tt, tmpIndexFile, zstore.get(), zvType, dzstat);
+}
+
 void TerarkZipTableBuilder::Abandon() {
   closed_ = true;
   tmpKeyFile_.complete_write();
   tmpValueFile_.complete_write();
   tmpSampleFile_.complete_write();
+  zbuilder_.reset();
+  tmpZipDictFile_.Delete();
+  tmpZipValueFile_.Delete();
 }
 
 void TerarkZipTableBuilder::AddPrevUserKey() {
@@ -1899,7 +1947,7 @@ const {
   }
 #if 1
   INFO(table_builder_options.ioptions.info_log
-      , "nth_new_talbe{ terark = %zd fallback = %zd } curlevel = %d minlevel = %d numlevel = %d fallback = %p\n"
+      , "nth_newtable{ terark = %zd fallback = %zd } curlevel = %d minlevel = %d numlevel = %d fallback = %p\n"
       , nth_new_terark_table_, nth_new_fallback_table_, curlevel, minlevel, numlevel, fallback_factory_
       );
 #endif
