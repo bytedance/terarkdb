@@ -1857,7 +1857,7 @@ bool IsBytewiseComparator(const Comparator* cmp) {
     // reverse bytewise compare, needs reverse in iterator
     return true;
   }
-	return fstring(cmp->Name()) == "leveldb.BytewiseComparator";
+	return name == "leveldb.BytewiseComparator";
 #else
 	return BytewiseComparator() == cmp;
 #endif
