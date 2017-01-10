@@ -565,7 +565,7 @@ private:
 
   Arena arena_;
   const TerarkZipTableOptions& table_options_;
-  const TableBuilderOptions& tbo_;
+  const TableBuilderOptions tbo_;
   InternalIterator* second_pass_iter_ = nullptr;
   valvec<byte_t> prevUserKey_;
   terark::febitvec valueBits_;
