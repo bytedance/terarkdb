@@ -1255,15 +1255,6 @@ Status TerarkZipTableBuilder::Finish() {
 	assert(!closed_);
 	closed_ = true;
 
-	{
-	  std::unique_lock<std::mutex> lock(g_sumMutex);
-	  g_sumKeyLen += properties_.raw_key_size;
-	  g_sumValueLen += properties_.raw_value_size;
-	  g_sumUserKeyLen += lenUserKeys_;
-	  g_sumUserKeyNum += numUserKeys_;
-	  g_sumEntryNum += properties_.num_entries;
-	}
-
 	if (zbuilder_) {
 	  return OfflineFinish();
 	}
@@ -1669,6 +1660,14 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
 		offset_ += footer_encoding.size();
 	}
   long long t8 = g_pf.now();
+  {
+    std::unique_lock<std::mutex> lock(g_sumMutex);
+    g_sumKeyLen += properties_.raw_key_size;
+    g_sumValueLen += properties_.raw_value_size;
+    g_sumUserKeyLen += lenUserKeys_;
+    g_sumUserKeyNum += numUserKeys_;
+    g_sumEntryNum += properties_.num_entries;
+  }
   INFO(tbo_.ioptions.info_log
     ,
 R"EOS(TerarkZipTableBuilder::Finish():this=%p: second pass time =%7.2f's, %8.3f'MB/sec, value only(%4.1f%% of KV)
