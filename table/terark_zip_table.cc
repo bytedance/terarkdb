@@ -1193,6 +1193,7 @@ size_t g_sumValueLen = 0;
 size_t g_sumUserKeyLen = 0;
 size_t g_sumUserKeyNum = 0;
 size_t g_sumEntryNum = 0;
+long long g_lastTime = g_pf.now();
 
 void TerarkZipTableBuilder::Add(const Slice& key, const Slice& value) {
 	assert(key.size() >= 8);
@@ -1691,6 +1692,8 @@ R"EOS(TerarkZipTableBuilder::Finish():this=%p: second pass time =%7.2f's, %8.3f'
     total ukey  len =%12.6f GB     avg =%8.3f KB
     total ukey  num =%15.9f Billion
     total entry num =%15.9f Billion
+    write speed all =%15.9f MB/sec (with    version num)
+    write speed all =%15.9f MB/sec (without version num)
 )EOS"
     , this, g_pf.sf(t3,t4)
     , properties_.raw_value_size*1.0/g_pf.uf(t3,t4)
@@ -1735,6 +1738,8 @@ R"EOS(TerarkZipTableBuilder::Finish():this=%p: second pass time =%7.2f's, %8.3f'
     , g_sumUserKeyLen/1e9, g_sumUserKeyLen/1e3/g_sumUserKeyNum
     , g_sumUserKeyNum/1e9
     , g_sumEntryNum/1e9
+    , (g_sumKeyLen + g_sumValueLen) / g_pf.uf(g_lastTime, t8)
+    , (g_sumKeyLen + g_sumValueLen - g_sumEntryNum*8) / g_pf.uf(g_lastTime, t8)
   );
 	return s;
 }
@@ -1979,6 +1984,9 @@ const {
       , nth_new_terark_table_, nth_new_fallback_table_, curlevel, minlevel, numlevel, fallback_factory_
       );
 #endif
+  if (0 == nth_new_terark_table_) {
+    g_lastTime = g_pf.now();
+  }
 	if (fallback_factory_) {
     if (curlevel >= 0 && curlevel < minlevel) {
       nth_new_fallback_table_++;
