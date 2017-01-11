@@ -80,6 +80,7 @@ static const std::string kTerarkZipTableIndexBlock = "TerarkZipTableIndexBlock";
 static const std::string kTerarkZipTableValueTypeBlock = "TerarkZipTableValueTypeBlock";
 static const std::string kTerarkZipTableValueDictBlock = "TerarkZipTableValueDictBlock";
 static const std::string kTerarkZipTableCommonPrefixBlock = "TerarkZipTableCommonPrefixBlock";
+static const std::string kEmptyTableKey = "ThisIsAnEmptyTable";
 
 class TerarkZipTableIterator;
 
@@ -489,6 +490,44 @@ struct ZipValueMultiValue {
 	}
 };
 
+class TerarkEmptyTableReader : public TableReader, boost::noncopyable {
+  class Iter : public InternalIterator, boost::noncopyable {
+  public:
+    Iter() {}
+    ~Iter() {}
+    void SetPinnedItersMgr(PinnedIteratorsManager*) {}
+    bool Valid() const override { return false; }
+    void SeekToFirst() override {}
+    void SeekToLast() override {}
+    void SeekForPrev(const Slice&) override {}
+    void Seek(const Slice&) override {}
+    void Next() override {}
+    void Prev() override {}
+    Slice key() const override { THROW_STD(invalid_argument, "Invalid call"); }
+    Slice value() const override { THROW_STD(invalid_argument, "Invalid call"); }
+    Status status() const override { return Status::OK(); }
+    bool IsKeyPinned() const override { return false; }
+    bool IsValuePinned() const override { return false; }
+  };
+  std::shared_ptr<const TableProperties> table_properties_;
+public:
+  InternalIterator*
+  NewIterator(const ReadOptions&, Arena* a, bool) override {
+    return a ? new(a->AllocateAligned(sizeof(Iter)))Iter() : new Iter();
+  }
+  void Prepare(const Slice&) override {}
+  Status Get(const ReadOptions&, const Slice&, GetContext*, bool) override {
+    return Status::OK();
+  }
+  size_t ApproximateMemoryUsage() const override { return 100; }
+  uint64_t ApproximateOffsetOf(const Slice&) override { return 0; }
+  void SetupForCompaction() override {}
+  std::shared_ptr<const TableProperties>
+  GetTableProperties() const override { return table_properties_; }
+  ~TerarkEmptyTableReader() {}
+  TerarkEmptyTableReader() : table_properties_(new TableProperties()){}
+};
+
 /**
  * one user key map to a record id: the index NO. of a key in NestLoudsTrie,
  * the record id is used to direct index a type enum(small integer) array,
@@ -557,10 +596,12 @@ public:
 private:
   void AddPrevUserKey();
   void OfflineZipValueData();
+  Status EmptyTableFinish();
   Status OfflineFinish();
   Status WriteSSTFile(long long t3, long long t4
       , fstring tmpIndexFile, DictZipBlobStore* zstore, UintVecMin0& zvType
       , const DictZipBlobStore::ZipStat& dzstat);
+  Status WriteMetaData(std::initializer_list<std::pair<const std::string*, BlockHandle> > blocks);
   DictZipBlobStore::ZipBuilder* createZipBuilder() const;
 
   Arena arena_;
@@ -1251,9 +1292,25 @@ Status WriteBlock(const ByteArray& blockData, WritableFileWriter* file,
   return s;
 }
 
+Status TerarkZipTableBuilder::EmptyTableFinish() {
+  INFO(tbo_.ioptions.info_log
+      , "TerarkZipTableBuilder::EmptyFinish():this=%p\n", this);
+  offset_ = 0;
+  BlockHandle emptyTableBH;
+  Status s = WriteBlock(Slice("Empty"), file_, &offset_, &emptyTableBH);
+  if (!s.ok()) {
+    return s;
+  }
+  return WriteMetaData({{&kEmptyTableKey, emptyTableBH}});
+}
+
 Status TerarkZipTableBuilder::Finish() {
 	assert(!closed_);
 	closed_ = true;
+
+	if (0 == numUserKeys_) {
+	  return EmptyTableFinish();
+	}
 
 	if (zbuilder_) {
 	  return OfflineFinish();
@@ -1297,7 +1354,7 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
       while ( (sumWorkingMem + myWorkMem >= softMemLimit && myWorkMem >= smallmem)
           ||  (sumWorkingMem + myWorkMem >= hardMemLimit) ) {
         INFO(tbo_.ioptions.info_log
-            , "TerarkZipTableBuilder::Finish():this=%p: wait, sumWorkingMem = %f'GB, indexWorkingMem = %f'GB\n"
+            , "TerarkZipTableBuilder::Finish():this=%p: wait, sumWorkingMem = %f'GB, nltTrieWorkingMem = %f'GB\n"
             , this, sumWorkingMem/1e9, myWorkMem/1e9
             );
         zipCond.wait(zipLock);
@@ -1620,45 +1677,12 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
 	}
 	index.reset();
 	properties_.index_size = indexBlock.size();
-	MetaIndexBuilder metaindexBuiler;
-	metaindexBuiler.Add(kTerarkZipTableValueDictBlock, dictBlock);
-	metaindexBuiler.Add(kTerarkZipTableIndexBlock, indexBlock);
-	metaindexBuiler.Add(kTerarkZipTableValueTypeBlock, zvTypeBlock);
-	metaindexBuiler.Add(kTerarkZipTableCommonPrefixBlock, commonPrefixBlock);
-	PropertyBlockBuilder propBlockBuilder;
-	propBlockBuilder.AddTableProperty(properties_);
-	propBlockBuilder.Add(properties_.user_collected_properties);
-	std::vector<std::unique_ptr<IntTblPropCollector>> collectors;
-	if (tbo_.int_tbl_prop_collector_factories) {
-	  const auto& factories = *tbo_.int_tbl_prop_collector_factories;
-	  collectors.resize(factories.size());
-    auto cfId = properties_.column_family_id;
-	  for (size_t i = 0; i < collectors.size(); ++i) {
-	    collectors[i].reset(factories[i]->CreateIntTblPropCollector(cfId));
-	  }
-	}
-	NotifyCollectTableCollectorsOnFinish(collectors,
-	                                     tbo_.ioptions.info_log,
-	                                     &propBlockBuilder);
-	BlockHandle propBlock, metaindexBlock;
-	s = WriteBlock(propBlockBuilder.Finish(), file_, &offset_, &propBlock);
-	if (!s.ok()) {
-		return s;
-	}
-	metaindexBuiler.Add(kPropertiesBlock, propBlock);
-	s = WriteBlock(metaindexBuiler.Finish(), file_, &offset_, &metaindexBlock);
-	if (!s.ok()) {
-		return s;
-	}
-	Footer footer(kTerarkZipTableMagicNumber, 0);
-	footer.set_metaindex_handle(metaindexBlock);
-	footer.set_index_handle(BlockHandle::NullBlockHandle());
-	std::string footer_encoding;
-	footer.EncodeTo(&footer_encoding);
-	s = file_->Append(footer_encoding);
-	if (s.ok()) {
-		offset_ += footer_encoding.size();
-	}
+	WriteMetaData({
+    {&kTerarkZipTableValueDictBlock   , dictBlock},
+    {&kTerarkZipTableIndexBlock       , indexBlock},
+    {&kTerarkZipTableValueTypeBlock   , zvTypeBlock},
+    {&kTerarkZipTableCommonPrefixBlock, commonPrefixBlock},
+	});
   long long t8 = g_pf.now();
   {
     std::unique_lock<std::mutex> lock(g_sumMutex);
@@ -1741,6 +1765,48 @@ R"EOS(TerarkZipTableBuilder::Finish():this=%p: second pass time =%7.2f's, %8.3f'
     , (g_sumKeyLen + g_sumValueLen - g_sumEntryNum*8) / g_pf.uf(g_lastTime, t8)
   );
 	return s;
+}
+
+Status TerarkZipTableBuilder::WriteMetaData(std::initializer_list<std::pair<const std::string*, BlockHandle> > blocks) {
+  MetaIndexBuilder metaindexBuiler;
+  for (const auto& block : blocks) {
+    metaindexBuiler.Add(*block.first, block.second);
+  }
+  PropertyBlockBuilder propBlockBuilder;
+  propBlockBuilder.AddTableProperty(properties_);
+  propBlockBuilder.Add(properties_.user_collected_properties);
+  std::vector<std::unique_ptr<IntTblPropCollector>> collectors;
+  if (tbo_.int_tbl_prop_collector_factories) {
+    const auto& factories = *tbo_.int_tbl_prop_collector_factories;
+    collectors.resize(factories.size());
+    auto cfId = properties_.column_family_id;
+    for (size_t i = 0; i < collectors.size(); ++i) {
+      collectors[i].reset(factories[i]->CreateIntTblPropCollector(cfId));
+    }
+  }
+  NotifyCollectTableCollectorsOnFinish(collectors,
+                                       tbo_.ioptions.info_log,
+                                       &propBlockBuilder);
+  BlockHandle propBlock, metaindexBlock;
+  Status s = WriteBlock(propBlockBuilder.Finish(), file_, &offset_, &propBlock);
+  if (!s.ok()) {
+    return s;
+  }
+  metaindexBuiler.Add(kPropertiesBlock, propBlock);
+  s = WriteBlock(metaindexBuiler.Finish(), file_, &offset_, &metaindexBlock);
+  if (!s.ok()) {
+    return s;
+  }
+  Footer footer(kTerarkZipTableMagicNumber, 0);
+  footer.set_metaindex_handle(metaindexBlock);
+  footer.set_index_handle(BlockHandle::NullBlockHandle());
+  std::string footer_encoding;
+  footer.EncodeTo(&footer_encoding);
+  s = file_->Append(footer_encoding);
+  if (s.ok()) {
+    offset_ += footer_encoding.size();
+  }
+  return s;
 }
 
 Status TerarkZipTableBuilder::OfflineFinish() {
@@ -1943,6 +2009,13 @@ const {
 				  "all index and data will be loaded in memory\n");
 	}
 #endif
+  BlockContents emptyTableBC;
+  s = ReadMetaBlock(file.get(), file_size, kTerarkZipTableMagicNumber
+      , table_reader_options.ioptions, kEmptyTableKey, &emptyTableBC);
+  if (s.ok()) {
+    table->reset(new TerarkEmptyTableReader());
+    return s;
+  }
 	std::unique_ptr<TerarkZipTableReader>
 	t(new TerarkZipTableReader(table_reader_options, table_options_));
 	s = t->Open(file.release(), file_size);
