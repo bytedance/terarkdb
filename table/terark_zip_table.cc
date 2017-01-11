@@ -1187,13 +1187,13 @@ uint64_t TerarkZipTableBuilder::FileSize() const {
 	}
 }
 
-std::mutex g_sumMutex;
-size_t g_sumKeyLen = 0;
-size_t g_sumValueLen = 0;
-size_t g_sumUserKeyLen = 0;
-size_t g_sumUserKeyNum = 0;
-size_t g_sumEntryNum = 0;
-long long g_lastTime = g_pf.now();
+static std::mutex g_sumMutex;
+static size_t g_sumKeyLen = 0;
+static size_t g_sumValueLen = 0;
+static size_t g_sumUserKeyLen = 0;
+static size_t g_sumUserKeyNum = 0;
+static size_t g_sumEntryNum = 0;
+static long long g_lastTime = g_pf.now();
 
 void TerarkZipTableBuilder::Add(const Slice& key, const Slice& value) {
 	assert(key.size() >= 8);
