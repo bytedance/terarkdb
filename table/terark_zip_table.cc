@@ -1187,6 +1187,13 @@ uint64_t TerarkZipTableBuilder::FileSize() const {
 	}
 }
 
+std::mutex g_sumMutex;
+size_t g_sumKeyLen = 0;
+size_t g_sumValueLen = 0;
+size_t g_sumUserKeyLen = 0;
+size_t g_sumUserKeyNum = 0;
+size_t g_sumEntryNum = 0;
+
 void TerarkZipTableBuilder::Add(const Slice& key, const Slice& value) {
 	assert(key.size() >= 8);
 	fstring userKey(key.data(), key.size()-8);
@@ -1246,6 +1253,15 @@ Status WriteBlock(const ByteArray& blockData, WritableFileWriter* file,
 Status TerarkZipTableBuilder::Finish() {
 	assert(!closed_);
 	closed_ = true;
+
+	{
+	  std::unique_lock<std::mutex> lock(g_sumMutex);
+	  g_sumKeyLen += properties_.raw_key_size;
+	  g_sumValueLen += properties_.raw_value_size;
+	  g_sumUserKeyLen += lenUserKeys_;
+	  g_sumUserKeyNum += numUserKeys_;
+	  g_sumEntryNum += properties_.num_entries;
+	}
 
 	if (zbuilder_) {
 	  return OfflineFinish();
@@ -1669,6 +1685,12 @@ R"EOS(TerarkZipTableBuilder::Finish():this=%p: second pass time =%7.2f's, %8.3f'
     __ZipSize{ index =%9.4f GB  value =%9.4f GB   all =%9.4f GB }
     UnZip/Zip{ index =%9.4f     value =%9.4f      all =%9.4f    }
     Zip/UnZip{ index =%9.4f     value =%9.4f      all =%9.4f    }
+----------------------------
+    total value len =%12.6f GB     avg =%8.3f KB (by entry num)
+    total  key  len =%12.6f GB     avg =%8.3f KB
+    total ukey  len =%12.6f GB     avg =%8.3f KB
+    total ukey  num =%15.9f Billion
+    total entry num =%15.9f Billion
 )EOS"
     , this, g_pf.sf(t3,t4)
     , properties_.raw_value_size*1.0/g_pf.uf(t3,t4)
@@ -1707,6 +1729,12 @@ R"EOS(TerarkZipTableBuilder::Finish():this=%p: second pass time =%7.2f's, %8.3f'
     , properties_.index_size / double(lenUserKeys_)
     , properties_.data_size  / double(properties_.raw_value_size)
     , offset_ / double(rawBytes)
+
+    , g_sumValueLen/1e9, g_sumValueLen/1e3/g_sumEntryNum
+    , g_sumKeyLen  /1e9, g_sumKeyLen  /1e3/g_sumEntryNum
+    , g_sumUserKeyLen/1e9, g_sumUserKeyLen/1e3/g_sumUserKeyNum
+    , g_sumUserKeyNum/1e9
+    , g_sumEntryNum/1e9
   );
 	return s;
 }
@@ -1947,7 +1975,7 @@ const {
   }
 #if 1
   INFO(table_builder_options.ioptions.info_log
-      , "nth_newtable{ terark = %zd fallback = %zd } curlevel = %d minlevel = %d numlevel = %d fallback = %p\n"
+      , "nth_newtable{ terark = %3zd fallback = %3zd } curlevel = %d minlevel = %d numlevel = %d fallback = %p\n"
       , nth_new_terark_table_, nth_new_fallback_table_, curlevel, minlevel, numlevel, fallback_factory_
       );
 #endif
