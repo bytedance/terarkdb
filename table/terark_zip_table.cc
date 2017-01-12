@@ -250,7 +250,7 @@ TerocksIndex::AutoRegisterFactory::AutoRegisterFactory(
     Factory* factory) {
   for (const char* name : names) {
 //  STD_INFO("AutoRegisterFactory: %s\n", name);
-    g_TerocksIndexFactroy.insert_i(name, factory);
+    g_TerocksIndexFactroy.insert_i(name, FactoryPtr(factory));
   }
 }
 
@@ -598,6 +598,7 @@ private:
   void OfflineZipValueData();
   Status EmptyTableFinish();
   Status OfflineFinish();
+  Status ZipValueToFinish(fstring tmpIndexFile, std::function<void()> waitIndex);
   Status WriteSSTFile(long long t3, long long t4
       , fstring tmpIndexFile, DictZipBlobStore* zstore, UintVecMin0& zvType
       , const DictZipBlobStore::ZipStat& dzstat);
@@ -1324,9 +1325,6 @@ Status TerarkZipTableBuilder::Finish() {
   tmpSampleFile_.complete_write();
 
 	AutoDeleteFile tmpIndexFile{tmpValueFile_.path + ".index"};
-	AutoDeleteFile tmpStoreFile{tmpValueFile_.path + ".zbs"};
-	AutoDeleteFile tmpStoreDict{tmpValueFile_.path + ".zbs-dict"};
-  DictZipBlobStore::ZipStat dzstat;
 
 	long long rawBytes = properties_.raw_key_size + properties_.raw_value_size;
 	{
@@ -1394,11 +1392,6 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
       , this, g_pf.sf(t1,tt), properties_.raw_key_size*1.0/g_pf.uf(t1,tt)
       );
 });
-  long long t3 = 0;
-  size_t realsampleLenSum = 0;
-	unique_ptr<DictZipBlobStore> zstore;
-	UintVecMin0 zvType(properties_.num_entries, kZipValueTypeBits);
-{
   const  size_t smalldictMem = 6*200*1024*1024;
   const  size_t myDictMem = std::min<size_t>(sampleLenSum_, INT32_MAX) * 6; // include samples self
   {
@@ -1431,7 +1424,14 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
     zipCond.notify_all();
   }BOOST_SCOPE_EXIT_END;
 
-  t3 = g_pf.now();
+  return ZipValueToFinish(tmpIndexFile, [&](){asyncIndexResult.get();});
+}
+
+Status
+TerarkZipTableBuilder::ZipValueToFinish(fstring tmpIndexFile, std::function<void()> waitIndex) {
+  AutoDeleteFile tmpStoreFile{tmpValueFile_.path + ".zbs"};
+  AutoDeleteFile tmpStoreDict{tmpValueFile_.path + ".zbs-dict"};
+  long long t3 = g_pf.now();
   auto zbuilder = UniquePtrOf(this->createZipBuilder());
 {
 #if defined(TERARK_ZIP_TRIAL_VERSION)
@@ -1439,6 +1439,7 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
 #endif
   valvec<byte_t> sample;
   NativeDataInput<InputBuffer> input(&tmpSampleFile_.fp);
+  size_t realsampleLenSum = 0;
   if (sampleLenSum_ < INT32_MAX) {
     for (size_t len = 0; len < sampleLenSum_; ) {
       input >> sample;
@@ -1464,8 +1465,9 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
     zbuilder->addSample("Hello World!");
   }
   zbuilder->finishSample();
-  zbuilder->prepare(properties_.num_entries, tmpStoreFile);
+  zbuilder->prepare(numUserKeys_, tmpStoreFile);
 }
+  UintVecMin0 zvType(properties_.num_entries, kZipValueTypeBits);
 	if (nullptr == second_pass_iter_)
 {
 	NativeDataInput<InputBuffer> input(&tmpValueFile_.fp);
@@ -1581,15 +1583,14 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
 }
 
   tmpValueFile_.close();
-  zstore.reset(zbuilder->finish());
-  dzstat = zbuilder->getZipStat();
+  unique_ptr<DictZipBlobStore> zstore(zbuilder->finish());
+  DictZipBlobStore::ZipStat dzstat = zbuilder->getZipStat();
   zbuilder.reset();
-}
 
   long long t4 = g_pf.now();
 
   // wait for indexing complete, if indexing is slower than value compressing
-  asyncIndexResult.get();
+  waitIndex();
 
   return WriteSSTFile(t3, t4, tmpIndexFile, zstore.get(), zvType, dzstat);
 }
