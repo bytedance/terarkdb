@@ -1353,7 +1353,7 @@ Status TerarkZipTableBuilder::Finish() {
     std::unique_lock<std::mutex> zipLock(zipMutex);
     waitQueue.push_back({this, myStartTime});
   }
-auto waitForMemory = [&](size_t myWorkMem, const char* who, bool deleteMe) {
+auto waitForMemory = [&](size_t myWorkMem, const char* who) {
   while (true) {
     std::unique_lock<std::mutex> zipLock(zipMutex);
     while ( (myWorkMem < softMemLimit &&
@@ -1373,8 +1373,6 @@ auto waitForMemory = [&](size_t myWorkMem, const char* who, bool deleteMe) {
     assert(!waitQueue.empty());
     if (waitQueue.size() == 1) {
       assert(this == waitQueue[0].tztb);
-      if (deleteMe)
-        waitQueue.erase_all();
       break;
     }
     long long now = g_pf.now();
@@ -1389,8 +1387,6 @@ auto waitForMemory = [&](size_t myWorkMem, const char* who, bool deleteMe) {
       }
     }
     if (this == wq[minRateIdx].tztb) {
-      if (deleteMe)
-        waitQueue.erase_i(minRateIdx, 1);
       break;
     }
     zipCond.notify_one();
@@ -1406,7 +1402,7 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
   const size_t myWorkMem = lenUserKeys_ +
               sizeof(SortableStrVec::SEntry) * numUserKeys_ -
               commonPrefixLen_ * numUserKeys_;
-  waitForMemory(myWorkMem, "nltTrie", false);
+  waitForMemory(myWorkMem, "nltTrie");
   BOOST_SCOPE_EXIT(myWorkMem){
     std::unique_lock<std::mutex> zipLock(zipMutex);
     assert(sumWorkingMem >= myWorkMem);
@@ -1432,14 +1428,21 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
       );
 });
   const size_t myDictMem = std::min<size_t>(sampleLenSum_, INT32_MAX) * 6;
-  waitForMemory(myDictMem, "diztZip", true);
+  waitForMemory(myDictMem, "diztZip");
   BOOST_SCOPE_EXIT(myDictMem){
     std::unique_lock<std::mutex> zipLock(zipMutex);
     assert(sumWorkingMem >= myDictMem);
     sumWorkingMem -= myDictMem;
     zipCond.notify_one();
   }BOOST_SCOPE_EXIT_END;
-  return ZipValueToFinish(tmpIndexFile, [&](){asyncIndexResult.get();});
+
+  auto waitIndex = [&]() {
+    asyncIndexResult.get();
+    std::unique_lock<std::mutex> zipLock(zipMutex);
+    waitQueue.trim(std::remove_if(waitQueue.begin(), waitQueue.end(),
+        [this](PendingTask x){return this==x.tztb;}));
+  };
+  return ZipValueToFinish(tmpIndexFile, waitIndex);
 }
 
 Status
