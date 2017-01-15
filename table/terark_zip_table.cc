@@ -1380,14 +1380,15 @@ auto waitForMemory = [&](size_t myWorkMem, const char* who, bool deleteMe) {
     long long now = g_pf.now();
     size_t minRateIdx = size_t(-1);
     double minRateVal = DBL_MAX;
-    for (size_t i = 0; i < waitQueue.size(); ++i) {
-      double rate = myWorkMem / (0.1 + now - waitQueue[i].startTime);
+    auto wq = waitQueue.data();
+    for (size_t i = 0, n = waitQueue.size(); i < n; ++i) {
+      double rate = myWorkMem / (0.1 + now - wq[i].startTime);
       if (rate < minRateVal) {
         minRateVal = rate;
         minRateIdx = i;
       }
     }
-    if (this == waitQueue[minRateIdx].tztb) {
+    if (this == wq[minRateIdx].tztb) {
       if (deleteMe)
         waitQueue.erase_i(minRateIdx, 1);
       break;
@@ -1430,7 +1431,7 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
       , this, g_pf.sf(t1,tt), properties_.raw_key_size*1.0/g_pf.uf(t1,tt)
       );
 });
-  const size_t myDictMem = std::min<size_t>(sampleLenSum_, INT32_MAX) * 6; // include samples self
+  const size_t myDictMem = std::min<size_t>(sampleLenSum_, INT32_MAX) * 6;
   waitForMemory(myDictMem, "diztZip", true);
   BOOST_SCOPE_EXIT(myDictMem){
     std::unique_lock<std::mutex> zipLock(zipMutex);
