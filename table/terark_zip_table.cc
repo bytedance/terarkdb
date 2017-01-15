@@ -38,6 +38,7 @@
 #include <random>
 #include <stdlib.h>
 #include <stdint.h>
+#include <float.h>
 #include <util/arena.h> // for #include <sys/mman.h>
 #include <cxxabi.h>
 
@@ -1302,6 +1303,13 @@ Status TerarkZipTableBuilder::EmptyTableFinish() {
   return WriteMetaData({{&kEmptyTableKey, emptyTableBH}});
 }
 
+namespace {
+  struct PendingTask {
+    const TerarkZipTableBuilder* tztb;
+    long long startTime;
+  };
+}
+
 Status TerarkZipTableBuilder::Finish() {
 	assert(!closed_);
 	closed_ = true;
@@ -1312,6 +1320,10 @@ Status TerarkZipTableBuilder::Finish() {
 
   AddPrevUserKey();
   tmpKeyFile_.complete_write();
+  if (1 == numUserKeys_) {
+    assert(commonPrefixLen_ == lenUserKeys_);
+    commonPrefixLen_ = 0; // to avoid empty nlt trie
+  }
 	if (zbuilder_) {
 	  return OfflineFinish();
 	}
@@ -1330,45 +1342,75 @@ Status TerarkZipTableBuilder::Finish() {
 	}
   static std::mutex zipMutex;
   static std::condition_variable zipCond;
+  static valvec<PendingTask> waitQueue;
   static size_t sumWorkingMem = 0;
   const  size_t softMemLimit = table_options_.softZipWorkingMemLimit;
   const  size_t hardMemLimit = std::max(table_options_.hardZipWorkingMemLimit, softMemLimit);
+  const  size_t smallmem = table_options_.smallTaskMemory;
   const  std::chrono::seconds waitForTime(10);
-
+  {
+    const  long long myStartTime = g_pf.now();
+    std::unique_lock<std::mutex> zipLock(zipMutex);
+    waitQueue.push_back({this, myStartTime});
+  }
+auto waitForMemory = [&](size_t myWorkMem, const char* who, bool deleteMe) {
+  while (true) {
+    std::unique_lock<std::mutex> zipLock(zipMutex);
+    while ( (myWorkMem < softMemLimit &&
+              ( (sumWorkingMem + myWorkMem >= softMemLimit
+                              && myWorkMem >= smallmem) ||
+                (sumWorkingMem + myWorkMem >= hardMemLimit) )
+            ) ||
+            (myWorkMem >= softMemLimit && sumWorkingMem > softMemLimit / 4)
+          )
+    {
+      INFO(tbo_.ioptions.info_log
+          , "TerarkZipTableBuilder::Finish():this=%p: wait, sumWorkingMem = %f'GB, %s WorkingMem = %f'GB\n"
+          , this, sumWorkingMem/1e9, who, myWorkMem/1e9
+          );
+      zipCond.wait_for(zipLock, waitForTime);
+    }
+    assert(!waitQueue.empty());
+    if (waitQueue.size() == 1) {
+      assert(this == waitQueue[0].tztb);
+      if (deleteMe)
+        waitQueue.erase_all();
+      break;
+    }
+    long long now = g_pf.now();
+    size_t minRateIdx = size_t(-1);
+    double minRateVal = DBL_MAX;
+    for (size_t i = 0; i < waitQueue.size(); ++i) {
+      double rate = myWorkMem / (0.1 + now - waitQueue[i].startTime);
+      if (rate < minRateVal) {
+        minRateVal = rate;
+        minRateIdx = i;
+      }
+    }
+    if (this == waitQueue[minRateIdx].tztb) {
+      if (deleteMe)
+        waitQueue.erase_i(minRateIdx, 1);
+      break;
+    }
+    zipCond.notify_one();
+    zipLock.unlock();
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+  }
+  sumWorkingMem += myWorkMem;
+};
 // indexing is also slow, run it in parallel
 AutoDeleteFile tmpIndexFile{tmpValueFile_.path + ".index"};
 std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
 {
   const size_t myWorkMem = lenUserKeys_ +
-              sizeof(SortableStrVec::SEntry) * numUserKeys_;
-  const size_t smallmem = 1000*1024*1024;
-  {
-    std::unique_lock<std::mutex> zipLock(zipMutex);
-    if (myWorkMem < softMemLimit) {
-      while ( (sumWorkingMem + myWorkMem >= softMemLimit && myWorkMem >= smallmem)
-          ||  (sumWorkingMem + myWorkMem >= hardMemLimit) ) {
-        INFO(tbo_.ioptions.info_log
-            , "TerarkZipTableBuilder::Finish():this=%p: wait, sumWorkingMem = %f'GB, nltTrieWorkingMem = %f'GB\n"
-            , this, sumWorkingMem/1e9, myWorkMem/1e9
-            );
-        zipCond.wait_for(zipLock, waitForTime);
-      }
-    }
-    else {
-      // relaxed condition is for preventing large job starvation
-      // and, even for very large index, we should allowing it to be built
-      // because even very large index is unlikely hit NestLoudsTrie limit
-      while (sumWorkingMem > softMemLimit/2) {
-        zipCond.wait_for(zipLock, waitForTime);
-      }
-    }
-    sumWorkingMem += myWorkMem;
-  }
+              sizeof(SortableStrVec::SEntry) * numUserKeys_ -
+              commonPrefixLen_ * numUserKeys_;
+  waitForMemory(myWorkMem, "nltTrie", false);
   BOOST_SCOPE_EXIT(myWorkMem){
     std::unique_lock<std::mutex> zipLock(zipMutex);
     assert(sumWorkingMem >= myWorkMem);
     sumWorkingMem -= myWorkMem;
-    zipCond.notify_all();
+    zipCond.notify_one();
   }BOOST_SCOPE_EXIT_END;
 
   long long t1 = g_pf.now();
@@ -1388,38 +1430,14 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
       , this, g_pf.sf(t1,tt), properties_.raw_key_size*1.0/g_pf.uf(t1,tt)
       );
 });
-  const size_t smalldictMem = 6*200*1024*1024;
   const size_t myDictMem = std::min<size_t>(sampleLenSum_, INT32_MAX) * 6; // include samples self
-  {
-    std::unique_lock<std::mutex> zipLock(zipMutex);
-    if (myDictMem < softMemLimit) {
-      while ( (sumWorkingMem + myDictMem >= softMemLimit && myDictMem >= smalldictMem)
-          ||  (sumWorkingMem + myDictMem >= hardMemLimit) ) {
-        INFO(tbo_.ioptions.info_log
-            , "TerarkZipTableBuilder::Finish():this=%p: wait, sumWorkingMem = %f'GB, dictZipWorkingMem = %f'GB\n"
-            , this, sumWorkingMem/1e9, myDictMem/1e9
-            );
-        zipCond.wait_for(zipLock, waitForTime);
-      }
-    }
-    else {
-      while (sumWorkingMem > 0) {
-        INFO(tbo_.ioptions.info_log
-            , "TerarkZipTableBuilder::Finish():this=%p: wait, sumWorkingMem = %f'GB, dictZipWorkingMem = %f'GB\n"
-            , this, sumWorkingMem/1e9, myDictMem/1e9
-            );
-        zipCond.wait_for(zipLock, waitForTime);
-      }
-    }
-    sumWorkingMem += myDictMem;
-  }
+  waitForMemory(myDictMem, "diztZip", true);
   BOOST_SCOPE_EXIT(myDictMem){
     std::unique_lock<std::mutex> zipLock(zipMutex);
     assert(sumWorkingMem >= myDictMem);
     sumWorkingMem -= myDictMem;
-    zipCond.notify_all();
+    zipCond.notify_one();
   }BOOST_SCOPE_EXIT_END;
-
   return ZipValueToFinish(tmpIndexFile, [&](){asyncIndexResult.get();});
 }
 
