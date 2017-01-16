@@ -1044,9 +1044,16 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   size_t recNum = keyIndex_->NumKeys();
   typeArray_.risk_set_data((byte_t*)zValueTypeBlock.data.data(), recNum);
   long long t0 = g_pf.now();
-  MmapWarmUp(fstringOf(indexBlock.data));
-  MmapWarmUp(valstore_->get_dict());
-  MmapWarmUp(valstore_->get_index());
+  if (tzto_.warmUpIndexOnOpen) {
+    MmapWarmUp(fstringOf(indexBlock.data));
+    if (!tzto_.warmUpValueOnOpen) {
+      MmapWarmUp(valstore_->get_dict());
+      MmapWarmUp(valstore_->get_index());
+    }
+  }
+  if (tzto_.warmUpValueOnOpen) {
+    MmapWarmUp(valstore_->get_data());
+  }
   long long t1 = g_pf.now();
   keyIndex_->BuildCache(tzto_.indexCacheRatio);
   long long t2 = g_pf.now();
