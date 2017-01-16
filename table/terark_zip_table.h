@@ -21,38 +21,38 @@ struct TerarkZipTableOptions {
     kHuffman,
     kFSE,
   };
-	int indexNestLevel = 3;
+  int indexNestLevel = 3;
 
-	/// 0 : check sum nothing
-	/// 1 : check sum meta data and index, check on file load
-	/// 2 : check sum all data, not check on file load, checksum is for
-	///     each record, this incurs 4 bytes overhead for each record
-	/// 3 : check sum all data with one checksum value, not checksum each record,
-	///     if checksum doesn't match, load will fail
-	int checksumLevel = 1;
+  /// 0 : check sum nothing
+  /// 1 : check sum meta data and index, check on file load
+  /// 2 : check sum all data, not check on file load, checksum is for
+  ///     each record, this incurs 4 bytes overhead for each record
+  /// 3 : check sum all data with one checksum value, not checksum each record,
+  ///     if checksum doesn't match, load will fail
+  int checksumLevel = 1;
 
-	EntropyAlgo entropyAlgo = kNoEntropy;
+  EntropyAlgo entropyAlgo = kNoEntropy;
 
-	///    < 0 : only last level using terarkZip
-	///          this is equivalent to terarkZipMinLevel == num_levels-1
-	/// others : use terarkZip when curlevel >= terarkZipMinLevel
-	///          this includes the two special cases:
-	///                   == 0 : all levels using terarkZip
-	///          >= num_levels : all levels using fallback TableFactory
+  ///    < 0 : only last level using terarkZip
+  ///          this is equivalent to terarkZipMinLevel == num_levels-1
+  /// others : use terarkZip when curlevel >= terarkZipMinLevel
+  ///          this includes the two special cases:
+  ///                   == 0 : all levels using terarkZip
+  ///          >= num_levels : all levels using fallback TableFactory
   /// it shown that set terarkZipMinLevel = 0 is the best choice
   /// if mixed with rocksdb's native SST, those SSTs may using too much
   /// memory & SSD, which degrades the performance
-	int terarkZipMinLevel = 0;
+  int terarkZipMinLevel = 0;
 
-	bool useSuffixArrayLocalMatch = false;
-	bool isOfflineBuild = false;
-	bool warmUpIndexOnOpen = true;
-	bool warmUpValueOnOpen = false;
+  bool useSuffixArrayLocalMatch = false;
+  bool isOfflineBuild = false;
+  bool warmUpIndexOnOpen = true;
+  bool warmUpValueOnOpen = false;
 
-	float estimateCompressionRatio = 0.2;
-	double sampleRatio = 0.03;
-	std::string localTempDir = "/tmp";
-	std::string indexType = "IL_256";
+  float estimateCompressionRatio = 0.2;
+  double sampleRatio = 0.03;
+  std::string localTempDir = "/tmp";
+  std::string indexType = "IL_256";
 
   size_t softZipWorkingMemLimit = 16ull << 30;
   size_t hardZipWorkingMemLimit = 32ull << 30;
