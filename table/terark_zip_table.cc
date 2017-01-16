@@ -1439,12 +1439,15 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
   }BOOST_SCOPE_EXIT_END;
 
   auto waitIndex = [&]() {
+    {
+      std::unique_lock<std::mutex> zipLock(zipMutex);
+      sumWorkingMem -= myDictMem;
+    }
+    myDictMem = 0; // success, set to 0
     asyncIndexResult.get();
     std::unique_lock<std::mutex> zipLock(zipMutex);
     waitQueue.trim(std::remove_if(waitQueue.begin(), waitQueue.end(),
         [this](PendingTask x){return this==x.tztb;}));
-    sumWorkingMem -= myDictMem;
-    myDictMem = 0; // success, set to 0
   };
   return ZipValueToFinish(tmpIndexFile, waitIndex);
 }
