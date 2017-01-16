@@ -1427,11 +1427,13 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
       , this, g_pf.sf(t1,tt), properties_.raw_key_size*1.0/g_pf.uf(t1,tt)
       );
 });
-  const size_t myDictMem = std::min<size_t>(sampleLenSum_, INT32_MAX) * 6;
+  size_t myDictMem = std::min<size_t>(sampleLenSum_, INT32_MAX) * 6;
   waitForMemory(myDictMem, "diztZip");
-  BOOST_SCOPE_EXIT(myDictMem){
+
+  BOOST_SCOPE_EXIT(&myDictMem){
     std::unique_lock<std::mutex> zipLock(zipMutex);
     assert(sumWorkingMem >= myDictMem);
+    // if success, myDictMem is 0, else sumWorkingMem should be restored
     sumWorkingMem -= myDictMem;
     zipCond.notify_one();
   }BOOST_SCOPE_EXIT_END;
@@ -1441,6 +1443,8 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
     std::unique_lock<std::mutex> zipLock(zipMutex);
     waitQueue.trim(std::remove_if(waitQueue.begin(), waitQueue.end(),
         [this](PendingTask x){return this==x.tztb;}));
+    sumWorkingMem -= myDictMem;
+    myDictMem = 0; // success, set to 0
   };
   return ZipValueToFinish(tmpIndexFile, waitIndex);
 }
