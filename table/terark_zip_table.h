@@ -25,7 +25,10 @@ struct TerarkZipTableOptions {
 
 	/// 0 : check sum nothing
 	/// 1 : check sum meta data and index, check on file load
-	/// 2 : check sum all data, not check on file load, check on record read
+	/// 2 : check sum all data, not check on file load, checksum is for
+	///     each record, this incurs 4 bytes overhead for each record
+	/// 3 : check sum all data with one checksum value, not checksum each record,
+	///     if checksum doesn't match, load will fail
 	int checksumLevel = 1;
 
 	EntropyAlgo entropyAlgo = kNoEntropy;
