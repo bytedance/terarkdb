@@ -32,6 +32,9 @@
 #include <terark/fsa/dfa_mmap_header.hpp>
 #include <terark/fsa/fsa_cache.hpp>
 #include <terark/bitfield_array.hpp>
+#include <terark/circular_queue.hpp>
+#include <terark/num_to_str.hpp>
+#include <terark/util/concurrent_queue.hpp>
 #include <boost/scope_exit.hpp>
 #include <future>
 #include <memory>
@@ -1459,6 +1462,43 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
   return ZipValueToFinish(tmpIndexFile, waitIndex);
 }
 
+class KeyValueReader : public boost::noncopyable {
+public:
+  virtual ~KeyValueReader() {}
+  virtual void Read(Slice* key, Slice* val) = 0;
+  virtual void Next() = 0;
+};
+class SimpleKeyValueReader : public KeyValueReader {
+  InternalIterator* m_iter;
+public:
+  explicit SimpleKeyValueReader(InternalIterator* iter) : m_iter(iter) {}
+  void Read(Slice* key, Slice* val) override {
+    *key = m_iter->key();
+    *val = m_iter->value();
+  }
+  void Next() override {
+    m_iter->Next();
+  }
+};
+class AsyncKeyValueReader : public KeyValueReader {
+public:
+  struct KeyValue {
+    std::string key, val;
+    void swap(KeyValue& y) { key.swap(y.key); val.swap(y.val); }
+  };
+  typedef  terark::util::concurrent_queue<terark::circular_queue<KeyValue> >
+           queue_t;
+  queue_t  m_queue;
+  KeyValue m_kv;
+  AsyncKeyValueReader() : m_queue(50) { }
+  virtual void Read(Slice* key, Slice* val) override {
+    m_queue.pop_front_by_swap(m_kv);
+    *key = m_kv.key;
+    *val = m_kv.val;
+  }
+  void Next() override { /* do nothing */  }
+};
+
 Status
 TerarkZipTableBuilder::ZipValueToFinish(fstring tmpIndexFile, std::function<void()> waitIndex) {
   AutoDeleteFile tmpStoreFile{tmpValueFile_.path + ".zbs"};
@@ -1563,11 +1603,37 @@ TerarkZipTableBuilder::ZipValueToFinish(fstring tmpIndexFile, std::function<void
   valvec<byte_t> value;
   size_t entryId = 0;
   size_t bitPos = 0;
+  unique_ptr<KeyValueReader> kvReader;
+  unique_ptr<std::future<void> > arFuture;
+  if (table_options_.useAsyncKeyValueReader &&
+      table_options_.smallTaskMemory < properties_.raw_value_size) {
+    auto asyncReader = new AsyncKeyValueReader();
+    auto func = [&]() {
+      auto iter = second_pass_iter_;
+      auto reader = asyncReader;
+      AsyncKeyValueReader::KeyValue kv;
+      size_t count = 0;
+      while (iter->Valid()) {
+        Slice k = iter->key();
+        Slice v = iter->value();
+        kv.key.assign(k.data(), k.size());
+        kv.val.assign(v.data(), v.size());
+        reader->m_queue.push_back_by_swap(kv);
+        iter->Next();
+        count++;
+      }
+      TERARK_RT_assert(count == properties_.num_entries, std::logic_error);
+    };
+    kvReader.reset(asyncReader);
+    arFuture.reset(new std::future<void>(std::async(std::launch::async, func)));
+  }
+  else {
+    kvReader.reset(new SimpleKeyValueReader(second_pass_iter_));
+  }
   for (size_t recId = 0; recId < numUserKeys_; recId++) {
     value.erase_all();
-    assert(second_pass_iter_->Valid());
-    Slice curKey = second_pass_iter_->key();
-    Slice curVal = second_pass_iter_->value();
+    Slice curKey, curVal;
+    kvReader->Read(&curKey, &curVal);
     ParsedInternalKey pikey;
     ParseInternalKey(curKey, &pikey);
     size_t oneSeqLen = valueBits_.one_seq_len(bitPos);
@@ -1587,7 +1653,7 @@ TerarkZipTableBuilder::ZipValueToFinish(fstring tmpIndexFile, std::function<void
         value.append(fstringOf(curVal));
         zbuilder->addRecord(value);
       }
-      second_pass_iter_->Next();
+      kvReader->Next();
     }
     else {
       zvType.set0(recId, size_t(ZipValueType::kMulti));
@@ -1596,20 +1662,24 @@ TerarkZipTableBuilder::ZipValueToFinish(fstring tmpIndexFile, std::function<void
       ((ZipValueMultiValue*)value.data())->num = oneSeqLen;
       ((ZipValueMultiValue*)value.data())->offsets[0] = 0;
       for (size_t j = 0; j < oneSeqLen; j++) {
-        curKey = second_pass_iter_->key();
-        curVal = second_pass_iter_->value();
-        ParseInternalKey(curKey, &pikey);
+        if (j) {
+          kvReader->Read(&curKey, &curVal);
+          ParseInternalKey(curKey, &pikey);
+        }
       //  assert(fstringOf(pikey.user_key) == backupKeys[recId]);
         uint64_t seqType = PackSequenceAndType(pikey.sequence, pikey.type);
         value.append((byte_t*)&seqType, 8);
         value.append(fstringOf(curVal));
         ((ZipValueMultiValue*)value.data())->offsets[j+1] = value.size() - headerSize;
-        second_pass_iter_->Next();
+        kvReader->Next();
       }
       zbuilder->addRecord(value);
     }
     bitPos += oneSeqLen + 1;
     entryId += oneSeqLen;
+  }
+  if (arFuture) {
+    arFuture->get(); // wait for
   }
   assert(entryId == properties_.num_entries);
 }

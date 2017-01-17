@@ -48,6 +48,7 @@ struct TerarkZipTableOptions {
   bool isOfflineBuild = false;
   bool warmUpIndexOnOpen = true;
   bool warmUpValueOnOpen = false;
+  bool useAsyncKeyValueReader = true;
 
   float estimateCompressionRatio = 0.2;
   double sampleRatio = 0.03;
