@@ -1476,9 +1476,7 @@ public:
     *key = m_iter->key();
     *val = m_iter->value();
   }
-  void Next() override {
-    m_iter->Next();
-  }
+  void Next() override { m_iter->Next(); }
 };
 class AsyncKeyValueReader : public KeyValueReader {
 public:
@@ -1486,14 +1484,10 @@ public:
     std::string key, val;
     void swap(KeyValue& y) { key.swap(y.key); val.swap(y.val); }
   };
-  typedef  terark::util::concurrent_queue<terark::circular_queue<KeyValue> >
-           queue_t;
-  queue_t  m_queue;
+  terark::util::concurrent_queue<terark::circular_queue<KeyValue> > m_queue;
   KeyValue m_kv;
-  AsyncKeyValueReader() : m_queue(50) {
-    m_queue.queue().init(50);
-  }
-  virtual void Read(Slice* key, Slice* val) override {
+  AsyncKeyValueReader() : m_queue(50) { m_queue.queue().init(50); }
+  void Read(Slice* key, Slice* val) override {
     m_queue.pop_front_by_swap(m_kv);
     *key = m_kv.key;
     *val = m_kv.val;
@@ -1542,77 +1536,75 @@ TerarkZipTableBuilder::ZipValueToFinish(fstring tmpIndexFile, std::function<void
   zbuilder->prepare(numUserKeys_, tmpStoreFile);
 }
   bitfield_array<2> zvType(properties_.num_entries);
-	if (nullptr == second_pass_iter_)
+  if (nullptr == second_pass_iter_)
 {
-	NativeDataInput<InputBuffer> input(&tmpValueFile_.fp);
-	valvec<byte_t> value;
+  NativeDataInput<InputBuffer> input(&tmpValueFile_.fp);
+  valvec<byte_t> value;
 #if defined(TERARK_ZIP_TRIAL_VERSION)
   valvec<byte_t> tmpValueBuf;
 #endif
-	size_t entryId = 0;
-	size_t bitPos = 0;
-	for (size_t recId = 0; recId < numUserKeys_; recId++) {
-		uint64_t seqType = input.load_as<uint64_t>();
-		uint64_t seqNum;
-		ValueType vType;
-		UnPackSequenceAndType(seqType, &seqNum, &vType);
-		size_t oneSeqLen = valueBits_.one_seq_len(bitPos);
-		assert(oneSeqLen >= 1);
-		if (1==oneSeqLen && (kTypeDeletion==vType || kTypeValue==vType)) {
-			if (0 == seqNum && kTypeValue==vType) {
-				zvType.set0(recId, size_t(ZipValueType::kZeroSeq));
+  size_t entryId = 0;
+  size_t bitPos = 0;
+  for (size_t recId = 0; recId < numUserKeys_; recId++) {
+    uint64_t seqType = input.load_as<uint64_t>();
+    uint64_t seqNum;
+    ValueType vType;
+    UnPackSequenceAndType(seqType, &seqNum, &vType);
+    size_t oneSeqLen = valueBits_.one_seq_len(bitPos);
+    assert(oneSeqLen >= 1);
+    if (1==oneSeqLen && (kTypeDeletion==vType || kTypeValue==vType)) {
+      if (0 == seqNum && kTypeValue==vType) {
+        zvType.set0(recId, size_t(ZipValueType::kZeroSeq));
 #if defined(TERARK_ZIP_TRIAL_VERSION)
-				if (randomGenerator_() < randomGenerator_.max()/1000) {
-				  input >> tmpValueBuf;
-				  value.assign(fstring(g_trail_rand_delete));
-				} else
+        if (randomGenerator_() < randomGenerator_.max()/1000) {
+          input >> tmpValueBuf;
+          value.assign(fstring(g_trail_rand_delete));
+        } else
 #endif
-				  input >> value;
-			} else {
-				if (kTypeValue==vType) {
-					zvType.set0(recId, size_t(ZipValueType::kValue));
-				} else {
-					zvType.set0(recId, size_t(ZipValueType::kDelete));
-				}
-				value.erase_all();
-				value.append((byte_t*)&seqNum, 7);
-				input.load_add(value);
-			}
-		}
-		else {
-			zvType.set0(recId, size_t(ZipValueType::kMulti));
-			size_t headerSize = ZipValueMultiValue::calcHeaderSize(oneSeqLen);
-			value.resize(headerSize);
-			((ZipValueMultiValue*)value.data())->num = oneSeqLen;
-			((ZipValueMultiValue*)value.data())->offsets[0] = 0;
-			for (size_t j = 0; j < oneSeqLen; j++) {
-				if (j > 0) {
-					seqType = input.load_as<uint64_t>();
-				}
-				value.append((byte_t*)&seqType, 8);
-				input.load_add(value);
-				((ZipValueMultiValue*)value.data())->offsets[j+1] = value.size() - headerSize;
-			}
-		}
+          input >> value;
+      } else {
+        if (kTypeValue==vType) {
+          zvType.set0(recId, size_t(ZipValueType::kValue));
+        } else {
+          zvType.set0(recId, size_t(ZipValueType::kDelete));
+        }
+        value.erase_all();
+        value.append((byte_t*)&seqNum, 7);
+        input.load_add(value);
+      }
+    }
+    else {
+      zvType.set0(recId, size_t(ZipValueType::kMulti));
+      size_t headerSize = ZipValueMultiValue::calcHeaderSize(oneSeqLen);
+      value.resize(headerSize);
+      ((ZipValueMultiValue*)value.data())->num = oneSeqLen;
+      ((ZipValueMultiValue*)value.data())->offsets[0] = 0;
+      for (size_t j = 0; j < oneSeqLen; j++) {
+        if (j > 0) {
+          seqType = input.load_as<uint64_t>();
+        }
+        value.append((byte_t*)&seqType, 8);
+        input.load_add(value);
+        ((ZipValueMultiValue*)value.data())->offsets[j+1] = value.size() - headerSize;
+      }
+    }
     zbuilder->addRecord(value);
-		bitPos += oneSeqLen + 1;
-		entryId += oneSeqLen;
-	}
+    bitPos += oneSeqLen + 1;
+    entryId += oneSeqLen;
+  }
   assert(entryId == properties_.num_entries);
 }
-	else
+  else
 {
   valvec<byte_t> value;
   size_t entryId = 0;
   size_t bitPos = 0;
   unique_ptr<KeyValueReader> kvReader;
-  unique_ptr<std::future<void> > arFuture;
   if (table_options_.useAsyncKeyValueReader &&
       table_options_.smallTaskMemory < properties_.raw_value_size) {
-    auto asyncReader = new AsyncKeyValueReader();
     auto func = [&]() {
       auto iter = second_pass_iter_;
-      auto reader = asyncReader;
+      auto reader = static_cast<AsyncKeyValueReader*>(kvReader.get());
       AsyncKeyValueReader::KeyValue kv;
       size_t count = 0;
       while (iter->Valid()) {
@@ -1626,8 +1618,8 @@ TerarkZipTableBuilder::ZipValueToFinish(fstring tmpIndexFile, std::function<void
       }
       TERARK_RT_assert(count == properties_.num_entries, std::logic_error);
     };
-    kvReader.reset(asyncReader);
-    arFuture.reset(new std::future<void>(std::async(std::launch::async, func)));
+    kvReader.reset(new AsyncKeyValueReader());
+    std::thread(func).detach();
   }
   else {
     kvReader.reset(new SimpleKeyValueReader(second_pass_iter_));
@@ -1679,9 +1671,6 @@ TerarkZipTableBuilder::ZipValueToFinish(fstring tmpIndexFile, std::function<void
     }
     bitPos += oneSeqLen + 1;
     entryId += oneSeqLen;
-  }
-  if (arFuture) {
-    arFuture->get(); // wait for
   }
   assert(entryId == properties_.num_entries);
 }
