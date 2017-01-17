@@ -1490,7 +1490,9 @@ public:
            queue_t;
   queue_t  m_queue;
   KeyValue m_kv;
-  AsyncKeyValueReader() : m_queue(50) { }
+  AsyncKeyValueReader() : m_queue(50) {
+    m_queue.queue().init(50);
+  }
   virtual void Read(Slice* key, Slice* val) override {
     m_queue.pop_front_by_swap(m_kv);
     *key = m_kv.key;
