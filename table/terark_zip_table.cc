@@ -2093,7 +2093,7 @@ const {
           column_family_id, file);
       INFO(table_builder_options.ioptions.info_log
           , "TerarkZipTableFactory::NewTableBuilder() returns class: %s\n"
-          , typeid(*tb).name());
+          , ClassName(*tb).c_str());
       return tb;
     }
 	}
