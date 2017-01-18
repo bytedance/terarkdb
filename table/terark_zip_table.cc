@@ -1369,6 +1369,7 @@ auto waitForMemory = [&](size_t myWorkMem, const char* who) {
     assert(!waitQueue.empty());
     if (waitQueue.size() == 1) {
       assert(this == waitQueue[0].tztb);
+      sumWorkingMem += myWorkMem;
       break;
     }
     long long now = g_pf.now();
@@ -1383,13 +1384,13 @@ auto waitForMemory = [&](size_t myWorkMem, const char* who) {
       }
     }
     if (this == wq[minRateIdx].tztb) {
+      sumWorkingMem += myWorkMem;
       break;
     }
     zipCond.notify_one();
     zipLock.unlock();
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
   }
-  sumWorkingMem += myWorkMem;
 };
 // indexing is also slow, run it in parallel
 AutoDeleteFile tmpIndexFile{tmpValueFile_.path + ".index"};
