@@ -680,13 +680,7 @@ public:
   }
 
   void SeekForPrev(const Slice& target) override {
-#if 0
-    assert(false);
-    status_ =
-        Status::NotSupported("SeekForPrev() is not supported in TerarkZipTableIterator");
-#else
     SeekForPrevImpl(target, &table_->table_reader_options_.internal_comparator);
-#endif
   }
 
   void Seek(const Slice& target) override {
