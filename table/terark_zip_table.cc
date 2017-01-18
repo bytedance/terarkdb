@@ -1310,7 +1310,10 @@ Status TerarkZipTableBuilder::Finish() {
 	assert(!closed_);
 	closed_ = true;
 
-	if (0 == keyStat_.numKeys) {
+	if (size_t(-1) == keyStat_.numKeys) {
+	  keyStat_.maxKeyLen = 0;
+	  keyStat_.sumKeyLen = 0;
+	  keyStat_.numKeys = 0;
 	  return EmptyTableFinish();
 	}
 
