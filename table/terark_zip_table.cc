@@ -637,16 +637,18 @@ private:
 class TerarkZipTableIterator : public InternalIterator, boost::noncopyable {
 public:
   explicit TerarkZipTableIterator(const TerarkZipTableReader* table)
-	: table_(table), iter_(table->keyIndex_->NewIterator())
-	, commonPrefix_(fstringOf(table->commonPrefix_))
-	, reverse_(table->isReverseBytewiseOrder_)
+  : table_(table)
+  , valstore_(table->valstore_.get())
+  , iter_(table->keyIndex_->NewIterator())
+  , commonPrefix_(fstringOf(table->commonPrefix_))
+  , reverse_(table->isReverseBytewiseOrder_)
   {
     // isReverseBytewiseOrder_ just reverse key order
     // do not reverse multi values of a single key
     // so it can not use a reverse wrapper iterator
-	  zValtype_ = ZipValueType::kZeroSeq;
-	  pinned_iters_mgr_ = NULL;
-	  SetIterInvalid();
+    zValtype_ = ZipValueType::kZeroSeq;
+    pinned_iters_mgr_ = NULL;
+    SetIterInvalid();
   }
 
   void SetPinnedItersMgr(PinnedIteratorsManager* pinned_iters_mgr) {
@@ -842,7 +844,7 @@ private:
 		  size_t recId = iter_->id();
 		  try {
 		    TryPinBuffer(valueBuf_);
-			  table_->valstore_->get_record(recId, &valueBuf_);
+			  valstore_->get_record(recId, &valueBuf_);
 		  }
 		  catch (const BadCrc32cException& ex) { // crc checksum error
 			  SetIterInvalid();
@@ -868,49 +870,56 @@ private:
 	  }
   }
   void DecodeCurrKeyValue() {
-	assert(status_.ok());
-	assert(iter_->id() < table_->keyIndex_->NumKeys());
-	switch (zValtype_) {
-	default:
-		status_ = Status::Aborted("TerarkZipTableReader::Get()",
-				"Bad ZipValueType");
-		abort(); // must not goes here, if it does, it should be a bug!!
-		break;
-	case ZipValueType::kZeroSeq:
-		pInterKey_.sequence = 0;
-		pInterKey_.type = kTypeValue;
-		userValue_ = SliceOf(valueBuf_);
-		break;
-	case ZipValueType::kValue: // should be a kTypeValue, the normal case
-		// little endian uint64_t
-		pInterKey_.sequence = *(uint64_t*)valueBuf_.data() & kMaxSequenceNumber;
-		pInterKey_.type = kTypeValue;
-		userValue_ = SliceOf(fstring(valueBuf_).substr(7));
-		break;
-	case ZipValueType::kDelete:
-		// little endian uint64_t
-		pInterKey_.sequence = *(uint64_t*)valueBuf_.data() & kMaxSequenceNumber;
-		pInterKey_.type = kTypeDeletion;
-		userValue_ = Slice();
-		break;
-	case ZipValueType::kMulti: { // more than one value
-		auto zmValue = (const ZipValueMultiValue*)(valueBuf_.data());
-		assert(0 != valnum_);
-		assert(validx_ < valnum_);
-		assert(valnum_ == zmValue->num);
-		Slice d = zmValue->getValueData(validx_);
-		auto snt = unaligned_load<SequenceNumber>(d.data());
-		UnPackSequenceAndType(snt, &pInterKey_.sequence, &pInterKey_.type);
-		d.remove_prefix(sizeof(SequenceNumber));
-		userValue_ = d;
-		break; }
-	}
-	interKeyBuf_.assign(commonPrefix_.data(), commonPrefix_.size());
-	AppendInternalKey(&interKeyBuf_, pInterKey_);
-	interKeyBuf_xx_.assign((byte_t*)interKeyBuf_.data(), interKeyBuf_.size());
+    assert(status_.ok());
+    assert(iter_->id() < table_->keyIndex_->NumKeys());
+    switch (zValtype_) {
+    default:
+      status_ = Status::Aborted("TerarkZipTableIterator::DecodeCurrKeyValue()",
+          "Bad ZipValueType");
+      abort(); // must not goes here, if it does, it should be a bug!!
+      break;
+    case ZipValueType::kZeroSeq:
+      assert(0 == validx_);
+      assert(1 == valnum_);
+      pInterKey_.sequence = 0;
+      pInterKey_.type = kTypeValue;
+      userValue_ = SliceOf(valueBuf_);
+      break;
+    case ZipValueType::kValue: // should be a kTypeValue, the normal case
+      assert(0 == validx_);
+      assert(1 == valnum_);
+      // little endian uint64_t
+      pInterKey_.sequence = *(uint64_t*)valueBuf_.data() & kMaxSequenceNumber;
+      pInterKey_.type = kTypeValue;
+      userValue_ = SliceOf(fstring(valueBuf_).substr(7));
+      break;
+    case ZipValueType::kDelete:
+      assert(0 == validx_);
+      assert(1 == valnum_);
+      // little endian uint64_t
+      pInterKey_.sequence = *(uint64_t*)valueBuf_.data() & kMaxSequenceNumber;
+      pInterKey_.type = kTypeDeletion;
+      userValue_ = Slice();
+      break;
+    case ZipValueType::kMulti: { // more than one value
+      auto zmValue = (const ZipValueMultiValue*)(valueBuf_.data());
+      assert(0 != valnum_);
+      assert(validx_ < valnum_);
+      assert(valnum_ == zmValue->num);
+      Slice d = zmValue->getValueData(validx_);
+      auto snt = unaligned_load<SequenceNumber>(d.data());
+      UnPackSequenceAndType(snt, &pInterKey_.sequence, &pInterKey_.type);
+      d.remove_prefix(sizeof(SequenceNumber));
+      userValue_ = d;
+      break; }
+    }
+    interKeyBuf_.assign(commonPrefix_.data(), commonPrefix_.size());
+    AppendInternalKey(&interKeyBuf_, pInterKey_);
+    interKeyBuf_xx_.assign((byte_t*)interKeyBuf_.data(), interKeyBuf_.size());
   }
 
   const TerarkZipTableReader* const table_;
+  const terark::BlobStore*    const valstore_;
   const unique_ptr<TerocksIndex::Iterator> iter_;
   const fstring commonPrefix_;
   const bool reverse_;
