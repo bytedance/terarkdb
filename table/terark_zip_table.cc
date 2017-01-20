@@ -1223,13 +1223,26 @@ TerarkZipTableBuilder::~TerarkZipTableBuilder() {
 }
 
 uint64_t TerarkZipTableBuilder::FileSize() const {
-	if (0 == offset_) {
-		// for compaction caller to split file by increasing size
-		auto kvLen = properties_.raw_key_size +  properties_.raw_value_size;
-		return uint64_t(kvLen * table_options_.estimateCompressionRatio);
-	} else {
-		return offset_;
-	}
+  if (0 == offset_) {
+    // for compaction caller to split file by increasing size
+    auto kvLen = properties_.raw_key_size +  properties_.raw_value_size;
+    auto fsize = uint64_t(kvLen * table_options_.estimateCompressionRatio);
+    if (terark_unlikely(size_t(-1) == keyStat_.sumKeyLen)) {
+      return fsize;
+    }
+    size_t dictZipMemSize = std::min<size_t>(sampleLenSum_, INT32_MAX) * 6;
+    size_t nltTrieMemSize = keyStat_.sumKeyLen +
+        sizeof(SortableStrVec::SEntry) * keyStat_.numKeys;
+    size_t peakMemSize = std::max(dictZipMemSize, nltTrieMemSize);
+    if (peakMemSize < table_options_.softZipWorkingMemLimit) {
+      return fsize;
+    } else {
+      return fsize * 5; // notify rocksdb to `Finish()` this table asap.
+    }
+  }
+  else {
+    return offset_;
+  }
 }
 
 static std::mutex g_sumMutex;
