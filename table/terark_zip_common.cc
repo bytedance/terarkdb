@@ -1,0 +1,56 @@
+#include "terark_zip_common.h"
+#include <cxxabi.h>
+
+namespace rocksdb {
+
+const char* StrDateTimeNow() {
+  thread_local char buf[64];
+  time_t rawtime;
+  time(&rawtime);
+  struct tm* timeinfo = localtime(&rawtime);
+  strftime(buf, sizeof(buf), "%F %T",timeinfo);
+  return buf;
+}
+
+std::string demangle(const char* name) {
+  int status = -4; // some arbitrary value to eliminate the compiler warning
+  terark::AutoFree<char> res(abi::__cxa_demangle(name, NULL, NULL, &status));
+  return (status==0) ? res.p : name ;
+}
+
+void AutoDeleteFile::Delete() {
+  ::remove(fpath.c_str());
+  fpath.clear();
+}
+AutoDeleteFile::~AutoDeleteFile() {
+  if (!fpath.empty()) {
+    ::remove(fpath.c_str());
+  }
+}
+
+TempFileDeleteOnClose::~TempFileDeleteOnClose() {
+  if (fp)
+    this->close();
+}
+void TempFileDeleteOnClose::open() {
+  fp.open(path.c_str(), "wb+");
+  fp.disbuf();
+  writer.attach(&fp);
+}
+void TempFileDeleteOnClose::dopen(int fd) {
+  fp.dopen(fd, "wb+");
+  fp.disbuf();
+  writer.attach(&fp);
+}
+void TempFileDeleteOnClose::close() {
+  assert(nullptr != fp);
+  fp.close();
+  ::remove(path.c_str());
+}
+void TempFileDeleteOnClose::complete_write() {
+  writer.flush_buffer();
+  fp.rewind();
+}
+
+} // namespace rocksdb
+

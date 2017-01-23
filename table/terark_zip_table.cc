@@ -6,6 +6,8 @@
  */
 
 #include "terark_zip_table.h"
+#include "terark_zip_index.h"
+#include "terark_zip_common.h"
 #include <rocksdb/comparator.h>
 #include <rocksdb/env.h>
 #include <rocksdb/options.h>
@@ -16,59 +18,25 @@
 #include <table/table_reader.h>
 #include <table/meta_blocks.h>
 #include <db/compaction_iterator.h>
-#include <terark/stdtypes.hpp>
-#include <terark/lcast.hpp>
+#include <terark/bitmap.hpp>
 #include <terark/util/crc.hpp>
-#include <terark/util/mmap.hpp>
 #include <terark/util/throw.hpp>
 #include <terark/util/profiling.hpp>
+#include <terark/util/fstrvec.hpp>
+#include <terark/util/sortable_strvec.hpp>
 #include <terark/zbs/fast_zip_blob_store.hpp>
-#include <terark/fsa/nest_trie_dawg.hpp>
-#include <terark/io/FileStream.hpp>
-#include <terark/io/MemStream.hpp>
-#include <terark/io/StreamBuffer.hpp>
-#include <terark/io/DataIO.hpp>
-#include <terark/hash_strmap.hpp>
-#include <terark/fsa/dfa_mmap_header.hpp>
-#include <terark/fsa/fsa_cache.hpp>
 #include <terark/bitfield_array.hpp>
 #include <boost/scope_exit.hpp>
 #include <future>
-#include <memory>
 #include <random>
 #include <stdlib.h>
 #include <stdint.h>
 #include <float.h>
 #include <util/arena.h> // for #include <sys/mman.h>
-#include <cxxabi.h>
 
 namespace rocksdb {
 
-using std::unique_ptr;
-using std::vector;
-using std::string;
-
-template<class T>
-unique_ptr<T> UniquePtrOf(T* p) { return unique_ptr<T>(p); }
-
-using terark::BaseDFA;
-using terark::NestLoudsTrieDAWG_SE_512;
-using terark::NestLoudsTrieDAWG_IL_256;
-using terark::NestLoudsTrieDAWG_Mixed_SE_512;
-using terark::NestLoudsTrieDAWG_Mixed_IL_256;
-using terark::NestLoudsTrieDAWG_Mixed_XL_256;
 using terark::DictZipBlobStore;
-using terark::byte_t;
-using terark::valvec;
-using terark::valvec_no_init;
-using terark::valvec_reserve;
-using terark::fstring;
-using terark::initial_state;
-using terark::FileStream;
-using terark::InputBuffer;
-using terark::OutputBuffer;
-using terark::LittleEndianDataInput;
-using terark::LittleEndianDataOutput;
 using terark::SortableStrVec;
 using terark::bitfield_array;
 using terark::BadCrc32cException;
@@ -85,53 +53,9 @@ static const std::string kEmptyTableKey = "ThisIsAnEmptyTable";
 
 class TerarkZipTableIterator;
 
-#if defined(IOS_CROSS_COMPILE) || defined(__DARWIN_C_LEVEL)
-  #define MY_THREAD_LOCAL(Type, Var)  Type Var
-//#elif defined(_WIN32)
-//  #define MY_THREAD_LOCAL(Type, Var)  static __declspec(thread) Type Var
-#else
-  #define MY_THREAD_LOCAL(Type, Var)  static thread_local Type Var
-#endif
-
 #ifdef TERARK_ZIP_TRIAL_VERSION
 const char g_trail_rand_delete[] = "TERARK_ZIP_TRIAL_VERSION random deleted this row";
 #endif
-
-#define STD_INFO(format, ...) fprintf(stderr, "%s INFO: " format, StrDateTimeNow(), ##__VA_ARGS__)
-#define STD_WARN(format, ...) fprintf(stderr, "%s WARN: " format, StrDateTimeNow(), ##__VA_ARGS__)
-
-#undef INFO
-#undef WARN
-#if defined(NDEBUG) && 0
-  #define INFO(logger, format, ...) Info(logger, format, ##__VA_ARGS__)
-  #define WARN(logger, format, ...) Warn(logger, format, ##__VA_ARGS__)
-#else
-  #define INFO(logger, format, ...) STD_INFO(format, ##__VA_ARGS__)
-  #define WARN(logger, format, ...) STD_WARN(format, ##__VA_ARGS__)
-#endif
-
-static const char* StrDateTimeNow() {
-  thread_local char buf[64];
-  time_t rawtime;
-  time(&rawtime);
-  struct tm* timeinfo = localtime(&rawtime);
-  strftime(buf, sizeof(buf), "%F %T",timeinfo);
-  return buf;
-}
-
-static std::string demangle(const char* name) {
-  int status = -4; // some arbitrary value to eliminate the compiler warning
-  terark::AutoFree<char> res(abi::__cxa_demangle(name, NULL, NULL, &status));
-  return (status==0) ? res.p : name ;
-}
-template<class T>
-static std::string ClassName() {
-  return demangle(typeid(T).name());
-}
-template<class T>
-static std::string ClassName(const T& x) {
-  return demangle(typeid(x).name());
-}
 
 template<class ByteArray>
 inline Slice SliceOf(const ByteArray& ba) {
@@ -147,326 +71,6 @@ template<class ByteArrayView>
 inline ByteArrayView SubStr(const ByteArrayView& x, size_t pos) {
   assert(pos <= x.size());
   return ByteArrayView(x.data() + pos, x.size() - pos);
-}
-
-class AutoDeleteFile {
-public:
-  std::string fpath;
-  operator fstring() const { return fpath; }
-  void Delete() {
-    ::remove(fpath.c_str());
-    fpath.clear();
-  }
-  ~AutoDeleteFile() {
-    if (!fpath.empty()) {
-      ::remove(fpath.c_str());
-    }
-  }
-};
-class TempFileDeleteOnClose {
-public:
-  std::string path;
-  FileStream  fp;
-  NativeDataOutput<OutputBuffer> writer;
-  void open() {
-    fp.open(path.c_str(), "wb+");
-    fp.disbuf();
-    writer.attach(&fp);
-  }
-  void dopen(int fd) {
-    fp.dopen(fd, "wb+");
-    fp.disbuf();
-    writer.attach(&fp);
-  }
-  ~TempFileDeleteOnClose() {
-    if (fp)
-      this->close();
-  }
-  void close() {
-    assert(nullptr != fp);
-    fp.close();
-    ::remove(path.c_str());
-  }
-  void complete_write() {
-    writer.flush_buffer();
-    fp.rewind();
-  }
-};
-
-class TerocksIndex : boost::noncopyable {
-public:
-  class Iterator : boost::noncopyable {
-  protected:
-    size_t m_id = size_t(-1);
-  public:
-    virtual ~Iterator();
-    virtual bool SeekToFirst() = 0;
-    virtual bool SeekToLast() = 0;
-    virtual bool Seek(fstring target) = 0;
-    virtual bool Next() = 0;
-    virtual bool Prev() = 0;
-    inline bool Valid() const { return size_t(-1) != m_id; }
-    inline size_t id() const { return m_id; }
-    virtual Slice key() const = 0;
-    inline void SetInvalid() { m_id = size_t(-1); }
-  };
-  struct KeyStat {
-    size_t commonPrefixLen = 0;
-    size_t minKeyLen = 0;
-    size_t maxKeyLen = size_t(-1);
-    size_t sumKeyLen = size_t(-1);
-    size_t numKeys   = size_t(-1);
-  };
-  class Factory : public terark::RefCounter {
-  public:
-    virtual ~Factory();
-    virtual void Build(TempFileDeleteOnClose& tmpKeyFile,
-                       const TerarkZipTableOptions& tzopt,
-                       fstring tmpFilePath,
-                       const KeyStat&) const = 0;
-    virtual unique_ptr<TerocksIndex> LoadMemory(fstring mem) const = 0;
-    virtual unique_ptr<TerocksIndex> LoadFile(fstring fpath) const = 0;
-    virtual size_t MemSizeForBuild(const KeyStat&) const = 0;
-  };
-  typedef boost::intrusive_ptr<Factory> FactoryPtr;
-  struct AutoRegisterFactory {
-    AutoRegisterFactory(std::initializer_list<const char*> names, Factory* factory);
-  };
-  static const Factory* GetFactory(fstring name);
-  static const Factory* SelectFactory(const KeyStat&, fstring name);
-  static unique_ptr<TerocksIndex> LoadFile(fstring fpath);
-  static unique_ptr<TerocksIndex> LoadMemory(fstring mem);
-  virtual ~TerocksIndex();
-  virtual size_t Find(fstring key) const = 0;
-  virtual size_t NumKeys() const = 0;
-  virtual fstring Memory() const = 0;
-  virtual Iterator* NewIterator() const = 0;
-  virtual bool NeedsReorder() const = 0;
-  virtual void GetOrderMap(uint32_t* newToOld) const = 0;
-  virtual void BuildCache(double cacheRatio) = 0;
-};
-static terark::hash_strmap<TerocksIndex::FactoryPtr> g_TerocksIndexFactroy;
-#define TerocksIndexRegister(clazz, ...) \
-    TerocksIndex::AutoRegisterFactory \
-    g_AutoRegister_##clazz({#clazz,##__VA_ARGS__}, new clazz::MyFactory())
-
-TerocksIndex::AutoRegisterFactory::AutoRegisterFactory(
-    std::initializer_list<const char*> names,
-    Factory* factory) {
-  for (const char* name : names) {
-//  STD_INFO("AutoRegisterFactory: %s\n", name);
-    g_TerocksIndexFactroy.insert_i(name, FactoryPtr(factory));
-  }
-}
-
-const TerocksIndex::Factory* TerocksIndex::GetFactory(fstring name) {
-  size_t idx = g_TerocksIndexFactroy.find_i(name);
-  if (idx < g_TerocksIndexFactroy.end_i()) {
-    auto factory = g_TerocksIndexFactroy.val(idx).get();
-    return factory;
-  }
-  return NULL;
-}
-
-const TerocksIndex::Factory*
-TerocksIndex::SelectFactory(const KeyStat& ks, fstring name) {
-  return GetFactory(name);
-}
-
-TerocksIndex::~TerocksIndex() {}
-TerocksIndex::Factory::~Factory() {}
-TerocksIndex::Iterator::~Iterator() {}
-
-class NestLoudsTrieIterBase : public TerocksIndex::Iterator {
-protected:
-  unique_ptr<terark::ADFA_LexIterator> m_iter;
-  template<class NLTrie>
-  bool Done(const NLTrie* trie, bool ok) {
-    if (ok)
-      m_id = trie->state_to_word_id(m_iter->word_state());
-    else
-      m_id = size_t(-1);
-    return ok;
-  }
-  Slice key() const override {
-    return SliceOf(m_iter->word());
-  }
-  NestLoudsTrieIterBase(terark::ADFA_LexIterator* iter)
-   : m_iter(iter) {}
-};
-template<class NLTrie>
-class NestLoudsTrieIndex : public TerocksIndex {
-  unique_ptr<NLTrie> m_trie;
-  class MyIterator : public NestLoudsTrieIterBase {
-    const NLTrie* m_trie;
-  public:
-    explicit MyIterator(NLTrie* trie)
-     : NestLoudsTrieIterBase(trie->adfa_make_iter(initial_state))
-     , m_trie(trie)
-    {}
-    bool SeekToFirst() override { return Done(m_trie, m_iter->seek_begin()); }
-    bool SeekToLast()  override { return Done(m_trie, m_iter->seek_end()); }
-    bool Seek(fstring key) override {
-        return Done(m_trie, m_iter->seek_lower_bound(key));
-    }
-    bool Next() override { return Done(m_trie, m_iter->incr()); }
-    bool Prev() override { return Done(m_trie, m_iter->decr()); }
-  };
-public:
-  NestLoudsTrieIndex(NLTrie* trie) : m_trie(trie) {}
-  size_t Find(fstring key) const override final {
-    MY_THREAD_LOCAL(terark::MatchContext, ctx);
-    ctx.root = 0;
-    ctx.pos = 0;
-    ctx.zidx = 0;
-  //ctx.zbuf_state = size_t(-1);
-    return m_trie->index(ctx, key);
-  }
-  size_t NumKeys() const override final {
-    return m_trie->num_words();
-  }
-  fstring Memory() const override final {
-    return m_trie->get_mmap();
-  }
-  Iterator* NewIterator() const override final {
-    return new MyIterator(m_trie.get());
-  }
-  bool NeedsReorder() const override final { return true; }
-  void GetOrderMap(uint32_t* newToOld)
-  const override final {
-    terark::NonRecursiveDictionaryOrderToStateMapGenerator gen;
-    gen(*m_trie, [&](size_t dictOrderOldId, size_t state) {
-      size_t newId = m_trie->state_to_word_id(state);
-      newToOld[newId] = uint32_t(dictOrderOldId);
-    });
-  }
-  void BuildCache(double cacheRatio) {
-    if (cacheRatio > 1e-8) {
-        m_trie->build_fsa_cache(cacheRatio, NULL);
-    }
-  }
-  class MyFactory : public Factory {
-  public:
-    void Build(TempFileDeleteOnClose& tmpKeyFile,
-               const TerarkZipTableOptions& tzopt,
-               fstring tmpFilePath,
-               const KeyStat& ks) const override {
-      NativeDataInput<InputBuffer> reader(&tmpKeyFile.fp);
-#if !defined(NDEBUG)
-      SortableStrVec backupKeys;
-#endif
-      size_t sumPrefixLen = ks.commonPrefixLen * ks.numKeys;
-      SortableStrVec keyVec;
-      keyVec.m_index.reserve(ks.numKeys);
-      keyVec.m_strpool.reserve(ks.sumKeyLen - sumPrefixLen);
-      valvec<byte_t> keyBuf;
-      for (size_t seq_id = 0; seq_id < ks.numKeys; ++seq_id) {
-        reader >> keyBuf;
-        keyVec.push_back(fstring(keyBuf).substr(ks.commonPrefixLen));
-      }
-      tmpKeyFile.close();
-#if !defined(NDEBUG)
-      for (size_t i = 1; i < keyVec.size(); ++i) {
-        fstring prev = keyVec[i-1];
-        fstring curr = keyVec[i];
-        assert(prev < curr);
-      }
-      backupKeys = keyVec;
-#endif
-      terark::NestLoudsTrieConfig conf;
-      conf.nestLevel = tzopt.indexNestLevel;
-      const size_t smallmem = 1000*1024*1024;
-      const size_t myWorkMem = keyVec.mem_size();
-      if (myWorkMem > smallmem) {
-        // use tmp files during index building
-        conf.tmpDir = tzopt.localTempDir;
-        // adjust tmpLevel for linkVec, wihch is proportional to num of keys
-        if (ks.numKeys > 1ul<<30) {
-          // not need any mem in BFS, instead 8G file of 4G mem (linkVec)
-          // this reduce 10% peak mem when avg keylen is 24 bytes
-          conf.tmpLevel = 3;
-        }
-        else if (myWorkMem > 256ul<<20) {
-          // 1G mem in BFS, swap to 1G file after BFS and before build nextStrVec
-          conf.tmpLevel = 2;
-        }
-      }
-      if (keyVec[0] < keyVec.back()) {
-        conf.isInputSorted = true;
-      }
-      std::unique_ptr<NLTrie> trie(new NLTrie());
-      trie->build_from(keyVec, conf);
-      trie->save_mmap(tmpFilePath);
-    }
-    unique_ptr<TerocksIndex> LoadMemory(fstring mem) const override {
-      unique_ptr<BaseDFA>
-      dfa(BaseDFA::load_mmap_user_mem(mem.data(), mem.size()));
-      auto trie = dynamic_cast<NLTrie*>(dfa.get());
-      if (NULL == trie) {
-        throw std::invalid_argument("Bad trie class: " + ClassName(*dfa)
-            + ", should be " + ClassName<NLTrie>());
-      }
-      unique_ptr<TerocksIndex> index(new NestLoudsTrieIndex(trie));
-      dfa.release();
-      return std::move(index);
-    }
-    unique_ptr<TerocksIndex> LoadFile(fstring fpath) const override {
-      unique_ptr<BaseDFA> dfa(BaseDFA::load_mmap(fpath));
-      auto trie = dynamic_cast<NLTrie*>(dfa.get());
-      if (NULL == trie) {
-        throw std::invalid_argument(
-            "File: " + fpath + ", Bad trie class: " + ClassName(*dfa)
-            + ", should be " + ClassName<NLTrie>());
-      }
-      unique_ptr<TerocksIndex> index(new NestLoudsTrieIndex(trie));
-      dfa.release();
-      return std::move(index);
-    }
-    size_t MemSizeForBuild(const KeyStat& ks) const override {
-      return sizeof(SortableStrVec::SEntry) * ks.numKeys + ks.sumKeyLen
-          - ks.commonPrefixLen * ks.numKeys;
-    }
-  };
-};
-typedef NestLoudsTrieDAWG_IL_256 NestLoudsTrieDAWG_IL_256_32;
-typedef NestLoudsTrieDAWG_SE_512 NestLoudsTrieDAWG_SE_512_32;
-typedef NestLoudsTrieIndex<NestLoudsTrieDAWG_SE_512_32> TerocksIndex_NestLoudsTrieDAWG_SE_512_32;
-typedef NestLoudsTrieIndex<NestLoudsTrieDAWG_IL_256_32> TerocksIndex_NestLoudsTrieDAWG_IL_256_32;
-typedef NestLoudsTrieIndex<NestLoudsTrieDAWG_Mixed_SE_512> TerocksIndex_NestLoudsTrieDAWG_Mixed_SE_512;
-typedef NestLoudsTrieIndex<NestLoudsTrieDAWG_Mixed_IL_256> TerocksIndex_NestLoudsTrieDAWG_Mixed_IL_256;
-typedef NestLoudsTrieIndex<NestLoudsTrieDAWG_Mixed_XL_256> TerocksIndex_NestLoudsTrieDAWG_Mixed_XL_256;
-TerocksIndexRegister(TerocksIndex_NestLoudsTrieDAWG_SE_512_32, "NestLoudsTrieDAWG_SE_512", "SE_512_32", "SE_512");
-TerocksIndexRegister(TerocksIndex_NestLoudsTrieDAWG_IL_256_32, "NestLoudsTrieDAWG_IL_256", "IL_256_32", "IL_256", "NestLoudsTrieDAWG_IL");
-TerocksIndexRegister(TerocksIndex_NestLoudsTrieDAWG_Mixed_SE_512, "NestLoudsTrieDAWG_Mixed_SE_512", "Mixed_SE_512");
-TerocksIndexRegister(TerocksIndex_NestLoudsTrieDAWG_Mixed_IL_256, "NestLoudsTrieDAWG_Mixed_IL_256", "Mixed_IL_256");
-TerocksIndexRegister(TerocksIndex_NestLoudsTrieDAWG_Mixed_XL_256, "NestLoudsTrieDAWG_Mixed_XL_256", "Mixed_XL_256");
-
-unique_ptr<TerocksIndex> TerocksIndex::LoadFile(fstring fpath) {
-  TerocksIndex::Factory* factory = NULL;
-  {
-    terark::MmapWholeFile mmap(fpath);
-    auto header = (const terark::DFA_MmapHeader*)mmap.base;
-    size_t idx = g_TerocksIndexFactroy.find_i(header->dfa_class_name);
-    if (idx >= g_TerocksIndexFactroy.end_i()) {
-      throw std::invalid_argument(
-          "TerocksIndex::LoadFile(" + fpath + "): Unknown trie class: "
-          + header->dfa_class_name);
-    }
-    factory = g_TerocksIndexFactroy.val(idx).get();
-  }
-  return factory->LoadFile(fpath);
-}
-
-unique_ptr<TerocksIndex> TerocksIndex::LoadMemory(fstring mem) {
-  auto header = (const terark::DFA_MmapHeader*)mem.data();
-  size_t idx = g_TerocksIndexFactroy.find_i(header->dfa_class_name);
-  if (idx >= g_TerocksIndexFactroy.end_i()) {
-    throw std::invalid_argument(
-        std::string("TerocksIndex::LoadMemory(): Unknown trie class: ")
-        + header->dfa_class_name);
-  }
-  TerocksIndex::Factory* factory = g_TerocksIndexFactroy.val(idx).get();
-  return factory->LoadMemory(mem);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -730,7 +334,7 @@ public:
       }
     }
     else { // now iter is at bytewise lower bound position
-      int cmp = iter_->key().compare(SubStr(pikey.user_key, cplen));
+      int cmp = SliceOf(iter_->key()).compare(SubStr(pikey.user_key, cplen));
       assert(cmp >= 0); // iterKey >= searchKey
       if (cmp > 0 && reverse_) {
         iter_->Prev();
