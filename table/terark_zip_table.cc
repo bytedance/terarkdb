@@ -274,7 +274,6 @@ public:
   void SeekToFirst() override {
 	  if (UnzipIterRecord(IndexIterSeekToFirst())) {
 		  DecodeCurrKeyValue();
-		  validx_ = 1;
 	  }
   }
 
@@ -342,9 +341,10 @@ public:
       }
     }
 	  if (UnzipIterRecord(ok)) {
+	    validx_ = size_t(-1);
 		  do {
+	      validx_++;
 			  DecodeCurrKeyValue();
-			  validx_++;
 			  if (pInterKey_.sequence <= pikey.sequence) {
 				  return; // done
 			  }
@@ -357,14 +357,13 @@ public:
 
   void Next() override {
 	  assert(iter_->Valid());
+    validx_++;
 	  if (validx_ < valnum_) {
 		  DecodeCurrKeyValue();
-		  validx_++;
 	  }
 	  else {
 		  if (UnzipIterRecord(IndexIterNext())) {
 			  DecodeCurrKeyValue();
-			  validx_ = 1;
 		  }
 	  }
   }
