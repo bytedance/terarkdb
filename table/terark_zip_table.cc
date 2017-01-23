@@ -9,7 +9,6 @@
 #include "terark_zip_index.h"
 #include "terark_zip_common.h"
 #include <rocksdb/comparator.h>
-#include <rocksdb/env.h>
 #include <rocksdb/options.h>
 #include <rocksdb/table.h>
 #include <table/get_context.h>
@@ -17,7 +16,6 @@
 #include <table/table_builder.h>
 #include <table/table_reader.h>
 #include <table/meta_blocks.h>
-#include <db/compaction_iterator.h>
 #include <terark/bitmap.hpp>
 #include <terark/util/crc.hpp>
 #include <terark/util/throw.hpp>
@@ -348,7 +346,7 @@ public:
 			  if (pInterKey_.sequence <= pikey.sequence) {
 				  return; // done
 			  }
-		  } while (validx_ < valnum_);
+		  } while (validx_ + 1 < valnum_);
 		  // no visible version/sequence for target, use Next();
 		  // if using Next(), version check is not needed
 		  Next();
