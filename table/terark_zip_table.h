@@ -64,6 +64,17 @@ struct TerarkZipTableOptions {
   double indexCacheRatio = 0;//0.001;
 };
 
+/// @memBytesLimit total memory can be used for the whole process
+///   memBytesLimit == 0 indicate all physical memory can be used
+void TerarkZipAutoConfigForBulkLoad(struct TerarkZipTableOptions&,
+                         struct DBOptions&,
+                         struct ColumnFamilyOptions&,
+                         size_t memBytesLimit = 0);
+void TerarkZipAutoConfigForOnlineDB(struct TerarkZipTableOptions&,
+                         struct DBOptions&,
+                         struct ColumnFamilyOptions&,
+                         size_t memBytesLimit = 0);
+
 class TableFactory*
 NewTerarkZipTableFactory(const TerarkZipTableOptions&,
 						 class TableFactory* fallback);

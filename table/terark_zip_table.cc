@@ -45,7 +45,6 @@
 namespace rocksdb {
 
 using std::unique_ptr;
-using std::unordered_map;
 using std::vector;
 using std::string;
 
@@ -234,6 +233,7 @@ public:
     AutoRegisterFactory(std::initializer_list<const char*> names, Factory* factory);
   };
   static const Factory* GetFactory(fstring name);
+  static const Factory* SelectFactory(const KeyStat&, fstring name);
   static unique_ptr<TerocksIndex> LoadFile(fstring fpath);
   static unique_ptr<TerocksIndex> LoadMemory(fstring mem);
   virtual ~TerocksIndex();
@@ -266,6 +266,11 @@ const TerocksIndex::Factory* TerocksIndex::GetFactory(fstring name) {
     return factory;
   }
   return NULL;
+}
+
+const TerocksIndex::Factory*
+TerocksIndex::SelectFactory(const KeyStat& ks, fstring name) {
+  return GetFactory(name);
 }
 
 TerocksIndex::~TerocksIndex() {}
