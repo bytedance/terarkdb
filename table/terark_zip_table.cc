@@ -305,10 +305,8 @@ public:
         assert(pikey.user_key.size() < commonPrefix_.size());
         if (reverse_) {
           SeekToLast();
-          if (iter_->Valid()) {
-            this->Next(); // move  to EOF
-            assert(!this->Valid());
-          }
+          this->Next(); // move  to EOF
+          assert(!this->Valid());
         }
         else {
           SeekToFirst();
@@ -321,6 +319,8 @@ public:
           SeekToFirst();
         } else {
           SeekToLast();
+          this->Next(); // move  to EOF
+          assert(!this->Valid());
         }
       }
       return;
