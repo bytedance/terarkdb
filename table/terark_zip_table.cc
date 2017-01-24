@@ -323,15 +323,17 @@ public:
     }
     else {
       bool ok = iter_->Seek(fstringOf(pikey.user_key).substr(cplen));
+      int cmp; // compare(iterKey, searchKey)
       if (!ok) { // searchKey is bytewise greater than all keys in database
         if (reverse_) {
           // searchKey is reverse_bytewise less than all keys in database
           iter_->SeekToLast();
           ok = iter_->Valid();
         }
+        cmp = -1;
       }
       else { // now iter is at bytewise lower bound position
-        int cmp = SliceOf(iter_->key()).compare(SubStr(pikey.user_key, cplen));
+        cmp = SliceOf(iter_->key()).compare(SubStr(pikey.user_key, cplen));
         assert(cmp >= 0); // iterKey >= searchKey
         if (cmp > 0 && reverse_) {
           iter_->Prev();
@@ -339,17 +341,22 @@ public:
         }
       }
       if (UnzipIterRecord(ok)) {
-        validx_ = size_t(-1);
-        do {
-          validx_++;
+        if (0 == cmp) {
+          validx_ = size_t(-1);
+          do {
+            validx_++;
+            DecodeCurrKeyValue();
+            if (pInterKey_.sequence <= pikey.sequence) {
+              return; // done
+            }
+          } while (validx_ + 1 < valnum_);
+          // no visible version/sequence for target, use Next();
+          // if using Next(), version check is not needed
+          Next();
+        }
+        else {
           DecodeCurrKeyValue();
-          if (pInterKey_.sequence <= pikey.sequence) {
-            return; // done
-          }
-        } while (validx_ + 1 < valnum_);
-        // no visible version/sequence for target, use Next();
-        // if using Next(), version check is not needed
-        Next();
+        }
       }
     }
   }
