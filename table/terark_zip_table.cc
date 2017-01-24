@@ -320,37 +320,38 @@ public:
           assert(!this->Valid());
         }
       }
-      return;
     }
-    bool ok = iter_->Seek(fstringOf(pikey.user_key).substr(cplen));
-    if (!ok) { // searchKey is bytewise greater than all keys in database
-      if (reverse_) {
-        // searchKey is reverse_bytewise less than all keys in database
-        iter_->SeekToLast();
-        ok = iter_->Valid();
+    else {
+      bool ok = iter_->Seek(fstringOf(pikey.user_key).substr(cplen));
+      if (!ok) { // searchKey is bytewise greater than all keys in database
+        if (reverse_) {
+          // searchKey is reverse_bytewise less than all keys in database
+          iter_->SeekToLast();
+          ok = iter_->Valid();
+        }
+      }
+      else { // now iter is at bytewise lower bound position
+        int cmp = SliceOf(iter_->key()).compare(SubStr(pikey.user_key, cplen));
+        assert(cmp >= 0); // iterKey >= searchKey
+        if (cmp > 0 && reverse_) {
+          iter_->Prev();
+          ok = iter_->Valid();
+        }
+      }
+      if (UnzipIterRecord(ok)) {
+        validx_ = size_t(-1);
+        do {
+          validx_++;
+          DecodeCurrKeyValue();
+          if (pInterKey_.sequence <= pikey.sequence) {
+            return; // done
+          }
+        } while (validx_ + 1 < valnum_);
+        // no visible version/sequence for target, use Next();
+        // if using Next(), version check is not needed
+        Next();
       }
     }
-    else { // now iter is at bytewise lower bound position
-      int cmp = SliceOf(iter_->key()).compare(SubStr(pikey.user_key, cplen));
-      assert(cmp >= 0); // iterKey >= searchKey
-      if (cmp > 0 && reverse_) {
-        iter_->Prev();
-        ok = iter_->Valid();
-      }
-    }
-	  if (UnzipIterRecord(ok)) {
-	    validx_ = size_t(-1);
-		  do {
-	      validx_++;
-			  DecodeCurrKeyValue();
-			  if (pInterKey_.sequence <= pikey.sequence) {
-				  return; // done
-			  }
-		  } while (validx_ + 1 < valnum_);
-		  // no visible version/sequence for target, use Next();
-		  // if using Next(), version check is not needed
-		  Next();
-	  }
   }
 
   void Next() override {
