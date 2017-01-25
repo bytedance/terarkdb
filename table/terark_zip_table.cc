@@ -814,10 +814,16 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(
 
   if (tzto.isOfflineBuild) {
     if (tbo.compression_dict && tbo.compression_dict->size()) {
+      auto data = (byte_t*)tbo.compression_dict->data();
+      auto size = tbo.compression_dict->size();
       tmpZipValueFile_.fpath = tmpValueFile_.path + ".zbs";
       tmpZipDictFile_.fpath  = tmpValueFile_.path + ".zbs-dict";
+      valvec<byte_t> strDict(data, size);
+#if defined(MADV_DONTNEED)
+      madvise(data, size, MADV_DONTNEED);
+#endif
       zbuilder_.reset(this->createZipBuilder());
-      zbuilder_->useSample(*tbo.compression_dict);
+      zbuilder_->useSample(strDict); // take ownership of strDict
     //zbuilder_->finishSample(); // do not call finishSample here
       zbuilder_->prepare(1024, tmpZipValueFile_.fpath);
     }
