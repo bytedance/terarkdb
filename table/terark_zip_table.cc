@@ -1080,7 +1080,7 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
       );
 });
   size_t myDictMem = std::min<size_t>(sampleLenSum_, INT32_MAX) * 6;
-  waitForMemory(myDictMem, "diztZip");
+  waitForMemory(myDictMem, "dictZip");
 
   BOOST_SCOPE_EXIT(&myDictMem){
     std::unique_lock<std::mutex> zipLock(zipMutex);
