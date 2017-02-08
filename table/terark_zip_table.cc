@@ -1012,7 +1012,7 @@ auto waitForMemory = [&](size_t myWorkMem, const char* who) {
       if (myWorkMem < smallmem) {
         return false; // do not wait
       }
-      if (sumWaitingMem < softMemLimit) {
+      if (sumWaitingMem + sumWorkingMem < softMemLimit) {
         return false; // do not wait
       }
       if (waitQueue.size() == 1) {
