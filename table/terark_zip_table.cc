@@ -988,54 +988,61 @@ Status TerarkZipTableBuilder::Finish() {
   const  size_t softMemLimit = table_options_.softZipWorkingMemLimit;
   const  size_t hardMemLimit = std::max(table_options_.hardZipWorkingMemLimit, softMemLimit);
   const  size_t smallmem = table_options_.smallTaskMemory;
-  const  std::chrono::seconds waitForTime(10);
+  const  long long myStartTime = g_pf.now();
   {
-    const  long long myStartTime = g_pf.now();
     std::unique_lock<std::mutex> zipLock(zipMutex);
     waitQueue.push_back({this, myStartTime});
   }
 auto waitForMemory = [&](size_t myWorkMem, const char* who) {
-  while (true) {
-    std::unique_lock<std::mutex> zipLock(zipMutex);
-    while ( (myWorkMem < softMemLimit &&
-              ( (sumWorkingMem + myWorkMem >= softMemLimit
-                              && myWorkMem >= smallmem) ||
-                (sumWorkingMem + myWorkMem >= hardMemLimit) )
-            ) ||
-            (myWorkMem >= softMemLimit && sumWorkingMem > softMemLimit / 4)
-          )
-    {
-      INFO(tbo_.ioptions.info_log
-          , "TerarkZipTableBuilder::Finish():this=%p: wait, sumWorkingMem = %f'GB, %s WorkingMem = %f'GB\n"
-          , this, sumWorkingMem/1e9, who, myWorkMem/1e9
-          );
-      zipCond.wait_for(zipLock, waitForTime);
+  const std::chrono::seconds waitForTime(10);
+  long long now = myStartTime;
+  auto shouldWait = [&]() {
+    bool w;
+    if (myWorkMem < softMemLimit) {
+      w = (sumWorkingMem + myWorkMem >= hardMemLimit) ||
+          (sumWorkingMem + myWorkMem >= softMemLimit && myWorkMem >= smallmem);
     }
-    assert(!waitQueue.empty());
-    if (waitQueue.size() == 1) {
-      assert(this == waitQueue[0].tztb);
-      sumWorkingMem += myWorkMem;
-      break;
+    else {
+      w = sumWorkingMem > softMemLimit / 4;
     }
-    long long now = g_pf.now();
-    size_t minRateIdx = size_t(-1);
-    double minRateVal = DBL_MAX;
-    auto wq = waitQueue.data();
-    for (size_t i = 0, n = waitQueue.size(); i < n; ++i) {
-      double rate = myWorkMem / (0.1 + now - wq[i].startTime);
-      if (rate < minRateVal) {
-        minRateVal = rate;
-        minRateIdx = i;
+    if (!w) {
+      assert(!waitQueue.empty());
+      now = g_pf.now();
+      if (waitQueue.size() == 1) {
+        assert(this == waitQueue[0].tztb);
+        return false; // do not wait
+      }
+      size_t minRateIdx = size_t(-1);
+      double minRateVal = DBL_MAX;
+      auto wq = waitQueue.data();
+      for (size_t i = 0, n = waitQueue.size(); i < n; ++i) {
+        double rate = myWorkMem / (0.1 + now - wq[i].startTime);
+        if (rate < minRateVal) {
+          minRateVal = rate;
+          minRateIdx = i;
+        }
+      }
+      if (this == wq[minRateIdx].tztb) {
+        return false; // do not wait
       }
     }
-    if (this == wq[minRateIdx].tztb) {
-      sumWorkingMem += myWorkMem;
-      break;
-    }
-    zipCond.notify_one();
-    zipLock.unlock();
-    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    return true; // wait
+  };
+  std::unique_lock<std::mutex> zipLock(zipMutex);
+  while (shouldWait()) {
+    INFO(tbo_.ioptions.info_log
+        , "TerarkZipTableBuilder::Finish():this=%p: wait, sumWorkingMem = %f GB, %s WorkingMem = %f GB\n"
+        , this, sumWorkingMem/1e9, who, myWorkMem/1e9
+        );
+    zipCond.wait_for(zipLock, waitForTime);
   }
+  INFO(tbo_.ioptions.info_log
+      , "TerarkZipTableBuilder::Finish():this=%p: wait, sumWorkingMem = %f GB, %s WorkingMem = %f GB"
+        ", waited %8.3f sec, Key+Value bytes = %f GB\n"
+      , this, sumWorkingMem/1e9, who, myWorkMem/1e9, g_pf.sf(myStartTime, now)
+      , (properties_.raw_key_size + properties_.raw_value_size) / 1e9
+      );
+  sumWorkingMem += myWorkMem;
 };
 // indexing is also slow, run it in parallel
 AutoDeleteFile tmpIndexFile{tmpValueFile_.path + ".index"};
