@@ -984,6 +984,7 @@ Status TerarkZipTableBuilder::Finish() {
   static std::mutex zipMutex;
   static std::condition_variable zipCond;
   static valvec<PendingTask> waitQueue;
+  static size_t sumWaitingMem = 0;
   static size_t sumWorkingMem = 0;
   const  size_t softMemLimit = table_options_.softZipWorkingMemLimit;
   const  size_t hardMemLimit = std::max(table_options_.hardZipWorkingMemLimit, softMemLimit);
@@ -1008,6 +1009,12 @@ auto waitForMemory = [&](size_t myWorkMem, const char* who) {
     if (!w) {
       assert(!waitQueue.empty());
       now = g_pf.now();
+      if (myWorkMem < smallmem) {
+        return false; // do not wait
+      }
+      if (sumWaitingMem < softMemLimit) {
+        return false; // do not wait
+      }
       if (waitQueue.size() == 1) {
         assert(this == waitQueue[0].tztb);
         return false; // do not wait
@@ -1029,6 +1036,7 @@ auto waitForMemory = [&](size_t myWorkMem, const char* who) {
     return true; // wait
   };
   std::unique_lock<std::mutex> zipLock(zipMutex);
+  sumWaitingMem += myWorkMem;
   while (shouldWait()) {
     INFO(tbo_.ioptions.info_log
         , "TerarkZipTableBuilder::Finish():this=%p: wait, sumWorkingMem = %f GB, %s WorkingMem = %f GB\n"
@@ -1042,6 +1050,7 @@ auto waitForMemory = [&](size_t myWorkMem, const char* who) {
       , this, sumWorkingMem/1e9, who, myWorkMem/1e9, g_pf.sf(myStartTime, now)
       , (properties_.raw_key_size + properties_.raw_value_size) / 1e9
       );
+  sumWaitingMem -= myWorkMem;
   sumWorkingMem += myWorkMem;
 };
 // indexing is also slow, run it in parallel
@@ -1059,7 +1068,7 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
     std::unique_lock<std::mutex> zipLock(zipMutex);
     assert(sumWorkingMem >= myWorkMem);
     sumWorkingMem -= myWorkMem;
-    zipCond.notify_one();
+    zipCond.notify_all();
   }BOOST_SCOPE_EXIT_END;
 
   long long t1 = g_pf.now();
@@ -1078,7 +1087,7 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
     assert(sumWorkingMem >= myDictMem);
     // if success, myDictMem is 0, else sumWorkingMem should be restored
     sumWorkingMem -= myDictMem;
-    zipCond.notify_one();
+    zipCond.notify_all();
   }BOOST_SCOPE_EXIT_END;
 
   auto waitIndex = [&]() {
