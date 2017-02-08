@@ -1039,15 +1039,15 @@ auto waitForMemory = [&](size_t myWorkMem, const char* who) {
   sumWaitingMem += myWorkMem;
   while (shouldWait()) {
     INFO(tbo_.ioptions.info_log
-        , "TerarkZipTableBuilder::Finish():this=%p: wait, sumWorkingMem = %f GB, %s WorkingMem = %f GB\n"
-        , this, sumWorkingMem/1e9, who, myWorkMem/1e9
+        , "TerarkZipTableBuilder::Finish():this=%p: sumWaitingMem = %f GB, sumWorkingMem = %f GB, %s WorkingMem = %f GB, wait...\n"
+        , this, sumWaitingMem/1e9, sumWorkingMem/1e9, who, myWorkMem/1e9
         );
     zipCond.wait_for(zipLock, waitForTime);
   }
   INFO(tbo_.ioptions.info_log
-      , "TerarkZipTableBuilder::Finish():this=%p: wait, sumWorkingMem = %f GB, %s WorkingMem = %f GB"
-        ", waited %8.3f sec, Key+Value bytes = %f GB\n"
-      , this, sumWorkingMem/1e9, who, myWorkMem/1e9, g_pf.sf(myStartTime, now)
+      , "TerarkZipTableBuilder::Finish():this=%p: sumWaitingMem = %f GB, sumWorkingMem = %f GB, %s WorkingMem = %f GB, waited %8.3f sec, Key+Value bytes = %f GB\n"
+      , this, sumWaitingMem/1e9, sumWorkingMem/1e9, who, myWorkMem/1e9
+      , g_pf.sf(myStartTime, now)
       , (properties_.raw_key_size + properties_.raw_value_size) / 1e9
       );
   sumWaitingMem -= myWorkMem;
