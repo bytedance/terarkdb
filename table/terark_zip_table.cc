@@ -316,8 +316,9 @@ private:
   Status PlainValueToFinish(fstring tmpIndexFile, std::function<void()> waitIndex);
 #endif // TerocksPrivateCode
   Status ZipValueToFinish(fstring tmpIndexFile, std::function<void()> waitIndex);
+  void BuilderWriteValues(std::function<void(fstring val)> write);
   Status WriteSSTFile(long long t3, long long t4
-      , fstring tmpIndexFile, DictZipBlobStore* zstore, bitfield_array<2>& zvType
+      , fstring tmpIndexFile, DictZipBlobStore* zstore
       , const DictZipBlobStore::ZipStat& dzstat);
   Status WriteMetaData(std::initializer_list<std::pair<const std::string*, BlockHandle> > blocks);
   DictZipBlobStore::ZipBuilder* createZipBuilder() const;
@@ -1246,8 +1247,8 @@ PlainValueToFinish(fstring tmpIndexFile, std::function<void()> waitIndex) {
   size_t variaNum = keyStat_.numKeys - fixedNum;
   if (4 * variaNum + keyStat_.numKeys*5/4 < 4 * keyStat_.numKeys) {
     // use MixedLenBlobStore
-    auto builder = UniquePtrOf(new terark::MixedLenBlobStore(fixedLen));
-
+    auto builder = UniquePtrOf(new terark::MixedLenBlobStore::Builder(fixedLen));
+    BuilderWriteValues([&](fstring value){builder->add_record(value);});
   }
   else {
     // use PlainBlobStore
@@ -1297,67 +1298,84 @@ ZipValueToFinish(fstring tmpIndexFile, std::function<void()> waitIndex) {
   zbuilder->finishSample();
   zbuilder->prepare(keyStat_.numKeys, tmpStoreFile);
 }
-  bitfield_array<2> zvType(properties_.num_entries);
-	if (nullptr == second_pass_iter_)
+
+  BuilderWriteValues([&](fstring value){zbuilder->addRecord(value);});
+
+  unique_ptr<DictZipBlobStore> zstore(zbuilder->finish());
+  DictZipBlobStore::ZipStat dzstat = zbuilder->getZipStat();
+  zbuilder.reset();
+
+  long long t4 = g_pf.now();
+
+  // wait for indexing complete, if indexing is slower than value compressing
+  waitIndex();
+
+  return WriteSSTFile(t3, t4, tmpIndexFile, zstore.get(), dzstat);
+}
+
+void
+TerarkZipTableBuilder::BuilderWriteValues(std::function<void(fstring)> write) {
+  bzvType_.resize(keyStat_.numKeys);
+  if (nullptr == second_pass_iter_)
 {
-	NativeDataInput<InputBuffer> input(&tmpValueFile_.fp);
-	valvec<byte_t> value;
+  NativeDataInput<InputBuffer> input(&tmpValueFile_.fp);
+  valvec<byte_t> value;
 #if defined(TERARK_ZIP_TRIAL_VERSION)
   valvec<byte_t> tmpValueBuf;
 #endif
-	size_t entryId = 0;
-	size_t bitPos = 0;
-	for (size_t recId = 0; recId < keyStat_.numKeys; recId++) {
-		uint64_t seqType = input.load_as<uint64_t>();
-		uint64_t seqNum;
-		ValueType vType;
-		UnPackSequenceAndType(seqType, &seqNum, &vType);
-		size_t oneSeqLen = valueBits_.one_seq_len(bitPos);
-		assert(oneSeqLen >= 1);
-		if (1==oneSeqLen && (kTypeDeletion==vType || kTypeValue==vType)) {
-			if (0 == seqNum && kTypeValue==vType) {
-				zvType.set0(recId, size_t(ZipValueType::kZeroSeq));
+  size_t entryId = 0;
+  size_t bitPos = 0;
+  for (size_t recId = 0; recId < keyStat_.numKeys; recId++) {
+    uint64_t seqType = input.load_as<uint64_t>();
+    uint64_t seqNum;
+    ValueType vType;
+    UnPackSequenceAndType(seqType, &seqNum, &vType);
+    size_t oneSeqLen = valueBits_.one_seq_len(bitPos);
+    assert(oneSeqLen >= 1);
+    if (1==oneSeqLen && (kTypeDeletion==vType || kTypeValue==vType)) {
+      if (0 == seqNum && kTypeValue==vType) {
+        bzvType_.set0(recId, size_t(ZipValueType::kZeroSeq));
 #if defined(TERARK_ZIP_TRIAL_VERSION)
-				if (randomGenerator_() < randomGenerator_.max()/1000) {
-				  input >> tmpValueBuf;
-				  value.assign(fstring(g_trail_rand_delete));
-				} else
+        if (randomGenerator_() < randomGenerator_.max()/1000) {
+          input >> tmpValueBuf;
+          value.assign(fstring(g_trail_rand_delete));
+        } else
 #endif
-				  input >> value;
-			} else {
-				if (kTypeValue==vType) {
-					zvType.set0(recId, size_t(ZipValueType::kValue));
-				} else {
-					zvType.set0(recId, size_t(ZipValueType::kDelete));
-				}
-				value.erase_all();
-				value.append((byte_t*)&seqNum, 7);
-				input.load_add(value);
-			}
-		}
-		else {
-			zvType.set0(recId, size_t(ZipValueType::kMulti));
-			size_t headerSize = ZipValueMultiValue::calcHeaderSize(oneSeqLen);
-			value.resize(headerSize);
-			((ZipValueMultiValue*)value.data())->offsets[0] = uint32_t(oneSeqLen);
-			for (size_t j = 0; j < oneSeqLen; j++) {
-				if (j > 0) {
-					seqType = input.load_as<uint64_t>();
-				}
-				value.append((byte_t*)&seqType, 8);
-				input.load_add(value);
-				if (j + 1 < oneSeqLen) {
-				  ((ZipValueMultiValue*)value.data())->offsets[j+1] = value.size() - headerSize;
-				}
-			}
-		}
-    zbuilder->addRecord(value);
-		bitPos += oneSeqLen + 1;
-		entryId += oneSeqLen;
-	}
+          input >> value;
+      } else {
+        if (kTypeValue==vType) {
+          bzvType_.set0(recId, size_t(ZipValueType::kValue));
+        } else {
+          bzvType_.set0(recId, size_t(ZipValueType::kDelete));
+        }
+        value.erase_all();
+        value.append((byte_t*)&seqNum, 7);
+        input.load_add(value);
+      }
+    }
+    else {
+      bzvType_.set0(recId, size_t(ZipValueType::kMulti));
+      size_t headerSize = ZipValueMultiValue::calcHeaderSize(oneSeqLen);
+      value.resize(headerSize);
+      ((ZipValueMultiValue*)value.data())->offsets[0] = uint32_t(oneSeqLen);
+      for (size_t j = 0; j < oneSeqLen; j++) {
+        if (j > 0) {
+          seqType = input.load_as<uint64_t>();
+        }
+        value.append((byte_t*)&seqType, 8);
+        input.load_add(value);
+        if (j + 1 < oneSeqLen) {
+          ((ZipValueMultiValue*)value.data())->offsets[j+1] = value.size() - headerSize;
+        }
+      }
+    }
+    write(value);
+    bitPos += oneSeqLen + 1;
+    entryId += oneSeqLen;
+  }
   assert(entryId == properties_.num_entries);
 }
-	else
+  else
 {
   valvec<byte_t> value;
   size_t entryId = 0;
@@ -1374,27 +1392,27 @@ ZipValueToFinish(fstring tmpIndexFile, std::function<void()> waitIndex) {
     if (1==oneSeqLen && (kTypeDeletion==pikey.type || kTypeValue==pikey.type)) {
     //  assert(fstringOf(pikey.user_key) == backupKeys[recId]);
       if (0 == pikey.sequence && kTypeValue==pikey.type) {
-        zvType.set0(recId, size_t(ZipValueType::kZeroSeq));
+        bzvType_.set0(recId, size_t(ZipValueType::kZeroSeq));
 #if defined(TERARK_ZIP_TRIAL_VERSION)
         if (randomGenerator_() < randomGenerator_.max()/1000)
-          zbuilder->addRecord(fstring(g_trail_rand_delete));
+          write(fstring(g_trail_rand_delete));
         else
 #endif
-        zbuilder->addRecord(fstringOf(curVal));
+        write(fstringOf(curVal));
       } else {
         if (kTypeValue==pikey.type) {
-          zvType.set0(recId, size_t(ZipValueType::kValue));
+          bzvType_.set0(recId, size_t(ZipValueType::kValue));
         } else {
-          zvType.set0(recId, size_t(ZipValueType::kDelete));
+          bzvType_.set0(recId, size_t(ZipValueType::kDelete));
         }
         value.append((byte_t*)&pikey.sequence, 7);
         value.append(fstringOf(curVal));
-        zbuilder->addRecord(value);
+        write(value);
       }
       second_pass_iter_->Next();
     }
     else {
-      zvType.set0(recId, size_t(ZipValueType::kMulti));
+      bzvType_.set0(recId, size_t(ZipValueType::kMulti));
       size_t headerSize = ZipValueMultiValue::calcHeaderSize(oneSeqLen);
       value.resize(headerSize);
       ((ZipValueMultiValue*)value.data())->offsets[0] = uint32_t(oneSeqLen);
@@ -1413,29 +1431,18 @@ ZipValueToFinish(fstring tmpIndexFile, std::function<void()> waitIndex) {
         }
         second_pass_iter_->Next();
       }
-      zbuilder->addRecord(value);
+      write(value);
     }
     bitPos += oneSeqLen + 1;
     entryId += oneSeqLen;
   }
   assert(entryId == properties_.num_entries);
 }
-
   tmpValueFile_.close();
-  unique_ptr<DictZipBlobStore> zstore(zbuilder->finish());
-  DictZipBlobStore::ZipStat dzstat = zbuilder->getZipStat();
-  zbuilder.reset();
-
-  long long t4 = g_pf.now();
-
-  // wait for indexing complete, if indexing is slower than value compressing
-  waitIndex();
-
-  return WriteSSTFile(t3, t4, tmpIndexFile, zstore.get(), zvType, dzstat);
 }
 
 Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
-    , fstring tmpIndexFile, DictZipBlobStore* zstore, bitfield_array<2>& zvType
+    , fstring tmpIndexFile, DictZipBlobStore* zstore
     , const DictZipBlobStore::ZipStat& dzstat)
 {
   const size_t realsampleLenSum = zstore->get_dict().size();
@@ -1447,7 +1454,7 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
   BlockHandle dataBlock, dictBlock, indexBlock, zvTypeBlock;
   BlockHandle commonPrefixBlock;
 {
-  size_t real_size = index->Memory().size() + zstore->mem_size() + zvType.mem_size();
+  size_t real_size = index->Memory().size() + zstore->mem_size() + bzvType_.mem_size();
   size_t block_size, last_allocated_block;
   file_->writable_file()->GetPreallocationStatus(&block_size, &last_allocated_block);
   INFO(tbo_.ioptions.info_log
@@ -1469,13 +1476,13 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
         size_t dictOrderOldId = newToOld.p[newId];
         size_t reverseOrderId = keyStat_.numKeys - dictOrderOldId - 1;
         newToOld.p[newId] = reverseOrderId;
-        zvType2.set0(newId, zvType[reverseOrderId]);
+        zvType2.set0(newId, bzvType_[reverseOrderId]);
       }
 		}
 		else {
 		  for (size_t newId = 0; newId < keyStat_.numKeys; ++newId) {
 		    size_t dictOrderOldId = newToOld.p[newId];
-		    zvType2.set0(newId, zvType[dictOrderOldId]);
+		    zvType2.set0(newId, bzvType_[dictOrderOldId]);
 		  }
 		}
 		t7 = g_pf.now();
@@ -1492,8 +1499,8 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
 		} catch (const Status&) {
 		  return s;
 		}
-		zvType.clear();
-		zvType.swap(zvType2);
+		bzvType_.clear();
+		bzvType_.swap(zvType2);
 	}
   else {
     t7 = t6 = t5;
@@ -1510,7 +1517,7 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
 	if (!s.ok()) {
 		return s;
 	}
-	fstring zvTypeMem(zvType.data(), zvType.mem_size());
+	fstring zvTypeMem(bzvType_.data(), bzvType_.mem_size());
 	s = WriteBlock(zvTypeMem, file_, &offset_, &zvTypeBlock);
 	if (!s.ok()) {
 		return s;
@@ -1669,7 +1676,7 @@ Status TerarkZipTableBuilder::OfflineFinish() {
       , "TerarkZipTableBuilder::Finish():this=%p:  index pass time =%7.2f's, %8.3f'MB/sec\n"
       , this, g_pf.sf(t1,tt), properties_.raw_key_size*1.0/g_pf.uf(t1,tt)
       );
-  return WriteSSTFile(t1, tt, tmpIndexFile, zstore.get(), bzvType_, dzstat);
+  return WriteSSTFile(t1, tt, tmpIndexFile, zstore.get(), dzstat);
 }
 
 void TerarkZipTableBuilder::Abandon() {
