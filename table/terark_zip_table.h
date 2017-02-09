@@ -62,7 +62,7 @@ struct TerarkZipTableOptions {
   // use dictZip for value when average value length >= minDictZipValueSize
   // otherwise do not use dictZip
   size_t minDictZipValueSize = 50;
-#endif
+#endif // TerocksPrivateCode
 
   // should be a small value, typically 0.001
   // default is to disable indexCache, because the improvement

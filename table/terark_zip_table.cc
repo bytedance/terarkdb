@@ -226,7 +226,7 @@ private:
   Status OfflineFinish();
 #if defined(TerocksPrivateCode)
   Status PlainValueToFinish(fstring tmpIndexFile, std::function<void()> waitIndex);
-#endif
+#endif // TerocksPrivateCode
   Status ZipValueToFinish(fstring tmpIndexFile, std::function<void()> waitIndex);
   Status WriteSSTFile(long long t3, long long t4
       , fstring tmpIndexFile, DictZipBlobStore* zstore, bitfield_array<2>& zvType
@@ -1134,13 +1134,12 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
     waitQueue.trim(std::remove_if(waitQueue.begin(), waitQueue.end(),
         [this](PendingTask x){return this==x.tztb;}));
   };
-  auto avgValueLen = double(properties_.raw_value_size) / properties_.num_entries;
-
 #if defined(TerocksPrivateCode)
+  auto avgValueLen = double(properties_.raw_value_size) / properties_.num_entries;
   if (avgValueLen < table_options_.minDictZipValueSize)
     return PlainValueToFinish(tmpIndexFile, waitIndex);
   else
-#endif
+#endif // TerocksPrivateCode
   return ZipValueToFinish(tmpIndexFile, waitIndex);
 }
 
@@ -1152,7 +1151,7 @@ PlainValueToFinish(fstring tmpIndexFile, std::function<void()> waitIndex) {
 
   return s;
 }
-#endif
+#endif // TerocksPrivateCode
 
 Status
 TerarkZipTableBuilder::
