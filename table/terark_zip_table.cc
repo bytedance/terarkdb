@@ -17,6 +17,7 @@
 #include <table/table_reader.h>
 #include <table/meta_blocks.h>
 #include <terark/bitmap.hpp>
+#include <terark/gold_hash_map.hpp>
 #include <terark/util/crc.hpp>
 #include <terark/util/throw.hpp>
 #include <terark/util/profiling.hpp>
@@ -31,6 +32,10 @@
 #include <stdint.h>
 #include <float.h>
 #include <util/arena.h> // for #include <sys/mman.h>
+
+#if defined(TerocksPrivateCode)
+#include <terark/zbs/mixed_len_blob_store.hpp>
+#endif // TerocksPrivateCode
 
 namespace rocksdb {
 
@@ -198,6 +203,88 @@ private:
   Status LoadIndex(Slice mem);
 };
 
+class Uint32Histogram {
+  terark::valvec<uint32_t> m_small_cnt;
+  terark::gold_hash_map<uint32_t, uint32_t> m_large_cnt;
+  static const size_t MAX_SMALL_VALUE = 4096;
+
+public:
+  size_t m_distinct_key_cnt;
+  size_t m_cnt_sum;
+  size_t m_min_cnt_key, m_cnt_of_min_cnt_key;
+  size_t m_max_cnt_key, m_cnt_of_max_cnt_key;
+
+  Uint32Histogram() {
+    m_cnt_of_min_cnt_key = 0;
+    m_cnt_of_max_cnt_key = 0;
+    m_min_cnt_key = size_t(-1);
+    m_max_cnt_key = 0;
+    m_distinct_key_cnt = 0;
+    m_cnt_sum = 0;
+    m_small_cnt.resize(MAX_SMALL_VALUE, 0);
+  }
+  uint32_t& operator[](size_t val) {
+    if (val < MAX_SMALL_VALUE)
+      return m_small_cnt[val];
+    else
+      return m_large_cnt[val];
+  }
+  void finish() {
+    const uint32_t* pCnt = m_small_cnt.data();
+    for (size_t maxKey = MAX_SMALL_VALUE; maxKey > 0; --maxKey) {
+      if (pCnt[maxKey-1] > 0) {
+        m_small_cnt.risk_set_size(maxKey);
+        break;
+      }
+    }
+    size_t sum = 0;
+    size_t distinct_cnt = 0;
+    uint32_t cnt_of_max_cnt_key = 0;
+    uint32_t cnt_of_min_cnt_key = 0;
+    for (size_t key = 0, maxKey = m_small_cnt.size(); key < maxKey; ++key) {
+      uint32_t cnt = pCnt[key];
+      if (cnt) {
+        distinct_cnt++;
+        sum += cnt;
+        if (cnt_of_max_cnt_key < cnt) {
+          cnt_of_max_cnt_key = cnt;
+          m_max_cnt_key = key;
+        }
+        if (cnt_of_min_cnt_key > cnt) {
+          cnt_of_min_cnt_key = cnt;
+          m_min_cnt_key = key;
+        }
+      }
+    }
+    for (size_t idx = m_large_cnt.beg_i(); idx < m_large_cnt.end_i(); ++idx) {
+      sum += m_large_cnt.val(idx);
+    }
+    distinct_cnt += m_large_cnt.size();
+    m_distinct_key_cnt = distinct_cnt;
+    m_cnt_sum = sum;
+  }
+  template<class OP>
+  void for_each(OP op) const {
+    const uint32_t* pCnt = m_small_cnt.data();
+    for (size_t key = 0, maxKey = m_small_cnt.size(); key < maxKey; ++key) {
+      if (pCnt[key]) {
+        op(uint32_t(key), pCnt[key]);
+      }
+    }
+    valvec<std::pair<uint32_t, uint32_t> >
+    large(m_large_cnt.size(), valvec_no_init());
+    for (size_t idx = m_large_cnt.beg_i(); idx < m_large_cnt.end_i(); ++idx) {
+      uint32_t key = m_large_cnt.key(idx);
+      uint32_t val = m_large_cnt.val(idx);
+      large[idx] = std::make_pair(key, val);
+    }
+    std::sort(large.begin(), large.end());
+    for (auto kv : large) {
+      op(kv.first, kv.second);
+    }
+  }
+};
+
 class TerarkZipTableBuilder: public TableBuilder, boost::noncopyable {
 public:
   TerarkZipTableBuilder(
@@ -222,6 +309,7 @@ public:
 private:
   void AddPrevUserKey();
   void OfflineZipValueData();
+  void UpdateValueLenHistogram();
   Status EmptyTableFinish();
   Status OfflineFinish();
 #if defined(TerocksPrivateCode)
@@ -238,6 +326,8 @@ private:
   const TerarkZipTableOptions& table_options_;
   const TableBuilderOptions tbo_;
   InternalIterator* second_pass_iter_ = nullptr;
+  Uint32Histogram keyLenHistogram_;
+  Uint32Histogram valueLenHistogram_;
   valvec<byte_t> prevUserKey_;
   terark::febitvec valueBits_;
   TempFileDeleteOnClose tmpKeyFile_;
@@ -928,11 +1018,9 @@ void TerarkZipTableBuilder::Add(const Slice& key, const Slice& value) {
 		t0 = g_pf.now();
 	}
 	valueBits_.push_back(true);
-  if (zbuilder_) {
-    valueBuf_.emplace_back(userKey.end(), 8);
-    valueBuf_.back_append(value.data(), value.size());
-  }
-  else {
+  valueBuf_.emplace_back(userKey.end(), 8);
+  valueBuf_.back_append(value.data(), value.size());
+  if (!zbuilder_) {
 	  if (!value.empty() && randomGenerator_() < sampleUpperBound_) {
 	    tmpSampleFile_.writer << fstringOf(value);
 	    sampleLenSum_ += value.size();
@@ -991,6 +1079,8 @@ Status TerarkZipTableBuilder::Finish() {
 	}
 
   AddPrevUserKey();
+  keyLenHistogram_.finish();
+  valueLenHistogram_.finish();
   tmpKeyFile_.complete_write();
   if (1 == keyStat_.numKeys) {
     assert(keyStat_.commonPrefixLen == keyStat_.sumKeyLen);
@@ -1135,7 +1225,7 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
         [this](PendingTask x){return this==x.tztb;}));
   };
 #if defined(TerocksPrivateCode)
-  auto avgValueLen = double(properties_.raw_value_size) / properties_.num_entries;
+  auto avgValueLen = properties_.raw_value_size / properties_.num_entries;
   if (avgValueLen < table_options_.minDictZipValueSize)
     return PlainValueToFinish(tmpIndexFile, waitIndex);
   else
@@ -1148,7 +1238,20 @@ Status
 TerarkZipTableBuilder::
 PlainValueToFinish(fstring tmpIndexFile, std::function<void()> waitIndex) {
   Status s;
+//  double maxFrequentKeyRatio =
+//  double(valueLenHistogram_.m_cnt_of_max_cnt_key) / keyStat_.numKeys;
+//  size_t totalLen = valueLenHistogram_.m_cnt_sum;
+  size_t fixedLen = valueLenHistogram_.m_max_cnt_key;
+  size_t fixedNum = valueLenHistogram_.m_cnt_of_max_cnt_key;
+  size_t variaNum = keyStat_.numKeys - fixedNum;
+  if (4 * variaNum + keyStat_.numKeys*5/4 < 4 * keyStat_.numKeys) {
+    // use MixedLenBlobStore
+    auto builder = UniquePtrOf(new terark::MixedLenBlobStore(fixedLen));
 
+  }
+  else {
+    // use PlainBlobStore
+  }
   return s;
 }
 #endif // TerocksPrivateCode
@@ -1580,9 +1683,12 @@ void TerarkZipTableBuilder::Abandon() {
 }
 
 void TerarkZipTableBuilder::AddPrevUserKey() {
+  UpdateValueLenHistogram(); // will use valueBuf_
   if (zbuilder_) {
-    OfflineZipValueData();
+    OfflineZipValueData(); // will change valueBuf_
   }
+  valueBuf_.erase_all();
+  keyLenHistogram_[prevUserKey_.size()]++;
   tmpKeyFile_.writer << prevUserKey_;
 	valueBits_.push_back(false);
 	keyStat_.sumKeyLen += prevUserKey_.size();
@@ -1623,7 +1729,24 @@ void TerarkZipTableBuilder::OfflineZipValueData() {
     }
     zbuilder_->addRecord(valueBuf_.strpool);
   }
-  valueBuf_.erase_all();
+}
+
+void TerarkZipTableBuilder::UpdateValueLenHistogram() {
+  uint64_t seq, seqType = *(uint64_t*)valueBuf_.strpool.data();
+  ValueType type;
+  UnPackSequenceAndType(seqType, &seq, &type);
+  const size_t vNum = valueBuf_.size();
+  size_t valueLen = 0;
+  if (vNum == 1 && (kTypeDeletion==type || kTypeValue==type)) {
+    if (0 == seq && kTypeValue==type)
+      valueLen = valueBuf_.strpool.size() - 8;
+    else
+      valueLen = valueBuf_.strpool.size() - 1;
+  }
+  else {
+    valueLen = valueBuf_.strpool.size() + sizeof(uint32_t)*vNum;
+  }
+  valueLenHistogram_[valueLen]++;
 }
 
 /////////////////////////////////////////////////////////////////////////////
