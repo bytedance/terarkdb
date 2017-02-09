@@ -82,10 +82,29 @@ enum class ZipValueType : unsigned char {
 //const size_t kZipValueTypeBits = 2;
 
 struct ZipValueMultiValue {
-	uint32_t num;
+  // TODO: use offset[0] as num, and do not store offsets[num]
+  // when unzip, reserve num+1 cells, set offsets[0] to 0,
+  // and set offsets[num] to length of value pack
+//	uint32_t num;
 	uint32_t offsets[1];
 
-	Slice getValueData(size_t nth) const {
+	///@size size include the extra uint32, == encoded_size + 4
+	static
+	const ZipValueMultiValue* decode(void* data, size_t size, size_t* pNum) {
+	  // data + 4 is the encoded data
+	  auto me = (ZipValueMultiValue*)(data);
+	  size_t num = me->offsets[1];
+	  assert(num > 0);
+	  memmove(me->offsets, me->offsets+1, sizeof(uint32_t)*(num-1));
+	  me->offsets[num] = size - sizeof(uint32_t)*num;
+	  *pNum = num;
+	  return me;
+	}
+	static
+	const ZipValueMultiValue* decode(valvec<byte_t>& buf, size_t* pNum) {
+	  return decode(buf.data(), buf.size(), pNum);
+	}
+	Slice getValueData(size_t nth, size_t num) const {
 		assert(nth < num);
 		size_t offset0 = offsets[nth+0];
 		size_t offset1 = offsets[nth+1];
@@ -94,7 +113,7 @@ struct ZipValueMultiValue {
 		return Slice(base + offset0, dlength);
 	}
 	static size_t calcHeaderSize(size_t n) {
-		return sizeof(uint32_t) * (n + 2);
+		return sizeof(uint32_t) * (n);
 	}
 };
 
@@ -205,6 +224,9 @@ private:
   void OfflineZipValueData();
   Status EmptyTableFinish();
   Status OfflineFinish();
+#if defined(TerocksPrivateCode)
+  Status PlainValueToFinish(fstring tmpIndexFile, std::function<void()> waitIndex);
+#endif
   Status ZipValueToFinish(fstring tmpIndexFile, std::function<void()> waitIndex);
   Status WriteSSTFile(long long t3, long long t4
       , fstring tmpIndexFile, DictZipBlobStore* zstore, bitfield_array<2>& zvType
@@ -456,9 +478,15 @@ private:
   bool UnzipIterRecord(bool hasRecord) {
 	  if (hasRecord) {
 		  size_t recId = iter_->id();
+		  zValtype_ = ZipValueType(table_->typeArray_[recId]);
 		  try {
 		    TryPinBuffer(valueBuf_);
-			  valstore_->get_record(recId, &valueBuf_);
+		    if (ZipValueType::kMulti == zValtype_) {
+		      valueBuf_.resize_no_init(sizeof(uint32_t)); // for offsets[valnum_]
+		    } else {
+		      valueBuf_.erase_all();
+		    }
+			  valstore_->get_record_append(recId, &valueBuf_);
 		  }
 		  catch (const BadCrc32cException& ex) { // crc checksum error
 			  SetIterInvalid();
@@ -466,11 +494,8 @@ private:
 				"TerarkZipTableIterator::UnzipIterRecord()", ex.what());
 			  return false;
 		  }
-		  zValtype_ = ZipValueType(table_->typeArray_[recId]);
 		  if (ZipValueType::kMulti == zValtype_) {
-			  auto zmValue = (ZipValueMultiValue*)(valueBuf_.data());
-			  assert(zmValue->num > 0);
-			  valnum_ = zmValue->num;
+			  ZipValueMultiValue::decode(valueBuf_, &valnum_);
 		  } else {
 			  valnum_ = 1;
 		  }
@@ -519,8 +544,7 @@ private:
       auto zmValue = (const ZipValueMultiValue*)(valueBuf_.data());
       assert(0 != valnum_);
       assert(validx_ < valnum_);
-      assert(valnum_ == zmValue->num);
-      Slice d = zmValue->getValueData(validx_);
+      Slice d = zmValue->getValueData(validx_, valnum_);
       auto snt = unaligned_load<SequenceNumber>(d.data());
       UnPackSequenceAndType(snt, &pInterKey_.sequence, &pInterKey_.type);
       d.remove_prefix(sizeof(SequenceNumber));
@@ -575,7 +599,7 @@ static void MmapWarmUpBytes(const void* addr, size_t len) {
 }
 template<class T>
 static void MmapWarmUp(const T* addr, size_t len) {
-  MmapWarmUpBytes((T*)addr, sizeof(T)*len);
+  MmapWarmUpBytes(addr, sizeof(T)*len);
 }
 static void MmapWarmUp(fstring mem) {
   MmapWarmUpBytes(mem.data(), mem.size());
@@ -725,13 +749,19 @@ TerarkZipTableReader::Get(const ReadOptions& ro, const Slice& ikey,
 	if (size_t(-1) == recId) {
 		return Status::OK();
 	}
+	auto zvType = ZipValueType(typeArray_[recId]);
+	if (ZipValueType::kMulti == zvType) {
+	  g_tbuf.resize_no_init(sizeof(uint32_t));
+	} else {
+	  g_tbuf.erase_all();
+	}
 	try {
-		valstore_->get_record(recId, &g_tbuf);
+		valstore_->get_record_append(recId, &g_tbuf);
 	}
 	catch (const terark::BadChecksumException& ex) {
 		return Status::Corruption("TerarkZipTableReader::Get()", ex.what());
 	}
-	switch (ZipValueType(typeArray_[recId])) {
+	switch (zvType) {
 	default:
 		return Status::Aborted("TerarkZipTableReader::Get()", "Bad ZipValueType");
 	case ZipValueType::kZeroSeq:
@@ -754,9 +784,10 @@ TerarkZipTableReader::Get(const ReadOptions& ro, const Slice& ikey,
 		}
 		break; }
 	case ZipValueType::kMulti: { // more than one value
-		auto mVal = (const ZipValueMultiValue*)g_tbuf.data();
-		for(size_t i = 0; i < size_t(mVal->num); ++i) {
-			Slice val = mVal->getValueData(i);
+	  size_t num = 0;
+		auto mVal = ZipValueMultiValue::decode(g_tbuf, &num);
+		for(size_t i = 0; i < num; ++i) {
+			Slice val = mVal->getValueData(i, num);
 			SequenceNumber sn;
 			ValueType valtype;
 			{
@@ -1103,11 +1134,29 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
     waitQueue.trim(std::remove_if(waitQueue.begin(), waitQueue.end(),
         [this](PendingTask x){return this==x.tztb;}));
   };
+  auto avgValueLen = double(properties_.raw_value_size) / properties_.num_entries;
+
+#if defined(TerocksPrivateCode)
+  if (avgValueLen < table_options_.minDictZipValueSize)
+    return PlainValueToFinish(tmpIndexFile, waitIndex);
+  else
+#endif
   return ZipValueToFinish(tmpIndexFile, waitIndex);
 }
 
+#if defined(TerocksPrivateCode)
 Status
-TerarkZipTableBuilder::ZipValueToFinish(fstring tmpIndexFile, std::function<void()> waitIndex) {
+TerarkZipTableBuilder::
+PlainValueToFinish(fstring tmpIndexFile, std::function<void()> waitIndex) {
+  Status s;
+
+  return s;
+}
+#endif
+
+Status
+TerarkZipTableBuilder::
+ZipValueToFinish(fstring tmpIndexFile, std::function<void()> waitIndex) {
   AutoDeleteFile tmpStoreFile{tmpValueFile_.path + ".zbs"};
   AutoDeleteFile tmpStoreDict{tmpValueFile_.path + ".zbs-dict"};
   long long t3 = g_pf.now();
@@ -1188,15 +1237,16 @@ TerarkZipTableBuilder::ZipValueToFinish(fstring tmpIndexFile, std::function<void
 			zvType.set0(recId, size_t(ZipValueType::kMulti));
 			size_t headerSize = ZipValueMultiValue::calcHeaderSize(oneSeqLen);
 			value.resize(headerSize);
-			((ZipValueMultiValue*)value.data())->num = oneSeqLen;
-			((ZipValueMultiValue*)value.data())->offsets[0] = 0;
+			((ZipValueMultiValue*)value.data())->offsets[0] = uint32_t(oneSeqLen);
 			for (size_t j = 0; j < oneSeqLen; j++) {
 				if (j > 0) {
 					seqType = input.load_as<uint64_t>();
 				}
 				value.append((byte_t*)&seqType, 8);
 				input.load_add(value);
-				((ZipValueMultiValue*)value.data())->offsets[j+1] = value.size() - headerSize;
+				if (j + 1 < oneSeqLen) {
+				  ((ZipValueMultiValue*)value.data())->offsets[j+1] = value.size() - headerSize;
+				}
 			}
 		}
     zbuilder->addRecord(value);
@@ -1223,6 +1273,11 @@ TerarkZipTableBuilder::ZipValueToFinish(fstring tmpIndexFile, std::function<void
     //  assert(fstringOf(pikey.user_key) == backupKeys[recId]);
       if (0 == pikey.sequence && kTypeValue==pikey.type) {
         zvType.set0(recId, size_t(ZipValueType::kZeroSeq));
+#if defined(TERARK_ZIP_TRIAL_VERSION)
+        if (randomGenerator_() < randomGenerator_.max()/1000)
+          zbuilder->addRecord(fstring(g_trail_rand_delete));
+        else
+#endif
         zbuilder->addRecord(fstringOf(curVal));
       } else {
         if (kTypeValue==pikey.type) {
@@ -1240,17 +1295,20 @@ TerarkZipTableBuilder::ZipValueToFinish(fstring tmpIndexFile, std::function<void
       zvType.set0(recId, size_t(ZipValueType::kMulti));
       size_t headerSize = ZipValueMultiValue::calcHeaderSize(oneSeqLen);
       value.resize(headerSize);
-      ((ZipValueMultiValue*)value.data())->num = oneSeqLen;
-      ((ZipValueMultiValue*)value.data())->offsets[0] = 0;
+      ((ZipValueMultiValue*)value.data())->offsets[0] = uint32_t(oneSeqLen);
       for (size_t j = 0; j < oneSeqLen; j++) {
-        curKey = second_pass_iter_->key();
-        curVal = second_pass_iter_->value();
-        ParseInternalKey(curKey, &pikey);
+        if (j > 0) {
+          curKey = second_pass_iter_->key();
+          curVal = second_pass_iter_->value();
+          ParseInternalKey(curKey, &pikey);
+        }
       //  assert(fstringOf(pikey.user_key) == backupKeys[recId]);
         uint64_t seqType = PackSequenceAndType(pikey.sequence, pikey.type);
         value.append((byte_t*)&seqType, 8);
         value.append(fstringOf(curVal));
-        ((ZipValueMultiValue*)value.data())->offsets[j+1] = value.size() - headerSize;
+        if (j+1 < oneSeqLen) {
+          ((ZipValueMultiValue*)value.data())->offsets[j+1] = value.size() - headerSize;
+        }
         second_pass_iter_->Next();
       }
       zbuilder->addRecord(value);
@@ -1560,8 +1618,8 @@ void TerarkZipTableBuilder::OfflineZipValueData() {
     char* pData = valueBuf_.strpool.data();
     memmove(pData + headerSize, pData, valueBytes);
     auto multiVals = (ZipValueMultiValue*)pData;
-    multiVals->num = uint32_t(vNum);
-    for (size_t i = 0; i < vNum+1; ++i) {
+    multiVals->offsets[0] = uint32_t(vNum);
+    for (size_t i = 1; i < vNum; ++i) {
       multiVals->offsets[i] = uint32_t(valueBuf_.offsets[i]);
     }
     zbuilder_->addRecord(valueBuf_.strpool);

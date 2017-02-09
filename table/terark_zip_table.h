@@ -57,6 +57,12 @@ struct TerarkZipTableOptions {
   size_t softZipWorkingMemLimit = 16ull << 30;
   size_t hardZipWorkingMemLimit = 32ull << 30;
   size_t smallTaskMemory = 1200 << 20; // 1.2G
+#define TerocksPrivateCode
+#if defined(TerocksPrivateCode)
+  // use dictZip for value when average value length >= minDictZipValueSize
+  // otherwise do not use dictZip
+  size_t minDictZipValueSize = 50;
+#endif
 
   // should be a small value, typically 0.001
   // default is to disable indexCache, because the improvement
