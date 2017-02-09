@@ -1036,21 +1036,23 @@ auto waitForMemory = [&](size_t myWorkMem, const char* who) {
     return true; // wait
   };
   std::unique_lock<std::mutex> zipLock(zipMutex);
-  sumWaitingMem += myWorkMem;
-  while (shouldWait()) {
+  if (myWorkMem > smallmem / 2) { // never wait for very smallmem(SST flush)
+    sumWaitingMem += myWorkMem;
+    while (shouldWait()) {
+      INFO(tbo_.ioptions.info_log
+          , "TerarkZipTableBuilder::Finish():this=%p: sumWaitingMem = %f GB, sumWorkingMem = %f GB, %s WorkingMem = %f GB, wait...\n"
+          , this, sumWaitingMem/1e9, sumWorkingMem/1e9, who, myWorkMem/1e9
+          );
+      zipCond.wait_for(zipLock, waitForTime);
+    }
     INFO(tbo_.ioptions.info_log
-        , "TerarkZipTableBuilder::Finish():this=%p: sumWaitingMem = %f GB, sumWorkingMem = %f GB, %s WorkingMem = %f GB, wait...\n"
+        , "TerarkZipTableBuilder::Finish():this=%p: sumWaitingMem = %f GB, sumWorkingMem = %f GB, %s WorkingMem = %f GB, waited %8.3f sec, Key+Value bytes = %f GB\n"
         , this, sumWaitingMem/1e9, sumWorkingMem/1e9, who, myWorkMem/1e9
+        , g_pf.sf(myStartTime, now)
+        , (properties_.raw_key_size + properties_.raw_value_size) / 1e9
         );
-    zipCond.wait_for(zipLock, waitForTime);
+    sumWaitingMem -= myWorkMem;
   }
-  INFO(tbo_.ioptions.info_log
-      , "TerarkZipTableBuilder::Finish():this=%p: sumWaitingMem = %f GB, sumWorkingMem = %f GB, %s WorkingMem = %f GB, waited %8.3f sec, Key+Value bytes = %f GB\n"
-      , this, sumWaitingMem/1e9, sumWorkingMem/1e9, who, myWorkMem/1e9
-      , g_pf.sf(myStartTime, now)
-      , (properties_.raw_key_size + properties_.raw_value_size) / 1e9
-      );
-  sumWaitingMem -= myWorkMem;
   sumWorkingMem += myWorkMem;
 };
 // indexing is also slow, run it in parallel
