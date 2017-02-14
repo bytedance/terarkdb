@@ -34,7 +34,8 @@
 #include <util/arena.h> // for #include <sys/mman.h>
 
 #if defined(TerocksPrivateCode)
-#include <terark/zbs/mixed_len_blob_store.hpp>
+  #include <terark/zbs/plain_blob_store.hpp>
+  #include <terark/zbs/mixed_len_blob_store.hpp>
 #endif // TerocksPrivateCode
 
 namespace rocksdb {
@@ -1252,6 +1253,9 @@ PlainValueToFinish(fstring tmpIndexFile, std::function<void()> waitIndex) {
   }
   else {
     // use PlainBlobStore
+    terark::PlainBlobStore plain;
+    plain.reset_with_content_size(keyStat_.numKeys);
+    BuilderWriteValues([&](fstring value){plain.add_record(value);});
   }
   return s;
 }

@@ -81,6 +81,8 @@ void TerarkZipAutoConfigForOnlineDB(struct TerarkZipTableOptions&,
                          struct ColumnFamilyOptions&,
                          size_t memBytesLimit = 0);
 
+void TerarkZipConfigFromEnv(struct DBOptions&, struct ColumnFamilyOptions&);
+
 class TableFactory*
 NewTerarkZipTableFactory(const TerarkZipTableOptions&,
 						 class TableFactory* fallback);
