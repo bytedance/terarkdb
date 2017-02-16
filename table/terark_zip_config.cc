@@ -85,15 +85,27 @@ void TerarkZipAutoConfigForOnlineDB(struct TerarkZipTableOptions& tzo,
   dbo.env->SetBackgroundThreads(2, rocksdb::Env::HIGH);
 }
 
-void TerarkZipConfigFromEnv(DBOptions& dbo, ColumnFamilyOptions& cfo) {
+bool TerarkZipConfigFromEnv(DBOptions& dbo, ColumnFamilyOptions& cfo) {
+  if (TerarkZipCFOptionsFromEnv(cfo)) {
+    TerarkZipDBOptionsFromEnv(dbo);
+    return true;
+  } else {
+    return false;
+  }
+}
+
+bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo) {
+  const char* localTempDir = getenv("TerarkZipTable_localTempDir");
+  if (!localTempDir) {
+    STD_INFO("TerarkZipConfigFromEnv(dbo, cfo) failed because env TerarkZipTable_localTempDir is not defined\n");
+    return false;
+  }
+  if (!*localTempDir) {
+      THROW_STD(invalid_argument,
+        "If env TerarkZipTable_localTempDir is defined, it must not be empty");
+  }
   struct TerarkZipTableOptions tzo;
-  if (const char* env = getenv("TerarkZipTable_localTempDir")) {
-    tzo.localTempDir = env;
-  }
-  else {
-    THROW_STD(invalid_argument,
-        "env TerarkZipTable_localTempDir must be defined");
-  }
+  tzo.localTempDir = localTempDir;
   if (const char* algo = getenv("TerarkZipTable_entropyAlgo")) {
     if (strcasecmp(algo, "NoEntropy") == 0) {
       tzo.entropyAlgo = tzo.kNoEntropy;
@@ -115,7 +127,6 @@ void TerarkZipConfigFromEnv(DBOptions& dbo, ColumnFamilyOptions& cfo) {
   if (const char* env = getenv("TerarkZipTable_indexType")) {
     tzo.indexType = env;
   }
-  dbo.allow_mmap_reads = true;
 
 #define MyGetInt(obj, name, Default) \
     obj.name = (int)terark::getEnvLong("TerarkZipTable_" #name, Default)
@@ -167,6 +178,12 @@ void TerarkZipConfigFromEnv(DBOptions& dbo, ColumnFamilyOptions& cfo) {
   MyGetInt(cfo, target_file_size_base      , 1ull << 30);
   MyGetInt(cfo, target_file_size_multiplier, 5         );
   MyGetInt(cfo, num_levels                 , 5         );
+
+  STD_INFO("TerarkZipConfigFromEnv(dbo, cfo) successed\n");
+  return true;
+}
+
+void TerarkZipDBOptionsFromEnv(DBOptions& dbo) {
   MyGetInt(dbo, base_background_compactions, 3         );
   MyGetInt(dbo,  max_background_compactions, 5         );
   MyGetInt(dbo,  max_background_flushes    , 2         );
@@ -174,6 +191,7 @@ void TerarkZipConfigFromEnv(DBOptions& dbo, ColumnFamilyOptions& cfo) {
 
   dbo.env->SetBackgroundThreads(dbo.max_background_compactions, rocksdb::Env::LOW);
   dbo.env->SetBackgroundThreads(dbo.max_background_flushes    , rocksdb::Env::HIGH);
+  dbo.allow_mmap_reads = true;
 }
 
 }
