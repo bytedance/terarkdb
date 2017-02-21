@@ -206,6 +206,7 @@ private:
 
 class Uint32Histogram {
   terark::valvec<uint32_t> m_small_cnt;
+  terark::valvec<std::pair<uint32_t, uint32_t> > m_large_cnt_compact;
   terark::gold_hash_map<uint32_t, uint32_t> m_large_cnt;
   static const size_t MAX_SMALL_VALUE = 4096;
 
@@ -263,6 +264,17 @@ public:
     distinct_cnt += m_large_cnt.size();
     m_distinct_key_cnt = distinct_cnt;
     m_cnt_sum = sum;
+
+    m_large_cnt_compact.resize_no_init(m_large_cnt.size());
+    auto large_beg = m_large_cnt_compact.begin();
+    auto large_num = m_large_cnt.end_i();
+    for(size_t idx = 0; idx < large_num; ++idx) {
+      uint32_t key = m_large_cnt.key(idx);
+      uint32_t val = m_large_cnt.val(idx);
+      large_beg[idx] = std::make_pair(key, val);
+    }
+    std::sort(large_beg, large_beg + large_num);
+    m_large_cnt_compact.risk_set_size(large_num);
   }
   template<class OP>
   void for_each(OP op) const {
@@ -272,15 +284,7 @@ public:
         op(uint32_t(key), pCnt[key]);
       }
     }
-    valvec<std::pair<uint32_t, uint32_t> >
-    large(m_large_cnt.size(), valvec_no_init());
-    for (size_t idx = m_large_cnt.beg_i(); idx < m_large_cnt.end_i(); ++idx) {
-      uint32_t key = m_large_cnt.key(idx);
-      uint32_t val = m_large_cnt.val(idx);
-      large[idx] = std::make_pair(key, val);
-    }
-    std::sort(large.begin(), large.end());
-    for (auto kv : large) {
+    for (auto kv : m_large_cnt_compact) {
       op(kv.first, kv.second);
     }
   }
