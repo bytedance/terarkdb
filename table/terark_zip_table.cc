@@ -1512,13 +1512,14 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
 		t7 = g_pf.now();
 		try {
 		  dataBlock.set_offset(offset_);
-		  zstore->reorder_zip_data(newToOld, [&](const void* data, size_t size) {
+		  auto writeAppend = [&](const void* data, size_t size) {
 		    s = file_->Append(Slice((const char*)data, size));
 		    if (!s.ok()) {
 		      throw s;
 		    }
 		    offset_ += size;
-		  });
+		  };
+		  zstore->reorder_zip_data(newToOld, std::ref(writeAppend));
 		  dataBlock.set_size(offset_ - dataBlock.offset());
 		} catch (const Status&) {
 		  return s;
