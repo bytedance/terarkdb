@@ -1786,12 +1786,27 @@ void TerarkZipTableBuilder::UpdateValueLenHistogram() {
 
 /////////////////////////////////////////////////////////////////////////////
 
+TableFactory*
+__attribute__((weak))
+NewAdaptiveTableFactory(
+    std::shared_ptr<TableFactory> table_factory_to_write,
+    std::shared_ptr<TableFactory> block_based_table_factory,
+    std::shared_ptr<TableFactory> plain_table_factory,
+    std::shared_ptr<TableFactory> cuckoo_table_factory);
+
 class TerarkZipTableFactory : public TableFactory, boost::noncopyable {
  public:
   explicit
   TerarkZipTableFactory(const TerarkZipTableOptions& tzto, TableFactory* fallback)
   : table_options_(tzto), fallback_factory_(fallback) {
-    adaptive_factory_ = NewAdaptiveTableFactory();
+    if (NewAdaptiveTableFactory) {
+      adaptive_factory_ = NewAdaptiveTableFactory();
+    } else {
+      adaptive_factory_ = fallback;
+      STD_WARN("Missing Symbol NewAdaptiveTableFactory(), "
+               "use fallback factory as adaptive_factory_, "
+               "may not recognize rocksdb SSTables\n");
+    }
   }
 
   const char* Name() const override { return "TerarkZipTable"; }
