@@ -785,7 +785,7 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
     }
   }
   if (tzto_.warmUpValueOnOpen) {
-    MmapWarmUp(valstore_->get_data());
+    MmapWarmUp(valstore_->get_mmap());
   }
   long long t1 = g_pf.now();
   keyIndex_->BuildCache(tzto_.indexCacheRatio);
