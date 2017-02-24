@@ -332,7 +332,10 @@ private:
 
   Arena arena_;
   const TerarkZipTableOptions& table_options_;
-  const TableBuilderOptions tbo_;
+// fuck out TableBuilderOptions
+  const ImmutableCFOptions& ioptions_;
+  std::vector<std::unique_ptr<IntTblPropCollector>> collectors_;
+// end fuck out TableBuilderOptions
   InternalIterator* second_pass_iter_ = nullptr;
   Uint32Histogram keyLenHistogram_;
   Uint32Histogram valueLenHistogram_;
@@ -918,8 +921,17 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(
 		uint32_t column_family_id,
 		WritableFileWriter* file)
   : table_options_(tzto)
-  , tbo_(tbo)
+  , ioptions_(tbo.ioptions)
 {
+  if (tbo.int_tbl_prop_collector_factories) {
+    const auto& factories = *tbo.int_tbl_prop_collector_factories;
+    collectors_.resize(factories.size());
+    auto cfId = properties_.column_family_id;
+    for (size_t i = 0; i < collectors_.size(); ++i) {
+      collectors_[i].reset(factories[i]->CreateIntTblPropCollector(cfId));
+    }
+  }
+
   file_ = file;
   sampleUpperBound_ = randomGenerator_.max() * table_options_.sampleRatio;
   tmpValueFile_.path = tzto.localTempDir + "/Terocks-XXXXXX";
@@ -1495,7 +1507,7 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
 		terark::AutoFree<uint32_t> newToOld(keyStat_.numKeys, UINT32_MAX);
 		index->GetOrderMap(newToOld.p);
 		t6 = g_pf.now();
-		if (fstring(tbo_.ioptions.user_comparator->Name()).startsWith("rev:")) {
+		if (fstring(ioptions_.user_comparator->Name()).startsWith("rev:")) {
 		  // Damn reverse bytewise order
       for (size_t newId = 0; newId < keyStat_.numKeys; ++newId) {
         size_t dictOrderOldId = newToOld.p[newId];
@@ -1650,17 +1662,8 @@ Status TerarkZipTableBuilder::WriteMetaData(std::initializer_list<std::pair<cons
   PropertyBlockBuilder propBlockBuilder;
   propBlockBuilder.AddTableProperty(properties_);
   propBlockBuilder.Add(properties_.user_collected_properties);
-  std::vector<std::unique_ptr<IntTblPropCollector>> collectors;
-  if (tbo_.int_tbl_prop_collector_factories) {
-    const auto& factories = *tbo_.int_tbl_prop_collector_factories;
-    collectors.resize(factories.size());
-    auto cfId = properties_.column_family_id;
-    for (size_t i = 0; i < collectors.size(); ++i) {
-      collectors[i].reset(factories[i]->CreateIntTblPropCollector(cfId));
-    }
-  }
-  NotifyCollectTableCollectorsOnFinish(collectors,
-                                       tbo_.ioptions.info_log,
+  NotifyCollectTableCollectorsOnFinish(collectors_,
+                                       ioptions_.info_log,
                                        &propBlockBuilder);
   BlockHandle propBlock, metaindexBlock;
   Status s = WriteBlock(propBlockBuilder.Finish(), file_, &offset_, &propBlock);
