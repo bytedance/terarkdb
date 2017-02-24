@@ -173,21 +173,23 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo) {
     cfo.compaction_style = kCompactionStyleUniversal;
     cfo.compaction_options_universal.allow_trivial_move = true;
   }
-  MyGetInt(cfo, write_buffer_size          , 1ull << 30);
-  MyGetInt(cfo, max_write_buffer_number    , 5         );
-  MyGetInt(cfo, target_file_size_base      , 1ull << 30);
-  MyGetInt(cfo, target_file_size_multiplier, 5         );
-  MyGetInt(cfo, num_levels                 , 5         );
+  cfo.write_buffer_size     = uint64_t(1) << 30; // 1G
+  cfo.target_file_size_base = uint64_t(1) << 30; // 1G
+  MyGetXiB(cfo, write_buffer_size);
+  MyGetXiB(cfo, target_file_size_base);
+  MyGetInt(cfo, max_write_buffer_number    , 5);
+  MyGetInt(cfo, target_file_size_multiplier, 5);
+  MyGetInt(cfo, num_levels                 , 5);
 
   STD_INFO("TerarkZipConfigFromEnv(dbo, cfo) successed\n");
   return true;
 }
 
 void TerarkZipDBOptionsFromEnv(DBOptions& dbo) {
-  MyGetInt(dbo, base_background_compactions, 3         );
-  MyGetInt(dbo,  max_background_compactions, 5         );
-  MyGetInt(dbo,  max_background_flushes    , 2         );
-  MyGetInt(dbo,  max_subcompactions        , 1         );
+  MyGetInt(dbo, base_background_compactions, 3);
+  MyGetInt(dbo,  max_background_compactions, 5);
+  MyGetInt(dbo,  max_background_flushes    , 2);
+  MyGetInt(dbo,  max_subcompactions        , 1);
 
   dbo.env->SetBackgroundThreads(dbo.max_background_compactions, rocksdb::Env::LOW);
   dbo.env->SetBackgroundThreads(dbo.max_background_flushes    , rocksdb::Env::HIGH);
