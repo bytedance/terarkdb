@@ -75,11 +75,15 @@ struct TerarkZipTableOptions {
 void TerarkZipAutoConfigForBulkLoad(struct TerarkZipTableOptions&,
                          struct DBOptions&,
                          struct ColumnFamilyOptions&,
-                         size_t memBytesLimit = 0);
+                         size_t cpuNum = 0,
+                         size_t memBytesLimit = 0,
+                         size_t diskBytesLimit = 0);
 void TerarkZipAutoConfigForOnlineDB(struct TerarkZipTableOptions&,
                          struct DBOptions&,
                          struct ColumnFamilyOptions&,
-                         size_t memBytesLimit = 0);
+                         size_t cpuNum = 0,
+                         size_t memBytesLimit = 0,
+                         size_t diskBytesLimit = 0);
 
 bool TerarkZipConfigFromEnv(struct DBOptions&, struct ColumnFamilyOptions&);
 bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions&);

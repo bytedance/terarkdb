@@ -8,13 +8,40 @@
 #include <rocksdb/env.h>
 #include <unistd.h>
 
+namespace terark {
+  void DictZipBlobStore_setZipThreads(int zipThreads);
+}
+
 namespace rocksdb {
+
+static
+int ComputeFileSizeMultiplier(double diskLimit, double minVal, int levels) {
+  if (diskLimit > 0) {
+    double maxSST = diskLimit / 6.0;
+    double maxMul = maxSST / minVal;
+    double oneMul = pow(maxMul, 1.0/(levels-1));
+    if (oneMul > 1.0)
+      return (int)oneMul;
+    else
+      return 1;
+  }
+  else {
+    return 5;
+  }
+}
 
 void TerarkZipAutoConfigForBulkLoad(struct TerarkZipTableOptions& tzo,
                                     struct DBOptions& dbo,
                                     struct ColumnFamilyOptions& cfo,
-                                    size_t memBytesLimit)
+                                    size_t cpuNum,
+                                    size_t memBytesLimit,
+                                    size_t diskBytesLimit)
 {
+  using namespace std; // max, min
+  int iCpuNum = int(cpuNum);
+  if (cpuNum > 0) {
+    terark::DictZipBlobStore_setZipThreads(max(iCpuNum-1, 0));
+  }
   if (0 == memBytesLimit) {
     size_t page_num  = sysconf(_SC_PHYS_PAGES);
     size_t page_size = sysconf(_SC_PAGE_SIZE);
@@ -30,7 +57,8 @@ void TerarkZipAutoConfigForBulkLoad(struct TerarkZipTableOptions& tzo,
   cfo.max_write_buffer_number = 6;
   cfo.min_write_buffer_number_to_merge = 1;
   cfo.target_file_size_base = cfo.write_buffer_size;
-  cfo.target_file_size_multiplier = 5;
+  cfo.target_file_size_multiplier = ComputeFileSizeMultiplier(
+      diskBytesLimit, cfo.target_file_size_base, cfo.num_levels);
   cfo.compaction_style = rocksdb::kCompactionStyleUniversal;
   cfo.compaction_options_universal.allow_trivial_move = true;
 
@@ -49,14 +77,21 @@ void TerarkZipAutoConfigForBulkLoad(struct TerarkZipTableOptions& tzo,
   dbo.max_background_flushes = 2;
   dbo.max_subcompactions = 1; // no sub compactions
 
-  dbo.env->SetBackgroundThreads(4, rocksdb::Env::HIGH);
+  dbo.env->SetBackgroundThreads(max(1,min(4,iCpuNum/2)), rocksdb::Env::HIGH);
 }
 
 void TerarkZipAutoConfigForOnlineDB(struct TerarkZipTableOptions& tzo,
                                     struct DBOptions& dbo,
                                     struct ColumnFamilyOptions& cfo,
-                                    size_t memBytesLimit)
+                                    size_t cpuNum,
+                                    size_t memBytesLimit,
+                                    size_t diskBytesLimit)
 {
+  using namespace std; // max, min
+  int iCpuNum = int(cpuNum);
+  if (cpuNum > 0) {
+    terark::DictZipBlobStore_setZipThreads((iCpuNum * 3 + 1) / 5);
+  }
   if (0 == memBytesLimit) {
     size_t page_num  = sysconf(_SC_PHYS_PAGES);
     size_t page_size = sysconf(_SC_PAGE_SIZE);
@@ -70,7 +105,8 @@ void TerarkZipAutoConfigForOnlineDB(struct TerarkZipTableOptions& tzo,
   cfo.num_levels = 5;
   cfo.max_write_buffer_number = 5;
   cfo.target_file_size_base = cfo.write_buffer_size;
-  cfo.target_file_size_multiplier = 5;
+  cfo.target_file_size_multiplier = ComputeFileSizeMultiplier(
+      diskBytesLimit, cfo.target_file_size_base, cfo.num_levels);
   cfo.compaction_style = rocksdb::kCompactionStyleUniversal;
   cfo.compaction_options_universal.allow_trivial_move = true;
 
@@ -81,8 +117,8 @@ void TerarkZipAutoConfigForOnlineDB(struct TerarkZipTableOptions& tzo,
   dbo.base_background_compactions = 3;
   dbo.max_background_compactions = 5;
 
-  dbo.env->SetBackgroundThreads(3, rocksdb::Env::LOW);
-  dbo.env->SetBackgroundThreads(2, rocksdb::Env::HIGH);
+  dbo.env->SetBackgroundThreads(max(1,min(3,iCpuNum*3/8)), rocksdb::Env::LOW);
+  dbo.env->SetBackgroundThreads(max(1,min(2,iCpuNum*2/8)), rocksdb::Env::HIGH);
 }
 
 bool TerarkZipConfigFromEnv(DBOptions& dbo, ColumnFamilyOptions& cfo) {
