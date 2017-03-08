@@ -172,6 +172,9 @@ public:
   InternalIterator*
   NewIterator(const ReadOptions&, Arena*, bool skip_filters) override;
 
+  InternalIterator*
+  NewRangeTombstoneIterator(const ReadOptions& read_options) override;
+
   void Prepare(const Slice& target) override {}
 
   Status Get(const ReadOptions&, const Slice& key, GetContext*,
@@ -200,6 +203,7 @@ private:
   const TableReaderOptions table_reader_options_;
   std::shared_ptr<const TableProperties> table_properties_;
   const TerarkZipTableOptions& tzto_;
+  terark::fstrvec tombstones_;
   bool isReverseBytewiseOrder_;
   friend class TerarkZipTableIterator;
   Status LoadIndex(Slice mem);
@@ -831,6 +835,97 @@ NewIterator(const ReadOptions& ro, Arena* arena, bool skip_filters) {
 	else {
 		return new TerarkZipTableIterator(this);
 	}
+}
+
+// TODO: need to use Internal Key Compare
+class TZT_RangeTombstoneIter : public InternalIterator, boost::noncopyable {
+  const terark::fstrvec* tombstones_;
+  const bool isReverseBytewiseOrder_;
+  intptr_t num_;
+  intptr_t idx_;
+public:
+  TZT_RangeTombstoneIter(const terark::fstrvec* tombstones, bool isReverse)
+    : tombstones_(tombstones)
+    , isReverseBytewiseOrder_(isReverse)
+    , num_(tombstones->size()), idx_(-1) {}
+  ~TZT_RangeTombstoneIter() {}
+  void SetPinnedItersMgr(PinnedIteratorsManager*) {}
+  bool Valid() const override {
+    if (isReverseBytewiseOrder_)
+      return idx_ >= 0;
+    else
+      return idx_ < num_;
+  }
+  void SeekToFirst() override {
+    if (isReverseBytewiseOrder_)
+      idx_ = num_ - 1;
+    else
+      idx_ = 0;
+  }
+  void SeekToLast() override {
+    if (isReverseBytewiseOrder_)
+      idx_ = 0;
+    else
+      idx_ = num_ - 1;
+  }
+  void SeekForPrev(const Slice& key) override {
+    idx_ = terark::lower_bound_0<const terark::fstrvec&>(
+        *tombstones_, num_, fstringOf(key));
+    if (!isReverseBytewiseOrder_) {
+      if (idx_ < num_ && fstringOf(key) != (*tombstones_)[idx_]) {
+        idx_++;
+      }
+    }
+  }
+  void Seek(const Slice& key) override {
+    idx_ = terark::lower_bound_0<const terark::fstrvec&>(
+        *tombstones_, num_, fstringOf(key));
+    if (isReverseBytewiseOrder_) {
+      if (idx_ < num_ && fstringOf(key) != (*tombstones_)[idx_]) {
+        idx_--;
+      }
+    }
+  }
+  void Next() override {
+    if (isReverseBytewiseOrder_) {
+      assert(idx_ >= 0);
+      idx_--;
+    }
+    else {
+      assert(idx_ < num_);
+      idx_++;
+    }
+  }
+  void Prev() override {
+    if (!isReverseBytewiseOrder_) {
+      assert(idx_ >= 0);
+      idx_--;
+    }
+    else {
+      assert(idx_ < num_);
+      idx_++;
+    }
+  }
+  Slice key() const override {
+    assert(idx_ >= 0);
+    assert(idx_ < num_);
+    auto pp = (*tombstones_)[idx_];
+    return Slice(pp.first, pp.second - pp.first);
+  }
+  Slice value() const override {
+    assert(idx_ >= 0);
+    assert(idx_ < num_);
+    return Slice();
+  }
+  Status status() const override { return Status::OK(); }
+  bool IsKeyPinned() const override { return true; }
+  bool IsValuePinned() const override { return true; }
+};
+
+InternalIterator*
+TerarkZipTableReader::
+NewRangeTombstoneIterator(const ReadOptions& read_options) {
+  return TZT_RangeTombstoneIter(&tombstones_, isReverseBytewiseOrder_);
 }
 
 Status
