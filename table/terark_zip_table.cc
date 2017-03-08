@@ -767,9 +767,9 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   }
   try {
 	  valstore_.reset(new DictZipBlobStore());
-	  valstore_->load_user_memory(
-			  fstringOf(valueDictBlock.data),
-			  fstring(file_data.data(), props->data_size));
+	  valstore_->init_with_dict_memory(
+			  fstring(file_data.data(), props->data_size),
+			  fstringOf(valueDictBlock.data));
   }
   catch (const BadCrc32cException& ex) {
 	  return Status::Corruption("TerarkZipTableReader::Open()", ex.what());
