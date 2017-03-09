@@ -1,11 +1,8 @@
 #include "terark_zip_table.h"
 #include "terark_zip_common.h"
-#include <terark/fstring.hpp>
 #include <terark/util/throw.hpp>
-#include <terark/num_to_str.hpp>
 #include <rocksdb/options.h>
 #include <rocksdb/table.h>
-#include <rocksdb/env.h>
 #include <unistd.h>
 
 namespace terark {
