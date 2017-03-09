@@ -193,7 +193,7 @@ public:
   Status Open(RandomAccessFileReader* file, uint64_t file_size);
 
 private:
-  unique_ptr<DictZipBlobStore> valstore_;
+  unique_ptr<terark::BlobStore> valstore_;
   unique_ptr<TerocksIndex> keyIndex_;
   Slice commonPrefix_;
   bitfield_array<2> typeArray_;
@@ -770,10 +770,10 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
         , s.ToString().c_str());
   }
   try {
-	  valstore_.reset(new DictZipBlobStore());
-	  valstore_->init_with_dict_memory(
-			  fstring(file_data.data(), props->data_size),
-			  fstringOf(valueDictBlock.data));
+	  valstore_.reset(terark::BlobStore::load_from_user_memory(
+        fstring(file_data.data(), props->data_size),
+        fstringOf(valueDictBlock.data)
+	      ));
   }
   catch (const BadCrc32cException& ex) {
 	  return Status::Corruption("TerarkZipTableReader::Open()", ex.what());
@@ -789,7 +789,9 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
     MmapWarmUp(fstringOf(indexBlock.data));
     if (!tzto_.warmUpValueOnOpen) {
       MmapWarmUp(valstore_->get_dict());
-      MmapWarmUp(valstore_->get_index());
+      for (fstring block : valstore_->get_index_blocks()) {
+        MmapWarmUp(block);
+      }
     }
   }
   if (tzto_.warmUpValueOnOpen) {
@@ -925,7 +927,7 @@ public:
 InternalIterator*
 TerarkZipTableReader::
 NewRangeTombstoneIterator(const ReadOptions& read_options) {
-  return TZT_RangeTombstoneIter(&tombstones_, isReverseBytewiseOrder_);
+  return new TZT_RangeTombstoneIter(&tombstones_, isReverseBytewiseOrder_);
 }
 
 Status
