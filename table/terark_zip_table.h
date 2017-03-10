@@ -49,7 +49,7 @@ struct TerarkZipTableOptions {
   bool warmUpIndexOnOpen = true;
   bool warmUpValueOnOpen = false;
 
-  float estimateCompressionRatio = 0.2;
+  float estimateCompressionRatio = 0.2f;
   double sampleRatio = 0.03;
   std::string localTempDir = "/tmp";
   std::string indexType = "IL_256";

@@ -32,6 +32,9 @@
 #include <stdint.h>
 #include <float.h>
 #include <util/arena.h> // for #include <sys/mman.h>
+#ifdef _MSC_VER
+# include <io.h>
+#endif
 
 #if defined(TerocksPrivateCode)
   #include <terark/zbs/plain_blob_store.hpp>
@@ -1032,6 +1035,14 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(
   file_ = file;
   sampleUpperBound_ = randomGenerator_.max() * table_options_.sampleRatio;
   tmpValueFile_.path = tzto.localTempDir + "/Terocks-XXXXXX";
+#if _MSC_VER
+  if (int err = _mktemp_s(&tmpValueFile_.path[0], tmpValueFile_.path.size() + 1)) {
+    fprintf(stderr
+      , "ERROR: _mktemp_s(%s) failed with: %s, so we may use large memory\n"
+      , tmpValueFile_.path.c_str(), strerror(err));
+  }
+  tmpValueFile_.open();
+#else
   int fd = mkstemp(&tmpValueFile_.path[0]);
   if (fd < 0) {
     int err = errno;
@@ -1040,6 +1051,7 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(
         , tmpValueFile_.path.c_str(), strerror(err));
   }
   tmpValueFile_.dopen(fd);
+#endif
   tmpKeyFile_.path = tmpValueFile_.path + ".keydata";
   tmpKeyFile_.open();
   tmpSampleFile_.path = tmpValueFile_.path + ".sample";
@@ -1887,27 +1899,12 @@ void TerarkZipTableBuilder::UpdateValueLenHistogram() {
 
 /////////////////////////////////////////////////////////////////////////////
 
-TableFactory*
-__attribute__((weak))
-NewAdaptiveTableFactory(
-    std::shared_ptr<TableFactory> table_factory_to_write,
-    std::shared_ptr<TableFactory> block_based_table_factory,
-    std::shared_ptr<TableFactory> plain_table_factory,
-    std::shared_ptr<TableFactory> cuckoo_table_factory);
-
 class TerarkZipTableFactory : public TableFactory, boost::noncopyable {
  public:
   explicit
   TerarkZipTableFactory(const TerarkZipTableOptions& tzto, TableFactory* fallback)
   : table_options_(tzto), fallback_factory_(fallback) {
-    if (NewAdaptiveTableFactory) {
-      adaptive_factory_ = NewAdaptiveTableFactory();
-    } else {
-      adaptive_factory_ = fallback;
-      STD_WARN("Missing Symbol NewAdaptiveTableFactory(), "
-               "use fallback factory as adaptive_factory_, "
-               "may not recognize rocksdb SSTables\n");
-    }
+    adaptive_factory_ = NewAdaptiveTableFactory();
   }
 
   const char* Name() const override { return "TerarkZipTable"; }

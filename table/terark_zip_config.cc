@@ -3,7 +3,12 @@
 #include <terark/util/throw.hpp>
 #include <rocksdb/options.h>
 #include <rocksdb/table.h>
-#include <unistd.h>
+#ifdef _MSC_VER
+# include <Windows.h>
+# define strcasecmp _stricmp
+#else
+# include <unistd.h>
+#endif
 
 namespace terark {
   void DictZipBlobStore_setZipThreads(int zipThreads);
@@ -40,9 +45,16 @@ void TerarkZipAutoConfigForBulkLoad(struct TerarkZipTableOptions& tzo,
     terark::DictZipBlobStore_setZipThreads(max(iCpuNum-1, 0));
   }
   if (0 == memBytesLimit) {
+#ifdef _MSC_VER
+    MEMORYSTATUSEX statex;
+    statex.dwLength = sizeof(statex);
+    GlobalMemoryStatusEx(&statex);
+    memBytesLimit = statex.ullTotalPhys;
+#else
     size_t page_num  = sysconf(_SC_PHYS_PAGES);
     size_t page_size = sysconf(_SC_PAGE_SIZE);
     memBytesLimit = page_num * page_size;
+#endif
   }
   tzo.softZipWorkingMemLimit = memBytesLimit * 7 / 8;
   tzo.hardZipWorkingMemLimit = tzo.softZipWorkingMemLimit;
@@ -90,9 +102,16 @@ void TerarkZipAutoConfigForOnlineDB(struct TerarkZipTableOptions& tzo,
     terark::DictZipBlobStore_setZipThreads((iCpuNum * 3 + 1) / 5);
   }
   if (0 == memBytesLimit) {
+#ifdef _MSC_VER
+    MEMORYSTATUSEX statex;
+    statex.dwLength = sizeof(statex);
+    GlobalMemoryStatusEx(&statex);
+    memBytesLimit = statex.ullTotalPhys;
+#else
     size_t page_num  = sysconf(_SC_PHYS_PAGES);
     size_t page_size = sysconf(_SC_PAGE_SIZE);
     memBytesLimit = page_num * page_size;
+#endif
   }
   tzo.softZipWorkingMemLimit = memBytesLimit * 1 / 8;
   tzo.hardZipWorkingMemLimit = tzo.softZipWorkingMemLimit * 2;
