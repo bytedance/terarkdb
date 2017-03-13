@@ -57,7 +57,7 @@ struct TerarkZipTableOptions {
   size_t softZipWorkingMemLimit = 16ull << 30;
   size_t hardZipWorkingMemLimit = 32ull << 30;
   size_t smallTaskMemory = 1200 << 20; // 1.2G
-#define TerocksPrivateCode
+//#define TerocksPrivateCode
 #if defined(TerocksPrivateCode)
   // use dictZip for value when average value length >= minDictZipValueSize
   // otherwise do not use dictZip

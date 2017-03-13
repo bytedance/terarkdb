@@ -15,6 +15,7 @@
 #include <table/internal_iterator.h>
 #include <table/table_builder.h>
 #include <table/table_reader.h>
+#include <table/block.h>
 #include <table/meta_blocks.h>
 #include <terark/bitmap.hpp>
 #include <terark/gold_hash_map.hpp>
@@ -198,6 +199,7 @@ public:
 private:
   unique_ptr<terark::BlobStore> valstore_;
   unique_ptr<TerocksIndex> keyIndex_;
+  unique_ptr<Block> tombstone_;
   Slice commonPrefix_;
   bitfield_array<2> typeArray_;
   static const size_t kNumInternalBytes = 8;
@@ -206,7 +208,6 @@ private:
   const TableReaderOptions table_reader_options_;
   std::shared_ptr<const TableProperties> table_properties_;
   const TerarkZipTableOptions& tzto_;
-  terark::fstrvec tombstones_;
   bool isReverseBytewiseOrder_;
   friend class TerarkZipTableIterator;
   Status LoadIndex(Slice mem);
@@ -362,6 +363,7 @@ private:
   Status status_;
   TableProperties properties_;
   std::unique_ptr<DictZipBlobStore::ZipBuilder> zbuilder_;
+  BlockBuilder range_del_block_;
   bitfield_array<2> bzvType_;
   terark::fstrvec valueBuf_; // collect multiple values for one key
   bool closed_ = false;  // Either Finish() or Abandon() has been called.
@@ -742,7 +744,7 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   table_properties_.reset(uniqueProps.release());
   isReverseBytewiseOrder_ =
       fstring(ioptions.user_comparator->Name()).startsWith("rev:");
-  BlockContents valueDictBlock, indexBlock, zValueTypeBlock;
+  BlockContents valueDictBlock, indexBlock, zValueTypeBlock, tombstoneBlock;
   BlockContents commonPrefixBlock;
   s = ReadMetaBlock(file, file_size, kTerarkZipTableMagicNumber, ioptions,
 		  kTerarkZipTableValueDictBlock, &valueDictBlock);
@@ -758,6 +760,11 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
 		  kTerarkZipTableValueTypeBlock, &zValueTypeBlock);
   if (!s.ok()) {
 	  return s;
+  }
+  s = ReadMetaBlock(file, file_size, kTerarkZipTableMagicNumber, ioptions,
+    kRangeDelBlock, &tombstoneBlock);
+  if (s.ok()) {
+    tombstone_.reset(new Block(std::move(tombstoneBlock), 0));
   }
   s = ReadMetaBlock(file, file_size, kTerarkZipTableMagicNumber, ioptions,
       kTerarkZipTableCommonPrefixBlock, &commonPrefixBlock);
@@ -842,95 +849,14 @@ NewIterator(const ReadOptions& ro, Arena* arena, bool skip_filters) {
 	}
 }
 
-// TODO: need to use Internal Key Compare
-class TZT_RangeTombstoneIter : public InternalIterator, boost::noncopyable {
-  const terark::fstrvec* tombstones_;
-  const bool isReverseBytewiseOrder_;
-  intptr_t num_;
-  intptr_t idx_;
-public:
-  TZT_RangeTombstoneIter(const terark::fstrvec* tombstones, bool isReverse)
-    : tombstones_(tombstones)
-    , isReverseBytewiseOrder_(isReverse)
-    , num_(tombstones->size()), idx_(-1) {}
-  ~TZT_RangeTombstoneIter() {}
-  void SetPinnedItersMgr(PinnedIteratorsManager*) {}
-  bool Valid() const override {
-    if (isReverseBytewiseOrder_)
-      return idx_ >= 0;
-    else
-      return idx_ < num_;
-  }
-  void SeekToFirst() override {
-    if (isReverseBytewiseOrder_)
-      idx_ = num_ - 1;
-    else
-      idx_ = 0;
-  }
-  void SeekToLast() override {
-    if (isReverseBytewiseOrder_)
-      idx_ = 0;
-    else
-      idx_ = num_ - 1;
-  }
-  void SeekForPrev(const Slice& key) override {
-    idx_ = terark::lower_bound_0<const terark::fstrvec&>(
-        *tombstones_, num_, fstringOf(key));
-    if (!isReverseBytewiseOrder_) {
-      if (idx_ < num_ && fstringOf(key) != (*tombstones_)[idx_]) {
-        idx_++;
-      }
-    }
-  }
-  void Seek(const Slice& key) override {
-    idx_ = terark::lower_bound_0<const terark::fstrvec&>(
-        *tombstones_, num_, fstringOf(key));
-    if (isReverseBytewiseOrder_) {
-      if (idx_ < num_ && fstringOf(key) != (*tombstones_)[idx_]) {
-        idx_--;
-      }
-    }
-  }
-  void Next() override {
-    if (isReverseBytewiseOrder_) {
-      assert(idx_ >= 0);
-      idx_--;
-    }
-    else {
-      assert(idx_ < num_);
-      idx_++;
-    }
-  }
-  void Prev() override {
-    if (!isReverseBytewiseOrder_) {
-      assert(idx_ >= 0);
-      idx_--;
-    }
-    else {
-      assert(idx_ < num_);
-      idx_++;
-    }
-  }
-  Slice key() const override {
-    assert(idx_ >= 0);
-    assert(idx_ < num_);
-    auto pp = (*tombstones_)[idx_];
-    return Slice(pp.first, pp.second - pp.first);
-  }
-  Slice value() const override {
-    assert(idx_ >= 0);
-    assert(idx_ < num_);
-    return Slice();
-  }
-  Status status() const override { return Status::OK(); }
-  bool IsKeyPinned() const override { return true; }
-  bool IsValuePinned() const override { return true; }
-};
-
 InternalIterator*
 TerarkZipTableReader::
 NewRangeTombstoneIterator(const ReadOptions& read_options) {
-  return new TZT_RangeTombstoneIter(&tombstones_, isReverseBytewiseOrder_);
+  if (tombstone_) {
+    auto iter = tombstone_->NewIterator(&table_reader_options_.internal_comparator);
+    return iter;
+  }
+  return nullptr;
 }
 
 Status
@@ -1022,6 +948,7 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(
 		WritableFileWriter* file)
   : table_options_(tzto)
   , ioptions_(tbo.ioptions)
+  , range_del_block_(1)
 {
   if (tbo.int_tbl_prop_collector_factories) {
     const auto& factories = *tbo.int_tbl_prop_collector_factories;
@@ -1124,44 +1051,62 @@ static size_t g_sumEntryNum = 0;
 static long long g_lastTime = g_pf.now();
 
 void TerarkZipTableBuilder::Add(const Slice& key, const Slice& value) {
-	assert(key.size() >= 8);
-	fstring userKey(key.data(), key.size()-8);
-	if (terark_likely(size_t(-1) != keyStat_.numKeys)) {
-		if (prevUserKey_ != userKey) {
-			assert(prevUserKey_ < userKey);
-			keyStat_.commonPrefixLen = fstring(prevUserKey_.data(), keyStat_.commonPrefixLen)
-			                 . commonPrefixLen(userKey);
-      keyStat_.minKeyLen = std::min(userKey.size(), keyStat_.minKeyLen);
-      keyStat_.maxKeyLen = std::max(userKey.size(), keyStat_.maxKeyLen);
-			AddPrevUserKey();
-			prevUserKey_.assign(userKey);
-		}
-	}
-	else {
-    keyStat_.commonPrefixLen = userKey.size();
-    keyStat_.minKeyLen = userKey.size();
-    keyStat_.maxKeyLen = userKey.size();
-		prevUserKey_.assign(userKey);
-		keyStat_.sumKeyLen = 0;
-		keyStat_.numKeys = 0;
-		t0 = g_pf.now();
-	}
-	valueBits_.push_back(true);
-  valueBuf_.emplace_back(userKey.end(), 8);
-  valueBuf_.back_append(value.data(), value.size());
-  if (!zbuilder_) {
-	  if (!value.empty() && randomGenerator_() < sampleUpperBound_) {
-	    tmpSampleFile_.writer << fstringOf(value);
-	    sampleLenSum_ += value.size();
-	  }
-	  if (!second_pass_iter_) {
-	    tmpValueFile_.writer.ensureWrite(userKey.end(), 8);
-	    tmpValueFile_.writer << fstringOf(value);
-	  }
-	}
-	properties_.num_entries++;
-	properties_.raw_key_size += key.size();
-	properties_.raw_value_size += value.size();
+
+  ValueType value_type = ExtractValueType(key);
+  uint64_t offset = uint64_t((properties_.raw_key_size + properties_.raw_value_size) * table_options_.estimateCompressionRatio);
+  if (IsValueType(value_type)) {
+    assert(key.size() >= 8);
+    fstring userKey(key.data(), key.size() - 8);
+    if (terark_likely(size_t(-1) != keyStat_.numKeys)) {
+      if (prevUserKey_ != userKey) {
+        assert(prevUserKey_ < userKey);
+        keyStat_.commonPrefixLen = fstring(prevUserKey_.data(), keyStat_.commonPrefixLen)
+          .commonPrefixLen(userKey);
+        keyStat_.minKeyLen = std::min(userKey.size(), keyStat_.minKeyLen);
+        keyStat_.maxKeyLen = std::max(userKey.size(), keyStat_.maxKeyLen);
+        AddPrevUserKey();
+        prevUserKey_.assign(userKey);
+      }
+    }
+    else {
+      keyStat_.commonPrefixLen = userKey.size();
+      keyStat_.minKeyLen = userKey.size();
+      keyStat_.maxKeyLen = userKey.size();
+      prevUserKey_.assign(userKey);
+      keyStat_.sumKeyLen = 0;
+      keyStat_.numKeys = 0;
+      t0 = g_pf.now();
+    }
+    valueBits_.push_back(true);
+    valueBuf_.emplace_back(userKey.end(), 8);
+    valueBuf_.back_append(value.data(), value.size());
+    if (!zbuilder_) {
+      if (!value.empty() && randomGenerator_() < sampleUpperBound_) {
+        tmpSampleFile_.writer << fstringOf(value);
+        sampleLenSum_ += value.size();
+      }
+      if (!second_pass_iter_) {
+        tmpValueFile_.writer.ensureWrite(userKey.end(), 8);
+        tmpValueFile_.writer << fstringOf(value);
+      }
+    }
+    properties_.num_entries++;
+    properties_.raw_key_size += key.size();
+    properties_.raw_value_size += value.size();
+    NotifyCollectTableCollectorsOnAdd(key, value, offset,
+      collectors_, ioptions_.info_log);
+  }
+  else if (value_type == kTypeRangeDeletion) {
+    range_del_block_.Add(key, value);
+    properties_.num_entries++;
+    properties_.raw_key_size += key.size();
+    properties_.raw_value_size += value.size();
+    NotifyCollectTableCollectorsOnAdd(key, value, offset,
+      collectors_, ioptions_.info_log);
+  }
+  else {
+    assert(false);
+  }
 }
 
 template<class ByteArray>
@@ -1532,6 +1477,10 @@ TerarkZipTableBuilder::BuilderWriteValues(std::function<void(fstring)> write) {
     Slice curVal = second_pass_iter_->value();
     ParsedInternalKey pikey;
     ParseInternalKey(curKey, &pikey);
+    if (kTypeRangeDeletion == pikey.type) {
+      second_pass_iter_->Next();
+      continue;
+    }
     size_t oneSeqLen = valueBits_.one_seq_len(bitPos);
     assert(oneSeqLen >= 1);
     if (1==oneSeqLen && (kTypeDeletion==pikey.type || kTypeValue==pikey.type)) {
@@ -1597,7 +1546,7 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
 	unique_ptr<TerocksIndex> index(TerocksIndex::LoadFile(tmpIndexFile));
 	assert(index->NumKeys() == keyStat_.numKeys);
 	Status s;
-  BlockHandle dataBlock, dictBlock, indexBlock, zvTypeBlock;
+  BlockHandle dataBlock, dictBlock, indexBlock, zvTypeBlock, tombstoneBlock;
   BlockHandle commonPrefixBlock;
 {
   size_t real_size = index->Memory().size() + zstore->mem_size() + bzvType_.mem_size();
@@ -1670,12 +1619,20 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
 		return s;
 	}
 	index.reset();
+  if (!range_del_block_.empty()) {
+    s = WriteBlock(range_del_block_.Finish(), file_, &offset_, &tombstoneBlock);
+    if (!s.ok()) {
+      return s;
+    }
+  }
+  range_del_block_.Reset();
 	properties_.index_size = indexBlock.size();
 	WriteMetaData({
     {dictMem.size() ? &kTerarkZipTableValueDictBlock : NULL, dictBlock},
     {&kTerarkZipTableIndexBlock       , indexBlock},
     {&kTerarkZipTableValueTypeBlock   , zvTypeBlock},
     {&kTerarkZipTableCommonPrefixBlock, commonPrefixBlock},
+    {!range_del_block_.empty() ? &kRangeDelBlock : NULL, tombstoneBlock},
 	});
   long long t8 = g_pf.now();
   {
