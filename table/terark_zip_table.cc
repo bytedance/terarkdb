@@ -1463,7 +1463,9 @@ TerarkZipTableBuilder::BuilderWriteValues(std::function<void(fstring)> write) {
     bitPos += oneSeqLen + 1;
     entryId += oneSeqLen;
   }
-  assert(entryId == properties_.num_entries);
+  // tmpValueFile_ ignore kTypeRangeDeletion keys
+  // so entryId may less than properties_.num_entries
+  assert(entryId <= properties_.num_entries);
 }
   else
 {
@@ -1481,6 +1483,7 @@ TerarkZipTableBuilder::BuilderWriteValues(std::function<void(fstring)> write) {
       assert(second_pass_iter_->Valid());
       curKey = second_pass_iter_->key();
       ParseInternalKey(curKey, &pikey);
+      entryId += 1;
     }
     Slice curVal = second_pass_iter_->value();
     size_t oneSeqLen = valueBits_.one_seq_len(bitPos);
@@ -1524,6 +1527,7 @@ TerarkZipTableBuilder::BuilderWriteValues(std::function<void(fstring)> write) {
             assert(second_pass_iter_->Valid());
             curKey = second_pass_iter_->key();
             ParseInternalKey(curKey, &pikey);
+            entryId += 1;
           }
           curVal = second_pass_iter_->value();
         }
