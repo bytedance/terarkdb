@@ -1511,6 +1511,10 @@ TerarkZipTableBuilder::BuilderWriteValues(std::function<void(fstring)> write) {
       value.resize(headerSize);
       ((ZipValueMultiValue*)value.data())->offsets[0] = uint32_t(oneSeqLen);
       for (size_t j = 0; j < oneSeqLen; j++) {
+        if (kTypeRangeDeletion == pikey.type) {
+          second_pass_iter_->Next();
+          continue;
+        }
         if (j > 0) {
           curKey = second_pass_iter_->key();
           curVal = second_pass_iter_->value();
