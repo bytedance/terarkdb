@@ -37,6 +37,36 @@
 # include <io.h>
 #endif
 
+
+#define DEBUG_TWO_PASS_ITER
+
+#if defined(DEBUG_TWO_PASS_ITER) && !defined(NDEBUG)
+
+void DEBUG_PRINT_KEY(const char* first_or_second, rocksdb::Slice key) {
+  rocksdb::ParsedInternalKey ikey;
+  rocksdb::ParseInternalKey(key, &ikey);
+  fprintf(stderr, "DEBUG: %s pass -> %s \n", first_or_second, ikey.DebugString().c_str());
+}
+
+#define DEBUG_PRINT_1ST_PASS_KEY(key) DEBUG_PRINT_KEY("1st", key);
+#define DEBUG_PRINT_2ND_PASS_KEY(key) DEBUG_PRINT_KEY("2nd", key);
+
+#else
+
+void DEBUG_PRINT_KEY(...){}
+
+#define DEBUG_PRINT_1ST_PASS_KEY(...) DEBUG_PRINT_KEY(__VA_ARGS__);
+#define DEBUG_PRINT_2ND_PASS_KEY(...) DEBUG_PRINT_KEY(__VA_ARGS__);
+
+#endif
+
+
+
+
+
+
+
+
 #if defined(TerocksPrivateCode)
   #include <terark/zbs/plain_blob_store.hpp>
   #include <terark/zbs/mixed_len_blob_store.hpp>
@@ -1051,7 +1081,7 @@ static size_t g_sumEntryNum = 0;
 static long long g_lastTime = g_pf.now();
 
 void TerarkZipTableBuilder::Add(const Slice& key, const Slice& value) {
-
+  DEBUG_PRINT_1ST_PASS_KEY(key);
   ValueType value_type = ExtractValueType(key);
   uint64_t offset = uint64_t((properties_.raw_key_size + properties_.raw_value_size) * table_options_.estimateCompressionRatio);
   if (IsValueType(value_type)) {
@@ -1478,10 +1508,12 @@ TerarkZipTableBuilder::BuilderWriteValues(std::function<void(fstring)> write) {
     ParsedInternalKey pikey;
     Slice curKey = second_pass_iter_->key();
     ParseInternalKey(curKey, &pikey);
+    DEBUG_PRINT_2ND_PASS_KEY(curKey);
     while (kTypeRangeDeletion == pikey.type) {
       second_pass_iter_->Next();
       assert(second_pass_iter_->Valid());
       curKey = second_pass_iter_->key();
+      DEBUG_PRINT_2ND_PASS_KEY(curKey);
       ParseInternalKey(curKey, &pikey);
       entryId += 1;
     }
@@ -1526,6 +1558,7 @@ TerarkZipTableBuilder::BuilderWriteValues(std::function<void(fstring)> write) {
             second_pass_iter_->Next();
             assert(second_pass_iter_->Valid());
             curKey = second_pass_iter_->key();
+            DEBUG_PRINT_2ND_PASS_KEY(curKey);
             ParseInternalKey(curKey, &pikey);
             entryId += 1;
           }
