@@ -1473,18 +1473,20 @@ TerarkZipTableBuilder::BuilderWriteValues(std::function<void(fstring)> write) {
   for (size_t recId = 0; recId < keyStat_.numKeys; recId++) {
     value.erase_all();
     assert(second_pass_iter_->Valid());
-    Slice curKey = second_pass_iter_->key();
-    Slice curVal = second_pass_iter_->value();
     ParsedInternalKey pikey;
+    Slice curKey = second_pass_iter_->key();
     ParseInternalKey(curKey, &pikey);
-    if (kTypeRangeDeletion == pikey.type) {
+    while (kTypeRangeDeletion == pikey.type) {
       second_pass_iter_->Next();
-      continue;
+      assert(second_pass_iter_->Valid());
+      curKey = second_pass_iter_->key();
+      ParseInternalKey(curKey, &pikey);
     }
+    Slice curVal = second_pass_iter_->value();
     size_t oneSeqLen = valueBits_.one_seq_len(bitPos);
     assert(oneSeqLen >= 1);
     if (1==oneSeqLen && (kTypeDeletion==pikey.type || kTypeValue==pikey.type)) {
-    //  assert(fstringOf(pikey.user_key) == backupKeys[recId]);
+      //assert(fstringOf(pikey.user_key) == backupKeys[recId]);
       if (0 == pikey.sequence && kTypeValue==pikey.type) {
         bzvType_.set0(recId, size_t(ZipValueType::kZeroSeq));
 #if defined(TERARK_ZIP_TRIAL_VERSION)
@@ -1492,11 +1494,13 @@ TerarkZipTableBuilder::BuilderWriteValues(std::function<void(fstring)> write) {
           write(fstring(g_trail_rand_delete));
         else
 #endif
-        write(fstringOf(curVal));
-      } else {
-        if (kTypeValue==pikey.type) {
+          write(fstringOf(curVal));
+      }
+      else {
+        if (kTypeValue == pikey.type) {
           bzvType_.set0(recId, size_t(ZipValueType::kValue));
-        } else {
+        }
+        else {
           bzvType_.set0(recId, size_t(ZipValueType::kDelete));
         }
         value.append((byte_t*)&pikey.sequence, 7);
@@ -1511,16 +1515,22 @@ TerarkZipTableBuilder::BuilderWriteValues(std::function<void(fstring)> write) {
       value.resize(headerSize);
       ((ZipValueMultiValue*)value.data())->offsets[0] = uint32_t(oneSeqLen);
       for (size_t j = 0; j < oneSeqLen; j++) {
-        if (kTypeRangeDeletion == pikey.type) {
-          second_pass_iter_->Next();
-          continue;
-        }
         if (j > 0) {
+          assert(second_pass_iter_->Valid());
           curKey = second_pass_iter_->key();
-          curVal = second_pass_iter_->value();
           ParseInternalKey(curKey, &pikey);
+          while (kTypeRangeDeletion == pikey.type) {
+            second_pass_iter_->Next();
+            assert(second_pass_iter_->Valid());
+            curKey = second_pass_iter_->key();
+            ParseInternalKey(curKey, &pikey);
+          }
+          curVal = second_pass_iter_->value();
         }
-      //  assert(fstringOf(pikey.user_key) == backupKeys[recId]);
+        else {
+          assert(kTypeRangeDeletion != pikey.type);
+        }
+        //assert(fstringOf(pikey.user_key) == backupKeys[recId]);
         uint64_t seqType = PackSequenceAndType(pikey.sequence, pikey.type);
         value.append((byte_t*)&seqType, 8);
         value.append(fstringOf(curVal));
