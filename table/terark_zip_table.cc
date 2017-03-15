@@ -1945,7 +1945,45 @@ class TerarkZipTableFactory : public TableFactory, boost::noncopyable {
 class TableFactory*
 NewTerarkZipTableFactory(const TerarkZipTableOptions& tzto,
 						 class TableFactory* fallback) {
-  STD_INFO("NewTerarkZipTableFactory()\n");
+  const char* cv_bool[] = {"false", "true"};
+  STD_INFO(
+R"RAW(NewTerarkZipTableFactory(
+  localTempDir             = %s
+  indexType                = %s
+  checksumLevel            = %d
+  entropyAlgo              = %d
+  indexNestLevel           = %d
+  terarkZipMinLevel        = %d
+  debugLevel               = %d
+  useSuffixArrayLocalMatch = %s
+  warmUpIndexOnOpen        = %s
+  warmUpValueOnOpen        = %s
+  disableTwoPass           = %s
+  estimateCompressionRatio = %f
+  sampleRatio              = %f
+  indexCacheRatio          = %f
+  softZipWorkingMemLimit   = %zd
+  hardZipWorkingMemLimit   = %zd
+  smallTaskMemory          = %zd
+))RAW" "\n",
+  tzto.localTempDir.c_str(),
+  tzto.indexType.c_str(),
+  tzto.checksumLevel,
+  (int)tzto.entropyAlgo,
+  tzto.indexNestLevel,
+  tzto.terarkZipMinLevel,
+  tzto.debugLevel,
+  cv_bool[!!tzto.useSuffixArrayLocalMatch],
+  cv_bool[!!tzto.warmUpIndexOnOpen],
+  cv_bool[!!tzto.warmUpValueOnOpen],
+  cv_bool[!!tzto.disableTwoPass],
+  tzto.estimateCompressionRatio,
+  tzto.sampleRatio,
+  tzto.indexCacheRatio,
+  tzto.softZipWorkingMemLimit,
+  tzto.hardZipWorkingMemLimit,
+  tzto.smallTaskMemory
+  );
 	return new TerarkZipTableFactory(tzto, fallback);
 }
 
