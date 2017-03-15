@@ -38,7 +38,7 @@
 #endif
 
 
-#define DEBUG_TWO_PASS_ITER
+//#define DEBUG_TWO_PASS_ITER
 
 #if defined(DEBUG_TWO_PASS_ITER) && !defined(NDEBUG)
 
@@ -59,11 +59,6 @@ void DEBUG_PRINT_KEY(...){}
 #define DEBUG_PRINT_2ND_PASS_KEY(...) DEBUG_PRINT_KEY(__VA_ARGS__);
 
 #endif
-
-
-
-
-
 
 
 
@@ -347,7 +342,9 @@ public:
   uint64_t FileSize() const override;
   TableProperties GetTableProperties() const override { return properties_; }
   void SetSecondPassIterator(InternalIterator* reader) override {
-    second_pass_iter_ = reader;
+    if (!table_options_.disableTwoPass) {
+      second_pass_iter_ = reader;
+    }
   }
 
 private:

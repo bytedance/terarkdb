@@ -44,10 +44,18 @@ struct TerarkZipTableOptions {
   /// memory & SSD, which degrades the performance
   int terarkZipMinLevel = 0;
 
+  /// please always set to 0
+  /// unless you know what it really does for
+  /// 0 : no debug
+  /// 1 : verify 2nd pass iter keyset
+  /// 2 : verify 2nd pass iter whole data
+  int debugLevel = 0;
+
   bool useSuffixArrayLocalMatch = false;
   bool isOfflineBuild = false;
   bool warmUpIndexOnOpen = true;
   bool warmUpValueOnOpen = false;
+  bool disableTwoPass = false;
 
   float estimateCompressionRatio = 0.2f;
   double sampleRatio = 0.03;
