@@ -45,7 +45,7 @@
 void DEBUG_PRINT_KEY(const char* first_or_second, rocksdb::Slice key) {
   rocksdb::ParsedInternalKey ikey;
   rocksdb::ParseInternalKey(key, &ikey);
-  fprintf(stderr, "DEBUG: %s pass -> %s \n", first_or_second, ikey.DebugString().c_str());
+  fprintf(stderr, "DEBUG: %s pass -> %s \n", first_or_second, ikey.DebugString(true).c_str());
 }
 
 #define DEBUG_PRINT_1ST_PASS_KEY(key) DEBUG_PRINT_KEY("1st", key);
@@ -379,6 +379,7 @@ private:
   TempFileDeleteOnClose tmpKeyFile_;
   TempFileDeleteOnClose tmpValueFile_;
   TempFileDeleteOnClose tmpSampleFile_;
+  FileStream tmpDumpFile_;
   AutoDeleteFile tmpZipDictFile_;
   AutoDeleteFile tmpZipValueFile_;
   std::mt19937_64 randomGenerator_;
@@ -1010,6 +1011,9 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(
   tmpKeyFile_.open();
   tmpSampleFile_.path = tmpValueFile_.path + ".sample";
   tmpSampleFile_.open();
+  if (table_options_.debugLevel == 3) {
+    tmpDumpFile_.open(tmpValueFile_.path + ".dump", "wb+");
+  }
 
   properties_.fixed_key_len = 0;
   properties_.num_data_blocks = 1;
@@ -1078,6 +1082,12 @@ static size_t g_sumEntryNum = 0;
 static long long g_lastTime = g_pf.now();
 
 void TerarkZipTableBuilder::Add(const Slice& key, const Slice& value) {
+
+  if (table_options_.debugLevel == 3) {
+    rocksdb::ParsedInternalKey ikey;
+    rocksdb::ParseInternalKey(key, &ikey);
+    fprintf(tmpDumpFile_.fp(), "DEBUG: 1st pass -> %s / %s \n", ikey.DebugString(true).c_str(), value.ToString(true).c_str());
+  }
   DEBUG_PRINT_1ST_PASS_KEY(key);
   ValueType value_type = ExtractValueType(key);
   uint64_t offset = uint64_t((properties_.raw_key_size + properties_.raw_value_size) * table_options_.estimateCompressionRatio);
@@ -1112,7 +1122,7 @@ void TerarkZipTableBuilder::Add(const Slice& key, const Slice& value) {
         tmpSampleFile_.writer << fstringOf(value);
         sampleLenSum_ += value.size();
       }
-      if (!second_pass_iter_) {
+      if (!second_pass_iter_ || table_options_.debugLevel == 2) {
         tmpValueFile_.writer.ensureWrite(userKey.end(), 8);
         tmpValueFile_.writer << fstringOf(value);
       }
@@ -1191,7 +1201,7 @@ Status TerarkZipTableBuilder::Finish() {
 	  return OfflineFinish();
 	}
 
-  if (!second_pass_iter_) {
+  if (!second_pass_iter_ || table_options_.debugLevel == 2) {
     tmpValueFile_.complete_write();
   }
   tmpSampleFile_.complete_write();
@@ -1499,26 +1509,79 @@ TerarkZipTableBuilder::BuilderWriteValues(std::function<void(fstring)> write) {
   valvec<byte_t> value;
   size_t entryId = 0;
   size_t bitPos = 0;
+  bool veriftKey = table_options_.debugLevel == 1 || table_options_.debugLevel == 2;
+  bool veriftValue = table_options_.debugLevel == 2;
+  bool dumpKeyValue = table_options_.debugLevel == 3;
+  NativeDataInput<InputBuffer> fileKeySet;
+  NativeDataInput<InputBuffer> fileValueSet;
+  valvec<byte_t> veriftTemp;
+  auto verifyKeyFunc = [&](const ParsedInternalKey& ikey) {
+    fileKeySet >> veriftTemp;
+    if (fstring(veriftTemp) != fstringOf(ikey.user_key)) {
+      abort();
+    }
+  };
+  auto verifyValueFunc = [&](const ParsedInternalKey& ikey, const Slice& value) {
+    uint64_t seqType = fileValueSet.load_as<uint64_t>();
+    fileValueSet >> veriftTemp;
+    uint64_t seqNum;
+    ValueType vType;
+    UnPackSequenceAndType(seqType, &seqNum, &vType);
+    if (ikey.sequence != seqNum || ikey.type != vType ||
+      fstring(veriftTemp) != fstringOf(value)) {
+      abort();
+    }
+  };
+  auto dumpKeyValueFunc = [&](const ParsedInternalKey& ikey, const Slice& value) {
+    fprintf(tmpDumpFile_.fp(), "DEBUG: 2nd pass -> %s / %s \n", ikey.DebugString(true).c_str(), value.ToString(true).c_str());
+  };
+  if (veriftKey) {
+    if (!tmpKeyFile_.fp.isOpen()) {
+      abort();
+    }
+    tmpKeyFile_.fp.rewind();
+    fileKeySet.attach(&tmpKeyFile_.fp);
+  }
+  if (veriftValue) {
+    if (!tmpValueFile_.fp.isOpen()) {
+      abort();
+    }
+    tmpValueFile_.fp.rewind();
+    fileValueSet.attach(&tmpValueFile_.fp);
+  }
+
   for (size_t recId = 0; recId < keyStat_.numKeys; recId++) {
     value.erase_all();
     assert(second_pass_iter_->Valid());
     ParsedInternalKey pikey;
     Slice curKey = second_pass_iter_->key();
-    ParseInternalKey(curKey, &pikey);
     DEBUG_PRINT_2ND_PASS_KEY(curKey);
+    ParseInternalKey(curKey, &pikey);
+    if (dumpKeyValue) {
+      dumpKeyValueFunc(pikey, second_pass_iter_->value());
+    }
     while (kTypeRangeDeletion == pikey.type) {
       second_pass_iter_->Next();
       assert(second_pass_iter_->Valid());
       curKey = second_pass_iter_->key();
       DEBUG_PRINT_2ND_PASS_KEY(curKey);
       ParseInternalKey(curKey, &pikey);
+      if (dumpKeyValue) {
+        dumpKeyValueFunc(pikey, second_pass_iter_->value());
+      }
       entryId += 1;
+    }
+    if (veriftKey) {
+      verifyKeyFunc(pikey);
     }
     Slice curVal = second_pass_iter_->value();
     size_t oneSeqLen = valueBits_.one_seq_len(bitPos);
     assert(oneSeqLen >= 1);
     if (1==oneSeqLen && (kTypeDeletion==pikey.type || kTypeValue==pikey.type)) {
       //assert(fstringOf(pikey.user_key) == backupKeys[recId]);
+      if (veriftValue) {
+        verifyValueFunc(pikey, curVal);
+      }
       if (0 == pikey.sequence && kTypeValue==pikey.type) {
         bzvType_.set0(recId, size_t(ZipValueType::kZeroSeq));
 #if defined(TERARK_ZIP_TRIAL_VERSION)
@@ -1550,19 +1613,29 @@ TerarkZipTableBuilder::BuilderWriteValues(std::function<void(fstring)> write) {
         if (j > 0) {
           assert(second_pass_iter_->Valid());
           curKey = second_pass_iter_->key();
+          DEBUG_PRINT_2ND_PASS_KEY(curKey);
           ParseInternalKey(curKey, &pikey);
+          if (dumpKeyValue) {
+            dumpKeyValueFunc(pikey, second_pass_iter_->value());
+          }
           while (kTypeRangeDeletion == pikey.type) {
             second_pass_iter_->Next();
             assert(second_pass_iter_->Valid());
             curKey = second_pass_iter_->key();
             DEBUG_PRINT_2ND_PASS_KEY(curKey);
             ParseInternalKey(curKey, &pikey);
+            if (dumpKeyValue) {
+              dumpKeyValueFunc(pikey, second_pass_iter_->value());
+            }
             entryId += 1;
           }
           curVal = second_pass_iter_->value();
         }
         else {
           assert(kTypeRangeDeletion != pikey.type);
+        }
+        if (veriftValue) {
+          verifyValueFunc(pikey, curVal);
         }
         //assert(fstringOf(pikey.user_key) == backupKeys[recId]);
         uint64_t seqType = PackSequenceAndType(pikey.sequence, pikey.type);
@@ -1580,6 +1653,9 @@ TerarkZipTableBuilder::BuilderWriteValues(std::function<void(fstring)> write) {
   }
   assert(entryId == properties_.num_entries);
 }
+  if (tmpDumpFile_.isOpen()) {
+    tmpDumpFile_.close();
+  }
   tmpValueFile_.close();
 }
 
@@ -1945,46 +2021,11 @@ class TerarkZipTableFactory : public TableFactory, boost::noncopyable {
 class TableFactory*
 NewTerarkZipTableFactory(const TerarkZipTableOptions& tzto,
 						 class TableFactory* fallback) {
-  const char* cv_bool[] = {"false", "true"};
-  STD_INFO(
-R"RAW(NewTerarkZipTableFactory(
-  localTempDir             = %s
-  indexType                = %s
-  checksumLevel            = %d
-  entropyAlgo              = %d
-  indexNestLevel           = %d
-  terarkZipMinLevel        = %d
-  debugLevel               = %d
-  useSuffixArrayLocalMatch = %s
-  warmUpIndexOnOpen        = %s
-  warmUpValueOnOpen        = %s
-  disableTwoPass           = %s
-  estimateCompressionRatio = %f
-  sampleRatio              = %f
-  indexCacheRatio          = %f
-  softZipWorkingMemLimit   = %zd
-  hardZipWorkingMemLimit   = %zd
-  smallTaskMemory          = %zd
-))RAW" "\n",
-  tzto.localTempDir.c_str(),
-  tzto.indexType.c_str(),
-  tzto.checksumLevel,
-  (int)tzto.entropyAlgo,
-  tzto.indexNestLevel,
-  tzto.terarkZipMinLevel,
-  tzto.debugLevel,
-  cv_bool[!!tzto.useSuffixArrayLocalMatch],
-  cv_bool[!!tzto.warmUpIndexOnOpen],
-  cv_bool[!!tzto.warmUpValueOnOpen],
-  cv_bool[!!tzto.disableTwoPass],
-  tzto.estimateCompressionRatio,
-  tzto.sampleRatio,
-  tzto.indexCacheRatio,
-  tzto.softZipWorkingMemLimit,
-  tzto.hardZipWorkingMemLimit,
-  tzto.smallTaskMemory
+  TerarkZipTableFactory* table = new TerarkZipTableFactory(tzto, fallback);
+  STD_INFO("NewTerarkZipTableFactory(\n%s)\n",
+    table->GetPrintableTableOptions().c_str()
   );
-	return new TerarkZipTableFactory(tzto, fallback);
+  return table;
 }
 
 inline static
@@ -2124,23 +2165,41 @@ const {
 std::string TerarkZipTableFactory::GetPrintableTableOptions() const {
   std::string ret;
   ret.reserve(2000);
+  const char* cvb[] = {"false", "true"};
   const int kBufferSize = 200;
   char buffer[kBufferSize];
-  const auto& to =  table_options_;
-#undef AppendF
-#define AppendF(...) ret.append(buffer, snprintf(buffer, kBufferSize, ##__VA_ARGS__))
-  AppendF("indexNestLevel: %d\n", to.indexNestLevel);
-  AppendF("checksumLevel : %d\n", to.checksumLevel);
-  AppendF("entropyAlgo   : %d\n", to.entropyAlgo);
-  AppendF("terarkZipMinLevel: %d\n", to.terarkZipMinLevel);
-  AppendF("useSuffixArrayLocalMatch: %d\n", to.useSuffixArrayLocalMatch);
-  AppendF("estimateCompressionRatio: %f\n", to.estimateCompressionRatio);
-  AppendF("sampleRatio  : %f\n", to.sampleRatio);
-  AppendF("softZipWorkingMemLimit: %8.3f GB\n", to.softZipWorkingMemLimit/1e9);
-  AppendF("hardZipWorkingMemLimit: %8.3f GB\n", to.hardZipWorkingMemLimit/1e9);
-  ret += "localTempDir : ";
-  ret += to.localTempDir;
-  ret += "\n";
+  const auto& tzto =  table_options_;
+  const double gb = 1ull << 30;
+
+  ret += "localTempDir             = ";
+  ret += tzto.localTempDir;
+  ret += '\n';
+
+#ifdef M_APPEND
+# error WTF ?
+#endif
+#define M_APPEND(fmt, value) \
+  ret.append(buffer, snprintf(buffer, kBufferSize, fmt "\n", value))
+
+  M_APPEND("indexType                = %s"    , tzto.indexType.c_str()              );
+  M_APPEND("checksumLevel            = %d"    , tzto.checksumLevel                  );
+  M_APPEND("entropyAlgo              = %d"    , (int)tzto.entropyAlgo               );
+  M_APPEND("indexNestLevel           = %d"    , tzto.indexNestLevel                 );
+  M_APPEND("terarkZipMinLevel        = %d"    , tzto.terarkZipMinLevel              );
+  M_APPEND("debugLevel               = %d"    , tzto.debugLevel                     );
+  M_APPEND("useSuffixArrayLocalMatch = %s"    , cvb[!!tzto.useSuffixArrayLocalMatch]);
+  M_APPEND("warmUpIndexOnOpen        = %s"    , cvb[!!tzto.warmUpIndexOnOpen]       );
+  M_APPEND("warmUpValueOnOpen        = %s"    , cvb[!!tzto.warmUpValueOnOpen]       );
+  M_APPEND("disableTwoPass           = %s"    , cvb[!!tzto.disableTwoPass]          );
+  M_APPEND("estimateCompressionRatio = %f"    , tzto.estimateCompressionRatio       );
+  M_APPEND("sampleRatio              = %f"    , tzto.sampleRatio                    );
+  M_APPEND("indexCacheRatio          = %f"    , tzto.indexCacheRatio                );
+  M_APPEND("softZipWorkingMemLimit   = %.3fGB", tzto.softZipWorkingMemLimit / gb    );
+  M_APPEND("hardZipWorkingMemLimit   = %.3fGB", tzto.hardZipWorkingMemLimit / gb    );
+  M_APPEND("smallTaskMemory          = %.3fGB", tzto.smallTaskMemory / gb           );
+
+#undef M_APPEND
+
   return ret;
 }
 

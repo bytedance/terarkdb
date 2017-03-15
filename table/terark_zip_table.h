@@ -47,8 +47,9 @@ struct TerarkZipTableOptions {
   /// please always set to 0
   /// unless you know what it really does for
   /// 0 : no debug
-  /// 1 : verify 2nd pass iter keyset
-  /// 2 : verify 2nd pass iter whole data
+  /// 1 : verify 2nd pass iter keys
+  /// 2 : verify 2nd pass iter keys & values
+  /// 3 : dump 1st & 2nd pass data to file
   int debugLevel = 0;
 
   bool useSuffixArrayLocalMatch = false;

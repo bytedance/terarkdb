@@ -135,7 +135,9 @@ public:
         reader >> keyBuf;
         keyVec.push_back(fstring(keyBuf).substr(ks.commonPrefixLen));
       }
-      tmpKeyFile.close();
+      if (tzopt.debugLevel != 1 && tzopt.debugLevel != 2) {
+        tmpKeyFile.close();
+      }
 #if !defined(NDEBUG)
       for (size_t i = 1; i < keyVec.size(); ++i) {
         fstring prev = keyVec[i-1];
