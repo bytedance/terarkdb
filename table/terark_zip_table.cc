@@ -408,6 +408,7 @@ private:
   bitfield_array<2> bzvType_;
   terark::fstrvec valueBuf_; // collect multiple values for one key
   bool closed_ = false;  // Either Finish() or Abandon() has been called.
+  bool isReverseBytewiseOrder_;
 
   long long t0 = 0;
 };
@@ -1030,6 +1031,8 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(
   , ioptions_(tbo.ioptions)
   , range_del_block_(1)
 {
+  isReverseBytewiseOrder_ =
+    fstring(ioptions_.user_comparator->Name()).startsWith("rev:");
   if (tbo.int_tbl_prop_collector_factories) {
     const auto& factories = *tbo.int_tbl_prop_collector_factories;
     collectors_.resize(factories.size());
@@ -1159,7 +1162,7 @@ void TerarkZipTableBuilder::Add(const Slice& key, const Slice& value) {
     fstring userKey(key.data(), key.size() - 8);
     if (terark_likely(size_t(-1) != keyStat_.numKeys)) {
       if (prevUserKey_ != userKey) {
-        assert(prevUserKey_ < userKey);
+        assert((prevUserKey_ < userKey) ^ isReverseBytewiseOrder_);
         keyStat_.commonPrefixLen = fstring(prevUserKey_.data(), keyStat_.commonPrefixLen)
           .commonPrefixLen(userKey);
         keyStat_.minKeyLen = std::min(userKey.size(), keyStat_.minKeyLen);
