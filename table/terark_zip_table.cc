@@ -353,7 +353,7 @@ public:
   void Abandon() override;
   uint64_t NumEntries() const override { return properties_.num_entries; }
   uint64_t FileSize() const override;
-  TableProperties GetTableProperties() const override { return properties_; }
+  TableProperties GetTableProperties() const override;
   void SetSecondPassIterator(InternalIterator* reader) override {
     if (!table_options_.disableTwoPass) {
       second_pass_iter_ = reader;
@@ -1123,6 +1123,17 @@ uint64_t TerarkZipTableBuilder::FileSize() const {
   else {
     return offset_;
   }
+}
+
+TableProperties TerarkZipTableBuilder::GetTableProperties() const {
+  TableProperties ret = properties_;
+  for (const auto& collector : collectors_) {
+    for (const auto& prop : collector->GetReadableProperties()) {
+      ret.readable_properties.insert(prop);
+    }
+    collector->Finish(&ret.user_collected_properties);
+  }
+  return ret;
 }
 
 static std::mutex g_sumMutex;
