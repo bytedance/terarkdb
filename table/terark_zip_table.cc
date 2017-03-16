@@ -172,11 +172,21 @@ class TerarkEmptyTableReader : public TableReader, boost::noncopyable {
     bool IsKeyPinned() const override { return false; }
     bool IsValuePinned() const override { return false; }
   };
+  const TableReaderOptions table_reader_options_;
   std::shared_ptr<const TableProperties> table_properties_;
+  unique_ptr<Block> tombstone_;
+  Slice  file_data_;
+  unique_ptr<RandomAccessFileReader> file_;
 public:
   InternalIterator*
   NewIterator(const ReadOptions&, Arena* a, bool) override {
     return a ? new(a->AllocateAligned(sizeof(Iter)))Iter() : new Iter();
+  }
+  InternalIterator*
+  NewRangeTombstoneIterator(const ReadOptions& read_options) override {
+    return tombstone_ ?
+      tombstone_->NewIterator(&table_reader_options_.internal_comparator) :
+      nullptr;
   }
   void Prepare(const Slice&) override {}
   Status Get(const ReadOptions&, const Slice&, GetContext*, bool) override {
@@ -188,7 +198,10 @@ public:
   std::shared_ptr<const TableProperties>
   GetTableProperties() const override { return table_properties_; }
   ~TerarkEmptyTableReader() {}
-  TerarkEmptyTableReader() : table_properties_(new TableProperties()){}
+  TerarkEmptyTableReader(const TableReaderOptions& o)
+    : table_reader_options_(o) {
+  }
+  Status Open(RandomAccessFileReader* file, uint64_t file_size);
 };
 
 /**
@@ -398,6 +411,45 @@ private:
 
   long long t0 = 0;
 };
+
+///////////////////////////////////////////////////////////////////////////////
+
+Status
+TerarkEmptyTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
+  file_.reset(file); // take ownership
+  const auto& ioptions = table_reader_options_.ioptions;
+  TableProperties* props = nullptr;
+  Status s = ReadTableProperties(file, file_size,
+    kTerarkZipTableMagicNumber, ioptions, &props);
+  if (!s.ok()) {
+    return s;
+  }
+  assert(nullptr != props);
+  unique_ptr<TableProperties> uniqueProps(props);
+  Slice file_data;
+  if (table_reader_options_.env_options.use_mmap_reads) {
+    s = file->Read(0, file_size, &file_data, nullptr);
+    if (!s.ok())
+      return s;
+  }
+  else {
+    return Status::InvalidArgument("TerarkZipTableReader::Open()",
+      "EnvOptions::use_mmap_reads must be true");
+  }
+  file_data_ = file_data;
+  table_properties_.reset(uniqueProps.release());
+  BlockContents tombstoneBlock;
+  s = ReadMetaBlock(file, file_size, kTerarkZipTableMagicNumber, ioptions,
+    kRangeDelBlock, &tombstoneBlock);
+  if (s.ok()) {
+    tombstone_.reset(new Block(std::move(tombstoneBlock), 0));
+  }
+  INFO(ioptions.info_log
+    , "TerarkZipTableReader::Open(): fsize = %zd, entries = %zd keys = 0 indexSize = 0 valueSize = 0, warm up time =      0.000'sec, build cache time =      0.000'sec\n"
+    , size_t(file_size), size_t(table_properties_->num_entries)
+  );
+  return Status::OK();
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -1163,12 +1215,22 @@ Status TerarkZipTableBuilder::EmptyTableFinish() {
   INFO(tbo_.ioptions.info_log
       , "TerarkZipTableBuilder::EmptyFinish():this=%p\n", this);
   offset_ = 0;
-  BlockHandle emptyTableBH;
+  BlockHandle emptyTableBH, tombstoneBH;
   Status s = WriteBlock(Slice("Empty"), file_, &offset_, &emptyTableBH);
   if (!s.ok()) {
     return s;
   }
-  return WriteMetaData({{&kEmptyTableKey, emptyTableBH}});
+  if (!range_del_block_.empty()) {
+    s = WriteBlock(range_del_block_.Finish(), file_, &offset_, &tombstoneBH);
+    if (!s.ok()) {
+      return s;
+    }
+  }
+  range_del_block_.Reset();
+  return WriteMetaData({
+    {&kEmptyTableKey, emptyTableBH},
+    {!range_del_block_.empty() ? &kRangeDelBlock : NULL, tombstoneBH},
+  });
 }
 
 namespace {
@@ -2097,7 +2159,13 @@ const {
   s = ReadMetaBlock(file.get(), file_size, kTerarkZipTableMagicNumber
       , table_reader_options.ioptions, kEmptyTableKey, &emptyTableBC);
   if (s.ok()) {
-    table->reset(new TerarkEmptyTableReader());
+    std::unique_ptr<TerarkEmptyTableReader>
+    t(new TerarkEmptyTableReader(table_reader_options));
+    s = t->Open(file.release(), file_size);
+    if (!s.ok()) {
+      return s;
+    }
+    *table = std::move(t);
     return s;
   }
 	std::unique_ptr<TerarkZipTableReader>
