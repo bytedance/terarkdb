@@ -1161,9 +1161,9 @@ void TerarkZipTableBuilder::Add(const Slice& key, const Slice& value) {
       keyStat_.commonPrefixLen = userKey.size();
       keyStat_.minKeyLen = userKey.size();
       keyStat_.maxKeyLen = userKey.size();
-      prevUserKey_.assign(userKey);
       keyStat_.sumKeyLen = 0;
       keyStat_.numKeys = 0;
+      prevUserKey_.assign(userKey);
       t0 = g_pf.now();
     }
     valueBits_.push_back(true);
