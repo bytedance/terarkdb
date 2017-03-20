@@ -11,6 +11,7 @@
 #include <rocksdb/comparator.h>
 #include <rocksdb/options.h>
 #include <rocksdb/table.h>
+#include <rocksdb/merge_operator.h>
 #include <table/get_context.h>
 #include <table/internal_iterator.h>
 #include <table/table_builder.h>
@@ -1031,8 +1032,21 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(
   , ioptions_(tbo.ioptions)
   , range_del_block_(1)
 {
+  properties_.fixed_key_len = 0;
+  properties_.num_data_blocks = 1;
+  properties_.column_family_id = column_family_id;
+  properties_.column_family_name = tbo.column_family_name;
+  properties_.comparator_name = ioptions_.user_comparator ?
+    ioptions_.user_comparator->Name() : "nullptr";
+  properties_.merge_operator_name = ioptions_.merge_operator ?
+    ioptions_.merge_operator->Name() : "nullptr";
+  properties_.compression_name = CompressionTypeToString(tbo.compression_type);
+  properties_.prefix_extractor_name = ioptions_.prefix_extractor ?
+    ioptions_.prefix_extractor->Name() : "nullptr";
+
   isReverseBytewiseOrder_ =
-    fstring(ioptions_.user_comparator->Name()).startsWith("rev:");
+    fstring(properties_.comparator_name).startsWith("rev:");
+
   if (tbo.int_tbl_prop_collector_factories) {
     const auto& factories = *tbo.int_tbl_prop_collector_factories;
     collectors_.resize(factories.size());
@@ -1041,6 +1055,18 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(
       collectors_[i].reset(factories[i]->CreateIntTblPropCollector(cfId));
     }
   }
+
+  std::string property_collectors_names = "[";
+  for (size_t i = 0;
+    i < ioptions_.table_properties_collector_factories.size(); ++i) {
+    if (i != 0) {
+      property_collectors_names += ",";
+    }
+    property_collectors_names +=
+      ioptions_.table_properties_collector_factories[i]->Name();
+  }
+  property_collectors_names += "]";
+  properties_.property_collectors_names = property_collectors_names;
 
   file_ = file;
   sampleUpperBound_ = randomGenerator_.max() * table_options_.sampleRatio;
@@ -1069,11 +1095,6 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(
   if (table_options_.debugLevel == 3) {
     tmpDumpFile_.open(tmpValueFile_.path + ".dump", "wb+");
   }
-
-  properties_.fixed_key_len = 0;
-  properties_.num_data_blocks = 1;
-  properties_.column_family_id = column_family_id;
-  properties_.column_family_name = tbo.column_family_name;
 
   if (tzto.isOfflineBuild) {
     if (tbo.compression_dict && tbo.compression_dict->size()) {
