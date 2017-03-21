@@ -259,12 +259,14 @@ class Uint32Histogram {
   static const size_t MAX_SMALL_VALUE = 4096;
 
 public:
+  size_t m_totla_key_len;
   size_t m_distinct_key_cnt;
   size_t m_cnt_sum;
   size_t m_min_cnt_key, m_cnt_of_min_cnt_key;
   size_t m_max_cnt_key, m_cnt_of_max_cnt_key;
 
   Uint32Histogram() {
+    m_totla_key_len = 0;
     m_cnt_of_min_cnt_key = 0;
     m_cnt_of_max_cnt_key = 0;
     m_min_cnt_key = size_t(-1);
@@ -287,6 +289,7 @@ public:
         break;
       }
     }
+    size_t len = 0;
     size_t sum = 0;
     size_t distinct_cnt = 0;
     uint32_t cnt_of_max_cnt_key = 0;
@@ -294,6 +297,7 @@ public:
     for (size_t key = 0, maxKey = m_small_cnt.size(); key < maxKey; ++key) {
       uint32_t cnt = pCnt[key];
       if (cnt) {
+        len += cnt * key;
         distinct_cnt++;
         sum += cnt;
         if (cnt_of_max_cnt_key < cnt) {
@@ -306,6 +310,8 @@ public:
         }
       }
     }
+    m_cnt_of_min_cnt_key = cnt_of_min_cnt_key;
+    m_cnt_of_max_cnt_key = cnt_of_max_cnt_key;
     for (size_t idx = m_large_cnt.beg_i(); idx < m_large_cnt.end_i(); ++idx) {
       sum += m_large_cnt.val(idx);
     }
@@ -320,8 +326,10 @@ public:
       uint32_t key = m_large_cnt.key(idx);
       uint32_t val = m_large_cnt.val(idx);
       large_beg[idx] = std::make_pair(key, val);
+      len += key * key;
     }
     std::sort(large_beg, large_beg + large_num);
+    m_totla_key_len = len;
     m_large_cnt_compact.risk_set_size(large_num);
   }
   template<class OP>
@@ -830,9 +838,10 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   BlockContents commonPrefixBlock;
   s = ReadMetaBlock(file, file_size, kTerarkZipTableMagicNumber, ioptions,
 		  kTerarkZipTableValueDictBlock, &valueDictBlock);
-  if (!s.ok()) {
-	  return s;
-  }
+  // PlainBlobStore & MixedLenBlobStore no dict
+  //if (!s.ok()) {
+  //  return s;
+  //}
   s = ReadMetaBlock(file, file_size, kTerarkZipTableMagicNumber, ioptions,
 		  kTerarkZipTableIndexBlock, &indexBlock);
   if (!s.ok()) {
@@ -1463,8 +1472,9 @@ PlainValueToFinish(fstring tmpIndexFile, std::function<void()> waitIndex) {
     // use PlainBlobStore
     auto plain = new terark::PlainBlobStore();
     store.reset(plain);
-    plain->reset_with_content_size(keyStat_.numKeys);
+    plain->reset_with_content_size(valueLenHistogram_.m_totla_key_len);
     BuilderWriteValues([&](fstring value){plain->add_record(value);});
+    plain->finish();
   }
   long long t4 = g_pf.now();
 
