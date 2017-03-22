@@ -838,10 +838,9 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   BlockContents commonPrefixBlock;
   s = ReadMetaBlock(file, file_size, kTerarkZipTableMagicNumber, ioptions,
 		  kTerarkZipTableValueDictBlock, &valueDictBlock);
+#if defined(TerocksPrivateCode)
   // PlainBlobStore & MixedLenBlobStore no dict
-  //if (!s.ok()) {
-  //  return s;
-  //}
+#endif // TerocksPrivateCode
   s = ReadMetaBlock(file, file_size, kTerarkZipTableMagicNumber, ioptions,
 		  kTerarkZipTableIndexBlock, &indexBlock);
   if (!s.ok()) {
