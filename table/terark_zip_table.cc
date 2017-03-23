@@ -2116,6 +2116,8 @@ class TerarkZipTableFactory : public TableFactory, boost::noncopyable {
 
   void* GetOptions() override { return &table_options_; }
 
+  bool IsDeleteRangeSupported() const override { return true; }
+
  private:
   TerarkZipTableOptions table_options_;
   TableFactory* fallback_factory_;
