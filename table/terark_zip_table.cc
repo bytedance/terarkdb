@@ -253,6 +253,7 @@ public:
   ~TerarkEmptyTableReader() {}
   TerarkEmptyTableReader(const TableReaderOptions& o)
     : table_reader_options_(o) {
+    global_seqno_ = SequenceNumber(-1);
   }
   Status Open(RandomAccessFileReader* file, uint64_t file_size);
 };
