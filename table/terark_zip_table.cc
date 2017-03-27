@@ -236,7 +236,7 @@ public:
   NewRangeTombstoneIterator(const ReadOptions& read_options) override {
     return tombstone_ ?
       tombstone_->NewIterator(
-        &table_reader_options_.internal_comparator, 
+        &table_reader_options_.internal_comparator,
         nullptr, true,
         table_reader_options_.ioptions.statistics) :
       nullptr;
