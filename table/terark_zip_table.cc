@@ -51,7 +51,7 @@
 
 
 
-#define TERARK_SUPPORT_UINT64_COMPARATOR
+//#define TERARK_SUPPORT_UINT64_COMPARATOR
 //#define DEBUG_TWO_PASS_ITER
 
 
@@ -2297,9 +2297,9 @@ class TableFactory*
 NewTerarkZipTableFactory(const TerarkZipTableOptions& tzto,
 						 class TableFactory* fallback) {
   TerarkZipTableFactory* table = new TerarkZipTableFactory(tzto, fallback);
-  STD_INFO("NewTerarkZipTableFactory(\n%s)\n",
-    table->GetPrintableTableOptions().c_str()
-  );
+  //STD_INFO("NewTerarkZipTableFactory(\n%s)\n",
+  //  table->GetPrintableTableOptions().c_str()
+  //);
   return table;
 }
 
