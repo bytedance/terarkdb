@@ -41,7 +41,7 @@
 # include <io.h>
 #endif
 
-//#define TERARK_SUPPORT_UINT64_COMPARATOR
+#define TERARK_SUPPORT_UINT64_COMPARATOR
 //#define DEBUG_TWO_PASS_ITER
 
 
@@ -113,7 +113,7 @@ SequenceNumber GetGlobalSequenceNumber(const TableProperties& table_properties,
     fprintf(stderr,
         "An external sst file with version %u have global seqno property "
         "with value %llu, which is greater than kMaxSequenceNumber\n",
-        version, global_seqno);
+        version, (long long)global_seqno);
   }
 
   return global_seqno;
@@ -895,9 +895,9 @@ TerarkZipTableReader::~TerarkZipTableReader() {
 
 TerarkZipTableReader::TerarkZipTableReader(const TableReaderOptions& tro,
       const TerarkZipTableOptions& tzto)
- : table_reader_options_(tro)
- , tzto_(tzto)
- , global_seqno_(kDisableGlobalSequenceNumber)
+  : table_reader_options_(tro)
+  , global_seqno_(kDisableGlobalSequenceNumber)
+  , tzto_(tzto)
 {
   isReverseBytewiseOrder_ = false;
 }
