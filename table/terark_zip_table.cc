@@ -41,9 +41,8 @@
 # include <io.h>
 #endif
 
-#define TERARK_SUPPORT_UINT64_COMPARATOR
+//#define TERARK_SUPPORT_UINT64_COMPARATOR
 //#define DEBUG_TWO_PASS_ITER
-
 
 
 #if defined(DEBUG_TWO_PASS_ITER) && !defined(NDEBUG)
@@ -119,6 +118,20 @@ SequenceNumber GetGlobalSequenceNumber(const TableProperties& table_properties,
 
   return global_seqno;
 }
+
+Block* DetachBlockContents(BlockContents &tombstoneBlock, SequenceNumber global_seqno)
+{
+  std::unique_ptr<char[]> tombstoneBuf(new char[tombstoneBlock.data.size()]);
+  memcpy(tombstoneBuf.get(), tombstoneBlock.data.data(), tombstoneBlock.data.size());
+  return new Block(
+      BlockContents(std::move(tombstoneBuf), tombstoneBlock.data.size(), false, kNoCompression),
+      global_seqno);
+}
+
+void SharedBlockCleanupFunction(void* arg1, void* arg2) {
+  delete reinterpret_cast<shared_ptr<Block>*>(arg1);
+}
+
 }
 
 #if defined(TerocksPrivateCode)
@@ -235,23 +248,16 @@ class TerarkEmptyTableReader : public TableReader, boost::noncopyable {
   const TableReaderOptions table_reader_options_;
   std::shared_ptr<const TableProperties> table_properties_;
   SequenceNumber global_seqno_;
-  unique_ptr<Block> tombstone_;
+  shared_ptr<Block> tombstone_;
   Slice  file_data_;
   unique_ptr<RandomAccessFileReader> file_;
 public:
   InternalIterator*
-  NewIterator(const ReadOptions&, Arena* a, bool) override {
+      NewIterator(const ReadOptions&, Arena* a, bool) override {
     return a ? new(a->AllocateAligned(sizeof(Iter)))Iter() : new Iter();
   }
   InternalIterator*
-  NewRangeTombstoneIterator(const ReadOptions& read_options) override {
-    return tombstone_ ?
-      tombstone_->NewIterator(
-        &table_reader_options_.internal_comparator, 
-        nullptr, true,
-        table_reader_options_.ioptions.statistics) :
-      nullptr;
-  }
+      NewRangeTombstoneIterator(const ReadOptions& read_options) override;
   void Prepare(const Slice&) override {}
   Status Get(const ReadOptions&, const Slice&, GetContext*, bool) override {
     return Status::OK();
@@ -302,7 +308,7 @@ public:
 private:
   unique_ptr<terark::BlobStore> valstore_;
   unique_ptr<TerocksIndex> keyIndex_;
-  unique_ptr<Block> tombstone_;
+  shared_ptr<Block> tombstone_;
   Slice commonPrefix_;
   bitfield_array<2> typeArray_;
   static const size_t kNumInternalBytes = 8;
@@ -495,6 +501,22 @@ private:
 
 ///////////////////////////////////////////////////////////////////////////////
 
+
+InternalIterator*
+TerarkEmptyTableReader::
+NewRangeTombstoneIterator(const ReadOptions& read_options) {
+  if (tombstone_) {
+    auto iter = tombstone_->NewIterator(
+      &table_reader_options_.internal_comparator,
+      nullptr, true,
+      table_reader_options_.ioptions.statistics);
+    iter->RegisterCleanup(SharedBlockCleanupFunction,
+      new shared_ptr<Block>(tombstone_), nullptr);
+    return iter;
+  }
+  return nullptr;
+}
+
 Status
 TerarkEmptyTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   file_.reset(file); // take ownership
@@ -524,7 +546,7 @@ TerarkEmptyTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   s = ReadMetaBlock(file, file_size, kTerarkZipTableMagicNumber, ioptions,
     kRangeDelBlock, &tombstoneBlock);
   if (s.ok()) {
-    tombstone_.reset(new Block(std::move(tombstoneBlock), global_seqno_));
+    tombstone_.reset(DetachBlockContents(tombstoneBlock, global_seqno_));
   }
   INFO(ioptions.info_log
     , "TerarkZipTableReader::Open(): fsize = %zd, entries = %zd keys = 0 indexSize = 0 valueSize = 0, warm up time =      0.000'sec, build cache time =      0.000'sec\n"
@@ -953,7 +975,7 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   s = ReadMetaBlock(file, file_size, kTerarkZipTableMagicNumber, ioptions,
     kRangeDelBlock, &tombstoneBlock);
   if (s.ok()) {
-    tombstone_.reset(new Block(std::move(tombstoneBlock), global_seqno_));
+    tombstone_.reset(DetachBlockContents(tombstoneBlock, global_seqno_));
   }
   s = ReadMetaBlock(file, file_size, kTerarkZipTableMagicNumber, ioptions,
       kTerarkZipTableCommonPrefixBlock, &commonPrefixBlock);
@@ -1011,6 +1033,8 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   return Status::OK();
 }
 
+
+
 Status TerarkZipTableReader::LoadIndex(Slice mem) {
   auto func = "TerarkZipTableReader::LoadIndex()";
   try {
@@ -1043,9 +1067,11 @@ TerarkZipTableReader::
 NewRangeTombstoneIterator(const ReadOptions& read_options) {
   if (tombstone_) {
     auto iter = tombstone_->NewIterator(
-      &table_reader_options_.internal_comparator,
-      nullptr, true,
-      table_reader_options_.ioptions.statistics);
+        &table_reader_options_.internal_comparator,
+        nullptr, true,
+        table_reader_options_.ioptions.statistics);
+    iter->RegisterCleanup(SharedBlockCleanupFunction,
+        new shared_ptr<Block>(tombstone_), nullptr);
     return iter;
   }
   return nullptr;
