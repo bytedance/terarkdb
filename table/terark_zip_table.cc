@@ -39,6 +39,9 @@
 #include <util/arena.h> // for #include <sys/mman.h>
 #ifdef _MSC_VER
 # include <io.h>
+#else
+# include <sys/types.h>
+# include <sys/mman.h>
 #endif
 
 #define TERARK_SUPPORT_UINT64_COMPARATOR
@@ -121,6 +124,9 @@ SequenceNumber GetGlobalSequenceNumber(const TableProperties& table_properties,
 
 Block* DetachBlockContents(BlockContents &tombstoneBlock, SequenceNumber global_seqno)
 {
+#ifndef _MSC_VER
+  madvise((void*)tombstoneBlock.data.data(), tombstoneBlock.data.size(), MADV_DONTNEED);
+#endif
   std::unique_ptr<char[]> tombstoneBuf(new char[tombstoneBlock.data.size()]);
   memcpy(tombstoneBuf.get(), tombstoneBlock.data.data(), tombstoneBlock.data.size());
   return new Block(
