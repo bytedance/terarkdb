@@ -56,7 +56,7 @@ struct TerarkZipTableOptions {
   bool isOfflineBuild = false;
   bool warmUpIndexOnOpen = true;
   bool warmUpValueOnOpen = false;
-  bool disableTwoPass = false;
+  bool disableSecondPassIter = false;
 
   float estimateCompressionRatio = 0.2f;
   double sampleRatio = 0.03;

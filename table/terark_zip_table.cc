@@ -44,6 +44,13 @@
 # include <sys/mman.h>
 #endif
 
+#if defined(TerocksPrivateCode)
+# include <terark/zbs/plain_blob_store.hpp>
+# include <terark/zbs/mixed_len_blob_store.hpp>
+#endif // TerocksPrivateCode
+
+
+
 #define TERARK_SUPPORT_UINT64_COMPARATOR
 //#define DEBUG_TWO_PASS_ITER
 
@@ -124,11 +131,19 @@ SequenceNumber GetGlobalSequenceNumber(const TableProperties& table_properties,
 
 Block* DetachBlockContents(BlockContents &tombstoneBlock, SequenceNumber global_seqno)
 {
-#ifndef _MSC_VER
-  madvise((void*)tombstoneBlock.data.data(), tombstoneBlock.data.size(), MADV_DONTNEED);
-#endif
   std::unique_ptr<char[]> tombstoneBuf(new char[tombstoneBlock.data.size()]);
   memcpy(tombstoneBuf.get(), tombstoneBlock.data.data(), tombstoneBlock.data.size());
+#ifndef _MSC_VER
+  uintptr_t ptr = (uintptr_t)tombstoneBlock.data.data();
+  uintptr_t aligned_ptr = terark::align_up(ptr, 4096);
+  if (aligned_ptr - ptr < tombstoneBlock.data.size()) {
+    size_t sz = terark::align_down(
+        tombstoneBlock.data.size() - (aligned_ptr - ptr), 4096);
+    if (sz > 0) {
+      madvise((void*)aligned_ptr, sz, MADV_DONTNEED);
+    }
+  }
+#endif
   return new Block(
       BlockContents(std::move(tombstoneBuf), tombstoneBlock.data.size(), false, kNoCompression),
       global_seqno);
@@ -139,11 +154,6 @@ void SharedBlockCleanupFunction(void* arg1, void* arg2) {
 }
 
 }
-
-#if defined(TerocksPrivateCode)
-  #include <terark/zbs/plain_blob_store.hpp>
-  #include <terark/zbs/mixed_len_blob_store.hpp>
-#endif // TerocksPrivateCode
 
 namespace rocksdb {
 
@@ -444,7 +454,7 @@ public:
   uint64_t FileSize() const override;
   TableProperties GetTableProperties() const override;
   void SetSecondPassIterator(InternalIterator* reader) override {
-    if (!table_options_.disableTwoPass) {
+    if (!table_options_.disableSecondPassIter) {
       second_pass_iter_ = reader;
     }
   }
@@ -2466,7 +2476,7 @@ std::string TerarkZipTableFactory::GetPrintableTableOptions() const {
   M_APPEND("useSuffixArrayLocalMatch = %s"    , cvb[!!tzto.useSuffixArrayLocalMatch]);
   M_APPEND("warmUpIndexOnOpen        = %s"    , cvb[!!tzto.warmUpIndexOnOpen]       );
   M_APPEND("warmUpValueOnOpen        = %s"    , cvb[!!tzto.warmUpValueOnOpen]       );
-  M_APPEND("disableTwoPass           = %s"    , cvb[!!tzto.disableTwoPass]          );
+  M_APPEND("disableSecondPassIter    = %s"    , cvb[!!tzto.disableSecondPassIter]   );
   M_APPEND("estimateCompressionRatio = %f"    , tzto.estimateCompressionRatio       );
   M_APPEND("sampleRatio              = %f"    , tzto.sampleRatio                    );
   M_APPEND("indexCacheRatio          = %f"    , tzto.indexCacheRatio                );

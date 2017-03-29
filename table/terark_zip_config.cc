@@ -197,7 +197,7 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo) {
   MyGetBool  (tzo, useSuffixArrayLocalMatch, false);
   MyGetBool  (tzo, warmUpIndexOnOpen       , true );
   MyGetBool  (tzo, warmUpValueOnOpen       , false);
-  MyGetBool  (tzo, disableTwoPass          , false);
+  MyGetBool  (tzo, disableSecondPassIter   , false);
 
   MyGetDouble(tzo, estimateCompressionRatio, 0.20 );
   MyGetDouble(tzo, sampleRatio             , 0.03 );
