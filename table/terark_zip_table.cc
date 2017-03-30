@@ -60,7 +60,7 @@
 void DEBUG_PRINT_KEY(const char* first_or_second, rocksdb::Slice key) {
   rocksdb::ParsedInternalKey ikey;
   rocksdb::ParseInternalKey(key, &ikey);
-  fprintf(stderr, "DEBUG: %s pass -> %s\n", first_or_second, ikey.DebugString(true).c_str());
+  fprintf(stderr, "DEBUG: %s pass => %s\n", first_or_second, ikey.DebugString(true).c_str());
 }
 
 #define DEBUG_PRINT_1ST_PASS_KEY(key) DEBUG_PRINT_KEY("1st", key);
@@ -286,7 +286,7 @@ public:
   ~TerarkEmptyTableReader() {}
   TerarkEmptyTableReader(const TableReaderOptions& o)
     : table_reader_options_(o)
-    , global_seqno_(kDisableGlobalSequenceNumber){
+    , global_seqno_(kDisableGlobalSequenceNumber) {
   }
   Status Open(RandomAccessFileReader* file, uint64_t file_size);
 };
@@ -1258,7 +1258,7 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(
   tmpKeyFile_.open();
   tmpSampleFile_.path = tmpValueFile_.path + ".sample";
   tmpSampleFile_.open();
-  if (table_options_.debugLevel == 3) {
+  if (table_options_.debugLevel == 4) {
     tmpDumpFile_.open(tmpValueFile_.path + ".dump", "wb+");
   }
 
@@ -1336,10 +1336,10 @@ static long long g_lastTime = g_pf.now();
 
 void TerarkZipTableBuilder::Add(const Slice& key, const Slice& value) {
 
-  if (table_options_.debugLevel == 3) {
+  if (table_options_.debugLevel == 4) {
     rocksdb::ParsedInternalKey ikey;
     rocksdb::ParseInternalKey(key, &ikey);
-    fprintf(tmpDumpFile_.fp(), "DEBUG: 1st pass -> %s / %s \n", ikey.DebugString(true).c_str(), value.ToString(true).c_str());
+    fprintf(tmpDumpFile_.fp(), "DEBUG: 1st pass => %s / %s \n", ikey.DebugString(true).c_str(), value.ToString(true).c_str());
   }
   DEBUG_PRINT_1ST_PASS_KEY(key);
   ValueType value_type = ExtractValueType(key);
@@ -1383,7 +1383,7 @@ void TerarkZipTableBuilder::Add(const Slice& key, const Slice& value) {
         tmpSampleFile_.writer << fstringOf(value);
         sampleLenSum_ += value.size();
       }
-      if (!second_pass_iter_ || table_options_.debugLevel == 2) {
+      if (!second_pass_iter_ || table_options_.debugLevel == 3) {
         tmpValueFile_.writer.ensureWrite(key.data() + userKey.size(), 8);
         tmpValueFile_.writer << fstringOf(value);
       }
@@ -1421,7 +1421,7 @@ Status WriteBlock(const ByteArray& blockData, WritableFileWriter* file,
 }
 
 Status TerarkZipTableBuilder::EmptyTableFinish() {
-  INFO(tbo_.ioptions.info_log
+  INFO(ioptions_.info_log
       , "TerarkZipTableBuilder::EmptyFinish():this=%p\n", this);
   offset_ = 0;
   BlockHandle emptyTableBH, tombstoneBH(0, 0);
@@ -1472,14 +1472,14 @@ Status TerarkZipTableBuilder::Finish() {
 	  return OfflineFinish();
 	}
 
-  if (!second_pass_iter_ || table_options_.debugLevel == 2) {
+  if (!second_pass_iter_ || table_options_.debugLevel == 3) {
     tmpValueFile_.complete_write();
   }
   tmpSampleFile_.complete_write();
 	{
 	  long long rawBytes = properties_.raw_key_size + properties_.raw_value_size;
 	  long long tt = g_pf.now();
-	  INFO(tbo_.ioptions.info_log
+	  INFO(ioptions_.info_log
 	      , "TerarkZipTableBuilder::Finish():this=%p:  first pass time =%7.2f's, %8.3f'MB/sec\n"
 	      , this, g_pf.sf(t0,tt), rawBytes*1.0/g_pf.uf(t0,tt)
 	      );
@@ -1542,13 +1542,13 @@ auto waitForMemory = [&](size_t myWorkMem, const char* who) {
   if (myWorkMem > smallmem / 2) { // never wait for very smallmem(SST flush)
     sumWaitingMem += myWorkMem;
     while (shouldWait()) {
-      INFO(tbo_.ioptions.info_log
+      INFO(ioptions_.info_log
           , "TerarkZipTableBuilder::Finish():this=%p: sumWaitingMem = %f GB, sumWorkingMem = %f GB, %s WorkingMem = %f GB, wait...\n"
           , this, sumWaitingMem/1e9, sumWorkingMem/1e9, who, myWorkMem/1e9
           );
       zipCond.wait_for(zipLock, waitForTime);
     }
-    INFO(tbo_.ioptions.info_log
+    INFO(ioptions_.info_log
         , "TerarkZipTableBuilder::Finish():this=%p: sumWaitingMem = %f GB, sumWorkingMem = %f GB, %s WorkingMem = %f GB, waited %8.3f sec, Key+Value bytes = %f GB\n"
         , this, sumWaitingMem/1e9, sumWorkingMem/1e9, who, myWorkMem/1e9
         , g_pf.sf(myStartTime, now)
@@ -1579,7 +1579,7 @@ std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
   long long t1 = g_pf.now();
   factory->Build(tmpKeyFile_, table_options_, tmpIndexFile, keyStat_);
   long long tt = g_pf.now();
-  INFO(tbo_.ioptions.info_log
+  INFO(ioptions_.info_log
       , "TerarkZipTableBuilder::Finish():this=%p:  index pass time =%7.2f's, %8.3f'MB/sec\n"
       , this, g_pf.sf(t1,tt), properties_.raw_key_size*1.0/g_pf.uf(t1,tt)
       );
@@ -1781,9 +1781,9 @@ TerarkZipTableBuilder::BuilderWriteValues(std::function<void(fstring)> write) {
   valvec<byte_t> value;
   size_t entryId = 0;
   size_t bitPos = 0;
-  bool veriftKey = table_options_.debugLevel == 1 || table_options_.debugLevel == 2;
-  bool veriftValue = table_options_.debugLevel == 2;
-  bool dumpKeyValue = table_options_.debugLevel == 3;
+  bool veriftKey = table_options_.debugLevel == 2 || table_options_.debugLevel == 3;
+  bool veriftValue = table_options_.debugLevel == 3;
+  bool dumpKeyValue = table_options_.debugLevel == 4;
   NativeDataInput<InputBuffer> fileKeySet;
   NativeDataInput<InputBuffer> fileValueSet;
   valvec<byte_t> veriftTemp;
@@ -1805,7 +1805,7 @@ TerarkZipTableBuilder::BuilderWriteValues(std::function<void(fstring)> write) {
     }
   };
   auto dumpKeyValueFunc = [&](const ParsedInternalKey& ikey, const Slice& value) {
-    fprintf(tmpDumpFile_.fp(), "DEBUG: 2nd pass -> %s / %s \n", ikey.DebugString(true).c_str(), value.ToString(true).c_str());
+    fprintf(tmpDumpFile_.fp(), "DEBUG: 2nd pass => %s / %s \n", ikey.DebugString(true).c_str(), value.ToString(true).c_str());
   };
   if (veriftKey) {
     if (!tmpKeyFile_.fp.isOpen()) {
@@ -1949,7 +1949,7 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
   size_t real_size = index->Memory().size() + zstore->mem_size() + bzvType_.mem_size();
   size_t block_size, last_allocated_block;
   file_->writable_file()->GetPreallocationStatus(&block_size, &last_allocated_block);
-  INFO(tbo_.ioptions.info_log
+  INFO(ioptions_.info_log
     , "TerarkZipTableBuilder::Finish():this=%p: old prealloc_size = %zd, real_size = %zd\n"
     , this, block_size, real_size
     );
@@ -2040,7 +2040,7 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
     g_sumUserKeyNum += keyStat_.numKeys;
     g_sumEntryNum += properties_.num_entries;
   }
-  INFO(tbo_.ioptions.info_log
+  INFO(ioptions_.info_log
     ,
 R"EOS(TerarkZipTableBuilder::Finish():this=%p: second pass time =%7.2f's, %8.3f'MB/sec, value only(%4.1f%% of KV)
    wait indexing time = %7.2f's,
@@ -2166,7 +2166,7 @@ Status TerarkZipTableBuilder::OfflineFinish() {
     factory->Build(tmpKeyFile_, table_options_, tmpIndexFile, keyStat_);
   }
   long long tt = g_pf.now();
-  INFO(tbo_.ioptions.info_log
+  INFO(ioptions_.info_log
       , "TerarkZipTableBuilder::Finish():this=%p:  index pass time =%7.2f's, %8.3f'MB/sec\n"
       , this, g_pf.sf(t1,tt), properties_.raw_key_size*1.0/g_pf.uf(t1,tt)
       );
@@ -2297,9 +2297,11 @@ class TableFactory*
 NewTerarkZipTableFactory(const TerarkZipTableOptions& tzto,
 						 class TableFactory* fallback) {
   TerarkZipTableFactory* table = new TerarkZipTableFactory(tzto, fallback);
-  //STD_INFO("NewTerarkZipTableFactory(\n%s)\n",
-  //  table->GetPrintableTableOptions().c_str()
-  //);
+  if (tzto.debugLevel < 0) {
+    STD_INFO("NewTerarkZipTableFactory(\n%s)\n",
+      table->GetPrintableTableOptions().c_str()
+    );
+  }
   return table;
 }
 

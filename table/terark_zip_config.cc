@@ -235,7 +235,9 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo) {
   MyGetInt(cfo, target_file_size_multiplier, 5);
   MyGetInt(cfo, num_levels                 , 5);
 
-  STD_INFO("TerarkZipConfigFromEnv(dbo, cfo) successed\n");
+  if (tzo.debugLevel) {
+    STD_INFO("TerarkZipConfigFromEnv(dbo, cfo) successed\n");
+  }
   return true;
 }
 

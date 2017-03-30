@@ -19,12 +19,12 @@ namespace rocksdb {
 
 #undef INFO
 #undef WARN
-#if defined(NDEBUG) && 0
-  #define INFO(logger, format, ...) Info(logger, format, ##__VA_ARGS__)
-  #define WARN(logger, format, ...) Warn(logger, format, ##__VA_ARGS__)
+#if defined(NDEBUG) || 1
+# define INFO(logger, format, ...) Info(logger, format, ##__VA_ARGS__)
+# define WARN(logger, format, ...) Warn(logger, format, ##__VA_ARGS__)
 #else
-  #define INFO(logger, format, ...) STD_INFO(format, ##__VA_ARGS__)
-  #define WARN(logger, format, ...) STD_WARN(format, ##__VA_ARGS__)
+# define INFO(logger, format, ...) STD_INFO(format, ##__VA_ARGS__)
+# define WARN(logger, format, ...) STD_WARN(format, ##__VA_ARGS__)
 #endif
 
 using std::string;
