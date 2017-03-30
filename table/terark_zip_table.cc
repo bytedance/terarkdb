@@ -2124,7 +2124,7 @@ Status TerarkZipTableBuilder::WriteMetaData(std::initializer_list<std::pair<cons
   }
   PropertyBlockBuilder propBlockBuilder;
   propBlockBuilder.AddTableProperty(properties_);
-  propBlockBuilder.Add(properties_.user_collected_properties);
+  //propBlockBuilder.Add(properties_.user_collected_properties);
   NotifyCollectTableCollectorsOnFinish(collectors_,
                                        ioptions_.info_log,
                                        &propBlockBuilder);
