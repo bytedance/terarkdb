@@ -500,6 +500,7 @@ private:
   size_t sampleLenSum_ = 0;
   WritableFileWriter* file_;
   uint64_t offset_ = 0;
+  uint64_t zeroSeqCount_ = 0;
   Status status_;
   TableProperties properties_;
   std::unique_ptr<DictZipBlobStore::ZipBuilder> zbuilder_;
@@ -563,6 +564,9 @@ TerarkEmptyTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
     kRangeDelBlock, &tombstoneBlock);
   if (s.ok()) {
     tombstone_.reset(DetachBlockContents(tombstoneBlock, global_seqno_));
+  }
+  if (global_seqno_ == kDisableGlobalSequenceNumber) {
+    global_seqno_ = 0;
   }
   INFO(ioptions.info_log
     , "TerarkZipTableReader::Open(): fsize = %zd, entries = %zd keys = 0 indexSize = 0 valueSize = 0, warm up time =      0.000'sec, build cache time =      0.000'sec\n"
@@ -799,7 +803,9 @@ private:
   bool UnzipIterRecord(bool hasRecord) {
 	  if (hasRecord) {
 		  size_t recId = iter_->id();
-		  zValtype_ = ZipValueType(table_->typeArray_[recId]);
+      zValtype_ = table_->typeArray_.size()
+          ? ZipValueType(table_->typeArray_[recId])
+          : ZipValueType::kZeroSeq;
 		  try {
 		    TryPinBuffer(valueBuf_);
 		    if (ZipValueType::kMulti == zValtype_) {
@@ -841,7 +847,7 @@ private:
     case ZipValueType::kZeroSeq:
       assert(0 == validx_);
       assert(1 == valnum_);
-      pInterKey_.sequence = 0;
+      pInterKey_.sequence = table_->global_seqno_;
       pInterKey_.type = kTypeValue;
       userValue_ = SliceOf(valueBuf_);
       break;
@@ -984,14 +990,12 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
 	  return s;
   }
   s = ReadMetaBlock(file, file_size, kTerarkZipTableMagicNumber, ioptions,
-		  kTerarkZipTableValueTypeBlock, &zValueTypeBlock);
-  if (!s.ok()) {
-	  return s;
-  }
-  s = ReadMetaBlock(file, file_size, kTerarkZipTableMagicNumber, ioptions,
     kRangeDelBlock, &tombstoneBlock);
   if (s.ok()) {
     tombstone_.reset(DetachBlockContents(tombstoneBlock, global_seqno_));
+  }
+  if (global_seqno_ == kDisableGlobalSequenceNumber) {
+    global_seqno_ = 0;
   }
   s = ReadMetaBlock(file, file_size, kTerarkZipTableMagicNumber, ioptions,
       kTerarkZipTableCommonPrefixBlock, &commonPrefixBlock);
@@ -1020,7 +1024,11 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
 	  return s;
   }
   size_t recNum = keyIndex_->NumKeys();
-  typeArray_.risk_set_data((byte_t*)zValueTypeBlock.data.data(), recNum);
+  s = ReadMetaBlock(file, file_size, kTerarkZipTableMagicNumber, ioptions,
+    kTerarkZipTableValueTypeBlock, &zValueTypeBlock);
+  if (s.ok()) {
+    typeArray_.risk_set_data((byte_t*)zValueTypeBlock.data.data(), recNum);
+  }
   long long t0 = g_pf.now();
   if (tzto_.warmUpIndexOnOpen) {
     MmapWarmUp(fstringOf(indexBlock.data));
@@ -1119,7 +1127,9 @@ TerarkZipTableReader::Get(const ReadOptions& ro, const Slice& ikey,
 	if (size_t(-1) == recId) {
 		return Status::OK();
 	}
-	auto zvType = ZipValueType(typeArray_[recId]);
+	auto zvType = typeArray_.size()
+      ? ZipValueType(typeArray_[recId])
+      : ZipValueType::kZeroSeq;
 	if (ZipValueType::kMulti == zvType) {
 	  g_tbuf.resize_no_init(sizeof(uint32_t));
 	} else {
@@ -1135,7 +1145,7 @@ TerarkZipTableReader::Get(const ReadOptions& ro, const Slice& ikey,
 	default:
 		return Status::Aborted("TerarkZipTableReader::Get()", "Bad ZipValueType");
 	case ZipValueType::kZeroSeq:
-	  get_context->SaveValue(ParsedInternalKey(pikey.user_key, 0, kTypeValue),
+	  get_context->SaveValue(ParsedInternalKey(pikey.user_key, global_seqno_, kTypeValue),
         Slice((char*)g_tbuf.data(), g_tbuf.size()));
 		break;
 	case ZipValueType::kValue: { // should be a kTypeValue, the normal case
@@ -1943,7 +1953,7 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
 	unique_ptr<TerocksIndex> index(TerocksIndex::LoadFile(tmpIndexFile));
 	assert(index->NumKeys() == keyStat_.numKeys);
 	Status s;
-  BlockHandle dataBlock, dictBlock, indexBlock, zvTypeBlock, tombstoneBlock(0, 0);
+  BlockHandle dataBlock, dictBlock, indexBlock, zvTypeBlock(0, 0), tombstoneBlock(0, 0);
   BlockHandle commonPrefixBlock;
 {
   size_t real_size = index->Memory().size() + zstore->mem_size() + bzvType_.mem_size();
@@ -2010,11 +2020,14 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
 	if (!s.ok()) {
 		return s;
 	}
-	fstring zvTypeMem(bzvType_.data(), bzvType_.mem_size());
-	s = WriteBlock(zvTypeMem, file_, &offset_, &zvTypeBlock);
-	if (!s.ok()) {
-		return s;
-	}
+  if (zeroSeqCount_ != bzvType_.size()) {
+    assert(zeroSeqCount_ < bzvType_.size());
+    fstring zvTypeMem(bzvType_.data(), bzvType_.mem_size());
+    s = WriteBlock(zvTypeMem, file_, &offset_, &zvTypeBlock);
+    if (!s.ok()) {
+      return s;
+    }
+  }
 	index.reset();
   if (!range_del_block_.empty()) {
     s = WriteBlock(range_del_block_.Finish(), file_, &offset_, &tombstoneBlock);
@@ -2026,8 +2039,8 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
 	properties_.index_size = indexBlock.size();
 	WriteMetaData({
     {dictMem.size() ? &kTerarkZipTableValueDictBlock : NULL, dictBlock},
-    {&kTerarkZipTableIndexBlock       , indexBlock},
-    {&kTerarkZipTableValueTypeBlock   , zvTypeBlock},
+    {&kTerarkZipTableIndexBlock, indexBlock},
+    {!zvTypeBlock.IsNull() ? &kTerarkZipTableValueTypeBlock : NULL, zvTypeBlock},
     {&kTerarkZipTableCommonPrefixBlock, commonPrefixBlock},
     {!tombstoneBlock.IsNull() ? &kRangeDelBlock : NULL, tombstoneBlock},
 	});
@@ -2240,10 +2253,13 @@ void TerarkZipTableBuilder::UpdateValueLenHistogram() {
   const size_t vNum = valueBuf_.size();
   size_t valueLen = 0;
   if (vNum == 1 && (kTypeDeletion==type || kTypeValue==type)) {
-    if (0 == seq && kTypeValue==type)
+    if (0 == seq && kTypeValue == type) {
       valueLen = valueBuf_.strpool.size() - 8;
-    else
+      ++zeroSeqCount_;
+    }
+    else {
       valueLen = valueBuf_.strpool.size() - 1;
+    }
   }
   else {
     valueLen = valueBuf_.strpool.size() + sizeof(uint32_t)*vNum;
