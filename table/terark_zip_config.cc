@@ -73,7 +73,6 @@ void TerarkZipAutoConfigForBulkLoad(struct TerarkZipTableOptions& tzo,
 
   cfo.max_compaction_bytes = (static_cast<uint64_t>(1) << 60);
   cfo.disable_auto_compactions = true;
-  dbo.disableDataSync = true;
   cfo.level0_file_num_compaction_trigger = (1<<30);
   cfo.level0_slowdown_writes_trigger = (1<<30);
   cfo.level0_stop_writes_trigger = (1<<30);
