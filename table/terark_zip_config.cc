@@ -73,7 +73,6 @@ void TerarkZipAutoConfigForBulkLoad(struct TerarkZipTableOptions& tzo,
 
   cfo.max_compaction_bytes = (static_cast<uint64_t>(1) << 60);
   cfo.disable_auto_compactions = true;
-  dbo.disableDataSync = true;
   cfo.level0_file_num_compaction_trigger = (1<<30);
   cfo.level0_slowdown_writes_trigger = (1<<30);
   cfo.level0_stop_writes_trigger = (1<<30);
@@ -193,9 +192,11 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo) {
   MyGetInt   (tzo, checksumLevel           , 3    );
   MyGetInt   (tzo, indexNestLevel          , 3    );
   MyGetInt   (tzo, terarkZipMinLevel       , 0    );
+  MyGetInt   (tzo, debugLevel              , 0    );
   MyGetBool  (tzo, useSuffixArrayLocalMatch, false);
   MyGetBool  (tzo, warmUpIndexOnOpen       , true );
   MyGetBool  (tzo, warmUpValueOnOpen       , false);
+  MyGetBool  (tzo, disableSecondPassIter   , false);
 
   MyGetDouble(tzo, estimateCompressionRatio, 0.20 );
   MyGetDouble(tzo, sampleRatio             , 0.03 );
@@ -233,7 +234,9 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo) {
   MyGetInt(cfo, target_file_size_multiplier, 5);
   MyGetInt(cfo, num_levels                 , 5);
 
-  STD_INFO("TerarkZipConfigFromEnv(dbo, cfo) successed\n");
+  if (tzo.debugLevel) {
+    STD_INFO("TerarkZipConfigFromEnv(dbo, cfo) successed\n");
+  }
   return true;
 }
 

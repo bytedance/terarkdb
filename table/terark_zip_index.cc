@@ -135,7 +135,14 @@ public:
         reader >> keyBuf;
         keyVec.push_back(fstring(keyBuf).substr(ks.commonPrefixLen));
       }
-      tmpKeyFile.close();
+      if (tzopt.debugLevel != 2 && tzopt.debugLevel != 3) {
+        tmpKeyFile.close();
+      }
+      if (keyVec[0] > keyVec.back()) {
+        std::reverse(keyVec.m_index.begin(), keyVec.m_index.end());
+      }
+//      for(size_t i = 0, ei = keyVec.size(); i < ei)
+
 #if !defined(NDEBUG)
       for (size_t i = 1; i < keyVec.size(); ++i) {
         fstring prev = keyVec[i-1];
@@ -162,9 +169,7 @@ public:
           conf.tmpLevel = 2;
         }
       }
-      if (keyVec[0] < keyVec.back()) {
-        conf.isInputSorted = true;
-      }
+      conf.isInputSorted = true;
       std::unique_ptr<NLTrie> trie(new NLTrie());
       trie->build_from(keyVec, conf);
       trie->save_mmap(tmpFilePath);

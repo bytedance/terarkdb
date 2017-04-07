@@ -44,10 +44,20 @@ struct TerarkZipTableOptions {
   /// memory & SSD, which degrades the performance
   int terarkZipMinLevel = 0;
 
+  /// please always set to 0
+  /// unless you know what it really does for
+  /// 0 : no debug
+  /// 1 : enable infomation output
+  /// 2 : verify 2nd pass iter keys
+  /// 3 : verify 2nd pass iter keys & values
+  /// 4 : dump 1st & 2nd pass data to file
+  int debugLevel = 0;
+
   bool useSuffixArrayLocalMatch = false;
   bool isOfflineBuild = false;
   bool warmUpIndexOnOpen = true;
   bool warmUpValueOnOpen = false;
+  bool disableSecondPassIter = false;
 
   float estimateCompressionRatio = 0.2f;
   double sampleRatio = 0.03;
@@ -57,11 +67,17 @@ struct TerarkZipTableOptions {
   size_t softZipWorkingMemLimit = 16ull << 30;
   size_t hardZipWorkingMemLimit = 32ull << 30;
   size_t smallTaskMemory = 1200 << 20; // 1.2G
-#define TerocksPrivateCode
+//#define TerocksPrivateCode
 #if defined(TerocksPrivateCode)
+  // these fields is only for TerocksPrivateCode
+  // always keep these fields for binary compatibility
+#endif // TerocksPrivateCode
   // use dictZip for value when average value length >= minDictZipValueSize
   // otherwise do not use dictZip
   size_t minDictZipValueSize = 50;
+  size_t keyPrefixLen = 0; // for IndexID
+#if defined(TerocksPrivateCode)
+  // end fields for TerocksPrivateCode
 #endif // TerocksPrivateCode
 
   // should be a small value, typically 0.001
