@@ -45,7 +45,17 @@
 #endif
 
 #if defined(TerocksPrivateCode)
+# include <fstream>
 # include <terark/zbs/xxhash_helper.hpp>
+# include <cryptopp/cryptlib.h>
+# include <cryptopp/osrng.h>
+# include <cryptopp/base64.h>
+# include <cryptopp/filters.h>
+# include <cryptopp/eccrypto.h>
+# include <cryptopp/gfpcrypt.h>
+# include <cryptopp/rsa.h>
+#include <nlohmann/json.hpp>
+
 # include <terark/zbs/plain_blob_store.hpp>
 # include <terark/zbs/mixed_len_blob_store.hpp>
 #endif // TerocksPrivateCode
@@ -179,15 +189,24 @@ class TerarkZipTableIterator;
 #if defined(TerocksPrivateCode)
 
 using terark::XXHash64;
+typedef CryptoPP::RSASS<CryptoPP::PKCS1v15, CryptoPP::SHA256> RsaWithSha256;
 
-static std::mutex g_lintMutex;
+static std::mutex g_licenseMutex;
 //static const uint64_t g_trialDuration = 30ULL * 24 * 3600 * 1000;
 static const uint64_t g_trialDuration = 30ULL * 1000;
-static const std::string kTerarkZipTableLicense = "TerarkZipTableMetaBlock";
+static const std::string kTerarkZipTableLicense = "TerarkZipTableExtendedBlock";
+static const std::string g_publikKey =
+"MIIBIDANBgkqhkiG9w0BAQEFAAOCAQ0AMIIBCAKCAQEAxPQGCXF8uotaYLixcWL65GO8wYcZ"
+"ONEThvMn9olRVhzOpBW0/OsFuKwP6/9/zN3WK6mFKXc8qoCDIEedH/4U2JYeXQoxzQf7E3Ow"
+"8cQ+0/6oz/5USnvxN0sf28JOEogAxX2Gqub6nt2fl2T/0CeCQ7WBR76EoZa941Q6XfG2mYys"
+"BeapgXm7zWLZJieP9ChQCtEE5JM2f75VHHk99QHsUV4njhQL0weONIuFg163AsuK5QV+dUON"
+"g4UYTb3i9pkmxs2TAQt+rXaB8dpTpetTy+2nscGw+Ya4lHSZEyZlWGfktdR/jRlnyZMElXIq"
+"ZpEctXh0pkFys/ePkMiDLEAGnQIBEQ==";
+
 
 struct LicenseInfo {
   struct Head {
-    char meta[4] = {'M', 'E', 'T', 'A'};
+    char meta[4] = {'E', 'X', 'T', '.'};
     uint32_t size = sizeof(Head);
     uint64_t sign;
   } head;
@@ -199,10 +218,8 @@ struct LicenseInfo {
   struct KeyInfo {
     SubHead head = {{'k', 'e', 'y', '_'}, 1, sizeof(KeyInfo)};
     uint64_t sign;
-    struct {
-      byte_t byte[32];
-    } key;
-    uint64_t key_date;
+    uint64_t id_hash;
+    uint64_t date;
     uint64_t duration;
   } *key = nullptr, key_storage;
   struct SstInfo {
@@ -217,6 +234,7 @@ struct LicenseInfo {
     BadHead,
     BadSign,
     BadVersion,
+    BadLicense,
     OutOfLicense,
   };
 
@@ -231,6 +249,52 @@ struct LicenseInfo {
     head.sign = XXHash64(kTerarkZipTableMagicNumber)
       .update(sst, sizeof *sst)
       .digest();
+  }
+  Result load_nolock(const std::string& license_file) {
+    using namespace CryptoPP;
+    using json = nlohmann::json;
+    StringSource pubFile(g_publikKey, true, new Base64Decoder);
+    RsaWithSha256::Verifier pub(pubFile);
+
+    json signedJson = json::parse(std::ifstream(license_file, std::ios::binary));
+    std::string strSign = signedJson["sign"].get<std::string>();
+    StringSource signedSource(strSign, true, new Base64Decoder);
+    if (signedSource.MaxRetrievable() != pub.SignatureLength())
+    {
+      return BadLicense;
+    }
+    SecByteBlock signature(pub.SignatureLength());
+    signedSource.Get(signature, signature.size());
+
+    VerifierFilter *verifierFilter = new VerifierFilter(pub);
+    verifierFilter->Put(signature, pub.SignatureLength());
+    std::string base64Data = signedJson["data"].get<std::string>();
+    StringSource base64Source(base64Data, true, new Base64Decoder());
+    std::string strData;
+    strData.resize(base64Source.MaxRetrievable());
+    base64Source.Get((byte*)strData.data(), strData.size());
+    StringSource(strData, true, verifierFilter);
+    fprintf(stdout, verifierFilter->GetLastResult() ? "success" : "fail");
+    if (!verifierFilter->GetLastResult()) {
+      return BadLicense;
+    }
+    json signedDetail = json::parse(strData);
+    key_storage.id_hash = XXHash64(kTerarkZipTableMagicNumber)
+      .update(signedDetail["id"].get<std::string>())
+      .digest();
+    key_storage.date = signedDetail["dat"].get<uint64_t>();
+    key_storage.duration = signedDetail["dur"].get<uint64_t>();
+    key_storage.sign = XXHash64(kTerarkZipTableMagicNumber)
+      .update(&key_storage.id_hash, sizeof key_storage.id_hash)
+      .update(&key_storage.date, sizeof key_storage.date)
+      .update(&key_storage.duration, sizeof key_storage.duration)
+      .digest();
+    key = &key_storage;
+    head.sign = XXHash64(kTerarkZipTableMagicNumber)
+      .update(key, sizeof *key)
+      .update(sst, sizeof *sst)
+      .digest();
+    return OK;
   }
   Result merge(const void* data, size_t size) {
     if (size == 0) {
@@ -249,6 +313,7 @@ struct LicenseInfo {
     if (in_head.sign != XXHash64(kTerarkZipTableMagicNumber).update(l_ptr, l_size).digest()) {
       return Result::BadSign;
     }
+    bool head_dirty = false;
     while(l_size) {
       if (l_size < sizeof(SubHead)) {
         return Result::BadStream;
@@ -266,16 +331,17 @@ struct LicenseInfo {
         KeyInfo key_info;
         memcpy(&key_info, l_ptr, sizeof(KeyInfo));
         if (key_info.sign != XXHash64(kTerarkZipTableMagicNumber)
-          .update(&key_info.key, sizeof key_info.key)
-          .update(&key_info.key_date, sizeof key_info.key_date)
+          .update(&key_info.id_hash, sizeof key_info.id_hash)
+          .update(&key_info.date, sizeof key_info.date)
           .update(&key_info.duration, sizeof key_info.duration)
           .digest()) {
           return Result::BadSign;
         }
-        std::unique_lock<std::mutex> l(g_lintMutex);
-        if (key == nullptr || key->key_date + key->duration < key_info.key_date + key_info.duration) {
+        std::unique_lock<std::mutex> l(g_licenseMutex);
+        if (key == nullptr || key->date + key->duration < key_info.date + key_info.duration) {
           key_storage = key_info;
           key = &key_storage;
+          head_dirty = true;
         }
       }
       else if (strncmp(sub_head.name, sst_storage.head.name, 4) == 0) {
@@ -293,9 +359,10 @@ struct LicenseInfo {
           .digest()) {
           return Result::BadSign;
         }
-        std::unique_lock<std::mutex> l(g_lintMutex);
+        std::unique_lock<std::mutex> l(g_licenseMutex);
         if (sst->create_date > sst_info.create_date) {
           *sst = sst_info;
+          head_dirty = true;
         }
       }
       else {
@@ -304,16 +371,25 @@ struct LicenseInfo {
       l_ptr += sub_head.size;
       l_size -= sub_head.size;
     }
+    if (head_dirty) {
+      XXHash64 hasher(kTerarkZipTableMagicNumber);
+      if (key != nullptr) {
+        hasher.update(key, sizeof *key);
+      }
+      hasher.update(sst, sizeof *sst);
+      head.sign = hasher.digest();
+    }
     return Result::OK;
   }
 
   valvec<byte_t> dump() const {
+    std::unique_lock<std::mutex> l(g_licenseMutex);
     valvec<byte_t> result;
     result.append((const byte_t*)&head, sizeof head);
-    result.append((const byte_t*)sst, sizeof *sst);
     if (key) {
       result.append((const byte_t*)key, sizeof *key);
     }
+    result.append((const byte_t*)sst, sizeof *sst);
     return result;
   }
 
@@ -321,13 +397,13 @@ struct LicenseInfo {
     using namespace std::chrono;
     uint64_t now = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
     if (key) {
-      std::unique_lock<std::mutex> l(g_lintMutex);
-      if (now > key->key_date + key->duration) {
+      std::unique_lock<std::mutex> l(g_licenseMutex);
+      if (now > key->date + key->duration) {
         return false;
       }
     }
     else {
-      std::unique_lock<std::mutex> l(g_lintMutex);
+      std::unique_lock<std::mutex> l(g_licenseMutex);
       if (now > sst->create_date + g_trialDuration) {
         return false;
       }
@@ -2529,6 +2605,14 @@ NewTerarkZipTableFactory(const TerarkZipTableOptions& tzto,
       table->GetPrintableTableOptions().c_str()
     );
   }
+#if defined(TerocksPrivateCode)
+  if (!tzto.extendedConfigFile.empty() && g_license.key == nullptr) {
+    std::unique_lock<std::mutex> l(g_licenseMutex);
+    if (g_license.key == nullptr) {
+      g_license.load_nolock(tzto.extendedConfigFile);
+    }
+  }
+#endif // TerocksPrivateCode
   return table;
 }
 
