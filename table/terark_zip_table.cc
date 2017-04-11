@@ -54,7 +54,7 @@
 # include <cryptopp/eccrypto.h>
 # include <cryptopp/gfpcrypt.h>
 # include <cryptopp/rsa.h>
-#include <nlohmann/json.hpp>
+# include <nlohmann/json.hpp>
 
 # include <terark/zbs/plain_blob_store.hpp>
 # include <terark/zbs/mixed_len_blob_store.hpp>
@@ -266,7 +266,7 @@ struct LicenseInfo {
     SecByteBlock signature(pub.SignatureLength());
     signedSource.Get(signature, signature.size());
 
-    VerifierFilter *verifierFilter = new VerifierFilter(pub);
+    SignatureVerificationFilter *verifierFilter = new SignatureVerificationFilter(pub);
     verifierFilter->Put(signature, pub.SignatureLength());
     std::string base64Data = signedJson["data"].get<std::string>();
     StringSource base64Source(base64Data, true, new Base64Decoder());
@@ -274,7 +274,6 @@ struct LicenseInfo {
     strData.resize(base64Source.MaxRetrievable());
     base64Source.Get((byte*)strData.data(), strData.size());
     StringSource(strData, true, verifierFilter);
-    fprintf(stdout, verifierFilter->GetLastResult() ? "success" : "fail");
     if (!verifierFilter->GetLastResult()) {
       return BadLicense;
     }

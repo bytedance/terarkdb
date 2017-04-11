@@ -112,7 +112,7 @@ void verify(const std::string& signedFile, const std::string& publicKey) {
   SecByteBlock signature(pub.SignatureLength());
   signedSource.Get(signature, signature.size());
 
-  VerifierFilter *verifierFilter = new VerifierFilter(pub);
+  SignatureVerificationFilter *verifierFilter = new SignatureVerificationFilter(pub);
   verifierFilter->Put(signature, pub.SignatureLength());
   std::string strData = signedJson["data"].get<std::string>();
   StringSource dataSource(strData, true, new Base64Decoder(verifierFilter));
