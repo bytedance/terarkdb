@@ -1239,6 +1239,7 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   if (s.ok()) {
     auto res = g_license.merge(licenseBlock.data.data(), licenseBlock.data.size());
     assert(res == LicenseInfo::Result::OK);
+    (void)res; // shut up !
     if (!g_license.check()) {
       return Status::Corruption("License expired", "Trial");
     }

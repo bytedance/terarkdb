@@ -74,7 +74,7 @@ struct TerarkZipTableOptions {
 #endif // TerocksPrivateCode
   // use dictZip for value when average value length >= minDictZipValueSize
   // otherwise do not use dictZip
-  size_t minDictZipValueSize = 50;
+  size_t minDictZipValueSize = 30;
   size_t keyPrefixLen = 0; // for IndexID
 #if defined(TerocksPrivateCode)
   // end fields for TerocksPrivateCode

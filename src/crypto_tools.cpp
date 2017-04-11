@@ -31,6 +31,7 @@ Options:
      if empty , $(-k).pub
   -l <license file>
   -i <id>
+  -a <application>
   -b <begin time> UTC ms
   -d <duration> ms
 
@@ -68,7 +69,7 @@ void gen(const std::string& seedFile, const std::string& privateKey, const std::
   pubFile.MessageEnd();
 }
 
-void sign(const std::string& id, uint64_t beginDate, uint64_t duration, const std::string& signedFile, const std::string& privateKey) {
+void sign(const std::string& id, const std::string& app, uint64_t beginDate, uint64_t duration, const std::string& signedFile, const std::string& privateKey) {
   using namespace CryptoPP;
   using json = nlohmann::json;
   FileSource privFile(privateKey.c_str(), true, new Base64Decoder);
@@ -77,6 +78,7 @@ void sign(const std::string& id, uint64_t beginDate, uint64_t duration, const st
 
   json rawJson;
   rawJson["id"] = id;
+  rawJson["app"] = app;
   rawJson["dat"] = beginDate;
   rawJson["dur"] = duration;
   std::string rawMsg = rawJson.dump();
@@ -106,7 +108,7 @@ void verify(const std::string& signedFile, const std::string& publicKey) {
   StringSource signedSource(strSign, true, new Base64Decoder);
   if (signedSource.MaxRetrievable() != pub.SignatureLength())
   {
-    fprintf(stdout, "fail");
+    fprintf(stdout, "fail\n");
     return;
   }
   SecByteBlock signature(pub.SignatureLength());
@@ -116,7 +118,7 @@ void verify(const std::string& signedFile, const std::string& publicKey) {
   verifierFilter->Put(signature, pub.SignatureLength());
   std::string strData = signedJson["data"].get<std::string>();
   StringSource dataSource(strData, true, new Base64Decoder(verifierFilter));
-  fprintf(stdout, verifierFilter->GetLastResult() ? "success" : "fail");
+  fprintf(stdout, verifierFilter->GetLastResult() ? "success\n" : "fail\n");
 }
 
 int main(int argc, char* argv[]) {
@@ -128,11 +130,12 @@ int main(int argc, char* argv[]) {
   std::string publicKey;
   std::string licenseFile;
   std::string id;
+  std::string app;
   uint64_t beginDate = 0;
   uint64_t duration = 0;
 
   for (;;) {
-    int opt = getopt(argc, argv, "s:k:p:l:i:b:d:GSV");
+    int opt = getopt(argc, argv, "s:k:p:l:i:a:b:d:GSV");
     switch (opt) {
     case -1:
       goto GO;
@@ -152,6 +155,10 @@ int main(int argc, char* argv[]) {
       break;
     case 'i':
       id = optarg;
+      break;
+    case 'a':
+      app = optarg;
+      break;
     case 'b':
       beginDate = std::atoll(optarg);
       break;
@@ -189,7 +196,7 @@ GO:
       usage(argv[0]);
       return -1;
     }
-    sign(id, beginDate, duration, licenseFile, privateKey);
+    sign(id, app, beginDate, duration, licenseFile, privateKey);
   }
   if (isVerify) {
     if (licenseFile.empty() || publicKey.empty()) {
