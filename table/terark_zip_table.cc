@@ -175,6 +175,7 @@ using terark::BadCrc32cException;
 using terark::byte_swap;
 
 static terark::profiling g_pf;
+static std::once_flag g_once;
 
 static const uint64_t kTerarkZipTableMagicNumber = 0x1122334455667788;
 
@@ -191,9 +192,7 @@ class TerarkZipTableIterator;
 using terark::XXHash64;
 typedef CryptoPP::RSASS<CryptoPP::PKCS1v15, CryptoPP::SHA256> RsaWithSha256;
 
-static std::mutex g_licenseMutex;
-//static const uint64_t g_trialDuration = 30ULL * 24 * 3600 * 1000;
-static const uint64_t g_trialDuration = 30ULL * 1000;
+static const uint64_t g_trialDuration = 30ULL * 24 * 3600 * 1000;
 static const std::string kTerarkZipTableLicense = "TerarkZipTableExtendedBlock";
 static const std::string g_publikKey =
 "MIIBIDANBgkqhkiG9w0BAQEFAAOCAQ0AMIIBCAKCAQEAxPQGCXF8uotaYLixcWL65GO8wYcZ"
@@ -227,7 +226,9 @@ struct LicenseInfo {
     uint64_t sign;
     uint64_t create_date;
   } *sst = nullptr, sst_storage;
-  
+
+  mutable std::mutex mutex;
+
   enum Result : uint32_t {
     OK,
     BadStream,
@@ -235,7 +236,6 @@ struct LicenseInfo {
     BadSign,
     BadVersion,
     BadLicense,
-    OutOfLicense,
   };
 
   LicenseInfo() {
@@ -253,41 +253,44 @@ struct LicenseInfo {
   Result load_nolock(const std::string& license_file) {
     using namespace CryptoPP;
     using json = nlohmann::json;
-    StringSource pubFile(g_publikKey, true, new Base64Decoder);
-    RsaWithSha256::Verifier pub(pubFile);
+    try {
+      StringSource pubFile(g_publikKey, true, new Base64Decoder);
+      RsaWithSha256::Verifier pub(pubFile);
 
-    json signedJson = json::parse(std::ifstream(license_file, std::ios::binary));
-    std::string strSign = signedJson["sign"].get<std::string>();
-    StringSource signedSource(strSign, true, new Base64Decoder);
-    if (signedSource.MaxRetrievable() != pub.SignatureLength())
-    {
+      json signedJson = json::parse(std::ifstream(license_file, std::ios::binary));
+      std::string strSign = signedJson["sign"].get<std::string>();
+      StringSource signedSource(strSign, true, new Base64Decoder);
+      if (signedSource.MaxRetrievable() != pub.SignatureLength())
+      {
+        return BadLicense;
+      }
+      SecByteBlock signature(pub.SignatureLength());
+      signedSource.Get(signature, signature.size());
+
+      std::string base64Data = signedJson["data"].get<std::string>();
+      StringSource base64Source(base64Data, true, new Base64Decoder());
+      std::string strData;
+      strData.resize(base64Source.MaxRetrievable());
+      base64Source.Get((byte*)strData.data(), strData.size());
+      if (!pub.VerifyMessage((const byte*)strData.data(), strData.size(),
+          signature.data(), signature.size())) {
+        return BadLicense;
+      }
+      json signedDetail = json::parse(strData);
+      key_storage.id_hash = XXHash64(kTerarkZipTableMagicNumber)
+        .update(signedDetail["id"].get<std::string>())
+        .digest();
+      key_storage.date = signedDetail["dat"].get<uint64_t>();
+      key_storage.duration = signedDetail["dur"].get<uint64_t>();
+      key_storage.sign = XXHash64(kTerarkZipTableMagicNumber)
+        .update(&key_storage.id_hash, sizeof key_storage.id_hash)
+        .update(&key_storage.date, sizeof key_storage.date)
+        .update(&key_storage.duration, sizeof key_storage.duration)
+        .digest();
+    }
+    catch (...) {
       return BadLicense;
     }
-    SecByteBlock signature(pub.SignatureLength());
-    signedSource.Get(signature, signature.size());
-
-    SignatureVerificationFilter *verifierFilter = new SignatureVerificationFilter(pub);
-    verifierFilter->Put(signature, pub.SignatureLength());
-    std::string base64Data = signedJson["data"].get<std::string>();
-    StringSource base64Source(base64Data, true, new Base64Decoder());
-    std::string strData;
-    strData.resize(base64Source.MaxRetrievable());
-    base64Source.Get((byte*)strData.data(), strData.size());
-    StringSource(strData, true, verifierFilter);
-    if (!verifierFilter->GetLastResult()) {
-      return BadLicense;
-    }
-    json signedDetail = json::parse(strData);
-    key_storage.id_hash = XXHash64(kTerarkZipTableMagicNumber)
-      .update(signedDetail["id"].get<std::string>())
-      .digest();
-    key_storage.date = signedDetail["dat"].get<uint64_t>();
-    key_storage.duration = signedDetail["dur"].get<uint64_t>();
-    key_storage.sign = XXHash64(kTerarkZipTableMagicNumber)
-      .update(&key_storage.id_hash, sizeof key_storage.id_hash)
-      .update(&key_storage.date, sizeof key_storage.date)
-      .update(&key_storage.duration, sizeof key_storage.duration)
-      .digest();
     key = &key_storage;
     head.sign = XXHash64(kTerarkZipTableMagicNumber)
       .update(key, sizeof *key)
@@ -336,7 +339,7 @@ struct LicenseInfo {
           .digest()) {
           return Result::BadSign;
         }
-        std::unique_lock<std::mutex> l(g_licenseMutex);
+        std::unique_lock<std::mutex> l(mutex);
         if (key == nullptr || key->date + key->duration < key_info.date + key_info.duration) {
           key_storage = key_info;
           key = &key_storage;
@@ -358,7 +361,7 @@ struct LicenseInfo {
           .digest()) {
           return Result::BadSign;
         }
-        std::unique_lock<std::mutex> l(g_licenseMutex);
+        std::unique_lock<std::mutex> l(mutex);
         if (sst->create_date > sst_info.create_date) {
           *sst = sst_info;
           head_dirty = true;
@@ -382,7 +385,7 @@ struct LicenseInfo {
   }
 
   valvec<byte_t> dump() const {
-    std::unique_lock<std::mutex> l(g_licenseMutex);
+    std::unique_lock<std::mutex> l(mutex);
     valvec<byte_t> result;
     result.append((const byte_t*)&head, sizeof head);
     if (key) {
@@ -396,13 +399,13 @@ struct LicenseInfo {
     using namespace std::chrono;
     uint64_t now = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
     if (key) {
-      std::unique_lock<std::mutex> l(g_licenseMutex);
+      std::unique_lock<std::mutex> l(mutex);
       if (now > key->date + key->duration) {
         return false;
       }
     }
     else {
-      std::unique_lock<std::mutex> l(g_licenseMutex);
+      std::unique_lock<std::mutex> l(mutex);
       if (now > sst->create_date + g_trialDuration) {
         return false;
       }
@@ -410,8 +413,6 @@ struct LicenseInfo {
     return true;
   }
 };
-
-static LicenseInfo g_license;
 
 #endif // TerocksPrivateCode
 
@@ -434,6 +435,56 @@ inline ByteArrayView SubStr(const ByteArrayView& x, size_t pos) {
   assert(pos <= x.size());
   return ByteArrayView(x.data() + pos, x.size() - pos);
 }
+
+///////////////////////////////////////////////////////////////////////////////
+
+class TerarkZipTableFactory : public TableFactory, boost::noncopyable {
+public:
+  explicit
+    TerarkZipTableFactory(const TerarkZipTableOptions& tzto, TableFactory* fallback)
+    : table_options_(tzto), fallback_factory_(fallback) {
+    adaptive_factory_ = NewAdaptiveTableFactory();
+  }
+
+  const char* Name() const override { return "TerarkZipTable"; }
+
+  Status
+    NewTableReader(const TableReaderOptions& table_reader_options,
+      unique_ptr<RandomAccessFileReader>&& file,
+      uint64_t file_size,
+      unique_ptr<TableReader>* table,
+      bool prefetch_index_and_filter_in_cache) const override;
+
+  TableBuilder*
+    NewTableBuilder(const TableBuilderOptions& table_builder_options,
+      uint32_t column_family_id,
+      WritableFileWriter* file) const override;
+
+  std::string GetPrintableTableOptions() const override;
+
+  // Sanitizes the specified DB Options.
+  Status SanitizeOptions(const DBOptions& db_opts,
+    const ColumnFamilyOptions& cf_opts) const override;
+
+  void* GetOptions() override { return &table_options_; }
+
+  bool IsDeleteRangeSupported() const override { return true; }
+
+private:
+  TerarkZipTableOptions table_options_;
+  TableFactory* fallback_factory_;
+  TableFactory* adaptive_factory_; // just for open table
+  mutable size_t nth_new_terark_table_ = 0;
+  mutable size_t nth_new_fallback_table_ = 0;
+#if defined(TerocksPrivateCode)
+private:
+  LicenseInfo license_;
+public:
+  LicenseInfo& GetLicense() {
+    return license_;
+  }
+#endif // TerocksPrivateCode
+};
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -800,15 +851,18 @@ TerarkEmptyTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   table_properties_.reset(uniqueProps.release());
   global_seqno_ = GetGlobalSequenceNumber(*table_properties_, ioptions.info_log);
 #if defined(TerocksPrivateCode)
+  auto table_factory = dynamic_cast<TerarkZipTableFactory*>(ioptions.table_factory);
+  assert(table_factory);
+  auto& license = table_factory->GetLicense();
   BlockContents licenseBlock;
   s = ReadMetaBlock(file, file_size, kTerarkZipTableMagicNumber, ioptions,
     kTerarkZipTableLicense, &licenseBlock);
   if (s.ok()) {
-    auto res = g_license.merge(licenseBlock.data.data(), licenseBlock.data.size());
+    auto res = license.merge(licenseBlock.data.data(), licenseBlock.data.size());
     assert(res == LicenseInfo::Result::OK);
     (void)res; // shut up !
-    if (!g_license.check()) {
-      return Status::Corruption("License expired", "Trial");
+    if (!license.check()) {
+      return Status::Corruption("License expired", "contact@terark.com");
     }
   }
 #endif // TerocksPrivateCode
@@ -1237,11 +1291,14 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   s = ReadMetaBlock(file, file_size, kTerarkZipTableMagicNumber, ioptions,
     kTerarkZipTableLicense, &licenseBlock);
   if (s.ok()) {
-    auto res = g_license.merge(licenseBlock.data.data(), licenseBlock.data.size());
+    auto table_factory = dynamic_cast<TerarkZipTableFactory*>(ioptions.table_factory);
+    assert(table_factory);
+    auto& license = table_factory->GetLicense();
+    auto res = license.merge(licenseBlock.data.data(), licenseBlock.data.size());
     assert(res == LicenseInfo::Result::OK);
     (void)res; // shut up !
-    if (!g_license.check()) {
-      return Status::Corruption("License expired", "Trial");
+    if (!license.check()) {
+      return Status::Corruption("License expired", "contact@terark.com");
     }
   }
 #endif // TerocksPrivateCode
@@ -1512,7 +1569,7 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(
 
   file_ = file;
   sampleUpperBound_ = randomGenerator_.max() * table_options_.sampleRatio;
-  tmpValueFile_.path = tzto.localTempDir + "/Terocks-XXXXXX";
+  tmpValueFile_.path = tzto.localTempDir + "/Terark-XXXXXX";
 #if _MSC_VER
   if (int err = _mktemp_s(&tmpValueFile_.path[0], tmpValueFile_.path.size() + 1)) {
     fprintf(stderr
@@ -1706,9 +1763,11 @@ Status TerarkZipTableBuilder::EmptyTableFinish() {
     return s;
   }
 #if defined(TerocksPrivateCode)
+  auto table_factory = dynamic_cast<TerarkZipTableFactory*>(ioptions_.table_factory);
+  assert(table_factory);
+  auto& license = table_factory->GetLicense();
   BlockHandle licenseHandle;
-  auto license = g_license.dump();
-  s = WriteBlock(SliceOf(license), file_, &offset_, &licenseHandle);
+  s = WriteBlock(SliceOf(license.dump()), file_, &offset_, &licenseHandle);
   if (!s.ok()) {
     return s;
   }
@@ -2307,9 +2366,11 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
   }
 	index.reset();
 #if defined(TerocksPrivateCode)
+  auto table_factory = dynamic_cast<TerarkZipTableFactory*>(ioptions_.table_factory);
+  assert(table_factory);
+  auto& license = table_factory->GetLicense();
   BlockHandle licenseHandle;
-  auto license = g_license.dump();
-  s = WriteBlock(SliceOf(license), file_, &offset_, &licenseHandle);
+  s = WriteBlock(SliceOf(license.dump()), file_, &offset_, &licenseHandle);
   if (!s.ok()) {
     return s;
   }
@@ -2557,49 +2618,35 @@ void TerarkZipTableBuilder::UpdateValueLenHistogram() {
 
 /////////////////////////////////////////////////////////////////////////////
 
-class TerarkZipTableFactory : public TableFactory, boost::noncopyable {
- public:
-  explicit
-  TerarkZipTableFactory(const TerarkZipTableOptions& tzto, TableFactory* fallback)
-  : table_options_(tzto), fallback_factory_(fallback) {
-    adaptive_factory_ = NewAdaptiveTableFactory();
-  }
-
-  const char* Name() const override { return "TerarkZipTable"; }
-
-  Status
-  NewTableReader(const TableReaderOptions& table_reader_options,
-                 unique_ptr<RandomAccessFileReader>&& file,
-                 uint64_t file_size,
-				 unique_ptr<TableReader>* table,
-				 bool prefetch_index_and_filter_in_cache) const override;
-
-  TableBuilder*
-  NewTableBuilder(const TableBuilderOptions& table_builder_options,
-				  uint32_t column_family_id,
-				  WritableFileWriter* file) const override;
-
-  std::string GetPrintableTableOptions() const override;
-
-  // Sanitizes the specified DB Options.
-  Status SanitizeOptions(const DBOptions& db_opts,
-                         const ColumnFamilyOptions& cf_opts) const override;
-
-  void* GetOptions() override { return &table_options_; }
-
-  bool IsDeleteRangeSupported() const override { return true; }
-
- private:
-  TerarkZipTableOptions table_options_;
-  TableFactory* fallback_factory_;
-  TableFactory* adaptive_factory_; // just for open table
-  mutable size_t nth_new_terark_table_ = 0;
-  mutable size_t nth_new_fallback_table_ = 0;
-};
-
 class TableFactory*
 NewTerarkZipTableFactory(const TerarkZipTableOptions& tzto,
 						 class TableFactory* fallback) {
+  int err = 0;
+  try {
+    TempFileDeleteOnClose test;
+    test.path = tzto.localTempDir + "/Terark-XXXXXX";
+#if _MSC_VER
+    if (err = _mktemp_s(&test.path[0], test.path.size() + 1)) {
+      throw 0;
+    }
+    test.open();
+#else
+    int fd = mkstemp(&test.path[0]);
+    if (fd < 0) {
+      err = errno;
+      throw 0;
+    }
+    test.dopen(fd);
+#endif
+    test.writer << "Terark";
+    test.complete_write();
+  }
+  catch (...) {
+    fprintf(stderr
+      , "ERROR: bad localTempDir %s %s\n"
+      , tzto.localTempDir.c_str(), err ? strerror(err) : "");
+    abort();
+  }
   TerarkZipTableFactory* table = new TerarkZipTableFactory(tzto, fallback);
   if (tzto.debugLevel < 0) {
     STD_INFO("NewTerarkZipTableFactory(\n%s)\n",
@@ -2607,10 +2654,44 @@ NewTerarkZipTableFactory(const TerarkZipTableOptions& tzto,
     );
   }
 #if defined(TerocksPrivateCode)
-  if (!tzto.extendedConfigFile.empty() && g_license.key == nullptr) {
-    std::unique_lock<std::mutex> l(g_licenseMutex);
-    if (g_license.key == nullptr) {
-      g_license.load_nolock(tzto.extendedConfigFile);
+  auto& license = table->GetLicense();
+  if (!tzto.extendedConfigFile.empty() && license.key == nullptr) {
+    std::unique_lock<std::mutex> l(license.mutex);
+    if (license.key == nullptr) {
+      using namespace std::chrono;
+#if _MSC_VER
+# define RED_BEGIN
+# define RED_END
+#else
+# define RED_BEGIN "\033[1;31;40m"
+# define RED_END "\033[0m"
+#endif
+      license.load_nolock(tzto.extendedConfigFile);
+      uint64_t now =
+        duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+      if (license.key == nullptr ||
+          now + g_trialDuration > license.key->date + license.key->duration) {
+        if (license.key == nullptr) {
+          fprintf(stderr, RED_BEGIN "Bad license file %s" RED_END "\n", tzto.extendedConfigFile.c_str());
+        }
+        else {
+          if (now + g_trialDuration > license.key->date + license.key->duration) {
+            thread_local char buf[64];
+            std::time_t rawtime = (license.key->date + license.key->duration) / 1000;
+            struct tm* timeinfo = gmtime(&rawtime);
+            strftime(buf, sizeof(buf), "%F %T", timeinfo);
+            if (now > license.key->date + license.key->duration) {
+              fprintf(stderr, RED_BEGIN "License expired at %s" RED_END "\n", buf);
+            }
+            else {
+              fprintf(stderr, RED_BEGIN "License will expired at %s" RED_END "\n", buf);
+            }
+          }
+        }
+        fprintf(stderr, RED_BEGIN "contact@terark.com" RED_END "\n");
+      }
+#undef RED_BEGIN
+#undef RED_END
     }
   }
 #endif // TerocksPrivateCode
