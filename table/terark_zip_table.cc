@@ -2852,7 +2852,7 @@ std::string TerarkZipTableFactory::GetPrintableTableOptions() const {
   const auto& tzto =  table_options_;
   const double gb = 1ull << 30;
 
-  ret += "localTempDir             = ";
+  ret += "localTempDir             : ";
   ret += tzto.localTempDir;
   ret += '\n';
 
