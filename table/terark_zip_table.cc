@@ -175,7 +175,6 @@ using terark::BadCrc32cException;
 using terark::byte_swap;
 
 static terark::profiling g_pf;
-static std::once_flag g_once;
 
 static const uint64_t kTerarkZipTableMagicNumber = 0x1122334455667788;
 
