@@ -412,6 +412,76 @@ struct LicenseInfo {
     }
     return true;
   }
+
+  void print_error(const char* file_name, bool startup, rocksdb::Logger* logger) const {
+    using namespace std::chrono;
+    std::unique_lock<std::mutex> l(mutex);
+#if _MSC_VER
+# define RED_BEGIN ""
+# define RED_END ""
+#else
+# define RED_BEGIN "\033[5;31;40m"
+# define RED_END "\033[0m"
+#endif
+    uint64_t now = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+    auto get_err_str = [](const char* msg, const char *file, uint64_t time) {
+      std::stringstream info;
+      info << RED_BEGIN;
+      info << msg;
+      if (file) {
+        info << file;
+      }
+      if (time) {
+        thread_local char buf[64];
+        std::time_t rawtime = time / 1000;
+        struct tm* timeinfo = gmtime(&rawtime);
+        strftime(buf, sizeof(buf), "%F %T", timeinfo);
+        info << buf;
+      }
+      info << " contact@terark.com";
+      info << RED_END;
+      return info.str();
+    };
+    std::string error_str;
+    if (startup) {
+      if (key == nullptr) {
+        if (file_name && *file_name) {
+          error_str = get_err_str("Bad license file ", file_name, 0);
+        }
+        else {
+          error_str = get_err_str("Trial version", nullptr, 0);
+        }
+      }
+      else {
+        if (now > key->date + key->duration) {
+          error_str = get_err_str("License expired at ", nullptr, key->date + key->duration);
+        }
+        else if (now + g_trialDuration > key->date + key->duration) {
+          error_str = get_err_str("License will expired at ", nullptr, key->date + key->duration);
+        }
+      }
+    }
+    else {
+      if (key != nullptr) {
+        if (now > key->date + key->duration) {
+          error_str = get_err_str("License expired at ", nullptr, key->date + key->duration);
+        }
+      }
+      else {
+        if (now > sst->create_date + g_trialDuration) {
+          error_str = get_err_str("Trial expired at ", nullptr, sst->create_date + g_trialDuration);
+        }
+      }
+    }
+    if (!error_str.empty()) {
+      fprintf(stderr, "%s\n", error_str.c_str());
+      if (logger) {
+        Warn(logger, error_str.c_str());
+      }
+    }
+#undef RED_BEGIN
+#undef RED_END
+  }
 };
 
 #endif // TerocksPrivateCode
@@ -862,6 +932,7 @@ TerarkEmptyTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
     assert(res == LicenseInfo::Result::OK);
     (void)res; // shut up !
     if (!license.check()) {
+      license.print_error(nullptr, false, ioptions.info_log);
       return Status::Corruption("License expired", "contact@terark.com");
     }
   }
@@ -1298,6 +1369,7 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
     assert(res == LicenseInfo::Result::OK);
     (void)res; // shut up !
     if (!license.check()) {
+      license.print_error(nullptr, false, ioptions.info_log);
       return Status::Corruption("License expired", "contact@terark.com");
     }
   }
@@ -2658,42 +2730,10 @@ NewTerarkZipTableFactory(const TerarkZipTableOptions& tzto,
   if (!tzto.extendedConfigFile.empty() && license.key == nullptr) {
     std::unique_lock<std::mutex> l(license.mutex);
     if (license.key == nullptr) {
-      using namespace std::chrono;
-#if _MSC_VER
-# define RED_BEGIN
-# define RED_END
-#else
-# define RED_BEGIN "\033[1;31;40m"
-# define RED_END "\033[0m"
-#endif
       license.load_nolock(tzto.extendedConfigFile);
-      uint64_t now =
-        duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
-      if (license.key == nullptr ||
-          now + g_trialDuration > license.key->date + license.key->duration) {
-        if (license.key == nullptr) {
-          fprintf(stderr, RED_BEGIN "Bad license file %s" RED_END "\n", tzto.extendedConfigFile.c_str());
-        }
-        else {
-          if (now + g_trialDuration > license.key->date + license.key->duration) {
-            thread_local char buf[64];
-            std::time_t rawtime = (license.key->date + license.key->duration) / 1000;
-            struct tm* timeinfo = gmtime(&rawtime);
-            strftime(buf, sizeof(buf), "%F %T", timeinfo);
-            if (now > license.key->date + license.key->duration) {
-              fprintf(stderr, RED_BEGIN "License expired at %s" RED_END "\n", buf);
-            }
-            else {
-              fprintf(stderr, RED_BEGIN "License will expired at %s" RED_END "\n", buf);
-            }
-          }
-        }
-        fprintf(stderr, RED_BEGIN "contact@terark.com" RED_END "\n");
-      }
-#undef RED_BEGIN
-#undef RED_END
     }
   }
+  license.print_error(tzto.extendedConfigFile.c_str(), true, nullptr);
 #endif // TerocksPrivateCode
   return table;
 }
