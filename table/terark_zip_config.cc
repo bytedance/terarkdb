@@ -178,6 +178,9 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo) {
   if (const char* env = getenv("TerarkZipTable_indexType")) {
     tzo.indexType = env;
   }
+  if (const char* env = getenv("TerarkZipTable_extendedConfigFile")) {
+    tzo.extendedConfigFile = env;
+  }
 
 #define MyGetInt(obj, name, Default) \
     obj.name = (int)terark::getEnvLong("TerarkZipTable_" #name, Default)
@@ -207,7 +210,7 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo) {
   MyGetXiB(tzo, smallTaskMemory);
 
 #if defined(TerocksPrivateCode)
-  MyGetInt(tzo, minDictZipValueSize, 50);
+  MyGetInt(tzo, minDictZipValueSize, 30);
 #endif // TerocksPrivateCode
 
   cfo.table_factory.reset(NewTerarkZipTableFactory(tzo, NewAdaptiveTableFactory()));

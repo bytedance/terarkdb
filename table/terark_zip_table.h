@@ -63,18 +63,18 @@ struct TerarkZipTableOptions {
   double sampleRatio = 0.03;
   std::string localTempDir = "/tmp";
   std::string indexType = "IL_256";
+  std::string extendedConfigFile;
 
   size_t softZipWorkingMemLimit = 16ull << 30;
   size_t hardZipWorkingMemLimit = 32ull << 30;
   size_t smallTaskMemory = 1200 << 20; // 1.2G
-//#define TerocksPrivateCode
 #if defined(TerocksPrivateCode)
   // these fields is only for TerocksPrivateCode
   // always keep these fields for binary compatibility
 #endif // TerocksPrivateCode
   // use dictZip for value when average value length >= minDictZipValueSize
   // otherwise do not use dictZip
-  size_t minDictZipValueSize = 50;
+  size_t minDictZipValueSize = 30;
   size_t keyPrefixLen = 0; // for IndexID
 #if defined(TerocksPrivateCode)
   // end fields for TerocksPrivateCode
