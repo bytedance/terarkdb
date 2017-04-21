@@ -71,6 +71,7 @@ public:
   FileStream  fp;
   NativeDataOutput<OutputBuffer> writer;
   ~TempFileDeleteOnClose();
+  void open_temp();
   void open();
   void dopen(int fd);
   void close();
