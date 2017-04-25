@@ -1,6 +1,7 @@
 #pragma once
 
 #include <terark/fstring.hpp>
+#include <terark/valvec.hpp>
 #include <terark/util/refcount.hpp>
 #include <boost/intrusive_ptr.hpp>
 #include <memory>
@@ -8,12 +9,14 @@
 namespace rocksdb {
 
 using terark::fstring;
+using terark::valvec;
+using terark::byte_t;
 using std::unique_ptr;
 
 struct TerarkZipTableOptions;
 class TempFileDeleteOnClose;
 
-class TerocksIndex : boost::noncopyable {
+class TerarkIndex : boost::noncopyable {
 public:
   class Iterator : boost::noncopyable {
   protected:
@@ -36,6 +39,8 @@ public:
     size_t maxKeyLen = size_t(-1);
     size_t sumKeyLen = size_t(-1);
     size_t numKeys   = size_t(-1);
+    valvec<byte_t> minKey;
+    valvec<byte_t> maxKey;
   };
   class Factory : public terark::RefCounter {
   public:
@@ -44,19 +49,20 @@ public:
                        const TerarkZipTableOptions& tzopt,
                        fstring tmpFilePath,
                        const KeyStat&) const = 0;
-    virtual unique_ptr<TerocksIndex> LoadMemory(fstring mem) const = 0;
-    virtual unique_ptr<TerocksIndex> LoadFile(fstring fpath) const = 0;
+    virtual unique_ptr<TerarkIndex> LoadMemory(fstring mem) const = 0;
+    virtual unique_ptr<TerarkIndex> LoadFile(fstring fpath) const = 0;
     virtual size_t MemSizeForBuild(const KeyStat&) const = 0;
   };
   typedef boost::intrusive_ptr<Factory> FactoryPtr;
   struct AutoRegisterFactory {
-    AutoRegisterFactory(std::initializer_list<const char*> names, Factory* factory);
+    AutoRegisterFactory(std::initializer_list<const char*> names,
+        const char* rtti_name, Factory* factory);
   };
   static const Factory* GetFactory(fstring name);
   static const Factory* SelectFactory(const KeyStat&, fstring name);
-  static unique_ptr<TerocksIndex> LoadFile(fstring fpath);
-  static unique_ptr<TerocksIndex> LoadMemory(fstring mem);
-  virtual ~TerocksIndex();
+  static unique_ptr<TerarkIndex> LoadFile(fstring fpath);
+  static unique_ptr<TerarkIndex> LoadMemory(fstring mem);
+  virtual ~TerarkIndex();
   virtual size_t Find(fstring key) const = 0;
   virtual size_t NumKeys() const = 0;
   virtual fstring Memory() const = 0;
@@ -66,8 +72,13 @@ public:
   virtual void BuildCache(double cacheRatio) = 0;
 };
 
-#define TerocksIndexRegister(clazz, ...) \
-    TerocksIndex::AutoRegisterFactory \
-    g_AutoRegister_##clazz({#clazz,##__VA_ARGS__}, new clazz::MyFactory())
+#define TerarkIndexRegister(clazz, ...)                         \
+	  BOOST_STATIC_ASSERT(sizeof(BOOST_STRINGIZE(clazz)) <= 60);  \
+    TerarkIndex::AutoRegisterFactory                            \
+    g_AutoRegister_##clazz(                                     \
+        {#clazz,##__VA_ARGS__},                                 \
+        typeid(clazz).name(),                                   \
+        new clazz::MyFactory()                                  \
+    )
 
 }

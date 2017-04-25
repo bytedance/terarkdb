@@ -1,10 +1,42 @@
 #include "terark_zip_common.h"
+#include <boost/predef/other/endian.h>
+#include <terark/io/byte_swap.hpp>
 # include <ctime>
 #ifndef _MSC_VER
 # include <cxxabi.h>
 #endif
 
 namespace rocksdb {
+
+uint64_t ReadUint64(const byte_t* beg, const byte_t* end) {
+  assert(end - beg <= 8);
+  union {
+    byte_t bytes[8];
+    uint64_t value = 0;
+  } c;
+  size_t l = end - beg;
+  memcpy(c.bytes + l, beg, l);
+#if BOOST_ENDIAN_LITTLE_BYTE
+  return terark::byte_swap(c.value);
+#else
+  return c.value;
+#endif
+}
+
+void AssignUint64(byte_t* beg, byte_t* end, uint64_t value) {
+  assert(end - beg <= 8);
+  union {
+    byte_t bytes[8];
+    uint64_t value;
+  } c;
+#if BOOST_ENDIAN_LITTLE_BYTE
+  c.value = terark::byte_swap(value);
+#else
+  c.value = value;
+#endif
+  size_t l = end - beg;
+  memcpy(beg, c.bytes + l, l);
+}
 
 const char* StrDateTimeNow() {
   thread_local char buf[64];
