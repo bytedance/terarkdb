@@ -1641,23 +1641,7 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(
   file_ = file;
   sampleUpperBound_ = randomGenerator_.max() * table_options_.sampleRatio;
   tmpValueFile_.path = tzto.localTempDir + "/Terark-XXXXXX";
-#if _MSC_VER
-  if (int err = _mktemp_s(&tmpValueFile_.path[0], tmpValueFile_.path.size() + 1)) {
-    fprintf(stderr
-      , "ERROR: _mktemp_s(%s) failed with: %s, so we may use large memory\n"
-      , tmpValueFile_.path.c_str(), strerror(err));
-  }
-  tmpValueFile_.open();
-#else
-  int fd = mkstemp(&tmpValueFile_.path[0]);
-  if (fd < 0) {
-    int err = errno;
-    THROW_STD(invalid_argument
-        , "ERROR: TerarkZipTableBuilder::TerarkZipTableBuilder(): mkstemp(%s) = %s\n"
-        , tmpValueFile_.path.c_str(), strerror(err));
-  }
-  tmpValueFile_.dopen(fd);
-#endif
+  tmpValueFile_.open_temp();
   tmpKeyFile_.path = tmpValueFile_.path + ".keydata";
   tmpKeyFile_.open();
   tmpSampleFile_.path = tmpValueFile_.path + ".sample";
@@ -2700,21 +2684,8 @@ NewTerarkZipTableFactory(const TerarkZipTableOptions& tzto,
 						 class TableFactory* fallback) {
   int err = 0;
   try {
-    TempFileDeleteOnClose test;
-    test.path = tzto.localTempDir + "/Terark-XXXXXX";
-#if _MSC_VER
-    if (err = _mktemp_s(&test.path[0], test.path.size() + 1)) {
-      throw 0;
-    }
-    test.open();
-#else
-    int fd = mkstemp(&test.path[0]);
-    if (fd < 0) {
-      err = errno;
-      throw 0;
-    }
-    test.dopen(fd);
-#endif
+    TempFileDeleteOnClose test{tzto.localTempDir + "/Terark-XXXXXX"};
+    test.open_temp();
     test.writer << "Terark";
     test.complete_write();
   }
