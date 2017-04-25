@@ -1,8 +1,15 @@
 #include "terark_zip_common.h"
-#include <boost/predef/other/endian.h>
 #include <terark/io/byte_swap.hpp>
-# include <ctime>
-#ifndef _MSC_VER
+#include <boost/predef/other/endian.h>
+#include <terark/util/throw.hpp>
+#include <stdlib.h>
+#include <ctime>
+#ifdef _MSC_VER
+# include <io.h>
+#else
+# include <sys/types.h>
+# include <sys/stat.h>
+# include <fcntl.h>
 # include <cxxabi.h>
 #endif
 
@@ -70,6 +77,29 @@ AutoDeleteFile::~AutoDeleteFile() {
 TempFileDeleteOnClose::~TempFileDeleteOnClose() {
   if (fp)
     this->close();
+}
+
+/// this->path is temporary filename template such as: /some/dir/tmpXXXXXX
+void TempFileDeleteOnClose::open_temp() {
+  if (!terark::fstring(path).endsWith("XXXXXX")) {
+    THROW_STD(invalid_argument,
+        "ERROR: path = \"%s\", must ends with \"XXXXXX\"", path.c_str());
+  }
+#if _MSC_VER
+  if (int err = _mktemp_s(&path[0], path.size() + 1)) {
+    THROW_STD(invalid_argument, "ERROR: _mktemp_s(%s) = %s"
+        , path.c_str(), strerror(err));
+  }
+  this->open();
+#else
+  int fd = mkstemp(&path[0]);
+  if (fd < 0) {
+    int err = errno;
+    THROW_STD(invalid_argument, "ERROR: mkstemp(%s) = %s"
+        , path.c_str(), strerror(err));
+  }
+  this->dopen(fd);
+#endif
 }
 void TempFileDeleteOnClose::open() {
   fp.open(path.c_str(), "wb+");
