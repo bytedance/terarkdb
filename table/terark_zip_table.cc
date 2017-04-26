@@ -2440,6 +2440,13 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
 }
   long long t6, t7;
   offset_ = 0;
+  auto writeAppend = [&](const void* data, size_t size) {
+    s = file_->Append(Slice((const char*)data, size));
+    if (!s.ok()) {
+      throw s;
+    }
+    offset_ += size;
+  };
   if (index->NeedsReorder()) {
     bitfield_array<2> zvType2(keyStat_.numKeys);
 		terark::AutoFree<uint32_t> newToOld(keyStat_.numKeys, UINT32_MAX);
@@ -2463,13 +2470,6 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
 		t7 = g_pf.now();
 		try {
 		  dataBlock.set_offset(offset_);
-		  auto writeAppend = [&](const void* data, size_t size) {
-		    s = file_->Append(Slice((const char*)data, size));
-		    if (!s.ok()) {
-		      throw s;
-		    }
-		    offset_ += size;
-		  };
 		  zstore->reorder_zip_data(newToOld, std::ref(writeAppend));
 		  dataBlock.set_size(offset_ - dataBlock.offset());
 		} catch (const Status&) {
@@ -2479,21 +2479,37 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
 		bzvType_.swap(zvType2);
 	}
   else {
-    t7 = t6 = t5;
-    try {
-      dataBlock.set_offset(offset_);
-      auto writeAppend = [&](const void* data, size_t size) {
-        s = file_->Append(Slice((const char*)data, size));
-        if (!s.ok()) {
-          throw s;
-        }
-        offset_ += size;
-      };
-      zstore->save_mmap(std::ref(writeAppend));
-      dataBlock.set_size(offset_ - dataBlock.offset());
+    if (fstring(ioptions_.user_comparator->Name()).startsWith("rev:")) {
+      bitfield_array<2> zvType2(keyStat_.numKeys);
+      terark::AutoFree<uint32_t> newToOld(keyStat_.numKeys);
+      t6 = g_pf.now();
+      for (size_t newId = 0, oldId = keyStat_.numKeys - 1; newId < keyStat_.numKeys;
+          ++newId, --oldId) {
+        newToOld.p[newId] = oldId;
+        zvType2.set0(newId, bzvType_[oldId]);
+      }
+      t7 = g_pf.now();
+      try {
+        dataBlock.set_offset(offset_);
+        zstore->reorder_zip_data(newToOld, std::ref(writeAppend));
+        dataBlock.set_size(offset_ - dataBlock.offset());
+      }
+      catch (const Status&) {
+        return s;
+      }
+      bzvType_.clear();
+      bzvType_.swap(zvType2);
     }
-    catch (const Status&) {
-      return s;
+    else {
+      t7 = t6 = t5;
+      try {
+        dataBlock.set_offset(offset_);
+        zstore->save_mmap(std::ref(writeAppend));
+        dataBlock.set_size(offset_ - dataBlock.offset());
+      }
+      catch (const Status&) {
+        return s;
+      }
     }
   }
   fstring commonPrefix(prevUserKey_.data(), keyStat_.commonPrefixLen);
