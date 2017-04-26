@@ -237,7 +237,7 @@ public:
 template<class RankSelect>
 class TerarkUintIndex : public TerarkIndex {
 public:
-  static constexpr char* index_name = "UintIndex";
+  static const char* index_name;
   struct FileHeader : public TerarkIndexHeader
   {
     uint64_t min_value;
@@ -481,6 +481,8 @@ protected:
   bool          isUserMemory_;
   uint32_t      keyLength_;
 };
+template<class RankSelect>
+const char* TerarkUintIndex<RankSelect>::index_name = "UintIndex";
 
 #endif // TerocksPrivateCode
 

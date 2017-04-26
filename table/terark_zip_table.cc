@@ -317,7 +317,8 @@ struct LicenseInfo {
 #ifdef USE_OPENSSL
       int ret = 1;
       unsigned char digest[SHA256_DIGEST_LENGTH];
-      SHA256_CTX sha_ctx = { 0 };
+      SHA256_CTX sha_ctx;
+      memset(&sha_ctx, 0, sizeof sha_ctx);
       ret = SHA256_Init(&sha_ctx);
       if (ret != 1) {
         return InternalError;
@@ -2763,7 +2764,8 @@ NewTerarkZipTableFactory(const TerarkZipTableOptions& tzto,
 						 class TableFactory* fallback) {
   int err = 0;
   try {
-    TempFileDeleteOnClose test{tzto.localTempDir + "/Terark-XXXXXX"};
+    TempFileDeleteOnClose test;
+    test.path = tzto.localTempDir + "/Terark-XXXXXX";
     test.open_temp();
     test.writer << "Terark";
     test.complete_write();
