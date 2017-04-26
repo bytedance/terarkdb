@@ -12,6 +12,12 @@
 
 #include <string>
 
+
+#define TerocksPrivateCode
+#if defined(TerocksPrivateCode)
+// this macro for remove private code ...
+#endif // TerocksPrivateCode
+
 namespace rocksdb {
 
 struct TerarkZipTableOptions {
