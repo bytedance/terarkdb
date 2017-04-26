@@ -47,14 +47,54 @@
 #if defined(TerocksPrivateCode)
 # include <fstream>
 # include <terark/zbs/xxhash_helper.hpp>
-# include <cryptopp/cryptlib.h>
-# include <cryptopp/osrng.h>
-# include <cryptopp/base64.h>
-# include <cryptopp/filters.h>
-# include <cryptopp/eccrypto.h>
-# include <cryptopp/gfpcrypt.h>
-# include <cryptopp/rsa.h>
-# include <nlohmann/json.hpp>
+
+//# define USE_CRYPTO
+# define USE_OPENSSL
+
+
+#   include <nlohmann/json.hpp>
+
+# ifdef USE_CRYPTO
+#   include <cryptopp/cryptlib.h>
+#   include <cryptopp/osrng.h>
+#   include <cryptopp/base64.h>
+#   include <cryptopp/filters.h>
+#   include <cryptopp/eccrypto.h>
+#   include <cryptopp/gfpcrypt.h>
+#   include <cryptopp/rsa.h>
+# endif
+
+# ifdef USE_OPENSSL
+extern "C" {
+#   include <openssl/sha.h>
+#   include <openssl/rsa.h>
+#   include <openssl/rand.h>
+#   include <openssl/objects.h>
+#   include <openssl/pem.h>
+#   include <openssl/bio.h>
+}
+# endif
+
+# include <boost/archive/iterators/base64_from_binary.hpp>
+# include <boost/archive/iterators/binary_from_base64.hpp>
+# include <boost/archive/iterators/transform_width.hpp>
+
+static std::string base64_decode(const std::string& base64) {
+  using namespace boost::archive::iterators;
+  typedef transform_width<binary_from_base64<std::string::const_iterator>, 8, 6> base64_decode_iter;
+  std::string ret;
+  ret.reserve(base64.size() * 3 / 4);
+  // this shit boost base64 !!!
+  std::copy(base64_decode_iter(base64.begin()), base64_decode_iter(base64.end()),
+    std::back_inserter(ret));
+  if (base64.size() > 2 && strcmp(base64.data() + base64.size() - 2, "==") == 0) {
+    ret.resize(ret.size() - 2);
+  }
+  else if (!base64.empty() && base64.back() == '=') {
+    ret.pop_back();
+  }
+  return ret;
+}
 
 # include <terark/zbs/plain_blob_store.hpp>
 # include <terark/zbs/mixed_len_blob_store.hpp>
@@ -189,7 +229,6 @@ class TerarkZipTableIterator;
 #if defined(TerocksPrivateCode)
 
 using terark::XXHash64;
-typedef CryptoPP::RSASS<CryptoPP::PKCS1v15, CryptoPP::SHA256> RsaWithSha256;
 
 static const uint64_t g_trialDuration = 30ULL * 24 * 3600 * 1000;
 static const std::string kTerarkZipTableLicense = "TerarkZipTableExtendedBlock";
@@ -235,6 +274,7 @@ struct LicenseInfo {
     BadSign,
     BadVersion,
     BadLicense,
+    InternalError,
   };
 
   LicenseInfo() {
@@ -250,15 +290,18 @@ struct LicenseInfo {
       .digest();
   }
   Result load_nolock(const std::string& license_file) {
-    using namespace CryptoPP;
     using json = nlohmann::json;
     try {
-      StringSource pubFile(g_publikKey, true, new Base64Decoder);
-      RsaWithSha256::Verifier pub(pubFile);
-
       json signedJson = json::parse(std::ifstream(license_file, std::ios::binary));
-      std::string strSign = signedJson["sign"].get<std::string>();
-      StringSource signedSource(strSign, true, new Base64Decoder);
+      std::string strSign = base64_decode(signedJson["sign"].get<std::string>());
+      std::string strData = base64_decode(signedJson["data"].get<std::string>());
+#ifdef USE_CRYPTO
+      using namespace CryptoPP;
+      std::string binPubKey = base64_decode(g_publikKey);
+      StringSource pubFile(binPubKey, true, nullptr);
+      RSASS<PKCS1v15, SHA256>::Verifier pub(pubFile);
+
+      StringSource signedSource(strSign, true, nullptr);
       if (signedSource.MaxRetrievable() != pub.SignatureLength())
       {
         return BadLicense;
@@ -266,15 +309,51 @@ struct LicenseInfo {
       SecByteBlock signature(pub.SignatureLength());
       signedSource.Get(signature, signature.size());
 
-      std::string base64Data = signedJson["data"].get<std::string>();
-      StringSource base64Source(base64Data, true, new Base64Decoder());
-      std::string strData;
-      strData.resize(base64Source.MaxRetrievable());
-      base64Source.Get((byte*)strData.data(), strData.size());
       if (!pub.VerifyMessage((const byte*)strData.data(), strData.size(),
           signature.data(), signature.size())) {
         return BadLicense;
       }
+#endif
+#ifdef USE_OPENSSL
+      int ret = 1;
+      unsigned char digest[SHA256_DIGEST_LENGTH];
+      SHA256_CTX sha_ctx = { 0 };
+      ret = SHA256_Init(&sha_ctx);
+      if (ret != 1) {
+        return InternalError;
+      }
+      ret = SHA256_Update(&sha_ctx, strData.data(), strData.size());
+      if (ret != 1) {
+        return InternalError;
+      }
+      ret = SHA256_Final(digest, &sha_ctx);
+      if (ret != 1) {
+        return InternalError;
+      }
+      std::string publicKey;
+      publicKey += "-----BEGIN PUBLIC KEY-----\n";
+      for (size_t i = 0; i < g_publikKey.size(); i += 64) {
+        publicKey.append(g_publikKey.data() + i, std::min<size_t>(64, g_publikKey.size() - i));
+        publicKey += '\n';
+      }
+      publicKey += "-----END PUBLIC KEY-----\n";
+      BIO* pub_bio = BIO_new_mem_buf(publicKey.data(), (int)publicKey.size());
+      if (pub_bio == nullptr) {
+        return InternalError;
+      }
+      RSA* pub = PEM_read_bio_RSA_PUBKEY(pub_bio, NULL, NULL, NULL);
+      if (pub == nullptr) {
+        BIO_free(pub_bio);
+        return BadLicense;
+      }
+      ret = RSA_verify(NID_sha256, digest, sizeof digest,
+          (const byte_t*)strSign.data(), strSign.size(), pub);
+      BIO_free(pub_bio);
+      RSA_free(pub);
+      if (ret != 1) {
+        return BadLicense;
+      }
+#endif
       json signedDetail = json::parse(strData);
       key_storage.id_hash = XXHash64(kTerarkZipTableMagicNumber)
         .update(signedDetail["id"].get<std::string>())
