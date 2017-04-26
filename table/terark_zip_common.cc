@@ -22,7 +22,7 @@ uint64_t ReadUint64(const byte_t* beg, const byte_t* end) {
     uint64_t value = 0;
   } c;
   size_t l = end - beg;
-  memcpy(c.bytes + l, beg, l);
+  memcpy(c.bytes + (8 - l), beg, l);
 #if BOOST_ENDIAN_LITTLE_BYTE
   return terark::byte_swap(c.value);
 #else
@@ -42,7 +42,7 @@ void AssignUint64(byte_t* beg, byte_t* end, uint64_t value) {
   c.value = value;
 #endif
   size_t l = end - beg;
-  memcpy(beg, c.bytes + l, l);
+  memcpy(beg, c.bytes + (8 - l), l);
 }
 
 const char* StrDateTimeNow() {

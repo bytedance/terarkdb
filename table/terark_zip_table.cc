@@ -46,15 +46,19 @@
 
 #if defined(TerocksPrivateCode)
 # include <fstream>
+# include <boost/archive/iterators/binary_from_base64.hpp>
+# include <boost/archive/iterators/transform_width.hpp>
 # include <terark/zbs/xxhash_helper.hpp>
+# include <terark/zbs/plain_blob_store.hpp>
+# include <terark/zbs/mixed_len_blob_store.hpp>
 
-//# define USE_CRYPTO
+//# define USE_CRYPTOPP
 # define USE_OPENSSL
 
 
 #   include <nlohmann/json.hpp>
 
-# ifdef USE_CRYPTO
+# ifdef USE_CRYPTOPP
 #   include <cryptopp/cryptlib.h>
 #   include <cryptopp/osrng.h>
 #   include <cryptopp/base64.h>
@@ -65,7 +69,8 @@
 # endif
 
 # ifdef USE_OPENSSL
-extern "C" {
+extern "C"
+{
 #   include <openssl/sha.h>
 #   include <openssl/rsa.h>
 #   include <openssl/rand.h>
@@ -75,9 +80,6 @@ extern "C" {
 }
 # endif
 
-# include <boost/archive/iterators/base64_from_binary.hpp>
-# include <boost/archive/iterators/binary_from_base64.hpp>
-# include <boost/archive/iterators/transform_width.hpp>
 
 static std::string base64_decode(const std::string& base64) {
   using namespace boost::archive::iterators;
@@ -86,7 +88,7 @@ static std::string base64_decode(const std::string& base64) {
   ret.reserve(base64.size() * 3 / 4);
   // this shit boost base64 !!!
   std::copy(base64_decode_iter(base64.begin()), base64_decode_iter(base64.end()),
-    std::back_inserter(ret));
+      std::back_inserter(ret));
   if (base64.size() > 2 && strcmp(base64.data() + base64.size() - 2, "==") == 0) {
     ret.resize(ret.size() - 2);
   }
@@ -96,8 +98,6 @@ static std::string base64_decode(const std::string& base64) {
   return ret;
 }
 
-# include <terark/zbs/plain_blob_store.hpp>
-# include <terark/zbs/mixed_len_blob_store.hpp>
 #endif // TerocksPrivateCode
 
 
@@ -295,7 +295,7 @@ struct LicenseInfo {
       json signedJson = json::parse(std::ifstream(license_file, std::ios::binary));
       std::string strSign = base64_decode(signedJson["sign"].get<std::string>());
       std::string strData = base64_decode(signedJson["data"].get<std::string>());
-#ifdef USE_CRYPTO
+#ifdef USE_CRYPTOPP
       using namespace CryptoPP;
       std::string binPubKey = base64_decode(g_publikKey);
       StringSource pubFile(binPubKey, true, nullptr);
@@ -2045,8 +2045,7 @@ AutoDeleteFile tmpIndexFile{tmpValueFile_.path + ".index"};
 std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
 {
   //TODO fix reorder bug (blob store->get_mmap())
-  //auto factory = TerarkIndex::SelectFactory(keyStat_, table_options_.indexType);
-  auto factory = TerarkIndex::GetFactory(table_options_.indexType);
+  auto factory = TerarkIndex::SelectFactory(keyStat_, table_options_.indexType);
   if (!factory) {
     THROW_STD(invalid_argument,
         "invalid indexType: %s", table_options_.indexType.c_str());
@@ -2481,7 +2480,21 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
 	}
   else {
     t7 = t6 = t5;
-    WriteBlock(zstore->get_mmap(), file_, &offset_, &dataBlock);
+    try {
+      dataBlock.set_offset(offset_);
+      auto writeAppend = [&](const void* data, size_t size) {
+        s = file_->Append(Slice((const char*)data, size));
+        if (!s.ok()) {
+          throw s;
+        }
+        offset_ += size;
+      };
+      zstore->save_mmap(std::ref(writeAppend));
+      dataBlock.set_size(offset_ - dataBlock.offset());
+    }
+    catch (const Status&) {
+      return s;
+    }
   }
   fstring commonPrefix(prevUserKey_.data(), keyStat_.commonPrefixLen);
   WriteBlock(commonPrefix, file_, &offset_, &commonPrefixBlock);

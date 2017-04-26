@@ -148,7 +148,7 @@ public:
     void Build(TempFileDeleteOnClose& tmpKeyFile,
                const TerarkZipTableOptions& tzopt,
                fstring tmpFilePath,
-               const KeyStat& ks) const override {
+               KeyStat& ks) const override {
       NativeDataInput<InputBuffer> reader(&tmpKeyFile.fp);
 #if !defined(NDEBUG)
       SortableStrVec backupKeys;
@@ -352,7 +352,7 @@ public:
     virtual void Build(TempFileDeleteOnClose& tmpKeyFile,
       const TerarkZipTableOptions& tzopt,
       fstring tmpFilePath,
-      const KeyStat& ks) const {
+      KeyStat& ks) const {
       if (ks.maxKeyLen != ks.minKeyLen || ks.minKeyLen == 0 || ks.maxKeyLen > 8) {
         abort();
       }
@@ -383,6 +383,7 @@ public:
       FileStream writer(tmpFilePath, "wb+");
       writer.ensureWrite(&header, sizeof header);
       writer.ensureWrite(indexSeq_.data(), indexSeq_.mem_size());
+      ks.commonPrefixLen = 0;
     }
     virtual unique_ptr<TerarkIndex> LoadMemory(fstring mem) const {
       return unique_ptr<TerarkIndex>(loadImpl(mem, {}).release());
@@ -427,6 +428,7 @@ public:
       if (strcmp(header->class_name, g_TerarkIndexName.val(name_i).c_str()) != 0) {
         return nullptr;
       }
+      ptr->header_ = header;
       ptr->minValue_ = header->min_value;
       ptr->maxValue_ = header->max_value;
       ptr->keyLength_ = header->key_length;
@@ -459,7 +461,7 @@ public:
     return indexSeq_.max_rank1();
   }
   virtual fstring Memory() const {
-    return fstring((const char*)indexSeq_.data(), (ptrdiff_t)indexSeq_.mem_size());
+    return fstring((const char*)header_, (ptrdiff_t)header_->file_size);
   }
   virtual Iterator* NewIterator() const {
     return new UIntIndexIterator(*this);
@@ -474,12 +476,13 @@ public:
     //do nothing
   }
 protected:
-  MmapWholeFile file_;
-  RankSelect    indexSeq_;
-  uint64_t      minValue_;
-  uint64_t      maxValue_;
-  bool          isUserMemory_;
-  uint32_t      keyLength_;
+  const FileHeader* header_;
+  MmapWholeFile     file_;
+  RankSelect        indexSeq_;
+  uint64_t          minValue_;
+  uint64_t          maxValue_;
+  bool              isUserMemory_;
+  uint32_t          keyLength_;
 };
 template<class RankSelect>
 const char* TerarkUintIndex<RankSelect>::index_name = "UintIndex";
