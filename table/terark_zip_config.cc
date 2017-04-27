@@ -1,5 +1,6 @@
 #include "terark_zip_table.h"
 #include "terark_zip_common.h"
+#include <terark/hash_strmap.hpp>
 #include <terark/util/throw.hpp>
 #include <rocksdb/options.h>
 #include <rocksdb/table.h>
@@ -178,9 +179,6 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo) {
   if (const char* env = getenv("TerarkZipTable_indexType")) {
     tzo.indexType = env;
   }
-  if (const char* env = getenv("TerarkZipTable_extendedConfigFile")) {
-    tzo.extendedConfigFile = env;
-  }
 
 #define MyGetInt(obj, name, Default) \
     obj.name = (int)terark::getEnvLong("TerarkZipTable_" #name, Default)
@@ -210,7 +208,7 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo) {
   MyGetXiB(tzo, smallTaskMemory);
 
 #if defined(TerocksPrivateCode)
-  MyGetInt(tzo, minDictZipValueSize, 30);
+  MyGetInt(tzo, minDictZipValueSize, 50);
 #endif // TerocksPrivateCode
 
   cfo.table_factory.reset(NewTerarkZipTableFactory(tzo, NewAdaptiveTableFactory()));
@@ -252,6 +250,46 @@ void TerarkZipDBOptionsFromEnv(DBOptions& dbo) {
   dbo.env->SetBackgroundThreads(dbo.max_background_compactions, rocksdb::Env::LOW);
   dbo.env->SetBackgroundThreads(dbo.max_background_flushes    , rocksdb::Env::HIGH);
   dbo.allow_mmap_reads = true;
+}
+
+bool TerarkZipIsBlackListCF(const std::string& cfname) {
+  static std::mutex  mtx;
+  static size_t  isInitialized = false;
+  static terark::hash_strmap<>  blackList;
+  if (!isInitialized) {
+    std::lock_guard<std::mutex> lock;
+    if (!isInitialized) {
+      if (const char* env = getenv("TerarkZipTable_blackListColumnFamily")) {
+        valvec<fstring> names;
+        fstring(env).split(',', &names);
+        for (auto nm : names)
+          blackList.insert_i(nm);
+      }
+      isInitialized = true;
+    }
+  }
+  return blackList.exists(cfname);
+}
+
+template<class T>
+T& auto_const_cast(const T& x) {
+  return const_cast<T&>(x);
+}
+
+void
+TerarkZipMultiCFOptionsFromEnv(const DBOptions& db_options,
+      const std::vector<ColumnFamilyDescriptor>& cfvec) {
+  size_t numIsBlackList = 0;
+  for (auto& cf : auto_const_cast(cfvec)) {
+    if (TerarkZipIsBlackListCF(cf.name)) {
+      numIsBlackList++;
+    } else {
+      TerarkZipCFOptionsFromEnv(cf.options);
+    }
+  }
+  if (numIsBlackList < cfvec.size()) {
+    TerarkZipDBOptionsFromEnv(auto_const_cast(db_options));
+  }
 }
 
 }
