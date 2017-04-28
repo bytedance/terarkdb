@@ -2,6 +2,7 @@
 #include "terark_zip_common.h"
 #include <terark/hash_strmap.hpp>
 #include <terark/util/throw.hpp>
+#include <rocksdb/db.h>
 #include <rocksdb/options.h>
 #include <rocksdb/table.h>
 #ifdef _MSC_VER
@@ -10,6 +11,7 @@
 #else
 # include <unistd.h>
 #endif
+#include <mutex>
 
 namespace terark {
   void DictZipBlobStore_setZipThreads(int zipThreads);
@@ -257,7 +259,7 @@ bool TerarkZipIsBlackListCF(const std::string& cfname) {
   static size_t  isInitialized = false;
   static terark::hash_strmap<>  blackList;
   if (!isInitialized) {
-    std::lock_guard<std::mutex> lock;
+    std::lock_guard<std::mutex> lock(mtx);
     if (!isInitialized) {
       if (const char* env = getenv("TerarkZipTable_blackListColumnFamily")) {
         valvec<fstring> names;
