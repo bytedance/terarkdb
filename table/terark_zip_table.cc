@@ -2143,7 +2143,6 @@ Status
 TerarkZipTableBuilder::
 ZipValueToFinish(fstring tmpIndexFile, std::function<void()> waitIndex) {
   AutoDeleteFile tmpStoreFile{tmpValueFile_.path + ".zbs"};
-  AutoDeleteFile tmpStoreDict{tmpValueFile_.path + ".zbs-dict"};
   long long t3 = g_pf.now();
   auto zbuilder = UniquePtrOf(this->createZipBuilder());
 {
@@ -2183,9 +2182,9 @@ ZipValueToFinish(fstring tmpIndexFile, std::function<void()> waitIndex) {
 
   BuilderWriteValues([&](fstring value){zbuilder->addRecord(value);});
 
-  unique_ptr<DictZipBlobStore> zstore(zbuilder->finish_and_free_dict());
+  unique_ptr<DictZipBlobStore> zstore(zbuilder->finish(
+      DictZipBlobStore::ZipBuilder::FinishFreeDict));
   DictZipBlobStore::ZipStat dzstat = zbuilder->getZipStat();
-  zbuilder.reset();
 
   long long t4 = g_pf.now();
 
@@ -2681,7 +2680,8 @@ Status TerarkZipTableBuilder::WriteMetaData(std::initializer_list<std::pair<cons
 }
 
 Status TerarkZipTableBuilder::OfflineFinish() {
-  std::unique_ptr<DictZipBlobStore> zstore(zbuilder_->finish_and_free_dict());
+  std::unique_ptr<DictZipBlobStore> zstore(zbuilder_->finish(
+      DictZipBlobStore::ZipBuilder::FinishFreeDict));
   auto dzstat = zbuilder_->getZipStat();
   zbuilder_.reset();
   valvec<byte_t> commonPrefix(prevUserKey_.data(), keyStat_.commonPrefixLen);
