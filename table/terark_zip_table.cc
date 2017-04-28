@@ -339,7 +339,7 @@ struct LicenseInfo {
         publicKey += '\n';
       }
       publicKey += "-----END PUBLIC KEY-----\n";
-      BIO* pub_bio = BIO_new_mem_buf(publicKey.data(), (int)publicKey.size());
+      BIO* pub_bio = BIO_new_mem_buf((void*)publicKey.data(), (int)publicKey.size());
       if (pub_bio == nullptr) {
         return InternalError;
       }
