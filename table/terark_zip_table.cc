@@ -332,6 +332,7 @@ struct LicenseInfo {
         return InternalError;
       }
       std::string publicKey;
+      publicKey.reserve(g_publikKey.size() + (g_publikKey.size() + 63) / 64 + 60);
       publicKey += "-----BEGIN PUBLIC KEY-----\n";
       for (size_t i = 0; i < g_publikKey.size(); i += 64) {
         publicKey.append(g_publikKey.data() + i, std::min<size_t>(64, g_publikKey.size() - i));
@@ -2182,7 +2183,7 @@ ZipValueToFinish(fstring tmpIndexFile, std::function<void()> waitIndex) {
 
   BuilderWriteValues([&](fstring value){zbuilder->addRecord(value);});
 
-  unique_ptr<DictZipBlobStore> zstore(zbuilder->finish());
+  unique_ptr<DictZipBlobStore> zstore(zbuilder->finish_and_free_dict());
   DictZipBlobStore::ZipStat dzstat = zbuilder->getZipStat();
   zbuilder.reset();
 
@@ -2680,7 +2681,7 @@ Status TerarkZipTableBuilder::WriteMetaData(std::initializer_list<std::pair<cons
 }
 
 Status TerarkZipTableBuilder::OfflineFinish() {
-  std::unique_ptr<DictZipBlobStore> zstore(zbuilder_->finish());
+  std::unique_ptr<DictZipBlobStore> zstore(zbuilder_->finish_and_free_dict());
   auto dzstat = zbuilder_->getZipStat();
   zbuilder_.reset();
   valvec<byte_t> commonPrefix(prevUserKey_.data(), keyStat_.commonPrefixLen);
