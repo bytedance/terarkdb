@@ -44,8 +44,14 @@ __attribute__((weak))
 TerarkZipConfigFromEnv(struct DBOptions&,
                        struct ColumnFamilyOptions&);
 
-bool __attribute__((weak)) TerarkZipCFOptionsFromEnv(ColumnFamilyOptions&);
-void __attribute__((weak)) TerarkZipDBOptionsFromEnv(DBOptions&);
+bool __attribute__((weak)) TerarkZipCFOptionsFromEnv(struct ColumnFamilyOptions&);
+void __attribute__((weak)) TerarkZipDBOptionsFromEnv(struct DBOptions&);
+
+bool __attribute__((weak)) TerarkZipIsBlackListCF(const std::string& cfname);
+
+void __attribute__((weak))
+TerarkZipMultiCFOptionsFromEnv(const struct DBOptions& db_options,
+      const std::vector<struct ColumnFamilyDescriptor>& cfvec);
 
 #endif // _MSC_VER
 

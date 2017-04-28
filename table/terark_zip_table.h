@@ -11,6 +11,7 @@
 #define TERARK_ZIP_TABLE_H_
 
 #include <string>
+#include <vector>
 
 
 #define TerocksPrivateCode
@@ -108,8 +109,16 @@ void TerarkZipAutoConfigForOnlineDB(struct TerarkZipTableOptions&,
                          size_t diskBytesLimit = 0);
 
 bool TerarkZipConfigFromEnv(struct DBOptions&, struct ColumnFamilyOptions&);
-bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions&);
-void TerarkZipDBOptionsFromEnv(DBOptions&);
+bool TerarkZipCFOptionsFromEnv(struct ColumnFamilyOptions&);
+void TerarkZipDBOptionsFromEnv(struct DBOptions&);
+bool TerarkZipIsBlackListCF(const std::string& cfname);
+
+/// will check column family black list in env
+///@param db_options is const but will be modified in this function
+///@param cfvec      is const but will be modified in this function
+void
+TerarkZipMultiCFOptionsFromEnv(const struct DBOptions& db_options,
+      const std::vector<struct ColumnFamilyDescriptor>& cfvec);
 
 class TableFactory*
 NewTerarkZipTableFactory(const TerarkZipTableOptions&,
