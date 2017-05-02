@@ -46,18 +46,58 @@
 
 #if defined(TerocksPrivateCode)
 # include <fstream>
+# include <boost/archive/iterators/binary_from_base64.hpp>
+# include <boost/archive/iterators/transform_width.hpp>
 # include <terark/zbs/xxhash_helper.hpp>
-# include <cryptopp/cryptlib.h>
-# include <cryptopp/osrng.h>
-# include <cryptopp/base64.h>
-# include <cryptopp/filters.h>
-# include <cryptopp/eccrypto.h>
-# include <cryptopp/gfpcrypt.h>
-# include <cryptopp/rsa.h>
-# include <nlohmann/json.hpp>
-
 # include <terark/zbs/plain_blob_store.hpp>
 # include <terark/zbs/mixed_len_blob_store.hpp>
+
+//# define USE_CRYPTOPP
+# define USE_OPENSSL
+
+
+#   include <nlohmann/json.hpp>
+
+# ifdef USE_CRYPTOPP
+#   include <cryptopp/cryptlib.h>
+#   include <cryptopp/osrng.h>
+#   include <cryptopp/base64.h>
+#   include <cryptopp/filters.h>
+#   include <cryptopp/eccrypto.h>
+#   include <cryptopp/gfpcrypt.h>
+#   include <cryptopp/rsa.h>
+# endif
+
+# ifdef USE_OPENSSL
+extern "C"
+{
+#   include <openssl/sha.h>
+#   include <openssl/rsa.h>
+#   include <openssl/rand.h>
+#   include <openssl/objects.h>
+#   include <openssl/pem.h>
+#   include <openssl/bio.h>
+}
+# endif
+
+
+static std::string base64_decode(const std::string& base64) {
+  using namespace boost::archive::iterators;
+  typedef transform_width<binary_from_base64<std::string::const_iterator>, 8, 6> base64_decode_iter;
+  std::string ret;
+  ret.reserve(base64.size() * 3 / 4);
+  // this shit boost base64 !!!
+  std::copy(base64_decode_iter(base64.begin()), base64_decode_iter(base64.end()),
+      std::back_inserter(ret));
+  if (base64.size() > 2 && strcmp(base64.data() + base64.size() - 2, "==") == 0) {
+    ret.resize(ret.size() - 2);
+  }
+  else if (!base64.empty() && base64.back() == '=') {
+    ret.pop_back();
+  }
+  return ret;
+}
+
 #endif // TerocksPrivateCode
 
 
@@ -189,7 +229,6 @@ class TerarkZipTableIterator;
 #if defined(TerocksPrivateCode)
 
 using terark::XXHash64;
-typedef CryptoPP::RSASS<CryptoPP::PKCS1v15, CryptoPP::SHA256> RsaWithSha256;
 
 static const uint64_t g_trialDuration = 30ULL * 24 * 3600 * 1000;
 static const std::string kTerarkZipTableLicense = "TerarkZipTableExtendedBlock";
@@ -235,6 +274,7 @@ struct LicenseInfo {
     BadSign,
     BadVersion,
     BadLicense,
+    InternalError,
   };
 
   LicenseInfo() {
@@ -250,15 +290,18 @@ struct LicenseInfo {
       .digest();
   }
   Result load_nolock(const std::string& license_file) {
-    using namespace CryptoPP;
     using json = nlohmann::json;
     try {
-      StringSource pubFile(g_publikKey, true, new Base64Decoder);
-      RsaWithSha256::Verifier pub(pubFile);
-
       json signedJson = json::parse(std::ifstream(license_file, std::ios::binary));
-      std::string strSign = signedJson["sign"].get<std::string>();
-      StringSource signedSource(strSign, true, new Base64Decoder);
+      std::string strSign = base64_decode(signedJson["sign"].get<std::string>());
+      std::string strData = base64_decode(signedJson["data"].get<std::string>());
+#ifdef USE_CRYPTOPP
+      using namespace CryptoPP;
+      std::string binPubKey = base64_decode(g_publikKey);
+      StringSource pubFile(binPubKey, true, nullptr);
+      RSASS<PKCS1v15, SHA256>::Verifier pub(pubFile);
+
+      StringSource signedSource(strSign, true, nullptr);
       if (signedSource.MaxRetrievable() != pub.SignatureLength())
       {
         return BadLicense;
@@ -266,15 +309,53 @@ struct LicenseInfo {
       SecByteBlock signature(pub.SignatureLength());
       signedSource.Get(signature, signature.size());
 
-      std::string base64Data = signedJson["data"].get<std::string>();
-      StringSource base64Source(base64Data, true, new Base64Decoder());
-      std::string strData;
-      strData.resize(base64Source.MaxRetrievable());
-      base64Source.Get((byte*)strData.data(), strData.size());
       if (!pub.VerifyMessage((const byte*)strData.data(), strData.size(),
           signature.data(), signature.size())) {
         return BadLicense;
       }
+#endif
+#ifdef USE_OPENSSL
+      int ret = 1;
+      unsigned char digest[SHA256_DIGEST_LENGTH];
+      SHA256_CTX sha_ctx;
+      memset(&sha_ctx, 0, sizeof sha_ctx);
+      ret = SHA256_Init(&sha_ctx);
+      if (ret != 1) {
+        return InternalError;
+      }
+      ret = SHA256_Update(&sha_ctx, strData.data(), strData.size());
+      if (ret != 1) {
+        return InternalError;
+      }
+      ret = SHA256_Final(digest, &sha_ctx);
+      if (ret != 1) {
+        return InternalError;
+      }
+      std::string publicKey;
+      publicKey.reserve(g_publikKey.size() + (g_publikKey.size() + 63) / 64 + 60);
+      publicKey += "-----BEGIN PUBLIC KEY-----\n";
+      for (size_t i = 0; i < g_publikKey.size(); i += 64) {
+        publicKey.append(g_publikKey.data() + i, std::min<size_t>(64, g_publikKey.size() - i));
+        publicKey += '\n';
+      }
+      publicKey += "-----END PUBLIC KEY-----\n";
+      BIO* pub_bio = BIO_new_mem_buf((void*)publicKey.data(), (int)publicKey.size());
+      if (pub_bio == nullptr) {
+        return InternalError;
+      }
+      RSA* pub = PEM_read_bio_RSA_PUBKEY(pub_bio, NULL, NULL, NULL);
+      if (pub == nullptr) {
+        BIO_free(pub_bio);
+        return BadLicense;
+      }
+      ret = RSA_verify(NID_sha256, digest, sizeof digest,
+          (const byte_t*)strSign.data(), strSign.size(), pub);
+      BIO_free(pub_bio);
+      RSA_free(pub);
+      if (ret != 1) {
+        return BadLicense;
+      }
+#endif
       json signedDetail = json::parse(strData);
       key_storage.id_hash = XXHash64(kTerarkZipTableMagicNumber)
         .update(signedDetail["id"].get<std::string>())
@@ -683,7 +764,7 @@ public:
 
 private:
   unique_ptr<terark::BlobStore> valstore_;
-  unique_ptr<TerocksIndex> keyIndex_;
+  unique_ptr<TerarkIndex> keyIndex_;
   shared_ptr<Block> tombstone_;
   Slice commonPrefix_;
   bitfield_array<2> typeArray_;
@@ -820,7 +901,7 @@ public:
   }
 
 private:
-  void AddPrevUserKey();
+  void AddPrevUserKey(bool finish = false);
   void OfflineZipValueData();
   void UpdateValueLenHistogram();
   Status EmptyTableFinish();
@@ -856,7 +937,7 @@ private:
   AutoDeleteFile tmpZipValueFile_;
   std::mt19937_64 randomGenerator_;
   uint64_t sampleUpperBound_;
-  TerocksIndex::KeyStat keyStat_;
+  TerarkIndex::KeyStat keyStat_;
   size_t sampleLenSum_ = 0;
   WritableFileWriter* file_;
   uint64_t offset_ = 0;
@@ -1269,7 +1350,7 @@ private:
 
   const TerarkZipTableReader* const table_;
   const terark::BlobStore*    const valstore_;
-  const unique_ptr<TerocksIndex::Iterator> iter_;
+  const unique_ptr<TerarkIndex::Iterator> iter_;
   const fstring commonPrefix_;
   const bool reverse_;
 #if defined(TERARK_SUPPORT_UINT64_COMPARATOR) && BOOST_ENDIAN_LITTLE_BYTE
@@ -1456,7 +1537,7 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
 Status TerarkZipTableReader::LoadIndex(Slice mem) {
   auto func = "TerarkZipTableReader::LoadIndex()";
   try {
-	  keyIndex_ = TerocksIndex::LoadMemory(fstringOf(mem));
+	  keyIndex_ = TerarkIndex::LoadMemory(fstringOf(mem));
   }
   catch (const BadCrc32cException& ex) {
 	  return Status::Corruption(func, ex.what());
@@ -1641,23 +1722,7 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(
   file_ = file;
   sampleUpperBound_ = randomGenerator_.max() * table_options_.sampleRatio;
   tmpValueFile_.path = tzto.localTempDir + "/Terark-XXXXXX";
-#if _MSC_VER
-  if (int err = _mktemp_s(&tmpValueFile_.path[0], tmpValueFile_.path.size() + 1)) {
-    fprintf(stderr
-      , "ERROR: _mktemp_s(%s) failed with: %s, so we may use large memory\n"
-      , tmpValueFile_.path.c_str(), strerror(err));
-  }
-  tmpValueFile_.open();
-#else
-  int fd = mkstemp(&tmpValueFile_.path[0]);
-  if (fd < 0) {
-    int err = errno;
-    THROW_STD(invalid_argument
-        , "ERROR: TerarkZipTableBuilder::TerarkZipTableBuilder(): mkstemp(%s) = %s\n"
-        , tmpValueFile_.path.c_str(), strerror(err));
-  }
-  tmpValueFile_.dopen(fd);
-#endif
+  tmpValueFile_.open_temp();
   tmpKeyFile_.path = tmpValueFile_.path + ".keydata";
   tmpKeyFile_.open();
   tmpSampleFile_.path = tmpValueFile_.path + ".sample";
@@ -1776,6 +1841,7 @@ void TerarkZipTableBuilder::Add(const Slice& key, const Slice& value) {
       keyStat_.maxKeyLen = userKey.size();
       keyStat_.sumKeyLen = 0;
       keyStat_.numKeys = 0;
+      keyStat_.minKey.assign(userKey);
       prevUserKey_.assign(userKey);
       t0 = g_pf.now();
     }
@@ -1853,7 +1919,7 @@ Status TerarkZipTableBuilder::EmptyTableFinish() {
   return WriteMetaData({
 #if defined(TerocksPrivateCode)
     {&kTerarkZipTableLicense, licenseHandle},
-#endif
+#endif // TerocksPrivateCode
     {&kEmptyTableKey, emptyTableBH},
     {!tombstoneBH.IsNull() ? &kRangeDelBlock : NULL, tombstoneBH},
   });
@@ -1877,7 +1943,7 @@ Status TerarkZipTableBuilder::Finish() {
 	  return EmptyTableFinish();
 	}
 
-  AddPrevUserKey();
+  AddPrevUserKey(true);
   keyLenHistogram_.finish();
   valueLenHistogram_.finish();
   tmpKeyFile_.complete_write();
@@ -1979,7 +2045,8 @@ auto waitForMemory = [&](size_t myWorkMem, const char* who) {
 AutoDeleteFile tmpIndexFile{tmpValueFile_.path + ".index"};
 std::future<void> asyncIndexResult = std::async(std::launch::async, [&]()
 {
-  auto factory = TerocksIndex::GetFactory(table_options_.indexType);
+  //TODO fix reorder bug (blob store->get_mmap())
+  auto factory = TerarkIndex::SelectFactory(keyStat_, table_options_.indexType);
   if (!factory) {
     THROW_STD(invalid_argument,
         "invalid indexType: %s", table_options_.indexType.c_str());
@@ -2076,7 +2143,6 @@ Status
 TerarkZipTableBuilder::
 ZipValueToFinish(fstring tmpIndexFile, std::function<void()> waitIndex) {
   AutoDeleteFile tmpStoreFile{tmpValueFile_.path + ".zbs"};
-  AutoDeleteFile tmpStoreDict{tmpValueFile_.path + ".zbs-dict"};
   long long t3 = g_pf.now();
   auto zbuilder = UniquePtrOf(this->createZipBuilder());
 {
@@ -2116,9 +2182,9 @@ ZipValueToFinish(fstring tmpIndexFile, std::function<void()> waitIndex) {
 
   BuilderWriteValues([&](fstring value){zbuilder->addRecord(value);});
 
-  unique_ptr<DictZipBlobStore> zstore(zbuilder->finish());
+  unique_ptr<DictZipBlobStore> zstore(zbuilder->finish(
+      DictZipBlobStore::ZipBuilder::FinishFreeDict));
   DictZipBlobStore::ZipStat dzstat = zbuilder->getZipStat();
-  zbuilder.reset();
 
   long long t4 = g_pf.now();
 
@@ -2357,7 +2423,7 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
   const size_t realsampleLenSum = dictMem.size();
   long long rawBytes = properties_.raw_key_size + properties_.raw_value_size;
   long long t5 = g_pf.now();
-	unique_ptr<TerocksIndex> index(TerocksIndex::LoadFile(tmpIndexFile));
+	unique_ptr<TerarkIndex> index(TerarkIndex::LoadFile(tmpIndexFile));
 	assert(index->NumKeys() == keyStat_.numKeys);
 	Status s;
   BlockHandle dataBlock, dictBlock, indexBlock, zvTypeBlock(0, 0), tombstoneBlock(0, 0);
@@ -2374,6 +2440,13 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
 }
   long long t6, t7;
   offset_ = 0;
+  auto writeAppend = [&](const void* data, size_t size) {
+    s = file_->Append(Slice((const char*)data, size));
+    if (!s.ok()) {
+      throw s;
+    }
+    offset_ += size;
+  };
   if (index->NeedsReorder()) {
     bitfield_array<2> zvType2(keyStat_.numKeys);
 		terark::AutoFree<uint32_t> newToOld(keyStat_.numKeys, UINT32_MAX);
@@ -2397,13 +2470,6 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
 		t7 = g_pf.now();
 		try {
 		  dataBlock.set_offset(offset_);
-		  auto writeAppend = [&](const void* data, size_t size) {
-		    s = file_->Append(Slice((const char*)data, size));
-		    if (!s.ok()) {
-		      throw s;
-		    }
-		    offset_ += size;
-		  };
 		  zstore->reorder_zip_data(newToOld, std::ref(writeAppend));
 		  dataBlock.set_size(offset_ - dataBlock.offset());
 		} catch (const Status&) {
@@ -2413,8 +2479,38 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
 		bzvType_.swap(zvType2);
 	}
   else {
-    t7 = t6 = t5;
-    WriteBlock(zstore->get_mmap(), file_, &offset_, &dataBlock);
+    if (fstring(ioptions_.user_comparator->Name()).startsWith("rev:")) {
+      bitfield_array<2> zvType2(keyStat_.numKeys);
+      terark::AutoFree<uint32_t> newToOld(keyStat_.numKeys);
+      t6 = g_pf.now();
+      for (size_t newId = 0, oldId = keyStat_.numKeys - 1; newId < keyStat_.numKeys;
+          ++newId, --oldId) {
+        newToOld.p[newId] = oldId;
+        zvType2.set0(newId, bzvType_[oldId]);
+      }
+      t7 = g_pf.now();
+      try {
+        dataBlock.set_offset(offset_);
+        zstore->reorder_zip_data(newToOld, std::ref(writeAppend));
+        dataBlock.set_size(offset_ - dataBlock.offset());
+      }
+      catch (const Status&) {
+        return s;
+      }
+      bzvType_.clear();
+      bzvType_.swap(zvType2);
+    }
+    else {
+      t7 = t6 = t5;
+      try {
+        dataBlock.set_offset(offset_);
+        zstore->save_mmap(std::ref(writeAppend));
+        dataBlock.set_size(offset_ - dataBlock.offset());
+      }
+      catch (const Status&) {
+        return s;
+      }
+    }
   }
   fstring commonPrefix(prevUserKey_.data(), keyStat_.commonPrefixLen);
   WriteBlock(commonPrefix, file_, &offset_, &commonPrefixBlock);
@@ -2457,7 +2553,7 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
 	WriteMetaData({
 #if defined(TerocksPrivateCode)
     { &kTerarkZipTableLicense, licenseHandle },
-#endif
+#endif // TerocksPrivateCode
     {dictMem.size() ? &kTerarkZipTableValueDictBlock : NULL, dictBlock},
     {&kTerarkZipTableIndexBlock, indexBlock},
     {!zvTypeBlock.IsNull() ? &kTerarkZipTableValueTypeBlock : NULL, zvTypeBlock},
@@ -2584,14 +2680,15 @@ Status TerarkZipTableBuilder::WriteMetaData(std::initializer_list<std::pair<cons
 }
 
 Status TerarkZipTableBuilder::OfflineFinish() {
-  std::unique_ptr<DictZipBlobStore> zstore(zbuilder_->finish());
+  std::unique_ptr<DictZipBlobStore> zstore(zbuilder_->finish(
+      DictZipBlobStore::ZipBuilder::FinishFreeDict));
   auto dzstat = zbuilder_->getZipStat();
   zbuilder_.reset();
   valvec<byte_t> commonPrefix(prevUserKey_.data(), keyStat_.commonPrefixLen);
   AutoDeleteFile tmpIndexFile{tmpValueFile_.path + ".index"};
   long long t1 = g_pf.now();
   {
-    auto factory = TerocksIndex::GetFactory(table_options_.indexType);
+    auto factory = TerarkIndex::GetFactory(table_options_.indexType);
     if (!factory) {
       THROW_STD(invalid_argument,
           "invalid indexType: %s", table_options_.indexType.c_str());
@@ -2617,7 +2714,7 @@ void TerarkZipTableBuilder::Abandon() {
   tmpZipValueFile_.Delete();
 }
 
-void TerarkZipTableBuilder::AddPrevUserKey() {
+void TerarkZipTableBuilder::AddPrevUserKey(bool finish) {
   UpdateValueLenHistogram(); // will use valueBuf_
   if (zbuilder_) {
     OfflineZipValueData(); // will change valueBuf_
@@ -2628,6 +2725,9 @@ void TerarkZipTableBuilder::AddPrevUserKey() {
 	valueBits_.push_back(false);
 	keyStat_.sumKeyLen += prevUserKey_.size();
 	keyStat_.numKeys++;
+  if (finish) {
+    keyStat_.maxKey.assign(prevUserKey_);
+  }
 }
 
 void TerarkZipTableBuilder::OfflineZipValueData() {
@@ -2696,19 +2796,7 @@ NewTerarkZipTableFactory(const TerarkZipTableOptions& tzto,
   try {
     TempFileDeleteOnClose test;
     test.path = tzto.localTempDir + "/Terark-XXXXXX";
-#if _MSC_VER
-    if (err = _mktemp_s(&test.path[0], test.path.size() + 1)) {
-      throw 0;
-    }
-    test.open();
-#else
-    int fd = mkstemp(&test.path[0]);
-    if (fd < 0) {
-      err = errno;
-      throw 0;
-    }
-    test.dopen(fd);
-#endif
+    test.open_temp();
     test.writer << "Terark";
     test.complete_write();
   }
@@ -2718,14 +2806,14 @@ NewTerarkZipTableFactory(const TerarkZipTableOptions& tzto,
       , tzto.localTempDir.c_str(), err ? strerror(err) : "");
     abort();
   }
-  TerarkZipTableFactory* table = new TerarkZipTableFactory(tzto, fallback);
+  TerarkZipTableFactory* factory = new TerarkZipTableFactory(tzto, fallback);
   if (tzto.debugLevel < 0) {
     STD_INFO("NewTerarkZipTableFactory(\n%s)\n",
-      table->GetPrintableTableOptions().c_str()
+      factory->GetPrintableTableOptions().c_str()
     );
   }
 #if defined(TerocksPrivateCode)
-  auto& license = table->GetLicense();
+  auto& license = factory->GetLicense();
   if (!tzto.extendedConfigFile.empty() && license.key == nullptr) {
     std::unique_lock<std::mutex> l(license.mutex);
     if (license.key == nullptr) {
@@ -2734,7 +2822,7 @@ NewTerarkZipTableFactory(const TerarkZipTableOptions& tzto,
   }
   license.print_error(tzto.extendedConfigFile.c_str(), true, nullptr);
 #endif // TerocksPrivateCode
-  return table;
+  return factory;
 }
 
 inline static
@@ -2748,7 +2836,7 @@ bool IsBytewiseComparator(const Comparator* cmp) {
     // reverse bytewise compare, needs reverse in iterator
     return true;
   }
-# if defined(TERARK_SUPPORT_UINT64_COMPARATOR) && BOOST_ENDIAN_LITTLE_BYTE
+# if defined(TERARK_SUPPORT_UINT64_COMPARATOR)
   if (name == "rocksdb.Uint64Comparator") {
     return true;
   }
@@ -2771,12 +2859,6 @@ const {
 		return Status::InvalidArgument("TerarkZipTableFactory::NewTableReader()",
 				"user comparator must be 'leveldb.BytewiseComparator'");
 	}
-#if 0
-  if (fstring(userCmp->Name()).startsWith("rev:")) {
-    return Status::InvalidArgument("TerarkZipTableFactory::NewTableReader()",
-        "Damn, fuck out the reverse bytewise comparator");
-  }
-#endif
 	Footer footer;
 	Status s = ReadFooterFromFile(file.get(), file_size, &footer);
 	if (!s.ok()) {
@@ -2841,13 +2923,6 @@ const {
 				"TerarkZipTableFactory::NewTableBuilder(): "
 				"user comparator must be 'leveldb.BytewiseComparator'");
 	}
-#if 0
-  if (fstring(userCmp->Name()).startsWith("rev:")) {
-    THROW_STD(invalid_argument,
-        "TerarkZipTableFactory::NewTableBuilder(): "
-        "user comparator must be 'leveldb.BytewiseComparator'");
-  }
-#endif
   int curlevel = table_builder_options.level;
   int numlevel = table_builder_options.ioptions.num_levels;
   int minlevel = table_options_.terarkZipMinLevel;
@@ -2931,13 +3006,7 @@ const {
 		return Status::InvalidArgument("TerarkZipTableFactory::SanitizeOptions()",
 				"user comparator must be 'leveldb.BytewiseComparator'");
 	}
-#if 0
-	if (fstring(cf_opts.comparator->Name()).startsWith("rev:")) {
-	  return Status::InvalidArgument("TerarkZipTableFactory::SanitizeOptions",
-	      "Damn, fuck out the reverse bytewise comparator");
-	}
-#endif
-  auto indexFactory = TerocksIndex::GetFactory(table_options_.indexType);
+  auto indexFactory = TerarkIndex::GetFactory(table_options_.indexType);
   if (!indexFactory) {
     std::string msg = "invalid indexType: " + table_options_.indexType;
     return Status::InvalidArgument(msg);

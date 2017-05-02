@@ -13,6 +13,12 @@
 #include <string>
 #include <vector>
 
+
+#define TerocksPrivateCode
+#if defined(TerocksPrivateCode)
+// this macro for remove private code ...
+#endif // TerocksPrivateCode
+
 namespace rocksdb {
 
 struct TerarkZipTableOptions {
@@ -76,7 +82,7 @@ struct TerarkZipTableOptions {
   // use dictZip for value when average value length >= minDictZipValueSize
   // otherwise do not use dictZip
   size_t minDictZipValueSize = 30;
-  size_t keyPrefixLen = 0; // for IndexID
+  size_t keyPrefixLenReserved = 0; // unused
 #if defined(TerocksPrivateCode)
   // end fields for TerocksPrivateCode
 #endif // TerocksPrivateCode
