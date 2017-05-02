@@ -2,6 +2,7 @@
 #include "terark_zip_table_builder.h"
 // std headers
 #include <future>
+#include <cfloat>
 // boost headers
 #include <boost/scope_exit.hpp>
 // rocksdb headers
@@ -15,9 +16,7 @@
 #endif // TerocksPrivateCode
 
 
-
 namespace rocksdb {
-
 
 #ifdef TERARK_ZIP_TRIAL_VERSION
 const char g_trail_rand_delete[] = "TERARK_ZIP_TRIAL_VERSION random deleted this row";

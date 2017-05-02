@@ -16,9 +16,8 @@
 // std headers
 #include <future>
 #include <random>
-#include <stdlib.h>
-#include <stdint.h>
-#include <float.h>
+#include <cstdlib>
+#include <cstdint>
 #include <fstream>
 #include <util/arena.h> // for #include <sys/mman.h>
 #ifdef _MSC_VER

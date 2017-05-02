@@ -10,9 +10,6 @@
 #include <terark/util/crc.hpp>
 
 
-
-
-
 namespace {
 using namespace rocksdb;
 
@@ -816,6 +813,5 @@ TerarkZipTableReader::TerarkZipTableReader(const TableReaderOptions& tro,
 {
   isReverseBytewiseOrder_ = false;
 }
-
 
 }
