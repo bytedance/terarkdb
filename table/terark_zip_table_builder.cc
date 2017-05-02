@@ -306,10 +306,10 @@ Status TerarkZipTableBuilder::EmptyTableFinish() {
   range_del_block_.Reset();
   return WriteMetaData({
 #if defined(TerocksPrivateCode)
-    { &kTerarkZipTableLicense, licenseHandle },
+    { &kTerarkZipTableExtendedBlock                 , licenseHandle },
 #endif // TerocksPrivateCode
-    { &kEmptyTableKey, emptyTableBH },
-    { !tombstoneBH.IsNull() ? &kRangeDelBlock : NULL, tombstoneBH },
+    { &kTerarkEmptyTableKey                         , emptyTableBH  },
+    { !tombstoneBH.IsNull() ? &kRangeDelBlock : NULL, tombstoneBH   },
   });
 }
 
@@ -938,13 +938,13 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
   properties_.index_size = indexBlock.size();
   WriteMetaData({
 #if defined(TerocksPrivateCode)
-    { &kTerarkZipTableLicense, licenseHandle },
+    { &kTerarkZipTableExtendedBlock, licenseHandle },
 #endif // TerocksPrivateCode
-    { dictMem.size() ? &kTerarkZipTableValueDictBlock : NULL, dictBlock },
-    { &kTerarkZipTableIndexBlock, indexBlock },
-    { !zvTypeBlock.IsNull() ? &kTerarkZipTableValueTypeBlock : NULL, zvTypeBlock },
-    { &kTerarkZipTableCommonPrefixBlock, commonPrefixBlock },
-    { !tombstoneBlock.IsNull() ? &kRangeDelBlock : NULL, tombstoneBlock },
+    { dictMem.size() ? &kTerarkZipTableValueDictBlock : NULL       , dictBlock         },
+    { &kTerarkZipTableIndexBlock                                   , indexBlock        },
+    { !zvTypeBlock.IsNull() ? &kTerarkZipTableValueTypeBlock : NULL, zvTypeBlock       },
+    { &kTerarkZipTableCommonPrefixBlock                            , commonPrefixBlock },
+    { !tombstoneBlock.IsNull() ? &kRangeDelBlock : NULL            , tombstoneBlock    },
   });
   long long t8 = g_pf.now();
   {

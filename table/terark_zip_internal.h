@@ -49,13 +49,11 @@ extern const std::string kTerarkZipTableIndexBlock;
 extern const std::string kTerarkZipTableValueTypeBlock;
 extern const std::string kTerarkZipTableValueDictBlock;
 extern const std::string kTerarkZipTableCommonPrefixBlock;
-extern const std::string kEmptyTableKey;
+extern const std::string kTerarkEmptyTableKey;
 
 #if defined(TerocksPrivateCode)
 
-extern const uint64_t g_trialDuration;
-extern const std::string kTerarkZipTableLicense;
-extern const std::string g_publikKey;
+extern const std::string kTerarkZipTableExtendedBlock;
 
 #endif // TerocksPrivateCode
 

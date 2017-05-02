@@ -108,15 +108,15 @@ const std::string kTerarkZipTableIndexBlock = "TerarkZipTableIndexBlock";
 const std::string kTerarkZipTableValueTypeBlock = "TerarkZipTableValueTypeBlock";
 const std::string kTerarkZipTableValueDictBlock = "TerarkZipTableValueDictBlock";
 const std::string kTerarkZipTableCommonPrefixBlock = "TerarkZipTableCommonPrefixBlock";
-const std::string kEmptyTableKey = "ThisIsAnEmptyTable";
+const std::string kTerarkEmptyTableKey = "ThisIsAnEmptyTable";
 
 #if defined(TerocksPrivateCode)
 
 using terark::XXHash64;
 
-const uint64_t g_trialDuration = 30ULL * 24 * 3600 * 1000;
-const std::string kTerarkZipTableLicense = "TerarkZipTableExtendedBlock";
-const std::string g_publikKey =
+const std::string kTerarkZipTableExtendedBlock = "TerarkZipTableExtendedBlock";
+static const uint64_t g_dTerarkTrialDuration = 30ULL * 24 * 3600 * 1000;
+static const std::string g_szTerarkPublikKey =
 "MIIBIDANBgkqhkiG9w0BAQEFAAOCAQ0AMIIBCAKCAQEAxPQGCXF8uotaYLixcWL65GO8wYcZ"
 "ONEThvMn9olRVhzOpBW0/OsFuKwP6/9/zN3WK6mFKXc8qoCDIEedH/4U2JYeXQoxzQf7E3Ow"
 "8cQ+0/6oz/5USnvxN0sf28JOEogAxX2Gqub6nt2fl2T/0CeCQ7WBR76EoZa941Q6XfG2mYys"
@@ -184,10 +184,11 @@ LicenseInfo::Result LicenseInfo::load_nolock(const std::string& license_file) {
       return InternalError;
     }
     std::string publicKey;
-    publicKey.reserve(g_publikKey.size() + (g_publikKey.size() + 63) / 64 + 60);
+    publicKey.reserve(g_szTerarkPublikKey.size() + (g_szTerarkPublikKey.size() + 63) / 64 + 60);
     publicKey += "-----BEGIN PUBLIC KEY-----\n";
-    for (size_t i = 0; i < g_publikKey.size(); i += 64) {
-      publicKey.append(g_publikKey.data() + i, std::min<size_t>(64, g_publikKey.size() - i));
+    for (size_t i = 0; i < g_szTerarkPublikKey.size(); i += 64) {
+      publicKey.append(g_szTerarkPublikKey.data() + i,
+        std::min<size_t>(64, g_szTerarkPublikKey.size() - i));
       publicKey += '\n';
     }
     publicKey += "-----END PUBLIC KEY-----\n";
@@ -339,7 +340,7 @@ bool LicenseInfo::check() const {
   }
   else {
     std::unique_lock<std::mutex> l(mutex);
-    if (now > sst->create_date + g_trialDuration) {
+    if (now > sst->create_date + g_dTerarkTrialDuration) {
       return false;
     }
   }
@@ -389,7 +390,7 @@ void LicenseInfo::print_error(const char* file_name, bool startup, rocksdb::Logg
       if (now > key->date + key->duration) {
         error_str = get_err_str("License expired at ", nullptr, key->date + key->duration);
       }
-      else if (now + g_trialDuration > key->date + key->duration) {
+      else if (now + g_dTerarkTrialDuration > key->date + key->duration) {
         error_str = get_err_str("License will expired at ", nullptr, key->date + key->duration);
       }
     }
@@ -401,8 +402,8 @@ void LicenseInfo::print_error(const char* file_name, bool startup, rocksdb::Logg
       }
     }
     else {
-      if (now > sst->create_date + g_trialDuration) {
-        error_str = get_err_str("Trial expired at ", nullptr, sst->create_date + g_trialDuration);
+      if (now > sst->create_date + g_dTerarkTrialDuration) {
+        error_str = get_err_str("Trial expired at ", nullptr, sst->create_date + g_dTerarkTrialDuration);
       }
     }
   }
@@ -521,7 +522,7 @@ TerarkZipTableFactory::NewTableReader(
 #endif
   BlockContents emptyTableBC;
   s = ReadMetaBlock(file.get(), file_size, kTerarkZipTableMagicNumber
-    , table_reader_options.ioptions, kEmptyTableKey, &emptyTableBC);
+    , table_reader_options.ioptions, kTerarkEmptyTableKey, &emptyTableBC);
   if (s.ok()) {
     std::unique_ptr<TerarkEmptyTableReader>
       t(new TerarkEmptyTableReader(table_reader_options));

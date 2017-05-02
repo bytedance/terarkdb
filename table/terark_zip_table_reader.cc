@@ -508,7 +508,7 @@ TerarkEmptyTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   auto& license = table_factory->GetLicense();
   BlockContents licenseBlock;
   s = ReadMetaBlock(file, file_size, kTerarkZipTableMagicNumber, ioptions,
-    kTerarkZipTableLicense, &licenseBlock);
+    kTerarkZipTableExtendedBlock, &licenseBlock);
   if (s.ok()) {
     auto res = license.merge(licenseBlock.data.data(), licenseBlock.data.size());
     assert(res == LicenseInfo::Result::OK);
@@ -572,7 +572,7 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
 #if defined(TerocksPrivateCode)
   BlockContents licenseBlock;
   s = ReadMetaBlock(file, file_size, kTerarkZipTableMagicNumber, ioptions,
-    kTerarkZipTableLicense, &licenseBlock);
+    kTerarkZipTableExtendedBlock, &licenseBlock);
   if (s.ok()) {
     auto table_factory = dynamic_cast<TerarkZipTableFactory*>(ioptions.table_factory);
     assert(table_factory);
