@@ -147,7 +147,7 @@ public:
   public:
     void Build(TempFileDeleteOnClose& tmpKeyFile,
                const TerarkZipTableOptions& tzopt,
-               fstring tmpFilePath,
+               std::function<void(const void *, size_t)> write,
                KeyStat& ks) const override {
       NativeDataInput<InputBuffer> reader(&tmpKeyFile.fp);
 #if !defined(NDEBUG)
@@ -161,9 +161,6 @@ public:
       for (size_t seq_id = 0; seq_id < ks.numKeys; ++seq_id) {
         reader >> keyBuf;
         keyVec.push_back(fstring(keyBuf).substr(ks.commonPrefixLen));
-      }
-      if (tzopt.debugLevel != 2 && tzopt.debugLevel != 3) {
-        tmpKeyFile.close();
       }
       if (keyVec[0] > keyVec.back()) {
         std::reverse(keyVec.m_index.begin(), keyVec.m_index.end());
@@ -199,7 +196,7 @@ public:
       conf.isInputSorted = true;
       std::unique_ptr<NLTrie> trie(new NLTrie());
       trie->build_from(keyVec, conf);
-      trie->save_mmap(tmpFilePath);
+      trie->save_mmap(write);
     }
     unique_ptr<TerarkIndex> LoadMemory(fstring mem) const override {
       unique_ptr<BaseDFA>
@@ -349,10 +346,10 @@ public:
   public:
     virtual ~MyFactory() {
     }
-    virtual void Build(TempFileDeleteOnClose& tmpKeyFile,
-      const TerarkZipTableOptions& tzopt,
-      fstring tmpFilePath,
-      KeyStat& ks) const {
+    void Build(TempFileDeleteOnClose& tmpKeyFile,
+               const TerarkZipTableOptions& tzopt,
+               std::function<void(const void *, size_t)> write,
+               KeyStat& ks) const override {
       if (ks.maxKeyLen != ks.minKeyLen || ks.minKeyLen == 0 || ks.maxKeyLen > 8) {
         abort();
       }
@@ -371,27 +368,23 @@ public:
         reader >> keyBuf;
         indexSeq_.set1(ReadUint64(keyBuf.begin(), keyBuf.end()) - minValue);
       }
-      if (tzopt.debugLevel != 2 && tzopt.debugLevel != 3) {
-        tmpKeyFile.close();
-      }
       indexSeq_.build_cache(false, false);
       FileHeader header(indexSeq_.mem_size());
       header.min_value = minValue;
       header.max_value = maxValue;
       header.index_mem_size = indexSeq_.mem_size();
       header.key_length = ks.minKeyLen;
-      FileStream writer(tmpFilePath, "wb+");
-      writer.ensureWrite(&header, sizeof header);
-      writer.ensureWrite(indexSeq_.data(), indexSeq_.mem_size());
+      write(&header, sizeof header);
+      write(indexSeq_.data(), indexSeq_.mem_size());
       ks.commonPrefixLen = 0;
     }
-    virtual unique_ptr<TerarkIndex> LoadMemory(fstring mem) const {
+    unique_ptr<TerarkIndex> LoadMemory(fstring mem) const override {
       return unique_ptr<TerarkIndex>(loadImpl(mem, {}).release());
     }
-    virtual unique_ptr<TerarkIndex> LoadFile(fstring fpath) const {
+    unique_ptr<TerarkIndex> LoadFile(fstring fpath) const override {
       return unique_ptr<TerarkIndex>(loadImpl({}, fpath).release());
     }
-    virtual size_t MemSizeForBuild(const KeyStat& ks) const {
+    size_t MemSizeForBuild(const KeyStat& ks) const override {
       uint64_t
         minValue = ReadUint64(ks.minKey.begin(), ks.minKey.end()),
         maxValue = ReadUint64(ks.maxKey.begin(), ks.maxKey.end());

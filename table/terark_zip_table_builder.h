@@ -41,6 +41,7 @@ using terark::fstrvec;
 using terark::valvec;
 using terark::byte_t;
 using terark::febitvec;
+using terark::BlobStore;
 using terark::Uint32Histogram;
 using terark::DictZipBlobStore;
 
@@ -58,7 +59,8 @@ public:
     const TerarkZipTableOptions&,
     const TableBuilderOptions& tbo,
     uint32_t column_family_id,
-    WritableFileWriter* file);
+    WritableFileWriter* file,
+    size_t key_prefixLen);
 
   ~TerarkZipTableBuilder();
 
@@ -76,18 +78,42 @@ public:
   }
 
 private:
+  struct KeyValueStatus {
+    TerarkIndex::KeyStat stat;
+    std::string prefix;
+    Uint32Histogram key;
+    Uint32Histogram value;
+    bitfield_array<2> type;
+    size_t keyFileBegin = 0;
+    size_t keyFileEnd = 0;
+    size_t valueFileBegin = 0;
+    size_t valueFileEnd = 0;
+  };
+  struct KeyValueOffset {
+    size_t key;
+    size_t value;
+    size_t type;
+  };
   void AddPrevUserKey(bool finish = false);
   void OfflineZipValueData();
   void UpdateValueLenHistogram();
   Status EmptyTableFinish();
   Status OfflineFinish();
-#if defined(TerocksPrivateCode)
-  Status PlainValueToFinish(fstring tmpIndexFile, std::function<void()> waitIndex);
-#endif // TerocksPrivateCode
   Status ZipValueToFinish(fstring tmpIndexFile, std::function<void()> waitIndex);
-  void BuilderWriteValues(std::function<void(fstring val)> write);
+  Status ZipValueToFinishMulti(fstring tmpIndexFile, std::function<void()> waitIndex);
+  void DebugPrepare();
+  void DebugCleanup();
+  void BuilderWriteValues(KeyValueStatus& kvs, std::function<void(fstring val)> write);
+  Status ReorderStore(TerarkIndex* index, BlobStore* store
+    , KeyValueStatus& kvs, std::function<void(const void*, size_t)> write
+    , BlockHandle dataBlock
+    , long long& t5, long long& t6, long long& t7);
   Status WriteSSTFile(long long t3, long long t4
     , fstring tmpIndexFile, terark::BlobStore* zstore
+    , fstring dictMem
+    , const DictZipBlobStore::ZipStat& dzstat);
+  Status WriteSSTFileMulti(fstring tmpIndexFile
+    , fstring tmpStoreFilePrefix
     , fstring dictMem
     , const DictZipBlobStore::ZipStat& dzstat);
   Status WriteMetaData(std::initializer_list<std::pair<const std::string*, BlockHandle> > blocks);
@@ -100,8 +126,7 @@ private:
   std::vector<std::unique_ptr<IntTblPropCollector>> collectors_;
   // end fuck out TableBuilderOptions
   InternalIterator* second_pass_iter_ = nullptr;
-  Uint32Histogram keyLenHistogram_;
-  Uint32Histogram valueLenHistogram_;
+  valvec<KeyValueStatus> histogram_;
   valvec<byte_t> prevUserKey_;
   terark::febitvec valueBits_;
   TempFileDeleteOnClose tmpKeyFile_;
@@ -112,7 +137,6 @@ private:
   AutoDeleteFile tmpZipValueFile_;
   std::mt19937_64 randomGenerator_;
   uint64_t sampleUpperBound_;
-  TerarkIndex::KeyStat keyStat_;
   size_t sampleLenSum_ = 0;
   WritableFileWriter* file_;
   uint64_t offset_ = 0;
@@ -121,7 +145,6 @@ private:
   TableProperties properties_;
   std::unique_ptr<DictZipBlobStore::ZipBuilder> zbuilder_;
   BlockBuilder range_del_block_;
-  bitfield_array<2> bzvType_;
   terark::fstrvec valueBuf_; // collect multiple values for one key
   bool closed_ = false;  // Either Finish() or Abandon() has been called.
   bool isReverseBytewiseOrder_;
@@ -130,6 +153,7 @@ private:
 #endif
 
   long long t0 = 0;
+  size_t key_prefixLen_;
 };
 
 

@@ -38,6 +38,7 @@
 #include <table/meta_blocks.h>
 
 // terark headers
+#include <terark/lcast.hpp>
 #if defined(TerocksPrivateCode)
 # include <terark/zbs/xxhash_helper.hpp>
 #endif // TerocksPrivateCode
@@ -104,11 +105,12 @@ terark::profiling g_pf;
 
 const uint64_t kTerarkZipTableMagicNumber = 0x1122334455667788;
 
-const std::string kTerarkZipTableIndexBlock = "TerarkZipTableIndexBlock";
-const std::string kTerarkZipTableValueTypeBlock = "TerarkZipTableValueTypeBlock";
-const std::string kTerarkZipTableValueDictBlock = "TerarkZipTableValueDictBlock";
+const std::string kTerarkZipTableIndexBlock        = "TerarkZipTableIndexBlock";
+const std::string kTerarkZipTableValueTypeBlock    = "TerarkZipTableValueTypeBlock";
+const std::string kTerarkZipTableValueDictBlock    = "TerarkZipTableValueDictBlock";
+const std::string kTerarkZipTableOffsetBlock       = "TerarkZipTableOffsetBlock";
 const std::string kTerarkZipTableCommonPrefixBlock = "TerarkZipTableCommonPrefixBlock";
-const std::string kTerarkEmptyTableKey = "ThisIsAnEmptyTable";
+const std::string kTerarkEmptyTableKey             = "ThisIsAnEmptyTable";
 
 #if defined(TerocksPrivateCode)
 
@@ -478,6 +480,20 @@ bool IsBytewiseComparator(const Comparator* cmp) {
 #endif
 }
 
+inline static
+size_t GetFixedPrefixLen(const SliceTransform* tr) {
+  if (tr == nullptr) {
+    return 0;
+  }
+  fstring trName = tr->Name();
+  fstring namePrefix = "rocksdb.FixedPrefix.";
+  if (namePrefix != trName.substr(0, namePrefix.size())) {
+    return 0;
+  }
+  return terark::lcast(trName.substr(namePrefix.size()));
+}
+
+
 Status
 TerarkZipTableFactory::NewTableReader(
   const TableReaderOptions& table_reader_options,
@@ -560,6 +576,7 @@ TerarkZipTableFactory::NewTableBuilder(
   if (minlevel < 0) {
     minlevel = numlevel - 1;
   }
+  size_t keyPrefixLen = GetFixedPrefixLen(table_builder_options.ioptions.prefix_extractor);
 #if 1
   INFO(table_builder_options.ioptions.info_log
     , "nth_newtable{ terark = %3zd fallback = %3zd } curlevel = %d minlevel = %d numlevel = %d fallback = %p\n"
@@ -585,7 +602,8 @@ TerarkZipTableFactory::NewTableBuilder(
     table_options_,
     table_builder_options,
     column_family_id,
-    file);
+    file,
+    keyPrefixLen);
 }
 
 std::string TerarkZipTableFactory::GetPrintableTableOptions() const {

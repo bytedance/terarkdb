@@ -34,11 +34,11 @@ public:
     inline void SetInvalid() { m_id = size_t(-1); }
   };
   struct KeyStat {
-    size_t commonPrefixLen = 0;
+    size_t commonPrefixLen = size_t(-1);
     size_t minKeyLen = 0;
     size_t maxKeyLen = size_t(-1);
-    size_t sumKeyLen = size_t(-1);
-    size_t numKeys   = size_t(-1);
+    size_t sumKeyLen = 0;
+    size_t numKeys   = 0;
     valvec<byte_t> minKey;
     valvec<byte_t> maxKey;
   };
@@ -47,7 +47,7 @@ public:
     virtual ~Factory();
     virtual void Build(TempFileDeleteOnClose& tmpKeyFile,
                        const TerarkZipTableOptions& tzopt,
-                       fstring tmpFilePath,
+                       std::function<void(const void *, size_t)> write,
                        KeyStat&) const = 0;
     virtual unique_ptr<TerarkIndex> LoadMemory(fstring mem) const = 0;
     virtual unique_ptr<TerarkIndex> LoadFile(fstring fpath) const = 0;
