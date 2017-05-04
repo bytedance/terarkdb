@@ -30,6 +30,16 @@ uint64_t ReadUint64(const byte_t* beg, const byte_t* end) {
 #endif
 }
 
+uint64_t ReadUint64Aligned(const byte_t* beg, const byte_t* end) {
+  assert(end - beg == 8);
+  (void)end;
+#if BOOST_ENDIAN_LITTLE_BYTE
+  return terark::byte_swap(*(const uint64_t*)beg);
+#else
+  return *(const uint64_t*)beg;
+#endif
+}
+
 void AssignUint64(byte_t* beg, byte_t* end, uint64_t value) {
   assert(end - beg <= 8);
   union {

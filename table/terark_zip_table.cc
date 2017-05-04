@@ -422,6 +422,66 @@ void LicenseInfo::print_error(const char* file_name, bool startup, rocksdb::Logg
 #endif // TerocksPrivateCode
 
 
+size_t TerarkZipMultiOffsetInfo::calc_size(size_t prefixLen, size_t partCount) {
+  BOOST_STATIC_ASSERT(sizeof(KeyValueOffset) % 16 == 0);
+  return 16 + partCount * sizeof(KeyValueOffset) + terark::align_up(prefixLen * partCount, 16);
+}
+
+void TerarkZipMultiOffsetInfo::Init(size_t prefixLen, size_t partCount) {
+  prefixLen_ = prefixLen;
+  partCount_ = partCount;
+  offset_.resize_no_init(partCount);
+  prefix_set_.resize_no_init(prefixLen * partCount);
+}
+
+void TerarkZipMultiOffsetInfo::set(size_t i, fstring p, size_t k, size_t v, size_t t, size_t c) {
+  assert(p.size() == prefixLen_);
+  memcpy(prefix_set_.data() + i * prefixLen_, p.data(), p.size());
+  offset_[i].key = k;
+  offset_[i].value = v;
+  offset_[i].type = t;
+  offset_[i].commonPrefix = c;
+}
+
+valvec<byte_t> TerarkZipMultiOffsetInfo::dump() {
+  valvec<byte_t> ret;
+  size_t size = calc_size(prefixLen_, partCount_);
+  ret.resize_no_init(size);
+  size_t offset = 0;
+  auto push = [&](const void* d, size_t s) {
+    memcpy(ret.data() + offset, d, s);
+    offset += s;
+  };
+  push(&partCount_, 8);
+  push(&prefixLen_, 8);
+  push(offset_.data(), offset_.size() * sizeof(KeyValueOffset));
+  push(prefix_set_.data(), prefix_set_.size());
+  memset(ret.data() + offset, 0, size - offset);
+  return ret;
+}
+
+bool TerarkZipMultiOffsetInfo::risk_set_memory(const void* p, size_t s) {
+  offset_.clear();
+  prefix_set_.clear();
+  if (s < 16) {
+    return false;
+  }
+  auto src = (const byte_t*)p;
+  memcpy(&partCount_, src, 8);
+  memcpy(&prefixLen_, src + 8, 8);
+  if (s != calc_size(prefixLen_, partCount_)) {
+    return false;
+  }
+  offset_.risk_set_data((KeyValueOffset*)src + 16, partCount_);
+  prefix_set_.risk_set_data((char*)src + 16 + partCount_ * sizeof(KeyValueOffset),
+    prefixLen_ * partCount_);
+  return true;
+}
+
+void TerarkZipMultiOffsetInfo::risk_release_ownership() {
+
+}
+
 class TableFactory*
   NewTerarkZipTableFactory(const TerarkZipTableOptions& tzto,
     class TableFactory* fallback) {
@@ -493,7 +553,6 @@ size_t GetFixedPrefixLen(const SliceTransform* tr) {
   return terark::lcast(trName.substr(namePrefix.size()));
 }
 
-
 Status
 TerarkZipTableFactory::NewTableReader(
   const TableReaderOptions& table_reader_options,
@@ -536,12 +595,24 @@ TerarkZipTableFactory::NewTableReader(
       "all index and data will be loaded in memory\n");
   }
 #endif
-  BlockContents emptyTableBC;
+  BlockContents emptyTableBC, offsetBC;
   s = ReadMetaBlock(file.get(), file_size, kTerarkZipTableMagicNumber
     , table_reader_options.ioptions, kTerarkEmptyTableKey, &emptyTableBC);
   if (s.ok()) {
     std::unique_ptr<TerarkEmptyTableReader>
       t(new TerarkEmptyTableReader(table_reader_options));
+    s = t->Open(file.release(), file_size);
+    if (!s.ok()) {
+      return s;
+    }
+    *table = std::move(t);
+    return s;
+  }
+  s = ReadMetaBlock(file.get(), file_size, kTerarkZipTableMagicNumber
+    , table_reader_options.ioptions, kTerarkZipTableOffsetBlock, &offsetBC);
+  if (s.ok()) {
+    std::unique_ptr<TerarkZipTableMultiReader>
+      t(new TerarkZipTableMultiReader(table_reader_options, table_options_));
     s = t->Open(file.release(), file_size);
     if (!s.ok()) {
       return s;

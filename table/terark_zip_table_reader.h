@@ -30,9 +30,26 @@
 
 namespace rocksdb {
 
-class TerarkZipTableIterator;
+class TerarkZipTableTombstone {
 
-class TerarkEmptyTableReader : public TableReader, boost::noncopyable {
+private:
+  shared_ptr<Block> tombstone_;
+
+protected:
+  virtual SequenceNumber GetSequenceNumber() const = 0;
+  virtual const TableReaderOptions& GetTableReaderOptions() const = 0;
+
+  Status LoadTombstone(RandomAccessFileReader* file, uint64_t file_size);
+
+public:
+  virtual InternalIterator*
+    NewRangeTombstoneIterator(const ReadOptions& read_options);
+};
+
+class TerarkEmptyTableReader
+  : public TerarkZipTableTombstone
+  , public TableReader
+  , boost::noncopyable {
   class Iter : public InternalIterator, boost::noncopyable {
   public:
     Iter() {}
@@ -54,7 +71,6 @@ class TerarkEmptyTableReader : public TableReader, boost::noncopyable {
   const TableReaderOptions table_reader_options_;
   std::shared_ptr<const TableProperties> table_properties_;
   SequenceNumber global_seqno_;
-  shared_ptr<Block> tombstone_;
   Slice  file_data_;
   unique_ptr<RandomAccessFileReader> file_;
 public:
@@ -62,8 +78,7 @@ public:
     NewIterator(const ReadOptions&, Arena* a, bool) override {
     return a ? new(a->AllocateAligned(sizeof(Iter)))Iter() : new Iter();
   }
-  InternalIterator*
-    NewRangeTombstoneIterator(const ReadOptions& read_options) override;
+  using TerarkZipTableTombstone::NewRangeTombstoneIterator;
   void Prepare(const Slice&) override {}
   Status Get(const ReadOptions&, const Slice&, GetContext*, bool) override {
     return Status::OK();
@@ -79,21 +94,51 @@ public:
     , global_seqno_(kDisableGlobalSequenceNumber) {
   }
   Status Open(RandomAccessFileReader* file, uint64_t file_size);
+private:
+  SequenceNumber GetSequenceNumber() const override {
+    return global_seqno_;
+  }
+  const TableReaderOptions& GetTableReaderOptions() const override {
+    return table_reader_options_;
+  }
 };
 
+struct TerarkZipSegment {
+  size_t segmentIndex_;
+  fstring prefix_;
+  unique_ptr<TerarkIndex> index_;
+  unique_ptr<terark::BlobStore> store_;
+  bitfield_array<2> type_;
+  std::string commonPrefix_;
+
+  enum {
+    FlagNone = 0,
+    FlagSkipFilter = 1,
+#if defined(TERARK_SUPPORT_UINT64_COMPARATOR) && BOOST_ENDIAN_LITTLE_BYTE
+    FlagUint64Comparator = 2,
+#endif
+  };
+
+  Status Get(SequenceNumber, const ReadOptions&, const Slice& key,
+    GetContext*, int flag);
+
+  ~TerarkZipSegment();
+};
 
 /**
-* one user key map to a record id: the index NO. of a key in NestLoudsTrie,
-* the record id is used to direct index a type enum(small integer) array,
-* the record id is also used to access the value store
-*/
-class TerarkZipTableReader : public TableReader, boost::noncopyable {
+ * one user key map to a record id: the index NO. of a key in NestLoudsTrie,
+ * the record id is used to direct index a type enum(small integer) array,
+ * the record id is also used to access the value store
+ */
+class TerarkZipTableReader
+  : public TerarkZipTableTombstone
+  , public TableReader
+  , boost::noncopyable {
 public:
   InternalIterator*
     NewIterator(const ReadOptions&, Arena*, bool skip_filters) override;
 
-  InternalIterator*
-    NewRangeTombstoneIterator(const ReadOptions& read_options) override;
+  using TerarkZipTableTombstone::NewRangeTombstoneIterator;
 
   void Prepare(const Slice& target) override {}
 
@@ -113,11 +158,14 @@ public:
   Status Open(RandomAccessFileReader* file, uint64_t file_size);
 
 private:
-  unique_ptr<terark::BlobStore> valstore_;
-  unique_ptr<TerarkIndex> keyIndex_;
-  shared_ptr<Block> tombstone_;
-  Slice commonPrefix_;
-  bitfield_array<2> typeArray_;
+  SequenceNumber GetSequenceNumber() const override {
+    return global_seqno_;
+  }
+  const TableReaderOptions& GetTableReaderOptions() const override {
+    return table_reader_options_;
+  }
+
+  TerarkZipSegment segment_;
   static const size_t kNumInternalBytes = 8;
   Slice  file_data_;
   unique_ptr<RandomAccessFileReader> file_;
@@ -129,8 +177,87 @@ private:
 #if defined(TERARK_SUPPORT_UINT64_COMPARATOR) && BOOST_ENDIAN_LITTLE_BYTE
   bool isUint64Comparator_;
 #endif
-  friend class TerarkZipTableIterator;
   Status LoadIndex(Slice mem);
+};
+
+class TerarkZipTableMultiReader
+  : public TerarkZipTableTombstone
+  , public TableReader
+  , boost::noncopyable {
+public:
+
+  InternalIterator*
+    NewIterator(const ReadOptions&, Arena*, bool skip_filters) override;
+
+  using TerarkZipTableTombstone::NewRangeTombstoneIterator;
+
+  void Prepare(const Slice& target) override {}
+
+  Status Get(const ReadOptions&, const Slice& key, GetContext*,
+    bool skip_filters) override;
+
+  uint64_t ApproximateOffsetOf(const Slice& key) override { return 0; }
+  void SetupForCompaction() override {}
+
+  std::shared_ptr<const TableProperties>
+    GetTableProperties() const override { return table_properties_; }
+
+  size_t ApproximateMemoryUsage() const override { return file_data_.size(); }
+
+  ~TerarkZipTableMultiReader();
+  TerarkZipTableMultiReader(const TableReaderOptions&, const TerarkZipTableOptions&);
+  Status Open(RandomAccessFileReader* file, uint64_t file_size);
+
+  class SegmentIndex {
+  private:
+    size_t partCount_;
+    size_t prefixLen_;
+    size_t alignedPrefixLen_;
+    valvec<byte_t> prefix_set_;
+    valvec<TerarkZipSegment> segments_;
+
+    struct PartIndexOperator {
+      const SegmentIndex* p;
+      fstring operator[](size_t i) const;
+    };
+
+    const TerarkZipSegment* (SegmentIndex::*get_segment_ptr)(fstring) const;
+
+    const TerarkZipSegment* GetSegmentU64Sequential(fstring key) const;
+    const TerarkZipSegment* GetSegmentU64SequentialReverse(fstring key) const;
+    const TerarkZipSegment* GetSegmentU64Binary(fstring key) const;
+    const TerarkZipSegment* GetSegmentU64BinaryReverse(fstring key) const;
+    const TerarkZipSegment* GetSegmentBytewise(fstring key) const;
+    const TerarkZipSegment* GetSegmentBytewiseReverse(fstring key) const;
+
+  public:
+    Status Init(fstring offsetMemory, fstring indexMempry, fstring storeMemory,
+      fstring dictMemory, fstring typeMemory, fstring commonPrefixMemory, bool reverse);
+    size_t GetSegmentCount() const;
+    const TerarkZipSegment* GetSegment(size_t i) const;
+    const TerarkZipSegment* GetSegment(fstring key) const;
+  };
+
+private:
+  SequenceNumber GetSequenceNumber() const override {
+    return global_seqno_;
+  }
+  const TableReaderOptions& GetTableReaderOptions() const override {
+    return table_reader_options_;
+  }
+
+  SegmentIndex segmentIndex_;
+  static const size_t kNumInternalBytes = 8;
+  Slice  file_data_;
+  unique_ptr<RandomAccessFileReader> file_;
+  const TableReaderOptions table_reader_options_;
+  std::shared_ptr<const TableProperties> table_properties_;
+  SequenceNumber global_seqno_;
+  const TerarkZipTableOptions& tzto_;
+  bool isReverseBytewiseOrder_;
+#if defined(TERARK_SUPPORT_UINT64_COMPARATOR) && BOOST_ENDIAN_LITTLE_BYTE
+  bool isUint64Comparator_;
+#endif
 };
 
 }  // namespace rocksdb

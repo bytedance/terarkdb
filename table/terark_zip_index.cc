@@ -278,7 +278,7 @@ public:
       byte_t targetBuffer[8] = {};
       memcpy(targetBuffer + (8 - index_.keyLength_),
           target.data(), std::min<size_t>(index_.keyLength_, target.size()));
-      uint64_t targetValue = ReadUint64(targetBuffer, targetBuffer + 8);
+      uint64_t targetValue = ReadUint64Aligned(targetBuffer, targetBuffer + 8);
       if (targetValue > index_.maxValue_) {
         m_id = size_t(-1);
         return false;

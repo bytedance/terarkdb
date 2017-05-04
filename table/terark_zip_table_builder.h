@@ -89,11 +89,6 @@ private:
     size_t valueFileBegin = 0;
     size_t valueFileEnd = 0;
   };
-  struct KeyValueOffset {
-    size_t key;
-    size_t value;
-    size_t type;
-  };
   void AddPrevUserKey(bool finish = false);
   void OfflineZipValueData();
   void UpdateValueLenHistogram();
@@ -104,7 +99,7 @@ private:
   void DebugPrepare();
   void DebugCleanup();
   void BuilderWriteValues(KeyValueStatus& kvs, std::function<void(fstring val)> write);
-  Status ReorderStore(TerarkIndex* index, BlobStore* store
+  Status WriteStore(TerarkIndex* index, BlobStore* store
     , KeyValueStatus& kvs, std::function<void(const void*, size_t)> write
     , BlockHandle dataBlock
     , long long& t5, long long& t6, long long& t7);
