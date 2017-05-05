@@ -484,6 +484,8 @@ public:
 };
 #endif
 
+#if defined(TerocksPrivateCode)
+
 template<bool reverse>
 class TerarkZipTableMultiIterator : public TerarkZipTableIterator<reverse> {
 public:
@@ -638,6 +640,8 @@ protected:
     interKeyBuf_xx_.assign((byte_t*)interKeyBuf_.data(), interKeyBuf_.size());
   }
 };
+
+#endif // TerocksPrivateCode
 
 Status rocksdb::TerarkZipTableTombstone::
 LoadTombstone(RandomAccessFileReader * file, uint64_t file_size) {
@@ -1017,6 +1021,8 @@ TerarkZipTableReader::TerarkZipTableReader(const TableReaderOptions& tro,
   isReverseBytewiseOrder_ = false;
 }
 
+#if defined(TerocksPrivateCode)
+
 fstring TerarkZipTableMultiReader::SegmentIndex::PartIndexOperator::operator[](size_t i) const {
   return fstring(p->prefixSet_.data() + i * p->alignedPrefixLen_, p->prefixLen_);
 };
@@ -1337,5 +1343,7 @@ rocksdb::TerarkZipTableMultiReader::Open(RandomAccessFileReader* file, uint64_t 
   );
   return Status::OK();
 }
+
+#endif // TerocksPrivateCode
 
 }

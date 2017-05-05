@@ -541,6 +541,8 @@ bool IsBytewiseComparator(const Comparator* cmp) {
 #endif
 }
 
+#if defined(TerocksPrivateCode)
+
 inline static
 size_t GetFixedPrefixLen(const SliceTransform* tr) {
   if (tr == nullptr) {
@@ -553,6 +555,8 @@ size_t GetFixedPrefixLen(const SliceTransform* tr) {
   }
   return terark::lcast(trName.substr(namePrefix.size()));
 }
+
+#endif // TerocksPrivateCode
 
 Status
 TerarkZipTableFactory::NewTableReader(
@@ -596,7 +600,7 @@ TerarkZipTableFactory::NewTableReader(
       "all index and data will be loaded in memory\n");
   }
 #endif
-  BlockContents emptyTableBC, offsetBC;
+  BlockContents emptyTableBC;
   s = ReadMetaBlock(file.get(), file_size, kTerarkZipTableMagicNumber
     , table_reader_options.ioptions, kTerarkEmptyTableKey, &emptyTableBC);
   if (s.ok()) {
@@ -609,6 +613,8 @@ TerarkZipTableFactory::NewTableReader(
     *table = std::move(t);
     return s;
   }
+#if defined(TerocksPrivateCode)
+  BlockContents offsetBC;
   s = ReadMetaBlock(file.get(), file_size, kTerarkZipTableMagicNumber
     , table_reader_options.ioptions, kTerarkZipTableOffsetBlock, &offsetBC);
   if (s.ok()) {
@@ -621,6 +627,7 @@ TerarkZipTableFactory::NewTableReader(
     *table = std::move(t);
     return s;
   }
+#endif // TerocksPrivateCode
   std::unique_ptr<TerarkZipTableReader>
     t(new TerarkZipTableReader(table_reader_options, table_options_));
   s = t->Open(file.release(), file_size);
@@ -648,7 +655,10 @@ TerarkZipTableFactory::NewTableBuilder(
   if (minlevel < 0) {
     minlevel = numlevel - 1;
   }
-  size_t keyPrefixLen = GetFixedPrefixLen(table_builder_options.ioptions.prefix_extractor);
+  size_t keyPrefixLen = 0;
+#if defined(TerocksPrivateCode)
+  keyPrefixLen = GetFixedPrefixLen(table_builder_options.ioptions.prefix_extractor);
+#endif // TerocksPrivateCode
 #if defined(TERARK_SUPPORT_UINT64_COMPARATOR) && BOOST_ENDIAN_LITTLE_BYTE
   if (fstring(userCmp->Name()) == "rocksdb.Uint64Comparator") {
     keyPrefixLen = 0;

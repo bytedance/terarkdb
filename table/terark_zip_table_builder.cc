@@ -503,12 +503,12 @@ Status TerarkZipTableBuilder::Finish() {
     waitQueue.trim(std::remove_if(waitQueue.begin(), waitQueue.end(),
       [this](PendingTask x) {return this == x.tztb; }));
   };
-  if (histogram_.size() == 1) {
-    return ZipValueToFinish(tmpIndexFile, waitIndex);
-  }
-  else {
+#if defined(TerocksPrivateCode)
+  if (histogram_.size() > 1) {
     return ZipValueToFinishMulti(tmpIndexFile, waitIndex);
   }
+#endif // TerocksPrivateCode
+  return ZipValueToFinish(tmpIndexFile, waitIndex);
 }
 
 Status
@@ -611,6 +611,8 @@ ZipValueToFinish(fstring tmpIndexFile, std::function<void()> waitIndex) {
   return WriteSSTFile(t3, t4, tmpIndexFile, store.get(), dictMem, dzstat);
 }
 
+#if defined(TerocksPrivateCode)
+
 Status TerarkZipTableBuilder::
 ZipValueToFinishMulti(fstring tmpIndexFile, std::function<void()> waitIndex) {
   DebugPrepare();
@@ -674,6 +676,8 @@ ZipValueToFinishMulti(fstring tmpIndexFile, std::function<void()> waitIndex) {
   waitIndex();
   return WriteSSTFileMulti(tmpIndexFile, tmpStoreFile, zbuilder->getDictMem(), dzstat);
 }
+
+#endif // TerocksPrivateCode
 
 void TerarkZipTableBuilder::DebugPrepare() {
   if (second_pass_iter_) {
@@ -1164,6 +1168,8 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
   return s;
 }
 
+#if defined(TerocksPrivateCode)
+
 Status TerarkZipTableBuilder::WriteSSTFileMulti(
   fstring tmpIndexFile,
   fstring tmpStoreFile,
@@ -1409,10 +1415,9 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(
 //, (g_sumKeyLen + g_sumValueLen - g_sumEntryNum * 8) / g_pf.uf(g_lastTime, t8)
 //);
   return s;
-
-
-  return Status::OK();
 }
+
+#endif // TerocksPrivateCode
 
 Status TerarkZipTableBuilder::WriteMetaData(std::initializer_list<std::pair<const std::string*, BlockHandle> > blocks) {
   MetaIndexBuilder metaindexBuiler;

@@ -95,7 +95,9 @@ private:
   Status EmptyTableFinish();
   Status OfflineFinish();
   Status ZipValueToFinish(fstring tmpIndexFile, std::function<void()> waitIndex);
+#if defined(TerocksPrivateCode)
   Status ZipValueToFinishMulti(fstring tmpIndexFile, std::function<void()> waitIndex);
+#endif // TerocksPrivateCode
   void DebugPrepare();
   void DebugCleanup();
   void BuilderWriteValues(NativeDataInput<InputBuffer>& tmpValueFileinput
@@ -108,10 +110,12 @@ private:
     , fstring tmpIndexFile, terark::BlobStore* zstore
     , fstring dictMem
     , const DictZipBlobStore::ZipStat& dzstat);
+#if defined(TerocksPrivateCode)
   Status WriteSSTFileMulti(fstring tmpIndexFile
     , fstring tmpStoreFilePrefix
     , fstring dictMem
     , const DictZipBlobStore::ZipStat& dzstat);
+#endif // TerocksPrivateCode
   Status WriteMetaData(std::initializer_list<std::pair<const std::string*, BlockHandle> > blocks);
   DictZipBlobStore::ZipBuilder* createZipBuilder() const;
 

@@ -25,7 +25,7 @@
 #include <terark/util/profiling.hpp>
 
 
-#define TERARK_SUPPORT_UINT64_COMPARATOR
+//#define TERARK_SUPPORT_UINT64_COMPARATOR
 //#define DEBUG_TWO_PASS_ITER
 
 
