@@ -98,10 +98,11 @@ private:
   Status ZipValueToFinishMulti(fstring tmpIndexFile, std::function<void()> waitIndex);
   void DebugPrepare();
   void DebugCleanup();
-  void BuilderWriteValues(KeyValueStatus& kvs, std::function<void(fstring val)> write);
+  void BuilderWriteValues(NativeDataInput<InputBuffer>& tmpValueFileinput
+    , KeyValueStatus& kvs, std::function<void(fstring val)> write);
   Status WriteStore(TerarkIndex* index, BlobStore* store
     , KeyValueStatus& kvs, std::function<void(const void*, size_t)> write
-    , BlockHandle dataBlock
+    , BlockHandle& dataBlock
     , long long& t5, long long& t6, long long& t7);
   Status WriteSSTFile(long long t3, long long t4
     , fstring tmpIndexFile, terark::BlobStore* zstore

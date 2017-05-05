@@ -176,7 +176,7 @@ struct TerarkZipMultiOffsetInfo {
   };
   size_t partCount_, prefixLen_;
   valvec<KeyValueOffset> offset_;
-  valvec<char> prefix_set_;
+  valvec<char> prefixSet_;
 
   static size_t calc_size(size_t prefixLen, size_t partCount);
   void Init(size_t prefixLen, size_t partCount);

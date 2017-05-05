@@ -44,6 +44,8 @@ protected:
 public:
   virtual InternalIterator*
     NewRangeTombstoneIterator(const ReadOptions& read_options);
+
+  virtual ~TerarkZipTableTombstone() {}
 };
 
 class TerarkEmptyTableReader
@@ -88,7 +90,7 @@ public:
   void SetupForCompaction() override {}
   std::shared_ptr<const TableProperties>
     GetTableProperties() const override { return table_properties_; }
-  ~TerarkEmptyTableReader() {}
+  virtual ~TerarkEmptyTableReader() {}
   TerarkEmptyTableReader(const TableReaderOptions& o)
     : table_reader_options_(o)
     , global_seqno_(kDisableGlobalSequenceNumber) {
@@ -105,7 +107,7 @@ private:
 
 struct TerarkZipSegment {
   size_t segmentIndex_;
-  fstring prefix_;
+  std::string prefix_;
   unique_ptr<TerarkIndex> index_;
   unique_ptr<terark::BlobStore> store_;
   bitfield_array<2> type_;
@@ -120,7 +122,7 @@ struct TerarkZipSegment {
   };
 
   Status Get(SequenceNumber, const ReadOptions&, const Slice& key,
-    GetContext*, int flag);
+    GetContext*, int flag) const;
 
   ~TerarkZipSegment();
 };
@@ -153,7 +155,7 @@ public:
 
   size_t ApproximateMemoryUsage() const override { return file_data_.size(); }
 
-  ~TerarkZipTableReader();
+  virtual ~TerarkZipTableReader();
   TerarkZipTableReader(const TableReaderOptions&, const TerarkZipTableOptions&);
   Status Open(RandomAccessFileReader* file, uint64_t file_size);
 
@@ -204,7 +206,7 @@ public:
 
   size_t ApproximateMemoryUsage() const override { return file_data_.size(); }
 
-  ~TerarkZipTableMultiReader();
+  virtual ~TerarkZipTableMultiReader();
   TerarkZipTableMultiReader(const TableReaderOptions&, const TerarkZipTableOptions&);
   Status Open(RandomAccessFileReader* file, uint64_t file_size);
 
@@ -213,7 +215,7 @@ public:
     size_t partCount_;
     size_t prefixLen_;
     size_t alignedPrefixLen_;
-    valvec<byte_t> prefix_set_;
+    valvec<byte_t> prefixSet_;
     valvec<TerarkZipSegment> segments_;
 
     struct PartIndexOperator {
@@ -224,7 +226,6 @@ public:
     const TerarkZipSegment* (SegmentIndex::*get_segment_ptr)(fstring) const;
 
     const TerarkZipSegment* GetSegmentU64Sequential(fstring key) const;
-    const TerarkZipSegment* GetSegmentU64SequentialReverse(fstring key) const;
     const TerarkZipSegment* GetSegmentU64Binary(fstring key) const;
     const TerarkZipSegment* GetSegmentU64BinaryReverse(fstring key) const;
     const TerarkZipSegment* GetSegmentBytewise(fstring key) const;
@@ -255,9 +256,6 @@ private:
   SequenceNumber global_seqno_;
   const TerarkZipTableOptions& tzto_;
   bool isReverseBytewiseOrder_;
-#if defined(TERARK_SUPPORT_UINT64_COMPARATOR) && BOOST_ENDIAN_LITTLE_BYTE
-  bool isUint64Comparator_;
-#endif
 };
 
 }  // namespace rocksdb

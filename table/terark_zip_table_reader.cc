@@ -142,13 +142,19 @@ public:
     , const TerarkZipSegment *segment
     , SequenceNumber global_seqno)
     : table_reader_options_(&tro)
-    , segment_(segment_)
+    , segment_(segment)
     , global_seqno_(global_seqno) {
     if (segment_ != nullptr) {
       iter_.reset(segment_->index_->NewIterator());
+      iter_->SetInvalid();
     }
     pinned_iters_mgr_ = NULL;
-    SetIterInvalid();
+    TryPinBuffer(interKeyBuf_xx_);
+    validx_ = 0;
+    valnum_ = 0;
+    pInterKey_.user_key = Slice();
+    pInterKey_.sequence = uint64_t(-1);
+    pInterKey_.type = kMaxValue;
   }
 
   void SetPinnedItersMgr(PinnedIteratorsManager* pinned_iters_mgr) {
@@ -220,22 +226,25 @@ public:
       }
     }
     else {
-      bool ok = iter_->Seek(fstringOf(pikey.user_key).substr(cplen));
+      bool ok;
       int cmp; // compare(iterKey, searchKey)
-      if (!ok) { // searchKey is bytewise greater than all keys in database
-        if (reverse) {
+      if (reverse) {
+        ok = iter_->Seek(fstringOf(pikey.user_key).substr(cplen));
+        if (!ok) {
           // searchKey is reverse_bytewise less than all keys in database
           iter_->SeekToLast();
           ok = iter_->Valid();
+          cmp = -1;
         }
-        cmp = -1;
-      }
-      else { // now iter is at bytewise lower bound position
-        cmp = SliceOf(iter_->key()).compare(SubStr(pikey.user_key, cplen));
-        assert(cmp >= 0); // iterKey >= searchKey
-        if (cmp > 0 && reverse) {
+        else if ((cmp = SliceOf(iter_->key()).compare(SubStr(pikey.user_key, cplen))) != 0) {
           iter_->Prev();
           ok = iter_->Valid();
+        }
+      }
+      else {
+        ok = iter_->Seek(fstringOf(pikey.user_key).substr(cplen));
+        if (ok) {
+          cmp = SliceOf(iter_->key()).compare(SubStr(pikey.user_key, cplen));
         }
       }
       if (UnzipIterRecord(ok)) {
@@ -500,12 +509,38 @@ public:
       SetIterInvalid();
       return;
     }
-    segment_ = segmentIndex_->GetSegment(fstringOf(pikey.user_key));
-    if (segment_ == nullptr) {
+    auto segment = segmentIndex_->GetSegment(fstringOf(pikey.user_key));
+    if (segment == nullptr) {
       SetIterInvalid();
+      return;
     }
-    pikey.user_key.remove_prefix(std::min(segment_->prefix_.size(), pikey.user_key.size()));
+    pikey.user_key.remove_prefix(std::min(segment->prefix_.size(), pikey.user_key.size()));
+    if (segment != segment_) {
+      segment_ = segment;
+      iter_.reset(segment_->index_->NewIterator());
+    }
     SeekInternal(pikey);
+    if (!Valid()) {
+      if (reverse) {
+        if (segment->segmentIndex_ != 0) {
+          segment_ = segmentIndex_->GetSegment(segment->segmentIndex_ - 1);
+          iter_.reset(segment_->index_->NewIterator());
+          if (UnzipIterRecord(iter_->SeekToLast())) {
+            validx_ = valnum_ - 1;
+            DecodeCurrKeyValue();
+          }
+        }
+      }
+      else {
+        if (segment->segmentIndex_ != segmentIndex_->GetSegmentCount() - 1) {
+          segment_ = segmentIndex_->GetSegment(segment->segmentIndex_ + 1);
+          iter_.reset(segment_->index_->NewIterator());
+          if (UnzipIterRecord(iter_->SeekToFirst())) {
+            DecodeCurrKeyValue();
+          }
+        }
+      }
+    }
   }
 
 protected:
@@ -551,23 +586,23 @@ protected:
       if (iter_->Next()) {
         return true;
       }
-      if (segment_->segmentIndex_ == 0) {
-        return false;
-      }
-      segment_ = segmentIndex_->GetSegment(segment_->segmentIndex_ - 1);
-      iter_.reset(segment_->index_->NewIterator());
-      return iter_->SeekToLast();
-    }
-    else {
-      if (iter_->Prev()) {
-        return true;
-      }
       if (segment_->segmentIndex_ == segmentIndex_->GetSegmentCount() - 1) {
         return false;
       }
       segment_ = segmentIndex_->GetSegment(segment_->segmentIndex_ + 1);
       iter_.reset(segment_->index_->NewIterator());
       return iter_->SeekToFirst();
+    }
+    else {
+      if (iter_->Prev()) {
+        return true;
+      }
+      if (segment_->segmentIndex_ == 0) {
+        return false;
+      }
+      segment_ = segmentIndex_->GetSegment(segment_->segmentIndex_ - 1);
+      iter_.reset(segment_->index_->NewIterator());
+      return iter_->SeekToLast();
     }
   }
   bool IndexIterNext() override {
@@ -576,23 +611,23 @@ protected:
       if (iter_->Prev()) {
         return true;
       }
-      if (segment_->segmentIndex_ == segmentIndex_->GetSegmentCount() - 1) {
-        return false;
-      }
-      segment_ = segmentIndex_->GetSegment(segment_->segmentIndex_ + 1);
-      iter_.reset(segment_->index_->NewIterator());
-      return iter_->SeekToFirst();
-    }
-    else {
-      if (iter_->Next()) {
-        return true;
-      }
       if (segment_->segmentIndex_ == 0) {
         return false;
       }
       segment_ = segmentIndex_->GetSegment(segment_->segmentIndex_ - 1);
       iter_.reset(segment_->index_->NewIterator());
       return iter_->SeekToLast();
+    }
+    else {
+      if (iter_->Next()) {
+        return true;
+      }
+      if (segment_->segmentIndex_ == segmentIndex_->GetSegmentCount() - 1) {
+        return false;
+      }
+      segment_ = segmentIndex_->GetSegment(segment_->segmentIndex_ + 1);
+      iter_.reset(segment_->index_->NewIterator());
+      return iter_->SeekToFirst();
     }
   }
   void DecodeCurrKeyValue() override {
@@ -631,7 +666,7 @@ NewRangeTombstoneIterator(const ReadOptions & read_options) {
 
 
 Status TerarkZipSegment::Get(SequenceNumber global_seqno, const ReadOptions& ro, const Slice& ikey,
-  GetContext* get_context, int flag) {
+  GetContext* get_context, int flag) const {
   (void)flag;
   MY_THREAD_LOCAL(valvec<byte_t>, g_tbuf);
   ParsedInternalKey pikey;
@@ -652,7 +687,8 @@ Status TerarkZipSegment::Get(SequenceNumber global_seqno, const ReadOptions& ro,
   if (commonPrefix_.size() != cplen) {
     return Status::OK();
   }
-  size_t recId = index_->Find(fstringOf(user_key).substr(cplen));
+  assert(user_key.size() > prefix_.size());
+  size_t recId = index_->Find(fstringOf(user_key).substr(cplen + prefix_.size()));
   if (size_t(-1) == recId) {
     return Status::OK();
   }
@@ -960,7 +996,7 @@ NewIterator(const ReadOptions& ro, Arena* arena, bool skip_filters) {
 Status
 TerarkZipTableReader::Get(const ReadOptions& ro, const Slice& ikey,
   GetContext* get_context, bool skip_filters) {
-  int flag = TerarkZipSegment::FlagNone;
+  int flag = skip_filters ? TerarkZipSegment::FlagSkipFilter : TerarkZipSegment::FlagNone;
 #if defined(TERARK_SUPPORT_UINT64_COMPARATOR) && BOOST_ENDIAN_LITTLE_BYTE
   if (isUint64Comparator_) {
     flag |= TerarkZipSegment::FlagUint64Comparator;
@@ -982,30 +1018,17 @@ TerarkZipTableReader::TerarkZipTableReader(const TableReaderOptions& tro,
 }
 
 fstring TerarkZipTableMultiReader::SegmentIndex::PartIndexOperator::operator[](size_t i) const {
-  return fstring(p->prefix_set_.data() + i * p->alignedPrefixLen_, p->prefixLen_);
+  return fstring(p->prefixSet_.data() + i * p->alignedPrefixLen_, p->prefixLen_);
 };
 
 const TerarkZipSegment* TerarkZipTableMultiReader::SegmentIndex::GetSegmentU64Sequential(fstring key) const {
   byte_t targetBuffer[8] = {};
   memcpy(targetBuffer + (8 - prefixLen_), key.data(), std::min<size_t>(prefixLen_, key.size()));
   uint64_t targetValue = ReadUint64Aligned(targetBuffer, targetBuffer + 8);
-  auto ptr = (const uint64_t*)prefix_set_.data();
+  auto ptr = (const uint64_t*)prefixSet_.data();
   size_t count = partCount_;
   for (size_t i = 0; i < count; ++i) {
     if (ptr[i] >= targetValue) {
-      return &segments_[i];
-    }
-  }
-  return nullptr;
-}
-const TerarkZipSegment* TerarkZipTableMultiReader::SegmentIndex::GetSegmentU64SequentialReverse(fstring key) const {
-  byte_t targetBuffer[8] = {};
-  memcpy(targetBuffer + (8 - prefixLen_), key.data(), std::min<size_t>(prefixLen_, key.size()));
-  uint64_t targetValue = ReadUint64Aligned(targetBuffer, targetBuffer + 8);
-  auto ptr = (const uint64_t*)prefix_set_.data();
-  size_t count = partCount_;
-  for (size_t i = count - 1; i != size_t(-1); --i) {
-    if (ptr[i] <= targetValue) {
       return &segments_[i];
     }
   }
@@ -1016,7 +1039,7 @@ const TerarkZipSegment* TerarkZipTableMultiReader::SegmentIndex::GetSegmentU64Bi
   byte_t targetBuffer[8] = {};
   memcpy(targetBuffer + (8 - prefixLen_), key.data(), std::min<size_t>(prefixLen_, key.size()));
   uint64_t targetValue = ReadUint64Aligned(targetBuffer, targetBuffer + 8);
-  auto ptr = (const uint64_t*)prefix_set_.data();
+  auto ptr = (const uint64_t*)prefixSet_.data();
   auto index = terark::lower_bound_n(ptr, 0, partCount_, targetValue);
   if (index == partCount_) {
     return nullptr;
@@ -1028,12 +1051,12 @@ const TerarkZipSegment* TerarkZipTableMultiReader::SegmentIndex::GetSegmentU64Bi
   byte_t targetBuffer[8] = {};
   memcpy(targetBuffer + (8 - prefixLen_), key.data(), std::min<size_t>(prefixLen_, key.size()));
   uint64_t targetValue = ReadUint64Aligned(targetBuffer, targetBuffer + 8);
-  auto ptr = (const uint64_t*)prefix_set_.data();
-  auto index = terark::rev_lower_bound_n(ptr, 0, partCount_, targetValue);
-  if (index == partCount_) {
+  auto ptr = (const uint64_t*)prefixSet_.data();
+  auto index = terark::upper_bound_n(ptr, 0, partCount_, targetValue);
+  if (index == 0) {
     return nullptr;
   }
-  return &segments_[index];
+  return &segments_[index - 1];
 }
 
 const TerarkZipSegment* TerarkZipTableMultiReader::SegmentIndex::GetSegmentBytewise(fstring key) const {
@@ -1053,11 +1076,11 @@ const TerarkZipSegment* TerarkZipTableMultiReader::SegmentIndex::GetSegmentBytew
     key = fstring(key.data(), prefixLen_);
   }
   PartIndexOperator ptr = {this};
-  auto index = terark::rev_lower_bound_n(ptr, 0, partCount_, key);
-  if (index == partCount_) {
+  auto index = terark::upper_bound_n(ptr, 0, partCount_, key);
+  if (index == 0) {
     return nullptr;
   }
-  return &segments_[index];
+  return &segments_[index - 1];
 }
 
 Status TerarkZipTableMultiReader::SegmentIndex::Init(
@@ -1080,22 +1103,21 @@ Status TerarkZipTableMultiReader::SegmentIndex::Init(
   partCount_ = offset.partCount_;
   prefixLen_ = offset.prefixLen_;
   alignedPrefixLen_ = terark::align_up(prefixLen_, 8);
-  prefix_set_.resize(alignedPrefixLen_ * partCount_);
+  prefixSet_.resize(alignedPrefixLen_ * partCount_);
 
   if (prefixLen_ <= 8) {
     for (size_t i = 0; i < partCount_; ++i) {
-      auto u64p = (uint64_t*)prefix_set_.data() + i * alignedPrefixLen_;
-      *u64p = ReadUint64((const byte_t *)offset.prefix_set_.data() + i * prefixLen_,
-        (const byte_t *)offset.prefix_set_.data() + (i + 1) * prefixLen_);
+      auto u64p = (uint64_t*)(prefixSet_.data() + i * alignedPrefixLen_);
+      auto src = (const byte_t *)offset.prefixSet_.data() + i * prefixLen_;
+      *u64p = ReadUint64(src, src + prefixLen_);
     }
-    get_segment_ptr = partCount_ < 32
-      ? (reverse ? &SegmentIndex::GetSegmentU64SequentialReverse : &SegmentIndex::GetSegmentU64Sequential)
-      : (reverse ? &SegmentIndex::GetSegmentU64BinaryReverse     : &SegmentIndex::GetSegmentU64Binary    );
+    get_segment_ptr = reverse ? &SegmentIndex::GetSegmentU64BinaryReverse :
+      partCount_ < 32 ? &SegmentIndex::GetSegmentU64Sequential : &SegmentIndex::GetSegmentU64Binary;
   }
   else {
     for (size_t i = 0; i < partCount_; ++i) {
-      memcpy(prefix_set_.data() + i * alignedPrefixLen_,
-        offset.prefix_set_.data() + i * prefixLen_, prefixLen_);
+      memcpy(prefixSet_.data() + i * alignedPrefixLen_,
+        offset.prefixSet_.data() + i * prefixLen_, prefixLen_);
     }
     get_segment_ptr = reverse ? &SegmentIndex::GetSegmentBytewiseReverse : &SegmentIndex::GetSegmentBytewise;
   }
@@ -1107,7 +1129,7 @@ Status TerarkZipTableMultiReader::SegmentIndex::Init(
       auto& part = segments_.back();
       auto& curr = offset.offset_[i];
       part.segmentIndex_ = i;
-      part.prefix_ = fstring(prefix_set_.data() + i * alignedPrefixLen_, prefixLen_);
+      part.prefix_.assign(offset.prefixSet_.data() + i * prefixLen_, prefixLen_);
       part.index_ = TerarkIndex::LoadMemory({indexMempry.data() + last.key,
         ptrdiff_t(curr.key - last.key)});
       part.store_.reset(BlobStore::load_from_user_memory({storeMemory.data() +
@@ -1143,7 +1165,7 @@ InternalIterator* TerarkZipTableMultiReader::NewIterator(const ReadOptions &,
   (void)skip_filters; // unused
   if (isReverseBytewiseOrder_) {
     if (arena) {
-      return new(arena->AllocateAligned(sizeof(TerarkZipTableIterator<true>)))
+      return new(arena->AllocateAligned(sizeof(TerarkZipTableMultiIterator<true>)))
         TerarkZipTableMultiIterator<true>(table_reader_options_, segmentIndex_, global_seqno_);
     }
     else {
@@ -1152,7 +1174,7 @@ InternalIterator* TerarkZipTableMultiReader::NewIterator(const ReadOptions &,
   }
   else {
     if (arena) {
-      return new(arena->AllocateAligned(sizeof(TerarkZipTableIterator<false>)))
+      return new(arena->AllocateAligned(sizeof(TerarkZipTableMultiIterator<false>)))
         TerarkZipTableMultiIterator<false>(table_reader_options_, segmentIndex_, global_seqno_);
     }
     else {
@@ -1164,8 +1186,17 @@ InternalIterator* TerarkZipTableMultiReader::NewIterator(const ReadOptions &,
 Status
 TerarkZipTableMultiReader::Get(const ReadOptions& ro, const Slice& ikey,
   GetContext* get_context, bool skip_filters) {
-
-  return Status();
+  int flag = skip_filters ? TerarkZipSegment::FlagSkipFilter : TerarkZipSegment::FlagNone;
+  ParsedInternalKey pikey;
+  if (ikey.size() < 8 + pikey.user_key.size()) {
+    return Status::InvalidArgument("TerarkZipTableMultiReader::Get()",
+      "param target.size() < 8");
+  }
+  auto segment = segmentIndex_.GetSegment(fstringOf(ikey).substr(0, ikey.size() - 8));
+  if (segment == nullptr) {
+    Status::OK();
+  }
+  return segment->Get(global_seqno_, ro, ikey, get_context, flag);
 }
 
 TerarkZipTableMultiReader::~TerarkZipTableMultiReader() {
@@ -1208,8 +1239,7 @@ rocksdb::TerarkZipTableMultiReader::Open(RandomAccessFileReader* file, uint64_t 
   isReverseBytewiseOrder_ =
     fstring(ioptions.user_comparator->Name()).startsWith("rev:");
 #if defined(TERARK_SUPPORT_UINT64_COMPARATOR) && BOOST_ENDIAN_LITTLE_BYTE
-  isUint64Comparator_ =
-    fstring(ioptions.user_comparator->Name()) == "rocksdb.Uint64Comparator";
+  assert(fstring(ioptions.user_comparator->Name()) != "rocksdb.Uint64Comparator");
 #endif
   BlockContents valueDictBlock, indexBlock, zValueTypeBlock, commonPrefixBlock;
   BlockContents offsetBlock;

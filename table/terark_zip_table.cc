@@ -431,12 +431,12 @@ void TerarkZipMultiOffsetInfo::Init(size_t prefixLen, size_t partCount) {
   prefixLen_ = prefixLen;
   partCount_ = partCount;
   offset_.resize_no_init(partCount);
-  prefix_set_.resize_no_init(prefixLen * partCount);
+  prefixSet_.resize_no_init(prefixLen * partCount);
 }
 
 void TerarkZipMultiOffsetInfo::set(size_t i, fstring p, size_t k, size_t v, size_t t, size_t c) {
   assert(p.size() == prefixLen_);
-  memcpy(prefix_set_.data() + i * prefixLen_, p.data(), p.size());
+  memcpy(prefixSet_.data() + i * prefixLen_, p.data(), p.size());
   offset_[i].key = k;
   offset_[i].value = v;
   offset_[i].type = t;
@@ -455,14 +455,14 @@ valvec<byte_t> TerarkZipMultiOffsetInfo::dump() {
   push(&partCount_, 8);
   push(&prefixLen_, 8);
   push(offset_.data(), offset_.size() * sizeof(KeyValueOffset));
-  push(prefix_set_.data(), prefix_set_.size());
+  push(prefixSet_.data(), prefixSet_.size());
   memset(ret.data() + offset, 0, size - offset);
   return ret;
 }
 
 bool TerarkZipMultiOffsetInfo::risk_set_memory(const void* p, size_t s) {
   offset_.clear();
-  prefix_set_.clear();
+  prefixSet_.clear();
   if (s < 16) {
     return false;
   }
@@ -472,14 +472,15 @@ bool TerarkZipMultiOffsetInfo::risk_set_memory(const void* p, size_t s) {
   if (s != calc_size(prefixLen_, partCount_)) {
     return false;
   }
-  offset_.risk_set_data((KeyValueOffset*)src + 16, partCount_);
-  prefix_set_.risk_set_data((char*)src + 16 + partCount_ * sizeof(KeyValueOffset),
+  offset_.risk_set_data((KeyValueOffset*)(src + 16), partCount_);
+  prefixSet_.risk_set_data((char*)src + 16 + partCount_ * sizeof(KeyValueOffset),
     prefixLen_ * partCount_);
   return true;
 }
 
 void TerarkZipMultiOffsetInfo::risk_release_ownership() {
-
+  offset_.risk_release_ownership();
+  prefixSet_.risk_release_ownership();
 }
 
 class TableFactory*
@@ -648,6 +649,11 @@ TerarkZipTableFactory::NewTableBuilder(
     minlevel = numlevel - 1;
   }
   size_t keyPrefixLen = GetFixedPrefixLen(table_builder_options.ioptions.prefix_extractor);
+#if defined(TERARK_SUPPORT_UINT64_COMPARATOR) && BOOST_ENDIAN_LITTLE_BYTE
+  if (fstring(userCmp->Name()) == "rocksdb.Uint64Comparator") {
+    keyPrefixLen = 0;
+  }
+#endif
 #if 1
   INFO(table_builder_options.ioptions.info_log
     , "nth_newtable{ terark = %3zd fallback = %3zd } curlevel = %d minlevel = %d numlevel = %d fallback = %p\n"

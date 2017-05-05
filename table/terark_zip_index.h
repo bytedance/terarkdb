@@ -3,6 +3,8 @@
 #include <terark/fstring.hpp>
 #include <terark/valvec.hpp>
 #include <terark/util/refcount.hpp>
+#include <terark/io/DataIO.hpp>
+#include <terark/io/StreamBuffer.hpp>
 #include <boost/intrusive_ptr.hpp>
 #include <memory>
 
@@ -11,6 +13,8 @@ namespace rocksdb {
 using terark::fstring;
 using terark::valvec;
 using terark::byte_t;
+using terark::NativeDataInput;
+using terark::InputBuffer;
 using std::unique_ptr;
 
 struct TerarkZipTableOptions;
@@ -45,7 +49,7 @@ public:
   class Factory : public terark::RefCounter {
   public:
     virtual ~Factory();
-    virtual void Build(TempFileDeleteOnClose& tmpKeyFile,
+    virtual void Build(NativeDataInput<InputBuffer>& tmpKeyFileReader,
                        const TerarkZipTableOptions& tzopt,
                        std::function<void(const void *, size_t)> write,
                        KeyStat&) const = 0;

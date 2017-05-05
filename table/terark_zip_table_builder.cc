@@ -245,6 +245,12 @@ void TerarkZipTableBuilder::Add(const Slice& key, const Slice& value) {
       }
     }
     else {
+      if (terark_unlikely(histogram_.empty())) {
+        t0 = g_pf.now();
+      }
+      else {
+        AddPrevUserKey(true);
+      }
       histogram_.emplace_back();
       auto& currentHistogram = histogram_.back();
       currentHistogram.prefix.assign(userKey.data(), key_prefixLen_);
@@ -256,9 +262,6 @@ void TerarkZipTableBuilder::Add(const Slice& key, const Slice& value) {
       currentHistogram.stat.numKeys = 0;
       currentHistogram.stat.minKey.assign(userKey);
       prevUserKey_.assign(userKey);
-      if (terark_unlikely(histogram_.empty())) {
-        t0 = g_pf.now();
-      }
     }
     valueBits_.push_back(true);
     valueBuf_.emplace_back(key.data() + key_prefixLen_ + userKey.size(), 8);
@@ -443,6 +446,7 @@ Status TerarkZipTableBuilder::Finish() {
   {
     size_t fileOffset = 0;
     FileStream writer(tmpIndexFile, "wb+");
+    NativeDataInput<InputBuffer> tempKeyFileReader(&tmpKeyFile_.fp);
     for (size_t i = 0; i < histogram_.size(); ++i) {
       auto& keyStat = histogram_[i].stat;
       auto factory = TerarkIndex::SelectFactory(keyStat, table_options_.indexType);
@@ -461,12 +465,12 @@ Status TerarkZipTableBuilder::Finish() {
 
       long long t1 = g_pf.now();
       histogram_[i].keyFileBegin = fileOffset;
-      factory->Build(tmpKeyFile_, table_options_, [&fileOffset, &writer](const void* data, size_t size) {
+      factory->Build(tempKeyFileReader, table_options_, [&fileOffset, &writer](const void* data, size_t size) {
         fileOffset += size;
         writer.ensureWrite(data, size);
       }, keyStat);
       histogram_[i].keyFileEnd = fileOffset;
-      assert((fileOffset - histogram_[i].keyFileBegin) % 16 == 0);
+      assert((fileOffset - histogram_[i].keyFileBegin) % 8 == 0);
       long long tt = g_pf.now();
       INFO(ioptions_.info_log
         , "TerarkZipTableBuilder::Finish():this=%p:  index pass time =%7.2f's, %8.3f'MB/sec\n"
@@ -513,6 +517,7 @@ ZipValueToFinish(fstring tmpIndexFile, std::function<void()> waitIndex) {
   DebugPrepare();
   assert(histogram_.size() == 1);
   AutoDeleteFile tmpStoreFile{tmpValueFile_.path + ".zbs"};
+  NativeDataInput<InputBuffer> input(&tmpValueFile_.fp);
   auto& kvs = histogram_.front();
   fstring dictMem;
   std::unique_ptr<DictZipBlobStore::ZipBuilder> zbuilder;
@@ -532,7 +537,7 @@ ZipValueToFinish(fstring tmpIndexFile, std::function<void()> waitIndex) {
     if (4 * variaNum + kvs.stat.numKeys * 5 / 4 < 4 * kvs.stat.numKeys) {
       // use MixedLenBlobStore
       auto builder = UniquePtrOf(new terark::MixedLenBlobStore::Builder(fixedLen));
-      BuilderWriteValues(kvs, [&](fstring value) {builder->add_record(value); });
+      BuilderWriteValues(input, kvs, [&](fstring value) {builder->add_record(value); });
       store.reset(builder->finish());
     }
     else {
@@ -540,7 +545,7 @@ ZipValueToFinish(fstring tmpIndexFile, std::function<void()> waitIndex) {
       auto plain = new terark::PlainBlobStore();
       store.reset(plain);
       plain->reset_with_content_size(kvs.value.m_totla_key_len);
-      BuilderWriteValues(kvs, [&](fstring value) {plain->add_record(value); });
+      BuilderWriteValues(input, kvs, [&](fstring value) {plain->add_record(value); });
       plain->finish();
     }
     t4 = g_pf.now();
@@ -590,7 +595,7 @@ ZipValueToFinish(fstring tmpIndexFile, std::function<void()> waitIndex) {
       zbuilder->prepare(kvs.stat.numKeys, tmpStoreFile);
     }
 
-    BuilderWriteValues(kvs, [&](fstring value) {zbuilder->addRecord(value); });
+    BuilderWriteValues(input, kvs, [&](fstring value) {zbuilder->addRecord(value); });
 
     DictZipBlobStore* zstore;
     store.reset(zstore = zbuilder->finish(
@@ -598,7 +603,7 @@ ZipValueToFinish(fstring tmpIndexFile, std::function<void()> waitIndex) {
     dzstat = zbuilder->getZipStat();
 
     t4 = g_pf.now();
-    dictMem = zstore->get_dict();
+    dictMem = zbuilder->getDictMem();
   }
   DebugCleanup();
   // wait for indexing complete, if indexing is slower than value compressing
@@ -610,9 +615,9 @@ Status TerarkZipTableBuilder::
 ZipValueToFinishMulti(fstring tmpIndexFile, std::function<void()> waitIndex) {
   DebugPrepare();
   assert(histogram_.size() > 1);
-  std::string tmpStoreFile{tmpValueFile_.path + ".zbs"};
+  AutoDeleteFile tmpStoreFile{tmpValueFile_.path + ".zbs"};
+  NativeDataInput<InputBuffer> input(&tmpValueFile_.fp);
   auto& kvs = histogram_.front();
-  fstring dictMem;
   auto zbuilder = UniquePtrOf(this->createZipBuilder());
   std::unique_ptr<terark::BlobStore> store;
   DictZipBlobStore::ZipStat dzstat;
@@ -655,19 +660,19 @@ ZipValueToFinishMulti(fstring tmpIndexFile, std::function<void()> waitIndex) {
     auto& kvs = histogram_[i];
     kvs.valueFileBegin = fileOffset;
     zbuilder->prepare(kvs.stat.numKeys, tmpStoreFile, fileOffset);
-    BuilderWriteValues(kvs, [&](fstring value) {zbuilder->addRecord(value); });
+    BuilderWriteValues(input, kvs, [&](fstring value) {zbuilder->addRecord(value); });
     auto store = zbuilder->finish(DictZipBlobStore::ZipBuilder::FinishWithoutReload);
     assert(store == nullptr);
     (void)store; // shut up !
-    fileOffset = FileStream(tmpStoreFile.c_str(), "rb+").fsize();
+    fileOffset = FileStream(tmpStoreFile.fpath.c_str(), "rb+").fsize();
     kvs.valueFileEnd = fileOffset;
-    assert((kvs.valueFileEnd - kvs.valueFileBegin) % 16 == 0);
+    assert((kvs.valueFileEnd - kvs.valueFileBegin) % 8 == 0);
   }
-  zbuilder->free_dict();
+  zbuilder->freeDict();
   DebugCleanup();
   // wait for indexing complete, if indexing is slower than value compressing
   waitIndex();
-  return WriteSSTFileMulti(tmpIndexFile, tmpStoreFile, dictMem, dzstat);
+  return WriteSSTFileMulti(tmpIndexFile, tmpStoreFile, zbuilder->getDictMem(), dzstat);
 }
 
 void TerarkZipTableBuilder::DebugPrepare() {
@@ -697,12 +702,12 @@ void TerarkZipTableBuilder::DebugCleanup() {
 }
 
 void
-TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<void(fstring)> write) {
+TerarkZipTableBuilder::BuilderWriteValues(NativeDataInput<InputBuffer>& input, 
+  KeyValueStatus& kvs, std::function<void(fstring)> write) {
   auto& bzvType = kvs.type;
   bzvType.resize(kvs.stat.numKeys);
   if (nullptr == second_pass_iter_)
   {
-    NativeDataInput<InputBuffer> input(&tmpValueFile_.fp);
     valvec<byte_t> value;
 #if defined(TERARK_ZIP_TRIAL_VERSION)
     valvec<byte_t> tmpValueBuf;
@@ -911,7 +916,7 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
 
 Status TerarkZipTableBuilder::WriteStore(TerarkIndex* index, terark::BlobStore* store
   , KeyValueStatus& kvs, std::function<void(const void*, size_t)> writeAppend
-  , BlockHandle dataBlock
+  , BlockHandle& dataBlock
   , long long& t5, long long& t6, long long& t7) {
   auto& keyStat = kvs.stat;
   auto& bzvType = kvs.type;
@@ -1024,7 +1029,10 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
   if (!s.ok()) {
     return s;
   }
-  fstring commonPrefix(prevUserKey_.data(), keyStat.commonPrefixLen);
+  std::string commonPrefix;
+  commonPrefix.reserve(key_prefixLen_ + keyStat.commonPrefixLen);
+  commonPrefix.append(kvs.prefix.data(), kvs.prefix.size());
+  commonPrefix.append((const char*)prevUserKey_.data(), keyStat.commonPrefixLen);
   WriteBlock(commonPrefix, file_, &offset_, &commonPrefixBlock);
   properties_.data_size = dataBlock.size();
   s = WriteBlock(dictMem, file_, &offset_, &dictBlock);
@@ -1162,14 +1170,11 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(
   fstring dictMem,
   const DictZipBlobStore::ZipStat& dzstat) {
   assert(histogram_.size() > 1);
-  auto& kvs = histogram_.front();
-  auto& keyStat = kvs.stat;
-  auto& bzvType = kvs.type;
   const size_t realsampleLenSum = dictMem.size();
   long long rawBytes = properties_.raw_key_size + properties_.raw_value_size;
   long long t5 = g_pf.now();
   terark::MmapWholeFile mmapIndexFile(tmpIndexFile.c_str());
-  terark::MmapWholeFile mmapStoreFile(tmpIndexFile.c_str());
+  terark::MmapWholeFile mmapStoreFile(tmpStoreFile.c_str());
   assert(mmapIndexFile.base != nullptr);
   assert(mmapStoreFile.base != nullptr);
   Status s;

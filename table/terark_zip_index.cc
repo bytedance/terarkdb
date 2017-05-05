@@ -145,11 +145,10 @@ public:
   }
   class MyFactory : public Factory {
   public:
-    void Build(TempFileDeleteOnClose& tmpKeyFile,
+    void Build(NativeDataInput<InputBuffer>& reader,
                const TerarkZipTableOptions& tzopt,
                std::function<void(const void *, size_t)> write,
                KeyStat& ks) const override {
-      NativeDataInput<InputBuffer> reader(&tmpKeyFile.fp);
 #if !defined(NDEBUG)
       SortableStrVec backupKeys;
 #endif
@@ -165,8 +164,6 @@ public:
       if (keyVec[0] > keyVec.back()) {
         std::reverse(keyVec.m_index.begin(), keyVec.m_index.end());
       }
-//      for(size_t i = 0, ei = keyVec.size(); i < ei)
-
 #if !defined(NDEBUG)
       for (size_t i = 1; i < keyVec.size(); ++i) {
         fstring prev = keyVec[i-1];
@@ -289,8 +286,11 @@ public:
       }
       pos_ = targetValue - index_.minValue_;
       m_id = index_.indexSeq_.rank1(pos_);
-      if (!index_.indexSeq_[pos_] || target.size() > index_.keyLength_) {
-        if (m_id == index_.indexSeq_.max_rank1() - 1) {
+      if (!index_.indexSeq_[pos_]) {
+        pos_ += index_.indexSeq_.zero_seq_len(pos_);
+      }
+      else if (target.size() > index_.keyLength_) {
+        if (pos_ == index_.indexSeq_.size() - 1) {
           m_id = size_t(-1);
           return false;
         }
@@ -346,7 +346,7 @@ public:
   public:
     virtual ~MyFactory() {
     }
-    void Build(TempFileDeleteOnClose& tmpKeyFile,
+    void Build(NativeDataInput<InputBuffer>& reader,
                const TerarkZipTableOptions& tzopt,
                std::function<void(const void *, size_t)> write,
                KeyStat& ks) const override {
@@ -361,7 +361,6 @@ public:
       }
       uint64_t diff = maxValue - minValue + 1;
       RankSelect indexSeq_;
-      NativeDataInput<InputBuffer> reader(&tmpKeyFile.fp);
       valvec<byte_t> keyBuf;
       indexSeq_.resize(diff);
       for (size_t seq_id = 0; seq_id < ks.numKeys; ++seq_id) {
