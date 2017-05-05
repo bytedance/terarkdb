@@ -105,8 +105,8 @@ private:
   }
 };
 
-struct TerarkZipSegment {
-  size_t segmentIndex_;
+struct TerarkZipSubReader {
+  size_t subIndex_;
   std::string prefix_;
   unique_ptr<TerarkIndex> index_;
   unique_ptr<terark::BlobStore> store_;
@@ -124,7 +124,7 @@ struct TerarkZipSegment {
   Status Get(SequenceNumber, const ReadOptions&, const Slice& key,
     GetContext*, int flag) const;
 
-  ~TerarkZipSegment();
+  ~TerarkZipSubReader();
 };
 
 /**
@@ -167,7 +167,7 @@ private:
     return table_reader_options_;
   }
 
-  TerarkZipSegment segment_;
+  TerarkZipSubReader subReader_;
   static const size_t kNumInternalBytes = 8;
   Slice  file_data_;
   unique_ptr<RandomAccessFileReader> file_;
@@ -213,33 +213,33 @@ public:
   TerarkZipTableMultiReader(const TableReaderOptions&, const TerarkZipTableOptions&);
   Status Open(RandomAccessFileReader* file, uint64_t file_size);
 
-  class SegmentIndex {
+  class SubIndex {
   private:
     size_t partCount_;
     size_t prefixLen_;
     size_t alignedPrefixLen_;
     valvec<byte_t> prefixSet_;
-    valvec<TerarkZipSegment> segments_;
+    valvec<TerarkZipSubReader> subReader_;
 
     struct PartIndexOperator {
-      const SegmentIndex* p;
+      const SubIndex* p;
       fstring operator[](size_t i) const;
     };
 
-    const TerarkZipSegment* (SegmentIndex::*get_segment_ptr)(fstring) const;
+    const TerarkZipSubReader* (SubIndex::*GetSubReaderPtr)(fstring) const;
 
-    const TerarkZipSegment* GetSegmentU64Sequential(fstring key) const;
-    const TerarkZipSegment* GetSegmentU64Binary(fstring key) const;
-    const TerarkZipSegment* GetSegmentU64BinaryReverse(fstring key) const;
-    const TerarkZipSegment* GetSegmentBytewise(fstring key) const;
-    const TerarkZipSegment* GetSegmentBytewiseReverse(fstring key) const;
+    const TerarkZipSubReader* GetSubReaderU64Sequential(fstring key) const;
+    const TerarkZipSubReader* GetSubReaderU64Binary(fstring key) const;
+    const TerarkZipSubReader* GetSubReaderU64BinaryReverse(fstring key) const;
+    const TerarkZipSubReader* GetSubReaderBytewise(fstring key) const;
+    const TerarkZipSubReader* GetSubReaderBytewiseReverse(fstring key) const;
 
   public:
     Status Init(fstring offsetMemory, fstring indexMempry, fstring storeMemory,
       fstring dictMemory, fstring typeMemory, fstring commonPrefixMemory, bool reverse);
-    size_t GetSegmentCount() const;
-    const TerarkZipSegment* GetSegment(size_t i) const;
-    const TerarkZipSegment* GetSegment(fstring key) const;
+    size_t GetSubCount() const;
+    const TerarkZipSubReader* GetSubReader(size_t i) const;
+    const TerarkZipSubReader* GetSubReader(fstring key) const;
   };
 
 private:
@@ -250,7 +250,7 @@ private:
     return table_reader_options_;
   }
 
-  SegmentIndex segmentIndex_;
+  SubIndex subIndex_;
   static const size_t kNumInternalBytes = 8;
   Slice  file_data_;
   unique_ptr<RandomAccessFileReader> file_;
