@@ -111,7 +111,8 @@ private:
     , fstring dictMem
     , const DictZipBlobStore::ZipStat& dzstat);
 #if defined(TerocksPrivateCode)
-  Status WriteSSTFileMulti(fstring tmpIndexFile
+  Status WriteSSTFileMulti(long long t3, long long t4
+    , fstring tmpIndexFile
     , fstring tmpStoreFilePrefix
     , fstring dictMem
     , const DictZipBlobStore::ZipStat& dzstat);

@@ -623,10 +623,12 @@ ZipValueToFinishMulti(fstring tmpIndexFile, std::function<void()> waitIndex) {
   auto zbuilder = UniquePtrOf(this->createZipBuilder());
   std::unique_ptr<terark::BlobStore> store;
   DictZipBlobStore::ZipStat dzstat;
+  long long t3, t4;
 
 #if defined(TERARK_ZIP_TRIAL_VERSION)
   zbuilder->addSample(g_trail_rand_delete);
 #endif
+  t3 = g_pf.now();
   {
     valvec<byte_t> sample;
     NativeDataInput<InputBuffer> input(&tmpSampleFile_.fp);
@@ -671,10 +673,11 @@ ZipValueToFinishMulti(fstring tmpIndexFile, std::function<void()> waitIndex) {
     assert((kvs.valueFileEnd - kvs.valueFileBegin) % 8 == 0);
   }
   zbuilder->freeDict();
+  t4 = g_pf.now();
   DebugCleanup();
   // wait for indexing complete, if indexing is slower than value compressing
   waitIndex();
-  return WriteSSTFileMulti(tmpIndexFile, tmpStoreFile, zbuilder->getDictMem(), dzstat);
+  return WriteSSTFileMulti(t3, t4, tmpIndexFile, tmpStoreFile, zbuilder->getDictMem(), dzstat);
 }
 
 #endif // TerocksPrivateCode
@@ -1170,7 +1173,7 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
 
 #if defined(TerocksPrivateCode)
 
-Status TerarkZipTableBuilder::WriteSSTFileMulti(
+Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4,
   fstring tmpIndexFile,
   fstring tmpStoreFile,
   fstring dictMem,
@@ -1342,78 +1345,78 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(
     g_sumUserKeyNum += numKeys;
     g_sumEntryNum += properties_.num_entries;
   }
-//  INFO(ioptions_.info_log
-//    ,
-//    R"EOS(TerarkZipTableBuilder::Finish():this=%p: second pass time =%7.2f's, %8.3f'MB/sec, value only(%4.1f%% of KV)
-//   wait indexing time = %7.2f's,
-//  remap KeyValue time = %7.2f's, %8.3f'MB/sec (all stages of remap)
-//    Get OrderMap time = %7.2f's, %8.3f'MB/sec (index lex order gen)
-//  rebuild zvType time = %7.2f's, %8.3f'MB/sec
-//  write SST data time = %7.2f's, %8.3f'MB/sec
-//    z-dict build time = %7.2f's, sample length = %7.3f'MB, throughput = %6.3f'MB/sec
-//    zip my value time = %7.2f's, unzip  length = %7.3f'GB
-//    zip my value throughput = %7.3f'MB/sec
-//    zip pipeline throughput = %7.3f'MB/sec
-//    entries = %zd  keys = %zd  avg-key = %.2f  avg-zkey = %.2f  avg-val = %.2f  avg-zval = %.2f
-//    UnZipSize{ index =%9.4f GB  value =%9.4f GB   all =%9.4f GB }
-//    __ZipSize{ index =%9.4f GB  value =%9.4f GB   all =%9.4f GB }
-//    UnZip/Zip{ index =%9.4f     value =%9.4f      all =%9.4f    }
-//    Zip/UnZip{ index =%9.4f     value =%9.4f      all =%9.4f    }
-//----------------------------
-//    total value len =%12.6f GB     avg =%8.3f KB (by entry num)
-//    total  key  len =%12.6f GB     avg =%8.3f KB
-//    total ukey  len =%12.6f GB     avg =%8.3f KB
-//    total ukey  num =%15.9f Billion
-//    total entry num =%15.9f Billion
-//    write speed all =%15.9f MB/sec (with    version num)
-//    write speed all =%15.9f MB/sec (without version num)
-//)EOS"
-//, this, g_pf.sf(t3, t4)
-//, properties_.raw_value_size*1.0 / g_pf.uf(t3, t4)
-//, properties_.raw_value_size*100.0 / rawBytes
-//
-//, g_pf.sf(t4, t5) // wait indexing time
-//, g_pf.sf(t5, t8), double(offset_) / g_pf.uf(t5, t8)
-//
-//, g_pf.sf(t5, t6), properties_.index_size / g_pf.uf(t5, t6) // index lex walk
-//
-//, g_pf.sf(t6, t7), keyStat.numKeys * 2 / 8 / (g_pf.uf(t6, t7) + 1.0) // rebuild zvType
-//
-//, g_pf.sf(t7, t8), double(offset_) / g_pf.uf(t7, t8) // write SST data
-//
-//, dzstat.dictBuildTime, realsampleLenSum / 1e6
-//, realsampleLenSum / dzstat.dictBuildTime / 1e6
-//
-//, dzstat.dictZipTime, properties_.raw_value_size / 1e9
-//, properties_.raw_value_size / dzstat.dictZipTime / 1e6
-//, dzstat.pipelineThroughBytes / dzstat.dictZipTime / 1e6
-//
-//, size_t(properties_.num_entries), keyStat.numKeys
-//, double(keyStat.sumKeyLen) / keyStat.numKeys
-//, double(properties_.index_size) / keyStat.numKeys
-//, double(properties_.raw_value_size) / keyStat.numKeys
-//, double(properties_.data_size) / keyStat.numKeys
-//
-//, keyStat.sumKeyLen / 1e9, properties_.raw_value_size / 1e9, rawBytes / 1e9
-//
-//, properties_.index_size / 1e9, properties_.data_size / 1e9, offset_ / 1e9
-//
-//, double(keyStat.sumKeyLen) / properties_.index_size
-//, double(properties_.raw_value_size) / properties_.data_size
-//, double(rawBytes) / offset_
-//
-//, properties_.index_size / double(keyStat.sumKeyLen)
-//, properties_.data_size / double(properties_.raw_value_size)
-//, offset_ / double(rawBytes)
-//
-//, g_sumValueLen / 1e9, g_sumValueLen / 1e3 / g_sumEntryNum
-//, g_sumKeyLen / 1e9, g_sumKeyLen / 1e3 / g_sumEntryNum
-//, g_sumUserKeyLen / 1e9, g_sumUserKeyLen / 1e3 / g_sumUserKeyNum
-//, g_sumUserKeyNum / 1e9
-//, g_sumEntryNum / 1e9
-//, (g_sumKeyLen + g_sumValueLen) / g_pf.uf(g_lastTime, t8)
-//, (g_sumKeyLen + g_sumValueLen - g_sumEntryNum * 8) / g_pf.uf(g_lastTime, t8)
-//);
+  INFO(ioptions_.info_log
+    ,
+    R"EOS(TerarkZipTableBuilder::Finish():this=%p: second pass time =%7.2f's, %8.3f'MB/sec, value only(%4.1f%% of KV)
+   wait indexing time = %7.2f's,
+  remap KeyValue time = %7.2f's, %8.3f'MB/sec (all stages of remap)
+    Get OrderMap time = %7.2f's, %8.3f'MB/sec (index lex order gen)
+  rebuild zvType time = %7.2f's, %8.3f'MB/sec
+  write SST data time = %7.2f's, %8.3f'MB/sec
+    z-dict build time = %7.2f's, sample length = %7.3f'MB, throughput = %6.3f'MB/sec
+    zip my value time = %7.2f's, unzip  length = %7.3f'GB
+    zip my value throughput = %7.3f'MB/sec
+    zip pipeline throughput = %7.3f'MB/sec
+    entries = %zd  keys = %zd  avg-key = %.2f  avg-zkey = %.2f  avg-val = %.2f  avg-zval = %.2f
+    UnZipSize{ index =%9.4f GB  value =%9.4f GB   all =%9.4f GB }
+    __ZipSize{ index =%9.4f GB  value =%9.4f GB   all =%9.4f GB }
+    UnZip/Zip{ index =%9.4f     value =%9.4f      all =%9.4f    }
+    Zip/UnZip{ index =%9.4f     value =%9.4f      all =%9.4f    }
+----------------------------
+    total value len =%12.6f GB     avg =%8.3f KB (by entry num)
+    total  key  len =%12.6f GB     avg =%8.3f KB
+    total ukey  len =%12.6f GB     avg =%8.3f KB
+    total ukey  num =%15.9f Billion
+    total entry num =%15.9f Billion
+    write speed all =%15.9f MB/sec (with    version num)
+    write speed all =%15.9f MB/sec (without version num)
+)EOS"
+, this, g_pf.sf(t3, t4)
+, properties_.raw_value_size*1.0 / g_pf.uf(t3, t4)
+, properties_.raw_value_size*100.0 / rawBytes
+
+, g_pf.sf(t4, t5) // wait indexing time
+, g_pf.sf(t5, t8), double(offset_) / g_pf.uf(t5, t8)
+
+, g_pf.sf(t5, t6), properties_.index_size / g_pf.uf(t5, t6) // index lex walk
+
+, g_pf.sf(t6, t7), numKeys * 2 / 8 / (g_pf.uf(t6, t7) + 1.0) // rebuild zvType
+
+, g_pf.sf(t7, t8), double(offset_) / g_pf.uf(t7, t8) // write SST data
+
+, dzstat.dictBuildTime, realsampleLenSum / 1e6
+, realsampleLenSum / dzstat.dictBuildTime / 1e6
+
+, dzstat.dictZipTime, properties_.raw_value_size / 1e9
+, properties_.raw_value_size / dzstat.dictZipTime / 1e6
+, dzstat.pipelineThroughBytes / dzstat.dictZipTime / 1e6
+
+, size_t(properties_.num_entries), numKeys
+, double(sumKeyLen) / numKeys
+, double(properties_.index_size) / numKeys
+, double(properties_.raw_value_size) / numKeys
+, double(properties_.data_size) / numKeys
+
+, sumKeyLen / 1e9, properties_.raw_value_size / 1e9, rawBytes / 1e9
+
+, properties_.index_size / 1e9, properties_.data_size / 1e9, offset_ / 1e9
+
+, double(sumKeyLen) / properties_.index_size
+, double(properties_.raw_value_size) / properties_.data_size
+, double(rawBytes) / offset_
+
+, properties_.index_size / double(sumKeyLen)
+, properties_.data_size / double(properties_.raw_value_size)
+, offset_ / double(rawBytes)
+
+, g_sumValueLen / 1e9, g_sumValueLen / 1e3 / g_sumEntryNum
+, g_sumKeyLen / 1e9, g_sumKeyLen / 1e3 / g_sumEntryNum
+, g_sumUserKeyLen / 1e9, g_sumUserKeyLen / 1e3 / g_sumUserKeyNum
+, g_sumUserKeyNum / 1e9
+, g_sumEntryNum / 1e9
+, (g_sumKeyLen + g_sumValueLen) / g_pf.uf(g_lastTime, t8)
+, (g_sumKeyLen + g_sumValueLen - g_sumEntryNum * 8) / g_pf.uf(g_lastTime, t8)
+);
   return s;
 }
 
@@ -1454,30 +1457,35 @@ Status TerarkZipTableBuilder::WriteMetaData(std::initializer_list<std::pair<cons
 }
 
 Status TerarkZipTableBuilder::OfflineFinish() {
-  //TODO
-  //std::unique_ptr<DictZipBlobStore> zstore(zbuilder_->finish(
-  //  DictZipBlobStore::ZipBuilder::FinishFreeDict));
-  //auto dzstat = zbuilder_->getZipStat();
-  //zbuilder_.reset();
-  //valvec<byte_t> commonPrefix(prevUserKey_.data(), kvs.stat.commonPrefixLen);
-  //AutoDeleteFile tmpIndexFile{tmpValueFile_.path + ".index"};
-  //long long t1 = g_pf.now();
-  //{
-  //  auto factory = TerarkIndex::GetFactory(table_options_.indexType);
-  //  if (!factory) {
-  //    THROW_STD(invalid_argument,
-  //      "invalid indexType: %s", table_options_.indexType.c_str());
-  //  }
-  //  factory->Build(tmpKeyFile_, table_options_, tmpIndexFile, kvs.stat);
-  //}
-  //long long tt = g_pf.now();
-  //INFO(ioptions_.info_log
-  //  , "TerarkZipTableBuilder::Finish():this=%p:  index pass time =%7.2f's, %8.3f'MB/sec\n"
-  //  , this, g_pf.sf(t1, tt), properties_.raw_key_size*1.0 / g_pf.uf(t1, tt)
-  //);
-  //fstring dictMem = zstore->get_dict();
-  //return WriteSSTFile(t1, tt, tmpIndexFile, zstore.get(), dictMem, dzstat);
-  return Status::OK();
+  std::unique_ptr<DictZipBlobStore> zstore(zbuilder_->finish(
+    DictZipBlobStore::ZipBuilder::FinishFreeDict));
+  auto& kvs = histogram_[0];
+  auto dzstat = zbuilder_->getZipStat();
+  zbuilder_.reset();
+  valvec<byte_t> commonPrefix(prevUserKey_.data(), kvs.stat.commonPrefixLen);
+  AutoDeleteFile tmpIndexFile{tmpValueFile_.path + ".index"};
+  long long t1 = g_pf.now();
+  {
+    auto factory = TerarkIndex::GetFactory(table_options_.indexType);
+    if (!factory) {
+      THROW_STD(invalid_argument,
+        "invalid indexType: %s", table_options_.indexType.c_str());
+    }
+    NativeDataInput<InputBuffer> tempKeyFileReader(&tmpKeyFile_.fp);
+    FileStream writer(tmpIndexFile, "wb+");
+    factory->Build(tempKeyFileReader, table_options_, [&writer](const void* data, size_t size) {
+      writer.ensureWrite(data, size);
+    }, kvs.stat);
+
+
+  }
+  long long tt = g_pf.now();
+  INFO(ioptions_.info_log
+    , "TerarkZipTableBuilder::Finish():this=%p:  index pass time =%7.2f's, %8.3f'MB/sec\n"
+    , this, g_pf.sf(t1, tt), properties_.raw_key_size*1.0 / g_pf.uf(t1, tt)
+  );
+  fstring dictMem = zstore->get_dict();
+  return WriteSSTFile(t1, tt, tmpIndexFile, zstore.get(), dictMem, dzstat);
 }
 
 void TerarkZipTableBuilder::Abandon() {
@@ -1508,41 +1516,42 @@ void TerarkZipTableBuilder::AddPrevUserKey(bool finish) {
 }
 
 void TerarkZipTableBuilder::OfflineZipValueData() {
-  //uint64_t seq, seqType = *(uint64_t*)valueBuf_.strpool.data();
-  //ValueType type;
-  //UnPackSequenceAndType(seqType, &seq, &type);
-  //const size_t vNum = valueBuf_.size();
-  //if (vNum == 1 && (kTypeDeletion == type || kTypeValue == type)) {
-  //  if (0 == seq && kTypeValue == type) {
-  //    bzvType.push_back(byte_t(ZipValueType::kZeroSeq));
-  //    zbuilder_->addRecord(fstring(valueBuf_.strpool).substr(8));
-  //  }
-  //  else {
-  //    if (kTypeValue == type) {
-  //      bzvType.push_back(byte_t(ZipValueType::kValue));
-  //    }
-  //    else {
-  //      bzvType.push_back(byte_t(ZipValueType::kDelete));
-  //    }
-  //    // use Little Endian upper 7 bytes
-  //    *(uint64_t*)valueBuf_.strpool.data() <<= 8;
-  //    zbuilder_->addRecord(fstring(valueBuf_.strpool).substr(1));
-  //  }
-  //}
-  //else {
-  //  bzvType.push_back(byte_t(ZipValueType::kMulti));
-  //  size_t valueBytes = valueBuf_.strpool.size();
-  //  size_t headerSize = ZipValueMultiValue::calcHeaderSize(vNum);
-  //  valueBuf_.strpool.grow_no_init(headerSize);
-  //  char* pData = valueBuf_.strpool.data();
-  //  memmove(pData + headerSize, pData, valueBytes);
-  //  auto multiVals = (ZipValueMultiValue*)pData;
-  //  multiVals->offsets[0] = uint32_t(vNum);
-  //  for (size_t i = 1; i < vNum; ++i) {
-  //    multiVals->offsets[i] = uint32_t(valueBuf_.offsets[i]);
-  //  }
-  //  zbuilder_->addRecord(valueBuf_.strpool);
-  //}
+  uint64_t seq, seqType = *(uint64_t*)valueBuf_.strpool.data();
+  auto& bzvType = histogram_[0].type;
+  ValueType type;
+  UnPackSequenceAndType(seqType, &seq, &type);
+  const size_t vNum = valueBuf_.size();
+  if (vNum == 1 && (kTypeDeletion == type || kTypeValue == type)) {
+    if (0 == seq && kTypeValue == type) {
+      bzvType.push_back(byte_t(ZipValueType::kZeroSeq));
+      zbuilder_->addRecord(fstring(valueBuf_.strpool).substr(8));
+    }
+    else {
+      if (kTypeValue == type) {
+        bzvType.push_back(byte_t(ZipValueType::kValue));
+      }
+      else {
+        bzvType.push_back(byte_t(ZipValueType::kDelete));
+      }
+      // use Little Endian upper 7 bytes
+      *(uint64_t*)valueBuf_.strpool.data() <<= 8;
+      zbuilder_->addRecord(fstring(valueBuf_.strpool).substr(1));
+    }
+  }
+  else {
+    bzvType.push_back(byte_t(ZipValueType::kMulti));
+    size_t valueBytes = valueBuf_.strpool.size();
+    size_t headerSize = ZipValueMultiValue::calcHeaderSize(vNum);
+    valueBuf_.strpool.grow_no_init(headerSize);
+    char* pData = valueBuf_.strpool.data();
+    memmove(pData + headerSize, pData, valueBytes);
+    auto multiVals = (ZipValueMultiValue*)pData;
+    multiVals->offsets[0] = uint32_t(vNum);
+    for (size_t i = 1; i < vNum; ++i) {
+      multiVals->offsets[i] = uint32_t(valueBuf_.offsets[i]);
+    }
+    zbuilder_->addRecord(valueBuf_.strpool);
+  }
 }
 
 void TerarkZipTableBuilder::UpdateValueLenHistogram() {

@@ -657,7 +657,9 @@ TerarkZipTableFactory::NewTableBuilder(
   }
   size_t keyPrefixLen = 0;
 #if defined(TerocksPrivateCode)
-  keyPrefixLen = GetFixedPrefixLen(table_builder_options.ioptions.prefix_extractor);
+  if (!table_options_.isOfflineBuild) {
+    keyPrefixLen = GetFixedPrefixLen(table_builder_options.ioptions.prefix_extractor);
+  }
 #endif // TerocksPrivateCode
 #if defined(TERARK_SUPPORT_UINT64_COMPARATOR) && BOOST_ENDIAN_LITTLE_BYTE
   if (fstring(userCmp->Name()) == "rocksdb.Uint64Comparator") {
