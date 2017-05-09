@@ -80,7 +80,7 @@ public:
 private:
   struct KeyValueStatus {
     TerarkIndex::KeyStat stat;
-    std::string prefix;
+    valvec<char> prefix;
     Uint32Histogram key;
     Uint32Histogram value;
     bitfield_array<2> type;
