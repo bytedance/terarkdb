@@ -667,14 +667,20 @@ TerarkZipTableFactory::NewTableBuilder(
   }
   else {
     keyPrefixLen = GetFixedPrefixLen(table_builder_options.ioptions.prefix_extractor);
-    if (keyPrefixLen != 0 && table_options_.keyPrefixLen != 0 &&
-      keyPrefixLen != table_options_.keyPrefixLen) {
-      WARN(table_builder_options.ioptions.info_log
-        , "TerarkZipTableFactory::NewTableBuilder() found non best config , keyPrefixLen = %zd , prefix_extractor = %zd\n"
-        , table_options_.keyPrefixLen, keyPrefixLen
-      );
+    if (keyPrefixLen != 0) {
+      if (table_options_.keyPrefixLen != 0) {
+        if (keyPrefixLen != table_options_.keyPrefixLen) {
+          WARN(table_builder_options.ioptions.info_log
+            , "TerarkZipTableFactory::NewTableBuilder() found non best config , keyPrefixLen = %zd , prefix_extractor = %zd\n"
+            , table_options_.keyPrefixLen, keyPrefixLen
+          );
+        }
+        keyPrefixLen = std::min(keyPrefixLen, table_options_.keyPrefixLen);
+      }
     }
-    keyPrefixLen = std::min(keyPrefixLen, table_options_.keyPrefixLen);
+    else {
+      keyPrefixLen = table_options_.keyPrefixLen;
+    }
   }
 #endif // TerocksPrivateCode
 #if defined(TERARK_SUPPORT_UINT64_COMPARATOR) && BOOST_ENDIAN_LITTLE_BYTE
