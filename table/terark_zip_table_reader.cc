@@ -228,8 +228,8 @@ public:
     else {
       bool ok;
       int cmp; // compare(iterKey, searchKey)
+      ok = iter_->Seek(fstringOf(pikey.user_key).substr(cplen));
       if (reverse) {
-        ok = iter_->Seek(fstringOf(pikey.user_key).substr(cplen));
         if (!ok) {
           // searchKey is reverse_bytewise less than all keys in database
           iter_->SeekToLast();
@@ -237,12 +237,13 @@ public:
           cmp = -1;
         }
         else if ((cmp = SliceOf(iter_->key()).compare(SubStr(pikey.user_key, cplen))) != 0) {
+          assert(cmp > 0);
           iter_->Prev();
           ok = iter_->Valid();
         }
       }
       else {
-        ok = iter_->Seek(fstringOf(pikey.user_key).substr(cplen));
+        cmp = 0;
         if (ok) {
           cmp = SliceOf(iter_->key()).compare(SubStr(pikey.user_key, cplen));
         }
@@ -458,6 +459,18 @@ public:
     , SequenceNumber global_seqno)
     : TerarkZipTableIterator<false>(tro, subReader, global_seqno) {
   }
+protected:
+  typedef TerarkZipTableIterator<false> base_t;
+  using base_t::subReader_;
+  using base_t::pInterKey_;
+  using base_t::interKeyBuf_;
+  using base_t::interKeyBuf_xx_;
+  using base_t::status_;
+
+  using base_t::SeekInternal;
+  using base_t::DecodeCurrKeyValueInternal;
+
+public:
   void Seek(const Slice& target) override {
     ParsedInternalKey pikey;
     if (!ParseInternalKey(target, &pikey)) {
@@ -497,6 +510,21 @@ public:
   }
 protected:
   const TerarkZipTableMultiReader::SubIndex *subIndex_;
+
+  typedef TerarkZipTableIterator<reverse> base_t;
+  using base_t::subReader_;
+  using base_t::iter_;
+  using base_t::pInterKey_;
+  using base_t::interKeyBuf_;
+  using base_t::interKeyBuf_xx_;
+  using base_t::valnum_;
+  using base_t::validx_;
+  using base_t::status_;
+
+  using base_t::TryPinBuffer;
+  using base_t::SeekInternal;
+  using base_t::UnzipIterRecord;
+  using base_t::DecodeCurrKeyValueInternal;
 
 public:
   bool Valid() const override {
