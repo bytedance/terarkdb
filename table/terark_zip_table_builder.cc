@@ -619,7 +619,6 @@ ZipValueToFinishMulti(fstring tmpIndexFile, std::function<void()> waitIndex) {
   assert(histogram_.size() > 1);
   AutoDeleteFile tmpStoreFile{tmpValueFile_.path + ".zbs"};
   NativeDataInput<InputBuffer> input(&tmpValueFile_.fp);
-  auto& kvs = histogram_.front();
   auto zbuilder = UniquePtrOf(this->createZipBuilder());
   std::unique_ptr<terark::BlobStore> store;
   DictZipBlobStore::ZipStat dzstat;

@@ -59,6 +59,7 @@ const TerarkIndex::Factory* TerarkIndex::GetFactory(fstring name) {
 
 const TerarkIndex::Factory*
 TerarkIndex::SelectFactory(const KeyStat& ks, fstring name) {
+#if defined(TerocksPrivateCode)
   if (ks.maxKeyLen == ks.minKeyLen && ks.minKeyLen > 0 && ks.maxKeyLen <= 8) {
     uint64_t
       minValue = ReadUint64(ks.minKey.begin(), ks.minKey.end()),
@@ -68,6 +69,7 @@ TerarkIndex::SelectFactory(const KeyStat& ks, fstring name) {
       return GetFactory("UintIndex");
     }
   }
+#endif // TerocksPrivateCode
   return GetFactory(name);
 }
 
