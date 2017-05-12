@@ -271,7 +271,7 @@ void TerarkZipTableBuilder::Add(const Slice& key, const Slice& value) {
         tmpSampleFile_.writer << fstringOf(value);
         sampleLenSum_ += value.size();
       }
-      if (!second_pass_iter_ || table_options_.debugLevel == 3) {
+      if (!second_pass_iter_) {
         tmpValueFile_.writer.ensureWrite(valueBuf_.back().first, 8);
         tmpValueFile_.writer << fstringOf(value);
       }
@@ -354,7 +354,7 @@ Status TerarkZipTableBuilder::Finish() {
     return OfflineFinish();
   }
 
-  if (!second_pass_iter_ || table_options_.debugLevel == 3) {
+  if (!second_pass_iter_) {
     tmpValueFile_.complete_write();
   }
   tmpSampleFile_.complete_write();
@@ -477,9 +477,7 @@ Status TerarkZipTableBuilder::Finish() {
         , this, g_pf.sf(t1, tt), properties_.raw_key_size*1.0 / g_pf.uf(t1, tt)
       );
     }
-    if (table_options_.debugLevel != 2 && table_options_.debugLevel != 3) {
-      tmpKeyFile_.close();
-    }
+    tmpKeyFile_.close();
   });
   size_t myDictMem = std::min<size_t>(sampleLenSum_, INT32_MAX) * 6;
   waitForMemory(myDictMem, "dictZip");
@@ -682,22 +680,6 @@ ZipValueToFinishMulti(fstring tmpIndexFile, std::function<void()> waitIndex) {
 #endif // TerocksPrivateCode
 
 void TerarkZipTableBuilder::DebugPrepare() {
-  if (second_pass_iter_) {
-    bool veriftKey = table_options_.debugLevel == 2 || table_options_.debugLevel == 3;
-    bool veriftValue = table_options_.debugLevel == 3;
-    if (veriftKey) {
-      if (!tmpKeyFile_.fp.isOpen()) {
-        abort();
-      }
-      tmpKeyFile_.fp.rewind();
-    }
-    if (veriftValue) {
-      if (!tmpValueFile_.fp.isOpen()) {
-        abort();
-      }
-      tmpValueFile_.fp.rewind();
-    }
-  }
 }
 
 void TerarkZipTableBuilder::DebugCleanup() {
@@ -783,34 +765,14 @@ TerarkZipTableBuilder::BuilderWriteValues(NativeDataInput<InputBuffer>& input,
     bool veriftKey = table_options_.debugLevel == 2 || table_options_.debugLevel == 3;
     bool veriftValue = table_options_.debugLevel == 3;
     bool dumpKeyValue = table_options_.debugLevel == 4;
-    NativeDataInput<InputBuffer> fileKeySet;
-    NativeDataInput<InputBuffer> fileValueSet;
-    valvec<byte_t> veriftTemp;
-    auto verifyKeyFunc = [&](const ParsedInternalKey& ikey) {
-      fileKeySet >> veriftTemp;
-      if (fstring(veriftTemp) != fstringOf(ikey.user_key)) {
-        abort();
-      }
-    };
-    auto verifyValueFunc = [&](const ParsedInternalKey& ikey, const Slice& value) {
-      uint64_t seqType = fileValueSet.load_as<uint64_t>();
-      fileValueSet >> veriftTemp;
-      uint64_t seqNum;
-      ValueType vType;
-      UnPackSequenceAndType(seqType, &seqNum, &vType);
-      if (ikey.sequence != seqNum || ikey.type != vType ||
-        fstring(veriftTemp) != fstringOf(value)) {
-        abort();
-      }
-    };
     auto dumpKeyValueFunc = [&](const ParsedInternalKey& ikey, const Slice& value) {
       fprintf(tmpDumpFile_.fp(), "DEBUG: 2nd pass => %s / %s \n", ikey.DebugString(true).c_str(), value.ToString(true).c_str());
     };
     if (veriftKey) {
-      fileKeySet.attach(&tmpKeyFile_.fp);
+      //TODO
     }
     if (veriftValue) {
-      fileValueSet.attach(&tmpValueFile_.fp);
+      //TODO
     }
 
     for (size_t recId = 0; recId < kvs.stat.numKeys; recId++) {
@@ -836,7 +798,7 @@ TerarkZipTableBuilder::BuilderWriteValues(NativeDataInput<InputBuffer>& input,
       }
       if (veriftKey) {
         pikey.user_key.remove_prefix(key_prefixLen_);
-        verifyKeyFunc(pikey);
+        //TODO
       }
       Slice curVal = second_pass_iter_->value();
       size_t oneSeqLen = valueBits_.one_seq_len(bitPos);
@@ -844,7 +806,7 @@ TerarkZipTableBuilder::BuilderWriteValues(NativeDataInput<InputBuffer>& input,
       if (1 == oneSeqLen && (kTypeDeletion == pikey.type || kTypeValue == pikey.type)) {
         //assert(fstringOf(pikey.user_key) == backupKeys[recId]);
         if (veriftValue) {
-          verifyValueFunc(pikey, curVal);
+          //TODO
         }
         if (0 == pikey.sequence && kTypeValue == pikey.type) {
           bzvType.set0(recId, size_t(ZipValueType::kZeroSeq));
@@ -899,7 +861,7 @@ TerarkZipTableBuilder::BuilderWriteValues(NativeDataInput<InputBuffer>& input,
             assert(kTypeRangeDeletion != pikey.type);
           }
           if (veriftValue) {
-            verifyValueFunc(pikey, curVal);
+            //TODO
           }
           //assert(fstringOf(pikey.user_key) == backupKeys[recId]);
           uint64_t seqType = PackSequenceAndType(pikey.sequence, pikey.type);
