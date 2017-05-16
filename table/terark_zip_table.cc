@@ -421,6 +421,7 @@ void LicenseInfo::print_error(const char* file_name, bool startup, rocksdb::Logg
 
 #endif // TerocksPrivateCode
 
+#if defined(TerocksPrivateCode)
 
 size_t TerarkZipMultiOffsetInfo::calc_size(size_t prefixLen, size_t partCount) {
   BOOST_STATIC_ASSERT(sizeof(KeyValueOffset) % 16 == 0);
@@ -482,6 +483,8 @@ void TerarkZipMultiOffsetInfo::risk_release_ownership() {
   offset_.risk_release_ownership();
   prefixSet_.risk_release_ownership();
 }
+
+#endif // TerocksPrivateCode
 
 class TableFactory*
   NewTerarkZipTableFactory(const TerarkZipTableOptions& tzto,
