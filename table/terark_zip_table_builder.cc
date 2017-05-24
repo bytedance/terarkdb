@@ -1057,32 +1057,30 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
     g_sumUserKeyNum += keyStat.numKeys;
     g_sumEntryNum += properties_.num_entries;
   }
-  INFO(ioptions_.info_log
-    ,
-    R"EOS(TerarkZipTableBuilder::Finish():this=%p: second pass time =%7.2f's, %8.3f'MB/sec, value only(%4.1f%% of KV)
-   wait indexing time = %7.2f's,
-  remap KeyValue time = %7.2f's, %8.3f'MB/sec (all stages of remap)
-    Get OrderMap time = %7.2f's, %8.3f'MB/sec (index lex order gen)
-  rebuild zvType time = %7.2f's, %8.3f'MB/sec
-  write SST data time = %7.2f's, %8.3f'MB/sec
-    z-dict build time = %7.2f's, sample length = %7.3f'MB, throughput = %6.3f'MB/sec
-    zip my value time = %7.2f's, unzip  length = %7.3f'GB
-    zip my value throughput = %7.3f'MB/sec
-    zip pipeline throughput = %7.3f'MB/sec
-    entries = %zd  keys = %zd  avg-key = %.2f  avg-zkey = %.2f  avg-val = %.2f  avg-zval = %.2f
-    UnZipSize{ index =%9.4f GB  value =%9.4f GB   all =%9.4f GB }
-    __ZipSize{ index =%9.4f GB  value =%9.4f GB   all =%9.4f GB }
-    UnZip/Zip{ index =%9.4f     value =%9.4f      all =%9.4f    }
-    Zip/UnZip{ index =%9.4f     value =%9.4f      all =%9.4f    }
-----------------------------
-    total value len =%12.6f GB     avg =%8.3f KB (by entry num)
-    total  key  len =%12.6f GB     avg =%8.3f KB
-    total ukey  len =%12.6f GB     avg =%8.3f KB
-    total ukey  num =%15.9f Billion
-    total entry num =%15.9f Billion
-    write speed all =%15.9f MB/sec (with    version num)
-    write speed all =%15.9f MB/sec (without version num)
-)EOS"
+  INFO(ioptions_.info_log,
+    "TerarkZipTableBuilder::Finish():this=%p: second pass time =%7.2f's, %8.3f'MB/sec, value only(%4.1f%% of KV)\n"
+    "   wait indexing time = %7.2f's,\n"
+    "  remap KeyValue time = %7.2f's, %8.3f'MB/sec (all stages of remap)\n"
+    "    Get OrderMap time = %7.2f's, %8.3f'MB/sec (index lex order gen)\n"
+    "  rebuild zvType time = %7.2f's, %8.3f'MB/sec\n"
+    "  write SST data time = %7.2f's, %8.3f'MB/sec\n"
+    "    z-dict build time = %7.2f's, sample length = %7.3f'MB, throughput = %6.3f'MB/sec\n"
+    "    zip my value time = %7.2f's, unzip  length = %7.3f'GB\n"
+    "    zip my value throughput = %7.3f'MB/sec\n"
+    "    zip pipeline throughput = %7.3f'MB/sec\n"
+    "    entries = %zd  keys = %zd  avg-key = %.2f  avg-zkey = %.2f  avg-val = %.2f  avg-zval = %.2f\n"
+    "    UnZipSize{ index =%9.4f GB  value =%9.4f GB   all =%9.4f GB }\n"
+    "    __ZipSize{ index =%9.4f GB  value =%9.4f GB   all =%9.4f GB }\n"
+    "    UnZip/Zip{ index =%9.4f     value =%9.4f      all =%9.4f    }\n"
+    "    Zip/UnZip{ index =%9.4f     value =%9.4f      all =%9.4f    }\n"
+    "----------------------------\n"
+    "    total value len =%12.6f GB     avg =%8.3f KB (by entry num)\n"
+    "    total  key  len =%12.6f GB     avg =%8.3f KB\n"
+    "    total ukey  len =%12.6f GB     avg =%8.3f KB\n"
+    "    total ukey  num =%15.9f Billion\n"
+    "    total entry num =%15.9f Billion\n"
+    "    write speed all =%15.9f MB/sec (with    version num)\n"
+    "    write speed all =%15.9f MB/sec (without version num)"
 , this, g_pf.sf(t3, t4)
 , properties_.raw_value_size*1.0 / g_pf.uf(t3, t4)
 , properties_.raw_value_size*100.0 / rawBytes
@@ -1302,32 +1300,30 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4,
     g_sumUserKeyNum += numKeys;
     g_sumEntryNum += properties_.num_entries;
   }
-  INFO(ioptions_.info_log
-    ,
-    R"EOS(TerarkZipTableBuilder::Finish():this=%p: second pass time =%7.2f's, %8.3f'MB/sec, value only(%4.1f%% of KV)
-   wait indexing time = %7.2f's,
-  remap KeyValue time = %7.2f's, %8.3f'MB/sec (all stages of remap)
-    Get OrderMap time = %7.2f's, %8.3f'MB/sec (index lex order gen)
-  rebuild zvType time = %7.2f's, %8.3f'MB/sec
-  write SST data time = %7.2f's, %8.3f'MB/sec
-    z-dict build time = %7.2f's, sample length = %7.3f'MB, throughput = %6.3f'MB/sec
-    zip my value time = %7.2f's, unzip  length = %7.3f'GB
-    zip my value throughput = %7.3f'MB/sec
-    zip pipeline throughput = %7.3f'MB/sec
-    entries = %zd  keys = %zd  avg-key = %.2f  avg-zkey = %.2f  avg-val = %.2f  avg-zval = %.2f
-    UnZipSize{ index =%9.4f GB  value =%9.4f GB   all =%9.4f GB }
-    __ZipSize{ index =%9.4f GB  value =%9.4f GB   all =%9.4f GB }
-    UnZip/Zip{ index =%9.4f     value =%9.4f      all =%9.4f    }
-    Zip/UnZip{ index =%9.4f     value =%9.4f      all =%9.4f    }
-----------------------------
-    total value len =%12.6f GB     avg =%8.3f KB (by entry num)
-    total  key  len =%12.6f GB     avg =%8.3f KB
-    total ukey  len =%12.6f GB     avg =%8.3f KB
-    total ukey  num =%15.9f Billion
-    total entry num =%15.9f Billion
-    write speed all =%15.9f MB/sec (with    version num)
-    write speed all =%15.9f MB/sec (without version num)
-)EOS"
+  INFO(ioptions_.info_log,
+    "TerarkZipTableBuilder::FinishMulti():this=%p: second pass time =%7.2f's, %8.3f'MB/sec, value only(%4.1f%% of KV)\n"
+    "   wait indexing time = %7.2f's,\n"
+    "  remap KeyValue time = %7.2f's, %8.3f'MB/sec (all stages of remap)\n"
+    "    Get OrderMap time = %7.2f's, %8.3f'MB/sec (index lex order gen)\n"
+    "  rebuild zvType time = %7.2f's, %8.3f'MB/sec\n"
+    "  write SST data time = %7.2f's, %8.3f'MB/sec\n"
+    "    z-dict build time = %7.2f's, sample length = %7.3f'MB, throughput = %6.3f'MB/sec\n"
+    "    zip my value time = %7.2f's, unzip  length = %7.3f'GB\n"
+    "    zip my value throughput = %7.3f'MB/sec\n"
+    "    zip pipeline throughput = %7.3f'MB/sec\n"
+    "    entries = %zd  keys = %zd  avg-key = %.2f  avg-zkey = %.2f  avg-val = %.2f  avg-zval = %.2f\n"
+    "    UnZipSize{ index =%9.4f GB  value =%9.4f GB   all =%9.4f GB }\n"
+    "    __ZipSize{ index =%9.4f GB  value =%9.4f GB   all =%9.4f GB }\n"
+    "    UnZip/Zip{ index =%9.4f     value =%9.4f      all =%9.4f    }\n"
+    "    Zip/UnZip{ index =%9.4f     value =%9.4f      all =%9.4f    }\n"
+    "----------------------------\n"
+    "    total value len =%12.6f GB     avg =%8.3f KB (by entry num)\n"
+    "    total  key  len =%12.6f GB     avg =%8.3f KB\n"
+    "    total ukey  len =%12.6f GB     avg =%8.3f KB\n"
+    "    total ukey  num =%15.9f Billion\n"
+    "    total entry num =%15.9f Billion\n"
+    "    write speed all =%15.9f MB/sec (with    version num)\n"
+    "    write speed all =%15.9f MB/sec (without version num)"
 , this, g_pf.sf(t3, t4)
 , properties_.raw_value_size*1.0 / g_pf.uf(t3, t4)
 , properties_.raw_value_size*100.0 / rawBytes
