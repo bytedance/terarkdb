@@ -196,6 +196,19 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo) {
   MyGetInt   (tzo, indexNestLevel          , 3    );
   MyGetInt   (tzo, terarkZipMinLevel       , 0    );
   MyGetInt   (tzo, debugLevel              , 0    );
+  MyGetInt   (tzo, offsetArrayBlockUnits   , 0    );
+  if (true
+      && 0   != tzo.offsetArrayBlockUnits
+      && 64  != tzo.offsetArrayBlockUnits
+      && 128 != tzo.offsetArrayBlockUnits
+  ){
+    STD_WARN(
+      "TerarkZipConfigFromEnv: bad offsetArrayBlockUnits = %d, must be one of {0,64,128}, reset to 128\n"
+      , tzo.offsetArrayBlockUnits
+    );
+    tzo.offsetArrayBlockUnits = 128;
+  }
+
   MyGetBool  (tzo, useSuffixArrayLocalMatch, false);
   MyGetBool  (tzo, warmUpIndexOnOpen       , true );
   MyGetBool  (tzo, warmUpValueOnOpen       , false);
