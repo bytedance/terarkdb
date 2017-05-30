@@ -3,6 +3,8 @@
 #include <terark/fstring.hpp>
 #include <terark/valvec.hpp>
 #include <terark/util/refcount.hpp>
+#include <terark/io/DataIO.hpp>
+#include <terark/io/StreamBuffer.hpp>
 #include <boost/intrusive_ptr.hpp>
 #include <memory>
 
@@ -11,6 +13,8 @@ namespace rocksdb {
 using terark::fstring;
 using terark::valvec;
 using terark::byte_t;
+using terark::NativeDataInput;
+using terark::InputBuffer;
 using std::unique_ptr;
 
 struct TerarkZipTableOptions;
@@ -34,20 +38,20 @@ public:
     inline void SetInvalid() { m_id = size_t(-1); }
   };
   struct KeyStat {
-    size_t commonPrefixLen = 0;
+    size_t commonPrefixLen = size_t(-1);
     size_t minKeyLen = 0;
     size_t maxKeyLen = size_t(-1);
-    size_t sumKeyLen = size_t(-1);
-    size_t numKeys   = size_t(-1);
+    size_t sumKeyLen = 0;
+    size_t numKeys   = 0;
     valvec<byte_t> minKey;
     valvec<byte_t> maxKey;
   };
   class Factory : public terark::RefCounter {
   public:
     virtual ~Factory();
-    virtual void Build(TempFileDeleteOnClose& tmpKeyFile,
+    virtual void Build(NativeDataInput<InputBuffer>& tmpKeyFileReader,
                        const TerarkZipTableOptions& tzopt,
-                       fstring tmpFilePath,
+                       std::function<void(const void *, size_t)> write,
                        KeyStat&) const = 0;
     virtual unique_ptr<TerarkIndex> LoadMemory(fstring mem) const = 0;
     virtual unique_ptr<TerarkIndex> LoadFile(fstring fpath) const = 0;
