@@ -715,12 +715,14 @@ Status TerarkZipSubReader::Get(SequenceNumber global_seqno, const ReadOptions& r
     user_key = Slice(reinterpret_cast<const char*>(&u64_target), 8);
   }
 #endif
+  assert(user_key.size() >= prefix_.size());
+  assert(fstringOf(user_key).substr(0, prefix_.size()) == prefix_);
+  user_key.remove_prefix(prefix_.size());
   size_t cplen = user_key.difference_offset(commonPrefix_);
   if (commonPrefix_.size() != cplen) {
     return Status::OK();
   }
-  assert(user_key.size() > prefix_.size());
-  size_t recId = index_->Find(fstringOf(user_key).substr(cplen + prefix_.size()));
+  size_t recId = index_->Find(fstringOf(user_key).substr(cplen));
   if (size_t(-1) == recId) {
     return Status::OK();
   }
