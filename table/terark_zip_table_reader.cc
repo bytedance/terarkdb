@@ -1235,8 +1235,8 @@ TerarkZipTableMultiReader::Get(const ReadOptions& ro, const Slice& ikey,
       "param target.size() < 8");
   }
   auto subReader = subIndex_.GetSubReader(fstringOf(ikey).substr(0, ikey.size() - 8));
-  if (subReader == nullptr) {
-    Status::OK();
+  if (subReader == nullptr || fstringOf(ikey).substr(0, subReader->prefix_.size()) != subReader->prefix_) {
+    return Status::OK();
   }
   return subReader->Get(global_seqno_, ro, ikey, get_context, flag);
 }
