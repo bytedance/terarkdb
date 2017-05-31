@@ -204,24 +204,22 @@ public:
       if (pikey.user_key.size() == cplen) {
         assert(pikey.user_key.size() < subReader_->commonPrefix_.size());
         if (reverse) {
-          SeekToLast();
-          this->Next(); // move  to EOF
-          assert(!this->Valid());
+          TerarkZipTableIterator::SeekToLast();
+          Next(); // move to EOF
         }
         else {
-          SeekToFirst();
+          TerarkZipTableIterator::SeekToFirst();
         }
       }
       else {
         assert(pikey.user_key.size() > cplen);
         assert(pikey.user_key[cplen] != subReader_->commonPrefix_[cplen]);
         if ((byte_t(pikey.user_key[cplen]) < subReader_->commonPrefix_[cplen]) ^ reverse) {
-          SeekToFirst();
+          TerarkZipTableIterator::SeekToFirst();
         }
         else {
-          SeekToLast();
-          this->Next(); // move  to EOF
-          assert(!this->Valid());
+          TerarkZipTableIterator::SeekToLast();
+          Next(); // move to EOF
         }
       }
     }
@@ -327,14 +325,14 @@ protected:
     pInterKey_.sequence = uint64_t(-1);
     pInterKey_.type = kMaxValue;
   }
-  virtual bool IndexIterSeekToFirst() {
+  bool IndexIterSeekToFirst() {
     TryPinBuffer(interKeyBuf_xx_);
     if (reverse)
       return iter_->SeekToLast();
     else
       return iter_->SeekToFirst();
   }
-  virtual bool IndexIterSeekToLast() {
+  bool IndexIterSeekToLast() {
     TryPinBuffer(interKeyBuf_xx_);
     if (reverse)
       return iter_->SeekToFirst();
@@ -531,6 +529,36 @@ public:
     return iter_ && iter_->Valid();
   }
 
+  void SeekToFirst() override {
+    const TerarkZipSubReader* subReader;
+    if (reverse) {
+      subReader = subIndex_->GetSubReader(subIndex_->GetSubCount() - 1);
+    }
+    else {
+      subReader = subIndex_->GetSubReader(0);
+    }
+    if (subReader_ != subReader) {
+      subReader_ = subReader;
+      iter_.reset(subReader->index_->NewIterator());
+    }
+    TerarkZipTableIterator::SeekToFirst();
+  }
+
+  void SeekToLast() override {
+    const TerarkZipSubReader* subReader;
+    if (reverse) {
+      subReader = subIndex_->GetSubReader(0);
+    }
+    else {
+      subReader = subIndex_->GetSubReader(subIndex_->GetSubCount() - 1);
+    }
+    if (subReader_ != subReader) {
+      subReader_ = subReader;
+      iter_.reset(subReader->index_->NewIterator());
+    }
+    TerarkZipTableIterator::SeekToLast();
+  }
+
   void Seek(const Slice& target) override {
     ParsedInternalKey pikey;
     if (!ParseInternalKey(target, &pikey)) {
@@ -544,29 +572,35 @@ public:
       SetIterInvalid();
       return;
     }
-    pikey.user_key.remove_prefix(std::min(subReader->prefix_.size(), pikey.user_key.size()));
     if (subReader != subReader_) {
       subReader_ = subReader;
       iter_.reset(subReader_->index_->NewIterator());
     }
-    SeekInternal(pikey);
-    if (!Valid()) {
+    if (pikey.user_key.size() <= subReader->prefix_.size() ||
+      fstringOf(pikey.user_key).substr(0, subReader->prefix_.size()) != subReader->prefix_) {
       if (reverse) {
-        if (subReader->subIndex_ != 0) {
-          subReader_ = subIndex_->GetSubReader(subReader->subIndex_ - 1);
-          iter_.reset(subReader_->index_->NewIterator());
-          if (UnzipIterRecord(iter_->SeekToLast())) {
-            validx_ = valnum_ - 1;
-            DecodeCurrKeyValue();
-          }
-        }
+        TerarkZipTableIterator::SeekToLast();
       }
       else {
-        if (subReader->subIndex_ != subIndex_->GetSubCount() - 1) {
-          subReader_ = subIndex_->GetSubReader(subReader->subIndex_ + 1);
-          iter_.reset(subReader_->index_->NewIterator());
-          if (UnzipIterRecord(iter_->SeekToFirst())) {
-            DecodeCurrKeyValue();
+        TerarkZipTableIterator::SeekToFirst();
+      }
+    }
+    else {
+      pikey.user_key.remove_prefix(subReader->prefix_.size());
+      SeekInternal(pikey);
+      if (!Valid()) {
+        if (reverse) {
+          if (subReader->subIndex_ != 0) {
+            subReader_ = subIndex_->GetSubReader(subReader->subIndex_ - 1);
+            iter_.reset(subReader_->index_->NewIterator());
+            TerarkZipTableIterator::SeekToLast();
+          }
+        }
+        else {
+          if (subReader->subIndex_ != subIndex_->GetSubCount() - 1) {
+            subReader_ = subIndex_->GetSubReader(subReader->subIndex_ + 1);
+            iter_.reset(subReader_->index_->NewIterator());
+            TerarkZipTableIterator::SeekToFirst();
           }
         }
       }
@@ -583,32 +617,6 @@ protected:
     pInterKey_.user_key = Slice();
     pInterKey_.sequence = uint64_t(-1);
     pInterKey_.type = kMaxValue;
-  }
-  bool IndexIterSeekToFirst() override {
-    TryPinBuffer(interKeyBuf_xx_);
-    if (reverse) {
-      subReader_ = subIndex_->GetSubReader(subIndex_->GetSubCount() - 1);
-      iter_.reset(subReader_->index_->NewIterator());
-      return iter_->SeekToLast();
-    }
-    else {
-      subReader_ = subIndex_->GetSubReader(0);
-      iter_.reset(subReader_->index_->NewIterator());
-      return iter_->SeekToFirst();
-    }
-  }
-  bool IndexIterSeekToLast() override {
-    TryPinBuffer(interKeyBuf_xx_);
-    if (reverse) {
-      subReader_ = subIndex_->GetSubReader(0);
-      iter_.reset(subReader_->index_->NewIterator());
-      return iter_->SeekToFirst();
-    }
-    else {
-      subReader_ = subIndex_->GetSubReader(subIndex_->GetSubCount() - 1);
-      iter_.reset(subReader_->index_->NewIterator());
-      return iter_->SeekToLast();
-    }
   }
   bool IndexIterPrev() override {
     TryPinBuffer(interKeyBuf_xx_);
