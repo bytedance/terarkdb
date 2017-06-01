@@ -237,6 +237,7 @@ public:
   public:
     Status Init(fstring offsetMemory, fstring indexMempry, fstring storeMemory,
       fstring dictMemory, fstring typeMemory, fstring commonPrefixMemory, bool reverse);
+    size_t GetPrefixLen() const;
     size_t GetSubCount() const;
     const TerarkZipSubReader* GetSubReader(size_t i) const;
     const TerarkZipSubReader* GetSubReader(fstring key) const;

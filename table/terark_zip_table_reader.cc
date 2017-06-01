@@ -181,10 +181,6 @@ public:
     }
   }
 
-  void SeekForPrev(const Slice& target) override {
-    SeekForPrevImpl(target, &table_reader_options_->internal_comparator);
-  }
-
   void Seek(const Slice& target) override {
     ParsedInternalKey pikey;
     if (!ParseInternalKey(target, &pikey)) {
@@ -194,6 +190,10 @@ public:
       return;
     }
     SeekInternal(pikey);
+  }
+
+  void SeekForPrev(const Slice& target) override {
+    SeekForPrevImpl(target, &table_reader_options_->internal_comparator);
   }
 
   void Next() override {
@@ -245,12 +245,12 @@ public:
   }
 
 protected:
-  void SeekToASCFirst() {
+  void SeekToAscendingFirst() {
     if (UnzipIterRecord(iter_->SeekToFirst())) {
       DecodeCurrKeyValue();
     }
   }
-  void SeekToASCLast() {
+  void SeekToAscendingLast() {
     if (UnzipIterRecord(iter_->SeekToLast())) {
       validx_ = valnum_ - 1;
       DecodeCurrKeyValue();
@@ -263,31 +263,22 @@ protected:
     if (subReader_->commonPrefix_.size() != cplen) {
       if (pikey.user_key.size() == cplen) {
         assert(pikey.user_key.size() < subReader_->commonPrefix_.size());
-        if (reverse) {
+        if (reverse)
           SetIterInvalid();
-        }
-        else {
-          SeekToASCFirst();
-        }
+        else
+          SeekToAscendingFirst();
       }
       else {
         assert(pikey.user_key.size() > cplen);
         assert(pikey.user_key[cplen] != subReader_->commonPrefix_[cplen]);
-        if ((byte_t(pikey.user_key[cplen]) < subReader_->commonPrefix_[cplen])) {
-          if (reverse) {
-            SetIterInvalid();
-          }
-          else {
-            SeekToASCFirst();
-          }
+        if ((byte_t(pikey.user_key[cplen]) < subReader_->commonPrefix_[cplen]) ^ reverse) {
+          if (reverse)
+            SeekToAscendingLast();
+          else
+            SeekToAscendingFirst();
         }
         else {
-          if (reverse) {
-            SeekToASCLast();
-          }
-          else {
-            SetIterInvalid();
-          }
+          SetIterInvalid();
         }
       }
     }
@@ -299,20 +290,23 @@ protected:
         if (!ok) {
           // searchKey is reverse_bytewise less than all keys in database
           iter_->SeekToLast();
-          ok = iter_->Valid();
+          assert(iter_->Valid()); // TerarkIndex should not empty
+          ok = true;
           cmp = -1;
         }
-        else if ((cmp = SliceOf(iter_->key()).compare(SubStr(pikey.user_key, cplen))) != 0) {
-          assert(cmp > 0);
-          iter_->Prev();
-          ok = iter_->Valid();
+        else {
+          cmp = SliceOf(iter_->key()).compare(SubStr(pikey.user_key, cplen));
+          if (cmp != 0) {
+            assert(cmp > 0);
+            iter_->Prev();
+            ok = iter_->Valid();
+          }
         }
       }
       else {
         cmp = 0;
-        if (ok) {
+        if (ok)
           cmp = SliceOf(iter_->key()).compare(SubStr(pikey.user_key, cplen));
-        }
       }
       if (UnzipIterRecord(ok)) {
         if (0 == cmp) {
@@ -336,9 +330,8 @@ protected:
   }
   virtual void SetIterInvalid() {
     TryPinBuffer(interKeyBuf_xx_);
-    if (iter_) {
+    if (iter_)
       iter_->SetInvalid();
-    }
     validx_ = 0;
     valnum_ = 0;
     pInterKey_.user_key = Slice();
@@ -562,17 +555,15 @@ public:
       SetIterInvalid();
       return;
     }
-    if (subReader != subReader_) {
+    if (subReader_ != subReader) {
       subReader_ = subReader;
-      iter_.reset(subReader_->index_->NewIterator());
+      iter_.reset(subReader->index_->NewIterator());
     }
     if (!pikey.user_key.starts_with(SliceOf(subReader->prefix_))) {
-      if (reverse) {
-        SeekToASCLast();
-      }
-      else {
-        SeekToASCFirst();
-      }
+      if (reverse)
+        SeekToAscendingLast();
+      else
+        SeekToAscendingFirst();
     }
     else {
       pikey.user_key.remove_prefix(subReader->prefix_.size());
@@ -582,14 +573,14 @@ public:
           if (subReader->subIndex_ != 0) {
             subReader_ = subIndex_->GetSubReader(subReader->subIndex_ - 1);
             iter_.reset(subReader_->index_->NewIterator());
-            SeekToASCLast();
+            SeekToAscendingLast();
           }
         }
         else {
           if (subReader->subIndex_ != subIndex_->GetSubCount() - 1) {
             subReader_ = subIndex_->GetSubReader(subReader->subIndex_ + 1);
             iter_.reset(subReader_->index_->NewIterator());
-            SeekToASCFirst();
+            SeekToAscendingFirst();
           }
         }
       }
@@ -626,23 +617,19 @@ protected:
   bool IndexIterPrev() override {
     TryPinBuffer(interKeyBuf_xx_);
     if (reverse) {
-      if (iter_->Next()) {
+      if (iter_->Next())
         return true;
-      }
-      if (subReader_->subIndex_ == subIndex_->GetSubCount() - 1) {
+      if (subReader_->subIndex_ == subIndex_->GetSubCount() - 1)
         return false;
-      }
       subReader_ = subIndex_->GetSubReader(subReader_->subIndex_ + 1);
       iter_.reset(subReader_->index_->NewIterator());
       return iter_->SeekToFirst();
     }
     else {
-      if (iter_->Prev()) {
+      if (iter_->Prev())
         return true;
-      }
-      if (subReader_->subIndex_ == 0) {
+      if (subReader_->subIndex_ == 0)
         return false;
-      }
       subReader_ = subIndex_->GetSubReader(subReader_->subIndex_ - 1);
       iter_.reset(subReader_->index_->NewIterator());
       return iter_->SeekToLast();
@@ -651,23 +638,19 @@ protected:
   bool IndexIterNext() override {
     TryPinBuffer(interKeyBuf_xx_);
     if (reverse) {
-      if (iter_->Prev()) {
+      if (iter_->Prev())
         return true;
-      }
-      if (subReader_->subIndex_ == 0) {
+      if (subReader_->subIndex_ == 0)
         return false;
-      }
       subReader_ = subIndex_->GetSubReader(subReader_->subIndex_ - 1);
       iter_.reset(subReader_->index_->NewIterator());
       return iter_->SeekToLast();
     }
     else {
-      if (iter_->Next()) {
+      if (iter_->Next())
         return true;
-      }
-      if (subReader_->subIndex_ == subIndex_->GetSubCount() - 1) {
+      if (subReader_->subIndex_ == subIndex_->GetSubCount() - 1)
         return false;
-      }
       subReader_ = subIndex_->GetSubReader(subReader_->subIndex_ + 1);
       iter_.reset(subReader_->index_->NewIterator());
       return iter_->SeekToFirst();
@@ -728,8 +711,7 @@ Status TerarkZipSubReader::Get(SequenceNumber global_seqno, const ReadOptions& r
     user_key = Slice(reinterpret_cast<const char*>(&u64_target), 8);
   }
 #endif
-  assert(user_key.size() >= prefix_.size());
-  assert(fstringOf(user_key).substr(0, prefix_.size()) == prefix_);
+  assert(user_key.starts_with(prefix_));
   user_key.remove_prefix(prefix_.size());
   size_t cplen = user_key.difference_offset(commonPrefix_);
   if (commonPrefix_.size() != cplen) {
@@ -1203,6 +1185,10 @@ Status TerarkZipTableMultiReader::SubIndex::Init(
   return Status::OK();
 }
 
+size_t TerarkZipTableMultiReader::SubIndex::GetPrefixLen() const {
+  return prefixLen_;
+}
+
 size_t TerarkZipTableMultiReader::SubIndex::GetSubCount() const {
   return partCount_;
 }
@@ -1242,13 +1228,12 @@ Status
 TerarkZipTableMultiReader::Get(const ReadOptions& ro, const Slice& ikey,
   GetContext* get_context, bool skip_filters) {
   int flag = skip_filters ? TerarkZipSubReader::FlagSkipFilter : TerarkZipSubReader::FlagNone;
-  ParsedInternalKey pikey;
-  if (ikey.size() < 8 + pikey.user_key.size()) {
+  if (ikey.size() <= 8 + subIndex_.GetPrefixLen()) {
     return Status::InvalidArgument("TerarkZipTableMultiReader::Get()",
-      "param target.size() < 8");
+      "param target.size() < 8 + PrefixLen");
   }
   auto subReader = subIndex_.GetSubReader(fstringOf(ikey).substr(0, ikey.size() - 8));
-  if (subReader == nullptr || fstringOf(ikey).substr(0, subReader->prefix_.size()) != subReader->prefix_) {
+  if (subReader == nullptr || !ikey.starts_with(subReader->prefix_)) {
     return Status::OK();
   }
   return subReader->Get(global_seqno_, ro, ikey, get_context, flag);
