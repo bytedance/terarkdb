@@ -196,77 +196,6 @@ public:
     SeekInternal(pikey);
   }
 
-  void SeekInternal(const ParsedInternalKey& pikey) {
-    TryPinBuffer(interKeyBuf_xx_);
-    // Damn MySQL-rocksdb may use "rev:" comparator
-    size_t cplen = fstringOf(pikey.user_key).commonPrefixLen(subReader_->commonPrefix_);
-    if (subReader_->commonPrefix_.size() != cplen) {
-      if (pikey.user_key.size() == cplen) {
-        assert(pikey.user_key.size() < subReader_->commonPrefix_.size());
-        if (reverse) {
-          TerarkZipTableIterator<reverse>::SeekToLast();
-          Next(); // move to EOF
-        }
-        else {
-          TerarkZipTableIterator<reverse>::SeekToFirst();
-        }
-      }
-      else {
-        assert(pikey.user_key.size() > cplen);
-        assert(pikey.user_key[cplen] != subReader_->commonPrefix_[cplen]);
-        if ((byte_t(pikey.user_key[cplen]) < subReader_->commonPrefix_[cplen]) ^ reverse) {
-          TerarkZipTableIterator<reverse>::SeekToFirst();
-        }
-        else {
-          TerarkZipTableIterator<reverse>::SeekToLast();
-          Next(); // move to EOF
-        }
-      }
-    }
-    else {
-      bool ok;
-      int cmp; // compare(iterKey, searchKey)
-      ok = iter_->Seek(fstringOf(pikey.user_key).substr(cplen));
-      if (reverse) {
-        if (!ok) {
-          // searchKey is reverse_bytewise less than all keys in database
-          iter_->SeekToLast();
-          ok = iter_->Valid();
-          cmp = -1;
-        }
-        else if ((cmp = SliceOf(iter_->key()).compare(SubStr(pikey.user_key, cplen))) != 0) {
-          assert(cmp > 0);
-          iter_->Prev();
-          ok = iter_->Valid();
-        }
-      }
-      else {
-        cmp = 0;
-        if (ok) {
-          cmp = SliceOf(iter_->key()).compare(SubStr(pikey.user_key, cplen));
-        }
-      }
-      if (UnzipIterRecord(ok)) {
-        if (0 == cmp) {
-          validx_ = size_t(-1);
-          do {
-            validx_++;
-            DecodeCurrKeyValue();
-            if (pInterKey_.sequence <= pikey.sequence) {
-              return; // done
-            }
-          } while (validx_ + 1 < valnum_);
-          // no visible version/sequence for target, use Next();
-          // if using Next(), version check is not needed
-          Next();
-        }
-        else {
-          DecodeCurrKeyValue();
-        }
-      }
-    }
-  }
-
   void Next() override {
     assert(iter_->Valid());
     validx_++;
@@ -316,23 +245,114 @@ public:
   }
 
 protected:
+  void SeekToASCFirst() {
+    if (UnzipIterRecord(iter_->SeekToFirst())) {
+      DecodeCurrKeyValue();
+    }
+  }
+  void SeekToASCLast() {
+    if (UnzipIterRecord(iter_->SeekToLast())) {
+      validx_ = valnum_ - 1;
+      DecodeCurrKeyValue();
+    }
+  }
+  void SeekInternal(const ParsedInternalKey& pikey) {
+    TryPinBuffer(interKeyBuf_xx_);
+    // Damn MySQL-rocksdb may use "rev:" comparator
+    size_t cplen = fstringOf(pikey.user_key).commonPrefixLen(subReader_->commonPrefix_);
+    if (subReader_->commonPrefix_.size() != cplen) {
+      if (pikey.user_key.size() == cplen) {
+        assert(pikey.user_key.size() < subReader_->commonPrefix_.size());
+        if (reverse) {
+          SetIterInvalid();
+        }
+        else {
+          SeekToASCFirst();
+        }
+      }
+      else {
+        assert(pikey.user_key.size() > cplen);
+        assert(pikey.user_key[cplen] != subReader_->commonPrefix_[cplen]);
+        if ((byte_t(pikey.user_key[cplen]) < subReader_->commonPrefix_[cplen])) {
+          if (reverse) {
+            SetIterInvalid();
+          }
+          else {
+            SeekToASCFirst();
+          }
+        }
+        else {
+          if (reverse) {
+            SeekToASCLast();
+          }
+          else {
+            SetIterInvalid();
+          }
+        }
+      }
+    }
+    else {
+      bool ok;
+      int cmp; // compare(iterKey, searchKey)
+      ok = iter_->Seek(fstringOf(pikey.user_key).substr(cplen));
+      if (reverse) {
+        if (!ok) {
+          // searchKey is reverse_bytewise less than all keys in database
+          iter_->SeekToLast();
+          ok = iter_->Valid();
+          cmp = -1;
+        }
+        else if ((cmp = SliceOf(iter_->key()).compare(SubStr(pikey.user_key, cplen))) != 0) {
+          assert(cmp > 0);
+          iter_->Prev();
+          ok = iter_->Valid();
+        }
+      }
+      else {
+        cmp = 0;
+        if (ok) {
+          cmp = SliceOf(iter_->key()).compare(SubStr(pikey.user_key, cplen));
+        }
+      }
+      if (UnzipIterRecord(ok)) {
+        if (0 == cmp) {
+          validx_ = size_t(-1);
+          do {
+            validx_++;
+            DecodeCurrKeyValue();
+            if (pInterKey_.sequence <= pikey.sequence) {
+              return; // done
+            }
+          } while (validx_ + 1 < valnum_);
+          // no visible version/sequence for target, use Next();
+          // if using Next(), version check is not needed
+          Next();
+        }
+        else {
+          DecodeCurrKeyValue();
+        }
+      }
+    }
+  }
   virtual void SetIterInvalid() {
     TryPinBuffer(interKeyBuf_xx_);
-    iter_->SetInvalid();
+    if (iter_) {
+      iter_->SetInvalid();
+    }
     validx_ = 0;
     valnum_ = 0;
     pInterKey_.user_key = Slice();
     pInterKey_.sequence = uint64_t(-1);
     pInterKey_.type = kMaxValue;
   }
-  bool IndexIterSeekToFirst() {
+  virtual bool IndexIterSeekToFirst() {
     TryPinBuffer(interKeyBuf_xx_);
     if (reverse)
       return iter_->SeekToLast();
     else
       return iter_->SeekToFirst();
   }
-  bool IndexIterSeekToLast() {
+  virtual bool IndexIterSeekToLast() {
     TryPinBuffer(interKeyBuf_xx_);
     if (reverse)
       return iter_->SeekToFirst();
@@ -529,36 +549,6 @@ public:
     return iter_ && iter_->Valid();
   }
 
-  void SeekToFirst() override {
-    const TerarkZipSubReader* subReader;
-    if (reverse) {
-      subReader = subIndex_->GetSubReader(subIndex_->GetSubCount() - 1);
-    }
-    else {
-      subReader = subIndex_->GetSubReader(0);
-    }
-    if (subReader_ != subReader) {
-      subReader_ = subReader;
-      iter_.reset(subReader->index_->NewIterator());
-    }
-    TerarkZipTableIterator<reverse>::SeekToFirst();
-  }
-
-  void SeekToLast() override {
-    const TerarkZipSubReader* subReader;
-    if (reverse) {
-      subReader = subIndex_->GetSubReader(0);
-    }
-    else {
-      subReader = subIndex_->GetSubReader(subIndex_->GetSubCount() - 1);
-    }
-    if (subReader_ != subReader) {
-      subReader_ = subReader;
-      iter_.reset(subReader->index_->NewIterator());
-    }
-    TerarkZipTableIterator<reverse>::SeekToLast();
-  }
-
   void Seek(const Slice& target) override {
     ParsedInternalKey pikey;
     if (!ParseInternalKey(target, &pikey)) {
@@ -576,13 +566,12 @@ public:
       subReader_ = subReader;
       iter_.reset(subReader_->index_->NewIterator());
     }
-    if (pikey.user_key.size() <= subReader->prefix_.size() ||
-      fstringOf(pikey.user_key).substr(0, subReader->prefix_.size()) != subReader->prefix_) {
+    if (!pikey.user_key.starts_with(SliceOf(subReader->prefix_))) {
       if (reverse) {
-        TerarkZipTableIterator<reverse>::SeekToLast();
+        SeekToASCLast();
       }
       else {
-        TerarkZipTableIterator<reverse>::SeekToFirst();
+        SeekToASCFirst();
       }
     }
     else {
@@ -593,14 +582,14 @@ public:
           if (subReader->subIndex_ != 0) {
             subReader_ = subIndex_->GetSubReader(subReader->subIndex_ - 1);
             iter_.reset(subReader_->index_->NewIterator());
-            TerarkZipTableIterator<reverse>::SeekToLast();
+            SeekToASCLast();
           }
         }
         else {
           if (subReader->subIndex_ != subIndex_->GetSubCount() - 1) {
             subReader_ = subIndex_->GetSubReader(subReader->subIndex_ + 1);
             iter_.reset(subReader_->index_->NewIterator());
-            TerarkZipTableIterator<reverse>::SeekToFirst();
+            SeekToASCFirst();
           }
         }
       }
@@ -608,15 +597,31 @@ public:
   }
 
 protected:
-  void SetIterInvalid() override {
+  bool IndexIterSeekToFirst() override {
     TryPinBuffer(interKeyBuf_xx_);
-    subReader_ = nullptr;
-    iter_.reset();
-    validx_ = 0;
-    valnum_ = 0;
-    pInterKey_.user_key = Slice();
-    pInterKey_.sequence = uint64_t(-1);
-    pInterKey_.type = kMaxValue;
+    if (reverse) {
+      subReader_ = subIndex_->GetSubReader(subIndex_->GetSubCount() - 1);
+      iter_.reset(subReader_->index_->NewIterator());
+      return iter_->SeekToLast();
+    }
+    else {
+      subReader_ = subIndex_->GetSubReader(0);
+      iter_.reset(subReader_->index_->NewIterator());
+      return iter_->SeekToFirst();
+    }
+  }
+  bool IndexIterSeekToLast() override {
+    TryPinBuffer(interKeyBuf_xx_);
+    if (reverse) {
+      subReader_ = subIndex_->GetSubReader(0);
+      iter_.reset(subReader_->index_->NewIterator());
+      return iter_->SeekToFirst();
+    }
+    else {
+      subReader_ = subIndex_->GetSubReader(subIndex_->GetSubCount() - 1);
+      iter_.reset(subReader_->index_->NewIterator());
+      return iter_->SeekToLast();
+    }
   }
   bool IndexIterPrev() override {
     TryPinBuffer(interKeyBuf_xx_);
