@@ -204,21 +204,21 @@ public:
       if (pikey.user_key.size() == cplen) {
         assert(pikey.user_key.size() < subReader_->commonPrefix_.size());
         if (reverse) {
-          TerarkZipTableIterator::SeekToLast();
+          TerarkZipTableIterator<reverse>::SeekToLast();
           Next(); // move to EOF
         }
         else {
-          TerarkZipTableIterator::SeekToFirst();
+          TerarkZipTableIterator<reverse>::SeekToFirst();
         }
       }
       else {
         assert(pikey.user_key.size() > cplen);
         assert(pikey.user_key[cplen] != subReader_->commonPrefix_[cplen]);
         if ((byte_t(pikey.user_key[cplen]) < subReader_->commonPrefix_[cplen]) ^ reverse) {
-          TerarkZipTableIterator::SeekToFirst();
+          TerarkZipTableIterator<reverse>::SeekToFirst();
         }
         else {
-          TerarkZipTableIterator::SeekToLast();
+          TerarkZipTableIterator<reverse>::SeekToLast();
           Next(); // move to EOF
         }
       }
@@ -541,7 +541,7 @@ public:
       subReader_ = subReader;
       iter_.reset(subReader->index_->NewIterator());
     }
-    TerarkZipTableIterator::SeekToFirst();
+    TerarkZipTableIterator<reverse>::SeekToFirst();
   }
 
   void SeekToLast() override {
@@ -556,7 +556,7 @@ public:
       subReader_ = subReader;
       iter_.reset(subReader->index_->NewIterator());
     }
-    TerarkZipTableIterator::SeekToLast();
+    TerarkZipTableIterator<reverse>::SeekToLast();
   }
 
   void Seek(const Slice& target) override {
@@ -579,10 +579,10 @@ public:
     if (pikey.user_key.size() <= subReader->prefix_.size() ||
       fstringOf(pikey.user_key).substr(0, subReader->prefix_.size()) != subReader->prefix_) {
       if (reverse) {
-        TerarkZipTableIterator::SeekToLast();
+        TerarkZipTableIterator<reverse>::SeekToLast();
       }
       else {
-        TerarkZipTableIterator::SeekToFirst();
+        TerarkZipTableIterator<reverse>::SeekToFirst();
       }
     }
     else {
@@ -593,14 +593,14 @@ public:
           if (subReader->subIndex_ != 0) {
             subReader_ = subIndex_->GetSubReader(subReader->subIndex_ - 1);
             iter_.reset(subReader_->index_->NewIterator());
-            TerarkZipTableIterator::SeekToLast();
+            TerarkZipTableIterator<reverse>::SeekToLast();
           }
         }
         else {
           if (subReader->subIndex_ != subIndex_->GetSubCount() - 1) {
             subReader_ = subIndex_->GetSubReader(subReader->subIndex_ + 1);
             iter_.reset(subReader_->index_->NewIterator());
-            TerarkZipTableIterator::SeekToFirst();
+            TerarkZipTableIterator<reverse>::SeekToFirst();
           }
         }
       }
