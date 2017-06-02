@@ -527,7 +527,6 @@ ZipValueToFinish(fstring tmpIndexFile, std::function<void()> waitIndex) {
 #if defined(TerocksPrivateCode)
   auto avgValueLen = kvs.value.m_totla_key_len / properties_.num_entries;
   if (avgValueLen < table_options_.minDictZipValueSize) {
-    size_t fixedLen = kvs.value.m_max_cnt_key;
     size_t fixedNum = kvs.value.m_cnt_of_max_cnt_key;
     size_t variaNum = kvs.stat.numKeys - fixedNum;
     auto buildPlainBlobStore = [&] {
@@ -684,7 +683,6 @@ ZipValueToFinishMulti(fstring tmpIndexFile, std::function<void()> waitIndex) {
     kvs.valueFileBegin = fileOffset;
     auto avgValueLen = kvs.value.m_totla_key_len / properties_.num_entries;
     if (avgValueLen < minDictZipValueSize) {
-      size_t fixedLen = kvs.value.m_max_cnt_key;
       size_t fixedNum = kvs.value.m_cnt_of_max_cnt_key;
       size_t variaNum = kvs.stat.numKeys - fixedNum;
       FileStream file(tmpStoreFile.fpath.c_str(), "ab+");

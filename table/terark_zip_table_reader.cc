@@ -535,6 +535,9 @@ protected:
   using base_t::validx_;
   using base_t::status_;
 
+  using base_t::SeekToAscendingFirst;
+  using base_t::SeekToAscendingLast;
+  using base_t::SetIterInvalid;
   using base_t::TryPinBuffer;
   using base_t::SeekInternal;
   using base_t::UnzipIterRecord;
