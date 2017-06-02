@@ -1305,9 +1305,6 @@ rocksdb::TerarkZipTableMultiReader::Open(RandomAccessFileReader* file, uint64_t 
   }
   s = ReadMetaBlock(file, file_size, kTerarkZipTableMagicNumber, ioptions,
     kTerarkZipTableValueDictBlock, &valueDictBlock);
-  if (!s.ok()) {
-    return s;
-  }
   s = ReadMetaBlock(file, file_size, kTerarkZipTableMagicNumber, ioptions,
     kTerarkZipTableIndexBlock, &indexBlock);
   if (!s.ok()) {
