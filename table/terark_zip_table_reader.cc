@@ -247,12 +247,15 @@ public:
 protected:
   void SeekToAscendingFirst() {
     if (UnzipIterRecord(iter_->SeekToFirst())) {
+      if (reverse)
+        validx_ = valnum_ - 1;
       DecodeCurrKeyValue();
     }
   }
   void SeekToAscendingLast() {
     if (UnzipIterRecord(iter_->SeekToLast())) {
-      validx_ = valnum_ - 1;
+      if (!reverse)
+        validx_ = valnum_ - 1;
       DecodeCurrKeyValue();
     }
   }
