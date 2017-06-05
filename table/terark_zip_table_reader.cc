@@ -754,16 +754,11 @@ Status TerarkZipSubReader::Get(SequenceNumber global_seqno, const ReadOptions& r
   auto zvType = type_.size()
     ? ZipValueType(type_[recId])
     : ZipValueType::kZeroSeq;
-  if (ZipValueType::kMulti == zvType) {
-    g_tbuf.resize_no_init(sizeof(uint32_t));
-  }
-  else {
-    g_tbuf.erase_all();
-  }
   switch (zvType) {
   default:
     return Status::Aborted("TerarkZipTableReader::Get()", "Bad ZipValueType");
   case ZipValueType::kZeroSeq:
+    g_tbuf.erase_all();
     try {
       if (0==ro.value_data_offset && UINT32_MAX==ro.value_data_length)
         store_->get_record_append(recId, &g_tbuf);
@@ -778,6 +773,7 @@ Status TerarkZipSubReader::Get(SequenceNumber global_seqno, const ReadOptions& r
       Slice((char*)g_tbuf.data(), g_tbuf.size()));
     break;
   case ZipValueType::kValue: { // should be a kTypeValue, the normal case
+    g_tbuf.erase_all();
     try {
       if (0==ro.value_data_offset && UINT32_MAX==ro.value_data_length)
         store_->get_record_append(recId, &g_tbuf);
@@ -804,6 +800,7 @@ Status TerarkZipSubReader::Get(SequenceNumber global_seqno, const ReadOptions& r
     }
     break; }
   case ZipValueType::kMulti: { // more than one value
+    g_tbuf.resize_no_init(sizeof(uint32_t));
     try {
       store_->get_record_append(recId, &g_tbuf);
     }
