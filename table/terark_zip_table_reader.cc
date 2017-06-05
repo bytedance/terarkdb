@@ -133,6 +133,8 @@ protected:
   ZipValueType            zValtype_;
   size_t                  valnum_;
   size_t                  validx_;
+  uint32_t                value_data_offset;
+  uint32_t                value_data_length;
   Status                  status_;
   PinnedIteratorsManager* pinned_iters_mgr_;
   valvec<valvec<byte_t>>  pinned_buffer_;
@@ -140,6 +142,7 @@ protected:
 public:
   TerarkZipTableIterator(const TableReaderOptions& tro
     , const TerarkZipSubReader *subReader
+    , const ReadOptions& ro
     , SequenceNumber global_seqno)
     : table_reader_options_(&tro)
     , subReader_(subReader)
@@ -155,6 +158,8 @@ public:
     pInterKey_.user_key = Slice();
     pInterKey_.sequence = uint64_t(-1);
     pInterKey_.type = kMaxValue;
+    value_data_offset = ro.value_data_offset;
+    value_data_length = ro.value_data_length;
   }
 
   void SetPinnedItersMgr(PinnedIteratorsManager* pinned_iters_mgr) {
@@ -388,11 +393,17 @@ protected:
         TryPinBuffer(valueBuf_);
         if (ZipValueType::kMulti == zValtype_) {
           valueBuf_.resize_no_init(sizeof(uint32_t)); // for offsets[valnum_]
+          subReader_->store_->get_record_append(recId, &valueBuf_);
+        }
+        else if (0 == value_data_offset && UINT32_MAX == value_data_length) {
+          valueBuf_.erase_all();
+          subReader_->store_->get_record_append(recId, &valueBuf_);
         }
         else {
           valueBuf_.erase_all();
+          subReader_->store_->get_slice_append(recId,
+              value_data_offset, value_data_length, &valueBuf_);
         }
-        subReader_->store_->get_record_append(recId, &valueBuf_);
       }
       catch (const BadCrc32cException& ex) { // crc checksum error
         SetIterInvalid();
@@ -402,6 +413,25 @@ protected:
       }
       if (ZipValueType::kMulti == zValtype_) {
         ZipValueMultiValue::decode(valueBuf_, &valnum_);
+        size_t rvOffset = value_data_offset;
+        size_t rvLength = value_data_length;
+        if (rvOffset || rvLength < UINT32_MAX) {
+            uint32_t* offsets = (uint32_t*)valueBuf_.data();
+            size_t pos = 0;
+            char* base = (char*)(offsets + valnum_ + 1);
+            for(size_t i = 0; i < valnum_; ++i) {
+                size_t q = offsets[i + 0];
+                size_t r = offsets[i + 1];
+                size_t l = r - q;
+                offsets[i] = pos;
+                if (l > rvOffset) {
+                    size_t l2 = std::min(l - rvOffset, rvLength);
+                    memmove(base + pos, base + q + rvOffset, l2);
+                    pos += l2;
+                }
+            }
+            offsets[valnum_] = pos;
+        }
       }
       else {
         valnum_ = 1;
@@ -515,8 +545,9 @@ class TerarkZipTableMultiIterator : public TerarkZipTableIterator<reverse> {
 public:
   TerarkZipTableMultiIterator(const TableReaderOptions& tro
     , const TerarkZipTableMultiReader::SubIndex& subIndex
+    , const ReadOptions& ro
     , SequenceNumber global_seqno)
-    : TerarkZipTableIterator<reverse>(tro, nullptr, global_seqno)
+    : TerarkZipTableIterator<reverse>(tro, nullptr, ro, global_seqno)
     , subIndex_(&subIndex) {
   }
 protected:
@@ -692,7 +723,6 @@ NewRangeTombstoneIterator(const ReadOptions & read_options) {
   return nullptr;
 }
 
-
 Status TerarkZipSubReader::Get(SequenceNumber global_seqno, const ReadOptions& ro, const Slice& ikey,
   GetContext* get_context, int flag) const {
   (void)flag;
@@ -730,20 +760,34 @@ Status TerarkZipSubReader::Get(SequenceNumber global_seqno, const ReadOptions& r
   else {
     g_tbuf.erase_all();
   }
-  try {
-    store_->get_record_append(recId, &g_tbuf);
-  }
-  catch (const terark::BadChecksumException& ex) {
-    return Status::Corruption("TerarkZipTableReader::Get()", ex.what());
-  }
   switch (zvType) {
   default:
     return Status::Aborted("TerarkZipTableReader::Get()", "Bad ZipValueType");
   case ZipValueType::kZeroSeq:
+    try {
+      if (0==ro.value_data_offset && UINT32_MAX==ro.value_data_length)
+        store_->get_record_append(recId, &g_tbuf);
+      else // get_slice_append does not support entropy zip
+        store_->get_slice_append(recId,
+          ro.value_data_offset, ro.value_data_length, &g_tbuf);
+    }
+    catch (const terark::BadChecksumException& ex) {
+      return Status::Corruption("TerarkZipTableReader::Get()", ex.what());
+    }
     get_context->SaveValue(ParsedInternalKey(pikey.user_key, global_seqno, kTypeValue),
       Slice((char*)g_tbuf.data(), g_tbuf.size()));
     break;
   case ZipValueType::kValue: { // should be a kTypeValue, the normal case
+    try {
+      if (0==ro.value_data_offset && UINT32_MAX==ro.value_data_length)
+        store_->get_record_append(recId, &g_tbuf);
+      else // get_slice_append does not support entropy zip
+        store_->get_slice_append(recId,
+          ro.value_data_offset, ro.value_data_length, &g_tbuf);
+    }
+    catch (const terark::BadChecksumException& ex) {
+      return Status::Corruption("TerarkZipTableReader::Get()", ex.what());
+    }
                                // little endian uint64_t
     uint64_t seq = *(uint64_t*)g_tbuf.data() & kMaxSequenceNumber;
     if (seq <= pikey.sequence) {
@@ -760,8 +804,18 @@ Status TerarkZipSubReader::Get(SequenceNumber global_seqno, const ReadOptions& r
     }
     break; }
   case ZipValueType::kMulti: { // more than one value
+    try {
+      store_->get_record_append(recId, &g_tbuf);
+    }
+    catch (const terark::BadChecksumException& ex) {
+      return Status::Corruption("TerarkZipTableReader::Get()", ex.what());
+    }
     size_t num = 0;
     auto mVal = ZipValueMultiValue::decode(g_tbuf, &num);
+    const size_t rvOffset = ro.value_data_offset;
+    const size_t rvLength = ro.value_data_length;
+    const size_t lenLimit = rvLength < UINT32_MAX
+                          ? rvOffset + rvLength : size_t(-1);
     for (size_t i = 0; i < num; ++i) {
       Slice val = mVal->getValueData(i, num);
       SequenceNumber sn;
@@ -773,6 +827,12 @@ Status TerarkZipSubReader::Get(SequenceNumber global_seqno, const ReadOptions& r
       if (sn <= pikey.sequence) {
         val.remove_prefix(sizeof(SequenceNumber));
         // only kTypeMerge will return true
+        if (val.size_ > lenLimit) {
+            val.size_ = rvLength;
+            val.data_ += rvOffset;
+        } else {
+            val.remove_prefix(rvOffset);
+        }
         bool hasMoreValue = get_context->SaveValue(
           ParsedInternalKey(pikey.user_key, sn, valtype), val);
         if (!hasMoreValue) {
@@ -1004,19 +1064,19 @@ NewIterator(const ReadOptions& ro, Arena* arena, bool skip_filters) {
   if (isReverseBytewiseOrder_) {
     if (arena) {
       return new(arena->AllocateAligned(sizeof(TerarkZipTableIterator<true>)))
-        TerarkZipTableIterator<true>(table_reader_options_, &subReader_, global_seqno_);
+        TerarkZipTableIterator<true>(table_reader_options_, &subReader_, ro, global_seqno_);
     }
     else {
-      return new TerarkZipTableIterator<true>(table_reader_options_, &subReader_, global_seqno_);
+      return new TerarkZipTableIterator<true>(table_reader_options_, &subReader_, ro, global_seqno_);
     }
   }
   else {
     if (arena) {
       return new(arena->AllocateAligned(sizeof(TerarkZipTableIterator<false>)))
-        TerarkZipTableIterator<false>(table_reader_options_, &subReader_, global_seqno_);
+        TerarkZipTableIterator<false>(table_reader_options_, &subReader_, ro, global_seqno_);
     }
     else {
-      return new TerarkZipTableIterator<false>(table_reader_options_, &subReader_, global_seqno_);
+      return new TerarkZipTableIterator<false>(table_reader_options_, &subReader_, ro, global_seqno_);
     }
   }
 }
@@ -1201,25 +1261,25 @@ const TerarkZipSubReader* TerarkZipTableMultiReader::SubIndex::GetSubReader(fstr
   return (this->*GetSubReaderPtr)(key);
 }
 
-InternalIterator* TerarkZipTableMultiReader::NewIterator(const ReadOptions &,
+InternalIterator* TerarkZipTableMultiReader::NewIterator(const ReadOptions& ro,
   Arena *arena, bool skip_filters) {
   (void)skip_filters; // unused
   if (isReverseBytewiseOrder_) {
     if (arena) {
       return new(arena->AllocateAligned(sizeof(TerarkZipTableMultiIterator<true>)))
-        TerarkZipTableMultiIterator<true>(table_reader_options_, subIndex_, global_seqno_);
+        TerarkZipTableMultiIterator<true>(table_reader_options_, subIndex_, ro, global_seqno_);
     }
     else {
-      return new TerarkZipTableMultiIterator<true>(table_reader_options_, subIndex_, global_seqno_);
+      return new TerarkZipTableMultiIterator<true>(table_reader_options_, subIndex_, ro, global_seqno_);
     }
   }
   else {
     if (arena) {
       return new(arena->AllocateAligned(sizeof(TerarkZipTableMultiIterator<false>)))
-        TerarkZipTableMultiIterator<false>(table_reader_options_, subIndex_, global_seqno_);
+        TerarkZipTableMultiIterator<false>(table_reader_options_, subIndex_, ro, global_seqno_);
     }
     else {
-      return new TerarkZipTableMultiIterator<false>(table_reader_options_, subIndex_, global_seqno_);
+      return new TerarkZipTableMultiIterator<false>(table_reader_options_, subIndex_, ro, global_seqno_);
     }
   }
 }
