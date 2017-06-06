@@ -141,12 +141,13 @@ protected:
 
 public:
   TerarkZipTableIterator(const TableReaderOptions& tro
-    , const TerarkZipSubReader *subReader
-    , const ReadOptions& ro
-    , SequenceNumber global_seqno)
+                       , const TerarkZipSubReader *subReader
+                       , const ReadOptions& ro
+                       , SequenceNumber global_seqno)
     : table_reader_options_(&tro)
     , subReader_(subReader)
-    , global_seqno_(global_seqno) {
+    , global_seqno_(global_seqno)
+  {
     if (subReader_ != nullptr) {
       iter_.reset(subReader_->index_->NewIterator());
       iter_->SetInvalid();

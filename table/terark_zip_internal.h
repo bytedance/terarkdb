@@ -203,6 +203,10 @@ public:
     : table_options_(tzto), fallback_factory_(fallback) {
     adaptive_factory_ = NewAdaptiveTableFactory();
   }
+  ~TerarkZipTableFactory() {
+      delete fallback_factory_;
+      delete adaptive_factory_;
+  }
 
   const char* Name() const override { return "TerarkZipTable"; }
 

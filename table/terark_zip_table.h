@@ -122,6 +122,7 @@ void
 TerarkZipMultiCFOptionsFromEnv(const struct DBOptions& db_options,
       const std::vector<struct ColumnFamilyDescriptor>& cfvec);
 
+///@param fallback take ownership of fallback
 class TableFactory*
 NewTerarkZipTableFactory(const TerarkZipTableOptions&,
 						 class TableFactory* fallback);
