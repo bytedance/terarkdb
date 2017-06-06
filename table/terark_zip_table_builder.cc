@@ -541,14 +541,14 @@ ZipValueToFinish(fstring tmpIndexFile, std::function<void()> waitIndex) {
       store.reset(builder->finish());
     };
     auto buildZipOffsetBlobStore = [&] {
-      size_t blockUnits = kvs.value.m_max_cnt_key;
+      size_t blockUnits = table_options_.offsetArrayBlockUnits;
       auto builder = UniquePtrOf(new terark::ZipOffsetBlobStore::Builder(blockUnits));
       BuilderWriteValues(input, kvs, [&](fstring value) {builder->add_record(value); });
       store.reset(builder->finish());
     };
     t3 = g_pf.now();
     if (table_options_.offsetArrayBlockUnits) {
-      if (variaNum / 64 < kvs.stat.numKeys) {
+      if (variaNum * 64 < kvs.stat.numKeys) {
         buildMixedLenBlobStore();
       }
       else {
@@ -702,14 +702,14 @@ ZipValueToFinishMulti(fstring tmpIndexFile, std::function<void()> waitIndex) {
         store->save_mmap(writeToFile);
       };
       auto buildZipOffsetBlobStore = [&] {
-        size_t blockUnits = kvs.value.m_max_cnt_key;
+        size_t blockUnits = table_options_.offsetArrayBlockUnits;
         auto builder = UniquePtrOf(new terark::ZipOffsetBlobStore::Builder(blockUnits));
         BuilderWriteValues(input, kvs, [&](fstring value) {builder->add_record(value); });
         auto store = UniquePtrOf(builder->finish());
         store->save_mmap(writeToFile);
       };
       if (table_options_.offsetArrayBlockUnits) {
-        if (variaNum / 64 < kvs.stat.numKeys) {
+        if (variaNum * 64 < kvs.stat.numKeys) {
           buildMixedLenBlobStore();
         }
         else {

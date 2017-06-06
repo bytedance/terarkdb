@@ -141,7 +141,7 @@ protected:
 
 public:
   TerarkZipTableIterator(const TableReaderOptions& tro
-                       , const TerarkZipSubReader *subReader
+                       , const TerarkZipSubReader* subReader
                        , const ReadOptions& ro
                        , SequenceNumber global_seqno)
     : table_reader_options_(&tro)
@@ -337,7 +337,7 @@ protected:
       }
     }
   }
-  virtual void SetIterInvalid() {
+  void SetIterInvalid() override {
     TryPinBuffer(interKeyBuf_xx_);
     if (iter_)
       iter_->SetInvalid();
@@ -548,14 +548,14 @@ template<bool reverse>
 class TerarkZipTableMultiIterator : public TerarkZipTableIterator<reverse> {
 public:
   TerarkZipTableMultiIterator(const TableReaderOptions& tro
-    , const TerarkZipTableMultiReader::SubIndex& subIndex
-    , const ReadOptions& ro
-    , SequenceNumber global_seqno)
+                            , const TerarkZipTableMultiReader::SubIndex& subIndex
+                            , const ReadOptions& ro
+                            , SequenceNumber global_seqno)
     : TerarkZipTableIterator<reverse>(tro, nullptr, ro, global_seqno)
-    , subIndex_(&subIndex) {
-  }
+    , subIndex_(&subIndex)
+  {}
 protected:
-  const TerarkZipTableMultiReader::SubIndex *subIndex_;
+  const TerarkZipTableMultiReader::SubIndex* subIndex_;
 
   typedef TerarkZipTableIterator<reverse> base_t;
   using base_t::subReader_;
@@ -716,7 +716,7 @@ LoadTombstone(RandomAccessFileReader * file, uint64_t file_size) {
   return s;
 }
 
-InternalIterator *TerarkZipTableTombstone::
+InternalIterator* TerarkZipTableTombstone::
 NewRangeTombstoneIterator(const ReadOptions & read_options) {
   if (tombstone_) {
     auto iter = tombstone_->NewIterator(
@@ -1088,7 +1088,7 @@ NewIterator(const ReadOptions& ro, Arena* arena, bool skip_filters) {
 
 Status
 TerarkZipTableReader::Get(const ReadOptions& ro, const Slice& ikey,
-  GetContext* get_context, bool skip_filters) {
+                          GetContext* get_context, bool skip_filters) {
   int flag = skip_filters ? TerarkZipSubReader::FlagSkipFilter : TerarkZipSubReader::FlagNone;
 #if defined(TERARK_SUPPORT_UINT64_COMPARATOR) && BOOST_ENDIAN_LITTLE_BYTE
   if (isUint64Comparator_) {
@@ -1184,13 +1184,14 @@ TerarkZipTableMultiReader::SubIndex::GetSubReaderBytewiseReverse(fstring key) co
 }
 
 Status TerarkZipTableMultiReader::SubIndex::Init(
-  fstring offsetMemory,
-  fstring indexMempry,
-  fstring storeMemory,
-  fstring dictMemory,
-  fstring typeMemory,
-  fstring commonPrefixMemory,
-  bool reverse) {
+                      fstring offsetMemory,
+                      fstring indexMempry,
+                      fstring storeMemory,
+                      fstring dictMemory,
+                      fstring typeMemory,
+                      fstring commonPrefixMemory,
+                      bool reverse)
+{
   TerarkZipMultiOffsetInfo offset;
   if (!offset.risk_set_memory(offsetMemory.data(), offsetMemory.size())) {
     return Status::Corruption("bad offset block");
@@ -1211,16 +1212,21 @@ Status TerarkZipTableMultiReader::SubIndex::Init(
       auto src = (const byte_t *)offset.prefixSet_.data() + i * prefixLen_;
       *u64p = ReadUint64(src, src + prefixLen_);
     }
-    GetSubReaderPtr = reverse ? &SubIndex::GetSubReaderU64BinaryReverse :
-      partCount_ < 32 ? &SubIndex::GetSubReaderU64Sequential : &SubIndex::GetSubReaderU64Binary;
+    if (reverse) {
+        GetSubReaderPtr = &SubIndex::GetSubReaderU64BinaryReverse;
+    }
+    else {
+        GetSubReaderPtr = partCount_ < 32 ? &SubIndex::GetSubReaderU64Sequential
+                                          : &SubIndex::GetSubReaderU64Binary;
+    }
   }
   else {
     for (size_t i = 0; i < partCount_; ++i) {
       memcpy(prefixSet_.data() + i * alignedPrefixLen_,
         offset.prefixSet_.data() + i * prefixLen_, prefixLen_);
     }
-    GetSubReaderPtr = reverse ? &SubIndex::GetSubReaderBytewiseReverse :
-      &SubIndex::GetSubReaderBytewise;
+    GetSubReaderPtr = reverse ? &SubIndex::GetSubReaderBytewiseReverse
+                              : &SubIndex::GetSubReaderBytewise;
   }
 
   TerarkZipMultiOffsetInfo::KeyValueOffset last = {0, 0, 0, 0};
@@ -1232,13 +1238,15 @@ Status TerarkZipTableMultiReader::SubIndex::Init(
       part.subIndex_ = i;
       part.prefix_.assign(offset.prefixSet_.data() + i * prefixLen_, prefixLen_);
       part.index_ = TerarkIndex::LoadMemory({indexMempry.data() + last.key,
-        ptrdiff_t(curr.key - last.key)});
-      part.store_.reset(BlobStore::load_from_user_memory({storeMemory.data() +
-        last.value, ptrdiff_t(curr.value - last.value)}, dictMemory));
+                                             ptrdiff_t(curr.key - last.key)});
+      part.store_.reset(BlobStore::load_from_user_memory(
+        { storeMemory.data() + last.value,
+          ptrdiff_t(curr.value - last.value) },
+        dictMemory));
       assert(bitfield_array<2>::compute_mem_size(part.index_->NumKeys()) == curr.type - last.type);
       part.type_.risk_set_data((byte_t*)(typeMemory.data() + last.type), part.index_->NumKeys());
       part.commonPrefix_.assign(commonPrefixMemory.data() + last.commonPrefix,
-        curr.commonPrefix - last.commonPrefix);
+                                curr.commonPrefix - last.commonPrefix);
       last = curr;
     }
   }
