@@ -525,14 +525,14 @@ ZipValueToFinish(fstring tmpIndexFile, std::function<void()> waitIndex) {
   DictZipBlobStore::ZipStat dzstat;
   long long t3, t4;
 #if defined(TerocksPrivateCode)
-  auto avgValueLen = kvs.value.m_totla_key_len / properties_.num_entries;
+  auto avgValueLen = kvs.value.m_total_key_len / properties_.num_entries;
   if (avgValueLen < table_options_.minDictZipValueSize) {
     size_t fixedNum = kvs.value.m_cnt_of_max_cnt_key;
     size_t variaNum = kvs.stat.numKeys - fixedNum;
     auto buildPlainBlobStore = [&] {
       auto plain = new terark::PlainBlobStore();
       store.reset(plain);
-      plain->reset_with_content_size(kvs.value.m_totla_key_len);
+      plain->reset_with_content_size(kvs.value.m_total_key_len);
       BuilderWriteValues(input, kvs, [&](fstring value) {plain->add_record(value); });
       plain->finish();
     };
@@ -681,7 +681,7 @@ ZipValueToFinishMulti(fstring tmpIndexFile, std::function<void()> waitIndex) {
   for (size_t i = 0; i < histogram_.size(); ++i) {
     auto& kvs = histogram_[i];
     kvs.valueFileBegin = fileOffset;
-    auto avgValueLen = kvs.value.m_totla_key_len / properties_.num_entries;
+    auto avgValueLen = kvs.value.m_total_key_len / properties_.num_entries;
     if (avgValueLen < minDictZipValueSize) {
       size_t fixedNum = kvs.value.m_cnt_of_max_cnt_key;
       size_t variaNum = kvs.stat.numKeys - fixedNum;
@@ -691,7 +691,7 @@ ZipValueToFinishMulti(fstring tmpIndexFile, std::function<void()> waitIndex) {
       };
       auto buildPlainBlobStore = [&] {
         auto store = UniquePtrOf(new terark::PlainBlobStore());
-        store->reset_with_content_size(kvs.value.m_totla_key_len);
+        store->reset_with_content_size(kvs.value.m_total_key_len);
         BuilderWriteValues(input, kvs, [&](fstring value) {store->add_record(value); });
         store->finish();
         store->save_mmap(writeToFile);
