@@ -337,7 +337,7 @@ protected:
       }
     }
   }
-  void SetIterInvalid() override {
+  void SetIterInvalid() {
     TryPinBuffer(interKeyBuf_xx_);
     if (iter_)
       iter_->SetInvalid();
