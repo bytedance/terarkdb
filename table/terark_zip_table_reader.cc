@@ -252,12 +252,15 @@ public:
 protected:
   void SeekToAscendingFirst() {
     if (UnzipIterRecord(iter_->SeekToFirst())) {
+      if (reverse)
+        validx_ = valnum_ - 1;
       DecodeCurrKeyValue();
     }
   }
   void SeekToAscendingLast() {
     if (UnzipIterRecord(iter_->SeekToLast())) {
-      validx_ = valnum_ - 1;
+      if (!reverse)
+        validx_ = valnum_ - 1;
       DecodeCurrKeyValue();
     }
   }
@@ -563,6 +566,9 @@ protected:
   using base_t::validx_;
   using base_t::status_;
 
+  using base_t::SeekToAscendingFirst;
+  using base_t::SeekToAscendingLast;
+  using base_t::SetIterInvalid;
   using base_t::TryPinBuffer;
   using base_t::SeekInternal;
   using base_t::UnzipIterRecord;
@@ -1362,9 +1368,6 @@ rocksdb::TerarkZipTableMultiReader::Open(RandomAccessFileReader* file, uint64_t 
   }
   s = ReadMetaBlock(file, file_size, kTerarkZipTableMagicNumber, ioptions,
     kTerarkZipTableValueDictBlock, &valueDictBlock);
-  if (!s.ok()) {
-    return s;
-  }
   s = ReadMetaBlock(file, file_size, kTerarkZipTableMagicNumber, ioptions,
     kTerarkZipTableIndexBlock, &indexBlock);
   if (!s.ok()) {

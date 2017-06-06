@@ -13,6 +13,7 @@
 #if defined(TerocksPrivateCode)
 # include <terark/zbs/plain_blob_store.hpp>
 # include <terark/zbs/mixed_len_blob_store.hpp>
+# include <terark/zbs/zip_offset_blob_store.hpp>
 #endif // TerocksPrivateCode
 
 
@@ -522,28 +523,45 @@ ZipValueToFinish(fstring tmpIndexFile, std::function<void()> waitIndex) {
   DictZipBlobStore::ZipStat dzstat;
   long long t3, t4;
 #if defined(TerocksPrivateCode)
-  auto avgValueLen = kvs.value.m_totla_key_len / properties_.num_entries;
+  auto avgValueLen = kvs.value.m_total_key_len / properties_.num_entries;
   if (avgValueLen < table_options_.minDictZipValueSize) {
-    //  double maxFrequentKeyRatio =
-    //  double(valueLenHistogram_.m_cnt_of_max_cnt_key) / keyStat_.numKeys;
-    //  size_t totalLen = valueLenHistogram_.m_cnt_sum;
-    size_t fixedLen = kvs.value.m_max_cnt_key;
     size_t fixedNum = kvs.value.m_cnt_of_max_cnt_key;
     size_t variaNum = kvs.stat.numKeys - fixedNum;
-    t3 = g_pf.now();
-    if (4 * variaNum + kvs.stat.numKeys * 5 / 4 < 4 * kvs.stat.numKeys) {
-      // use MixedLenBlobStore
+    auto buildPlainBlobStore = [&] {
+      auto plain = new terark::PlainBlobStore();
+      store.reset(plain);
+      plain->reset_with_content_size(kvs.value.m_total_key_len);
+      BuilderWriteValues(input, kvs, [&](fstring value) {plain->add_record(value); });
+      plain->finish();
+    };
+    auto buildMixedLenBlobStore = [&] {
+      size_t fixedLen = kvs.value.m_max_cnt_key;
       auto builder = UniquePtrOf(new terark::MixedLenBlobStore::Builder(fixedLen));
       BuilderWriteValues(input, kvs, [&](fstring value) {builder->add_record(value); });
       store.reset(builder->finish());
+    };
+    auto buildZipOffsetBlobStore = [&] {
+      size_t blockUnits = kvs.value.m_max_cnt_key;
+      auto builder = UniquePtrOf(new terark::ZipOffsetBlobStore::Builder(blockUnits));
+      BuilderWriteValues(input, kvs, [&](fstring value) {builder->add_record(value); });
+      store.reset(builder->finish());
+    };
+    t3 = g_pf.now();
+    if (table_options_.offsetArrayBlockUnits) {
+      if (variaNum / 64 < kvs.stat.numKeys) {
+        buildMixedLenBlobStore();
+      }
+      else {
+        buildZipOffsetBlobStore();
+      }
     }
     else {
-      // use PlainBlobStore
-      auto plain = new terark::PlainBlobStore();
-      store.reset(plain);
-      plain->reset_with_content_size(kvs.value.m_totla_key_len);
-      BuilderWriteValues(input, kvs, [&](fstring value) {plain->add_record(value); });
-      plain->finish();
+      if (4 * variaNum + kvs.stat.numKeys * 5 / 4 < 4 * kvs.stat.numKeys) {
+        buildMixedLenBlobStore();
+      }
+      else {
+        buildPlainBlobStore();
+      }
     }
     t4 = g_pf.now();
     dzstat.dictBuildTime = 0.000001;
@@ -655,15 +673,66 @@ ZipValueToFinishMulti(fstring tmpIndexFile, std::function<void()> waitIndex) {
     }
     zbuilder->finishSample();
   }
+  auto minDictZipValueSize = table_options_.minDictZipValueSize / 2;
   size_t fileOffset = 0;
+  size_t dictRefCount = 0;
   for (size_t i = 0; i < histogram_.size(); ++i) {
     auto& kvs = histogram_[i];
     kvs.valueFileBegin = fileOffset;
-    zbuilder->prepare(kvs.stat.numKeys, tmpStoreFile, fileOffset);
-    BuilderWriteValues(input, kvs, [&](fstring value) {zbuilder->addRecord(value); });
-    auto store = zbuilder->finish(DictZipBlobStore::ZipBuilder::FinishWithoutReload);
-    assert(store == nullptr);
-    (void)store; // shut up !
+    auto avgValueLen = kvs.value.m_total_key_len / properties_.num_entries;
+    if (avgValueLen < minDictZipValueSize) {
+      size_t fixedNum = kvs.value.m_cnt_of_max_cnt_key;
+      size_t variaNum = kvs.stat.numKeys - fixedNum;
+      FileStream file(tmpStoreFile.fpath.c_str(), "ab+");
+      auto writeToFile = [&](const void* d, size_t s) {
+        file.ensureWrite(d, s);
+      };
+      auto buildPlainBlobStore = [&] {
+        auto store = UniquePtrOf(new terark::PlainBlobStore());
+        store->reset_with_content_size(kvs.value.m_total_key_len);
+        BuilderWriteValues(input, kvs, [&](fstring value) {store->add_record(value); });
+        store->finish();
+        store->save_mmap(writeToFile);
+      };
+      auto buildMixedLenBlobStore = [&] {
+        size_t fixedLen = kvs.value.m_max_cnt_key;
+        auto builder = UniquePtrOf(new terark::MixedLenBlobStore::Builder(fixedLen));
+        BuilderWriteValues(input, kvs, [&](fstring value) {builder->add_record(value); });
+        auto store = UniquePtrOf(builder->finish());
+        store->save_mmap(writeToFile);
+      };
+      auto buildZipOffsetBlobStore = [&] {
+        size_t blockUnits = kvs.value.m_max_cnt_key;
+        auto builder = UniquePtrOf(new terark::ZipOffsetBlobStore::Builder(blockUnits));
+        BuilderWriteValues(input, kvs, [&](fstring value) {builder->add_record(value); });
+        auto store = UniquePtrOf(builder->finish());
+        store->save_mmap(writeToFile);
+      };
+      if (table_options_.offsetArrayBlockUnits) {
+        if (variaNum / 64 < kvs.stat.numKeys) {
+          buildMixedLenBlobStore();
+        }
+        else {
+          buildZipOffsetBlobStore();
+        }
+      }
+      else {
+        if (4 * variaNum + kvs.stat.numKeys * 5 / 4 < 4 * kvs.stat.numKeys) {
+          buildMixedLenBlobStore();
+        }
+        else {
+          buildPlainBlobStore();
+        }
+      }
+    }
+    else {
+      ++dictRefCount;
+      zbuilder->prepare(kvs.stat.numKeys, tmpStoreFile, fileOffset);
+      BuilderWriteValues(input, kvs, [&](fstring value) {zbuilder->addRecord(value); });
+      auto store = zbuilder->finish(DictZipBlobStore::ZipBuilder::FinishWithoutReload);
+      assert(store == nullptr);
+      (void)store; // shut up !
+    }
     fileOffset = FileStream(tmpStoreFile.fpath.c_str(), "rb+").fsize();
     kvs.valueFileEnd = fileOffset;
     assert((kvs.valueFileEnd - kvs.valueFileBegin) % 8 == 0);
@@ -673,7 +742,8 @@ ZipValueToFinishMulti(fstring tmpIndexFile, std::function<void()> waitIndex) {
   DebugCleanup();
   // wait for indexing complete, if indexing is slower than value compressing
   waitIndex();
-  return WriteSSTFileMulti(t3, t4, tmpIndexFile, tmpStoreFile, zbuilder->getDictMem(), dzstat);
+  return WriteSSTFileMulti(t3, t4, tmpIndexFile, tmpStoreFile,
+    dictRefCount > 0 ? zbuilder->getDictMem() : "", dzstat);
 }
 
 #endif // TerocksPrivateCode
@@ -1220,9 +1290,11 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4,
   commonPrefix.resize(terark::align_up(commonPrefixLenSize, 16), 0);
   WriteBlock(commonPrefix, file_, &offset_, &commonPrefixBlock);
   properties_.data_size = dataBlock.size();
-  s = WriteBlock(dictMem, file_, &offset_, &dictBlock);
-  if (!s.ok()) {
-    return s;
+  if (!dictMem.empty()) {
+    s = WriteBlock(dictMem, file_, &offset_, &dictBlock);
+    if (!s.ok()) {
+      return s;
+    }
   }
   try {
     if (isReverseBytewiseOrder_) {
@@ -1283,7 +1355,7 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4,
   properties_.index_size = indexBlock.size();
   WriteMetaData({
     {&kTerarkZipTableExtendedBlock                                , licenseHandle     },
-    {dictMem.size() ? &kTerarkZipTableValueDictBlock : NULL       , dictBlock         },
+    {!dictMem.empty() ? &kTerarkZipTableValueDictBlock : NULL     , dictBlock         },
     {&kTerarkZipTableIndexBlock                                   , indexBlock        },
     {!zvTypeBlock.IsNull() ? &kTerarkZipTableValueTypeBlock : NULL, zvTypeBlock       },
     {&kTerarkZipTableOffsetBlock                                  , offsetBlock       },                     
