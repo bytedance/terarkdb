@@ -207,9 +207,7 @@ TableProperties TerarkZipTableBuilder::GetTableProperties() const {
   return ret;
 }
 
-
 void TerarkZipTableBuilder::Add(const Slice& key, const Slice& value) {
-
   if (table_options_.debugLevel == 4) {
     rocksdb::ParsedInternalKey ikey;
     rocksdb::ParseInternalKey(key, &ikey);
