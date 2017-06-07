@@ -137,7 +137,6 @@ protected:
   uint32_t                value_data_length;
   Status                  status_;
   PinnedIteratorsManager* pinned_iters_mgr_;
-  valvec<valvec<byte_t>>  pinned_buffer_;
 
 public:
   TerarkZipTableIterator(const TableReaderOptions& tro
@@ -380,9 +379,7 @@ protected:
   }
   void TryPinBuffer(valvec<byte_t>& buf) {
     if (pinned_iters_mgr_ && pinned_iters_mgr_->PinningEnabled()) {
-      pinned_iters_mgr_->PinPtr(buf.data(), [](void* p) {
-        free(p);
-      });
+      pinned_iters_mgr_->PinPtr(buf.data(), free);
       buf.risk_release_ownership();
     }
   }
