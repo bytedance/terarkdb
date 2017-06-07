@@ -19,10 +19,6 @@
 
 namespace rocksdb {
 
-#ifdef TERARK_ZIP_TRIAL_VERSION
-const char g_trail_rand_delete[] = "TERARK_ZIP_TRIAL_VERSION random deleted this row";
-#endif
-
 using terark::SortableStrVec;
 using terark::byte_swap;
 
@@ -465,10 +461,12 @@ Status TerarkZipTableBuilder::Finish() {
 
       long long t1 = g_pf.now();
       histogram_[i].keyFileBegin = fileOffset;
-      factory->Build(tempKeyFileReader, table_options_, [&fileOffset, &writer](const void* data, size_t size) {
-        fileOffset += size;
-        writer.ensureWrite(data, size);
-      }, keyStat);
+      factory->Build(tempKeyFileReader, table_options_
+          , [&fileOffset, &writer](const void* data, size_t size) {
+              fileOffset += size;
+              writer.ensureWrite(data, size);
+            }
+          , keyStat);
       histogram_[i].keyFileEnd = fileOffset;
       assert((fileOffset - histogram_[i].keyFileBegin) % 8 == 0);
       long long tt = g_pf.now();
@@ -575,9 +573,6 @@ ZipValueToFinish(fstring tmpIndexFile, std::function<void()> waitIndex) {
   {
     t3 = g_pf.now();
     zbuilder = UniquePtrOf(this->createZipBuilder());
-#if defined(TERARK_ZIP_TRIAL_VERSION)
-    zbuilder->addSample(g_trail_rand_delete);
-#endif
     {
       valvec<byte_t> sample;
       NativeDataInput<InputBuffer> input(&tmpSampleFile_.fp);
@@ -639,9 +634,6 @@ ZipValueToFinishMulti(fstring tmpIndexFile, std::function<void()> waitIndex) {
   DictZipBlobStore::ZipStat dzstat;
   long long t3, t4;
 
-#if defined(TERARK_ZIP_TRIAL_VERSION)
-  zbuilder->addSample(g_trail_rand_delete);
-#endif
   t3 = g_pf.now();
   {
     valvec<byte_t> sample;
@@ -766,9 +758,6 @@ TerarkZipTableBuilder::BuilderWriteValues(NativeDataInput<InputBuffer>& input,
   if (nullptr == second_pass_iter_)
   {
     valvec<byte_t> value;
-#if defined(TERARK_ZIP_TRIAL_VERSION)
-    valvec<byte_t> tmpValueBuf;
-#endif
     size_t entryId = 0;
     size_t bitPos = 0;
     for (size_t recId = 0; recId < kvs.stat.numKeys; recId++) {
@@ -781,13 +770,6 @@ TerarkZipTableBuilder::BuilderWriteValues(NativeDataInput<InputBuffer>& input,
       if (1 == oneSeqLen && (kTypeDeletion == vType || kTypeValue == vType)) {
         if (0 == seqNum && kTypeValue == vType) {
           bzvType.set0(recId, size_t(ZipValueType::kZeroSeq));
-#if defined(TERARK_ZIP_TRIAL_VERSION)
-          if (randomGenerator_() < randomGenerator_.max() / 1000) {
-            input >> tmpValueBuf;
-            value.assign(fstring(g_trail_rand_delete));
-          }
-          else
-#endif
             input >> value;
         }
         else {
@@ -879,12 +861,7 @@ TerarkZipTableBuilder::BuilderWriteValues(NativeDataInput<InputBuffer>& input,
         }
         if (0 == pikey.sequence && kTypeValue == pikey.type) {
           bzvType.set0(recId, size_t(ZipValueType::kZeroSeq));
-#if defined(TERARK_ZIP_TRIAL_VERSION)
-          if (randomGenerator_() < randomGenerator_.max() / 1000)
-            write(fstring(g_trail_rand_delete));
-          else
-#endif
-            write(fstringOf(curVal));
+          write(fstringOf(curVal));
         }
         else {
           if (kTypeValue == pikey.type) {

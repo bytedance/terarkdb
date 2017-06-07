@@ -260,7 +260,7 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo) {
 void TerarkZipDBOptionsFromEnv(DBOptions& dbo) {
   MyGetInt(dbo, base_background_compactions, 3);
   MyGetInt(dbo,  max_background_compactions, 5);
-  MyGetInt(dbo,  max_background_flushes    , 2);
+  MyGetInt(dbo,  max_background_flushes    , 3);
   MyGetInt(dbo,  max_subcompactions        , 1);
 
   dbo.env->SetBackgroundThreads(dbo.max_background_compactions, rocksdb::Env::LOW);
