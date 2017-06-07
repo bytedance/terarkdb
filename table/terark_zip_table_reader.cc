@@ -164,7 +164,6 @@ public:
   }
 
   void SetPinnedItersMgr(PinnedIteratorsManager* pinned_iters_mgr) {
-    pinned_buffer_.clear();
     pinned_iters_mgr_ = pinned_iters_mgr;
   }
 
@@ -381,14 +380,10 @@ protected:
   }
   void TryPinBuffer(valvec<byte_t>& buf) {
     if (pinned_iters_mgr_ && pinned_iters_mgr_->PinningEnabled()) {
-      if (pinned_buffer_.size() > 100) {
-          THROW_STD(runtime_error
-              , "pinned_buffer count = %zd, maybe memory leak"
-              ,  pinned_buffer_.size()
-          );
-      }
-      pinned_buffer_.push_back();
-      pinned_buffer_.back().swap(buf);
+      pinned_iters_mgr_->PinPtr(buf.data(), [](void* p) {
+        free(p);
+      });
+      buf.risk_release_ownership();
     }
   }
   bool UnzipIterRecord(bool hasRecord) {
