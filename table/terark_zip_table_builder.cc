@@ -261,7 +261,7 @@ void TerarkZipTableBuilder::Add(const Slice& key, const Slice& value) {
       prevUserKey_.assign(userKey);
     }
     valueBits_.push_back(true);
-    valueBuf_.emplace_back((char*)seqType, 8);
+    valueBuf_.emplace_back((char*)&seqType, 8);
     valueBuf_.back_append(value.data(), value.size());
     if (!zbuilder_) {
       if (!value.empty() && randomGenerator_() < sampleUpperBound_) {
