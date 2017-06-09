@@ -1295,7 +1295,7 @@ Status
 TerarkZipTableMultiReader::Get(const ReadOptions& ro, const Slice& ikey,
   GetContext* get_context, bool skip_filters) {
   int flag = skip_filters ? TerarkZipSubReader::FlagSkipFilter : TerarkZipSubReader::FlagNone;
-  if (ikey.size() <= 8 + subIndex_.GetPrefixLen()) {
+  if (ikey.size() < 8 + subIndex_.GetPrefixLen()) {
     return Status::InvalidArgument("TerarkZipTableMultiReader::Get()",
       "param target.size() < 8 + PrefixLen");
   }
