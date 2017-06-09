@@ -108,13 +108,13 @@ private:
     , long long& t5, long long& t6, long long& t7);
   Status WriteSSTFile(long long t3, long long t4
     , fstring tmpIndexFile, terark::BlobStore* zstore
-    , fstring dictMem
+    , terark::BlobStore::Dictionary dict
     , const DictZipBlobStore::ZipStat& dzstat);
 #if defined(TerocksPrivateCode)
   Status WriteSSTFileMulti(long long t3, long long t4
     , fstring tmpIndexFile
     , fstring tmpStoreFilePrefix
-    , fstring dictMem
+    , terark::BlobStore::Dictionary dict
     , const DictZipBlobStore::ZipStat& dzstat);
 #endif // TerocksPrivateCode
   Status WriteMetaData(std::initializer_list<std::pair<const std::string*, BlockHandle> > blocks);

@@ -1006,7 +1006,6 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   if (tzto_.warmUpIndexOnOpen) {
     MmapWarmUp(fstringOf(indexBlock.data));
     if (!tzto_.warmUpValueOnOpen) {
-      MmapWarmUp(subReader_.store_->get_dict());
       for (fstring block : subReader_.store_->get_index_blocks()) {
         MmapWarmUp(block);
       }
