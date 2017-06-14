@@ -128,6 +128,9 @@ void TerarkZipAutoConfigForOnlineDB(struct TerarkZipTableOptions& tzo,
   cfo.compaction_style = rocksdb::kCompactionStyleUniversal;
   cfo.compaction_options_universal.allow_trivial_move = true;
 
+  cfo.max_bytes_for_level_base = cfo.write_buffer_size * 4;
+  cfo.max_bytes_for_level_multiplier = cfo.target_file_size_multiplier;
+
   dbo.create_if_missing = true;
   dbo.allow_mmap_reads = true;
   dbo.max_background_flushes = 2;
