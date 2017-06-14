@@ -1182,7 +1182,7 @@ Status TerarkZipTableMultiReader::SubIndex::Init(
                       fstring offsetMemory,
                       fstring indexMempry,
                       fstring storeMemory,
-                      fstring dictMemory,
+                      terark::BlobStore::Dictionary dict,
                       fstring typeMemory,
                       fstring commonPrefixMemory,
                       bool reverse)
@@ -1237,7 +1237,7 @@ Status TerarkZipTableMultiReader::SubIndex::Init(
       part.store_.reset(BlobStore::load_from_user_memory(
         { storeMemory.data() + last.value,
           ptrdiff_t(curr.value - last.value) },
-        dictMemory));
+        dict));
       assert(bitfield_array<2>::compute_mem_size(part.index_->NumKeys()) == curr.type - last.type);
       part.type_.risk_set_data((byte_t*)(typeMemory.data() + last.type), part.index_->NumKeys());
       part.commonPrefix_.assign(commonPrefixMemory.data() + last.commonPrefix,
