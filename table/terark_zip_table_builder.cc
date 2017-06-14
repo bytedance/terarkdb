@@ -934,6 +934,10 @@ Status TerarkZipTableBuilder::WriteStore(TerarkIndex* index, terark::BlobStore* 
   , long long& t5, long long& t6, long long& t7) {
   auto& keyStat = kvs.stat;
   auto& bzvType = kvs.type;
+  INFO(ioptions_.info_log
+      , "TerarkZipTableBuilder::Finish():this=%p:  index type = %-32s, store type = %-20s\n"
+      , this, index->Name(), store->name()
+  );
   if (index->NeedsReorder()) {
     bitfield_array<2> zvType2(keyStat.numKeys);
     terark::AutoFree<uint32_t> newToOld(keyStat.numKeys, UINT32_MAX);

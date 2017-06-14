@@ -67,6 +67,7 @@ public:
   static unique_ptr<TerarkIndex> LoadFile(fstring fpath);
   static unique_ptr<TerarkIndex> LoadMemory(fstring mem);
   virtual ~TerarkIndex();
+  virtual const char* Name() const = 0;
   virtual size_t Find(fstring key) const = 0;
   virtual size_t NumKeys() const = 0;
   virtual fstring Memory() const = 0;
@@ -86,3 +87,4 @@ public:
     )
 
 }
+ 
