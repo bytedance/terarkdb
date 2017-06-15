@@ -10,7 +10,6 @@
 #include "terark_zip_index.h"
 #include "terark_zip_common.h"
 #include "terark_zip_internal.h"
-#include "terark_zip_table_builder.h"
 #include "terark_zip_table_reader.h"
 
 // std headers
@@ -89,8 +88,6 @@ static std::string base64_decode(const std::string& base64) {
 }
 
 #endif // TerocksPrivateCode
-
-
 
 
 #ifdef TERARK_SUPPORT_UINT64_COMPARATOR
@@ -698,6 +695,7 @@ TerarkZipTableFactory::NewTableBuilder(
   );
 #endif
   if (0 == nth_new_terark_table_) {
+    extern long long g_lastTime; // defined in terark_zip_table_builder.cc
     g_lastTime = g_pf.now();
   }
   if (fallback_factory_) {
@@ -712,7 +710,17 @@ TerarkZipTableFactory::NewTableBuilder(
     }
   }
   nth_new_terark_table_++;
-  return new TerarkZipTableBuilder(
+
+  // defined in terark_zip_table_builder.cc
+  extern
+  TableBuilder*
+  createTerarkZipTableBuilder(const TerarkZipTableOptions& tzo,
+                              const TableBuilderOptions&   tbo,
+                              uint32_t                     column_family_id,
+                              WritableFileWriter*          file,
+                              size_t                       key_prefixLen);
+
+  return createTerarkZipTableBuilder(
     table_options_,
     table_builder_options,
     column_family_id,

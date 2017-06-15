@@ -45,14 +45,6 @@ using terark::BlobStore;
 using terark::Uint32Histogram;
 using terark::DictZipBlobStore;
 
-extern std::mutex g_sumMutex;
-extern size_t g_sumKeyLen;
-extern size_t g_sumValueLen;
-extern size_t g_sumUserKeyLen;
-extern size_t g_sumUserKeyNum;
-extern size_t g_sumEntryNum;
-extern long long g_lastTime;
-
 class TerarkZipTableBuilder : public TableBuilder, boost::noncopyable {
 public:
   TerarkZipTableBuilder(

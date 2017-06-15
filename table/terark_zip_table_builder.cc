@@ -208,7 +208,8 @@ void TerarkZipTableBuilder::Add(const Slice& key, const Slice& value) {
   if (table_options_.debugLevel == 4) {
     rocksdb::ParsedInternalKey ikey;
     rocksdb::ParseInternalKey(key, &ikey);
-    fprintf(tmpDumpFile_.fp(), "DEBUG: 1st pass => %s / %s \n", ikey.DebugString(true).c_str(), value.ToString(true).c_str());
+    fprintf(tmpDumpFile_, "DEBUG: 1st pass => %s / %s \n",
+        ikey.DebugString(true).c_str(), value.ToString(true).c_str());
   }
   DEBUG_PRINT_1ST_PASS_KEY(key);
   uint64_t seqType = DecodeFixed64(key.data() + key.size() - 8);
@@ -1594,4 +1595,14 @@ void TerarkZipTableBuilder::UpdateValueLenHistogram() {
 }
 
 
+TableBuilder*
+createTerarkZipTableBuilder(const TerarkZipTableOptions& tzo,
+                            const TableBuilderOptions&   tbo,
+                            uint32_t                     column_family_id,
+                            WritableFileWriter*          file,
+                            size_t                       key_prefixLen)
+{
+    return new TerarkZipTableBuilder(tzo, tbo, column_family_id, file, key_prefixLen);
 }
+
+} // namespace
