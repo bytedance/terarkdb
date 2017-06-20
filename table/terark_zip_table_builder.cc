@@ -563,6 +563,10 @@ ZipValueToFinish(fstring tmpIndexFile, std::function<void()> waitIndex) {
         buildPlainBlobStore();
       }
     }
+    //TODO use builder
+    store->save_mmap(tmpStoreFile);
+    store.reset(terark::BlobStore::load_from_mmap(tmpStoreFile, false));
+    //end TODO
     t4 = g_pf.now();
     dzstat.dictBuildTime = 0.000001;
     dzstat.dictFileTime = 0.000001;
