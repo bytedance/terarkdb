@@ -71,7 +71,7 @@ Block* DetachBlockContents(BlockContents &tombstoneBlock, SequenceNumber global_
     size_t sz = terark::align_down(
       tombstoneBlock.data.size() - (aligned_ptr - ptr), 4096);
     if (sz > 0) {
-      madvise((void*)aligned_ptr, sz, MADV_DONTNEED);
+        posix_madvise((void*)aligned_ptr, sz, POSIX_MADV_DONTNEED);
     }
   }
 #endif
