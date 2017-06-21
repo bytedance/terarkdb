@@ -89,7 +89,7 @@ static void MmapWarmUpBytes(const void* addr, size_t len) {
   auto base = (const byte_t*)(uintptr_t(addr) & uintptr_t(~4095));
   auto size = terark::align_up((size_t(addr) & 4095) + len, 4096);
 #ifdef POSIX_MADV_WILLNEED
-  posix_madvise((void*)addr, len, POSIX_MADV_WILLNEED);
+  posix_madvise((void*)base, size, POSIX_MADV_WILLNEED);
 #endif
   for (size_t i = 0; i < size; i += 4096) {
     volatile byte_t unused = ((const volatile byte_t*)base)[i];
@@ -108,6 +108,25 @@ static void MmapWarmUp(const Vec& uv) {
   MmapWarmUpBytes(uv.data(), uv.mem_size());
 }
 
+static void MmapColdizeBytes(const void* addr, size_t len) {
+#ifdef POSIX_MADV_DONTNEED
+    auto base = (const byte_t*)(uintptr_t(addr) & uintptr_t(~4095));
+    auto size = terark::align_up((size_t(addr) & 4095) + len, 4096);
+    posix_madvise((void*)base, size, POSIX_MADV_DONTNEED);
+#endif
+}
+static void MmapColdize(fstring mem) {
+    MmapColdizeBytes(mem.data(), mem.size());
+}
+/*
+static void MmapColdize(Slice mem) {
+    MmapColdizeBytes(mem.data(), mem.size());
+}
+template<class Vec>
+static void MmapColdize(const Vec& uv) {
+    MmapColdizeBytes(uv.data(), uv.mem_size());
+}
+*/
 
 }
 
@@ -1013,6 +1032,8 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   }
   if (tzto_.warmUpValueOnOpen) {
     MmapWarmUp(subReader_.store_->get_mmap());
+  } else {
+    MmapColdize(subReader_.store_->get_mmap());
   }
   long long t1 = g_pf.now();
   subReader_.index_->BuildCache(tzto_.indexCacheRatio);
@@ -1418,6 +1439,8 @@ rocksdb::TerarkZipTableMultiReader::Open(RandomAccessFileReader* file, uint64_t 
   }
   if (tzto_.warmUpValueOnOpen) {
     MmapWarmUp(fstring(file_data.data(), props->data_size));
+  } else {
+    MmapColdize(fstring(file_data.data(), props->data_size));
   }
 
   long long t1 = g_pf.now();
