@@ -19,6 +19,30 @@ namespace terark {
 
 namespace rocksdb {
 
+void TerarkZipDeleteTempFiles(const std::string& tmpPath) {
+  Env* env = Env::Default();
+  std::vector<std::string> files;
+  env->GetChildren(tmpPath, &files);
+  std::string fpath;
+  for (const std::string& f : files) {
+    if (false
+        || fstring(f).startsWith("Terark-")
+        || fstring(f).startsWith("q1-")
+        || fstring(f).startsWith("q2-")
+        || fstring(f).startsWith("linkSeqVec-")
+        || fstring(f).startsWith("linkVec-")
+        || fstring(f).startsWith("label-")
+        || fstring(f).startsWith("nextStrVec-")
+        ) {
+      fpath.resize(0);
+      fpath.append(tmpPath);
+      fpath.push_back('/');
+      fpath.append(f);
+      env->DeleteFile(fpath);
+    }
+  }
+}
+
 static
 int ComputeFileSizeMultiplier(double diskLimit, double minVal, int levels) {
   if (diskLimit > 0) {

@@ -262,7 +262,9 @@ public:
 
   class UIntIndexIterator : public TerarkIndex::Iterator {
   public:
-    UIntIndexIterator(const TerarkUintIndex& index) : index_(index) {}
+    UIntIndexIterator(const TerarkUintIndex& index) : index_(index) {
+      pos_ = size_t(-1);
+    }
     virtual ~UIntIndexIterator() {}
 
     virtual bool SeekToFirst() {
@@ -344,7 +346,7 @@ public:
     void UpdateBuffer() {
       AssignUint64(buffer_, buffer_ + index_.keyLength_, pos_ + index_.minValue_);
     }
-    uint64_t pos_;
+    size_t pos_;
     byte_t buffer_[8];
     const TerarkUintIndex& index_;
   };
