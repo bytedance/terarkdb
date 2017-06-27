@@ -8,6 +8,7 @@
 #ifdef _MSC_VER
 # include <Windows.h>
 # define strcasecmp _stricmp
+# undef DeleteFile
 #else
 # include <unistd.h>
 #endif
