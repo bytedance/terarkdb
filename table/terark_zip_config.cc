@@ -303,10 +303,12 @@ bool TerarkZipIsBlackListCF(const std::string& cfname) {
     std::lock_guard<std::mutex> lock(mtx);
     if (!isInitialized) {
       if (const char* env = getenv("TerarkZipTable_blackListColumnFamily")) {
-        valvec<fstring> names;
-        fstring(env).split(',', &names);
-        for (auto nm : names)
-          blackList.insert_i(nm);
+          const char* end = env + strlen(env);
+          for (auto  curr = env; curr < end; ) {
+            auto next = std::find(curr, end, ',');
+            blackList.insert_i(fstring(curr, next));
+            curr = next + 1;
+          }
       }
       isInitialized = true;
     }
