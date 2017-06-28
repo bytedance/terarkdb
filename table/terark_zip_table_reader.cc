@@ -109,27 +109,27 @@ static void MmapWarmUp(const Vec& uv) {
 }
 
 static void MmapColdizeBytes(const void* addr, size_t len) {
-	size_t low = terark::align_up(size_t(addr), 4096);
-	size_t hig = terark::align_down(size_t(addr) + len, 4096);
-	if (low < hig) {
-		size_t size = hig - low;
+  size_t low = terark::align_up(size_t(addr), 4096);
+  size_t hig = terark::align_down(size_t(addr) + len, 4096);
+  if (low < hig) {
+    size_t size = hig - low;
 #ifdef POSIX_MADV_DONTNEED
-		posix_madvise((void*)low, size, POSIX_MADV_DONTNEED);
+    posix_madvise((void*)low, size, POSIX_MADV_DONTNEED);
 #elif defined(_MSC_VER) // defined(_WIN32) || defined(_WIN64)
-		VirtualFree((void*)low, size, MEM_DECOMMIT);
+    VirtualFree((void*)low, size, MEM_DECOMMIT);
 #endif
-	}
+  }
 }
 static void MmapColdize(fstring mem) {
-    MmapColdizeBytes(mem.data(), mem.size());
+  MmapColdizeBytes(mem.data(), mem.size());
 }
 /*
 static void MmapColdize(Slice mem) {
-    MmapColdizeBytes(mem.data(), mem.size());
+  MmapColdizeBytes(mem.data(), mem.size());
 }
 template<class Vec>
 static void MmapColdize(const Vec& uv) {
-    MmapColdizeBytes(uv.data(), uv.mem_size());
+  MmapColdizeBytes(uv.data(), uv.mem_size());
 }
 */
 

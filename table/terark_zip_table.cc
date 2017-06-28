@@ -486,20 +486,6 @@ void TerarkZipMultiOffsetInfo::risk_release_ownership() {
 class TableFactory*
   NewTerarkZipTableFactory(const TerarkZipTableOptions& tzto,
     class TableFactory* fallback) {
-  int err = 0;
-  try {
-    TempFileDeleteOnClose test;
-    test.path = tzto.localTempDir + "/Terark-XXXXXX";
-    test.open_temp();
-    test.writer << "Terark";
-    test.complete_write();
-  }
-  catch (...) {
-    fprintf(stderr
-      , "ERROR: bad localTempDir %s %s\n"
-      , tzto.localTempDir.c_str(), err ? strerror(err) : "");
-    abort();
-  }
   TerarkZipTableFactory* factory = new TerarkZipTableFactory(tzto, fallback);
   if (tzto.debugLevel < 0) {
     STD_INFO("NewTerarkZipTableFactory(\n%s)\n",
@@ -774,6 +760,21 @@ Status
 TerarkZipTableFactory::SanitizeOptions(const DBOptions& db_opts,
   const ColumnFamilyOptions& cf_opts)
   const {
+  auto table_factory = dynamic_cast<TerarkZipTableFactory*>(cf_opts.table_factory.get());
+  assert(table_factory);
+  auto& tzto = *reinterpret_cast<const TerarkZipTableOptions*>(table_factory->GetOptions());
+  try {
+    TempFileDeleteOnClose test;
+    test.path = tzto.localTempDir + "/Terark-XXXXXX";
+    test.open_temp();
+    test.writer << "Terark";
+    test.complete_write();
+  }
+  catch (...) {
+    std::string msg = "ERROR: bad localTempDir : " + tzto.localTempDir;
+    fprintf(stderr , "%s\n" , msg.c_str());
+    return Status::InvalidArgument("TerarkZipTableFactory::SanitizeOptions()", msg);
+  }
   if (!IsBytewiseComparator(cf_opts.comparator)) {
     return Status::InvalidArgument("TerarkZipTableFactory::SanitizeOptions()",
       "user comparator must be 'leveldb.BytewiseComparator'");
