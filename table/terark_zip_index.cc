@@ -156,7 +156,7 @@ public:
                std::function<void(const void *, size_t)> write,
                KeyStat& ks) const override {
 #if !defined(NDEBUG)
-      SortableStrVec backupKeys;
+//    SortableStrVec backupKeys;
 #endif
       size_t sumPrefixLen = ks.commonPrefixLen * ks.numKeys;
       SortableStrVec keyVec;
@@ -176,25 +176,37 @@ public:
         fstring curr = keyVec[i];
         assert(prev < curr);
       }
-      backupKeys = keyVec;
+//    backupKeys = keyVec;
 #endif
       terark::NestLoudsTrieConfig conf;
       conf.nestLevel = tzopt.indexNestLevel;
-      const size_t smallmem = 1000*1024*1024;
-      const size_t myWorkMem = keyVec.mem_size();
-      if (myWorkMem > smallmem) {
-        // use tmp files during index building
+      if (tzopt.indexTempLevel >= 0 && tzopt.indexTempLevel < 4) {
+        const size_t smallmem = tzopt.smallTaskMemory;
+        const size_t myWorkMem = keyVec.mem_size();
+        if (myWorkMem > smallmem) {
+          // use tmp files during index building
+          conf.tmpDir = tzopt.localTempDir;
+          if (0 == tzopt.indexTempLevel) {
+            // adjust tmpLevel for linkVec, wihch is proportional to num of keys
+            if (keyVec.avg_size() <= 16) {
+              // not need any mem in BFS, instead 8G file of 4G mem (linkVec)
+              // this reduce 10% peak mem when avg keylen is 24 bytes
+              conf.tmpLevel = 3;
+            }
+            else if (myWorkMem > 256ul << 20) {
+              // 1G mem in BFS, swap to 1G file after BFS and before build nextStrVec
+              conf.tmpLevel = 2;
+            }
+          }
+          else {
+            conf.tmpLevel = tzopt.indexTempLevel;
+          }
+        }
+      }
+      if (tzopt.indexTempLevel >= 4) {
+        // always use max tmpLevel 3
         conf.tmpDir = tzopt.localTempDir;
-        // adjust tmpLevel for linkVec, wihch is proportional to num of keys
-        if (ks.numKeys > 1ul<<30) {
-          // not need any mem in BFS, instead 8G file of 4G mem (linkVec)
-          // this reduce 10% peak mem when avg keylen is 24 bytes
-          conf.tmpLevel = 3;
-        }
-        else if (myWorkMem > 256ul<<20) {
-          // 1G mem in BFS, swap to 1G file after BFS and before build nextStrVec
-          conf.tmpLevel = 2;
-        }
+        conf.tmpLevel = 3;
       }
       conf.isInputSorted = true;
       std::unique_ptr<NLTrie> trie(new NLTrie());
