@@ -737,6 +737,7 @@ ret.append(buffer, snprintf(buffer, kBufferSize, fmt "\n", value))
   M_APPEND("checksumLevel            : %d", tzto.checksumLevel);
   M_APPEND("entropyAlgo              : %d", (int)tzto.entropyAlgo);
   M_APPEND("indexNestLevel           : %d", tzto.indexNestLevel);
+  M_APPEND("indexTempLevel           : %d", tzto.indexTempLevel);
   M_APPEND("terarkZipMinLevel        : %d", tzto.terarkZipMinLevel);
   M_APPEND("debugLevel               : %d", tzto.debugLevel);
   M_APPEND("useSuffixArrayLocalMatch : %s", cvb[!!tzto.useSuffixArrayLocalMatch]);
