@@ -627,10 +627,10 @@ TerarkZipTableFactory::NewTableReader(
 extern
 TableBuilder*
 createTerarkZipTableBuilder(const TerarkZipTableOptions& tzo,
-    const TableBuilderOptions&   tbo,
-    uint32_t                     column_family_id,
-    WritableFileWriter*          file,
-    size_t                       key_prefixLen);
+                            const TableBuilderOptions&   tbo,
+                            uint32_t                     column_family_id,
+                            WritableFileWriter*          file,
+                            size_t                       key_prefixLen);
 extern long long g_lastTime;
 
 TableBuilder*
@@ -759,8 +759,8 @@ ret.append(buffer, snprintf(buffer, kBufferSize, fmt "\n", value))
 
 Status
 TerarkZipTableFactory::SanitizeOptions(const DBOptions& db_opts,
-  const ColumnFamilyOptions& cf_opts)
-  const {
+                                       const ColumnFamilyOptions& cf_opts)
+const {
   auto table_factory = dynamic_cast<TerarkZipTableFactory*>(cf_opts.table_factory.get());
   assert(table_factory);
   auto& tzto = *reinterpret_cast<const TerarkZipTableOptions*>(table_factory->GetOptions());
