@@ -181,8 +181,7 @@ public:
       terark::NestLoudsTrieConfig conf;
       conf.nestLevel = tzopt.indexNestLevel;
       if (tzopt.indexTempLevel >= 0 && tzopt.indexTempLevel < 4) {
-        const size_t smallmem = tzopt.smallTaskMemory;
-        if (keyVec.mem_size() > smallmem) {
+        if (keyVec.mem_size() > tzopt.smallTaskMemory) {
           // use tmp files during index building
           conf.tmpDir = tzopt.localTempDir;
           if (0 == tzopt.indexTempLevel) {
@@ -192,7 +191,8 @@ public:
               // this reduce 10% peak mem when avg keylen is 24 bytes
               conf.tmpLevel = 3;
             }
-            else if (keyVec.mem_size() > 256ul << 20) {
+            else if (keyVec.mem_size() > tzopt.smallTaskMemory*3/2) {
+              // for example:
               // 1G mem in BFS, swap to 1G file after BFS and before build nextStrVec
               conf.tmpLevel = 2;
             }
