@@ -209,6 +209,9 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo) {
   if (const char* env = getenv("TerarkZipTable_indexType")) {
     tzo.indexType = env;
   }
+  if (const char* env = getenv("TerarkZipTable_extendedConfigFile")) {
+    tzo.extendedConfigFile = env;
+  }
 
 #define MyGetInt(obj, name, Default) \
     obj.name = (int)terark::getEnvLong("TerarkZipTable_" #name, Default)
