@@ -932,7 +932,7 @@ TerarkZipTableBuilder::BuilderWriteValues(NativeDataInput<InputBuffer>& input,
 }
 
 Status TerarkZipTableBuilder::WriteStore(TerarkIndex* index, terark::BlobStore* store
-  , KeyValueStatus& kvs, std::function<void(const void*, size_t)> writeAppend
+  , KeyValueStatus& kvs
   , BlockHandle& dataBlock
   , long long& t5, long long& t6, long long& t7) {
   auto& keyStat = kvs.stat;
@@ -941,9 +941,12 @@ Status TerarkZipTableBuilder::WriteStore(TerarkIndex* index, terark::BlobStore* 
       , "TerarkZipTableBuilder::Finish():this=%p:  index type = %-32s, store type = %-20s\n"
       , this, index->Name(), store->name()
   );
+  using namespace std::placeholders;
+  auto writeAppend = std::bind(&DoWriteAppend, this, _1, _2);
   if (index->NeedsReorder()) {
     bitfield_array<2> zvType2(keyStat.numKeys);
-    UintVecMin0 newToOld(keyStat.numKeys, keyStat.numKeys);
+    size_t maxUintVecVal = keyStat.numKeys - 1;
+    UintVecMin0 newToOld(keyStat.numKeys, maxUintVecVal);
     index->GetOrderMap(newToOld);
     t6 = g_pf.now();
     if (fstring(ioptions_.user_comparator->Name()).startsWith("rev:")) {
@@ -1010,6 +1013,14 @@ Status TerarkZipTableBuilder::WriteStore(TerarkIndex* index, terark::BlobStore* 
   return Status::OK();
 }
 
+void TerarkZipTableBuilder::DoWriteAppend(const void* data, size_t size) {
+  Status s = file_->Append(Slice((const char*)data, size));
+  if (!s.ok()) {
+    throw s;
+  }
+  offset_ += size;
+}
+
 Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
   , fstring tmpIndexFile, terark::BlobStore* zstore
   , terark::BlobStore::Dictionary dict
@@ -1039,14 +1050,7 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
   }
   long long t6, t7;
   offset_ = 0;
-  auto writeAppend = [&](const void* data, size_t size) {
-    s = file_->Append(Slice((const char*)data, size));
-    if (!s.ok()) {
-      throw s;
-    }
-    offset_ += size;
-  };
-  s = WriteStore(index.get(), zstore, kvs, writeAppend, dataBlock, t5, t6, t7);
+  s = WriteStore(index.get(), zstore, kvs, dataBlock, t5, t6, t7);
   if (!s.ok()) {
     return s;
   }
@@ -1251,13 +1255,6 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4,
   }
   long long t6, t7;
   offset_ = 0;
-  auto writeAppend = [&](const void* data, size_t size) {
-    s = file_->Append(Slice((const char*)data, size));
-    if (!s.ok()) {
-      throw s;
-    }
-    offset_ += size;
-  };
   auto getMmapPart = [](terark::MmapWholeFile& mmap, size_t beg, size_t end) {
     assert(beg <= end);
     assert(end <= mmap.size);
@@ -1273,7 +1270,7 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4,
     unique_ptr<BlobStore> store(BlobStore::load_from_user_memory(getMmapPart(mmapStoreFile,
       kvs.valueFileBegin, kvs.valueFileEnd), dict));
     assert(index->NumKeys() == kvs.stat.numKeys);
-    s = WriteStore(index.get(), store.get(), kvs, writeAppend, dataBlock, t5, t6, t7);
+    s = WriteStore(index.get(), store.get(), kvs, dataBlock, t5, t6, t7);
     if (!s.ok()) {
       return s;
     }
@@ -1291,32 +1288,28 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4,
     if (isReverseBytewiseOrder_) {
       indexBlock.set_offset(offset_);
       indexBlock.set_size(mmapIndexFile.size);
-      for (size_t i = histogram_.size() - 1; i != size_t(-1); --i) {
-        auto& kvs = histogram_[i];
-        writeAppend((const char*)mmapIndexFile.base + kvs.keyFileBegin,
+      for (size_t i = histogram_.size(); i > 0; ) {
+        auto& kvs = histogram_[--i];
+        DoWriteAppend((const char*)mmapIndexFile.base + kvs.keyFileBegin,
           kvs.keyFileEnd - kvs.keyFileBegin);
       }
       assert(offset_ == indexBlock.offset() + indexBlock.size());
     }
     else {
-      s = WriteBlock(getMmapPart(mmapIndexFile, 0, mmapIndexFile.size),
-        file_, &offset_, &indexBlock);
-      if (!s.ok()) {
-        return s;
-      }
+      DoWriteAppend(mmapIndexFile.base, mmapIndexFile.size);
     }
     zvTypeBlock.set_offset(offset_);
     zvTypeBlock.set_size(typeSize);
     if (isReverseBytewiseOrder_) {
-      for (size_t i = histogram_.size() - 1; i != size_t(-1); --i) {
-        auto& kvs = histogram_[i];
-        writeAppend(kvs.type.data(), kvs.type.mem_size());
+      for (size_t i = histogram_.size(); i > 0; ) {
+        auto& kvs = histogram_[--i];
+        DoWriteAppend(kvs.type.data(), kvs.type.mem_size());
       }
     }
     else {
       for (size_t i = 0; i < histogram_.size(); ++i) {
         auto& kvs = histogram_[i];
-        writeAppend(kvs.type.data(), kvs.type.mem_size());
+        DoWriteAppend(kvs.type.data(), kvs.type.mem_size());
       }
     }
     assert(offset_ == zvTypeBlock.offset() + zvTypeBlock.size());

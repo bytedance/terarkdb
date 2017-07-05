@@ -94,8 +94,9 @@ private:
   void DebugCleanup();
   void BuilderWriteValues(NativeDataInput<InputBuffer>& tmpValueFileinput
     , KeyValueStatus& kvs, std::function<void(fstring val)> write);
+  void DoWriteAppend(const void* data, size_t size);
   Status WriteStore(TerarkIndex* index, BlobStore* store
-    , KeyValueStatus& kvs, std::function<void(const void*, size_t)> write
+    , KeyValueStatus& kvs
     , BlockHandle& dataBlock
     , long long& t5, long long& t6, long long& t7);
   Status WriteSSTFile(long long t3, long long t4
