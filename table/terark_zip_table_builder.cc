@@ -1495,11 +1495,11 @@ Status TerarkZipTableBuilder::OfflineFinish() {
     }
     NativeDataInput<InputBuffer> tempKeyFileReader(&tmpKeyFile_.fp);
     FileStream writer(tmpIndexFile, "wb+");
-    factory->Build(tempKeyFileReader, table_options_, [&writer](const void* data, size_t size) {
-      writer.ensureWrite(data, size);
-    }, kvs.stat);
-
-
+    factory->Build(tempKeyFileReader, table_options_,
+      [&writer](const void* data, size_t size) {
+        writer.ensureWrite(data, size);
+      },
+      kvs.stat);
   }
   long long tt = g_pf.now();
   INFO(ioptions_.info_log
