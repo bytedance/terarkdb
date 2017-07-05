@@ -42,7 +42,7 @@ using terark::valvec;
 using terark::byte_t;
 using terark::febitvec;
 using terark::BlobStore;
-using terark::Uint32Histogram;
+using terark::Uint64Histogram;
 using terark::DictZipBlobStore;
 
 class TerarkZipTableBuilder : public TableBuilder, boost::noncopyable {
@@ -73,8 +73,8 @@ private:
   struct KeyValueStatus {
     TerarkIndex::KeyStat stat;
     valvec<char> prefix;
-    Uint32Histogram key;
-    Uint32Histogram value;
+    Uint64Histogram key;
+    Uint64Histogram value;
     bitfield_array<2> type;
     size_t keyFileBegin = 0;
     size_t keyFileEnd = 0;

@@ -21,7 +21,7 @@ namespace rocksdb {
 
 using terark::SortableStrVec;
 using terark::byte_swap;
-
+using terark::UintVecMin0;
 
 std::mutex g_sumMutex;
 size_t g_sumKeyLen = 0;
@@ -943,21 +943,21 @@ Status TerarkZipTableBuilder::WriteStore(TerarkIndex* index, terark::BlobStore* 
   );
   if (index->NeedsReorder()) {
     bitfield_array<2> zvType2(keyStat.numKeys);
-    terark::AutoFree<uint32_t> newToOld(keyStat.numKeys, UINT32_MAX);
-    index->GetOrderMap(newToOld.p);
+    UintVecMin0 newToOld(keyStat.numKeys, keyStat.numKeys);
+    index->GetOrderMap(newToOld);
     t6 = g_pf.now();
     if (fstring(ioptions_.user_comparator->Name()).startsWith("rev:")) {
       // Damn reverse bytewise order
       for (size_t newId = 0; newId < keyStat.numKeys; ++newId) {
-        size_t dictOrderOldId = newToOld.p[newId];
+        size_t dictOrderOldId = newToOld[newId];
         size_t reverseOrderId = keyStat.numKeys - dictOrderOldId - 1;
-        newToOld.p[newId] = reverseOrderId;
+        newToOld.set_wire(newId, reverseOrderId);
         zvType2.set0(newId, bzvType[reverseOrderId]);
       }
     }
     else {
       for (size_t newId = 0; newId < keyStat.numKeys; ++newId) {
-        size_t dictOrderOldId = newToOld.p[newId];
+        size_t dictOrderOldId = newToOld[newId];
         zvType2.set0(newId, bzvType[dictOrderOldId]);
       }
     }
@@ -976,11 +976,11 @@ Status TerarkZipTableBuilder::WriteStore(TerarkIndex* index, terark::BlobStore* 
   else {
     if (fstring(ioptions_.user_comparator->Name()).startsWith("rev:")) {
       bitfield_array<2> zvType2(keyStat.numKeys);
-      terark::AutoFree<uint32_t> newToOld(keyStat.numKeys);
+      UintVecMin0 newToOld(keyStat.numKeys, keyStat.numKeys);
       t6 = g_pf.now();
       for (size_t newId = 0, oldId = keyStat.numKeys - 1; newId < keyStat.numKeys;
         ++newId, --oldId) {
-        newToOld.p[newId] = oldId;
+        newToOld.set_wire(newId, oldId);
         zvType2.set0(newId, bzvType[oldId]);
       }
       t7 = g_pf.now();

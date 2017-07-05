@@ -20,6 +20,7 @@ using terark::NestLoudsTrieDAWG_Mixed_IL_256;
 using terark::NestLoudsTrieDAWG_Mixed_XL_256;
 using terark::SortableStrVec;
 using terark::MmapWholeFile;
+using terark::UintVecMin0;
 
 static terark::hash_strmap<TerarkIndex::FactoryPtr> g_TerarkIndexFactroy;
 static terark::hash_strmap<std::string>             g_TerarkIndexName;
@@ -140,12 +141,12 @@ public:
     return new MyIterator(m_trie.get());
   }
   bool NeedsReorder() const override final { return true; }
-  void GetOrderMap(uint32_t* newToOld)
+  void GetOrderMap(UintVecMin0& newToOld)
   const override final {
     terark::NonRecursiveDictionaryOrderToStateMapGenerator gen;
     gen(*m_trie, [&](size_t dictOrderOldId, size_t state) {
       size_t newId = m_trie->state_to_word_id(state);
-      newToOld[newId] = uint32_t(dictOrderOldId);
+      newToOld.set_wire(newId, dictOrderOldId);
     });
   }
   void BuildCache(double cacheRatio) {
@@ -485,7 +486,7 @@ public:
   virtual bool NeedsReorder() const {
     return false;
   }
-  virtual void GetOrderMap(uint32_t* newToOld) const {
+  virtual void GetOrderMap(UintVecMin0& newToOld) const {
     assert(false);
   }
   virtual void BuildCache(double cacheRatio) {
