@@ -942,10 +942,10 @@ Status TerarkZipTableBuilder::WriteStore(TerarkIndex* index, terark::BlobStore* 
       , this, index->Name(), store->name()
   );
   using namespace std::placeholders;
-  auto writeAppend = std::bind(&DoWriteAppend, this, _1, _2);
+  auto writeAppend = std::bind(&TerarkZipTableBuilder::DoWriteAppend, this, _1, _2);
+  size_t maxUintVecVal = keyStat.numKeys - 1;
   if (index->NeedsReorder()) {
     bitfield_array<2> zvType2(keyStat.numKeys);
-    size_t maxUintVecVal = keyStat.numKeys - 1;
     UintVecMin0 newToOld(keyStat.numKeys, maxUintVecVal);
     index->GetOrderMap(newToOld);
     t6 = g_pf.now();
@@ -979,7 +979,7 @@ Status TerarkZipTableBuilder::WriteStore(TerarkIndex* index, terark::BlobStore* 
   else {
     if (fstring(ioptions_.user_comparator->Name()).startsWith("rev:")) {
       bitfield_array<2> zvType2(keyStat.numKeys);
-      UintVecMin0 newToOld(keyStat.numKeys, keyStat.numKeys);
+      UintVecMin0 newToOld(keyStat.numKeys, maxUintVecVal);
       t6 = g_pf.now();
       for (size_t newId = 0, oldId = keyStat.numKeys - 1; newId < keyStat.numKeys;
         ++newId, --oldId) {
