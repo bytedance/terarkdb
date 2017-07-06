@@ -84,8 +84,28 @@ private:
   void AddPrevUserKey(bool finish = false);
   void OfflineZipValueData();
   void UpdateValueLenHistogram();
+  struct WaitHandle : boost::noncopyable {
+    WaitHandle();
+    WaitHandle(size_t);
+    WaitHandle(WaitHandle&&);
+    WaitHandle& operator = (WaitHandle&&);
+    size_t myWorkMem;
+    void Release(size_t size = 0);
+    ~WaitHandle();
+  };
+  WaitHandle WaitForMemory(const char* who, size_t memorySize);
   Status EmptyTableFinish();
   Status OfflineFinish();
+  struct BuildStoreParams {
+    NativeDataInput<InputBuffer>& input;
+    KeyValueStatus& kvs;
+    WaitHandle handle;
+  };
+#if defined(TerocksPrivateCode)
+  std::unique_ptr<BlobStore> buildPlainBlobStore(BuildStoreParams& params);
+  std::unique_ptr<BlobStore> buildMixedLenBlobStore(BuildStoreParams& params);
+  std::unique_ptr<BlobStore> buildZipOffsetBlobStore(BuildStoreParams& params);
+#endif // TerocksPrivateCode
   Status ZipValueToFinish(fstring tmpIndexFile, std::function<void()> waitIndex);
 #if defined(TerocksPrivateCode)
   Status ZipValueToFinishMulti(fstring tmpIndexFile, std::function<void()> waitIndex);
