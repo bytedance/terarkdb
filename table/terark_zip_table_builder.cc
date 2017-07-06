@@ -1285,9 +1285,9 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4,
     }
   }
   try {
+    indexBlock.set_offset(offset_);
+    indexBlock.set_size(mmapIndexFile.size);
     if (isReverseBytewiseOrder_) {
-      indexBlock.set_offset(offset_);
-      indexBlock.set_size(mmapIndexFile.size);
       for (size_t i = histogram_.size(); i > 0; ) {
         auto& kvs = histogram_[--i];
         DoWriteAppend((const char*)mmapIndexFile.base + kvs.keyFileBegin,
