@@ -334,7 +334,7 @@ TerarkZipTableBuilder::WaitHandle TerarkZipTableBuilder::WaitForMemory(const cha
   const size_t hardMemLimit = std::max(table_options_.hardZipWorkingMemLimit, softMemLimit);
   const size_t smallmem = table_options_.smallTaskMemory;
   const std::chrono::seconds waitForTime(10);
-  long long myStartTime, now;
+  long long myStartTime = 0, now;
   auto shouldWait = [&]() {
     bool w;
     if (myWorkMem < softMemLimit) {
@@ -344,9 +344,9 @@ TerarkZipTableBuilder::WaitHandle TerarkZipTableBuilder::WaitForMemory(const cha
     else {
       w = sumWorkingMem > softMemLimit / 4;
     }
+    now = g_pf.now();
     if (!w) {
       assert(!waitQueue.empty());
-      now = g_pf.now();
       if (myWorkMem < smallmem) {
         return false; // do not wait
       }
@@ -378,13 +378,22 @@ TerarkZipTableBuilder::WaitHandle TerarkZipTableBuilder::WaitForMemory(const cha
   sumWaitingMem += myWorkMem;
   while (shouldWait()) {
     INFO(ioptions_.info_log
-      , "TerarkZipTableBuilder::Finish():this=%p: sumWaitingMem = %f GB, sumWorkingMem = %f GB, %s WorkingMem = %f GB, wait...\n"
+      , "TerarkZipTableBuilder::Finish():this=%p: sumWaitingMem = %f GB, sumWorkingMem = %f GB, %-10s workingMem = %f GB, wait...\n"
       , this, sumWaitingMem / 1e9, sumWorkingMem / 1e9, who, myWorkMem / 1e9
     );
     zipCond.wait_for(zipLock, waitForTime);
   }
+  if (myStartTime == 0) {
+    auto wq = waitQueue.data();
+    for (size_t i = 0, n = waitQueue.size(); i < n; ++i) {
+      if (this == wq[i].tztb) {
+        myStartTime = wq[i].startTime;
+        break;
+      }
+    }
+  }
   INFO(ioptions_.info_log
-    , "TerarkZipTableBuilder::Finish():this=%p: sumWaitingMem = %f GB, sumWorkingMem = %f GB, %-10s WorkingMem = %f GB, waited %8.3f sec, Key+Value bytes = %f GB\n"
+    , "TerarkZipTableBuilder::Finish():this=%p: sumWaitingMem = %f GB, sumWorkingMem = %f GB, %-10s workingMem = %f GB, waited %8.3f sec, Key+Value bytes = %f GB\n"
     , this, sumWaitingMem / 1e9, sumWorkingMem / 1e9, who, myWorkMem / 1e9
     , g_pf.sf(myStartTime, now)
     , (properties_.raw_key_size + properties_.raw_value_size) / 1e9
@@ -531,7 +540,7 @@ std::unique_ptr<BlobStore> TerarkZipTableBuilder::buildPlainBlobStore(BuildStore
   store->reset_with_content_size(kvs.value.m_total_key_len);
   BuilderWriteValues(params.input, kvs, [&](fstring value) {store->add_record(value); });
   store->finish();
-  return store;
+  return std::move(store);
 };
 std::unique_ptr<BlobStore> TerarkZipTableBuilder::buildMixedLenBlobStore(BuildStoreParams &params) {
   auto& kvs = params.kvs;
@@ -567,7 +576,7 @@ ZipValueToFinish(fstring tmpIndexFile, std::function<void()> waitIndex) {
   BlobStore::Dictionary dict;
   std::unique_ptr<DictZipBlobStore::ZipBuilder> zbuilder;
   std::unique_ptr<terark::BlobStore> store;
-  BuildStoreParams params = {input, kvs};
+  BuildStoreParams params = {input, kvs, 0};
   DictZipBlobStore::ZipStat dzstat;
   long long t3, t4;
 #if defined(TerocksPrivateCode)
@@ -689,7 +698,7 @@ ZipValueToFinishMulti(fstring tmpIndexFile, std::function<void()> waitIndex) {
     if (avgValueLen < minDictZipValueSize) {
       size_t fixedNum = kvs.value.m_cnt_of_max_cnt_key;
       size_t variaNum = kvs.stat.numKeys - fixedNum;
-      BuildStoreParams params = {input, kvs};
+      BuildStoreParams params = {input, kvs, 0};
       std::unique_ptr<terark::BlobStore> store;
       if (table_options_.offsetArrayBlockUnits) {
         if (variaNum * 64 < kvs.stat.numKeys) {
