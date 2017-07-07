@@ -67,8 +67,13 @@ TerarkIndex::SelectFactory(const KeyStat& ks, fstring name) {
       minValue = ReadUint64(ks.minKey.begin(), ks.minKey.end()),
       maxValue = ReadUint64(ks.maxKey.begin(), ks.maxKey.end());
     uint64_t diff = (minValue < maxValue ? maxValue - minValue : minValue - maxValue) + 1;
-    if (diff < ks.numKeys * 30 && ks.numKeys < (4ULL << 30)) {
-      return GetFactory("UintIndex");
+    if (diff < ks.numKeys * 30) {
+      if (ks.numKeys < (4ull << 30)) {
+        return GetFactory("UintIndex");
+      }
+      else {
+        return GetFactory("UintIndex_SE_512_64");
+      }
     }
   }
 #endif // TerocksPrivateCode
@@ -525,9 +530,11 @@ TerarkIndexRegister(TerocksIndex_NestLoudsTrieDAWG_Mixed_XL_256, "NestLoudsTrieD
 typedef TerarkUintIndex<terark::rank_select_il_256_32> TerarkUintIndex_IL_256_32;
 typedef TerarkUintIndex<terark::rank_select_se_256_32> TerarkUintIndex_SE_256_32;
 typedef TerarkUintIndex<terark::rank_select_se_512_32> TerarkUintIndex_SE_512_32;
+typedef TerarkUintIndex<terark::rank_select_se_512_64> TerarkUintIndex_SE_512_64;
 TerarkIndexRegister(TerarkUintIndex_IL_256_32, "UintIndex_IL_256_32", "UintIndex");
 TerarkIndexRegister(TerarkUintIndex_SE_256_32, "UintIndex_SE_256_32");
 TerarkIndexRegister(TerarkUintIndex_SE_512_32, "UintIndex_SE_512_32");
+TerarkIndexRegister(TerarkUintIndex_SE_512_64, "UintIndex_SE_512_64");
 #endif // TerocksPrivateCode
 
 unique_ptr<TerarkIndex> TerarkIndex::LoadFile(fstring fpath) {

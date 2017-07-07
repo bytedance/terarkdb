@@ -586,7 +586,7 @@ ZipValueToFinish(fstring tmpIndexFile, std::function<void()> waitIndex) {
     size_t variaNum = kvs.stat.numKeys - fixedNum;
     t3 = g_pf.now();
     if (table_options_.offsetArrayBlockUnits) {
-      if (variaNum * 64 < kvs.stat.numKeys) {
+      if (kvs.stat.numKeys < (4ull << 30) && variaNum * 64 < kvs.stat.numKeys) {
         store = buildMixedLenBlobStore(params);
       }
       else {
@@ -594,7 +594,8 @@ ZipValueToFinish(fstring tmpIndexFile, std::function<void()> waitIndex) {
       }
     }
     else {
-      if (4 * variaNum + kvs.stat.numKeys * 5 / 4 < 4 * kvs.stat.numKeys) {
+      if (kvs.stat.numKeys < (4ull << 30) &&
+          4 * variaNum + kvs.stat.numKeys * 5 / 4 < 4 * kvs.stat.numKeys) {
         store = buildMixedLenBlobStore(params);
       }
       else {
@@ -701,7 +702,7 @@ ZipValueToFinishMulti(fstring tmpIndexFile, std::function<void()> waitIndex) {
       BuildStoreParams params = {input, kvs, 0};
       std::unique_ptr<terark::BlobStore> store;
       if (table_options_.offsetArrayBlockUnits) {
-        if (variaNum * 64 < kvs.stat.numKeys) {
+        if (kvs.stat.numKeys < (4ull << 30) && variaNum * 64 < kvs.stat.numKeys) {
           store = buildMixedLenBlobStore(params);
         }
         else {
@@ -709,7 +710,8 @@ ZipValueToFinishMulti(fstring tmpIndexFile, std::function<void()> waitIndex) {
         }
       }
       else {
-        if (4 * variaNum + kvs.stat.numKeys * 5 / 4 < 4 * kvs.stat.numKeys) {
+        if (kvs.stat.numKeys < (4ull << 30) &&
+            4 * variaNum + kvs.stat.numKeys * 5 / 4 < 4 * kvs.stat.numKeys) {
           store = buildMixedLenBlobStore(params);
         }
         else {
@@ -1315,6 +1317,8 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4,
   commonPrefix.reserve(terark::align_up(commonPrefixLenSize, 16));
   for (size_t i = 0; i < histogram_.size(); ++i) {
     auto& kvs = histogram_[isReverseBytewiseOrder_ ? histogram_.size() - 1 - i : i];
+    sumKeyLen += kvs.stat.sumKeyLen;
+    numKeys += kvs.stat.numKeys;
     commonPrefix.append(fstring(kvs.stat.minKey).substr(0, kvs.stat.commonPrefixLen));
     unique_ptr<TerarkIndex> index(TerarkIndex::LoadMemory(getMmapPart(mmapIndexFile,
       kvs.keyFileBegin, kvs.keyFileEnd)));
