@@ -18,7 +18,8 @@ using terark::NestLoudsTrieDAWG_IL_256;
 using terark::NestLoudsTrieDAWG_Mixed_SE_512;
 using terark::NestLoudsTrieDAWG_Mixed_IL_256;
 using terark::NestLoudsTrieDAWG_Mixed_XL_256;
-using terark::SortableStrVec;
+using terark::SortedStrVec;
+using terark::FixedLenStrVec;
 using terark::MmapWholeFile;
 using terark::UintVecMin0;
 
@@ -165,28 +166,73 @@ public:
                const TerarkZipTableOptions& tzopt,
                std::function<void(const void *, size_t)> write,
                KeyStat& ks) const override {
-#if !defined(NDEBUG)
-//    SortableStrVec backupKeys;
-#endif
-      size_t sumPrefixLen = ks.commonPrefixLen * ks.numKeys;
-      SortableStrVec keyVec;
-      keyVec.m_index.reserve(ks.numKeys);
-      keyVec.m_strpool.reserve(ks.sumKeyLen - sumPrefixLen);
+      size_t numKeys = ks.numKeys;
+      size_t commonPrefixLen = ks.commonPrefixLen;
+      size_t sumPrefixLen = commonPrefixLen * numKeys;
+      size_t sumRealKeyLen = ks.sumKeyLen - sumPrefixLen;
       valvec<byte_t> keyBuf;
-      for (size_t seq_id = 0; seq_id < ks.numKeys; ++seq_id) {
-        reader >> keyBuf;
-        keyVec.push_back(fstring(keyBuf).substr(ks.commonPrefixLen));
+      if (ks.minKeyLen != ks.maxKeyLen) {
+        SortedStrVec keyVec;
+        if (ks.minKey < ks.maxKey) {
+          keyVec.reserve(numKeys, sumRealKeyLen);
+          for (size_t i = 0; i < numKeys; ++i) {
+            reader >> keyBuf;
+            keyVec.push_back(fstring(keyBuf).substr(commonPrefixLen));
+          }
+        }
+        else {
+          keyVec.m_offsets.resize_with_wire_max_val(numKeys + 1, sumRealKeyLen);
+          keyVec.m_offsets.set_wire(numKeys, sumRealKeyLen);
+          keyVec.m_strpool.resize(sumRealKeyLen);
+          size_t offset = sumRealKeyLen;
+          for (size_t i = numKeys; i > 0; ) {
+            --i;
+            reader >> keyBuf;
+            fstring str = fstring(keyBuf).substr(commonPrefixLen);
+            offset -= str.size();
+            memcpy(keyVec.m_strpool.data() + offset, str.data(), str.size());
+            keyVec.m_offsets.set_wire(i, offset);
+          }
+          assert(offset == 0);
+        }
+        BuildImpl(tzopt, write, keyVec);
       }
-      if (keyVec[0] > keyVec.back()) {
-        std::reverse(keyVec.m_index.begin(), keyVec.m_index.end());
+      else {
+        size_t fixlen = ks.minKeyLen - commonPrefixLen;
+        FixedLenStrVec keyVec(fixlen);
+        if (ks.minKey < ks.maxKey) {
+          keyVec.reserve(numKeys, sumRealKeyLen);
+          for (size_t i = 0; i < numKeys; ++i) {
+            reader >> keyBuf;
+            keyVec.push_back(fstring(keyBuf).substr(commonPrefixLen));
+          }
+        }
+        else {
+          keyVec.m_size = numKeys;
+          keyVec.m_strpool.resize(sumRealKeyLen);
+          for (size_t i = numKeys; i > 0; ) {
+            --i;
+            reader >> keyBuf;
+            memcpy(keyVec.m_strpool.data() + fixlen * i
+              , fstring(keyBuf).substr(commonPrefixLen).data()
+              , fixlen);
+          }
+        }
+        BuildImpl(tzopt, write, keyVec);
       }
+    }
+  private:
+    template<class StrVec>
+    void BuildImpl(const TerarkZipTableOptions& tzopt,
+                   std::function<void(const void *, size_t)> write,
+                   StrVec& keyVec) const {
 #if !defined(NDEBUG)
       for (size_t i = 1; i < keyVec.size(); ++i) {
-        fstring prev = keyVec[i-1];
+        fstring prev = keyVec[i - 1];
         fstring curr = keyVec[i];
         assert(prev < curr);
       }
-//    backupKeys = keyVec;
+      //    backupKeys = keyVec;
 #endif
       terark::NestLoudsTrieConfig conf;
       conf.nestLevel = tzopt.indexNestLevel;
@@ -222,6 +268,7 @@ public:
       trie->build_from(keyVec, conf);
       trie->save_mmap(write);
     }
+  public:
     unique_ptr<TerarkIndex> LoadMemory(fstring mem) const override {
       unique_ptr<BaseDFA>
       dfa(BaseDFA::load_mmap_user_mem(mem.data(), mem.size()));
@@ -247,8 +294,12 @@ public:
       return std::move(index);
     }
     size_t MemSizeForBuild(const KeyStat& ks) const override {
-      return sizeof(SortableStrVec::SEntry) * ks.numKeys + ks.sumKeyLen
-          - ks.commonPrefixLen * ks.numKeys;
+      size_t sumRealKeyLen = ks.sumKeyLen - ks.commonPrefixLen * ks.numKeys;
+      if (ks.minKeyLen == ks.maxKeyLen) {
+        return sumRealKeyLen;
+      }
+      size_t indexSize = UintVecMin0::compute_mem_size_by_max_val(ks.numKeys + 1, sumRealKeyLen);
+      return indexSize + sumRealKeyLen;
     }
   };
 };
