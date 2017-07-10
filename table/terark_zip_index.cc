@@ -69,7 +69,7 @@ TerarkIndex::SelectFactory(const KeyStat& ks, fstring name) {
       maxValue = ReadUint64(ks.maxKey.begin(), ks.maxKey.end());
     uint64_t diff = (minValue < maxValue ? maxValue - minValue : minValue - maxValue) + 1;
     if (diff < ks.numKeys * 30) {
-      if (ks.numKeys < (4ull << 30)) {
+      if (diff < (4ull << 30)) {
         return GetFactory("UintIndex");
       }
       else {
