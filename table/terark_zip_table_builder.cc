@@ -378,7 +378,7 @@ TerarkZipTableBuilder::WaitHandle TerarkZipTableBuilder::WaitForMemory(const cha
   sumWaitingMem += myWorkMem;
   while (shouldWait()) {
     INFO(ioptions_.info_log
-      , "TerarkZipTableBuilder::Finish():this=%09p: sumWaitingMem =%7.3f GB, sumWorkingMem =%7.3f GB, %-10s workingMem =%8.4f GB, wait...\n"
+      , "TerarkZipTableBuilder::Finish():this=%012p: sumWaitingMem =%7.3f GB, sumWorkingMem =%7.3f GB, %-10s workingMem =%8.4f GB, wait...\n"
       , this, sumWaitingMem / 1e9, sumWorkingMem / 1e9, who, myWorkMem / 1e9
     );
     zipCond.wait_for(zipLock, waitForTime);
@@ -393,7 +393,7 @@ TerarkZipTableBuilder::WaitHandle TerarkZipTableBuilder::WaitForMemory(const cha
     }
   }
   INFO(ioptions_.info_log
-    , "TerarkZipTableBuilder::Finish():this=%09p: sumWaitingMem =%8.3f GB, sumWorkingMem =%8.3f GB, %-10s workingMem =%8.4f GB, waited %9.3f sec, Key+Value bytes =%8.3f GB\n"
+    , "TerarkZipTableBuilder::Finish():this=%012p: sumWaitingMem =%8.3f GB, sumWorkingMem =%8.3f GB, %-10s workingMem =%8.4f GB, waited %9.3f sec, Key+Value bytes =%8.3f GB\n"
     , this, sumWaitingMem / 1e9, sumWorkingMem / 1e9, who, myWorkMem / 1e9
     , g_pf.sf(myStartTime, now)
     , (properties_.raw_key_size + properties_.raw_value_size) / 1e9
@@ -405,7 +405,7 @@ TerarkZipTableBuilder::WaitHandle TerarkZipTableBuilder::WaitForMemory(const cha
 
 Status TerarkZipTableBuilder::EmptyTableFinish() {
   INFO(ioptions_.info_log
-    , "TerarkZipTableBuilder::EmptyFinish():this=%09p\n", this);
+    , "TerarkZipTableBuilder::EmptyFinish():this=%012p\n", this);
   offset_ = 0;
   BlockHandle emptyTableBH, tombstoneBH(0, 0);
   Status s = WriteBlock(Slice("Empty"), file_, &offset_, &emptyTableBH);
@@ -469,7 +469,7 @@ Status TerarkZipTableBuilder::Finish() {
     long long rawBytes = properties_.raw_key_size + properties_.raw_value_size;
     long long tt = g_pf.now();
     INFO(ioptions_.info_log
-      , "TerarkZipTableBuilder::Finish():this=%09p:  first pass time =%7.2f's, %8.3f'MB/sec\n"
+      , "TerarkZipTableBuilder::Finish():this=%012p:  first pass time =%7.2f's, %8.3f'MB/sec\n"
       , this, g_pf.sf(t0, tt), rawBytes*1.0 / g_pf.uf(t0, tt)
     );
   }
@@ -512,7 +512,7 @@ Status TerarkZipTableBuilder::Finish() {
       assert((fileOffset - histogram_[i].keyFileBegin) % 8 == 0);
       long long tt = g_pf.now();
       INFO(ioptions_.info_log
-        , "TerarkZipTableBuilder::Finish():this=%09p:  index pass time =%7.2f's, %8.3f'MB/sec\n"
+        , "TerarkZipTableBuilder::Finish():this=%012p:  index pass time =%7.2f's, %8.3f'MB/sec\n"
         , this, g_pf.sf(t1, tt), properties_.raw_key_size*1.0 / g_pf.uf(t1, tt)
       );
     }
@@ -988,7 +988,7 @@ Status TerarkZipTableBuilder::WriteStore(TerarkIndex* index, terark::BlobStore* 
   auto& keyStat = kvs.stat;
   auto& bzvType = kvs.type;
   INFO(ioptions_.info_log
-      , "TerarkZipTableBuilder::Finish():this=%09p:  index type = %-32s, store type = %-20s\n"
+      , "TerarkZipTableBuilder::Finish():this=%012p:  index type = %-32s, store type = %-20s\n"
       , this, index->Name(), store->name()
   );
   using namespace std::placeholders;
@@ -1108,7 +1108,7 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
     size_t block_size, last_allocated_block;
     file_->writable_file()->GetPreallocationStatus(&block_size, &last_allocated_block);
     INFO(ioptions_.info_log
-      , "TerarkZipTableBuilder::Finish():this=%09p: old prealloc_size = %zd, real_size = %zd\n"
+      , "TerarkZipTableBuilder::Finish():this=%012p: old prealloc_size = %zd, real_size = %zd\n"
       , this, block_size, real_size
     );
     file_->writable_file()->SetPreallocationBlockSize(1 * 1024 * 1024 + real_size);
@@ -1180,7 +1180,7 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
     g_sumEntryNum += properties_.num_entries;
   }
   INFO(ioptions_.info_log,
-    "TerarkZipTableBuilder::Finish():this=%09p: second pass time =%7.2f's, %8.3f'MB/sec, value only(%4.1f%% of KV)\n"
+    "TerarkZipTableBuilder::Finish():this=%012p: second pass time =%7.2f's, %8.3f'MB/sec, value only(%4.1f%% of KV)\n"
     "   wait indexing time = %7.2f's,\n"
     "  remap KeyValue time = %7.2f's, %8.3f'MB/sec (all stages of remap)\n"
     "    Get OrderMap time = %7.2f's, %8.3f'MB/sec (index lex order gen)\n"
@@ -1320,7 +1320,7 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4
     size_t block_size, last_allocated_block;
     file_->writable_file()->GetPreallocationStatus(&block_size, &last_allocated_block);
     INFO(ioptions_.info_log
-      , "TerarkZipTableBuilder::Finish():this=%09p: old prealloc_size = %zd, real_size = %zd\n"
+      , "TerarkZipTableBuilder::Finish():this=%012p: old prealloc_size = %zd, real_size = %zd\n"
       , this, block_size, real_size
     );
     file_->writable_file()->SetPreallocationBlockSize(1 * 1024 * 1024 + real_size);
@@ -1433,7 +1433,7 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4
     g_sumEntryNum += properties_.num_entries;
   }
   INFO(ioptions_.info_log,
-    "TerarkZipTableBuilder::FinishMulti():this=%09p: second pass time =%7.2f's, %8.3f'MB/sec, value only(%4.1f%% of KV)\n"
+    "TerarkZipTableBuilder::FinishMulti():this=%012p: second pass time =%7.2f's, %8.3f'MB/sec, value only(%4.1f%% of KV)\n"
     "   wait indexing time = %7.2f's,\n"
     "  remap KeyValue time = %7.2f's, %8.3f'MB/sec (all stages of remap)\n"
     "    Get OrderMap time = %7.2f's, %8.3f'MB/sec (index lex order gen)\n"
@@ -1579,7 +1579,7 @@ Status TerarkZipTableBuilder::OfflineFinish() {
   }
   long long tt = g_pf.now();
   INFO(ioptions_.info_log
-    , "TerarkZipTableBuilder::Finish():this=%09p:  index pass time =%7.2f's, %8.3f'MB/sec\n"
+    , "TerarkZipTableBuilder::Finish():this=%012p:  index pass time =%7.2f's, %8.3f'MB/sec\n"
     , this, g_pf.sf(t1, tt), properties_.raw_key_size*1.0 / g_pf.uf(t1, tt)
   );
   return WriteSSTFile(t1, tt, tmpIndexFile, tmpStoreFile, tmpDictFile, dzstat);
