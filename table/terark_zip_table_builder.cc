@@ -1286,30 +1286,12 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4
   BlockHandle commonPrefixBlock;
   TerarkZipMultiOffsetInfo offsetInfo;
   offsetInfo.Init(key_prefixLen_, histogram_.size());
-  size_t sumKeyLen = 0;
-  size_t numKeys = 0;
   size_t typeSize = 0;
   size_t commonPrefixLenSize = 0;
-  if (isReverseBytewiseOrder_) {
-    size_t keyOffset = 0;
-    size_t valueOffset = 0;
-    for (size_t i = 0; i < histogram_.size(); ++i) {
-      auto& kvs = histogram_[histogram_.size() - 1 - i];
-      keyOffset += kvs.keyFileEnd - kvs.keyFileBegin;
-      valueOffset += kvs.valueFileEnd - kvs.valueFileBegin;
-      typeSize += kvs.type.mem_size();
-      commonPrefixLenSize += kvs.stat.commonPrefixLen;
-      offsetInfo.set(i, kvs.prefix, keyOffset, valueOffset, typeSize, commonPrefixLenSize);
-    }
-  }
-  else {
-    for (size_t i = 0; i < histogram_.size(); ++i) {
-      auto& kvs = histogram_[i];
-      typeSize += kvs.type.mem_size();
-      commonPrefixLenSize += kvs.stat.commonPrefixLen;
-      offsetInfo.set(i, kvs.prefix, kvs.keyFileEnd, kvs.valueFileEnd, typeSize,
-        commonPrefixLenSize);
-    }
+  for (size_t i = 0; i < histogram_.size(); ++i) {
+    auto& kvs = histogram_[i];
+    typeSize += kvs.type.mem_size();
+    commonPrefixLenSize += kvs.stat.commonPrefixLen;
   }
   {
     size_t real_size = TerarkZipMultiOffsetInfo::calc_size(key_prefixLen_, histogram_.size())
@@ -1323,7 +1305,7 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4
       , "TerarkZipTableBuilder::Finish():this=%012p: old prealloc_size = %zd, real_size = %zd\n"
       , this, block_size, real_size
     );
-    file_->writable_file()->SetPreallocationBlockSize(1 * 1024 * 1024 + real_size);
+    file_->writable_file()->SetPreallocationBlockSize((1ull << 20) + real_size);
   }
   long long t6 = t5, t7 = t5;
   offset_ = 0;
@@ -1333,6 +1315,12 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4
     return fstring((const char*)mmap.base + beg, (const char*)mmap.base + end);
   };
   valvec<byte_t> commonPrefix;
+  size_t sumKeyLen = 0;
+  size_t numKeys = 0;
+  size_t keyOffset = 0;
+  size_t valueOffset = 0;
+  typeSize = 0;
+  commonPrefixLenSize = 0;
   commonPrefix.reserve(terark::align_up(commonPrefixLenSize, 16));
   for (size_t i = 0; i < histogram_.size(); ++i) {
     auto& kvs = histogram_[isReverseBytewiseOrder_ ? histogram_.size() - 1 - i : i];
@@ -1351,6 +1339,11 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4
     }
     t6 += t6p - t7;
     t7 = t7p;
+    keyOffset += kvs.keyFileEnd - kvs.keyFileBegin;
+    valueOffset = offset_;
+    typeSize += kvs.type.mem_size();
+    commonPrefixLenSize += kvs.stat.commonPrefixLen;
+    offsetInfo.set(i, kvs.prefix, keyOffset, valueOffset, typeSize, commonPrefixLenSize);
   }
   commonPrefix.resize(terark::align_up(commonPrefixLenSize, 16), 0);
   WriteBlock(commonPrefix, file_, &offset_, &commonPrefixBlock);

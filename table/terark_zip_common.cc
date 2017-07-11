@@ -19,8 +19,9 @@ uint64_t ReadUint64(const byte_t* beg, const byte_t* end) {
   assert(end - beg <= 8);
   union {
     byte_t bytes[8];
-    uint64_t value = 0;
+    uint64_t value;
   } c;
+  c.value = 0;
   size_t l = end - beg;
   memcpy(c.bytes + (8 - l), beg, l);
 #if BOOST_ENDIAN_LITTLE_BYTE
