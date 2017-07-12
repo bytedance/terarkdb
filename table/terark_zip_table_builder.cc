@@ -469,7 +469,7 @@ Status TerarkZipTableBuilder::Finish() {
     long long rawBytes = properties_.raw_key_size + properties_.raw_value_size;
     long long tt = g_pf.now();
     INFO(ioptions_.info_log
-      , "TerarkZipTableBuilder::Finish():this=%012p:  first pass time =%7.2f's, %8.3f'MB/sec\n"
+      , "TerarkZipTableBuilder::Finish():this=%012p:  first pass time =%8.2f's, %8.3f'MB/sec\n"
       , this, g_pf.sf(t0, tt), rawBytes*1.0 / g_pf.uf(t0, tt)
     );
   }
@@ -512,7 +512,7 @@ Status TerarkZipTableBuilder::Finish() {
       assert((fileOffset - histogram_[i].keyFileBegin) % 8 == 0);
       long long tt = g_pf.now();
       INFO(ioptions_.info_log
-        , "TerarkZipTableBuilder::Finish():this=%012p:  index pass time =%7.2f's, %8.3f'MB/sec\n"
+        , "TerarkZipTableBuilder::Finish():this=%012p:  index pass time =%8.2f's, %8.3f'MB/sec\n"
         , this, g_pf.sf(t1, tt), properties_.raw_key_size*1.0 / g_pf.uf(t1, tt)
       );
     }
@@ -1180,7 +1180,7 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
     g_sumEntryNum += properties_.num_entries;
   }
   INFO(ioptions_.info_log,
-    "TerarkZipTableBuilder::Finish():this=%012p: second pass time =%7.2f's, %8.3f'MB/sec, value only(%4.1f%% of KV)\n"
+    "TerarkZipTableBuilder::Finish():this=%012p: second pass time =%8.2f's, %8.3f'MB/sec, value only(%4.1f%% of KV)\n"
     "   wait indexing time = %7.2f's,\n"
     "  remap KeyValue time = %7.2f's, %8.3f'MB/sec (all stages of remap)\n"
     "    Get OrderMap time = %7.2f's, %8.3f'MB/sec (index lex order gen)\n"
@@ -1426,7 +1426,7 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4
     g_sumEntryNum += properties_.num_entries;
   }
   INFO(ioptions_.info_log,
-    "TerarkZipTableBuilder::FinishMulti():this=%012p: second pass time =%7.2f's, %8.3f'MB/sec, value only(%4.1f%% of KV)\n"
+    "TerarkZipTableBuilder::FinishMulti():this=%012p: second pass time =%8.2f's, %8.3f'MB/sec, value only(%4.1f%% of KV)\n"
     "   wait indexing time = %7.2f's,\n"
     "  remap KeyValue time = %7.2f's, %8.3f'MB/sec (all stages of remap)\n"
     "    Get OrderMap time = %7.2f's, %8.3f'MB/sec (index lex order gen)\n"
@@ -1572,7 +1572,7 @@ Status TerarkZipTableBuilder::OfflineFinish() {
   }
   long long tt = g_pf.now();
   INFO(ioptions_.info_log
-    , "TerarkZipTableBuilder::Finish():this=%012p:  index pass time =%7.2f's, %8.3f'MB/sec\n"
+    , "TerarkZipTableBuilder::Finish():this=%012p:  index pass time =%8.2f's, %8.3f'MB/sec\n"
     , this, g_pf.sf(t1, tt), properties_.raw_key_size*1.0 / g_pf.uf(t1, tt)
   );
   return WriteSSTFile(t1, tt, tmpIndexFile, tmpStoreFile, tmpDictFile, dzstat);
