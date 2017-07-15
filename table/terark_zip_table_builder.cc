@@ -10,6 +10,7 @@
 #include <table/meta_blocks.h>
 // terark headers
 #include <terark/util/sortable_strvec.hpp>
+#include <terark/zbs/zero_length_blob_store.hpp>
 #if defined(TerocksPrivateCode)
 # include <terark/zbs/plain_blob_store.hpp>
 # include <terark/zbs/mixed_len_blob_store.hpp>
@@ -531,6 +532,13 @@ Status TerarkZipTableBuilder::Finish() {
 }
 
 #if defined(TerocksPrivateCode)
+std::unique_ptr<BlobStore> TerarkZipTableBuilder::buildZeroLengthBlobStore(BuildStoreParams &params) {
+  auto& kvs = params.kvs;
+  auto store = UniquePtrOf(new terark::ZeroLengthBlobStore());
+  BuilderWriteValues(params.input, kvs, [&](fstring value) { assert(value.empty()); });
+  store->finish(kvs.stat.numKeys);
+  return std::move(store);
+};
 std::unique_ptr<BlobStore> TerarkZipTableBuilder::buildPlainBlobStore(BuildStoreParams &params) {
   auto& kvs = params.kvs;
   size_t workingMemory = kvs.value.m_total_key_len
@@ -585,7 +593,10 @@ ZipValueToFinish(fstring tmpIndexFile, std::function<void()> waitIndex) {
     std::unique_ptr<terark::BlobStore> store;
     BuildStoreParams params = {input, kvs, 0};
     t3 = g_pf.now();
-    if (table_options_.offsetArrayBlockUnits) {
+    if (kvs.value.m_total_key_len == 0) {
+      store = buildZeroLengthBlobStore(params);
+    }
+    else if (table_options_.offsetArrayBlockUnits) {
       if (kvs.stat.numKeys < (4ull << 30) && variaNum * 64 < kvs.stat.numKeys) {
         store = buildMixedLenBlobStore(params);
       }
@@ -699,7 +710,10 @@ ZipValueToFinishMulti(fstring tmpIndexFile, std::function<void()> waitIndex) {
       size_t variaNum = kvs.stat.numKeys - fixedNum;
       BuildStoreParams params = {input, kvs, 0};
       std::unique_ptr<terark::BlobStore> store;
-      if (table_options_.offsetArrayBlockUnits) {
+      if (kvs.value.m_total_key_len == 0) {
+        store = buildZeroLengthBlobStore(params);
+      }
+      else if (table_options_.offsetArrayBlockUnits) {
         if (kvs.stat.numKeys < (4ull << 30) && variaNum * 64 < kvs.stat.numKeys) {
           store = buildMixedLenBlobStore(params);
         }

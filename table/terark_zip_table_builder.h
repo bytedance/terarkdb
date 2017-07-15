@@ -102,6 +102,7 @@ private:
     WaitHandle handle;
   };
 #if defined(TerocksPrivateCode)
+  std::unique_ptr<BlobStore> buildZeroLengthBlobStore(BuildStoreParams& params);
   std::unique_ptr<BlobStore> buildPlainBlobStore(BuildStoreParams& params);
   std::unique_ptr<BlobStore> buildMixedLenBlobStore(BuildStoreParams& params);
   std::unique_ptr<BlobStore> buildZipOffsetBlobStore(BuildStoreParams& params);
