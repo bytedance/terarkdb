@@ -63,10 +63,12 @@ const TerarkIndex::Factory* TerarkIndex::GetFactory(fstring name) {
 const TerarkIndex::Factory*
 TerarkIndex::SelectFactory(const KeyStat& ks, fstring name) {
 #if defined(TerocksPrivateCode)
-  if (ks.maxKeyLen == ks.minKeyLen && ks.minKeyLen > 0 && ks.maxKeyLen <= 8) {
+  if (ks.maxKeyLen == ks.minKeyLen &&
+      ks.maxKeyLen - ks.commonPrefixLen > 0 &&
+      ks.maxKeyLen - ks.commonPrefixLen <= sizeof(uint64_t)) {
     uint64_t
-      minValue = ReadUint64(ks.minKey.begin(), ks.minKey.end()),
-      maxValue = ReadUint64(ks.maxKey.begin(), ks.maxKey.end());
+      minValue = ReadUint64(ks.minKey.begin() + ks.commonPrefixLen, ks.minKey.end()),
+      maxValue = ReadUint64(ks.maxKey.begin() + ks.commonPrefixLen, ks.maxKey.end());
     uint64_t diff = (minValue < maxValue ? maxValue - minValue : minValue - maxValue) + 1;
     if (diff < ks.numKeys * 30) {
       if (diff < (4ull << 30)) {
@@ -428,12 +430,15 @@ public:
                const TerarkZipTableOptions& tzopt,
                std::function<void(const void *, size_t)> write,
                KeyStat& ks) const override {
-      if (ks.maxKeyLen != ks.minKeyLen || ks.minKeyLen == 0 || ks.maxKeyLen > 8) {
+      size_t commonPrefixLen = ks.commonPrefixLen;
+      if (ks.maxKeyLen != ks.minKeyLen ||
+          ks.maxKeyLen - commonPrefixLen == 0 ||
+          ks.maxKeyLen - commonPrefixLen > sizeof(uint64_t)) {
         abort();
       }
       uint64_t
-        minValue = ReadUint64(ks.minKey.begin(), ks.minKey.end()),
-        maxValue = ReadUint64(ks.maxKey.begin(), ks.maxKey.end());
+        minValue = ReadUint64(ks.minKey.begin() + commonPrefixLen, ks.minKey.end()),
+        maxValue = ReadUint64(ks.maxKey.begin() + commonPrefixLen, ks.maxKey.end());
       if (minValue > maxValue) {
         std::swap(minValue, maxValue);
       }
@@ -443,17 +448,17 @@ public:
       indexSeq_.resize(diff);
       for (size_t seq_id = 0; seq_id < ks.numKeys; ++seq_id) {
         reader >> keyBuf;
-        indexSeq_.set1(ReadUint64(keyBuf.begin(), keyBuf.end()) - minValue);
+        indexSeq_.set1(ReadUint64(keyBuf.begin() + commonPrefixLen,
+            keyBuf.end()) - minValue);
       }
       indexSeq_.build_cache(false, false);
       FileHeader header(indexSeq_.mem_size());
       header.min_value = minValue;
       header.max_value = maxValue;
       header.index_mem_size = indexSeq_.mem_size();
-      header.key_length = ks.minKeyLen;
+      header.key_length = ks.minKeyLen - commonPrefixLen;
       write(&header, sizeof header);
       write(indexSeq_.data(), indexSeq_.mem_size());
-      ks.commonPrefixLen = 0;
     }
     unique_ptr<TerarkIndex> LoadMemory(fstring mem) const override {
       return unique_ptr<TerarkIndex>(loadImpl(mem, {}).release());
