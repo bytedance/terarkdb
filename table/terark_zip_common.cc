@@ -1,6 +1,6 @@
+#include "terark_zip_table.h"
 #include "terark_zip_common.h"
 #include <terark/io/byte_swap.hpp>
-#include <boost/predef/other/endian.h>
 #include <terark/util/throw.hpp>
 #include <stdlib.h>
 #include <ctime>
@@ -12,16 +12,20 @@
 # include <fcntl.h>
 # include <cxxabi.h>
 #endif
+#if defined(TerocksPrivateCode)
+#include <boost/predef/other/endian.h>
+#endif // TerocksPrivateCode
 
 namespace rocksdb {
 
+#if defined(TerocksPrivateCode)
 uint64_t ReadUint64(const byte_t* beg, const byte_t* end) {
   assert(end - beg <= 8);
   union {
     byte_t bytes[8];
     uint64_t value;
   } c;
-  c.value = 0;
+  c.value = 0;  // this is fix for gcc-4.8 union init bug
   size_t l = end - beg;
   memcpy(c.bytes + (8 - l), beg, l);
 #if BOOST_ENDIAN_LITTLE_BYTE
@@ -55,6 +59,7 @@ void AssignUint64(byte_t* beg, byte_t* end, uint64_t value) {
   size_t l = end - beg;
   memcpy(beg, c.bytes + (8 - l), l);
 }
+#endif // TerocksPrivateCode
 
 const char* StrDateTimeNow() {
   thread_local char buf[64];
