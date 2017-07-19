@@ -10,8 +10,8 @@
 #include <table/meta_blocks.h>
 // terark headers
 #include <terark/util/sortable_strvec.hpp>
-#include <terark/zbs/zero_length_blob_store.hpp>
 #if defined(TerocksPrivateCode)
+# include <terark/zbs/zero_length_blob_store.hpp>
 # include <terark/zbs/plain_blob_store.hpp>
 # include <terark/zbs/mixed_len_blob_store.hpp>
 # include <terark/zbs/zip_offset_blob_store.hpp>
