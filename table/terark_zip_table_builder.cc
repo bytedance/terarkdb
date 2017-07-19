@@ -83,6 +83,7 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(
   , ioptions_(tbo.ioptions)
   , range_del_block_(1)
   , key_prefixLen_(key_prefixLen)
+  , level_(tbo.level)
 {
   properties_.fixed_key_len = 0;
   properties_.num_data_blocks = 1;
@@ -315,10 +316,10 @@ TerarkZipTableBuilder::WaitHandle& TerarkZipTableBuilder::WaitHandle::operator =
 }
 void TerarkZipTableBuilder::WaitHandle::Release(size_t size) {
   assert(size <= myWorkMem);
-  if (size == 0) {
-    size = myWorkMem;
-  }
   if (myWorkMem > 0) {
+    if (size == 0) {
+      size = myWorkMem;
+    }
     std::unique_lock<std::mutex> zipLock(zipMutex);
     assert(sumWorkingMem >= myWorkMem);
     sumWorkingMem -= size;
@@ -531,6 +532,98 @@ Status TerarkZipTableBuilder::Finish() {
   return ZipValueToFinish(tmpIndexFile, waitIndex);
 }
 
+
+TerarkZipTableBuilder::WaitHandle
+TerarkZipTableBuilder::
+LoadSample(std::unique_ptr<DictZipBlobStore::ZipBuilder>& zbuilder) {
+  size_t dictWorkingMemory = std::min<size_t>(sampleLenSum_, INT32_MAX) * 6;
+  auto waitHandle = WaitForMemory("dictZip", dictWorkingMemory);
+
+  valvec<byte_t> sample;
+#if defined(TerocksPrivateCode)
+  valvec<byte_t> test;
+  const size_t test_size = 32ull << 20;
+  auto table_factory = dynamic_cast<TerarkZipTableFactory*>(ioptions_.table_factory);
+  assert(table_factory);
+  auto hard_test = table_factory->GetCollect().hard();
+#endif // TerocksPrivateCode
+  NativeDataInput<InputBuffer> sampleInput(&tmpSampleFile_.fp);
+  size_t realsampleLenSum = 0;
+#if defined(TerocksPrivateCode)
+  if (hard_test && sampleLenSum_ < test_size) {
+    for (size_t len = 0; len < sampleLenSum_; ) {
+      sampleInput >> sample;
+      zbuilder->addSample(sample);
+      test.append(sample);
+      len += sample.size();
+    }
+    realsampleLenSum = sampleLenSum_;
+  }
+  else
+#endif // TerocksPrivateCode
+  {
+    if (sampleLenSum_ < INT32_MAX) {
+#if defined(TerocksPrivateCode)
+      uint64_t upperBoundTest = uint64_t(
+        randomGenerator_.max() * double(test_size) / sampleLenSum_);
+#endif // TerocksPrivateCode
+      for (size_t len = 0; len < sampleLenSum_; ) {
+        sampleInput >> sample;
+        zbuilder->addSample(sample);
+        len += sample.size();
+#if defined(TerocksPrivateCode)
+        if (hard_test && randomGenerator_() < upperBoundTest) {
+          test.append(sample);
+        }
+#endif // TerocksPrivateCode
+      }
+      realsampleLenSum = sampleLenSum_;
+    }
+    else {
+      uint64_t upperBoundSample = uint64_t(
+        randomGenerator_.max() * double(INT32_MAX) / sampleLenSum_);
+#if defined(TerocksPrivateCode)
+      uint64_t upperBoundTest = uint64_t(
+        randomGenerator_.max() * double(test_size) / sampleLenSum_);
+#endif // TerocksPrivateCode
+      for (size_t len = 0; len < sampleLenSum_; ) {
+        sampleInput >> sample;
+        if (randomGenerator_() < upperBoundSample) {
+          zbuilder->addSample(sample);
+          realsampleLenSum += sample.size();
+        }
+#if defined(TerocksPrivateCode)
+        if (hard_test && randomGenerator_() < upperBoundTest) {
+          test.append(sample);
+        }
+#endif // TerocksPrivateCode
+        len += sample.size();
+      }
+    }
+  }
+  tmpSampleFile_.close();
+#if defined(TerocksPrivateCode)
+  if (hard_test) {
+    std::string output;
+    bool result = Snappy_Compress(rocksdb::CompressionOptions(), (const char*)test.data(), test.size(), &output);
+    assert(result);
+    (void)result;
+    if (CollectInfo::hard(test.size(), output.size())) {
+      // hard to compress ...
+      zbuilder.reset();
+      waitHandle.Release();
+      return waitHandle;
+    }
+    test.clear();
+  }
+#endif // TerocksPrivateCode
+  if (0 == realsampleLenSum) { // prevent from empty
+    zbuilder->addSample("Hello World!");
+  }
+  zbuilder->finishSample();
+  return waitHandle;
+}
+
 #if defined(TerocksPrivateCode)
 std::unique_ptr<BlobStore> TerarkZipTableBuilder::buildZeroLengthBlobStore(BuildStoreParams &params) {
   auto& kvs = params.kvs;
@@ -582,12 +675,16 @@ ZipValueToFinish(fstring tmpIndexFile, std::function<void()> waitIndex) {
   AutoDeleteFile tmpDictFile{tmpValueFile_.path + ".dict"};
   NativeDataInput<InputBuffer> input(&tmpValueFile_.fp);
   auto& kvs = histogram_.front();
-  std::unique_ptr<DictZipBlobStore::ZipBuilder> zbuilder;
   DictZipBlobStore::ZipStat dzstat;
   long long t3, t4;
+
+  t3 = g_pf.now();
 #if defined(TerocksPrivateCode)
-  auto avgValueLen = kvs.value.m_total_key_len / kvs.stat.numKeys;
-  if (avgValueLen < table_options_.minDictZipValueSize) {
+  auto needCompress = [&]() {
+    auto avgValueLen = kvs.value.m_total_key_len / kvs.stat.numKeys;
+    return avgValueLen > table_options_.minDictZipValueSize;
+  };
+  auto zipIncompressibleStore = [&] {
     size_t fixedNum = kvs.value.m_cnt_of_max_cnt_key;
     size_t variaNum = kvs.stat.numKeys - fixedNum;
     std::unique_ptr<terark::BlobStore> store;
@@ -606,7 +703,7 @@ ZipValueToFinish(fstring tmpIndexFile, std::function<void()> waitIndex) {
     }
     else {
       if (kvs.stat.numKeys < (4ull << 30) &&
-          4 * variaNum + kvs.stat.numKeys * 5 / 4 < 4 * kvs.stat.numKeys) {
+        4 * variaNum + kvs.stat.numKeys * 5 / 4 < 4 * kvs.stat.numKeys) {
         store = buildMixedLenBlobStore(params);
       }
       else {
@@ -620,58 +717,37 @@ ZipValueToFinish(fstring tmpIndexFile, std::function<void()> waitIndex) {
     dzstat.dictFileTime = 0.000001;
     dzstat.dictZipTime = g_pf.sf(t3, t4);
     dzstat.sampleTime = 0.000001;
+  };
+  if (!needCompress()) {
+    zipIncompressibleStore();
   }
   else
 #endif // TerocksPrivateCode
   {
-    size_t dictWorkingMemory = std::min<size_t>(sampleLenSum_, INT32_MAX) * 6;
-    auto dictWaitHandle = WaitForMemory("dictZip", dictWorkingMemory);
-    t3 = g_pf.now();
-    zbuilder = UniquePtrOf(this->createZipBuilder());
-    {
-      valvec<byte_t> sample;
-      NativeDataInput<InputBuffer> input(&tmpSampleFile_.fp);
-      size_t realsampleLenSum = 0;
-      if (sampleLenSum_ < INT32_MAX) {
-        for (size_t len = 0; len < sampleLenSum_; ) {
-          input >> sample;
-          zbuilder->addSample(sample);
-          len += sample.size();
-        }
-        realsampleLenSum = sampleLenSum_;
-      }
-      else {
-        uint64_t upperBound2 = uint64_t(
-          randomGenerator_.max() * double(INT32_MAX) / sampleLenSum_);
-        for (size_t len = 0; len < sampleLenSum_; ) {
-          input >> sample;
-          if (randomGenerator_() < upperBound2) {
-            zbuilder->addSample(sample);
-            realsampleLenSum += sample.size();
-          }
-          len += sample.size();
-        }
-      }
-      tmpSampleFile_.close();
-      if (0 == realsampleLenSum) { // prevent from empty
-        zbuilder->addSample("Hello World!");
-      }
-      zbuilder->finishSample();
-      zbuilder->prepare(kvs.stat.numKeys, tmpStoreFile);
+    auto zbuilder = UniquePtrOf(createZipBuilder());
+    WaitHandle dictWaitHandle = LoadSample(zbuilder);
+#if defined(TerocksPrivateCode)
+    if (!zbuilder) {
+      zipIncompressibleStore();
     }
+    else
+#endif // TerocksPrivateCode
+    {
+      zbuilder->prepare(kvs.stat.numKeys, tmpStoreFile);
 
-    BuilderWriteValues(input, kvs, [&](fstring value) {zbuilder->addRecord(value); });
+      BuilderWriteValues(input, kvs, [&](fstring value) {zbuilder->addRecord(value); });
 
-    auto store = zbuilder->finish(DictZipBlobStore::ZipBuilder::FinishFreeDict
+      auto store = zbuilder->finish(DictZipBlobStore::ZipBuilder::FinishFreeDict
         | DictZipBlobStore::ZipBuilder::FinishWithoutReload);
-    assert(store == nullptr);
-    (void)store;
-    dzstat = zbuilder->getZipStat();
+      assert(store == nullptr);
+      (void)store;
+      dzstat = zbuilder->getZipStat();
 
-    t4 = g_pf.now();
-    auto dict = zbuilder->getDictionary().memory;
-    FileStream(tmpDictFile, "wb+").ensureWrite(dict.data(), dict.size());
-    zbuilder.reset();
+      t4 = g_pf.now();
+      auto dict = zbuilder->getDictionary().memory;
+      FileStream(tmpDictFile, "wb+").ensureWrite(dict.data(), dict.size());
+      zbuilder.reset();
+    }
   }
   DebugCleanup();
   // wait for indexing complete, if indexing is slower than value compressing
@@ -688,24 +764,39 @@ ZipValueToFinishMulti(fstring tmpIndexFile, std::function<void()> waitIndex) {
   AutoDeleteFile tmpStoreFile{tmpValueFile_.path + ".zbs"};
   AutoDeleteFile tmpDictFile{tmpValueFile_.path + ".dict"};
   NativeDataInput<InputBuffer> input(&tmpValueFile_.fp);
-  auto zbuilder = UniquePtrOf(this->createZipBuilder());
+  std::unique_ptr<DictZipBlobStore::ZipBuilder> zbuilder;
+  WaitHandle dictWaitHandle;
   std::unique_ptr<terark::BlobStore> store;
   DictZipBlobStore::ZipStat dzstat;
-  long long t1, t2, t3, t4;
+  long long t3, t4;
 
   auto minDictZipValueSize = table_options_.minDictZipValueSize / 2;
-  size_t dictWorkingMemory = std::min<size_t>(sampleLenSum_, INT32_MAX) * 6;
-  WaitHandle dictWaitHandle;
   size_t fileOffset = 0;
   size_t dictRefCount = 0;
 
   t3 = g_pf.now();
-
+  auto initZBuilder = [&] {
+    if (dictRefCount == size_t(-1)) {
+      return false;
+    }
+    if (dictRefCount == 0) {
+      zbuilder.reset(createZipBuilder());
+      dictWaitHandle = LoadSample(zbuilder);
+      if (!zbuilder) {
+        dictRefCount = size_t(-1);
+        return false;
+      }
+    }
+    return true;
+  };
+  auto needCompress = [&](KeyValueStatus &kvs) {
+    auto avgValueLen = kvs.value.m_total_key_len / kvs.stat.numKeys;
+    return avgValueLen > minDictZipValueSize;
+  };
   for (size_t i = 0; i < histogram_.size(); ++i) {
     auto& kvs = histogram_[i];
     kvs.valueFileBegin = fileOffset;
-    auto avgValueLen = kvs.value.m_total_key_len / kvs.stat.numKeys;
-    if (avgValueLen < minDictZipValueSize) {
+    if (!needCompress(kvs) || !initZBuilder()) {
       size_t fixedNum = kvs.value.m_cnt_of_max_cnt_key;
       size_t variaNum = kvs.stat.numKeys - fixedNum;
       BuildStoreParams params = {input, kvs, 0};
@@ -723,7 +814,7 @@ ZipValueToFinishMulti(fstring tmpIndexFile, std::function<void()> waitIndex) {
       }
       else {
         if (kvs.stat.numKeys < (4ull << 30) &&
-            4 * variaNum + kvs.stat.numKeys * 5 / 4 < 4 * kvs.stat.numKeys) {
+          4 * variaNum + kvs.stat.numKeys * 5 / 4 < 4 * kvs.stat.numKeys) {
           store = buildMixedLenBlobStore(params);
         }
         else {
@@ -736,39 +827,6 @@ ZipValueToFinishMulti(fstring tmpIndexFile, std::function<void()> waitIndex) {
       });
     }
     else {
-      if (dictRefCount == 0) {
-        dictWaitHandle = WaitForMemory("dictZip", dictWorkingMemory);
-        valvec<byte_t> sample;
-        t1 = g_pf.now();
-        NativeDataInput<InputBuffer> sampleInput(&tmpSampleFile_.fp);
-        size_t realsampleLenSum = 0;
-        if (sampleLenSum_ < INT32_MAX) {
-          for (size_t len = 0; len < sampleLenSum_; ) {
-            sampleInput >> sample;
-            zbuilder->addSample(sample);
-            len += sample.size();
-          }
-          realsampleLenSum = sampleLenSum_;
-        }
-        else {
-          uint64_t upperBound2 = uint64_t(
-            randomGenerator_.max() * double(INT32_MAX) / sampleLenSum_);
-          for (size_t len = 0; len < sampleLenSum_; ) {
-            sampleInput >> sample;
-            if (randomGenerator_() < upperBound2) {
-              zbuilder->addSample(sample);
-              realsampleLenSum += sample.size();
-            }
-            len += sample.size();
-          }
-        }
-        tmpSampleFile_.close();
-        if (0 == realsampleLenSum) { // prevent from empty
-          zbuilder->addSample("Hello World!");
-        }
-        zbuilder->finishSample();
-        t2 = g_pf.now();
-      }
       zbuilder->prepare(kvs.stat.numKeys, tmpStoreFile, fileOffset);
       BuilderWriteValues(input, kvs, [&](fstring value) {zbuilder->addRecord(value); });
       auto store = zbuilder->finish(DictZipBlobStore::ZipBuilder::FinishWithoutReload);
@@ -783,10 +841,9 @@ ZipValueToFinishMulti(fstring tmpIndexFile, std::function<void()> waitIndex) {
     kvs.valueFileEnd = fileOffset;
     assert((kvs.valueFileEnd - kvs.valueFileBegin) % 8 == 0);
   }
-  if (dictRefCount > 0) {
+  if (zbuilder) {
     zbuilder->freeDict();
     t4 = g_pf.now();
-    t3 += t2 - t1;
     auto dict = zbuilder->getDictionary().memory;
     FileStream(tmpDictFile, "wb+").ensureWrite(dict.data(), dict.size());
     zbuilder.reset();
@@ -1270,6 +1327,12 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
 , (g_sumKeyLen + g_sumValueLen) / g_pf.uf(g_lastTime, t8)
 , (g_sumKeyLen + g_sumValueLen - g_sumEntryNum * 8) / g_pf.uf(g_lastTime, t8)
 );
+#if defined(TerocksPrivateCode)
+  if (level_ == 0) {
+    auto& collect = table_factory->GetCollect();
+    collect.update(properties_.raw_value_size, properties_.data_size);
+  }
+#endif // TerocksPrivateCode
   return s;
 }
 
@@ -1361,7 +1424,7 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4
   }
   commonPrefix.resize(terark::align_up(commonPrefixLenSize, 16), 0);
   WriteBlock(commonPrefix, file_, &offset_, &commonPrefixBlock);
-  properties_.data_size = dataBlock.size();
+  properties_.data_size = offset_;
   if (!dict.memory.empty()) {
     s = WriteBlock(dict.memory, file_, &offset_, &dictBlock);
     if (!s.ok()) {
@@ -1516,6 +1579,10 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4
 , (g_sumKeyLen + g_sumValueLen) / g_pf.uf(g_lastTime, t8)
 , (g_sumKeyLen + g_sumValueLen - g_sumEntryNum * 8) / g_pf.uf(g_lastTime, t8)
 );
+  if (level_ == 0) {
+    auto& collect = table_factory->GetCollect();
+    collect.update(properties_.raw_value_size, properties_.data_size);
+  }
   return s;
 }
 

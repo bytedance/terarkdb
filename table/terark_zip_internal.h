@@ -13,6 +13,7 @@
 // project headers
 #include "terark_zip_table.h"
 // std headers
+#include <deque>
 #include <mutex>
 // rocksdb headers
 #include <rocksdb/slice.h>
@@ -118,6 +119,24 @@ struct LicenseInfo {
   valvec<byte_t> dump() const;
   bool check() const;
   void print_error(const char* file_name, bool startup, rocksdb::Logger* logger) const;
+};
+
+struct CollectInfo {
+  static const size_t queue_size;
+  static const double hard_ratio;
+
+  struct CompressionInfo {
+    size_t raw_size;
+    size_t zip_size;
+  };
+  std::deque<CompressionInfo> queue;
+  size_t raw_size = 0;
+  size_t zip_size = 0;
+  mutable std::mutex mutex;
+
+  void update(size_t raw, size_t zip);
+  static bool hard(size_t raw, size_t zip);
+  bool hard() const;
 };
 
 #endif // TerocksPrivateCode
@@ -241,9 +260,13 @@ private:
 #if defined(TerocksPrivateCode)
 private:
   LicenseInfo license_;
+  CollectInfo collect_;
 public:
   LicenseInfo& GetLicense() {
     return license_;
+  }
+  CollectInfo& GetCollect() {
+    return collect_;
   }
 #endif // TerocksPrivateCode
 };

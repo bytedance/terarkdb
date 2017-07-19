@@ -416,6 +416,30 @@ void LicenseInfo::print_error(const char* file_name, bool startup, rocksdb::Logg
 #undef RED_END
 }
 
+const size_t CollectInfo::queue_size = 4;
+const double CollectInfo::hard_ratio = 0.9;
+
+void CollectInfo::update(size_t raw, size_t zip) {
+  std::unique_lock<std::mutex> l(mutex);
+  raw_size += raw;
+  zip_size += zip;
+  queue.emplace_back(CompressionInfo{raw, zip});
+  while (queue.size() > queue_size) {
+    raw_size -= queue.front().raw_size;
+    zip_size -= queue.front().zip_size;
+    queue.pop_front();
+  }
+}
+
+bool CollectInfo::hard(size_t raw, size_t zip) {
+  return double(zip) / double(raw) > hard_ratio;
+}
+
+bool CollectInfo::hard() const {
+  std::unique_lock<std::mutex> l(mutex);
+  return queue.size() == queue_size && hard(raw_size, zip_size);
+}
+
 #endif // TerocksPrivateCode
 
 #if defined(TerocksPrivateCode)

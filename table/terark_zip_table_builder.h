@@ -96,12 +96,13 @@ private:
   WaitHandle WaitForMemory(const char* who, size_t memorySize);
   Status EmptyTableFinish();
   Status OfflineFinish();
+  WaitHandle LoadSample(std::unique_ptr<DictZipBlobStore::ZipBuilder>& zbuilder);
+#if defined(TerocksPrivateCode)
   struct BuildStoreParams {
     NativeDataInput<InputBuffer>& input;
     KeyValueStatus& kvs;
     WaitHandle handle;
   };
-#if defined(TerocksPrivateCode)
   std::unique_ptr<BlobStore> buildZeroLengthBlobStore(BuildStoreParams& params);
   std::unique_ptr<BlobStore> buildPlainBlobStore(BuildStoreParams& params);
   std::unique_ptr<BlobStore> buildMixedLenBlobStore(BuildStoreParams& params);
@@ -167,6 +168,7 @@ private:
 #if defined(TERARK_SUPPORT_UINT64_COMPARATOR) && BOOST_ENDIAN_LITTLE_BYTE
   bool isUint64Comparator_;
 #endif
+  int level_;
 
   long long t0 = 0;
   size_t key_prefixLen_;
