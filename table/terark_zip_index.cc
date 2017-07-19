@@ -8,6 +8,9 @@
 #include <terark/util/mmap.hpp>
 #include <terark/util/sortable_strvec.hpp>
 
+
+#define DEBUG_ITERATOR
+
 namespace rocksdb {
 
 using terark::initial_state;
@@ -122,8 +125,34 @@ class NestLoudsTrieIndex : public TerarkIndex {
     bool Seek(fstring key) override {
         return Done(m_trie, m_iter->seek_lower_bound(key));
     }
-    bool Next() override { return Done(m_trie, m_iter->incr()); }
-    bool Prev() override { return Done(m_trie, m_iter->decr()); }
+    bool Next() override {
+#ifdef DEBUG_ITERATOR
+      auto key_ref = key();
+      std::string saved_key(key_ref.data(), key_ref.size());
+      bool ret = Done(m_trie, m_iter->incr());
+      if (ret && key() < saved_key) {
+        assert(0);
+        //throw std::exception("NestLoudsTrieIndex::Next() error");
+      }
+      return ret;
+#else
+      return Done(m_trie, m_iter->incr());
+#endif
+    }
+    bool Prev() override {
+#ifdef DEBUG_ITERATOR
+      auto key_ref = key();
+      std::string saved_key(key_ref.data(), key_ref.size());
+      bool ret = Done(m_trie, m_iter->decr());
+      if (ret && key() > saved_key) {
+        assert(0);
+        //throw std::exception("NestLoudsTrieIndex::Prev() error");
+      }
+      return ret;
+#else
+      return Done(m_trie, m_iter->decr());
+#endif
+    }
   };
 public:
   NestLoudsTrieIndex(NLTrie* trie) : m_trie(trie) {}
