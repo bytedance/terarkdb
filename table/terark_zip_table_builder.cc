@@ -19,7 +19,7 @@
 #endif // TerocksPrivateCode
 
 namespace snappy {
-  size_t Compress(const char* input, size_t input_length, string* output);
+  size_t Compress(const char* input, size_t input_length, std::string* output);
 }
 
 namespace rocksdb {

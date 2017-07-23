@@ -241,9 +241,7 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo) {
     );
     tzo.offsetArrayBlockUnits = 128;
   }
-  if (false
-      || tzo.indexNestScale < 1
-      || tzo.indexNestScale > 255
+  if (tzo.indexNestScale == 0
   ){
     STD_WARN(
       "TerarkZipConfigFromEnv: bad indexNestScale = %d, must be in [1,255], reset to 8\n"
