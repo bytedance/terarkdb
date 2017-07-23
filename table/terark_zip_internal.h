@@ -13,7 +13,6 @@
 // project headers
 #include "terark_zip_table.h"
 // std headers
-#include <deque>
 #include <mutex>
 // rocksdb headers
 #include <rocksdb/slice.h>
@@ -34,6 +33,9 @@
 //# define USE_CRYPTOPP
 # define USE_OPENSSL
 #endif // TerocksPrivateCode
+
+
+void PrintVersion(rocksdb::Logger* info_log);
 
 namespace rocksdb {
 
@@ -56,6 +58,7 @@ extern const std::string kTerarkEmptyTableKey;
 #if defined(TerocksPrivateCode)
 
 extern const std::string kTerarkZipTableExtendedBlock;
+extern const std::string kTerarkZipTableBuildTimestamp;
 
 #endif // TerocksPrivateCode
 
@@ -126,15 +129,16 @@ struct CollectInfo {
   static const double hard_ratio;
 
   struct CompressionInfo {
+    uint64_t timestamp;
     size_t raw_size;
     size_t zip_size;
   };
-  std::deque<CompressionInfo> queue;
+  std::vector<CompressionInfo> queue;
   size_t raw_size = 0;
   size_t zip_size = 0;
   mutable std::mutex mutex;
 
-  void update(size_t raw, size_t zip);
+  void update(uint64_t timestamp, size_t raw, size_t zip);
   static bool hard(size_t raw, size_t zip);
   bool hard() const;
 };

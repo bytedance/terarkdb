@@ -58,13 +58,15 @@ struct TerarkZipTableOptions {
   /// 2 : verify 2nd pass iter keys
   /// 3 : verify 2nd pass iter keys & values
   /// 4 : dump 1st & 2nd pass data to file
-  int debugLevel = 0;
-
-  bool useSuffixArrayLocalMatch = false;
-  bool isOfflineBuild = false;
-  bool warmUpIndexOnOpen = true;
-  bool warmUpValueOnOpen = false;
-  bool disableSecondPassIter = false;
+  unsigned char debugLevel               = 0;
+  unsigned char reserveValue             = 0;
+  unsigned char indexNestScale           = 8;
+  bool          enableCompressionProbe   = true;
+  bool          useSuffixArrayLocalMatch = false;
+  bool          isOfflineBuild           = false;
+  bool          warmUpIndexOnOpen        = true;
+  bool          warmUpValueOnOpen        = false;
+  bool          disableSecondPassIter    = false;
 
   /// -1: dont use temp file for  any  index build
   ///  0: only use temp file for large index build, smart
@@ -72,15 +74,15 @@ struct TerarkZipTableOptions {
   ///  2: only use temp file for large index build, same as NLT.tmpLevel
   ///  3: only use temp file for large index build, same as NLT.tmpLevel
   ///  4:      use temp file for  all  index build
-  signed char indexTempLevel = 0;
+  signed char    indexTempLevel           = 0;
 
-  unsigned short offsetArrayBlockUnits = 0;
+  unsigned short offsetArrayBlockUnits    = 0;
 
-  float estimateCompressionRatio = 0.2f;
-  double sampleRatio = 0.03;
-  std::string localTempDir = "/tmp";
-  std::string indexType = "IL_256";
-  std::string extendedConfigFile;
+  float          estimateCompressionRatio = 0.2f;
+  double         sampleRatio              = 0.03;
+  std::string    localTempDir             = "/tmp";
+  std::string    indexType                = "IL_256";
+  std::string    extendedConfigFile;
 
   size_t softZipWorkingMemLimit = 16ull << 30;
   size_t hardZipWorkingMemLimit = 32ull << 30;

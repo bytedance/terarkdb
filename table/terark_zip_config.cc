@@ -229,6 +229,7 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo) {
   MyGetInt   (tzo, debugLevel              , 0    );
   MyGetInt   (tzo, keyPrefixLen            , 0    );
   MyGetInt   (tzo, offsetArrayBlockUnits   , 0    );
+  MyGetInt   (tzo, indexNestScale          , 8    );
   if (true
       && 0   != tzo.offsetArrayBlockUnits
       && 64  != tzo.offsetArrayBlockUnits
@@ -240,11 +241,22 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo) {
     );
     tzo.offsetArrayBlockUnits = 128;
   }
+  if (false
+      || tzo.indexNestScale < 1
+      || tzo.indexNestScale > 255
+  ){
+    STD_WARN(
+      "TerarkZipConfigFromEnv: bad indexNestScale = %d, must be in [1,255], reset to 8\n"
+      , int(tzo.indexNestScale)
+    );
+    tzo.offsetArrayBlockUnits = 8;
+  }
 
   MyGetBool  (tzo, useSuffixArrayLocalMatch, false);
   MyGetBool  (tzo, warmUpIndexOnOpen       , true );
   MyGetBool  (tzo, warmUpValueOnOpen       , false);
   MyGetBool  (tzo, disableSecondPassIter   , false);
+  MyGetBool  (tzo, enableCompressionProbe  , true );
 
   MyGetDouble(tzo, estimateCompressionRatio, 0.20 );
   MyGetDouble(tzo, sampleRatio             , 0.03 );

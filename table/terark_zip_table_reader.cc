@@ -9,6 +9,7 @@
 #include <table/meta_blocks.h>
 #include <table/get_context.h>
 // terark headers
+#include <terark/lcast.hpp>
 #include <terark/util/crc.hpp>
 
 
@@ -132,6 +133,40 @@ static void MmapColdize(const Vec& uv) {
   MmapColdizeBytes(uv.data(), uv.mem_size());
 }
 */
+
+#if defined(TerocksPrivateCode)
+Status UpdateLicenseInfo(TableFactory* table_factory,
+                         Logger* info_log,
+                         const BlockContents& licenseBlock) {
+  auto terark_zip_table_factory = dynamic_cast<TerarkZipTableFactory*>(table_factory);
+  assert(terark_zip_table_factory);
+  auto& license = terark_zip_table_factory->GetLicense();
+  auto res = license.merge(licenseBlock.data.data(), licenseBlock.data.size());
+  assert(res == LicenseInfo::Result::OK);
+  (void)res; // shut up !
+  if (!license.check()) {
+    license.print_error(nullptr, false, info_log);
+    return Status::Corruption("License expired", "contact@terark.com");
+  }
+  return Status::OK();
+}
+
+void UpdateCollectInfo(TableFactory* table_factory,
+                       const TerarkZipTableOptions* tzopt,
+                       TableProperties *props) {
+  if (!tzopt->enableCompressionProbe) {
+    return;
+  }
+  auto find = props->user_collected_properties.find(kTerarkZipTableBuildTimestamp);
+  if (find == props->user_collected_properties.end()) {
+    return;
+  }
+  auto terark_zip_table_factory = dynamic_cast<TerarkZipTableFactory*>(table_factory);
+  assert(terark_zip_table_factory);
+  auto& collect = terark_zip_table_factory->GetCollect();
+  collect.update(terark::lcast(find->second), props->raw_value_size, props->data_size);
+}
+#endif // TerocksPrivateCode
 
 }
 
@@ -907,19 +942,13 @@ TerarkEmptyTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   table_properties_.reset(uniqueProps.release());
   global_seqno_ = GetGlobalSequenceNumber(*table_properties_, ioptions.info_log);
 #if defined(TerocksPrivateCode)
-  auto table_factory = dynamic_cast<TerarkZipTableFactory*>(ioptions.table_factory);
-  assert(table_factory);
-  auto& license = table_factory->GetLicense();
   BlockContents licenseBlock;
   s = ReadMetaBlock(file, file_size, kTerarkZipTableMagicNumber, ioptions,
     kTerarkZipTableExtendedBlock, &licenseBlock);
   if (s.ok()) {
-    auto res = license.merge(licenseBlock.data.data(), licenseBlock.data.size());
-    assert(res == LicenseInfo::Result::OK);
-    (void)res; // shut up !
-    if (!license.check()) {
-      license.print_error(nullptr, false, ioptions.info_log);
-      return Status::Corruption("License expired", "contact@terark.com");
+    s = UpdateLicenseInfo(ioptions.table_factory, ioptions.info_log, licenseBlock);
+    if (!s.ok()) {
+      return s;
     }
   }
 #endif // TerocksPrivateCode
@@ -977,17 +1006,12 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   s = ReadMetaBlock(file, file_size, kTerarkZipTableMagicNumber, ioptions,
     kTerarkZipTableExtendedBlock, &licenseBlock);
   if (s.ok()) {
-    auto table_factory = dynamic_cast<TerarkZipTableFactory*>(ioptions.table_factory);
-    assert(table_factory);
-    auto& license = table_factory->GetLicense();
-    auto res = license.merge(licenseBlock.data.data(), licenseBlock.data.size());
-    assert(res == LicenseInfo::Result::OK);
-    (void)res; // shut up !
-    if (!license.check()) {
-      license.print_error(nullptr, false, ioptions.info_log);
-      return Status::Corruption("License expired", "contact@terark.com");
+    s = UpdateLicenseInfo(ioptions.table_factory, ioptions.info_log, licenseBlock);
+    if (!s.ok()) {
+      return s;
     }
   }
+  UpdateCollectInfo(ioptions.table_factory, &tzto_, props);
 #endif // TerocksPrivateCode
   s = ReadMetaBlock(file, file_size, kTerarkZipTableMagicNumber, ioptions,
     kTerarkZipTableValueDictBlock, &valueDictBlock);
@@ -1395,17 +1419,12 @@ rocksdb::TerarkZipTableMultiReader::Open(RandomAccessFileReader* file, uint64_t 
   s = ReadMetaBlock(file, file_size, kTerarkZipTableMagicNumber, ioptions,
     kTerarkZipTableExtendedBlock, &licenseBlock);
   if (s.ok()) {
-    auto table_factory = dynamic_cast<TerarkZipTableFactory*>(ioptions.table_factory);
-    assert(table_factory);
-    auto& license = table_factory->GetLicense();
-    auto res = license.merge(licenseBlock.data.data(), licenseBlock.data.size());
-    assert(res == LicenseInfo::Result::OK);
-    (void)res; // shut up !
-    if (!license.check()) {
-      license.print_error(nullptr, false, ioptions.info_log);
-      return Status::Corruption("License expired", "contact@terark.com");
+    s = UpdateLicenseInfo(ioptions.table_factory, ioptions.info_log, licenseBlock);
+    if (!s.ok()) {
+      return s;
     }
   }
+  UpdateCollectInfo(ioptions.table_factory, &tzto_, props);
   s = ReadMetaBlock(file, file_size, kTerarkZipTableMagicNumber, ioptions,
     kTerarkZipTableOffsetBlock, &offsetBlock);
   if (!s.ok()) {

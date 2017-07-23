@@ -67,6 +67,25 @@ extern "C"
 # endif
 #endif // TerocksPrivateCode
 
+static std::once_flag PrintVersionHashInfoFlag;
+
+#ifndef _MSC_VER
+const char* git_version_hash_info_core();
+const char* git_version_hash_info_fsa();
+const char* git_version_hash_info_zbs();
+const char* git_version_hash_info_terark_zip_rocksdb();
+#endif
+
+void PrintVersionHashInfo(rocksdb::Logger* info_log) {
+  std::call_once(PrintVersionHashInfoFlag, [info_log] {
+#ifndef _MSC_VER
+    INFO(info_log, "core %s", git_version_hash_info_core());
+    INFO(info_log, "fsa %s", git_version_hash_info_fsa());
+    INFO(info_log, "zbs %s", git_version_hash_info_zbs());
+    INFO(info_log, "terark_zip_rocksdb %s", git_version_hash_info_terark_zip_rocksdb());
+#endif
+  });
+}
 
 #if defined(TerocksPrivateCode)
 
@@ -114,6 +133,7 @@ const std::string kTerarkEmptyTableKey             = "ThisIsAnEmptyTable";
 using terark::XXHash64;
 
 const std::string kTerarkZipTableExtendedBlock = "TerarkZipTableExtendedBlock";
+const std::string kTerarkZipTableBuildTimestamp = "terark.build.timestamp";
 static const uint64_t g_dTerarkTrialDuration = 30ULL * 24 * 3600 * 1000;
 static const std::string g_szTerarkPublikKey =
 "MIIBIDANBgkqhkiG9w0BAQEFAAOCAQ0AMIIBCAKCAQEAxPQGCXF8uotaYLixcWL65GO8wYcZ"
@@ -416,18 +436,23 @@ void LicenseInfo::print_error(const char* file_name, bool startup, rocksdb::Logg
 #undef RED_END
 }
 
-const size_t CollectInfo::queue_size = 4;
+const size_t CollectInfo::queue_size = 8;
 const double CollectInfo::hard_ratio = 0.9;
 
-void CollectInfo::update(size_t raw, size_t zip) {
+void CollectInfo::update(uint64_t timestamp, size_t raw, size_t zip) {
   std::unique_lock<std::mutex> l(mutex);
   raw_size += raw;
   zip_size += zip;
-  queue.emplace_back(CompressionInfo{raw, zip});
+  auto comp = [](const CompressionInfo& l, const CompressionInfo& r) {
+    return l.timestamp > r.timestamp;
+  };
+  queue.emplace_back(CompressionInfo{timestamp, raw, zip});
+  std::push_heap(queue.begin(), queue.end(), comp);
   while (queue.size() > queue_size) {
     raw_size -= queue.front().raw_size;
     zip_size -= queue.front().zip_size;
-    queue.pop_front();
+    std::pop_heap(queue.begin(), queue.end(), comp);
+    queue.pop_back();
   }
 }
 
@@ -437,7 +462,7 @@ bool CollectInfo::hard(size_t raw, size_t zip) {
 
 bool CollectInfo::hard() const {
   std::unique_lock<std::mutex> l(mutex);
-  return queue.size() == queue_size && hard(raw_size, zip_size);
+  return !queue.empty() && hard(raw_size, zip_size);
 }
 
 #endif // TerocksPrivateCode
@@ -575,6 +600,7 @@ TerarkZipTableFactory::NewTableReader(
   uint64_t file_size, unique_ptr<TableReader>* table,
   bool prefetch_index_and_filter_in_cache)
   const {
+  PrintVersionHashInfo(table_reader_options.ioptions.info_log);
   auto userCmp = table_reader_options.internal_comparator.user_comparator();
   if (!IsBytewiseComparator(userCmp)) {
     return Status::InvalidArgument("TerarkZipTableFactory::NewTableReader()",
@@ -663,6 +689,7 @@ TerarkZipTableFactory::NewTableBuilder(
   uint32_t column_family_id,
   WritableFileWriter* file)
   const {
+  PrintVersionHashInfo(table_builder_options.ioptions.info_log);
   auto userCmp = table_builder_options.internal_comparator.user_comparator();
   if (!IsBytewiseComparator(userCmp)) {
     THROW_STD(invalid_argument,

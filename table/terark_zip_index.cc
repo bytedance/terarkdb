@@ -267,6 +267,7 @@ public:
 #endif
       terark::NestLoudsTrieConfig conf;
       conf.nestLevel = tzopt.indexNestLevel;
+      conf.nestScale = tzopt.indexNestScale;
       if (tzopt.indexTempLevel >= 0 && tzopt.indexTempLevel < 4) {
         if (keyVec.mem_size() > tzopt.smallTaskMemory) {
           // use tmp files during index building

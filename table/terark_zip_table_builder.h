@@ -168,7 +168,6 @@ private:
 #if defined(TERARK_SUPPORT_UINT64_COMPARATOR) && BOOST_ENDIAN_LITTLE_BYTE
   bool isUint64Comparator_;
 #endif
-  int level_;
 
   long long t0 = 0;
   size_t key_prefixLen_;

@@ -10,6 +10,7 @@
 #include <table/meta_blocks.h>
 // terark headers
 #include <terark/util/sortable_strvec.hpp>
+#include <terark/lcast.hpp>
 #if defined(TerocksPrivateCode)
 # include <terark/zbs/zero_length_blob_store.hpp>
 # include <terark/zbs/plain_blob_store.hpp>
@@ -17,6 +18,9 @@
 # include <terark/zbs/zip_offset_blob_store.hpp>
 #endif // TerocksPrivateCode
 
+namespace snappy {
+  size_t Compress(const char* input, size_t input_length, string* output);
+}
 
 namespace rocksdb {
 
@@ -66,6 +70,12 @@ Status WriteBlock(const ByteArray& blockData, WritableFileWriter* file,
   return s;
 }
 
+std::string GetTimestamp() {
+    using namespace std::chrono;
+    uint64_t timestamp = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+    return terark::lcast(timestamp);
+}
+
 namespace {
 struct PendingTask {
   const TerarkZipTableBuilder* tztb;
@@ -82,7 +92,6 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(
   : table_options_(tzto)
   , ioptions_(tbo.ioptions)
   , range_del_block_(1)
-  , level_(tbo.level)
   , key_prefixLen_(key_prefixLen)
 {
   properties_.fixed_key_len = 0;
@@ -545,7 +554,7 @@ LoadSample(std::unique_ptr<DictZipBlobStore::ZipBuilder>& zbuilder) {
   const size_t test_size = 32ull << 20;
   auto table_factory = dynamic_cast<TerarkZipTableFactory*>(ioptions_.table_factory);
   assert(table_factory);
-  auto hard_test = table_factory->GetCollect().hard();
+  auto hard_test = table_options_.enableCompressionProbe && table_factory->GetCollect().hard();
 #endif // TerocksPrivateCode
   NativeDataInput<InputBuffer> sampleInput(&tmpSampleFile_.fp);
   size_t realsampleLenSum = 0;
@@ -605,9 +614,7 @@ LoadSample(std::unique_ptr<DictZipBlobStore::ZipBuilder>& zbuilder) {
 #if defined(TerocksPrivateCode)
   if (hard_test) {
     std::string output;
-    bool result = Snappy_Compress(rocksdb::CompressionOptions(), (const char*)test.data(), test.size(), &output);
-    assert(result);
-    (void)result;
+    snappy::Compress((const char*)test.data(), test.size(), &output);
     if (CollectInfo::hard(test.size(), output.size())) {
       // hard to compress ...
       zbuilder.reset();
@@ -1327,12 +1334,6 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
 , (g_sumKeyLen + g_sumValueLen) / g_pf.uf(g_lastTime, t8)
 , (g_sumKeyLen + g_sumValueLen - g_sumEntryNum * 8) / g_pf.uf(g_lastTime, t8)
 );
-#if defined(TerocksPrivateCode)
-  if (level_ == 0) {
-    auto& collect = table_factory->GetCollect();
-    collect.update(properties_.raw_value_size, properties_.data_size);
-  }
-#endif // TerocksPrivateCode
   return s;
 }
 
@@ -1579,10 +1580,6 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4
 , (g_sumKeyLen + g_sumValueLen) / g_pf.uf(g_lastTime, t8)
 , (g_sumKeyLen + g_sumValueLen - g_sumEntryNum * 8) / g_pf.uf(g_lastTime, t8)
 );
-  if (level_ == 0) {
-    auto& collect = table_factory->GetCollect();
-    collect.update(properties_.raw_value_size, properties_.data_size);
-  }
   return s;
 }
 
@@ -1600,6 +1597,7 @@ Status TerarkZipTableBuilder::WriteMetaData(std::initializer_list<std::pair<cons
   NotifyCollectTableCollectorsOnFinish(collectors_,
     ioptions_.info_log,
     &propBlockBuilder);
+  propBlockBuilder.Add(kTerarkZipTableBuildTimestamp, GetTimestamp());
   BlockHandle propBlock, metaindexBlock;
   Status s = WriteBlock(propBlockBuilder.Finish(), file_, &offset_, &propBlock);
   if (!s.ok()) {
