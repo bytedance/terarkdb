@@ -900,7 +900,8 @@ TerarkEmptyTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   }
   if (uniqueProps->comparator_name != fstring(ioptions.user_comparator->Name())) {
     return Status::InvalidArgument("TerarkZipTableReader::Open()",
-      "Invalid user_comparator");
+      "Invalid user_comparator , need " + uniqueProps->comparator_name
+      + ", but provid " + ioptions.user_comparator->Name());
   }
   file_data_ = file_data;
   table_properties_.reset(uniqueProps.release());
@@ -958,7 +959,8 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   }
   if (uniqueProps->comparator_name != fstring(ioptions.user_comparator->Name())) {
     return Status::InvalidArgument("TerarkZipTableReader::Open()",
-      "Invalid user_comparator");
+      "Invalid user_comparator , need " + uniqueProps->comparator_name
+      + ", but provid " + ioptions.user_comparator->Name());
   }
   file_data_ = file_data;
   table_properties_.reset(uniqueProps.release());
@@ -1376,7 +1378,8 @@ rocksdb::TerarkZipTableMultiReader::Open(RandomAccessFileReader* file, uint64_t 
   }
   if (uniqueProps->comparator_name != fstring(ioptions.user_comparator->Name())) {
     return Status::InvalidArgument("TerarkZipTableReader::Open()",
-      "Invalid user_comparator");
+      "Invalid user_comparator , need " + uniqueProps->comparator_name
+      + ", but provid " + ioptions.user_comparator->Name());
   }
   file_data_ = file_data;
   table_properties_.reset(uniqueProps.release());

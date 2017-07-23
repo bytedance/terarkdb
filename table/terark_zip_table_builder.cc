@@ -82,8 +82,8 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(
   : table_options_(tzto)
   , ioptions_(tbo.ioptions)
   , range_del_block_(1)
-  , key_prefixLen_(key_prefixLen)
   , level_(tbo.level)
+  , key_prefixLen_(key_prefixLen)
 {
   properties_.fixed_key_len = 0;
   properties_.num_data_blocks = 1;

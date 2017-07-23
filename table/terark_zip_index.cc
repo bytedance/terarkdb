@@ -83,7 +83,7 @@ TerarkIndex::SelectFactory(const KeyStat& ks, fstring name) {
     }
   }
 #endif // TerocksPrivateCode
-  if (ks.numKeys > (1ull << 30) || ks.sumKeyLen - ks.numKeys * ks.commonPrefixLen > (15ull << 30)) {
+  if (ks.sumKeyLen - ks.numKeys * ks.commonPrefixLen > INT32_MAX) {
     return GetFactory("SE_512_64");
   }
   return GetFactory(name);
