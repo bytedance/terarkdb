@@ -83,13 +83,14 @@ struct PendingTask {
 };
 }
 
-TerarkZipTableBuilder::TerarkZipTableBuilder(
-  const TerarkZipTableOptions& tzto,
-  const TableBuilderOptions& tbo,
-  uint32_t column_family_id,
-  WritableFileWriter* file,
-  size_t key_prefixLen)
+TerarkZipTableBuilder::TerarkZipTableBuilder(const TerarkZipTableFactory* table_factory,
+                                             const TerarkZipTableOptions& tzto,
+                                             const TableBuilderOptions& tbo,
+                                             uint32_t column_family_id,
+                                             WritableFileWriter* file,
+                                             size_t key_prefixLen)
   : table_options_(tzto)
+  , table_factory_(table_factory)
   , ioptions_(tbo.ioptions)
   , range_del_block_(1)
   , key_prefixLen_(key_prefixLen)
@@ -181,22 +182,24 @@ uint64_t TerarkZipTableBuilder::FileSize() const {
   if (0 == offset_) {
     // for compaction caller to split file by increasing size
     auto kvLen = properties_.raw_key_size + properties_.raw_value_size;
-    auto fsize = uint64_t(kvLen * table_options_.estimateCompressionRatio);
+    auto fsize = uint64_t(kvLen *
+        table_factory_->GetCollect().estimate(table_options_.estimateCompressionRatio));
     if (terark_unlikely(histogram_.empty())) {
       return fsize;
     }
     size_t dictZipMemSize = std::min<size_t>(sampleLenSum_, INT32_MAX) * 6;
     size_t nltTrieMemSize = 0;
     for (auto& item : histogram_) {
-      nltTrieMemSize = std::max(nltTrieMemSize,
-        item.stat.sumKeyLen + sizeof(SortableStrVec::SEntry) * item.stat.numKeys);
+      size_t indexSize = UintVecMin0::compute_mem_size_by_max_val(
+          item.stat.sumKeyLen, item.stat.numKeys);
+      nltTrieMemSize = std::max(nltTrieMemSize, item.stat.sumKeyLen + indexSize);
     }
     size_t peakMemSize = std::max(dictZipMemSize, nltTrieMemSize);
     if (peakMemSize < table_options_.softZipWorkingMemLimit) {
       return fsize;
     }
     else {
-      return fsize * 5; // notify rocksdb to `Finish()` this table asap.
+      return (1ull << 60); // notify rocksdb to `Finish()` this table asap.
     }
   }
   else {
@@ -424,9 +427,7 @@ Status TerarkZipTableBuilder::EmptyTableFinish() {
     return s;
   }
 #if defined(TerocksPrivateCode)
-  auto table_factory = dynamic_cast<TerarkZipTableFactory*>(ioptions_.table_factory);
-  assert(table_factory);
-  auto& license = table_factory->GetLicense();
+  auto& license = table_factory_->GetLicense();
   BlockHandle licenseHandle;
   s = WriteBlock(SliceOf(license.dump()), file_, &offset_, &licenseHandle);
   if (!s.ok()) {
@@ -552,9 +553,7 @@ LoadSample(std::unique_ptr<DictZipBlobStore::ZipBuilder>& zbuilder) {
 #if defined(TerocksPrivateCode)
   valvec<byte_t> test;
   const size_t test_size = 32ull << 20;
-  auto table_factory = dynamic_cast<TerarkZipTableFactory*>(ioptions_.table_factory);
-  assert(table_factory);
-  auto hard_test = table_options_.enableCompressionProbe && table_factory->GetCollect().hard();
+  auto hard_test = table_options_.enableCompressionProbe && table_factory_->GetCollect().hard();
 #endif // TerocksPrivateCode
   NativeDataInput<InputBuffer> sampleInput(&tmpSampleFile_.fp);
   size_t realsampleLenSum = 0;
@@ -1221,9 +1220,7 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
   }
   index.reset();
 #if defined(TerocksPrivateCode)
-  auto table_factory = dynamic_cast<TerarkZipTableFactory*>(ioptions_.table_factory);
-  assert(table_factory);
-  auto& license = table_factory->GetLicense();
+  auto& license = table_factory_->GetLicense();
   BlockHandle licenseHandle;
   s = WriteBlock(SliceOf(license.dump()), file_, &offset_, &licenseHandle);
   if (!s.ok()) {
@@ -1469,9 +1466,7 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4
   if (!s.ok()) {
     return s;
   }
-  auto table_factory = dynamic_cast<TerarkZipTableFactory*>(ioptions_.table_factory);
-  assert(table_factory);
-  auto& license = table_factory->GetLicense();
+  auto& license = table_factory_->GetLicense();
   BlockHandle licenseHandle;
   s = WriteBlock(SliceOf(license.dump()), file_, &offset_, &licenseHandle);
   if (!s.ok()) {
@@ -1746,13 +1741,15 @@ void TerarkZipTableBuilder::UpdateValueLenHistogram() {
 
 
 TableBuilder*
-createTerarkZipTableBuilder(const TerarkZipTableOptions& tzo,
+createTerarkZipTableBuilder(const TerarkZipTableFactory* table_factory,
+                            const TerarkZipTableOptions& tzo,
                             const TableBuilderOptions&   tbo,
                             uint32_t                     column_family_id,
                             WritableFileWriter*          file,
                             size_t                       key_prefixLen)
 {
-    return new TerarkZipTableBuilder(tzo, tbo, column_family_id, file, key_prefixLen);
+    return new TerarkZipTableBuilder(
+        table_factory, tzo, tbo, column_family_id, file, key_prefixLen);
 }
 
 } // namespace

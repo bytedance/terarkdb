@@ -436,24 +436,35 @@ void LicenseInfo::print_error(const char* file_name, bool startup, rocksdb::Logg
 #undef RED_END
 }
 
+#endif // TerocksPrivateCode
+
 const size_t CollectInfo::queue_size = 8;
 const double CollectInfo::hard_ratio = 0.9;
 
-void CollectInfo::update(uint64_t timestamp, size_t raw, size_t zip) {
+void CollectInfo::update(uint64_t timestamp
+  , size_t raw_value, size_t zip_value
+  , size_t raw_store, size_t zip_store) {
   std::unique_lock<std::mutex> l(mutex);
-  raw_size += raw;
-  zip_size += zip;
+  raw_value_size += raw_value;
+  zip_value_size += zip_value;
+  raw_store_size += raw_store;
+  zip_store_size += zip_store;
   auto comp = [](const CompressionInfo& l, const CompressionInfo& r) {
     return l.timestamp > r.timestamp;
   };
-  queue.emplace_back(CompressionInfo{timestamp, raw, zip});
+  queue.emplace_back(CompressionInfo{timestamp
+    , raw_value, zip_value, raw_store, zip_store});
   std::push_heap(queue.begin(), queue.end(), comp);
   while (queue.size() > queue_size) {
-    raw_size -= queue.front().raw_size;
-    zip_size -= queue.front().zip_size;
+    auto& front = queue.front();
+    raw_value_size += front.raw_value;
+    zip_value_size += front.zip_value;
+    raw_store_size += front.raw_store;
+    zip_store_size += front.zip_store;
     std::pop_heap(queue.begin(), queue.end(), comp);
     queue.pop_back();
   }
+  estimate_compression_ratio = float(zip_store_size) / float(raw_store_size);
 }
 
 bool CollectInfo::hard(size_t raw, size_t zip) {
@@ -462,10 +473,13 @@ bool CollectInfo::hard(size_t raw, size_t zip) {
 
 bool CollectInfo::hard() const {
   std::unique_lock<std::mutex> l(mutex);
-  return !queue.empty() && hard(raw_size, zip_size);
+  return !queue.empty() && hard(raw_value_size, zip_value_size);
 }
 
-#endif // TerocksPrivateCode
+float CollectInfo::estimate(float def_value) const {
+  float ret = estimate_compression_ratio;
+  return ret ? ret : def_value;
+}
 
 #if defined(TerocksPrivateCode)
 
@@ -641,7 +655,7 @@ TerarkZipTableFactory::NewTableReader(
     , table_reader_options.ioptions, kTerarkEmptyTableKey, &emptyTableBC);
   if (s.ok()) {
     std::unique_ptr<TerarkEmptyTableReader>
-      t(new TerarkEmptyTableReader(table_reader_options));
+      t(new TerarkEmptyTableReader(this, table_reader_options));
     s = t->Open(file.release(), file_size);
     if (!s.ok()) {
       return s;
@@ -655,7 +669,7 @@ TerarkZipTableFactory::NewTableReader(
     , table_reader_options.ioptions, kTerarkZipTableOffsetBlock, &offsetBC);
   if (s.ok()) {
     std::unique_ptr<TerarkZipTableMultiReader>
-      t(new TerarkZipTableMultiReader(table_reader_options, table_options_));
+      t(new TerarkZipTableMultiReader(this, table_reader_options, table_options_));
     s = t->Open(file.release(), file_size);
     if (!s.ok()) {
       return s;
@@ -665,7 +679,7 @@ TerarkZipTableFactory::NewTableReader(
   }
 #endif // TerocksPrivateCode
   std::unique_ptr<TerarkZipTableReader>
-    t(new TerarkZipTableReader(table_reader_options, table_options_));
+    t(new TerarkZipTableReader(this, table_reader_options, table_options_));
   s = t->Open(file.release(), file_size);
   if (s.ok()) {
     *table = std::move(t);
@@ -676,7 +690,8 @@ TerarkZipTableFactory::NewTableReader(
 // defined in terark_zip_table_builder.cc
 extern
 TableBuilder*
-createTerarkZipTableBuilder(const TerarkZipTableOptions& tzo,
+createTerarkZipTableBuilder(const TerarkZipTableFactory* table_factory,
+                            const TerarkZipTableOptions& tzo,
                             const TableBuilderOptions&   tbo,
                             uint32_t                     column_family_id,
                             WritableFileWriter*          file,
@@ -758,6 +773,7 @@ TerarkZipTableFactory::NewTableBuilder(
   nth_new_terark_table_++;
 
   return createTerarkZipTableBuilder(
+    this,
     table_options_,
     table_builder_options,
     column_family_id,

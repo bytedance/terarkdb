@@ -48,6 +48,7 @@ using terark::DictZipBlobStore;
 class TerarkZipTableBuilder : public TableBuilder, boost::noncopyable {
 public:
   TerarkZipTableBuilder(
+    const TerarkZipTableFactory* table_factory,
     const TerarkZipTableOptions&,
     const TableBuilderOptions& tbo,
     uint32_t column_family_id,
@@ -138,6 +139,7 @@ private:
 
   Arena arena_;
   const TerarkZipTableOptions& table_options_;
+  const TerarkZipTableFactory* table_factory_;
   // fuck out TableBuilderOptions
   const ImmutableCFOptions& ioptions_;
   std::vector<std::unique_ptr<IntTblPropCollector>> collectors_;

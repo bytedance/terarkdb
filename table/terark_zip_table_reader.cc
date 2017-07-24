@@ -135,12 +135,10 @@ static void MmapColdize(const Vec& uv) {
 */
 
 #if defined(TerocksPrivateCode)
-Status UpdateLicenseInfo(TableFactory* table_factory,
+Status UpdateLicenseInfo(const TerarkZipTableFactory* table_factory,
                          Logger* info_log,
                          const BlockContents& licenseBlock) {
-  auto terark_zip_table_factory = dynamic_cast<TerarkZipTableFactory*>(table_factory);
-  assert(terark_zip_table_factory);
-  auto& license = terark_zip_table_factory->GetLicense();
+  auto& license = table_factory->GetLicense();
   auto res = license.merge(licenseBlock.data.data(), licenseBlock.data.size());
   assert(res == LicenseInfo::Result::OK);
   (void)res; // shut up !
@@ -150,10 +148,12 @@ Status UpdateLicenseInfo(TableFactory* table_factory,
   }
   return Status::OK();
 }
+#endif // TerocksPrivateCode
 
-void UpdateCollectInfo(TableFactory* table_factory,
+void UpdateCollectInfo(const TerarkZipTableFactory* table_factory,
                        const TerarkZipTableOptions* tzopt,
-                       TableProperties *props) {
+                       TableProperties *props,
+                       size_t file_size) {
   if (!tzopt->enableCompressionProbe) {
     return;
   }
@@ -161,12 +161,11 @@ void UpdateCollectInfo(TableFactory* table_factory,
   if (find == props->user_collected_properties.end()) {
     return;
   }
-  auto terark_zip_table_factory = dynamic_cast<TerarkZipTableFactory*>(table_factory);
-  assert(terark_zip_table_factory);
-  auto& collect = terark_zip_table_factory->GetCollect();
-  collect.update(terark::lcast(find->second), props->raw_value_size, props->data_size);
+  auto& collect = table_factory->GetCollect();
+  collect.update(terark::lcast(find->second)
+      , props->raw_value_size, props->data_size
+      , props->raw_key_size + props->raw_value_size, file_size);
 }
-#endif // TerocksPrivateCode
 
 }
 
@@ -946,7 +945,7 @@ TerarkEmptyTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   s = ReadMetaBlock(file, file_size, kTerarkZipTableMagicNumber, ioptions,
     kTerarkZipTableExtendedBlock, &licenseBlock);
   if (s.ok()) {
-    s = UpdateLicenseInfo(ioptions.table_factory, ioptions.info_log, licenseBlock);
+    s = UpdateLicenseInfo(table_factory_, ioptions.info_log, licenseBlock);
     if (!s.ok()) {
       return s;
     }
@@ -1006,13 +1005,13 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   s = ReadMetaBlock(file, file_size, kTerarkZipTableMagicNumber, ioptions,
     kTerarkZipTableExtendedBlock, &licenseBlock);
   if (s.ok()) {
-    s = UpdateLicenseInfo(ioptions.table_factory, ioptions.info_log, licenseBlock);
+    s = UpdateLicenseInfo(table_factory_, ioptions.info_log, licenseBlock);
     if (!s.ok()) {
       return s;
     }
   }
-  UpdateCollectInfo(ioptions.table_factory, &tzto_, props);
 #endif // TerocksPrivateCode
+  UpdateCollectInfo(table_factory_, &tzto_, props, file_size);
   s = ReadMetaBlock(file, file_size, kTerarkZipTableMagicNumber, ioptions,
     kTerarkZipTableValueDictBlock, &valueDictBlock);
 #if defined(TerocksPrivateCode)
@@ -1156,9 +1155,11 @@ TerarkZipTableReader::Get(const ReadOptions& ro, const Slice& ikey,
 TerarkZipTableReader::~TerarkZipTableReader() {
 }
 
-TerarkZipTableReader::TerarkZipTableReader(const TableReaderOptions& tro,
-  const TerarkZipTableOptions& tzto)
+TerarkZipTableReader::TerarkZipTableReader(const TerarkZipTableFactory* table_factory,
+                                           const TableReaderOptions& tro,
+                                           const TerarkZipTableOptions& tzto)
   : table_reader_options_(tro)
+  , table_factory_(table_factory)
   , global_seqno_(kDisableGlobalSequenceNumber)
   , tzto_(tzto)
 {
@@ -1369,9 +1370,11 @@ TerarkZipTableMultiReader::Get(const ReadOptions& ro, const Slice& ikey,
 TerarkZipTableMultiReader::~TerarkZipTableMultiReader() {
 }
 
-TerarkZipTableMultiReader::TerarkZipTableMultiReader(const TableReaderOptions& tro
-  , const TerarkZipTableOptions& tzto)
+TerarkZipTableMultiReader::TerarkZipTableMultiReader(const TerarkZipTableFactory* table_factory,
+                                                     const TableReaderOptions& tro,
+                                                     const TerarkZipTableOptions& tzto)
   : table_reader_options_(tro)
+  , table_factory_(table_factory)
   , global_seqno_(kDisableGlobalSequenceNumber)
   , tzto_(tzto)
 {
@@ -1419,12 +1422,12 @@ rocksdb::TerarkZipTableMultiReader::Open(RandomAccessFileReader* file, uint64_t 
   s = ReadMetaBlock(file, file_size, kTerarkZipTableMagicNumber, ioptions,
     kTerarkZipTableExtendedBlock, &licenseBlock);
   if (s.ok()) {
-    s = UpdateLicenseInfo(ioptions.table_factory, ioptions.info_log, licenseBlock);
+    s = UpdateLicenseInfo(table_factory_, ioptions.info_log, licenseBlock);
     if (!s.ok()) {
       return s;
     }
   }
-  UpdateCollectInfo(ioptions.table_factory, &tzto_, props);
+  UpdateCollectInfo(table_factory_, &tzto_, props, file_size);
   s = ReadMetaBlock(file, file_size, kTerarkZipTableMagicNumber, ioptions,
     kTerarkZipTableOffsetBlock, &offsetBlock);
   if (!s.ok()) {
