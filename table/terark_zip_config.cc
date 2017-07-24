@@ -34,6 +34,8 @@ void TerarkZipDeleteTempFiles(const std::string& tmpPath) {
         || fstring(f).startsWith("linkVec-")
         || fstring(f).startsWith("label-")
         || fstring(f).startsWith("nextStrVec-")
+        || fstring(f).startsWith("nestStrVec-")
+        || fstring(f).startsWith("nestStrPool-")
         ) {
       fpath.resize(0);
       fpath.append(tmpPath);
