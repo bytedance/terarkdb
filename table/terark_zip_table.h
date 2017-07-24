@@ -73,7 +73,8 @@ struct TerarkZipTableOptions {
   ///  1: only use temp file for large index build, same as NLT.tmpLevel
   ///  2: only use temp file for large index build, same as NLT.tmpLevel
   ///  3: only use temp file for large index build, same as NLT.tmpLevel
-  ///  4:      use temp file for  all  index build
+  ///  4: only use temp file for large index build, same as NLT.tmpLevel
+  ///  5:      use temp file for  all  index build
   signed char    indexTempLevel           = 0;
 
   unsigned short offsetArrayBlockUnits    = 0;

@@ -268,7 +268,7 @@ public:
       terark::NestLoudsTrieConfig conf;
       conf.nestLevel = tzopt.indexNestLevel;
       conf.nestScale = tzopt.indexNestScale;
-      if (tzopt.indexTempLevel >= 0 && tzopt.indexTempLevel < 4) {
+      if (tzopt.indexTempLevel >= 0 && tzopt.indexTempLevel < 5) {
         if (keyVec.mem_size() > tzopt.smallTaskMemory) {
           // use tmp files during index building
           conf.tmpDir = tzopt.localTempDir;
@@ -277,7 +277,7 @@ public:
             if (keyVec.avg_size() <= 16) {
               // not need any mem in BFS, instead 8G file of 4G mem (linkVec)
               // this reduce 10% peak mem when avg keylen is 24 bytes
-              conf.tmpLevel = 3;
+              conf.tmpLevel = 4;
             }
             else if (keyVec.mem_size() > tzopt.smallTaskMemory*3/2) {
               // for example:
@@ -290,10 +290,10 @@ public:
           }
         }
       }
-      if (tzopt.indexTempLevel >= 4) {
+      if (tzopt.indexTempLevel >= 5) {
         // always use max tmpLevel 3
         conf.tmpDir = tzopt.localTempDir;
-        conf.tmpLevel = 3;
+        conf.tmpLevel = 4;
       }
       conf.isInputSorted = true;
       std::unique_ptr<NLTrie> trie(new NLTrie());
