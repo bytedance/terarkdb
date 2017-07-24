@@ -133,7 +133,6 @@ const std::string kTerarkEmptyTableKey             = "ThisIsAnEmptyTable";
 using terark::XXHash64;
 
 const std::string kTerarkZipTableExtendedBlock = "TerarkZipTableExtendedBlock";
-const std::string kTerarkZipTableBuildTimestamp = "terark.build.timestamp";
 static const uint64_t g_dTerarkTrialDuration = 30ULL * 24 * 3600 * 1000;
 static const std::string g_szTerarkPublikKey =
 "MIIBIDANBgkqhkiG9w0BAQEFAAOCAQ0AMIIBCAKCAQEAxPQGCXF8uotaYLixcWL65GO8wYcZ"
@@ -144,6 +143,7 @@ static const std::string g_szTerarkPublikKey =
 "ZpEctXh0pkFys/ePkMiDLEAGnQIBEQ==";
 
 #endif // TerocksPrivateCode
+const std::string kTerarkZipTableBuildTimestamp = "terark.build.timestamp";
 
 #if defined(TerocksPrivateCode)
 
