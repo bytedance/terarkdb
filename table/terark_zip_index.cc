@@ -274,10 +274,18 @@ public:
           conf.tmpDir = tzopt.localTempDir;
           if (0 == tzopt.indexTempLevel) {
             // adjust tmpLevel for linkVec, wihch is proportional to num of keys
-            if (keyVec.avg_size() <= 16) {
+            double avglen = keyVec.avg_size();
+            if (keyVec.mem_size() > tzopt.smallTaskMemory*2 && avglen <= 50) {
               // not need any mem in BFS, instead 8G file of 4G mem (linkVec)
               // this reduce 10% peak mem when avg keylen is 24 bytes
-              conf.tmpLevel = 4;
+              if (avglen <= 30) {
+                // write str data(each len+data) of nestStrVec to tmpfile
+                conf.tmpLevel = 4;
+              } else {
+                // write offset+len of nestStrVec to tmpfile
+                // which offset is ref to outer StrVec's data
+                conf.tmpLevel = 3;
+              }
             }
             else if (keyVec.mem_size() > tzopt.smallTaskMemory*3/2) {
               // for example:
@@ -291,7 +299,7 @@ public:
         }
       }
       if (tzopt.indexTempLevel >= 5) {
-        // always use max tmpLevel 3
+        // always use max tmpLevel 4
         conf.tmpDir = tzopt.localTempDir;
         conf.tmpLevel = 4;
       }
