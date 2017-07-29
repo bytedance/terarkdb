@@ -67,7 +67,6 @@ const TerarkIndex::Factory*
 TerarkIndex::SelectFactory(const KeyStat& ks, fstring name) {
 #if defined(TerocksPrivateCode)
   if (ks.maxKeyLen == ks.minKeyLen &&
-      ks.maxKeyLen - ks.commonPrefixLen > 0 &&
       ks.maxKeyLen - ks.commonPrefixLen <= sizeof(uint64_t)) {
     uint64_t
       minValue = ReadUint64(ks.minKey.begin() + ks.commonPrefixLen, ks.minKey.end()),
@@ -470,7 +469,6 @@ public:
                KeyStat& ks) const override {
       size_t commonPrefixLen = ks.commonPrefixLen;
       if (ks.maxKeyLen != ks.minKeyLen ||
-          ks.maxKeyLen - commonPrefixLen == 0 ||
           ks.maxKeyLen - commonPrefixLen > sizeof(uint64_t)) {
         abort();
       }

@@ -187,15 +187,13 @@ uint64_t TerarkZipTableBuilder::FileSize() const {
     if (terark_unlikely(histogram_.empty())) {
       return fsize;
     }
-    size_t dictZipMemSize = std::min<size_t>(sampleLenSum_, INT32_MAX) * 6;
     size_t nltTrieMemSize = 0;
     for (auto& item : histogram_) {
       size_t indexSize = UintVecMin0::compute_mem_size_by_max_val(
           item.stat.sumKeyLen, item.stat.numKeys);
       nltTrieMemSize = std::max(nltTrieMemSize, item.stat.sumKeyLen + indexSize);
     }
-    size_t peakMemSize = std::max(dictZipMemSize, nltTrieMemSize);
-    if (peakMemSize < table_options_.softZipWorkingMemLimit) {
+    if (nltTrieMemSize < table_options_.softZipWorkingMemLimit) {
       return fsize;
     }
     else {
@@ -570,7 +568,9 @@ LoadSample(std::unique_ptr<DictZipBlobStore::ZipBuilder>& zbuilder) {
   else
 #endif // TerocksPrivateCode
   {
-    if (sampleLenSum_ < INT32_MAX) {
+    size_t sampleMax = std::min<size_t>(
+        INT32_MAX, size_t(table_options_.softZipWorkingMemLimit / 6.5));
+    if (sampleLenSum_ < sampleMax) {
 #if defined(TerocksPrivateCode)
       uint64_t upperBoundTest = uint64_t(
         randomGenerator_.max() * double(test_size) / sampleLenSum_);
@@ -589,7 +589,7 @@ LoadSample(std::unique_ptr<DictZipBlobStore::ZipBuilder>& zbuilder) {
     }
     else {
       uint64_t upperBoundSample = uint64_t(
-        randomGenerator_.max() * double(INT32_MAX) / sampleLenSum_);
+        randomGenerator_.max() * double(sampleMax) / sampleLenSum_);
 #if defined(TerocksPrivateCode)
       uint64_t upperBoundTest = uint64_t(
         randomGenerator_.max() * double(test_size) / sampleLenSum_);
