@@ -50,10 +50,9 @@ public:
   class Factory : public terark::RefCounter {
   public:
     virtual ~Factory();
-    virtual void Build(NativeDataInput<InputBuffer>& tmpKeyFileReader,
-                       const TerarkZipTableOptions& tzopt,
-                       std::function<void(const void *, size_t)> write,
-                       KeyStat&) const = 0;
+    virtual TerarkIndex* Build(NativeDataInput<InputBuffer>& tmpKeyFileReader,
+                               const TerarkZipTableOptions& tzopt,
+                               const KeyStat&) const = 0;
     virtual unique_ptr<TerarkIndex> LoadMemory(fstring mem) const = 0;
     virtual unique_ptr<TerarkIndex> LoadFile(fstring fpath) const = 0;
     virtual size_t MemSizeForBuild(const KeyStat&) const = 0;
@@ -69,6 +68,7 @@ public:
   static unique_ptr<TerarkIndex> LoadMemory(fstring mem);
   virtual ~TerarkIndex();
   virtual const char* Name() const = 0;
+  virtual void SaveMmap(std::function<void(const void *, size_t)> write) const = 0;
   virtual size_t Find(fstring key) const = 0;
   virtual size_t NumKeys() const = 0;
   virtual fstring Memory() const = 0;

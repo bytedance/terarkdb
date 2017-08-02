@@ -104,6 +104,8 @@ struct TerarkZipTableOptions {
   // default is to disable indexCache, because the improvement
   // is about only 10% when set to 0.001
   double indexCacheRatio = 0;//0.001;
+
+  size_t singleIndexMemLimit = 0x1E0000000; // 7.5G
 };
 
 void TerarkZipDeleteTempFiles(const std::string& tmpPath);

@@ -18,6 +18,7 @@
 #include "terark_zip_index.h"
 // std headers
 #include <random>
+#include <future>
 // rocksdb headers
 #include <table/table_builder.h>
 #include <table/block_builder.h>
@@ -72,15 +73,24 @@ public:
 
 private:
   struct KeyValueStatus {
-    TerarkIndex::KeyStat stat;
     valvec<char> prefix;
     Uint64Histogram key;
     Uint64Histogram value;
     bitfield_array<2> type;
-    size_t keyFileBegin = 0;
-    size_t keyFileEnd = 0;
-    size_t valueFileBegin = 0;
-    size_t valueFileEnd = 0;
+    size_t split = 0;
+    uint64_t keyFileBegin = 0;
+    uint64_t keyFileEnd = 0;
+    uint64_t valueFileBegin = 0;
+    uint64_t valueFileEnd = 0;
+  };
+  struct BuildIndexParams {
+    TempFileDeleteOnClose data;
+    TerarkIndex::KeyStat stat;
+    std::future<Status> wait;
+    size_t prefixIndex = 0;   // low bound = 0
+    size_t splitIndex = 0;    // low bound = 1
+    uint64_t indexFileBegin = 0;
+    uint64_t indexFileEnd = 0;
   };
   void AddPrevUserKey(bool finish = false);
   void OfflineZipValueData();
@@ -97,6 +107,8 @@ private:
   WaitHandle WaitForMemory(const char* who, size_t memorySize);
   Status EmptyTableFinish();
   Status OfflineFinish();
+  void BuildIndex(BuildIndexParams* param);
+  Status WaitBuildIndex();
   WaitHandle LoadSample(std::unique_ptr<DictZipBlobStore::ZipBuilder>& zbuilder);
 #if defined(TerocksPrivateCode)
   struct BuildStoreParams {
@@ -109,9 +121,9 @@ private:
   std::unique_ptr<BlobStore> buildMixedLenBlobStore(BuildStoreParams& params);
   std::unique_ptr<BlobStore> buildZipOffsetBlobStore(BuildStoreParams& params);
 #endif // TerocksPrivateCode
-  Status ZipValueToFinish(fstring tmpIndexFile, std::function<void()> waitIndex);
+  Status ZipValueToFinish();
 #if defined(TerocksPrivateCode)
-  Status ZipValueToFinishMulti(fstring tmpIndexFile, std::function<void()> waitIndex);
+  Status ZipValueToFinishMulti();
 #endif // TerocksPrivateCode
   void DebugPrepare();
   void DebugCleanup();
@@ -123,13 +135,11 @@ private:
     , BlockHandle& dataBlock
     , long long& t5, long long& t6, long long& t7);
   Status WriteSSTFile(long long t3, long long t4
-    , fstring tmpIndexFile
     , fstring tmpStoreFile
     , fstring tmpDictFile
     , const DictZipBlobStore::ZipStat& dzstat);
 #if defined(TerocksPrivateCode)
   Status WriteSSTFileMulti(long long t3, long long t4
-    , fstring tmpIndexFile
     , fstring tmpStoreFile
     , fstring tmpDictFile
     , const DictZipBlobStore::ZipStat& dzstat);
@@ -146,17 +156,21 @@ private:
   // end fuck out TableBuilderOptions
   InternalIterator* second_pass_iter_ = nullptr;
   valvec<KeyValueStatus> histogram_;
+  TerarkIndex::KeyStat *currentStat_ = nullptr;
   valvec<byte_t> prevUserKey_;
   terark::febitvec valueBits_;
-  TempFileDeleteOnClose tmpKeyFile_;
   TempFileDeleteOnClose tmpValueFile_;
   TempFileDeleteOnClose tmpSampleFile_;
+  AutoDeleteFile tmpIndexFile_;
+  valvec<unique_ptr<BuildIndexParams>> indexBuild_;
+  std::mutex indexBuildMutex_;
   FileStream tmpDumpFile_;
   AutoDeleteFile tmpZipDictFile_;
   AutoDeleteFile tmpZipValueFile_;
   std::mt19937_64 randomGenerator_;
   uint64_t sampleUpperBound_;
   size_t sampleLenSum_ = 0;
+  size_t singleIndexMemLimit = 0;
   WritableFileWriter* file_;
   uint64_t offset_ = 0;
   uint64_t zeroSeqCount_ = 0;
