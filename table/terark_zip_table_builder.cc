@@ -229,11 +229,13 @@ void TerarkZipTableBuilder::Add(const Slice& key, const Slice& value) {
     }
 #endif
     auto newBuildIndex = [&] {
-      indexBuild_.emplace_back(new BuildIndexParams);
-      indexBuild_.back()->data.path = tmpValueFile_.path + ".keydata."
-        + terark::lcast(indexBuild_.size());
-      indexBuild_.back()->data.open();
-      currentStat_ = &indexBuild_.back()->stat;
+      auto newParams = new BuildIndexParams;
+      char buffer[32];
+      snprintf(buffer, sizeof buffer, ".keydata.%012p", newParams);
+      newParams->data.path = tmpValueFile_.path + buffer;
+      newParams->data.open();
+      currentStat_ = &newParams->stat;
+      return newParams;
     };
     if (terark_likely(!histogram_.empty()
       && histogram_.back().prefix == userKey.substr(0, key_prefixLen_))) {
@@ -245,10 +247,8 @@ void TerarkZipTableBuilder::Add(const Slice& key, const Slice& value) {
         if (terark_unlikely(nltTrieMemSize > singleIndexMemLimit)) {
           AddPrevUserKey(true);
           ++histogram_.back().split;
-          indexBuild_.back()->prefixIndex = histogram_.size() - 1;
-          indexBuild_.back()->splitIndex = histogram_.back().split;
-          BuildIndex(indexBuild_.back().get());
-          newBuildIndex();
+          BuildIndex(histogram_.back().build->back(), histogram_.back());
+          histogram_.back().build->emplace_back(newBuildIndex());
         }
         else {
           AddPrevUserKey();
@@ -267,12 +267,12 @@ void TerarkZipTableBuilder::Add(const Slice& key, const Slice& value) {
       }
       else {
         AddPrevUserKey(true);
-        indexBuild_.back()->prefixIndex = histogram_.size() - 1;
-        BuildIndex(indexBuild_.back().get());
+        BuildIndex(histogram_.back().build->back(), histogram_.back());
       }
-      newBuildIndex();
       histogram_.emplace_back();
       auto& currentHistogram = histogram_.back();
+      currentHistogram.build.reset(new std::list<BuildIndexParams>);
+      currentHistogram.build->emplace_back(newBuildIndex());
       currentHistogram.prefix.assign(userKey.data(), key_prefixLen_);
       userKey = userKey.substr(key_prefixLen_);
       currentStat_->commonPrefixLen = userKey.size();
@@ -466,7 +466,7 @@ Status TerarkZipTableBuilder::Finish() {
   }
 
   AddPrevUserKey(true);
-  BuildIndex(indexBuild_.back().get());
+  BuildIndex(histogram_.back().build->back(), histogram_.back());
 
   if (zbuilder_) {
     return OfflineFinish();
@@ -501,14 +501,14 @@ Status TerarkZipTableBuilder::Finish() {
   return ZipValueToFinish();
 }
 
-void TerarkZipTableBuilder::BuildIndex(BuildIndexParams* params) {
-  if (params->stat.numKeys == 1 || params->splitIndex != 0) {
-    params->stat.commonPrefixLen = 0;
+void TerarkZipTableBuilder::BuildIndex(BuildIndexParams& param, KeyValueStatus& kvs) {
+  if (param.stat.numKeys == 1 || kvs.split != 0) {
+    param.stat.commonPrefixLen = 0;
   }
-  params->data.complete_write();
-  NativeDataInput<InputBuffer> tempKeyFileReader(&params->data.fp);
-  params->wait = std::async(std::launch::async, [&]() {
-    auto& keyStat = params->stat;
+  param.data.complete_write();
+  NativeDataInput<InputBuffer> tempKeyFileReader(&param.data.fp);
+  param.wait = std::async(std::launch::async, [&]() {
+    auto& keyStat = param.stat;
     auto factory = TerarkIndex::SelectFactory(keyStat, table_options_.indexType);
     if (!factory) {
       THROW_STD(invalid_argument,
@@ -532,15 +532,15 @@ void TerarkZipTableBuilder::BuildIndex(BuildIndexParams* params) {
 
     std::unique_lock<std::mutex> l(indexBuildMutex_);
     FileStream writer(tmpIndexFile_, "ab+");
-    params->indexFileBegin = writer.fsize();
+    param.indexFileBegin = writer.fsize();
     size_t fileOffset = 0;
     auto write = [&fileOffset, &writer](const void* data, size_t size) {
       fileOffset += size;
       writer.ensureWrite(data, size);
     };
     writer.flush();
-    params->indexFileEnd = writer.fsize();
-    assert(params->indexFileEnd - params->indexFileBegin == fileOffset);
+    param.indexFileEnd = writer.fsize();
+    assert(param.indexFileEnd - param.indexFileBegin == fileOffset);
     assert(fileOffset % 8 == 0);
     long long tt = g_pf.now();
     size_t rawKeySize = keyStat.numKeys * (8 + keyStat.commonPrefixLen) + keyStat.sumKeyLen;
@@ -554,13 +554,63 @@ void TerarkZipTableBuilder::BuildIndex(BuildIndexParams* params) {
 
 Status TerarkZipTableBuilder::WaitBuildIndex() {
   Status result = Status::OK();
-  for (auto &ptr : indexBuild_) {
-    auto subResult = ptr->wait.get();
-    if (terark_unlikely(!subResult.ok() && result.ok())) {
-      result = std::move(subResult);
+  for (auto& kvs : histogram_) {
+    for (auto& param : *kvs.build) {
+      auto subResult = param.wait.get();
+      if (terark_unlikely(!subResult.ok() && result.ok())) {
+        result = std::move(subResult);
+      }
     }
   }
   return result;
+}
+
+TerarkIndex* TerarkZipTableBuilder::LoadBuildIndex(KeyValueStatus& kvs, fstring mmap_memory) {
+  if (kvs.split == 0) {
+    assert(kvs.build->size() == 1);
+    auto& param = kvs.build->front();
+    return TerarkIndex::LoadMemory(fstring(mmap_memory.data() + param.indexFileBegin,
+      param.indexFileEnd - param.indexFileBegin)).release();
+  }
+#error
+  //valvec<std::unique_ptr<terark::MatchingDFA>> dfa_vec;
+  //std::unique_ptr<MatchingDFA> dfa;
+  //size_t offset = 0;
+  //while (true) {
+  //  assert(size_t(memory.data() + offset) % 8 == 0);
+  //  dfa.reset(MatchingDFA::load_mmap_user_mem(
+  //    memory.data() + offset, memory.size() - offset));
+  //  if (!dfa) {
+  //    return nullptr;
+  //  }
+  //  offset += dfa->get_mmap().size();
+  //  assert(offset <= memory.size());
+  //  if (offset > memory.size()) {
+  //    return nullptr;
+  //  }
+  //  dfa_vec.emplace_back(dfa.release());
+  //  if (offset == memory.size()) {
+  //    break;
+  //  }
+  //}
+  //if (dfa_vec.size() == 1) {
+  //  return dfa_vec.front().release();
+  //}
+  //if (!ordered) {
+  //  assert(false);
+  //  return nullptr;
+  //}
+  //static_assert(sizeof(std::unique_ptr<MatchingDFA>) == sizeof(MatchingDFA*), "WTF ?");
+  //dfa.reset(createLazyUnionDFA(
+  //  (const MatchingDFA**)dfa_vec.data(), dfa_vec.size(), true));
+  //dfa_vec.risk_set_size(0);
+  //return dfa.release();
+
+
+  //LoadAsLazyUnionDFA()
+  //if (isReverseBytewiseOrder_) {
+
+  //}
 }
 
 TerarkZipTableBuilder::WaitHandle

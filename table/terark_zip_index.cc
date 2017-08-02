@@ -7,6 +7,7 @@
 #include <terark/fsa/nest_trie_dawg.hpp>
 #include <terark/util/mmap.hpp>
 #include <terark/util/sortable_strvec.hpp>
+#include <terark/fsa/fsa_for_union_dfa.hpp>
 
 
 //#define DEBUG_ITERATOR
@@ -25,6 +26,7 @@ using terark::SortedStrVec;
 using terark::FixedLenStrVec;
 using terark::MmapWholeFile;
 using terark::UintVecMin0;
+using terark::MatchingDFA;
 
 static terark::hash_strmap<TerarkIndex::FactoryPtr> g_TerarkIndexFactroy;
 static terark::hash_strmap<std::string>             g_TerarkIndexName;
@@ -94,6 +96,19 @@ TerarkIndex::Iterator::~Iterator() {}
 class NestLoudsTrieIterBase : public TerarkIndex::Iterator {
 protected:
   unique_ptr<terark::ADFA_LexIterator> m_iter;
+  fstring key() const override {
+    return fstring(m_iter->word());
+  }
+  NestLoudsTrieIterBase(terark::ADFA_LexIterator* iter)
+   : m_iter(iter) {}
+};
+
+template<class NLTrie>
+class NestLoudsTrieIterBaseTpl : public NestLoudsTrieIterBase {
+protected:
+  using TerarkIndex::Iterator::m_id;
+  NestLoudsTrieIterBaseTpl(const NLTrie* trie)
+    : NestLoudsTrieIterBase(trie->adfa_make_iter(initial_state)) {}
   template<class NLTrie>
   bool Done(const NLTrie* trie, bool ok) {
     if (ok)
@@ -102,21 +117,58 @@ protected:
       m_id = size_t(-1);
     return ok;
   }
-  fstring key() const override {
-    return fstring(m_iter->word());
-  }
-  NestLoudsTrieIterBase(terark::ADFA_LexIterator* iter)
-   : m_iter(iter) {}
 };
+template<>
+class NestLoudsTrieIterBaseTpl<MatchingDFA> : public NestLoudsTrieIterBase {
+protected:
+  using TerarkIndex::Iterator::m_id;
+  NestLoudsTrieIterBaseTpl(const MatchingDFA* dfa)
+    : NestLoudsTrieIterBase(dfa->adfa_make_iter(initial_state)) {
+    m_dawg = dfa->get_dawg();
+  }
+  const terark::BaseDAWG* m_dawg;
+  bool Done(const MatchingDFA* trie, bool ok) {
+    assert(trie->get_dawg() == m_dawg);
+    if (ok)
+      m_id = m_dawg->v_state_to_word_id(m_iter->word_state());
+    else
+      m_id = size_t(-1);
+    return ok;
+  }
+};
+
+template<class NLTrie>
+void NestLoudsTrieBuildCache(NLTrie* trie, double cacheRatio) {
+  trie->build_fsa_cache(cacheRatio, NULL);
+}
+void NestLoudsTrieBuildCache(MatchingDFA* dfa, double cacheRatio) {
+}
+
+
+template<class NLTrie>
+void NestLoudsTrieGetOrderMap(NLTrie* trie, UintVecMin0& newToOld) {
+  terark::NonRecursiveDictionaryOrderToStateMapGenerator gen;
+  gen(*trie, [&](size_t dictOrderOldId, size_t state) {
+    size_t newId = trie->state_to_word_id(state);
+    newToOld.set_wire(newId, dictOrderOldId);
+  });
+}
+void NestLoudsTrieGetOrderMap(MatchingDFA* dfa, UintVecMin0& newToOld) {
+}
+
+
 template<class NLTrie>
 class NestLoudsTrieIndex : public TerarkIndex {
+  const terark::BaseDAWG* m_dawg;
   unique_ptr<NLTrie> m_trie;
-  class MyIterator : public NestLoudsTrieIterBase {
+  class MyIterator : public NestLoudsTrieIterBaseTpl<NLTrie> {
     const NLTrie* m_trie;
+  protected:
+    using NestLoudsTrieIterBaseTpl<NLTrie>::Done;
   public:
     explicit MyIterator(NLTrie* trie)
-     : NestLoudsTrieIterBase(trie->adfa_make_iter(initial_state))
-     , m_trie(trie)
+      : NestLoudsTrieIterBaseTpl<NLTrie>(trie)
+      , m_trie(trie)
     {}
     bool SeekToFirst() override { return Done(m_trie, m_iter->seek_begin()); }
     bool SeekToLast()  override { return Done(m_trie, m_iter->seek_end()); }
@@ -153,7 +205,9 @@ class NestLoudsTrieIndex : public TerarkIndex {
     }
   };
 public:
-  NestLoudsTrieIndex(NLTrie* trie) : m_trie(trie) {}
+  NestLoudsTrieIndex(NLTrie* trie) : m_trie(trie) {
+    m_dawg = trie->get_dawg();
+  }
   const char* Name() const override {
     auto header = (const TerarkIndexHeader*)m_trie->get_mmap().data();
     return header->class_name;
@@ -167,10 +221,10 @@ public:
     ctx.pos = 0;
     ctx.zidx = 0;
   //ctx.zbuf_state = size_t(-1);
-    return m_trie->index(ctx, key);
+    return m_dawg->index(ctx, key);
   }
   size_t NumKeys() const override final {
-    return m_trie->num_words();
+    return m_dawg->num_words();
   }
   fstring Memory() const override final {
     return m_trie->get_mmap();
@@ -181,15 +235,11 @@ public:
   bool NeedsReorder() const override final { return true; }
   void GetOrderMap(UintVecMin0& newToOld)
   const override final {
-    terark::NonRecursiveDictionaryOrderToStateMapGenerator gen;
-    gen(*m_trie, [&](size_t dictOrderOldId, size_t state) {
-      size_t newId = m_trie->state_to_word_id(state);
-      newToOld.set_wire(newId, dictOrderOldId);
-    });
+    NestLoudsTrieGetOrderMap(m_trie.get(), newToOld);
   }
   void BuildCache(double cacheRatio) {
     if (cacheRatio > 1e-8) {
-        m_trie->build_fsa_cache(cacheRatio, NULL);
+      NestLoudsTrieBuildCache(m_trie.get(), cacheRatio);
     }
   }
   class MyFactory : public Factory {
@@ -706,6 +756,33 @@ unique_ptr<TerarkIndex> TerarkIndex::LoadMemory(fstring mem) {
   }
   TerarkIndex::Factory* factory = g_TerarkIndexFactroy.val(idx).get();
   return factory->LoadMemory(mem);
+}
+
+unique_ptr<TerarkIndex> TerarkIndex::LoadMemory(fstrvec memoryVec, bool ordered) {
+  valvec<std::unique_ptr<MatchingDFA>> dfaVec;
+  for (size_t i = 0; i < memoryVec.size(); ++i) {
+    auto memory = fstring(memoryVec[i]);
+    auto header = (const TerarkIndexHeader*)memory.data();
+    if (strstr(header->class_name, "UintIndex")) {
+      assert(false); // unsupport yet ...
+    }
+    dfaVec.emplace_back(MatchingDFA::load_mmap_user_mem(
+      memory.data(), memory.size()));
+    if (!dfaVec.back()->get_dawg()) {
+      assert(false); // unsupport yet ...
+      throw std::invalid_argument(
+        std::string("TerarkIndex::LoadMemory(): Unexpected: dfa is not a dawg"));
+    }
+  }
+  if (!ordered) {
+    assert(false);
+    return nullptr;
+  }
+  static_assert(sizeof(std::unique_ptr<MatchingDFA>) == sizeof(MatchingDFA*), "WTF ?");
+  auto dfa = terark::createLazyUnionDFA(
+    (const MatchingDFA**)dfaVec.data(), dfaVec.size(), true);
+  dfaVec.risk_set_size(0);
+  return unique_ptr<TerarkIndex>(new NestLoudsTrieIndex<MatchingDFA>(dfa));
 }
 
 } // namespace rocksdb

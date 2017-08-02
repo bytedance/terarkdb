@@ -6,6 +6,7 @@
 #include <terark/int_vector.hpp>
 #include <terark/io/DataIO.hpp>
 #include <terark/io/StreamBuffer.hpp>
+#include <terark/util/fstrvec.hpp>
 #include <boost/intrusive_ptr.hpp>
 #include <memory>
 
@@ -16,6 +17,7 @@ using terark::valvec;
 using terark::byte_t;
 using terark::NativeDataInput;
 using terark::InputBuffer;
+using terark::fstrvec;
 using std::unique_ptr;
 
 struct TerarkZipTableOptions;
@@ -66,6 +68,7 @@ public:
   static const Factory* SelectFactory(const KeyStat&, fstring name);
   static unique_ptr<TerarkIndex> LoadFile(fstring fpath);
   static unique_ptr<TerarkIndex> LoadMemory(fstring mem);
+  static unique_ptr<TerarkIndex> LoadMemory(fstrvec memoryVec, bool ordered);
   virtual ~TerarkIndex();
   virtual const char* Name() const = 0;
   virtual void SaveMmap(std::function<void(const void *, size_t)> write) const = 0;

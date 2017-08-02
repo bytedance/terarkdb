@@ -72,6 +72,13 @@ public:
   }
 
 private:
+  struct BuildIndexParams {
+    TempFileDeleteOnClose data;
+    TerarkIndex::KeyStat stat;
+    std::future<Status> wait;
+    uint64_t indexFileBegin = 0;
+    uint64_t indexFileEnd = 0;
+  };
   struct KeyValueStatus {
     valvec<char> prefix;
     Uint64Histogram key;
@@ -82,15 +89,7 @@ private:
     uint64_t keyFileEnd = 0;
     uint64_t valueFileBegin = 0;
     uint64_t valueFileEnd = 0;
-  };
-  struct BuildIndexParams {
-    TempFileDeleteOnClose data;
-    TerarkIndex::KeyStat stat;
-    std::future<Status> wait;
-    size_t prefixIndex = 0;   // low bound = 0
-    size_t splitIndex = 0;    // low bound = 1
-    uint64_t indexFileBegin = 0;
-    uint64_t indexFileEnd = 0;
+    std::unique_ptr<std::list<BuildIndexParams>> build;
   };
   void AddPrevUserKey(bool finish = false);
   void OfflineZipValueData();
@@ -107,8 +106,9 @@ private:
   WaitHandle WaitForMemory(const char* who, size_t memorySize);
   Status EmptyTableFinish();
   Status OfflineFinish();
-  void BuildIndex(BuildIndexParams* param);
+  void BuildIndex(BuildIndexParams& param, KeyValueStatus& kvs);
   Status WaitBuildIndex();
+  TerarkIndex* LoadBuildIndex(KeyValueStatus& kvs, fstring mmap_memory);
   WaitHandle LoadSample(std::unique_ptr<DictZipBlobStore::ZipBuilder>& zbuilder);
 #if defined(TerocksPrivateCode)
   struct BuildStoreParams {
@@ -162,7 +162,6 @@ private:
   TempFileDeleteOnClose tmpValueFile_;
   TempFileDeleteOnClose tmpSampleFile_;
   AutoDeleteFile tmpIndexFile_;
-  valvec<unique_ptr<BuildIndexParams>> indexBuild_;
   std::mutex indexBuildMutex_;
   FileStream tmpDumpFile_;
   AutoDeleteFile tmpZipDictFile_;
