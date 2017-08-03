@@ -521,7 +521,7 @@ public:
     }
   protected:
     void UpdateBuffer() {
-      AssignUint64(buffer_.data() + index_.keyLength_,
+      AssignUint64(buffer_.data() + index_.commonPrefix_.size(),
         buffer_.data() + buffer_.size(), pos_ + index_.minValue_);
     }
     size_t pos_;
@@ -565,8 +565,11 @@ public:
       header->key_length = ks.minKeyLen - commonPrefixLen;
       if (commonPrefixLen > ks.commonPrefixLen) {
         header->common_prefix_length = commonPrefixLen - ks.commonPrefixLen;
-        valvec<char> buffer(ks.minKey.data(), header->common_prefix_length);
-        ptr->commonPrefix_ = buffer;
+        valvec<char> buffer;
+        buffer.resize(terark::align_up(header->common_prefix_length, 8));
+        memcpy(buffer.data(), ks.minKey.data(), header->common_prefix_length);
+        ptr->commonPrefix_ = fstring(buffer).substr(0, header->common_prefix_length);
+        header->file_size += buffer.size();
         buffer.risk_release_ownership();
       }
       ptr->header_ = header;
@@ -636,7 +639,8 @@ public:
       if (header_->common_prefix_length != 0) {
         assert(!commonPrefix_.empty());
         valvec<char> buffer;
-        buffer.risk_set_data((char*)commonPrefix_.data(), commonPrefix_.size());
+        buffer.risk_set_data((char*)commonPrefix_.data(),
+          terark::align_up(commonPrefix_.size(), 8));
       }
       delete (FileHeader*)header_;
     }
@@ -649,13 +653,16 @@ public:
   }
   void SaveMmap(std::function<void(const void *, size_t)> write) const override {
     write(header_, sizeof *header_);
+    if (!commonPrefix_.empty()) {
+      write(commonPrefix_.data(), terark::align_up(commonPrefix_.size(), 8));
+    }
     write(indexSeq_.data(), indexSeq_.mem_size());
   }
   size_t Find(fstring key) const override {
     if (key.size() != keyLength_ + commonPrefix_.size()) {
       return size_t(-1);
     }
-    if (!key.startsWith(commonPrefix_)) {
+    if (key.commonPrefixLen(commonPrefix_) != commonPrefix_.size()) {
       return size_t(-1);
     }
     key.n -= commonPrefix_.size();
@@ -748,6 +755,11 @@ unique_ptr<TerarkIndex> TerarkIndex::LoadFile(fstring fpath) {
 
 unique_ptr<TerarkIndex> TerarkIndex::LoadMemory(fstring mem) {
   auto header = (const TerarkIndexHeader*)mem.data();
+  if (header->file_size > mem.size()) {
+    auto dfa = loadAsLazyUnionDFA(mem, true);
+    assert(dfa);
+    return unique_ptr<TerarkIndex>(new NestLoudsTrieIndex<MatchingDFA>(dfa));
+  }
   size_t idx = g_TerarkIndexFactroy.find_i(header->class_name);
   if (idx >= g_TerarkIndexFactroy.end_i()) {
     throw std::invalid_argument(
@@ -756,33 +768,6 @@ unique_ptr<TerarkIndex> TerarkIndex::LoadMemory(fstring mem) {
   }
   TerarkIndex::Factory* factory = g_TerarkIndexFactroy.val(idx).get();
   return factory->LoadMemory(mem);
-}
-
-unique_ptr<TerarkIndex> TerarkIndex::LoadMemory(fstrvec memoryVec, bool ordered) {
-  valvec<std::unique_ptr<MatchingDFA>> dfaVec;
-  for (size_t i = 0; i < memoryVec.size(); ++i) {
-    auto memory = fstring(memoryVec[i]);
-    auto header = (const TerarkIndexHeader*)memory.data();
-    if (strstr(header->class_name, "UintIndex")) {
-      assert(false); // unsupport yet ...
-    }
-    dfaVec.emplace_back(MatchingDFA::load_mmap_user_mem(
-      memory.data(), memory.size()));
-    if (!dfaVec.back()->get_dawg()) {
-      assert(false); // unsupport yet ...
-      throw std::invalid_argument(
-        std::string("TerarkIndex::LoadMemory(): Unexpected: dfa is not a dawg"));
-    }
-  }
-  if (!ordered) {
-    assert(false);
-    return nullptr;
-  }
-  static_assert(sizeof(std::unique_ptr<MatchingDFA>) == sizeof(MatchingDFA*), "WTF ?");
-  auto dfa = terark::createLazyUnionDFA(
-    (const MatchingDFA**)dfaVec.data(), dfaVec.size(), true);
-  dfaVec.risk_set_size(0);
-  return unique_ptr<TerarkIndex>(new NestLoudsTrieIndex<MatchingDFA>(dfa));
 }
 
 } // namespace rocksdb

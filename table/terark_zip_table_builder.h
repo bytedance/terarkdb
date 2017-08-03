@@ -40,6 +40,7 @@ namespace rocksdb {
 using terark::fstring;
 using terark::fstrvec;
 using terark::valvec;
+using terark::UintVecMin0;
 using terark::byte_t;
 using terark::febitvec;
 using terark::BlobStore;
@@ -81,15 +82,16 @@ private:
   };
   struct KeyValueStatus {
     valvec<char> prefix;
+    valvec<char> commonPrefix;
     Uint64Histogram key;
     Uint64Histogram value;
     bitfield_array<2> type;
     size_t split = 0;
-    uint64_t keyFileBegin = 0;
-    uint64_t keyFileEnd = 0;
+    uint64_t indexFileBegin = 0;
+    uint64_t indexFileEnd = 0;
     uint64_t valueFileBegin = 0;
     uint64_t valueFileEnd = 0;
-    std::unique_ptr<std::list<BuildIndexParams>> build;
+    valvec<std::unique_ptr<BuildIndexParams>> build;
   };
   void AddPrevUserKey(bool finish = false);
   void OfflineZipValueData();
@@ -108,7 +110,15 @@ private:
   Status OfflineFinish();
   void BuildIndex(BuildIndexParams& param, KeyValueStatus& kvs);
   Status WaitBuildIndex();
-  TerarkIndex* LoadBuildIndex(KeyValueStatus& kvs, fstring mmap_memory);
+  struct ReorderGenerator : boost::noncopyable {
+    valvec<std::unique_ptr<TerarkIndex>> indexes;
+    size_t current;
+    WaitHandle handle;
+    std::function<bool(UintVecMin0&)> generate; // if empty, needn't reorder
+  };
+  void BuildReordergGenerator(ReorderGenerator& generator,
+    KeyValueStatus& kvs,
+    fstring mmap_memory);
   WaitHandle LoadSample(std::unique_ptr<DictZipBlobStore::ZipBuilder>& zbuilder);
 #if defined(TerocksPrivateCode)
   struct BuildStoreParams {
@@ -130,7 +140,7 @@ private:
   void BuilderWriteValues(NativeDataInput<InputBuffer>& tmpValueFileinput
     , KeyValueStatus& kvs, std::function<void(fstring val)> write);
   void DoWriteAppend(const void* data, size_t size);
-  Status WriteStore(TerarkIndex* index, BlobStore* store
+  Status WriteStore(fstring indexMmap, BlobStore* store
     , KeyValueStatus& kvs
     , BlockHandle& dataBlock
     , long long& t5, long long& t6, long long& t7);
@@ -155,6 +165,7 @@ private:
   std::vector<std::unique_ptr<IntTblPropCollector>> collectors_;
   // end fuck out TableBuilderOptions
   InternalIterator* second_pass_iter_ = nullptr;
+  size_t keydataSeed_ = 0;
   valvec<KeyValueStatus> histogram_;
   TerarkIndex::KeyStat *currentStat_ = nullptr;
   valvec<byte_t> prevUserKey_;
@@ -178,6 +189,7 @@ private:
   std::unique_ptr<DictZipBlobStore::ZipBuilder> zbuilder_;
   BlockBuilder range_del_block_;
   terark::fstrvec valueBuf_; // collect multiple values for one key
+  bool waitInited_ = false;
   bool closed_ = false;  // Either Finish() or Abandon() has been called.
   bool isReverseBytewiseOrder_;
 #if defined(TERARK_SUPPORT_UINT64_COMPARATOR) && BOOST_ENDIAN_LITTLE_BYTE
