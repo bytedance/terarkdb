@@ -41,7 +41,7 @@ public:
     inline void SetInvalid() { m_id = size_t(-1); }
   };
   struct KeyStat {
-    size_t commonPrefixLen = size_t(-1);
+    size_t commonPrefixLen = 0;
     size_t minKeyLen = 0;
     size_t maxKeyLen = size_t(-1);
     size_t sumKeyLen = 0;

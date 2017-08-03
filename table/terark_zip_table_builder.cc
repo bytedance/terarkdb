@@ -258,13 +258,10 @@ void TerarkZipTableBuilder::Add(const Slice& key, const Slice& value) {
           ++histogram_.back().split;
           BuildIndex(*histogram_.back().build.back(), histogram_.back());
           histogram_.back().build.emplace_back(newBuildIndex());
-          currentStat_->commonPrefixLen = userKey.size();
           currentStat_->minKey.assign(userKey);
         }
         else {
           AddPrevUserKey();
-          currentStat_->commonPrefixLen = fstring(prevUserKey_.data(),
-            currentStat_->commonPrefixLen).commonPrefixLen(userKey);
         }
         currentStat_->minKeyLen = std::min(userKey.size(), currentStat_->minKeyLen);
         currentStat_->maxKeyLen = std::max(userKey.size(), currentStat_->maxKeyLen);
@@ -284,7 +281,6 @@ void TerarkZipTableBuilder::Add(const Slice& key, const Slice& value) {
       currentHistogram.build.emplace_back(newBuildIndex());
       currentHistogram.prefix.assign(userKey.data(), key_prefixLen_);
       userKey = userKey.substr(key_prefixLen_);
-      currentStat_->commonPrefixLen = userKey.size();
       currentStat_->minKeyLen = userKey.size();
       currentStat_->maxKeyLen = userKey.size();
       currentStat_->minKey.assign(userKey);
@@ -508,8 +504,9 @@ Status TerarkZipTableBuilder::Finish() {
 }
 
 void TerarkZipTableBuilder::BuildIndex(BuildIndexParams& param, KeyValueStatus& kvs) {
-  if (param.stat.numKeys == 1 || kvs.split != 0) {
-    param.stat.commonPrefixLen = 0;
+  assert(param.stat.numKeys > 0);
+  if (param.stat.numKeys > 1 && kvs.split == 0) {
+    param.stat.commonPrefixLen = fstring(param.stat.minKey).commonPrefixLen(param.stat.maxKey);
   }
   param.data.complete_write();
   param.wait = std::async(std::launch::async, [&]() {
@@ -541,20 +538,20 @@ void TerarkZipTableBuilder::BuildIndex(BuildIndexParams& param, KeyValueStatus& 
       );
       return Status::Corruption("TerarkZipTableBuilder index build error", ex.what());
     }
+    size_t fileSize = 0;
     {
       std::unique_lock<std::mutex> l(indexBuildMutex_);
       FileStream writer(tmpIndexFile_, "ab+");
       param.indexFileBegin = writer.fsize();
-      size_t fileOffset = 0;
-      indexPtr->SaveMmap([&fileOffset, &writer](const void* data, size_t size) {
-        fileOffset += size;
+      indexPtr->SaveMmap([&fileSize, &writer](const void* data, size_t size) {
+        fileSize += size;
         writer.ensureWrite(data, size);
       });
       writer.flush();
       param.indexFileEnd = writer.fsize();
-      assert(param.indexFileEnd - param.indexFileBegin == fileOffset);
-      assert(fileOffset % 8 == 0);
     }
+    assert(param.indexFileEnd - param.indexFileBegin == fileSize);
+    assert(fileSize % 8 == 0);
     long long tt = g_pf.now();
     size_t rawKeySize = kvs.key.m_cnt_sum * (8 + keyStat.commonPrefixLen) + kvs.key.m_total_key_len;
     INFO(ioptions_.info_log
