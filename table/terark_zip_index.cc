@@ -583,9 +583,11 @@ public:
       return unique_ptr<TerarkIndex>(loadImpl({}, fpath).release());
     }
     size_t MemSizeForBuild(const KeyStat& ks) const override {
+      assert(ks.minKeyLen == ks.maxKeyLen);
+      size_t length = ks.maxKeyLen - fstring(ks.minKey).commonPrefixLen(ks.maxKey);
       uint64_t
-        minValue = ReadUint64(ks.minKey.begin(), ks.minKey.end()),
-        maxValue = ReadUint64(ks.maxKey.begin(), ks.maxKey.end());
+        minValue = ReadUint64(ks.minKey.begin(), ks.minKey.begin() + length),
+        maxValue = ReadUint64(ks.maxKey.begin(), ks.maxKey.begin() + length);
       if (minValue > maxValue) {
         std::swap(minValue, maxValue);
       }
