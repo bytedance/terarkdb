@@ -32,6 +32,7 @@
 #include <terark/histogram.hpp>
 #include <terark/zbs/blob_store.hpp>
 #include <terark/zbs/dict_zip_blob_store.hpp>
+#include <terark/zbs/zip_reorder_map.hpp>
 #include <terark/bitfield_array.hpp>
 #include <terark/util/fstrvec.hpp>
 
@@ -44,6 +45,7 @@ using terark::UintVecMin0;
 using terark::byte_t;
 using terark::febitvec;
 using terark::BlobStore;
+using terark::ZReorderMap;
 using terark::Uint64Histogram;
 using terark::DictZipBlobStore;
 
@@ -110,13 +112,11 @@ private:
   Status OfflineFinish();
   void BuildIndex(BuildIndexParams& param, KeyValueStatus& kvs);
   Status WaitBuildIndex();
-  struct ReorderGenerator : boost::noncopyable {
-    valvec<std::unique_ptr<TerarkIndex>> indexes;
-    size_t current;
-    WaitHandle handle;
-    std::function<bool(UintVecMin0&)> generate; // if empty, needn't reorder
+  struct BuildReorderParams {
+    AutoDeleteFile tmpReorderFile;
+    bitfield_array<2> type;
   };
-  void BuildReordergGenerator(ReorderGenerator& generator,
+  void BuildReorderMap(BuildReorderParams& params,
     KeyValueStatus& kvs,
     fstring mmap_memory);
   WaitHandle LoadSample(std::unique_ptr<DictZipBlobStore::ZipBuilder>& zbuilder);

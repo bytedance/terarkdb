@@ -10,6 +10,7 @@
 #include <table/meta_blocks.h>
 // terark headers
 #include <terark/util/sortable_strvec.hpp>
+#include <terark/io/MemStream.hpp>
 #include <terark/lcast.hpp>
 #if defined(TerocksPrivateCode)
 # include <terark/zbs/zero_length_blob_store.hpp>
@@ -584,15 +585,14 @@ Status TerarkZipTableBuilder::WaitBuildIndex() {
   return result;
 }
 
-void TerarkZipTableBuilder::BuildReordergGenerator(ReorderGenerator& generator,
-                                                   KeyValueStatus& kvs,
-                                                   fstring mmap_memory) {
-  generator.indexes.clear();
-  generator.current = 0;
+void TerarkZipTableBuilder::BuildReorderMap(BuildReorderParams& params,
+                                            KeyValueStatus& kvs,
+                                            fstring mmap_memory) {
+  valvec<std::unique_ptr<TerarkIndex>> indexes;
   size_t reoder = 0;
   for (size_t i = 0; i < kvs.build.size(); ++i) {
     auto &param = *kvs.build[isReverseBytewiseOrder_ ? kvs.build.size() - i - 1 : i];
-    generator.indexes.emplace_back(
+    indexes.emplace_back(
       TerarkIndex::LoadMemory(
         fstring(
           mmap_memory.data() + param.indexFileBegin,
@@ -600,48 +600,61 @@ void TerarkZipTableBuilder::BuildReordergGenerator(ReorderGenerator& generator,
         )
       ).release()
     );
-    if (generator.indexes.back()->NeedsReorder() || isReverseBytewiseOrder_) {
+    if (indexes.back()->NeedsReorder() || isReverseBytewiseOrder_) {
       ++reoder;
     }
   }
   if (reoder == 0) {
-    generator.indexes.clear();
-    generator.generate = nullptr;
+    params.type.clear();
+    params.tmpReorderFile.Delete();
     return;
   }
-  generator.generate = [&generator, this](UintVecMin0& newToOld) {
-    assert(generator.current < generator.indexes.size());
-    auto index = generator.indexes[generator.current].get();
-    newToOld.clear();
-    generator.handle.Release();
+  params.type.resize_no_init(kvs.key.m_cnt_sum);
+  ZReorderMap::Builder builder(kvs.key.m_cnt_sum,
+    isReverseBytewiseOrder_ ? -1 : 1, params.tmpReorderFile.fpath, "wb");
+  size_t h = 0;
+  for (auto& ptr : indexes) {
+    auto index = ptr.get();
     size_t count = index->NumKeys();
-    size_t memory = UintVecMin0::compute_mem_size_by_max_val(count, count - 1);
-    generator.handle = std::move(WaitForMemory("reorder", memory));
-    newToOld.resize_with_wire_max_val(index->NumKeys(), index->NumKeys() - 1);
     if (index->NeedsReorder()) {
+      size_t memory = UintVecMin0::compute_mem_size_by_max_val(count, count - 1);
+      WaitHandle handle = std::move(WaitForMemory("reorder", memory));
+      UintVecMin0 newToOld(index->NumKeys(), index->NumKeys() - 1);
       index->GetOrderMap(newToOld);
       if (isReverseBytewiseOrder_) {
-        for (size_t i = 0; i < count; ++i) {
-          size_t o = newToOld[i];
-          newToOld.set_wire(i, count - o - 1);
+        for (size_t n = 0; n < count; ++n) {
+          size_t o = count - newToOld[n] - 1 + h;
+          builder.push_back(o);
+          params.type.set0(n + h, kvs.type[o]);
+        }
+      }
+      else {
+        for (size_t n = 0; n < count; ++n) {
+          size_t o = newToOld[n] + h;
+          builder.push_back(o);
+          params.type.set0(n + h, kvs.type[o]);
         }
       }
     }
     else {
       if (isReverseBytewiseOrder_) {
-        for (size_t n = 0, o = count - 1; n < count; ++n, --o) {
-          newToOld.set_wire(n, o);
+        for (size_t n = 0, o = count - 1 + h; n < count; ++n, --o) {
+          builder.push_back(o);
+          params.type.set0(n + h, kvs.type[o]);
         }
       }
       else {
-        for (size_t i = 0; i < count; ++i) {
-          newToOld.set_wire(i, i);
+        for (size_t n = 0; n < count; ++n) {
+          size_t o = n + h;
+          builder.push_back(o);
+          params.type.set0(n + h, kvs.type[o]);
         }
       }
     }
-    generator.current = (generator.current + 1) % generator.indexes.size();
-    return generator.current != 0;
-  };
+    h += count;
+    ptr.reset();
+  }
+  builder.finish();
 }
 
 TerarkZipTableBuilder::WaitHandle
@@ -1171,7 +1184,6 @@ Status TerarkZipTableBuilder::WriteStore(fstring indexMmap, terark::BlobStore* s
   , BlockHandle& dataBlock
   , long long& t5, long long& t6, long long& t7) {
   size_t numKeys = kvs.key.m_cnt_sum;
-  auto& bzvType = kvs.type;
   INFO(ioptions_.info_log
     , "TerarkZipTableBuilder::Finish():this=%012p:  index type = %-32s, store type = %-20s\n"
     , this, "Unknow", store->name()
@@ -1179,46 +1191,22 @@ Status TerarkZipTableBuilder::WriteStore(fstring indexMmap, terark::BlobStore* s
   using namespace std::placeholders;
   auto writeAppend = std::bind(&TerarkZipTableBuilder::DoWriteAppend, this, _1, _2);
   size_t maxUintVecVal = numKeys - 1;
-  ReorderGenerator reorder;
-  BuildReordergGenerator(reorder, kvs, indexMmap);
-  if (reorder.generate) {
-    bitfield_array<2> zvType2(numKeys);
-    size_t memSize = UintVecMin0::compute_mem_size_by_max_val(maxUintVecVal, numKeys);
-    AutoDeleteFile tmpReorderFile{tmpValueFile_.path + ".reorder"};
-    FileStream(tmpReorderFile, "wb+").chsize(memSize);
-    terark::MmapWholeFile reorderMmap(tmpReorderFile.fpath, true);
-    UintVecMin0 newToOld;
-    newToOld.risk_set_data((byte_t*)reorderMmap.base,
-      numKeys, UintVecMin0::compute_uintbits(maxUintVecVal));
-    size_t i = 0, h = 0;
-    UintVecMin0 tempNewToOld;
-    bool more;
-    do
-    {
-      more = reorder.generate(tempNewToOld);
-      for (size_t i = 0; i < tempNewToOld.size(); ++i) {
-        size_t o = h + tempNewToOld[i];
-        size_t n = h + i;
-        newToOld.set_wire(n, o);
-        zvType2.set0(n, bzvType[o]);
-      }
-      h += tempNewToOld.size();
-    } while (more);
-    tempNewToOld.clear();
+  BuildReorderParams params;
+  params.tmpReorderFile.fpath = tmpValueFile_.path + ".reorder";
+  BuildReorderMap(params, kvs, indexMmap);
+  if (params.type.size() != 0) {
+    params.type.swap(kvs.type);
+    ZReorderMap reorder(params.tmpReorderFile.fpath);
     t6 = g_pf.now();
     t7 = g_pf.now();
     try {
       dataBlock.set_offset(offset_);
-      store->reorder_zip_data(newToOld, std::ref(writeAppend));
+      store->reorder_zip_data(reorder, std::ref(writeAppend));
       dataBlock.set_size(offset_ - dataBlock.offset());
     }
     catch (const Status& s) {
-      newToOld.risk_release_ownership();
       return s;
     }
-    newToOld.risk_release_ownership();
-    bzvType.clear();
-    bzvType.swap(zvType2);
   }
   else {
     t7 = t6 = t5;
