@@ -565,12 +565,8 @@ public:
       header->key_length = ks.minKeyLen - commonPrefixLen;
       if (commonPrefixLen > ks.commonPrefixLen) {
         header->common_prefix_length = commonPrefixLen - ks.commonPrefixLen;
-        valvec<char> buffer;
-        buffer.resize(terark::align_up(header->common_prefix_length, 8));
-        memcpy(buffer.data(), ks.minKey.data(), header->common_prefix_length);
-        ptr->commonPrefix_ = fstring(buffer).substr(0, header->common_prefix_length);
-        header->file_size += buffer.size();
-        buffer.risk_release_ownership();
+        ptr->commonPrefix_.assign(ks.minKey.data(), header->common_prefix_length);
+        header->file_size += terark::align_up(header->common_prefix_length, 8);
       }
       ptr->header_ = header;
       ptr->indexSeq_.swap(indexSeq);
@@ -627,7 +623,7 @@ public:
       ptr->maxValue_ = header->max_value;
       ptr->keyLength_ = header->key_length;
       if (header->common_prefix_length > 0) {
-        ptr->commonPrefix_ = fstring((const char*)mem.data() + header->header_size,
+        ptr->commonPrefix_.risk_set_data((char*)mem.data() + header->header_size,
           header->common_prefix_length);
       }
       ptr->indexSeq_.risk_mmap_from((unsigned char*)mem.data() + header->header_size
@@ -638,16 +634,11 @@ public:
   using TerarkIndex::FactoryPtr;
   virtual ~TerarkUintIndex() {
     if (isBuilding_) {
-      if (header_->common_prefix_length != 0) {
-        assert(!commonPrefix_.empty());
-        valvec<char> buffer;
-        buffer.risk_set_data((char*)commonPrefix_.data(),
-          terark::align_up(commonPrefix_.size(), 8));
-      }
       delete (FileHeader*)header_;
     }
     else if (file_.base != nullptr || isUserMemory_) {
       indexSeq_.risk_release_ownership();
+      commonPrefix_.risk_release_ownership();
     }
   }
   const char* Name() const override {
@@ -700,7 +691,7 @@ public:
 protected:
   const FileHeader* header_;
   MmapWholeFile     file_;
-  fstring           commonPrefix_;
+  valvec<char>      commonPrefix_;
   RankSelect        indexSeq_;
   uint64_t          minValue_;
   uint64_t          maxValue_;
