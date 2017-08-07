@@ -109,7 +109,6 @@ protected:
   using TerarkIndex::Iterator::m_id;
   NestLoudsTrieIterBaseTpl(const NLTrie* trie)
     : NestLoudsTrieIterBase(trie->adfa_make_iter(initial_state)) {}
-  template<class NLTrie>
   bool Done(const NLTrie* trie, bool ok) {
     if (ok)
       m_id = trie->state_to_word_id(m_iter->word_state());
@@ -150,10 +149,13 @@ void NestLoudsTrieGetOrderMap(NLTrie* trie, UintVecMin0& newToOld) {
   terark::NonRecursiveDictionaryOrderToStateMapGenerator gen;
   gen(*trie, [&](size_t dictOrderOldId, size_t state) {
     size_t newId = trie->state_to_word_id(state);
+    //assert(trie->state_to_dict_index(state) == dictOrderOldId);
+    //assert(trie->dict_index_to_state(dictOrderOldId) == state);
     newToOld.set_wire(newId, dictOrderOldId);
   });
 }
 void NestLoudsTrieGetOrderMap(MatchingDFA* dfa, UintVecMin0& newToOld) {
+  assert(0);
 }
 
 
@@ -165,6 +167,7 @@ class NestLoudsTrieIndex : public TerarkIndex {
     const NLTrie* m_trie;
   protected:
     using NestLoudsTrieIterBaseTpl<NLTrie>::Done;
+    using NestLoudsTrieIterBase::m_iter;
   public:
     explicit MyIterator(NLTrie* trie)
       : NestLoudsTrieIterBaseTpl<NLTrie>(trie)
