@@ -586,12 +586,12 @@ Status TerarkZipTableBuilder::WaitBuildIndex() {
 }
 
 void TerarkZipTableBuilder::BuildReorderMap(BuildReorderParams& params,
-                                            KeyValueStatus& kvs,
-                                            fstring mmap_memory) {
+  KeyValueStatus& kvs,
+  fstring mmap_memory) {
   valvec<std::unique_ptr<TerarkIndex>> indexes;
   size_t reoder = 0;
-  for (size_t i = 0; i < kvs.build.size(); ++i) {
-    auto &param = *kvs.build[isReverseBytewiseOrder_ ? kvs.build.size() - i - 1 : i];
+  for (auto& ptr : kvs.build) {
+    auto &param = *ptr;
     indexes.emplace_back(
       TerarkIndex::LoadMemory(
         fstring(
@@ -612,33 +612,48 @@ void TerarkZipTableBuilder::BuildReorderMap(BuildReorderParams& params,
   params.type.resize_no_init(kvs.key.m_cnt_sum);
   ZReorderMap::Builder builder(kvs.key.m_cnt_sum,
     isReverseBytewiseOrder_ ? -1 : 1, params.tmpReorderFile.fpath, "wb");
-  size_t h = 0;
-  for (auto& ptr : indexes) {
-    auto index = ptr.get();
-    size_t count = index->NumKeys();
-    if (index->NeedsReorder()) {
-      size_t memory = UintVecMin0::compute_mem_size_by_max_val(count, count - 1);
-      WaitHandle handle = std::move(WaitForMemory("reorder", memory));
-      UintVecMin0 newToOld(index->NumKeys(), index->NumKeys() - 1);
-      index->GetOrderMap(newToOld);
-      if (isReverseBytewiseOrder_) {
+  if (isReverseBytewiseOrder_) {
+    size_t ho = kvs.key.m_cnt_sum;
+    size_t hn = 0;
+    for (auto it = indexes.rbegin(); it != indexes.rend(); ++it) {
+      auto index = it->get();
+      size_t count = index->NumKeys();
+      ho -= count;
+      if (index->NeedsReorder()) {
+        size_t memory = UintVecMin0::compute_mem_size_by_max_val(count, count - 1);
+        WaitHandle handle = std::move(WaitForMemory("reorder", memory));
+        UintVecMin0 newToOld(index->NumKeys(), index->NumKeys() - 1);
+        index->GetOrderMap(newToOld);
         for (size_t n = 0; n < count; ++n) {
-          size_t o = count - newToOld[n] - 1 + h;
+          size_t o = count - newToOld[n] - 1 + ho;
           builder.push_back(o);
-          params.type.set0(n + h, kvs.type[o]);
+          params.type.set0(n + hn, kvs.type[o]);
         }
       }
       else {
-        for (size_t n = 0; n < count; ++n) {
-          size_t o = newToOld[n] + h;
+        for (size_t n = 0, o = count - 1 + ho; n < count; ++n, --o) {
           builder.push_back(o);
-          params.type.set0(n + h, kvs.type[o]);
+          params.type.set0(n + hn, kvs.type[o]);
         }
       }
+      hn += count;
+      it->reset();
     }
-    else {
-      if (isReverseBytewiseOrder_) {
-        for (size_t n = 0, o = count - 1 + h; n < count; ++n, --o) {
+    assert(ho == 0);
+    assert(hn == kvs.key.m_cnt_sum);
+  }
+  else {
+    size_t h = 0;
+    for (auto& ptr : indexes) {
+      auto index = ptr.get();
+      size_t count = index->NumKeys();
+      if (index->NeedsReorder()) {
+        size_t memory = UintVecMin0::compute_mem_size_by_max_val(count, count - 1);
+        WaitHandle handle = std::move(WaitForMemory("reorder", memory));
+        UintVecMin0 newToOld(index->NumKeys(), index->NumKeys() - 1);
+        index->GetOrderMap(newToOld);
+        for (size_t n = 0; n < count; ++n) {
+          size_t o = newToOld[n] + h;
           builder.push_back(o);
           params.type.set0(n + h, kvs.type[o]);
         }
@@ -650,9 +665,10 @@ void TerarkZipTableBuilder::BuildReorderMap(BuildReorderParams& params,
           params.type.set0(n + h, kvs.type[o]);
         }
       }
+      h += count;
+      ptr.reset();
     }
-    h += count;
-    ptr.reset();
+    assert(h == kvs.key.m_cnt_sum);
   }
   builder.finish();
 }
@@ -1272,16 +1288,7 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
   if (!s.ok()) {
     return s;
   }
-  std::string commonPrefix;
-  commonPrefix.reserve(kvs.prefix.size() + kvs.commonPrefix.size());
-  commonPrefix.append(kvs.prefix.data(), kvs.prefix.size());
-  commonPrefix.append(kvs.commonPrefix.data(), kvs.commonPrefix.size());
-  WriteBlock(commonPrefix, file_, &offset_, &commonPrefixBlock);
   properties_.data_size = dataBlock.size();
-  s = WriteBlock(dict.memory, file_, &offset_, &dictBlock);
-  if (!s.ok()) {
-    return s;
-  }
   indexBlock.set_offset(offset_);
   indexBlock.set_size(mmapIndexFile.size);
   if (isReverseBytewiseOrder_) {
@@ -1299,6 +1306,7 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
     }
   }
   assert(offset_ == indexBlock.offset() + indexBlock.size());
+  properties_.index_size = indexBlock.size();
   if (zeroSeqCount_ != bzvType.size()) {
     assert(zeroSeqCount_ < bzvType.size());
     fstring zvTypeMem(bzvType.data(), bzvType.mem_size());
@@ -1322,7 +1330,15 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
     }
   }
   range_del_block_.Reset();
-  properties_.index_size = indexBlock.size();
+  std::string commonPrefix;
+  commonPrefix.reserve(kvs.prefix.size() + kvs.commonPrefix.size());
+  commonPrefix.append(kvs.prefix.data(), kvs.prefix.size());
+  commonPrefix.append(kvs.commonPrefix.data(), kvs.commonPrefix.size());
+  WriteBlock(commonPrefix, file_, &offset_, &commonPrefixBlock);
+  s = WriteBlock(dict.memory, file_, &offset_, &dictBlock);
+  if (!s.ok()) {
+    return s;
+  }
   WriteMetaData({
 #if defined(TerocksPrivateCode)
     { &kTerarkZipTableExtendedBlock                                , licenseHandle     },

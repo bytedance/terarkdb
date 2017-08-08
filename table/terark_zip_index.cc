@@ -176,7 +176,7 @@ class NestLoudsTrieIndex : public TerarkIndex {
     bool SeekToFirst() override { return Done(m_trie, m_iter->seek_begin()); }
     bool SeekToLast()  override { return Done(m_trie, m_iter->seek_end()); }
     bool Seek(fstring key) override {
-        return Done(m_trie, m_iter->seek_lower_bound(key));
+      return Done(m_trie, m_iter->seek_lower_bound(key));
     }
     bool Next() override {
 #ifdef DEBUG_ITERATOR
@@ -751,7 +751,7 @@ unique_ptr<TerarkIndex> TerarkIndex::LoadFile(fstring fpath) {
 
 unique_ptr<TerarkIndex> TerarkIndex::LoadMemory(fstring mem) {
   auto header = (const TerarkIndexHeader*)mem.data();
-  if (header->file_size > mem.size()) {
+  if (header->file_size < mem.size()) {
     auto dfa = loadAsLazyUnionDFA(mem, true);
     assert(dfa);
     return unique_ptr<TerarkIndex>(new NestLoudsTrieIndex<MatchingDFA>(dfa));
