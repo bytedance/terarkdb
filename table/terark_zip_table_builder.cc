@@ -1209,7 +1209,6 @@ Status TerarkZipTableBuilder::WriteStore(fstring indexMmap, terark::BlobStore* s
   );
   using namespace std::placeholders;
   auto writeAppend = std::bind(&TerarkZipTableBuilder::DoWriteAppend, this, _1, _2);
-  size_t maxUintVecVal = numKeys - 1;
   BuildReorderParams params;
   params.tmpReorderFile.fpath = tmpValueFile_.path + ".reorder";
   BuildReorderMap(params, kvs, indexMmap);
