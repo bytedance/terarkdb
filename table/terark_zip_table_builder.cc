@@ -251,6 +251,7 @@ void TerarkZipTableBuilder::Add(const Slice& key, const Slice& value) {
       userKey = userKey.substr(key_prefixLen_);
       if (prevUserKey_ != userKey) {
         assert((prevUserKey_ < userKey) ^ isReverseBytewiseOrder_);
+#if defined(TerocksPrivateCode)
         size_t indexSize = UintVecMin0::compute_mem_size_by_max_val(
           currentStat_->sumKeyLen, currentStat_->numKeys);
         size_t nltTrieMemSize = currentStat_->sumKeyLen + indexSize;
@@ -261,7 +262,9 @@ void TerarkZipTableBuilder::Add(const Slice& key, const Slice& value) {
           histogram_.back().build.emplace_back(newBuildIndex());
           currentStat_->minKey.assign(userKey);
         }
-        else {
+        else
+#endif // TerocksPrivateCode
+        {
           AddPrevUserKey();
         }
         currentStat_->minKeyLen = std::min(userKey.size(), currentStat_->minKeyLen);
