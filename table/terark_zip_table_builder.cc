@@ -1202,7 +1202,6 @@ Status TerarkZipTableBuilder::WriteStore(fstring indexMmap, terark::BlobStore* s
   , KeyValueStatus& kvs
   , BlockHandle& dataBlock
   , long long& t5, long long& t6, long long& t7) {
-  size_t numKeys = kvs.key.m_cnt_sum;
   INFO(ioptions_.info_log
     , "TerarkZipTableBuilder::Finish():this=%012p:  index type = %-32s, store type = %-20s\n"
     , this, "Unknow", store->name()
