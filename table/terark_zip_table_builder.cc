@@ -679,7 +679,9 @@ void TerarkZipTableBuilder::BuildReorderMap(BuildReorderParams& params,
 TerarkZipTableBuilder::WaitHandle
 TerarkZipTableBuilder::
 LoadSample(std::unique_ptr<DictZipBlobStore::ZipBuilder>& zbuilder) {
-  size_t dictWorkingMemory = std::min<size_t>(sampleLenSum_, INT32_MAX) * 6;
+  size_t sampleMax = std::min<size_t>(
+    INT32_MAX, size_t(table_options_.softZipWorkingMemLimit / 6.5));
+  size_t dictWorkingMemory = std::min<size_t>({sampleMax, sampleLenSum_, INT32_MAX}) * 6;
   auto waitHandle = WaitForMemory("dictZip", dictWorkingMemory);
 
   valvec<byte_t> sample;
@@ -703,8 +705,6 @@ LoadSample(std::unique_ptr<DictZipBlobStore::ZipBuilder>& zbuilder) {
   else
 #endif // TerocksPrivateCode
   {
-    size_t sampleMax = std::min<size_t>(
-        INT32_MAX, size_t(table_options_.softZipWorkingMemLimit / 6.5));
     if (sampleLenSum_ < sampleMax) {
 #if defined(TerocksPrivateCode)
       uint64_t upperBoundTest = uint64_t(

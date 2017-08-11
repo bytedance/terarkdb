@@ -853,7 +853,15 @@ Status TerarkZipSubReader::Get(SequenceNumber global_seqno, const ReadOptions& r
     }
     break; }
   case ZipValueType::kDelete: {
-    // little endian uint64_t
+    g_tbuf.erase_all();
+    try {
+      g_tbuf.reserve(sizeof(SequenceNumber));
+      store_->get_record_append(recId, &g_tbuf);
+      assert(g_tbuf.size() == sizeof(SequenceNumber) - 1);
+    }
+    catch (const terark::BadChecksumException& ex) {
+      return Status::Corruption("TerarkZipTableReader::Get()", ex.what());
+    }
     uint64_t seq = *(uint64_t*)g_tbuf.data() & kMaxSequenceNumber;
     if (seq <= pikey.sequence) {
       get_context->SaveValue(ParsedInternalKey(pikey.user_key, seq, kTypeDeletion),
