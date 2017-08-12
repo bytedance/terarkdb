@@ -800,13 +800,18 @@ std::string TerarkZipTableFactory::GetPrintableTableOptions() const {
 #define M_APPEND(fmt, value) \
 ret.append(buffer, snprintf(buffer, kBufferSize, fmt "\n", value))
 
+  M_APPEND("extendedConfigFile       : %s", tzto.extendedConfigFile.c_str());
   M_APPEND("indexType                : %s", tzto.indexType.c_str());
   M_APPEND("checksumLevel            : %d", tzto.checksumLevel);
   M_APPEND("entropyAlgo              : %d", (int)tzto.entropyAlgo);
   M_APPEND("indexNestLevel           : %d", tzto.indexNestLevel);
-  M_APPEND("indexTempLevel           : %d", tzto.indexTempLevel);
+  M_APPEND("indexNestScale           : %d", (int)tzto.indexNestScale);
+  M_APPEND("indexTempLevel           : %d", (int)tzto.indexTempLevel);
   M_APPEND("terarkZipMinLevel        : %d", tzto.terarkZipMinLevel);
-  M_APPEND("debugLevel               : %d", tzto.debugLevel);
+  M_APPEND("minDictZipValueSize      : %zd", tzto.minDictZipValueSize);
+  M_APPEND("keyPrefixLen             : %zd", tzto.keyPrefixLen);
+  M_APPEND("debugLevel               : %d", (int)tzto.debugLevel);
+  M_APPEND("enableCompressionProbe   : %s", cvb[!!tzto.enableCompressionProbe]);
   M_APPEND("useSuffixArrayLocalMatch : %s", cvb[!!tzto.useSuffixArrayLocalMatch]);
   M_APPEND("warmUpIndexOnOpen        : %s", cvb[!!tzto.warmUpIndexOnOpen]);
   M_APPEND("warmUpValueOnOpen        : %s", cvb[!!tzto.warmUpValueOnOpen]);
@@ -818,6 +823,7 @@ ret.append(buffer, snprintf(buffer, kBufferSize, fmt "\n", value))
   M_APPEND("softZipWorkingMemLimit   : %.3fGB", tzto.softZipWorkingMemLimit / gb);
   M_APPEND("hardZipWorkingMemLimit   : %.3fGB", tzto.hardZipWorkingMemLimit / gb);
   M_APPEND("smallTaskMemory          : %.3fGB", tzto.smallTaskMemory / gb);
+  M_APPEND("singleIndexMemLimit      : %.3fGB", tzto.singleIndexMemLimit / gb);
 
 #undef M_APPEND
 
