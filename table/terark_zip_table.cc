@@ -77,14 +77,16 @@ const char* git_version_hash_info_terark_zip_rocksdb();
 #endif
 
 void PrintVersionHashInfo(rocksdb::Logger* info_log) {
+#if defined(TerocksPrivateCode)
   std::call_once(PrintVersionHashInfoFlag, [info_log] {
-#ifndef _MSC_VER
+# ifndef _MSC_VER
     INFO(info_log, "core %s", git_version_hash_info_core());
     INFO(info_log, "fsa %s", git_version_hash_info_fsa());
     INFO(info_log, "zbs %s", git_version_hash_info_zbs());
     INFO(info_log, "terark_zip_rocksdb %s", git_version_hash_info_terark_zip_rocksdb());
-#endif
+# endif
   });
+#endif // TerocksPrivateCode
 }
 
 #if defined(TerocksPrivateCode)

@@ -697,7 +697,7 @@ TerarkZipTableBuilder::WaitHandle
 TerarkZipTableBuilder::
 LoadSample(std::unique_ptr<DictZipBlobStore::ZipBuilder>& zbuilder) {
   size_t sampleMax = std::min<size_t>(INT32_MAX, table_options_.softZipWorkingMemLimit / 7);
-  size_t dictWorkingMemory = std::min<size_t>({sampleMax, sampleLenSum_, INT32_MAX}) * 6;
+  size_t dictWorkingMemory = std::min<size_t>(sampleMax, sampleLenSum_) * 6;
   auto waitHandle = WaitForMemory("dictZip", dictWorkingMemory);
 
   valvec<byte_t> sample;
