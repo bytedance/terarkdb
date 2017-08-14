@@ -125,11 +125,13 @@ private:
     NativeDataInput<InputBuffer>& input;
     KeyValueStatus& kvs;
     WaitHandle handle;
+    fstring fpath;
+    size_t offset;
   };
-  std::unique_ptr<BlobStore> buildZeroLengthBlobStore(BuildStoreParams& params);
-  std::unique_ptr<BlobStore> buildPlainBlobStore(BuildStoreParams& params);
-  std::unique_ptr<BlobStore> buildMixedLenBlobStore(BuildStoreParams& params);
-  std::unique_ptr<BlobStore> buildZipOffsetBlobStore(BuildStoreParams& params);
+  void buildZeroLengthBlobStore(BuildStoreParams& params);
+  void buildPlainBlobStore(BuildStoreParams& params);
+  void buildMixedLenBlobStore(BuildStoreParams& params);
+  void buildZipOffsetBlobStore(BuildStoreParams& params);
 #endif // TerocksPrivateCode
   Status ZipValueToFinish();
 #if defined(TerocksPrivateCode)
