@@ -759,7 +759,7 @@ protected:
 
 #endif // TerocksPrivateCode
 
-Status rocksdb::TerarkZipTableTombstone::
+Status TerarkZipTableTombstone::
 LoadTombstone(RandomAccessFileReader * file, uint64_t file_size) {
   BlockContents tombstoneBlock;
   Status s = ReadMetaBlock(file, file_size, kTerarkZipTableMagicNumber, 
@@ -929,7 +929,7 @@ TerarkEmptyTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
     return s;
   }
   assert(nullptr != props);
-  unique_ptr<TableProperties> uniqueProps(props);
+  table_properties_.reset(props);
   Slice file_data;
   if (table_reader_options_.env_options.use_mmap_reads) {
     s = file->Read(0, file_size, &file_data, nullptr);
@@ -940,14 +940,13 @@ TerarkEmptyTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
     return Status::InvalidArgument("TerarkZipTableReader::Open()",
       "EnvOptions::use_mmap_reads must be true");
   }
-  if (uniqueProps->comparator_name != fstring(ioptions.user_comparator->Name())) {
+  if (props->comparator_name != fstring(ioptions.user_comparator->Name())) {
     return Status::InvalidArgument("TerarkZipTableReader::Open()",
-      "Invalid user_comparator , need " + uniqueProps->comparator_name
+      "Invalid user_comparator , need " + props->comparator_name
       + ", but provid " + ioptions.user_comparator->Name());
   }
   file_data_ = file_data;
-  table_properties_.reset(uniqueProps.release());
-  global_seqno_ = GetGlobalSequenceNumber(*table_properties_, ioptions.info_log);
+  global_seqno_ = GetGlobalSequenceNumber(*props, ioptions.info_log);
 #if defined(TerocksPrivateCode)
   BlockContents licenseBlock;
   s = ReadMetaBlock(file, file_size, kTerarkZipTableMagicNumber, ioptions,
@@ -965,7 +964,7 @@ TerarkEmptyTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   }
   INFO(ioptions.info_log
     , "TerarkZipTableReader::Open(): fsize = %zd, entries = %zd keys = 0 indexSize = 0 valueSize = 0, warm up time =      0.000'sec, build cache time =      0.000'sec\n"
-    , size_t(file_size), size_t(table_properties_->num_entries)
+    , size_t(file_size), size_t(props->num_entries)
   );
   return Status::OK();
 }
@@ -982,7 +981,7 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
     return s;
   }
   assert(nullptr != props);
-  unique_ptr<TableProperties> uniqueProps(props);
+  table_properties_.reset(props);
   Slice file_data;
   if (table_reader_options_.env_options.use_mmap_reads) {
     s = file->Read(0, file_size, &file_data, nullptr);
@@ -993,14 +992,13 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
     return Status::InvalidArgument("TerarkZipTableReader::Open()",
       "EnvOptions::use_mmap_reads must be true");
   }
-  if (uniqueProps->comparator_name != fstring(ioptions.user_comparator->Name())) {
+  if (props->comparator_name != fstring(ioptions.user_comparator->Name())) {
     return Status::InvalidArgument("TerarkZipTableReader::Open()",
-      "Invalid user_comparator , need " + uniqueProps->comparator_name
+      "Invalid user_comparator , need " + props->comparator_name
       + ", but provid " + ioptions.user_comparator->Name());
   }
   file_data_ = file_data;
-  table_properties_.reset(uniqueProps.release());
-  global_seqno_ = GetGlobalSequenceNumber(*table_properties_, ioptions.info_log);
+  global_seqno_ = GetGlobalSequenceNumber(*props, ioptions.info_log);
   isReverseBytewiseOrder_ =
     fstring(ioptions.user_comparator->Name()).startsWith("rev:");
 #if defined(TERARK_SUPPORT_UINT64_COMPARATOR) && BOOST_ENDIAN_LITTLE_BYTE
@@ -1086,10 +1084,10 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   long long t2 = g_pf.now();
   INFO(ioptions.info_log
     , "TerarkZipTableReader::Open(): fsize = %zd, entries = %zd keys = %zd indexSize = %zd valueSize=%zd, warm up time = %6.3f'sec, build cache time = %6.3f'sec\n"
-    , size_t(file_size), size_t(table_properties_->num_entries)
+    , size_t(file_size), size_t(props->num_entries)
     , subReader_.index_->NumKeys()
-    , size_t(table_properties_->index_size)
-    , size_t(table_properties_->data_size)
+    , size_t(props->index_size)
+    , size_t(props->data_size)
     , g_pf.sf(t0, t1)
     , g_pf.sf(t1, t2)
   );
@@ -1390,7 +1388,7 @@ TerarkZipTableMultiReader::TerarkZipTableMultiReader(const TerarkZipTableFactory
 }
 
 Status
-rocksdb::TerarkZipTableMultiReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
+TerarkZipTableMultiReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   file_.reset(file); // take ownership
   const auto& ioptions = table_reader_options_.ioptions;
   TableProperties* props = nullptr;
@@ -1400,7 +1398,7 @@ rocksdb::TerarkZipTableMultiReader::Open(RandomAccessFileReader* file, uint64_t 
     return s;
   }
   assert(nullptr != props);
-  unique_ptr<TableProperties> uniqueProps(props);
+  table_properties_.reset(props);
   Slice file_data;
   if (table_reader_options_.env_options.use_mmap_reads) {
     s = file->Read(0, file_size, &file_data, nullptr);
@@ -1411,14 +1409,13 @@ rocksdb::TerarkZipTableMultiReader::Open(RandomAccessFileReader* file, uint64_t 
     return Status::InvalidArgument("TerarkZipTableReader::Open()",
       "EnvOptions::use_mmap_reads must be true");
   }
-  if (uniqueProps->comparator_name != fstring(ioptions.user_comparator->Name())) {
+  if (props->comparator_name != fstring(ioptions.user_comparator->Name())) {
     return Status::InvalidArgument("TerarkZipTableReader::Open()",
-      "Invalid user_comparator , need " + uniqueProps->comparator_name
+      "Invalid user_comparator , need " + props->comparator_name
       + ", but provid " + ioptions.user_comparator->Name());
   }
   file_data_ = file_data;
-  table_properties_.reset(uniqueProps.release());
-  global_seqno_ = GetGlobalSequenceNumber(*table_properties_, ioptions.info_log);
+  global_seqno_ = GetGlobalSequenceNumber(*props, ioptions.info_log);
   isReverseBytewiseOrder_ =
     fstring(ioptions.user_comparator->Name()).startsWith("rev:");
 #if defined(TERARK_SUPPORT_UINT64_COMPARATOR) && BOOST_ENDIAN_LITTLE_BYTE
@@ -1503,10 +1500,10 @@ rocksdb::TerarkZipTableMultiReader::Open(RandomAccessFileReader* file, uint64_t 
   long long t2 = g_pf.now();
   INFO(ioptions.info_log
     , "TerarkZipTableReader::Open(): fsize = %zd, entries = %zd keys = %zd indexSize = %zd valueSize=%zd, warm up time = %6.3f'sec, build cache time = %6.3f'sec\n"
-    , size_t(file_size), size_t(table_properties_->num_entries)
+    , size_t(file_size), size_t(props->num_entries)
     , keyCount
-    , size_t(table_properties_->index_size)
-    , size_t(table_properties_->data_size)
+    , size_t(props->index_size)
+    , size_t(props->data_size)
     , g_pf.sf(t0, t1)
     , g_pf.sf(t1, t2)
   );
