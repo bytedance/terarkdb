@@ -794,28 +794,23 @@ void TerarkZipTableBuilder::buildZeroLengthBlobStore(BuildStoreParams &params) {
 };
 void TerarkZipTableBuilder::buildPlainBlobStore(BuildStoreParams &params) {
   auto& kvs = params.kvs;
-  size_t workingMemory = kvs.value.m_total_key_len
-      + UintVecMin0::compute_mem_size_by_max_val(kvs.value.m_total_key_len, kvs.key.m_cnt_sum );
+  size_t workingMemory =
+      UintVecMin0::compute_mem_size_by_max_val(kvs.value.m_total_key_len, kvs.key.m_cnt_sum);
   params.handle = WaitForMemory("plain", workingMemory);
-  auto store = UniquePtrOf(new terark::PlainBlobStore());
-  store->reset_with_content_size(kvs.value.m_total_key_len);
-  BuilderWriteValues(params.input, kvs, [&](fstring value) {store->add_record(value); });
-  store->finish();
-  FileStream file(params.fpath, "ab+");
-  store->save_mmap([&](const void* d, size_t s) {
-    file.ensureWrite(d, s);
-  });
+  terark::PlainBlobStore::MyBuilder builder(kvs.value.m_total_key_len, params.fpath, params.offset);
+  BuilderWriteValues(params.input, kvs, [&](fstring value) { builder.addRecord(value); });
+  builder.finish();
 };
 void TerarkZipTableBuilder::buildMixedLenBlobStore(BuildStoreParams &params) {
   auto& kvs = params.kvs;
   size_t fixedLen = kvs.value.m_max_cnt_key;
   size_t fixedLenCount = kvs.value.m_cnt_of_max_cnt_key;
   size_t varDataLen = kvs.value.m_total_key_len - fixedLen * fixedLenCount;
-  size_t workingMemory = kvs.value.m_total_key_len
-      + UintVecMin0::compute_mem_size_by_max_val(varDataLen, kvs.key.m_cnt_sum  - fixedLenCount);
+  size_t workingMemory = kvs.value.m_total_key_len +
+      UintVecMin0::compute_mem_size_by_max_val(varDataLen, kvs.key.m_cnt_sum  - fixedLenCount);
   params.handle = WaitForMemory("mixedLen", workingMemory);
   auto builder = UniquePtrOf(new terark::MixedLenBlobStore::Builder(fixedLen));
-  BuilderWriteValues(params.input, kvs, [&](fstring value) {builder->add_record(value); });
+  BuilderWriteValues(params.input, kvs, [&](fstring value) { builder->add_record(value); });
   auto store = UniquePtrOf(builder->finish());
   FileStream file(params.fpath, "ab+");
   store->save_mmap([&](const void* d, size_t s) {
@@ -824,12 +819,12 @@ void TerarkZipTableBuilder::buildMixedLenBlobStore(BuildStoreParams &params) {
 };
 void TerarkZipTableBuilder::buildZipOffsetBlobStore(BuildStoreParams &params) {
   auto& kvs = params.kvs;
-  size_t workingMemory = kvs.value.m_total_key_len + kvs.key.m_cnt_sum ;
+  size_t workingMemory = kvs.key.m_cnt_sum ;
   params.handle = WaitForMemory("zipOffset", workingMemory);
-  auto builder = UniquePtrOf(new terark::ZipOffsetBlobStore::MyBuilder(
-    table_options_.offsetArrayBlockUnits, params.fpath, params.offset));
-  BuilderWriteValues(params.input, kvs, [&](fstring value) {builder->addRecord(value); });
-  builder->finish();
+  size_t blockUnits = table_options_.offsetArrayBlockUnits;
+  terark::ZipOffsetBlobStore::MyBuilder builder(blockUnits, params.fpath, params.offset);
+  BuilderWriteValues(params.input, kvs, [&](fstring value) { builder.addRecord(value); });
+  builder.finish();
 };
 #endif // TerocksPrivateCode
 
