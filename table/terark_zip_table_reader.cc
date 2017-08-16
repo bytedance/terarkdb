@@ -1109,7 +1109,7 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
     MmapWarmUp(subReader_.store_->get_mmap());
   } else {
     //MmapColdize(subReader_.store_->get_mmap());
-    if (tzto_.adviseRandomRead) {
+    if (tzto_.adviseRandomRead || ioptions.advise_random_on_open) {
       MmapAdviseRandom(subReader_.store_->get_mmap());
     }
   }
@@ -1522,7 +1522,7 @@ TerarkZipTableMultiReader::Open(RandomAccessFileReader* file, uint64_t file_size
     MmapWarmUp(fstring(file_data.data(), props->data_size));
   } else {
   //MmapColdize(fstring(file_data.data(), props->data_size));
-    if (tzto_.adviseRandomRead) {
+    if (tzto_.adviseRandomRead || ioptions.advise_random_on_open) {
       MmapAdviseRandom(file_data.data(), props->data_size);
     }
   }
