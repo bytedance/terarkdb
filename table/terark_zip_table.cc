@@ -813,6 +813,7 @@ ret.append(buffer, snprintf(buffer, kBufferSize, fmt "\n", value))
   M_APPEND("minDictZipValueSize      : %zd", tzto.minDictZipValueSize);
   M_APPEND("keyPrefixLen             : %zd", tzto.keyPrefixLen);
   M_APPEND("debugLevel               : %d", (int)tzto.debugLevel);
+  M_APPEND("adviseRandomRead         : %s", cvb[!!tzto.adviseRandomRead]);
   M_APPEND("enableCompressionProbe   : %s", cvb[!!tzto.enableCompressionProbe]);
   M_APPEND("useSuffixArrayLocalMatch : %s", cvb[!!tzto.useSuffixArrayLocalMatch]);
   M_APPEND("warmUpIndexOnOpen        : %s", cvb[!!tzto.warmUpIndexOnOpen]);

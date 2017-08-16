@@ -59,7 +59,7 @@ struct TerarkZipTableOptions {
   /// 3 : verify 2nd pass iter keys & values
   /// 4 : dump 1st & 2nd pass data to file
   signed char   debugLevel               = 0;
-  unsigned char reserveValue             = 0;
+  bool          adviseRandomRead         = true;
   unsigned char indexNestScale           = 8;
   bool          enableCompressionProbe   = true;
   bool          useSuffixArrayLocalMatch = false;
@@ -106,8 +106,6 @@ struct TerarkZipTableOptions {
   double indexCacheRatio = 0;//0.001;
 
   size_t singleIndexMemLimit = 0x1E0000000; // 7.5G
-
-  bool  adviseRandomRead = true;
 };
 
 void TerarkZipDeleteTempFiles(const std::string& tmpPath);
