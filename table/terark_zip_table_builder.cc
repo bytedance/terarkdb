@@ -809,13 +809,17 @@ void TerarkZipTableBuilder::buildMixedLenBlobStore(BuildStoreParams &params) {
   size_t workingMemory = kvs.value.m_total_key_len +
       UintVecMin0::compute_mem_size_by_max_val(varDataLen, kvs.key.m_cnt_sum  - fixedLenCount);
   params.handle = WaitForMemory("mixedLen", workingMemory);
-  auto builder = UniquePtrOf(new terark::MixedLenBlobStore::Builder(fixedLen));
-  BuilderWriteValues(params.input, kvs, [&](fstring value) { builder->add_record(value); });
-  auto store = UniquePtrOf(builder->finish());
-  FileStream file(params.fpath, "ab+");
-  store->save_mmap([&](const void* d, size_t s) {
-    file.ensureWrite(d, s);
-  });
+  std::unique_ptr<terark::BlobStore::Builder> builder;
+  if (kvs.value.m_cnt_sum < (4ULL << 30)) {
+    builder.reset(new terark::MixedLenBlobStore::MyBuilder(
+        fixedLen, varDataLen, params.fpath, params.offset));
+  }
+  else {
+    builder.reset(new terark::MixedLenBlobStore64::MyBuilder(
+        fixedLen, varDataLen, params.fpath, params.offset));
+  }
+  BuilderWriteValues(params.input, kvs, [&](fstring value) { builder->addRecord(value); });
+  builder->finish();
 };
 void TerarkZipTableBuilder::buildZipOffsetBlobStore(BuildStoreParams &params) {
   auto& kvs = params.kvs;
@@ -855,7 +859,7 @@ ZipValueToFinish() {
       buildZeroLengthBlobStore(params);
     }
     else if (table_options_.offsetArrayBlockUnits) {
-      if (kvs.key.m_cnt_sum  < (4ull << 30) && variaNum * 64 < kvs.key.m_cnt_sum ) {
+      if (variaNum * 64 < kvs.key.m_cnt_sum ) {
         buildMixedLenBlobStore(params);
       }
       else {
@@ -863,8 +867,7 @@ ZipValueToFinish() {
       }
     }
     else {
-      if (kvs.key.m_cnt_sum  < (4ull << 30) &&
-        4 * variaNum + kvs.key.m_cnt_sum  * 5 / 4 < 4 * kvs.key.m_cnt_sum ) {
+      if (4 * variaNum + kvs.key.m_cnt_sum  * 5 / 4 < 4 * kvs.key.m_cnt_sum ) {
         buildMixedLenBlobStore(params);
       }
       else {
@@ -964,7 +967,7 @@ ZipValueToFinishMulti() {
         buildZeroLengthBlobStore(params);
       }
       else if (table_options_.offsetArrayBlockUnits) {
-        if (kvs.key.m_cnt_sum < (4ull << 30) && variaNum * 64 < kvs.key.m_cnt_sum) {
+        if (variaNum * 64 < kvs.key.m_cnt_sum) {
           buildMixedLenBlobStore(params);
         }
         else {
@@ -972,8 +975,7 @@ ZipValueToFinishMulti() {
         }
       }
       else {
-        if (kvs.key.m_cnt_sum  < (4ull << 30) &&
-          4 * variaNum + kvs.key.m_cnt_sum * 5 / 4 < 4 * kvs.key.m_cnt_sum) {
+        if (4 * variaNum + kvs.key.m_cnt_sum * 5 / 4 < 4 * kvs.key.m_cnt_sum) {
           buildMixedLenBlobStore(params);
         }
         else {
