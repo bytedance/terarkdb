@@ -30,6 +30,13 @@
 
 namespace rocksdb {
 
+Status ReadMetaBlockAdapte(class RandomAccessFileReader* file,
+                           uint64_t file_size,
+                           uint64_t table_magic_number,
+                           const struct ImmutableCFOptions& ioptions,
+                           const std::string& meta_block_name,
+                           struct BlockContents* contents);
+
 class TerarkZipTableTombstone {
 
 private:

@@ -623,7 +623,12 @@ TerarkZipTableFactory::NewTableReader(
       "user comparator must be 'leveldb.BytewiseComparator'");
   }
   Footer footer;
+
+#if ROCKSDB_MAJOR >= 5 && ROCKSDB_MINOR >= 7
+  Status s = ReadFooterFromFile(file.get(), nullptr, file_size, &footer);
+#else
   Status s = ReadFooterFromFile(file.get(), file_size, &footer);
+#endif
   if (!s.ok()) {
     return s;
   }
@@ -653,7 +658,7 @@ TerarkZipTableFactory::NewTableReader(
   }
 #endif
   BlockContents emptyTableBC;
-  s = ReadMetaBlock(file.get(), file_size, kTerarkZipTableMagicNumber
+  s = ReadMetaBlockAdapte(file.get(), file_size, kTerarkZipTableMagicNumber
     , table_reader_options.ioptions, kTerarkEmptyTableKey, &emptyTableBC);
   if (s.ok()) {
     std::unique_ptr<TerarkEmptyTableReader>
@@ -667,7 +672,7 @@ TerarkZipTableFactory::NewTableReader(
   }
 #if defined(TerocksPrivateCode)
   BlockContents offsetBC;
-  s = ReadMetaBlock(file.get(), file_size, kTerarkZipTableMagicNumber
+  s = ReadMetaBlockAdapte(file.get(), file_size, kTerarkZipTableMagicNumber
     , table_reader_options.ioptions, kTerarkZipTableOffsetBlock, &offsetBC);
   if (s.ok()) {
     std::unique_ptr<TerarkZipTableMultiReader>

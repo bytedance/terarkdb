@@ -186,8 +186,22 @@ void UpdateCollectInfo(const TerarkZipTableFactory* table_factory,
 
 }
 
-
 namespace rocksdb {
+
+Status ReadMetaBlockAdapte(RandomAccessFileReader* file,
+                           uint64_t file_size,
+                           uint64_t table_magic_number,
+                           const ImmutableCFOptions& ioptions,
+                           const std::string& meta_block_name,
+                           BlockContents* contents) {
+#if ROCKSDB_MAJOR >= 5 && ROCKSDB_MINOR >= 7
+    return ReadMetaBlock(file, nullptr, file_size, table_magic_number, ioptions,
+        meta_block_name, contents);
+#else
+    return ReadMetaBlock(file, file_size, table_magic_number, ioptions,
+        meta_block_name, contents);
+#endif
+}
 
 using terark::BadCrc32cException;
 using terark::byte_swap;
@@ -779,7 +793,7 @@ protected:
 Status TerarkZipTableTombstone::
 LoadTombstone(RandomAccessFileReader * file, uint64_t file_size) {
   BlockContents tombstoneBlock;
-  Status s = ReadMetaBlock(file, file_size, kTerarkZipTableMagicNumber, 
+  Status s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber, 
     GetTableReaderOptions().ioptions,  kRangeDelBlock, &tombstoneBlock);
   if (s.ok()) {
     tombstone_.reset(DetachBlockContents(tombstoneBlock, GetSequenceNumber()));
@@ -966,7 +980,7 @@ TerarkEmptyTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   global_seqno_ = GetGlobalSequenceNumber(*props, ioptions.info_log);
 #if defined(TerocksPrivateCode)
   BlockContents licenseBlock;
-  s = ReadMetaBlock(file, file_size, kTerarkZipTableMagicNumber, ioptions,
+  s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber, ioptions,
     kTerarkZipTableExtendedBlock, &licenseBlock);
   if (s.ok()) {
     s = UpdateLicenseInfo(table_factory_, ioptions.info_log, licenseBlock);
@@ -1025,7 +1039,7 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   BlockContents valueDictBlock, indexBlock, zValueTypeBlock, commonPrefixBlock;
 #if defined(TerocksPrivateCode)
   BlockContents licenseBlock;
-  s = ReadMetaBlock(file, file_size, kTerarkZipTableMagicNumber, ioptions,
+  s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber, ioptions,
     kTerarkZipTableExtendedBlock, &licenseBlock);
   if (s.ok()) {
     s = UpdateLicenseInfo(table_factory_, ioptions.info_log, licenseBlock);
@@ -1035,12 +1049,12 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   }
 #endif // TerocksPrivateCode
   UpdateCollectInfo(table_factory_, &tzto_, props, file_size);
-  s = ReadMetaBlock(file, file_size, kTerarkZipTableMagicNumber, ioptions,
+  s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber, ioptions,
     kTerarkZipTableValueDictBlock, &valueDictBlock);
 #if defined(TerocksPrivateCode)
   // PlainBlobStore & MixedLenBlobStore no dict
 #endif // TerocksPrivateCode
-  s = ReadMetaBlock(file, file_size, kTerarkZipTableMagicNumber, ioptions,
+  s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber, ioptions,
     kTerarkZipTableIndexBlock, &indexBlock);
   if (!s.ok()) {
     return s;
@@ -1049,7 +1063,7 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   if (global_seqno_ == kDisableGlobalSequenceNumber) {
     global_seqno_ = 0;
   }
-  s = ReadMetaBlock(file, file_size, kTerarkZipTableMagicNumber, ioptions,
+  s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber, ioptions,
     kTerarkZipTableCommonPrefixBlock, &commonPrefixBlock);
   if (s.ok()) {
     subReader_.commonPrefix_.assign(commonPrefixBlock.data.data(),
@@ -1077,7 +1091,7 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
     return s;
   }
   size_t recNum = subReader_.index_->NumKeys();
-  s = ReadMetaBlock(file, file_size, kTerarkZipTableMagicNumber, ioptions,
+  s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber, ioptions,
     kTerarkZipTableValueTypeBlock, &zValueTypeBlock);
   if (s.ok()) {
     subReader_.type_.risk_set_data((byte_t*)zValueTypeBlock.data.data(), recNum);
@@ -1444,7 +1458,7 @@ TerarkZipTableMultiReader::Open(RandomAccessFileReader* file, uint64_t file_size
   BlockContents valueDictBlock, indexBlock, zValueTypeBlock, commonPrefixBlock;
   BlockContents offsetBlock;
   BlockContents licenseBlock;
-  s = ReadMetaBlock(file, file_size, kTerarkZipTableMagicNumber, ioptions,
+  s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber, ioptions,
     kTerarkZipTableExtendedBlock, &licenseBlock);
   if (s.ok()) {
     s = UpdateLicenseInfo(table_factory_, ioptions.info_log, licenseBlock);
@@ -1453,14 +1467,14 @@ TerarkZipTableMultiReader::Open(RandomAccessFileReader* file, uint64_t file_size
     }
   }
   UpdateCollectInfo(table_factory_, &tzto_, props, file_size);
-  s = ReadMetaBlock(file, file_size, kTerarkZipTableMagicNumber, ioptions,
+  s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber, ioptions,
     kTerarkZipTableOffsetBlock, &offsetBlock);
   if (!s.ok()) {
     return s;
   }
-  s = ReadMetaBlock(file, file_size, kTerarkZipTableMagicNumber, ioptions,
+  s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber, ioptions,
     kTerarkZipTableValueDictBlock, &valueDictBlock);
-  s = ReadMetaBlock(file, file_size, kTerarkZipTableMagicNumber, ioptions,
+  s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber, ioptions,
     kTerarkZipTableIndexBlock, &indexBlock);
   if (!s.ok()) {
     return s;
@@ -1469,12 +1483,12 @@ TerarkZipTableMultiReader::Open(RandomAccessFileReader* file, uint64_t file_size
   if (global_seqno_ == kDisableGlobalSequenceNumber) {
     global_seqno_ = 0;
   }
-  s = ReadMetaBlock(file, file_size, kTerarkZipTableMagicNumber, ioptions,
+  s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber, ioptions,
     kTerarkZipTableCommonPrefixBlock, &commonPrefixBlock);
   if (!s.ok()) {
     return s;
   }
-  s = ReadMetaBlock(file, file_size, kTerarkZipTableMagicNumber, ioptions,
+  s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber, ioptions,
     kTerarkZipTableValueTypeBlock, &zValueTypeBlock);
   if (!s.ok()) {
     return s;
