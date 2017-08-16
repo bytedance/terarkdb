@@ -109,6 +109,7 @@ static void MmapWarmUp(const Vec& uv) {
   MmapWarmUpBytes(uv.data(), uv.mem_size());
 }
 
+/*
 static void MmapColdizeBytes(const void* addr, size_t len) {
   size_t low = terark::align_up(size_t(addr), 4096);
   size_t hig = terark::align_down(size_t(addr) + len, 4096);
@@ -124,6 +125,7 @@ static void MmapColdizeBytes(const void* addr, size_t len) {
 static void MmapColdize(fstring mem) {
   MmapColdizeBytes(mem.data(), mem.size());
 }
+*/
 /*
 static void MmapColdize(Slice mem) {
   MmapColdizeBytes(mem.data(), mem.size());
@@ -133,6 +135,21 @@ static void MmapColdize(const Vec& uv) {
   MmapColdizeBytes(uv.data(), uv.mem_size());
 }
 */
+
+static void MmapAdviseRandom(const void* addr, size_t len) {
+  size_t low = terark::align_up(size_t(addr), 4096);
+  size_t hig = terark::align_down(size_t(addr) + len, 4096);
+  if (low < hig) {
+    size_t size = hig - low;
+#ifdef POSIX_MADV_RANDOM
+    posix_madvise((void*)low, size, POSIX_MADV_RANDOM);
+#elif defined(_MSC_VER) // defined(_WIN32) || defined(_WIN64)
+#endif
+  }
+}
+static void MmapAdviseRandom(fstring mem) {
+  MmapAdviseRandom(mem.data(), mem.size());
+}
 
 #if defined(TerocksPrivateCode)
 Status UpdateLicenseInfo(const TerarkZipTableFactory* table_factory,
@@ -1077,7 +1094,10 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   if (tzto_.warmUpValueOnOpen) {
     MmapWarmUp(subReader_.store_->get_mmap());
   } else {
-    MmapColdize(subReader_.store_->get_mmap());
+    //MmapColdize(subReader_.store_->get_mmap());
+    if (tzto_.adviseRandomRead) {
+      MmapAdviseRandom(subReader_.store_->get_mmap());
+    }
   }
   long long t1 = g_pf.now();
   subReader_.index_->BuildCache(tzto_.indexCacheRatio);
@@ -1487,7 +1507,10 @@ TerarkZipTableMultiReader::Open(RandomAccessFileReader* file, uint64_t file_size
   if (tzto_.warmUpValueOnOpen) {
     MmapWarmUp(fstring(file_data.data(), props->data_size));
   } else {
-    MmapColdize(fstring(file_data.data(), props->data_size));
+  //MmapColdize(fstring(file_data.data(), props->data_size));
+    if (tzto_.adviseRandomRead) {
+      MmapAdviseRandom(file_data.data(), props->data_size);
+    }
   }
 
   long long t1 = g_pf.now();

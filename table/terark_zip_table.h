@@ -106,6 +106,8 @@ struct TerarkZipTableOptions {
   double indexCacheRatio = 0;//0.001;
 
   size_t singleIndexMemLimit = 0x1E0000000; // 7.5G
+
+  bool  adviseRandomRead = true;
 };
 
 void TerarkZipDeleteTempFiles(const std::string& tmpPath);
