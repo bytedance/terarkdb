@@ -1383,6 +1383,7 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
     "    zip pipeline throughput = %7.3f'MB/sec\n"
     "    entries = %zd  avg-key = %.2f  avg-zkey = %.2f  avg-val = %.2f  avg-zval = %.2f\n"
     "    usrkeys = %zd  avg-key = %.2f  avg-zkey = %.2f  avg-val = %.2f  avg-zval = %.2f\n"
+    "    seq expand size = %zd  multi value expand size = %zd\n"
     "    UnZipSize{ index =%9.4f GB  value =%9.4f GB   all =%9.4f GB }\n"
     "    __ZipSize{ index =%9.4f GB  value =%9.4f GB   all =%9.4f GB }\n"
     "    UnZip/Zip{ index =%9.4f     value =%9.4f      all =%9.4f    }\n"
@@ -1426,6 +1427,8 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
 , double(properties_.index_size)     / kvs.key.m_cnt_sum
 , double(properties_.raw_value_size) / kvs.key.m_cnt_sum
 , double(properties_.data_size)      / kvs.key.m_cnt_sum
+
+, seqExpandSize_, multiValueExpandSize_
 
 , kvs.key.m_total_key_len / 1e9, properties_.raw_value_size / 1e9, rawBytes / 1e9
 
@@ -1630,6 +1633,7 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4
     "    zip pipeline throughput = %7.3f'MB/sec\n"
     "    entries = %zd  avg-key = %.2f  avg-zkey = %.2f  avg-val = %.2f  avg-zval = %.2f\n"
     "    usrkeys = %zd  avg-key = %.2f  avg-zkey = %.2f  avg-val = %.2f  avg-zval = %.2f\n"
+    "    seq expand size = %zd  multi value expand size = %zd\n"
     "    UnZipSize{ index =%9.4f GB  value =%9.4f GB   all =%9.4f GB }\n"
     "    __ZipSize{ index =%9.4f GB  value =%9.4f GB   all =%9.4f GB }\n"
     "    UnZip/Zip{ index =%9.4f     value =%9.4f      all =%9.4f    }\n"
@@ -1673,6 +1677,8 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4
 , double(properties_.index_size)     / numKeys
 , double(properties_.raw_value_size) / numKeys
 , double(properties_.data_size)      / numKeys
+
+, seqExpandSize_, multiValueExpandSize_
 
 , sumKeyLen / 1e9, properties_.raw_value_size / 1e9, rawBytes / 1e9
 
@@ -1851,9 +1857,12 @@ void TerarkZipTableBuilder::UpdateValueLenHistogram() {
     }
     else {
       valueLen = valueBuf_.strpool.size() - 1;
+      seqExpandSize_ += 7;
     }
   }
   else {
+    seqExpandSize_ += vNum * 8;
+    multiValueExpandSize_ += vNum * 4;
     valueLen = valueBuf_.strpool.size() + sizeof(uint32_t)*vNum;
   }
   histogram_.back().value[valueLen]++;

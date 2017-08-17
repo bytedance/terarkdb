@@ -186,6 +186,8 @@ private:
   WritableFileWriter* file_;
   uint64_t offset_ = 0;
   uint64_t zeroSeqCount_ = 0;
+  size_t seqExpandSize_ = 0;
+  size_t multiValueExpandSize_ = 0;
   Status status_;
   TableProperties properties_;
   std::unique_ptr<DictZipBlobStore::ZipBuilder> zbuilder_;
