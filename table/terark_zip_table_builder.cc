@@ -806,7 +806,7 @@ void TerarkZipTableBuilder::buildMixedLenBlobStore(BuildStoreParams &params) {
   size_t fixedLen = kvs.value.m_max_cnt_key;
   size_t fixedLenCount = kvs.value.m_cnt_of_max_cnt_key;
   size_t varDataLen = kvs.value.m_total_key_len - fixedLen * fixedLenCount;
-  size_t workingMemory = kvs.value.m_total_key_len +
+  size_t workingMemory =
       UintVecMin0::compute_mem_size_by_max_val(varDataLen, kvs.key.m_cnt_sum  - fixedLenCount);
   params.handle = WaitForMemory("mixedLen", workingMemory);
   std::unique_ptr<terark::BlobStore::Builder> builder;
