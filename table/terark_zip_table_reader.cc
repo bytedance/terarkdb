@@ -819,6 +819,21 @@ Status TerarkZipSubReader::Get(SequenceNumber global_seqno, const ReadOptions& r
   GetContext* get_context, int flag) const {
   (void)flag;
   MY_THREAD_LOCAL(valvec<byte_t>, g_tbuf);
+  auto get_record_append = [&](size_t recId) {
+    if (0 == ro.value_data_offset && UINT32_MAX == ro.value_data_length) {
+      if (flag & FlagUsePread)
+        store_->pread_record_append(storeFD_, storeOffset_, recId, &g_tbuf);
+      else
+        store_->get_record_append(recId, &g_tbuf);
+    }
+    else {
+      assert(0);
+      if (flag & FlagUsePread)
+        assert(0);
+      else
+        store_->get_slice_append(recId, ro.value_data_offset, ro.value_data_length, &g_tbuf);
+    }
+  };
   ParsedInternalKey pikey;
   if (!ParseInternalKey(ikey, &pikey)) {
     return Status::InvalidArgument("TerarkZipTableReader::Get()",
@@ -852,11 +867,7 @@ Status TerarkZipSubReader::Get(SequenceNumber global_seqno, const ReadOptions& r
   case ZipValueType::kZeroSeq:
     g_tbuf.erase_all();
     try {
-      if (0==ro.value_data_offset && UINT32_MAX==ro.value_data_length)
-        store_->get_record_append(recId, &g_tbuf);
-      else // get_slice_append does not support entropy zip
-        store_->get_slice_append(recId,
-          ro.value_data_offset, ro.value_data_length, &g_tbuf);
+      get_record_append(recId);
     }
     catch (const terark::BadChecksumException& ex) {
       return Status::Corruption("TerarkZipTableReader::Get()", ex.what());
@@ -867,11 +878,7 @@ Status TerarkZipSubReader::Get(SequenceNumber global_seqno, const ReadOptions& r
   case ZipValueType::kValue: { // should be a kTypeValue, the normal case
     g_tbuf.erase_all();
     try {
-      if (0==ro.value_data_offset && UINT32_MAX==ro.value_data_length)
-        store_->get_record_append(recId, &g_tbuf);
-      else // get_slice_append does not support entropy zip
-        store_->get_slice_append(recId,
-          ro.value_data_offset, ro.value_data_length, &g_tbuf);
+      get_record_append(recId);
     }
     catch (const terark::BadChecksumException& ex) {
       return Status::Corruption("TerarkZipTableReader::Get()", ex.what());
@@ -887,7 +894,7 @@ Status TerarkZipSubReader::Get(SequenceNumber global_seqno, const ReadOptions& r
     g_tbuf.erase_all();
     try {
       g_tbuf.reserve(sizeof(SequenceNumber));
-      store_->get_record_append(recId, &g_tbuf);
+      get_record_append(recId);
       assert(g_tbuf.size() == sizeof(SequenceNumber) - 1);
     }
     catch (const terark::BadChecksumException& ex) {
@@ -902,7 +909,7 @@ Status TerarkZipSubReader::Get(SequenceNumber global_seqno, const ReadOptions& r
   case ZipValueType::kMulti: { // more than one value
     g_tbuf.resize_no_init(sizeof(uint32_t));
     try {
-      store_->get_record_append(recId, &g_tbuf);
+      get_record_append(recId);
     }
     catch (const terark::BadChecksumException& ex) {
       return Status::Corruption("TerarkZipTableReader::Get()", ex.what());
@@ -1096,6 +1103,9 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   if (s.ok()) {
     subReader_.type_.risk_set_data((byte_t*)zValueTypeBlock.data.data(), recNum);
   }
+  subReader_.subIndex_ = 0;
+  subReader_.storeFD_ = file_->file()->FileDescriptor();
+  subReader_.storeOffset_ = 0;
   long long t0 = g_pf.now();
   if (tzto_.warmUpIndexOnOpen) {
     MmapWarmUp(fstringOf(indexBlock.data));
@@ -1184,6 +1194,7 @@ Status
 TerarkZipTableReader::Get(const ReadOptions& ro, const Slice& ikey,
                           GetContext* get_context, bool skip_filters) {
   int flag = skip_filters ? TerarkZipSubReader::FlagSkipFilter : TerarkZipSubReader::FlagNone;
+  if (tzto_.usePread) flag |= TerarkZipSubReader::FlagUsePread;
 #if defined(TERARK_SUPPORT_UINT64_COMPARATOR) && BOOST_ENDIAN_LITTLE_BYTE
   if (isUint64Comparator_) {
     flag |= TerarkZipSubReader::FlagUint64Comparator;
@@ -1286,6 +1297,7 @@ Status TerarkZipTableMultiReader::SubIndex::Init(
                       terark::BlobStore::Dictionary dict,
                       fstring typeMemory,
                       fstring commonPrefixMemory,
+                      int fileFD,
                       bool reverse)
 {
   TerarkZipMultiOffsetInfo offset;
@@ -1332,6 +1344,8 @@ Status TerarkZipTableMultiReader::SubIndex::Init(
       auto& part = subReader_.back();
       auto& curr = offset.offset_[i];
       part.subIndex_ = i;
+      part.storeFD_ = fileFD;
+      part.storeOffset_ = last.value;
       part.prefix_.assign(offset.prefixSet_.data() + i * prefixLen_, prefixLen_);
       part.index_ = TerarkIndex::LoadMemory({indexMempry.data() + last.key,
                                              ptrdiff_t(curr.key - last.key)});
@@ -1396,6 +1410,7 @@ Status
 TerarkZipTableMultiReader::Get(const ReadOptions& ro, const Slice& ikey,
   GetContext* get_context, bool skip_filters) {
   int flag = skip_filters ? TerarkZipSubReader::FlagSkipFilter : TerarkZipSubReader::FlagNone;
+  if (tzto_.usePread) flag |= TerarkZipSubReader::FlagUsePread;
   if (ikey.size() < 8 + subIndex_.GetPrefixLen()) {
     return Status::InvalidArgument("TerarkZipTableMultiReader::Get()",
       "param target.size() < 8 + PrefixLen");
@@ -1499,6 +1514,7 @@ TerarkZipTableMultiReader::Open(RandomAccessFileReader* file, uint64_t file_size
     , fstringOf(valueDictBlock.data)
     , fstringOf(zValueTypeBlock.data)
     , fstringOf(commonPrefixBlock.data)
+    , file_->file()->FileDescriptor()
     , isReverseBytewiseOrder_
   );
   if (!s.ok()) {
