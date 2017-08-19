@@ -118,6 +118,7 @@ private:
 
 struct TerarkZipSubReader {
   size_t subIndex_;
+  bool   storeUsePread_;
   int    storeFD_;
   size_t storeOffset_;
   std::string prefix_;
@@ -132,8 +133,9 @@ struct TerarkZipSubReader {
 #if defined(TERARK_SUPPORT_UINT64_COMPARATOR) && BOOST_ENDIAN_LITTLE_BYTE
     FlagUint64Comparator = 2,
 #endif
-    FlagUsePread = 3,
   };
+
+  void InitUsePread(int minPreadLen);
 
   Status Get(SequenceNumber, const ReadOptions&, const Slice& key,
     GetContext*, int flag) const;
@@ -260,6 +262,7 @@ public:
                 terark::BlobStore::Dictionary dict,
                 fstring typeMemory,
                 fstring commonPrefixMemory,
+                int minPreadLen,
                 int fileFD,
                 bool reverse);
     size_t GetPrefixLen() const;

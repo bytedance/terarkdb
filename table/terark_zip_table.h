@@ -107,8 +107,11 @@ struct TerarkZipTableOptions {
 
   size_t singleIndexMemLimit = 0x1E0000000; // 7.5G
 
-  bool   usePread            = false;
-  char   reserveBytes[15]    = {};
+  ///  < 0: do not use pread
+  /// == 0: always use pread
+  ///  > 0: use pread if BlobStore avg record len > minPreadLen
+  int    minPreadLen         = -1;
+  char   reserveBytes[36]    = {};
 };
 
 void TerarkZipDeleteTempFiles(const std::string& tmpPath);

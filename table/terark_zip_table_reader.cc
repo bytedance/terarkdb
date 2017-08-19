@@ -815,20 +815,34 @@ NewRangeTombstoneIterator(const ReadOptions & read_options) {
   return nullptr;
 }
 
+void TerarkZipSubReader::InitUsePread(int minPreadLen) {
+  if (minPreadLen < 0) {
+    storeUsePread_ = false;
+  }
+  else if (minPreadLen == 0) {
+    storeUsePread_ = true;
+  }
+  else {
+    size_t numRecords = store_->num_records();
+    size_t memSize = store_->get_mmap().size();
+    storeUsePread_ = memSize < minPreadLen * numRecords;
+  }
+}
+
 Status TerarkZipSubReader::Get(SequenceNumber global_seqno, const ReadOptions& ro, const Slice& ikey,
   GetContext* get_context, int flag) const {
   (void)flag;
   MY_THREAD_LOCAL(valvec<byte_t>, g_tbuf);
   auto get_record_append = [&](size_t recId) {
     if (0 == ro.value_data_offset && UINT32_MAX == ro.value_data_length) {
-      if (flag & FlagUsePread)
+      if (storeUsePread_)
         store_->pread_record_append(storeFD_, storeOffset_, recId, &g_tbuf);
       else
         store_->get_record_append(recId, &g_tbuf);
     }
     else {
       assert(0);
-      if (flag & FlagUsePread)
+      if (storeUsePread_)
         assert(0);
       else
         store_->get_slice_append(recId, ro.value_data_offset, ro.value_data_length, &g_tbuf);
@@ -1106,6 +1120,7 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   subReader_.subIndex_ = 0;
   subReader_.storeFD_ = file_->file()->FileDescriptor();
   subReader_.storeOffset_ = 0;
+  subReader_.InitUsePread(tzto_.minPreadLen);
   long long t0 = g_pf.now();
   if (tzto_.warmUpIndexOnOpen) {
     MmapWarmUp(fstringOf(indexBlock.data));
@@ -1194,7 +1209,6 @@ Status
 TerarkZipTableReader::Get(const ReadOptions& ro, const Slice& ikey,
                           GetContext* get_context, bool skip_filters) {
   int flag = skip_filters ? TerarkZipSubReader::FlagSkipFilter : TerarkZipSubReader::FlagNone;
-  if (tzto_.usePread) flag |= TerarkZipSubReader::FlagUsePread;
 #if defined(TERARK_SUPPORT_UINT64_COMPARATOR) && BOOST_ENDIAN_LITTLE_BYTE
   if (isUint64Comparator_) {
     flag |= TerarkZipSubReader::FlagUint64Comparator;
@@ -1297,6 +1311,7 @@ Status TerarkZipTableMultiReader::SubIndex::Init(
                       terark::BlobStore::Dictionary dict,
                       fstring typeMemory,
                       fstring commonPrefixMemory,
+                      int minPreadLen,
                       int fileFD,
                       bool reverse)
 {
@@ -1349,10 +1364,9 @@ Status TerarkZipTableMultiReader::SubIndex::Init(
       part.prefix_.assign(offset.prefixSet_.data() + i * prefixLen_, prefixLen_);
       part.index_ = TerarkIndex::LoadMemory({indexMempry.data() + last.key,
                                              ptrdiff_t(curr.key - last.key)});
-      part.store_.reset(BlobStore::load_from_user_memory(
-        { storeMemory.data() + last.value,
-          ptrdiff_t(curr.value - last.value) },
-        dict));
+      fstring dataMem(storeMemory.data() + last.value, curr.value - last.value);
+      part.store_.reset(BlobStore::load_from_user_memory(dataMem, dict));
+      part.InitUsePread(minPreadLen);
       assert(bitfield_array<2>::compute_mem_size(part.index_->NumKeys()) == curr.type - last.type);
       part.type_.risk_set_data((byte_t*)(typeMemory.data() + last.type), part.index_->NumKeys());
       part.commonPrefix_.assign(commonPrefixMemory.data() + last.commonPrefix,
@@ -1410,7 +1424,6 @@ Status
 TerarkZipTableMultiReader::Get(const ReadOptions& ro, const Slice& ikey,
   GetContext* get_context, bool skip_filters) {
   int flag = skip_filters ? TerarkZipSubReader::FlagSkipFilter : TerarkZipSubReader::FlagNone;
-  if (tzto_.usePread) flag |= TerarkZipSubReader::FlagUsePread;
   if (ikey.size() < 8 + subIndex_.GetPrefixLen()) {
     return Status::InvalidArgument("TerarkZipTableMultiReader::Get()",
       "param target.size() < 8 + PrefixLen");
@@ -1514,6 +1527,7 @@ TerarkZipTableMultiReader::Open(RandomAccessFileReader* file, uint64_t file_size
     , fstringOf(valueDictBlock.data)
     , fstringOf(zValueTypeBlock.data)
     , fstringOf(commonPrefixBlock.data)
+    , tzto_.minPreadLen
     , file_->file()->FileDescriptor()
     , isReverseBytewiseOrder_
   );
