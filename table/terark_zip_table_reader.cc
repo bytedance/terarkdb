@@ -482,16 +482,11 @@ protected:
         TryPinBuffer(valueBuf_);
         if (ZipValueType::kMulti == zValtype_) {
           valueBuf_.resize_no_init(sizeof(uint32_t)); // for offsets[valnum_]
-          subReader_->store_->get_record_append(recId, &valueBuf_);
-        }
-        else if (0 == value_data_offset && UINT32_MAX == value_data_length) {
-          valueBuf_.erase_all();
-          subReader_->store_->get_record_append(recId, &valueBuf_);
+          subReader_->GetRecordAppend(recId, &valueBuf_);
         }
         else {
           valueBuf_.erase_all();
-          subReader_->store_->get_slice_append(recId,
-              value_data_offset, value_data_length, &valueBuf_);
+          subReader_->GetRecordAppend(recId, &valueBuf_, value_data_offset, value_data_length);
         }
       }
       catch (const BadCrc32cException& ex) { // crc checksum error
@@ -829,25 +824,34 @@ void TerarkZipSubReader::InitUsePread(int minPreadLen) {
   }
 }
 
+void TerarkZipSubReader::GetRecordAppend(size_t recId, valvec<byte_t>* tbuf,
+                                         uint32_t offset, uint32_t length) const {
+  if (0 == offset && UINT32_MAX == length) {
+    if (storeUsePread_)
+      store_->pread_record_append(storeFD_, storeOffset_, recId, tbuf);
+    else
+      store_->get_record_append(recId, tbuf);
+  }
+  else {
+    assert(0);
+    if (storeUsePread_)
+      assert(0);
+    else
+      store_->get_slice_append(recId, offset, length, tbuf);
+  }
+}
+
+void TerarkZipSubReader::GetRecordAppend(size_t recId, valvec<byte_t>* tbuf) const {
+  if (storeUsePread_)
+    store_->pread_record_append(storeFD_, storeOffset_, recId, tbuf);
+  else
+    store_->get_record_append(recId, tbuf);
+}
+
 Status TerarkZipSubReader::Get(SequenceNumber global_seqno, const ReadOptions& ro, const Slice& ikey,
-  GetContext* get_context, int flag) const {
+                               GetContext* get_context, int flag) const {
   (void)flag;
   MY_THREAD_LOCAL(valvec<byte_t>, g_tbuf);
-  auto get_record_append = [&](size_t recId) {
-    if (0 == ro.value_data_offset && UINT32_MAX == ro.value_data_length) {
-      if (storeUsePread_)
-        store_->pread_record_append(storeFD_, storeOffset_, recId, &g_tbuf);
-      else
-        store_->get_record_append(recId, &g_tbuf);
-    }
-    else {
-      assert(0);
-      if (storeUsePread_)
-        assert(0);
-      else
-        store_->get_slice_append(recId, ro.value_data_offset, ro.value_data_length, &g_tbuf);
-    }
-  };
   ParsedInternalKey pikey;
   if (!ParseInternalKey(ikey, &pikey)) {
     return Status::InvalidArgument("TerarkZipTableReader::Get()",
@@ -881,7 +885,7 @@ Status TerarkZipSubReader::Get(SequenceNumber global_seqno, const ReadOptions& r
   case ZipValueType::kZeroSeq:
     g_tbuf.erase_all();
     try {
-      get_record_append(recId);
+      GetRecordAppend(recId, &g_tbuf, ro.value_data_offset, ro.value_data_length);
     }
     catch (const terark::BadChecksumException& ex) {
       return Status::Corruption("TerarkZipTableReader::Get()", ex.what());
@@ -892,7 +896,7 @@ Status TerarkZipSubReader::Get(SequenceNumber global_seqno, const ReadOptions& r
   case ZipValueType::kValue: { // should be a kTypeValue, the normal case
     g_tbuf.erase_all();
     try {
-      get_record_append(recId);
+      GetRecordAppend(recId, &g_tbuf, ro.value_data_offset, ro.value_data_length);
     }
     catch (const terark::BadChecksumException& ex) {
       return Status::Corruption("TerarkZipTableReader::Get()", ex.what());
@@ -908,7 +912,7 @@ Status TerarkZipSubReader::Get(SequenceNumber global_seqno, const ReadOptions& r
     g_tbuf.erase_all();
     try {
       g_tbuf.reserve(sizeof(SequenceNumber));
-      get_record_append(recId);
+      GetRecordAppend(recId, &g_tbuf);
       assert(g_tbuf.size() == sizeof(SequenceNumber) - 1);
     }
     catch (const terark::BadChecksumException& ex) {
@@ -923,7 +927,7 @@ Status TerarkZipSubReader::Get(SequenceNumber global_seqno, const ReadOptions& r
   case ZipValueType::kMulti: { // more than one value
     g_tbuf.resize_no_init(sizeof(uint32_t));
     try {
-      get_record_append(recId);
+      GetRecordAppend(recId, &g_tbuf);
     }
     catch (const terark::BadChecksumException& ex) {
       return Status::Corruption("TerarkZipTableReader::Get()", ex.what());
