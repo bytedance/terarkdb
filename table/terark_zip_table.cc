@@ -824,7 +824,7 @@ ret.append(buffer, snprintf(buffer, kBufferSize, fmt "\n", value))
   M_APPEND("warmUpIndexOnOpen        : %s", cvb[!!tzto.warmUpIndexOnOpen]);
   M_APPEND("warmUpValueOnOpen        : %s", cvb[!!tzto.warmUpValueOnOpen]);
   M_APPEND("disableSecondPassIter    : %s", cvb[!!tzto.disableSecondPassIter]);
-  M_APPEND("minPreadLen              : %s", cvb[!!tzto.minPreadLen]);
+  M_APPEND("minPreadLen              : %d", tzto.minPreadLen);
   M_APPEND("offsetArrayBlockUnits    : %d", (int)tzto.offsetArrayBlockUnits);
   M_APPEND("estimateCompressionRatio : %f", tzto.estimateCompressionRatio);
   M_APPEND("sampleRatio              : %f", tzto.sampleRatio);
