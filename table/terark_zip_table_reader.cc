@@ -1,8 +1,6 @@
 // project headers
 #include "terark_zip_table_reader.h"
 #include "terark_zip_common.h"
-// boost headers
-#include <boost/scope_exit.hpp>
 // rocksdb headers
 #include <table/internal_iterator.h>
 #include <table/sst_file_writer_collectors.h>
@@ -1316,16 +1314,14 @@ Status TerarkZipTableMultiReader::SubIndex::Init(
                       fstring typeMemory,
                       fstring commonPrefixMemory,
                       int minPreadLen,
-                      int fileFD,
+                      intptr_t fileFD,
                       bool reverse)
 {
   TerarkZipMultiOffsetInfo offset;
   if (!offset.risk_set_memory(offsetMemory.data(), offsetMemory.size())) {
     return Status::Corruption("bad offset block");
   }
-  BOOST_SCOPE_EXIT(&offset) {
-    offset.risk_release_ownership();
-  }BOOST_SCOPE_EXIT_END;
+  TERARK_SCOPE_EXIT(offset.risk_release_ownership());
   subReader_.reserve(offset.partCount_);
 
   partCount_ = offset.partCount_;
