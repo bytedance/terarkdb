@@ -301,6 +301,8 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo) {
   MyGetInt(cfo, max_write_buffer_number    , 5);
   MyGetInt(cfo, target_file_size_multiplier, 5);
   MyGetInt(cfo, num_levels                 , 5);
+  MyGetInt(cfo, level0_file_num_compaction_trigger,
+           cfo. level0_file_num_compaction_trigger);
 
   if (tzo.debugLevel) {
     STD_INFO("TerarkZipConfigFromEnv(dbo, cfo) successed\n");
