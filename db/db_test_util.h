@@ -436,6 +436,9 @@ class SpecialEnv : public EnvWrapper {
         *bytes_read_ += result->size();
         return s;
       }
+      virtual intptr_t FileDescriptor() const override {
+        return target_->FileDescriptor();
+      }
 
      private:
       unique_ptr<RandomAccessFile> target_;

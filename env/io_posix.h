@@ -102,6 +102,7 @@ class PosixRandomAccessFile : public RandomAccessFile {
   virtual size_t GetRequiredBufferAlignment() const override {
     return logical_sector_size_;
   }
+  virtual intptr_t FileDescriptor() const override;
 };
 
 class PosixWritableFile : public WritableFile {
@@ -165,6 +166,7 @@ class PosixMmapReadableFile : public RandomAccessFile {
                       char* scratch) const override;
   virtual Status FsRead(uint64_t offset, size_t len, void* buf) const override;
   virtual Status InvalidateCache(size_t offset, size_t length) override;
+  virtual intptr_t FileDescriptor() const override;
 };
 
 class PosixMmapFile : public WritableFile {
