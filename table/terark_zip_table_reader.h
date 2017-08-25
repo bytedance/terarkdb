@@ -118,6 +118,8 @@ private:
 
 struct TerarkZipSubReader {
   size_t subIndex_;
+  size_t rawReaderOffset_;
+  size_t rawReaderSize_;
   bool   storeUsePread_;
   intptr_t   storeFD_;
   size_t storeOffset_;
@@ -139,6 +141,7 @@ struct TerarkZipSubReader {
 
   void GetRecordAppend(size_t recId, valvec<byte_t>* tbuf, uint32_t offset, uint32_t length) const;
   void GetRecordAppend(size_t recId, valvec<byte_t>* tbuf) const;
+
   Status Get(SequenceNumber, const ReadOptions&, const Slice& key,
     GetContext*, int flag) const;
 
@@ -165,7 +168,7 @@ public:
   Status Get(const ReadOptions&, const Slice& key, GetContext*,
     bool skip_filters) override;
 
-  uint64_t ApproximateOffsetOf(const Slice& key) override { return 0; }
+  uint64_t ApproximateOffsetOf(const Slice& key) override;
   void SetupForCompaction() override {}
 
   std::shared_ptr<const TableProperties>
@@ -195,6 +198,7 @@ private:
   const TerarkZipTableFactory* table_factory_;
   std::shared_ptr<const TableProperties> table_properties_;
   SequenceNumber global_seqno_;
+  double estimateRatio_;
   const TerarkZipTableOptions& tzto_;
   bool isReverseBytewiseOrder_;
 #if defined(TERARK_SUPPORT_UINT64_COMPARATOR) && BOOST_ENDIAN_LITTLE_BYTE
@@ -222,7 +226,7 @@ public:
   Status Get(const ReadOptions&, const Slice& key, GetContext*,
     bool skip_filters) override;
 
-  uint64_t ApproximateOffsetOf(const Slice& key) override { return 0; }
+  uint64_t ApproximateOffsetOf(const Slice& key) override;
   void SetupForCompaction() override {}
 
   std::shared_ptr<const TableProperties>
@@ -289,6 +293,7 @@ private:
   const TerarkZipTableFactory* table_factory_;
   std::shared_ptr<const TableProperties> table_properties_;
   SequenceNumber global_seqno_;
+  double estimateRatio_;
   const TerarkZipTableOptions& tzto_;
   bool isReverseBytewiseOrder_;
 };

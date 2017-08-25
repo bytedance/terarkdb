@@ -185,6 +185,8 @@ private:
   size_t singleIndexMemLimit = 0;
   WritableFileWriter* file_;
   uint64_t offset_ = 0;
+  uint64_t estimateOffset_ = 0;
+  float estimateRatio_ = 0;
   uint64_t zeroSeqCount_ = 0;
   size_t seqExpandSize_ = 0;
   size_t multiValueExpandSize_ = 0;

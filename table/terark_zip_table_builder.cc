@@ -104,6 +104,8 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(const TerarkZipTableFactory* table_
   singleIndexMemLimit = std::min(table_options_.softZipWorkingMemLimit,
     table_options_.singleIndexMemLimit);
 
+  estimateRatio_ = table_factory_->GetCollect().estimate(table_options_.estimateCompressionRatio);
+
   properties_.fixed_key_len = 0;
   properties_.num_data_blocks = 1;
   properties_.column_family_id = column_family_id;
@@ -192,11 +194,8 @@ TerarkZipTableBuilder::~TerarkZipTableBuilder() {
 uint64_t TerarkZipTableBuilder::FileSize() const {
   if (0 == offset_) {
     // for compaction caller to split file by increasing size
-    auto kvLen = properties_.raw_key_size + properties_.raw_value_size;
-    auto fsize = uint64_t(kvLen *
-        table_factory_->GetCollect().estimate(table_options_.estimateCompressionRatio));
 #if defined(TerocksPrivateCode)
-    return fsize;
+    return estimateOffset_;
 #endif // TerocksPrivateCode
     size_t nltTrieMemSize = 0;
     for (auto& item : histogram_) {
@@ -208,7 +207,7 @@ uint64_t TerarkZipTableBuilder::FileSize() const {
     }
     nltTrieMemSize = nltTrieMemSize * 3 / 2;
     if (nltTrieMemSize < table_options_.softZipWorkingMemLimit) {
-      return fsize;
+      return estimateOffset_;
     }
     else {
       return 1ULL << 60; // notify rocksdb to `Finish()` this table asap.
@@ -238,10 +237,19 @@ void TerarkZipTableBuilder::Add(const Slice& key, const Slice& value) {
         ikey.DebugString(true).c_str(), value.ToString(true).c_str());
   }
   DEBUG_PRINT_1ST_PASS_KEY(key);
+
+  ++properties_.num_entries;
+  properties_.raw_key_size += key.size();
+  properties_.raw_value_size += value.size();
+  uint64_t offset = uint64_t((properties_.raw_key_size + properties_.raw_value_size)
+                             * estimateRatio_);
+  assert(offset >= estimateOffset_);
+  NotifyCollectTableCollectorsOnAdd(key, value, offset,
+                                    collectors_, ioptions_.info_log);
+  estimateOffset_ = offset;
+
   uint64_t seqType = DecodeFixed64(key.data() + key.size() - 8);
   ValueType value_type = ValueType(seqType & 255);
-  uint64_t offset = uint64_t((properties_.raw_key_size + properties_.raw_value_size)
-    * table_options_.estimateCompressionRatio);
   if (IsValueType(value_type)) {
     assert(key.size() >= 8);
     fstring userKey(key.data(), key.size() - 8);
@@ -320,19 +328,9 @@ void TerarkZipTableBuilder::Add(const Slice& key, const Slice& value) {
         tmpValueFile_.writer << fstringOf(value);
       }
     }
-    properties_.num_entries++;
-    properties_.raw_key_size += key.size();
-    properties_.raw_value_size += value.size();
-    NotifyCollectTableCollectorsOnAdd(key, value, offset,
-      collectors_, ioptions_.info_log);
   }
   else if (value_type == kTypeRangeDeletion) {
     range_del_block_.Add(key, value);
-    properties_.num_entries++;
-    properties_.raw_key_size += key.size();
-    properties_.raw_value_size += value.size();
-    NotifyCollectTableCollectorsOnAdd(key, value, offset,
-      collectors_, ioptions_.info_log);
   }
   else {
     assert(false);
@@ -1351,6 +1349,7 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
   if (!s.ok()) {
     return s;
   }
+  properties_.num_data_blocks = kvs.key.m_cnt_sum;
   WriteMetaData({
 #if defined(TerocksPrivateCode)
     { &kTerarkZipTableExtendedBlock                                , licenseHandle     },
@@ -1602,6 +1601,7 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4
   }
   range_del_block_.Reset();
   properties_.index_size = indexBlock.size();
+  properties_.num_data_blocks = numKeys;
   WriteMetaData({
     {&kTerarkZipTableExtendedBlock                                , licenseHandle     },
     {!dict.memory.empty() ? &kTerarkZipTableValueDictBlock : NULL , dictBlock         },
@@ -1718,6 +1718,7 @@ Status TerarkZipTableBuilder::WriteMetaData(std::initializer_list<std::pair<cons
     ioptions_.info_log,
     &propBlockBuilder);
   propBlockBuilder.Add(kTerarkZipTableBuildTimestamp, GetTimestamp());
+  propBlockBuilder.Add(kTerarkZipTableEstimateRatio, terark::lcast(estimateRatio_));
   BlockHandle propBlock, metaindexBlock;
   Status s = WriteBlock(propBlockBuilder.Finish(), file_, &offset_, &propBlock);
   if (!s.ok()) {

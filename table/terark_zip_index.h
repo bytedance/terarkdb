@@ -35,6 +35,7 @@ public:
     virtual bool Seek(fstring target) = 0;
     virtual bool Next() = 0;
     virtual bool Prev() = 0;
+    virtual size_t DictRank() const = 0;
     inline bool Valid() const { return size_t(-1) != m_id; }
     inline size_t id() const { return m_id; }
     virtual fstring key() const = 0;
@@ -73,6 +74,7 @@ public:
   virtual void SaveMmap(std::function<void(const void *, size_t)> write) const = 0;
   virtual size_t Find(fstring key) const = 0;
   virtual size_t NumKeys() const = 0;
+  virtual size_t TotalKeySize() const = 0;
   virtual fstring Memory() const = 0;
   virtual Iterator* NewIterator() const = 0;
   virtual bool NeedsReorder() const = 0;

@@ -12,8 +12,6 @@
 #endif // TerocksPrivateCode
 
 
-//#define DEBUG_ITERATOR
-
 namespace rocksdb {
 
 using terark::initial_state;
@@ -99,7 +97,7 @@ class NestLoudsTrieIterBase : public TerarkIndex::Iterator {
 protected:
   unique_ptr<terark::ADFA_LexIterator> m_iter;
   fstring key() const override {
-    return fstring(m_iter->word());
+	  return fstring(m_iter->word());
   }
   NestLoudsTrieIterBase(terark::ADFA_LexIterator* iter)
    : m_iter(iter) {}
@@ -110,10 +108,13 @@ class NestLoudsTrieIterBaseTpl : public NestLoudsTrieIterBase {
 protected:
   using TerarkIndex::Iterator::m_id;
   NestLoudsTrieIterBaseTpl(const NLTrie* trie)
-    : NestLoudsTrieIterBase(trie->adfa_make_iter(initial_state)) {}
-  bool Done(const NLTrie* trie, bool ok) {
+    : NestLoudsTrieIterBase(trie->adfa_make_iter(initial_state)) {
+    m_dawg = trie;
+  }
+  const NLTrie* m_dawg;
+  bool Done(bool ok) {
     if (ok)
-      m_id = trie->state_to_word_id(m_iter->word_state());
+      m_id = m_dawg->state_to_word_id(m_iter->word_state());
     else
       m_id = size_t(-1);
     return ok;
@@ -128,8 +129,7 @@ protected:
     m_dawg = dfa->get_dawg();
   }
   const terark::BaseDAWG* m_dawg;
-  bool Done(const MatchingDFA* trie, bool ok) {
-    assert(trie->get_dawg() == m_dawg);
+  bool Done(bool ok) {
     if (ok)
       m_id = m_dawg->v_state_to_word_id(m_iter->word_state());
     else
@@ -166,47 +166,23 @@ class NestLoudsTrieIndex : public TerarkIndex {
   const terark::BaseDAWG* m_dawg;
   unique_ptr<NLTrie> m_trie;
   class MyIterator : public NestLoudsTrieIterBaseTpl<NLTrie> {
-    const NLTrie* m_trie;
   protected:
+    using NestLoudsTrieIterBaseTpl<NLTrie>::m_dawg;
     using NestLoudsTrieIterBaseTpl<NLTrie>::Done;
     using NestLoudsTrieIterBase::m_iter;
+    using TerarkIndex::Iterator::m_id;
   public:
     explicit MyIterator(NLTrie* trie)
       : NestLoudsTrieIterBaseTpl<NLTrie>(trie)
-      , m_trie(trie)
     {}
-    bool SeekToFirst() override { return Done(m_trie, m_iter->seek_begin()); }
-    bool SeekToLast()  override { return Done(m_trie, m_iter->seek_end()); }
-    bool Seek(fstring key) override {
-      return Done(m_trie, m_iter->seek_lower_bound(key));
-    }
-    bool Next() override {
-#ifdef DEBUG_ITERATOR
-      auto key_ref = key();
-      std::string saved_key(key_ref.data(), key_ref.size());
-      bool ret = Done(m_trie, m_iter->incr());
-      if (ret && key() < saved_key) {
-        assert(0);
-        //throw std::exception("NestLoudsTrieIndex::Next() error");
-      }
-      return ret;
-#else
-      return Done(m_trie, m_iter->incr());
-#endif
-    }
-    bool Prev() override {
-#ifdef DEBUG_ITERATOR
-      auto key_ref = key();
-      std::string saved_key(key_ref.data(), key_ref.size());
-      bool ret = Done(m_trie, m_iter->decr());
-      if (ret && key() > saved_key) {
-        assert(0);
-        //throw std::exception("NestLoudsTrieIndex::Prev() error");
-      }
-      return ret;
-#else
-      return Done(m_trie, m_iter->decr());
-#endif
+    bool SeekToFirst() override { return Done(m_iter->seek_begin()); }
+    bool SeekToLast()  override { return Done(m_iter->seek_end()); }
+    bool Seek(fstring key) override { return Done(m_iter->seek_lower_bound(key)); }
+    bool Next() override { return Done(m_iter->incr()); }
+    bool Prev() override { return Done(m_iter->decr()); }
+    size_t DictRank() const override {
+      assert(m_id != size_t(-1));
+      return m_dawg->state_to_dict_rank(m_iter->word_state());
     }
   };
 public:
@@ -230,6 +206,9 @@ public:
   }
   size_t NumKeys() const override final {
     return m_dawg->num_words();
+  }
+  size_t TotalKeySize() const override final {
+    return m_trie->adfa_total_words_len();
   }
   fstring Memory() const override final {
     return m_trie->get_mmap();
@@ -520,6 +499,10 @@ public:
         return true;
       }
     }
+    size_t DictRank() const override {
+      assert(m_id != size_t(-1));
+      return m_id;
+    }
     fstring key() const override {
       assert(m_id != size_t(-1));
       return buffer_;
@@ -677,6 +660,9 @@ public:
   }
   size_t NumKeys() const override {
     return indexSeq_.max_rank1();
+  }
+  size_t TotalKeySize() const override final {
+    return (commonPrefix_.size() + keyLength_) * indexSeq_.max_rank1();
   }
   fstring Memory() const override {
     return fstring((const char*)header_, (ptrdiff_t)header_->file_size);
