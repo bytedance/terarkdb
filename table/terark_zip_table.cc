@@ -560,13 +560,25 @@ class TableFactory*
   }
 #if defined(TerocksPrivateCode)
   auto& license = factory->GetLicense();
-  if (!tzto.extendedConfigFile.empty() && license.key == nullptr) {
-    std::unique_lock<std::mutex> l(license.mutex);
-    if (license.key == nullptr) {
-      license.load_nolock(tzto.extendedConfigFile);
+  std::string license_file = tzto.extendedConfigFile;
+  if (license_file.empty()) {
+    if (const char* env = getenv("TerarkZipTable_licenseFile")) {
+      license_file = env;
+    }
+    else {
+      FileStream f;
+      if (f.xopen(".license", "rb")) {
+        license_file = ".license";
+      }
     }
   }
-  license.print_error(tzto.extendedConfigFile.c_str(), true, nullptr);
+  if (!license_file.empty() && license.key == nullptr) {
+    std::unique_lock<std::mutex> l(license.mutex);
+    if (license.key == nullptr) {
+      license.load_nolock(license_file);
+    }
+  }
+  license.print_error(license_file.c_str(), true, nullptr);
 #endif // TerocksPrivateCode
   return factory;
 }
