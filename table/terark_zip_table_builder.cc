@@ -472,7 +472,9 @@ Status TerarkZipTableBuilder::EmptyTableFinish() {
     }
   }
   range_del_block_.Reset();
-  return WriteMetaData({
+  TerarkZipMultiOffsetInfo offsetInfo;
+  offsetInfo.Init(0, 0);
+  return WriteMetaData(offsetInfo, {
 #if defined(TerocksPrivateCode)
     { &kTerarkZipTableExtendedBlock                 , licenseHandle },
 #endif // TerocksPrivateCode
@@ -1350,7 +1352,15 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
     return s;
   }
   properties_.num_data_blocks = kvs.key.m_cnt_sum;
-  WriteMetaData({
+  TerarkZipMultiOffsetInfo offsetInfo;
+  offsetInfo.Init(0, 1);
+  offsetInfo.set(0,
+                 fstring(),
+                 indexBlock.size(),
+                 properties_.data_size,
+                 zvTypeBlock.size(),
+                 commonPrefixBlock.size());
+  WriteMetaData(offsetInfo, {
 #if defined(TerocksPrivateCode)
     { &kTerarkZipTableExtendedBlock                                , licenseHandle     },
 #endif // TerocksPrivateCode
@@ -1602,7 +1612,7 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4
   range_del_block_.Reset();
   properties_.index_size = indexBlock.size();
   properties_.num_data_blocks = numKeys;
-  WriteMetaData({
+  WriteMetaData(offsetInfo, {
     {&kTerarkZipTableExtendedBlock                                , licenseHandle     },
     {!dict.memory.empty() ? &kTerarkZipTableValueDictBlock : NULL , dictBlock         },
     {&kTerarkZipTableIndexBlock                                   , indexBlock        },
@@ -1705,7 +1715,8 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4
 
 #endif // TerocksPrivateCode
 
-Status TerarkZipTableBuilder::WriteMetaData(std::initializer_list<std::pair<const std::string*, BlockHandle> > blocks) {
+Status TerarkZipTableBuilder::WriteMetaData(const TerarkZipMultiOffsetInfo& offsetInfo,
+                                            std::initializer_list<std::pair<const std::string*, BlockHandle>> blocks) {
   MetaIndexBuilder metaindexBuiler;
   for (const auto& block : blocks) {
     if (block.first) {
@@ -1714,11 +1725,75 @@ Status TerarkZipTableBuilder::WriteMetaData(std::initializer_list<std::pair<cons
   }
   PropertyBlockBuilder propBlockBuilder;
   propBlockBuilder.AddTableProperty(properties_);
-  NotifyCollectTableCollectorsOnFinish(collectors_,
-    ioptions_.info_log,
-    &propBlockBuilder);
+  UserCollectedProperties user_collected_properties;
+  for (auto& collector : collectors_) {
+    user_collected_properties.clear();
+    Status s = collector->Finish(&user_collected_properties);
+    if (!s.ok()) {
+      LogPropertiesCollectionError(ioptions_.info_log, "Finish", collector->Name());
+      continue;
+    }
+    ///////////////////////////////////////////////////////////////////
+    // hack MyRocks Rdb_tbl_prop_coll
+    while (fstring(collector->Name()) == "Rdb_tbl_prop_coll") {
+      auto find = user_collected_properties.find("__indexstats__");
+      assert(find != user_collected_properties.end());
+      if (find == user_collected_properties.end())
+        break;
+      try {
+        std::string &Rdb_index_stats = find->second;
+        terark::BigEndianDataInput <terark::MemIO> input;
+        terark::BigEndianDataOutput<terark::MemIO> output;
+        input.set((void*)Rdb_index_stats.data(), Rdb_index_stats.size());
+        uint64_t version;
+        input >> version;     // version
+        assert(version >= 1); // INDEX_STATS_VERSION_INITIAL
+        assert(version <= 2); // INDEX_STATS_VERSION_ENTRY_TYPES
+        if (version < 1 || version > 2)
+          break;
+        for (size_t i = 0; i < offsetInfo.partCount_; ++i) {
+          size_t ii = isReverseBytewiseOrder_ ? offsetInfo.partCount_ - i - 1 : i;
+          input.skip(4);                  // cf_id
+          if (offsetInfo.prefixLen_ == 4) {
+            uint32_t index_id;            // index_id
+            input.ensureRead(&index_id, 4);
+            fstring prefix = fstring(offsetInfo.prefixSet_).substr(ii * 4, 4);
+            if (fstring((char*)&index_id, 4) != prefix)
+              THROW_STD(runtime_error, "mismatch index_id or prefix");
+          }
+          else {
+            input.skip(4);                // index_id
+          }
+          input.skip(8 * 2);              // data_size, rows
+          output.set(input.current(), 8); // actual_disk_size addr
+          auto &info = offsetInfo.offset_[ii];
+          output << uint64_t(info.key + info.value);
+          input.skip(8);                  // actual_disk_size
+          uint64_t distinct_keys_per_prefix_size;
+          input >> distinct_keys_per_prefix_size;
+          if (version >= 2) { // INDEX_STATS_VERSION_ENTRY_TYPES
+            // entry_deletes
+            // entry_single_deletes
+            // entry_single_deletes
+            // entry_others
+            input.skip(8 * 4);
+          }
+          // distinct_keys_per_prefix
+          input.skip(distinct_keys_per_prefix_size * 8);
+        }
+        assert(input.current() == input.end());
+      }
+      catch (const std::exception& ex) {
+        WARN(ioptions_.info_log,
+             "TerarkZipTableBuilder::WriteMetaData() Rdb_tbl_prop_coll hack fail %s",
+             ex.what());
+      }
+      break;
+    }
+    ///////////////////////////////////////////////////////////////////
+    propBlockBuilder.Add(user_collected_properties);
+  }
   propBlockBuilder.Add(kTerarkZipTableBuildTimestamp, GetTimestamp());
-  propBlockBuilder.Add(kTerarkZipTableEstimateRatio, terark::lcast(estimateRatio_));
   BlockHandle propBlock, metaindexBlock;
   Status s = WriteBlock(propBlockBuilder.Finish(), file_, &offset_, &propBlock);
   if (!s.ok()) {

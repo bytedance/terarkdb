@@ -59,15 +59,6 @@ SequenceNumber GetGlobalSequenceNumber(const TableProperties& table_properties,
   return global_seqno;
 }
 
-float GetEstimateRatio(const TableProperties& table_properties) {
-  auto &p = table_properties;
-  auto find = p.user_collected_properties.find(kTerarkZipTableEstimateRatio);
-  if (find != p.user_collected_properties.end()) {
-    return terark::lcast(find->second);
-  }
-  return 0;
-}
-
 Block* DetachBlockContents(BlockContents &tombstoneBlock, SequenceNumber global_seqno)
 {
   std::unique_ptr<char[]> tombstoneBuf(new char[tombstoneBlock.data.size()]);
@@ -1149,9 +1140,7 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   subReader_.storeOffset_ = 0;
   subReader_.InitUsePread(tzto_.minPreadLen);
   subReader_.rawReaderOffset_ = 0;
-  subReader_.rawReaderSize_ =
-      subReader_.index_->TotalKeySize() + subReader_.store_->total_data_size();
-  estimateRatio_ = GetEstimateRatio(*props);
+  subReader_.rawReaderSize_ = indexBlock.data.size() + props->data_size;
   long long t0 = g_pf.now();
   if (tzto_.warmUpIndexOnOpen) {
     MmapWarmUp(fstringOf(indexBlock.data));
@@ -1256,15 +1245,14 @@ uint64_t TerarkZipTableReader::ApproximateOffsetOf(const Slice& ikey) {
   assert(&subReader_ == static_cast<TerarkZipTableIndexIterator*>(iter.get())->GetSubReader());
   size_t numRecords = subReader_.index_->NumKeys();
   size_t rank;
-  size_t id = indexIter->id();
-  if (id == size_t(-1))
+  if (indexIter->Valid())
     rank = numRecords;
   else
     rank = indexIter->DictRank();
-  auto offset = estimateRatio_ * subReader_.rawReaderSize_ * rank / numRecords;
+  auto offset = uint64_t(subReader_.rawReaderSize_ * 1.0 * rank / numRecords);
   if (isReverseBytewiseOrder_)
-    return uint64_t(estimateRatio_ * subReader_.rawReaderSize_ - offset);
-  return uint64_t(offset);
+    return subReader_.rawReaderSize_ - offset;
+  return offset;
 }
 
 TerarkZipTableReader::~TerarkZipTableReader() {
@@ -1421,7 +1409,7 @@ Status TerarkZipTableMultiReader::SubIndex::Init(
       part.commonPrefix_.assign(commonPrefixMemory.data() + last.commonPrefix,
                                 curr.commonPrefix - last.commonPrefix);
       part.rawReaderOffset_ = rawSize;
-      part.rawReaderSize_ = part.index_->TotalKeySize() + part.store_->total_data_size();
+      part.rawReaderSize_ = (curr.key - last.key) + dataMem.size();
       rawSize += part.rawReaderSize_;
       last = curr;
     }
@@ -1495,7 +1483,6 @@ uint64_t TerarkZipTableMultiReader::ApproximateOffsetOf(const Slice& ikey) {
   auto subReader = iter->GetSubReader();
   size_t numRecords;
   size_t rank;
-  double offset;
   if (indexIter == nullptr) {
     if (isReverseBytewiseOrder_) {
       subReader = subIndex_.GetSubReader(0);
@@ -1510,18 +1497,18 @@ uint64_t TerarkZipTableMultiReader::ApproximateOffsetOf(const Slice& ikey) {
   }
   else {
     numRecords = subReader->index_->NumKeys();
-    size_t id = indexIter->id();
-    if (id == size_t(-1))
+    if (indexIter->Valid())
       rank = numRecords;
     else
       rank = indexIter->DictRank();
   }
-  offset = estimateRatio_ * subReader->rawReaderSize_ * rank / numRecords;
+  auto offset = uint64_t(subReader->rawReaderOffset_ +
+                         1.0 * subReader->rawReaderSize_ * rank / numRecords);
   if (isReverseBytewiseOrder_) {
     subReader = subIndex_.GetSubReader(subIndex_.GetSubCount() - 1);
-    return uint64_t(estimateRatio_ * subReader->rawReaderSize_ - offset);
+    return subReader->rawReaderOffset_ + subReader->rawReaderSize_ - offset;
   }
-  return uint64_t(offset);
+  return offset;
 }
 
 TerarkZipTableMultiReader::~TerarkZipTableMultiReader() {
@@ -1623,7 +1610,6 @@ TerarkZipTableMultiReader::Open(RandomAccessFileReader* file, uint64_t file_size
   if (!s.ok()) {
     return s;
   }
-  estimateRatio_ = GetEstimateRatio(*props);
   long long t0 = g_pf.now();
 
   if (tzto_.warmUpIndexOnOpen) {

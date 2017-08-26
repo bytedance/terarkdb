@@ -156,7 +156,8 @@ private:
     , fstring tmpDictFile
     , const DictZipBlobStore::ZipStat& dzstat);
 #endif // TerocksPrivateCode
-  Status WriteMetaData(std::initializer_list<std::pair<const std::string*, BlockHandle> > blocks);
+  Status WriteMetaData(const TerarkZipMultiOffsetInfo& offsetInfo,
+                       std::initializer_list<std::pair<const std::string*, BlockHandle>> blocks);
   DictZipBlobStore::ZipBuilder* createZipBuilder() const;
 
   Arena arena_;
