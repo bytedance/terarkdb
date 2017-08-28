@@ -1745,7 +1745,7 @@ Status TerarkZipTableBuilder::WriteMetaData(const TerarkZipMultiOffsetInfo& offs
         terark::BigEndianDataInput <terark::MemIO> input;
         terark::BigEndianDataOutput<terark::MemIO> output;
         input.set((void*)Rdb_index_stats.data(), Rdb_index_stats.size());
-        uint64_t version;
+        uint64_t version = 0;
         input >> version;     // version
         assert(version >= 1); // INDEX_STATS_VERSION_INITIAL
         assert(version <= 2); // INDEX_STATS_VERSION_ENTRY_TYPES
@@ -1769,7 +1769,7 @@ Status TerarkZipTableBuilder::WriteMetaData(const TerarkZipMultiOffsetInfo& offs
           auto &info = offsetInfo.offset_[ii];
           output << uint64_t(info.key + info.value);
           input.skip(8);                  // actual_disk_size
-          uint64_t distinct_keys_per_prefix_size;
+          uint64_t distinct_keys_per_prefix_size = 0;
           input >> distinct_keys_per_prefix_size;
           if (version >= 2) { // INDEX_STATS_VERSION_ENTRY_TYPES
             // entry_deletes
