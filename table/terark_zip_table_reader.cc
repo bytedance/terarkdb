@@ -1245,10 +1245,13 @@ uint64_t TerarkZipTableReader::ApproximateOffsetOf(const Slice& ikey) {
   assert(&subReader_ == static_cast<TerarkZipTableIndexIterator*>(iter.get())->GetSubReader());
   size_t numRecords = subReader_.index_->NumKeys();
   size_t rank;
-  if (indexIter->Valid())
-    rank = numRecords;
-  else
+  if (iter->Valid()) {
+    assert(indexIter->Valid());
     rank = indexIter->DictRank();
+  }
+  else {
+    rank = numRecords;
+  }
   auto offset = uint64_t(subReader_.rawReaderSize_ * 1.0 * rank / numRecords);
   if (isReverseBytewiseOrder_)
     return subReader_.rawReaderSize_ - offset;
@@ -1483,7 +1486,7 @@ uint64_t TerarkZipTableMultiReader::ApproximateOffsetOf(const Slice& ikey) {
   auto subReader = iter->GetSubReader();
   size_t numRecords;
   size_t rank;
-  if (indexIter == nullptr) {
+  if (!iter->Valid()) {
     if (isReverseBytewiseOrder_) {
       subReader = subIndex_.GetSubReader(0);
       numRecords = subReader->index_->NumKeys();
@@ -1498,9 +1501,9 @@ uint64_t TerarkZipTableMultiReader::ApproximateOffsetOf(const Slice& ikey) {
   else {
     numRecords = subReader->index_->NumKeys();
     if (indexIter->Valid())
-      rank = numRecords;
-    else
       rank = indexIter->DictRank();
+    else
+      rank = numRecords;
   }
   auto offset = uint64_t(subReader->rawReaderOffset_ +
                          1.0 * subReader->rawReaderSize_ * rank / numRecords);

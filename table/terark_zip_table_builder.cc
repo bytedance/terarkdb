@@ -1745,7 +1745,7 @@ Status TerarkZipTableBuilder::WriteMetaData(const TerarkZipMultiOffsetInfo& offs
         terark::BigEndianDataInput <terark::MemIO> input;
         terark::BigEndianDataOutput<terark::MemIO> output;
         input.set((void*)Rdb_index_stats.data(), Rdb_index_stats.size());
-        uint64_t version = 0;
+        uint16_t version = 0;
         input >> version;     // version
         assert(version >= 1); // INDEX_STATS_VERSION_INITIAL
         assert(version <= 2); // INDEX_STATS_VERSION_ENTRY_TYPES
