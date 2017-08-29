@@ -182,7 +182,10 @@ class NestLoudsTrieIndex : public TerarkIndex {
     bool Prev() override { return Done(m_iter->decr()); }
     size_t DictRank() const override {
       assert(m_id != size_t(-1));
+#if defined(TerocksPrivateCode)
       return m_dawg->state_to_dict_rank(m_iter->word_state());
+#endif // TerocksPrivateCode
+      return m_id;
     }
   };
 public:

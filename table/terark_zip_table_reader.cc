@@ -1238,6 +1238,7 @@ TerarkZipTableReader::Get(const ReadOptions& ro, const Slice& ikey,
 }
 
 uint64_t TerarkZipTableReader::ApproximateOffsetOf(const Slice& ikey) {
+#if defined(TerocksPrivateCode)
   auto iter = UniquePtrOf(NewIterator(ReadOptions(), nullptr, false));
   iter->Seek(ikey);
   auto indexIter = static_cast<TerarkZipTableIndexIterator*>(iter.get())->GetIndexIterator();
@@ -1256,6 +1257,8 @@ uint64_t TerarkZipTableReader::ApproximateOffsetOf(const Slice& ikey) {
   if (isReverseBytewiseOrder_)
     return subReader_.rawReaderSize_ - offset;
   return offset;
+#endif // TerocksPrivateCode
+  return 0;
 }
 
 TerarkZipTableReader::~TerarkZipTableReader() {

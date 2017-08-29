@@ -201,8 +201,6 @@ struct ZipValueMultiValue {
   }
 };
 
-#if defined(TerocksPrivateCode)
-
 struct TerarkZipMultiOffsetInfo {
   struct KeyValueOffset {
     size_t key;
@@ -226,9 +224,6 @@ struct TerarkZipMultiOffsetInfo {
   bool risk_set_memory(const void*, size_t);
   void risk_release_ownership();
 };
-
-#endif // TerocksPrivateCode
-
 
 class TerarkZipTableFactory : public TableFactory, boost::noncopyable {
 public:

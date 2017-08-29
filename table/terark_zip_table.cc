@@ -484,8 +484,6 @@ float CollectInfo::estimate(float def_value) const {
   return ret ? ret : def_value;
 }
 
-#if defined(TerocksPrivateCode)
-
 size_t TerarkZipMultiOffsetInfo::calc_size(size_t prefixLen, size_t partCount) {
   BOOST_STATIC_ASSERT(sizeof(KeyValueOffset) % 16 == 0);
   return 16 + partCount * sizeof(KeyValueOffset) + terark::align_up(prefixLen * partCount, 16);
@@ -546,8 +544,6 @@ void TerarkZipMultiOffsetInfo::risk_release_ownership() {
   offset_.risk_release_ownership();
   prefixSet_.risk_release_ownership();
 }
-
-#endif // TerocksPrivateCode
 
 class TableFactory*
   NewTerarkZipTableFactory(const TerarkZipTableOptions& tzto,
