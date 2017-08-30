@@ -27,3 +27,14 @@
 *.exe
 *.out
 *.app
+
+.idea/
+.vs/
+*.tlog
+*.lastbuildstate
+*.idb
+*.pdb
+*.ilk
+*/x64/Debug/
+*/x64/Release/
+*/CMakeFiles/
