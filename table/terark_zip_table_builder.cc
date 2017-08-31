@@ -584,7 +584,7 @@ void TerarkZipTableBuilder::BuildIndex(BuildIndexParams& param, KeyValueStatus& 
   });
 }
 
-Status TerarkZipTableBuilder::WaitBuildIndex(bool abandon) {
+Status TerarkZipTableBuilder::WaitBuildIndex() {
   Status result = Status::OK();
   size_t offset = 0;
   for (auto& kvs : histogram_) {
@@ -592,9 +592,6 @@ Status TerarkZipTableBuilder::WaitBuildIndex(bool abandon) {
     kvs.indexFileBegin = offset;
     for (auto& ptr : kvs.build) {
       auto& param = *ptr;
-      if (abandon && !param.wait.valid()) {
-        continue;
-      }
       assert(param.wait.valid());
       auto subResult = param.wait.get();
       offset += param.indexFileEnd - param.indexFileBegin;
@@ -915,7 +912,7 @@ ZipValueToFinish() {
   }
   DebugCleanup();
   // wait for indexing complete, if indexing is slower than value compressing
-  Status indexBuildResult = WaitBuildIndex(false);
+  Status indexBuildResult = WaitBuildIndex();
   if (!indexBuildResult.ok()) {
     return indexBuildResult;
   }
@@ -1016,7 +1013,7 @@ ZipValueToFinishMulti() {
   dzstat.dictZipTime = g_pf.sf(t3, t4);
 
   DebugCleanup();
-  Status indexBuildResult = WaitBuildIndex(false);
+  Status indexBuildResult = WaitBuildIndex();
   if (!indexBuildResult.ok()) {
     return indexBuildResult;
   }
@@ -1865,8 +1862,19 @@ Status TerarkZipTableBuilder::OfflineFinish() {
 }
 
 void TerarkZipTableBuilder::Abandon() {
-  WaitBuildIndex(true);
+  assert(!closed_);
   closed_ = true;
+  for (auto& kvs : histogram_) {
+    for (auto& ptr : kvs.build) {
+      auto& param = *ptr;
+      if (param.wait.valid()) {
+        param.wait.get();
+      }
+      else {
+        param.data.complete_write();
+      }
+    }
+  }
   histogram_.clear();
   tmpValueFile_.complete_write();
   tmpSampleFile_.complete_write();

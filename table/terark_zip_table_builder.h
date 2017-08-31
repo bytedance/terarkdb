@@ -111,7 +111,7 @@ private:
   Status EmptyTableFinish();
   Status OfflineFinish();
   void BuildIndex(BuildIndexParams& param, KeyValueStatus& kvs);
-  Status WaitBuildIndex(bool abandon);
+  Status WaitBuildIndex();
   struct BuildReorderParams {
     AutoDeleteFile tmpReorderFile;
     bitfield_array<2> type;
