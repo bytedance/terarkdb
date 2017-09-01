@@ -24,6 +24,7 @@
 #include <terark/valvec.hpp>
 #include <terark/stdtypes.hpp>
 #include <terark/util/profiling.hpp>
+#include <terark/zbs/lru_page_cache.hpp>
 
 
 //#define TERARK_SUPPORT_UINT64_COMPARATOR
@@ -43,6 +44,7 @@ namespace rocksdb {
 using terark::fstring;
 using terark::valvec;
 using terark::byte_t;
+using terark::LruReadonlyCache;
 
 
 extern terark::profiling g_pf;
@@ -228,14 +230,8 @@ struct TerarkZipMultiOffsetInfo {
 class TerarkZipTableFactory : public TableFactory, boost::noncopyable {
 public:
   explicit
-    TerarkZipTableFactory(const TerarkZipTableOptions& tzto, TableFactory* fallback)
-    : table_options_(tzto), fallback_factory_(fallback) {
-    adaptive_factory_ = NewAdaptiveTableFactory();
-  }
-  ~TerarkZipTableFactory() {
-      delete fallback_factory_;
-      delete adaptive_factory_;
-  }
+  TerarkZipTableFactory(const TerarkZipTableOptions& tzto, TableFactory* fallback);
+  ~TerarkZipTableFactory();
 
   const char* Name() const override { return "TerarkZipTable"; }
 
@@ -261,10 +257,13 @@ public:
 
   bool IsDeleteRangeSupported() const override { return true; }
 
+  LruReadonlyCache* cache() const { return cache_.get(); }
+
 private:
   TerarkZipTableOptions table_options_;
   TableFactory* fallback_factory_;
   TableFactory* adaptive_factory_; // just for open table
+  boost::intrusive_ptr<LruReadonlyCache> cache_;
   mutable size_t nth_new_terark_table_ = 0;
   mutable size_t nth_new_fallback_table_ = 0;
 private:

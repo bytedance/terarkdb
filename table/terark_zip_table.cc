@@ -618,6 +618,21 @@ size_t GetFixedPrefixLen(const SliceTransform* tr) {
 
 #endif // TerocksPrivateCode
 
+TerarkZipTableFactory::TerarkZipTableFactory(
+    const TerarkZipTableOptions& tzto, TableFactory* fallback)
+: table_options_(tzto), fallback_factory_(fallback) {
+    adaptive_factory_ = NewAdaptiveTableFactory();
+    if (tzto.minPreadLen >= 0 && tzto.cacheCapacityBytes) {
+        cache_.reset(LruReadonlyCache::create(
+            tzto.cacheCapacityBytes, tzto.cacheShards));
+    }
+}
+
+TerarkZipTableFactory::~TerarkZipTableFactory() {
+    delete fallback_factory_;
+    delete adaptive_factory_;
+}
+
 Status
 TerarkZipTableFactory::NewTableReader(
   const TableReaderOptions& table_reader_options,
@@ -842,6 +857,8 @@ ret.append(buffer, snprintf(buffer, kBufferSize, fmt "\n", value))
   M_APPEND("hardZipWorkingMemLimit   : %.3fGB", tzto.hardZipWorkingMemLimit / gb);
   M_APPEND("smallTaskMemory          : %.3fGB", tzto.smallTaskMemory / gb);
   M_APPEND("singleIndexMemLimit      : %.3fGB", tzto.singleIndexMemLimit / gb);
+  M_APPEND("cacheCapacityBytes       : %.3fGB", tzto.cacheCapacityBytes / gb);
+  M_APPEND("cacheShards              : %d", tzto.cacheShards);
 
 #undef M_APPEND
 

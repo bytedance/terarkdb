@@ -9,7 +9,8 @@
 // terark headers
 #include <terark/lcast.hpp>
 #include <terark/util/crc.hpp>
-
+#include <sys/unistd.h>
+#include <fcntl.h>
 
 namespace {
 using namespace rocksdb;
@@ -842,7 +843,7 @@ void TerarkZipSubReader::GetRecordAppend(size_t recId, valvec<byte_t>* tbuf,
                                          uint32_t offset, uint32_t length) const {
   if (0 == offset && UINT32_MAX == length) {
     if (storeUsePread_)
-      store_->pread_record_append(storeFD_, storeOffset_, recId, tbuf);
+      store_->pread_record_append(cache_, storeFD_, storeOffset_, recId, tbuf);
     else
       store_->get_record_append(recId, tbuf);
   }
@@ -857,7 +858,7 @@ void TerarkZipSubReader::GetRecordAppend(size_t recId, valvec<byte_t>* tbuf,
 
 void TerarkZipSubReader::GetRecordAppend(size_t recId, valvec<byte_t>* tbuf) const {
   if (storeUsePread_)
-    store_->pread_record_append(storeFD_, storeOffset_, recId, tbuf);
+    store_->pread_record_append(cache_, storeFD_, storeOffset_, recId, tbuf);
   else
     store_->get_record_append(recId, tbuf);
 }
@@ -1141,6 +1142,12 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   subReader_.InitUsePread(tzto_.minPreadLen);
   subReader_.rawReaderOffset_ = 0;
   subReader_.rawReaderSize_ = indexBlock.data.size() + props->data_size;
+  if (subReader_.storeUsePread_) {
+    subReader_.cache_ = table_factory_->cache();
+    if (subReader_.cache_) {
+      subReader_.storeFD_ = subReader_.cache_->open(subReader_.storeFD_);
+    }
+  }
   long long t0 = g_pf.now();
   if (tzto_.warmUpIndexOnOpen) {
     MmapWarmUp(fstringOf(indexBlock.data));
@@ -1150,7 +1157,7 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
       }
     }
   }
-  if (tzto_.warmUpValueOnOpen) {
+  if (tzto_.warmUpValueOnOpen && !subReader_.storeUsePread_) {
     MmapWarmUp(subReader_.store_->get_mmap());
   } else {
     //MmapColdize(subReader_.store_->get_mmap());
@@ -1262,6 +1269,11 @@ uint64_t TerarkZipTableReader::ApproximateOffsetOf(const Slice& ikey) {
 }
 
 TerarkZipTableReader::~TerarkZipTableReader() {
+  if (subReader_.storeUsePread_) {
+    if (subReader_.cache_) {
+      subReader_.cache_->close(subReader_.storeFD_);
+    }
+  }
 }
 
 TerarkZipTableReader::TerarkZipTableReader(const TerarkZipTableFactory* table_factory,
@@ -1348,6 +1360,13 @@ TerarkZipTableMultiReader::SubIndex::GetSubReaderBytewiseReverse(fstring key) co
   return &subReader_[index - 1];
 }
 
+TerarkZipTableMultiReader::SubIndex::~SubIndex() {
+  if (cache_fi_ >= 0) {
+    assert(nullptr != cache_);
+    cache_->close(cache_fi_);
+  }
+}
+
 Status TerarkZipTableMultiReader::SubIndex::Init(
                       fstring offsetMemory,
                       fstring indexMempry,
@@ -1357,6 +1376,7 @@ Status TerarkZipTableMultiReader::SubIndex::Init(
                       fstring commonPrefixMemory,
                       int minPreadLen,
                       intptr_t fileFD,
+                      LruReadonlyCache* cache,
                       bool reverse)
 {
   TerarkZipMultiOffsetInfo offset;
@@ -1366,6 +1386,7 @@ Status TerarkZipTableMultiReader::SubIndex::Init(
   TERARK_SCOPE_EXIT(offset.risk_release_ownership());
   subReader_.reserve(offset.partCount_);
 
+  cache_ = cache;
   partCount_ = offset.partCount_;
   prefixLen_ = offset.prefixLen_;
   alignedPrefixLen_ = terark::align_up(prefixLen_, 8);
@@ -1397,6 +1418,7 @@ Status TerarkZipTableMultiReader::SubIndex::Init(
   TerarkZipMultiOffsetInfo::KeyValueOffset last = {0, 0, 0, 0};
   size_t rawSize = 0;
   try {
+    cache_fi_ = -1;
     for (size_t i = 0; i < partCount_; ++i) {
       subReader_.push_back();
       auto& part = subReader_.back();
@@ -1416,8 +1438,29 @@ Status TerarkZipTableMultiReader::SubIndex::Init(
                                 curr.commonPrefix - last.commonPrefix);
       part.rawReaderOffset_ = rawSize;
       part.rawReaderSize_ = (curr.key - last.key) + dataMem.size();
+      if (part.storeUsePread_ && cache) {
+        if (cache_fi_ < 0) {
+          cache_fi_ = cache->open(part.storeFD_);
+        }
+        part.cache_ = cache;
+        part.storeFD_ = cache_fi_;
+      }
       rawSize += part.rawReaderSize_;
       last = curr;
+    }
+    if (cache_fi_ >= 0) {
+      assert(nullptr != cache_);
+#ifdef OS_MACOSX
+      if (fcntl(fd, F_NOCACHE, 1) == -1) {
+        return IOError("While fcntl NoCache"
+            , "O_DIRECT is required for terark user space cache");
+      }
+#else
+      if (fcntl(fileFD, F_SETFL, fcntl(fileFD, F_GETFD) | O_DIRECT) == -1) {
+        return Status::IOError("While fcntl NoCache"
+            , "O_DIRECT is required for terark user space cache");
+      }
+#endif
     }
   }
   catch (const std::exception& ex) {
@@ -1611,6 +1654,7 @@ TerarkZipTableMultiReader::Open(RandomAccessFileReader* file, uint64_t file_size
     , fstringOf(commonPrefixBlock.data)
     , tzto_.minPreadLen
     , file_->file()->FileDescriptor()
+    , table_factory_->cache()
     , isReverseBytewiseOrder_
   );
   if (!s.ok()) {

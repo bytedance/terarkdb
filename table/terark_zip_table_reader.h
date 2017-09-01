@@ -117,6 +117,7 @@ private:
 };
 
 struct TerarkZipSubReader {
+  LruReadonlyCache* cache_ = nullptr;
   size_t subIndex_;
   size_t rawReaderOffset_;
   size_t rawReaderSize_;
@@ -241,6 +242,8 @@ public:
 
   class SubIndex {
   private:
+    LruReadonlyCache* cache_ = nullptr;
+    intptr_t cache_fi_ = -1;
     size_t partCount_;
     size_t prefixLen_;
     size_t alignedPrefixLen_;
@@ -261,6 +264,7 @@ public:
     const TerarkZipSubReader* GetSubReaderBytewiseReverse(fstring key) const;
 
   public:
+    ~SubIndex();
     Status Init(fstring offsetMemory,
                 fstring indexMempry,
                 fstring storeMemory,
@@ -269,6 +273,7 @@ public:
                 fstring commonPrefixMemory,
                 int minPreadLen,
                 intptr_t fileFD,
+                LruReadonlyCache* cache,
                 bool reverse);
     size_t GetPrefixLen() const;
     size_t GetSubCount() const;

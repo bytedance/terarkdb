@@ -111,7 +111,9 @@ struct TerarkZipTableOptions {
   /// == 0: always use pread
   ///  > 0: use pread if BlobStore avg record len > minPreadLen
   int    minPreadLen         = -1;
-  char   reserveBytes[36]    = {};
+  int    cacheShards         = 17; // to reduce lock competition
+  size_t cacheCapacityBytes  = 0;  // non-zero implies direct io read
+  char   reserveBytes[24]    = {};
 };
 
 void TerarkZipDeleteTempFiles(const std::string& tmpPath);
