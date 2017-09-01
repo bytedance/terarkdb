@@ -26,6 +26,7 @@
 #include <terark/util/profiling.hpp>
 #include <terark/zbs/lru_page_cache.hpp>
 
+#include <boost/intrusive_ptr.hpp>
 
 //#define TERARK_SUPPORT_UINT64_COMPARATOR
 //#define DEBUG_TWO_PASS_ITER
