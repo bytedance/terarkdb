@@ -9,8 +9,11 @@
 // terark headers
 #include <terark/lcast.hpp>
 #include <terark/util/crc.hpp>
-#include <sys/unistd.h>
-#include <fcntl.h>
+
+#ifndef _MSC_VER
+# include <sys/unistd.h>
+# include <fcntl.h>
+#endif
 
 namespace {
 using namespace rocksdb;
@@ -1448,6 +1451,7 @@ Status TerarkZipTableMultiReader::SubIndex::Init(
       rawSize += part.rawReaderSize_;
       last = curr;
     }
+#ifndef _MSC_VER
     if (cache_fi_ >= 0) {
       assert(nullptr != cache_);
 #ifdef OS_MACOSX
@@ -1462,6 +1466,7 @@ Status TerarkZipTableMultiReader::SubIndex::Init(
       }
 #endif
     }
+#endif
   }
   catch (const std::exception& ex) {
     subReader_.clear();

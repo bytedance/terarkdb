@@ -15,6 +15,8 @@
 // std headers
 #include <mutex>
 #include <atomic>
+// boost headers
+#include <boost/intrusive_ptr.hpp>
 // rocksdb headers
 #include <rocksdb/slice.h>
 #include <rocksdb/env.h>
@@ -25,8 +27,6 @@
 #include <terark/stdtypes.hpp>
 #include <terark/util/profiling.hpp>
 #include <terark/zbs/lru_page_cache.hpp>
-
-#include <boost/intrusive_ptr.hpp>
 
 //#define TERARK_SUPPORT_UINT64_COMPARATOR
 //#define DEBUG_TWO_PASS_ITER
