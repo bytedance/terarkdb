@@ -1325,9 +1325,10 @@ TerarkZipTableMultiReader::SubIndex::GetSubReaderU64Binary(fstring key) const {
 }
 
 const TerarkZipSubReader*
-TerarkZipTableMultiReader::SubIndex::GetSubReaderU64BinaryReverse(fstring key) const {
+TerarkZipTableMultiReader::SubIndex::GetSubReaderU64BinaryReverse(fstring key)
+const {
   byte_t targetBuffer[8] = {};
-  memcpy(targetBuffer + (8 - prefixLen_), key.data(), std::min<size_t>(prefixLen_, key.size()));
+  memcpy(targetBuffer + (8 - prefixLen_), key.data(), std::min(prefixLen_, key.size()));
   uint64_t targetValue = ReadUint64Aligned(targetBuffer, targetBuffer + 8);
   auto ptr = (const uint64_t*)prefixSet_.data();
   auto index = terark::upper_bound_n(ptr, 0, partCount_, targetValue);
@@ -1338,7 +1339,8 @@ TerarkZipTableMultiReader::SubIndex::GetSubReaderU64BinaryReverse(fstring key) c
 }
 
 const TerarkZipSubReader*
-TerarkZipTableMultiReader::SubIndex::GetSubReaderBytewise(fstring key) const {
+TerarkZipTableMultiReader::SubIndex::GetSubReaderBytewise(fstring key)
+const {
   if (key.size() > prefixLen_) {
     key = fstring(key.data(), prefixLen_);
   }
@@ -1351,7 +1353,8 @@ TerarkZipTableMultiReader::SubIndex::GetSubReaderBytewise(fstring key) const {
 }
 
 const TerarkZipSubReader*
-TerarkZipTableMultiReader::SubIndex::GetSubReaderBytewiseReverse(fstring key) const {
+TerarkZipTableMultiReader::SubIndex::GetSubReaderBytewiseReverse(fstring key)
+const {
   if (key.size() > prefixLen_) {
     key = fstring(key.data(), prefixLen_);
   }
@@ -1483,40 +1486,47 @@ size_t TerarkZipTableMultiReader::SubIndex::GetSubCount() const {
   return partCount_;
 }
 
-const TerarkZipSubReader* TerarkZipTableMultiReader::SubIndex::GetSubReader(size_t i) const {
+const TerarkZipSubReader*
+TerarkZipTableMultiReader::SubIndex::GetSubReader(size_t i) const {
   return &subReader_[i];
 }
 
-const TerarkZipSubReader* TerarkZipTableMultiReader::SubIndex::GetSubReader(fstring key) const {
+const TerarkZipSubReader*
+TerarkZipTableMultiReader::SubIndex::GetSubReader(fstring key) const {
   return (this->*GetSubReaderPtr)(key);
 }
 
-InternalIterator* TerarkZipTableMultiReader::NewIterator(const ReadOptions& ro,
-  Arena *arena, bool skip_filters) {
+InternalIterator*
+TerarkZipTableMultiReader::NewIterator(const ReadOptions& ro,
+                                       Arena *arena, bool skip_filters) {
   (void)skip_filters; // unused
   if (isReverseBytewiseOrder_) {
+    typedef TerarkZipTableMultiIterator<true>  IterType;
     if (arena) {
-      return new(arena->AllocateAligned(sizeof(TerarkZipTableMultiIterator<true>)))
-        TerarkZipTableMultiIterator<true>(table_reader_options_, subIndex_, ro, global_seqno_);
+      return new(arena->AllocateAligned(sizeof(IterType)))
+        IterType(table_reader_options_, subIndex_, ro, global_seqno_);
     }
     else {
-      return new TerarkZipTableMultiIterator<true>(table_reader_options_, subIndex_, ro, global_seqno_);
+      return new
+        IterType(table_reader_options_, subIndex_, ro, global_seqno_);
     }
   }
   else {
+    typedef TerarkZipTableMultiIterator<false> IterType;
     if (arena) {
-      return new(arena->AllocateAligned(sizeof(TerarkZipTableMultiIterator<false>)))
-        TerarkZipTableMultiIterator<false>(table_reader_options_, subIndex_, ro, global_seqno_);
+      return new(arena->AllocateAligned(sizeof(IterType)))
+        IterType(table_reader_options_, subIndex_, ro, global_seqno_);
     }
     else {
-      return new TerarkZipTableMultiIterator<false>(table_reader_options_, subIndex_, ro, global_seqno_);
+      return new
+        IterType(table_reader_options_, subIndex_, ro, global_seqno_);
     }
   }
 }
 
 Status
 TerarkZipTableMultiReader::Get(const ReadOptions& ro, const Slice& ikey,
-  GetContext* get_context, bool skip_filters) {
+                               GetContext* get_context, bool skip_filters) {
   int flag = skip_filters ? TerarkZipSubReader::FlagSkipFilter : TerarkZipSubReader::FlagNone;
   if (ikey.size() < 8 + subIndex_.GetPrefixLen()) {
     return Status::InvalidArgument("TerarkZipTableMultiReader::Get()",
