@@ -224,7 +224,7 @@ public:
 };
 
 template<bool reverse>
-class TerarkZipTableIterator : public TerarkZipTableIndexIterator, boost::noncopyable {
+class TerarkZipTableIterator : public TerarkZipTableIndexIterator {
 protected:
   const TableReaderOptions* table_reader_options_;
   SequenceNumber          global_seqno_;
@@ -859,15 +859,18 @@ void TerarkZipSubReader::GetRecordAppend(size_t recId, valvec<byte_t>* tbuf,
   }
 }
 
-void TerarkZipSubReader::GetRecordAppend(size_t recId, valvec<byte_t>* tbuf) const {
+void TerarkZipSubReader::GetRecordAppend(size_t recId, valvec<byte_t>* tbuf)
+const {
   if (storeUsePread_)
     store_->pread_record_append(cache_, storeFD_, storeOffset_, recId, tbuf);
   else
     store_->get_record_append(recId, tbuf);
 }
 
-Status TerarkZipSubReader::Get(SequenceNumber global_seqno, const ReadOptions& ro, const Slice& ikey,
-                               GetContext* get_context, int flag) const {
+Status TerarkZipSubReader::Get(SequenceNumber global_seqno,
+                               const ReadOptions& ro, const Slice& ikey,
+                               GetContext* get_context, int flag)
+const {
   (void)flag;
   MY_THREAD_LOCAL(valvec<byte_t>, g_tbuf);
   ParsedInternalKey pikey;
@@ -1578,13 +1581,15 @@ uint64_t TerarkZipTableMultiReader::ApproximateOffsetOf(const Slice& ikey) {
 TerarkZipTableMultiReader::~TerarkZipTableMultiReader() {
 }
 
-TerarkZipTableMultiReader::TerarkZipTableMultiReader(const TerarkZipTableFactory* table_factory,
-                                                     const TableReaderOptions& tro,
-                                                     const TerarkZipTableOptions& tzto)
+TerarkZipTableMultiReader::TerarkZipTableMultiReader(
+              const TerarkZipTableFactory* table_factory,
+              const TableReaderOptions& tro,
+              const TerarkZipTableOptions& tzto)
   : table_reader_options_(tro)
   , table_factory_(table_factory)
   , global_seqno_(kDisableGlobalSequenceNumber)
   , tzto_(tzto)
+  , estimateRatio_(tzto.estimateCompressionRatio)
 {
   isReverseBytewiseOrder_ = false;
 }
