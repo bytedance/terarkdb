@@ -1590,7 +1590,6 @@ TerarkZipTableMultiReader::TerarkZipTableMultiReader(
   , table_factory_(table_factory)
   , global_seqno_(kDisableGlobalSequenceNumber)
   , tzto_(tzto)
-  , estimateRatio_(tzto.estimateCompressionRatio)
 {
   isReverseBytewiseOrder_ = false;
 }

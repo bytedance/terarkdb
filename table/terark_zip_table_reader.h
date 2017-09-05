@@ -297,7 +297,6 @@ private:
   const TerarkZipTableFactory* table_factory_;
   std::shared_ptr<const TableProperties> table_properties_;
   SequenceNumber global_seqno_;
-  double estimateRatio_;
   const TerarkZipTableOptions& tzto_;
   bool isReverseBytewiseOrder_;
 };
