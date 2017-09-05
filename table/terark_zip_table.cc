@@ -896,4 +896,19 @@ const {
   return Status::OK();
 }
 
+bool TerarkZipTablePrintCacheStat(const TableFactory* factory, FILE* fp) {
+  auto tztf = dynamic_cast<const TerarkZipTableFactory*>(factory);
+  if (tztf) {
+    if (tztf->cache()) {
+      tztf->cache()->print_stat_cnt(fp);
+      return true;
+    } else {
+      fprintf(fp, "PrintCacheStat: terark user cache == nullptr\n");
+    }
+  } else {
+    fprintf(fp, "PrintCacheStat: factory is not TerarkZipTableFactory\n");
+  }
+  return false;
+}
+
 } /* namespace rocksdb */

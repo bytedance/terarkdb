@@ -12,6 +12,7 @@
 
 #include <string>
 #include <vector>
+#include <stdio.h>
 
 
 #define TerocksPrivateCode
@@ -149,6 +150,8 @@ TerarkZipMultiCFOptionsFromEnv(const struct DBOptions& db_options,
 class TableFactory*
 NewTerarkZipTableFactory(const TerarkZipTableOptions&,
 						 class TableFactory* fallback);
+
+bool TerarkZipTablePrintCacheStat(const class TableFactory*, FILE*);
 
 }  // namespace rocksdb
 
