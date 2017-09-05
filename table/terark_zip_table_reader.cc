@@ -1443,7 +1443,7 @@ Status TerarkZipTableMultiReader::SubIndex::Init(
       part.rawReaderSize_ = (curr.key - last.key) + dataMem.size();
       if (part.storeUsePread_ && cache) {
         if (cache_fi_ < 0) {
-          cache_fi_ = cache->open(part.storeFD_);
+          cache_fi_ = cache->open(fileFD);
         }
         part.cache_ = cache;
         part.storeFD_ = cache_fi_;
