@@ -62,7 +62,7 @@ void AssignUint64(byte_t* beg, byte_t* end, uint64_t value) {
 #endif // TerocksPrivateCode
 
 const char* StrDateTimeNow() {
-  thread_local char buf[64];
+  static thread_local char buf[64];
   time_t rawtime;
   time(&rawtime);
   struct tm* timeinfo = localtime(&rawtime);

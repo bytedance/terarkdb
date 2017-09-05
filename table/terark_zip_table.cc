@@ -388,7 +388,7 @@ void LicenseInfo::print_error(const char* file_name, bool startup, rocksdb::Logg
       info << file;
     }
     if (time) {
-      thread_local char buf[64];
+      char buf[64];
       std::time_t rawtime = time / 1000;
       struct tm* timeinfo = gmtime(&rawtime);
       strftime(buf, sizeof(buf), "%F %T", timeinfo);
