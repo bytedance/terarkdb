@@ -1375,7 +1375,7 @@ TerarkZipTableMultiReader::SubIndex::~SubIndex() {
 
 Status TerarkZipTableMultiReader::SubIndex::Init(
                       fstring offsetMemory,
-                      fstring indexMempry,
+                      fstring indexMemory,
                       fstring storeMemory,
                       terark::BlobStore::Dictionary dict,
                       fstring typeMemory,
@@ -1433,7 +1433,7 @@ Status TerarkZipTableMultiReader::SubIndex::Init(
       part.storeFD_ = fileFD;
       part.storeOffset_ = last.value;
       part.prefix_.assign(offset.prefixSet_.data() + i * prefixLen_, prefixLen_);
-      part.index_ = TerarkIndex::LoadMemory({indexMempry.data() + last.key,
+      part.index_ = TerarkIndex::LoadMemory({indexMemory.data() + last.key,
                                              ptrdiff_t(curr.key - last.key)});
       fstring dataMem(storeMemory.data() + last.value, curr.value - last.value);
       part.store_.reset(BlobStore::load_from_user_memory(dataMem, dict));

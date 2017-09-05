@@ -266,7 +266,7 @@ public:
   public:
     ~SubIndex();
     Status Init(fstring offsetMemory,
-                fstring indexMempry,
+                fstring indexMemory,
                 fstring storeMemory,
                 terark::BlobStore::Dictionary dict,
                 fstring typeMemory,
