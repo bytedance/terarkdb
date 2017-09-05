@@ -843,7 +843,8 @@ void TerarkZipSubReader::InitUsePread(int minPreadLen) {
 }
 
 void TerarkZipSubReader::GetRecordAppend(size_t recId, valvec<byte_t>* tbuf,
-                                         uint32_t offset, uint32_t length) const {
+                                         uint32_t offset, uint32_t length)
+const {
   if (0 == offset && UINT32_MAX == length) {
     if (storeUsePread_)
       store_->pread_record_append(cache_, storeFD_, storeOffset_, recId, tbuf);
