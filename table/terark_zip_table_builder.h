@@ -173,6 +173,7 @@ private:
   TerarkIndex::KeyStat *currentStat_ = nullptr;
   valvec<byte_t> prevUserKey_;
   terark::febitvec valueBits_;
+  size_t bitPosUnique_ = 0;
   TempFileDeleteOnClose tmpValueFile_;
   TempFileDeleteOnClose tmpSampleFile_;
   AutoDeleteFile tmpIndexFile_;

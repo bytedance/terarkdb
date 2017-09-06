@@ -1041,7 +1041,7 @@ TerarkZipTableBuilder::BuilderWriteValues(NativeDataInput<InputBuffer>& input,
   {
     valvec<byte_t> value;
     size_t entryId = 0;
-    size_t bitPos = 0;
+    size_t bitPos = bitPosUnique_;
     for (size_t recId = 0; recId < kvs.key.m_cnt_sum ; recId++) {
       uint64_t seqType = input.load_as<uint64_t>();
       uint64_t seqNum;
@@ -1086,6 +1086,7 @@ TerarkZipTableBuilder::BuilderWriteValues(NativeDataInput<InputBuffer>& input,
       bitPos += oneSeqLen + 1;
       entryId += oneSeqLen;
     }
+    bitPosUnique_ = bitPos;
     // tmpValueFile_ ignore kTypeRangeDeletion keys
     // so entryId may less than properties_.num_entries
     assert(entryId <= properties_.num_entries);
@@ -1094,7 +1095,7 @@ TerarkZipTableBuilder::BuilderWriteValues(NativeDataInput<InputBuffer>& input,
   {
     valvec<byte_t> value;
     size_t entryId = 0;
-    size_t bitPos = 0;
+    size_t bitPos = bitPosUnique_;
     bool veriftKey = table_options_.debugLevel == 2 || table_options_.debugLevel == 3;
     bool veriftValue = table_options_.debugLevel == 3;
     bool dumpKeyValue = table_options_.debugLevel == 4;
@@ -1205,6 +1206,7 @@ TerarkZipTableBuilder::BuilderWriteValues(NativeDataInput<InputBuffer>& input,
       bitPos += oneSeqLen + 1;
       entryId += oneSeqLen;
     }
+    bitPosUnique_ = bitPos;
     // second pass no range deletion ...
     //assert(entryId <= properties_.num_entries);
   }
