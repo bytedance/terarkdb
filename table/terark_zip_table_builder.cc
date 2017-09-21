@@ -12,6 +12,7 @@
 #include <terark/util/sortable_strvec.hpp>
 #include <terark/io/MemStream.hpp>
 #include <terark/lcast.hpp>
+#include <terark/num_to_str.hpp>
 #if defined(TerocksPrivateCode)
 # include <terark/zbs/zero_length_blob_store.hpp>
 # include <terark/zbs/plain_blob_store.hpp>
