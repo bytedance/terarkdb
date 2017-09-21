@@ -128,10 +128,10 @@ private:
     fstring fpath;
     size_t offset;
   };
-  void buildZeroLengthBlobStore(BuildStoreParams& params);
-  void buildPlainBlobStore(BuildStoreParams& params);
-  void buildMixedLenBlobStore(BuildStoreParams& params);
-  void buildZipOffsetBlobStore(BuildStoreParams& params);
+  Status buildZeroLengthBlobStore(BuildStoreParams& params);
+  Status buildPlainBlobStore(BuildStoreParams& params);
+  Status buildMixedLenBlobStore(BuildStoreParams& params);
+  Status buildZipOffsetBlobStore(BuildStoreParams& params);
 #endif // TerocksPrivateCode
   Status ZipValueToFinish();
 #if defined(TerocksPrivateCode)
@@ -139,7 +139,7 @@ private:
 #endif // TerocksPrivateCode
   void DebugPrepare();
   void DebugCleanup();
-  void BuilderWriteValues(NativeDataInput<InputBuffer>& tmpValueFileinput
+  Status BuilderWriteValues(NativeDataInput<InputBuffer>& tmpValueFileinput
     , KeyValueStatus& kvs, std::function<void(fstring val)> write);
   void DoWriteAppend(const void* data, size_t size);
   Status WriteStore(fstring indexMmap, BlobStore* store

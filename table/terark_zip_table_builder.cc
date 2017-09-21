@@ -526,14 +526,16 @@ Status TerarkZipTableBuilder::Finish() {
 
 void TerarkZipTableBuilder::BuildIndex(BuildIndexParams& param, KeyValueStatus& kvs) {
   assert(param.stat.numKeys > 0);
-  if (param.stat.numKeys > 1 && kvs.split == 0) {
+  size_t rawKeySize = kvs.key.m_cnt_sum * (8 + param.stat.commonPrefixLen) + kvs.key.m_total_key_len;
+  size_t split = kvs.split;
+  if (param.stat.numKeys > 1 && split == 0) {
     param.stat.commonPrefixLen = fstring(param.stat.minKey).commonPrefixLen(param.stat.maxKey);
   }
   param.data.complete_write();
   param.wait = std::async(std::launch::async, [&]() {
     auto& keyStat = param.stat;
     const TerarkIndex::Factory* factory;
-    if (kvs.split != 0) {
+    if (split != 0) {
       factory = TerarkIndex::GetFactory("IL_256");
     }
     else {
@@ -574,7 +576,6 @@ void TerarkZipTableBuilder::BuildIndex(BuildIndexParams& param, KeyValueStatus& 
     assert(param.indexFileEnd - param.indexFileBegin == fileSize);
     assert(fileSize % 8 == 0);
     long long tt = g_pf.now();
-    size_t rawKeySize = kvs.key.m_cnt_sum * (8 + keyStat.commonPrefixLen) + kvs.key.m_total_key_len;
     INFO(ioptions_.info_log
       , "TerarkZipTableBuilder::Finish():this=%012p:  index pass time =%8.2f's,%8.3f'MB/sec\n"
       , this, g_pf.sf(t1, tt), rawKeySize*1.0 / g_pf.uf(t1, tt)
@@ -783,26 +784,32 @@ LoadSample(std::unique_ptr<DictZipBlobStore::ZipBuilder>& zbuilder) {
 }
 
 #if defined(TerocksPrivateCode)
-void TerarkZipTableBuilder::buildZeroLengthBlobStore(BuildStoreParams &params) {
+Status TerarkZipTableBuilder::buildZeroLengthBlobStore(BuildStoreParams &params) {
   auto& kvs = params.kvs;
   auto store = UniquePtrOf(new terark::ZeroLengthBlobStore());
-  BuilderWriteValues(params.input, kvs, [&](fstring value) { assert(value.empty()); });
-  store->finish(kvs.key.m_cnt_sum);
-  FileStream file(params.fpath, "ab+");
-  store->save_mmap([&](const void* d, size_t s) {
-    file.ensureWrite(d, s);
-  });
+  auto s = BuilderWriteValues(params.input, kvs, [&](fstring value) { assert(value.empty()); });
+  if (s.ok()) {
+    store->finish(kvs.key.m_cnt_sum);
+    FileStream file(params.fpath, "ab+");
+    store->save_mmap([&](const void* d, size_t s) {
+      file.ensureWrite(d, s);
+    });
+  }
+  return s;
 };
-void TerarkZipTableBuilder::buildPlainBlobStore(BuildStoreParams &params) {
+Status TerarkZipTableBuilder::buildPlainBlobStore(BuildStoreParams &params) {
   auto& kvs = params.kvs;
   size_t workingMemory =
       UintVecMin0::compute_mem_size_by_max_val(kvs.value.m_total_key_len, kvs.key.m_cnt_sum);
   params.handle = WaitForMemory("plain", workingMemory);
   terark::PlainBlobStore::MyBuilder builder(kvs.value.m_total_key_len, params.fpath, params.offset);
-  BuilderWriteValues(params.input, kvs, [&](fstring value) { builder.addRecord(value); });
-  builder.finish();
+  auto s = BuilderWriteValues(params.input, kvs, [&](fstring value) { builder.addRecord(value); });
+  if (s.ok()) {
+    builder.finish();
+  }
+  return s;
 };
-void TerarkZipTableBuilder::buildMixedLenBlobStore(BuildStoreParams &params) {
+Status TerarkZipTableBuilder::buildMixedLenBlobStore(BuildStoreParams &params) {
   auto& kvs = params.kvs;
   size_t fixedLen = kvs.value.m_max_cnt_key;
   size_t fixedLenCount = kvs.value.m_cnt_of_max_cnt_key;
@@ -819,17 +826,23 @@ void TerarkZipTableBuilder::buildMixedLenBlobStore(BuildStoreParams &params) {
     builder.reset(new terark::MixedLenBlobStore64::MyBuilder(
         fixedLen, varDataLen, params.fpath, params.offset));
   }
-  BuilderWriteValues(params.input, kvs, [&](fstring value) { builder->addRecord(value); });
-  builder->finish();
+  auto s = BuilderWriteValues(params.input, kvs, [&](fstring value) { builder->addRecord(value); });
+  if (s.ok()) {
+    builder->finish();
+  }
+  return s;
 };
-void TerarkZipTableBuilder::buildZipOffsetBlobStore(BuildStoreParams &params) {
+Status TerarkZipTableBuilder::buildZipOffsetBlobStore(BuildStoreParams &params) {
   auto& kvs = params.kvs;
   size_t workingMemory = kvs.key.m_cnt_sum ;
   params.handle = WaitForMemory("zipOffset", workingMemory);
   size_t blockUnits = table_options_.offsetArrayBlockUnits;
   terark::ZipOffsetBlobStore::MyBuilder builder(blockUnits, params.fpath, params.offset);
-  BuilderWriteValues(params.input, kvs, [&](fstring value) { builder.addRecord(value); });
-  builder.finish();
+  auto s = BuilderWriteValues(params.input, kvs, [&](fstring value) { builder.addRecord(value); });
+  if (s.ok()) {
+    builder.finish();
+  }
+  return s;
 };
 #endif // TerocksPrivateCode
 
@@ -842,6 +855,7 @@ Status TerarkZipTableBuilder::ZipValueToFinish() {
   auto& kvs = histogram_.front();
   DictZipBlobStore::ZipStat dzstat;
   long long t3, t4;
+  Status s;
 
   t3 = g_pf.now();
 #if defined(TerocksPrivateCode)
@@ -855,22 +869,22 @@ Status TerarkZipTableBuilder::ZipValueToFinish() {
     BuildStoreParams params = {input, kvs, 0, tmpStoreFile, 0};
     t3 = g_pf.now();
     if (kvs.value.m_total_key_len == 0) {
-      buildZeroLengthBlobStore(params);
+      s = buildZeroLengthBlobStore(params);
     }
     else if (table_options_.offsetArrayBlockUnits) {
       if (variaNum * 64 < kvs.key.m_cnt_sum ) {
-        buildMixedLenBlobStore(params);
+        s = buildMixedLenBlobStore(params);
       }
       else {
-        buildZipOffsetBlobStore(params);
+        s = buildZipOffsetBlobStore(params);
       }
     }
     else {
       if (4 * variaNum + kvs.key.m_cnt_sum  * 5 / 4 < 4 * kvs.key.m_cnt_sum ) {
-        buildMixedLenBlobStore(params);
+        s = buildMixedLenBlobStore(params);
       }
       else {
-        buildPlainBlobStore(params);
+        s = buildPlainBlobStore(params);
       }
     }
     tmpDictFile.fpath.clear();
@@ -897,14 +911,17 @@ Status TerarkZipTableBuilder::ZipValueToFinish() {
     {
       zbuilder->prepare(kvs.key.m_cnt_sum , tmpStoreFile);
 
-      BuilderWriteValues(input, kvs, [&](fstring value) {zbuilder->addRecord(value); });
-
-      zbuilder->finish(DictZipBlobStore::ZipBuilder::FinishFreeDict);
-      dzstat = zbuilder->getZipStat();
+      s = BuilderWriteValues(input, kvs, [&](fstring value) {zbuilder->addRecord(value); });
+      if (s.ok()) {
+        zbuilder->finish(DictZipBlobStore::ZipBuilder::FinishFreeDict);
+        dzstat = zbuilder->getZipStat();
+      }
 
       t4 = g_pf.now();
-      auto dict = zbuilder->getDictionary().memory;
-      FileStream(tmpDictFile, "wb+").ensureWrite(dict.data(), dict.size());
+      if (s.ok()) {
+        auto dict = zbuilder->getDictionary().memory;
+        FileStream(tmpDictFile, "wb+").ensureWrite(dict.data(), dict.size());
+      }
       zbuilder.reset();
     }
   }
@@ -913,6 +930,9 @@ Status TerarkZipTableBuilder::ZipValueToFinish() {
   Status indexBuildResult = WaitBuildIndex();
   if (!indexBuildResult.ok()) {
     return indexBuildResult;
+  }
+  if (!s.ok()) {
+    return s;
   }
   return WriteSSTFile(t3, t4, tmpStoreFile, tmpDictFile, dzstat);
 }
@@ -930,6 +950,7 @@ Status TerarkZipTableBuilder::ZipValueToFinishMulti() {
   std::unique_ptr<terark::BlobStore> store;
   DictZipBlobStore::ZipStat dzstat;
   long long t3, t4;
+  Status s;
 
   auto minDictZipValueSize = table_options_.minDictZipValueSize / 2;
   size_t fileOffset = 0;
@@ -962,33 +983,38 @@ Status TerarkZipTableBuilder::ZipValueToFinishMulti() {
       size_t variaNum = kvs.key.m_cnt_sum - fixedNum;
       BuildStoreParams params = {input, kvs, 0, tmpStoreFile, fileOffset};
       if (kvs.value.m_total_key_len == 0) {
-        buildZeroLengthBlobStore(params);
+        s = buildZeroLengthBlobStore(params);
       }
       else if (table_options_.offsetArrayBlockUnits) {
         if (variaNum * 64 < kvs.key.m_cnt_sum) {
-          buildMixedLenBlobStore(params);
+          s = buildMixedLenBlobStore(params);
         }
         else {
-          buildZipOffsetBlobStore(params);
+          s = buildZipOffsetBlobStore(params);
         }
       }
       else {
         if (4 * variaNum + kvs.key.m_cnt_sum * 5 / 4 < 4 * kvs.key.m_cnt_sum) {
-          buildMixedLenBlobStore(params);
+          s = buildMixedLenBlobStore(params);
         }
         else {
-          buildPlainBlobStore(params);
+          s = buildPlainBlobStore(params);
         }
       }
     }
     else {
       zbuilder->prepare(kvs.key.m_cnt_sum, tmpStoreFile, fileOffset);
-      BuilderWriteValues(input, kvs, [&](fstring value) {zbuilder->addRecord(value); });
-      zbuilder->finish(DictZipBlobStore::ZipBuilder::FinishNone);
-      if (dictRefCount == 0) {
-        dzstat = zbuilder->getZipStat();
+      s = BuilderWriteValues(input, kvs, [&](fstring value) {zbuilder->addRecord(value); });
+      if (s.ok()) {
+        zbuilder->finish(DictZipBlobStore::ZipBuilder::FinishNone);
+        if (dictRefCount == 0) {
+          dzstat = zbuilder->getZipStat();
+        }
       }
       ++dictRefCount;
+    }
+    if (!s.ok()) {
+      break;
     }
     fileOffset = FileStream(tmpStoreFile.fpath.c_str(), "rb").fsize();
     kvs.valueFileEnd = fileOffset;
@@ -997,8 +1023,10 @@ Status TerarkZipTableBuilder::ZipValueToFinishMulti() {
   if (zbuilder) {
     zbuilder->freeDict();
     t4 = g_pf.now();
-    auto dict = zbuilder->getDictionary().memory;
-    FileStream(tmpDictFile, "wb+").ensureWrite(dict.data(), dict.size());
+    if (s.ok()) {
+      auto dict = zbuilder->getDictionary().memory;
+      FileStream(tmpDictFile, "wb+").ensureWrite(dict.data(), dict.size());
+    }
     zbuilder.reset();
     dictWaitHandle.Release();
   }
@@ -1013,6 +1041,9 @@ Status TerarkZipTableBuilder::ZipValueToFinishMulti() {
   Status indexBuildResult = WaitBuildIndex();
   if (!indexBuildResult.ok()) {
     return indexBuildResult;
+  }
+  if (!s.ok()) {
+    return s;
   }
   return WriteSSTFileMulti(t3, t4, tmpStoreFile, tmpDictFile, dzstat);
 }
@@ -1029,7 +1060,7 @@ void TerarkZipTableBuilder::DebugCleanup() {
   tmpValueFile_.close();
 }
 
-void
+Status
 TerarkZipTableBuilder::BuilderWriteValues(NativeDataInput<InputBuffer>& input,
   KeyValueStatus& kvs, std::function<void(fstring)> write) {
   auto& bzvType = kvs.type;
@@ -1105,6 +1136,12 @@ TerarkZipTableBuilder::BuilderWriteValues(NativeDataInput<InputBuffer>& input,
     if (veriftValue) {
       //TODO
     }
+#define ITER_MOVE_NEXT(it)                    \
+    do {                                      \
+      it->Next();                             \
+      if (!it->Valid() || !it->status().ok()) \
+        return it->status();                  \
+    } while(0)
 
     for (size_t recId = 0; recId < kvs.key.m_cnt_sum ; recId++) {
       value.erase_all();
@@ -1112,16 +1149,16 @@ TerarkZipTableBuilder::BuilderWriteValues(NativeDataInput<InputBuffer>& input,
       ParsedInternalKey pikey;
       Slice curKey = second_pass_iter_->key();
       DEBUG_PRINT_2ND_PASS_KEY(curKey);
-      ParseInternalKey(curKey, &pikey);
+      TERARK_RT_assert(ParseInternalKey(curKey, &pikey), std::logic_error);
       if (dumpKeyValue) {
         dumpKeyValueFunc(pikey, second_pass_iter_->value());
       }
       while (kTypeRangeDeletion == pikey.type) {
-        second_pass_iter_->Next();
+        ITER_MOVE_NEXT(second_pass_iter_);
         assert(second_pass_iter_->Valid());
         curKey = second_pass_iter_->key();
         DEBUG_PRINT_2ND_PASS_KEY(curKey);
-        ParseInternalKey(curKey, &pikey);
+        TERARK_RT_assert(ParseInternalKey(curKey, &pikey), std::logic_error);
         if (dumpKeyValue) {
           dumpKeyValueFunc(pikey, second_pass_iter_->value());
         }
@@ -1154,7 +1191,7 @@ TerarkZipTableBuilder::BuilderWriteValues(NativeDataInput<InputBuffer>& input,
           value.append(fstringOf(curVal));
           write(value);
         }
-        second_pass_iter_->Next();
+        ITER_MOVE_NEXT(second_pass_iter_);
       }
       else {
         bzvType.set0(recId, size_t(ZipValueType::kMulti));
@@ -1166,16 +1203,16 @@ TerarkZipTableBuilder::BuilderWriteValues(NativeDataInput<InputBuffer>& input,
             assert(second_pass_iter_->Valid());
             curKey = second_pass_iter_->key();
             DEBUG_PRINT_2ND_PASS_KEY(curKey);
-            ParseInternalKey(curKey, &pikey);
+            TERARK_RT_assert(ParseInternalKey(curKey, &pikey), std::logic_error);
             if (dumpKeyValue) {
               dumpKeyValueFunc(pikey, second_pass_iter_->value());
             }
             while (kTypeRangeDeletion == pikey.type) {
-              second_pass_iter_->Next();
+              ITER_MOVE_NEXT(second_pass_iter_);
               assert(second_pass_iter_->Valid());
               curKey = second_pass_iter_->key();
               DEBUG_PRINT_2ND_PASS_KEY(curKey);
-              ParseInternalKey(curKey, &pikey);
+              TERARK_RT_assert(ParseInternalKey(curKey, &pikey), std::logic_error);
               if (dumpKeyValue) {
                 dumpKeyValueFunc(pikey, second_pass_iter_->value());
               }
@@ -1196,7 +1233,7 @@ TerarkZipTableBuilder::BuilderWriteValues(NativeDataInput<InputBuffer>& input,
           if (j + 1 < oneSeqLen) {
             ((ZipValueMultiValue*)value.data())->offsets[j + 1] = value.size() - headerSize;
           }
-          second_pass_iter_->Next();
+          ITER_MOVE_NEXT(second_pass_iter_);
         }
         write(value);
       }
@@ -1206,7 +1243,10 @@ TerarkZipTableBuilder::BuilderWriteValues(NativeDataInput<InputBuffer>& input,
     bitPosUnique_ = bitPos;
     // second pass no range deletion ...
     //assert(entryId <= properties_.num_entries);
+
+#undef ITER_MOVE_NEXT
   }
+  return Status::OK();
 }
 
 Status TerarkZipTableBuilder::WriteStore(fstring indexMmap, terark::BlobStore* store
