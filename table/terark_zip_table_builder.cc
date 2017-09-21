@@ -833,9 +833,7 @@ void TerarkZipTableBuilder::buildZipOffsetBlobStore(BuildStoreParams &params) {
 };
 #endif // TerocksPrivateCode
 
-Status
-TerarkZipTableBuilder::
-ZipValueToFinish() {
+Status TerarkZipTableBuilder::ZipValueToFinish() {
   DebugPrepare();
   assert(histogram_.size() == 1);
   AutoDeleteFile tmpStoreFile{tmpValueFile_.path + ".zbs"};
@@ -921,8 +919,7 @@ ZipValueToFinish() {
 
 #if defined(TerocksPrivateCode)
 
-Status TerarkZipTableBuilder::
-ZipValueToFinishMulti() {
+Status TerarkZipTableBuilder::ZipValueToFinishMulti() {
   DebugPrepare();
   assert(histogram_.size() > 1);
   AutoDeleteFile tmpStoreFile{tmpValueFile_.path + ".zbs"};
