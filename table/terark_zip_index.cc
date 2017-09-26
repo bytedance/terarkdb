@@ -193,8 +193,14 @@ public:
     m_dawg = trie->get_dawg();
   }
   const char* Name() const override {
-    auto header = (const TerarkIndexHeader*)m_trie->get_mmap().data();
-    return header->class_name;
+    if (m_trie->is_mmap()) {
+      auto header = (const TerarkIndexHeader*)m_trie->get_mmap().data();
+      return header->class_name;
+    }
+    else {
+      size_t name_i = g_TerarkIndexName.find_i(typeid(*this).name());
+      return g_TerarkIndexName.val(name_i).c_str();
+    }
   }
   void SaveMmap(std::function<void(const void *, size_t)> write) const override {
     m_trie->save_mmap(write);

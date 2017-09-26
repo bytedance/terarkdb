@@ -578,8 +578,8 @@ void TerarkZipTableBuilder::BuildIndex(BuildIndexParams& param, KeyValueStatus& 
     assert(fileSize % 8 == 0);
     long long tt = g_pf.now();
     INFO(ioptions_.info_log
-      , "TerarkZipTableBuilder::Finish():this=%012p:  index pass time =%8.2f's,%8.3f'MB/sec\n"
-      , this, g_pf.sf(t1, tt), rawKeySize*1.0 / g_pf.uf(t1, tt)
+      , "TerarkZipTableBuilder::Finish():this=%012p:  index pass time =%8.2f's,%8.3f'MB/sec, index type=%-32s\n"
+      , this, g_pf.sf(t1, tt), rawKeySize*1.0 / g_pf.uf(t1, tt), indexPtr->Name()
     );
     param.data.close();
     return Status::OK();
@@ -610,7 +610,9 @@ Status TerarkZipTableBuilder::WaitBuildIndex() {
 
 void TerarkZipTableBuilder::BuildReorderMap(BuildReorderParams& params,
   KeyValueStatus& kvs,
-  fstring mmap_memory) {
+  fstring mmap_memory,
+  BlobStore* store,
+  long long& t6) {
   valvec<std::unique_ptr<TerarkIndex>> indexes;
   size_t reoder = 0;
   for (auto& ptr : kvs.build) {
@@ -627,6 +629,10 @@ void TerarkZipTableBuilder::BuildReorderMap(BuildReorderParams& params,
       ++reoder;
     }
   }
+  INFO(ioptions_.info_log
+    , "TerarkZipTableBuilder::Finish():this=%012p:  index type = %-32s, store type = %-20s\n"
+    , this, indexes.size() == 1 ? indexes.front()->Name() : "LazyUnionDFA", store->name());
+  t6 = g_pf.now();
   if (reoder == 0) {
     params.type.clear();
     params.tmpReorderFile.Delete();
@@ -1254,19 +1260,14 @@ Status TerarkZipTableBuilder::WriteStore(fstring indexMmap, terark::BlobStore* s
   , KeyValueStatus& kvs
   , BlockHandle& dataBlock
   , long long& t5, long long& t6, long long& t7) {
-  INFO(ioptions_.info_log
-    , "TerarkZipTableBuilder::Finish():this=%012p:  index type = %-32s, store type = %-20s\n"
-    , this, "Unknow", store->name()
-  );
   using namespace std::placeholders;
   auto writeAppend = std::bind(&TerarkZipTableBuilder::DoWriteAppend, this, _1, _2);
   BuildReorderParams params;
   params.tmpReorderFile.fpath = tmpValueFile_.path + ".reorder";
-  BuildReorderMap(params, kvs, indexMmap);
+  BuildReorderMap(params, kvs, indexMmap, store, t6);
   if (params.type.size() != 0) {
     params.type.swap(kvs.type);
     ZReorderMap reorder(params.tmpReorderFile.fpath);
-    t6 = g_pf.now();
     t7 = g_pf.now();
     try {
       dataBlock.set_offset(offset_);
@@ -1278,7 +1279,7 @@ Status TerarkZipTableBuilder::WriteStore(fstring indexMmap, terark::BlobStore* s
     }
   }
   else {
-    t7 = t6 = t5;
+    t7 = t6;
     try {
       dataBlock.set_offset(offset_);
       store->save_mmap(std::ref(writeAppend));

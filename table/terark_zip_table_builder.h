@@ -118,7 +118,9 @@ private:
   };
   void BuildReorderMap(BuildReorderParams& params,
     KeyValueStatus& kvs,
-    fstring mmap_memory);
+    fstring mmap_memory,
+    BlobStore* store,
+    long long& t6);
   WaitHandle LoadSample(std::unique_ptr<DictZipBlobStore::ZipBuilder>& zbuilder);
 #if defined(TerocksPrivateCode)
   struct BuildStoreParams {
