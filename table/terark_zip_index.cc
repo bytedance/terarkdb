@@ -612,7 +612,12 @@ public:
         return nullptr;
       }
       size_t name_i = g_TerarkIndexName.find_i(typeid(TerarkUintIndex<RankSelect>).name());
-      if (strcmp(header->class_name, g_TerarkIndexName.val(name_i).c_str()) != 0) {
+      size_t self_i = g_TerarkIndexFactroy.find_i(g_TerarkIndexName.val(name_i));
+      assert(self_i < g_TerarkIndexFactroy.end_i());
+      size_t head_i = g_TerarkIndexFactroy.find_i(header->class_name);
+      if (head_i >= g_TerarkIndexFactroy.end_i()
+        || g_TerarkIndexFactroy.val(head_i) != g_TerarkIndexFactroy.val(self_i)
+        ) {
         return nullptr;
       }
       ptr->header_ = header;
