@@ -86,7 +86,7 @@ public:
 	  BOOST_STATIC_ASSERT(sizeof(BOOST_STRINGIZE(clazz)) <= 60);  \
     TerarkIndex::AutoRegisterFactory                            \
     g_AutoRegister_##clazz(                                     \
-        {##__VA_ARGS__,#clazz},                                 \
+        {__VA_ARGS__,#clazz},                                   \
         typeid(clazz).name(),                                   \
         new clazz::MyFactory()                                  \
     )
