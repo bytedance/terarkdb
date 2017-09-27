@@ -531,9 +531,10 @@ void TerarkZipTableBuilder::BuildIndex(BuildIndexParams& param, KeyValueStatus& 
   if (param.stat.numKeys > 1 && split == 0) {
     param.stat.commonPrefixLen = fstring(param.stat.minKey).commonPrefixLen(param.stat.maxKey);
   }
+  size_t prefixLen = param.stat.commonPrefixLen + kvs.prefix.size();
   size_t rawKeySize = param.stat.sumKeyLen - param.stat.numKeys * param.stat.commonPrefixLen;
   param.data.complete_write();
-  param.wait = std::async(std::launch::async, [this, &param, rawKeySize, split]() {
+  param.wait = std::async(std::launch::async, [this, &param, rawKeySize, prefixLen, split]() {
     auto& keyStat = param.stat;
     const TerarkIndex::Factory* factory;
     if (split != 0) {
@@ -580,13 +581,12 @@ void TerarkZipTableBuilder::BuildIndex(BuildIndexParams& param, KeyValueStatus& 
     INFO(ioptions_.info_log,
       "TerarkZipTableBuilder::Finish():this=%012p:  index pass time =%8.2f's,%8.3f'MB/sec\n"
       "    index type = %s\n"
-      "    usrkeys = %zd  min-keylen = %zd  max-keylen = %d\n"
-      "    raw-key = %zd  zip-key = %zd\n"
-      "    avg-key = %.2f  avg-zkey = %.2f\n"
+      "    usrkeys = %zd  min-keylen = %zd  max-keylen = %zd  prefix = %zd\n"
+      "    raw-key =%9.4f GB  zip-key =%9.4f GB  avg-key =%7.2f  avg-zkey =%7.2f\n"
       , this, g_pf.sf(t1, tt), rawKeySize*1.0 / g_pf.uf(t1, tt)
       , indexPtr->Name()
-      , param.stat.numKeys, param.stat.minKeyLen, param.stat.maxKeyLen
-      , rawKeySize, fileSize
+      , param.stat.numKeys, param.stat.minKeyLen, param.stat.maxKeyLen, prefixLen
+      , rawKeySize*1.0 / 1e9, fileSize*1.0 / 1e9
       , rawKeySize*1.0 / param.stat.numKeys, fileSize*1.0 / param.stat.numKeys
     );
     param.data.close();
@@ -643,16 +643,16 @@ void TerarkZipTableBuilder::BuildReorderMap(BuildReorderParams& params,
   }
   INFO(ioptions_.info_log,
     "TerarkZipTableBuilder::Finish():this=%012p:  index type = %-32s, store type = %-20s\n"
-    "    usrkeys = %zd  key-segment = %zd"
-    "    raw-key = %zd  zip-key = %zd  avg-key = %.2f  avg-zkey = %.2f\n"
-    "    raw-val = %zd  zip-val = %zd  avg-val = %.2f  avg-zval = %.2f\n"
+    "    usrkeys = %zd  key-segment = %zd  prefix = %zd\n"
+    "    raw-key =%9.4f GB  zip-key =%9.4f GB  avg-key =%7.2f  avg-zkey =%7.2f\n"
+    "    raw-val =%9.4f GB  zip-val =%9.4f GB  avg-val =%7.2f  avg-zval =%7.2f\n"
     , this, indexes.size() == 1 ? indexes.front()->Name() : "LazyUnionDFA", store->name()
-    , store->num_records(), indexes.size()
+    , store->num_records(), indexes.size(), kvs.prefix.size()
 
-    , rawKeySize, zipKeySize
+    , rawKeySize*1.0 / 1e9, zipKeySize*1.0 / 1e9
     , rawKeySize*1.0 / store->num_records(), zipKeySize*1.0 / store->num_records()
 
-    , store->total_data_size(), store->get_mmap().size()
+    , store->total_data_size()*1.0 / 1e9, store->get_mmap().size()*1.0 / 1e9
     , store->total_data_size()*1.0 / store->num_records(), store->get_mmap().size()*1.0 / store->num_records()
   );
   t6 = g_pf.now();
@@ -1682,7 +1682,7 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4
     {!dict.memory.empty() ? &kTerarkZipTableValueDictBlock : NULL , dictBlock         },
     {&kTerarkZipTableIndexBlock                                   , indexBlock        },
     {!zvTypeBlock.IsNull() ? &kTerarkZipTableValueTypeBlock : NULL, zvTypeBlock       },
-    {&kTerarkZipTableOffsetBlock                                  , offsetBlock       },                     
+    {&kTerarkZipTableOffsetBlock                                  , offsetBlock       },
     {&kTerarkZipTableCommonPrefixBlock                            , commonPrefixBlock },
     {!tombstoneBlock.IsNull() ? &kRangeDelBlock : NULL            , tombstoneBlock    },
   });
@@ -1943,6 +1943,7 @@ void TerarkZipTableBuilder::Abandon() {
   tmpValueFile_.complete_write();
   tmpSampleFile_.complete_write();
   zbuilder_.reset();
+  tmpIndexFile_.Delete();
   tmpZipDictFile_.Delete();
   tmpZipValueFile_.Delete();
 }
