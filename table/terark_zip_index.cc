@@ -609,17 +609,17 @@ public:
         || header->version != 1
         || header->file_size != mem.size()
         ) {
-        return nullptr;
+        throw std::invalid_argument("TerarkUintIndex::Load(): Bad file header");
       }
-      size_t name_i = g_TerarkIndexName.find_i(typeid(TerarkUintIndex<RankSelect>).name());
-      size_t self_i = g_TerarkIndexFactroy.find_i(g_TerarkIndexName.val(name_i));
-      assert(self_i < g_TerarkIndexFactroy.end_i());
-      size_t head_i = g_TerarkIndexFactroy.find_i(header->class_name);
-      if (head_i >= g_TerarkIndexFactroy.end_i()
-        || g_TerarkIndexFactroy.val(head_i) != g_TerarkIndexFactroy.val(self_i)
-        ) {
-        return nullptr;
-      }
+      auto verifyClassName = [&] {
+        size_t name_i = g_TerarkIndexName.find_i(typeid(TerarkUintIndex<RankSelect>).name());
+        size_t self_i = g_TerarkIndexFactroy.find_i(g_TerarkIndexName.val(name_i));
+        assert(self_i < g_TerarkIndexFactroy.end_i());
+        size_t head_i = g_TerarkIndexFactroy.find_i(header->class_name);
+        return head_i < g_TerarkIndexFactroy.end_i()
+          && g_TerarkIndexFactroy.val(head_i) == g_TerarkIndexFactroy.val(self_i);
+      };
+      assert(verifyClassName()), (void)verifyClassName;
       ptr->header_ = header;
       ptr->minValue_ = header->min_value;
       ptr->maxValue_ = header->max_value;
