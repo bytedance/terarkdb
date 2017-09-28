@@ -27,6 +27,7 @@ using terark::FixedLenStrVec;
 using terark::MmapWholeFile;
 using terark::UintVecMin0;
 using terark::MatchingDFA;
+using terark::commonPrefixLen;
 
 static terark::hash_strmap<TerarkIndex::FactoryPtr> g_TerarkIndexFactroy;
 static terark::hash_strmap<std::string>             g_TerarkIndexName;
@@ -436,7 +437,7 @@ public:
       return true;
     }
     bool Seek(fstring target) override {
-      size_t cplen = target.commonPrefixLen(index_.commonPrefix_);
+      size_t cplen = commonPrefixLen(target, index_.commonPrefix_);
       if (cplen != index_.commonPrefix_.size()) {
         assert(target.size() >= cplen);
         assert(target.size() == cplen || target[cplen] != index_.commonPrefix_[cplen]);
@@ -530,15 +531,15 @@ public:
     TerarkIndex* Build(NativeDataInput<InputBuffer>& reader,
                        const TerarkZipTableOptions& tzopt,
                        const KeyStat& ks) const override {
-      size_t commonPrefixLen = fstring(ks.minKey).commonPrefixLen(ks.maxKey);
-      assert(commonPrefixLen >= ks.commonPrefixLen);
+      size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
+      assert(cplen >= ks.commonPrefixLen);
       if (ks.maxKeyLen != ks.minKeyLen ||
-          ks.maxKeyLen - commonPrefixLen > sizeof(uint64_t)) {
+          ks.maxKeyLen - cplen > sizeof(uint64_t)) {
         abort();
       }
       uint64_t
-        minValue = ReadUint64(ks.minKey.begin() + commonPrefixLen, ks.minKey.end()),
-        maxValue = ReadUint64(ks.maxKey.begin() + commonPrefixLen, ks.maxKey.end());
+        minValue = ReadUint64(ks.minKey.begin() + cplen, ks.minKey.end()),
+        maxValue = ReadUint64(ks.maxKey.begin() + cplen, ks.maxKey.end());
       if (minValue > maxValue) {
         std::swap(minValue, maxValue);
       }
@@ -548,7 +549,7 @@ public:
       indexSeq.resize(diff);
       for (size_t seq_id = 0; seq_id < ks.numKeys; ++seq_id) {
         reader >> keyBuf;
-        indexSeq.set1(ReadUint64(keyBuf.begin() + commonPrefixLen,
+        indexSeq.set1(ReadUint64(keyBuf.begin() + cplen,
             keyBuf.end()) - minValue);
       }
       indexSeq.build_cache(false, false);
@@ -559,9 +560,9 @@ public:
       header->min_value = minValue;
       header->max_value = maxValue;
       header->index_mem_size = indexSeq.mem_size();
-      header->key_length = ks.minKeyLen - commonPrefixLen;
-      if (commonPrefixLen > ks.commonPrefixLen) {
-        header->common_prefix_length = commonPrefixLen - ks.commonPrefixLen;
+      header->key_length = ks.minKeyLen - cplen;
+      if (cplen > ks.commonPrefixLen) {
+        header->common_prefix_length = cplen - ks.commonPrefixLen;
         ptr->commonPrefix_.assign(ks.minKey.data(), header->common_prefix_length);
         header->file_size += terark::align_up(header->common_prefix_length, 8);
       }
@@ -577,7 +578,7 @@ public:
     }
     size_t MemSizeForBuild(const KeyStat& ks) const override {
       assert(ks.minKeyLen == ks.maxKeyLen);
-      size_t length = ks.maxKeyLen - fstring(ks.minKey).commonPrefixLen(ks.maxKey);
+      size_t length = ks.maxKeyLen - commonPrefixLen(ks.minKey, ks.maxKey);
       uint64_t
         minValue = ReadUint64(ks.minKey.begin(), ks.minKey.begin() + length),
         maxValue = ReadUint64(ks.maxKey.begin(), ks.maxKey.begin() + length);

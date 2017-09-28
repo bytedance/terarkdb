@@ -29,6 +29,7 @@ namespace rocksdb {
 using terark::SortableStrVec;
 using terark::byte_swap;
 using terark::UintVecMin0;
+using terark::commonPrefixLen;
 
 std::mutex g_sumMutex;
 size_t g_sumKeyLen = 0;
@@ -528,8 +529,17 @@ Status TerarkZipTableBuilder::Finish() {
 void TerarkZipTableBuilder::BuildIndex(BuildIndexParams& param, KeyValueStatus& kvs) {
   assert(param.stat.numKeys > 0);
   size_t split = kvs.split;
-  if (param.stat.numKeys > 1 && split == 0) {
+#if defined(TerocksPrivateCode)
+  if (split == 0) {
     param.stat.commonPrefixLen = fstring(param.stat.minKey).commonPrefixLen(param.stat.maxKey);
+  }
+  else if (0)
+#endif // TerocksPrivateCode
+  {
+    // nlt don't support only one key which is empty ...
+    if (split == 0 && param.stat.numKeys > 1) {
+      param.stat.commonPrefixLen = commonPrefixLen(param.stat.minKey, param.stat.maxKey);
+    }
   }
   size_t prefixLen = param.stat.commonPrefixLen + kvs.prefix.size();
   size_t rawKeySize = param.stat.sumKeyLen - param.stat.numKeys * param.stat.commonPrefixLen;
