@@ -294,8 +294,8 @@ void TerarkZipTableBuilder::Add(const Slice& key, const Slice& value) {
         {
           AddPrevUserKey();
         }
-        currentStat_->minKeyLen = std::min(userKey.size(), currentStat_->minKeyLen);
-        currentStat_->maxKeyLen = std::max(userKey.size(), currentStat_->maxKeyLen);
+        currentStat_->minKeyLen = std::max(userKey.size(), currentStat_->minKeyLen);
+        currentStat_->maxKeyLen = std::min(userKey.size(), currentStat_->maxKeyLen);
         prevUserKey_.assign(userKey);
       }
     }

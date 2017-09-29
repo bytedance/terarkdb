@@ -437,7 +437,7 @@ public:
       return true;
     }
     bool Seek(fstring target) override {
-      size_t cplen = commonPrefixLen(target, index_.commonPrefix_);
+      size_t cplen = target.commonPrefixLen(index_.commonPrefix_);
       if (cplen != index_.commonPrefix_.size()) {
         assert(target.size() >= cplen);
         assert(target.size() == cplen || target[cplen] != index_.commonPrefix_[cplen]);
