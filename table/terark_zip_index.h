@@ -43,8 +43,8 @@ public:
   };
   struct KeyStat {
     size_t commonPrefixLen = 0;
-    size_t minKeyLen = 0;
-    size_t maxKeyLen = size_t(-1);
+    size_t minKeyLen = size_t(-1);
+    size_t maxKeyLen = 0;
     size_t sumKeyLen = 0;
     size_t numKeys   = 0;
     valvec<byte_t> minKey;
