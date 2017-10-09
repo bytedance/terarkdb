@@ -7,6 +7,7 @@
 #include <terark/fsa/nest_trie_dawg.hpp>
 #include <terark/util/mmap.hpp>
 #include <terark/util/sortable_strvec.hpp>
+#include <terark/num_to_str.hpp>
 #if defined(TerocksPrivateCode)
 #include <terark/fsa/fsa_for_union_dfa.hpp>
 #endif // TerocksPrivateCode
