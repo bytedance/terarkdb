@@ -425,7 +425,7 @@ TerarkZipTableBuilder::WaitHandle TerarkZipTableBuilder::WaitForMemory(const cha
   sumWaitingMem += myWorkMem;
   while (shouldWait()) {
     INFO(ioptions_.info_log
-      , "TerarkZipTableBuilder::Finish():this=%012p: sumWaitingMem =%7.3f GB, sumWorkingMem =%7.3f GB, %-10s workingMem =%8.4f GB, wait...\n"
+      , "TerarkZipTableBuilder::Finish():this=%012p: sumWaitingMem =%8.3f GB, sumWorkingMem =%8.3f GB, %-10s workingMem =%8.4f GB, wait...\n"
       , this, sumWaitingMem / 1e9, sumWorkingMem / 1e9, who, myWorkMem / 1e9
     );
     zipCond.wait_for(zipLock, waitForTime);
@@ -547,10 +547,13 @@ void TerarkZipTableBuilder::BuildIndex(BuildIndexParams& param, KeyValueStatus& 
   param.wait = std::async(std::launch::async, [this, &param, rawKeySize, prefixLen, split]() {
     auto& keyStat = param.stat;
     const TerarkIndex::Factory* factory;
+#if defined(TerocksPrivateCode)
     if (split != 0) {
       factory = TerarkIndex::GetFactory("IL_256");
     }
-    else {
+    else
+#endif // TerocksPrivateCode
+    {
       factory = TerarkIndex::SelectFactory(keyStat, table_options_.indexType);
     }
     if (!factory) {
