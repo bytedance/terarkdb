@@ -200,6 +200,7 @@ public:
     }
     else {
       size_t name_i = g_TerarkIndexName.find_i(typeid(*this).name());
+      TERARK_RT_assert(name_i < g_TerarkIndexName.end_i(), std::logic_error);
       return g_TerarkIndexName.val(name_i).c_str();
     }
   }
