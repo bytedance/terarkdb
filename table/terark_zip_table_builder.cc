@@ -283,7 +283,7 @@ void TerarkZipTableBuilder::Add(const Slice& key, const Slice& value) {
           currentStat_->sumKeyLen, currentStat_->numKeys);
         size_t nltTrieMemSize = currentStat_->sumKeyLen + indexSize;
         if (terark_unlikely(nltTrieMemSize > singleIndexMemLimit)) {
-          AddPrevUserKey(true);
+          AddLastUserKey();
           ++histogram_.back().split;
           BuildIndex(*histogram_.back().build.back(), histogram_.back());
           histogram_.back().build.emplace_back(newBuildIndex());
@@ -304,7 +304,7 @@ void TerarkZipTableBuilder::Add(const Slice& key, const Slice& value) {
         t0 = g_pf.now();
       }
       else {
-        AddPrevUserKey(true);
+        AddLastUserKey();
         BuildIndex(*histogram_.back().build.back(), histogram_.back());
       }
       histogram_.emplace_back();
@@ -494,7 +494,7 @@ Status TerarkZipTableBuilder::Finish() {
     return EmptyTableFinish();
   }
 
-  AddPrevUserKey(true);
+  AddLastUserKey();
   BuildIndex(*histogram_.back().build.back(), histogram_.back());
 
   for (auto& kvs : histogram_) {
@@ -1961,7 +1961,7 @@ void TerarkZipTableBuilder::Abandon() {
   tmpZipValueFile_.Delete();
 }
 
-void TerarkZipTableBuilder::AddPrevUserKey(bool finish) {
+void TerarkZipTableBuilder::AddPrevUserKey() {
   UpdateValueLenHistogram(); // will use valueBuf_
   if (zbuilder_) {
     OfflineZipValueData(); // will change valueBuf_
@@ -1972,9 +1972,11 @@ void TerarkZipTableBuilder::AddPrevUserKey(bool finish) {
   valueBits_.push_back(false);
   currentStat_->sumKeyLen += prevUserKey_.size();
   currentStat_->numKeys++;
-  if (finish) {
-    currentStat_->maxKey.assign(prevUserKey_);
-  }
+}
+
+void TerarkZipTableBuilder::AddLastUserKey() {
+  AddPrevUserKey();
+  currentStat_->maxKey.assign(prevUserKey_);
 }
 
 void TerarkZipTableBuilder::OfflineZipValueData() {

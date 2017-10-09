@@ -95,7 +95,8 @@ private:
     uint64_t valueFileEnd = 0;
     valvec<std::unique_ptr<BuildIndexParams>> build;
   };
-  void AddPrevUserKey(bool finish = false);
+  void AddPrevUserKey();
+  void AddLastUserKey();
   void OfflineZipValueData();
   void UpdateValueLenHistogram();
   struct WaitHandle : boost::noncopyable {
