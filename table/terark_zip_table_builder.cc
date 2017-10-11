@@ -842,9 +842,6 @@ Status TerarkZipTableBuilder::buildZeroLengthBlobStore(BuildStoreParams &params)
 };
 Status TerarkZipTableBuilder::buildPlainBlobStore(BuildStoreParams &params) {
   auto& kvs = params.kvs;
-  size_t workingMemory =
-      UintVecMin0::compute_mem_size_by_max_val(kvs.value.m_total_key_len, kvs.key.m_cnt_sum);
-  params.handle = WaitForMemory("plain", workingMemory);
   terark::PlainBlobStore::MyBuilder builder(kvs.value.m_total_key_len, params.fpath, params.offset);
   auto s = BuilderWriteValues(params.input, kvs, [&](fstring value) { builder.addRecord(value); });
   if (s.ok()) {
@@ -857,9 +854,6 @@ Status TerarkZipTableBuilder::buildMixedLenBlobStore(BuildStoreParams &params) {
   size_t fixedLen = kvs.value.m_max_cnt_key;
   size_t fixedLenCount = kvs.value.m_cnt_of_max_cnt_key;
   size_t varDataLen = kvs.value.m_total_key_len - fixedLen * fixedLenCount;
-  size_t workingMemory =
-      UintVecMin0::compute_mem_size_by_max_val(varDataLen, kvs.key.m_cnt_sum  - fixedLenCount);
-  params.handle = WaitForMemory("mixedLen", workingMemory);
   std::unique_ptr<terark::BlobStore::Builder> builder;
   if (kvs.value.m_cnt_sum < (4ULL << 30)) {
     builder.reset(new terark::MixedLenBlobStore::MyBuilder(
@@ -877,8 +871,6 @@ Status TerarkZipTableBuilder::buildMixedLenBlobStore(BuildStoreParams &params) {
 };
 Status TerarkZipTableBuilder::buildZipOffsetBlobStore(BuildStoreParams &params) {
   auto& kvs = params.kvs;
-  size_t workingMemory = kvs.key.m_cnt_sum ;
-  params.handle = WaitForMemory("zipOffset", workingMemory);
   size_t blockUnits = table_options_.offsetArrayBlockUnits;
   terark::ZipOffsetBlobStore::MyBuilder builder(blockUnits, params.fpath, params.offset);
   auto s = BuilderWriteValues(params.input, kvs, [&](fstring value) { builder.addRecord(value); });
@@ -1307,7 +1299,7 @@ Status TerarkZipTableBuilder::WriteStore(fstring indexMmap, terark::BlobStore* s
     t7 = g_pf.now();
     try {
       dataBlock.set_offset(offset_);
-      store->reorder_zip_data(reorder, std::ref(writeAppend));
+      store->reorder_zip_data(reorder, std::ref(writeAppend), tmpValueFile_.path + ".reorder-tmp");
       dataBlock.set_size(offset_ - dataBlock.offset());
     }
     catch (const Status& s) {
