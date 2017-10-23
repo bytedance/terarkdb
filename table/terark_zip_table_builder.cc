@@ -1174,7 +1174,7 @@ TerarkZipTableBuilder::BuilderWriteValues(NativeDataInput<InputBuffer>& input,
 #define ITER_MOVE_NEXT(it)                    \
     do {                                      \
       it->Next();                             \
-      if (!it->Valid() || !it->status().ok()) \
+      if (!it->status().ok())                 \
         return it->status();                  \
     } while(0)
 
