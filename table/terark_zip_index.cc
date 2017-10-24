@@ -443,7 +443,7 @@ public:
       if (cplen != index_.commonPrefix_.size()) {
         assert(target.size() >= cplen);
         assert(target.size() == cplen || target[cplen] != index_.commonPrefix_[cplen]);
-        if (target.size() == cplen || target[cplen] < index_.commonPrefix_[cplen]) {
+        if (target.size() == cplen || byte_t(target[cplen]) < byte_t(index_.commonPrefix_[cplen])) {
           SeekToFirst();
           return true;
         }
