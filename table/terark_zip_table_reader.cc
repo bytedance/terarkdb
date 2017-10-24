@@ -382,7 +382,7 @@ protected:
       else {
         assert(pikey.user_key.size() > cplen);
         assert(pikey.user_key[cplen] != subReader_->commonPrefix_[cplen]);
-        if ((byte_t(pikey.user_key[cplen]) < subReader_->commonPrefix_[cplen]) ^ reverse) {
+        if ((byte_t(pikey.user_key[cplen]) < byte_t(subReader_->commonPrefix_[cplen])) ^ reverse) {
           if (reverse)
             SeekToAscendingLast();
           else
