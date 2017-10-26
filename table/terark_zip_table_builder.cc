@@ -341,12 +341,15 @@ void TerarkZipTableBuilder::Add(const Slice& key, const Slice& value) {
 
 TerarkZipTableBuilder::WaitHandle::WaitHandle() : myWorkMem(0) {
 }
-TerarkZipTableBuilder::WaitHandle::WaitHandle(size_t workMem) : myWorkMem(workMem) {
+TerarkZipTableBuilder::WaitHandle::WaitHandle(size_t workMem)
+  : myWorkMem(workMem) {
 }
-TerarkZipTableBuilder::WaitHandle::WaitHandle(WaitHandle&& other) : myWorkMem(other.myWorkMem) {
+TerarkZipTableBuilder::WaitHandle::WaitHandle(WaitHandle&& other)
+  : myWorkMem(other.myWorkMem) {
   other.myWorkMem = 0;
 }
-TerarkZipTableBuilder::WaitHandle& TerarkZipTableBuilder::WaitHandle::operator = (WaitHandle&& other) {
+TerarkZipTableBuilder::WaitHandle&
+TerarkZipTableBuilder::WaitHandle::operator=(WaitHandle&& other) {
   Release();
   myWorkMem = other.myWorkMem;
   other.myWorkMem = 0;
@@ -369,7 +372,8 @@ TerarkZipTableBuilder::WaitHandle::~WaitHandle() {
   Release(myWorkMem);
 }
 
-TerarkZipTableBuilder::WaitHandle TerarkZipTableBuilder::WaitForMemory(const char* who, size_t myWorkMem) {
+TerarkZipTableBuilder::WaitHandle
+TerarkZipTableBuilder::WaitForMemory(const char* who, size_t myWorkMem) {
   const size_t softMemLimit = table_options_.softZipWorkingMemLimit;
   const size_t hardMemLimit = std::max(table_options_.hardZipWorkingMemLimit, softMemLimit);
   const size_t smallmem = table_options_.smallTaskMemory;
