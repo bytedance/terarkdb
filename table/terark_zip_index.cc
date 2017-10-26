@@ -23,6 +23,14 @@ using terark::NestLoudsTrieDAWG_IL_256;
 using terark::NestLoudsTrieDAWG_Mixed_SE_512;
 using terark::NestLoudsTrieDAWG_Mixed_IL_256;
 using terark::NestLoudsTrieDAWG_Mixed_XL_256;
+
+using terark::NestLoudsTrieDAWG_SE_512_32_FL;
+using terark::NestLoudsTrieDAWG_SE_512_64_FL;
+using terark::NestLoudsTrieDAWG_IL_256_32_FL;
+using terark::NestLoudsTrieDAWG_Mixed_SE_512_32_FL;
+using terark::NestLoudsTrieDAWG_Mixed_IL_256_32_FL;
+using terark::NestLoudsTrieDAWG_Mixed_XL_256_32_FL;
+
 using terark::SortedStrVec;
 using terark::FixedLenStrVec;
 using terark::MmapWholeFile;
@@ -720,12 +728,27 @@ typedef NestLoudsTrieIndex<NestLoudsTrieDAWG_SE_512_64> TerocksIndex_NestLoudsTr
 typedef NestLoudsTrieIndex<NestLoudsTrieDAWG_Mixed_IL_256> TerocksIndex_NestLoudsTrieDAWG_Mixed_IL_256;
 typedef NestLoudsTrieIndex<NestLoudsTrieDAWG_Mixed_SE_512> TerocksIndex_NestLoudsTrieDAWG_Mixed_SE_512;
 typedef NestLoudsTrieIndex<NestLoudsTrieDAWG_Mixed_XL_256> TerocksIndex_NestLoudsTrieDAWG_Mixed_XL_256;
+
+typedef NestLoudsTrieIndex<NestLoudsTrieDAWG_IL_256_32_FL> TerocksIndex_NestLoudsTrieDAWG_IL_256_32_FL;
+typedef NestLoudsTrieIndex<NestLoudsTrieDAWG_SE_512_32_FL> TerocksIndex_NestLoudsTrieDAWG_SE_512_32_FL;
+typedef NestLoudsTrieIndex<NestLoudsTrieDAWG_SE_512_64_FL> TerocksIndex_NestLoudsTrieDAWG_SE_512_64_FL;
+typedef NestLoudsTrieIndex<NestLoudsTrieDAWG_Mixed_IL_256_32_FL> TerocksIndex_NestLoudsTrieDAWG_Mixed_IL_256_32_FL;
+typedef NestLoudsTrieIndex<NestLoudsTrieDAWG_Mixed_SE_512_32_FL> TerocksIndex_NestLoudsTrieDAWG_Mixed_SE_512_32_FL;
+typedef NestLoudsTrieIndex<NestLoudsTrieDAWG_Mixed_XL_256_32_FL> TerocksIndex_NestLoudsTrieDAWG_Mixed_XL_256_32_FL;
+
 TerarkIndexRegister(TerocksIndex_NestLoudsTrieDAWG_IL_256_32, "NestLoudsTrieDAWG_IL", "IL_256_32", "IL_256", "NestLoudsTrieDAWG_IL_256");
 TerarkIndexRegister(TerocksIndex_NestLoudsTrieDAWG_SE_512_32, "NestLoudsTrieDAWG_SE_512", "SE_512_32", "SE_512");
 TerarkIndexRegister(TerocksIndex_NestLoudsTrieDAWG_SE_512_64, "NestLoudsTrieDAWG_SE_512_64", "SE_512_64");
 TerarkIndexRegister(TerocksIndex_NestLoudsTrieDAWG_Mixed_SE_512, "NestLoudsTrieDAWG_Mixed_SE_512", "Mixed_SE_512");
 TerarkIndexRegister(TerocksIndex_NestLoudsTrieDAWG_Mixed_IL_256, "NestLoudsTrieDAWG_Mixed_IL_256", "Mixed_IL_256");
 TerarkIndexRegister(TerocksIndex_NestLoudsTrieDAWG_Mixed_XL_256, "NestLoudsTrieDAWG_Mixed_XL_256", "Mixed_XL_256");
+
+TerarkIndexRegister(TerocksIndex_NestLoudsTrieDAWG_IL_256_32_FL, "NestLoudsTrieDAWG_IL_256_32_FL", "IL_256_32_FL", "IL_256_FL");
+TerarkIndexRegister(TerocksIndex_NestLoudsTrieDAWG_SE_512_32_FL, "NestLoudsTrieDAWG_SE_512_32_FL", "SE_512_32_FL", "SE_512_FL");
+TerarkIndexRegister(TerocksIndex_NestLoudsTrieDAWG_SE_512_64_FL, "NestLoudsTrieDAWG_SE_512_64_FL", "SE_512_64_FL");
+TerarkIndexRegister(TerocksIndex_NestLoudsTrieDAWG_Mixed_SE_512_32_FL, "NestLoudsTrieDAWG_Mixed_SE_512_32_FL", "Mixed_SE_512_32_FL");
+TerarkIndexRegister(TerocksIndex_NestLoudsTrieDAWG_Mixed_IL_256_32_FL, "NestLoudsTrieDAWG_Mixed_IL_256_32_FL", "Mixed_IL_256_32_FL");
+TerarkIndexRegister(TerocksIndex_NestLoudsTrieDAWG_Mixed_XL_256_32_FL, "NestLoudsTrieDAWG_Mixed_XL_256_32_FL", "Mixed_XL_256_32_FL");
 
 #if defined(TerocksPrivateCode)
 typedef TerarkUintIndex<terark::rank_select_il_256_32> TerarkUintIndex_IL_256_32;
