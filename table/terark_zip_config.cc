@@ -125,11 +125,35 @@ void TerarkZipAutoConfigForOnlineDB(struct TerarkZipTableOptions& tzo,
                                     size_t memBytesLimit,
                                     size_t diskBytesLimit)
 {
+  TerarkZipAutoConfigForOnlineDB_CFOptions(tzo, cfo, memBytesLimit, diskBytesLimit);
+  TerarkZipAutoConfigForOnlineDB_DBOptions(dbo, cpuNum);
+}
+
+void
+TerarkZipAutoConfigForOnlineDB_DBOptions(struct DBOptions& dbo, size_t cpuNum)
+{
   using namespace std; // max, min
   int iCpuNum = int(cpuNum);
   if (cpuNum > 0) {
     terark::DictZipBlobStore_setZipThreads((iCpuNum * 3 + 1) / 5);
   }
+  dbo.create_if_missing = true;
+  dbo.allow_mmap_reads = true;
+  dbo.max_background_flushes = 2;
+  dbo.max_subcompactions = 1; // no sub compactions
+  dbo.base_background_compactions = 3;
+  dbo.max_background_compactions = 5;
+
+  dbo.env->SetBackgroundThreads(max(1,min(3,iCpuNum*3/8)), rocksdb::Env::LOW);
+  dbo.env->SetBackgroundThreads(max(1,min(2,iCpuNum*2/8)), rocksdb::Env::HIGH);
+}
+
+void TerarkZipAutoConfigForOnlineDB_CFOptions(struct TerarkZipTableOptions& tzo,
+                                    struct ColumnFamilyOptions& cfo,
+                                    size_t memBytesLimit,
+                                    size_t diskBytesLimit)
+{
+  using namespace std; // max, min
   if (0 == memBytesLimit) {
 #ifdef _MSC_VER
     MEMORYSTATUSEX statex;
@@ -148,7 +172,7 @@ void TerarkZipAutoConfigForOnlineDB(struct TerarkZipTableOptions& tzo,
 
   cfo.write_buffer_size = tzo.smallTaskMemory;
   cfo.num_levels = 5;
-  cfo.max_write_buffer_number = 5;
+  cfo.max_write_buffer_number = 3;
   cfo.target_file_size_base = cfo.write_buffer_size;
   cfo.target_file_size_multiplier = ComputeFileSizeMultiplier(
       diskBytesLimit, cfo.target_file_size_base, cfo.num_levels);
@@ -157,16 +181,6 @@ void TerarkZipAutoConfigForOnlineDB(struct TerarkZipTableOptions& tzo,
 
   cfo.max_bytes_for_level_base = cfo.write_buffer_size * 4;
   cfo.max_bytes_for_level_multiplier = cfo.target_file_size_multiplier;
-
-  dbo.create_if_missing = true;
-  dbo.allow_mmap_reads = true;
-  dbo.max_background_flushes = 2;
-  dbo.max_subcompactions = 1; // no sub compactions
-  dbo.base_background_compactions = 3;
-  dbo.max_background_compactions = 5;
-
-  dbo.env->SetBackgroundThreads(max(1,min(3,iCpuNum*3/8)), rocksdb::Env::LOW);
-  dbo.env->SetBackgroundThreads(max(1,min(2,iCpuNum*2/8)), rocksdb::Env::HIGH);
 }
 
 bool TerarkZipConfigFromEnv(DBOptions& dbo, ColumnFamilyOptions& cfo) {
@@ -189,6 +203,7 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo) {
         "If env TerarkZipTable_localTempDir is defined, it must not be empty");
   }
   struct TerarkZipTableOptions tzo;
+  TerarkZipAutoConfigForOnlineDB_CFOptions(tzo, cfo, 0, 0);
   tzo.localTempDir = localTempDir;
   if (const char* algo = getenv("TerarkZipTable_entropyAlgo")) {
     if (strcasecmp(algo, "NoEntropy") == 0) {
@@ -225,6 +240,8 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo) {
   if (const char* env = getenv("TerarkZipTable_" #name))\
     obj.name = terark::ParseSizeXiB(env)
 
+#define MyOverrideInt(obj, name) MyGetInt(obj, name, obj.name)
+
   MyGetInt   (tzo, checksumLevel           , 3    );
   MyGetInt   (tzo, indexNestLevel          , 3    );
   MyGetInt   (tzo, terarkZipMinLevel       , 0    );
@@ -243,13 +260,12 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo) {
     );
     tzo.offsetArrayBlockUnits = 128;
   }
-  if (tzo.indexNestScale == 0
-  ){
+  if (tzo.indexNestScale == 0){
     STD_WARN(
       "TerarkZipConfigFromEnv: bad indexNestScale = %d, must be in [1,255], reset to 8\n"
       , int(tzo.indexNestScale)
     );
-    tzo.offsetArrayBlockUnits = 8;
+    tzo.indexNestScale = 8;
   }
 
   MyGetBool  (tzo, useSuffixArrayLocalMatch, false);
@@ -300,11 +316,10 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo) {
   cfo.target_file_size_base = uint64_t(1) << 30; // 1G
   MyGetXiB(cfo, write_buffer_size);
   MyGetXiB(cfo, target_file_size_base);
-  MyGetInt(cfo, max_write_buffer_number    , 5);
-  MyGetInt(cfo, target_file_size_multiplier, 5);
-  MyGetInt(cfo, num_levels                 , 5);
-  MyGetInt(cfo, level0_file_num_compaction_trigger,
-           cfo. level0_file_num_compaction_trigger);
+  MyOverrideInt(cfo, max_write_buffer_number);
+  MyOverrideInt(cfo, target_file_size_multiplier);
+  MyOverrideInt(cfo, num_levels                 );
+  MyOverrideInt(cfo, level0_file_num_compaction_trigger);
 
   if (tzo.debugLevel) {
     STD_INFO("TerarkZipConfigFromEnv(dbo, cfo) successed\n");
@@ -313,6 +328,8 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo) {
 }
 
 void TerarkZipDBOptionsFromEnv(DBOptions& dbo) {
+  TerarkZipAutoConfigForOnlineDB_DBOptions(dbo, 0);
+
   MyGetInt(dbo, base_background_compactions, 3);
   MyGetInt(dbo,  max_background_compactions, 5);
   MyGetInt(dbo,  max_background_flushes    , 3);

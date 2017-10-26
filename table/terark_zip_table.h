@@ -133,6 +133,14 @@ void TerarkZipAutoConfigForOnlineDB(struct TerarkZipTableOptions&,
                          size_t cpuNum = 0,
                          size_t memBytesLimit = 0,
                          size_t diskBytesLimit = 0);
+void
+TerarkZipAutoConfigForOnlineDB_DBOptions(struct DBOptions& dbo, size_t cpuNum = 0);
+
+void
+TerarkZipAutoConfigForOnlineDB_CFOptions(struct TerarkZipTableOptions& tzo,
+                                    struct ColumnFamilyOptions& cfo,
+                                    size_t memBytesLimit = 0,
+                                    size_t diskBytesLimit = 0);
 
 bool TerarkZipConfigFromEnv(struct DBOptions&, struct ColumnFamilyOptions&);
 bool TerarkZipCFOptionsFromEnv(struct ColumnFamilyOptions&);
