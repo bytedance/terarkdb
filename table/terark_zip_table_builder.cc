@@ -490,7 +490,7 @@ Status TerarkZipTableBuilder::EmptyTableFinish() {
 }
 
 
-Status TerarkZipTableBuilder::Finish() {
+Status TerarkZipTableBuilder::Finish() try {
   assert(!closed_);
   closed_ = true;
 
@@ -528,6 +528,9 @@ Status TerarkZipTableBuilder::Finish() {
   }
 #endif // TerocksPrivateCode
   return ZipValueToFinish();
+}
+catch (const std::exception& ex) {
+  return AbortFinish(ex);
 }
 
 void TerarkZipTableBuilder::BuildIndex(BuildIndexParams& param, KeyValueStatus& kvs) {
@@ -1955,6 +1958,30 @@ void TerarkZipTableBuilder::Abandon() {
   tmpIndexFile_.Delete();
   tmpZipDictFile_.Delete();
   tmpZipValueFile_.Delete();
+}
+
+// based on Abandon
+Status TerarkZipTableBuilder::AbortFinish(const std::exception& ex) {
+  closed_ = true;
+  for (auto& kvs : histogram_) {
+    for (auto& ptr : kvs.build) {
+      auto& param = *ptr;
+      if (param.wait.valid()) {
+        param.wait.get();
+      }
+      else if (param.data.fp) {
+        param.data.complete_write();
+      }
+    }
+  }
+  histogram_.clear();
+  if (tmpValueFile_.fp)  tmpValueFile_.complete_write();
+  if (tmpSampleFile_.fp) tmpSampleFile_.complete_write();
+  zbuilder_.reset();
+  tmpIndexFile_.Delete();
+  tmpZipDictFile_.Delete();
+  tmpZipValueFile_.Delete();
+  return Status::Aborted("exception", ex.what());
 }
 
 void TerarkZipTableBuilder::AddPrevUserKey() {

@@ -81,8 +81,10 @@ std::string demangle(const char* name) {
 }
 
 void AutoDeleteFile::Delete() {
-  ::remove(fpath.c_str());
-  fpath.clear();
+  if (!fpath.empty()) {
+    ::remove(fpath.c_str());
+    fpath.clear();
+  }
 }
 AutoDeleteFile::~AutoDeleteFile() {
   if (!fpath.empty()) {

@@ -64,6 +64,7 @@ public:
   void Add(const Slice& key, const Slice& value) override;
   Status status() const override { return status_; }
   Status Finish() override;
+  Status AbortFinish(const std::exception& ex);
   void Abandon() override;
   uint64_t NumEntries() const override { return properties_.num_entries; }
   uint64_t FileSize() const override;
