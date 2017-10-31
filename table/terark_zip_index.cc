@@ -267,6 +267,7 @@ public:
         }
         else {
           keyVec.m_offsets.resize_with_wire_max_val(numKeys + 1, sumRealKeyLen);
+          // TBD: obj.set_wire(a, b) e.g. obj[a] = b
           keyVec.m_offsets.set_wire(numKeys, sumRealKeyLen);
           keyVec.m_strpool.resize(sumRealKeyLen);
           size_t offset = sumRealKeyLen;
@@ -421,6 +422,10 @@ public:
   template<class RankSelect1st, class RankSelect2nd>
   class TerarkCompositeIndex : public TerarkIndex {
   public:
+    static const int kCommonPrefixLen = 4;
+    static const int kIndex1stLen = 8;
+    static const int kIndex2ndLen = 8;
+
     static const char* index_name;
     struct FileHeader : public TerarkIndexHeader
     {
@@ -428,6 +433,7 @@ public:
       uint64_t max_value;
       uint64_t index_1st_mem_size;
       uint64_t index_2nd_mem_size;
+      uint64_t index_data_size;
       uint32_t key_length;
       uint32_t common_prefix_length;
 
@@ -447,17 +453,176 @@ public:
     };
 
   public:
-    class MyFactory : public TerarkIndex::Factory {
+    class TerarkCompositeIndexIterator : public TerarkIndex::Iterator {
     public:
-      static const int kCommonPrefixLen = 4;
-      static const int kIndex1stLen = 4;
-      static const int kIndex2ndLen = 4;
+      TerarkCompositeIndexIterator(const TerarkCompositeIndex& index) : index_(index) {
+        pos_ = size_t(-1);
+        buffer_.resize_no_init(index_.commonPrefix_.size() + index_.keyLength_);
+        memcpy(buffer_.data(), index_.commonPrefix_.data(), index_.commonPrefix_.size());
+      }
+      virtual ~TerarkCompositeIndexIterator() {}
 
-      uint64_t Read1stIndex(valvec<byte_t> key, size_t cplen) {
-        return ReadUint64(key.begin() + cplen,
-                          key.begin() + cplen + kIndex1stLen);
+      
+      bool SeekToFirst() override {
+        m_id = 0;
+        //pos_ = 0;
+        UpdateBuffer();
+        return true;
+      }
+      bool SeekToLast() override {
+        // max_rank1() is size,
+        // max_rank1() - 1 is last position
+        m_id = index_.index2ndRS_.max_rank1() - 1;
+        //pos_ = index_.indexSeq_.size() - 1;
+        UpdateBuffer();
+        return true;
+      }
+      bool Seek(fstring target) override {
+        size_t cplen = target.commonPrefixLen(index_.commonPrefix_);
+        if (cplen != index_.commonPrefix_.size()) {
+          assert(target.size() >= cplen);
+          assert(target.size() == cplen || target[cplen] != index_.commonPrefix_[cplen]);
+          if (target.size() == cplen || byte_t(target[cplen]) < byte_t(index_.commonPrefix_[cplen])) {
+            SeekToFirst();
+            return true;
+          } else {
+            m_id = size_t(-1);
+            return false;
+          }
+        }
+        //target.n -= index_.commonPrefix_.size();
+        //byte_t targetBuffer[8] = {};
+        //memcpy(targetBuffer + (8 - index_.keyLength_),
+        //     target.data(), std::min<size_t>(index_.keyLength_, target.size()));
+        //uint64_t targetValue = ReadUint64Aligned(targetBuffer, targetBuffer + 8);
+
+        uint64_t index1st = Read1stIndex(target, cplen);
+        if (index1st > index_.maxValue_) {
+          m_id = size_t(-1);
+          return false;
+        }
+        if (index1st < index_.minValue_) {
+          SeekToFirst();
+          return true;
+        }
+        // find the corresponding bit within 2ndRS
+        fstring index2nd = target.substr(cplen + kIndex1stLen);
+        uint64_t offset = index1st - index_.minValue_;
+        if (index_.index1stRS_[offset]) {
+          // find within this index
+          uint64_t
+            order = index_.index1stRS_.rank1(offset),
+            pos0 = index_.index2ndRS_.select0(order);
+          if (pos0 == index_.index2ndRS_.size() - 1) {
+            pos_ = locate(index_.indexData_, pos0, 1, index2nd);
+          } else {
+            uint64_t cnt = index_.index2ndRS_.one_seq_len(pos0 + 1) + 1;
+            pos_ = locate(index_.indexData_, pos0, cnt, index2nd);
+          }
+        } else {
+          // no such index, use the lower_bound form
+          uint64_t cnt = index_.index1stRS_.zero_seq_len(offset);
+          if (offset + cnt >= index_.index1stRS_.size()) {
+            m_id = size_t(-1);
+            return false;
+          }
+          uint64_t rank = index_.index1stRS_.rank1(offset + cnt);
+          pos_ = index_.index2ndRS_.select0(rank);
+        }
+        UpdateBuffer();
+        return true;
+        /* TBC
+        if (!index_.indexSeq_[pos_]) {
+          pos_ += index_.indexSeq_.zero_seq_len(pos_);
+        }
+        else if (target.size() > index_.keyLength_) {
+          if (pos_ == index_.indexSeq_.size() - 1) {
+            m_id = size_t(-1);
+            return false;
+          }
+          ++m_id;
+          pos_ = pos_ + index_.indexSeq_.zero_seq_len(pos_ + 1) + 1;
+        }
+        UpdateBuffer();
+        return true;
+        */
+      }
+      bool Next() override {
+        assert(m_id != size_t(-1));
+        // 
+        if (m_id == index_.indexSeq_.max_rank1() - 1) {
+          m_id = size_t(-1);
+          return false;
+        }
+        else {
+          ++m_id;
+          pos_ = pos_ + index_.indexSeq_.zero_seq_len(pos_ + 1) + 1;
+          UpdateBuffer();
+          return true;
+        }
+      }
+      bool Prev() override {
+        assert(m_id != size_t(-1));
+        assert(index_.indexSeq_[pos_]);
+        assert(index_.indexSeq_.rank1(pos_) == m_id);
+        if (m_id == 0) {
+          m_id = size_t(-1);
+          return false;
+        }
+        else {
+          --m_id;
+          pos_ = pos_ - index_.indexSeq_.zero_seq_revlen(pos_) - 1;
+          UpdateBuffer();
+          return true;
+        }
       }
 
+      // TBD
+      size_t locate(FixedLenStrVec arr,
+                    size_t start, size_t len, fstring target) {
+        /*
+         * Find within index data, 
+         *   items > 64, use binary search
+         *   items <= 64, iterate search
+         */
+        return size_t(-1);
+      }
+
+      size_t DictRank() const override {
+        assert(m_id != size_t(-1));
+        return m_id;
+      }
+      fstring key() const override {
+        assert(m_id != size_t(-1));
+        return buffer_;
+      }
+    protected:
+      void UpdateBuffer() {
+        //AssignUint64(buffer_.data() + index_.commonPrefix_.size(),
+        //           buffer_.data() + buffer_.size(), pos_ + index_.minValue_);
+        
+        /*
+         * index1st = Assignuint64()
+         * index2nd = index_.indexData_[m_id]
+         * key = commonprefix + index1st + index2nd
+         */
+      }
+      size_t pos_;
+      valvec<byte_t> buffer_;
+      const TerarkCompositeIndex& index_;
+    };
+
+    uint64_t Read1stIndex(valvec<byte_t> key, size_t cplen) {
+      return ReadUint64(key.begin() + cplen,
+                        key.begin() + cplen + kIndex1stLen);
+    }
+    
+  public:
+    class MyFactory : public TerarkIndex::Factory {
+    public:
+      /*
+       * no option.keyPrefixLen
+       */
       TerarkIndex* Build(NativeDataInput<InputBuffer>& reader,
                          const TerarkZipTableOptions& tzopt,
                          const KeyStat& ks) const override {
@@ -467,7 +632,9 @@ public:
           // if (ks.maxKeyLen - cplen > sizeof(uint64_t)) {
           abort();
         }
-        // for negative number
+        /*
+         * rocksdb reverse comparator 
+         */
         uint64_t
           minValue = Read1stIndex(ks.minKey),
           maxValue = Read1stIndex(ks.maxKey);
@@ -508,28 +675,34 @@ public:
         }
         index1stRS.build_cache(false, false);
         index2ndRS.build_cache(false, false);
-
-        unique_ptr< CompositeIndex<RankSelect1st, RankSelect2nd> > ptr(
-          new CompositeIndex<RankSelect1st, RankSelect2nd>());
+        /*
+         * construct index, set meta, index, data
+         */        
+        unique_ptr< TerarkCompositeIndex<RankSelect1st, RankSelect2nd> > ptr(
+          new TerarkCompositeIndex<RankSelect1st, RankSelect2nd>());
         ptr->isUserMemory_ = false;
         ptr->isBuilding_ = true;
-        FileHeader *header = new FileHeader(
-          index1stRS.mem_size() +
-          index2ndRS.mem_size() +
-          keyVec.mem_size());
-        header->min_value = minValue;
-        header->max_value = maxValue;
-        header->index_1st_mem_size = index1stRS.mem_size();
-        header->index_2nd_mem_size = index2ndRS.mem_size();
-        header->key_length = ks.minKeyLen - cplen; // ...
-        if (cplen > ks.commonPrefixLen) {
-          header->common_prefix_length = cplen - ks.commonPrefixLen;
-          ptr->commonPrefix_.assign(ks.minKey.data(), header->common_prefix_length);
-          header->file_size += terark::align_up(header->common_prefix_length, 8);
+        {
+          // save meta into header
+          FileHeader *header = new FileHeader(
+            index1stRS.mem_size() +
+            index2ndRS.mem_size() +
+            keyVec.mem_size());
+          header->min_value = minValue;
+          header->max_value = maxValue;
+          header->index_1st_mem_size = index1stRS.mem_size();
+          header->index_2nd_mem_size = index2ndRS.mem_size();
+          header->key_length = ks.minKeyLen - cplen; // ...
+          if (cplen > ks.commonPrefixLen) {
+            header->common_prefix_length = cplen - ks.commonPrefixLen;
+            ptr->commonPrefix_.assign(ks.minKey.data(), header->common_prefix_length);
+            header->file_size += terark::align_up(header->common_prefix_length, 8);
+          }
+          ptr->header_ = header;
         }
-        ptr->header_ = header;
         ptr->index1stRS_.swap(index1stRS);
         ptr->index2ndRS_.swap(index2ndRS);
+        ptr->indexData_.swap(keyVec);
         return ptr.release();
       }
       unique_ptr<TerarkIndex> LoadMemory(fstring mem) const override {
@@ -553,12 +726,35 @@ public:
         if (mem.data() == nullptr) {
           MmapWholeFile(fpath).swap(ptr->file_);
           mem = {(const char*)ptr->file_.base, (ptrdiff_t)ptr->file_.size};
-        }
-        else {
+        } else {
           ptr->isUserMemory_ = true;
         }
+        // make sure header is valid
+        verifyHeader(mem);
+        // construct composite index
         const FileHeader* header = (const FileHeader*)mem.data();
-
+        ptr->header_ = header;
+        ptr->minValue_ = header->min_value;
+        ptr->maxValue_ = header->max_value;
+        ptr->keyLength_ = header->key_length;
+        if (header->common_prefix_length > 0) {
+          ptr->commonPrefix_.risk_set_data((char*)mem.data() + header->header_size,
+                                           header->common_prefix_length);
+        }
+        size_t offset = header->header_size +
+          terark::align_up(header->common_prefix_length, 8);
+        ptr->index1stRS_.risk_mmap_from((unsigned char*)mem.data() + offset,
+                                        header->index_1st_mem_size);
+        offset += header->index_1st_mem_size;
+        ptr->index2ndRS_.risk_mmap_from((unsigned char*)mem.data() + offset,
+                                        header->index_2nd_mem_size);
+        offset += header->index_2nd_mem_size;
+        ptr->indexData_.risk_mmap_from((unsigned char*)mem.data() + offset,
+                                       header->indexData_);
+        return ptr;
+      }
+      bool verifyHeader(fstring mem) {
+        const FileHeader* header = (const FileHeader*)mem.data();
         if (mem.size() < sizeof(FileHeader)
             || header->magic_len != strlen(index_name)
             || strcmp(header->magic, index_name) != 0
@@ -578,31 +774,83 @@ public:
             g_TerarkIndexFactroy.val(head_i) == g_TerarkIndexFactroy.val(self_i);
         };
         assert(verifyClassName()), (void)verifyClassName;
-        ptr->header_ = header;
-        ptr->minValue_ = header->min_value;
-        ptr->maxValue_ = header->max_value;
-        ptr->keyLength_ = header->key_length;
-        if (header->common_prefix_length > 0) {
-          ptr->commonPrefix_.risk_set_data((char*)mem.data() + header->header_size,
-                                           header->common_prefix_length);
-        }
-        size_t offset = header->header_size +
-          terark::align_up(header->common_prefix_length, 8);
-        ptr->index1stRS_.risk_mmap_from((unsigned char*)mem.data() + offset,
-                                        header->index_1st_mem_size);
-        offset += header->index_1st_mem_size;
-        ptr->index2ndRS_.risk_mmap_from((unsigned char*)mem.data() + offset,
-                                        header->index_2nd_mem_size);
-        return ptr;
+        return true;
       }
+      
     };
+    
     using TerarkIndex::FactoryPtr;
+    virtual ~TerarkUintIndex() {
+      if (isBuilding_) {
+        delete (FileHeader*)header_;
+      } else if (file_.base != nullptr || isUserMemory_) {
+        index1stRS_.risk_release_ownership();
+        index2ndRS_.risk_release_ownership();
+        indexData_.risk_release_ownership();
+        commonPrefix_.risk_release_ownership();
+      }
+    }
+    const char* Name() const override {
+      return header_->class_name;
+    }
+    void SaveMmap(std::function<void(const void *, size_t)> write) const override {
+      write(header_, sizeof *header_);
+      if (!commonPrefix_.empty()) {
+        write(commonPrefix_.data(), terark::align_up(commonPrefix_.size(), 8));
+      }
+      write(index1stRS_.data(), index1stRS_.mem_size());
+      write(index2ndRS_.data(), index2ndRS_.mem_size());
+      write(indexData_.data(), indexData_.mem_size());
+    }
+    size_t Find(fstring key) const override {
+      if (key.size() != keyLength_ + commonPrefix_.size()) {
+        return size_t(-1);
+      }
+      if (key.commonPrefixLen(commonPrefix_) != commonPrefix_.size()) {
+        return size_t(-1);
+      }
+      key.n -= commonPrefix_.size();
+      assert(key.n == keyLength_);
+      uint64_t findValue = ReadUint64((const byte_t*)key.begin(), (const byte_t*)key.end());
+      if (findValue < minValue_ || findValue > maxValue_) {
+        return size_t(-1);
+      }
+      uint64_t findPos = findValue - minValue_;
+      if (!indexSeq_[findPos]) {
+        return size_t(-1);
+      }
+      return indexSeq_.rank1(findPos);
+    }
+    size_t NumKeys() const override {
+      return indexData_.size();
+    }
+    size_t TotalKeySize() const override final {
+      return (commonPrefix_.size() + keyLength_) * indexData_.size();
+    }
+    fstring Memory() const override {
+      return fstring((const char*)header_, (ptrdiff_t)header_->file_size);
+    }
+    Iterator* NewIterator() const override {
+      return new TerarkCompositeIndexIterator(*this);
+    }
+    bool NeedsReorder() const override {
+      return false;
+    }
+    void GetOrderMap(UintVecMin0& newToOld) const override {
+      assert(false);
+    }
+    void BuildCache(double cacheRatio) override {
+      //do nothing
+    }
+
+    
   protected:
     const FileHeader* header_;
     MmapWholeFile     file_;
     valvec<char>      commonPrefix_;
     RankSelect1       index1stRS_;
     RankSelect2       index2ndRS_;
+    FixedLenStrVec    indexData_;
     uint64_t          minValue_;
     uint64_t          maxValue_;
     bool              isUserMemory_;
