@@ -412,8 +412,202 @@ public:
    * using UintIndex
    * 
    */
-  template<class RankSelect1, class RankSelect2>
+  /*
+   * 1. take commonprefixlen = 4, index1_len = 4, index2_len = 4.
+   *    assume at least 2 index1 exist. right now.
+   * 2. add indexlen detector, dynamically detect the length of index1, index2...
+   *
+   */
+  template<class RankSelect1st, class RankSelect2nd>
   class TerarkCompositeIndex : public TerarkIndex {
+  public:
+    static const char* index_name;
+    struct FileHeader : public TerarkIndexHeader
+    {
+      uint64_t min_value;
+      uint64_t max_value;
+      uint64_t index_1st_mem_size;
+      uint64_t index_2nd_mem_size;
+      uint32_t key_length;
+      uint32_t common_prefix_length;
+
+      FileHeader(size_t body_size) {
+        memset(this, 0, sizeof *this);
+        magic_len = strlen(index_name);
+        strncpy(magic, index_name, sizeof magic);
+        size_t name_i = g_TerarkIndexName.find_i(
+          typeid(TerarkCompositeIndex<RankSelect1st, RankSelect2nd>).name());
+        strncpy(class_name, g_TerarkIndexName.val(name_i).c_str(), sizeof class_name);
+
+        header_size = sizeof *this;
+        version = 1;
+
+        file_size = sizeof *this + body_size;
+      }
+    };
+
+  public:
+    class MyFactory : public TerarkIndex::Factory {
+    public:
+      static const int kCommonPrefixLen = 4;
+      static const int kIndex1stLen = 4;
+      static const int kIndex2ndLen = 4;
+
+      uint64_t Read1stIndex(valvec<byte_t> key, size_t cplen) {
+        return ReadUint64(key.begin() + cplen,
+                          key.begin() + cplen + kIndex1stLen);
+      }
+
+      TerarkIndex* Build(NativeDataInput<InputBuffer>& reader,
+                         const TerarkZipTableOptions& tzopt,
+                         const KeyStat& ks) const override {
+        size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
+        assert(cplen >= ks.commonPrefixLen);
+        if (ks.maxKeyLen != ks.minKeyLen) {
+          // if (ks.maxKeyLen - cplen > sizeof(uint64_t)) {
+          abort();
+        }
+        // for negative number
+        uint64_t
+          minValue = Read1stIndex(ks.minKey),
+          maxValue = Read1stIndex(ks.maxKey);
+        if (minValue > maxValue) {
+          std::swap(minValue, maxValue);
+        }
+        uint64_t diff = maxValue - minValue + 1;
+        /*
+         * 1stRS stores bitmap [minvalue, maxvalue] for index1st
+         * 2ndRS stores bitmap [keystart, keyend] for composite index
+         * order of rs2 follows the order of index data, and order 
+         * of rs1 follows the order of rs2
+         */
+        RankSelect1st index1stRS(diff);
+        RankSelect2nd index2ndRS(ks.numKeys);
+        valvec<byte_t> keyBuf;
+        uint64_t prev = size_t(-1);
+        size_t fixlen = kIndex2ndLen; // TBD
+        FixedLenStrVec keyVec(fixlen);
+        if (ks.minKey < ks.maxKey) {
+          keyVec.reserve(ks.numKeys, ks.numKeys * fixlen);
+          for (size_t i = 0; i < ks.numKeys; ++i) {
+            reader >> keyBuf;
+            uint64_t offset = Read1stIndex(keyBuf) - minValue;
+            index1stRS.set1(offset);
+            if (offset != prev) { // new index1 encountered
+              index2ndRS.set0(i);
+            } else {
+              index2ndRS.set1(i);
+            }
+            prev = offset;
+            // save index data
+            keyVec.push_back(
+              fstring(keyBuf).substr(kCommonPrefixLen + kIndex1stLen));
+          }
+        } else {
+          // TBD
+        }
+        index1stRS.build_cache(false, false);
+        index2ndRS.build_cache(false, false);
+
+        unique_ptr< CompositeIndex<RankSelect1st, RankSelect2nd> > ptr(
+          new CompositeIndex<RankSelect1st, RankSelect2nd>());
+        ptr->isUserMemory_ = false;
+        ptr->isBuilding_ = true;
+        FileHeader *header = new FileHeader(
+          index1stRS.mem_size() +
+          index2ndRS.mem_size() +
+          keyVec.mem_size());
+        header->min_value = minValue;
+        header->max_value = maxValue;
+        header->index_1st_mem_size = index1stRS.mem_size();
+        header->index_2nd_mem_size = index2ndRS.mem_size();
+        header->key_length = ks.minKeyLen - cplen; // ...
+        if (cplen > ks.commonPrefixLen) {
+          header->common_prefix_length = cplen - ks.commonPrefixLen;
+          ptr->commonPrefix_.assign(ks.minKey.data(), header->common_prefix_length);
+          header->file_size += terark::align_up(header->common_prefix_length, 8);
+        }
+        ptr->header_ = header;
+        ptr->index1stRS_.swap(index1stRS);
+        ptr->index2ndRS_.swap(index2ndRS);
+        return ptr.release();
+      }
+      unique_ptr<TerarkIndex> LoadMemory(fstring mem) const override {
+        return unique_ptr<TerarkIndex>(loadImpl(mem, {}).release());
+      }
+      unique_ptr<TerarkIndex> LoadFile(fstring fpath) const override {
+        return unique_ptr<TerarkIndex>(loadImpl({}, fpath).release());
+      }
+      size_t MemSizeForBuild(const KeyStat& ks) const override {
+        // TBD
+        return 0;
+      }
+    protected:
+      unique_ptr<TerarkCompositeIndex<RankSelect1st, RankSelect2nd>>
+        loadImpl(fstring mem, fstring fpath) const {
+        unique_ptr<TerarkCompositeIndex<RankSelect1st, RankSelect2nd>>
+          ptr(new TerarkCompositeIndex<RankSelect1st, RankSelect2nd>());
+        ptr->isUserMemory_ = false;
+        ptr->isBuilding_ = false;
+
+        if (mem.data() == nullptr) {
+          MmapWholeFile(fpath).swap(ptr->file_);
+          mem = {(const char*)ptr->file_.base, (ptrdiff_t)ptr->file_.size};
+        }
+        else {
+          ptr->isUserMemory_ = true;
+        }
+        const FileHeader* header = (const FileHeader*)mem.data();
+
+        if (mem.size() < sizeof(FileHeader)
+            || header->magic_len != strlen(index_name)
+            || strcmp(header->magic, index_name) != 0
+            || header->header_size != sizeof(FileHeader)
+            || header->version != 1
+            || header->file_size != mem.size()
+          ) {
+          throw std::invalid_argument("TerarkCompositeIndex::Load(): Bad file header");
+        }
+        auto verifyClassName = [&] {
+          size_t name_i = g_TerarkIndexName.find_i(
+            typeid(TerarkCompositeIndex<RankSelect1st, RankSelect2nd>).name());
+          size_t self_i = g_TerarkIndexFactroy.find_i(g_TerarkIndexName.val(name_i));
+          assert(self_i < g_TerarkIndexFactroy.end_i());
+          size_t head_i = g_TerarkIndexFactroy.find_i(header->class_name);
+          return head_i < g_TerarkIndexFactroy.end_i() &&
+            g_TerarkIndexFactroy.val(head_i) == g_TerarkIndexFactroy.val(self_i);
+        };
+        assert(verifyClassName()), (void)verifyClassName;
+        ptr->header_ = header;
+        ptr->minValue_ = header->min_value;
+        ptr->maxValue_ = header->max_value;
+        ptr->keyLength_ = header->key_length;
+        if (header->common_prefix_length > 0) {
+          ptr->commonPrefix_.risk_set_data((char*)mem.data() + header->header_size,
+                                           header->common_prefix_length);
+        }
+        size_t offset = header->header_size +
+          terark::align_up(header->common_prefix_length, 8);
+        ptr->index1stRS_.risk_mmap_from((unsigned char*)mem.data() + offset,
+                                        header->index_1st_mem_size);
+        offset += header->index_1st_mem_size;
+        ptr->index2ndRS_.risk_mmap_from((unsigned char*)mem.data() + offset,
+                                        header->index_2nd_mem_size);
+        return ptr;
+      }
+    };
+    using TerarkIndex::FactoryPtr;
+  protected:
+    const FileHeader* header_;
+    MmapWholeFile     file_;
+    valvec<char>      commonPrefix_;
+    RankSelect1       index1stRS_;
+    RankSelect2       index2ndRS_;
+    uint64_t          minValue_;
+    uint64_t          maxValue_;
+    bool              isUserMemory_;
+    bool              isBuilding_;
+    uint32_t          keyLength_;
   };
   
 #if defined(TerocksPrivateCode)
