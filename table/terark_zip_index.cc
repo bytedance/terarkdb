@@ -456,24 +456,29 @@ public:
     class TerarkCompositeIndexIterator : public TerarkIndex::Iterator {
     public:
       TerarkCompositeIndexIterator(const TerarkCompositeIndex& index) : index_(index) {
-        pos_ = size_t(-1);
+        //pos_ = size_t(-1);
+        m_id = size_t(-1);
         buffer_.resize_no_init(index_.commonPrefix_.size() + index_.keyLength_);
         memcpy(buffer_.data(), index_.commonPrefix_.data(), index_.commonPrefix_.size());
       }
       virtual ~TerarkCompositeIndexIterator() {}
-
       
       bool SeekToFirst() override {
+        offset_1st_ = index_.index1stRS_.select1(0);
+        assert(offset_1st_ != size_t(-1));
         m_id = 0;
-        //pos_ = 0;
         UpdateBuffer();
         return true;
       }
       bool SeekToLast() override {
         // max_rank1() is size,
-        // max_rank1() - 1 is last position
+        // max_rank1() - 1 is last positio
+        assert(index_.index1stRS_.max_rank1() > 0);
+        size_t last = index_.index1stRS_.max_rank1() - 1;
+        offset_1st_ = index_.index1stRS_.select1(last);
+        assert(offset_1st_ != size_t(-1));
+        
         m_id = index_.index2ndRS_.max_rank1() - 1;
-        //pos_ = index_.indexSeq_.size() - 1;
         UpdateBuffer();
         return true;
       }
@@ -482,7 +487,8 @@ public:
         if (cplen != index_.commonPrefix_.size()) {
           assert(target.size() >= cplen);
           assert(target.size() == cplen || target[cplen] != index_.commonPrefix_[cplen]);
-          if (target.size() == cplen || byte_t(target[cplen]) < byte_t(index_.commonPrefix_[cplen])) {
+          if (target.size() == cplen ||
+              byte_t(target[cplen]) < byte_t(index_.commonPrefix_[cplen])) {
             SeekToFirst();
             return true;
           } else {
@@ -500,34 +506,33 @@ public:
         if (index1st > index_.maxValue_) {
           m_id = size_t(-1);
           return false;
-        }
-        if (index1st < index_.minValue_) {
-          SeekToFirst();
-          return true;
+        } else if (index1st < index_.minValue_) {
+          return SeekToFirst();
         }
         // find the corresponding bit within 2ndRS
+        offset_1st_ = index1st - index_.minValue_;
         fstring index2nd = target.substr(cplen + kIndex1stLen);
-        uint64_t offset = index1st - index_.minValue_;
-        if (index_.index1stRS_[offset]) {
+        if (index_.index1stRS_[offset_1st_]) {
           // find within this index
           uint64_t
-            order = index_.index1stRS_.rank1(offset),
+            order = index_.index1stRS_.rank1(offset_1st_),
             pos0 = index_.index2ndRS_.select0(order);
-          if (pos0 == index_.index2ndRS_.size() - 1) {
-            pos_ = locate(index_.indexData_, pos0, 1, index2nd);
+          if (pos0 == index_.index2ndRS_.size() - 1) { // last elem
+            m_id = Locate(index_.indexData_, pos0, 1, index2nd);
           } else {
             uint64_t cnt = index_.index2ndRS_.one_seq_len(pos0 + 1) + 1;
-            pos_ = locate(index_.indexData_, pos0, cnt, index2nd);
+            m_id = Locate(index_.indexData_, pos0, cnt, index2nd);
           }
         } else {
           // no such index, use the lower_bound form
-          uint64_t cnt = index_.index1stRS_.zero_seq_len(offset);
-          if (offset + cnt >= index_.index1stRS_.size()) {
+          uint64_t cnt = index_.index1stRS_.zero_seq_len(offset_1st_);
+          if (offset_1st_ + cnt >= index_.index1stRS_.size()) {
             m_id = size_t(-1);
             return false;
           }
-          uint64_t rank = index_.index1stRS_.rank1(offset + cnt);
-          pos_ = index_.index2ndRS_.select0(rank);
+          offset_1st_ += cnt;
+          uint64_t order = index_.index1stRS_.rank1(offset_1st_);
+          m_id = index_.index2ndRS_.select0(order);
         }
         UpdateBuffer();
         return true;
@@ -547,44 +552,82 @@ public:
         return true;
         */
       }
+
       bool Next() override {
         assert(m_id != size_t(-1));
-        // 
-        if (m_id == index_.indexSeq_.max_rank1() - 1) {
+        assert(index_.index1stRS_[offset_1st_] != 0);
+        if (m_id + 1 == index_.index2ndRS_.size()) {
           m_id = size_t(-1);
           return false;
-        }
-        else {
+        } else {
+          if (IsIndexDiff(m_id, m_id + 1)) {
+            assert(offset_1st_ + 1 <  index_index1stRS_.size());
+            uint64_t cnt = index_.index1stRS_.zero_seq_len(offset_1st_ + 1);
+            offset_1st_ += cnt + 1;
+          }
           ++m_id;
-          pos_ = pos_ + index_.indexSeq_.zero_seq_len(pos_ + 1) + 1;
           UpdateBuffer();
           return true;
         }
       }
       bool Prev() override {
         assert(m_id != size_t(-1));
-        assert(index_.indexSeq_[pos_]);
-        assert(index_.indexSeq_.rank1(pos_) == m_id);
+        assert(index_.index1stRS_[offset_1st_] != 0);
         if (m_id == 0) {
           m_id = size_t(-1);
           return false;
-        }
-        else {
+        } else {
+          if (IsIndexDiff(m_id - 1, m_id)) {
+            /*
+             * zero_seq_ has [a, b) range, hence next() need (pos_ + 1), whereas
+             * prev() just called with (pos_) is enough
+             * case1: 1 0 1, ... 
+             * case2: 1 1, ...
+             */
+            assert(offset_1st_ > 0);
+            uint64_t cnt = index_.index1stRS_.zero_seq_revlen(offset_1st_);
+            assert(offset_1st_ >= cnt + 1);
+            offset_1st_ -= (cnt + 1);
+          }
           --m_id;
-          pos_ = pos_ - index_.indexSeq_.zero_seq_revlen(pos_) - 1;
           UpdateBuffer();
           return true;
         }
       }
 
-      // TBD
-      size_t locate(FixedLenStrVec arr,
-                    size_t start, size_t len, fstring target) {
+      /*
+       * use 2nd index bitmap to check if 1st index changed
+       */
+      bool IsIndexDiff(size_t lid, size_t rid) {
+        /*
+         * case1: 0 1 1 0, ...
+         * case2: 0 0, ...
+         *   the 2nd 0 means another index started
+         */
+        return (index_.index2ndRS_[lid] > index_.index2ndRS_[rid] ||
+                index_.index2ndRS_[lid] == index_.index2ndRS_[rid] == 0);
+      }
+      
+      size_t Locate(FixedLenStrVec arr,
+                    size_t start, size_t cnt, fstring target) {
         /*
          * Find within index data, 
          *   items > 64, use binary search
          *   items <= 64, iterate search
          */
+        static const size_t limit = 64;
+        if (cnt > limit) {
+          // bsearch
+          auto iter = std::lower_bound(
+            arr.begin() + start, arr.begin() + start + cnt, target);
+          return std::distance(arr.begin(), iter);
+        } else {
+          for (size_t i = 0; i < cnt; i++) {
+            if (target <= arr[start + i]) {
+              return start + i;
+            }
+          }
+        }
         return size_t(-1);
       }
 
@@ -598,16 +641,21 @@ public:
       }
     protected:
       void UpdateBuffer() {
-        //AssignUint64(buffer_.data() + index_.commonPrefix_.size(),
-        //           buffer_.data() + buffer_.size(), pos_ + index_.minValue_);
-        
-        /*
-         * index1st = Assignuint64()
-         * index2nd = index_.indexData_[m_id]
-         * key = commonprefix + index1st + index2nd
-         */
+        // key = commonprefix + index1st + index2nd
+        // assign index 1st
+        size_t offset = index_.commonPrefix_.size();
+        AssignUint64(buffer_.data() + offset,
+                     buffer_.data() + offset + kIndex1stLen,
+                     offset_1st_ + index_.minValue_);
+        // assign index 2nd
+        offset += kIndex1stLen;
+        fstring data = index_.indexData_[m_id];
+        memcpy(buffer_.data() + offset,
+               data.data(), data.size());
+               
       }
-      size_t pos_;
+      size_t offset_1st_; // used to track & decode index1 value
+      //size_t pos_;
       valvec<byte_t> buffer_;
       const TerarkCompositeIndex& index_;
     };
