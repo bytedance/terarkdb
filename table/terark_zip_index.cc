@@ -267,7 +267,6 @@ public:
         }
         else {
           keyVec.m_offsets.resize_with_wire_max_val(numKeys + 1, sumRealKeyLen);
-          // TBD: obj.set_wire(a, b) e.g. obj[a] = b
           keyVec.m_offsets.set_wire(numKeys, sumRealKeyLen);
           keyVec.m_strpool.resize(sumRealKeyLen);
           size_t offset = sumRealKeyLen;
@@ -414,8 +413,7 @@ public:
    * 
    */
   /*
-   * 1. take commonprefixlen = 4, index1_len = 4, index2_len = 4.
-   *    assume at least 2 index1 exist. right now.
+   * 1. assume index1_len = 8, ks.commonPrefixLen = 0, assume at least 2 index1 exist. right now.
    * 2. add indexlen detector, dynamically detect the length of index1, index2...
    *
    */
@@ -427,14 +425,20 @@ public:
     static const int kIndex2ndLen = 8;
 
     static const char* index_name;
-    struct FileHeader : public TerarkIndexHeader
-    {
+    struct FileHeader : public TerarkIndexHeader {
       uint64_t min_value;
       uint64_t max_value;
       uint64_t index_1st_mem_size;
       uint64_t index_2nd_mem_size;
       uint64_t index_data_size;
       uint32_t key_length;
+      /*
+       * (Rocksdb) For one huge index, we'll split it into multipart-index for the sake of RAM, 
+       * and each sub-index could have longer commonPrefix compared with ks.commonPrefix.
+       * what's more, under such circumstances, ks.commonPrefix may have been rewritten
+       * be upper-level builder to '0'. here, 
+       * common_prefix_length = sub-index.commonPrefixLen - whole-index.commonPrefixLen
+       */
       uint32_t common_prefix_length;
 
       FileHeader(size_t body_size) {
@@ -471,14 +475,15 @@ public:
         return true;
       }
       bool SeekToLast() override {
-        // max_rank1() is size,
-        // max_rank1() - 1 is last positio
+        /*
+         * max_rank1() is size,
+         * max_rank1() - 1 is last positio
+         */
         assert(index_.index1stRS_.max_rank1() > 0);
         size_t last = index_.index1stRS_.max_rank1() - 1;
         offset_1st_ = index_.index1stRS_.select1(last);
         assert(offset_1st_ != size_t(-1));
-        
-        m_id = index_.index2ndRS_.max_rank1() - 1;
+        m_id = index_.index2ndRS_.size() - 1;
         UpdateBuffer();
         return true;
       }
@@ -489,20 +494,22 @@ public:
           assert(target.size() == cplen || target[cplen] != index_.commonPrefix_[cplen]);
           if (target.size() == cplen ||
               byte_t(target[cplen]) < byte_t(index_.commonPrefix_[cplen])) {
-            SeekToFirst();
-            return true;
+            return SeekToFirst();
           } else {
             m_id = size_t(-1);
             return false;
           }
         }
-        //target.n -= index_.commonPrefix_.size();
-        //byte_t targetBuffer[8] = {};
-        //memcpy(targetBuffer + (8 - index_.keyLength_),
-        //     target.data(), std::min<size_t>(index_.keyLength_, target.size()));
-        //uint64_t targetValue = ReadUint64Aligned(targetBuffer, targetBuffer + 8);
 
-        uint64_t index1st = Read1stIndex(target, cplen);
+        uint64_t index1st = 0;
+        if (target.size() <= kIndex1stLen) {
+          byte_t targetBuffer[8] = { 0 };
+          memcpy(targetBuffer + (8 - target.size()),
+                 target.data(), target.size());
+          index1st = Read1stIndex(fstring(targetBuffer, targetBuffer + 8), cplen);
+        } else {
+          index1st = Read1stIndex(target, cplen);
+        }
         if (index1st > index_.maxValue_) {
           m_id = size_t(-1);
           return false;
@@ -511,14 +518,14 @@ public:
         }
         // find the corresponding bit within 2ndRS
         offset_1st_ = index1st - index_.minValue_;
-        fstring index2nd = target.substr(cplen + kIndex1stLen);
+        fstring index2nd = target.substr(kIndex1stLen);
         if (index_.index1stRS_[offset_1st_]) {
           // find within this index
           uint64_t
             order = index_.index1stRS_.rank1(offset_1st_),
             pos0 = index_.index2ndRS_.select0(order);
           if (pos0 == index_.index2ndRS_.size() - 1) { // last elem
-            m_id = Locate(index_.indexData_, pos0, 1, index2nd);
+            m_id = (index2nd <= index_.indexData_[pos0]) ? pos0 : size_t(-1);
           } else {
             uint64_t cnt = index_.index2ndRS_.one_seq_len(pos0 + 1) + 1;
             m_id = Locate(index_.indexData_, pos0, cnt, index2nd);
@@ -534,23 +541,11 @@ public:
           uint64_t order = index_.index1stRS_.rank1(offset_1st_);
           m_id = index_.index2ndRS_.select0(order);
         }
-        UpdateBuffer();
-        return true;
-        /* TBC
-        if (!index_.indexSeq_[pos_]) {
-          pos_ += index_.indexSeq_.zero_seq_len(pos_);
-        }
-        else if (target.size() > index_.keyLength_) {
-          if (pos_ == index_.indexSeq_.size() - 1) {
-            m_id = size_t(-1);
-            return false;
-          }
-          ++m_id;
-          pos_ = pos_ + index_.indexSeq_.zero_seq_len(pos_ + 1) + 1;
+        if (m_id == size_t(-1)) {
+          return false;
         }
         UpdateBuffer();
         return true;
-        */
       }
 
       bool Next() override {
@@ -564,6 +559,7 @@ public:
             assert(offset_1st_ + 1 <  index_index1stRS_.size());
             uint64_t cnt = index_.index1stRS_.zero_seq_len(offset_1st_ + 1);
             offset_1st_ += cnt + 1;
+            assert(offset_1st_ < index_.index1stRS_.size());
           }
           ++m_id;
           UpdateBuffer();
@@ -607,29 +603,6 @@ public:
         return (index_.index2ndRS_[lid] > index_.index2ndRS_[rid] ||
                 index_.index2ndRS_[lid] == index_.index2ndRS_[rid] == 0);
       }
-      
-      size_t Locate(FixedLenStrVec arr,
-                    size_t start, size_t cnt, fstring target) {
-        /*
-         * Find within index data, 
-         *   items > 64, use binary search
-         *   items <= 64, iterate search
-         */
-        static const size_t limit = 64;
-        if (cnt > limit) {
-          // bsearch
-          auto iter = std::lower_bound(
-            arr.begin() + start, arr.begin() + start + cnt, target);
-          return std::distance(arr.begin(), iter);
-        } else {
-          for (size_t i = 0; i < cnt; i++) {
-            if (target <= arr[start + i]) {
-              return start + i;
-            }
-          }
-        }
-        return size_t(-1);
-      }
 
       size_t DictRank() const override {
         assert(m_id != size_t(-1));
@@ -645,25 +618,19 @@ public:
         // assign index 1st
         size_t offset = index_.commonPrefix_.size();
         AssignUint64(buffer_.data() + offset,
-                     buffer_.data() + offset + kIndex1stLen,
+                     buffer_.data() + kIndex1stLen,
                      offset_1st_ + index_.minValue_);
         // assign index 2nd
-        offset += kIndex1stLen;
+        offset = kIndex1stLen;
         fstring data = index_.indexData_[m_id];
         memcpy(buffer_.data() + offset,
                data.data(), data.size());
                
       }
       size_t offset_1st_; // used to track & decode index1 value
-      //size_t pos_;
       valvec<byte_t> buffer_;
       const TerarkCompositeIndex& index_;
     };
-
-    uint64_t Read1stIndex(valvec<byte_t> key, size_t cplen) {
-      return ReadUint64(key.begin() + cplen,
-                        key.begin() + cplen + kIndex1stLen);
-    }
     
   public:
     class MyFactory : public TerarkIndex::Factory {
@@ -676,16 +643,18 @@ public:
                          const KeyStat& ks) const override {
         size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
         assert(cplen >= ks.commonPrefixLen);
-        if (ks.maxKeyLen != ks.minKeyLen) {
+        if (ks.maxKeyLen != ks.minKeyLen ||
+            ks.maxKeyLen <= sizeof(uint64_t)) {
           // if (ks.maxKeyLen - cplen > sizeof(uint64_t)) {
           abort();
         }
         /*
-         * rocksdb reverse comparator 
+         * if rocksdb reverse comparator is used, then minValue
+         * is actually the largetst one
          */
         uint64_t
-          minValue = Read1stIndex(ks.minKey),
-          maxValue = Read1stIndex(ks.maxKey);
+          minValue = Read1stIndex(ks.minKey, cplen),
+          maxValue = Read1stIndex(ks.maxKey, cplen);
         if (minValue > maxValue) {
           std::swap(minValue, maxValue);
         }
@@ -697,16 +666,16 @@ public:
          * of rs1 follows the order of rs2
          */
         RankSelect1st index1stRS(diff);
-        RankSelect2nd index2ndRS(ks.numKeys);
+        RankSelect2nd index2ndRS(ks.numKeys + 1);
         valvec<byte_t> keyBuf;
         uint64_t prev = size_t(-1);
-        size_t fixlen = kIndex2ndLen; // TBD
+        size_t sumRealKeyLen = (ks.maxKeyLen - kIndex1stLen) * ks.numKeys;
         FixedLenStrVec keyVec(fixlen);
         if (ks.minKey < ks.maxKey) {
-          keyVec.reserve(ks.numKeys, ks.numKeys * fixlen);
+          keyVec.reserve(ks.numKeys, sumRealKeyLen);
           for (size_t i = 0; i < ks.numKeys; ++i) {
             reader >> keyBuf;
-            uint64_t offset = Read1stIndex(keyBuf) - minValue;
+            uint64_t offset = Read1stIndex(keyBuf, cplen) - minValue;
             index1stRS.set1(offset);
             if (offset != prev) { // new index1 encountered
               index2ndRS.set0(i);
@@ -715,11 +684,32 @@ public:
             }
             prev = offset;
             // save index data
-            keyVec.push_back(
-              fstring(keyBuf).substr(kCommonPrefixLen + kIndex1stLen));
+            keyVec.push_back(fstring(keyBuf).substr(kIndex1stLen));
           }
         } else {
-          // TBD
+          keyVec.m_offsets.resize_with_wire_max_val(numKeys + 1, sumRealKeyLen);
+          keyVec.m_offsets.set_wire(numKeys, sumRealKeyLen);
+          keyVec.m_strpool.resize(sumRealKeyLen);
+          size_t offset = sumRealKeyLen;
+          for (size_t i = numKeys - 1; i >= 0; --i) {
+            reader >> keyBuf;
+            uint64_t offset = Read1stIndex(keyBuf, cplen) - minValue;
+            index1stRS.set1(offset);
+            if (offset != prev) { // next index1 is new one
+              index2ndRS.set0(i + 1);
+            } else {
+              index2ndRS.set1(i + 1);
+            }
+            prev = offset;
+            // save index data
+            fstring str =  fstring(keyBuf).substr(kIndex1stLen);
+            offset -= str.size();
+            memcpy(keyVec.m_strpool.data() + offset, str.data(), str.size());
+            keyVec.m_offsets.set_wire(i, offset);
+          }
+          index2ndRS_.set0(0); // set 1st element to 0
+          index2ndRS_.resize(ks.numKeys); // TBD: if resize if necessary ?
+          assert(offset == 0);
         }
         index1stRS.build_cache(false, false);
         index2ndRS.build_cache(false, false);
@@ -740,10 +730,13 @@ public:
           header->max_value = maxValue;
           header->index_1st_mem_size = index1stRS.mem_size();
           header->index_2nd_mem_size = index2ndRS.mem_size();
-          header->key_length = ks.minKeyLen - cplen; // ...
+          header->key_length = ks.minKeyLen - cplen;
           if (cplen > ks.commonPrefixLen) {
+            // upper layer didn't handle common prefix, we'll do it
+            // ourselves. actually here ks.commonPrefixLen == 0
             header->common_prefix_length = cplen - ks.commonPrefixLen;
-            ptr->commonPrefix_.assign(ks.minKey.data(), header->common_prefix_length);
+            ptr->commonPrefix_.assign(ks.minKey.data() + ks.commonPrefixLen,
+              header->common_prefix_length);
             header->file_size += terark::align_up(header->common_prefix_length, 8);
           }
           ptr->header_ = header;
@@ -760,8 +753,19 @@ public:
         return unique_ptr<TerarkIndex>(loadImpl({}, fpath).release());
       }
       size_t MemSizeForBuild(const KeyStat& ks) const override {
-        // TBD
-        return 0;
+        assert(ks.minKeyLen == ks.maxKeyLen);
+        size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
+        uint64_t
+          minValue = Read1stIndex(ks.minKey, cplen),
+          maxValue = Read1stIndex(ks.maxKey, cplen);
+        if (minValue > maxValue) {
+          std::swap(minValue, maxValue);
+        }
+        uint64_t diff = maxValue - minValue + 1;
+        size_t index1stsz = size_t(std::ceil(diff * 1.25 / 8));
+        size_t index2ndsz = size_t(std::ceil(ks.numKeys * 1.25 / 8));
+        size_t indexDatasz = size_t(std::ceil(ks.numKeys * (ks.minKey.size() - kIndex1stLen)));
+        return index1stsz + index2ndsz + indexDatasz;
       }
     protected:
       unique_ptr<TerarkCompositeIndex<RankSelect1st, RankSelect2nd>>
@@ -770,7 +774,6 @@ public:
           ptr(new TerarkCompositeIndex<RankSelect1st, RankSelect2nd>());
         ptr->isUserMemory_ = false;
         ptr->isBuilding_ = false;
-
         if (mem.data() == nullptr) {
           MmapWholeFile(fpath).swap(ptr->file_);
           mem = {(const char*)ptr->file_.base, (ptrdiff_t)ptr->file_.size};
@@ -851,23 +854,29 @@ public:
       write(indexData_.data(), indexData_.mem_size());
     }
     size_t Find(fstring key) const override {
-      if (key.size() != keyLength_ + commonPrefix_.size()) {
+      if (key.size() != keyLength_ + commonPrefix_.size() ||
+          key.commonPrefixLen(commonPrefix_) != commonPrefix_.size()) {
         return size_t(-1);
       }
-      if (key.commonPrefixLen(commonPrefix_) != commonPrefix_.size()) {
+      uint64_t index1st = Read1stIndex(key, 0);
+      if (index1st < minValue_ || index1st > maxValue_) {
         return size_t(-1);
       }
-      key.n -= commonPrefix_.size();
-      assert(key.n == keyLength_);
-      uint64_t findValue = ReadUint64((const byte_t*)key.begin(), (const byte_t*)key.end());
-      if (findValue < minValue_ || findValue > maxValue_) {
+      uint64_t offset = index1st - minValue_;
+      if (!index1stRS_[offset]) {
         return size_t(-1);
       }
-      uint64_t findPos = findValue - minValue_;
-      if (!indexSeq_[findPos]) {
-        return size_t(-1);
+      uint64_t
+        order = index1stRS_.rank1(offset),
+        pos0 = index2ndRS_.select0(order);
+      assert(pos0 != size_t(-1));
+      size_t cnt = index2ndRS_.one_seq_len(pos0 + 1);
+      fstring index2nd = target.substr(kIndex1stLen);
+      size_t id = Locate(indexData_, pos0, cnt + 1, index2nd);
+      if (id != size_t(-1) && index2nd == indexData_[id]) {
+        return id;
       }
-      return indexSeq_.rank1(findPos);
+      return size_t(-1);
     }
     size_t NumKeys() const override {
       return indexData_.size();
@@ -891,6 +900,40 @@ public:
       //do nothing
     }
 
+  public:
+    // handlers
+    uint64_t Read1stIndex(valvec<byte_t> key, size_t cplen) {
+      return ReadUint64(key.begin() + cplen,
+                        key.begin() + cplen + kIndex1stLen);
+    }
+    uint64_t Read1stIndex(fstring key, size_t cplen) {
+      return ReadUint64(key.begin() + cplen,
+                        key.begin() + cplen + kIndex1stLen);
+    }
+    size_t Locate(FixedLenStrVec arr,
+                  size_t start, size_t cnt, fstring target) {
+      /*
+       * Find within index data, 
+       *   items > 64, use binary search
+       *   items <= 64, iterate search
+       */
+      static const size_t limit = 64;
+      if (cnt > limit) {
+        // bsearch
+        auto end = arr.begin() + start + cnt;
+        auto iter = std::lower_bound(
+          arr.begin() + start, end, target);
+        if (iter != end)
+          return std::distance(arr.begin(), iter);
+      } else {
+        for (size_t i = 0; i < cnt; i++) {
+          if (target <= arr[start + i]) {
+            return start + i;
+          }
+        }
+      }
+      return size_t(-1);
+    }
     
   protected:
     const FileHeader* header_;
@@ -1082,7 +1125,8 @@ public:
       header->key_length = ks.minKeyLen - cplen;
       if (cplen > ks.commonPrefixLen) {
         header->common_prefix_length = cplen - ks.commonPrefixLen;
-        ptr->commonPrefix_.assign(ks.minKey.data(), header->common_prefix_length);
+        ptr->commonPrefix_.assign(ks.minKey.data() + ks.commonPrefixLen,
+          header->common_prefix_length);
         header->file_size += terark::align_up(header->common_prefix_length, 8);
       }
       ptr->header_ = header;
