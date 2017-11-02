@@ -528,7 +528,7 @@ public:
             m_id = (index2nd <= index_.indexData_[pos0]) ? pos0 : size_t(-1);
           } else {
             uint64_t cnt = index_.index2ndRS_.one_seq_len(pos0 + 1) + 1;
-            m_id = Locate(index_.indexData_, pos0, cnt, index2nd);
+            m_id = index_.Locate(index_.indexData_, pos0, cnt, index2nd);
           }
         } else {
           // no such index, use the lower_bound form
@@ -646,6 +646,7 @@ public:
         if (ks.maxKeyLen != ks.minKeyLen ||
             ks.maxKeyLen <= sizeof(uint64_t)) {
           // if (ks.maxKeyLen - cplen > sizeof(uint64_t)) {
+          printf("diff ken len, maxlen %d, minlen %d\n", ks.maxKeyLen, ks.minKeyLen);
           abort();
         }
         /*
@@ -707,8 +708,8 @@ public:
             memcpy(keyVec.m_strpool.data() + offset, str.data(), str.size());
             //keyVec.m_offsets.set_wire(i, offset);
           }
-          index2ndRS_.set0(0); // set 1st element to 0
-          index2ndRS_.resize(ks.numKeys); // TBD: if resize if necessary ?
+          index2ndRS.set0(0); // set 1st element to 0
+          index2ndRS.resize(ks.numKeys); // TBD: if resize if necessary ?
           assert(offset == 0);
         }
         index1stRS.build_cache(false, false);
@@ -807,7 +808,7 @@ public:
           header->common_prefix_length - kIndex1stLen;
         return ptr;
       }
-      bool verifyHeader(fstring mem) {
+      bool verifyHeader(fstring mem) const {
         const FileHeader* header = (const FileHeader*)mem.data();
         if (mem.size() < sizeof(FileHeader)
             || header->magic_len != strlen(index_name)
@@ -905,16 +906,16 @@ public:
 
   public:
     // handlers
-    uint64_t Read1stIndex(valvec<byte_t> key, size_t cplen) {
+    static uint64_t Read1stIndex(valvec<byte_t>& key, size_t cplen) {
       return ReadUint64(key.begin() + cplen,
-                        key.begin() + cplen + kIndex1stLen);
+                        key.begin() + kIndex1stLen);
     }
-    uint64_t Read1stIndex(fstring key, size_t cplen) {
-      return ReadUint64(key.begin() + cplen,
-                        key.begin() + cplen + kIndex1stLen);
+    static uint64_t Read1stIndex(fstring key, size_t cplen) {
+      return ReadUint64((const byte_t*)key.data() + cplen,
+                        (const byte_t*)key.data() + kIndex1stLen);
     }
     size_t Locate(FixedLenStrVec arr,
-                  size_t start, size_t cnt, fstring target) {
+                  size_t start, size_t cnt, fstring target) const {
       /*
        * Find within index data, 
        *   items > 64, use binary search
@@ -955,6 +956,9 @@ public:
     bool              isBuilding_;
     uint32_t          keyLength_;
   };
+  template<class RankSelect1st, class RankSelect2nd>
+  const char* TerarkCompositeIndex<RankSelect1st, RankSelect2nd>::index_name = "CompositeIndex";
+
   
 #if defined(TerocksPrivateCode)
 
@@ -1296,6 +1300,8 @@ typedef NestLoudsTrieIndex<NestLoudsTrieDAWG_Mixed_IL_256_32_FL> TerocksIndex_Ne
 typedef NestLoudsTrieIndex<NestLoudsTrieDAWG_Mixed_SE_512_32_FL> TerocksIndex_NestLoudsTrieDAWG_Mixed_SE_512_32_FL;
 typedef NestLoudsTrieIndex<NestLoudsTrieDAWG_Mixed_XL_256_32_FL> TerocksIndex_NestLoudsTrieDAWG_Mixed_XL_256_32_FL;
 
+  typedef TerarkCompositeIndex<terark::rank_select_il_256, terark::rank_select_il_256> TerarkCompositeIndex_IL_256_32;
+
 TerarkIndexRegister(TerocksIndex_NestLoudsTrieDAWG_IL_256_32, "NestLoudsTrieDAWG_IL", "IL_256_32", "IL_256", "NestLoudsTrieDAWG_IL_256");
 TerarkIndexRegister(TerocksIndex_NestLoudsTrieDAWG_SE_512_32, "NestLoudsTrieDAWG_SE_512", "SE_512_32", "SE_512");
 TerarkIndexRegister(TerocksIndex_NestLoudsTrieDAWG_SE_512_64, "NestLoudsTrieDAWG_SE_512_64", "SE_512_64");
@@ -1309,6 +1315,8 @@ TerarkIndexRegister(TerocksIndex_NestLoudsTrieDAWG_SE_512_64_FL, "NestLoudsTrieD
 TerarkIndexRegister(TerocksIndex_NestLoudsTrieDAWG_Mixed_SE_512_32_FL, "NestLoudsTrieDAWG_Mixed_SE_512_32_FL", "Mixed_SE_512_32_FL");
 TerarkIndexRegister(TerocksIndex_NestLoudsTrieDAWG_Mixed_IL_256_32_FL, "NestLoudsTrieDAWG_Mixed_IL_256_32_FL", "Mixed_IL_256_32_FL");
 TerarkIndexRegister(TerocksIndex_NestLoudsTrieDAWG_Mixed_XL_256_32_FL, "NestLoudsTrieDAWG_Mixed_XL_256_32_FL", "Mixed_XL_256_32_FL");
+
+  TerarkIndexRegister(TerarkCompositeIndex_IL_256_32, "CompositeIndex_IL_256_32", "CompositeIndex");
 
 #if defined(TerocksPrivateCode)
 typedef TerarkUintIndex<terark::rank_select_il_256_32> TerarkUintIndex_IL_256_32;
