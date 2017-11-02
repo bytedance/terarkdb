@@ -83,7 +83,7 @@ struct TerarkZipTableOptions {
   float          estimateCompressionRatio = 0.2f;
   double         sampleRatio              = 0.03;
   std::string    localTempDir             = "/tmp";
-  std::string    indexType                = "IL_256";
+  std::string    indexType                = "Mixed_XL_256_32_FL";
   std::string    extendedConfigFile;
 
   size_t softZipWorkingMemLimit = 16ull << 30;
