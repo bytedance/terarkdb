@@ -4,7 +4,6 @@
 #include <future>
 #include <cfloat>
 // boost headers
-#include <boost/scope_exit.hpp>
 // rocksdb headers
 #include <rocksdb/merge_operator.h>
 #include <table/meta_blocks.h>
