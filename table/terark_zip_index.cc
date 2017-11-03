@@ -588,19 +588,6 @@ public:
         }
       }
 
-      /*
-       * use 2nd index bitmap to check if 1st index changed
-       */
-      bool IsIndexDiff(size_t lid, size_t rid) {
-        /*
-         * case1: 0 1 1 0, ...
-         * case2: 0 0, ...
-         *   the 2nd 0 means another index started
-         */
-        return (index_.index2ndRS_[lid] > index_.index2ndRS_[rid] ||
-                index_.index2ndRS_[lid] == index_.index2ndRS_[rid] == 0);
-      }
-
       size_t DictRank() const override {
         assert(m_id != size_t(-1));
         return m_id;
@@ -609,7 +596,21 @@ public:
         assert(m_id != size_t(-1));
         return buffer_;
       }
+
     protected:
+      //use 2nd index bitmap to check if 1st index changed
+      bool IsIndexDiff(size_t lid, size_t rid) {
+        /*
+         * case1: 0 1 1 0, ...
+         * case2: 0 0, ...
+         *   the 2nd 0 means another index started
+         */
+        int li = (int)index_.index2ndRS_[lid],
+          ri = (int)index_.index2ndRS_[rid];
+        return (li > ri ||
+                li + ri == 0);
+      }
+
       void UpdateBuffer() {
         // key = commonprefix + index1st + index2nd
         // assign index 1st
@@ -656,15 +657,15 @@ public:
         if (minValue > maxValue) {
           std::swap(minValue, maxValue);
         }
-        uint64_t diff = maxValue - minValue + 1;
+        uint64_t cnt = maxValue - minValue + 1;
         /*
          * 1stRS stores bitmap [minvalue, maxvalue] for index1st
          * 2ndRS stores bitmap [keystart, keyend] for composite index
          * order of rs2 follows the order of index data, and order 
          * of rs1 follows the order of rs2
          */
-        RankSelect1st index1stRS(diff);
-        RankSelect2nd index2ndRS(ks.numKeys + 1);
+        RankSelect1st index1stRS(cnt);
+        RankSelect2nd index2ndRS(ks.numKeys);
         valvec<byte_t> keyBuf;
         uint64_t prev = size_t(-1);
         size_t sumRealKeyLen = (ks.maxKeyLen - kIndex1stLen) * ks.numKeys;
@@ -681,33 +682,29 @@ public:
               index2ndRS.set1(i);
             }
             prev = offset;
-            // save index data
             keyVec.push_back(fstring(keyBuf).substr(kIndex1stLen));
           }
         } else {
-          //keyVec.m_offsets.resize_with_wire_max_val(numKeys + 1, sumRealKeyLen);
-          //keyVec.m_offsets.set_wire(numKeys, sumRealKeyLen);
-          //keyVec.m_strpool.resize(sumRealKeyLen);
-          size_t offset = sumRealKeyLen;
+          size_t pos = sumRealKeyLen;
           for (size_t i = ks.numKeys - 1; i >= 0; --i) {
             reader >> keyBuf;
             uint64_t offset = Read1stIndex(keyBuf, cplen) - minValue;
             index1stRS.set1(offset);
-            if (offset != prev) { // next index1 is new one
-              index2ndRS.set0(i + 1);
-            } else {
-              index2ndRS.set1(i + 1);
+            if (i < ks.numKeys - 1) {
+              if (offset != prev) { // next index1 is new one
+                index2ndRS.set0(i + 1);
+              } else {
+                index2ndRS.set1(i + 1);
+              }
             }
             prev = offset;
             // save index data
             fstring str =  fstring(keyBuf).substr(kIndex1stLen);
-            offset -= str.size();
-            memcpy(keyVec.m_strpool.data() + offset, str.data(), str.size());
-            //keyVec.m_offsets.set_wire(i, offset);
+            pos -= str.size();
+            memcpy(keyVec.m_strpool.data() + pos, str.data(), str.size());
           }
           index2ndRS.set0(0); // set 1st element to 0
-          index2ndRS.resize(ks.numKeys); // TBD: if resize if necessary ?
-          assert(offset == 0);
+          assert(pos == 0);
         }
         index1stRS.build_cache(false, false);
         index2ndRS.build_cache(false, false);

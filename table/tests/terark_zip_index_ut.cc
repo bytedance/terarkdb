@@ -134,6 +134,84 @@ void test_ascend() {
     assert(result == size_t(-1));
   }
   printf("\tFind done\n");
+  // iterator
+  auto iter = index->NewIterator();
+  {
+    // seek to 1st, next()
+    char arr[16] = { 0 };
+    assert(iter->SeekToFirst());
+    assert(iter->DictRank() == 0);
+    assert(fstring(arr, 16) == iter->key());
+    for (int i = 0; i < 10; i++) {
+      arr[7] = i;
+      for (int j = 0; j < 10; j++) {
+        arr[15] = j;
+        if (i == 0 && j == 0)
+          continue;
+        assert(iter->Next());
+        assert(iter->DictRank() == i * 10 + j);
+        assert(fstring(arr, 16) == iter->key());
+      }
+    }
+    assert(iter->Next() == false);
+  }
+  {
+    // seek to last, prev()
+    char arr[16] = { 0 };
+    assert(iter->SeekToLast());
+    assert(iter->DictRank() == 99);
+    for (int i = 9; i >= 0; i--) {
+      arr[7] = i;
+      for (int j = 9; j >= 0; j--) {
+        arr[15] = j;
+        if (i == 9 && j == 9) {
+          assert(fstring(arr, 16) == iter->key());
+          continue;
+        }
+        assert(iter->Prev());
+        assert(iter->DictRank() == i * 10 + j);
+        assert(fstring(arr, 16) == iter->key());
+      }
+    }
+    assert(iter->Prev() == false);
+  }
+  {
+    // matches
+    char arr[16] = { 0 };
+    for (int i = 0; i < 9; i++) {
+      arr[7] = i;
+      for (int j = 9; j >= 0; j--) {
+        arr[15] = j;
+        int idx = i * 10 + j;
+        assert(iter->Seek(keys[idx]));
+        assert(iter->DictRank() == idx);
+        assert(fstring(arr, 16) == iter->key());
+      }
+    }
+    // larger than larger @apple
+    arr[7] = 20; arr[15] = 0;
+    assert(iter->Seek(fstring(arr, 16)) == false);
+    /*
+    // lower_bound
+    char larr[17] = { 0 };
+    larr[16] = 1;
+    for (int i = 0; i < 9; i++) {
+      larr[7] = i;
+      for (int j = 9; j >= 0; j--) {
+        if (i == 9 && j == 9)
+          continue;
+        larr[15] = j;
+        int idx = i * 10 + j + 1;
+        assert(iter->Seek(fstring(larr, 17)));
+        assert(iter->DictRank() == idx);
+        larr[15] += 1;
+        assert(fstring(larr, 16) == iter->key());
+      }
+    }
+    */
+  }
+  printf("\tIterator done\n");
+
   ::remove(key_path.c_str());
   ::remove(index_path.c_str());
 }
@@ -143,5 +221,3 @@ int main(int argc, char** argv) {
   test_ascend();
   return 0;
 }
-
-//}
