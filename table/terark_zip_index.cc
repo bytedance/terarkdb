@@ -90,6 +90,30 @@ TerarkIndex::SelectFactory(const KeyStat& ks, fstring name) {
       else {
         return GetFactory("UintIndex_SE_512_64");
       }
+    } 
+  } else if (ks.maxKeyLen == ks.minKeyLen && // TBD: to confirm
+             ks.commonPrefixLen < 8 &&
+             ks.maxKeyLen >= 16) {
+    static const int kIndex1stLen = 8;
+    uint64_t
+      minValue = ReadUint64(ks.minKey.begin() + ks.commonPrefixLen,
+                            ks.minKey.begin() + kIndex1stLen),
+      maxValue = ReadUint64(ks.maxKey.begin() + ks.commonPrefixLen,
+                            ks.maxKey.begin() + kIndex1stLen);
+    uint64_t diff = std::max(minValue, maxValue) - std::min(minValue, maxValue) + 1;
+    /*
+     * Assume numKeys(100) => total bytes = 100 * 8 => total bits =  6,400,
+     *      diff(100 * 30) => total bits = 3,000,
+     *      diff(100 * 60) => total bits = 6,000
+     * diff < numKeys * 30 means we could save around more than half 
+     * of the space.
+     */
+    if (diff < ks.numKeys * 30) {
+      if (diff < (4ull << 30)) {
+        return GetFactory("CompositeIndex_IL_256");
+      } else {
+        return GetFactory("CompositeIndex_SE_512_64");
+      }
     }
   }
 #endif // TerocksPrivateCode
@@ -398,6 +422,8 @@ public:
 };
 
 
+#if defined(TerocksPrivateCode)
+
   /*
    * For simplicity, let's take composite index => index1:index2. Then following 
    * compositeindexes like,
@@ -610,7 +636,6 @@ public:
         return (li > ri ||
                 li + ri == 0);
       }
-
       void UpdateBuffer() {
         // key = commonprefix + index1st + index2nd
         // assign index 1st
@@ -625,6 +650,7 @@ public:
                data.data(), data.size());
                
       }
+
       size_t offset_1st_; // used to track & decode index1 value
       valvec<byte_t> buffer_;
       const TerarkCompositeIndex& index_;
@@ -830,7 +856,8 @@ public:
       }
       
     };
-    
+
+  public:    
     using TerarkIndex::FactoryPtr;
     virtual ~TerarkCompositeIndex() {
       if (isBuilding_) {
@@ -913,12 +940,15 @@ public:
     }
     size_t Locate(const FixedLenStrVec& arr,
                   size_t start, size_t cnt, fstring target) const {
+      size_t lo = start, hi = start + cnt;
+      size_t pos = arr.lower_bound(lo, hi, target);
+      return (pos < hi) ? pos : size_t(-1);
       /*
        * Find within index data, 
        *   items > 64, use binary search
        *   items <= 64, iterate search
        */
-      static const size_t limit = 64;
+      /*static const size_t limit = 64;
       if (cnt > limit) {
         // bsearch
         size_t lo = start, hi = start + cnt;
@@ -938,8 +968,8 @@ public:
         }
       }
       return size_t(-1);
-    }
-    
+      */}
+
   protected:
     const FileHeader* header_;
     MmapWholeFile     file_;
@@ -956,8 +986,6 @@ public:
   template<class RankSelect1st, class RankSelect2nd>
   const char* TerarkCompositeIndex<RankSelect1st, RankSelect2nd>::index_name = "CompositeIndex";
 
-  
-#if defined(TerocksPrivateCode)
 
 template<class RankSelect>
 class TerarkUintIndex : public TerarkIndex {
@@ -1298,6 +1326,7 @@ typedef NestLoudsTrieIndex<NestLoudsTrieDAWG_Mixed_SE_512_32_FL> TerocksIndex_Ne
 typedef NestLoudsTrieIndex<NestLoudsTrieDAWG_Mixed_XL_256_32_FL> TerocksIndex_NestLoudsTrieDAWG_Mixed_XL_256_32_FL;
 
   typedef TerarkCompositeIndex<terark::rank_select_il_256, terark::rank_select_il_256> TerarkCompositeIndex_IL_256_32;
+  typedef TerarkCompositeIndex<terark::rank_select_se_512, terark::rank_select_se_512> TerarkCompositeIndex_SE_512_64;
 
 TerarkIndexRegister(TerocksIndex_NestLoudsTrieDAWG_IL_256_32, "NestLoudsTrieDAWG_IL", "IL_256_32", "IL_256", "NestLoudsTrieDAWG_IL_256");
 TerarkIndexRegister(TerocksIndex_NestLoudsTrieDAWG_SE_512_32, "NestLoudsTrieDAWG_SE_512", "SE_512_32", "SE_512");
@@ -1314,6 +1343,7 @@ TerarkIndexRegister(TerocksIndex_NestLoudsTrieDAWG_Mixed_IL_256_32_FL, "NestLoud
 TerarkIndexRegister(TerocksIndex_NestLoudsTrieDAWG_Mixed_XL_256_32_FL, "NestLoudsTrieDAWG_Mixed_XL_256_32_FL", "Mixed_XL_256_32_FL");
 
   TerarkIndexRegister(TerarkCompositeIndex_IL_256_32, "CompositeIndex_IL_256_32", "CompositeIndex");
+  TerarkIndexRegister(TerarkCompositeIndex_SE_512_64, "CompositeIndex_SE_512_64", "CompositeIndex_SE_512_64");
 
 #if defined(TerocksPrivateCode)
 typedef TerarkUintIndex<terark::rank_select_il_256_32> TerarkUintIndex_IL_256_32;
