@@ -33,5 +33,5 @@ terark_zip_index.o:
 	${CXX} ${CFLAGS} ${INC} ${LIBPATH} -c ../terark_zip_index.cc ${LIB}
 
 clean:
-	rm -f ${EXES} *.o *.exe *.a test_add bridge *.so* integration_test
+	rm -f ${EXES} *.o *.exe *.a test_add bridge *.so* terark_zip_index_ut
 

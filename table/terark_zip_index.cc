@@ -415,7 +415,7 @@ public:
   /*
    * 1. assume index1_len = 8, ks.commonPrefixLen = 0, assume at least 2 index1 exist. right now.
    * 2. add indexlen detector, dynamically detect the length of index1, index2...
-   *
+   * 3. for fixed len index_2nd+, we could have their common prefix as well.
    */
   template<class RankSelect1st, class RankSelect2nd>
   class TerarkCompositeIndex : public TerarkIndex {
@@ -802,10 +802,11 @@ public:
         offset += header->index_2nd_mem_size;
         ptr->indexData_.m_strpool.risk_set_data((unsigned char*)mem.data() + offset,
                                                 header->index_data_mem_size);
-        ptr->indexData_.m_size = header->index_data_mem_size;
         // TBD: confirm this
-        ptr->indexData_.m_fixlen = header->key_length + 
+        size_t fixlen = header->key_length + 
           header->common_prefix_length - kIndex1stLen;
+        ptr->indexData_.m_fixlen = fixlen;
+        ptr->indexData_.m_size = header->index_data_mem_size / fixlen;
         return ptr;
       }
       bool verifyHeader(fstring mem) const {
@@ -914,7 +915,7 @@ public:
       return ReadUint64((const byte_t*)key.data() + cplen,
                         (const byte_t*)key.data() + kIndex1stLen);
     }
-    size_t Locate(FixedLenStrVec arr,
+    size_t Locate(const FixedLenStrVec& arr,
                   size_t start, size_t cnt, fstring target) const {
       /*
        * Find within index data, 
