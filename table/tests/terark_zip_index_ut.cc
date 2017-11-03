@@ -129,6 +129,10 @@ void test_ascend() {
     size_t result = index->Find(keys[idx]);
     assert(idx == result);
   }
+  for (size_t idx = stat.numKeys; idx < 110; idx++) {
+    size_t result = index->Find(keys[idx]);
+    assert(result == size_t(-1));
+  }
   printf("\tFind done\n");
   ::remove(key_path.c_str());
   ::remove(index_path.c_str());

@@ -402,15 +402,12 @@ public:
    * For simplicity, let's take composite index => index1:index2. Then following 
    * compositeindexes like,
    *   4:6, 4:7, 4:8, 7:19, 7:20, 8:3
-   * index1: {4, 7}, use bitmap (also UintIndex's form) to respresent 0(0), 1(0), 
-   *   2(0), 3(0), 4(1), 5(0), 6(0), 7(1), 8(1)
+   * index1: {4, 7}, use bitmap (also UintIndex's form) to respresent
+   *   4(1), 5(0), 6(0), 7(1), 8(1)
    * index1:index2: use bitmap to respresent 4:6(0), 4:7(1), 4:8(1), 7:19(0), 7:20(1), 8:3(0)
    * to search 7:20, use bitmap1 to rank1(7) = 2, then use bitmap2 to select0(2) = position-3,
    * use bitmap2 to select0(3) = position-5. That is, we should search within [3, 5). 
    * iter [3 to 5), 7:20 is found, done.
-   * One more thing, we'll searialize just index2[], since index1 could be represent 
-   * using UintIndex
-   * 
    */
   /*
    * 1. assume index1_len = 8, ks.commonPrefixLen = 0, assume at least 2 index1 exist. right now.
