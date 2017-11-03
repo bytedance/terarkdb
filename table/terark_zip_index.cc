@@ -672,7 +672,7 @@ public:
         FixedLenStrVec keyVec(ks.maxKeyLen - kIndex1stLen);
         keyVec.reserve(ks.numKeys, sumRealKeyLen);
         if (ks.minKey < ks.maxKey) {
-          for (size_t i = 0; i < ks.numKeys; ++i) {
+          for (long i = 0; i < ks.numKeys; ++i) {
             reader >> keyBuf;
             uint64_t offset = Read1stIndex(keyBuf, cplen) - minValue;
             index1stRS.set1(offset);
@@ -686,7 +686,9 @@ public:
           }
         } else {
           size_t pos = sumRealKeyLen;
-          for (size_t i = ks.numKeys - 1; i >= 0; --i) {
+          keyVec.m_size = ks.numKeys;
+          keyVec.m_strpool.resize(sumRealKeyLen);
+          for (long i = ks.numKeys - 1; i >= 0; --i) {
             reader >> keyBuf;
             uint64_t offset = Read1stIndex(keyBuf, cplen) - minValue;
             index1stRS.set1(offset);
@@ -699,7 +701,7 @@ public:
             }
             prev = offset;
             // save index data
-            fstring str =  fstring(keyBuf).substr(kIndex1stLen);
+            fstring str = fstring(keyBuf).substr(kIndex1stLen);
             pos -= str.size();
             memcpy(keyVec.m_strpool.data() + pos, str.data(), str.size());
           }

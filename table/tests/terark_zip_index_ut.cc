@@ -51,7 +51,7 @@ namespace rocksdb {
 }
 
 /*
- * 1. index1st: uint64, index2nd: uint64
+ * index1st: uint64, index2nd: uint64
  */
 //typedef map<string, int> IndexDict;
 //IndexDict dict;
@@ -96,6 +96,36 @@ void init_data_ascend() {
   stat.sumKeyLen = 16 * 100;
 }
 
+void init_data_descend() {
+  rocksdb::FileWriter fwriter;
+  fwriter.path = key_path;
+  fwriter.open();
+  keys.resize(110);
+  char carr[16] = { 0 };
+	for (int i = 10; i >= 0; i--) {
+    carr[7] = i;
+    for (int j = 9; j >= 0; j--) {
+      carr[15] = j;
+      // keep the last 10 elem for 'Find Fail Test'
+      if (i < 10) {
+        fwriter.writer << fstring(carr, 16);
+      }
+      if (i == 0 && j == 0) {
+        stat.maxKey.assign(carr, carr + 16);
+      } else if (i == 9 && j == 9) {
+        stat.minKey.assign(carr, carr + 16);
+      }
+      keys[i * 10 + j] = string(carr, 16);
+    }
+	}
+  fwriter.close();
+  stat.numKeys = 100;
+  stat.commonPrefixLen = 0;
+  stat.minKeyLen = 16;
+  stat.maxKeyLen = 16;
+  stat.sumKeyLen = 16 * 100;
+}
+
 TerarkIndex* save_reload(TerarkIndex* index, const TerarkIndex::Factory* factory) {
   FileStream writer(index_path, "wb");
   index->SaveMmap([&writer](const void* data, size_t size) {
@@ -107,12 +137,17 @@ TerarkIndex* save_reload(TerarkIndex* index, const TerarkIndex::Factory* factory
   return factory->LoadFile(index_path).release();
 }
 
-void test_ascend() {
-  printf("==== Ascend Test started\n");
+void test_simple(bool ascend) {
   // init data
   clear();
   key_path = "./tmp_key.txt";
-  init_data_ascend();
+  if (ascend) {
+    printf("==== Ascend Test started\n");
+    init_data_ascend();
+  } else {
+    printf("==== Descend Test started\n");
+    init_data_descend();
+  }
   // build index
   FileStream fp(key_path, "rb");
   NativeDataInput<InputBuffer> tempKeyFileReader(&fp);
@@ -176,7 +211,7 @@ void test_ascend() {
     assert(iter->Prev() == false);
   }
   {
-    // matches
+    // seek matches
     char arr[16] = { 0 };
     for (int i = 0; i < 9; i++) {
       arr[7] = i;
@@ -188,36 +223,48 @@ void test_ascend() {
         assert(fstring(arr, 16) == iter->key());
       }
     }
-    // larger than larger @apple
+  }
+  {
+    // seek larger than larger @apple
+    char arr[16] = { 0 };
     arr[7] = 20; arr[15] = 0;
     assert(iter->Seek(fstring(arr, 16)) == false);
-    /*
+    // smaller than smaller
+    char sarr[4] = { 0 };
+    assert(iter->Seek(fstring(sarr, 4)));
+    assert(iter->DictRank() == 0);
+    // 
+    char marr[12] = { 0 };
+    marr[7] = 4;
+    assert(iter->Seek(fstring(marr, 12)));
+    assert(iter->DictRank() == 4 * 10 + 0);
+    arr[7] = 4; arr[15] = 0;
+    assert(fstring(arr, 16) == iter->key());
+  }
+  {
     // lower_bound
-    char larr[17] = { 0 };
-    larr[16] = 1;
+    char arr[17] = { 0 };
+    arr[16] = 1;
     for (int i = 0; i < 9; i++) {
-      larr[7] = i;
-      for (int j = 9; j >= 0; j--) {
+      arr[7] = i;
+      for (int j = 0; j < 9; j++) {
         if (i == 9 && j == 9)
-          continue;
-        larr[15] = j;
+          break;
+        arr[15] = j;
         int idx = i * 10 + j + 1;
-        assert(iter->Seek(fstring(larr, 17)));
+        assert(iter->Seek(fstring(arr, 17)));
         assert(iter->DictRank() == idx);
-        larr[15] += 1;
-        assert(fstring(larr, 16) == iter->key());
       }
     }
-    */
   }
   printf("\tIterator done\n");
-
   ::remove(key_path.c_str());
   ::remove(index_path.c_str());
 }
 
 int main(int argc, char** argv) {
   printf("EXAGGERATE\n");
-  test_ascend();
+  test_simple(true/*ascend*/);
+  test_simple(false);
   return 0;
 }
