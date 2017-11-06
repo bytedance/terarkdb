@@ -262,9 +262,68 @@ void test_simple(bool ascend) {
   ::remove(index_path.c_str());
 }
 
+void test_select() {
+  // cfactory -> CompositeIndexFactory
+  rocksdb::TerarkIndex::Factory* cfactory = nullptr;
+  {
+    KeyStat stat;
+    stat.numKeys = 100;
+    stat.minKeyLen = stat.maxKeyLen = 16;
+    stat.commonPrefixLen = 0;
+    char arr[16] = { 0 };
+    arr[7] = arr[15] = 4;
+    stat.minKey.assign(arr, arr + 16);
+    arr[7] = arr[15] = 14;
+    stat.maxKey.assign(arr, arr + 16);
+    cfactory = SelectFactory(stat, "");
+    assert(cfactory != nullptr);
+  }
+  {
+    // do NOT select composite
+    KeyStat stat;
+    stat.commonPrefixLen = 0;
+    stat.minKeyLen = stat.maxKeyLen = 8;
+    auto factory = SelectFactory(stat, "");
+    assert(factory != nullptr);
+    assert(factory != cfactory);
+  }
+  {
+    // do NOT select composite
+    KeyStat stat;
+    stat.numKeys = 1;
+    stat.commonPrefixLen = 0;
+    stat.minKeyLen = stat.maxKeyLen = 16;
+    char arr[16] = { 0 };
+    arr[7] = 1;
+    stat.minKey.assign(arr, arr + 16);
+    arr[5] = 1;
+    stat.maxKey.assign(arr, arr + 16);
+    auto factory = SelectFactory(stat, "");
+    assert(factory != nullptr);
+    assert(factory != cfactory);
+  }
+  {
+    // do select composite
+    KeyStat stat;
+    stat.numKeys = 100;
+    stat.commonPrefixLen = 0;
+    stat.minKeyLen = stat.maxKeyLen = 16;
+    char arr[16] = { 0 };
+    arr[7] = 1;
+    stat.minKey.assign(arr, arr + 16);
+    arr[7] = 14;
+    stat.maxKey.assign(arr, arr + 16);
+    auto factory = SelectFactory(stat, "");
+    assert(factory == cfactory);
+  }
+
+}
+
+
 int main(int argc, char** argv) {
   printf("EXAGGERATE\n");
   test_simple(true/*ascend*/);
   test_simple(false);
+  test_select();
   return 0;
 }
