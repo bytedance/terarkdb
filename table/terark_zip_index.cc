@@ -85,7 +85,10 @@ TerarkIndex::SelectFactory(const KeyStat& ks, fstring name) {
       maxValue = ReadUint64(ks.maxKey.begin() + cplen, ks.maxKey.end());
     uint64_t diff = (minValue < maxValue ? maxValue - minValue : minValue - maxValue) + 1;
     if (diff < ks.numKeys * 30) {
-      if (diff < (4ull << 30)) {
+      if (diff == ks.numKeys) {
+        return GetFactory("UintIndex_AllOne");
+      }
+      else if (diff < (4ull << 30)) {
         return GetFactory("UintIndex");
       }
       else {
@@ -410,6 +413,13 @@ public:
     uint64_t max_value;
     uint64_t index_mem_size;
     uint32_t key_length;
+    /*
+     * (Rocksdb) For one huge index, we'll split it into multipart-index for the sake of RAM,
+     * and each sub-index could have longer commonPrefix compared with ks.commonPrefix.
+     * what's more, under such circumstances, ks.commonPrefix may have been rewritten
+     * by upper-level builder to '0'. here,
+     * common_prefix_length = sub-index.commonPrefixLen - whole-index.commonPrefixLen
+     */
     uint32_t common_prefix_length;
 
     FileHeader(size_t body_size) {
@@ -480,6 +490,9 @@ public:
         pos_ += index_.indexSeq_.zero_seq_len(pos_);
       }
       else if (target.size() > index_.keyLength_) {
+        // minValue:  target
+        // targetVal: targetvalue.1
+        // maxValue:  targetvau
         if (pos_ == index_.indexSeq_.size() - 1) {
           m_id = size_t(-1);
           return false;
@@ -556,12 +569,16 @@ public:
       }
       uint64_t diff = maxValue - minValue + 1;
       RankSelect indexSeq;
-      valvec<byte_t> keyBuf;
       indexSeq.resize(diff);
-      for (size_t seq_id = 0; seq_id < ks.numKeys; ++seq_id) {
-        reader >> keyBuf;
-        indexSeq.set1(ReadUint64(keyBuf.begin() + cplen,
+      if (ks.numKeys != diff) { // otherwise, it's 'all one' case
+        valvec<byte_t> keyBuf;
+        for (size_t seq_id = 0; seq_id < ks.numKeys; ++seq_id) {
+          reader >> keyBuf;
+          // even if 'cplen' contains actual data besides prefix,
+          // after stripping, the left range is self-meaningful ranges
+          indexSeq.set1(ReadUint64(keyBuf.begin() + cplen,
             keyBuf.end()) - minValue);
+        }
       }
       indexSeq.build_cache(false, false);
       unique_ptr<TerarkUintIndex<RankSelect>> ptr(new TerarkUintIndex<RankSelect>());
@@ -719,6 +736,50 @@ protected:
 template<class RankSelect>
 const char* TerarkUintIndex<RankSelect>::index_name = "UintIndex";
 
+/*
+ * special impl for all one UintIndex
+ */
+class rank_select_allone : boost::noncopyable {
+public:
+  rank_select_allone() : m_size(-1), m_placeholder(nullptr) {}
+  ~rank_select_allone() = default;
+
+  void resize(size_t newsize) { m_size = newsize; }
+  void set1(size_t i) { assert(i < m_size); }
+  void build_cache(bool, bool) {};
+  void swap(rank_select_allone& another) {
+    std::swap(m_size, another.m_size);
+    std::swap(m_placeholder, another.m_placeholder);
+  }
+
+  void risk_release_ownership() {}
+  void risk_mmap_from(unsigned char* base, size_t length) {
+    assert(base != nullptr);
+    assert(length == sizeof(*this));
+    m_size = *((size_t*)base);
+  }
+
+  const void* data() const { return this; }
+  bool operator[](int n) const { // alias of 'is1'
+    assert(n >= 0 && n < m_size);
+    return true;
+  }
+
+  size_t mem_size() const { return sizeof(*this); }
+  size_t max_rank1() const { return m_size; }
+  size_t size() const { return m_size; }
+  size_t rank1(size_t bitpos) const { return bitpos; }
+
+  ///@returns number of continuous one/zero bits starts at bitpos
+  size_t zero_seq_len(size_t bitpos) const { return 0; }
+  size_t zero_seq_revlen(size_t endpos) const { return 0; }
+
+private:
+  size_t m_size;
+  unsigned char* m_placeholder;
+};
+
+
 #endif // TerocksPrivateCode
 
 typedef NestLoudsTrieDAWG_IL_256 NestLoudsTrieDAWG_IL_256_32;
@@ -756,10 +817,12 @@ typedef TerarkUintIndex<terark::rank_select_il_256_32> TerarkUintIndex_IL_256_32
 typedef TerarkUintIndex<terark::rank_select_se_256_32> TerarkUintIndex_SE_256_32;
 typedef TerarkUintIndex<terark::rank_select_se_512_32> TerarkUintIndex_SE_512_32;
 typedef TerarkUintIndex<terark::rank_select_se_512_64> TerarkUintIndex_SE_512_64;
+typedef TerarkUintIndex<rank_select_allone> TerarkUintIndex_AllOne;
 TerarkIndexRegister(TerarkUintIndex_IL_256_32, "UintIndex_IL_256_32", "UintIndex");
 TerarkIndexRegister(TerarkUintIndex_SE_256_32, "UintIndex_SE_256_32");
 TerarkIndexRegister(TerarkUintIndex_SE_512_32, "UintIndex_SE_512_32");
 TerarkIndexRegister(TerarkUintIndex_SE_512_64, "UintIndex_SE_512_64");
+TerarkIndexRegister(TerarkUintIndex_AllOne, "UintIndex_AllOne");
 #endif // TerocksPrivateCode
 
 unique_ptr<TerarkIndex> TerarkIndex::LoadFile(fstring fpath) {
