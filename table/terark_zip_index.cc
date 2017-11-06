@@ -760,8 +760,8 @@ public:
   }
 
   const void* data() const { return this; }
-  bool operator[](int n) const { // alias of 'is1'
-    assert(n >= 0 && n < m_size);
+  bool operator[](long n) const { // alias of 'is1'
+    assert(n >= 0 && (size_t)n < m_size);
     return true;
   }
 
