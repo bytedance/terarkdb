@@ -264,9 +264,9 @@ void test_simple(bool ascend) {
 
 void test_select() {
   // cfactory -> CompositeIndexFactory
-  rocksdb::TerarkIndex::Factory* cfactory = nullptr;
+  const rocksdb::TerarkIndex::Factory* cfactory = nullptr;
   {
-    KeyStat stat;
+    TerarkIndex::KeyStat stat;
     stat.numKeys = 100;
     stat.minKeyLen = stat.maxKeyLen = 16;
     stat.commonPrefixLen = 0;
@@ -275,21 +275,21 @@ void test_select() {
     stat.minKey.assign(arr, arr + 16);
     arr[7] = arr[15] = 14;
     stat.maxKey.assign(arr, arr + 16);
-    cfactory = SelectFactory(stat, "");
+    cfactory = TerarkIndex::SelectFactory(stat, "");
     assert(cfactory != nullptr);
   }
   {
     // do NOT select composite
-    KeyStat stat;
+    TerarkIndex::KeyStat stat;
     stat.commonPrefixLen = 0;
     stat.minKeyLen = stat.maxKeyLen = 8;
-    auto factory = SelectFactory(stat, "");
+    auto factory = TerarkIndex::SelectFactory(stat, "");
     assert(factory != nullptr);
     assert(factory != cfactory);
   }
   {
     // do NOT select composite
-    KeyStat stat;
+    TerarkIndex::KeyStat stat;
     stat.numKeys = 1;
     stat.commonPrefixLen = 0;
     stat.minKeyLen = stat.maxKeyLen = 16;
@@ -298,13 +298,13 @@ void test_select() {
     stat.minKey.assign(arr, arr + 16);
     arr[5] = 1;
     stat.maxKey.assign(arr, arr + 16);
-    auto factory = SelectFactory(stat, "");
+    auto factory = TerarkIndex::SelectFactory(stat, "");
     assert(factory != nullptr);
     assert(factory != cfactory);
   }
   {
     // do select composite
-    KeyStat stat;
+    TerarkIndex::KeyStat stat;
     stat.numKeys = 100;
     stat.commonPrefixLen = 0;
     stat.minKeyLen = stat.maxKeyLen = 16;
@@ -313,7 +313,7 @@ void test_select() {
     stat.minKey.assign(arr, arr + 16);
     arr[7] = 14;
     stat.maxKey.assign(arr, arr + 16);
-    auto factory = SelectFactory(stat, "");
+    auto factory = TerarkIndex::SelectFactory(stat, "");
     assert(factory == cfactory);
   }
 

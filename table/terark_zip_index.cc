@@ -77,7 +77,7 @@ const TerarkIndex::Factory* TerarkIndex::GetFactory(fstring name) {
 const TerarkIndex::Factory*
 TerarkIndex::SelectFactory(const KeyStat& ks, fstring name) {
   assert(ks.numKeys > 0);
-  assert(!ks.minValue.empty() && !ks.maxValue.empty());
+  assert(!ks.minKey.empty() && !ks.maxKey.empty());
 #if defined(TerocksPrivateCode)
   size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
   assert(cplen >= ks.commonPrefixLen);
@@ -115,12 +115,12 @@ TerarkIndex::SelectFactory(const KeyStat& ks, fstring name) {
      */
     if (diff < ks.numKeys * 30) {
       if (diff < (4ull << 30)) {
-        return GetFactory("CompositeIndex_IL_256");
+        return GetFactory("CompositeIndex_IL_256_32");
       } else {
         return GetFactory("CompositeIndex_SE_512_64");
       }
     }
-    assert(name != "CompositeIndex_IL_256" &&
+    assert(name != "CompositeIndex_IL_256_32" &&
            name != "CompositeIndex_SE_512_64");
   }
 #endif // TerocksPrivateCode
@@ -1349,8 +1349,8 @@ TerarkIndexRegister(TerocksIndex_NestLoudsTrieDAWG_Mixed_SE_512_32_FL, "NestLoud
 TerarkIndexRegister(TerocksIndex_NestLoudsTrieDAWG_Mixed_IL_256_32_FL, "NestLoudsTrieDAWG_Mixed_IL_256_32_FL", "Mixed_IL_256_32_FL");
 TerarkIndexRegister(TerocksIndex_NestLoudsTrieDAWG_Mixed_XL_256_32_FL, "NestLoudsTrieDAWG_Mixed_XL_256_32_FL", "Mixed_XL_256_32_FL");
 
-TerarkIndexRegister(TerarkCompositeIndex_IL_256_32, "CompositeIndex_IL_256_32", "CompositeIndex");
-TerarkIndexRegister(TerarkCompositeIndex_SE_512_64, "CompositeIndex_SE_512_64", "CompositeIndex_SE_512_64");
+  TerarkIndexRegister(TerarkCompositeIndex_IL_256_32, "CompositeIndex_IL_256_32", "CompositeIndex_IL_256_32");
+  TerarkIndexRegister(TerarkCompositeIndex_SE_512_64, "CompositeIndex_SE_512_64", "CompositeIndex_SE_512_64");
 
 #if defined(TerocksPrivateCode)
 typedef TerarkUintIndex<terark::rank_select_il_256_32> TerarkUintIndex_IL_256_32;
