@@ -403,6 +403,50 @@ public:
 
 #if defined(TerocksPrivateCode)
 
+
+/*
+ * special impl for all one UintIndex
+ */
+class rank_select_allone : boost::noncopyable {
+public:
+  rank_select_allone() : m_size(-1), m_placeholder(nullptr) {}
+  ~rank_select_allone() = default;
+
+  void resize(size_t newsize) { m_size = newsize; }
+  void set1(size_t i) { assert(i < m_size); }
+  void build_cache(bool, bool) {};
+  void swap(rank_select_allone& another) {
+    std::swap(m_size, another.m_size);
+    std::swap(m_placeholder, another.m_placeholder);
+  }
+
+  void risk_release_ownership() {}
+  void risk_mmap_from(unsigned char* base, size_t length) {
+    assert(base != nullptr);
+    assert(length == sizeof(*this));
+    m_size = *((size_t*)base);
+  }
+
+  const void* data() const { return this; }
+  bool operator[](int n) const { // alias of 'is1'
+    assert(n >= 0 && n < m_size);
+    return true;
+  }
+
+  size_t mem_size() const { return sizeof(*this); }
+  size_t max_rank1() const { return m_size; }
+  size_t size() const { return m_size; }
+  size_t rank1(size_t bitpos) const { return bitpos; }
+
+  ///@returns number of continuous one/zero bits starts at bitpos
+  size_t zero_seq_len(size_t bitpos) const { return 0; }
+  size_t zero_seq_revlen(size_t endpos) const { return 0; }
+
+private:
+  size_t m_size;
+  unsigned char* m_placeholder;
+};
+
 template<class RankSelect>
 class TerarkUintIndex : public TerarkIndex {
 public:
@@ -570,7 +614,8 @@ public:
       uint64_t diff = maxValue - minValue + 1;
       RankSelect indexSeq;
       indexSeq.resize(diff);
-      if (ks.numKeys != diff) { // otherwise, it's 'all one' case
+      if (!std::is_same<RankSelect, rank_select_allone>::value) {
+        // not 'all one' case
         valvec<byte_t> keyBuf;
         for (size_t seq_id = 0; seq_id < ks.numKeys; ++seq_id) {
           reader >> keyBuf;
@@ -579,6 +624,8 @@ public:
           indexSeq.set1(ReadUint64(keyBuf.begin() + cplen,
             keyBuf.end()) - minValue);
         }
+      } else {
+        printf("== all one index used\n");
       }
       indexSeq.build_cache(false, false);
       unique_ptr<TerarkUintIndex<RankSelect>> ptr(new TerarkUintIndex<RankSelect>());
@@ -735,50 +782,6 @@ protected:
 };
 template<class RankSelect>
 const char* TerarkUintIndex<RankSelect>::index_name = "UintIndex";
-
-/*
- * special impl for all one UintIndex
- */
-class rank_select_allone : boost::noncopyable {
-public:
-  rank_select_allone() : m_size(-1), m_placeholder(nullptr) {}
-  ~rank_select_allone() = default;
-
-  void resize(size_t newsize) { m_size = newsize; }
-  void set1(size_t i) { assert(i < m_size); }
-  void build_cache(bool, bool) {};
-  void swap(rank_select_allone& another) {
-    std::swap(m_size, another.m_size);
-    std::swap(m_placeholder, another.m_placeholder);
-  }
-
-  void risk_release_ownership() {}
-  void risk_mmap_from(unsigned char* base, size_t length) {
-    assert(base != nullptr);
-    assert(length == sizeof(*this));
-    m_size = *((size_t*)base);
-  }
-
-  const void* data() const { return this; }
-  bool operator[](int n) const { // alias of 'is1'
-    assert(n >= 0 && n < m_size);
-    return true;
-  }
-
-  size_t mem_size() const { return sizeof(*this); }
-  size_t max_rank1() const { return m_size; }
-  size_t size() const { return m_size; }
-  size_t rank1(size_t bitpos) const { return bitpos; }
-
-  ///@returns number of continuous one/zero bits starts at bitpos
-  size_t zero_seq_len(size_t bitpos) const { return 0; }
-  size_t zero_seq_revlen(size_t endpos) const { return 0; }
-
-private:
-  size_t m_size;
-  unsigned char* m_placeholder;
-};
-
 
 #endif // TerocksPrivateCode
 
