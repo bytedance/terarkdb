@@ -403,7 +403,6 @@ public:
 
 #if defined(TerocksPrivateCode)
 
-
 /*
  * special impl for all one UintIndex
  */
