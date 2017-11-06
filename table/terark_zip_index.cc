@@ -461,7 +461,7 @@ public:
           return false;
         }
       }
-      target.n -= index_.commonPrefix_.size();
+      target = target.substr(index_.commonPrefix_.size());
       byte_t targetBuffer[8] = {};
       memcpy(targetBuffer + (8 - index_.keyLength_),
           target.data(), std::min<size_t>(index_.keyLength_, target.size()));
