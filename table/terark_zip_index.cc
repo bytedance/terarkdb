@@ -79,11 +79,12 @@ TerarkIndex::SelectFactory(const KeyStat& ks, fstring name) {
   assert(ks.numKeys > 0);
   assert(!ks.minValue.empty() && !ks.maxValue.empty());
 #if defined(TerocksPrivateCode)
-  if (ks.maxKeyLen == ks.minKeyLen &&
-      ks.maxKeyLen - ks.commonPrefixLen <= sizeof(uint64_t)) {
+  size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
+  assert(cplen >= ks.commonPrefixLen);
+  if (ks.maxKeyLen == ks.minKeyLen && ks.maxKeyLen - cplen <= sizeof(uint64_t)) {
     uint64_t
-      minValue = ReadUint64(ks.minKey.begin() + ks.commonPrefixLen, ks.minKey.end()),
-      maxValue = ReadUint64(ks.maxKey.begin() + ks.commonPrefixLen, ks.maxKey.end());
+      minValue = ReadUint64(ks.minKey.begin() + cplen, ks.minKey.end()),
+      maxValue = ReadUint64(ks.maxKey.begin() + cplen, ks.maxKey.end());
     uint64_t diff = (minValue < maxValue ? maxValue - minValue : minValue - maxValue) + 1;
     if (diff < ks.numKeys * 30) {
       if (diff < (4ull << 30)) {
@@ -1054,7 +1055,7 @@ public:
           return false;
         }
       }
-      target.n -= index_.commonPrefix_.size();
+      target = target.substr(index_.commonPrefix_.size());
       byte_t targetBuffer[8] = {};
       memcpy(targetBuffer + (8 - index_.keyLength_),
           target.data(), std::min<size_t>(index_.keyLength_, target.size()));
@@ -1266,7 +1267,7 @@ public:
     if (key.commonPrefixLen(commonPrefix_) != commonPrefix_.size()) {
       return size_t(-1);
     }
-    key.n -= commonPrefix_.size();
+    key = key.substr(commonPrefix_.size());
     assert(key.n == keyLength_);
     uint64_t findValue = ReadUint64((const byte_t*)key.begin(), (const byte_t*)key.end());
     if (findValue < minValue_ || findValue > maxValue_) {
