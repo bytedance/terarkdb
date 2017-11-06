@@ -151,7 +151,7 @@ void test_simple(bool ascend) {
   // build index
   FileStream fp(key_path, "rb");
   NativeDataInput<InputBuffer> tempKeyFileReader(&fp);
-  auto factory = rocksdb::TerarkIndex::GetFactory("CompositeIndex");
+  auto factory = rocksdb::TerarkIndex::GetFactory("CompositeIndex_IL_256_32");
   rocksdb::TerarkZipTableOptions tableOpt;
   TerarkIndex* index = factory->Build(tempKeyFileReader, tableOpt, stat);
   printf("\tbuild done\n");
@@ -264,7 +264,8 @@ void test_simple(bool ascend) {
 
 void test_select() {
   // cfactory -> CompositeIndexFactory
-  const rocksdb::TerarkIndex::Factory* cfactory = nullptr;
+  const rocksdb::TerarkIndex::Factory* cfactory = 
+    TerarkIndex::GetFactory("CompositeIndex_IL_256_32");
   {
     TerarkIndex::KeyStat stat;
     stat.numKeys = 100;
@@ -275,13 +276,17 @@ void test_select() {
     stat.minKey.assign(arr, arr + 16);
     arr[7] = arr[15] = 14;
     stat.maxKey.assign(arr, arr + 16);
-    cfactory = TerarkIndex::SelectFactory(stat, "");
-    assert(cfactory != nullptr);
+    auto factory = TerarkIndex::SelectFactory(stat, "");
+    assert(factory == cfactory);
   }
   {
     // do NOT select composite
     TerarkIndex::KeyStat stat;
     stat.commonPrefixLen = 0;
+    stat.numKeys = 1;
+    char arr[8] = { 0 };
+    stat.minKey.assign(arr, arr + 8);
+    stat.maxKey.assign(arr, arr + 8);
     stat.minKeyLen = stat.maxKeyLen = 8;
     auto factory = TerarkIndex::SelectFactory(stat, "");
     assert(factory != nullptr);
@@ -299,8 +304,7 @@ void test_select() {
     arr[5] = 1;
     stat.maxKey.assign(arr, arr + 16);
     auto factory = TerarkIndex::SelectFactory(stat, "");
-    assert(factory != nullptr);
-    assert(factory != cfactory);
+    assert(factory == nullptr);
   }
   {
     // do select composite
