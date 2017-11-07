@@ -293,7 +293,22 @@ void test_select() {
     assert(factory != cfactory);
   }
   {
-    // seek index1stLen
+    // do NOT select composite: key count > 16M
+    TerarkIndex::KeyStat stat;
+    stat.numKeys = 1 << 31;
+    stat.commonPrefixLen = 0;
+    stat.minKeyLen = stat.maxKeyLen = 16;
+    byte_t arr[16] = { 0 };
+    arr[8] = 1;
+    stat.minKey.assign(arr, arr + 16);
+    arr[4] = 1; arr[8] = 0;
+    stat.maxKey.assign(arr, arr + 16);
+    size_t celen = size_t(-1);
+    auto factory = TerarkIndex::SelectFactory(stat, "");
+    assert(factory == nullptr);
+  }
+  {
+    // seek index1stLen: len = 1
     TerarkIndex::KeyStat stat;
     stat.numKeys = 1;
     stat.commonPrefixLen = 0;
@@ -301,11 +316,41 @@ void test_select() {
     char arr[16] = { 0 };
     arr[7] = 1;
     stat.minKey.assign(arr, arr + 16);
-    arr[5] = 1;
+    arr[5] = 1; arr[7] = 1;
     stat.maxKey.assign(arr, arr + 16);
     size_t celen = size_t(-1);
     assert(TerarkIndex::SeekCostEffectiveIndexLen(stat, celen));
     assert(celen == 1);
+  }
+  {
+    // seek index1stLen: len = 2
+    TerarkIndex::KeyStat stat;
+    stat.numKeys = 256;
+    stat.commonPrefixLen = 0;
+    stat.minKeyLen = stat.maxKeyLen = 16;
+    byte_t arr[16] = { 0 };
+    arr[8] = 1;
+    stat.minKey.assign(arr, arr + 16);
+    arr[7] = 1; arr[8] = 0;
+    stat.maxKey.assign(arr, arr + 16);
+    size_t celen = size_t(-1);
+    assert(TerarkIndex::SeekCostEffectiveIndexLen(stat, celen));
+    assert(celen == 2);
+  }
+  {
+    // seek index1stLen: len = 3
+    TerarkIndex::KeyStat stat;
+    stat.numKeys = 1 << 16;
+    stat.commonPrefixLen = 0;
+    stat.minKeyLen = stat.maxKeyLen = 16;
+    byte_t arr[16] = { 0 };
+    arr[8] = 1;
+    stat.minKey.assign(arr, arr + 16);
+    arr[6] = 1; arr[8] = 0;
+    stat.maxKey.assign(arr, arr + 16);
+    size_t celen = size_t(-1);
+    assert(TerarkIndex::SeekCostEffectiveIndexLen(stat, celen));
+    assert(celen == 3);
   }
   {
     // do select composite
