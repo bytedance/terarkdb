@@ -74,44 +74,46 @@ const TerarkIndex::Factory* TerarkIndex::GetFactory(fstring name) {
   return NULL;
 }
 
-  bool SeekCostEffectiveIndexLen(const TerarkIndex::KeyStat& ks, size_t& ceLen) {
-    /*
-     * the length of index1,
-     * 1. 1 byte => too many sub-indexes under each index1
-     * 2. 8 byte => a lot more gaps compared with 1 byte index1
-     * 
-     * more bytes with less gap is preferred, assume 1000 keys, 
-     * maxKeyLen = 16, original cost is 16,000 * 8  = 128,000
-     * gap = diff - numkeys
-     *   8 bytes, all one => 1000 + (16 - 8) * 8 * 1000 = 65,000
-     *   8 bytes, 0.5 gap => 2000 + 64,000            =  66,000
-     *
-     *   7 bytes, 0.5 gap => 2000 + (16 - 7) * 8 * 1000 = 74,000
-     *   2 bytes, 0.5 gap => 2000 + (16 - 2) * 8 * 1000 = 114,000
-     */
-    static const int maxLen = 8;
-    size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
-    long originCost = ks.numKeys * ks.maxKeyLen * 8,
-      minCost = originCost;
-    for (int i = maxLen, csLen = maxLen; i > 0; i--) {
-      int offset = cplen, end = cplen + i;
-      uint64_t
-        minValue = ReadUint64(ks.minKey.begin() + offset,
-                              ks.minKey.begin() + end),
-        maxValue = ReadUint64(ks.maxKey.begin() + offset,
-                              ks.maxKey.begin() + end);
-      uint64_t diff = std::max(minValue, maxValue) - std::min(minValue, maxValue) + 1;
-      uint64_t cost = diff + (ks.maxKeyLen - i) * ks.numKeys;
-      //if (diff == ks.numKeys) {
-      //  cost -= diff;
-      //}
-      if (cost < minCost) {
-        minCost = cost;
-        ceLen = i;
-      }
+bool SeekCostEffectiveIndexLen(const TerarkIndex::KeyStat& ks, size_t& ceLen) {
+  assert(ks.minKey.size() > 8);
+  /*
+   * the length of index1,
+   * 1. 1 byte => too many sub-indexes under each index1
+   * 2. 8 byte => a lot more gaps compared with 1 byte index1
+   * more bytes with less gap is preferred.
+
+   * assume 1000 keys, maxKeyLen = 16, original cost = 16,000 * 8  = 128,000,
+   * gap = diff - numkeys,
+   *   8 bytes, all one => 1000 + (16 - 8) * 8 * 1000 = 65,000
+   *   8 bytes, 0.5 gap => 2000 + 64,000              = 66,000
+   *
+   *   7 bytes, 0.5 gap => 2000 + (16 - 7) * 8 * 1000 = 74,000
+   *   2 bytes, 0.5 gap => 2000 + (16 - 2) * 8 * 1000 = 114,000
+   */
+  static const int maxLen = 8;
+  size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
+  long originCost = ks.numKeys * ks.maxKeyLen * 8,
+    minCost = originCost;
+  ceLen = maxLen;
+  for (int i = maxLen; i > 0; i--) {
+    int offset = cplen, end = cplen + i;
+    uint64_t
+      minValue = ReadUint64(ks.minKey.begin() + offset,
+                            ks.minKey.begin() + end),
+      maxValue = ReadUint64(ks.maxKey.begin() + offset,
+                            ks.maxKey.begin() + end);
+    uint64_t diff = std::max(minValue, maxValue) - std::min(minValue, maxValue) + 1;
+    uint64_t cost = diff + (ks.maxKeyLen - i) * ks.numKeys;
+    //if (diff == ks.numKeys) {
+    //  cost -= diff;
+    //}
+    if (cost < minCost) {
+      minCost = cost;
+      ceLen = i;
     }
-    return (minCost < originCost * 0.8);
   }
+  return (minCost < originCost * 0.8);
+}
 
 const TerarkIndex::Factory*
 TerarkIndex::SelectFactory(const KeyStat& ks, fstring name) {
@@ -136,7 +138,7 @@ TerarkIndex::SelectFactory(const KeyStat& ks, fstring name) {
     }
     assert(name != "UintIndex" &&
            name != "UintIndex_SE_512_64");
-  } else if (ks.maxKeyLen == ks.minKeyLen && // TBD: to confirm
+  } else if (ks.maxKeyLen == ks.minKeyLen && // TBD: to confirm the threshold of index2ndLen
              ks.maxKeyLen - cplen > sizeof(uint64_t) &&
              SeekCostEffectiveIndexLen(ks, ceLen)) {
     uint64_t
@@ -482,20 +484,18 @@ template<class RankSelect1st, class RankSelect2nd>
 class TerarkCompositeIndex : public TerarkIndex {
 public:
   static const int kCommonPrefixLen = 4;
-  //static const int kIndex1stLen = 8;
-
   static const char* index_name;
   struct FileHeader : public TerarkIndexHeader {
     uint64_t min_value;
     uint64_t max_value;
-    /*
-     * 
-     */
-    uint64_t index_1st_len;
     uint64_t index_1st_mem_size;
     uint64_t index_2nd_mem_size;
     uint64_t index_data_mem_size;
-    uint32_t key_length;
+    /*
+     * per key length = common_prefix_len + index_1st_len + key_length
+     */
+    uint32_t index_1st_len;
+    uint32_t index_2nd_len;
     /*
      * (Rocksdb) For one huge index, we'll split it into multipart-index for the sake of RAM, 
      * and each sub-index could have longer commonPrefix compared with ks.commonPrefix.
@@ -524,9 +524,9 @@ public:
   class TerarkCompositeIndexIterator : public TerarkIndex::Iterator {
   public:
     TerarkCompositeIndexIterator(const TerarkCompositeIndex& index) : index_(index) {
-      //pos_ = size_t(-1);
       m_id = size_t(-1);
-      buffer_.resize_no_init(index_.commonPrefix_.size() + index_.keyLength_);
+      buffer_.resize_no_init(index_.commonPrefix_.size() +
+        index_.index1stLen_ + index_.index2ndLen_);
       memcpy(buffer_.data(), index_.commonPrefix_.data(), index_.commonPrefix_.size());
     }
     virtual ~TerarkCompositeIndexIterator() {}
@@ -564,17 +564,19 @@ public:
           return false;
         }
       }
-
+      
       uint64_t index1st = 0;
+      fstring index2nd = "";
       if (target.size() <= cplen + index_.index1stLen_) {
+        fstring sub = target.substr(index_.commonPrefix_.size());
         byte_t targetBuffer[8] = { 0 };
-        // TBD...
-        memcpy(targetBuffer + (8 - target.size()),
-               target.data(), target.size());
+        memcpy(targetBuffer + (8 - sub.size()),
+               sub.data(), sub.size());
         index1st = Read1stIndex(fstring(targetBuffer, targetBuffer + 8), 
-                                cplen, 8);
+                                0, 8);
       } else {
         index1st = Read1stIndex(target, cplen, index_.index1stLen_);
+        index2nd = target.substr(cplen + index_.index1stLen_);
       }
       if (index1st > index_.maxValue_) {
         m_id = size_t(-1);
@@ -582,9 +584,9 @@ public:
       } else if (index1st < index_.minValue_) {
         return SeekToFirst();
       }
+      
       // find the corresponding bit within 2ndRS
       offset_1st_ = index1st - index_.minValue_;
-      fstring index2nd = target.substr(cplen + index_.index1stLen_);
       if (index_.index1stRS_[offset_1st_]) {
         // find within this index
         uint64_t
@@ -691,7 +693,6 @@ public:
       fstring data = index_.indexData_[m_id];
       memcpy(buffer_.data() + offset,
              data.data(), data.size());
-               
     }
 
     size_t offset_1st_; // used to track & decode index1 value
@@ -715,16 +716,16 @@ public:
         printf("diff ken len, maxlen %d, minlen %d\n", ks.maxKeyLen, ks.minKeyLen);
         abort();
       }
+
+      size_t index1stLen = 0;
+      assert(SeekCostEffectiveIndexLen(ks, index1stLen));
+      uint64_t
+        minValue = Read1stIndex(ks.minKey, cplen, index1stLen),
+        maxValue = Read1stIndex(ks.maxKey, cplen, index1stLen);
       /*
        * if rocksdb reverse comparator is used, then minValue
        * is actually the largetst one
        */
-      size_t index1stLen = 0;
-      SeekCostEffectiveIndexLen(ks, index1stLen);
-
-      uint64_t
-        minValue = Read1stIndex(ks.minKey, cplen, index1stLen),
-        maxValue = Read1stIndex(ks.maxKey, cplen, index1stLen);
       if (minValue > maxValue) {
         std::swap(minValue, maxValue);
       }
@@ -795,11 +796,11 @@ public:
           keyVec.mem_size());
         header->min_value = minValue;
         header->max_value = maxValue;
-        header->index_1st_len = index1stLen;
         header->index_1st_mem_size = index1stRS.mem_size();
         header->index_2nd_mem_size = index2ndRS.mem_size();
         header->index_data_mem_size = keyVec.mem_size();
-        header->key_length = ks.minKeyLen - cplen;
+        header->index_1st_len = index1stLen;
+        header->index_2nd_len = ks.minKeyLen - cplen - index1stLen;
         if (cplen > ks.commonPrefixLen) {
           // upper layer didn't handle common prefix, we'll do it
           // ourselves. actually here ks.commonPrefixLen == 0
@@ -860,7 +861,7 @@ public:
       ptr->minValue_ = header->min_value;
       ptr->maxValue_ = header->max_value;
       ptr->index1stLen_ = header->index_1st_len;
-      ptr->keyLength_ = header->key_length;
+      ptr->index2ndLen_ = header->index_2nd_len;
       if (header->common_prefix_length > 0) {
         ptr->commonPrefix_.risk_set_data((char*)mem.data() + header->header_size,
                                          header->common_prefix_length);
@@ -875,10 +876,8 @@ public:
       offset += header->index_2nd_mem_size;
       ptr->indexData_.m_strpool.risk_set_data((unsigned char*)mem.data() + offset,
                                               header->index_data_mem_size);
-      // TBD: confirm this
-      size_t fixlen = header->key_length - header->index_1st_len;
-      ptr->indexData_.m_fixlen = fixlen;
-      ptr->indexData_.m_size = header->index_data_mem_size / fixlen;
+      ptr->indexData_.m_fixlen = header->index_2nd_len;
+      ptr->indexData_.m_size = header->index_data_mem_size / header->index_2nd_len;
       return ptr;
     }
     bool verifyHeader(fstring mem) const {
@@ -931,10 +930,10 @@ public:
     write(indexData_.m_strpool.data(), indexData_.mem_size());
   }
   size_t Find(fstring key) const override {
-    // TBD: key.size() == keyLength_ + index1stLen_ + commonPrefix_.size() ?
+    // TBD: key.size() == index2ndLen_ + index1stLen_ + commonPrefix_.size() ?
     size_t cplen = commonPrefix_.size();
-    if (key.size() != keyLength_ + index1stLen_ + cplen ||
-        key.commonPrefixLen(commonPrefix_) != commonPrefix_.size()) {
+    if (key.size() != index2ndLen_ + index1stLen_ + cplen ||
+        key.commonPrefixLen(commonPrefix_) != cplen) {
       return size_t(-1);
     }
     uint64_t index1st = Read1stIndex(key, cplen, index1stLen_);
@@ -961,7 +960,7 @@ public:
     return indexData_.size();
   }
   size_t TotalKeySize() const override final {
-    return (commonPrefix_.size() + keyLength_) * indexData_.size();
+    return (commonPrefix_.size() + index1stLen_ + index2ndLen_) * indexData_.size();
   }
   fstring Memory() const override {
     return fstring((const char*)header_, (ptrdiff_t)header_->file_size);
@@ -1030,10 +1029,10 @@ protected:
   FixedLenStrVec    indexData_;
   uint64_t          minValue_;
   uint64_t          maxValue_;
-  uint64_t          index1stLen_;
+  uint32_t          index1stLen_;
+  uint32_t          index2ndLen_;
   bool              isUserMemory_;
   bool              isBuilding_;
-  uint32_t          keyLength_;
 };
 template<class RankSelect1st, class RankSelect2nd>
 const char* TerarkCompositeIndex<RankSelect1st, RankSelect2nd>::index_name = "CompositeIndex";
