@@ -67,6 +67,7 @@ public:
   };
   static const Factory* GetFactory(fstring name);
   static const Factory* SelectFactory(const KeyStat&, fstring name);
+  static bool SeekCostEffectiveIndexLen(const KeyStat& ks, size_t& ceLen);
   static unique_ptr<TerarkIndex> LoadFile(fstring fpath);
   static unique_ptr<TerarkIndex> LoadMemory(fstring mem);
   virtual ~TerarkIndex();

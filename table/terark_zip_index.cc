@@ -74,7 +74,7 @@ const TerarkIndex::Factory* TerarkIndex::GetFactory(fstring name) {
   return NULL;
 }
 
-bool SeekCostEffectiveIndexLen(const TerarkIndex::KeyStat& ks, size_t& ceLen) {
+bool TerarkIndex::SeekCostEffectiveIndexLen(const KeyStat& ks, size_t& ceLen) {
   assert(ks.minKey.size() > 8);
   /*
    * the length of index1,
@@ -92,7 +92,7 @@ bool SeekCostEffectiveIndexLen(const TerarkIndex::KeyStat& ks, size_t& ceLen) {
    */
   static const int maxLen = 8;
   size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
-  long originCost = ks.numKeys * ks.maxKeyLen * 8,
+  size_t originCost = ks.numKeys * ks.maxKeyLen * 8,
     minCost = originCost;
   ceLen = maxLen;
   for (int i = maxLen; i > 0; i--) {
@@ -103,10 +103,11 @@ bool SeekCostEffectiveIndexLen(const TerarkIndex::KeyStat& ks, size_t& ceLen) {
       maxValue = ReadUint64(ks.maxKey.begin() + offset,
                             ks.maxKey.begin() + end);
     uint64_t diff = std::max(minValue, maxValue) - std::min(minValue, maxValue) + 1;
-    uint64_t cost = diff + (ks.maxKeyLen - i) * ks.numKeys;
-    //if (diff == ks.numKeys) {
-    //  cost -= diff;
-    //}
+    // diff is bitmap, * 1.2 is extra cost to build RankSelect
+    uint64_t cost = diff * 1.2 + (ks.maxKeyLen - i) * ks.numKeys;
+    if (diff == ks.numKeys) {
+      cost -= (diff * 1.2);
+    }
     if (cost < minCost) {
       minCost = cost;
       ceLen = i;
@@ -138,8 +139,9 @@ TerarkIndex::SelectFactory(const KeyStat& ks, fstring name) {
     }
     assert(name != "UintIndex" &&
            name != "UintIndex_SE_512_64");
-  } else if (ks.maxKeyLen == ks.minKeyLen && // TBD: to confirm the threshold of index2ndLen
+  } else if (ks.maxKeyLen == ks.minKeyLen &&
              ks.maxKeyLen - cplen > sizeof(uint64_t) &&
+             ks.maxKeyLen - cplen <= 16 && // plain index2nd stored without compression
              SeekCostEffectiveIndexLen(ks, ceLen)) {
     uint64_t
       minValue = ReadUint64(ks.minKey.begin() + cplen,
@@ -147,14 +149,17 @@ TerarkIndex::SelectFactory(const KeyStat& ks, fstring name) {
       maxValue = ReadUint64(ks.maxKey.begin() + cplen,
                             ks.maxKey.begin() + cplen + ceLen);
     uint64_t diff = std::max(minValue, maxValue) - std::min(minValue, maxValue) + 1;
-    // TBD: if diff == ks.numKeys, use UintFullIndex as index1stRS
-    if (diff < (4ull << 30)) {
-      return GetFactory("CompositeIndex_IL_256_32");
-    } else {
-      return GetFactory("CompositeIndex_SE_512_64");
+    // since index2nd is stored in plain text, too many will cost too much space.
+    // set threshold as 16M keys, that is around 128M.
+    if (diff < (1ull << 24)) {
+      if (diff == ks.numKeys) {
+        return GetFactory("CompositeIndex_Full_IL_256_32");
+      } else {
+        return GetFactory("CompositeIndex_IL_256_32");
+      }
     }
     assert(name != "CompositeIndex_IL_256_32" &&
-           name != "CompositeIndex_SE_512_64");
+           name != "CompositeIndex_Full_IL_256_32");
   }
 #endif // TerocksPrivateCode
   if (ks.sumKeyLen - ks.numKeys * ks.commonPrefixLen > 0x1E0000000) { // 7.5G
@@ -1376,9 +1381,6 @@ typedef NestLoudsTrieIndex<NestLoudsTrieDAWG_Mixed_IL_256_32_FL> TerocksIndex_Ne
 typedef NestLoudsTrieIndex<NestLoudsTrieDAWG_Mixed_SE_512_32_FL> TerocksIndex_NestLoudsTrieDAWG_Mixed_SE_512_32_FL;
 typedef NestLoudsTrieIndex<NestLoudsTrieDAWG_Mixed_XL_256_32_FL> TerocksIndex_NestLoudsTrieDAWG_Mixed_XL_256_32_FL;
 
-typedef TerarkCompositeIndex<terark::rank_select_il_256, terark::rank_select_il_256> TerarkCompositeIndex_IL_256_32;
-typedef TerarkCompositeIndex<terark::rank_select_se_512, terark::rank_select_se_512> TerarkCompositeIndex_SE_512_64;
-
 TerarkIndexRegister(TerocksIndex_NestLoudsTrieDAWG_IL_256_32, "NestLoudsTrieDAWG_IL", "IL_256_32", "IL_256", "NestLoudsTrieDAWG_IL_256");
 TerarkIndexRegister(TerocksIndex_NestLoudsTrieDAWG_SE_512_32, "NestLoudsTrieDAWG_SE_512", "SE_512_32", "SE_512");
 TerarkIndexRegister(TerocksIndex_NestLoudsTrieDAWG_SE_512_64, "NestLoudsTrieDAWG_SE_512_64", "SE_512_64");
@@ -1393,10 +1395,12 @@ TerarkIndexRegister(TerocksIndex_NestLoudsTrieDAWG_Mixed_SE_512_32_FL, "NestLoud
 TerarkIndexRegister(TerocksIndex_NestLoudsTrieDAWG_Mixed_IL_256_32_FL, "NestLoudsTrieDAWG_Mixed_IL_256_32_FL", "Mixed_IL_256_32_FL");
 TerarkIndexRegister(TerocksIndex_NestLoudsTrieDAWG_Mixed_XL_256_32_FL, "NestLoudsTrieDAWG_Mixed_XL_256_32_FL", "Mixed_XL_256_32_FL");
 
-  TerarkIndexRegister(TerarkCompositeIndex_IL_256_32, "CompositeIndex_IL_256_32", "CompositeIndex_IL_256_32");
-  TerarkIndexRegister(TerarkCompositeIndex_SE_512_64, "CompositeIndex_SE_512_64", "CompositeIndex_SE_512_64");
-
 #if defined(TerocksPrivateCode)
+typedef TerarkCompositeIndex<terark::rank_select_il_256, terark::rank_select_il_256> TerarkCompositeIndex_IL_256_32;
+typedef TerarkCompositeIndex<terark::rank_select_all_one, terark::rank_select_il_256> TerarkCompositeIndex_Full_IL_256_32;
+TerarkIndexRegister(TerarkCompositeIndex_IL_256_32, "CompositeIndex_IL_256_32", "CompositeIndex_IL_256_32");
+TerarkIndexRegister(TerarkCompositeIndex_Full_IL_256_32, "CompositeIndex_Full_IL_256_32", "CompositeIndex_Full_IL_256_32");
+
 typedef TerarkUintIndex<terark::rank_select_il_256_32> TerarkUintIndex_IL_256_32;
 typedef TerarkUintIndex<terark::rank_select_se_256_32> TerarkUintIndex_SE_256_32;
 typedef TerarkUintIndex<terark::rank_select_se_512_32> TerarkUintIndex_SE_512_32;

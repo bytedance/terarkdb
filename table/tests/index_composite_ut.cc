@@ -280,7 +280,7 @@ void test_select() {
     assert(factory == cfactory);
   }
   {
-    // do NOT select composite
+    // do NOT select composite: size == 8
     TerarkIndex::KeyStat stat;
     stat.commonPrefixLen = 0;
     stat.numKeys = 1;
@@ -293,7 +293,7 @@ void test_select() {
     assert(factory != cfactory);
   }
   {
-    // do NOT select composite
+    // seek index1stLen
     TerarkIndex::KeyStat stat;
     stat.numKeys = 1;
     stat.commonPrefixLen = 0;
@@ -303,8 +303,9 @@ void test_select() {
     stat.minKey.assign(arr, arr + 16);
     arr[5] = 1;
     stat.maxKey.assign(arr, arr + 16);
-    auto factory = TerarkIndex::SelectFactory(stat, "");
-    assert(factory == nullptr);
+    size_t celen = size_t(-1);
+    assert(TerarkIndex::SeekCostEffectiveIndexLen(stat, celen));
+    assert(celen == 1);
   }
   {
     // do select composite
@@ -320,7 +321,6 @@ void test_select() {
     auto factory = TerarkIndex::SelectFactory(stat, "");
     assert(factory == cfactory);
   }
-
 }
 
 
