@@ -80,20 +80,22 @@ bool TerarkIndex::SeekCostEffectiveIndexLen(const KeyStat& ks, size_t& ceLen) {
    * the length of index1,
    * 1. 1 byte => too many sub-indexes under each index1
    * 2. 8 byte => a lot more gaps compared with 1 byte index1
-   * more bytes with less gap is preferred.
-
-   * assume 1000 keys, maxKeyLen = 16, original cost = 16,000 * 8  = 128,000,
-   * gap = diff - numkeys,
-   *   8 bytes, all one => 1000 + (16 - 8) * 8 * 1000 = 65,000
+   * !!! more bytes with less gap is preferred, in other words,
+   * prefer smaller gap-ratio, larger compression-ratio
+   * best case is : w1 * (1 / gap-ratio) + w2 * compress-ratio 
+   *   gap-ratio = (diff - numkeys) / diff,
+   *   compress-ratio = compressed-part / original,
+   * assume 1000 keys, maxKeyLen = 16
+   *   original cost = 16,000 * 8                     = 128,000,
    *   8 bytes, 0.5 gap => 2000 + 64,000              = 66,000
-   *
-   *   7 bytes, 0.5 gap => 2000 + (16 - 7) * 8 * 1000 = 74,000
    *   2 bytes, 0.5 gap => 2000 + (16 - 2) * 8 * 1000 = 114,000
    */
   static const int maxLen = 8;
+  static const double w1 = 0.1, w2 = 0.5,
+    max_gap_ratio = 0.9, min_gap_ratio = 0.1;
   size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
-  size_t originCost = ks.numKeys * ks.maxKeyLen * 8,
-    minCost = originCost;
+  size_t originCost = ks.numKeys * ks.maxKeyLen * 8;
+  double score = 0;
   ceLen = maxLen;
   for (int i = maxLen; i > 0; i--) {
     int offset = cplen, end = cplen + i;
@@ -103,17 +105,26 @@ bool TerarkIndex::SeekCostEffectiveIndexLen(const KeyStat& ks, size_t& ceLen) {
       maxValue = ReadUint64(ks.maxKey.begin() + offset,
                             ks.maxKey.begin() + end);
     uint64_t diff = std::max(minValue, maxValue) - std::min(minValue, maxValue) + 1;
+    double gap_ratio = diff == ks.numKeys ? min_gap_ratio : 
+      diff / (diff - ks.numKeys);
+    if (gap_ratio > max_gap_ratio)
+      continue;
+    gap_ratio = std::max(gap_ratio, min_gap_ratio);
     // diff is bitmap, * 1.2 is extra cost to build RankSelect
     uint64_t cost = diff * 1.2 + (ks.maxKeyLen - i) * ks.numKeys;
     if (diff == ks.numKeys) {
       cost -= (diff * 1.2);
     }
-    if (cost < minCost) {
-      minCost = cost;
+    if (cost > originCost * 0.8)
+      continue;
+    double compress_ratio = (originCost - cost) / originCost;
+    double cur = w1 * (1 / gap_ratio) + w2 * compress_ratio;
+    if (cur > score) {
+      score = cur;
       ceLen = i;
     }
   }
-  return (minCost < originCost * 0.8);
+  return score > 0;
 }
 
 const TerarkIndex::Factory*
@@ -167,6 +178,18 @@ TerarkIndex::SelectFactory(const KeyStat& ks, fstring name) {
            name != "CompositeIndex_Full_IL_256_32");
   }
 #endif // TerocksPrivateCode
+  /*
+   * 32bit, 2G nodes could store:
+   * 1. 2 children,
+   *    => 1 + 2**2 + 2**3 + ... + 2**30 == 2**31 => tree height == 30,
+   *    2G * 30 = 60G
+   * 2. 64 children,
+   *    => 1 + 2**6 + 2**12 + ... + 2**30 + N = 2**31 => tree height = 7,
+   *    2G * 7 = 14G,
+   * 3. every node has 256 children, 
+   *    => 1 + 2**8 + 2**16 + 2**24 + N == 2**31 => N ~= 2**31 = 2G, trie tree height == 5,
+   *    2G * 5 = 10G
+   */
   if (ks.sumKeyLen - ks.numKeys * ks.commonPrefixLen > 0x1E0000000) { // 7.5G
     return GetFactory("SE_512_64");
   }
@@ -574,7 +597,7 @@ public:
       }
       
       uint64_t index1st = 0;
-      fstring index2nd = "";
+      fstring index2nd;
       if (target.size() <= cplen + index_.index1stLen_) {
         fstring sub = target.substr(index_.commonPrefix_.size());
         byte_t targetBuffer[8] = { 0 };

@@ -319,8 +319,7 @@ void test_select() {
     arr[5] = 1; arr[7] = 1;
     stat.maxKey.assign(arr, arr + 16);
     size_t celen = size_t(-1);
-    assert(TerarkIndex::SeekCostEffectiveIndexLen(stat, celen));
-    assert(celen == 1);
+    assert(TerarkIndex::SeekCostEffectiveIndexLen(stat, celen) == false);
   }
   {
     // seek index1stLen: len = 2
