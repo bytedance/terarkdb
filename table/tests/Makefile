@@ -5,7 +5,7 @@ TerarkLib=/newssd1/zzz/terark-zip-rocksdb/pkg/terark-zip-rocksdb-Linux-x86_64-g+
 RocksDir=/newssd1/temp/rocksdb
 CXX=g++
 #CFLAGS=-g3 -std=c++11 -fPIC
-CFLAGS=-g -std=c++11
+CFLAGS=-g -std=c++11 -Wall
 INC=-I. -I.. -I$(TerarkDir) -I$(RocksDir)/include -I$(RocksDir)
 LIBPATH=-L. -L.. -L$(TerarkLib)/lib -L$(RocksDir)
 LIB=-lpthread -lrocksdb -lterark-core-g++-5.4-r -lterark-fsa-g++-5.4-r -lterark-zbs-g++-5.4-r

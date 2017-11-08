@@ -739,7 +739,7 @@ public:
       assert(cplen >= ks.commonPrefixLen);
       if (ks.maxKeyLen != ks.minKeyLen ||
           ks.maxKeyLen - cplen <= sizeof(uint64_t)) {
-        printf("diff ken len, maxlen %d, minlen %d\n", ks.maxKeyLen, ks.minKeyLen);
+        printf("diff ken len, maxlen %zu, minlen %zu\n", ks.maxKeyLen, ks.minKeyLen);
         abort();
       }
 
@@ -771,7 +771,7 @@ public:
       FixedLenStrVec keyVec(index2ndLen);
       keyVec.reserve(ks.numKeys, sumRealKeyLen);
       if (ks.minKey < ks.maxKey) {
-        for (long i = 0; i < ks.numKeys; ++i) {
+        for (size_t i = 0; i < ks.numKeys; ++i) {
           reader >> keyBuf;
           uint64_t offset = Read1stIndex(keyBuf, cplen, index1stLen) - minValue;
           index1stRS.set1(offset);
@@ -787,11 +787,12 @@ public:
         size_t pos = sumRealKeyLen;
         keyVec.m_size = ks.numKeys;
         keyVec.m_strpool.resize(sumRealKeyLen);
+        // compare with '0', do NOT use size_t
         for (long i = ks.numKeys - 1; i >= 0; --i) {
           reader >> keyBuf;
           uint64_t offset = Read1stIndex(keyBuf, cplen, index1stLen) - minValue;
           index1stRS.set1(offset);
-          if (i < ks.numKeys - 1) {
+          if (i < (long)ks.numKeys - 1) {
             if (offset != prev) { // next index1 is new one
               index2ndRS.set0(i + 1);
             } else {
