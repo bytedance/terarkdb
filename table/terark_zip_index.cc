@@ -85,9 +85,10 @@ bool TerarkIndex::SeekCostEffectiveIndexLen(const KeyStat& ks, size_t& ceLen) {
    * best case is : w1 * (1 / gap-ratio) + w2 * compress-ratio 
    *   gap-ratio = (diff - numkeys) / diff,
    *   compress-ratio = compressed-part / original,
-   * assume 1000 keys, maxKeyLen = 16
-   *   original cost = 16,000 * 8                     = 128,000,
-   *   8 bytes, 0.5 gap => 2000 + 64,000              = 66,000
+   *
+   * to calculate space usage, assume 1000 keys, maxKeyLen = 16,
+   *   original cost = 16,000 * 8                     = 128,000 bit
+   *   8 bytes, 0.5 gap => 2000 + (16 - 8) * 8 * 1000 = 66,000
    *   2 bytes, 0.5 gap => 2000 + (16 - 2) * 8 * 1000 = 114,000
    */
   static const int maxLen = 8;
@@ -105,8 +106,9 @@ bool TerarkIndex::SeekCostEffectiveIndexLen(const KeyStat& ks, size_t& ceLen) {
       maxValue = ReadUint64(ks.maxKey.begin() + offset,
                             ks.maxKey.begin() + end);
     uint64_t diff = std::max(minValue, maxValue) - std::min(minValue, maxValue) + 1;
-    double gap_ratio = diff == ks.numKeys ? min_gap_ratio : 
-      diff / (diff - ks.numKeys);
+    // one index1st with a collection of index2nd, that's when diff < numkeys
+    double gap_ratio = diff <= ks.numKeys ? min_gap_ratio : 
+      (double)(diff - ks.numKeys) / diff;
     if (gap_ratio > max_gap_ratio)
       continue;
     gap_ratio = std::max(gap_ratio, min_gap_ratio);
@@ -151,12 +153,10 @@ TerarkIndex::SelectFactory(const KeyStat& ks, fstring name) {
         return GetFactory("UintIndex_SE_512_64");
       }
     }
-    assert(name != "UintIndex" &&
-           name != "UintIndex_SE_512_64");
   } else if (ks.maxKeyLen == ks.minKeyLen &&
              ks.maxKeyLen - cplen > sizeof(uint64_t) &&
-             ks.maxKeyLen - cplen <= 16 && // plain index2nd stored without compression
-             ks.numKeys < (1ull << 24) && // !!!
+             ks.maxKeyLen - cplen <= 16 && // !!! plain index2nd may occupy too much space,
+             ks.numKeys < (1ull << 24) &&  // set key count threshold to 16M (aound 128M)
              SeekCostEffectiveIndexLen(ks, ceLen)) {
     uint64_t
       minValue = ReadUint64(ks.minKey.begin() + cplen,
@@ -164,15 +164,10 @@ TerarkIndex::SelectFactory(const KeyStat& ks, fstring name) {
       maxValue = ReadUint64(ks.maxKey.begin() + cplen,
                             ks.maxKey.begin() + cplen + ceLen);
     uint64_t diff = std::max(minValue, maxValue) - std::min(minValue, maxValue) + 1;
-    // !!!
-    // since index2nd is stored in plain text, too many will cost too much space.
-    // set threshold as 16M keys, that is around 128M.
-    if (diff < (1ull << 24)) {
-      if (diff == ks.numKeys) {
-        return GetFactory("CompositeIndex_Full_IL_256_32");
-      } else {
-        return GetFactory("CompositeIndex_IL_256_32");
-      }
+    if (diff == ks.numKeys) {
+      return GetFactory("CompositeIndex_Full_IL_256_32");
+    } else {
+      return GetFactory("CompositeIndex_IL_256_32");
     }
     assert(name != "CompositeIndex_IL_256_32" &&
            name != "CompositeIndex_Full_IL_256_32");
@@ -181,13 +176,13 @@ TerarkIndex::SelectFactory(const KeyStat& ks, fstring name) {
   /*
    * 32bit, 2G nodes could store:
    * 1. 2 children,
-   *    => 1 + 2**2 + 2**3 + ... + 2**30 == 2**31 => tree height == 30,
-   *    2G * 30 = 60G
+   *    => 1 + 2**1 + 2**2 + ... + 2**30 == 2**31 => leaf cnt == 2**30, height = 31
+   *    1G * 31 = 31G
    * 2. 64 children,
-   *    => 1 + 2**6 + 2**12 + ... + 2**30 + N = 2**31 => tree height = 7,
-   *    2G * 7 = 14G,
+   *    => 1 + 2**6 + 2**12 + ... + 2**30 + N = 2**31 => 2**30 with h = 7, 2**30 with h == 6
+   *    1G * 13 = 13G,
    * 3. every node has 256 children, 
-   *    => 1 + 2**8 + 2**16 + 2**24 + N == 2**31 => N ~= 2**31 = 2G, trie tree height == 5,
+   *    => 1 + 2**8 + 2**16 + 2**24 + N == 2**31 => N ~= 2**31 with h == 5,
    *    2G * 5 = 10G
    */
   if (ks.sumKeyLen - ks.numKeys * ks.commonPrefixLen > 0x1E0000000) { // 7.5G
@@ -523,7 +518,7 @@ public:
     uint64_t index_2nd_mem_size;
     uint64_t index_data_mem_size;
     /*
-     * per key length = common_prefix_len + index_1st_len + key_length
+     * per key length = common_prefix_len + index_1st_len + index_2nd_len
      */
     uint32_t index_1st_len;
     uint32_t index_2nd_len;

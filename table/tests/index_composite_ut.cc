@@ -308,9 +308,23 @@ void test_select() {
     assert(factory == nullptr);
   }
   {
-    // seek index1stLen: len = 1
+    // do NOT select composite index: gap ratio too high
     TerarkIndex::KeyStat stat;
-    stat.numKeys = 1;
+    stat.numKeys = 2;
+    stat.commonPrefixLen = 0;
+    stat.minKeyLen = stat.maxKeyLen = 16;
+    char arr[16] = { 0 };
+    arr[5] = 1; arr[7] = 1;
+    stat.minKey.assign(arr, arr + 16);
+    arr[5] = 100; arr[7] = 1;
+    stat.maxKey.assign(arr, arr + 16);
+    size_t celen = size_t(-1);
+    assert(TerarkIndex::SeekCostEffectiveIndexLen(stat, celen) == false);
+  }
+  {
+    // seek index1stLen: len = 2
+    TerarkIndex::KeyStat stat;
+    stat.numKeys = 2;
     stat.commonPrefixLen = 0;
     stat.minKeyLen = stat.maxKeyLen = 16;
     char arr[16] = { 0 };
@@ -319,7 +333,8 @@ void test_select() {
     arr[5] = 1; arr[7] = 1;
     stat.maxKey.assign(arr, arr + 16);
     size_t celen = size_t(-1);
-    assert(TerarkIndex::SeekCostEffectiveIndexLen(stat, celen) == false);
+    assert(TerarkIndex::SeekCostEffectiveIndexLen(stat, celen));
+    assert(celen == 1);
   }
   {
     // seek index1stLen: len = 2
