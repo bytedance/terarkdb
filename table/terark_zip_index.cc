@@ -165,13 +165,13 @@ TerarkIndex::SelectFactory(const KeyStat& ks, fstring name) {
     uint64_t diff = std::max(minValue, maxValue) - std::min(minValue, maxValue) + 1;
     const char* facname = nullptr;
     if (ks.numKeys < (4ull << 30)) {
-      facname = diff == ks.numKeys ? "CompositeIndex_Full_IL_256_32" :
-        "CompositeIndex_IL_256_32";
+      facname = diff == ks.numKeys ? "CompositeIndex_AllOne_IL85" :
+        "CompositeIndex_IL85_IL85";
     } else {
-      facname = diff == ks.numKeys ? "CompositeIndex_Full_SE_512_64" :
-        "CompositeIndex_SE_512_64";
+      facname = diff == ks.numKeys ? "CompositeIndex_AllOne_SE96" :
+        "CompositeIndex_SE96_SE96";
     }
-    printf("Factory used: %s\n", facname);
+    //printf("Factory used: %s\n", facname);
     return GetFactory(facname);
   }
 #endif // TerocksPrivateCode
@@ -495,6 +495,96 @@ public:
 #if defined(TerocksPrivateCode)
 
 /*
+ * special impl for all one/zero UintIndex
+ */
+class rank_select_allone : boost::noncopyable {
+public:
+  rank_select_allone() : m_size(-1), m_placeholder(nullptr) {}
+  rank_select_allone(size_t sz) : m_size(sz), m_placeholder(nullptr) {}
+  ~rank_select_allone() = default;
+
+  void resize(size_t newsize) { m_size = newsize; }
+  void set1(size_t i) { assert(i < m_size); }
+  size_t select1(size_t i) const { return i; }
+  void build_cache(bool, bool) {};
+  void swap(rank_select_allone& another) {
+    std::swap(m_size, another.m_size);
+    std::swap(m_placeholder, another.m_placeholder);
+  }
+
+  void risk_release_ownership() {}
+  void risk_mmap_from(unsigned char* base, size_t length) {
+    assert(base != nullptr);
+    assert(length == sizeof(*this));
+    m_size = *((size_t*)base);
+  }
+
+  const void* data() const { return this; }
+  bool operator[](long n) const { // alias of 'is1'
+    assert(n >= 0 && (size_t)n < m_size);
+    return true;
+  }
+
+  size_t mem_size() const { return sizeof(*this); }
+  size_t max_rank1() const { return m_size; }
+  size_t size() const { return m_size; }
+  size_t rank1(size_t bitpos) const { return bitpos; }
+
+  ///@returns number of continuous one/zero bits starts at bitpos
+  size_t zero_seq_len(size_t bitpos) const { return 0; }
+  size_t zero_seq_revlen(size_t endpos) const { return 0; }
+
+private:
+  size_t m_size;
+  unsigned char* m_placeholder;
+};
+
+class rank_select_allzero : boost::noncopyable {
+public:
+  rank_select_allzero() : m_size(-1), m_placeholder(nullptr) {}
+  rank_select_allzero(size_t sz) : m_size(sz), m_placeholder(nullptr) {}
+  ~rank_select_allzero() = default;
+
+  void clear() {}
+  void resize(size_t newsize) { m_size = newsize; }
+  void set0(size_t i) { assert(i < m_size); }
+  void set1(size_t i) { assert(i < m_size); }
+  size_t select0(size_t i) const { return i; }
+  void build_cache(bool, bool) {};
+  void swap(rank_select_allzero& another) {
+    std::swap(m_size, another.m_size);
+    std::swap(m_placeholder, another.m_placeholder);
+  }
+
+  void risk_release_ownership() {}
+  void risk_mmap_from(unsigned char* base, size_t length) {
+    assert(base != nullptr);
+    assert(length == sizeof(*this));
+    m_size = *((size_t*)base);
+  }
+
+  const void* data() const { return this; }
+  bool operator[](long n) const { // alias of 'is1'
+    assert(n >= 0 && (size_t)n < m_size);
+    return true;
+  }
+
+  size_t mem_size() const { return sizeof(*this); }
+  size_t max_rank0() const { return m_size; }
+  size_t max_rank1() const { return 0; }
+  size_t size() const { return m_size; }
+  size_t rank0(size_t bitpos) const { return bitpos; }
+
+  ///@returns number of continuous one/zero bits starts at bitpos
+  size_t one_seq_len(size_t bitpos) const { return 0; }
+  size_t one_seq_revlen(size_t endpos) const { return 0; }
+
+private:
+  size_t m_size;
+  unsigned char* m_placeholder;
+};
+
+/*
  * For simplicity, let's take composite index => index1:index2. Then following 
  * compositeindexes like,
  *   4:6, 4:7, 4:8, 7:19, 7:20, 8:3
@@ -504,9 +594,6 @@ public:
  * to search 7:20, use bitmap1 to rank1(7) = 2, then use bitmap2 to select0(2) = position-3,
  * use bitmap2 to select0(3) = position-5. That is, we should search within [3, 5). 
  * iter [3 to 5), 7:20 is found, done.
- */
-/*
- * for fixed len index_2nd+, we could have their common prefix as well ?
  */
 template<class RankSelect1st, class RankSelect2nd>
 class TerarkCompositeIndex : public TerarkIndex {
@@ -928,6 +1015,7 @@ public:
         ) {
         throw std::invalid_argument("TerarkCompositeIndex::Load(): Bad file header");
       }
+      //printf("\ntypename is: %s\n", typeid(TerarkCompositeIndex<RankSelect1st, RankSelect2nd>).name());
       auto verifyClassName = [&] {
         size_t name_i = g_TerarkIndexName.find_i(
           typeid(TerarkCompositeIndex<RankSelect1st, RankSelect2nd>).name());
@@ -935,7 +1023,7 @@ public:
         assert(self_i < g_TerarkIndexFactroy.end_i());
         size_t head_i = g_TerarkIndexFactroy.find_i(header->class_name);
         return head_i < g_TerarkIndexFactroy.end_i() &&
-        g_TerarkIndexFactroy.val(head_i) == g_TerarkIndexFactroy.val(self_i);
+                        g_TerarkIndexFactroy.val(head_i) == g_TerarkIndexFactroy.val(self_i);
       };
       assert(verifyClassName()), (void)verifyClassName;
       return true;
@@ -943,14 +1031,13 @@ public:
     /*
      * TBD: overwrite the given indexRS type with our designated one
      */
-    std::string BuildAndCheckRS(RankSelect1st& index1stRS, RankSelect2nd& index2ndRS) {
+    std::string BuildAndCheckRS(RankSelect1st& index1stRS, RankSelect2nd& index2ndRS) const {
       index1stRS.build_cache(false, false);
+      index2ndRS.build_cache(false, false);
       if (index2ndRS.max_rank1() != 0) {
-        index2ndRS.build_cache(false, false);
         return string();
       } else {
         index2ndRS.clear();
-        //index2ndRS.resize_no_init() to sizeof rank_select_allzero
         return std::string(typeid(TerarkCompositeIndex<RankSelect1st, rank_select_allzero>).name());
       }
     }
@@ -1065,94 +1152,6 @@ protected:
 template<class RankSelect1st, class RankSelect2nd>
 const char* TerarkCompositeIndex<RankSelect1st, RankSelect2nd>::index_name = "CompositeIndex";
 
-/*
- * special impl for all one/zero UintIndex
- */
-class rank_select_allone : boost::noncopyable {
-public:
-  rank_select_allone() : m_size(-1), m_placeholder(nullptr) {}
-  rank_select_allone(size_t sz) : m_size(sz), m_placeholder(nullptr) {}
-  ~rank_select_allone() = default;
-
-  void resize(size_t newsize) { m_size = newsize; }
-  void set1(size_t i) { assert(i < m_size); }
-  size_t select1(size_t i) const { return i; }
-  void build_cache(bool, bool) {};
-  void swap(rank_select_allone& another) {
-    std::swap(m_size, another.m_size);
-    std::swap(m_placeholder, another.m_placeholder);
-  }
-
-  void risk_release_ownership() {}
-  void risk_mmap_from(unsigned char* base, size_t length) {
-    assert(base != nullptr);
-    assert(length == sizeof(*this));
-    m_size = *((size_t*)base);
-  }
-
-  const void* data() const { return this; }
-  bool operator[](long n) const { // alias of 'is1'
-    assert(n >= 0 && (size_t)n < m_size);
-    return true;
-  }
-
-  size_t mem_size() const { return sizeof(*this); }
-  size_t max_rank1() const { return m_size; }
-  size_t size() const { return m_size; }
-  size_t rank1(size_t bitpos) const { return bitpos; }
-
-  ///@returns number of continuous one/zero bits starts at bitpos
-  size_t zero_seq_len(size_t bitpos) const { return 0; }
-  size_t zero_seq_revlen(size_t endpos) const { return 0; }
-
-private:
-  size_t m_size;
-  unsigned char* m_placeholder;
-};
-
-class rank_select_allzero : boost::noncopyable {
-public:
-  rank_select_allzero() : m_size(-1), m_placeholder(nullptr) {}
-  rank_select_allzero(size_t sz) : m_size(sz), m_placeholder(nullptr) {}
-  ~rank_select_allzero() = default;
-
-  void resize(size_t newsize) { m_size = newsize; }
-  void set0(size_t i) { assert(i < m_size); }
-  size_t select0(size_t i) const { return i; }
-  void build_cache(bool, bool) {};
-  void swap(rank_select_allzero& another) {
-    std::swap(m_size, another.m_size);
-    std::swap(m_placeholder, another.m_placeholder);
-  }
-
-  void risk_release_ownership() {}
-  void risk_mmap_from(unsigned char* base, size_t length) {
-    assert(base != nullptr);
-    assert(length == sizeof(*this));
-    m_size = *((size_t*)base);
-  }
-
-  const void* data() const { return this; }
-  bool operator[](long n) const { // alias of 'is1'
-    assert(n >= 0 && (size_t)n < m_size);
-    return true;
-  }
-
-  size_t mem_size() const { return sizeof(*this); }
-  size_t max_rank0() const { return m_size; }
-  size_t size() const { return m_size; }
-  size_t rank0(size_t bitpos) const { return bitpos; }
-
-  ///@returns number of continuous one/zero bits starts at bitpos
-  size_t one_seq_len(size_t bitpos) const { return 0; }
-  size_t one_seq_revlen(size_t endpos) const { return 0; }
-
-private:
-  size_t m_size;
-  unsigned char* m_placeholder;
-};
-
-  
 template<class RankSelect>
 class TerarkUintIndex : public TerarkIndex {
 public:

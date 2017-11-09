@@ -134,7 +134,7 @@ TerarkIndex* save_reload(TerarkIndex* index, const TerarkIndex::Factory* factory
   writer.flush();
   writer.close();
   
-  return factory->LoadFile(index_path).release();
+  return TerarkIndex::LoadFile(index_path).release();
 }
 
 void test_simple(bool ascend) {
@@ -151,7 +151,7 @@ void test_simple(bool ascend) {
   // build index
   FileStream fp(key_path, "rb");
   NativeDataInput<InputBuffer> tempKeyFileReader(&fp);
-  auto factory = rocksdb::TerarkIndex::GetFactory("CompositeIndex_IL_256_32");
+  auto factory = rocksdb::TerarkIndex::GetFactory("CompositeIndex_IL85_IL85");
   rocksdb::TerarkZipTableOptions tableOpt;
   TerarkIndex* index = factory->Build(tempKeyFileReader, tableOpt, stat);
   printf("\tbuild done\n");
@@ -263,9 +263,11 @@ void test_simple(bool ascend) {
 }
 
 void test_select() {
-  // cfactory -> CompositeIndexFactory
-  const rocksdb::TerarkIndex::Factory* cfactory = 
-    TerarkIndex::GetFactory("CompositeIndex_IL_256_32");
+  // prepare
+  const rocksdb::TerarkIndex::Factory* f_il85_il85 = 
+    TerarkIndex::GetFactory("CompositeIndex_IL85_IL85");
+  const rocksdb::TerarkIndex::Factory* f_allone_allzero = 
+    TerarkIndex::GetFactory("CompositeIndex_AllOne_AllZero");
   {
     TerarkIndex::KeyStat stat;
     stat.numKeys = 100;
@@ -277,7 +279,8 @@ void test_select() {
     arr[7] = arr[15] = 14;
     stat.maxKey.assign(arr, arr + 16);
     auto factory = TerarkIndex::SelectFactory(stat, "");
-    assert(factory == cfactory);
+    assert(factory != nullptr);
+    assert(factory == f_il85_il85);
   }
   {
     // do NOT select composite: size == 8
@@ -290,7 +293,7 @@ void test_select() {
     stat.minKeyLen = stat.maxKeyLen = 8;
     auto factory = TerarkIndex::SelectFactory(stat, "");
     assert(factory != nullptr);
-    assert(factory != cfactory);
+    assert(factory != f_il85_il85);
   }
   {
     // do NOT select composite index: gap ratio too high
@@ -378,7 +381,7 @@ void test_select() {
     arr[7] = 14;
     stat.maxKey.assign(arr, arr + 16);
     auto factory = TerarkIndex::SelectFactory(stat, "");
-    assert(factory == cfactory);
+    assert(factory == f_il85_il85);
   }
 }
 
