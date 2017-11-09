@@ -155,8 +155,7 @@ TerarkIndex::SelectFactory(const KeyStat& ks, fstring name) {
     }
   } else if (ks.maxKeyLen == ks.minKeyLen &&
              ks.maxKeyLen - cplen > sizeof(uint64_t) &&
-             ks.maxKeyLen - cplen <= 16 && // !!! plain index2nd may occupy too much space,
-             ks.numKeys < (1ull << 24) &&  // set key count threshold to 16M (aound 128M)
+             ks.maxKeyLen - cplen <= 16 && // !!! plain index2nd may occupy too much space
              SeekCostEffectiveIndexLen(ks, ceLen)) {
     uint64_t
       minValue = ReadUint64(ks.minKey.begin() + cplen,
@@ -164,13 +163,16 @@ TerarkIndex::SelectFactory(const KeyStat& ks, fstring name) {
       maxValue = ReadUint64(ks.maxKey.begin() + cplen,
                             ks.maxKey.begin() + cplen + ceLen);
     uint64_t diff = std::max(minValue, maxValue) - std::min(minValue, maxValue) + 1;
-    if (diff == ks.numKeys) {
-      return GetFactory("CompositeIndex_Full_IL_256_32");
+    const char* facname = nullptr;
+    if (ks.numKeys < (4ull << 30)) {
+      facname = diff == ks.numKeys ? "CompositeIndex_Full_IL_256_32" :
+        "CompositeIndex_IL_256_32";
     } else {
-      return GetFactory("CompositeIndex_IL_256_32");
+      facname = diff == ks.numKeys ? "CompositeIndex_Full_SE_512_64" :
+        "CompositeIndex_SE_512_64";
     }
-    assert(name != "CompositeIndex_IL_256_32" &&
-           name != "CompositeIndex_Full_IL_256_32");
+    printf("Factory used: %s\n", facname);
+    return GetFactory(facname);
   }
 #endif // TerocksPrivateCode
   /*
@@ -1454,10 +1456,15 @@ TerarkIndexRegister(TerocksIndex_NestLoudsTrieDAWG_Mixed_IL_256_32_FL, "NestLoud
 TerarkIndexRegister(TerocksIndex_NestLoudsTrieDAWG_Mixed_XL_256_32_FL, "NestLoudsTrieDAWG_Mixed_XL_256_32_FL", "Mixed_XL_256_32_FL");
 
 #if defined(TerocksPrivateCode)
-typedef TerarkCompositeIndex<terark::rank_select_il_256, terark::rank_select_il_256> TerarkCompositeIndex_IL_256_32;
-typedef TerarkCompositeIndex<rank_select_allone, terark::rank_select_il_256> TerarkCompositeIndex_Full_IL_256_32;
+typedef TerarkCompositeIndex<terark::rank_select_il_256, terark::rank_select_il_256>       TerarkCompositeIndex_IL_256_32;
+typedef TerarkCompositeIndex<rank_select_allone, terark::rank_select_il_256>               TerarkCompositeIndex_Full_IL_256_32;
+typedef TerarkCompositeIndex<terark::rank_select_se_512_64, terark::rank_select_se_512_64> TerarkCompositeIndex_SE_512_64;
+typedef TerarkCompositeIndex<rank_select_allone, terark::rank_select_se_512_64>            TerarkCompositeIndex_Full_SE_512_64;
+
 TerarkIndexRegister(TerarkCompositeIndex_IL_256_32, "CompositeIndex_IL_256_32", "CompositeIndex_IL_256_32");
 TerarkIndexRegister(TerarkCompositeIndex_Full_IL_256_32, "CompositeIndex_Full_IL_256_32", "CompositeIndex_Full_IL_256_32");
+TerarkIndexRegister(TerarkCompositeIndex_SE_512_64, "CompositeIndex_SE_512_64", "CompositeIndex_SE_512_64");
+TerarkIndexRegister(TerarkCompositeIndex_Full_SE_512_64, "CompositeIndex_Full_SE_512_64", "CompositeIndex_Full_SE_512_64");
 
 typedef TerarkUintIndex<terark::rank_select_il_256_32> TerarkUintIndex_IL_256_32;
 typedef TerarkUintIndex<terark::rank_select_se_256_32> TerarkUintIndex_SE_256_32;

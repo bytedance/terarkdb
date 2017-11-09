@@ -293,21 +293,6 @@ void test_select() {
     assert(factory != cfactory);
   }
   {
-    // do NOT select composite: key count > 16M
-    TerarkIndex::KeyStat stat;
-    stat.numKeys = 1 << 31;
-    stat.commonPrefixLen = 0;
-    stat.minKeyLen = stat.maxKeyLen = 16;
-    byte_t arr[16] = { 0 };
-    arr[8] = 1;
-    stat.minKey.assign(arr, arr + 16);
-    arr[4] = 1; arr[8] = 0;
-    stat.maxKey.assign(arr, arr + 16);
-    size_t celen = size_t(-1);
-    auto factory = TerarkIndex::SelectFactory(stat, "");
-    assert(factory == nullptr);
-  }
-  {
     // do NOT select composite index: gap ratio too high
     TerarkIndex::KeyStat stat;
     stat.numKeys = 2;
@@ -320,6 +305,21 @@ void test_select() {
     stat.maxKey.assign(arr, arr + 16);
     size_t celen = size_t(-1);
     assert(TerarkIndex::SeekCostEffectiveIndexLen(stat, celen) == false);
+  }
+  {
+    // select composite: key count > 4G
+    TerarkIndex::KeyStat stat;
+    stat.numKeys = 1ull << 32;
+    stat.commonPrefixLen = 0;
+    stat.minKeyLen = stat.maxKeyLen = 16;
+    byte_t arr[16] = { 0 };
+    arr[4] = 0; arr[8] = 1;
+    stat.minKey.assign(arr, arr + 16);
+    arr[4] = 1; arr[8] = 0;
+    stat.maxKey.assign(arr, arr + 16);
+    size_t celen = size_t(-1);
+    auto factory = TerarkIndex::SelectFactory(stat, "");
+    assert(factory != nullptr);
   }
   {
     // seek index1stLen: len = 2
