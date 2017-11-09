@@ -620,17 +620,12 @@ public:
      */
     uint32_t common_prefix_length;
 
-    FileHeader(size_t body_size, fstring c_name = fstring()) {
+    FileHeader(size_t body_size) {
       memset(this, 0, sizeof *this);
       magic_len = strlen(index_name);
       strncpy(magic, index_name, sizeof magic);
-      size_t name_i;
-      if (c_name.empty()) {
-        name_i = g_TerarkIndexName.find_i(
-          typeid(TerarkCompositeIndex<RankSelect1st, RankSelect2nd>).name());
-      } else {
-        name_i = g_TerarkIndexName.find_i(c_name);
-      }
+      size_t name_i = g_TerarkIndexName.find_i(
+        typeid(TerarkCompositeIndex<RankSelect1st, RankSelect2nd>).name());
       assert(name_i < g_TerarkIndexFactroy.end_i());
       strncpy(class_name, g_TerarkIndexName.val(name_i).c_str(), sizeof class_name);
       header_size = sizeof *this;
@@ -905,39 +900,20 @@ public:
         index2ndRS.set0(0); // set 1st element to 0
         assert(pos == 0);
       }
-      //
-      std::string c_name = BuildAndCheckRS(index1stRS, index2ndRS);
-      // construct index, set meta, index, data
-      unique_ptr< TerarkCompositeIndex<RankSelect1st, RankSelect2nd> > ptr(
-        new TerarkCompositeIndex<RankSelect1st, RankSelect2nd>());
-      ptr->isUserMemory_ = false;
-      ptr->isBuilding_ = true;
-      {
-        // save meta into header
-        FileHeader *header = new FileHeader(
-          index1stRS.mem_size() + index2ndRS.mem_size() + keyVec.mem_size(),
-          c_name);
-        header->min_value = minValue;
-        header->max_value = maxValue;
-        header->index_1st_mem_size = index1stRS.mem_size();
-        header->index_2nd_mem_size = index2ndRS.mem_size();
-        header->index_data_mem_size = keyVec.mem_size();
-        header->index_1st_len = index1stLen;
-        header->index_2nd_len = ks.minKeyLen - cplen - index1stLen;
-        if (cplen > ks.commonPrefixLen) {
-          // upper layer didn't handle common prefix, we'll do it
-          // ourselves. actually here ks.commonPrefixLen == 0
-          header->common_prefix_length = cplen - ks.commonPrefixLen;
-          ptr->commonPrefix_.assign(ks.minKey.data() + ks.commonPrefixLen,
-                                    header->common_prefix_length);
-          header->file_size += terark::align_up(header->common_prefix_length, 8);
-        }
-        ptr->header_ = header;
+      index1stRS.build_cache(false, false);
+      index2ndRS.build_cache(false, false);
+      if (index2ndRS.max_rank1() == 0) {
+        rank_select_allzero rs2(index2ndRS.size());
+        unique_ptr< TerarkCompositeIndex<RankSelect1st, rank_select_allzero> >
+          ptr(new TerarkCompositeIndex<RankSelect1st, rank_select_allzero>(
+            index1stRS, rs2, keyVec, ks, minValue, maxValue, index1stLen));
+        return ptr.release();
+      } else {
+        unique_ptr< TerarkCompositeIndex<RankSelect1st, RankSelect2nd> >
+          ptr(new TerarkCompositeIndex<RankSelect1st, RankSelect2nd>(
+            index1stRS, index2ndRS, keyVec, ks, minValue, maxValue, index1stLen));
+        return ptr.release();
       }
-      ptr->index1stRS_.swap(index1stRS);
-      ptr->index2ndRS_.swap(index2ndRS);
-      ptr->indexData_.swap(keyVec);
-      return ptr.release();
     }
     unique_ptr<TerarkIndex> LoadMemory(fstring mem) const override {
       return unique_ptr<TerarkIndex>(loadImpl(mem, {}).release());
@@ -1031,23 +1007,39 @@ public:
       assert(verifyClassName()), (void)verifyClassName;
       return true;
     }
-    /*
-     * TBD: overwrite the given indexRS type with our designated one
-     */
-    std::string BuildAndCheckRS(RankSelect1st& index1stRS, RankSelect2nd& index2ndRS) const {
-      index1stRS.build_cache(false, false);
-      index2ndRS.build_cache(false, false);
-      if (index2ndRS.max_rank1() != 0) {
-        return string();
-      } else {
-        index2ndRS.clear();
-        return std::string(typeid(TerarkCompositeIndex<RankSelect1st, rank_select_allzero>).name());
-      }
-    }
   };
 
-public:    
+public:
   using TerarkIndex::FactoryPtr;
+  TerarkCompositeIndex() {}
+  TerarkCompositeIndex(RankSelect1st& index1stRS, RankSelect2nd& index2ndRS,
+                       FixedLenStrVec& keyVec, const KeyStat& ks, 
+                       uint64_t minValue, uint64_t maxValue, size_t index1stLen) {
+    isBuilding_ = true;
+    size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
+    // save meta into header
+    FileHeader* header = new FileHeader(index1stRS.mem_size() + index2ndRS.mem_size() + keyVec.mem_size());
+    header->min_value = minValue;
+    header->max_value = maxValue;
+    header->index_1st_mem_size = index1stRS.mem_size();
+    header->index_2nd_mem_size = index2ndRS.mem_size();
+    header->index_data_mem_size = keyVec.mem_size();
+    header->index_1st_len = index1stLen;
+    header->index_2nd_len = ks.minKeyLen - cplen - index1stLen;
+    if (cplen > ks.commonPrefixLen) {
+      // upper layer didn't handle common prefix, we'll do it
+      // ourselves. actually here ks.commonPrefixLen == 0
+      header->common_prefix_length = cplen - ks.commonPrefixLen;
+      commonPrefix_.assign(ks.minKey.data() + ks.commonPrefixLen,
+                           header->common_prefix_length);
+      header->file_size += terark::align_up(header->common_prefix_length, 8);
+    }
+    header_ = header;
+    index1stRS_.swap(index1stRS);
+    index2ndRS_.swap(index2ndRS);
+    indexData_.swap(keyVec);
+  }
+
   virtual ~TerarkCompositeIndex() {
     if (isBuilding_) {
       delete (FileHeader*)header_;
@@ -1067,9 +1059,7 @@ public:
       write(commonPrefix_.data(), terark::align_up(commonPrefix_.size(), 8));
     }
     write(index1stRS_.data(), index1stRS_.mem_size());
-    if (index2ndRS_.mem_size() > 0) {
-      write(index2ndRS_.data(), index2ndRS_.mem_size());
-    }
+    write(index2ndRS_.data(), index2ndRS_.mem_size());
     write(indexData_.m_strpool.data(), indexData_.mem_size());
   }
   size_t Find(fstring key) const override {
