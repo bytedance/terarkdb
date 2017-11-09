@@ -566,7 +566,7 @@ public:
   const void* data() const { return this; }
   bool operator[](long n) const { // alias of 'is1'
     assert(n >= 0 && (size_t)n < m_size);
-    return true;
+    return false;
   }
 
   size_t mem_size() const { return sizeof(*this); }
@@ -684,7 +684,6 @@ public:
           return false;
         }
       }
-      
       uint64_t index1st = 0;
       fstring index2nd;
       if (target.size() <= cplen + index_.index1stLen_) {
@@ -717,6 +716,10 @@ public:
         } else {
           uint64_t cnt = index_.index2ndRS_.one_seq_len(pos0 + 1) + 1;
           m_id = index_.Locate(index_.indexData_, pos0, cnt, index2nd);
+          if (m_id == size_t(-1) && pos0 + cnt < index_.indexData_.size()) {
+            // try next offset
+            m_id = pos0 + cnt;
+          }
         }
       } else {
         // no such index, use the lower_bound form
@@ -1070,7 +1073,6 @@ public:
     write(indexData_.m_strpool.data(), indexData_.mem_size());
   }
   size_t Find(fstring key) const override {
-    // TBD: key.size() == index2ndLen_ + index1stLen_ + commonPrefix_.size() ?
     size_t cplen = commonPrefix_.size();
     if (key.size() != index2ndLen_ + index1stLen_ + cplen ||
         key.commonPrefixLen(commonPrefix_) != cplen) {
