@@ -175,18 +175,6 @@ TerarkIndex::SelectFactory(const KeyStat& ks, fstring name) {
     return GetFactory(facname);
   }
 #endif // TerocksPrivateCode
-  /*
-   * 32bit, 2G nodes could store:
-   * 1. 2 children,
-   *    => 1 + 2**1 + 2**2 + ... + 2**30 == 2**31 => leaf cnt == 2**30, height = 31
-   *    1G * 31 = 31G
-   * 2. 64 children,
-   *    => 1 + 2**6 + 2**12 + ... + 2**30 + N = 2**31 => 2**30 with h = 7, 2**30 with h == 6
-   *    1G * 13 = 13G,
-   * 3. every node has 256 children, 
-   *    => 1 + 2**8 + 2**16 + 2**24 + N == 2**31 => N ~= 2**31 with h == 5,
-   *    2G * 5 = 10G
-   */
   if (ks.sumKeyLen - ks.numKeys * ks.commonPrefixLen > 0x1E0000000) { // 7.5G
     return GetFactory("SE_512_64");
   }
@@ -737,10 +725,10 @@ public:
         byte_t targetBuffer[8] = { 0 };
         memcpy(targetBuffer + (8 - sub.size()),
                sub.data(), sub.size());
-        index1st = Read1stIndex(fstring(targetBuffer, targetBuffer + 8), 
-                                0, 8);
+        index1st = Read1stKey(fstring(targetBuffer, targetBuffer + 8),
+                              0, 8);
       } else {
-        index1st = Read1stIndex(target, cplen, index_.index1stLen_);
+        index1st = Read1stKey(target, cplen, index_.index1stLen_);
         index2nd = target.substr(cplen + index_.index1stLen_);
       }
       if (index1st > index_.maxValue_) {
@@ -797,7 +785,7 @@ public:
         m_id = size_t(-1);
         return false;
       } else {
-        if (IsIndexDiff(m_id, m_id + 1)) {
+        if (Is1stKeyDiff(m_id, m_id + 1)) {
           assert(offset_1st_ + 1 <  index_.index1stRS_.size());
           uint64_t cnt = index_.index1stRS_.zero_seq_len(offset_1st_ + 1);
           offset_1st_ += cnt + 1;
@@ -815,7 +803,7 @@ public:
         m_id = size_t(-1);
         return false;
       } else {
-        if (IsIndexDiff(m_id - 1, m_id)) {
+        if (Is1stKeyDiff(m_id - 1, m_id)) {
           /*
            * zero_seq_ has [a, b) range, hence next() need (pos_ + 1), whereas
            * prev() just called with (pos_) is enough
@@ -844,16 +832,15 @@ public:
 
   protected:
     //use 2nd index bitmap to check if 1st index changed
-    bool IsIndexDiff(size_t lid, size_t rid) {
+    bool Is1stKeyDiff(size_t prev_id, size_t cur_id) {
       /*
-       * case1: 0 1 1 0, ...
+       * case1: 1 0, ...
        * case2: 0 0, ...
        *   the 2nd 0 means another index started
        */
-      int li = (int)index_.index2ndRS_[lid],
-        ri = (int)index_.index2ndRS_[rid];
-      return (li > ri ||
-              li + ri == 0);
+      bool prev = index_.index2ndRS_[prev_id],
+        cur = index_.index2ndRS_[cur_id];
+      return ((prev && !cur) || (!prev && !cur));
     }
     void UpdateBuffer() {
       // key = commonprefix + index1st + index2nd
@@ -893,9 +880,8 @@ public:
 
       size_t index1stLen = 0;
       assert(SeekCostEffectiveIndexLen(ks, index1stLen));
-      uint64_t
-        minValue = Read1stIndex(ks.minKey, cplen, index1stLen),
-        maxValue = Read1stIndex(ks.maxKey, cplen, index1stLen);
+      uint64_t minValue = Read1stKey(ks.minKey, cplen, index1stLen);
+      uint64_t maxValue = Read1stKey(ks.maxKey, cplen, index1stLen);
       /*
        * if rocksdb reverse comparator is used, then minValue
        * is actually the largetst one
@@ -921,7 +907,7 @@ public:
       if (ks.minKey < ks.maxKey) {
         for (size_t i = 0; i < ks.numKeys; ++i) {
           reader >> keyBuf;
-          uint64_t offset = Read1stIndex(keyBuf, cplen, index1stLen) - minValue;
+          uint64_t offset = Read1stKey(keyBuf, cplen, index1stLen) - minValue;
           index1stRS.set1(offset);
           if (offset != prev) { // new index1 encountered
             index2ndRS.set0(i);
@@ -938,7 +924,7 @@ public:
         // compare with '0', do NOT use size_t
         for (long i = ks.numKeys - 1; i >= 0; --i) {
           reader >> keyBuf;
-          uint64_t offset = Read1stIndex(keyBuf, cplen, index1stLen) - minValue;
+          uint64_t offset = Read1stKey(keyBuf, cplen, index1stLen) - minValue;
           index1stRS.set1(offset);
           if (i < (long)ks.numKeys - 1) {
             if (offset != prev) { // next index1 is new one
@@ -982,9 +968,8 @@ public:
       size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
       size_t index1stLen = 0;
       assert(SeekCostEffectiveIndexLen(ks, index1stLen));
-      uint64_t
-        minValue = Read1stIndex(ks.minKey, cplen, index1stLen),
-        maxValue = Read1stIndex(ks.maxKey, cplen, index1stLen);
+      uint64_t minValue = Read1stKey(ks.minKey, cplen, index1stLen);
+      uint64_t maxValue = Read1stKey(ks.maxKey, cplen, index1stLen);
       if (minValue > maxValue) {
         std::swap(minValue, maxValue);
       }
@@ -1124,7 +1109,7 @@ public:
         key.commonPrefixLen(commonPrefix_) != cplen) {
       return size_t(-1);
     }
-    uint64_t index1st = Read1stIndex(key, cplen, index1stLen_);
+    uint64_t index1st = Read1stKey(key, cplen, index1stLen_);
     if (index1st < minValue_ || index1st > maxValue_) {
       return size_t(-1);
     }
@@ -1132,9 +1117,8 @@ public:
     if (!index1stRS_[offset]) {
       return size_t(-1);
     }
-    uint64_t
-      order = index1stRS_.rank1(offset),
-      pos0 = index2ndRS_.select0(order);
+    uint64_t order = index1stRS_.rank1(offset);
+    uint64_t pos0 = index2ndRS_.select0(order);
     assert(pos0 != size_t(-1));
     size_t cnt = index2ndRS_.one_seq_len(pos0 + 1);
     fstring index2nd = key.substr(cplen + index1stLen_);
@@ -1168,11 +1152,11 @@ public:
 
 public:
   // handlers
-  static uint64_t Read1stIndex(valvec<byte_t>& key, size_t cplen, size_t index1stLen) {
+  static uint64_t Read1stKey(valvec<byte_t>& key, size_t cplen, size_t index1stLen) {
     return ReadUint64(key.begin() + cplen,
                       key.begin() + cplen + index1stLen);
   }
-  static uint64_t Read1stIndex(fstring key, size_t cplen, size_t index1stLen) {
+  static uint64_t Read1stKey(fstring key, size_t cplen, size_t index1stLen) {
     return ReadUint64((const byte_t*)key.data() + cplen,
                       (const byte_t*)key.data() + cplen + index1stLen);
   }
@@ -1377,8 +1361,6 @@ public:
           indexSeq.set1(ReadUint64(keyBuf.begin() + cplen,
             keyBuf.end()) - minValue);
         }
-      } else {
-        printf("== all one index used\n");
       }
       indexSeq.build_cache(false, false);
       unique_ptr<TerarkUintIndex<RankSelect>> ptr(new TerarkUintIndex<RankSelect>());
