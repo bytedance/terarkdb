@@ -509,6 +509,7 @@ public:
   rank_select_allone& operator=(const rank_select_allone& rs) {
     m_size = rs.m_size;
     m_placeholder = rs.m_placeholder;
+    return *this;
   }
   ~rank_select_allone() = default;
 
@@ -576,6 +577,7 @@ public:
   rank_select_allzero& operator=(const rank_select_allzero& rs) {
     m_size = rs.m_size;
     m_placeholder = rs.m_placeholder;
+    return *this;
   }
   ~rank_select_allzero() = default;
 
