@@ -678,6 +678,7 @@ public:
   class TerarkCompositeIndexIterator : public TerarkIndex::Iterator {
   public:
     TerarkCompositeIndexIterator(const TerarkCompositeIndex& index) : index_(index) {
+      offset_1st_ = size_t(-1);
       m_id = size_t(-1);
       buffer_.resize_no_init(index_.commonPrefix_.size() +
         index_.index1stLen_ + index_.index2ndLen_);
