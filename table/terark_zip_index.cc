@@ -88,7 +88,7 @@ TerarkIndex::SelectFactory(const KeyStat& ks, fstring name) {
       if (diff == ks.numKeys) {
         return GetFactory("UintIndex_AllOne");
       }
-      else if (diff < (4ull << 30)) {
+      else if (diff < UINT32_MAX) {
         return GetFactory("UintIndex");
       }
       else {
