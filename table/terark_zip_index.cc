@@ -623,8 +623,6 @@ public:
           indexSeq.set1(ReadUint64(keyBuf.begin() + cplen,
             keyBuf.end()) - minValue);
         }
-      } else {
-        printf("== all one index used\n");
       }
       indexSeq.build_cache(false, false);
       unique_ptr<TerarkUintIndex<RankSelect>> ptr(new TerarkUintIndex<RankSelect>());
