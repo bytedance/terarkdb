@@ -291,6 +291,19 @@ void test_standard(DataStored dtype) {
       }
     }
   }
+  {
+    // cross index1st boundary lower_bound
+    char arr[16] = { 0 };
+    arr[7] = 4; arr[15] = 14;
+    assert(iter->Seek(fstring(arr, 16)));
+    int idx = (4 + 1) * 10;
+    assert(iter->DictRank() == idx);
+
+    arr[7] = 9; arr[15] = 9;
+    assert(iter->Seek(fstring(arr, 16)));
+    arr[7] = 9; arr[15] = 10;
+    assert(iter->Seek(fstring(arr, 16)) == false);
+  }
   printf("\tIterator done\n");
   ::remove(key_path.c_str());
   ::remove(index_path.c_str());
