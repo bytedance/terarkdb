@@ -700,33 +700,38 @@ public:
       }
       
       // find the corresponding bit within 2ndRS
+      uint64_t order, pos0, cnt;
       offset_1st_ = index1st - index_.minValue_;
       if (index_.index1stRS_[offset_1st_]) {
         // find within this index
-        uint64_t
-          order = index_.index1stRS_.rank1(offset_1st_),
-          pos0 = index_.index2ndRS_.select0(order);
+        order = index_.index1stRS_.rank1(offset_1st_);
+        pos0 = index_.index2ndRS_.select0(order);
         if (pos0 == index_.index2ndRS_.size() - 1) { // last elem
           m_id = (index2nd <= index_.indexData_[pos0]) ? pos0 : size_t(-1);
+          goto out;
         } else {
-          uint64_t cnt = index_.index2ndRS_.one_seq_len(pos0 + 1) + 1;
+          cnt = index_.index2ndRS_.one_seq_len(pos0 + 1) + 1;
           m_id = index_.Locate(index_.indexData_, pos0, cnt, index2nd);
-          if (m_id == size_t(-1) && pos0 + cnt < index_.indexData_.size()) {
+          if (m_id != size_t(-1)) {
+            goto out;
+          } else if (pos0 + cnt == index_.indexData_.size()) {
+            goto out;
+          } else {
             // try next offset
-            m_id = pos0 + cnt;
+            offset_1st_++;
           }
         }
-      } else {
-        // no such index, use the lower_bound form
-        uint64_t cnt = index_.index1stRS_.zero_seq_len(offset_1st_);
-        if (offset_1st_ + cnt >= index_.index1stRS_.size()) {
-          m_id = size_t(-1);
-          return false;
-        }
-        offset_1st_ += cnt;
-        uint64_t order = index_.index1stRS_.rank1(offset_1st_);
-        m_id = index_.index2ndRS_.select0(order);
       }
+      // no such index, use the lower_bound form
+      cnt = index_.index1stRS_.zero_seq_len(offset_1st_);
+      if (offset_1st_ + cnt >= index_.index1stRS_.size()) {
+        m_id = size_t(-1);
+        return false;
+      }
+      offset_1st_ += cnt;
+      order = index_.index1stRS_.rank1(offset_1st_);
+      m_id = index_.index2ndRS_.select0(order);
+    out:
       if (m_id == size_t(-1)) {
         return false;
       }
