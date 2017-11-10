@@ -497,7 +497,7 @@ public:
 /*
  * special impl for all one/zero UintIndex
  */
-class rank_select_allone : boost::noncopyable {
+class rank_select_allone {
 public:
   typedef boost::mpl::false_ is_mixed;
   rank_select_allone() : m_size(0), m_placeholder(nullptr) {}
@@ -565,7 +565,7 @@ private:
   unsigned char* m_placeholder;
 };
 
-class rank_select_allzero : boost::noncopyable {
+class rank_select_allzero {
 public:
   typedef boost::mpl::false_ is_mixed;
   rank_select_allzero() : m_size(0), m_placeholder(nullptr) {}
