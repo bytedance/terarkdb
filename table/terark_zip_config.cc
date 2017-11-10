@@ -46,22 +46,6 @@ void TerarkZipDeleteTempFiles(const std::string& tmpPath) {
   }
 }
 
-static
-int ComputeFileSizeMultiplier(double diskLimit, double minVal, int levels) {
-  if (diskLimit > 0) {
-    double maxSST = diskLimit / 6.0;
-    double maxMul = maxSST / minVal;
-    double oneMul = pow(maxMul, 1.0/(levels-1));
-    if (oneMul > 1.0)
-      return (int)oneMul;
-    else
-      return 1;
-  }
-  else {
-    return 2;
-  }
-}
-
 void TerarkZipAutoConfigForBulkLoad(struct TerarkZipTableOptions& tzo,
                                     struct DBOptions& dbo,
                                     struct ColumnFamilyOptions& cfo,
@@ -96,8 +80,7 @@ void TerarkZipAutoConfigForBulkLoad(struct TerarkZipTableOptions& tzo,
   cfo.max_write_buffer_number = 6;
   cfo.min_write_buffer_number_to_merge = 1;
   cfo.target_file_size_base = cfo.write_buffer_size;
-  cfo.target_file_size_multiplier = ComputeFileSizeMultiplier(
-      diskBytesLimit, cfo.target_file_size_base, cfo.num_levels);
+  cfo.target_file_size_multiplier = cfo.write_buffer_size * 16;
   cfo.compaction_style = rocksdb::kCompactionStyleUniversal;
   cfo.compaction_options_universal.allow_trivial_move = true;
 
