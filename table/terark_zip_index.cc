@@ -75,7 +75,6 @@ const TerarkIndex::Factory* TerarkIndex::GetFactory(fstring name) {
 }
 
 bool TerarkIndex::SeekCostEffectiveIndexLen(const KeyStat& ks, size_t& ceLen) {
-  assert(ks.minKey.size() > 8);
   /*
    * the length of index1,
    * 1. 1 byte => too many sub-indexes under each index1
@@ -91,10 +90,11 @@ bool TerarkIndex::SeekCostEffectiveIndexLen(const KeyStat& ks, size_t& ceLen) {
    *   8 bytes, 0.5 gap => 2000 + (16 - 8) * 8 * 1000 = 66,000
    *   2 bytes, 0.5 gap => 2000 + (16 - 2) * 8 * 1000 = 114,000
    */
-  static const int maxLen = 8;
+  //static const int maxLen = 8;
   static const double w1 = 0.1, w2 = 0.5,
     max_gap_ratio = 0.9, min_gap_ratio = 0.1;
   size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
+  const int maxLen = std::min<int>(8, ks.maxKeyLen - cplen);
   size_t originCost = ks.numKeys * ks.maxKeyLen * 8;
   double score = 0;
   ceLen = maxLen;
@@ -153,10 +153,11 @@ TerarkIndex::SelectFactory(const KeyStat& ks, fstring name) {
         return GetFactory("UintIndex_SE_512_64");
       }
     }
-  } else if (ks.maxKeyLen == ks.minKeyLen &&
-             ks.maxKeyLen - cplen > sizeof(uint64_t) &&
-             ks.maxKeyLen - cplen <= 16 && // !!! plain index2nd may occupy too much space
-             SeekCostEffectiveIndexLen(ks, ceLen)) {
+  }
+  if (ks.maxKeyLen == ks.minKeyLen &&
+      ks.maxKeyLen - cplen <= 16 && // !!! plain index2nd may occupy too much space
+      SeekCostEffectiveIndexLen(ks, ceLen) &&
+      ks.maxKeyLen > cplen + ceLen) {
     uint64_t
       minValue = ReadUint64(ks.minKey.begin() + cplen,
                             ks.minKey.begin() + cplen + ceLen),
@@ -171,7 +172,7 @@ TerarkIndex::SelectFactory(const KeyStat& ks, fstring name) {
       facname = diff == ks.numKeys ? "CompositeIndex_AllOne_SE_512_64" :
         "CompositeIndex_SE_512_64_SE_512_64";
     }
-    printf("Factory used: %s\n", facname);
+    //printf("Factory used: %s\n", facname);
     return GetFactory(facname);
   }
 #endif // TerocksPrivateCode
@@ -874,13 +875,14 @@ public:
       size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
       assert(cplen >= ks.commonPrefixLen);
       if (ks.maxKeyLen != ks.minKeyLen ||
-          ks.maxKeyLen - cplen <= sizeof(uint64_t)) {
+          ks.maxKeyLen <= cplen + 1) {
         printf("diff ken len, maxlen %zu, minlen %zu\n", ks.maxKeyLen, ks.minKeyLen);
         abort();
       }
 
       size_t index1stLen = 0;
-      assert(SeekCostEffectiveIndexLen(ks, index1stLen));
+      assert(SeekCostEffectiveIndexLen(ks, index1stLen) &&
+             ks.maxKeyLen > cplen + index1stLen);
       uint64_t minValue = Read1stKey(ks.minKey, cplen, index1stLen);
       uint64_t maxValue = Read1stKey(ks.maxKey, cplen, index1stLen);
       /*
