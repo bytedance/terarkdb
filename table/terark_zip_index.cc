@@ -90,8 +90,7 @@ bool TerarkIndex::SeekCostEffectiveIndexLen(const KeyStat& ks, size_t& ceLen) {
    *   8 bytes, 0.5 gap => 2000 + (16 - 8) * 8 * 1000 = 66,000
    *   2 bytes, 0.5 gap => 2000 + (16 - 2) * 8 * 1000 = 114,000
    */
-  //static const int maxLen = 8;
-  static const double w1 = 0.1, w2 = 1.2,
+  static const double w1 = 0.1, w2 = 1.1,
     max_gap_ratio = 0.9, min_gap_ratio = 0.1;
   size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
   const int maxLen = std::min<int>(8, ks.maxKeyLen - cplen);
@@ -883,8 +882,8 @@ public:
       }
 
       size_t index1stLen = 0;
-      assert(SeekCostEffectiveIndexLen(ks, index1stLen) &&
-             ks.maxKeyLen > cplen + index1stLen);
+      bool check = SeekCostEffectiveIndexLen(ks, index1stLen);
+      assert(check && ks.maxKeyLen > cplen + index1stLen);
       uint64_t minValue = Read1stKey(ks.minKey, cplen, index1stLen);
       uint64_t maxValue = Read1stKey(ks.maxKey, cplen, index1stLen);
       /*
@@ -972,7 +971,8 @@ public:
       assert(ks.minKeyLen == ks.maxKeyLen);
       size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
       size_t index1stLen = 0;
-      assert(SeekCostEffectiveIndexLen(ks, index1stLen));
+      bool check = SeekCostEffectiveIndexLen(ks, index1stLen);
+      assert(check && ks.maxKeyLen > cplen + index1stLen);
       uint64_t minValue = Read1stKey(ks.minKey, cplen, index1stLen);
       uint64_t maxValue = Read1stKey(ks.maxKey, cplen, index1stLen);
       if (minValue > maxValue) {
