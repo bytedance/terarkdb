@@ -1084,6 +1084,11 @@ public:
     index1stRS_.swap(index1stRS);
     index2ndRS_.swap(index2ndRS);
     indexData_.swap(keyVec);
+    index1stLen_ = index1stLen;
+    index2ndLen_ = header->index_2nd_len;
+    minValue_ = minValue;
+    maxValue_ = maxValue;
+    isUserMemory_ = false;
   }
 
   virtual ~TerarkCompositeIndex() {
