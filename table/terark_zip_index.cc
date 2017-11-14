@@ -91,11 +91,11 @@ bool TerarkIndex::SeekCostEffectiveIndexLen(const KeyStat& ks, size_t& ceLen) {
    *   2 bytes, 0.5 gap => 2000 + (16 - 2) * 8 * 1000 = 114,000
    */
   //static const int maxLen = 8;
-  static const double w1 = 0.1, w2 = 0.5,
+  static const double w1 = 0.1, w2 = 1.2,
     max_gap_ratio = 0.9, min_gap_ratio = 0.1;
   size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
   const int maxLen = std::min<int>(8, ks.maxKeyLen - cplen);
-  size_t originCost = ks.numKeys * ks.maxKeyLen * 8;
+  double originCost = ks.numKeys * ks.maxKeyLen * 8;
   double score = 0;
   ceLen = maxLen;
   for (int i = maxLen; i > 0; i--) {
@@ -105,17 +105,19 @@ bool TerarkIndex::SeekCostEffectiveIndexLen(const KeyStat& ks, size_t& ceLen) {
                             ks.minKey.begin() + end),
       maxValue = ReadUint64(ks.maxKey.begin() + offset,
                             ks.maxKey.begin() + end);
-    uint64_t diff = std::max(minValue, maxValue) - std::min(minValue, maxValue) + 1;
+    uint64_t diff1st = std::max(minValue, maxValue) - std::min(minValue, maxValue) + 1;
+    uint64_t diff2nd = ks.numKeys;
     // one index1st with a collection of index2nd, that's when diff < numkeys
-    double gap_ratio = diff <= ks.numKeys ? min_gap_ratio : 
-      (double)(diff - ks.numKeys) / diff;
+    double gap_ratio = diff1st <= ks.numKeys ? min_gap_ratio : 
+      (double)(diff1st - ks.numKeys) / diff1st;
     if (gap_ratio > max_gap_ratio)
       continue;
     gap_ratio = std::max(gap_ratio, min_gap_ratio);
     // diff is bitmap, * 1.2 is extra cost to build RankSelect
-    uint64_t cost = diff * 1.2 + (ks.maxKeyLen - i) * ks.numKeys;
-    if (diff == ks.numKeys) {
-      cost -= (diff * 1.2);
+    double cost = (diff1st + diff2nd) * 1.2 + 
+      (ks.maxKeyLen - cplen - i) * ks.numKeys * 8;
+    if (diff1st == ks.numKeys) {
+      cost -= (diff1st * 1.2);
     }
     if (cost > originCost * 0.8)
       continue;

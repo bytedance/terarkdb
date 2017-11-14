@@ -414,7 +414,6 @@ void test_allzero(DataStored dtype) {
   ::remove(index_path.c_str());
 }
 
-
 void test_select() {
   // prepare
   const rocksdb::TerarkIndex::Factory* f_il85_il85 = 
@@ -447,6 +446,41 @@ void test_select() {
     auto factory = TerarkIndex::SelectFactory(stat, "");
     assert(factory != nullptr);
     assert(factory != f_il85_il85);
+  }
+  {
+    auto assign32 = [](char* beg, char* end, int32_t value) {
+        union {
+          char bytes[4];
+          int32_t value;
+        } c;
+#if BOOST_ENDIAN_LITTLE_BYTE
+        c.value = terark::byte_swap(value);
+#else
+        c.value = value;
+#endif
+        size_t l = end - beg;
+        memcpy(beg, c.bytes + (4 - l), l);
+    };
+    TerarkIndex::KeyStat stat;
+    stat.commonPrefixLen = 0;
+    stat.numKeys = 10000000;
+    {
+      char arr[8] = { 0 };
+      int v1 = 1350476, v2 = 9531880;
+      assign32(arr, arr + 4, v1);
+      assign32(arr + 4, arr + 8, v2);
+      stat.minKey.assign(arr, arr + 8);
+    }
+    {
+      char arr[8] = { 0 };
+      int v1 = 8778214, v2 = 8569467;
+      assign32(arr, arr + 4, v1);
+      assign32(arr + 4, arr + 8, v2);
+      stat.maxKey.assign(arr, arr + 8);
+    }
+    stat.minKeyLen = stat.maxKeyLen = 8;
+    size_t ceLen = 0;
+    assert(TerarkIndex::SeekCostEffectiveIndexLen(stat, ceLen));
   }
   {
     // do NOT select composite index: gap ratio too high
