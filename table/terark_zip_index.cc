@@ -800,10 +800,10 @@ public:
       }
     }
     unique_ptr<TerarkIndex> LoadMemory(fstring mem) const override {
-      return loadImpl(mem, {});
+      return UniquePtrOf(loadImpl(mem, {}));
     }
     unique_ptr<TerarkIndex> LoadFile(fstring fpath) const override {
-      return loadImpl({}, fpath);
+      return UniquePtrOf(loadImpl({}, fpath));
     }
     size_t MemSizeForBuild(const KeyStat& ks) const override {
       assert(ks.minKeyLen == ks.maxKeyLen);
@@ -1225,10 +1225,10 @@ public:
       return ptr.release();
     }
     unique_ptr<TerarkIndex> LoadMemory(fstring mem) const override {
-      return loadImpl(mem, {});
+      return UniquePtrOf(loadImpl(mem, {}));
     }
     unique_ptr<TerarkIndex> LoadFile(fstring fpath) const override {
-      return loadImpl({}, fpath);
+      return UniquePtrOf(loadImpl({}, fpath));
     }
     size_t MemSizeForBuild(const KeyStat& ks) const override {
       assert(ks.minKeyLen == ks.maxKeyLen);
