@@ -554,7 +554,7 @@ public:
       size_t last = index_.index1stRS_.max_rank1() - 1;
       offset_1st_ = index_.index1stRS_.select1(last);
       assert(offset_1st_ != size_t(-1));
-      m_id = index_.index2ndRS_.size() - 1;
+      m_id = index_.indexData_.size() - 1;
       UpdateBuffer();
       return true;
     }
@@ -598,7 +598,7 @@ public:
         // find within this index
         order = index_.index1stRS_.rank1(offset_1st_);
         pos0 = index_.index2ndRS_.select0(order);
-        if (pos0 == index_.index2ndRS_.size() - 1) { // last elem
+        if (pos0 == index_.indexData_.size() - 1) { // last elem
           m_id = (index2nd <= index_.indexData_[pos0]) ? pos0 : size_t(-1);
           goto out;
         } else {
@@ -634,7 +634,7 @@ public:
     bool Next() override {
       assert(m_id != size_t(-1));
       assert(index_.index1stRS_[offset_1st_] != 0);
-      if (terark_unlikely(m_id + 1 == index_.index2ndRS_.size())) {
+      if (terark_unlikely(m_id + 1 == index_.indexData_.size())) {
         m_id = size_t(-1);
         return false;
       } else {
@@ -745,7 +745,7 @@ public:
        * of rs1 follows the order of rs2
        */
       RankSelect1st index1stRS(cnt);
-      RankSelect2nd index2ndRS(ks.numKeys);
+      RankSelect2nd index2ndRS(ks.numKeys + 1); // append extra '0' at back
       valvec<byte_t> keyBuf;
       uint64_t prev = size_t(-1);
       size_t index2ndLen = ks.maxKeyLen - cplen - index1stLen;
@@ -774,12 +774,10 @@ public:
           reader >> keyBuf;
           uint64_t offset = Read1stKey(keyBuf, cplen, index1stLen) - minValue;
           index1stRS.set1(offset);
-          if (i < (long)ks.numKeys - 1) {
-            if (offset != prev) { // next index1 is new one
-              index2ndRS.set0(i + 1);
-            } else {
-              index2ndRS.set1(i + 1);
-            }
+          if (offset != prev) { // next index1 is new one
+            index2ndRS.set0(i + 1);
+          } else {
+            index2ndRS.set1(i + 1);
           }
           prev = offset;
           // save index data
@@ -790,6 +788,8 @@ public:
         index2ndRS.set0(0); // set 1st element to 0
         assert(pos == 0);
       }
+      index2ndRS.set0(ks.numKeys);
+      // TBD: build histogram, which should set as 'true'
       index1stRS.build_cache(false, false);
       index2ndRS.build_cache(false, false);
       if (index2ndRS.max_rank1() == 0) {
@@ -861,7 +861,7 @@ public:
                                       header->index_2nd_mem_size);
         offset += header->index_2nd_mem_size;
       } else { // all zero
-        ptr->index2ndRS_.resize(ptr->index1stRS_.max_rank1());
+        ptr->index2ndRS_.resize(ptr->index1stRS_.max_rank1() + 1); // append extra '0' at back
       }
       ptr->indexData_.m_strpool.risk_set_data((unsigned char*)mem.data() + offset,
                                               header->index_data_mem_size);
