@@ -64,12 +64,12 @@ inline uint64_t ReadBigEndianUint64(const byte_t* beg, const byte_t* end) {
 
 inline
 uint64_t ReadBigEndianUint64Aligned(const byte_t* beg, size_t len) {
-  assert(8 == len); (void)len;
+  assert(8 == len); TERARK_UNUSED_VAR(len);
   return VALUE_OF_BYTE_SWAP_IF_LITTLE_ENDIAN(*(const uint64_t*)beg);
 }
 inline
 uint64_t ReadBigEndianUint64Aligned(const byte_t* beg, const byte_t* end) {
-  assert(end - beg == 8); (void)end;
+  assert(end - beg == 8); TERARK_UNUSED_VAR(end);
   return VALUE_OF_BYTE_SWAP_IF_LITTLE_ENDIAN(*(const uint64_t*)beg);
 }
 

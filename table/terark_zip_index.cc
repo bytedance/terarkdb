@@ -724,10 +724,9 @@ public:
       }
 
       size_t key1_len = 0;
-#if !defined(NDEBUG)
       bool check = SeekCostEffectiveIndexLen(ks, key1_len);
       assert(check && ks.maxKeyLen > cplen + key1_len);
-#endif
+      TERARK_UNUSED_VAR(check);
       uint64_t minValue = Read1stKey(ks.minKey, cplen, key1_len);
       uint64_t maxValue = Read1stKey(ks.maxKey, cplen, key1_len);
       /*
@@ -811,10 +810,9 @@ public:
       assert(ks.minKeyLen == ks.maxKeyLen);
       size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
       size_t key1_len = 0;
-#if !defined(NDEBUG)
       bool check = SeekCostEffectiveIndexLen(ks, key1_len);
       assert(check && ks.maxKeyLen > cplen + key1_len);
-#endif
+      TERARK_UNUSED_VAR(check);
       uint64_t minValue = Read1stKey(ks.minKey, cplen, key1_len);
       uint64_t maxValue = Read1stKey(ks.maxKey, cplen, key1_len);
       if (minValue > maxValue) {
@@ -890,7 +888,7 @@ public:
         return head_i < g_TerarkIndexFactroy.end_i() &&
                         g_TerarkIndexFactroy.val(head_i) == g_TerarkIndexFactroy.val(self_i);
       };
-      assert(verifyClassName()), (void)verifyClassName;
+      assert(verifyClassName()); TERARK_UNUSED_VAR(verifyClassName);
       return true;
     }
   };
@@ -1280,7 +1278,7 @@ public:
         return head_i < g_TerarkIndexFactroy.end_i()
           && g_TerarkIndexFactroy.val(head_i) == g_TerarkIndexFactroy.val(self_i);
       };
-      assert(verifyClassName()), (void)verifyClassName;
+      assert(verifyClassName()); TERARK_UNUSED_VAR(verifyClassName);
       ptr->header_ = header;
       ptr->minValue_ = header->min_value;
       ptr->maxValue_ = header->max_value;

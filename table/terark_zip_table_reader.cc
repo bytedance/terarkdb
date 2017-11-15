@@ -96,7 +96,7 @@ static void MmapWarmUpBytes(const void* addr, size_t len) {
 #endif
   for (size_t i = 0; i < size; i += 4096) {
     volatile byte_t unused = ((const volatile byte_t*)base)[i];
-    (void)unused;
+    TERARK_UNUSED_VAR(unused);
   }
 }
 template<class T>
@@ -160,7 +160,7 @@ Status UpdateLicenseInfo(const TerarkZipTableFactory* table_factory,
   auto& license = table_factory->GetLicense();
   auto res = license.merge(licenseBlock.data.data(), licenseBlock.data.size());
   assert(res == LicenseInfo::Result::OK);
-  (void)res; // shut up !
+  TERARK_UNUSED_VAR(res);
   if (!license.check()) {
     license.print_error(nullptr, false, info_log);
     return Status::Corruption("License expired", "contact@terark.com");
@@ -872,7 +872,7 @@ Status TerarkZipSubReader::Get(SequenceNumber global_seqno,
                                const ReadOptions& ro, const Slice& ikey,
                                GetContext* get_context, int flag)
 const {
-  (void)flag;
+  TERARK_UNUSED_VAR(flag);
   MY_THREAD_LOCAL(valvec<byte_t>, g_tbuf);
   ParsedInternalKey pikey;
   if (!ParseInternalKey(ikey, &pikey)) {
@@ -1206,7 +1206,7 @@ Status TerarkZipTableReader::LoadIndex(Slice mem) {
 InternalIterator*
 TerarkZipTableReader::
 NewIterator(const ReadOptions& ro, Arena* arena, bool skip_filters) {
-  (void)skip_filters; // unused
+  TERARK_UNUSED_VAR(skip_filters); // unused
 #if defined(TERARK_SUPPORT_UINT64_COMPARATOR) && BOOST_ENDIAN_LITTLE_BYTE
   if (isUint64Comparator_) {
     if (arena) {
@@ -1503,7 +1503,7 @@ TerarkZipTableMultiReader::SubIndex::GetSubReader(fstring key) const {
 InternalIterator*
 TerarkZipTableMultiReader::NewIterator(const ReadOptions& ro,
                                        Arena *arena, bool skip_filters) {
-  (void)skip_filters; // unused
+  TERARK_UNUSED_VAR(skip_filters); // unused
   if (isReverseBytewiseOrder_) {
     typedef TerarkZipTableMultiIterator<true>  IterType;
     if (arena) {
