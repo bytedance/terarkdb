@@ -40,6 +40,16 @@ using terark::commonPrefixLen;
 static terark::hash_strmap<TerarkIndex::FactoryPtr> g_TerarkIndexFactroy;
 static terark::hash_strmap<std::string>             g_TerarkIndexName;
 
+template<class IndexClass>
+bool VerifyClassName(fstring class_name) {
+  size_t name_i = g_TerarkIndexName.find_i(typeid(IndexClass).name());
+  size_t self_i = g_TerarkIndexFactroy.find_i(g_TerarkIndexName.val(name_i));
+  assert(self_i < g_TerarkIndexFactroy.end_i());
+  size_t head_i = g_TerarkIndexFactroy.find_i(class_name);
+  return head_i < g_TerarkIndexFactroy.end_i() &&
+                  g_TerarkIndexFactroy.val(head_i) == g_TerarkIndexFactroy.val(self_i);
+}
+
 struct TerarkIndexHeader {
   uint8_t   magic_len;
   char      magic[19];
@@ -879,16 +889,7 @@ public:
         throw std::invalid_argument("TerarkCompositeIndex::Load(): Bad file header");
       }
       //printf("\ntypename is: %s\n", typeid(TerarkCompositeIndex<RankSelect1, RankSelect2>).name());
-      auto verifyClassName = [&] {
-        size_t name_i = g_TerarkIndexName.find_i(
-          typeid(TerarkCompositeIndex<RankSelect1, RankSelect2>).name());
-        size_t self_i = g_TerarkIndexFactroy.find_i(g_TerarkIndexName.val(name_i));
-        assert(self_i < g_TerarkIndexFactroy.end_i());
-        size_t head_i = g_TerarkIndexFactroy.find_i(header->class_name);
-        return head_i < g_TerarkIndexFactroy.end_i() &&
-                        g_TerarkIndexFactroy.val(head_i) == g_TerarkIndexFactroy.val(self_i);
-      };
-      assert(verifyClassName()); TERARK_UNUSED_VAR(verifyClassName);
+      assert(VerifyClassName<TerarkCompositeIndex>(header->class_name));
       return true;
     }
   };
@@ -1248,7 +1249,7 @@ public:
     }
   protected:
     TerarkIndex* loadImpl(fstring mem, fstring fpath) const {
-      auto ptr = UniquePtrOf(new TerarkUintIndex<RankSelect>());
+      auto ptr = UniquePtrOf(new TerarkUintIndex());
       ptr->isUserMemory_ = false;
       ptr->isBuilding_ = false;
 
@@ -1270,15 +1271,7 @@ public:
         ) {
         throw std::invalid_argument("TerarkUintIndex::Load(): Bad file header");
       }
-      auto verifyClassName = [&] {
-        size_t name_i = g_TerarkIndexName.find_i(typeid(TerarkUintIndex<RankSelect>).name());
-        size_t self_i = g_TerarkIndexFactroy.find_i(g_TerarkIndexName.val(name_i));
-        assert(self_i < g_TerarkIndexFactroy.end_i());
-        size_t head_i = g_TerarkIndexFactroy.find_i(header->class_name);
-        return head_i < g_TerarkIndexFactroy.end_i()
-          && g_TerarkIndexFactroy.val(head_i) == g_TerarkIndexFactroy.val(self_i);
-      };
-      assert(verifyClassName()); TERARK_UNUSED_VAR(verifyClassName);
+      assert(VerifyClassName<TerarkUintIndex>(header->class_name));
       ptr->header_ = header;
       ptr->minValue_ = header->min_value;
       ptr->maxValue_ = header->max_value;
