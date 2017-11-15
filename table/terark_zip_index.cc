@@ -12,7 +12,6 @@
 #include <terark/fsa/fsa_for_union_dfa.hpp>
 #endif // TerocksPrivateCode
 
-
 namespace rocksdb {
 
 using terark::initial_state;
@@ -142,7 +141,7 @@ TerarkIndex::SelectFactory(const KeyStat& ks, fstring name) {
       if (diff == ks.numKeys) {
         return GetFactory("UintIndex_AllOne");
       }
-      else if (diff < (4ull << 30)) {
+      else if (diff < UINT32_MAX) {
         return GetFactory("UintIndex");
       }
       else {
@@ -158,7 +157,7 @@ TerarkIndex::SelectFactory(const KeyStat& ks, fstring name) {
     auto maxValue = ReadBigEndianUint64(ks.maxKey.begin() + cplen, ceLen);
     uint64_t diff = std::max(minValue, maxValue) - std::min(minValue, maxValue) + 1;
     const char* facname = nullptr;
-    if (ks.numKeys < (4ull << 30)) {
+    if (ks.numKeys < UINT32_MAX) {
       facname = diff == ks.numKeys ? "CompositeIndex_AllOne_IL_256_32" :
         "CompositeIndex_IL_256_32_IL_256_32";
     } else {
@@ -639,7 +638,7 @@ public:
         m_id = size_t(-1);
         return false;
       } else {
-        if (Is1stKeyDiff(m_id, m_id + 1)) {
+        if (Is1stKeyDiff(m_id + 1)) {
           assert(offset_1st_ + 1 <  index_.index1stRS_.size());
           uint64_t cnt = index_.index1stRS_.zero_seq_len(offset_1st_ + 1);
           offset_1st_ += cnt + 1;
@@ -657,7 +656,7 @@ public:
         m_id = size_t(-1);
         return false;
       } else {
-        if (Is1stKeyDiff(m_id - 1, m_id)) {
+        if (Is1stKeyDiff(m_id)) {
           /*
            * zero_seq_ has [a, b) range, hence next() need (pos_ + 1), whereas
            * prev() just called with (pos_) is enough
@@ -686,28 +685,20 @@ public:
 
   protected:
     //use 2nd index bitmap to check if 1st index changed
-    bool Is1stKeyDiff(size_t prev_id, size_t cur_id) {
-      /*
-       * case1: 1 0, ...
-       * case2: 0 0, ...
-       *   the 2nd 0 means another index started
-       */
-      bool prev = index_.index2ndRS_[prev_id];
-      bool cur = index_.index2ndRS_[cur_id];
-      return ((prev && !cur) || (!prev && !cur));
+    bool Is1stKeyDiff(size_t curr_id) {
+      return index_.index2ndRS_.is0(curr_id);
     }
     void UpdateBuffer() {
       // key = commonprefix + index1st + index2nd
       // assign index 1st
       size_t offset = index_.commonPrefix_.size();
-      SaveAsBigEndianUint64(buffer_.data() + offset,
-                   buffer_.data() + offset + index_.index1stLen_,
-                   offset_1st_ + index_.minValue_);
+      auto len1 = index_.index1stLen_;
+      auto key1 = offset_1st_ + index_.minValue_;
+      SaveAsBigEndianUint64(buffer_.data() + offset, len1, key1);
       // assign index 2nd
-      offset += index_.index1stLen_;
+      offset += len1;
       fstring data = index_.indexData_[m_id];
-      memcpy(buffer_.data() + offset,
-             data.data(), data.size());
+      memcpy(buffer_.data() + offset, data.data(), data.size());
     }
 
     size_t offset_1st_; // used to track & decode index1 value
@@ -734,7 +725,7 @@ public:
 
       size_t index1stLen = 0;
       bool check = SeekCostEffectiveIndexLen(ks, index1stLen);
-      assert(check && ks.maxKeyLen > cplen + index1stLen), check;
+      assert(check && ks.maxKeyLen > cplen + index1stLen);
       uint64_t minValue = Read1stKey(ks.minKey, cplen, index1stLen);
       uint64_t maxValue = Read1stKey(ks.maxKey, cplen, index1stLen);
       /*
@@ -755,10 +746,10 @@ public:
       RankSelect2nd index2ndRS(ks.numKeys);
       valvec<byte_t> keyBuf;
       uint64_t prev = size_t(-1);
-      size_t index2ndLen = ks.maxKeyLen - cplen - index1stLen,
-        sumRealKeyLen = index2ndLen * ks.numKeys;
+      size_t index2ndLen = ks.maxKeyLen - cplen - index1stLen;
+      size_t sum2ndKeyLen = index2ndLen * ks.numKeys;
       FixedLenStrVec keyVec(index2ndLen);
-      keyVec.reserve(ks.numKeys, sumRealKeyLen);
+      keyVec.reserve(ks.numKeys, sum2ndKeyLen);
       if (ks.minKey < ks.maxKey) {
         for (size_t i = 0; i < ks.numKeys; ++i) {
           reader >> keyBuf;
@@ -773,9 +764,9 @@ public:
           keyVec.push_back(fstring(keyBuf).substr(cplen + index1stLen));
         }
       } else {
-        size_t pos = sumRealKeyLen;
+        size_t pos = sum2ndKeyLen;
         keyVec.m_size = ks.numKeys;
-        keyVec.m_strpool.resize(sumRealKeyLen);
+        keyVec.m_strpool.resize(sum2ndKeyLen);
         // compare with '0', do NOT use size_t
         for (long i = ks.numKeys - 1; i >= 0; --i) {
           reader >> keyBuf;
@@ -801,22 +792,18 @@ public:
       index2ndRS.build_cache(false, false);
       if (index2ndRS.max_rank1() == 0) {
         terark::rank_select_allzero rs2(index2ndRS.size());
-        unique_ptr< TerarkCompositeIndex<RankSelect1st, terark::rank_select_allzero> >
-          ptr(new TerarkCompositeIndex<RankSelect1st, terark::rank_select_allzero>(
-            index1stRS, rs2, keyVec, ks, minValue, maxValue, index1stLen));
-        return ptr.release();
+        return new TerarkCompositeIndex<RankSelect1st, terark::rank_select_allzero>(
+            index1stRS, rs2, keyVec, ks, minValue, maxValue, index1stLen);
       } else {
-        unique_ptr< TerarkCompositeIndex<RankSelect1st, RankSelect2nd> >
-          ptr(new TerarkCompositeIndex<RankSelect1st, RankSelect2nd>(
-            index1stRS, index2ndRS, keyVec, ks, minValue, maxValue, index1stLen));
-        return ptr.release();
+        return new TerarkCompositeIndex<RankSelect1st, RankSelect2nd>(
+            index1stRS, index2ndRS, keyVec, ks, minValue, maxValue, index1stLen);
       }
     }
     unique_ptr<TerarkIndex> LoadMemory(fstring mem) const override {
-      return unique_ptr<TerarkIndex>(loadImpl(mem, {}).release());
+      return loadImpl(mem, {});
     }
     unique_ptr<TerarkIndex> LoadFile(fstring fpath) const override {
-      return unique_ptr<TerarkIndex>(loadImpl({}, fpath).release());
+      return loadImpl({}, fpath);
     }
     size_t MemSizeForBuild(const KeyStat& ks) const override {
       assert(ks.minKeyLen == ks.maxKeyLen);
@@ -837,10 +824,8 @@ public:
       return index1stsz + index2ndsz + indexDatasz;
     }
   protected:
-    unique_ptr<TerarkCompositeIndex<RankSelect1st, RankSelect2nd>>
-      loadImpl(fstring mem, fstring fpath) const {
-      unique_ptr<TerarkCompositeIndex<RankSelect1st, RankSelect2nd>>
-        ptr(new TerarkCompositeIndex<RankSelect1st, RankSelect2nd>());
+    TerarkIndex* loadImpl(fstring mem, fstring fpath) const {
+      auto ptr = UniquePtrOf(new TerarkCompositeIndex<RankSelect1st, RankSelect2nd>());
       ptr->isUserMemory_ = false;
       ptr->isBuilding_ = false;
       if (mem.data() == nullptr) {
@@ -878,7 +863,7 @@ public:
                                               header->index_data_mem_size);
       ptr->indexData_.m_fixlen = header->index_2nd_len;
       ptr->indexData_.m_size = header->index_data_mem_size / header->index_2nd_len;
-      return ptr;
+      return ptr.release();
     }
     bool verifyHeader(fstring mem) const {
       const FileHeader* header = (const FileHeader*)mem.data();
@@ -1221,7 +1206,7 @@ public:
         }
       }
       indexSeq.build_cache(false, false);
-      unique_ptr<TerarkUintIndex<RankSelect>> ptr(new TerarkUintIndex<RankSelect>());
+      auto ptr = UniquePtrOf(new TerarkUintIndex<RankSelect>());
       ptr->isUserMemory_ = false;
       ptr->isBuilding_ = true;
       FileHeader *header = new FileHeader(indexSeq.mem_size());
@@ -1240,10 +1225,10 @@ public:
       return ptr.release();
     }
     unique_ptr<TerarkIndex> LoadMemory(fstring mem) const override {
-      return unique_ptr<TerarkIndex>(loadImpl(mem, {}).release());
+      return loadImpl(mem, {});
     }
     unique_ptr<TerarkIndex> LoadFile(fstring fpath) const override {
-      return unique_ptr<TerarkIndex>(loadImpl({}, fpath).release());
+      return loadImpl({}, fpath);
     }
     size_t MemSizeForBuild(const KeyStat& ks) const override {
       assert(ks.minKeyLen == ks.maxKeyLen);
@@ -1257,8 +1242,8 @@ public:
       return size_t(std::ceil(diff * 1.25 / 8));
     }
   protected:
-    unique_ptr<TerarkUintIndex<RankSelect>> loadImpl(fstring mem, fstring fpath) const {
-      unique_ptr<TerarkUintIndex<RankSelect>> ptr(new TerarkUintIndex<RankSelect>());
+    TerarkIndex* loadImpl(fstring mem, fstring fpath) const {
+      auto ptr = UniquePtrOf(new TerarkUintIndex<RankSelect>());
       ptr->isUserMemory_ = false;
       ptr->isBuilding_ = false;
 
@@ -1299,7 +1284,7 @@ public:
       }
       ptr->indexSeq_.risk_mmap_from((unsigned char*)mem.data() + header->header_size
         + terark::align_up(header->common_prefix_length, 8), header->index_mem_size);
-      return ptr;
+      return ptr.release();
     }
   };
   using TerarkIndex::FactoryPtr;
@@ -1418,7 +1403,7 @@ typedef TerarkCompositeIndex<terark::rank_select_se_512_64, terark::rank_select_
 typedef TerarkCompositeIndex<terark::rank_select_se_512_64, terark::rank_select_allzero>   TerarkCompositeIndex_SE_512_64_AllZero;
 typedef TerarkCompositeIndex<terark::rank_select_allone, terark::rank_select_se_512_64>    TerarkCompositeIndex_AllOne_SE_512_64;
 typedef TerarkCompositeIndex<terark::rank_select_allone, terark::rank_select_allzero>      TerarkCompositeIndex_AllOne_AllZero;
-  
+
 TerarkIndexRegister(TerarkCompositeIndex_IL_256_32_IL_256_32, "CompositeIndex_IL_256_32_IL_256_32");
 TerarkIndexRegister(TerarkCompositeIndex_IL_256_32_AllZero, "CompositeIndex_IL_256_32_AllZero");
 TerarkIndexRegister(TerarkCompositeIndex_AllOne_IL_256_32, "CompositeIndex_AllOne_IL_256_32");
