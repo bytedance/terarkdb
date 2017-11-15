@@ -810,22 +810,22 @@ public:
     size_t MemSizeForBuild(const KeyStat& ks) const override {
       assert(ks.minKeyLen == ks.maxKeyLen);
       size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
-      size_t index1stLen = 0;
+      size_t key1_len = 0;
 #if !defined(NDEBUG)
-      bool check = SeekCostEffectiveIndexLen(ks, index1stLen);
-      assert(check && ks.maxKeyLen > cplen + index1stLen);
+      bool check = SeekCostEffectiveIndexLen(ks, key1_len);
+      assert(check && ks.maxKeyLen > cplen + key1_len);
 #endif
-      uint64_t minValue = Read1stKey(ks.minKey, cplen, index1stLen);
-      uint64_t maxValue = Read1stKey(ks.maxKey, cplen, index1stLen);
+      uint64_t minValue = Read1stKey(ks.minKey, cplen, key1_len);
+      uint64_t maxValue = Read1stKey(ks.maxKey, cplen, key1_len);
       if (minValue > maxValue) {
         std::swap(minValue, maxValue);
       }
       uint64_t diff = maxValue - minValue + 1;
-      size_t index1stsz = size_t(std::ceil(diff * 1.25 / 8));
-      size_t index2ndsz = size_t(std::ceil(ks.numKeys * 1.25 / 8));
-      size_t indexDatasz = 
-        size_t(std::ceil(ks.numKeys * (ks.minKey.size() - cplen - index1stLen)));
-      return index1stsz + index2ndsz + indexDatasz;
+      size_t key2_len = ks.minKey.size() - cplen - key1_len;
+      size_t rankselect_1st_sz = size_t(std::ceil(diff * 1.25 / 8));
+      size_t rankselect_2nd_sz = size_t(std::ceil(ks.numKeys * 1.25 / 8));
+      size_t sum_key2_sz = std::ceil(ks.numKeys * key2_len);
+      return rankselect_1st_sz + rankselect_2nd_sz + sum_key2_sz;
     }
   protected:
     TerarkIndex* loadImpl(fstring mem, fstring fpath) const {
