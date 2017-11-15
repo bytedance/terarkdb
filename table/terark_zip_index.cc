@@ -99,11 +99,8 @@ bool TerarkIndex::SeekCostEffectiveIndexLen(const KeyStat& ks, size_t& ceLen) {
   ceLen = maxLen;
   for (int i = maxLen; i > 0; i--) {
     int offset = cplen, end = cplen + i;
-    uint64_t
-      minValue = ReadUint64(ks.minKey.begin() + offset,
-                            ks.minKey.begin() + end),
-      maxValue = ReadUint64(ks.maxKey.begin() + offset,
-                            ks.maxKey.begin() + end);
+    auto minValue = ReadUint64(ks.minKey.begin() + offset, i);
+    auto maxValue = ReadUint64(ks.maxKey.begin() + offset, i);
     uint64_t diff1st = std::max(minValue, maxValue) - std::min(minValue, maxValue) + 1;
     uint64_t diff2nd = ks.numKeys;
     // one index1st with a collection of index2nd, that's when diff < numkeys
@@ -139,9 +136,8 @@ TerarkIndex::SelectFactory(const KeyStat& ks, fstring name) {
   assert(cplen >= ks.commonPrefixLen);
   size_t ceLen = 0; // cost effective index1st len if any
   if (ks.maxKeyLen == ks.minKeyLen && ks.maxKeyLen - cplen <= sizeof(uint64_t)) {
-    uint64_t
-      minValue = ReadUint64(ks.minKey.begin() + cplen, ks.minKey.end()),
-      maxValue = ReadUint64(ks.maxKey.begin() + cplen, ks.maxKey.end());
+    auto minValue = ReadUint64(ks.minKey.begin() + cplen, ks.minKey.end());
+    auto maxValue = ReadUint64(ks.maxKey.begin() + cplen, ks.maxKey.end());
     uint64_t diff = (minValue < maxValue ? maxValue - minValue : minValue - maxValue) + 1;
     if (diff < ks.numKeys * 30) {
       if (diff == ks.numKeys) {
@@ -159,11 +155,8 @@ TerarkIndex::SelectFactory(const KeyStat& ks, fstring name) {
       ks.maxKeyLen - cplen <= 16 && // !!! plain index2nd may occupy too much space
       SeekCostEffectiveIndexLen(ks, ceLen) &&
       ks.maxKeyLen > cplen + ceLen) {
-    uint64_t
-      minValue = ReadUint64(ks.minKey.begin() + cplen,
-                            ks.minKey.begin() + cplen + ceLen),
-      maxValue = ReadUint64(ks.maxKey.begin() + cplen,
-                            ks.maxKey.begin() + cplen + ceLen);
+    auto minValue = ReadUint64(ks.minKey.begin() + cplen, ceLen);
+    auto maxValue = ReadUint64(ks.maxKey.begin() + cplen, ceLen);
     uint64_t diff = std::max(minValue, maxValue) - std::min(minValue, maxValue) + 1;
     const char* facname = nullptr;
     if (ks.numKeys < (4ull << 30)) {
@@ -943,6 +936,11 @@ public:
     index1stRS_.swap(index1stRS);
     index2ndRS_.swap(index2ndRS);
     indexData_.swap(keyVec);
+    index1stLen_ = index1stLen;
+    index2ndLen_ = header->index_2nd_len;
+    minValue_ = minValue;
+    maxValue_ = maxValue;
+    isUserMemory_ = false;
   }
 
   virtual ~TerarkCompositeIndex() {
@@ -1016,13 +1014,11 @@ public:
 
 public:
   // handlers
-  static uint64_t Read1stKey(valvec<byte_t>& key, size_t cplen, size_t index1stLen) {
-    return ReadUint64(key.begin() + cplen,
-                      key.begin() + cplen + index1stLen);
+  static uint64_t Read1stKey(const valvec<byte_t>& key, size_t cplen, size_t index1stLen) {
+    return ReadUint64(key.begin() + cplen, index1stLen);
   }
   static uint64_t Read1stKey(fstring key, size_t cplen, size_t index1stLen) {
-    return ReadUint64((const byte_t*)key.data() + cplen,
-                      (const byte_t*)key.data() + cplen + index1stLen);
+    return ReadUint64((const byte_t*)key.data() + cplen, index1stLen);
   }
   size_t Locate(const FixedLenStrVec& arr,
                 size_t start, size_t cnt, fstring target) const {
@@ -1120,7 +1116,7 @@ public:
       byte_t targetBuffer[8] = {};
       memcpy(targetBuffer + (8 - index_.keyLength_),
           target.data(), std::min<size_t>(index_.keyLength_, target.size()));
-      uint64_t targetValue = ReadUint64Aligned(targetBuffer, targetBuffer + 8);
+      uint64_t targetValue = ReadUint64Aligned(targetBuffer, 8);
       if (targetValue > index_.maxValue_) {
         m_id = size_t(-1);
         return false;
@@ -1206,9 +1202,8 @@ public:
           ks.maxKeyLen - cplen > sizeof(uint64_t)) {
         abort();
       }
-      uint64_t
-        minValue = ReadUint64(ks.minKey.begin() + cplen, ks.minKey.end()),
-        maxValue = ReadUint64(ks.maxKey.begin() + cplen, ks.maxKey.end());
+      auto minValue = ReadUint64(ks.minKey.begin() + cplen, ks.minKey.end());
+      auto maxValue = ReadUint64(ks.maxKey.begin() + cplen, ks.maxKey.end());
       if (minValue > maxValue) {
         std::swap(minValue, maxValue);
       }
@@ -1254,9 +1249,8 @@ public:
     size_t MemSizeForBuild(const KeyStat& ks) const override {
       assert(ks.minKeyLen == ks.maxKeyLen);
       size_t length = ks.maxKeyLen - commonPrefixLen(ks.minKey, ks.maxKey);
-      uint64_t
-        minValue = ReadUint64(ks.minKey.begin(), ks.minKey.begin() + length),
-        maxValue = ReadUint64(ks.maxKey.begin(), ks.maxKey.begin() + length);
+      auto minValue = ReadUint64(ks.minKey.begin(), length);
+      auto maxValue = ReadUint64(ks.maxKey.begin(), length);
       if (minValue > maxValue) {
         std::swap(minValue, maxValue);
       }
@@ -1338,7 +1332,7 @@ public:
     }
     key = key.substr(commonPrefix_.size());
     assert(key.n == keyLength_);
-    uint64_t findValue = ReadUint64((const byte_t*)key.begin(), (const byte_t*)key.end());
+    uint64_t findValue = ReadUint64((const byte_t*)key.begin(), key.size());
     if (findValue < minValue_ || findValue > maxValue_) {
       return size_t(-1);
     }

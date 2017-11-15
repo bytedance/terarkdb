@@ -21,12 +21,14 @@ namespace rocksdb {
 #if defined(TerocksPrivateCode)
 uint64_t ReadUint64(const byte_t* beg, const byte_t* end) {
   assert(end - beg <= 8);
+  return ReadUint64(beg, end - beg);
+}
+uint64_t ReadUint64(const byte_t* beg, size_t l) {
   union {
     byte_t bytes[8];
     uint64_t value;
   } c;
   c.value = 0;  // this is fix for gcc-4.8 union init bug
-  size_t l = end - beg;
   memcpy(c.bytes + (8 - l), beg, l);
 #if BOOST_ENDIAN_LITTLE_BYTE
   return terark::byte_swap(c.value);
