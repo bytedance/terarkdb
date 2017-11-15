@@ -700,7 +700,7 @@ public:
       // key = commonprefix + index1st + index2nd
       // assign index 1st
       size_t offset = index_.commonPrefix_.size();
-      AssignUint64(buffer_.data() + offset,
+      SaveAsBigEndianUint64(buffer_.data() + offset,
                    buffer_.data() + offset + index_.index1stLen_,
                    offset_1st_ + index_.minValue_);
       // assign index 2nd
@@ -1183,7 +1183,7 @@ public:
     }
   protected:
     void UpdateBuffer() {
-      AssignUint64(buffer_.data() + index_.commonPrefix_.size(),
+      SaveAsBigEndianUint64(buffer_.data() + index_.commonPrefix_.size(),
         buffer_.data() + buffer_.size(), pos_ + index_.minValue_);
     }
     size_t pos_;
