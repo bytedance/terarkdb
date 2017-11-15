@@ -90,18 +90,17 @@ bool TerarkIndex::SeekCostEffectiveIndexLen(const KeyStat& ks, size_t& ceLen) {
    *   8 bytes, 0.5 gap => 2000 + (16 - 8) * 8 * 1000 = 66,000
    *   2 bytes, 0.5 gap => 2000 + (16 - 2) * 8 * 1000 = 114,000
    */
-  static const double w1 = 0.1, w2 = 1.1,
+  static const double w1 = 0.1, w2 = 1.2,
     max_gap_ratio = 0.9, min_gap_ratio = 0.1;
   size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
-  const int maxLen = std::min<int>(8, ks.maxKeyLen - cplen);
+  const size_t maxLen = std::min<size_t>(8, ks.maxKeyLen - cplen);
   double originCost = ks.numKeys * ks.maxKeyLen * 8;
   double score = 0;
   ceLen = maxLen;
-  for (int i = maxLen; i > 0; i--) {
-    int offset = cplen, end = cplen + i;
-    auto minValue = ReadBigEndianUint64(ks.minKey.begin() + offset, i);
-    auto maxValue = ReadBigEndianUint64(ks.maxKey.begin() + offset, i);
-    uint64_t diff1st = std::max(minValue, maxValue) - std::min(minValue, maxValue) + 1;
+  for (size_t i = maxLen; i > 0; i--) {
+    auto minValue = ReadBigEndianUint64(ks.minKey.begin() + cplen, i);
+    auto maxValue = ReadBigEndianUint64(ks.maxKey.begin() + cplen, i);
+    uint64_t diff1st = abs_diff(minValue, maxValue) + 1;
     uint64_t diff2nd = ks.numKeys;
     // one index1st with a collection of index2nd, that's when diff < numkeys
     double gap_ratio = diff1st <= ks.numKeys ? min_gap_ratio : 
@@ -478,147 +477,6 @@ public:
 #if defined(TerocksPrivateCode)
 
 /*
- * special impl for all one/zero UintIndex
- */
-class rank_select_allone {
-public:
-  typedef boost::mpl::false_ is_mixed;
-  rank_select_allone() : m_size(0), m_placeholder(nullptr) {}
-  rank_select_allone(size_t sz) : m_size(sz), m_placeholder(nullptr) {}
-  rank_select_allone(const rank_select_allone& rs) {
-    m_size = rs.m_size;
-    m_placeholder = rs.m_placeholder;
-  }
-  rank_select_allone& operator=(const rank_select_allone& rs) {
-    m_size = rs.m_size;
-    m_placeholder = rs.m_placeholder;
-    return *this;
-  }
-  ~rank_select_allone() = default;
-
-  void clear() { m_size = 0; }
-  void risk_release_ownership() {}
-  void risk_mmap_from(unsigned char* base, size_t length) {
-    assert(base != nullptr);
-    assert(length == sizeof(*this));
-    m_size = *((size_t*)base);
-  }
-  void shrink_to_fit() {}
-
-  void resize(size_t newsize) { m_size = newsize; }
-  void swap(rank_select_allone& another) {
-    std::swap(m_size, another.m_size);
-    std::swap(m_placeholder, another.m_placeholder);
-  }
-  void build_cache(bool, bool) {};
-  size_t mem_size() const { return sizeof(*this); }
-  void set0(size_t i) { assert(i < m_size); }
-  void set1(size_t i) { assert(i < m_size); }
-  size_t rank0(size_t bitpos) const { return 0; }
-  size_t rank1(size_t bitpos) const { assert(bitpos < m_size); return bitpos; }
-  size_t select0(size_t id) const { return size_t(-1); }
-  size_t select1(size_t id) const { assert(id < m_size); return id; }
-  size_t max_rank0() const { return 0; }
-  size_t max_rank1() const { return m_size; }
-  size_t size() const { return m_size; }
-
-  const void* data() const { return this; }
-  bool operator[](long n) const { // alias of 'is1'
-    assert(n >= 0 && (size_t)n < m_size);
-    return true;
-  }
-  const uint32_t* get_rank_cache() const { return NULL; }
-  const uint32_t* get_sel0_cache() const { return NULL; }
-  const uint32_t* get_sel1_cache() const { return NULL; }
-
-  ///@returns number of continuous one/zero bits starts at bitpos
-  size_t zero_seq_len(size_t bitpos) const { return 0; }
-  size_t zero_seq_revlen(size_t bitpos) const { return 0; }
-  size_t one_seq_len(size_t bitpos) const {
-    assert(bitpos < m_size);
-    return m_size - bitpos;
-  }
-  size_t one_seq_revlen(size_t bitpos) const {
-    assert(bitpos < m_size);
-    return bitpos;
-  }
-
-private:
-  size_t m_size;
-  unsigned char* m_placeholder;
-};
-
-class rank_select_allzero {
-public:
-  typedef boost::mpl::false_ is_mixed;
-  rank_select_allzero() : m_size(0), m_placeholder(nullptr) {}
-  rank_select_allzero(size_t sz) : m_size(sz), m_placeholder(nullptr) {}
-  rank_select_allzero(const rank_select_allzero& rs) {
-    m_size = rs.m_size;
-    m_placeholder = rs.m_placeholder;
-  }
-  rank_select_allzero& operator=(const rank_select_allzero& rs) {
-    m_size = rs.m_size;
-    m_placeholder = rs.m_placeholder;
-    return *this;
-  }
-  ~rank_select_allzero() = default;
-
-  void clear() { m_size = 0; }
-  void risk_release_ownership() {}
-  void risk_mmap_from(unsigned char* base, size_t length) {
-    assert(base != nullptr);
-    assert(length == sizeof(*this));
-    m_size = *((size_t*)base);
-  }
-  void shrink_to_fit() {}
-
-  void resize(size_t newsize) { m_size = newsize; }
-  void swap(rank_select_allzero& another) {
-    std::swap(m_size, another.m_size);
-    std::swap(m_placeholder, another.m_placeholder);
-  }
-  void build_cache(bool, bool) {};
-
-  size_t mem_size() const { return sizeof(*this); }
-  void set0(size_t i) { assert(i < m_size); }
-  void set1(size_t i) { assert(i < m_size); }
-  size_t rank0(size_t bitpos) const { assert(bitpos < m_size); return bitpos; }
-  size_t rank1(size_t bitpos) const { return 0; }
-  size_t select0(size_t id) const { assert(id < m_size); return id; }
-  size_t select1(size_t id) const { return size_t(-1); }
-  size_t max_rank0() const { return m_size; }
-  size_t max_rank1() const { return 0; }
-  size_t size() const { return m_size; }
-
-  const void* data() const { return this; }
-  bool operator[](long n) const { // alias of 'is1'
-    assert(n >= 0 && (size_t)n < m_size);
-    return false;
-  }
-
-  const uint32_t* get_rank_cache() const { return NULL; }
-  const uint32_t* get_sel0_cache() const { return NULL; }
-  const uint32_t* get_sel1_cache() const { return NULL; }
-
-  ///@returns number of continuous one/zero bits starts at bitpos
-  size_t zero_seq_len(size_t bitpos) const {
-    assert(bitpos < m_size);
-    return m_size - bitpos;
-  }
-  size_t zero_seq_revlen(size_t bitpos) const {
-    assert(bitpos < m_size);
-    return bitpos;
-  }
-  size_t one_seq_len(size_t bitpos) const { return 0; }
-  size_t one_seq_revlen(size_t bitpos) const { return 0; }
-
-private:
-  size_t m_size;
-  unsigned char* m_placeholder;
-};
-
-/*
  * For simplicity, let's take composite index => index1:index2. Then following 
  * compositeindexes like,
  *   4:6, 4:7, 4:8, 7:19, 7:20, 8:3
@@ -777,7 +635,7 @@ public:
     bool Next() override {
       assert(m_id != size_t(-1));
       assert(index_.index1stRS_[offset_1st_] != 0);
-      if (m_id + 1 == index_.index2ndRS_.size()) {
+      if (terark_unlikely(m_id + 1 == index_.index2ndRS_.size())) {
         m_id = size_t(-1);
         return false;
       } else {
@@ -795,7 +653,7 @@ public:
     bool Prev() override {
       assert(m_id != size_t(-1));
       assert(index_.index1stRS_[offset_1st_] != 0);
-      if (m_id == 0) {
+      if (terark_unlikely(m_id == 0)) {
         m_id = size_t(-1);
         return false;
       } else {
@@ -834,8 +692,8 @@ public:
        * case2: 0 0, ...
        *   the 2nd 0 means another index started
        */
-      bool prev = index_.index2ndRS_[prev_id],
-        cur = index_.index2ndRS_[cur_id];
+      bool prev = index_.index2ndRS_[prev_id];
+      bool cur = index_.index2ndRS_[cur_id];
       return ((prev && !cur) || (!prev && !cur));
     }
     void UpdateBuffer() {
@@ -876,7 +734,7 @@ public:
 
       size_t index1stLen = 0;
       bool check = SeekCostEffectiveIndexLen(ks, index1stLen);
-      assert(check && ks.maxKeyLen > cplen + index1stLen);
+      assert(check && ks.maxKeyLen > cplen + index1stLen), check;
       uint64_t minValue = Read1stKey(ks.minKey, cplen, index1stLen);
       uint64_t maxValue = Read1stKey(ks.maxKey, cplen, index1stLen);
       /*
@@ -942,9 +800,9 @@ public:
       index1stRS.build_cache(false, false);
       index2ndRS.build_cache(false, false);
       if (index2ndRS.max_rank1() == 0) {
-        rank_select_allzero rs2(index2ndRS.size());
-        unique_ptr< TerarkCompositeIndex<RankSelect1st, rank_select_allzero> >
-          ptr(new TerarkCompositeIndex<RankSelect1st, rank_select_allzero>(
+        terark::rank_select_allzero rs2(index2ndRS.size());
+        unique_ptr< TerarkCompositeIndex<RankSelect1st, terark::rank_select_allzero> >
+          ptr(new TerarkCompositeIndex<RankSelect1st, terark::rank_select_allzero>(
             index1stRS, rs2, keyVec, ks, minValue, maxValue, index1stLen));
         return ptr.release();
       } else {
@@ -965,7 +823,7 @@ public:
       size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
       size_t index1stLen = 0;
       bool check = SeekCostEffectiveIndexLen(ks, index1stLen);
-      assert(check && ks.maxKeyLen > cplen + index1stLen);
+      assert(check && ks.maxKeyLen > cplen + index1stLen), check;
       uint64_t minValue = Read1stKey(ks.minKey, cplen, index1stLen);
       uint64_t maxValue = Read1stKey(ks.maxKey, cplen, index1stLen);
       if (minValue > maxValue) {
@@ -1351,7 +1209,7 @@ public:
       uint64_t diff = maxValue - minValue + 1;
       RankSelect indexSeq;
       indexSeq.resize(diff);
-      if (!std::is_same<RankSelect, rank_select_allone>::value) {
+      if (!std::is_same<RankSelect, terark::rank_select_allone>::value) {
         // not 'all one' case
         valvec<byte_t> keyBuf;
         for (size_t seq_id = 0; seq_id < ks.numKeys; ++seq_id) {
@@ -1553,13 +1411,13 @@ TerarkIndexRegister(TerocksIndex_NestLoudsTrieDAWG_Mixed_XL_256_32_FL, "NestLoud
 #if defined(TerocksPrivateCode)
 
 typedef TerarkCompositeIndex<terark::rank_select_il_256, terark::rank_select_il_256>       TerarkCompositeIndex_IL_256_32_IL_256_32;
-typedef TerarkCompositeIndex<terark::rank_select_il_256, rank_select_allzero>              TerarkCompositeIndex_IL_256_32_AllZero;
-typedef TerarkCompositeIndex<rank_select_allone, terark::rank_select_il_256>               TerarkCompositeIndex_AllOne_IL_256_32;
+typedef TerarkCompositeIndex<terark::rank_select_il_256, terark::rank_select_allzero>      TerarkCompositeIndex_IL_256_32_AllZero;
+typedef TerarkCompositeIndex<terark::rank_select_allone, terark::rank_select_il_256>       TerarkCompositeIndex_AllOne_IL_256_32;
 
 typedef TerarkCompositeIndex<terark::rank_select_se_512_64, terark::rank_select_se_512_64> TerarkCompositeIndex_SE_512_64_SE_512_64;
-typedef TerarkCompositeIndex<terark::rank_select_se_512_64, rank_select_allzero>           TerarkCompositeIndex_SE_512_64_AllZero;
-typedef TerarkCompositeIndex<rank_select_allone, terark::rank_select_se_512_64>            TerarkCompositeIndex_AllOne_SE_512_64;
-typedef TerarkCompositeIndex<rank_select_allone, rank_select_allzero>               TerarkCompositeIndex_AllOne_AllZero;
+typedef TerarkCompositeIndex<terark::rank_select_se_512_64, terark::rank_select_allzero>   TerarkCompositeIndex_SE_512_64_AllZero;
+typedef TerarkCompositeIndex<terark::rank_select_allone, terark::rank_select_se_512_64>    TerarkCompositeIndex_AllOne_SE_512_64;
+typedef TerarkCompositeIndex<terark::rank_select_allone, terark::rank_select_allzero>      TerarkCompositeIndex_AllOne_AllZero;
   
 TerarkIndexRegister(TerarkCompositeIndex_IL_256_32_IL_256_32, "CompositeIndex_IL_256_32_IL_256_32");
 TerarkIndexRegister(TerarkCompositeIndex_IL_256_32_AllZero, "CompositeIndex_IL_256_32_AllZero");
@@ -1574,7 +1432,7 @@ typedef TerarkUintIndex<terark::rank_select_il_256_32> TerarkUintIndex_IL_256_32
 typedef TerarkUintIndex<terark::rank_select_se_256_32> TerarkUintIndex_SE_256_32;
 typedef TerarkUintIndex<terark::rank_select_se_512_32> TerarkUintIndex_SE_512_32;
 typedef TerarkUintIndex<terark::rank_select_se_512_64> TerarkUintIndex_SE_512_64;
-typedef TerarkUintIndex<rank_select_allone> TerarkUintIndex_AllOne;
+typedef TerarkUintIndex<terark::rank_select_allone>    TerarkUintIndex_AllOne;
 TerarkIndexRegister(TerarkUintIndex_IL_256_32, "UintIndex_IL_256_32", "UintIndex");
 TerarkIndexRegister(TerarkUintIndex_SE_256_32, "UintIndex_SE_256_32");
 TerarkIndexRegister(TerarkUintIndex_SE_512_32, "UintIndex_SE_512_32");

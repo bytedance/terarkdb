@@ -90,6 +90,22 @@ inline void SaveAsBigEndianUint64(byte_t* beg, byte_t* end, uint64_t value) {
 
 #endif // TerocksPrivateCode
 
+template<class T>
+inline void correct_minmax(T& minVal, T& maxVal) {
+  if (maxVal < minVal) {
+    using namespace std;
+    swap(maxVal, minVal);
+  }
+}
+
+template<class T>
+T abs_diff(const T& x, const T& y) {
+  if (x < y)
+    return y - x;
+  else
+    return x - y;
+}
+
 const char* StrDateTimeNow();
 std::string demangle(const char* name);
 
