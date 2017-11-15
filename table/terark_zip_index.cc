@@ -724,8 +724,10 @@ public:
       }
 
       size_t index1stLen = 0;
+#if !defined(NDEBUG)
       bool check = SeekCostEffectiveIndexLen(ks, index1stLen);
       assert(check && ks.maxKeyLen > cplen + index1stLen);
+#endif
       uint64_t minValue = Read1stKey(ks.minKey, cplen, index1stLen);
       uint64_t maxValue = Read1stKey(ks.maxKey, cplen, index1stLen);
       /*
@@ -809,8 +811,10 @@ public:
       assert(ks.minKeyLen == ks.maxKeyLen);
       size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
       size_t index1stLen = 0;
+#if !defined(NDEBUG)
       bool check = SeekCostEffectiveIndexLen(ks, index1stLen);
-      assert(check && ks.maxKeyLen > cplen + index1stLen), check;
+      assert(check && ks.maxKeyLen > cplen + index1stLen);
+#endif
       uint64_t minValue = Read1stKey(ks.minKey, cplen, index1stLen);
       uint64_t maxValue = Read1stKey(ks.maxKey, cplen, index1stLen);
       if (minValue > maxValue) {
