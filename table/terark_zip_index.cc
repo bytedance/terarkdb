@@ -98,7 +98,7 @@ bool TerarkIndex::SeekCostEffectiveIndexLen(const KeyStat& ks, size_t& ceLen) {
   double score = 0;
   ceLen = maxLen;
   for (int i = maxLen; i > 0; i--) {
-    int offset = cplen, end = cplen + i;
+    int offset = cplen;
     auto minValue = ReadUint64(ks.minKey.begin() + offset, i);
     auto maxValue = ReadUint64(ks.maxKey.begin() + offset, i);
     uint64_t diff1st = std::max(minValue, maxValue) - std::min(minValue, maxValue) + 1;
