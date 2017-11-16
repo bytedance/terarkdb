@@ -739,14 +739,13 @@ public:
       if (minValue > maxValue) {
         std::swap(minValue, maxValue);
       }
-      uint64_t cnt = maxValue - minValue + 1;
       /*
-       * 1stRS stores bitmap [minvalue, maxvalue] for index1st
-       * 2ndRS stores bitmap [keystart, keyend] for composite index
+       * 1stRS stores bitmap [minValue, maxValue] for index1st
+       * 2ndRS stores bitmap for StaticMap<key1, list<key2>>
        * order of rs2 follows the order of index data, and order 
        * of rs1 follows the order of rs2
        */
-      RankSelect1 rankselect1(cnt);
+      RankSelect1 rankselect1(maxValue - minValue + 1);
       RankSelect2 rankselect2(ks.numKeys + 1); // append extra '0' at back
       valvec<byte_t> keyBuf;
       uint64_t prev = size_t(-1);
@@ -759,7 +758,7 @@ public:
           reader >> keyBuf;
           uint64_t offset = Read1stKey(keyBuf, cplen, key1_len) - minValue;
           rankselect1.set1(offset);
-          if (offset != prev) { // new index1 encountered
+          if (offset != prev) { // new key1 encountered
             rankselect2.set0(i);
           } else {
             rankselect2.set1(i);

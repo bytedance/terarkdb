@@ -94,10 +94,12 @@ static void MmapWarmUpBytes(const void* addr, size_t len) {
 #ifdef POSIX_MADV_WILLNEED
   posix_madvise((void*)base, size, POSIX_MADV_WILLNEED);
 #endif
+  size_t sum_unused = 0;
   for (size_t i = 0; i < size; i += 4096) {
-    volatile byte_t unused = ((const volatile byte_t*)base)[i];
-    TERARK_UNUSED_VAR(unused);
+    byte_t unused = ((const volatile byte_t*)base)[i];
+	sum_unused += unused;
   }
+  TERARK_UNUSED_VAR(sum_unused);
 }
 template<class T>
 static void MmapWarmUp(const T* addr, size_t len) {
