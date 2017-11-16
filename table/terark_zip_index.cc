@@ -122,9 +122,6 @@ bool TerarkIndex::SeekCostEffectiveIndexLen(const KeyStat& ks, size_t& ceLen) {
     // diff is bitmap, * 1.2 is extra cost to build RankSelect
     double cost = (diff1st + diff2nd) * 1.2 + 
       (ks.maxKeyLen - cplen - i) * ks.numKeys * 8;
-    if (diff1st == ks.numKeys) {
-      cost -= (diff1st * 1.2);
-    }
     if (cost > originCost * 0.8)
       continue;
     double compress_ratio = (originCost - cost) / originCost;
@@ -140,7 +137,7 @@ bool TerarkIndex::SeekCostEffectiveIndexLen(const KeyStat& ks, size_t& ceLen) {
 const TerarkIndex::Factory*
 TerarkIndex::SelectFactory(const KeyStat& ks, fstring name) {
   assert(ks.numKeys > 0);
-  assert(!ks.minKey.empty() && !ks.maxKey.empty());
+  //assert(!ks.minKey.empty() && !ks.maxKey.empty());
 #if defined(TerocksPrivateCode)
   size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
   assert(cplen >= ks.commonPrefixLen);
@@ -165,19 +162,11 @@ TerarkIndex::SelectFactory(const KeyStat& ks, fstring name) {
       ks.maxKeyLen - cplen <= 16 && // !!! plain index2nd may occupy too much space
       SeekCostEffectiveIndexLen(ks, ceLen) &&
       ks.maxKeyLen > cplen + ceLen) {
-    auto minValue = ReadBigEndianUint64(ks.minKey.begin() + cplen, ceLen);
-    auto maxValue = ReadBigEndianUint64(ks.maxKey.begin() + cplen, ceLen);
-    uint64_t diff = std::max(minValue, maxValue) - std::min(minValue, maxValue) + 1;
-    const char* facname = nullptr;
     if (ks.numKeys < UINT32_MAX) {
-      facname = diff == ks.numKeys ? "CompositeIndex_AllOne_IL_256_32" :
-        "CompositeIndex_IL_256_32_IL_256_32";
+      return GetFactory("CompositeIndex_IL_256_32_IL_256_32");
     } else {
-      facname = diff == ks.numKeys ? "CompositeIndex_AllOne_SE_512_64" :
-        "CompositeIndex_SE_512_64_SE_512_64";
+      return GetFactory("CompositeIndex_SE_512_64_SE_512_64");
     }
-    //printf("Factory used: %s\n", facname);
-    return GetFactory(facname);
   }
 #endif // TerocksPrivateCode
   if (ks.sumKeyLen - ks.numKeys * ks.commonPrefixLen > 0x1E0000000) { // 7.5G
@@ -522,6 +511,7 @@ public:
      * common_prefix_length = sub-index.commonPrefixLen - whole-index.commonPrefixLen
      */
     uint32_t common_prefix_length;
+    uint32_t reserved;
 
     FileHeader(size_t body_size) {
       memset(this, 0, sizeof *this);
@@ -793,7 +783,17 @@ public:
       // TBD: build histogram, which should set as 'true'
       rankselect1.build_cache(false, false);
       rankselect2.build_cache(false, false);
-      if (rankselect2.max_rank1() == 0) {
+      // TBD: confirm this
+      if (rankselect1.max_rank0() == 0 && rankselect2.max_rank1() == 0) {
+        terark::rank_select_allone rs1(rankselect1.size());
+        terark::rank_select_allzero rs2(rankselect2.size());
+        return new TerarkCompositeIndex<terark::rank_select_allone, terark::rank_select_allzero>(
+          rs1, rs2, keyVec, ks, minValue, maxValue, key1_len);
+      } else if (rankselect1.max_rank0() == 0) {
+        terark::rank_select_allone rs1(rankselect1.size());
+        return new TerarkCompositeIndex<terark::rank_select_allone, RankSelect2>(
+          rs1, rankselect2, keyVec, ks, minValue, maxValue, key1_len);
+      } else if (rankselect2.max_rank1() == 0) {
         terark::rank_select_allzero rs2(rankselect2.size());
         return new TerarkCompositeIndex<RankSelect1, terark::rank_select_allzero>(
             rankselect1, rs2, keyVec, ks, minValue, maxValue, key1_len);
@@ -895,7 +895,10 @@ public:
     isBuilding_ = true;
     size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
     // save meta into header
-    FileHeader* header = new FileHeader(rankselect1.mem_size() + rankselect2.mem_size() + keyVec.mem_size());
+    FileHeader* header = new FileHeader(
+      rankselect1.mem_size() + 
+      rankselect2.mem_size() + 
+      terark::align_up(keyVec.mem_size(), 8));
     header->min_value = minValue;
     header->max_value = maxValue;
     header->rankselect1_mem_size = rankselect1.mem_size();
@@ -937,12 +940,17 @@ public:
   }
   void SaveMmap(std::function<void(const void *, size_t)> write) const override {
     write(header_, sizeof *header_);
-    if (!commonPrefix_.empty()) {
+    if (!commonPrefix_.empty()) { // TBD: sst is immutable, don't worry about md5 ~
       write(commonPrefix_.data(), terark::align_up(commonPrefix_.size(), 8));
     }
     write(rankselect1_.data(), rankselect1_.mem_size());
     write(rankselect2_.data(), rankselect2_.mem_size());
     write(key2_data_.m_strpool.data(), key2_data_.mem_size());
+    size_t remainder = key2_data_.mem_size() % 8;
+    if (remainder) {
+      static const char zeros[8] = { 0 };
+      write(zeros, 8 - remainder);
+    }
   }
   size_t Find(fstring key) const override {
     size_t cplen = commonPrefix_.size();
