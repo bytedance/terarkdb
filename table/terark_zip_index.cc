@@ -557,14 +557,7 @@ public:
       return true;
     }
     bool SeekToLast() override {
-      /*
-       * max_rank1() is size,
-       * max_rank1() - 1 is last position
-       */
-      assert(index_.rankselect1_.max_rank1() > 0);
-      size_t last = index_.rankselect1_.max_rank1() - 1;
-      rankselect1_idx_ = index_.rankselect1_.select1(last);
-      assert(rankselect1_idx_ != size_t(-1));
+      rankselect1_idx_ = index_.rankselect1_.size() - 1;
       m_id = index_.key2_data_.size() - 1;
       UpdateBuffer();
       return true;
@@ -761,7 +754,7 @@ public:
       size_t sum2ndKeyLen = key2_len * ks.numKeys;
       FixedLenStrVec keyVec(key2_len);
       keyVec.reserve(ks.numKeys, sum2ndKeyLen);
-      if (ks.minKey < ks.maxKey) {
+      if (ks.minKey < ks.maxKey) { // ascend
         for (size_t i = 0; i < ks.numKeys; ++i) {
           reader >> keyBuf;
           uint64_t offset = Read1stKey(keyBuf, cplen, key1_len) - minValue;
@@ -774,7 +767,7 @@ public:
           prev = offset;
           keyVec.push_back(fstring(keyBuf).substr(cplen + key1_len));
         }
-      } else {
+      } else { // descend, reverse comparator
         size_t pos = sum2ndKeyLen;
         keyVec.m_size = ks.numKeys;
         keyVec.m_strpool.resize(sum2ndKeyLen);
