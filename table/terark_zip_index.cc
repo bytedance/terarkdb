@@ -12,7 +12,7 @@
 #include <terark/fsa/fsa_for_union_dfa.hpp>
 #endif // TerocksPrivateCode
 
-namespace rocksdb {
+//namespace rocksdb {
 
 using terark::initial_state;
 using terark::BaseDFA;
@@ -476,6 +476,61 @@ public:
 
 #if defined(TerocksPrivateCode)
 
+template<class Container>
+class CompositeKeyDataContainer {
+public:
+  //CompositeKeyDataContainer
+
+  void set(size_t idx, size_t val) {
+    assert(idx < container_.size());
+    container_.set_wire(idx, val);
+  }
+  void set(size_t idx, fstring val) {
+    assert(idx < container_.size());
+    container_.set_wire(idx, val);
+  }
+  // TBD: temp use
+  void swap(FixedLenStrVec& other) {
+    container_.swap(other);
+  }
+  void swap(CompositeKeyDataContainer<Container>& other) {
+    container_.swap(other.container_);
+  }
+  void risk_release_ownership() {
+    container_.risk_release_ownership();
+  }
+  const byte_t* data() const { return container_.data(); }
+  size_t mem_size() const { return container_.mem_size(); }
+  size_t size() const { return container_.size(); }
+  bool equals(size_t idx, fstring other) const {
+    return container_[idx] == other;
+  }
+  size_t lower_bound(size_t lo, size_t hi, fstring val) const {
+    return container_.lower_bound(lo, hi, val);
+  }
+  // TBD: UintVecMin0
+  void init(size_t len, size_t sz) {
+    container_.m_fixlen = len;
+    container_.m_size = sz;
+  }
+  // TBD: UintVecMin0
+  void risk_set_data(byte_t* data, size_t sz) {
+    container_.m_strpool.risk_set_data(data, sz);
+  }
+  // TBD: UintVecMin0
+  fstring operator[](size_t idx) const {
+    assert(idx < container_.size());
+    return container_[idx];
+  }
+  // TBD: UintVecMin0
+  size_t lower_bound(size_t lo, size_t hi, size_t val) const {
+    return container_.lower_bound(lo, hi, val);
+  }
+
+private:
+  Container container_;
+};
+
 /*
  * For simplicity, let's take composite index => index1:index2. Then following 
  * compositeindexes like,
@@ -487,10 +542,10 @@ public:
  * use bitmap2 to select0(3) = position-5. That is, we should search within [3, 5). 
  * iter [3 to 5), 7:20 is found, done.
  */
-template<class RankSelect1, class RankSelect2>
+template<class RankSelect1, class RankSelect2, 
+         class Key2DataContainer=CompositeKeyDataContainer<FixedLenStrVec>>
 class TerarkCompositeUintIndex : public TerarkIndex {
 public:
-  //static const int kCommonPrefixLen = 4;
   static const char* index_name;
   struct FileHeader : public TerarkIndexHeader {
     uint64_t min_value;
@@ -498,6 +553,7 @@ public:
     uint64_t rankselect1_mem_size;
     uint64_t rankselect2_mem_size;
     uint64_t key2_data_mem_size;
+    uint64_t key2_min_value;
     /*
      * per key length = common_prefix_len + key1_fixed_len + key2_fixed_len
      */
@@ -535,7 +591,7 @@ public:
       rankselect1_idx_ = size_t(-1);
       m_id = size_t(-1);
       buffer_.resize_no_init(index_.commonPrefix_.size() +
-        index_.key1_len_ + index_.key2_len_);
+                             index_.key1_len_ + index_.key2_len_);
       memcpy(buffer_.data(), index_.commonPrefix_.data(), index_.commonPrefix_.size());
     }
     virtual ~TerarkCompositeUintIndexIterator() {}
@@ -682,13 +738,13 @@ public:
       return index_.rankselect2_.is0(curr_id);
     }
     void UpdateBuffer() {
-      // key = commonprefix + index1st + index2nd
-      // assign index 1st
+      // key = commonprefix + key1s + key2
+      // assign key1
       size_t offset = index_.commonPrefix_.size();
       auto len1 = index_.key1_len_;
       auto key1 = rankselect1_idx_ + index_.minValue_;
       SaveAsBigEndianUint64(buffer_.data() + offset, len1, key1);
-      // assign index 2nd
+      // assign key2
       offset += len1;
       fstring data = index_.key2_data_[m_id];
       memcpy(buffer_.data() + offset, data.data(), data.size());
@@ -742,6 +798,7 @@ public:
       size_t key2_len = ks.maxKeyLen - cplen - key1_len;
       size_t sum2ndKeyLen = key2_len * ks.numKeys;
       FixedLenStrVec keyVec(key2_len);
+      fstring minKey2Data, maxKey2Data;
       keyVec.reserve(ks.numKeys, sum2ndKeyLen);
       if (ks.minKey < ks.maxKey) { // ascend
         for (size_t i = 0; i < ks.numKeys; ++i) {
@@ -754,7 +811,10 @@ public:
             rankselect2.set1(i);
           }
           prev = offset;
-          keyVec.push_back(fstring(keyBuf).substr(cplen + key1_len));
+          fstring key2Data = fstring(keyBuf).substr(cplen + key1_len);
+          //updateMinMax(key2Data, minKey2Data, maxKey2Data);
+          //keyVec.set_wire(i, key2Data);
+          keyVec.push_back(key2Data);
         }
       } else { // descend, reverse comparator
         size_t pos = sum2ndKeyLen;
@@ -772,9 +832,11 @@ public:
           }
           prev = offset;
           // save index data
-          fstring str = fstring(keyBuf).substr(cplen + key1_len);
-          pos -= str.size();
-          memcpy(keyVec.m_strpool.data() + pos, str.data(), str.size());
+          fstring key2Data = fstring(keyBuf).substr(cplen + key1_len);
+          //updateMinMax(key2Data, minKey2Data, maxKey2Data);
+          pos -= key2Data.size();
+          memcpy(keyVec.m_strpool.data() + pos, key2Data.data(), key2Data.size());
+          //keyVec.set_wire(i, key2Data);
         }
         rankselect2.set0(0); // set 1st element to 0
         assert(pos == 0);
@@ -783,23 +845,38 @@ public:
       // TBD: build histogram, which should set as 'true'
       rankselect1.build_cache(false, false);
       rankselect2.build_cache(false, false);
+      // go over keydata, find min/max data, decide the
+      //  the best container to be used to store them
+      {
+        /*} else if (key2_len <= 8) {
+          uint64_t minValue = ReadBigEndianUint64((const byte_t*)minKey2Data.data(), minKey2Data.size());
+          uint64_t maxValue = ReadBigEndianUint64((const byte_t*)maxKey2Data.data(), maxKey2Data.size());
+          uint64_t diff = maxValue - minValue;
+          // TBD: should check if condition, like diff < 4 then fixlen is good enough
+          //Key2DataContainer 
+          //for (
+        
+          }*/
+      }
       // TBD: confirm this
+      Key2DataContainer container;
+      container.swap(keyVec);
       if (rankselect1.max_rank0() == 0 && rankselect2.max_rank1() == 0) {
         terark::rank_select_allone rs1(rankselect1.size());
         terark::rank_select_allzero rs2(rankselect2.size());
         return new TerarkCompositeUintIndex<terark::rank_select_allone, terark::rank_select_allzero>(
-          rs1, rs2, keyVec, ks, minValue, maxValue, key1_len);
-      } else if (rankselect1.max_rank0() == 0) {
-        terark::rank_select_allone rs1(rankselect1.size());
-        return new TerarkCompositeUintIndex<terark::rank_select_allone, RankSelect2>(
-          rs1, rankselect2, keyVec, ks, minValue, maxValue, key1_len);
+          rs1, rs2, container, ks, minValue, maxValue, key1_len, 0);
       } else if (rankselect2.max_rank1() == 0) {
         terark::rank_select_allzero rs2(rankselect2.size());
         return new TerarkCompositeUintIndex<RankSelect1, terark::rank_select_allzero>(
-            rankselect1, rs2, keyVec, ks, minValue, maxValue, key1_len);
+          rankselect1, rs2, container, ks, minValue, maxValue, key1_len, 0);
+      } else if (rankselect1.max_rank0() == 0) {
+        terark::rank_select_allone rs1(rankselect1.size());
+        return new TerarkCompositeUintIndex<terark::rank_select_allone, RankSelect2>(
+          rs1, rankselect2, container, ks, minValue, maxValue, key1_len, 0);
       } else {
         return new TerarkCompositeUintIndex<RankSelect1, RankSelect2>(
-            rankselect1, rankselect2, keyVec, ks, minValue, maxValue, key1_len);
+          rankselect1, rankselect2, container, ks, minValue, maxValue, key1_len, 0);
       }
     }
     unique_ptr<TerarkIndex> LoadMemory(fstring mem) const override {
@@ -854,19 +931,21 @@ public:
       size_t offset = header->header_size +
         terark::align_up(header->common_prefix_length, 8);
       ptr->rankselect1_.risk_mmap_from((unsigned char*)mem.data() + offset,
-                                      header->rankselect1_mem_size);
+                                       header->rankselect1_mem_size);
       offset += header->rankselect1_mem_size;
       if (header->rankselect2_mem_size > 0) {
         ptr->rankselect2_.risk_mmap_from((unsigned char*)mem.data() + offset,
-                                      header->rankselect2_mem_size);
+                                         header->rankselect2_mem_size);
         offset += header->rankselect2_mem_size;
       } else { // all zero
         ptr->rankselect2_.resize(ptr->rankselect1_.max_rank1() + 1); // append extra '0' at back
       }
-      ptr->key2_data_.m_strpool.risk_set_data((unsigned char*)mem.data() + offset,
-                                              header->key2_data_mem_size);
-      ptr->key2_data_.m_fixlen = header->key2_fixed_len;
-      ptr->key2_data_.m_size = header->key2_data_mem_size / header->key2_fixed_len;
+      ptr->key2_data_.risk_set_data((unsigned char*)mem.data() + offset,
+                                    header->key2_data_mem_size);
+      ptr->key2_data_.init(header->key2_fixed_len,
+                           header->key2_data_mem_size / header->key2_fixed_len);
+      //ptr->key2_data_.m_fixlen = header->key2_fixed_len;
+      //ptr->key2_data_.m_size = header->key2_data_mem_size / header->key2_fixed_len;
       return ptr.release();
     }
     bool verifyHeader(fstring mem) const {
@@ -880,9 +959,14 @@ public:
         ) {
         throw std::invalid_argument("TerarkCompositeUintIndex::Load(): Bad file header");
       }
-      //printf("\ntypename is: %s\n", typeid(TerarkCompositeUintIndex<RankSelect1, RankSelect2>).name());
       assert(VerifyClassName<TerarkCompositeUintIndex>(header->class_name));
       return true;
+    }
+    static void updateMinMax(fstring data, fstring& minData, fstring& maxData) {
+      if (data < minData)
+        minData = data;
+      if (data > maxData)
+        maxData = data;
     }
   };
 
@@ -890,21 +974,23 @@ public:
   using TerarkIndex::FactoryPtr;
   TerarkCompositeUintIndex() {}
   TerarkCompositeUintIndex(RankSelect1& rankselect1, RankSelect2& rankselect2,
-                       FixedLenStrVec& keyVec, const KeyStat& ks, 
-                       uint64_t minValue, uint64_t maxValue, size_t key1_len) {
+                           Key2DataContainer& key2Container, const KeyStat& ks, 
+                           uint64_t minValue, uint64_t maxValue, 
+                           size_t key1_len, uint64_t minKey2Value) {
     isBuilding_ = true;
     size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
     // save meta into header
     FileHeader* header = new FileHeader(
       rankselect1.mem_size() + 
       rankselect2.mem_size() + 
-      terark::align_up(keyVec.mem_size(), 8));
+      terark::align_up(key2Container.mem_size(), 8));
     header->min_value = minValue;
     header->max_value = maxValue;
     header->rankselect1_mem_size = rankselect1.mem_size();
     header->rankselect2_mem_size = rankselect2.mem_size();
-    header->key2_data_mem_size = keyVec.mem_size();
+    header->key2_data_mem_size = key2Container.mem_size();
     header->key1_fixed_len = key1_len;
+    header->key2_min_value = minKey2Value;
     header->key2_fixed_len = ks.minKeyLen - cplen - key1_len;
     if (cplen > ks.commonPrefixLen) {
       // upper layer didn't handle common prefix, we'll do it
@@ -917,11 +1003,12 @@ public:
     header_ = header;
     rankselect1_.swap(rankselect1);
     rankselect2_.swap(rankselect2);
-    key2_data_.swap(keyVec);
+    key2_data_.swap(key2Container);
     key1_len_ = key1_len;
     key2_len_ = header->key2_fixed_len;
     minValue_ = minValue;
     maxValue_ = maxValue;
+    key2_min_value_ = minKey2Value;
     isUserMemory_ = false;
   }
 
@@ -931,7 +1018,7 @@ public:
     } else if (file_.base != nullptr || isUserMemory_) {
       rankselect1_.risk_release_ownership();
       rankselect2_.risk_release_ownership();
-      key2_data_.m_strpool.risk_release_ownership();
+      key2_data_.risk_release_ownership();
       commonPrefix_.risk_release_ownership();
     }
   }
@@ -945,7 +1032,7 @@ public:
     }
     write(rankselect1_.data(), rankselect1_.mem_size());
     write(rankselect2_.data(), rankselect2_.mem_size());
-    write(key2_data_.m_strpool.data(), key2_data_.mem_size());
+    write(key2_data_.data(), key2_data_.mem_size());
     size_t remainder = key2_data_.mem_size() % 8;
     if (remainder) {
       static const char zeros[8] = { 0 };
@@ -958,11 +1045,11 @@ public:
         key.commonPrefixLen(commonPrefix_) != cplen) {
       return size_t(-1);
     }
-    uint64_t index1st = Read1stKey(key, cplen, key1_len_);
-    if (index1st < minValue_ || index1st > maxValue_) {
+    uint64_t key1 = Read1stKey(key, cplen, key1_len_);
+    if (key1 < minValue_ || key1 > maxValue_) {
       return size_t(-1);
     }
-    uint64_t offset = index1st - minValue_;
+    uint64_t offset = key1 - minValue_;
     if (!rankselect1_[offset]) {
       return size_t(-1);
     }
@@ -970,9 +1057,9 @@ public:
     uint64_t pos0 = rankselect2_.select0(order);
     assert(pos0 != size_t(-1));
     size_t cnt = rankselect2_.one_seq_len(pos0 + 1);
-    fstring index2nd = key.substr(cplen + key1_len_);
-    size_t id = Locate(key2_data_, pos0, cnt + 1, index2nd);
-    if (id != size_t(-1) && index2nd == key2_data_[id]) {
+    fstring key2 = key.substr(cplen + key1_len_);
+    size_t id = Locate(key2_data_, pos0, cnt + 1, key2);
+    if (id != size_t(-1) && key2_data_.equals(id, key2)) {
       return id;
     }
     return size_t(-1);
@@ -1010,7 +1097,7 @@ public:
   static uint64_t Read1stKey(const byte_t* key, size_t cplen, size_t key1_len) {
     return ReadBigEndianUint64(key + cplen, key1_len);
   }
-  size_t Locate(const FixedLenStrVec& arr,
+  size_t Locate(const Key2DataContainer& arr,
                 size_t start, size_t cnt, fstring target) const {
     size_t lo = start, hi = start + cnt;
     size_t pos = arr.lower_bound(lo, hi, target);
@@ -1023,16 +1110,17 @@ protected:
   valvec<char>      commonPrefix_;
   RankSelect1       rankselect1_;
   RankSelect2       rankselect2_;
-  FixedLenStrVec    key2_data_;
+  Key2DataContainer key2_data_;
   uint64_t          minValue_;
   uint64_t          maxValue_;
+  uint64_t          key2_min_value_;
   uint32_t          key1_len_;
   uint32_t          key2_len_;
   bool              isUserMemory_;
   bool              isBuilding_;
 };
-template<class RankSelect1, class RankSelect2>
-const char* TerarkCompositeUintIndex<RankSelect1, RankSelect2>::index_name = "CompositeIndex";
+template<class RankSelect1, class RankSelect2, class Key2DataContainer>
+const char* TerarkCompositeUintIndex<RankSelect1, RankSelect2, Key2DataContainer>::index_name = "CompositeIndex";
 
 template<class RankSelect>
 class TerarkUintIndex : public TerarkIndex {
@@ -1458,4 +1546,4 @@ unique_ptr<TerarkIndex> TerarkIndex::LoadMemory(fstring mem) {
   return factory->LoadMemory(mem);
 }
 
-} // namespace rocksdb
+//} // namespace rocksdb
