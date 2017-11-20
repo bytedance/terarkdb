@@ -163,9 +163,9 @@ TerarkIndex::SelectFactory(const KeyStat& ks, fstring name) {
       SeekCostEffectiveIndexLen(ks, ceLen) &&
       ks.maxKeyLen > cplen + ceLen) {
     if (ks.numKeys < UINT32_MAX) {
-      return GetFactory("CompositeIndex_IL_256_32_IL_256_32");
+      return GetFactory("CompositeUintIndex_IL_256_32_IL_256_32");
     } else {
-      return GetFactory("CompositeIndex_SE_512_64_SE_512_64");
+      return GetFactory("CompositeUintIndex_SE_512_64_SE_512_64");
     }
   }
 #endif // TerocksPrivateCode
@@ -488,7 +488,7 @@ public:
  * iter [3 to 5), 7:20 is found, done.
  */
 template<class RankSelect1, class RankSelect2>
-class TerarkCompositeIndex : public TerarkIndex {
+class TerarkCompositeUintIndex : public TerarkIndex {
 public:
   //static const int kCommonPrefixLen = 4;
   static const char* index_name;
@@ -518,7 +518,7 @@ public:
       magic_len = strlen(index_name);
       strncpy(magic, index_name, sizeof magic);
       size_t name_i = g_TerarkIndexName.find_i(
-        typeid(TerarkCompositeIndex<RankSelect1, RankSelect2>).name());
+        typeid(TerarkCompositeUintIndex<RankSelect1, RankSelect2>).name());
       assert(name_i < g_TerarkIndexFactroy.end_i());
       strncpy(class_name, g_TerarkIndexName.val(name_i).c_str(), sizeof class_name);
       header_size = sizeof *this;
@@ -529,16 +529,16 @@ public:
   };
 
 public:
-  class TerarkCompositeIndexIterator : public TerarkIndex::Iterator {
+  class TerarkCompositeUintIndexIterator : public TerarkIndex::Iterator {
   public:
-    TerarkCompositeIndexIterator(const TerarkCompositeIndex& index) : index_(index) {
+    TerarkCompositeUintIndexIterator(const TerarkCompositeUintIndex& index) : index_(index) {
       rankselect1_idx_ = size_t(-1);
       m_id = size_t(-1);
       buffer_.resize_no_init(index_.commonPrefix_.size() +
         index_.key1_len_ + index_.key2_len_);
       memcpy(buffer_.data(), index_.commonPrefix_.data(), index_.commonPrefix_.size());
     }
-    virtual ~TerarkCompositeIndexIterator() {}
+    virtual ~TerarkCompositeUintIndexIterator() {}
 
     bool SeekToFirst() override {
       rankselect1_idx_ = 0;
@@ -696,7 +696,7 @@ public:
 
     size_t rankselect1_idx_; // used to track & decode index1 value
     valvec<byte_t> buffer_;
-    const TerarkCompositeIndex& index_;
+    const TerarkCompositeUintIndex& index_;
   };
     
 public:
@@ -787,18 +787,18 @@ public:
       if (rankselect1.max_rank0() == 0 && rankselect2.max_rank1() == 0) {
         terark::rank_select_allone rs1(rankselect1.size());
         terark::rank_select_allzero rs2(rankselect2.size());
-        return new TerarkCompositeIndex<terark::rank_select_allone, terark::rank_select_allzero>(
+        return new TerarkCompositeUintIndex<terark::rank_select_allone, terark::rank_select_allzero>(
           rs1, rs2, keyVec, ks, minValue, maxValue, key1_len);
       } else if (rankselect1.max_rank0() == 0) {
         terark::rank_select_allone rs1(rankselect1.size());
-        return new TerarkCompositeIndex<terark::rank_select_allone, RankSelect2>(
+        return new TerarkCompositeUintIndex<terark::rank_select_allone, RankSelect2>(
           rs1, rankselect2, keyVec, ks, minValue, maxValue, key1_len);
       } else if (rankselect2.max_rank1() == 0) {
         terark::rank_select_allzero rs2(rankselect2.size());
-        return new TerarkCompositeIndex<RankSelect1, terark::rank_select_allzero>(
+        return new TerarkCompositeUintIndex<RankSelect1, terark::rank_select_allzero>(
             rankselect1, rs2, keyVec, ks, minValue, maxValue, key1_len);
       } else {
-        return new TerarkCompositeIndex<RankSelect1, RankSelect2>(
+        return new TerarkCompositeUintIndex<RankSelect1, RankSelect2>(
             rankselect1, rankselect2, keyVec, ks, minValue, maxValue, key1_len);
       }
     }
@@ -829,7 +829,7 @@ public:
     }
   protected:
     TerarkIndex* loadImpl(fstring mem, fstring fpath) const {
-      auto ptr = UniquePtrOf(new TerarkCompositeIndex<RankSelect1, RankSelect2>());
+      auto ptr = UniquePtrOf(new TerarkCompositeUintIndex<RankSelect1, RankSelect2>());
       ptr->isUserMemory_ = false;
       ptr->isBuilding_ = false;
       if (mem.data() == nullptr) {
@@ -878,18 +878,18 @@ public:
           || header->version != 1
           || header->file_size != mem.size()
         ) {
-        throw std::invalid_argument("TerarkCompositeIndex::Load(): Bad file header");
+        throw std::invalid_argument("TerarkCompositeUintIndex::Load(): Bad file header");
       }
-      //printf("\ntypename is: %s\n", typeid(TerarkCompositeIndex<RankSelect1, RankSelect2>).name());
-      assert(VerifyClassName<TerarkCompositeIndex>(header->class_name));
+      //printf("\ntypename is: %s\n", typeid(TerarkCompositeUintIndex<RankSelect1, RankSelect2>).name());
+      assert(VerifyClassName<TerarkCompositeUintIndex>(header->class_name));
       return true;
     }
   };
 
 public:
   using TerarkIndex::FactoryPtr;
-  TerarkCompositeIndex() {}
-  TerarkCompositeIndex(RankSelect1& rankselect1, RankSelect2& rankselect2,
+  TerarkCompositeUintIndex() {}
+  TerarkCompositeUintIndex(RankSelect1& rankselect1, RankSelect2& rankselect2,
                        FixedLenStrVec& keyVec, const KeyStat& ks, 
                        uint64_t minValue, uint64_t maxValue, size_t key1_len) {
     isBuilding_ = true;
@@ -925,7 +925,7 @@ public:
     isUserMemory_ = false;
   }
 
-  virtual ~TerarkCompositeIndex() {
+  virtual ~TerarkCompositeUintIndex() {
     if (isBuilding_) {
       delete (FileHeader*)header_;
     } else if (file_.base != nullptr || isUserMemory_) {
@@ -987,7 +987,7 @@ public:
     return fstring((const char*)header_, (ptrdiff_t)header_->file_size);
   }
   Iterator* NewIterator() const override {
-    return new TerarkCompositeIndexIterator(*this);
+    return new TerarkCompositeUintIndexIterator(*this);
   }
   bool NeedsReorder() const override {
     return false;
@@ -1032,7 +1032,7 @@ protected:
   bool              isBuilding_;
 };
 template<class RankSelect1, class RankSelect2>
-const char* TerarkCompositeIndex<RankSelect1, RankSelect2>::index_name = "CompositeIndex";
+const char* TerarkCompositeUintIndex<RankSelect1, RankSelect2>::index_name = "CompositeIndex";
 
 template<class RankSelect>
 class TerarkUintIndex : public TerarkIndex {
@@ -1393,23 +1393,23 @@ TerarkIndexRegister(TerocksIndex_NestLoudsTrieDAWG_Mixed_XL_256_32_FL, "NestLoud
 
 #if defined(TerocksPrivateCode)
 
-typedef TerarkCompositeIndex<terark::rank_select_il_256, terark::rank_select_il_256>       TerarkCompositeIndex_IL_256_32_IL_256_32;
-typedef TerarkCompositeIndex<terark::rank_select_il_256, terark::rank_select_allzero>      TerarkCompositeIndex_IL_256_32_AllZero;
-typedef TerarkCompositeIndex<terark::rank_select_allone, terark::rank_select_il_256>       TerarkCompositeIndex_AllOne_IL_256_32;
+typedef TerarkCompositeUintIndex<terark::rank_select_il_256, terark::rank_select_il_256>       TerarkCompositeUintIndex_IL_256_32_IL_256_32;
+typedef TerarkCompositeUintIndex<terark::rank_select_il_256, terark::rank_select_allzero>      TerarkCompositeUintIndex_IL_256_32_AllZero;
+typedef TerarkCompositeUintIndex<terark::rank_select_allone, terark::rank_select_il_256>       TerarkCompositeUintIndex_AllOne_IL_256_32;
 
-typedef TerarkCompositeIndex<terark::rank_select_se_512_64, terark::rank_select_se_512_64> TerarkCompositeIndex_SE_512_64_SE_512_64;
-typedef TerarkCompositeIndex<terark::rank_select_se_512_64, terark::rank_select_allzero>   TerarkCompositeIndex_SE_512_64_AllZero;
-typedef TerarkCompositeIndex<terark::rank_select_allone, terark::rank_select_se_512_64>    TerarkCompositeIndex_AllOne_SE_512_64;
-typedef TerarkCompositeIndex<terark::rank_select_allone, terark::rank_select_allzero>      TerarkCompositeIndex_AllOne_AllZero;
+typedef TerarkCompositeUintIndex<terark::rank_select_se_512_64, terark::rank_select_se_512_64> TerarkCompositeUintIndex_SE_512_64_SE_512_64;
+typedef TerarkCompositeUintIndex<terark::rank_select_se_512_64, terark::rank_select_allzero>   TerarkCompositeUintIndex_SE_512_64_AllZero;
+typedef TerarkCompositeUintIndex<terark::rank_select_allone, terark::rank_select_se_512_64>    TerarkCompositeUintIndex_AllOne_SE_512_64;
+typedef TerarkCompositeUintIndex<terark::rank_select_allone, terark::rank_select_allzero>      TerarkCompositeUintIndex_AllOne_AllZero;
 
-TerarkIndexRegister(TerarkCompositeIndex_IL_256_32_IL_256_32, "CompositeIndex_IL_256_32_IL_256_32");
-TerarkIndexRegister(TerarkCompositeIndex_IL_256_32_AllZero, "CompositeIndex_IL_256_32_AllZero");
-TerarkIndexRegister(TerarkCompositeIndex_AllOne_IL_256_32, "CompositeIndex_AllOne_IL_256_32");
+TerarkIndexRegister(TerarkCompositeUintIndex_IL_256_32_IL_256_32, "CompositeUintIndex_IL_256_32_IL_256_32");
+TerarkIndexRegister(TerarkCompositeUintIndex_IL_256_32_AllZero, "CompositeUintIndex_IL_256_32_AllZero");
+TerarkIndexRegister(TerarkCompositeUintIndex_AllOne_IL_256_32, "CompositeUintIndex_AllOne_IL_256_32");
 
-TerarkIndexRegister(TerarkCompositeIndex_SE_512_64_SE_512_64, "CompositeIndex_SE_512_64_SE_512_64");
-TerarkIndexRegister(TerarkCompositeIndex_SE_512_64_AllZero, "CompositeIndex_SE_512_64_AllZero");
-TerarkIndexRegister(TerarkCompositeIndex_AllOne_SE_512_64, "CompositeIndex_AllOne_SE_512_64");
-TerarkIndexRegister(TerarkCompositeIndex_AllOne_AllZero, "CompositeIndex_AllOne_AllZero");
+TerarkIndexRegister(TerarkCompositeUintIndex_SE_512_64_SE_512_64, "CompositeUintIndex_SE_512_64_SE_512_64");
+TerarkIndexRegister(TerarkCompositeUintIndex_SE_512_64_AllZero, "CompositeUintIndex_SE_512_64_AllZero");
+TerarkIndexRegister(TerarkCompositeUintIndex_AllOne_SE_512_64, "CompositeUintIndex_AllOne_SE_512_64");
+TerarkIndexRegister(TerarkCompositeUintIndex_AllOne_AllZero, "CompositeUintIndex_AllOne_AllZero");
 
 typedef TerarkUintIndex<terark::rank_select_il_256_32> TerarkUintIndex_IL_256_32;
 typedef TerarkUintIndex<terark::rank_select_se_256_32> TerarkUintIndex_SE_256_32;
