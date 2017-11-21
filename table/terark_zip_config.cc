@@ -46,22 +46,6 @@ void TerarkZipDeleteTempFiles(const std::string& tmpPath) {
   }
 }
 
-static
-int ComputeFileSizeMultiplier(double diskLimit, double minVal, int levels) {
-  if (diskLimit > 0) {
-    double maxSST = diskLimit / 6.0;
-    double maxMul = maxSST / minVal;
-    double oneMul = pow(maxMul, 1.0/(levels-1));
-    if (oneMul > 1.0)
-      return (int)oneMul;
-    else
-      return 1;
-  }
-  else {
-    return 5;
-  }
-}
-
 void TerarkZipAutoConfigForBulkLoad(struct TerarkZipTableOptions& tzo,
                                     struct DBOptions& dbo,
                                     struct ColumnFamilyOptions& cfo,
@@ -92,12 +76,11 @@ void TerarkZipAutoConfigForBulkLoad(struct TerarkZipTableOptions& tzo,
   tzo.indexNestLevel = 2;
 
   cfo.write_buffer_size = tzo.smallTaskMemory;
-  cfo.num_levels = 5;
+  cfo.num_levels = 7;
   cfo.max_write_buffer_number = 6;
   cfo.min_write_buffer_number_to_merge = 1;
   cfo.target_file_size_base = cfo.write_buffer_size;
-  cfo.target_file_size_multiplier = ComputeFileSizeMultiplier(
-      diskBytesLimit, cfo.target_file_size_base, cfo.num_levels);
+  cfo.target_file_size_multiplier = cfo.write_buffer_size * 16;
   cfo.compaction_style = rocksdb::kCompactionStyleUniversal;
   cfo.compaction_options_universal.allow_trivial_move = true;
 
@@ -171,16 +154,16 @@ void TerarkZipAutoConfigForOnlineDB_CFOptions(struct TerarkZipTableOptions& tzo,
   tzo.smallTaskMemory = memBytesLimit / 64;
 
   cfo.write_buffer_size = tzo.smallTaskMemory;
-  cfo.num_levels = 5;
+  cfo.num_levels = 7;
   cfo.max_write_buffer_number = 3;
-  cfo.target_file_size_base = cfo.write_buffer_size;
-  cfo.target_file_size_multiplier = ComputeFileSizeMultiplier(
-      diskBytesLimit, cfo.target_file_size_base, cfo.num_levels);
+  cfo.target_file_size_base = cfo.write_buffer_size * 16;
+  cfo.target_file_size_multiplier = 1;
   cfo.compaction_style = rocksdb::kCompactionStyleUniversal;
   cfo.compaction_options_universal.allow_trivial_move = true;
 
-  cfo.max_bytes_for_level_base = cfo.write_buffer_size * 4;
-  cfo.max_bytes_for_level_multiplier = cfo.target_file_size_multiplier;
+  // intended: less than target_file_size_base
+  cfo.max_bytes_for_level_base = cfo.write_buffer_size * 8;
+  cfo.max_bytes_for_level_multiplier = 2;
 }
 
 bool TerarkZipConfigFromEnv(DBOptions& dbo, ColumnFamilyOptions& cfo) {
@@ -250,8 +233,8 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo) {
   MyGetInt   (tzo, offsetArrayBlockUnits   , 0    );
   MyGetInt   (tzo, indexNestScale          , 8    );
   if (true
-      && 0   != tzo.offsetArrayBlockUnits
-      && 64  != tzo.offsetArrayBlockUnits
+      &&   0 != tzo.offsetArrayBlockUnits
+      &&  64 != tzo.offsetArrayBlockUnits
       && 128 != tzo.offsetArrayBlockUnits
   ){
     STD_WARN(
@@ -309,7 +292,7 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo) {
 #define MyGetUniversal_uint(name, Default) \
     cfo.compaction_options_universal.name = \
         terark::getEnvLong("TerarkZipTable_" #name, Default)
-    MyGetUniversal_uint(min_merge_width,  5);
+    MyGetUniversal_uint(min_merge_width,  4);
     MyGetUniversal_uint(max_merge_width, 50);
   }
   cfo.write_buffer_size     = uint64_t(1) << 30; // 1G

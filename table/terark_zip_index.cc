@@ -53,6 +53,14 @@ bool VerifyClassName(fstring class_name) {
                   g_TerarkIndexFactroy.val(head_i) == g_TerarkIndexFactroy.val(self_i);
 }
 
+void AppendExtraZero(std::function<void(const void *, size_t)> write, size_t len) {
+  assert(len <= 8);
+  static const char zeros[8] = { 0 };
+  if (0 < len && len < 8) {
+    write(zeros, len);
+  }
+}
+
 struct TerarkIndexHeader {
   uint8_t   magic_len;
   char      magic[19];
@@ -633,7 +641,8 @@ public:
      * common_prefix_length = sub-index.commonPrefixLen - whole-index.commonPrefixLen
      */
     uint32_t common_prefix_length;
-    uint32_t reserved;
+    uint32_t reserved32;
+    uint64_t reserved64;
 
     FileHeader(size_t body_size) {
       memset(this, 0, sizeof *this);
@@ -657,7 +666,7 @@ public:
       rankselect1_idx_ = size_t(-1);
       m_id = size_t(-1);
       buffer_.resize_no_init(index_.commonPrefix_.size() +
-                             index_.key1_len_ + index_.key2_len_);
+        index_.key1_len_ + index_.key2_len_);
       memcpy(buffer_.data(), index_.commonPrefix_.data(), index_.commonPrefix_.size());
     }
     virtual ~TerarkCompositeUintIndexIterator() {}
@@ -1129,17 +1138,14 @@ public:
   }
   void SaveMmap(std::function<void(const void *, size_t)> write) const override {
     write(header_, sizeof *header_);
-    if (!commonPrefix_.empty()) { // TBD: sst is immutable, don't worry about md5 ~
-      write(commonPrefix_.data(), terark::align_up(commonPrefix_.size(), 8));
+    if (!commonPrefix_.empty()) {
+      write(commonPrefix_.data(), commonPrefix_.size());
+      AppendExtraZero(write, 8 - commonPrefix_.size() % 8);
     }
     write(rankselect1_.data(), rankselect1_.mem_size());
     write(rankselect2_.data(), rankselect2_.mem_size());
     write(key2_data_.data(), key2_data_.mem_size());
-    size_t remainder = key2_data_.mem_size() % 8;
-    if (remainder) {
-      static const char zeros[8] = { 0 };
-      write(zeros, 8 - remainder);
-    }
+    AppendExtraZero(write, 8 - key2_data_.mem_size() % 8);
   }
   size_t Find(fstring key) const override {
     size_t cplen = commonPrefix_.size();
@@ -1492,7 +1498,8 @@ public:
   void SaveMmap(std::function<void(const void *, size_t)> write) const override {
     write(header_, sizeof *header_);
     if (!commonPrefix_.empty()) {
-      write(commonPrefix_.data(), terark::align_up(commonPrefix_.size(), 8));
+      write(commonPrefix_.data(), commonPrefix_.size());
+      AppendExtraZero(write, 8 - commonPrefix_.size() % 8);
     }
     write(indexSeq_.data(), indexSeq_.mem_size());
   }
@@ -1584,17 +1591,18 @@ TerarkIndexRegister(TerocksIndex_NestLoudsTrieDAWG_Mixed_XL_256_32_FL, "NestLoud
 
 #if defined(TerocksPrivateCode)
 
+
 typedef CompositeKeyDataContainer<UintVecMin0> CKMin0DataCont;
 typedef CompositeKeyDataContainer<FixedLenStrVec> CKStrDataCont;
 
-  typedef TerarkCompositeUintIndex<terark::rank_select_il_256, terark::rank_select_il_256, CKMin0DataCont>       TerarkCompositeUintIndex_IL_256_32_IL_256_32_Uint;
-  typedef TerarkCompositeUintIndex<terark::rank_select_il_256, terark::rank_select_allzero, CKMin0DataCont>      TerarkCompositeUintIndex_IL_256_32_AllZero_Uint;
-  typedef TerarkCompositeUintIndex<terark::rank_select_allone, terark::rank_select_il_256, CKMin0DataCont>       TerarkCompositeUintIndex_AllOne_IL_256_32_Uint;
+typedef TerarkCompositeUintIndex<terark::rank_select_il_256, terark::rank_select_il_256, CKMin0DataCont>       TerarkCompositeUintIndex_IL_256_32_IL_256_32_Uint;
+typedef TerarkCompositeUintIndex<terark::rank_select_il_256, terark::rank_select_allzero, CKMin0DataCont>      TerarkCompositeUintIndex_IL_256_32_AllZero_Uint;
+typedef TerarkCompositeUintIndex<terark::rank_select_allone, terark::rank_select_il_256, CKMin0DataCont>       TerarkCompositeUintIndex_AllOne_IL_256_32_Uint;
 
-  typedef TerarkCompositeUintIndex<terark::rank_select_se_512_64, terark::rank_select_se_512_64, CKMin0DataCont> TerarkCompositeUintIndex_SE_512_64_SE_512_64_Uint;
-  typedef TerarkCompositeUintIndex<terark::rank_select_se_512_64, terark::rank_select_allzero, CKMin0DataCont>   TerarkCompositeUintIndex_SE_512_64_AllZero_Uint;
-  typedef TerarkCompositeUintIndex<terark::rank_select_allone, terark::rank_select_se_512_64, CKMin0DataCont>    TerarkCompositeUintIndex_AllOne_SE_512_64_Uint;
-  typedef TerarkCompositeUintIndex<terark::rank_select_allone, terark::rank_select_allzero, CKMin0DataCont>      TerarkCompositeUintIndex_AllOne_AllZero_Uint;
+typedef TerarkCompositeUintIndex<terark::rank_select_se_512_64, terark::rank_select_se_512_64, CKMin0DataCont> TerarkCompositeUintIndex_SE_512_64_SE_512_64_Uint;
+typedef TerarkCompositeUintIndex<terark::rank_select_se_512_64, terark::rank_select_allzero, CKMin0DataCont>   TerarkCompositeUintIndex_SE_512_64_AllZero_Uint;
+typedef TerarkCompositeUintIndex<terark::rank_select_allone, terark::rank_select_se_512_64, CKMin0DataCont>    TerarkCompositeUintIndex_AllOne_SE_512_64_Uint;
+typedef TerarkCompositeUintIndex<terark::rank_select_allone, terark::rank_select_allzero, CKMin0DataCont>      TerarkCompositeUintIndex_AllOne_AllZero_Uint;
 
 TerarkIndexRegister(TerarkCompositeUintIndex_IL_256_32_IL_256_32_Uint, "CompositeUintIndex_IL_256_32_IL_256_32_Uint");
 TerarkIndexRegister(TerarkCompositeUintIndex_IL_256_32_AllZero_Uint, "CompositeUintIndex_IL_256_32_AllZero_Uint");
@@ -1606,14 +1614,14 @@ TerarkIndexRegister(TerarkCompositeUintIndex_AllOne_SE_512_64_Uint, "CompositeUi
 TerarkIndexRegister(TerarkCompositeUintIndex_AllOne_AllZero_Uint, "CompositeUintIndex_AllOne_AllZero_Uint");
 
 
-  typedef TerarkCompositeUintIndex<terark::rank_select_il_256, terark::rank_select_il_256, CKStrDataCont>       TerarkCompositeUintIndex_IL_256_32_IL_256_32_Str;
-  typedef TerarkCompositeUintIndex<terark::rank_select_il_256, terark::rank_select_allzero, CKStrDataCont>      TerarkCompositeUintIndex_IL_256_32_AllZero_Str;
-  typedef TerarkCompositeUintIndex<terark::rank_select_allone, terark::rank_select_il_256, CKStrDataCont>       TerarkCompositeUintIndex_AllOne_IL_256_32_Str;
+typedef TerarkCompositeUintIndex<terark::rank_select_il_256, terark::rank_select_il_256, CKStrDataCont>       TerarkCompositeUintIndex_IL_256_32_IL_256_32_Str;
+typedef TerarkCompositeUintIndex<terark::rank_select_il_256, terark::rank_select_allzero, CKStrDataCont>      TerarkCompositeUintIndex_IL_256_32_AllZero_Str;
+typedef TerarkCompositeUintIndex<terark::rank_select_allone, terark::rank_select_il_256, CKStrDataCont>       TerarkCompositeUintIndex_AllOne_IL_256_32_Str;
 
-  typedef TerarkCompositeUintIndex<terark::rank_select_se_512_64, terark::rank_select_se_512_64, CKStrDataCont> TerarkCompositeUintIndex_SE_512_64_SE_512_64_Str;
-  typedef TerarkCompositeUintIndex<terark::rank_select_se_512_64, terark::rank_select_allzero, CKStrDataCont>   TerarkCompositeUintIndex_SE_512_64_AllZero_Str;
-  typedef TerarkCompositeUintIndex<terark::rank_select_allone, terark::rank_select_se_512_64, CKStrDataCont>    TerarkCompositeUintIndex_AllOne_SE_512_64_Str;
-  typedef TerarkCompositeUintIndex<terark::rank_select_allone, terark::rank_select_allzero, CKStrDataCont>      TerarkCompositeUintIndex_AllOne_AllZero_Str;
+typedef TerarkCompositeUintIndex<terark::rank_select_se_512_64, terark::rank_select_se_512_64, CKStrDataCont> TerarkCompositeUintIndex_SE_512_64_SE_512_64_Str;
+typedef TerarkCompositeUintIndex<terark::rank_select_se_512_64, terark::rank_select_allzero, CKStrDataCont>   TerarkCompositeUintIndex_SE_512_64_AllZero_Str;
+typedef TerarkCompositeUintIndex<terark::rank_select_allone, terark::rank_select_se_512_64, CKStrDataCont>    TerarkCompositeUintIndex_AllOne_SE_512_64_Str;
+typedef TerarkCompositeUintIndex<terark::rank_select_allone, terark::rank_select_allzero, CKStrDataCont>      TerarkCompositeUintIndex_AllOne_AllZero_Str;
 
 TerarkIndexRegister(TerarkCompositeUintIndex_IL_256_32_IL_256_32_Str, "CompositeUintIndex_IL_256_32_IL_256_32_Str");
 TerarkIndexRegister(TerarkCompositeUintIndex_IL_256_32_AllZero_Str, "CompositeUintIndex_IL_256_32_AllZero_Str");
@@ -1623,7 +1631,6 @@ TerarkIndexRegister(TerarkCompositeUintIndex_SE_512_64_SE_512_64_Str, "Composite
 TerarkIndexRegister(TerarkCompositeUintIndex_SE_512_64_AllZero_Str, "CompositeUintIndex_SE_512_64_AllZero_Str");
 TerarkIndexRegister(TerarkCompositeUintIndex_AllOne_SE_512_64_Str, "CompositeUintIndex_AllOne_SE_512_64_Str");
 TerarkIndexRegister(TerarkCompositeUintIndex_AllOne_AllZero_Str, "CompositeUintIndex_AllOne_AllZero_Str");
-
 
 
 typedef TerarkUintIndex<terark::rank_select_il_256_32> TerarkUintIndex_IL_256_32;
