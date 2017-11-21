@@ -37,6 +37,9 @@ using terark::UintVecMin0;
 using terark::MatchingDFA;
 using terark::commonPrefixLen;
 
+using terark::rank_select_allzero;
+using terark::rank_select_allone;
+
 static terark::hash_strmap<TerarkIndex::FactoryPtr> g_TerarkIndexFactroy;
 static terark::hash_strmap<std::string>             g_TerarkIndexName;
 
@@ -163,9 +166,9 @@ TerarkIndex::SelectFactory(const KeyStat& ks, fstring name) {
       SeekCostEffectiveIndexLen(ks, ceLen) &&
       ks.maxKeyLen > cplen + ceLen) {
     if (ks.numKeys < UINT32_MAX) {
-      return GetFactory("CompositeUintIndex_IL_256_32_IL_256_32");
+      return GetFactory("CompositeUintIndex_IL_256_32_IL_256_32_Str");
     } else {
-      return GetFactory("CompositeUintIndex_SE_512_64_SE_512_64");
+      return GetFactory("CompositeUintIndex_SE_512_64_SE_512_64_Str");
     }
   }
 #endif // TerocksPrivateCode
@@ -476,25 +479,25 @@ public:
 
 #if defined(TerocksPrivateCode)
 
-template<class Container, bool isUint>
+template<class Container>
 class CompositeKeyDataContainer {
+};
+
+template<>
+class CompositeKeyDataContainer<UintVecMin0> {
 public:
   void set(size_t idx, size_t val) {
     assert(idx < container_.size());
     container_.set_wire(idx, val);
   }
-  void set(size_t idx, fstring val) {
-    assert(idx < container_.size());
-    container_.set_wire(idx, val);
-  }
-  void swap(CompositeKeyDataContainer<Container, isUint>& other) {
+  void swap(CompositeKeyDataContainer<UintVecMin0>& other) {
     container_.swap(other.container_);
-  }
-  void swap(FixedLenStrVec& other) {
-    container_.swap(other);
   }
   void swap(UintVecMin0& other) {
     container_.swap(other);
+  }
+  void init(size_t len, size_t sz) {
+    assert(0);
   }
   void risk_release_ownership() {
     container_.risk_release_ownership();
@@ -502,42 +505,83 @@ public:
   const byte_t* data() const { return container_.data(); }
   size_t mem_size() const { return container_.mem_size(); }
   size_t size() const { return container_.size(); }
-  bool equals(size_t idx, fstring other) const {
-    return container_[idx] == other;
-  }
   bool equals(size_t idx, size_t val) const {
     return container_[idx] == val;
   }
-  void init(size_t len, size_t sz) {
-    container_.m_fixlen = len;
-    container_.m_size = sz;
+  bool equals(size_t idx, fstring val) const {
+    assert(0);
+    return false;
   }
   void risk_set_data(byte_t* data, size_t num, size_t maxValue) {
     size_t bits = UintVecMin0::compute_uintbits(maxValue);
     container_.risk_set_data(data, num, bits);
   }
   void risk_set_data(byte_t* data, size_t sz) {
-    container_.m_strpool.risk_set_data(data, sz);
+    assert(0);
   }
-  // TBD:
   fstring operator[](size_t idx) const {
     assert(idx < container_.size());
-    if (isUint) {
-      static byte_t arr[8] = { 0 };
-      size_t v = container_[idx];
-      SaveAsBigEndianUint64(arr, arr + 8, v);
-      return fstring(arr, arr + 8);
-    } else {
-      return container_[idx];
-    }
+    static byte_t arr[8] = { 0 };
+    size_t v = container_[idx];
+    SaveAsBigEndianUint64(arr, arr + 8, v);
+    return fstring(arr, arr + 8);
   }
-  // TBD: UintVecMin0 lower_bound_n<>
-  size_t lower_bound(size_t lo, size_t hi, size_t val) const {
+  size_t lower_bound(size_t lo, size_t hi, fstring val) const {
+    uint64_t n = ReadBigEndianUint64((const byte_t*)val.data(), val.size());
+    size_t pos = terark::lower_bound_n<const UintVecMin0&>(container_, lo, hi, n);
+    return pos;
+  }
+
+private:
+  UintVecMin0 container_;
+};
+
+template<>
+class CompositeKeyDataContainer<FixedLenStrVec> {
+public:
+  void set(size_t idx, fstring val) {
+    assert(idx < container_.size());
+    container_.set_wire(idx, val);
+  }
+  void swap(CompositeKeyDataContainer<FixedLenStrVec>& other) {
+    container_.swap(other.container_);
+  }
+  void swap(FixedLenStrVec& other) {
+    container_.swap(other);
+  }
+  void risk_release_ownership() {
+    container_.risk_release_ownership();
+  }
+  void init(size_t len, size_t sz) {
+    container_.m_fixlen = len;
+    container_.m_size = sz;
+  }
+  const byte_t* data() const { return container_.data(); }
+  size_t mem_size() const { return container_.mem_size(); }
+  size_t size() const { return container_.size(); }
+  bool equals(size_t idx, fstring other) const {
+    return container_[idx] == other;
+  }
+  bool equals(size_t idx, size_t other) const {
+    assert(0);
+    return false;
+  }
+  void risk_set_data(byte_t* data, size_t sz) {
+    container_.m_strpool.risk_set_data(data, sz);
+  }
+  void risk_set_data(byte_t* data, size_t num, size_t maxValue) {
+    assert(0);
+  }
+  fstring operator[](size_t idx) const {
+    assert(idx < container_.size());
+    return container_[idx];
+  }
+  size_t lower_bound(size_t lo, size_t hi, fstring val) const {
     return container_.lower_bound(lo, hi, val);
   }
 
 private:
-  Container container_;
+  FixedLenStrVec container_;
 };
 
 /*
@@ -552,7 +596,7 @@ private:
  * iter [3 to 5), 7:20 is found, done.
  */
 template<class RankSelect1, class RankSelect2, 
-         class Key2DataContainer=CompositeKeyDataContainer<FixedLenStrVec, false>>
+         class Key2DataContainer=CompositeKeyDataContainer<FixedLenStrVec>>
 class TerarkCompositeUintIndex : public TerarkIndex {
 public:
   static const char* index_name;
@@ -768,8 +812,8 @@ public:
 public:
   class MyFactory : public TerarkIndex::Factory {
   public:
-    typedef CompositeKeyDataContainer<UintVecMin0, true> Min0DataCont;
-    typedef CompositeKeyDataContainer<FixedLenStrVec, false> StrDataCont;
+    typedef CompositeKeyDataContainer<UintVecMin0> Min0DataCont;
+    typedef CompositeKeyDataContainer<FixedLenStrVec> StrDataCont;
 
   public:
     /*
@@ -792,10 +836,8 @@ public:
       TERARK_UNUSED_VAR(check);
       uint64_t minValue = Read1stKey(ks.minKey, cplen, key1_len);
       uint64_t maxValue = Read1stKey(ks.maxKey, cplen, key1_len);
-      /*
-       * if rocksdb reverse comparator is used, then minValue
-       * is actually the largetst one
-       */
+      // if rocksdb reverse comparator is used, then minValue
+      // is actually the largetst one
       if (minValue > maxValue) {
         std::swap(minValue, maxValue);
       }
@@ -860,49 +902,57 @@ public:
       rankselect1.build_cache(false, false);
       rankselect2.build_cache(false, false);
       // TBD: confirm this
-      Key2DataContainer emptyContainer;
-      if (rankselect1.max_rank0() == 0 && rankselect2.max_rank1() == 0) {
-        terark::rank_select_allone rs1(rankselect1.size());
-        terark::rank_select_allzero rs2(rankselect2.size());
-        return new TerarkCompositeUintIndex<terark::rank_select_allone, terark::rank_select_allzero>(
-          rs1, rs2, emptyContainer, ks, minValue, maxValue, key1_len, 0);
-      } else if (rankselect2.max_rank1() == 0) {
-        terark::rank_select_allzero rs2(rankselect2.size());
-        return new TerarkCompositeUintIndex<RankSelect1, terark::rank_select_allzero>(
-          rankselect1, rs2, emptyContainer, ks, minValue, maxValue, key1_len, 0);
-      }
       if (key2_len <= 8) { // try with UintVecMin0
         uint64_t key2MinValue = ReadBigEndianUint64((const byte_t*)minKey2Data.data(), minKey2Data.size());
         uint64_t key2MaxValue = ReadBigEndianUint64((const byte_t*)maxKey2Data.data(), maxKey2Data.size());
-        uint64_t diff = key2MaxValue - key2MinValue + 1;
+        //uint64_t diff = key2MaxValue - key2MinValue + 1;
         /*
          * TBD: should check if condition, like diff < 4 then fixlen is good enough
          */
         UintVecMin0 vecMin0(ks.numKeys, key2MaxValue - key2MinValue);
-        for (fstring str : keyVec) {
+        for (size_t i = 0; i < keyVec.size(); i++) {
+          fstring str = keyVec[i];
           uint64_t key2 = ReadBigEndianUint64((const byte_t*)str.data(), str.size());
-          vecMin0.push_back(key2 - key2MinValue);
+          vecMin0.set_wire(i, key2 - key2MinValue);
         }
         Min0DataCont container;
         container.swap(vecMin0);
-        if (rankselect1.max_rank0() == 0) {
+        if (rankselect1.max_rank0() == 0 && rankselect2.max_rank1() == 0) {
+          rank_select_allone rs1(rankselect1.size());
+          rank_select_allzero rs2(rankselect2.size());
+          return new TerarkCompositeUintIndex<rank_select_allone, rank_select_allzero, Min0DataCont>(
+            rs1, rs2, container, ks, minValue, maxValue, key1_len, key2MinValue, key2MaxValue);
+        } else if (rankselect2.max_rank1() == 0) {
+          terark::rank_select_allzero rs2(rankselect2.size());
+          return new TerarkCompositeUintIndex<RankSelect1, rank_select_allzero, Min0DataCont>(
+            rankselect1, rs2, container, ks, minValue, maxValue, key1_len, key2MinValue, key2MaxValue);
+        } else if (rankselect1.max_rank0() == 0) {
           terark::rank_select_allone rs1(rankselect1.size());
-          return new TerarkCompositeUintIndex<terark::rank_select_allone, RankSelect2, Min0DataVec>(
-            rs1, rankselect2, container, ks, minValue, maxValue, key1_len, key2MinValue);
+          return new TerarkCompositeUintIndex<rank_select_allone, RankSelect2, Min0DataCont>(
+            rs1, rankselect2, container, ks, minValue, maxValue, key1_len, key2MinValue, key2MaxValue);
         } else {
           return new TerarkCompositeUintIndex<RankSelect1, RankSelect2, Min0DataCont>(
-            rankselect1, rankselect2, container, ks, minValue, maxValue, key1_len, key2MinValue);
+            rankselect1, rankselect2, container, ks, minValue, maxValue, key1_len, key2MinValue, key2MaxValue);
         }
       } else {
         StrDataCont container;
         container.swap(keyVec);
-        if (rankselect1.max_rank0() == 0) {
+        if (rankselect1.max_rank0() == 0 && rankselect2.max_rank1() == 0) {
+          rank_select_allone rs1(rankselect1.size());
+          rank_select_allzero rs2(rankselect2.size());
+          return new TerarkCompositeUintIndex<rank_select_allone, rank_select_allzero, StrDataCont>(
+            rs1, rs2, container, ks, minValue, maxValue, key1_len, 0, 0);
+        } else if (rankselect2.max_rank1() == 0) {
+          terark::rank_select_allzero rs2(rankselect2.size());
+          return new TerarkCompositeUintIndex<RankSelect1, rank_select_allzero, StrDataCont>(
+            rankselect1, rs2, container, ks, minValue, maxValue, key1_len, 0, 0);
+        } else if (rankselect1.max_rank0() == 0) {
           terark::rank_select_allone rs1(rankselect1.size());
-          return new TerarkCompositeUintIndex<terark::rank_select_allone, RankSelect2>(
-            rs1, rankselect2, container, ks, minValue, maxValue, key1_len, 0);
+          return new TerarkCompositeUintIndex<rank_select_allone, RankSelect2, StrDataCont>(
+            rs1, rankselect2, container, ks, minValue, maxValue, key1_len, 0, 0);
         } else {
-          return new TerarkCompositeUintIndex<RankSelect1, RankSelect2>(
-            rankselect1, rankselect2, container, ks, minValue, maxValue, key1_len, 0);
+          return new TerarkCompositeUintIndex<RankSelect1, RankSelect2, StrDataCont>(
+            rankselect1, rankselect2, container, ks, minValue, maxValue, key1_len, 0, 0);
         }
       }
     }
@@ -933,7 +983,8 @@ public:
     }
   protected:
     TerarkIndex* loadImpl(fstring mem, fstring fpath) const {
-      auto ptr = UniquePtrOf(new TerarkCompositeUintIndex<RankSelect1, RankSelect2>());
+      auto ptr = UniquePtrOf(
+        new TerarkCompositeUintIndex<RankSelect1, RankSelect2, Key2DataContainer>());
       ptr->isUserMemory_ = false;
       ptr->isBuilding_ = false;
       if (mem.data() == nullptr) {
@@ -1518,23 +1569,47 @@ TerarkIndexRegister(TerocksIndex_NestLoudsTrieDAWG_Mixed_XL_256_32_FL, "NestLoud
 
 #if defined(TerocksPrivateCode)
 
-typedef TerarkCompositeUintIndex<terark::rank_select_il_256, terark::rank_select_il_256>       TerarkCompositeUintIndex_IL_256_32_IL_256_32;
-typedef TerarkCompositeUintIndex<terark::rank_select_il_256, terark::rank_select_allzero>      TerarkCompositeUintIndex_IL_256_32_AllZero;
-typedef TerarkCompositeUintIndex<terark::rank_select_allone, terark::rank_select_il_256>       TerarkCompositeUintIndex_AllOne_IL_256_32;
+typedef CompositeKeyDataContainer<UintVecMin0> CKMin0DataCont;
+typedef CompositeKeyDataContainer<FixedLenStrVec> CKStrDataCont;
 
-typedef TerarkCompositeUintIndex<terark::rank_select_se_512_64, terark::rank_select_se_512_64> TerarkCompositeUintIndex_SE_512_64_SE_512_64;
-typedef TerarkCompositeUintIndex<terark::rank_select_se_512_64, terark::rank_select_allzero>   TerarkCompositeUintIndex_SE_512_64_AllZero;
-typedef TerarkCompositeUintIndex<terark::rank_select_allone, terark::rank_select_se_512_64>    TerarkCompositeUintIndex_AllOne_SE_512_64;
-typedef TerarkCompositeUintIndex<terark::rank_select_allone, terark::rank_select_allzero>      TerarkCompositeUintIndex_AllOne_AllZero;
+  typedef TerarkCompositeUintIndex<terark::rank_select_il_256, terark::rank_select_il_256, CKMin0DataCont>       TerarkCompositeUintIndex_IL_256_32_IL_256_32_Uint;
+  typedef TerarkCompositeUintIndex<terark::rank_select_il_256, terark::rank_select_allzero, CKMin0DataCont>      TerarkCompositeUintIndex_IL_256_32_AllZero_Uint;
+  typedef TerarkCompositeUintIndex<terark::rank_select_allone, terark::rank_select_il_256, CKMin0DataCont>       TerarkCompositeUintIndex_AllOne_IL_256_32_Uint;
 
-TerarkIndexRegister(TerarkCompositeUintIndex_IL_256_32_IL_256_32, "CompositeUintIndex_IL_256_32_IL_256_32");
-TerarkIndexRegister(TerarkCompositeUintIndex_IL_256_32_AllZero, "CompositeUintIndex_IL_256_32_AllZero");
-TerarkIndexRegister(TerarkCompositeUintIndex_AllOne_IL_256_32, "CompositeUintIndex_AllOne_IL_256_32");
+  typedef TerarkCompositeUintIndex<terark::rank_select_se_512_64, terark::rank_select_se_512_64, CKMin0DataCont> TerarkCompositeUintIndex_SE_512_64_SE_512_64_Uint;
+  typedef TerarkCompositeUintIndex<terark::rank_select_se_512_64, terark::rank_select_allzero, CKMin0DataCont>   TerarkCompositeUintIndex_SE_512_64_AllZero_Uint;
+  typedef TerarkCompositeUintIndex<terark::rank_select_allone, terark::rank_select_se_512_64, CKMin0DataCont>    TerarkCompositeUintIndex_AllOne_SE_512_64_Uint;
+  typedef TerarkCompositeUintIndex<terark::rank_select_allone, terark::rank_select_allzero, CKMin0DataCont>      TerarkCompositeUintIndex_AllOne_AllZero_Uint;
 
-TerarkIndexRegister(TerarkCompositeUintIndex_SE_512_64_SE_512_64, "CompositeUintIndex_SE_512_64_SE_512_64");
-TerarkIndexRegister(TerarkCompositeUintIndex_SE_512_64_AllZero, "CompositeUintIndex_SE_512_64_AllZero");
-TerarkIndexRegister(TerarkCompositeUintIndex_AllOne_SE_512_64, "CompositeUintIndex_AllOne_SE_512_64");
-TerarkIndexRegister(TerarkCompositeUintIndex_AllOne_AllZero, "CompositeUintIndex_AllOne_AllZero");
+TerarkIndexRegister(TerarkCompositeUintIndex_IL_256_32_IL_256_32_Uint, "CompositeUintIndex_IL_256_32_IL_256_32_Uint");
+TerarkIndexRegister(TerarkCompositeUintIndex_IL_256_32_AllZero_Uint, "CompositeUintIndex_IL_256_32_AllZero_Uint");
+TerarkIndexRegister(TerarkCompositeUintIndex_AllOne_IL_256_32_Uint, "CompositeUintIndex_AllOne_IL_256_32_Uint");
+
+TerarkIndexRegister(TerarkCompositeUintIndex_SE_512_64_SE_512_64_Uint, "CompositeUintIndex_SE_512_64_SE_512_64_Uint");
+TerarkIndexRegister(TerarkCompositeUintIndex_SE_512_64_AllZero_Uint, "CompositeUintIndex_SE_512_64_AllZero_Uint");
+TerarkIndexRegister(TerarkCompositeUintIndex_AllOne_SE_512_64_Uint, "CompositeUintIndex_AllOne_SE_512_64_Uint");
+TerarkIndexRegister(TerarkCompositeUintIndex_AllOne_AllZero_Uint, "CompositeUintIndex_AllOne_AllZero_Uint");
+
+
+  typedef TerarkCompositeUintIndex<terark::rank_select_il_256, terark::rank_select_il_256, CKStrDataCont>       TerarkCompositeUintIndex_IL_256_32_IL_256_32_Str;
+  typedef TerarkCompositeUintIndex<terark::rank_select_il_256, terark::rank_select_allzero, CKStrDataCont>      TerarkCompositeUintIndex_IL_256_32_AllZero_Str;
+  typedef TerarkCompositeUintIndex<terark::rank_select_allone, terark::rank_select_il_256, CKStrDataCont>       TerarkCompositeUintIndex_AllOne_IL_256_32_Str;
+
+  typedef TerarkCompositeUintIndex<terark::rank_select_se_512_64, terark::rank_select_se_512_64, CKStrDataCont> TerarkCompositeUintIndex_SE_512_64_SE_512_64_Str;
+  typedef TerarkCompositeUintIndex<terark::rank_select_se_512_64, terark::rank_select_allzero, CKStrDataCont>   TerarkCompositeUintIndex_SE_512_64_AllZero_Str;
+  typedef TerarkCompositeUintIndex<terark::rank_select_allone, terark::rank_select_se_512_64, CKStrDataCont>    TerarkCompositeUintIndex_AllOne_SE_512_64_Str;
+  typedef TerarkCompositeUintIndex<terark::rank_select_allone, terark::rank_select_allzero, CKStrDataCont>      TerarkCompositeUintIndex_AllOne_AllZero_Str;
+
+TerarkIndexRegister(TerarkCompositeUintIndex_IL_256_32_IL_256_32_Str, "CompositeUintIndex_IL_256_32_IL_256_32_Str");
+TerarkIndexRegister(TerarkCompositeUintIndex_IL_256_32_AllZero_Str, "CompositeUintIndex_IL_256_32_AllZero_Str");
+TerarkIndexRegister(TerarkCompositeUintIndex_AllOne_IL_256_32_Str, "CompositeUintIndex_AllOne_IL_256_32_Str");
+
+TerarkIndexRegister(TerarkCompositeUintIndex_SE_512_64_SE_512_64_Str, "CompositeUintIndex_SE_512_64_SE_512_64_Str");
+TerarkIndexRegister(TerarkCompositeUintIndex_SE_512_64_AllZero_Str, "CompositeUintIndex_SE_512_64_AllZero_Str");
+TerarkIndexRegister(TerarkCompositeUintIndex_AllOne_SE_512_64_Str, "CompositeUintIndex_AllOne_SE_512_64_Str");
+TerarkIndexRegister(TerarkCompositeUintIndex_AllOne_AllZero_Str, "CompositeUintIndex_AllOne_AllZero_Str");
+
+
 
 typedef TerarkUintIndex<terark::rank_select_il_256_32> TerarkUintIndex_IL_256_32;
 typedef TerarkUintIndex<terark::rank_select_se_256_32> TerarkUintIndex_SE_256_32;

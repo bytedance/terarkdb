@@ -185,7 +185,7 @@ void test_standard(DataStored dtype) {
   // build index
   FileStream fp(key_path, "rb");
   NativeDataInput<InputBuffer> tempKeyFileReader(&fp);
-  auto factory = rocksdb::TerarkIndex::GetFactory("CompositeUintIndex_IL_256_32_IL_256_32");
+  auto factory = rocksdb::TerarkIndex::GetFactory("CompositeUintIndex_IL_256_32_IL_256_32_Uint");
   rocksdb::TerarkZipTableOptions tableOpt;
   TerarkIndex* index = factory->Build(tempKeyFileReader, tableOpt, stat);
   printf("\tbuild done\n");
@@ -322,7 +322,7 @@ void test_allzero(DataStored dtype) {
   // build index
   FileStream fp(key_path, "rb");
   NativeDataInput<InputBuffer> tempKeyFileReader(&fp);
-  auto factory = rocksdb::TerarkIndex::GetFactory("CompositeUintIndex_IL_256_32_IL_256_32");
+  auto factory = rocksdb::TerarkIndex::GetFactory("CompositeUintIndex_IL_256_32_IL_256_32_Uint");
   rocksdb::TerarkZipTableOptions tableOpt;
   TerarkIndex* index = factory->Build(tempKeyFileReader, tableOpt, stat);
   printf("\tbuild done\n");
@@ -417,9 +417,9 @@ void test_allzero(DataStored dtype) {
 void test_select() {
   // prepare
   const rocksdb::TerarkIndex::Factory* f_il85_il85 = 
-    TerarkIndex::GetFactory("CompositeUintIndex_IL_256_32_IL_256_32");
+    TerarkIndex::GetFactory("CompositeUintIndex_IL_256_32_IL_256_32_Uint");
   const rocksdb::TerarkIndex::Factory* f_allone_allzero = 
-    TerarkIndex::GetFactory("CompositeUintIndex_AllOne_AllZero");
+    TerarkIndex::GetFactory("CompositeUintIndex_AllOne_AllZero_Uint");
   {
     TerarkIndex::KeyStat stat;
     stat.numKeys = 100;
