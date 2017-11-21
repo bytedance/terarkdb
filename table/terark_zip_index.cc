@@ -174,9 +174,9 @@ TerarkIndex::SelectFactory(const KeyStat& ks, fstring name) {
       SeekCostEffectiveIndexLen(ks, ceLen) &&
       ks.maxKeyLen > cplen + ceLen) {
     if (ks.numKeys < UINT32_MAX) {
-      return GetFactory("CompositeUintIndex_IL_256_32_IL_256_32_Str");
+      return GetFactory("CompositeUintIndex_IL_256_32_IL_256_32_Uint");
     } else {
-      return GetFactory("CompositeUintIndex_SE_512_64_SE_512_64_Str");
+      return GetFactory("CompositeUintIndex_SE_512_64_SE_512_64_Uint");
     }
   }
 #endif // TerocksPrivateCode
@@ -616,7 +616,7 @@ private:
  * iter [3 to 5), 7:20 is found, done.
  */
 template<class RankSelect1, class RankSelect2, 
-         class Key2DataContainer=CompositeKeyDataContainer<FixedLenStrVec>>
+         class Key2DataContainer=CompositeKeyDataContainer<UintVecMin0>>
 class TerarkCompositeUintIndex : public TerarkIndex {
 public:
   static const char* index_name;
