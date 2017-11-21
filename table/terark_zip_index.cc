@@ -506,11 +506,12 @@ public:
   size_t mem_size() const { return container_.mem_size(); }
   size_t size() const { return container_.size(); }
   bool equals(size_t idx, size_t val) const {
-    return container_[idx] == val;
-  }
-  bool equals(size_t idx, fstring val) const {
     assert(0);
     return false;
+  }
+  bool equals(size_t idx, fstring val) const {
+    uint64_t n = ReadBigEndianUint64((const byte_t*)val.data(), val.size());
+    return container_[idx] == n;
   }
   void risk_set_data(byte_t* data, size_t num, size_t maxValue) {
     size_t bits = UintVecMin0::compute_uintbits(maxValue);
@@ -527,8 +528,19 @@ public:
     return fstring(arr, arr + 8);
   }
   size_t lower_bound(size_t lo, size_t hi, fstring val) const {
-    uint64_t n = ReadBigEndianUint64((const byte_t*)val.data(), val.size());
+    size_t len = std::min<size_t>(val.size(), 8);
+    uint64_t n = ReadBigEndianUint64((const byte_t*)val.data(), len);
     size_t pos = terark::lower_bound_n<const UintVecMin0&>(container_, lo, hi, n);
+    if (len != val.size()) { // val.size() > 8
+      while (pos != hi) {
+        byte_t arr[8] = { 0 };
+        size_t v = container_[pos];
+        SaveAsBigEndianUint64(arr, arr + 8, v);
+        if (fstring(arr, arr + 8) >= val)
+          return pos;
+        pos++;
+      }
+    }
     return pos;
   }
 
@@ -628,7 +640,7 @@ public:
       magic_len = strlen(index_name);
       strncpy(magic, index_name, sizeof magic);
       size_t name_i = g_TerarkIndexName.find_i(
-        typeid(TerarkCompositeUintIndex<RankSelect1, RankSelect2>).name());
+        typeid(TerarkCompositeUintIndex<RankSelect1, RankSelect2, Key2DataContainer>).name());
       assert(name_i < g_TerarkIndexFactroy.end_i());
       strncpy(class_name, g_TerarkIndexName.val(name_i).c_str(), sizeof class_name);
       header_size = sizeof *this;
@@ -978,6 +990,7 @@ public:
       size_t key2_len = ks.minKey.size() - cplen - key1_len;
       size_t rankselect_1st_sz = size_t(std::ceil(diff * 1.25 / 8));
       size_t rankselect_2nd_sz = size_t(std::ceil(ks.numKeys * 1.25 / 8));
+      // TBD:
       size_t sum_key2_sz = std::ceil(ks.numKeys * key2_len);
       return rankselect_1st_sz + rankselect_2nd_sz + sum_key2_sz;
     }
@@ -1017,15 +1030,15 @@ public:
         ptr->rankselect2_.risk_mmap_from((unsigned char*)mem.data() + offset,
                                          header->rankselect2_mem_size);
         offset += header->rankselect2_mem_size;
-      } else { // all zero
+      } else { // TBD: all zero, should never reach here
         ptr->rankselect2_.resize(ptr->rankselect1_.max_rank1() + 1); // append extra '0' at back
       }
-      // TBD:
-      if (header->key2_min_value) {
-        size_t num = ptr->rankselect1_.max_rank1();
+      // TBD: key2_data align
+      if (header->key2_max_value) { // UintVecMin0
+        size_t num = ptr->rankselect2_.size() - 1; // sub the extra append '0'
         ptr->key2_data_.risk_set_data((unsigned char*)mem.data() + offset,
                                       num, header->key2_max_value);
-      } else {
+      } else { // FixedLenStr
         ptr->key2_data_.risk_set_data((unsigned char*)mem.data() + offset,
                                       header->key2_data_mem_size);
         ptr->key2_data_.init(header->key2_fixed_len,
@@ -1073,6 +1086,7 @@ public:
     header->max_value = maxValue;
     header->rankselect1_mem_size = rankselect1.mem_size();
     header->rankselect2_mem_size = rankselect2.mem_size();
+    // TBD: align
     header->key2_data_mem_size = key2Container.mem_size();
     header->key1_fixed_len = key1_len;
     header->key2_min_value = minKey2Value;
