@@ -45,9 +45,66 @@ using terark::LittleEndianDataOutput;
 template<class T>
 inline unique_ptr<T> UniquePtrOf(T* p) { return unique_ptr<T>(p); }
 
-uint64_t ReadUint64(const byte_t* beg, const byte_t* end);
-uint64_t ReadUint64Aligned(const byte_t* beg, const byte_t* end);
-void AssignUint64(byte_t* beg, byte_t* end, uint64_t value);
+#if defined(TerocksPrivateCode)
+
+inline uint64_t ReadBigEndianUint64(const byte_t* beg, size_t len) {
+  union {
+    byte_t bytes[8];
+    uint64_t value;
+  } c;
+  c.value = 0;  // this is fix for gcc-4.8 union init bug
+  memcpy(c.bytes + (8 - len), beg, len);
+  return VALUE_OF_BYTE_SWAP_IF_LITTLE_ENDIAN(c.value);
+}
+
+inline uint64_t ReadBigEndianUint64(const byte_t* beg, const byte_t* end) {
+  assert(end - beg <= 8);
+  return ReadBigEndianUint64(beg, end-beg);
+}
+
+inline
+uint64_t ReadBigEndianUint64Aligned(const byte_t* beg, size_t len) {
+  assert(8 == len); TERARK_UNUSED_VAR(len);
+  return VALUE_OF_BYTE_SWAP_IF_LITTLE_ENDIAN(*(const uint64_t*)beg);
+}
+inline
+uint64_t ReadBigEndianUint64Aligned(const byte_t* beg, const byte_t* end) {
+  assert(end - beg == 8); TERARK_UNUSED_VAR(end);
+  return VALUE_OF_BYTE_SWAP_IF_LITTLE_ENDIAN(*(const uint64_t*)beg);
+}
+
+inline void SaveAsBigEndianUint64(byte_t* beg, size_t len, uint64_t value) {
+  assert(len <= 8);
+  union {
+    byte_t bytes[8];
+    uint64_t value;
+  } c;
+  c.value = VALUE_OF_BYTE_SWAP_IF_LITTLE_ENDIAN(value);
+  memcpy(beg, c.bytes + (8 - len), len);
+}
+
+inline void SaveAsBigEndianUint64(byte_t* beg, byte_t* end, uint64_t value) {
+  assert(end - beg <= 8);
+  SaveAsBigEndianUint64(beg, end-beg, value);
+}
+
+#endif // TerocksPrivateCode
+
+template<class T>
+inline void correct_minmax(T& minVal, T& maxVal) {
+  if (maxVal < minVal) {
+    using namespace std;
+    swap(maxVal, minVal);
+  }
+}
+
+template<class T>
+T abs_diff(const T& x, const T& y) {
+  if (x < y)
+    return y - x;
+  else
+    return x - y;
+}
 
 const char* StrDateTimeNow();
 std::string demangle(const char* name);

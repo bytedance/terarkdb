@@ -94,10 +94,12 @@ static void MmapWarmUpBytes(const void* addr, size_t len) {
 #ifdef POSIX_MADV_WILLNEED
   posix_madvise((void*)base, size, POSIX_MADV_WILLNEED);
 #endif
+  size_t sum_unused = 0;
   for (size_t i = 0; i < size; i += 4096) {
-    volatile byte_t unused = ((const volatile byte_t*)base)[i];
-    (void)unused;
+    byte_t unused = ((const volatile byte_t*)base)[i];
+	sum_unused += unused;
   }
+  TERARK_UNUSED_VAR(sum_unused);
 }
 template<class T>
 static void MmapWarmUp(const T* addr, size_t len) {
@@ -160,7 +162,7 @@ Status UpdateLicenseInfo(const TerarkZipTableFactory* table_factory,
   auto& license = table_factory->GetLicense();
   auto res = license.merge(licenseBlock.data.data(), licenseBlock.data.size());
   assert(res == LicenseInfo::Result::OK);
-  (void)res; // shut up !
+  TERARK_UNUSED_VAR(res);
   if (!license.check()) {
     license.print_error(nullptr, false, info_log);
     return Status::Corruption("License expired", "contact@terark.com");
@@ -872,7 +874,7 @@ Status TerarkZipSubReader::Get(SequenceNumber global_seqno,
                                const ReadOptions& ro, const Slice& ikey,
                                GetContext* get_context, int flag)
 const {
-  (void)flag;
+  TERARK_UNUSED_VAR(flag);
   MY_THREAD_LOCAL(valvec<byte_t>, g_tbuf);
   ParsedInternalKey pikey;
   if (!ParseInternalKey(ikey, &pikey)) {
@@ -1206,7 +1208,7 @@ Status TerarkZipTableReader::LoadIndex(Slice mem) {
 InternalIterator*
 TerarkZipTableReader::
 NewIterator(const ReadOptions& ro, Arena* arena, bool skip_filters) {
-  (void)skip_filters; // unused
+  TERARK_UNUSED_VAR(skip_filters); // unused
 #if defined(TERARK_SUPPORT_UINT64_COMPARATOR) && BOOST_ENDIAN_LITTLE_BYTE
   if (isUint64Comparator_) {
     if (arena) {
@@ -1304,7 +1306,7 @@ const TerarkZipSubReader*
 TerarkZipTableMultiReader::SubIndex::GetSubReaderU64Sequential(fstring key) const {
   byte_t targetBuffer[8] = {};
   memcpy(targetBuffer + (8 - prefixLen_), key.data(), std::min<size_t>(prefixLen_, key.size()));
-  uint64_t targetValue = ReadUint64Aligned(targetBuffer, targetBuffer + 8);
+  uint64_t targetValue = ReadBigEndianUint64Aligned(targetBuffer, targetBuffer + 8);
   auto ptr = (const uint64_t*)prefixSet_.data();
   size_t count = partCount_;
   for (size_t i = 0; i < count; ++i) {
@@ -1319,7 +1321,7 @@ const TerarkZipSubReader*
 TerarkZipTableMultiReader::SubIndex::GetSubReaderU64Binary(fstring key) const {
   byte_t targetBuffer[8] = {};
   memcpy(targetBuffer + (8 - prefixLen_), key.data(), std::min<size_t>(prefixLen_, key.size()));
-  uint64_t targetValue = ReadUint64Aligned(targetBuffer, targetBuffer + 8);
+  uint64_t targetValue = ReadBigEndianUint64Aligned(targetBuffer, targetBuffer + 8);
   auto ptr = (const uint64_t*)prefixSet_.data();
   auto index = terark::lower_bound_n(ptr, 0, partCount_, targetValue);
   if (index == partCount_) {
@@ -1333,7 +1335,7 @@ TerarkZipTableMultiReader::SubIndex::GetSubReaderU64BinaryReverse(fstring key)
 const {
   byte_t targetBuffer[8] = {};
   memcpy(targetBuffer + (8 - prefixLen_), key.data(), std::min(prefixLen_, key.size()));
-  uint64_t targetValue = ReadUint64Aligned(targetBuffer, targetBuffer + 8);
+  uint64_t targetValue = ReadBigEndianUint64Aligned(targetBuffer, targetBuffer + 8);
   auto ptr = (const uint64_t*)prefixSet_.data();
   auto index = terark::upper_bound_n(ptr, 0, partCount_, targetValue);
   if (index == 0) {
@@ -1406,7 +1408,7 @@ Status TerarkZipTableMultiReader::SubIndex::Init(
     for (size_t i = 0; i < partCount_; ++i) {
       auto u64p = (uint64_t*)(prefixSet_.data() + i * alignedPrefixLen_);
       auto src = (const byte_t *)offset.prefixSet_.data() + i * prefixLen_;
-      *u64p = ReadUint64(src, src + prefixLen_);
+      *u64p = ReadBigEndianUint64(src, src + prefixLen_);
     }
     if (reverse) {
         GetSubReaderPtr = &SubIndex::GetSubReaderU64BinaryReverse;
@@ -1503,7 +1505,7 @@ TerarkZipTableMultiReader::SubIndex::GetSubReader(fstring key) const {
 InternalIterator*
 TerarkZipTableMultiReader::NewIterator(const ReadOptions& ro,
                                        Arena *arena, bool skip_filters) {
-  (void)skip_filters; // unused
+  TERARK_UNUSED_VAR(skip_filters); // unused
   if (isReverseBytewiseOrder_) {
     typedef TerarkZipTableMultiIterator<true>  IterType;
     if (arena) {
