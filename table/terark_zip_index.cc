@@ -998,7 +998,7 @@ public:
       size_t key2_len = ks.minKey.size() - cplen - key1_len;
       size_t rankselect_1st_sz = size_t(std::ceil(diff * 1.25 / 8));
       size_t rankselect_2nd_sz = size_t(std::ceil(ks.numKeys * 1.25 / 8));
-      // TBD:
+      // maximum
       size_t sum_key2_sz = std::ceil(ks.numKeys * key2_len);
       return rankselect_1st_sz + rankselect_2nd_sz + sum_key2_sz;
     }
@@ -1034,14 +1034,9 @@ public:
       ptr->rankselect1_.risk_mmap_from((unsigned char*)mem.data() + offset,
                                        header->rankselect1_mem_size);
       offset += header->rankselect1_mem_size;
-      if (header->rankselect2_mem_size > 0) {
-        ptr->rankselect2_.risk_mmap_from((unsigned char*)mem.data() + offset,
-                                         header->rankselect2_mem_size);
-        offset += header->rankselect2_mem_size;
-      } else { // TBD: all zero, should never reach here
-        ptr->rankselect2_.resize(ptr->rankselect1_.max_rank1() + 1); // append extra '0' at back
-      }
-      // TBD: key2_data align
+      ptr->rankselect2_.risk_mmap_from((unsigned char*)mem.data() + offset,
+                                       header->rankselect2_mem_size);
+      offset += header->rankselect2_mem_size;
       if (header->key2_max_value) { // UintVecMin0
         size_t num = ptr->rankselect2_.size() - 1; // sub the extra append '0'
         ptr->key2_data_.risk_set_data((unsigned char*)mem.data() + offset,
@@ -1096,7 +1091,6 @@ public:
     header->max_value = maxValue;
     header->rankselect1_mem_size = rankselect1.mem_size();
     header->rankselect2_mem_size = rankselect2.mem_size();
-    // TBD: align
     header->key2_data_mem_size = key2Container.mem_size();
     header->key1_fixed_len = key1_len;
     header->key2_min_value = minKey2Value;

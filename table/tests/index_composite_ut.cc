@@ -165,7 +165,7 @@ void test_il256_il256(DataStored dtype) {
   // build index
   FileStream fp(key_path, "rb");
   NativeDataInput<InputBuffer> tempKeyFileReader(&fp);
-  auto factory = rocksdb::TerarkIndex::GetFactory("CompositeUintIndex_IL_256_32_IL_256_32");
+  auto factory = rocksdb::TerarkIndex::GetFactory("CompositeUintIndex_IL_256_32_IL_256_32_Uint");
   rocksdb::TerarkZipTableOptions tableOpt;
   TerarkIndex* index = factory->Build(tempKeyFileReader, tableOpt, stat);
   printf("\tbuild done\n");
