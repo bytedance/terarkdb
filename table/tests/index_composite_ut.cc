@@ -71,7 +71,240 @@ void clear() {
   memset(&stat, 0, sizeof(stat));
 }
 
-void init_data_ascend() {
+TerarkIndex* save_reload(TerarkIndex* index, 
+                         const TerarkIndex::Factory* factory) {
+  FileStream writer(index_path, "wb");
+  index->SaveMmap([&writer](const void* data, size_t size) {
+      writer.ensureWrite(data, size);
+    });
+  writer.flush();
+  writer.close();
+  
+  return TerarkIndex::LoadFile(index_path).release();
+}
+
+/*
+ * il256 il256
+ */
+void init_data_il256_il256_ascend() {
+  rocksdb::FileWriter fwriter;
+  fwriter.path = key_path;
+  fwriter.open();
+  keys.resize(100);
+  char carr[16] = { 0 };
+  for (int i = 0; i < 100; i++) {
+    keys[i] = string(carr, carr + 16);
+  }
+	for (int i = 0; i < 10; i += 2) {
+    carr[7] = i;
+    for (int j = 0; j < 10; j++) {
+      carr[15] = j;
+      // keep the last 10 elem for 'Find Fail Test'
+      if (i < 9) {
+        fwriter.writer << fstring(carr, 16);
+      }
+      if (i == 0 && j == 0) {
+        stat.minKey.assign(carr, carr + 16);
+      } else if (i == 8 && j == 9) {
+        stat.maxKey.assign(carr, carr + 16);
+      }
+      keys[i * 10 + j] = string(carr, 16);
+    }
+	}
+  fwriter.close();
+  stat.numKeys = 50;
+  stat.commonPrefixLen = 0;
+  stat.minKeyLen = 16;
+  stat.maxKeyLen = 16;
+  stat.sumKeyLen = 16 * 50;
+}
+
+void init_data_il256_il256_descend() {
+    rocksdb::FileWriter fwriter;
+  fwriter.path = key_path;
+  fwriter.open();
+  keys.resize(100);
+  char carr[16] = { 0 };
+  for (int i = 0; i < 100; i++) {
+    keys[i] = string(carr, carr + 16);
+  }
+	for (int i = 8; i >= 0; i -= 2) {
+    carr[7] = i;
+    for (int j = 9; j >= 0; j--) {
+      carr[15] = j;
+      fwriter.writer << fstring(carr, 16);
+      if (i == 0 && j == 0) {
+        stat.maxKey.assign(carr, carr + 16);
+      } else if (i == 8 && j == 9) {
+        stat.minKey.assign(carr, carr + 16);
+      }
+      keys[i * 10 + j] = string(carr, 16);
+    }
+	}
+  fwriter.close();
+  stat.numKeys = 50;
+  stat.commonPrefixLen = 0;
+  stat.minKeyLen = 16;
+  stat.maxKeyLen = 16;
+  stat.sumKeyLen = 16 * 50;
+}
+
+void test_il256_il256(DataStored dtype) {
+  // init data
+  clear();
+  key_path = "./tmp_key.txt";
+  if (dtype == standard_ascend) {
+    printf("==== Ascend Test started\n");
+    init_data_il256_il256_ascend();
+  } else if (dtype == standard_descend) {
+    printf("==== Descend Test started\n");
+    init_data_il256_il256_descend();
+  } else {
+    assert(0);
+  }
+  // build index
+  FileStream fp(key_path, "rb");
+  NativeDataInput<InputBuffer> tempKeyFileReader(&fp);
+  auto factory = rocksdb::TerarkIndex::GetFactory("CompositeUintIndex_IL_256_32_IL_256_32");
+  rocksdb::TerarkZipTableOptions tableOpt;
+  TerarkIndex* index = factory->Build(tempKeyFileReader, tableOpt, stat);
+  printf("\tbuild done\n");
+  // save & reload
+  index_path = "./tmp_index.txt";
+  index = save_reload(index, factory);
+  printf("\tsave & reload done\n");
+  // search test
+  for (size_t i = 0; i < 10; i += 2) {
+    for (size_t j = 0; j < 10; j++) {
+      size_t idx = i * 10 + j;
+      size_t expected = i / 2 * 10 + j;
+      size_t result = index->Find(keys[idx]);
+      assert(result == expected);
+    }
+  }
+  {
+    char arr[16] = { 0 };
+    for (size_t i = 1; i < 10; i += 2) {
+      arr[7] = i;
+      for (size_t j = 0; j < 10; j++) {
+        arr[15] = j;
+        assert(index->Find(arr) == size_t(-1));
+      }
+    }
+  }
+  printf("\tFind done\n");
+  // iterator
+  auto iter = index->NewIterator();
+  {
+    // seek to 1st, next()
+    char arr[16] = { 0 };
+    assert(iter->SeekToFirst());
+    assert(iter->DictRank() == 0);
+    assert(fstring(arr, 16) == iter->key());
+    for (int i = 0; i < 10; i += 2) {
+      arr[7] = i;
+      for (int j = 0; j < 10; j++) {
+        arr[15] = j;
+        if (i == 0 && j == 0)
+          continue;
+        assert(iter->Next());
+        assert(iter->DictRank() == i / 2 * 10 + j);
+        assert(fstring(arr, 16) == iter->key());
+      }
+    }
+    assert(iter->Next() == false);
+  }
+  {
+    // seek to last, prev()
+    char arr[16] = { 0 };
+    assert(iter->SeekToLast());
+    assert(iter->DictRank() == 49);
+    for (int i = 8; i >= 0; i -= 2) {
+      arr[7] = i;
+      for (int j = 9; j >= 0; j--) {
+        arr[15] = j;
+        if (i == 8 && j == 9) {
+          assert(fstring(arr, 16) == iter->key());
+          continue;
+        }
+        assert(iter->Prev());
+        assert(iter->DictRank() == i / 2 * 10 + j);
+        assert(fstring(arr, 16) == iter->key());
+      }
+    }
+    assert(iter->Prev() == false);
+  }
+  {
+    // seek matches
+    char arr[16] = { 0 };
+    for (int i = 0; i < 9; i += 2) {
+      arr[7] = i;
+      for (int j = 9; j >= 0; j--) {
+        arr[15] = j;
+        int idx = i * 10 + j;
+        int expected = i / 2 * 10 + j;
+        assert(iter->Seek(keys[idx]));
+        assert(iter->DictRank() == expected);
+        assert(fstring(arr, 16) == iter->key());
+      }
+    }
+  }
+  {
+    // seek larger than larger @apple
+    char arr[16] = { 0 };
+    arr[7] = 20; arr[15] = 0;
+    assert(iter->Seek(fstring(arr, 16)) == false);
+    // smaller than smaller
+    char sarr[4] = { 0 };
+    assert(iter->Seek(fstring(sarr, 4)));
+    assert(iter->DictRank() == 0);
+    // 
+    char marr[12] = { 0 };
+    marr[7] = 4;
+    assert(iter->Seek(fstring(marr, 12)));
+    assert(iter->DictRank() == 2 * 10 + 0);
+    arr[7] = 4; arr[15] = 0;
+    assert(fstring(arr, 16) == iter->key());
+  }
+  {
+    // lower_bound
+    char arr[17] = { 0 };
+    arr[16] = 1;
+    for (int i = 0; i < 9; i += 2) {
+      arr[7] = i;
+      for (int j = 0; j < 9; j++) {
+        if (i == 8 && j == 9)
+          break;
+        arr[15] = j;
+        int expected = i / 2 * 10 + j + 1;
+        assert(iter->Seek(fstring(arr, 17)));
+        assert(iter->DictRank() == expected);
+      }
+    }
+  }
+  {
+    // cross index1st boundary lower_bound
+    char arr[16] = { 0 };
+    arr[7] = 4; arr[15] = 14;
+    assert(iter->Seek(fstring(arr, 16)));
+    int expected = (4 + 2) / 2 * 10;
+    assert(iter->DictRank() == expected);
+
+    arr[7] = 8; arr[15] = 9;
+    assert(iter->Seek(fstring(arr, 16)));
+    arr[7] = 8; arr[15] = 10;
+    assert(iter->Seek(fstring(arr, 16)) == false);
+  }
+  printf("\tIterator done\n");
+  ::remove(key_path.c_str());
+  ::remove(index_path.c_str());
+}
+
+
+/*
+ * allone il256
+ */
+void init_data_allone_il256_ascend() {
   rocksdb::FileWriter fwriter;
   fwriter.path = key_path;
   fwriter.open();
@@ -101,7 +334,7 @@ void init_data_ascend() {
   stat.sumKeyLen = 16 * 100;
 }
 
-void init_data_descend() {
+void init_data_allone_il256_descend() {
   rocksdb::FileWriter fwriter;
   fwriter.path = key_path;
   fwriter.open();
@@ -131,55 +364,16 @@ void init_data_descend() {
   stat.sumKeyLen = 16 * 100;
 }
 
-void init_data_standard_allzero() {
-  rocksdb::FileWriter fwriter;
-  fwriter.path = key_path;
-  fwriter.open();
-  keys.resize(110);
-  char carr[16] = { 0 };
-	for (int i = 0; i < 110; i++) {
-    carr[7] = i;
-    carr[15] = i;
-    // keep the last 10 elem for 'Find Fail Test'
-    if (i < 100) {
-      fwriter.writer << fstring(carr, 16);
-    }
-    if (i == 0) {
-      stat.minKey.assign(carr, carr + 16);
-    } else if (i == 99) {
-      stat.maxKey.assign(carr, carr + 16);
-    }
-    keys[i] = string(carr, 16);
-	}
-  fwriter.close();
-  stat.numKeys = 100;
-  stat.commonPrefixLen = 0;
-  stat.minKeyLen = 16;
-  stat.maxKeyLen = 16;
-  stat.sumKeyLen = 16 * 100;
-}
-
-TerarkIndex* save_reload(TerarkIndex* index, const TerarkIndex::Factory* factory) {
-  FileStream writer(index_path, "wb");
-  index->SaveMmap([&writer](const void* data, size_t size) {
-      writer.ensureWrite(data, size);
-    });
-  writer.flush();
-  writer.close();
-  
-  return TerarkIndex::LoadFile(index_path).release();
-}
-
-void test_standard(DataStored dtype) {
+void test_allone_il256(DataStored dtype) {
   // init data
   clear();
   key_path = "./tmp_key.txt";
   if (dtype == standard_ascend) {
     printf("==== Ascend Test started\n");
-    init_data_ascend();
+    init_data_allone_il256_ascend();
   } else if (dtype == standard_descend) {
     printf("==== Descend Test started\n");
-    init_data_descend();
+    init_data_allone_il256_descend();
   } else {
     assert(0);
   }
@@ -310,13 +504,44 @@ void test_standard(DataStored dtype) {
   ::remove(index_path.c_str());
 }
 
-void test_allzero(DataStored dtype) {
+/*
+ * allone allzero
+ */
+void init_data_allone_allzero() {
+  rocksdb::FileWriter fwriter;
+  fwriter.path = key_path;
+  fwriter.open();
+  keys.resize(110);
+  char carr[16] = { 0 };
+	for (int i = 0; i < 110; i++) {
+    carr[7] = i;
+    carr[15] = i;
+    // keep the last 10 elem for 'Find Fail Test'
+    if (i < 100) {
+      fwriter.writer << fstring(carr, 16);
+    }
+    if (i == 0) {
+      stat.minKey.assign(carr, carr + 16);
+    } else if (i == 99) {
+      stat.maxKey.assign(carr, carr + 16);
+    }
+    keys[i] = string(carr, 16);
+	}
+  fwriter.close();
+  stat.numKeys = 100;
+  stat.commonPrefixLen = 0;
+  stat.minKeyLen = 16;
+  stat.maxKeyLen = 16;
+  stat.sumKeyLen = 16 * 100;
+}
+
+void test_allone_allzero(DataStored dtype) {
   // init data
   clear();
   key_path = "./tmp_key.txt";
   if (dtype == standard_allzero) {
     printf("==== AllZero Test started\n");
-    init_data_standard_allzero();
+    init_data_allone_allzero();
   } else {
     assert(0);
   }
@@ -415,6 +640,10 @@ void test_allzero(DataStored dtype) {
   ::remove(index_path.c_str());
 }
 
+
+/*
+ * select
+ */
 void test_select() {
   // prepare
   const rocksdb::TerarkIndex::Factory* f_il85_il85 = 
@@ -576,9 +805,16 @@ void test_select() {
 
 int main(int argc, char** argv) {
   printf("EXAGGERATE\n");
-  test_standard(standard_ascend);
-  test_standard(standard_descend);
-  test_allzero(standard_allzero);
+
+  test_il256_il256(standard_ascend);
+  test_il256_il256(standard_descend);
+
+  test_allone_il256(standard_ascend);
+  test_allone_il256(standard_descend);
+
+  test_allone_allzero(standard_allzero);
+
   test_select();
+
   return 0;
 }
