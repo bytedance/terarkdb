@@ -861,12 +861,11 @@ public:
        */
       RankSelect1 rankselect1(maxValue - minValue + 1);
       RankSelect2 rankselect2(ks.numKeys + 1); // append extra '0' at back
-      valvec<byte_t> keyBuf;
+      valvec<byte_t> keyBuf, minKey2Data, maxKey2Data;;
       uint64_t prev = size_t(-1);
       size_t key2_len = ks.maxKeyLen - cplen - key1_len;
       size_t sum2ndKeyLen = key2_len * ks.numKeys;
       FixedLenStrVec keyVec(key2_len);
-      fstring minKey2Data, maxKey2Data;
       keyVec.reserve(ks.numKeys, sum2ndKeyLen);
       if (ks.minKey < ks.maxKey) { // ascend
         for (size_t i = 0; i < ks.numKeys; ++i) {
@@ -1060,11 +1059,13 @@ public:
       assert(VerifyClassName<TerarkCompositeUintIndex>(header->class_name));
       return true;
     }
-    static void updateMinMax(fstring data, fstring& minData, fstring& maxData) {
-      if (data < minData)
-        minData = data;
-      if (data > maxData)
-        maxData = data;
+    static void updateMinMax(fstring data, valvec<byte_t>& minData, valvec<byte_t>& maxData) {
+      if (minData.empty() || data < fstring(minData.begin(), minData.size())) {
+        minData.assign(data.data(), data.size());
+      }
+      if (maxData.empty() || data > fstring(maxData.begin(), maxData.size())) {
+        maxData.assign(data.data(), data.size());
+      }
     }
   };
 
