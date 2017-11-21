@@ -50,6 +50,14 @@ bool VerifyClassName(fstring class_name) {
                   g_TerarkIndexFactroy.val(head_i) == g_TerarkIndexFactroy.val(self_i);
 }
 
+void AppendExtraZero(std::function<void(const void *, size_t)> write, size_t len) {
+  assert(len <= 8);
+  static const char zeros[8] = { 0 };
+  if (0 < len && len < 8) {
+    write(zeros, len);
+  }
+}
+
 struct TerarkIndexHeader {
   uint8_t   magic_len;
   char      magic[19];
@@ -950,13 +958,6 @@ public:
     write(key2_data_.m_strpool.data(), key2_data_.mem_size());
     AppendExtraZero(write, 8 - key2_data_.mem_size() % 8);
   }
-  void AppendExtraZero(std::function<void(const void *, size_t)> write, size_t len) const {
-    assert(len <= 8);
-    static const char zeros[8] = { 0 };
-    if (0 < len && len < 8) {
-      write(zeros, len);
-    }
-  }
   size_t Find(fstring key) const override {
     size_t cplen = commonPrefix_.size();
     if (key.size() != key2_len_ + key1_len_ + cplen ||
@@ -1310,13 +1311,6 @@ public:
       AppendExtraZero(write, 8 - commonPrefix_.size() % 8);
     }
     write(indexSeq_.data(), indexSeq_.mem_size());
-  }
-  void AppendExtraZero(std::function<void(const void *, size_t)> write, size_t len) const {
-    assert(len <= 8);
-    static const char zeros[8] = { 0 };
-    if (0 < len && len < 8) {
-      write(zeros, len);
-    }
   }
   size_t Find(fstring key) const override {
     if (key.size() != keyLength_ + commonPrefix_.size()) {
