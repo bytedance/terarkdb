@@ -1234,6 +1234,9 @@ public:
       }
       ptr->header_ = header;
       ptr->indexSeq_.swap(indexSeq);
+      ptr->minValue_ = minValue;
+      ptr->maxValue_ = maxValue;
+      ptr->keyLength_ = header->key_length;
       return ptr.release();
     }
     unique_ptr<TerarkIndex> LoadMemory(fstring mem) const override {

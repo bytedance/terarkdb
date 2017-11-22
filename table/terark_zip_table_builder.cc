@@ -582,6 +582,31 @@ void TerarkZipTableBuilder::BuildIndex(BuildIndexParams& param, KeyValueStatus& 
       );
       return Status::Corruption("TerarkZipTableBuilder index build error", ex.what());
     }
+    if (table_options_.debugLevel >= 2) {
+        tempKeyFileReader.resetbuf();
+        param.data.fp.rewind();
+        auto it = UniquePtrOf(indexPtr->NewIterator());
+        auto commonPrefixLen = param.stat.commonPrefixLen;
+        valvec<byte_t> value;
+        if (fstring(param.stat.minKey) < fstring(param.stat.maxKey)) {
+            for (it->SeekToFirst(); it->Valid(); it->Next()) {
+                tempKeyFileReader >> value;
+                if (it->key() != fstring(value).substr(commonPrefixLen)) {
+                    return Status::Corruption("TerarkZipTableBuilder index build check fail",
+                        indexPtr->Name());
+                }
+            }
+        }
+        else {
+            for (it->SeekToLast(); it->Valid(); it->Prev()) {
+                tempKeyFileReader >> value;
+                if (it->key() != fstring(value).substr(commonPrefixLen)) {
+                    return Status::Corruption("TerarkZipTableBuilder index build check fail",
+                        indexPtr->Name());
+                }
+            }
+        }
+    }
     size_t fileSize = 0;
     {
       std::unique_lock<std::mutex> l(indexBuildMutex_);
