@@ -687,7 +687,8 @@ public:
       size_t cplen = target.commonPrefixLen(index_.commonPrefix_);
       if (cplen != index_.commonPrefix_.size()) {
         assert(target.size() >= cplen);
-        assert(target.size() == cplen || target[cplen] != index_.commonPrefix_[cplen]);
+        assert(target.size() == cplen ||
+            byte_t(target[cplen]) != byte_t(index_.commonPrefix_[cplen]));
         if (target.size() == cplen ||
             byte_t(target[cplen]) < byte_t(index_.commonPrefix_[cplen])) {
           return SeekToFirst();
@@ -699,9 +700,15 @@ public:
       uint64_t key1 = 0;
       fstring  key2;
       if (target.size() <= cplen + index_.key1_len_) {
-        fstring sub = target.substr(index_.commonPrefix_.size());
+        fstring sub = target.substr(cplen);
         byte_t targetBuffer[8] = { 0 };
-        memcpy(targetBuffer + (8 - sub.size()), sub.data(), sub.size());
+        /*
+         * do not think hard about int, think about string instead. 
+         * assume key1_len is 6 byte len like 'abcdef', target without
+         * commpref is 'b', u should compare 'b' with 'a' instead of 'f'.
+         * that's why assign sub starting in the middle instead at tail.
+         */
+        memcpy(targetBuffer + (8 - index_.key1_len_), sub.data(), sub.size());
         key1 = Read1stKey(targetBuffer, 0, 8);
         key2 = fstring(); // empty
       } else {
@@ -1283,8 +1290,10 @@ public:
       size_t cplen = target.commonPrefixLen(index_.commonPrefix_);
       if (cplen != index_.commonPrefix_.size()) {
         assert(target.size() >= cplen);
-        assert(target.size() == cplen || target[cplen] != index_.commonPrefix_[cplen]);
-        if (target.size() == cplen || byte_t(target[cplen]) < byte_t(index_.commonPrefix_[cplen])) {
+        assert(target.size() == cplen
+            || byte_t(target[cplen]) != byte_t(index_.commonPrefix_[cplen]));
+        if (target.size() == cplen
+            || byte_t(target[cplen]) < byte_t(index_.commonPrefix_[cplen])) {
           SeekToFirst();
           return true;
         }
@@ -1294,6 +1303,13 @@ public:
         }
       }
       target = target.substr(index_.commonPrefix_.size());
+      /*
+       *    target.size()     == 4;
+       *    index_.keyLength_ == 6;
+       *    | - - - - - - - - |  <- buffer
+       *        | - - - - - - |  <- index
+       *        | - - - - |      <- target
+       */
       byte_t targetBuffer[8] = {};
       memcpy(targetBuffer + (8 - index_.keyLength_),
           target.data(), std::min<size_t>(index_.keyLength_, target.size()));
@@ -1419,6 +1435,9 @@ public:
       }
       ptr->header_ = header;
       ptr->indexSeq_.swap(indexSeq);
+      ptr->minValue_ = minValue;
+      ptr->maxValue_ = maxValue;
+      ptr->keyLength_ = header->key_length;
       return ptr.release();
     }
     unique_ptr<TerarkIndex> LoadMemory(fstring mem) const override {
