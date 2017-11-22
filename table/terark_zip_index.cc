@@ -580,6 +580,12 @@ public:
       if (target.size() <= cplen + index_.key1_len_) {
         fstring sub = target.substr(cplen);
         byte_t targetBuffer[8] = { 0 };
+        /*
+         * do not think hard about int, think about string instead. 
+         * assume key1_len is 6 byte len like 'abcdef', target without
+         * commpref is 'b', u should compare 'b' with 'a' instead of 'f'.
+         * that's why assign sub starting in the middle instead at tail.
+         */
         memcpy(targetBuffer + (8 - index_.key1_len_), sub.data(), sub.size());
         key1 = Read1stKey(targetBuffer, 0, 8);
         key2 = fstring(); // empty
