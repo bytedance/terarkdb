@@ -1618,6 +1618,7 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4
     typeSize += kvs.type.mem_size();
     offsetInfo.set(i, kvs.prefix, keyOffset, valueOffset, typeSize, commonPrefix.size());
   }
+  properties_.data_size = offset_;
   try {
     indexBlock.set_offset(offset_);
     indexBlock.set_size(mmapIndexFile.size);
@@ -1679,7 +1680,6 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4
   range_del_block_.Reset();
   commonPrefix.resize(terark::align_up(commonPrefix.size(), 16), 0);
   WriteBlock(commonPrefix, file_, &offset_, &commonPrefixBlock);
-  properties_.data_size = offset_;
   if (!dict.memory.empty()) {
       s = WriteBlock(dict.memory, file_, &offset_, &dictBlock);
       if (!s.ok()) {
