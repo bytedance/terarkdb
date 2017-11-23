@@ -640,7 +640,76 @@ void test_allone_allzero(DataStored dtype) {
   ::remove(index_path.c_str());
 }
 
+/*
+ *       pos6  pos7       pos15
+ * key : 0    [0..249]    [0..249]
+ *       1    [0..249]    [0..249]
+ *       ....
+ * then key1: pos0 ~ 7, key2: pos8 ~ 15
+ * when Seek(2), expected result should be 500, not 2.
+ * keep in mind, treat like string, compare from left to right      
+ */
+void init_data_seek_short_target() {
+  rocksdb::FileWriter fwriter;
+  fwriter.path = key_path;
+  fwriter.open();
+  keys.resize(400);
+  byte_t carr[16] = { 0 };
+	for (int i = 0; i < 4; i++) {
+    carr[6] = i;
+    for (int j = 0; j < 250; j++) {
+      carr[7] = j; 
+      carr[15] = j;
+      fwriter.writer << fstring(carr, 16);
+      if (i == 0 && j == 0) {
+        stat.minKey.assign(carr, carr + 16);
+      } else if (i == 3 && j == 249) {
+        stat.maxKey.assign(carr, carr + 16);
+      }
+    }
+	}
+  fwriter.close();
+  stat.numKeys = 1000;
+  stat.commonPrefixLen = 0;
+  stat.minKeyLen = 16;
+  stat.maxKeyLen = 16;
+  stat.sumKeyLen = 16 * stat.numKeys;
+}
 
+void test_data_seek_short_target() {
+  // init data
+  printf("==== Seek-short Test started\n");
+  clear();
+  key_path = "./tmp_key.txt";
+  init_data_seek_short_target();
+  {
+    size_t celen;
+    assert(rocksdb::TerarkIndex::SeekCostEffectiveIndexLen(stat, celen));
+    assert(celen == 2);
+  }
+  // build index
+  FileStream fp(key_path, "rb");
+  NativeDataInput<InputBuffer> tempKeyFileReader(&fp);
+  auto factory = rocksdb::TerarkIndex::GetFactory("CompositeUintIndex_IL_256_32_IL_256_32");
+  rocksdb::TerarkZipTableOptions tableOpt;
+  TerarkIndex* index = factory->Build(tempKeyFileReader, tableOpt, stat);
+  assert(index->Name() == string("CompositeUintIndex_IL_256_32_AllZero"));
+  printf("\tbuild done\n");
+  // save & reload
+  index_path = "./tmp_index.txt";
+  index = save_reload(index, factory);
+  printf("\tsave & reload done\n");
+  // iterator
+  auto iter = index->NewIterator();
+  {
+    // seek lower_bound
+    char arr[7] = { 0 };
+    arr[6] = 2;
+    assert(iter->Seek(fstring(arr, arr + 7)));
+    assert(iter->DictRank() == 250 * 2);
+  }
+  printf("\tSeek done\n");
+}
 /*
  * select
  */
@@ -813,6 +882,8 @@ int main(int argc, char** argv) {
   test_allone_il256(standard_descend);
 
   test_allone_allzero(standard_allzero);
+
+  test_data_seek_short_target();
 
   test_select();
 
