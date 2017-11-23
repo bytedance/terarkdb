@@ -15,7 +15,6 @@
 #include "../terark_zip_common.h"
 #include "../terark_zip_index.h"
 
-
 using std::string;
 using std::unique_ptr;
 
@@ -33,7 +32,6 @@ using terark::LittleEndianDataOutput;
 
 using rocksdb::TerarkIndex;
 
-
 enum DataStored {
   standard_ascend = 0,
   standard_descend,
@@ -47,6 +45,13 @@ extern void test_allone_il256_uint(DataStored);
 extern void test_allone_il256_uint(DataStored);
 extern void test_allone_allzero_uint(DataStored);
 extern void test_data_seek_short_target_uint();
-extern void test_select_uint();
+extern void test_seek_cost_effective();
+
+extern void test_il256_il256_str(DataStored);
+extern void test_il256_il256_str(DataStored);
+extern void test_allone_il256_str(DataStored);
+extern void test_allone_il256_str(DataStored);
+extern void test_allone_allzero_str(DataStored);
+extern void test_data_seek_short_target_str();
 
 

@@ -1,5 +1,4 @@
 
-
 #include <fstream>
 #include <iostream>
 #include <map>
@@ -16,7 +15,7 @@
 
 using namespace std;
 
-static const size_t KEY_LEN = 16;
+static const size_t KEY_LEN = 18;
 
 namespace rocksdb {
   
@@ -76,7 +75,7 @@ static void init_data_il256_il256_ascend() {
   fwriter.path = key_path;
   fwriter.open();
   keys.resize(100);
-  char carr[KEY_LEN] = { 0 };
+  char carr[18] = { 0 };
   for (int i = 0; i < 100; i++) {
     keys[i] = string(carr, carr + KEY_LEN);
   }
@@ -109,7 +108,7 @@ static void init_data_il256_il256_descend() {
   fwriter.path = key_path;
   fwriter.open();
   keys.resize(100);
-  char carr[KEY_LEN] = { 0 };
+  char carr[18] = { 0 };
   for (int i = 0; i < 100; i++) {
     keys[i] = string(carr, carr + KEY_LEN);
   }
@@ -134,15 +133,15 @@ static void init_data_il256_il256_descend() {
   stat.sumKeyLen = KEY_LEN * 50;
 }
 
-void test_il256_il256_uint(DataStored dtype) {
+void test_il256_il256_str(DataStored dtype) {
   // init data
   clear();
   key_path = "./tmp_key.txt";
   if (dtype == standard_ascend) {
-    printf("==== Uint Ascend Test started\n");
+    printf("==== Str Ascend Test started\n");
     init_data_il256_il256_ascend();
   } else if (dtype == standard_descend) {
-    printf("==== Uint Descend Test started\n");
+    printf("==== Str Descend Test started\n");
     init_data_il256_il256_descend();
   } else {
     assert(0);
@@ -153,7 +152,7 @@ void test_il256_il256_uint(DataStored dtype) {
   auto factory = rocksdb::TerarkIndex::GetFactory("CompositeUintIndex_IL_256_32_IL_256_32_Uint");
   rocksdb::TerarkZipTableOptions tableOpt;
   TerarkIndex* index = factory->Build(tempKeyFileReader, tableOpt, stat);
-  assert(index->Name() == string("CompositeUintIndex_IL_256_32_IL_256_32_Uint"));
+  assert(index->Name() == string("CompositeUintIndex_IL_256_32_IL_256_32_Str"));
   printf("\tbuild done\n");
   // save & reload
   index_path = "./tmp_index.txt";
@@ -254,7 +253,7 @@ void test_il256_il256_uint(DataStored dtype) {
   }
   {
     // lower_bound
-    char arr[17] = { 0 };
+    char arr[KEY_LEN + 1] = { 0 };
     arr[KEY_LEN] = 1;
     for (int i = 0; i < 9; i += 2) {
       arr[7] = i;
@@ -263,7 +262,7 @@ void test_il256_il256_uint(DataStored dtype) {
           break;
         arr[15] = j;
         int expected = i / 2 * 10 + j + 1;
-        assert(iter->Seek(fstring(arr, 17)));
+        assert(iter->Seek(fstring(arr, KEY_LEN + 1)));
         assert(iter->DictRank() == expected);
       }
     }
@@ -349,15 +348,15 @@ static void init_data_allone_il256_descend() {
   stat.sumKeyLen = KEY_LEN * 100;
 }
 
-void test_allone_il256_uint(DataStored dtype) {
+void test_allone_il256_str(DataStored dtype) {
   // init data
   clear();
   key_path = "./tmp_key.txt";
   if (dtype == standard_ascend) {
-    printf("==== Uint Ascend Test started\n");
+    printf("==== Str Ascend Test started\n");
     init_data_allone_il256_ascend();
   } else if (dtype == standard_descend) {
-    printf("==== Uint Descend Test started\n");
+    printf("==== Str Descend Test started\n");
     init_data_allone_il256_descend();
   } else {
     assert(0);
@@ -368,7 +367,7 @@ void test_allone_il256_uint(DataStored dtype) {
   auto factory = rocksdb::TerarkIndex::GetFactory("CompositeUintIndex_IL_256_32_IL_256_32_Uint");
   rocksdb::TerarkZipTableOptions tableOpt;
   TerarkIndex* index = factory->Build(tempKeyFileReader, tableOpt, stat);
-  assert(index->Name() == string("CompositeUintIndex_AllOne_IL_256_32_Uint"));
+  assert(index->Name() == string("CompositeUintIndex_AllOne_IL_256_32_Str"));
   printf("\tbuild done\n");
   // save & reload
   index_path = "./tmp_index.txt";
@@ -458,7 +457,7 @@ void test_allone_il256_uint(DataStored dtype) {
   }
   {
     // lower_bound
-    char arr[17] = { 0 };
+    char arr[KEY_LEN + 1] = { 0 };
     arr[KEY_LEN] = 1;
     for (int i = 0; i < 9; i++) {
       arr[7] = i;
@@ -467,7 +466,7 @@ void test_allone_il256_uint(DataStored dtype) {
           break;
         arr[15] = j;
         int idx = i * 10 + j + 1;
-        assert(iter->Seek(fstring(arr, 17)));
+        assert(iter->Seek(fstring(arr, KEY_LEN + 1)));
         assert(iter->DictRank() == idx);
       }
     }
@@ -520,12 +519,12 @@ static void init_data_allone_allzero() {
   stat.sumKeyLen = KEY_LEN * 100;
 }
 
-void test_allone_allzero_uint(DataStored dtype) {
+void test_allone_allzero_str(DataStored dtype) {
   // init data
   clear();
   key_path = "./tmp_key.txt";
   if (dtype == standard_allzero) {
-    printf("==== Uint AllZero Test started\n");
+    printf("==== Str AllZero Test started\n");
     init_data_allone_allzero();
   } else {
     assert(0);
@@ -536,7 +535,7 @@ void test_allone_allzero_uint(DataStored dtype) {
   auto factory = rocksdb::TerarkIndex::GetFactory("CompositeUintIndex_IL_256_32_IL_256_32_Uint");
   rocksdb::TerarkZipTableOptions tableOpt;
   TerarkIndex* index = factory->Build(tempKeyFileReader, tableOpt, stat);
-  assert(index->Name() == string("CompositeUintIndex_AllOne_AllZero_Uint"));
+  assert(index->Name() == string("CompositeUintIndex_AllOne_AllZero_Str"));
   printf("\tbuild done\n");
   // save & reload
   index_path = "./tmp_index.txt";
@@ -610,14 +609,14 @@ void test_allone_allzero_uint(DataStored dtype) {
   }
   {
     // lower_bound
-    char arr[17] = { 0 };
+    char arr[KEY_LEN + 1] = { 0 };
     arr[KEY_LEN] = 1;
     for (int i = 0; i < 100; i++) {
       arr[7] = i; arr[15] = i;
       if (i == 99)
         break;
       int idx = i + 1;
-      assert(iter->Seek(fstring(arr, 17)));
+      assert(iter->Seek(fstring(arr, KEY_LEN + 1)));
       assert(iter->DictRank() == idx);
     }
   }
@@ -661,9 +660,9 @@ static void init_data_seek_short_target() {
   stat.sumKeyLen = KEY_LEN * stat.numKeys;
 }
 
-void test_data_seek_short_target_uint() {
+void test_data_seek_short_target_str() {
   // init data
-  printf("==== Uint Seek-short Test started\n");
+  printf("==== Str Seek-short Test started\n");
   clear();
   key_path = "./tmp_key.txt";
   init_data_seek_short_target();
@@ -678,7 +677,7 @@ void test_data_seek_short_target_uint() {
   auto factory = rocksdb::TerarkIndex::GetFactory("CompositeUintIndex_IL_256_32_IL_256_32_Uint");
   rocksdb::TerarkZipTableOptions tableOpt;
   TerarkIndex* index = factory->Build(tempKeyFileReader, tableOpt, stat);
-  assert(index->Name() == string("CompositeUintIndex_IL_256_32_AllZero_Uint"));
+  assert(index->Name() == string("CompositeUintIndex_IL_256_32_AllZero_Str"));
   printf("\tbuild done\n");
   // save & reload
   index_path = "./tmp_index.txt";
@@ -692,172 +691,6 @@ void test_data_seek_short_target_uint() {
     arr[6] = 2;
     assert(iter->Seek(fstring(arr, arr + 7)));
     assert(iter->DictRank() == 250 * 2);
-  }
-  printf("\tSeek done\n");
-  clear();
-}
-/*
- * select
- */
-void test_seek_cost_effective() {
-  printf("==== Uint Seek-Cost-Effective Test started\n");
-  // prepare
-  const rocksdb::TerarkIndex::Factory* f_il85_il85 = 
-    TerarkIndex::GetFactory("CompositeUintIndex_IL_256_32_IL_256_32_Uint");
-  const rocksdb::TerarkIndex::Factory* f_se96_se96 = 
-    TerarkIndex::GetFactory("CompositeUintIndex_SE_512_64_SE_512_64_Uint");
-  const rocksdb::TerarkIndex::Factory* f_allone_allzero = 
-    TerarkIndex::GetFactory("CompositeUintIndex_AllOne_AllZero_Uint");
-  {
-    TerarkIndex::KeyStat stat;
-    stat.numKeys = 100;
-    stat.minKeyLen = stat.maxKeyLen = KEY_LEN;
-    stat.commonPrefixLen = 0;
-    char arr[KEY_LEN] = { 0 };
-    arr[7] = arr[15] = 4;
-    stat.minKey.assign(arr, arr + KEY_LEN);
-    arr[7] = arr[15] = 14;
-    stat.maxKey.assign(arr, arr + KEY_LEN);
-    auto factory = TerarkIndex::SelectFactory(stat, "");
-    assert(factory != nullptr);
-    assert(factory == f_il85_il85);
-  }
-  {
-    // do NOT select composite: size == 8
-    TerarkIndex::KeyStat stat;
-    stat.commonPrefixLen = 0;
-    stat.numKeys = 1;
-    char arr[8] = { 0 };
-    stat.minKey.assign(arr, arr + 8);
-    stat.maxKey.assign(arr, arr + 8);
-    stat.minKeyLen = stat.maxKeyLen = 8;
-    auto factory = TerarkIndex::SelectFactory(stat, "");
-    assert(factory != nullptr);
-    assert(factory != f_il85_il85);
-  }
-  {
-    auto assign32 = [](char* beg, char* end, int32_t value) {
-        union {
-          char bytes[4];
-          int32_t value;
-        } c;
-#if BOOST_ENDIAN_LITTLE_BYTE
-        c.value = terark::byte_swap(value);
-#else
-        c.value = value;
-#endif
-        size_t l = end - beg;
-        memcpy(beg, c.bytes + (4 - l), l);
-    };
-    TerarkIndex::KeyStat stat;
-    stat.commonPrefixLen = 0;
-    stat.numKeys = 10000000;
-    {
-      char arr[8] = { 0 };
-      int v1 = 1350476, v2 = 9531880;
-      assign32(arr, arr + 4, v1);
-      assign32(arr + 4, arr + 8, v2);
-      stat.minKey.assign(arr, arr + 8);
-    }
-    {
-      char arr[8] = { 0 };
-      int v1 = 8778214, v2 = 8569467;
-      assign32(arr, arr + 4, v1);
-      assign32(arr + 4, arr + 8, v2);
-      stat.maxKey.assign(arr, arr + 8);
-    }
-    stat.minKeyLen = stat.maxKeyLen = 8;
-    size_t ceLen = 0;
-    assert(TerarkIndex::SeekCostEffectiveIndexLen(stat, ceLen));
-  }
-  {
-    // do NOT select composite index: gap ratio too high
-    TerarkIndex::KeyStat stat;
-    stat.numKeys = 2;
-    stat.commonPrefixLen = 0;
-    stat.minKeyLen = stat.maxKeyLen = KEY_LEN;
-    char arr[KEY_LEN] = { 0 };
-    arr[5] = 1; arr[7] = 1;
-    stat.minKey.assign(arr, arr + KEY_LEN);
-    arr[5] = 100; arr[7] = 1;
-    stat.maxKey.assign(arr, arr + KEY_LEN);
-    size_t celen = size_t(-1);
-    assert(TerarkIndex::SeekCostEffectiveIndexLen(stat, celen) == false);
-  }
-  {
-    // select composite: key count > 4G
-    TerarkIndex::KeyStat stat;
-    stat.numKeys = 1ull << 32;
-    stat.commonPrefixLen = 0;
-    stat.minKeyLen = stat.maxKeyLen = KEY_LEN;
-    byte_t arr[KEY_LEN] = { 0 };
-    arr[4] = 0; arr[8] = 1;
-    stat.minKey.assign(arr, arr + KEY_LEN);
-    arr[4] = 1; arr[8] = 0;
-    stat.maxKey.assign(arr, arr + KEY_LEN);
-    size_t celen = size_t(-1);
-    auto factory = TerarkIndex::SelectFactory(stat, "");
-    assert(factory != nullptr);
-    assert(factory == f_se96_se96);
-  }
-  {
-    // seek index1stLen: len = 2
-    TerarkIndex::KeyStat stat;
-    stat.numKeys = 2;
-    stat.commonPrefixLen = 0;
-    stat.minKeyLen = stat.maxKeyLen = KEY_LEN;
-    char arr[KEY_LEN] = { 0 };
-    arr[7] = 1;
-    stat.minKey.assign(arr, arr + KEY_LEN);
-    arr[5] = 1; arr[7] = 1;
-    stat.maxKey.assign(arr, arr + KEY_LEN);
-    size_t celen = size_t(-1);
-    assert(TerarkIndex::SeekCostEffectiveIndexLen(stat, celen));
-    assert(celen == 1);
-  }
-  {
-    // seek index1stLen: len = 2
-    TerarkIndex::KeyStat stat;
-    stat.numKeys = 256;
-    stat.commonPrefixLen = 0;
-    stat.minKeyLen = stat.maxKeyLen = KEY_LEN;
-    byte_t arr[KEY_LEN] = { 0 };
-    arr[8] = 1;
-    stat.minKey.assign(arr, arr + KEY_LEN);
-    arr[7] = 1; arr[8] = 0;
-    stat.maxKey.assign(arr, arr + KEY_LEN);
-    size_t celen = size_t(-1);
-    assert(TerarkIndex::SeekCostEffectiveIndexLen(stat, celen));
-    assert(celen == 2);
-  }
-  {
-    // seek index1stLen: len = 3
-    TerarkIndex::KeyStat stat;
-    stat.numKeys = 1 << KEY_LEN;
-    stat.commonPrefixLen = 0;
-    stat.minKeyLen = stat.maxKeyLen = KEY_LEN;
-    byte_t arr[KEY_LEN] = { 0 };
-    arr[8] = 1;
-    stat.minKey.assign(arr, arr + KEY_LEN);
-    arr[6] = 1; arr[8] = 0;
-    stat.maxKey.assign(arr, arr + KEY_LEN);
-    size_t celen = size_t(-1);
-    assert(TerarkIndex::SeekCostEffectiveIndexLen(stat, celen));
-    assert(celen == 3);
-  }
-  {
-    // do select composite: il85_il85
-    TerarkIndex::KeyStat stat;
-    stat.numKeys = 100;
-    stat.commonPrefixLen = 0;
-    stat.minKeyLen = stat.maxKeyLen = KEY_LEN;
-    char arr[KEY_LEN] = { 0 };
-    arr[7] = 1;
-    stat.minKey.assign(arr, arr + KEY_LEN);
-    arr[7] = 14;
-    stat.maxKey.assign(arr, arr + KEY_LEN);
-    auto factory = TerarkIndex::SelectFactory(stat, "");
-    assert(factory == f_il85_il85);
   }
   printf("\tSeek done\n");
   clear();
