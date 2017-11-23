@@ -498,7 +498,6 @@ public:
 template<class RankSelect1, class RankSelect2>
 class TerarkCompositeUintIndex : public TerarkIndex {
 public:
-  //static const int kCommonPrefixLen = 4;
   static const char* index_name;
   struct FileHeader : public TerarkIndexHeader {
     uint64_t min_value;
