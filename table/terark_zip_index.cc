@@ -987,19 +987,19 @@ public:
       // TBD: build histogram, which should set as 'true'
       rankselect1.build_cache(false, false);
       rankselect2.build_cache(false, false);
-      ContainerUsedT containerChosen = chooseContainer(key2_len, minKey2Data, maxKey2Data);
-      if (containerChosen == kFixedLenStr) {
-        return CreateIndexWithStrCont(rankselect1, rankselect2, keyVec, ks,
-                                      minValue, maxValue, key1_len);
-      } else {
+      // try order: 1. sorteduint; 2. uintmin0; 3. fixlen
+      if (key2_len <= 8) {
         TerarkIndex* index =  CreateIndexWithSortedUintCont(rankselect1, rankselect2, 
           keyVec, ks, minValue, maxValue, key1_len, minKey2Data, maxKey2Data);
         if (!index) {
           index = CreateIndexWithUintCont(rankselect1, rankselect2, 
             keyVec, ks, minValue, maxValue, key1_len, minKey2Data, maxKey2Data);
         }
-        return index;
+        if (index)
+          return index;
       }
+      return CreateIndexWithStrCont(rankselect1, rankselect2, keyVec, ks,
+                                    minValue, maxValue, key1_len);
     }
   private:
     static void updateMinMax(fstring data, valvec<byte_t>& minData, valvec<byte_t>& maxData) {
@@ -1010,26 +1010,6 @@ public:
         maxData.assign(data.data(), data.size());
       }
     }
-    static ContainerUsedT chooseContainer(size_t key2Len, valvec<byte_t>& minKey2Data,
-                                          valvec<byte_t>& maxKey2Data) {
-      if (key2Len > 8) {
-        return kFixedLenStr;
-      }
-      uint64_t key2MinValue = ReadBigEndianUint64((const byte_t*)minKey2Data.data(), minKey2Data.size());
-      uint64_t key2MaxValue = ReadBigEndianUint64((const byte_t*)maxKey2Data.data(), maxKey2Data.size());
-      uint64_t diff = key2MaxValue - key2MinValue + 1;
-      /*
-       * TBD: if diff could be represented using less bit compared with
-       * key2_len * 8, then we could use UintVecMin0
-       */
-      size_t bitUsed = UintVecMin0::compute_uintbits(diff);
-      TERARK_UNUSED_VAR(bitUsed);
-      if (true) {
-        return kUintMin0;
-      }
-      //kSortedUint
-    }
-
     static TerarkIndex* CreateIndexWithSortedUintCont(RankSelect1& rankselect1, RankSelect2& rankselect2,
                                          FixedLenStrVec& keyVec, const KeyStat& ks, 
                                          uint64_t minValue, uint64_t maxValue, size_t key1_len,
@@ -1039,20 +1019,23 @@ public:
       uint64_t key2MinValue = ReadBigEndianUint64((const byte_t*)minKey2Data.data(), minKey2Data.size());
       uint64_t key2MaxValue = ReadBigEndianUint64((const byte_t*)maxKey2Data.data(), maxKey2Data.size());
       auto builder = SortedUintVec::createBuilder(false, kBlockUnits);
-      size_t prev = 
+      uint64_t prev = 
         ReadBigEndianUint64((const byte_t*)keyVec[0].data(), keyVec[0].size()) - key2MinValue;
       builder->push_back(prev);
       for (size_t i = 1; i < keyVec.size(); i++) {
         fstring str = keyVec[i];
         uint64_t key2 = 
           ReadBigEndianUint64((const byte_t*)str.data(), str.size()) - key2MinValue;
-        if (terark_unlikely(abs(key2 - prev) > kLimit)) // should not use sorted uint vec
+        if (terark_unlikely(abs_diff(key2, prev) > kLimit)) // should not use sorted uint vec
           return nullptr;
         prev = key2;
         builder->push_back(prev);
       }
       SortedUintVec uintVec;
-      builder->finish(&uintVec);
+      auto rs = builder->finish(&uintVec);
+      if (rs.mem_size > keyVec.mem_size() / 2.0) // too much ram consumed
+        return nullptr;
+      printf("sorteduint mem: %zu, keyvec mem: %zu\n", rs.mem_size, keyVec.mem_size());
       SortedUintDataCont container;
       container.swap(uintVec);
       if (rankselect1.max_rank0() == 0 && rankselect2.max_rank1() == 0) {
@@ -1081,6 +1064,9 @@ public:
       uint64_t key2MaxValue = ReadBigEndianUint64((const byte_t*)maxKey2Data.data(), maxKey2Data.size());
       uint64_t diff = key2MaxValue - key2MinValue + 1;
       size_t bitUsed = UintVecMin0::compute_uintbits(diff);
+      printf("uint bit used: %zu, keyvec bit used: %zu\n", bitUsed, keyVec.m_fixlen * 8);
+      if (bitUsed > keyVec.m_fixlen * 8 * 0.9) // compress ratio just so so
+        return nullptr;
       // reuse memory from keyvec, since vecMin0 should consume less mem
       // compared with fixedlenvec
       UintVecMin0 vecMin0;

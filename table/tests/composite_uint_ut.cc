@@ -84,14 +84,15 @@ static void init_data_il256_il256_ascend() {
     carr[7] = i;
     for (int j = 0; j < 10; j++) {
       carr[15] = j;
-      // keep the last 10 elem for 'Find Fail Test'
-      if (i < 9) {
-        fwriter.writer << fstring(carr, KEY_LEN);
-      }
       if (i == 0 && j == 0) {
         stat.minKey.assign(carr, carr + KEY_LEN);
       } else if (i == 8 && j == 9) {
+        carr[8] = 1; // get rid of sorteduint
         stat.maxKey.assign(carr, carr + KEY_LEN);
+      }
+      // keep the last 10 elem for 'Find Fail Test'
+      if (i < 9) {
+        fwriter.writer << fstring(carr, KEY_LEN);
       }
       keys[i * 10 + j] = string(carr, KEY_LEN);
     }
@@ -116,13 +117,14 @@ static void init_data_il256_il256_descend() {
 	for (int i = 8; i >= 0; i -= 2) {
     carr[7] = i;
     for (int j = 9; j >= 0; j--) {
-      carr[15] = j;
-      fwriter.writer << fstring(carr, KEY_LEN);
+      carr[8] = 0; carr[15] = j;
       if (i == 0 && j == 0) {
         stat.maxKey.assign(carr, carr + KEY_LEN);
       } else if (i == 8 && j == 9) {
+        carr[8] = 1; // get rid of sorteduint
         stat.minKey.assign(carr, carr + KEY_LEN);
       }
+      fwriter.writer << fstring(carr, KEY_LEN);
       keys[i * 10 + j] = string(carr, KEY_LEN);
     }
 	}
@@ -193,6 +195,8 @@ void test_il256_il256_uint(DataStored dtype) {
         arr[15] = j;
         if (i == 0 && j == 0)
           continue;
+        if (i == 8 && j == 9)
+          arr[8] = 1;
         assert(iter->Next());
         assert(iter->DictRank() == i / 2 * 10 + j);
         assert(fstring(arr, KEY_LEN) == iter->key());
@@ -210,7 +214,9 @@ void test_il256_il256_uint(DataStored dtype) {
       for (int j = 9; j >= 0; j--) {
         arr[15] = j;
         if (i == 8 && j == 9) {
+          arr[8] = 1;
           assert(fstring(arr, KEY_LEN) == iter->key());
+          arr[8] = 0;
           continue;
         }
         assert(iter->Prev());
@@ -226,11 +232,13 @@ void test_il256_il256_uint(DataStored dtype) {
     for (int i = 0; i < 9; i += 2) {
       arr[7] = i;
       for (int j = 9; j >= 0; j--) {
-        arr[15] = j;
+        arr[8] = 0; arr[15] = j;
         int idx = i * 10 + j;
         int expected = i / 2 * 10 + j;
         assert(iter->Seek(keys[idx]));
         assert(iter->DictRank() == expected);
+        if (i == 8 && j == 9)
+          arr[8] = 1;
         assert(fstring(arr, KEY_LEN) == iter->key());
       }
     }
@@ -278,7 +286,7 @@ void test_il256_il256_uint(DataStored dtype) {
 
     arr[7] = 8; arr[15] = 9;
     assert(iter->Seek(fstring(arr, KEY_LEN)));
-    arr[7] = 8; arr[15] = 10;
+    arr[7] = 8; arr[8] = 1; arr[15] = 10;
     assert(iter->Seek(fstring(arr, KEY_LEN)) == false);
   }
   printf("\tIterator done\n");
@@ -299,14 +307,15 @@ static void init_data_allone_il256_ascend() {
     carr[7] = i;
     for (int j = 0; j < 10; j++) {
       carr[15] = j;
-      // keep the last 10 elem for 'Find Fail Test'
-      if (i < 10) {
-        fwriter.writer << fstring(carr, KEY_LEN);
-      }
       if (i == 0 && j == 0) {
         stat.minKey.assign(carr, carr + KEY_LEN);
       } else if (i == 9 && j == 9) {
+        carr[8] = 1; // get rid of sorteduint
         stat.maxKey.assign(carr, carr + KEY_LEN);
+      }
+      // keep the last 10 elem for 'Find Fail Test'
+      if (i < 10) {
+        fwriter.writer << fstring(carr, KEY_LEN);
       }
       keys[i * 10 + j] = string(carr, KEY_LEN);
     }
@@ -328,15 +337,16 @@ static void init_data_allone_il256_descend() {
 	for (int i = 10; i >= 0; i--) {
     carr[7] = i;
     for (int j = 9; j >= 0; j--) {
-      carr[15] = j;
-      // keep the last 10 elem for 'Find Fail Test'
-      if (i < 10) {
-        fwriter.writer << fstring(carr, KEY_LEN);
-      }
+      carr[8] = 0; carr[15] = j;
       if (i == 0 && j == 0) {
         stat.maxKey.assign(carr, carr + KEY_LEN);
       } else if (i == 9 && j == 9) {
+        carr[8] = 1; // get rid of sorteduint
         stat.minKey.assign(carr, carr + KEY_LEN);
+      }
+      // keep the last 10 elem for 'Find Fail Test'
+      if (i < 10) {
+        fwriter.writer << fstring(carr, KEY_LEN);
       }
       keys[i * 10 + j] = string(carr, KEY_LEN);
     }
@@ -395,9 +405,11 @@ void test_allone_il256_uint(DataStored dtype) {
     for (int i = 0; i < 10; i++) {
       arr[7] = i;
       for (int j = 0; j < 10; j++) {
-        arr[15] = j;
+        arr[8] = 0; arr[15] = j;
         if (i == 0 && j == 0)
           continue;
+        if (i == 9 && j == 9)
+          arr[8] = 1;
         assert(iter->Next());
         assert(iter->DictRank() == i * 10 + j);
         assert(fstring(arr, KEY_LEN) == iter->key());
@@ -413,8 +425,9 @@ void test_allone_il256_uint(DataStored dtype) {
     for (int i = 9; i >= 0; i--) {
       arr[7] = i;
       for (int j = 9; j >= 0; j--) {
-        arr[15] = j;
+        arr[8] = 0; arr[15] = j;
         if (i == 9 && j == 9) {
+          arr[8] = 1;
           assert(fstring(arr, KEY_LEN) == iter->key());
           continue;
         }
@@ -428,10 +441,12 @@ void test_allone_il256_uint(DataStored dtype) {
   {
     // seek matches
     char arr[KEY_LEN] = { 0 };
-    for (int i = 0; i < 9; i++) {
+    for (int i = 0; i < 10; i++) {
       arr[7] = i;
       for (int j = 9; j >= 0; j--) {
-        arr[15] = j;
+        arr[8] = 0; arr[15] = j;
+        if (i == 9 && j == 9)
+          arr[8] = 1;
         int idx = i * 10 + j;
         assert(iter->Seek(keys[idx]));
         assert(iter->DictRank() == idx);
@@ -460,9 +475,9 @@ void test_allone_il256_uint(DataStored dtype) {
     // lower_bound
     char arr[17] = { 0 };
     arr[KEY_LEN] = 1;
-    for (int i = 0; i < 9; i++) {
+    for (int i = 0; i < 10; i++) {
       arr[7] = i;
-      for (int j = 0; j < 9; j++) {
+      for (int j = 0; j < 10; j++) {
         if (i == 9 && j == 9)
           break;
         arr[15] = j;
@@ -482,7 +497,7 @@ void test_allone_il256_uint(DataStored dtype) {
 
     arr[7] = 9; arr[15] = 9;
     assert(iter->Seek(fstring(arr, KEY_LEN)));
-    arr[7] = 9; arr[15] = 10;
+    arr[7] = 9; arr[8] = 1; arr[15] = 10;
     assert(iter->Seek(fstring(arr, KEY_LEN)) == false);
   }
   printf("\tIterator done\n");
@@ -501,14 +516,15 @@ static void init_data_allone_allzero() {
 	for (int i = 0; i < 110; i++) {
     carr[7] = i;
     carr[15] = i;
-    // keep the last 10 elem for 'Find Fail Test'
-    if (i < 100) {
-      fwriter.writer << fstring(carr, KEY_LEN);
-    }
     if (i == 0) {
       stat.minKey.assign(carr, carr + KEY_LEN);
     } else if (i == 99) {
+      carr[8] = 1;
       stat.maxKey.assign(carr, carr + KEY_LEN);
+    }
+    // keep the last 10 elem for 'Find Fail Test'
+    if (i < 100) {
+      fwriter.writer << fstring(carr, KEY_LEN);
     }
     keys[i] = string(carr, KEY_LEN);
 	}
@@ -562,6 +578,8 @@ void test_allone_allzero_uint(DataStored dtype) {
     assert(fstring(arr, KEY_LEN) == iter->key());
     for (int i = 1; i < 100; i++) {
       arr[7] = i; arr[15] = i;
+      if (i == 99)
+        arr[8] = 1;
       assert(iter->Next());
       assert(iter->DictRank() == i);
       assert(fstring(arr, KEY_LEN) == iter->key());
@@ -588,6 +606,8 @@ void test_allone_allzero_uint(DataStored dtype) {
       arr[7] = i; arr[15] = i;
       assert(iter->Seek(keys[i]));
       assert(iter->DictRank() == i);
+      if (i == 99)
+        arr[8] = 1;
       assert(fstring(arr, KEY_LEN) == iter->key());
     }
   }
@@ -645,12 +665,13 @@ static void init_data_seek_short_target() {
     for (int j = 0; j < 250; j++) {
       carr[7] = j; 
       carr[15] = j;
-      fwriter.writer << fstring(carr, KEY_LEN);
       if (i == 0 && j == 0) {
         stat.minKey.assign(carr, carr + KEY_LEN);
       } else if (i == 3 && j == 249) {
+        carr[8] = 1;
         stat.maxKey.assign(carr, carr + KEY_LEN);
       }
+      fwriter.writer << fstring(carr, KEY_LEN);
     }
 	}
   fwriter.close();
