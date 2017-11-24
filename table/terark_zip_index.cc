@@ -33,6 +33,7 @@ using terark::NestLoudsTrieDAWG_Mixed_XL_256_32_FL;
 using terark::SortedStrVec;
 using terark::FixedLenStrVec;
 using terark::MmapWholeFile;
+using terark::SortedUintVec;
 using terark::UintVecMin0;
 using terark::MatchingDFA;
 using terark::commonPrefixLen;
@@ -492,12 +493,70 @@ class CompositeKeyDataContainer {
 };
 
 template<>
+class CompositeKeyDataContainer<SortedUintVec> {
+public:
+  void swap(CompositeKeyDataContainer<SortedUintVec>& other) {
+    container_.swap(other.container_);
+  }
+  void swap(SortedUintVec& other) {
+    container_.swap(other);
+  }
+  void init(size_t len, size_t sz) {
+    assert(0);
+  }
+  void risk_release_ownership() {
+    container_.risk_release_ownership();
+  }
+  const byte_t* data() const { return container_.data(); }
+  size_t mem_size() const { return container_.mem_size(); }
+  size_t size() const { return container_.size(); }
+  bool equals(size_t idx, size_t val) const {
+    assert(0);
+    return false;
+  }
+  bool equals(size_t idx, fstring val) const {
+    assert(idx < container_.size());
+    uint64_t n = ReadBigEndianUint64((const byte_t*)val.data(), val.size());
+    return container_[idx] == n;
+  }
+  void risk_set_data(byte_t* data, size_t num, size_t maxValue) {
+    assert(0);
+  }
+  void risk_set_data(byte_t* data, size_t sz) {
+    container_.risk_set_data(data, sz);
+  }
+  fstring operator[](size_t idx) const {
+    assert(idx < container_.size());
+    static byte_t arr[8] = { 0 };
+    size_t v = container_[idx];
+    SaveAsBigEndianUint64(arr, arr + 8, v);
+    return fstring(arr, arr + 8);
+  }
+  size_t lower_bound(size_t lo, size_t hi, fstring val) const {
+    size_t len = std::min<size_t>(val.size(), 8);
+    uint64_t n = ReadBigEndianUint64((const byte_t*)val.data(), len);
+    size_t pos = terark::lower_bound_n<const SortedUintVec&>(container_, lo, hi, n);
+    if (len != val.size()) { // val.size() > 8
+      while (pos != hi) {
+        byte_t arr[8] = { 0 };
+        size_t v = container_[pos];
+        SaveAsBigEndianUint64(arr, arr + 8, v);
+        if (fstring(arr, arr + 8) >= val)
+          return pos;
+        pos++;
+      }
+    }
+    return pos;
+  }
+
+private:
+  SortedUintVec container_;
+};
+
+
+template<>
 class CompositeKeyDataContainer<UintVecMin0> {
 public:
-  void set(size_t idx, size_t val) {
-    assert(idx < container_.size());
-    container_.set_wire(idx, val);
-  }
   void swap(CompositeKeyDataContainer<UintVecMin0>& other) {
     container_.swap(other.container_);
   }
@@ -559,10 +618,6 @@ private:
 template<>
 class CompositeKeyDataContainer<FixedLenStrVec> {
 public:
-  void set(size_t idx, fstring val) {
-    assert(idx < container_.size());
-    container_.set_wire(idx, val);
-  }
   void swap(CompositeKeyDataContainer<FixedLenStrVec>& other) {
     container_.swap(other.container_);
   }
@@ -840,6 +895,7 @@ public:
 public:
   class MyFactory : public TerarkIndex::Factory {
   public:
+    typedef CompositeKeyDataContainer<SortedUintVec> SortedUintDataCont;
     typedef CompositeKeyDataContainer<UintVecMin0> Min0DataCont;
     typedef CompositeKeyDataContainer<FixedLenStrVec> StrDataCont;
     enum ContainerUsedT {
@@ -882,12 +938,12 @@ public:
        */
       RankSelect1 rankselect1(maxValue - minValue + 1);
       RankSelect2 rankselect2(ks.numKeys + 1); // append extra '0' at back
-      valvec<byte_t> keyBuf, minKey2Data, maxKey2Data;;
+      valvec<byte_t> keyBuf, minKey2Data, maxKey2Data;
       uint64_t prev = size_t(-1);
       size_t key2_len = ks.maxKeyLen - cplen - key1_len;
-      size_t sum2ndKeyLen = key2_len * ks.numKeys;
+      size_t sumKey2Len = key2_len * ks.numKeys;
       FixedLenStrVec keyVec(key2_len);
-      keyVec.reserve(ks.numKeys, sum2ndKeyLen);
+      keyVec.reserve(ks.numKeys, sumKey2Len);
       if (ks.minKey < ks.maxKey) { // ascend
         for (size_t i = 0; i < ks.numKeys; ++i) {
           reader >> keyBuf;
@@ -901,18 +957,12 @@ public:
           prev = offset;
           fstring key2Data = fstring(keyBuf).substr(cplen + key1_len);
           updateMinMax(key2Data, minKey2Data, maxKey2Data);
-          //keyVec.set_wire(i, key2Data);
           keyVec.push_back(key2Data);
-          /*
-           * TBD: if every abs(cur_key_2 - prev_key_2) could be represented with 48 bit,
-           * then SortedUintVec should be employed.
-           * use builder::(false) version
-           */
         }
       } else { // descend, reverse comparator
-        size_t pos = sum2ndKeyLen;
+        size_t pos = sumKey2Len;
         keyVec.m_size = ks.numKeys;
-        keyVec.m_strpool.resize(sum2ndKeyLen);
+        keyVec.m_strpool.resize(sumKey2Len);
         // compare with '0', do NOT use size_t
         for (long i = ks.numKeys - 1; i >= 0; --i) {
           reader >> keyBuf;
@@ -929,7 +979,6 @@ public:
           updateMinMax(key2Data, minKey2Data, maxKey2Data);
           pos -= key2Data.size();
           memcpy(keyVec.m_strpool.data() + pos, key2Data.data(), key2Data.size());
-          //keyVec.set_wire(i, key2Data);
         }
         rankselect2.set0(0); // set 1st element to 0
         assert(pos == 0);
@@ -939,14 +988,17 @@ public:
       rankselect1.build_cache(false, false);
       rankselect2.build_cache(false, false);
       ContainerUsedT containerChosen = chooseContainer(key2_len, minKey2Data, maxKey2Data);
-      if (containerChosen == kUintMin0) {
-        return CreateIndexWithUintCont(rankselect1, rankselect2, keyVec, ks, minValue, maxValue,
-                                       key1_len, minKey2Data, maxKey2Data);
-      } else if (containerChosen == kSortedUint) {
-        return nullptr;
-      } else {
+      if (containerChosen == kFixedLenStr) {
         return CreateIndexWithStrCont(rankselect1, rankselect2, keyVec, ks,
                                       minValue, maxValue, key1_len);
+      } else {
+        TerarkIndex* index =  CreateIndexWithSortedUintCont(rankselect1, rankselect2, 
+          keyVec, ks, minValue, maxValue, key1_len, minKey2Data, maxKey2Data);
+        if (!index) {
+          index = CreateIndexWithUintCont(rankselect1, rankselect2, 
+            keyVec, ks, minValue, maxValue, key1_len, minKey2Data, maxKey2Data);
+        }
+        return index;
       }
     }
   private:
@@ -978,6 +1030,51 @@ public:
       //kSortedUint
     }
 
+    static TerarkIndex* CreateIndexWithSortedUintCont(RankSelect1& rankselect1, RankSelect2& rankselect2,
+                                         FixedLenStrVec& keyVec, const KeyStat& ks, 
+                                         uint64_t minValue, uint64_t maxValue, size_t key1_len,
+                                         valvec<byte_t>& minKey2Data, valvec<byte_t>& maxKey2Data) {
+      // TBD: for test
+      return nullptr;
+      const size_t kBlockUnits = 128;
+      const size_t kLimit = (1ull << 48) - 1;
+      uint64_t key2MinValue = ReadBigEndianUint64((const byte_t*)minKey2Data.data(), minKey2Data.size());
+      uint64_t key2MaxValue = ReadBigEndianUint64((const byte_t*)maxKey2Data.data(), maxKey2Data.size());
+      auto builder = SortedUintVec::createBuilder(false, kBlockUnits);
+      size_t prev = 
+        ReadBigEndianUint64((const byte_t*)keyVec[0].data(), keyVec[0].size()) - key2MinValue;
+      builder->push_back(prev);
+      for (size_t i = 1; i < keyVec.size(); i++) {
+        fstring str = keyVec[i];
+        uint64_t key2 = 
+          ReadBigEndianUint64((const byte_t*)str.data(), str.size()) - key2MinValue;
+        if (terark_unlikely(abs(key2 - prev) > kLimit)) // should not use sorted uint vec
+          return nullptr;
+        prev = key2;
+        builder->push_back(prev);
+      }
+      SortedUintVec uintVec;
+      builder->finish(&uintVec);
+      SortedUintDataCont container;
+      container.swap(uintVec);
+      if (rankselect1.max_rank0() == 0 && rankselect2.max_rank1() == 0) {
+        rank_select_allone rs1(rankselect1.size());
+        rank_select_allzero rs2(rankselect2.size());
+        return new TerarkCompositeUintIndex<rank_select_allone, rank_select_allzero, SortedUintDataCont>(
+          rs1, rs2, container, ks, minValue, maxValue, key1_len, key2MinValue, key2MaxValue);
+      } else if (rankselect2.max_rank1() == 0) {
+        terark::rank_select_allzero rs2(rankselect2.size());
+        return new TerarkCompositeUintIndex<RankSelect1, rank_select_allzero, SortedUintDataCont>(
+          rankselect1, rs2, container, ks, minValue, maxValue, key1_len, key2MinValue, key2MaxValue);
+      } else if (rankselect1.max_rank0() == 0) {
+        terark::rank_select_allone rs1(rankselect1.size());
+        return new TerarkCompositeUintIndex<rank_select_allone, RankSelect2, SortedUintDataCont>(
+          rs1, rankselect2, container, ks, minValue, maxValue, key1_len, key2MinValue, key2MaxValue);
+      } else {
+        return new TerarkCompositeUintIndex<RankSelect1, RankSelect2, SortedUintDataCont>(
+          rankselect1, rankselect2, container, ks, minValue, maxValue, key1_len, key2MinValue, key2MaxValue);
+      }
+    }
     static TerarkIndex* CreateIndexWithUintCont(RankSelect1& rankselect1, RankSelect2& rankselect2,
                                          FixedLenStrVec& keyVec, const KeyStat& ks, 
                                          uint64_t minValue, uint64_t maxValue, size_t key1_len,
@@ -1656,9 +1753,28 @@ TerarkIndexRegister(TerocksIndex_NestLoudsTrieDAWG_Mixed_XL_256_32_FL, "NestLoud
 
 #if defined(TerocksPrivateCode)
 
-
+typedef CompositeKeyDataContainer<SortedUintVec> CKSortedUintDataCont;
 typedef CompositeKeyDataContainer<UintVecMin0> CKMin0DataCont;
 typedef CompositeKeyDataContainer<FixedLenStrVec> CKStrDataCont;
+
+typedef TerarkCompositeUintIndex<terark::rank_select_il_256, terark::rank_select_il_256, CKSortedUintDataCont>       TerarkCompositeUintIndex_IL_256_32_IL_256_32_SortedUint;
+typedef TerarkCompositeUintIndex<terark::rank_select_il_256, terark::rank_select_allzero, CKSortedUintDataCont>      TerarkCompositeUintIndex_IL_256_32_AllZero_SortedUint;
+typedef TerarkCompositeUintIndex<terark::rank_select_allone, terark::rank_select_il_256, CKSortedUintDataCont>       TerarkCompositeUintIndex_AllOne_IL_256_32_SortedUint;
+
+typedef TerarkCompositeUintIndex<terark::rank_select_se_512_64, terark::rank_select_se_512_64, CKSortedUintDataCont> TerarkCompositeUintIndex_SE_512_64_SE_512_64_SortedUint;
+typedef TerarkCompositeUintIndex<terark::rank_select_se_512_64, terark::rank_select_allzero, CKSortedUintDataCont>   TerarkCompositeUintIndex_SE_512_64_AllZero_SortedUint;
+typedef TerarkCompositeUintIndex<terark::rank_select_allone, terark::rank_select_se_512_64, CKSortedUintDataCont>    TerarkCompositeUintIndex_AllOne_SE_512_64_SortedUint;
+typedef TerarkCompositeUintIndex<terark::rank_select_allone, terark::rank_select_allzero, CKSortedUintDataCont>      TerarkCompositeUintIndex_AllOne_AllZero_SortedUint;
+
+TerarkIndexRegister(TerarkCompositeUintIndex_IL_256_32_IL_256_32_SortedUint, "CompositeUintIndex_IL_256_32_IL_256_32_SortedUint");
+TerarkIndexRegister(TerarkCompositeUintIndex_IL_256_32_AllZero_SortedUint, "CompositeUintIndex_IL_256_32_AllZero_SortedUint");
+TerarkIndexRegister(TerarkCompositeUintIndex_AllOne_IL_256_32_SortedUint, "CompositeUintIndex_AllOne_IL_256_32_SortedUint");
+
+TerarkIndexRegister(TerarkCompositeUintIndex_SE_512_64_SE_512_64_SortedUint, "CompositeUintIndex_SE_512_64_SE_512_64_SortedUint");
+TerarkIndexRegister(TerarkCompositeUintIndex_SE_512_64_AllZero_SortedUint, "CompositeUintIndex_SE_512_64_AllZero_SortedUint");
+TerarkIndexRegister(TerarkCompositeUintIndex_AllOne_SE_512_64_SortedUint, "CompositeUintIndex_AllOne_SE_512_64_SortedUint");
+TerarkIndexRegister(TerarkCompositeUintIndex_AllOne_AllZero_SortedUint, "CompositeUintIndex_AllOne_AllZero_SortedUint");
+
 
 typedef TerarkCompositeUintIndex<terark::rank_select_il_256, terark::rank_select_il_256, CKMin0DataCont>       TerarkCompositeUintIndex_IL_256_32_IL_256_32_Uint;
 typedef TerarkCompositeUintIndex<terark::rank_select_il_256, terark::rank_select_allzero, CKMin0DataCont>      TerarkCompositeUintIndex_IL_256_32_AllZero_Uint;
