@@ -1034,8 +1034,6 @@ public:
                                          FixedLenStrVec& keyVec, const KeyStat& ks, 
                                          uint64_t minValue, uint64_t maxValue, size_t key1_len,
                                          valvec<byte_t>& minKey2Data, valvec<byte_t>& maxKey2Data) {
-      // TBD: for test
-      return nullptr;
       const size_t kBlockUnits = 128;
       const size_t kLimit = (1ull << 48) - 1;
       uint64_t key2MinValue = ReadBigEndianUint64((const byte_t*)minKey2Data.data(), minKey2Data.size());
@@ -1200,7 +1198,10 @@ public:
       ptr->rankselect2_.risk_mmap_from((unsigned char*)mem.data() + offset,
                                        header->rankselect2_mem_size);
       offset += header->rankselect2_mem_size;
-      if (header->key2_max_value) { // UintVecMin0
+      if (std::is_same<Key2DataContainer, SortedUintDataCont>::value) {
+        ptr->key2_data_.risk_set_data((unsigned char*)mem.data() + offset,
+                                      header->key2_data_mem_size);
+      } else if (std::is_same<Key2DataContainer, Min0DataCont>::value) {
         size_t num = ptr->rankselect2_.size() - 1; // sub the extra append '0'
         ptr->key2_data_.risk_set_data((unsigned char*)mem.data() + offset,
                                       num, header->key2_max_value);

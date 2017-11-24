@@ -10,7 +10,7 @@ INC=-I. -I.. -I$(TerarkDir) -I$(RocksDir)/include -I$(RocksDir)
 LIBPATH=-L. -L.. -L$(TerarkLib)/lib -L$(RocksDir)
 LIB=-lpthread -lrocksdb -lterark-core-g++-4.8-d -lterark-fsa-g++-4.8-d -lterark-zbs-g++-4.8-d
 
-OBJS=composite_uint_ut.o composite_str_ut.o terark_zip_common.o terark_zip_index.o
+OBJS=composite_sorteduint_ut.o composite_uint_ut.o composite_str_ut.o terark_zip_common.o terark_zip_index.o
 
 
 all: test_composite
@@ -21,6 +21,9 @@ test_composite: ${OBJS}
 
 test_full: ${OBJS}
 	${CXX} -g3 -std=c++11 ${INC} ${LIBPATH} -o index_full_ut index_full_ut.cc ${OBJS} ${LIB}
+
+composite_sorteduint_ut.o:
+	${CXX} ${CFLAGS} ${INC} ${LIBPATH} -c composite_sorteduint_ut.cc ${LIB}
 
 composite_uint_ut.o:
 	${CXX} ${CFLAGS} ${INC} ${LIBPATH} -c composite_uint_ut.cc ${LIB}

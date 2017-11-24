@@ -5,6 +5,17 @@
 int main(int argc, char** argv) {
   printf("EXAGGERATE\n");
 
+  printf("/////////////// sorteduint test\n");
+  test_il256_il256_sorteduint(standard_ascend);
+  test_il256_il256_sorteduint(standard_descend);
+
+  test_allone_il256_sorteduint(standard_ascend);
+  test_allone_il256_sorteduint(standard_descend);
+
+  test_allone_allzero_sorteduint(standard_allzero);
+
+  test_data_seek_short_target_sorteduint();
+
   printf("/////////////// uint test\n");
   test_il256_il256_uint(standard_ascend);
   test_il256_il256_uint(standard_descend);

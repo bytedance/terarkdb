@@ -38,18 +38,21 @@ enum DataStored {
   standard_allzero,
 };
 
+// sorteduint related
+extern void test_il256_il256_sorteduint(DataStored);
+extern void test_allone_il256_sorteduint(DataStored);
+extern void test_allone_allzero_sorteduint(DataStored);
+extern void test_data_seek_short_target_sorteduint();
+
 // uint related
 extern void test_il256_il256_uint(DataStored);
-extern void test_il256_il256_uint(DataStored);
-extern void test_allone_il256_uint(DataStored);
 extern void test_allone_il256_uint(DataStored);
 extern void test_allone_allzero_uint(DataStored);
 extern void test_data_seek_short_target_uint();
 extern void test_seek_cost_effective();
 
+// str related
 extern void test_il256_il256_str(DataStored);
-extern void test_il256_il256_str(DataStored);
-extern void test_allone_il256_str(DataStored);
 extern void test_allone_il256_str(DataStored);
 extern void test_allone_allzero_str(DataStored);
 extern void test_data_seek_short_target_str();
