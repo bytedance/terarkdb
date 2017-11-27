@@ -1234,8 +1234,7 @@ public:
       }
       indexSeq.build_cache(false, false);
       auto ptr = UniquePtrOf(new TerarkUintIndex<RankSelect>());
-      ptr->isUserMemory_ = false;
-      ptr->isBuilding_ = true;
+      ptr->workingState_ = WorkingState::Building;
       FileHeader *header = new FileHeader(indexSeq.mem_size());
       header->min_value = minValue;
       header->max_value = maxValue;
@@ -1273,30 +1272,35 @@ public:
     }
   protected:
     TerarkIndex* loadImpl(fstring mem, fstring fpath) const {
-      auto ptr = UniquePtrOf(new TerarkUintIndex());
-      ptr->isUserMemory_ = false;
-      ptr->isBuilding_ = false;
+      auto getHeader = [](fstring m) {
+        const FileHeader* h = (const FileHeader*)m.data();
+        if (m.size() < sizeof(FileHeader)
+          || h->magic_len != strlen(index_name)
+          || strcmp(h->magic, index_name) != 0
+          || h->header_size != sizeof(FileHeader)
+          || h->version != 1
+          || h->file_size != m.size()
+          ) {
+          throw std::invalid_argument("TerarkUintIndex::Load(): Bad file header");
+        }
+        assert(VerifyClassName<TerarkUintIndex>(h->class_name));
+        return h;
+      };
 
+      auto ptr = UniquePtrOf(new TerarkUintIndex());
+      ptr->workingState_ = WorkingState::UserMemory;
+
+      const FileHeader* header;
       if (mem.data() == nullptr) {
-        MmapWholeFile(fpath).swap(ptr->file_);
-        mem = {(const char*)ptr->file_.base, (ptrdiff_t)ptr->file_.size};
+        MmapWholeFile mmapFile(fpath);
+        mem = mmapFile.memory();
+        ptr->header_ = header = getHeader(mem);
+        MmapWholeFile().swap(mmapFile);
+        ptr->workingState_ = WorkingState::MmapFile;
       }
       else {
-        ptr->isUserMemory_ = true;
+        ptr->header_ = header = getHeader(mem);
       }
-      const FileHeader* header = (const FileHeader*)mem.data();
-
-      if (mem.size() < sizeof(FileHeader)
-        || header->magic_len != strlen(index_name)
-        || strcmp(header->magic, index_name) != 0
-        || header->header_size != sizeof(FileHeader)
-        || header->version != 1
-        || header->file_size != mem.size()
-        ) {
-        throw std::invalid_argument("TerarkUintIndex::Load(): Bad file header");
-      }
-      assert(VerifyClassName<TerarkUintIndex>(header->class_name));
-      ptr->header_ = header;
       ptr->minValue_ = header->min_value;
       ptr->maxValue_ = header->max_value;
       ptr->keyLength_ = header->key_length;
@@ -1311,12 +1315,15 @@ public:
   };
   using TerarkIndex::FactoryPtr;
   virtual ~TerarkUintIndex() {
-    if (isBuilding_) {
+    if (workingState_ == WorkingState::Building) {
       delete (FileHeader*)header_;
     }
-    else if (file_.base != nullptr || isUserMemory_) {
+    else {
       indexSeq_.risk_release_ownership();
       commonPrefix_.risk_release_ownership();
+      if (workingState_ == WorkingState::MmapFile) {
+        terark::mmap_close((void*)header_, header_->file_size);
+      }
     }
   }
   const char* Name() const override {
@@ -1372,14 +1379,16 @@ public:
   }
 protected:
   const FileHeader* header_;
-  MmapWholeFile     file_;
   valvec<char>      commonPrefix_;
   RankSelect        indexSeq_;
   uint64_t          minValue_;
   uint64_t          maxValue_;
-  bool              isUserMemory_;
-  bool              isBuilding_;
   uint32_t          keyLength_;
+  enum class WorkingState : uint32_t {
+    Building = 1,
+    UserMemory = 2,
+    MmapFile = 3,
+  }                 workingState_;
 };
 template<class RankSelect>
 const char* TerarkUintIndex<RankSelect>::index_name = "UintIndex";
