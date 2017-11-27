@@ -153,7 +153,7 @@ void TerarkZipAutoConfigForOnlineDB_CFOptions(struct TerarkZipTableOptions& tzo,
   tzo.hardZipWorkingMemLimit = tzo.softZipWorkingMemLimit * 2;
   tzo.smallTaskMemory = memBytesLimit / 64;
 
-  cfo.write_buffer_size = tzo.smallTaskMemory;
+  cfo.write_buffer_size = memBytesLimit / 32;
   cfo.num_levels = 7;
   cfo.max_write_buffer_number = 3;
   cfo.target_file_size_base = cfo.write_buffer_size * 16;
@@ -295,8 +295,6 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo) {
     MyGetUniversal_uint(min_merge_width,  4);
     MyGetUniversal_uint(max_merge_width, 50);
   }
-  cfo.write_buffer_size     = uint64_t(1) << 30; // 1G
-  cfo.target_file_size_base = uint64_t(1) << 30; // 1G
   MyGetXiB(cfo, write_buffer_size);
   MyGetXiB(cfo, target_file_size_base);
   MyOverrideInt(cfo, max_write_buffer_number);
