@@ -107,7 +107,7 @@ static void init_data_il256_il256_ascend() {
 }
 
 static void init_data_il256_il256_descend() {
-    rocksdb::FileWriter fwriter;
+  rocksdb::FileWriter fwriter;
   fwriter.path = key_path;
   fwriter.open();
   keys.resize(100);
@@ -307,50 +307,59 @@ static void init_data_allone_il256_ascend() {
   rocksdb::FileWriter fwriter;
   fwriter.path = key_path;
   fwriter.open();
-  keys.resize(110);
-  //const int key1min = 0;
+  keys.resize(120);
   char carr[KEY_LEN] = { 0 };
+  for (int i = 0; i < 120; i++) {
+    keys[i] = string(carr, carr + KEY_LEN);
+  }
+  const int key1min = 2;
   size_t kcnt = 0;
-	for (int i = 0; i < 11; i++) {
+	for (int i = key1min; i < 11; i++) {
     carr[7] = i;
     for (int j = 0; j < 10; j++) {
       carr[15] = j;
       // keep the last 10 elem for 'Find Fail Test'
       if (i < 10) {
+        kcnt ++;
         fwriter.writer << fstring(carr, KEY_LEN);
       }
-      if (i == 0 && j == 0) {
+      if (i == key1min && j == 0) {
         stat.minKey.assign(carr, carr + KEY_LEN);
       } else if (i == 9 && j == 9) {
         stat.maxKey.assign(carr, carr + KEY_LEN);
       }
       keys[i * 10 + j] = string(carr, KEY_LEN);
-      kcnt ++;
     }
 	}
   fwriter.close();
-  stat.numKeys = 100;
+  stat.numKeys = kcnt;
   stat.commonPrefixLen = 0;
   stat.minKeyLen = KEY_LEN;
   stat.maxKeyLen = KEY_LEN;
-  stat.sumKeyLen = KEY_LEN * 100;
+  stat.sumKeyLen = KEY_LEN * kcnt;
 }
 
 static void init_data_allone_il256_descend() {
   rocksdb::FileWriter fwriter;
   fwriter.path = key_path;
   fwriter.open();
-  keys.resize(110);
+  keys.resize(120);
   char carr[KEY_LEN] = { 0 };
-	for (int i = 10; i >= 0; i--) {
+  for (int i = 0; i < 120; i++) {
+    keys[i] = string(carr, carr + KEY_LEN);
+  }
+  const int key1min = 2; // key1 min > 0
+  size_t kcnt = 0;
+	for (int i = 10; i >= key1min; i--) {
     carr[7] = i;
     for (int j = 9; j >= 0; j--) {
       carr[15] = j;
       // keep the last 10 elem for 'Find Fail Test'
       if (i < 10) {
+        kcnt ++;
         fwriter.writer << fstring(carr, KEY_LEN);
       }
-      if (i == 0 && j == 0) {
+      if (i == key1min && j == 0) {
         stat.maxKey.assign(carr, carr + KEY_LEN);
       } else if (i == 9 && j == 9) {
         stat.minKey.assign(carr, carr + KEY_LEN);
@@ -359,11 +368,11 @@ static void init_data_allone_il256_descend() {
     }
 	}
   fwriter.close();
-  stat.numKeys = 100;
+  stat.numKeys = kcnt;
   stat.commonPrefixLen = 0;
   stat.minKeyLen = KEY_LEN;
   stat.maxKeyLen = KEY_LEN;
-  stat.sumKeyLen = KEY_LEN * 100;
+  stat.sumKeyLen = KEY_LEN * kcnt;
 }
 
 void test_allone_il256_sorteduint(DataStored dtype) {
@@ -380,6 +389,7 @@ void test_allone_il256_sorteduint(DataStored dtype) {
     assert(0);
   }
   // build index
+  const int key1min = 2;
   FileStream fp(key_path, "rb");
   NativeDataInput<InputBuffer> tempKeyFileReader(&fp);
   auto factory = rocksdb::TerarkIndex::GetFactory("CompositeUintIndex_IL_256_32_IL_256_32_SortedUint");
@@ -392,11 +402,16 @@ void test_allone_il256_sorteduint(DataStored dtype) {
   index = save_reload(index, factory);
   printf("\tsave & reload done\n");
   // search test
-  for (size_t idx = 0; idx < stat.numKeys; idx++) {
-    size_t result = index->Find(keys[idx]);
-    assert(idx == result);
+  size_t expected = 0;
+  for (size_t i = key1min; i < 10; i++) {
+    for (size_t j = 0; j < 10; j++) {
+      size_t idx = i * 10 + j;
+      size_t result = index->Find(keys[idx]);
+      assert(expected == result);
+      expected ++;
+    }
   }
-  for (size_t idx = stat.numKeys; idx < 110; idx++) {
+  for (size_t idx = 0; idx < 10; idx++) {
     size_t result = index->Find(keys[idx]);
     assert(result == size_t(-1));
   }
@@ -406,17 +421,20 @@ void test_allone_il256_sorteduint(DataStored dtype) {
   {
     // seek to 1st, next()
     char arr[KEY_LEN] = { 0 };
+    arr[7] = key1min;
+    size_t expected = 0;
     assert(iter->SeekToFirst());
-    assert(iter->DictRank() == 0);
+    assert(iter->DictRank() == expected);
     assert(fstring(arr, KEY_LEN) == iter->key());
-    for (int i = 0; i < 10; i++) {
+    for (int i = key1min; i < 10; i++) {
       arr[7] = i;
       for (int j = 0; j < 10; j++) {
         arr[15] = j;
-        if (i == 0 && j == 0)
+        if (i == key1min && j == 0)
           continue;
+        expected ++;
         assert(iter->Next());
-        assert(iter->DictRank() == i * 10 + j);
+        assert(iter->DictRank() == expected);
         assert(fstring(arr, KEY_LEN) == iter->key());
       }
     }
@@ -425,9 +443,10 @@ void test_allone_il256_sorteduint(DataStored dtype) {
   {
     // seek to last, prev()
     char arr[KEY_LEN] = { 0 };
+    size_t expected = stat.numKeys - 1;
     assert(iter->SeekToLast());
-    assert(iter->DictRank() == 99);
-    for (int i = 9; i >= 0; i--) {
+    assert(iter->DictRank() == expected);
+    for (int i = 9; i >= key1min; i--) {
       arr[7] = i;
       for (int j = 9; j >= 0; j--) {
         arr[15] = j;
@@ -435,8 +454,9 @@ void test_allone_il256_sorteduint(DataStored dtype) {
           assert(fstring(arr, KEY_LEN) == iter->key());
           continue;
         }
+        expected --;
         assert(iter->Prev());
-        assert(iter->DictRank() == i * 10 + j);
+        assert(iter->DictRank() == expected);
         assert(fstring(arr, KEY_LEN) == iter->key());
       }
     }
@@ -445,14 +465,16 @@ void test_allone_il256_sorteduint(DataStored dtype) {
   {
     // seek matches
     char arr[KEY_LEN] = { 0 };
-    for (int i = 0; i < 9; i++) {
+    size_t expected = 0;
+    for (int i = key1min; i < 9; i++) {
       arr[7] = i;
-      for (int j = 9; j >= 0; j--) {
+      for (int j = 0; j < 10; j++) {
         arr[15] = j;
         int idx = i * 10 + j;
         assert(iter->Seek(keys[idx]));
-        assert(iter->DictRank() == idx);
+        assert(iter->DictRank() == expected);
         assert(fstring(arr, KEY_LEN) == iter->key());
+        expected ++;
       }
     }
   }
@@ -469,7 +491,7 @@ void test_allone_il256_sorteduint(DataStored dtype) {
     char marr[12] = { 0 };
     marr[7] = 4;
     assert(iter->Seek(fstring(marr, 12)));
-    assert(iter->DictRank() == 4 * 10 + 0);
+    assert(iter->DictRank() == 2 * 10);
     arr[7] = 4; arr[15] = 0;
     assert(fstring(arr, KEY_LEN) == iter->key());
   }
@@ -477,15 +499,16 @@ void test_allone_il256_sorteduint(DataStored dtype) {
     // lower_bound
     char arr[17] = { 0 };
     arr[KEY_LEN] = 1;
-    for (int i = 0; i < 9; i++) {
+    size_t expected = 1;
+    for (int i = key1min; i < 10; i++) {
       arr[7] = i;
-      for (int j = 0; j < 9; j++) {
+      for (int j = 0; j < 10; j++) {
         if (i == 9 && j == 9)
           break;
         arr[15] = j;
-        int idx = i * 10 + j + 1;
         assert(iter->Seek(fstring(arr, 17)));
-        assert(iter->DictRank() == idx);
+        assert(iter->DictRank() == expected);
+        expected ++;
       }
     }
   }
@@ -494,8 +517,8 @@ void test_allone_il256_sorteduint(DataStored dtype) {
     char arr[KEY_LEN] = { 0 };
     arr[7] = 4; arr[15] = 14;
     assert(iter->Seek(fstring(arr, KEY_LEN)));
-    int idx = (4 + 1) * 10;
-    assert(iter->DictRank() == idx);
+    int expected = 3 * 10;
+    assert(iter->DictRank() == expected);
 
     arr[7] = 9; arr[15] = 9;
     assert(iter->Seek(fstring(arr, KEY_LEN)));
