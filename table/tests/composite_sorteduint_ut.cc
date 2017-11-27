@@ -186,9 +186,22 @@ void test_il256_il256_sorteduint(DataStored dtype) {
       arr[7] = i;
       for (size_t j = 0; j < 10; j++) {
         arr[15] = j;
-        assert(index->Find(arr) == size_t(-1));
+        assert(index->Find(fstring(arr, arr + KEY_LEN)) == size_t(-1));
       }
     }
+  }
+  {
+    char arr[KEY_LEN] = { 0 };
+    arr[7] = 2; arr[15] = 14;
+    assert(index->Find(fstring(arr, arr + KEY_LEN)) == size_t(-1));
+    //
+    char narr[KEY_LEN + 1] = { 0 };
+    arr[7] = 2; arr[15] = 14;
+    assert(index->Find(fstring(arr, arr + KEY_LEN)) == size_t(-1));
+    //
+    char marr[KEY_LEN] = { 0 };
+    arr[6] = 2; arr[15] = 14;
+    assert(index->Find(fstring(arr, arr + KEY_LEN)) == size_t(-1));
   }
   printf("\tFind done\n");
   // iterator
@@ -269,6 +282,10 @@ void test_il256_il256_sorteduint(DataStored dtype) {
     assert(iter->DictRank() == 2 * 8);
     arr[7] = 4; arr[15] = key2min;
     assert(fstring(arr, KEY_LEN) == iter->key());
+    //
+    char larr[12] = { 0 };
+    larr[3] = 5;
+    assert(iter->Seek(fstring(larr, 12)) == false);
   }
   {
     // lower_bound

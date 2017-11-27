@@ -189,7 +189,7 @@ void test_il256_il256_uint(DataStored dtype) {
       arr[7] = i;
       for (size_t j = 0; j < 10; j++) {
         arr[15] = j;
-        assert(index->Find(arr) == size_t(-1));
+        assert(index->Find(fstring(arr, arr + KEY_LEN)) == size_t(-1));
       }
     }
   }
