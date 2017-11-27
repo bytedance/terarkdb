@@ -1,5 +1,4 @@
 
-
 #include <fstream>
 #include <iostream>
 #include <map>
@@ -156,9 +155,15 @@ void test_il256_il256_sorteduint(DataStored dtype) {
   FileStream fp(key_path, "rb");
   NativeDataInput<InputBuffer> tempKeyFileReader(&fp);
   auto factory = rocksdb::TerarkIndex::GetFactory("CompositeUintIndex_IL_256_32_IL_256_32_SortedUint");
+  {
+    size_t memsz = factory->MemSizeForBuild(stat);
+    assert(memsz < stat.sumKeyLen * 0.8);
+    printf("\tcompress check done\n");
+  }
   rocksdb::TerarkZipTableOptions tableOpt;
   TerarkIndex* index = factory->Build(tempKeyFileReader, tableOpt, stat);
   assert(index->Name() == string("CompositeUintIndex_IL_256_32_IL_256_32_SortedUint"));
+
   printf("\tbuild done\n");
   // save & reload
   index_path = "./tmp_index.txt";
@@ -296,6 +301,8 @@ void test_il256_il256_sorteduint(DataStored dtype) {
     assert(iter->Seek(fstring(arr, KEY_LEN)) == false);
   }
   printf("\tIterator done\n");
+  delete iter;
+  delete index;
   clear();
 }
 
@@ -393,6 +400,11 @@ void test_allone_il256_sorteduint(DataStored dtype) {
   FileStream fp(key_path, "rb");
   NativeDataInput<InputBuffer> tempKeyFileReader(&fp);
   auto factory = rocksdb::TerarkIndex::GetFactory("CompositeUintIndex_IL_256_32_IL_256_32_SortedUint");
+  {
+    size_t memsz = factory->MemSizeForBuild(stat);
+    assert(memsz < stat.sumKeyLen * 0.8);
+    printf("\tcompress check done\n");
+  }
   rocksdb::TerarkZipTableOptions tableOpt;
   TerarkIndex* index = factory->Build(tempKeyFileReader, tableOpt, stat);
   assert(index->Name() == string("CompositeUintIndex_AllOne_IL_256_32_SortedUint"));
@@ -526,6 +538,8 @@ void test_allone_il256_sorteduint(DataStored dtype) {
     assert(iter->Seek(fstring(arr, KEY_LEN)) == false);
   }
   printf("\tIterator done\n");
+  delete iter;
+  delete index;
   clear();
 }
 
@@ -574,6 +588,11 @@ void test_allone_allzero_sorteduint(DataStored dtype) {
   FileStream fp(key_path, "rb");
   NativeDataInput<InputBuffer> tempKeyFileReader(&fp);
   auto factory = rocksdb::TerarkIndex::GetFactory("CompositeUintIndex_IL_256_32_IL_256_32_SortedUint");
+  {
+    size_t memsz = factory->MemSizeForBuild(stat);
+    assert(memsz < stat.sumKeyLen * 0.8);
+    printf("\tcompress check done\n");
+  }
   rocksdb::TerarkZipTableOptions tableOpt;
   TerarkIndex* index = factory->Build(tempKeyFileReader, tableOpt, stat);
   assert(index->Name() == string("CompositeUintIndex_AllOne_AllZero_SortedUint"));
@@ -662,6 +681,8 @@ void test_allone_allzero_sorteduint(DataStored dtype) {
     }
   }
   printf("\tIterator done\n");
+  delete iter;
+  delete index;
   clear();
 }
 
@@ -716,6 +737,11 @@ void test_data_seek_short_target_sorteduint() {
   FileStream fp(key_path, "rb");
   NativeDataInput<InputBuffer> tempKeyFileReader(&fp);
   auto factory = rocksdb::TerarkIndex::GetFactory("CompositeUintIndex_IL_256_32_IL_256_32_SortedUint");
+  {
+    size_t memsz = factory->MemSizeForBuild(stat);
+    assert(memsz < stat.sumKeyLen * 0.8);
+    printf("\tcompress check done\n");
+  }
   rocksdb::TerarkZipTableOptions tableOpt;
   TerarkIndex* index = factory->Build(tempKeyFileReader, tableOpt, stat);
   assert(index->Name() == string("CompositeUintIndex_IL_256_32_AllZero_SortedUint"));
@@ -734,5 +760,7 @@ void test_data_seek_short_target_sorteduint() {
     assert(iter->DictRank() == 250 * 2);
   }
   printf("\tSeek done\n");
+  delete iter;
+  delete index;
   clear();
 }

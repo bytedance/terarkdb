@@ -508,7 +508,7 @@ public:
   void init(size_t len, size_t sz) {
     assert(0);
   }
-  void set_min_value(size_t minval) {
+  void init(size_t minval) {
     min_value_ = minval;
   }
   void risk_release_ownership() {
@@ -581,7 +581,7 @@ public:
   void init(size_t len, size_t sz) {
     assert(0);
   }
-  void set_min_value(size_t minval) {
+  void init(size_t minval) {
     min_value_ = minval;
   }
   void risk_release_ownership() {
@@ -653,8 +653,8 @@ public:
     container_.m_fixlen = len;
     container_.m_size = sz;
   }
-  void set_min_value(size_t minval) {
-    // do nothing
+  void init(size_t minval) {
+    assert(0);
   }
   const byte_t* data() const { return container_.data(); }
   size_t mem_size() const { return container_.mem_size(); }
@@ -737,6 +737,16 @@ public:
 
       file_size = sizeof *this + body_size;
     }
+  };
+
+public:
+  typedef CompositeKeyDataContainer<SortedUintVec> SortedUintDataCont;
+  typedef CompositeKeyDataContainer<UintVecMin0> Min0DataCont;
+  typedef CompositeKeyDataContainer<FixedLenStrVec> StrDataCont;
+  enum ContainerUsedT {
+    kFixedLenStr = 0,
+    kUintMin0,
+    kSortedUint
   };
 
 public:
@@ -920,16 +930,6 @@ public:
 public:
   class MyFactory : public TerarkIndex::Factory {
   public:
-    typedef CompositeKeyDataContainer<SortedUintVec> SortedUintDataCont;
-    typedef CompositeKeyDataContainer<UintVecMin0> Min0DataCont;
-    typedef CompositeKeyDataContainer<FixedLenStrVec> StrDataCont;
-    enum ContainerUsedT {
-      kFixedLenStr = 0,
-      kUintMin0,
-      kSortedUint
-    };
-
-  public:
     /*
      * no option.keyPrefixLen
      */
@@ -1063,7 +1063,7 @@ public:
       printf("sorteduint mem: %zu, keyvec mem: %zu\n", rs.mem_size, keyVec.mem_size());
       SortedUintDataCont container;
       container.swap(uintVec);
-      container.set_min_value(key2MinValue);
+      container.init(key2MinValue);
       if (rankselect1.max_rank0() == 0 && rankselect2.max_rank1() == 0) {
         rank_select_allone rs1(rankselect1.size());
         rank_select_allzero rs2(rankselect2.size());
@@ -1105,7 +1105,7 @@ public:
       keyVec.risk_release_ownership();
       Min0DataCont container;
       container.swap(vecMin0);
-      container.set_min_value(key2MinValue);
+      container.init(key2MinValue);
       if (rankselect1.max_rank0() == 0 && rankselect2.max_rank1() == 0) {
         rank_select_allone rs1(rankselect1.size());
         rank_select_allzero rs2(rankselect2.size());
@@ -1147,7 +1147,6 @@ public:
           rankselect1, rankselect2, container, ks, minValue, maxValue, key1_len, 0, 0);
       }
     }
-    
 
   public:
     unique_ptr<TerarkIndex> LoadMemory(fstring mem) const override {
@@ -1214,13 +1213,13 @@ public:
       if (std::is_same<Key2DataContainer, SortedUintDataCont>::value) {
         ptr->key2_data_.risk_set_data((unsigned char*)mem.data() + offset,
                                       header->key2_data_mem_size);
-        ptr->key2_data_.set_min_value(header->key2_min_value);
+        ptr->key2_data_.init(header->key2_min_value);
       } else if (std::is_same<Key2DataContainer, Min0DataCont>::value) {
         size_t num = ptr->rankselect2_.size() - 1; // sub the extra append '0'
         size_t diff = header->key2_max_value - header->key2_min_value + 1;
         ptr->key2_data_.risk_set_data((unsigned char*)mem.data() + offset,
                                       num, diff);
-        ptr->key2_data_.set_min_value(header->key2_min_value);
+        ptr->key2_data_.init(header->key2_min_value);
       } else { // FixedLenStr
         ptr->key2_data_.risk_set_data((unsigned char*)mem.data() + offset,
                                       header->key2_data_mem_size);
@@ -1243,7 +1242,6 @@ public:
       assert(VerifyClassName<TerarkCompositeUintIndex>(header->class_name));
       return true;
     }
-  
   };
 
 public:
@@ -1281,7 +1279,12 @@ public:
     rankselect1_.swap(rankselect1);
     rankselect2_.swap(rankselect2);
     key2_data_.swap(key2Container);
-    key2_data_.set_min_value(minKey2Value);
+    if (std::is_same<Key2DataContainer, StrDataCont>::value) {
+      key2_data_.init(header->key2_fixed_len,
+        header->key2_data_mem_size / header->key2_fixed_len);
+    } else {
+      key2_data_.init(header->key2_min_value);
+    }
     key1_len_ = key1_len;
     key2_len_ = header->key2_fixed_len;
     minValue_ = minValue;
@@ -1294,12 +1297,13 @@ public:
   virtual ~TerarkCompositeUintIndex() {
     if (isBuilding_) {
       delete (FileHeader*)header_;
-    } else if (file_.base != nullptr || isUserMemory_) {
-      rankselect1_.risk_release_ownership();
-      rankselect2_.risk_release_ownership();
-      key2_data_.risk_release_ownership();
-      commonPrefix_.risk_release_ownership();
     }
+    //} else if (file_.base != nullptr || isUserMemory_) {
+    rankselect1_.risk_release_ownership();
+    rankselect2_.risk_release_ownership();
+    key2_data_.risk_release_ownership();
+    commonPrefix_.risk_release_ownership();
+      //}
   }
   const char* Name() const override {
     return header_->class_name;
