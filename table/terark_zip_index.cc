@@ -77,13 +77,14 @@ struct TerarkIndexHeader {
 };
 
 TerarkIndex::AutoRegisterFactory::AutoRegisterFactory(
-  std::initializer_list<const char*> names,
-  const char* rtti_name,
-  Factory* factory) {
+                          std::initializer_list<const char*> names,
+                          const char* rtti_name,
+                          Factory* factory) {
+  assert(names.size() > 0);
   for (const char* name : names) {
     g_TerarkIndexFactroy.insert_i(name, FactoryPtr(factory));
-    g_TerarkIndexName.insert_i(rtti_name, *names.begin());
   }
+  g_TerarkIndexName.insert_i(rtti_name, *names.begin());
 }
 
 const TerarkIndex::Factory* TerarkIndex::GetFactory(fstring name) {
