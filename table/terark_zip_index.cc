@@ -494,14 +494,13 @@ public:
     typedef boost::mpl::false_ is_mixed;
     rank_select_fewzero() : m_size(0) {}
     explicit
-      rank_select_fewzero(size_t sz) : m_size(sz), m_placeholder(nullptr) {}
+      rank_select_fewzero(size_t sz) : m_size(sz) {}
 
     void clear() { m_size = 0; }
     void risk_release_ownership() {}
     void risk_mmap_from(unsigned char* base, size_t length) {
-      assert(base != nullptr);
-      assert(length == sizeof(*this));
-      m_size = *((size_t*)base);
+      // TBD: ? m_size = *((size_t*)base);
+      m_pospool.risk_mmap_from(base, length);
     }
     void shrink_to_fit() {}
 
@@ -526,7 +525,7 @@ public:
       m_pospool.shrink_to_fit();
     }
 
-    size_t mem_size() const { return sizeof(*this) + m_pospool.mem_size(); }
+    size_t mem_size() const { return m_pospool.mem_size(); }
 
     // exclude pos
     size_t rank0(size_t pos) const { 
@@ -599,22 +598,22 @@ public:
     size_t size() const { return m_size; }
 
     const void* data() const { return m_pospool.data(); }
-    bool operator[](size_t n) const {
-      assert(n < m_size);
-      return is1(n);
+    bool operator[](size_t pos) const {
+      assert(pos < m_size);
+      return is1(pos);
     }
-    bool is1(size_t i) const {
-      assert(n < m_size);
-      size_t res = lower_bound_n(m_pospool, 1, m_pospool.size(), n);
+    bool is1(size_t pos) const {
+      assert(pos < m_size);
+      size_t res = lower_bound_n(m_pospool, 1, m_pospool.size(), pos);
       if (res == m_pospool.size()) { // not in '0's
         return true;
       } else {
-        return (n != m_pospool[res]);
+        return (pos != m_pospool[res]);
       }
     }
-    bool is0(size_t i) const {
-      assert(i < m_size);
-      return !is1(i);
+    bool is0(size_t pos) const {
+      assert(pos < m_size);
+      return !is1(pos);
     }
 
     const uint32_t* get_rank_cache() const { return NULL; }
@@ -622,16 +621,50 @@ public:
     const uint32_t* get_sel1_cache() const { return NULL; }
 
     ///@returns number of continuous one/zero bits starts at bitpos
-    size_t zero_seq_len(size_t bitpos) const {
-      assert(bitpos < m_size);
-      return m_size - bitpos;
+    size_t zero_seq_len(size_t pos) const {
+      assert(pos < m_size);
+      size_t i = rank0(pos);
+      if (i == size_t(-1) || m_pospool[i] != pos) // arr[pos] is not '0'
+        return 0;
+      size_t cnt = 1;
+      while (i < m_pospool.size() - 1) {
+        if (m_pospool[i] + 1 == m_pospool[i + 1])
+          i++, cnt++;
+        else
+          break;
+      }
+      return cnt;
     }
-    size_t zero_seq_revlen(size_t bitpos) const {
-      assert(bitpos < m_size);
-      return bitpos;
+    size_t zero_seq_revlen(size_t pos) const {
+      assert(pos < m_size);
+      size_t i = rank0(pos);
+      if (i == size_t(-1) || i == 1)
+        return 0;
+      /*
+      size_t cnt = 1;
+      while (i < m_pospool.size() - 1) {
+        if (m_pospool[i] + 1 == m_pospool[i + 1])
+          i++, cnt++;
+        else
+          break;
+      }
+      return cnt;
+      */
+      return size_t(-1);
     }
-    size_t one_seq_len(size_t bitpos) const { return 0; }
-    size_t one_seq_revlen(size_t bitpos) const { return 0; }
+    size_t one_seq_len(size_t pos) const {
+      assert(pos < m_size);
+      size_t i = rank0(pos);
+      if (i == size_t(-1) || m_pospool[i] == pos) // arr[pos] is not '1'
+        return 0;
+      if (i == m_pospool.size() - 1)
+        return m_size - pos;
+      else
+        return m_pospool[i + 1] - pos;
+    }
+    size_t one_seq_revlen(size_t bitpos) const {
+      return size_t(-1);
+    }
 
   private:
     /*
