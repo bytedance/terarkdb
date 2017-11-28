@@ -275,17 +275,25 @@ void test_il256_il256_sorteduint(DataStored dtype) {
     char sarr[4] = { 0 };
     assert(iter->Seek(fstring(sarr, 4)));
     assert(iter->DictRank() == 0);
-    // 
+    // shorter key2, smaller than key2min
     char marr[12] = { 0 };
     marr[7] = 4;
     assert(iter->Seek(fstring(marr, 12)));
     assert(iter->DictRank() == 2 * 8);
     arr[7] = 4; arr[15] = key2min;
     assert(fstring(arr, KEY_LEN) == iter->key());
-    //
+    // shorter key2, equal as key2min
+    // for align to left, should larger than all narr[7] = 4
+    // return narr[7] = 6
+    char narr[12] = { 0 };
+    narr[7] = 4; narr[11] = key2min;
+    assert(iter->Seek(fstring(narr, 12)));
+    assert(iter->DictRank() == 3 * 8);
+    // none exist
     char larr[12] = { 0 };
     larr[3] = 5;
     assert(iter->Seek(fstring(larr, 12)) == false);
+    
   }
   {
     // lower_bound
