@@ -530,27 +530,29 @@ public:
 
     // exclude pos
     size_t rank0(size_t pos) const { 
-      assert(pos < m_size); 
+      assert(pos < m_size);
       if (pos == 0)
         return 0;
       pos --;
-      size_t res = lower_bound_n(m_pospool, 0, m_pospool.size(), pos);
+      size_t res = lower_bound_n(m_pospool, 1, m_pospool.size(), pos);
       if (res == m_pospool.size()) {
         return size_t(-1);
-      } else if (m_pospool[res] == pos) {
-        return size_t(-1);
+      } else if (pos == m_pospool[res]) {
+        return res;
+      } else { // < 
+        return res - 1;
       }
-      
-      return bitpos; 
     }
-    size_t rank1(size_t bitpos) const { return 0; }
+    size_t rank1(size_t pos) const {
+      assert(pos < m_size);
+      return pos - rank0(pos);
+    }
     size_t select0(size_t id) const { 
       assert(id < m_size);
       if (id >= m_pospool.size())
         return size_t(-1);
       return m_pospool[id];
     }
-
     /*
      * pos: 0 1 2 3 4
      * bit: 1 0 1 1 0
@@ -564,20 +566,56 @@ public:
      * elif id < m_pospool[i] - i:
      *   return (id - (m_pospool[i - 1] - (i - 1))) + m_pospool[i - 1]
      */
-
     size_t select1(size_t id) const {
-      
-      return size_t(-1);
+      size_t i = lower_bound_n(1, m_pospool.size(), id);
+      if (i >= m_pospool.size())
+        return size_t(-1);
+      // TBD: possible consecutive m_pos[i] + 1 == m_pos[i + 1]
+      // make sure arr[m_pospool[i] - 1] is '1' not '0'
+      if (id == m_pospool[i] - i)
+        return m_pospool[i] - 1;
+      size_t prev = m_pospool[i - 1] - (i - 1);
+      size_t offset = id - prev;
+      return m_pospool[i - 1] + offset;
     }
 
+  private:
+    size_t lower_bound_n(size_t low, size_t upp, const size_t& id) {
+      size_t i = low, j = upp;
+      while (i < j) {
+        size_t mid = (i + j) / 2;
+        size_t rank1 = m_pospool[mid] - mid;
+        if (rank1 < id)
+          i = mid + 1;
+        else
+          j = mid;
+      }
+      return i;
+    }
+
+  public:
     size_t max_rank0() const { return m_pospool.size(); }
     size_t max_rank1() const { return m_size - m_pospool.size(); }
     size_t size() const { return m_size; }
 
-    const void* data() const { return this; }
-    bool operator[](size_t n) const { assert(n < m_size); return false; }
-    bool is1(size_t i) const { assert(i < m_size); return false; }
-    bool is0(size_t i) const { assert(i < m_size); return true;  }
+    const void* data() const { return m_pospool.data(); }
+    bool operator[](size_t n) const {
+      assert(n < m_size);
+      return is1(n);
+    }
+    bool is1(size_t i) const {
+      assert(n < m_size);
+      size_t res = lower_bound_n(m_pospool, 1, m_pospool.size(), n);
+      if (res == m_pospool.size()) { // not in '0's
+        return true;
+      } else {
+        return (n != m_pospool[res]);
+      }
+    }
+    bool is0(size_t i) const {
+      assert(i < m_size);
+      return !is1(i);
+    }
 
     const uint32_t* get_rank_cache() const { return NULL; }
     const uint32_t* get_sel0_cache() const { return NULL; }
