@@ -487,6 +487,125 @@ public:
 
 
 #if defined(TerocksPrivateCode)
+  
+
+  class TERARK_DLL_EXPORT rank_select_fewzero : public febitvec {
+  public:
+    typedef boost::mpl::false_ is_mixed;
+    rank_select_fewzero() : m_size(0) {}
+    explicit
+      rank_select_fewzero(size_t sz) : m_size(sz), m_placeholder(nullptr) {}
+
+    void clear() { m_size = 0; }
+    void risk_release_ownership() {}
+    void risk_mmap_from(unsigned char* base, size_t length) {
+      assert(base != nullptr);
+      assert(length == sizeof(*this));
+      m_size = *((size_t*)base);
+    }
+    void shrink_to_fit() {}
+
+    void resize(size_t newsize) { m_size = newsize; }
+    void swap(rank_select_allzero& another) {
+      std::swap(m_size, another.m_size);
+    }
+    void build_cache(bool, bool) {
+      // reserve 0.01
+      assert(m_size > 0);
+      //m_poslev0.resize((m_size + 127) / 128);
+      //m_poslev1.resize((m_poslev0 + 127) / 128);
+      m_pospool.resize((m_size + 99) / 100 + 1);
+      m_pospool[0] = 0;
+      size_t idx = 1;
+      for (size_t pos = 0; pos < m_size; pos++) {
+        if (is0(pos)) {
+          m_pospool[idx] = pos;
+          idx ++;
+        }
+      }
+      m_pospool.shrink_to_fit();
+    }
+
+    size_t mem_size() const { return sizeof(*this) + m_pospool.mem_size(); }
+
+    // exclude pos
+    size_t rank0(size_t pos) const { 
+      assert(pos < m_size); 
+      if (pos == 0)
+        return 0;
+      pos --;
+      size_t res = lower_bound_n(m_pospool, 0, m_pospool.size(), pos);
+      if (res == m_pospool.size()) {
+        return size_t(-1);
+      } else if (m_pospool[res] == pos) {
+        return size_t(-1);
+      }
+      
+      return bitpos; 
+    }
+    size_t rank1(size_t bitpos) const { return 0; }
+    size_t select0(size_t id) const { 
+      assert(id < m_size);
+      if (id >= m_pospool.size())
+        return size_t(-1);
+      return m_pospool[id];
+    }
+
+    /*
+     * pos: 0 1 2 3 4
+     * bit: 1 0 1 1 0
+     * pos0 = rank0[pos0] + rank1[pos0] => 
+     *   rank1[pos0] = pos0 - rank0[pos0] =>
+     *   rank1[pos0] = m_pospool[id] - id, to find id? =>
+     * j = m_pospool[i] - i, find lower_bound() that
+     * id <= m_pospool[i] - i,
+     * if id == m_pospool[i] - i:
+     *   return m_pospool[i] - 1
+     * elif id < m_pospool[i] - i:
+     *   return (id - (m_pospool[i - 1] - (i - 1))) + m_pospool[i - 1]
+     */
+
+    size_t select1(size_t id) const {
+      
+      return size_t(-1);
+    }
+
+    size_t max_rank0() const { return m_pospool.size(); }
+    size_t max_rank1() const { return m_size - m_pospool.size(); }
+    size_t size() const { return m_size; }
+
+    const void* data() const { return this; }
+    bool operator[](size_t n) const { assert(n < m_size); return false; }
+    bool is1(size_t i) const { assert(i < m_size); return false; }
+    bool is0(size_t i) const { assert(i < m_size); return true;  }
+
+    const uint32_t* get_rank_cache() const { return NULL; }
+    const uint32_t* get_sel0_cache() const { return NULL; }
+    const uint32_t* get_sel1_cache() const { return NULL; }
+
+    ///@returns number of continuous one/zero bits starts at bitpos
+    size_t zero_seq_len(size_t bitpos) const {
+      assert(bitpos < m_size);
+      return m_size - bitpos;
+    }
+    size_t zero_seq_revlen(size_t bitpos) const {
+      assert(bitpos < m_size);
+      return bitpos;
+    }
+    size_t one_seq_len(size_t bitpos) const { return 0; }
+    size_t one_seq_revlen(size_t bitpos) const { return 0; }
+
+  private:
+    /*
+     * poslev0 will store the occurrence of every '0'
+     * poslev1 will store the occurrence of every '0' out of 128 '0'
+     */
+    valvec<size_t> m_poslev0;
+    valvec<size_t> m_poslev1;
+    valvec<size_t> m_pospool
+    size_t m_size;
+  };
+
 
 template<class Container>
 class CompositeKeyDataContainer {
@@ -563,7 +682,6 @@ private:
   SortedUintVec container_;
   uint64_t min_value_;
 };
-
 
 template<>
 class CompositeKeyDataContainer<UintVecMin0> {
