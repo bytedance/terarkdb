@@ -617,6 +617,12 @@ private:
   size_t get_val(size_t idx) const {
     return container_[idx] + min_value_;
   }
+  uint64_t to_uint64(fstring val) const {
+    byte_t targetBuffer[8] = { 0 };
+    memcpy(targetBuffer + (8 - key_len_), val.data(), 
+           std::min<size_t>(key_len_, val.size()));
+    return ReadBigEndianUint64(targetBuffer, 8);
+  }
 public:
   void swap(CompositeKeyDataContainer<SortedUintVec>& other) {
     container_.swap(other.container_);
@@ -640,7 +646,9 @@ public:
   }
   bool equals(size_t idx, fstring val) const {
     assert(idx < container_.size());
-    uint64_t n = ReadBigEndianUint64((const byte_t*)val.data(), val.size());
+    if (val.size() != key_len_)
+      return false;
+    uint64_t n = to_uint64(val);
     return get_val(idx) == n;
   }
   void risk_set_data(byte_t* data, size_t num, size_t maxValue) {
@@ -651,21 +659,18 @@ public:
   }
   fstring operator[](size_t idx) const {
     assert(idx < container_.size());
-    static byte_t arr[8] = { 0 };
+    MY_THREAD_STATIC_LOCAL(byte_t, arr[8]);
+    memset(arr, 8, 0);
     size_t v = get_val(idx);
-    SaveAsBigEndianUint64(arr, arr + 8, v);
-    return fstring(arr, arr + 8);
+    SaveAsBigEndianUint64(arr, arr + key_len_, v);
+    return fstring(arr, arr + key_len_);
   }
   /*
    * 1. m_len == 8,
    * 2. m_len < 8, should align
    */
   size_t lower_bound(size_t lo, size_t hi, fstring val) const {
-    // TBD: confirm this, align issue
-    byte_t targetBuffer[8] = { 0 };
-    memcpy(targetBuffer + (8 - key_len_), val.data(), 
-           std::min<size_t>(key_len_, val.size()));
-    uint64_t n = ReadBigEndianUint64(targetBuffer, 8);
+    uint64_t n = to_uint64(val);
     if (n < min_value_) // if equal, val len may > 8
       return lo;
     n -= min_value_;
@@ -673,8 +678,8 @@ public:
     while (pos != hi) {
       byte_t arr[8] = { 0 };
       size_t v = get_val(pos);
-      SaveAsBigEndianUint64(arr, arr + 8, v);
-      if (fstring(arr, arr + 8) >= val)
+      SaveAsBigEndianUint64(arr, arr + key_len_, v);
+      if (fstring(arr, arr + key_len_) >= val)
         return pos;
       pos++;
     }
@@ -692,6 +697,12 @@ class CompositeKeyDataContainer<UintVecMin0> {
 private:
   size_t get_val(size_t idx) const {
     return container_[idx] + min_value_;
+  }
+  uint64_t to_uint64(fstring val) const {
+    byte_t targetBuffer[8] = { 0 };
+    memcpy(targetBuffer + (8 - key_len_), val.data(), 
+           std::min<size_t>(key_len_, val.size()));
+    return ReadBigEndianUint64(targetBuffer, 8);
   }
 public:
   void swap(CompositeKeyDataContainer<UintVecMin0>& other) {
@@ -715,7 +726,10 @@ public:
     return false;
   }
   bool equals(size_t idx, fstring val) const {
-    uint64_t n = ReadBigEndianUint64((const byte_t*)val.data(), val.size());
+    assert(idx < container_.size());
+    if (val.size() != key_len_)
+      return false;
+    uint64_t n = to_uint64(val);
     return get_val(idx) == n;
   }
   void risk_set_data(byte_t* data, size_t num, size_t maxValue) {
@@ -727,16 +741,14 @@ public:
   }
   fstring operator[](size_t idx) const {
     assert(idx < container_.size());
-    static byte_t arr[8] = { 0 };
+    MY_THREAD_STATIC_LOCAL(byte_t, arr[8]);
+    memset(arr, 8, 0);
     size_t v = get_val(idx);
-    SaveAsBigEndianUint64(arr, arr + 8, v);
-    return fstring(arr, arr + 8);
+    SaveAsBigEndianUint64(arr, key_len_, v);
+    return fstring(arr, arr + key_len_);
   }
   size_t lower_bound(size_t lo, size_t hi, fstring val) const {
-    byte_t targetBuffer[8] = { 0 };
-    memcpy(targetBuffer + (8 - key_len_), val.data(), 
-           std::min<size_t>(key_len_, val.size()));
-    uint64_t n = ReadBigEndianUint64(targetBuffer, 8);
+    uint64_t n = to_uint64(val);
     if (n < min_value_) // if equal, val len may > key_len_
       return lo;
     n -= min_value_;
@@ -744,8 +756,8 @@ public:
     while (pos != hi) {
       byte_t arr[8] = { 0 };
       size_t v = get_val(pos);
-      SaveAsBigEndianUint64(arr, arr + 8, v);
-      if (fstring(arr, arr + 8) >= val)
+      SaveAsBigEndianUint64(arr, key_len_, v);
+      if (fstring(arr, arr + key_len_) >= val)
         return pos;
       pos++;
     }

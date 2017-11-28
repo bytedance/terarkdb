@@ -14,6 +14,14 @@ namespace rocksdb {
   #define MY_THREAD_LOCAL(Type, Var)  static thread_local Type Var
 #endif
 
+#if defined(IOS_CROSS_COMPILE) || defined(__DARWIN_C_LEVEL)
+  #define MY_THREAD_STATIC_LOCAL(Type, Var)  static Type Var
+//#elif defined(_WIN32)
+//  #define MY_THREAD_LOCAL(Type, Var)  static __declspec(thread) Type Var
+#else
+  #define MY_THREAD_STATIC_LOCAL(Type, Var)  static thread_local Type Var
+#endif
+
 #define STD_INFO(format, ...) fprintf(stderr, "%s INFO: " format, StrDateTimeNow(), ##__VA_ARGS__)
 #define STD_WARN(format, ...) fprintf(stderr, "%s WARN: " format, StrDateTimeNow(), ##__VA_ARGS__)
 
