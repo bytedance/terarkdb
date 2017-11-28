@@ -505,10 +505,8 @@ public:
   void swap(SortedUintVec& other) {
     container_.swap(other);
   }
-  void init(size_t len, size_t sz) {
-    assert(0);
-  }
-  void init(size_t minval) {
+  void init(size_t len, size_t minval) {
+    key_len_ = len;
     min_value_ = minval;
   }
   void risk_release_ownership() {
@@ -539,22 +537,27 @@ public:
     SaveAsBigEndianUint64(arr, arr + 8, v);
     return fstring(arr, arr + 8);
   }
+  /*
+   * 1. m_len == 8,
+   * 2. m_len < 8, should align
+   */
   size_t lower_bound(size_t lo, size_t hi, fstring val) const {
-    size_t len = std::min<size_t>(val.size(), 8);
-    uint64_t n = ReadBigEndianUint64((const byte_t*)val.data(), len);
+    // TBD: confirm this, align issue
+    byte_t targetBuffer[8] = { 0 };
+    memcpy(targetBuffer + (8 - key_len_), val.data(), 
+           std::min<size_t>(key_len_, val.size()));
+    uint64_t n = ReadBigEndianUint64(targetBuffer, 8);
     if (n < min_value_) // if equal, val len may > 8
       return lo;
     n -= min_value_;
     size_t pos = terark::lower_bound_n<const SortedUintVec&>(container_, lo, hi, n);
-    if (len != val.size()) { // val.size() > 8
-      while (pos != hi) {
-        byte_t arr[8] = { 0 };
-        size_t v = get_val(pos);
-        SaveAsBigEndianUint64(arr, arr + 8, v);
-        if (fstring(arr, arr + 8) >= val)
-          return pos;
-        pos++;
-      }
+    while (pos != hi) {
+      byte_t arr[8] = { 0 };
+      size_t v = get_val(pos);
+      SaveAsBigEndianUint64(arr, arr + 8, v);
+      if (fstring(arr, arr + 8) >= val)
+        return pos;
+      pos++;
     }
     return pos;
   }
@@ -562,6 +565,7 @@ public:
 private:
   SortedUintVec container_;
   uint64_t min_value_;
+  size_t key_len_;
 };
 
 
@@ -578,10 +582,8 @@ public:
   void swap(UintVecMin0& other) {
     container_.swap(other);
   }
-  void init(size_t len, size_t sz) {
-    assert(0);
-  }
-  void init(size_t minval) {
+  void init(size_t len, size_t minval) {
+    key_len_ = len;
     min_value_ = minval;
   }
   void risk_release_ownership() {
@@ -613,21 +615,21 @@ public:
     return fstring(arr, arr + 8);
   }
   size_t lower_bound(size_t lo, size_t hi, fstring val) const {
-    size_t len = std::min<size_t>(val.size(), 8);
-    uint64_t n = ReadBigEndianUint64((const byte_t*)val.data(), len);
-    if (n < min_value_) // if equal, val len may > 8
+    byte_t targetBuffer[8] = { 0 };
+    memcpy(targetBuffer + (8 - key_len_), val.data(), 
+           std::min<size_t>(key_len_, val.size()));
+    uint64_t n = ReadBigEndianUint64(targetBuffer, 8);
+    if (n < min_value_) // if equal, val len may > key_len_
       return lo;
     n -= min_value_;
     size_t pos = terark::lower_bound_n<const UintVecMin0&>(container_, lo, hi, n);
-    if (len != val.size()) { // val.size() > 8
-      while (pos != hi) {
-        byte_t arr[8] = { 0 };
-        size_t v = get_val(pos);
-        SaveAsBigEndianUint64(arr, arr + 8, v);
-        if (fstring(arr, arr + 8) >= val)
-          return pos;
-        pos++;
-      }
+    while (pos != hi) {
+      byte_t arr[8] = { 0 };
+      size_t v = get_val(pos);
+      SaveAsBigEndianUint64(arr, arr + 8, v);
+      if (fstring(arr, arr + 8) >= val)
+        return pos;
+      pos++;
     }
     return pos;
   }
@@ -635,6 +637,7 @@ public:
 private:
   UintVecMin0 container_;
   uint64_t min_value_;
+  size_t key_len_;
 };
 
 template<>
@@ -1063,7 +1066,7 @@ public:
       printf("sorteduint mem: %zu, keyvec mem: %zu\n", rs.mem_size, keyVec.mem_size());
       SortedUintDataCont container;
       container.swap(uintVec);
-      container.init(key2MinValue);
+      container.init(minKey2Data.size(), key2MinValue);
       if (rankselect1.max_rank0() == 0 && rankselect2.max_rank1() == 0) {
         rank_select_allone rs1(rankselect1.size());
         rank_select_allzero rs2(rankselect2.size());
@@ -1105,7 +1108,7 @@ public:
       keyVec.risk_release_ownership();
       Min0DataCont container;
       container.swap(vecMin0);
-      container.init(key2MinValue);
+      container.init(minKey2Data.size(), key2MinValue);
       if (rankselect1.max_rank0() == 0 && rankselect2.max_rank1() == 0) {
         rank_select_allone rs1(rankselect1.size());
         rank_select_allzero rs2(rankselect2.size());
@@ -1213,13 +1216,13 @@ public:
       if (std::is_same<Key2DataContainer, SortedUintDataCont>::value) {
         ptr->key2_data_.risk_set_data((unsigned char*)mem.data() + offset,
                                       header->key2_data_mem_size);
-        ptr->key2_data_.init(header->key2_min_value);
+        ptr->key2_data_.init(header->key2_fixed_len, header->key2_min_value);
       } else if (std::is_same<Key2DataContainer, Min0DataCont>::value) {
         size_t num = ptr->rankselect2_.size() - 1; // sub the extra append '0'
         size_t diff = header->key2_max_value - header->key2_min_value + 1;
         ptr->key2_data_.risk_set_data((unsigned char*)mem.data() + offset,
                                       num, diff);
-        ptr->key2_data_.init(header->key2_min_value);
+        ptr->key2_data_.init(header->key2_fixed_len, header->key2_min_value);
       } else { // FixedLenStr
         ptr->key2_data_.risk_set_data((unsigned char*)mem.data() + offset,
                                       header->key2_data_mem_size);
@@ -1283,7 +1286,7 @@ public:
       key2_data_.init(header->key2_fixed_len,
         header->key2_data_mem_size / header->key2_fixed_len);
     } else {
-      key2_data_.init(header->key2_min_value);
+      key2_data_.init(header->key2_fixed_len, header->key2_min_value);
     }
     key1_len_ = key1_len;
     key2_len_ = header->key2_fixed_len;
