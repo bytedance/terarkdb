@@ -1851,15 +1851,10 @@ TerarkIndexRegister(CompositeUintIndex_SE_512_64_AllZero_Str);
 TerarkIndexRegister(CompositeUintIndex_AllOne_SE_512_64_Str);
 TerarkIndexRegister(CompositeUintIndex_AllOne_AllZero_Str);
 
-
 typedef UintIndex<terark::rank_select_il_256_32> UintIndex_IL_256_32;
-typedef UintIndex<terark::rank_select_se_256_32> UintIndex_SE_256_32;
-typedef UintIndex<terark::rank_select_se_512_32> UintIndex_SE_512_32;
 typedef UintIndex<terark::rank_select_se_512_64> UintIndex_SE_512_64;
 typedef UintIndex<terark::rank_select_allone>    UintIndex_AllOne;
 TerarkIndexRegister(UintIndex_IL_256_32, "UintIndex");
-TerarkIndexRegister(UintIndex_SE_256_32);
-TerarkIndexRegister(UintIndex_SE_512_32);
 TerarkIndexRegister(UintIndex_SE_512_64);
 TerarkIndexRegister(UintIndex_AllOne);
 #endif // TerocksPrivateCode
