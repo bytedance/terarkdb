@@ -477,7 +477,7 @@ private:
   uint64_t to_uint64(fstring val) const {
     byte_t targetBuffer[8] = { 0 };
     memcpy(targetBuffer + (8 - key_len_), val.data(), 
-           std::min<size_t>(key_len_, val.size()));
+           std::min(key_len_, val.size()));
     return ReadBigEndianUint64(targetBuffer, 8);
   }
 public:
@@ -514,13 +514,22 @@ public:
   void risk_set_data(byte_t* data, size_t sz) {
     container_.risk_set_data(data, sz);
   }
-  fstring operator[](size_t idx) const {
+
+  void get(size_t idx, byte_t* data) const {
     assert(idx < container_.size());
-    MY_THREAD_STATIC_LOCAL(byte_t, arr[8]);
-    memset(arr, 8, 0);
     size_t v = get_val(idx);
-    SaveAsBigEndianUint64(arr, arr + key_len_, v);
-    return fstring(arr, arr + key_len_);
+    SaveAsBigEndianUint64(data, key_len_, v);
+  }
+  int compare(size_t idx, fstring another) const {
+    assert(idx < container_.size());
+    byte_t arr[8] = { 0 };
+    get(idx, arr);
+    if (fstring(arr, arr + key_len_) < another)
+      return -1;
+    else if (fstring(arr, arr + key_len_) == another)
+      return 0;
+    else
+      return 1;
   }
   /*
    * 1. m_len == 8,
@@ -535,7 +544,7 @@ public:
     while (pos != hi) {
       byte_t arr[8] = { 0 };
       size_t v = get_val(pos);
-      SaveAsBigEndianUint64(arr, arr + key_len_, v);
+      SaveAsBigEndianUint64(arr, key_len_, v);
       if (fstring(arr, arr + key_len_) >= val)
         return pos;
       pos++;
@@ -549,7 +558,6 @@ private:
   size_t key_len_;
 };
 
-
 template<>
 class CompositeKeyDataContainer<UintVecMin0> {
 private:
@@ -559,7 +567,7 @@ private:
   uint64_t to_uint64(fstring val) const {
     byte_t targetBuffer[8] = { 0 };
     memcpy(targetBuffer + (8 - key_len_), val.data(), 
-           std::min<size_t>(key_len_, val.size()));
+           std::min(key_len_, val.size()));
     return ReadBigEndianUint64(targetBuffer, 8);
   }
 public:
@@ -597,13 +605,22 @@ public:
   void risk_set_data(byte_t* data, size_t sz) {
     assert(0);
   }
-  fstring operator[](size_t idx) const {
+
+  void get(size_t idx, byte_t* data) const {
     assert(idx < container_.size());
-    MY_THREAD_STATIC_LOCAL(byte_t, arr[8]);
-    memset(arr, 8, 0);
     size_t v = get_val(idx);
-    SaveAsBigEndianUint64(arr, key_len_, v);
-    return fstring(arr, arr + key_len_);
+    SaveAsBigEndianUint64(data, key_len_, v);
+  }
+  int compare(size_t idx, fstring another) const {
+    assert(idx < container_.size());
+    byte_t arr[8] = { 0 };
+    get(idx, arr);
+    if (fstring(arr, arr + key_len_) < another)
+      return -1;
+    else if (fstring(arr, arr + key_len_) == another)
+      return 0;
+    else
+      return 1;
   }
   size_t lower_bound(size_t lo, size_t hi, fstring val) const {
     uint64_t n = to_uint64(val);
@@ -663,9 +680,19 @@ public:
   void risk_set_data(byte_t* data, size_t num, size_t maxValue) {
     assert(0);
   }
-  fstring operator[](size_t idx) const {
+
+  void get(size_t idx, byte_t* data) const {
     assert(idx < container_.size());
-    return container_[idx];
+    memcpy(data, container_[idx].data(), container_[idx].size());
+  }
+  int compare(size_t idx, fstring another) const {
+    assert(idx < container_.size());
+    if (container_[idx] < another)
+      return -1;
+    else if (container_[idx] == another)
+      return 0;
+    else
+      return 1;
   }
   size_t lower_bound(size_t lo, size_t hi, fstring val) const {
     return container_.lower_bound(lo, hi, val);
@@ -814,7 +841,8 @@ public:
         order = index_.rankselect1_.rank1(rankselect1_idx_);
         pos0 = index_.rankselect2_.select0(order);
         if (pos0 == index_.key2_data_.size() - 1) { // last elem
-          m_id = (key2 <= index_.key2_data_[pos0]) ? pos0 : size_t(-1);
+          //m_id = (key2 <= index_.key2_data_[pos0]) ? pos0 : size_t(-1);
+          m_id = (index_.key2_data_.compare(pos0, key2) >= 0) ? pos0 : size_t(-1);
           goto out;
         } else {
           cnt = index_.rankselect2_.one_seq_len(pos0 + 1) + 1;
@@ -912,8 +940,9 @@ public:
       SaveAsBigEndianUint64(buffer_.data() + offset, len1, key1);
       // assign key2
       offset += len1;
-      fstring data = index_.key2_data_[m_id];
-      memcpy(buffer_.data() + offset, data.data(), data.size());
+      byte_t key2_data[8] = { 0 };
+      index_.key2_data_.get(m_id, key2_data);
+      memcpy(buffer_.data() + offset, key2_data, index_.key2_len_);
     }
 
     size_t rankselect1_idx_; // used to track & decode index1 value
