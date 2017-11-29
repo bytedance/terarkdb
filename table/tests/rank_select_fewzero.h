@@ -25,9 +25,11 @@ using terark::febitvec;
 class rank_select_fewzero {
 public:
   typedef boost::mpl::false_ is_mixed;
-rank_select_fewzero() : m_size(0) {}
-  explicit
-    rank_select_fewzero(size_t sz) : m_size(sz), m_bitarr(sz, true) {}
+rank_select_fewzero() : m_size(0), m_prev(-1) {}
+  explicit rank_select_fewzero(size_t sz) :
+    m_size(sz),
+    m_prev(-1),
+    m_bitarr(sz, true) {}
 
   void clear() { m_size = 0; }
   void risk_release_ownership() {}
@@ -98,7 +100,8 @@ rank_select_fewzero() : m_size(0) {}
    * if id == m_pospool[i] - i + 1:
    *   return m_pospool[i] - i
    * elif id < m_pospool[i] - i + 1:
-   *   return (id - (m_pospool[i - 1] - (i - 1) + 1)) + m_pospool[i - 1]
+   *   offset = id - (m_pospool[i - 1] - (i - 1) + 1)
+   *   return m_pospool[i - 1] + offset
    */
   size_t select1(size_t id) const {
     RET_IF_ZERO(id);
@@ -181,9 +184,16 @@ public:
   //  invoking is1() during Next()/Prev()?
   size_t zero_seq_len(size_t pos) const {
     assert(pos < m_size);
+    // to accelerate Next()
+    //if (0 < m_prev && m_prev < m_pospool.size() + 1 &&
+    //    m_pospool[m_prev] < pos && pos < m_pospool[m_prev + 1]) {
+    //  return 0;
+    //}
     size_t i;
-    if (is1(pos, i))
+    if (is1(pos, i)) {
+      //m_prev = i - 1;
       return 0;
+    }
     size_t cnt = 1;
     while (i < m_pospool.size() - 1) {
       if (m_pospool[i] + 1 == m_pospool[i + 1])
@@ -235,5 +245,6 @@ public:
 private:
   valvec<size_t> m_pospool;
   size_t m_size;
+  size_t m_prev;
   febitvec m_bitarr;
 };
