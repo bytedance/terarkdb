@@ -700,23 +700,9 @@ private:
   FixedLenStrVec container_;
 };
 
-/*
- * For simplicity, let's take composite index => index1:index2. Then following 
- * compositeindexes like,
- *   4:6, 4:7, 4:8, 7:19, 7:20, 8:3
- * index1: {4, 7}, use bitmap (also UintIndex's form) to respresent
- *   4(1), 5(0), 6(0), 7(1), 8(1)
- * index1:index2: use bitmap to respresent 4:6(0), 4:7(1), 4:8(1), 7:19(0), 7:20(1), 8:3(0)
- * to search 7:20, use bitmap1 to rank1(7) = 2, then use bitmap2 to select0(2) = position-3,
- * use bitmap2 to select0(3) = position-5. That is, we should search within [3, 5). 
- * iter [3 to 5), 7:20 is found, done.
- */
-template<class RankSelect1, class RankSelect2, 
-         class Key2DataContainer=CompositeKeyDataContainer<UintVecMin0>>
-class CompositeUintIndex : public TerarkIndex {
-public:
+struct CompositeUintIndexBase : public TerarkIndex {
   static const char* index_name;
-  struct FileHeader : public TerarkIndexHeader {
+  struct MyBaseFileHeader : public TerarkIndexHeader {
     uint64_t min_value;
     uint64_t max_value;
     uint64_t rankselect1_mem_size;
@@ -730,41 +716,58 @@ public:
     uint32_t key1_fixed_len;
     uint32_t key2_fixed_len;
     /*
-     * (Rocksdb) For one huge index, we'll split it into multipart-index for the sake of RAM, 
+     * (Rocksdb) For one huge index, we'll split it into multipart-index for the sake of RAM,
      * and each sub-index could have longer commonPrefix compared with ks.commonPrefix.
      * what's more, under such circumstances, ks.commonPrefix may have been rewritten
-     * be upper-level builder to '0'. here, 
+     * be upper-level builder to '0'. here,
      * common_prefix_length = sub-index.commonPrefixLen - whole-index.commonPrefixLen
      */
     uint32_t common_prefix_length;
     uint32_t reserved32;
     uint64_t reserved64;
 
-    FileHeader(size_t body_size) {
+    MyBaseFileHeader(size_t body_size, const std::type_info& ti) {
       memset(this, 0, sizeof *this);
       magic_len = strlen(index_name);
       strncpy(magic, index_name, sizeof magic);
-      size_t name_i = g_TerarkIndexName.find_i(
-        typeid(CompositeUintIndex<RankSelect1, RankSelect2, Key2DataContainer>).name());
+      size_t name_i = g_TerarkIndexName.find_i(ti.name());
       assert(name_i < g_TerarkIndexFactroy.end_i());
       strncpy(class_name, g_TerarkIndexName.val(name_i).c_str(), sizeof class_name);
       header_size = sizeof *this;
       version = 1;
-
       file_size = sizeof *this + body_size;
     }
   };
-
-public:
-  typedef CompositeKeyDataContainer<SortedUintVec> SortedUintDataCont;
-  typedef CompositeKeyDataContainer<UintVecMin0> Min0DataCont;
-  typedef CompositeKeyDataContainer<FixedLenStrVec> StrDataCont;
   enum ContainerUsedT {
     kFixedLenStr = 0,
     kUintMin0,
     kSortedUint
   };
+};
+const char* CompositeUintIndexBase::index_name = "CompositeIndex";
 
+/*
+ * For simplicity, let's take composite index => index1:index2. Then following
+ * compositeindexes like,
+ *   4:6, 4:7, 4:8, 7:19, 7:20, 8:3
+ * index1: {4, 7}, use bitmap (also UintIndex's form) to respresent
+ *   4(1), 5(0), 6(0), 7(1), 8(1)
+ * index1:index2: use bitmap to respresent 4:6(0), 4:7(1), 4:8(1), 7:19(0), 7:20(1), 8:3(0)
+ * to search 7:20, use bitmap1 to rank1(7) = 2, then use bitmap2 to select0(2) = position-3,
+ * use bitmap2 to select0(3) = position-5. That is, we should search within [3, 5).
+ * iter [3 to 5), 7:20 is found, done.
+ */
+template<class RankSelect1, class RankSelect2, class Key2DataContainer>
+class CompositeUintIndex : public CompositeUintIndexBase {
+public:
+  struct FileHeader : MyBaseFileHeader {
+    FileHeader(size_t file_size)
+      : MyBaseFileHeader(file_size, typeid(CompositeUintIndex))
+    {}
+  };
+  typedef CompositeKeyDataContainer<SortedUintVec> SortedUintDataCont;
+  typedef CompositeKeyDataContainer<UintVecMin0> Min0DataCont;
+  typedef CompositeKeyDataContainer<FixedLenStrVec> StrDataCont;
 public:
   class CompositeUintIndexIterator : public TerarkIndex::Iterator {
   public:
@@ -1416,14 +1419,10 @@ protected:
   bool              isUserMemory_;
   bool              isBuilding_;
 };
-template<class RankSelect1, class RankSelect2, class Key2DataContainer>
-const char* CompositeUintIndex<RankSelect1, RankSelect2, Key2DataContainer>::index_name = "CompositeIndex";
 
-template<class RankSelect>
-class UintIndex : public TerarkIndex {
-public:
+struct UintIndexBase : public TerarkIndex{
   static const char* index_name;
-  struct FileHeader : public TerarkIndexHeader
+  struct MyBaseFileHeader : public TerarkIndexHeader
   {
     uint64_t min_value;
     uint64_t max_value;
@@ -1438,20 +1437,27 @@ public:
      */
     uint32_t common_prefix_length;
 
-    FileHeader(size_t body_size) {
+    MyBaseFileHeader(size_t body_size, const std::type_info& ti) {
       memset(this, 0, sizeof *this);
       magic_len = strlen(index_name);
       strncpy(magic, index_name, sizeof magic);
-      size_t name_i = g_TerarkIndexName.find_i(typeid(UintIndex<RankSelect>).name());
+      size_t name_i = g_TerarkIndexName.find_i(ti.name());
       strncpy(class_name, g_TerarkIndexName.val(name_i).c_str(), sizeof class_name);
-
       header_size = sizeof *this;
       version = 1;
-
       file_size = sizeof *this + body_size;
     }
   };
+};
+const char* UintIndexBase::index_name = "UintIndex";
 
+template<class RankSelect>
+class UintIndex : public UintIndexBase {
+public:
+  struct FileHeader : public MyBaseFileHeader {
+    FileHeader(size_t body_size)
+      : MyBaseFileHeader(body_size, typeid(UintIndex)) {}
+  };
   class UIntIndexIterator : public TerarkIndex::Iterator {
   public:
     UIntIndexIterator(const UintIndex& index) : index_(index) {
@@ -1754,8 +1760,6 @@ protected:
   bool              isBuilding_;
   uint32_t          keyLength_;
 };
-template<class RankSelect>
-const char* UintIndex<RankSelect>::index_name = "UintIndex";
 
 #endif // TerocksPrivateCode
 
@@ -1844,12 +1848,13 @@ typedef CompositeUintIndex<terark::rank_select_allone, terark::rank_select_allze
 
 TerarkIndexRegister(CompositeUintIndex_IL_256_32_IL_256_32_Str);
 TerarkIndexRegister(CompositeUintIndex_IL_256_32_AllZero_Str);
-TerarkIndexRegister(CompositeUintIndex_AllOne_IL_256_32_Str);
 
 TerarkIndexRegister(CompositeUintIndex_SE_512_64_SE_512_64_Str);
 TerarkIndexRegister(CompositeUintIndex_SE_512_64_AllZero_Str);
-TerarkIndexRegister(CompositeUintIndex_AllOne_SE_512_64_Str);
+
 TerarkIndexRegister(CompositeUintIndex_AllOne_AllZero_Str);
+TerarkIndexRegister(CompositeUintIndex_AllOne_IL_256_32_Str);
+TerarkIndexRegister(CompositeUintIndex_AllOne_SE_512_64_Str);
 
 typedef UintIndex<terark::rank_select_il_256_32> UintIndex_IL_256_32;
 typedef UintIndex<terark::rank_select_se_512_64> UintIndex_SE_512_64;
