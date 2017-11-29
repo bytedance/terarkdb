@@ -59,7 +59,7 @@ rank_select_fewzero() : m_size(0) {}
   size_t mem_size() const { return m_pospool.used_mem_size(); }
 
   // exclude pos
-  size_t rank0(size_t pos) const { 
+  size_t rank0(size_t pos) const {
     assert(pos < m_size);
     if (pos == 0)
       return 0;
@@ -77,7 +77,7 @@ rank_select_fewzero() : m_size(0) {}
     assert(pos < m_size);
     return pos - rank0(pos);
   }
-  size_t select0(size_t id) const { 
+  size_t select0(size_t id) const {
     assert(id < m_size);
     if (id >= m_pospool.size())
       return size_t(-1);
@@ -132,6 +132,19 @@ private:
     }
     return i;
   }
+  
+  /*
+   * res returns as the rank0 lower_bound
+   */
+  bool is1(size_t pos, size_t& res) const {
+    assert(pos < m_size);
+    res = terark::lower_bound_n(m_pospool, 1, m_pospool.size(), pos);
+    if (res >= m_pospool.size()) { // not in '0's
+      return true;
+    } else {
+      return (pos != m_pospool[res]);
+    }
+  }
 
 public:
   size_t max_rank0() const { return m_pospool.size() - 1; }
@@ -143,15 +156,11 @@ public:
     assert(pos < m_size);
     return is1(pos);
   }
-    
+  // TBD: use hash_set maybe better
   bool is1(size_t pos) const {
     assert(pos < m_size);
-    size_t res = terark::lower_bound_n(m_pospool, 1, m_pospool.size(), pos);
-    if (res == m_pospool.size()) { // not in '0's
-      return true;
-    } else {
-      return (pos != m_pospool[res]);
-    }
+    size_t res;
+    return is1(pos, res);
   }
   bool is0(size_t pos) const {
     assert(pos < m_size);
@@ -165,8 +174,8 @@ public:
   ///@returns number of continuous one/zero bits starts at bitpos
   size_t zero_seq_len(size_t pos) const {
     assert(pos < m_size);
-    size_t i = rank0(pos);
-    if (m_pospool[i] != pos) // arr[pos] is not '0'
+    size_t i;
+    if (is1(pos, i))
       return 0;
     size_t cnt = 1;
     while (i < m_pospool.size() - 1) {
