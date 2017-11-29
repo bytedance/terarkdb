@@ -1607,8 +1607,8 @@ public:
           reader >> keyBuf;
           // even if 'cplen' contains actual data besides prefix,
           // after stripping, the left range is self-meaningful ranges
-          indexSeq.set1(ReadBigEndianUint64(keyBuf.begin() + cplen,
-            keyBuf.end()) - minValue);
+          auto cur = ReadBigEndianUint64(keyBuf.begin() + cplen, keyBuf.end());
+          indexSeq.set1(cur - minValue);
         }
       }
       indexSeq.build_cache(false, false);
