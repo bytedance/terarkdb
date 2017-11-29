@@ -1741,28 +1741,24 @@ protected:
 typedef NestLoudsTrieDAWG_IL_256 NestLoudsTrieDAWG_IL_256_32;
 typedef NestLoudsTrieDAWG_SE_512 NestLoudsTrieDAWG_SE_512_32;
 typedef NestLoudsTrieIndex<NestLoudsTrieDAWG_IL_256_32> TrieDAWG_IL_256_32;
-typedef NestLoudsTrieIndex<NestLoudsTrieDAWG_SE_512_32> TrieDAWG_SE_512_32;
 typedef NestLoudsTrieIndex<NestLoudsTrieDAWG_SE_512_64> TrieDAWG_SE_512_64;
 typedef NestLoudsTrieIndex<NestLoudsTrieDAWG_Mixed_IL_256> TrieDAWG_Mixed_IL_256;
 typedef NestLoudsTrieIndex<NestLoudsTrieDAWG_Mixed_SE_512> TrieDAWG_Mixed_SE_512;
 typedef NestLoudsTrieIndex<NestLoudsTrieDAWG_Mixed_XL_256> TrieDAWG_Mixed_XL_256;
 
 typedef NestLoudsTrieIndex<NestLoudsTrieDAWG_IL_256_32_FL> TrieDAWG_IL_256_32_FL;
-typedef NestLoudsTrieIndex<NestLoudsTrieDAWG_SE_512_32_FL> TrieDAWG_SE_512_32_FL;
 typedef NestLoudsTrieIndex<NestLoudsTrieDAWG_SE_512_64_FL> TrieDAWG_SE_512_64_FL;
 typedef NestLoudsTrieIndex<NestLoudsTrieDAWG_Mixed_IL_256_32_FL> TrieDAWG_Mixed_IL_256_32_FL;
 typedef NestLoudsTrieIndex<NestLoudsTrieDAWG_Mixed_SE_512_32_FL> TrieDAWG_Mixed_SE_512_32_FL;
 typedef NestLoudsTrieIndex<NestLoudsTrieDAWG_Mixed_XL_256_32_FL> TrieDAWG_Mixed_XL_256_32_FL;
 
 TerarkIndexRegisterImp(TrieDAWG_IL_256_32, "NestLoudsTrieDAWG_IL", "IL_256_32", "IL_256", "NestLoudsTrieDAWG_IL_256");
-TerarkIndexRegisterImp(TrieDAWG_SE_512_32, "NestLoudsTrieDAWG_SE_512", "SE_512_32", "SE_512");
-TerarkIndexRegisterImp(TrieDAWG_SE_512_64, "NestLoudsTrieDAWG_SE_512_64", "SE_512_64");
+TerarkIndexRegisterNLT(SE_512_64);
 TerarkIndexRegisterNLT(Mixed_SE_512);
 TerarkIndexRegisterNLT(Mixed_IL_256);
 TerarkIndexRegisterNLT(Mixed_XL_256);
 
 TerarkIndexRegisterNLT(IL_256_32_FL);
-TerarkIndexRegisterNLT(SE_512_32_FL);
 TerarkIndexRegisterNLT(SE_512_64_FL);
 TerarkIndexRegisterNLT(Mixed_SE_512_32_FL);
 TerarkIndexRegisterNLT(Mixed_IL_256_32_FL);
