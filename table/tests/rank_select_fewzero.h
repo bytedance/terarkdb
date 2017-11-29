@@ -14,6 +14,7 @@
 using terark::valvec;
 using terark::febitvec;
 
+// make sure at least one '1' and at least one '0'
 class rank_select_fewzero {
 public:
   typedef boost::mpl::false_ is_mixed;
@@ -63,13 +64,13 @@ rank_select_fewzero() : m_size(0) {}
     if (pos == 0)
       return 0;
     pos --;
-    size_t res = terark::lower_bound_n(m_pospool, 1, m_pospool.size(), pos);
-    if (res == m_pospool.size()) { // TBD: when ?
+    size_t rank = terark::lower_bound_n(m_pospool, 1, m_pospool.size(), pos);
+    if (rank == m_pospool.size()) {
       return m_pospool.size() - 1;
-    } else if (pos == m_pospool[res]) {
-      return res;
+    } else if (pos == m_pospool[rank]) {
+      return rank;
     } else { // < 
-      return res - 1;
+      return rank - 1;
     }
   }
   size_t rank1(size_t pos) const {
@@ -83,38 +84,48 @@ rank_select_fewzero() : m_size(0) {}
     return m_pospool[id];
   }
   /*
-   * pos: 0 1 2 3 4
-   * bit: 1 0 1 1 0
-   * pos0 = rank0[pos0] + rank1[pos0] => 
-   *   rank1[pos0] = pos0 - rank0[pos0] =>
-   *   rank1[pos0] = m_pospool[id] - id, to find id? =>
-   * j = m_pospool[i] - i, find lower_bound() that
-   * id <= m_pospool[i] - i,
-   * if id == m_pospool[i] - i:
-   *   return m_pospool[i] - 1
-   * elif id < m_pospool[i] - i:
-   *   return (id - (m_pospool[i - 1] - (i - 1))) + m_pospool[i - 1]
+   * pos0 = rank0[pos0] + rank1[pos0] - 1 => 
+   *   rank1[pos0] = pos0 - rank0[pos0] + 1 =>
+   *   rank1[pos0] = m_pospool[id] - id + 1, to find id? =>
+   * j = m_pospool[i] - i + 1, find lower_bound() that
+   * id <= m_pospool[i] - i + 1,
+   * if id == m_pospool[i] - i + 1:
+   *   return m_pospool[i] - i
+   * elif id < m_pospool[i] - i + 1:
+   *   return (id - (m_pospool[i - 1] - (i - 1) + 1)) + m_pospool[i - 1]
    */
   size_t select1(size_t id) const {
+    if (id == 0)
+      return 0;
     size_t i = lower_bound(1, m_pospool.size(), id);
-    if (i >= m_pospool.size())
-      return size_t(-1);
     // TBD: possible consecutive m_pos[i] + 1 == m_pos[i + 1]
     // make sure arr[m_pospool[i] - 1] is '1' not '0'
-    if (id == m_pospool[i] - i)
+    if (i < m_pospool.size() && id == rank1_from_rank0(i))
       return m_pospool[i] - 1;
-    size_t prev = m_pospool[i - 1] - (i - 1);
+    if (i >= m_pospool.size()) { // beyond the last '0'
+      i = m_pospool.size() - 1;
+    } else { // move to prev '0'
+      i --; 
+    }
+    size_t prev = rank1_from_rank0(i);
     size_t offset = id - prev;
-    return m_pospool[i - 1] + offset;
+    return m_pospool[i] + offset;
   }
 
 private:
-  size_t lower_bound(size_t low, size_t upp, const size_t& id) const {
+  size_t rank1_from_rank0(size_t i) const {
+    assert(i < m_pospool.size());
+    return m_pospool[i] - i + 1;
+  }
+  /*
+   * return rank0 that m_pospool[rank0] >= rank1's position
+   */
+  size_t lower_bound(size_t low, size_t upp, const size_t& rank1) const {
     size_t i = low, j = upp;
     while (i < j) {
       size_t mid = (i + j) / 2;
-      size_t rank1 = m_pospool[mid] - mid;
-      if (rank1 < id)
+      size_t t = rank1_from_rank0(mid);
+      if (t < rank1)
         i = mid + 1;
       else
         j = mid;
@@ -123,8 +134,8 @@ private:
   }
 
 public:
-  size_t max_rank0() const { return m_pospool.size(); }
-  size_t max_rank1() const { return m_size - m_pospool.size(); }
+  size_t max_rank0() const { return m_pospool.size() - 1; }
+  size_t max_rank1() const { return m_size - (m_pospool.size() - 1); }
   size_t size() const { return m_size; }
 
   const void* data() const { return m_pospool.data(); }
