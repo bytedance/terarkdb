@@ -221,7 +221,7 @@ void NestLoudsTrieBuildCache(MatchingDFA* dfa, double cacheRatio) {
 
 
 template<class NLTrie>
-void NestLoudsTrieGetOrderMap(NLTrie* trie, UintVecMin0& newToOld) {
+void NestLoudsTrieGetOrderMap(const NLTrie* trie, UintVecMin0& newToOld) {
   NonRecursiveDictionaryOrderToStateMapGenerator gen;
   gen(*trie, [&](size_t dictOrderOldId, size_t state) {
     size_t newId = trie->state_to_word_id(state);
@@ -230,7 +230,7 @@ void NestLoudsTrieGetOrderMap(NLTrie* trie, UintVecMin0& newToOld) {
     newToOld.set_wire(newId, dictOrderOldId);
   });
 }
-void NestLoudsTrieGetOrderMap(MatchingDFA* dfa, UintVecMin0& newToOld) {
+void NestLoudsTrieGetOrderMap(const MatchingDFA* dfa, UintVecMin0& newToOld) {
   assert(0);
 }
 
