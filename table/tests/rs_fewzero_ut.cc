@@ -38,13 +38,17 @@ using rocksdb::TerarkIndex;
  */
 void test_simple() {
   printf("==== Test started\n");
-  rank_select_fewzero rs(7);
+  const size_t kCnt = 7;
+  terark::rank_select_simple simple(kCnt);
   size_t pos = 0;
-  rs.set1(pos++); rs.set0(pos++);
-  rs.set1(pos++); rs.set1(pos++);
-  rs.set0(pos++); rs.set0(pos++);
-  rs.set1(pos++);
-  rs.build_cache(true, true);
+  simple.set1(pos++); simple.set0(pos++);
+  simple.set1(pos++); simple.set1(pos++);
+  simple.set0(pos++); simple.set0(pos++);
+  simple.set1(pos++);
+  simple.build_cache(true, true);
+  
+  rank_select_fewzero rs(kCnt);
+  rs.build_from(simple);
   {
     assert(rs.zero_seq_revlen(0) == 0);
     assert(rs.zero_seq_revlen(1) == 0);

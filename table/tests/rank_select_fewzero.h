@@ -25,54 +25,57 @@ using terark::febitvec;
 class rank_select_fewzero {
 public:
   typedef boost::mpl::false_ is_mixed;
-rank_select_fewzero() : m_size(0), m_prev(-1) {}
+  rank_select_fewzero() : m_size(0), m_prev(-1) {}
   explicit rank_select_fewzero(size_t sz) :
     m_size(sz),
-    m_prev(-1),
-    m_bitarr(sz, true) {}
-
-  void clear() { m_size = 0; }
-  void risk_release_ownership() {}
+    m_prev(-1) {}
+    
+  void clear() { 
+    m_size = 0;
+    m_prev = size_t(-1);
+    m_pospool.clear();
+  }
+  void risk_release_ownership() {
+    m_pospool.risk_release_ownership();
+  }
   void risk_mmap_from(unsigned char* base, size_t length) {
     // TBD: ? m_size = *((size_t*)base);
     m_pospool.risk_set_data((size_t*)base, length);
   }
-  void shrink_to_fit() {}
 
   void resize(size_t newsize) {
     m_size = newsize;
+    m_pospool.resize(newsize);
   }
   void swap(rank_select_fewzero& another) {
     std::swap(m_size, another.m_size);
     std::swap(m_pospool, another.m_pospool);
   }
-  void set0(size_t pos) { m_bitarr.set0(pos); }
-  void set1(size_t pos) { m_bitarr.set1(pos); }
-  void build_cache(bool, bool) {
-    // reserve 0.01
-    assert(m_size > 0);
-    // TBD: for test, just resize to m_size now
-    //m_pospool.resize((m_size + 99) / 100 + 1);
+
+  template<class RankSelect>
+  void build_from(RankSelect& rs) {
+    // TBD: for fewzero, 0.01 is actually reasonable
+    //m_pospool.resize(m_size / 10);
     m_pospool.resize(m_size + 1);
     m_pospool[0] = 0;
     size_t idx = 1;
     for (size_t pos = 0; pos < m_size; pos++) {
-      if (m_bitarr.is0(pos)) {
+      if (rs.is0(pos)) {
         m_pospool[idx] = pos;
         idx ++;
       }
     }
     m_pospool.resize(idx);
   }
-
-  size_t mem_size() const { return m_pospool.used_mem_size(); }
+  size_t mem_size() const { return sizeof(m_size) + m_pospool.used_mem_size(); }
 
   // exclude pos
   size_t rank0(size_t pos) const {
     assert(pos < m_size);
     RET_IF_ZERO(pos);
     pos --;
-    size_t rank = terark::lower_bound_n(m_pospool, 1, m_pospool.size(), pos);
+    size_t rank = terark::lower_bound_n<const valvec<size_t>&>(
+      m_pospool, 1, m_pospool.size(), pos);
     if (rank == m_pospool.size()) {
       return m_pospool.size() - 1;
     } else if (pos == m_pospool[rank]) {
@@ -246,5 +249,4 @@ private:
   valvec<size_t> m_pospool;
   size_t m_size;
   size_t m_prev;
-  febitvec m_bitarr;
 };
