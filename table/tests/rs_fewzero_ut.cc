@@ -46,6 +46,24 @@ void test_simple() {
   rs.set1(pos++);
   rs.build_cache(true, true);
   {
+    assert(rs.zero_seq_revlen(0) == 0);
+    assert(rs.zero_seq_revlen(1) == 0);
+    assert(rs.zero_seq_revlen(2) == 1);
+    assert(rs.zero_seq_revlen(3) == 0);
+    assert(rs.zero_seq_revlen(4) == 0);
+    assert(rs.zero_seq_revlen(5) == 1);
+    assert(rs.zero_seq_revlen(6) == 2);
+  }
+  {
+    assert(rs.one_seq_revlen(0) == 0);
+    assert(rs.one_seq_revlen(1) == 1);
+    assert(rs.one_seq_revlen(2) == 0);
+    assert(rs.one_seq_revlen(3) == 1);
+    assert(rs.one_seq_revlen(4) == 2);
+    assert(rs.one_seq_revlen(5) == 0);
+    assert(rs.one_seq_revlen(6) == 0);
+  }
+  {
     assert(rs.zero_seq_len(0) == 0);
     assert(rs.zero_seq_len(1) == 1);
     assert(rs.zero_seq_len(2) == 0);
@@ -55,6 +73,13 @@ void test_simple() {
     assert(rs.zero_seq_len(6) == 0);
   }
   {
+    assert(rs.one_seq_len(0) == 1);
+    assert(rs.one_seq_len(1) == 0);
+    assert(rs.one_seq_len(2) == 2);
+    assert(rs.one_seq_len(3) == 1);
+    assert(rs.one_seq_len(4) == 0);
+    assert(rs.one_seq_len(5) == 0);
+    assert(rs.one_seq_len(6) == 1);
   }
   {
     assert(rs.is0(0) == false);

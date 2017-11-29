@@ -14,6 +14,13 @@
 using terark::valvec;
 using terark::febitvec;
 
+
+#define RET_IF_ZERO(v) \
+  do {                    \
+    if ((v) == 0)         \
+      return 0;           \
+  } while(0)
+
 // make sure at least one '1' and at least one '0'
 class rank_select_fewzero {
 public:
@@ -61,8 +68,7 @@ rank_select_fewzero() : m_size(0) {}
   // exclude pos
   size_t rank0(size_t pos) const {
     assert(pos < m_size);
-    if (pos == 0)
-      return 0;
+    RET_IF_ZERO(pos);
     pos --;
     size_t rank = terark::lower_bound_n(m_pospool, 1, m_pospool.size(), pos);
     if (rank == m_pospool.size()) {
@@ -95,8 +101,7 @@ rank_select_fewzero() : m_size(0) {}
    *   return (id - (m_pospool[i - 1] - (i - 1) + 1)) + m_pospool[i - 1]
    */
   size_t select1(size_t id) const {
-    if (id == 0)
-      return 0;
+    RET_IF_ZERO(id);
     size_t i = lower_bound(1, m_pospool.size(), id);
     // TBD: possible consecutive m_pos[i] + 1 == m_pos[i + 1]
     // make sure arr[m_pospool[i] - 1] is '1' not '0'
@@ -134,7 +139,7 @@ private:
   }
   
   /*
-   * res returns as the rank0 lower_bound
+   * res: as the rank0 lower_bound
    */
   bool is1(size_t pos, size_t& res) const {
     assert(pos < m_size);
@@ -172,6 +177,8 @@ public:
   const uint32_t* get_sel1_cache() const { return NULL; }
 
   ///@returns number of continuous one/zero bits starts at bitpos
+  // TBD: has one prev state stored, which may helpful to avoid
+  //  invoking is1() during Next()/Prev()?
   size_t zero_seq_len(size_t pos) const {
     assert(pos < m_size);
     size_t i;
@@ -188,11 +195,11 @@ public:
   }
   size_t zero_seq_revlen(size_t pos) const {
     assert(pos < m_size);
-    size_t i = rank0(pos);
-    if (m_pospool[i] != pos - 1) // prev should be '0'
+    RET_IF_ZERO(pos);
+    pos --;
+    size_t i;
+    if (is1(pos, i))
       return 0;
-    else
-      i --;
     size_t cnt = 1;
     while (i > 1) { // m_pospool[0] is placeholder
       if (m_pospool[i - 1] + 1 == m_pospool[i])
@@ -204,20 +211,25 @@ public:
   }
   size_t one_seq_len(size_t pos) const {
     assert(pos < m_size);
-    size_t i = rank0(pos);
-    if (m_pospool[i] == pos) // arr[pos] is not '1'
+    size_t i;
+    if (!is1(pos, i))
       return 0;
-    if (i == m_pospool.size() - 1)
+    if (i >= m_pospool.size() - 1)
       return m_size - pos;
     else
-      return m_pospool[i + 1] - pos;
+      return m_pospool[i] - pos;
   }
   size_t one_seq_revlen(size_t pos) const {
     assert(pos < m_size);
-    size_t i = rank0(pos);
-    if (m_pospool[i] == pos - 1) // prev is '0'
+    RET_IF_ZERO(pos);
+    pos --;
+    size_t i;
+    if (!is1(pos, i))
       return 0;
-    return pos - m_pospool[i] - 1;
+    if (i == 1)
+      return pos + 1;
+    else
+      return pos - m_pospool[i - 1];
   }
 
 private:
