@@ -160,8 +160,7 @@ private:
     , fstring tmpDictFile
     , const DictZipBlobStore::ZipStat& dzstat);
 #endif // TerocksPrivateCode
-  Status WriteMetaData(const TerarkZipMultiOffsetInfo& offsetInfo,
-                       std::initializer_list<std::pair<const std::string*, BlockHandle>> blocks);
+  Status WriteMetaData(std::initializer_list<std::pair<const std::string*, BlockHandle>> blocks);
   DictZipBlobStore::ZipBuilder* createZipBuilder() const;
 
   Arena arena_;
@@ -169,6 +168,7 @@ private:
   const TerarkZipTableFactory* table_factory_;
   // fuck out TableBuilderOptions
   const ImmutableCFOptions& ioptions_;
+  TerarkZipMultiOffsetInfo offset_info_;
   std::vector<std::unique_ptr<IntTblPropCollector>> collectors_;
   // end fuck out TableBuilderOptions
   InternalIterator* second_pass_iter_ = nullptr;
