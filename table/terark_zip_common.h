@@ -64,10 +64,13 @@ inline uint64_t ReadBigEndianUint64(const byte_t* beg, size_t len) {
   memcpy(c.bytes + (8 - len), beg, len);
   return VALUE_OF_BYTE_SWAP_IF_LITTLE_ENDIAN(c.value);
 }
-
 inline uint64_t ReadBigEndianUint64(const byte_t* beg, const byte_t* end) {
   assert(end - beg <= 8);
   return ReadBigEndianUint64(beg, end-beg);
+}
+inline uint64_t ReadBigEndianUint64(fstring data) {
+  assert(data.size() <= 8);
+  return ReadBigEndianUint64(data.data(), data.size());
 }
 
 inline
@@ -79,6 +82,10 @@ inline
 uint64_t ReadBigEndianUint64Aligned(const byte_t* beg, const byte_t* end) {
   assert(end - beg == 8); TERARK_UNUSED_VAR(end);
   return VALUE_OF_BYTE_SWAP_IF_LITTLE_ENDIAN(*(const uint64_t*)beg);
+}
+inline uint64_t ReadBigEndianUint64Aligned(fstring data) {
+  assert(data.size() == 8);
+  return VALUE_OF_BYTE_SWAP_IF_LITTLE_ENDIAN(*(const uint64_t*)data.p);
 }
 
 inline void SaveAsBigEndianUint64(byte_t* beg, size_t len, uint64_t value) {
