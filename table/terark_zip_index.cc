@@ -1090,16 +1090,14 @@ public:
                                          valvec<byte_t>& minKey2Data, valvec<byte_t>& maxKey2Data) {
       const size_t kBlockUnits = 128;
       const size_t kLimit = (1ull << 48) - 1;
-      uint64_t key2MinValue = ReadBigEndianUint64((const byte_t*)minKey2Data.data(), minKey2Data.size());
-      uint64_t key2MaxValue = ReadBigEndianUint64((const byte_t*)maxKey2Data.data(), maxKey2Data.size());
+      uint64_t key2MinValue = ReadBigEndianUint64(minKey2Data);
+      uint64_t key2MaxValue = ReadBigEndianUint64(maxKey2Data);
       auto builder = SortedUintVec::createBuilder(false, kBlockUnits);
-      uint64_t prev = 
-        ReadBigEndianUint64((const byte_t*)keyVec[0].data(), keyVec[0].size()) - key2MinValue;
+      uint64_t prev = ReadBigEndianUint64(keyVec[0]) - key2MinValue;
       builder->push_back(prev);
       for (size_t i = 1; i < keyVec.size(); i++) {
         fstring str = keyVec[i];
-        uint64_t key2 = 
-          ReadBigEndianUint64((const byte_t*)str.data(), str.size()) - key2MinValue;
+        uint64_t key2 = ReadBigEndianUint64(str) - key2MinValue;
         if (terark_unlikely(abs_diff(key2, prev) > kLimit)) // should not use sorted uint vec
           return nullptr;
         prev = key2;
@@ -1178,8 +1176,8 @@ public:
                                          FixedLenStrVec& keyVec, const KeyStat& ks, 
                                          uint64_t minValue, uint64_t maxValue, size_t key1_len,
                                          valvec<byte_t>& minKey2Data, valvec<byte_t>& maxKey2Data) {
-      uint64_t key2MinValue = ReadBigEndianUint64((const byte_t*)minKey2Data.data(), minKey2Data.size());
-      uint64_t key2MaxValue = ReadBigEndianUint64((const byte_t*)maxKey2Data.data(), maxKey2Data.size());
+      uint64_t key2MinValue = ReadBigEndianUint64(minKey2Data);
+      uint64_t key2MaxValue = ReadBigEndianUint64(maxKey2Data);
       uint64_t diff = key2MaxValue - key2MinValue + 1;
       size_t bitUsed = UintVecMin0::compute_uintbits(diff);
       printf("uint bit used: %zu, keyvec bit used: %zu\n", bitUsed, keyVec.m_fixlen * 8);
@@ -1191,7 +1189,7 @@ public:
       vecMin0.risk_set_data(const_cast<byte_t*>(keyVec.data()), keyVec.size(), bitUsed);
       for (size_t i = 0; i < keyVec.size(); i++) {
         fstring str = keyVec[i];
-        uint64_t key2 = ReadBigEndianUint64((const byte_t*)str.data(), str.size());
+        uint64_t key2 = ReadBigEndianUint64(str);
         vecMin0.set_wire(i, key2 - key2MinValue);
       }
       keyVec.risk_release_ownership();
@@ -1791,7 +1789,7 @@ public:
     }
     key = key.substr(commonPrefix_.size());
     assert(key.n == keyLength_);
-    uint64_t findValue = ReadBigEndianUint64((const byte_t*)key.begin(), key.size());
+    uint64_t findValue = ReadBigEndianUint64(key);
     if (findValue < minValue_ || findValue > maxValue_) {
       return size_t(-1);
     }
