@@ -70,7 +70,7 @@ inline uint64_t ReadBigEndianUint64(const byte_t* beg, const byte_t* end) {
 }
 inline uint64_t ReadBigEndianUint64(fstring data) {
   assert(data.size() <= 8);
-  return ReadBigEndianUint64(data.data(), data.size());
+  return ReadBigEndianUint64((const byte_t*)data.data(), data.size());
 }
 
 inline
