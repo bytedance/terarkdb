@@ -38,7 +38,7 @@ public:
     m_pospool.risk_release_ownership();
   }
   void risk_mmap_from(unsigned char* base, size_t length) {
-    m_pospool.risk_set_data((T*)base, length);
+    m_pospool.risk_set_data((T*)base, length / sizeof(T));
     m_size = m_pospool[0];
   }
 
@@ -286,7 +286,7 @@ public:
     m_pospool.risk_release_ownership();
   }
   void risk_mmap_from(unsigned char* base, size_t length) {
-    m_pospool.risk_set_data((size_t*)base, length);
+    m_pospool.risk_set_data((size_t*)base, length / sizeof(T));
     m_size = m_pospool[0];
   }
 
