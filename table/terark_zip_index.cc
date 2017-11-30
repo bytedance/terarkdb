@@ -536,7 +536,7 @@ public:
     if (n < min_value_) // if equal, val len may > 8
       return lo;
     n -= min_value_;
-    size_t pos = lower_bound_n<const SortedUintVec&>(container_, lo, hi, n);
+    size_t pos = container_.lower_bound(lo, hi, n);
     while (pos != hi) {
       byte_t arr[8] = { 0 };
       size_t v = get_val(pos);
