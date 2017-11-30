@@ -11,6 +11,7 @@
 #include <terark/num_to_str.hpp>
 #if defined(TerocksPrivateCode)
 #include <terark/fsa/fsa_for_union_dfa.hpp>
+#include "tests/rank_select_fewzero.h"
 #endif // TerocksPrivateCode
 
 namespace rocksdb {
@@ -36,6 +37,13 @@ void AppendExtraZero(std::function<void(const void *, size_t)> write, size_t len
   if (0 < len && len < 8) {
     write(zeros, len);
   }
+}
+
+// 0 < cnt0 and cnt0 < 0.02 * total
+bool IsFewZero(size_t total, size_t cnt0) {
+  assert(total > 0);
+  return (0 < cnt0) && 
+    (cnt0 < (double)total * 0.02);
 }
 
 struct TerarkIndexHeader {
@@ -939,9 +947,17 @@ public:
 public:
   class MyFactory : public TerarkIndex::Factory {
   public:
-    /*
-     * no option.keyPrefixLen
-     */
+    enum AmazingCombinationT {
+        kAllOne_AllZero = 0,
+        kAllOne_FewZero,
+        kAllOne_Normal,
+        kFewZero_AllZero,
+        kFewZero_FewZero,
+        kFewZero_Normal,
+        kNormal_Normal
+      };
+  public:
+    // no option.keyPrefixLen
     TerarkIndex* Build(NativeDataInput<InputBuffer>& reader,
                        const TerarkZipTableOptions& tzopt,
                        const KeyStat& ks) const override {
@@ -1044,6 +1060,24 @@ public:
         maxData.assign(data.data(), data.size());
       }
     }
+    static AmazingCombinationT figureCombination(RankSelect1& rs1, RankSelect2& rs2) {
+      bool isRS1FewZero = IsFewZero(rs1.size(), rs1.max_rank0());
+      bool isRS2FewZero = IsFewZero(rs2.size(), rs2.max_rank0());
+      if (rs1.max_rank0() == 0 && rs2.max_rank1() == 0)
+        return kAllOne_AllZero;
+      else if (rs1.max_rank0() == 0 && isRS2FewZero)
+        return kAllOne_FewZero;
+      else if (rs1.max_rank0() == 0)
+        return kAllOne_Normal;
+      else if (isRS1FewZero && rs2.max_rank1() == 0)
+        return kFewZero_AllZero;
+      else if (isRS1FewZero && isRS2FewZero)
+        return kFewZero_FewZero;
+      else if (isRS1FewZero)
+        return kFewZero_Normal;
+      else
+        return kNormal_Normal;
+    }
     static TerarkIndex* CreateIndexWithSortedUintCont(RankSelect1& rankselect1, RankSelect2& rankselect2,
                                          FixedLenStrVec& keyVec, const KeyStat& ks, 
                                          uint64_t minValue, uint64_t maxValue, size_t key1_len,
@@ -1073,22 +1107,54 @@ public:
       SortedUintDataCont container;
       container.swap(uintVec);
       container.init(minKey2Data.size(), key2MinValue);
-      if (rankselect1.max_rank0() == 0 && rankselect2.max_rank1() == 0) {
+      AmazingCombinationT cob = figureCombination(rankselect1, rankselect2);
+      switch (cob) {
+      case kAllOne_AllZero: {
         rank_select_allone rs1(rankselect1.size());
         rank_select_allzero rs2(rankselect2.size());
         return new CompositeUintIndex<rank_select_allone, rank_select_allzero, SortedUintDataCont>(
           rs1, rs2, container, ks, minValue, maxValue, key1_len, key2MinValue, key2MaxValue);
-      } else if (rankselect2.max_rank1() == 0) {
-        rank_select_allzero rs2(rankselect2.size());
-        return new CompositeUintIndex<RankSelect1, rank_select_allzero, SortedUintDataCont>(
-          rankselect1, rs2, container, ks, minValue, maxValue, key1_len, key2MinValue, key2MaxValue);
-      } else if (rankselect1.max_rank0() == 0) {
+      }
+      case kAllOne_FewZero: {
+        rank_select_allone rs1(rankselect1.size());
+        rank_select_fewzero<typename RankSelect2::index_t> rs2(rankselect2.size());
+        rs2.build_from(rankselect2);
+        return new CompositeUintIndex<rank_select_allone, rank_select_fewzero<typename RankSelect2::index_t>, SortedUintDataCont>(
+          rs1, rs2, container, ks, minValue, maxValue, key1_len, key2MinValue, key2MaxValue);
+      }
+      case kAllOne_Normal: {
         rank_select_allone rs1(rankselect1.size());
         return new CompositeUintIndex<rank_select_allone, RankSelect2, SortedUintDataCont>(
           rs1, rankselect2, container, ks, minValue, maxValue, key1_len, key2MinValue, key2MaxValue);
-      } else {
+      }
+      case kFewZero_AllZero: {
+        rank_select_fewzero<typename RankSelect1::index_t> rs1(rankselect1.size());
+        rs1.build_from(rankselect1);
+        rank_select_allzero rs2(rankselect2.size());
+        return new CompositeUintIndex<rank_select_fewzero<typename RankSelect1::index_t>, rank_select_allzero, SortedUintDataCont>(
+          rs1, rs2, container, ks, minValue, maxValue, key1_len, key2MinValue, key2MaxValue);
+      }
+      case kFewZero_FewZero: {
+        rank_select_fewzero<typename RankSelect1::index_t> rs1(rankselect1.size());
+        rs1.build_from(rankselect1);
+        rank_select_fewzero<typename RankSelect2::index_t> rs2(rankselect2.size());
+        rs2.build_from(rankselect2);
+        return new CompositeUintIndex<rank_select_fewzero<typename RankSelect1::index_t>, 
+                                      rank_select_fewzero<typename RankSelect2::index_t>, SortedUintDataCont>(
+          rs1, rs2, container, ks, minValue, maxValue, key1_len, key2MinValue, key2MaxValue);
+      }
+      case kFewZero_Normal: {
+        rank_select_fewzero<typename RankSelect1::index_t> rs1(rankselect1.size());
+        rs1.build_from(rankselect1);
+        return new CompositeUintIndex<rank_select_fewzero<typename RankSelect1::index_t>, RankSelect2, SortedUintDataCont>(
+          rs1, rankselect2, container, ks, minValue, maxValue, key1_len, key2MinValue, key2MaxValue);
+      }
+      case kNormal_Normal: {
         return new CompositeUintIndex<RankSelect1, RankSelect2, SortedUintDataCont>(
           rankselect1, rankselect2, container, ks, minValue, maxValue, key1_len, key2MinValue, key2MaxValue);
+      }
+      default:
+        assert(0);
       }
     }
     static TerarkIndex* CreateIndexWithUintCont(RankSelect1& rankselect1, RankSelect2& rankselect2,

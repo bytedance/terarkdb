@@ -143,7 +143,6 @@ private:
     }
     return i;
   }
-  
   // res: as the rank0 lower_bound
   bool is1(size_t pos, size_t& res) const {
     assert(pos < m_size);
@@ -160,6 +159,8 @@ public:
   size_t max_rank0() const { return m_pospool.size() - 1; }
   size_t max_rank1() const { return m_size - (m_pospool.size() - 1); }
   size_t size() const { return m_size; }
+  size_t isall0() const { return false; }
+  size_t isall1() const { return false; }
 
   const void* data() const { return m_pospool.data(); }
   bool operator[](size_t pos) const {
@@ -182,18 +183,30 @@ public:
   const uint32_t* get_sel1_cache() const { return NULL; }
 
   ///@returns number of continuous one/zero bits starts at bitpos
-  // TBD: has one prev state stored, which may helpful to avoid
-  //  invoking is1() during Next()/Prev()?
   size_t zero_seq_len(size_t pos) const {
     assert(pos < m_size);
-    // to accelerate Next()
-    //if (0 < m_prev && m_prev < m_pospool.size() + 1 &&
-    //    m_pospool[m_prev] < pos && pos < m_pospool[m_prev + 1]) {
-    //  return 0;
-    //}
+    size_t i;
+    if (is1(pos, i))
+      return 0;
+    size_t cnt = 1;
+    while (i < m_pospool.size() - 1) {
+      if (m_pospool[i] + 1 == m_pospool[i + 1])
+        i++, cnt++;
+      else
+        break;
+    }
+    return cnt;
+  }
+  // Next() accelerate version
+  size_t zero_seq_len(size_t pos, size_t& hint) const {
+    assert(pos < m_size);
+    if (0 < hint && hint < m_pospool.size() - 1 &&
+        m_pospool[hint] < pos && pos < m_pospool[hint + 1]) {
+      return 0;
+    }
     size_t i;
     if (is1(pos, i)) {
-      //m_prev = i - 1;
+      hint = i - 1;
       return 0;
     }
     size_t cnt = 1;
@@ -205,6 +218,7 @@ public:
     }
     return cnt;
   }
+
   size_t zero_seq_revlen(size_t pos) const {
     assert(pos < m_size);
     RET_IF_ZERO(pos);
@@ -379,6 +393,8 @@ public:
   size_t max_rank0() const { return m_size - (m_pospool.size() - 1); }
   size_t max_rank1() const { return m_pospool.size() - 1; }
   size_t size() const { return m_size; }
+  size_t isall0() const { return false; }
+  size_t isall1() const { return false; }
 
   const void* data() const { return m_pospool.data(); }
   bool operator[](size_t pos) const {
@@ -400,6 +416,7 @@ public:
   const uint32_t* get_sel0_cache() const { return NULL; }
   const uint32_t* get_sel1_cache() const { return NULL; }
 
+  ///@returns number of continuous one/zero bits starts at bitpos
   size_t zero_seq_len(size_t pos) const {
     assert(pos < m_size);
     size_t i;
@@ -410,6 +427,23 @@ public:
     else
       return m_pospool[i] - pos;
   }
+  // Next() accelerate version ???
+  size_t zero_seq_len(size_t pos, size_t& hint) const {
+    assert(pos < m_size);
+    if (0 < hint && hint < m_pospool.size() - 1 &&
+        m_pospool[hint] < pos && pos < m_pospool[hint + 1]) {
+      hint ++;
+      return m_pospool[hint] - pos;
+    }
+    size_t i;
+    if (!is0(pos, i))
+      return 0;
+    if (i >= m_pospool.size())
+      return m_size - pos;
+    else
+      return m_pospool[i] - pos;
+  }
+
   size_t zero_seq_revlen(size_t pos) const {
     assert(pos < m_size);
     RET_IF_ZERO(pos);
@@ -423,21 +457,12 @@ public:
       return pos - m_pospool[i - 1];
   }
 
-  ///@returns number of continuous one/zero bits starts at bitpos
-  // TBD: has one prev state stored, which may helpful to avoid
-  //  invoking is1() during Next()/Prev()?
+
   size_t one_seq_len(size_t pos) const {
     assert(pos < m_size);
-    // to accelerate Next()
-    //if (0 < m_prev && m_prev < m_pospool.size() + 1 &&
-    //    m_pospool[m_prev] < pos && pos < m_pospool[m_prev + 1]) {
-    //  return 0;
-    //}
     size_t i;
-    if (is0(pos, i)) {
-      //m_prev = i - 1;
+    if (is0(pos, i))
       return 0;
-    }
     size_t cnt = 1;
     while (i < m_pospool.size() - 1) {
       if (m_pospool[i] + 1 == m_pospool[i + 1])
