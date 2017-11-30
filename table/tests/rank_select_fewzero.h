@@ -26,6 +26,7 @@ template<typename T>
 class rank_select_fewzero {
 public:
   typedef boost::mpl::false_ is_mixed;
+  typedef T index_t;
   rank_select_fewzero() : m_size(0) {}
   explicit rank_select_fewzero(size_t sz) : m_size(sz) {}
     
@@ -37,7 +38,7 @@ public:
     m_pospool.risk_release_ownership();
   }
   void risk_mmap_from(unsigned char* base, size_t length) {
-    m_pospool.risk_set_data((size_t*)base, length);
+    m_pospool.risk_set_data((T*)base, length);
     m_size = m_pospool[0];
   }
 
@@ -49,6 +50,8 @@ public:
     std::swap(m_size, another.m_size);
     std::swap(m_pospool, another.m_pospool);
   }
+  void set0(size_t) { assert(0); }
+  void set1(size_t) { assert(0); }
 
   template<class RankSelect>
   void build_from(RankSelect& rs) {
@@ -65,6 +68,7 @@ public:
     assert(1 < idx && idx < m_size);
     m_pospool.resize(idx);
   }
+  void build_cache(bool, bool) { assert(0); }
   size_t mem_size() const { return m_pospool.used_mem_size(); }
 
   // exclude pos
@@ -270,6 +274,7 @@ template<typename T>
 class rank_select_fewone {
 public:
   typedef boost::mpl::false_ is_mixed;
+  typedef T index_t;
   rank_select_fewone() : m_size(0) {}
   explicit rank_select_fewone(size_t sz) : m_size(sz) {}
     
@@ -293,6 +298,8 @@ public:
     std::swap(m_size, another.m_size);
     std::swap(m_pospool, another.m_pospool);
   }
+  void set0(size_t) { assert(0); }
+  void set1(size_t) { assert(0); }
 
   template<class RankSelect>
   void build_from(RankSelect& rs) {
@@ -309,6 +316,7 @@ public:
     assert(1 < idx && idx < m_size);
     m_pospool.resize(idx);
   }
+  void build_cache(bool, bool) { assert(0); }
   size_t mem_size() const { return m_pospool.used_mem_size(); }
 
   // exclude pos

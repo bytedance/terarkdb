@@ -769,7 +769,8 @@ void test_data_seek_short_target_sorteduint() {
   }
   rocksdb::TerarkZipTableOptions tableOpt;
   TerarkIndex* index = factory->Build(tempKeyFileReader, tableOpt, stat);
-  assert(index->Name() == string("CompositeUintIndex_IL_256_32_AllZero_SortedUint"));
+  //assert(index->Name() == string("CompositeUintIndex_IL_256_32_AllZero_SortedUint"));
+  assert(index->Name() == string("CompositeUintIndex_FewZero32_AllZero_SortedUint"));
   printf("\tbuild done\n");
   // save & reload
   index_path = "./tmp_index.txt";
