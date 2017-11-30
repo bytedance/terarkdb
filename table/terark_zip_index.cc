@@ -515,7 +515,7 @@ public:
     container_.risk_set_data(data, sz);
   }
 
-  void get(size_t idx, byte_t* data) const {
+  void copy_to(size_t idx, byte_t* data) const {
     assert(idx < container_.size());
     size_t v = get_val(idx);
     SaveAsBigEndianUint64(data, key_len_, v);
@@ -523,13 +523,9 @@ public:
   int compare(size_t idx, fstring another) const {
     assert(idx < container_.size());
     byte_t arr[8] = { 0 };
-    get(idx, arr);
-    if (fstring(arr, arr + key_len_) < another)
-      return -1;
-    else if (fstring(arr, arr + key_len_) == another)
-      return 0;
-    else
-      return 1;
+    copy_to(idx, arr);
+    fstring me(arr, arr + key_len_);
+    return fstring_func::compare3()(me, another);
   }
   /*
    * 1. m_len == 8,
@@ -606,7 +602,7 @@ public:
     assert(0);
   }
 
-  void get(size_t idx, byte_t* data) const {
+  void copy_to(size_t idx, byte_t* data) const {
     assert(idx < container_.size());
     size_t v = get_val(idx);
     SaveAsBigEndianUint64(data, key_len_, v);
@@ -614,13 +610,9 @@ public:
   int compare(size_t idx, fstring another) const {
     assert(idx < container_.size());
     byte_t arr[8] = { 0 };
-    get(idx, arr);
-    if (fstring(arr, arr + key_len_) < another)
-      return -1;
-    else if (fstring(arr, arr + key_len_) == another)
-      return 0;
-    else
-      return 1;
+    copy_to(idx, arr);
+    fstring me(arr, arr + key_len_);
+    return fstring_func::compare3()(me, another);
   }
   size_t lower_bound(size_t lo, size_t hi, fstring val) const {
     uint64_t n = to_uint64(val);
@@ -681,18 +673,13 @@ public:
     assert(0);
   }
 
-  void get(size_t idx, byte_t* data) const {
+  void copy_to(size_t idx, byte_t* data) const {
     assert(idx < container_.size());
     memcpy(data, container_[idx].data(), container_[idx].size());
   }
   int compare(size_t idx, fstring another) const {
     assert(idx < container_.size());
-    if (container_[idx] < another)
-      return -1;
-    else if (container_[idx] == another)
-      return 0;
-    else
-      return 1;
+    return fstring_func::compare3()(container_[idx], another);
   }
   size_t lower_bound(size_t lo, size_t hi, fstring val) const {
     return container_.lower_bound(lo, hi, val);
@@ -940,9 +927,7 @@ public:
       SaveAsBigEndianUint64(buffer_.data() + offset, len1, key1);
       // assign key2
       offset += len1;
-      byte_t key2_data[8] = { 0 };
-      index_.key2_data_.get(m_id, key2_data);
-      memcpy(buffer_.data() + offset, key2_data, index_.key2_len_);
+      index_.key2_data_.copy_to(m_id, buffer_.data() + offset);
     }
 
     size_t rankselect1_idx_; // used to track & decode index1 value
