@@ -1264,24 +1264,70 @@ public:
     static TerarkIndex* CreateIndexWithStrCont(RankSelect1& rankselect1, RankSelect2& rankselect2,
                                                FixedLenStrVec& keyVec, const KeyStat& ks, 
                                                uint64_t minValue, uint64_t maxValue, size_t key1_len) {
+      const size_t kRS1Cnt = rankselect1.size(); // to accompany ks2cnt
+      const size_t kRS2Cnt = rankselect2.size(); // extra '0' append to rs2, included as well
       StrDataCont container;
       container.swap(keyVec);
-      if (rankselect1.max_rank0() == 0 && rankselect2.max_rank1() == 0) {
-        rank_select_allone rs1(rankselect1.size());
-        rank_select_allzero rs2(rankselect2.size());
+      // StrDataCont
+      AmazingCombinationT cob = figureCombination(rankselect1, rankselect2);
+      switch (cob) {
+      case kAllOne_AllZero: {
+        rank_select_allone rs1(kRS1Cnt);
+        rank_select_allzero rs2(kRS2Cnt);
         return new CompositeUintIndex<rank_select_allone, rank_select_allzero, StrDataCont>(
           rs1, rs2, container, ks, minValue, maxValue, key1_len, 0, 0);
-      } else if (rankselect2.max_rank1() == 0) {
-        rank_select_allzero rs2(rankselect2.size());
-        return new CompositeUintIndex<RankSelect1, rank_select_allzero, StrDataCont>(
-          rankselect1, rs2, container, ks, minValue, maxValue, key1_len, 0, 0);
-      } else if (rankselect1.max_rank0() == 0) {
-        rank_select_allone rs1(rankselect1.size());
+      }
+      case kAllOne_FewZero: {
+        rank_select_allone rs1(kRS1Cnt);
+        rank_select_fewzero<typename RankSelect2::index_t> rs2(kRS2Cnt);
+        rs2.build_from(rankselect2);
+        return new CompositeUintIndex<rank_select_allone, rank_select_fewzero<typename RankSelect2::index_t>, StrDataCont>(
+          rs1, rs2, container, ks, minValue, maxValue, key1_len, 0, 0);
+      }
+      case kAllOne_Normal: {
+        rank_select_allone rs1(kRS1Cnt);
         return new CompositeUintIndex<rank_select_allone, RankSelect2, StrDataCont>(
           rs1, rankselect2, container, ks, minValue, maxValue, key1_len, 0, 0);
-      } else {
+      }
+      case kFewZero_AllZero: {
+        rank_select_fewzero<typename RankSelect1::index_t> rs1(kRS1Cnt);
+        rs1.build_from(rankselect1);
+        rank_select_allzero rs2(kRS2Cnt);
+        return new CompositeUintIndex<rank_select_fewzero<typename RankSelect1::index_t>, rank_select_allzero, StrDataCont>(
+          rs1, rs2, container, ks, minValue, maxValue, key1_len, 0, 0);
+      }
+      case kFewZero_FewZero: {
+        rank_select_fewzero<typename RankSelect1::index_t> rs1(kRS1Cnt);
+        rs1.build_from(rankselect1);
+        rank_select_fewzero<typename RankSelect2::index_t> rs2(kRS2Cnt);
+        rs2.build_from(rankselect2);
+        return new CompositeUintIndex<rank_select_fewzero<typename RankSelect1::index_t>, 
+                                      rank_select_fewzero<typename RankSelect2::index_t>, StrDataCont>(
+          rs1, rs2, container, ks, minValue, maxValue, key1_len, 0, 0);
+      }
+      case kFewZero_Normal: {
+        rank_select_fewzero<typename RankSelect1::index_t> rs1(kRS1Cnt);
+        rs1.build_from(rankselect1);
+        return new CompositeUintIndex<rank_select_fewzero<typename RankSelect1::index_t>, RankSelect2, StrDataCont>(
+          rs1, rankselect2, container, ks, minValue, maxValue, key1_len, 0, 0);
+      }
+      case kNormal_AllZero: {
+        rank_select_allzero rs2(kRS2Cnt);
+        return new CompositeUintIndex<RankSelect1, rank_select_allzero, StrDataCont>(
+          rankselect1, rs2, container, ks, minValue, maxValue, key1_len, 0, 0);
+      }
+      case kNormal_FewZero: {
+        rank_select_fewzero<typename RankSelect2::index_t> rs2(kRS2Cnt);
+        rs2.build_from(rankselect2);
+        return new CompositeUintIndex<RankSelect1, rank_select_fewzero<typename RankSelect2::index_t>, StrDataCont>(
+          rankselect1, rs2, container, ks, minValue, maxValue, key1_len, 0, 0);
+      }
+      case kNormal_Normal: {
         return new CompositeUintIndex<RankSelect1, RankSelect2, StrDataCont>(
           rankselect1, rankselect2, container, ks, minValue, maxValue, key1_len, 0, 0);
+      }
+      default:
+        assert(0);
       }
     }
 
@@ -2007,47 +2053,47 @@ typedef CompositeUintIndex<rank_select_se_512_64, rank_select_se_512_64, CKMin0D
 TerarkIndexRegister(CompositeUintIndex_IL_256_32_IL_256_32_Uint);
 TerarkIndexRegister(CompositeUintIndex_SE_512_64_SE_512_64_Uint);
 
-/*
-typedef CompositeUintIndex<rank_select_il_256_32, rank_select_il_256_32, CKMin0DataCont> CompositeUintIndex_IL_256_32_IL_256_32_Uint;
-typedef CompositeUintIndex<rank_select_il_256_32, rank_select_allzero  , CKMin0DataCont> CompositeUintIndex_IL_256_32_AllZero_Uint;
-
-typedef CompositeUintIndex<rank_select_se_512_64, rank_select_se_512_64, CKMin0DataCont> CompositeUintIndex_SE_512_64_SE_512_64_Uint;
-typedef CompositeUintIndex<rank_select_se_512_64, rank_select_allzero  , CKMin0DataCont> CompositeUintIndex_SE_512_64_AllZero_Uint;
-
-typedef CompositeUintIndex<rank_select_allone   , rank_select_il_256_32, CKMin0DataCont> CompositeUintIndex_AllOne_IL_256_32_Uint;
-typedef CompositeUintIndex<rank_select_allone   , rank_select_se_512_64, CKMin0DataCont> CompositeUintIndex_AllOne_SE_512_64_Uint;
-typedef CompositeUintIndex<rank_select_allone   , rank_select_allzero  , CKMin0DataCont> CompositeUintIndex_AllOne_AllZero_Uint;
-
-TerarkIndexRegister(CompositeUintIndex_IL_256_32_IL_256_32_Uint);
-TerarkIndexRegister(CompositeUintIndex_IL_256_32_AllZero_Uint);
-
-TerarkIndexRegister(CompositeUintIndex_SE_512_64_SE_512_64_Uint);
-TerarkIndexRegister(CompositeUintIndex_SE_512_64_AllZero_Uint);
-
-TerarkIndexRegister(CompositeUintIndex_AllOne_IL_256_32_Uint);
-TerarkIndexRegister(CompositeUintIndex_AllOne_SE_512_64_Uint);
-TerarkIndexRegister(CompositeUintIndex_AllOne_AllZero_Uint);
-*/
-
-typedef CompositeUintIndex<rank_select_il_256_32, rank_select_il_256_32, CKStrDataCont> CompositeUintIndex_IL_256_32_IL_256_32;
-typedef CompositeUintIndex<rank_select_il_256_32, rank_select_allzero  , CKStrDataCont> CompositeUintIndex_IL_256_32_AllZero;
-
-typedef CompositeUintIndex<rank_select_se_512_64, rank_select_se_512_64, CKStrDataCont> CompositeUintIndex_SE_512_64_SE_512_64;
-typedef CompositeUintIndex<rank_select_se_512_64, rank_select_allzero  , CKStrDataCont> CompositeUintIndex_SE_512_64_AllZero;
-
+// ---- CKStrDataCont
+// allone allzero
+typedef CompositeUintIndex<rank_select_allone   , rank_select_allzero  , CKStrDataCont> CompositeUintIndex_AllOne_AllZero;
+TerarkIndexRegister(CompositeUintIndex_AllOne_AllZero);
+// allone fewzero
+typedef CompositeUintIndex<rank_select_allone   , rs_fewzero_32  ,       CKStrDataCont> CompositeUintIndex_AllOne_FewZero32;
+typedef CompositeUintIndex<rank_select_allone   , rs_fewzero_64  ,       CKStrDataCont> CompositeUintIndex_AllOne_FewZero64;
+TerarkIndexRegister(CompositeUintIndex_AllOne_FewZero32);
+TerarkIndexRegister(CompositeUintIndex_AllOne_FewZero64);
+// allone normal
 typedef CompositeUintIndex<rank_select_allone   , rank_select_il_256_32, CKStrDataCont> CompositeUintIndex_AllOne_IL_256_32;
 typedef CompositeUintIndex<rank_select_allone   , rank_select_se_512_64, CKStrDataCont> CompositeUintIndex_AllOne_SE_512_64;
-typedef CompositeUintIndex<rank_select_allone   , rank_select_allzero  , CKStrDataCont> CompositeUintIndex_AllOne_AllZero;
-
-TerarkIndexRegister(CompositeUintIndex_IL_256_32_IL_256_32);
-TerarkIndexRegister(CompositeUintIndex_IL_256_32_AllZero);
-
-TerarkIndexRegister(CompositeUintIndex_SE_512_64_SE_512_64);
-TerarkIndexRegister(CompositeUintIndex_SE_512_64_AllZero);
-
-TerarkIndexRegister(CompositeUintIndex_AllOne_AllZero);
 TerarkIndexRegister(CompositeUintIndex_AllOne_IL_256_32);
 TerarkIndexRegister(CompositeUintIndex_AllOne_SE_512_64);
+// fewzero allzero
+typedef CompositeUintIndex<rs_fewzero_32        , rank_select_allzero  , CKStrDataCont> CompositeUintIndex_FewZero32_AllZero;
+typedef CompositeUintIndex<rs_fewzero_64        , rank_select_allzero  , CKStrDataCont> CompositeUintIndex_FewZero64_AllZero;
+TerarkIndexRegister(CompositeUintIndex_FewZero32_AllZero);
+TerarkIndexRegister(CompositeUintIndex_FewZero64_AllZero);
+// fewzero fewzero
+typedef CompositeUintIndex<rs_fewzero_32        , rs_fewzero_32        , CKStrDataCont> CompositeUintIndex_FewZero32_FewZero32;
+typedef CompositeUintIndex<rs_fewzero_64        , rs_fewzero_64        , CKStrDataCont> CompositeUintIndex_FewZero32_FewZero64;
+TerarkIndexRegister(CompositeUintIndex_FewZero32_FewZero32);
+TerarkIndexRegister(CompositeUintIndex_FewZero32_FewZero64);
+// normal allzero
+typedef CompositeUintIndex<rank_select_il_256_32, rank_select_allzero  , CKStrDataCont> CompositeUintIndex_IL_256_32_AllZero;
+typedef CompositeUintIndex<rank_select_se_512_64, rank_select_allzero  , CKStrDataCont> CompositeUintIndex_SE_512_64_AllZero;
+TerarkIndexRegister(CompositeUintIndex_IL_256_32_AllZero);
+TerarkIndexRegister(CompositeUintIndex_SE_512_64_AllZero);
+// normal fewzero
+typedef CompositeUintIndex<rank_select_il_256_32, rs_fewzero_32        , CKStrDataCont> CompositeUintIndex_IL_256_32_FewZero32;
+typedef CompositeUintIndex<rank_select_se_512_64, rs_fewzero_64        , CKStrDataCont> CompositeUintIndex_SE_512_64_FewZero64;
+TerarkIndexRegister(CompositeUintIndex_IL_256_32_FewZero32);
+TerarkIndexRegister(CompositeUintIndex_SE_512_64_FewZero64);
+// normal normal
+typedef CompositeUintIndex<rank_select_il_256_32, rank_select_il_256_32, CKStrDataCont> CompositeUintIndex_IL_256_32_IL_256_32;
+typedef CompositeUintIndex<rank_select_se_512_64, rank_select_se_512_64, CKStrDataCont> CompositeUintIndex_SE_512_64_SE_512_64;
+TerarkIndexRegister(CompositeUintIndex_IL_256_32_IL_256_32);
+TerarkIndexRegister(CompositeUintIndex_SE_512_64_SE_512_64);
+
+
 
 typedef UintIndex<rank_select_il_256_32> UintIndex_IL_256_32;
 typedef UintIndex<rank_select_se_512_64> UintIndex_SE_512_64;
