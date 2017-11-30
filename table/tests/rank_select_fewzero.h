@@ -22,25 +22,23 @@ using terark::febitvec;
   } while(0)
 
 // make sure at least one '1' and at least one '0'
+template<typename T>
 class rank_select_fewzero {
 public:
   typedef boost::mpl::false_ is_mixed;
-  rank_select_fewzero() : m_size(0), m_prev(-1) {}
-  explicit rank_select_fewzero(size_t sz) :
-    m_size(sz),
-    m_prev(-1) {}
+  rank_select_fewzero() : m_size(0) {}
+  explicit rank_select_fewzero(size_t sz) : m_size(sz) {}
     
-  void clear() { 
+  void clear() {
     m_size = 0;
-    m_prev = size_t(-1);
     m_pospool.clear();
   }
   void risk_release_ownership() {
     m_pospool.risk_release_ownership();
   }
   void risk_mmap_from(unsigned char* base, size_t length) {
-    // TBD: ? m_size = *((size_t*)base);
     m_pospool.risk_set_data((size_t*)base, length);
+    m_size = m_pospool[0];
   }
 
   void resize(size_t newsize) {
@@ -55,9 +53,8 @@ public:
   template<class RankSelect>
   void build_from(RankSelect& rs) {
     // TBD: for fewzero, 0.01 is actually reasonable
-    //m_pospool.resize(m_size / 10);
     m_pospool.resize(m_size + 1);
-    m_pospool[0] = 0;
+    m_pospool[0] = m_size;
     size_t idx = 1;
     for (size_t pos = 0; pos < m_size; pos++) {
       if (rs.is0(pos)) {
@@ -65,16 +62,17 @@ public:
         idx ++;
       }
     }
+    assert(1 < idx && idx < m_size);
     m_pospool.resize(idx);
   }
-  size_t mem_size() const { return sizeof(m_size) + m_pospool.used_mem_size(); }
+  size_t mem_size() const { return m_pospool.used_mem_size(); }
 
   // exclude pos
   size_t rank0(size_t pos) const {
     assert(pos < m_size);
     RET_IF_ZERO(pos);
     pos --;
-    size_t rank = terark::lower_bound_n<const valvec<size_t>&>(
+    size_t rank = terark::lower_bound_n<const valvec<T>&>(
       m_pospool, 1, m_pospool.size(), pos);
     if (rank == m_pospool.size()) {
       return m_pospool.size() - 1;
@@ -86,11 +84,12 @@ public:
   }
   size_t rank1(size_t pos) const {
     assert(pos < m_size);
+    RET_IF_ZERO(pos);
     return pos - rank0(pos);
   }
   size_t select0(size_t id) const {
-    assert(id < m_size);
-    if (id >= m_pospool.size())
+    RET_IF_ZERO(id);
+    if (id > max_rank0())
       return size_t(-1);
     return m_pospool[id];
   }
@@ -108,6 +107,8 @@ public:
    */
   size_t select1(size_t id) const {
     RET_IF_ZERO(id);
+    if (id > max_rank1())
+      return size_t(-1);
     size_t i = lower_bound(1, m_pospool.size(), id);
     // TBD: possible consecutive m_pos[i] + 1 == m_pos[i + 1]
     // make sure arr[m_pospool[i] - 1] is '1' not '0'
@@ -128,9 +129,7 @@ private:
     assert(i < m_pospool.size());
     return m_pospool[i] - i + 1;
   }
-  /*
-   * return rank0 that m_pospool[rank0] >= rank1's position
-   */
+  // return rank0 that m_pospool[rank0] >= rank1's position
   size_t lower_bound(size_t low, size_t upp, const size_t& rank1) const {
     size_t i = low, j = upp;
     while (i < j) {
@@ -145,12 +144,10 @@ private:
     return i;
   }
   
-  /*
-   * res: as the rank0 lower_bound
-   */
+  // res: as the rank0 lower_bound
   bool is1(size_t pos, size_t& res) const {
     assert(pos < m_size);
-    res = terark::lower_bound_n<const terark::valvec<size_t>&>(
+    res = terark::lower_bound_n<const terark::valvec<T>&>(
       m_pospool, 1, m_pospool.size(), pos);
     if (res >= m_pospool.size()) { // not in '0's
       return true;
@@ -216,7 +213,7 @@ public:
     if (is1(pos, i))
       return 0;
     size_t cnt = 1;
-    while (i > 1) { // m_pospool[0] is placeholder
+    while (i > 1) { // m_pospool[0] is 'placeholder' -- m_size
       if (m_pospool[i - 1] + 1 == m_pospool[i])
         i--, cnt++;
       else
@@ -248,32 +245,30 @@ public:
   }
 
 private:
-  valvec<size_t> m_pospool;
+  // [0] is used to store m_size
+  valvec<T> m_pospool;
   size_t m_size;
-  size_t m_prev;
 };
 
 
 // make sure at least one '1' and at least one '0'
+template<typename T>
 class rank_select_fewone {
 public:
   typedef boost::mpl::false_ is_mixed;
-  rank_select_fewone() : m_size(0), m_prev(-1) {}
-  explicit rank_select_fewone(size_t sz) :
-    m_size(sz),
-    m_prev(-1) {}
+  rank_select_fewone() : m_size(0) {}
+  explicit rank_select_fewone(size_t sz) : m_size(sz) {}
     
   void clear() { 
     m_size = 0;
-    m_prev = size_t(-1);
     m_pospool.clear();
   }
   void risk_release_ownership() {
     m_pospool.risk_release_ownership();
   }
   void risk_mmap_from(unsigned char* base, size_t length) {
-    // TBD: ? m_size = *((size_t*)base);
     m_pospool.risk_set_data((size_t*)base, length);
+    m_size = m_pospool[0];
   }
 
   void resize(size_t newsize) {
@@ -288,9 +283,8 @@ public:
   template<class RankSelect>
   void build_from(RankSelect& rs) {
     // TBD: for fewzero, 0.01 is actually reasonable
-    //m_pospool.resize(m_size / 10);
     m_pospool.resize(m_size + 1);
-    m_pospool[0] = 0;
+    m_pospool[0] = m_size;
     size_t idx = 1;
     for (size_t pos = 0; pos < m_size; pos++) {
       if (rs.is1(pos)) {
@@ -298,21 +292,22 @@ public:
         idx ++;
       }
     }
+    assert(1 < idx && idx < m_size);
     m_pospool.resize(idx);
   }
-  size_t mem_size() const { return sizeof(m_size) + m_pospool.used_mem_size(); }
+  size_t mem_size() const { return m_pospool.used_mem_size(); }
 
   // exclude pos
   size_t rank0(size_t pos) const {
     assert(pos < m_size);
+    RET_IF_ZERO(pos);
     return pos - rank1(pos);
   }
-
   size_t rank1(size_t pos) const {
     assert(pos < m_size);
     RET_IF_ZERO(pos);
     pos --;
-    size_t rank = terark::lower_bound_n<const valvec<size_t>&>(
+    size_t rank = terark::lower_bound_n<const valvec<T>&>(
       m_pospool, 1, m_pospool.size(), pos);
     if (rank == m_pospool.size()) {
       return m_pospool.size() - 1;
@@ -325,6 +320,8 @@ public:
 
   size_t select0(size_t id) const {
     RET_IF_ZERO(id);
+    if (id > max_rank0())
+      return size_t(-1);
     size_t i = lower_bound(1, m_pospool.size(), id);
     // TBD: possible consecutive m_pos[i] + 1 == m_pos[i + 1]
     // make sure arr[m_pospool[i] - 1] is '1' not '0'
@@ -340,8 +337,8 @@ public:
     return m_pospool[i] + offset;
   }
   size_t select1(size_t id) const {
-    assert(id < m_size);
-    if (id >= m_pospool.size())
+    RET_IF_ZERO(id);
+    if (id > max_rank1())
       return size_t(-1);
     return m_pospool[id];
   }
@@ -369,7 +366,7 @@ private:
   // res: as the rank0 lower_bound
   bool is0(size_t pos, size_t& res) const {
     assert(pos < m_size);
-    res = terark::lower_bound_n<const terark::valvec<size_t>&>(
+    res = terark::lower_bound_n<const terark::valvec<T>&>(
       m_pospool, 1, m_pospool.size(), pos);
     if (res >= m_pospool.size()) { // not in '1's
       return true;
@@ -468,8 +465,8 @@ public:
   }
 
 private:
-  valvec<size_t> m_pospool;
+  // [0] is used to store m_size
+  valvec<T> m_pospool;
   size_t m_size;
-  size_t m_prev;
 };
 
