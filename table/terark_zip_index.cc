@@ -173,7 +173,8 @@ TerarkIndex::SelectFactory(const KeyStat& ks, fstring name) {
     auto minValue = ReadBigEndianUint64(ks.minKey.begin() + cplen, ceLen);
     auto maxValue = ReadBigEndianUint64(ks.maxKey.begin() + cplen, ceLen);
     uint64_t diff = (minValue < maxValue ? maxValue - minValue : minValue - maxValue) + 1;
-    if (diff < UINT32_MAX) {
+    if (diff < UINT32_MAX &&
+        ks.numKeys < UINT32_MAX) { // for composite cluster key, key1:key2 maybe 1:N
       return GetFactory("CompositeUintIndex_IL_256_32_IL_256_32");
     } else {
       return GetFactory("CompositeUintIndex_SE_512_64_SE_512_64");
