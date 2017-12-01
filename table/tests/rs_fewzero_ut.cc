@@ -50,6 +50,26 @@ void test_fewzero() {
   rank_select_fewzero<uint32_t> rs(kCnt);
   rs.build_from(simple);
   {
+    size_t hint;
+    assert(rs.zero_seq_len(0, hint) == 0);
+    assert(rs.zero_seq_len(1, hint) == 1);
+    assert(rs.zero_seq_len(2, hint) == 0);
+    assert(rs.zero_seq_len(3, hint) == 0);
+    assert(rs.zero_seq_len(4, hint) == 2);
+    assert(rs.zero_seq_len(5, hint) == 1);
+    assert(rs.zero_seq_len(6, hint) == 0);
+  }
+  {
+    size_t hint;
+    assert(rs.zero_seq_revlen(0, hint) == 0);
+    assert(rs.zero_seq_revlen(1, hint) == 0);
+    assert(rs.zero_seq_revlen(2, hint) == 1);
+    assert(rs.zero_seq_revlen(3, hint) == 0);
+    assert(rs.zero_seq_revlen(4, hint) == 0);
+    assert(rs.zero_seq_revlen(5, hint) == 1);
+    assert(rs.zero_seq_revlen(6, hint) == 2);
+  }
+  {
     assert(rs.zero_seq_revlen(0) == 0);
     assert(rs.zero_seq_revlen(1) == 0);
     assert(rs.zero_seq_revlen(2) == 1);
@@ -159,6 +179,27 @@ void test_fewone() {
   
   rank_select_fewone<uint32_t> rs(kCnt);
   rs.build_from(simple);
+  {
+    size_t hint;
+    assert(rs.zero_seq_len(0, hint) == 0);
+    assert(rs.zero_seq_len(1, hint) == 1);
+    assert(rs.zero_seq_len(2, hint) == 0);
+    assert(rs.zero_seq_len(3, hint) == 0);
+    assert(rs.zero_seq_len(4, hint) == 2);
+    assert(rs.zero_seq_len(5, hint) == 1);
+    assert(rs.zero_seq_len(6, hint) == 0);
+  }
+  {
+    size_t hint;
+    assert(rs.zero_seq_revlen(0, hint) == 0);
+    assert(rs.zero_seq_revlen(1, hint) == 0);
+    assert(rs.zero_seq_revlen(2, hint) == 1);
+    assert(rs.zero_seq_revlen(3, hint) == 0);
+    assert(rs.zero_seq_revlen(4, hint) == 0);
+    assert(rs.zero_seq_revlen(5, hint) == 1);
+    assert(rs.zero_seq_revlen(6, hint) == 2);
+  }
+
   {
     assert(rs.zero_seq_revlen(0) == 0);
     assert(rs.zero_seq_revlen(1) == 0);
