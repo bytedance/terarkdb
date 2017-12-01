@@ -39,7 +39,7 @@ void AppendExtraZero(std::function<void(const void *, size_t)> write, size_t len
   }
 }
 
-// 0 < cnt0 and cnt0 < 0.02 * total
+// 0 < cnt0 and cnt0 < 0.05 * total
 bool IsFewZero(size_t total, size_t cnt0) {
   assert(total > 0);
   return (0 < cnt0) && 
@@ -698,6 +698,36 @@ private:
   FixedLenStrVec container_;
 };
 
+template<class RankSelect>
+size_t fast_zero_seq_len(RankSelect& rs, size_t pos, size_t& hint) {
+  return rs.zero_seq_len(pos);
+}
+template<>
+size_t fast_zero_seq_len<rank_select_fewzero<uint32_t>>(
+  rank_select_fewzero<uint32_t>& rs, size_t pos, size_t& hint) {
+  return rs.zero_seq_len(pos, hint);
+}
+template<>
+size_t fast_zero_seq_len<rank_select_fewzero<uint64_t>>(
+  rank_select_fewzero<uint64_t>& rs, size_t pos, size_t& hint) {
+  return rs.zero_seq_len(pos, hint);
+}
+template<class RankSelect>
+size_t fast_zero_seq_revlen(RankSelect& rs, size_t pos, size_t& hint) {
+  return rs.zero_seq_revlen(pos);
+}
+template<>
+size_t fast_zero_seq_revlen<rank_select_fewzero<uint32_t>>(
+  rank_select_fewzero<uint32_t>& rs, size_t pos, size_t& hint) {
+  return rs.zero_seq_revlen(pos, hint);
+}
+template<>
+size_t fast_zero_seq_revlen<rank_select_fewzero<uint64_t>>(
+  rank_select_fewzero<uint64_t>& rs, size_t pos, size_t& hint) {
+  return rs.zero_seq_revlen(pos, hint);
+}
+
+
 struct CompositeUintIndexBase : public TerarkIndex {
   static const char* index_name;
   struct MyBaseFileHeader : public TerarkIndexHeader {
@@ -879,7 +909,8 @@ public:
       } else {
         if (Is1stKeyDiff(m_id + 1)) {
           assert(rankselect1_idx_ + 1 <  index_.rankselect1_.size());
-          uint64_t cnt = index_.rankselect1_.zero_seq_len(rankselect1_idx_ + 1);
+          //uint64_t cnt = index_.rankselect1_.zero_seq_len(rankselect1_idx_ + 1);
+          uint64_t cnt = fast_zero_seq_len(index_.rankselect1_, rankselect1_idx_ + 1, access_hint_);
           rankselect1_idx_ += cnt + 1;
           assert(rankselect1_idx_ < index_.rankselect1_.size());
         }
@@ -903,7 +934,8 @@ public:
            * case2: 1 1, ...
            */
           assert(rankselect1_idx_ > 0);
-          uint64_t cnt = index_.rankselect1_.zero_seq_revlen(rankselect1_idx_);
+          //uint64_t cnt = index_.rankselect1_.zero_seq_revlen(rankselect1_idx_);
+          uint64_t cnt = fast_zero_seq_revlen(index_.rankselect1_, rankselect1_idx_, access_hint_);
           assert(rankselect1_idx_ >= cnt + 1);
           rankselect1_idx_ -= (cnt + 1);
         }
@@ -940,6 +972,7 @@ public:
     }
 
     size_t rankselect1_idx_; // used to track & decode index1 value
+    size_t access_hint_;
     valvec<byte_t> buffer_;
     const CompositeUintIndex& index_;
   };

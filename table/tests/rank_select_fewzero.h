@@ -239,6 +239,31 @@ public:
     }
     return cnt;
   }
+  // Prev() accelerate version
+  size_t zero_seq_revlen(size_t pos, size_t& hint) const {
+    assert(pos < m_size);
+    RET_IF_ZERO(pos);
+    pos --;
+    if (0 < hint && hint < m_pospool.size() - 1 &&
+        m_pospool[hint] < pos && pos < m_pospool[hint + 1]) {
+      return 0;
+    }
+    size_t i;
+    if (is1(pos, i)) {
+      hint = i - 1;
+      return 0;
+    }
+    size_t cnt = 1;
+    while (i > 1) { // m_pospool[0] is 'placeholder' -- m_size
+      if (m_pospool[i - 1] + 1 == m_pospool[i])
+        i--, cnt++;
+      else
+        break;
+    }
+    return cnt;
+  }
+
+
   size_t one_seq_len(size_t pos) const {
     assert(pos < m_size);
     size_t i;
@@ -435,17 +460,19 @@ public:
     else
       return m_pospool[i] - pos;
   }
-  // Next() accelerate version ???
+  // Next() accelerate version
   size_t zero_seq_len(size_t pos, size_t& hint) const {
     assert(pos < m_size);
     if (0 < hint && hint < m_pospool.size() - 1 &&
         m_pospool[hint] < pos && pos < m_pospool[hint + 1]) {
-      hint ++;
+      hint ++; // to next '1' where following Next() will start from
       return m_pospool[hint] - pos;
     }
     size_t i;
-    if (!is0(pos, i))
+    if (!is0(pos, i)) {
+      hint = i - 1;
       return 0;
+    }
     if (i >= m_pospool.size())
       return m_size - pos;
     else
@@ -464,6 +491,27 @@ public:
     else
       return pos - m_pospool[i - 1];
   }
+  // Prev() accelerate version
+  size_t zero_seq_revlen(size_t pos, size_t& hint) const {
+    assert(pos < m_size);
+    RET_IF_ZERO(pos);
+    pos --;
+    if (0 < hint && hint < m_pospool.size() - 1 &&
+        m_pospool[hint] < pos && pos < m_pospool[hint + 1]) {
+      size_t cur = hint--; // to prev '1' where following Prev() will start from
+      return pos - m_pospool[cur];
+    }
+    size_t i;
+    if (!is0(pos, i)) {
+      hint = i - 1;
+      return 0;
+    }
+    if (i == 1)
+      return pos + 1;
+    else
+      return pos - m_pospool[i - 1];
+  }
+
 
 
   size_t one_seq_len(size_t pos) const {
