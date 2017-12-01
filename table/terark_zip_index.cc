@@ -170,7 +170,10 @@ TerarkIndex::SelectFactory(const KeyStat& ks, fstring name) {
       ks.maxKeyLen - cplen <= 16 && // !!! plain index2nd may occupy too much space
       SeekCostEffectiveIndexLen(ks, ceLen) &&
       ks.maxKeyLen > cplen + ceLen) {
-    if (ks.numKeys < UINT32_MAX) {
+    auto minValue = ReadBigEndianUint64(ks.minKey.begin() + cplen, ceLen);
+    auto maxValue = ReadBigEndianUint64(ks.maxKey.begin() + cplen, ceLen);
+    uint64_t diff = (minValue < maxValue ? maxValue - minValue : minValue - maxValue) + 1;
+    if (diff < UINT32_MAX) {
       return GetFactory("CompositeUintIndex_IL_256_32_IL_256_32");
     } else {
       return GetFactory("CompositeUintIndex_SE_512_64_SE_512_64");
