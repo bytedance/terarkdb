@@ -41,6 +41,7 @@ enum DataStored {
 // sorteduint related
 extern void test_il256_il256_sorteduint(DataStored);
 extern void test_allone_il256_sorteduint(DataStored);
+extern void test_fewzero_allzero_sorteduint(DataStored);
 extern void test_allone_allzero_sorteduint(DataStored);
 extern void test_data_seek_short_target_sorteduint();
 

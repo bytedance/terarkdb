@@ -39,16 +39,17 @@ void AppendExtraZero(std::function<void(const void *, size_t)> write, size_t len
   }
 }
 
-// 0 < cnt0 and cnt0 < 0.05 * total
+// 0 < cnt0 and cnt0 < 0.01 * total
 bool IsFewZero(size_t total, size_t cnt0) {
   assert(total > 0);
   return (0 < cnt0) && 
-    (cnt0 < (double)total * 0.02);
+    (cnt0 <= (double)total * 0.01);
 }
 bool IsFewOne(size_t total, size_t cnt1) {
   assert(total > 0);
-  return (0 < cnt1) && 
-    (cnt1 < (double)total * 0.02);
+  return (0 < cnt1) &&
+    ((double)total * 0.005 < cnt1) &&
+    (cnt1 <= (double)total * 0.01);
 }
 
 
@@ -106,7 +107,8 @@ bool TerarkIndex::SeekCostEffectiveIndexLen(const KeyStat& ks, size_t& ceLen) {
   const double w2 = 1.2;
   const double min_gap_ratio = 0.1;
   const double max_gap_ratio = 0.9;
-  const double fewzero_gap_ratio = 0.95; // fewzero 0.05, that's 5 '1' and 95 '0'
+  const double fewone_min_gap_ratio = 0.99; // fewone 0.01, that's 1 '1' out of 100
+  const double fewone_max_gap_ratio = 0.995; // fewone 0.005, 1 '1' out of 200
   const size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
   const size_t maxLen = std::min<size_t>(8, ks.maxKeyLen - cplen);
   const double originCost = ks.numKeys * ks.maxKeyLen * 8;
@@ -123,8 +125,11 @@ bool TerarkIndex::SeekCostEffectiveIndexLen(const KeyStat& ks, size_t& ceLen) {
     // one index1st with a collection of index2nd, that's when diff < numkeys
     double gap_ratio = diff1st <= ks.numKeys ? min_gap_ratio : 
       (double)(diff1st - ks.numKeys) / diff1st;
-    if (gap_ratio > fewzero_gap_ratio) { // fewzero branch
-      size_t bits = (diff1st < UINT32_MAX) ? 32 : 64;
+    if (fewone_min_gap_ratio <= gap_ratio &&
+        gap_ratio < fewone_max_gap_ratio) { // fewone branch
+      // to construct rankselect for fewone, much more extra space is needed
+      // TBD: maybe we could prescan ?
+      size_t bits = (diff1st < UINT32_MAX && ks.numKeys < UINT32_MAX) ? 32 : 64;
       double cost = ks.numKeys * bits + diff2nd * 1.2 + 
         (ks.maxKeyLen - cplen - i) * ks.numKeys * 8;
       if (cost > originCost * 0.8)
@@ -728,7 +733,7 @@ public:
 private:
   FixedLenStrVec container_;
 };
-
+// -- fast zero-seq-len
 template<class RankSelect>
 size_t fast_zero_seq_len(RankSelect& rs, size_t pos, size_t& hint) {
   return rs.zero_seq_len(pos);
@@ -743,6 +748,17 @@ size_t fast_zero_seq_len<rank_select_fewzero<uint64_t>>(
   rank_select_fewzero<uint64_t>& rs, size_t pos, size_t& hint) {
   return rs.zero_seq_len(pos, hint);
 }
+template<>
+size_t fast_zero_seq_len<rank_select_fewone<uint32_t>>(
+  rank_select_fewone<uint32_t>& rs, size_t pos, size_t& hint) {
+  return rs.zero_seq_len(pos, hint);
+}
+template<>
+size_t fast_zero_seq_len<rank_select_fewone<uint64_t>>(
+  rank_select_fewone<uint64_t>& rs, size_t pos, size_t& hint) {
+  return rs.zero_seq_len(pos, hint);
+}
+// -- fast zero-seq-revlen
 template<class RankSelect>
 size_t fast_zero_seq_revlen(RankSelect& rs, size_t pos, size_t& hint) {
   return rs.zero_seq_revlen(pos);
@@ -755,6 +771,16 @@ size_t fast_zero_seq_revlen<rank_select_fewzero<uint32_t>>(
 template<>
 size_t fast_zero_seq_revlen<rank_select_fewzero<uint64_t>>(
   rank_select_fewzero<uint64_t>& rs, size_t pos, size_t& hint) {
+  return rs.zero_seq_revlen(pos, hint);
+}
+template<>
+size_t fast_zero_seq_revlen<rank_select_fewone<uint32_t>>(
+  rank_select_fewone<uint32_t>& rs, size_t pos, size_t& hint) {
+  return rs.zero_seq_revlen(pos, hint);
+}
+template<>
+size_t fast_zero_seq_revlen<rank_select_fewone<uint64_t>>(
+  rank_select_fewone<uint64_t>& rs, size_t pos, size_t& hint) {
   return rs.zero_seq_revlen(pos, hint);
 }
 

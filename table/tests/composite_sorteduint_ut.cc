@@ -569,6 +569,217 @@ void test_allone_il256_sorteduint(DataStored dtype) {
 }
 
 /*
+ * fewzero allzero
+ */
+static void init_data_fewzero_allzero_ascend() {
+  rocksdb::FileWriter fwriter;
+  fwriter.path = key_path;
+  fwriter.open();
+  keys.resize(120);
+  char carr[KEY_LEN] = { 0 };
+  for (int i = 0; i < 120; i++) {
+    keys[i] = string(carr, carr + KEY_LEN);
+  }
+  size_t kcnt = 0;
+  for (int i = 0; i < 100; i++) {
+    carr[7] = i; carr[15] = i;
+    kcnt ++;
+    fwriter.writer << fstring(carr, KEY_LEN);
+    if (i == 0) {
+      stat.minKey.assign(carr, carr + KEY_LEN);
+    }
+    keys[i] = string(carr, KEY_LEN);
+  }
+  {
+    carr[7] = 101; carr[15] = 101;  // 101 '1', 1 '0'
+    kcnt ++;
+    fwriter.writer << fstring(carr, KEY_LEN);
+    stat.maxKey.assign(carr, carr + KEY_LEN);
+  }
+  fwriter.close();
+  stat.numKeys = kcnt;
+  stat.commonPrefixLen = 0;
+  stat.minKeyLen = KEY_LEN;
+  stat.maxKeyLen = KEY_LEN;
+  stat.sumKeyLen = KEY_LEN * kcnt;
+}
+
+static void init_data_fewzero_allzero_descend() {
+  rocksdb::FileWriter fwriter;
+  fwriter.path = key_path;
+  fwriter.open();
+  keys.resize(120);
+  char carr[KEY_LEN] = { 0 };
+  for (int i = 0; i < 120; i++) {
+    keys[i] = string(carr, carr + KEY_LEN);
+  }
+  size_t kcnt = 0;
+  {
+    carr[7] = 101; carr[15] = 101; // 101 '1', 1 '0'
+    kcnt ++;
+    fwriter.writer << fstring(carr, KEY_LEN);
+    stat.minKey.assign(carr, carr + KEY_LEN);
+  }
+  for (int i = 99; i >= 0; i--) {
+    carr[7] = i; carr[15] = i;
+    kcnt ++;
+    fwriter.writer << fstring(carr, KEY_LEN);
+    if (i == 0) {
+      stat.maxKey.assign(carr, carr + KEY_LEN);
+    }
+    keys[i] = string(carr, KEY_LEN);
+  }
+  fwriter.close();
+  stat.numKeys = kcnt;
+  stat.commonPrefixLen = 0;
+  stat.minKeyLen = KEY_LEN;
+  stat.maxKeyLen = KEY_LEN;
+  stat.sumKeyLen = KEY_LEN * kcnt;
+}
+
+void test_fewzero_allzero_sorteduint(DataStored dtype) {
+  // init data
+  clear();
+  key_path = "./tmp_key.txt";
+  if (dtype == standard_ascend) {
+    printf("==== SortedUint Ascend Test started\n");
+    init_data_fewzero_allzero_ascend();
+  } else if (dtype == standard_descend) {
+    printf("==== SortedUint Descend Test started\n");
+    init_data_fewzero_allzero_descend();
+  } else {
+    assert(0);
+  }
+  // build index
+  FileStream fp(key_path, "rb");
+  NativeDataInput<InputBuffer> tempKeyFileReader(&fp);
+  auto factory = rocksdb::TerarkIndex::GetFactory("CompositeUintIndex_IL_256_32_IL_256_32_SortedUint");
+  {
+    size_t memsz = factory->MemSizeForBuild(stat);
+    assert(memsz < stat.sumKeyLen * 0.8);
+    printf("\tcompress check done\n");
+  }
+  rocksdb::TerarkZipTableOptions tableOpt;
+  TerarkIndex* index = factory->Build(tempKeyFileReader, tableOpt, stat);
+  assert(index->Name() == string("CompositeUintIndex_FewZero32_AllZero_SortedUint"));
+  printf("\tbuild done\n");
+  // save & reload
+  index_path = "./tmp_index.txt";
+  index = save_reload(index, factory);
+  printf("\tsave & reload done\n");
+  // search test
+  size_t expected = 0;
+  for (size_t idx = 0; idx < 100; idx++) {
+    size_t result = index->Find(keys[idx]);
+    assert(expected == result);
+    expected ++;
+  }
+  /*for (size_t idx = 0; idx < 10; idx++) {
+    size_t result = index->Find(keys[idx]);
+    assert(result == size_t(-1));
+    }*/
+  printf("\tFind done\n");
+  // iterator
+  auto iter = index->NewIterator();
+  {
+    // seek to 1st, next()
+    char arr[KEY_LEN] = { 0 };
+    arr[7] = 0; arr[15] = 0;
+    size_t expected = 0;
+    assert(iter->SeekToFirst());
+    assert(iter->DictRank() == expected);
+    assert(fstring(arr, KEY_LEN) == iter->key());
+    for (int i = 0; i < 100; i++) {
+      arr[7] = i;  arr[15] = i;
+      if (i == 0)
+        continue;
+      expected ++;
+      assert(iter->Next());
+      assert(iter->DictRank() == expected);
+      assert(fstring(arr, KEY_LEN) == iter->key());
+    }
+    assert(iter->Next() == true);
+    assert(iter->Next() == false);
+  }
+  {
+    // seek to last, prev()
+    char arr[KEY_LEN] = { 0 };
+    size_t expected = stat.numKeys - 1;
+    assert(iter->SeekToLast());
+    assert(iter->DictRank() == expected);
+    for (int i = 99; i >= 0; i--) {
+      arr[7] = i;  arr[15] = i;
+      expected --;
+      assert(iter->Prev());
+      assert(iter->DictRank() == expected);
+      assert(fstring(arr, KEY_LEN) == iter->key());
+    }
+    assert(iter->Prev() == false);
+  }
+  {
+    // seek matches
+    char arr[KEY_LEN] = { 0 };
+    size_t expected = 0;
+    for (int i = 0; i < 100; i++) {
+      arr[7] = i;  arr[15] = i;
+      assert(iter->Seek(keys[i]));
+      assert(iter->DictRank() == expected);
+      assert(fstring(arr, KEY_LEN) == iter->key());
+      expected ++;
+    }
+  }
+  {
+    // seek larger than larger @apple
+    char arr[KEY_LEN] = { 0 };
+    arr[7] = 120; arr[15] = 0;
+    assert(iter->Seek(fstring(arr, KEY_LEN)) == false);
+    // smaller than smaller
+    char sarr[4] = { 0 };
+    assert(iter->Seek(fstring(sarr, 4)));
+    assert(iter->DictRank() == 0);
+    // 
+    char marr[12] = { 0 };
+    marr[7] = 4;
+    assert(iter->Seek(fstring(marr, 12)));
+    assert(iter->DictRank() == 4);
+    arr[7] = 4; arr[15] = 4;
+    assert(fstring(arr, KEY_LEN) == iter->key());
+  }
+  {
+    // lower_bound
+    char arr[17] = { 0 };
+    arr[KEY_LEN] = 1;
+    size_t expected = 1;
+    for (int i = 0; i < 100; i++) {
+      arr[7] = i; arr[15] = i;
+      if (i == 99)
+        break;
+      assert(iter->Seek(fstring(arr, 17)));
+      assert(iter->DictRank() == expected);
+      expected ++;
+    }
+  }
+  {
+    // cross index1st boundary lower_bound
+    char arr[KEY_LEN] = { 0 };
+    arr[7] = 4; arr[15] = 5;
+    assert(iter->Seek(fstring(arr, KEY_LEN)));
+    int expected = 5;
+    assert(iter->DictRank() == expected);
+
+    arr[7] = 101; arr[15] = 101;
+    assert(iter->Seek(fstring(arr, KEY_LEN)));
+    arr[7] = 101; arr[15] = 102;
+    assert(iter->Seek(fstring(arr, KEY_LEN)) == false);
+  }
+  printf("\tIterator done\n");
+  delete iter;
+  delete index;
+  clear();
+}
+
+
+/*
  * allone allzero
  */
 static void init_data_allone_allzero() {
@@ -769,8 +980,8 @@ void test_data_seek_short_target_sorteduint() {
   }
   rocksdb::TerarkZipTableOptions tableOpt;
   TerarkIndex* index = factory->Build(tempKeyFileReader, tableOpt, stat);
-  //assert(index->Name() == string("CompositeUintIndex_IL_256_32_AllZero_SortedUint"));
-  assert(index->Name() == string("CompositeUintIndex_FewZero32_AllZero_SortedUint"));
+  assert(index->Name() == string("CompositeUintIndex_IL_256_32_AllZero_SortedUint"));
+  //assert(index->Name() == string("CompositeUintIndex_FewZero32_AllZero_SortedUint"));
   printf("\tbuild done\n");
   // save & reload
   index_path = "./tmp_index.txt";
