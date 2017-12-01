@@ -13,8 +13,8 @@ LIB=-lpthread -lrocksdb -lterark-core-g++-4.8-d -lterark-fsa-g++-4.8-d -lterark-
 OBJS=composite_sorteduint_ut.o composite_uint_ut.o composite_str_ut.o terark_zip_common.o terark_zip_index.o
 
 
-all: test_rs_fewzero
-#all: test_composite
+#all: test_rs_fewzero
+all: test_composite
 #all: test_full
 
 test_composite: ${OBJS}

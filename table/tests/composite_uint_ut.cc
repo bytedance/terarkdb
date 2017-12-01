@@ -846,7 +846,7 @@ void test_seek_cost_effective() {
     assert(TerarkIndex::SeekCostEffectiveIndexLen(stat, ceLen));
   }
   {
-    // do NOT select composite index: gap ratio too high
+    // still select composite index: gap ratio high enough to use fewone
     TerarkIndex::KeyStat stat;
     stat.numKeys = 2;
     stat.commonPrefixLen = 0;
@@ -857,7 +857,7 @@ void test_seek_cost_effective() {
     arr[5] = 100; arr[7] = 1;
     stat.maxKey.assign(arr, arr + KEY_LEN);
     size_t celen = size_t(-1);
-    assert(TerarkIndex::SeekCostEffectiveIndexLen(stat, celen) == false);
+    assert(TerarkIndex::SeekCostEffectiveIndexLen(stat, celen));
   }
   {
     // select composite: key count > 4G

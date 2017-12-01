@@ -112,6 +112,8 @@ bool TerarkIndex::SeekCostEffectiveIndexLen(const KeyStat& ks, size_t& ceLen) {
   const double originCost = ks.numKeys * ks.maxKeyLen * 8;
   double score = 0;
   double minCost = originCost;
+  size_t scoreLen = maxLen;
+  size_t minCostLen = maxLen;
   ceLen = maxLen;
   for (size_t i = maxLen; i > 0; i--) {
     auto minValue = ReadBigEndianUint64(ks.minKey.begin() + cplen, i);
@@ -121,53 +123,40 @@ bool TerarkIndex::SeekCostEffectiveIndexLen(const KeyStat& ks, size_t& ceLen) {
     // one index1st with a collection of index2nd, that's when diff < numkeys
     double gap_ratio = diff1st <= ks.numKeys ? min_gap_ratio : 
       (double)(diff1st - ks.numKeys) / diff1st;
-    if (gap_ratio > max_gap_ratio)
+    if (gap_ratio > fewzero_gap_ratio) { // fewzero branch
+      size_t bits = (diff1st < UINT32_MAX) ? 32 : 64;
+      double cost = ks.numKeys * bits + diff2nd * 1.2 + 
+        (ks.maxKeyLen - cplen - i) * ks.numKeys * 8;
+      if (cost > originCost * 0.8)
+        continue;
+      if (cost < minCost) {
+        minCost = cost;
+        minCostLen = i;
+      }
+    } else if (gap_ratio > max_gap_ratio) { // skip branch
       continue;
-    gap_ratio = std::max(gap_ratio, min_gap_ratio);
-    // diff is bitmap, * 1.2 is extra cost to build RankSelect
-    double cost = (diff1st + diff2nd) * 1.2 + 
-      (ks.maxKeyLen - cplen - i) * ks.numKeys * 8;
-    if (cost > originCost * 0.8)
-      continue;
-    double compress_ratio = (originCost - cost) / originCost;
-    double cur = w1 * (1 / gap_ratio) + w2 * compress_ratio;
-    if (cur > score) {
-      score = cur;
-      ceLen = i;
+    } else {
+      gap_ratio = std::max(gap_ratio, min_gap_ratio);
+      // diff is bitmap, * 1.2 is extra cost to build RankSelect
+      double cost = (diff1st + diff2nd) * 1.2 + 
+        (ks.maxKeyLen - cplen - i) * ks.numKeys * 8;
+      if (cost > originCost * 0.8)
+        continue;
+      double compress_ratio = (originCost - cost) / originCost;
+      double cur = w1 * (1 / gap_ratio) + w2 * compress_ratio;
+      if (cur > score) {
+        score = cur;
+        scoreLen = i;
+      }
     }
   }
-  return score > 0;
-}
-// TBD: Testing
-bool TestingSeekCostEffectiveIndexLen(const TerarkIndex::KeyStat& ks, size_t& ceLen) {
-  const double min_gap_ratio = 0.1;
-  const double max_gap_ratio = 0.95; // fewzero 0.05, that's 5 '1' and 95 '0'
-  const size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
-  const size_t maxLen = std::min<size_t>(8, ks.maxKeyLen - cplen);
-  const double originCost = ks.numKeys * ks.maxKeyLen * 8;
-  double minCost = originCost;
-  ceLen = maxLen;
-  for (size_t i = maxLen; i > 0; i--) {
-    auto minValue = ReadBigEndianUint64(ks.minKey.begin() + cplen, i);
-    auto maxValue = ReadBigEndianUint64(ks.maxKey.begin() + cplen, i);
-    uint64_t diff1st = abs_diff(minValue, maxValue) + 1;
-    uint64_t diff2nd = ks.numKeys;
-    // one index1st with a collection of index2nd, that's when diff < numkeys
-    double gap_ratio = diff1st <= ks.numKeys ? min_gap_ratio : 
-      (double)(diff1st - ks.numKeys) / diff1st;
-    if (gap_ratio < max_gap_ratio)
-      continue;
-    // diff is bitmap, * 1.2 is extra cost to build RankSelect
-    double cost = ks.numKeys * 32 + diff2nd * 1.2 + 
-      (ks.maxKeyLen - cplen - i) * ks.numKeys * 8;
-    if (cost > originCost * 0.8)
-      continue;
-    if (cost < minCost) {
-      minCost = cost;
-      ceLen = i;
-    }
+
+  if (score > 0 || minCost <= originCost * 0.8) {
+    ceLen = (score > 0) ? scoreLen : minCostLen;
+    return true;
+  } else {
+    return false;
   }
-  return minCost < originCost * 0.8;
 }
 
 const TerarkIndex::Factory*
