@@ -772,6 +772,8 @@ public:
           reader >> keyBuf;
           uint64_t offset = Read1stKey(keyBuf, cplen, key1_len) - minValue;
           rankselect1.set1(offset);
+          if (terark_unlikely(i == 0)) // make sure 1st prev != offset
+            prev = offset - 1;
           if (offset != prev) { // new key1 encountered
             rankselect2.set0(i);
           } else {
@@ -789,6 +791,8 @@ public:
           reader >> keyBuf;
           uint64_t offset = Read1stKey(keyBuf, cplen, key1_len) - minValue;
           rankselect1.set1(offset);
+          if (terark_unlikely(i == ks.numKeys - 1)) // make sure 1st prev != offset
+            prev = offset - 1;
           if (offset != prev) { // next index1 is new one
             rankselect2.set0(i + 1);
           } else {
