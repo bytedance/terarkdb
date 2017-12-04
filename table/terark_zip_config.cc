@@ -321,25 +321,23 @@ void TerarkZipDBOptionsFromEnv(DBOptions& dbo) {
   dbo.allow_mmap_reads = true;
 }
 
-bool TerarkZipIsBlackListCF(const std::string& cfname) {
-  static std::mutex  mtx;
-  static size_t  isInitialized = false;
-  static terark::hash_strmap<>  blackList;
-  if (!isInitialized) {
-    std::lock_guard<std::mutex> lock(mtx);
-    if (!isInitialized) {
-      if (const char* env = getenv("TerarkZipTable_blackListColumnFamily")) {
-          const char* end = env + strlen(env);
-          for (auto  curr = env; curr < end; ) {
-            auto next = std::find(curr, end, ',');
-            blackList.insert_i(fstring(curr, next));
-            curr = next + 1;
-          }
+class TerarkBlackListCF : public terark::hash_strmap<> {
+public:
+  TerarkBlackListCF() {
+    if (const char* env = getenv("TerarkZipTable_blackListColumnFamily")) {
+      const char* end = env + strlen(env);
+      for (auto  curr = env; curr < end; ) {
+        auto next = std::find(curr, end, ',');
+        this->insert_i(fstring(curr, next));
+        curr = next + 1;
       }
-      isInitialized = true;
     }
   }
-  return blackList.exists(cfname);
+};
+static TerarkBlackListCF g_blacklistCF;
+
+bool TerarkZipIsBlackListCF(const std::string& cfname) {
+  return g_blacklistCF.exists(cfname);
 }
 
 template<class T>
