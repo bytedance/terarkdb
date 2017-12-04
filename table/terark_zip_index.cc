@@ -544,10 +544,7 @@ public:
     n -= min_value_;
     size_t pos = container_.lower_bound(lo, hi, n);
     while (pos != hi) {
-      byte_t arr[8] = { 0 };
-      size_t v = get_val(pos);
-      SaveAsBigEndianUint64(arr, key_len_, v);
-      if (fstring(arr, arr + key_len_) >= val)
+      if (compare(pos, val) >= 0)
         return pos;
       pos++;
     }
@@ -629,10 +626,7 @@ public:
     n -= min_value_;
     size_t pos = lower_bound_n<const UintVecMin0&>(container_, lo, hi, n);
     while (pos != hi) {
-      byte_t arr[8] = { 0 };
-      size_t v = get_val(pos);
-      SaveAsBigEndianUint64(arr, key_len_, v);
-      if (fstring(arr, arr + key_len_) >= val)
+      if (compare(pos, val) >= 0)
         return pos;
       pos++;
     }
@@ -675,6 +669,7 @@ public:
     return false;
   }
   void risk_set_data(byte_t* data, size_t sz) {
+    assert(data != nullptr);
     container_.m_strpool.risk_set_data(data, sz);
   }
   void risk_set_data(byte_t* data, size_t num, size_t maxValue) {
@@ -1184,9 +1179,9 @@ public:
       }
       uint64_t diff = maxValue - minValue + 1;
       size_t key2_len = ks.minKey.size() - cplen - key1_len;
+      // maximum
       size_t rankselect_1st_sz = size_t(std::ceil(diff * 1.25 / 8));
       size_t rankselect_2nd_sz = size_t(std::ceil(ks.numKeys * 1.25 / 8));
-      // maximum
       size_t sum_key2_sz = std::ceil(ks.numKeys * key2_len);
       return rankselect_1st_sz + rankselect_2nd_sz + sum_key2_sz;
     }
@@ -1306,13 +1301,12 @@ public:
   virtual ~CompositeUintIndex() {
     if (isBuilding_) {
       delete (FileHeader*)header_;
+    } else if (file_.base != nullptr || isUserMemory_) {
+      rankselect1_.risk_release_ownership();
+      rankselect2_.risk_release_ownership();
+      key2_data_.risk_release_ownership();
+      commonPrefix_.risk_release_ownership();
     }
-    //} else if (file_.base != nullptr || isUserMemory_) {
-    rankselect1_.risk_release_ownership();
-    rankselect2_.risk_release_ownership();
-    key2_data_.risk_release_ownership();
-    commonPrefix_.risk_release_ownership();
-      //}
   }
   const char* Name() const override {
     return header_->class_name;
