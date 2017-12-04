@@ -88,7 +88,7 @@ public:
 
 #define TerarkIndexRegisterNLT(clazzSuffix, ...)          \
     TerarkIndexRegisterImp(TrieDAWG_##clazzSuffix,                      \
-        BOOST_STRINGIZE(BOOST_CONCAT(NestLoudsTrieDAWG_, clazzSuffix)), \
+        BOOST_STRINGIZE(BOOST_PP_CAT(NestLoudsTrieDAWG_, clazzSuffix)), \
         BOOST_STRINGIZE(clazzSuffix), \
         ##__VA_ARGS__)
 
