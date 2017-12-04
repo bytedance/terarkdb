@@ -147,10 +147,14 @@ TerarkIndex::SelectFactory(const KeyStat& ks, fstring name) {
   assert(ks.numKeys > 0);
   //assert(!ks.minKey.empty() && !ks.maxKey.empty());
 #if defined(TerocksPrivateCode)
+  static bool disableUintIndex =
+    terark::getEnvBool("TerarkZipTable_disableUintIndex", false);
+  static bool disableCompositeUintIndex =
+    terark::getEnvBool("TerarkZipTable_disableCompositeUintIndex", false);
   size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
   assert(cplen >= ks.commonPrefixLen);
   size_t ceLen = 0; // cost effective index1st len if any
-  if (ks.maxKeyLen == ks.minKeyLen && ks.maxKeyLen - cplen <= sizeof(uint64_t)) {
+  if (!disableUintIndex && ks.maxKeyLen == ks.minKeyLen && ks.maxKeyLen - cplen <= sizeof(uint64_t)) {
     auto minValue = ReadBigEndianUint64(ks.minKey.begin() + cplen, ks.minKey.end());
     auto maxValue = ReadBigEndianUint64(ks.maxKey.begin() + cplen, ks.maxKey.end());
     uint64_t diff = (minValue < maxValue ? maxValue - minValue : minValue - maxValue) + 1;
@@ -166,7 +170,8 @@ TerarkIndex::SelectFactory(const KeyStat& ks, fstring name) {
       }
     }
   }
-  if (ks.maxKeyLen == ks.minKeyLen &&
+  if (!disableCompositeUintIndex &&
+      ks.maxKeyLen == ks.minKeyLen &&
       ks.maxKeyLen - cplen <= 16 && // !!! plain index2nd may occupy too much space
       SeekCostEffectiveIndexLen(ks, ceLen) &&
       ks.maxKeyLen > cplen + ceLen) {
