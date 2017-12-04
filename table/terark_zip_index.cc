@@ -486,6 +486,8 @@ private:
 public:
   void swap(CompositeKeyDataContainer<SortedUintVec>& other) {
     container_.swap(other.container_);
+    std::swap(min_value_, other.min_value_);
+    std::swap(key_len_, other.key_len_);
   }
   void swap(SortedUintVec& other) {
     container_.swap(other);
@@ -515,6 +517,7 @@ public:
     assert(0);
   }
   void risk_set_data(byte_t* data, size_t sz) {
+    assert(data != nullptr);
     container_.risk_set_data(data, sz);
   }
 
@@ -572,6 +575,8 @@ private:
 public:
   void swap(CompositeKeyDataContainer<UintVecMin0>& other) {
     container_.swap(other.container_);
+    std::swap(min_value_, other.min_value_);
+    std::swap(key_len_, other.key_len_);
   }
   void swap(UintVecMin0& other) {
     container_.swap(other);
@@ -1054,7 +1059,7 @@ public:
       const size_t kLimit = (1ull << 48) - 1;
       uint64_t key2MinValue = ReadBigEndianUint64(minKey2Data);
       uint64_t key2MaxValue = ReadBigEndianUint64(maxKey2Data);
-      auto builder = SortedUintVec::createBuilder(false, kBlockUnits);
+      unique_ptr<SortedUintVec:: Builder> builder(SortedUintVec::createBuilder(false, kBlockUnits));
       uint64_t prev = ReadBigEndianUint64(keyVec[0]) - key2MinValue;
       builder->push_back(prev);
       for (size_t i = 1; i < keyVec.size(); i++) {
@@ -1069,7 +1074,7 @@ public:
       auto rs = builder->finish(&uintVec);
       if (rs.mem_size > keyVec.mem_size() / 2.0) // too much ram consumed
         return nullptr;
-      printf("sorteduint mem: %zu, keyvec mem: %zu\n", rs.mem_size, keyVec.mem_size());
+      //printf("sorteduint mem: %zu, keyvec mem: %zu\n", rs.mem_size, keyVec.mem_size());
       SortedUintDataCont container;
       container.swap(uintVec);
       container.init(minKey2Data.size(), key2MinValue);
@@ -1099,7 +1104,7 @@ public:
       uint64_t key2MaxValue = ReadBigEndianUint64(maxKey2Data);
       uint64_t diff = key2MaxValue - key2MinValue + 1;
       size_t bitUsed = UintVecMin0::compute_uintbits(diff);
-      printf("uint bit used: %zu, keyvec bit used: %zu\n", bitUsed, keyVec.m_fixlen * 8);
+      //printf("uint bit used: %zu, keyvec bit used: %zu\n", bitUsed, keyVec.m_fixlen * 8);
       if (bitUsed > keyVec.m_fixlen * 8 * 0.9) // compress ratio just so so
         return nullptr;
       // reuse memory from keyvec, since vecMin0 should consume less mem
@@ -1138,6 +1143,7 @@ public:
                                                uint64_t minValue, uint64_t maxValue, size_t key1_len) {
       StrDataCont container;
       container.swap(keyVec);
+      // do NOT call container.init() here, keyVec is inited already
       if (rankselect1.max_rank0() == 0 && rankselect2.max_rank1() == 0) {
         rank_select_allone rs1(rankselect1.size());
         rank_select_allzero rs2(rankselect2.size());
@@ -1257,9 +1263,9 @@ public:
   using TerarkIndex::FactoryPtr;
   CompositeUintIndex() {}
   CompositeUintIndex(RankSelect1& rankselect1, RankSelect2& rankselect2,
-                           Key2DataContainer& key2Container, const KeyStat& ks, 
-                           uint64_t minValue, uint64_t maxValue, size_t key1_len, 
-                           uint64_t minKey2Value = 0, uint64_t maxKey2Value = 0) {
+                     Key2DataContainer& key2Container, const KeyStat& ks,
+                     uint64_t minValue, uint64_t maxValue, size_t key1_len,
+                     uint64_t minKey2Value = 0, uint64_t maxKey2Value = 0) {
     isBuilding_ = true;
     size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
     // save meta into header
@@ -1288,12 +1294,6 @@ public:
     rankselect1_.swap(rankselect1);
     rankselect2_.swap(rankselect2);
     key2_data_.swap(key2Container);
-    if (std::is_same<Key2DataContainer, StrDataCont>::value) {
-      key2_data_.init(header->key2_fixed_len,
-        header->key2_data_mem_size / header->key2_fixed_len);
-    } else {
-      key2_data_.init(header->key2_fixed_len, header->key2_min_value);
-    }
     key1_len_ = key1_len;
     key2_len_ = header->key2_fixed_len;
     minValue_ = minValue;
