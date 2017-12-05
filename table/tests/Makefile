@@ -1,7 +1,7 @@
 
 
 TerarkDir=/newssd1/temp/terark/src
-TerarkLib=/newssd1/temp/terark-zip-rocksdb/pkg/terark-zip-rocksdb-Linux-x86_64-g++-4.8-bmi2-1
+TerarkLib=/newssd1/temp/terark-zip-rocksdb/pkg/terark-zip-rocksdb-Linux-x86_64-g++-4.8-bmi2-0
 RocksDir=/newssd1/temp/rocksdb
 CXX=g++
 #CFLAGS=-g3 -std=c++11 -fPIC

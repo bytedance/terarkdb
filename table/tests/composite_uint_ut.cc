@@ -937,3 +937,19 @@ void test_seek_cost_effective() {
   printf("\tSeek done\n");
   clear();
 }
+
+void test_temp() {
+  printf("==== test_temp started\n");
+  TerarkIndex::KeyStat stat;
+  stat.numKeys = size_t(-1);
+  char arr[KEY_LEN] = { 0 };
+  arr[7] = 1;
+  stat.minKey.assign(arr, arr + KEY_LEN);
+  arr[7] = 14;
+  stat.maxKey.assign(arr, arr + KEY_LEN);
+  auto factory = TerarkIndex::SelectFactory(stat, "NestLoudsTrieDAWG_Mixed_XL_256_32_FL");
+  assert(factory != nullptr);
+  printf("\tdone\n");
+}
+
+

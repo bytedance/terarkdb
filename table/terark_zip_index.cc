@@ -127,10 +127,14 @@ TerarkIndex::SelectFactory(const KeyStat& ks, fstring name) {
   assert(ks.numKeys > 0);
   //assert(!ks.minKey.empty() && !ks.maxKey.empty());
 #if defined(TerocksPrivateCode)
+  static bool disableUintIndex =
+    terark::getEnvBool("TerarkZipTable_disableUintIndex", false);
+  static bool disableCompositeUintIndex =
+    terark::getEnvBool("TerarkZipTable_disableCompositeUintIndex", false);
   size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
   assert(cplen >= ks.commonPrefixLen);
   size_t ceLen = 0; // cost effective index1st len if any
-  if (ks.maxKeyLen == ks.minKeyLen && ks.maxKeyLen - cplen <= sizeof(uint64_t)) {
+  if (!disableUintIndex && ks.maxKeyLen == ks.minKeyLen && ks.maxKeyLen - cplen <= sizeof(uint64_t)) {
     auto minValue = ReadBigEndianUint64(ks.minKey.begin() + cplen, ks.minKey.end());
     auto maxValue = ReadBigEndianUint64(ks.maxKey.begin() + cplen, ks.maxKey.end());
     uint64_t diff = (minValue < maxValue ? maxValue - minValue : minValue - maxValue) + 1;
@@ -146,7 +150,8 @@ TerarkIndex::SelectFactory(const KeyStat& ks, fstring name) {
       }
     }
   }
-  if (ks.maxKeyLen == ks.minKeyLen &&
+  if (!disableCompositeUintIndex &&
+      ks.maxKeyLen == ks.minKeyLen &&
       ks.maxKeyLen - cplen <= 16 && // !!! plain index2nd may occupy too much space
       SeekCostEffectiveIndexLen(ks, ceLen) &&
       ks.maxKeyLen > cplen + ceLen) {
@@ -1024,10 +1029,17 @@ public:
       rankselect1.build_cache(false, false);
       rankselect2.build_cache(false, false);
       // try order: 1. sorteduint; 2. uintmin0; 3. fixlen
+      // TBD: following skips are only for test right now
+      bool skipSorted =
+        terark::getEnvBool("TerarkZipTable_skipSorted", false);
+      bool skipUint =
+        terark::getEnvBool("TerarkZipTable_skipUint", false);
       if (key2_len <= 8) {
-        TerarkIndex* index =  CreateIndexWithSortedUintCont(rankselect1, rankselect2, 
-          keyVec, ks, minValue, maxValue, key1_len, minKey2Data, maxKey2Data);
-        if (!index) {
+        TerarkIndex* index = nullptr;
+        if (!skipSorted)
+          index = CreateIndexWithSortedUintCont(rankselect1, rankselect2, 
+                                                keyVec, ks, minValue, maxValue, key1_len, minKey2Data, maxKey2Data);
+        if (!index && !skipUint) {
           index = CreateIndexWithUintCont(rankselect1, rankselect2, 
             keyVec, ks, minValue, maxValue, key1_len, minKey2Data, maxKey2Data);
         }
@@ -1047,9 +1059,9 @@ public:
       }
     }
     static TerarkIndex* CreateIndexWithSortedUintCont(RankSelect1& rankselect1, RankSelect2& rankselect2,
-                                         FixedLenStrVec& keyVec, const KeyStat& ks, 
-                                         uint64_t minValue, uint64_t maxValue, size_t key1_len,
-                                         valvec<byte_t>& minKey2Data, valvec<byte_t>& maxKey2Data) {
+                                                      FixedLenStrVec& keyVec, const KeyStat& ks, 
+                                                      uint64_t key1MinValue, uint64_t key1MaxValue, size_t key1_len,
+                                                      valvec<byte_t>& minKey2Data, valvec<byte_t>& maxKey2Data) {
       const size_t kBlockUnits = 128;
       const size_t kLimit = (1ull << 48) - 1;
       uint64_t key2MinValue = ReadBigEndianUint64(minKey2Data);
@@ -1073,27 +1085,12 @@ public:
       SortedUintDataCont container;
       container.swap(uintVec);
       container.init(minKey2Data.size(), key2MinValue);
-      if (rankselect1.max_rank0() == 0 && rankselect2.max_rank1() == 0) {
-        rank_select_allone rs1(rankselect1.size());
-        rank_select_allzero rs2(rankselect2.size());
-        return new CompositeUintIndex<rank_select_allone, rank_select_allzero, SortedUintDataCont>(
-          rs1, rs2, container, ks, minValue, maxValue, key1_len, key2MinValue, key2MaxValue);
-      } else if (rankselect2.max_rank1() == 0) {
-        rank_select_allzero rs2(rankselect2.size());
-        return new CompositeUintIndex<RankSelect1, rank_select_allzero, SortedUintDataCont>(
-          rankselect1, rs2, container, ks, minValue, maxValue, key1_len, key2MinValue, key2MaxValue);
-      } else if (rankselect1.max_rank0() == 0) {
-        rank_select_allone rs1(rankselect1.size());
-        return new CompositeUintIndex<rank_select_allone, RankSelect2, SortedUintDataCont>(
-          rs1, rankselect2, container, ks, minValue, maxValue, key1_len, key2MinValue, key2MaxValue);
-      } else {
-        return new CompositeUintIndex<RankSelect1, RankSelect2, SortedUintDataCont>(
-          rankselect1, rankselect2, container, ks, minValue, maxValue, key1_len, key2MinValue, key2MaxValue);
-      }
+      return CreateIndex(rankselect1, rankselect2, container, ks, 
+                         key1MinValue, key1MaxValue, key1_len, key2MinValue, key2MaxValue);
     }
     static TerarkIndex* CreateIndexWithUintCont(RankSelect1& rankselect1, RankSelect2& rankselect2,
                                          FixedLenStrVec& keyVec, const KeyStat& ks, 
-                                         uint64_t minValue, uint64_t maxValue, size_t key1_len,
+                                         uint64_t key1MinValue, uint64_t key1MaxValue, size_t key1_len,
                                          valvec<byte_t>& minKey2Data, valvec<byte_t>& maxKey2Data) {
       uint64_t key2MinValue = ReadBigEndianUint64(minKey2Data);
       uint64_t key2MaxValue = ReadBigEndianUint64(maxKey2Data);
@@ -1115,46 +1112,40 @@ public:
       Min0DataCont container;
       container.swap(vecMin0);
       container.init(minKey2Data.size(), key2MinValue);
-      if (rankselect1.max_rank0() == 0 && rankselect2.max_rank1() == 0) {
-        rank_select_allone rs1(rankselect1.size());
-        rank_select_allzero rs2(rankselect2.size());
-        return new CompositeUintIndex<rank_select_allone, rank_select_allzero, Min0DataCont>(
-          rs1, rs2, container, ks, minValue, maxValue, key1_len, key2MinValue, key2MaxValue);
-      } else if (rankselect2.max_rank1() == 0) {
-        rank_select_allzero rs2(rankselect2.size());
-        return new CompositeUintIndex<RankSelect1, rank_select_allzero, Min0DataCont>(
-          rankselect1, rs2, container, ks, minValue, maxValue, key1_len, key2MinValue, key2MaxValue);
-      } else if (rankselect1.max_rank0() == 0) {
-        rank_select_allone rs1(rankselect1.size());
-        return new CompositeUintIndex<rank_select_allone, RankSelect2, Min0DataCont>(
-          rs1, rankselect2, container, ks, minValue, maxValue, key1_len, key2MinValue, key2MaxValue);
-      } else {
-        return new CompositeUintIndex<RankSelect1, RankSelect2, Min0DataCont>(
-          rankselect1, rankselect2, container, ks, minValue, maxValue, key1_len, key2MinValue, key2MaxValue);
-      }
+      return CreateIndex(rankselect1, rankselect2, container, ks,
+                         key1MinValue, key1MaxValue, key1_len, key2MinValue, key2MaxValue);
     }
     static TerarkIndex* CreateIndexWithStrCont(RankSelect1& rankselect1, RankSelect2& rankselect2,
                                                FixedLenStrVec& keyVec, const KeyStat& ks, 
-                                               uint64_t minValue, uint64_t maxValue, size_t key1_len) {
+                                               uint64_t key1MinValue, uint64_t key1MaxValue, size_t key1_len) {
       StrDataCont container;
       container.swap(keyVec);
       // do NOT call container.init() here, keyVec is inited already
+      return CreateIndex(rankselect1, rankselect2, container, ks,
+                         key1MinValue, key1MaxValue, key1_len, 0, 0);
+    }
+
+    template<class DataCont>
+    static TerarkIndex* CreateIndex(RankSelect1& rankselect1, RankSelect2& rankselect2,
+                                    DataCont& container, const KeyStat& ks,
+                                    uint64_t key1MinValue, uint64_t key1MaxValue, size_t key1_len,
+                                    uint64_t key2MinValue, uint64_t key2MaxValue) {
       if (rankselect1.max_rank0() == 0 && rankselect2.max_rank1() == 0) {
         rank_select_allone rs1(rankselect1.size());
         rank_select_allzero rs2(rankselect2.size());
-        return new CompositeUintIndex<rank_select_allone, rank_select_allzero, StrDataCont>(
-          rs1, rs2, container, ks, minValue, maxValue, key1_len, 0, 0);
+        return new CompositeUintIndex<rank_select_allone, rank_select_allzero, DataCont>(
+          rs1, rs2, container, ks, key1MinValue, key1MaxValue, key1_len, key2MinValue, key2MaxValue);
       } else if (rankselect2.max_rank1() == 0) {
         rank_select_allzero rs2(rankselect2.size());
-        return new CompositeUintIndex<RankSelect1, rank_select_allzero, StrDataCont>(
-          rankselect1, rs2, container, ks, minValue, maxValue, key1_len, 0, 0);
+        return new CompositeUintIndex<RankSelect1, rank_select_allzero, DataCont>(
+          rankselect1, rs2, container, ks, key1MinValue, key1MaxValue, key1_len, key2MinValue, key2MaxValue);
       } else if (rankselect1.max_rank0() == 0) {
         rank_select_allone rs1(rankselect1.size());
-        return new CompositeUintIndex<rank_select_allone, RankSelect2, StrDataCont>(
-          rs1, rankselect2, container, ks, minValue, maxValue, key1_len, 0, 0);
+        return new CompositeUintIndex<rank_select_allone, RankSelect2, DataCont>(
+          rs1, rankselect2, container, ks, key1MinValue, key1MaxValue, key1_len, key2MinValue, key2MaxValue);
       } else {
-        return new CompositeUintIndex<RankSelect1, RankSelect2, StrDataCont>(
-          rankselect1, rankselect2, container, ks, minValue, maxValue, key1_len, 0, 0);
+        return new CompositeUintIndex<RankSelect1, RankSelect2, DataCont>(
+          rankselect1, rankselect2, container, ks, key1MinValue, key1MaxValue, key1_len, key2MinValue, key2MaxValue);
       }
     }
 
