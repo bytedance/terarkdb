@@ -162,7 +162,7 @@ TerarkIndex::SelectFactory(const KeyStat& ks, fstring name) {
         ks.numKeys < UINT32_MAX) { // for composite cluster key, key1:key2 maybe 1:N
       return GetFactory("CompositeUintIndex_IL_256_32_IL_256_32");
     } else {
-      return GetFactory("CompositeUintIndex_SE_512_64_SE_512_64_Uint");
+      return GetFactory("CompositeUintIndex_SE_512_64_SE_512_64");
     }
   }
 #endif // TerocksPrivateCode

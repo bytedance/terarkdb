@@ -778,11 +778,11 @@ void test_seek_cost_effective() {
   printf("==== Uint Seek-Cost-Effective Test started\n");
   // prepare
   const rocksdb::TerarkIndex::Factory* f_il85_il85 = 
-    TerarkIndex::GetFactory("CompositeUintIndex_IL_256_32_IL_256_32_Uint");
+    TerarkIndex::GetFactory("CompositeUintIndex_IL_256_32_IL_256_32");
   const rocksdb::TerarkIndex::Factory* f_se96_se96 = 
-    TerarkIndex::GetFactory("CompositeUintIndex_SE_512_64_SE_512_64_Uint");
+    TerarkIndex::GetFactory("CompositeUintIndex_SE_512_64_SE_512_64");
   const rocksdb::TerarkIndex::Factory* f_allone_allzero = 
-    TerarkIndex::GetFactory("CompositeUintIndex_AllOne_AllZero_Uint");
+    TerarkIndex::GetFactory("CompositeUintIndex_AllOne_AllZero");
   {
     TerarkIndex::KeyStat stat;
     stat.numKeys = 100;
