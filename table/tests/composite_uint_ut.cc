@@ -779,11 +779,11 @@ void test_seek_cost_effective() {
   printf("==== Uint Seek-Cost-Effective Test started\n");
   // prepare
   const rocksdb::TerarkIndex::Factory* f_il85_il85 = 
-    TerarkIndex::GetFactory("CompositeUintIndex_IL_256_32_IL_256_32_Uint");
+    TerarkIndex::GetFactory("CompositeUintIndex_IL_256_32_IL_256_32");
   const rocksdb::TerarkIndex::Factory* f_se96_se96 = 
-    TerarkIndex::GetFactory("CompositeUintIndex_SE_512_64_SE_512_64_Uint");
+    TerarkIndex::GetFactory("CompositeUintIndex_SE_512_64_SE_512_64");
   const rocksdb::TerarkIndex::Factory* f_allone_allzero = 
-    TerarkIndex::GetFactory("CompositeUintIndex_AllOne_AllZero_Uint");
+    TerarkIndex::GetFactory("CompositeUintIndex_AllOne_AllZero");
   {
     TerarkIndex::KeyStat stat;
     stat.numKeys = 100;
@@ -940,3 +940,19 @@ void test_seek_cost_effective() {
   printf("\tSeek done\n");
   clear();
 }
+
+void test_temp() {
+  printf("==== test_temp started\n");
+  TerarkIndex::KeyStat stat;
+  stat.numKeys = size_t(-1);
+  char arr[KEY_LEN] = { 0 };
+  arr[7] = 1;
+  stat.minKey.assign(arr, arr + KEY_LEN);
+  arr[7] = 14;
+  stat.maxKey.assign(arr, arr + KEY_LEN);
+  auto factory = TerarkIndex::SelectFactory(stat, "NestLoudsTrieDAWG_Mixed_XL_256_32_FL");
+  assert(factory != nullptr);
+  printf("\tdone\n");
+}
+
+

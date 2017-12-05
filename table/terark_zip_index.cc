@@ -169,10 +169,14 @@ TerarkIndex::SelectFactory(const KeyStat& ks, fstring name) {
   assert(ks.numKeys > 0);
   //assert(!ks.minKey.empty() && !ks.maxKey.empty());
 #if defined(TerocksPrivateCode)
+  static bool disableUintIndex =
+    terark::getEnvBool("TerarkZipTable_disableUintIndex", false);
+  static bool disableCompositeUintIndex =
+    terark::getEnvBool("TerarkZipTable_disableCompositeUintIndex", false);
   size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
   assert(cplen >= ks.commonPrefixLen);
   size_t ceLen = 0; // cost effective index1st len if any
-  if (ks.maxKeyLen == ks.minKeyLen && ks.maxKeyLen - cplen <= sizeof(uint64_t)) {
+  if (!disableUintIndex && ks.maxKeyLen == ks.minKeyLen && ks.maxKeyLen - cplen <= sizeof(uint64_t)) {
     auto minValue = ReadBigEndianUint64(ks.minKey.begin() + cplen, ks.minKey.end());
     auto maxValue = ReadBigEndianUint64(ks.maxKey.begin() + cplen, ks.maxKey.end());
     uint64_t diff = (minValue < maxValue ? maxValue - minValue : minValue - maxValue) + 1;
@@ -188,17 +192,19 @@ TerarkIndex::SelectFactory(const KeyStat& ks, fstring name) {
       }
     }
   }
-  if (ks.maxKeyLen == ks.minKeyLen &&
+  if (!disableCompositeUintIndex &&
+      ks.maxKeyLen == ks.minKeyLen &&
       ks.maxKeyLen - cplen <= 16 && // !!! plain index2nd may occupy too much space
       SeekCostEffectiveIndexLen(ks, ceLen) &&
       ks.maxKeyLen > cplen + ceLen) {
     auto minValue = ReadBigEndianUint64(ks.minKey.begin() + cplen, ceLen);
     auto maxValue = ReadBigEndianUint64(ks.maxKey.begin() + cplen, ceLen);
     uint64_t diff = (minValue < maxValue ? maxValue - minValue : minValue - maxValue) + 1;
-    if (diff < UINT32_MAX) {
-      return GetFactory("CompositeUintIndex_IL_256_32_IL_256_32_Uint");
+    if (diff < UINT32_MAX &&
+        ks.numKeys < UINT32_MAX) { // for composite cluster key, key1:key2 maybe 1:N
+      return GetFactory("CompositeUintIndex_IL_256_32_IL_256_32");
     } else {
-      return GetFactory("CompositeUintIndex_SE_512_64_SE_512_64_Uint");
+      return GetFactory("CompositeUintIndex_SE_512_64_SE_512_64");
     }
   }
 #endif // TerocksPrivateCode
@@ -528,6 +534,8 @@ private:
 public:
   void swap(CompositeKeyDataContainer<SortedUintVec>& other) {
     container_.swap(other.container_);
+    std::swap(min_value_, other.min_value_);
+    std::swap(key_len_, other.key_len_);
   }
   void swap(SortedUintVec& other) {
     container_.swap(other);
@@ -542,10 +550,6 @@ public:
   const byte_t* data() const { return container_.data(); }
   size_t mem_size() const { return container_.mem_size(); }
   size_t size() const { return container_.size(); }
-  bool equals(size_t idx, size_t val) const {
-    assert(0);
-    return false;
-  }
   bool equals(size_t idx, fstring val) const {
     assert(idx < container_.size());
     if (val.size() != key_len_)
@@ -557,6 +561,7 @@ public:
     assert(0);
   }
   void risk_set_data(byte_t* data, size_t sz) {
+    assert(data != nullptr);
     container_.risk_set_data(data, sz);
   }
 
@@ -583,10 +588,7 @@ public:
     n -= min_value_;
     size_t pos = container_.lower_bound(lo, hi, n);
     while (pos != hi) {
-      byte_t arr[8] = { 0 };
-      size_t v = get_val(pos);
-      SaveAsBigEndianUint64(arr, key_len_, v);
-      if (fstring(arr, arr + key_len_) >= val)
+      if (compare(pos, val) >= 0)
         return pos;
       pos++;
     }
@@ -614,6 +616,8 @@ private:
 public:
   void swap(CompositeKeyDataContainer<UintVecMin0>& other) {
     container_.swap(other.container_);
+    std::swap(min_value_, other.min_value_);
+    std::swap(key_len_, other.key_len_);
   }
   void swap(UintVecMin0& other) {
     container_.swap(other);
@@ -628,10 +632,6 @@ public:
   const byte_t* data() const { return container_.data(); }
   size_t mem_size() const { return container_.mem_size(); }
   size_t size() const { return container_.size(); }
-  bool equals(size_t idx, size_t val) const {
-    assert(0);
-    return false;
-  }
   bool equals(size_t idx, fstring val) const {
     assert(idx < container_.size());
     if (val.size() != key_len_)
@@ -666,10 +666,7 @@ public:
     n -= min_value_;
     size_t pos = lower_bound_n<const UintVecMin0&>(container_, lo, hi, n);
     while (pos != hi) {
-      byte_t arr[8] = { 0 };
-      size_t v = get_val(pos);
-      SaveAsBigEndianUint64(arr, key_len_, v);
-      if (fstring(arr, arr + key_len_) >= val)
+      if (compare(pos, val) >= 0)
         return pos;
       pos++;
     }
@@ -707,11 +704,9 @@ public:
   bool equals(size_t idx, fstring other) const {
     return container_[idx] == other;
   }
-  bool equals(size_t idx, size_t other) const {
-    assert(0);
-    return false;
-  }
   void risk_set_data(byte_t* data, size_t sz) {
+    assert(data != nullptr);
+    // here, sz == count, since <byte_t>
     container_.m_strpool.risk_set_data(data, sz);
   }
   void risk_set_data(byte_t* data, size_t num, size_t maxValue) {
@@ -924,7 +919,6 @@ public:
         order = index_.rankselect1_.rank1(rankselect1_idx_);
         pos0 = index_.rankselect2_.select0(order);
         if (pos0 == index_.key2_data_.size() - 1) { // last elem
-          //m_id = (key2 <= index_.key2_data_[pos0]) ? pos0 : size_t(-1);
           m_id = (index_.key2_data_.compare(pos0, key2) >= 0) ? pos0 : size_t(-1);
           goto out;
         } else {
@@ -1096,6 +1090,8 @@ public:
           reader >> keyBuf;
           uint64_t offset = Read1stKey(keyBuf, cplen, key1_len) - minValue;
           rankselect1.set1(offset);
+          if (terark_unlikely(i == 0)) // make sure 1st prev != offset
+            prev = offset - 1;
           if (offset != prev) { // new key1 encountered
             rankselect2.set0(i);
           } else {
@@ -1115,6 +1111,8 @@ public:
           reader >> keyBuf;
           uint64_t offset = Read1stKey(keyBuf, cplen, key1_len) - minValue;
           rankselect1.set1(offset);
+          if (terark_unlikely(i == ks.numKeys - 1)) // make sure 1st prev != offset
+            prev = offset - 1;
           if (offset != prev) { // next index1 is new one
             rankselect2.set0(i + 1);
           } else {
@@ -1135,10 +1133,17 @@ public:
       rankselect1.build_cache(false, false);
       rankselect2.build_cache(false, false);
       // try order: 1. sorteduint; 2. uintmin0; 3. fixlen
+      // TBD: following skips are only for test right now
+      bool skipSorted =
+        terark::getEnvBool("TerarkZipTable_skipSorted", false);
+      bool skipUint =
+        terark::getEnvBool("TerarkZipTable_skipUint", false);
       if (key2_len <= 8) {
-        TerarkIndex* index =  CreateIndexWithSortedUintCont(rankselect1, rankselect2, 
-          keyVec, ks, minValue, maxValue, key1_len, minKey2Data, maxKey2Data);
-        if (!index) {
+        TerarkIndex* index = nullptr;
+        if (!skipSorted)
+          index = CreateIndexWithSortedUintCont(rankselect1, rankselect2, 
+                                                keyVec, ks, minValue, maxValue, key1_len, minKey2Data, maxKey2Data);
+        if (!index && !skipUint) {
           index = CreateIndexWithUintCont(rankselect1, rankselect2, 
             keyVec, ks, minValue, maxValue, key1_len, minKey2Data, maxKey2Data);
         }
@@ -1187,16 +1192,14 @@ public:
         return kNormal_Normal;
     }
     static TerarkIndex* CreateIndexWithSortedUintCont(RankSelect1& rankselect1, RankSelect2& rankselect2,
-                                         FixedLenStrVec& keyVec, const KeyStat& ks, 
-                                         uint64_t minValue, uint64_t maxValue, size_t key1_len,
-                                         valvec<byte_t>& minKey2Data, valvec<byte_t>& maxKey2Data) {
+                                                      FixedLenStrVec& keyVec, const KeyStat& ks, 
+                                                      uint64_t key1MinValue, uint64_t key1MaxValue, size_t key1_len,
+                                                      valvec<byte_t>& minKey2Data, valvec<byte_t>& maxKey2Data) {
       const size_t kBlockUnits = 128;
       const size_t kLimit = (1ull << 48) - 1;
-      const size_t kRS1Cnt = rankselect1.size(); // to accompany ks2cnt
-      const size_t kRS2Cnt = rankselect2.size(); // extra '0' append to rs2, included as well
       uint64_t key2MinValue = ReadBigEndianUint64(minKey2Data);
       uint64_t key2MaxValue = ReadBigEndianUint64(maxKey2Data);
-      auto builder = SortedUintVec::createBuilder(false, kBlockUnits);
+      unique_ptr<SortedUintVec:: Builder> builder(SortedUintVec::createBuilder(false, kBlockUnits));
       uint64_t prev = ReadBigEndianUint64(keyVec[0]) - key2MinValue;
       builder->push_back(prev);
       for (size_t i = 1; i < keyVec.size(); i++) {
@@ -1211,104 +1214,22 @@ public:
       auto rs = builder->finish(&uintVec);
       if (rs.mem_size > keyVec.mem_size() / 2.0) // too much ram consumed
         return nullptr;
-      printf("sorteduint mem: %zu, keyvec mem: %zu\n", rs.mem_size, keyVec.mem_size());
+      //printf("sorteduint mem: %zu, keyvec mem: %zu\n", rs.mem_size, keyVec.mem_size());
       SortedUintDataCont container;
       container.swap(uintVec);
       container.init(minKey2Data.size(), key2MinValue);
-      AmazingCombinationT cob = figureCombination(rankselect1, rankselect2);
-      switch (cob) {
-      case kAllOne_AllZero: {
-        rank_select_allone rs1(kRS1Cnt);
-        rank_select_allzero rs2(kRS2Cnt);
-        return new CompositeUintIndex<rank_select_allone, rank_select_allzero, SortedUintDataCont>(
-          rs1, rs2, container, ks, minValue, maxValue, key1_len, key2MinValue, key2MaxValue);
-      }
-      case kAllOne_FewZero: {
-        rank_select_allone rs1(kRS1Cnt);
-        rank_select_fewzero<typename RankSelect2::index_t> rs2(kRS2Cnt);
-        rs2.build_from(rankselect2);
-        return new CompositeUintIndex<rank_select_allone, rank_select_fewzero<typename RankSelect2::index_t>, SortedUintDataCont>(
-          rs1, rs2, container, ks, minValue, maxValue, key1_len, key2MinValue, key2MaxValue);
-      }
-      case kAllOne_Normal: {
-        rank_select_allone rs1(kRS1Cnt);
-        return new CompositeUintIndex<rank_select_allone, RankSelect2, SortedUintDataCont>(
-          rs1, rankselect2, container, ks, minValue, maxValue, key1_len, key2MinValue, key2MaxValue);
-      }
-      case kFewZero_AllZero: {
-        rank_select_fewzero<typename RankSelect1::index_t> rs1(kRS1Cnt);
-        rs1.build_from(rankselect1);
-        rank_select_allzero rs2(kRS2Cnt);
-        return new CompositeUintIndex<rank_select_fewzero<typename RankSelect1::index_t>, rank_select_allzero, SortedUintDataCont>(
-          rs1, rs2, container, ks, minValue, maxValue, key1_len, key2MinValue, key2MaxValue);
-      }
-      case kFewZero_FewZero: {
-        rank_select_fewzero<typename RankSelect1::index_t> rs1(kRS1Cnt);
-        rs1.build_from(rankselect1);
-        rank_select_fewzero<typename RankSelect2::index_t> rs2(kRS2Cnt);
-        rs2.build_from(rankselect2);
-        return new CompositeUintIndex<rank_select_fewzero<typename RankSelect1::index_t>, 
-                                      rank_select_fewzero<typename RankSelect2::index_t>, SortedUintDataCont>(
-          rs1, rs2, container, ks, minValue, maxValue, key1_len, key2MinValue, key2MaxValue);
-      }
-      case kFewZero_Normal: {
-        rank_select_fewzero<typename RankSelect1::index_t> rs1(kRS1Cnt);
-        rs1.build_from(rankselect1);
-        return new CompositeUintIndex<rank_select_fewzero<typename RankSelect1::index_t>, RankSelect2, SortedUintDataCont>(
-          rs1, rankselect2, container, ks, minValue, maxValue, key1_len, key2MinValue, key2MaxValue);
-      }
-      case kFewOne_AllZero: {
-        rank_select_fewone<typename RankSelect1::index_t> rs1(kRS1Cnt);
-        rs1.build_from(rankselect1);
-        rank_select_allzero rs2(kRS2Cnt);
-        return new CompositeUintIndex<rank_select_fewone<typename RankSelect1::index_t>, rank_select_allzero, SortedUintDataCont>(
-          rs1, rs2, container, ks, minValue, maxValue, key1_len, key2MinValue, key2MaxValue);
-      }
-      case kFewOne_FewZero: {
-        rank_select_fewone<typename RankSelect1::index_t> rs1(kRS1Cnt);
-        rs1.build_from(rankselect1);
-        rank_select_fewzero<typename RankSelect2::index_t> rs2(kRS2Cnt);
-        rs2.build_from(rankselect2);
-        return new CompositeUintIndex<rank_select_fewone<typename RankSelect1::index_t>,
-                                      rank_select_fewzero<typename RankSelect2::index_t>, SortedUintDataCont>(
-                                        rs1, rs2, container, ks, minValue, maxValue, key1_len, key2MinValue, key2MaxValue);
-      }
-      case kFewOne_Normal: {
-        rank_select_fewone<typename RankSelect1::index_t> rs1(kRS1Cnt);
-        rs1.build_from(rankselect1);
-        return new CompositeUintIndex<rank_select_fewone<typename RankSelect1::index_t>, RankSelect2, SortedUintDataCont>(
-          rs1, rankselect2, container, ks, minValue, maxValue, key1_len, key2MinValue, key2MaxValue);
-      }
-      case kNormal_AllZero: {
-        rank_select_allzero rs2(kRS2Cnt);
-        return new CompositeUintIndex<RankSelect1, rank_select_allzero, SortedUintDataCont>(
-          rankselect1, rs2, container, ks, minValue, maxValue, key1_len, key2MinValue, key2MaxValue);
-      }
-      case kNormal_FewZero: {
-        rank_select_fewzero<typename RankSelect2::index_t> rs2(kRS2Cnt);
-        rs2.build_from(rankselect2);
-        return new CompositeUintIndex<RankSelect1, rank_select_fewzero<typename RankSelect2::index_t>, SortedUintDataCont>(
-          rankselect1, rs2, container, ks, minValue, maxValue, key1_len, key2MinValue, key2MaxValue);
-      }
-      case kNormal_Normal: {
-        return new CompositeUintIndex<RankSelect1, RankSelect2, SortedUintDataCont>(
-          rankselect1, rankselect2, container, ks, minValue, maxValue, key1_len, key2MinValue, key2MaxValue);
-      }
-      default:
-        assert(0);
-      }
+      return CreateIndex(rankselect1, rankselect2, container, ks, key1MinValue, key1MaxValue, key1_len,
+                         key2MinValue, key2MaxValue);
     }
     static TerarkIndex* CreateIndexWithUintCont(RankSelect1& rankselect1, RankSelect2& rankselect2,
-                                         FixedLenStrVec& keyVec, const KeyStat& ks, 
-                                         uint64_t minValue, uint64_t maxValue, size_t key1_len,
-                                         valvec<byte_t>& minKey2Data, valvec<byte_t>& maxKey2Data) {
-      const size_t kRS1Cnt = rankselect1.size(); // to accompany ks2cnt
-      const size_t kRS2Cnt = rankselect2.size(); // extra '0' append to rs2, included as well
+                                                FixedLenStrVec& keyVec, const KeyStat& ks, 
+                                                uint64_t key1MinValue, uint64_t key1MaxValue, size_t key1_len,
+                                                valvec<byte_t>& minKey2Data, valvec<byte_t>& maxKey2Data) {
       uint64_t key2MinValue = ReadBigEndianUint64(minKey2Data);
       uint64_t key2MaxValue = ReadBigEndianUint64(maxKey2Data);
       uint64_t diff = key2MaxValue - key2MinValue + 1;
       size_t bitUsed = UintVecMin0::compute_uintbits(diff);
-      printf("uint bit used: %zu, keyvec bit used: %zu\n", bitUsed, keyVec.m_fixlen * 8);
+      //printf("uint bit used: %zu, keyvec bit used: %zu\n", bitUsed, keyVec.m_fixlen * 8);
       if (bitUsed > keyVec.m_fixlen * 8 * 0.9) // compress ratio just so so
         return nullptr;
       // reuse memory from keyvec, since vecMin0 should consume less mem
@@ -1324,123 +1245,51 @@ public:
       Min0DataCont container;
       container.swap(vecMin0);
       container.init(minKey2Data.size(), key2MinValue);
-      AmazingCombinationT cob = figureCombination(rankselect1, rankselect2);
-      switch (cob) {
-      case kAllOne_AllZero: {
-        rank_select_allone rs1(kRS1Cnt);
-        rank_select_allzero rs2(kRS2Cnt);
-        return new CompositeUintIndex<rank_select_allone, rank_select_allzero, Min0DataCont>(
-          rs1, rs2, container, ks, minValue, maxValue, key1_len, key2MinValue, key2MaxValue);
-      }
-      case kAllOne_FewZero: {
-        rank_select_allone rs1(kRS1Cnt);
-        rank_select_fewzero<typename RankSelect2::index_t> rs2(kRS2Cnt);
-        rs2.build_from(rankselect2);
-        return new CompositeUintIndex<rank_select_allone, rank_select_fewzero<typename RankSelect2::index_t>, Min0DataCont>(
-          rs1, rs2, container, ks, minValue, maxValue, key1_len, key2MinValue, key2MaxValue);
-      }
-      case kAllOne_Normal: {
-        rank_select_allone rs1(kRS1Cnt);
-        return new CompositeUintIndex<rank_select_allone, RankSelect2, Min0DataCont>(
-          rs1, rankselect2, container, ks, minValue, maxValue, key1_len, key2MinValue, key2MaxValue);
-      }
-      case kFewZero_AllZero: {
-        rank_select_fewzero<typename RankSelect1::index_t> rs1(kRS1Cnt);
-        rs1.build_from(rankselect1);
-        rank_select_allzero rs2(kRS2Cnt);
-        return new CompositeUintIndex<rank_select_fewzero<typename RankSelect1::index_t>, rank_select_allzero, Min0DataCont>(
-          rs1, rs2, container, ks, minValue, maxValue, key1_len, key2MinValue, key2MaxValue);
-      }
-      case kFewZero_FewZero: {
-        rank_select_fewzero<typename RankSelect1::index_t> rs1(kRS1Cnt);
-        rs1.build_from(rankselect1);
-        rank_select_fewzero<typename RankSelect2::index_t> rs2(kRS2Cnt);
-        rs2.build_from(rankselect2);
-        return new CompositeUintIndex<rank_select_fewzero<typename RankSelect1::index_t>, 
-                                      rank_select_fewzero<typename RankSelect2::index_t>, Min0DataCont>(
-          rs1, rs2, container, ks, minValue, maxValue, key1_len, key2MinValue, key2MaxValue);
-      }
-      case kFewZero_Normal: {
-        rank_select_fewzero<typename RankSelect1::index_t> rs1(kRS1Cnt);
-        rs1.build_from(rankselect1);
-        return new CompositeUintIndex<rank_select_fewzero<typename RankSelect1::index_t>, RankSelect2, Min0DataCont>(
-          rs1, rankselect2, container, ks, minValue, maxValue, key1_len, key2MinValue, key2MaxValue);
-      }
-      case kFewOne_AllZero: {
-        rank_select_fewone<typename RankSelect1::index_t> rs1(kRS1Cnt);
-        rs1.build_from(rankselect1);
-        rank_select_allzero rs2(kRS2Cnt);
-        return new CompositeUintIndex<rank_select_fewone<typename RankSelect1::index_t>, rank_select_allzero, Min0DataCont>(
-          rs1, rs2, container, ks, minValue, maxValue, key1_len, key2MinValue, key2MaxValue);
-      }
-      case kFewOne_FewZero: {
-        rank_select_fewone<typename RankSelect1::index_t> rs1(kRS1Cnt);
-        rs1.build_from(rankselect1);
-        rank_select_fewzero<typename RankSelect2::index_t> rs2(kRS2Cnt);
-        rs2.build_from(rankselect2);
-        return new CompositeUintIndex<rank_select_fewone<typename RankSelect1::index_t>,
-                                      rank_select_fewzero<typename RankSelect2::index_t>, Min0DataCont>(
-                                        rs1, rs2, container, ks, minValue, maxValue, key1_len, key2MinValue, key2MaxValue);
-      }
-      case kFewOne_Normal: {
-        rank_select_fewone<typename RankSelect1::index_t> rs1(kRS1Cnt);
-        rs1.build_from(rankselect1);
-        return new CompositeUintIndex<rank_select_fewone<typename RankSelect1::index_t>, RankSelect2, Min0DataCont>(
-          rs1, rankselect2, container, ks, minValue, maxValue, key1_len, key2MinValue, key2MaxValue);
-      }
-      case kNormal_AllZero: {
-        rank_select_allzero rs2(kRS2Cnt);
-        return new CompositeUintIndex<RankSelect1, rank_select_allzero, Min0DataCont>(
-          rankselect1, rs2, container, ks, minValue, maxValue, key1_len, key2MinValue, key2MaxValue);
-      }
-      case kNormal_FewZero: {
-        rank_select_fewzero<typename RankSelect2::index_t> rs2(kRS2Cnt);
-        rs2.build_from(rankselect2);
-        return new CompositeUintIndex<RankSelect1, rank_select_fewzero<typename RankSelect2::index_t>, Min0DataCont>(
-          rankselect1, rs2, container, ks, minValue, maxValue, key1_len, key2MinValue, key2MaxValue);
-      }
-      case kNormal_Normal: {
-        return new CompositeUintIndex<RankSelect1, RankSelect2, Min0DataCont>(
-          rankselect1, rankselect2, container, ks, minValue, maxValue, key1_len, key2MinValue, key2MaxValue);
-      }
-      default:
-        assert(0);
-      }
+      return CreateIndex(rankselect1, rankselect2, container, ks, key1MinValue, key1MaxValue, key1_len,
+                         key2MinValue, key2MaxValue);
     }
     static TerarkIndex* CreateIndexWithStrCont(RankSelect1& rankselect1, RankSelect2& rankselect2,
                                                FixedLenStrVec& keyVec, const KeyStat& ks, 
-                                               uint64_t minValue, uint64_t maxValue, size_t key1_len) {
-      const size_t kRS1Cnt = rankselect1.size(); // to accompany ks2cnt
-      const size_t kRS2Cnt = rankselect2.size(); // extra '0' append to rs2, included as well
+                                               uint64_t key1MinValue, uint64_t key1MaxValue, size_t key1_len) {
       StrDataCont container;
       container.swap(keyVec);
-      // StrDataCont
+      return CreateIndex(rankselect1, rankselect2, container, ks, 
+                         key1MinValue, key1MaxValue, key1_len, 0, 0);
+    }
+
+    template<class DataCont>
+    static TerarkIndex* CreateIndex(RankSelect1& rankselect1, RankSelect2& rankselect2,
+                                    DataCont& container, const KeyStat& ks,
+                                    uint64_t key1MinValue, uint64_t key1MaxValue, size_t key1_len,
+                                    uint64_t key2MinValue, uint64_t key2MaxValue) {
+      const size_t kRS1Cnt = rankselect1.size(); // to accompany ks2cnt
+      const size_t kRS2Cnt = rankselect2.size(); // extra '0' append to rs2, included as well
       AmazingCombinationT cob = figureCombination(rankselect1, rankselect2);
       switch (cob) {
       case kAllOne_AllZero: {
         rank_select_allone rs1(kRS1Cnt);
         rank_select_allzero rs2(kRS2Cnt);
-        return new CompositeUintIndex<rank_select_allone, rank_select_allzero, StrDataCont>(
-          rs1, rs2, container, ks, minValue, maxValue, key1_len, 0, 0);
+        return new CompositeUintIndex<rank_select_allone, rank_select_allzero, DataCont>(
+          rs1, rs2, container, ks, key1MinValue, key1MaxValue, key1_len, key2MinValue, key2MaxValue);
       }
       case kAllOne_FewZero: {
         rank_select_allone rs1(kRS1Cnt);
         rank_select_fewzero<typename RankSelect2::index_t> rs2(kRS2Cnt);
         rs2.build_from(rankselect2);
-        return new CompositeUintIndex<rank_select_allone, rank_select_fewzero<typename RankSelect2::index_t>, StrDataCont>(
-          rs1, rs2, container, ks, minValue, maxValue, key1_len, 0, 0);
+        return new CompositeUintIndex<rank_select_allone, rank_select_fewzero<typename RankSelect2::index_t>, DataCont>(
+          rs1, rs2, container, ks, key1MinValue, key1MaxValue, key1_len, key2MinValue, key2MaxValue);
       }
       case kAllOne_Normal: {
         rank_select_allone rs1(kRS1Cnt);
-        return new CompositeUintIndex<rank_select_allone, RankSelect2, StrDataCont>(
-          rs1, rankselect2, container, ks, minValue, maxValue, key1_len, 0, 0);
+        return new CompositeUintIndex<rank_select_allone, RankSelect2, DataCont>(
+          rs1, rankselect2, container, ks, key1MinValue, key1MaxValue, key1_len, key2MinValue, key2MaxValue);
       }
       case kFewZero_AllZero: {
         rank_select_fewzero<typename RankSelect1::index_t> rs1(kRS1Cnt);
         rs1.build_from(rankselect1);
         rank_select_allzero rs2(kRS2Cnt);
-        return new CompositeUintIndex<rank_select_fewzero<typename RankSelect1::index_t>, rank_select_allzero, StrDataCont>(
-          rs1, rs2, container, ks, minValue, maxValue, key1_len, 0, 0);
+        return new CompositeUintIndex<rank_select_fewzero<typename RankSelect1::index_t>, rank_select_allzero, DataCont>(
+          rs1, rs2, container, ks, key1MinValue, key1MaxValue, key1_len, key2MinValue, key2MaxValue);
       }
       case kFewZero_FewZero: {
         rank_select_fewzero<typename RankSelect1::index_t> rs1(kRS1Cnt);
@@ -1448,21 +1297,21 @@ public:
         rank_select_fewzero<typename RankSelect2::index_t> rs2(kRS2Cnt);
         rs2.build_from(rankselect2);
         return new CompositeUintIndex<rank_select_fewzero<typename RankSelect1::index_t>, 
-                                      rank_select_fewzero<typename RankSelect2::index_t>, StrDataCont>(
-          rs1, rs2, container, ks, minValue, maxValue, key1_len, 0, 0);
+                                      rank_select_fewzero<typename RankSelect2::index_t>, DataCont>(
+          rs1, rs2, container, ks, key1MinValue, key1MaxValue, key1_len, key2MinValue, key2MaxValue);
       }
       case kFewZero_Normal: {
         rank_select_fewzero<typename RankSelect1::index_t> rs1(kRS1Cnt);
         rs1.build_from(rankselect1);
-        return new CompositeUintIndex<rank_select_fewzero<typename RankSelect1::index_t>, RankSelect2, StrDataCont>(
-          rs1, rankselect2, container, ks, minValue, maxValue, key1_len, 0, 0);
+        return new CompositeUintIndex<rank_select_fewzero<typename RankSelect1::index_t>, RankSelect2, DataCont>(
+          rs1, rankselect2, container, ks, key1MinValue, key1MaxValue, key1_len, key2MinValue, key2MaxValue);
       }
       case kFewOne_AllZero: {
         rank_select_fewone<typename RankSelect1::index_t> rs1(kRS1Cnt);
         rs1.build_from(rankselect1);
         rank_select_allzero rs2(kRS2Cnt);
-        return new CompositeUintIndex<rank_select_fewone<typename RankSelect1::index_t>, rank_select_allzero, StrDataCont>(
-          rs1, rs2, container, ks, minValue, maxValue, key1_len, 0, 0);
+        return new CompositeUintIndex<rank_select_fewone<typename RankSelect1::index_t>, rank_select_allzero, DataCont>(
+          rs1, rs2, container, ks, key1MinValue, key1MaxValue, key1_len, key2MinValue, key2MaxValue);
       }
       case kFewOne_FewZero: {
         rank_select_fewone<typename RankSelect1::index_t> rs1(kRS1Cnt);
@@ -1470,32 +1319,33 @@ public:
         rank_select_fewzero<typename RankSelect2::index_t> rs2(kRS2Cnt);
         rs2.build_from(rankselect2);
         return new CompositeUintIndex<rank_select_fewone<typename RankSelect1::index_t>,
-                                      rank_select_fewzero<typename RankSelect2::index_t>, StrDataCont>(
-                                        rs1, rs2, container, ks, minValue, maxValue, key1_len, 0, 0);
+                                      rank_select_fewzero<typename RankSelect2::index_t>, DataCont>(
+                                        rs1, rs2, container, ks, key1MinValue, key1MaxValue, key1_len, key2MinValue, key2MaxValue);
       }
       case kFewOne_Normal: {
         rank_select_fewone<typename RankSelect1::index_t> rs1(kRS1Cnt);
         rs1.build_from(rankselect1);
-        return new CompositeUintIndex<rank_select_fewone<typename RankSelect1::index_t>, RankSelect2, StrDataCont>(
-          rs1, rankselect2, container, ks, minValue, maxValue, key1_len, 0, 0);
+        return new CompositeUintIndex<rank_select_fewone<typename RankSelect1::index_t>, RankSelect2, DataCont>(
+          rs1, rankselect2, container, ks, key1MinValue, key1MaxValue, key1_len, key2MinValue, key2MaxValue);
       }
       case kNormal_AllZero: {
         rank_select_allzero rs2(kRS2Cnt);
-        return new CompositeUintIndex<RankSelect1, rank_select_allzero, StrDataCont>(
-          rankselect1, rs2, container, ks, minValue, maxValue, key1_len, 0, 0);
+        return new CompositeUintIndex<RankSelect1, rank_select_allzero, DataCont>(
+          rankselect1, rs2, container, ks, key1MinValue, key1MaxValue, key1_len, key2MinValue, key2MaxValue);
       }
       case kNormal_FewZero: {
         rank_select_fewzero<typename RankSelect2::index_t> rs2(kRS2Cnt);
         rs2.build_from(rankselect2);
-        return new CompositeUintIndex<RankSelect1, rank_select_fewzero<typename RankSelect2::index_t>, StrDataCont>(
-          rankselect1, rs2, container, ks, minValue, maxValue, key1_len, 0, 0);
+        return new CompositeUintIndex<RankSelect1, rank_select_fewzero<typename RankSelect2::index_t>, DataCont>(
+          rankselect1, rs2, container, ks, key1MinValue, key1MaxValue, key1_len, key2MinValue, key2MaxValue);
       }
       case kNormal_Normal: {
-        return new CompositeUintIndex<RankSelect1, RankSelect2, StrDataCont>(
-          rankselect1, rankselect2, container, ks, minValue, maxValue, key1_len, 0, 0);
+        return new CompositeUintIndex<RankSelect1, RankSelect2, DataCont>(
+          rankselect1, rankselect2, container, ks, key1MinValue, key1MaxValue, key1_len, key2MinValue, key2MaxValue);
       }
       default:
         assert(0);
+        return nullptr;
       }
     }
 
@@ -1520,9 +1370,9 @@ public:
       }
       uint64_t diff = maxValue - minValue + 1;
       size_t key2_len = ks.minKey.size() - cplen - key1_len;
+      // maximum
       size_t rankselect_1st_sz = size_t(std::ceil(diff * 1.25 / 8));
       size_t rankselect_2nd_sz = size_t(std::ceil(ks.numKeys * 1.25 / 8));
-      // maximum
       size_t sum_key2_sz = std::ceil(ks.numKeys * key2_len);
       return rankselect_1st_sz + rankselect_2nd_sz + sum_key2_sz;
     }
@@ -1599,9 +1449,9 @@ public:
   using TerarkIndex::FactoryPtr;
   CompositeUintIndex() {}
   CompositeUintIndex(RankSelect1& rankselect1, RankSelect2& rankselect2,
-                           Key2DataContainer& key2Container, const KeyStat& ks, 
-                           uint64_t minValue, uint64_t maxValue, size_t key1_len, 
-                           uint64_t minKey2Value = 0, uint64_t maxKey2Value = 0) {
+                     Key2DataContainer& key2Container, const KeyStat& ks,
+                     uint64_t minValue, uint64_t maxValue, size_t key1_len,
+                     uint64_t minKey2Value = 0, uint64_t maxKey2Value = 0) {
     isBuilding_ = true;
     size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
     // save meta into header
@@ -1630,12 +1480,6 @@ public:
     rankselect1_.swap(rankselect1);
     rankselect2_.swap(rankselect2);
     key2_data_.swap(key2Container);
-    if (std::is_same<Key2DataContainer, StrDataCont>::value) {
-      key2_data_.init(header->key2_fixed_len,
-        header->key2_data_mem_size / header->key2_fixed_len);
-    } else {
-      key2_data_.init(header->key2_fixed_len, header->key2_min_value);
-    }
     key1_len_ = key1_len;
     key2_len_ = header->key2_fixed_len;
     minValue_ = minValue;
@@ -1648,13 +1492,12 @@ public:
   virtual ~CompositeUintIndex() {
     if (isBuilding_) {
       delete (FileHeader*)header_;
+    } else if (file_.base != nullptr || isUserMemory_) {
+      rankselect1_.risk_release_ownership();
+      rankselect2_.risk_release_ownership();
+      key2_data_.risk_release_ownership();
+      commonPrefix_.risk_release_ownership();
     }
-    //} else if (file_.base != nullptr || isUserMemory_) {
-    rankselect1_.risk_release_ownership();
-    rankselect2_.risk_release_ownership();
-    key2_data_.risk_release_ownership();
-    commonPrefix_.risk_release_ownership();
-      //}
   }
   const char* Name() const override {
     return header_->class_name;
@@ -1944,9 +1787,10 @@ public:
         }
       }
       indexSeq.build_cache(false, false);
+
       auto ptr = UniquePtrOf(new UintIndex<RankSelect>());
-      ptr->isUserMemory_ = false;
-      ptr->isBuilding_ = true;
+      ptr->workingState_ = WorkingState::Building;
+
       FileHeader *header = new FileHeader(indexSeq.mem_size());
       header->min_value = minValue;
       header->max_value = maxValue;
@@ -1984,30 +1828,35 @@ public:
     }
   protected:
     TerarkIndex* loadImpl(fstring mem, fstring fpath) const {
-      auto ptr = UniquePtrOf(new UintIndex());
-      ptr->isUserMemory_ = false;
-      ptr->isBuilding_ = false;
+      auto getHeader = [](fstring m) {
+        const FileHeader* h = (const FileHeader*)m.data();
+        if (m.size() < sizeof(FileHeader)
+          || h->magic_len != strlen(index_name)
+          || strcmp(h->magic, index_name) != 0
+          || h->header_size != sizeof(FileHeader)
+          || h->version != 1
+          || h->file_size != m.size()
+          ) {
+          throw std::invalid_argument("UintIndex::Load(): Bad file header");
+        }
+        assert(VerifyClassName<UintIndex>(h->class_name));
+        return h;
+      };
 
+      auto ptr = UniquePtrOf(new UintIndex());
+      ptr->workingState_ = WorkingState::UserMemory;
+
+      const FileHeader* header;
       if (mem.data() == nullptr) {
-        MmapWholeFile(fpath).swap(ptr->file_);
-        mem = {(const char*)ptr->file_.base, (ptrdiff_t)ptr->file_.size};
+        MmapWholeFile mmapFile(fpath);
+        mem = mmapFile.memory();
+        ptr->header_ = header = getHeader(mem);
+        MmapWholeFile().swap(mmapFile);
+        ptr->workingState_ = WorkingState::MmapFile;
       }
       else {
-        ptr->isUserMemory_ = true;
+        ptr->header_ = header = getHeader(mem);
       }
-      const FileHeader* header = (const FileHeader*)mem.data();
-
-      if (mem.size() < sizeof(FileHeader)
-        || header->magic_len != strlen(index_name)
-        || strcmp(header->magic, index_name) != 0
-        || header->header_size != sizeof(FileHeader)
-        || header->version != 1
-        || header->file_size != mem.size()
-        ) {
-        throw std::invalid_argument("UintIndex::Load(): Bad file header");
-      }
-      assert(VerifyClassName<UintIndex>(header->class_name));
-      ptr->header_ = header;
       ptr->minValue_ = header->min_value;
       ptr->maxValue_ = header->max_value;
       ptr->keyLength_ = header->key_length;
@@ -2022,12 +1871,15 @@ public:
   };
   using TerarkIndex::FactoryPtr;
   virtual ~UintIndex() {
-    if (isBuilding_) {
+    if (workingState_ == WorkingState::Building) {
       delete (FileHeader*)header_;
     }
-    else if (file_.base != nullptr || isUserMemory_) {
+    else {
       indexSeq_.risk_release_ownership();
       commonPrefix_.risk_release_ownership();
+      if (workingState_ == WorkingState::MmapFile) {
+        terark::mmap_close((void*)header_, header_->file_size);
+      }
     }
   }
   const char* Name() const override {
@@ -2083,14 +1935,16 @@ public:
   }
 protected:
   const FileHeader* header_;
-  MmapWholeFile     file_;
   valvec<char>      commonPrefix_;
   RankSelect        indexSeq_;
   uint64_t          minValue_;
   uint64_t          maxValue_;
-  bool              isUserMemory_;
-  bool              isBuilding_;
   uint32_t          keyLength_;
+  enum class WorkingState : uint32_t {
+    Building = 1,
+    UserMemory = 2,
+    MmapFile = 3,
+  }                 workingState_;
 };
 
 #endif // TerocksPrivateCode
