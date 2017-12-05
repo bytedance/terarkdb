@@ -158,8 +158,9 @@ TerarkIndex::SelectFactory(const KeyStat& ks, fstring name) {
     auto minValue = ReadBigEndianUint64(ks.minKey.begin() + cplen, ceLen);
     auto maxValue = ReadBigEndianUint64(ks.maxKey.begin() + cplen, ceLen);
     uint64_t diff = (minValue < maxValue ? maxValue - minValue : minValue - maxValue) + 1;
-    if (diff < UINT32_MAX) {
-      return GetFactory("CompositeUintIndex_IL_256_32_IL_256_32_Uint");
+    if (diff < UINT32_MAX &&
+        ks.numKeys < UINT32_MAX) { // for composite cluster key, key1:key2 maybe 1:N
+      return GetFactory("CompositeUintIndex_IL_256_32_IL_256_32");
     } else {
       return GetFactory("CompositeUintIndex_SE_512_64_SE_512_64_Uint");
     }
@@ -978,6 +979,8 @@ public:
           reader >> keyBuf;
           uint64_t offset = Read1stKey(keyBuf, cplen, key1_len) - minValue;
           rankselect1.set1(offset);
+          if (terark_unlikely(i == 0)) // make sure 1st prev != offset
+            prev = offset - 1;
           if (offset != prev) { // new key1 encountered
             rankselect2.set0(i);
           } else {
@@ -997,6 +1000,8 @@ public:
           reader >> keyBuf;
           uint64_t offset = Read1stKey(keyBuf, cplen, key1_len) - minValue;
           rankselect1.set1(offset);
+          if (terark_unlikely(i == ks.numKeys - 1)) // make sure 1st prev != offset
+            prev = offset - 1;
           if (offset != prev) { // next index1 is new one
             rankselect2.set0(i + 1);
           } else {
@@ -1575,9 +1580,10 @@ public:
         }
       }
       indexSeq.build_cache(false, false);
+
       auto ptr = UniquePtrOf(new UintIndex<RankSelect>());
-      ptr->isUserMemory_ = false;
-      ptr->isBuilding_ = true;
+      ptr->workingState_ = WorkingState::Building;
+
       FileHeader *header = new FileHeader(indexSeq.mem_size());
       header->min_value = minValue;
       header->max_value = maxValue;
@@ -1615,30 +1621,35 @@ public:
     }
   protected:
     TerarkIndex* loadImpl(fstring mem, fstring fpath) const {
-      auto ptr = UniquePtrOf(new UintIndex());
-      ptr->isUserMemory_ = false;
-      ptr->isBuilding_ = false;
+      auto getHeader = [](fstring m) {
+        const FileHeader* h = (const FileHeader*)m.data();
+        if (m.size() < sizeof(FileHeader)
+          || h->magic_len != strlen(index_name)
+          || strcmp(h->magic, index_name) != 0
+          || h->header_size != sizeof(FileHeader)
+          || h->version != 1
+          || h->file_size != m.size()
+          ) {
+          throw std::invalid_argument("UintIndex::Load(): Bad file header");
+        }
+        assert(VerifyClassName<UintIndex>(h->class_name));
+        return h;
+      };
 
+      auto ptr = UniquePtrOf(new UintIndex());
+      ptr->workingState_ = WorkingState::UserMemory;
+
+      const FileHeader* header;
       if (mem.data() == nullptr) {
-        MmapWholeFile(fpath).swap(ptr->file_);
-        mem = {(const char*)ptr->file_.base, (ptrdiff_t)ptr->file_.size};
+        MmapWholeFile mmapFile(fpath);
+        mem = mmapFile.memory();
+        ptr->header_ = header = getHeader(mem);
+        MmapWholeFile().swap(mmapFile);
+        ptr->workingState_ = WorkingState::MmapFile;
       }
       else {
-        ptr->isUserMemory_ = true;
+        ptr->header_ = header = getHeader(mem);
       }
-      const FileHeader* header = (const FileHeader*)mem.data();
-
-      if (mem.size() < sizeof(FileHeader)
-        || header->magic_len != strlen(index_name)
-        || strcmp(header->magic, index_name) != 0
-        || header->header_size != sizeof(FileHeader)
-        || header->version != 1
-        || header->file_size != mem.size()
-        ) {
-        throw std::invalid_argument("UintIndex::Load(): Bad file header");
-      }
-      assert(VerifyClassName<UintIndex>(header->class_name));
-      ptr->header_ = header;
       ptr->minValue_ = header->min_value;
       ptr->maxValue_ = header->max_value;
       ptr->keyLength_ = header->key_length;
@@ -1653,12 +1664,15 @@ public:
   };
   using TerarkIndex::FactoryPtr;
   virtual ~UintIndex() {
-    if (isBuilding_) {
+    if (workingState_ == WorkingState::Building) {
       delete (FileHeader*)header_;
     }
-    else if (file_.base != nullptr || isUserMemory_) {
+    else {
       indexSeq_.risk_release_ownership();
       commonPrefix_.risk_release_ownership();
+      if (workingState_ == WorkingState::MmapFile) {
+        terark::mmap_close((void*)header_, header_->file_size);
+      }
     }
   }
   const char* Name() const override {
@@ -1714,14 +1728,16 @@ public:
   }
 protected:
   const FileHeader* header_;
-  MmapWholeFile     file_;
   valvec<char>      commonPrefix_;
   RankSelect        indexSeq_;
   uint64_t          minValue_;
   uint64_t          maxValue_;
-  bool              isUserMemory_;
-  bool              isBuilding_;
   uint32_t          keyLength_;
+  enum class WorkingState : uint32_t {
+    Building = 1,
+    UserMemory = 2,
+    MmapFile = 3,
+  }                 workingState_;
 };
 
 #endif // TerocksPrivateCode

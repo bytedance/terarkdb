@@ -90,6 +90,76 @@ std::string GetTimestamp() {
     return terark::lcast(timestamp);
 }
 
+#if defined(TerocksPrivateCode)
+///////////////////////////////////////////////////////////////////
+// hack MyRocks Rdb_tbl_prop_coll
+rocksdb::Status MyRocksTablePropertiesCollectorHack(IntTblPropCollector* collector,
+                                                    const TerarkZipMultiOffsetInfo& offset_info,
+                                                    UserCollectedProperties &user_collected_properties,
+                                                    bool is_reverse_bytewise_order) {
+  if (fstring(collector->Name()) != "Rdb_tbl_prop_coll") {
+    return Status::OK();
+  }
+  if (offset_info.prefixLen_ != 4) { // prefix mismatch, can't hack ...
+    return Status::OK();
+  }
+  auto find = user_collected_properties.find("__indexstats__");
+  assert(find != user_collected_properties.end());
+  if (find == user_collected_properties.end()) {
+    return Status::OK();
+  }
+  std::string Rdb_index_stats = find->second;
+  terark::BigEndianDataInput <terark::MemIO> input;
+  terark::BigEndianDataOutput<terark::MemIO> output;
+  input.set((void*)Rdb_index_stats.data(), Rdb_index_stats.size());
+  uint16_t version = 0;
+  input >> version;     // version
+  assert(version >= 1); // INDEX_STATS_VERSION_INITIAL
+  assert(version <= 2); // INDEX_STATS_VERSION_ENTRY_TYPES
+  if (version < 1 || version > 2) {
+    return Status::Corruption("Rdb_tbl_prop_coll hack fail",
+                              "Unsupported version");
+  }
+  auto getActualSize = [&offset_info](size_t i)->uint64_t {
+    auto &info = offset_info.offset_[i];
+    if (i == 0)
+      return info.key + info.value;
+    auto &last = offset_info.offset_[i - 1];
+    return info.key + info.value - last.key - last.value;
+  };
+  for (size_t i = 0; i < offset_info.partCount_; ++i) {
+    size_t ii = is_reverse_bytewise_order ? offset_info.partCount_ - i - 1 : i;
+    input.skip(4);                  // cf_id
+    uint32_t index_id;              // index_id
+    input.ensureRead(&index_id, 4);
+    fstring prefix = fstring(offset_info.prefixSet_).substr(ii * 4, 4);
+    if (fstring((char*)&index_id, 4) != prefix) {
+      return Status::Corruption("Rdb_tbl_prop_coll hack fail",
+                                "Mismatch index_id or prefix");
+    }
+    input.skip(8 * 2);              // data_size, rows
+    output.set(input.current(), 8); // actual_disk_size addr
+    output << getActualSize(ii);
+    input.skip(8);                  // actual_disk_size
+    uint64_t distinct_keys_per_prefix_size = 0;
+    input >> distinct_keys_per_prefix_size;
+    if (version >= 2) { // INDEX_STATS_VERSION_ENTRY_TYPES
+                        // entry_deletes
+                        // entry_single_deletes
+                        // entry_merges
+                        // entry_others
+      input.skip(8 * 4);
+    }
+    // distinct_keys_per_prefix
+    input.skip(distinct_keys_per_prefix_size * 8);
+  }
+  find->second = Rdb_index_stats;
+  assert(input.current() == input.end());
+  return Status::OK();
+}
+///////////////////////////////////////////////////////////////////
+#endif // TerocksPrivateCode
+
 TerarkZipTableBuilder::TerarkZipTableBuilder(const TerarkZipTableFactory* table_factory,
                                              const TerarkZipTableOptions& tzto,
                                              const TableBuilderOptions& tbo,
@@ -226,6 +296,10 @@ TableProperties TerarkZipTableBuilder::GetTableProperties() const {
       ret.readable_properties.insert(prop);
     }
     collector->Finish(&ret.user_collected_properties);
+#if defined(TerocksPrivateCode)
+    MyRocksTablePropertiesCollectorHack(collector.get(), offset_info_,
+                                        ret.user_collected_properties, isReverseBytewiseOrder_);
+#endif // TerocksPrivateCode
   }
   return ret;
 }
@@ -477,9 +551,8 @@ Status TerarkZipTableBuilder::EmptyTableFinish() {
     }
   }
   range_del_block_.Reset();
-  TerarkZipMultiOffsetInfo offsetInfo;
-  offsetInfo.Init(0, 0);
-  return WriteMetaData(offsetInfo, {
+  offset_info_.Init(0, 0);
+  return WriteMetaData({
 #if defined(TerocksPrivateCode)
     { &kTerarkZipTableExtendedBlock                 , licenseHandle },
 #endif // TerocksPrivateCode
@@ -1453,15 +1526,14 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
     return s;
   }
   properties_.num_data_blocks = kvs.key.m_cnt_sum;
-  TerarkZipMultiOffsetInfo offsetInfo;
-  offsetInfo.Init(0, 1);
-  offsetInfo.set(0,
-                 fstring(),
-                 indexBlock.size(),
-                 properties_.data_size,
-                 zvTypeBlock.size(),
-                 commonPrefixBlock.size());
-  WriteMetaData(offsetInfo, {
+  offset_info_.Init(kvs.prefix.size(), 1);
+  offset_info_.set(0,
+                   kvs.prefix,
+                   indexBlock.size(),
+                   properties_.data_size,
+                   zvTypeBlock.size(),
+                   commonPrefixBlock.size());
+  WriteMetaData({
 #if defined(TerocksPrivateCode)
     { &kTerarkZipTableExtendedBlock                                , licenseHandle     },
 #endif // TerocksPrivateCode
@@ -1587,8 +1659,7 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4
   Status s;
   BlockHandle dataBlock, dictBlock, indexBlock, zvTypeBlock, offsetBlock, tombstoneBlock(0, 0);
   BlockHandle commonPrefixBlock;
-  TerarkZipMultiOffsetInfo offsetInfo;
-  offsetInfo.Init(key_prefixLen_, histogram_.size());
+  offset_info_.Init(key_prefixLen_, histogram_.size());
   size_t typeSize = 0;
   size_t commonPrefixLenSize = 0;
   for (size_t i = 0; i < histogram_.size(); ++i) {
@@ -1641,7 +1712,7 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4
     keyOffset += kvs.indexFileEnd - kvs.indexFileBegin;
     valueOffset = offset_;
     typeSize += kvs.type.mem_size();
-    offsetInfo.set(i, kvs.prefix, keyOffset, valueOffset, typeSize, commonPrefix.size());
+    offset_info_.set(i, kvs.prefix, keyOffset, valueOffset, typeSize, commonPrefix.size());
   }
   properties_.data_size = offset_;
   try {
@@ -1686,7 +1757,7 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4
   catch (const Status& s) {
     return s;
   }
-  s = WriteBlock(offsetInfo.dump(), file_, &offset_, &offsetBlock);
+  s = WriteBlock(offset_info_.dump(), file_, &offset_, &offsetBlock);
   if (!s.ok()) {
     return s;
   }
@@ -1713,7 +1784,7 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4
   }
   properties_.index_size = indexBlock.size();
   properties_.num_data_blocks = numKeys;
-  WriteMetaData(offsetInfo, {
+  WriteMetaData({
     {&kTerarkZipTableExtendedBlock                                , licenseHandle     },
     {!dict.memory.empty() ? &kTerarkZipTableValueDictBlock : NULL , dictBlock         },
     {&kTerarkZipTableIndexBlock                                   , indexBlock        },
@@ -1816,8 +1887,7 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4
 
 #endif // TerocksPrivateCode
 
-Status TerarkZipTableBuilder::WriteMetaData(const TerarkZipMultiOffsetInfo& offsetInfo,
-                                            std::initializer_list<std::pair<const std::string*, BlockHandle>> blocks) {
+Status TerarkZipTableBuilder::WriteMetaData(std::initializer_list<std::pair<const std::string*, BlockHandle>> blocks) {
   MetaIndexBuilder metaindexBuiler;
   for (const auto& block : blocks) {
     if (block.first) {
@@ -1835,68 +1905,11 @@ Status TerarkZipTableBuilder::WriteMetaData(const TerarkZipMultiOffsetInfo& offs
       continue;
     }
 #if defined(TerocksPrivateCode)
-    ///////////////////////////////////////////////////////////////////
-    // hack MyRocks Rdb_tbl_prop_coll
-    while (fstring(collector->Name()) == "Rdb_tbl_prop_coll") {
-      if (offsetInfo.prefixLen_ != 4) // prefix mismatch, can't hack ...
-        break;
-      auto find = user_collected_properties.find("__indexstats__");
-      assert(find != user_collected_properties.end());
-      if (find == user_collected_properties.end())
-        break;
-      try {
-        std::string Rdb_index_stats = find->second;
-        terark::BigEndianDataInput <terark::MemIO> input;
-        terark::BigEndianDataOutput<terark::MemIO> output;
-        input.set((void*)Rdb_index_stats.data(), Rdb_index_stats.size());
-        uint16_t version = 0;
-        input >> version;     // version
-        assert(version >= 1); // INDEX_STATS_VERSION_INITIAL
-        assert(version <= 2); // INDEX_STATS_VERSION_ENTRY_TYPES
-        if (version < 1 || version > 2)
-          THROW_STD(runtime_error, "unsupported version");
-        auto getActualSize = [&offsetInfo](size_t i)->uint64_t {
-          auto &info = offsetInfo.offset_[i];
-          if (i == 0)
-            return info.key + info.value;
-          auto &last = offsetInfo.offset_[i - 1];
-          return info.key + info.value - last.key - last.value;
-        };
-        for (size_t i = 0; i < offsetInfo.partCount_; ++i) {
-          size_t ii = isReverseBytewiseOrder_ ? offsetInfo.partCount_ - i - 1 : i;
-          input.skip(4);                  // cf_id
-          uint32_t index_id;              // index_id
-          input.ensureRead(&index_id, 4);
-          fstring prefix = fstring(offsetInfo.prefixSet_).substr(ii * 4, 4);
-          if (fstring((char*)&index_id, 4) != prefix)
-            THROW_STD(runtime_error, "mismatch index_id or prefix");
-          input.skip(8 * 2);              // data_size, rows
-          output.set(input.current(), 8); // actual_disk_size addr
-          output << getActualSize(ii);
-          input.skip(8);                  // actual_disk_size
-          uint64_t distinct_keys_per_prefix_size = 0;
-          input >> distinct_keys_per_prefix_size;
-          if (version >= 2) { // INDEX_STATS_VERSION_ENTRY_TYPES
-            // entry_deletes
-            // entry_single_deletes
-            // entry_merges
-            // entry_others
-            input.skip(8 * 4);
-          }
-          // distinct_keys_per_prefix
-          input.skip(distinct_keys_per_prefix_size * 8);
-        }
-        find->second = Rdb_index_stats;
-        assert(input.current() == input.end());
-      }
-      catch (const std::exception& ex) {
-        WARN(ioptions_.info_log,
-             "TerarkZipTableBuilder::WriteMetaData() Rdb_tbl_prop_coll hack fail %s",
-             ex.what());
-      }
-      break;
+    s = MyRocksTablePropertiesCollectorHack(collector.get(), offset_info_,
+                                            user_collected_properties, isReverseBytewiseOrder_);
+    if (!s.ok()) {
+      WARN(ioptions_.info_log, "MyRocksTablePropertiesCollectorHack fail: %s", s.ToString().c_str());
     }
-    ///////////////////////////////////////////////////////////////////
 #endif // TerocksPrivateCode
     propBlockBuilder.Add(user_collected_properties);
   }
