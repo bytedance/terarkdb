@@ -129,7 +129,7 @@ bool TerarkIndex::SeekCostEffectiveIndexLen(const KeyStat& ks, size_t& ceLen) {
       continue;
     gap_ratio = std::max(gap_ratio, min_gap_ratio);
     // diff is bitmap, * 1.2 is extra cost to build RankSelect
-    double cost = (diff1st + diff2nd) * 1.2 + 
+    double cost = ((double)diff1st + diff2nd) * 1.2 + 
       (ks.maxKeyLen - cplen - i) * ks.numKeys * 8;
     if (cost > originCost * 0.8)
       continue;
