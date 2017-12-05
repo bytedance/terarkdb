@@ -92,8 +92,8 @@ public:
         BOOST_STRINGIZE(clazzSuffix), \
         ##__VA_ARGS__)
 
-#define TerarkIndexRegisterImp(clazz, WireName, ...)             \
-	  BOOST_STATIC_ASSERT(sizeof(BOOST_STRINGIZE(clazz)) <= 60);  \
+#define TerarkIndexRegisterImp(clazz, WireName, ...)            \
+	  BOOST_STATIC_ASSERT(sizeof(WireName) <= 60);                \
     TerarkIndex::AutoRegisterFactory                            \
     terark_used_static_obj                                      \
     g_AutoRegister_##clazz(                                     \
