@@ -507,10 +507,6 @@ public:
   const byte_t* data() const { return container_.data(); }
   size_t mem_size() const { return container_.mem_size(); }
   size_t size() const { return container_.size(); }
-  bool equals(size_t idx, size_t val) const {
-    assert(0);
-    return false;
-  }
   bool equals(size_t idx, fstring val) const {
     assert(idx < container_.size());
     if (val.size() != key_len_)
@@ -593,10 +589,6 @@ public:
   const byte_t* data() const { return container_.data(); }
   size_t mem_size() const { return container_.mem_size(); }
   size_t size() const { return container_.size(); }
-  bool equals(size_t idx, size_t val) const {
-    assert(0);
-    return false;
-  }
   bool equals(size_t idx, fstring val) const {
     assert(idx < container_.size());
     if (val.size() != key_len_)
@@ -669,12 +661,9 @@ public:
   bool equals(size_t idx, fstring other) const {
     return container_[idx] == other;
   }
-  bool equals(size_t idx, size_t other) const {
-    assert(0);
-    return false;
-  }
   void risk_set_data(byte_t* data, size_t sz) {
     assert(data != nullptr);
+    // here, sz == count, since <byte_t>
     container_.m_strpool.risk_set_data(data, sz);
   }
   void risk_set_data(byte_t* data, size_t num, size_t maxValue) {
@@ -836,7 +825,6 @@ public:
         order = index_.rankselect1_.rank1(rankselect1_idx_);
         pos0 = index_.rankselect2_.select0(order);
         if (pos0 == index_.key2_data_.size() - 1) { // last elem
-          //m_id = (key2 <= index_.key2_data_[pos0]) ? pos0 : size_t(-1);
           m_id = (index_.key2_data_.compare(pos0, key2) >= 0) ? pos0 : size_t(-1);
           goto out;
         } else {
@@ -1089,9 +1077,9 @@ public:
                          key1MinValue, key1MaxValue, key1_len, key2MinValue, key2MaxValue);
     }
     static TerarkIndex* CreateIndexWithUintCont(RankSelect1& rankselect1, RankSelect2& rankselect2,
-                                         FixedLenStrVec& keyVec, const KeyStat& ks, 
-                                         uint64_t key1MinValue, uint64_t key1MaxValue, size_t key1_len,
-                                         valvec<byte_t>& minKey2Data, valvec<byte_t>& maxKey2Data) {
+                                                FixedLenStrVec& keyVec, const KeyStat& ks, 
+                                                uint64_t key1MinValue, uint64_t key1MaxValue, size_t key1_len,
+                                                valvec<byte_t>& minKey2Data, valvec<byte_t>& maxKey2Data) {
       uint64_t key2MinValue = ReadBigEndianUint64(minKey2Data);
       uint64_t key2MaxValue = ReadBigEndianUint64(maxKey2Data);
       uint64_t diff = key2MaxValue - key2MinValue + 1;
