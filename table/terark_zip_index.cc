@@ -1175,21 +1175,22 @@ public:
         maxData.assign(data.data(), data.size());
       }
     }
-    static AmazingCombinationT figureCombination(RankSelect1& rs1, RankSelect2& rs2) {
+    static AmazingCombinationT figureCombination(const RankSelect1& rs1, const RankSelect2& rs2) {
       bool isRS1FewZero = IsFewZero(rs1.size(), rs1.max_rank0());
       bool isRS2FewZero = IsFewZero(rs2.size(), rs2.max_rank0());
       bool isRS1FewOne  = IsFewOne(rs1.size(), rs1.max_rank1());
       bool isRS2FewOne  = IsFewOne(rs2.size(), rs2.max_rank1());
-      if (rs1.max_rank0() == 0 && rs2.max_rank1() == 0)
+      // all one && ...
+      if (rs1.isall1() && rs2.isall0())
         return kAllOne_AllZero;
-      else if (rs1.max_rank0() == 0 && isRS2FewZero)
+      else if (rs1.isall1() && isRS2FewZero)
         return kAllOne_FewZero;
-      else if (rs1.max_rank0() == 0 && isRS2FewOne)
+      else if (rs1.isall1() && isRS2FewOne)
         return kAllOne_FewOne;
-      else if (rs1.max_rank0() == 0)
+      else if (rs1.isall1())
         return kAllOne_Normal; 
-      //
-      else if (isRS1FewZero && rs2.max_rank1() == 0)
+      // few zero && ...
+      else if (isRS1FewZero && rs2.isall0())
         return kFewZero_AllZero;
       else if (isRS1FewZero && isRS2FewZero)
         return kFewZero_FewZero;
@@ -1197,8 +1198,8 @@ public:
         return kFewZero_FewOne;
       else if (isRS1FewZero)
         return kFewZero_Normal;
-      //
-      else if (isRS1FewOne && rs2.max_rank1() == 0)
+      // few one && ...
+      else if (isRS1FewOne && rs2.isall0())
         return kFewOne_AllZero;
       else if (isRS1FewOne && isRS2FewZero)
         return kFewOne_FewZero;
@@ -1207,7 +1208,7 @@ public:
       else if (isRS1FewOne)
         return kFewOne_Normal;
       //
-      else if (rs2.max_rank1() == 0)
+      else if (rs2.isall0())
         return kNormal_AllZero;
       else if (isRS2FewZero)
         return kNormal_FewZero;
@@ -1242,7 +1243,7 @@ public:
       SortedUintDataCont container;
       container.swap(uintVec);
       container.init(minKey2Data.size(), key2MinValue);
-      return CreateIndex(rankselect1, rankselect2, container, ks, key1MinValue, key1MaxValue, 
+      return CreateIndex(rankselect1, rankselect2, container, ks, key1MinValue, key1MaxValue,
                          key1_len, key2MinValue, key2MaxValue);
     }
     static TerarkIndex* CreateIndexWithUintCont(RankSelect1& rankselect1, RankSelect2& rankselect2,
@@ -1289,7 +1290,7 @@ public:
       const size_t kRS2Cnt = rankselect2.size(); // extra '0' append to rs2, included as well
       AmazingCombinationT cob = figureCombination(rankselect1, rankselect2);
       switch (cob) {
-        // -- all one & ...
+      // -- all one & ...
       case kAllOne_AllZero: {
         rank_select_allone rs1(kRS1Cnt);
         rank_select_allzero rs2(kRS2Cnt);
@@ -1362,7 +1363,7 @@ public:
         rs2.build_from(rankselect2);
         return new CompositeUintIndex<rank_select_fewone<typename RankSelect1::index_t>,
                                       rank_select_fewzero<typename RankSelect2::index_t>, DataCont>(
-                                        rs1, rs2, container, ks, key1MinValue, key1MaxValue, key1_len, key2MinValue, key2MaxValue);
+          rs1, rs2, container, ks, key1MinValue, key1MaxValue, key1_len, key2MinValue, key2MaxValue);
       }
       case kFewOne_FewOne: {
         rank_select_fewone<typename RankSelect1::index_t> rs1(kRS1Cnt);
@@ -2034,24 +2035,6 @@ TerarkIndexRegisterNLT(Mixed_IL_256_32_FL);
 TerarkIndexRegisterNLT(Mixed_XL_256_32_FL);
 
 #if defined(TerocksPrivateCode)
-
-/*enum AmazingCombinationT {
-  kAllOne_AllZero = 0,
-  kAllOne_FewZero,
-  kAllOne_Normal,
-
-  kFewZero_AllZero,
-  kFewZero_FewZero,
-  kFewZero_Normal,
-    
-  kFewOne_AllZero,
-  kFewOne_FewZero,
-  kFewOne_Normal,      
-
-  kNormal_AllZero,
-  kNormal_FewZero,
-  kNormal_Normal
-  };*/
 
 typedef rank_select_fewzero<uint32_t> rs_fewzero_32;
 typedef rank_select_fewzero<uint64_t> rs_fewzero_64;
