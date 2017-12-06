@@ -120,7 +120,8 @@ bool TerarkIndex::SeekCostEffectiveIndexLen(const KeyStat& ks, size_t& ceLen) {
   for (size_t i = maxLen; i > 0; i--) {
     auto minValue = ReadBigEndianUint64(ks.minKey.begin() + cplen, i);
     auto maxValue = ReadBigEndianUint64(ks.maxKey.begin() + cplen, i);
-    uint64_t diff1st = abs_diff(minValue, maxValue) + 1;
+//  uint64_t diff1st = abs_diff(minValue, maxValue) + 1; // +1 may overflow
+    uint64_t diff1st = abs_diff(minValue, maxValue); // don't +1
     uint64_t diff2nd = ks.numKeys;
     // one index1st with a collection of index2nd, that's when diff < numkeys
     double gap_ratio = diff1st <= ks.numKeys ? min_gap_ratio : 
@@ -143,7 +144,7 @@ bool TerarkIndex::SeekCostEffectiveIndexLen(const KeyStat& ks, size_t& ceLen) {
     } else {
       gap_ratio = std::max(gap_ratio, min_gap_ratio);
       // diff is bitmap, * 1.2 is extra cost to build RankSelect
-      double cost = (diff1st + diff2nd) * 1.2 + 
+      double cost = ((double)diff1st + diff2nd) * 1.2 + 
         (ks.maxKeyLen - cplen - i) * ks.numKeys * 8;
       if (cost > originCost * 0.8)
         continue;
@@ -179,9 +180,13 @@ TerarkIndex::SelectFactory(const KeyStat& ks, fstring name) {
   if (!disableUintIndex && ks.maxKeyLen == ks.minKeyLen && ks.maxKeyLen - cplen <= sizeof(uint64_t)) {
     auto minValue = ReadBigEndianUint64(ks.minKey.begin() + cplen, ks.minKey.end());
     auto maxValue = ReadBigEndianUint64(ks.maxKey.begin() + cplen, ks.maxKey.end());
-    uint64_t diff = (minValue < maxValue ? maxValue - minValue : minValue - maxValue) + 1;
+    if (minValue > maxValue) {
+      std::swap(minValue, maxValue);
+    }
+//  uint64_t diff = maxValue - minValue + 1; // +1 may overflow
+    uint64_t diff = maxValue - minValue; // don't +1
     if (diff < ks.numKeys * 30) {
-      if (diff == ks.numKeys) {
+      if (diff + 1 == ks.numKeys) {
         return GetFactory("UintIndex_AllOne");
       }
       else if (diff < UINT32_MAX) {
@@ -199,9 +204,11 @@ TerarkIndex::SelectFactory(const KeyStat& ks, fstring name) {
       ks.maxKeyLen > cplen + ceLen) {
     auto minValue = ReadBigEndianUint64(ks.minKey.begin() + cplen, ceLen);
     auto maxValue = ReadBigEndianUint64(ks.maxKey.begin() + cplen, ceLen);
-    uint64_t diff = (minValue < maxValue ? maxValue - minValue : minValue - maxValue) + 1;
-    if (diff < UINT32_MAX &&
-        ks.numKeys < UINT32_MAX) { // for composite cluster key, key1:key2 maybe 1:N
+    if (minValue > maxValue) {
+      std::swap(minValue, maxValue);
+    }
+    if (maxValue - minValue < UINT32_MAX-1 &&
+        ks.numKeys < UINT32_MAX-1) { // for composite cluster key, key1:key2 maybe 1:N
       return GetFactory("CompositeUintIndex_IL_256_32_IL_256_32");
     } else {
       return GetFactory("CompositeUintIndex_SE_512_64_SE_512_64");
@@ -1111,12 +1118,14 @@ public:
         keyVec.m_size = ks.numKeys;
         keyVec.m_strpool.resize(sumKey2Len);
         // compare with '0', do NOT use size_t
-        for (long i = ks.numKeys - 1; i >= 0; --i) {
+        for (size_t i = ks.numKeys; i > 0; ) {
+          i--;
           reader >> keyBuf;
           uint64_t offset = Read1stKey(keyBuf, cplen, key1_len) - minValue;
           rankselect1.set1(offset);
-          if (terark_unlikely(i == ks.numKeys - 1)) // make sure 1st prev != offset
+          if (terark_unlikely(i == ks.numKeys - 1)) { // make sure 1st prev != offset
             prev = offset - 1;
+          }
           if (offset != prev) { // next index1 is new one
             rankselect2.set0(i + 1);
           } else {
@@ -1821,10 +1830,10 @@ public:
       if (minValue > maxValue) {
         std::swap(minValue, maxValue);
       }
-      uint64_t diff = maxValue - minValue + 1;
+      assert(maxValue - minValue < UINT64_MAX); // must not overflow
       RankSelect indexSeq;
-      indexSeq.resize(diff);
-      if (!std::is_same<RankSelect, rank_select_allone>::value) {
+      indexSeq.resize(maxValue - minValue + 1);
+      if (!std::is_same<RankSelect, terark::rank_select_allone>::value) {
         // not 'all one' case
         valvec<byte_t> keyBuf;
         for (size_t seq_id = 0; seq_id < ks.numKeys; ++seq_id) {

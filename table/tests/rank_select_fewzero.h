@@ -44,7 +44,7 @@ public:
 
   void resize(size_t newsize) {
     m_size = newsize;
-    m_pospool.resize(newsize);
+    m_pospool.resize(m_size + 1);
   }
   void swap(rank_select_fewzero& another) {
     std::swap(m_size, another.m_size);
@@ -56,6 +56,10 @@ public:
   template<class RankSelect>
   void build_from(RankSelect& rs) {
     // TBD: for fewzero, 0.01 is actually reasonable
+    if (rs.isall0() || rs.isall1()) {
+      THROW_STD(invalid_argument,
+                "there should be cnt(0) > 0 && cnt(1) > 0");
+    }
     m_pospool.resize(m_size + 1);
     m_pospool[0] = m_size;
     size_t idx = 1;
@@ -65,7 +69,6 @@ public:
         idx ++;
       }
     }
-    assert(1 < idx && idx < m_size);
     m_pospool.resize(idx);
   }
   void build_cache(bool, bool) { assert(0); }
@@ -76,14 +79,14 @@ public:
     assert(pos < m_size);
     RET_IF_ZERO(pos);
     pos --;
-    size_t rank = terark::lower_bound_n<const valvec<T>&>(
+    size_t rank0 = terark::lower_bound_n<const valvec<T>&>(
       m_pospool, 1, m_pospool.size(), pos);
-    if (rank == m_pospool.size()) {
+    if (rank0 >= m_pospool.size()) {
       return m_pospool.size() - 1;
-    } else if (pos == m_pospool[rank]) {
-      return rank;
+    } else if (pos == m_pospool[rank0]) {
+      return rank0;
     } else { // < 
-      return rank - 1;
+      return rank0 - 1;
     }
   }
   size_t rank1(size_t pos) const {
@@ -98,9 +101,9 @@ public:
     return m_pospool[id];
   }
   /*
-   * pos0 = rank0[pos0] + rank1[pos0] - 1 => 
-   *   rank1[pos0] = pos0 - rank0[pos0] + 1 =>
-   *   rank1[pos0] = m_pospool[id] - id + 1, to find id? =>
+   * pos0 = rank0[pos0] + rank1[pos0] => 
+   *   rank1[pos0] = pos0 - rank0[pos0] =>
+   *   rank1[pos0] = m_pospool[id] + 1 - id to find id? =>
    * j = m_pospool[i] - i + 1, find lower_bound() that
    * id <= m_pospool[i] - i + 1,
    * if id == m_pospool[i] - i + 1:
@@ -113,19 +116,17 @@ public:
     RET_IF_ZERO(id);
     if (id > max_rank1())
       return size_t(-1);
-    size_t i = lower_bound(1, m_pospool.size(), id);
-    // TBD: possible consecutive m_pos[i] + 1 == m_pos[i + 1]
-    // make sure arr[m_pospool[i] - 1] is '1' not '0'
-    if (i < m_pospool.size() && id == rank1_from_rank0(i))
-      return m_pospool[i] - 1;
-    if (i >= m_pospool.size()) { // beyond the last '0'
-      i = m_pospool.size() - 1;
+    size_t rank0 = lower_bound(1, m_pospool.size(), id);
+    if (rank0 < m_pospool.size() && id == rank1_from_rank0(rank0))
+      return m_pospool[rank0] - 1;
+    if (rank0 >= m_pospool.size()) { // beyond the last '0'
+      rank0 = m_pospool.size() - 1;
     } else { // move to prev '0'
-      i --; 
+      rank0 --; 
     }
-    size_t prev = rank1_from_rank0(i);
+    size_t prev = rank1_from_rank0(rank0);
     size_t offset = id - prev;
-    return m_pospool[i] + offset;
+    return m_pospool[rank0] + offset;
   }
 
 private:
@@ -138,7 +139,7 @@ private:
     size_t i = low, j = upp;
     while (i < j) {
       size_t mid = (i + j) / 2;
-      //size_t t = rank1_from_rank0(mid);
+      // same as: t = rank1_from_rank0(mid);
       size_t t = m_pospool[mid] - mid + 1;
       if (t < rank1)
         i = mid + 1;
@@ -148,14 +149,14 @@ private:
     return i;
   }
   // res: as the rank0 lower_bound
-  bool is1(size_t pos, size_t& res) const {
+  bool is1(size_t pos, size_t& rank0) const {
     assert(pos < m_size);
-    res = terark::lower_bound_n<const terark::valvec<T>&>(
+    rank0 = terark::lower_bound_n<const terark::valvec<T>&>(
       m_pospool, 1, m_pospool.size(), pos);
-    if (res >= m_pospool.size()) { // not in '0's
+    if (rank0 >= m_pospool.size()) { // not in '0's
       return true;
     } else {
-      return (pos != m_pospool[res]);
+      return (pos != m_pospool[rank0]);
     }
   }
 
@@ -303,7 +304,7 @@ public:
   rank_select_fewone() : m_size(0) {}
   explicit rank_select_fewone(size_t sz) : m_size(sz) {}
     
-  void clear() { 
+  void clear() {
     m_size = 0;
     m_pospool.clear();
   }
@@ -317,7 +318,7 @@ public:
 
   void resize(size_t newsize) {
     m_size = newsize;
-    m_pospool.resize(newsize);
+    m_pospool.resize(m_size + 1);
   }
   void swap(rank_select_fewone& another) {
     std::swap(m_size, another.m_size);
@@ -329,6 +330,9 @@ public:
   template<class RankSelect>
   void build_from(RankSelect& rs) {
     // TBD: for fewzero, 0.01 is actually reasonable
+    if (rs.isall0() || rs.isall1()) {
+      THROW_STD(invalid_argument, "there should be cnt(0) > 0 && cnt(1) > 0");
+    }
     m_pospool.resize(m_size + 1);
     m_pospool[0] = m_size;
     size_t idx = 1;
@@ -338,7 +342,6 @@ public:
         idx ++;
       }
     }
-    assert(1 < idx && idx < m_size);
     m_pospool.resize(idx);
   }
   void build_cache(bool, bool) { assert(0); }
