@@ -98,7 +98,7 @@ bool TerarkIndex::SeekCostEffectiveIndexLen(const KeyStat& ks, size_t& ceLen) {
    * 2. 8 byte => a lot more gaps compared with 1 byte index1
    * !!! more bytes with less gap is preferred, in other words,
    * prefer smaller gap-ratio, larger compression-ratio
-   * best case is : w1 * (1 / gap-ratio) + w2 * compress-ratio 
+   * best case is : w1 * (1 / gap-ratio) + w2 * compress-ratio
    *   gap-ratio = (diff - numkeys) / diff,
    *   compress-ratio = compressed-part / original,
    *
@@ -123,13 +123,13 @@ bool TerarkIndex::SeekCostEffectiveIndexLen(const KeyStat& ks, size_t& ceLen) {
     uint64_t diff1st = abs_diff(minValue, maxValue); // don't +1
     uint64_t diff2nd = ks.numKeys;
     // one index1st with a collection of index2nd, that's when diff < numkeys
-    double gap_ratio = diff1st <= ks.numKeys ? min_gap_ratio : 
+    double gap_ratio = diff1st <= ks.numKeys ? min_gap_ratio :
       (double)(diff1st - ks.numKeys) / diff1st;
     if (gap_ratio > max_gap_ratio)
       continue;
     gap_ratio = std::max(gap_ratio, min_gap_ratio);
     // diff is bitmap, * 1.2 is extra cost to build RankSelect
-    double cost = ((double)diff1st + diff2nd) * 1.2 + 
+    double cost = ((double)diff1st + diff2nd) * 1.2 +
       (ks.maxKeyLen - cplen - i) * ks.numKeys * 8;
     if (cost > originCost * 0.8)
       continue;
@@ -501,14 +501,14 @@ public:
 #if defined(TerocksPrivateCode)
 
 /*
- * For simplicity, let's take composite index => index1:index2. Then following 
+ * For simplicity, let's take composite index => index1:index2. Then following
  * compositeindexes like,
  *   4:6, 4:7, 4:8, 7:19, 7:20, 8:3
  * index1: {4, 7}, use bitmap (also UintIndex's form) to respresent
  *   4(1), 5(0), 6(0), 7(1), 8(1)
  * index1:index2: use bitmap to respresent 4:6(0), 4:7(1), 4:8(1), 7:19(0), 7:20(1), 8:3(0)
  * to search 7:20, use bitmap1 to rank1(7) = 2, then use bitmap2 to select0(2) = position-3,
- * use bitmap2 to select0(3) = position-5. That is, we should search within [3, 5). 
+ * use bitmap2 to select0(3) = position-5. That is, we should search within [3, 5).
  * iter [3 to 5), 7:20 is found, done.
  */
 template<class RankSelect1, class RankSelect2>
@@ -527,10 +527,10 @@ public:
     uint32_t key1_fixed_len;
     uint32_t key2_fixed_len;
     /*
-     * (Rocksdb) For one huge index, we'll split it into multipart-index for the sake of RAM, 
+     * (Rocksdb) For one huge index, we'll split it into multipart-index for the sake of RAM,
      * and each sub-index could have longer commonPrefix compared with ks.commonPrefix.
      * what's more, under such circumstances, ks.commonPrefix may have been rewritten
-     * be upper-level builder to '0'. here, 
+     * be upper-level builder to '0'. here,
      * common_prefix_length = sub-index.commonPrefixLen - whole-index.commonPrefixLen
      */
     uint32_t common_prefix_length;
@@ -596,7 +596,7 @@ public:
         fstring sub = target.substr(cplen);
         byte_t targetBuffer[8] = { 0 };
         /*
-         * do not think hard about int, think about string instead. 
+         * do not think hard about int, think about string instead.
          * assume key1_len is 6 byte len like 'abcdef', target without
          * commpref is 'b', u should compare 'b' with 'a' instead of 'f'.
          * that's why assign sub starting in the middle instead at tail.
@@ -614,7 +614,7 @@ public:
       } else if (key1 < index_.minValue_) {
         return SeekToFirst();
       }
-      
+
       // find the corresponding bit within 2ndRS
       uint64_t order, pos0, cnt;
       rankselect1_idx_ = key1 - index_.minValue_;
@@ -684,7 +684,7 @@ public:
           /*
            * zero_seq_ has [a, b) range, hence next() need (pos_ + 1), whereas
            * prev() just called with (pos_) is enough
-           * case1: 1 0 1, ... 
+           * case1: 1 0 1, ...
            * case2: 1 1, ...
            */
           assert(rankselect1_idx_ > 0);
@@ -729,7 +729,7 @@ public:
     valvec<byte_t> buffer_;
     const TerarkCompositeUintIndex& index_;
   };
-    
+
 public:
   class MyFactory : public TerarkIndex::Factory {
   public:
@@ -763,7 +763,7 @@ public:
       /*
        * 1stRS stores bitmap [minValue, maxValue] for index1st
        * 2ndRS stores bitmap for StaticMap<key1, list<key2>>
-       * order of rs2 follows the order of index data, and order 
+       * order of rs2 follows the order of index data, and order
        * of rs1 follows the order of rs2
        */
       RankSelect1 rankselect1(maxValue - minValue + 1);
@@ -927,14 +927,14 @@ public:
   using TerarkIndex::FactoryPtr;
   TerarkCompositeUintIndex() {}
   TerarkCompositeUintIndex(RankSelect1& rankselect1, RankSelect2& rankselect2,
-                       FixedLenStrVec& keyVec, const KeyStat& ks, 
+                       FixedLenStrVec& keyVec, const KeyStat& ks,
                        uint64_t minValue, uint64_t maxValue, size_t key1_len) {
     isBuilding_ = true;
     size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
     // save meta into header
     FileHeader* header = new FileHeader(
-      rankselect1.mem_size() + 
-      rankselect2.mem_size() + 
+      rankselect1.mem_size() +
+      rankselect2.mem_size() +
       terark::align_up(keyVec.mem_size(), 8));
     header->min_value = minValue;
     header->max_value = maxValue;
