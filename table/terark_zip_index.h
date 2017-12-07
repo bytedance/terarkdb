@@ -59,6 +59,7 @@ public:
     virtual unique_ptr<TerarkIndex> LoadMemory(fstring mem) const = 0;
     virtual unique_ptr<TerarkIndex> LoadFile(fstring fpath) const = 0;
     virtual size_t MemSizeForBuild(const KeyStat&) const = 0;
+    const char* FactoryName() const;
   };
   typedef boost::intrusive_ptr<Factory> FactoryPtr;
   struct AutoRegisterFactory {

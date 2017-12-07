@@ -650,8 +650,8 @@ void TerarkZipTableBuilder::BuildIndex(BuildIndexParams& param, KeyValueStatus& 
     }
     catch (const std::exception& ex) {
       INFO(ioptions_.info_log
-        , "TerarkZipTableBuilder::Finish():this=%012p:  index build error %s\n"
-        , this, ex.what()
+        , "TerarkZipTableBuilder::Finish():this=%012p:  index build fail , type = %s , error = %s\n"
+        , this, factory->FactoryName(), ex.what()
       );
       return Status::Corruption("TerarkZipTableBuilder index build error", ex.what());
     }

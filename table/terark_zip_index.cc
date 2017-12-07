@@ -87,6 +87,15 @@ const TerarkIndex::Factory* TerarkIndex::GetFactory(fstring name) {
   return NULL;
 }
 
+const char* TerarkIndex::Factory::FactoryName() const {
+  for (auto pair : g_TerarkIndexFactroy) {
+    if (pair.second == this) {
+      return pair.first.c_str();
+    }
+  }
+  return "Unknow (internal error)";
+}
+
 bool TerarkIndex::SeekCostEffectiveIndexLen(const KeyStat& ks, size_t& ceLen) {
   /*
    * the length of index1,
