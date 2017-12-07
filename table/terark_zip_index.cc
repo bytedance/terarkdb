@@ -18,6 +18,11 @@ namespace rocksdb {
 
 using namespace terark;
 
+typedef rank_select_fewzero<uint32_t> rs_fewzero_32;
+typedef rank_select_fewzero<uint64_t> rs_fewzero_64;
+typedef rank_select_fewone<uint32_t> rs_fewone_32;
+typedef rank_select_fewone<uint64_t> rs_fewone_64;
+
 static hash_strmap<TerarkIndex::FactoryPtr> g_TerarkIndexFactroy;
 static hash_strmap<std::string>             g_TerarkIndexName;
 
@@ -301,155 +306,78 @@ void NestLoudsTrieGetOrderMap(const MatchingDFA* dfa, UintVecMin0& newToOld) {
   assert(0);
 }
 
-
-template<class NLTrie>
-class NestLoudsTrieIndex : public TerarkIndex {
+struct NestLoudsTrieIndexBase : public TerarkIndex {
   const BaseDAWG* m_dawg;
-  unique_ptr<NLTrie> m_trie;
-  class MyIterator : public NestLoudsTrieIterBaseTpl<NLTrie> {
-  protected:
-    using NestLoudsTrieIterBaseTpl<NLTrie>::m_dawg;
-    using NestLoudsTrieIterBaseTpl<NLTrie>::Done;
-    using NestLoudsTrieIterBase::m_iter;
-    using TerarkIndex::Iterator::m_id;
-  public:
-    explicit MyIterator(NLTrie* trie)
-      : NestLoudsTrieIterBaseTpl<NLTrie>(trie)
-    {}
-    bool SeekToFirst() override { return Done(m_iter->seek_begin()); }
-    bool SeekToLast()  override { return Done(m_iter->seek_end()); }
-    bool Seek(fstring key) override { return Done(m_iter->seek_lower_bound(key)); }
-    bool Next() override { return Done(m_iter->incr()); }
-    bool Prev() override { return Done(m_iter->decr()); }
-    size_t DictRank() const override {
-      assert(m_id != size_t(-1));
-#if defined(TerocksPrivateCode)
-      return m_dawg->state_to_dict_rank(m_iter->word_state());
-#endif // TerocksPrivateCode
-      return m_id;
-    }
-  };
-public:
-  NestLoudsTrieIndex(NLTrie* trie) : m_trie(trie) {
-    m_dawg = trie->get_dawg();
-  }
-  const char* Name() const override {
-    if (m_trie->is_mmap()) {
-      auto header = (const TerarkIndexHeader*)m_trie->get_mmap().data();
-      return header->class_name;
-    }
-    else {
-      size_t name_i = g_TerarkIndexName.find_i(typeid(*this).name());
-      TERARK_RT_assert(name_i < g_TerarkIndexName.end_i(), std::logic_error);
-      return g_TerarkIndexName.val(name_i).c_str();
-    }
-  }
-  void SaveMmap(std::function<void(const void *, size_t)> write) const override {
-    m_trie->save_mmap(write);
-  }
-  size_t Find(fstring key) const override final {
-    MY_THREAD_LOCAL(terark::MatchContext, ctx);
-    ctx.root = 0;
-    ctx.pos = 0;
-    ctx.zidx = 0;
-    ctx.zbuf_state = size_t(-1);
-    return m_dawg->index(ctx, key);
-  }
-  size_t NumKeys() const override final {
-    return m_dawg->num_words();
-  }
-  size_t TotalKeySize() const override final {
-    return m_trie->adfa_total_words_len();
-  }
-  fstring Memory() const override final {
-    return m_trie->get_mmap();
-  }
-  Iterator* NewIterator() const override final {
-    return new MyIterator(m_trie.get());
-  }
-  bool NeedsReorder() const override final { return true; }
-  void GetOrderMap(UintVecMin0& newToOld)
-  const override final {
-    NestLoudsTrieGetOrderMap(m_trie.get(), newToOld);
-  }
-  void BuildCache(double cacheRatio) {
-    if (cacheRatio > 1e-8) {
-      NestLoudsTrieBuildCache(m_trie.get(), cacheRatio);
-    }
-  }
-  class MyFactory : public Factory {
-  public:
-    TerarkIndex* Build(NativeDataInput<InputBuffer>& reader,
-                       const TerarkZipTableOptions& tzopt,
-                       const KeyStat& ks) const override {
+  unique_ptr<BaseDFA> m_trie;
+
+  struct MyBaseFactory : public Factory {
+    static
+    void Read_SortedStrVec(SortedStrVec& keyVec,
+                           NativeDataInput<InputBuffer>& reader,
+                           const KeyStat& ks) {
       size_t numKeys = ks.numKeys;
       size_t commonPrefixLen = ks.commonPrefixLen;
       size_t sumPrefixLen = commonPrefixLen * numKeys;
       size_t sumRealKeyLen = ks.sumKeyLen - sumPrefixLen;
       valvec<byte_t> keyBuf;
-      if (ks.minKeyLen != ks.maxKeyLen) {
-        SortedStrVec keyVec;
-        if (ks.minKey < ks.maxKey) {
-          keyVec.reserve(numKeys, sumRealKeyLen);
-          for (size_t i = 0; i < numKeys; ++i) {
-            reader >> keyBuf;
-            keyVec.push_back(fstring(keyBuf).substr(commonPrefixLen));
-          }
+      if (ks.minKey < ks.maxKey) {
+        keyVec.reserve(numKeys, sumRealKeyLen);
+        for (size_t i = 0; i < numKeys; ++i) {
+          reader >> keyBuf;
+          keyVec.push_back(fstring(keyBuf).substr(commonPrefixLen));
         }
-        else {
-          keyVec.m_offsets.resize_with_wire_max_val(numKeys + 1, sumRealKeyLen);
-          keyVec.m_offsets.set_wire(numKeys, sumRealKeyLen);
-          keyVec.m_strpool.resize(sumRealKeyLen);
-          size_t offset = sumRealKeyLen;
-          for (size_t i = numKeys; i > 0; ) {
-            --i;
-            reader >> keyBuf;
-            fstring str = fstring(keyBuf).substr(commonPrefixLen);
-            offset -= str.size();
-            memcpy(keyVec.m_strpool.data() + offset, str.data(), str.size());
-            keyVec.m_offsets.set_wire(i, offset);
-          }
-          assert(offset == 0);
-        }
-        return BuildImpl(tzopt, keyVec);
       }
       else {
-        size_t fixlen = ks.minKeyLen - commonPrefixLen;
-        FixedLenStrVec keyVec(fixlen);
-        if (ks.minKey < ks.maxKey) {
-          keyVec.reserve(numKeys, sumRealKeyLen);
-          for (size_t i = 0; i < numKeys; ++i) {
-            reader >> keyBuf;
-            keyVec.push_back(fstring(keyBuf).substr(commonPrefixLen));
-          }
+        keyVec.m_offsets.resize_with_wire_max_val(numKeys + 1, sumRealKeyLen);
+        keyVec.m_offsets.set_wire(numKeys, sumRealKeyLen);
+        keyVec.m_strpool.resize(sumRealKeyLen);
+        size_t offset = sumRealKeyLen;
+        for (size_t i = numKeys; i > 0; ) {
+          --i;
+          reader >> keyBuf;
+          fstring str = fstring(keyBuf).substr(commonPrefixLen);
+          offset -= str.size();
+          memcpy(keyVec.m_strpool.data() + offset, str.data(), str.size());
+          keyVec.m_offsets.set_wire(i, offset);
         }
-        else {
-          keyVec.m_size = numKeys;
-          keyVec.m_strpool.resize(sumRealKeyLen);
-          for (size_t i = numKeys; i > 0; ) {
-            --i;
-            reader >> keyBuf;
-            memcpy(keyVec.m_strpool.data() + fixlen * i
-              , fstring(keyBuf).substr(commonPrefixLen).data()
-              , fixlen);
-          }
-        }
-        return BuildImpl(tzopt, keyVec);
+        assert(offset == 0);
       }
     }
-  private:
-    template<class StrVec>
-    TerarkIndex* BuildImpl(const TerarkZipTableOptions& tzopt,
-                           StrVec& keyVec) const {
-#if !defined(NDEBUG)
-      for (size_t i = 1; i < keyVec.size(); ++i) {
-        fstring prev = keyVec[i - 1];
-        fstring curr = keyVec[i];
-        assert(prev < curr);
+    static
+    void Read_FixedLenStrVec(FixedLenStrVec& keyVec,
+                           NativeDataInput<InputBuffer>& reader,
+                           const KeyStat& ks) {
+      size_t numKeys = ks.numKeys;
+      size_t commonPrefixLen = ks.commonPrefixLen;
+      size_t sumPrefixLen = commonPrefixLen * numKeys;
+      size_t sumRealKeyLen = ks.sumKeyLen - sumPrefixLen;
+      valvec<byte_t> keyBuf;
+      size_t fixlen = ks.minKeyLen - commonPrefixLen;
+      keyVec.m_fixlen = fixlen;
+      if (ks.minKey < ks.maxKey) {
+        keyVec.reserve(numKeys, sumRealKeyLen);
+        for (size_t i = 0; i < numKeys; ++i) {
+          reader >> keyBuf;
+          keyVec.push_back(fstring(keyBuf).substr(commonPrefixLen));
+        }
       }
-      //    backupKeys = keyVec;
-#endif
-      NestLoudsTrieConfig conf;
+      else {
+        keyVec.m_size = numKeys;
+        keyVec.m_strpool.resize(sumRealKeyLen);
+        for (size_t i = numKeys; i > 0; ) {
+          --i;
+          reader >> keyBuf;
+          memcpy(keyVec.m_strpool.data() + fixlen * i
+            , fstring(keyBuf).substr(commonPrefixLen).data()
+            , fixlen);
+        }
+      }
+    }
+    template<class StrVec>
+    static
+    void Set_NestLoudsTrieConfig(NestLoudsTrieConfig& conf,
+                                 const StrVec& keyVec,
+                                 const TerarkZipTableOptions& tzopt) {
       conf.nestLevel = tzopt.indexNestLevel;
       conf.nestScale = tzopt.indexNestScale;
       if (tzopt.indexTempLevel >= 0 && tzopt.indexTempLevel < 5) {
@@ -488,6 +416,132 @@ public:
         conf.tmpLevel = 4;
       }
       conf.isInputSorted = true;
+    }
+
+    template<class StrVec>
+    static void AssertSorted(const StrVec& keyVec) {
+#if !defined(NDEBUG)
+      for (size_t i = 1; i < keyVec.size(); ++i) {
+        fstring prev = keyVec[i - 1];
+        fstring curr = keyVec[i];
+        assert(prev < curr);
+      }
+#endif
+    }
+
+    size_t MemSizeForBuild(const KeyStat& ks) const override {
+      size_t sumRealKeyLen = ks.sumKeyLen - ks.commonPrefixLen * ks.numKeys;
+      if (ks.minKeyLen == ks.maxKeyLen) {
+        return sumRealKeyLen;
+      }
+      size_t indexSize = UintVecMin0::compute_mem_size_by_max_val(ks.numKeys + 1, sumRealKeyLen);
+      return indexSize + sumRealKeyLen;
+    }
+  };
+
+  NestLoudsTrieIndexBase(BaseDFA* trie) : m_trie(trie) {
+    m_dawg = trie->get_dawg();
+  }
+
+  const char* Name() const override {
+    if (m_trie->is_mmap()) {
+      auto header = (const TerarkIndexHeader*)m_trie->get_mmap().data();
+      return header->class_name;
+    }
+    else {
+      size_t name_i = g_TerarkIndexName.find_i(typeid(*this).name());
+      TERARK_RT_assert(name_i < g_TerarkIndexName.end_i(), std::logic_error);
+      return g_TerarkIndexName.val(name_i).c_str();
+    }
+  }
+  void SaveMmap(std::function<void(const void *, size_t)> write) const override {
+    m_trie->save_mmap(write);
+  }
+  size_t Find(fstring key) const override final {
+    MY_THREAD_LOCAL(terark::MatchContext, ctx);
+    ctx.root = 0;
+    ctx.pos = 0;
+    ctx.zidx = 0;
+    ctx.zbuf_state = size_t(-1);
+    return m_dawg->index(ctx, key);
+  }
+  size_t NumKeys() const override final {
+    return m_dawg->num_words();
+  }
+  size_t TotalKeySize() const override final {
+    return m_trie->adfa_total_words_len();
+  }
+  fstring Memory() const override final {
+    return m_trie->get_mmap();
+  }
+  bool NeedsReorder() const override final { return true; }
+};
+
+template<class NLTrie>
+class NestLoudsTrieIndex : public NestLoudsTrieIndexBase {
+  class MyIterator : public NestLoudsTrieIterBaseTpl<NLTrie> {
+  protected:
+    using NestLoudsTrieIterBaseTpl<NLTrie>::m_dawg;
+    using NestLoudsTrieIterBaseTpl<NLTrie>::Done;
+    using NestLoudsTrieIterBase::m_iter;
+    using TerarkIndex::Iterator::m_id;
+  public:
+    explicit MyIterator(const NLTrie* trie)
+      : NestLoudsTrieIterBaseTpl<NLTrie>(trie)
+    {}
+    bool SeekToFirst() override { return Done(m_iter->seek_begin()); }
+    bool SeekToLast()  override { return Done(m_iter->seek_end()); }
+    bool Seek(fstring key) override { return Done(m_iter->seek_lower_bound(key)); }
+    bool Next() override { return Done(m_iter->incr()); }
+    bool Prev() override { return Done(m_iter->decr()); }
+    size_t DictRank() const override {
+      assert(m_id != size_t(-1));
+#if defined(TerocksPrivateCode)
+      return m_dawg->state_to_dict_rank(m_iter->word_state());
+#endif // TerocksPrivateCode
+      return m_id;
+    }
+  };
+public:
+  NestLoudsTrieIndex(NLTrie* trie) : NestLoudsTrieIndexBase(trie) {}
+  Iterator* NewIterator() const override final {
+    auto trie = static_cast<const NLTrie*>(m_trie.get());
+    return new MyIterator(trie);
+  }
+  void GetOrderMap(UintVecMin0& newToOld)
+  const override final {
+    auto trie = static_cast<const NLTrie*>(m_trie.get());
+    NestLoudsTrieGetOrderMap(trie, newToOld);
+  }
+  void BuildCache(double cacheRatio) {
+    if (cacheRatio > 1e-8) {
+      auto trie = static_cast<NLTrie*>(m_trie.get());
+      NestLoudsTrieBuildCache(trie, cacheRatio);
+    }
+  }
+  class MyFactory : public MyBaseFactory {
+  public:
+    TerarkIndex* Build(NativeDataInput<InputBuffer>& reader,
+                       const TerarkZipTableOptions& tzopt,
+                       const KeyStat& ks) const override {
+      if (ks.minKeyLen != ks.maxKeyLen) {
+        SortedStrVec keyVec;
+        Read_SortedStrVec(keyVec, reader, ks);
+        return BuildImpl(tzopt, keyVec);
+      }
+      else {
+        FixedLenStrVec keyVec;
+        Read_FixedLenStrVec(keyVec, reader, ks);
+        return BuildImpl(tzopt, keyVec);
+      }
+    }
+  private:
+    template<class StrVec>
+    TerarkIndex*
+    BuildImpl(const TerarkZipTableOptions& tzopt, StrVec& keyVec) const {
+      AssertSorted(keyVec);
+      NestLoudsTrieConfig conf;
+      Set_NestLoudsTrieConfig(conf, keyVec, tzopt);
       std::unique_ptr<NLTrie> trie(new NLTrie());
       trie->build_from(keyVec, conf);
       return new NestLoudsTrieIndex(trie.release());
@@ -517,14 +571,6 @@ public:
       dfa.release();
       return std::move(index);
     }
-    size_t MemSizeForBuild(const KeyStat& ks) const override {
-      size_t sumRealKeyLen = ks.sumKeyLen - ks.commonPrefixLen * ks.numKeys;
-      if (ks.minKeyLen == ks.maxKeyLen) {
-        return sumRealKeyLen;
-      }
-      size_t indexSize = UintVecMin0::compute_mem_size_by_max_val(ks.numKeys + 1, sumRealKeyLen);
-      return indexSize + sumRealKeyLen;
-    }
   };
 };
 
@@ -532,8 +578,7 @@ public:
 #if defined(TerocksPrivateCode)
 
 template<class Container>
-class CompositeKeyDataContainer {
-};
+class CompositeKeyDataContainer;
 
 template<>
 class CompositeKeyDataContainer<SortedUintVec> {
@@ -618,7 +663,7 @@ private:
 };
 
 template<>
-class CompositeKeyDataContainer<UintVecMin0> {
+class CompositeKeyDataContainer<BigUintVecMin0> {
 private:
   size_t get_val(size_t idx) const {
     return container_[idx] + min_value_;
@@ -630,12 +675,12 @@ private:
     return ReadBigEndianUint64(targetBuffer, 8);
   }
 public:
-  void swap(CompositeKeyDataContainer<UintVecMin0>& other) {
+  void swap(CompositeKeyDataContainer<BigUintVecMin0>& other) {
     container_.swap(other.container_);
     std::swap(min_value_, other.min_value_);
     std::swap(key_len_, other.key_len_);
   }
-  void swap(UintVecMin0& other) {
+  void swap(BigUintVecMin0& other) {
     container_.swap(other);
   }
   void init(size_t len, size_t minval) {
@@ -656,7 +701,7 @@ public:
     return get_val(idx) == n;
   }
   void risk_set_data(byte_t* data, size_t num, size_t maxValue) {
-    size_t bits = UintVecMin0::compute_uintbits(maxValue);
+    size_t bits = BigUintVecMin0::compute_uintbits(maxValue);
     container_.risk_set_data(data, num, bits);
   }
   void risk_set_data(byte_t* data, size_t sz) {
@@ -680,7 +725,7 @@ public:
     if (n < min_value_) // if equal, val len may > key_len_
       return lo;
     n -= min_value_;
-    size_t pos = lower_bound_n<const UintVecMin0&>(container_, lo, hi, n);
+    size_t pos = lower_bound_n<const BigUintVecMin0&>(container_, lo, hi, n);
     while (pos != hi) {
       if (compare(pos, val) >= 0)
         return pos;
@@ -690,7 +735,7 @@ public:
   }
 
 private:
-  UintVecMin0 container_;
+  BigUintVecMin0 container_;
   uint64_t min_value_;
   size_t key_len_;
 };
@@ -746,57 +791,39 @@ private:
 };
 // -- fast zero-seq-len
 template<class RankSelect>
-size_t fast_zero_seq_len(RankSelect& rs, size_t pos, size_t& hint) {
+size_t fast_zero_seq_len(const RankSelect& rs, size_t pos, size_t& hint) {
   return rs.zero_seq_len(pos);
 }
-template<>
-size_t fast_zero_seq_len<rank_select_fewzero<uint32_t>>(
-  rank_select_fewzero<uint32_t>& rs, size_t pos, size_t& hint) {
+template<class Uint>
+size_t
+fast_zero_seq_len(const rank_select_fewzero<Uint>& rs, size_t pos, size_t& hint) {
   return rs.zero_seq_len(pos, hint);
 }
-template<>
-size_t fast_zero_seq_len<rank_select_fewzero<uint64_t>>(
-  rank_select_fewzero<uint64_t>& rs, size_t pos, size_t& hint) {
-  return rs.zero_seq_len(pos, hint);
-}
-template<>
-size_t fast_zero_seq_len<rank_select_fewone<uint32_t>>(
-  rank_select_fewone<uint32_t>& rs, size_t pos, size_t& hint) {
-  return rs.zero_seq_len(pos, hint);
-}
-template<>
-size_t fast_zero_seq_len<rank_select_fewone<uint64_t>>(
-  rank_select_fewone<uint64_t>& rs, size_t pos, size_t& hint) {
+template<class Uint>
+size_t
+fast_zero_seq_len(const rank_select_fewone<Uint>& rs, size_t pos, size_t& hint) {
   return rs.zero_seq_len(pos, hint);
 }
 // -- fast zero-seq-revlen
 template<class RankSelect>
-size_t fast_zero_seq_revlen(RankSelect& rs, size_t pos, size_t& hint) {
+size_t fast_zero_seq_revlen(const RankSelect& rs, size_t pos, size_t& hint) {
   return rs.zero_seq_revlen(pos);
 }
-template<>
-size_t fast_zero_seq_revlen<rank_select_fewzero<uint32_t>>(
-  rank_select_fewzero<uint32_t>& rs, size_t pos, size_t& hint) {
+template<class Uint>
+size_t
+fast_zero_seq_revlen(const rank_select_fewzero<Uint>& rs, size_t pos, size_t& hint) {
   return rs.zero_seq_revlen(pos, hint);
 }
-template<>
-size_t fast_zero_seq_revlen<rank_select_fewzero<uint64_t>>(
-  rank_select_fewzero<uint64_t>& rs, size_t pos, size_t& hint) {
+template<class Uint>
+size_t
+fast_zero_seq_revlen(const rank_select_fewone<Uint>& rs, size_t pos, size_t& hint) {
   return rs.zero_seq_revlen(pos, hint);
 }
-template<>
-size_t fast_zero_seq_revlen<rank_select_fewone<uint32_t>>(
-  rank_select_fewone<uint32_t>& rs, size_t pos, size_t& hint) {
-  return rs.zero_seq_revlen(pos, hint);
-}
-template<>
-size_t fast_zero_seq_revlen<rank_select_fewone<uint64_t>>(
-  rank_select_fewone<uint64_t>& rs, size_t pos, size_t& hint) {
-  return rs.zero_seq_revlen(pos, hint);
-}
-
 
 struct CompositeUintIndexBase : public TerarkIndex {
+  typedef CompositeKeyDataContainer<SortedUintVec> SortedUintDataCont;
+  typedef CompositeKeyDataContainer<BigUintVecMin0> Min0DataCont;
+  typedef CompositeKeyDataContainer<FixedLenStrVec> StrDataCont;
   static const char* index_name;
   struct MyBaseFileHeader : public TerarkIndexHeader {
     uint64_t min_value;
@@ -839,213 +866,17 @@ struct CompositeUintIndexBase : public TerarkIndex {
     kUintMin0,
     kSortedUint
   };
-};
-const char* CompositeUintIndexBase::index_name = "CompositeIndex";
-
-/*
- * For simplicity, let's take composite index => index1:index2. Then following
- * compositeindexes like,
- *   4:6, 4:7, 4:8, 7:19, 7:20, 8:3
- * index1: {4, 7}, use bitmap (also UintIndex's form) to respresent
- *   4(1), 5(0), 6(0), 7(1), 8(1)
- * index1:index2: use bitmap to respresent 4:6(0), 4:7(1), 4:8(1), 7:19(0), 7:20(1), 8:3(0)
- * to search 7:20, use bitmap1 to rank1(7) = 2, then use bitmap2 to select0(2) = position-3,
- * use bitmap2 to select0(3) = position-5. That is, we should search within [3, 5).
- * iter [3 to 5), 7:20 is found, done.
- */
-template<class RankSelect1, class RankSelect2, class Key2DataContainer>
-class CompositeUintIndex : public CompositeUintIndexBase {
-public:
-  struct FileHeader : MyBaseFileHeader {
-    FileHeader(size_t file_size)
-      : MyBaseFileHeader(file_size, typeid(CompositeUintIndex))
-    {}
-  };
-  typedef CompositeKeyDataContainer<SortedUintVec> SortedUintDataCont;
-  typedef CompositeKeyDataContainer<UintVecMin0> Min0DataCont;
-  typedef CompositeKeyDataContainer<FixedLenStrVec> StrDataCont;
-public:
-  class CompositeUintIndexIterator : public TerarkIndex::Iterator {
-  public:
-    CompositeUintIndexIterator(const CompositeUintIndex& index) : index_(index) {
-      rankselect1_idx_ = size_t(-1);
-      m_id = size_t(-1);
-      buffer_.resize_no_init(index_.KeyLen());
-      memcpy(buffer_.data(), index_.commonPrefix_.data(), index_.commonPrefix_.size());
-      access_hint_ = size_t(-1);
-    }
-    virtual ~CompositeUintIndexIterator() {}
-
-    bool SeekToFirst() override {
-      rankselect1_idx_ = 0;
-      m_id = 0;
-      UpdateBuffer();
-      return true;
-    }
-    bool SeekToLast() override {
-      rankselect1_idx_ = index_.rankselect1_.size() - 1;
-      m_id = index_.key2_data_.size() - 1;
-      UpdateBuffer();
-      return true;
-    }
-    bool Seek(fstring target) override {
-      size_t cplen = target.commonPrefixLen(index_.commonPrefix_);
-      if (cplen != index_.commonPrefix_.size()) {
-        assert(target.size() >= cplen);
-        assert(target.size() == cplen ||
-            byte_t(target[cplen]) != byte_t(index_.commonPrefix_[cplen]));
-        if (target.size() == cplen ||
-            byte_t(target[cplen]) < byte_t(index_.commonPrefix_[cplen])) {
-          return SeekToFirst();
-        } else {
-          m_id = size_t(-1);
-          return false;
-        }
-      }
-      uint64_t key1 = 0;
-      fstring  key2;
-      if (target.size() <= cplen + index_.key1_len_) {
-        fstring sub = target.substr(cplen);
-        byte_t targetBuffer[8] = { 0 };
-        /*
-         * do not think hard about int, think about string instead. 
-         * assume key1_len is 6 byte len like 'abcdef', target without
-         * commpref is 'b', u should compare 'b' with 'a' instead of 'f'.
-         * that's why assign sub starting in the middle instead at tail.
-         */
-        memcpy(targetBuffer + (8 - index_.key1_len_), sub.data(), sub.size());
-        key1 = Read1stKey(targetBuffer, 0, 8);
-        key2 = fstring(); // empty
-      } else {
-        key1 = Read1stKey(target, cplen, index_.key1_len_);
-        key2 = target.substr(cplen + index_.key1_len_);
-      }
-      if (key1 > index_.maxValue_) {
-        m_id = size_t(-1);
-        return false;
-      } else if (key1 < index_.minValue_) {
-        return SeekToFirst();
-      }
-      
-      // find the corresponding bit within 2ndRS
-      uint64_t order, pos0, cnt;
-      rankselect1_idx_ = key1 - index_.minValue_;
-      if (index_.rankselect1_[rankselect1_idx_]) {
-        // find within this index
-        order = index_.rankselect1_.rank1(rankselect1_idx_);
-        pos0 = index_.rankselect2_.select0(order);
-        if (pos0 == index_.key2_data_.size() - 1) { // last elem
-          m_id = (index_.key2_data_.compare(pos0, key2) >= 0) ? pos0 : size_t(-1);
-          goto out;
-        } else {
-          cnt = index_.rankselect2_.one_seq_len(pos0 + 1) + 1;
-          m_id = index_.Locate(index_.key2_data_, pos0, cnt, key2);
-          if (m_id != size_t(-1)) {
-            goto out;
-          } else if (pos0 + cnt == index_.key2_data_.size()) {
-            goto out;
-          } else {
-            // try next offset
-            rankselect1_idx_++;
-          }
-        }
-      }
-      // no such index, use the lower_bound form
-      cnt = index_.rankselect1_.zero_seq_len(rankselect1_idx_);
-      if (rankselect1_idx_ + cnt >= index_.rankselect1_.size()) {
-        m_id = size_t(-1);
-        return false;
-      }
-      rankselect1_idx_ += cnt;
-      order = index_.rankselect1_.rank1(rankselect1_idx_);
-      m_id = index_.rankselect2_.select0(order);
-    out:
-      if (m_id == size_t(-1)) {
-        return false;
-      }
-      UpdateBuffer();
-      return true;
-    }
-
-    bool Next() override {
-      assert(m_id != size_t(-1));
-      assert(index_.rankselect1_[rankselect1_idx_] != 0);
-      if (terark_unlikely(m_id + 1 == index_.key2_data_.size())) {
-        m_id = size_t(-1);
-        return false;
-      } else {
-        if (Is1stKeyDiff(m_id + 1)) {
-          assert(rankselect1_idx_ + 1 <  index_.rankselect1_.size());
-          //uint64_t cnt = index_.rankselect1_.zero_seq_len(rankselect1_idx_ + 1);
-          uint64_t cnt = fast_zero_seq_len(index_.rankselect1_, rankselect1_idx_ + 1, access_hint_);
-          rankselect1_idx_ += cnt + 1;
-          assert(rankselect1_idx_ < index_.rankselect1_.size());
-        }
-        ++m_id;
-        UpdateBuffer();
-        return true;
-      }
-    }
-    bool Prev() override {
-      assert(m_id != size_t(-1));
-      assert(index_.rankselect1_[rankselect1_idx_] != 0);
-      if (terark_unlikely(m_id == 0)) {
-        m_id = size_t(-1);
-        return false;
-      } else {
-        if (Is1stKeyDiff(m_id)) {
-          /*
-           * zero_seq_ has [a, b) range, hence next() need (pos_ + 1), whereas
-           * prev() just called with (pos_) is enough
-           * case1: 1 0 1, ... 
-           * case2: 1 1, ...
-           */
-          assert(rankselect1_idx_ > 0);
-          //uint64_t cnt = index_.rankselect1_.zero_seq_revlen(rankselect1_idx_);
-          uint64_t cnt = fast_zero_seq_revlen(index_.rankselect1_, rankselect1_idx_, access_hint_);
-          assert(rankselect1_idx_ >= cnt + 1);
-          rankselect1_idx_ -= (cnt + 1);
-        }
-        --m_id;
-        UpdateBuffer();
-        return true;
-      }
-    }
-
-    size_t DictRank() const override {
-      assert(m_id != size_t(-1));
-      return m_id;
-    }
-    fstring key() const override {
-      assert(m_id != size_t(-1));
-      return buffer_;
-    }
-
-  protected:
-    //use 2nd index bitmap to check if 1st index changed
-    bool Is1stKeyDiff(size_t curr_id) {
-      return index_.rankselect2_.is0(curr_id);
-    }
-    void UpdateBuffer() {
-      // key = commonprefix + key1s + key2
-      // assign key1
-      size_t offset = index_.commonPrefix_.size();
-      auto len1 = index_.key1_len_;
-      auto key1 = rankselect1_idx_ + index_.minValue_;
-      SaveAsBigEndianUint64(buffer_.data() + offset, len1, key1);
-      // assign key2
-      offset += len1;
-      index_.key2_data_.copy_to(m_id, buffer_.data() + offset);
-    }
-
-    size_t rankselect1_idx_; // used to track & decode index1 value
-    size_t access_hint_;
-    valvec<byte_t> buffer_;
-    const CompositeUintIndex& index_;
-  };
-
-public:
-  class MyFactory : public TerarkIndex::Factory {
+  // handlers
+  static uint64_t Read1stKey(const valvec<byte_t>& key, size_t cplen, size_t key1_len) {
+    return ReadBigEndianUint64(key.begin() + cplen, key1_len);
+  }
+  static uint64_t Read1stKey(fstring key, size_t cplen, size_t key1_len) {
+    return ReadBigEndianUint64((const byte_t*)key.data() + cplen, key1_len);
+  }
+  static uint64_t Read1stKey(const byte_t* key, size_t cplen, size_t key1_len) {
+    return ReadBigEndianUint64(key + cplen, key1_len);
+  }
+  class MyBaseFactory : public TerarkIndex::Factory {
   public:
     // composite index as cluster index
     // secondary index which contain 'id' as key2
@@ -1067,11 +898,247 @@ public:
       kNormal_FewOne,
       kNormal_Normal
     };
-  public:
+    size_t MemSizeForBuild(const KeyStat& ks) const override {
+      assert(ks.minKeyLen == ks.maxKeyLen);
+      size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
+      size_t key1_len = 0;
+      bool check = SeekCostEffectiveIndexLen(ks, key1_len);
+      assert(check && ks.maxKeyLen > cplen + key1_len);
+      TERARK_UNUSED_VAR(check);
+      uint64_t minValue = Read1stKey(ks.minKey, cplen, key1_len);
+      uint64_t maxValue = Read1stKey(ks.maxKey, cplen, key1_len);
+      if (minValue > maxValue) {
+        std::swap(minValue, maxValue);
+      }
+      uint64_t diff = maxValue - minValue + 1;
+      size_t key2_len = ks.minKey.size() - cplen - key1_len;
+      // maximum
+      size_t rankselect_1st_sz = size_t(std::ceil(diff * 1.25 / 8));
+      size_t rankselect_2nd_sz = size_t(std::ceil(ks.numKeys * 1.25 / 8));
+      size_t sum_key2_sz = std::ceil(ks.numKeys * key2_len);
+      return rankselect_1st_sz + rankselect_2nd_sz + sum_key2_sz;
+    }
+    static void
+    updateMinMax(fstring data, valvec<byte_t>& minData, valvec<byte_t>& maxData) {
+      if (minData.empty() || data < fstring(minData.begin(), minData.size())) {
+        minData.assign(data.data(), data.size());
+      }
+      if (maxData.empty() || data > fstring(maxData.begin(), maxData.size())) {
+        maxData.assign(data.data(), data.size());
+      }
+    }
+    template<class RankSelect1, class RankSelect2>
+    static AmazingCombinationT
+    figureCombination(const RankSelect1& rs1, const RankSelect2& rs2) {
+      bool isRS1FewZero = IsFewZero(rs1.size(), rs1.max_rank0());
+      bool isRS2FewZero = IsFewZero(rs2.size(), rs2.max_rank0());
+      bool isRS1FewOne  = IsFewOne(rs1.size(), rs1.max_rank1());
+      bool isRS2FewOne  = IsFewOne(rs2.size(), rs2.max_rank1());
+      // all one && ...
+      if (rs1.isall1() && rs2.isall0())
+        return kAllOne_AllZero;
+      else if (rs1.isall1() && isRS2FewZero)
+        return kAllOne_FewZero;
+      else if (rs1.isall1() && isRS2FewOne)
+        return kAllOne_FewOne;
+      else if (rs1.isall1())
+        return kAllOne_Normal;
+      // few zero && ...
+      else if (isRS1FewZero && rs2.isall0())
+        return kFewZero_AllZero;
+      else if (isRS1FewZero && isRS2FewZero)
+        return kFewZero_FewZero;
+      else if (isRS1FewZero && isRS2FewOne)
+        return kFewZero_FewOne;
+      else if (isRS1FewZero)
+        return kFewZero_Normal;
+      // few one && ...
+      else if (isRS1FewOne && rs2.isall0())
+        return kFewOne_AllZero;
+      else if (isRS1FewOne && isRS2FewZero)
+        return kFewOne_FewZero;
+      else if (isRS1FewOne && isRS2FewOne)
+        return kFewOne_FewOne;
+      else if (isRS1FewOne)
+        return kFewOne_Normal;
+      //
+      else if (rs2.isall0())
+        return kNormal_AllZero;
+      else if (isRS2FewZero)
+        return kNormal_FewZero;
+      else if (isRS2FewOne)
+        return kNormal_FewOne;
+      else
+        return kNormal_Normal;
+    }
+    template<class RankSelect1, class RankSelect2>
+    static TerarkIndex*
+    CreateIndexWithSortedUintCont(RankSelect1& rankselect1,
+                                  RankSelect2& rankselect2,
+                                  FixedLenStrVec& keyVec,
+                                  const KeyStat& ks,
+                                  uint64_t key1MinValue,
+                                  uint64_t key1MaxValue,
+                                  size_t key1_len,
+                                  valvec<byte_t>& minKey2Data,
+                                  valvec<byte_t>& maxKey2Data) {
+      const size_t kBlockUnits = 128;
+      const size_t kLimit = (1ull << 48) - 1;
+      uint64_t key2MinValue = ReadBigEndianUint64(minKey2Data);
+      uint64_t key2MaxValue = ReadBigEndianUint64(maxKey2Data);
+      unique_ptr<SortedUintVec:: Builder> builder(SortedUintVec::createBuilder(false, kBlockUnits));
+      uint64_t prev = ReadBigEndianUint64(keyVec[0]) - key2MinValue;
+      builder->push_back(prev);
+      for (size_t i = 1; i < keyVec.size(); i++) {
+        fstring str = keyVec[i];
+        uint64_t key2 = ReadBigEndianUint64(str) - key2MinValue;
+        if (terark_unlikely(abs_diff(key2, prev) > kLimit)) // should not use sorted uint vec
+          return nullptr;
+        prev = key2;
+        builder->push_back(prev);
+      }
+      SortedUintVec uintVec;
+      auto rs = builder->finish(&uintVec);
+      if (rs.mem_size > keyVec.mem_size() / 2.0) // too much ram consumed
+        return nullptr;
+      SortedUintDataCont container;
+      container.swap(uintVec);
+      container.init(minKey2Data.size(), key2MinValue);
+      return CreateIndex(rankselect1, rankselect2, container, ks,
+                         key1MinValue, key1MaxValue,
+                         key1_len, key2MinValue, key2MaxValue);
+    }
+    template<class RankSelect1, class RankSelect2>
+    static TerarkIndex*
+    CreateIndexWithUintCont(RankSelect1& rankselect1,
+                            RankSelect2& rankselect2,
+                            FixedLenStrVec& keyVec,
+                            const KeyStat& ks,
+                            uint64_t key1MinValue,
+                            uint64_t key1MaxValue,
+                            size_t key1_len,
+                            valvec<byte_t>& minKey2Data,
+                            valvec<byte_t>& maxKey2Data) {
+      uint64_t key2MinValue = ReadBigEndianUint64(minKey2Data);
+      uint64_t key2MaxValue = ReadBigEndianUint64(maxKey2Data);
+      uint64_t diff = key2MaxValue - key2MinValue + 1;
+      size_t bitUsed = BigUintVecMin0::compute_uintbits(diff);
+      if (bitUsed > keyVec.m_fixlen * 8 * 0.9) // compress ratio just so so
+        return nullptr;
+      // reuse memory from keyvec, since vecMin0 should consume less mem
+      // compared with fixedlenvec
+      BigUintVecMin0 vecMin0;
+      vecMin0.risk_set_data(const_cast<byte_t*>(keyVec.data()), keyVec.size(), bitUsed);
+      for (size_t i = 0; i < keyVec.size(); i++) {
+        fstring str = keyVec[i];
+        uint64_t key2 = ReadBigEndianUint64(str);
+        vecMin0.set_wire(i, key2 - key2MinValue);
+      }
+      keyVec.risk_release_ownership();
+      Min0DataCont container;
+      container.swap(vecMin0);
+      container.init(minKey2Data.size(), key2MinValue);
+      return CreateIndex(rankselect1, rankselect2, container, ks, key1MinValue, key1MaxValue,
+                         key1_len, key2MinValue, key2MaxValue);
+    }
+    template<class RankSelect1, class RankSelect2>
+    static TerarkIndex*
+    CreateIndexWithStrCont(RankSelect1& rankselect1,
+                           RankSelect2& rankselect2,
+                           FixedLenStrVec& keyVec,
+                           const KeyStat& ks,
+                           uint64_t key1MinValue,
+                           uint64_t key1MaxValue,
+                           size_t key1_len) {
+      StrDataCont container;
+      container.swap(keyVec);
+      return CreateIndex(rankselect1, rankselect2, container, ks,
+                         key1MinValue, key1MaxValue, key1_len, 0, 0);
+    }
+    template<class RankSelect1, class RankSelect2, class DataCont>
+    static TerarkIndex*
+    CreateIndex(RankSelect1& rankselect1,
+                RankSelect2& rankselect2,
+                DataCont& container, const KeyStat& ks,
+                uint64_t key1MinValue, uint64_t key1MaxValue, size_t key1_len,
+                uint64_t key2MinValue, uint64_t key2MaxValue);
+    bool verifyBaseHeader(fstring mem) const {
+      const MyBaseFileHeader* header = (const MyBaseFileHeader*)mem.data();
+      if (mem.size() < sizeof(MyBaseFileHeader)
+          || header->magic_len != strlen(index_name)
+          || strcmp(header->magic, index_name) != 0
+          || header->header_size != sizeof(MyBaseFileHeader)
+          || header->version != 1
+          || header->file_size != mem.size()
+        ) {
+        throw std::invalid_argument("CompositeUintIndex::Load(): Bad file header");
+      }
+      return true;
+    }
     // no option.keyPrefixLen
-    TerarkIndex* Build(NativeDataInput<InputBuffer>& reader,
-                       const TerarkZipTableOptions& tzopt,
-                       const KeyStat& ks) const override {
+
+#define Disable_BuildImpl(rs1, rs2) \
+    TerarkIndex* BuildImpl(NativeDataInput<InputBuffer>& reader, \
+                           const TerarkZipTableOptions& tzopt, \
+                           const KeyStat& ks, \
+                           rs1*, rs2*) \
+    const { TERARK_IF_DEBUG(assert(0), abort()); }
+
+    template<class rs2> Disable_BuildImpl(rs_fewone_32, rs2);
+    template<class rs2> Disable_BuildImpl(rs_fewone_64, rs2);
+    template<class rs2> Disable_BuildImpl(rs_fewzero_32, rs2);
+    template<class rs2> Disable_BuildImpl(rs_fewzero_64, rs2);
+    template<class rs2> Disable_BuildImpl(rank_select_allone, rs2);
+    template<class rs2> Disable_BuildImpl(rank_select_allzero, rs2);
+
+    template<class rs1> Disable_BuildImpl(rs1, rs_fewone_32);
+    template<class rs1> Disable_BuildImpl(rs1, rs_fewone_64);
+    template<class rs1> Disable_BuildImpl(rs1, rs_fewzero_32);
+    template<class rs1> Disable_BuildImpl(rs1, rs_fewzero_64);
+    template<class rs1> Disable_BuildImpl(rs1, rank_select_allone);
+    template<class rs1> Disable_BuildImpl(rs1, rank_select_allzero);
+
+    Disable_BuildImpl(rs_fewone_32, rs_fewone_32);
+    Disable_BuildImpl(rs_fewone_32, rs_fewzero_32);
+    Disable_BuildImpl(rs_fewone_32, rank_select_allone);
+    Disable_BuildImpl(rs_fewone_32, rank_select_allzero);
+
+    Disable_BuildImpl(rs_fewzero_32, rs_fewone_32);
+    Disable_BuildImpl(rs_fewzero_32, rs_fewzero_32);
+    Disable_BuildImpl(rs_fewzero_32, rank_select_allone);
+    Disable_BuildImpl(rs_fewzero_32, rank_select_allzero);
+
+    Disable_BuildImpl(rs_fewone_64, rs_fewone_64);
+    Disable_BuildImpl(rs_fewone_64, rs_fewzero_64);
+    Disable_BuildImpl(rs_fewone_64, rank_select_allone);
+    Disable_BuildImpl(rs_fewone_64, rank_select_allzero);
+
+    Disable_BuildImpl(rs_fewzero_64, rs_fewone_64);
+    Disable_BuildImpl(rs_fewzero_64, rs_fewzero_64);
+    Disable_BuildImpl(rs_fewzero_64, rank_select_allone);
+    Disable_BuildImpl(rs_fewzero_64, rank_select_allzero);
+
+    Disable_BuildImpl(rank_select_allone, rs_fewone_32);
+    Disable_BuildImpl(rank_select_allone, rs_fewzero_32);
+    Disable_BuildImpl(rank_select_allone, rank_select_allone);
+    Disable_BuildImpl(rank_select_allone, rank_select_allzero);
+
+    Disable_BuildImpl(rank_select_allzero, rs_fewone_32);
+    Disable_BuildImpl(rank_select_allzero, rs_fewzero_32);
+    Disable_BuildImpl(rank_select_allzero, rank_select_allone);
+    Disable_BuildImpl(rank_select_allzero, rank_select_allzero);
+
+    Disable_BuildImpl(rank_select_allone, rs_fewone_64);
+    Disable_BuildImpl(rank_select_allone, rs_fewzero_64);
+
+    Disable_BuildImpl(rank_select_allzero, rs_fewone_64);
+    Disable_BuildImpl(rank_select_allzero, rs_fewzero_64);
+
+    template<class RankSelect1, class RankSelect2>
+    TerarkIndex* BuildImpl(NativeDataInput<InputBuffer>& reader,
+                           const TerarkZipTableOptions& tzopt,
+                           const KeyStat& ks,
+                           RankSelect1*, RankSelect2*) const {
       size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
       assert(cplen >= ks.commonPrefixLen);
       if (ks.maxKeyLen != ks.minKeyLen ||
@@ -1094,7 +1161,7 @@ public:
       /*
        * 1stRS stores bitmap [minValue, maxValue] for index1st
        * 2ndRS stores bitmap for StaticMap<key1, list<key2>>
-       * order of rs2 follows the order of index data, and order 
+       * order of rs2 follows the order of index data, and order
        * of rs1 follows the order of rs2
        */
       RankSelect1 rankselect1(maxValue - minValue + 1);
@@ -1163,291 +1230,24 @@ public:
       if (key2_len <= 8) {
         TerarkIndex* index = nullptr;
         if (!skipSorted)
-          index = CreateIndexWithSortedUintCont(rankselect1, rankselect2, 
-                                                keyVec, ks, minValue, maxValue, key1_len, minKey2Data, maxKey2Data);
+          index = CreateIndexWithSortedUintCont(
+              rankselect1, rankselect2, keyVec, ks,
+              minValue, maxValue, key1_len, minKey2Data, maxKey2Data);
         if (!index && !skipUint) {
-          index = CreateIndexWithUintCont(rankselect1, rankselect2, 
-            keyVec, ks, minValue, maxValue, key1_len, minKey2Data, maxKey2Data);
+          index = CreateIndexWithUintCont(
+              rankselect1, rankselect2, keyVec, ks,
+              minValue, maxValue, key1_len, minKey2Data, maxKey2Data);
         }
         if (index)
           return index;
       }
-      return CreateIndexWithStrCont(rankselect1, rankselect2, keyVec, ks,
-                                    minValue, maxValue, key1_len);
-    }
-  private:
-    static void updateMinMax(fstring data, valvec<byte_t>& minData, valvec<byte_t>& maxData) {
-      if (minData.empty() || data < fstring(minData.begin(), minData.size())) {
-        minData.assign(data.data(), data.size());
-      }
-      if (maxData.empty() || data > fstring(maxData.begin(), maxData.size())) {
-        maxData.assign(data.data(), data.size());
-      }
-    }
-    static AmazingCombinationT figureCombination(const RankSelect1& rs1, const RankSelect2& rs2) {
-      bool isRS1FewZero = IsFewZero(rs1.size(), rs1.max_rank0());
-      bool isRS2FewZero = IsFewZero(rs2.size(), rs2.max_rank0());
-      bool isRS1FewOne  = IsFewOne(rs1.size(), rs1.max_rank1());
-      bool isRS2FewOne  = IsFewOne(rs2.size(), rs2.max_rank1());
-      // all one && ...
-      if (rs1.isall1() && rs2.isall0())
-        return kAllOne_AllZero;
-      else if (rs1.isall1() && isRS2FewZero)
-        return kAllOne_FewZero;
-      else if (rs1.isall1() && isRS2FewOne)
-        return kAllOne_FewOne;
-      else if (rs1.isall1())
-        return kAllOne_Normal; 
-      // few zero && ...
-      else if (isRS1FewZero && rs2.isall0())
-        return kFewZero_AllZero;
-      else if (isRS1FewZero && isRS2FewZero)
-        return kFewZero_FewZero;
-      else if (isRS1FewZero && isRS2FewOne)
-        return kFewZero_FewOne;
-      else if (isRS1FewZero)
-        return kFewZero_Normal;
-      // few one && ...
-      else if (isRS1FewOne && rs2.isall0())
-        return kFewOne_AllZero;
-      else if (isRS1FewOne && isRS2FewZero)
-        return kFewOne_FewZero;
-      else if (isRS1FewOne && isRS2FewOne)
-        return kFewOne_FewOne;
-      else if (isRS1FewOne)
-        return kFewOne_Normal;
-      //
-      else if (rs2.isall0())
-        return kNormal_AllZero;
-      else if (isRS2FewZero)
-        return kNormal_FewZero;
-      else if (isRS2FewOne)
-        return kNormal_FewOne;
-      else
-        return kNormal_Normal;
-    }
-    static TerarkIndex* CreateIndexWithSortedUintCont(RankSelect1& rankselect1, RankSelect2& rankselect2,
-                                                      FixedLenStrVec& keyVec, const KeyStat& ks, 
-                                                      uint64_t key1MinValue, uint64_t key1MaxValue, size_t key1_len,
-                                                      valvec<byte_t>& minKey2Data, valvec<byte_t>& maxKey2Data) {
-      const size_t kBlockUnits = 128;
-      const size_t kLimit = (1ull << 48) - 1;
-      uint64_t key2MinValue = ReadBigEndianUint64(minKey2Data);
-      uint64_t key2MaxValue = ReadBigEndianUint64(maxKey2Data);
-      unique_ptr<SortedUintVec:: Builder> builder(SortedUintVec::createBuilder(false, kBlockUnits));
-      uint64_t prev = ReadBigEndianUint64(keyVec[0]) - key2MinValue;
-      builder->push_back(prev);
-      for (size_t i = 1; i < keyVec.size(); i++) {
-        fstring str = keyVec[i];
-        uint64_t key2 = ReadBigEndianUint64(str) - key2MinValue;
-        if (terark_unlikely(abs_diff(key2, prev) > kLimit)) // should not use sorted uint vec
-          return nullptr;
-        prev = key2;
-        builder->push_back(prev);
-      }
-      SortedUintVec uintVec;
-      auto rs = builder->finish(&uintVec);
-      if (rs.mem_size > keyVec.mem_size() / 2.0) // too much ram consumed
-        return nullptr;
-      SortedUintDataCont container;
-      container.swap(uintVec);
-      container.init(minKey2Data.size(), key2MinValue);
-      return CreateIndex(rankselect1, rankselect2, container, ks, key1MinValue, key1MaxValue,
-                         key1_len, key2MinValue, key2MaxValue);
-    }
-    static TerarkIndex* CreateIndexWithUintCont(RankSelect1& rankselect1, RankSelect2& rankselect2,
-                                                FixedLenStrVec& keyVec, const KeyStat& ks, 
-                                                uint64_t key1MinValue, uint64_t key1MaxValue, size_t key1_len,
-                                                valvec<byte_t>& minKey2Data, valvec<byte_t>& maxKey2Data) {
-      uint64_t key2MinValue = ReadBigEndianUint64(minKey2Data);
-      uint64_t key2MaxValue = ReadBigEndianUint64(maxKey2Data);
-      uint64_t diff = key2MaxValue - key2MinValue + 1;
-      size_t bitUsed = UintVecMin0::compute_uintbits(diff);
-      if (bitUsed > keyVec.m_fixlen * 8 * 0.9) // compress ratio just so so
-        return nullptr;
-      // reuse memory from keyvec, since vecMin0 should consume less mem
-      // compared with fixedlenvec
-      UintVecMin0 vecMin0;
-      vecMin0.risk_set_data(const_cast<byte_t*>(keyVec.data()), keyVec.size(), bitUsed);
-      for (size_t i = 0; i < keyVec.size(); i++) {
-        fstring str = keyVec[i];
-        uint64_t key2 = ReadBigEndianUint64(str);
-        vecMin0.set_wire(i, key2 - key2MinValue);
-      }
-      keyVec.risk_release_ownership();
-      Min0DataCont container;
-      container.swap(vecMin0);
-      container.init(minKey2Data.size(), key2MinValue);
-      return CreateIndex(rankselect1, rankselect2, container, ks, key1MinValue, key1MaxValue,
-                         key1_len, key2MinValue, key2MaxValue);
-    }
-    static TerarkIndex* CreateIndexWithStrCont(RankSelect1& rankselect1, RankSelect2& rankselect2,
-                                               FixedLenStrVec& keyVec, const KeyStat& ks, 
-                                               uint64_t key1MinValue, uint64_t key1MaxValue, size_t key1_len) {
-      StrDataCont container;
-      container.swap(keyVec);
-      return CreateIndex(rankselect1, rankselect2, container, ks, 
-                         key1MinValue, key1MaxValue, key1_len, 0, 0);
+      return CreateIndexWithStrCont(
+          rankselect1, rankselect2, keyVec, ks,
+          minValue, maxValue, key1_len);
     }
 
-    template<class DataCont>
-    static TerarkIndex* CreateIndex(RankSelect1& rankselect1, RankSelect2& rankselect2,
-                                    DataCont& container, const KeyStat& ks,
-                                    uint64_t key1MinValue, uint64_t key1MaxValue, size_t key1_len,
-                                    uint64_t key2MinValue, uint64_t key2MaxValue) {
-      const size_t kRS1Cnt = rankselect1.size(); // to accompany ks2cnt
-      const size_t kRS2Cnt = rankselect2.size(); // extra '0' append to rs2, included as well
-      AmazingCombinationT cob = figureCombination(rankselect1, rankselect2);
-      switch (cob) {
-      // -- all one & ...
-      case kAllOne_AllZero: {
-        rank_select_allone rs1(kRS1Cnt);
-        rank_select_allzero rs2(kRS2Cnt);
-        return new CompositeUintIndex<rank_select_allone, rank_select_allzero, DataCont>(
-          rs1, rs2, container, ks, key1MinValue, key1MaxValue, key1_len, key2MinValue, key2MaxValue);
-      }
-      case kAllOne_FewZero: {
-        rank_select_allone rs1(kRS1Cnt);
-        rank_select_fewzero<typename RankSelect2::index_t> rs2(kRS2Cnt);
-        rs2.build_from(rankselect2);
-        return new CompositeUintIndex<rank_select_allone, rank_select_fewzero<typename RankSelect2::index_t>, DataCont>(
-          rs1, rs2, container, ks, key1MinValue, key1MaxValue, key1_len, key2MinValue, key2MaxValue);
-      }
-      case kAllOne_FewOne: {
-        rank_select_allone rs1(kRS1Cnt);
-        rank_select_fewone<typename RankSelect2::index_t> rs2(kRS2Cnt);
-        rs2.build_from(rankselect2);
-        return new CompositeUintIndex<rank_select_allone, rank_select_fewone<typename RankSelect2::index_t>, DataCont>(
-          rs1, rs2, container, ks, key1MinValue, key1MaxValue, key1_len, key2MinValue, key2MaxValue);
-      }
-      case kAllOne_Normal: {
-        rank_select_allone rs1(kRS1Cnt);
-        return new CompositeUintIndex<rank_select_allone, RankSelect2, DataCont>(
-          rs1, rankselect2, container, ks, key1MinValue, key1MaxValue, key1_len, key2MinValue, key2MaxValue);
-      }
-      // -- few zero & ...
-      case kFewZero_AllZero: {
-        rank_select_fewzero<typename RankSelect1::index_t> rs1(kRS1Cnt);
-        rs1.build_from(rankselect1);
-        rank_select_allzero rs2(kRS2Cnt);
-        return new CompositeUintIndex<rank_select_fewzero<typename RankSelect1::index_t>, rank_select_allzero, DataCont>(
-          rs1, rs2, container, ks, key1MinValue, key1MaxValue, key1_len, key2MinValue, key2MaxValue);
-      }
-      case kFewZero_FewZero: {
-        rank_select_fewzero<typename RankSelect1::index_t> rs1(kRS1Cnt);
-        rs1.build_from(rankselect1);
-        rank_select_fewzero<typename RankSelect2::index_t> rs2(kRS2Cnt);
-        rs2.build_from(rankselect2);
-        return new CompositeUintIndex<rank_select_fewzero<typename RankSelect1::index_t>, 
-                                      rank_select_fewzero<typename RankSelect2::index_t>, DataCont>(
-          rs1, rs2, container, ks, key1MinValue, key1MaxValue, key1_len, key2MinValue, key2MaxValue);
-      }
-      case kFewZero_FewOne: {
-        rank_select_fewzero<typename RankSelect1::index_t> rs1(kRS1Cnt);
-        rs1.build_from(rankselect1);
-        rank_select_fewone<typename RankSelect2::index_t> rs2(kRS2Cnt);
-        rs2.build_from(rankselect2);
-        return new CompositeUintIndex<rank_select_fewzero<typename RankSelect1::index_t>,
-                                      rank_select_fewone<typename RankSelect2::index_t>, DataCont>(
-          rs1, rs2, container, ks, key1MinValue, key1MaxValue, key1_len, key2MinValue, key2MaxValue);
-      }
-      case kFewZero_Normal: {
-        rank_select_fewzero<typename RankSelect1::index_t> rs1(kRS1Cnt);
-        rs1.build_from(rankselect1);
-        return new CompositeUintIndex<rank_select_fewzero<typename RankSelect1::index_t>, RankSelect2, DataCont>(
-          rs1, rankselect2, container, ks, key1MinValue, key1MaxValue, key1_len, key2MinValue, key2MaxValue);
-      }
-      // few one & ...
-      case kFewOne_AllZero: {
-        rank_select_fewone<typename RankSelect1::index_t> rs1(kRS1Cnt);
-        rs1.build_from(rankselect1);
-        rank_select_allzero rs2(kRS2Cnt);
-        return new CompositeUintIndex<rank_select_fewone<typename RankSelect1::index_t>, rank_select_allzero, DataCont>(
-          rs1, rs2, container, ks, key1MinValue, key1MaxValue, key1_len, key2MinValue, key2MaxValue);
-      }
-      case kFewOne_FewZero: {
-        rank_select_fewone<typename RankSelect1::index_t> rs1(kRS1Cnt);
-        rs1.build_from(rankselect1);
-        rank_select_fewzero<typename RankSelect2::index_t> rs2(kRS2Cnt);
-        rs2.build_from(rankselect2);
-        return new CompositeUintIndex<rank_select_fewone<typename RankSelect1::index_t>,
-                                      rank_select_fewzero<typename RankSelect2::index_t>, DataCont>(
-          rs1, rs2, container, ks, key1MinValue, key1MaxValue, key1_len, key2MinValue, key2MaxValue);
-      }
-      case kFewOne_FewOne: {
-        rank_select_fewone<typename RankSelect1::index_t> rs1(kRS1Cnt);
-        rs1.build_from(rankselect1);
-        rank_select_fewone<typename RankSelect2::index_t> rs2(kRS2Cnt);
-        rs2.build_from(rankselect2);
-        return new CompositeUintIndex<rank_select_fewone<typename RankSelect1::index_t>,
-                                      rank_select_fewone<typename RankSelect2::index_t>, DataCont>(
-          rs1, rs2, container, ks, key1MinValue, key1MaxValue, key1_len, key2MinValue, key2MaxValue);
-      }
-      case kFewOne_Normal: {
-        rank_select_fewone<typename RankSelect1::index_t> rs1(kRS1Cnt);
-        rs1.build_from(rankselect1);
-        return new CompositeUintIndex<rank_select_fewone<typename RankSelect1::index_t>, RankSelect2, DataCont>(
-          rs1, rankselect2, container, ks, key1MinValue, key1MaxValue, key1_len, key2MinValue, key2MaxValue);
-      }
-      // normal & ...
-      case kNormal_AllZero: {
-        rank_select_allzero rs2(kRS2Cnt);
-        return new CompositeUintIndex<RankSelect1, rank_select_allzero, DataCont>(
-          rankselect1, rs2, container, ks, key1MinValue, key1MaxValue, key1_len, key2MinValue, key2MaxValue);
-      }
-      case kNormal_FewZero: {
-        rank_select_fewzero<typename RankSelect2::index_t> rs2(kRS2Cnt);
-        rs2.build_from(rankselect2);
-        return new CompositeUintIndex<RankSelect1, rank_select_fewzero<typename RankSelect2::index_t>, DataCont>(
-          rankselect1, rs2, container, ks, key1MinValue, key1MaxValue, key1_len, key2MinValue, key2MaxValue);
-      }
-      case kNormal_FewOne: {
-        rank_select_fewone<typename RankSelect2::index_t> rs2(kRS2Cnt);
-        rs2.build_from(rankselect2);
-        return new CompositeUintIndex<RankSelect1, rank_select_fewone<typename RankSelect2::index_t>, DataCont>(
-          rankselect1, rs2, container, ks, key1MinValue, key1MaxValue, key1_len, key2MinValue, key2MaxValue);
-      }
-      case kNormal_Normal: {
-        return new CompositeUintIndex<RankSelect1, RankSelect2, DataCont>(
-          rankselect1, rankselect2, container, ks, key1MinValue, key1MaxValue, key1_len, key2MinValue, key2MaxValue);
-      }
-      default:
-        assert(0);
-        return nullptr;
-      }
-    }
-
-  public:
-    unique_ptr<TerarkIndex> LoadMemory(fstring mem) const override {
-      return UniquePtrOf(loadImpl(mem, {}));
-    }
-    unique_ptr<TerarkIndex> LoadFile(fstring fpath) const override {
-      return UniquePtrOf(loadImpl({}, fpath));
-    }
-    size_t MemSizeForBuild(const KeyStat& ks) const override {
-      assert(ks.minKeyLen == ks.maxKeyLen);
-      size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
-      size_t key1_len = 0;
-      bool check = SeekCostEffectiveIndexLen(ks, key1_len);
-      assert(check && ks.maxKeyLen > cplen + key1_len);
-      TERARK_UNUSED_VAR(check);
-      uint64_t minValue = Read1stKey(ks.minKey, cplen, key1_len);
-      uint64_t maxValue = Read1stKey(ks.maxKey, cplen, key1_len);
-      if (minValue > maxValue) {
-        std::swap(minValue, maxValue);
-      }
-      uint64_t diff = maxValue - minValue + 1;
-      size_t key2_len = ks.minKey.size() - cplen - key1_len;
-      // maximum
-      size_t rankselect_1st_sz = size_t(std::ceil(diff * 1.25 / 8));
-      size_t rankselect_2nd_sz = size_t(std::ceil(ks.numKeys * 1.25 / 8));
-      size_t sum_key2_sz = std::ceil(ks.numKeys * key2_len);
-      return rankselect_1st_sz + rankselect_2nd_sz + sum_key2_sz;
-    }
-  protected:
-    TerarkIndex* loadImpl(fstring mem, fstring fpath) const {
-      auto ptr = UniquePtrOf(
-        new CompositeUintIndex<RankSelect1, RankSelect2, Key2DataContainer>());
+    void loadImplBase(fstring mem, fstring fpath, CompositeUintIndexBase* ptr)
+    const {
       ptr->isUserMemory_ = false;
       ptr->isBuilding_ = false;
       if (mem.data() == nullptr) {
@@ -1457,9 +1257,9 @@ public:
         ptr->isUserMemory_ = true;
       }
       // make sure header is valid
-      verifyHeader(mem);
+      verifyBaseHeader(mem);
       // construct composite index
-      const FileHeader* header = (const FileHeader*)mem.data();
+      const MyBaseFileHeader* header = (const MyBaseFileHeader*)mem.data();
       ptr->header_ = header;
       ptr->minValue_ = header->min_value;
       ptr->maxValue_ = header->max_value;
@@ -1468,9 +1268,287 @@ public:
       ptr->key1_len_ = header->key1_fixed_len;
       ptr->key2_len_ = header->key2_fixed_len;
       if (header->common_prefix_length > 0) {
-        ptr->commonPrefix_.risk_set_data((char*)mem.data() + header->header_size,
+        ptr->commonPrefix_.risk_set_data((byte_t*)mem.data() + header->header_size,
                                          header->common_prefix_length);
       }
+    }
+  };
+  class MyBaseIterator : public TerarkIndex::Iterator {
+  protected:
+    const CompositeUintIndexBase& index_;
+    size_t rankselect1_idx_; // used to track & decode index1 value
+    size_t access_hint_;
+    valvec<byte_t> buffer_;
+
+    MyBaseIterator(const CompositeUintIndexBase& index) : index_(index) {
+      rankselect1_idx_ = size_t(-1);
+      m_id = size_t(-1);
+      buffer_.resize_no_init(index.KeyLen());
+      memcpy(buffer_.data(), index.commonPrefix_.data(), index.commonPrefix_.size());
+      access_hint_ = size_t(-1);
+    }
+    void UpdateBuffer() {
+      // key = commonprefix + key1s + key2
+      // assign key1
+      size_t offset = index_.commonPrefix_.size();
+      auto len1 = index_.key1_len_;
+      auto key1 = rankselect1_idx_ + index_.minValue_;
+      SaveAsBigEndianUint64(buffer_.data() + offset, len1, key1);
+      UpdateBufferKey2(offset + len1);
+    }
+    virtual void UpdateBufferKey2(size_t offset) = 0;
+    size_t DictRank() const override {
+      assert(m_id != size_t(-1));
+      return m_id;
+    }
+    fstring key() const override {
+      assert(m_id != size_t(-1));
+      return buffer_;
+    }
+    bool SeekToFirst() override {
+      rankselect1_idx_ = 0;
+      m_id = 0;
+      UpdateBuffer();
+      return true;
+    }
+    int CommonSeek(fstring target, uint64_t* pKey1, fstring* pKey2) {
+      size_t cplen = target.commonPrefixLen(index_.commonPrefix_);
+      if (cplen != index_.commonPrefix_.size()) {
+        assert(target.size() >= cplen);
+        assert(target.size() == cplen ||
+            byte_t(target[cplen]) != byte_t(index_.commonPrefix_[cplen]));
+        if (target.size() == cplen ||
+            byte_t(target[cplen]) < byte_t(index_.commonPrefix_[cplen])) {
+          return SeekToFirst();
+        } else {
+          m_id = size_t(-1);
+          return false;
+        }
+      }
+      uint64_t key1 = 0;
+      fstring  key2;
+      if (target.size() <= cplen + index_.key1_len_) {
+        fstring sub = target.substr(cplen);
+        byte_t targetBuffer[8] = { 0 };
+        /*
+         * do not think hard about int, think about string instead.
+         * assume key1_len is 6 byte len like 'abcdef', target without
+         * commpref is 'b', u should compare 'b' with 'a' instead of 'f'.
+         * that's why assign sub starting in the middle instead at tail.
+         */
+        memcpy(targetBuffer + (8 - index_.key1_len_), sub.data(), sub.size());
+        *pKey1 = key1 = Read1stKey(targetBuffer, 0, 8);
+        *pKey2 = key2 = fstring(); // empty
+      } else {
+        *pKey1 = key1 = Read1stKey(target, cplen, index_.key1_len_);
+        *pKey2 = key2 = target.substr(cplen + index_.key1_len_);
+      }
+      if (key1 > index_.maxValue_) {
+        m_id = size_t(-1);
+        return false;
+      } else if (key1 < index_.minValue_) {
+        return SeekToFirst();
+      } else
+        return 2;
+    }
+
+  };
+
+  size_t KeyLen() const {
+    return commonPrefix_.size() + key1_len_ + key2_len_;
+  }
+  const char* Name() const override {
+    return header_->class_name;
+  }
+  fstring Memory() const override {
+    return fstring((const char*)header_, (ptrdiff_t)header_->file_size);
+  }
+  bool NeedsReorder() const override {
+    return false;
+  }
+  void GetOrderMap(UintVecMin0& newToOld) const override {
+    assert(false);
+  }
+  void BuildCache(double cacheRatio) override {
+    //do nothing
+  }
+
+  const MyBaseFileHeader* header_;
+  MmapWholeFile     file_;
+  valvec<byte_t>    commonPrefix_;
+  uint64_t          minValue_;
+  uint64_t          maxValue_;
+  uint64_t          key2_min_value_;
+  uint64_t          key2_max_value_;
+  uint32_t          key1_len_;
+  uint32_t          key2_len_;
+  bool              isUserMemory_;
+  bool              isBuilding_;
+};
+const char* CompositeUintIndexBase::index_name = "CompositeIndex";
+
+/*
+ * For simplicity, let's take composite index => index1:index2. Then following
+ * compositeindexes like,
+ *   4:6, 4:7, 4:8, 7:19, 7:20, 8:3
+ * index1: {4, 7}, use bitmap (also UintIndex's form) to respresent
+ *   4(1), 5(0), 6(0), 7(1), 8(1)
+ * index1:index2: use bitmap to respresent 4:6(0), 4:7(1), 4:8(1), 7:19(0), 7:20(1), 8:3(0)
+ * to search 7:20, use bitmap1 to rank1(7) = 2, then use bitmap2 to select0(2) = position-3,
+ * use bitmap2 to select0(3) = position-5. That is, we should search within [3, 5).
+ * iter [3 to 5), 7:20 is found, done.
+ */
+template<class RankSelect1, class RankSelect2, class Key2DataContainer>
+class CompositeUintIndex : public CompositeUintIndexBase {
+public:
+  struct FileHeader : MyBaseFileHeader {
+    FileHeader(size_t file_size)
+      : MyBaseFileHeader(file_size, typeid(CompositeUintIndex))
+    {}
+  };
+public:
+  class CompositeUintIndexIterator : public MyBaseIterator {
+  public:
+    CompositeUintIndexIterator(const CompositeUintIndex& index)
+      : MyBaseIterator(index) {}
+    void UpdateBufferKey2(size_t offset) override {
+      auto& index_ = static_cast<const CompositeUintIndex&>(MyBaseIterator::index_);
+      index_.key2_data_.copy_to(m_id, buffer_.data() + offset);
+    }
+
+    bool SeekToLast() override {
+      auto& index_ = static_cast<const CompositeUintIndex&>(MyBaseIterator::index_);
+      rankselect1_idx_ = index_.rankselect1_.size() - 1;
+      m_id = index_.key2_data_.size() - 1;
+      UpdateBuffer();
+      return true;
+    }
+    bool Seek(fstring target) override {
+      auto& index_ = static_cast<const CompositeUintIndex&>(MyBaseIterator::index_);
+      uint64_t key1 = 0;
+      fstring  key2;
+      int ret = CommonSeek(target, &key1, &key2);
+      if (ret < 2) {
+        return ret ? true : false;
+      }
+      // find the corresponding bit within 2ndRS
+      uint64_t order, pos0, cnt;
+      rankselect1_idx_ = key1 - index_.minValue_;
+      if (index_.rankselect1_[rankselect1_idx_]) {
+        // find within this index
+        order = index_.rankselect1_.rank1(rankselect1_idx_);
+        pos0 = index_.rankselect2_.select0(order);
+        if (pos0 == index_.key2_data_.size() - 1) { // last elem
+          m_id = (index_.key2_data_.compare(pos0, key2) >= 0) ? pos0 : size_t(-1);
+          goto out;
+        } else {
+          cnt = index_.rankselect2_.one_seq_len(pos0 + 1) + 1;
+          m_id = index_.Locate(index_.key2_data_, pos0, cnt, key2);
+          if (m_id != size_t(-1)) {
+            goto out;
+          } else if (pos0 + cnt == index_.key2_data_.size()) {
+            goto out;
+          } else {
+            // try next offset
+            rankselect1_idx_++;
+          }
+        }
+      }
+      // no such index, use the lower_bound form
+      cnt = index_.rankselect1_.zero_seq_len(rankselect1_idx_);
+      if (rankselect1_idx_ + cnt >= index_.rankselect1_.size()) {
+        m_id = size_t(-1);
+        return false;
+      }
+      rankselect1_idx_ += cnt;
+      order = index_.rankselect1_.rank1(rankselect1_idx_);
+      m_id = index_.rankselect2_.select0(order);
+    out:
+      if (m_id == size_t(-1)) {
+        return false;
+      }
+      UpdateBuffer();
+      return true;
+    }
+
+    bool Next() override {
+      auto& index_ = static_cast<const CompositeUintIndex&>(MyBaseIterator::index_);
+      assert(m_id != size_t(-1));
+      assert(index_.rankselect1_[rankselect1_idx_] != 0);
+      if (terark_unlikely(m_id + 1 == index_.key2_data_.size())) {
+        m_id = size_t(-1);
+        return false;
+      } else {
+        if (Is1stKeyDiff(m_id + 1)) {
+          assert(rankselect1_idx_ + 1 <  index_.rankselect1_.size());
+          //uint64_t cnt = index_.rankselect1_.zero_seq_len(rankselect1_idx_ + 1);
+          uint64_t cnt = fast_zero_seq_len(index_.rankselect1_, rankselect1_idx_ + 1, access_hint_);
+          rankselect1_idx_ += cnt + 1;
+          assert(rankselect1_idx_ < index_.rankselect1_.size());
+        }
+        ++m_id;
+        UpdateBuffer();
+        return true;
+      }
+    }
+    bool Prev() override {
+      auto& index_ = static_cast<const CompositeUintIndex&>(MyBaseIterator::index_);
+      assert(m_id != size_t(-1));
+      assert(index_.rankselect1_[rankselect1_idx_] != 0);
+      if (terark_unlikely(m_id == 0)) {
+        m_id = size_t(-1);
+        return false;
+      } else {
+        if (Is1stKeyDiff(m_id)) {
+          /*
+           * zero_seq_ has [a, b) range, hence next() need (pos_ + 1), whereas
+           * prev() just called with (pos_) is enough
+           * case1: 1 0 1, ... 
+           * case2: 1 1, ...
+           */
+          assert(rankselect1_idx_ > 0);
+          //uint64_t cnt = index_.rankselect1_.zero_seq_revlen(rankselect1_idx_);
+          uint64_t cnt = fast_zero_seq_revlen(index_.rankselect1_, rankselect1_idx_, access_hint_);
+          assert(rankselect1_idx_ >= cnt + 1);
+          rankselect1_idx_ -= (cnt + 1);
+        }
+        --m_id;
+        UpdateBuffer();
+        return true;
+      }
+    }
+
+  protected:
+    //use 2nd index bitmap to check if 1st index changed
+    bool Is1stKeyDiff(size_t curr_id) {
+      auto& index_ = static_cast<const CompositeUintIndex&>(MyBaseIterator::index_);
+      return index_.rankselect2_.is0(curr_id);
+    }
+  };
+
+public:
+  class MyFactory : public MyBaseFactory {
+  public:
+    // no option.keyPrefixLen
+    TerarkIndex* Build(NativeDataInput<InputBuffer>& reader,
+                       const TerarkZipTableOptions& tzopt,
+                       const KeyStat& ks) const override {
+      return BuildImpl(reader, tzopt, ks, (RankSelect1*)(NULL), (RankSelect2*)(NULL));
+    }
+  public:
+    unique_ptr<TerarkIndex> LoadMemory(fstring mem) const override {
+      return UniquePtrOf(loadImpl(mem, {}));
+    }
+    unique_ptr<TerarkIndex> LoadFile(fstring fpath) const override {
+      return UniquePtrOf(loadImpl({}, fpath));
+    }
+  protected:
+    TerarkIndex* loadImpl(fstring mem, fstring fpath) const {
+      auto ptr = UniquePtrOf(
+        new CompositeUintIndex<RankSelect1, RankSelect2, Key2DataContainer>());
+      const FileHeader* header = (const FileHeader*)mem.data();
+      loadImplBase(mem, fpath, ptr.get());
+      assert(VerifyClassName<CompositeUintIndex>(header->class_name));
       size_t offset = header->header_size +
         align_up(header->common_prefix_length, 8);
       ptr->rankselect1_.risk_mmap_from((unsigned char*)mem.data() + offset,
@@ -1496,20 +1574,6 @@ public:
                              header->key2_data_mem_size / header->key2_fixed_len);
       }
       return ptr.release();
-    }
-    bool verifyHeader(fstring mem) const {
-      const FileHeader* header = (const FileHeader*)mem.data();
-      if (mem.size() < sizeof(FileHeader)
-          || header->magic_len != strlen(index_name)
-          || strcmp(header->magic, index_name) != 0
-          || header->header_size != sizeof(FileHeader)
-          || header->version != 1
-          || header->file_size != mem.size()
-        ) {
-        throw std::invalid_argument("CompositeUintIndex::Load(): Bad file header");
-      }
-      assert(VerifyClassName<CompositeUintIndex>(header->class_name));
-      return true;
     }
   };
 
@@ -1567,9 +1631,6 @@ public:
       commonPrefix_.risk_release_ownership();
     }
   }
-  const char* Name() const override {
-    return header_->class_name;
-  }
   void SaveMmap(std::function<void(const void *, size_t)> write) const override {
     write(header_, sizeof *header_);
     if (!commonPrefix_.empty()) {
@@ -1612,33 +1673,11 @@ public:
   size_t TotalKeySize() const override final {
     return (commonPrefix_.size() + key1_len_ + key2_len_) * key2_data_.size();
   }
-  fstring Memory() const override {
-    return fstring((const char*)header_, (ptrdiff_t)header_->file_size);
-  }
   Iterator* NewIterator() const override {
     return new CompositeUintIndexIterator(*this);
   }
-  bool NeedsReorder() const override {
-    return false;
-  }
-  void GetOrderMap(UintVecMin0& newToOld) const override {
-    assert(false);
-  }
-  void BuildCache(double cacheRatio) override {
-    //do nothing
-  }
 
 public:
-  // handlers
-  static uint64_t Read1stKey(const valvec<byte_t>& key, size_t cplen, size_t key1_len) {
-    return ReadBigEndianUint64(key.begin() + cplen, key1_len);
-  }
-  static uint64_t Read1stKey(fstring key, size_t cplen, size_t key1_len) {
-    return ReadBigEndianUint64((const byte_t*)key.data() + cplen, key1_len);
-  }
-  static uint64_t Read1stKey(const byte_t* key, size_t cplen, size_t key1_len) {
-    return ReadBigEndianUint64(key + cplen, key1_len);
-  }
   size_t Locate(const Key2DataContainer& arr,
                 size_t start, size_t cnt, fstring target) const {
     size_t lo = start, hi = start + cnt;
@@ -1646,26 +1685,143 @@ public:
     return (pos < hi) ? pos : size_t(-1);
   }
 
-  size_t KeyLen() const {
-    return commonPrefix_.size() + key1_len_ + key2_len_;
-  }
-
 protected:
-  const FileHeader* header_;
-  MmapWholeFile     file_;
-  valvec<byte_t>    commonPrefix_;
   RankSelect1       rankselect1_;
   RankSelect2       rankselect2_;
   Key2DataContainer key2_data_;
-  uint64_t          minValue_;
-  uint64_t          maxValue_;
-  uint64_t          key2_min_value_;
-  uint64_t          key2_max_value_;
-  uint32_t          key1_len_;
-  uint32_t          key2_len_;
-  bool              isUserMemory_;
-  bool              isBuilding_;
 };
+
+template<class RankSelect1, class RankSelect2, class DataCont>
+TerarkIndex*
+CompositeUintIndexBase::MyBaseFactory::CreateIndex(
+    RankSelect1& rankselect1,
+    RankSelect2& rankselect2,
+    DataCont& container,
+    const KeyStat& ks,
+    uint64_t key1MinValue, uint64_t key1MaxValue, size_t key1_len,
+    uint64_t key2MinValue, uint64_t key2MaxValue)
+{
+  const size_t kRS1Cnt = rankselect1.size(); // to accompany ks2cnt
+  const size_t kRS2Cnt = rankselect2.size(); // extra '0' append to rs2, included as well
+  AmazingCombinationT cob = figureCombination(rankselect1, rankselect2);
+  switch (cob) {
+  // -- all one & ...
+  case kAllOne_AllZero: {
+    rank_select_allone rs1(kRS1Cnt);
+    rank_select_allzero rs2(kRS2Cnt);
+    return new CompositeUintIndex<rank_select_allone, rank_select_allzero, DataCont>(
+      rs1, rs2, container, ks, key1MinValue, key1MaxValue, key1_len, key2MinValue, key2MaxValue);
+  }
+  case kAllOne_FewZero: {
+    rank_select_allone rs1(kRS1Cnt);
+    rank_select_fewzero<typename RankSelect2::index_t> rs2(kRS2Cnt);
+    rs2.build_from(rankselect2);
+    return new CompositeUintIndex<rank_select_allone, rank_select_fewzero<typename RankSelect2::index_t>, DataCont>(
+      rs1, rs2, container, ks, key1MinValue, key1MaxValue, key1_len, key2MinValue, key2MaxValue);
+  }
+  case kAllOne_FewOne: {
+    rank_select_allone rs1(kRS1Cnt);
+    rank_select_fewone<typename RankSelect2::index_t> rs2(kRS2Cnt);
+    rs2.build_from(rankselect2);
+    return new CompositeUintIndex<rank_select_allone, rank_select_fewone<typename RankSelect2::index_t>, DataCont>(
+      rs1, rs2, container, ks, key1MinValue, key1MaxValue, key1_len, key2MinValue, key2MaxValue);
+  }
+  case kAllOne_Normal: {
+    rank_select_allone rs1(kRS1Cnt);
+    return new CompositeUintIndex<rank_select_allone, RankSelect2, DataCont>(
+      rs1, rankselect2, container, ks, key1MinValue, key1MaxValue, key1_len, key2MinValue, key2MaxValue);
+  }
+  // -- few zero & ...
+  case kFewZero_AllZero: {
+    rank_select_fewzero<typename RankSelect1::index_t> rs1(kRS1Cnt);
+    rs1.build_from(rankselect1);
+    rank_select_allzero rs2(kRS2Cnt);
+    return new CompositeUintIndex<rank_select_fewzero<typename RankSelect1::index_t>, rank_select_allzero, DataCont>(
+      rs1, rs2, container, ks, key1MinValue, key1MaxValue, key1_len, key2MinValue, key2MaxValue);
+  }
+  case kFewZero_FewZero: {
+    rank_select_fewzero<typename RankSelect1::index_t> rs1(kRS1Cnt);
+    rs1.build_from(rankselect1);
+    rank_select_fewzero<typename RankSelect2::index_t> rs2(kRS2Cnt);
+    rs2.build_from(rankselect2);
+    return new CompositeUintIndex<rank_select_fewzero<typename RankSelect1::index_t>,
+                                  rank_select_fewzero<typename RankSelect2::index_t>, DataCont>(
+      rs1, rs2, container, ks, key1MinValue, key1MaxValue, key1_len, key2MinValue, key2MaxValue);
+  }
+  case kFewZero_FewOne: {
+    rank_select_fewzero<typename RankSelect1::index_t> rs1(kRS1Cnt);
+    rs1.build_from(rankselect1);
+    rank_select_fewone<typename RankSelect2::index_t> rs2(kRS2Cnt);
+    rs2.build_from(rankselect2);
+    return new CompositeUintIndex<rank_select_fewzero<typename RankSelect1::index_t>,
+                                  rank_select_fewone<typename RankSelect2::index_t>, DataCont>(
+      rs1, rs2, container, ks, key1MinValue, key1MaxValue, key1_len, key2MinValue, key2MaxValue);
+  }
+  case kFewZero_Normal: {
+    rank_select_fewzero<typename RankSelect1::index_t> rs1(kRS1Cnt);
+    rs1.build_from(rankselect1);
+    return new CompositeUintIndex<rank_select_fewzero<typename RankSelect1::index_t>, RankSelect2, DataCont>(
+      rs1, rankselect2, container, ks, key1MinValue, key1MaxValue, key1_len, key2MinValue, key2MaxValue);
+  }
+  // few one & ...
+  case kFewOne_AllZero: {
+    rank_select_fewone<typename RankSelect1::index_t> rs1(kRS1Cnt);
+    rs1.build_from(rankselect1);
+    rank_select_allzero rs2(kRS2Cnt);
+    return new CompositeUintIndex<rank_select_fewone<typename RankSelect1::index_t>, rank_select_allzero, DataCont>(
+      rs1, rs2, container, ks, key1MinValue, key1MaxValue, key1_len, key2MinValue, key2MaxValue);
+  }
+  case kFewOne_FewZero: {
+    rank_select_fewone<typename RankSelect1::index_t> rs1(kRS1Cnt);
+    rs1.build_from(rankselect1);
+    rank_select_fewzero<typename RankSelect2::index_t> rs2(kRS2Cnt);
+    rs2.build_from(rankselect2);
+    return new CompositeUintIndex<rank_select_fewone<typename RankSelect1::index_t>,
+                                  rank_select_fewzero<typename RankSelect2::index_t>, DataCont>(
+      rs1, rs2, container, ks, key1MinValue, key1MaxValue, key1_len, key2MinValue, key2MaxValue);
+  }
+  case kFewOne_FewOne: {
+    rank_select_fewone<typename RankSelect1::index_t> rs1(kRS1Cnt);
+    rs1.build_from(rankselect1);
+    rank_select_fewone<typename RankSelect2::index_t> rs2(kRS2Cnt);
+    rs2.build_from(rankselect2);
+    return new CompositeUintIndex<rank_select_fewone<typename RankSelect1::index_t>,
+                                  rank_select_fewone<typename RankSelect2::index_t>, DataCont>(
+      rs1, rs2, container, ks, key1MinValue, key1MaxValue, key1_len, key2MinValue, key2MaxValue);
+  }
+  case kFewOne_Normal: {
+    rank_select_fewone<typename RankSelect1::index_t> rs1(kRS1Cnt);
+    rs1.build_from(rankselect1);
+    return new CompositeUintIndex<rank_select_fewone<typename RankSelect1::index_t>, RankSelect2, DataCont>(
+      rs1, rankselect2, container, ks, key1MinValue, key1MaxValue, key1_len, key2MinValue, key2MaxValue);
+  }
+  // normal & ...
+  case kNormal_AllZero: {
+    rank_select_allzero rs2(kRS2Cnt);
+    return new CompositeUintIndex<RankSelect1, rank_select_allzero, DataCont>(
+      rankselect1, rs2, container, ks, key1MinValue, key1MaxValue, key1_len, key2MinValue, key2MaxValue);
+  }
+  case kNormal_FewZero: {
+    rank_select_fewzero<typename RankSelect2::index_t> rs2(kRS2Cnt);
+    rs2.build_from(rankselect2);
+    return new CompositeUintIndex<RankSelect1, rank_select_fewzero<typename RankSelect2::index_t>, DataCont>(
+      rankselect1, rs2, container, ks, key1MinValue, key1MaxValue, key1_len, key2MinValue, key2MaxValue);
+  }
+  case kNormal_FewOne: {
+    rank_select_fewone<typename RankSelect2::index_t> rs2(kRS2Cnt);
+    rs2.build_from(rankselect2);
+    return new CompositeUintIndex<RankSelect1, rank_select_fewone<typename RankSelect2::index_t>, DataCont>(
+      rankselect1, rs2, container, ks, key1MinValue, key1MaxValue, key1_len, key2MinValue, key2MaxValue);
+  }
+  case kNormal_Normal: {
+    return new CompositeUintIndex<RankSelect1, RankSelect2, DataCont>(
+      rankselect1, rankselect2, container, ks, key1MinValue, key1MaxValue, key1_len, key2MinValue, key2MaxValue);
+  }
+  default:
+    assert(0);
+    return nullptr;
+  }
+}
 
 struct UintIndexBase : public TerarkIndex{
   static const char* index_name;
@@ -2049,12 +2205,8 @@ TerarkIndexRegisterNLT(Mixed_XL_256_32_FL);
 
 #if defined(TerocksPrivateCode)
 
-typedef rank_select_fewzero<uint32_t> rs_fewzero_32;
-typedef rank_select_fewzero<uint64_t> rs_fewzero_64;
-typedef rank_select_fewone<uint32_t> rs_fewone_32;
-typedef rank_select_fewone<uint64_t> rs_fewone_64;
 typedef CompositeKeyDataContainer<SortedUintVec>  CKSortedUintDataCont;
-typedef CompositeKeyDataContainer<UintVecMin0>    CKMin0DataCont;
+typedef CompositeKeyDataContainer<BigUintVecMin0> CKMin0DataCont;
 typedef CompositeKeyDataContainer<FixedLenStrVec> CKStrDataCont;
 
 // ---- CKSortedUintDataCont
