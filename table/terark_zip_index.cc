@@ -870,9 +870,9 @@ public:
     CompositeUintIndexIterator(const CompositeUintIndex& index) : index_(index) {
       rankselect1_idx_ = size_t(-1);
       m_id = size_t(-1);
-      buffer_.resize_no_init(index_.commonPrefix_.size() +
-        index_.key1_len_ + index_.key2_len_);
+      buffer_.resize_no_init(index_.KeyLen());
       memcpy(buffer_.data(), index_.commonPrefix_.data(), index_.commonPrefix_.size());
+      access_hint_ = size_t(-1);
     }
     virtual ~CompositeUintIndexIterator() {}
 
@@ -1043,7 +1043,7 @@ public:
     valvec<byte_t> buffer_;
     const CompositeUintIndex& index_;
   };
-    
+
 public:
   class MyFactory : public TerarkIndex::Factory {
   public:
@@ -1646,10 +1646,14 @@ public:
     return (pos < hi) ? pos : size_t(-1);
   }
 
+  size_t KeyLen() const {
+    return commonPrefix_.size() + key1_len_ + key2_len_;
+  }
+
 protected:
   const FileHeader* header_;
   MmapWholeFile     file_;
-  valvec<char>      commonPrefix_;
+  valvec<byte_t>    commonPrefix_;
   RankSelect1       rankselect1_;
   RankSelect2       rankselect2_;
   Key2DataContainer key2_data_;
