@@ -149,7 +149,7 @@ void test_il256_il256_str(DataStored dtype) {
   // build index
   FileStream fp(key_path, "rb");
   NativeDataInput<InputBuffer> tempKeyFileReader(&fp);
-  auto factory = rocksdb::TerarkIndex::GetFactory("CompositeUintIndex_IL_256_32_IL_256_32_Uint");
+  auto factory = rocksdb::TerarkIndex::GetFactory("CompositeUintIndex_IL_256_32_IL_256_32_BigUint");
   {
     size_t memsz = factory->MemSizeForBuild(stat);
     assert(memsz < stat.sumKeyLen * 0.8);
@@ -371,7 +371,7 @@ void test_allone_il256_str(DataStored dtype) {
   // build index
   FileStream fp(key_path, "rb");
   NativeDataInput<InputBuffer> tempKeyFileReader(&fp);
-  auto factory = rocksdb::TerarkIndex::GetFactory("CompositeUintIndex_IL_256_32_IL_256_32_Uint");
+  auto factory = rocksdb::TerarkIndex::GetFactory("CompositeUintIndex_IL_256_32_IL_256_32_BigUint");
   {
     size_t memsz = factory->MemSizeForBuild(stat);
     assert(memsz < stat.sumKeyLen * 0.8);
@@ -546,7 +546,7 @@ void test_allone_allzero_str(DataStored dtype) {
   // build index
   FileStream fp(key_path, "rb");
   NativeDataInput<InputBuffer> tempKeyFileReader(&fp);
-  auto factory = rocksdb::TerarkIndex::GetFactory("CompositeUintIndex_IL_256_32_IL_256_32_Uint");
+  auto factory = rocksdb::TerarkIndex::GetFactory("CompositeUintIndex_IL_256_32_IL_256_32_BigUint");
   {
     size_t memsz = factory->MemSizeForBuild(stat);
     assert(memsz < stat.sumKeyLen * 0.8);
@@ -695,7 +695,7 @@ void test_data_seek_short_target_str() {
   // build index
   FileStream fp(key_path, "rb");
   NativeDataInput<InputBuffer> tempKeyFileReader(&fp);
-  auto factory = rocksdb::TerarkIndex::GetFactory("CompositeUintIndex_IL_256_32_IL_256_32_Uint");
+  auto factory = rocksdb::TerarkIndex::GetFactory("CompositeUintIndex_IL_256_32_IL_256_32_BigUint");
   {
     size_t memsz = factory->MemSizeForBuild(stat);
     assert(memsz < stat.sumKeyLen * 0.8);
