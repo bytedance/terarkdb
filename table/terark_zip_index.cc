@@ -1246,7 +1246,7 @@ struct CompositeUintIndexBase : public TerarkIndex {
           minValue, maxValue, key1_len);
     }
 
-    void loadImplBase(fstring mem, fstring fpath, CompositeUintIndexBase* ptr)
+    void loadImplBase(fstring& mem, fstring fpath, CompositeUintIndexBase* ptr)
     const {
       ptr->isUserMemory_ = false;
       ptr->isBuilding_ = false;
@@ -1546,8 +1546,8 @@ public:
     TerarkIndex* loadImpl(fstring mem, fstring fpath) const {
       auto ptr = UniquePtrOf(
         new CompositeUintIndex<RankSelect1, RankSelect2, Key2DataContainer>());
-      const FileHeader* header = (const FileHeader*)mem.data();
       loadImplBase(mem, fpath, ptr.get());
+      const MyBaseFileHeader* header = (const MyBaseFileHeader*)mem.data();
       assert(VerifyClassName<CompositeUintIndex>(header->class_name));
       size_t offset = header->header_size +
         align_up(header->common_prefix_length, 8);
