@@ -8,6 +8,7 @@
 #include <terark/io/StreamBuffer.hpp>
 #include <terark/util/fstrvec.hpp>
 #include <boost/intrusive_ptr.hpp>
+#include <boost/noncopyable.hpp>
 #include <memory>
 
 namespace rocksdb {
