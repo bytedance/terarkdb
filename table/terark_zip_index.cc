@@ -45,18 +45,17 @@ void Padzero(const Writer& write, size_t offset) {
 }
 
 // 0 < cnt0 and cnt0 < 0.01 * total
-bool IsFewZero(size_t total, size_t cnt0) {
+inline bool IsFewZero(size_t total, size_t cnt0) {
   assert(total > 0);
   return (0 < cnt0) && 
     (cnt0 <= (double)total * 0.01);
 }
-bool IsFewOne(size_t total, size_t cnt1) {
+inline bool IsFewOne(size_t total, size_t cnt1) {
   assert(total > 0);
   return (0 < cnt1) &&
     ((double)total * 0.005 < cnt1) &&
     (cnt1 <= (double)total * 0.01);
 }
-
 
 struct TerarkIndexHeader {
   uint8_t   magic_len;
