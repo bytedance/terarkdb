@@ -36,11 +36,11 @@ bool VerifyClassName(fstring class_name) {
                   g_TerarkIndexFactroy.val(head_i) == g_TerarkIndexFactroy.val(self_i);
 }
 
-void AppendExtraZero(std::function<void(const void *, size_t)> write, size_t len) {
-  assert(len <= 8);
-  static const char zeros[8] = { 0 };
-  if (0 < len && len < 8) {
-    write(zeros, len);
+template<size_t Align, class Writer>
+void Padzero(const Writer& write, size_t offset) {
+  static const char zeros[Align] = { 0 };
+  if (offset % Align) {
+    write(zeros, Align - offset % Align);
   }
 }
 
@@ -1591,8 +1591,8 @@ public:
     size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
     // save meta into header
     FileHeader* header = new FileHeader(
-      rankselect1.mem_size() + 
-      rankselect2.mem_size() + 
+      rankselect1.mem_size() +
+      rankselect2.mem_size() +
       align_up(key2Container.mem_size(), 8));
     header->key1_min_value = minValue;
     header->key1_max_value = maxValue;
@@ -1638,12 +1638,12 @@ public:
     write(header_, sizeof *header_);
     if (!commonPrefix_.empty()) {
       write(commonPrefix_.data(), commonPrefix_.size());
-      AppendExtraZero(write, 8 - commonPrefix_.size() % 8);
+      Padzero<8>(write, commonPrefix_.size());
     }
     write(rankselect1_.data(), rankselect1_.mem_size());
     write(rankselect2_.data(), rankselect2_.mem_size());
     write(key2_data_.data(), key2_data_.mem_size());
-    AppendExtraZero(write, 8 - key2_data_.mem_size() % 8);
+    Padzero<8>(write, key2_data_.mem_size());
   }
   size_t Find(fstring key) const override {
     size_t cplen = commonPrefix_.size();
@@ -2120,7 +2120,7 @@ public:
     write(header_, sizeof *header_);
     if (!commonPrefix_.empty()) {
       write(commonPrefix_.data(), commonPrefix_.size());
-      AppendExtraZero(write, 8 - commonPrefix_.size() % 8);
+      Padzero<8>(write, commonPrefix_.size());
     }
     write(indexSeq_.data(), indexSeq_.mem_size());
   }

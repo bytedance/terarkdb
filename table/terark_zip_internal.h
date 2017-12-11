@@ -7,9 +7,6 @@
 
 #pragma once
 
-#ifndef TERARK_ZIP_INTERNAL_H_
-#define TERARK_ZIP_INTERNAL_H_
-
 // project headers
 #include "terark_zip_table.h"
 // std headers
@@ -17,6 +14,7 @@
 #include <atomic>
 // boost headers
 #include <boost/intrusive_ptr.hpp>
+#include <boost/noncopyable.hpp>
 // rocksdb headers
 #include <rocksdb/slice.h>
 #include <rocksdb/env.h>
@@ -168,7 +166,7 @@ enum class ZipValueType : unsigned char {
 //const size_t kZipValueTypeBits = 2;
 
 struct ZipValueMultiValue {
-  // TODO: use offset[0] as num, and do not store offsets[num]
+  // use offset[0] as num, and do not store offsets[num]
   // when unzip, reserve num+1 cells, set offsets[0] to 0,
   // and set offsets[num] to length of value pack
   //	uint32_t num;
@@ -285,5 +283,3 @@ public:
 
 
 }  // namespace rocksdb
-
-#endif /* TERARK_ZIP_INTERNAL_H_ */
