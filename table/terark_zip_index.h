@@ -22,7 +22,7 @@ using std::unique_ptr;
 
 struct TerarkZipTableOptions;
 class TempFileDeleteOnClose;
-
+class ImmutableCFOptions;
 class TerarkIndex : boost::noncopyable {
 public:
   class Iterator : boost::noncopyable {
@@ -55,7 +55,8 @@ public:
     virtual ~Factory();
     virtual TerarkIndex* Build(NativeDataInput<InputBuffer>& tmpKeyFileReader,
                                const TerarkZipTableOptions& tzopt,
-                               const KeyStat&) const = 0;
+                               const KeyStat&,
+                               const ImmutableCFOptions* ioption = nullptr) const = 0;
     virtual unique_ptr<TerarkIndex> LoadMemory(fstring mem) const = 0;
     virtual unique_ptr<TerarkIndex> LoadFile(fstring fpath) const = 0;
     virtual size_t MemSizeForBuild(const KeyStat&) const = 0;

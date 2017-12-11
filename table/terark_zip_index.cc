@@ -350,7 +350,8 @@ public:
   public:
     TerarkIndex* Build(NativeDataInput<InputBuffer>& reader,
                        const TerarkZipTableOptions& tzopt,
-                       const KeyStat& ks) const override {
+                       const KeyStat& ks,
+                       const ImmutableCFOptions* ioptions) const override {
       size_t numKeys = ks.numKeys;
       size_t commonPrefixLen = ks.commonPrefixLen;
       size_t sumPrefixLen = commonPrefixLen * numKeys;
@@ -738,7 +739,8 @@ public:
      */
     TerarkIndex* Build(NativeDataInput<InputBuffer>& reader,
                        const TerarkZipTableOptions& tzopt,
-                       const KeyStat& ks) const override {
+                       const KeyStat& ks,
+                       const ImmutableCFOptions* ioptions) const override {
       size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
       assert(cplen >= ks.commonPrefixLen);
       if (ks.maxKeyLen != ks.minKeyLen ||
@@ -820,17 +822,30 @@ public:
       // TBD: build histogram, which should set as 'true'
       rankselect1.build_cache(false, false);
       rankselect2.build_cache(false, false);
+#ifndef INDEX_UT
+      if (ioptions) {
+        INFO(ioptions->info_log,
+             "TerarkCompositeUintIndex::Build(): key1Min %zu, key1Max %zu"
+             "cplen %zu, key1_len %zu, key2_len %zu,\n"
+             "key1 size %zu, isall1 %d, "
+             "key2 size %zu, isall0 %d\n",
+             minValue, maxValue, cplen, key1_len, key2_len,
+             rankselect1.size(), rankselect1.isall1(), 
+             rankselect2.size(), rankselect2.isall0()
+          );
+      }
+#endif
       // TBD: confirm this
-      if (rankselect1.max_rank0() == 0 && rankselect2.max_rank1() == 0) {
+      if (rankselect1.isall1() && rankselect2.isall0()) {
         terark::rank_select_allone rs1(rankselect1.size());
         terark::rank_select_allzero rs2(rankselect2.size());
         return new TerarkCompositeUintIndex<terark::rank_select_allone, terark::rank_select_allzero>(
           rs1, rs2, keyVec, ks, minValue, maxValue, key1_len);
-      } else if (rankselect1.max_rank0() == 0) {
+      } else if (rankselect1.isall1()) {
         terark::rank_select_allone rs1(rankselect1.size());
         return new TerarkCompositeUintIndex<terark::rank_select_allone, RankSelect2>(
           rs1, rankselect2, keyVec, ks, minValue, maxValue, key1_len);
-      } else if (rankselect2.max_rank1() == 0) {
+      } else if (rankselect2.isall0()) {
         terark::rank_select_allzero rs2(rankselect2.size());
         return new TerarkCompositeUintIndex<RankSelect1, terark::rank_select_allzero>(
             rankselect1, rs2, keyVec, ks, minValue, maxValue, key1_len);
@@ -1228,7 +1243,8 @@ public:
   public:
     TerarkIndex* Build(NativeDataInput<InputBuffer>& reader,
                        const TerarkZipTableOptions& tzopt,
-                       const KeyStat& ks) const override {
+                       const KeyStat& ks,
+                       const ImmutableCFOptions* ioptions) const override {
       size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
       assert(cplen >= ks.commonPrefixLen);
       if (ks.maxKeyLen != ks.minKeyLen ||

@@ -120,7 +120,7 @@ void init_data_il256_il256_ascend() {
 }
 
 void init_data_il256_il256_descend() {
-    rocksdb::FileWriter fwriter;
+  rocksdb::FileWriter fwriter;
   fwriter.path = key_path;
   fwriter.open();
   keys.resize(100);
