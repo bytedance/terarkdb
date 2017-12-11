@@ -172,6 +172,7 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(const TerarkZipTableFactory* table_
   , range_del_block_(1)
   , key_prefixLen_(key_prefixLen)
 {
+try {
   singleIndexMemLimit = std::min(table_options_.softZipWorkingMemLimit,
     table_options_.singleIndexMemLimit);
 
@@ -245,6 +246,12 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(const TerarkZipTableFactory* table_
     }
   }
 }
+catch (const std::exception& ex) {
+  WARN_EXCEPT(tbo.ioptions.info_log
+      , "%s: Exception: %s", BOOST_CURRENT_FUNCTION, ex.what());
+  throw;
+}
+}
 
 DictZipBlobStore::ZipBuilder*
 TerarkZipTableBuilder::createZipBuilder() const {
@@ -304,7 +311,8 @@ TableProperties TerarkZipTableBuilder::GetTableProperties() const {
   return ret;
 }
 
-void TerarkZipTableBuilder::Add(const Slice& key, const Slice& value) {
+void TerarkZipTableBuilder::Add(const Slice& key, const Slice& value)
+try {
   if (table_options_.debugLevel == 4) {
     rocksdb::ParsedInternalKey ikey;
     rocksdb::ParseInternalKey(key, &ikey);
@@ -410,6 +418,11 @@ void TerarkZipTableBuilder::Add(const Slice& key, const Slice& value) {
   else {
     assert(false);
   }
+}
+catch (const std::exception& ex) {
+  WARN_EXCEPT(ioptions_.info_log
+      , "%s: Exception: %s", BOOST_CURRENT_FUNCTION, ex.what());
+  throw;
 }
 
 TerarkZipTableBuilder::WaitHandle::WaitHandle() : myWorkMem(0) {
