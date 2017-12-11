@@ -4,6 +4,7 @@
 #include <map>
 #include <string>
 #include <vector>
+#include <chrono>
 
 #include <terark/io/FileStream.hpp>
 #include <terark/rank_select.hpp>
@@ -68,6 +69,8 @@ void clear() {
   keys.clear();
   key_path.clear();
   index_path.clear();
+  stat.minKey.clear();
+  stat.maxKey.clear();
   memset(&stat, 0, sizeof(stat));
 }
 
@@ -79,7 +82,7 @@ TerarkIndex* save_reload(TerarkIndex* index,
     });
   writer.flush();
   writer.close();
-  
+  delete index;
   return TerarkIndex::LoadFile(index_path).release();
 }
 
@@ -297,8 +300,11 @@ void test_il256_il256(DataStored dtype) {
     assert(iter->Seek(fstring(arr, 16)) == false);
   }
   printf("\tIterator done\n");
+  delete iter;
+  delete index;
   ::remove(key_path.c_str());
   ::remove(index_path.c_str());
+  clear();
 }
 
 
@@ -502,8 +508,11 @@ void test_allone_il256(DataStored dtype) {
     assert(iter->Seek(fstring(arr, 16)) == false);
   }
   printf("\tIterator done\n");
+  delete iter;
+  delete index;
   ::remove(key_path.c_str());
   ::remove(index_path.c_str());
+  clear();
 }
 
 /*
@@ -639,8 +648,11 @@ void test_allone_allzero(DataStored dtype) {
     }
   }
   printf("\tIterator done\n");
+  delete iter;
+  delete index;
   ::remove(key_path.c_str());
   ::remove(index_path.c_str());
+  clear();
 }
 
 /*
@@ -712,6 +724,11 @@ void test_data_seek_short_target() {
     assert(iter->DictRank() == 250 * 2);
   }
   printf("\tSeek done\n");
+  delete iter;
+  delete index;
+  ::remove(key_path.c_str());
+  ::remove(index_path.c_str());
+  clear();
 }
 /*
  * select
@@ -872,10 +889,11 @@ void test_select() {
     auto factory = TerarkIndex::SelectFactory(stat, "");
     assert(factory == f_il85_il85);
   }
+  clear();
 }
 
 
-int main(int argc, char** argv) {
+int main_impl(int argc, char** argv) {
   printf("EXAGGERATE\n");
 
   test_il256_il256(standard_ascend);
@@ -890,5 +908,14 @@ int main(int argc, char** argv) {
 
   test_select();
 
+  return 0;
+}
+
+int main(int argc, char** argv) {
+    //auto now = std::chrono::system_clock::now;
+    //auto end = now() + std::chrono::minutes(2);
+  //while (now() < end) {
+  main_impl(argc, argv);
+  //}
   return 0;
 }

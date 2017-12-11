@@ -8,7 +8,7 @@ CXX=g++
 CFLAGS=-g -std=c++11 -Wall -DINDEX_UT
 INC=-I. -I.. -I$(TerarkDir) -I$(RocksDir)/include -I$(RocksDir)
 LIBPATH=-L. -L.. -L$(TerarkLib)/lib -L$(RocksDir)
-LIB=-lpthread -lrocksdb -lterark-core-g++-4.8-r -lterark-fsa-g++-4.8-r -lterark-zbs-g++-4.8-r
+LIB=-lpthread -lrocksdb -ltcmalloc -lterark-core-g++-4.8-r -lterark-fsa-g++-4.8-r -lterark-zbs-g++-4.8-r
 
 #OBJS=terark_zip_common.o terark_zip_config.o terark_zip_index.o
 OBJS=terark_zip_common.o terark_zip_index.o
