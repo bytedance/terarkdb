@@ -555,9 +555,9 @@ public:
         throw std::invalid_argument("Bad trie class: " + ClassName(*dfa)
             + ", should be " + ClassName<NLTrie>());
       }
-      unique_ptr<TerarkIndex> index(new NestLoudsTrieIndex(trie));
+      auto index = new NestLoudsTrieIndex(trie);
       dfa.release();
-      return std::move(index);
+      return unique_ptr<TerarkIndex>(index);
     }
     unique_ptr<TerarkIndex> LoadFile(fstring fpath) const override {
       unique_ptr<BaseDFA> dfa(BaseDFA::load_mmap(fpath));
@@ -567,9 +567,9 @@ public:
             "File: " + fpath + ", Bad trie class: " + ClassName(*dfa)
             + ", should be " + ClassName<NLTrie>());
       }
-      unique_ptr<TerarkIndex> index(new NestLoudsTrieIndex(trie));
+      auto index = new NestLoudsTrieIndex(trie);
       dfa.release();
-      return std::move(index);
+      return unique_ptr<TerarkIndex>(index);
     }
   };
 };
