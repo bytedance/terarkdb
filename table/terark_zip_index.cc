@@ -76,11 +76,13 @@ TerarkIndex::AutoRegisterFactory::AutoRegisterFactory(
                           const char* rtti_name,
                           Factory* factory) {
   assert(names.size() > 0);
+  fstring wireName = *names.begin();
+  TERARK_RT_assert(!g_TerarkIndexFactroy.exists(wireName), std::logic_error);
   factory->mapIndex = g_TerarkIndexFactroy.end_i();
   for (const char* name : names) {
     g_TerarkIndexFactroy.insert_i(name, FactoryPtr(factory));
   }
-  g_TerarkIndexName.insert_i(rtti_name, *names.begin());
+  g_TerarkIndexName.insert_i(rtti_name, wireName.c_str());
 }
 
 const TerarkIndex::Factory* TerarkIndex::GetFactory(fstring name) {
@@ -92,7 +94,7 @@ const TerarkIndex::Factory* TerarkIndex::GetFactory(fstring name) {
   return NULL;
 }
 
-const char* TerarkIndex::Factory::FactoryName() const {
+const char* TerarkIndex::Factory::WireName() const {
   TERARK_RT_assert(mapIndex < g_TerarkIndexFactroy.end_i(), std::logic_error);
   return g_TerarkIndexFactroy.key_c_str(mapIndex);
 }

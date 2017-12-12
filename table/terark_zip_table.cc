@@ -893,8 +893,8 @@ const {
     std::string msg = "invalid indexType: " + table_options_.indexType;
     return Status::InvalidArgument(msg);
   }
-  fstring className = indexFactory->FactoryName();
-  if (className.startsWith("NestLoudsTrieDAWG") != 0) {
+  fstring wireName = indexFactory->WireName();
+  if (wireName.startsWith("NestLoudsTrieDAWG") != 0) {
     std::string msg = "indexType is not a NestLoudsTrieDAWG: "
                     + table_options_.indexType;
     return Status::InvalidArgument(msg);
