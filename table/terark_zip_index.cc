@@ -76,6 +76,7 @@ TerarkIndex::AutoRegisterFactory::AutoRegisterFactory(
                           const char* rtti_name,
                           Factory* factory) {
   assert(names.size() > 0);
+  factory->mapIndex = g_TerarkIndexFactroy.end_i();
   for (const char* name : names) {
     g_TerarkIndexFactroy.insert_i(name, FactoryPtr(factory));
   }
@@ -92,12 +93,8 @@ const TerarkIndex::Factory* TerarkIndex::GetFactory(fstring name) {
 }
 
 const char* TerarkIndex::Factory::FactoryName() const {
-  for (auto pair : g_TerarkIndexFactroy) {
-    if (pair.second == this) {
-      return pair.first.c_str();
-    }
-  }
-  return "Unknow (internal error)";
+  TERARK_RT_assert(mapIndex < g_TerarkIndexFactroy.end_i(), std::logic_error);
+  return g_TerarkIndexFactroy.key_c_str(mapIndex);
 }
 
 bool TerarkIndex::SeekCostEffectiveIndexLen(const KeyStat& ks, size_t& ceLen) {

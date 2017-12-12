@@ -53,6 +53,7 @@ public:
   };
   class Factory : public terark::RefCounter {
   public:
+    size_t  mapIndex = size_t(-1);
     virtual ~Factory();
     virtual TerarkIndex* Build(NativeDataInput<InputBuffer>& tmpKeyFileReader,
                                const TerarkZipTableOptions& tzopt,

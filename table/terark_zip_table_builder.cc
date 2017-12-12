@@ -623,7 +623,7 @@ void TerarkZipTableBuilder::BuildIndex(BuildIndexParams& param, KeyValueStatus& 
   size_t split = kvs.split;
 #if defined(TerocksPrivateCode)
   if (split == 0) {
-    param.stat.commonPrefixLen = fstring(param.stat.minKey).commonPrefixLen(param.stat.maxKey);
+    param.stat.commonPrefixLen = commonPrefixLen(param.stat.minKey, param.stat.maxKey);
   }
   else if (0)
 #endif // TerocksPrivateCode
@@ -636,12 +636,13 @@ void TerarkZipTableBuilder::BuildIndex(BuildIndexParams& param, KeyValueStatus& 
   size_t prefixLen = param.stat.commonPrefixLen + kvs.prefix.size();
   size_t rawKeySize = param.stat.sumKeyLen - param.stat.numKeys * param.stat.commonPrefixLen;
   param.data.complete_write();
-  param.wait = std::async(std::launch::async, [this, &param, rawKeySize, prefixLen, split]() {
+  param.wait = std::async(std::launch::async,
+                         [this, &param, rawKeySize, prefixLen, split]() {
     auto& keyStat = param.stat;
     const TerarkIndex::Factory* factory;
 #if defined(TerocksPrivateCode)
     if (split != 0) {
-      factory = TerarkIndex::GetFactory("IL_256");
+      factory = TerarkIndex::GetFactory(table_options_.indexType);
     }
     else
 #endif // TerocksPrivateCode
@@ -669,6 +670,7 @@ void TerarkZipTableBuilder::BuildIndex(BuildIndexParams& param, KeyValueStatus& 
       return Status::Corruption("TerarkZipTableBuilder index build error", ex.what());
     }
     if (table_options_.debugLevel >= 2) {
+        // check index correctness
         tempKeyFileReader.resetbuf();
         param.data.fp.rewind();
         auto it = UniquePtrOf(indexPtr->NewIterator());
@@ -1699,7 +1701,8 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4
   auto getMmapPart = [](terark::MmapWholeFile& mmap, size_t beg, size_t end) {
     assert(beg <= end);
     assert(end <= mmap.size);
-    return fstring((const char*)mmap.base + beg, (const char*)mmap.base + end);
+    auto base = (const char*)(mmap.base);
+    return fstring(base + beg, base + end);
   };
   valvec<byte_t> commonPrefix;
   size_t sumKeyLen = 0;
@@ -1713,8 +1716,9 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4
     sumKeyLen += kvs.key.m_total_key_len + kvs.prefix.size() * kvs.key.m_cnt_sum;
     numKeys += kvs.key.m_cnt_sum ;
     commonPrefix.append(kvs.commonPrefix);
-    unique_ptr<BlobStore> store(BlobStore::load_from_user_memory(getMmapPart(mmapStoreFile,
-      kvs.valueFileBegin, kvs.valueFileEnd), dict));
+    unique_ptr<BlobStore> store(BlobStore::load_from_user_memory(
+        getMmapPart(mmapStoreFile, kvs.valueFileBegin, kvs.valueFileEnd),
+        dict));
     long long t6p, t7p;
     s = WriteStore(mmapIndexFile.memory(), store.get(), kvs, dataBlock, t7, t6p, t7p);
     if (!s.ok()) {
