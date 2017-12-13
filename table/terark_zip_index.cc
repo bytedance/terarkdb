@@ -528,10 +528,6 @@ public:
                        const TerarkZipTableOptions& tzopt,
                        const KeyStat& ks,
                        const ImmutableCFOptions* ioptions) const override {
-      //size_t numKeys = ks.numKeys;
-      //size_t commonPrefixLen = ks.commonPrefixLen;
-      //size_t sumPrefixLen = commonPrefixLen * numKeys;
-      //size_t sumRealKeyLen = ks.sumKeyLen - sumPrefixLen;
       valvec<byte_t> keyBuf;
       if (ks.minKeyLen != ks.maxKeyLen) {
         SortedStrVec keyVec;
@@ -1150,7 +1146,8 @@ struct CompositeUintIndexBase : public TerarkIndex {
     TerarkIndex* BuildImpl(NativeDataInput<InputBuffer>& reader,
                            const TerarkZipTableOptions& tzopt,
                            const KeyStat& ks,
-                           RankSelect1*, RankSelect2*) const {
+                           RankSelect1*, RankSelect2*,
+                           const ImmutableCFOptions* ioption) const {
       size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
       assert(cplen >= ks.commonPrefixLen);
       if (ks.maxKeyLen != ks.minKeyLen ||
@@ -1235,6 +1232,19 @@ struct CompositeUintIndexBase : public TerarkIndex {
       rankselect2.build_cache(false, false);
       // try order: 1. sorteduint; 2. uintmin0; 3. fixlen
       // TBD: following skips are only for test right now
+#ifndef INDEX_UT
+      if (ioptions) {
+        INFO(ioptions->info_log,
+             "TerarkCompositeUintIndex::Build(): key1Min %zu, key1Max %zu"
+             "cplen %zu, key1_len %zu, key2_len %zu,\n"
+             "key1 size %zu, key2 size %zu,",
+             "rankselect combination is %d\n",
+             minValue, maxValue, cplen, key1_len, key2_len,
+             rankselect1.size(), rankselect2.size(),
+             figureCombination(rankselect1, rankselect2)
+          );
+      }
+#endif
       bool skipSorted =
         terark::getEnvBool("TerarkZipTable_skipSorted", false);
       bool skipUint =
@@ -1317,12 +1327,6 @@ struct CompositeUintIndexBase : public TerarkIndex {
       assert(m_id != size_t(-1));
       return buffer_;
     }
-    bool SeekToFirst() override {
-      rankselect1_idx_ = 0;
-      m_id = 0;
-      UpdateBuffer();
-      return true;
-    }
     int CommonSeek(fstring target, uint64_t* pKey1, fstring* pKey2) {
       size_t cplen = target.commonPrefixLen(index_.commonPrefix_);
       if (cplen != index_.commonPrefix_.size()) {
@@ -1394,6 +1398,11 @@ struct CompositeUintIndexBase : public TerarkIndex {
   uint64_t          key2_max_value_;
   uint32_t          key1_len_;
   uint32_t          key2_len_;
+  enum class WorkingState : uint32_t {
+    Building = 1,
+    UserMemory = 2,
+    MmapFile = 3,
+  } workingState_;
   bool              isUserMemory_;
   bool              isBuilding_;
 };
@@ -1428,6 +1437,12 @@ public:
       index_.key2_data_.copy_to(m_id, buffer_.data() + offset);
     }
 
+    bool SeekToFirst() override {
+      rankselect1_idx_ = 0;
+      m_id = 0;
+      UpdateBuffer();
+      return true;
+    }
     bool SeekToLast() override {
       auto& index_ = static_cast<const CompositeUintIndex&>(MyBaseIterator::index_);
       rankselect1_idx_ = index_.rankselect1_.size() - 1;
@@ -1546,7 +1561,8 @@ public:
                        const TerarkZipTableOptions& tzopt,
                        const KeyStat& ks,
                        const ImmutableCFOptions* ioption) const override {
-      return BuildImpl(reader, tzopt, ks, (RankSelect1*)(NULL), (RankSelect2*)(NULL));
+      return BuildImpl(reader, tzopt, ks, 
+                       (RankSelect1*)(NULL), (RankSelect2*)(NULL), ioption);
     }
   public:
     unique_ptr<TerarkIndex> LoadMemory(fstring mem) const override {
@@ -1598,6 +1614,7 @@ public:
                      uint64_t minValue, uint64_t maxValue, size_t key1_len,
                      uint64_t minKey2Value = 0, uint64_t maxKey2Value = 0) {
     isBuilding_ = true;
+    workingState_ = WorkingState::Building;
     size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
     // save meta into header
     FileHeader* header = new FileHeader(
@@ -2093,7 +2110,8 @@ public:
         MmapWholeFile mmapFile(fpath);
         mem = mmapFile.memory();
         ptr->header_ = header = getHeader(mem);
-        MmapWholeFile().swap(mmapFile);
+        //MmapWholeFile().swap(mmapFile);
+        mmapFile.base = nullptr;
         ptr->workingState_ = WorkingState::MmapFile;
       }
       else {

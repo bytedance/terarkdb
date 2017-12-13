@@ -37,22 +37,24 @@ public:
   void risk_release_ownership() {
     m_pospool.risk_release_ownership();
   }
+  /*
+   * in order for 8 byte aligned up, all risk_mmap_from() &
+   * mem_size() & build_from() are customized
+   */
   void risk_mmap_from(unsigned char* base, size_t length) {
+    if (sizeof(T) % 8) { // T is not 8B aligned
+      valvec<T> temp;
+      temp.risk_set_data((T*)base, 2); // 1 is ok as well
+      if (temp[0] % 2)
+        length -= 4;
+      temp.risk_release_ownership();
+    }
     m_pospool.risk_set_data((T*)base, length / sizeof(T));
     m_size = m_pospool[0];
   }
-
-  void resize(size_t newsize) {
-    m_size = newsize;
-    m_pospool.resize(m_size + 1);
+  size_t mem_size() const {
+    return terark::align_up(m_pospool.used_mem_size(), 8);
   }
-  void swap(rank_select_fewzero& another) {
-    std::swap(m_size, another.m_size);
-    std::swap(m_pospool, another.m_pospool);
-  }
-  void set0(size_t) { assert(0); }
-  void set1(size_t) { assert(0); }
-
   template<class RankSelect>
   void build_from(RankSelect& rs) {
     // TBD: for fewzero, 0.01 is actually reasonable
@@ -69,10 +71,15 @@ public:
         idx ++;
       }
     }
-    m_pospool.resize(idx);
+    m_pospool.resize(idx); // prev resize ensures the appending elems are '0'
   }
   void build_cache(bool, bool) { assert(0); }
-  size_t mem_size() const { return m_pospool.used_mem_size(); }
+  void swap(rank_select_fewzero& another) {
+    std::swap(m_size, another.m_size);
+    std::swap(m_pospool, another.m_pospool);
+  }
+  void set0(size_t) { assert(0); }
+  void set1(size_t) { assert(0); }
 
   // exclude pos
   size_t rank0(size_t pos) const {
@@ -311,22 +318,24 @@ public:
   void risk_release_ownership() {
     m_pospool.risk_release_ownership();
   }
+  /*
+   * in order for 8 byte aligned up, both risk_mmap_from() &
+   * mem_size() & build_from() customized
+   */
   void risk_mmap_from(unsigned char* base, size_t length) {
+    if (sizeof(T) % 8) { // T is not 8B aligned
+      valvec<T> temp;
+      temp.risk_set_data((T*)base, 2); // 1 is ok as well
+      if (temp[0] % 2)
+        length -= 4;
+      temp.risk_release_ownership();
+    }
     m_pospool.risk_set_data((T*)base, length / sizeof(T));
     m_size = m_pospool[0];
   }
-
-  void resize(size_t newsize) {
-    m_size = newsize;
-    m_pospool.resize(m_size + 1);
+  size_t mem_size() const {
+    return terark::align_up(m_pospool.used_mem_size(), 8);
   }
-  void swap(rank_select_fewone& another) {
-    std::swap(m_size, another.m_size);
-    std::swap(m_pospool, another.m_pospool);
-  }
-  void set0(size_t) { assert(0); }
-  void set1(size_t) { assert(0); }
-
   template<class RankSelect>
   void build_from(RankSelect& rs) {
     // TBD: for fewzero, 0.01 is actually reasonable
@@ -342,10 +351,15 @@ public:
         idx ++;
       }
     }
-    m_pospool.resize(idx);
+    m_pospool.resize(idx); // prev resize ensures the appending elems are '0'
   }
   void build_cache(bool, bool) { assert(0); }
-  size_t mem_size() const { return m_pospool.used_mem_size(); }
+  void swap(rank_select_fewone& another) {
+    std::swap(m_size, another.m_size);
+    std::swap(m_pospool, another.m_pospool);
+  }
+  void set0(size_t) { assert(0); }
+  void set1(size_t) { assert(0); }
 
   // exclude pos
   size_t rank0(size_t pos) const {
