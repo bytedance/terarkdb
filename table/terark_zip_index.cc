@@ -1,3 +1,8 @@
+
+#ifndef INDEX_UT
+#include "util/cf_options.h"
+#endif
+
 #include "terark_zip_index.h"
 #include "terark_zip_table.h"
 #include "terark_zip_common.h"
@@ -106,7 +111,7 @@ bool TerarkIndex::SeekCostEffectiveIndexLen(const KeyStat& ks, size_t& ceLen) {
    * 2. 8 byte => a lot more gaps compared with 1 byte index1
    * !!! more bytes with less gap is preferred, in other words,
    * prefer smaller gap-ratio, larger compression-ratio
-   * best case is : w1 * (1 / gap-ratio) + w2 * compress-ratio 
+   * best case is : w1 * (1 / gap-ratio) + w2 * compress-ratio
    *   gap-ratio = (diff - numkeys) / diff,
    *   compress-ratio = compressed-part / original,
    *
@@ -136,7 +141,7 @@ bool TerarkIndex::SeekCostEffectiveIndexLen(const KeyStat& ks, size_t& ceLen) {
     uint64_t diff1st = abs_diff(minValue, maxValue); // don't +1
     uint64_t diff2nd = ks.numKeys;
     // one index1st with a collection of index2nd, that's when diff < numkeys
-    double gap_ratio = diff1st <= ks.numKeys ? min_gap_ratio : 
+    double gap_ratio = diff1st <= ks.numKeys ? min_gap_ratio :
       (double)(diff1st - ks.numKeys) / diff1st;
     if (fewone_min_gap_ratio <= gap_ratio &&
         gap_ratio < fewone_max_gap_ratio) { // fewone branch
@@ -521,7 +526,13 @@ public:
   public:
     TerarkIndex* Build(NativeDataInput<InputBuffer>& reader,
                        const TerarkZipTableOptions& tzopt,
-                       const KeyStat& ks) const override {
+                       const KeyStat& ks,
+                       const ImmutableCFOptions* ioptions) const override {
+      //size_t numKeys = ks.numKeys;
+      //size_t commonPrefixLen = ks.commonPrefixLen;
+      //size_t sumPrefixLen = commonPrefixLen * numKeys;
+      //size_t sumRealKeyLen = ks.sumKeyLen - sumPrefixLen;
+      valvec<byte_t> keyBuf;
       if (ks.minKeyLen != ks.maxKeyLen) {
         SortedStrVec keyVec;
         Read_SortedStrVec(keyVec, reader, ks);
@@ -1504,7 +1515,7 @@ public:
           /*
            * zero_seq_ has [a, b) range, hence next() need (pos_ + 1), whereas
            * prev() just called with (pos_) is enough
-           * case1: 1 0 1, ... 
+           * case1: 1 0 1, ...
            * case2: 1 1, ...
            */
           assert(rankselect1_idx_ > 0);
@@ -1533,7 +1544,8 @@ public:
     // no option.keyPrefixLen
     TerarkIndex* Build(NativeDataInput<InputBuffer>& reader,
                        const TerarkZipTableOptions& tzopt,
-                       const KeyStat& ks) const override {
+                       const KeyStat& ks,
+                       const ImmutableCFOptions* ioption) const override {
       return BuildImpl(reader, tzopt, ks, (RankSelect1*)(NULL), (RankSelect2*)(NULL));
     }
   public:
@@ -1989,7 +2001,8 @@ public:
   public:
     TerarkIndex* Build(NativeDataInput<InputBuffer>& reader,
                        const TerarkZipTableOptions& tzopt,
-                       const KeyStat& ks) const override {
+                       const KeyStat& ks,
+                       const ImmutableCFOptions* ioptions) const override {
       size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
       assert(cplen >= ks.commonPrefixLen);
       if (ks.maxKeyLen != ks.minKeyLen ||

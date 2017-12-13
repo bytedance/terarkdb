@@ -4,13 +4,12 @@ TerarkDir=/newssd1/temp/terark/src
 TerarkLib=/newssd1/temp/terark-zip-rocksdb/pkg/terark-zip-rocksdb-Linux-x86_64-g++-4.8-bmi2-0
 RocksDir=/newssd1/temp/rocksdb
 CXX=g++
-CFLAGS=-g3 -std=c++11 -fPIC
+CFLAGS=-g3 -std=c++11 -fPIC -DINDEX_UT
 #CFLAGS=-g -std=c++11 -ftest-coverage -fprofile-arcs
 INC=-I. -I.. -I$(TerarkDir) -I$(RocksDir)/include -I$(RocksDir)
 LIBPATH=-L. -L.. -L$(TerarkLib)/lib -L$(RocksDir)
 #LIB=-lpthread -lrocksdb -lterark-core-g++-4.8-d -lterark-fsa-g++-4.8-d -lterark-zbs-g++-4.8-d -lgcov
 LIB=-lpthread -lrocksdb -lterark-core-g++-4.8-d -lterark-fsa-g++-4.8-d -lterark-zbs-g++-4.8-d
-
 OBJS=composite_sorteduint_ut.o composite_uint_ut.o composite_str_ut.o terark_zip_common.o terark_zip_index.o
 
 
