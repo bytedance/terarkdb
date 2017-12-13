@@ -1,3 +1,8 @@
+
+#ifndef INDEX_UT
+#include "util/cf_options.h"
+#endif
+
 #include "terark_zip_index.h"
 #include "terark_zip_table.h"
 #include "terark_zip_common.h"
