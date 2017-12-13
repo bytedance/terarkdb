@@ -995,6 +995,8 @@ struct CompositeUintIndexBase : public TerarkIndex {
       const size_t kLimit = (1ull << 48) - 1;
       uint64_t key2MinValue = ReadBigEndianUint64(minKey2Data);
       uint64_t key2MaxValue = ReadBigEndianUint64(maxKey2Data);
+      if (key2MinValue == key2MaxValue) // MyRock UT will fail on this condition
+        return nullptr;
       unique_ptr<SortedUintVec:: Builder> builder(SortedUintVec::createBuilder(false, kBlockUnits));
       uint64_t prev = ReadBigEndianUint64(keyVec[0]) - key2MinValue;
       builder->push_back(prev);
@@ -1270,13 +1272,13 @@ struct CompositeUintIndexBase : public TerarkIndex {
 
     void loadImplBase(fstring& mem, fstring fpath, CompositeUintIndexBase* ptr)
     const {
-      ptr->isUserMemory_ = false;
-      ptr->isBuilding_ = false;
       if (mem.data() == nullptr) {
-        MmapWholeFile(fpath).swap(ptr->file_);
-        mem = {(const char*)ptr->file_.base, (ptrdiff_t)ptr->file_.size};
+        MmapWholeFile mmapFile(fpath);
+        mem = mmapFile.memory();
+        mmapFile.base = nullptr;
+        ptr->workingState_ = WorkingState::MmapFile;
       } else {
-        ptr->isUserMemory_ = true;
+        ptr->workingState_ = WorkingState::UserMemory;
       }
       // make sure header is valid
       verifyBaseHeader(mem);
@@ -1390,7 +1392,6 @@ struct CompositeUintIndexBase : public TerarkIndex {
   }
 
   const MyBaseFileHeader* header_;
-  MmapWholeFile     file_;
   valvec<byte_t>    commonPrefix_;
   uint64_t          minValue_;
   uint64_t          maxValue_;
@@ -1403,8 +1404,6 @@ struct CompositeUintIndexBase : public TerarkIndex {
     UserMemory = 2,
     MmapFile = 3,
   } workingState_;
-  bool              isUserMemory_;
-  bool              isBuilding_;
 };
 const char* CompositeUintIndexBase::index_name = "CompositeIndex";
 
@@ -1613,7 +1612,7 @@ public:
                      Key2DataContainer& key2Container, const KeyStat& ks,
                      uint64_t minValue, uint64_t maxValue, size_t key1_len,
                      uint64_t minKey2Value = 0, uint64_t maxKey2Value = 0) {
-    isBuilding_ = true;
+    //isBuilding_ = true;
     workingState_ = WorkingState::Building;
     size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
     // save meta into header
@@ -1648,17 +1647,20 @@ public:
     maxValue_ = maxValue;
     key2_min_value_ = minKey2Value;
     key2_max_value_ = maxKey2Value;
-    isUserMemory_ = false;
+    //isUserMemory_ = false;
   }
 
   virtual ~CompositeUintIndex() {
-    if (isBuilding_) {
+    if (workingState_ == WorkingState::Building) {
       delete (FileHeader*)header_;
-    } else if (file_.base != nullptr || isUserMemory_) {
+    } else {
       rankselect1_.risk_release_ownership();
       rankselect2_.risk_release_ownership();
       key2_data_.risk_release_ownership();
       commonPrefix_.risk_release_ownership();
+      if (workingState_ == WorkingState::MmapFile) {
+        terark::mmap_close((void*)header_, header_->file_size);
+      }
     }
   }
   void SaveMmap(std::function<void(const void *, size_t)> write) const override {
