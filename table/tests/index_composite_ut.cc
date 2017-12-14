@@ -1,4 +1,5 @@
 
+#include <chrono>
 #include "index_composite_ut.h"
 
 int main_impl(int argc, char** argv) {
@@ -47,8 +48,8 @@ int main_impl(int argc, char** argv) {
 }
 
 int main(int argc, char** argv) {
-    //auto now = std::chrono::system_clock::now;
-    //auto end = now() + std::chrono::minutes(2);
+  //auto now = std::chrono::system_clock::now;
+  //auto end = now() + std::chrono::minutes(2);
   //while (now() < end) {
   main_impl(argc, argv);
   //}

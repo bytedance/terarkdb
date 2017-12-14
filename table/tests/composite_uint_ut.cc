@@ -50,6 +50,8 @@ namespace {
     keys.clear();
     key_path.clear();
     index_path.clear();
+    stat.minKey.clear();
+    stat.maxKey.clear();
     memset(&stat, 0, sizeof(stat));
     ::remove(key_path.c_str());
     ::remove(index_path.c_str());
@@ -63,7 +65,7 @@ namespace {
       });
     writer.flush();
     writer.close();
-  
+    delete index;
     return TerarkIndex::LoadFile(index_path).release();
   }
 }

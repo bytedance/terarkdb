@@ -39,18 +39,18 @@ public:
   }
   /*
    * in order for 8 byte aligned up, all risk_mmap_from() &
-   * mem_size() & build_from() are customized
+   * mem_size() are customized
    */
   void risk_mmap_from(unsigned char* base, size_t length) {
-    if (sizeof(T) % 8) { // T is not 8B aligned
-      valvec<T> temp;
-      temp.risk_set_data((T*)base, 2); // 1 is ok as well
-      if (temp[0] % 2)
-        length -= 4;
-      temp.risk_release_ownership();
-    }
-    m_pospool.risk_set_data((T*)base, length / sizeof(T));
+    size_t cnt = length / sizeof(T);
+    m_pospool.risk_set_data((T*)base, cnt);
     m_size = m_pospool[0];
+    // for 4B and odd size, Pad0ForAlign was made
+    if (sizeof(T) % 8 && m_pospool.back() == 0) {
+        m_pospool.risk_release_ownership();
+        cnt --;
+        m_pospool.risk_set_data((T*)base, cnt);
+    }
   }
   size_t mem_size() const {
     return terark::align_up(m_pospool.used_mem_size(), 8);
@@ -323,15 +323,15 @@ public:
    * mem_size() & build_from() customized
    */
   void risk_mmap_from(unsigned char* base, size_t length) {
-    if (sizeof(T) % 8) { // T is not 8B aligned
-      valvec<T> temp;
-      temp.risk_set_data((T*)base, 2); // 1 is ok as well
-      if (temp[0] % 2)
-        length -= 4;
-      temp.risk_release_ownership();
-    }
-    m_pospool.risk_set_data((T*)base, length / sizeof(T));
+    size_t cnt = length / sizeof(T);
+    m_pospool.risk_set_data((T*)base, cnt);
     m_size = m_pospool[0];
+    // for 4B and odd size, Pad0ForAlign was made
+    if (sizeof(T) % 8 && m_pospool.back() == 0) {
+      m_pospool.risk_release_ownership();
+      cnt --;
+      m_pospool.risk_set_data((T*)base, cnt);
+    }
   }
   size_t mem_size() const {
     return terark::align_up(m_pospool.used_mem_size(), 8);
