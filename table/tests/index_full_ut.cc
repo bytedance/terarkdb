@@ -124,7 +124,7 @@ TerarkIndex* save_reload(TerarkIndex* index, const TerarkIndex::Factory* factory
     });
   writer.flush();
   writer.close();
-  
+
   return factory->LoadFile(index_path).release();
 }
 

@@ -52,7 +52,7 @@ void Padzero(const Writer& write, size_t offset) {
 // 0 < cnt0 and cnt0 < 0.01 * total
 inline bool IsFewZero(size_t total, size_t cnt0) {
   assert(total > 0);
-  return (0 < cnt0) && 
+  return (0 < cnt0) &&
     (cnt0 <= (double)total * 0.01);
 }
 inline bool IsFewOne(size_t total, size_t cnt1) {
@@ -148,7 +148,7 @@ bool TerarkIndex::SeekCostEffectiveIndexLen(const KeyStat& ks, size_t& ceLen) {
       // to construct rankselect for fewone, much more extra space is needed
       // TBD: maybe we could prescan ?
       size_t bits = (diff1st < UINT32_MAX && ks.numKeys < UINT32_MAX) ? 32 : 64;
-      double cost = ks.numKeys * bits + diff2nd * 1.2 + 
+      double cost = ks.numKeys * bits + diff2nd * 1.2 +
         (ks.maxKeyLen - cplen - i) * ks.numKeys * 8;
       if (cost > originCost * 0.8)
         continue;
@@ -161,7 +161,7 @@ bool TerarkIndex::SeekCostEffectiveIndexLen(const KeyStat& ks, size_t& ceLen) {
     } else {
       gap_ratio = std::max(gap_ratio, min_gap_ratio);
       // diff is bitmap, * 1.2 is extra cost to build RankSelect
-      double cost = ((double)diff1st + diff2nd) * 1.2 + 
+      double cost = ((double)diff1st + diff2nd) * 1.2 +
         (ks.maxKeyLen - cplen - i) * ks.numKeys * 8;
       if (cost > originCost * 0.8)
         continue;
@@ -593,7 +593,7 @@ private:
   }
   uint64_t to_uint64(fstring val) const {
     byte_t targetBuffer[8] = { 0 };
-    memcpy(targetBuffer + (8 - key_len_), val.data(), 
+    memcpy(targetBuffer + (8 - key_len_), val.data(),
            std::min(key_len_, val.size()));
     return ReadBigEndianUint64(targetBuffer, 8);
   }
@@ -675,7 +675,7 @@ private:
   }
   uint64_t to_uint64(fstring val) const {
     byte_t targetBuffer[8] = { 0 };
-    memcpy(targetBuffer + (8 - key_len_), val.data(), 
+    memcpy(targetBuffer + (8 - key_len_), val.data(),
            std::min(key_len_, val.size()));
     return ReadBigEndianUint64(targetBuffer, 8);
   }
@@ -1560,7 +1560,7 @@ public:
                        const TerarkZipTableOptions& tzopt,
                        const KeyStat& ks,
                        const ImmutableCFOptions* ioption) const override {
-      return BuildImpl(reader, tzopt, ks, 
+      return BuildImpl(reader, tzopt, ks,
                        (RankSelect1*)(NULL), (RankSelect2*)(NULL), ioption);
     }
   public:
@@ -2412,7 +2412,7 @@ TerarkIndexRegister(CompositeUintIndex_SE_512_64_SE_512_64_BigUint);
 
 
 
-// ---- CKStrDataCont, 
+// ---- CKStrDataCont,
 // allone allzero
 typedef CompositeUintIndex<rank_select_allone   , rank_select_allzero  , CKStrDataCont> CompositeUintIndex_AllOne_AllZero;
 TerarkIndexRegister(CompositeUintIndex_AllOne_AllZero);

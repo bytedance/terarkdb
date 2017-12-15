@@ -178,7 +178,7 @@ public:
   size_t ApproximateMemoryUsage() const override { return file_data_.size(); }
 
   virtual ~TerarkZipTableReader();
-  TerarkZipTableReader(const TerarkZipTableFactory* table_factory, 
+  TerarkZipTableReader(const TerarkZipTableFactory* table_factory,
                        const TableReaderOptions&,
                        const TerarkZipTableOptions&);
   Status Open(RandomAccessFileReader* file, uint64_t file_size);

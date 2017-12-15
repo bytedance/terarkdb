@@ -19,7 +19,7 @@ using namespace std;
 static const size_t KEY_LEN = 16;
 
 namespace rocksdb {
-  
+
   struct TerarkZipTableOptions {};
 
   class FileWriter {
@@ -57,7 +57,7 @@ namespace {
     ::remove(index_path.c_str());
   }
 
-  TerarkIndex* save_reload(TerarkIndex* index, 
+  TerarkIndex* save_reload(TerarkIndex* index,
                            const TerarkIndex::Factory* factory) {
     FileStream writer(index_path, "wb");
     index->SaveMmap([&writer](const void* data, size_t size) {
@@ -503,7 +503,7 @@ void test_allone_il256_uint(DataStored dtype) {
     char sarr[4] = { 0 };
     assert(iter->Seek(fstring(sarr, 4)));
     assert(iter->DictRank() == 0);
-    // 
+    //
     char marr[12] = { 0 };
     marr[7] = 4;
     assert(iter->Seek(fstring(marr, 12)));
@@ -701,7 +701,7 @@ void test_allone_allzero_uint(DataStored dtype) {
  *       ....
  * then key1: pos0 ~ 7, key2: pos8 ~ 15
  * when Seek(2), expected result should be 500, not 2.
- * keep in mind, treat like string, compare from left to right      
+ * keep in mind, treat like string, compare from left to right
  */
 static void init_data_seek_short_target() {
   rocksdb::FileWriter fwriter;
@@ -712,7 +712,7 @@ static void init_data_seek_short_target() {
 	for (int i = 0; i < 4; i++) {
     carr[6] = i;
     for (int j = 0; j < 250; j++) {
-      carr[7] = j; 
+      carr[7] = j;
       carr[15] = j;
       if (i == 0 && j == 0) {
         stat.minKey.assign(carr, carr + KEY_LEN);
@@ -780,11 +780,11 @@ void test_data_seek_short_target_uint() {
 void test_seek_cost_effective() {
   printf("==== Uint Seek-Cost-Effective Test started\n");
   // prepare
-  const rocksdb::TerarkIndex::Factory* f_il85_il85 = 
+  const rocksdb::TerarkIndex::Factory* f_il85_il85 =
     TerarkIndex::GetFactory("CompositeUintIndex_IL_256_32_IL_256_32");
-  const rocksdb::TerarkIndex::Factory* f_se96_se96 = 
+  const rocksdb::TerarkIndex::Factory* f_se96_se96 =
     TerarkIndex::GetFactory("CompositeUintIndex_SE_512_64_SE_512_64");
-  const rocksdb::TerarkIndex::Factory* f_allone_allzero = 
+  const rocksdb::TerarkIndex::Factory* f_allone_allzero =
     TerarkIndex::GetFactory("CompositeUintIndex_AllOne_AllZero");
   {
     TerarkIndex::KeyStat stat;

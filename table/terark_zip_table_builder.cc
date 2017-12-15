@@ -660,7 +660,7 @@ void TerarkZipTableBuilder::BuildIndex(BuildIndexParams& param, KeyValueStatus& 
     long long t1 = g_pf.now();
     std::unique_ptr<TerarkIndex> indexPtr;
     try {
-      indexPtr.reset(factory->Build(tempKeyFileReader, 
+      indexPtr.reset(factory->Build(tempKeyFileReader,
         table_options_, keyStat, &ioptions_));
     }
     catch (const std::exception& ex) {

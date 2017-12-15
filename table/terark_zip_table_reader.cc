@@ -808,7 +808,7 @@ protected:
 Status TerarkZipTableTombstone::
 LoadTombstone(RandomAccessFileReader * file, uint64_t file_size) {
   BlockContents tombstoneBlock;
-  Status s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber, 
+  Status s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber,
     GetTableReaderOptions().ioptions,  kRangeDelBlock, &tombstoneBlock);
   if (s.ok()) {
     tombstone_.reset(DetachBlockContents(tombstoneBlock, GetSequenceNumber()));

@@ -18,7 +18,7 @@ using namespace std;
 static const size_t KEY_LEN = 16;
 
 namespace rocksdb {
-  
+
   struct TerarkZipTableOptions {};
 
   class FileWriter {
@@ -56,7 +56,7 @@ namespace {
     ::remove(index_path.c_str());
   }
 
-  TerarkIndex* save_reload(TerarkIndex* index, 
+  TerarkIndex* save_reload(TerarkIndex* index,
                            const TerarkIndex::Factory* factory) {
     FileStream writer(index_path, "wb");
     index->SaveMmap([&writer](const void* data, size_t size) {
@@ -295,7 +295,7 @@ void test_il256_il256_sorteduint(DataStored dtype) {
     char larr[12] = { 0 };
     larr[3] = 5;
     assert(iter->Seek(fstring(larr, 12)) == false);
-    
+
   }
   {
     // lower_bound
@@ -526,7 +526,7 @@ void test_allone_il256_sorteduint(DataStored dtype) {
     char sarr[4] = { 0 };
     assert(iter->Seek(fstring(sarr, 4)));
     assert(iter->DictRank() == 0);
-    // 
+    //
     char marr[12] = { 0 };
     marr[7] = 4;
     assert(iter->Seek(fstring(marr, 12)));
@@ -739,7 +739,7 @@ void test_fewzero_allzero_sorteduint(DataStored dtype) {
     char sarr[4] = { 0 };
     assert(iter->Seek(fstring(sarr, 4)));
     assert(iter->DictRank() == 0);
-    // 
+    //
     char marr[12] = { 0 };
     marr[7] = 4;
     assert(iter->Seek(fstring(marr, 12)));
@@ -931,7 +931,7 @@ void test_allone_allzero_sorteduint(DataStored dtype) {
  *       ....
  * then key1: pos0 ~ 7, key2: pos8 ~ 15
  * when Seek(2), expected result should be 500, not 2.
- * keep in mind, treat like string, compare from left to right      
+ * keep in mind, treat like string, compare from left to right
  */
 static void init_data_seek_short_target() {
   rocksdb::FileWriter fwriter;
@@ -942,7 +942,7 @@ static void init_data_seek_short_target() {
 	for (int i = 0; i < 4; i++) {
     carr[6] = i;
     for (int j = 0; j < 250; j++) {
-      carr[7] = j; 
+      carr[7] = j;
       carr[15] = j;
       fwriter.writer << fstring(carr, KEY_LEN);
       if (i == 0 && j == 0) {
