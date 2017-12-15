@@ -57,21 +57,22 @@ public:
   }
   template<class RankSelect>
   void build_from(RankSelect& rs) {
-    // TBD: for fewzero, 0.01 is actually reasonable
     if (rs.isall0() || rs.isall1()) {
       THROW_STD(invalid_argument,
                 "there should be cnt(0) > 0 && cnt(1) > 0");
     }
-    m_pospool.resize(m_size + 1);
-    m_pospool[0] = m_size;
+    // for fewzero, 0.1 is actually reasonable
+    m_pospool.reserve(std::max<size_t>(m_size / 10, 10));
+    m_pospool.push_back(m_size); // [0] for m_size
     size_t idx = 1;
     for (size_t pos = 0; pos < m_size; pos++) {
       if (rs.is0(pos)) {
-        m_pospool[idx] = pos;
+        m_pospool.push_back(pos);
         idx ++;
       }
     }
-    m_pospool.resize(idx); // prev resize ensures the appending elems are '0'
+    m_pospool.push_back(0); // append extra '0' for align consideration
+    m_pospool.resize(idx); // resize to the actual size, extra '0' will be kept behind for align
   }
   void build_cache(bool, bool) { assert(0); }
   void swap(rank_select_fewzero& another) {
@@ -338,20 +339,21 @@ public:
   }
   template<class RankSelect>
   void build_from(RankSelect& rs) {
-    // TBD: for fewzero, 0.01 is actually reasonable
     if (rs.isall0() || rs.isall1()) {
       THROW_STD(invalid_argument, "there should be cnt(0) > 0 && cnt(1) > 0");
     }
-    m_pospool.resize(m_size + 1);
-    m_pospool[0] = m_size;
+    // for fewzero, 0.1 is actually reasonable
+    m_pospool.reserve(std::max<size_t>(m_size / 10, 10));
+    m_pospool.push_back(m_size); // [0] for m_size
     size_t idx = 1;
     for (size_t pos = 0; pos < m_size; pos++) {
       if (rs.is1(pos)) {
-        m_pospool[idx] = pos;
+        m_pospool.push_back(pos);
         idx ++;
       }
     }
-    m_pospool.resize(idx); // prev resize ensures the appending elems are '0'
+    m_pospool.push_back(0); // append extra '0' for align consideration
+    m_pospool.resize(idx); // resize to the actual size, extra '0' will be kept behind for align
   }
   void build_cache(bool, bool) { assert(0); }
   void swap(rank_select_fewone& another) {
