@@ -29,7 +29,13 @@ typedef rank_select_fewone<uint32_t> rs_fewone_32;
 typedef rank_select_fewone<uint64_t> rs_fewone_64;
 
 static hash_strmap<TerarkIndex::FactoryPtr> g_TerarkIndexFactroy;
-static hash_strmap<std::string>             g_TerarkIndexName;
+static hash_strmap<std::string,
+                   fstring_func::hash_align,
+                   fstring_func::equal_align,
+                   ValueInline,
+                   SafeCopy ///< some std::string is not memmovable
+                  >
+       g_TerarkIndexName;
 
 template<class IndexClass>
 bool VerifyClassName(fstring class_name) {
