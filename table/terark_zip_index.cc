@@ -1095,7 +1095,7 @@ struct CompositeUintIndexBase : public TerarkIndex {
                            const TerarkZipTableOptions& tzopt, \
                            const KeyStat& ks, \
                            rs1*, rs2*) \
-    const { TERARK_IF_DEBUG(assert(0), abort()); }
+    const { TERARK_IF_DEBUG(assert(0), abort()); return NULL; }
 
     template<class rs2> Disable_BuildImpl(rs_fewone_32, rs2);
     template<class rs2> Disable_BuildImpl(rs_fewone_64, rs2);
