@@ -628,7 +628,7 @@ void TerarkZipTableBuilder::BuildIndex(BuildIndexParams& param, KeyValueStatus& 
     const TerarkIndex::Factory* factory;
 #if defined(TerocksPrivateCode)
     if (split != 0) {
-      factory = TerarkIndex::GetFactory("IL_256");
+      factory = TerarkIndex::GetFactory(table_options_.indexType);
     }
     else
 #endif // TerocksPrivateCode
