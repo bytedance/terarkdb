@@ -183,7 +183,8 @@ void UpdateCollectInfo(const TerarkZipTableFactory* table_factory,
     return;
   }
   auto& collect = table_factory->GetCollect();
-  collect.update(terark::lcast(find->second)
+  uint64_t timestamp = terark::lcast(find->second);
+  collect.update(timestamp
       , props->raw_value_size, props->data_size
       , props->raw_key_size + props->raw_value_size, file_size);
 }

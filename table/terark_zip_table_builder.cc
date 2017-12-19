@@ -25,10 +25,7 @@ namespace snappy {
 
 namespace rocksdb {
 
-using terark::SortableStrVec;
-using terark::byte_swap;
-using terark::UintVecMin0;
-using terark::commonPrefixLen;
+using namespace terark;
 
 std::mutex g_sumMutex;
 size_t g_sumKeyLen = 0;

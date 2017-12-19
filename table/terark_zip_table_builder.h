@@ -23,6 +23,7 @@
 #include <table/table_builder.h>
 #include <table/block_builder.h>
 #include <table/format.h>
+#include <table/internal_iterator.h>
 #include <util/arena.h>
 // terark headers
 #include <terark/fstring.hpp>
