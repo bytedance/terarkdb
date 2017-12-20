@@ -183,7 +183,8 @@ void UpdateCollectInfo(const TerarkZipTableFactory* table_factory,
     return;
   }
   auto& collect = table_factory->GetCollect();
-  collect.update(terark::lcast(find->second)
+  uint64_t timestamp = terark::lcast(find->second);
+  collect.update(timestamp
       , props->raw_value_size, props->data_size
       , props->raw_key_size + props->raw_value_size, file_size);
 }
@@ -808,7 +809,7 @@ protected:
 Status TerarkZipTableTombstone::
 LoadTombstone(RandomAccessFileReader * file, uint64_t file_size) {
   BlockContents tombstoneBlock;
-  Status s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber, 
+  Status s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber,
     GetTableReaderOptions().ioptions,  kRangeDelBlock, &tombstoneBlock);
   if (s.ok()) {
     tombstone_.reset(DetachBlockContents(tombstoneBlock, GetSequenceNumber()));

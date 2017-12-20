@@ -25,10 +25,7 @@ namespace snappy {
 
 namespace rocksdb {
 
-using terark::SortableStrVec;
-using terark::byte_swap;
-using terark::UintVecMin0;
-using terark::commonPrefixLen;
+using namespace terark;
 
 std::mutex g_sumMutex;
 size_t g_sumKeyLen = 0;
@@ -660,7 +657,7 @@ void TerarkZipTableBuilder::BuildIndex(BuildIndexParams& param, KeyValueStatus& 
     long long t1 = g_pf.now();
     std::unique_ptr<TerarkIndex> indexPtr;
     try {
-      indexPtr.reset(factory->Build(tempKeyFileReader, 
+      indexPtr.reset(factory->Build(tempKeyFileReader,
         table_options_, keyStat, &ioptions_));
     }
     catch (const std::exception& ex) {

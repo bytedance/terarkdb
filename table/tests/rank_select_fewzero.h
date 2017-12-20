@@ -29,7 +29,7 @@ public:
   typedef T index_t;
   rank_select_fewzero() : m_size(0) {}
   explicit rank_select_fewzero(size_t sz) : m_size(sz) {}
-    
+
   void clear() {
     m_size = 0;
     m_pospool.clear();
@@ -93,7 +93,7 @@ public:
       return m_pospool.size() - 1;
     } else if (pos == m_pospool[rank0]) {
       return rank0;
-    } else { // < 
+    } else { // <
       return rank0 - 1;
     }
   }
@@ -109,7 +109,7 @@ public:
     return m_pospool[id];
   }
   /*
-   * pos0 = rank0[pos0] + rank1[pos0] => 
+   * pos0 = rank0[pos0] + rank1[pos0] =>
    *   rank1[pos0] = pos0 - rank0[pos0] =>
    *   rank1[pos0] = m_pospool[id] + 1 - id to find id? =>
    * j = m_pospool[i] - i + 1, find lower_bound() that
@@ -130,7 +130,7 @@ public:
     if (rank0 >= m_pospool.size()) { // beyond the last '0'
       rank0 = m_pospool.size() - 1;
     } else { // move to prev '0'
-      rank0 --; 
+      rank0 --;
     }
     size_t prev = rank1_from_rank0(rank0);
     size_t offset = id - prev;
@@ -311,7 +311,7 @@ public:
   typedef T index_t;
   rank_select_fewone() : m_size(0) {}
   explicit rank_select_fewone(size_t sz) : m_size(sz) {}
-    
+
   void clear() {
     m_size = 0;
     m_pospool.clear();
@@ -379,7 +379,7 @@ public:
       return m_pospool.size() - 1;
     } else if (pos == m_pospool[rank]) {
       return rank;
-    } else { // < 
+    } else { // <
       return rank - 1;
     }
   }
@@ -396,7 +396,7 @@ public:
     if (i >= m_pospool.size()) { // beyond the last '0'
       i = m_pospool.size() - 1;
     } else { // move to prev '0'
-      i --; 
+      i --;
     }
     size_t prev = rank0_from_rank1(i);
     size_t offset = id - prev;
@@ -428,7 +428,7 @@ private:
     }
     return i;
   }
-  
+
   // res: as the rank0 lower_bound
   bool is0(size_t pos, size_t& res) const {
     assert(pos < m_size);

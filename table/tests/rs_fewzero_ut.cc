@@ -46,7 +46,7 @@ void test_fewzero() {
   simple.set0(pos++); simple.set0(pos++);
   simple.set1(pos++);
   simple.build_cache(true, true);
-  
+
   rank_select_fewzero<uint32_t> rs(kCnt);
   rs.build_from(simple);
 
@@ -181,7 +181,7 @@ void test_fewone() {
   simple.set0(pos++); simple.set0(pos++);
   simple.set1(pos++);
   simple.build_cache(true, true);
-  
+
   rank_select_fewone<uint32_t> rs(kCnt);
   rs.build_from(simple);
   
