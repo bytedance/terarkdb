@@ -10,11 +10,11 @@ INC=-I. -I.. -I$(TerarkDir) -I$(RocksDir)/include -I$(RocksDir)
 LIBPATH=-L. -L.. -L$(TerarkLib)/lib -L$(RocksDir)
 #LIB=-lpthread -lrocksdb -lterark-core-g++-4.8-d -lterark-fsa-g++-4.8-d -lterark-zbs-g++-4.8-d -lgcov
 LIB=-lpthread -lrocksdb -lterark-core-g++-4.8-d -lterark-fsa-g++-4.8-d -lterark-zbs-g++-4.8-d
-OBJS=composite_sorteduint_ut.o composite_uint_ut.o composite_str_ut.o terark_zip_common.o terark_zip_index.o
+OBJS=composite_sorteduint_ut.o composite_uint_ut.o composite_str_ut.o terark_zip_common.o terark_zip_index.o rank_select_fewzero.o
 
 
-#all: test_rs_fewzero
-all: test_composite
+all: test_rs_fewzero
+#all: test_composite
 #all: test_full
 
 test_composite: ${OBJS}
@@ -24,8 +24,8 @@ test_composite: ${OBJS}
 test_full: ${OBJS}
 	${CXX} -g3 -std=c++11 ${INC} ${LIBPATH} -o index_full_ut index_full_ut.cc ${OBJS} ${LIB}
 
-test_rs_fewzero: rank_select_fewzero.h
-	${CXX} -g3 -std=c++11 ${INC} ${LIBPATH} -o rs_fewzero_ut rs_fewzero_ut.cc  ${LIB}
+test_rs_fewzero: ${OBJS}
+	${CXX} -g3 -std=c++11 ${INC} ${LIBPATH} -o rs_fewzero_ut rs_fewzero_ut.cc ${OBJS} ${LIB}
 
 composite_sorteduint_ut.o:
 	${CXX} ${CFLAGS} ${INC} ${LIBPATH} -c composite_sorteduint_ut.cc ${LIB}
@@ -41,6 +41,9 @@ terark_zip_common.o:
 
 terark_zip_index.o:
 	${CXX} ${CFLAGS} -Wall ${INC} ${LIBPATH} -c ../terark_zip_index.cc ${LIB}
+
+rank_select_fewzero.o:
+	${CXX} ${CFLAGS} -Wall ${INC} ${LIBPATH} -c rank_select_fewzero.cc ${LIB}
 
 clean:
 	rm -f ${EXES} *.o *.exe *.a test_add bridge *.so* *.gcno *.gcda *.gcov index_composite_ut index_full_ut rs_fewzero_ut
