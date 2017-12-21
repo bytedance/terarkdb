@@ -16,7 +16,6 @@
 #include <terark/num_to_str.hpp>
 #if defined(TerocksPrivateCode)
 #include <terark/fsa/fsa_for_union_dfa.hpp>
-#include "tests/rank_select_fewzero.h"
 #endif // TerocksPrivateCode
 
 namespace rocksdb {
@@ -149,8 +148,7 @@ bool TerarkIndex::SeekCostEffectiveIndexLen(const KeyStat& ks, size_t& ceLen) {
   for (size_t i = maxLen; i > 0; i--) {
     auto minValue = ReadBigEndianUint64(ks.minKey.begin() + cplen, i);
     auto maxValue = ReadBigEndianUint64(ks.maxKey.begin() + cplen, i);
-//  uint64_t diff1st = abs_diff(minValue, maxValue) + 1; // +1 may overflow
-    uint64_t diff1st = abs_diff(minValue, maxValue); // don't +1
+    uint64_t diff1st = abs_diff(minValue, maxValue); // don't +1, which may cause overflow
     uint64_t diff2nd = ks.numKeys;
     // one index1st with a collection of index2nd, that's when diff < numkeys
     double gap_ratio = diff1st <= ks.numKeys ? min_gap_ratio :
@@ -158,7 +156,6 @@ bool TerarkIndex::SeekCostEffectiveIndexLen(const KeyStat& ks, size_t& ceLen) {
     if (fewone_min_gap_ratio <= gap_ratio &&
         gap_ratio < fewone_max_gap_ratio) { // fewone branch
       // to construct rankselect for fewone, much more extra space is needed
-      // TBD: maybe we could prescan ?
       size_t bits = (diff1st < UINT32_MAX && ks.numKeys < UINT32_MAX) ? 32 : 64;
       double cost = ks.numKeys * bits + diff2nd * 1.2 +
         (ks.maxKeyLen - cplen - i) * ks.numKeys * 8;
@@ -212,8 +209,7 @@ TerarkIndex::SelectFactory(const KeyStat& ks, fstring name) {
     if (minValue > maxValue) {
       std::swap(minValue, maxValue);
     }
-//  uint64_t diff = maxValue - minValue + 1; // +1 may overflow
-    uint64_t diff = maxValue - minValue; // don't +1
+    uint64_t diff = maxValue - minValue; // don't +1, may overflow
     if (diff < ks.numKeys * 30) {
       if (diff + 1 == ks.numKeys) {
         return GetFactory("UintIndex_AllOne");
@@ -927,7 +923,7 @@ struct CompositeUintIndexBase : public TerarkIndex {
       // maximum
       size_t rankselect_1st_sz = size_t(std::ceil(diff * 1.25 / 8));
       size_t rankselect_2nd_sz = size_t(std::ceil(ks.numKeys * 1.25 / 8));
-      size_t sum_key2_sz = std::ceil(ks.numKeys * key2_len);
+      size_t sum_key2_sz = std::ceil(ks.numKeys * key2_len) * 1.25; // sorteduint as the extra cost
       return rankselect_1st_sz + rankselect_2nd_sz + sum_key2_sz;
     }
     static void
@@ -1240,9 +1236,9 @@ struct CompositeUintIndexBase : public TerarkIndex {
 #ifndef INDEX_UT
       if (ioptions) {
         INFO(ioptions->info_log,
-             "TerarkCompositeUintIndex::Build(): key1Min %zu, key1Max %zu"
+             "TerarkCompositeUintIndex::Build(): key1Min %zu, key1Max %zu, "
              "cplen %zu, key1_len %zu, key2_len %zu,\n"
-             "key1 size %zu, key2 size %zu,",
+             "key1 size %zu, key2 size %zu, ",
              "rankselect combination is %d\n",
              minValue, maxValue, cplen, key1_len, key2_len,
              rankselect1.size(), rankselect2.size(),
@@ -1314,6 +1310,12 @@ struct CompositeUintIndexBase : public TerarkIndex {
       memcpy(buffer_.data(), index.commonPrefix_.data(), index.commonPrefix_.size());
       access_hint_ = size_t(-1);
     }
+    /*
+     * Various combinations of <RankSelect1, RankSelect2, DataCont> may cause tooooo many template instantiations,
+     * which will cause code expansion & compiler errors (warnings). That's why we lift some methods from
+     * NonBaseIterator to BaseIterator, like UpdateBuffer/UpdateBufferKey2/CommonSeek/SeekToFirst(), even though
+     * it seems strange.
+     */
     void UpdateBuffer() {
       // key = commonprefix + key1s + key2
       // assign key1
