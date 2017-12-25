@@ -299,8 +299,7 @@ template<class NLTrie>
 void NestLoudsTrieBuildCache(NLTrie* trie, double cacheRatio) {
   trie->build_fsa_cache(cacheRatio, NULL);
 }
-void NestLoudsTrieBuildCache(MatchingDFA* dfa, double cacheRatio) {
-}
+void NestLoudsTrieBuildCache(MatchingDFA* dfa, double cacheRatio) {}
 
 
 template<class NLTrie>
@@ -969,7 +968,7 @@ struct CompositeUintIndexBase : public TerarkIndex {
         return kFewOne_FewOne;
       else if (isRS1FewOne)
         return kFewOne_Normal;
-      //
+      // normal && ...
       else if (rs2.isall0())
         return kNormal_AllZero;
       else if (isRS2FewZero)
@@ -1048,7 +1047,8 @@ struct CompositeUintIndexBase : public TerarkIndex {
       Min0DataCont container;
       container.swap(vecMin0);
       container.init(minKey2Data.size(), key2MinValue);
-      return CreateIndex(rankselect1, rankselect2, container, ks, key1MinValue, key1MaxValue,
+      return CreateIndex(rankselect1, rankselect2, container, ks,
+                         key1MinValue, key1MaxValue,
                          key1_len, key2MinValue, key2MaxValue);
     }
     template<class RankSelect1, class RankSelect2>
@@ -1098,50 +1098,50 @@ struct CompositeUintIndexBase : public TerarkIndex {
     template<class rs2> Disable_BuildImpl(rs_fewzero_32, rs2);
     template<class rs2> Disable_BuildImpl(rs_fewzero_64, rs2);
     template<class rs2> Disable_BuildImpl(rank_select_allone, rs2);
-    template<class rs2> Disable_BuildImpl(rank_select_allzero, rs2);
+    //template<class rs2> Disable_BuildImpl(rank_select_allzero, rs2);
 
     template<class rs1> Disable_BuildImpl(rs1, rs_fewone_32);
     template<class rs1> Disable_BuildImpl(rs1, rs_fewone_64);
     template<class rs1> Disable_BuildImpl(rs1, rs_fewzero_32);
     template<class rs1> Disable_BuildImpl(rs1, rs_fewzero_64);
-    template<class rs1> Disable_BuildImpl(rs1, rank_select_allone);
+    //template<class rs1> Disable_BuildImpl(rs1, rank_select_allone);
     template<class rs1> Disable_BuildImpl(rs1, rank_select_allzero);
 
     Disable_BuildImpl(rs_fewone_32, rs_fewone_32);
     Disable_BuildImpl(rs_fewone_32, rs_fewzero_32);
-    Disable_BuildImpl(rs_fewone_32, rank_select_allone);
+    //Disable_BuildImpl(rs_fewone_32, rank_select_allone);
     Disable_BuildImpl(rs_fewone_32, rank_select_allzero);
 
     Disable_BuildImpl(rs_fewzero_32, rs_fewone_32);
     Disable_BuildImpl(rs_fewzero_32, rs_fewzero_32);
-    Disable_BuildImpl(rs_fewzero_32, rank_select_allone);
+    //Disable_BuildImpl(rs_fewzero_32, rank_select_allone);
     Disable_BuildImpl(rs_fewzero_32, rank_select_allzero);
 
     Disable_BuildImpl(rs_fewone_64, rs_fewone_64);
     Disable_BuildImpl(rs_fewone_64, rs_fewzero_64);
-    Disable_BuildImpl(rs_fewone_64, rank_select_allone);
+    //Disable_BuildImpl(rs_fewone_64, rank_select_allone);
     Disable_BuildImpl(rs_fewone_64, rank_select_allzero);
 
     Disable_BuildImpl(rs_fewzero_64, rs_fewone_64);
     Disable_BuildImpl(rs_fewzero_64, rs_fewzero_64);
-    Disable_BuildImpl(rs_fewzero_64, rank_select_allone);
+    //Disable_BuildImpl(rs_fewzero_64, rank_select_allone);
     Disable_BuildImpl(rs_fewzero_64, rank_select_allzero);
 
     Disable_BuildImpl(rank_select_allone, rs_fewone_32);
     Disable_BuildImpl(rank_select_allone, rs_fewzero_32);
-    Disable_BuildImpl(rank_select_allone, rank_select_allone);
+    //Disable_BuildImpl(rank_select_allone, rank_select_allone);
     Disable_BuildImpl(rank_select_allone, rank_select_allzero);
 
-    Disable_BuildImpl(rank_select_allzero, rs_fewone_32);
-    Disable_BuildImpl(rank_select_allzero, rs_fewzero_32);
-    Disable_BuildImpl(rank_select_allzero, rank_select_allone);
-    Disable_BuildImpl(rank_select_allzero, rank_select_allzero);
+    //Disable_BuildImpl(rank_select_allzero, rs_fewone_32);
+    //Disable_BuildImpl(rank_select_allzero, rs_fewzero_32);
+    //Disable_BuildImpl(rank_select_allzero, rank_select_allone);
+    //Disable_BuildImpl(rank_select_allzero, rank_select_allzero);
 
     Disable_BuildImpl(rank_select_allone, rs_fewone_64);
     Disable_BuildImpl(rank_select_allone, rs_fewzero_64);
 
-    Disable_BuildImpl(rank_select_allzero, rs_fewone_64);
-    Disable_BuildImpl(rank_select_allzero, rs_fewzero_64);
+    //Disable_BuildImpl(rank_select_allzero, rs_fewone_64);
+    //Disable_BuildImpl(rank_select_allzero, rs_fewzero_64);
 
     template<class RankSelect1, class RankSelect2>
     TerarkIndex* BuildImpl(NativeDataInput<InputBuffer>& reader,
