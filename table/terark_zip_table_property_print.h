@@ -16,7 +16,6 @@
   M_Boolea(warmUpValueOnOpen);
   M_Boolea(disableSecondPassIter);
   M_NumFmt(minPreadLen              , "%d");
-  M_NumFmt(minDictZipValueSize      , "%zd");
   M_NumFmt(offsetArrayBlockUnits    , "%d");
   M_NumFmt(estimateCompressionRatio , "%f");
   M_NumFmt(sampleRatio              , "%f");
