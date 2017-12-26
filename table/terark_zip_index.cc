@@ -2123,10 +2123,12 @@ public:
                        const TerarkZipTableOptions& tzopt,
                        const KeyStat& ks,
                        const ImmutableCFOptions* ioptions) const override {
+    /* can be rank_select_allone
       if (std::is_same<RankSelect, rank_select_allone>::value) {
         abort(); // will not happen
         return NULL; // let compiler to eliminate dead code
       }
+    */
       size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
       assert(cplen >= ks.commonPrefixLen);
       if (ks.maxKeyLen != ks.minKeyLen ||
@@ -2151,8 +2153,8 @@ public:
           auto cur = ReadBigEndianUint64(keyBuf.begin() + cplen, keyBuf.end());
           indexSeq.set1(cur - minValue);
         }
+        indexSeq.build_cache(false, false);
       }
-      indexSeq.build_cache(false, false);
 
       auto ptr = UniquePtrOf(new UintIndex<RankSelect>());
       ptr->workingState_ = WorkingState::Building;
