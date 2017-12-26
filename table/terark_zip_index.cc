@@ -1,6 +1,6 @@
 
 #ifndef INDEX_UT
-#include "util/cf_options.h"
+#include "db/builder.h" // for cf_options.h
 #endif
 
 #include "terark_zip_index.h"
