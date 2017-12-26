@@ -851,14 +851,15 @@ const {
   std::string& ret = *opt_string;
   ret.resize(0);
 
-#define WriteName(name) ret.append(#name).append('=')
+#define WriteName(name) ret.append(#name).append("=")
 
 #define M_String(name) WriteName(name).append(tzto.name).append(delimiter)
-#define M_NumFmt(name) WriteName(name);PrintBuf(fmt, tzto.name); \
+#define M_NumFmt(name, fmt) \
+                       WriteName(name);PrintBuf(fmt, tzto.name); \
                        ret.append(delimiter)
-#define M_NumGiB(name) WriteName(name);PrintBuf("%.3fGiB", tzto.name/GiB));\
+#define M_NumGiB(name) WriteName(name);PrintBuf("%.3fGiB", tzto.name/GiB);\
                        ret.append(delimiter)
-#define M_Boolea(name) WriteName(name);PrintBuf("%s", cvb[!!tzto.name])); \
+#define M_Boolea(name) WriteName(name);PrintBuf("%s", cvb[!!tzto.name]); \
                        ret.append(delimiter)
 
 #include "terark_zip_table_property_print.h"
