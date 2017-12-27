@@ -36,9 +36,15 @@
 #endif // TerocksPrivateCode
 
 #if ROCKSDB_MAJOR * 1000 + ROCKSDB_MINOR >= 5008
-  #define TERARK_ROCKSDB_5008(x) x
+  #define TERARK_ROCKSDB_5008(...) __VA_ARGS__
 #else
-  #define TERARK_ROCKSDB_5008(x)
+  #define TERARK_ROCKSDB_5008(...)
+#endif
+
+#if ROCKSDB_MAJOR * 1000 + ROCKSDB_MINOR >= 5007
+  #define TERARK_ROCKSDB_5007(...) __VA_ARGS__
+#else
+  #define TERARK_ROCKSDB_5007(...)
 #endif
 
 void PrintVersion(rocksdb::Logger* info_log);

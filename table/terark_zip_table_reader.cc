@@ -11,6 +11,7 @@
 #include <terark/util/crc.hpp>
 
 #ifndef _MSC_VER
+# include <sys/mman.h>
 # include <sys/unistd.h>
 # include <fcntl.h>
 #endif
@@ -84,7 +85,7 @@ Block* DetachBlockContents(BlockContents &tombstoneBlock, SequenceNumber global_
 }
 
 void SharedBlockCleanupFunction(void* arg1, void* arg2) {
-  delete reinterpret_cast<shared_ptr<Block>*>(arg1);
+  delete reinterpret_cast<std::shared_ptr<Block>*>(arg1);
 }
 
 
@@ -199,13 +200,9 @@ Status ReadMetaBlockAdapte(RandomAccessFileReader* file,
                            const ImmutableCFOptions& ioptions,
                            const std::string& meta_block_name,
                            BlockContents* contents) {
-#if ROCKSDB_MAJOR >= 5 && ROCKSDB_MINOR >= 7
-    return ReadMetaBlock(file, nullptr, file_size, table_magic_number, ioptions,
+    return ReadMetaBlock(file, TERARK_ROCKSDB_5007(nullptr,)
+        file_size, table_magic_number, ioptions,
         meta_block_name, contents);
-#else
-    return ReadMetaBlock(file, file_size, table_magic_number, ioptions,
-        meta_block_name, contents);
-#endif
 }
 
 using terark::BadCrc32cException;
@@ -825,7 +822,7 @@ NewRangeTombstoneIterator(const ReadOptions & read_options) {
       nullptr, true,
       GetTableReaderOptions().ioptions.statistics);
     iter->RegisterCleanup(SharedBlockCleanupFunction,
-      new shared_ptr<Block>(tombstone_), nullptr);
+      new std::shared_ptr<Block>(tombstone_), nullptr);
     return iter;
   }
   return nullptr;

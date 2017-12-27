@@ -647,12 +647,8 @@ TerarkZipTableFactory::NewTableReader(
       "user comparator must be 'leveldb.BytewiseComparator'");
   }
   Footer footer;
-
-#if ROCKSDB_MAJOR >= 5 && ROCKSDB_MINOR >= 7
-  Status s = ReadFooterFromFile(file.get(), nullptr, file_size, &footer);
-#else
-  Status s = ReadFooterFromFile(file.get(), file_size, &footer);
-#endif
+  Status s = ReadFooterFromFile(file.get(), TERARK_ROCKSDB_5007(nullptr,)
+                                file_size, &footer);
   if (!s.ok()) {
     return s;
   }
@@ -812,8 +808,6 @@ TerarkZipTableFactory::NewTableBuilder(
     keyPrefixLen);
 }
 
-static const double GiB = 1ull << 30;
-
 #define PrintBuf(...) ret.append(buffer, snprintf(buffer, kBufferSize, __VA_ARGS__))
 
 std::string TerarkZipTableFactory::GetPrintableTableOptions() const {
@@ -832,7 +826,7 @@ std::string TerarkZipTableFactory::GetPrintableTableOptions() const {
   ret.append("\n")
 
 #define M_NumFmt(name, fmt) \
-                        PrintBuf("%-24s : " fmt "\n", #name, tzto.name)
+                       PrintBuf("%-24s : " fmt "\n", #name, tzto.name)
 #define M_NumGiB(name) PrintBuf("%-24s : %.3fGiB\n", #name, tzto.name/GiB)
 #define M_Boolea(name) PrintBuf("%-24s : %s\n", #name, cvb[!!tzto.name])
 #include "terark_zip_table_property_print.h"

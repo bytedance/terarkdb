@@ -40,7 +40,7 @@ Status ReadMetaBlockAdapte(class RandomAccessFileReader* file,
 class TerarkZipTableTombstone {
 
 private:
-  shared_ptr<Block> tombstone_;
+  std::shared_ptr<Block> tombstone_;
 
 protected:
   virtual SequenceNumber GetSequenceNumber() const = 0;

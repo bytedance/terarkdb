@@ -1005,7 +1005,7 @@ struct CompositeUintIndexBase : public TerarkIndex {
         if (terark_unlikely(abs_diff(key2, prev) > kLimit)) // should not use sorted uint vec
           return nullptr;
         prev = key2;
-        builder->push_back(prev);
+        builder->push_back(key2);
       }
       SortedUintVec uintVec;
       auto rs = builder->finish(&uintVec);

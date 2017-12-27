@@ -1,3 +1,5 @@
+  const double GiB = 1ull << 30;
+
   M_String(extendedConfigFile);
   M_String(indexType);
   M_NumFmt(checksumLevel            , "%d");
