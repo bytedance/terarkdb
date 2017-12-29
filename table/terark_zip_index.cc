@@ -1003,8 +1003,8 @@ struct CompositeUintIndexBase : public TerarkIndex {
         uint64_t key2 = ReadBigEndianUint64(str) - key2MinValue;
         if (terark_unlikely(abs_diff(key2, prev) > kLimit)) // should not use sorted uint vec
           return nullptr;
-        prev = key2;
         builder->push_back(key2);
+        prev = key2;
       }
       SortedUintVec uintVec;
       auto rs = builder->finish(&uintVec);
@@ -1286,7 +1286,7 @@ struct CompositeUintIndexBase : public TerarkIndex {
       ptr->header_ = header;
       ptr->minValue_ = header->key1_min_value;
       ptr->maxValue_ = header->key1_max_value;
-      ptr->key2_min_value_ = header->key2_min_value;
+      ptr->key2_min_value_ = header->key2_min_value; // old version do NOT has this attribute
       ptr->key2_max_value_ = header->key2_max_value;
       ptr->key1_len_ = header->key1_fixed_len;
       ptr->key2_len_ = header->key2_fixed_len;
