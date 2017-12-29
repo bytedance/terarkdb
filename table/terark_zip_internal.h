@@ -35,6 +35,17 @@
 # define USE_OPENSSL
 #endif // TerocksPrivateCode
 
+#if ROCKSDB_MAJOR * 1000 + ROCKSDB_MINOR >= 5008
+  #define TERARK_ROCKSDB_5008(...) __VA_ARGS__
+#else
+  #define TERARK_ROCKSDB_5008(...)
+#endif
+
+#if ROCKSDB_MAJOR * 1000 + ROCKSDB_MINOR >= 5007
+  #define TERARK_ROCKSDB_5007(...) __VA_ARGS__
+#else
+  #define TERARK_ROCKSDB_5007(...)
+#endif
 
 void PrintVersion(rocksdb::Logger* info_log);
 
@@ -257,6 +268,9 @@ public:
   bool IsDeleteRangeSupported() const override { return true; }
 
   LruReadonlyCache* cache() const { return cache_.get(); }
+
+  Status GetOptionString(std::string* opt_string, const std::string& delimiter)
+  const TERARK_ROCKSDB_5008(override);
 
 private:
   TerarkZipTableOptions table_options_;

@@ -88,6 +88,7 @@ void TempFileDeleteOnClose::dopen(int fd) {
 }
 void TempFileDeleteOnClose::close() {
   assert(nullptr != fp);
+  writer.resetbuf();
   fp.close();
   ::remove(path.c_str());
 }

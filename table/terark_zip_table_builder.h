@@ -95,6 +95,11 @@ private:
     uint64_t indexFileEnd = 0;
     uint64_t valueFileBegin = 0;
     uint64_t valueFileEnd = 0;
+    uint64_t seqType = 0;
+    TempFileDeleteOnClose valueFile;
+    bool isValueBuild = false;
+    bool isUseDictZip = false;
+    std::future<Status> wait;
     valvec<std::unique_ptr<BuildIndexParams>> build;
   };
   void AddPrevUserKey();
@@ -114,7 +119,13 @@ private:
   Status EmptyTableFinish();
   Status OfflineFinish();
   void BuildIndex(BuildIndexParams& param, KeyValueStatus& kvs);
+  enum BuildStoreFlag {
+    BuildStoreInit = 1,
+    BuildStoreSync = 2,
+  };
+  Status BuildStore(KeyValueStatus& kvs, DictZipBlobStore::ZipBuilder* zbuilder, uint64_t flag);
   Status WaitBuildIndex();
+  Status WaitBuildStore();
   struct BuildReorderParams {
     AutoDeleteFile tmpReorderFile;
     bitfield_array<2> type;
@@ -127,7 +138,6 @@ private:
   WaitHandle LoadSample(std::unique_ptr<DictZipBlobStore::ZipBuilder>& zbuilder);
 #if defined(TerocksPrivateCode)
   struct BuildStoreParams {
-    NativeDataInput<InputBuffer>& input;
     KeyValueStatus& kvs;
     WaitHandle handle;
     fstring fpath;
@@ -142,22 +152,17 @@ private:
 #if defined(TerocksPrivateCode)
   Status ZipValueToFinishMulti();
 #endif // TerocksPrivateCode
-  void DebugPrepare();
-  void DebugCleanup();
-  Status BuilderWriteValues(NativeDataInput<InputBuffer>& tmpValueFileinput
-    , KeyValueStatus& kvs, std::function<void(fstring val)> write);
+  Status BuilderWriteValues(KeyValueStatus& kvs, std::function<void(fstring val)> write);
   void DoWriteAppend(const void* data, size_t size);
   Status WriteStore(fstring indexMmap, BlobStore* store
     , KeyValueStatus& kvs
     , BlockHandle& dataBlock
     , long long& t5, long long& t6, long long& t7);
   Status WriteSSTFile(long long t3, long long t4
-    , fstring tmpStoreFile
     , fstring tmpDictFile
     , const DictZipBlobStore::ZipStat& dzstat);
 #if defined(TerocksPrivateCode)
   Status WriteSSTFileMulti(long long t3, long long t4
-    , fstring tmpStoreFile
     , fstring tmpDictFile
     , const DictZipBlobStore::ZipStat& dzstat);
 #endif // TerocksPrivateCode
@@ -173,16 +178,23 @@ private:
   std::vector<std::unique_ptr<IntTblPropCollector>> collectors_;
   // end fuck out TableBuilderOptions
   InternalIterator* second_pass_iter_ = nullptr;
-  size_t keydataSeed_ = 0;
-  valvec<KeyValueStatus> histogram_;
+  size_t nameSeed_ = 0;
+  size_t keyDataSize_ = 0;
+  size_t valueDataSize_ = 0;
+  valvec<std::unique_ptr<KeyValueStatus>> histogram_;
   TerarkIndex::KeyStat *currentStat_ = nullptr;
   valvec<byte_t> prevUserKey_;
   terark::febitvec valueBits_;
   size_t bitPosUnique_ = 0;
-  TempFileDeleteOnClose tmpValueFile_;
+  TempFileDeleteOnClose tmpSentryFile_;
   TempFileDeleteOnClose tmpSampleFile_;
   AutoDeleteFile tmpIndexFile_;
+  AutoDeleteFile tmpStoreFile_;
+  AutoDeleteFile tmpZipStoreFile_;
+  uint64_t tmpStoreFileSize_ = 0;
+  uint64_t tmpZipStoreFileSize_ = 0;
   std::mutex indexBuildMutex_;
+  std::mutex storeBuildMutex_;
   FileStream tmpDumpFile_;
   AutoDeleteFile tmpZipDictFile_;
   AutoDeleteFile tmpZipValueFile_;

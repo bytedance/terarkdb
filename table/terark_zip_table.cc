@@ -647,12 +647,8 @@ TerarkZipTableFactory::NewTableReader(
       "user comparator must be 'leveldb.BytewiseComparator'");
   }
   Footer footer;
-
-#if ROCKSDB_MAJOR >= 5 && ROCKSDB_MINOR >= 7
-  Status s = ReadFooterFromFile(file.get(), nullptr, file_size, &footer);
-#else
-  Status s = ReadFooterFromFile(file.get(), file_size, &footer);
-#endif
+  Status s = ReadFooterFromFile(file.get(), TERARK_ROCKSDB_5007(nullptr,)
+                                file_size, &footer);
   if (!s.ok()) {
     return s;
   }
@@ -812,6 +808,8 @@ TerarkZipTableFactory::NewTableBuilder(
     keyPrefixLen);
 }
 
+#define PrintBuf(...) ret.append(buffer, snprintf(buffer, kBufferSize, __VA_ARGS__))
+
 std::string TerarkZipTableFactory::GetPrintableTableOptions() const {
   std::string ret;
   ret.reserve(2000);
@@ -819,50 +817,48 @@ std::string TerarkZipTableFactory::GetPrintableTableOptions() const {
   const int kBufferSize = 200;
   char buffer[kBufferSize];
   const auto& tzto = table_options_;
-  const double gb = 1ull << 30;
 
-  ret += "localTempDir             : ";
-  ret += tzto.localTempDir;
-  ret += '\n';
+#define M_String(name) \
+  ret.append(#name);          \
+  ret.append("                         : " + strlen(#name)   \
+                                      , 27 - strlen(#name)); \
+  ret.append(tzto.name); \
+  ret.append("\n")
 
-#ifdef M_APPEND
-# error WTF ?
-#endif
-#define M_APPEND(fmt, value) \
-ret.append(buffer, snprintf(buffer, kBufferSize, fmt "\n", value))
-
-  M_APPEND("extendedConfigFile       : %s", tzto.extendedConfigFile.c_str());
-  M_APPEND("indexType                : %s", tzto.indexType.c_str());
-  M_APPEND("checksumLevel            : %d", tzto.checksumLevel);
-  M_APPEND("entropyAlgo              : %d", (int)tzto.entropyAlgo);
-  M_APPEND("indexNestLevel           : %d", tzto.indexNestLevel);
-  M_APPEND("indexNestScale           : %d", (int)tzto.indexNestScale);
-  M_APPEND("indexTempLevel           : %d", (int)tzto.indexTempLevel);
-  M_APPEND("terarkZipMinLevel        : %d", tzto.terarkZipMinLevel);
-  M_APPEND("minDictZipValueSize      : %zd", tzto.minDictZipValueSize);
-  M_APPEND("keyPrefixLen             : %zd", tzto.keyPrefixLen);
-  M_APPEND("debugLevel               : %d", (int)tzto.debugLevel);
-  M_APPEND("adviseRandomRead         : %s", cvb[!!tzto.adviseRandomRead]);
-  M_APPEND("enableCompressionProbe   : %s", cvb[!!tzto.enableCompressionProbe]);
-  M_APPEND("useSuffixArrayLocalMatch : %s", cvb[!!tzto.useSuffixArrayLocalMatch]);
-  M_APPEND("warmUpIndexOnOpen        : %s", cvb[!!tzto.warmUpIndexOnOpen]);
-  M_APPEND("warmUpValueOnOpen        : %s", cvb[!!tzto.warmUpValueOnOpen]);
-  M_APPEND("disableSecondPassIter    : %s", cvb[!!tzto.disableSecondPassIter]);
-  M_APPEND("minPreadLen              : %d", tzto.minPreadLen);
-  M_APPEND("offsetArrayBlockUnits    : %d", (int)tzto.offsetArrayBlockUnits);
-  M_APPEND("estimateCompressionRatio : %f", tzto.estimateCompressionRatio);
-  M_APPEND("sampleRatio              : %f", tzto.sampleRatio);
-  M_APPEND("indexCacheRatio          : %f", tzto.indexCacheRatio);
-  M_APPEND("softZipWorkingMemLimit   : %.3fGB", tzto.softZipWorkingMemLimit / gb);
-  M_APPEND("hardZipWorkingMemLimit   : %.3fGB", tzto.hardZipWorkingMemLimit / gb);
-  M_APPEND("smallTaskMemory          : %.3fGB", tzto.smallTaskMemory / gb);
-  M_APPEND("singleIndexMemLimit      : %.3fGB", tzto.singleIndexMemLimit / gb);
-  M_APPEND("cacheCapacityBytes       : %.3fGB", tzto.cacheCapacityBytes / gb);
-  M_APPEND("cacheShards              : %d", tzto.cacheShards);
-
-#undef M_APPEND
-
+#define M_NumFmt(name, fmt) \
+                       PrintBuf("%-24s : " fmt "\n", #name, tzto.name)
+#define M_NumGiB(name) PrintBuf("%-24s : %.3fGiB\n", #name, tzto.name/GiB)
+#define M_Boolea(name) PrintBuf("%-24s : %s\n", #name, cvb[!!tzto.name])
+#include "terark_zip_table_property_print.h"
   return ret;
+}
+
+Status
+TerarkZipTableFactory::GetOptionString(std::string* opt_string,
+                                       const std::string& delimiter)
+const {
+  const char* cvb[] = {"false", "true"};
+  const int kBufferSize = 200;
+  char buffer[kBufferSize];
+  const auto& tzto = table_options_;
+
+  std::string& ret = *opt_string;
+  ret.resize(0);
+
+#define WriteName(name) ret.append(#name).append("=")
+
+#define M_String(name) WriteName(name).append(tzto.name).append(delimiter)
+#define M_NumFmt(name, fmt) \
+                       WriteName(name);PrintBuf(fmt, tzto.name); \
+                       ret.append(delimiter)
+#define M_NumGiB(name) WriteName(name);PrintBuf("%.3fGiB", tzto.name/GiB);\
+                       ret.append(delimiter)
+#define M_Boolea(name) WriteName(name);PrintBuf("%s", cvb[!!tzto.name]); \
+                       ret.append(delimiter)
+
+#include "terark_zip_table_property_print.h"
+
+  return Status::OK();
 }
 
 Status
@@ -894,8 +890,9 @@ const {
     return Status::InvalidArgument(msg);
   }
   fstring wireName = indexFactory->WireName();
-  if (wireName.startsWith("NestLoudsTrieDAWG") != 0) {
+  if (!wireName.startsWith("NestLoudsTrieDAWG")) {
     std::string msg = "indexType is not a NestLoudsTrieDAWG: "
+                      "WireName = " + wireName + " , ConfName = "
                     + table_options_.indexType;
     return Status::InvalidArgument(msg);
   }
