@@ -62,11 +62,19 @@ void Padzero(const Writer& write, size_t offset) {
 
 // 0 < cnt0 and cnt0 < 0.01 * total
 inline bool IsFewZero(size_t total, size_t cnt0) {
+  static bool disableFewZero =
+    terark::getEnvBool("TerarkZipTable_disableFewZero", false);
+  if (disableFewZero)
+    return false;
   assert(total > 0);
   return (0 < cnt0) &&
     (cnt0 <= (double)total * 0.01);
 }
 inline bool IsFewOne(size_t total, size_t cnt1) {
+  static bool disableFewZero =
+    terark::getEnvBool("TerarkZipTable_disableFewZero", false);
+  if (disableFewZero)
+    return false;
   assert(total > 0);
   return (0 < cnt1) &&
     ((double)total * 0.005 < cnt1) &&
@@ -140,6 +148,8 @@ bool TerarkIndex::SeekCostEffectiveIndexLen(const KeyStat& ks, size_t& ceLen) {
   const size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
   const size_t maxLen = std::min<size_t>(8, ks.maxKeyLen - cplen);
   const double originCost = ks.numKeys * ks.maxKeyLen * 8;
+  static bool disableFewZero =
+    terark::getEnvBool("TerarkZipTable_disableFewZero", false);
   double score = 0;
   double minCost = originCost;
   size_t scoreLen = maxLen;
@@ -153,7 +163,8 @@ bool TerarkIndex::SeekCostEffectiveIndexLen(const KeyStat& ks, size_t& ceLen) {
     // one index1st with a collection of index2nd, that's when diff < numkeys
     double gap_ratio = diff1st <= ks.numKeys ? min_gap_ratio :
       (double)(diff1st - ks.numKeys) / diff1st;
-    if (fewone_min_gap_ratio <= gap_ratio &&
+    if (!disableFewZero &&
+        fewone_min_gap_ratio <= gap_ratio &&
         gap_ratio < fewone_max_gap_ratio) { // fewone branch
       // to construct rankselect for fewone, much more extra space is needed
       size_t bits = (diff1st < UINT32_MAX && ks.numKeys < UINT32_MAX) ? 32 : 64;
