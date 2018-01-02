@@ -609,10 +609,17 @@ public:
   void swap(SortedUintVec& other) {
     container_.swap(other);
   }
-  void init(size_t len, size_t minval) {
+  void set_min_value(uint64_t min_value) {
+    min_value_ = min_value;
+  }
+  void set_key_len(size_t key_len) {
+    key_len_ = key_len;
+  }
+  void set_sz(size_t sz) { assert(0); }
+  /*void init(size_t len, size_t minval) {
     key_len_ = len;
     min_value_ = minval;
-  }
+    }*/
   void risk_release_ownership() {
     container_.risk_release_ownership();
   }
@@ -664,6 +671,7 @@ public:
     return pos;
   }
 
+
 private:
   SortedUintVec container_;
   uint64_t min_value_;
@@ -690,10 +698,17 @@ public:
   void swap(BigUintVecMin0& other) {
     container_.swap(other);
   }
-  void init(size_t len, size_t minval) {
+  void set_min_value(uint64_t min_value) {
+    min_value_ = min_value;
+  }
+  void set_key_len(size_t key_len) {
+    key_len_ = key_len;
+  }
+  void set_sz(size_t sz) { assert(0); }
+  /*void init(size_t len, size_t minval) {
     key_len_ = len;
     min_value_ = minval;
-  }
+    }*/
   void risk_release_ownership() {
     container_.risk_release_ownership();
   }
@@ -758,12 +773,12 @@ public:
   void risk_release_ownership() {
     container_.risk_release_ownership();
   }
-  void init(size_t len, size_t sz) {
+  void set_key_len(size_t len) {
     container_.m_fixlen = len;
-    container_.m_size = sz;
   }
-  void init(size_t minval) {
-    assert(0);
+  void set_min_value(uint64_t min_value) { assert(0); }
+  void set_sz(size_t sz) {
+    container_.m_size = sz;
   }
   const byte_t* data() const { return container_.data(); }
   size_t mem_size() const { return container_.mem_size(); }
@@ -1012,7 +1027,9 @@ struct CompositeUintIndexBase : public TerarkIndex {
         return nullptr;
       SortedUintDataCont container;
       container.swap(uintVec);
-      container.init(minKey2Data.size(), key2MinValue);
+      //container.init(minKey2Data.size(), key2MinValue);
+      container.set_key_len(minKey2Data.size());
+      container.set_min_value(key2MinValue);
       return CreateIndex(rankselect1, rankselect2, container, ks,
                          key1MinValue, key1MaxValue,
                          key1_len, key2MinValue, key2MaxValue);
@@ -1046,7 +1063,9 @@ struct CompositeUintIndexBase : public TerarkIndex {
       keyVec.risk_release_ownership();
       Min0DataCont container;
       container.swap(vecMin0);
-      container.init(minKey2Data.size(), key2MinValue);
+      //container.init(minKey2Data.size(), key2MinValue);
+      container.set_key_len(minKey2Data.size());
+      container.set_min_value(key2MinValue);
       return CreateIndex(rankselect1, rankselect2, container, ks,
                          key1MinValue, key1MaxValue,
                          key1_len, key2MinValue, key2MaxValue);
@@ -1600,18 +1619,24 @@ public:
       if (std::is_same<Key2DataContainer, SortedUintDataCont>::value) {
         ptr->key2_data_.risk_set_data((unsigned char*)mem.data() + offset,
                                       header->key2_data_mem_size);
-        ptr->key2_data_.init(header->key2_fixed_len, header->key2_min_value);
+        //ptr->key2_data_.init(header->key2_fixed_len, header->key2_min_value);
+        ptr->key2_data_.set_key_len(header->key2_fixed_len);
+        ptr->key2_data_.set_min_value(header->key2_min_value);
       } else if (std::is_same<Key2DataContainer, Min0DataCont>::value) {
         size_t num = ptr->rankselect2_.size() - 1; // sub the extra append '0'
         size_t diff = header->key2_max_value - header->key2_min_value + 1;
         ptr->key2_data_.risk_set_data((unsigned char*)mem.data() + offset,
                                       num, diff);
-        ptr->key2_data_.init(header->key2_fixed_len, header->key2_min_value);
+        //ptr->key2_data_.init(header->key2_fixed_len, header->key2_min_value);
+        ptr->key2_data_.set_key_len(header->key2_fixed_len);
+        ptr->key2_data_.set_min_value(header->key2_min_value);
       } else { // FixedLenStr
         ptr->key2_data_.risk_set_data((unsigned char*)mem.data() + offset,
                                       header->key2_data_mem_size);
-        ptr->key2_data_.init(header->key2_fixed_len,
-                             header->key2_data_mem_size / header->key2_fixed_len);
+        //ptr->key2_data_.init(header->key2_fixed_len,
+        //                   header->key2_data_mem_size / header->key2_fixed_len);
+        ptr->key2_data_.set_key_len(header->key2_fixed_len);
+        ptr->key2_data_.set_sz(header->key2_data_mem_size / header->key2_fixed_len);
       }
       return ptr.release();
     }
