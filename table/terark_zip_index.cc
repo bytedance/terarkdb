@@ -1019,8 +1019,8 @@ struct CompositeUintIndexBase : public TerarkIndex {
       const size_t kLimit = (1ull << 48) - 1;
       uint64_t key2MinValue = ReadBigEndianUint64(minKey2Data);
       uint64_t key2MaxValue = ReadBigEndianUint64(maxKey2Data);
-      if (key2MinValue == key2MaxValue) // MyRock UT will fail on this condition
-        return nullptr;
+      //if (key2MinValue == key2MaxValue) // MyRock UT will fail on this condition
+      //  return nullptr;
       unique_ptr<SortedUintVec:: Builder> builder(SortedUintVec::createBuilder(false, kBlockUnits));
       uint64_t prev = ReadBigEndianUint64(keyVec[0]) - key2MinValue;
       builder->push_back(prev);
