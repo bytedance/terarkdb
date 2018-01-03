@@ -578,6 +578,9 @@ Status TerarkZipTableBuilder::Finish() try {
   if (histogram_.empty()) {
     return EmptyTableFinish();
   }
+  if (tmpDumpFile_) {
+    tmpDumpFile_.flush();
+  }
 
   AddLastUserKey();
   BuildIndex(*histogram_.back()->build.back(), *histogram_.back());
@@ -727,32 +730,38 @@ Status TerarkZipTableBuilder::BuildStore(KeyValueStatus& kvs,
     size_t variaNum = kvs.key.m_cnt_sum - fixedNum;
     BuildStoreParams params = { kvs, 0, tmpStoreFile_, tmpStoreFileSize_ };
     Status s;
-    if (kvs.value.m_total_key_len == 0) {
-      s = buildZeroLengthBlobStore(params);
-    }
-    else if (table_options_.offsetArrayBlockUnits) {
-      if (variaNum * 64 < kvs.key.m_cnt_sum) {
-        s = buildMixedLenBlobStore(params);
+    try {
+      if (kvs.value.m_total_key_len == 0) {
+        s = buildZeroLengthBlobStore(params);
+      }
+      else if (table_options_.offsetArrayBlockUnits) {
+        if (variaNum * 64 < kvs.key.m_cnt_sum) {
+          s = buildMixedLenBlobStore(params);
+        }
+        else {
+          s = buildZipOffsetBlobStore(params);
+        }
       }
       else {
-        s = buildZipOffsetBlobStore(params);
+        if (4 * variaNum + kvs.key.m_cnt_sum * 5 / 4 < 4 * kvs.key.m_cnt_sum) {
+          s = buildMixedLenBlobStore(params);
+        }
+        else {
+          s = buildPlainBlobStore(params);
+        }
       }
-    }
-    else {
-      if (4 * variaNum + kvs.key.m_cnt_sum * 5 / 4 < 4 * kvs.key.m_cnt_sum) {
-        s = buildMixedLenBlobStore(params);
+      size_t newTmpStoreFileSize = FileStream(tmpStoreFile_.fpath, "rb").fsize();
+      if (s.ok()) {
+        kvs.valueFileBegin = tmpStoreFileSize_;
+        kvs.valueFileEnd = newTmpStoreFileSize;
+        assert((kvs.valueFileEnd - kvs.valueFileBegin) % 8 == 0);
       }
-      else {
-        s = buildPlainBlobStore(params);
-      }
+      tmpStoreFileSize_ = newTmpStoreFileSize;
     }
-    size_t newTmpStoreFileSize = FileStream(tmpStoreFile_.fpath, "rb").fsize();
-    if (s.ok()) {
-      kvs.valueFileBegin = tmpStoreFileSize_;
-      kvs.valueFileEnd = newTmpStoreFileSize;
-      assert((kvs.valueFileEnd - kvs.valueFileBegin) % 8 == 0);
+    catch(...) {
+      tmpStoreFileSize_ = FileStream(tmpStoreFile_.fpath, "rb").fsize();
+      throw;
     }
-    tmpStoreFileSize_ = newTmpStoreFileSize;
     return s;
   };
   auto buildCompressedStore = [this, &kvs, zbuilder]() {
@@ -762,18 +771,25 @@ Status TerarkZipTableBuilder::BuildStore(KeyValueStatus& kvs,
       || tmpZipStoreFileSize_ == FileStream(tmpZipStoreFile_.fpath, "rb").fsize());
 
     zbuilder->prepare(kvs.key.m_cnt_sum, tmpZipStoreFile_, tmpZipStoreFileSize_);
-    Status s = BuilderWriteValues(kvs, [&](fstring value) {zbuilder->addRecord(value); });
-    size_t newTmpZipStoreFileSize = 0;
-    if (s.ok()) {
-      zbuilder->finish(DictZipBlobStore::ZipBuilder::FinishNone);
-      kvs.valueFileBegin = tmpZipStoreFileSize_;
-      newTmpZipStoreFileSize = FileStream(tmpZipStoreFile_.fpath, "rb").fsize();
-      kvs.valueFileEnd = newTmpZipStoreFileSize;
-      assert((kvs.valueFileEnd - kvs.valueFileBegin) % 8 == 0);
-    } else {
-      newTmpZipStoreFileSize = FileStream(tmpZipStoreFile_.fpath, "rb").fsize();
+    Status s;
+    try {
+      s = BuilderWriteValues(kvs, [&](fstring value) {zbuilder->addRecord(value); });
+      size_t newTmpZipStoreFileSize = 0;
+      if (s.ok()) {
+        zbuilder->finish(DictZipBlobStore::ZipBuilder::FinishNone);
+        kvs.valueFileBegin = tmpZipStoreFileSize_;
+        newTmpZipStoreFileSize = FileStream(tmpZipStoreFile_.fpath, "rb").fsize();
+        kvs.valueFileEnd = newTmpZipStoreFileSize;
+        assert((kvs.valueFileEnd - kvs.valueFileBegin) % 8 == 0);
+      } else {
+        newTmpZipStoreFileSize = FileStream(tmpZipStoreFile_.fpath, "rb").fsize();
+      }
+      tmpZipStoreFileSize_ = newTmpZipStoreFileSize;
     }
-    tmpZipStoreFileSize_ = newTmpZipStoreFileSize;
+    catch(...) {
+      tmpZipStoreFileSize_ = FileStream(tmpZipStoreFile_.fpath, "rb").fsize();
+      throw;
+    }
     return s;
   };
 
