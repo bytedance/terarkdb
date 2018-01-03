@@ -1,0 +1,10 @@
+
+stages:
+  - build
+
+job-build:
+  stage: build
+  script:
+    - touch start-ci.txt
+  only:
+    - master

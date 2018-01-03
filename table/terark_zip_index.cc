@@ -623,11 +623,7 @@ public:
   void set_key_len(size_t key_len) {
     key_len_ = key_len;
   }
-  void set_sz(size_t sz) { assert(0); }
-  /*void init(size_t len, size_t minval) {
-    key_len_ = len;
-    min_value_ = minval;
-    }*/
+  void set_size(size_t sz) { assert(0); }
   void risk_release_ownership() {
     container_.risk_release_ownership();
   }
@@ -712,11 +708,7 @@ public:
   void set_key_len(size_t key_len) {
     key_len_ = key_len;
   }
-  void set_sz(size_t sz) { assert(0); }
-  /*void init(size_t len, size_t minval) {
-    key_len_ = len;
-    min_value_ = minval;
-    }*/
+  void set_size(size_t sz) { assert(0); }
   void risk_release_ownership() {
     container_.risk_release_ownership();
   }
@@ -785,7 +777,7 @@ public:
     container_.m_fixlen = len;
   }
   void set_min_value(uint64_t min_value) { assert(0); }
-  void set_sz(size_t sz) {
+  void set_size(size_t sz) {
     container_.m_size = sz;
   }
   const byte_t* data() const { return container_.data(); }
@@ -1644,7 +1636,7 @@ public:
         //ptr->key2_data_.init(header->key2_fixed_len,
         //                   header->key2_data_mem_size / header->key2_fixed_len);
         ptr->key2_data_.set_key_len(header->key2_fixed_len);
-        ptr->key2_data_.set_sz(header->key2_data_mem_size / header->key2_fixed_len);
+        ptr->key2_data_.set_size(header->key2_data_mem_size / header->key2_fixed_len);
       }
       return ptr.release();
     }
