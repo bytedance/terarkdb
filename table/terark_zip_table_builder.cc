@@ -837,7 +837,8 @@ Status TerarkZipTableBuilder::WaitBuildIndex() {
         param.data.close();
       }
     }
-    kvs->commonPrefix.assign(fstring(kvs->build.front()->stat.minKey).substr(0, commonPrefixLength));
+    auto minKey = fstring(kvs->build.front()->stat.minKey);
+    kvs->commonPrefix.assign(minKey.substr(0, commonPrefixLength));
     kvs->indexFileEnd = offset;
   }
   return result;
@@ -1066,7 +1067,7 @@ Status TerarkZipTableBuilder::buildZeroLengthBlobStore(BuildStoreParams &params)
     });
   }
   return s;
-};
+}
 Status TerarkZipTableBuilder::buildPlainBlobStore(BuildStoreParams &params) {
   auto& kvs = params.kvs;
   terark::PlainBlobStore::MyBuilder builder(kvs.value.m_total_key_len, params.fpath, params.offset);
@@ -1075,7 +1076,7 @@ Status TerarkZipTableBuilder::buildPlainBlobStore(BuildStoreParams &params) {
     builder.finish();
   }
   return s;
-};
+}
 Status TerarkZipTableBuilder::buildMixedLenBlobStore(BuildStoreParams &params) {
   auto& kvs = params.kvs;
   size_t fixedLen = kvs.value.m_max_cnt_key;
@@ -1095,7 +1096,7 @@ Status TerarkZipTableBuilder::buildMixedLenBlobStore(BuildStoreParams &params) {
     builder->finish();
   }
   return s;
-};
+}
 Status TerarkZipTableBuilder::buildZipOffsetBlobStore(BuildStoreParams &params) {
   auto& kvs = params.kvs;
   size_t blockUnits = table_options_.offsetArrayBlockUnits;
@@ -1105,7 +1106,7 @@ Status TerarkZipTableBuilder::buildZipOffsetBlobStore(BuildStoreParams &params) 
     builder.finish();
   }
   return s;
-};
+}
 #endif // TerocksPrivateCode
 
 Status TerarkZipTableBuilder::ZipValueToFinish() {
