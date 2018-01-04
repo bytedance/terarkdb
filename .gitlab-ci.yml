@@ -1,10 +1,11 @@
-
 stages:
   - build
 
 job-build:
   stage: build
   script:
-    - touch start-ci.txt
+    - sh build_for_ci.sh
+    - rm -rf /ci_build/terark-zip-rocksdb/*
+    - cp -r pkg/* /ci_build/terark-zip-rocksdb/
   only:
     - master
