@@ -137,6 +137,35 @@ rocksdb::Status MyRocksTablePropertiesCollectorHack(IntTblPropCollector* collect
 ///////////////////////////////////////////////////////////////////
 #endif // TerocksPrivateCode
 
+class TerarkZipTableBuilderTask : public PipelineTask {
+public:
+  std::promise<Status> promise;
+  std::function<Status()> func;
+};
+
+class TerarkZipTableBuilderStage : public PipelineStage
+{
+protected:
+  void process(int threadno, PipelineQueueItem* item) {
+    auto task = static_cast<TerarkZipTableBuilderTask*>(item->task);
+    Status s;
+    try {
+      s = task->func();
+    }
+    catch (const std::exception& ex) {
+      s = Status::Aborted("exception", ex.what());
+    }
+    task->promise.set_value(s);
+  }
+
+public:
+  TerarkZipTableBuilderStage()
+    : PipelineStage(1)
+  {
+    m_step_name = "build";
+  }
+};
+
 TerarkZipTableBuilder::TerarkZipTableBuilder(const TerarkZipTableFactory* table_factory,
                                              const TerarkZipTableOptions& tzto,
                                              const TableBuilderOptions& tbo,
@@ -224,6 +253,10 @@ try {
       zbuilder_->prepare(1024, tmpZipValueFile_.fpath);
     }
   }
+  pipeline_.m_silent = true;
+  pipeline_ >> new TerarkZipTableBuilderStage;
+  pipeline_.setQueueSize(50); // we thought it's enough ...
+  pipeline_.compile();
 }
 catch (const std::exception& ex) {
   WARN_EXCEPT(tbo.ioptions.info_log
@@ -243,6 +276,8 @@ TerarkZipTableBuilder::createZipBuilder() const {
 }
 
 TerarkZipTableBuilder::~TerarkZipTableBuilder() {
+  pipeline_.stop();
+  pipeline_.wait();
   std::unique_lock<std::mutex> zipLock(zipMutex);
   waitQueue.trim(std::remove_if(waitQueue.begin(), waitQueue.end(),
     [this](PendingTask x) {return this == x.tztb; }));
@@ -609,6 +644,14 @@ catch (const std::exception& ex) {
   return AbortFinish(ex);
 }
 
+std::future<Status> TerarkZipTableBuilder::Async(std::function<Status()> func) {
+  auto task = new TerarkZipTableBuilderTask;
+  task->func = std::move(func);
+  auto future = task->promise.get_future();
+  pipeline_.inqueue(task);
+  return future;
+}
+
 void TerarkZipTableBuilder::BuildIndex(BuildIndexParams& param, KeyValueStatus& kvs) {
   assert(param.stat.numKeys > 0);
 #if defined(TerocksPrivateCode)
@@ -624,7 +667,7 @@ void TerarkZipTableBuilder::BuildIndex(BuildIndexParams& param, KeyValueStatus& 
     }
   }
   param.data.complete_write();
-  param.wait = std::async(std::launch::async, [this, &param, &kvs]() {
+  param.wait = Async([this, &param, &kvs]() {
     auto& keyStat = param.stat;
     const TerarkIndex::Factory* factory;
 #if defined(TerocksPrivateCode)
@@ -804,10 +847,10 @@ Status TerarkZipTableBuilder::BuildStore(KeyValueStatus& kvs,
       if (kvs.valueFile.fp && table_options_.debugLevel != 2) {
         kvs.isValueBuild = true;
         if (flag & BuildStoreSync) {
-          buildUncompressedStore();
+          return buildUncompressedStore();
         }
         else {
-          kvs.wait = std::async(std::launch::async, buildUncompressedStore);
+          kvs.wait = Async(buildUncompressedStore);
         }
       }
     }
@@ -825,10 +868,10 @@ Status TerarkZipTableBuilder::BuildStore(KeyValueStatus& kvs,
   }
   else {
     if (kvs.isUseDictZip) {
-      kvs.wait = std::async(std::launch::async, buildCompressedStore);
+      kvs.wait = Async(buildCompressedStore);
     }
     else {
-      kvs.wait = std::async(std::launch::async, buildUncompressedStore);
+      kvs.wait = Async(buildUncompressedStore);
     }
   }
   return Status::OK();
@@ -1201,6 +1244,17 @@ Status TerarkZipTableBuilder::ZipValueToFinishMulti() {
   if (isUseDictZip) {
     zbuilder.reset(createZipBuilder());
     dictWaitHandle = LoadSample(zbuilder);
+    if (zbuilder) {
+      assert(tmpZipStoreFileSize_ == 0);
+      // build dict in this thread
+      zbuilder->prepare(1, tmpZipStoreFile_, 0);
+      // disallow 0 record finish
+      zbuilder->addRecord("Hello World!");
+      // make zbuilder ready to next work
+      zbuilder->finish(DictZipBlobStore::ZipBuilder::FinishNone);
+      // truncate output file
+      FileStream(tmpZipStoreFile_.fpath, "wb");
+    }
     for (auto& kvs : histogram_) {
       if (kvs->isUseDictZip) {
         s = BuildStore(*kvs, zbuilder.get(), BuildStoreSync);
