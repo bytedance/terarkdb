@@ -294,6 +294,26 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo) {
         terark::getEnvLong("TerarkZipTable_" #name, Default)
     MyGetUniversal_uint(min_merge_width,  4);
     MyGetUniversal_uint(max_merge_width, 50);
+    cfo.compaction_options_universal.size_ratio = (unsigned)
+        terark::getEnvLong("TerarkZipTable_universal_compaction_size_ratio",
+                           10);
+    const char* env_stop_style =
+        getenv("TerarkZipTable_universal_compaction_stop_style");
+    if (env_stop_style) {
+      auto& ou = cfo.compaction_options_universal;
+      if (strncasecmp(env_stop_style, "Similar", 7) == 0) {
+        ou.stop_style = kCompactionStopStyleSimilarSize;
+      }
+      else if (strncasecmp(env_stop_style, "Total", 5) == 0) {
+        ou.stop_style = kCompactionStopStyleTotalSize;
+      }
+      else {
+        STD_WARN(
+          "bad env TerarkZipTable_universal_compaction_stop_style=%s, use rocksdb default 'TotalSize'",
+          env_stop_style);
+        ou.stop_style = kCompactionStopStyleTotalSize;
+      }
+    }
   }
   MyGetXiB(cfo, write_buffer_size);
   MyGetXiB(cfo, target_file_size_base);
