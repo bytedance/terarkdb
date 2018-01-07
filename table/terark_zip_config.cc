@@ -292,11 +292,11 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo) {
 #define MyGetUniversal_uint(name, Default) \
     cfo.compaction_options_universal.name = \
         terark::getEnvLong("TerarkZipTable_" #name, Default)
-    MyGetUniversal_uint(min_merge_width,  4);
-    MyGetUniversal_uint(max_merge_width, 50);
+    MyGetUniversal_uint(min_merge_width, 3);
+    MyGetUniversal_uint(max_merge_width, 7);
     cfo.compaction_options_universal.size_ratio = (unsigned)
         terark::getEnvLong("TerarkZipTable_universal_compaction_size_ratio",
-                           10);
+                            cfo.compaction_options_universal.size_ratio);
     const char* env_stop_style =
         getenv("TerarkZipTable_universal_compaction_stop_style");
     if (env_stop_style) {
