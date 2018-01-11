@@ -74,7 +74,7 @@ void TerarkZipAutoConfigForBulkLoad(struct TerarkZipTableOptions& tzo,
   tzo.softZipWorkingMemLimit = memBytesLimit * 7 / 8;
   tzo.hardZipWorkingMemLimit = tzo.softZipWorkingMemLimit;
   tzo.smallTaskMemory = memBytesLimit / 16;
-  tzo.indexNestLevel = 2;
+  tzo.indexNestLevel = 3;
 
   cfo.write_buffer_size = tzo.smallTaskMemory;
   cfo.num_levels = 7;
