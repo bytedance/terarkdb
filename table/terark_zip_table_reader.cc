@@ -16,6 +16,9 @@
 # include <fcntl.h>
 #endif
 
+// for isChecksumVerifyEnabled()
+#include <terark/zbs/blob_store_file_header.hpp>
+
 namespace {
 using namespace rocksdb;
 
@@ -501,7 +504,7 @@ protected:
         }
         subReader_->GetRecordAppend(recId, &valueBuf_);
       }
-      catch (const BadCrc32cException& ex) { // crc checksum error
+      catch (const std::exception& ex) { // crc checksum error
         SetIterInvalid();
         status_ = Status::Corruption(
           "TerarkZipTableIterator::UnzipIterRecord()", ex.what());
@@ -830,24 +833,6 @@ void TerarkZipSubReader::InitUsePread(int minPreadLen) {
   }
 }
 
-void TerarkZipSubReader::GetRecordAppend(size_t recId, valvec<byte_t>* tbuf,
-                                         uint32_t offset, uint32_t length)
-const {
-  if (0 == offset && UINT32_MAX == length) {
-    if (storeUsePread_)
-      store_->pread_record_append(cache_, storeFD_, storeOffset_, recId, tbuf);
-    else
-      store_->get_record_append(recId, tbuf);
-  }
-  else {
-    assert(0);
-    if (storeUsePread_)
-      assert(0);
-    else
-      store_->get_slice_append(recId, offset, length, tbuf);
-  }
-}
-
 void TerarkZipSubReader::GetRecordAppend(size_t recId, valvec<byte_t>* tbuf)
 const {
   if (storeUsePread_)
@@ -897,7 +882,7 @@ const {
     try {
       GetRecordAppend(recId, &g_tbuf);
     }
-    catch (const terark::BadChecksumException& ex) {
+    catch (const std::exception& ex) {
       return Status::Corruption("TerarkZipTableReader::Get()", ex.what());
     }
     get_context->SaveValue(ParsedInternalKey(pikey.user_key, global_seqno, kTypeValue),
@@ -908,7 +893,7 @@ const {
     try {
       GetRecordAppend(recId, &g_tbuf);
     }
-    catch (const terark::BadChecksumException& ex) {
+    catch (const std::exception& ex) {
       return Status::Corruption("TerarkZipTableReader::Get()", ex.what());
     }
                                // little endian uint64_t
@@ -925,7 +910,7 @@ const {
       GetRecordAppend(recId, &g_tbuf);
       assert(g_tbuf.size() == sizeof(SequenceNumber) - 1);
     }
-    catch (const terark::BadChecksumException& ex) {
+    catch (const std::exception& ex) {
       return Status::Corruption("TerarkZipTableReader::Get()", ex.what());
     }
     uint64_t seq = *(uint64_t*)g_tbuf.data() & kMaxSequenceNumber;
@@ -939,7 +924,7 @@ const {
     try {
       GetRecordAppend(recId, &g_tbuf);
     }
-    catch (const terark::BadChecksumException& ex) {
+    catch (const std::exception& ex) {
       return Status::Corruption("TerarkZipTableReader::Get()", ex.what());
     }
     size_t num = 0;
@@ -1024,6 +1009,14 @@ TerarkEmptyTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   return Status::OK();
 }
 
+terark::BlobStore::Dictionary
+getVerifyDict(Slice dictData) {
+  if (terark::isChecksumVerifyEnabled()) {
+    return terark::BlobStore::Dictionary(fstringOf(dictData));
+  } else {
+    return terark::BlobStore::Dictionary(fstringOf(dictData), 0);
+  }
+}
 
 Status
 TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
@@ -1104,7 +1097,7 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   try {
     subReader_.store_.reset(terark::BlobStore::load_from_user_memory(
       fstring(file_data.data(), props->data_size),
-      fstringOf(valueDictBlock.data)
+      getVerifyDict(valueDictBlock.data)
     ));
   }
   catch (const BadCrc32cException& ex) {
@@ -1646,7 +1639,7 @@ TerarkZipTableMultiReader::Open(RandomAccessFileReader* file, uint64_t file_size
   s = subIndex_.Init(fstringOf(offsetBlock.data)
     , fstringOf(indexBlock.data)
     , fstring(file_data.data(), props->data_size)
-    , fstringOf(valueDictBlock.data)
+    , getVerifyDict(valueDictBlock.data)
     , fstringOf(zValueTypeBlock.data)
     , fstringOf(commonPrefixBlock.data)
     , tzto_.minPreadLen

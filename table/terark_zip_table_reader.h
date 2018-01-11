@@ -140,7 +140,6 @@ struct TerarkZipSubReader {
 
   void InitUsePread(int minPreadLen);
 
-  void GetRecordAppend(size_t recId, valvec<byte_t>* tbuf, uint32_t offset, uint32_t length) const;
   void GetRecordAppend(size_t recId, valvec<byte_t>* tbuf) const;
 
   Status Get(SequenceNumber, const ReadOptions&, const Slice& key,
