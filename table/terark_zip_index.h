@@ -22,7 +22,7 @@ using std::unique_ptr;
 
 struct TerarkZipTableOptions;
 class TempFileDeleteOnClose;
-class ImmutableCFOptions;
+struct ImmutableCFOptions;
 class TerarkIndex : boost::noncopyable {
 public:
   class Iterator : boost::noncopyable {
