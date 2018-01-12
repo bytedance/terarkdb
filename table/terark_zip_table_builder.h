@@ -95,8 +95,8 @@ private:
     uint64_t valueFileBegin = 0;
     uint64_t valueFileEnd = 0;
     TempFileDeleteOnClose valueFile;
-    bool isUseDictZip = false;
     bool isValueBuild = false;
+    bool isUseDictZip = false;
     std::future<Status> wait;
     valvec<std::unique_ptr<BuildIndexParams>> build;
   };
@@ -117,7 +117,7 @@ private:
   Status EmptyTableFinish();
   Status OfflineFinish();
   void BuildIndex(BuildIndexParams& param, KeyValueStatus& kvs);
-  void BuildStore(KeyValueStatus& kvs, DictZipBlobStore::ZipBuilder* zbuilder);
+  Status BuildStore(KeyValueStatus& kvs, DictZipBlobStore::ZipBuilder* zbuilder, bool async);
   Status WaitBuildIndex();
   Status WaitBuildStore();
   struct BuildReorderParams {
