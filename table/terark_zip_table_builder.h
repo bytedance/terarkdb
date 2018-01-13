@@ -94,6 +94,7 @@ private:
     uint64_t indexFileEnd = 0;
     uint64_t valueFileBegin = 0;
     uint64_t valueFileEnd = 0;
+    uint64_t seqType = 0;
     TempFileDeleteOnClose valueFile;
     bool isValueBuild = false;
     bool isUseDictZip = false;
