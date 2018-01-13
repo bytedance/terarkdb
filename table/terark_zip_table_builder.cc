@@ -597,7 +597,6 @@ catch (const std::exception& ex) {
 
 void TerarkZipTableBuilder::BuildIndex(BuildIndexParams& param, KeyValueStatus& kvs) {
   assert(param.stat.numKeys > 0);
-  size_t split = kvs.split;
   if (kvs.split == 0) {
     param.stat.commonPrefixLen = fstring(param.stat.minKey).commonPrefixLen(param.stat.maxKey);
   }
@@ -795,7 +794,6 @@ Status TerarkZipTableBuilder::WaitBuildIndex() {
 
 Status TerarkZipTableBuilder::WaitBuildStore() {
   Status result = Status::OK();
-  size_t offset = 0;
   for (auto& kvs : histogram_) {
     if (kvs->isValueBuild) {
       assert(kvs->wait.valid());
