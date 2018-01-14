@@ -145,6 +145,7 @@ struct TerarkZipSubReader {
 
   Status Get(SequenceNumber, const ReadOptions&, const Slice& key,
     GetContext*, int flag) const;
+  size_t DictRank(fstring key) const;
 
   ~TerarkZipSubReader();
 };

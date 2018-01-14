@@ -972,6 +972,28 @@ const {
   return Status::OK();
 }
 
+size_t TerarkZipSubReader::DictRank(fstring key) const {
+  auto& cp = commonPrefix_;
+  size_t cplen = key.commonPrefixLen(cp);
+  if (cp.size() != cplen) {
+    if (key.size() == cplen) {
+      assert(key.size() < cp.size());
+      return 0;
+    }
+    else {
+      assert(key.size() > cplen);
+      assert(key[cplen] != cp[cplen]);
+      if ((byte_t(key[cplen]) < byte_t(cp[cplen])))
+        return 0;
+      else
+        return index_->NumKeys();
+    }
+  }
+  else {
+    return index_->DictRank(key.substr(cplen));
+  }
+}
+
 TerarkZipSubReader::~TerarkZipSubReader() {
   type_.risk_release_ownership();
 }
@@ -1258,7 +1280,7 @@ uint64_t TerarkZipTableReader::ApproximateOffsetOf_old(const Slice& ikey) {
 uint64_t TerarkZipTableReader::ApproximateOffsetOf_new(const Slice& ikey) {
 #if defined(TerocksPrivateCode)
   size_t numRecords = subReader_.index_->NumKeys();
-  size_t rank = subReader_.index_->DictRank(fstringOf(ikey));
+  size_t rank = subReader_.DictRank(fstringOf(ExtractUserKey(ikey)));
   auto offset = uint64_t(subReader_.rawReaderSize_ * 1.0 * rank / numRecords);
   if (isReverseBytewiseOrder_)
     return subReader_.rawReaderSize_ - offset;
@@ -1582,31 +1604,33 @@ uint64_t TerarkZipTableMultiReader::ApproximateOffsetOf_new(const Slice& ikey) {
   const TerarkZipSubReader* subReader;
   size_t numRecords;
   size_t rank;
-  subReader = subIndex_.GetSubReader(fstringOf(ikey));
+  fstring key = fstringOf(ExtractUserKey(ikey));
+  subReader = subIndex_.GetSubReader(key);
   if (subReader == nullptr) {
-    if (isReverseBytewiseOrder_) {
-      subReader = subIndex_.GetSubReader(0);
-      numRecords = subReader->index_->NumKeys();
-      rank = 0;
-    }
-    else {
-      subReader = subIndex_.GetSubReader(subIndex_.GetSubCount() - 1);
-      numRecords = subReader->index_->NumKeys();
-      rank = numRecords;
-    }
+    subReader = subIndex_.GetSubReader(subIndex_.GetSubCount() - 1);
+    numRecords = subReader->index_->NumKeys();
+    rank = numRecords;
   }
   else {
     numRecords = subReader->index_->NumKeys();
-    if (!ikey.starts_with(SliceOf(subReader->prefix_))) {
-      if (isReverseBytewiseOrder_) {
-        rank = numRecords;
+    fstring prefix = subReader->prefix_;
+    size_t cplen = key.commonPrefixLen(prefix);
+    if (prefix.size() != cplen) {
+      if (key.size() == cplen) {
+        assert(key.size() < prefix.size());
+        rank = 0;
       }
       else {
-        rank = 0;
+        assert(key.size() > cplen);
+        assert(key[cplen] != prefix[cplen]);
+        if ((byte_t(key[cplen]) < byte_t(prefix[cplen])))
+          rank = 0;
+        else
+          return numRecords;
       }
     }
     else {
-      rank = subReader->index_->DictRank(fstringOf(ikey));
+      rank = subReader->DictRank(key.substr(prefix.size()));
     }
   }
   auto offset = uint64_t(subReader->rawReaderOffset_ +
