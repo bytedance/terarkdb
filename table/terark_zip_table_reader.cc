@@ -190,6 +190,9 @@ void UpdateCollectInfo(const TerarkZipTableFactory* table_factory,
       , props->raw_key_size + props->raw_value_size, file_size);
 }
 
+static bool g_useOldOffsetOf =
+  terark::getEnvBool("TerarkZipTable_oldOffsetOf", false);
+
 }
 
 namespace rocksdb {
@@ -1230,19 +1233,24 @@ TerarkZipTableReader::Get(const ReadOptions& ro, const Slice& ikey,
 
 uint64_t TerarkZipTableReader::ApproximateOffsetOf(const Slice& ikey) {
 #if defined(TerocksPrivateCode)
-  auto iter = UniquePtrOf(NewIterator(ReadOptions(), nullptr, false));
-  iter->Seek(ikey);
-  auto indexIter = static_cast<TerarkZipTableIndexIterator*>(iter.get())->GetIndexIterator();
-  assert(indexIter != nullptr);
-  assert(&subReader_ == static_cast<TerarkZipTableIndexIterator*>(iter.get())->GetSubReader());
   size_t numRecords = subReader_.index_->NumKeys();
   size_t rank;
-  if (iter->Valid()) {
-    assert(indexIter->Valid());
-    rank = indexIter->DictRank();
+  if (g_useOldOffsetOf) {
+    auto iter = UniquePtrOf(NewIterator(ReadOptions(), nullptr, false));
+    iter->Seek(ikey);
+    auto indexIter = static_cast<TerarkZipTableIndexIterator*>(iter.get())->GetIndexIterator();
+    assert(indexIter != nullptr);
+    assert(&subReader_ == static_cast<TerarkZipTableIndexIterator*>(iter.get())->GetSubReader());
+    if (iter->Valid()) {
+      assert(indexIter->Valid());
+      rank = indexIter->DictRank();
+    }
+    else {
+      rank = numRecords;
+    }
   }
   else {
-    rank = numRecords;
+    rank = subReader_.index_->DictRank(fstringOf(ikey));
   }
   auto offset = uint64_t(subReader_.rawReaderSize_ * 1.0 * rank / numRecords);
   if (isReverseBytewiseOrder_)
@@ -1521,31 +1529,53 @@ TerarkZipTableMultiReader::Get(const ReadOptions& ro, const Slice& ikey,
 }
 
 uint64_t TerarkZipTableMultiReader::ApproximateOffsetOf(const Slice& ikey) {
-  auto iter = UniquePtrOf(static_cast<TerarkZipTableIndexIterator*>(
-    NewIterator(ReadOptions(), nullptr, false)));
-  iter->Seek(ikey);
-  auto indexIter = iter->GetIndexIterator();
-  auto subReader = iter->GetSubReader();
+  const TerarkZipSubReader* subReader;
   size_t numRecords;
   size_t rank;
-  if (!iter->Valid()) {
-    if (isReverseBytewiseOrder_) {
-      subReader = subIndex_.GetSubReader(0);
-      numRecords = subReader->index_->NumKeys();
-      rank = 0;
+  if (g_useOldOffsetOf) {
+    auto iter = UniquePtrOf(static_cast<TerarkZipTableIndexIterator*>(
+      NewIterator(ReadOptions(), nullptr, false)));
+    iter->Seek(ikey);
+    auto indexIter = iter->GetIndexIterator();
+    subReader = iter->GetSubReader();
+    if (!iter->Valid()) {
+      if (isReverseBytewiseOrder_) {
+        subReader = subIndex_.GetSubReader(0);
+        numRecords = subReader->index_->NumKeys();
+        rank = 0;
+      }
+      else {
+        subReader = subIndex_.GetSubReader(subIndex_.GetSubCount() - 1);
+        numRecords = subReader->index_->NumKeys();
+        rank = numRecords;
+      }
     }
     else {
-      subReader = subIndex_.GetSubReader(subIndex_.GetSubCount() - 1);
       numRecords = subReader->index_->NumKeys();
-      rank = numRecords;
+      if (indexIter->Valid())
+        rank = indexIter->DictRank();
+      else
+        rank = numRecords;
     }
   }
   else {
-    numRecords = subReader->index_->NumKeys();
-    if (indexIter->Valid())
-      rank = indexIter->DictRank();
-    else
-      rank = numRecords;
+    subReader = subIndex_.GetSubReader(fstringOf(ikey));
+    if (subReader == nullptr) {
+      if (isReverseBytewiseOrder_) {
+        subReader = subIndex_.GetSubReader(0);
+        numRecords = subReader->index_->NumKeys();
+        rank = 0;
+      }
+      else {
+        subReader = subIndex_.GetSubReader(subIndex_.GetSubCount() - 1);
+        numRecords = subReader->index_->NumKeys();
+        rank = numRecords;
+      }
+    }
+    else {
+      numRecords = subReader->index_->NumKeys();
+      rank = subReader->index_->DictRank(fstringOf(ikey));
+    }
   }
   auto offset = uint64_t(subReader->rawReaderOffset_ +
                          1.0 * subReader->rawReaderSize_ * rank / numRecords);

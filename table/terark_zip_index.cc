@@ -55,6 +55,13 @@ bool VerifyClassName(fstring class_name) {
                   g_TerarkIndexFactroy.val(head_i) == g_TerarkIndexFactroy.val(self_i);
 }
 
+namespace {
+MatchContext& get_ctx() {
+  MY_THREAD_LOCAL(terark::MatchContext, ctx);
+  return ctx;
+}
+}
+
 template<size_t Align, class Writer>
 void Padzero(const Writer& write, size_t offset) {
   static const char zeros[Align] = { 0 };
@@ -476,12 +483,21 @@ struct NestLoudsTrieIndexBase : public TerarkIndex {
     m_trie->save_mmap(write);
   }
   size_t Find(fstring key) const override final {
-    MY_THREAD_LOCAL(terark::MatchContext, ctx);
+    auto& ctx = get_ctx();
+    ctx.reset();
     ctx.root = 0;
     ctx.pos = 0;
     ctx.zidx = 0;
     ctx.zbuf_state = size_t(-1);
     return m_dawg->index(ctx, key);
+  }
+  virtual size_t DictRank(fstring key) const {
+    auto& ctx = get_ctx();
+    ctx.root = 0;
+    ctx.pos = 0;
+    ctx.zidx = 0;
+    ctx.zbuf_state = size_t(-1);
+    return m_dawg->dict_rank(ctx, key);
   }
   size_t NumKeys() const override final {
     return m_dawg->num_words();
@@ -1315,6 +1331,61 @@ struct CompositeUintIndexBase : public TerarkIndex {
       }
     }
   };
+  static int CommonSeek(fstring target,
+                        const CompositeUintIndexBase& index,
+                        uint64_t* pKey1,
+                        fstring* pKey2,
+                        size_t& id,
+                        size_t& rankselect1_idx) {
+    size_t cplen = target.commonPrefixLen(index.commonPrefix_);
+    if (cplen != index.commonPrefix_.size()) {
+      assert(target.size() >= cplen);
+      assert(target.size() == cplen ||
+        byte_t(target[cplen]) != byte_t(index.commonPrefix_[cplen]));
+      if (target.size() == cplen ||
+        byte_t(target[cplen]) < byte_t(index.commonPrefix_[cplen])) {
+        rankselect1_idx = 0;
+        id = 0;
+        return 1;
+      }
+      else {
+        id = size_t(-1);
+        return 0;
+      }
+    }
+    uint64_t key1 = 0;
+    fstring  key2;
+    if (target.size() <= cplen + index.key1_len_) {
+      fstring sub = target.substr(cplen);
+      byte_t targetBuffer[8] = { 0 };
+      /*
+       * do not think hard about int, think about string instead.
+       * assume key1_len is 6 byte len like 'abcdef', target without
+       * commpref is 'b', u should compare 'b' with 'a' instead of 'f'.
+       * that's why assign sub starting in the middle instead at tail.
+       */
+      memcpy(targetBuffer + (8 - index.key1_len_), sub.data(), sub.size());
+      *pKey1 = key1 = Read1stKey(targetBuffer, 0, 8);
+      *pKey2 = key2 = fstring(); // empty
+    }
+    else {
+      *pKey1 = key1 = Read1stKey(target, cplen, index.key1_len_);
+      *pKey2 = key2 = target.substr(cplen + index.key1_len_);
+    }
+    if (key1 > index.maxValue_) {
+      id = size_t(-1);
+      return 0;
+    }
+    else if (key1 < index.minValue_) {
+      rankselect1_idx = 0;
+      id = 0;
+      return 1;
+    }
+    else {
+      return 2;
+    }
+  }
+
   class MyBaseIterator : public TerarkIndex::Iterator {
   protected:
     const CompositeUintIndexBase& index_;
@@ -1353,47 +1424,6 @@ struct CompositeUintIndexBase : public TerarkIndex {
       assert(m_id != size_t(-1));
       return buffer_;
     }
-    int CommonSeek(fstring target, uint64_t* pKey1, fstring* pKey2) {
-      size_t cplen = target.commonPrefixLen(index_.commonPrefix_);
-      if (cplen != index_.commonPrefix_.size()) {
-        assert(target.size() >= cplen);
-        assert(target.size() == cplen ||
-            byte_t(target[cplen]) != byte_t(index_.commonPrefix_[cplen]));
-        if (target.size() == cplen ||
-            byte_t(target[cplen]) < byte_t(index_.commonPrefix_[cplen])) {
-          return SeekToFirst();
-        } else {
-          m_id = size_t(-1);
-          return false;
-        }
-      }
-      uint64_t key1 = 0;
-      fstring  key2;
-      if (target.size() <= cplen + index_.key1_len_) {
-        fstring sub = target.substr(cplen);
-        byte_t targetBuffer[8] = { 0 };
-        /*
-         * do not think hard about int, think about string instead.
-         * assume key1_len is 6 byte len like 'abcdef', target without
-         * commpref is 'b', u should compare 'b' with 'a' instead of 'f'.
-         * that's why assign sub starting in the middle instead at tail.
-         */
-        memcpy(targetBuffer + (8 - index_.key1_len_), sub.data(), sub.size());
-        *pKey1 = key1 = Read1stKey(targetBuffer, 0, 8);
-        *pKey2 = key2 = fstring(); // empty
-      } else {
-        *pKey1 = key1 = Read1stKey(target, cplen, index_.key1_len_);
-        *pKey2 = key2 = target.substr(cplen + index_.key1_len_);
-      }
-      if (key1 > index_.maxValue_) {
-        m_id = size_t(-1);
-        return false;
-      } else if (key1 < index_.minValue_) {
-        return SeekToFirst();
-      } else
-        return 2;
-    }
-
     bool SeekToFirst() override {
       rankselect1_idx_ = 0;
       m_id = 0;
@@ -1464,6 +1494,57 @@ public:
     {}
   };
 public:
+  static bool SeekImpl(fstring target,
+                       const CompositeUintIndex& index,
+                       size_t& id,
+                       size_t& rankselect1_idx) {
+    uint64_t key1 = 0;
+    fstring  key2;
+    int ret = CompositeUintIndexBase::CommonSeek(target, index, &key1, &key2, id, rankselect1_idx);
+    if (ret < 2) {
+      return ret ? true : false;
+    }
+    // find the corresponding bit within 2ndRS
+    uint64_t order, pos0, cnt;
+    rankselect1_idx = key1 - index.minValue_;
+    if (index.rankselect1_[rankselect1_idx]) {
+      // find within this index
+      order = index.rankselect1_.rank1(rankselect1_idx);
+      pos0 = index.rankselect2_.select0(order);
+      if (pos0 == index.key2_data_.size() - 1) { // last elem
+        id = (index.key2_data_.compare(pos0, key2) >= 0) ? pos0 : size_t(-1);
+        goto out;
+      }
+      else {
+        cnt = index.rankselect2_.one_seq_len(pos0 + 1) + 1;
+        id = index.Locate(index.key2_data_, pos0, cnt, key2);
+        if (id != size_t(-1)) {
+          goto out;
+        }
+        else if (pos0 + cnt == index.key2_data_.size()) {
+          goto out;
+        }
+        else {
+          // try next offset
+          rankselect1_idx++;
+        }
+      }
+    }
+    // no such index, use the lower_bound form
+    cnt = index.rankselect1_.zero_seq_len(rankselect1_idx);
+    if (rankselect1_idx + cnt >= index.rankselect1_.size()) {
+      id = size_t(-1);
+      return false;
+    }
+    rankselect1_idx += cnt;
+    order = index.rankselect1_.rank1(rankselect1_idx);
+    id = index.rankselect2_.select0(order);
+  out:
+    if (id == size_t(-1)) {
+      return false;
+    }
+    return true;
+  }
   class CompositeUintIndexIterator : public MyBaseIterator {
   public:
     CompositeUintIndexIterator(const CompositeUintIndex& index)
@@ -1481,51 +1562,12 @@ public:
       return true;
     }
     bool Seek(fstring target) override {
-      auto& index_ = static_cast<const CompositeUintIndex&>(MyBaseIterator::index_);
-      uint64_t key1 = 0;
-      fstring  key2;
-      int ret = CommonSeek(target, &key1, &key2);
-      if (ret < 2) {
-        return ret ? true : false;
+      auto& index = static_cast<const CompositeUintIndex&>(MyBaseIterator::index_);
+      if (CompositeUintIndex::SeekImpl(target, index, m_id, rankselect1_idx_)) {
+        UpdateBuffer();
+        return true;
       }
-      // find the corresponding bit within 2ndRS
-      uint64_t order, pos0, cnt;
-      rankselect1_idx_ = key1 - index_.minValue_;
-      if (index_.rankselect1_[rankselect1_idx_]) {
-        // find within this index
-        order = index_.rankselect1_.rank1(rankselect1_idx_);
-        pos0 = index_.rankselect2_.select0(order);
-        if (pos0 == index_.key2_data_.size() - 1) { // last elem
-          m_id = (index_.key2_data_.compare(pos0, key2) >= 0) ? pos0 : size_t(-1);
-          goto out;
-        } else {
-          cnt = index_.rankselect2_.one_seq_len(pos0 + 1) + 1;
-          m_id = index_.Locate(index_.key2_data_, pos0, cnt, key2);
-          if (m_id != size_t(-1)) {
-            goto out;
-          } else if (pos0 + cnt == index_.key2_data_.size()) {
-            goto out;
-          } else {
-            // try next offset
-            rankselect1_idx_++;
-          }
-        }
-      }
-      // no such index, use the lower_bound form
-      cnt = index_.rankselect1_.zero_seq_len(rankselect1_idx_);
-      if (rankselect1_idx_ + cnt >= index_.rankselect1_.size()) {
-        m_id = size_t(-1);
-        return false;
-      }
-      rankselect1_idx_ += cnt;
-      order = index_.rankselect1_.rank1(rankselect1_idx_);
-      m_id = index_.rankselect2_.select0(order);
-    out:
-      if (m_id == size_t(-1)) {
-        return false;
-      }
-      UpdateBuffer();
-      return true;
+      return false;
     }
 
     bool Next() override {
@@ -1731,6 +1773,13 @@ public:
       return id;
     }
     return size_t(-1);
+  }
+  size_t DictRank(fstring key) const override {
+    size_t id, rankselect1_idx;
+    if (CompositeUintIndex::SeekImpl(key, *this, id, rankselect1_idx)) {
+      return id;
+    }
+    return key2_data_.size();
   }
   size_t NumKeys() const override {
     return key2_data_.size();
@@ -2043,6 +2092,62 @@ public:
     FileHeader(size_t body_size)
       : MyBaseFileHeader(body_size, typeid(UintIndex)) {}
   };
+  static bool SeekImpl(fstring target, const UintIndex& index, size_t& id, size_t& pos) {
+    size_t cplen = target.commonPrefixLen(index.commonPrefix_);
+    if (cplen != index.commonPrefix_.size()) {
+      assert(target.size() >= cplen);
+      assert(target.size() == cplen
+        || byte_t(target[cplen]) != byte_t(index.commonPrefix_[cplen]));
+      if (target.size() == cplen
+        || byte_t(target[cplen]) < byte_t(index.commonPrefix_[cplen])) {
+        id = 0;
+        pos = 0;
+        return true;
+      }
+      else {
+        id = size_t(-1);
+        return false;
+      }
+    }
+    target = target.substr(index.commonPrefix_.size());
+    /*
+     *    target.size()     == 4;
+     *    index_.keyLength_ == 6;
+     *    | - - - - - - - - |  <- buffer
+     *        | - - - - - - |  <- index
+     *        | - - - - |      <- target
+     */
+    byte_t targetBuffer[8] = {};
+    memcpy(targetBuffer + (8 - index.keyLength_),
+      target.data(), std::min<size_t>(index.keyLength_, target.size()));
+    uint64_t targetValue = ReadBigEndianUint64Aligned(targetBuffer, 8);
+    if (targetValue > index.maxValue_) {
+      id = size_t(-1);
+      return false;
+    }
+    if (targetValue < index.minValue_) {
+      id = 0;
+      pos = 0;
+      return true;
+    }
+    pos = targetValue - index.minValue_;
+    id = index.indexSeq_.rank1(pos);
+    if (!index.indexSeq_[pos]) {
+      pos += index.indexSeq_.zero_seq_len(pos);
+    }
+    else if (target.size() > index.keyLength_) {
+      // minValue:  target
+      // targetVal: targetvalue.1
+      // maxValue:  targetvau
+      if (pos == index.indexSeq_.size() - 1) {
+        id = size_t(-1);
+        return false;
+      }
+      ++id;
+      pos = pos + index.indexSeq_.zero_seq_len(pos + 1) + 1;
+    }
+    return true;
+  }
   class UIntIndexIterator : public MyBaseIterator {
   public:
     UIntIndexIterator(const UintIndex& index) : MyBaseIterator(index) {}
@@ -2054,60 +2159,12 @@ public:
       return true;
     }
     bool Seek(fstring target) override {
-      auto& index_ = static_cast<const UintIndex&>(this->index_);
-      size_t cplen = target.commonPrefixLen(index_.commonPrefix_);
-      if (cplen != index_.commonPrefix_.size()) {
-        assert(target.size() >= cplen);
-        assert(target.size() == cplen
-            || byte_t(target[cplen]) != byte_t(index_.commonPrefix_[cplen]));
-        if (target.size() == cplen
-            || byte_t(target[cplen]) < byte_t(index_.commonPrefix_[cplen])) {
-          SeekToFirst();
-          return true;
-        }
-        else {
-          m_id = size_t(-1);
-          return false;
-        }
-      }
-      target = target.substr(index_.commonPrefix_.size());
-      /*
-       *    target.size()     == 4;
-       *    index_.keyLength_ == 6;
-       *    | - - - - - - - - |  <- buffer
-       *        | - - - - - - |  <- index
-       *        | - - - - |      <- target
-       */
-      byte_t targetBuffer[8] = {};
-      memcpy(targetBuffer + (8 - index_.keyLength_),
-          target.data(), std::min<size_t>(index_.keyLength_, target.size()));
-      uint64_t targetValue = ReadBigEndianUint64Aligned(targetBuffer, 8);
-      if (targetValue > index_.maxValue_) {
-        m_id = size_t(-1);
-        return false;
-      }
-      if (targetValue < index_.minValue_) {
-        SeekToFirst();
+      auto& index = static_cast<const UintIndex&>(this->index_);
+      if (UintIndex::SeekImpl(target, index, m_id, pos_)) {
+        UpdateBuffer();
         return true;
       }
-      pos_ = targetValue - index_.minValue_;
-      m_id = index_.indexSeq_.rank1(pos_);
-      if (!index_.indexSeq_[pos_]) {
-        pos_ += index_.indexSeq_.zero_seq_len(pos_);
-      }
-      else if (target.size() > index_.keyLength_) {
-        // minValue:  target
-        // targetVal: targetvalue.1
-        // maxValue:  targetvau
-        if (pos_ == index_.indexSeq_.size() - 1) {
-          m_id = size_t(-1);
-          return false;
-        }
-        ++m_id;
-        pos_ = pos_ + index_.indexSeq_.zero_seq_len(pos_ + 1) + 1;
-      }
-      UpdateBuffer();
-      return true;
+      return false;
     }
     bool Next() override {
       auto& index_ = static_cast<const UintIndex&>(this->index_);
@@ -2253,6 +2310,13 @@ public:
       return size_t(-1);
     }
     return indexSeq_.rank1(findPos);
+  }
+  size_t DictRank(fstring key) const override {
+    size_t id, pos;
+    if (UintIndex::SeekImpl(key, *this, id, pos)) {
+      return id;
+    }
+    return indexSeq_.max_rank1();
   }
   size_t NumKeys() const override {
     return indexSeq_.max_rank1();
