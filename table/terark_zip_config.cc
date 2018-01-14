@@ -7,8 +7,8 @@
 #include <rocksdb/table.h>
 #ifdef _MSC_VER
 # include <Windows.h>
-# define strcasecmp stricmp
-# define strncasecmp strnicmp
+# define strcasecmp _stricmp
+# define strncasecmp _strnicmp
 # undef DeleteFile
 #else
 # include <unistd.h>
