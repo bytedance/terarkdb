@@ -148,6 +148,7 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(const TerarkZipTableFactory* table_
   , ioptions_(tbo.ioptions)
   , range_del_block_(1)
   , key_prefixLen_(key_prefixLen)
+{
 try {
   singleIndexMemLimit = std::min(table_options_.softZipWorkingMemLimit,
     table_options_.singleIndexMemLimit);
@@ -228,6 +229,7 @@ catch (const std::exception& ex) {
   WARN_EXCEPT(tbo.ioptions.info_log
       , "%s: Exception: %s", BOOST_CURRENT_FUNCTION, ex.what());
   throw;
+}
 }
 
 DictZipBlobStore::ZipBuilder*
@@ -606,14 +608,14 @@ catch (const std::exception& ex) {
 void TerarkZipTableBuilder::BuildIndex(BuildIndexParams& param, KeyValueStatus& kvs) {
   assert(param.stat.numKeys > 0);
 #if defined(TerocksPrivateCode)
-  if (split == 0) {
+  if (kvs.split == 0) {
     param.stat.commonPrefixLen = commonPrefixLen(param.stat.minKey, param.stat.maxKey);
   }
   else if (0)
 #endif // TerocksPrivateCode
   {
     // nlt don't support only one key which is empty ...
-    if (split == 0 && param.stat.numKeys > 1) {
+    if (kvs.split == 0 && param.stat.numKeys > 1) {
       param.stat.commonPrefixLen = commonPrefixLen(param.stat.minKey, param.stat.maxKey);
     }
   }
