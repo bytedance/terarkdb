@@ -1574,7 +1574,17 @@ uint64_t TerarkZipTableMultiReader::ApproximateOffsetOf(const Slice& ikey) {
     }
     else {
       numRecords = subReader->index_->NumKeys();
-      rank = subReader->index_->DictRank(fstringOf(ikey));
+      if (!ikey.starts_with(SliceOf(subReader->prefix_))) {
+        if (isReverseBytewiseOrder_) {
+          rank = numRecords;
+        }
+        else {
+          rank = 0;
+        }
+      }
+      else {
+        rank = subReader->index_->DictRank(fstringOf(ikey));
+      }
     }
   }
   auto offset = uint64_t(subReader->rawReaderOffset_ +
