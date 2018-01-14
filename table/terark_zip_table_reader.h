@@ -169,6 +169,8 @@ public:
   Status Get(const ReadOptions&, const Slice& key, GetContext*,
     bool skip_filters) override;
 
+  uint64_t ApproximateOffsetOf_old(const Slice& key);
+  uint64_t ApproximateOffsetOf_new(const Slice& key);
   uint64_t ApproximateOffsetOf(const Slice& key) override;
   void SetupForCompaction() override {}
 
@@ -226,6 +228,8 @@ public:
   Status Get(const ReadOptions&, const Slice& key, GetContext*,
     bool skip_filters) override;
 
+  uint64_t ApproximateOffsetOf_old(const Slice& key);
+  uint64_t ApproximateOffsetOf_new(const Slice& key);
   uint64_t ApproximateOffsetOf(const Slice& key) override;
   void SetupForCompaction() override {}
 
