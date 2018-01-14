@@ -78,6 +78,7 @@ public:
   virtual const char* Name() const = 0;
   virtual void SaveMmap(std::function<void(const void *, size_t)> write) const = 0;
   virtual size_t Find(fstring key) const = 0;
+  virtual size_t DictRank(fstring key) const = 0;
   virtual size_t NumKeys() const = 0;
   virtual size_t TotalKeySize() const = 0;
   virtual fstring Memory() const = 0;

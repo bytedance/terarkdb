@@ -190,6 +190,9 @@ void UpdateCollectInfo(const TerarkZipTableFactory* table_factory,
       , props->raw_key_size + props->raw_value_size, file_size);
 }
 
+static bool g_useOldOffsetOf =
+  terark::getEnvBool("TerarkZipTable_oldOffsetOf", false);
+
 }
 
 namespace rocksdb {
@@ -1228,7 +1231,7 @@ TerarkZipTableReader::Get(const ReadOptions& ro, const Slice& ikey,
   return subReader_.Get(global_seqno_, ro, ikey, get_context, flag);
 }
 
-uint64_t TerarkZipTableReader::ApproximateOffsetOf(const Slice& ikey) {
+uint64_t TerarkZipTableReader::ApproximateOffsetOf_old(const Slice& ikey) {
 #if defined(TerocksPrivateCode)
   auto iter = UniquePtrOf(NewIterator(ReadOptions(), nullptr, false));
   iter->Seek(ikey);
@@ -1250,6 +1253,25 @@ uint64_t TerarkZipTableReader::ApproximateOffsetOf(const Slice& ikey) {
   return offset;
 #endif // TerocksPrivateCode
   return 0;
+}
+
+uint64_t TerarkZipTableReader::ApproximateOffsetOf_new(const Slice& ikey) {
+#if defined(TerocksPrivateCode)
+  size_t numRecords = subReader_.index_->NumKeys();
+  size_t rank = subReader_.index_->DictRank(fstringOf(ikey));
+  auto offset = uint64_t(subReader_.rawReaderSize_ * 1.0 * rank / numRecords);
+  if (isReverseBytewiseOrder_)
+    return subReader_.rawReaderSize_ - offset;
+  return offset;
+#endif // TerocksPrivateCode
+  return 0;
+}
+
+uint64_t TerarkZipTableReader::ApproximateOffsetOf(const Slice& ikey) {
+  if (g_useOldOffsetOf)
+    return ApproximateOffsetOf_old(ikey);
+  else
+    return ApproximateOffsetOf_new(ikey);
 }
 
 TerarkZipTableReader::~TerarkZipTableReader() {
@@ -1520,7 +1542,7 @@ TerarkZipTableMultiReader::Get(const ReadOptions& ro, const Slice& ikey,
   return subReader->Get(global_seqno_, ro, ikey, get_context, flag);
 }
 
-uint64_t TerarkZipTableMultiReader::ApproximateOffsetOf(const Slice& ikey) {
+uint64_t TerarkZipTableMultiReader::ApproximateOffsetOf_old(const Slice& ikey) {
   auto iter = UniquePtrOf(static_cast<TerarkZipTableIndexIterator*>(
     NewIterator(ReadOptions(), nullptr, false)));
   iter->Seek(ikey);
@@ -1548,12 +1570,59 @@ uint64_t TerarkZipTableMultiReader::ApproximateOffsetOf(const Slice& ikey) {
       rank = numRecords;
   }
   auto offset = uint64_t(subReader->rawReaderOffset_ +
+    1.0 * subReader->rawReaderSize_ * rank / numRecords);
+  if (isReverseBytewiseOrder_) {
+    subReader = subIndex_.GetSubReader(subIndex_.GetSubCount() - 1);
+    return subReader->rawReaderOffset_ + subReader->rawReaderSize_ - offset;
+  }
+  return offset;
+}
+
+uint64_t TerarkZipTableMultiReader::ApproximateOffsetOf_new(const Slice& ikey) {
+  const TerarkZipSubReader* subReader;
+  size_t numRecords;
+  size_t rank;
+  subReader = subIndex_.GetSubReader(fstringOf(ikey));
+  if (subReader == nullptr) {
+    if (isReverseBytewiseOrder_) {
+      subReader = subIndex_.GetSubReader(0);
+      numRecords = subReader->index_->NumKeys();
+      rank = 0;
+    }
+    else {
+      subReader = subIndex_.GetSubReader(subIndex_.GetSubCount() - 1);
+      numRecords = subReader->index_->NumKeys();
+      rank = numRecords;
+    }
+  }
+  else {
+    numRecords = subReader->index_->NumKeys();
+    if (!ikey.starts_with(SliceOf(subReader->prefix_))) {
+      if (isReverseBytewiseOrder_) {
+        rank = numRecords;
+      }
+      else {
+        rank = 0;
+      }
+    }
+    else {
+      rank = subReader->index_->DictRank(fstringOf(ikey));
+    }
+  }
+  auto offset = uint64_t(subReader->rawReaderOffset_ +
                          1.0 * subReader->rawReaderSize_ * rank / numRecords);
   if (isReverseBytewiseOrder_) {
     subReader = subIndex_.GetSubReader(subIndex_.GetSubCount() - 1);
     return subReader->rawReaderOffset_ + subReader->rawReaderSize_ - offset;
   }
   return offset;
+}
+
+uint64_t TerarkZipTableMultiReader::ApproximateOffsetOf(const Slice& ikey) {
+  if (g_useOldOffsetOf)
+    return ApproximateOffsetOf_old(ikey);
+  else
+    return ApproximateOffsetOf_new(ikey);
 }
 
 TerarkZipTableMultiReader::~TerarkZipTableMultiReader() {
