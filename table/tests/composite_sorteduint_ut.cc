@@ -639,6 +639,7 @@ static void init_data_fewzero_allzero_descend() {
   stat.sumKeyLen = KEY_LEN * kcnt;
 }
 
+/* TBD: don't use fewzero right now
 void test_fewzero_allzero_sorteduint(DataStored dtype) {
   // init data
   clear();
@@ -676,10 +677,6 @@ void test_fewzero_allzero_sorteduint(DataStored dtype) {
     assert(expected == result);
     expected ++;
   }
-  /*for (size_t idx = 0; idx < 10; idx++) {
-    size_t result = index->Find(keys[idx]);
-    assert(result == size_t(-1));
-    }*/
   printf("\tFind done\n");
   // iterator
   auto iter = index->NewIterator();
@@ -779,7 +776,7 @@ void test_fewzero_allzero_sorteduint(DataStored dtype) {
   delete index;
   clear();
 }
-
+*/
 
 /*
  * allone allzero

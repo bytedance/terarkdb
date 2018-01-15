@@ -42,8 +42,8 @@ static hash_strmap<std::string,
                   >
        g_TerarkIndexName;
 
-static bool g_DisableFewZero =
-  terark::getEnvBool("TerarkZipTable_disableFewZero", false);
+static bool g_DisableFewZero = true;
+  //  terark::getEnvBool("TerarkZipTable_disableFewZero", false);
 
 template<class IndexClass>
 bool VerifyClassName(fstring class_name) {

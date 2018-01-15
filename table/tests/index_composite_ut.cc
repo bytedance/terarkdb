@@ -12,8 +12,8 @@ int main_impl(int argc, char** argv) {
     test_allone_il256_sorteduint(standard_ascend);
     test_allone_il256_sorteduint(standard_descend);
 
-    test_fewzero_allzero_sorteduint(standard_ascend);
-    test_fewzero_allzero_sorteduint(standard_descend);
+    //test_fewzero_allzero_sorteduint(standard_ascend);
+    //test_fewzero_allzero_sorteduint(standard_descend);
 
     test_allone_allzero_sorteduint(standard_allzero);
 
