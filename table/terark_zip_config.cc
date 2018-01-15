@@ -318,6 +318,7 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo) {
   }
   MyGetXiB(cfo, write_buffer_size);
   MyGetXiB(cfo, target_file_size_base);
+  MyGetBool(cfo, enable_partial_remove, false);
   MyOverrideInt(cfo, max_write_buffer_number);
   MyOverrideInt(cfo, target_file_size_multiplier);
   MyOverrideInt(cfo, num_levels                 );
