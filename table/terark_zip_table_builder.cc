@@ -202,8 +202,8 @@ try {
   tmpSampleFile_.path = tmpSentryFile_.path + ".sample";
   tmpSampleFile_.open();
   tmpIndexFile_.fpath = tmpSentryFile_.path + ".index";
-  tmpStoreFile_.fpath = tmpSentryFile_.path + ".zbs";
-  FileStream(tmpStoreFile_.fpath, "wb+");
+  tmpStoreFile_.fpath = tmpSentryFile_.path + ".bs";
+  tmpZipStoreFile_.fpath = tmpSentryFile_.path + ".zbs";
   if (table_options_.debugLevel == 3) {
     tmpDumpFile_.open(tmpSentryFile_.path + ".dump", "wb+");
   }
@@ -365,7 +365,7 @@ try {
       else {
         AddLastUserKey();
         BuildIndex(*histogram_.back()->build.back(), *histogram_.back());
-        BuildStore(*histogram_.back(), nullptr, true);
+        BuildStore(*histogram_.back(), nullptr, BuildStoreInit);
       }
       histogram_.emplace_back(new KeyValueStatus);
       auto& currentHistogram = *histogram_.back();
@@ -580,7 +580,7 @@ Status TerarkZipTableBuilder::Finish() try {
 
   AddLastUserKey();
   BuildIndex(*histogram_.back()->build.back(), *histogram_.back());
-  BuildStore(*histogram_.back(), nullptr, true);
+  BuildStore(*histogram_.back(), nullptr, BuildStoreInit);
   if (zbuilder_) {
     return OfflineFinish();
   }
@@ -716,21 +716,15 @@ void TerarkZipTableBuilder::BuildIndex(BuildIndexParams& param, KeyValueStatus& 
 
 Status TerarkZipTableBuilder::BuildStore(KeyValueStatus& kvs,
                                          DictZipBlobStore::ZipBuilder* zbuilder,
-                                         bool async) {
-  if (async) {
-    if (kvs.valueFile.fp) {
-      kvs.valueFile.complete_write();
-    }
-    kvs.key.finish();
-    kvs.value.finish();
-  }
+                                         uint64_t flag) {
   auto buildUncompressedStore = [this, &kvs]() {
     std::unique_lock<std::mutex> l(storeBuildMutex_);
+    assert(tmpStoreFileSize_ == 0
+      || tmpStoreFileSize_ == FileStream(tmpStoreFile_.fpath, "rb").fsize());
 
     size_t fixedNum = kvs.value.m_cnt_of_max_cnt_key;
     size_t variaNum = kvs.key.m_cnt_sum - fixedNum;
-    size_t fileOffset = FileStream(tmpStoreFile_.fpath, "rb").fsize();
-    BuildStoreParams params = { kvs, 0, tmpStoreFile_, fileOffset };
+    BuildStoreParams params = { kvs, 0, tmpStoreFile_, tmpStoreFileSize_ };
     Status s;
     if (kvs.value.m_total_key_len == 0) {
       s = buildZeroLengthBlobStore(params);
@@ -752,18 +746,47 @@ Status TerarkZipTableBuilder::BuildStore(KeyValueStatus& kvs,
       }
     }
     if (s.ok()) {
-      kvs.valueFileBegin = fileOffset;
-      kvs.valueFileEnd = FileStream(tmpStoreFile_.fpath, "rb").fsize();
+      kvs.valueFileBegin = tmpStoreFileSize_;
+      tmpStoreFileSize_ = FileStream(tmpStoreFile_.fpath, "rb").fsize();
+      kvs.valueFileEnd = tmpStoreFileSize_;
       assert((kvs.valueFileEnd - kvs.valueFileBegin) % 8 == 0);
     }
     return s;
   };
-  auto avgValueLen = kvs.value.m_total_key_len / kvs.key.m_cnt_sum;
-  if (async) {
+  auto buildCompressedStore = [this, &kvs, zbuilder]() {
+    assert(zbuilder != nullptr);
+    std::unique_lock<std::mutex> l(storeBuildMutex_);
+    assert(tmpZipStoreFileSize_ == 0
+      || tmpZipStoreFileSize_ == FileStream(tmpZipStoreFile_.fpath, "rb").fsize());
+
+    zbuilder->prepare(kvs.key.m_cnt_sum, tmpZipStoreFile_, tmpZipStoreFileSize_);
+    Status s = BuilderWriteValues(kvs, [&](fstring value) {zbuilder->addRecord(value); });
+    if (s.ok()) {
+      zbuilder->finish(DictZipBlobStore::ZipBuilder::FinishNone);
+      kvs.valueFileBegin = tmpZipStoreFileSize_;
+      tmpZipStoreFileSize_ = FileStream(tmpZipStoreFile_.fpath, "rb").fsize();
+      kvs.valueFileEnd = tmpZipStoreFileSize_;
+      assert((kvs.valueFileEnd - kvs.valueFileBegin) % 8 == 0);
+    }
+    return s;
+  };
+
+  if (flag & BuildStoreInit) {
+    if (kvs.valueFile.fp) {
+      kvs.valueFile.complete_write();
+    }
+    kvs.key.finish();
+    kvs.value.finish();
+    auto avgValueLen = kvs.value.m_total_key_len / kvs.key.m_cnt_sum;
     if (avgValueLen < table_options_.minDictZipValueSize) {
       if (kvs.valueFile.fp && table_options_.debugLevel != 2) {
         kvs.isValueBuild = true;
-        kvs.wait = std::async(std::launch::async, buildUncompressedStore);
+        if (flag & BuildStoreSync) {
+          buildUncompressedStore();
+        }
+        else {
+          kvs.wait = std::async(std::launch::async, buildUncompressedStore);
+        }
       }
     }
     else {
@@ -771,25 +794,22 @@ Status TerarkZipTableBuilder::BuildStore(KeyValueStatus& kvs,
     }
     return Status::OK();
   }
-  assert(!kvs.isValueBuild);
   kvs.isValueBuild = true;
-  if (!kvs.isUseDictZip || zbuilder == nullptr) {
-    return buildUncompressedStore();
+  if (kvs.isUseDictZip && zbuilder == nullptr) {
+    kvs.isUseDictZip = false;
+  }
+  if (flag & BuildStoreSync) {
+    return kvs.isUseDictZip ? buildCompressedStore() : buildUncompressedStore();
   }
   else {
-    std::unique_lock<std::mutex> l(storeBuildMutex_);
-    size_t fileOffset = FileStream(tmpStoreFile_.fpath, "rb").fsize();
-
-    zbuilder->prepare(kvs.key.m_cnt_sum, tmpStoreFile_, fileOffset);
-    Status s = BuilderWriteValues(kvs, [&](fstring value) {zbuilder->addRecord(value); });
-    if (s.ok()) {
-      zbuilder->finish(DictZipBlobStore::ZipBuilder::FinishNone);
-      kvs.valueFileBegin = fileOffset;
-      kvs.valueFileEnd = FileStream(tmpStoreFile_.fpath, "rb").fsize();
-      assert((kvs.valueFileEnd - kvs.valueFileBegin) % 8 == 0);
+    if (kvs.isUseDictZip) {
+      kvs.wait = std::async(std::launch::async, buildCompressedStore);
     }
-    return s;
+    else {
+      kvs.wait = std::async(std::launch::async, buildUncompressedStore);
+    }
   }
+  return Status::OK();
 }
 
 Status TerarkZipTableBuilder::WaitBuildIndex() {
@@ -801,11 +821,14 @@ Status TerarkZipTableBuilder::WaitBuildIndex() {
     for (auto& ptr : kvs->build) {
       auto& param = *ptr;
       assert(param.wait.valid());
-      auto subResult = param.wait.get();
+      auto s = param.wait.get();
       offset += param.indexFileEnd - param.indexFileBegin;
       commonPrefixLength = std::min(commonPrefixLength, param.stat.commonPrefixLen);
-      if (terark_unlikely(!subResult.ok() && result.ok())) {
-        result = std::move(subResult);
+      if (terark_unlikely(!s.ok() && result.ok())) {
+        result = std::move(s);
+      }
+      if (param.data.fp) {
+        param.data.close();
       }
     }
     kvs->commonPrefix.assign(fstring(kvs->build.front()->stat.minKey).substr(0, commonPrefixLength));
@@ -817,11 +840,10 @@ Status TerarkZipTableBuilder::WaitBuildIndex() {
 Status TerarkZipTableBuilder::WaitBuildStore() {
   Status result = Status::OK();
   for (auto& kvs : histogram_) {
-    if (kvs->isValueBuild) {
-      assert(kvs->wait.valid());
-      auto subResult = kvs->wait.get();
-      if (terark_unlikely(!subResult.ok() && result.ok())) {
-        result = std::move(subResult);
+    if (kvs->wait.valid()) {
+      auto s = kvs->wait.get();
+      if (terark_unlikely(!s.ok() && result.ok())) {
+        result = std::move(s);
       }
     }
   }
@@ -1081,7 +1103,6 @@ Status TerarkZipTableBuilder::buildZipOffsetBlobStore(BuildStoreParams &params) 
 #endif // TerocksPrivateCode
 
 Status TerarkZipTableBuilder::ZipValueToFinish() {
-  DebugPrepare();
   assert(histogram_.size() == 1);
   auto& kvs = *histogram_.front();
   AutoDeleteFile tmpDictFile{ tmpSentryFile_.path + ".dict" };
@@ -1099,7 +1120,7 @@ Status TerarkZipTableBuilder::ZipValueToFinish() {
       zbuilder.reset(createZipBuilder());
       dictWaitHandle = LoadSample(zbuilder);
     }
-    s = BuildStore(kvs, zbuilder.get(), false);
+    s = BuildStore(kvs, zbuilder.get(), BuildStoreSync);
     if (zbuilder) {
       dzstat = zbuilder->getZipStat();
     }
@@ -1118,22 +1139,20 @@ Status TerarkZipTableBuilder::ZipValueToFinish() {
     tmpDictFile.fpath.clear();
     t4 = g_pf.now();
   }
-  DebugCleanup();
   // wait for indexing complete, if indexing is slower than value compressing
-  Status indexBuildResult = WaitBuildIndex();
-  if (!indexBuildResult.ok()) {
-    return indexBuildResult;
-  }
+  s = WaitBuildIndex();
   if (!s.ok()) {
     return s;
   }
-  return WriteSSTFile(t3, t4, tmpStoreFile_, tmpDictFile, dzstat);
+  if (tmpDumpFile_.isOpen()) {
+    tmpDumpFile_.close();
+  }
+  return WriteSSTFile(t3, t4, tmpDictFile, dzstat);
 }
 
 #if defined(TerocksPrivateCode)
 
 Status TerarkZipTableBuilder::ZipValueToFinishMulti() {
-  DebugPrepare();
   assert(histogram_.size() > 1);
   AutoDeleteFile tmpDictFile{ tmpSentryFile_.path + ".dict"};
   std::unique_ptr<DictZipBlobStore::ZipBuilder> zbuilder;
@@ -1141,12 +1160,9 @@ Status TerarkZipTableBuilder::ZipValueToFinishMulti() {
   std::unique_ptr<terark::BlobStore> store;
   DictZipBlobStore::ZipStat dzstat;
   size_t dictRefCount = 0;
+  Status s;
   long long t3, t4;
   t3 = g_pf.now();
-  Status s = WaitBuildStore();
-  if (!s.ok()) {
-    return s;
-  }
   bool isUseDictZip = false;
   for (auto& kvs : histogram_) {
     if (kvs->isValueBuild) {
@@ -1156,10 +1172,7 @@ Status TerarkZipTableBuilder::ZipValueToFinishMulti() {
       isUseDictZip = true;
     }
     else {
-      s = BuildStore(*kvs, nullptr, false);
-      if (!s.ok()) {
-        return s;
-      }
+      BuildStore(*kvs, nullptr, 0);
     }
   }
   if (isUseDictZip) {
@@ -1167,7 +1180,7 @@ Status TerarkZipTableBuilder::ZipValueToFinishMulti() {
     dictWaitHandle = LoadSample(zbuilder);
     for (auto& kvs : histogram_) {
       if (kvs->isUseDictZip) {
-        s = BuildStore(*kvs, zbuilder.get(), false);
+        s = BuildStore(*kvs, zbuilder.get(), BuildStoreSync);
         if (!s.ok()) {
           break;
         }
@@ -1192,31 +1205,22 @@ Status TerarkZipTableBuilder::ZipValueToFinishMulti() {
     tmpDictFile.fpath.clear();
     t4 = g_pf.now();
   }
-
-  dzstat.dictZipTime = g_pf.sf(t3, t4);
-
-  DebugCleanup();
-  Status indexBuildResult = WaitBuildIndex();
-  if (!indexBuildResult.ok()) {
-    return indexBuildResult;
-  }
+  s = WaitBuildStore();
   if (!s.ok()) {
     return s;
   }
-  return WriteSSTFileMulti(t3, t4, tmpStoreFile_, tmpDictFile, dzstat);
-}
-
-#endif // TerocksPrivateCode
-
-void TerarkZipTableBuilder::DebugPrepare() {
-}
-
-void TerarkZipTableBuilder::DebugCleanup() {
+  s = WaitBuildIndex();
+  if (!s.ok()) {
+    return s;
+  }
+  dzstat.dictZipTime = g_pf.sf(t3, t4);
   if (tmpDumpFile_.isOpen()) {
     tmpDumpFile_.close();
   }
-  tmpSentryFile_.close();
+  return WriteSSTFileMulti(t3, t4, tmpDictFile, dzstat);
 }
+
+#endif // TerocksPrivateCode
 
 Status
 TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<void(fstring)> write) {
@@ -1491,7 +1495,6 @@ void TerarkZipTableBuilder::DoWriteAppend(const void* data, size_t size) {
 }
 
 Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
-  , fstring tmpStoreFile
   , fstring tmpDictFile
   , const DictZipBlobStore::ZipStat& dzstat)
 {
@@ -1503,12 +1506,12 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
     dict = BlobStore::Dictionary(fstring{(const char*)dictMmap.base,
         (ptrdiff_t)dictMmap.size});
   }
+  auto& kvs = *histogram_.front();
   terark::MmapWholeFile mmapIndexFile(tmpIndexFile_.fpath);
-  terark::MmapWholeFile mmapStoreFile(tmpStoreFile.c_str());
+  terark::MmapWholeFile mmapStoreFile((kvs.isUseDictZip ? tmpZipStoreFile_ : tmpStoreFile_).fpath);
   assert(mmapIndexFile.base != nullptr);
   assert(mmapStoreFile.base != nullptr);
   auto store = UniquePtrOf(BlobStore::load_from_user_memory(mmapStoreFile.memory(), dict));
-  auto& kvs = *histogram_.front();
   auto& bzvType = kvs.type;
   const size_t realsampleLenSum = dict.memory.size();
   long long rawBytes = properties_.raw_key_size + properties_.raw_value_size;
@@ -1696,7 +1699,6 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
 #if defined(TerocksPrivateCode)
 
 Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4
-  , fstring tmpStoreFile
   , fstring tmpDictFile
   , const DictZipBlobStore::ZipStat& dzstat) {
   assert(histogram_.size() > 1);
@@ -1711,9 +1713,17 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4
   long long rawBytes = properties_.raw_key_size + properties_.raw_value_size;
   long long t5 = g_pf.now();
   terark::MmapWholeFile mmapIndexFile(tmpIndexFile_.fpath);
-  terark::MmapWholeFile mmapStoreFile(tmpStoreFile.c_str());
+  terark::MmapWholeFile mmapStoreFile;
+  terark::MmapWholeFile mmapZipStoreFile;
   assert(mmapIndexFile.base != nullptr);
-  assert(mmapStoreFile.base != nullptr);
+  if (tmpStoreFileSize_ != 0) {
+    terark::MmapWholeFile(tmpStoreFile_.fpath).swap(mmapStoreFile);
+    assert(mmapStoreFile.base != nullptr);
+  }
+  if (tmpZipStoreFileSize_ != 0) {
+    terark::MmapWholeFile(tmpZipStoreFile_.fpath).swap(mmapZipStoreFile);
+    assert(mmapZipStoreFile.base != nullptr);
+  }
   Status s;
   BlockHandle dataBlock, dictBlock, indexBlock, zvTypeBlock, offsetBlock, tombstoneBlock(0, 0);
   BlockHandle commonPrefixBlock;
@@ -1760,8 +1770,9 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4
     numKeys += kvs.key.m_cnt_sum ;
     commonPrefix.append(kvs.commonPrefix);
     unique_ptr<BlobStore> store(BlobStore::load_from_user_memory(
-        getMmapPart(mmapStoreFile, kvs.valueFileBegin, kvs.valueFileEnd),
-        dict));
+        getMmapPart(kvs.isUseDictZip ? mmapZipStoreFile : mmapStoreFile,
+          kvs.valueFileBegin, kvs.valueFileEnd
+        ), dict));
     long long t6p, t7p;
     s = WriteStore(mmapIndexFile.memory(), store.get(), kvs, dataBlock, t7, t6p, t7p);
     if (!s.ok()) {

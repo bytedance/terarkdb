@@ -119,7 +119,11 @@ private:
   Status EmptyTableFinish();
   Status OfflineFinish();
   void BuildIndex(BuildIndexParams& param, KeyValueStatus& kvs);
-  Status BuildStore(KeyValueStatus& kvs, DictZipBlobStore::ZipBuilder* zbuilder, bool async);
+  enum BuildStoreFlag {
+    BuildStoreInit = 1,
+    BuildStoreSync = 2,
+  };
+  Status BuildStore(KeyValueStatus& kvs, DictZipBlobStore::ZipBuilder* zbuilder, uint64_t flag);
   Status WaitBuildIndex();
   Status WaitBuildStore();
   struct BuildReorderParams {
@@ -148,8 +152,6 @@ private:
 #if defined(TerocksPrivateCode)
   Status ZipValueToFinishMulti();
 #endif // TerocksPrivateCode
-  void DebugPrepare();
-  void DebugCleanup();
   Status BuilderWriteValues(KeyValueStatus& kvs, std::function<void(fstring val)> write);
   void DoWriteAppend(const void* data, size_t size);
   Status WriteStore(fstring indexMmap, BlobStore* store
@@ -157,12 +159,10 @@ private:
     , BlockHandle& dataBlock
     , long long& t5, long long& t6, long long& t7);
   Status WriteSSTFile(long long t3, long long t4
-    , fstring tmpStoreFile
     , fstring tmpDictFile
     , const DictZipBlobStore::ZipStat& dzstat);
 #if defined(TerocksPrivateCode)
   Status WriteSSTFileMulti(long long t3, long long t4
-    , fstring tmpStoreFile
     , fstring tmpDictFile
     , const DictZipBlobStore::ZipStat& dzstat);
 #endif // TerocksPrivateCode
@@ -190,6 +190,9 @@ private:
   TempFileDeleteOnClose tmpSampleFile_;
   AutoDeleteFile tmpIndexFile_;
   AutoDeleteFile tmpStoreFile_;
+  AutoDeleteFile tmpZipStoreFile_;
+  uint64_t tmpStoreFileSize_ = 0;
+  uint64_t tmpZipStoreFileSize_ = 0;
   std::mutex indexBuildMutex_;
   std::mutex storeBuildMutex_;
   FileStream tmpDumpFile_;
