@@ -69,7 +69,7 @@ void init_data_ascend() {
   fwriter.open();
   keys.resize(110);
   char carr[8] = { 0 };
-	for (int i = 0; i < 110; i++) {
+  for (int i = 0; i < 110; i++) {
     carr[7] = i;
     // keep the last 5 elem for 'Find Fail Test'
     if (i < 100) {
@@ -81,7 +81,7 @@ void init_data_ascend() {
       stat.maxKey.assign(carr, carr + 8);
     }
     keys[i] = string(carr, 8);
-	}
+  }
   fwriter.close();
   stat.numKeys = 100;
   stat.commonPrefixLen = 0;
@@ -96,7 +96,7 @@ void init_data_descend() {
   fwriter.open();
   keys.resize(110);
   char carr[8] = { 0 };
-	for (int i = 109; i >= 0; i--) {
+  for (int i = 109; i >= 0; i--) {
     carr[7] = i;
     // keep the last 10 elem for 'Find Fail Test'
     if (i < 100) {
@@ -108,7 +108,7 @@ void init_data_descend() {
       stat.minKey.assign(carr, carr + 8);
     }
     keys[i] = string(carr, 8);
-	}
+  }
   fwriter.close();
   stat.numKeys = 100;
   stat.commonPrefixLen = 0;
@@ -260,15 +260,15 @@ void test_select() {
     cfactory = TerarkIndex::SelectFactory(stat, "");
     assert(cfactory != nullptr);
   }
-  {
+  /*{
     // do NOT select composite
     TerarkIndex::KeyStat stat;
     stat.commonPrefixLen = 0;
     stat.minKeyLen = stat.maxKeyLen = 9;
     auto factory = TerarkIndex::SelectFactory(stat, "");
     assert(factory == nullptr);
-  }
-  {
+    }*/
+  /*{
     // do NOT select composite
     TerarkIndex::KeyStat stat;
     stat.numKeys = 1;
@@ -280,7 +280,7 @@ void test_select() {
     stat.maxKey.assign(arr, arr + 8);
     auto factory = TerarkIndex::SelectFactory(stat, "");
     assert(factory == nullptr);
-  }
+    }*/
   {
     // do select composite
     TerarkIndex::KeyStat stat;

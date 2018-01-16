@@ -2010,7 +2010,7 @@ struct UintIndexBase : public TerarkIndex{
       uint64_t diff = maxValue - minValue + 1;
       return size_t(std::ceil(diff * 1.25 / 8));
     }
-    void loadCommonPart(UintIndexBase* ptr, fstring mem, fstring fpath) const {
+    void loadCommonPart(UintIndexBase* ptr, fstring& mem, fstring fpath) const {
       auto getHeader = [](fstring m) {
         const MyBaseFileHeader* h = (const MyBaseFileHeader*)m.data();
         if (m.size() < sizeof(MyBaseFileHeader)
