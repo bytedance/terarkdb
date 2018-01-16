@@ -1020,7 +1020,7 @@ TerarkEmptyTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
     return Status::InvalidArgument("TerarkZipTableReader::Open()",
       "EnvOptions::use_mmap_reads must be true");
   }
-  if (props->comparator_name != fstring(ioptions.user_comparator->Name())) {
+  if (props->comparator_name != fstring(ioptions.user_comparator->Name()) && 0) {
     return Status::InvalidArgument("TerarkZipTableReader::Open()",
       "Invalid user_comparator , need " + props->comparator_name
       + ", but provid " + ioptions.user_comparator->Name());
@@ -1072,7 +1072,7 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
     return Status::InvalidArgument("TerarkZipTableReader::Open()",
       "EnvOptions::use_mmap_reads must be true");
   }
-  if (props->comparator_name != fstring(ioptions.user_comparator->Name())) {
+  if (props->comparator_name != fstring(ioptions.user_comparator->Name()) && 0) {
     return Status::InvalidArgument("TerarkZipTableReader::Open()",
       "Invalid user_comparator , need " + props->comparator_name
       + ", but provid " + ioptions.user_comparator->Name());
@@ -1686,7 +1686,7 @@ TerarkZipTableMultiReader::Open(RandomAccessFileReader* file, uint64_t file_size
     return Status::InvalidArgument("TerarkZipTableReader::Open()",
       "EnvOptions::use_mmap_reads must be true");
   }
-  if (props->comparator_name != fstring(ioptions.user_comparator->Name())) {
+  if (props->comparator_name != fstring(ioptions.user_comparator->Name()) && 0) {
     return Status::InvalidArgument("TerarkZipTableReader::Open()",
       "Invalid user_comparator , need " + props->comparator_name
       + ", but provid " + ioptions.user_comparator->Name());
