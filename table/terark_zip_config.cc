@@ -323,6 +323,8 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo) {
   MyOverrideInt(cfo, target_file_size_multiplier);
   MyOverrideInt(cfo, num_levels                 );
   MyOverrideInt(cfo, level0_file_num_compaction_trigger);
+  MyOverrideInt(cfo, level0_slowdown_writes_trigger);
+  MyOverrideInt(cfo, level0_stop_writes_trigger);
 
   if (tzo.debugLevel) {
     STD_INFO("TerarkZipConfigFromEnv(dbo, cfo) successed\n");
