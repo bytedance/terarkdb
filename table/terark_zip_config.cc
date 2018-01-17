@@ -343,6 +343,7 @@ void TerarkZipDBOptionsFromEnv(DBOptions& dbo) {
   dbo.env->SetBackgroundThreads(dbo.max_background_compactions, rocksdb::Env::LOW);
   dbo.env->SetBackgroundThreads(dbo.max_background_flushes    , rocksdb::Env::HIGH);
   dbo.allow_mmap_reads = true;
+  dbo.new_table_reader_for_compaction_inputs = false;
 }
 
 class TerarkBlackListCF : public terark::hash_strmap<> {
