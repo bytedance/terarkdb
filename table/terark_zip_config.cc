@@ -98,6 +98,8 @@ void TerarkZipAutoConfigForBulkLoad(struct TerarkZipTableOptions& tzo,
   dbo.allow_mmap_reads = true;
   dbo.max_background_flushes = 2;
   dbo.max_subcompactions = 1; // no sub compactions
+  dbo.new_table_reader_for_compaction_inputs = false;
+  dbo.max_open_files = -1;
 
   dbo.env->SetBackgroundThreads(max(1,min(4,iCpuNum/2)), rocksdb::Env::HIGH);
 }
@@ -344,6 +346,7 @@ void TerarkZipDBOptionsFromEnv(DBOptions& dbo) {
   dbo.env->SetBackgroundThreads(dbo.max_background_flushes    , rocksdb::Env::HIGH);
   dbo.allow_mmap_reads = true;
   dbo.new_table_reader_for_compaction_inputs = false;
+  dbo.max_open_files = -1;
 }
 
 class TerarkBlackListCF : public terark::hash_strmap<> {
