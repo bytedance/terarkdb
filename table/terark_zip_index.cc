@@ -1027,7 +1027,6 @@ struct CompositeUintIndexBase : public TerarkIndex {
       //if (key2MinValue == key2MaxValue) // MyRock UT will fail on this condition
       //  return nullptr;
       unique_ptr<SortedUintVec:: Builder> builder(SortedUintVec::createBuilder(false, kBlockUnits));
-      printf("%llX\n", (uintptr_t)builder.get());
       uint64_t prev = ReadBigEndianUint64(keyVec[0]) - key2MinValue;
       builder->push_back(prev);
       for (size_t i = 1; i < keyVec.size(); i++) {
