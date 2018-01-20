@@ -278,6 +278,8 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo) {
   MyGetInt(tzo, minDictZipValueSize, 50);
 #endif // TerocksPrivateCode
 
+  tzo.singleIndexMemLimit = std::min<size_t>(tzo.singleIndexMemLimit, 0x1E0000000);
+
   cfo.table_factory.reset(NewTerarkZipTableFactory(tzo, NewAdaptiveTableFactory()));
   const char* compaction_style = "Universal";
   if (const char* env = getenv("TerarkZipTable_compaction_style")) {
