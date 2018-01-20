@@ -270,6 +270,7 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo) {
   MyGetXiB(tzo, softZipWorkingMemLimit);
   MyGetXiB(tzo, hardZipWorkingMemLimit);
   MyGetXiB(tzo, smallTaskMemory);
+  MyGetXiB(tzo, singleIndexMemLimit);
   MyGetXiB(tzo, cacheCapacityBytes);
   MyGetInt(tzo, cacheShards, 17);
 
