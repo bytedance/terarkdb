@@ -159,7 +159,7 @@ void TerarkZipAutoConfigForOnlineDB_CFOptions(struct TerarkZipTableOptions& tzo,
   cfo.write_buffer_size = memBytesLimit / 32;
   cfo.num_levels = 7;
   cfo.max_write_buffer_number = 3;
-  cfo.target_file_size_base = cfo.write_buffer_size * 16;
+  cfo.target_file_size_base = memBytesLimit / 8;
   cfo.target_file_size_multiplier = 1;
   cfo.compaction_style = rocksdb::kCompactionStyleUniversal;
   cfo.compaction_options_universal.allow_trivial_move = true;
