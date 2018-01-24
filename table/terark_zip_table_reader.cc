@@ -1619,7 +1619,7 @@ uint64_t TerarkZipTableMultiReader::ApproximateOffsetOf_new(const Slice& ikey) {
         if ((byte_t(key[cplen]) < byte_t(prefix[cplen])))
           rank = 0;
         else
-          return numRecords;
+          rank = numRecords;
       }
     }
     else {
