@@ -33,6 +33,39 @@ enum class WorkingState : uint32_t {
   MmapFile = 3,
 };
 
+enum SkipIndexType : uint32_t {
+  kNone               = 0,
+  kUintIndex          = 1 << 0,
+  kCompositeUintIndex = 1 << 1,
+  kFewZero            = 1 << 2,
+  kSortedUint         = 1 << 3,
+  kBigUint0           = 1 << 4
+};
+
+static bool IsIndexTypeDisabled(SkipIndexType type) {
+  static bool _inited = false;
+  static SkipIndexType _skipped = kNone;
+  if (!_inited) {
+    uint32_t tmp = 0;
+    tmp |= terark::getEnvBool("TerarkZipTable_skipUintIndex", false) ? 
+      kUintIndex : 0;
+    tmp |= terark::getEnvBool("TerarkZipTable_skipCompositeUintIndex", false) ? 
+      kCompositeUintIndex : 0;
+    // still skip right now
+    tmp |= terark::getEnvBool("TerarkZipTable_skipFewZero", true) ? 
+      kFewZero : 0;
+    tmp |= terark::getEnvBool("TerarkZipTable_skipSortedUint", false) ? 
+      kSortedUint : 0;
+    tmp |= terark::getEnvBool("TerarkZipTable_skipBigUint0", false) ? 
+      kBigUint0 : 0;
+    _skipped = (SkipIndexType)tmp;
+    _inited = true;
+  }
+  return (_skipped & type);
+}
+
+
+      
 static hash_strmap<TerarkIndex::FactoryPtr> g_TerarkIndexFactroy;
 static hash_strmap<std::string,
                    fstring_func::hash_align,
@@ -42,8 +75,6 @@ static hash_strmap<std::string,
                   >
        g_TerarkIndexName;
 
-static bool g_DisableFewZero = true;
-  //  terark::getEnvBool("TerarkZipTable_disableFewZero", false);
 
 template<class IndexClass>
 bool VerifyClassName(fstring class_name) {
@@ -72,14 +103,14 @@ void Padzero(const Writer& write, size_t offset) {
 
 // 0 < cnt0 and cnt0 < 0.01 * total
 inline bool IsFewZero(size_t total, size_t cnt0) {
-  if (g_DisableFewZero)
+  if (IsIndexTypeDisabled(SkipIndexType::kFewZero))
     return false;
   assert(total > 0);
   return (0 < cnt0) &&
     (cnt0 <= (double)total * 0.01);
 }
 inline bool IsFewOne(size_t total, size_t cnt1) {
-  if (g_DisableFewZero)
+  if (IsIndexTypeDisabled(SkipIndexType::kFewZero))
     return false;
   assert(total > 0);
   return (0 < cnt1) &&
@@ -167,7 +198,7 @@ bool TerarkIndex::SeekCostEffectiveIndexLen(const KeyStat& ks, size_t& ceLen) {
     // one index1st with a collection of index2nd, that's when diff < numkeys
     double gap_ratio = diff1st <= ks.numKeys ? min_gap_ratio :
       (double)(diff1st - ks.numKeys) / diff1st;
-    if (!g_DisableFewZero &&
+    if (!IsIndexTypeDisabled(SkipIndexType::kFewZero) &&
         fewone_min_gap_ratio <= gap_ratio &&
         gap_ratio < fewone_max_gap_ratio) { // fewone branch
       // to construct rankselect for fewone, much more extra space is needed
@@ -211,14 +242,12 @@ TerarkIndex::SelectFactory(const KeyStat& ks, fstring name) {
   assert(ks.numKeys > 0);
   //assert(!ks.minKey.empty() && !ks.maxKey.empty());
 #if defined(TerocksPrivateCode)
-  static bool disableUintIndex =
-    terark::getEnvBool("TerarkZipTable_disableUintIndex", false);
-  static bool disableCompositeUintIndex =
-    terark::getEnvBool("TerarkZipTable_disableCompositeUintIndex", false);
   size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
   assert(cplen >= ks.commonPrefixLen);
   size_t ceLen = 0; // cost effective index1st len if any
-  if (!disableUintIndex && ks.maxKeyLen == ks.minKeyLen && ks.maxKeyLen - cplen <= sizeof(uint64_t)) {
+  if (!IsIndexTypeDisabled(SkipIndexType::kUintIndex) && 
+      ks.maxKeyLen == ks.minKeyLen && 
+      ks.maxKeyLen - cplen <= sizeof(uint64_t)) {
     auto minValue = ReadBigEndianUint64(ks.minKey.begin() + cplen, ks.minKey.end());
     auto maxValue = ReadBigEndianUint64(ks.maxKey.begin() + cplen, ks.maxKey.end());
     if (minValue > maxValue) {
@@ -237,7 +266,7 @@ TerarkIndex::SelectFactory(const KeyStat& ks, fstring name) {
       }
     }
   }
-  if (!disableCompositeUintIndex &&
+  if (!IsIndexTypeDisabled(SkipIndexType::kCompositeUintIndex) &&
       ks.maxKeyLen == ks.minKeyLen &&
       ks.maxKeyLen - cplen <= 16 && // !!! plain index2nd may occupy too much space
       SeekCostEffectiveIndexLen(ks, ceLen) &&
@@ -1281,17 +1310,13 @@ struct CompositeUintIndexBase : public TerarkIndex {
           );
       }
 #endif
-      bool skipSorted =
-        terark::getEnvBool("TerarkZipTable_skipSorted", false);
-      bool skipUint =
-        terark::getEnvBool("TerarkZipTable_skipUint", false);
       if (key2_len <= 8) {
         TerarkIndex* index = nullptr;
-        if (!skipSorted)
+        if (!IsIndexTypeDisabled(SkipIndexType::kSortedUint))
           index = CreateIndexWithSortedUintCont(
               rankselect1, rankselect2, keyVec, ks,
               minValue, maxValue, key1_len, minKey2Data, maxKey2Data);
-        if (!index && !skipUint) {
+        if (!index && !IsIndexTypeDisabled(SkipIndexType::kBigUint0)) {
           index = CreateIndexWithUintCont(
               rankselect1, rankselect2, keyVec, ks,
               minValue, maxValue, key1_len, minKey2Data, maxKey2Data);
