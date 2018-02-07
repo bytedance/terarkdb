@@ -952,15 +952,15 @@ struct CompositeUintIndexBase : public TerarkIndex {
       kAllOne_FewZero,     // c-cluster index
       kAllOne_FewOne,
       kAllOne_Normal,      // c-cluster index
-      kFewZero_AllZero,    // secondary index with gap
+      kFewZero_AllZero = 4,// secondary index with gap
       kFewZero_FewZero,    //
       kFewZero_FewOne,
       kFewZero_Normal,
-      kFewOne_AllZero,     // secondary index with lots of gap
+      kFewOne_AllZero = 8, // secondary index with lots of gap
       kFewOne_FewZero,     // c-cluster index with lots of gap
       kFewOne_FewOne,
       kFewOne_Normal,      // c-cluster index with lots of gap
-      kNormal_AllZero,
+      kNormal_AllZero = 12,
       kNormal_FewZero,
       kNormal_FewOne,
       kNormal_Normal
@@ -1302,7 +1302,7 @@ struct CompositeUintIndexBase : public TerarkIndex {
         INFO(ioptions->info_log,
              "TerarkCompositeUintIndex::Build(): key1Min %zu, key1Max %zu, "
              "cplen %zu, key1_len %zu, key2_len %zu,\n"
-             "key1 size %zu, key2 size %zu, ",
+             "key1 size %zu, key2 size %zu, "
              "rankselect combination is %d\n",
              minValue, maxValue, cplen, key1_len, key2_len,
              rankselect1.size(), rankselect2.size(),
