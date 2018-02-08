@@ -33,38 +33,11 @@ enum class WorkingState : uint32_t {
   MmapFile = 3,
 };
 
-enum SkipIndexType : uint32_t {
-  kNone               = 0,
-  kUintIndex          = 1 << 0,
-  kCompositeUintIndex = 1 << 1,
-  kFewZero            = 1 << 2,
-  kSortedUint         = 1 << 3,
-  kBigUint0           = 1 << 4
-};
-
-static bool IsIndexTypeDisabled(SkipIndexType type) {
-  static bool _inited = false;
-  static SkipIndexType _skipped = kNone;
-  if (!_inited) {
-    uint32_t tmp = 0;
-    tmp |= terark::getEnvBool("TerarkZipTable_skipUintIndex", false) ? 
-      kUintIndex : 0;
-    tmp |= terark::getEnvBool("TerarkZipTable_skipCompositeUintIndex", false) ? 
-      kCompositeUintIndex : 0;
-    // still skip right now
-    tmp |= terark::getEnvBool("TerarkZipTable_skipFewZero", true) ? 
-      kFewZero : 0;
-    tmp |= terark::getEnvBool("TerarkZipTable_skipSortedUint", false) ? 
-      kSortedUint : 0;
-    tmp |= terark::getEnvBool("TerarkZipTable_skipBigUint0", false) ? 
-      kBigUint0 : 0;
-    _skipped = (SkipIndexType)tmp;
-    _inited = true;
-  }
-  return (_skipped & type);
-}
-
-
+static bool g_indexEnableFewZero            = terark::getEnvBool("TerarkZipTable_enableFewZero", false);
+static bool g_indexEnableUintIndex          = terark::getEnvBool("TerarkZipTable_enableUintIndex", true);
+static bool g_indexEnableCompositeUintIndex = terark::getEnvBool("TerarkZipTable_enableCompositeUintIndex", true);
+static bool g_indexEnableSortedUint         = terark::getEnvBool("TerarkZipTable_enableSortedUint", true);
+static bool g_indexEnableBigUint0           = terark::getEnvBool("TerarkZipTable_enableBigUint0", true);
       
 static hash_strmap<TerarkIndex::FactoryPtr> g_TerarkIndexFactroy;
 static hash_strmap<std::string,
@@ -103,14 +76,14 @@ void Padzero(const Writer& write, size_t offset) {
 
 // 0 < cnt0 and cnt0 < 0.01 * total
 inline bool IsFewZero(size_t total, size_t cnt0) {
-  if (IsIndexTypeDisabled(SkipIndexType::kFewZero))
+  if (!g_indexEnableFewZero)
     return false;
   assert(total > 0);
   return (0 < cnt0) &&
     (cnt0 <= (double)total * 0.01);
 }
 inline bool IsFewOne(size_t total, size_t cnt1) {
-  if (IsIndexTypeDisabled(SkipIndexType::kFewZero))
+  if (!g_indexEnableFewZero)
     return false;
   assert(total > 0);
   return (0 < cnt1) &&
@@ -198,7 +171,7 @@ bool TerarkIndex::SeekCostEffectiveIndexLen(const KeyStat& ks, size_t& ceLen) {
     // one index1st with a collection of index2nd, that's when diff < numkeys
     double gap_ratio = diff1st <= ks.numKeys ? min_gap_ratio :
       (double)(diff1st - ks.numKeys) / diff1st;
-    if (!IsIndexTypeDisabled(SkipIndexType::kFewZero) &&
+    if (g_indexEnableFewZero &&
         fewone_min_gap_ratio <= gap_ratio &&
         gap_ratio < fewone_max_gap_ratio) { // fewone branch
       // to construct rankselect for fewone, much more extra space is needed
@@ -245,7 +218,7 @@ TerarkIndex::SelectFactory(const KeyStat& ks, fstring name) {
   size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
   assert(cplen >= ks.commonPrefixLen);
   size_t ceLen = 0; // cost effective index1st len if any
-  if (!IsIndexTypeDisabled(SkipIndexType::kUintIndex) && 
+  if (g_indexEnableUintIndex && 
       ks.maxKeyLen == ks.minKeyLen && 
       ks.maxKeyLen - cplen <= sizeof(uint64_t)) {
     auto minValue = ReadBigEndianUint64(ks.minKey.begin() + cplen, ks.minKey.end());
@@ -266,7 +239,7 @@ TerarkIndex::SelectFactory(const KeyStat& ks, fstring name) {
       }
     }
   }
-  if (!IsIndexTypeDisabled(SkipIndexType::kCompositeUintIndex) &&
+  if (g_indexEnableCompositeUintIndex &&
       ks.maxKeyLen == ks.minKeyLen &&
       ks.maxKeyLen - cplen <= 16 && // !!! plain index2nd may occupy too much space
       SeekCostEffectiveIndexLen(ks, ceLen) &&
@@ -1312,11 +1285,11 @@ struct CompositeUintIndexBase : public TerarkIndex {
 #endif
       if (key2_len <= 8) {
         TerarkIndex* index = nullptr;
-        if (!IsIndexTypeDisabled(SkipIndexType::kSortedUint))
+        if (g_indexEnableSortedUint)
           index = CreateIndexWithSortedUintCont(
               rankselect1, rankselect2, keyVec, ks,
               minValue, maxValue, key1_len, minKey2Data, maxKey2Data);
-        if (!index && !IsIndexTypeDisabled(SkipIndexType::kBigUint0)) {
+        if (!index && g_indexEnableBigUint0) {
           index = CreateIndexWithUintCont(
               rankselect1, rankselect2, keyVec, ks,
               minValue, maxValue, key1_len, minKey2Data, maxKey2Data);
