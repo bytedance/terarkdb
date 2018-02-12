@@ -746,12 +746,13 @@ Status TerarkZipTableBuilder::BuildStore(KeyValueStatus& kvs,
         s = buildPlainBlobStore(params);
       }
     }
+    size_t newTmpStoreFileSize = FileStream(tmpStoreFile_.fpath, "rb").fsize();
     if (s.ok()) {
       kvs.valueFileBegin = tmpStoreFileSize_;
-      tmpStoreFileSize_ = FileStream(tmpStoreFile_.fpath, "rb").fsize();
-      kvs.valueFileEnd = tmpStoreFileSize_;
+      kvs.valueFileEnd = newTmpStoreFileSize;
       assert((kvs.valueFileEnd - kvs.valueFileBegin) % 8 == 0);
     }
+    tmpStoreFileSize_ = newTmpStoreFileSize;
     return s;
   };
   auto buildCompressedStore = [this, &kvs, zbuilder]() {
@@ -762,13 +763,17 @@ Status TerarkZipTableBuilder::BuildStore(KeyValueStatus& kvs,
 
     zbuilder->prepare(kvs.key.m_cnt_sum, tmpZipStoreFile_, tmpZipStoreFileSize_);
     Status s = BuilderWriteValues(kvs, [&](fstring value) {zbuilder->addRecord(value); });
+    size_t newTmpZipStoreFileSize = 0;
     if (s.ok()) {
       zbuilder->finish(DictZipBlobStore::ZipBuilder::FinishNone);
       kvs.valueFileBegin = tmpZipStoreFileSize_;
-      tmpZipStoreFileSize_ = FileStream(tmpZipStoreFile_.fpath, "rb").fsize();
-      kvs.valueFileEnd = tmpZipStoreFileSize_;
+      newTmpZipStoreFileSize = FileStream(tmpZipStoreFile_.fpath, "rb").fsize();
+      kvs.valueFileEnd = newTmpZipStoreFileSize;
       assert((kvs.valueFileEnd - kvs.valueFileBegin) % 8 == 0);
+    } else {
+      newTmpZipStoreFileSize = FileStream(tmpZipStoreFile_.fpath, "rb").fsize();
     }
+    tmpZipStoreFileSize_ = newTmpZipStoreFileSize;
     return s;
   };
 
@@ -2059,6 +2064,9 @@ void TerarkZipTableBuilder::Abandon() {
         param.data.complete_write();
       }
     }
+    if (kvs->wait.valid()) {
+      kvs->wait.get();
+    }
   }
   histogram_.clear();
   tmpSentryFile_.complete_write();
@@ -2082,6 +2090,9 @@ Status TerarkZipTableBuilder::AbortFinish(const std::exception& ex) {
       else if (param.data.fp) {
         param.data.complete_write();
       }
+    }
+    if (kvs->wait.valid()) {
+      kvs->wait.get();
     }
   }
   histogram_.clear();
