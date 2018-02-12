@@ -395,7 +395,8 @@ try {
         tmpSampleFile_.writer << fstringOf(value);
         sampleLenSum_ += value.size();
       }
-      if (currentHistogram.valueFile.fp
+      if (second_pass_iter_
+        && currentHistogram.valueFile.fp
         && table_options_.debugLevel != 2
         && valueDataSize_ > (1ull << 20)
         && valueDataSize_ > keyDataSize_ * 2) {
