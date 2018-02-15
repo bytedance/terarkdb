@@ -384,13 +384,13 @@ try {
       keyDataSize_ = 0;
       valueDataSize_ = 0;
     }
+    auto& currentHistogram = *histogram_.back();
     keyDataSize_ += userKey.size();
     valueDataSize_ += value.size() + 8;
-    valueBits_.push_back(true);
+    currentHistogram.valueBits.push_back(true);
     valueBuf_.emplace_back((char*)&seqType, 8);
     valueBuf_.back_append(value.data(), value.size());
     if (!zbuilder_) {
-      auto& currentHistogram = *histogram_.back();
       if (!value.empty() && randomGenerator_() < sampleUpperBound_) {
         tmpSampleFile_.writer << fstringOf(value);
         sampleLenSum_ += value.size();
@@ -1296,13 +1296,13 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
       seekSecondPassIter();
     }
     size_t entryId = 0;
-    size_t bitPos = bitPosUnique_;
+    size_t bitPos = 0;
     for (size_t recId = 0; recId < kvs.key.m_cnt_sum ; recId++) {
       uint64_t seqType = input.load_as<uint64_t>();
       uint64_t seqNum;
       ValueType vType;
       UnPackSequenceAndType(seqType, &seqNum, &vType);
-      size_t oneSeqLen = valueBits_.one_seq_len(bitPos);
+      size_t oneSeqLen = kvs.valueBits.one_seq_len(bitPos);
       assert(oneSeqLen >= 1);
       if (1 == oneSeqLen && (kTypeDeletion == vType || kTypeValue == vType)) {
         if (0 == seqNum && kTypeValue == vType) {
@@ -1359,7 +1359,6 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
       bitPos += oneSeqLen + 1;
       entryId += oneSeqLen;
     }
-    bitPosUnique_ = bitPos;
     // tmpSentryFile_ ignore kTypeRangeDeletion keys
     // so entryId may less than properties_.num_entries
     assert(entryId <= properties_.num_entries);
@@ -1371,7 +1370,7 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
     seekSecondPassIter();
     valvec<byte_t> value;
     size_t entryId = 0;
-    size_t bitPos = bitPosUnique_;
+    size_t bitPos = 0;
     bool dumpKeyValue = table_options_.debugLevel == 3;
     auto dumpKeyValueFunc = [&](const ParsedInternalKey& ikey, const Slice& value) {
       fprintf(tmpDumpFile_.fp(), "DEBUG: 2nd pass => %s / %s \n", ikey.DebugString(true).c_str(), value.ToString(true).c_str());
@@ -1403,7 +1402,7 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
         entryId += 1;
       }
       Slice curVal = second_pass_iter_->value();
-      size_t oneSeqLen = valueBits_.one_seq_len(bitPos);
+      size_t oneSeqLen = kvs.valueBits.one_seq_len(bitPos);
       assert(oneSeqLen >= 1);
       if (1 == oneSeqLen && (kTypeDeletion == pikey.type || kTypeValue == pikey.type)) {
         if (0 == pikey.sequence && kTypeValue == pikey.type) {
@@ -1464,12 +1463,12 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
       bitPos += oneSeqLen + 1;
       entryId += oneSeqLen;
     }
-    bitPosUnique_ = bitPos;
     // second pass no range deletion ...
     //assert(entryId <= properties_.num_entries);
 
 #undef ITER_MOVE_NEXT
   }
+  kvs.valueBits.clear();
   return Status::OK();
 }
 
@@ -2129,9 +2128,10 @@ void TerarkZipTableBuilder::AddPrevUserKey() {
     OfflineZipValueData(); // will change valueBuf_
   }
   valueBuf_.erase_all();
-  histogram_.back()->key[prevUserKey_.size()]++;
-  histogram_.back()->build.back()->data.writer << prevUserKey_;
-  valueBits_.push_back(false);
+  auto& currentHistogram = *histogram_.back();
+  currentHistogram.key[prevUserKey_.size()]++;
+  currentHistogram.build.back()->data.writer << prevUserKey_;
+  currentHistogram.valueBits.push_back(false);
   currentStat_->sumKeyLen += prevUserKey_.size();
   currentStat_->numKeys++;
 }

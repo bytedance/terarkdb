@@ -89,6 +89,7 @@ private:
     valvec<char> commonPrefix;
     Uint64Histogram key;
     Uint64Histogram value;
+    terark::febitvec valueBits;
     bitfield_array<2> type;
     size_t split = 0;
     uint64_t indexFileBegin = 0;
@@ -184,8 +185,6 @@ private:
   valvec<std::unique_ptr<KeyValueStatus>> histogram_;
   TerarkIndex::KeyStat *currentStat_ = nullptr;
   valvec<byte_t> prevUserKey_;
-  terark::febitvec valueBits_;
-  size_t bitPosUnique_ = 0;
   TempFileDeleteOnClose tmpSentryFile_;
   TempFileDeleteOnClose tmpSampleFile_;
   AutoDeleteFile tmpIndexFile_;
