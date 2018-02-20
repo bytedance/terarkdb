@@ -121,6 +121,7 @@ private:
   WaitHandle WaitForMemory(const char* who, size_t memorySize);
   Status EmptyTableFinish();
   Status OfflineFinish();
+  std::future<Status> Async(std::function<Status()> func);
   void BuildIndex(BuildIndexParams& param, KeyValueStatus& kvs);
   enum BuildStoreFlag {
     BuildStoreInit = 1,
