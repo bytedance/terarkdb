@@ -137,6 +137,35 @@ rocksdb::Status MyRocksTablePropertiesCollectorHack(IntTblPropCollector* collect
 ///////////////////////////////////////////////////////////////////
 #endif // TerocksPrivateCode
 
+class TerarkZipTableBuilderTask : public PipelineTask {
+public:
+  std::promise<Status> promise;
+  std::function<Status()> func;
+};
+
+class TerarkZipTableBuilderStage : public PipelineStage
+{
+protected:
+  void process(int threadno, PipelineQueueItem* item) {
+    auto task = static_cast<TerarkZipTableBuilderTask*>(item->task);
+    Status s;
+    try {
+      s = task->func();
+    }
+    catch (const std::exception& ex) {
+      s = Status::Aborted("exception", ex.what());
+    }
+    task->promise.set_value(s);
+  }
+
+public:
+  TerarkZipTableBuilderStage()
+    : PipelineStage(1)
+  {
+    m_step_name = "build";
+  }
+};
+
 TerarkZipTableBuilder::TerarkZipTableBuilder(const TerarkZipTableFactory* table_factory,
                                              const TerarkZipTableOptions& tzto,
                                              const TableBuilderOptions& tbo,
@@ -224,6 +253,11 @@ try {
       zbuilder_->prepare(1024, tmpZipValueFile_.fpath);
     }
   }
+
+  pipeline_.m_silent = "TerarkZipBuilder";
+  pipeline_ >> new TerarkZipTableBuilderStage;
+  pipeline_.compile();
+  pipeline_.start();
 }
 catch (const std::exception& ex) {
   WARN_EXCEPT(tbo.ioptions.info_log
@@ -624,7 +658,9 @@ void TerarkZipTableBuilder::BuildIndex(BuildIndexParams& param, KeyValueStatus& 
     }
   }
   param.data.complete_write();
-  param.wait = std::async(std::launch::async, [this, &param, &kvs]() {
+  auto task = new TerarkZipTableBuilderTask;
+  param.wait = task->promise.get_future();
+  task->func = [this, &param, &kvs]() {
     auto& keyStat = param.stat;
     const TerarkIndex::Factory* factory;
 #if defined(TerocksPrivateCode)
@@ -715,7 +751,8 @@ void TerarkZipTableBuilder::BuildIndex(BuildIndexParams& param, KeyValueStatus& 
       param.data.close();
     }
     return Status::OK();
-  });
+  };
+  pipeline_.inqueue(task);
 }
 
 Status TerarkZipTableBuilder::BuildStore(KeyValueStatus& kvs,
@@ -824,12 +861,15 @@ Status TerarkZipTableBuilder::BuildStore(KeyValueStatus& kvs,
     return kvs.isUseDictZip ? buildCompressedStore() : buildUncompressedStore();
   }
   else {
+    auto task = new TerarkZipTableBuilderTask;
+    kvs.wait = task->promise.get_future();
     if (kvs.isUseDictZip) {
-      kvs.wait = std::async(std::launch::async, buildCompressedStore);
+      task->func = buildCompressedStore;
     }
     else {
-      kvs.wait = std::async(std::launch::async, buildUncompressedStore);
+      task->func = buildUncompressedStore;
     }
+    pipeline_.inqueue(task);
   }
   return Status::OK();
 }
@@ -1170,6 +1210,8 @@ Status TerarkZipTableBuilder::ZipValueToFinish() {
   if (tmpDumpFile_.isOpen()) {
     tmpDumpFile_.close();
   }
+  pipeline_.stop();
+  pipeline_.wait();
   return WriteSSTFile(t3, t4, tmpDictFile, dzstat);
 }
 
@@ -1201,6 +1243,13 @@ Status TerarkZipTableBuilder::ZipValueToFinishMulti() {
   if (isUseDictZip) {
     zbuilder.reset(createZipBuilder());
     dictWaitHandle = LoadSample(zbuilder);
+    if (zbuilder) {
+      assert(tmpZipStoreFileSize_ == 0);
+      zbuilder->prepare(1, tmpZipStoreFile_, 0);
+      zbuilder->addRecord("Hello World!");
+      zbuilder->finish(DictZipBlobStore::ZipBuilder::FinishNone);
+      FileStream(tmpZipStoreFile_.fpath, "wb");
+    }
     for (auto& kvs : histogram_) {
       if (kvs->isUseDictZip) {
         s = BuildStore(*kvs, zbuilder.get(), BuildStoreSync);
@@ -1240,6 +1289,8 @@ Status TerarkZipTableBuilder::ZipValueToFinishMulti() {
   if (tmpDumpFile_.isOpen()) {
     tmpDumpFile_.close();
   }
+  pipeline_.stop();
+  pipeline_.wait();
   return WriteSSTFileMulti(t3, t4, tmpDictFile, dzstat);
 }
 
@@ -2092,6 +2143,8 @@ void TerarkZipTableBuilder::Abandon() {
   tmpStoreFile_.Delete();
   tmpZipDictFile_.Delete();
   tmpZipValueFile_.Delete();
+  pipeline_.stop();
+  pipeline_.wait();
 }
 
 // based on Abandon
@@ -2119,6 +2172,8 @@ Status TerarkZipTableBuilder::AbortFinish(const std::exception& ex) {
   tmpStoreFile_.Delete();
   tmpZipDictFile_.Delete();
   tmpZipValueFile_.Delete();
+  pipeline_.stop();
+  pipeline_.wait();
   return Status::Aborted("exception", ex.what());
 }
 

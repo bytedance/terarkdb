@@ -36,6 +36,7 @@
 #include <terark/zbs/zip_reorder_map.hpp>
 #include <terark/bitfield_array.hpp>
 #include <terark/util/fstrvec.hpp>
+#include <terark/thread/pipeline.hpp>
 
 namespace rocksdb {
 
@@ -49,6 +50,7 @@ using terark::BlobStore;
 using terark::ZReorderMap;
 using terark::Uint64Histogram;
 using terark::DictZipBlobStore;
+using terark::PipelineProcessor;
 
 class TerarkZipTableBuilder : public TableBuilder, boost::noncopyable {
 public:
@@ -89,7 +91,7 @@ private:
     valvec<char> commonPrefix;
     Uint64Histogram key;
     Uint64Histogram value;
-    terark::febitvec valueBits;
+    febitvec valueBits;
     bitfield_array<2> type;
     size_t split = 0;
     uint64_t indexFileBegin = 0;
@@ -212,7 +214,8 @@ private:
   TableProperties properties_;
   std::unique_ptr<DictZipBlobStore::ZipBuilder> zbuilder_;
   BlockBuilder range_del_block_;
-  terark::fstrvec valueBuf_; // collect multiple values for one key
+  fstrvec valueBuf_; // collect multiple values for one key
+  PipelineProcessor pipeline_;
   bool waitInited_ = false;
   bool closed_ = false;  // Either Finish() or Abandon() has been called.
   bool isReverseBytewiseOrder_;
