@@ -255,8 +255,8 @@ try {
   }
   pipeline_.m_silent = true;
   pipeline_ >> new TerarkZipTableBuilderStage;
+  pipeline_.setQueueSize(50); // we thought it's enough ...
   pipeline_.compile();
-  pipeline_.start();
 }
 catch (const std::exception& ex) {
   WARN_EXCEPT(tbo.ioptions.info_log
@@ -1246,9 +1246,13 @@ Status TerarkZipTableBuilder::ZipValueToFinishMulti() {
     dictWaitHandle = LoadSample(zbuilder);
     if (zbuilder) {
       assert(tmpZipStoreFileSize_ == 0);
+      // build dict in this thread
       zbuilder->prepare(1, tmpZipStoreFile_, 0);
+      // disallow 0 record finish
       zbuilder->addRecord("Hello World!");
+      // make zbuilder ready to next work
       zbuilder->finish(DictZipBlobStore::ZipBuilder::FinishNone);
+      // truncate output file
       FileStream(tmpZipStoreFile_.fpath, "wb");
     }
     for (auto& kvs : histogram_) {
