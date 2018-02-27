@@ -2417,12 +2417,12 @@ DefineAndRegister(SE_512_64, FewOne64 );
 DefineAndRegister(IL_256_32, IL_256_32);
 DefineAndRegister(SE_512_64, SE_512_64);
 
-typedef UintIndex<rank_select_il_256_32> UintIndex_IL_256_32;
-typedef UintIndex<rank_select_se_512_64> UintIndex_SE_512_64;
-typedef UintIndex<rank_select_allone>    UintIndex_AllOne;
-TerarkIndexRegister(UintIndex_IL_256_32);
-TerarkIndexRegister(UintIndex_SE_512_64);
-TerarkIndexRegister(UintIndex_AllOne);
+#define RegisterUintIndex(RankSelect) \
+  typedef UintIndex<RankSelect> UintIndex_##RankSelect; \
+            TerarkIndexRegister(UintIndex_##RankSelect)
+RegisterUintIndex(IL_256_32);
+RegisterUintIndex(SE_512_64);
+RegisterUintIndex(AllOne);
 
 #endif // TerocksPrivateCode
 
