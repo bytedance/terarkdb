@@ -2368,54 +2368,55 @@ typedef rs_fewone_64           FewOne64;
 typedef rs_fewzero_32          FewZero32;
 typedef rs_fewzero_64          FewZero64;
 
-#define   DefineAndRegister1(rs1, rs2, TypeNameInfix, Key2Container)        \
-  typedef CompositeUintIndex<rs1, rs2, Key2Container##DataCont>             \
+#define RegisterCompositeUintIndex1(rs1, rs2, TypeNameInfix, Key2Container) \
+  typedef       CompositeUintIndex <rs1, rs2, Key2Container##DataCont>      \
                       CompositeUintIndex_##TypeNameInfix##_##Key2Container; \
   TerarkIndexRegister(CompositeUintIndex_##TypeNameInfix##_##Key2Container)
 
-#define   DefineAndRegister2(rs1, rs2, TypeNameInfix)      \
-  typedef CompositeUintIndex<rs1, rs2, StrDataCont>        \
-                      CompositeUintIndex_##TypeNameInfix ; \
-  TerarkIndexRegister(CompositeUintIndex_##TypeNameInfix); \
-  DefineAndRegister1(rs1, rs2, TypeNameInfix, SortedUint); \
-  DefineAndRegister1(rs1, rs2, TypeNameInfix,    BigUint)
+#define RegisterCompositeUintIndex2(rs1, rs2, TypeNameInfix) \
+  typedef       CompositeUintIndex <rs1, rs2, StrDataCont>   \
+                      CompositeUintIndex_##TypeNameInfix ;   \
+  TerarkIndexRegister(CompositeUintIndex_##TypeNameInfix);   \
+  RegisterCompositeUintIndex1(rs1, rs2, TypeNameInfix, SortedUint); \
+  RegisterCompositeUintIndex1(rs1, rs2, TypeNameInfix,    BigUint)
 
-#define DefineAndRegister(rs1, rs2)  DefineAndRegister2(rs1, rs2, rs1##_##rs2)
+#define RegisterCompositeUintIndex(rs1, rs2)  \
+        RegisterCompositeUintIndex2(rs1, rs2, rs1##_##rs2)
 
-DefineAndRegister(AllOne   , AllZero  );
-DefineAndRegister(AllOne   , FewZero32);
-DefineAndRegister(AllOne   , FewZero64);
-DefineAndRegister(AllOne   , FewOne32 );
-DefineAndRegister(AllOne   , FewOne64 );
-DefineAndRegister(AllOne   , IL_256_32);
-DefineAndRegister(AllOne   , SE_512_64);
+RegisterCompositeUintIndex(AllOne   , AllZero  );
+RegisterCompositeUintIndex(AllOne   , FewZero32);
+RegisterCompositeUintIndex(AllOne   , FewZero64);
+RegisterCompositeUintIndex(AllOne   , FewOne32 );
+RegisterCompositeUintIndex(AllOne   , FewOne64 );
+RegisterCompositeUintIndex(AllOne   , IL_256_32);
+RegisterCompositeUintIndex(AllOne   , SE_512_64);
 
-DefineAndRegister(FewOne32 , AllZero  );
-DefineAndRegister(FewOne64 , AllZero  );
-DefineAndRegister(FewOne32 , FewZero32);
-DefineAndRegister(FewOne64 , FewZero64);
-DefineAndRegister(FewOne32 , FewOne32 );
-DefineAndRegister(FewOne64 , FewOne64 );
-DefineAndRegister(FewOne32 , IL_256_32);
-DefineAndRegister(FewOne64 , SE_512_64);
+RegisterCompositeUintIndex(FewOne32 , AllZero  );
+RegisterCompositeUintIndex(FewOne64 , AllZero  );
+RegisterCompositeUintIndex(FewOne32 , FewZero32);
+RegisterCompositeUintIndex(FewOne64 , FewZero64);
+RegisterCompositeUintIndex(FewOne32 , FewOne32 );
+RegisterCompositeUintIndex(FewOne64 , FewOne64 );
+RegisterCompositeUintIndex(FewOne32 , IL_256_32);
+RegisterCompositeUintIndex(FewOne64 , SE_512_64);
 
-DefineAndRegister(FewZero32, AllZero  );
-DefineAndRegister(FewZero64, AllZero  );
-DefineAndRegister(FewZero32, FewZero32);
-DefineAndRegister(FewZero64, FewZero64);
-DefineAndRegister(FewZero32, FewOne32 );
-DefineAndRegister(FewZero64, FewOne64 );
-DefineAndRegister(FewZero32, IL_256_32);
-DefineAndRegister(FewZero64, SE_512_64);
+RegisterCompositeUintIndex(FewZero32, AllZero  );
+RegisterCompositeUintIndex(FewZero64, AllZero  );
+RegisterCompositeUintIndex(FewZero32, FewZero32);
+RegisterCompositeUintIndex(FewZero64, FewZero64);
+RegisterCompositeUintIndex(FewZero32, FewOne32 );
+RegisterCompositeUintIndex(FewZero64, FewOne64 );
+RegisterCompositeUintIndex(FewZero32, IL_256_32);
+RegisterCompositeUintIndex(FewZero64, SE_512_64);
 
-DefineAndRegister(IL_256_32, AllZero  );
-DefineAndRegister(SE_512_64, AllZero  );
-DefineAndRegister(IL_256_32, FewZero32);
-DefineAndRegister(SE_512_64, FewZero64);
-DefineAndRegister(IL_256_32, FewOne32 );
-DefineAndRegister(SE_512_64, FewOne64 );
-DefineAndRegister(IL_256_32, IL_256_32);
-DefineAndRegister(SE_512_64, SE_512_64);
+RegisterCompositeUintIndex(IL_256_32, AllZero  );
+RegisterCompositeUintIndex(SE_512_64, AllZero  );
+RegisterCompositeUintIndex(IL_256_32, FewZero32);
+RegisterCompositeUintIndex(SE_512_64, FewZero64);
+RegisterCompositeUintIndex(IL_256_32, FewOne32 );
+RegisterCompositeUintIndex(SE_512_64, FewOne64 );
+RegisterCompositeUintIndex(IL_256_32, IL_256_32);
+RegisterCompositeUintIndex(SE_512_64, SE_512_64);
 
 #define RegisterUintIndex(RankSelect) \
   typedef UintIndex<RankSelect> UintIndex_##RankSelect; \
