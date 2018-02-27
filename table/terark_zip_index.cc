@@ -2368,20 +2368,18 @@ typedef rs_fewone_64           FewOne64;
 typedef rs_fewzero_32          FewZero32;
 typedef rs_fewzero_64          FewZero64;
 
-#define RegisterCompositeUintIndex1(rs1, rs2, TypeNameInfix, Key2Container) \
-  typedef       CompositeUintIndex <rs1, rs2, Key2Container##DataCont>      \
-                      CompositeUintIndex_##TypeNameInfix##_##Key2Container; \
-  TerarkIndexRegister(CompositeUintIndex_##TypeNameInfix##_##Key2Container)
+#define RegisterIndex TerarkIndexRegister
+#define RegisterCompositeUintIndex1(rs1, rs2, Key2) \
+  typedef       CompositeUintIndex <rs1, rs2, Key2##DataCont> \
+                CompositeUintIndex_##rs1##_##rs2##_##Key2; \
+  RegisterIndex(CompositeUintIndex_##rs1##_##rs2##_##Key2)
 
-#define RegisterCompositeUintIndex2(rs1, rs2, TypeNameInfix) \
-  typedef       CompositeUintIndex <rs1, rs2, StrDataCont>   \
-                      CompositeUintIndex_##TypeNameInfix ;   \
-  TerarkIndexRegister(CompositeUintIndex_##TypeNameInfix);   \
-  RegisterCompositeUintIndex1(rs1, rs2, TypeNameInfix, SortedUint); \
-  RegisterCompositeUintIndex1(rs1, rs2, TypeNameInfix,    BigUint)
-
-#define RegisterCompositeUintIndex(rs1, rs2)  \
-        RegisterCompositeUintIndex2(rs1, rs2, rs1##_##rs2)
+#define RegisterCompositeUintIndex(rs1, rs2) \
+  typedef       CompositeUintIndex<rs1, rs2, StrDataCont> \
+                CompositeUintIndex_##rs1##_##rs2 ;   \
+  RegisterIndex(CompositeUintIndex_##rs1##_##rs2);   \
+  RegisterCompositeUintIndex1(rs1, rs2, SortedUint); \
+  RegisterCompositeUintIndex1(rs1, rs2,    BigUint)
 
 RegisterCompositeUintIndex(AllOne   , AllZero  );
 RegisterCompositeUintIndex(AllOne   , FewZero32);
