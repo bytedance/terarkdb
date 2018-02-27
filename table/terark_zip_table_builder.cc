@@ -61,7 +61,7 @@ Status WriteBlock(const ByteArray& blockData, WritableFileWriter* file,
   return s;
 }
 
-std::string GetTimestamp() {
+static std::string GetTimestamp() {
     using namespace std::chrono;
     uint64_t timestamp = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
     return terark::lcast(timestamp);
