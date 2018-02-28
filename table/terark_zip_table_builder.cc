@@ -160,7 +160,7 @@ protected:
 
 public:
   TerarkZipTableBuilderStage()
-    : PipelineStage(1)
+    : PipelineStage(3)
   {
     m_step_name = "build";
   }

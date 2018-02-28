@@ -613,6 +613,387 @@ public:
 
 #if defined(TerocksPrivateCode)
 
+namespace composite_index_detail {
+
+class DummyIterator : public TerarkIndex::Iterator {
+public:
+    bool SeekToFirst() {
+        return false;
+    }
+    bool SeekToLast() {
+        return false;
+    }
+    bool Seek(fstring target) {
+        return false;
+    }
+    bool Next() {
+        return false;
+    }
+    bool Prev() {
+        return false;
+    }
+    size_t DictRank() const {
+        return 0;
+    }
+    virtual fstring key() const {
+        return fstring();
+    }
+};
+
+
+struct VirtualPrefixBase {
+    virtual ~VirtualPrefixBase() {}
+    virtual size_t Find(fstring key) const = 0;
+    virtual size_t DictRank(fstring key) const = 0;
+    virtual bool NeedsReorder() const = 0;
+};
+struct VirtualPrefix {
+    VirtualPrefix(VirtualPrefixBase* base) : prefix(base) {}
+    ~VirtualPrefix() {
+        delete prefix;
+    }
+    VirtualPrefixBase* prefix;
+
+    size_t Find(fstring key) const {
+        return prefix->Find(key);
+    }
+    size_t DictRank(fstring key) const {
+        return prefix->DictRank(key);
+    }
+    bool NeedsReorder() const {
+        return prefix->NeedsReorder();
+    }
+};
+template<class Prefix>
+struct VirtualPrefixWrapper : public VirtualPrefixBase, public Prefix {
+    size_t Find(fstring key) const override {
+        return Prefix::Find(key);
+    }
+    size_t DictRank(fstring key) const override {
+        return Prefix::DictRank(key);
+    }
+    bool NeedsReorder() const override {
+        return Prefix::NeedsReorder();
+    }
+};
+
+struct VirtualMapBase {
+    virtual ~VirtualMapBase() {}
+    virtual bool IsUnique() const = 0;
+};
+struct VirtualMap {
+    VirtualMap(VirtualMapBase* base) : map(base) {}
+    ~VirtualMap() {
+        delete map;
+    }
+    VirtualMapBase* map;
+
+    bool IsUnique() const {
+        return map->IsUnique();
+    }
+};
+template<class Map>
+struct VirtualMapWrapper : public VirtualMapBase, public Map {
+    bool IsUnique() const override {
+        return Map::IsUnique();
+    }
+};
+
+struct VirtualSuffixBase {
+    virtual ~VirtualSuffixBase() {}
+};
+struct VirtualSuffix {
+    VirtualSuffix(VirtualSuffixBase* base) : suffix(base) {}
+    ~VirtualSuffix() {
+        delete suffix;
+    }
+    VirtualSuffixBase* suffix;
+};
+template<class Suffix>
+struct VirtualSuffixWrapper : public VirtualSuffixBase {
+};
+
+template<class RankSelect>
+struct UintPrefix {
+    UintPrefix() = default;
+    UintPrefix(UintPrefix&&) = default;
+    UintPrefix(UintPrefix* other) {
+        rank_select.swap(other->rank_select);
+        key_length = other->key_length;
+        delete other;
+    }
+    RankSelect rank_select;
+    size_t key_length;
+    uint64_t min_value;
+    uint64_t max_value;
+
+    size_t Find(fstring key) const {
+        if (key.size() != key_length) {
+            return size_t(-1);
+        }
+        uint64_t value = ReadBigEndianUint64(key);
+        if (value < min_value || value > max_value) {
+            return size_t(-1);
+        }
+        uint64_t pos = value - min_value;
+        if (!rank_select[pos]) {
+            return size_t(-1);
+        }
+        return rank_select.rank1(pos);
+    }
+    size_t DictRank(fstring key) const {
+        size_t id, pos;
+        if (Seek(key, id, pos)) {
+          return id;
+        }
+        return rank_select.max_rank1();
+    }
+    bool Seek(fstring key, size_t& id, size_t& pos) const {
+        /*
+         *    key.size() == 4;
+         *    key_length == 6;
+         *    | - - - - - - - - |  <- buffer
+         *        | - - - - - - |  <- index
+         *        | - - - - |      <- key
+         */
+        byte_t buffer[8] = {};
+        memcpy(buffer + (8 - key_length), key.data(), std::min<size_t>(key_length, key.size()));
+        uint64_t value = ReadBigEndianUint64Aligned(buffer, 8);
+        if (value > max_value) {
+            id = size_t(-1);
+            return false;
+        }
+        if (value < min_value) {
+            id = 0;
+            pos = 0;
+            return true;
+        }
+        pos = value - min_value;
+        id = rank_select.rank1(pos);
+        if (!rank_select[pos]) {
+            pos += rank_select.zero_seq_len(pos);
+        }
+        else if (key.size() > key_length) {
+            if (pos == rank_select.size() - 1) {
+                id = size_t(-1);
+                return false;
+            }
+            ++id;
+            pos = pos + rank_select.zero_seq_len(pos + 1) + 1;
+        }
+        return true;
+    }
+    bool NeedsReorder() const {
+        return false;
+    }
+};
+
+template<class RankSelect>
+struct Map {
+    Map() = default;
+    Map(Map&&) = default;
+    Map(Map* other) {
+        rank_select.swap(other->rank_select);
+        delete other;
+    }
+    RankSelect rank_select;
+
+    bool IsUnique() const {
+        return false;
+    }
+};
+
+template<>
+struct Map<rank_select_allone> {
+    Map() = default;
+    Map(Map&&) = default;
+    Map(Map* other) {
+        rank_select = other->rank_select;
+        delete other;
+    }
+    rank_select_allone rank_select;
+
+    bool IsUnique() const {
+        return true;
+    }
+};
+
+struct EmptySuffix {
+    EmptySuffix() = default;
+    EmptySuffix(EmptySuffix&&) = default;
+    EmptySuffix(EmptySuffix* other) {
+        delete other;
+    }
+};
+
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Prefix :
+//   VirtualImpl :
+//     NLTPrefix<>
+//       Mixed_XL_256
+//       SE_512_64
+//     UintPrefix<>
+//       FewZero32
+//       FewZero64
+//       FewOne32
+//       FewOne64
+//   UintPrefix<>
+//     AllOne
+//     IL_256_32
+//     SE_512_64
+// Map :
+//   VirtualImpl :
+//     FewZero32
+//     FewZero64
+//     FewOne32
+//     FewOne64
+//   AllOne
+//   IL_256_32
+//   SE_512_64
+// Suffix :
+//   VirtualImpl :
+//     DynamicStr
+//     EntropyStr
+//     DictZipStr
+//     Number<>
+//       SortedUintVec
+//   Empty
+//   FixedStr
+//   Number<>
+//     BigUintVecMin0
+
+
+
+class CompositeIndexFactoryBase : public TerarkIndex::Factory {
+    TerarkIndex* Build(NativeDataInput<InputBuffer>& tmpKeyFileReader,
+                       const TerarkZipTableOptions& tzopt,
+                       const TerarkIndex::KeyStat&,
+                       const ImmutableCFOptions* ioption = nullptr) const {
+        return nullptr;
+    }
+    size_t MemSizeForBuild(const TerarkIndex::KeyStat&) const {
+        return 0;
+    }
+};
+
+template<class Prefix, class Map, class Suffix>
+class CompositeIndexFactory : public CompositeIndexFactoryBase {
+    unique_ptr<TerarkIndex> LoadMemory(fstring mem) const {
+        return nullptr;
+    }
+    unique_ptr<TerarkIndex> LoadFile(fstring fpath) const {
+        return nullptr;
+    }
+};
+
+template<class Prefix, class Map, class Suffix>
+class CompositeIndex : public TerarkIndex {
+public:
+    typedef composite_index_detail::DummyFactory MyFactory;
+
+    CompositeIndex(Prefix&& prefix, Map&& map, Suffix&& suffix)
+        : prefix_(std::move(prefix))
+        , map_(std::move(map))
+        , suffix_(std::move(suffix)) {
+    }
+
+    fstring common_;
+    Prefix prefix_;
+    Map map_;
+    Suffix suffix_;
+
+    const char* Name() const {
+        return "CompositeIndex";
+    }
+    void SaveMmap(std::function<void(const void *, size_t)> write) const {
+
+    }
+    size_t Find(fstring key) const {
+        if (key.commonPrefixLen(common_) != common_.size()) {
+            return size_t(-1);
+        }
+        key = key.substr(common_.size());
+        size_t id = prefix_.Find(key);
+        if (map_.IsUnique()) {
+            return id;
+        }
+        // TODO
+        assert(0);
+        return 0;
+    }
+    size_t DictRank(fstring key) const {
+        size_t cplen = key.commonPrefixLen(common_);
+        if (cplen != common_.size()) {
+            assert(key.size() >= cplen);
+            assert(key.size() == cplen || byte_t(key[cplen]) != byte_t(common_[cplen]));
+            if (key.size() == cplen || byte_t(key[cplen]) < byte_t(common_[cplen])) {
+                return 0;
+            }
+            else {
+                return NumKeys();
+            }
+        }
+        if (map_.IsUnique()) {
+            return prefix_.DictRank(key);
+        }
+        // TODO
+        //size_t id = prefix_.Find(key);
+        assert(0);
+        return 0;
+    }
+    size_t NumKeys() const {
+        return 0;
+    }
+    size_t TotalKeySize() const {
+        return 0;
+    }
+    fstring Memory() const {
+        return fstring();
+    }
+    Iterator* NewIterator() const {
+        return nullptr;
+    }
+    bool NeedsReorder() const {
+        return prefix_.NeedsReorder();
+    }
+    void GetOrderMap(terark::UintVecMin0& newToOld) const {
+    }
+    void BuildCache(double cacheRatio) {
+    }
+};
+
+
+template<class RankSelect>
+using UintIndex =
+    CompositeIndex<composite_index_detail::UintPrefix<RankSelect>,
+                   composite_index_detail::Map<rank_select_allone>,
+                   composite_index_detail::EmptySuffix>;
+
+using VirtualCompositeIndex =
+    CompositeIndex<composite_index_detail::VirtualPrefix,
+                   composite_index_detail::VirtualMap,
+                   composite_index_detail::VirtualSuffix>;
+
+int foo() {
+    auto i0 = new UintIndex<rank_select_allone>(
+        new composite_index_detail::UintPrefix<rank_select_allone>(),
+        new composite_index_detail::Map<rank_select_allone>(),
+        new composite_index_detail::EmptySuffix());
+
+    auto i1 = new VirtualCompositeIndex(
+        new composite_index_detail::VirtualPrefixWrapper<composite_index_detail::UintPrefix<rank_select_allone>>(),
+        new composite_index_detail::VirtualMapWrapper<composite_index_detail::Map<rank_select_il_256_32>>(),
+        new composite_index_detail::VirtualSuffixWrapper<composite_index_detail::EmptySuffix>());
+
+    return -1;
+}
+
+
+
+////////////////////////////////////////////////////////////////////////////////
+
 class SortedUintDataCont {
 private:
   size_t get_val(size_t idx) const {
@@ -1932,400 +2313,400 @@ CompositeUintIndexBase::MyBaseFactory::CreateIndex(
     return nullptr;
   }
 }
-
-struct UintIndexBase : public TerarkIndex{
-  static const char* index_name;
-  struct MyBaseFileHeader : public TerarkIndexHeader
-  {
-    uint64_t min_value;
-    uint64_t max_value;
-    uint64_t index_mem_size;
-    uint32_t key_length;
-    /*
-     * (Rocksdb) For one huge index, we'll split it into multipart-index for the sake of RAM,
-     * and each sub-index could have longer commonPrefix compared with ks.commonPrefix.
-     * what's more, under such circumstances, ks.commonPrefix may have been rewritten
-     * by upper-level builder to '0'. here,
-     * common_prefix_length = sub-index.commonPrefixLen - whole-index.commonPrefixLen
-     */
-    uint32_t common_prefix_length;
-
-    MyBaseFileHeader(size_t body_size, const std::type_info& ti) {
-      memset(this, 0, sizeof *this);
-      magic_len = strlen(index_name);
-      strncpy(magic, index_name, sizeof magic);
-      size_t name_i = g_TerarkIndexName.find_i(ti.name());
-      strncpy(class_name, g_TerarkIndexName.val(name_i).c_str(), sizeof class_name);
-      header_size = sizeof *this;
-      version = 1;
-      file_size = sizeof *this + body_size;
-    }
-  };
-  class MyBaseIterator : public TerarkIndex::Iterator {
-  public:
-    MyBaseIterator(const UintIndexBase& index) : index_(index) {
-      pos_ = size_t(-1);
-      buffer_.resize_no_init(index_.commonPrefix_.size() + index_.keyLength_);
-      memcpy(buffer_.data(), index_.commonPrefix_.data(), index_.commonPrefix_.size());
-    }
-
-    bool SeekToFirst() override {
-      m_id = 0;
-      pos_ = 0;
-      UpdateBuffer();
-      return true;
-    }
-    size_t DictRank() const override {
-      assert(m_id != size_t(-1));
-      return m_id;
-    }
-    fstring key() const override {
-      assert(m_id != size_t(-1));
-      return buffer_;
-    }
-  protected:
-    void UpdateBuffer() {
-      SaveAsBigEndianUint64(buffer_.data() + index_.commonPrefix_.size(),
-        buffer_.data() + buffer_.size(), pos_ + index_.minValue_);
-    }
-    size_t pos_;
-    valvec<byte_t> buffer_;
-    const UintIndexBase& index_;
-  };
-
-  class MyBaseFactory : public TerarkIndex::Factory {
-  public:
-    size_t MemSizeForBuild(const KeyStat& ks) const override {
-      assert(ks.minKeyLen == ks.maxKeyLen);
-      size_t length = ks.maxKeyLen - commonPrefixLen(ks.minKey, ks.maxKey);
-      auto minValue = ReadBigEndianUint64(ks.minKey.begin(), length);
-      auto maxValue = ReadBigEndianUint64(ks.maxKey.begin(), length);
-      if (minValue > maxValue) {
-        std::swap(minValue, maxValue);
-      }
-      uint64_t diff = maxValue - minValue + 1;
-      return size_t(std::ceil(diff * 1.25 / 8));
-    }
-    void loadCommonPart(UintIndexBase* ptr, fstring& mem, fstring fpath) const {
-      auto getHeader = [](fstring m) {
-        const MyBaseFileHeader* h = (const MyBaseFileHeader*)m.data();
-        if (m.size() < sizeof(MyBaseFileHeader)
-          || h->magic_len != strlen(index_name)
-          || strcmp(h->magic, index_name) != 0
-          || h->header_size != sizeof(MyBaseFileHeader)
-          || h->version != 1
-          || h->file_size != m.size()
-          ) {
-          throw std::invalid_argument("UintIndex::Load(): Bad file header");
-        }
-        return h;
-      };
-
-      ptr->workingState_ = WorkingState::UserMemory;
-
-      const MyBaseFileHeader* header;
-      if (mem.data() == nullptr) {
-        MmapWholeFile mmapFile(fpath);
-        mem = mmapFile.memory();
-        ptr->header_ = header = getHeader(mem);
-        //MmapWholeFile().swap(mmapFile);
-        mmapFile.base = nullptr;
-        ptr->workingState_ = WorkingState::MmapFile;
-      }
-      else {
-        ptr->header_ = header = getHeader(mem);
-      }
-      ptr->minValue_ = header->min_value;
-      ptr->maxValue_ = header->max_value;
-      ptr->keyLength_ = header->key_length;
-      if (header->common_prefix_length > 0) {
-        ptr->commonPrefix_.risk_set_data((char*)mem.data() + header->header_size,
-          header->common_prefix_length);
-      }
-    }
-  };
-
-  virtual ~UintIndexBase() {
-    if (workingState_ == WorkingState::Building) {
-      delete header_;
-    }
-    else {
-      if (workingState_ == WorkingState::MmapFile) {
-        terark::mmap_close((void*)header_, header_->file_size);
-      }
-      commonPrefix_.risk_release_ownership();
-    }
-  }
-  const char* Name() const override {
-    return header_->class_name;
-  }
-  fstring Memory() const override {
-    return fstring((const char*)header_, (ptrdiff_t)header_->file_size);
-  }
-  bool NeedsReorder() const override {
-    return false;
-  }
-  void GetOrderMap(UintVecMin0& newToOld) const override {
-    assert(false);
-  }
-  void BuildCache(double cacheRatio) override {
-    //do nothing
-  }
-
-  const MyBaseFileHeader* header_;
-  valvec<char>      commonPrefix_;
-  uint64_t          minValue_;
-  uint64_t          maxValue_;
-  uint32_t          keyLength_;
-  WorkingState      workingState_;
-};
-const char* UintIndexBase::index_name = "UintIndex";
-
-template<class RankSelect>
-class UintIndex : public UintIndexBase {
-public:
-  struct FileHeader : public MyBaseFileHeader {
-    FileHeader(size_t body_size)
-      : MyBaseFileHeader(body_size, typeid(UintIndex)) {}
-  };
-  static bool SeekImpl(fstring target, const UintIndex& index, size_t& id, size_t& pos) {
-    size_t cplen = target.commonPrefixLen(index.commonPrefix_);
-    if (cplen != index.commonPrefix_.size()) {
-      assert(target.size() >= cplen);
-      assert(target.size() == cplen
-        || byte_t(target[cplen]) != byte_t(index.commonPrefix_[cplen]));
-      if (target.size() == cplen
-        || byte_t(target[cplen]) < byte_t(index.commonPrefix_[cplen])) {
-        id = 0;
-        pos = 0;
-        return true;
-      }
-      else {
-        id = size_t(-1);
-        return false;
-      }
-    }
-    target = target.substr(index.commonPrefix_.size());
-    /*
-     *    target.size()     == 4;
-     *    index_.keyLength_ == 6;
-     *    | - - - - - - - - |  <- buffer
-     *        | - - - - - - |  <- index
-     *        | - - - - |      <- target
-     */
-    byte_t targetBuffer[8] = {};
-    memcpy(targetBuffer + (8 - index.keyLength_),
-      target.data(), std::min<size_t>(index.keyLength_, target.size()));
-    uint64_t targetValue = ReadBigEndianUint64Aligned(targetBuffer, 8);
-    if (targetValue > index.maxValue_) {
-      id = size_t(-1);
-      return false;
-    }
-    if (targetValue < index.minValue_) {
-      id = 0;
-      pos = 0;
-      return true;
-    }
-    pos = targetValue - index.minValue_;
-    id = index.indexSeq_.rank1(pos);
-    if (!index.indexSeq_[pos]) {
-      pos += index.indexSeq_.zero_seq_len(pos);
-    }
-    else if (target.size() > index.keyLength_) {
-      // minValue:  target
-      // targetVal: targetvalue.1
-      // maxValue:  targetvau
-      if (pos == index.indexSeq_.size() - 1) {
-        id = size_t(-1);
-        return false;
-      }
-      ++id;
-      pos = pos + index.indexSeq_.zero_seq_len(pos + 1) + 1;
-    }
-    return true;
-  }
-  class UIntIndexIterator : public MyBaseIterator {
-  public:
-    UIntIndexIterator(const UintIndex& index) : MyBaseIterator(index) {}
-    bool SeekToLast() override {
-      auto& index_ = static_cast<const UintIndex&>(this->index_);
-      m_id = index_.indexSeq_.max_rank1() - 1;
-      pos_ = index_.indexSeq_.size() - 1;
-      UpdateBuffer();
-      return true;
-    }
-    bool Seek(fstring target) override {
-      auto& index = static_cast<const UintIndex&>(this->index_);
-      if (UintIndex::SeekImpl(target, index, m_id, pos_)) {
-        UpdateBuffer();
-        return true;
-      }
-      return false;
-    }
-    bool Next() override {
-      auto& index_ = static_cast<const UintIndex&>(this->index_);
-      assert(m_id != size_t(-1));
-      assert(index_.indexSeq_[pos_]);
-      assert(index_.indexSeq_.rank1(pos_) == m_id);
-      if (m_id == index_.indexSeq_.max_rank1() - 1) {
-        m_id = size_t(-1);
-        return false;
-      }
-      else {
-        ++m_id;
-        pos_ = pos_ + index_.indexSeq_.zero_seq_len(pos_ + 1) + 1;
-        UpdateBuffer();
-        return true;
-      }
-    }
-    bool Prev() override {
-      auto& index_ = static_cast<const UintIndex&>(this->index_);
-      assert(m_id != size_t(-1));
-      assert(index_.indexSeq_[pos_]);
-      assert(index_.indexSeq_.rank1(pos_) == m_id);
-      if (m_id == 0) {
-        m_id = size_t(-1);
-        return false;
-      }
-      else {
-        --m_id;
-        pos_ = pos_ - index_.indexSeq_.zero_seq_revlen(pos_) - 1;
-        UpdateBuffer();
-        return true;
-      }
-    }
-  };
-  class MyFactory : public MyBaseFactory {
-  public:
-    TerarkIndex* Build(NativeDataInput<InputBuffer>& reader,
-                       const TerarkZipTableOptions& tzopt,
-                       const KeyStat& ks,
-                       const ImmutableCFOptions* ioptions) const override {
-    /* can be rank_select_allone
-      if (std::is_same<RankSelect, rank_select_allone>::value) {
-        abort(); // will not happen
-        return NULL; // let compiler to eliminate dead code
-      }
-    */
-      size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
-      assert(cplen >= ks.commonPrefixLen);
-      if (ks.maxKeyLen != ks.minKeyLen ||
-          ks.maxKeyLen - cplen > sizeof(uint64_t)) {
-        abort();
-      }
-      auto minValue = ReadBigEndianUint64(ks.minKey.begin() + cplen, ks.minKey.end());
-      auto maxValue = ReadBigEndianUint64(ks.maxKey.begin() + cplen, ks.maxKey.end());
-      if (minValue > maxValue) {
-        std::swap(minValue, maxValue);
-      }
-      assert(maxValue - minValue < UINT64_MAX); // must not overflow
-      RankSelect indexSeq;
-      indexSeq.resize(maxValue - minValue + 1);
-      if (!std::is_same<RankSelect, terark::rank_select_allone>::value) {
-        // not 'all one' case
-        valvec<byte_t> keyBuf;
-        for (size_t seq_id = 0; seq_id < ks.numKeys; ++seq_id) {
-          reader >> keyBuf;
-          // even if 'cplen' contains actual data besides prefix,
-          // after stripping, the left range is self-meaningful ranges
-          auto cur = ReadBigEndianUint64(keyBuf.begin() + cplen, keyBuf.end());
-          indexSeq.set1(cur - minValue);
-        }
-        indexSeq.build_cache(false, false);
-      }
-
-      auto ptr = UniquePtrOf(new UintIndex<RankSelect>());
-      ptr->workingState_ = WorkingState::Building;
-
-      FileHeader *header = new FileHeader(indexSeq.mem_size());
-      header->min_value = minValue;
-      header->max_value = maxValue;
-      header->index_mem_size = indexSeq.mem_size();
-      header->key_length = ks.minKeyLen - cplen;
-      if (cplen > ks.commonPrefixLen) {
-        header->common_prefix_length = cplen - ks.commonPrefixLen;
-        ptr->commonPrefix_.assign(ks.minKey.data() + ks.commonPrefixLen,
-          header->common_prefix_length);
-        header->file_size += align_up(header->common_prefix_length, 8);
-      }
-      ptr->header_ = header;
-      ptr->indexSeq_.swap(indexSeq);
-      ptr->minValue_ = minValue;
-      ptr->maxValue_ = maxValue;
-      ptr->keyLength_ = header->key_length;
-      return ptr.release();
-    }
-    unique_ptr<TerarkIndex> LoadMemory(fstring mem) const override {
-      return UniquePtrOf(loadImpl(mem, {}));
-    }
-    unique_ptr<TerarkIndex> LoadFile(fstring fpath) const override {
-      return UniquePtrOf(loadImpl({}, fpath));
-    }
-    TerarkIndex* loadImpl(fstring mem, fstring fpath) const {
-      auto ptr = UniquePtrOf(new UintIndex());
-      loadCommonPart(ptr.get(), mem, fpath);
-      auto header = (const FileHeader*)(mem.data());
-      assert(VerifyClassName<UintIndex>(header->class_name));
-      ptr->indexSeq_.risk_mmap_from((unsigned char*)mem.data() + header->header_size
-        + align_up(header->common_prefix_length, 8), header->index_mem_size);
-      return ptr.release();
-    }
-  };
-  using TerarkIndex::FactoryPtr;
-  virtual ~UintIndex() {
-    if (workingState_ == WorkingState::Building) {
-      // do nothing
-    }
-    else {
-      indexSeq_.risk_release_ownership();
-    }
-  }
-  void SaveMmap(std::function<void(const void *, size_t)> write) const override {
-    write(header_, sizeof *header_);
-    if (!commonPrefix_.empty()) {
-      write(commonPrefix_.data(), commonPrefix_.size());
-      Padzero<8>(write, commonPrefix_.size());
-    }
-    write(indexSeq_.data(), indexSeq_.mem_size());
-  }
-  size_t Find(fstring key) const override {
-    if (key.size() != keyLength_ + commonPrefix_.size()) {
-      return size_t(-1);
-    }
-    if (key.commonPrefixLen(commonPrefix_) != commonPrefix_.size()) {
-      return size_t(-1);
-    }
-    key = key.substr(commonPrefix_.size());
-    assert(key.n == keyLength_);
-    uint64_t findValue = ReadBigEndianUint64(key);
-    if (findValue < minValue_ || findValue > maxValue_) {
-      return size_t(-1);
-    }
-    uint64_t findPos = findValue - minValue_;
-    if (!indexSeq_[findPos]) {
-      return size_t(-1);
-    }
-    return indexSeq_.rank1(findPos);
-  }
-  size_t DictRank(fstring key) const override {
-    size_t id, pos;
-    if (UintIndex::SeekImpl(key, *this, id, pos)) {
-      return id;
-    }
-    return indexSeq_.max_rank1();
-  }
-  size_t NumKeys() const override {
-    return indexSeq_.max_rank1();
-  }
-  size_t TotalKeySize() const override final {
-    return (commonPrefix_.size() + keyLength_) * indexSeq_.max_rank1();
-  }
-  Iterator* NewIterator() const override {
-    return new UIntIndexIterator(*this);
-  }
-protected:
-  RankSelect        indexSeq_;
-};
+//
+//struct UintIndexBase : public TerarkIndex{
+//  static const char* index_name;
+//  struct MyBaseFileHeader : public TerarkIndexHeader
+//  {
+//    uint64_t min_value;
+//    uint64_t max_value;
+//    uint64_t index_mem_size;
+//    uint32_t key_length;
+//    /*
+//     * (Rocksdb) For one huge index, we'll split it into multipart-index for the sake of RAM,
+//     * and each sub-index could have longer commonPrefix compared with ks.commonPrefix.
+//     * what's more, under such circumstances, ks.commonPrefix may have been rewritten
+//     * by upper-level builder to '0'. here,
+//     * common_prefix_length = sub-index.commonPrefixLen - whole-index.commonPrefixLen
+//     */
+//    uint32_t common_prefix_length;
+//
+//    MyBaseFileHeader(size_t body_size, const std::type_info& ti) {
+//      memset(this, 0, sizeof *this);
+//      magic_len = strlen(index_name);
+//      strncpy(magic, index_name, sizeof magic);
+//      size_t name_i = g_TerarkIndexName.find_i(ti.name());
+//      strncpy(class_name, g_TerarkIndexName.val(name_i).c_str(), sizeof class_name);
+//      header_size = sizeof *this;
+//      version = 1;
+//      file_size = sizeof *this + body_size;
+//    }
+//  };
+//  class MyBaseIterator : public TerarkIndex::Iterator {
+//  public:
+//    MyBaseIterator(const UintIndexBase& index) : index_(index) {
+//      pos_ = size_t(-1);
+//      buffer_.resize_no_init(index_.commonPrefix_.size() + index_.keyLength_);
+//      memcpy(buffer_.data(), index_.commonPrefix_.data(), index_.commonPrefix_.size());
+//    }
+//
+//    bool SeekToFirst() override {
+//      m_id = 0;
+//      pos_ = 0;
+//      UpdateBuffer();
+//      return true;
+//    }
+//    size_t DictRank() const override {
+//      assert(m_id != size_t(-1));
+//      return m_id;
+//    }
+//    fstring key() const override {
+//      assert(m_id != size_t(-1));
+//      return buffer_;
+//    }
+//  protected:
+//    void UpdateBuffer() {
+//      SaveAsBigEndianUint64(buffer_.data() + index_.commonPrefix_.size(),
+//        buffer_.data() + buffer_.size(), pos_ + index_.minValue_);
+//    }
+//    size_t pos_;
+//    valvec<byte_t> buffer_;
+//    const UintIndexBase& index_;
+//  };
+//
+//  class MyBaseFactory : public TerarkIndex::Factory {
+//  public:
+//    size_t MemSizeForBuild(const KeyStat& ks) const override {
+//      assert(ks.minKeyLen == ks.maxKeyLen);
+//      size_t length = ks.maxKeyLen - commonPrefixLen(ks.minKey, ks.maxKey);
+//      auto minValue = ReadBigEndianUint64(ks.minKey.begin(), length);
+//      auto maxValue = ReadBigEndianUint64(ks.maxKey.begin(), length);
+//      if (minValue > maxValue) {
+//        std::swap(minValue, maxValue);
+//      }
+//      uint64_t diff = maxValue - minValue + 1;
+//      return size_t(std::ceil(diff * 1.25 / 8));
+//    }
+//    void loadCommonPart(UintIndexBase* ptr, fstring& mem, fstring fpath) const {
+//      auto getHeader = [](fstring m) {
+//        const MyBaseFileHeader* h = (const MyBaseFileHeader*)m.data();
+//        if (m.size() < sizeof(MyBaseFileHeader)
+//          || h->magic_len != strlen(index_name)
+//          || strcmp(h->magic, index_name) != 0
+//          || h->header_size != sizeof(MyBaseFileHeader)
+//          || h->version != 1
+//          || h->file_size != m.size()
+//          ) {
+//          throw std::invalid_argument("UintIndex::Load(): Bad file header");
+//        }
+//        return h;
+//      };
+//
+//      ptr->workingState_ = WorkingState::UserMemory;
+//
+//      const MyBaseFileHeader* header;
+//      if (mem.data() == nullptr) {
+//        MmapWholeFile mmapFile(fpath);
+//        mem = mmapFile.memory();
+//        ptr->header_ = header = getHeader(mem);
+//        //MmapWholeFile().swap(mmapFile);
+//        mmapFile.base = nullptr;
+//        ptr->workingState_ = WorkingState::MmapFile;
+//      }
+//      else {
+//        ptr->header_ = header = getHeader(mem);
+//      }
+//      ptr->minValue_ = header->min_value;
+//      ptr->maxValue_ = header->max_value;
+//      ptr->keyLength_ = header->key_length;
+//      if (header->common_prefix_length > 0) {
+//        ptr->commonPrefix_.risk_set_data((char*)mem.data() + header->header_size,
+//          header->common_prefix_length);
+//      }
+//    }
+//  };
+//
+//  virtual ~UintIndexBase() {
+//    if (workingState_ == WorkingState::Building) {
+//      delete header_;
+//    }
+//    else {
+//      if (workingState_ == WorkingState::MmapFile) {
+//        terark::mmap_close((void*)header_, header_->file_size);
+//      }
+//      commonPrefix_.risk_release_ownership();
+//    }
+//  }
+//  const char* Name() const override {
+//    return header_->class_name;
+//  }
+//  fstring Memory() const override {
+//    return fstring((const char*)header_, (ptrdiff_t)header_->file_size);
+//  }
+//  bool NeedsReorder() const override {
+//    return false;
+//  }
+//  void GetOrderMap(UintVecMin0& newToOld) const override {
+//    assert(false);
+//  }
+//  void BuildCache(double cacheRatio) override {
+//    //do nothing
+//  }
+//
+//  const MyBaseFileHeader* header_;
+//  valvec<char>      commonPrefix_;
+//  uint64_t          minValue_;
+//  uint64_t          maxValue_;
+//  uint32_t          keyLength_;
+//  WorkingState      workingState_;
+//};
+//const char* UintIndexBase::index_name = "UintIndex";
+//
+//template<class RankSelect>
+//class UintIndex : public UintIndexBase {
+//public:
+//  struct FileHeader : public MyBaseFileHeader {
+//    FileHeader(size_t body_size)
+//      : MyBaseFileHeader(body_size, typeid(UintIndex)) {}
+//  };
+//  static bool SeekImpl(fstring target, const UintIndex& index, size_t& id, size_t& pos) {
+//    size_t cplen = target.commonPrefixLen(index.commonPrefix_);
+//    if (cplen != index.commonPrefix_.size()) {
+//      assert(target.size() >= cplen);
+//      assert(target.size() == cplen
+//        || byte_t(target[cplen]) != byte_t(index.commonPrefix_[cplen]));
+//      if (target.size() == cplen
+//        || byte_t(target[cplen]) < byte_t(index.commonPrefix_[cplen])) {
+//        id = 0;
+//        pos = 0;
+//        return true;
+//      }
+//      else {
+//        id = size_t(-1);
+//        return false;
+//      }
+//    }
+//    target = target.substr(index.commonPrefix_.size());
+//    /*
+//     *    target.size()     == 4;
+//     *    index_.keyLength_ == 6;
+//     *    | - - - - - - - - |  <- buffer
+//     *        | - - - - - - |  <- index
+//     *        | - - - - |      <- target
+//     */
+//    byte_t targetBuffer[8] = {};
+//    memcpy(targetBuffer + (8 - index.keyLength_),
+//      target.data(), std::min<size_t>(index.keyLength_, target.size()));
+//    uint64_t targetValue = ReadBigEndianUint64Aligned(targetBuffer, 8);
+//    if (targetValue > index.maxValue_) {
+//      id = size_t(-1);
+//      return false;
+//    }
+//    if (targetValue < index.minValue_) {
+//      id = 0;
+//      pos = 0;
+//      return true;
+//    }
+//    pos = targetValue - index.minValue_;
+//    id = index.indexSeq_.rank1(pos);
+//    if (!index.indexSeq_[pos]) {
+//      pos += index.indexSeq_.zero_seq_len(pos);
+//    }
+//    else if (target.size() > index.keyLength_) {
+//      // minValue:  target
+//      // targetVal: targetvalue.1
+//      // maxValue:  targetvau
+//      if (pos == index.indexSeq_.size() - 1) {
+//        id = size_t(-1);
+//        return false;
+//      }
+//      ++id;
+//      pos = pos + index.indexSeq_.zero_seq_len(pos + 1) + 1;
+//    }
+//    return true;
+//  }
+//  class UIntIndexIterator : public MyBaseIterator {
+//  public:
+//    UIntIndexIterator(const UintIndex& index) : MyBaseIterator(index) {}
+//    bool SeekToLast() override {
+//      auto& index_ = static_cast<const UintIndex&>(this->index_);
+//      m_id = index_.indexSeq_.max_rank1() - 1;
+//      pos_ = index_.indexSeq_.size() - 1;
+//      UpdateBuffer();
+//      return true;
+//    }
+//    bool Seek(fstring target) override {
+//      auto& index = static_cast<const UintIndex&>(this->index_);
+//      if (UintIndex::SeekImpl(target, index, m_id, pos_)) {
+//        UpdateBuffer();
+//        return true;
+//      }
+//      return false;
+//    }
+//    bool Next() override {
+//      auto& index_ = static_cast<const UintIndex&>(this->index_);
+//      assert(m_id != size_t(-1));
+//      assert(index_.indexSeq_[pos_]);
+//      assert(index_.indexSeq_.rank1(pos_) == m_id);
+//      if (m_id == index_.indexSeq_.max_rank1() - 1) {
+//        m_id = size_t(-1);
+//        return false;
+//      }
+//      else {
+//        ++m_id;
+//        pos_ = pos_ + index_.indexSeq_.zero_seq_len(pos_ + 1) + 1;
+//        UpdateBuffer();
+//        return true;
+//      }
+//    }
+//    bool Prev() override {
+//      auto& index_ = static_cast<const UintIndex&>(this->index_);
+//      assert(m_id != size_t(-1));
+//      assert(index_.indexSeq_[pos_]);
+//      assert(index_.indexSeq_.rank1(pos_) == m_id);
+//      if (m_id == 0) {
+//        m_id = size_t(-1);
+//        return false;
+//      }
+//      else {
+//        --m_id;
+//        pos_ = pos_ - index_.indexSeq_.zero_seq_revlen(pos_) - 1;
+//        UpdateBuffer();
+//        return true;
+//      }
+//    }
+//  };
+//  class MyFactory : public MyBaseFactory {
+//  public:
+//    TerarkIndex* Build(NativeDataInput<InputBuffer>& reader,
+//                       const TerarkZipTableOptions& tzopt,
+//                       const KeyStat& ks,
+//                       const ImmutableCFOptions* ioptions) const override {
+//    /* can be rank_select_allone
+//      if (std::is_same<RankSelect, rank_select_allone>::value) {
+//        abort(); // will not happen
+//        return NULL; // let compiler to eliminate dead code
+//      }
+//    */
+//      size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
+//      assert(cplen >= ks.commonPrefixLen);
+//      if (ks.maxKeyLen != ks.minKeyLen ||
+//          ks.maxKeyLen - cplen > sizeof(uint64_t)) {
+//        abort();
+//      }
+//      auto minValue = ReadBigEndianUint64(ks.minKey.begin() + cplen, ks.minKey.end());
+//      auto maxValue = ReadBigEndianUint64(ks.maxKey.begin() + cplen, ks.maxKey.end());
+//      if (minValue > maxValue) {
+//        std::swap(minValue, maxValue);
+//      }
+//      assert(maxValue - minValue < UINT64_MAX); // must not overflow
+//      RankSelect indexSeq;
+//      indexSeq.resize(maxValue - minValue + 1);
+//      if (!std::is_same<RankSelect, terark::rank_select_allone>::value) {
+//        // not 'all one' case
+//        valvec<byte_t> keyBuf;
+//        for (size_t seq_id = 0; seq_id < ks.numKeys; ++seq_id) {
+//          reader >> keyBuf;
+//          // even if 'cplen' contains actual data besides prefix,
+//          // after stripping, the left range is self-meaningful ranges
+//          auto cur = ReadBigEndianUint64(keyBuf.begin() + cplen, keyBuf.end());
+//          indexSeq.set1(cur - minValue);
+//        }
+//        indexSeq.build_cache(false, false);
+//      }
+//
+//      auto ptr = UniquePtrOf(new UintIndex<RankSelect>());
+//      ptr->workingState_ = WorkingState::Building;
+//
+//      FileHeader *header = new FileHeader(indexSeq.mem_size());
+//      header->min_value = minValue;
+//      header->max_value = maxValue;
+//      header->index_mem_size = indexSeq.mem_size();
+//      header->key_length = ks.minKeyLen - cplen;
+//      if (cplen > ks.commonPrefixLen) {
+//        header->common_prefix_length = cplen - ks.commonPrefixLen;
+//        ptr->commonPrefix_.assign(ks.minKey.data() + ks.commonPrefixLen,
+//          header->common_prefix_length);
+//        header->file_size += align_up(header->common_prefix_length, 8);
+//      }
+//      ptr->header_ = header;
+//      ptr->indexSeq_.swap(indexSeq);
+//      ptr->minValue_ = minValue;
+//      ptr->maxValue_ = maxValue;
+//      ptr->keyLength_ = header->key_length;
+//      return ptr.release();
+//    }
+//    unique_ptr<TerarkIndex> LoadMemory(fstring mem) const override {
+//      return UniquePtrOf(loadImpl(mem, {}));
+//    }
+//    unique_ptr<TerarkIndex> LoadFile(fstring fpath) const override {
+//      return UniquePtrOf(loadImpl({}, fpath));
+//    }
+//    TerarkIndex* loadImpl(fstring mem, fstring fpath) const {
+//      auto ptr = UniquePtrOf(new UintIndex());
+//      loadCommonPart(ptr.get(), mem, fpath);
+//      auto header = (const FileHeader*)(mem.data());
+//      assert(VerifyClassName<UintIndex>(header->class_name));
+//      ptr->indexSeq_.risk_mmap_from((unsigned char*)mem.data() + header->header_size
+//        + align_up(header->common_prefix_length, 8), header->index_mem_size);
+//      return ptr.release();
+//    }
+//  };
+//  using TerarkIndex::FactoryPtr;
+//  virtual ~UintIndex() {
+//    if (workingState_ == WorkingState::Building) {
+//      // do nothing
+//    }
+//    else {
+//      indexSeq_.risk_release_ownership();
+//    }
+//  }
+//  void SaveMmap(std::function<void(const void *, size_t)> write) const override {
+//    write(header_, sizeof *header_);
+//    if (!commonPrefix_.empty()) {
+//      write(commonPrefix_.data(), commonPrefix_.size());
+//      Padzero<8>(write, commonPrefix_.size());
+//    }
+//    write(indexSeq_.data(), indexSeq_.mem_size());
+//  }
+//  size_t Find(fstring key) const override {
+//    if (key.size() != keyLength_ + commonPrefix_.size()) {
+//      return size_t(-1);
+//    }
+//    if (key.commonPrefixLen(commonPrefix_) != commonPrefix_.size()) {
+//      return size_t(-1);
+//    }
+//    key = key.substr(commonPrefix_.size());
+//    assert(key.n == keyLength_);
+//    uint64_t findValue = ReadBigEndianUint64(key);
+//    if (findValue < minValue_ || findValue > maxValue_) {
+//      return size_t(-1);
+//    }
+//    uint64_t findPos = findValue - minValue_;
+//    if (!indexSeq_[findPos]) {
+//      return size_t(-1);
+//    }
+//    return indexSeq_.rank1(findPos);
+//  }
+//  size_t DictRank(fstring key) const override {
+//    size_t id, pos;
+//    if (UintIndex::SeekImpl(key, *this, id, pos)) {
+//      return id;
+//    }
+//    return indexSeq_.max_rank1();
+//  }
+//  size_t NumKeys() const override {
+//    return indexSeq_.max_rank1();
+//  }
+//  size_t TotalKeySize() const override final {
+//    return (commonPrefix_.size() + keyLength_) * indexSeq_.max_rank1();
+//  }
+//  Iterator* NewIterator() const override {
+//    return new UIntIndexIterator(*this);
+//  }
+//protected:
+//  RankSelect        indexSeq_;
+//};
 
 #endif // TerocksPrivateCode
 
