@@ -32,7 +32,7 @@
 
 #if defined(TerocksPrivateCode)
 //# define USE_CRYPTOPP
-# define USE_OPENSSL
+//# define USE_OPENSSL
 #endif // TerocksPrivateCode
 
 #if ROCKSDB_MAJOR * 1000 + ROCKSDB_MINOR >= 5008

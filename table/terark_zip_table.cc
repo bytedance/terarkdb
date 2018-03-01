@@ -352,20 +352,20 @@ valvec<byte_t> LicenseInfo::dump() const {
 }
 
 bool LicenseInfo::check() const {
-  using namespace std::chrono;
-  uint64_t now = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
-  if (key) {
-    std::unique_lock<std::mutex> l(mutex);
-    if (now > key->date + key->duration) {
-      return false;
-    }
-  }
-  else {
-    std::unique_lock<std::mutex> l(mutex);
-    if (now > sst->create_date + g_dTerarkTrialDuration) {
-      return false;
-    }
-  }
+  //using namespace std::chrono;
+  //uint64_t now = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+  //if (key) {
+  //  std::unique_lock<std::mutex> l(mutex);
+  //  if (now > key->date + key->duration) {
+  //    return false;
+  //  }
+  //}
+  //else {
+  //  std::unique_lock<std::mutex> l(mutex);
+  //  if (now > sst->create_date + g_dTerarkTrialDuration) {
+  //    return false;
+  //  }
+  //}
   return true;
 }
 

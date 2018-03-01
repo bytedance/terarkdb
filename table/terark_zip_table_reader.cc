@@ -194,7 +194,7 @@ void UpdateCollectInfo(const TerarkZipTableFactory* table_factory,
 }
 
 static bool g_useOldOffsetOf =
-  terark::getEnvBool("TerarkZipTable_oldOffsetOf", false);
+  terark::getEnvBool("TerarkZipTable_oldOffsetOf", true);
 
 }
 
