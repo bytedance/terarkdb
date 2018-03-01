@@ -12,9 +12,6 @@
 # include <fcntl.h>
 # include <cxxabi.h>
 #endif
-#if defined(TerocksPrivateCode)
-#include <boost/predef/other/endian.h>
-#endif // TerocksPrivateCode
 
 namespace rocksdb {
 

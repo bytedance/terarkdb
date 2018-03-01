@@ -210,8 +210,6 @@ private:
 };
 
 
-#if defined(TerocksPrivateCode)
-
 class TerarkZipTableMultiReader
   : public TerarkZipTableTombstone
   , public TableReader
@@ -304,8 +302,6 @@ private:
   const TerarkZipTableOptions& tzto_;
   bool isReverseBytewiseOrder_;
 };
-
-#endif // TerocksPrivateCode
 
 }  // namespace rocksdb
 

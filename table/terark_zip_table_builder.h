@@ -140,7 +140,6 @@ private:
     BlobStore* store,
     long long& t6);
   WaitHandle LoadSample(std::unique_ptr<DictZipBlobStore::ZipBuilder>& zbuilder);
-#if defined(TerocksPrivateCode)
   struct BuildStoreParams {
     KeyValueStatus& kvs;
     WaitHandle handle;
@@ -151,11 +150,8 @@ private:
   Status buildPlainBlobStore(BuildStoreParams& params);
   Status buildMixedLenBlobStore(BuildStoreParams& params);
   Status buildZipOffsetBlobStore(BuildStoreParams& params);
-#endif // TerocksPrivateCode
   Status ZipValueToFinish();
-#if defined(TerocksPrivateCode)
   Status ZipValueToFinishMulti();
-#endif // TerocksPrivateCode
   Status BuilderWriteValues(KeyValueStatus& kvs, std::function<void(fstring val)> write);
   void DoWriteAppend(const void* data, size_t size);
   Status WriteStore(fstring indexMmap, BlobStore* store
@@ -165,11 +161,9 @@ private:
   Status WriteSSTFile(long long t3, long long t4
     , fstring tmpDictFile
     , const DictZipBlobStore::ZipStat& dzstat);
-#if defined(TerocksPrivateCode)
   Status WriteSSTFileMulti(long long t3, long long t4
     , fstring tmpDictFile
     , const DictZipBlobStore::ZipStat& dzstat);
-#endif // TerocksPrivateCode
   Status WriteMetaData(std::initializer_list<std::pair<const std::string*, BlockHandle>> blocks);
   DictZipBlobStore::ZipBuilder* createZipBuilder() const;
 

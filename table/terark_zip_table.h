@@ -88,17 +88,10 @@ struct TerarkZipTableOptions {
   size_t softZipWorkingMemLimit = 16ull << 30;
   size_t hardZipWorkingMemLimit = 32ull << 30;
   size_t smallTaskMemory = 1200 << 20; // 1.2G
-#if defined(TerocksPrivateCode)
-  // these fields is only for TerocksPrivateCode
-  // always keep these fields for binary compatibility
-#endif // TerocksPrivateCode
   // use dictZip for value when average value length >= minDictZipValueSize
   // otherwise do not use dictZip
-  size_t minDictZipValueSize = 30;
+  size_t minDictZipValueSize = 15;
   size_t keyPrefixLen = 0; // for IndexID
-#if defined(TerocksPrivateCode)
-  // end fields for TerocksPrivateCode
-#endif // TerocksPrivateCode
 
   // should be a small value, typically 0.001
   // default is to disable indexCache, because the improvement
@@ -156,7 +149,7 @@ TerarkZipMultiCFOptionsFromEnv(const struct DBOptions& db_options,
 ///@param fallback take ownership of fallback
 class TableFactory*
 NewTerarkZipTableFactory(const TerarkZipTableOptions&,
-						 class TableFactory* fallback);
+                         class TableFactory* fallback);
 
 bool TerarkZipTablePrintCacheStat(const class TableFactory*, FILE*);
 

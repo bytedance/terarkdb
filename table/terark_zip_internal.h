@@ -67,11 +67,8 @@ extern const std::string kTerarkZipTableValueDictBlock;
 extern const std::string kTerarkZipTableOffsetBlock;
 extern const std::string kTerarkZipTableCommonPrefixBlock;
 extern const std::string kTerarkEmptyTableKey;
-
 #if defined(TerocksPrivateCode)
-
 extern const std::string kTerarkZipTableExtendedBlock;
-
 #endif // TerocksPrivateCode
 extern const std::string kTerarkZipTableBuildTimestamp;
 
