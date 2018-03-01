@@ -1877,12 +1877,14 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4
   if (!s.ok()) {
     return s;
   }
+#if defined(TerocksPrivateCode)
   auto& license = table_factory_->GetLicense();
   BlockHandle licenseHandle;
   s = WriteBlock(SliceOf(license.dump()), file_, &offset_, &licenseHandle);
   if (!s.ok()) {
-    return s;
+      return s;
   }
+#endif // TerocksPrivateCode
   if (!range_del_block_.empty()) {
     s = WriteBlock(range_del_block_.Finish(), file_, &offset_, &tombstoneBlock);
     if (!s.ok()) {
@@ -1901,7 +1903,9 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4
   properties_.index_size = indexBlock.size();
   properties_.num_data_blocks = numKeys;
   WriteMetaData({
+#if defined(TerocksPrivateCode)
     {&kTerarkZipTableExtendedBlock                                , licenseHandle     },
+#endif // TerocksPrivateCode
     {!dict.memory.empty() ? &kTerarkZipTableValueDictBlock : NULL , dictBlock         },
     {&kTerarkZipTableIndexBlock                                   , indexBlock        },
     {!zvTypeBlock.IsNull() ? &kTerarkZipTableValueTypeBlock : NULL, zvTypeBlock       },

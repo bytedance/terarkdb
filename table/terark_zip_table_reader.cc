@@ -1682,6 +1682,7 @@ TerarkZipTableMultiReader::Open(RandomAccessFileReader* file, uint64_t file_size
 #endif
   BlockContents valueDictBlock, indexBlock, zValueTypeBlock, commonPrefixBlock;
   BlockContents offsetBlock;
+#if defined(TerocksPrivateCode)
   BlockContents licenseBlock;
   s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber, ioptions,
     kTerarkZipTableExtendedBlock, &licenseBlock);
@@ -1691,6 +1692,7 @@ TerarkZipTableMultiReader::Open(RandomAccessFileReader* file, uint64_t file_size
       return s;
     }
   }
+#endif // TerocksPrivateCode
   UpdateCollectInfo(table_factory_, &tzto_, props, file_size);
   s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber, ioptions,
     kTerarkZipTableOffsetBlock, &offsetBlock);
