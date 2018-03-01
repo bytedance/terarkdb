@@ -89,22 +89,28 @@ public:
 };
 
 #define TerarkIndexRegister(clazz, ...) \
-    TerarkIndexRegisterImp(clazz, #clazz, ##__VA_ARGS__)
+    TerarkIndexRegisterImp(clazz, clazz::MyFactory, #clazz, ##__VA_ARGS__)
 
-#define TerarkIndexRegisterNLT(clazzSuffix, ...)          \
-    TerarkIndexRegisterImp(TrieDAWG_##clazzSuffix,                      \
+#define TerarkIndexRegisterWithFactory(clazz, factory, ...) \
+    TerarkIndexRegisterImp(clazz, factory, #clazz, ##__VA_ARGS__)
+
+#define TerarkIndexRegisterNLT(clazzSuffix, ...)                        \
+    TerarkIndexRegisterNLTImp(TrieDAWG_##clazzSuffix,                   \
         BOOST_STRINGIZE(BOOST_PP_CAT(NestLoudsTrieDAWG_, clazzSuffix)), \
-        BOOST_STRINGIZE(clazzSuffix), \
+        BOOST_STRINGIZE(clazzSuffix),                                   \
         ##__VA_ARGS__)
 
-#define TerarkIndexRegisterImp(clazz, WireName, ...)            \
-	  BOOST_STATIC_ASSERT(sizeof(WireName) <= 60);                \
+#define TerarkIndexRegisterNLTImp(clazz, ...) \
+    TerarkIndexRegisterImp(clazz, clazz::MyFactory, ##__VA_ARGS__)
+
+#define TerarkIndexRegisterImp(clazz, factory, WireName, ...)   \
+    BOOST_STATIC_ASSERT(sizeof(WireName) <= 60);                \
     TerarkIndex::AutoRegisterFactory                            \
     terark_used_static_obj                                      \
     g_AutoRegister_##clazz(                                     \
         {WireName,__VA_ARGS__},                                 \
         typeid(clazz).name(),                                   \
-        new clazz::MyFactory()                                  \
+        new factory()                                           \
     )
 
 }

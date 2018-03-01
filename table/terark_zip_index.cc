@@ -617,377 +617,530 @@ namespace composite_index_detail {
 
 class DummyIterator : public TerarkIndex::Iterator {
 public:
-    bool SeekToFirst() {
-        return false;
-    }
-    bool SeekToLast() {
-        return false;
-    }
-    bool Seek(fstring target) {
-        return false;
-    }
-    bool Next() {
-        return false;
-    }
-    bool Prev() {
-        return false;
-    }
-    size_t DictRank() const {
-        return 0;
-    }
-    virtual fstring key() const {
-        return fstring();
-    }
+  bool SeekToFirst() {
+    return false;
+  }
+  bool SeekToLast() {
+    return false;
+  }
+  bool Seek(fstring target) {
+    return false;
+  }
+  bool Next() {
+    return false;
+  }
+  bool Prev() {
+    return false;
+  }
+  size_t DictRank() const {
+    return 0;
+  }
+  virtual fstring key() const {
+    return fstring();
+  }
 };
 
-
-struct VirtualPrefixBase {
-    virtual ~VirtualPrefixBase() {}
-    virtual size_t Find(fstring key) const = 0;
-    virtual size_t DictRank(fstring key) const = 0;
-    virtual bool NeedsReorder() const = 0;
+struct SerializationBase {
+  virtual bool Load(fstring mem) = 0;
+  virtual void Save(std::function<void(void*, size_t)> append) const = 0;
+  virtual ~SerializationBase() {}
 };
-struct VirtualPrefix {
-    VirtualPrefix(VirtualPrefixBase* base) : prefix(base) {}
-    ~VirtualPrefix() {
-        delete prefix;
-    }
-    VirtualPrefixBase* prefix;
+struct VirtualPrefixBase : public SerializationBase {
+  virtual ~VirtualPrefixBase() {}
+  virtual size_t KeyCount() const = 0;
+  virtual size_t TotalKeySize() const = 0;
+  virtual size_t Find(fstring key) const = 0;
+  virtual size_t DictRank(fstring key) const = 0;
+  virtual bool NeedsReorder() const = 0;
+};
+struct VirtualPrefix : public SerializationBase {
+  VirtualPrefix(VirtualPrefixBase* base) : prefix(base) {}
+  ~VirtualPrefix() {
+    delete prefix;
+  }
+  VirtualPrefixBase* prefix;
 
-    size_t Find(fstring key) const {
-        return prefix->Find(key);
-    }
-    size_t DictRank(fstring key) const {
-        return prefix->DictRank(key);
-    }
-    bool NeedsReorder() const {
-        return prefix->NeedsReorder();
-    }
+  size_t KeyCount() const {
+    return prefix->KeyCount();
+  }
+  size_t TotalKeySize() const {
+    return prefix->TotalKeySize();
+  }
+  size_t Find(fstring key) const {
+    return prefix->Find(key);
+  }
+  size_t DictRank(fstring key) const {
+    return prefix->DictRank(key);
+  }
+  bool NeedsReorder() const {
+    return prefix->NeedsReorder();
+  }
+
+  bool Load(fstring mem) {
+    return prefix->Load(mem);
+  }
+  void Save(std::function<void(void*, size_t)> append) const {
+    prefix->Save(append);
+  }
 };
 template<class Prefix>
 struct VirtualPrefixWrapper : public VirtualPrefixBase, public Prefix {
-    size_t Find(fstring key) const override {
-        return Prefix::Find(key);
-    }
-    size_t DictRank(fstring key) const override {
-        return Prefix::DictRank(key);
-    }
-    bool NeedsReorder() const override {
-        return Prefix::NeedsReorder();
-    }
+  VirtualPrefixWrapper(Prefix *prefix) : Prefix(prefix) {}
+
+  size_t KeyCount() const override {
+    return Prefix::KeyCount();
+  }
+  size_t TotalKeySize() const override {
+    return Prefix::TotalKeySize();
+  }
+  size_t Find(fstring key) const override {
+    return Prefix::Find(key);
+  }
+  size_t DictRank(fstring key) const override {
+    return Prefix::DictRank(key);
+  }
+  bool NeedsReorder() const override {
+    return Prefix::NeedsReorder();
+  }
+
+  bool Load(fstring mem) override {
+    return Prefix::Load(mem);
+  }
+  void Save(std::function<void(void*, size_t)> append) const override {
+    Prefix::Save(append);
+  }
 };
 
-struct VirtualMapBase {
-    virtual ~VirtualMapBase() {}
-    virtual bool IsUnique() const = 0;
+struct VirtualMapBase : public SerializationBase {
+  virtual ~VirtualMapBase() {}
+  virtual bool IsUnique() const = 0;
 };
-struct VirtualMap {
-    VirtualMap(VirtualMapBase* base) : map(base) {}
-    ~VirtualMap() {
-        delete map;
-    }
-    VirtualMapBase* map;
+struct VirtualMap : public SerializationBase {
+  VirtualMap(VirtualMapBase* base) : map(base) {}
+  ~VirtualMap() {
+    delete map;
+  }
+  VirtualMapBase* map;
 
-    bool IsUnique() const {
-        return map->IsUnique();
-    }
+  bool IsUnique() const {
+    return map->IsUnique();
+  }
+
+  bool Load(fstring mem) override {
+    return map->Load(mem);
+  }
+  void Save(std::function<void(void*, size_t)> append) const override {
+    map->Save(append);
+  }
 };
 template<class Map>
 struct VirtualMapWrapper : public VirtualMapBase, public Map {
-    bool IsUnique() const override {
-        return Map::IsUnique();
-    }
+  VirtualMapWrapper(Map *map) : Map(map) {}
+
+  bool IsUnique() const override {
+    return Map::IsUnique();
+  }
+
+  bool Load(fstring mem) override {
+    return Map::Load(mem);
+  }
+  void Save(std::function<void(void*, size_t)> append) const override {
+    Map::Save(append);
+  }
 };
 
-struct VirtualSuffixBase {
-    virtual ~VirtualSuffixBase() {}
+struct VirtualSuffixBase : public SerializationBase {
+  virtual ~VirtualSuffixBase() {}
 };
-struct VirtualSuffix {
-    VirtualSuffix(VirtualSuffixBase* base) : suffix(base) {}
-    ~VirtualSuffix() {
-        delete suffix;
-    }
-    VirtualSuffixBase* suffix;
+struct VirtualSuffix : public SerializationBase {
+  VirtualSuffix(VirtualSuffixBase* base) : suffix(base) {}
+  ~VirtualSuffix() {
+    delete suffix;
+  }
+  VirtualSuffixBase* suffix;
+
+
+  bool Load(fstring mem) override {
+    return suffix->Load(mem);
+  }
+  void Save(std::function<void(void*, size_t)> append) const override {
+    suffix->Save(append);
+  }
 };
 template<class Suffix>
-struct VirtualSuffixWrapper : public VirtualSuffixBase {
-};
+struct VirtualSuffixWrapper : public VirtualSuffixBase, public Suffix {
+  VirtualSuffixWrapper(Suffix *suffix) : Suffix(suffix) {}
 
-template<class RankSelect>
-struct UintPrefix {
-    UintPrefix() = default;
-    UintPrefix(UintPrefix&&) = default;
-    UintPrefix(UintPrefix* other) {
-        rank_select.swap(other->rank_select);
-        key_length = other->key_length;
-        delete other;
-    }
-    RankSelect rank_select;
-    size_t key_length;
-    uint64_t min_value;
-    uint64_t max_value;
-
-    size_t Find(fstring key) const {
-        if (key.size() != key_length) {
-            return size_t(-1);
-        }
-        uint64_t value = ReadBigEndianUint64(key);
-        if (value < min_value || value > max_value) {
-            return size_t(-1);
-        }
-        uint64_t pos = value - min_value;
-        if (!rank_select[pos]) {
-            return size_t(-1);
-        }
-        return rank_select.rank1(pos);
-    }
-    size_t DictRank(fstring key) const {
-        size_t id, pos;
-        if (Seek(key, id, pos)) {
-          return id;
-        }
-        return rank_select.max_rank1();
-    }
-    bool Seek(fstring key, size_t& id, size_t& pos) const {
-        /*
-         *    key.size() == 4;
-         *    key_length == 6;
-         *    | - - - - - - - - |  <- buffer
-         *        | - - - - - - |  <- index
-         *        | - - - - |      <- key
-         */
-        byte_t buffer[8] = {};
-        memcpy(buffer + (8 - key_length), key.data(), std::min<size_t>(key_length, key.size()));
-        uint64_t value = ReadBigEndianUint64Aligned(buffer, 8);
-        if (value > max_value) {
-            id = size_t(-1);
-            return false;
-        }
-        if (value < min_value) {
-            id = 0;
-            pos = 0;
-            return true;
-        }
-        pos = value - min_value;
-        id = rank_select.rank1(pos);
-        if (!rank_select[pos]) {
-            pos += rank_select.zero_seq_len(pos);
-        }
-        else if (key.size() > key_length) {
-            if (pos == rank_select.size() - 1) {
-                id = size_t(-1);
-                return false;
-            }
-            ++id;
-            pos = pos + rank_select.zero_seq_len(pos + 1) + 1;
-        }
-        return true;
-    }
-    bool NeedsReorder() const {
-        return false;
-    }
-};
-
-template<class RankSelect>
-struct Map {
-    Map() = default;
-    Map(Map&&) = default;
-    Map(Map* other) {
-        rank_select.swap(other->rank_select);
-        delete other;
-    }
-    RankSelect rank_select;
-
-    bool IsUnique() const {
-        return false;
-    }
-};
-
-template<>
-struct Map<rank_select_allone> {
-    Map() = default;
-    Map(Map&&) = default;
-    Map(Map* other) {
-        rank_select = other->rank_select;
-        delete other;
-    }
-    rank_select_allone rank_select;
-
-    bool IsUnique() const {
-        return true;
-    }
-};
-
-struct EmptySuffix {
-    EmptySuffix() = default;
-    EmptySuffix(EmptySuffix&&) = default;
-    EmptySuffix(EmptySuffix* other) {
-        delete other;
-    }
+  bool Load(fstring mem) override {
+    return Suffix::Load(mem);
+  }
+  void Save(std::function<void(void*, size_t)> append) const override {
+    Suffix::Save(append);
+  }
 };
 
 }
 
+
 ////////////////////////////////////////////////////////////////////////////////
-// Prefix :
-//   VirtualImpl :
-//     NLTPrefix<>
-//       Mixed_XL_256
-//       SE_512_64
-//     UintPrefix<>
-//       FewZero32
-//       FewZero64
-//       FewOne32
-//       FewOne64
-//   UintPrefix<>
-//     AllOne
-//     IL_256_32
-//     SE_512_64
-// Map :
-//   VirtualImpl :
-//     FewZero32
-//     FewZero64
-//     FewOne32
-//     FewOne64
-//   AllOne
-//   IL_256_32
-//   SE_512_64
-// Suffix :
-//   VirtualImpl :
-//     DynamicStr
-//     EntropyStr
-//     DictZipStr
-//     Number<>
-//       SortedUintVec
-//   Empty
-//   FixedStr
-//   Number<>
-//     BigUintVecMin0
-
-
-
-class CompositeIndexFactoryBase : public TerarkIndex::Factory {
-    TerarkIndex* Build(NativeDataInput<InputBuffer>& tmpKeyFileReader,
-                       const TerarkZipTableOptions& tzopt,
-                       const TerarkIndex::KeyStat&,
-                       const ImmutableCFOptions* ioption = nullptr) const {
-        return nullptr;
-    }
-    size_t MemSizeForBuild(const TerarkIndex::KeyStat&) const {
-        return 0;
-    }
-};
-
-template<class Prefix, class Map, class Suffix>
-class CompositeIndexFactory : public CompositeIndexFactoryBase {
-    unique_ptr<TerarkIndex> LoadMemory(fstring mem) const {
-        return nullptr;
-    }
-    unique_ptr<TerarkIndex> LoadFile(fstring fpath) const {
-        return nullptr;
-    }
-};
+//  Prefix :
+//    VirtualImpl :
+//      NLTPrefix<>
+//        Mixed_XL_256
+//        SE_512_64
+//      UintPrefix<>
+//        FewZero32
+//        FewZero64
+//        FewOne32
+//        FewOne64
+//    UintPrefix<>
+//      AllOne
+//      IL_256_32
+//      SE_512_64
+//  Map :
+//    VirtualImpl :
+//      FewZero32
+//      FewZero64
+//      FewOne32
+//      FewOne64
+//    AllOne
+//    IL_256_32
+//    SE_512_64
+//  Suffix :
+//    VirtualImpl :
+//      DynamicStr
+//      EntropyStr
+//      DictZipStr
+//      Number<>
+//        SortedUintVec
+//    Empty
+//    FixedStr
+//    Number<>
+//      BigUintVecMin0
 
 template<class Prefix, class Map, class Suffix>
 class CompositeIndex : public TerarkIndex {
 public:
-    typedef composite_index_detail::DummyFactory MyFactory;
+  CompositeIndex(Prefix&& prefix, Map&& map, Suffix&& suffix)
+    : prefix_(std::move(prefix))
+    , map_(std::move(map))
+    , suffix_(std::move(suffix)) {
+  }
 
-    CompositeIndex(Prefix&& prefix, Map&& map, Suffix&& suffix)
-        : prefix_(std::move(prefix))
-        , map_(std::move(map))
-        , suffix_(std::move(suffix)) {
-    }
+  fstring common_;
+  Prefix prefix_;
+  Map map_;
+  Suffix suffix_;
 
-    fstring common_;
-    Prefix prefix_;
-    Map map_;
-    Suffix suffix_;
+  const char* Name() const {
+    return "CompositeIndex";
+  }
+  void SaveMmap(std::function<void(const void *, size_t)> write) const {
+    // TODO
+  }
+  size_t Find(fstring key) const {
+    if (key.commonPrefixLen(common_) != common_.size()) {
+      return size_t(-1);
+    }
+    key = key.substr(common_.size());
+    size_t id = prefix_.Find(key);
+    if (map_.IsUnique()) {
+      return id;
+    }
+    // TODO
+    assert(0);
+    return 0;
+  }
+  size_t DictRank(fstring key) const {
+    size_t cplen = key.commonPrefixLen(common_);
+    if (cplen != common_.size()) {
+      assert(key.size() >= cplen);
+      assert(key.size() == cplen || byte_t(key[cplen]) != byte_t(common_[cplen]));
+      if (key.size() == cplen || byte_t(key[cplen]) < byte_t(common_[cplen])) {
+        return 0;
+      }
+      else {
+        return NumKeys();
+      }
+    }
+    if (map_.IsUnique()) {
+      return prefix_.DictRank(key);
+    }
+    // TODO
+    //size_t id = prefix_.Find(key);
+    assert(0);
+    return 0;
+  }
+  size_t NumKeys() const {
+    if (map_.IsUnique()) {
+      return prefix_.KeyCount();
+    }
+    // TODO
+    return 0;
+  }
+  size_t TotalKeySize() const {
+    size_t size = prefix_.TotalKeySize();
+    size += NumKeys() * common_.size();
+    // TODO
+    return 0;
+  }
+  fstring Memory() const {
+    return fstring();
+  }
+  Iterator* NewIterator() const {
+    return nullptr;
+  }
+  bool NeedsReorder() const {
+    return prefix_.NeedsReorder();
+  }
+  void GetOrderMap(terark::UintVecMin0& newToOld) const {
+  }
+  void BuildCache(double cacheRatio) {
+  }
+};
 
-    const char* Name() const {
-        return "CompositeIndex";
-    }
-    void SaveMmap(std::function<void(const void *, size_t)> write) const {
+namespace composite_index_detail {
 
-    }
-    size_t Find(fstring key) const {
-        if (key.commonPrefixLen(common_) != common_.size()) {
-            return size_t(-1);
-        }
-        key = key.substr(common_.size());
-        size_t id = prefix_.Find(key);
-        if (map_.IsUnique()) {
-            return id;
-        }
-        // TODO
-        assert(0);
-        return 0;
-    }
-    size_t DictRank(fstring key) const {
-        size_t cplen = key.commonPrefixLen(common_);
-        if (cplen != common_.size()) {
-            assert(key.size() >= cplen);
-            assert(key.size() == cplen || byte_t(key[cplen]) != byte_t(common_[cplen]));
-            if (key.size() == cplen || byte_t(key[cplen]) < byte_t(common_[cplen])) {
-                return 0;
-            }
-            else {
-                return NumKeys();
-            }
-        }
-        if (map_.IsUnique()) {
-            return prefix_.DictRank(key);
-        }
-        // TODO
-        //size_t id = prefix_.Find(key);
-        assert(0);
-        return 0;
-    }
-    size_t NumKeys() const {
-        return 0;
-    }
-    size_t TotalKeySize() const {
-        return 0;
-    }
-    fstring Memory() const {
-        return fstring();
-    }
-    Iterator* NewIterator() const {
-        return nullptr;
-    }
-    bool NeedsReorder() const {
-        return prefix_.NeedsReorder();
-    }
-    void GetOrderMap(terark::UintVecMin0& newToOld) const {
-    }
-    void BuildCache(double cacheRatio) {
-    }
+class CompositeIndexFactoryBase : public TerarkIndex::Factory {
+  TerarkIndex* Build(NativeDataInput<InputBuffer>& tmpKeyFileReader,
+                     const TerarkZipTableOptions& tzopt,
+                     const TerarkIndex::KeyStat&,
+                     const ImmutableCFOptions* ioption = nullptr) const {
+    return nullptr;
+  }
+  size_t MemSizeForBuild(const TerarkIndex::KeyStat&) const {
+    return 0;
+  }
+  unique_ptr<TerarkIndex> LoadMemory(fstring mem) const {
+    return nullptr;
+  }
+  unique_ptr<TerarkIndex> LoadFile(fstring fpath) const {
+    return nullptr;
+  }
+protected:
+  virtual TerarkIndex* CreateIndex(SerializationBase* prefix,
+                                   SerializationBase* map,
+                                   SerializationBase* suffix) const = 0;
+  virtual SerializationBase* CreatePrefix() const = 0;
+  virtual SerializationBase* CreateMap() const = 0;
+  virtual SerializationBase* CreateSuffix() const = 0;
+};
+
+template<class Prefix, size_t PV, class Map, size_t MV, class Suffix, size_t SV>
+struct CompositeIndexDeclare {
+  typedef CompositeIndex<typename std::conditional<PV, VirtualPrefixWrapper<Prefix>, Prefix>::type,
+                         typename std::conditional<MV, VirtualMapWrapper<Map>, Map>::type,
+                         typename std::conditional<SV, VirtualSuffixWrapper<Suffix>, Suffix>::type> index_type;
 };
 
 
+template<class Prefix, size_t PV, class Map, size_t MV, class Suffix, size_t SV>
+class CompositeIndexFactory : public CompositeIndexFactoryBase {
+protected:
+  virtual TerarkIndex* CreateIndex(SerializationBase* prefix,
+                                   SerializationBase* map,
+                                   SerializationBase* suffix) const {
+    return new CompositeIndexDeclare<Prefix, PV, Map, MV, Suffix, SV>::index_type(prefix, map, suffix);
+  }
+  SerializationBase* CreatePrefix() const override {
+    return new Prefix();
+  }
+  SerializationBase* CreateMap() const override {
+    return new Map();
+  }
+  SerializationBase* CreateSuffix() const override {
+    return new Suffix();
+  }
+};
+
+}
+
+using composite_index_detail::CompositeIndexDeclare;
+using composite_index_detail::CompositeIndexFactory;
+
+#define RegisterCompositeIndex(Prefix, PV, Map, MV, Suffix, SV, Name, ...)                      \
+  typedef typename CompositeIndexDeclare<Prefix, PV, Map, MV, Suffix, SV>::index_type Name;     \
+  typedef CompositeIndexFactory<Prefix, PV, Map, MV, Suffix, SV> Name##Factory;                 \
+  TerarkIndexRegisterWithFactory(Name, Name##Factory, ##__VA_ARGS__)
+
+#define RegisterCompositeIndexWithFactory(Prefix, PV, Map, MV, Suffix, SV, Name, Factory, ...)  \
+  typedef typename CompositeIndexDeclare<Prefix, PV, Map, MV, Suffix, SV>::index_type Name;     \
+  TerarkIndexRegisterWithFactory(Name, Factory, ##__VA_ARGS__)
+
+
+
+template<class RankSelect>
+struct CompositeIndexUintPrefix : public composite_index_detail::SerializationBase {
+  CompositeIndexUintPrefix() = default;
+  CompositeIndexUintPrefix(CompositeIndexUintPrefix&&) = default;
+  CompositeIndexUintPrefix(SerializationBase* base) {
+    assert(dynamic_cast<CompositeIndexUintPrefix<RankSelect>*>(base) != nullptr);
+    auto other = static_cast<CompositeIndexUintPrefix<RankSelect>*>(base);
+    rank_select.swap(other->rank_select);
+    key_length = other->key_length;
+    delete other;
+  }
+  RankSelect rank_select;
+  size_t key_length;
+  uint64_t min_value;
+  uint64_t max_value;
+
+  size_t KeyCount() const {
+    return rank_select.max_rank1();
+  }
+  size_t TotalKeySize() const {
+    return key_length * rank_select.max_rank1();
+  }
+  size_t Find(fstring key) const {
+    if (key.size() != key_length) {
+      return size_t(-1);
+    }
+    uint64_t value = ReadBigEndianUint64(key);
+    if (value < min_value || value > max_value) {
+      return size_t(-1);
+    }
+    uint64_t pos = value - min_value;
+    if (!rank_select[pos]) {
+      return size_t(-1);
+    }
+    return rank_select.rank1(pos);
+  }
+  size_t DictRank(fstring key) const {
+    size_t id, pos;
+    if (Seek(key, id, pos)) {
+      return id;
+    }
+    return rank_select.max_rank1();
+  }
+  bool Seek(fstring key, size_t& id, size_t& pos) const {
+    /*
+     *    key.size() == 4;
+     *    key_length == 6;
+     *    | - - - - - - - - |  <- buffer
+     *        | - - - - - - |  <- index
+     *        | - - - - |      <- key
+     */
+    byte_t buffer[8] = {};
+    memcpy(buffer + (8 - key_length), key.data(), std::min<size_t>(key_length, key.size()));
+    uint64_t value = ReadBigEndianUint64Aligned(buffer, 8);
+    if (value > max_value) {
+      id = size_t(-1);
+      return false;
+    }
+    if (value < min_value) {
+      id = 0;
+      pos = 0;
+      return true;
+    }
+    pos = value - min_value;
+    id = rank_select.rank1(pos);
+    if (!rank_select[pos]) {
+      pos += rank_select.zero_seq_len(pos);
+    }
+    else if (key.size() > key_length) {
+      if (pos == rank_select.size() - 1) {
+        id = size_t(-1);
+        return false;
+      }
+      ++id;
+      pos = pos + rank_select.zero_seq_len(pos + 1) + 1;
+    }
+    return true;
+  }
+  bool NeedsReorder() const {
+    return false;
+  }
+
+  bool Load(fstring mem) override {
+    return false;
+  }
+  void Save(std::function<void(void*, size_t)> append) const override {
+  }
+};
+
+template<class RankSelect>
+struct CompositeIndexMap : public composite_index_detail::SerializationBase {
+  CompositeIndexMap() = default;
+  CompositeIndexMap(CompositeIndexMap&&) = default;
+  CompositeIndexMap(SerializationBase* base) {
+    assert(dynamic_cast<CompositeIndexMap<RankSelect>*>(base) != nullptr);
+    auto other = static_cast<CompositeIndexMap<RankSelect>*>(base);
+    rank_select.swap(other->rank_select);
+    delete other;
+  }
+  RankSelect rank_select;
+
+  bool IsUnique() const {
+    return false;
+  }
+
+  bool Load(fstring mem) override {
+    return false;
+  }
+  void Save(std::function<void(void*, size_t)> append) const override {
+  }
+};
+
+template<>
+struct CompositeIndexMap<rank_select_allone> : public composite_index_detail::SerializationBase {
+  CompositeIndexMap() = default;
+  CompositeIndexMap(CompositeIndexMap&&) = default;
+  CompositeIndexMap(SerializationBase* base) {
+    assert(dynamic_cast<CompositeIndexMap<rank_select_allone>*>(base) != nullptr);
+    auto other = static_cast<CompositeIndexMap<rank_select_allone>*>(base);
+    rank_select = other->rank_select;
+    delete other;
+  }
+  rank_select_allone rank_select;
+
+  bool IsUnique() const {
+    return true;
+  }
+
+  bool Load(fstring mem) override {
+    return false;
+  }
+  void Save(std::function<void(void*, size_t)> append) const override {
+  }
+};
+
+struct CompositeIndexEmptySuffix : public composite_index_detail::SerializationBase {
+  CompositeIndexEmptySuffix() = default;
+  CompositeIndexEmptySuffix(CompositeIndexEmptySuffix&&) = default;
+  CompositeIndexEmptySuffix(SerializationBase* base) {
+    delete base;
+  }
+
+  bool Load(fstring mem) override {
+    return false;
+  }
+  void Save(std::function<void(void*, size_t)> append) const override {
+  }
+};
+
 template<class RankSelect>
 using UintIndex =
-    CompositeIndex<composite_index_detail::UintPrefix<RankSelect>,
-                   composite_index_detail::Map<rank_select_allone>,
-                   composite_index_detail::EmptySuffix>;
+  typename CompositeIndexDeclare<CompositeIndexUintPrefix<RankSelect>, 0,
+                                 CompositeIndexMap<rank_select_allone>, 0,
+                                 CompositeIndexEmptySuffix, 0>::index_type;
 
 using VirtualCompositeIndex =
-    CompositeIndex<composite_index_detail::VirtualPrefix,
-                   composite_index_detail::VirtualMap,
-                   composite_index_detail::VirtualSuffix>;
+  typename CompositeIndexDeclare<CompositeIndexUintPrefix<rank_select_allone>, 1,
+                                 CompositeIndexMap<rank_select_il_256_32>, 1,
+                                 CompositeIndexEmptySuffix, 1>::index_type;
 
 int foo() {
-    auto i0 = new UintIndex<rank_select_allone>(
-        new composite_index_detail::UintPrefix<rank_select_allone>(),
-        new composite_index_detail::Map<rank_select_allone>(),
-        new composite_index_detail::EmptySuffix());
+  auto i0 = new UintIndex<rank_select_allone>(
+    new CompositeIndexUintPrefix<rank_select_allone>(),
+    new CompositeIndexMap<rank_select_allone>(),
+    new CompositeIndexEmptySuffix());
 
-    auto i1 = new VirtualCompositeIndex(
-        new composite_index_detail::VirtualPrefixWrapper<composite_index_detail::UintPrefix<rank_select_allone>>(),
-        new composite_index_detail::VirtualMapWrapper<composite_index_detail::Map<rank_select_il_256_32>>(),
-        new composite_index_detail::VirtualSuffixWrapper<composite_index_detail::EmptySuffix>());
+  auto i1 = new VirtualCompositeIndex(
+    new CompositeIndexUintPrefix<rank_select_allone>(),
+    new CompositeIndexMap<rank_select_il_256_32>(),
+    new CompositeIndexEmptySuffix());
 
-    return -1;
+  return -1;
 }
 
 
@@ -2724,7 +2877,7 @@ typedef NestLoudsTrieIndex<NestLoudsTrieDAWG_Mixed_IL_256_32_FL> TrieDAWG_Mixed_
 typedef NestLoudsTrieIndex<NestLoudsTrieDAWG_Mixed_SE_512_32_FL> TrieDAWG_Mixed_SE_512_32_FL;
 typedef NestLoudsTrieIndex<NestLoudsTrieDAWG_Mixed_XL_256_32_FL> TrieDAWG_Mixed_XL_256_32_FL;
 
-TerarkIndexRegisterImp(TrieDAWG_IL_256_32, "NestLoudsTrieDAWG_IL", "IL_256_32", "IL_256", "NestLoudsTrieDAWG_IL_256");
+TerarkIndexRegisterImp(TrieDAWG_IL_256_32, TrieDAWG_IL_256_32::MyFactory, "NestLoudsTrieDAWG_IL", "IL_256_32", "IL_256", "NestLoudsTrieDAWG_IL_256");
 TerarkIndexRegisterNLT(SE_512_64);
 TerarkIndexRegisterNLT(Mixed_SE_512);
 TerarkIndexRegisterNLT(Mixed_IL_256);
@@ -2798,9 +2951,16 @@ RegisterCompositeUintIndex(SE_512_64, FewOne64 );
 RegisterCompositeUintIndex(IL_256_32, IL_256_32);
 RegisterCompositeUintIndex(SE_512_64, SE_512_64);
 
-#define RegisterUintIndex(RankSelect) \
-  typedef UintIndex<RankSelect> UintIndex_##RankSelect; \
-            TerarkIndexRegister(UintIndex_##RankSelect)
+//#define RegisterUintIndex(RankSelect) \
+//  typedef UintIndex<RankSelect> UintIndex_##RankSelect; \
+//            TerarkIndexRegister(UintIndex_##RankSelect)
+#define RegisterUintIndex(RankSelect)         \
+  RegisterCompositeIndex(                     \
+    CompositeIndexUintPrefix<RankSelect>, 0,  \
+    CompositeIndexMap<rank_select_allone>, 0, \
+    CompositeIndexEmptySuffix, 0,             \
+    UintIndex_##RankSelect                    \
+  )
 RegisterUintIndex(IL_256_32);
 RegisterUintIndex(SE_512_64);
 RegisterUintIndex(AllOne);
