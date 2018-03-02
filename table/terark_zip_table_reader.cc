@@ -194,7 +194,7 @@ void UpdateCollectInfo(const TerarkZipTableFactory* table_factory,
 }
 
 static bool g_useOldOffsetOf =
-  terark::getEnvBool("TerarkZipTable_oldOffsetOf", false);
+  terark::getEnvBool("TerarkZipTable_oldOffsetOf", true);
 
 }
 
@@ -634,8 +634,6 @@ public:
 };
 #endif
 
-#if defined(TerocksPrivateCode)
-
 template<bool reverse>
 class TerarkZipTableMultiIterator : public TerarkZipTableIterator<reverse> {
 public:
@@ -794,8 +792,6 @@ protected:
     interKeyBuf_xx_.assign((byte_t*)interKeyBuf_.data(), interKeyBuf_.size());
   }
 };
-
-#endif // TerocksPrivateCode
 
 Status TerarkZipTableTombstone::
 LoadTombstone(RandomAccessFileReader * file, uint64_t file_size) {
@@ -1093,9 +1089,7 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   UpdateCollectInfo(table_factory_, &tzto_, props, file_size);
   s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber, ioptions,
     kTerarkZipTableValueDictBlock, &valueDictBlock);
-#if defined(TerocksPrivateCode)
   // PlainBlobStore & MixedLenBlobStore no dict
-#endif // TerocksPrivateCode
   s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber, ioptions,
     kTerarkZipTableIndexBlock, &indexBlock);
   if (!s.ok()) {
@@ -1247,7 +1241,6 @@ TerarkZipTableReader::Get(const ReadOptions& ro, const Slice& ikey,
 }
 
 uint64_t TerarkZipTableReader::ApproximateOffsetOf_old(const Slice& ikey) {
-#if defined(TerocksPrivateCode)
   auto iter = UniquePtrOf(NewIterator(ReadOptions(), nullptr, false));
   iter->Seek(ikey);
   auto indexIter = static_cast<TerarkZipTableIndexIterator*>(iter.get())->GetIndexIterator();
@@ -1266,8 +1259,6 @@ uint64_t TerarkZipTableReader::ApproximateOffsetOf_old(const Slice& ikey) {
   if (isReverseBytewiseOrder_)
     return subReader_.rawReaderSize_ - offset;
   return offset;
-#endif // TerocksPrivateCode
-  return 0;
 }
 
 uint64_t TerarkZipTableReader::ApproximateOffsetOf_new(const Slice& ikey) {
@@ -1307,8 +1298,6 @@ TerarkZipTableReader::TerarkZipTableReader(const TerarkZipTableFactory* table_fa
 {
   isReverseBytewiseOrder_ = false;
 }
-
-#if defined(TerocksPrivateCode)
 
 fstring TerarkZipTableMultiReader::SubIndex::PartIndexOperator::operator[](size_t i) const {
   return fstring(p->prefixSet_.data() + i * p->alignedPrefixLen_, p->prefixLen_);
@@ -1693,6 +1682,7 @@ TerarkZipTableMultiReader::Open(RandomAccessFileReader* file, uint64_t file_size
 #endif
   BlockContents valueDictBlock, indexBlock, zValueTypeBlock, commonPrefixBlock;
   BlockContents offsetBlock;
+#if defined(TerocksPrivateCode)
   BlockContents licenseBlock;
   s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber, ioptions,
     kTerarkZipTableExtendedBlock, &licenseBlock);
@@ -1702,6 +1692,7 @@ TerarkZipTableMultiReader::Open(RandomAccessFileReader* file, uint64_t file_size
       return s;
     }
   }
+#endif // TerocksPrivateCode
   UpdateCollectInfo(table_factory_, &tzto_, props, file_size);
   s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber, ioptions,
     kTerarkZipTableOffsetBlock, &offsetBlock);
@@ -1785,7 +1776,5 @@ TerarkZipTableMultiReader::Open(RandomAccessFileReader* file, uint64_t file_size
   );
   return Status::OK();
 }
-
-#endif // TerocksPrivateCode
 
 }

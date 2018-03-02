@@ -352,20 +352,20 @@ valvec<byte_t> LicenseInfo::dump() const {
 }
 
 bool LicenseInfo::check() const {
-  using namespace std::chrono;
-  uint64_t now = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
-  if (key) {
-    std::unique_lock<std::mutex> l(mutex);
-    if (now > key->date + key->duration) {
-      return false;
-    }
-  }
-  else {
-    std::unique_lock<std::mutex> l(mutex);
-    if (now > sst->create_date + g_dTerarkTrialDuration) {
-      return false;
-    }
-  }
+  //using namespace std::chrono;
+  //uint64_t now = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+  //if (key) {
+  //  std::unique_lock<std::mutex> l(mutex);
+  //  if (now > key->date + key->duration) {
+  //    return false;
+  //  }
+  //}
+  //else {
+  //  std::unique_lock<std::mutex> l(mutex);
+  //  if (now > sst->create_date + g_dTerarkTrialDuration) {
+  //    return false;
+  //  }
+  //}
   return true;
 }
 
@@ -601,8 +601,6 @@ bool IsBytewiseComparator(const Comparator* cmp) {
 #endif
 }
 
-#if defined(TerocksPrivateCode)
-
 inline static
 size_t GetFixedPrefixLen(const SliceTransform* tr) {
   if (tr == nullptr) {
@@ -615,8 +613,6 @@ size_t GetFixedPrefixLen(const SliceTransform* tr) {
   }
   return terark::lcast(trName.substr(namePrefix.size()));
 }
-
-#endif // TerocksPrivateCode
 
 TerarkZipTableFactory::TerarkZipTableFactory(
     const TerarkZipTableOptions& tzto, TableFactory* fallback)
@@ -690,7 +686,6 @@ TerarkZipTableFactory::NewTableReader(
     *table = std::move(t);
     return s;
   }
-#if defined(TerocksPrivateCode)
   BlockContents offsetBC;
   s = ReadMetaBlockAdapte(file.get(), file_size, kTerarkZipTableMagicNumber
     , table_reader_options.ioptions, kTerarkZipTableOffsetBlock, &offsetBC);
@@ -704,7 +699,6 @@ TerarkZipTableFactory::NewTableReader(
     *table = std::move(t);
     return s;
   }
-#endif // TerocksPrivateCode
   std::unique_ptr<TerarkZipTableReader>
     t(new TerarkZipTableReader(this, table_reader_options, table_options_));
   s = t->Open(file.release(), file_size);
@@ -745,7 +739,6 @@ TerarkZipTableFactory::NewTableBuilder(
     minlevel = numlevel - 1;
   }
   size_t keyPrefixLen = 0;
-#if defined(TerocksPrivateCode)
   if (table_options_.isOfflineBuild) {
     if (table_options_.keyPrefixLen != 0) {
       WARN(table_builder_options.ioptions.info_log
@@ -771,7 +764,6 @@ TerarkZipTableFactory::NewTableBuilder(
       keyPrefixLen = table_options_.keyPrefixLen;
     }
   }
-#endif // TerocksPrivateCode
 #if defined(TERARK_SUPPORT_UINT64_COMPARATOR) && BOOST_ENDIAN_LITTLE_BYTE
   if (fstring(userCmp->Name()) == "rocksdb.Uint64Comparator") {
     keyPrefixLen = 0;

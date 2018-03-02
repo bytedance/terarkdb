@@ -58,8 +58,6 @@ using terark::LittleEndianDataOutput;
 template<class T>
 inline unique_ptr<T> UniquePtrOf(T* p) { return unique_ptr<T>(p); }
 
-#if defined(TerocksPrivateCode)
-
 inline uint64_t ReadBigEndianUint64(const byte_t* beg, size_t len) {
   union {
     byte_t bytes[8];
@@ -107,8 +105,6 @@ inline void SaveAsBigEndianUint64(byte_t* beg, byte_t* end, uint64_t value) {
   assert(end - beg <= 8);
   SaveAsBigEndianUint64(beg, end-beg, value);
 }
-
-#endif // TerocksPrivateCode
 
 template<class T>
 inline void correct_minmax(T& minVal, T& maxVal) {

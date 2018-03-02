@@ -32,7 +32,7 @@
 
 #if defined(TerocksPrivateCode)
 //# define USE_CRYPTOPP
-# define USE_OPENSSL
+//# define USE_OPENSSL
 #endif // TerocksPrivateCode
 
 #if ROCKSDB_MAJOR * 1000 + ROCKSDB_MINOR >= 5008
@@ -67,11 +67,8 @@ extern const std::string kTerarkZipTableValueDictBlock;
 extern const std::string kTerarkZipTableOffsetBlock;
 extern const std::string kTerarkZipTableCommonPrefixBlock;
 extern const std::string kTerarkEmptyTableKey;
-
 #if defined(TerocksPrivateCode)
-
 extern const std::string kTerarkZipTableExtendedBlock;
-
 #endif // TerocksPrivateCode
 extern const std::string kTerarkZipTableBuildTimestamp;
 

@@ -12,12 +12,10 @@
 #include <terark/io/MemStream.hpp>
 #include <terark/lcast.hpp>
 #include <terark/num_to_str.hpp>
-#if defined(TerocksPrivateCode)
 # include <terark/zbs/zero_length_blob_store.hpp>
 # include <terark/zbs/plain_blob_store.hpp>
 # include <terark/zbs/mixed_len_blob_store.hpp>
 # include <terark/zbs/zip_offset_blob_store.hpp>
-#endif // TerocksPrivateCode
 
 namespace snappy {
   size_t Compress(const char* input, size_t input_length, std::string* output);
@@ -67,7 +65,6 @@ static std::string GetTimestamp() {
     return terark::lcast(timestamp);
 }
 
-#if defined(TerocksPrivateCode)
 ///////////////////////////////////////////////////////////////////
 // hack MyRocks Rdb_tbl_prop_coll
 rocksdb::Status MyRocksTablePropertiesCollectorHack(IntTblPropCollector* collector,
@@ -135,7 +132,6 @@ rocksdb::Status MyRocksTablePropertiesCollectorHack(IntTblPropCollector* collect
   return Status::OK();
 }
 ///////////////////////////////////////////////////////////////////
-#endif // TerocksPrivateCode
 
 class TerarkZipTableBuilderTask : public PipelineTask {
 public:
@@ -317,10 +313,8 @@ TableProperties TerarkZipTableBuilder::GetTableProperties() const {
       ret.readable_properties.insert(prop);
     }
     collector->Finish(&ret.user_collected_properties);
-#if defined(TerocksPrivateCode)
     MyRocksTablePropertiesCollectorHack(collector.get(), offset_info_,
                                         ret.user_collected_properties, isReverseBytewiseOrder_);
-#endif // TerocksPrivateCode
   }
   return ret;
 }
@@ -633,11 +627,9 @@ Status TerarkZipTableBuilder::Finish() try {
       , this, g_pf.sf(t0, tt), rawBytes*1.0 / g_pf.uf(t0, tt)
     );
   }
-#if defined(TerocksPrivateCode)
   if (histogram_.size() > 1) {
     return ZipValueToFinishMulti();
   }
-#endif // TerocksPrivateCode
   return ZipValueToFinish();
 }
 catch (const std::exception& ex) {
@@ -1033,14 +1025,11 @@ LoadSample(std::unique_ptr<DictZipBlobStore::ZipBuilder>& zbuilder) {
   auto waitHandle = WaitForMemory("dictZip", dictWorkingMemory);
 
   valvec<byte_t> sample;
-#if defined(TerocksPrivateCode)
   valvec<byte_t> test;
   const size_t test_size = 32ull << 20;
   auto hard_test = table_options_.enableCompressionProbe && table_factory_->GetCollect().hard();
-#endif // TerocksPrivateCode
   NativeDataInput<InputBuffer> sampleInput(&tmpSampleFile_.fp);
   size_t realsampleLenSum = 0;
-#if defined(TerocksPrivateCode)
   if (hard_test && sampleLenSum_ < test_size) {
     for (size_t len = 0; len < sampleLenSum_; ) {
       sampleInput >> sample;
@@ -1050,50 +1039,39 @@ LoadSample(std::unique_ptr<DictZipBlobStore::ZipBuilder>& zbuilder) {
     }
     realsampleLenSum = sampleLenSum_;
   }
-  else
-#endif // TerocksPrivateCode
-  {
+  else {
     if (sampleLenSum_ < sampleMax) {
-#if defined(TerocksPrivateCode)
       uint64_t upperBoundTest = uint64_t(
         randomGenerator_.max() * double(test_size) / sampleLenSum_);
-#endif // TerocksPrivateCode
       for (size_t len = 0; len < sampleLenSum_; ) {
         sampleInput >> sample;
         zbuilder->addSample(sample);
         len += sample.size();
-#if defined(TerocksPrivateCode)
         if (hard_test && randomGenerator_() < upperBoundTest) {
           test.append(sample);
         }
-#endif // TerocksPrivateCode
       }
       realsampleLenSum = sampleLenSum_;
     }
     else {
       uint64_t upperBoundSample = uint64_t(
         randomGenerator_.max() * double(sampleMax) / sampleLenSum_);
-#if defined(TerocksPrivateCode)
       uint64_t upperBoundTest = uint64_t(
         randomGenerator_.max() * double(test_size) / sampleLenSum_);
-#endif // TerocksPrivateCode
       for (size_t len = 0; len < sampleLenSum_; ) {
         sampleInput >> sample;
         if (randomGenerator_() < upperBoundSample) {
           zbuilder->addSample(sample);
           realsampleLenSum += sample.size();
         }
-#if defined(TerocksPrivateCode)
         if (hard_test && randomGenerator_() < upperBoundTest) {
           test.append(sample);
         }
-#endif // TerocksPrivateCode
         len += sample.size();
       }
     }
   }
   tmpSampleFile_.close();
-#if defined(TerocksPrivateCode)
   if (hard_test) {
     std::string output;
     snappy::Compress((const char*)test.data(), test.size(), &output);
@@ -1105,7 +1083,6 @@ LoadSample(std::unique_ptr<DictZipBlobStore::ZipBuilder>& zbuilder) {
     }
     test.clear();
   }
-#endif // TerocksPrivateCode
   if (0 == realsampleLenSum) { // prevent from empty
     zbuilder->addSample("Hello World!");
   }
@@ -1113,7 +1090,6 @@ LoadSample(std::unique_ptr<DictZipBlobStore::ZipBuilder>& zbuilder) {
   return waitHandle;
 }
 
-#if defined(TerocksPrivateCode)
 Status TerarkZipTableBuilder::buildZeroLengthBlobStore(BuildStoreParams &params) {
   auto& kvs = params.kvs;
   auto store = UniquePtrOf(new terark::ZeroLengthBlobStore());
@@ -1166,7 +1142,6 @@ Status TerarkZipTableBuilder::buildZipOffsetBlobStore(BuildStoreParams &params) 
   }
   return s;
 }
-#endif // TerocksPrivateCode
 
 Status TerarkZipTableBuilder::ZipValueToFinish() {
   assert(histogram_.size() == 1);
@@ -1215,8 +1190,6 @@ Status TerarkZipTableBuilder::ZipValueToFinish() {
   }
   return WriteSSTFile(t3, t4, tmpDictFile, dzstat);
 }
-
-#if defined(TerocksPrivateCode)
 
 Status TerarkZipTableBuilder::ZipValueToFinishMulti() {
   assert(histogram_.size() > 1);
@@ -1296,8 +1269,6 @@ Status TerarkZipTableBuilder::ZipValueToFinishMulti() {
   }
   return WriteSSTFileMulti(t3, t4, tmpDictFile, dzstat);
 }
-
-#endif // TerocksPrivateCode
 
 Status
 TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<void(fstring)> write) {
@@ -1772,8 +1743,6 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
   return s;
 }
 
-#if defined(TerocksPrivateCode)
-
 Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4
   , fstring tmpDictFile
   , const DictZipBlobStore::ZipStat& dzstat) {
@@ -1908,12 +1877,14 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4
   if (!s.ok()) {
     return s;
   }
+#if defined(TerocksPrivateCode)
   auto& license = table_factory_->GetLicense();
   BlockHandle licenseHandle;
   s = WriteBlock(SliceOf(license.dump()), file_, &offset_, &licenseHandle);
   if (!s.ok()) {
-    return s;
+      return s;
   }
+#endif // TerocksPrivateCode
   if (!range_del_block_.empty()) {
     s = WriteBlock(range_del_block_.Finish(), file_, &offset_, &tombstoneBlock);
     if (!s.ok()) {
@@ -1932,7 +1903,9 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4
   properties_.index_size = indexBlock.size();
   properties_.num_data_blocks = numKeys;
   WriteMetaData({
+#if defined(TerocksPrivateCode)
     {&kTerarkZipTableExtendedBlock                                , licenseHandle     },
+#endif // TerocksPrivateCode
     {!dict.memory.empty() ? &kTerarkZipTableValueDictBlock : NULL , dictBlock         },
     {&kTerarkZipTableIndexBlock                                   , indexBlock        },
     {!zvTypeBlock.IsNull() ? &kTerarkZipTableValueTypeBlock : NULL, zvTypeBlock       },
@@ -2032,8 +2005,6 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4
   return s;
 }
 
-#endif // TerocksPrivateCode
-
 Status TerarkZipTableBuilder::WriteMetaData(std::initializer_list<std::pair<const std::string*, BlockHandle>> blocks) {
   MetaIndexBuilder metaindexBuiler;
   for (const auto& block : blocks) {
@@ -2051,13 +2022,11 @@ Status TerarkZipTableBuilder::WriteMetaData(std::initializer_list<std::pair<cons
       LogPropertiesCollectionError(ioptions_.info_log, "Finish", collector->Name());
       continue;
     }
-#if defined(TerocksPrivateCode)
     s = MyRocksTablePropertiesCollectorHack(collector.get(), offset_info_,
                                             user_collected_properties, isReverseBytewiseOrder_);
     if (!s.ok()) {
       WARN(ioptions_.info_log, "MyRocksTablePropertiesCollectorHack fail: %s", s.ToString().c_str());
     }
-#endif // TerocksPrivateCode
     propBlockBuilder.Add(user_collected_properties);
   }
   propBlockBuilder.Add(kTerarkZipTableBuildTimestamp, GetTimestamp());

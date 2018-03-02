@@ -211,8 +211,6 @@ bool TerarkIndex::SeekCostEffectiveIndexLen(const KeyStat& ks, size_t& ceLen) {
 const TerarkIndex::Factory*
 TerarkIndex::SelectFactory(const KeyStat& ks, fstring name) {
   assert(ks.numKeys > 0);
-  //assert(!ks.minKey.empty() && !ks.maxKey.empty());
-#if defined(TerocksPrivateCode)
   size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
   assert(cplen >= ks.commonPrefixLen);
   size_t ceLen = 0; // cost effective index1st len if any
@@ -254,7 +252,6 @@ TerarkIndex::SelectFactory(const KeyStat& ks, fstring name) {
       return GetFactory("CompositeUintIndex_SE_512_64_SE_512_64");
     }
   }
-#endif // TerocksPrivateCode
   if (ks.sumKeyLen - ks.numKeys * ks.commonPrefixLen > 0x1E0000000) { // 7.5G
     return GetFactory("SE_512_64");
   }
@@ -530,10 +527,7 @@ class NestLoudsTrieIndex : public NestLoudsTrieIndexBase {
     bool Prev() override { return Done(m_iter->decr()); }
     size_t DictRank() const override {
       assert(m_id != size_t(-1));
-#if defined(TerocksPrivateCode)
       return m_dawg->state_to_dict_rank(m_iter->word_state());
-#endif // TerocksPrivateCode
-      return m_id;
     }
   };
 public:
@@ -609,9 +603,6 @@ public:
     }
   };
 };
-
-
-#if defined(TerocksPrivateCode)
 
 namespace composite_index_detail {
 
@@ -2861,8 +2852,6 @@ CompositeUintIndexBase::MyBaseFactory::CreateIndex(
 //  RankSelect        indexSeq_;
 //};
 
-#endif // TerocksPrivateCode
-
 typedef NestLoudsTrieDAWG_IL_256 NestLoudsTrieDAWG_IL_256_32;
 typedef NestLoudsTrieDAWG_SE_512 NestLoudsTrieDAWG_SE_512_32;
 typedef NestLoudsTrieIndex<NestLoudsTrieDAWG_IL_256_32> TrieDAWG_IL_256_32;
@@ -2888,8 +2877,6 @@ TerarkIndexRegisterNLT(SE_512_64_FL);
 TerarkIndexRegisterNLT(Mixed_SE_512_32_FL);
 TerarkIndexRegisterNLT(Mixed_IL_256_32_FL);
 TerarkIndexRegisterNLT(Mixed_XL_256_32_FL);
-
-#if defined(TerocksPrivateCode)
 
 typedef Min0DataCont BigUintDataCont;
 
@@ -2965,7 +2952,6 @@ RegisterUintIndex(IL_256_32);
 RegisterUintIndex(SE_512_64);
 RegisterUintIndex(AllOne);
 
-#endif // TerocksPrivateCode
 
 unique_ptr<TerarkIndex> TerarkIndex::LoadFile(fstring fpath) {
   TerarkIndex::Factory* factory = NULL;

@@ -273,10 +273,7 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo) {
   MyGetXiB(tzo, singleIndexMemLimit);
   MyGetXiB(tzo, cacheCapacityBytes);
   MyGetInt(tzo, cacheShards, 17);
-
-#if defined(TerocksPrivateCode)
-  MyGetInt(tzo, minDictZipValueSize, 50);
-#endif // TerocksPrivateCode
+  MyGetInt(tzo, minDictZipValueSize, 15);
 
   tzo.singleIndexMemLimit = std::min<size_t>(tzo.singleIndexMemLimit, 0x1E0000000);
 
