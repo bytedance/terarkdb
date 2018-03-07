@@ -51,8 +51,8 @@ static hash_strmap<std::string,
                    fstring_func::equal_align,
                    ValueInline,
                    SafeCopy ///< some std::string is not memmovable
-                  >
-       g_TerarkIndexName;
+                  > g_TerarkIndexName;
+static hash_strmap<TerarkIndex::FactoryPtr> g_TerarkIndexCombin;
 
 
 template<class IndexClass>
@@ -114,6 +114,10 @@ TerarkIndex::AutoRegisterFactory::AutoRegisterFactory(
                           const char* rtti_name,
                           Factory* factory) {
   assert(names.size() > 0);
+  auto combinName = factory->CombinName();
+  if (combinName != nullptr) {
+    g_TerarkIndexCombin.insert_i(combinName, factory);
+  }
   fstring wireName = *names.begin();
   TERARK_RT_assert(!g_TerarkIndexFactroy.exists(wireName), std::logic_error);
   factory->mapIndex = g_TerarkIndexFactroy.end_i();
@@ -622,6 +626,57 @@ struct SerializationBase {
 
 class VirtualTag {};
 
+struct Common {
+  Common() : working_state(WorkingState::UserMemory) {}
+  Common(Common&& o) : common(o.common), working_state(o.working_state) {
+    o.working_state = WorkingState::UserMemory;
+  }
+  Common(fstring c, bool ownership) : working_state(WorkingState::UserMemory) {
+    reset(c, ownership);
+  }
+  void reset(fstring c, bool ownership) {
+    if (working_state == WorkingState::Building) {
+      free((void*)common.p);
+      working_state = WorkingState::UserMemory;
+    }
+    if (ownership && !c.empty()) {
+      working_state = WorkingState::Building;
+      auto p = (char*)malloc(c.size());
+      if (p == nullptr) {
+        throw std::bad_alloc();
+      }
+      memcpy(p, c.p, c.size());
+      common.p = p;
+      common.n = c.size();
+    }
+    else {
+      common = c;
+    }
+  }
+  ~Common() {
+    if (working_state == WorkingState::Building) {
+      free((void*)common.p);
+    }
+  }
+  Common& operator = (const Common &) = delete;
+
+  operator fstring() const {
+    return common;
+  }
+  size_t size() const {
+    return common.size();
+  }
+  const char* data() const {
+    return common.data();
+  }
+  byte_t operator[](ptrdiff_t i) const {
+    return common[i];
+  }
+
+  fstring common;
+  WorkingState working_state;
+};
+
 struct VirtualPrefixBase : public SerializationBase {
   virtual ~VirtualPrefixBase() {}
   virtual void* AllocIteratorStorage() const = 0;
@@ -845,17 +900,73 @@ struct VirtualSuffix : public SerializationBase {
 
 class CompositeIndexFactoryBase : public TerarkIndex::Factory {
 public:
-  TerarkIndex* Build(NativeDataInput<InputBuffer>& tmpKeyFileReader,
+  typedef composite_index_detail::SerializationBase SerializationBase;
+  typedef composite_index_detail::Common Common;
+  template<class RankSelect>
+  SerializationBase* BuildUintPrefix(NativeDataInput<InputBuffer>& reader,
+                                     const TerarkZipTableOptions& tzopt,
+                                     const TerarkIndex::KeyStat& ks,
+                                     const ImmutableCFOptions* ioption,
+                                     std::string& name,
+                                     SortedStrVec& suffix) const;
+
+  template<class RankSelect>
+  SerializationBase* BuildMap(std::string& name) const;
+
+  SerializationBase* BuildEmptySuffix(std::string& name) const;
+
+  TerarkIndex* Build(NativeDataInput<InputBuffer>& reader,
                      const TerarkZipTableOptions& tzopt,
-                     const TerarkIndex::KeyStat& keyStat,
+                     const TerarkIndex::KeyStat& ks,
                      const ImmutableCFOptions* ioption = nullptr) const {
- 
-    // TODO;
+    assert(ks.numKeys > 0);
+    SortedStrVec raw_suffix;
+    Common common;
+    SerializationBase* prefix;
+    SerializationBase* map;
+    SerializationBase* suffix;
+    std::string combin, name;
+    size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
+    assert(cplen >= ks.commonPrefixLen);
+    common.reset(fstring(ks.minKey).substr(ks.commonPrefixLen, cplen - ks.commonPrefixLen), true);
+    size_t ceLen = 0; // cost effective index1st len if any
+    if (g_indexEnableUintIndex &&
+      ks.maxKeyLen == ks.minKeyLen &&
+      ks.maxKeyLen - cplen <= sizeof(uint64_t)) {
+      auto minValue = ReadBigEndianUint64(ks.minKey.begin() + cplen, ks.minKey.end());
+      auto maxValue = ReadBigEndianUint64(ks.maxKey.begin() + cplen, ks.maxKey.end());
+      if (minValue > maxValue) {
+        std::swap(minValue, maxValue);
+      }
+      uint64_t diff = maxValue - minValue; // don't +1, may overflow
+      if (diff < ks.numKeys * 30) {
+        if (diff + 1 == ks.numKeys) {
+          prefix = BuildUintPrefix<rank_select_allone>(reader, tzopt, ks, ioption, name, raw_suffix);
+        }
+        else if (diff < UINT32_MAX) {
+          prefix = BuildUintPrefix<rank_select_il_256_32>(reader, tzopt, ks, ioption, name, raw_suffix);
+        }
+        else {
+          prefix = BuildUintPrefix<rank_select_se_512_64>(reader, tzopt, ks, ioption, name, raw_suffix);
+        }
+        combin += name;
+        map = BuildMap<rank_select_allone>(name);
+        combin += name;
+        suffix = BuildEmptySuffix(name);
+        combin += name;
+        assert(dynamic_cast<const CompositeIndexFactoryBase*>(TerarkIndex::GetFactory(combin)) != nullptr);
+        auto factory = static_cast<const CompositeIndexFactoryBase*>(TerarkIndex::GetFactory(combin));
+        auto index = factory->CreateIndex(std::move(common), prefix, map, suffix);
+      }
+    }
+    assert(0);
+    // TODO
     return nullptr;
   }
-  size_t MemSizeForBuild(const TerarkIndex::KeyStat&) const {
-    // TODO;
-    return 0;
+  size_t MemSizeForBuild(const TerarkIndex::KeyStat& ks) const {
+    // TODO
+    size_t indexSize = UintVecMin0::compute_mem_size_by_max_val(ks.sumKeyLen, ks.numKeys);
+    return ks.sumKeyLen + indexSize;
   }
   unique_ptr<TerarkIndex> LoadMemory(fstring mem) const {
     // TODO;
@@ -869,8 +980,8 @@ public:
     // TODO;
   }
 protected:
-  using SerializationBase = composite_index_detail::SerializationBase;
-  virtual TerarkIndex* CreateIndex(SerializationBase* prefix,
+  virtual TerarkIndex* CreateIndex(Common&& common,
+                                   SerializationBase* prefix,
                                    SerializationBase* map,
                                    SerializationBase* suffix) const {
     TERARK_RT_assert(0, std::logic_error);
@@ -892,14 +1003,15 @@ protected:
 
 template<class Prefix, class Map, class Suffix>
 struct CompositeIndexParts {
+  typedef composite_index_detail::Common Common;
   CompositeIndexParts() {}
-  CompositeIndexParts(fstring common, Prefix&& prefix, Map&& map, Suffix&& suffix)
-    : common_(common)
+  CompositeIndexParts(Common&& common, Prefix&& prefix, Map&& map, Suffix&& suffix)
+    : common_(std::move(common))
     , prefix_(std::move(prefix))
     , map_(std::move(map))
     , suffix_(std::move(suffix)) {
   }
-  fstring common_;
+  Common common_;
   Prefix prefix_;
   Map map_;
   Suffix suffix_;
@@ -1071,8 +1183,8 @@ public:
     : factory_(factory)
     , header_(nullptr) {
   }
-  CompositeIndex(const CompositeIndexFactoryBase* factory, fstring common, Prefix&& prefix, Map&& map, Suffix&& suffix)
-    : CompositeIndexParts<Prefix, Map, Suffix>(common, std::move(prefix), std::move(map), std::move(suffix))
+  CompositeIndex(const CompositeIndexFactoryBase* factory, Common&& common, Prefix&& prefix, Map&& map, Suffix&& suffix)
+    : CompositeIndexParts<Prefix, Map, Suffix>(std::move(common), std::move(prefix), std::move(map), std::move(suffix))
     , factory_(factory)
     , header_(nullptr) {
   }
@@ -1159,11 +1271,20 @@ struct CompositeIndexDeclare {
 
 template<class Prefix, size_t PV, class Map, size_t MV, class Suffix, size_t SV>
 class CompositeIndexFactory : public CompositeIndexFactoryBase {
+public:
+  const char* CombinName() const override {
+    static std::string name = std::string()
+      += typeid(Prefix).name()
+      += typeid(Map).name()
+      += typeid(Suffix).name();
+    return name.c_str();
+  }
 protected:
-  virtual TerarkIndex* CreateIndex(SerializationBase* prefix,
-                                   SerializationBase* map,
-                                   SerializationBase* suffix) const {
-    return new CompositeIndexDeclare<Prefix, PV, Map, MV, Suffix, SV>::index_type(prefix, map, suffix);
+  TerarkIndex* CreateIndex(Common&& common,
+                           SerializationBase* prefix,
+                           SerializationBase* map,
+                           SerializationBase* suffix) const override {
+    return new CompositeIndexDeclare<Prefix, PV, Map, MV, Suffix, SV>::index_type(std::move(common), prefix, map, suffix);
   }
   SerializationBase* CreatePrefix() const override {
     return new Prefix();
@@ -1202,6 +1323,8 @@ struct CompositeIndexUintPrefix : public composite_index_detail::SerializationBa
     auto other = static_cast<CompositeIndexUintPrefix<RankSelect>*>(base);
     rank_select.swap(other->rank_select);
     key_length = other->key_length;
+    min_value = other->min_value;
+    max_value = other->max_value;
     working_state = base->working_state;
     delete other;
   }
@@ -1348,6 +1471,65 @@ struct CompositeIndexEmptySuffix : public composite_index_detail::SerializationB
   }
 };
 
+
+template<class RankSelect>
+composite_index_detail::SerializationBase*
+CompositeIndexFactoryBase::BuildUintPrefix(NativeDataInput<InputBuffer>& reader,
+                                           const TerarkZipTableOptions& tzopt,
+                                           const TerarkIndex::KeyStat& ks,
+                                           const ImmutableCFOptions* ioption,
+                                           std::string& name,
+                                           SortedStrVec& suffix) const {
+  name = typeid(CompositeIndexUintPrefix<RankSelect>).name();
+  size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
+  assert(cplen >= ks.commonPrefixLen);
+  if (ks.maxKeyLen != ks.minKeyLen ||
+      ks.maxKeyLen - cplen > sizeof(uint64_t)) {
+    abort();
+  }
+  auto minValue = ReadBigEndianUint64(ks.minKey.begin() + cplen, ks.minKey.end());
+  auto maxValue = ReadBigEndianUint64(ks.maxKey.begin() + cplen, ks.maxKey.end());
+  if (minValue > maxValue) {
+    std::swap(minValue, maxValue);
+  }
+  assert(maxValue - minValue < UINT64_MAX); // must not overflow
+  RankSelect rank_select;
+  rank_select.resize(maxValue - minValue + 1);
+  if (!std::is_same<RankSelect, rank_select_allone>::value) {
+    // not 'all one' case
+    valvec<byte_t> keyBuf;
+    for (size_t seq_id = 0; seq_id < ks.numKeys; ++seq_id) {
+      reader >> keyBuf;
+      // even if 'cplen' contains actual data besides prefix,
+      // after stripping, the left range is self-meaningful ranges
+      auto cur = ReadBigEndianUint64(keyBuf.begin() + cplen, keyBuf.end());
+      rank_select.set1(cur - minValue);
+    }
+    rank_select.build_cache(false, false);
+  }
+  auto prefix = new CompositeIndexUintPrefix<RankSelect>();
+  prefix->rank_select.swap(rank_select);
+  prefix->key_length = ks.maxKeyLen - cplen;
+  prefix->min_value = minValue;
+  prefix->max_value = maxValue;
+  prefix->working_state = WorkingState::Building;
+  return prefix;
+}
+
+template<class RankSelect>
+composite_index_detail::SerializationBase*
+CompositeIndexFactoryBase::BuildMap(std::string& name) const {
+  name = typeid(CompositeIndexMap<RankSelect>).name();
+  return new CompositeIndexMap<RankSelect>();
+}
+
+composite_index_detail::SerializationBase*
+CompositeIndexFactoryBase::BuildEmptySuffix(std::string& name) const {
+  name = typeid(CompositeIndexEmptySuffix).name();
+  return new CompositeIndexEmptySuffix();
+}
+
+
 template<class RankSelect>
 using UintIndex =
   typename CompositeIndexDeclare<CompositeIndexUintPrefix<RankSelect>, 0,
@@ -1361,13 +1543,13 @@ using VirtualCompositeIndex =
 
 int foo() {
   auto i0 = new UintIndex<rank_select_allone>(
-    nullptr, fstring(),
+    nullptr, composite_index_detail::Common(),
     new CompositeIndexUintPrefix<rank_select_allone>(),
     new CompositeIndexMap<rank_select_allone>(),
     new CompositeIndexEmptySuffix());
 
   auto i1 = new VirtualCompositeIndex(
-    nullptr, "123",
+    nullptr, composite_index_detail::Common("123", false),
     new CompositeIndexUintPrefix<rank_select_allone>(),
     new CompositeIndexMap<rank_select_il_256_32>(),
     new CompositeIndexEmptySuffix());
@@ -3229,7 +3411,7 @@ class UintIndexFactory : public CompositeIndexFactoryBase {
     ptr->max_value = h->max_value;
     ptr->key_length = h->key_length;
     if (h->common_prefix_length > 0) {
-      index->common_ = mem.substr(h->header_size, h->common_prefix_length);
+      index->common_.reset(mem.substr(h->header_size, h->common_prefix_length), false);
     }
     ptr->rank_select.risk_mmap_from(
       (unsigned char*)mem.data() + h->header_size + align_up(h->common_prefix_length, 8), h->index_mem_size);
