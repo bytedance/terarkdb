@@ -27,6 +27,12 @@ typedef rank_select_fewzero<uint64_t> rs_fewzero_64;
 typedef rank_select_fewone<uint32_t> rs_fewone_32;
 typedef rank_select_fewone<uint64_t> rs_fewone_64;
 
+template<class RankSelect> struct RankSelectNeedHint : public std::false_type {};
+template<> struct RankSelectNeedHint<rs_fewzero_32> : public std::true_type {};
+template<> struct RankSelectNeedHint<rs_fewzero_64> : public std::true_type {};
+template<> struct RankSelectNeedHint<rs_fewone_32> : public std::true_type {};
+template<> struct RankSelectNeedHint<rs_fewone_64> : public std::true_type {};
+
 enum class WorkingState : uint32_t {
   Building = 1,
   UserMemory = 2,
@@ -606,78 +612,48 @@ public:
 
 namespace composite_index_detail {
 
-class DummyIterator : public TerarkIndex::Iterator {
-public:
-  bool SeekToFirst() {
-    return false;
-  }
-  bool SeekToLast() {
-    return false;
-  }
-  bool Seek(fstring target) {
-    return false;
-  }
-  bool Next() {
-    return false;
-  }
-  bool Prev() {
-    return false;
-  }
-  size_t DictRank() const {
-    return 0;
-  }
-  virtual fstring key() const {
-    return fstring();
-  }
-};
-
 struct SerializationBase {
   virtual bool Load(fstring mem) = 0;
   virtual void Save(std::function<void(void*, size_t)> append) const = 0;
   virtual ~SerializationBase() {}
+
+  WorkingState working_state;
 };
+
+class VirtualTag {};
+
 struct VirtualPrefixBase : public SerializationBase {
   virtual ~VirtualPrefixBase() {}
+  virtual void* AllocIteratorStorage() const = 0;
+  virtual void FreeIteratorStorage(void*) const = 0;
   virtual size_t KeyCount() const = 0;
   virtual size_t TotalKeySize() const = 0;
   virtual size_t Find(fstring key) const = 0;
   virtual size_t DictRank(fstring key) const = 0;
   virtual bool NeedsReorder() const = 0;
 };
-struct VirtualPrefix : public SerializationBase {
-  VirtualPrefix(VirtualPrefixBase* base) : prefix(base) {}
-  ~VirtualPrefix() {
-    delete prefix;
-  }
-  VirtualPrefixBase* prefix;
-
-  size_t KeyCount() const {
-    return prefix->KeyCount();
-  }
-  size_t TotalKeySize() const {
-    return prefix->TotalKeySize();
-  }
-  size_t Find(fstring key) const {
-    return prefix->Find(key);
-  }
-  size_t DictRank(fstring key) const {
-    return prefix->DictRank(key);
-  }
-  bool NeedsReorder() const {
-    return prefix->NeedsReorder();
-  }
-
-  bool Load(fstring mem) {
-    return prefix->Load(mem);
-  }
-  void Save(std::function<void(void*, size_t)> append) const {
-    prefix->Save(append);
-  }
-};
 template<class Prefix>
 struct VirtualPrefixWrapper : public VirtualPrefixBase, public Prefix {
+  typedef typename Prefix::IteratorStorage IteratorStorage;
   VirtualPrefixWrapper(Prefix *prefix) : Prefix(prefix) {}
 
+  void* AllocIteratorStorage() const {
+    typedef std::is_same<IteratorStorage, void> is_void;
+    if (is_void::value) {
+      return nullptr;
+    }
+    typedef std::conditional<is_void::value, Prefix::IteratorStorage, size_t> type;
+    return new type;
+  }
+  void FreeIteratorStorage(void* ptr) const {
+    typedef std::is_same<IteratorStorage, void> is_void;
+    if (is_void::value) {
+      assert(ptr == nullptr);
+      return;
+    }
+    typedef std::conditional<is_void::value, IteratorStorage, size_t> type;
+    delete (type*)ptr;
+  }
   size_t KeyCount() const override {
     return Prefix::KeyCount();
   }
@@ -701,35 +677,73 @@ struct VirtualPrefixWrapper : public VirtualPrefixBase, public Prefix {
     Prefix::Save(append);
   }
 };
+struct VirtualPrefix : public SerializationBase {
+  typedef VirtualTag IteratorStorage;
+  template<class Prefix>
+  VirtualPrefix(Prefix* p) {
+    prefix = new VirtualPrefixWrapper<Prefix>(p);
+  }
+  ~VirtualPrefix() {
+    delete prefix;
+  }
+  VirtualPrefixBase* prefix;
+
+  void* AllocIteratorStorage() const {
+    return prefix->AllocIteratorStorage();
+  }
+  void FreeIteratorStorage(void* ptr) const {
+    prefix->FreeIteratorStorage(ptr);
+  }
+  size_t KeyCount() const {
+    return prefix->KeyCount();
+  }
+  size_t TotalKeySize() const {
+    return prefix->TotalKeySize();
+  }
+  size_t Find(fstring key) const {
+    return prefix->Find(key);
+  }
+  size_t DictRank(fstring key) const {
+    return prefix->DictRank(key);
+  }
+  bool NeedsReorder() const {
+    return prefix->NeedsReorder();
+  }
+
+  bool Load(fstring mem) {
+    return prefix->Load(mem);
+  }
+  void Save(std::function<void(void*, size_t)> append) const {
+    prefix->Save(append);
+  }
+};
 
 struct VirtualMapBase : public SerializationBase {
   virtual ~VirtualMapBase() {}
-  virtual bool IsUnique() const = 0;
-};
-struct VirtualMap : public SerializationBase {
-  VirtualMap(VirtualMapBase* base) : map(base) {}
-  ~VirtualMap() {
-    delete map;
-  }
-  VirtualMapBase* map;
-
-  bool IsUnique() const {
-    return map->IsUnique();
-  }
-
-  bool Load(fstring mem) override {
-    return map->Load(mem);
-  }
-  void Save(std::function<void(void*, size_t)> append) const override {
-    map->Save(append);
-  }
+  virtual void* AllocIteratorStorage() const = 0;
+  virtual void FreeIteratorStorage(void*) const = 0;
 };
 template<class Map>
 struct VirtualMapWrapper : public VirtualMapBase, public Map {
+  typedef typename Map::IteratorStorage IteratorStorage;
   VirtualMapWrapper(Map *map) : Map(map) {}
 
-  bool IsUnique() const override {
-    return Map::IsUnique();
+  void* AllocIteratorStorage() const {
+    typedef std::is_same<IteratorStorage, void> is_void;
+    if (is_void::value) {
+      return nullptr;
+    }
+    typedef std::conditional<is_void::value, Map::IteratorStorage, size_t> type;
+    return new type;
+  }
+  void FreeIteratorStorage(void* ptr) const {
+    typedef std::is_same<IteratorStorage, void> is_void;
+    if (is_void::value) {
+      assert(ptr == nullptr);
+      return;
+    }
+    typedef std::conditional<is_void::value, IteratorStorage, size_t> type;
+    delete (type*)ptr;
   }
 
   bool Load(fstring mem) override {
@@ -739,28 +753,60 @@ struct VirtualMapWrapper : public VirtualMapBase, public Map {
     Map::Save(append);
   }
 };
+struct VirtualMap : public SerializationBase {
+  typedef VirtualTag IteratorStorage;
+  typedef std::false_type is_unique;
+  template<class Map>
+  VirtualMap(Map* m) {
+    map = new VirtualMapWrapper<Map>(m);
+  }
+  ~VirtualMap() {
+    delete map;
+  }
+  VirtualMapBase* map;
+
+  void* AllocIteratorStorage() const {
+    return map->AllocIteratorStorage();
+  }
+  void FreeIteratorStorage(void* ptr) const {
+    map->FreeIteratorStorage(ptr);
+  }
+
+  bool Load(fstring mem) override {
+    return map->Load(mem);
+  }
+  void Save(std::function<void(void*, size_t)> append) const override {
+    map->Save(append);
+  }
+};
 
 struct VirtualSuffixBase : public SerializationBase {
   virtual ~VirtualSuffixBase() {}
-};
-struct VirtualSuffix : public SerializationBase {
-  VirtualSuffix(VirtualSuffixBase* base) : suffix(base) {}
-  ~VirtualSuffix() {
-    delete suffix;
-  }
-  VirtualSuffixBase* suffix;
-
-
-  bool Load(fstring mem) override {
-    return suffix->Load(mem);
-  }
-  void Save(std::function<void(void*, size_t)> append) const override {
-    suffix->Save(append);
-  }
+  virtual void* AllocIteratorStorage() const = 0;
+  virtual void FreeIteratorStorage(void*) const = 0;
 };
 template<class Suffix>
 struct VirtualSuffixWrapper : public VirtualSuffixBase, public Suffix {
+  typedef typename Suffix::IteratorStorage IteratorStorage;
   VirtualSuffixWrapper(Suffix *suffix) : Suffix(suffix) {}
+
+  void* AllocIteratorStorage() const {
+    typedef std::is_same<IteratorStorage, void> is_void;
+    if (is_void::value) {
+      return nullptr;
+    }
+    typedef std::conditional<is_void::value, Suffix::IteratorStorage, size_t> type;
+    return new type;
+  }
+  void FreeIteratorStorage(void* ptr) const {
+    typedef std::is_same<IteratorStorage, void> is_void;
+    if (is_void::value) {
+      assert(ptr == nullptr);
+      return;
+    }
+    typedef std::conditional<is_void::value, IteratorStorage, size_t> type;
+    delete (type*)ptr;
+  }
 
   bool Load(fstring mem) override {
     return Suffix::Load(mem);
@@ -769,8 +815,217 @@ struct VirtualSuffixWrapper : public VirtualSuffixBase, public Suffix {
     Suffix::Save(append);
   }
 };
+struct VirtualSuffix : public SerializationBase {
+  typedef VirtualTag IteratorStorage;
+  template<class Suffix>
+  VirtualSuffix(Suffix* s) {
+    suffix = new VirtualSuffixWrapper<Suffix>(s);
+  }
+  ~VirtualSuffix() {
+    delete suffix;
+  }
+  VirtualSuffixBase* suffix;
+
+  void* AllocIteratorStorage() const {
+    return suffix->AllocIteratorStorage();
+  }
+  void FreeIteratorStorage(void* ptr) const {
+    suffix->FreeIteratorStorage(ptr);
+  }
+
+  bool Load(fstring mem) override {
+    return suffix->Load(mem);
+  }
+  void Save(std::function<void(void*, size_t)> append) const override {
+    suffix->Save(append);
+  }
+};
 
 }
+
+class CompositeIndexFactoryBase : public TerarkIndex::Factory {
+public:
+  TerarkIndex* Build(NativeDataInput<InputBuffer>& tmpKeyFileReader,
+                     const TerarkZipTableOptions& tzopt,
+                     const TerarkIndex::KeyStat& keyStat,
+                     const ImmutableCFOptions* ioption = nullptr) const {
+ 
+    // TODO;
+    return nullptr;
+  }
+  size_t MemSizeForBuild(const TerarkIndex::KeyStat&) const {
+    // TODO;
+    return 0;
+  }
+  unique_ptr<TerarkIndex> LoadMemory(fstring mem) const {
+    // TODO;
+    return nullptr;
+  }
+  unique_ptr<TerarkIndex> LoadFile(fstring fpath) const {
+    // TODO;
+    return nullptr;
+  }
+  virtual void SaveMmap(const TerarkIndex* index, std::function<void(const void *, size_t)> write) const {
+    // TODO;
+  }
+protected:
+  using SerializationBase = composite_index_detail::SerializationBase;
+  virtual TerarkIndex* CreateIndex(SerializationBase* prefix,
+                                   SerializationBase* map,
+                                   SerializationBase* suffix) const {
+    TERARK_RT_assert(0, std::logic_error);
+    return nullptr;
+  }
+  virtual SerializationBase* CreatePrefix() const {
+    TERARK_RT_assert(0, std::logic_error);
+    return nullptr;
+  }
+  virtual SerializationBase* CreateMap() const {
+    TERARK_RT_assert(0, std::logic_error);
+    return nullptr;
+  }
+  virtual SerializationBase* CreateSuffix() const {
+    TERARK_RT_assert(0, std::logic_error);
+    return nullptr;
+  }
+};
+
+template<class Prefix, class Map, class Suffix>
+struct CompositeIndexParts {
+  CompositeIndexParts() {}
+  CompositeIndexParts(fstring common, Prefix&& prefix, Map&& map, Suffix&& suffix)
+    : common_(common)
+    , prefix_(std::move(prefix))
+    , map_(std::move(map))
+    , suffix_(std::move(suffix)) {
+  }
+  fstring common_;
+  Prefix prefix_;
+  Map map_;
+  Suffix suffix_;
+};
+
+template<class Prefix, class Map, class Suffix>
+class CompositeIndexIterator : public TerarkIndex::Iterator {
+public:
+  CompositeIndexIterator(const CompositeIndexParts<Prefix, Map, Suffix>* index_ptr) : storage_(index_ptr) {}
+
+  bool SeekToFirst() {
+    return false;
+  }
+  bool SeekToLast() {
+    return false;
+  }
+  bool Seek(fstring target) {
+    return false;
+  }
+  bool Next() {
+    return false;
+  }
+  bool Prev() {
+    return false;
+  }
+  size_t DictRank() const {
+    return 0;
+  }
+  virtual fstring key() const {
+    return fstring();
+  }
+private:
+  size_t& prefix_id() {
+    return Map::is_unique ? m_id : *storage_.second_id();
+  }
+  size_t& map_id() {
+    return m_id;
+  }
+
+  template<class Tag, class Value = Tag>
+  struct Storage {
+    typedef Value* type;
+    Value v;
+    Value* get() {
+      return &v;
+    }
+    template<class T>
+    void alloc(T& t) {
+    }
+    template<class T>
+    void free(T& t) {
+    }
+  };
+  template<class Tag>
+  struct Storage<Tag, void> {
+    typedef void* type;
+    void* get() {
+      return nullptr;
+    }
+    template<class T>
+    void alloc(T& t) {
+    }
+    template<class T>
+    void free(T& t) {
+    }
+  };
+  template<class Tag>
+  struct Storage<Tag, composite_index_detail::VirtualTag> {
+    typedef void* type;
+    void* v;
+    void** get() {
+      return &v;
+    }
+    template<class T>
+    void alloc(T& t) {
+      v = t.AllocIteratorStorage();
+    }
+    template<class T>
+    void free(T& t) {
+      t.FreeIteratorStorage(v);
+    }
+  };
+  typedef typename std::conditional<Map::is_unique::value, void, size_t>::type second_id_type;
+  class SecondIdTag {};
+  struct StorageInfoType : public Storage<const CompositeIndexParts<Prefix, Map, Suffix>*>
+                         , public Storage<Prefix, typename Prefix::IteratorStorage>
+                         , public Storage<Map, typename Map::IteratorStorage>
+                         , public Storage<Suffix, typename Suffix::IteratorStorage>
+                         , public Storage<SecondIdTag, second_id_type>
+                         {
+    StorageInfoType(const CompositeIndexParts<Prefix, Map, Suffix>*index) {
+      *((Storage<const CompositeIndexParts<Prefix, Map, Suffix>*>*)this)->get() = index;
+      ((Storage<Prefix, typename Prefix::IteratorStorage>*)this)->alloc(prefix());
+      ((Storage<Map, typename Map::IteratorStorage>*)this)->alloc(map());
+      ((Storage<Suffix, typename Suffix::IteratorStorage>*)this)->alloc(suffix());
+    }
+    ~StorageInfoType() {
+      ((Storage<Prefix, typename Prefix::IteratorStorage>*)this)->free(prefix());
+      ((Storage<Map, typename Map::IteratorStorage>*)this)->free(map());
+      ((Storage<Suffix, typename Suffix::IteratorStorage>*)this)->free(suffix());
+    }
+
+    const Prefix& prefix() {
+      return (*((Storage<const CompositeIndexParts<Prefix, Map, Suffix>*>*)this)->get())->prefix_;
+    }
+    const Map& map() {
+      return (*((Storage<const CompositeIndexParts<Prefix, Map, Suffix>*>*)this)->get())->map_;
+    }
+    const Suffix& suffix() {
+      return (*((Storage<const CompositeIndexParts<Prefix, Map, Suffix>*>*)this)->get())->suffix_;
+    }
+    typename Storage<Prefix, typename Prefix::IteratorStorage>::type* prefix_storage() {
+      return ((Storage<Prefix, typename Prefix::IteratorStorage>*)this)->get();
+    }
+    typename Storage<Map, typename Map::IteratorStorage>::type* map_storage() {
+      return ((Storage<Map, typename Map::IteratorStorage>*)this)->get();
+    }
+    typename Storage<Suffix, typename Suffix::IteratorStorage>::type* suffix_storage() {
+      return ((Storage<Suffix, typename Suffix::IteratorStorage>*)this)->get();
+    }
+    size_t* second_id() {
+      assert(((Storage<SecondIdTag, second_id_type>*)this)->get() != nullptr);
+      return (size_t*)((Storage<SecondIdTag, second_id_type>*)this)->get();
+    }
+  } storage_;
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -810,39 +1065,41 @@ struct VirtualSuffixWrapper : public VirtualSuffixBase, public Suffix {
 //      BigUintVecMin0
 
 template<class Prefix, class Map, class Suffix>
-class CompositeIndex : public TerarkIndex {
+class CompositeIndex : public TerarkIndex, public CompositeIndexParts<Prefix, Map, Suffix> {
 public:
-  CompositeIndex(Prefix&& prefix, Map&& map, Suffix&& suffix)
-    : prefix_(std::move(prefix))
-    , map_(std::move(map))
-    , suffix_(std::move(suffix)) {
+  CompositeIndex(const CompositeIndexFactoryBase* factory)
+    : factory_(factory)
+    , header_(nullptr) {
+  }
+  CompositeIndex(const CompositeIndexFactoryBase* factory, fstring common, Prefix&& prefix, Map&& map, Suffix&& suffix)
+    : CompositeIndexParts<Prefix, Map, Suffix>(common, std::move(prefix), std::move(map), std::move(suffix))
+    , factory_(factory)
+    , header_(nullptr) {
   }
 
-  fstring common_;
-  Prefix prefix_;
-  Map map_;
-  Suffix suffix_;
+  const CompositeIndexFactoryBase* factory_;
+  const TerarkIndexHeader* header_;
 
-  const char* Name() const {
-    return "CompositeIndex";
+  const char* Name() const override {
+    return factory_->WireName();
   }
-  void SaveMmap(std::function<void(const void *, size_t)> write) const {
-    // TODO
+  void SaveMmap(std::function<void(const void *, size_t)> write) const override {
+    factory_->SaveMmap(this, write);
   }
-  size_t Find(fstring key) const {
+  size_t Find(fstring key) const override {
     if (key.commonPrefixLen(common_) != common_.size()) {
       return size_t(-1);
     }
     key = key.substr(common_.size());
     size_t id = prefix_.Find(key);
-    if (map_.IsUnique()) {
+    if (Map::is_unique::value) {
       return id;
     }
     // TODO
     assert(0);
     return 0;
   }
-  size_t DictRank(fstring key) const {
+  size_t DictRank(fstring key) const override {
     size_t cplen = key.commonPrefixLen(common_);
     if (cplen != common_.size()) {
       assert(key.size() >= cplen);
@@ -854,7 +1111,7 @@ public:
         return NumKeys();
       }
     }
-    if (map_.IsUnique()) {
+    if (Map::is_unique::value) {
       return prefix_.DictRank(key);
     }
     // TODO
@@ -862,66 +1119,41 @@ public:
     assert(0);
     return 0;
   }
-  size_t NumKeys() const {
-    if (map_.IsUnique()) {
+  size_t NumKeys() const override {
+    if (Map::is_unique::value) {
       return prefix_.KeyCount();
     }
     // TODO
     return 0;
   }
-  size_t TotalKeySize() const {
+  size_t TotalKeySize() const override {
     size_t size = prefix_.TotalKeySize();
     size += NumKeys() * common_.size();
     // TODO
     return 0;
   }
-  fstring Memory() const {
+  fstring Memory() const override {
     return fstring();
   }
-  Iterator* NewIterator() const {
-    return nullptr;
+  Iterator* NewIterator() const override {
+    return new CompositeIndexIterator<Prefix, Map, Suffix>(this);
   }
-  bool NeedsReorder() const {
+  bool NeedsReorder() const override {
     return prefix_.NeedsReorder();
   }
-  void GetOrderMap(terark::UintVecMin0& newToOld) const {
+  void GetOrderMap(terark::UintVecMin0& newToOld) const  override {
   }
-  void BuildCache(double cacheRatio) {
+  void BuildCache(double cacheRatio) override {
   }
 };
 
 namespace composite_index_detail {
 
-class CompositeIndexFactoryBase : public TerarkIndex::Factory {
-  TerarkIndex* Build(NativeDataInput<InputBuffer>& tmpKeyFileReader,
-                     const TerarkZipTableOptions& tzopt,
-                     const TerarkIndex::KeyStat&,
-                     const ImmutableCFOptions* ioption = nullptr) const {
-    return nullptr;
-  }
-  size_t MemSizeForBuild(const TerarkIndex::KeyStat&) const {
-    return 0;
-  }
-  unique_ptr<TerarkIndex> LoadMemory(fstring mem) const {
-    return nullptr;
-  }
-  unique_ptr<TerarkIndex> LoadFile(fstring fpath) const {
-    return nullptr;
-  }
-protected:
-  virtual TerarkIndex* CreateIndex(SerializationBase* prefix,
-                                   SerializationBase* map,
-                                   SerializationBase* suffix) const = 0;
-  virtual SerializationBase* CreatePrefix() const = 0;
-  virtual SerializationBase* CreateMap() const = 0;
-  virtual SerializationBase* CreateSuffix() const = 0;
-};
-
 template<class Prefix, size_t PV, class Map, size_t MV, class Suffix, size_t SV>
 struct CompositeIndexDeclare {
-  typedef CompositeIndex<typename std::conditional<PV, VirtualPrefixWrapper<Prefix>, Prefix>::type,
-                         typename std::conditional<MV, VirtualMapWrapper<Map>, Map>::type,
-                         typename std::conditional<SV, VirtualSuffixWrapper<Suffix>, Suffix>::type> index_type;
+  typedef CompositeIndex<typename std::conditional<PV, VirtualPrefix, Prefix>::type,
+                         typename std::conditional<MV, VirtualMap, Map>::type,
+                         typename std::conditional<SV, VirtualSuffix, Suffix>::type> index_type;
 };
 
 
@@ -962,6 +1194,7 @@ using composite_index_detail::CompositeIndexFactory;
 
 template<class RankSelect>
 struct CompositeIndexUintPrefix : public composite_index_detail::SerializationBase {
+  typedef typename std::conditional<RankSelectNeedHint<RankSelect>::value, size_t, void> IteratorStorage;
   CompositeIndexUintPrefix() = default;
   CompositeIndexUintPrefix(CompositeIndexUintPrefix&&) = default;
   CompositeIndexUintPrefix(SerializationBase* base) {
@@ -969,6 +1202,7 @@ struct CompositeIndexUintPrefix : public composite_index_detail::SerializationBa
     auto other = static_cast<CompositeIndexUintPrefix<RankSelect>*>(base);
     rank_select.swap(other->rank_select);
     key_length = other->key_length;
+    working_state = base->working_state;
     delete other;
   }
   RankSelect rank_select;
@@ -1051,19 +1285,23 @@ struct CompositeIndexUintPrefix : public composite_index_detail::SerializationBa
 
 template<class RankSelect>
 struct CompositeIndexMap : public composite_index_detail::SerializationBase {
+  typedef typename std::conditional<RankSelectNeedHint<RankSelect>::value, size_t, void> IteratorStorage;
+  typedef std::false_type is_unique;
   CompositeIndexMap() = default;
   CompositeIndexMap(CompositeIndexMap&&) = default;
   CompositeIndexMap(SerializationBase* base) {
     assert(dynamic_cast<CompositeIndexMap<RankSelect>*>(base) != nullptr);
     auto other = static_cast<CompositeIndexMap<RankSelect>*>(base);
     rank_select.swap(other->rank_select);
+    working_state = base->working_state;
     delete other;
   }
-  RankSelect rank_select;
-
-  bool IsUnique() const {
-    return false;
+  ~CompositeIndexMap() {
+    if (working_state != WorkingState::Building) {
+      rank_select.risk_release_ownership();
+    }
   }
+  RankSelect rank_select;
 
   bool Load(fstring mem) override {
     return false;
@@ -1074,19 +1312,18 @@ struct CompositeIndexMap : public composite_index_detail::SerializationBase {
 
 template<>
 struct CompositeIndexMap<rank_select_allone> : public composite_index_detail::SerializationBase {
+  typedef void IteratorStorage;
+  typedef std::true_type is_unique;
   CompositeIndexMap() = default;
   CompositeIndexMap(CompositeIndexMap&&) = default;
   CompositeIndexMap(SerializationBase* base) {
     assert(dynamic_cast<CompositeIndexMap<rank_select_allone>*>(base) != nullptr);
     auto other = static_cast<CompositeIndexMap<rank_select_allone>*>(base);
     rank_select = other->rank_select;
+    working_state = WorkingState::UserMemory;
     delete other;
   }
   rank_select_allone rank_select;
-
-  bool IsUnique() const {
-    return true;
-  }
 
   bool Load(fstring mem) override {
     return false;
@@ -1096,9 +1333,11 @@ struct CompositeIndexMap<rank_select_allone> : public composite_index_detail::Se
 };
 
 struct CompositeIndexEmptySuffix : public composite_index_detail::SerializationBase {
+  typedef void IteratorStorage;
   CompositeIndexEmptySuffix() = default;
   CompositeIndexEmptySuffix(CompositeIndexEmptySuffix&&) = default;
   CompositeIndexEmptySuffix(SerializationBase* base) {
+    working_state = WorkingState::UserMemory;
     delete base;
   }
 
@@ -1122,11 +1361,13 @@ using VirtualCompositeIndex =
 
 int foo() {
   auto i0 = new UintIndex<rank_select_allone>(
+    nullptr, fstring(),
     new CompositeIndexUintPrefix<rank_select_allone>(),
     new CompositeIndexMap<rank_select_allone>(),
     new CompositeIndexEmptySuffix());
 
   auto i1 = new VirtualCompositeIndex(
+    nullptr, "123",
     new CompositeIndexUintPrefix<rank_select_allone>(),
     new CompositeIndexMap<rank_select_il_256_32>(),
     new CompositeIndexEmptySuffix());
@@ -2941,12 +3182,98 @@ RegisterCompositeUintIndex(SE_512_64, SE_512_64);
 //#define RegisterUintIndex(RankSelect) \
 //  typedef UintIndex<RankSelect> UintIndex_##RankSelect; \
 //            TerarkIndexRegister(UintIndex_##RankSelect)
+
+const char* UintIndexName = "UintIndex";
+template<class RankSelect>
+class UintIndexFactory : public CompositeIndexFactoryBase {
+  ~UintIndexFactory() {}
+
+  
+  typedef CompositeIndex<CompositeIndexUintPrefix<RankSelect>,
+                         CompositeIndexMap<rank_select_allone>,
+                         CompositeIndexEmptySuffix> index_type;
+
+  struct FileHeader : public TerarkIndexHeader {
+    uint64_t min_value;
+    uint64_t max_value;
+    uint64_t index_mem_size;
+    uint32_t key_length;
+    uint32_t common_prefix_length;
+
+    FileHeader(size_t body_size, const std::type_info& ti) {
+      memset(this, 0, sizeof *this);
+      magic_len = strlen(UintIndexName);
+      strncpy(magic, UintIndexName, sizeof magic);
+      size_t name_i = g_TerarkIndexName.find_i(ti.name());
+      strncpy(class_name, g_TerarkIndexName.val(name_i).c_str(), sizeof class_name);
+      header_size = sizeof *this;
+      version = 1;
+      file_size = sizeof *this + body_size;
+    }
+  };
+
+  unique_ptr<TerarkIndex> LoadMemory(fstring mem) const override {
+    unique_ptr<index_type> index(new index_type(this));
+    const FileHeader* h = (const FileHeader*)mem.data();
+    if (mem.size() < sizeof(FileHeader)
+      || h->magic_len != strlen(UintIndexName)
+      || strcmp(h->magic, UintIndexName) != 0
+      || h->header_size != sizeof(FileHeader)
+      || h->version != 1
+      || h->file_size != mem.size()
+      ) {
+      throw std::invalid_argument("UintIndex::Load(): Bad file header");
+    }
+    auto ptr = &index->prefix_;
+    ptr->min_value = h->min_value;
+    ptr->max_value = h->max_value;
+    ptr->key_length = h->key_length;
+    if (h->common_prefix_length > 0) {
+      index->common_ = mem.substr(h->header_size, h->common_prefix_length);
+    }
+    ptr->rank_select.risk_mmap_from(
+      (unsigned char*)mem.data() + h->header_size + align_up(h->common_prefix_length, 8), h->index_mem_size);
+
+    index->prefix_.working_state = WorkingState::UserMemory;
+    index->map_.working_state = WorkingState::UserMemory;
+    index->suffix_.working_state = WorkingState::UserMemory;
+    return unique_ptr<TerarkIndex>(index.release());
+  }
+  unique_ptr<TerarkIndex> LoadFile(fstring fpath) const override {
+    MmapWholeFile mmapFile(fpath);
+    auto ret = LoadMemory(mmapFile.memory());
+    assert(dynamic_cast<index_type*>(ret.get()) != nullptr);
+    index_type* index = static_cast<index_type*>(ret.get());
+    index->header_ = (const FileHeader*)mmapFile.base;
+    mmapFile.base = nullptr;
+    return ret;
+  }
+
+  void SaveMmap(const TerarkIndex* index, std::function<void(const void *, size_t)> write) const override {
+    assert(dynamic_cast<const index_type*>(index) != nullptr);
+    auto uint_index = static_cast<const index_type*>(index);
+    auto ptr = &uint_index->prefix_;
+    FileHeader header(ptr->rank_select.mem_size(), typeid(UintIndex<RankSelect>));
+    header.min_value = ptr->min_value;
+    header.max_value = ptr->max_value;
+    header.index_mem_size = ptr->rank_select.mem_size();
+    header.key_length = uint_index->common_.size();
+    write(&header, sizeof header);
+    if (uint_index->common_.size() > 0) {
+      write(uint_index->common_.data(), uint_index->common_.size());
+      Padzero<8>(write, uint_index->common_.size());
+    }
+    write(ptr->rank_select.data(), ptr->rank_select.mem_size());
+  }
+};
+
 #define RegisterUintIndex(RankSelect)         \
-  RegisterCompositeIndex(                     \
+  RegisterCompositeIndexWithFactory(          \
     CompositeIndexUintPrefix<RankSelect>, 0,  \
     CompositeIndexMap<rank_select_allone>, 0, \
     CompositeIndexEmptySuffix, 0,             \
-    UintIndex_##RankSelect                    \
+    UintIndex_##RankSelect,                   \
+    UintIndexFactory<RankSelect>              \
   )
 RegisterUintIndex(IL_256_32);
 RegisterUintIndex(SE_512_64);
