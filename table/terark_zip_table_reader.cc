@@ -213,7 +213,7 @@ Status ReadMetaBlockAdapte(RandomAccessFileReader* file,
 
 using terark::BadCrc32cException;
 using terark::byte_swap;
-using terark::BlobStore;
+using terark::AbstractBlobStore;
 
 class TerarkZipTableIndexIterator : public InternalIterator {
 protected:
@@ -1030,12 +1030,12 @@ TerarkEmptyTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   return Status::OK();
 }
 
-terark::BlobStore::Dictionary
+AbstractBlobStore::Dictionary
 getVerifyDict(Slice dictData) {
   if (terark::isChecksumVerifyEnabled()) {
-    return terark::BlobStore::Dictionary(fstringOf(dictData));
+    return AbstractBlobStore::Dictionary(fstringOf(dictData));
   } else {
-    return terark::BlobStore::Dictionary(fstringOf(dictData), 0);
+    return AbstractBlobStore::Dictionary(fstringOf(dictData), 0);
   }
 }
 
@@ -1114,7 +1114,7 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
       , s.ToString().c_str());
   }
   try {
-    subReader_.store_.reset(terark::BlobStore::load_from_user_memory(
+    subReader_.store_.reset(AbstractBlobStore::load_from_user_memory(
       fstring(file_data.data(), props->data_size),
       getVerifyDict(valueDictBlock.data)
     ));
@@ -1384,7 +1384,7 @@ Status TerarkZipTableMultiReader::SubIndex::Init(
                       fstring offsetMemory,
                       fstring indexMemory,
                       fstring storeMemory,
-                      terark::BlobStore::Dictionary dict,
+                      AbstractBlobStore::Dictionary dict,
                       fstring typeMemory,
                       fstring commonPrefixMemory,
                       int minPreadLen,
@@ -1443,7 +1443,7 @@ Status TerarkZipTableMultiReader::SubIndex::Init(
       part.index_ = TerarkIndex::LoadMemory({indexMemory.data() + last.key,
                                              ptrdiff_t(curr.key - last.key)});
       fstring dataMem(storeMemory.data() + last.value, curr.value - last.value);
-      part.store_.reset(BlobStore::load_from_user_memory(dataMem, dict));
+      part.store_.reset(AbstractBlobStore::load_from_user_memory(dataMem, dict));
       part.InitUsePread(minPreadLen);
       assert(bitfield_array<2>::compute_mem_size(part.index_->NumKeys()) == curr.type - last.type);
       part.type_.risk_set_data((byte_t*)(typeMemory.data() + last.type), part.index_->NumKeys());

@@ -909,10 +909,10 @@ Status TerarkZipTableBuilder::WaitBuildStore() {
 }
 
 void TerarkZipTableBuilder::BuildReorderMap(BuildReorderParams& params,
-  KeyValueStatus& kvs,
-  fstring mmap_memory,
-  BlobStore* store,
-  long long& t6) {
+                                            KeyValueStatus& kvs,
+                                            fstring mmap_memory,
+                                            AbstractBlobStore* store,
+                                            long long& t6) {
   valvec<std::unique_ptr<TerarkIndex>> indexes;
   size_t rawKeySize = 0;
   size_t zipKeySize = 0;
@@ -1117,7 +1117,7 @@ Status TerarkZipTableBuilder::buildMixedLenBlobStore(BuildStoreParams &params) {
   size_t fixedLen = kvs.value.m_max_cnt_key;
   size_t fixedLenCount = kvs.value.m_cnt_of_max_cnt_key;
   size_t varDataLen = kvs.value.m_total_key_len - fixedLen * fixedLenCount;
-  std::unique_ptr<terark::BlobStore::Builder> builder;
+  std::unique_ptr<AbstractBlobStore::Builder> builder;
   if (kvs.value.m_cnt_sum < (4ULL << 30)) {
     builder.reset(new terark::MixedLenBlobStore::MyBuilder(
         fixedLen, varDataLen, params.fpath, params.offset));
@@ -1196,7 +1196,7 @@ Status TerarkZipTableBuilder::ZipValueToFinishMulti() {
   AutoDeleteFile tmpDictFile{ tmpSentryFile_.path + ".dict"};
   std::unique_ptr<DictZipBlobStore::ZipBuilder> zbuilder;
   WaitHandle dictWaitHandle;
-  std::unique_ptr<terark::BlobStore> store;
+  std::unique_ptr<AbstractBlobStore> store;
   DictZipBlobStore::ZipStat dzstat;
   size_t dictRefCount = 0;
   Status s;
@@ -1497,7 +1497,7 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
   return Status::OK();
 }
 
-Status TerarkZipTableBuilder::WriteStore(fstring indexMmap, terark::BlobStore* store
+Status TerarkZipTableBuilder::WriteStore(fstring indexMmap, AbstractBlobStore* store
   , KeyValueStatus& kvs
   , BlockHandle& dataBlock
   , long long& t5, long long& t6, long long& t7) {
@@ -1547,10 +1547,10 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
 {
   assert(histogram_.size() == 1);
   terark::MmapWholeFile dictMmap;
-  BlobStore::Dictionary dict;
+  AbstractBlobStore::Dictionary dict;
   if (!tmpDictFile.empty()) {
     terark::MmapWholeFile(tmpDictFile.c_str()).swap(dictMmap);
-    dict = BlobStore::Dictionary(fstring{(const char*)dictMmap.base,
+    dict = AbstractBlobStore::Dictionary(fstring{(const char*)dictMmap.base,
         (ptrdiff_t)dictMmap.size});
   }
   auto& kvs = *histogram_.front();
@@ -1558,7 +1558,7 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
   terark::MmapWholeFile mmapStoreFile((kvs.isUseDictZip ? tmpZipStoreFile_ : tmpStoreFile_).fpath);
   assert(mmapIndexFile.base != nullptr);
   assert(mmapStoreFile.base != nullptr);
-  auto store = UniquePtrOf(BlobStore::load_from_user_memory(mmapStoreFile.memory(), dict));
+  auto store = UniquePtrOf(AbstractBlobStore::load_from_user_memory(mmapStoreFile.memory(), dict));
   auto& bzvType = kvs.type;
   const size_t realsampleLenSum = dict.memory.size();
   long long rawBytes = properties_.raw_key_size + properties_.raw_value_size;
@@ -1748,10 +1748,10 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4
   , const DictZipBlobStore::ZipStat& dzstat) {
   assert(histogram_.size() > 1);
   terark::MmapWholeFile dictMmap;
-  BlobStore::Dictionary dict;
+  AbstractBlobStore::Dictionary dict;
   if (!tmpDictFile.empty()) {
     terark::MmapWholeFile(tmpDictFile.c_str()).swap(dictMmap);
-    dict = BlobStore::Dictionary(fstring{(const char*)dictMmap.base,
+    dict = AbstractBlobStore::Dictionary(fstring{(const char*)dictMmap.base,
         (ptrdiff_t)dictMmap.size});
   }
   const size_t realsampleLenSum = dict.memory.size();
@@ -1814,7 +1814,7 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4
     sumKeyLen += kvs.key.m_total_key_len + kvs.prefix.size() * kvs.key.m_cnt_sum;
     numKeys += kvs.key.m_cnt_sum ;
     commonPrefix.append(kvs.commonPrefix);
-    unique_ptr<BlobStore> store(BlobStore::load_from_user_memory(
+    unique_ptr<AbstractBlobStore> store(AbstractBlobStore::load_from_user_memory(
         getMmapPart(kvs.isUseDictZip ? mmapZipStoreFile : mmapStoreFile,
           kvs.valueFileBegin, kvs.valueFileEnd
         ), dict));
