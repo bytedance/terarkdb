@@ -26,7 +26,7 @@
 // terark headers
 #include <terark/util/throw.hpp>
 #include <terark/bitfield_array.hpp>
-#include <terark/zbs/blob_store.hpp>
+#include <terark/zbs/abstract_blob_store.hpp>
 
 namespace rocksdb {
 
@@ -126,7 +126,7 @@ struct TerarkZipSubReader {
   size_t storeOffset_;
   std::string prefix_;
   unique_ptr<TerarkIndex> index_;
-  unique_ptr<terark::BlobStore> store_;
+  unique_ptr<terark::AbstractBlobStore> store_;
   bitfield_array<2> type_;
   std::string commonPrefix_;
 
@@ -270,7 +270,7 @@ public:
     Status Init(fstring offsetMemory,
                 fstring indexMemory,
                 fstring storeMemory,
-                terark::BlobStore::Dictionary dict,
+                terark::AbstractBlobStore::Dictionary dict,
                 fstring typeMemory,
                 fstring commonPrefixMemory,
                 int minPreadLen,

@@ -31,7 +31,7 @@
 #include <terark/bitmap.hpp>
 #include <terark/stdtypes.hpp>
 #include <terark/histogram.hpp>
-#include <terark/zbs/blob_store.hpp>
+#include <terark/zbs/abstract_blob_store.hpp>
 #include <terark/zbs/dict_zip_blob_store.hpp>
 #include <terark/zbs/zip_reorder_map.hpp>
 #include <terark/bitfield_array.hpp>
@@ -46,7 +46,7 @@ using terark::valvec;
 using terark::UintVecMin0;
 using terark::byte_t;
 using terark::febitvec;
-using terark::BlobStore;
+using terark::AbstractBlobStore;
 using terark::ZReorderMap;
 using terark::Uint64Histogram;
 using terark::DictZipBlobStore;
@@ -135,10 +135,10 @@ private:
     bitfield_array<2> type;
   };
   void BuildReorderMap(BuildReorderParams& params,
-    KeyValueStatus& kvs,
-    fstring mmap_memory,
-    BlobStore* store,
-    long long& t6);
+                       KeyValueStatus& kvs,
+                       fstring mmap_memory,
+                       AbstractBlobStore* store,
+                       long long& t6);
   WaitHandle LoadSample(std::unique_ptr<DictZipBlobStore::ZipBuilder>& zbuilder);
   struct BuildStoreParams {
     KeyValueStatus& kvs;
@@ -154,16 +154,16 @@ private:
   Status ZipValueToFinishMulti();
   Status BuilderWriteValues(KeyValueStatus& kvs, std::function<void(fstring val)> write);
   void DoWriteAppend(const void* data, size_t size);
-  Status WriteStore(fstring indexMmap, BlobStore* store
-    , KeyValueStatus& kvs
-    , BlockHandle& dataBlock
-    , long long& t5, long long& t6, long long& t7);
-  Status WriteSSTFile(long long t3, long long t4
-    , fstring tmpDictFile
-    , const DictZipBlobStore::ZipStat& dzstat);
-  Status WriteSSTFileMulti(long long t3, long long t4
-    , fstring tmpDictFile
-    , const DictZipBlobStore::ZipStat& dzstat);
+  Status WriteStore(fstring indexMmap, AbstractBlobStore* store,
+                    KeyValueStatus& kvs,
+                    BlockHandle& dataBlock,
+                    long long& t5, long long& t6, long long& t7);
+  Status WriteSSTFile(long long t3, long long t4,
+                      fstring tmpDictFile,
+                      const DictZipBlobStore::ZipStat& dzstat);
+  Status WriteSSTFileMulti(long long t3, long long t4,
+                           fstring tmpDictFile,
+                           const DictZipBlobStore::ZipStat& dzstat);
   Status WriteMetaData(std::initializer_list<std::pair<const std::string*, BlockHandle>> blocks);
   DictZipBlobStore::ZipBuilder* createZipBuilder() const;
 
