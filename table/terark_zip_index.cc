@@ -711,7 +711,7 @@ struct VirtualPrefixWrapper : public VirtualPrefixBase, public Prefix {
     if (is_void::value) {
       return nullptr;
     }
-    typedef std::conditional<is_void::value, Prefix::IteratorStorage, size_t> type;
+    typedef std::conditional<is_void::value, typename Prefix::IteratorStorage, size_t> type;
     return new type;
   }
   void FreeIteratorStorage(void* ptr) const {
@@ -844,7 +844,7 @@ struct VirtualMapWrapper : public VirtualMapBase, public Map {
     if (is_void::value) {
       return nullptr;
     }
-    typedef std::conditional<is_void::value, Map::IteratorStorage, size_t> type;
+    typedef std::conditional<is_void::value, typename Map::IteratorStorage, size_t> type;
     return new type;
   }
   void FreeIteratorStorage(void* ptr) const {
@@ -906,7 +906,7 @@ struct VirtualSuffixWrapper : public VirtualSuffixBase, public Suffix {
     if (is_void::value) {
       return nullptr;
     }
-    typedef std::conditional<is_void::value, Suffix::IteratorStorage, size_t> type;
+    typedef std::conditional<is_void::value, typename Suffix::IteratorStorage, size_t> type;
     return new type;
   }
   void FreeIteratorStorage(void* ptr) const {
@@ -1047,19 +1047,19 @@ struct IteratorStorage : public IteratorStorageHolder<const CompositeIndexParts<
   typename IteratorStorageHolder<Prefix, typename Prefix::IteratorStorage>::type* prefix_storage() {
     return ((IteratorStorageHolder<Prefix, typename Prefix::IteratorStorage>*)this)->get();
   }
-  typename const IteratorStorageHolder<Prefix, typename Prefix::IteratorStorage>::type* prefix_storage() const {
+  const typename IteratorStorageHolder<Prefix, typename Prefix::IteratorStorage>::type* prefix_storage() const {
     return ((IteratorStorageHolder<Prefix, typename Prefix::IteratorStorage>*)this)->get();
   }
   typename IteratorStorageHolder<Map, typename Map::IteratorStorage>::type* map_storage() {
     return ((IteratorStorageHolder<Map, typename Map::IteratorStorage>*)this)->get();
   }
-  typename const IteratorStorageHolder<Map, typename Map::IteratorStorage>::type* map_storage() const {
+  const typename IteratorStorageHolder<Map, typename Map::IteratorStorage>::type* map_storage() const {
     return ((IteratorStorageHolder<Map, typename Map::IteratorStorage>*)this)->get();
   }
   typename IteratorStorageHolder<Suffix, typename Suffix::IteratorStorage>::type* suffix_storage() {
     return ((IteratorStorageHolder<Suffix, typename Suffix::IteratorStorage>*)this)->get();
   }
-  typename const IteratorStorageHolder<Suffix, typename Suffix::IteratorStorage>::type* suffix_storage() const {
+  const typename IteratorStorageHolder<Suffix, typename Suffix::IteratorStorage>::type* suffix_storage() const {
     return ((IteratorStorageHolder<Suffix, typename Suffix::IteratorStorage>*)this)->get();
   }
   size_t* second_id() {
@@ -1105,7 +1105,7 @@ public:
     size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
     assert(cplen >= ks.commonPrefixLen);
     common.reset(fstring(ks.minKey).substr(ks.commonPrefixLen, cplen - ks.commonPrefixLen), true);
-    size_t ceLen = 0; // cost effective index1st len if any
+    // size_t ceLen = 0; // cost effective index1st len if any
     if (g_indexEnableUintIndex &&
       ks.maxKeyLen == ks.minKeyLen &&
       ks.maxKeyLen - cplen <= sizeof(uint64_t)) {
@@ -1184,15 +1184,29 @@ class CompositeIndexIterator
   , public composite_index_detail::IteratorStorage<Prefix,
                                                    Map,
                                                    Suffix,
-                                                   typename std::conditional<Map::is_unique::value, void, size_t
-                                                   >::type> {
+                                                   typename std::conditional<Map::is_unique::value,
+                                                                             void,
+                                                                             size_t>::type> {
 public:
+  typedef composite_index_detail::IteratorStorage<Prefix,
+                                                  Map,
+                                                  Suffix,
+                                                  typename std::conditional<Map::is_unique::value,
+                                                                            void,
+                                                                            size_t
+                                                                            >::type
+                                                  > IteratorStorage;
+  using IteratorStorage::common;
+  using IteratorStorage::prefix;
+  using IteratorStorage::map;
+  using IteratorStorage::suffix;
+  using IteratorStorage::prefix_storage;
+  using IteratorStorage::map_storage;
+  using IteratorStorage::suffix_storage;
+  using IteratorStorage::second_id;
+
   CompositeIndexIterator(const composite_index_detail::CompositeIndexParts<Prefix, Map, Suffix>* index_ptr)
-    : composite_index_detail::IteratorStorage<Prefix,
-                                              Map,
-                                              Suffix,
-                                              typename std::conditional<Map::is_unique::value, void, size_t
-                                              >::type>(index_ptr) {}
+    : IteratorStorage(index_ptr) {}
 
   bool SeekToFirst() override {
     if (Map::is_unique::value) {
@@ -1325,12 +1339,19 @@ private:
 template<class Prefix, class Map, class Suffix>
 class CompositeIndex : public TerarkIndex, public composite_index_detail::CompositeIndexParts<Prefix, Map, Suffix> {
 public:
+  typedef composite_index_detail::CompositeIndexParts<Prefix, Map, Suffix> CompositeIndexParts;
+  typedef composite_index_detail::Common Common;
+  using CompositeIndexParts::common_;
+  using CompositeIndexParts::prefix_;
+  using CompositeIndexParts::map_;
+  using CompositeIndexParts::suffix_;
+
   CompositeIndex(const CompositeIndexFactoryBase* factory)
     : factory_(factory)
     , header_(nullptr) {
   }
   CompositeIndex(const CompositeIndexFactoryBase* factory, Common&& common, Prefix&& prefix, Map&& map, Suffix&& suffix)
-    : CompositeIndexParts<Prefix, Map, Suffix>(std::move(common), std::move(prefix), std::move(map), std::move(suffix))
+    : composite_index_detail::CompositeIndexParts<Prefix, Map, Suffix>(std::move(common), std::move(prefix), std::move(map), std::move(suffix))
     , factory_(factory)
     , header_(nullptr) {
   }
@@ -1761,35 +1782,6 @@ CompositeIndexFactoryBase::BuildEmptySuffix(std::string& name) const {
   name = typeid(CompositeIndexEmptySuffix).name();
   return new CompositeIndexEmptySuffix();
 }
-
-
-template<class RankSelect>
-using UintIndex =
-  typename CompositeIndexDeclare<CompositeIndexUintPrefix<RankSelect>, 0,
-                                 CompositeIndexMap<rank_select_allone>, 0,
-                                 CompositeIndexEmptySuffix, 0>::index_type;
-
-using VirtualCompositeIndex =
-  typename CompositeIndexDeclare<CompositeIndexUintPrefix<rank_select_allone>, 1,
-                                 CompositeIndexMap<rank_select_il_256_32>, 1,
-                                 CompositeIndexEmptySuffix, 1>::index_type;
-
-int foo() {
-  auto i0 = new UintIndex<rank_select_allone>(
-    nullptr, composite_index_detail::Common(),
-    new CompositeIndexUintPrefix<rank_select_allone>(),
-    new CompositeIndexMap<rank_select_allone>(),
-    new CompositeIndexEmptySuffix());
-
-  auto i1 = new VirtualCompositeIndex(
-    nullptr, composite_index_detail::Common("123", false),
-    new CompositeIndexUintPrefix<rank_select_allone>(),
-    new CompositeIndexMap<rank_select_il_256_32>(),
-    new CompositeIndexEmptySuffix());
-
-  return -1;
-}
-
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -3200,9 +3192,11 @@ RegisterCompositeUintIndex(SE_512_64, FewOne64 );
 RegisterCompositeUintIndex(IL_256_32, IL_256_32);
 RegisterCompositeUintIndex(SE_512_64, SE_512_64);
 
-//#define RegisterUintIndex(RankSelect) \
-//  typedef UintIndex<RankSelect> UintIndex_##RankSelect; \
-//            TerarkIndexRegister(UintIndex_##RankSelect)
+template<class RankSelect>
+using UintIndex =  typename CompositeIndexDeclare<CompositeIndexUintPrefix<RankSelect>, 0,
+                                                  CompositeIndexMap<rank_select_allone>, 0,
+                                                  CompositeIndexEmptySuffix, 0>::index_type;
+
 
 const char* UintIndexName = "UintIndex";
 template<class RankSelect>
@@ -3211,6 +3205,10 @@ class UintIndexFactory
                                  CompositeIndexMap<rank_select_allone>, 0,
                                  CompositeIndexEmptySuffix, 0> {
   ~UintIndexFactory() {}
+
+  typedef typename CompositeIndexFactory<CompositeIndexUintPrefix<RankSelect>, 0,
+                                         CompositeIndexMap<rank_select_allone>, 0,
+                                         CompositeIndexEmptySuffix, 0>::index_type index_type;
 
   struct FileHeader : public TerarkIndexHeader {
     uint64_t min_value;
