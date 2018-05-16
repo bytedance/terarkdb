@@ -1240,12 +1240,46 @@ public:
       }
     }
     target = target.substr(cplen);
+    bool seek_valid = prefix().Seek(prefix_id(), prefix_storage(), target);
     if (Map::is_unique::value) {
-      return prefix().Seek(prefix_id(), prefix_storage(), target);
+      return seek_valid;
+    }
+    fstring prefix_key = prefix().GetKey(prefix_id(), prefix_storage());
+    assert(prefix_key <= target);
+    if (prefix_key.size() == target.size()) {
+      map().Trans(prefix_id(), map_id(), map_storage());
+      suffix().Set(map_id(), suffix_storage());
+      return true;
+    }
+
+    if (target.size() <= cplen + index.key1_len_) {
+      fstring sub = target.substr(cplen);
+      byte_t targetBuffer[8] = { 0 };
+      /*
+      * do not think hard about int, think about string instead.
+      * assume key1_len is 6 byte len like 'abcdef', target without
+      * commpref is 'b', u should compare 'b' with 'a' instead of 'f'.
+      * that's why assign sub starting in the middle instead at tail.
+      */
+      memcpy(targetBuffer + (8 - index.key1_len_), sub.data(), sub.size());
+      *pKey1 = key1 = Read1stKey(targetBuffer, 0, 8);
+      *pKey2 = key2 = fstring(); // empty
     }
     else {
-      // TODO
-      return false;
+      *pKey1 = key1 = Read1stKey(target, cplen, index.key1_len_);
+      *pKey2 = key2 = target.substr(cplen + index.key1_len_);
+    }
+    if (key1 > index.maxValue_) {
+      id = size_t(-1);
+      return 0;
+    }
+    else if (key1 < index.minValue_) {
+      rankselect1_idx = 0;
+      id = 0;
+      return 1;
+    }
+    else {
+      return 2;
     }
   }
   bool Next() override {
@@ -1374,6 +1408,7 @@ public:
     if (Map::is_unique::value) {
       return id;
     }
+
     // TODO
     assert(0);
     return 0;
@@ -1402,14 +1437,14 @@ public:
     if (Map::is_unique::value) {
       return prefix_.KeyCount();
     }
-    // TODO
-    return 0;
+    return map_.SuffixCount();
   }
   size_t TotalKeySize() const override {
-    size_t size = prefix_.TotalKeySize();
-    size += NumKeys() * common_.size();
-    // TODO
-    return 0;
+    size_t size = NumKeys() * common_.size();
+    size += prefix_.TotalKeySize();
+    size += map_.TotalKeySize();
+    size += suffix_.TotalKeySize();
+    return size;
   }
   fstring Memory() const override {
     return fstring();
@@ -1479,6 +1514,9 @@ using composite_index_detail::CompositeIndexFactory;
   TerarkIndexRegisterWithFactory(Name, Factory, ##__VA_ARGS__)
 
 
+////////////////////////////////////////////////////////////////////////////////
+// Impls
+////////////////////////////////////////////////////////////////////////////////
 
 template<class RankSelect>
 struct CompositeIndexUintPrefix : public composite_index_detail::SerializationBase {
@@ -1680,6 +1718,14 @@ struct CompositeIndexMap : public composite_index_detail::SerializationBase {
   }
   RankSelect rank_select;
 
+  size_t SuffixCount() const {
+    return rank_select.size();
+  }
+
+  size_t TotalKeySize() const {
+    return rank_select.mem_size();
+  }
+
   bool Load(fstring mem) override {
     return false;
   }
@@ -1702,6 +1748,14 @@ struct CompositeIndexMap<rank_select_allone> : public composite_index_detail::Se
   }
   rank_select_allone rank_select;
 
+  size_t SuffixCount() const {
+    return rank_select.size();
+  }
+
+  size_t TotalKeySize() const {
+    return rank_select.mem_size();
+  }
+
   bool Load(fstring mem) override {
     return false;
   }
@@ -1718,6 +1772,18 @@ struct CompositeIndexEmptySuffix : public composite_index_detail::SerializationB
     delete base;
   }
 
+  size_t TotalKeySize() const {
+    return 0;
+  }
+
+  bool Find(fstring another) const {
+    return false;
+  }
+
+  size_t Seek() const {
+    return size_t(-1);
+  }
+
   bool Load(fstring mem) override {
     return false;
   }
@@ -1725,6 +1791,42 @@ struct CompositeIndexEmptySuffix : public composite_index_detail::SerializationB
   }
 };
 
+struct CompositeIndexDynamicStrSuffix : public composite_index_detail::SerializationBase {
+  typedef void IteratorStorage;
+
+  CompositeIndexDynamicStrSuffix() = default;
+  CompositeIndexDynamicStrSuffix(CompositeIndexDynamicStrSuffix&&) = default;
+  CompositeIndexDynamicStrSuffix(SerializationBase* base) {
+    working_state = WorkingState::UserMemory;
+    delete base;
+  }
+  SortedStrVec str_pool_;
+
+  size_t TotalKeySize() const {
+    return str_pool_.mem_size();
+  }
+
+  size_t Find(fstring key) const {
+    size_t id = str_pool_.lower_bound(key);
+    if (str_pool_[id] != key) {
+      return size_t(-1);
+    }
+    return id;
+  }
+
+  size_t Seek(fstring key) const {
+    return -1;
+  }
+
+  bool Load(fstring mem) override {
+    return false;
+  }
+  void Save(std::function<void(void*, size_t)> append) const override {
+  }
+};
+
+////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
 
 template<class RankSelect>
 composite_index_detail::SerializationBase*
@@ -1926,7 +2028,7 @@ public:
   }
   int compare(size_t idx, fstring another) const {
     assert(idx < container_.size());
-    byte_t arr[8] = { 0 };
+    alignas(8) byte_t arr[8] = { 0 };
     copy_to(idx, arr);
     fstring me(arr, arr + key_len_);
     return fstring_func::compare3()(me, another);
