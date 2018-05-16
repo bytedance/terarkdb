@@ -1148,7 +1148,7 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   if (tzto_.warmUpIndexOnOpen) {
     MmapWarmUp(fstringOf(indexBlock.data));
     if (!tzto_.warmUpValueOnOpen) {
-      for (fstring block : subReader_.store_->get_index_blocks()) {
+      for (fstring block : subReader_.store_->get_meta_blocks()) {
         MmapWarmUp(block);
       }
     }
@@ -1158,7 +1158,9 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   } else {
     //MmapColdize(subReader_.store_->get_mmap());
     if (tzto_.adviseRandomRead || ioptions.advise_random_on_open) {
-      MmapAdviseRandom(subReader_.store_->get_mmap());
+      for (fstring block : subReader_.store_->get_data_blocks()) {
+        MmapAdviseRandom(block);
+      }
     }
   }
   long long t1 = g_pf.now();
@@ -1742,7 +1744,7 @@ TerarkZipTableMultiReader::Open(RandomAccessFileReader* file, uint64_t file_size
       MmapWarmUp(fstringOf(valueDictBlock.data));
       for (size_t i = 0; i < subIndex_.GetSubCount(); ++i) {
         auto part = subIndex_.GetSubReader(i);
-        for (fstring block : part->store_->get_index_blocks()) {
+        for (fstring block : part->store_->get_meta_blocks()) {
           MmapWarmUp(block);
         }
       }
@@ -1753,7 +1755,12 @@ TerarkZipTableMultiReader::Open(RandomAccessFileReader* file, uint64_t file_size
   } else {
   //MmapColdize(fstring(file_data.data(), props->data_size));
     if (tzto_.adviseRandomRead || ioptions.advise_random_on_open) {
-      MmapAdviseRandom(file_data.data(), props->data_size);
+      for (size_t i = 0; i < subIndex_.GetSubCount(); ++i) {
+        auto part = subIndex_.GetSubReader(i);
+        for (fstring block : part->store_->get_data_blocks()) {
+          MmapAdviseRandom(block);
+        }
+      }
     }
   }
 
