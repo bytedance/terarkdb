@@ -817,6 +817,7 @@ Status TerarkZipTableBuilder::BuildStore(KeyValueStatus& kvs,
         kvs.valueFileEnd = newTmpZipStoreFileSize;
         assert((kvs.valueFileEnd - kvs.valueFileBegin) % 8 == 0);
       } else {
+        zbuilder->abandon();
         newTmpZipStoreFileSize = FileStream(tmpZipStoreFile_.fpath, "rb").fsize();
       }
       tmpZipStoreFileSize_ = newTmpZipStoreFileSize;
@@ -1162,6 +1163,9 @@ Status TerarkZipTableBuilder::ZipValueToFinish() {
       dictWaitHandle = LoadSample(zbuilder);
     }
     s = BuildStore(kvs, zbuilder.get(), BuildStoreSync);
+    if (!s.ok()) {
+      return s;
+    }
     if (zbuilder) {
       dzstat = zbuilder->getZipStat();
     }
@@ -1255,6 +1259,9 @@ Status TerarkZipTableBuilder::ZipValueToFinishMulti() {
     tmpDictFile.fpath.clear();
     t4 = g_pf.now();
   }
+  if (!s.ok()) {
+      return s;
+  }
   s = WaitBuildStore();
   if (!s.ok()) {
     return s;
@@ -1283,6 +1290,12 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
     target.append((const char*)&kvs.seqType, 8);
     second_pass_iter_->Seek(target);
   };
+#define ITER_MOVE_NEXT(it)                    \
+    do {                                      \
+      it->Next();                             \
+      if (!it->status().ok())                 \
+        return it->status();                  \
+    } while(0)
   if (kvs.valueFile.fp)
   {
     NativeDataInput<InputBuffer> input(&kvs.valueFile.fp);
@@ -1336,7 +1349,7 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
           if (veriftIter) {
             TERARK_RT_assert(readKey(seqType, true) == second_pass_iter_->key(), std::logic_error);
             TERARK_RT_assert(SliceOf(value) == second_pass_iter_->value(), std::logic_error);
-            second_pass_iter_->Next();
+            ITER_MOVE_NEXT(second_pass_iter_);
           }
         }
         else {
@@ -1353,7 +1366,7 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
             TERARK_RT_assert(readKey(seqType, true) == second_pass_iter_->key(), std::logic_error);
             TERARK_RT_assert(Slice((char*)value.data() + 7, value.size() - 7) ==
               second_pass_iter_->value(), std::logic_error);
-            second_pass_iter_->Next();
+            ITER_MOVE_NEXT(second_pass_iter_);
           }
         }
       }
@@ -1373,7 +1386,7 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
             TERARK_RT_assert(readKey(seqType, j == 0) == second_pass_iter_->key(), std::logic_error);
             TERARK_RT_assert(Slice((char*)value.data() + oldSize, value.size() - oldSize) ==
               second_pass_iter_->value(), std::logic_error);
-            second_pass_iter_->Next();
+            ITER_MOVE_NEXT(second_pass_iter_);
           }
           if (j + 1 < oneSeqLen) {
             ((ZipValueMultiValue*)value.data())->offsets[j + 1] = value.size() - headerSize;
@@ -1400,12 +1413,6 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
     auto dumpKeyValueFunc = [&](const ParsedInternalKey& ikey, const Slice& value) {
       fprintf(tmpDumpFile_.fp(), "DEBUG: 2nd pass => %s / %s \n", ikey.DebugString(true).c_str(), value.ToString(true).c_str());
     };
-#define ITER_MOVE_NEXT(it)                    \
-    do {                                      \
-      it->Next();                             \
-      if (!it->status().ok())                 \
-        return it->status();                  \
-    } while(0)
 
     for (size_t recId = 0; recId < kvs.key.m_cnt_sum ; recId++) {
       value.erase_all();
