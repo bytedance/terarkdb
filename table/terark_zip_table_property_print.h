@@ -11,7 +11,6 @@
   M_NumFmt(minDictZipValueSize      , "%zd");
   M_NumFmt(keyPrefixLen             , "%zd");
   M_NumFmt(debugLevel               , "%d");
-  M_Boolea(adviseRandomRead);
   M_Boolea(enableCompressionProbe);
   M_Boolea(useSuffixArrayLocalMatch);
   M_Boolea(warmUpIndexOnOpen);

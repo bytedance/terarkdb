@@ -1154,10 +1154,12 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
     }
   }
   if (tzto_.warmUpValueOnOpen && !subReader_.storeUsePread_) {
-    MmapWarmUp(subReader_.store_->get_mmap());
+    for (fstring block : subReader_.store_->get_data_blocks()) {
+      MmapWarmUp(block);
+    }
   } else {
     //MmapColdize(subReader_.store_->get_mmap());
-    if (tzto_.adviseRandomRead || ioptions.advise_random_on_open) {
+    if (ioptions.advise_random_on_open) {
       for (fstring block : subReader_.store_->get_data_blocks()) {
         MmapAdviseRandom(block);
       }
@@ -1751,10 +1753,15 @@ TerarkZipTableMultiReader::Open(RandomAccessFileReader* file, uint64_t file_size
     }
   }
   if (tzto_.warmUpValueOnOpen) {
-    MmapWarmUp(fstring(file_data.data(), props->data_size));
+    for (size_t i = 0; i < subIndex_.GetSubCount(); ++i) {
+      auto part = subIndex_.GetSubReader(i);
+      for (fstring block : part->store_->get_data_blocks()) {
+        MmapWarmUp(block);
+      }
+    }
   } else {
   //MmapColdize(fstring(file_data.data(), props->data_size));
-    if (tzto_.adviseRandomRead || ioptions.advise_random_on_open) {
+    if (ioptions.advise_random_on_open) {
       for (size_t i = 0; i < subIndex_.GetSubCount(); ++i) {
         auto part = subIndex_.GetSubReader(i);
         for (fstring block : part->store_->get_data_blocks()) {

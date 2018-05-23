@@ -59,7 +59,7 @@ struct TerarkZipTableOptions {
   /// 2 : verify 2nd pass iter keys & values
   /// 3 : dump 1st & 2nd pass data to file
   signed char   debugLevel               = 0;
-  bool          adviseRandomRead         = true;
+  bool          reserveBool              = false;
   unsigned char indexNestScale           = 8;
   bool          enableCompressionProbe   = true;
   bool          useSuffixArrayLocalMatch = false;
