@@ -96,6 +96,7 @@ void TerarkZipAutoConfigForBulkLoad(struct TerarkZipTableOptions& tzo,
   dbo.create_if_missing = true;
   dbo.allow_concurrent_memtable_write = false;
   dbo.allow_mmap_reads = true;
+  dbo.allow_mmap_populate = false;
   dbo.max_background_flushes = 2;
   dbo.max_subcompactions = 1; // no sub compactions
   dbo.new_table_reader_for_compaction_inputs = false;
@@ -125,6 +126,7 @@ TerarkZipAutoConfigForOnlineDB_DBOptions(struct DBOptions& dbo, size_t cpuNum)
   }
   dbo.create_if_missing = true;
   dbo.allow_mmap_reads = true;
+  dbo.allow_mmap_populate = true;
   dbo.max_background_flushes = 2;
   dbo.max_subcompactions = 1; // no sub compactions
   dbo.base_background_compactions = 3;
@@ -340,6 +342,7 @@ void TerarkZipDBOptionsFromEnv(DBOptions& dbo) {
   MyGetInt(dbo,  max_background_compactions, 5);
   MyGetInt(dbo,  max_background_flushes    , 3);
   MyGetInt(dbo,  max_subcompactions        , 1);
+  MyGetBool(dbo, allow_mmap_populate       , false);
 
   dbo.env->SetBackgroundThreads(dbo.max_background_compactions, rocksdb::Env::LOW);
   dbo.env->SetBackgroundThreads(dbo.max_background_flushes    , rocksdb::Env::HIGH);
