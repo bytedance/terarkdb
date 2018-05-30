@@ -780,7 +780,7 @@ TerarkZipTableFactory::NewTableBuilder(
 #if 1
   INFO(table_builder_options.ioptions.info_log
     , "nth_newtable{ terark = %3zd fallback = %3zd } curlevel = %d minlevel = %d numlevel = %d fallback = %p\n"
-    , nth_new_terark_table_, nth_new_fallback_table_, curlevel, minlevel, numlevel, fallback_factory_
+    , nth_new_terark_table_, nth_new_fallback_table_, curlevel, minlevel, numlevel, fallback_factory_.get()
   );
 #endif
   if (0 == nth_new_terark_table_) {
