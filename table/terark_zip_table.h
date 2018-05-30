@@ -12,6 +12,7 @@
 
 #include <string>
 #include <vector>
+#include <memory>
 #include <stdio.h>
 
 
@@ -146,10 +147,13 @@ void
 TerarkZipMultiCFOptionsFromEnv(const struct DBOptions& db_options,
       const std::vector<struct ColumnFamilyDescriptor>& cfvec);
 
-///@param fallback take ownership of fallback
 class TableFactory*
 NewTerarkZipTableFactory(const TerarkZipTableOptions&,
-                         class TableFactory* fallback);
+                         std::shared_ptr<class TableFactory> fallback);
+
+std::shared_ptr<class TableFactory>
+SingleTerarkZipTableFactory(const TerarkZipTableOptions&,
+                            std::shared_ptr<class TableFactory> fallback);
 
 bool TerarkZipTablePrintCacheStat(const class TableFactory*, FILE*);
 

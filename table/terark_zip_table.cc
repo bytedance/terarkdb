@@ -545,9 +545,9 @@ void TerarkZipMultiOffsetInfo::risk_release_ownership() {
   prefixSet_.risk_release_ownership();
 }
 
-class TableFactory*
-  NewTerarkZipTableFactory(const TerarkZipTableOptions& tzto,
-    class TableFactory* fallback) {
+TableFactory*
+NewTerarkZipTableFactory(const TerarkZipTableOptions& tzto,
+                         std::shared_ptr<TableFactory> fallback) {
   TerarkZipTableFactory* factory = new TerarkZipTableFactory(tzto, fallback);
   if (tzto.debugLevel < 0) {
     STD_INFO("NewTerarkZipTableFactory(\n%s)\n",
@@ -576,6 +576,14 @@ class TableFactory*
   }
   license.print_error(license_file.c_str(), true, nullptr);
 #endif // TerocksPrivateCode
+  return factory;
+}
+
+std::shared_ptr<TableFactory>
+SingleTerarkZipTableFactory(const TerarkZipTableOptions& tzto,
+                            std::shared_ptr<TableFactory> fallback) {
+  static std::shared_ptr<TableFactory> factory(
+      NewTerarkZipTableFactory(tzto, fallback));
   return factory;
 }
 
@@ -615,7 +623,8 @@ size_t GetFixedPrefixLen(const SliceTransform* tr) {
 }
 
 TerarkZipTableFactory::TerarkZipTableFactory(
-    const TerarkZipTableOptions& tzto, TableFactory* fallback)
+    const TerarkZipTableOptions& tzto,
+    std::shared_ptr<TableFactory> fallback)
 : table_options_(tzto), fallback_factory_(fallback) {
     adaptive_factory_ = NewAdaptiveTableFactory();
     if (tzto.minPreadLen >= 0 && tzto.cacheCapacityBytes) {
@@ -625,7 +634,6 @@ TerarkZipTableFactory::TerarkZipTableFactory(
 }
 
 TerarkZipTableFactory::~TerarkZipTableFactory() {
-    delete fallback_factory_;
     delete adaptive_factory_;
 }
 
@@ -891,7 +899,7 @@ const {
   return Status::OK();
 }
 
-bool TerarkZipTablePrintCacheStat(const TableFactory* factory, FILE* fp) {
+bool TerarkZipTablePrintCacheStat(TableFactory* factory, FILE* fp) {
   auto tztf = dynamic_cast<const TerarkZipTableFactory*>(factory);
   if (tztf) {
     if (tztf->cache()) {

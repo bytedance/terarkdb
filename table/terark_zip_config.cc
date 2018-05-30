@@ -76,6 +76,8 @@ void TerarkZipAutoConfigForBulkLoad(struct TerarkZipTableOptions& tzo,
   tzo.smallTaskMemory = memBytesLimit / 16;
   tzo.indexNestLevel = 3;
 
+  cfo.table_factory = SingleTerarkZipTableFactory(tzo,
+      std::shared_ptr<TableFactory>(NewAdaptiveTableFactory()));
   cfo.write_buffer_size = tzo.smallTaskMemory;
   cfo.num_levels = 7;
   cfo.max_write_buffer_number = 6;
@@ -278,7 +280,8 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo) {
 
   tzo.singleIndexMemLimit = std::min<size_t>(tzo.singleIndexMemLimit, 0x1E0000000);
 
-  cfo.table_factory.reset(NewTerarkZipTableFactory(tzo, NewAdaptiveTableFactory()));
+  cfo.table_factory = SingleTerarkZipTableFactory(tzo,
+    std::shared_ptr<TableFactory>(NewAdaptiveTableFactory()));
   const char* compaction_style = "Universal";
   if (const char* env = getenv("TerarkZipTable_compaction_style")) {
     compaction_style = env;

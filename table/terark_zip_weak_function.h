@@ -47,7 +47,12 @@ TerarkZipAutoConfigForOnlineDB_CFOptions(struct TerarkZipTableOptions& tzo,
 class TableFactory*
 __attribute__((weak))
 NewTerarkZipTableFactory(const TerarkZipTableOptions&,
-                         class TableFactory* fallback);
+                         std::shared_ptr<class TableFactory> fallback);
+
+std::shared_ptr<class TableFactory>
+__attribute__((weak))
+SingleTerarkZipTableFactory(const TerarkZipTableOptions&,
+                            std::shared_ptr<class TableFactory> fallback);
 
 
 bool
