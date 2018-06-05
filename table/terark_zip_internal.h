@@ -71,6 +71,7 @@ extern const std::string kTerarkEmptyTableKey;
 extern const std::string kTerarkZipTableExtendedBlock;
 #endif // TerocksPrivateCode
 extern const std::string kTerarkZipTableBuildTimestamp;
+extern const std::string kTerarkZipTableDictInfo;
 
 template<class ByteArray>
 inline Slice SliceOf(const ByteArray& ba) {

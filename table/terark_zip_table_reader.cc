@@ -9,6 +9,7 @@
 // terark headers
 #include <terark/lcast.hpp>
 #include <terark/util/crc.hpp>
+#include <terark/util/hugepage.hpp>
 
 #ifndef _MSC_VER
 # include <sys/mman.h>
@@ -18,6 +19,8 @@
 
 // for isChecksumVerifyEnabled()
 #include <terark/zbs/blob_store_file_header.hpp>
+// third party
+#include <zstd/zstd.h>
 
 namespace {
 using namespace rocksdb;
@@ -117,7 +120,6 @@ static void MmapWarmUp(const Vec& uv) {
   MmapWarmUpBytes(uv.data(), uv.mem_size());
 }
 
-/*
 static void MmapColdizeBytes(const void* addr, size_t len) {
   size_t low = terark::align_up(size_t(addr), 4096);
   size_t hig = terark::align_down(size_t(addr) + len, 4096);
@@ -133,8 +135,6 @@ static void MmapColdizeBytes(const void* addr, size_t len) {
 static void MmapColdize(fstring mem) {
   MmapColdizeBytes(mem.data(), mem.size());
 }
-*/
-/*
 static void MmapColdize(Slice mem) {
   MmapColdizeBytes(mem.data(), mem.size());
 }
@@ -142,7 +142,33 @@ template<class Vec>
 static void MmapColdize(const Vec& uv) {
   MmapColdizeBytes(uv.data(), uv.mem_size());
 }
-*/
+
+Status UnzipDict(const TableProperties& table_properties, fstring dict, valvec<byte_t>* output_dict) {
+  auto find = table_properties.user_collected_properties.find(kTerarkZipTableDictInfo);
+  if (find == table_properties.user_collected_properties.end()) {
+    return Status::OK();
+  }
+  const std::string& dictInfo = find->second;
+  output_dict->clear();
+  if (dictInfo.empty()) {
+    return Status::OK();
+  }
+  if (!fstring(dictInfo).startsWith("ZSTD_")) {
+    return Status::Corruption("Load global dict error", "unsupported dict format");
+  }
+  unsigned long long raw_size = ZSTD_getDecompressedSize(dict.data(), dict.size());
+  if (raw_size == 0) {
+    return Status::Corruption("Load global dict error", "zstd get raw size fail");
+  }
+  use_hugepage_resize_no_init(output_dict, raw_size);
+  size_t size = ZSTD_decompress(output_dict->data(), raw_size, dict.data(), dict.size());
+  if (ZSTD_isError(size)) {
+    return Status::Corruption("Load global dict ZSTD error", ZSTD_getErrorName(size));
+  }
+  MmapColdize(dict);
+  return Status::OK();
+}
+
 
 static void MmapAdviseRandom(const void* addr, size_t len) {
   size_t low = terark::align_up(size_t(addr), 4096);
@@ -1089,6 +1115,12 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   UpdateCollectInfo(table_factory_, &tzto_, props, file_size);
   s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber, ioptions,
     kTerarkZipTableValueDictBlock, &valueDictBlock);
+  if (s.ok()) {
+    s = UnzipDict(*props, fstringOf(valueDictBlock.data), &dict_);
+    if (!s.ok()) {
+      return s;
+    }
+  }
   // PlainBlobStore & MixedLenBlobStore no dict
   s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber, ioptions,
     kTerarkZipTableIndexBlock, &indexBlock);
@@ -1116,7 +1148,7 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   try {
     subReader_.store_.reset(AbstractBlobStore::load_from_user_memory(
       fstring(file_data.data(), props->data_size),
-      getVerifyDict(valueDictBlock.data)
+      getVerifyDict(dict_.empty() ? valueDictBlock.data : SliceOf(dict_))
     ));
   }
   catch (const BadCrc32cException& ex) {
@@ -1705,6 +1737,12 @@ TerarkZipTableMultiReader::Open(RandomAccessFileReader* file, uint64_t file_size
   }
   s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber, ioptions,
     kTerarkZipTableValueDictBlock, &valueDictBlock);
+  if (s.ok()) {
+    s = UnzipDict(*props, fstringOf(valueDictBlock.data), &dict_);
+    if (!s.ok()) {
+      return s;
+    }
+  }
   s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber, ioptions,
     kTerarkZipTableIndexBlock, &indexBlock);
   if (!s.ok()) {
@@ -1727,7 +1765,7 @@ TerarkZipTableMultiReader::Open(RandomAccessFileReader* file, uint64_t file_size
   s = subIndex_.Init(fstringOf(offsetBlock.data)
     , fstringOf(indexBlock.data)
     , fstring(file_data.data(), props->data_size)
-    , getVerifyDict(valueDictBlock.data)
+    , getVerifyDict(dict_.empty() ? valueDictBlock.data : SliceOf(dict_))
     , fstringOf(zValueTypeBlock.data)
     , fstringOf(commonPrefixBlock.data)
     , tzto_.minPreadLen

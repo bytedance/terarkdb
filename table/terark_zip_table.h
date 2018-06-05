@@ -107,7 +107,8 @@ struct TerarkZipTableOptions {
   int    minPreadLen         = -1;
   int    cacheShards         = 17; // to reduce lock competition
   size_t cacheCapacityBytes  = 0;  // non-zero implies direct io read
-  char   reserveBytes[24]    = {};
+  bool   disableZipDict      = false;
+  char   reserveBytes[23]    = {};
 };
 
 void TerarkZipDeleteTempFiles(const std::string& tmpPath);
