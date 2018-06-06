@@ -135,9 +135,9 @@ static void MmapColdizeBytes(const void* addr, size_t len) {
 static void MmapColdize(fstring mem) {
   MmapColdizeBytes(mem.data(), mem.size());
 }
-static void MmapColdize(Slice mem) {
-  MmapColdizeBytes(mem.data(), mem.size());
-}
+//static void MmapColdize(Slice mem) {
+//  MmapColdizeBytes(mem.data(), mem.size());
+//}
 template<class Vec>
 static void MmapColdize(const Vec& uv) {
   MmapColdizeBytes(uv.data(), uv.mem_size());
