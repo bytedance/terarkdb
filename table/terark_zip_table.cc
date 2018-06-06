@@ -147,6 +147,7 @@ static const std::string g_szTerarkPublikKey =
 #endif // TerocksPrivateCode
 const std::string kTerarkZipTableBuildTimestamp = "terark.build.timestamp";
 const std::string kTerarkZipTableDictInfo = "terark.build.dict_info";
+const std::string kTerarkZipTableDictSize = "terark.build.dict_size";
 const std::string kTerarkZipTableEstimateRatio = "terark.build.estimate_ratio";
 
 #if defined(TerocksPrivateCode)

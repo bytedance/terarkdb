@@ -240,6 +240,7 @@ Status ReadMetaBlockAdapte(RandomAccessFileReader* file,
 
 using terark::BadCrc32cException;
 using terark::byte_swap;
+using terark::lcast;
 using terark::AbstractBlobStore;
 
 class TerarkZipTableIndexIterator : public InternalIterator {
@@ -1116,12 +1117,15 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   UpdateCollectInfo(table_factory_, &tzto_, props, file_size);
   s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber, ioptions,
     kTerarkZipTableValueDictBlock, &valueDictBlock);
+  Slice dict = valueDictBlock.data;
   if (s.ok()) {
     s = DecompressDict(*props, fstringOf(valueDictBlock.data), &dict_);
     if (!s.ok()) {
       return s;
     }
+    dict = dict_.empty() ? valueDictBlock.data : SliceOf(dict_);
   }
+  props->user_collected_properties.emplace(kTerarkZipTableDictSize, lcast(dict.size()));
   // PlainBlobStore & MixedLenBlobStore no dict
   s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber, ioptions,
     kTerarkZipTableIndexBlock, &indexBlock);
@@ -1149,7 +1153,7 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   try {
     subReader_.store_.reset(AbstractBlobStore::load_from_user_memory(
       fstring(file_data.data(), props->data_size),
-      getVerifyDict(dict_.empty() ? valueDictBlock.data : SliceOf(dict_))
+      getVerifyDict(dict)
     ));
   }
   catch (const BadCrc32cException& ex) {
@@ -1738,12 +1742,15 @@ TerarkZipTableMultiReader::Open(RandomAccessFileReader* file, uint64_t file_size
   }
   s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber, ioptions,
     kTerarkZipTableValueDictBlock, &valueDictBlock);
+  Slice dict;
   if (s.ok()) {
     s = DecompressDict(*props, fstringOf(valueDictBlock.data), &dict_);
     if (!s.ok()) {
       return s;
     }
+    dict = dict_.empty() ? valueDictBlock.data : SliceOf(dict_);
   }
+  props->user_collected_properties.emplace(kTerarkZipTableDictSize, lcast(dict.size()));
   s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber, ioptions,
     kTerarkZipTableIndexBlock, &indexBlock);
   if (!s.ok()) {
@@ -1766,7 +1773,7 @@ TerarkZipTableMultiReader::Open(RandomAccessFileReader* file, uint64_t file_size
   s = subIndex_.Init(fstringOf(offsetBlock.data)
     , fstringOf(indexBlock.data)
     , fstring(file_data.data(), props->data_size)
-    , getVerifyDict(dict_.empty() ? valueDictBlock.data : SliceOf(dict_))
+    , getVerifyDict(dict)
     , fstringOf(zValueTypeBlock.data)
     , fstringOf(commonPrefixBlock.data)
     , tzto_.minPreadLen

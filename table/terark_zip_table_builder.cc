@@ -314,6 +314,7 @@ TableProperties TerarkZipTableBuilder::GetTableProperties() const {
     MyRocksTablePropertiesCollectorHack(collector.get(), offset_info_,
                                         ret.user_collected_properties, isReverseBytewiseOrder_);
   }
+  ret.user_collected_properties.emplace(kTerarkZipTableDictSize, lcast(dictSize_));
   return ret;
 }
 
@@ -870,16 +871,18 @@ Status TerarkZipTableBuilder::BuildStore(KeyValueStatus& kvs,
 
 std::future<Status>
 TerarkZipTableBuilder::CompressDict(fstring tmpDictFile, fstring dict,
-                                    std::string* info, long long* td2) {
+                                    std::string* info, long long* td) {
   if (table_options_.disableCompressDict) {
     return Async([=] {
+      long long tds = g_pf.now();
       FileStream(tmpDictFile, "wb+").ensureWrite(dict.data(), dict.size());
       info->clear();
-      *td2 = g_pf.now();
+      *td = g_pf.now() - tds;
       return Status::OK();
     });
   }
   return Async([=] {
+    long long tds = g_pf.now();
     FileStream(tmpDictFile, "wb+").chsize(dict.size());
     MmapWholeFile dictFile(tmpDictFile, true);
     size_t zstd_size = ZSTD_compress(dictFile.base, dictFile.size, dict.data(), dict.size(), 0);
@@ -893,7 +896,7 @@ TerarkZipTableBuilder::CompressDict(fstring tmpDictFile, fstring dict,
       *info = "ZSTD_";
       info->append(lcast(ZSTD_versionNumber()));
     }
-    *td2 = g_pf.now();
+    *td = g_pf.now() - tds;
     return Status::OK();
   });
 }
@@ -1181,9 +1184,8 @@ Status TerarkZipTableBuilder::ZipValueToFinish() {
   std::future<Status> dictWait;
   DictZipBlobStore::ZipStat dzstat;
   std::string dictInfo;
-  size_t dictSize = 0;
   uint64_t dictHash = 0;
-  long long t3, t4, td1, td2;
+  long long t3, t4, td;
   t3 = g_pf.now();
   Status s = WaitBuildStore();
   if (!s.ok()) {
@@ -1197,10 +1199,9 @@ Status TerarkZipTableBuilder::ZipValueToFinish() {
     if (zbuilder) {
       // prepareDict() will invalid zbuilder->getDictionary().memory()
       zbuilder->prepareDict();
-      td1 = g_pf.now();
-      dictWait = CompressDict(tmpDictFile, zbuilder->getDictionary().memory, &dictInfo, &td2);
-      dictSize = zbuilder->getDictionary().memory.size();
+      dictWait = CompressDict(tmpDictFile, zbuilder->getDictionary().memory, &dictInfo, &td);
       dictHash = zbuilder->getDictionary().xxhash;
+      dictSize_ = zbuilder->getDictionary().memory.size();
     }
     s = BuildStore(kvs, zbuilder.get(), BuildStoreSync);
     if (!s.ok()) {
@@ -1224,7 +1225,7 @@ Status TerarkZipTableBuilder::ZipValueToFinish() {
   else {
     tmpDictFile.fpath.clear();
     t4 = g_pf.now();
-    td1 = td2 = 0;
+    td = 1;
   }
   // wait for indexing complete, if indexing is slower than value compressing
   s = WaitBuildIndex();
@@ -1234,7 +1235,7 @@ Status TerarkZipTableBuilder::ZipValueToFinish() {
   if (tmpDumpFile_.isOpen()) {
     tmpDumpFile_.close();
   }
-  return WriteSSTFile(t3, t4, td2 - td1, tmpDictFile, dictInfo, dictSize, dictHash, dzstat);
+  return WriteSSTFile(t3, t4, td, tmpDictFile, dictInfo, dictHash, dzstat);
 }
 
 Status TerarkZipTableBuilder::ZipValueToFinishMulti() {
@@ -1246,11 +1247,10 @@ Status TerarkZipTableBuilder::ZipValueToFinishMulti() {
   std::unique_ptr<AbstractBlobStore> store;
   DictZipBlobStore::ZipStat dzstat;
   std::string dictInfo;
-  size_t dictSize = 0;
   uint64_t dictHash = 0;
   size_t dictRefCount = 0;
   Status s;
-  long long t3, t4, td1, td2;
+  long long t3, t4, td;
   t3 = g_pf.now();
   bool isUseDictZip = false;
   for (auto& kvs : histogram_) {
@@ -1271,9 +1271,9 @@ Status TerarkZipTableBuilder::ZipValueToFinishMulti() {
       assert(tmpZipStoreFileSize_ == 0);
       // build dict in this thread
       zbuilder->prepareDict();
-      dictWait = CompressDict(tmpDictFile, zbuilder->getDictionary().memory, &dictInfo, &td2);
-      dictSize = zbuilder->getDictionary().memory.size();
+      dictWait = CompressDict(tmpDictFile, zbuilder->getDictionary().memory, &dictInfo, &td);
       dictHash = zbuilder->getDictionary().xxhash;
+      dictSize_ = zbuilder->getDictionary().memory.size();
     }
     for (auto& kvs : histogram_) {
       if (kvs->isUseDictZip) {
@@ -1306,7 +1306,7 @@ Status TerarkZipTableBuilder::ZipValueToFinishMulti() {
   else {
     tmpDictFile.fpath.clear();
     t4 = g_pf.now();
-    td1 = td2 = 1;
+    td = 0;
   }
   s = WaitBuildStore();
   if (!s.ok()) {
@@ -1320,7 +1320,7 @@ Status TerarkZipTableBuilder::ZipValueToFinishMulti() {
   if (tmpDumpFile_.isOpen()) {
     tmpDumpFile_.close();
   }
-  return WriteSSTFileMulti(t3, t4, td2 - td1, tmpDictFile, dictInfo, dictSize, dictHash, dzstat);
+  return WriteSSTFileMulti(t3, t4, td, tmpDictFile, dictInfo, dictHash, dzstat);
 }
 
 Status
@@ -1595,12 +1595,12 @@ void TerarkZipTableBuilder::DoWriteAppend(const void* data, size_t size) {
 }
 
 Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4, long long td
-  , fstring tmpDictFile, const std::string& dictInfo, size_t dictSize, uint64_t dictHash
+  , fstring tmpDictFile, const std::string& dictInfo, uint64_t dictHash
   , const DictZipBlobStore::ZipStat& dzstat)
 {
   assert(histogram_.size() == 1);
   terark::MmapWholeFile dictMmap;
-  AbstractBlobStore::Dictionary dict(dictSize, dictHash);
+  AbstractBlobStore::Dictionary dict(dictSize_, dictHash);
   auto& kvs = *histogram_.front();
   terark::MmapWholeFile mmapIndexFile(tmpIndexFile_.fpath);
   terark::MmapWholeFile mmapStoreFile((kvs.isUseDictZip ? tmpZipStoreFile_ : tmpStoreFile_).fpath);
@@ -1717,18 +1717,18 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4, long long
     "    Get OrderMap time = %7.2f's, %8.3f'MB/sec (index lex order gen)\n"
     "  rebuild zvType time = %7.2f's, %8.3f'MB/sec\n"
     "  write SST data time = %7.2f's, %8.3f'MB/sec\n"
+    "   dict compress time = %7.2f's, %8.3f'MB/sec\n"
     "    z-dict build time = %7.2f's, sample length = %7.3f'MB, throughput = %6.3f'MB/sec\n"
-    "   dict compress time = %7.2f's,   zip  length = %7.3f'MB, throughput = %6.3f'MB/sec\n"
     "    zip my value time = %7.2f's, unzip  length = %7.3f'GB\n"
     "    zip my value throughput = %7.3f'MB/sec\n"
     "    zip pipeline throughput = %7.3f'MB/sec\n"
     "    entries = %zd  avg-key = %.2f  avg-zkey = %.2f  avg-val = %.2f  avg-zval = %.2f\n"
     "    usrkeys = %zd  avg-key = %.2f  avg-zkey = %.2f  avg-val = %.2f  avg-zval = %.2f\n"
     "    seq expand size = %zd  multi value expand size = %zd\n"
-    "    UnZipSize{ index =%9.4f GB  value =%9.4f GB   all =%9.4f GB }\n"
-    "    __ZipSize{ index =%9.4f GB  value =%9.4f GB   all =%9.4f GB }\n"
-    "    UnZip/Zip{ index =%9.4f     value =%9.4f      all =%9.4f    }\n"
-    "    Zip/UnZip{ index =%9.4f     value =%9.4f      all =%9.4f    }\n"
+    "    UnZipSize{ index =%9.4f GB  value =%9.4f GB  dict =%7.2f MB  all =%9.4f GB }\n"
+    "    __ZipSize{ index =%9.4f GB  value =%9.4f GB  dict =%7.2f MB  all =%9.4f GB }\n"
+    "    UnZip/Zip{ index =%9.4f     value =%9.4f     dict =%7.2f     all =%9.4f    }\n"
+    "    Zip/UnZip{ index =%9.4f     value =%9.4f     dict =%7.2f     all =%9.4f    }\n"
     "----------------------------\n"
     "    total value len =%14.6f GB     avg =%8.3f KB (by entry num)\n"
     "    total  key  len =%14.6f GB     avg =%8.3f KB\n"
@@ -1750,11 +1750,10 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4, long long
 
 , g_pf.sf(t7, t8), double(offset_) / g_pf.uf(t7, t8) // write SST data
 
+, g_pf.uf(td) / 1e6, dictSize_ / (g_pf.uf(td) + 1.0) // dict compress
+
 , dzstat.dictBuildTime, realsampleLenSum / 1e6 // z-dict build
 , realsampleLenSum / dzstat.dictBuildTime / 1e6
-
-, g_pf.uf(td) / 1e6, dictBlock.size() / 1e6 // dict compress
-, dictSize / (g_pf.uf(td) + 1.0) // mb(bytes / 1e6) / s(us / 1e6)
 
 , dzstat.dictZipTime, properties_.raw_value_size / 1e9 // zip my value
 , properties_.raw_value_size / dzstat.dictZipTime / 1e6
@@ -1774,16 +1773,24 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4, long long
 
 , seqExpandSize_, multiValueExpandSize_
 
-, kvs.key.m_total_key_len / 1e9, properties_.raw_value_size / 1e9, rawBytes / 1e9
+, kvs.key.m_total_key_len / 1e9
+, properties_.raw_value_size / 1e9
+, dictSize_ / 1e6
+, rawBytes / 1e9
 
-, properties_.index_size / 1e9, properties_.data_size / 1e9, offset_ / 1e9
+, properties_.index_size / 1e9
+, properties_.data_size / 1e9
+, dictBlock.size() / 1e6
+, offset_ / 1e9
 
 , double(kvs.key.m_total_key_len) / properties_.index_size
 , double(properties_.raw_value_size) / properties_.data_size
+, double(dictSize_) / (dictBlock.size() + 1)
 , double(rawBytes) / offset_
 
 , properties_.index_size / double(kvs.key.m_total_key_len)
 , properties_.data_size / double(properties_.raw_value_size)
+, dictBlock.size() / double(dictSize_ + 1)
 , offset_ / double(rawBytes)
 
 , g_sumValueLen / 1e9, g_sumValueLen / 1e3 / g_sumEntryNum
@@ -1798,11 +1805,11 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4, long long
 }
 
 Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4, long long td
-  , fstring tmpDictFile, const std::string& dictInfo, size_t dictSize, uint64_t dictHash
+  , fstring tmpDictFile, const std::string& dictInfo, uint64_t dictHash
   , const DictZipBlobStore::ZipStat& dzstat) {
   assert(histogram_.size() > 1);
   terark::MmapWholeFile dictMmap;
-  AbstractBlobStore::Dictionary dict(dictSize, dictHash);
+  AbstractBlobStore::Dictionary dict(dictSize_, dictHash);
   const size_t realsampleLenSum = dict.memory.size();
   long long rawBytes = properties_.raw_key_size + properties_.raw_value_size;
   long long t5 = g_pf.now();
@@ -1978,18 +1985,18 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4, long
     "    Get OrderMap time = %7.2f's, %8.3f'MB/sec (index lex order gen)\n"
     "  rebuild zvType time = %7.2f's, %8.3f'MB/sec\n"
     "  write SST data time = %7.2f's, %8.3f'MB/sec\n"
+    "   dict compress time = %7.2f's, %8.3f'MB/sec\n"
     "    z-dict build time = %7.2f's, sample length = %7.3f'MB, throughput = %6.3f'MB/sec\n"
-    "   dict compress time = %7.2f's,   zip  length = %7.3f'MB, throughput = %6.3f'MB/sec\n"
     "    zip my value time = %7.2f's, unzip  length = %7.3f'GB\n"
     "    zip my value throughput = %7.3f'MB/sec\n"
     "    zip pipeline throughput = %7.3f'MB/sec\n"
     "    entries = %zd  avg-key = %.2f  avg-zkey = %.2f  avg-val = %.2f  avg-zval = %.2f\n"
     "    usrkeys = %zd  avg-key = %.2f  avg-zkey = %.2f  avg-val = %.2f  avg-zval = %.2f\n"
     "    seq expand size = %zd  multi value expand size = %zd\n"
-    "    UnZipSize{ index =%9.4f GB  value =%9.4f GB   all =%9.4f GB }\n"
-    "    __ZipSize{ index =%9.4f GB  value =%9.4f GB   all =%9.4f GB }\n"
-    "    UnZip/Zip{ index =%9.4f     value =%9.4f      all =%9.4f    }\n"
-    "    Zip/UnZip{ index =%9.4f     value =%9.4f      all =%9.4f    }\n"
+    "    UnZipSize{ index =%9.4f GB  value =%9.4f GB  dict =%7.2f MB  all =%9.4f GB }\n"
+    "    __ZipSize{ index =%9.4f GB  value =%9.4f GB  dict =%7.2f MB  all =%9.4f GB }\n"
+    "    UnZip/Zip{ index =%9.4f     value =%9.4f     dict =%7.2f     all =%9.4f    }\n"
+    "    Zip/UnZip{ index =%9.4f     value =%9.4f     dict =%7.2f     all =%9.4f    }\n"
     "----------------------------\n"
     "    total value len =%14.6f GB     avg =%8.3f KB (by entry num)\n"
     "    total  key  len =%14.6f GB     avg =%8.3f KB\n"
@@ -2011,11 +2018,10 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4, long
 
 , g_pf.sf(t7, t8), double(offset_) / g_pf.uf(t7, t8) // write SST data
 
+, g_pf.uf(td) / 1e6, dictSize_ / (g_pf.uf(td) + 1.0) // dict compress
+
 , dzstat.dictBuildTime, realsampleLenSum / 1e6 // z-dict build
 , realsampleLenSum / dzstat.dictBuildTime / 1e6
-
-, g_pf.uf(td) / 1e6, dictBlock.size() / 1e6 // dict compress
-, dictSize / (g_pf.uf(td) + 1.0) // mb(bytes / 1e6) / s(us / 1e6)
 
 , dzstat.dictZipTime, properties_.raw_value_size / 1e9 // zip my value
 , properties_.raw_value_size / dzstat.dictZipTime / 1e6
@@ -2035,16 +2041,24 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4, long
 
 , seqExpandSize_, multiValueExpandSize_
 
-, sumKeyLen / 1e9, properties_.raw_value_size / 1e9, rawBytes / 1e9
+, sumKeyLen / 1e9
+, properties_.raw_value_size / 1e9
+, dictSize_ / 1e9
+, rawBytes / 1e9
 
-, properties_.index_size / 1e9, properties_.data_size / 1e9, offset_ / 1e9
+, properties_.index_size / 1e9
+, properties_.data_size / 1e9
+, dictBlock.size() / 1e9
+, offset_ / 1e9
 
 , double(sumKeyLen) / properties_.index_size
 , double(properties_.raw_value_size) / properties_.data_size
+, double(dictSize_) / (dictBlock.size() + 1)
 , double(rawBytes) / offset_
 
 , properties_.index_size / double(sumKeyLen)
 , properties_.data_size / double(properties_.raw_value_size)
+, dictBlock.size() / double(dictSize_ + 1)
 , offset_ / double(rawBytes)
 
 , g_sumValueLen / 1e9, g_sumValueLen / 1e3 / g_sumEntryNum

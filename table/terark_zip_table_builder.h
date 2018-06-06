@@ -129,7 +129,7 @@ private:
   };
   Status BuildStore(KeyValueStatus& kvs, DictZipBlobStore::ZipBuilder* zbuilder, uint64_t flag);
   std::future<Status> CompressDict(fstring tmpDictFile, fstring dict,
-                                   std::string* type, long long* td2);
+                                   std::string* type, long long* td);
   Status WaitBuildIndex();
   Status WaitBuildStore();
   struct BuildReorderParams {
@@ -162,11 +162,11 @@ private:
                     long long& t5, long long& t6, long long& t7);
   Status WriteSSTFile(long long t3, long long t4, long long td,
                       fstring tmpDictFile,
-                      const std::string& dictInfo, size_t dictSize, uint64_t dicthash,
+                      const std::string& dictInfo, uint64_t dicthash,
                       const DictZipBlobStore::ZipStat& dzstat);
   Status WriteSSTFileMulti(long long t3, long long t4, long long td,
                            fstring tmpDictFile,
-                           const std::string& dictType, size_t dictSize, uint64_t dicthash,
+                           const std::string& dictType, uint64_t dicthash,
                            const DictZipBlobStore::ZipStat& dzstat);
   Status WriteMetaData(const std::string& dictType,
                        std::initializer_list<std::pair<const std::string*, BlockHandle>> blocks);
@@ -206,6 +206,7 @@ private:
   WritableFileWriter* file_;
   uint64_t offset_ = 0;
   uint64_t estimateOffset_ = 0;
+  size_t dictSize_ = 0;
   float estimateRatio_ = 0;
   uint64_t zeroSeqCount_ = 0;
   size_t seqExpandSize_ = 0;
