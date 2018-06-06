@@ -128,7 +128,8 @@ private:
     BuildStoreSync = 2,
   };
   Status BuildStore(KeyValueStatus& kvs, DictZipBlobStore::ZipBuilder* zbuilder, uint64_t flag);
-  std::future<Status> SaveDict(fstring tmpDictFile, fstring dict, std::string* type);
+  std::future<Status> CompressDict(fstring tmpDictFile, fstring dict,
+                                   std::string* type, long long* td2);
   Status WaitBuildIndex();
   Status WaitBuildStore();
   struct BuildReorderParams {
@@ -159,11 +160,11 @@ private:
                     KeyValueStatus& kvs,
                     BlockHandle& dataBlock,
                     long long& t5, long long& t6, long long& t7);
-  Status WriteSSTFile(long long t3, long long t4,
+  Status WriteSSTFile(long long t3, long long t4, long long td,
                       fstring tmpDictFile,
                       const std::string& dictInfo, size_t dictSize, uint64_t dicthash,
                       const DictZipBlobStore::ZipStat& dzstat);
-  Status WriteSSTFileMulti(long long t3, long long t4,
+  Status WriteSSTFileMulti(long long t3, long long t4, long long td,
                            fstring tmpDictFile,
                            const std::string& dictType, size_t dictSize, uint64_t dicthash,
                            const DictZipBlobStore::ZipStat& dzstat);

@@ -143,7 +143,7 @@ static void MmapColdize(const Vec& uv) {
   MmapColdizeBytes(uv.data(), uv.mem_size());
 }
 
-Status UnzipDict(const TableProperties& table_properties, fstring dict, valvec<byte_t>* output_dict) {
+Status DecompressDict(const TableProperties& table_properties, fstring dict, valvec<byte_t>* output_dict) {
   auto find = table_properties.user_collected_properties.find(kTerarkZipTableDictInfo);
   if (find == table_properties.user_collected_properties.end()) {
     return Status::OK();
@@ -165,6 +165,7 @@ Status UnzipDict(const TableProperties& table_properties, fstring dict, valvec<b
   if (ZSTD_isError(size)) {
     return Status::Corruption("Load global dict ZSTD error", ZSTD_getErrorName(size));
   }
+  assert(size == raw_size);
   MmapColdize(dict);
   return Status::OK();
 }
@@ -1116,7 +1117,7 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber, ioptions,
     kTerarkZipTableValueDictBlock, &valueDictBlock);
   if (s.ok()) {
-    s = UnzipDict(*props, fstringOf(valueDictBlock.data), &dict_);
+    s = DecompressDict(*props, fstringOf(valueDictBlock.data), &dict_);
     if (!s.ok()) {
       return s;
     }
@@ -1738,7 +1739,7 @@ TerarkZipTableMultiReader::Open(RandomAccessFileReader* file, uint64_t file_size
   s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber, ioptions,
     kTerarkZipTableValueDictBlock, &valueDictBlock);
   if (s.ok()) {
-    s = UnzipDict(*props, fstringOf(valueDictBlock.data), &dict_);
+    s = DecompressDict(*props, fstringOf(valueDictBlock.data), &dict_);
     if (!s.ok()) {
       return s;
     }

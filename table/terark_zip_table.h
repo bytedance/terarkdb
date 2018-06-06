@@ -107,7 +107,7 @@ struct TerarkZipTableOptions {
   int    minPreadLen         = -1;
   int    cacheShards         = 17; // to reduce lock competition
   size_t cacheCapacityBytes  = 0;  // non-zero implies direct io read
-  bool   disableZipDict      = false;
+  bool   disableCompressDict = false;
   char   reserveBytes[23]    = {};
 };
 
