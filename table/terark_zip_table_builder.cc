@@ -1695,7 +1695,7 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4, long long
 #if defined(TerocksPrivateCode)
     { &kTerarkZipTableExtendedBlock                                , licenseHandle     },
 #endif // TerocksPrivateCode
-    { dict.memory.size() ? &kTerarkZipTableValueDictBlock : NULL   , dictBlock         },
+    { !dict.memory.empty() ? &kTerarkZipTableValueDictBlock : NULL , dictBlock         },
     { &kTerarkZipTableIndexBlock                                   , indexBlock        },
     { !zvTypeBlock.IsNull() ? &kTerarkZipTableValueTypeBlock : NULL, zvTypeBlock       },
     { &kTerarkZipTableCommonPrefixBlock                            , commonPrefixBlock },
@@ -1710,6 +1710,7 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4, long long
     g_sumUserKeyNum += kvs.key.m_cnt_sum;
     g_sumEntryNum += properties_.num_entries;
   }
+  size_t dictBlockSize = dict.memory.empty() ? 0 : dictBlock.size();
   INFO(ioptions_.info_log,
     "TerarkZipTableBuilder::Finish():this=%012p: second pass time =%8.2f's,%8.3f'MB/sec, value only(%4.1f%% of KV)\n"
     "   wait indexing time = %7.2f's,\n"
@@ -1780,17 +1781,17 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4, long long
 
 , properties_.index_size / 1e9
 , properties_.data_size / 1e9
-, dictBlock.size() / 1e6
+, dictBlockSize / 1e6
 , offset_ / 1e9
 
 , double(kvs.key.m_total_key_len) / properties_.index_size
 , double(properties_.raw_value_size) / properties_.data_size
-, double(dictSize_) / (dictBlock.size() + 1)
+, double(dictSize_) / std::max<size_t>(dictBlockSize, 1)
 , double(rawBytes) / offset_
 
 , properties_.index_size / double(kvs.key.m_total_key_len)
 , properties_.data_size / double(properties_.raw_value_size)
-, dictBlock.size() / double(dictSize_ + 1)
+, dictBlockSize / std::max<double>(dictSize_, 1)
 , offset_ / double(rawBytes)
 
 , g_sumValueLen / 1e9, g_sumValueLen / 1e3 / g_sumEntryNum
@@ -1960,15 +1961,16 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4, long
   properties_.num_data_blocks = numKeys;
   WriteMetaData(dictInfo, {
 #if defined(TerocksPrivateCode)
-    {&kTerarkZipTableExtendedBlock                                , licenseHandle     },
+    { &kTerarkZipTableExtendedBlock                                , licenseHandle     },
 #endif // TerocksPrivateCode
-    {!dict.memory.empty() ? &kTerarkZipTableValueDictBlock : NULL , dictBlock         },
-    {&kTerarkZipTableIndexBlock                                   , indexBlock        },
-    {!zvTypeBlock.IsNull() ? &kTerarkZipTableValueTypeBlock : NULL, zvTypeBlock       },
-    {&kTerarkZipTableOffsetBlock                                  , offsetBlock       },
-    {&kTerarkZipTableCommonPrefixBlock                            , commonPrefixBlock },
-    {!tombstoneBlock.IsNull() ? &kRangeDelBlock : NULL            , tombstoneBlock    },
+    { !dict.memory.empty() ? &kTerarkZipTableValueDictBlock : NULL , dictBlock         },
+    { &kTerarkZipTableIndexBlock                                   , indexBlock        },
+    { !zvTypeBlock.IsNull() ? &kTerarkZipTableValueTypeBlock : NULL, zvTypeBlock       },
+    { &kTerarkZipTableOffsetBlock                                  , offsetBlock       },
+    { &kTerarkZipTableCommonPrefixBlock                            , commonPrefixBlock },
+    { !tombstoneBlock.IsNull() ? &kRangeDelBlock : NULL            , tombstoneBlock    },
   });
+  size_t dictBlockSize = dict.memory.empty() ? 0 : dictBlock.size();
   long long t8 = g_pf.now();
   {
     std::unique_lock<std::mutex> lock(g_sumMutex);
@@ -2043,22 +2045,22 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4, long
 
 , sumKeyLen / 1e9
 , properties_.raw_value_size / 1e9
-, dictSize_ / 1e9
+, dictSize_ / 1e6
 , rawBytes / 1e9
 
 , properties_.index_size / 1e9
 , properties_.data_size / 1e9
-, dictBlock.size() / 1e9
+, dictBlockSize / 1e6
 , offset_ / 1e9
 
 , double(sumKeyLen) / properties_.index_size
 , double(properties_.raw_value_size) / properties_.data_size
-, double(dictSize_) / (dictBlock.size() + 1)
+, double(dictSize_) / std::max<double>(dictBlockSize, 1)
 , double(rawBytes) / offset_
 
 , properties_.index_size / double(sumKeyLen)
 , properties_.data_size / double(properties_.raw_value_size)
-, dictBlock.size() / double(dictSize_ + 1)
+, dictBlockSize / std::max<double>(dictSize_, 1)
 , offset_ / double(rawBytes)
 
 , g_sumValueLen / 1e9, g_sumValueLen / 1e3 / g_sumEntryNum
