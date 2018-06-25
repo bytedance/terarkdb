@@ -193,21 +193,53 @@ namespace {
 
         template<class Lock>
         class Iterator : public MemTableRep::Iterator {
-            mutable std::string buffer_;
+            typedef terark::PatriciaTrie::AccessToken token_t;
+            std::string buffer_;
             PTrieRep* rep_;
             std::unique_ptr<terark::ADFA_LexIterator> iter_;
+            std::aligned_storage<sizeof(token_t)>::type storage_;
+            token_t* token_;
             uintptr_t where_;
+            size_t num_entries_;
+
+            static constexpr size_t num_token_update = 1;   // should be 1024
 
             friend class PTrieRep;
 
             Iterator(PTrieRep* rep)
                 : rep_(rep)
-                , iter_(rep_->trie_.adfa_make_iter())
-                , where_(node_t::nil_sentinel) {
+                , token_(nullptr)
+                , where_(node_t::nil_sentinel)
+                , num_entries_(0) {
+            }
+
+            void UpdateIterator(bool keep) {
+                if (token_ != nullptr &&
+                    rep_->num_entries_ - num_entries_ < num_token_update) {
+                    return;
+                }
+                if (token_ != nullptr) {
+                    token_->~AccessToken();
+                }
+                token_ = new(&storage_) token_t(&rep_->trie_);
+                num_entries_ = rep_->num_entries_;
+                iter_.reset(rep_->trie_.adfa_make_iter());
+                if (keep) {
+                    Slice internal_key = GetLengthPrefixedSlice(buffer_.data());
+                    terark::fstring find_key(internal_key.data(), internal_key.size() - 8);
+                    bool ok = iter_->seek_lower_bound(find_key);
+                    TERARK_UNUSED_VAR(ok);
+                    assert(ok);
+                    assert(iter_->word() == find_key);
+                }
             }
 
         public:
-            virtual ~Iterator() override {}
+            virtual ~Iterator() override {
+                if (token_ != nullptr) {
+                    token_->~AccessToken();
+                }
+            }
 
             // Returns true iff the iterator is positioned at a valid node.
             virtual bool Valid() const override {
@@ -217,30 +249,41 @@ namespace {
             // Returns the key at the current position.
             // REQUIRES: Valid()
             virtual const char *key() const override {
-                Lock _lock(&rep_->mutex_);
-                return build_key(iter_->word(), where_, &buffer_);
+                return buffer_.data();
             }
 
             // Advances to the next position.
             // REQUIRES: Valid()
             virtual void Next() override {
                 Lock _lock(&rep_->mutex_);
+                UpdateIterator(true);
                 where_ = threaded_rbtree_move_next(where_, deref_node_t());
-                if (where_ == node_t::nil_sentinel && iter_->incr()) {
+                if (where_ == node_t::nil_sentinel) {
+                    if (!iter_->incr()) {
+                        return;
+                    }
                     root_t* root = (root_t*)rep_->trie_.get_valptr(iter_->word_state());
                     where_ = root->get_most_left(deref_node_t());
+                    assert(where_ != node_t::nil_sentinel);
                 }
+                build_key(iter_->word(), where_, &buffer_);
             }
 
             // Advances to the previous position.
             // REQUIRES: Valid()
             virtual void Prev() override {
                 Lock _lock(&rep_->mutex_);
+                UpdateIterator(true);
                 where_ = threaded_rbtree_move_prev(where_, deref_node_t());
-                if (where_ == node_t::nil_sentinel && iter_->decr()) {
+                if (where_ == node_t::nil_sentinel) {
+                    if (!iter_->decr()) {
+                        return;
+                    }
                     root_t* root = (root_t*)rep_->trie_.get_valptr(iter_->word_state());
                     where_ = root->get_most_right(deref_node_t());
+                    assert(where_ != node_t::nil_sentinel);
                 }
+                build_key(iter_->word(), where_, &buffer_);
             }
 
             // Advance to the first entry with a key >= target
@@ -260,6 +303,7 @@ namespace {
                 uint64_t tag = DecodeFixed64(find_key.end());
 
                 Lock _lock(&rep_->mutex_);
+                UpdateIterator(false);
                 if (!iter_->seek_lower_bound(find_key)) {
                     where_ = node_t::nil_sentinel;
                     return;
@@ -269,12 +313,13 @@ namespace {
                                                      deref_key_t(), key_compare_t());
                 if (where_ == node_t::nil_sentinel) {
                     if (!iter_->incr()) {
-                        where_ = node_t::nil_sentinel;
                         return;
                     }
                     root = (root_t*)rep_->trie_.get_valptr(iter_->word_state());
                     where_ = root->get_most_left(deref_node_t());
+                    assert(where_ != node_t::nil_sentinel);
                 }
+                build_key(iter_->word(), where_, &buffer_);
             }
 
             // retreat to the first entry with a key <= target
@@ -294,6 +339,7 @@ namespace {
                 uint64_t tag = DecodeFixed64(find_key.end());
 
                 Lock _lock(&rep_->mutex_);
+                UpdateIterator(false);
                 if (!iter_->seek_rev_lower_bound(find_key)) {
                     where_ = node_t::nil_sentinel;
                     return;
@@ -303,36 +349,51 @@ namespace {
                                                              deref_key_t(), key_compare_t());
                 if (where_ == node_t::nil_sentinel) {
                     if (!iter_->decr()) {
-                        where_ = node_t::nil_sentinel;
                         return;
                     }
                     root = (root_t*)rep_->trie_.get_valptr(iter_->word_state());
                     where_ = root->get_most_right(deref_node_t());
+                    assert(where_ != node_t::nil_sentinel);
                 }
+                build_key(iter_->word(), where_, &buffer_);
             }
 
             // Position at the first entry in list.
             // Final state of iterator is Valid() iff list is not empty.
             virtual void SeekToFirst() override {
-                Lock _lock(&rep_->mutex_);
-                if (iter_->seek_begin()) {
-                    root_t* root = (root_t*)rep_->trie_.get_valptr(iter_->word_state());
-                    where_ = root->get_most_left(deref_node_t());
-                } else {
+                if (rep_->num_entries_.load() == 0) {
                     where_ = node_t::nil_sentinel;
+                    return;
                 }
+                Lock _lock(&rep_->mutex_);
+                UpdateIterator(false);
+                if (!iter_->seek_begin()) {
+                    where_ = node_t::nil_sentinel;
+                    return;
+                }
+                root_t* root = (root_t*)rep_->trie_.get_valptr(iter_->word_state());
+                where_ = root->get_most_left(deref_node_t());
+                assert(where_ != node_t::nil_sentinel);
+                build_key(iter_->word(), where_, &buffer_);
             }
 
             // Position at the last entry in list.
             // Final state of iterator is Valid() iff list is not empty.
             virtual void SeekToLast() override {
-                Lock _lock(&rep_->mutex_);
-                if (iter_->seek_end() && iter_->decr()) {
-                    root_t* root = (root_t*)rep_->trie_.get_valptr(iter_->word_state());
-                    where_ = root->get_most_right(deref_node_t());
-                } else {
+                if (rep_->num_entries_.load() == 0) {
                     where_ = node_t::nil_sentinel;
+                    return;
                 }
+                Lock _lock(&rep_->mutex_);
+                UpdateIterator(false);
+                if (!iter_->seek_end()) {
+                    where_ = node_t::nil_sentinel;
+                    return;
+                }
+                root_t* root = (root_t*)rep_->trie_.get_valptr(iter_->word_state());
+                where_ = root->get_most_right(deref_node_t());
+                assert(where_ != node_t::nil_sentinel);
+                build_key(iter_->word(), where_, &buffer_);
             }
         };
         virtual MemTableRep::Iterator *GetIterator(Arena *arena = nullptr) override {
@@ -352,13 +413,22 @@ namespace {
 
     class PTrieMemtableRepFactory : public MemTableRepFactory {
     public:
+        PTrieMemtableRepFactory(std::shared_ptr<class MemTableRepFactory> fallback)
+            : fallback_(fallback) {}
         virtual ~PTrieMemtableRepFactory(){}
 
         using MemTableRepFactory::CreateMemTableRep;
         virtual MemTableRep *CreateMemTableRep(
                 const MemTableRep::KeyComparator &compare, Allocator *allocator,
                 const SliceTransform *transform, Logger *logger) override {
-          return new PTrieRep(compare, allocator, transform);
+            assert(dynamic_cast<const MemTable::KeyComparator *>(&compare) != nullptr);
+            auto key_comparator = static_cast<const MemTable::KeyComparator *>(&compare);
+            auto user_comparator = key_comparator->comparator.user_comparator();
+            if (strcmp(user_comparator->Name(), BytewiseComparator()->Name()) == 0) {
+                return new PTrieRep(compare, allocator, transform);
+            } else {
+                return fallback_->CreateMemTableRep(compare, allocator, transform, logger);
+            }
         }
 
         virtual const char *Name() const override {
@@ -368,12 +438,17 @@ namespace {
         virtual bool IsInsertConcurrentlySupported() const override {
             return false;
         }
+
+    private:
+        std::shared_ptr<class MemTableRepFactory> fallback_;
     };
 }
 
-MemTableRepFactory *NewPatriciaTrieRepFactory()
-{
-  return new PTrieMemtableRepFactory();
+MemTableRepFactory *NewPatriciaTrieRepFactory(std::shared_ptr<class MemTableRepFactory> fallback) {
+    if (!fallback) {
+        fallback.reset(new SkipListFactory());
+    }
+    return new PTrieMemtableRepFactory(fallback);
 }
 
 } // namespace rocksdb

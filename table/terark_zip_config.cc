@@ -282,6 +282,7 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo) {
 
   tzo.singleIndexMemLimit = std::min<size_t>(tzo.singleIndexMemLimit, 0x1E0000000);
 
+  cfo.memtable_factory.reset(NewPatriciaTrieRepFactory());
   cfo.table_factory = SingleTerarkZipTableFactory(tzo,
     std::shared_ptr<TableFactory>(NewAdaptiveTableFactory()));
   const char* compaction_style = "Universal";

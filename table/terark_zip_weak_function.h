@@ -44,6 +44,10 @@ TerarkZipAutoConfigForOnlineDB_CFOptions(struct TerarkZipTableOptions& tzo,
                                     size_t memBytesLimit,
                                     size_t diskBytesLimit);
 
+class MemTableRepFactory*
+    __attribute__((weak))
+NewPatriciaTrieRepFactory(std::shared_ptr<class MemTableRepFactory> fallback = nullptr);
+
 class TableFactory*
 __attribute__((weak))
 NewTerarkZipTableFactory(const TerarkZipTableOptions&,
