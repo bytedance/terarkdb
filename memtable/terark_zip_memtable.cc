@@ -146,8 +146,7 @@ public:
         break;
       } else if (token.value() != nullptr) {
         break;
-      } else {
-        assert(i == trie_vec_.size() - 1);
+      } else if (i == trie_vec_.size() - 1) {
         assert(i < trie_vec_.capacity());
         trie_vec_.emplace_back(
             new terark::PatriciaTrie(sizeof(void*),
@@ -250,22 +249,21 @@ public:
 
     struct Item {
       terark::PatriciaTrie* trie;
-      token_t* token;
+      token_t token;
       terark::ADFA_LexIterator* iter;
       size_t num_words;
       Item(terark::PatriciaTrie* _trie)
         : trie(_trie)
-        , token(new token_t(_trie))
+        , token(_trie)
         , iter(_trie->adfa_make_iter())
         , num_words(trie->num_words()) {
       }
       ~Item() {
         delete iter;
-        delete token;
       }
       bool Update() {
         if (trie->num_words() - num_words > num_words_update) {
-          token->update();
+          token.update();
           return true;
         }
         return false;
@@ -275,8 +273,9 @@ public:
     PTrieRep* rep_;
     union {
       struct {
-        terark::valvec<Item> heap_;
+        Item* heap_array_;
         size_t heap_size_;
+        terark::valvec<Item*> heap_;
       };
       Item item_;
     };
@@ -288,11 +287,12 @@ public:
       , where_(node_t::nil_sentinel)
       , direction_(0) {
       if (multi) {
-        new(&heap_) terark::valvec<Item>(rep_->trie_vec_.size(), terark::valvec_reserve());
-        for (size_t i = 0; i < rep_->trie_vec_.size(); ++i) {
-          heap_.emplace_back(rep_->trie_vec_[i].get());
+        heap_size_ = rep_->trie_vec_.size();
+        heap_array_ = (Item*)malloc(sizeof(Item) * heap_size_);
+        new(&heap_) terark::valvec<Item>(heap_size_, terark::valvec_reserve());
+        for (size_t i = 0; i < heap_size_; ++i) {
+          heap_.emplace_back(new(heap_array_ + i) Item(rep_->trie_vec_[i].get()));
         }
-        heap_size_ = 0;
       } else {
         new(&item_) Item(rep_->trie_vec_.front().get());
       }
@@ -300,7 +300,7 @@ public:
 
     Item& Current() {
       if (multi) {
-        return heap_.front();
+        return *heap_.front();
       } else {
         return item_;
       }
@@ -311,13 +311,13 @@ public:
     }
 
     struct ForwardComp {
-      bool operator()(Item& l, Item& r) const {
-        return l.iter->word() > r.iter->word();
+      bool operator()(Item* l, Item* r) const {
+        return l->iter->word() > r->iter->word();
       }
     };
     struct BackwardComp {
-      bool operator()(Item& l, Item& r) const {
-        return l.iter->word() < r.iter->word();
+      bool operator()(Item* l, Item* r) const {
+        return l->iter->word() < r->iter->word();
       }
     };
 
@@ -328,8 +328,9 @@ public:
       heap_size_ = heap_.size();
       if (direction == 1) {
         for (size_t i = 0; i < heap_size_; ) {
-          heap_[i].Update();
-          if (callback_func(arg, heap_[i].iter)) {
+          heap_[i]->Update();
+          if (heap_[i]->trie->num_words() > 0 &&
+              callback_func(arg, heap_[i]->iter)) {
             ++i;
           } else {
             --heap_size_;
@@ -339,8 +340,9 @@ public:
         std::make_heap(heap_.begin(), heap_.begin() + heap_size_, ForwardComp());
       } else {
         for (size_t i = 0; i < heap_size_; ) {
-          heap_[i].Update();
-          if (callback_func(arg, heap_[i].iter)) {
+          heap_[i]->Update();
+          if (heap_[i]->trie->num_words() > 0 &&
+              callback_func(arg, heap_[i]->iter)) {
             ++i;
           }
           else {
@@ -360,10 +362,86 @@ public:
       }
     }
 
+    bool ItemNext() {
+      if (multi) {
+        if (direction_ != 1) {
+          Slice internal_key = GetLengthPrefixedSlice(buffer_.data());
+          terark::fstring find_key(internal_key.data(), internal_key.size() - 8);
+          Rebuild(1, &find_key, [](void *arg, terark::ADFA_LexIterator* iter) {
+            return iter->seek_lower_bound(*(terark::fstring*)arg);
+          });
+          if (heap_size_ == 0) {
+            return false;
+          }
+        } else {
+          UpdateIterator();
+        }
+        std::pop_heap(heap_.begin(), heap_.begin() + heap_size_, ForwardComp());
+        if (heap_[heap_size_ - 1]->iter->incr()) {
+          std::push_heap(heap_.begin(), heap_.begin() + heap_size_, ForwardComp());
+        } else {
+          if (--heap_size_ == 0) {
+            return false;
+          }
+        }
+      } else {
+        UpdateIterator();
+        if (!item_.iter->incr()) {
+          return false;
+        }
+      }
+      const char* value = CurrentValue();
+      MutexLock _lock(sharding(value, rep_->mutex_));
+      root_t* root = *(root_t**)value;
+      where_ = root->get_most_left(deref_node_t());
+      assert(where_ != node_t::nil_sentinel);
+      return true;
+    }
+
+    bool ItemPrev() {
+      if (multi) {
+        if (direction_ != -1) {
+          Slice internal_key = GetLengthPrefixedSlice(buffer_.data());
+          terark::fstring find_key(internal_key.data(), internal_key.size() - 8);
+          Rebuild(-1, &find_key, [](void *arg, terark::ADFA_LexIterator* iter) {
+            return iter->seek_rev_lower_bound(*(terark::fstring*)arg);
+          });
+          if (heap_size_ == 0) {
+            return false;
+          }
+        } else {
+          UpdateIterator();
+        }
+        std::pop_heap(heap_.begin(), heap_.begin() + heap_size_, BackwardComp());
+        if (heap_[heap_size_ - 1]->iter->decr()) {
+          std::push_heap(heap_.begin(), heap_.begin() + heap_size_, BackwardComp());
+        } else {
+          if (--heap_size_ == 0) {
+            return false;
+          }
+        }
+      } else {
+        UpdateIterator();
+        if (!item_.iter->decr()) {
+          return false;
+        }
+      }
+      const char* value = CurrentValue();
+      MutexLock _lock(sharding(value, rep_->mutex_));
+      root_t* root = *(root_t**)value;
+      where_ = root->get_most_right(deref_node_t());
+      assert(where_ != node_t::nil_sentinel);
+      return true;
+    }
+
   public:
     virtual ~Iterator() {
       if (multi) {
-        heap_.~valvec<Item>();
+        heap_.~valvec<Item*>();
+        for (size_t i = 0; i < heap_size_; ++i) {
+          heap_array_[i].~Item();
+        }
+        free(heap_array_);
       } else {
         item_.~Item();
       }
@@ -383,44 +461,12 @@ public:
     // Advances to the next position.
     // REQUIRES: Valid()
     virtual void Next() override {
-      const void* value = CurrentValue();
       {
-        MutexLock _lock(sharding(value, rep_->mutex_));
+        MutexLock _lock(sharding(CurrentValue(), rep_->mutex_));
         where_ = threaded_rbtree_move_next(where_, deref_node_t());
       }
-      if (where_ == node_t::nil_sentinel) {
-        if (multi) {
-          if (direction_ != 1) {
-            Slice internal_key = GetLengthPrefixedSlice(buffer_.data());
-            terark::fstring find_key(internal_key.data(), internal_key.size() - 8);
-            Rebuild(1, &find_key, [](void *arg, terark::ADFA_LexIterator* iter) {
-              return iter->seek_lower_bound(*(terark::fstring*)arg);
-            });
-            if (heap_size_ == 0) {
-              return;
-            }
-          } else {
-            UpdateIterator();
-          }
-          std::pop_heap(heap_.begin(), heap_.begin() + heap_size_, ForwardComp());
-          if (heap_[heap_size_ - 1].iter->incr()) {
-            std::push_heap(heap_.begin(), heap_.begin() + heap_size_, ForwardComp());
-          } else {
-            if (--heap_size_ == 0) {
-              return;
-            }
-          }
-        } else {
-          UpdateIterator();
-          if (!item_.iter->incr()) {
-            return;
-          }
-        }
-        value = CurrentValue();
-        MutexLock _lock(sharding(value, rep_->mutex_));
-        root_t* root = *(root_t**)value;
-        where_ = root->get_most_left(deref_node_t());
-        assert(where_ != node_t::nil_sentinel);
+      if (where_ == node_t::nil_sentinel && !ItemNext()) {
+        return;
       }
       build_key(Current().iter->word(), where_, &buffer_);
     }
@@ -428,44 +474,12 @@ public:
     // Advances to the previous position.
     // REQUIRES: Valid()
     virtual void Prev() override {
-      const void* value = CurrentValue();
       {
-        MutexLock _lock(sharding(value, rep_->mutex_));
+        MutexLock _lock(sharding(CurrentValue(), rep_->mutex_));
         where_ = threaded_rbtree_move_prev(where_, deref_node_t());
       }
-      if (where_ == node_t::nil_sentinel) {
-        if (multi) {
-          if (direction_ != -1) {
-            Slice internal_key = GetLengthPrefixedSlice(buffer_.data());
-            terark::fstring find_key(internal_key.data(), internal_key.size() - 8);
-            Rebuild(-1, &find_key, [](void *arg, terark::ADFA_LexIterator* iter) {
-              return iter->seek_rev_lower_bound(*(terark::fstring*)arg);
-            });
-            if (heap_size_ == 0) {
-              return;
-            }
-          } else {
-            UpdateIterator();
-          }
-          std::pop_heap(heap_.begin(), heap_.begin() + heap_size_, BackwardComp());
-          if (heap_[heap_size_ - 1].iter->decr()) {
-            std::push_heap(heap_.begin(), heap_.begin() + heap_size_, BackwardComp());
-          } else {
-            if (--heap_size_ == 0) {
-              return;
-            }
-          }
-        } else {
-          UpdateIterator();
-          if (!item_.iter->decr()) {
-            return;
-          }
-        }
-        value = CurrentValue();
-        MutexLock _lock(sharding(value, rep_->mutex_));
-        root_t* root = *(root_t**)value;
-        where_ = root->get_most_right(deref_node_t());
-        assert(where_ != node_t::nil_sentinel);
+      if (where_ == node_t::nil_sentinel && !ItemPrev()) {
+        return;
       }
       build_key(Current().iter->word(), where_, &buffer_);
     }
@@ -473,10 +487,6 @@ public:
     // Advance to the first entry with a key >= target
     virtual void Seek(const Slice &user_key, const char *memtable_key)
       override {
-      if (rep_->num_entries_ == 0) {
-        where_ = node_t::nil_sentinel;
-        return;
-      }
       terark::fstring find_key;
       if (memtable_key != nullptr) {
         Slice internal_key = GetLengthPrefixedSlice(memtable_key);
@@ -491,11 +501,13 @@ public:
           return iter->seek_lower_bound(*(terark::fstring*)arg);
         });
         if (heap_size_ == 0) {
+          where_ = node_t::nil_sentinel;
           return;
         }
       } else {
         item_.Update();
-        if (!item_.iter->seek_lower_bound(find_key)) {
+        if (item_.trie->num_words() == 0 ||
+            !item_.iter->seek_lower_bound(find_key)) {
           where_ = node_t::nil_sentinel;
           return;
         }
@@ -503,19 +515,12 @@ public:
       const void* value = CurrentValue();
       {
         MutexLock _lock(sharding(value, rep_->mutex_));
-        root_t* root = *(root_t**)CurrentValue();
+        root_t* root = *(root_t**)value;
         where_ = threaded_rbtree_lower_bound(*root, deref_node_t(), tag,
                                              deref_key_t(), key_compare_t());
       }
-      if (where_ == node_t::nil_sentinel) {
-        if (!item_.iter->incr()) {
-          return;
-        }
-        value = CurrentValue();
-        MutexLock _lock(sharding(value, rep_->mutex_));
-        root_t* root = *(root_t**)value;
-        where_ = root->get_most_left(deref_node_t());
-        assert(where_ != node_t::nil_sentinel);
+      if (where_ == node_t::nil_sentinel && !ItemNext()) {
+        return;
       }
       build_key(Current().iter->word(), where_, &buffer_);
     }
@@ -523,10 +528,6 @@ public:
     // retreat to the first entry with a key <= target
     virtual void SeekForPrev(const Slice& user_key, const char* memtable_key)
       override {
-      if (rep_->num_entries_ == 0) {
-        where_ = node_t::nil_sentinel;
-        return;
-      }
       terark::fstring find_key;
       if (memtable_key != nullptr) {
         Slice internal_key = GetLengthPrefixedSlice(memtable_key);
@@ -537,15 +538,17 @@ public:
       uint64_t tag = DecodeFixed64(find_key.end());
 
       if (multi) {
-        Rebuild(1, &find_key, [](void *arg, terark::ADFA_LexIterator* iter) {
+        Rebuild(-1, &find_key, [](void *arg, terark::ADFA_LexIterator* iter) {
           return iter->seek_rev_lower_bound(*(terark::fstring*)arg);
         });
         if (heap_size_ == 0) {
+          where_ = node_t::nil_sentinel;
           return;
         }
       } else {
         item_.Update();
-        if (!item_.iter->seek_rev_lower_bound(find_key)) {
+        if (item_.trie->num_words() == 0 ||
+            !item_.iter->seek_rev_lower_bound(find_key)) {
           where_ = node_t::nil_sentinel;
           return;
         }
@@ -553,15 +556,14 @@ public:
       const void* value = CurrentValue();
       {
         MutexLock _lock(sharding(value, rep_->mutex_));
-        root_t* root = *(root_t**)CurrentValue();
+        root_t* root = *(root_t**)value;
         where_ = threaded_rbtree_reverse_lower_bound(*root, deref_node_t(), tag,
                                                      deref_key_t(), key_compare_t());
       }
-      if (where_ == node_t::nil_sentinel) {
-        Iterator::Next();
-      } else {
-        build_key(Current().iter->word(), where_, &buffer_);
+      if (where_ == node_t::nil_sentinel && !ItemPrev()) {
+        return;
       }
+      build_key(Current().iter->word(), where_, &buffer_);
     }
 
     // Position at the first entry in list.
@@ -577,7 +579,7 @@ public:
         }
       } else {
         item_.Update();
-        if (item_.trie->num_words() == 0 || item_.iter->seek_begin()) {
+        if (item_.trie->num_words() == 0 || !item_.iter->seek_begin()) {
           where_ = node_t::nil_sentinel;
           return;
         }
@@ -589,18 +591,14 @@ public:
         where_ = root->get_most_left(deref_node_t());
         assert(where_ != node_t::nil_sentinel);
       }
-      if (where_ == node_t::nil_sentinel) {
-        Iterator::Prev();
-      } else {
-        build_key(Current().iter->word(), where_, &buffer_);
-      }
+      build_key(Current().iter->word(), where_, &buffer_);
     }
 
     // Position at the last entry in list.
     // Final state of iterator is Valid() iff list is not empty.
     virtual void SeekToLast() override {
       if (multi) {
-        Rebuild(1, nullptr, [](void *arg, terark::ADFA_LexIterator* iter) {
+        Rebuild(-1, nullptr, [](void *arg, terark::ADFA_LexIterator* iter) {
           return iter->seek_end();
         });
         if (heap_size_ == 0) {
@@ -609,7 +607,7 @@ public:
         }
       } else {
         item_.Update();
-        if (item_.trie->num_words() == 0 || item_.iter->seek_end()) {
+        if (item_.trie->num_words() == 0 || !item_.iter->seek_end()) {
           where_ = node_t::nil_sentinel;
           return;
         }
