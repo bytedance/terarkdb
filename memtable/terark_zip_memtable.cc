@@ -18,6 +18,7 @@
 #include "util/mutexlock.h"
 #include "util/threaded_rbtree.h"
 #include <terark/fsa/dynamic_patricia_trie.hpp>
+#include <terark/heap_ext.hpp>
 #include <terark/io/byte_swap.hpp>
 
 namespace rocksdb {
@@ -35,6 +36,8 @@ class PTrieRep : public MemTableRep {
     node_t node;
     uint64_t tag;
     char prefixed_value[1];
+
+    Slice value() { return GetLengthPrefixedSlice(prefixed_value); }
   };
   static size_type constexpr rep_node_size = sizeof(node_t) + sizeof(uint64_t);
 
@@ -52,15 +55,10 @@ class PTrieRep : public MemTableRep {
 
   static const char* build_key(terark::fstring user_key, uintptr_t index, std::string* buffer) {
     rep_node_t* node = (rep_node_t*)index;
-    uint32_t value_size;
-    const char* value_ptr =
-        GetVarint32Ptr(node->prefixed_value, node->prefixed_value + 5, &value_size);
     buffer->resize(0);
-    buffer->reserve(user_key.size() + value_size + 18);
+    buffer->reserve(user_key.size() + 13);
     PutVarint32(buffer, user_key.size() + 8);
     buffer->append(user_key.data(), user_key.size());
-    PutFixed64(buffer, node->tag);
-    buffer->append(node->prefixed_value, value_ptr - node->prefixed_value + value_size);
     return buffer->data();
   }
 
@@ -91,26 +89,25 @@ public:
   }
 
   virtual KeyHandle Allocate(const size_t len, char **buf) override {
-    char *mem = (char*)malloc(len + 4);
-    *buf = mem;
-    return static_cast<KeyHandle>(mem);
+    assert(false);
+    return nullptr;
   }
 
   // Insert key into the list.
   // REQUIRES: nothing that compares equal to key is currently in the list.
   virtual void Insert(KeyHandle handle) override {
-    char *entry = (char*)handle;
-    uint32_t key_length;
-    const char* key_ptr = GetVarint32Ptr(entry, entry + 5, &key_length);
-    const char* key_end = key_ptr + key_length;
-    terark::fstring key(key_ptr, key_end - 8);
+    assert(false);
+  }
+
+  virtual void Insert(const Slice& internal_key, const Slice& value) override {
+    terark::fstring key(internal_key.data(), internal_key.data() + internal_key.size() - 8);
     uint64_t tag = DecodeFixed64(key.end());
-    uint32_t value_size;
-    const char* value_ptr = GetVarint32Ptr(key_end, key_end + 5, &value_size);
-    value_size += value_ptr - key_end;
-    rep_node_t* node = (rep_node_t*)allocator_->AllocateAligned(rep_node_size + value_size);
+
+    size_t node_size = rep_node_size + value.size() + VarintLength(value.size());
+    rep_node_t* node = (rep_node_t*)allocator_->AllocateAligned(node_size);
     node->tag = tag;
-    memcpy(node->prefixed_value, key_end, value_size);
+    memcpy(EncodeVarint32(node->prefixed_value, (uint32_t)value.size()),
+           value.data(), value.size());
 
     class Token : public terark::PatriciaTrie::WriterToken {
     public:
@@ -153,13 +150,11 @@ public:
                                      allocator_->BlockSize() << trie_vec_.size()));
       }
     }
-    free(handle);
     ++num_entries_;
   }
 
   // Returns true iff an entry that compares equal to key is in the list.
-  virtual bool Contains(const char *key) const override {
-    Slice internal_key = GetLengthPrefixedSlice(key);
+  virtual bool Contains(const Slice& internal_key) const override {
     terark::fstring find_key(internal_key.data(), internal_key.size() - 8);
     uint64_t tag = DecodeFixed64(find_key.end());
     for (size_t i = 0; i < trie_vec_.size(); ++i) {
@@ -206,7 +201,9 @@ public:
   }
 
   virtual void Get(const LookupKey &k, void *callback_args,
-                   bool(*callback_func)(void *arg, const char *entry)) override {
+                   bool(*callback_func)(void *arg,
+                                        const Slice& internal_key,
+                                        const Slice& value)) override {
     Slice internal_key = k.internal_key();
     terark::fstring find_key(internal_key.data(), internal_key.size() - 8);
     uint64_t tag = DecodeFixed64(find_key.end());
@@ -223,7 +220,8 @@ public:
         auto index = threaded_rbtree_lower_bound(*root, deref_node_t(), tag,
                                                  deref_key_t(), key_compare_t());
         while (index != node_t::nil_sentinel &&
-               callback_func(callback_args, build_key(find_key, index, &buffer))) {
+               callback_func(callback_args, build_key(find_key, index, &buffer),
+                             ((rep_node_t*)index)->value())) {
           index = threaded_rbtree_move_next(index, deref_node_t());
         }
       };
@@ -337,8 +335,7 @@ public:
       if (direction == 1) {
         for (size_t i = 0; i < multi_.size; ) {
           multi_.heap[i]->Update();
-          if (multi_.heap[i]->trie->num_words() > 0 &&
-              callback_func(arg, multi_.heap[i]->iter)) {
+          if (callback_func(arg, multi_.heap[i]->iter)) {
             ++i;
           } else {
             --multi_.size;
@@ -349,8 +346,7 @@ public:
       } else {
         for (size_t i = 0; i < multi_.size; ) {
           multi_.heap[i]->Update();
-          if (multi_.heap[i]->trie->num_words() > 0 &&
-              callback_func(arg, multi_.heap[i]->iter)) {
+          if (callback_func(arg, multi_.heap[i]->iter)) {
             ++i;
           }
           else {
@@ -384,10 +380,10 @@ public:
         } else {
           UpdateIterator();
         }
-        std::pop_heap(multi_.heap, multi_.heap + multi_.size, ForwardComp());
-        if (multi_.heap[multi_.size - 1]->iter->incr()) {
-          std::push_heap(multi_.heap, multi_.heap + multi_.size, ForwardComp());
+        if (multi_.heap[0]->iter->incr()) {
+          terark::adjust_heap_top(multi_.heap, multi_.size, ForwardComp());
         } else {
+          std::pop_heap(multi_.heap, multi_.heap + multi_.size, ForwardComp());
           if (--multi_.size == 0) {
             return false;
           }
@@ -420,10 +416,10 @@ public:
         } else {
           UpdateIterator();
         }
-        std::pop_heap(multi_.heap, multi_.heap + multi_.size, BackwardComp());
-        if (multi_.heap[multi_.size - 1]->iter->decr()) {
-          std::push_heap(multi_.heap, multi_.heap + multi_.size, BackwardComp());
+        if (multi_.heap[0]->iter->decr()) {
+          terark::adjust_heap_top(multi_.heap, multi_.size, BackwardComp());
         } else {
+          std::pop_heap(multi_.heap, multi_.heap + multi_.size, BackwardComp());
           if (--multi_.size == 0) {
             return false;
           }
@@ -463,7 +459,21 @@ public:
     // Returns the key at the current position.
     // REQUIRES: Valid()
     virtual const char *key() const override {
-      return buffer_.data();
+      assert(false);
+      return nullptr;
+    }
+
+    // Returns the key at the current position.
+    // REQUIRES: Valid()
+    virtual Slice SliceKey() const override {
+      return GetLengthPrefixedSlice(buffer_.data());
+    }
+
+    // Returns the key at the current position.
+    // REQUIRES: Valid()
+    virtual Slice SliceValue() const override {
+      rep_node_t* node = (rep_node_t*)where_;
+      return node->value();
     }
 
     // Advances to the next position.
@@ -514,21 +524,27 @@ public:
         }
       } else {
         single_.Update();
-        if (single_.trie->num_words() == 0 ||
-            !single_.iter->seek_lower_bound(find_key)) {
+        if (!single_.iter->seek_lower_bound(find_key)) {
           where_ = node_t::nil_sentinel;
           return;
         }
       }
       const void* value = CurrentValue();
-      {
+      if (Current().iter->word() == find_key) {
+        {
+          MutexLock _lock(sharding(value, rep_->mutex_));
+          root_t* root = *(root_t**)value;
+          where_ = threaded_rbtree_lower_bound(*root, deref_node_t(), tag,
+                                               deref_key_t(), key_compare_t());
+        }
+        if (where_ == node_t::nil_sentinel && !ItemNext()) {
+          return;
+        }
+      } else {
+        assert(Current().iter->word() > find_key);
         MutexLock _lock(sharding(value, rep_->mutex_));
         root_t* root = *(root_t**)value;
-        where_ = threaded_rbtree_lower_bound(*root, deref_node_t(), tag,
-                                             deref_key_t(), key_compare_t());
-      }
-      if (where_ == node_t::nil_sentinel && !ItemNext()) {
-        return;
+        where_ = root->get_most_left(deref_node_t());
       }
       build_key(Current().iter->word(), where_, &buffer_);
     }
@@ -555,21 +571,27 @@ public:
         }
       } else {
         single_.Update();
-        if (single_.trie->num_words() == 0 ||
-            !single_.iter->seek_rev_lower_bound(find_key)) {
+        if (!single_.iter->seek_rev_lower_bound(find_key)) {
           where_ = node_t::nil_sentinel;
           return;
         }
       }
       const void* value = CurrentValue();
-      {
+      if (Current().iter->word() == find_key) {
+        {
+          MutexLock _lock(sharding(value, rep_->mutex_));
+          root_t* root = *(root_t**)value;
+          where_ = threaded_rbtree_reverse_lower_bound(*root, deref_node_t(), tag,
+                                                       deref_key_t(), key_compare_t());
+        }
+        if (where_ == node_t::nil_sentinel && !ItemPrev()) {
+          return;
+        }
+      } else {
+        assert(Current().iter->word() < find_key);
         MutexLock _lock(sharding(value, rep_->mutex_));
         root_t* root = *(root_t**)value;
-        where_ = threaded_rbtree_reverse_lower_bound(*root, deref_node_t(), tag,
-                                                     deref_key_t(), key_compare_t());
-      }
-      if (where_ == node_t::nil_sentinel && !ItemPrev()) {
-        return;
+        where_ = root->get_most_right(deref_node_t());
       }
       build_key(Current().iter->word(), where_, &buffer_);
     }
@@ -587,7 +609,7 @@ public:
         }
       } else {
         single_.Update();
-        if (single_.trie->num_words() == 0 || !single_.iter->seek_begin()) {
+        if (!single_.iter->seek_begin()) {
           where_ = node_t::nil_sentinel;
           return;
         }
@@ -615,7 +637,7 @@ public:
         }
       } else {
         single_.Update();
-        if (single_.trie->num_words() == 0 || !single_.iter->seek_end()) {
+        if (!single_.iter->seek_end()) {
           where_ = node_t::nil_sentinel;
           return;
         }
@@ -629,6 +651,8 @@ public:
       }
       build_key(Current().iter->word(), where_, &buffer_);
     }
+
+    virtual bool IsSeekForPrevSupported() const { return true; }
   };
   virtual MemTableRep::Iterator *GetIterator(Arena *arena = nullptr) override {
     if (immutable_) {
@@ -667,9 +691,8 @@ public:
   virtual MemTableRep *CreateMemTableRep(
       const MemTableRep::KeyComparator &compare, Allocator *allocator,
       const SliceTransform *transform, Logger *logger) override {
-    assert(dynamic_cast<const MemTable::KeyComparator *>(&compare) != nullptr);
-    auto key_comparator = static_cast<const MemTable::KeyComparator *>(&compare);
-    auto user_comparator = key_comparator->comparator.user_comparator();
+    auto key_comparator = compare.icomparator();
+    auto user_comparator = key_comparator->user_comparator();
     if (strcmp(user_comparator->Name(), BytewiseComparator()->Name()) == 0) {
       return new PTrieRep(compare, allocator, transform, sharding_count_);
     } else {
