@@ -56,9 +56,9 @@ class PTrieRep : public MemTableRep {
   static const char* build_key(terark::fstring user_key, uintptr_t index, std::string* buffer) {
     rep_node_t* node = (rep_node_t*)index;
     buffer->resize(0);
-    buffer->reserve(user_key.size() + 13);
-    PutVarint32(buffer, user_key.size() + 8);
+    buffer->reserve(user_key.size() + 8);
     buffer->append(user_key.data(), user_key.size());
+    PutFixed64(buffer, node->tag);
     return buffer->data();
   }
 
@@ -201,28 +201,49 @@ public:
   }
 
   virtual void Get(const LookupKey &k, void *callback_args,
-                   bool(*callback_func)(void *arg,
-                                        const Slice& internal_key,
-                                        const Slice& value)) override {
+                   bool(*callback_func)(void *arg, const KVGetter*)) override {
+
+    class Context : public KVGetter {
+    public:
+      virtual Slice GetKey() const override {
+        return buffer;
+      }
+      virtual Slice GetValue() const override {
+        return ((rep_node_t*)index)->value();
+      }
+      virtual std::pair<Slice, Slice> GetKeyValue() const override {
+        return { GetKey(), GetValue() };
+      }
+
+      KVGetter* Update() {
+        build_key(find_key, index, &buffer);
+        return this;
+      }
+
+      terark::fstring find_key;
+      size_t index;
+      uint64_t tag;
+      std::string buffer;
+    } ctx;
+
     Slice internal_key = k.internal_key();
-    terark::fstring find_key(internal_key.data(), internal_key.size() - 8);
-    uint64_t tag = DecodeFixed64(find_key.end());
-    std::string buffer;
+    ctx.find_key = terark::fstring(internal_key.data(), internal_key.size() - 8);
+    ctx.tag = DecodeFixed64(ctx.find_key.end());
+
 
     for (size_t i = 0; i < trie_vec_.size(); ++i) {
       auto trie = trie_vec_[i].get();
       terark::PatriciaTrie::ReaderToken token(trie);
-      if (!trie->lookup(find_key, &token)) {
+      if (!trie->lookup(ctx.find_key, &token)) {
         continue;
       }
       auto get_impl = [&] {
         root_t* root = *(root_t**)token.value();
-        auto index = threaded_rbtree_lower_bound(*root, deref_node_t(), tag,
+        ctx.index = threaded_rbtree_lower_bound(*root, deref_node_t(), ctx.tag,
                                                  deref_key_t(), key_compare_t());
-        while (index != node_t::nil_sentinel &&
-               callback_func(callback_args, build_key(find_key, index, &buffer),
-                             ((rep_node_t*)index)->value())) {
-          index = threaded_rbtree_move_next(index, deref_node_t());
+        while (ctx.index != node_t::nil_sentinel &&
+               callback_func(callback_args, ctx.Update())) {
+          ctx.index = threaded_rbtree_move_next(ctx.index, deref_node_t());
         }
       };
       if (immutable_) {
@@ -360,8 +381,7 @@ public:
 
     void UpdateIterator() {
       if (Current().Update()) {
-        Slice internal_key = GetLengthPrefixedSlice(buffer_.data());
-        terark::fstring find_key(internal_key.data(), internal_key.size() - 8);
+        terark::fstring find_key(buffer_.data(), buffer_.size() - 8);
         Current().iter->seek_lower_bound(find_key);
       }
     }
@@ -369,8 +389,7 @@ public:
     bool ItemNext() {
       if (heap_mode) {
         if (direction_ != 1) {
-          Slice internal_key = GetLengthPrefixedSlice(buffer_.data());
-          terark::fstring find_key(internal_key.data(), internal_key.size() - 8);
+          terark::fstring find_key(buffer_.data(), buffer_.size() - 8);
           Rebuild(1, &find_key, [](void *arg, terark::ADFA_LexIterator* iter) {
             return iter->seek_lower_bound(*(terark::fstring*)arg);
           });
@@ -405,8 +424,7 @@ public:
     bool ItemPrev() {
       if (heap_mode) {
         if (direction_ != -1) {
-          Slice internal_key = GetLengthPrefixedSlice(buffer_.data());
-          terark::fstring find_key(internal_key.data(), internal_key.size() - 8);
+          terark::fstring find_key(buffer_.data(), buffer_.size() - 8);
           Rebuild(-1, &find_key, [](void *arg, terark::ADFA_LexIterator* iter) {
             return iter->seek_rev_lower_bound(*(terark::fstring*)arg);
           });
@@ -463,17 +481,16 @@ public:
       return nullptr;
     }
 
-    // Returns the key at the current position.
-    // REQUIRES: Valid()
-    virtual Slice SliceKey() const override {
-      return GetLengthPrefixedSlice(buffer_.data());
+    virtual Slice GetKey() const override {
+      return buffer_;
     }
 
-    // Returns the key at the current position.
-    // REQUIRES: Valid()
-    virtual Slice SliceValue() const override {
-      rep_node_t* node = (rep_node_t*)where_;
-      return node->value();
+    virtual Slice GetValue() const override {
+      return ((rep_node_t*)where_)->value();
+    }
+
+    virtual std::pair<Slice, Slice> GetKeyValue() const override {
+      return { GetKey(), GetValue() };
     }
 
     // Advances to the next position.
