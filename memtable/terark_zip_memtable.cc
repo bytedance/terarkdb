@@ -148,7 +148,7 @@ public:
         break;
       } else if (i == trie_vec_.size() - 1) {
         assert(i < trie_vec_.capacity());
-        trie_vec_.emplace_back(
+        trie_vec_.unchecked_emplace_back(
             new terark::PatriciaTrie(sizeof(void*),
                                      allocator_->BlockSize() << trie_vec_.size()));
       }
@@ -186,6 +186,9 @@ public:
   }
 
   virtual void MarkReadOnly() override {
+    for (size_t i = 0; i < trie_vec_.size(); ++i) {
+      trie_vec_[i]->set_readonly();
+    }
     immutable_ = true;
   }
 
@@ -241,17 +244,18 @@ public:
     template<class T> DummyLock(T const &) {}
   };
 
-  template<bool multi, class Lock>
-  class Iterator : public MemTableRep::Iterator {
+  template<bool heap_mode, class Lock>
+  class Iterator : public MemTableRep::Iterator, boost::noncopyable {
     typedef terark::PatriciaTrie::ReaderToken token_t;
     friend class PTrieRep;
     static constexpr size_t num_words_update = 1024;
 
-    struct Item {
+    struct Item : boost::noncopyable {
       terark::PatriciaTrie* trie;
       token_t token;
       terark::ADFA_LexIterator* iter;
       size_t num_words;
+
       Item(terark::PatriciaTrie* _trie)
         : trie(_trie)
         , token(_trie)
@@ -273,11 +277,12 @@ public:
     PTrieRep* rep_;
     union {
       struct {
-        Item* heap_array_;
-        size_t heap_size_;
-        terark::valvec<Item*> heap_;
-      };
-      Item item_;
+        Item* array;
+        size_t count;
+        Item** heap;
+        size_t size;
+      } multi_;
+      Item single_;
     };
     int direction_;
     uintptr_t where_;
@@ -286,28 +291,31 @@ public:
       : rep_(rep)
       , where_(node_t::nil_sentinel)
       , direction_(0) {
-      if (multi) {
-        heap_size_ = rep_->trie_vec_.size();
-        heap_array_ = (Item*)malloc(sizeof(Item) * heap_size_);
-        new(&heap_) terark::valvec<Item>(heap_size_, terark::valvec_reserve());
-        for (size_t i = 0; i < heap_size_; ++i) {
-          heap_.emplace_back(new(heap_array_ + i) Item(rep_->trie_vec_[i].get()));
+      if (heap_mode) {
+        multi_.count = rep_->trie_vec_.size();
+        multi_.array = (Item*)malloc(sizeof(Item) * multi_.count);
+        multi_.heap = (Item**)malloc(sizeof(void*) * multi_.count);
+        for (size_t i = 0; i < multi_.count; ++i) {
+          multi_.heap[i] =
+              new(multi_.array + i) Item(rep_->trie_vec_[i].get());
         }
+        multi_.size = 0;
       } else {
-        new(&item_) Item(rep_->trie_vec_.front().get());
+        new(&single_) Item(rep_->trie_vec_.front().get());
       }
     }
 
     Item& Current() {
-      if (multi) {
-        return *heap_.front();
+      if (heap_mode) {
+        return **multi_.heap;
       } else {
-        return item_;
+        return single_;
       }
     }
 
     const char* CurrentValue() {
-      return (const char*)Current().trie->get_valptr(Current().iter->word_state());
+      auto& item = Current();
+      return (const char*)item.trie->get_valptr(item.iter->word_state());
     }
 
     struct ForwardComp {
@@ -325,32 +333,32 @@ public:
                  bool(*callback_func)(void *arg, terark::ADFA_LexIterator* iter)) {
       assert(std::abs(direction) == 1);
       direction_ = direction;
-      heap_size_ = heap_.size();
+      multi_.size = multi_.count;
       if (direction == 1) {
-        for (size_t i = 0; i < heap_size_; ) {
-          heap_[i]->Update();
-          if (heap_[i]->trie->num_words() > 0 &&
-              callback_func(arg, heap_[i]->iter)) {
+        for (size_t i = 0; i < multi_.size; ) {
+          multi_.heap[i]->Update();
+          if (multi_.heap[i]->trie->num_words() > 0 &&
+              callback_func(arg, multi_.heap[i]->iter)) {
             ++i;
           } else {
-            --heap_size_;
-            std::swap(heap_[i], heap_[heap_size_]);
+            --multi_.size;
+            std::swap(multi_.heap[i], multi_.heap[multi_.size]);
           }
         }
-        std::make_heap(heap_.begin(), heap_.begin() + heap_size_, ForwardComp());
+        std::make_heap(multi_.heap, multi_.heap + multi_.size, ForwardComp());
       } else {
-        for (size_t i = 0; i < heap_size_; ) {
-          heap_[i]->Update();
-          if (heap_[i]->trie->num_words() > 0 &&
-              callback_func(arg, heap_[i]->iter)) {
+        for (size_t i = 0; i < multi_.size; ) {
+          multi_.heap[i]->Update();
+          if (multi_.heap[i]->trie->num_words() > 0 &&
+              callback_func(arg, multi_.heap[i]->iter)) {
             ++i;
           }
           else {
-            --heap_size_;
-            std::swap(heap_[i], heap_[heap_size_]);
+            --multi_.size;
+            std::swap(multi_.heap[i], multi_.heap[multi_.size]);
           }
         }
-        std::make_heap(heap_.begin(), heap_.begin() + heap_size_, BackwardComp());
+        std::make_heap(multi_.heap, multi_.heap + multi_.size, BackwardComp());
       }
     }
 
@@ -363,30 +371,30 @@ public:
     }
 
     bool ItemNext() {
-      if (multi) {
+      if (heap_mode) {
         if (direction_ != 1) {
           Slice internal_key = GetLengthPrefixedSlice(buffer_.data());
           terark::fstring find_key(internal_key.data(), internal_key.size() - 8);
           Rebuild(1, &find_key, [](void *arg, terark::ADFA_LexIterator* iter) {
             return iter->seek_lower_bound(*(terark::fstring*)arg);
           });
-          if (heap_size_ == 0) {
+          if (multi_.size == 0) {
             return false;
           }
         } else {
           UpdateIterator();
         }
-        std::pop_heap(heap_.begin(), heap_.begin() + heap_size_, ForwardComp());
-        if (heap_[heap_size_ - 1]->iter->incr()) {
-          std::push_heap(heap_.begin(), heap_.begin() + heap_size_, ForwardComp());
+        std::pop_heap(multi_.heap, multi_.heap + multi_.size, ForwardComp());
+        if (multi_.heap[multi_.size - 1]->iter->incr()) {
+          std::push_heap(multi_.heap, multi_.heap + multi_.size, ForwardComp());
         } else {
-          if (--heap_size_ == 0) {
+          if (--multi_.size == 0) {
             return false;
           }
         }
       } else {
         UpdateIterator();
-        if (!item_.iter->incr()) {
+        if (!single_.iter->incr()) {
           return false;
         }
       }
@@ -399,30 +407,30 @@ public:
     }
 
     bool ItemPrev() {
-      if (multi) {
+      if (heap_mode) {
         if (direction_ != -1) {
           Slice internal_key = GetLengthPrefixedSlice(buffer_.data());
           terark::fstring find_key(internal_key.data(), internal_key.size() - 8);
           Rebuild(-1, &find_key, [](void *arg, terark::ADFA_LexIterator* iter) {
             return iter->seek_rev_lower_bound(*(terark::fstring*)arg);
           });
-          if (heap_size_ == 0) {
+          if (multi_.size == 0) {
             return false;
           }
         } else {
           UpdateIterator();
         }
-        std::pop_heap(heap_.begin(), heap_.begin() + heap_size_, BackwardComp());
-        if (heap_[heap_size_ - 1]->iter->decr()) {
-          std::push_heap(heap_.begin(), heap_.begin() + heap_size_, BackwardComp());
+        std::pop_heap(multi_.heap, multi_.heap + multi_.size, BackwardComp());
+        if (multi_.heap[multi_.size - 1]->iter->decr()) {
+          std::push_heap(multi_.heap, multi_.heap + multi_.size, BackwardComp());
         } else {
-          if (--heap_size_ == 0) {
+          if (--multi_.size == 0) {
             return false;
           }
         }
       } else {
         UpdateIterator();
-        if (!item_.iter->decr()) {
+        if (!single_.iter->decr()) {
           return false;
         }
       }
@@ -436,14 +444,14 @@ public:
 
   public:
     virtual ~Iterator() {
-      if (multi) {
-        heap_.~valvec<Item*>();
-        for (size_t i = 0; i < heap_size_; ++i) {
-          heap_array_[i].~Item();
+      if (heap_mode) {
+        free(multi_.heap);
+        for (size_t i = 0; i < multi_.count; ++i) {
+          multi_.array[i].~Item();
         }
-        free(heap_array_);
+        free(multi_.array);
       } else {
-        item_.~Item();
+        single_.~Item();
       }
     }
 
@@ -496,18 +504,18 @@ public:
       }
       uint64_t tag = DecodeFixed64(find_key.end());
 
-      if (multi) {
+      if (heap_mode) {
         Rebuild(1, &find_key, [](void *arg, terark::ADFA_LexIterator* iter) {
           return iter->seek_lower_bound(*(terark::fstring*)arg);
         });
-        if (heap_size_ == 0) {
+        if (multi_.size == 0) {
           where_ = node_t::nil_sentinel;
           return;
         }
       } else {
-        item_.Update();
-        if (item_.trie->num_words() == 0 ||
-            !item_.iter->seek_lower_bound(find_key)) {
+        single_.Update();
+        if (single_.trie->num_words() == 0 ||
+            !single_.iter->seek_lower_bound(find_key)) {
           where_ = node_t::nil_sentinel;
           return;
         }
@@ -537,18 +545,18 @@ public:
       }
       uint64_t tag = DecodeFixed64(find_key.end());
 
-      if (multi) {
+      if (heap_mode) {
         Rebuild(-1, &find_key, [](void *arg, terark::ADFA_LexIterator* iter) {
           return iter->seek_rev_lower_bound(*(terark::fstring*)arg);
         });
-        if (heap_size_ == 0) {
+        if (multi_.size == 0) {
           where_ = node_t::nil_sentinel;
           return;
         }
       } else {
-        item_.Update();
-        if (item_.trie->num_words() == 0 ||
-            !item_.iter->seek_rev_lower_bound(find_key)) {
+        single_.Update();
+        if (single_.trie->num_words() == 0 ||
+            !single_.iter->seek_rev_lower_bound(find_key)) {
           where_ = node_t::nil_sentinel;
           return;
         }
@@ -569,17 +577,17 @@ public:
     // Position at the first entry in list.
     // Final state of iterator is Valid() iff list is not empty.
     virtual void SeekToFirst() override {
-      if (multi) {
+      if (heap_mode) {
         Rebuild(1, nullptr, [](void *arg, terark::ADFA_LexIterator* iter) {
           return iter->seek_begin();
         });
-        if (heap_size_ == 0) {
+        if (multi_.size == 0) {
           where_ = node_t::nil_sentinel;
           return;
         }
       } else {
-        item_.Update();
-        if (item_.trie->num_words() == 0 || !item_.iter->seek_begin()) {
+        single_.Update();
+        if (single_.trie->num_words() == 0 || !single_.iter->seek_begin()) {
           where_ = node_t::nil_sentinel;
           return;
         }
@@ -597,17 +605,17 @@ public:
     // Position at the last entry in list.
     // Final state of iterator is Valid() iff list is not empty.
     virtual void SeekToLast() override {
-      if (multi) {
+      if (heap_mode) {
         Rebuild(-1, nullptr, [](void *arg, terark::ADFA_LexIterator* iter) {
           return iter->seek_end();
         });
-        if (heap_size_ == 0) {
+        if (multi_.size == 0) {
           where_ = node_t::nil_sentinel;
           return;
         }
       } else {
-        item_.Update();
-        if (item_.trie->num_words() == 0 || !item_.iter->seek_end()) {
+        single_.Update();
+        if (single_.trie->num_words() == 0 || !single_.iter->seek_end()) {
           where_ = node_t::nil_sentinel;
           return;
         }
