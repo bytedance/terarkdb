@@ -99,7 +99,7 @@ public:
     assert(false);
   }
 
-  virtual void Insert(const Slice& internal_key, const Slice& value) override {
+  virtual void InsertKeyValue(const Slice& internal_key, const Slice& value) override {
     terark::fstring key(internal_key.data(), internal_key.data() + internal_key.size() - 8);
     uint64_t tag = DecodeFixed64(key.end());
 
@@ -303,8 +303,8 @@ public:
       } multi_;
       Item single_;
     };
-    int direction_;
     uintptr_t where_;
+    int direction_;
 
     Iterator(PTrieRep* rep)
       : rep_(rep)
