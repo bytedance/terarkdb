@@ -201,9 +201,9 @@ public:
   }
 
   virtual void Get(const LookupKey &k, void *callback_args,
-                   bool(*callback_func)(void *arg, const KVGetter*)) override {
+                   bool(*callback_func)(void *arg, const KeyValuePair*)) override {
 
-    class Context : public KVGetter {
+    class Context : public KeyValuePair {
     public:
       virtual Slice GetKey() const override {
         return buffer;
@@ -215,7 +215,7 @@ public:
         return { GetKey(), GetValue() };
       }
 
-      KVGetter* Update() {
+      KeyValuePair* Update() {
         build_key(find_key, index, &buffer);
         return this;
       }
@@ -668,6 +668,8 @@ public:
       }
       build_key(Current().iter->word(), where_, &buffer_);
     }
+
+    virtual bool IsKeyPinned() const override { return false; }
 
     virtual bool IsSeekForPrevSupported() const { return true; }
   };
