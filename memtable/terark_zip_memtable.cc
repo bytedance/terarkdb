@@ -11,11 +11,11 @@
 #include <vector>
 #include <algorithm>
 #include <atomic>
+#include <mutex>
 
 #include "db/memtable.h"
 #include "rocksdb/memtablerep.h"
 #include "util/arena.h"
-#include "util/mutexlock.h"
 #include "util/threaded_rbtree.h"
 #include <terark/fsa/dynamic_patricia_trie.hpp>
 #include <terark/heap_ext.hpp>
@@ -72,14 +72,14 @@ class PTrieRep : public MemTableRep {
     return buffer->data();
   }
 
-  static port::Mutex* sharding(const void* ptr, terark::valvec<port::Mutex>& mutex) {
+  static std::mutex& sharding(const void* ptr, terark::valvec<std::mutex>& mutex) {
     uintptr_t val = size_t(ptr);
-    return &mutex[terark::byte_swap((val << 3) | (val >> 61)) % mutex.size()];
+    return mutex[terark::byte_swap((val << 3) | (val >> 61)) % mutex.size()];
   }
 
 private:
   mutable terark::valvec<std::unique_ptr<terark::PatriciaTrie>> trie_vec_;
-  mutable terark::valvec<port::Mutex> mutex_;
+  mutable terark::valvec<std::mutex> mutex_;
   std::atomic_bool immutable_;
   std::atomic_size_t num_entries_;
   size_t mem_size_;
@@ -140,7 +140,7 @@ public:
       if (!trie->insert(key, &root_insert, &token)) {
         trie->mem_free(root_index, sizeof(root_t));
         root = (root_t*)trie->mem_get(*(uint32_t*)token.value());
-        MutexLock _lock(sharding(root, mutex_));
+        std::unique_lock<std::mutex> _lock(sharding(root, mutex_));
         threaded_rbtree_find_path_for_multi(*root, stack, deref_node_t(trie), tag,
                                             deref_key_t(trie), key_compare_t());
         threaded_rbtree_insert(*root, stack, deref_node_t(trie), node_index);
@@ -192,7 +192,7 @@ public:
         }
       }
       else {
-        MutexLock _lock(sharding(root, mutex_));
+        std::unique_lock<std::mutex> _lock(sharding(root, mutex_));
         if (contains_impl()) {
           return true;
         }
@@ -273,7 +273,7 @@ public:
       if (immutable_) {
         get_impl();
       } else {
-        MutexLock _lock(sharding(root, mutex_));
+        std::unique_lock<std::mutex> _lock(sharding(root, mutex_));
         get_impl();
       }
     }
@@ -297,7 +297,7 @@ public:
       if (immutable_) {
         heap_next();
       } else {
-        MutexLock _lock(sharding(heap->root, mutex_));
+        std::unique_lock<std::mutex> _lock(sharding(heap->root, mutex_));
         heap_next();
       }
     }
@@ -306,11 +306,11 @@ public:
   virtual ~PTrieRep() override {}
 
   // used for immutable
-  struct DummyLock {
-    template<class T> DummyLock(T const &) {}
+  struct dummy_lock {
+    template<class T> dummy_lock(T const &) {}
   };
 
-  template<bool heap_mode, class Lock>
+  template<bool heap_mode, class lock_t>
   class Iterator : public MemTableRep::Iterator, boost::noncopyable {
     typedef terark::PatriciaTrie::ReaderToken token_t;
     friend class PTrieRep;
@@ -356,7 +356,7 @@ public:
         auto root = Value();
         if (iter->word() == find_key) {
           {
-            Lock _lock(sharding(root, rep->mutex_));
+            lock_t _lock(sharding(root, rep->mutex_));
             where = threaded_rbtree_lower_bound(*root, deref_node_t(trie), find_tag,
                                                 deref_key_t(trie), key_compare_t());
           }
@@ -370,7 +370,7 @@ public:
           root = Value();
         }
         assert(iter->word() > find_key);
-        Lock _lock(sharding(root, rep->mutex_));
+        lock_t _lock(sharding(root, rep->mutex_));
         where = root->get_most_left(deref_node_t(trie));
         tag = deref_key_t(trie)(where);
       }
@@ -384,7 +384,7 @@ public:
         auto root = Value();
         if (iter->word() == find_key) {
           {
-            Lock _lock(sharding(root, rep->mutex_));
+            lock_t _lock(sharding(root, rep->mutex_));
             where =
                 threaded_rbtree_reverse_lower_bound(*root, deref_node_t(trie),
                                                     find_tag, deref_key_t(trie),
@@ -400,7 +400,7 @@ public:
           root = Value();
         }
         assert(iter->word() < find_key);
-        Lock _lock(sharding(root, rep->mutex_));
+        lock_t _lock(sharding(root, rep->mutex_));
         where = root->get_most_right(deref_node_t(trie));
         tag = deref_key_t(trie)(where);
       }
@@ -412,7 +412,7 @@ public:
         }
         auto trie = token.trie();
         auto root = Value();
-        Lock _lock(sharding(root, rep->mutex_));
+        lock_t _lock(sharding(root, rep->mutex_));
         where = root->get_most_left(deref_node_t(trie));
         tag = deref_key_t(trie)(where);
       }
@@ -424,7 +424,7 @@ public:
         }
         auto trie = token.trie();
         auto root = Value();
-        Lock _lock(sharding(root, rep->mutex_));
+        lock_t _lock(sharding(root, rep->mutex_));
         where = root->get_most_right(deref_node_t(trie));
         tag = deref_key_t(trie)(where);
       }
@@ -440,7 +440,7 @@ public:
             return;
           }
           auto root = Value();
-          Lock _lock(sharding(root, rep->mutex_));
+          lock_t _lock(sharding(root, rep->mutex_));
           where = root->get_most_left(deref_node_t(trie));
         }
         tag = deref_key_t(trie)(where);
@@ -457,7 +457,7 @@ public:
             return;
           }
           auto root = Value();
-          Lock _lock(sharding(root, rep->mutex_));
+          lock_t _lock(sharding(root, rep->mutex_));
           where = root->get_most_right(deref_node_t(trie));
         }
         tag = deref_key_t(trie)(where);
@@ -792,21 +792,21 @@ public:
   virtual MemTableRep::Iterator *GetIterator(Arena *arena = nullptr) override {
     if (immutable_) {
       if (trie_vec_.size() == 1) {
-        typedef PTrieRep::Iterator<false, DummyLock> i_t;
+        typedef PTrieRep::Iterator<false, dummy_lock> i_t;
         return arena ? new(arena->AllocateAligned(sizeof(i_t))) i_t(this)
                      : new i_t(this);
       } else {
-        typedef PTrieRep::Iterator<true, DummyLock> i_t;
+        typedef PTrieRep::Iterator<true, dummy_lock> i_t;
         return arena ? new(arena->AllocateAligned(sizeof(i_t))) i_t(this)
                      : new i_t(this);
       }
     } else {
       if (trie_vec_.size() == 1) {
-        typedef PTrieRep::Iterator<false, MutexLock> i_t;
+        typedef PTrieRep::Iterator<false, std::unique_lock<std::mutex>> i_t;
         return arena ? new(arena->AllocateAligned(sizeof(i_t))) i_t(this)
                      : new i_t(this);
       } else {
-        typedef PTrieRep::Iterator<true, MutexLock> i_t;
+        typedef PTrieRep::Iterator<true, std::unique_lock<std::mutex>> i_t;
         return arena ? new(arena->AllocateAligned(sizeof(i_t))) i_t(this)
                      : new i_t(this);
       }
