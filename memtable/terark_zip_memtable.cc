@@ -25,44 +25,28 @@ namespace rocksdb {
 namespace {
 
 class PTrieRep : public MemTableRep {
-  typedef size_t size_type;
-  static size_type constexpr max_stack_depth = 2 * (sizeof(uint32_t) * 8 - 1);
-
-  typedef threaded_rbtree_node_t<uint32_t> node_t;
-  typedef threaded_rbtree_stack_t<node_t, max_stack_depth> stack_t;
-  typedef threaded_rbtree_root_t<node_t, std::false_type, std::false_type> root_t;
 
 #pragma pack(push)
 #pragma pack(4)
-  struct rep_node_t {
-    node_t node;
-    uint64_t tag;
-    char prefixed_value[1];
+  struct vector_t {
+    uint32_t size;
+    uint32_t loc;
+    struct data_t {
+      uint64_t tag;
+      uint32_t loc;
 
-    Slice value() { return GetLengthPrefixedSlice(prefixed_value); }
+      operator uint64_t() const {
+        return tag;
+      }
+    };
+
+    bool full() {
+      return terark::fast_popcount(size) == 1;
+    }
   };
 #pragma pack(pop)
 
-  static size_type constexpr rep_node_size = sizeof(node_t) + sizeof(uint64_t);
-
-  struct deref_node_t {
-    deref_node_t(terark::PatriciaTrie* _trie) : trie(_trie) {}
-    node_t &operator()(size_type index) {
-      return *(node_t*)trie->mem_get(index);
-    }
-    terark::PatriciaTrie* trie;
-  };
-  struct deref_key_t {
-    deref_key_t(terark::PatriciaTrie* _trie) : trie(_trie) {}
-    uint64_t operator()(size_type index) const {
-      return ((rep_node_t*)trie->mem_get(index))->tag;
-    }
-    terark::PatriciaTrie* trie;
-  };
-
-  static size_t constexpr max_trie_count = 32;
-
-  typedef std::greater<uint64_t> key_compare_t;
+  static constexpr size_t max_trie_count = 32;
 
   static const char* build_key(terark::fstring user_key, uint64_t tag, std::string* buffer) {
     buffer->resize(0);
@@ -72,14 +56,8 @@ class PTrieRep : public MemTableRep {
     return buffer->data();
   }
 
-  static std::mutex& sharding(const void* ptr, terark::valvec<std::mutex>& mutex) {
-    uintptr_t val = size_t(ptr);
-    return mutex[terark::byte_swap((val << 3) | (val >> 61)) % mutex.size()];
-  }
-
 private:
   mutable terark::valvec<std::unique_ptr<terark::PatriciaTrie>> trie_vec_;
-  mutable terark::valvec<std::mutex> mutex_;
   std::atomic_bool immutable_;
   std::atomic_size_t num_entries_;
   size_t mem_size_;
@@ -92,12 +70,8 @@ public:
     , num_entries_(0)
     , mem_size_(0) {
     assert(sharding > 0);
-    mutex_.reserve(sharding);
-    for (size_t i = 0; i < sharding; ++i) {
-      mutex_.unchecked_emplace_back();
-    }
     trie_vec_.reserve(max_trie_count);
-    trie_vec_.emplace_back(new terark::PatriciaTrie(sizeof(root_t), allocator->BlockSize()));
+    trie_vec_.emplace_back(new terark::PatriciaTrie(sizeof(uint32_t), allocator->BlockSize()));
   }
 
   virtual KeyHandle Allocate(const size_t len, char **buf) override {
@@ -113,44 +87,107 @@ public:
 
   virtual void InsertKeyValue(const Slice& internal_key, const Slice& value) override {
     terark::fstring key(internal_key.data(), internal_key.data() + internal_key.size() - 8);
-    uint64_t tag = DecodeFixed64(key.end());
+    //uint64_t tag = DecodeFixed64(key.end());
 
-    size_t node_size = rep_node_size + value.size() + VarintLength(value.size());
+    class Token : public terark::PatriciaTrie::WriterToken {
+    public:
+      Token(terark::PatriciaTrie* trie, uint64_t tag, const Slice& value)
+        : terark::PatriciaTrie::WriterToken(trie)
+        , tag_(tag)
+        , value_(value) {}
+      uint64_t get_tag() {
+        return tag_;
+      }
+    protected:
+      bool init_value(void* dest, const void* src, size_t valsize) override {
+        assert(src == nullptr);
+        assert(valsize == sizeof(uint32_t));
+        size_t vector_loc = terark::PatriciaTrie::mem_alloc_fail;
+        size_t data_loc = terark::PatriciaTrie::mem_alloc_fail;
+        size_t value_loc = terark::PatriciaTrie::mem_alloc_fail;
+        size_t value_size = VarintLength(value_.size()) + value_.size();
+          
+        vector_loc = trie()->mem_alloc(sizeof(vector_t));
+        if (vector_loc == terark::PatriciaTrie::mem_alloc_fail) {
+          goto init_fail;
+        }
+        data_loc = trie()->mem_alloc(sizeof(vector_t::data_t));
+        if (data_loc == terark::PatriciaTrie::mem_alloc_fail) {
+          goto init_fail;
+        }
+        value_loc = trie()->mem_alloc(value_size);
+        if (value_loc == terark::PatriciaTrie::mem_alloc_fail) {
+          goto init_fail;
+        }
+
+        memcpy(EncodeVarint32((char*)trie()->mem_get(value_loc), (uint32_t)value_.size()),
+               value_.data(), value_.size());
+        auto* data = (vector_t::data_t*)trie()->mem_get(data_loc);
+        data->loc = (uint32_t)value_loc;
+        data->tag = tag_;
+        auto* vector = (vector_t*)trie()->mem_get(vector_loc);
+        vector->loc = (uint32_t)data_loc;
+        vector->size = 1;
+
+        uint32_t u32_vector_loc = vector_loc;
+        memcpy(dest, &u32_vector_loc, valsize);
+        return true;
+      init_fail:
+        if (value_loc != terark::PatriciaTrie::mem_alloc_fail)
+          trie()->mem_free(vector_loc, value_size);
+        if (data_loc != terark::PatriciaTrie::mem_alloc_fail)
+          trie()->mem_free(vector_loc, sizeof(vector_t::data_t));
+        if (vector_loc != terark::PatriciaTrie::mem_alloc_fail)
+          trie()->mem_free(vector_loc, sizeof(vector_t));
+        return false;
+      }
+    private:
+      uint64_t tag_;
+      Slice value_;
+    };
+
     auto insert_impl = [&](terark::PatriciaTrie* trie) {
-      size_t node_index = trie->mem_alloc(node_size);
-      if (node_index == terark::PatriciaTrie::mem_alloc_fail) {
-        return false;
-      }
-      size_t root_index = trie->mem_alloc(sizeof(root_t));
-      if (root_index == terark::PatriciaTrie::mem_alloc_fail) {
-        trie->mem_free(node_index, node_size);
-        return false;
-      }
-      rep_node_t* node = (rep_node_t*)trie->mem_get(node_index);
-      node->tag = tag;
-      memcpy(EncodeVarint32(node->prefixed_value, (uint32_t)value.size()),
-             value.data(), value.size());
-      root_t* root = new(trie->mem_get(root_index)) root_t();
-      stack_t stack;
-      stack.height = 0;
-      threaded_rbtree_insert(*root, stack, deref_node_t(trie), node_index);
+      Token token(trie, DecodeFixed64(key.end()), value);
 
-      terark::PatriciaTrie::WriterToken token(trie);
-      uint32_t root_insert = (uint32_t)root_index;
-      if (!trie->insert(key, &root_insert, &token)) {
-        trie->mem_free(root_index, sizeof(root_t));
-        root = (root_t*)trie->mem_get(*(uint32_t*)token.value());
-        std::unique_lock<std::mutex> _lock(sharding(root, mutex_));
-        threaded_rbtree_find_path_for_multi(*root, stack, deref_node_t(trie), tag,
-                                            deref_key_t(trie), key_compare_t());
-        threaded_rbtree_insert(*root, stack, deref_node_t(trie), node_index);
+      if (!trie->insert(key, nullptr, &token)) {
+        size_t value_size = VarintLength(value.size()) + value.size();
+        size_t value_loc = trie->mem_alloc(value_size);
+        if (value_loc == terark::PatriciaTrie::mem_alloc_fail) {
+          return false;
+        }
+        memcpy(EncodeVarint32((char*)trie->mem_get(value_loc), (uint32_t)value.size()),
+               value.data(), value.size());
+
+        size_t vector_loc = *(uint32_t*)token.value();
+        auto* vector = (vector_t*)trie->mem_get(vector_loc);
+        size_t data_loc = vector->loc;
+        auto* data = (vector_t::data_t*)trie->mem_get(data_loc);
+        size_t size = vector->size;
+        assert(size > 0);
+        assert(token.get_tag() > data[size - 1].tag);
+        if (!vector->full()) {
+          data[size].loc = (uint32_t)value_loc;
+          data[size].tag = token.get_tag();
+          vector->size = size + 1;
+          return true;
+        }
+        size_t cow_data_loc = trie->mem_alloc(sizeof(vector_t::data_t) * size * 2);
+        if (cow_data_loc == terark::PatriciaTrie::mem_alloc_fail) {
+          trie->mem_free(value_loc, value_size);
+          return false;
+        }
+        auto* cow_data = (vector_t::data_t*)trie->mem_get(cow_data_loc);
+        memcpy(cow_data, data, sizeof(vector_t::data_t) * size);
+        cow_data[size].loc = (uint32_t)value_loc;
+        cow_data[size].tag = token.get_tag();
+        vector->loc = (uint32_t)cow_data_loc;
+        vector->size = size + 1;
+        trie->mem_lazy_free(data_loc, sizeof(vector_t::data_t) * size);
         return true;
       }
       else if (token.value() != nullptr) {
         return true;
       }
-      trie->mem_free(root_index, sizeof(root_t));
-      trie->mem_free(node_index, node_size);
       return false;
     };
     auto trie = trie_vec_.back().get();
@@ -160,8 +197,9 @@ public:
         new_mem_size += trie_vec_[i]->mem_size();
       }
       size_t new_trie_size =
-          std::max(trie->mem_size() * 2, key.size() + node_size) + 1024;
-      trie = new terark::PatriciaTrie(sizeof(root_t), new_trie_size);
+          std::max(trie->mem_size() * 2,
+                   key.size() + VarintLength(value.size()) + value.size()) + 1024;
+      trie = new terark::PatriciaTrie(sizeof(uint32_t), new_trie_size);
       trie_vec_.unchecked_emplace_back(trie);
       mem_size_ = new_mem_size;
       bool ok = insert_impl(trie);
@@ -180,22 +218,11 @@ public:
       if (!trie->lookup(find_key, &token)) {
         continue;
       }
-      root_t* root = (root_t*)trie->mem_get(*(uint32_t*)token.value());
-      auto contains_impl = [&] {
-        auto index = threaded_rbtree_equal_unique(*root, deref_node_t(trie), tag,
-                                                  deref_key_t(trie), key_compare_t());
-        return index != node_t::nil_sentinel;
-      };
-      if (immutable_) {
-        if (contains_impl()) {
-          return true;
-        }
-      }
-      else {
-        std::unique_lock<std::mutex> _lock(sharding(root, mutex_));
-        if (contains_impl()) {
-          return true;
-        }
+      auto vector = (vector_t*)trie->mem_get(*(uint32_t*)token.value());
+      size_t size = vector->size;
+      auto data = (vector_t::data_t*)trie->mem_get(vector->loc);
+      if (terark::binary_search_0(data, size, tag)) {
+        return true;
       }
     }
     return false;
@@ -220,39 +247,41 @@ public:
   virtual void Get(const LookupKey &k, void *callback_args,
                    bool(*callback_func)(void *arg, const KeyValuePair*)) override {
 
+    struct HeapItem {
+      uint64_t tag;
+      terark::PatriciaTrie* trie;
+      uint32_t vector_loc;
+      uint32_t index;
+    };
     class Context : public KeyValuePair {
     public:
       virtual Slice GetKey() const override {
         return buffer;
       }
       virtual Slice GetValue() const override {
-        return node->value();
+        return GetLengthPrefixedSlice(prefixed_value);
       }
       virtual std::pair<Slice, Slice> GetKeyValue() const override {
         return { Context::GetKey(), Context::GetValue() };
       }
 
-      KeyValuePair* Update(rep_node_t* _node) {
-        node = _node;
-        build_key(find_key, node->tag, &buffer);
+      KeyValuePair* Update(HeapItem* heap) {
+        auto vector = (vector_t*)heap->trie->mem_get(heap->vector_loc);
+        auto data = (vector_t::data_t*)heap->trie->mem_get(vector->loc);
+        build_key(find_key, heap->tag, &buffer);
+        prefixed_value = (const char*)heap->trie->mem_get(data[heap->index].loc);
         return this;
       }
 
       terark::fstring find_key;
-      rep_node_t* node;
       std::string buffer;
+      const char* prefixed_value;
     } ctx;
 
     Slice internal_key = k.internal_key();
     ctx.find_key = terark::fstring(internal_key.data(), internal_key.size() - 8);
     uint64_t tag = DecodeFixed64(ctx.find_key.end());
 
-    struct HeapItem {
-      uint64_t tag;
-      terark::PatriciaTrie* trie;
-      root_t* root;
-      size_t index;
-    };
     HeapItem heap[max_trie_count];
     size_t heap_size = 0;
 
@@ -262,72 +291,55 @@ public:
       if (!trie->lookup(ctx.find_key, &token)) {
         continue;
       }
-      root_t* root = (root_t*)trie->mem_get(*(uint32_t*)token.value());
-      auto get_impl = [&] {
-        size_t index = threaded_rbtree_lower_bound(*root, deref_node_t(trie), tag,
-                                                   deref_key_t(trie), key_compare_t());
-        if (index != node_t::nil_sentinel) {
-          heap[heap_size++] = HeapItem{ deref_key_t(trie)(index), trie, root, index };
-        }
-      };
-      if (immutable_) {
-        get_impl();
-      } else {
-        std::unique_lock<std::mutex> _lock(sharding(root, mutex_));
-        get_impl();
+      uint32_t vector_loc = *(uint32_t*)token.value();
+      auto vector = (vector_t*)trie->mem_get(vector_loc);
+      size_t size = vector->size;
+      auto data = (vector_t::data_t*)trie->mem_get(vector->loc);
+      size_t index = terark::upper_bound_0(data, size, tag) - 1;
+      if (index != size_t(-1)) {
+        heap[heap_size++] = HeapItem{ data[index].tag, trie, vector_loc, (uint32_t)index };
       }
     }
     auto heap_comp = [](const HeapItem& l, const HeapItem& r) {
       return l.tag < r.tag;
     };
     std::make_heap(heap, heap + heap_size, heap_comp);
-    auto heap_next = [&]() {
-      heap->index = threaded_rbtree_move_next(heap->index, deref_node_t(heap->trie));
-      if (heap->index != node_t::nil_sentinel) {
-        heap->tag = deref_key_t(heap->trie)(heap->index);
-        terark::adjust_heap_top(heap, heap_size, heap_comp);
-      } else {
+    while (heap_size > 0 && callback_func(callback_args, ctx.Update(heap))) {
+      if (heap->index == 0) {
         std::pop_heap(heap, heap + heap_size, heap_comp);
         --heap_size;
+        continue;
       }
-    };
-    while (heap_size > 0 &&
-           callback_func(callback_args,
-                         ctx.Update((rep_node_t*)heap->trie->mem_get(heap->index)))) {
-      if (immutable_) {
-        heap_next();
-      } else {
-        std::unique_lock<std::mutex> _lock(sharding(heap->root, mutex_));
-        heap_next();
-      }
+      --heap->index;
+      auto vector = (vector_t*)heap->trie->mem_get(heap->vector_loc);
+      auto data = (vector_t::data_t*)heap->trie->mem_get(vector->loc);
+      heap->tag = data[heap->index].tag;
+      terark::adjust_heap_top(heap, heap_size, heap_comp);
     }
   }
 
   virtual ~PTrieRep() override {}
 
-  // used for immutable
-  struct dummy_lock {
-    template<class T> dummy_lock(T const &) {}
-  };
-
-  template<bool heap_mode, class lock_t>
+  template<bool heap_mode>
   class Iterator : public MemTableRep::Iterator, boost::noncopyable {
     typedef terark::PatriciaTrie::ReaderToken token_t;
     friend class PTrieRep;
     static constexpr size_t num_words_update = 1024;
 
     struct HeapItem : boost::noncopyable {
+      uint64_t tag;
       token_t token;
       terark::ADFA_LexIterator* iter;
-      size_t where;
-      uint64_t tag;
+      uint32_t vector_loc;
+      uint32_t index;
       size_t num_words;
 
       HeapItem(terark::PatriciaTrie* trie)
-        : token(trie)
+        : tag(uint64_t(-1))
+        , token(trie)
         , iter(trie->adfa_make_iter())
-        , where(node_t::nil_sentinel)
-        , tag(0)
+        , vector_loc(uint32_t(-1))
+        , index(uint32_t(-1))
         , num_words(trie->num_words()) {
       }
       ~HeapItem() {
@@ -341,126 +353,123 @@ public:
         }
         return false;
       }
-      root_t* Value() {
+      struct VectorData {
+        size_t size;
+        const vector_t::data_t* data;
+      };
+      VectorData GetVector() {
         auto trie = token.trie();
-        size_t root_index = *(uint32_t*)trie->get_valptr(iter->word_state());
-        return (root_t*)trie->mem_get(root_index);
+        vector_loc = *(uint32_t*)trie->get_valptr(iter->word_state());
+        auto vector = (vector_t*)trie->mem_get(vector_loc);
+        size_t size = vector->size;
+        auto data = (vector_t::data_t*)trie->mem_get(vector->loc);
+        return { size, data };
+      }
+      uint32_t GetValue() const {
+        auto trie = token.trie();
+        auto vector = (vector_t*)trie->mem_get(vector_loc);
+        auto data = (vector_t::data_t*)trie->mem_get(vector->loc);
+        return data[index].loc;
       }
       void Seek(PTrieRep* rep, terark::fstring find_key, uint64_t find_tag) {
         Update();
         if (!iter->seek_lower_bound(find_key)) {
-          where = node_t::nil_sentinel;
+          index = uint32_t(-1);
           return;
         }
-        auto trie = token.trie();
-        auto root = Value();
+        auto vec = GetVector();
         if (iter->word() == find_key) {
-          {
-            lock_t _lock(sharding(root, rep->mutex_));
-            where = threaded_rbtree_lower_bound(*root, deref_node_t(trie), find_tag,
-                                                deref_key_t(trie), key_compare_t());
-          }
-          if (where != node_t::nil_sentinel) {
-            tag = deref_key_t(trie)(where);
+          index = terark::upper_bound_0(vec.data, vec.size, find_tag) - 1;
+          if (index != uint32_t(-1)) {
+            tag = vec.data[index];
             return;
           }
           if (!iter->incr()) {
+            assert(index == uint32_t(-1));
             return;
           }
-          root = Value();
+          vec = GetVector();
         }
         assert(iter->word() > find_key);
-        lock_t _lock(sharding(root, rep->mutex_));
-        where = root->get_most_left(deref_node_t(trie));
-        tag = deref_key_t(trie)(where);
+        index = vec.size - 1;
+        tag = vec.data[index].tag;
       }
       void SeekForPrev(PTrieRep* rep, terark::fstring find_key, uint64_t find_tag) {
         Update();
         if (!iter->seek_rev_lower_bound(find_key)) {
-          where = node_t::nil_sentinel;
+          index = uint32_t(-1);
           return;
         }
-        auto trie = token.trie();
-        auto root = Value();
+        auto vec = GetVector();
         if (iter->word() == find_key) {
-          {
-            lock_t _lock(sharding(root, rep->mutex_));
-            where =
-                threaded_rbtree_reverse_lower_bound(*root, deref_node_t(trie),
-                                                    find_tag, deref_key_t(trie),
-                                                    key_compare_t());
-          }
-          if (where != node_t::nil_sentinel) {
-            tag = deref_key_t(trie)(where);
+          index = terark::lower_bound_0(vec.data, vec.size, find_tag);
+          if (index != vec.size) {
+            tag = vec.data[index].tag;
             return;
           }
           if (!iter->decr()) {
+            index = uint32_t(-1);
             return;
           }
-          root = Value();
+          vec = GetVector();
         }
         assert(iter->word() < find_key);
-        lock_t _lock(sharding(root, rep->mutex_));
-        where = root->get_most_right(deref_node_t(trie));
-        tag = deref_key_t(trie)(where);
+        index = 0;
+        tag = vec.data[index].tag;
       }
       void SeekToFirst(PTrieRep* rep) {
         Update();
         if (!iter->seek_begin()) {
-          where = node_t::nil_sentinel;
+          index = uint32_t(-1);
           return;
         }
-        auto trie = token.trie();
-        auto root = Value();
-        lock_t _lock(sharding(root, rep->mutex_));
-        where = root->get_most_left(deref_node_t(trie));
-        tag = deref_key_t(trie)(where);
+        auto vec = GetVector();
+        index = vec.size - 1;
+        tag = vec.data[index].tag;
       }
       void SeekToLast(PTrieRep* rep) {
         Update();
         if (!iter->seek_end()) {
-          where = node_t::nil_sentinel;
+          index = uint32_t(-1);
           return;
         }
-        auto trie = token.trie();
-        auto root = Value();
-        lock_t _lock(sharding(root, rep->mutex_));
-        where = root->get_most_right(deref_node_t(trie));
-        tag = deref_key_t(trie)(where);
+        auto vec = GetVector();
+        index = 0;
+        tag = vec.data[index].tag;
       }
       void Next(PTrieRep* rep, std::string& internal_key) {
         if (Update()) {
           terark::fstring find_key(internal_key.data(), internal_key.size() - 8);
           iter->seek_lower_bound(find_key);
         }
-        auto trie = token.trie();
-        where = threaded_rbtree_move_next(where, deref_node_t(trie));
-        if (where == node_t::nil_sentinel) {
+        if (index-- == 0) {
           if (!iter->incr()) {
+            assert(index == uint32_t(-1));
             return;
           }
-          auto root = Value();
-          lock_t _lock(sharding(root, rep->mutex_));
-          where = root->get_most_left(deref_node_t(trie));
+          auto vec = GetVector();
+          index = vec.size - 1;
+          tag = vec.data[index].tag;
+        } else {
+          auto vec = GetVector();
+          tag = vec.data[index].tag;
         }
-        tag = deref_key_t(trie)(where);
       }
       void Prev(PTrieRep* rep, std::string& internal_key) {
         if (Update()) {
           terark::fstring find_key(internal_key.data(), internal_key.size() - 8);
           iter->seek_lower_bound(find_key);
         }
-        auto trie = token.trie();
-        where = threaded_rbtree_move_prev(where, deref_node_t(trie));
-        if (where == node_t::nil_sentinel) {
+        auto vec = GetVector();
+        if (++index == vec.size) {
           if (!iter->decr()) {
+            index = uint32_t(-1);
             return;
           }
-          auto root = Value();
-          lock_t _lock(sharding(root, rep->mutex_));
-          where = root->get_most_right(deref_node_t(trie));
+          vec = GetVector();
+          index = 0;
         }
-        tag = deref_key_t(trie)(where);
+        tag = vec.data[index].tag;
       }
     };
     std::string buffer_;
@@ -596,7 +605,8 @@ public:
 
     virtual Slice GetValue() const override {
       const HeapItem* item = Current();
-      return ((rep_node_t*)item->token.trie()->mem_get(item->where))->value();
+      uint32_t value_loc = item->GetValue();
+      return GetLengthPrefixedSlice((const char*)item->token.trie()->mem_get(value_loc));
     }
 
     virtual std::pair<Slice, Slice> GetKeyValue() const override {
@@ -612,7 +622,7 @@ public:
           uint64_t tag = DecodeFixed64(find_key.end());
           Rebuild<1>([&](HeapItem* item) {
             item->Seek(rep_, find_key, tag);
-            return item->where != node_t::nil_sentinel;
+            return item->index != uint32_t(-1);
           });
           if (multi_.size == 0) {
             direction_ = 0;
@@ -620,7 +630,7 @@ public:
           }
         }
         multi_.heap[0]->Next(rep_, buffer_);
-        if (multi_.heap[0]->where == node_t::nil_sentinel) {
+        if (multi_.heap[0]->index == uint32_t(-1)) {
           std::pop_heap(multi_.heap, multi_.heap + multi_.size, ForwardComp());
           if (--multi_.size == 0) {
             direction_ = 0;
@@ -631,7 +641,7 @@ public:
         }
       } else {
         single_.Next(rep_, buffer_);
-        if (single_.where == node_t::nil_sentinel) {
+        if (single_.index == uint32_t(-1)) {
           direction_ = 0;
           return;
         }
@@ -648,7 +658,7 @@ public:
           uint64_t tag = DecodeFixed64(find_key.end());
           Rebuild<-1>([&](HeapItem* item) {
             item->SeekForPrev(rep_, find_key, tag);
-            return item->where != node_t::nil_sentinel;
+            return item->index != uint32_t(-1);
           });
           if (multi_.size == 0) {
             direction_ = 0;
@@ -656,7 +666,7 @@ public:
           }
         }
         multi_.heap[0]->Prev(rep_, buffer_);
-        if (multi_.heap[0]->where == node_t::nil_sentinel) {
+        if (multi_.heap[0]->index == uint32_t(-1)) {
           std::pop_heap(multi_.heap, multi_.heap + multi_.size, BackwardComp());
           if (--multi_.size == 0) {
             direction_ = 0;
@@ -667,7 +677,7 @@ public:
         }
       } else {
         single_.Prev(rep_, buffer_);
-        if (single_.where == node_t::nil_sentinel) {
+        if (single_.index == uint32_t(-1)) {
           direction_ = 0;
           return;
         }
@@ -690,7 +700,7 @@ public:
       if (heap_mode) {
         Rebuild<1>([&](HeapItem* item) {
           item->Seek(rep_, find_key, tag);
-          return item->where != node_t::nil_sentinel;
+          return item->index != uint32_t(-1);
         });
         if (multi_.size == 0) {
           direction_ = 0;
@@ -698,7 +708,7 @@ public:
         }
       } else {
         single_.Seek(rep_, find_key, tag);
-        if (single_.where == node_t::nil_sentinel) {
+        if (single_.index == uint32_t(-1)) {
           direction_ = 0;
           return;
         }
@@ -722,7 +732,7 @@ public:
       if (heap_mode) {
         Rebuild<-1>([&](HeapItem* item) {
           item->SeekForPrev(rep_, find_key, tag);
-          return item->where != node_t::nil_sentinel;
+          return item->index != uint32_t(-1);
         });
         if (multi_.size == 0) {
           direction_ = 0;
@@ -730,7 +740,7 @@ public:
         }
       } else {
         single_.SeekForPrev(rep_, find_key, tag);
-        if (single_.where == node_t::nil_sentinel) {
+        if (single_.index == uint32_t(-1)) {
           direction_ = 0;
           return;
         }
@@ -745,7 +755,7 @@ public:
       if (heap_mode) {
         Rebuild<1>([&](HeapItem* item) {
           item->SeekToFirst(rep_);
-          return item->where != node_t::nil_sentinel;
+          return item->index != uint32_t(-1);
         });
         if (multi_.size == 0) {
           direction_ = 0;
@@ -753,7 +763,7 @@ public:
         }
       } else {
         single_.SeekToFirst(rep_);
-        if (single_.where != node_t::nil_sentinel) {
+        if (single_.index == uint32_t(-1)) {
           direction_ = 0;
           return;
         }
@@ -768,7 +778,7 @@ public:
       if (heap_mode) {
         Rebuild<-1>([&](HeapItem* item) {
           item->SeekToLast(rep_);
-          return item->where != node_t::nil_sentinel;
+          return item->index != uint32_t(-1);
         });
         if (multi_.size == 0) {
           direction_ = 0;
@@ -776,7 +786,7 @@ public:
         }
       } else {
         single_.SeekToLast(rep_);
-        if (single_.where != node_t::nil_sentinel) {
+        if (single_.index == uint32_t(-1)) {
           direction_ = 0;
           return;
         }
@@ -790,26 +800,12 @@ public:
     virtual bool IsSeekForPrevSupported() const { return true; }
   };
   virtual MemTableRep::Iterator *GetIterator(Arena *arena = nullptr) override {
-    if (immutable_) {
-      if (trie_vec_.size() == 1) {
-        typedef PTrieRep::Iterator<false, dummy_lock> i_t;
-        return arena ? new(arena->AllocateAligned(sizeof(i_t))) i_t(this)
-                     : new i_t(this);
-      } else {
-        typedef PTrieRep::Iterator<true, dummy_lock> i_t;
-        return arena ? new(arena->AllocateAligned(sizeof(i_t))) i_t(this)
-                     : new i_t(this);
-      }
+    if (trie_vec_.size() == 1) {
+      typedef PTrieRep::Iterator<false> i_t;
+      return arena ? new(arena->AllocateAligned(sizeof(i_t))) i_t(this) : new i_t(this);
     } else {
-      if (trie_vec_.size() == 1) {
-        typedef PTrieRep::Iterator<false, std::unique_lock<std::mutex>> i_t;
-        return arena ? new(arena->AllocateAligned(sizeof(i_t))) i_t(this)
-                     : new i_t(this);
-      } else {
-        typedef PTrieRep::Iterator<true, std::unique_lock<std::mutex>> i_t;
-        return arena ? new(arena->AllocateAligned(sizeof(i_t))) i_t(this)
-                     : new i_t(this);
-      }
+      typedef PTrieRep::Iterator<true> i_t;
+      return arena ? new(arena->AllocateAligned(sizeof(i_t))) i_t(this) : new i_t(this);
     }
   }
 };
