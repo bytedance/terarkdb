@@ -46,8 +46,7 @@ TerarkZipAutoConfigForOnlineDB_CFOptions(struct TerarkZipTableOptions& tzo,
 
 class MemTableRepFactory*
     __attribute__((weak))
-NewPatriciaTrieRepFactory(size_t sharding_count = 0,
-                          std::shared_ptr<class MemTableRepFactory> fallback = nullptr);
+NewPatriciaTrieRepFactory(std::shared_ptr<class MemTableRepFactory> fallback);
 
 class TableFactory*
 __attribute__((weak))

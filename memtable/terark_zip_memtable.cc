@@ -64,12 +64,11 @@ private:
 
 public:
   explicit PTrieRep(const MemTableRep::KeyComparator &compare, Allocator *allocator,
-                    const SliceTransform *, size_t sharding)
+                    const SliceTransform *)
     : MemTableRep(allocator)
     , immutable_(false)
     , num_entries_(0)
     , mem_size_(0) {
-    assert(sharding > 0);
     trie_vec_.reserve(max_trie_count);
     trie_vec_.emplace_back(new terark::PatriciaTrie(sizeof(uint32_t), allocator->BlockSize()));
   }
@@ -95,9 +94,11 @@ public:
         : terark::PatriciaTrie::WriterToken(trie)
         , tag_(tag)
         , value_(value) {}
+
       uint64_t get_tag() {
         return tag_;
       }
+
     protected:
       bool init_value(void* dest, const void* src, size_t valsize) override {
         assert(src == nullptr);
@@ -133,12 +134,15 @@ public:
         memcpy(dest, &u32_vector_loc, valsize);
         return true;
       init_fail:
-        if (value_loc != terark::PatriciaTrie::mem_alloc_fail)
-          trie()->mem_free(vector_loc, value_size);
-        if (data_loc != terark::PatriciaTrie::mem_alloc_fail)
-          trie()->mem_free(vector_loc, sizeof(vector_t::data_t));
-        if (vector_loc != terark::PatriciaTrie::mem_alloc_fail)
+        if (value_loc != terark::PatriciaTrie::mem_alloc_fail) {
+          trie()->mem_free(value_loc, value_size);
+        }
+        if (data_loc != terark::PatriciaTrie::mem_alloc_fail) {
+          trie()->mem_free(data_loc, sizeof(vector_t::data_t));
+        }
+        if (vector_loc != terark::PatriciaTrie::mem_alloc_fail) {
           trie()->mem_free(vector_loc, sizeof(vector_t));
+        }
         return false;
       }
     private:
@@ -184,8 +188,7 @@ public:
         vector->size = size + 1;
         trie->mem_lazy_free(data_loc, sizeof(vector_t::data_t) * size);
         return true;
-      }
-      else if (token.value() != nullptr) {
+      } else if (token.value() != nullptr) {
         return true;
       }
       return false;
@@ -512,8 +515,7 @@ public:
     HeapItem* Current() {
       if (heap_mode) {
         return *multi_.heap;
-      }
-      else {
+      } else {
         return &single_;
       }
     }
@@ -564,8 +566,7 @@ public:
         for (size_t i = 0; i < multi_.size; ) {
           if (callback_func(multi_.heap[i])) {
             ++i;
-          }
-          else {
+          } else {
             --multi_.size;
             std::swap(multi_.heap[i], multi_.heap[multi_.size]);
           }
@@ -812,10 +813,8 @@ public:
 
 class PTrieMemtableRepFactory : public MemTableRepFactory {
 public:
-  PTrieMemtableRepFactory(size_t sharding_count,
-                          std::shared_ptr<class MemTableRepFactory> fallback)
-    : sharding_count_(sharding_count)
-    , fallback_(fallback) {}
+  PTrieMemtableRepFactory(std::shared_ptr<class MemTableRepFactory> fallback)
+    : fallback_(fallback) {}
   virtual ~PTrieMemtableRepFactory() {}
 
   using MemTableRepFactory::CreateMemTableRep;
@@ -825,7 +824,7 @@ public:
     auto key_comparator = compare.icomparator();
     auto user_comparator = key_comparator->user_comparator();
     if (strcmp(user_comparator->Name(), BytewiseComparator()->Name()) == 0) {
-      return new PTrieRep(compare, allocator, transform, sharding_count_);
+      return new PTrieRep(compare, allocator, transform);
     } else {
       return fallback_->CreateMemTableRep(compare, allocator, transform, logger);
     }
@@ -840,21 +839,17 @@ public:
   }
 
 private:
-  size_t sharding_count_;
   std::shared_ptr<class MemTableRepFactory> fallback_;
 };
 
 }
 
-MemTableRepFactory* NewPatriciaTrieRepFactory(size_t sharding_count,
-                                              std::shared_ptr<class MemTableRepFactory> fallback) {
+MemTableRepFactory*
+NewPatriciaTrieRepFactory(std::shared_ptr<class MemTableRepFactory> fallback) {
   if (!fallback) {
     fallback.reset(new SkipListFactory());
   }
-  if (sharding_count == 0) {
-    sharding_count = std::thread::hardware_concurrency() * 2 + 3;
-  }
-  return new PTrieMemtableRepFactory(sharding_count, fallback);
+  return new PTrieMemtableRepFactory(fallback);
 }
 
 } // namespace rocksdb
