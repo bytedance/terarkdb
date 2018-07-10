@@ -107,33 +107,34 @@ public:
         size_t data_loc = terark::PatriciaTrie::mem_alloc_fail;
         size_t value_loc = terark::PatriciaTrie::mem_alloc_fail;
         size_t value_size = VarintLength(value_.size()) + value_.size();
-          
-        vector_loc = trie()->mem_alloc(sizeof(vector_t));
-        if (vector_loc == terark::PatriciaTrie::mem_alloc_fail) {
-          goto init_fail;
-        }
-        data_loc = trie()->mem_alloc(sizeof(vector_t::data_t));
-        if (data_loc == terark::PatriciaTrie::mem_alloc_fail) {
-          goto init_fail;
-        }
-        value_loc = trie()->mem_alloc(value_size);
-        if (value_loc == terark::PatriciaTrie::mem_alloc_fail) {
-          goto init_fail;
-        }
+        do { 
+          vector_loc = trie()->mem_alloc(sizeof(vector_t));
+          if (vector_loc == terark::PatriciaTrie::mem_alloc_fail) {
+            break;
+          }
+          data_loc = trie()->mem_alloc(sizeof(vector_t::data_t));
+          if (data_loc == terark::PatriciaTrie::mem_alloc_fail) {
+            break;
+          }
+          value_loc = trie()->mem_alloc(value_size);
+          if (value_loc == terark::PatriciaTrie::mem_alloc_fail) {
+            break;
+          }
 
-        memcpy(EncodeVarint32((char*)trie()->mem_get(value_loc), (uint32_t)value_.size()),
-               value_.data(), value_.size());
-        auto* data = (vector_t::data_t*)trie()->mem_get(data_loc);
-        data->loc = (uint32_t)value_loc;
-        data->tag = tag_;
-        auto* vector = (vector_t*)trie()->mem_get(vector_loc);
-        vector->loc = (uint32_t)data_loc;
-        vector->size = 1;
+          char* value_dst = EncodeVarint32((char*)trie()->mem_get(value_loc),
+                                           (uint32_t)value_.size());
+          memcpy(value_dst, value_.data(), value_.size());
+          auto* data = (vector_t::data_t*)trie()->mem_get(data_loc);
+          data->loc = (uint32_t)value_loc;
+          data->tag = tag_;
+          auto* vector = (vector_t*)trie()->mem_get(vector_loc);
+          vector->loc = (uint32_t)data_loc;
+          vector->size = 1;
 
-        uint32_t u32_vector_loc = vector_loc;
-        memcpy(dest, &u32_vector_loc, valsize);
-        return true;
-      init_fail:
+          uint32_t u32_vector_loc = vector_loc;
+          memcpy(dest, &u32_vector_loc, valsize);
+          return true;
+        } while (false);
         if (value_loc != terark::PatriciaTrie::mem_alloc_fail) {
           trie()->mem_free(value_loc, value_size);
         }
