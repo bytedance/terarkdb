@@ -16,7 +16,6 @@
 #include "db/memtable.h"
 #include "rocksdb/memtablerep.h"
 #include "util/arena.h"
-#include "util/threaded_rbtree.h"
 #include <terark/fsa/dynamic_patricia_trie.hpp>
 #include <terark/heap_ext.hpp>
 #include <terark/io/byte_swap.hpp>
@@ -28,7 +27,7 @@ class PTrieRep : public MemTableRep {
 
 #pragma pack(push)
 #pragma pack(4)
-  struct vector_t {
+  struct tag_vector_t {
     uint32_t size;
     uint32_t loc;
     struct data_t {
@@ -57,7 +56,12 @@ class PTrieRep : public MemTableRep {
   }
 
 private:
-  mutable terark::valvec<std::unique_ptr<terark::PatriciaTrie>> trie_vec_;
+  struct trie_item_t {
+    size_t accumulate_mem_size;
+    std::unique_ptr<terark::PatriciaTrie> trie;
+  };
+  mutable trie_item_t trie_arr_[max_trie_count];
+  trie_item_t* current_;
   std::atomic_bool immutable_;
   std::atomic_size_t num_entries_;
   size_t mem_size_;
@@ -69,8 +73,9 @@ public:
     , immutable_(false)
     , num_entries_(0)
     , mem_size_(0) {
-    trie_vec_.reserve(max_trie_count);
-    trie_vec_.emplace_back(new terark::PatriciaTrie(sizeof(uint32_t), allocator->BlockSize()));
+    current_ = trie_arr_;
+    current_->accumulate_mem_size = 0;
+    current_->trie.reset(new terark::PatriciaTrie(sizeof(uint32_t), allocator->BlockSize()));
   }
 
   virtual KeyHandle Allocate(const size_t len, char **buf) override {
@@ -107,12 +112,12 @@ public:
         size_t data_loc = terark::PatriciaTrie::mem_alloc_fail;
         size_t value_loc = terark::PatriciaTrie::mem_alloc_fail;
         size_t value_size = VarintLength(value_.size()) + value_.size();
-        do { 
-          vector_loc = trie()->mem_alloc(sizeof(vector_t));
+        do {
+          vector_loc = trie()->mem_alloc(sizeof(tag_vector_t));
           if (vector_loc == terark::PatriciaTrie::mem_alloc_fail) {
             break;
           }
-          data_loc = trie()->mem_alloc(sizeof(vector_t::data_t));
+          data_loc = trie()->mem_alloc(sizeof(tag_vector_t::data_t));
           if (data_loc == terark::PatriciaTrie::mem_alloc_fail) {
             break;
           }
@@ -124,10 +129,10 @@ public:
           char* value_dst = EncodeVarint32((char*)trie()->mem_get(value_loc),
                                            (uint32_t)value_.size());
           memcpy(value_dst, value_.data(), value_.size());
-          auto* data = (vector_t::data_t*)trie()->mem_get(data_loc);
+          auto* data = (tag_vector_t::data_t*)trie()->mem_get(data_loc);
           data->loc = (uint32_t)value_loc;
           data->tag = tag_;
-          auto* vector = (vector_t*)trie()->mem_get(vector_loc);
+          auto* vector = (tag_vector_t*)trie()->mem_get(vector_loc);
           vector->loc = (uint32_t)data_loc;
           vector->size = 1;
 
@@ -139,10 +144,10 @@ public:
           trie()->mem_free(value_loc, value_size);
         }
         if (data_loc != terark::PatriciaTrie::mem_alloc_fail) {
-          trie()->mem_free(data_loc, sizeof(vector_t::data_t));
+          trie()->mem_free(data_loc, sizeof(tag_vector_t::data_t));
         }
         if (vector_loc != terark::PatriciaTrie::mem_alloc_fail) {
-          trie()->mem_free(vector_loc, sizeof(vector_t));
+          trie()->mem_free(vector_loc, sizeof(tag_vector_t));
         }
         return false;
       }
@@ -164,9 +169,9 @@ public:
                value.data(), value.size());
 
         size_t vector_loc = *(uint32_t*)token.value();
-        auto* vector = (vector_t*)trie->mem_get(vector_loc);
+        auto* vector = (tag_vector_t*)trie->mem_get(vector_loc);
         size_t data_loc = vector->loc;
-        auto* data = (vector_t::data_t*)trie->mem_get(data_loc);
+        auto* data = (tag_vector_t::data_t*)trie->mem_get(data_loc);
         size_t size = vector->size;
         assert(size > 0);
         assert(token.get_tag() > data[size - 1].tag);
@@ -176,37 +181,38 @@ public:
           vector->size = size + 1;
           return true;
         }
-        size_t cow_data_loc = trie->mem_alloc(sizeof(vector_t::data_t) * size * 2);
+        size_t cow_data_loc = trie->mem_alloc(sizeof(tag_vector_t::data_t) * size * 2);
         if (cow_data_loc == terark::PatriciaTrie::mem_alloc_fail) {
           trie->mem_free(value_loc, value_size);
           return false;
         }
-        auto* cow_data = (vector_t::data_t*)trie->mem_get(cow_data_loc);
-        memcpy(cow_data, data, sizeof(vector_t::data_t) * size);
+        auto* cow_data = (tag_vector_t::data_t*)trie->mem_get(cow_data_loc);
+        memcpy(cow_data, data, sizeof(tag_vector_t::data_t) * size);
         cow_data[size].loc = (uint32_t)value_loc;
         cow_data[size].tag = token.get_tag();
         vector->loc = (uint32_t)cow_data_loc;
         vector->size = size + 1;
-        trie->mem_lazy_free(data_loc, sizeof(vector_t::data_t) * size);
+        trie->mem_lazy_free(data_loc, sizeof(tag_vector_t::data_t) * size);
         return true;
       } else if (token.value() != nullptr) {
         return true;
       }
       return false;
     };
-    auto trie = trie_vec_.back().get();
-    if (!insert_impl(trie)) {
-      size_t new_mem_size = 0;
-      for (size_t i = 0; i < trie_vec_.size(); ++i) {
-        new_mem_size += trie_vec_[i]->mem_size();
+    if (!insert_impl(current_->trie.get())) {
+      size_t accumulate_mem_size = 0;
+      for (trie_item_t* it = trie_arr_; it <= current_; ++it) {
+        accumulate_mem_size += it->trie->mem_size();
       }
       size_t new_trie_size =
-          std::max(trie->mem_size() * 2,
+          std::max(current_->trie->mem_size() * 2,
                    key.size() + VarintLength(value.size()) + value.size()) + 1024;
-      trie = new terark::PatriciaTrie(sizeof(uint32_t), new_trie_size);
-      trie_vec_.unchecked_emplace_back(trie);
-      mem_size_ = new_mem_size;
-      bool ok = insert_impl(trie);
+      auto next = current_ + 1;
+      assert(next != trie_arr_ + max_trie_count);
+      next->accumulate_mem_size = accumulate_mem_size;
+      next->trie.reset(new terark::PatriciaTrie(sizeof(uint32_t), new_trie_size));
+      current_ = next;
+      bool ok = insert_impl(current_->trie.get());
       assert(ok); (void)ok;
     }
     ++num_entries_;
@@ -216,15 +222,15 @@ public:
   virtual bool Contains(const Slice& internal_key) const override {
     terark::fstring find_key(internal_key.data(), internal_key.size() - 8);
     uint64_t tag = DecodeFixed64(find_key.end());
-    for (size_t i = 0; i < trie_vec_.size(); ++i) {
-      auto trie = trie_vec_[i].get();
+    for (trie_item_t* it = trie_arr_; it <= current_; ++it) {
+      auto trie = it->trie.get();
       terark::PatriciaTrie::ReaderToken token(trie);
       if (!trie->lookup(find_key, &token)) {
         continue;
       }
-      auto vector = (vector_t*)trie->mem_get(*(uint32_t*)token.value());
+      auto vector = (tag_vector_t*)trie->mem_get(*(uint32_t*)token.value());
       size_t size = vector->size;
-      auto data = (vector_t::data_t*)trie->mem_get(vector->loc);
+      auto data = (tag_vector_t::data_t*)trie->mem_get(vector->loc);
       if (terark::binary_search_0(data, size, tag)) {
         return true;
       }
@@ -233,14 +239,15 @@ public:
   }
 
   virtual void MarkReadOnly() override {
-    for (size_t i = 0; i < trie_vec_.size(); ++i) {
-      trie_vec_[i]->set_readonly();
+    for (trie_item_t* it = trie_arr_; it <= current_; ++it) {
+      it->trie->set_readonly();
     }
     immutable_ = true;
   }
 
   virtual size_t ApproximateMemoryUsage() override {
-    return mem_size_ + trie_vec_.back()->mem_size();
+    auto curr_item = current_;
+    return curr_item->accumulate_mem_size + curr_item->trie->mem_size();
   }
 
   virtual uint64_t ApproximateNumEntries(const Slice& start_ikey,
@@ -270,8 +277,8 @@ public:
       }
 
       KeyValuePair* Update(HeapItem* heap) {
-        auto vector = (vector_t*)heap->trie->mem_get(heap->vector_loc);
-        auto data = (vector_t::data_t*)heap->trie->mem_get(vector->loc);
+        auto vector = (tag_vector_t*)heap->trie->mem_get(heap->vector_loc);
+        auto data = (tag_vector_t::data_t*)heap->trie->mem_get(vector->loc);
         build_key(find_key, heap->tag, &buffer);
         prefixed_value = (const char*)heap->trie->mem_get(data[heap->index].loc);
         return this;
@@ -289,16 +296,16 @@ public:
     HeapItem heap[max_trie_count];
     size_t heap_size = 0;
 
-    for (size_t i = 0; i < trie_vec_.size(); ++i) {
-      auto trie = trie_vec_[i].get();
+    for (trie_item_t* it = trie_arr_; it <= current_; ++it) {
+      auto trie = it->trie.get();
       terark::PatriciaTrie::ReaderToken token(trie);
       if (!trie->lookup(ctx.find_key, &token)) {
         continue;
       }
       uint32_t vector_loc = *(uint32_t*)token.value();
-      auto vector = (vector_t*)trie->mem_get(vector_loc);
+      auto vector = (tag_vector_t*)trie->mem_get(vector_loc);
       size_t size = vector->size;
-      auto data = (vector_t::data_t*)trie->mem_get(vector->loc);
+      auto data = (tag_vector_t::data_t*)trie->mem_get(vector->loc);
       size_t index = terark::upper_bound_0(data, size, tag) - 1;
       if (index != size_t(-1)) {
         heap[heap_size++] = HeapItem{ data[index].tag, trie, vector_loc, (uint32_t)index };
@@ -315,8 +322,8 @@ public:
         continue;
       }
       --heap->index;
-      auto vector = (vector_t*)heap->trie->mem_get(heap->vector_loc);
-      auto data = (vector_t::data_t*)heap->trie->mem_get(vector->loc);
+      auto vector = (tag_vector_t*)heap->trie->mem_get(heap->vector_loc);
+      auto data = (tag_vector_t::data_t*)heap->trie->mem_get(vector->loc);
       heap->tag = data[heap->index].tag;
       terark::adjust_heap_top(heap, heap_size, heap_comp);
     }
@@ -359,20 +366,20 @@ public:
       }
       struct VectorData {
         size_t size;
-        const vector_t::data_t* data;
+        const tag_vector_t::data_t* data;
       };
       VectorData GetVector() {
         auto trie = token.trie();
         vector_loc = *(uint32_t*)trie->get_valptr(iter->word_state());
-        auto vector = (vector_t*)trie->mem_get(vector_loc);
+        auto vector = (tag_vector_t*)trie->mem_get(vector_loc);
         size_t size = vector->size;
-        auto data = (vector_t::data_t*)trie->mem_get(vector->loc);
+        auto data = (tag_vector_t::data_t*)trie->mem_get(vector->loc);
         return { size, data };
       }
       uint32_t GetValue() const {
         auto trie = token.trie();
-        auto vector = (vector_t*)trie->mem_get(vector_loc);
-        auto data = (vector_t::data_t*)trie->mem_get(vector->loc);
+        auto vector = (tag_vector_t*)trie->mem_get(vector_loc);
+        auto data = (tag_vector_t::data_t*)trie->mem_get(vector->loc);
         return data[index].loc;
       }
       void Seek(PTrieRep* rep, terark::fstring find_key, uint64_t find_tag) {
@@ -493,16 +500,16 @@ public:
       : rep_(rep)
       , direction_(0) {
       if (heap_mode) {
-        multi_.count = rep_->trie_vec_.size();
+        multi_.count = rep_->current_ - rep_->trie_arr_ + 1;
         multi_.array = (HeapItem*)malloc(sizeof(HeapItem) * multi_.count);
         multi_.heap = (HeapItem**)malloc(sizeof(void*) * multi_.count);
         for (size_t i = 0; i < multi_.count; ++i) {
           multi_.heap[i] =
-              new(multi_.array + i) HeapItem(rep_->trie_vec_[i].get());
+              new(multi_.array + i) HeapItem(rep_->trie_arr_[i].trie.get());
         }
         multi_.size = 0;
       } else {
-        new(&single_) HeapItem(rep_->trie_vec_.front().get());
+        new(&single_) HeapItem(rep_->trie_arr_->trie.get());
       }
     }
 
@@ -802,7 +809,7 @@ public:
     virtual bool IsSeekForPrevSupported() const { return true; }
   };
   virtual MemTableRep::Iterator *GetIterator(Arena *arena = nullptr) override {
-    if (trie_vec_.size() == 1) {
+    if (current_ == trie_arr_) {
       typedef PTrieRep::Iterator<false> i_t;
       return arena ? new(arena->AllocateAligned(sizeof(i_t))) i_t(this) : new i_t(this);
     } else {
