@@ -148,6 +148,9 @@ void
 TerarkZipMultiCFOptionsFromEnv(const struct DBOptions& db_options,
       const std::vector<struct ColumnFamilyDescriptor>& cfvec);
 
+const class WriteBatchEntryIndexFactory*
+WriteBatchEntryPTrieIndexFactory(const WriteBatchEntryIndexFactory* fallback);
+
 class MemTableRepFactory*
 NewPatriciaTrieRepFactory(std::shared_ptr<class MemTableRepFactory> fallback = nullptr);
 

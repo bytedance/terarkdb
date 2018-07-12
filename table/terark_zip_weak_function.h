@@ -44,8 +44,12 @@ TerarkZipAutoConfigForOnlineDB_CFOptions(struct TerarkZipTableOptions& tzo,
                                     size_t memBytesLimit,
                                     size_t diskBytesLimit);
 
+const class WriteBatchEntryIndexFactory*
+__attribute__((weak))
+WriteBatchEntryPTrieIndexFactory(const WriteBatchEntryIndexFactory* fallback);
+
 class MemTableRepFactory*
-    __attribute__((weak))
+__attribute__((weak))
 NewPatriciaTrieRepFactory(std::shared_ptr<class MemTableRepFactory> fallback);
 
 class TableFactory*

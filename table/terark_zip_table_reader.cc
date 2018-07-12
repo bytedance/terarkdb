@@ -243,7 +243,7 @@ using terark::byte_swap;
 using terark::lcast;
 using terark::AbstractBlobStore;
 
-class TerarkZipTableIndexIterator : public InternalIterator {
+class TerarkZipTableIndexIterator : public SourceInternalIterator {
 protected:
   const TerarkZipSubReader*         subReader_;
   unique_ptr<TerarkIndex::Iterator> iter_;
@@ -1233,7 +1233,7 @@ Status TerarkZipTableReader::LoadIndex(Slice mem) {
   return Status::OK();
 }
 
-InternalIterator*
+SourceInternalIterator*
 TerarkZipTableReader::
 NewIterator(const ReadOptions& ro, Arena* arena, bool skip_filters) {
   TERARK_UNUSED_VAR(skip_filters); // unused
@@ -1544,7 +1544,7 @@ TerarkZipTableMultiReader::SubIndex::GetSubReader(fstring key) const {
   return (this->*GetSubReaderPtr)(key);
 }
 
-InternalIterator*
+SourceInternalIterator*
 TerarkZipTableMultiReader::NewIterator(const ReadOptions& ro,
                                        Arena *arena, bool skip_filters) {
   TERARK_UNUSED_VAR(skip_filters); // unused

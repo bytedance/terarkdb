@@ -59,7 +59,7 @@ class TerarkEmptyTableReader
   : public TerarkZipTableTombstone
   , public TableReader
   , boost::noncopyable {
-  class Iter : public InternalIterator, boost::noncopyable {
+  class Iter : public SourceInternalIterator, boost::noncopyable {
   public:
     Iter() {}
     ~Iter() {}
@@ -84,7 +84,7 @@ class TerarkEmptyTableReader
   Slice  file_data_;
   unique_ptr<RandomAccessFileReader> file_;
 public:
-  InternalIterator*
+  SourceInternalIterator*
     NewIterator(const ReadOptions&, Arena* a, bool) override {
     return a ? new(a->AllocateAligned(sizeof(Iter)))Iter() : new Iter();
   }
@@ -159,7 +159,7 @@ class TerarkZipTableReader
   , public TableReader
   , boost::noncopyable {
 public:
-  InternalIterator*
+  SourceInternalIterator*
     NewIterator(const ReadOptions&, Arena*, bool skip_filters) override;
 
   using TerarkZipTableTombstone::NewRangeTombstoneIterator;
@@ -217,7 +217,7 @@ class TerarkZipTableMultiReader
   , boost::noncopyable {
 public:
 
-  InternalIterator*
+  SourceInternalIterator*
     NewIterator(const ReadOptions&, Arena*, bool skip_filters) override;
 
   using TerarkZipTableTombstone::NewRangeTombstoneIterator;
