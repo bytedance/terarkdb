@@ -5,6 +5,7 @@
 #include <rocksdb/db.h>
 #include <rocksdb/options.h>
 #include <rocksdb/table.h>
+#include "rocksdb/utilities/write_batch_with_index.h"
 #ifdef _MSC_VER
 # include <Windows.h>
 # define strcasecmp _stricmp
@@ -283,6 +284,7 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo) {
   tzo.singleIndexMemLimit = std::min<size_t>(tzo.singleIndexMemLimit, 0x1E0000000);
 
   cfo.memtable_factory.reset(NewPatriciaTrieRepFactory());
+  RegistWriteBatchEntryIndexFactory("patricia", WriteBatchEntryPTrieIndexFactory());
   cfo.table_factory = SingleTerarkZipTableFactory(tzo,
     std::shared_ptr<TableFactory>(NewAdaptiveTableFactory()));
   const char* compaction_style = "Universal";
