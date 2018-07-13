@@ -35,6 +35,7 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
     }
   };
 #pragma pack(pop)
+  typedef typename value_vector_t::data_t value_wrap_t;
 
   static constexpr size_t num_words_update = 1024;
   
@@ -145,14 +146,14 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
     }
     struct VectorData {
       size_t size;
-      const typename value_vector_t::data_t* data;
+      const value_wrap_t* data;
     };
     VectorData GetVector() {
       auto trie = static_cast<terark::MainPatricia*>(token.main());
       auto vector_loc = *(uint32_t*)trie->get_valptr(iter->word_state());
       auto vector = (value_vector_t*)trie->mem_get(vector_loc);
       size_t size = vector->size;
-      auto data = (value_vector_t::data_t*)trie->mem_get(vector->loc);
+      auto data = (value_wrap_t*)trie->mem_get(vector->loc);
       return { size, data };
     }
     WriteBatchIndexEntry* Seek(WriteBatchIndexEntry* entry) {
@@ -340,9 +341,9 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
         bool init_value(void* valptr, size_t valsize) override {
           assert(valsize == sizeof(uint32_t));
 
-          size_t data_loc = trie()->mem_alloc(sizeof(value_vector_t::data_t));
-          assert(data_loc != terark::Patricia::mem_alloc_fail);
-          auto* data = (value_vector_t::data_t*)trie()->mem_get(data_loc);
+          size_t data_loc = trie()->mem_alloc(sizeof(value_wrap_t));
+          assert(data_loc != terark::MainPatricia::mem_alloc_fail);
+          auto* data = (value_wrap_t*)trie()->mem_get(data_loc);
           data->value = value_;
 
           size_t vector_loc = trie()->mem_alloc(sizeof(value_vector_t));
@@ -366,7 +367,7 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
         size_t vector_loc = *(uint32_t*)token.value();
         auto* vector = (value_vector_t*)index_.mem_get(vector_loc);
         size_t data_loc = vector->loc;
-        auto* data = (value_vector_t::data_t*)index_.mem_get(data_loc);
+        auto* data = (value_wrap_t*)index_.mem_get(data_loc);
         size_t size = vector->size;
         assert(size > 0);
         assert(key->offset > data[size - 1].value->offset);
@@ -375,14 +376,14 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
           vector->size = size + 1;
         } else {
           size_t cow_data_loc =
-              index_.mem_alloc(sizeof(value_vector_t::data_t) * size * 2);
+              index_.mem_alloc(sizeof(value_wrap_t) * size * 2);
           assert(cow_data_loc != terark::MainPatricia::mem_alloc_fail);
-          auto* cow_data = (value_vector_t::data_t*)index_.mem_get(cow_data_loc);
-          memcpy(cow_data, data, sizeof(value_vector_t::data_t) * size);
+          auto* cow_data = (value_wrap_t*)index_.mem_get(cow_data_loc);
+          memcpy(cow_data, data, sizeof(value_wrap_t) * size);
           cow_data[size].value = key;
           vector->loc = (uint32_t)cow_data_loc;
           vector->size = size + 1;
-          index_.mem_lazy_free(data_loc, sizeof(value_vector_t::data_t) * size);
+          index_.mem_lazy_free(data_loc, sizeof(value_wrap_t) * size);
         }
       }
       return true;
