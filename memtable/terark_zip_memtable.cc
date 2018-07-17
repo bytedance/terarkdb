@@ -362,9 +362,10 @@ public:
         delete iter;
       }
       bool Update() {
-        if (token.main()->num_words() - num_words > num_words_update) {
+        auto curr_num_words = token.main()->num_words();
+        if (curr_num_words - num_words > num_words_update) {
           token.update();
-          num_words = token.main()->num_words();
+          num_words = curr_num_words;
           return true;
         }
         return false;
