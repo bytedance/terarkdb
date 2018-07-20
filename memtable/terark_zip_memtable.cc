@@ -67,15 +67,15 @@ private:
   size_t mem_size_;
 
 public:
-  explicit PTrieRep(const MemTableRep::KeyComparator &compare, Allocator *allocator,
-                    const SliceTransform *)
+  explicit PTrieRep(size_t write_buffer_size, const MemTableRep::KeyComparator &compare,
+                    Allocator *allocator, const SliceTransform *)
     : MemTableRep(allocator)
     , immutable_(false)
     , num_entries_(0)
     , mem_size_(0) {
     current_ = trie_arr_;
     current_->accumulate_mem_size = 0;
-    current_->trie.reset(new terark::MainPatricia(sizeof(uint32_t), allocator->BlockSize(),
+    current_->trie.reset(new terark::MainPatricia(sizeof(uint32_t), write_buffer_size,
                                                   terark::Patricia::OneWriteMultiRead));
   }
 
@@ -209,7 +209,7 @@ public:
         accumulate_mem_size += it->trie->mem_size();
       }
       size_t new_trie_size =
-          std::max(current_->trie->mem_size() * 2,
+          std::max(accumulate_mem_size,
                    key.size() + VarintLength(value.size()) + value.size()) + 1024;
       auto next = current_ + 1;
       assert(next != trie_arr_ + max_trie_count);
@@ -832,16 +832,32 @@ public:
     : fallback_(fallback) {}
   virtual ~PTrieMemtableRepFactory() {}
 
-  using MemTableRepFactory::CreateMemTableRep;
-  virtual MemTableRep *CreateMemTableRep(
-      const MemTableRep::KeyComparator &compare, Allocator *allocator,
-      const SliceTransform *transform, Logger *logger) override {
-    auto key_comparator = compare.icomparator();
-    auto user_comparator = key_comparator->user_comparator();
+  virtual MemTableRep* CreateMemTableRep(const MemTableRep::KeyComparator& key_cmp,
+                                         Allocator* allocator,
+                                         const SliceTransform* transform,
+                                         Logger* logger) override {
+    auto icomp = key_cmp.icomparator();
+    auto user_comparator = icomp->user_comparator();
     if (strcmp(user_comparator->Name(), BytewiseComparator()->Name()) == 0) {
-      return new PTrieRep(compare, allocator, transform);
+      return new PTrieRep(allocator->BlockSize() * 17 / 16, key_cmp, allocator,
+                          transform);
     } else {
-      return fallback_->CreateMemTableRep(compare, allocator, transform, logger);
+      return fallback_->CreateMemTableRep(key_cmp, allocator, transform, logger);
+    }
+  }
+  virtual MemTableRep* CreateMemTableRep(
+      const MemTableRep::KeyComparator& key_cmp, Allocator* allocator,
+      const ImmutableCFOptions& ioptions,
+      const MutableCFOptions& mutable_cf_options,
+      uint32_t column_family_id) {
+    auto icomp = key_cmp.icomparator();
+    auto user_comparator = icomp->user_comparator();
+    if (strcmp(user_comparator->Name(), BytewiseComparator()->Name()) == 0) {
+      return new PTrieRep(mutable_cf_options.write_buffer_size * 17 / 16, key_cmp,
+                          allocator, ioptions.prefix_extractor);
+    } else {
+      return fallback_->CreateMemTableRep(key_cmp, allocator, ioptions,
+                                          mutable_cf_options, column_family_id);
     }
   }
 
