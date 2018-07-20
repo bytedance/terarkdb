@@ -340,7 +340,6 @@ public:
   class Iterator : public MemTableRep::Iterator, boost::noncopyable {
     typedef terark::Patricia::ReaderToken token_t;
     friend class PTrieRep;
-    static constexpr size_t num_words_update = 1024;
 
     struct HeapItem : boost::noncopyable {
       uint64_t tag;
@@ -361,15 +360,6 @@ public:
       ~HeapItem() {
         delete iter;
       }
-      bool Update() {
-        auto curr_num_words = token.main()->num_words();
-        if (curr_num_words - num_words > num_words_update) {
-          token.update();
-          num_words = curr_num_words;
-          return true;
-        }
-        return false;
-      }
       struct VectorData {
         size_t size;
         const tag_vector_t::data_t* data;
@@ -389,7 +379,7 @@ public:
         return data[index].loc;
       }
       void Seek(terark::fstring find_key, uint64_t find_tag) {
-        Update();
+        token.update_lazy();
         if (!iter->seek_lower_bound(find_key)) {
           index = uint32_t(-1);
           return;
@@ -412,7 +402,7 @@ public:
         tag = vec.data[index].tag;
       }
       void SeekForPrev(terark::fstring find_key, uint64_t find_tag) {
-        Update();
+        token.update_lazy();
         if (!iter->seek_rev_lower_bound(find_key)) {
           index = uint32_t(-1);
           return;
@@ -435,7 +425,7 @@ public:
         tag = vec.data[index].tag;
       }
       void SeekToFirst() {
-        Update();
+        token.update_lazy();
         if (!iter->seek_begin()) {
           index = uint32_t(-1);
           return;
@@ -445,7 +435,7 @@ public:
         tag = vec.data[index].tag;
       }
       void SeekToLast() {
-        Update();
+        token.update_lazy();
         if (!iter->seek_end()) {
           index = uint32_t(-1);
           return;
@@ -455,7 +445,7 @@ public:
         tag = vec.data[index].tag;
       }
       void Next(std::string& internal_key) {
-        if (Update()) {
+        if (token.update_lazy()) {
           terark::fstring find_key(internal_key.data(), internal_key.size() - 8);
           iter->seek_lower_bound(find_key);
         }
@@ -473,7 +463,7 @@ public:
         }
       }
       void Prev(std::string& internal_key) {
-        if (Update()) {
+        if (token.update_lazy()) {
           terark::fstring find_key(internal_key.data(), internal_key.size() - 8);
           iter->seek_lower_bound(find_key);
         }

@@ -36,40 +36,27 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
   };
 #pragma pack(pop)
   typedef typename value_vector_t::data_t value_wrap_t;
-
-  static constexpr size_t num_words_update = 1024;
   
   struct IteratorImplWithoutOffset {
     terark::Patricia::ReaderToken token;
     WriteBatchKeyExtractor extractor;
     terark::ADFA_LexIterator* iter;
-    size_t num_words;
 
     IteratorImplWithoutOffset(terark::Patricia* index, WriteBatchKeyExtractor e)
       : token(index),
         extractor(e),
-        iter(index->adfa_make_iter()),
-        num_words(index->num_words()) {
+        iter(index->adfa_make_iter()) {
     }
     ~IteratorImplWithoutOffset() {
       delete iter;
     }
 
-    bool Update() {
-      auto curr_num_words = token.sub()->num_words();
-      if (curr_num_words - num_words > num_words_update) {
-        token.update();
-        num_words = curr_num_words;
-        return true;
-      }
-      return false;
-    }
     WriteBatchIndexEntry* GetValue() {
       auto trie = static_cast<terark::MainPatricia*>(token.main());
       return *(WriteBatchIndexEntry**)trie->get_valptr(iter->word_state());
     }
     WriteBatchIndexEntry* Seek(WriteBatchIndexEntry* entry) {
-      Update();
+      token.update_lazy();
       auto key = extractor(entry);
       if (!iter->seek_lower_bound(terark::fstring(key.data(), key.size()))) {
         return nullptr;
@@ -77,7 +64,7 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
       return GetValue();
     }
     WriteBatchIndexEntry* SeekForPrev(WriteBatchIndexEntry* entry) {
-      Update();
+      token.update_lazy();
       auto key = extractor(entry);
       if (!iter->seek_rev_lower_bound(terark::fstring(key.data(), key.size()))) {
         return nullptr;
@@ -85,21 +72,21 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
       return GetValue();
     }
     WriteBatchIndexEntry* SeekToFirst() {
-      Update();
+      token.update_lazy();
       if (!iter->seek_begin()) {
         return nullptr;
       }
       return GetValue();
     }
     WriteBatchIndexEntry* SeekToLast() {
-      Update();
+      token.update_lazy();
       if (!iter->seek_end()) {
         return nullptr;
       }
       return GetValue();
     }
     WriteBatchIndexEntry* Next(WriteBatchIndexEntry* curr) {
-      if (Update()) {
+      if (token.update_lazy()) {
         auto key = extractor(curr);
         iter->seek_lower_bound(terark::fstring(key.data(), key.size()));
       }
@@ -109,7 +96,7 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
       return GetValue();
     }
     WriteBatchIndexEntry* Prev(WriteBatchIndexEntry* curr) {
-      if (Update()) {
+      if (token.update_lazy()) {
         auto key = extractor(curr);
         iter->seek_lower_bound(terark::fstring(key.data(), key.size()));
       }
@@ -137,14 +124,6 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
       delete iter;
     }
 
-    bool Update() {
-      if (token.main()->num_words() - num_words > num_words_update) {
-        token.update();
-        num_words = token.main()->num_words();
-        return true;
-      }
-      return false;
-    }
     struct VectorData {
       size_t size;
       const value_wrap_t* data;
@@ -158,7 +137,7 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
       return { size, data };
     }
     WriteBatchIndexEntry* Seek(WriteBatchIndexEntry* entry) {
-      Update();
+      token.update_lazy();
       auto slice_key = extractor(entry);
       auto find_key = terark::fstring(slice_key.data(), slice_key.size());
       if (!iter->seek_lower_bound(find_key)) {
@@ -180,7 +159,7 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
       return vec.data[index].value;
     }
     WriteBatchIndexEntry* SeekForPrev(WriteBatchIndexEntry* entry) {
-      Update();
+      token.update_lazy();
       auto slice_key = extractor(entry);
       auto find_key = terark::fstring(slice_key.data(), slice_key.size());
       if (!iter->seek_rev_lower_bound(find_key)) {
@@ -202,7 +181,7 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
       return vec.data[index].value;
     }
     WriteBatchIndexEntry* SeekToFirst() {
-      Update();
+      token.update_lazy();
       if (!iter->seek_begin()) {
         return nullptr;
       }
@@ -211,7 +190,7 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
       return vec.data[index].value;
     }
     WriteBatchIndexEntry* SeekToLast() {
-      Update();
+      token.update_lazy();
       if (!iter->seek_end()) {
         return nullptr;
       }
@@ -220,7 +199,7 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
       return vec.data[index].value;
     }
     WriteBatchIndexEntry* Next(WriteBatchIndexEntry* curr) {
-      if (Update()) {
+      if (token.update_lazy()) {
         auto key = extractor(curr);
         iter->seek_lower_bound(terark::fstring(key.data(), key.size()));
       }
@@ -237,7 +216,7 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
       }
     }
     WriteBatchIndexEntry* Prev(WriteBatchIndexEntry* curr) {
-      if (Update()) {
+      if (token.update_lazy()) {
         auto key = extractor(curr);
         iter->seek_lower_bound(terark::fstring(key.data(), key.size()));
       }
