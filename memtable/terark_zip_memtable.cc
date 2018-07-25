@@ -343,7 +343,7 @@ public:
 
     struct HeapItem : boost::noncopyable {
       uint64_t tag;
-      terark::Patricia::CheapIterator iter;
+      terark::Patricia::Iterator iter;
       uint32_t vector_loc;
       uint32_t index;
       size_t num_words;
@@ -812,7 +812,7 @@ public:
     auto icomp = key_cmp.icomparator();
     auto user_comparator = icomp->user_comparator();
     if (strcmp(user_comparator->Name(), BytewiseComparator()->Name()) == 0) {
-      return new PTrieRep(allocator->BlockSize() * 17 / 16, key_cmp, allocator,
+      return new PTrieRep(allocator->BlockSize() * 9 / 8, key_cmp, allocator,
                           transform);
     } else {
       return fallback_->CreateMemTableRep(key_cmp, allocator, transform, logger);
@@ -826,7 +826,7 @@ public:
     auto icomp = key_cmp.icomparator();
     auto user_comparator = icomp->user_comparator();
     if (strcmp(user_comparator->Name(), BytewiseComparator()->Name()) == 0) {
-      return new PTrieRep(mutable_cf_options.write_buffer_size * 17 / 16, key_cmp,
+      return new PTrieRep(mutable_cf_options.write_buffer_size * 9 / 8, key_cmp,
                           allocator, ioptions.prefix_extractor);
     } else {
       return fallback_->CreateMemTableRep(key_cmp, allocator, ioptions,

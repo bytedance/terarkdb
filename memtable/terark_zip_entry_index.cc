@@ -38,12 +38,12 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
   typedef typename value_vector_t::data_t value_wrap_t;
   
   struct IteratorImplWithoutOffset {
-    terark::Patricia::CheapIterator iter;
+    terark::Patricia::Iterator iter;
     WriteBatchKeyExtractor extractor;
+    bool is_tls = false;
 
-    IteratorImplWithoutOffset(terark::Patricia* index, WriteBatchKeyExtractor e)
-      : iter(index),
-        extractor(e) {
+    IteratorImplWithoutOffset()
+      : extractor(nullptr) {
     }
 
     WriteBatchIndexEntry* GetValue() {
@@ -76,13 +76,13 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
       }
       return GetValue();
     }
-    WriteBatchIndexEntry* Next(WriteBatchIndexEntry* curr) {
+    WriteBatchIndexEntry* Next() {
       if (!iter.incr()) {
         return nullptr;
       }
       return GetValue();
     }
-    WriteBatchIndexEntry* Prev(WriteBatchIndexEntry* curr) {
+    WriteBatchIndexEntry* Prev() {
       if (!iter.decr()) {
         return nullptr;
       }
@@ -90,16 +90,13 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
     }
   };
   struct IteratorImplWithOffset {
-    terark::Patricia::CheapIterator iter;
+    terark::Patricia::Iterator iter;
     WriteBatchKeyExtractor extractor;
-    uint32_t index;
-    size_t num_words;
+    uint32_t index = uint32_t(-1);
+    bool is_tls = false;
 
-    IteratorImplWithOffset(terark::Patricia* index,  WriteBatchKeyExtractor e)
-      : iter(index),
-        extractor(e),
-        index(uint32_t(-1)),
-        num_words(index->num_words()) {
+    IteratorImplWithOffset()
+      : extractor(nullptr) {
     }
 
     struct VectorData {
@@ -172,7 +169,7 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
       index = 0;
       return vec.data[index].value;
     }
-    WriteBatchIndexEntry* Next(WriteBatchIndexEntry* curr) {
+    WriteBatchIndexEntry* Next() {
       if (index-- == 0) {
         if (!iter.incr()) {
           return nullptr;
@@ -185,7 +182,7 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
         return vec.data[index].value;
       }
     }
-    WriteBatchIndexEntry* Prev(WriteBatchIndexEntry* curr) {
+    WriteBatchIndexEntry* Prev() {
       auto vec = GetVector();
       if (++index == vec.size) {
         if (!iter.decr()) {
@@ -204,15 +201,29 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
 
   class PTrieIterator : public WriteBatchEntryIndex::Iterator {
    public:
-    PTrieIterator(terark::Patricia* index, WriteBatchKeyExtractor e)
-      : impl_(new IteratorImpl(index, e)),
+    PTrieIterator(terark::Patricia* index, WriteBatchKeyExtractor e, bool ephemeral)
+      : impl_(nullptr),
         key_(nullptr) {
+      if (ephemeral) {
+        static thread_local IteratorImpl tls_impl;
+        impl_ = &tls_impl;
+        impl_->is_tls = true;
+      } else {
+        impl_ = new IteratorImpl();
+      }
+      impl_->iter.reset(index);
+      impl_->extractor = e;
     }
+    ~PTrieIterator() {
+      if (impl_->is_tls) {
+        impl_->iter.reset(nullptr);
+      } else {
+        delete impl_;
+      }
+    }
+
     IteratorImpl* impl_;
     WriteBatchIndexEntry* key_;
-    ~PTrieIterator() {
-      delete impl_;
-    }
 
    public:
     virtual bool Valid() const override {
@@ -231,10 +242,10 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
       key_ = impl_->SeekForPrev(target);
     }
     virtual void Next() override {
-      key_ = impl_->Next(key_);
+      key_ = impl_->Next();
     }
     virtual void Prev() override {
-      key_ = impl_->Prev(key_);
+      key_ = impl_->Prev();
     }
     virtual WriteBatchIndexEntry* key() const override {
       return key_;
@@ -252,12 +263,12 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
       OverwriteKey ? sizeof(void*) : sizeof(uint32_t);
 
   virtual Iterator* NewIterator() override {
-    return new PTrieIterator(&index_, extractor_);
+    return new PTrieIterator(&index_, extractor_, false);
   }
-  virtual void NewIterator(IteratorStorage& storage) override {
+  virtual void NewIterator(IteratorStorage& storage, bool ephemeral) override {
     static_assert(sizeof(PTrieIterator) <= sizeof storage.buffer,
                   "Need larger buffer for PTrieIterator");
-    storage.iter = new (storage.buffer) PTrieIterator(&index_, extractor_);
+    storage.iter = new (storage.buffer) PTrieIterator(&index_, extractor_, ephemeral);
   }
   virtual bool Upsert(WriteBatchIndexEntry* key) override {
     auto slice_key = extractor_(key);
