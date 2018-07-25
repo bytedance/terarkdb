@@ -343,90 +343,82 @@ public:
 
     struct HeapItem : boost::noncopyable {
       uint64_t tag;
-      token_t token;
-      terark::ADFA_LexIterator* iter;
+      terark::Patricia::CheapIterator iter;
       uint32_t vector_loc;
       uint32_t index;
       size_t num_words;
 
       HeapItem(terark::Patricia* trie)
         : tag(uint64_t(-1))
-        , token(trie)
-        , iter(trie->adfa_make_iter())
+        , iter(trie)
         , vector_loc(uint32_t(-1))
         , index(uint32_t(-1))
         , num_words(trie->num_words()) {
-      }
-      ~HeapItem() {
-        delete iter;
       }
       struct VectorData {
         size_t size;
         const tag_vector_t::data_t* data;
       };
       VectorData GetVector() {
-        auto trie = static_cast<terark::MainPatricia*>(token.main());
-        vector_loc = *(uint32_t*)trie->get_valptr(iter->word_state());
+        auto trie = static_cast<terark::MainPatricia*>(iter.main());
+        vector_loc = *(uint32_t*)trie->get_valptr(iter.word_state());
         auto vector = (tag_vector_t*)trie->mem_get(vector_loc);
         size_t size = vector->size;
         auto data = (tag_vector_t::data_t*)trie->mem_get(vector->loc);
         return { size, data };
       }
       uint32_t GetValue() const {
-        auto trie = static_cast<terark::MainPatricia*>(token.main());
+        auto trie = static_cast<terark::MainPatricia*>(iter.main());
         auto vector = (tag_vector_t*)trie->mem_get(vector_loc);
         auto data = (tag_vector_t::data_t*)trie->mem_get(vector->loc);
         return data[index].loc;
       }
       void Seek(terark::fstring find_key, uint64_t find_tag) {
-        token.update_lazy();
-        if (!iter->seek_lower_bound(find_key)) {
+        if (!iter.seek_lower_bound(find_key)) {
           index = uint32_t(-1);
           return;
         }
         auto vec = GetVector();
-        if (iter->word() == find_key) {
+        if (iter.word() == find_key) {
           index = terark::upper_bound_0(vec.data, vec.size, find_tag) - 1;
           if (index != uint32_t(-1)) {
             tag = vec.data[index];
             return;
           }
-          if (!iter->incr()) {
+          if (!iter.incr()) {
             assert(index == uint32_t(-1));
             return;
           }
           vec = GetVector();
         }
-        assert(iter->word() > find_key);
+        assert(iter.word() > find_key);
         index = vec.size - 1;
         tag = vec.data[index].tag;
       }
       void SeekForPrev(terark::fstring find_key, uint64_t find_tag) {
-        token.update_lazy();
-        if (!iter->seek_rev_lower_bound(find_key)) {
+        if (!iter.seek_rev_lower_bound(find_key)) {
           index = uint32_t(-1);
           return;
         }
         auto vec = GetVector();
-        if (iter->word() == find_key) {
+        if (iter.word() == find_key) {
           index = terark::lower_bound_0(vec.data, vec.size, find_tag);
           if (index != vec.size) {
             tag = vec.data[index].tag;
             return;
           }
-          if (!iter->decr()) {
+          if (!iter.decr()) {
             index = uint32_t(-1);
             return;
           }
           vec = GetVector();
         }
-        assert(iter->word() < find_key);
+        assert(iter.word() < find_key);
         index = 0;
         tag = vec.data[index].tag;
       }
       void SeekToFirst() {
-        token.update_lazy();
-        if (!iter->seek_begin()) {
+        if (!iter.seek_begin()) {
           index = uint32_t(-1);
           return;
         }
@@ -435,8 +427,7 @@ public:
         tag = vec.data[index].tag;
       }
       void SeekToLast() {
-        token.update_lazy();
-        if (!iter->seek_end()) {
+        if (!iter.seek_end()) {
           index = uint32_t(-1);
           return;
         }
@@ -445,12 +436,8 @@ public:
         tag = vec.data[index].tag;
       }
       void Next(std::string& internal_key) {
-        if (token.update_lazy()) {
-          terark::fstring find_key(internal_key.data(), internal_key.size() - 8);
-          iter->seek_lower_bound(find_key);
-        }
         if (index-- == 0) {
-          if (!iter->incr()) {
+          if (!iter.incr()) {
             assert(index == uint32_t(-1));
             return;
           }
@@ -463,13 +450,9 @@ public:
         }
       }
       void Prev(std::string& internal_key) {
-        if (token.update_lazy()) {
-          terark::fstring find_key(internal_key.data(), internal_key.size() - 8);
-          iter->seek_lower_bound(find_key);
-        }
         auto vec = GetVector();
         if (++index == vec.size) {
-          if (!iter->decr()) {
+          if (!iter.decr()) {
             index = uint32_t(-1);
             return;
           }
@@ -524,7 +507,7 @@ public:
       }
     }
     terark::fstring CurrentKey() {
-      return Current()->iter->word();
+      return Current()->iter.word();
     }
     uint64_t CurrentTag() {
       return Current()->tag;
@@ -532,7 +515,7 @@ public:
 
     struct ForwardComp {
       bool operator()(HeapItem* l, HeapItem* r) const {
-        int c = terark::fstring_func::compare3()(l->iter->word(), r->iter->word());
+        int c = terark::fstring_func::compare3()(l->iter.word(), r->iter.word());
         if (c == 0) {
           return l->tag < r->tag;
         } else {
@@ -542,7 +525,7 @@ public:
     };
     struct BackwardComp {
       bool operator()(HeapItem* l, HeapItem* r) const {
-        int c = terark::fstring_func::compare3()(l->iter->word(), r->iter->word());
+        int c = terark::fstring_func::compare3()(l->iter.word(), r->iter.word());
         if (c == 0) {
           return l->tag > r->tag;
         } else {
@@ -611,7 +594,7 @@ public:
     virtual Slice GetValue() const override {
       const HeapItem* item = Current();
       uint32_t value_loc = item->GetValue();
-      auto trie = static_cast<terark::MainPatricia*>(item->token.main());
+      auto trie = static_cast<terark::MainPatricia*>(item->iter.main());
       return GetLengthPrefixedSlice((const char*)trie->mem_get(value_loc));
     }
 
