@@ -47,8 +47,7 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
     }
 
     WriteBatchIndexEntry* GetValue() {
-      auto trie = static_cast<terark::MainPatricia*>(iter.main());
-      return *(WriteBatchIndexEntry**)trie->get_valptr(iter.word_state());
+      return *(WriteBatchIndexEntry**)iter.value();
     }
     WriteBatchIndexEntry* Seek(WriteBatchIndexEntry* entry) {
       auto key = extractor(entry);
@@ -105,8 +104,7 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
     };
     VectorData GetVector() {
       auto trie = static_cast<terark::MainPatricia*>(iter.main());
-      auto vector_loc = *(uint32_t*)trie->get_valptr(iter.word_state());
-      auto vector = (value_vector_t*)trie->mem_get(vector_loc);
+      auto vector = (value_vector_t*)trie->mem_get(*(uint32_t*)iter.value());
       size_t size = vector->size;
       auto data = (value_wrap_t*)trie->mem_get(vector->loc);
       return { size, data };

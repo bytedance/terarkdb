@@ -209,7 +209,7 @@ public:
         accumulate_mem_size += it->trie->mem_size();
       }
       size_t new_trie_size =
-          std::max(accumulate_mem_size,
+          std::max(accumulate_mem_size - trie_arr_->trie->mem_size() * 7 / 8,
                    key.size() + VarintLength(value.size()) + value.size()) + 1024;
       auto next = current_ + 1;
       assert(next != trie_arr_ + max_trie_count);
@@ -342,18 +342,14 @@ public:
     friend class PTrieRep;
 
     struct HeapItem : boost::noncopyable {
-      uint64_t tag;
       terark::Patricia::Iterator iter;
-      uint32_t vector_loc;
-      uint32_t index;
-      size_t num_words;
+      uint64_t tag;
+      size_t index;
 
       HeapItem(terark::Patricia* trie)
-        : tag(uint64_t(-1))
-        , iter(trie)
-        , vector_loc(uint32_t(-1))
-        , index(uint32_t(-1))
-        , num_words(trie->num_words()) {
+        : iter(trie)
+        , tag(uint64_t(-1))
+        , index(size_t(-1))  {
       }
       struct VectorData {
         size_t size;
@@ -361,32 +357,31 @@ public:
       };
       VectorData GetVector() {
         auto trie = static_cast<terark::MainPatricia*>(iter.main());
-        vector_loc = *(uint32_t*)trie->get_valptr(iter.word_state());
-        auto vector = (tag_vector_t*)trie->mem_get(vector_loc);
+        auto vector = (tag_vector_t*)trie->mem_get(*(uint32_t*)iter.value());
         size_t size = vector->size;
         auto data = (tag_vector_t::data_t*)trie->mem_get(vector->loc);
         return { size, data };
       }
       uint32_t GetValue() const {
         auto trie = static_cast<terark::MainPatricia*>(iter.main());
-        auto vector = (tag_vector_t*)trie->mem_get(vector_loc);
+        auto vector = (tag_vector_t*)trie->mem_get(*(uint32_t*)iter.value());
         auto data = (tag_vector_t::data_t*)trie->mem_get(vector->loc);
         return data[index].loc;
       }
       void Seek(terark::fstring find_key, uint64_t find_tag) {
         if (!iter.seek_lower_bound(find_key)) {
-          index = uint32_t(-1);
+          index = size_t(-1);
           return;
         }
         auto vec = GetVector();
         if (iter.word() == find_key) {
           index = terark::upper_bound_0(vec.data, vec.size, find_tag) - 1;
-          if (index != uint32_t(-1)) {
+          if (index != size_t(-1)) {
             tag = vec.data[index];
             return;
           }
           if (!iter.incr()) {
-            assert(index == uint32_t(-1));
+            assert(index == size_t(-1));
             return;
           }
           vec = GetVector();
@@ -397,7 +392,7 @@ public:
       }
       void SeekForPrev(terark::fstring find_key, uint64_t find_tag) {
         if (!iter.seek_rev_lower_bound(find_key)) {
-          index = uint32_t(-1);
+          index = size_t(-1);
           return;
         }
         auto vec = GetVector();
@@ -408,7 +403,7 @@ public:
             return;
           }
           if (!iter.decr()) {
-            index = uint32_t(-1);
+            index = size_t(-1);
             return;
           }
           vec = GetVector();
@@ -419,7 +414,7 @@ public:
       }
       void SeekToFirst() {
         if (!iter.seek_begin()) {
-          index = uint32_t(-1);
+          index = size_t(-1);
           return;
         }
         auto vec = GetVector();
@@ -428,7 +423,7 @@ public:
       }
       void SeekToLast() {
         if (!iter.seek_end()) {
-          index = uint32_t(-1);
+          index = size_t(-1);
           return;
         }
         auto vec = GetVector();
@@ -438,7 +433,7 @@ public:
       void Next(std::string& internal_key) {
         if (index-- == 0) {
           if (!iter.incr()) {
-            assert(index == uint32_t(-1));
+            assert(index == size_t(-1));
             return;
           }
           auto vec = GetVector();
@@ -453,7 +448,7 @@ public:
         auto vec = GetVector();
         if (++index == vec.size) {
           if (!iter.decr()) {
-            index = uint32_t(-1);
+            index = size_t(-1);
             return;
           }
           vec = GetVector();
@@ -611,7 +606,7 @@ public:
           uint64_t tag = DecodeFixed64(find_key.end());
           Rebuild<1>([&](HeapItem* item) {
             item->Seek(find_key, tag);
-            return item->index != uint32_t(-1);
+            return item->index != size_t(-1);
           });
           if (multi_.size == 0) {
             direction_ = 0;
@@ -619,7 +614,7 @@ public:
           }
         }
         multi_.heap[0]->Next(buffer_);
-        if (multi_.heap[0]->index == uint32_t(-1)) {
+        if (multi_.heap[0]->index == size_t(-1)) {
           std::pop_heap(multi_.heap, multi_.heap + multi_.size, ForwardComp());
           if (--multi_.size == 0) {
             direction_ = 0;
@@ -630,7 +625,7 @@ public:
         }
       } else {
         single_.Next(buffer_);
-        if (single_.index == uint32_t(-1)) {
+        if (single_.index == size_t(-1)) {
           direction_ = 0;
           return;
         }
@@ -647,7 +642,7 @@ public:
           uint64_t tag = DecodeFixed64(find_key.end());
           Rebuild<-1>([&](HeapItem* item) {
             item->SeekForPrev(find_key, tag);
-            return item->index != uint32_t(-1);
+            return item->index != size_t(-1);
           });
           if (multi_.size == 0) {
             direction_ = 0;
@@ -655,7 +650,7 @@ public:
           }
         }
         multi_.heap[0]->Prev(buffer_);
-        if (multi_.heap[0]->index == uint32_t(-1)) {
+        if (multi_.heap[0]->index == size_t(-1)) {
           std::pop_heap(multi_.heap, multi_.heap + multi_.size, BackwardComp());
           if (--multi_.size == 0) {
             direction_ = 0;
@@ -666,7 +661,7 @@ public:
         }
       } else {
         single_.Prev(buffer_);
-        if (single_.index == uint32_t(-1)) {
+        if (single_.index == size_t(-1)) {
           direction_ = 0;
           return;
         }
@@ -689,7 +684,7 @@ public:
       if (heap_mode) {
         Rebuild<1>([&](HeapItem* item) {
           item->Seek(find_key, tag);
-          return item->index != uint32_t(-1);
+          return item->index != size_t(-1);
         });
         if (multi_.size == 0) {
           direction_ = 0;
@@ -697,7 +692,7 @@ public:
         }
       } else {
         single_.Seek(find_key, tag);
-        if (single_.index == uint32_t(-1)) {
+        if (single_.index == size_t(-1)) {
           direction_ = 0;
           return;
         }
@@ -721,7 +716,7 @@ public:
       if (heap_mode) {
         Rebuild<-1>([&](HeapItem* item) {
           item->SeekForPrev(find_key, tag);
-          return item->index != uint32_t(-1);
+          return item->index != size_t(-1);
         });
         if (multi_.size == 0) {
           direction_ = 0;
@@ -729,7 +724,7 @@ public:
         }
       } else {
         single_.SeekForPrev(find_key, tag);
-        if (single_.index == uint32_t(-1)) {
+        if (single_.index == size_t(-1)) {
           direction_ = 0;
           return;
         }
@@ -744,7 +739,7 @@ public:
       if (heap_mode) {
         Rebuild<1>([&](HeapItem* item) {
           item->SeekToFirst();
-          return item->index != uint32_t(-1);
+          return item->index != size_t(-1);
         });
         if (multi_.size == 0) {
           direction_ = 0;
@@ -752,7 +747,7 @@ public:
         }
       } else {
         single_.SeekToFirst();
-        if (single_.index == uint32_t(-1)) {
+        if (single_.index == size_t(-1)) {
           direction_ = 0;
           return;
         }
@@ -767,7 +762,7 @@ public:
       if (heap_mode) {
         Rebuild<-1>([&](HeapItem* item) {
           item->SeekToLast();
-          return item->index != uint32_t(-1);
+          return item->index != size_t(-1);
         });
         if (multi_.size == 0) {
           direction_ = 0;
@@ -775,7 +770,7 @@ public:
         }
       } else {
         single_.SeekToLast();
-        if (single_.index == uint32_t(-1)) {
+        if (single_.index == size_t(-1)) {
           direction_ = 0;
           return;
         }
