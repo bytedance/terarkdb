@@ -102,6 +102,7 @@ private:
     TempFileDeleteOnClose valueFile;
     bool isValueBuild = false;
     bool isUseDictZip = false;
+	bool isReadFromFile = true;
     std::future<Status> wait;
     valvec<std::unique_ptr<BuildIndexParams>> build;
   };
@@ -184,7 +185,7 @@ private:
   size_t nameSeed_ = 0;
   size_t keyDataSize_ = 0;
   size_t valueDataSize_ = 0;
-  valvec<std::unique_ptr<KeyValueStatus>> histogram_;
+  valvec<std::unique_ptr<KeyValueStatus>> prefixBuildInfos_;
   TerarkIndex::KeyStat *currentStat_ = nullptr;
   valvec<byte_t> prevUserKey_;
   TempFileDeleteOnClose tmpSentryFile_;
