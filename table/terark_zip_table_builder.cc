@@ -1369,9 +1369,9 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
 	return SliceOf(key);
   };
 
+  NativeDataInput<InputBuffer> input(&kvs.valueFile.fp);
   if (kvs.isReadFromFile)
   {
-    NativeDataInput<InputBuffer> input(&kvs.valueFile.fp);
 	bool veriftIter = false; // table_options_.debugLevel == 2 && second_pass_iter_ != nullptr;
 
     if (veriftIter) {
@@ -1453,6 +1453,14 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
   else
   {
     assert(second_pass_iter_ != nullptr);
+	valvec<byte_t> ignore_value;
+	auto readInternalKey = [&](bool next) {
+	  auto seqType = input.load_as<uint64_t>();
+	  input >> ignore_value;
+	  return readKey(seqType, next);
+	};
+	auto& ic = ioptions_.internal_comparator;
+
     seekSecondPassIter();
     valvec<byte_t> key, value;
     size_t entryId = 0;
@@ -1466,27 +1474,17 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
       assert(second_pass_iter_->Valid());
       ParsedInternalKey pikey;
       Slice curKey = second_pass_iter_->key();
-	  auto storedKey = readKey(pikey.type, true);
+	  auto storedKey = readInternalKey(true);
       TERARK_RT_assert(ParseInternalKey(curKey, &pikey), std::logic_error);
       if (dumpKeyValue) {
         dumpKeyValueFunc(pikey, second_pass_iter_->value());
       }
-      while (kTypeRangeDeletion == pikey.type) {
-        ITER_MOVE_NEXT(second_pass_iter_);
-        assert(second_pass_iter_->Valid());
-        curKey = second_pass_iter_->key();
-		storedKey = readKey(pikey.type, false);
-        TERARK_RT_assert(ParseInternalKey(curKey, &pikey), std::logic_error);
-        if (dumpKeyValue) {
-          dumpKeyValueFunc(pikey, second_pass_iter_->value());
-        }
-        entryId += 1;
-      }
+	  assert(kTypeRangeDeletion != pikey.type);
       Slice curVal = second_pass_iter_->value();
       size_t oneSeqLen = kvs.valueBits.one_seq_len(bitPos);
       assert(oneSeqLen >= 1);
       if (1 == oneSeqLen && (kTypeDeletion == pikey.type || kTypeValue == pikey.type)) {
-		if (curKey == storedKey) {
+		if (ic.Compare(curKey, storedKey) == 0) {
 		  if (0 == pikey.sequence && kTypeValue == pikey.type) {
 			bzvType.set0(recId, size_t(ZipValueType::kZeroSeq));
 			write(fstringOf(curVal));
@@ -1524,25 +1522,15 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
             if (dumpKeyValue) {
               dumpKeyValueFunc(pikey, second_pass_iter_->value());
             }
-            while (kTypeRangeDeletion == pikey.type) {
-              ITER_MOVE_NEXT(second_pass_iter_);
-              assert(second_pass_iter_->Valid());
-              curKey = second_pass_iter_->key();
-              TERARK_RT_assert(ParseInternalKey(curKey, &pikey), std::logic_error);
-              if (dumpKeyValue) {
-                dumpKeyValueFunc(pikey, second_pass_iter_->value());
-              }
-              entryId += 1;
-            }
             curVal = second_pass_iter_->value();
           }
           else {
             assert(kTypeRangeDeletion != pikey.type);
           }
-          uint64_t seqType = PackSequenceAndType(pikey.sequence, pikey.type);
-		  storedKey = readKey(seqType, false);
-		  if (curKey == storedKey) {
-			value.append((byte_t*)&seqType, 8);
+          //uint64_t seqType = PackSequenceAndType(pikey.sequence, pikey.type);
+		  storedKey = readInternalKey(false); 
+		  if (ic.Compare(curKey, storedKey) == 0){
+			value.append(storedKey.data() + storedKey.size() - 8, 8);
 		  }
 		  else {
 			uint64_t seqDelType = PackSequenceAndType(pikey.sequence, ValueType::kTypeDeletion);
