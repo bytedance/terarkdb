@@ -134,6 +134,7 @@ TerarkZipAutoConfigForOnlineDB_DBOptions(struct DBOptions& dbo, size_t cpuNum)
   dbo.max_subcompactions = 1; // no sub compactions
   dbo.base_background_compactions = 3;
   dbo.max_background_compactions = 5;
+  dbo.allow_concurrent_memtable_write = false;
 
   dbo.env->SetBackgroundThreads(max(1,min(3,iCpuNum*3/8)), rocksdb::Env::LOW);
   dbo.env->SetBackgroundThreads(max(1,min(2,iCpuNum*2/8)), rocksdb::Env::HIGH);
@@ -284,6 +285,7 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo) {
   tzo.singleIndexMemLimit = std::min<size_t>(tzo.singleIndexMemLimit, 0x1E0000000);
 
   cfo.memtable_factory.reset(NewPatriciaTrieRepFactory());
+
   RegistWriteBatchEntryIndexFactory("patricia", WriteBatchEntryPTrieIndexFactory());
   cfo.table_factory = SingleTerarkZipTableFactory(tzo,
     std::shared_ptr<TableFactory>(NewAdaptiveTableFactory()));

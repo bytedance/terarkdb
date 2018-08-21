@@ -1372,7 +1372,7 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
   if (kvs.isReadFromFile)
   {
     NativeDataInput<InputBuffer> input(&kvs.valueFile.fp);
-    bool veriftIter = table_options_.debugLevel == 2 && second_pass_iter_ != nullptr;
+	bool veriftIter = false; // table_options_.debugLevel == 2 && second_pass_iter_ != nullptr;
 
     if (veriftIter) {
       key.assign(kvs.prefix);
