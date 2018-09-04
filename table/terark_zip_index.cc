@@ -267,19 +267,16 @@ class NestLoudsTrieIter : public TerarkIndex::Iterator {
 protected:
   using TerarkIndex::Iterator::m_id;
   typename   NLTrie::Iterator  m_iter;
-  const NLTrie* m_dawg;
   bool Done(bool ok) {
+	auto dawg = static_cast<const NLTrie*>(m_iter.get_dfa());
     if (ok)
-      m_id = m_dawg->state_to_word_id(m_iter.word_state());
+      m_id = dawg->state_to_word_id(m_iter.word_state());
     else
       m_id = size_t(-1);
     return ok;
   }
 public:
-  NestLoudsTrieIter(const NLTrie* trie)
-    : m_iter(trie) {
-    m_dawg = trie;
-  }
+  NestLoudsTrieIter(const NLTrie* trie) : m_iter(trie) {}
   fstring key() const override { return m_iter.word(); }
   bool SeekToFirst() override { return Done(m_iter.seek_begin()); }
   bool SeekToLast()  override { return Done(m_iter.seek_end()); }
@@ -287,8 +284,9 @@ public:
   bool Next() override { return Done(m_iter.incr()); }
   bool Prev() override { return Done(m_iter.decr()); }
   size_t DictRank() const override {
+	auto dawg = static_cast<const NLTrie*>(m_iter.get_dfa());
     assert(m_id != size_t(-1));
-    return m_dawg->state_to_dict_rank(m_iter.word_state());
+    return dawg->state_to_dict_rank(m_iter.word_state());
   }
 };
 template<>
