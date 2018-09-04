@@ -1183,7 +1183,7 @@ struct CompositeUintIndexBase : public TerarkIndex {
       uint64_t minValue = Read1stKey(ks.minKey, cplen, key1_len);
       uint64_t maxValue = Read1stKey(ks.maxKey, cplen, key1_len);
       // if rocksdb reverse comparator is used, then minValue
-      // is actually the largetst one
+      // is actually the largest one
       if (minValue > maxValue) {
         std::swap(minValue, maxValue);
       }
@@ -1458,7 +1458,7 @@ const char* CompositeUintIndexBase::index_name = "CompositeIndex";
  * For simplicity, let's take composite index => index1:index2. Then following
  * compositeindexes like,
  *   4:6, 4:7, 4:8, 7:19, 7:20, 8:3
- * index1: {4, 7}, use bitmap (also UintIndex's form) to respresent
+ * index1: {4, 7}, use bitmap (also UintIndex's form) to represent
  *   4(1), 5(0), 6(0), 7(1), 8(1)
  * index1:index2: use bitmap to respresent 4:6(0), 4:7(1), 4:8(1), 7:19(0), 7:20(1), 8:3(0)
  * to search 7:20, use bitmap1 to rank1(7) = 2, then use bitmap2 to select0(2) = position-3,
