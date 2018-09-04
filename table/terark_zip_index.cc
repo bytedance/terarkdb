@@ -280,7 +280,7 @@ public:
     : m_iter(trie) {
     m_dawg = trie;
   }
-  fstring key() const override { return fstring(m_iter.word()); }
+  fstring key() const override { return m_iter.word(); }
   bool SeekToFirst() override { return Done(m_iter.seek_begin()); }
   bool SeekToLast()  override { return Done(m_iter.seek_end()); }
   bool Seek(fstring key) override { return Done(m_iter.seek_lower_bound(key)); }
@@ -309,7 +309,7 @@ public:
     : m_iter(dfa->adfa_make_iter(initial_state)) {
     m_dawg = dfa->get_dawg();
   }
-  fstring key() const override { return fstring(m_iter->word()); }
+  fstring key() const override { return m_iter->word(); }
   bool SeekToFirst() override { return Done(m_iter->seek_begin()); }
   bool SeekToLast()  override { return Done(m_iter->seek_end()); }
   bool Seek(fstring key) override { return Done(m_iter->seek_lower_bound(key)); }
