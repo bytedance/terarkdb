@@ -262,41 +262,40 @@ TerarkIndex::~TerarkIndex() {}
 TerarkIndex::Factory::~Factory() {}
 TerarkIndex::Iterator::~Iterator() {}
 
-class NestLoudsTrieIterBase : public TerarkIndex::Iterator {
-protected:
-  unique_ptr<ADFA_LexIterator> m_iter;
-  fstring key() const override {
-	  return fstring(m_iter->word());
-  }
-  NestLoudsTrieIterBase(ADFA_LexIterator* iter)
-   : m_iter(iter) {}
-};
-
 template<class NLTrie>
-class NestLoudsTrieIterBaseTpl : public NestLoudsTrieIterBase {
+class NestLoudsTrieIter : public TerarkIndex::Iterator {
 protected:
   using TerarkIndex::Iterator::m_id;
-  NestLoudsTrieIterBaseTpl(const NLTrie* trie)
-    : NestLoudsTrieIterBase(trie->adfa_make_iter(initial_state)) {
-    m_dawg = trie;
-  }
+  typename   NLTrie::Iterator  m_iter;
   const NLTrie* m_dawg;
   bool Done(bool ok) {
     if (ok)
-      m_id = m_dawg->state_to_word_id(m_iter->word_state());
+      m_id = m_dawg->state_to_word_id(m_iter.word_state());
     else
       m_id = size_t(-1);
     return ok;
   }
+public:
+  NestLoudsTrieIter(const NLTrie* trie)
+    : m_iter(trie) {
+    m_dawg = trie;
+  }
+  fstring key() const override { return fstring(m_iter.word()); }
+  bool SeekToFirst() override { return Done(m_iter.seek_begin()); }
+  bool SeekToLast()  override { return Done(m_iter.seek_end()); }
+  bool Seek(fstring key) override { return Done(m_iter.seek_lower_bound(key)); }
+  bool Next() override { return Done(m_iter.incr()); }
+  bool Prev() override { return Done(m_iter.decr()); }
+  size_t DictRank() const override {
+    assert(m_id != size_t(-1));
+    return m_dawg->state_to_dict_rank(m_iter.word_state());
+  }
 };
 template<>
-class NestLoudsTrieIterBaseTpl<MatchingDFA> : public NestLoudsTrieIterBase {
+class NestLoudsTrieIter<MatchingDFA> : public TerarkIndex::Iterator {
 protected:
   using TerarkIndex::Iterator::m_id;
-  NestLoudsTrieIterBaseTpl(const MatchingDFA* dfa)
-    : NestLoudsTrieIterBase(dfa->adfa_make_iter(initial_state)) {
-    m_dawg = dfa->get_dawg();
-  }
+  unique_ptr<ADFA_LexIterator> m_iter;
   const BaseDAWG* m_dawg;
   bool Done(bool ok) {
     if (ok)
@@ -304,6 +303,21 @@ protected:
     else
       m_id = size_t(-1);
     return ok;
+  }
+public:
+  NestLoudsTrieIter(const MatchingDFA* dfa)
+    : m_iter(dfa->adfa_make_iter(initial_state)) {
+    m_dawg = dfa->get_dawg();
+  }
+  fstring key() const override { return fstring(m_iter->word()); }
+  bool SeekToFirst() override { return Done(m_iter->seek_begin()); }
+  bool SeekToLast()  override { return Done(m_iter->seek_end()); }
+  bool Seek(fstring key) override { return Done(m_iter->seek_lower_bound(key)); }
+  bool Next() override { return Done(m_iter->incr()); }
+  bool Prev() override { return Done(m_iter->decr()); }
+  size_t DictRank() const override {
+    assert(m_id != size_t(-1));
+    return m_dawg->state_to_dict_rank(m_iter->word_state());
   }
 };
 
@@ -510,26 +524,7 @@ struct NestLoudsTrieIndexBase : public TerarkIndex {
 
 template<class NLTrie>
 class NestLoudsTrieIndex : public NestLoudsTrieIndexBase {
-  class MyIterator : public NestLoudsTrieIterBaseTpl<NLTrie> {
-  protected:
-    using NestLoudsTrieIterBaseTpl<NLTrie>::m_dawg;
-    using NestLoudsTrieIterBaseTpl<NLTrie>::Done;
-    using NestLoudsTrieIterBase::m_iter;
-    using TerarkIndex::Iterator::m_id;
-  public:
-    explicit MyIterator(const NLTrie* trie)
-      : NestLoudsTrieIterBaseTpl<NLTrie>(trie)
-    {}
-    bool SeekToFirst() override { return Done(m_iter->seek_begin()); }
-    bool SeekToLast()  override { return Done(m_iter->seek_end()); }
-    bool Seek(fstring key) override { return Done(m_iter->seek_lower_bound(key)); }
-    bool Next() override { return Done(m_iter->incr()); }
-    bool Prev() override { return Done(m_iter->decr()); }
-    size_t DictRank() const override {
-      assert(m_id != size_t(-1));
-      return m_dawg->state_to_dict_rank(m_iter->word_state());
-    }
-  };
+  typedef NestLoudsTrieIter<NLTrie> MyIterator;
 public:
   NestLoudsTrieIndex(NLTrie* trie) : NestLoudsTrieIndexBase(trie) {}
   Iterator* NewIterator() const override final {
