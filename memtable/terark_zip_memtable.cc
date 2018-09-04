@@ -77,6 +77,7 @@ public:
     current_ = trie_arr_;
     current_->accumulate_mem_size = 0;
     current_->trie.reset(new terark::MainPatricia(sizeof(uint32_t), write_buffer_size,
+                                                  terark::Patricia::OneWriteMultiRead));
   }
 
   virtual KeyHandle Allocate(const size_t len, char **buf) override {
