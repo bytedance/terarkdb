@@ -73,10 +73,10 @@ public:
     , immutable_(false)
     , num_entries_(0)
     , mem_size_(0) {
+    write_buffer_size = std::min(write_buffer_size, (size_t(1) << 34) - 64*1024);
     current_ = trie_arr_;
     current_->accumulate_mem_size = 0;
     current_->trie.reset(new terark::MainPatricia(sizeof(uint32_t), write_buffer_size,
-                                                  terark::Patricia::OneWriteMultiRead));
   }
 
   virtual KeyHandle Allocate(const size_t len, char **buf) override {
