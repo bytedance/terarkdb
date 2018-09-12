@@ -1559,7 +1559,6 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
 		  else if (mulCmpRet > 0) { // curKey > bufKey
 			uint64_t seqDelType = PackSequenceAndType(pIKey.sequence, ValueType::kTypeDeletion);
 			value.append((byte_t*)&seqDelType, 8);
-			//value.append(fstring());
 			if (++mulRecId < varNum) {
 			  bufKey = readInternalKey(false);
 			  ((ZipValueMultiValue*)value.data())->offsets[mulRecId] = value.size() - headerSize;
@@ -1584,7 +1583,6 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
 	  if (varNum == 1) {
 		bzvType.set0(recId, size_t(ZipValueType::kDelete));
 		value.append((byte_t*)&pIKey.sequence, 7);
-		//value.append(fstring());
 	  }
 	  else {
 		bzvType.set0(recId, size_t(ZipValueType::kMulti));
@@ -1597,7 +1595,6 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
 		  }
 		  uint64_t seqDelType = PackSequenceAndType(pIKey.sequence, ValueType::kTypeDeletion);
 		  value.append((byte_t*)&seqDelType, 8);
-		  //value.append(fstring());
 		  if (mulRecId + 1 < varNum) {
 			bufKey = readInternalKey(false);
 			((ZipValueMultiValue*)value.data())->offsets[mulRecId + 1] = value.size() - headerSize;
