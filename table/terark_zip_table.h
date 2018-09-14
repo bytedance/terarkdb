@@ -68,6 +68,7 @@ struct TerarkZipTableOptions {
   bool          warmUpIndexOnOpen        = true;
   bool          warmUpValueOnOpen        = false;
   bool          disableSecondPassIter    = false;
+  bool			useOldSecondPassMethod   = false;
 
   /// -1: dont use temp file for  any  index build
   ///  0: only use temp file for large index build, smart
