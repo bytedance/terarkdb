@@ -1486,7 +1486,7 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
 	
 	value.erase_all();
 	
-	if (!ioptions_.compaction_filter_factory->IsFilterIdempotent()) {
+	if (!ioptions_.IsFilterIdempotent()) {
 		while (recId < kvs.key.m_cnt_sum && second_pass_iter_->Valid()) {
 			curKey = second_pass_iter_->key();
 			curVal = second_pass_iter_->value();
