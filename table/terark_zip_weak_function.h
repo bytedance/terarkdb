@@ -46,7 +46,7 @@ TerarkZipAutoConfigForOnlineDB_CFOptions(struct TerarkZipTableOptions& tzo,
 
 const class WriteBatchEntryIndexFactory*
 __attribute__((weak))
-WriteBatchEntryPTrieIndexFactory(const WriteBatchEntryIndexFactory* fallback);
+patricia_WriteBatchEntryIndexFactory(const WriteBatchEntryIndexFactory* fallback);
 
 class MemTableRepFactory*
 __attribute__((weak))
