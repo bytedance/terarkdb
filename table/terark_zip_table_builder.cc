@@ -1377,9 +1377,8 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
   };
 
   NativeDataInput<InputBuffer> input(&kvs.valueFile.fp);
-  if (kvs.isReadFromFile)
-  {
-	bool veriftIter = false; // table_options_.debugLevel == 2 && second_pass_iter_ != nullptr;
+  if (kvs.isReadFromFile) {
+	  bool veriftIter = false; // table_options_.debugLevel == 2 && second_pass_iter_ != nullptr;
 
     if (veriftIter) {
       key.assign(kvs.prefix);
@@ -1388,6 +1387,9 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
       keyInput.attach(&keyFile);
       seekSecondPassIter();
     }
+
+    assert(second_pass_iter_ != nullptr);
+
     size_t entryId = 0;
     size_t bitPos = 0;
     for (size_t recId = 0; recId < kvs.key.m_cnt_sum ; recId++) {
@@ -1459,237 +1461,238 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
   }
   else
   {
-	assert(second_pass_iter_ != nullptr);
+	  assert(second_pass_iter_ != nullptr);
 	
-	valvec<byte_t> ignVal;
-	size_t recId = 0, entryId = 0, bitPos = 0;
+	  valvec<byte_t> ignVal;
+	  size_t recId = 0, entryId = 0, bitPos = 0;
 	
-	auto readInternalKey = [&](bool next) {
-	  auto seqType = input.load_as<uint64_t>();
-	  input >> ignVal;
-	  return readKey(seqType, next);
-	};
-	auto& ic = ioptions_.internal_comparator;
-	
-	seekSecondPassIter();
-	assert(second_pass_iter_->status().ok());
-	
-	bool dumpKeyValue = table_options_.debugLevel == 3;
-	
-	auto dumpKeyValueFunc = [&](const ParsedInternalKey& ikey, const Slice& value) {
-	  fprintf(tmpDumpFile_.fp(), "DEBUG: 2nd pass => %s / %s \n", ikey.DebugString(true).c_str(), value.ToString(true).c_str());
-	};
-	
-	size_t varNum, cmpRet, mulCmpRet;
-	ParsedInternalKey pIKey;
-	Slice curKey, curVal, bufKey = readInternalKey(true);
-	
-	value.erase_all();
-	
-	if (!ioptions_.IsFilterIdempotent()) {
-		while (recId < kvs.key.m_cnt_sum && second_pass_iter_->Valid()) {
-			curKey = second_pass_iter_->key();
-			curVal = second_pass_iter_->value();
-			TERARK_RT_assert(ParseInternalKey(curKey, &pIKey), std::logic_error);
-			varNum = kvs.valueBits.one_seq_len(bitPos); assert(varNum >= 1);
-			cmpRet = ic.Compare(curKey, bufKey);
-			if (varNum == 1) { // single record contains {value, del, other{sglDel, CFBI£¬BI}}
-				if (cmpRet == 0) { // curKey == bufKey
-					if (pIKey.sequence == 0 && pIKey.type == kTypeValue) {
-						bzvType.set0(recId, size_t(ZipValueType::kZeroSeq));
-						write(fstringOf(curVal));
-					}
-					else if (pIKey.type == kTypeValue) {
-						bzvType.set0(recId, size_t(ZipValueType::kValue));
-						value.append((byte_t*)&pIKey.sequence, 7);
-						value.append(fstringOf(curVal));
-						write(value);
-					}
-					else if (pIKey.type == kTypeDeletion) {
-						bzvType.set0(recId, size_t(ZipValueType::kDelete));
-						value.append((byte_t*)&pIKey.sequence, 7);
-						assert(curVal.empty());
-						write(value);
-					}
-					else {
-						bzvType.set0(recId, size_t(ZipValueType::kMulti));
-						size_t headerSize = ZipValueMultiValue::calcHeaderSize(1);
-						value.resize(headerSize);
-						((ZipValueMultiValue*)value.data())->offsets[0] = 1;
-						value.append(bufKey.data() + bufKey.size() - 8, 8);
-						value.append(fstringOf(curVal));
-						write(value);
-					}
-					value.erase_all();
-					ITER_MOVE_NEXT(second_pass_iter_);
-					if (++recId < kvs.key.m_cnt_sum) bufKey = readInternalKey(true);
-				}
-				else if (cmpRet > 0) { // curKey > bufKey
-					bzvType.set0(recId, size_t(ZipValueType::kDelete));
-					value.append((byte_t*)&pIKey.sequence, 7);
-					value.append(fstring());
-					write(value);
-					value.erase_all();
-					if (++recId < kvs.key.m_cnt_sum) bufKey = readInternalKey(true);
-				}
-				else { // curKey < bufKey
-					ITER_MOVE_NEXT(second_pass_iter_);
-				}
-			}
-			else { // multi record contains {multi, merge, cfbi, bi}
-				bzvType.set0(recId, size_t(ZipValueType::kMulti));
-				size_t headerSize = ZipValueMultiValue::calcHeaderSize(varNum);
-				value.resize(headerSize);
-				((ZipValueMultiValue*)value.data())->offsets[0] = uint32_t(varNum);
-				size_t mulRecId = 0;
-				while (mulRecId < varNum && second_pass_iter_->Valid()) {
-					if (mulRecId > 0) {
-						curKey = second_pass_iter_->key();
-						curVal = second_pass_iter_->value();
-						TERARK_RT_assert(ParseInternalKey(curKey, &pIKey), std::logic_error);
-					}
-					mulCmpRet = ic.Compare(curKey, bufKey);
-					if (mulCmpRet == 0) { // curKey == bufKey
-						value.append(bufKey.data() + bufKey.size() - 8, 8);
-						value.append(fstringOf(curVal));
-						ITER_MOVE_NEXT(second_pass_iter_);
-						if (++mulRecId < varNum) {
-							bufKey = readInternalKey(false);
-							((ZipValueMultiValue*)value.data())->offsets[mulRecId] = value.size() - headerSize;
-						}
-					}
-					else if (mulCmpRet > 0) { // curKey > bufKey
-						uint64_t seqDelType = PackSequenceAndType(pIKey.sequence, ValueType::kTypeDeletion);
-						value.append((byte_t*)&seqDelType, 8);
-						if (++mulRecId < varNum) {
-							bufKey = readInternalKey(false);
-							((ZipValueMultiValue*)value.data())->offsets[mulRecId] = value.size() - headerSize;
-						}
-					}
-					else if (mulCmpRet < 0) { //curKey < bufKey
-						ITER_MOVE_NEXT(second_pass_iter_);
-					}
-				}
-				write(value);
-				value.erase_all();
-				if (++recId < kvs.key.m_cnt_sum) bufKey = readInternalKey(true);
-			}
-			bitPos += varNum + 1;
-			entryId += varNum;
-		}
+	  auto readInternalKey = [&](bool next) {
+	    auto seqType = input.load_as<uint64_t>();
+	    input >> ignVal;
+	    return readKey(seqType, next);
+	  };
 
-		while (recId < kvs.key.m_cnt_sum) {
-			value.erase_all();
-			varNum = kvs.valueBits.one_seq_len(bitPos); assert(varNum >= 1);
-			TERARK_RT_assert(ParseInternalKey(bufKey, &pIKey), std::logic_error);
-			if (varNum == 1) {
-				bzvType.set0(recId, size_t(ZipValueType::kDelete));
-				value.append((byte_t*)&pIKey.sequence, 7);
-			}
-			else {
-				bzvType.set0(recId, size_t(ZipValueType::kMulti));
-				size_t headerSize = ZipValueMultiValue::calcHeaderSize(varNum);
-				value.resize(headerSize);
-				((ZipValueMultiValue*)value.data())->offsets[0] = uint32_t(varNum);
-				for (size_t mulRecId = 0; mulRecId < varNum; mulRecId++) {
-					if (mulRecId > 0) {
-						TERARK_RT_assert(ParseInternalKey(bufKey, &pIKey), std::logic_error);
-					}
-					uint64_t seqDelType = PackSequenceAndType(pIKey.sequence, ValueType::kTypeDeletion);
-					value.append((byte_t*)&seqDelType, 8);
-					if (mulRecId + 1 < varNum) {
-						bufKey = readInternalKey(false);
-						((ZipValueMultiValue*)value.data())->offsets[mulRecId + 1] = value.size() - headerSize;
-					}
-				}
-			}
-			write(value);
-			bitPos += varNum + 1;
-			entryId += varNum;
-			if (++recId < kvs.key.m_cnt_sum) bufKey = readInternalKey(true);
-		}
+    auto dumpKeyValueFunc = [&](const ParsedInternalKey& ikey, const Slice& value) {
+      fprintf(tmpDumpFile_.fp(), "DEBUG: 2nd pass => %s / %s \n", ikey.DebugString(true).c_str(), value.ToString(true).c_str());
+    };
+
+	  auto& ic = ioptions_.internal_comparator;
+	
+	  seekSecondPassIter();
+	  assert(second_pass_iter_->status().ok());
+	  
+	  bool dumpKeyValue = table_options_.debugLevel == 0;
+	  
+	  size_t varNum, cmpRet, mulCmpRet;
+	  ParsedInternalKey pIKey;
+	  Slice curKey, curVal, bufKey = readInternalKey(true);
+	  
+	  value.erase_all();
+	  
+	  if (!ioptions_.IsFilterIdempotent()) {
+	  	while (recId < kvs.key.m_cnt_sum && second_pass_iter_->status().ok()) {
+	  		curKey = second_pass_iter_->key();
+	  		curVal = second_pass_iter_->value();
+	  		TERARK_RT_assert(ParseInternalKey(curKey, &pIKey), std::logic_error);
+	  		varNum = kvs.valueBits.one_seq_len(bitPos); assert(varNum >= 1);
+	  		cmpRet = ic.Compare(curKey, bufKey);
+	  		if (varNum == 1) { // single record contains {value, del, other{sglDel, CFBI£¬BI}}
+	  			if (cmpRet == 0) { // curKey == bufKey
+	  				if (pIKey.sequence == 0 && pIKey.type == kTypeValue) {
+	  					bzvType.set0(recId, size_t(ZipValueType::kZeroSeq));
+	  					write(fstringOf(curVal));
+	  				}
+	  				else if (pIKey.type == kTypeValue) {
+	  					bzvType.set0(recId, size_t(ZipValueType::kValue));
+	  					value.append((byte_t*)&pIKey.sequence, 7);
+	  					value.append(fstringOf(curVal));
+	  					write(value);
+	  				}
+	  				else if (pIKey.type == kTypeDeletion) {
+	  					bzvType.set0(recId, size_t(ZipValueType::kDelete));
+	  					value.append((byte_t*)&pIKey.sequence, 7);
+	  					assert(curVal.empty());
+	  					write(value);
+	  				}
+	  				else {
+	  					bzvType.set0(recId, size_t(ZipValueType::kMulti));
+	  					size_t headerSize = ZipValueMultiValue::calcHeaderSize(1);
+	  					value.resize(headerSize);
+	  					((ZipValueMultiValue*)value.data())->offsets[0] = 1;
+	  					value.append(bufKey.data() + bufKey.size() - 8, 8);
+	  					value.append(fstringOf(curVal));
+	  					write(value);
+	  				}
+	  				value.erase_all();
+	  				ITER_MOVE_NEXT(second_pass_iter_);
+	  				if (++recId < kvs.key.m_cnt_sum) bufKey = readInternalKey(true);
+	  			}
+	  			else if (cmpRet > 0) { // curKey > bufKey
+	  				bzvType.set0(recId, size_t(ZipValueType::kDelete));
+	  				value.append((byte_t*)&pIKey.sequence, 7);
+	  				value.append(fstring());
+	  				write(value);
+	  				value.erase_all();
+	  				if (++recId < kvs.key.m_cnt_sum) bufKey = readInternalKey(true);
+	  			}
+	  			else { // curKey < bufKey
+	  				ITER_MOVE_NEXT(second_pass_iter_);
+	  			}
+	  		}
+	  		else { // multi record contains {multi, merge, cfbi, bi}
+	  			bzvType.set0(recId, size_t(ZipValueType::kMulti));
+	  			size_t headerSize = ZipValueMultiValue::calcHeaderSize(varNum);
+	  			value.resize(headerSize);
+	  			((ZipValueMultiValue*)value.data())->offsets[0] = uint32_t(varNum);
+	  			size_t mulRecId = 0;
+	  			while (mulRecId < varNum && second_pass_iter_->status().ok()) {
+	  				if (mulRecId > 0) {
+	  					curKey = second_pass_iter_->key();
+	  					curVal = second_pass_iter_->value();
+	  					TERARK_RT_assert(ParseInternalKey(curKey, &pIKey), std::logic_error);
+	  				}
+	  				mulCmpRet = ic.Compare(curKey, bufKey);
+	  				if (mulCmpRet == 0) { // curKey == bufKey
+	  					value.append(bufKey.data() + bufKey.size() - 8, 8);
+	  					value.append(fstringOf(curVal));
+	  					ITER_MOVE_NEXT(second_pass_iter_);
+	  					if (++mulRecId < varNum) {
+	  						bufKey = readInternalKey(false);
+	  						((ZipValueMultiValue*)value.data())->offsets[mulRecId] = value.size() - headerSize;
+	  					}
+	  				}
+	  				else if (mulCmpRet > 0) { // curKey > bufKey
+	  					uint64_t seqDelType = PackSequenceAndType(pIKey.sequence, ValueType::kTypeDeletion);
+	  					value.append((byte_t*)&seqDelType, 8);
+	  					if (++mulRecId < varNum) {
+	  						bufKey = readInternalKey(false);
+	  						((ZipValueMultiValue*)value.data())->offsets[mulRecId] = value.size() - headerSize;
+	  					}
+	  				}
+	  				else if (mulCmpRet < 0) { //curKey < bufKey
+	  					ITER_MOVE_NEXT(second_pass_iter_);
+	  				}
+	  			}
+	  			write(value);
+	  			value.erase_all();
+	  			if (++recId < kvs.key.m_cnt_sum) bufKey = readInternalKey(true);
+	  		}
+	  		bitPos += varNum + 1;
+	  		entryId += varNum;
+	  	}
+
+	  	while (recId < kvs.key.m_cnt_sum) {
+	  		value.erase_all();
+	  		varNum = kvs.valueBits.one_seq_len(bitPos); assert(varNum >= 1);
+	  		TERARK_RT_assert(ParseInternalKey(bufKey, &pIKey), std::logic_error);
+	  		if (varNum == 1) {
+	  			bzvType.set0(recId, size_t(ZipValueType::kDelete));
+	  			value.append((byte_t*)&pIKey.sequence, 7);
+	  		}
+	  		else {
+	  			bzvType.set0(recId, size_t(ZipValueType::kMulti));
+	  			size_t headerSize = ZipValueMultiValue::calcHeaderSize(varNum);
+	  			value.resize(headerSize);
+	  			((ZipValueMultiValue*)value.data())->offsets[0] = uint32_t(varNum);
+	  			for (size_t mulRecId = 0; mulRecId < varNum; mulRecId++) {
+	  				if (mulRecId > 0) {
+	  					TERARK_RT_assert(ParseInternalKey(bufKey, &pIKey), std::logic_error);
+	  				}
+	  				uint64_t seqDelType = PackSequenceAndType(pIKey.sequence, ValueType::kTypeDeletion);
+	  				value.append((byte_t*)&seqDelType, 8);
+	  				if (mulRecId + 1 < varNum) {
+	  					bufKey = readInternalKey(false);
+	  					((ZipValueMultiValue*)value.data())->offsets[mulRecId + 1] = value.size() - headerSize;
+	  				}
+	  			}
+	  		}
+	  		write(value);
+	  		bitPos += varNum + 1;
+	  		entryId += varNum;
+	  		if (++recId < kvs.key.m_cnt_sum) bufKey = readInternalKey(true);
+	  	}
 	}
-	else {
-		// original method
-		for (size_t recId = 0; recId < kvs.key.m_cnt_sum; recId++) {
-			value.erase_all();
-			assert(second_pass_iter_->Valid());
-			ParsedInternalKey pikey;
-			Slice curKey = second_pass_iter_->key();
-			auto bufKey = readInternalKey(true);
-			TERARK_RT_assert(ParseInternalKey(curKey, &pikey), std::logic_error);
-			if (dumpKeyValue) {
-				dumpKeyValueFunc(pikey, second_pass_iter_->value());
-			}
-			assert(kTypeRangeDeletion != pikey.type);
-			Slice curVal = second_pass_iter_->value();
-			size_t varNum = kvs.valueBits.one_seq_len(bitPos);
-			assert(varNum >= 1);
-			if (1 == varNum && (kTypeDeletion == pikey.type || kTypeValue == pikey.type)) {
-				if (ic.Compare(curKey, bufKey) == 0) {
-					if (0 == pikey.sequence && kTypeValue == pikey.type) {
-						bzvType.set0(recId, size_t(ZipValueType::kZeroSeq));
-						write(fstringOf(curVal));
-					}
-					else {
-						if (kTypeValue == pikey.type) {
-							bzvType.set0(recId, size_t(ZipValueType::kValue));
-						}
-						else {
-							bzvType.set0(recId, size_t(ZipValueType::kDelete));
-						}
-						value.append((byte_t*)&pikey.sequence, 7);
-						value.append(fstringOf(curVal));
-						write(value);
-					}
-				}
-				else {
-					bzvType.set0(recId, size_t(ZipValueType::kDelete));
-					value.append((byte_t*)&pikey.sequence, 7);
-					value.append(fstringOf(curVal));
-					write(value);
-				}
-				ITER_MOVE_NEXT(second_pass_iter_);
-			}
-			else {
-				bzvType.set0(recId, size_t(ZipValueType::kMulti));
-				size_t headerSize = ZipValueMultiValue::calcHeaderSize(varNum);
-				value.resize(headerSize);
-				((ZipValueMultiValue*)value.data())->offsets[0] = uint32_t(varNum);
-				for (size_t j = 0; j < varNum; j++) {
-					if (j > 0) {
-						assert(second_pass_iter_->Valid());
-						curKey = second_pass_iter_->key();
-						TERARK_RT_assert(ParseInternalKey(curKey, &pikey), std::logic_error);
-						if (dumpKeyValue) {
-							dumpKeyValueFunc(pikey, second_pass_iter_->value());
-						}
-						curVal = second_pass_iter_->value();
-					}
-					else {
-						assert(kTypeRangeDeletion != pikey.type);
-					}
-					//uint64_t seqType = PackSequenceAndType(pikey.sequence, pikey.type);
-					bufKey = readInternalKey(false);
-					if (ic.Compare(curKey, bufKey) == 0) {
-						value.append(bufKey.data() + bufKey.size() - 8, 8);
-					}
-					else {
-						uint64_t seqDelType = PackSequenceAndType(pikey.sequence, ValueType::kTypeDeletion);
-						value.append((byte_t*)&seqDelType, 8);
-					}
-					value.append(fstringOf(curVal));
-					if (j + 1 < varNum) {
-						((ZipValueMultiValue*)value.data())->offsets[j + 1] = value.size() - headerSize;
-					}
-					ITER_MOVE_NEXT(second_pass_iter_);
-				}
-				write(value);
-			}
-			bitPos += varNum + 1;
-			entryId += varNum;
-		}
-	}
+	  else {
+	  	// original method
+	  	for (size_t recId = 0; recId < kvs.key.m_cnt_sum; recId++) {
+	  		value.erase_all();
+	  		assert(second_pass_iter_->Valid());
+	  		ParsedInternalKey pikey;
+	  		Slice curKey = second_pass_iter_->key();
+	  		auto bufKey = readInternalKey(true);
+	  		TERARK_RT_assert(ParseInternalKey(curKey, &pikey), std::logic_error);
+	  		if (dumpKeyValue) {
+	  			dumpKeyValueFunc(pikey, second_pass_iter_->value());
+	  		}
+	  		assert(kTypeRangeDeletion != pikey.type);
+	  		Slice curVal = second_pass_iter_->value();
+	  		size_t varNum = kvs.valueBits.one_seq_len(bitPos);
+	  		assert(varNum >= 1);
+	  		if (1 == varNum && (kTypeDeletion == pikey.type || kTypeValue == pikey.type)) {
+	  			if (ic.Compare(curKey, bufKey) == 0) {
+	  				if (0 == pikey.sequence && kTypeValue == pikey.type) {
+	  					bzvType.set0(recId, size_t(ZipValueType::kZeroSeq));
+	  					write(fstringOf(curVal));
+	  				}
+	  				else {
+	  					if (kTypeValue == pikey.type) {
+	  						bzvType.set0(recId, size_t(ZipValueType::kValue));
+	  					}
+	  					else {
+	  						bzvType.set0(recId, size_t(ZipValueType::kDelete));
+	  					}
+	  					value.append((byte_t*)&pikey.sequence, 7);
+	  					value.append(fstringOf(curVal));
+	  					write(value);
+	  				}
+	  			}
+	  			else {
+	  				bzvType.set0(recId, size_t(ZipValueType::kDelete));
+	  				value.append((byte_t*)&pikey.sequence, 7);
+	  				value.append(fstringOf(curVal));
+	  				write(value);
+	  			}
+	  			ITER_MOVE_NEXT(second_pass_iter_);
+	  		}
+	  		else {
+	  			bzvType.set0(recId, size_t(ZipValueType::kMulti));
+	  			size_t headerSize = ZipValueMultiValue::calcHeaderSize(varNum);
+	  			value.resize(headerSize);
+	  			((ZipValueMultiValue*)value.data())->offsets[0] = uint32_t(varNum);
+	  			for (size_t j = 0; j < varNum; j++) {
+	  				if (j > 0) {
+	  					assert(second_pass_iter_->Valid());
+	  					curKey = second_pass_iter_->key();
+	  					TERARK_RT_assert(ParseInternalKey(curKey, &pikey), std::logic_error);
+	  					if (dumpKeyValue) {
+	  						dumpKeyValueFunc(pikey, second_pass_iter_->value());
+	  					}
+	  					curVal = second_pass_iter_->value();
+	  				}
+	  				else {
+	  					assert(kTypeRangeDeletion != pikey.type);
+	  				}
+	  				//uint64_t seqType = PackSequenceAndType(pikey.sequence, pikey.type);
+	  				bufKey = readInternalKey(false);
+	  				if (ic.Compare(curKey, bufKey) == 0) {
+	  					value.append(bufKey.data() + bufKey.size() - 8, 8);
+	  				}
+	  				else {
+	  					uint64_t seqDelType = PackSequenceAndType(pikey.sequence, ValueType::kTypeDeletion);
+	  					value.append((byte_t*)&seqDelType, 8);
+	  				}
+	  				value.append(fstringOf(curVal));
+	  				if (j + 1 < varNum) {
+	  					((ZipValueMultiValue*)value.data())->offsets[j + 1] = value.size() - headerSize;
+	  				}
+	  				ITER_MOVE_NEXT(second_pass_iter_);
+	  			}
+	  			write(value);
+	  		}
+	  		bitPos += varNum + 1;
+	  		entryId += varNum;
+	  	}
+	  }
 	
 	assert(entryId <= properties_.num_entries);
 
