@@ -1616,7 +1616,7 @@ uint64_t TerarkZipTableMultiReader::ApproximateOffsetOf_new(const Slice& ikey) {
       }
     }
     else {
-      rank = subReader->DictRank(key.substr(prefix.size()));
+      rank = subReader->DictRank(key.substr(subIndex_.GetPrefixLen() + prefix.size()));
     }
   }
   auto offset = uint64_t(subReader->rawReaderOffset_ +
