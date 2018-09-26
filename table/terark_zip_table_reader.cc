@@ -1599,25 +1599,7 @@ uint64_t TerarkZipTableMultiReader::ApproximateOffsetOf_new(const Slice& ikey) {
   }
   else {
     numRecords = subReader->index_->NumKeys();
-    fstring prefix = subReader->prefix_;
-    size_t cplen = key.commonPrefixLen(prefix);
-    if (prefix.size() != cplen) {
-      if (key.size() == cplen) {
-        assert(key.size() < prefix.size());
-        rank = 0;
-      }
-      else {
-        assert(key.size() > cplen);
-        assert(key[cplen] != prefix[cplen]);
-        if ((byte_t(key[cplen]) < byte_t(prefix[cplen])))
-          rank = 0;
-        else
-          rank = numRecords;
-      }
-    }
-    else {
-      rank = subReader->DictRank(key.substr(subIndex_.GetPrefixLen() + prefix.size()));
-    }
+    rank = subReader->DictRank(key.substr(subIndex_.GetPrefixLen()));
   }
   auto offset = uint64_t(subReader->rawReaderOffset_ +
                          1.0 * subReader->rawReaderSize_ * rank / numRecords);
