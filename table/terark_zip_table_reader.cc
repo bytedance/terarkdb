@@ -678,7 +678,7 @@ public:
       SetIterInvalid();
       return;
     }
-    auto subReader = subIndex_->GetSubReader(fstringOf(pikey.user_key));
+    auto subReader = subIndex_->LowerBoundSubReader(fstringOf(pikey.user_key));
     if (subReader == nullptr) {
       SetIterInvalid();
       return;
@@ -1308,7 +1308,7 @@ fstring TerarkZipTableMultiReader::SubIndex::PartIndexOperator::operator[](size_
 };
 
 const TerarkZipSubReader*
-TerarkZipTableMultiReader::SubIndex::GetSubReaderU64Sequential(fstring key) const {
+TerarkZipTableMultiReader::SubIndex::LowerBoundSubReaderU64Sequential(fstring key) const {
   byte_t targetBuffer[8] = {};
   memcpy(targetBuffer + (8 - prefixLen_), key.data(), std::min<size_t>(prefixLen_, key.size()));
   uint64_t targetValue = ReadBigEndianUint64Aligned(targetBuffer, targetBuffer + 8);
@@ -1323,7 +1323,7 @@ TerarkZipTableMultiReader::SubIndex::GetSubReaderU64Sequential(fstring key) cons
 }
 
 const TerarkZipSubReader*
-TerarkZipTableMultiReader::SubIndex::GetSubReaderU64Binary(fstring key) const {
+TerarkZipTableMultiReader::SubIndex::LowerBoundSubReaderU64Binary(fstring key) const {
   byte_t targetBuffer[8] = {};
   memcpy(targetBuffer + (8 - prefixLen_), key.data(), std::min<size_t>(prefixLen_, key.size()));
   uint64_t targetValue = ReadBigEndianUint64Aligned(targetBuffer, targetBuffer + 8);
@@ -1336,7 +1336,7 @@ TerarkZipTableMultiReader::SubIndex::GetSubReaderU64Binary(fstring key) const {
 }
 
 const TerarkZipSubReader*
-TerarkZipTableMultiReader::SubIndex::GetSubReaderU64BinaryReverse(fstring key)
+TerarkZipTableMultiReader::SubIndex::LowerBoundSubReaderU64BinaryReverse(fstring key)
 const {
   byte_t targetBuffer[8] = {};
   memcpy(targetBuffer + (8 - prefixLen_), key.data(), std::min(prefixLen_, key.size()));
@@ -1350,7 +1350,7 @@ const {
 }
 
 const TerarkZipSubReader*
-TerarkZipTableMultiReader::SubIndex::GetSubReaderBytewise(fstring key)
+TerarkZipTableMultiReader::SubIndex::LowerBoundSubReaderBytewise(fstring key)
 const {
   if (key.size() > prefixLen_) {
     key = fstring(key.data(), prefixLen_);
@@ -1364,7 +1364,7 @@ const {
 }
 
 const TerarkZipSubReader*
-TerarkZipTableMultiReader::SubIndex::GetSubReaderBytewiseReverse(fstring key)
+TerarkZipTableMultiReader::SubIndex::LowerBoundSubReaderBytewiseReverse(fstring key)
 const {
   if (key.size() > prefixLen_) {
     key = fstring(key.data(), prefixLen_);
@@ -1416,11 +1416,11 @@ Status TerarkZipTableMultiReader::SubIndex::Init(
       *u64p = ReadBigEndianUint64(src, src + prefixLen_);
     }
     if (reverse) {
-        GetSubReaderPtr = &SubIndex::GetSubReaderU64BinaryReverse;
+        LowerBoundSubReaderFunc = &SubIndex::LowerBoundSubReaderU64BinaryReverse;
     }
     else {
-        GetSubReaderPtr = partCount_ < 32 ? &SubIndex::GetSubReaderU64Sequential
-                                          : &SubIndex::GetSubReaderU64Binary;
+        LowerBoundSubReaderFunc = partCount_ < 32 ? &SubIndex::LowerBoundSubReaderU64Sequential
+                                          : &SubIndex::LowerBoundSubReaderU64Binary;
     }
   }
   else {
@@ -1428,8 +1428,8 @@ Status TerarkZipTableMultiReader::SubIndex::Init(
       memcpy(prefixSet_.data() + i * alignedPrefixLen_,
         offset.prefixSet_.data() + i * prefixLen_, prefixLen_);
     }
-    GetSubReaderPtr = reverse ? &SubIndex::GetSubReaderBytewiseReverse
-                              : &SubIndex::GetSubReaderBytewise;
+    LowerBoundSubReaderFunc = reverse ? &SubIndex::LowerBoundSubReaderBytewiseReverse
+                              : &SubIndex::LowerBoundSubReaderBytewise;
   }
 
   TerarkZipMultiOffsetInfo::KeyValueOffset last = {0, 0, 0, 0};
@@ -1503,8 +1503,8 @@ TerarkZipTableMultiReader::SubIndex::GetSubReader(size_t i) const {
 }
 
 const TerarkZipSubReader*
-TerarkZipTableMultiReader::SubIndex::GetSubReader(fstring key) const {
-  return (this->*GetSubReaderPtr)(key);
+TerarkZipTableMultiReader::SubIndex::LowerBoundSubReader(fstring key) const {
+  return (this->*LowerBoundSubReaderFunc)(key);
 }
 
 InternalIterator*
@@ -1543,7 +1543,7 @@ TerarkZipTableMultiReader::Get(const ReadOptions& ro, const Slice& ikey,
     return Status::InvalidArgument("TerarkZipTableMultiReader::Get()",
       "param target.size() < 8 + PrefixLen");
   }
-  auto subReader = subIndex_.GetSubReader(fstringOf(ikey).substr(0, ikey.size() - 8));
+  auto subReader = subIndex_.LowerBoundSubReader(fstringOf(ikey).substr(0, ikey.size() - 8));
   if (subReader == nullptr || !ikey.starts_with(subReader->prefix_)) {
     return Status::OK();
   }
@@ -1587,11 +1587,10 @@ uint64_t TerarkZipTableMultiReader::ApproximateOffsetOf_old(const Slice& ikey) {
 }
 
 uint64_t TerarkZipTableMultiReader::ApproximateOffsetOf_new(const Slice& ikey) {
-  const TerarkZipSubReader* subReader;
+  fstring key = fstringOf(ExtractUserKey(ikey));
+  const TerarkZipSubReader* subReader = subIndex_.LowerBoundSubReader(key);
   size_t numRecords;
   size_t rank;
-  fstring key = fstringOf(ExtractUserKey(ikey));
-  subReader = subIndex_.GetSubReader(key);
   if (subReader == nullptr) {
     subReader = subIndex_.GetSubReader(subIndex_.GetSubCount() - 1);
     numRecords = subReader->index_->NumKeys();
