@@ -38,3 +38,10 @@
 */x64/Debug/
 */x64/Release/
 */CMakeFiles/
+
+build
+vs2015
+vs2017
+
+# vim backup file
+*~
