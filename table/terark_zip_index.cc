@@ -10,6 +10,7 @@
 #include <terark/hash_strmap.hpp>
 #include <terark/fsa/dfa_mmap_header.hpp>
 #include <terark/fsa/fsa_cache.hpp>
+#include <terark/fsa/nest_louds_trie_inline.hpp>
 #include <terark/fsa/nest_trie_dawg.hpp>
 #include <terark/util/mmap.hpp>
 #include <terark/util/sortable_strvec.hpp>
