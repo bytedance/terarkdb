@@ -239,7 +239,7 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo) {
   MyGetInt   (tzo, terarkZipMinLevel       , 0    );
   MyGetInt   (tzo, debugLevel              , 0    );
   MyGetInt   (tzo, keyPrefixLen            , 0    );
-  MyGetInt   (tzo, offsetArrayBlockUnits   , 0    );
+  MyGetInt   (tzo, offsetArrayBlockUnits   , 128  );
   MyGetInt   (tzo, indexNestScale          , 8    );
   if (true
       &&   0 != tzo.offsetArrayBlockUnits
@@ -269,7 +269,7 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo) {
   
 
   MyGetDouble(tzo, estimateCompressionRatio, 0.20 );
-  MyGetDouble(tzo, sampleRatio             , 0.03 );
+  MyGetDouble(tzo, sampleRatio             , 0.06 );
   MyGetDouble(tzo, indexCacheRatio         , 0.00 );
 
   MyGetInt(tzo, minPreadLen, -1);
@@ -279,7 +279,7 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo) {
   MyGetXiB(tzo, smallTaskMemory);
   MyGetXiB(tzo, singleIndexMemLimit);
   MyGetXiB(tzo, cacheCapacityBytes);
-  MyGetInt(tzo, cacheShards, 17);
+  MyGetInt(tzo, cacheShards, 67);
   MyGetInt(tzo, minDictZipValueSize, 15);
 
   tzo.singleIndexMemLimit = std::min<size_t>(tzo.singleIndexMemLimit, 0x1E0000000);
