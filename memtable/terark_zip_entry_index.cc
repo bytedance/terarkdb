@@ -345,8 +345,7 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
   }
 };
 
-const WriteBatchEntryIndexFactory*
-patricia_WriteBatchEntryIndexFactory(const WriteBatchEntryIndexFactory* fallback) {
+const WriteBatchEntryIndexFactory* WriteBatchEntryPTrieIndexFactory(const WriteBatchEntryIndexFactory* fallback) {
   class WriteBatchEntryPTrieIndexContext : public WriteBatchEntryIndexContext {
    public:
     WriteBatchEntryIndexContext* fallback_context;
@@ -389,22 +388,14 @@ patricia_WriteBatchEntryIndexFactory(const WriteBatchEntryIndexFactory* fallback
     PTrieIndexFactory(const WriteBatchEntryIndexFactory* _fallback)
       : fallback(_fallback) {
     }
-    const char* Name() const override final { return "patricia"; }
    private:
     const WriteBatchEntryIndexFactory* fallback;
   };
   if (fallback == nullptr) {
-    fallback = skip_list_WriteBatchEntryIndexFactory();
+    fallback = WriteBatchEntryRBTreeIndexFactory();
   }
   static PTrieIndexFactory factory(fallback);
   return &factory;
 }
-
-static const WriteBatchEntryIndexFactory*
-patricia_WriteBatchEntryIndexFactory() {
-  return patricia_WriteBatchEntryIndexFactory(nullptr);
-}
-
-ROCKSDB_REGISTER_WRITE_BATCH_WITH_INDEX(patricia);
 
 } // namespace rocksdb

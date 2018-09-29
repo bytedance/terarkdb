@@ -286,6 +286,7 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo) {
 
   cfo.memtable_factory.reset(NewPatriciaTrieRepFactory());
 
+  RegistWriteBatchEntryIndexFactory("patricia", WriteBatchEntryPTrieIndexFactory());
   cfo.table_factory = SingleTerarkZipTableFactory(tzo,
     std::shared_ptr<TableFactory>(NewAdaptiveTableFactory()));
   const char* compaction_style = "Universal";
