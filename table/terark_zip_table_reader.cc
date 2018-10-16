@@ -9,6 +9,7 @@
 // terark headers
 #include <terark/lcast.hpp>
 #include <terark/util/crc.hpp>
+#include <terark/util/function.hpp>
 #include <terark/util/hugepage.hpp>
 
 #ifndef _MSC_VER
@@ -860,10 +861,25 @@ void TerarkZipSubReader::InitUsePread(int minPreadLen) {
   }
 }
 
+static void
+FsPread(void* vself, uint64_t offset, size_t len, valvec<byte_t>* buf) {
+  TerarkZipSubReader* self = (TerarkZipSubReader*)vself;
+  buf->ensure_capacity(len);
+  Status s = self->storeFileObj_->FsRead(offset, len, buf->data());
+  if (terark_unlikely(!s.ok())) {
+    // to be catched by TerarkZipSubReader::Get()
+    throw std::logic_error(s.ToString());
+  }
+}
 void TerarkZipSubReader::GetRecordAppend(size_t recId, valvec<byte_t>* tbuf)
 const {
-  if (storeUsePread_)
-    store_->pread_record_append(cache_, storeFD_, storeOffset_, recId, tbuf);
+  if (storeUsePread_) {
+    auto cache = cache_;
+    if (cache)
+      store_->pread_record_append(cache, storeFD_, storeOffset_, recId, tbuf);
+    else
+      store_->fspread_record_append(&FsPread, (void*)this, storeOffset_, recId, tbuf);
+  }
   else
     store_->get_record_append(recId, tbuf);
 }
@@ -1171,6 +1187,7 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   }
   subReader_.subIndex_ = 0;
   subReader_.storeFD_ = file_->file()->FileDescriptor();
+  subReader_.storeFileObj_ = file_->file();
   subReader_.storeOffset_ = 0;
   subReader_.InitUsePread(tzto_.minPreadLen);
   subReader_.rawReaderOffset_ = 0;
@@ -1429,7 +1446,7 @@ Status TerarkZipTableMultiReader::SubIndex::Init(
                       fstring typeMemory,
                       fstring commonPrefixMemory,
                       int minPreadLen,
-                      intptr_t fileFD,
+                      RandomAccessFile* fileObj,
                       LruReadonlyCache* cache,
                       bool reverse)
 {
@@ -1478,7 +1495,8 @@ Status TerarkZipTableMultiReader::SubIndex::Init(
       auto& part = subReader_.back();
       auto& curr = offset.offset_[i];
       part.subIndex_ = i;
-      part.storeFD_ = fileFD;
+      part.storeFileObj_ = fileObj;
+      part.storeFD_ = fileObj->FileDescriptor();
       part.storeOffset_ = last.value;
       part.prefix_.assign(offset.prefixSet_.data() + i * prefixLen_, prefixLen_);
       part.index_ = TerarkIndex::LoadMemory({indexMemory.data() + last.key,
@@ -1758,7 +1776,7 @@ TerarkZipTableMultiReader::Open(RandomAccessFileReader* file, uint64_t file_size
     , fstringOf(zValueTypeBlock.data)
     , fstringOf(commonPrefixBlock.data)
     , tzto_.minPreadLen
-    , file_->file()->FileDescriptor()
+    , file_->file()
     , table_factory_->cache()
     , isReverseBytewiseOrder_
   );

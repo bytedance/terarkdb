@@ -123,6 +123,7 @@ struct TerarkZipSubReader {
   size_t rawReaderSize_;
   bool   storeUsePread_;
   intptr_t   storeFD_;
+  RandomAccessFile* storeFileObj_;
   size_t storeOffset_;
   std::string prefix_;
   unique_ptr<TerarkIndex> index_;
@@ -275,7 +276,7 @@ public:
                 fstring typeMemory,
                 fstring commonPrefixMemory,
                 int minPreadLen,
-                intptr_t fileFD,
+                RandomAccessFile* fileObj,
                 LruReadonlyCache* cache,
                 bool reverse);
     size_t GetPrefixLen() const;
