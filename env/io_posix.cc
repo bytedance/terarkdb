@@ -473,6 +473,20 @@ Status PosixMmapReadableFile::Read(uint64_t offset, size_t n, Slice* result,
   return s;
 }
 
+Status PosixMmapReadableFile::FsRead(uint64_t offset, size_t len, void* buf)
+const {
+    Status s;
+    ssize_t nRead = ::pread(fd_, buf, len, offset);
+    if (nRead != ssize_t(len)) {
+        s = IOError("PosixMmapReadableFile::FsRead(): pread(offset = "
+                    + ToString(offset)
+                    + ", len = " + ToString(len)
+                    + ") = " + ToString(nRead),
+                filename_, errno);
+    }
+    return s;
+}
+
 Status PosixMmapReadableFile::InvalidateCache(size_t offset, size_t length) {
 #ifndef OS_LINUX
   (void)offset;

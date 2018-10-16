@@ -13,6 +13,7 @@
 #include "util/aligned_buffer.h"
 #include "util/coding.h"
 #include "util/sync_point.h"
+#include "util/string_util.h"
 
 namespace rocksdb {
 namespace port {
@@ -264,6 +265,20 @@ Status WinMmapReadableFile::Read(uint64_t offset, size_t n, Slice* result,
   }
   *result =
     Slice(reinterpret_cast<const char*>(mapped_region_)+offset, n);
+  return s;
+}
+
+Status WinMmapReadableFile::FsRead(uint64_t offset, size_t len, void* buf)
+const {
+  size_t bytes_read = 0;
+  Status s = pread(this, (char*)buf, len, offset, bytes_read);
+  if (bytes_read != len) {
+    s = IOError(
+        "PosixMmapReadableFile::FsRead(): pread(\"file = " + filename_
+            + "\", offset = " + ToString(offset)
+            + ", len = " + ToString(len) + ") = " + ToString(bytes_read),
+        errno);
+  }
   return s;
 }
 
