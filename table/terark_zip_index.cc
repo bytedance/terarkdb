@@ -10,6 +10,7 @@
 #include <terark/hash_strmap.hpp>
 #include <terark/fsa/dfa_mmap_header.hpp>
 #include <terark/fsa/fsa_cache.hpp>
+#include <terark/fsa/nest_louds_trie_inline.hpp>
 #include <terark/fsa/nest_trie_dawg.hpp>
 #include <terark/util/mmap.hpp>
 #include <terark/util/sortable_strvec.hpp>
@@ -262,41 +263,38 @@ TerarkIndex::~TerarkIndex() {}
 TerarkIndex::Factory::~Factory() {}
 TerarkIndex::Iterator::~Iterator() {}
 
-class NestLoudsTrieIterBase : public TerarkIndex::Iterator {
-protected:
-  unique_ptr<ADFA_LexIterator> m_iter;
-  fstring key() const override {
-	  return fstring(m_iter->word());
-  }
-  NestLoudsTrieIterBase(ADFA_LexIterator* iter)
-   : m_iter(iter) {}
-};
-
 template<class NLTrie>
-class NestLoudsTrieIterBaseTpl : public NestLoudsTrieIterBase {
+class NestLoudsTrieIter : public TerarkIndex::Iterator {
 protected:
   using TerarkIndex::Iterator::m_id;
-  NestLoudsTrieIterBaseTpl(const NLTrie* trie)
-    : NestLoudsTrieIterBase(trie->adfa_make_iter(initial_state)) {
-    m_dawg = trie;
-  }
-  const NLTrie* m_dawg;
+  typename   NLTrie::Iterator  m_iter;
   bool Done(bool ok) {
+	auto dawg = static_cast<const NLTrie*>(m_iter.get_dfa());
     if (ok)
-      m_id = m_dawg->state_to_word_id(m_iter->word_state());
+      m_id = dawg->state_to_word_id(m_iter.word_state());
     else
       m_id = size_t(-1);
     return ok;
   }
+public:
+  NestLoudsTrieIter(const NLTrie* trie) : m_iter(trie) {}
+  fstring key() const override { return m_iter.word(); }
+  bool SeekToFirst() override { return Done(m_iter.seek_begin()); }
+  bool SeekToLast()  override { return Done(m_iter.seek_end()); }
+  bool Seek(fstring key) override { return Done(m_iter.seek_lower_bound(key)); }
+  bool Next() override { return Done(m_iter.incr()); }
+  bool Prev() override { return Done(m_iter.decr()); }
+  size_t DictRank() const override {
+	auto dawg = static_cast<const NLTrie*>(m_iter.get_dfa());
+    assert(m_id != size_t(-1));
+    return dawg->state_to_dict_rank(m_iter.word_state());
+  }
 };
 template<>
-class NestLoudsTrieIterBaseTpl<MatchingDFA> : public NestLoudsTrieIterBase {
+class NestLoudsTrieIter<MatchingDFA> : public TerarkIndex::Iterator {
 protected:
   using TerarkIndex::Iterator::m_id;
-  NestLoudsTrieIterBaseTpl(const MatchingDFA* dfa)
-    : NestLoudsTrieIterBase(dfa->adfa_make_iter(initial_state)) {
-    m_dawg = dfa->get_dawg();
-  }
+  unique_ptr<ADFA_LexIterator> m_iter;
   const BaseDAWG* m_dawg;
   bool Done(bool ok) {
     if (ok)
@@ -304,6 +302,21 @@ protected:
     else
       m_id = size_t(-1);
     return ok;
+  }
+public:
+  NestLoudsTrieIter(const MatchingDFA* dfa)
+    : m_iter(dfa->adfa_make_iter(initial_state)) {
+    m_dawg = dfa->get_dawg();
+  }
+  fstring key() const override { return m_iter->word(); }
+  bool SeekToFirst() override { return Done(m_iter->seek_begin()); }
+  bool SeekToLast()  override { return Done(m_iter->seek_end()); }
+  bool Seek(fstring key) override { return Done(m_iter->seek_lower_bound(key)); }
+  bool Next() override { return Done(m_iter->incr()); }
+  bool Prev() override { return Done(m_iter->decr()); }
+  size_t DictRank() const override {
+    assert(m_id != size_t(-1));
+    return m_dawg->state_to_dict_rank(m_iter->word_state());
   }
 };
 
@@ -510,26 +523,7 @@ struct NestLoudsTrieIndexBase : public TerarkIndex {
 
 template<class NLTrie>
 class NestLoudsTrieIndex : public NestLoudsTrieIndexBase {
-  class MyIterator : public NestLoudsTrieIterBaseTpl<NLTrie> {
-  protected:
-    using NestLoudsTrieIterBaseTpl<NLTrie>::m_dawg;
-    using NestLoudsTrieIterBaseTpl<NLTrie>::Done;
-    using NestLoudsTrieIterBase::m_iter;
-    using TerarkIndex::Iterator::m_id;
-  public:
-    explicit MyIterator(const NLTrie* trie)
-      : NestLoudsTrieIterBaseTpl<NLTrie>(trie)
-    {}
-    bool SeekToFirst() override { return Done(m_iter->seek_begin()); }
-    bool SeekToLast()  override { return Done(m_iter->seek_end()); }
-    bool Seek(fstring key) override { return Done(m_iter->seek_lower_bound(key)); }
-    bool Next() override { return Done(m_iter->incr()); }
-    bool Prev() override { return Done(m_iter->decr()); }
-    size_t DictRank() const override {
-      assert(m_id != size_t(-1));
-      return m_dawg->state_to_dict_rank(m_iter->word_state());
-    }
-  };
+  typedef NestLoudsTrieIter<NLTrie> MyIterator;
 public:
   NestLoudsTrieIndex(NLTrie* trie) : NestLoudsTrieIndexBase(trie) {}
   Iterator* NewIterator() const override final {
@@ -1190,7 +1184,7 @@ struct CompositeUintIndexBase : public TerarkIndex {
       uint64_t minValue = Read1stKey(ks.minKey, cplen, key1_len);
       uint64_t maxValue = Read1stKey(ks.maxKey, cplen, key1_len);
       // if rocksdb reverse comparator is used, then minValue
-      // is actually the largetst one
+      // is actually the largest one
       if (minValue > maxValue) {
         std::swap(minValue, maxValue);
       }
@@ -1465,7 +1459,7 @@ const char* CompositeUintIndexBase::index_name = "CompositeIndex";
  * For simplicity, let's take composite index => index1:index2. Then following
  * compositeindexes like,
  *   4:6, 4:7, 4:8, 7:19, 7:20, 8:3
- * index1: {4, 7}, use bitmap (also UintIndex's form) to respresent
+ * index1: {4, 7}, use bitmap (also UintIndex's form) to represent
  *   4(1), 5(0), 6(0), 7(1), 8(1)
  * index1:index2: use bitmap to respresent 4:6(0), 4:7(1), 4:8(1), 7:19(0), 7:20(1), 8:3(0)
  * to search 7:20, use bitmap1 to rank1(7) = 2, then use bitmap2 to select0(2) = position-3,

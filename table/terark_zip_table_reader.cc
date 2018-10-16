@@ -9,6 +9,8 @@
 // terark headers
 #include <terark/lcast.hpp>
 #include <terark/util/crc.hpp>
+#include <terark/util/function.hpp>
+#include <terark/util/hugepage.hpp>
 
 #ifndef _MSC_VER
 # include <sys/mman.h>
@@ -18,6 +20,8 @@
 
 // for isChecksumVerifyEnabled()
 #include <terark/zbs/blob_store_file_header.hpp>
+// third party
+#include <zstd/zstd.h>
 
 namespace {
 using namespace rocksdb;
@@ -117,7 +121,6 @@ static void MmapWarmUp(const Vec& uv) {
   MmapWarmUpBytes(uv.data(), uv.mem_size());
 }
 
-/*
 static void MmapColdizeBytes(const void* addr, size_t len) {
   size_t low = terark::align_up(size_t(addr), 4096);
   size_t hig = terark::align_down(size_t(addr) + len, 4096);
@@ -133,16 +136,41 @@ static void MmapColdizeBytes(const void* addr, size_t len) {
 static void MmapColdize(fstring mem) {
   MmapColdizeBytes(mem.data(), mem.size());
 }
-*/
-/*
-static void MmapColdize(Slice mem) {
-  MmapColdizeBytes(mem.data(), mem.size());
-}
+//static void MmapColdize(Slice mem) {
+//  MmapColdizeBytes(mem.data(), mem.size());
+//}
 template<class Vec>
 static void MmapColdize(const Vec& uv) {
   MmapColdizeBytes(uv.data(), uv.mem_size());
 }
-*/
+
+Status DecompressDict(const TableProperties& table_properties, fstring dict, valvec<byte_t>* output_dict) {
+  auto find = table_properties.user_collected_properties.find(kTerarkZipTableDictInfo);
+  if (find == table_properties.user_collected_properties.end()) {
+    return Status::OK();
+  }
+  const std::string& dictInfo = find->second;
+  output_dict->clear();
+  if (dictInfo.empty()) {
+    return Status::OK();
+  }
+  if (!fstring(dictInfo).startsWith("ZSTD_")) {
+    return Status::Corruption("Load global dict error", "unsupported dict format");
+  }
+  unsigned long long raw_size = ZSTD_getDecompressedSize(dict.data(), dict.size());
+  if (raw_size == 0) {
+    return Status::Corruption("Load global dict error", "zstd get raw size fail");
+  }
+  use_hugepage_resize_no_init(output_dict, raw_size);
+  size_t size = ZSTD_decompress(output_dict->data(), raw_size, dict.data(), dict.size());
+  if (ZSTD_isError(size)) {
+    return Status::Corruption("Load global dict ZSTD error", ZSTD_getErrorName(size));
+  }
+  assert(size == raw_size);
+  MmapColdize(dict);
+  return Status::OK();
+}
+
 
 static void MmapAdviseRandom(const void* addr, size_t len) {
   size_t low = terark::align_up(size_t(addr), 4096);
@@ -213,9 +241,10 @@ Status ReadMetaBlockAdapte(RandomAccessFileReader* file,
 
 using terark::BadCrc32cException;
 using terark::byte_swap;
+using terark::lcast;
 using terark::AbstractBlobStore;
 
-class TerarkZipTableIndexIterator : public InternalIterator {
+class TerarkZipTableIndexIterator : public SourceInternalIterator {
 protected:
   const TerarkZipSubReader*         subReader_;
   unique_ptr<TerarkIndex::Iterator> iter_;
@@ -832,10 +861,25 @@ void TerarkZipSubReader::InitUsePread(int minPreadLen) {
   }
 }
 
+static void
+FsPread(void* vself, uint64_t offset, size_t len, valvec<byte_t>* buf) {
+  TerarkZipSubReader* self = (TerarkZipSubReader*)vself;
+  buf->ensure_capacity(len);
+  Status s = self->storeFileObj_->FsRead(offset, len, buf->data());
+  if (terark_unlikely(!s.ok())) {
+    // to be catched by TerarkZipSubReader::Get()
+    throw std::logic_error(s.ToString());
+  }
+}
 void TerarkZipSubReader::GetRecordAppend(size_t recId, valvec<byte_t>* tbuf)
 const {
-  if (storeUsePread_)
-    store_->pread_record_append(cache_, storeFD_, storeOffset_, recId, tbuf);
+  if (storeUsePread_) {
+    auto cache = cache_;
+    if (cache)
+      store_->pread_record_append(cache, storeFD_, storeOffset_, recId, tbuf);
+    else
+      store_->fspread_record_append(&FsPread, (void*)this, storeOffset_, recId, tbuf);
+  }
   else
     store_->get_record_append(recId, tbuf);
 }
@@ -1089,6 +1133,15 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   UpdateCollectInfo(table_factory_, &tzto_, props, file_size);
   s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber, ioptions,
     kTerarkZipTableValueDictBlock, &valueDictBlock);
+  Slice dict = valueDictBlock.data;
+  if (s.ok()) {
+    s = DecompressDict(*props, fstringOf(valueDictBlock.data), &dict_);
+    if (!s.ok()) {
+      return s;
+    }
+    dict = dict_.empty() ? valueDictBlock.data : SliceOf(dict_);
+  }
+  props->user_collected_properties.emplace(kTerarkZipTableDictSize, lcast(dict.size()));
   // PlainBlobStore & MixedLenBlobStore no dict
   s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber, ioptions,
     kTerarkZipTableIndexBlock, &indexBlock);
@@ -1116,7 +1169,7 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   try {
     subReader_.store_.reset(AbstractBlobStore::load_from_user_memory(
       fstring(file_data.data(), props->data_size),
-      getVerifyDict(valueDictBlock.data)
+      getVerifyDict(dict)
     ));
   }
   catch (const BadCrc32cException& ex) {
@@ -1134,6 +1187,7 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   }
   subReader_.subIndex_ = 0;
   subReader_.storeFD_ = file_->file()->FileDescriptor();
+  subReader_.storeFileObj_ = file_->file();
   subReader_.storeOffset_ = 0;
   subReader_.InitUsePread(tzto_.minPreadLen);
   subReader_.rawReaderOffset_ = 0;
@@ -1196,7 +1250,7 @@ Status TerarkZipTableReader::LoadIndex(Slice mem) {
   return Status::OK();
 }
 
-InternalIterator*
+SourceInternalIterator*
 TerarkZipTableReader::
 NewIterator(const ReadOptions& ro, Arena* arena, bool skip_filters) {
   TERARK_UNUSED_VAR(skip_filters); // unused
@@ -1392,7 +1446,7 @@ Status TerarkZipTableMultiReader::SubIndex::Init(
                       fstring typeMemory,
                       fstring commonPrefixMemory,
                       int minPreadLen,
-                      intptr_t fileFD,
+                      RandomAccessFile* fileObj,
                       LruReadonlyCache* cache,
                       bool reverse)
 {
@@ -1441,7 +1495,8 @@ Status TerarkZipTableMultiReader::SubIndex::Init(
       auto& part = subReader_.back();
       auto& curr = offset.offset_[i];
       part.subIndex_ = i;
-      part.storeFD_ = fileFD;
+      part.storeFileObj_ = fileObj;
+      part.storeFD_ = fileObj->FileDescriptor();
       part.storeOffset_ = last.value;
       part.prefix_.assign(offset.prefixSet_.data() + i * prefixLen_, prefixLen_);
       part.index_ = TerarkIndex::LoadMemory({indexMemory.data() + last.key,
@@ -1507,7 +1562,7 @@ TerarkZipTableMultiReader::SubIndex::LowerBoundSubReader(fstring key) const {
   return (this->*LowerBoundSubReaderFunc)(key);
 }
 
-InternalIterator*
+SourceInternalIterator*
 TerarkZipTableMultiReader::NewIterator(const ReadOptions& ro,
                                        Arena *arena, bool skip_filters) {
   TERARK_UNUSED_VAR(skip_filters); // unused
@@ -1686,6 +1741,15 @@ TerarkZipTableMultiReader::Open(RandomAccessFileReader* file, uint64_t file_size
   }
   s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber, ioptions,
     kTerarkZipTableValueDictBlock, &valueDictBlock);
+  Slice dict;
+  if (s.ok()) {
+    s = DecompressDict(*props, fstringOf(valueDictBlock.data), &dict_);
+    if (!s.ok()) {
+      return s;
+    }
+    dict = dict_.empty() ? valueDictBlock.data : SliceOf(dict_);
+  }
+  props->user_collected_properties.emplace(kTerarkZipTableDictSize, lcast(dict.size()));
   s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber, ioptions,
     kTerarkZipTableIndexBlock, &indexBlock);
   if (!s.ok()) {
@@ -1708,11 +1772,11 @@ TerarkZipTableMultiReader::Open(RandomAccessFileReader* file, uint64_t file_size
   s = subIndex_.Init(fstringOf(offsetBlock.data)
     , fstringOf(indexBlock.data)
     , fstring(file_data.data(), props->data_size)
-    , getVerifyDict(valueDictBlock.data)
+    , getVerifyDict(dict)
     , fstringOf(zValueTypeBlock.data)
     , fstringOf(commonPrefixBlock.data)
     , tzto_.minPreadLen
-    , file_->file()->FileDescriptor()
+    , file_->file()
     , table_factory_->cache()
     , isReverseBytewiseOrder_
   );

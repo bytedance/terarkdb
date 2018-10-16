@@ -146,6 +146,8 @@ static const std::string g_szTerarkPublikKey =
 
 #endif // TerocksPrivateCode
 const std::string kTerarkZipTableBuildTimestamp = "terark.build.timestamp";
+const std::string kTerarkZipTableDictInfo = "terark.build.dict_info";
+const std::string kTerarkZipTableDictSize = "terark.build.dict_size";
 const std::string kTerarkZipTableEstimateRatio = "terark.build.estimate_ratio";
 
 #if defined(TerocksPrivateCode)
@@ -471,7 +473,7 @@ void CollectInfo::update(uint64_t timestamp
 }
 
 bool CollectInfo::hard(size_t raw, size_t zip) {
-  return double(zip) / double(raw) > hard_ratio;
+  return double(zip) > hard_ratio * double(raw);
 }
 
 bool CollectInfo::hard() const {

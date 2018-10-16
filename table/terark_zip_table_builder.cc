@@ -12,14 +12,12 @@
 #include <terark/io/MemStream.hpp>
 #include <terark/lcast.hpp>
 #include <terark/num_to_str.hpp>
-# include <terark/zbs/zero_length_blob_store.hpp>
-# include <terark/zbs/plain_blob_store.hpp>
-# include <terark/zbs/mixed_len_blob_store.hpp>
-# include <terark/zbs/zip_offset_blob_store.hpp>
-
-namespace snappy {
-  size_t Compress(const char* input, size_t input_length, std::string* output);
-}
+#include <terark/zbs/zero_length_blob_store.hpp>
+#include <terark/zbs/plain_blob_store.hpp>
+#include <terark/zbs/mixed_len_blob_store.hpp>
+#include <terark/zbs/zip_offset_blob_store.hpp>
+// third party
+#include <zstd/zstd.h>
 
 namespace rocksdb {
 
@@ -316,6 +314,7 @@ TableProperties TerarkZipTableBuilder::GetTableProperties() const {
     MyRocksTablePropertiesCollectorHack(collector.get(), offset_info_,
                                         ret.user_collected_properties, isReverseBytewiseOrder_);
   }
+  ret.user_collected_properties.emplace(kTerarkZipTableDictSize, lcast(dictSize_));
   return ret;
 }
 
@@ -590,7 +589,7 @@ Status TerarkZipTableBuilder::EmptyTableFinish() {
   }
   range_del_block_.Reset();
   offset_info_.Init(0, 0);
-  return WriteMetaData({
+  return WriteMetaData(std::string(), {
 #if defined(TerocksPrivateCode)
     { &kTerarkZipTableExtendedBlock                 , licenseHandle },
 #endif // TerocksPrivateCode
@@ -870,6 +869,38 @@ Status TerarkZipTableBuilder::BuildStore(KeyValueStatus& kvs,
   return Status::OK();
 }
 
+std::future<Status>
+TerarkZipTableBuilder::CompressDict(fstring tmpDictFile, fstring dict,
+                                    std::string* info, long long* td) {
+  if (table_options_.disableCompressDict) {
+    return Async([=] {
+      long long tds = g_pf.now();
+      FileStream(tmpDictFile, "wb+").ensureWrite(dict.data(), dict.size());
+      info->clear();
+      *td = g_pf.now() - tds;
+      return Status::OK();
+    });
+  }
+  return Async([=] {
+    long long tds = g_pf.now();
+    FileStream(tmpDictFile, "wb+").chsize(dict.size());
+    MmapWholeFile dictFile(tmpDictFile, true);
+    size_t zstd_size = ZSTD_compress(dictFile.base, dictFile.size, dict.data(), dict.size(), 0);
+    if (ZSTD_isError(zstd_size) || CollectInfo::hard(dict.size(), zstd_size)) {
+      memcpy(dictFile.base, dict.data(), dict.size());
+      info->clear();
+    }
+    else {
+      MmapWholeFile().swap(dictFile);
+      FileStream(tmpDictFile, "rb+").chsize(zstd_size);
+      *info = "ZSTD_";
+      info->append(lcast(ZSTD_versionNumber()));
+    }
+    *td = g_pf.now() - tds;
+    return Status::OK();
+  });
+}
+
 Status TerarkZipTableBuilder::WaitBuildIndex() {
   Status result = Status::OK();
   size_t offset = 0;
@@ -1074,9 +1105,9 @@ LoadSample(std::unique_ptr<DictZipBlobStore::ZipBuilder>& zbuilder) {
   }
   tmpSampleFile_.close();
   if (hard_test) {
-    std::string output;
-    snappy::Compress((const char*)test.data(), test.size(), &output);
-    if (CollectInfo::hard(test.size(), output.size())) {
+    valvec<byte_t> output(test.size(), valvec_no_init());
+    size_t zstd_size = ZSTD_compress(output.data(), test.size(), test.data(), test.size(), 0);
+    if (ZSTD_isError(zstd_size) || CollectInfo::hard(test.size(), zstd_size)) {
       // hard to compress ...
       zbuilder.reset();
       waitHandle.Release();
@@ -1150,8 +1181,11 @@ Status TerarkZipTableBuilder::ZipValueToFinish() {
   AutoDeleteFile tmpDictFile{ tmpSentryFile_.path + ".dict" };
   std::unique_ptr<DictZipBlobStore::ZipBuilder> zbuilder;
   WaitHandle dictWaitHandle;
+  std::future<Status> dictWait;
   DictZipBlobStore::ZipStat dzstat;
-  long long t3, t4;
+  std::string dictInfo;
+  uint64_t dictHash = 0;
+  long long t3, t4, td;
   t3 = g_pf.now();
   Status s = WaitBuildStore();
   if (!s.ok()) {
@@ -1161,6 +1195,13 @@ Status TerarkZipTableBuilder::ZipValueToFinish() {
     if (kvs.isUseDictZip) {
       zbuilder.reset(createZipBuilder());
       dictWaitHandle = LoadSample(zbuilder);
+    }
+    if (zbuilder) {
+      // prepareDict() will invalid zbuilder->getDictionary().memory()
+      zbuilder->prepareDict();
+      dictWait = CompressDict(tmpDictFile, zbuilder->getDictionary().memory, &dictInfo, &td);
+      dictHash = zbuilder->getDictionary().xxhash;
+      dictSize_ = zbuilder->getDictionary().memory.size();
     }
     s = BuildStore(kvs, zbuilder.get(), BuildStoreSync);
     if (!s.ok()) {
@@ -1173,9 +1214,10 @@ Status TerarkZipTableBuilder::ZipValueToFinish() {
   if (zbuilder) {
     zbuilder->freeDict();
     t4 = g_pf.now();
-    if (s.ok()) {
-      auto dict = zbuilder->getDictionary().memory;
-      FileStream(tmpDictFile, "wb+").ensureWrite(dict.data(), dict.size());
+    assert(dictWait.valid());
+    s = dictWait.get();
+    if (!s.ok()) {
+      return s;
     }
     zbuilder.reset();
     dictWaitHandle.Release();
@@ -1183,6 +1225,7 @@ Status TerarkZipTableBuilder::ZipValueToFinish() {
   else {
     tmpDictFile.fpath.clear();
     t4 = g_pf.now();
+    td = 1;
   }
   // wait for indexing complete, if indexing is slower than value compressing
   s = WaitBuildIndex();
@@ -1192,7 +1235,7 @@ Status TerarkZipTableBuilder::ZipValueToFinish() {
   if (tmpDumpFile_.isOpen()) {
     tmpDumpFile_.close();
   }
-  return WriteSSTFile(t3, t4, tmpDictFile, dzstat);
+  return WriteSSTFile(t3, t4, td, tmpDictFile, dictInfo, dictHash, dzstat);
 }
 
 Status TerarkZipTableBuilder::ZipValueToFinishMulti() {
@@ -1200,11 +1243,14 @@ Status TerarkZipTableBuilder::ZipValueToFinishMulti() {
   AutoDeleteFile tmpDictFile{ tmpSentryFile_.path + ".dict"};
   std::unique_ptr<DictZipBlobStore::ZipBuilder> zbuilder;
   WaitHandle dictWaitHandle;
+  std::future<Status> dictWait;
   std::unique_ptr<AbstractBlobStore> store;
   DictZipBlobStore::ZipStat dzstat;
+  std::string dictInfo;
+  uint64_t dictHash = 0;
   size_t dictRefCount = 0;
   Status s;
-  long long t3, t4;
+  long long t3, t4, td;
   t3 = g_pf.now();
   bool isUseDictZip = false;
   for (auto& kvs : histogram_) {
@@ -1224,13 +1270,10 @@ Status TerarkZipTableBuilder::ZipValueToFinishMulti() {
     if (zbuilder) {
       assert(tmpZipStoreFileSize_ == 0);
       // build dict in this thread
-      zbuilder->prepare(1, tmpZipStoreFile_, 0);
-      // disallow 0 record finish
-      zbuilder->addRecord("Hello World!");
-      // make zbuilder ready to next work
-      zbuilder->finish(DictZipBlobStore::ZipBuilder::FinishNone);
-      // truncate output file
-      FileStream(tmpZipStoreFile_.fpath, "wb");
+      zbuilder->prepareDict();
+      dictWait = CompressDict(tmpDictFile, zbuilder->getDictionary().memory, &dictInfo, &td);
+      dictHash = zbuilder->getDictionary().xxhash;
+      dictSize_ = zbuilder->getDictionary().memory.size();
     }
     for (auto& kvs : histogram_) {
       if (kvs->isUseDictZip) {
@@ -1245,12 +1288,17 @@ Status TerarkZipTableBuilder::ZipValueToFinishMulti() {
       }
     }
   }
+  if (!s.ok()) {
+    return s;
+  }
   if (zbuilder) {
     zbuilder->freeDict();
     t4 = g_pf.now();
-    if (s.ok()) {
-      auto dict = zbuilder->getDictionary().memory;
-      FileStream(tmpDictFile, "wb+").ensureWrite(dict.data(), dict.size());
+    assert(dictWait.valid());
+    s = dictWait.get();
+
+    if (!s.ok()) {
+      return s;
     }
     zbuilder.reset();
     dictWaitHandle.Release();
@@ -1258,9 +1306,7 @@ Status TerarkZipTableBuilder::ZipValueToFinishMulti() {
   else {
     tmpDictFile.fpath.clear();
     t4 = g_pf.now();
-  }
-  if (!s.ok()) {
-      return s;
+    td = 0;
   }
   s = WaitBuildStore();
   if (!s.ok()) {
@@ -1274,7 +1320,7 @@ Status TerarkZipTableBuilder::ZipValueToFinishMulti() {
   if (tmpDumpFile_.isOpen()) {
     tmpDumpFile_.close();
   }
-  return WriteSSTFileMulti(t3, t4, tmpDictFile, dzstat);
+  return WriteSSTFileMulti(t3, t4, td, tmpDictFile, dictInfo, dictHash, dzstat);
 }
 
 Status
@@ -1548,18 +1594,13 @@ void TerarkZipTableBuilder::DoWriteAppend(const void* data, size_t size) {
   offset_ += size;
 }
 
-Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
-  , fstring tmpDictFile
+Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4, long long td
+  , fstring tmpDictFile, const std::string& dictInfo, uint64_t dictHash
   , const DictZipBlobStore::ZipStat& dzstat)
 {
   assert(histogram_.size() == 1);
   terark::MmapWholeFile dictMmap;
-  AbstractBlobStore::Dictionary dict;
-  if (!tmpDictFile.empty()) {
-    terark::MmapWholeFile(tmpDictFile.c_str()).swap(dictMmap);
-    dict = AbstractBlobStore::Dictionary(fstring{(const char*)dictMmap.base,
-        (ptrdiff_t)dictMmap.size});
-  }
+  AbstractBlobStore::Dictionary dict(dictSize_, dictHash);
   auto& kvs = *histogram_.front();
   terark::MmapWholeFile mmapIndexFile(tmpIndexFile_.fpath);
   terark::MmapWholeFile mmapStoreFile((kvs.isUseDictZip ? tmpZipStoreFile_ : tmpStoreFile_).fpath);
@@ -1636,9 +1677,11 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
   commonPrefix.append(kvs.prefix.data(), kvs.prefix.size());
   commonPrefix.append(kvs.commonPrefix.data(), kvs.commonPrefix.size());
   WriteBlock(commonPrefix, file_, &offset_, &commonPrefixBlock);
-  s = WriteBlock(dict.memory, file_, &offset_, &dictBlock);
-  if (!s.ok()) {
-    return s;
+  if (!dict.memory.empty()) {
+    s = WriteBlock(MmapWholeFile(tmpDictFile).memory(), file_, &offset_, &dictBlock);
+    if (!s.ok()) {
+      return s;
+    }
   }
   properties_.num_data_blocks = kvs.key.m_cnt_sum;
   offset_info_.Init(kvs.prefix.size(), 1);
@@ -1648,11 +1691,11 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
                    properties_.data_size,
                    zvTypeBlock.size(),
                    commonPrefixBlock.size());
-  WriteMetaData({
+  WriteMetaData(dictInfo, {
 #if defined(TerocksPrivateCode)
     { &kTerarkZipTableExtendedBlock                                , licenseHandle     },
 #endif // TerocksPrivateCode
-    { dict.memory.size() ? &kTerarkZipTableValueDictBlock : NULL   , dictBlock         },
+    { !dict.memory.empty() ? &kTerarkZipTableValueDictBlock : NULL , dictBlock         },
     { &kTerarkZipTableIndexBlock                                   , indexBlock        },
     { !zvTypeBlock.IsNull() ? &kTerarkZipTableValueTypeBlock : NULL, zvTypeBlock       },
     { &kTerarkZipTableCommonPrefixBlock                            , commonPrefixBlock },
@@ -1667,6 +1710,7 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
     g_sumUserKeyNum += kvs.key.m_cnt_sum;
     g_sumEntryNum += properties_.num_entries;
   }
+  size_t dictBlockSize = dict.memory.empty() ? 0 : dictBlock.size();
   INFO(ioptions_.info_log,
     "TerarkZipTableBuilder::Finish():this=%012p: second pass time =%8.2f's,%8.3f'MB/sec, value only(%4.1f%% of KV)\n"
     "   wait indexing time = %7.2f's,\n"
@@ -1674,6 +1718,7 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
     "    Get OrderMap time = %7.2f's, %8.3f'MB/sec (index lex order gen)\n"
     "  rebuild zvType time = %7.2f's, %8.3f'MB/sec\n"
     "  write SST data time = %7.2f's, %8.3f'MB/sec\n"
+    "   dict compress time = %7.2f's, %8.3f'MB/sec\n"
     "    z-dict build time = %7.2f's, sample length = %7.3f'MB, throughput = %6.3f'MB/sec\n"
     "    zip my value time = %7.2f's, unzip  length = %7.3f'GB\n"
     "    zip my value throughput = %7.3f'MB/sec\n"
@@ -1681,10 +1726,10 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
     "    entries = %zd  avg-key = %.2f  avg-zkey = %.2f  avg-val = %.2f  avg-zval = %.2f\n"
     "    usrkeys = %zd  avg-key = %.2f  avg-zkey = %.2f  avg-val = %.2f  avg-zval = %.2f\n"
     "    seq expand size = %zd  multi value expand size = %zd\n"
-    "    UnZipSize{ index =%9.4f GB  value =%9.4f GB   all =%9.4f GB }\n"
-    "    __ZipSize{ index =%9.4f GB  value =%9.4f GB   all =%9.4f GB }\n"
-    "    UnZip/Zip{ index =%9.4f     value =%9.4f      all =%9.4f    }\n"
-    "    Zip/UnZip{ index =%9.4f     value =%9.4f      all =%9.4f    }\n"
+    "    UnZipSize{ index =%9.4f GB  value =%9.4f GB  dict =%7.2f MB  all =%9.4f GB }\n"
+    "    __ZipSize{ index =%9.4f GB  value =%9.4f GB  dict =%7.2f MB  all =%9.4f GB }\n"
+    "    UnZip/Zip{ index =%9.4f     value =%9.4f     dict =%7.2f     all =%9.4f    }\n"
+    "    Zip/UnZip{ index =%9.4f     value =%9.4f     dict =%7.2f     all =%9.4f    }\n"
     "----------------------------\n"
     "    total value len =%14.6f GB     avg =%8.3f KB (by entry num)\n"
     "    total  key  len =%14.6f GB     avg =%8.3f KB\n"
@@ -1706,10 +1751,12 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
 
 , g_pf.sf(t7, t8), double(offset_) / g_pf.uf(t7, t8) // write SST data
 
-, dzstat.dictBuildTime, realsampleLenSum / 1e6
+, g_pf.uf(td) / 1e6, dictSize_ / (g_pf.uf(td) + 1.0) // dict compress
+
+, dzstat.dictBuildTime, realsampleLenSum / 1e6 // z-dict build
 , realsampleLenSum / dzstat.dictBuildTime / 1e6
 
-, dzstat.dictZipTime, properties_.raw_value_size / 1e9
+, dzstat.dictZipTime, properties_.raw_value_size / 1e9 // zip my value
 , properties_.raw_value_size / dzstat.dictZipTime / 1e6
 , dzstat.pipelineThroughBytes / dzstat.dictZipTime / 1e6
 
@@ -1727,16 +1774,24 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
 
 , seqExpandSize_, multiValueExpandSize_
 
-, kvs.key.m_total_key_len / 1e9, properties_.raw_value_size / 1e9, rawBytes / 1e9
+, kvs.key.m_total_key_len / 1e9
+, properties_.raw_value_size / 1e9
+, dictSize_ / 1e6
+, rawBytes / 1e9
 
-, properties_.index_size / 1e9, properties_.data_size / 1e9, offset_ / 1e9
+, properties_.index_size / 1e9
+, properties_.data_size / 1e9
+, dictBlockSize / 1e6
+, offset_ / 1e9
 
 , double(kvs.key.m_total_key_len) / properties_.index_size
 , double(properties_.raw_value_size) / properties_.data_size
+, double(dictSize_) / std::max<size_t>(dictBlockSize, 1)
 , double(rawBytes) / offset_
 
 , properties_.index_size / double(kvs.key.m_total_key_len)
 , properties_.data_size / double(properties_.raw_value_size)
+, dictBlockSize / std::max<double>(dictSize_, 1)
 , offset_ / double(rawBytes)
 
 , g_sumValueLen / 1e9, g_sumValueLen / 1e3 / g_sumEntryNum
@@ -1750,17 +1805,12 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4
   return s;
 }
 
-Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4
-  , fstring tmpDictFile
+Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4, long long td
+  , fstring tmpDictFile, const std::string& dictInfo, uint64_t dictHash
   , const DictZipBlobStore::ZipStat& dzstat) {
   assert(histogram_.size() > 1);
   terark::MmapWholeFile dictMmap;
-  AbstractBlobStore::Dictionary dict;
-  if (!tmpDictFile.empty()) {
-    terark::MmapWholeFile(tmpDictFile.c_str()).swap(dictMmap);
-    dict = AbstractBlobStore::Dictionary(fstring{(const char*)dictMmap.base,
-        (ptrdiff_t)dictMmap.size});
-  }
+  AbstractBlobStore::Dictionary dict(dictSize_, dictHash);
   const size_t realsampleLenSum = dict.memory.size();
   long long rawBytes = properties_.raw_key_size + properties_.raw_value_size;
   long long t5 = g_pf.now();
@@ -1902,24 +1952,25 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4
   commonPrefix.resize(terark::align_up(commonPrefix.size(), 16), 0);
   WriteBlock(commonPrefix, file_, &offset_, &commonPrefixBlock);
   if (!dict.memory.empty()) {
-      s = WriteBlock(dict.memory, file_, &offset_, &dictBlock);
+      s = WriteBlock(MmapWholeFile(tmpDictFile).memory(), file_, &offset_, &dictBlock);
       if (!s.ok()) {
           return s;
       }
   }
   properties_.index_size = indexBlock.size();
   properties_.num_data_blocks = numKeys;
-  WriteMetaData({
+  WriteMetaData(dictInfo, {
 #if defined(TerocksPrivateCode)
-    {&kTerarkZipTableExtendedBlock                                , licenseHandle     },
+    { &kTerarkZipTableExtendedBlock                                , licenseHandle     },
 #endif // TerocksPrivateCode
-    {!dict.memory.empty() ? &kTerarkZipTableValueDictBlock : NULL , dictBlock         },
-    {&kTerarkZipTableIndexBlock                                   , indexBlock        },
-    {!zvTypeBlock.IsNull() ? &kTerarkZipTableValueTypeBlock : NULL, zvTypeBlock       },
-    {&kTerarkZipTableOffsetBlock                                  , offsetBlock       },
-    {&kTerarkZipTableCommonPrefixBlock                            , commonPrefixBlock },
-    {!tombstoneBlock.IsNull() ? &kRangeDelBlock : NULL            , tombstoneBlock    },
+    { !dict.memory.empty() ? &kTerarkZipTableValueDictBlock : NULL , dictBlock         },
+    { &kTerarkZipTableIndexBlock                                   , indexBlock        },
+    { !zvTypeBlock.IsNull() ? &kTerarkZipTableValueTypeBlock : NULL, zvTypeBlock       },
+    { &kTerarkZipTableOffsetBlock                                  , offsetBlock       },
+    { &kTerarkZipTableCommonPrefixBlock                            , commonPrefixBlock },
+    { !tombstoneBlock.IsNull() ? &kRangeDelBlock : NULL            , tombstoneBlock    },
   });
+  size_t dictBlockSize = dict.memory.empty() ? 0 : dictBlock.size();
   long long t8 = g_pf.now();
   {
     std::unique_lock<std::mutex> lock(g_sumMutex);
@@ -1936,6 +1987,7 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4
     "    Get OrderMap time = %7.2f's, %8.3f'MB/sec (index lex order gen)\n"
     "  rebuild zvType time = %7.2f's, %8.3f'MB/sec\n"
     "  write SST data time = %7.2f's, %8.3f'MB/sec\n"
+    "   dict compress time = %7.2f's, %8.3f'MB/sec\n"
     "    z-dict build time = %7.2f's, sample length = %7.3f'MB, throughput = %6.3f'MB/sec\n"
     "    zip my value time = %7.2f's, unzip  length = %7.3f'GB\n"
     "    zip my value throughput = %7.3f'MB/sec\n"
@@ -1943,10 +1995,10 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4
     "    entries = %zd  avg-key = %.2f  avg-zkey = %.2f  avg-val = %.2f  avg-zval = %.2f\n"
     "    usrkeys = %zd  avg-key = %.2f  avg-zkey = %.2f  avg-val = %.2f  avg-zval = %.2f\n"
     "    seq expand size = %zd  multi value expand size = %zd\n"
-    "    UnZipSize{ index =%9.4f GB  value =%9.4f GB   all =%9.4f GB }\n"
-    "    __ZipSize{ index =%9.4f GB  value =%9.4f GB   all =%9.4f GB }\n"
-    "    UnZip/Zip{ index =%9.4f     value =%9.4f      all =%9.4f    }\n"
-    "    Zip/UnZip{ index =%9.4f     value =%9.4f      all =%9.4f    }\n"
+    "    UnZipSize{ index =%9.4f GB  value =%9.4f GB  dict =%7.2f MB  all =%9.4f GB }\n"
+    "    __ZipSize{ index =%9.4f GB  value =%9.4f GB  dict =%7.2f MB  all =%9.4f GB }\n"
+    "    UnZip/Zip{ index =%9.4f     value =%9.4f     dict =%7.2f     all =%9.4f    }\n"
+    "    Zip/UnZip{ index =%9.4f     value =%9.4f     dict =%7.2f     all =%9.4f    }\n"
     "----------------------------\n"
     "    total value len =%14.6f GB     avg =%8.3f KB (by entry num)\n"
     "    total  key  len =%14.6f GB     avg =%8.3f KB\n"
@@ -1968,10 +2020,12 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4
 
 , g_pf.sf(t7, t8), double(offset_) / g_pf.uf(t7, t8) // write SST data
 
-, dzstat.dictBuildTime, realsampleLenSum / 1e6
+, g_pf.uf(td) / 1e6, dictSize_ / (g_pf.uf(td) + 1.0) // dict compress
+
+, dzstat.dictBuildTime, realsampleLenSum / 1e6 // z-dict build
 , realsampleLenSum / dzstat.dictBuildTime / 1e6
 
-, dzstat.dictZipTime, properties_.raw_value_size / 1e9
+, dzstat.dictZipTime, properties_.raw_value_size / 1e9 // zip my value
 , properties_.raw_value_size / dzstat.dictZipTime / 1e6
 , dzstat.pipelineThroughBytes / dzstat.dictZipTime / 1e6
 
@@ -1989,16 +2043,24 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4
 
 , seqExpandSize_, multiValueExpandSize_
 
-, sumKeyLen / 1e9, properties_.raw_value_size / 1e9, rawBytes / 1e9
+, sumKeyLen / 1e9
+, properties_.raw_value_size / 1e9
+, dictSize_ / 1e6
+, rawBytes / 1e9
 
-, properties_.index_size / 1e9, properties_.data_size / 1e9, offset_ / 1e9
+, properties_.index_size / 1e9
+, properties_.data_size / 1e9
+, dictBlockSize / 1e6
+, offset_ / 1e9
 
 , double(sumKeyLen) / properties_.index_size
 , double(properties_.raw_value_size) / properties_.data_size
+, double(dictSize_) / std::max<double>(dictBlockSize, 1)
 , double(rawBytes) / offset_
 
 , properties_.index_size / double(sumKeyLen)
 , properties_.data_size / double(properties_.raw_value_size)
+, dictBlockSize / std::max<double>(dictSize_, 1)
 , offset_ / double(rawBytes)
 
 , g_sumValueLen / 1e9, g_sumValueLen / 1e3 / g_sumEntryNum
@@ -2012,7 +2074,8 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4
   return s;
 }
 
-Status TerarkZipTableBuilder::WriteMetaData(std::initializer_list<std::pair<const std::string*, BlockHandle>> blocks) {
+Status TerarkZipTableBuilder::WriteMetaData(const std::string& dictInfo,
+                                            std::initializer_list<std::pair<const std::string*, BlockHandle>> blocks) {
   MetaIndexBuilder metaindexBuiler;
   for (const auto& block : blocks) {
     if (block.first) {
@@ -2037,6 +2100,9 @@ Status TerarkZipTableBuilder::WriteMetaData(std::initializer_list<std::pair<cons
     propBlockBuilder.Add(user_collected_properties);
   }
   propBlockBuilder.Add(kTerarkZipTableBuildTimestamp, GetTimestamp());
+  if (!dictInfo.empty()) {
+    propBlockBuilder.Add(kTerarkZipTableDictInfo, dictInfo);
+  }
   BlockHandle propBlock, metaindexBlock;
   Status s = WriteBlock(propBlockBuilder.Finish(), file_, &offset_, &propBlock);
   if (!s.ok()) {

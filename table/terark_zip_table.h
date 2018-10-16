@@ -107,7 +107,8 @@ struct TerarkZipTableOptions {
   int    minPreadLen         = -1;
   int    cacheShards         = 17; // to reduce lock competition
   size_t cacheCapacityBytes  = 0;  // non-zero implies direct io read
-  char   reserveBytes[24]    = {};
+  bool   disableCompressDict = false;
+  char   reserveBytes[23]    = {};
 };
 
 void TerarkZipDeleteTempFiles(const std::string& tmpPath);
@@ -146,6 +147,12 @@ bool TerarkZipIsBlackListCF(const std::string& cfname);
 void
 TerarkZipMultiCFOptionsFromEnv(const struct DBOptions& db_options,
       const std::vector<struct ColumnFamilyDescriptor>& cfvec);
+
+const class WriteBatchEntryIndexFactory*
+WriteBatchEntryPTrieIndexFactory(const WriteBatchEntryIndexFactory* fallback = nullptr);
+
+class MemTableRepFactory*
+NewPatriciaTrieRepFactory(std::shared_ptr<class MemTableRepFactory> fallback = nullptr);
 
 class TableFactory*
 NewTerarkZipTableFactory(const TerarkZipTableOptions&,

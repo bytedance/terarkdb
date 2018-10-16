@@ -59,7 +59,7 @@ class TerarkEmptyTableReader
   : public TerarkZipTableTombstone
   , public TableReader
   , boost::noncopyable {
-  class Iter : public InternalIterator, boost::noncopyable {
+  class Iter : public SourceInternalIterator, boost::noncopyable {
   public:
     Iter() {}
     ~Iter() {}
@@ -84,7 +84,7 @@ class TerarkEmptyTableReader
   Slice  file_data_;
   unique_ptr<RandomAccessFileReader> file_;
 public:
-  InternalIterator*
+  SourceInternalIterator*
     NewIterator(const ReadOptions&, Arena* a, bool) override {
     return a ? new(a->AllocateAligned(sizeof(Iter)))Iter() : new Iter();
   }
@@ -123,6 +123,7 @@ struct TerarkZipSubReader {
   size_t rawReaderSize_;
   bool   storeUsePread_;
   intptr_t   storeFD_;
+  RandomAccessFile* storeFileObj_;
   size_t storeOffset_;
   std::string prefix_;
   unique_ptr<TerarkIndex> index_;
@@ -159,7 +160,7 @@ class TerarkZipTableReader
   , public TableReader
   , boost::noncopyable {
 public:
-  InternalIterator*
+  SourceInternalIterator*
     NewIterator(const ReadOptions&, Arena*, bool skip_filters) override;
 
   using TerarkZipTableTombstone::NewRangeTombstoneIterator;
@@ -197,6 +198,7 @@ private:
   static const size_t kNumInternalBytes = 8;
   Slice  file_data_;
   unique_ptr<RandomAccessFileReader> file_;
+  valvec<byte_t> dict_;
   const TableReaderOptions table_reader_options_;
   const TerarkZipTableFactory* table_factory_;
   std::shared_ptr<const TableProperties> table_properties_;
@@ -216,7 +218,7 @@ class TerarkZipTableMultiReader
   , boost::noncopyable {
 public:
 
-  InternalIterator*
+  SourceInternalIterator*
     NewIterator(const ReadOptions&, Arena*, bool skip_filters) override;
 
   using TerarkZipTableTombstone::NewRangeTombstoneIterator;
@@ -274,7 +276,7 @@ public:
                 fstring typeMemory,
                 fstring commonPrefixMemory,
                 int minPreadLen,
-                intptr_t fileFD,
+                RandomAccessFile* fileObj,
                 LruReadonlyCache* cache,
                 bool reverse);
     size_t GetPrefixLen() const;
@@ -295,6 +297,7 @@ private:
   static const size_t kNumInternalBytes = 8;
   Slice  file_data_;
   unique_ptr<RandomAccessFileReader> file_;
+  valvec<byte_t> dict_;
   const TableReaderOptions table_reader_options_;
   const TerarkZipTableFactory* table_factory_;
   std::shared_ptr<const TableProperties> table_properties_;
