@@ -123,6 +123,7 @@ struct TerarkZipSubReader {
   size_t rawReaderSize_;
   bool   storeUsePread_;
   intptr_t   storeFD_;
+  RandomAccessFile* storeFileObj_;
   size_t storeOffset_;
   std::string prefix_;
   unique_ptr<TerarkIndex> index_;
@@ -258,13 +259,13 @@ public:
       fstring operator[](size_t i) const;
     };
 
-    const TerarkZipSubReader* (SubIndex::*GetSubReaderPtr)(fstring) const;
+    const TerarkZipSubReader* (SubIndex::*LowerBoundSubReaderFunc)(fstring) const;
 
-    const TerarkZipSubReader* GetSubReaderU64Sequential(fstring key) const;
-    const TerarkZipSubReader* GetSubReaderU64Binary(fstring key) const;
-    const TerarkZipSubReader* GetSubReaderU64BinaryReverse(fstring key) const;
-    const TerarkZipSubReader* GetSubReaderBytewise(fstring key) const;
-    const TerarkZipSubReader* GetSubReaderBytewiseReverse(fstring key) const;
+    const TerarkZipSubReader* LowerBoundSubReaderU64Sequential(fstring key) const;
+    const TerarkZipSubReader* LowerBoundSubReaderU64Binary(fstring key) const;
+    const TerarkZipSubReader* LowerBoundSubReaderU64BinaryReverse(fstring key) const;
+    const TerarkZipSubReader* LowerBoundSubReaderBytewise(fstring key) const;
+    const TerarkZipSubReader* LowerBoundSubReaderBytewiseReverse(fstring key) const;
 
   public:
     ~SubIndex();
@@ -275,13 +276,13 @@ public:
                 fstring typeMemory,
                 fstring commonPrefixMemory,
                 int minPreadLen,
-                intptr_t fileFD,
+                RandomAccessFile* fileObj,
                 LruReadonlyCache* cache,
                 bool reverse);
     size_t GetPrefixLen() const;
     size_t GetSubCount() const;
     const TerarkZipSubReader* GetSubReader(size_t i) const;
-    const TerarkZipSubReader* GetSubReader(fstring key) const;
+    const TerarkZipSubReader* LowerBoundSubReader(fstring key) const;
   };
 
 private:
