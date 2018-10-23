@@ -388,11 +388,14 @@ const WriteBatchEntryIndexFactory* WriteBatchEntryPTrieIndexFactory(const WriteB
     PTrieIndexFactory(const WriteBatchEntryIndexFactory* _fallback)
       : fallback(_fallback) {
     }
+    virtual const char* Name() const override {
+      return "WriteBatchEntryIndexFactory";
+    }
    private:
     const WriteBatchEntryIndexFactory* fallback;
   };
   if (fallback == nullptr) {
-    fallback = WriteBatchEntryRBTreeIndexFactory();
+    fallback = skip_list_WriteBatchEntryIndexFactory();
   }
   static PTrieIndexFactory factory(fallback);
   return &factory;

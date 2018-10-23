@@ -286,7 +286,7 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo) {
 
   cfo.memtable_factory.reset(NewPatriciaTrieRepFactory());
 
-  RegistWriteBatchEntryIndexFactory("patricia", WriteBatchEntryPTrieIndexFactory());
+  WriteBatchEntryIndexFactoryRegister("patricia", WriteBatchEntryPTrieIndexFactory());
   cfo.table_factory = SingleTerarkZipTableFactory(tzo,
     std::shared_ptr<TableFactory>(NewAdaptiveTableFactory()));
   const char* compaction_style = "Universal";
@@ -331,7 +331,7 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo) {
   }
   MyGetXiB(cfo, write_buffer_size);
   MyGetXiB(cfo, target_file_size_base);
-  MyGetBool(cfo, enable_partial_remove, false);
+  MyGetBool(cfo, enable_lazy_compaction, true);
   MyOverrideInt(cfo, max_write_buffer_number);
   MyOverrideInt(cfo, target_file_size_multiplier);
   MyOverrideInt(cfo, num_levels                 );

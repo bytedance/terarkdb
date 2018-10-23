@@ -758,7 +758,7 @@ TerarkZipTableFactory::NewTableBuilder(
     }
   }
   else {
-    keyPrefixLen = GetFixedPrefixLen(table_builder_options.ioptions.prefix_extractor);
+    keyPrefixLen = GetFixedPrefixLen(table_builder_options.moptions.prefix_extractor.get());
     if (keyPrefixLen != 0) {
       if (table_options_.keyPrefixLen != 0) {
         if (keyPrefixLen != table_options_.keyPrefixLen) {

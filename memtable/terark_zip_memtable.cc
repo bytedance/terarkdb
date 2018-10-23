@@ -91,7 +91,7 @@ public:
     assert(false);
   }
 
-  virtual void InsertKeyValue(const Slice& internal_key, const Slice& value) override {
+  virtual bool InsertKeyValue(const Slice& internal_key, const Slice& value) override {
     terark::fstring key(internal_key.data(), internal_key.data() + internal_key.size() - 8);
     //uint64_t tag = DecodeFixed64(key.end());
 
@@ -222,6 +222,8 @@ public:
       assert(ok); (void)ok;
     }
     ++num_entries_;
+    assert(false); // TODO
+    return true;
   }
 
   // Returns true iff an entry that compares equal to key is in the list.
@@ -823,7 +825,7 @@ public:
     auto user_comparator = icomp->user_comparator();
     if (strcmp(user_comparator->Name(), BytewiseComparator()->Name()) == 0) {
       return new PTrieRep(mutable_cf_options.write_buffer_size * 9 / 8, key_cmp,
-                          allocator, ioptions.prefix_extractor);
+                          allocator, mutable_cf_options.prefix_extractor.get());
     } else {
       return fallback_->CreateMemTableRep(key_cmp, allocator, ioptions,
                                           mutable_cf_options, column_family_id);
