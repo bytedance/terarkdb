@@ -12,6 +12,57 @@
 
 namespace rocksdb {
 
+class CompactionIteratorToInternalIterator : public InternalIterator {
+  CompactionIterator* c_iter_;
+
+ public:
+  CompactionIteratorToInternalIterator(CompactionIterator* i) : c_iter_(i) {}
+  virtual bool Valid() const override { return c_iter_->Valid(); }
+  virtual void SeekToFirst() override { c_iter_->SeekToFirst(); }
+  virtual void SeekToLast() override { abort(); }  // do not support
+  virtual void SeekForPrev(const rocksdb::Slice&) override {
+    abort();
+  }  // do not support
+  virtual void Seek(const Slice& target) override;
+  virtual void Next() override { c_iter_->Next(); }
+  virtual void Prev() override { abort(); }  // do not support
+  virtual Slice key() const override { return c_iter_->key(); }
+  virtual Slice value() const override { return c_iter_->value(); }
+  virtual Status status() const override {
+    auto ci = c_iter_;
+    if (ci->IsShuttingDown()) {
+      return Status::ShutdownInProgress();
+    }
+    return ci->status();
+  }
+};
+
+void CompactionIteratorToInternalIterator::Seek(const Slice& target) {
+  c_iter_->valid_ = false;
+  c_iter_->has_current_user_key_ = false;
+  c_iter_->at_next_ = false;
+  c_iter_->has_outputted_key_ = false;
+  c_iter_->clear_and_output_next_key_ = false;
+
+  c_iter_->current_user_key_sequence_ = 0;
+  c_iter_->current_user_key_snapshot_ = 0;
+  c_iter_->merge_out_iter_ = MergeOutputIterator(c_iter_->merge_helper_);
+  c_iter_->current_key_committed_ = false;
+  for (auto& v : c_iter_->level_ptrs_) {
+    v = 0;
+  }
+
+  IterKey key_for_seek;
+  key_for_seek.SetInternalKey(ExtractUserKey(target), kMaxSequenceNumber,
+                              kValueTypeForSeek);
+  c_iter_->input_->Seek(key_for_seek.GetInternalKey());
+  c_iter_->SeekToFirst();
+  InternalKeyComparator ic(c_iter_->cmp_);
+  while (c_iter_->Valid() && ic.Compare(c_iter_->key(), target) < 0) {
+    c_iter_->Next();
+  }
+}
+
 CompactionIterator::CompactionIterator(
     InternalIterator* input, const Comparator* cmp, MergeHelper* merge_helper,
     SequenceNumber last_sequence, std::vector<SequenceNumber>* snapshots,
@@ -107,6 +158,12 @@ void CompactionIterator::ResetRecordCounts() {
   iter_stats_.num_optimized_del_drop_obsolete = 0;
 }
 
+std::unique_ptr<InternalIterator>
+CompactionIterator::AdaptToInternalIterator() {
+  return std::unique_ptr<InternalIterator>(
+      new CompactionIteratorToInternalIterator(this));
+}
+
 void CompactionIterator::SeekToFirst() {
   NextFromInput();
   PrepareOutput();
@@ -179,13 +236,18 @@ void CompactionIterator::InvokeFilterIfNeeded(bool* need_skip,
     // Hack: pass internal key to BlobIndexCompactionFilter since it needs
     // to get sequence number.
     Slice& filter_key = ikey_.type == kTypeValue ? ikey_.user_key : key_;
-    {
-      StopWatchNano timer(env_, report_detailed_time_);
+    auto doFilter = [&]() {
       filter = compaction_filter_->FilterV2(
           compaction_->level(), filter_key, value_type, value_,
           &compaction_filter_value_, compaction_filter_skip_until_.rep());
-      iter_stats_.total_filter_time +=
-          env_ != nullptr && report_detailed_time_ ? timer.ElapsedNanos() : 0;
+    };
+    auto sample = filter_sample_interval_;
+    if (env_ && sample && (filter_hit_count_ & (sample - 1)) == 0) {
+      StopWatchNano timer(env_, true);
+      doFilter();
+      iter_stats_.total_filter_time += timer.ElapsedNanos() * sample;
+    } else {
+      doFilter();
     }
 
     if (filter == CompactionFilter::Decision::kRemoveAndSkipUntil &&
@@ -195,6 +257,7 @@ void CompactionIterator::InvokeFilterIfNeeded(bool* need_skip,
       // Keep the key as per FilterV2 documentation.
       filter = CompactionFilter::Decision::kKeep;
     }
+    ++filter_hit_count_;
 
     if (filter == CompactionFilter::Decision::kRemove) {
       // convert the current key to a delete; key_ is pointing into
@@ -213,6 +276,11 @@ void CompactionIterator::InvokeFilterIfNeeded(bool* need_skip,
       *skip_until = compaction_filter_skip_until_.Encode();
     }
   }
+}
+
+void CompactionIterator::SetFilterSampleInterval(size_t sample_interval) {
+  assert((sample_interval & (sample_interval - 1)) == 0);  // must be power of 2
+  filter_sample_interval_ = sample_interval;
 }
 
 void CompactionIterator::NextFromInput() {

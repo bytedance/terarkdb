@@ -620,7 +620,10 @@ class RandomAccessFile {
   //   both mmap and glfs_pread
   virtual Status FsRead(uint64_t offset, size_t len, void* buf) const;
 
-  virtual intptr_t FileDescriptor() const { abort(); return -1; }
+  virtual intptr_t FileDescriptor() const {
+    assert(false);
+    return -1;
+  }
 };
 // A file abstraction for sequential writing.  The implementation
 // must provide buffering since callers may append small fragments

@@ -22,6 +22,8 @@ namespace rocksdb {
 
 class CompactionIterator {
  public:
+    friend class CompactionIteratorToInternalIterator;
+
   // A wrapper around Compaction. Has a much smaller interface, only what
   // CompactionIterator uses. Tests can override it.
   class CompactionProxy {
@@ -52,7 +54,7 @@ class CompactionIterator {
     }
 
    protected:
-    CompactionProxy() = default;
+    CompactionProxy() : compaction_(nullptr) {}
 
    private:
     const Compaction* compaction_;
@@ -87,6 +89,8 @@ class CompactionIterator {
 
   void ResetRecordCounts();
 
+  std::unique_ptr<InternalIterator> AdaptToInternalIterator();
+
   // Seek to the beginning of the compaction iterator output.
   //
   // REQUIRED: Call only once.
@@ -105,6 +109,7 @@ class CompactionIterator {
   bool Valid() const { return valid_; }
   const Slice& user_key() const { return current_user_key_; }
   const CompactionIterationStats& iter_stats() const { return iter_stats_; }
+  void SetFilterSampleInterval(size_t filter_sample_interval);
 
  private:
   // Processes the input stream to find the next output
@@ -205,6 +210,9 @@ class CompactionIterator {
   // uncommitted values by providing a SnapshotChecker object.
   bool current_key_committed_;
 
+ public:
+  size_t filter_sample_interval_ = 64;
+  size_t filter_hit_count_ = 0;
   bool IsShuttingDown() {
     // This is a best-effort facility, so memory_order_relaxed is sufficient.
     return shutting_down_ && shutting_down_->load(std::memory_order_relaxed);

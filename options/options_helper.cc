@@ -126,6 +126,7 @@ DBOptions BuildDBOptions(const ImmutableDBOptions& immutable_db_options,
       immutable_db_options.preserve_deletes;
   options.two_write_queues = immutable_db_options.two_write_queues;
   options.manual_wal_flush = immutable_db_options.manual_wal_flush;
+  options.filter_idempotent = immutable_db_options.filter_idempotent;
 
   return options;
 }
@@ -1543,6 +1544,10 @@ std::unordered_map<std::string, OptionTypeInfo>
          {offsetof(struct DBOptions, preserve_deletes), OptionType::kBoolean,
           OptionVerificationType::kNormal, false,
           offsetof(struct ImmutableDBOptions, preserve_deletes)}},
+        {"filter_idempotent",
+         {offsetof(struct DBOptions, filter_idempotent), OptionType::kBoolean,
+          OptionVerificationType::kNormal, false,
+          offsetof(struct ImmutableDBOptions, filter_idempotent)}},
         {"concurrent_prepare",  // Deprecated by two_write_queues
          {0, OptionType::kBoolean, OptionVerificationType::kDeprecated, false,
           0}},

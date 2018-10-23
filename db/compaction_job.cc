@@ -280,25 +280,25 @@ struct CompactionJob::CompactionState {
           }
           if (range_end.empty() ||
               icomp.Compare(f->largest.Encode(), range_end) > 0) {
-            range_end = f->largest.Encode();
-          }
-        }
-      } else if (!level_files.files.empty()) {
-        auto f0 = level_files.files.front();
-        auto f1 = level_files.files.back();
-        if (range_start.empty() ||
-            icomp.Compare(f0->smallest.Encode(), range_start) < 0) {
-          range_start = f0->smallest.Encode();
-        }
-        if (range_end.empty() ||
-            icomp.Compare(f1->largest.Encode(), range_end) > 0) {
-          range_end = f1->largest.Encode();
+          range_end = f->largest.Encode();
         }
       }
+    } else if (!level_files.files.empty()) {
+      auto f0 = level_files.files.front();
+      auto f1 = level_files.files.back();
+      if (range_start.empty() ||
+          icomp.Compare(f0->smallest.Encode(), range_start) < 0) {
+        range_start = f0->smallest.Encode();
+      }
+      if (range_end.empty() ||
+          icomp.Compare(f1->largest.Encode(), range_end) > 0) {
+        range_end = f1->largest.Encode();
+      }
     }
-    range_start = ExtractUserKey(range_start);
-    range_end = ExtractUserKey(range_end);
   }
+  range_start = ExtractUserKey(range_start);
+  range_end = ExtractUserKey(range_end);
+}
 
   size_t NumOutputFiles() {
     size_t total = 0;
@@ -776,7 +776,7 @@ Status CompactionJob::Install(const MutableCFOptions& mutable_cf_options) {
   Status status = compact_->status;
   ColumnFamilyData* cfd = compact_->compaction->column_family_data();
   cfd->internal_stats()->AddCompactionStats(
-      compact_->compaction->output_level(), compaction_stats_);
+    compact_->compaction->output_level(), compaction_stats_);
 
   if (status.ok()) {
     status = InstallCompactionResults(mutable_cf_options);
@@ -887,6 +887,11 @@ void CompactionJob::ProcessEssenceCompaction(SubcompactionState* sub_compact) {
   std::unique_ptr<InternalIterator> input(versions_->MakeInputIterator(
       sub_compact->compaction, range_del_agg.get(), env_options_for_read_));
 
+  std::unique_ptr<RangeDelAggregator> range_del_agg2(
+      new RangeDelAggregator(cfd->internal_comparator(), existing_snapshots_));
+  std::unique_ptr<InternalIterator> input2(versions_->MakeInputIterator(
+      sub_compact->compaction, range_del_agg2.get(), env_options_for_read_));
+
   AutoThreadOperationStageUpdater stage_updater(
       ThreadStatus::STAGE_COMPACTION_PROCESS_KV);
 
@@ -957,6 +962,23 @@ void CompactionJob::ProcessEssenceCompaction(SubcompactionState* sub_compact) {
       snapshot_checker_, compact_->compaction->level(),
       db_options_.statistics.get(), shutting_down_);
 
+  if (!cfd->ioptions()->filter_idempotent) {
+    compaction_filter = cfd->ioptions()->compaction_filter;
+    if (compaction_filter == nullptr) {
+      compaction_filter_from_factory =
+          sub_compact->compaction->CreateCompactionFilter();
+      compaction_filter = compaction_filter_from_factory.get();
+    }
+  }
+
+  MergeHelper merge2(
+      env_, cfd->user_comparator(), cfd->ioptions()->merge_operator,
+      compaction_filter, db_options_.info_log.get(),
+      false /* internal key corruption is expected */,
+      existing_snapshots_.empty() ? 0 : existing_snapshots_.back(),
+      snapshot_checker_, compact_->compaction->level(),
+      db_options_.statistics.get(), shutting_down_);
+
   TEST_SYNC_POINT("CompactionJob::Run():Inprogress");
 
   const Slice* start = sub_compact->start;
@@ -970,14 +992,26 @@ void CompactionJob::ProcessEssenceCompaction(SubcompactionState* sub_compact) {
   }
 
   Status status;
-  sub_compact->c_iter.reset(new CompactionIterator(
-      input.get(), cfd->user_comparator(), &merge, versions_->LastSequence(),
-      &existing_snapshots_, earliest_write_conflict_snapshot_,
-      snapshot_checker_, env_, ShouldReportDetailedTime(env_, stats_), false,
-      range_del_agg.get(), sub_compact->compaction, compaction_filter,
-      shutting_down_, preserve_deletes_seqnum_));
+  auto makeCompactionIterator = [&](InternalIterator* input_x,
+                                    MergeHelper& merge_x,
+                                    bool report_detailed_time,
+                                    RangeDelAggregator* range_del_agg_x) {
+    return std::unique_ptr<CompactionIterator>(new CompactionIterator(
+        input_x, cfd->user_comparator(), &merge_x, versions_->LastSequence(),
+        &existing_snapshots_, earliest_write_conflict_snapshot_,
+        snapshot_checker_, env_, report_detailed_time, false, range_del_agg_x,
+        sub_compact->compaction, compaction_filter, shutting_down_,
+        preserve_deletes_seqnum_));
+  };
+  sub_compact->c_iter = makeCompactionIterator(
+      input.get(), merge, ShouldReportDetailedTime(env_, stats_),
+      range_del_agg.get());
   auto c_iter = sub_compact->c_iter.get();
   c_iter->SeekToFirst();
+  auto c_iter2 =
+      makeCompactionIterator(input2.get(), merge2, false, range_del_agg2.get());
+  c_iter2->SetFilterSampleInterval(0);
+  auto second_pass_iter = c_iter2->AdaptToInternalIterator();
   if (c_iter->Valid() && sub_compact->compaction->output_level() != 0) {
     // ShouldStopBefore() maintains state based on keys processed so far. The
     // compaction loop always calls it on the "next" key, thus won't tell it the
@@ -1021,6 +1055,7 @@ void CompactionJob::ProcessEssenceCompaction(SubcompactionState* sub_compact) {
       if (!status.ok()) {
         break;
       }
+      sub_compact->builder->SetSecondPassIterator(second_pass_iter.get());
     }
     assert(sub_compact->builder != nullptr);
     assert(sub_compact->current_output() != nullptr);
@@ -1186,7 +1221,7 @@ void CompactionJob::ProcessEssenceCompaction(SubcompactionState* sub_compact) {
   if (status.ok()) {
     status = c_iter->status();
   }
-
+  
   if (status.ok() && sub_compact->builder == nullptr &&
       sub_compact->outputs.size() == 0 &&
       !range_del_agg->IsEmpty()) {

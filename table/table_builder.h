@@ -18,6 +18,7 @@
 #include "options/cf_options.h"
 #include "rocksdb/options.h"
 #include "rocksdb/table_properties.h"
+#include "table/internal_iterator.h"
 #include "util/file_reader_writer.h"
 
 namespace rocksdb {
@@ -79,8 +80,8 @@ struct TableBuilderOptions {
       CompressionType _compression_type,
       const CompressionOptions& _compression_opts,
       const std::string* _compression_dict, bool _skip_filters,
-      bool _ignore_key_type, const std::string& _column_family_name,
-      int _level, uint64_t _creation_time = 0, int64_t _oldest_key_time = 0)
+      bool _ignore_key_type, const std::string& _column_family_name, int _level,
+      uint64_t _creation_time = 0, int64_t _oldest_key_time = 0)
       : ioptions(_ioptions),
         moptions(_moptions),
         internal_comparator(_internal_comparator),
@@ -107,7 +108,7 @@ struct TableBuilderOptions {
   // Ignore key type, force store all keys, no tombstones
   bool ignore_key_type;
   const std::string& column_family_name;
-  int level; // what level this table/file is on, -1 for "not set, don't know"
+  int level;  // what level this table/file is on, -1 for "not set, don't know"
   const uint64_t creation_time;
   const int64_t oldest_key_time;
 };
@@ -123,6 +124,8 @@ class TableBuilder {
  public:
   // REQUIRES: Either Finish() or Abandon() has been called.
   virtual ~TableBuilder() {}
+
+  virtual void SetSecondPassIterator(InternalIterator*) {}
 
   // Add key,value to the table being constructed.
   // REQUIRES: key is after any previously added key according to comparator.

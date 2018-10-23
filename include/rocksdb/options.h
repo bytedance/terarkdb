@@ -660,6 +660,8 @@ struct DBOptions {
   // Default: true
   bool advise_random_on_open = true;
 
+  bool allow_mmap_populate = false;
+
   // Amount of data to build up in memtables across all column
   // families before writing to disk.
   //
@@ -953,6 +955,9 @@ struct DBOptions {
   // relies on manual invocation of FlushWAL to write the WAL buffer to its
   // file.
   bool manual_wal_flush = false;
+
+  // TODO
+  bool filter_idempotent = false;
 };
 
 // Options to control the behavior of a database (passed to DB::Open)
