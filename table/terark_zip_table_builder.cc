@@ -8,6 +8,7 @@
 #include <rocksdb/merge_operator.h>
 #include <rocksdb/compaction_filter.h>
 #include <table/meta_blocks.h>
+#include <util/xxhash.h>
 // terark headers
 #include <terark/util/sortable_strvec.hpp>
 #include <terark/io/MemStream.hpp>
@@ -171,6 +172,7 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(const TerarkZipTableFactory* table_
   , table_factory_(table_factory)
   , ioptions_(tbo.ioptions)
   , range_del_block_(1)
+  , ignore_key_type_(tbo.ignore_key_type)
   , key_prefixLen_(key_prefixLen)
 {
 try {
@@ -340,7 +342,7 @@ try {
 
   uint64_t seqType = DecodeFixed64(key.data() + key.size() - 8);
   ValueType value_type = ValueType(seqType & 255);
-  if (IsValueType(value_type)) {
+  if (IsValueType(value_type) || ignore_key_type_) {
     assert(key.size() >= 8);
     fstring userKey(key.data(), key.size() - 8);
     assert(userKey.size() >= key_prefixLen_);
@@ -1369,44 +1371,32 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
   keyInput.attach(&keyFile);
 
   auto readKey = [&](uint64_t seqType, bool next) {
-	if (!next) {
-	  (uint64_t&)key.end()[-8] = seqType;
-	  return SliceOf(key);
-	}
-	TERARK_RT_assert(keyFileIndex != kvs.build.size(), std::logic_error);
-	key.resize(kvs.prefix.size());
-	keyInput.load_add(key);
-	key.append((char*)&seqType, 8);
-	if (++keyFileCount == kvs.build[keyFileIndex]->stat.numKeys) {
-	  keyFileCount = 0;
-	  keyInput.resetbuf();
-	  keyFile.close();
-	  if (++keyFileIndex < kvs.build.size()) {
-		keyFile.open(kvs.build[keyFileIndex]->data.path, "rb");
-		keyFile.disbuf();
-		keyInput.attach(&keyFile);
-	  }
-	}
-	return SliceOf(key);
+    if (!next) {
+      (uint64_t&)key.end()[-8] = seqType;
+      return SliceOf(key);
+    }
+    TERARK_RT_assert(keyFileIndex != kvs.build.size(), std::logic_error);
+    key.resize(kvs.prefix.size());
+    keyInput.load_add(key);
+    key.append((char*)&seqType, 8);
+    if (++keyFileCount == kvs.build[keyFileIndex]->stat.numKeys) {
+      keyFileCount = 0;
+      keyInput.resetbuf();
+      keyFile.close();
+      if (++keyFileIndex < kvs.build.size()) {
+        keyFile.open(kvs.build[keyFileIndex]->data.path, "rb");
+        keyFile.disbuf();
+        keyInput.attach(&keyFile);
+      }
+    }
+    return SliceOf(key);
   };
 
   NativeDataInput<InputBuffer> input(&kvs.valueFile.fp);
   if (kvs.isReadFromFile) {
-	  bool veriftIter = false; // table_options_.debugLevel == 2 && second_pass_iter_ != nullptr;
-
-    if (veriftIter) {
-      key.assign(kvs.prefix);
-      keyFile.open(kvs.build.front()->data.path, "rb");
-      keyFile.disbuf();
-      keyInput.attach(&keyFile);
-      seekSecondPassIter();
-    }
-
-    assert(second_pass_iter_ != nullptr);
-
     size_t entryId = 0;
     size_t bitPos = 0;
-    for (size_t recId = 0; recId < kvs.key.m_cnt_sum ; recId++) {
+    for (size_t recId = 0; recId < kvs.key.m_cnt_sum; recId++) {
       uint64_t seqType = input.load_as<uint64_t>();
       uint64_t seqNum;
       ValueType vType;
@@ -1417,11 +1407,6 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
         if (0 == seqNum && kTypeValue == vType) {
           bzvType.set0(recId, size_t(ZipValueType::kZeroSeq));
           input >> value;
-          if (veriftIter) {
-            TERARK_RT_assert(readKey(seqType, true) == second_pass_iter_->key(), std::logic_error);
-            TERARK_RT_assert(SliceOf(value) == second_pass_iter_->value(), std::logic_error);
-            ITER_MOVE_NEXT(second_pass_iter_);
-          }             
         }
         else {
           if (kTypeValue == vType) {
@@ -1433,12 +1418,6 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
           value.erase_all();
           value.append((byte_t*)&seqNum, 7);
           input.load_add(value);
-          if (veriftIter) {
-            TERARK_RT_assert(readKey(seqType, true) == second_pass_iter_->key(), std::logic_error);
-            TERARK_RT_assert(Slice((char*)value.data() + 7, value.size() - 7) ==
-              second_pass_iter_->value(), std::logic_error);
-            ITER_MOVE_NEXT(second_pass_iter_);
-          }
         }
       }
       else {
@@ -1453,12 +1432,6 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
           value.append((byte_t*)&seqType, 8);
           size_t oldSize = value.size();
           input.load_add(value);
-          if (veriftIter) {
-            TERARK_RT_assert(readKey(seqType, j == 0) == second_pass_iter_->key(), std::logic_error);
-            TERARK_RT_assert(Slice((char*)value.data() + oldSize, value.size() - oldSize) ==
-              second_pass_iter_->value(), std::logic_error);
-            ITER_MOVE_NEXT(second_pass_iter_);
-          }
           if (j + 1 < oneSeqLen) {
             ((ZipValueMultiValue*)value.data())->offsets[j + 1] = value.size() - headerSize;
           }
@@ -2275,13 +2248,26 @@ Status TerarkZipTableBuilder::WriteMetaData(const std::string& dictInfo,
     return s;
   }
   metaindexBuiler.Add(kPropertiesBlock, propBlock);
-  s = WriteBlock(metaindexBuiler.Finish(), file_, &offset_, &metaindexBlock);
+  Slice metaindexData = metaindexBuiler.Finish();
+  s = WriteBlock(metaindexData, file_, &offset_, &metaindexBlock);
+  if (s.ok()) {
+    char trailer[kBlockTrailerSize];
+    trailer[0] = kNoCompression;
+    void* xxh = XXH32_init(0);
+    XXH32_update(xxh, metaindexData.data(),
+      static_cast<uint32_t>(metaindexData.size()));
+    XXH32_update(xxh, trailer, 1);  // Extend  to cover block type
+    EncodeFixed32(trailer + 1, XXH32_digest(xxh));
+    s = file_->Append(Slice(trailer, kBlockTrailerSize));
+    offset_ += kBlockTrailerSize;
+  }
   if (!s.ok()) {
     return s;
   }
   Footer footer(kTerarkZipTableMagicNumber, 0);
   footer.set_metaindex_handle(metaindexBlock);
   footer.set_index_handle(BlockHandle::NullBlockHandle());
+  footer.set_checksum(kxxHash);
   std::string footer_encoding;
   footer.EncodeTo(&footer_encoding);
   s = file_->Append(footer_encoding);

@@ -599,7 +599,7 @@ protected:
       // little endian uint64_t
       pInterKey_.sequence = *(uint64_t*)valueBuf_.data() & kMaxSequenceNumber;
       pInterKey_.type = kTypeDeletion;
-      userValue_ = Slice();
+      userValue_ = SliceOf(fstring(valueBuf_).substr(7));
       break;
     case ZipValueType::kMulti: { // more than one value
       auto zmValue = (const ZipValueMultiValue*)(valueBuf_.data());
@@ -961,7 +961,7 @@ const {
     uint64_t seq = *(uint64_t*)g_tbuf.data() & kMaxSequenceNumber;
     if (seq <= pikey.sequence) {
       get_context->SaveValue(ParsedInternalKey(pikey.user_key, seq, kTypeDeletion),
-        Slice(), &matched);
+        SliceOf(fstring(g_tbuf).substr(7)), &matched);
     }
     break; }
   case ZipValueType::kMulti: { // more than one value
@@ -1323,6 +1323,14 @@ uint64_t TerarkZipTableReader::ApproximateOffsetOf_old(const Slice& ikey) {
   return offset;
 }
 
+
+void TerarkZipTableReader::RangeScan(const Slice* begin, const SliceTransform* prefix_extractor, void* arg,
+                                     bool(*callback_func)(void* arg, const Slice& ikey,
+                                                          const Slice& value)) {
+  // TODO
+  TableReader::RangeScan(begin, prefix_extractor, arg, callback_func);
+}
+
 uint64_t TerarkZipTableReader::ApproximateOffsetOf_new(const Slice& ikey) {
 #if defined(TerocksPrivateCode)
   size_t numRecords = subReader_.index_->NumKeys();
@@ -1608,6 +1616,13 @@ TerarkZipTableMultiReader::Get(const ReadOptions& ro, const Slice& ikey, GetCont
     return Status::OK();
   }
   return subReader->Get(global_seqno_, ro, ikey, get_context, flag);
+}
+
+void TerarkZipTableMultiReader::RangeScan(const Slice* begin, const SliceTransform* prefix_extractor, void* arg,
+                                          bool(*callback_func)(void* arg, const Slice& ikey,
+                                                               const Slice& value)) {
+  // TODO
+  TableReader::RangeScan(begin, prefix_extractor, arg, callback_func);
 }
 
 uint64_t TerarkZipTableMultiReader::ApproximateOffsetOf_old(const Slice& ikey) {

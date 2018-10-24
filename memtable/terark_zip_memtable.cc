@@ -222,7 +222,7 @@ public:
       assert(ok); (void)ok;
     }
     ++num_entries_;
-    assert(false); // TODO
+    //assert(false); // TODO
     return true;
   }
 
@@ -433,7 +433,8 @@ public:
         index = 0;
         tag = vec.data[index].tag;
       }
-      void Next(std::string& internal_key) {
+      void Next() {
+        assert(index != size_t(-1));
         if (index-- == 0) {
           if (!iter.incr()) {
             assert(index == size_t(-1));
@@ -447,7 +448,8 @@ public:
           tag = vec.data[index].tag;
         }
       }
-      void Prev(std::string& internal_key) {
+      void Prev() {
+        assert(index != size_t(-1));
         auto vec = GetVector();
         if (++index == vec.size) {
           if (!iter.decr()) {
@@ -616,7 +618,7 @@ public:
             return;
           }
         }
-        multi_.heap[0]->Next(buffer_);
+        multi_.heap[0]->Next();
         if (multi_.heap[0]->index == size_t(-1)) {
           std::pop_heap(multi_.heap, multi_.heap + multi_.size, ForwardComp());
           if (--multi_.size == 0) {
@@ -627,7 +629,7 @@ public:
           terark::adjust_heap_top(multi_.heap, multi_.size, ForwardComp());
         }
       } else {
-        single_.Next(buffer_);
+        single_.Next();
         if (single_.index == size_t(-1)) {
           direction_ = 0;
           return;
@@ -652,7 +654,7 @@ public:
             return;
           }
         }
-        multi_.heap[0]->Prev(buffer_);
+        multi_.heap[0]->Prev();
         if (multi_.heap[0]->index == size_t(-1)) {
           std::pop_heap(multi_.heap, multi_.heap + multi_.size, BackwardComp());
           if (--multi_.size == 0) {
@@ -663,7 +665,7 @@ public:
           terark::adjust_heap_top(multi_.heap, multi_.size, BackwardComp());
         }
       } else {
-        single_.Prev(buffer_);
+        single_.Prev();
         if (single_.index == size_t(-1)) {
           direction_ = 0;
           return;

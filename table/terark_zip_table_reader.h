@@ -95,6 +95,11 @@ public:
              const SliceTransform* prefix_extractor, bool skip_filters) override {
     return Status::OK();
   }
+  void RangeScan(const Slice* begin, const SliceTransform* prefix_extractor, void* arg,
+                 bool(*callback_func)(void* arg, const Slice& ikey,
+                                      const Slice& value)) override {
+    // do nothing
+  }
   size_t ApproximateMemoryUsage() const override { return 100; }
   uint64_t ApproximateOffsetOf(const Slice&) override { return 0; }
   void SetupForCompaction() override {}
@@ -173,6 +178,10 @@ public:
   Status Get(const ReadOptions& readOptions, const Slice& key, GetContext* get_context,
              const SliceTransform* prefix_extractor, bool skip_filters) override;
 
+  void RangeScan(const Slice* begin, const SliceTransform* prefix_extractor, void* arg,
+                 bool(*callback_func)(void* arg, const Slice& ikey,
+                                      const Slice& value)) override;
+
   uint64_t ApproximateOffsetOf_old(const Slice& key);
   uint64_t ApproximateOffsetOf_new(const Slice& key);
   uint64_t ApproximateOffsetOf(const Slice& key) override;
@@ -231,6 +240,10 @@ public:
 
   Status Get(const ReadOptions& readOptions, const Slice& key, GetContext* get_context,
              const SliceTransform* prefix_extractor, bool skip_filters) override;
+  
+  void RangeScan(const Slice* begin, const SliceTransform* prefix_extractor, void* arg,
+                 bool(*callback_func)(void* arg, const Slice& ikey,
+                                      const Slice& value)) override;
 
   uint64_t ApproximateOffsetOf_old(const Slice& key);
   uint64_t ApproximateOffsetOf_new(const Slice& key);
