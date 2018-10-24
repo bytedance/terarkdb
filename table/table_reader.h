@@ -11,13 +11,14 @@
 #include <memory>
 #include "rocksdb/slice_transform.h"
 #include "table/internal_iterator.h"
+#include "table/scoped_arena_iterator.h"
+#include "util/arena.h"
 
 namespace rocksdb {
 
 class Iterator;
 struct ParsedInternalKey;
 class Slice;
-class Arena;
 struct ReadOptions;
 struct TableProperties;
 class GetContext;
@@ -87,11 +88,13 @@ class TableReader {
 
   // Logic same as for(it->Seek(begin); it->Valid() && callback(*it); ++it) {}
   // Specialization for performance
-  virtual void RangeScan(const Slice* begin, void* arg,
+  virtual void RangeScan(const Slice* begin,
+                         const SliceTransform* prefix_extractor, void* arg,
                          bool (*callback_func)(void* arg, const Slice& ikey,
                                                const Slice& value)) {
-    std::unique_ptr<InternalIterator> iter(
-        NewIterator(ReadOptions(), nullptr));
+    Arena arena;
+    ScopedArenaIterator iter(
+        NewIterator(ReadOptions(), prefix_extractor, &arena));
     for (begin == nullptr ? iter->SeekToFirst() : iter->Seek(*begin);
          iter->Valid() && callback_func(arg, iter->key(), iter->value());
          iter->Next()) {
@@ -103,8 +106,8 @@ class TableReader {
   // persists the data on a non volatile storage medium like disk/SSD
   virtual Status Prefetch(const Slice* begin = nullptr,
                           const Slice* end = nullptr) {
-    (void) begin;
-    (void) end;
+    (void)begin;
+    (void)end;
     // Default implementation is NOOP.
     // The child class should implement functionality when applicable
     return Status::OK();

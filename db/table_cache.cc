@@ -92,7 +92,8 @@ InternalIterator* TranslateCompositeSstIterator(
 Status GetFromCompositeSst(const FileMetaData& file_meta,
                            TableReader* table_reader,
                            const InternalKeyComparator& icomp, const Slice& k,
-                           GetContext* get_context, void* arg,
+                           GetContext* get_context,
+                           const SliceTransform* prefix_extractor, void* arg,
                            bool (*get_from_sst)(void* arg, const Slice& find_k,
                                                 uint64_t file_number,
                                                 Status& status)) {
@@ -146,7 +147,7 @@ Status GetFromCompositeSst(const FileMetaData& file_meta,
             ExtractInternalKeyFooter(largest_key) - 1);
         return true;
       };
-      table_reader->RangeScan(&k, &get_from_link,
+      table_reader->RangeScan(&k, prefix_extractor, &get_from_link,
                               c_style_callback(get_from_link));
       return s;
     }
@@ -232,7 +233,7 @@ Status GetFromCompositeSst(const FileMetaData& file_meta,
         get_context->SetMinSequenceAndType(min_seq_type_backup);
         return is_largest_user_key;
       };
-      table_reader->RangeScan(&k, &get_from_map,
+      table_reader->RangeScan(&k, prefix_extractor, & get_from_map,
                               c_style_callback(get_from_map));
       return s;
     }
@@ -649,8 +650,9 @@ Status TableCache::Get(const ReadOptions& options,
 
           return status.ok() && !get_context->is_finished();
         };
-        s = GetFromCompositeSst(file_meta, t, internal_comparator, k, get_context,
-                         &get_from_sst, c_style_callback(get_from_sst));
+        s = GetFromCompositeSst(file_meta, t, internal_comparator, k,
+                                get_context, prefix_extractor, &get_from_sst,
+                                c_style_callback(get_from_sst));
       }
       get_context->SetReplayLog(nullptr);
     } else if (options.read_tier == kBlockCacheTier && s.IsIncomplete()) {
