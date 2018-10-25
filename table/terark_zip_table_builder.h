@@ -85,6 +85,7 @@ private:
     std::future<Status> wait;
     uint64_t indexFileBegin = 0;
     uint64_t indexFileEnd = 0;
+    std::atomic<size_t> ref = {2};
   };
   struct KeyValueStatus {
     valvec<char> prefix;

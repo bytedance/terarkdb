@@ -761,7 +761,7 @@ void TerarkZipTableBuilder::BuildIndex(BuildIndexParams& param, KeyValueStatus& 
       , rawKeySize*1.0 / 1e9, fileSize*1.0 / 1e9
       , rawKeySize*1.0 / param.stat.numKeys, fileSize*1.0 / param.stat.numKeys
     );
-    if (table_options_.debugLevel != 2 || second_pass_iter_ == nullptr) {
+    if (--param.ref == 0) {
       param.data.close();
     }
     return Status::OK();
@@ -1365,10 +1365,6 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
   FileStream keyFile;
   valvec<byte_t> key, value;
   NativeDataInput<InputBuffer> keyInput;
-  //key.assign(kvs.prefix);
-  keyFile.open(kvs.build.front()->data.path, "rb");
-  keyFile.disbuf();
-  keyInput.attach(&keyFile);
 
   auto readKey = [&](uint64_t seqType, bool next) {
     if (!next) {
@@ -1394,6 +1390,11 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
 
   NativeDataInput<InputBuffer> input(&kvs.valueFile.fp);
   if (kvs.isReadFromFile) {
+    for (auto& param : kvs.build) {
+      if (--param->ref == 0) {
+        param->data.close();
+      }
+    }
     size_t entryId = 0;
     size_t bitPos = 0;
     for (size_t recId = 0; recId < kvs.key.m_cnt_sum; recId++) {
@@ -1449,6 +1450,9 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
   else
   {
     assert(second_pass_iter_ != nullptr);
+    keyFile.open(kvs.build.front()->data.path, "rb");
+    keyFile.disbuf();
+    keyInput.attach(&keyFile);
 
     valvec<byte_t> ignVal;
     size_t recId = 0, entryId = 0, bitPos = 0;
@@ -1678,6 +1682,11 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
         }
         bitPos += varNum + 1;
         entryId += varNum;
+      }
+      for (auto& param : kvs.build) {
+        if (--param->ref == 0) {
+          param->data.close();
+        }
       }
     }
 
