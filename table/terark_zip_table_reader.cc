@@ -266,7 +266,7 @@ protected:
   ParsedInternalKey       pInterKey_;
   std::string             interKeyBuf_;
   valvec<byte_t>          interKeyBuf_xx_;
-  valvec<byte_t>          valueBuf_;
+  terark::BlobStore::CacheOffsets cacheOffsets_;
   Slice                   userValue_;
   ZipValueType            zValtype_;
   size_t                  valnum_;
@@ -276,6 +276,8 @@ protected:
 
   using TerarkZipTableIndexIterator::subReader_;
   using TerarkZipTableIndexIterator::iter_;
+
+  valvec<byte_t>& valueBuf() { return cacheOffsets_.recData; }
 
 public:
   TerarkZipTableIterator(const TableReaderOptions& tro
@@ -527,14 +529,14 @@ protected:
         ? ZipValueType(subReader_->type_[recId])
         : ZipValueType::kZeroSeq;
       try {
-        TryPinBuffer(valueBuf_);
+        TryPinBuffer(valueBuf());
         if (ZipValueType::kMulti == zValtype_) {
-          valueBuf_.resize_no_init(sizeof(uint32_t)); // for offsets[valnum_]
+          valueBuf().resize_no_init(sizeof(uint32_t)); // for offsets[valnum_]
         }
         else {
-          valueBuf_.erase_all();
+          valueBuf().erase_all();
         }
-        subReader_->GetRecordAppend(recId, &valueBuf_);
+        subReader_->CacheOffsetsGetRecordAppend(recId, &cacheOffsets_);
       }
       catch (const std::exception& ex) { // crc checksum error
         SetIterInvalid();
@@ -543,8 +545,8 @@ protected:
         return false;
       }
       if (ZipValueType::kMulti == zValtype_) {
-        ZipValueMultiValue::decode(valueBuf_, &valnum_);
-		uint32_t* offsets = (uint32_t*)valueBuf_.data();
+        ZipValueMultiValue::decode(valueBuf(), &valnum_);
+		uint32_t* offsets = (uint32_t*)valueBuf().data();
 		size_t pos = 0;
 		char* base = (char*)(offsets + valnum_ + 1);
 		for(size_t i = 0; i < valnum_; ++i) {
@@ -583,26 +585,26 @@ protected:
       assert(1 == valnum_);
       pInterKey_.sequence = global_seqno_;
       pInterKey_.type = kTypeValue;
-      userValue_ = SliceOf(valueBuf_);
+      userValue_ = SliceOf(valueBuf());
       break;
     case ZipValueType::kValue: // should be a kTypeValue, the normal case
       assert(0 == validx_);
       assert(1 == valnum_);
       // little endian uint64_t
-      pInterKey_.sequence = *(uint64_t*)valueBuf_.data() & kMaxSequenceNumber;
+      pInterKey_.sequence = *(uint64_t*)valueBuf().data() & kMaxSequenceNumber;
       pInterKey_.type = kTypeValue;
-      userValue_ = SliceOf(fstring(valueBuf_).substr(7));
+      userValue_ = SliceOf(fstring(valueBuf()).substr(7));
       break;
     case ZipValueType::kDelete:
       assert(0 == validx_);
       assert(1 == valnum_);
       // little endian uint64_t
-      pInterKey_.sequence = *(uint64_t*)valueBuf_.data() & kMaxSequenceNumber;
+      pInterKey_.sequence = *(uint64_t*)valueBuf().data() & kMaxSequenceNumber;
       pInterKey_.type = kTypeDeletion;
-      userValue_ = SliceOf(fstring(valueBuf_).substr(7));
+      userValue_ = SliceOf(fstring(valueBuf()).substr(7));
       break;
     case ZipValueType::kMulti: { // more than one value
-      auto zmValue = (const ZipValueMultiValue*)(valueBuf_.data());
+      auto zmValue = (const ZipValueMultiValue*)(valueBuf().data());
       assert(0 != valnum_);
       assert(validx_ < valnum_);
       Slice d = zmValue->getValueData(validx_, valnum_);
@@ -883,6 +885,20 @@ const {
   }
   else
     store_->get_record_append(recId, tbuf);
+}
+
+void TerarkZipSubReader::CacheOffsetsGetRecordAppend(
+        size_t recId, terark::BlobStore::CacheOffsets* co)
+const {
+  if (storeUsePread_) {
+    auto cache = cache_;
+    if (cache)
+      store_->pread_record_append(cache, storeFD_, storeOffset_, recId, &co->recData);
+    else
+      store_->fspread_record_append(&FsPread, (void*)this, storeOffset_, recId, &co->recData);
+  }
+  else
+    store_->get_record_append(recId, co);
 }
 
 Status TerarkZipSubReader::Get(SequenceNumber global_seqno,

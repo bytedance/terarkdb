@@ -149,6 +149,7 @@ struct TerarkZipSubReader {
   void InitUsePread(int minPreadLen);
 
   void GetRecordAppend(size_t recId, valvec<byte_t>* tbuf) const;
+  void CacheOffsetsGetRecordAppend(size_t recId, terark::BlobStore::CacheOffsets*) const;
 
   Status Get(SequenceNumber, const ReadOptions&, const Slice& key,
     GetContext*, int flag) const;
