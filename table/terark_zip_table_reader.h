@@ -149,7 +149,7 @@ struct TerarkZipSubReader {
   void InitUsePread(int minPreadLen);
 
   void GetRecordAppend(size_t recId, valvec<byte_t>* tbuf) const;
-  void CacheOffsetsGetRecordAppend(size_t recId, terark::BlobStore::CacheOffsets*) const;
+  void GetRecordAppend(size_t recId, terark::BlobStore::CacheOffsets*) const;
 
   Status Get(SequenceNumber, const ReadOptions&, const Slice& key,
     GetContext*, int flag) const;
@@ -171,6 +171,9 @@ public:
   InternalIterator*
     NewIterator(const ReadOptions&, const SliceTransform* prefix_extractor,
                 Arena* a, bool skip_filters, bool for_compaction) override;
+
+  template<bool reverse, bool ZipOffset>
+  InternalIterator* NewIteratorImp(const ReadOptions&, Arena* a);
 
   using TerarkZipTableTombstone::NewRangeTombstoneIterator;
 
@@ -235,6 +238,9 @@ public:
     NewIterator(const ReadOptions&, const SliceTransform* prefix_extractor,
                 Arena* a, bool skip_filters, bool for_compaction) override;
 
+  template<bool reverse, bool ZipOffset>
+  InternalIterator* NewIteratorImp(const ReadOptions&, Arena* a);
+
   using TerarkZipTableTombstone::NewRangeTombstoneIterator;
 
   void Prepare(const Slice& target) override {}
@@ -271,6 +277,7 @@ public:
     size_t alignedPrefixLen_;
     valvec<byte_t> prefixSet_;
     valvec<TerarkZipSubReader> subReader_;
+    bool hasAnyZipOffset_;
 
     struct PartIndexOperator {
       const SubIndex* p;
@@ -301,6 +308,7 @@ public:
     size_t GetSubCount() const;
     const TerarkZipSubReader* GetSubReader(size_t i) const;
     const TerarkZipSubReader* LowerBoundSubReader(fstring key) const;
+    bool HasAnyZipOffset() const { return hasAnyZipOffset_; }
   };
 
 private:
