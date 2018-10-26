@@ -512,24 +512,27 @@ protected:
     if (hasRecord) {
       auto& value_buf = ValueBuf();
       fstring user_key = iter_->key();
+      size_t aligned_key_length;
       try {
         TryPinBuffer(ValueBuf());
         size_t recId = iter_->id();
         zip_value_type_ = subReader_->type_.size()
           ? ZipValueType(subReader_->type_[recId])
           : ZipValueType::kZeroSeq;
-        size_t estimate_cap = 0;
+        size_t estimate_cap = 0, mulnum_size = 0;
         if (ZipValueType::kMulti == zip_value_type_) {
           estimate_cap += sizeof(uint32_t); // for offsets[valnum_]
+          mulnum_size = 4;
         }
         key_length_ = subReader_->prefix_.size() + subReader_->commonPrefix_.size() +
                       user_key.size() + sizeof key_tag_;
-        estimate_cap += key_length_ + subReader_->estimateUnzipCap_;
+        aligned_key_length = terark::align_up(key_length_, 4);
+        estimate_cap += aligned_key_length + subReader_->estimateUnzipCap_;
         value_buf.ensure_capacity(estimate_cap);
         value_buf.assign(subReader_->prefix_.data(), subReader_->prefix_.size());
         value_buf.append(subReader_->commonPrefix_.data(), subReader_->commonPrefix_.size());
         value_buf.append(user_key.data(), user_key.size());
-        value_buf.resize(terark::align_up(key_length_, 4));
+        value_buf.resize(aligned_key_length + mulnum_size);
         subReader_->GetRecordAppend(recId, cache_offsets_);
       }
       catch (const std::exception& ex) { // crc checksum error
@@ -539,7 +542,6 @@ protected:
         return false;
       }
       if (ZipValueType::kMulti == zip_value_type_) {
-        size_t aligned_key_length = terark::align_up(key_length_, 4);
         auto data_ptr = value_buf.data() + aligned_key_length;
         ZipValueMultiValue::decode(data_ptr, value_buf.size() - aligned_key_length, &value_count_);
         uint32_t* offsets = (uint32_t*)data_ptr;
@@ -692,6 +694,7 @@ protected:
   using base_t::value_count_;
   using base_t::value_index_;
   using base_t::status_;
+  using base_t::invalidate_offsets_cache;
 
   using base_t::ValueBuf;
   using base_t::SeekToAscendingFirst;
@@ -735,15 +738,13 @@ public:
       if (!Valid()) {
         if (reverse) {
           if (subReader->subIndex_ != 0) {
-            subReader_ = subIndex_->GetSubReader(subReader->subIndex_ - 1);
-            ResetIter(subReader);
+            ResetIter(subIndex_->GetSubReader(subReader->subIndex_ - 1));
             SeekToAscendingLast();
           }
         }
         else {
           if (subReader->subIndex_ != subIndex_->GetSubCount() - 1) {
-            subReader_ = subIndex_->GetSubReader(subReader->subIndex_ + 1);
-            ResetIter(subReader);
+            ResetIter(subIndex_->GetSubReader(subReader->subIndex_ + 1));
             SeekToAscendingFirst();
           }
         }
