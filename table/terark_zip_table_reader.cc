@@ -876,7 +876,7 @@ void TerarkZipSubReader::InitUsePread(int minPreadLen) {
   else {
     size_t numRecords = store_->num_records();
     size_t memSize = store_->get_mmap().size();
-    storeUsePread_ = memSize < minPreadLen * numRecords;
+    storeUsePread_ = memSize > minPreadLen * numRecords;
   }
 }
 
