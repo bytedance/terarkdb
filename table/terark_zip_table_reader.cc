@@ -631,7 +631,7 @@ public:
     this->cacheOffsets_ = reinterpret_cast<CacheOffsets*>(&rb_);
   }
   virtual void invalidate_offsets_cache() override {
-    rb_.invalidate();
+    rb_.invalidate_offsets_cache();
   }
 };
 
