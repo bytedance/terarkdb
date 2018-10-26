@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "rocksdb/options.h"
+#include "rocksdb/listener.h"
 
 namespace rocksdb {
 

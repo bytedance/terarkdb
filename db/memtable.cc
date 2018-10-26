@@ -861,6 +861,7 @@ bool MemTable::UpdateCallback(SequenceNumber seq,
             return true;
           }
         }
+          break;
         default:
           break;
       }
