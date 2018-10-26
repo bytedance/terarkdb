@@ -292,7 +292,6 @@ public:
       iter_->SetInvalid();
     }
     pinned_iters_mgr_ = NULL;
-    TryPinBuffer(keyBuf_);
     validx_ = 0;
     valnum_ = 0;
     pInterKey_.user_key = Slice();
@@ -515,12 +514,11 @@ protected:
   virtual void DecodeCurrKeyValue() {
     DecodeCurrKeyValueInternal();
     assert(subReader_->prefix_.empty());
-    keyBuf_.reserve(subReader_->commonPrefix_.size() + pInterKey_.user_key.size() + sizeof(uint64_t));
+    keyBuf_.ensure_capacity(subReader_->commonPrefix_.size() + pInterKey_.user_key.size() + sizeof(uint64_t));
     keyBuf_.assign(subReader_->commonPrefix_.data(), subReader_->commonPrefix_.size());
     keyBuf_.append(pInterKey_.user_key.data(), pInterKey_.user_key.size());
-    char buf[sizeof(uint64_t)];
+    char* buf = (char*)keyBuf_.grow_no_init(sizeof(uint64_t));
     EncodeFixed64(buf, PackSequenceAndType(pInterKey_.sequence, pInterKey_.type));
-    keyBuf_.append(buf, sizeof(buf));
   }
   void TryPinBuffer(valvec<byte_t>& buf) {
     if (pinned_iters_mgr_ && pinned_iters_mgr_->PinningEnabled()) {
