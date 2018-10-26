@@ -128,6 +128,7 @@ struct TerarkZipSubReader {
   size_t subIndex_;
   size_t rawReaderOffset_;
   size_t rawReaderSize_;
+  size_t estimateUnzipCap_;
   bool   storeUsePread_;
   intptr_t   storeFD_;
   RandomAccessFile* storeFileObj_;

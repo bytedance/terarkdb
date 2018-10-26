@@ -515,20 +515,22 @@ protected:
       fstring user_key = iter_->key();
       try {
         TryPinBuffer(ValueBuf());
-        key_length_ = subReader_->prefix_.size() + subReader_->commonPrefix_.size() +
-                      user_key.size() + sizeof key_tag_;
-        value_buf.ensure_capacity(key_length_);
-        value_buf.assign(subReader_->prefix_.data(), subReader_->prefix_.size());
-        value_buf.append(subReader_->commonPrefix_.data(), subReader_->commonPrefix_.size());
-        value_buf.append(user_key.data(), user_key.size());
-        value_buf.resize(terark::align_up(key_length_, 4));
         size_t recId = iter_->id();
         zip_value_type_ = subReader_->type_.size()
           ? ZipValueType(subReader_->type_[recId])
           : ZipValueType::kZeroSeq;
+        size_t estimate_cap = 0;
         if (ZipValueType::kMulti == zip_value_type_) {
-          value_buf.grow_no_init(sizeof(uint32_t)); // for offsets[valnum_]
+          estimate_cap += sizeof(uint32_t); // for offsets[valnum_]
         }
+        key_length_ = subReader_->prefix_.size() + subReader_->commonPrefix_.size() +
+                      user_key.size() + sizeof key_tag_;
+        estimate_cap += key_length_ + subReader_->estimateUnzipCap_;
+        value_buf.ensure_capacity(estimate_cap);
+        value_buf.assign(subReader_->prefix_.data(), subReader_->prefix_.size());
+        value_buf.append(subReader_->commonPrefix_.data(), subReader_->commonPrefix_.size());
+        value_buf.append(user_key.data(), user_key.size());
+        value_buf.resize(terark::align_up(key_length_, 4));
         subReader_->GetRecordAppend(recId, cache_offsets_);
       }
       catch (const std::exception& ex) { // crc checksum error
@@ -851,6 +853,9 @@ void TerarkZipSubReader::InitUsePread(int minPreadLen) {
     size_t memSize = store_->get_mmap().size();
     storeUsePread_ = memSize > minPreadLen * numRecords;
   }
+  double sumUnzipSize = store_->total_data_size();
+  double avgUnzipSize = sumUnzipSize / store_->num_records();
+  estimateUnzipCap_ = size_t(avgUnzipSize * 1.62); // a bit larger than 1.618
 }
 
 static const byte_t*
