@@ -276,8 +276,7 @@ protected:
   using TerarkZipTableIndexIterator::subReader_;
   using TerarkZipTableIndexIterator::iter_;
 
-  valvec<byte_t>& ValueBuf() { return cache_offsets_->recData; }
-  const valvec<byte_t>& ValueBuf() const { return cache_offsets_->recData; }
+  valvec<byte_t>& ValueBuf() const { return cache_offsets_->recData; }
 
 public:
   TerarkZipTableIterator(const TableReaderOptions& tro
