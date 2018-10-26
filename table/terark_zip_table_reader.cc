@@ -264,8 +264,7 @@ protected:
   const TableReaderOptions* table_reader_options_;
   SequenceNumber          global_seqno_;
   ParsedInternalKey       pInterKey_;
-  std::string             interKeyBuf_;
-  valvec<byte_t>          interKeyBuf_xx_;
+  valvec<byte_t>          keyBuf_;
   terark::BlobStore::CacheOffsets* cacheOffsets_;
   Slice                   userValue_;
   ZipValueType            zValtype_;
@@ -293,7 +292,7 @@ public:
       iter_->SetInvalid();
     }
     pinned_iters_mgr_ = NULL;
-    TryPinBuffer(interKeyBuf_xx_);
+    TryPinBuffer(keyBuf_);
     validx_ = 0;
     valnum_ = 0;
     pInterKey_.user_key = Slice();
@@ -367,7 +366,7 @@ public:
 
   Slice key() const override {
     assert(iter_->Valid());
-    return SliceOf(interKeyBuf_xx_);
+    return SliceOf(keyBuf_);
   }
 
   Slice value() const override {
@@ -402,7 +401,7 @@ protected:
     }
   }
   void SeekInternal(const ParsedInternalKey& pikey) {
-    TryPinBuffer(interKeyBuf_xx_);
+    TryPinBuffer(keyBuf_);
     // Damn MySQL-rocksdb may use "rev:" comparator
     size_t cplen = fstringOf(pikey.user_key).commonPrefixLen(subReader_->commonPrefix_);
     if (subReader_->commonPrefix_.size() != cplen) {
@@ -474,7 +473,7 @@ protected:
     }
   }
   void SetIterInvalid() {
-    TryPinBuffer(interKeyBuf_xx_);
+    TryPinBuffer(keyBuf_);
     if (iter_)
       iter_->SetInvalid();
     validx_ = 0;
@@ -486,28 +485,28 @@ protected:
   }
   virtual void invalidate_offsets_cache() = 0;
   virtual bool IndexIterSeekToFirst() {
-    TryPinBuffer(interKeyBuf_xx_);
+    TryPinBuffer(keyBuf_);
     if (reverse)
       return iter_->SeekToLast();
     else
       return iter_->SeekToFirst();
   }
   virtual bool IndexIterSeekToLast() {
-    TryPinBuffer(interKeyBuf_xx_);
+    TryPinBuffer(keyBuf_);
     if (reverse)
       return iter_->SeekToFirst();
     else
       return iter_->SeekToLast();
   }
   virtual bool IndexIterPrev() {
-    TryPinBuffer(interKeyBuf_xx_);
+    TryPinBuffer(keyBuf_);
     if (reverse)
       return iter_->Next();
     else
       return iter_->Prev();
   }
   virtual bool IndexIterNext() {
-    TryPinBuffer(interKeyBuf_xx_);
+    TryPinBuffer(keyBuf_);
     if (reverse)
       return iter_->Prev();
     else
@@ -515,9 +514,13 @@ protected:
   }
   virtual void DecodeCurrKeyValue() {
     DecodeCurrKeyValueInternal();
-    interKeyBuf_.assign(subReader_->commonPrefix_.data(), subReader_->commonPrefix_.size());
-    AppendInternalKey(&interKeyBuf_, pInterKey_);
-    interKeyBuf_xx_.assign((byte_t*)interKeyBuf_.data(), interKeyBuf_.size());
+    assert(subReader_->prefix_.empty());
+    keyBuf_.reserve(subReader_->commonPrefix_.size() + pInterKey_.user_key.size() + sizeof(uint64_t));
+    keyBuf_.assign(subReader_->commonPrefix_.data(), subReader_->commonPrefix_.size());
+    keyBuf_.append(pInterKey_.user_key.data(), pInterKey_.user_key.size());
+    char buf[sizeof(uint64_t)];
+    EncodeFixed64(buf, PackSequenceAndType(pInterKey_.sequence, pInterKey_.type));
+    keyBuf_.append(buf, sizeof(buf));
   }
   void TryPinBuffer(valvec<byte_t>& buf) {
     if (pinned_iters_mgr_ && pinned_iters_mgr_->PinningEnabled()) {
@@ -549,18 +552,18 @@ protected:
       }
       if (ZipValueType::kMulti == zValtype_) {
         ZipValueMultiValue::decode(valueBuf(), &valnum_);
-		uint32_t* offsets = (uint32_t*)valueBuf().data();
-		size_t pos = 0;
-		char* base = (char*)(offsets + valnum_ + 1);
-		for(size_t i = 0; i < valnum_; ++i) {
-			size_t q = offsets[i + 0];
-			size_t r = offsets[i + 1];
-			size_t l = r - q;
-			offsets[i] = pos;
-			memmove(base + pos, base + q, l);
-			pos += l;
-		}
-		offsets[valnum_] = pos;
+        uint32_t* offsets = (uint32_t*)valueBuf().data();
+        size_t pos = 0;
+        char* base = (char*)(offsets + valnum_ + 1);
+        for (size_t i = 0; i < valnum_; ++i) {
+          size_t q = offsets[i + 0];
+          size_t r = offsets[i + 1];
+          size_t l = r - q;
+          offsets[i] = pos;
+          memmove(base + pos, base + q, l);
+          pos += l;
+        }
+        offsets[valnum_] = pos;
       }
       else {
         valnum_ = 1;
@@ -672,12 +675,15 @@ public:
   }
   void DecodeCurrKeyValue() override {
     DecodeCurrKeyValueInternal();
-    interKeyBuf_.assign(subReader_->commonPrefix_.data(), subReader_->commonPrefix_.size());
-    AppendInternalKey(&interKeyBuf_, pInterKey_);
-    assert(interKeyBuf_.size() == 16);
-    uint64_t *ukey = reinterpret_cast<uint64_t*>(&interKeyBuf_[0]);
-    *ukey = byte_swap(*ukey);
-    interKeyBuf_xx_.assign((byte_t*)interKeyBuf_.data(), interKeyBuf_.size());
+    assert(subReader_->prefix_.empty());
+    assert(pInterKey_.user_key.size() == sizeof(uint64_t));
+    keyBuf_.reserve(subReader_->commonPrefix_.size() + pInterKey_.user_key.size() + sizeof(uint64_t));
+    keyBuf_.assign(subReader_->commonPrefix_.data(), subReader_->commonPrefix_.size());
+    uint64_t big_endian_ukey = byte_swap(*reinterpret_cast<uint64_t*>(pInterKey_.user_key.data()));
+    keyBuf_.append(&big_endian_ukey, sizeof(big_endian_ukey));
+    char buf[sizeof(uint64_t)];
+    EncodeFixed64(buf, PackSequenceAndType(key.sequence, key.type));
+    dst->append(buf, sizeof(buf));
   }
 };
 #endif
@@ -699,8 +705,7 @@ protected:
   using base_t::subReader_;
   using base_t::iter_;
   using base_t::pInterKey_;
-  using base_t::interKeyBuf_;
-  using base_t::interKeyBuf_xx_;
+  using base_t::keyBuf_;
   using base_t::valnum_;
   using base_t::validx_;
   using base_t::status_;
@@ -765,7 +770,7 @@ public:
 
 protected:
   bool IndexIterSeekToFirst() override {
-    TryPinBuffer(interKeyBuf_xx_);
+    TryPinBuffer(keyBuf_);
     if (reverse) {
       subReader_ = subIndex_->GetSubReader(subIndex_->GetSubCount() - 1);
       iter_.reset(subReader_->index_->NewIterator());
@@ -778,7 +783,7 @@ protected:
     }
   }
   bool IndexIterSeekToLast() override {
-    TryPinBuffer(interKeyBuf_xx_);
+    TryPinBuffer(keyBuf_);
     if (reverse) {
       subReader_ = subIndex_->GetSubReader(0);
       iter_.reset(subReader_->index_->NewIterator());
@@ -791,7 +796,7 @@ protected:
     }
   }
   bool IndexIterPrev() override {
-    TryPinBuffer(interKeyBuf_xx_);
+    TryPinBuffer(keyBuf_);
     if (reverse) {
       if (iter_->Next())
         return true;
@@ -812,7 +817,7 @@ protected:
     }
   }
   bool IndexIterNext() override {
-    TryPinBuffer(interKeyBuf_xx_);
+    TryPinBuffer(keyBuf_);
     if (reverse) {
       if (iter_->Prev())
         return true;
@@ -834,10 +839,14 @@ protected:
   }
   void DecodeCurrKeyValue() override {
     DecodeCurrKeyValueInternal();
-    interKeyBuf_.assign(subReader_->prefix_.data(), subReader_->prefix_.size());
-    interKeyBuf_.append(subReader_->commonPrefix_.data(), subReader_->commonPrefix_.size());
-    AppendInternalKey(&interKeyBuf_, pInterKey_);
-    interKeyBuf_xx_.assign((byte_t*)interKeyBuf_.data(), interKeyBuf_.size());
+    keyBuf_.reserve(subReader_->prefix_.size() + subReader_->commonPrefix_.size() +
+                    pInterKey_.user_key.size() + sizeof(uint64_t));
+    keyBuf_.assign(subReader_->prefix_.data(), subReader_->prefix_.size());
+    keyBuf_.append(subReader_->commonPrefix_.data(), subReader_->commonPrefix_.size());
+    keyBuf_.append(pInterKey_.user_key.data(), pInterKey_.user_key.size());
+    char buf[sizeof(uint64_t)];
+    EncodeFixed64(buf, PackSequenceAndType(pInterKey_.sequence, pInterKey_.type));
+    keyBuf_.append(buf, sizeof(buf));
   }
 };
 

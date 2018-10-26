@@ -1431,7 +1431,6 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
             seqType = input.load_as<uint64_t>();
           }
           value.append((byte_t*)&seqType, 8);
-          size_t oldSize = value.size();
           input.load_add(value);
           if (j + 1 < oneSeqLen) {
             ((ZipValueMultiValue*)value.data())->offsets[j + 1] = value.size() - headerSize;
@@ -1474,7 +1473,8 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
 
     bool dumpKeyValue = table_options_.debugLevel == 0;
 
-    size_t varNum, cmpRet, mulCmpRet;
+    size_t varNum;
+    int cmpRet, mulCmpRet;
     ParsedInternalKey pIKey;
     Slice curKey, curVal, bufKey = readInternalKey(true);
 

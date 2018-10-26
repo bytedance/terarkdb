@@ -161,18 +161,13 @@ public:
       Slice value_;
     };
 
+    enum class InsertResult {
+      Success, Duplicated, Fail,
+    };
     auto insert_impl = [&](terark::MainPatricia* trie) {
       Token token(trie, DecodeFixed64(key.end()), value);
       uint32_t value_storage;
       if (!trie->insert(key, &value_storage, &token)) {
-        size_t value_size = VarintLength(value.size()) + value.size();
-        size_t value_loc = trie->mem_alloc(value_size);
-        if (value_loc == terark::MainPatricia::mem_alloc_fail) {
-          return false;
-        }
-        memcpy(EncodeVarint32((char*)trie->mem_get(value_loc), (uint32_t)value.size()),
-               value.data(), value.size());
-
         size_t vector_loc = *(uint32_t*)token.value();
         auto* vector = (tag_vector_t*)trie->mem_get(vector_loc);
         size_t data_loc = vector->loc;
@@ -180,16 +175,26 @@ public:
         size_t size = vector->size;
         assert(size > 0);
         assert(token.get_tag() > data[size - 1].tag);
+        if ((token.get_tag() >> 8) == (data[size - 1].tag >> 8)) {
+          return InsertResult::Duplicated;
+        }
+        size_t value_size = VarintLength(value.size()) + value.size();
+        size_t value_loc = trie->mem_alloc(value_size);
+        if (value_loc == terark::MainPatricia::mem_alloc_fail) {
+          return InsertResult::Fail;
+        }
+        memcpy(EncodeVarint32((char*)trie->mem_get(value_loc), (uint32_t)value.size()),
+               value.data(), value.size());
         if (!vector->full()) {
           data[size].loc = (uint32_t)value_loc;
           data[size].tag = token.get_tag();
           vector->size = size + 1;
-          return true;
+          return InsertResult::Success;
         }
         size_t cow_data_loc = trie->mem_alloc(sizeof(tag_vector_t::data_t) * size * 2);
         if (cow_data_loc == terark::MainPatricia::mem_alloc_fail) {
           trie->mem_free(value_loc, value_size);
-          return false;
+          return InsertResult::Fail;
         }
         auto* cow_data = (tag_vector_t::data_t*)trie->mem_get(cow_data_loc);
         memcpy(cow_data, data, sizeof(tag_vector_t::data_t) * size);
@@ -198,31 +203,34 @@ public:
         vector->loc = (uint32_t)cow_data_loc;
         vector->size = size + 1;
         trie->mem_lazy_free(data_loc, sizeof(tag_vector_t::data_t) * size);
-        return true;
+        return InsertResult::Success;
       } else if (token.value() != nullptr) {
-        return true;
+        return InsertResult::Success;
       }
-      return false;
+      return InsertResult::Fail;
     };
-    if (!insert_impl(current_->trie.get())) {
-      size_t accumulate_mem_size = 0;
-      for (trie_item_t* it = trie_arr_; it <= current_; ++it) {
-        accumulate_mem_size += it->trie->mem_size();
+    for (trie_item_t* it = trie_arr_; it <= current_; ++it) {
+      auto insert_result = insert_impl(current_->trie.get());
+      if (insert_result != InsertResult::Fail) {
+        return insert_result == InsertResult::Success;
       }
-      size_t new_trie_size =
-          std::max(accumulate_mem_size - trie_arr_->trie->mem_size() * 7 / 8,
-                   key.size() + VarintLength(value.size()) + value.size()) + 1024;
-      auto next = current_ + 1;
-      assert(next != trie_arr_ + max_trie_count);
-      next->accumulate_mem_size = accumulate_mem_size;
-      next->trie.reset(new terark::MainPatricia(sizeof(uint32_t), new_trie_size,
-                                                terark::Patricia::OneWriteMultiRead));
-      current_ = next;
-      bool ok = insert_impl(current_->trie.get());
-      assert(ok); (void)ok;
     }
+    size_t accumulate_mem_size = 0;
+    for (trie_item_t* it = trie_arr_; it <= current_; ++it) {
+      accumulate_mem_size += it->trie->mem_size();
+    }
+    size_t new_trie_size =
+      std::max(accumulate_mem_size - trie_arr_->trie->mem_size() * 7 / 8,
+        key.size() + VarintLength(value.size()) + value.size()) + 1024;
+    auto next = current_ + 1;
+    assert(next != trie_arr_ + max_trie_count);
+    next->accumulate_mem_size = accumulate_mem_size;
+    next->trie.reset(new terark::MainPatricia(sizeof(uint32_t), new_trie_size,
+      terark::Patricia::OneWriteMultiRead));
+    current_ = next;
+    auto insert_result = insert_impl(current_->trie.get());
+    assert(insert_result == InsertResult::Success); (void)insert_result;
     ++num_entries_;
-    //assert(false); // TODO
     return true;
   }
 
@@ -841,6 +849,8 @@ public:
   virtual bool IsInsertConcurrentlySupported() const override {
     return false;
   }
+
+  virtual bool CanHandleDuplicatedKey() const override { return true; }
 
 private:
   std::shared_ptr<class MemTableRepFactory> fallback_;
