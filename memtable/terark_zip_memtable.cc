@@ -814,6 +814,7 @@ public:
   virtual ~PTrieMemtableRepFactory() {}
 
   virtual MemTableRep* CreateMemTableRep(const MemTableRep::KeyComparator& key_cmp,
+                                         bool needs_dup_key_check,
                                          Allocator* allocator,
                                          const SliceTransform* transform,
                                          Logger* logger) override {
@@ -823,21 +824,26 @@ public:
       return new PTrieRep(allocator->BlockSize() * 9 / 8, key_cmp, allocator,
                           transform);
     } else {
-      return fallback_->CreateMemTableRep(key_cmp, allocator, transform, logger);
+      return fallback_->CreateMemTableRep(key_cmp, needs_dup_key_check,
+                                          allocator, transform, logger);
     }
   }
   virtual MemTableRep* CreateMemTableRep(
-      const MemTableRep::KeyComparator& key_cmp, Allocator* allocator,
+      const MemTableRep::KeyComparator& key_cmp,
+      bool needs_dup_key_check,
+      Allocator* allocator,
       const ImmutableCFOptions& ioptions,
       const MutableCFOptions& mutable_cf_options,
-      uint32_t column_family_id) {
+      uint32_t column_family_id)
+  override {
     auto icomp = key_cmp.icomparator();
     auto user_comparator = icomp->user_comparator();
     if (strcmp(user_comparator->Name(), BytewiseComparator()->Name()) == 0) {
       return new PTrieRep(mutable_cf_options.write_buffer_size * 9 / 8, key_cmp,
                           allocator, mutable_cf_options.prefix_extractor.get());
     } else {
-      return fallback_->CreateMemTableRep(key_cmp, allocator, ioptions,
+      return fallback_->CreateMemTableRep(key_cmp, needs_dup_key_check,
+                                          allocator, ioptions,
                                           mutable_cf_options, column_family_id);
     }
   }
