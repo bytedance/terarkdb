@@ -473,6 +473,7 @@ Status DBImpl::Recover(
         // Clear memtables if recovery failed
         for (auto cfd : *versions_->GetColumnFamilySet()) {
           cfd->CreateNewMemtable(*cfd->GetLatestMutableCFOptions(),
+                                 seq_per_batch_,
                                  kMaxSequenceNumber);
         }
       }
@@ -760,6 +761,7 @@ Status DBImpl::RecoverLogFiles(const std::vector<uint64_t>& log_numbers,
           flushed = true;
 
           cfd->CreateNewMemtable(*cfd->GetLatestMutableCFOptions(),
+                                 false, // needs_dup_key_check
                                  *next_sequence);
         }
       }
@@ -860,6 +862,7 @@ Status DBImpl::RecoverLogFiles(const std::vector<uint64_t>& log_numbers,
           flushed = true;
 
           cfd->CreateNewMemtable(*cfd->GetLatestMutableCFOptions(),
+                                 false, // needs_dup_key_check
                                  versions_->LastSequence());
         }
         data_seen = true;

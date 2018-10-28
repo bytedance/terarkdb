@@ -236,6 +236,7 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
                              immutable_db_options_.table_cache_numshardbits);
 
   versions_.reset(new VersionSet(dbname_, &immutable_db_options_, env_options_,
+                                 seq_per_batch,
                                  table_cache_.get(), write_buffer_manager_,
                                  &write_controller_));
   column_family_memtables_.reset(

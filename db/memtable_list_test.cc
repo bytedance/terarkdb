@@ -115,6 +115,7 @@ class MemTableListTest : public testing::Test {
     WriteController write_controller(10000000u);
 
     VersionSet versions(dbname, &immutable_db_options, env_options,
+                        false, // seq_per_batch
                         table_cache.get(), &write_buffer_manager,
                         &write_controller);
     std::vector<ColumnFamilyDescriptor> cf_descs;
@@ -213,7 +214,9 @@ TEST_F(MemTableListTest, GetTest) {
   ImmutableCFOptions ioptions(options);
 
   WriteBufferManager wb(options.db_write_buffer_size);
-  MemTable* mem = new MemTable(cmp, ioptions, MutableCFOptions(options), &wb,
+  MemTable* mem = new MemTable(cmp, ioptions, MutableCFOptions(options),
+                               false, // needs_dup_key_check
+                               &wb,
                                kMaxSequenceNumber, 0 /* column_family_id */);
   mem->Ref();
 
@@ -252,7 +255,9 @@ TEST_F(MemTableListTest, GetTest) {
 
   // Create another memtable and write some keys to it
   WriteBufferManager wb2(options.db_write_buffer_size);
-  MemTable* mem2 = new MemTable(cmp, ioptions, MutableCFOptions(options), &wb2,
+  MemTable* mem2 = new MemTable(cmp, ioptions, MutableCFOptions(options),
+                                false, // needs_dup_key_check
+                                &wb2,
                                 kMaxSequenceNumber, 0 /* column_family_id */);
   mem2->Ref();
 
@@ -320,7 +325,9 @@ TEST_F(MemTableListTest, GetFromHistoryTest) {
   ImmutableCFOptions ioptions(options);
 
   WriteBufferManager wb(options.db_write_buffer_size);
-  MemTable* mem = new MemTable(cmp, ioptions, MutableCFOptions(options), &wb,
+  MemTable* mem = new MemTable(cmp, ioptions, MutableCFOptions(options),
+                               false, // needs_dup_key_check
+                               &wb,
                                kMaxSequenceNumber, 0 /* column_family_id */);
   mem->Ref();
 
@@ -399,7 +406,9 @@ TEST_F(MemTableListTest, GetFromHistoryTest) {
 
   // Create another memtable and write some keys to it
   WriteBufferManager wb2(options.db_write_buffer_size);
-  MemTable* mem2 = new MemTable(cmp, ioptions, MutableCFOptions(options), &wb2,
+  MemTable* mem2 = new MemTable(cmp, ioptions, MutableCFOptions(options),
+                                false, // needs_dup_key_check
+                                &wb2,
                                 kMaxSequenceNumber, 0 /* column_family_id */);
   mem2->Ref();
 
@@ -424,7 +433,9 @@ TEST_F(MemTableListTest, GetFromHistoryTest) {
 
   // Add a third memtable to push the first memtable out of the history
   WriteBufferManager wb3(options.db_write_buffer_size);
-  MemTable* mem3 = new MemTable(cmp, ioptions, MutableCFOptions(options), &wb3,
+  MemTable* mem3 = new MemTable(cmp, ioptions, MutableCFOptions(options),
+                                false, // needs_dup_key_check
+                                &wb3,
                                 kMaxSequenceNumber, 0 /* column_family_id */);
   mem3->Ref();
   list.Add(mem3, &to_delete);
@@ -499,7 +510,9 @@ TEST_F(MemTableListTest, FlushPendingTest) {
   std::vector<MemTable*> tables;
   MutableCFOptions mutable_cf_options(options);
   for (int i = 0; i < num_tables; i++) {
-    MemTable* mem = new MemTable(cmp, ioptions, mutable_cf_options, &wb,
+    MemTable* mem = new MemTable(cmp, ioptions, mutable_cf_options,
+                                 false, // needs_dup_key_check
+                                 &wb,
                                  kMaxSequenceNumber, 0 /* column_family_id */);
     mem->SetID(memtable_id++);
     mem->Ref();
@@ -751,7 +764,9 @@ TEST_F(MemTableListTest, FlushMultipleCFsTest) {
     uint64_t memtable_id = 0;
     for (int i = 0; i != num_tables_per_cf; ++i) {
       MemTable* mem =
-          new MemTable(cmp, ioptions, *(mutable_cf_options_list.back()), &wb,
+          new MemTable(cmp, ioptions, *(mutable_cf_options_list.back()),
+                       false, // needs_dup_key_check
+                       &wb,
                        kMaxSequenceNumber, cf_id);
       mem->SetID(memtable_id++);
       mem->Ref();
@@ -957,7 +972,9 @@ TEST_F(MemTableListTest, HasOlderAtomicFlush) {
     uint64_t memtable_id = 0;
     for (int i = 0; i != num_memtables_per_cf; ++i) {
       MemTable* mem =
-          new MemTable(cmp, ioptions, *(mutable_cf_options_list.back()), &wb,
+          new MemTable(cmp, ioptions, *(mutable_cf_options_list.back()),
+                       false, // needs_dup_key_check
+                       &wb,
                        kMaxSequenceNumber, cf_id);
       mem->SetID(memtable_id++);
       mem->Ref();

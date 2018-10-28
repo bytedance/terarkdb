@@ -312,7 +312,9 @@ MemTableRep::Iterator* VectorRep::GetIterator(Arena* arena) {
 } // anon namespace
 
 MemTableRep* VectorRepFactory::CreateMemTableRep(
-    const MemTableRep::KeyComparator& compare, Allocator* allocator,
+    const MemTableRep::KeyComparator& compare,
+    bool /*needs_dup_key_check*/,
+    Allocator* allocator,
     const SliceTransform*, Logger* /*logger*/) {
   return new VectorRep(compare, allocator, count_);
 }

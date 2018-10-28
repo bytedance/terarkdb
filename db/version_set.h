@@ -764,7 +764,9 @@ class BaseReferencedVersionBuilder;
 class VersionSet {
  public:
   VersionSet(const std::string& dbname, const ImmutableDBOptions* db_options,
-             const EnvOptions& env_options, Cache* table_cache,
+             const EnvOptions& env_options,
+             bool seq_per_batch,
+             Cache* table_cache,
              WriteBufferManager* write_buffer_manager,
              WriteController* write_controller);
   ~VersionSet();
@@ -1088,6 +1090,8 @@ class VersionSet {
 
   std::vector<ObsoleteFileInfo> obsolete_files_;
   std::vector<std::string> obsolete_manifests_;
+
+  const bool seq_per_batch_;
 
   // env options for all reads and writes except compactions
   EnvOptions env_options_;

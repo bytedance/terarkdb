@@ -811,6 +811,7 @@ class RecoveryTestHelper {
     WriteController write_controller;
 
     versions.reset(new VersionSet(test->dbname_, &db_options, env_options,
+                                  false, // seq_per_batch
                                   table_cache.get(), &write_buffer_manager,
                                   &write_controller));
 

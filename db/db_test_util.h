@@ -184,10 +184,14 @@ class SpecialSkipListFactory : public MemTableRepFactory {
 
   using MemTableRepFactory::CreateMemTableRep;
   virtual MemTableRep* CreateMemTableRep(
-      const MemTableRep::KeyComparator& compare, Allocator* allocator,
+      const MemTableRep::KeyComparator& compare,
+      bool needs_dup_key_check,
+      Allocator* allocator,
       const SliceTransform* transform, Logger* /*logger*/) override {
     return new SpecialMemTableRep(
-        allocator, factory_.CreateMemTableRep(compare, allocator, transform, 0),
+        allocator,
+        factory_.CreateMemTableRep(compare, needs_dup_key_check,
+                                   allocator, transform, 0),
         num_entries_flush_);
   }
   virtual const char* Name() const override { return "SkipListFactory"; }

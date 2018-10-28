@@ -1405,7 +1405,7 @@ Status DBImpl::SwitchMemtable(ColumnFamilyData* cfd, WriteContext* context) {
 
     if (s.ok()) {
       SequenceNumber seq = versions_->LastSequence();
-      new_mem = cfd->ConstructNewMemtable(mutable_cf_options, seq);
+      new_mem = cfd->ConstructNewMemtable(mutable_cf_options, seq_per_batch_, seq);
       context->superversion_context.NewSuperVersion();
     }
 

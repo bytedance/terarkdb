@@ -448,6 +448,7 @@ class MemTableConstructor: public Constructor {
     ImmutableCFOptions ioptions(options_);
     memtable_ =
         new MemTable(internal_comparator_, ioptions, MutableCFOptions(options_),
+                     false, // needs_dup_key_check
                      wb, kMaxSequenceNumber, 0 /* column_family_id */);
     memtable_->Ref();
   }
@@ -463,7 +464,9 @@ class MemTableConstructor: public Constructor {
     delete memtable_->Unref();
     ImmutableCFOptions mem_ioptions(ioptions);
     memtable_ = new MemTable(internal_comparator_, mem_ioptions,
-                             MutableCFOptions(options_), write_buffer_manager_,
+                             MutableCFOptions(options_),
+                             false, // needs_dup_key_check
+                             write_buffer_manager_,
                              kMaxSequenceNumber, 0 /* column_family_id */);
     memtable_->Ref();
     int seq = 1;
@@ -2874,7 +2877,9 @@ TEST_F(MemTableTest, Simple) {
   ImmutableCFOptions ioptions(options);
   WriteBufferManager wb(options.db_write_buffer_size);
   MemTable* memtable =
-      new MemTable(cmp, ioptions, MutableCFOptions(options), &wb,
+      new MemTable(cmp, ioptions, MutableCFOptions(options),
+                   false, // needs_dup_key_check
+                   &wb,
                    kMaxSequenceNumber, 0 /* column_family_id */);
   memtable->Ref();
   WriteBatch batch;

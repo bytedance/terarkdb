@@ -300,16 +300,22 @@ class MemTableRepFactory {
   virtual ~MemTableRepFactory() {}
 
   virtual MemTableRep* CreateMemTableRep(const MemTableRep::KeyComparator&,
+                                         bool needs_dup_key_check,
                                          Allocator*, const SliceTransform*,
                                          Logger* logger) = 0;
   virtual MemTableRep* CreateMemTableRep(
-      const MemTableRep::KeyComparator& key_cmp, Allocator* allocator,
+      const MemTableRep::KeyComparator& key_cmp,
+      bool needs_dup_key_check,
+      Allocator* allocator,
       const SliceTransform* slice_transform, Logger* logger,
       uint32_t /* column_family_id */) {
-    return CreateMemTableRep(key_cmp, allocator, slice_transform, logger);
+    return CreateMemTableRep(key_cmp, needs_dup_key_check,
+        allocator, slice_transform, logger);
   }
   virtual MemTableRep* CreateMemTableRep(
-      const MemTableRep::KeyComparator& key_cmp, Allocator* allocator,
+      const MemTableRep::KeyComparator& key_cmp,
+      bool needs_dup_key_check,
+      Allocator* allocator,
       const ImmutableCFOptions& ioptions,
       const MutableCFOptions& mutable_cf_options,
       uint32_t /* column_family_id */);
@@ -340,6 +346,7 @@ class SkipListFactory : public MemTableRepFactory {
 
   using MemTableRepFactory::CreateMemTableRep;
   virtual MemTableRep* CreateMemTableRep(const MemTableRep::KeyComparator&,
+                                         bool needs_dup_key_check,
                                          Allocator*, const SliceTransform*,
                                          Logger* logger) override;
   virtual const char* Name() const override { return "SkipListFactory"; }
@@ -369,6 +376,7 @@ class VectorRepFactory : public MemTableRepFactory {
 
   using MemTableRepFactory::CreateMemTableRep;
   virtual MemTableRep* CreateMemTableRep(const MemTableRep::KeyComparator&,
+                                         bool needs_dup_key_check,
                                          Allocator*, const SliceTransform*,
                                          Logger* logger) override;
 

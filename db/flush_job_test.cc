@@ -34,6 +34,7 @@ class FlushJobTest : public testing::Test {
         table_cache_(NewLRUCache(50000, 16)),
         write_buffer_manager_(db_options_.db_write_buffer_size),
         versions_(new VersionSet(dbname_, &db_options_, env_options_,
+                                 false, // seq_per_batch
                                  table_cache_.get(), &write_buffer_manager_,
                                  &write_controller_)),
         shutting_down_(false),
@@ -137,6 +138,7 @@ TEST_F(FlushJobTest, NonEmpty) {
   JobContext job_context(0);
   auto cfd = versions_->GetColumnFamilySet()->GetDefault();
   auto new_mem = cfd->ConstructNewMemtable(*cfd->GetLatestMutableCFOptions(),
+                                           false, // needs_dup_key_check
                                            kMaxSequenceNumber);
   new_mem->Ref();
   auto inserted_keys = mock::MakeMockFile();
@@ -202,6 +204,7 @@ TEST_F(FlushJobTest, FlushMemTablesSingleColumnFamily) {
   std::vector<MemTable*> new_mems;
   for (size_t i = 0; i != num_mems; ++i) {
     MemTable* mem = cfd->ConstructNewMemtable(*cfd->GetLatestMutableCFOptions(),
+                                              false, // needs_dup_key_check
                                               kMaxSequenceNumber);
     mem->SetID(i);
     mem->Ref();
@@ -276,7 +279,9 @@ TEST_F(FlushJobTest, FlushMemtablesMultipleColumnFamilies) {
     smallest_seqs.push_back(curr_seqno);
     for (size_t i = 0; i != num_memtables[k]; ++i) {
       MemTable* mem = cfd->ConstructNewMemtable(
-          *cfd->GetLatestMutableCFOptions(), kMaxSequenceNumber);
+          *cfd->GetLatestMutableCFOptions(),
+          false, // needs_dup_key_check
+          kMaxSequenceNumber);
       mem->SetID(i);
       mem->Ref();
       mem->TEST_AtomicFlushSequenceNumber() = 123;
@@ -368,6 +373,7 @@ TEST_F(FlushJobTest, Snapshots) {
   JobContext job_context(0);
   auto cfd = versions_->GetColumnFamilySet()->GetDefault();
   auto new_mem = cfd->ConstructNewMemtable(*cfd->GetLatestMutableCFOptions(),
+                                           false, // needs_dup_key_check
                                            kMaxSequenceNumber);
 
   std::vector<SequenceNumber> snapshots;

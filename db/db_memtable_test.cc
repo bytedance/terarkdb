@@ -71,23 +71,27 @@ class MockMemTableRepFactory : public MemTableRepFactory {
  public:
   using MemTableRepFactory::CreateMemTableRep;
   virtual MemTableRep* CreateMemTableRep(const MemTableRep::KeyComparator& cmp,
+                                         bool needs_dup_key_check,
                                          Allocator* allocator,
                                          const SliceTransform* transform,
                                          Logger* logger) override {
     SkipListFactory factory;
     MemTableRep* skiplist_rep =
-        factory.CreateMemTableRep(cmp, allocator, transform, logger);
+        factory.CreateMemTableRep(cmp, needs_dup_key_check,
+                                  allocator, transform, logger);
     mock_rep_ = new MockMemTableRep(allocator, skiplist_rep);
     return mock_rep_;
   }
 
-virtual MemTableRep* CreateMemTableRep(const MemTableRep::KeyComparator& cmp,
+  virtual MemTableRep* CreateMemTableRep(const MemTableRep::KeyComparator& cmp,
+                                         bool needs_dup_key_check,
                                          Allocator* allocator,
                                          const SliceTransform* transform,
                                          Logger* logger,
                                          uint32_t column_family_id) override {
     last_column_family_id_ = column_family_id;
-    return CreateMemTableRep(cmp, allocator, transform, logger);
+    return CreateMemTableRep(cmp, needs_dup_key_check,
+                             allocator, transform, logger);
   }
   virtual const char* Name() const override { return "MockMemTableRepFactory"; }
 
@@ -143,7 +147,9 @@ TEST_F(DBMemTableTest, DuplicateSeq) {
   options.memtable_factory = factory;
   ImmutableCFOptions ioptions(options);
   WriteBufferManager wb(options.db_write_buffer_size);
-  MemTable* mem = new MemTable(cmp, ioptions, MutableCFOptions(options), &wb,
+  MemTable* mem = new MemTable(cmp, ioptions, MutableCFOptions(options),
+                               false, // needs_dup_key_check
+                               &wb,
                                kMaxSequenceNumber, 0 /* column_family_id */);
 
   // Write some keys and make sure it returns false on duplicates
@@ -183,7 +189,9 @@ TEST_F(DBMemTableTest, DuplicateSeq) {
   options.memtable_insert_with_hint_prefix_extractor.reset(
       new TestPrefixExtractor());  // which uses _ to extract the prefix
   ioptions = ImmutableCFOptions(options);
-  mem = new MemTable(cmp, ioptions, MutableCFOptions(options), &wb,
+  mem = new MemTable(cmp, ioptions, MutableCFOptions(options),
+                     false, // needs_dup_key_check
+                     &wb,
                      kMaxSequenceNumber, 0 /* column_family_id */);
   // Insert a duplicate key with _ in it
   res = mem->Add(seq, kTypeValue, "key_1", "value");
@@ -195,7 +203,9 @@ TEST_F(DBMemTableTest, DuplicateSeq) {
   // Test when InsertConcurrently will be invoked
   options.allow_concurrent_memtable_write = true;
   ioptions = ImmutableCFOptions(options);
-  mem = new MemTable(cmp, ioptions, MutableCFOptions(options), &wb,
+  mem = new MemTable(cmp, ioptions, MutableCFOptions(options),
+                     false, // needs_dup_key_check
+                     &wb,
                      kMaxSequenceNumber, 0 /* column_family_id */);
   MemTablePostProcessInfo post_process_info;
   res = mem->Add(seq, kTypeValue, "key", "value", true, &post_process_info);

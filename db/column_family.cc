@@ -895,17 +895,23 @@ uint64_t ColumnFamilyData::GetLiveSstFilesSize() const {
 }
 
 MemTable* ColumnFamilyData::ConstructNewMemtable(
-    const MutableCFOptions& mutable_cf_options, SequenceNumber earliest_seq) {
+    const MutableCFOptions& mutable_cf_options,
+    bool needs_dup_key_check,
+    SequenceNumber earliest_seq) {
   return new MemTable(internal_comparator_, ioptions_, mutable_cf_options,
+                      needs_dup_key_check,
                       write_buffer_manager_, earliest_seq, id_);
 }
 
 void ColumnFamilyData::CreateNewMemtable(
-    const MutableCFOptions& mutable_cf_options, SequenceNumber earliest_seq) {
+    const MutableCFOptions& mutable_cf_options,
+    bool needs_dup_key_check,
+    SequenceNumber earliest_seq) {
   if (mem_ != nullptr) {
     delete mem_->Unref();
   }
-  SetMemtable(ConstructNewMemtable(mutable_cf_options, earliest_seq));
+  SetMemtable(ConstructNewMemtable(
+      mutable_cf_options, needs_dup_key_check, earliest_seq));
   mem_->Ref();
 }
 

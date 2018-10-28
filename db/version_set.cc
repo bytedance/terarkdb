@@ -2750,7 +2750,9 @@ struct VersionSet::ManifestWriter {
 
 VersionSet::VersionSet(const std::string& dbname,
                        const ImmutableDBOptions* _db_options,
-                       const EnvOptions& storage_options, Cache* table_cache,
+                       const EnvOptions& storage_options,
+                       bool seq_per_batch,
+                       Cache* table_cache,
                        WriteBufferManager* write_buffer_manager,
                        WriteController* write_controller)
     : column_family_set_(
@@ -2769,6 +2771,7 @@ VersionSet::VersionSet(const std::string& dbname,
       prev_log_number_(0),
       current_version_number_(0),
       manifest_file_size_(0),
+      seq_per_batch_(seq_per_batch),
       env_options_(storage_options) {}
 
 void CloseTables(void* ptr, size_t) {
@@ -3722,7 +3725,9 @@ Status VersionSet::ReduceNumberOfLevels(const std::string& dbname,
                                         options->table_cache_numshardbits));
   WriteController wc(options->delayed_write_rate);
   WriteBufferManager wb(options->db_write_buffer_size);
-  VersionSet versions(dbname, &db_options, env_options, tc.get(), &wb, &wc);
+  const bool seq_per_batch = false;
+  VersionSet versions(dbname, &db_options, env_options,
+                      seq_per_batch, tc.get(), &wb, &wc);
   Status status;
 
   std::vector<ColumnFamilyDescriptor> dummy;
@@ -4462,6 +4467,7 @@ ColumnFamilyData* VersionSet::CreateColumnFamily(
   // GetLatestMutableCFOptions() is safe here without mutex since the
   // cfd is not available to client
   new_cfd->CreateNewMemtable(*new_cfd->GetLatestMutableCFOptions(),
+                             seq_per_batch_,
                              LastSequence());
   new_cfd->SetLogNumber(edit->log_number_);
   return new_cfd;

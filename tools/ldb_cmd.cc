@@ -942,7 +942,9 @@ void DumpManifestFile(std::string file, bool verbose, bool hex, bool json) {
   WriteController wc(options.delayed_write_rate);
   WriteBufferManager wb(options.db_write_buffer_size);
   ImmutableDBOptions immutable_db_options(options);
-  VersionSet versions(dbname, &immutable_db_options, sopt, tc.get(), &wb, &wc);
+  const bool seq_per_batch = false;
+  VersionSet versions(dbname, &immutable_db_options, sopt,
+                      seq_per_batch, tc.get(), &wb, &wc);
   Status s = versions.DumpManifest(options, file, verbose, hex, json);
   if (!s.ok()) {
     printf("Error in processing file %s %s\n", file.c_str(),
@@ -1649,7 +1651,9 @@ Status ReduceDBLevelsCommand::GetOldNumOfLevels(Options& opt,
   const InternalKeyComparator cmp(opt.comparator);
   WriteController wc(opt.delayed_write_rate);
   WriteBufferManager wb(opt.db_write_buffer_size);
-  VersionSet versions(db_path_, &db_options, soptions, tc.get(), &wb, &wc);
+  const bool seq_per_batch = false;
+  VersionSet versions(db_path_, &db_options, soptions,
+                      seq_per_batch, tc.get(), &wb, &wc);
   std::vector<ColumnFamilyDescriptor> dummy;
   ColumnFamilyDescriptor dummy_descriptor(kDefaultColumnFamilyName,
                                           ColumnFamilyOptions(opt));
