@@ -1453,6 +1453,8 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
     keyFile.disbuf();
     keyInput.attach(&keyFile);
 
+    key.assign(kvs.prefix.data(), kvs.prefix.size());
+
     valvec<byte_t> ignVal;
     size_t recId = 0, entryId = 0, bitPos = 0;
 
