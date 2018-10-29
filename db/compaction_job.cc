@@ -1816,7 +1816,8 @@ Status CompactionJob::OpenCompactionOutputFile(
       sub_compact->compaction->output_compression(),
       sub_compact->compaction->output_compression_opts(),
       sub_compact->compaction->output_level(), &sub_compact->compression_dict,
-      skip_filters, false /* ignore_key_type */, output_file_creation_time));
+      skip_filters, false /* ignore_key_type */, output_file_creation_time,
+      0 /* oldest_key_time */, sub_compact->compaction->compaction_purpose()));
   LogFlush(db_options_.info_log);
   return s;
 }
