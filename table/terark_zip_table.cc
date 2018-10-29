@@ -774,6 +774,9 @@ TerarkZipTableFactory::NewTableBuilder(
       keyPrefixLen = table_options_.keyPrefixLen;
     }
   }
+  if (table_builder_options.sst_purpose != kEssenceSst) {
+    keyPrefixLen = 0;
+  }
 #if defined(TERARK_SUPPORT_UINT64_COMPARATOR) && BOOST_ENDIAN_LITTLE_BYTE
   if (fstring(userCmp->Name()) == "rocksdb.Uint64Comparator") {
     keyPrefixLen = 0;
