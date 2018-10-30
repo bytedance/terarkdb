@@ -76,12 +76,14 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
       return GetValue();
     }
     WriteBatchIndexEntry* Next() {
+      iter.update_now();
       if (!iter.incr()) {
         return nullptr;
       }
       return GetValue();
     }
     WriteBatchIndexEntry* Prev() {
+      iter.update_now();
       if (!iter.decr()) {
         return nullptr;
       }
@@ -117,7 +119,7 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
       }
       auto vec = GetVector();
       if (iter.word() == find_key) {
-        index = terark::upper_bound_0(vec.data, vec.size, entry->offset) - 1;
+        index = terark::lower_bound_0(vec.data, vec.size, entry->offset);
         if (index != uint32_t(-1)) {
           return vec.data[index].value;
         }
@@ -127,7 +129,7 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
         vec = GetVector();
       }
       assert(iter.word() > find_key);
-      index = vec.size - 1;
+      index = 0;
       return vec.data[index].value;
     }
     WriteBatchIndexEntry* SeekForPrev(WriteBatchIndexEntry* entry) {
@@ -138,7 +140,7 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
       }
       auto vec = GetVector();
       if (iter.word() == find_key) {
-        index = terark::lower_bound_0(vec.data, vec.size, entry->offset);
+        index = terark::upper_bound_0(vec.data, vec.size, entry->offset) - 1;
         if (index != vec.size) {
           return vec.data[index].value;
         }
@@ -148,7 +150,7 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
         vec = GetVector();
       }
       assert(iter.word() < find_key);
-      index = 0;
+      index = vec.size - 1;
       return vec.data[index].value;
     }
     WriteBatchIndexEntry* SeekToFirst() {
@@ -156,7 +158,7 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
         return nullptr;
       }
       auto vec = GetVector();
-      index = vec.size - 1;
+      index = 0;
       return vec.data[index].value;
     }
     WriteBatchIndexEntry* SeekToLast() {
@@ -164,32 +166,35 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
         return nullptr;
       }
       auto vec = GetVector();
-      index = 0;
+      index = vec.size - 1;
       return vec.data[index].value;
     }
     WriteBatchIndexEntry* Next() {
-      if (index-- == 0) {
-        if (!iter.incr()) {
-          return nullptr;
-        }
-        auto vec = GetVector();
-        index = vec.size - 1;
-        return vec.data[index].value;
-      } else {
-        auto vec = GetVector();
-        return vec.data[index].value;
-      }
-    }
-    WriteBatchIndexEntry* Prev() {
+      iter.update_now();
       auto vec = GetVector();
       if (++index == vec.size) {
-        if (!iter.decr()) {
+        if (!iter.incr()) {
           return nullptr;
         }
         vec = GetVector();
         index = 0;
       }
       return vec.data[index].value;
+    }
+    WriteBatchIndexEntry* Prev() {
+      iter.update_now();
+      if (index-- == 0) {
+        if (!iter.decr()) {
+          return nullptr;
+        }
+        auto vec = GetVector();
+        index = vec.size - 1;
+        return vec.data[index].value;
+      }
+      else {
+        auto vec = GetVector();
+        return vec.data[index].value;
+      }
     }
   };
   typedef typename std::conditional<OverwriteKey,
