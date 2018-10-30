@@ -962,15 +962,15 @@ void CompactionJob::ProcessEssenceCompaction(SubcompactionState* sub_compact) {
       snapshot_checker_, compact_->compaction->level(),
       db_options_.statistics.get(), shutting_down_);
 
+  std::unique_ptr<CompactionFilter> compaction_filter_from_factory2 = nullptr;
   if (!cfd->ioptions()->filter_idempotent) {
     compaction_filter = cfd->ioptions()->compaction_filter;
     if (compaction_filter == nullptr) {
-      compaction_filter_from_factory =
+      compaction_filter_from_factory2 =
           sub_compact->compaction->CreateCompactionFilter();
-      compaction_filter = compaction_filter_from_factory.get();
+      compaction_filter = compaction_filter_from_factory2.get();
     }
   }
-
   MergeHelper merge2(
       env_, cfd->user_comparator(), cfd->ioptions()->merge_operator,
       compaction_filter, db_options_.info_log.get(),
