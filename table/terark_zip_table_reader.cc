@@ -263,8 +263,10 @@ class TerarkZipTableIterator : public TerarkZipTableIndexIterator {
 protected:
   const TableReaderOptions* table_reader_options_;
   SequenceNumber          global_seqno_;
-  size_t                  key_length_;
   uint64_t                key_tag_;
+  byte_t*                 key_ptr_;
+  size_t                  key_length_;
+  size_t                  value_length_;
   terark::BlobStore::CacheOffsets* cache_offsets_;
   Slice                   user_value_;
   ZipValueType            zip_value_type_;
@@ -292,11 +294,13 @@ public:
       iter_->SetInvalid();
     }
     pinned_iters_mgr_ = NULL;
+    key_tag_ = 0;
+    key_ptr_ = nullptr;
+    key_length_ = 0;
+    value_length_ = 0;
+    cache_offsets_ = NULL;
     value_index_ = 0;
     value_count_ = 0;
-    key_length_ = 0;
-    key_tag_ = 0;
-    cache_offsets_ = NULL;
   }
 
   void SetPinnedItersMgr(PinnedIteratorsManager* pinned_iters_mgr) {
@@ -364,7 +368,7 @@ public:
 
   Slice key() const override {
     assert(iter_->Valid());
-    return Slice((const char*)ValueBuf().data(), key_length_);
+    return Slice((const char*)key_ptr_, key_length_);
   }
 
   Slice value() const override {
@@ -472,10 +476,13 @@ protected:
   void SetIterInvalid() {
     if (iter_)
       iter_->SetInvalid();
+    key_tag_ = 0;
+    key_ptr_ = nullptr;
+    key_length_ = 0;
+    value_length_ = 0;
+    invalidate_offsets_cache();
     value_index_ = 0;
     value_count_ = 0;
-    key_length_ = 0;
-    invalidate_offsets_cache();
   }
   virtual void invalidate_offsets_cache() = 0;
   virtual bool IndexIterSeekToFirst() {
@@ -512,27 +519,20 @@ protected:
     if (hasRecord) {
       auto& value_buf = ValueBuf();
       fstring user_key = iter_->key();
-      size_t aligned_key_length;
       try {
         TryPinBuffer(ValueBuf());
         size_t recId = iter_->id();
         zip_value_type_ = subReader_->type_.size()
           ? ZipValueType(subReader_->type_[recId])
           : ZipValueType::kZeroSeq;
-        size_t estimate_cap = 0, mulnum_size = 0;
-        if (ZipValueType::kMulti == zip_value_type_) {
-          estimate_cap += sizeof(uint32_t); // for offsets[valnum_]
-          mulnum_size = 4;
-        }
         key_length_ = subReader_->prefix_.size() + subReader_->commonPrefix_.size() +
                       user_key.size() + sizeof key_tag_;
-        aligned_key_length = terark::align_up(key_length_, 4);
-        estimate_cap += aligned_key_length + subReader_->estimateUnzipCap_;
-        value_buf.ensure_capacity(estimate_cap);
-        value_buf.assign(subReader_->prefix_.data(), subReader_->prefix_.size());
-        value_buf.append(subReader_->commonPrefix_.data(), subReader_->commonPrefix_.size());
-        value_buf.append(user_key.data(), user_key.size());
-        value_buf.resize(aligned_key_length + mulnum_size);
+        size_t mulnum_size = 0;
+        if (ZipValueType::kMulti == zip_value_type_) {
+          mulnum_size = sizeof(uint32_t); // for offsets[valnum_]
+        }
+        value_buf.ensure_capacity(key_length_ + subReader_->estimateUnzipCap_ + mulnum_size);
+        value_buf.resize_no_init(mulnum_size);
         subReader_->GetRecordAppend(recId, cache_offsets_);
       }
       catch (const std::exception& ex) { // crc checksum error
@@ -542,9 +542,8 @@ protected:
         return false;
       }
       if (ZipValueType::kMulti == zip_value_type_) {
-        auto data_ptr = value_buf.data() + aligned_key_length;
-        ZipValueMultiValue::decode(data_ptr, value_buf.size() - aligned_key_length, &value_count_);
-        uint32_t* offsets = (uint32_t*)data_ptr;
+        ZipValueMultiValue::decode(value_buf, &value_count_);
+        uint32_t* offsets = (uint32_t*)value_buf.data();
         size_t pos = 0;
         char* base = (char*)(offsets + value_count_ + 1);
         for (size_t i = 0; i < value_count_; ++i) {
@@ -561,6 +560,8 @@ protected:
         value_count_ = 1;
       }
       value_index_ = 0;
+      value_length_ = value_buf.size();
+      value_buf.resize_no_init(value_length_ + key_length_ * value_count_);
       return true;
     }
     else {
@@ -572,7 +573,6 @@ protected:
     assert(status_.ok());
     assert(iter_->id() < subReader_->index_->NumKeys());
     auto& value_buf = ValueBuf();
-    size_t aligned_key_length = terark::align_up(key_length_, 4);
     switch (zip_value_type_) {
     default:
       status_ = Status::Aborted("TerarkZipTableIterator::DecodeCurrKeyValue()",
@@ -582,36 +582,48 @@ protected:
     case ZipValueType::kZeroSeq:
       assert(0 == value_index_);
       assert(1 == value_count_);
+      key_ptr_ = value_buf.data() + value_length_;
       key_tag_ = PackSequenceAndType(global_seqno_, kTypeValue);
-      user_value_ = SliceOf(fstring(value_buf).substr(aligned_key_length));
+      user_value_ = SliceOf(fstring(value_buf).substr(0, value_length_));
       break;
     case ZipValueType::kValue: // should be a kTypeValue, the normal case
       assert(0 == value_index_);
       assert(1 == value_count_);
+      key_ptr_ = value_buf.data() + value_length_;
       // little endian uint64_t
-      key_tag_ = PackSequenceAndType(*(uint64_t*)(value_buf.data() + aligned_key_length) & kMaxSequenceNumber,
+      key_tag_ = PackSequenceAndType(*(uint64_t*)value_buf.data() & kMaxSequenceNumber,
                                      kTypeValue);
-      user_value_ = SliceOf(fstring(value_buf).substr(aligned_key_length + 7));
+      user_value_ = SliceOf(fstring(value_buf).substr(7, value_length_ - 7));
       break;
     case ZipValueType::kDelete:
       assert(0 == value_index_);
       assert(1 == value_count_);
+      key_ptr_ = value_buf.data() + value_length_;
       // little endian uint64_t
-      key_tag_ = PackSequenceAndType(*(uint64_t*)(value_buf.data() + aligned_key_length) & kMaxSequenceNumber,
+      key_tag_ = PackSequenceAndType(*(uint64_t*)value_buf.data() & kMaxSequenceNumber,
                                      kTypeDeletion);
-      user_value_ = SliceOf(fstring(value_buf).substr(aligned_key_length + 7));
+      user_value_ = SliceOf(fstring(value_buf).substr(7, value_length_ - 7));
       break;
     case ZipValueType::kMulti: { // more than one value
-      auto zmValue = (const ZipValueMultiValue*)(value_buf.data() + aligned_key_length);
+      auto zmValue = (const ZipValueMultiValue*)value_buf.data();
       assert(0 != value_count_);
       assert(value_index_ < value_count_);
+      key_ptr_ = value_buf.data() + value_length_ + key_length_ * value_index_;
       Slice d = zmValue->getValueData(value_index_, value_count_);
       key_tag_ = unaligned_load<SequenceNumber>(d.data());
       d.remove_prefix(sizeof(SequenceNumber));
       user_value_ = d;
       break; }
     }
-    *(uint64_t*)&*(value_buf.data() + key_length_  - 8) = key_tag_;
+    byte_t* key_ptr = key_ptr_;
+    fstring user_key = iter_->key();
+    memcpy(key_ptr, subReader_->prefix_.data(), subReader_->prefix_.size());
+    key_ptr += subReader_->prefix_.size();
+    memcpy(key_ptr, subReader_->commonPrefix_.data(), subReader_->commonPrefix_.size());
+    key_ptr += subReader_->commonPrefix_.size();
+    memcpy(key_ptr, user_key.data(), user_key.size());
+    key_ptr += user_key.size();
+    EncodeFixed64((char*)key_ptr, key_tag_);
   }
 };
 
@@ -666,8 +678,7 @@ public:
   void DecodeCurrKeyValue() override {
     base_t::DecodeCurrKeyValue();
     assert(key_length_ == 16);
-    auto& key_buf = ValueBuf();
-    uint64_t& u64_key = *(uint64_t*)key_buf.data();
+    uint64_t& u64_key = *(uint64_t*)key_ptr_;
     u64_key = terark::byte_swap(u64_key);
   }
 };
@@ -689,21 +700,13 @@ protected:
   typedef TerarkZipTableIterator<reverse> base_t;
   using base_t::subReader_;
   using base_t::iter_;
-  using base_t::key_length_;
-  using base_t::key_tag_;
-  using base_t::value_count_;
-  using base_t::value_index_;
   using base_t::status_;
   using base_t::invalidate_offsets_cache;
 
-  using base_t::ValueBuf;
   using base_t::SeekToAscendingFirst;
   using base_t::SeekToAscendingLast;
   using base_t::SetIterInvalid;
-  using base_t::TryPinBuffer;
   using base_t::SeekInternal;
-  using base_t::UnzipIterRecord;
-  using base_t::DecodeCurrKeyValue;
 
 public:
   bool Valid() const override {
