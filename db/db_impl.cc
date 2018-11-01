@@ -95,6 +95,10 @@
 #include "util/stop_watch.h"
 #include "util/string_util.h"
 #include "util/sync_point.h"
+#ifndef _MSC_VER
+# include <sys/unistd.h>
+# include <table/terark_zip_weak_function.h>
+#endif
 
 namespace rocksdb {
 const std::string kDefaultColumnFamilyName("default");
@@ -1433,6 +1437,26 @@ Status DBImpl::CreateColumnFamily(const ColumnFamilyOptions& cf_options,
                                   const std::string& column_family,
                                   ColumnFamilyHandle** handle) {
   assert(handle != nullptr);
+#ifndef _MSC_VER
+  const char* terarkdb_localTempDir = getenv("TerarkZipTable_localTempDir");
+  if (terarkdb_localTempDir) {
+    if (TerarkZipCFOptionsFromEnv && TerarkZipIsBlackListCF) {
+      if (::access(terarkdb_localTempDir, R_OK | W_OK) != 0) {
+        return Status::InvalidArgument(
+            "Must exists, and Permission ReadWrite is required on "
+            "env TerarkZipTable_localTempDir",
+            terarkdb_localTempDir);
+      }
+      if (!TerarkZipIsBlackListCF(column_family)) {
+        TerarkZipCFOptionsFromEnv(const_cast<ColumnFamilyOptions&>(cf_options));
+
+        return Status::InvalidArgument(
+            "env TerarkZipTable_localTempDir is defined, "
+            "but dynamic libterark-zip-rocksdb is not loaded");
+      }
+    }
+  }
+#endif
   Status s = CreateColumnFamilyImpl(cf_options, column_family, handle);
   if (s.ok()) {
     s = WriteOptionsFile(true /*need_mutex_lock*/,

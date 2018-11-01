@@ -11,6 +11,10 @@
 #include "db/merge_context.h"
 #include "db/range_del_aggregator.h"
 #include "monitoring/perf_context_imp.h"
+#ifndef _MSC_VER
+# include <sys/unistd.h>
+# include <table/terark_zip_weak_function.h>
+#endif
 
 namespace rocksdb {
 
@@ -158,6 +162,24 @@ Status DB::OpenForReadOnly(
   handles->clear();
 
   SuperVersionContext sv_context(/* create_superversion */ true);
+#ifndef _MSC_VER
+  const char* terarkdb_localTempDir = getenv("TerarkZipTable_localTempDir");
+  if (terarkdb_localTempDir) {
+    if (::access(terarkdb_localTempDir, R_OK | W_OK) != 0) {
+      return Status::InvalidArgument(
+          "Must exists, and Permission ReadWrite is required on "
+          "env TerarkZipTable_localTempDir",
+          terarkdb_localTempDir);
+    }
+    if (TerarkZipMultiCFOptionsFromEnv) {
+      TerarkZipMultiCFOptionsFromEnv(db_options, column_families);
+    } else {
+      return Status::InvalidArgument(
+          "env TerarkZipTable_localTempDir is defined, "
+          "but dynamic libterark-zip-rocksdb is not loaded");
+    }
+  }
+#endif
   DBImplReadOnly* impl = new DBImplReadOnly(db_options, dbname);
   impl->mutex_.Lock();
   Status s = impl->Recover(column_families, true /* read only */,
