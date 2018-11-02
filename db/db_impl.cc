@@ -2526,6 +2526,9 @@ Status DBImpl::DeleteFilesInRanges(ColumnFamilyHandle* column_family,
           }
         } else {
           for (auto f : vstorage->LevelFiles(i)) {
+            if (f->being_compacted) {
+              continue;
+            }
             status = map_builder.Build({CompactionInputFiles{i, {f}}},
                                        deleted_range, {}, kMapSst, i,
                                        f->fd.GetPathId(), vstorage, cfd, &edit);
