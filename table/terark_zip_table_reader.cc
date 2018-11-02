@@ -430,7 +430,8 @@ protected:
     else {
       bool ok;
       int cmp; // compare(iterKey, searchKey)
-      ok = iter_->Seek(fstringOf(pikey.user_key).substr(cplen));
+      auto seek_key = fstringOf(pikey.user_key).substr(cplen);
+      ok = iter_->Seek(seek_key);
       if (reverse) {
         if (!ok) {
           // searchKey is reverse_bytewise less than all keys in database
@@ -440,7 +441,7 @@ protected:
           cmp = -1;
         }
         else {
-          cmp = SliceOf(iter_->key()).compare(SubStr(pikey.user_key, cplen));
+          cmp = terark::fstring_func::compare3()(iter_->key(), seek_key);
           if (cmp != 0) {
             assert(cmp > 0);
             iter_->Prev();
@@ -451,7 +452,7 @@ protected:
       else {
         cmp = 0;
         if (ok)
-          cmp = SliceOf(iter_->key()).compare(SubStr(pikey.user_key, cplen));
+          cmp = terark::fstring_func::compare3()(iter_->key(), seek_key);
       }
       if (UnzipIterRecord(ok)) {
         if (0 == cmp) {
