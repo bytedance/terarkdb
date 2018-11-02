@@ -350,7 +350,7 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
   }
 };
 
-const WriteBatchEntryIndexFactory* WriteBatchEntryPTrieIndexFactory(const WriteBatchEntryIndexFactory* fallback) {
+const WriteBatchEntryIndexFactory* patricia_WriteBatchEntryIndexFactory(const WriteBatchEntryIndexFactory* fallback) {
   class WriteBatchEntryPTrieIndexContext : public WriteBatchEntryIndexContext {
    public:
     WriteBatchEntryIndexContext* fallback_context;

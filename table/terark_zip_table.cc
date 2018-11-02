@@ -589,7 +589,18 @@ SingleTerarkZipTableFactory(const TerarkZipTableOptions& tzto,
   return factory;
 }
 
-inline static
+bool IsForwardBytewiseComparator(const Comparator* cmp) {
+#if 1
+  const fstring name = cmp->Name();
+  if (name.startsWith("RocksDB_SE_")) {
+    return true;
+  }
+  return name == "leveldb.BytewiseComparator";
+#else
+  return BytewiseComparator() == cmp;
+#endif
+}
+
 bool IsBytewiseComparator(const Comparator* cmp) {
 #if 1
   const fstring name = cmp->Name();

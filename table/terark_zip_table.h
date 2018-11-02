@@ -11,10 +11,12 @@
 #define TERARK_ZIP_TABLE_H_
 
 #include <string>
+#include <unordered_map>
 #include <vector>
 #include <memory>
 #include <stdio.h>
 
+#include "rocksdb/status.h"
 
 #define TerocksPrivateCode
 #if defined(TerocksPrivateCode)
@@ -150,10 +152,13 @@ TerarkZipMultiCFOptionsFromEnv(const struct DBOptions& db_options,
       const std::vector<struct ColumnFamilyDescriptor>& cfvec);
 
 const class WriteBatchEntryIndexFactory*
-WriteBatchEntryPTrieIndexFactory(const WriteBatchEntryIndexFactory* fallback = nullptr);
+patricia_WriteBatchEntryIndexFactory(const WriteBatchEntryIndexFactory* fallback = nullptr);
 
 class MemTableRepFactory*
 NewPatriciaTrieRepFactory(std::shared_ptr<class MemTableRepFactory> fallback = nullptr);
+
+class MemTableRepFactory*
+NewPatriciaTrieRepFactory(const std::unordered_map<std::string, std::string>& options, Status* s);
 
 class TableFactory*
 NewTerarkZipTableFactory(const TerarkZipTableOptions&,

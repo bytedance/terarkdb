@@ -15,6 +15,7 @@
 
 #include "db/memtable.h"
 #include "rocksdb/memtablerep.h"
+#include "terark_zip_internal.h"
 #include "util/arena.h"
 #include <terark/fsa/dynamic_patricia_trie.inl>
 #include <terark/heap_ext.hpp>
@@ -820,7 +821,7 @@ public:
                                          Logger* logger) override {
     auto icomp = key_cmp.icomparator();
     auto user_comparator = icomp->user_comparator();
-    if (strcmp(user_comparator->Name(), BytewiseComparator()->Name()) == 0) {
+    if (IsForwardBytewiseComparator(user_comparator)) {
       return new PTrieRep(allocator->BlockSize() * 9 / 8, key_cmp, allocator,
                           transform);
     } else {
@@ -838,7 +839,7 @@ public:
   override {
     auto icomp = key_cmp.icomparator();
     auto user_comparator = icomp->user_comparator();
-    if (strcmp(user_comparator->Name(), BytewiseComparator()->Name()) == 0) {
+    if (IsForwardBytewiseComparator(user_comparator)) {
       return new PTrieRep(mutable_cf_options.write_buffer_size * 9 / 8, key_cmp,
                           allocator, mutable_cf_options.prefix_extractor.get());
     } else {
@@ -868,6 +869,20 @@ MemTableRepFactory*
 NewPatriciaTrieRepFactory(std::shared_ptr<class MemTableRepFactory> fallback) {
   if (!fallback) {
     fallback.reset(new SkipListFactory());
+  }
+  return new PTrieMemtableRepFactory(fallback);
+}
+
+MemTableRepFactory*
+NewPatriciaTrieRepFactory(const std::unordered_map<std::string, std::string>& options, Status* s) {
+  auto f = options.find("fallback");
+  std::shared_ptr<class MemTableRepFactory> fallback;
+  if (f != options.end() && f->second != "patricia") {
+    fallback.reset(CreateMemTableRepFactory(f->second, options, s));
+    if (!s->ok()) {
+      *s = Status::InvalidArgument("NewPatriciaTrieRepFactory", s->getState());
+      return nullptr;
+    }
   }
   return new PTrieMemtableRepFactory(fallback);
 }

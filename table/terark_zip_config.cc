@@ -284,9 +284,6 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo) {
 
   tzo.singleIndexMemLimit = std::min<size_t>(tzo.singleIndexMemLimit, 0x1E0000000);
 
-  cfo.memtable_factory.reset(NewPatriciaTrieRepFactory());
-
-  WriteBatchEntryIndexFactoryRegister("patricia", WriteBatchEntryPTrieIndexFactory());
   cfo.table_factory = SingleTerarkZipTableFactory(tzo,
     std::shared_ptr<TableFactory>(NewAdaptiveTableFactory()));
   const char* compaction_style = "Universal";
@@ -400,5 +397,8 @@ TerarkZipMultiCFOptionsFromEnv(const DBOptions& db_options,
     TerarkZipDBOptionsFromEnv(auto_const_cast(db_options));
   }
 }
+
+ROCKSDB_REGISTER_MEM_TABLE("patricia", PatriciaTrieRepFactory);
+ROCKSDB_REGISTER_WRITE_BATCH_WITH_INDEX(patricia);
 
 }

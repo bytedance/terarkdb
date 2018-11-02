@@ -90,6 +90,10 @@ inline ByteArrayView SubStr(const ByteArrayView& x, size_t pos) {
   return ByteArrayView(x.data() + pos, x.size() - pos);
 }
 
+bool IsForwardBytewiseComparator(const Comparator* cmp);
+
+bool IsBytewiseComparator(const Comparator* cmp);
+
 #if defined(TerocksPrivateCode)
 
 struct LicenseInfo {
