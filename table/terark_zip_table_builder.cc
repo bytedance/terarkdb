@@ -309,6 +309,10 @@ uint64_t TerarkZipTableBuilder::FileSize() const {
 
 TableProperties TerarkZipTableBuilder::GetTableProperties() const {
   TableProperties ret = properties_;
+  if (!closed_) {
+    // don't call MyRocksTablePropertiesCollectorHack before Finish()
+    return ret;
+  }
   for (const auto& collector : collectors_) {
     for (const auto& prop : collector->GetReadableProperties()) {
       ret.readable_properties.insert(prop);
@@ -1489,7 +1493,7 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
         TERARK_RT_assert(ParseInternalKey(curKey, &pIKey), std::logic_error);
         varNum = kvs.valueBits.one_seq_len(bitPos); assert(varNum >= 1);
         cmpRet = ic.Compare(curKey, bufKey);
-        if (varNum == 1) { // single record contains {value, del, other{sglDel, CFBI£¬BI}}
+        if (varNum == 1) { // single record contains {value, del, other{sglDel, CFBI, BI}}
           if (cmpRet == 0) { // curKey == bufKey
             if (pIKey.sequence == 0 && pIKey.type == kTypeValue) {
               bzvType.set0(recId, size_t(ZipValueType::kZeroSeq));
