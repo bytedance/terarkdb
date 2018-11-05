@@ -735,6 +735,7 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
             if (output_level != input_level.level) {
               edit->DeleteFile(input_level.level, file_number);
               edit->AddFile(output_level, *f);
+              assert(f->table_reader_handle == nullptr);
             }
             sst_live.erase(file_number);
           } else {
@@ -743,7 +744,11 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
         }
       }
       for (auto& pair : sst_live) {
-        edit->AddFile(output_level, *pair.second);
+        auto f = pair.second;
+        edit->AddFile(output_level, f->fd.GetNumber(), f->fd.GetPathId(),
+                      f->fd.file_size, f->smallest, f->largest,
+                      f->fd.smallest_seqno, f->fd.largest_seqno,
+                      f->marked_for_compaction, f->sst_purpose, f->sst_depend);
       }
       return s;
     }

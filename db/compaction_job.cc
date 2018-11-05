@@ -1669,6 +1669,7 @@ Status CompactionJob::InstallCompactionResults(
                                    include_start, include_end);
         for (auto& output : sub_compact.outputs) {
           added_files.emplace_back(&output.meta);
+          compaction->AddOutputTableFileNumber(output.meta.fd.GetNumber());
         }
       }
     }
@@ -1687,6 +1688,7 @@ Status CompactionJob::InstallCompactionResults(
       current->meta = file_meta;
       current->finished = true;
       current->table_properties.reset(prop.release());
+      compaction->AddOutputTableFileNumber(file_meta.fd.GetNumber());
     }
   } else {
     // Add compaction inputs
@@ -1695,6 +1697,7 @@ Status CompactionJob::InstallCompactionResults(
     for (const auto& sub_compact : compact_->sub_compact_states) {
       for (const auto& out : sub_compact.outputs) {
         compaction->edit()->AddFile(compaction->output_level(), out.meta);
+        compaction->AddOutputTableFileNumber(out.meta.fd.GetNumber());
       }
     }
   }

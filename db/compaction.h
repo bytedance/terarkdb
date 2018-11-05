@@ -304,6 +304,14 @@ class Compaction {
     output_table_properties_ = std::move(tp);
   }
 
+  bool IsNewOutputTable(uint64_t file_number) {
+    return new_output_tables_.count(file_number) > 0;
+  }
+
+  void AddOutputTableFileNumber(uint64_t file_number) {
+    new_output_tables_.emplace(file_number);
+  }
+
   Slice GetSmallestUserKey() const { return smallest_user_key_; }
 
   Slice GetLargestUserKey() const { return largest_user_key_; }
@@ -404,6 +412,9 @@ class Compaction {
 
   // table properties of output files
   TablePropertiesCollection output_table_properties_;
+
+  // new output tables
+  std::unordered_set<uint64_t> new_output_tables_;
 
   // smallest user keys in compaction
   Slice smallest_user_key_;
