@@ -3,6 +3,7 @@
 //  LICENSE file in the root directory of this source tree. An additional grant
 //  of patent rights can be found in the PATENTS file in the same directory.
 
+#include "terark_zip_internal.h"
 #include "util/arena.h"
 #include "util/coding.h"
 #include "utilities/write_batch_with_index/write_batch_with_index_internal.h"
@@ -380,7 +381,7 @@ const WriteBatchEntryIndexFactory* patricia_WriteBatchEntryIndexFactory(const Wr
                               const Comparator* c, Arena* a,
                               bool overwrite_key) const override {
       auto ptrie_ctx = static_cast<WriteBatchEntryPTrieIndexContext*>(ctx);
-      if (strcmp(c->Name(), BytewiseComparator()->Name()) != 0) {
+      if (!IsForwardBytewiseComparator(c)) {
         return fallback->New(ptrie_ctx->fallback_context, e, c, a, overwrite_key);
       } else if (overwrite_key) {
         typedef WriteBatchEntryPTrieIndex<true> index_t;
