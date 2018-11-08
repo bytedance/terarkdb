@@ -2510,6 +2510,7 @@ Status DBImpl::DeleteFilesInRanges(ColumnFamilyHandle* column_family,
         }
         return false;
       };
+      std::vector<FileMetaData*> deleted_files;
       for (int i = 0; i < cfd->NumberLevels(); i++) {
         if (vstorage->LevelFiles(i).empty()) {
           continue;
@@ -2519,7 +2520,7 @@ Status DBImpl::DeleteFilesInRanges(ColumnFamilyHandle* column_family,
           status = map_builder.Build(
               {CompactionInputFiles{i, vstorage->LevelFiles(i)}}, deleted_range,
               {}, kMapSst, i, vstorage->LevelFiles(i)[0]->fd.GetPathId(),
-              vstorage, cfd, &edit);
+              vstorage, cfd, &edit, nullptr, nullptr, &deleted_files);
           if (!status.ok()) {
             return status;
           }
@@ -2530,12 +2531,16 @@ Status DBImpl::DeleteFilesInRanges(ColumnFamilyHandle* column_family,
             }
             status = map_builder.Build({CompactionInputFiles{i, {f}}},
                                        deleted_range, {}, kMapSst, i,
-                                       f->fd.GetPathId(), vstorage, cfd, &edit);
+                                       f->fd.GetPathId(), vstorage, cfd, &edit,
+                                       nullptr, nullptr, &deleted_files);
             if (!status.ok()) {
               return status;
             }
           }
         }
+      }
+      for (auto f : deleted_files) {
+        f->being_compacted = true;
       }
     } else {
       for (size_t r = 0; r < n; r++) {

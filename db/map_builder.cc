@@ -558,7 +558,8 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
                          uint32_t output_path_id, VersionStorageInfo* vstorage,
                          ColumnFamilyData* cfd, VersionEdit* edit,
                          FileMetaData* file_meta_ptr,
-                         std::unique_ptr<TableProperties>* prop_ptr) {
+                         std::unique_ptr<TableProperties>* prop_ptr,
+                         std::vector<FileMetaData*> *deleted_files) {
   assert(compaction_purpose != kMapSst || deleted_range.empty() ||
          added_files.empty());
   assert(compaction_purpose != kLinkSst || !added_files.empty());
@@ -588,7 +589,6 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
   std::list<std::vector<RangeWithDepend>> level_ranges;
   MapSstElement map_element;
   FileMetaDataBoundBuilder bound_builder(cfd->internal_comparator());
-
   Status s;
 
   // load input files into level_ranges
@@ -706,7 +706,33 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
     }
     return s;
   }
+
+  auto edit_add_file = [edit](int level, const FileMetaData* f) {
+    // don't call edit->AddFile(level, *f)
+    // assert(!file_meta->table_reader_handle);
+    edit->AddFile(level, f->fd.GetNumber(), f->fd.GetPathId(),
+                  f->fd.file_size, f->smallest, f->largest,
+                  f->fd.smallest_seqno, f->fd.largest_seqno,
+                  f->marked_for_compaction, f->sst_purpose, f->sst_depend);
+  };
+  auto edit_del_file = [edit, deleted_files](int level, FileMetaData* f) {
+    edit->DeleteFile(level, f->fd.GetNumber());
+    if (deleted_files != nullptr) {
+      deleted_files->emplace_back(f);
+    }
+  };
   auto& ranges = level_ranges.front();
+  size_t stable_count = 0;
+  for (auto it = ranges.begin(); it != ranges.end(); ++it) {
+    stable_count += it->stable ? 1 : 0;
+  }
+  if (stable_count == ranges.size() && inputs.size() == 1 &&
+      inputs.front().files.size() == 1 &&
+      inputs.front().files.front()->sst_purpose == kMapSst) {
+    // all ranges stable, new map will equals to input map, done
+    return s;
+  }
+  // make sure level 0 files seqno no overlap
   if (output_level != 0 || ranges.size() == 1) {
     std::unordered_map<uint64_t, const FileMetaData*> sst_live;
     bool build_map_sst = false;
@@ -733,22 +759,18 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
           uint64_t file_number = f->fd.GetNumber();
           if (sst_live.count(file_number) > 0) {
             if (output_level != input_level.level) {
-              edit->DeleteFile(input_level.level, file_number);
-              edit->AddFile(output_level, *f);
-              assert(f->table_reader_handle == nullptr);
+              edit_del_file(input_level.level, f);
+              edit_add_file(output_level, f);
             }
             sst_live.erase(file_number);
           } else {
-            edit->DeleteFile(input_level.level, file_number);
+            edit_del_file(input_level.level, f);
           }
         }
       }
       for (auto& pair : sst_live) {
         auto f = pair.second;
-        edit->AddFile(output_level, f->fd.GetNumber(), f->fd.GetPathId(),
-                      f->fd.file_size, f->smallest, f->largest,
-                      f->fd.smallest_seqno, f->fd.largest_seqno,
-                      f->marked_for_compaction, f->sst_purpose, f->sst_depend);
+        edit_add_file(output_level, f);
       }
       return s;
     }
@@ -775,13 +797,15 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
   if (s.ok()) {
     for (auto& input_level : inputs) {
       for (auto f : input_level.files) {
-        edit->DeleteFile(input_level.level, f->fd.GetNumber());
+        edit_del_file(input_level.level, f);
       }
     }
     for (auto f : added_files) {
       edit->AddFile(-1, *f);
+      assert(f->table_reader_handle == nullptr);
     }
     edit->AddFile(output_level, file_meta);
+    assert(file_meta.table_reader_handle == nullptr);
   }
   if (file_meta_ptr != nullptr) {
     *file_meta_ptr = std::move(file_meta);

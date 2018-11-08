@@ -515,7 +515,7 @@ class VersionBuilder::Rep {
       }
     }
     for (auto f : depend_files_) {
-      files_meta.emplace_back(f, num_levels_);
+      files_meta.emplace_back(f, -1);
     }
 
     std::atomic<size_t> next_file_meta_idx(0);
@@ -528,12 +528,13 @@ class VersionBuilder::Rep {
 
         auto* file_meta = files_meta[file_idx].first;
         int level = files_meta[file_idx].second;
+        auto file_read_hist =
+            level > 0 ? internal_stats->GetFileReadHist(level) : nullptr;
         table_cache_->FindTable(
             env_options_, *(base_vstorage_->InternalComparator()),
             file_meta->fd, &file_meta->table_reader_handle, prefix_extractor,
             false /*no_io */, true /* record_read_stats */,
-            internal_stats->GetFileReadHist(level), false, level,
-            prefetch_index_and_filter_in_cache);
+            file_read_hist, false, level, prefetch_index_and_filter_in_cache);
         if (file_meta->table_reader_handle != nullptr) {
           // Load table_reader
           file_meta->fd.table_reader = table_cache_->GetTableReaderFromHandle(
