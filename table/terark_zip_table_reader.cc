@@ -380,6 +380,10 @@ public:
     return status_;
   }
 
+  uint64_t FileNumber() const override {
+    return table_reader_options_->file_number;
+  }
+
   bool IsKeyPinned() const {
     return pinned_iters_mgr_ && pinned_iters_mgr_->PinningEnabled();
   }
@@ -820,7 +824,7 @@ protected:
   }
 };
 
-Status TerarkZipTableTombstone::
+Status TerarkZipTableReaderBase::
 LoadTombstone(RandomAccessFileReader * file, uint64_t file_size) {
   BlockContents tombstoneBlock;
   Status s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber,
@@ -831,7 +835,7 @@ LoadTombstone(RandomAccessFileReader * file, uint64_t file_size) {
   return s;
 }
 
-InternalIterator* TerarkZipTableTombstone::
+InternalIterator* TerarkZipTableReaderBase::
 NewRangeTombstoneIterator(const ReadOptions & read_options) {
   if (tombstone_) {
     auto icomp = &GetTableReaderOptions().internal_comparator;

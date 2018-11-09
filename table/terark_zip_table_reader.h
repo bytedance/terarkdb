@@ -37,7 +37,7 @@ Status ReadMetaBlockAdapte(class RandomAccessFileReader* file,
   const std::string& meta_block_name,
   struct BlockContents* contents);
 
-class TerarkZipTableTombstone {
+class TerarkZipTableReaderBase : public TableReader, boost::noncopyable {
 
 private:
   std::shared_ptr<Block> tombstone_;
@@ -50,15 +50,10 @@ protected:
 
 public:
   virtual InternalIterator*
-    NewRangeTombstoneIterator(const ReadOptions& read_options);
-
-  virtual ~TerarkZipTableTombstone() {}
+    NewRangeTombstoneIterator(const ReadOptions& read_options) override;
 };
 
-class TerarkEmptyTableReader
-  : public TerarkZipTableTombstone
-  , public TableReader
-  , boost::noncopyable {
+class TerarkEmptyTableReader : public TerarkZipTableReaderBase {
   class Iter : public InternalIterator, boost::noncopyable {
   public:
     Iter() {}
@@ -89,7 +84,6 @@ public:
                 Arena* a, bool skip_filters, bool for_compaction) override {
     return a ? new(a->AllocateAligned(sizeof(Iter)))Iter() : new Iter();
   }
-  using TerarkZipTableTombstone::NewRangeTombstoneIterator;
   void Prepare(const Slice&) override {}
   Status Get(const ReadOptions& readOptions, const Slice& key, GetContext* get_context,
              const SliceTransform* prefix_extractor, bool skip_filters) override {
@@ -164,10 +158,7 @@ struct TerarkZipSubReader {
   * the record id is used to direct index a type enum(small integer) array,
   * the record id is also used to access the value store
   */
-class TerarkZipTableReader
-  : public TerarkZipTableTombstone
-  , public TableReader
-  , boost::noncopyable {
+class TerarkZipTableReader : public TerarkZipTableReaderBase {
 public:
   InternalIterator*
     NewIterator(const ReadOptions&, const SliceTransform* prefix_extractor,
@@ -175,8 +166,6 @@ public:
 
   template<bool reverse, bool ZipOffset>
   InternalIterator* NewIteratorImp(const ReadOptions&, Arena* a);
-
-  using TerarkZipTableTombstone::NewRangeTombstoneIterator;
 
   void Prepare(const Slice& target) override {}
 
@@ -229,10 +218,7 @@ private:
 };
 
 
-class TerarkZipTableMultiReader
-  : public TerarkZipTableTombstone
-  , public TableReader
-  , boost::noncopyable {
+class TerarkZipTableMultiReader : public TerarkZipTableReaderBase {
 public:
 
   InternalIterator*
@@ -242,7 +228,7 @@ public:
   template<bool reverse, bool ZipOffset>
   InternalIterator* NewIteratorImp(const ReadOptions&, Arena* a);
 
-  using TerarkZipTableTombstone::NewRangeTombstoneIterator;
+  using TerarkZipTableReaderBase::NewRangeTombstoneIterator;
 
   void Prepare(const Slice& target) override {}
 
