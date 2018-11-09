@@ -559,7 +559,7 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
                          ColumnFamilyData* cfd, VersionEdit* edit,
                          FileMetaData* file_meta_ptr,
                          std::unique_ptr<TableProperties>* prop_ptr,
-                         std::vector<FileMetaData*> *deleted_files) {
+                         std::set<FileMetaData*>* deleted_files) {
   assert(compaction_purpose != kMapSst || deleted_range.empty() ||
          added_files.empty());
   assert(compaction_purpose != kLinkSst || !added_files.empty());
@@ -718,7 +718,7 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
   auto edit_del_file = [edit, deleted_files](int level, FileMetaData* f) {
     edit->DeleteFile(level, f->fd.GetNumber());
     if (deleted_files != nullptr) {
-      deleted_files->emplace_back(f);
+      deleted_files->emplace(f);
     }
   };
   auto& ranges = level_ranges.front();

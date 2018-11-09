@@ -53,7 +53,7 @@ class MapBuilder {
                ColumnFamilyData* cfd, VersionEdit* edit,
                FileMetaData* file_meta = nullptr,
                std::unique_ptr<TableProperties>* porp = nullptr,
-               std::vector<FileMetaData*> *deleted_files = nullptr);
+               std::set<FileMetaData*>* deleted_files = nullptr);
 
  private:
   Status WriteOutputFile(const FileMetaDataBoundBuilder& bound_builder,

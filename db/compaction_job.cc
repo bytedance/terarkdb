@@ -1149,7 +1149,7 @@ void CompactionJob::ProcessEssenceCompaction(SubcompactionState* sub_compact) {
     }
     const Slice* next_key = nullptr;
     if (output_file_ended) {
-      assert(sub_compact->compaction->output_level() != 0);
+      assert(sub_compact->compaction->max_output_file_size() != 0);
       if (c_iter->Valid()) {
         next_key = &c_iter->key();
       }

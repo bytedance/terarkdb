@@ -237,12 +237,21 @@ template <class TValue>
 InternalIteratorBase<TValue>* NewFileNumberInternalIteratorWrapper(
     InternalIteratorBase<TValue>* inner, uint64_t file_number, Arena* arena) {
   using Wrapper = FileNumberInternalIteratorWrapperBase<TValue>;
+  using Inner = InternalIteratorBase<TValue>;
+  Wrapper* wrapper;
   if (arena == nullptr) {
-    return new Wrapper(inner, file_number);
+    wrapper = new Wrapper(inner, file_number);
+    wrapper->RegisterCleanup(
+        [](void* arg1, void*) { delete static_cast<Inner*>(arg1); }, inner,
+        nullptr);
   } else {
     auto mem = arena->AllocateAligned(sizeof(Wrapper));
-    return new (mem) Wrapper(inner, file_number);
+    wrapper = new (mem) Wrapper(inner, file_number);
+    wrapper->RegisterCleanup(
+        [](void* arg1, void*) { static_cast<Inner*>(arg1)->~Inner(); }, inner,
+        nullptr);
   }
+  return wrapper;
 }
 template InternalIteratorBase<BlockHandle>*
 NewFileNumberInternalIteratorWrapper(InternalIteratorBase<BlockHandle>* inner,

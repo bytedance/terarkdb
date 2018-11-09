@@ -2510,7 +2510,6 @@ Status DBImpl::DeleteFilesInRanges(ColumnFamilyHandle* column_family,
         }
         return false;
       };
-      std::vector<FileMetaData*> deleted_files;
       for (int i = 0; i < cfd->NumberLevels(); i++) {
         if (vstorage->LevelFiles(i).empty()) {
           continue;
