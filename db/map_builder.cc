@@ -698,15 +698,6 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
     }
   }
 
-  if (level_ranges.empty()) {
-    for (auto& input_level : inputs) {
-      for (auto f : input_level.files) {
-        edit->DeleteFile(input_level.level, f->fd.GetNumber());
-      }
-    }
-    return s;
-  }
-
   auto edit_add_file = [edit](int level, const FileMetaData* f) {
     // don't call edit->AddFile(level, *f)
     // assert(!file_meta->table_reader_handle);
@@ -721,6 +712,16 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
       deleted_files->emplace(f);
     }
   };
+
+  if (level_ranges.empty()) {
+    for (auto& input_level : inputs) {
+      for (auto f : input_level.files) {
+        edit_del_file(input_level.level, f);
+      }
+    }
+    return s;
+  }
+
   auto& ranges = level_ranges.front();
   size_t stable_count = 0;
   for (auto it = ranges.begin(); it != ranges.end(); ++it) {
