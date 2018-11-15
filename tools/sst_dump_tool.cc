@@ -41,6 +41,11 @@
 
 #include "port/port.h"
 
+#ifndef _MSC_VER
+# include <sys/unistd.h>
+# include <table/terark_zip_weak_function.h>
+#endif
+
 namespace rocksdb {
 
 SstFileReader::SstFileReader(const std::string& file_path, bool verify_checksum,
@@ -272,6 +277,23 @@ Status SstFileReader::SetTableOptionsByMagicNumber(
 
     options_.table_factory.reset(NewPlainTableFactory(plain_table_options));
     fprintf(stdout, "Sst file format: plain table\n");
+#ifndef _MSC_VER
+  } else if (const char* terarkdb_localTempDir =
+                 getenv("TerarkZipTable_localTempDir")) {
+    if (TerarkZipConfigFromEnv) {
+      if (::access(terarkdb_localTempDir, R_OK | W_OK) != 0) {
+        return Status::InvalidArgument(
+            "Must exists, and Permission ReadWrite is required on "
+            "env TerarkZipTable_localTempDir",
+            terarkdb_localTempDir);
+      }
+      TerarkZipConfigFromEnv(options_, options_);
+    } else {
+      return Status::InvalidArgument(
+          "env TerarkZipTable_localTempDir is defined, "
+          "but dynamic libterark-zip-rocksdb is not loaded");
+    }
+#endif
   } else {
     char error_msg_buffer[80];
     snprintf(error_msg_buffer, sizeof(error_msg_buffer) - 1,
