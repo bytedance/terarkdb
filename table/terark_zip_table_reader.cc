@@ -642,6 +642,7 @@ public:
     using CacheOffsets = terark::BlobStore::CacheOffsets;
     this->cache_offsets_ = reinterpret_cast<CacheOffsets*>(&rb_);
   }
+  virtual ~IterZO() {}
   virtual void invalidate_offsets_cache() override {
     rb_.invalidate_offsets_cache();
   }
