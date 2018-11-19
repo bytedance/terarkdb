@@ -106,8 +106,13 @@ Status SstFileReader::GetTableReader(const std::string& file_path) {
   }
 
   if (s.ok()) {
-    if (magic_number == kPlainTableMagicNumber ||
-        magic_number == kLegacyPlainTableMagicNumber) {
+    bool use_mmap_reads = magic_number == kPlainTableMagicNumber ||
+                          magic_number == kLegacyPlainTableMagicNumber;
+
+#ifndef _MSC_VER
+    use_mmap_reads = use_mmap_reads || getenv("TerarkZipTable_localTempDir");
+#endif
+    if (use_mmap_reads) {
       soptions_.use_mmap_reads = true;
       options_.env->NewRandomAccessFile(file_path, &file, soptions_);
       file_.reset(new RandomAccessFileReader(std::move(file), file_path));
