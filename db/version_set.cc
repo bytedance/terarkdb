@@ -2502,7 +2502,8 @@ void VersionStorageInfo::CalculateBaseBytes(const ImmutableCFOptions& ioptions,
   // Special logic to set number of sorted runs.
   // It is to match the previous behavior when all files are in L0.
   int num_l0_count = static_cast<int>(files_[0].size());
-  if (compaction_style_ == kCompactionStyleUniversal) {
+  if (compaction_style_ == kCompactionStyleUniversal &&
+      !options.enable_lazy_compaction) {
     // For universal compaction, we use level0 score to indicate
     // compaction score for the whole DB. Adding other levels as if
     // they are L0 files.
