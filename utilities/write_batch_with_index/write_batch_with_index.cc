@@ -580,8 +580,10 @@ void WriteBatchWithIndex::Rep::ClearIndex() {
   arena.~Arena();
   new (&arena) Arena();
   factory_context = index_factory->NewContext(&arena);
-  last_entry_offset = 0;
   free_entry = nullptr;
+  last_entry_offset = 0;
+  last_sub_batch_offset = 0;
+  sub_batch_cnt = 1;
 }
 
 Status WriteBatchWithIndex::Rep::ReBuildIndex() {
