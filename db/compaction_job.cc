@@ -262,43 +262,11 @@ struct CompactionJob::CompactionState {
   uint64_t num_input_records;
   uint64_t num_output_records;
 
-  Slice range_start, range_end;
-
   explicit CompactionState(Compaction* c)
       : compaction(c),
         total_bytes(0),
         num_input_records(0),
-        num_output_records(0) {
-    // Find out compaction range start/end
-    auto& icomp = c->column_family_data()->internal_comparator();
-    for (auto& level_files : *c->inputs()) {
-      if (level_files.level == 0) {
-        for (auto f : level_files.files) {
-          if (range_start.empty() ||
-              icomp.Compare(f->smallest.Encode(), range_start) < 0) {
-            range_start = f->smallest.Encode();
-          }
-          if (range_end.empty() ||
-              icomp.Compare(f->largest.Encode(), range_end) > 0) {
-          range_end = f->largest.Encode();
-        }
-      }
-    } else if (!level_files.files.empty()) {
-      auto f0 = level_files.files.front();
-      auto f1 = level_files.files.back();
-      if (range_start.empty() ||
-          icomp.Compare(f0->smallest.Encode(), range_start) < 0) {
-        range_start = f0->smallest.Encode();
-      }
-      if (range_end.empty() ||
-          icomp.Compare(f1->largest.Encode(), range_end) > 0) {
-        range_end = f1->largest.Encode();
-      }
-    }
-  }
-  range_start = ExtractUserKey(range_start);
-  range_end = ExtractUserKey(range_end);
-}
+        num_output_records(0) {}
 
   size_t NumOutputFiles() {
     size_t total = 0;
@@ -468,11 +436,11 @@ void CompactionJob::Prepare() {
       *start = input_range[i].start;
       *end = input_range[i].limit;
       assert(input_range[i].include_start);
-      if (uc->Compare(*start, compact_->range_start) == 0) {
+      if (uc->Compare(*start, c->GetSmallestUserKey()) == 0) {
         start = nullptr;
       }
       if (input_range[i].include_limit) {
-        assert(uc->Compare(*end, compact_->range_end) == 0);
+        assert(uc->Compare(*end, c->GetLargestUserKey()) == 0);
         end = nullptr;
       }
       compact_->sub_compact_states.emplace_back(c, start, end);
@@ -987,7 +955,8 @@ void CompactionJob::ProcessEssenceCompaction(SubcompactionState* sub_compact) {
     sub_compact->actual_start.SetMinPossibleForUserKey(*start);
     input->Seek(sub_compact->actual_start.Encode());
   } else {
-    sub_compact->actual_start.SetMinPossibleForUserKey(compact_->range_start);
+    sub_compact->actual_start.SetMinPossibleForUserKey(
+        sub_compact->compaction->GetSmallestUserKey());
     input->SeekToFirst();
   }
 
@@ -1286,7 +1255,8 @@ void CompactionJob::ProcessLinkCompaction(SubcompactionState* sub_compact) {
     sub_compact->actual_start.SetMinPossibleForUserKey(*start);
     input->Seek(sub_compact->actual_start.Encode());
   } else {
-    sub_compact->actual_start.SetMinPossibleForUserKey(compact_->range_start);
+    sub_compact->actual_start.SetMinPossibleForUserKey(
+        sub_compact->compaction->GetSmallestUserKey());
     input->SeekToFirst();
   }
 
@@ -1661,7 +1631,7 @@ Status CompactionJob::InstallCompactionResults(
             include_end = true;
           } else {
             sub_compact.actual_end.SetMaxPossibleForUserKey(
-                compact_->range_end);
+                compaction->GetLargestUserKey());
           }
         }
         deleted_range.emplace_back(sub_compact.actual_start.Encode(),

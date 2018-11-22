@@ -577,6 +577,19 @@ bool ExternalSstFileIngestionJob::IngestedFileFitInLevel(
   if (level == 0) {
     // Files can always fit in L0
     return true;
+  } else {
+    auto ucmp = cfd_->ioptions()->user_comparator;
+    for (auto c : *cfd_->compaction_picker()->compactions_in_progress()) {
+      if (c->output_level() != level ||
+          ucmp->Compare(c->GetSmallestUserKey(),
+                        file_to_ingest->largest_user_key) > 0 ||
+          ucmp->Compare(c->GetLargestUserKey(),
+                        file_to_ingest->smallest_user_key) < 0) {
+        continue;
+      }
+      // Files overlap with a compaction, we cannot add it to this level
+      return false;
+    }
   }
 
   auto* vstorage = cfd_->current()->storage_info();
