@@ -2213,79 +2213,25 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
   } else if (c->deletion_compaction()) {
     // TODO(icanadi) Do we want to honor snapshots here? i.e. not delete old
     // file if there is alive snapshot pointing to it
+    assert(c->num_input_files(1) == 0);
+    assert(c->level() == 0);
+    assert(c->column_family_data()->ioptions()->compaction_style ==
+           kCompactionStyleFIFO);
+
     compaction_job_stats.num_input_files = c->num_input_files(0);
 
     NotifyOnCompactionBegin(c->column_family_data(), c.get(), status,
                             compaction_job_stats, job_context->job_id);
 
-    if (c->input_range().empty()) {
-      assert(c->num_input_files(1) == 0);
-      assert(c->level() == 0);
-      assert(c->column_family_data()->ioptions()->compaction_style ==
-             kCompactionStyleFIFO);
-
-      for (const auto& f : *c->inputs(0)) {
-        c->edit()->DeleteFile(c->level(), f->fd.GetNumber());
-      }
-    } else {
-      assert(c->mutable_cf_options()->enable_lazy_compaction);
-
-      MapBuilder map_builder(job_context->job_id, immutable_db_options_,
-                             env_options_, versions_.get(), stats_, dbname_);
-      auto cfd = c->column_family_data();
-      auto vstorage = c->input_version()->storage_info();
-      std::vector<InternalKey> deleted_range_storage;
-      std::vector<Range> deleted_range;
-      deleted_range_storage.resize(c->input_range().size() * 2);
-      size_t storage_pos = 0;
-      for (auto& range : c->input_range()) {
-        InternalKey* start = &deleted_range_storage[storage_pos++];
-        InternalKey* limit = &deleted_range_storage[storage_pos++];
-        if (range.include_start) {
-          start->SetMinPossibleForUserKey(range.start);
-        } else {
-          start->SetMaxPossibleForUserKey(range.start);
-        }
-        if (range.include_limit) {
-          limit->SetMaxPossibleForUserKey(range.limit);
-        } else {
-          limit->SetMinPossibleForUserKey(range.limit);
-        }
-        deleted_range.emplace_back(start->Encode(), limit->Encode(),
-                                   range.include_start, range.include_limit);
-      }
-      for (auto& level_files : *c->inputs()) {
-        if (level_files.files.empty()) {
-          continue;
-        }
-        if (cfd->ioptions()->compaction_style == kCompactionStyleUniversal) {
-          status = map_builder.Build(
-              {level_files}, deleted_range, {}, kMapSst, level_files.level,
-              level_files.files[0]->fd.GetPathId(), vstorage, cfd, c->edit());
-          if (!status.ok()) {
-            break;
-          }
-        } else {
-          for (auto f : level_files.files) {
-            status = map_builder.Build(
-                {CompactionInputFiles{level_files.level, {f}}}, deleted_range,
-                {}, kMapSst, level_files.level, f->fd.GetPathId(), vstorage,
-                cfd, c->edit());
-            if (!status.ok()) {
-              break;
-            }
-          }
-        }
-      }
+    for (const auto& f : *c->inputs(0)) {
+      c->edit()->DeleteFile(c->level(), f->fd.GetNumber());
     }
-    if (status.ok()) {
-      status = versions_->LogAndApply(c->column_family_data(),
-                                      *c->mutable_cf_options(), c->edit(),
-                                      &mutex_, directories_.GetDbDir());
-    }
+    status = versions_->LogAndApply(c->column_family_data(),
+                                    *c->mutable_cf_options(), c->edit(),
+                                    &mutex_, directories_.GetDbDir());
     InstallSuperVersionAndScheduleWork(
-        c->column_family_data(), &job_context->superversion_contexts[0],
-        *c->mutable_cf_options(), FlushReason::kAutoCompaction);
+            c->column_family_data(), &job_context->superversion_contexts[0],
+            *c->mutable_cf_options(), FlushReason::kAutoCompaction);
     ROCKS_LOG_BUFFER(log_buffer, "[%s] Deleted %d files\n",
                      c->column_family_data()->GetName().c_str(),
                      c->num_input_files(0));
