@@ -1525,9 +1525,11 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
             if (++recId < kvs.key.m_cnt_sum) bufKey = readInternalKey(true);
           }
           else if (cmpRet > 0) { // curKey > bufKey
-            bzvType.set0(recId, size_t(ZipValueType::kDelete));
-            value.append((byte_t*)&pIKey.sequence, 7);
-            value.append(fstring());
+            bzvType.set0(recId, size_t(ZipValueType::kMulti));
+            size_t headerSize = ZipValueMultiValue::calcHeaderSize(1);
+            value.resize(headerSize);
+            ((ZipValueMultiValue*)value.data())->offsets[0] = 1;
+            value.append((byte_t*)&port::kMaxUint64, 8);
             write(value);
             value.erase_all();
             if (++recId < kvs.key.m_cnt_sum) bufKey = readInternalKey(true);
@@ -1559,8 +1561,7 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
               }
             }
             else if (mulCmpRet > 0) { // curKey > bufKey
-              uint64_t seqDelType = PackSequenceAndType(pIKey.sequence, ValueType::kTypeDeletion);
-              value.append((byte_t*)&seqDelType, 8);
+              value.append((byte_t*)&port::kMaxUint64, 8);
               if (++mulRecId < varNum) {
                 bufKey = readInternalKey(false);
                 ((ZipValueMultiValue*)value.data())->offsets[mulRecId] = value.size() - headerSize;
@@ -1582,25 +1583,18 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
         value.erase_all();
         varNum = kvs.valueBits.one_seq_len(bitPos); assert(varNum >= 1);
         TERARK_RT_assert(ParseInternalKey(bufKey, &pIKey), std::logic_error);
-        if (varNum == 1) {
-          bzvType.set0(recId, size_t(ZipValueType::kDelete));
-          value.append((byte_t*)&pIKey.sequence, 7);
-        }
-        else {
-          bzvType.set0(recId, size_t(ZipValueType::kMulti));
-          size_t headerSize = ZipValueMultiValue::calcHeaderSize(varNum);
-          value.resize(headerSize);
-          ((ZipValueMultiValue*)value.data())->offsets[0] = uint32_t(varNum);
-          for (size_t mulRecId = 0; mulRecId < varNum; mulRecId++) {
-            if (mulRecId > 0) {
-              TERARK_RT_assert(ParseInternalKey(bufKey, &pIKey), std::logic_error);
-            }
-            uint64_t seqDelType = PackSequenceAndType(pIKey.sequence, ValueType::kTypeDeletion);
-            value.append((byte_t*)&seqDelType, 8);
-            if (mulRecId + 1 < varNum) {
-              bufKey = readInternalKey(false);
-              ((ZipValueMultiValue*)value.data())->offsets[mulRecId + 1] = value.size() - headerSize;
-            }
+        bzvType.set0(recId, size_t(ZipValueType::kMulti));
+        size_t headerSize = ZipValueMultiValue::calcHeaderSize(varNum);
+        value.resize(headerSize);
+        ((ZipValueMultiValue*)value.data())->offsets[0] = uint32_t(varNum);
+        for (size_t mulRecId = 0; mulRecId < varNum; mulRecId++) {
+          if (mulRecId > 0) {
+            TERARK_RT_assert(ParseInternalKey(bufKey, &pIKey), std::logic_error);
+          }
+          value.append((byte_t*)&port::kMaxUint64, 8);
+          if (mulRecId + 1 < varNum) {
+            bufKey = readInternalKey(false);
+            ((ZipValueMultiValue*)value.data())->offsets[mulRecId + 1] = value.size() - headerSize;
           }
         }
         write(value);

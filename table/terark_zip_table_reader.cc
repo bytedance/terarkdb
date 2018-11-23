@@ -315,12 +315,18 @@ public:
     if (UnzipIterRecord(IndexIterSeekToFirst())) {
       DecodeCurrKeyValue();
     }
+    if (key_tag_ == port::kMaxUint64) {
+      Next();
+    }
   }
 
   void SeekToLast() override {
     if (UnzipIterRecord(IndexIterSeekToLast())) {
       value_index_ = value_count_ - 1;
       DecodeCurrKeyValue();
+    }
+    if (key_tag_ == port::kMaxUint64) {
+      Prev();
     }
   }
 
@@ -333,6 +339,9 @@ public:
       return;
     }
     SeekInternal(pikey);
+    if (key_tag_ == port::kMaxUint64) {
+      Next();
+    }
   }
 
   void SeekForPrev(const Slice& target) override {
@@ -340,34 +349,39 @@ public:
   }
 
   void Next() override {
-    assert(iter_->Valid());
-    value_index_++;
-    if (value_index_ < value_count_) {
-      DecodeCurrKeyValue();
-    }
-    else {
-      if (UnzipIterRecord(IndexIterNext())) {
+    do {
+      assert(iter_->Valid());
+      value_index_++;
+      if (value_index_ < value_count_) {
         DecodeCurrKeyValue();
       }
-    }
+      else {
+        if (UnzipIterRecord(IndexIterNext())) {
+          DecodeCurrKeyValue();
+        }
+      }
+    } while (key_tag_ == port::kMaxUint64);
   }
 
   void Prev() override {
-    assert(iter_->Valid());
-    if (value_index_ > 0) {
-      value_index_--;
-      DecodeCurrKeyValue();
-    }
-    else {
-      if (UnzipIterRecord(IndexIterPrev())) {
-        value_index_ = value_count_ - 1;
+    do {
+      assert(iter_->Valid());
+      if (value_index_ > 0) {
+        value_index_--;
         DecodeCurrKeyValue();
       }
-    }
+      else {
+        if (UnzipIterRecord(IndexIterPrev())) {
+          value_index_ = value_count_ - 1;
+          DecodeCurrKeyValue();
+        }
+      }
+    } while (key_tag_ == port::kMaxUint64);
   }
 
   Slice key() const override {
     assert(iter_->Valid());
+    assert(key_tag_ != port::kMaxUint64);
     return Slice((const char*)key_ptr_, key_length_);
   }
 
@@ -464,6 +478,9 @@ protected:
           do {
             value_index_++;
             DecodeCurrKeyValue();
+            if (key_tag_ == port::kMaxUint64) {
+              continue;
+            }
             if ((key_tag_ >> 8) <= pikey.sequence) {
               return; // done
             }
@@ -706,9 +723,11 @@ protected:
   typedef TerarkZipTableIterator<reverse> base_t;
   using base_t::subReader_;
   using base_t::iter_;
+  using base_t::key_tag_;
   using base_t::status_;
   using base_t::invalidate_offsets_cache;
 
+  using base_t::Next;
   using base_t::SeekToAscendingFirst;
   using base_t::SeekToAscendingLast;
   using base_t::SetIterInvalid;
@@ -758,6 +777,9 @@ public:
           }
         }
       }
+    }
+    if (key_tag_ == port::kMaxUint64) {
+      Next();
     }
   }
 
@@ -973,7 +995,6 @@ const {
     try {
       g_tbuf.reserve(sizeof(SequenceNumber));
       GetRecordAppend(recId, &g_tbuf);
-      assert(g_tbuf.size() == sizeof(SequenceNumber) - 1);
     }
     catch (const std::exception& ex) {
       return Status::Corruption("TerarkZipTableReader::Get()", ex.what());
@@ -996,12 +1017,13 @@ const {
     auto mVal = ZipValueMultiValue::decode(g_tbuf, &num);
     for (size_t i = 0; i < num; ++i) {
       Slice val = mVal->getValueData(i, num);
+      auto tag = unaligned_load<SequenceNumber>(val.data());
+      if (tag == port::kMaxUint64) {
+        continue;
+      }
       SequenceNumber sn;
       ValueType valtype;
-      {
-        auto snt = unaligned_load<SequenceNumber>(val.data());
-        UnPackSequenceAndType(snt, &sn, &valtype);
-      }
+      UnPackSequenceAndType(tag, &sn, &valtype);
       if (sn <= pikey.sequence) {
         val.remove_prefix(sizeof(SequenceNumber));
         bool hasMoreValue = get_context->SaveValue(
