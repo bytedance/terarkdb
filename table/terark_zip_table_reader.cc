@@ -563,7 +563,7 @@ protected:
           "TerarkZipTableIterator::UnzipIterRecord()", ex.what());
         return false;
       }
-      if (ZipValueType::kMulti == zip_value_type_) {
+      if (ZipValueType::kMulti == zip_value_type_ && value_buf.size() != sizeof(uint32_t)) {
         ZipValueMultiValue::decode(value_buf, &value_count_);
         uint32_t* offsets = (uint32_t*)value_buf.data();
         size_t pos = 0;
@@ -631,10 +631,16 @@ protected:
       assert(0 != value_count_);
       assert(value_index_ < value_count_);
       key_ptr_ = value_buf.data() + value_length_ + key_length_ * value_index_;
-      Slice d = zmValue->getValueData(value_index_, value_count_);
-      key_tag_ = unaligned_load<SequenceNumber>(d.data());
-      d.remove_prefix(sizeof(SequenceNumber));
-      user_value_ = d;
+      Slice d;
+      if (value_length_ == sizeof(uint32_t) || (d = zmValue->getValueData(value_index_, value_count_), d.empty())) {
+        key_tag_ = port::kMaxUint64;
+        user_value_.clear();
+      }
+      else {
+        key_tag_ = unaligned_load<SequenceNumber>(d.data());
+        d.remove_prefix(sizeof(SequenceNumber));
+        user_value_ = d;
+      }
       break; }
     }
     byte_t* key_ptr = key_ptr_;
@@ -678,8 +684,10 @@ protected:
   typedef TerarkZipTableIterator<false> base_t;
   using base_t::subReader_;
   using base_t::key_length_;
+  using base_t::key_tag_;
   using base_t::status_;
 
+  using base_t::Next;
   using base_t::SeekInternal;
   using base_t::DecodeCurrKeyValue;
 
@@ -697,6 +705,9 @@ public:
     u64_target = byte_swap(*reinterpret_cast<const uint64_t*>(pikey.user_key.data()));
     pikey.user_key = Slice(reinterpret_cast<const char*>(&u64_target), 8);
     SeekInternal(pikey);
+    if (key_tag_ == port::kMaxUint64) {
+      Next();
+    }
   }
   void DecodeCurrKeyValue() override {
     base_t::DecodeCurrKeyValue();
@@ -1013,14 +1024,17 @@ const {
     catch (const std::exception& ex) {
       return Status::Corruption("TerarkZipTableReader::Get()", ex.what());
     }
+    if (g_tbuf.size() == sizeof(uint32_t)) {
+      break;
+    }
     size_t num = 0;
     auto mVal = ZipValueMultiValue::decode(g_tbuf, &num);
     for (size_t i = 0; i < num; ++i) {
       Slice val = mVal->getValueData(i, num);
-      auto tag = unaligned_load<SequenceNumber>(val.data());
-      if (tag == port::kMaxUint64) {
+      if (val.empty()) {
         continue;
       }
+      auto tag = unaligned_load<SequenceNumber>(val.data());
       SequenceNumber sn;
       ValueType valtype;
       UnPackSequenceAndType(tag, &sn, &valtype);
