@@ -1,4 +1,4 @@
-//  Copyright (c) 2011-present, Facebook, Inc.  All rights reserved.
+//  CopyriaAght (c) 2011-present, Facebook, Inc.  All rights reserved.
 //  This source code is licensed under the BSD-style license found in the
 //  LICENSE file in the root directory of this source tree. An additional grant
 //  of patent rights can be found in the PATENTS file in the same directory.
@@ -12,10 +12,12 @@
 #include <utility>
 #include <vector>
 
-//temp
-#include "../terark/src/terark/thread/instance_tls.hpp"
+// c
 #include "../terark/src/terark/heap_ext.hpp"
-//shall be fixed
+#include "../terark/src/terark/mempool.hpp"
+#include "../terark/src/terark/stdtypes.hpp"
+#include "../terark/src/terark/thread/instance_tls.hpp"
+// C
 
 #include "db/memtable.h"
 #include "rocksdb/memtablerep.h"
@@ -23,193 +25,359 @@
 #include "util/mutexlock.h"
 #include "util/threaded_rbtree.h"
 
-
 namespace rocksdb {
 namespace {
 
 class ThreadedRBTreeRep : public MemTableRep {
  private:
-  typedef size_t index_t;
+  template <size_t padding = 2>
+  class rbtree_impl {
+   protected:
+    using my_mempool_t = terark::MemPool<1ull << padding>;
 
-  template <class index_t>
-  struct trbt_rep_node_t {
-    index_t lch;
-    index_t rch;
-    uint8_t color : 1;
-    uint8_t lchType : 1;
-    uint8_t rchType : 1;
-    uint8_t keyLen0 : 5;
-    unsigned char datum[1];
+    template <class index_t, class key_t>
+    struct trbt_node_t {
+      typedef typename index_t index_type;
+      typedef typename key_t key_type;
 
-    bool is_black() const { return !color; }
-    bool is_red() const { return color; }
-    bool left_is_child() const { return !lchType; }
-    bool left_is_thread() const { return lchType; }
-    bool right_is_child() const { return !rchType; }
-    bool right_is_thread() const { return rchType; }
+      index_type lch;
+      index_type rch;
+      uint8_t clr : 1;
+      uint8_t lcT : 1;
+      uint8_t rcT : 1;
+      uint8_t kln : 5;
+      char datum[1];
 
-    void set_black() { color = 0; }
-    void set_red() { color = 1; }
-    void left_set_child() { lchType = 0; }
-    void left_set_thread() { lchType = 1; }
-    void right_set_child() { rchType = 0; }
-    void right_set_thread() { rchType = 1; }
+      static const index_type nil_sentinel = MAXSIZE_T;
 
-    index_t left_get_link() { return lch; }
-    index_t right_get_link() { return rch; }
-    void left_set_link(index_t &l) { lch = l; }
-    void right_set_link(index_t &r) { rch = r; }
-  };
+      bool is_black() const { return !clr; }
+      bool is_red() const { return clr; }
+      bool left_is_child() const { return !lcT; }
+      bool left_is_thread() const { return lcT; }
+      bool right_is_child() const { return !rcT; }
+      bool right_is_thread() const { return rcT; }
 
-  template <class node_t, size_t max_depth = 64>
-  struct trbt_rep_stack_t {
+      void set_used() {}
+      void set_black() { clr = 0; }
+      void set_red() { clr = 1; }
+      void left_set_child() { lcT = 0; }
+      void left_set_thread() { lcT = 1; }
+      void right_set_child() { rcT = 0; }
+      void right_set_thread() { rcT = 1; }
 
-    size_t height, path = 0;
-    index_t offsets[max_depth];
+      index_type left_get_link() { return lch; }
+      index_type right_get_link() { return rch; }
+      void left_set_link(index_type l) { lch = l; }
+      void right_set_link(index_type r) { rch = r; }
 
-    bool is_left(size_t k) {
-      assert(k < max_depth);
-      return (path >> k) ^ 1;
-    }
-
-    bool is_right(size_t k) {
-      assert(k < max_depth);
-      return (path >> k) & 1;
-    }
-
-    index_t get_index(size_t k) {
-      assert(k < max_depth);
-      return offsets[k];
-    }
-
-    void push_index(index_t index, bool left) {
-      if (height == max_depth) {
-        throw std::length_error("thread_tb_tree_stack overflow");
+      key_type key() {
+        size_t klen = key_len();
+        const char *p = datum + ((klen > 38) ? VarintLength(klen - 39) : 0);
+        return key_type(p, klen);
       }
-      if (left)
-        path &= ~(1 << height);
-      else
-        path |= (1 << height);
-      offsets[height++] = index;
-    }
 
-    void update_index(size_t k, index_t index, bool left) {
-      assert(k < max_depth);
-      offsets[k] = index_type(index);
-      if (left)
-        path &= ~(1 << k);
-      else
-        path |= (1 << k);
-    }
+      size_t key_len() const {
+        if (kln < 31)
+          return size_t(kln) + 8;
+        else {
+          uint32_t ret = 0;
+          GetVarint32Ptr(datum, datum + 8, &ret);
+          return ret + 39;
+        }
+      }
 
-    void update_index(size_t k, index_t index) {
-      assert(k < max_depth);
-      offsets[k] = index_type(mask_type(index);
-    }
-  };
+      key_type value() const {
+        uint32_t vlen;
+        size_t klen = key_len();
+        const char *p = datum + klen;
+        if (klen >= 39) p += VarintLength(klen - 39);
+        GetVarint32Ptr(p, p + 8, &vlen);
+        p += VarintLength(vlen);
+        return key_type(p, vlen);
+      }
 
-  template <class node_t, class cmp_t, class stack_t>
-  class rbtree_t {
-   private:
-    bool readOnly_ = false;
-    size_t memSize_ = 0;
-    size_t size_ = 0;
-    size_t limit_ = 0;
-    cmp_t cmp_;
-    port::RWMutex lock_;
+      size_t value_len() const {
+        size_t ret, klen = key_len();
+        char *p = datum + klen;
+        if (klen >= 39) p += VarintLength(klen - 39);
+        GetVarint32Ptr(p, p + 8, ret);
+        return ret;
+      }
 
-    double ANumEntriesRadio(const Slice &start_ikey, const Slice &end_ikey) {
-      return 0;
-    }  // TODO 
-
-   public:
-    
-    rbtree_t() {}
-    ~rbtree_t() {}
-   
-    class Iterator {
-     private:
-     public:
-      explicit Iterator();
-      ~Iterator();
-      void Next() {}
-      void Prev() {}
-      void Seek(const char *key) {}
-      void SeekForPrev(const char *key) {}
-      void SeekToFirst() {}
-      void SeekToLast() {}
-      const char* key() const { return null; }
+      void set_key_value(const key_type &key, const key_type &val,
+                         uint32_t klnln, uint32_t vlnln, bool mag) {
+        char *p = datum;
+        kln = mag ? 31 : klnln;
+        if (mag) {
+          EncodeVarint32(p, static_cast<uint32_t>(key.size() - 39));
+          p += klnln;
+        }
+        memcpy(p, key.data(), key.size());
+        p += key.size();
+        EncodeVarint32(p, static_cast<uint32_t>(val.size()));
+        p += vlnln;
+        memcpy(p, val.data(), val.size());
+      }
     };
 
-    bool InsertKeyValue(const Slice &internal_key, const Slice &value) {
+    template <class node_t>
+    struct trbt_deref_node_t {
+      my_mempool_t *handle;
+      node_t &operator()(typename node_t::index_type idx) const {
+        return handle->at<node_t>(idx << padding);
+      }
+    };
+
+    template <class node_t>
+    struct trbt_deref_key_t {
+      my_mempool_t *handle;
+      typename const node_t::key_type &operator()(
+          typename node_t::index_type idx) const {
+        return handle->at<node_t>(idx).key();
+      }
+    };
+
+    template <class node_t, size_t max_depth>
+    struct trbt_rep_stack_t {
+      typename typedef node_t::index_type index_t;
+
+      size_t height = 0, path = 0;
+      index_t offsets[max_depth];
+
+      bool is_left(size_t k) {
+        assert(k < max_depth);
+        return !((path >> k) & 1);
+      }
+
+      bool is_right(size_t k) {
+        assert(k < max_depth);
+        return (path >> k) & 1;
+      }
+
+      index_t get_index(size_t k) {
+        assert(k < max_depth);
+        return offsets[k];
+      }
+
+      void push_index(index_t index, bool left) {
+        if (height == max_depth) {
+          throw std::length_error("thread_rbtree_stack overflow");
+        }
+        if (left)
+          path &= ~(1ull << height);
+        else
+          path |= (1ull << height);
+        offsets[height++] = index;
+      }
+
+      void update_index(size_t k, index_t index, bool left) {
+        assert(k < max_depth);
+        offsets[k] = index_type(index);
+        if (left)
+          path &= ~(1 << k);
+        else
+          path |= (1 << k);
+      }
+
+      void update_index(size_t k, index_t index) {
+        assert(k < max_depth);
+        offsets[k] = index_type(mask_type(index));
+      }
+    };
+
+    template <class deref_t>
+    struct trbt_rep_cmp_t {
+      bool operator()(size_t x, size_t y) const { return compare(x, y) < 0; }
+      bool operator()(const Slice &x, const Slice &y) const {
+        return compare(x, y) < 0;
+      }
+      int compare(size_t x, size_t y) const {
+        return c->Compare(deref(x), deref(y));
+      }
+      int compare(const Slice &x, const Slice &y) const {
+        return c->Compare(x, y);
+      }
+      deref_t deref;
+      const InternalKeyComparator *c;
+    };
+
+    using my_index_t = size_t;
+    using my_key_t = rocksdb::Slice;
+    using my_node_t = trbt_node_t<my_index_t, my_key_t>;
+    using my_deref_node_t = trbt_deref_node_t<my_node_t>;
+    using my_deref_key_t = trbt_deref_key_t<my_node_t>;
+    using my_cmp_t = trbt_rep_cmp_t<my_deref_key_t>;
+    using my_stack_t = trbt_rep_stack_t<my_node_t, 64>;
+    using my_root_t =
+        threaded_rbtree_root_t<my_node_t, std::true_type, std::true_type>;
+
+   private:
+    my_mempool_t data_;
+    my_root_t root_;
+    size_t item_num_ = 0, mem_used_ = 0, iter_cnt_ = 0;
+    port::RWMutex mutex_;
+    bool readOnly_ = false;
+    ThreadedRBTreeRep* rep_;
+
+   public:
+    rbtree_impl(ThreadedRBTreeRep *rep) : data_(256), rep_(rep) {}
+    ~rbtree_impl() { assert(iter_cnt_ == 0); }
+
+    class InnerIterator {
+     private:
+      rbtree_impl *impl_;
+      size_t pos_ = 0;
+
+     public:
+      explicit InnerIterator(rbtree_impl *impl) : impl_(impl) {
+        impl_->iter_cnt_++;
+      }
+
+      ~InnerIterator() { --impl_->iter_cnt_; }
+
+      void Next() {
+        pos_ = threaded_rbtree_move_next<my_deref_node_t>(
+            pos_, my_deref_node_t{&impl_->data_});
+      }
+
+      void Prev() {
+        pos_ = threaded_rbtree_move_prev<my_deref_node_t>(
+            pos_, my_deref_node_t{&impl_->data_});
+      }
+
+      void Seek(const char *key, const InternalKeyComparator *icmp) {
+        auto deref_key = my_deref_key_t{&impl_->data_};
+        auto cmp = my_cmp_t{deref_key, icmp};
+        pos_ = threaded_rbtree_lower_bound(
+            impl_->root_, my_deref_node_t{&impl_->data_}, key, deref_key, cmp);
+      }
+
+      void SeekForPrev(const char *key, const InternalKeyComparator *icmp) {
+        auto deref_key = my_deref_key_t{&impl_->data_};
+        auto cmp = my_cmp_t{deref_key, icmp};
+        pos_ = threaded_rbtree_upper_bound(
+            impl_->root_, my_deref_node_t{&impl_->data_}, key, deref_key, cmp);
+      }
+
+      void SeekToFirst() {
+        pos_ = impl_->root_.get_most_left(my_deref_node_t{&impl_->data_});
+      }
+
+      void SeekToLast() {
+        pos_ = impl_->root_.get_most_right(my_deref_node_t{&impl_->data_});
+      }
+
+      Slice Key() const { return my_deref_node_t{&impl_->data_}(pos_).key(); }
+
+      Slice Value() const {
+        return my_deref_node_t{&impl_->data_}(pos_).value();
+      }
+
+      bool Valid() const { return pos_ != my_node_t::nil_sentinel; }
+    };
+
+    bool InsertKeyValue(const Slice &iKey, const Slice &val) {
       if (readOnly_) return false;
-      bool largeKey = internal_key.size() > 38;
-      size_t capacity =
-          internal_key.size() +
-          (largeKey ? VarintLength(internal_key.size()) : 0) +
-          value.size() + VarintLength(value.size());
-      memSize_ += capacity;
-      alloc(); //TODO
-      return 0;
+      bool mag = iKey.size() > 38;
+      uint32_t klnln = VarintLength(iKey.size() - 39);
+      uint32_t vlnln = VarintLength(val.size());
+      size_t c = terark::align_up(
+          (mag ? klnln : 0) + iKey.size() + vlnln + val.size(), 4);
+      size_t pos = data_.alloc(c);
+      if (pos == size_t(-1)) return false;
+      mem_used_ += c;
+      my_deref_node_t{&data_}(pos).set_key_value(iKey, val, klnln, vlnln, mag);
+      my_stack_t stack;
+      {
+        ReadLock lock(&mutex_);
+        bool ex = threaded_rbtree_find_path_for_unique(
+            root_, stack, my_deref_node_t{&data_}, iKey, my_deref_key_t{&data_},
+            my_cmp_t{my_deref_key_t{&data_}, rep_->icmp_});
+        if (ex) return false;
+      }
+      WriteLock lock(&mutex_);
+      threaded_rbtree_insert(root_, stack, my_deref_node_t{&data_},
+                             data_.size() << padding);
+      item_num_++;
+      return true;
     }
 
-    Iterator *NewIterator() { return nullptr; }
+    bool Contains(const Slice &internal_key) const {}
+
+    InnerIterator &&NewInnerIterator() { return InnerIterator(this); }
 
     void MarkReadOnly() { readOnly_ = true; }
 
-    size_t Memsize() { return memsize_; }
+    size_t MemUsed() { return mem_used_; }
 
-    uint64_t ANumEntries(const Slice &start_ikey, const Slice &end_ikey) {
-      return round(size * ANumEntriesRadio(const Slice &start_ikey,
-                                           const Slice &end_ikey));
+    size_t Size() { return item_num_; }
+
+    uint64_t ApprxNumEntries(const Slice &start_ikey, const Slice &end_ikey) {
+      auto ApprxRankRatio = [this](const Slice &key) {
+        auto deref_key = my_deref_key_t{&data_};
+        auto cmp = my_cmp_t{deref_key, rep_->icmp_};
+        return uint64_t(
+            threaded_rbtree_approximate_rank_ratio(
+                root_, my_deref_node_t{&data_}, key, deref_key, cmp) *
+            item_num_);
+      };
+
+      uint64_t st = ApprxRankRatio(start_ikey);
+      uint64_t ed = ApprxRankRatio(end_ikey);
+
+      return ed > st ? ed - st : 0;
     }
   };
 
-  class KeyComparator {
-   public:
-    typedef rocksdb::Slice DecodedType;
+  using my_rbtree_t = rbtree_impl<2>;
+  struct TlsItem {
+    TlsItem() = default;
+    TlsItem(const TlsItem &) = delete;
+    TlsItem &operator=(const TlsItem &) = delete;
 
-    virtual DecodedType decode_key(const char *key) const {
-      return GetLengthPrefixedSlice(key);
+    using iter_t = std::list<my_rbtree_t>::iterator;
+
+    std::aligned_storage<sizeof(iter_t)>::type iter_storage;
+    my_rbtree_t *ptr = nullptr;
+
+    ~TlsItem() {
+      if (ptr == nullptr) {
+        return;
+      }
+      auto& iter = reinterpret_cast<iter_t &>(iter_storage);
+      // TODO
+
+      iter.~iter_t();
     }
 
-    virtual int operator()(const char *prefix_len_key1,
-                           const char *prefix_len_key2) const = 0;
-
-    virtual int operator()(const char *prefix_len_key,
-                           const Slice &key) const = 0;
-
-    virtual const InternalKeyComparator *icomparator() const = 0;
-
-    virtual ~KeyComparator() {}
+    void init(iter_t iter) {
+      ::new (&iter_storage) iter_t(iter);
+      ptr = &*iter;
+    }
+    my_rbtree_t *get() { return ptr; }
   };
 
-  using my_node_t = trbt_rep_node_t<index_t>;
-  using my_stack_t = trbt_rep_stack_t<my_node_t>;
-
-  using my_rbtree_t = rbtree_t<my_node_t, InternalKeyComparator, my_stack_t>;
-
-  terark::instance_tls<my_rbtree_t *> rbtree_ref_;
   std::list<my_rbtree_t> rbt_list_;
+  terark::instance_tls<TlsItem> rbtree_ref_;
   std::atomic_bool immutable_;
   const SliceTransform *transform_;
-  const MemTableRep::KeyComparator& cmp_;
+  const MemTableRep::KeyComparator &cmp_;
   const InternalKeyComparator *icmp_;
-  size_t iter_num_ = 0;
+  port::RWMutex mutex_;
+  size_t iter_cnt_ = 0;
 
  public:
-  explicit ThreadedRBTreeRep(size_t reserve_size,
-                             const MemTableRep::KeyComparator &compare,
+  explicit ThreadedRBTreeRep(const MemTableRep::KeyComparator &compare,
                              Allocator *allocator,
                              const SliceTransform *transform)
-      : MemTableRep(allocator), 
+      : MemTableRep(allocator),
         transform_(transform),
         immutable_(false),
         cmp_(compare) {
     icmp_ = cmp_.icomparator();
   }
 
-  virtual ~ThreadedRBTreeRep() override { assert(iter_num_); }
+  virtual ~ThreadedRBTreeRep() override { assert(iter_cnt_ > 0); }
 
   virtual KeyHandle Allocate(const size_t len, char **buf) override {
     assert(false);
@@ -220,23 +388,20 @@ class ThreadedRBTreeRep : public MemTableRep {
 
   char *EncodeKey(const Slice &user_key) { return nullptr; }
 
-  virtual void Get(const LookupKey &k, void *callback_args,
-                   bool (*callback_func)(void *arg,
-                                         const KeyValuePair *)) override {
-  }
-
   class HeapIterator : public MemTableRep::Iterator {
    private:
-    std::vector<my_rbtree_t::Iterator> heap_;
-    ThreadedRBTreeRep* rep_;
+    std::vector<my_rbtree_t::InnerIterator> rbt_;
+    ThreadedRBTreeRep *rep_;
     const InternalKeyComparator *icmp_;
     bool forward = true;
     std::atomic<size_t> iter_cnt_ = 0;
 
    public:
-    explicit HeapIterator(ThreadedRBTreeRep* rep) : rep_(rep) {
+    explicit HeapIterator(ThreadedRBTreeRep *rep) : rep_(rep) {
       icmp_ = rep_->cmp_.icomparator();
-      for (auto& rbt : rep_->rbt_list_) heap_.emplace_back(rbt.NewIterator());
+      for (auto &rbt : rep_->rbt_list_) {
+        rbt_.emplace_back(std::move(rbt.NewInnerIterator()));
+      }
       ++iter_cnt_;
     }
 
@@ -244,102 +409,154 @@ class ThreadedRBTreeRep : public MemTableRep {
 
     struct ForwardCmp {
       const InternalKeyComparator *icmp_;
-      bool operator()(my_rbtree_t::Iterator &l,
-                      my_rbtree_t::Iterator &r) const {
-        return icmp_->Compare(l.key(), r.key()) < 0;
+      bool operator()(const my_rbtree_t::InnerIterator &l,
+                      const my_rbtree_t::InnerIterator &r) const {
+        if (!l.Valid()) return false;
+        if (!r.Valid()) return true;
+        return icmp_->Compare(l.Key(), r.Key()) < 0;
       }
     };
 
     struct BackwardCmp {
       const InternalKeyComparator *icmp_;
-      bool operator()(my_rbtree_t::Iterator &l,
-                      my_rbtree_t::Iterator &r) const {
-        return icmp_->Compare(l.key(), r.key()) > 0;
+      bool operator()(const my_rbtree_t::InnerIterator &l,
+                      const my_rbtree_t::InnerIterator &r) const {
+        if (!r.Valid()) return false;
+        if (!l.Valid()) return true;
+        return icmp_->Compare(l.Key(), r.Key()) > 0;
       }
     };
 
-    virtual bool Valid() const override { return !heap_.empty(); }
+    virtual bool Valid() const override { return !rbt_.empty(); }
 
     virtual void Next() override {
-      if (!forward)
-        std::make_heap(heap_.begin(), heap_.end(), ForwardCmp{icmp_});
-      heap_.begin()->Next();
-      terark::adjust_heap_top(heap_, heap_.size(), ForwardCmp{icmp_});
+      if (!forward) std::make_heap(rbt_.begin(), rbt_.end(), ForwardCmp{icmp_});
+      rbt_.begin()->Next();
+      terark::adjust_heap_top(rbt_.begin(), rbt_.size(), ForwardCmp{icmp_});
     }
 
     virtual void Prev() override {
-      if (forward)
-        std::make_heap(heap_.begin(), heap_.end(), BackwardCmp{icmp_});
-      heap_.begin()->Prev();
-      terark::adjust_heap_top(heap_, heap_.size(), BackwardCmp{icmp_});
+      if (forward) std::make_heap(rbt_.begin(), rbt_.end(), BackwardCmp{icmp_});
+      rbt_.begin()->Prev();
+      terark::adjust_heap_top(rbt_.begin(), rbt_.size(), BackwardCmp{icmp_});
     }
 
     virtual void Seek(const Slice &user_key,
                       const char *memtable_key) override {
-      for (auto iter : heap_)
+      for (auto &iter : rbt_)
         if (memtable_key != nullptr)
-          iter.Seek(memtable_key);
+          iter.Seek(memtable_key, rep_->icmp_);
         else
-          iter.Seek(rep_->EncodeKey(user_key));
-      std::make_heap(heap_.begin(), heap_.end(), ForwardCmp{icmp_});
+          iter.Seek(rep_->EncodeKey(user_key), rep_->icmp_);
+      std::make_heap(rbt_.begin(), rbt_.end(), ForwardCmp{icmp_});
     }
 
     virtual void SeekForPrev(const Slice &user_key,
                              const char *memtable_key) override {
-      for (auto iter : heap_)
+      for (auto &iter : rbt_)
         if (memtable_key != nullptr)
-          iter.SeekForPrev(memtable_key);
+          iter.SeekForPrev(memtable_key, rep_->icmp_);
         else
-          iter.SeekForPrev(rep_->EncodeKey(user_key));
-      std::make_heap(heap_.begin(), heap_.end(), BackwardCmp{icmp_});
+          iter.SeekForPrev(rep_->EncodeKey(user_key), rep_->icmp_);
+      std::make_heap(rbt_.begin(), rbt_.end(), BackwardCmp{icmp_});
     }
 
-    virtual const char* key() const override { return heap_.front().key(); }
-
     virtual void SeekToFirst() override {
-      for (auto iter : heap_) iter.SeekToFirst();
-      std::make_heap(heap_.begin(), heap_.end(), ForwardCmp{icmp_});
+      for (auto &iter : rbt_) iter.SeekToFirst();
+      std::make_heap(rbt_.begin(), rbt_.end(), ForwardCmp{icmp_});
       forward = true;
     }
 
     virtual void SeekToLast() override {
-      for (auto iter : heap_) iter.SeekToLast();
-      std::make_heap(heap_.begin(), heap_.end(), BackwardCmp{icmp_});
+      for (auto &iter : rbt_) iter.SeekToLast();
+      std::make_heap(rbt_.begin(), rbt_.end(), BackwardCmp{icmp_});
       forward = false;
     }
 
+    virtual const char *key() const override {
+      assert(false);
+      return nullptr;
+    }
+
+    virtual Slice GetKey() const override { return rbt_.front().Key(); }
+
+    virtual Slice GetValue() const override { return rbt_.front().Value(); }
+
+    virtual std::pair<Slice, Slice> GetKeyValue() const override {
+      return std::pair<Slice, Slice>(rbt_.front().Key(), rbt_.front().Value());
+    }
   };
+
+  virtual void Get(const LookupKey &k, void *callback_args,
+                   bool (*callback_func)(void *arg,
+                                         const KeyValuePair *kv)) override {
+    ThreadedRBTreeRep::HeapIterator iter(this);
+    EncodedKeyValuePair pair;
+    Slice dummy;
+    for (iter.Seek(dummy, k.memtable_key().data());
+         iter.Valid() && callback_func(callback_args, &iter); iter.Next()) {
+    }
+  }
 
   virtual MemTableRep::Iterator *GetIterator(Arena *arena = nullptr) override {
     typedef ThreadedRBTreeRep::HeapIterator i_t;
-    return arena ? new (arena->AllocateAligned(sizeof(i_t))) i_t(this) : new i_t(this);
+    return arena ? new (arena->AllocateAligned(sizeof(i_t))) i_t(this)
+                 : new i_t(this);
   }
-  
+
   virtual bool InsertKeyValue(const Slice &internal_key,
-                              const Slice &value) override{
-    if (immutable_) return false;
-    return rbtree_ref_.get()->InsertKeyValue(internal_key, value);
+                              const Slice &value) override {
+    assert(!immutable_);
+    auto &ref = rbtree_ref_.get();
+    if (ref.get() == nullptr) {
+      WriteLock l(&mutex_);
+      rbt_list_.emplace_back(this);
+      ref.init(std::prev(rbt_list_.end()));
+    }
+    return ref.get()->InsertKeyValue(internal_key, value);
   }
-  
+
   virtual void MarkReadOnly() override {
-    for (auto& rbt : rbt_list_) rbt.MarkReadOnly();
+    for (auto &rbt : rbt_list_) rbt.MarkReadOnly();
     immutable_ = true;
   }
 
   virtual size_t ApproximateMemoryUsage() override {
-    size_t sz = 0;
-    for (auto& rbt : rbt_list_) sz += rbt.Memsize();
-    return sz;
+    size_t ret = 0;
+    for (auto &rbt : rbt_list_) ret += rbt.MemUsed();
+    return ret;
   }
 
   virtual uint64_t ApproximateNumEntries(const Slice &start_ikey,
                                          const Slice &end_ikey) override {
     size_t n = 0;
-    for (auto& rbt : rbt_list_) n += rbt.ANumEntries(start_ikey, end_ikey);
+    for (auto &rbt : rbt_list_) n += rbt.ApprxNumEntries(start_ikey, end_ikey);
     return n;
   }
 
+  virtual bool Contains(const Slice &internal_key) const override {
+    for (auto &rbt : rbt_list_)
+      if (rbt.Contains(internal_key)) return true;
+    return false;
+  }
+};
+}  // namespace
+
+class TRBTreeRepFactory : public MemTableRepFactory {
+ public:
+  explicit TRBTreeRepFactory() {}
+
+  using MemTableRepFactory::CreateMemTableRep;
+  virtual MemTableRep *CreateMemTableRep(
+      const MemTableRep::KeyComparator &comparator, bool needs_dup_key_check,
+      Allocator *allocator, const SliceTransform *transform,
+      Logger *logger) override {
+    return new ThreadedRBTreeRep(comparator, allocator, transform);
   };
 
-}  // namespace
+  virtual const char *Name() const override { return "TRBTreeRepFactory"; }
+
+  bool IsInsertConcurrentlySupported() const override { return true; }
+};
+
 }  // namespace rocksdb
