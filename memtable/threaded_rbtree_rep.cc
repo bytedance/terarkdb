@@ -13,10 +13,10 @@
 #include <vector>
 
 // c
-#include "../terark/src/terark/heap_ext.hpp"
-#include "../terark/src/terark/mempool.hpp"
-#include "../terark/src/terark/stdtypes.hpp"
-#include "../terark/src/terark/thread/instance_tls.hpp"
+#include <terark/heap_ext.hpp>
+#include <terark/mempool.hpp>
+#include <terark/stdtypes.hpp>
+#include <terark/thread/instance_tls.hpp>
 // C
 
 #include "db/memtable.h"
@@ -40,15 +40,15 @@ class ThreadedRBTreeRep : public MemTableRep {
       typedef typename index_t index_type;
       typedef typename key_t key_type;
 
-      index_type lch;
-      index_type rch;
+      static const index_type nil_sentinel = index_type(-1);
+
+      index_type lch = nil_sentinel;
+      index_type rch = nil_sentinel;
       uint8_t clr : 1;
       uint8_t lcT : 1;
       uint8_t rcT : 1;
       uint8_t kln : 5;
       char datum[1];
-
-      static const index_type nil_sentinel = MAXSIZE_T;
 
       bool is_black() const { return !clr; }
       bool is_red() const { return clr; }
@@ -70,44 +70,29 @@ class ThreadedRBTreeRep : public MemTableRep {
       void left_set_link(index_type l) { lch = l; }
       void right_set_link(index_type r) { rch = r; }
 
-      key_type key() {
-        size_t klen = key_len();
-        const char *p = datum + ((klen > 38) ? VarintLength(klen - 39) : 0);
-        return key_type(p, klen);
-      }
-
-      size_t key_len() const {
+      key_type key() const {
         if (kln < 31)
-          return size_t(kln) + 8;
+          return key_type{ datum, size_t(kln) + 8 };
         else {
           uint32_t ret = 0;
-          GetVarint32Ptr(datum, datum + 8, &ret);
-          return ret + 39;
+          auto p = GetVarint32Ptr(datum, datum + 8, &ret);
+          return key_type{ p , ret + 39 };
         }
       }
 
       key_type value() const {
+        auto k = key();
+        auto p = k.data() + k.size();
         uint32_t vlen;
-        size_t klen = key_len();
-        const char *p = datum + klen;
-        if (klen >= 39) p += VarintLength(klen - 39);
-        GetVarint32Ptr(p, p + 8, &vlen);
-        p += VarintLength(vlen);
+        p = GetVarint32Ptr(p, p + 8, &vlen);
         return key_type(p, vlen);
       }
 
-      size_t value_len() const {
-        size_t ret, klen = key_len();
-        char *p = datum + klen;
-        if (klen >= 39) p += VarintLength(klen - 39);
-        GetVarint32Ptr(p, p + 8, ret);
-        return ret;
-      }
-
       void set_key_value(const key_type &key, const key_type &val,
-                         uint32_t klnln, uint32_t vlnln, bool mag) {
+        uint32_t klnln, uint32_t vlnln, bool mag) {
         char *p = datum;
-        kln = mag ? 31 : klnln;
+        assert((key.size() < 39) ^ mag);
+        kln = mag ? 31 : key.size() - 8;
         if (mag) {
           EncodeVarint32(p, static_cast<uint32_t>(key.size() - 39));
           p += klnln;
@@ -131,9 +116,9 @@ class ThreadedRBTreeRep : public MemTableRep {
     template <class node_t>
     struct trbt_deref_key_t {
       my_mempool_t *handle;
-      typename const node_t::key_type &operator()(
-          typename node_t::index_type idx) const {
-        return handle->at<node_t>(idx).key();
+      typename const node_t::key_type operator()(
+        typename node_t::index_type idx) const {
+        return handle->at<node_t>(idx << padding).key();
       }
     };
 
@@ -201,7 +186,7 @@ class ThreadedRBTreeRep : public MemTableRep {
       const InternalKeyComparator *c;
     };
 
-    using my_index_t = size_t;
+    using my_index_t = uint32_t;
     using my_key_t = rocksdb::Slice;
     using my_node_t = trbt_node_t<my_index_t, my_key_t>;
     using my_deref_node_t = trbt_deref_node_t<my_node_t>;
@@ -209,7 +194,7 @@ class ThreadedRBTreeRep : public MemTableRep {
     using my_cmp_t = trbt_rep_cmp_t<my_deref_key_t>;
     using my_stack_t = trbt_rep_stack_t<my_node_t, 64>;
     using my_root_t =
-        threaded_rbtree_root_t<my_node_t, std::true_type, std::true_type>;
+      threaded_rbtree_root_t<my_node_t, std::true_type, std::true_type>;
 
    private:
     my_mempool_t data_;
@@ -237,40 +222,40 @@ class ThreadedRBTreeRep : public MemTableRep {
 
       void Next() {
         pos_ = threaded_rbtree_move_next<my_deref_node_t>(
-            pos_, my_deref_node_t{&impl_->data_});
+          pos_, my_deref_node_t{ &impl_->data_ });
       }
 
       void Prev() {
         pos_ = threaded_rbtree_move_prev<my_deref_node_t>(
-            pos_, my_deref_node_t{&impl_->data_});
+          pos_, my_deref_node_t{ &impl_->data_ });
       }
 
-      void Seek(const char *key, const InternalKeyComparator *icmp) {
-        auto deref_key = my_deref_key_t{&impl_->data_};
-        auto cmp = my_cmp_t{deref_key, icmp};
+      void Seek(const Slice& key, const InternalKeyComparator *icmp) {
+        auto deref_key = my_deref_key_t{ &impl_->data_ };
+        auto cmp = my_cmp_t{ deref_key, icmp };
         pos_ = threaded_rbtree_lower_bound(
-            impl_->root_, my_deref_node_t{&impl_->data_}, key, deref_key, cmp);
+          impl_->root_, my_deref_node_t{ &impl_->data_ }, key, deref_key, cmp);
       }
 
-      void SeekForPrev(const char *key, const InternalKeyComparator *icmp) {
-        auto deref_key = my_deref_key_t{&impl_->data_};
-        auto cmp = my_cmp_t{deref_key, icmp};
-        pos_ = threaded_rbtree_upper_bound(
-            impl_->root_, my_deref_node_t{&impl_->data_}, key, deref_key, cmp);
+      void SeekForPrev(const Slice& key, const InternalKeyComparator *icmp) {
+        auto deref_key = my_deref_key_t{ &impl_->data_ };
+        auto cmp = my_cmp_t{ deref_key, icmp };
+        pos_ = threaded_rbtree_reverse_lower_bound(
+          impl_->root_, my_deref_node_t{ &impl_->data_ }, key, deref_key, cmp);
       }
 
       void SeekToFirst() {
-        pos_ = impl_->root_.get_most_left(my_deref_node_t{&impl_->data_});
+        pos_ = impl_->root_.get_most_left(my_deref_node_t{ &impl_->data_ });
       }
 
       void SeekToLast() {
-        pos_ = impl_->root_.get_most_right(my_deref_node_t{&impl_->data_});
+        pos_ = impl_->root_.get_most_right(my_deref_node_t{ &impl_->data_ });
       }
 
-      Slice Key() const { return my_deref_node_t{&impl_->data_}(pos_).key(); }
+      Slice Key() const { return my_deref_node_t{ &impl_->data_ }(pos_).key(); }
 
       Slice Value() const {
-        return my_deref_node_t{&impl_->data_}(pos_).value();
+        return my_deref_node_t{ &impl_->data_ }(pos_).value();
       }
 
       bool Valid() const { return pos_ != my_node_t::nil_sentinel; }
@@ -278,33 +263,33 @@ class ThreadedRBTreeRep : public MemTableRep {
 
     bool InsertKeyValue(const Slice &iKey, const Slice &val) {
       if (readOnly_) return false;
-      bool mag = iKey.size() > 38;
-      uint32_t klnln = VarintLength(iKey.size() - 39);
+      bool mag = iKey.size() > 39;
+      uint32_t klnln = mag ? VarintLength(iKey.size() - 39) : 0;
       uint32_t vlnln = VarintLength(val.size());
       size_t c = terark::align_up(
-          (mag ? klnln : 0) + iKey.size() + vlnln + val.size(), 4);
+        9 + klnln + iKey.size() + vlnln + val.size(), 4);
       size_t pos = data_.alloc(c);
       if (pos == size_t(-1)) return false;
+      pos >>= padding;
       mem_used_ += c;
-      my_deref_node_t{&data_}(pos).set_key_value(iKey, val, klnln, vlnln, mag);
+      my_deref_node_t{ &data_ }(pos).set_key_value(iKey, val, klnln, vlnln, mag);
       my_stack_t stack;
       {
         ReadLock lock(&mutex_);
         bool ex = threaded_rbtree_find_path_for_unique(
-            root_, stack, my_deref_node_t{&data_}, iKey, my_deref_key_t{&data_},
-            my_cmp_t{my_deref_key_t{&data_}, rep_->icmp_});
+          root_, stack, my_deref_node_t{ &data_ }, iKey, my_deref_key_t{ &data_ },
+          my_cmp_t{ my_deref_key_t{&data_}, rep_->icmp_ });
         if (ex) return false;
       }
       WriteLock lock(&mutex_);
-      threaded_rbtree_insert(root_, stack, my_deref_node_t{&data_},
-                             data_.size() << padding);
+      threaded_rbtree_insert(root_, stack, my_deref_node_t{ &data_ }, pos);
       item_num_++;
       return true;
     }
 
-    bool Contains(const Slice &internal_key) const {}
+    bool Contains(const Slice &internal_key) const { return false; }
 
-    InnerIterator &&NewInnerIterator() { return InnerIterator(this); }
+    InnerIterator NewInnerIterator() { return InnerIterator(this); }
 
     void MarkReadOnly() { readOnly_ = true; }
 
@@ -314,12 +299,12 @@ class ThreadedRBTreeRep : public MemTableRep {
 
     uint64_t ApprxNumEntries(const Slice &start_ikey, const Slice &end_ikey) {
       auto ApprxRankRatio = [this](const Slice &key) {
-        auto deref_key = my_deref_key_t{&data_};
-        auto cmp = my_cmp_t{deref_key, rep_->icmp_};
+        auto deref_key = my_deref_key_t{ &data_ };
+        auto cmp = my_cmp_t{ deref_key, rep_->icmp_ };
         return uint64_t(
-            threaded_rbtree_approximate_rank_ratio(
-                root_, my_deref_node_t{&data_}, key, deref_key, cmp) *
-            item_num_);
+          threaded_rbtree_approximate_rank_ratio(
+            root_, my_deref_node_t{ &data_ }, key, deref_key, cmp) *
+          item_num_);
       };
 
       uint64_t st = ApprxRankRatio(start_ikey);
@@ -368,12 +353,12 @@ class ThreadedRBTreeRep : public MemTableRep {
 
  public:
   explicit ThreadedRBTreeRep(const MemTableRep::KeyComparator &compare,
-                             Allocator *allocator,
-                             const SliceTransform *transform)
-      : MemTableRep(allocator),
-        transform_(transform),
-        immutable_(false),
-        cmp_(compare) {
+    Allocator *allocator,
+    const SliceTransform *transform)
+    : MemTableRep(allocator),
+    transform_(transform),
+    immutable_(false),
+    cmp_(compare) {
     icmp_ = cmp_.icomparator();
   }
 
@@ -410,66 +395,72 @@ class ThreadedRBTreeRep : public MemTableRep {
     struct ForwardCmp {
       const InternalKeyComparator *icmp_;
       bool operator()(const my_rbtree_t::InnerIterator &l,
-                      const my_rbtree_t::InnerIterator &r) const {
-        if (!l.Valid()) return false;
-        if (!r.Valid()) return true;
-        return icmp_->Compare(l.Key(), r.Key()) < 0;
-      }
-    };
-
-    struct BackwardCmp {
-      const InternalKeyComparator *icmp_;
-      bool operator()(const my_rbtree_t::InnerIterator &l,
-                      const my_rbtree_t::InnerIterator &r) const {
+        const my_rbtree_t::InnerIterator &r) const {
         if (!r.Valid()) return false;
         if (!l.Valid()) return true;
         return icmp_->Compare(l.Key(), r.Key()) > 0;
       }
     };
 
-    virtual bool Valid() const override { return !rbt_.empty(); }
+    struct BackwardCmp {
+      const InternalKeyComparator *icmp_;
+      bool operator()(const my_rbtree_t::InnerIterator &l,
+        const my_rbtree_t::InnerIterator &r) const {
+        if (!r.Valid()) return false;
+        if (!l.Valid()) return true;
+        return icmp_->Compare(l.Key(), r.Key()) < 0;
+      }
+    };
+
+    virtual bool Valid() const override { return !rbt_.empty() && rbt_.front().Valid(); }
 
     virtual void Next() override {
-      if (!forward) std::make_heap(rbt_.begin(), rbt_.end(), ForwardCmp{icmp_});
+      assert(Valid());
+      if (!forward) Seek(GetKey(), nullptr);
+      assert(Valid());
       rbt_.begin()->Next();
-      terark::adjust_heap_top(rbt_.begin(), rbt_.size(), ForwardCmp{icmp_});
+      terark::adjust_heap_top(rbt_.begin(), rbt_.size(), ForwardCmp{ icmp_ });
     }
 
     virtual void Prev() override {
-      if (forward) std::make_heap(rbt_.begin(), rbt_.end(), BackwardCmp{icmp_});
+      assert(Valid());
+      if (forward) SeekForPrev(GetKey(), nullptr);
+      assert(Valid());
       rbt_.begin()->Prev();
-      terark::adjust_heap_top(rbt_.begin(), rbt_.size(), BackwardCmp{icmp_});
+      terark::adjust_heap_top(rbt_.begin(), rbt_.size(), BackwardCmp{ icmp_ });
     }
 
     virtual void Seek(const Slice &user_key,
-                      const char *memtable_key) override {
+      const char *memtable_key) override {
       for (auto &iter : rbt_)
         if (memtable_key != nullptr)
-          iter.Seek(memtable_key, rep_->icmp_);
+          iter.Seek(GetLengthPrefixedSlice(memtable_key), rep_->icmp_);
         else
-          iter.Seek(rep_->EncodeKey(user_key), rep_->icmp_);
-      std::make_heap(rbt_.begin(), rbt_.end(), ForwardCmp{icmp_});
+          iter.Seek(user_key, rep_->icmp_);
+      std::make_heap(rbt_.begin(), rbt_.end(), ForwardCmp{ icmp_ });
+      forward = true;
     }
 
     virtual void SeekForPrev(const Slice &user_key,
-                             const char *memtable_key) override {
+      const char *memtable_key) override {
       for (auto &iter : rbt_)
         if (memtable_key != nullptr)
-          iter.SeekForPrev(memtable_key, rep_->icmp_);
+          iter.SeekForPrev(GetLengthPrefixedSlice(memtable_key), rep_->icmp_);
         else
-          iter.SeekForPrev(rep_->EncodeKey(user_key), rep_->icmp_);
-      std::make_heap(rbt_.begin(), rbt_.end(), BackwardCmp{icmp_});
+          iter.SeekForPrev(user_key, rep_->icmp_);
+      std::make_heap(rbt_.begin(), rbt_.end(), BackwardCmp{ icmp_ });
+      forward = false;
     }
 
     virtual void SeekToFirst() override {
       for (auto &iter : rbt_) iter.SeekToFirst();
-      std::make_heap(rbt_.begin(), rbt_.end(), ForwardCmp{icmp_});
+      std::make_heap(rbt_.begin(), rbt_.end(), ForwardCmp{ icmp_ });
       forward = true;
     }
 
     virtual void SeekToLast() override {
       for (auto &iter : rbt_) iter.SeekToLast();
-      std::make_heap(rbt_.begin(), rbt_.end(), BackwardCmp{icmp_});
+      std::make_heap(rbt_.begin(), rbt_.end(), BackwardCmp{ icmp_ });
       forward = false;
     }
 
@@ -488,24 +479,24 @@ class ThreadedRBTreeRep : public MemTableRep {
   };
 
   virtual void Get(const LookupKey &k, void *callback_args,
-                   bool (*callback_func)(void *arg,
-                                         const KeyValuePair *kv)) override {
+    bool(*callback_func)(void *arg,
+      const KeyValuePair *kv)) override {
     ThreadedRBTreeRep::HeapIterator iter(this);
     EncodedKeyValuePair pair;
     Slice dummy;
     for (iter.Seek(dummy, k.memtable_key().data());
-         iter.Valid() && callback_func(callback_args, &iter); iter.Next()) {
+      iter.Valid() && callback_func(callback_args, &iter); iter.Next()) {
     }
   }
 
   virtual MemTableRep::Iterator *GetIterator(Arena *arena = nullptr) override {
     typedef ThreadedRBTreeRep::HeapIterator i_t;
     return arena ? new (arena->AllocateAligned(sizeof(i_t))) i_t(this)
-                 : new i_t(this);
+      : new i_t(this);
   }
 
   virtual bool InsertKeyValue(const Slice &internal_key,
-                              const Slice &value) override {
+    const Slice &value) override {
     assert(!immutable_);
     auto &ref = rbtree_ref_.get();
     if (ref.get() == nullptr) {
@@ -528,7 +519,7 @@ class ThreadedRBTreeRep : public MemTableRep {
   }
 
   virtual uint64_t ApproximateNumEntries(const Slice &start_ikey,
-                                         const Slice &end_ikey) override {
+    const Slice &end_ikey) override {
     size_t n = 0;
     for (auto &rbt : rbt_list_) n += rbt.ApprxNumEntries(start_ikey, end_ikey);
     return n;
@@ -544,19 +535,23 @@ class ThreadedRBTreeRep : public MemTableRep {
 
 class TRBTreeRepFactory : public MemTableRepFactory {
  public:
-  explicit TRBTreeRepFactory() {}
+explicit TRBTreeRepFactory() {}
 
-  using MemTableRepFactory::CreateMemTableRep;
-  virtual MemTableRep *CreateMemTableRep(
-      const MemTableRep::KeyComparator &comparator, bool needs_dup_key_check,
-      Allocator *allocator, const SliceTransform *transform,
-      Logger *logger) override {
-    return new ThreadedRBTreeRep(comparator, allocator, transform);
-  };
-
-  virtual const char *Name() const override { return "TRBTreeRepFactory"; }
-
-  bool IsInsertConcurrentlySupported() const override { return true; }
+using MemTableRepFactory::CreateMemTableRep;
+virtual MemTableRep *CreateMemTableRep(
+  const MemTableRep::KeyComparator &comparator, bool needs_dup_key_check,
+  Allocator *allocator, const SliceTransform *transform,
+  Logger *logger) override {
+  return new ThreadedRBTreeRep(comparator, allocator, transform);
 };
+
+virtual const char *Name() const override { return "TRBTreeRepFactory"; }
+
+bool IsInsertConcurrentlySupported() const override { return true; }
+};
+
+MemTableRepFactory* NewTRBTreeRepFactory() {
+return new TRBTreeRepFactory();
+}
 
 }  // namespace rocksdb
