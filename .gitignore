@@ -76,3 +76,5 @@ fbcode
 buckifier/*.pyc
 .vs
 vs2017
+/msvc14/build_version.dir
+/msvc14
