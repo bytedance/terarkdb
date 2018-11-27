@@ -590,6 +590,7 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
   MapSstElement map_element;
   FileMetaDataBoundBuilder bound_builder(cfd->internal_comparator());
   Status s;
+  size_t input_range_count = 0;
 
   // load input files into level_ranges
   for (auto& level_files : inputs) {
@@ -608,6 +609,7 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
             [&icomp](const RangeWithDepend& a, const RangeWithDepend& b) {
               return icomp.Compare(a.point[1], b.point[1]) < 0;
             }));
+        input_range_count += ranges.size();
         level_ranges.emplace_back(std::move(ranges));
       }
     } else {
@@ -628,6 +630,7 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
           [&icomp](const RangeWithDepend& a, const RangeWithDepend& b) {
             return icomp.Compare(a.point[1], b.point[1]) < 0;
           }));
+      input_range_count += ranges.size();
       level_ranges.emplace_back(std::move(ranges));
     }
   }
@@ -729,7 +732,7 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
     for (auto it = ranges.begin(); it != ranges.end(); ++it) {
       stable_count += it->stable ? 1 : 0;
     }
-    if (stable_count == ranges.size()) {
+    if (stable_count == input_range_count) {
       // all ranges stable, new map will equals to input map, done
       return s;
     }

@@ -2230,8 +2230,8 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
                                     *c->mutable_cf_options(), c->edit(),
                                     &mutex_, directories_.GetDbDir());
     InstallSuperVersionAndScheduleWork(
-            c->column_family_data(), &job_context->superversion_contexts[0],
-            *c->mutable_cf_options(), FlushReason::kAutoCompaction);
+        c->column_family_data(), &job_context->superversion_contexts[0],
+        *c->mutable_cf_options(), FlushReason::kAutoCompaction);
     ROCKS_LOG_BUFFER(log_buffer, "[%s] Deleted %d files\n",
                      c->column_family_data()->GetName().c_str(),
                      c->num_input_files(0));
