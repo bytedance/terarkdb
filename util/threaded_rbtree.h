@@ -633,15 +633,15 @@ std::size_t threaded_rbtree_equal_unique(root_t &root, deref_node_t deref,
   std::size_t p = root.root.root;
   while (p != node_type::nil_sentinel) {
     int c = comparator.compare(deref_key(p), key);
+    if (c == 0) {
+      return p;
+    }
     if (c < 0) {
       if (deref(p).right_is_thread()) {
         return node_type::nil_sentinel;
       }
       p = deref(p).right_get_link();
     } else {
-      if (c == 0) {
-        return p;
-      }
       if (deref(p).left_is_thread()) {
         return node_type::nil_sentinel;
       }
