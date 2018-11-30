@@ -213,78 +213,112 @@ class ThreadedRBTreeRep : public MemTableRep {
    private:
     my_mempool_t data_;
     my_root_t root_;
-    size_t item_num_ = 0, mem_used_ = 0, iter_cnt_ = 0;
-    port::RWMutex mutex_;
-    bool destory_ = false;
+    size_t item_num_ = 0, mem_used_ = 0;
+    mutable port::RWMutex mutex_;
     bool readOnly_ = false;
     ThreadedRBTreeRep *rep_;
     static const size_t lowCapicity = 64 * 1024 * 1024;
- 
+
    public:
     rbtree_impl(ThreadedRBTreeRep *rep) : data_(256), rep_(rep) {}
-    ~rbtree_impl() { assert(iter_cnt_ == 0); }
 
     void Destory() {
       if (mem_used_ < lowCapicity) {
+        WriteLock rep_lock(&rep_->mutex_);
         auto &list = rep_->rbt_list_;
-        auto iter = list.begin();
-        while ((iter != list.end()) && (((iter->MemUsed() + mem_used_) / 4 - UINT32_MAX >= 0) || (&*iter == this))) iter++;
-        if (iter != list.end()) {
-          iter->Merge(this);
-          iter = list.begin();
-          while (&*iter != this) iter++;
-          list.erase(iter);
+        auto curr = list.begin(), other = list.end();
+        for (; curr != list.end(); curr++) {
+          auto curr_ptr = &**curr;
+          if (this == curr_ptr)
+            other = curr;
+          else if ((curr_ptr->MemUsed() + mem_used_) / 4 - UINT32_MAX >= 0) {
+            WriteLock lock(&curr_ptr->mutex_);
+            if ((curr_ptr->MemUsed() + mem_used_) / 4 - UINT32_MAX >= 0) {
+              if (other == list.end()) {
+                other = curr;
+                while (this != curr_ptr)
+                  ;
+                (*other)->Merge(curr_ptr);
+                list.erase(curr);
+              } else {
+                curr_ptr->Merge(&**other);
+                list.erase(other);
+              }
+              break;
+            }
+          }
         }
       }
     }
 
     ThreadedRBTreeRep *Rep() { return rep_; }
 
+    template <class Lock>
     class InnerIterator {
      private:
-      rbtree_impl *impl_;
+      std::shared_ptr<rbtree_impl> impl_;
+      size_t bound_ = 0;
       size_t pos_ = 0;
 
      public:
       explicit InnerIterator(rbtree_impl *impl) : impl_(impl) {
-        impl_->iter_cnt_++;
-      }
-
-      ~InnerIterator() {
-        --impl_->iter_cnt_;
-        if ( impl_->NeedToDestory() && impl_->iter_cnt_ == 0) impl_->Destory();
+        bound_ = impl_->root_.get_most_right(my_deref_node_t{&impl_->data_});
       }
 
       void Next() {
-        pos_ = threaded_rbtree_move_next<my_deref_node_t>(
-            pos_, my_deref_node_t{&impl_->data_});
+        Lock lock(&impl_->mutex_);
+        do {
+          pos_ =
+              threaded_rbtree_move_next(pos_, my_deref_node_t{&impl_->data_});
+        } while (pos_ + 1 > bound_);
       }
 
       void Prev() {
-        pos_ = threaded_rbtree_move_prev<my_deref_node_t>(
-            pos_, my_deref_node_t{&impl_->data_});
+        Lock lock(&impl_->mutex_);
+        do {
+          pos_ =
+              threaded_rbtree_move_prev(pos_, my_deref_node_t{&impl_->data_});
+        } while (pos_ + 1 > bound_);
       }
 
       void Seek(const Slice &key, const InternalKeyComparator *icmp) {
         auto deref_key = my_deref_key_t{&impl_->data_};
         auto cmp = my_cmp_t{deref_key, icmp};
-        pos_ = threaded_rbtree_lower_bound(
-            impl_->root_, my_deref_node_t{&impl_->data_}, key, deref_key, cmp);
+        {
+          Lock lock(&impl_->mutex_);
+          pos_ = threaded_rbtree_lower_bound(impl_->root_,
+                                             my_deref_node_t{&impl_->data_},
+                                             key, deref_key, cmp);
+        }
+        if (pos_ + 1 > bound_) Next();
       }
 
       void SeekForPrev(const Slice &key, const InternalKeyComparator *icmp) {
         auto deref_key = my_deref_key_t{&impl_->data_};
         auto cmp = my_cmp_t{deref_key, icmp};
-        pos_ = threaded_rbtree_reverse_lower_bound(
-            impl_->root_, my_deref_node_t{&impl_->data_}, key, deref_key, cmp);
+        {
+          Lock lock(&impl_->mutex_);
+          pos_ = threaded_rbtree_reverse_lower_bound(
+              impl_->root_, my_deref_node_t{&impl_->data_}, key, deref_key,
+              cmp);
+        }
+        if (pos_ + 1 > bound_) Prev();
       }
 
       void SeekToFirst() {
-        pos_ = impl_->root_.get_most_left(my_deref_node_t{&impl_->data_});
+        {
+          Lock lock(&impl_->mutex_);
+          pos_ = impl_->root_.get_most_left(my_deref_node_t{&impl_->data_});
+        }
+        if (pos_ + 1 > bound_) Next();
       }
 
       void SeekToLast() {
-        pos_ = impl_->root_.get_most_right(my_deref_node_t{&impl_->data_});
+        {
+          Lock lock(&impl_->mutex_);
+          pos_ = impl_->root_.get_most_right(my_deref_node_t{&impl_->data_});
+        }
+        if (pos_ + 1 > bound_) Prev();
       }
 
       Slice Key() const { return my_deref_node_t{&impl_->data_}(pos_).key(); }
@@ -323,7 +357,6 @@ class ThreadedRBTreeRep : public MemTableRep {
     }
 
     void Merge(rbtree_impl<padding> *ptr) {
-      WriteLock lock(&mutex_);
       size_t c0 = ptr->MemUsed();
       size_t n = ptr->item_num_;
       size_t pos = data_.alloc(c0);
@@ -343,15 +376,22 @@ class ThreadedRBTreeRep : public MemTableRep {
       }
     }
 
-    bool Contains(const Slice &internal_key) const { return false; }
+    template <class Lock>
+    bool Contains(const Slice &internal_key) {
+      auto deref_key = my_deref_key_t{&data_};
+      auto cmp = my_cmp_t{deref_key, rep_->icmp_};
+      ReadLock lock(&mutex_);
+      return threaded_rbtree_equal_unique(root_, my_deref_node_t{&data_},
+                                          internal_key, deref_key,
+                                          cmp) != my_node_t::nil_sentinel;
+    }
 
-    InnerIterator NewInnerIterator() { return InnerIterator(this); }
+    template <class Lock>
+    InnerIterator<Lock> NewInnerIterator() {
+      return InnerIterator<Lock>(this);
+    }
 
     void MarkReadOnly() { readOnly_ = true; }
-
-    void MarkDestory() { destory_ = true; }
-
-    bool NeedToDestory() { return destory_; }
 
     bool IsReadOnly() { return readOnly_; }
 
@@ -361,6 +401,7 @@ class ThreadedRBTreeRep : public MemTableRep {
 
     size_t IterNum() { return iter_cnt_; }
 
+    template <class Lock>
     uint64_t ApprxNumEntries(const Slice &start_ikey, const Slice &end_ikey) {
       auto ApprxRankRatio = [this](const Slice &key) {
         auto deref_key = my_deref_key_t{&data_};
@@ -371,6 +412,7 @@ class ThreadedRBTreeRep : public MemTableRep {
             item_num_);
       };
 
+      Lock lock(&mutex_);
       uint64_t st = ApprxRankRatio(start_ikey);
       uint64_t ed = ApprxRankRatio(end_ikey);
 
@@ -387,22 +429,27 @@ class ThreadedRBTreeRep : public MemTableRep {
     my_rbtree_t *ptr = nullptr;
 
     ~TlsItem() {
-      if (ptr == nullptr) return;
-      ptr->MarkReadOnly();
-      ptr->MarkDestory();
+      if (ptr != nullptr) {
+        ptr->MarkReadOnly();
+        ptr->Destory();
+      }
     }
 
     void init(my_rbtree_t *p) { ptr = p; }
     my_rbtree_t *get() { return ptr; }
   };
 
-  std::list<my_rbtree_t> rbt_list_;
+  struct DummyLock {
+    DummyLock(...) {}
+  };
+
+  std::list<std::shared_ptr<my_rbtree_t>> rbt_list_;
   terark::instance_tls<TlsItem> rbtree_ref_;
   std::atomic_bool immutable_;
   const SliceTransform *transform_;
   const MemTableRep::KeyComparator &cmp_;
   const InternalKeyComparator *icmp_;
-  port::RWMutex mutex_;
+  mutable port::RWMutex mutex_;
   size_t iter_cnt_ = 0;
 
  public:
@@ -427,29 +474,26 @@ class ThreadedRBTreeRep : public MemTableRep {
 
   char *EncodeKey(const Slice &user_key) { return nullptr; }
 
+  template <class Lock>
   class HeapIterator : public MemTableRep::Iterator {
    private:
-    std::vector<my_rbtree_t::InnerIterator> rbt_;
+    std::vector<my_rbtree_t::InnerIterator<Lock>> rbt_;
     ThreadedRBTreeRep *rep_;
     const InternalKeyComparator *icmp_;
-    bool forward = true;
-    std::atomic<size_t> iter_cnt_ = 0;
+    bool forward_ = true;
 
    public:
     explicit HeapIterator(ThreadedRBTreeRep *rep) : rep_(rep) {
+      ReadLock rep_lock(&rep->mutex_);
       icmp_ = rep_->cmp_.icomparator();
-      for (auto &rbt : rep_->rbt_list_) {
-        rbt_.emplace_back(std::move(rbt.NewInnerIterator()));
-      }
-      ++iter_cnt_;
+      for (auto &rbt : rep_->rbt_list_)
+        rbt_.emplace_back(std::move(rbt->NewInnerIterator<Lock>()));
     }
-
-    virtual ~HeapIterator() override { --iter_cnt_; }
 
     struct ForwardCmp {
       const InternalKeyComparator *icmp_;
-      bool operator()(const my_rbtree_t::InnerIterator &l,
-                      const my_rbtree_t::InnerIterator &r) const {
+      template <class iter>
+      bool operator()(const iter &l, const iter &r) const {
         if (!r.Valid()) return false;
         if (!l.Valid()) return true;
         return icmp_->Compare(l.Key(), r.Key()) > 0;
@@ -458,8 +502,8 @@ class ThreadedRBTreeRep : public MemTableRep {
 
     struct BackwardCmp {
       const InternalKeyComparator *icmp_;
-      bool operator()(const my_rbtree_t::InnerIterator &l,
-                      const my_rbtree_t::InnerIterator &r) const {
+      template <class iter>
+      bool operator()(const iter &l, const iter &r) const {
         if (!r.Valid()) return false;
         if (!l.Valid()) return true;
         return icmp_->Compare(l.Key(), r.Key()) < 0;
@@ -472,7 +516,7 @@ class ThreadedRBTreeRep : public MemTableRep {
 
     virtual void Next() override {
       assert(Valid());
-      if (!forward) Seek(GetKey(), nullptr);
+      if (!forward_) Seek(GetKey(), nullptr);
       assert(Valid());
       rbt_.begin()->Next();
       terark::adjust_heap_top(rbt_.begin(), rbt_.size(), ForwardCmp{icmp_});
@@ -480,7 +524,7 @@ class ThreadedRBTreeRep : public MemTableRep {
 
     virtual void Prev() override {
       assert(Valid());
-      if (forward) SeekForPrev(GetKey(), nullptr);
+      if (forward_) SeekForPrev(GetKey(), nullptr);
       assert(Valid());
       rbt_.begin()->Prev();
       terark::adjust_heap_top(rbt_.begin(), rbt_.size(), BackwardCmp{icmp_});
@@ -494,7 +538,7 @@ class ThreadedRBTreeRep : public MemTableRep {
         else
           iter.Seek(user_key, rep_->icmp_);
       std::make_heap(rbt_.begin(), rbt_.end(), ForwardCmp{icmp_});
-      forward = true;
+      forward_ = true;
     }
 
     virtual void SeekForPrev(const Slice &user_key,
@@ -505,19 +549,19 @@ class ThreadedRBTreeRep : public MemTableRep {
         else
           iter.SeekForPrev(user_key, rep_->icmp_);
       std::make_heap(rbt_.begin(), rbt_.end(), BackwardCmp{icmp_});
-      forward = false;
+      forward_ = false;
     }
 
     virtual void SeekToFirst() override {
       for (auto &iter : rbt_) iter.SeekToFirst();
       std::make_heap(rbt_.begin(), rbt_.end(), ForwardCmp{icmp_});
-      forward = true;
+      forward_ = true;
     }
 
     virtual void SeekToLast() override {
       for (auto &iter : rbt_) iter.SeekToLast();
       std::make_heap(rbt_.begin(), rbt_.end(), BackwardCmp{icmp_});
-      forward = false;
+      forward_ = false;
     }
 
     virtual const char *key() const override {
@@ -537,18 +581,31 @@ class ThreadedRBTreeRep : public MemTableRep {
   virtual void Get(const LookupKey &k, void *callback_args,
                    bool (*callback_func)(void *arg,
                                          const KeyValuePair *kv)) override {
-    ThreadedRBTreeRep::HeapIterator iter(this);
     EncodedKeyValuePair pair;
     Slice dummy;
-    for (iter.Seek(dummy, k.memtable_key().data());
-         iter.Valid() && callback_func(callback_args, &iter); iter.Next()) {
+    if (immutable_) {
+      ThreadedRBTreeRep::HeapIterator<DummyLock> iter(this);
+      for (iter.Seek(dummy, k.memtable_key().data());
+           iter.Valid() && callback_func(callback_args, &iter); iter.Next()) {
+      }
+    } else {
+      ThreadedRBTreeRep::HeapIterator<ReadLock> iter(this);
+      for (iter.Seek(dummy, k.memtable_key().data());
+           iter.Valid() && callback_func(callback_args, &iter); iter.Next()) {
+      }
     }
   }
 
   virtual MemTableRep::Iterator *GetIterator(Arena *arena = nullptr) override {
-    typedef ThreadedRBTreeRep::HeapIterator i_t;
-    return arena ? new (arena->AllocateAligned(sizeof(i_t))) i_t(this)
-                 : new i_t(this);
+    if (immutable_) {
+      typedef ThreadedRBTreeRep::HeapIterator<DummyLock> i_t;
+      return arena ? new (arena->AllocateAligned(sizeof(i_t))) i_t(this)
+                   : new i_t(this);
+    } else {
+      typedef ThreadedRBTreeRep::HeapIterator<ReadLock> i_t;
+      return arena ? new (arena->AllocateAligned(sizeof(i_t))) i_t(this)
+                   : new i_t(this);
+    }
   }
 
   virtual bool InsertKeyValue(const Slice &internal_key,
@@ -556,34 +613,47 @@ class ThreadedRBTreeRep : public MemTableRep {
     assert(!immutable_);
     auto &ref = rbtree_ref_.get();
     if (ref.get() == nullptr) {
-      WriteLock l(&mutex_);
-      rbt_list_.emplace_back(this);
-      ref.init(&*std::prev(rbt_list_.end()));
+      WriteLock rep_lock(&mutex_);
+      rbt_list_.emplace_back(std::make_shared<my_rbtree_t>(this));
+      ref.init(&**std::prev(rbt_list_.end()));
     }
     return ref.get()->InsertKeyValue(internal_key, value);
   }
 
   virtual void MarkReadOnly() override {
-    for (auto &rbt : rbt_list_) rbt.MarkReadOnly();
+    for (auto &rbt : rbt_list_) rbt->MarkReadOnly();
     immutable_ = true;
   }
 
   virtual size_t ApproximateMemoryUsage() override {
     size_t ret = 0;
-    for (auto &rbt : rbt_list_) ret += rbt.MemUsed();
+    for (auto &rbt : rbt_list_) ret += rbt->MemUsed();
     return ret;
   }
 
   virtual uint64_t ApproximateNumEntries(const Slice &start_ikey,
                                          const Slice &end_ikey) override {
     size_t n = 0;
-    for (auto &rbt : rbt_list_) n += rbt.ApprxNumEntries(start_ikey, end_ikey);
+    ReadLock rep_lock(&mutex_);
+    if (immutable_)
+      for (auto &rbt : rbt_list_)
+        n += rbt->ApprxNumEntries<DummyLock>(start_ikey, end_ikey);
+    else
+      for (auto &rbt : rbt_list_)
+        n += rbt->ApprxNumEntries<ReadLock>(start_ikey, end_ikey);
     return n;
   }
 
   virtual bool Contains(const Slice &internal_key) const override {
-    for (auto &rbt : rbt_list_)
-      if (rbt.Contains(internal_key)) return true;
+    ReadLock rep_lock(&mutex_);
+    if (immutable_) {
+      for (auto &rbt : rbt_list_)
+        if (const_cast<my_rbtree_t *>(&*rbt)->Contains<DummyLock>(internal_key))
+          return true;
+    } else
+      for (auto &rbt : rbt_list_)
+        if (const_cast<my_rbtree_t *>(&*rbt)->Contains<ReadLock>(internal_key))
+          return true;
     return false;
   }
 };
