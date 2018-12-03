@@ -1535,6 +1535,7 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
           }
           else { // curKey < bufKey
             ITER_MOVE_NEXT(second_pass_iter_);
+            continue;
           }
         }
         else { // multi record contains {multi, merge, cfbi, bi}
