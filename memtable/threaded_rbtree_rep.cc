@@ -31,7 +31,7 @@ namespace {
 class ThreadedRBTreeRep : public MemTableRep {
  private:
   template <size_t padding = 2>
-  class rbtree_impl {
+  class rbtree_impl : public std::enable_shared_from_this<rbtree_impl<padding>> {
    protected:
     using my_mempool_t = terark::MemPool<1ull << padding>;
 
@@ -105,17 +105,9 @@ class ThreadedRBTreeRep : public MemTableRep {
       }
 
       size_t capicity() {
-        uint32_t rvln, ret = 0;
-        if (kln < 31) {
-          GetVarint32Ptr(datum + kln, datum + kln + 8, &rvln);
-          ret = 9 + kln + rvln;
-        } else {
-          uint32_t rkln;
-          auto p = GetVarint32Ptr(datum, datum + 8, &rkln);
-          GetVarint32Ptr(p + rkln, p + rkln + 8, &rvln);
-          ret = 9 + rkln + rvln;
-        }
-        return ret;
+        auto v = value();
+        auto p = v.data() + v.size();
+        return p - datum + 9;
       }
     };
 
@@ -213,7 +205,7 @@ class ThreadedRBTreeRep : public MemTableRep {
    private:
     my_mempool_t data_;
     my_root_t root_;
-    size_t item_num_ = 0, mem_used_ = 0;
+    size_t item_num_ = 0;
     mutable port::RWMutex mutex_;
     bool readOnly_ = false;
     ThreadedRBTreeRep *rep_;
@@ -223,27 +215,23 @@ class ThreadedRBTreeRep : public MemTableRep {
     rbtree_impl(ThreadedRBTreeRep *rep) : data_(256), rep_(rep) {}
 
     void Destory() {
-      if (mem_used_ < lowCapicity) {
+      size_t mem_used = data_.size();
+      if (mem_used < lowCapicity) {
         WriteLock rep_lock(&rep_->mutex_);
         auto &list = rep_->rbt_list_;
-        auto curr = list.begin(), other = list.end();
-        for (; curr != list.end(); curr++) {
+        for (auto curr = list.begin(), self = list.end(); curr != list.end(); curr++) {
           auto curr_ptr = &**curr;
           if (this == curr_ptr)
-            other = curr;
-          else if ((curr_ptr->MemUsed() + mem_used_) / 4 - UINT32_MAX >= 0) {
+            self = curr;
+          else if ((curr_ptr->MemUsed() + mem_used) / 4 - UINT32_MAX >= 0) {
             WriteLock lock(&curr_ptr->mutex_);
-            if ((curr_ptr->MemUsed() + mem_used_) / 4 - UINT32_MAX >= 0) {
-              if (other == list.end()) {
-                other = curr;
-                while (this != curr_ptr)
+            if ((curr_ptr->MemUsed() + mem_used) / 4 - UINT32_MAX >= 0) {
+              if (self == list.end()) {
+                for (self = std::next(curr); this != &**self; ++self)
                   ;
-                (*other)->Merge(curr_ptr);
-                list.erase(curr);
-              } else {
-                curr_ptr->Merge(&**other);
-                list.erase(other);
               }
+              curr_ptr->Merge(&**self);
+              list.erase(self);
               break;
             }
           }
@@ -258,11 +246,11 @@ class ThreadedRBTreeRep : public MemTableRep {
      private:
       std::shared_ptr<rbtree_impl> impl_;
       size_t bound_ = 0;
-      size_t pos_ = 0;
+      uint32_t pos_ = 0;
 
      public:
-      explicit InnerIterator(rbtree_impl *impl) : impl_(impl) {
-        bound_ = impl_->root_.get_most_right(my_deref_node_t{&impl_->data_});
+      explicit InnerIterator(std::shared_ptr<rbtree_impl> impl) : impl_(impl) {
+        bound_ = impl_->MemUsed() >> padding;
       }
 
       void Next() {
@@ -336,11 +324,10 @@ class ThreadedRBTreeRep : public MemTableRep {
       uint32_t klnln = mag ? VarintLength(iKey.size() - 39) : 0;
       uint32_t vlnln = VarintLength(val.size());
       size_t c =
-          terark::align_up(9 + klnln + iKey.size() + vlnln + val.size(), 4);
+          terark::align_up(9 + klnln + iKey.size() + vlnln + val.size(), 1 << padding);
       size_t pos = data_.alloc(c);
       if (pos == size_t(-1)) return false;
       size_t idx = pos >> padding;
-      mem_used_ += c;
       my_deref_node_t{&data_}(idx).set_key_value(iKey, val, klnln, vlnln, mag);
       my_stack_t stack;
       {
@@ -372,8 +359,9 @@ class ThreadedRBTreeRep : public MemTableRep {
                                  pos >> padding);
         else
           assert(false);
-        pos += terark::align_up(node.capicity(), 4);
+        pos += terark::align_up(node.capicity(), 1 << padding);
       }
+      item_num_ += n;
     }
 
     template <class Lock>
@@ -388,18 +376,16 @@ class ThreadedRBTreeRep : public MemTableRep {
 
     template <class Lock>
     InnerIterator<Lock> NewInnerIterator() {
-      return InnerIterator<Lock>(this);
+      return InnerIterator<Lock>(shared_from_this());
     }
 
     void MarkReadOnly() { readOnly_ = true; }
 
     bool IsReadOnly() { return readOnly_; }
 
-    uint64_t MemUsed() { return mem_used_; }
+    uint64_t MemUsed() { return data_.size(); }
 
     size_t Size() { return item_num_; }
-
-    size_t IterNum() { return iter_cnt_; }
 
     template <class Lock>
     uint64_t ApprxNumEntries(const Slice &start_ikey, const Slice &end_ikey) {
@@ -450,7 +436,6 @@ class ThreadedRBTreeRep : public MemTableRep {
   const MemTableRep::KeyComparator &cmp_;
   const InternalKeyComparator *icmp_;
   mutable port::RWMutex mutex_;
-  size_t iter_cnt_ = 0;
 
  public:
   explicit ThreadedRBTreeRep(const MemTableRep::KeyComparator &compare,
@@ -462,8 +447,6 @@ class ThreadedRBTreeRep : public MemTableRep {
         cmp_(compare) {
     icmp_ = cmp_.icomparator();
   }
-
-  virtual ~ThreadedRBTreeRep() override { assert(iter_cnt_ > 0); }
 
   virtual KeyHandle Allocate(const size_t len, char **buf) override {
     assert(false);
