@@ -60,10 +60,6 @@ bool VerifyClassName(fstring class_name) {
                   g_TerarkIndexFactroy.val(head_i) == g_TerarkIndexFactroy.val(self_i);
 }
 
-static MatchContext& get_ctx() {
-  MY_THREAD_LOCAL(terark::MatchContext, ctx);
-  return ctx;
-}
 
 template<size_t Align, class Writer>
 void Padzero(const Writer& write, size_t offset) {
@@ -493,21 +489,10 @@ struct NestLoudsTrieIndexBase : public TerarkIndex {
     m_trie->save_mmap(write);
   }
   size_t Find(fstring key) const override final {
-    auto& ctx = get_ctx();
-    ctx.reset();
-    ctx.root = 0;
-    ctx.pos = 0;
-    ctx.zidx = 0;
-    ctx.zbuf_state = size_t(-1);
-    return m_dawg->index(ctx, key);
+    return m_dawg->index(key);
   }
   virtual size_t DictRank(fstring key) const {
-    auto& ctx = get_ctx();
-    ctx.root = 0;
-    ctx.pos = 0;
-    ctx.zidx = 0;
-    ctx.zbuf_state = size_t(-1);
-    return m_dawg->dict_rank(ctx, key);
+    return m_dawg->dict_rank(key);
   }
   size_t NumKeys() const override final {
     return m_dawg->num_words();
