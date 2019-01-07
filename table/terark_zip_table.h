@@ -106,7 +106,7 @@ struct TerarkZipTableOptions {
   ///  < 0: do not use pread
   /// == 0: always use pread
   ///  > 0: use pread if BlobStore avg record len > minPreadLen
-  int    minPreadLen         = -1;
+  int    minPreadLen         = 0;
   int    cacheShards         = 17; // to reduce lock competition
   size_t cacheCapacityBytes  = 0;  // non-zero implies direct io read
   bool   disableCompressDict = false;
