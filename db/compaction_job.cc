@@ -966,7 +966,7 @@ void CompactionJob::ProcessEssenceCompaction(SubcompactionState* sub_compact) {
           bool report_detailed_time, RangeDelAggregator* range_del_agg_x,
           const CompactionFilter* compaction_filter_x) {
         return std::unique_ptr<CompactionIterator>(new CompactionIterator(
-            input_x, cfd->user_comparator(), &merge_x,
+            input_x, end, cfd->user_comparator(), &merge_x,
             versions_->LastSequence(), &existing_snapshots_,
             earliest_write_conflict_snapshot_, snapshot_checker_, env_,
             report_detailed_time, false, range_del_agg_x,
@@ -1006,12 +1006,8 @@ void CompactionJob::ProcessEssenceCompaction(SubcompactionState* sub_compact) {
     const Slice& key = c_iter->key();
     const Slice& value = c_iter->value();
 
-    // If an end key (exclusive) is specified, check if the current key is
-    // >= than it and exit if it is because the iterator is out of its range
-    if (end != nullptr &&
-        cfd->user_comparator()->Compare(c_iter->user_key(), *end) >= 0) {
-      break;
-    }
+    assert(end == nullptr ||
+           cfd->user_comparator()->Compare(c_iter->user_key(), *end) < 0);
     if (c_iter_stats.num_input_records % kRecordStatsEvery ==
         kRecordStatsEvery - 1) {
       RecordDroppedKeys(c_iter_stats, &sub_compact->compaction_job_stats);

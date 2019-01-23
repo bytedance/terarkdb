@@ -60,8 +60,9 @@ class CompactionIterator {
     const Compaction* compaction_;
   };
 
-  CompactionIterator(InternalIterator* input, const Comparator* cmp,
-                     MergeHelper* merge_helper, SequenceNumber last_sequence,
+  CompactionIterator(InternalIterator* input, const Slice* end,
+                     const Comparator* cmp, MergeHelper* merge_helper,
+                     SequenceNumber last_sequence,
                      std::vector<SequenceNumber>* snapshots,
                      SequenceNumber earliest_write_conflict_snapshot,
                      const SnapshotChecker* snapshot_checker, Env* env,
@@ -73,8 +74,9 @@ class CompactionIterator {
                      const SequenceNumber preserve_deletes_seqnum = 0);
 
   // Constructor with custom CompactionProxy, used for tests.
-  CompactionIterator(InternalIterator* input, const Comparator* cmp,
-                     MergeHelper* merge_helper, SequenceNumber last_sequence,
+  CompactionIterator(InternalIterator* input, const Slice* end,
+                     const Comparator* cmp, MergeHelper* merge_helper,
+                     SequenceNumber last_sequence,
                      std::vector<SequenceNumber>* snapshots,
                      SequenceNumber earliest_write_conflict_snapshot,
                      const SnapshotChecker* snapshot_checker, Env* env,
@@ -138,6 +140,7 @@ class CompactionIterator {
   inline bool ikeyNotNeededForIncrementalSnapshot();
 
   InternalIterator* input_;
+  const Slice* end_;
   const Comparator* cmp_;
   MergeHelper* merge_helper_;
   const std::vector<SequenceNumber>* snapshots_;

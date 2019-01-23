@@ -145,12 +145,13 @@ Status BuildTable(
                        snapshot_checker);
 
     CompactionIterator c_iter(
-        iter, internal_comparator.user_comparator(), &merge, kMaxSequenceNumber,
-        &snapshots, earliest_write_conflict_snapshot, snapshot_checker, env,
+        iter, nullptr, internal_comparator.user_comparator(), &merge,
+        kMaxSequenceNumber, &snapshots, earliest_write_conflict_snapshot,
+        snapshot_checker, env,
         ShouldReportDetailedTime(env, ioptions.statistics),
         true /* internal key corruption is not ok */, range_del_agg.get());
     CompactionIterator c_iter2(
-        iter, internal_comparator.user_comparator(), &merge2,
+        iter, nullptr, internal_comparator.user_comparator(), &merge2,
         kMaxSequenceNumber, &snapshots, earliest_write_conflict_snapshot,
         snapshot_checker, env, false /* report_detailed_time */,
         true /* internal key corruption is not ok */, range_del_agg.get());

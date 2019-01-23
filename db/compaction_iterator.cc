@@ -64,8 +64,9 @@ void CompactionIteratorToInternalIterator::Seek(const Slice& target) {
 }
 
 CompactionIterator::CompactionIterator(
-    InternalIterator* input, const Comparator* cmp, MergeHelper* merge_helper,
-    SequenceNumber last_sequence, std::vector<SequenceNumber>* snapshots,
+    InternalIterator* input, const Slice* end, const Comparator* cmp,
+    MergeHelper* merge_helper, SequenceNumber last_sequence,
+    std::vector<SequenceNumber>* snapshots,
     SequenceNumber earliest_write_conflict_snapshot,
     const SnapshotChecker* snapshot_checker, Env* env,
     bool report_detailed_time, bool expect_valid_internal_key,
@@ -74,7 +75,7 @@ CompactionIterator::CompactionIterator(
     const std::atomic<bool>* shutting_down,
     const SequenceNumber preserve_deletes_seqnum)
     : CompactionIterator(
-          input, cmp, merge_helper, last_sequence, snapshots,
+          input, end, cmp, merge_helper, last_sequence, snapshots,
           earliest_write_conflict_snapshot, snapshot_checker, env,
           report_detailed_time, expect_valid_internal_key, range_del_agg,
           std::unique_ptr<CompactionProxy>(
@@ -82,8 +83,9 @@ CompactionIterator::CompactionIterator(
           compaction_filter, shutting_down, preserve_deletes_seqnum) {}
 
 CompactionIterator::CompactionIterator(
-    InternalIterator* input, const Comparator* cmp, MergeHelper* merge_helper,
-    SequenceNumber /*last_sequence*/, std::vector<SequenceNumber>* snapshots,
+    InternalIterator* input, const Slice* end, const Comparator* cmp,
+    MergeHelper* merge_helper, SequenceNumber /*last_sequence*/,
+    std::vector<SequenceNumber>* snapshots,
     SequenceNumber earliest_write_conflict_snapshot,
     const SnapshotChecker* snapshot_checker, Env* env,
     bool report_detailed_time, bool expect_valid_internal_key,
@@ -93,6 +95,7 @@ CompactionIterator::CompactionIterator(
     const std::atomic<bool>* shutting_down,
     const SequenceNumber preserve_deletes_seqnum)
     : input_(input),
+      end_(end),
       cmp_(cmp),
       merge_helper_(merge_helper),
       snapshots_(snapshots),
@@ -307,6 +310,11 @@ void CompactionIterator::NextFromInput() {
       current_user_key_snapshot_ = 0;
       iter_stats_.num_input_corrupt_records++;
       valid_ = true;
+      break;
+    }
+    // If an end key (exclusive) is specified, check if the current key is
+    // >= than it and exit if it is because the iterator is out of its range
+    if (end_ != nullptr && cmp_->Compare(ikey_.user_key, *end_) >= 0) {
       break;
     }
 
