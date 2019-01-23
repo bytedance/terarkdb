@@ -727,15 +727,12 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
 
   auto& ranges = level_ranges.front();
   if (inputs.size() == 1 && inputs.front().files.size() == 1 &&
-      inputs.front().files.front()->sst_purpose == kMapSst) {
-    size_t stable_count = 0;
-    for (auto it = ranges.begin(); it != ranges.end(); ++it) {
-      stable_count += it->stable ? 1 : 0;
-    }
-    if (stable_count == input_range_count) {
-      // all ranges stable, new map will equals to input map, done
-      return s;
-    }
+      inputs.front().files.front()->sst_purpose == kMapSst &&
+      ranges.size() == input_range_count &&
+      !std::any_of(ranges.begin(), ranges.end(),
+                   [](const RangeWithDepend& e) { return !e.stable; })) {
+    // all ranges stable, new map will equals to input map, done
+    return s;
   }
   // make sure level 0 files seqno no overlap
   if (output_level != 0 || ranges.size() == 1) {
