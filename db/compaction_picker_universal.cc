@@ -523,6 +523,20 @@ Compaction* UniversalCompactionPicker::CompactRange(
     InternalKey** compaction_end, bool* manual_conflict,
     const std::unordered_set<uint64_t>* files_being_compact,
     bool enable_lazy_compaction) {
+  if (input_level == ColumnFamilyData::kCompactAllLevels &&
+      enable_lazy_compaction) {
+    size_t sr_count = 0;
+    int new_input_level = -1;
+    for (int level = 0; level < vstorage->num_levels(); ++level) {
+      if (vstorage->NumLevelFiles(level) > 0) {
+        ++sr_count;
+        new_input_level = level;
+      }
+    }
+    if (sr_count == 1) {
+      input_level = new_input_level;
+    }
+  }
   if (input_level == ColumnFamilyData::kCompactAllLevels) {
     assert(ioptions_.compaction_style == kCompactionStyleUniversal);
 
@@ -538,7 +552,6 @@ Compaction* UniversalCompactionPicker::CompactRange(
     // DBImpl::RunManualCompaction will make full range for universal compaction
     assert(begin == nullptr);
     assert(end == nullptr);
-    *compaction_end = nullptr;
 
     int start_level = 0;
     for (; start_level < vstorage->num_levels() &&
@@ -591,6 +604,12 @@ Compaction* UniversalCompactionPicker::CompactRange(
         GetCompressionOptions(ioptions_, vstorage, output_level);
     params.max_subcompactions = max_subcompactions;
     params.manual_compaction = true;
+    if (enable_lazy_compaction) {
+      params.max_subcompactions = 1;
+      params.compaction_purpose = kMapSst;
+    } else {
+      *compaction_end = nullptr;
+    }
 
     Compaction* c = new Compaction(std::move(params));
     RegisterCompaction(c);
