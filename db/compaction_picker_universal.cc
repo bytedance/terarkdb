@@ -525,15 +525,43 @@ Compaction* UniversalCompactionPicker::CompactRange(
     bool enable_lazy_compaction) {
   if (input_level == ColumnFamilyData::kCompactAllLevels &&
       enable_lazy_compaction) {
-    size_t sr_count = 0;
+    auto hit_sst = [&](const FileMetaData* f) {
+      if (files_being_compact->count(f->fd.GetNumber()) > 0) {
+        return true;
+      }
+      auto& depend_files = vstorage->depend_files();
+      for (auto file_number : f->sst_depend) {
+        if (files_being_compact->count(file_number) > 0) {
+          return true;
+        }
+        auto find = depend_files.find(file_number);
+        if (find == depend_files.end()) {
+          // TODO: log error
+          continue;
+        }
+        for (auto file_number_depend : find->second->sst_depend) {
+          if (files_being_compact->count(file_number_depend) > 0) {
+            return true;
+          }
+        };
+      }
+      return false;
+    };
+    size_t hit_count = 0;
     int new_input_level = -1;
     for (int level = 0; level < vstorage->num_levels(); ++level) {
-      if (vstorage->NumLevelFiles(level) > 0) {
-        ++sr_count;
-        new_input_level = level;
+      for (auto f : vstorage->LevelFiles(level)) {
+        if (hit_sst(f)) {
+          ++hit_count;
+          new_input_level = level;
+          break;
+        }
       }
     }
-    if (sr_count == 1) {
+    if (hit_count == 0) {
+      return nullptr;
+    }
+    if (hit_count == 1) {
       input_level = new_input_level;
     }
   }
