@@ -999,6 +999,7 @@ struct MapElementIterator : public InternalIterator {
                          }) -
         meta_array_;
     if (where_ == meta_size_) {
+      iter_.reset();
       return;
     }
     if (meta_array_[where_]->sst_purpose == kMapSst) {
@@ -1018,6 +1019,8 @@ struct MapElementIterator : public InternalIterator {
           iter_->SeekToFirst();
         }
       }
+    } else {
+      iter_.reset();
     }
     Update();
   }
@@ -1030,6 +1033,7 @@ struct MapElementIterator : public InternalIterator {
         meta_array_;
     if (where_-- == 0) {
       where_ = meta_size_;
+      iter_.reset();
       return;
     }
     if (meta_array_[where_]->sst_purpose == kMapSst) {
@@ -1050,6 +1054,8 @@ struct MapElementIterator : public InternalIterator {
           iter_->SeekToLast();
         }
       }
+    } else {
+      iter_.reset();
     }
     Update();
   }
@@ -1060,6 +1066,8 @@ struct MapElementIterator : public InternalIterator {
         return;
       }
       iter_->SeekToFirst();
+    } else {
+      iter_.reset();
     }
     Update();
   }
@@ -1070,6 +1078,8 @@ struct MapElementIterator : public InternalIterator {
         return;
       }
       iter_->SeekToLast();
+    } else {
+      iter_.reset();
     }
     Update();
   }
@@ -1091,6 +1101,8 @@ struct MapElementIterator : public InternalIterator {
         return;
       }
       iter_->SeekToFirst();
+    } else {
+      iter_.reset();
     }
     Update();
   }
@@ -1113,6 +1125,8 @@ struct MapElementIterator : public InternalIterator {
         return;
       }
       iter_->SeekToLast();
+    } else {
+      iter_.reset();
     }
     Update();
   }

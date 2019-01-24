@@ -564,7 +564,6 @@ void CompactionPicker::InitFilesBeingCompact(
     return;
   }
   auto& icmp = ioptions_.internal_comparator;
-  DependFileMap empty_depend_files;
   ReadOptions options;
   MapSstElement element;
   for (int level = 0; level < vstorage->num_levels(); ++level) {
