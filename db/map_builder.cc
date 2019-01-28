@@ -726,14 +726,6 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
   }
 
   auto& ranges = level_ranges.front();
-  if (inputs.size() == 1 && inputs.front().files.size() == 1 &&
-      inputs.front().files.front()->sst_purpose == kMapSst &&
-      ranges.size() == input_range_count &&
-      !std::any_of(ranges.begin(), ranges.end(),
-                   [](const RangeWithDepend& e) { return !e.stable; })) {
-    // all ranges stable, new map will equals to input map, done
-    return s;
-  }
   // make sure level 0 files seqno no overlap
   if (output_level != 0 || ranges.size() == 1) {
     std::unordered_map<uint64_t, const FileMetaData*> sst_live;
@@ -759,12 +751,11 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
       for (auto& input_level : inputs) {
         for (auto f : input_level.files) {
           uint64_t file_number = f->fd.GetNumber();
-          if (sst_live.count(file_number) > 0) {
+          if (sst_live.erase(file_number) > 0) {
             if (output_level != input_level.level) {
               edit_del_file(input_level.level, f);
               edit_add_file(output_level, f);
             }
-            sst_live.erase(file_number);
           } else {
             edit_del_file(input_level.level, f);
           }
@@ -776,6 +767,14 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
       }
       return s;
     }
+  }
+  if (inputs.size() == 1 && inputs.front().files.size() == 1 &&
+      inputs.front().files.front()->sst_purpose == kMapSst &&
+      ranges.size() == input_range_count &&
+      !std::any_of(ranges.begin(), ranges.end(),
+                   [](const RangeWithDepend& e) { return !e.stable; })) {
+    // all ranges stable, new map will equals to input map, done
+    return s;
   }
 
   using IterType = MapSstElementIterator;
