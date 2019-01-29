@@ -733,7 +733,8 @@ double GenSortedRunGroup(const std::vector<double>& sr, size_t group,
   for (size_t i = 1; i < sr.size(); ++i) {
     size_t end_i = sr.size() - (group - q_i);
     double new_acc = sr_acc + sr[i];
-    if ((i > end_i || sr_acc > q_acc || sr_acc * new_acc > q_acc * q_acc) &&
+    if ((i > end_i || sr_acc > q_acc ||
+         std::abs(new_acc - q_acc) > std::abs(sr_acc - q_acc)) &&
         q_i + 1 < group) {
       o[q_i].count = i - o[q_i].start;
       ++q_i;

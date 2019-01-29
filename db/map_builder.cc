@@ -565,7 +565,7 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
   assert(compaction_purpose != kLinkSst || !added_files.empty());
 
   auto& icomp = cfd->internal_comparator();
-  DependFileMap empty_delend_files;
+  DependFileMap empty_depend_files;
 
   auto create_iterator = [&](const FileMetaData* f,
                              const DependFileMap& depend_files, Arena* arena,
@@ -577,7 +577,7 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
 
     return cfd->table_cache()->NewIterator(
         read_options, env_options_for_read_, cfd->internal_comparator(), *f,
-        f->sst_purpose == kMapSst ? empty_delend_files : depend_files, nullptr,
+        f->sst_purpose == kMapSst ? empty_depend_files : depend_files, nullptr,
         cfd->GetCurrentMutableCFOptions()->prefix_extractor.get(), reader_ptr,
         nullptr /* no per level latency histogram */, true /* for_compaction */,
         arena, false /* skip_filters */, -1);
