@@ -82,7 +82,7 @@ struct TerarkZipTableOptions {
 
   unsigned short offsetArrayBlockUnits    = 0;
 
-  float          estimateCompressionRatio = 0.2f;
+  float          estimateCompressionRatio = 1.0f;
   double         sampleRatio              = 0.03;
   std::string    localTempDir             = "/tmp";
   std::string    indexType                = "Mixed_XL_256_32_FL";

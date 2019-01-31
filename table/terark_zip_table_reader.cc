@@ -210,15 +210,20 @@ void UpdateCollectInfo(const TerarkZipTableFactory* table_factory,
   if (!tzopt->enableCompressionProbe) {
     return;
   }
-  auto find = props->user_collected_properties.find(kTerarkZipTableBuildTimestamp);
-  if (find == props->user_collected_properties.end()) {
+  auto find_time = props->user_collected_properties.find(kTerarkZipTableBuildTimestamp);
+  if (find_time == props->user_collected_properties.end()) {
+    return;
+  }
+  auto find_entropy = props->user_collected_properties.find(kTerarkZipTableEntropy);
+  if (find_entropy == props->user_collected_properties.end()) {
     return;
   }
   auto& collect = table_factory->GetCollect();
-  uint64_t timestamp = terark::lcast(find->second);
+  uint64_t timestamp = terark::lcast(find_time->second);
+  size_t entropy = terark::lcast(find_entropy->second);
   collect.update(timestamp
       , props->raw_value_size, props->data_size
-      , props->raw_key_size + props->raw_value_size, file_size);
+      , entropy, file_size);
 }
 
 static bool g_useOldOffsetOf =

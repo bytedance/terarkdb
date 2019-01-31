@@ -333,16 +333,20 @@ try {
     fprintf(tmpDumpFile_, "DEBUG: 1st pass => %s / %s \n",
         ikey.DebugString(true).c_str(), value.ToString(true).c_str());
   }
-
+  freq_.add_record(fstringOf(key));
+  freq_.add_record(fstringOf(value));
   ++properties_.num_entries;
   properties_.raw_key_size += key.size();
   properties_.raw_value_size += value.size();
-  uint64_t offset = uint64_t((properties_.raw_key_size + properties_.raw_value_size)
-                             * estimateRatio_);
-  assert(offset >= estimateOffset_);
-  NotifyCollectTableCollectorsOnAdd(key, value, offset,
+  size_t freq_size = freq_.histogram().o0_size;
+  if (freq_size >= next_freq_size_) {
+    next_freq_size_ = freq_size + (1ULL << 20);
+    auto freq_copy = freq_;
+    freq_copy.finish();
+    estimateOffset_ = uint64_t(freq_hist_o1::estimate_size(freq_copy.histogram()) * estimateRatio_);
+  }
+  NotifyCollectTableCollectorsOnAdd(key, value, estimateOffset_,
                                     collectors_, ioptions_.info_log);
-  estimateOffset_ = offset;
 
   uint64_t seqType = DecodeFixed64(key.data() + key.size() - 8);
   ValueType value_type = ValueType(seqType & 255);
@@ -595,7 +599,7 @@ Status TerarkZipTableBuilder::EmptyTableFinish() {
   }
   range_del_block_.Reset();
   offset_info_.Init(0, 0);
-  return WriteMetaData(std::string(), {
+  return WriteMetaData(std::string(), 0, {
 #if defined(TerocksPrivateCode)
     { &kTerarkZipTableExtendedBlock                 , licenseHandle },
 #endif // TerocksPrivateCode
@@ -1836,7 +1840,9 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4, long long
                    properties_.data_size,
                    zvTypeBlock.size(),
                    commonPrefixBlock.size());
-  WriteMetaData(dictInfo, {
+  freq_.finish();
+  size_t entropy = freq_hist_o1::estimate_size(freq_.histogram());
+  WriteMetaData(dictInfo, entropy, {
 #if defined(TerocksPrivateCode)
     { &kTerarkZipTableExtendedBlock                                , licenseHandle     },
 #endif // TerocksPrivateCode
@@ -1870,7 +1876,7 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4, long long
     "    zip pipeline throughput = %7.3f'MB/sec\n"
     "    entries = %zd  avg-key = %.2f  avg-zkey = %.2f  avg-val = %.2f  avg-zval = %.2f\n"
     "    usrkeys = %zd  avg-key = %.2f  avg-zkey = %.2f  avg-val = %.2f  avg-zval = %.2f\n"
-    "    seq expand size = %zd  multi value expand size = %zd\n"
+    "    seq expand size = %zd  multi value expand size = %zd entropy size = %.4f GB\n"
     "    UnZipSize{ index =%9.4f GB  value =%9.4f GB  dict =%7.2f MB  all =%9.4f GB }\n"
     "    __ZipSize{ index =%9.4f GB  value =%9.4f GB  dict =%7.2f MB  all =%9.4f GB }\n"
     "    UnZip/Zip{ index =%9.4f     value =%9.4f     dict =%7.2f     all =%9.4f    }\n"
@@ -1917,7 +1923,7 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4, long long
 , double(properties_.raw_value_size + seqExpandSize_ + multiValueExpandSize_) / kvs.key.m_cnt_sum
 , double(properties_.data_size)      / kvs.key.m_cnt_sum
 
-, seqExpandSize_, multiValueExpandSize_
+, seqExpandSize_, multiValueExpandSize_, entropy / 1e9
 
 , kvs.key.m_total_key_len / 1e9
 , properties_.raw_value_size / 1e9
@@ -2104,7 +2110,9 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4, long
   }
   properties_.index_size = indexBlock.size();
   properties_.num_data_blocks = numKeys;
-  WriteMetaData(dictInfo, {
+  freq_.finish();
+  size_t entropy = freq_hist_o1::estimate_size(freq_.histogram());
+  WriteMetaData(dictInfo, entropy, {
 #if defined(TerocksPrivateCode)
     { &kTerarkZipTableExtendedBlock                                , licenseHandle     },
 #endif // TerocksPrivateCode
@@ -2139,7 +2147,7 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4, long
     "    zip pipeline throughput = %7.3f'MB/sec\n"
     "    entries = %zd  avg-key = %.2f  avg-zkey = %.2f  avg-val = %.2f  avg-zval = %.2f\n"
     "    usrkeys = %zd  avg-key = %.2f  avg-zkey = %.2f  avg-val = %.2f  avg-zval = %.2f\n"
-    "    seq expand size = %zd  multi value expand size = %zd\n"
+    "    seq expand size = %zd  multi value expand size = %zd entropy size = %0.4f GB\n"
     "    UnZipSize{ index =%9.4f GB  value =%9.4f GB  dict =%7.2f MB  all =%9.4f GB }\n"
     "    __ZipSize{ index =%9.4f GB  value =%9.4f GB  dict =%7.2f MB  all =%9.4f GB }\n"
     "    UnZip/Zip{ index =%9.4f     value =%9.4f     dict =%7.2f     all =%9.4f    }\n"
@@ -2186,7 +2194,7 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4, long
 , double(properties_.raw_value_size + seqExpandSize_ + multiValueExpandSize_) / numKeys
 , double(properties_.data_size)      / numKeys
 
-, seqExpandSize_, multiValueExpandSize_
+, seqExpandSize_, multiValueExpandSize_, entropy / 1e9
 
 , sumKeyLen / 1e9
 , properties_.raw_value_size / 1e9
@@ -2219,7 +2227,7 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4, long
   return s;
 }
 
-Status TerarkZipTableBuilder::WriteMetaData(const std::string& dictInfo,
+Status TerarkZipTableBuilder::WriteMetaData(const std::string& dictInfo, size_t entropy,
                                             std::initializer_list<std::pair<const std::string*, BlockHandle>> blocks) {
   MetaIndexBuilder metaindexBuiler;
   for (const auto& block : blocks) {
@@ -2245,6 +2253,9 @@ Status TerarkZipTableBuilder::WriteMetaData(const std::string& dictInfo,
     propBlockBuilder.Add(user_collected_properties);
   }
   propBlockBuilder.Add(kTerarkZipTableBuildTimestamp, GetTimestamp());
+  if (entropy > 0) {
+    propBlockBuilder.Add(kTerarkZipTableEntropy, terark::lcast(entropy));
+  }
   if (!dictInfo.empty()) {
     propBlockBuilder.Add(kTerarkZipTableDictInfo, dictInfo);
   }

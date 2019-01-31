@@ -73,6 +73,7 @@ extern const std::string kTerarkZipTableExtendedBlock;
 extern const std::string kTerarkZipTableBuildTimestamp;
 extern const std::string kTerarkZipTableDictInfo;
 extern const std::string kTerarkZipTableDictSize;
+extern const std::string kTerarkZipTableEntropy;
 
 template<class ByteArray>
 inline Slice SliceOf(const ByteArray& ba) {
@@ -150,13 +151,13 @@ struct CollectInfo {
     uint64_t timestamp;
     size_t raw_value;
     size_t zip_value;
-    size_t raw_store;
+    size_t entropy;
     size_t zip_store;
   };
   std::vector<CompressionInfo> queue;
   size_t raw_value_size = 0;
   size_t zip_value_size = 0;
-  size_t raw_store_size = 0;
+  size_t entropy_size = 0;
   size_t zip_store_size = 0;
   std::atomic<float> estimate_compression_ratio;
   mutable std::mutex mutex;

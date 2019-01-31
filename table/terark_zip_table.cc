@@ -148,7 +148,7 @@ static const std::string g_szTerarkPublikKey =
 const std::string kTerarkZipTableBuildTimestamp = "terark.build.timestamp";
 const std::string kTerarkZipTableDictInfo = "terark.build.dict_info";
 const std::string kTerarkZipTableDictSize = "terark.build.dict_size";
-const std::string kTerarkZipTableEstimateRatio = "terark.build.estimate_ratio";
+const std::string kTerarkZipTableEntropy = "terark.build.entropy";
 
 #if defined(TerocksPrivateCode)
 
@@ -443,33 +443,33 @@ void LicenseInfo::print_error(const char* file_name, bool startup, rocksdb::Logg
 
 #endif // TerocksPrivateCode
 
-const size_t CollectInfo::queue_size = 8;
+const size_t CollectInfo::queue_size = 1024;
 const double CollectInfo::hard_ratio = 0.9;
 
 void CollectInfo::update(uint64_t timestamp
   , size_t raw_value, size_t zip_value
-  , size_t raw_store, size_t zip_store) {
+  , size_t entropy, size_t zip_store) {
   std::unique_lock<std::mutex> l(mutex);
   raw_value_size += raw_value;
   zip_value_size += zip_value;
-  raw_store_size += raw_store;
+  entropy_size += entropy;
   zip_store_size += zip_store;
   auto comp = [](const CompressionInfo& l, const CompressionInfo& r) {
     return l.timestamp > r.timestamp;
   };
   queue.emplace_back(CompressionInfo{timestamp
-    , raw_value, zip_value, raw_store, zip_store});
+    , raw_value, zip_value, entropy, zip_store});
   std::push_heap(queue.begin(), queue.end(), comp);
   while (queue.size() > queue_size) {
     auto& front = queue.front();
-    raw_value_size += front.raw_value;
-    zip_value_size += front.zip_value;
-    raw_store_size += front.raw_store;
-    zip_store_size += front.zip_store;
+    raw_value_size -= front.raw_value;
+    zip_value_size -= front.zip_value;
+    entropy_size -= front.entropy;
+    zip_store_size -= front.zip_store;
     std::pop_heap(queue.begin(), queue.end(), comp);
     queue.pop_back();
   }
-  estimate_compression_ratio = float(zip_store_size) / float(raw_store_size);
+  estimate_compression_ratio = float(zip_store_size) / float(entropy_size);
 }
 
 bool CollectInfo::hard(size_t raw, size_t zip) {

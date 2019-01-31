@@ -31,6 +31,7 @@
 #include <terark/bitmap.hpp>
 #include <terark/stdtypes.hpp>
 #include <terark/histogram.hpp>
+#include <terark/entropy/entropy_base.hpp>
 #include <terark/zbs/abstract_blob_store.hpp>
 #include <terark/zbs/dict_zip_blob_store.hpp>
 #include <terark/zbs/zip_reorder_map.hpp>
@@ -51,6 +52,7 @@ using terark::ZReorderMap;
 using terark::Uint64Histogram;
 using terark::DictZipBlobStore;
 using terark::PipelineProcessor;
+using terark::freq_hist_o1;
 
 class TerarkZipTableBuilder : public TableBuilder, boost::noncopyable {
 public:
@@ -170,7 +172,7 @@ private:
                            fstring tmpDictFile,
                            const std::string& dictType, uint64_t dicthash,
                            const DictZipBlobStore::ZipStat& dzstat);
-  Status WriteMetaData(const std::string& dictType,
+  Status WriteMetaData(const std::string& dictType, size_t entropy,
                        std::initializer_list<std::pair<const std::string*, BlockHandle>> blocks);
   DictZipBlobStore::ZipBuilder* createZipBuilder() const;
 
@@ -219,6 +221,8 @@ private:
   BlockBuilder range_del_block_;
   fstrvec valueBuf_; // collect multiple values for one key
   PipelineProcessor pipeline_;
+  freq_hist_o1 freq_;
+  uint64_t next_freq_size_ = 1ULL << 20;
   bool waitInited_ = false;
   bool closed_ = false;  // Either Finish() or Abandon() has been called.
   bool isReverseBytewiseOrder_;
