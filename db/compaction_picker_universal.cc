@@ -1562,7 +1562,10 @@ Compaction* UniversalCompactionPicker::PickCompositeCompaction(
         break;
       }
       map_element.Decode(iter->key(), iter->value());
-      if (unique_check.count(iter->key()) > 0 || is_perfect(map_element)) {
+      if (unique_check.count(iter->key()) > 0 ||
+          (is_perfect(map_element) &&
+           uc->Compare(ExtractUserKey(map_element.smallest_key_),
+                       range.limit) != 0)) {
         assign_user_key(range.limit, map_element.smallest_key_);
         break;
       } else {
