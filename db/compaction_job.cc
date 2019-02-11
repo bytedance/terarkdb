@@ -1138,8 +1138,10 @@ void CompactionJob::ProcessEssenceCompaction(SubcompactionState* sub_compact) {
       RecordDroppedKeys(range_del_out_stats,
                         &sub_compact->compaction_job_stats);
       if (sub_compact->compaction->partial_compaction()) {
-        sub_compact->actual_end.SetMinPossibleForUserKey(
-            ExtractUserKey(*next_key));
+        if (next_key != nullptr) {
+          sub_compact->actual_end.SetMinPossibleForUserKey(
+              ExtractUserKey(*next_key));
+        }
         break;
       }
       if (sub_compact->outputs.size() == 1) {
