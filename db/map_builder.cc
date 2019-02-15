@@ -947,7 +947,8 @@ Status MapBuilder::WriteOutputFile(
   }
   EventHelpers::LogAndNotifyTableFileCreationFinished(
       nullptr, cfd->ioptions()->listeners, dbname_, cfd->GetName(), fname, -1,
-      file_meta->fd, **prop, TableFileCreationReason::kCompaction, s);
+      file_meta->fd, *prop ? **prop : TableProperties(),
+      TableFileCreationReason::kCompaction, s);
 
 #ifndef ROCKSDB_LITE
   // Report new file to SstFileManagerImpl
