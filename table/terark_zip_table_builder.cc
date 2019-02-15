@@ -341,9 +341,7 @@ try {
   size_t freq_size = freq_.histogram().o0_size;
   if (freq_size >= next_freq_size_) {
     next_freq_size_ = freq_size + (1ULL << 20);
-    auto freq_copy = freq_;
-    freq_copy.finish();
-    estimateOffset_ = uint64_t(freq_hist_o1::estimate_size(freq_copy.histogram()) * estimateRatio_);
+    estimateOffset_ = uint64_t(freq_hist_o1::estimate_size_unfinish(freq_.histogram()) * estimateRatio_);
   }
   NotifyCollectTableCollectorsOnAdd(key, value, estimateOffset_,
                                     collectors_, ioptions_.info_log);
