@@ -66,6 +66,7 @@ struct ExternalSstFileInfo;
 class WriteBatch;
 class Env;
 class EventListener;
+class StatsHistoryIterator;
 class TraceWriter;
 
 using std::unique_ptr;
@@ -1273,6 +1274,14 @@ class DB {
 
   // Needed for StackableDB
   virtual DB* GetRootDB() { return this; }
+
+  // Given a time window, return an iterator for accessing stats history
+  // User is responsible for deleting StatsHistoryIterator after use
+  virtual Status GetStatsHistory(uint64_t /*start_time*/,
+      uint64_t /*end_time*/,
+      std::unique_ptr<StatsHistoryIterator>* /*stats_iterator*/) {
+    return Status::NotSupported("GetStatsHistory() is not implemented.");
+  }
 
  private:
   // No copying allowed

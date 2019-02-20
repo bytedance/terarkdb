@@ -134,6 +134,8 @@ TEST_F(OptionsTest, GetOptionsFromMapTest) {
       {"is_fd_close_on_exec", "true"},
       {"skip_log_error_on_recovery", "false"},
       {"stats_dump_period_sec", "46"},
+      {"stats_persist_period_sec", "57"},
+      {"stats_history_buffer_size", "69"},
       {"advise_random_on_open", "true"},
       {"allow_mmap_populate", "true"},
       {"use_adaptive_mutex", "false"},
@@ -272,6 +274,8 @@ TEST_F(OptionsTest, GetOptionsFromMapTest) {
   ASSERT_EQ(new_db_opt.is_fd_close_on_exec, true);
   ASSERT_EQ(new_db_opt.skip_log_error_on_recovery, false);
   ASSERT_EQ(new_db_opt.stats_dump_period_sec, 46U);
+  ASSERT_EQ(new_db_opt.stats_persist_period_sec, 57U);
+  ASSERT_EQ(new_db_opt.stats_history_buffer_size, 69U);
   ASSERT_EQ(new_db_opt.advise_random_on_open, true);
   ASSERT_EQ(new_db_opt.allow_mmap_populate, true);
   ASSERT_EQ(new_db_opt.use_adaptive_mutex, false);
