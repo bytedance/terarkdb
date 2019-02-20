@@ -18,11 +18,14 @@
 #include "rocksdb/cache.h"
 #include "rocksdb/convenience.h"
 #include "rocksdb/rate_limiter.h"
+#include "rocksdb/stats_history.h"
 #include "util/random.h"
 #include "util/sync_point.h"
 #include "util/testutil.h"
 
 namespace rocksdb {
+
+const int kMicrosInSec = 1000000;
 
 class DBOptionsTest : public DBTestBase {
  public:
@@ -529,10 +532,11 @@ TEST_F(DBOptionsTest, SetStatsDumpPeriodSec) {
 
   for (int i = 0; i < 20; i++) {
     int num = rand() % 5000 + 1;
-    ASSERT_OK(dbfull()->SetDBOptions(
-        {{"stats_dump_period_sec", std::to_string(num)}}));
+    ASSERT_OK(
+        dbfull()->SetDBOptions({{"stats_dump_period_sec", ToString(num)}}));
     ASSERT_EQ(num, dbfull()->GetDBOptions().stats_dump_period_sec);
   }
+  Close();
 }
 
 TEST_F(DBOptionsTest, RunStatsDumpPeriodSec) {
@@ -564,13 +568,15 @@ TEST_F(DBOptionsTest, RunStatsDumpPeriodSec) {
   rocksdb::SyncPoint::GetInstance()->EnableProcessing();
   Reopen(options);
   ASSERT_EQ(5, dbfull()->GetDBOptions().stats_dump_period_sec);
-  dbfull()->TEST_WaitForTimedTaskRun([&] { mock_env->set_current_time(5); });
+  dbfull()->TEST_WaitForDumpStatsRun([&] { mock_env->set_current_time(5); });
   ASSERT_GE(counter, 1);
 
   // Test cacel job through SetOptions
   ASSERT_OK(dbfull()->SetDBOptions({{"stats_dump_period_sec", "0"}}));
   int old_val = counter;
-  env_->SleepForMicroseconds(10000000);
+  for (int i = 6; i < 20; ++i) {
+    dbfull()->TEST_WaitForDumpStatsRun([&] { mock_env->set_current_time(i); });
+  }
   ASSERT_EQ(counter, old_val);
   Close();
 }
@@ -609,7 +615,30 @@ TEST_F(DBOptionsTest, StatsPersistScheduling) {
   ASSERT_FALSE(dbfull()->TEST_IsPersistentStatsEnabled());
   Close();
 }
+// Test persistent stats background thread scheduling and cancelling
+TEST_F(DBOptionsTest, StatsPersistScheduling) {
+  Options options;
+  options.create_if_missing = true;
+  options.stats_persist_period_sec = 5;
+  std::unique_ptr<rocksdb::MockTimeEnv> mock_env;
+  mock_env.reset(new rocksdb::MockTimeEnv(env_));
+  mock_env->set_current_time(0);  // in seconds
+  options.env = mock_env.get();
+  int counter = 0;
+  rocksdb::SyncPoint::GetInstance()->SetCallBack(
+      "DBImpl::PersistStats:Entry", [&](void* /*arg*/) { counter++; });
+  rocksdb::SyncPoint::GetInstance()->EnableProcessing();
+  Reopen(options);
+  ASSERT_EQ(5, dbfull()->GetDBOptions().stats_persist_period_sec);
+  dbfull()->TEST_WaitForPersistStatsRun([&] { mock_env->set_current_time(5); });
+  ASSERT_GE(counter, 1);
 
+  // Test cacel job through SetOptions
+  ASSERT_TRUE(dbfull()->TEST_IsPersistentStatsEnabled());
+  ASSERT_OK(dbfull()->SetDBOptions({{"stats_persist_period_sec", "0"}}));
+  ASSERT_FALSE(dbfull()->TEST_IsPersistentStatsEnabled());
+  Close();
+}
 // Test enabling persistent stats for the first time
 TEST_F(DBOptionsTest, PersistentStatsFreshInstall) {
   Options options;
@@ -677,7 +706,6 @@ TEST_F(DBOptionsTest, GetStatsHistory) {
       });
   rocksdb::SyncPoint::GetInstance()->EnableProcessing();
 #endif  // OS_MACOSX && !NDEBUG
-
   CreateColumnFamilies({"pikachu"}, options);
   ASSERT_OK(Put("foo", "bar"));
   ReopenWithColumnFamilies({"default", "pikachu"}, options);
@@ -732,7 +760,6 @@ TEST_F(DBOptionsTest, InMemoryStatsHistoryPurging) {
       });
   rocksdb::SyncPoint::GetInstance()->EnableProcessing();
 #endif  // OS_MACOSX && !NDEBUG
-
   CreateColumnFamilies({"pikachu"}, options);
   ASSERT_OK(Put("foo", "bar"));
   ReopenWithColumnFamilies({"default", "pikachu"}, options);

@@ -8,6 +8,8 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
@@ -367,6 +369,11 @@ class Statistics {
     // Do nothing by default
     return std::string("ToString(): not implemented");
   }
+
+  virtual bool getTickerMap(std::map<std::string, uint64_t>*) const {
+    // Do nothing by default
+    return false;
+  };
 
   // Override this function to disable particular histogram collection
   virtual bool HistEnabledForType(uint32_t type) const {

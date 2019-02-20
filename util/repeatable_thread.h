@@ -47,6 +47,8 @@ class RepeatableThread {
     thread_.join();
   }
 
+  bool IsRunning() { return running_; }
+
   ~RepeatableThread() { cancel(); }
 
 #ifndef NDEBUG
