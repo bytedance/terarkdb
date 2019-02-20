@@ -88,6 +88,10 @@ DBOptions BuildDBOptions(const ImmutableDBOptions& immutable_db_options,
   options.allow_fallocate = immutable_db_options.allow_fallocate;
   options.is_fd_close_on_exec = immutable_db_options.is_fd_close_on_exec;
   options.stats_dump_period_sec = mutable_db_options.stats_dump_period_sec;
+  options.stats_persist_period_sec =
+      mutable_db_options.stats_persist_period_sec;
+  options.stats_history_buffer_size =
+      mutable_db_options.stats_history_buffer_size;
   options.advise_random_on_open = immutable_db_options.advise_random_on_open;
   options.allow_mmap_populate = immutable_db_options.allow_mmap_populate;
   options.write_buffer_flush_pri = immutable_db_options.write_buffer_flush_pri;
@@ -1618,6 +1622,14 @@ std::unordered_map<std::string, OptionTypeInfo>
          {offsetof(struct DBOptions, stats_dump_period_sec), OptionType::kUInt,
           OptionVerificationType::kNormal, true,
           offsetof(struct MutableDBOptions, stats_dump_period_sec)}},
+        {"stats_persist_period_sec",
+         {offsetof(struct DBOptions, stats_persist_period_sec),
+          OptionType::kUInt, OptionVerificationType::kNormal, true,
+          offsetof(struct MutableDBOptions, stats_persist_period_sec)}},
+        {"stats_history_buffer_size",
+         {offsetof(struct DBOptions, stats_history_buffer_size),
+          OptionType::kSizeT, OptionVerificationType::kNormal, true,
+          offsetof(struct MutableDBOptions, stats_history_buffer_size)}},
         {"fail_if_options_file_error",
          {offsetof(struct DBOptions, fail_if_options_file_error),
           OptionType::kBoolean, OptionVerificationType::kNormal, false, 0}},
