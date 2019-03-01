@@ -805,7 +805,7 @@ Status Version::GetPropertiesOfAllTables(TablePropertiesCollection* props) {
 
 Status Version::GetPropertiesOfAllTables(TablePropertiesCollection* props,
                                          int level) {
-  for (const auto& file_meta : storage_info_.files_[level]) {
+  for (const auto file_meta : storage_info_.files_[level]) {
     auto fname =
         TableFileName(cfd_->ioptions()->cf_paths, file_meta->fd.GetNumber(),
                       file_meta->fd.GetPathId());
@@ -825,7 +825,7 @@ Status Version::GetPropertiesOfAllTables(TablePropertiesCollection* props,
 
 Status Version::GetPropertiesOfTablesInRange(
     const Range* range, std::size_t n, TablePropertiesCollection* props) const {
-  for (int level = -1; level < storage_info_.num_non_empty_levels(); level++) {
+  for (int level = 0; level < storage_info_.num_non_empty_levels(); level++) {
     for (decltype(n) i = 0; i < n; i++) {
       // Convert user_key into a corresponding internal key.
       InternalKey k1(range[i].start, kMaxSequenceNumber, kValueTypeForSeek);
@@ -833,7 +833,19 @@ Status Version::GetPropertiesOfTablesInRange(
       std::vector<FileMetaData*> files;
       storage_info_.GetOverlappingInputs(level, &k1, &k2, &files, -1, nullptr,
                                          false);
-      for (const auto& file_meta : files) {
+      for (size_t j = 0; j < files.size(); ++j) {
+        const auto file_meta = files[j];
+        if (file_meta->sst_purpose != SstPurpose::kEssenceSst) {
+          for (auto file_number : file_meta->sst_depend) {
+            auto find = storage_info_.depend_files_.find(file_number);
+            if (find == storage_info_.depend_files_.end()) {
+              // TODO: log err
+              continue;
+            }
+            // use const_cast to append into files, we will not nodify it
+            files.push_back(const_cast<FileMetaData*>(find->second));
+          }
+        }
         auto fname =
             TableFileName(cfd_->ioptions()->cf_paths,
                           file_meta->fd.GetNumber(), file_meta->fd.GetPathId());
