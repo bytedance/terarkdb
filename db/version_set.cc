@@ -793,7 +793,7 @@ Status Version::GetTableProperties(std::shared_ptr<const TableProperties>* tp,
 
 Status Version::GetPropertiesOfAllTables(TablePropertiesCollection* props) {
   Status s;
-  for (int level = 0; level < storage_info_.num_levels_; level++) {
+  for (int level = -1; level < storage_info_.num_levels_; level++) {
     s = GetPropertiesOfAllTables(props, level);
     if (!s.ok()) {
       return s;
@@ -825,7 +825,7 @@ Status Version::GetPropertiesOfAllTables(TablePropertiesCollection* props,
 
 Status Version::GetPropertiesOfTablesInRange(
     const Range* range, std::size_t n, TablePropertiesCollection* props) const {
-  for (int level = 0; level < storage_info_.num_non_empty_levels(); level++) {
+  for (int level = -1; level < storage_info_.num_non_empty_levels(); level++) {
     for (decltype(n) i = 0; i < n; i++) {
       // Convert user_key into a corresponding internal key.
       InternalKey k1(range[i].start, kMaxSequenceNumber, kValueTypeForSeek);
@@ -885,6 +885,11 @@ size_t Version::GetMemoryUsageByTableReaders() {
           mutable_cf_options_.prefix_extractor.get());
     }
   }
+  for (auto file_meta : storage_info_.LevelFiles(-1)) {
+    total_usage += cfd_->table_cache()->GetMemoryUsageByTableReader(
+        env_options_, cfd_->internal_comparator(), file_meta->fd,
+        mutable_cf_options_.prefix_extractor.get());
+  }
   return total_usage;
 }
 
@@ -933,7 +938,7 @@ void Version::GetColumnFamilyMetaData(ColumnFamilyMetaData* cf_meta) {
 
 uint64_t Version::GetSstFilesSize() {
   uint64_t sst_files_size = 0;
-  for (int level = 0; level < storage_info_.num_levels_; level++) {
+  for (int level = -1; level < storage_info_.num_levels_; level++) {
     for (const auto& file_meta : storage_info_.LevelFiles(level)) {
       sst_files_size += file_meta->fd.GetFileSize();
     }
@@ -958,7 +963,7 @@ uint64_t VersionStorageInfo::GetEstimatedActiveKeys() const {
   uint64_t est = current_num_non_deletions_ - current_num_deletions_;
 
   uint64_t file_count = 0;
-  for (int level = 0; level < num_levels_; ++level) {
+  for (int level = -1; level < num_levels_; ++level) {
     file_count += files_[level].size();
   }
 
