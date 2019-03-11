@@ -5,6 +5,7 @@
 #include <rocksdb/db.h>
 #include <rocksdb/options.h>
 #include <rocksdb/table.h>
+#include "rocksdb/utilities/write_batch_with_index.h"
 #ifdef _MSC_VER
 # include <Windows.h>
 # define strcasecmp _stricmp
@@ -76,6 +77,8 @@ void TerarkZipAutoConfigForBulkLoad(struct TerarkZipTableOptions& tzo,
   tzo.smallTaskMemory = memBytesLimit / 16;
   tzo.indexNestLevel = 3;
 
+  cfo.table_factory = SingleTerarkZipTableFactory(tzo,
+      std::shared_ptr<TableFactory>(NewAdaptiveTableFactory()));
   cfo.write_buffer_size = tzo.smallTaskMemory;
   cfo.num_levels = 7;
   cfo.max_write_buffer_number = 6;
@@ -96,6 +99,7 @@ void TerarkZipAutoConfigForBulkLoad(struct TerarkZipTableOptions& tzo,
   dbo.create_if_missing = true;
   dbo.allow_concurrent_memtable_write = false;
   dbo.allow_mmap_reads = true;
+  dbo.allow_mmap_populate = false;
   dbo.max_background_flushes = 2;
   dbo.max_subcompactions = 1; // no sub compactions
   dbo.new_table_reader_for_compaction_inputs = false;
@@ -125,10 +129,12 @@ TerarkZipAutoConfigForOnlineDB_DBOptions(struct DBOptions& dbo, size_t cpuNum)
   }
   dbo.create_if_missing = true;
   dbo.allow_mmap_reads = true;
+  dbo.allow_mmap_populate = true;
   dbo.max_background_flushes = 2;
   dbo.max_subcompactions = 1; // no sub compactions
   dbo.base_background_compactions = 3;
   dbo.max_background_compactions = 5;
+  dbo.allow_concurrent_memtable_write = false;
 
   dbo.env->SetBackgroundThreads(max(1,min(3,iCpuNum*3/8)), rocksdb::Env::LOW);
   dbo.env->SetBackgroundThreads(max(1,min(2,iCpuNum*2/8)), rocksdb::Env::HIGH);
@@ -233,7 +239,7 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo) {
   MyGetInt   (tzo, terarkZipMinLevel       , 0    );
   MyGetInt   (tzo, debugLevel              , 0    );
   MyGetInt   (tzo, keyPrefixLen            , 0    );
-  MyGetInt   (tzo, offsetArrayBlockUnits   , 0    );
+  MyGetInt   (tzo, offsetArrayBlockUnits   , 128  );
   MyGetInt   (tzo, indexNestScale          , 8    );
   if (true
       &&   0 != tzo.offsetArrayBlockUnits
@@ -259,25 +265,27 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo) {
   MyGetBool  (tzo, warmUpValueOnOpen       , false);
   MyGetBool  (tzo, disableSecondPassIter   , false);
   MyGetBool  (tzo, enableCompressionProbe  , true );
-  MyGetBool  (tzo, adviseRandomRead        , true );
+  MyGetBool  (tzo, disableCompressDict     , false);
+  
 
-  MyGetDouble(tzo, estimateCompressionRatio, 0.20 );
-  MyGetDouble(tzo, sampleRatio             , 0.03 );
+  MyGetDouble(tzo, estimateCompressionRatio, 1.00 );
+  MyGetDouble(tzo, sampleRatio             , 0.06 );
   MyGetDouble(tzo, indexCacheRatio         , 0.00 );
 
-  MyGetInt(tzo, minPreadLen, -1);
+  MyGetInt(tzo, minPreadLen, 0);
 
   MyGetXiB(tzo, softZipWorkingMemLimit);
   MyGetXiB(tzo, hardZipWorkingMemLimit);
   MyGetXiB(tzo, smallTaskMemory);
   MyGetXiB(tzo, singleIndexMemLimit);
   MyGetXiB(tzo, cacheCapacityBytes);
-  MyGetInt(tzo, cacheShards, 17);
+  MyGetInt(tzo, cacheShards, 67);
   MyGetInt(tzo, minDictZipValueSize, 15);
 
   tzo.singleIndexMemLimit = std::min<size_t>(tzo.singleIndexMemLimit, 0x1E0000000);
 
-  cfo.table_factory.reset(NewTerarkZipTableFactory(tzo, NewAdaptiveTableFactory()));
+  cfo.table_factory = SingleTerarkZipTableFactory(tzo,
+    std::shared_ptr<TableFactory>(NewAdaptiveTableFactory()));
   const char* compaction_style = "Universal";
   if (const char* env = getenv("TerarkZipTable_compaction_style")) {
     compaction_style = env;
@@ -320,7 +328,7 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo) {
   }
   MyGetXiB(cfo, write_buffer_size);
   MyGetXiB(cfo, target_file_size_base);
-  MyGetBool(cfo, enable_partial_remove, false);
+  MyGetBool(cfo, enable_lazy_compaction, true);
   MyOverrideInt(cfo, max_write_buffer_number);
   MyOverrideInt(cfo, target_file_size_multiplier);
   MyOverrideInt(cfo, num_levels                 );
@@ -341,6 +349,7 @@ void TerarkZipDBOptionsFromEnv(DBOptions& dbo) {
   MyGetInt(dbo,  max_background_compactions, 5);
   MyGetInt(dbo,  max_background_flushes    , 3);
   MyGetInt(dbo,  max_subcompactions        , 1);
+  MyGetBool(dbo, allow_mmap_populate       , false);
 
   dbo.env->SetBackgroundThreads(dbo.max_background_compactions, rocksdb::Env::LOW);
   dbo.env->SetBackgroundThreads(dbo.max_background_flushes    , rocksdb::Env::HIGH);
@@ -388,5 +397,8 @@ TerarkZipMultiCFOptionsFromEnv(const DBOptions& db_options,
     TerarkZipDBOptionsFromEnv(auto_const_cast(db_options));
   }
 }
+
+ROCKSDB_REGISTER_MEM_TABLE("patricia", PatriciaTrieRepFactory);
+ROCKSDB_REGISTER_WRITE_BATCH_WITH_INDEX(patricia);
 
 }

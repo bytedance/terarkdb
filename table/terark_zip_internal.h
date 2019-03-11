@@ -71,6 +71,9 @@ extern const std::string kTerarkEmptyTableKey;
 extern const std::string kTerarkZipTableExtendedBlock;
 #endif // TerocksPrivateCode
 extern const std::string kTerarkZipTableBuildTimestamp;
+extern const std::string kTerarkZipTableDictInfo;
+extern const std::string kTerarkZipTableDictSize;
+extern const std::string kTerarkZipTableEntropy;
 
 template<class ByteArray>
 inline Slice SliceOf(const ByteArray& ba) {
@@ -87,6 +90,10 @@ inline ByteArrayView SubStr(const ByteArrayView& x, size_t pos) {
   assert(pos <= x.size());
   return ByteArrayView(x.data() + pos, x.size() - pos);
 }
+
+bool IsForwardBytewiseComparator(const Comparator* cmp);
+
+bool IsBytewiseComparator(const Comparator* cmp);
 
 #if defined(TerocksPrivateCode)
 
@@ -144,13 +151,13 @@ struct CollectInfo {
     uint64_t timestamp;
     size_t raw_value;
     size_t zip_value;
-    size_t raw_store;
+    size_t entropy;
     size_t zip_store;
   };
   std::vector<CompressionInfo> queue;
   size_t raw_value_size = 0;
   size_t zip_value_size = 0;
-  size_t raw_store_size = 0;
+  size_t entropy_size = 0;
   size_t zip_store_size = 0;
   std::atomic<float> estimate_compression_ratio;
   mutable std::mutex mutex;
@@ -237,7 +244,8 @@ struct TerarkZipMultiOffsetInfo {
 class TerarkZipTableFactory : public TableFactory, boost::noncopyable {
 public:
   explicit
-  TerarkZipTableFactory(const TerarkZipTableOptions& tzto, TableFactory* fallback);
+  TerarkZipTableFactory(const TerarkZipTableOptions& tzto,
+      std::shared_ptr<class TableFactory> fallback);
   ~TerarkZipTableFactory();
 
   const char* Name() const override { return "TerarkZipTable"; }
@@ -271,7 +279,7 @@ public:
 
 private:
   TerarkZipTableOptions table_options_;
-  TableFactory* fallback_factory_;
+  std::shared_ptr<class TableFactory> fallback_factory_;
   TableFactory* adaptive_factory_; // just for open table
   boost::intrusive_ptr<LruReadonlyCache> cache_;
   mutable size_t nth_new_terark_table_ = 0;

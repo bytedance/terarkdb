@@ -32,6 +32,7 @@ namespace rocksdb {
 # define WARN(logger, format, ...) Warn(logger, format, ##__VA_ARGS__)
 # define WARN_EXCEPT(logger, format, ...) \
     WARN(logger, format, ##__VA_ARGS__); \
+    LogFlush(logger); \
     STD_WARN(format, ##__VA_ARGS__)
 #else
 # define INFO(logger, format, ...) STD_INFO(format, ##__VA_ARGS__)

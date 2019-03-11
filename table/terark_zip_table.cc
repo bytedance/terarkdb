@@ -146,7 +146,9 @@ static const std::string g_szTerarkPublikKey =
 
 #endif // TerocksPrivateCode
 const std::string kTerarkZipTableBuildTimestamp = "terark.build.timestamp";
-const std::string kTerarkZipTableEstimateRatio = "terark.build.estimate_ratio";
+const std::string kTerarkZipTableDictInfo = "terark.build.dict_info";
+const std::string kTerarkZipTableDictSize = "terark.build.dict_size";
+const std::string kTerarkZipTableEntropy = "terark.build.entropy";
 
 #if defined(TerocksPrivateCode)
 
@@ -441,37 +443,37 @@ void LicenseInfo::print_error(const char* file_name, bool startup, rocksdb::Logg
 
 #endif // TerocksPrivateCode
 
-const size_t CollectInfo::queue_size = 8;
+const size_t CollectInfo::queue_size = 1024;
 const double CollectInfo::hard_ratio = 0.9;
 
 void CollectInfo::update(uint64_t timestamp
   , size_t raw_value, size_t zip_value
-  , size_t raw_store, size_t zip_store) {
+  , size_t entropy, size_t zip_store) {
   std::unique_lock<std::mutex> l(mutex);
   raw_value_size += raw_value;
   zip_value_size += zip_value;
-  raw_store_size += raw_store;
+  entropy_size += entropy;
   zip_store_size += zip_store;
   auto comp = [](const CompressionInfo& l, const CompressionInfo& r) {
     return l.timestamp > r.timestamp;
   };
   queue.emplace_back(CompressionInfo{timestamp
-    , raw_value, zip_value, raw_store, zip_store});
+    , raw_value, zip_value, entropy, zip_store});
   std::push_heap(queue.begin(), queue.end(), comp);
   while (queue.size() > queue_size) {
     auto& front = queue.front();
-    raw_value_size += front.raw_value;
-    zip_value_size += front.zip_value;
-    raw_store_size += front.raw_store;
-    zip_store_size += front.zip_store;
+    raw_value_size -= front.raw_value;
+    zip_value_size -= front.zip_value;
+    entropy_size -= front.entropy;
+    zip_store_size -= front.zip_store;
     std::pop_heap(queue.begin(), queue.end(), comp);
     queue.pop_back();
   }
-  estimate_compression_ratio = float(zip_store_size) / float(raw_store_size);
+  estimate_compression_ratio = float(zip_store_size) / float(entropy_size);
 }
 
 bool CollectInfo::hard(size_t raw, size_t zip) {
-  return double(zip) / double(raw) > hard_ratio;
+  return double(zip) > hard_ratio * double(raw);
 }
 
 bool CollectInfo::hard() const {
@@ -545,9 +547,9 @@ void TerarkZipMultiOffsetInfo::risk_release_ownership() {
   prefixSet_.risk_release_ownership();
 }
 
-class TableFactory*
-  NewTerarkZipTableFactory(const TerarkZipTableOptions& tzto,
-    class TableFactory* fallback) {
+TableFactory*
+NewTerarkZipTableFactory(const TerarkZipTableOptions& tzto,
+                         std::shared_ptr<TableFactory> fallback) {
   TerarkZipTableFactory* factory = new TerarkZipTableFactory(tzto, fallback);
   if (tzto.debugLevel < 0) {
     STD_INFO("NewTerarkZipTableFactory(\n%s)\n",
@@ -579,7 +581,26 @@ class TableFactory*
   return factory;
 }
 
-inline static
+std::shared_ptr<TableFactory>
+SingleTerarkZipTableFactory(const TerarkZipTableOptions& tzto,
+                            std::shared_ptr<TableFactory> fallback) {
+  static std::shared_ptr<TableFactory> factory(
+      NewTerarkZipTableFactory(tzto, fallback));
+  return factory;
+}
+
+bool IsForwardBytewiseComparator(const Comparator* cmp) {
+#if 1
+  const fstring name = cmp->Name();
+  if (name.startsWith("RocksDB_SE_")) {
+    return true;
+  }
+  return name == "leveldb.BytewiseComparator";
+#else
+  return BytewiseComparator() == cmp;
+#endif
+}
+
 bool IsBytewiseComparator(const Comparator* cmp) {
 #if 1
   const fstring name = cmp->Name();
@@ -615,7 +636,8 @@ size_t GetFixedPrefixLen(const SliceTransform* tr) {
 }
 
 TerarkZipTableFactory::TerarkZipTableFactory(
-    const TerarkZipTableOptions& tzto, TableFactory* fallback)
+    const TerarkZipTableOptions& tzto,
+    std::shared_ptr<TableFactory> fallback)
 : table_options_(tzto), fallback_factory_(fallback) {
     adaptive_factory_ = NewAdaptiveTableFactory();
     if (tzto.minPreadLen >= 0 && tzto.cacheCapacityBytes) {
@@ -625,7 +647,6 @@ TerarkZipTableFactory::TerarkZipTableFactory(
 }
 
 TerarkZipTableFactory::~TerarkZipTableFactory() {
-    delete fallback_factory_;
     delete adaptive_factory_;
 }
 
@@ -748,7 +769,7 @@ TerarkZipTableFactory::NewTableBuilder(
     }
   }
   else {
-    keyPrefixLen = GetFixedPrefixLen(table_builder_options.ioptions.prefix_extractor);
+    keyPrefixLen = GetFixedPrefixLen(table_builder_options.moptions.prefix_extractor.get());
     if (keyPrefixLen != 0) {
       if (table_options_.keyPrefixLen != 0) {
         if (keyPrefixLen != table_options_.keyPrefixLen) {
@@ -764,6 +785,9 @@ TerarkZipTableFactory::NewTableBuilder(
       keyPrefixLen = table_options_.keyPrefixLen;
     }
   }
+  if (table_builder_options.sst_purpose != kEssenceSst) {
+    keyPrefixLen = 0;
+  }
 #if defined(TERARK_SUPPORT_UINT64_COMPARATOR) && BOOST_ENDIAN_LITTLE_BYTE
   if (fstring(userCmp->Name()) == "rocksdb.Uint64Comparator") {
     keyPrefixLen = 0;
@@ -772,7 +796,7 @@ TerarkZipTableFactory::NewTableBuilder(
 #if 1
   INFO(table_builder_options.ioptions.info_log
     , "nth_newtable{ terark = %3zd fallback = %3zd } curlevel = %d minlevel = %d numlevel = %d fallback = %p\n"
-    , nth_new_terark_table_, nth_new_fallback_table_, curlevel, minlevel, numlevel, fallback_factory_
+    , nth_new_terark_table_, nth_new_fallback_table_, curlevel, minlevel, numlevel, fallback_factory_.get()
   );
 #endif
   if (0 == nth_new_terark_table_) {
@@ -891,7 +915,7 @@ const {
   return Status::OK();
 }
 
-bool TerarkZipTablePrintCacheStat(const TableFactory* factory, FILE* fp) {
+bool TerarkZipTablePrintCacheStat(TableFactory* factory, FILE* fp) {
   auto tztf = dynamic_cast<const TerarkZipTableFactory*>(factory);
   if (tztf) {
     if (tztf->cache()) {

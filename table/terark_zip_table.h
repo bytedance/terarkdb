@@ -11,9 +11,12 @@
 #define TERARK_ZIP_TABLE_H_
 
 #include <string>
+#include <unordered_map>
 #include <vector>
+#include <memory>
 #include <stdio.h>
 
+#include "rocksdb/status.h"
 
 #define TerocksPrivateCode
 #if defined(TerocksPrivateCode)
@@ -59,7 +62,7 @@ struct TerarkZipTableOptions {
   /// 2 : verify 2nd pass iter keys & values
   /// 3 : dump 1st & 2nd pass data to file
   signed char   debugLevel               = 0;
-  bool          adviseRandomRead         = true;
+  bool          reserveBool              = false;
   unsigned char indexNestScale           = 8;
   bool          enableCompressionProbe   = true;
   bool          useSuffixArrayLocalMatch = false;
@@ -79,7 +82,7 @@ struct TerarkZipTableOptions {
 
   unsigned short offsetArrayBlockUnits    = 0;
 
-  float          estimateCompressionRatio = 0.2f;
+  float          estimateCompressionRatio = 1.0f;
   double         sampleRatio              = 0.03;
   std::string    localTempDir             = "/tmp";
   std::string    indexType                = "Mixed_XL_256_32_FL";
@@ -103,10 +106,12 @@ struct TerarkZipTableOptions {
   ///  < 0: do not use pread
   /// == 0: always use pread
   ///  > 0: use pread if BlobStore avg record len > minPreadLen
-  int    minPreadLen         = -1;
+  int    minPreadLen         = 0;
   int    cacheShards         = 17; // to reduce lock competition
   size_t cacheCapacityBytes  = 0;  // non-zero implies direct io read
-  char   reserveBytes[24]    = {};
+  bool   disableCompressDict = false;
+  bool   useOldSecondPassMethod = false;
+  char   reserveBytes[22]    = {};
 };
 
 void TerarkZipDeleteTempFiles(const std::string& tmpPath);
@@ -146,10 +151,22 @@ void
 TerarkZipMultiCFOptionsFromEnv(const struct DBOptions& db_options,
       const std::vector<struct ColumnFamilyDescriptor>& cfvec);
 
-///@param fallback take ownership of fallback
+const class WriteBatchEntryIndexFactory*
+patricia_WriteBatchEntryIndexFactory(const WriteBatchEntryIndexFactory* fallback = nullptr);
+
+class MemTableRepFactory*
+NewPatriciaTrieRepFactory(std::shared_ptr<class MemTableRepFactory> fallback = nullptr);
+
+class MemTableRepFactory*
+NewPatriciaTrieRepFactory(const std::unordered_map<std::string, std::string>& options, Status* s);
+
 class TableFactory*
 NewTerarkZipTableFactory(const TerarkZipTableOptions&,
-                         class TableFactory* fallback);
+                         std::shared_ptr<class TableFactory> fallback);
+
+std::shared_ptr<class TableFactory>
+SingleTerarkZipTableFactory(const TerarkZipTableOptions&,
+                            std::shared_ptr<class TableFactory> fallback);
 
 bool TerarkZipTablePrintCacheStat(const class TableFactory*, FILE*);
 
