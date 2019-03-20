@@ -656,9 +656,7 @@ struct Common {
 };
 
 struct ComponentBase {
-  virtual size_t IteratorStorageSize() const = 0;
-  virtual void IteratorStorageConstruct(void* ptr) const = 0;
-  virtual void IteratorStorageDestruct(void* ptr) const = 0;
+  WorkingState working_state;
 
   virtual bool Load(fstring mem) = 0;
   virtual void Save(std::function<void(void*, size_t)> append) const = 0;
@@ -680,15 +678,18 @@ struct ComponentIteratorStorageImpl<void> {
 
 struct VirtualPrefixBase : public ComponentBase {
   virtual ~VirtualPrefixBase() {}
-  virtual void* AllocIteratorStorage() const = 0;
-  virtual void FreeIteratorStorage(void*) const = 0;
+
+  virtual size_t IteratorStorageSize() const = 0;
+  virtual void IteratorStorageConstruct(void* ptr) const = 0;
+  virtual void IteratorStorageDestruct(void* ptr) const = 0;
+
   virtual size_t KeyCount() const = 0;
   virtual size_t TotalKeySize() const = 0;
   virtual size_t Find(fstring key) const = 0;
   virtual size_t DictRank(fstring key) const = 0;
   virtual bool SeekToFirst(size_t& id, void* iter) const = 0;
   virtual bool SeekToLast(size_t& id, void* iter) const = 0;
-  virtual bool Seek(size_t& id, void* iter, fstring target) const = 0;
+  virtual bool Seek(size_t& id, fstring target, void* iter) const = 0;
   virtual bool Next(size_t& id, void* iter) const = 0;
   virtual bool Prev(size_t& id, void* iter) const = 0;
   virtual size_t DictRank(size_t id, const void* iter) const = 0;
@@ -722,8 +723,8 @@ struct VirtualPrefixWrapper : public VirtualPrefixBase, public Prefix, public Co
   bool SeekToLast(size_t& id, void* iter) const override {
     return Prefix::SeekToLast(id, (IteratorStorage*)iter);
   }
-  bool Seek(size_t& id, void* iter, fstring target) const override {
-    return Prefix::Seek(id, (IteratorStorage*)iter, target);
+  bool Seek(size_t& id, fstring target, void* iter) const override {
+    return Prefix::Seek(id, target, (IteratorStorage*)iter);
   }
   bool Next(size_t& id, void* iter) const override {
     return Prefix::Next(id, (IteratorStorage*)iter);
@@ -759,12 +760,16 @@ struct VirtualPrefix : public ComponentBase {
   }
   VirtualPrefixBase* prefix;
 
-  void* AllocIteratorStorage() const {
-    return prefix->AllocIteratorStorage();
+  size_t IteratorStorageSize() const {
+    return prefix->IteratorStorageSize();
   }
-  void FreeIteratorStorage(void* ptr) const {
-    prefix->FreeIteratorStorage(ptr);
+  void IteratorStorageConstruct(void* ptr) const {
+    prefix->IteratorStorageConstruct(ptr);
   }
+  void IteratorStorageDestruct(void* ptr) const {
+    prefix->IteratorStorageDestruct(ptr);
+  }
+
   size_t KeyCount() const {
     return prefix->KeyCount();
   }
@@ -783,8 +788,8 @@ struct VirtualPrefix : public ComponentBase {
   bool SeekToLast(size_t& id, void* iter) const {
     return prefix->SeekToLast(id, iter);
   }
-  bool Seek(size_t& id, void* iter, fstring target) const {
-    return prefix->Seek(id, iter, target);
+  bool Seek(size_t& id, fstring target, void* iter) const {
+    return prefix->Seek(id, target, iter);
   }
   bool Next(size_t& id, void* iter) const {
     return prefix->Next(id, iter);
@@ -812,22 +817,29 @@ struct VirtualPrefix : public ComponentBase {
 
 struct VirtualMapBase : public ComponentBase {
   virtual ~VirtualMapBase() {}
-  virtual void* AllocIteratorStorage() const = 0;
-  virtual void FreeIteratorStorage(void*) const = 0;
 
-  virtual size_t* GetSecondId(void*) const = 0;
+  virtual size_t IteratorStorageSize() const = 0;
+  virtual void IteratorStorageConstruct(void* ptr) const = 0;
+  virtual void IteratorStorageDestruct(void* ptr) const = 0;
+
+  virtual size_t* GetSuffixId(void* ptr) const = 0;
+  virtual size_t Trans(size_t& suffix_id, size_t& prefix_id, void* ptr) const = 0;
 };
 template<class Map>
 struct VirtualMapWrapper : public VirtualMapBase, public Map, public ComponentIteratorStorageImpl<typename Map::IteratorStorage> {
-  using IteratorStorageImpl = ComponentIteratorStorageImpl<typename Map::IteratorStorage>;
+  using typename Map::IteratorStorage;
+  using IteratorStorageImpl = ComponentIteratorStorageImpl<IteratorStorage>;
   VirtualMapWrapper(Map *map) : Map(map) {}
 
   using IteratorStorageImpl::IteratorStorageSize;
   using IteratorStorageImpl::IteratorStorageConstruct;
   using IteratorStorageImpl::IteratorStorageDestruct;
 
-  size_t* GetSecondId(void* ptr) const override {
-    return Map::GetSecondId(ptr);
+  size_t* GetSuffixId(void* ptr) const override {
+    return Map::GetSuffixId((IteratorStorage*)ptr);
+  }
+  size_t Trans(size_t& suffix_id, size_t& prefix_id, void* ptr) const override {
+    return Map::Trans(suffix_id, prefix_id, (IteratorStorage*)ptr)
   }
 
   bool Load(fstring mem) override {
@@ -849,8 +861,21 @@ struct VirtualMap : public ComponentBase {
   }
   VirtualMapBase* map;
 
-  size_t* GetSecondId(void* ptr) const {
-    return map->GetSecondId(ptr);
+  size_t IteratorStorageSize() const {
+    return map->IteratorStorageSize();
+  }
+  void IteratorStorageConstruct(void* ptr) const {
+    map->IteratorStorageConstruct(ptr);
+  }
+  void IteratorStorageDestruct(void* ptr) const {
+    map->IteratorStorageDestruct(ptr);
+  }
+
+  size_t* GetSuffixId(void* ptr) const {
+    return map->GetSuffixId(ptr);
+  }
+  size_t Trans(size_t& suffix_id, size_t& prefix_id, void* ptr) const {
+    return map->Trans(suffix_id, prefix_id, ptr);
   }
 
   bool Load(fstring mem) override {
@@ -863,8 +888,10 @@ struct VirtualMap : public ComponentBase {
 
 struct VirtualSuffixBase : public ComponentBase {
   virtual ~VirtualSuffixBase() {}
-  virtual void* AllocIteratorStorage() const = 0;
-  virtual void FreeIteratorStorage(void*) const = 0;
+
+  virtual size_t IteratorStorageSize() const = 0;
+  virtual void IteratorStorageConstruct(void* ptr) const = 0;
+  virtual void IteratorStorageDestruct(void* ptr) const = 0;
 };
 template<class Suffix>
 struct VirtualSuffixWrapper : public VirtualSuffixBase, public Suffix, public Prefix, public ComponentIteratorStorageImpl<typename Suffix::IteratorStorage> {
@@ -893,11 +920,14 @@ struct VirtualSuffix : public ComponentBase {
   }
   VirtualSuffixBase* suffix;
 
-  void* AllocIteratorStorage() const {
-    return suffix->AllocIteratorStorage();
+  size_t IteratorStorageSize() const {
+    return suffix->IteratorStorageSize();
   }
-  void FreeIteratorStorage(void* ptr) const {
-    suffix->FreeIteratorStorage(ptr);
+  void IteratorStorageConstruct(void* ptr) const {
+    suffix->IteratorStorageConstruct(ptr);
+  }
+  void IteratorStorageDestruct(void* ptr) const {
+    suffix->IteratorStorageDestruct(ptr);
   }
 
   bool Load(fstring mem) override {
@@ -932,6 +962,7 @@ struct IteratorStorage {
   void* prefix_storage_;
   void* map_storage_;
   void* suffix_storage_;
+  std::function<void(void*, void*, void*)> destructor_;
 
   template<class Prefix, class Map, class Suffix>
   static size_t GetIteratorStorageSize(const CompositeIndexParts<Prefix, Map, Suffix>* index) {
@@ -943,7 +974,7 @@ struct IteratorStorage {
   }
 
   template<class Prefix, class Map, class Suffix>
-  IteratorStorage(const CompositeIndexParts<Prefix, Map, Suffix>* index, void* iterator_storage, void* iterator_storage_size)
+  IteratorStorage(const CompositeIndexParts<Prefix, Map, Suffix>* index, void* iterator_storage, size_t iterator_storage_size)
     : common_(index->common_)
     , prefix_(index->prefix_)
     , map_(index->map_)
@@ -952,70 +983,31 @@ struct IteratorStorage {
     prefix_storage_ = iterator_storage;
     map_storage_ = (void*)(uintptr_t(prefix_storage_) + (index->prefix_.IteratorStorageSize() + sizeof(size_t) - 1) / sizeof(size_t));
     suffix_storage_ = (void*)(uintptr_t(map_storage_) + (index->map_.IteratorStorageSize() + sizeof(size_t) - 1) / sizeof(size_t));
-    if (prefix_.IteratorStorageSize() > 0) {
-      prefix_.IteratorStorageConstruct(prefix_storage_);
+    if (index->prefix_.IteratorStorageSize() > 0) {
+      index->prefix_.IteratorStorageConstruct(prefix_storage_);
     }
-    if (map_.IteratorStorageSize() > 0) {
-      map_.IteratorStorageConstruct(map_storage_);
+    if (index->map_.IteratorStorageSize() > 0) {
+      index->map_.IteratorStorageConstruct(map_storage_);
     }
-    if (suffix_.IteratorStorageSize() > 0) {
-      prefix_.IteratorStorageConstruct(suffix_storage_);
+    if (index->suffix_.IteratorStorageSize() > 0) {
+      index->prefix_.IteratorStorageConstruct(suffix_storage_);
     }
+    destructor_ = [index](void* prefix_storage, void* map_storage, void* suffix_storage) {
+      if (index->prefix_.IteratorStorageSize() > 0) {
+        index->prefix_.IteratorStorageDestruct(prefix_storage);
+      }
+      if (index->map_.IteratorStorageSize() > 0) {
+        index->map_.IteratorStorageDestruct(map_storage);
+      }
+      if (index->suffix_.IteratorStorageSize() > 0) {
+        index->prefix_.IteratorStorageDestruct(suffix_storage);
+      }
+    };
   }
   ~IteratorStorage() {
-    if (prefix_.IteratorStorageSize() > 0) {
-      prefix_.IteratorStorageDestruct(prefix_storage_);
-    }
-    if (map_.IteratorStorageSize() > 0) {
-      map_.IteratorStorageDestruct(map_storage_);
-    }
-    if (suffix_.IteratorStorageSize() > 0) {
-      prefix_.IteratorStorageDestruct(suffix_storage_);
-    }
+    destructor_(prefix_storage_, map_storage_, suffix_storage_);
   }
 
-  fstring common() const {
-    return common_;
-  }
-  template<class Prefix>
-  const Prefix& prefix() const {
-    return static_cast<Prefix&>(prefix_);
-  }
-  template<class Map>
-  const Map& map() const {
-    return static_cast<Map&>(map_);
-  }
-  template<class Suffix>
-  const Suffix& suffix() const {
-    return static_cast<Suffix&>(suffix_);
-  }
-
-  typename IteratorStorageHolder<Prefix, typename Prefix::IteratorStorage>::type* prefix_storage() {
-    return ((IteratorStorageHolder<Prefix, typename Prefix::IteratorStorage>*)this)->get();
-  }
-  const typename IteratorStorageHolder<Prefix, typename Prefix::IteratorStorage>::type* prefix_storage() const {
-    return ((IteratorStorageHolder<Prefix, typename Prefix::IteratorStorage>*)this)->get();
-  }
-  typename IteratorStorageHolder<Map, typename Map::IteratorStorage>::type* map_storage() {
-    return ((IteratorStorageHolder<Map, typename Map::IteratorStorage>*)this)->get();
-  }
-  const typename IteratorStorageHolder<Map, typename Map::IteratorStorage>::type* map_storage() const {
-    return ((IteratorStorageHolder<Map, typename Map::IteratorStorage>*)this)->get();
-  }
-  typename IteratorStorageHolder<Suffix, typename Suffix::IteratorStorage>::type* suffix_storage() {
-    return ((IteratorStorageHolder<Suffix, typename Suffix::IteratorStorage>*)this)->get();
-  }
-  const typename IteratorStorageHolder<Suffix, typename Suffix::IteratorStorage>::type* suffix_storage() const {
-    return ((IteratorStorageHolder<Suffix, typename Suffix::IteratorStorage>*)this)->get();
-  }
-  size_t* second_id() {
-    assert(((IteratorStorageHolder<SecondIdTag, SecondIDType>*)this)->get() != nullptr);
-    return (size_t*)((IteratorStorageHolder<SecondIdTag, SecondIDType>*)this)->get();
-  }
-  const size_t* second_id() const {
-    assert(((IteratorStorageHolder<SecondIdTag, SecondIDType>*)this)->get() != nullptr);
-    return (size_t*)((IteratorStorageHolder<SecondIdTag, SecondIDType>*)this)->get();
-  }
 };
 
 }
@@ -1127,32 +1119,56 @@ protected:
 template<class Prefix, class Map, class Suffix>
 class CompositeIndexIterator
   : public TerarkIndex::Iterator
-  , public composite_index_detail::IteratorStorage<Prefix,
-                                                   Map,
-                                                   Suffix,
-                                                   typename std::conditional<Map::is_unique::value,
-                                                                             void,
-                                                                             size_t>::type> {
+  , public composite_index_detail::IteratorStorage {
 public:
-  typedef composite_index_detail::IteratorStorage<Prefix,
-                                                  Map,
-                                                  Suffix,
-                                                  typename std::conditional<Map::is_unique::value,
-                                                                            void,
-                                                                            size_t
-                                                                            >::type
-                                                  > IteratorStorage;
-  using IteratorStorage::common;
-  using IteratorStorage::prefix;
-  using IteratorStorage::map;
-  using IteratorStorage::suffix;
-  using IteratorStorage::prefix_storage;
-  using IteratorStorage::map_storage;
-  using IteratorStorage::suffix_storage;
-  using IteratorStorage::second_id;
+  using IteratorStorage = composite_index_detail::IteratorStorage;
 
-  CompositeIndexIterator(const composite_index_detail::CompositeIndexParts<Prefix, Map, Suffix>* index_ptr)
-    : IteratorStorage(index_ptr) {}
+  using IteratorStorage::common_;
+  using IteratorStorage::prefix_;
+  using IteratorStorage::map_;
+  using IteratorStorage::suffix_;
+  using IteratorStorage::prefix_storage_;
+  using IteratorStorage::map_storage_;
+  using IteratorStorage::suffix_storage_;
+  std::unique_ptr<byte_t> iterator_storage_;
+  
+  fstring common() const {
+    return common_;
+  }
+  const Prefix& prefix() const {
+    return static_cast<const Prefix&>(prefix_);
+  }
+  const Map& map() const {
+    return static_cast<const Map&>(map_);
+  }
+  const Suffix& suffix() const {
+    return static_cast<const Suffix&>(suffix_);
+  }
+
+        typename Prefix::IteratorStorage* prefix_storage()       { return (typename Prefix::IteratorStorage*)prefix_storage_; }
+  const typename Prefix::IteratorStorage* prefix_storage() const { return (typename Prefix::IteratorStorage*)prefix_storage_; }
+  
+        typename Map::IteratorStorage* map_storage()       { return (typename Map::IteratorStorage*)map_storage_; }
+  const typename Map::IteratorStorage* map_storage() const { return (typename Map::IteratorStorage*)map_storage_; }
+  
+        typename Suffix::IteratorStorage* suffix_storage()       { return (typename Suffix::IteratorStorage*)suffix_storage_; }
+  const typename Suffix::IteratorStorage* suffix_storage() const { return (typename Suffix::IteratorStorage*)suffix_storage_; }
+
+private:
+  std::pair<void*, size_t> AllocIteratorStorage_(const composite_index_detail::CompositeIndexParts<Prefix, Map, Suffix>* index) {
+    size_t iterator_storage_size = index == nullptr ? 0 : composite_index_detail::IteratorStorage::GetIteratorStorageSize(index);
+    iterator_storage_.reset(iterator_storage_size > 0 ? ::new byte_t[iterator_storage_size] : nullptr);
+    return { iterator_storage_.get(), iterator_storage_size };
+  }
+  CompositeIndexIterator(const composite_index_detail::CompositeIndexParts<Prefix, Map, Suffix>* index, std::pair<void*, size_t> iterator_storage)
+    : IteratorStorage(index, iterator_storage.first, iterator_storage.second) {}
+
+public:
+  CompositeIndexIterator(const composite_index_detail::CompositeIndexParts<Prefix, Map, Suffix>* index, void* iterator_storage, size_t iterator_storage_size)
+    : CompositeIndexIterator(index, { iterator_storage, iterator_storage_size }) {}
+
+  CompositeIndexIterator(const composite_index_detail::CompositeIndexParts<Prefix, Map, Suffix>* index)
+    : CompositeIndexIterator(index, AllocIteratorStorage_(index)) {}
 
   bool SeekToFirst() override {
     if (Map::is_unique::value) {
@@ -1186,46 +1202,28 @@ public:
       }
     }
     target = target.substr(cplen);
-    bool seek_valid = prefix().Seek(prefix_id(), prefix_storage(), target);
-    if (Map::is_unique::value) {
-      return seek_valid;
+    if (!prefix().Seek(prefix_id(), target, prefix_storage())) {
+      m_id = size_t(-1);
+      return false;
     }
     fstring prefix_key = prefix().GetKey(prefix_id(), prefix_storage());
     assert(prefix_key <= target);
-    if (prefix_key.size() == target.size()) {
-      map().Trans(prefix_id(), map_id(), map_storage());
-      suffix().Set(map_id(), suffix_storage());
+    size_t suffix_count = map().Trans(suffix_id(), prefix_id(), map_storage());
+    if (prefix_key.size() != target.size()) {
+      suffix().Set(suffix_id(), suffix_storage());
       return true;
     }
-
-    if (target.size() <= cplen + index.key1_len_) {
-      fstring sub = target.substr(cplen);
-      byte_t targetBuffer[8] = { 0 };
-      /*
-      * do not think hard about int, think about string instead.
-      * assume key1_len is 6 byte len like 'abcdef', target without
-      * commpref is 'b', u should compare 'b' with 'a' instead of 'f'.
-      * that's why assign sub starting in the middle instead at tail.
-      */
-      memcpy(targetBuffer + (8 - index.key1_len_), sub.data(), sub.size());
-      *pKey1 = key1 = Read1stKey(targetBuffer, 0, 8);
-      *pKey2 = key2 = fstring(); // empty
+    target = target.substr(prefix_key.size());
+    if (suffix().Seek(target, suffix_id(), suffix_count, suffix_storage())) {
+      return true;
+    }
+    else if (++prefix_id() < prefix().KeyCount()) {
+      map().Trans(suffix_id(), prefix_id(), map_storage());
+      suffix().Set(suffix_id(), suffix_storage());
+      return true;
     }
     else {
-      *pKey1 = key1 = Read1stKey(target, cplen, index.key1_len_);
-      *pKey2 = key2 = target.substr(cplen + index.key1_len_);
-    }
-    if (key1 > index.maxValue_) {
-      id = size_t(-1);
-      return 0;
-    }
-    else if (key1 < index.minValue_) {
-      rankselect1_idx = 0;
-      id = 0;
-      return 1;
-    }
-    else {
-      return 2;
+      return false;
     }
   }
   bool Next() override {
@@ -1239,7 +1237,12 @@ public:
   }
   bool Prev() override {
     if (Map::is_unique::value) {
-      return prefix().Prev(prefix_id(), prefix_storage());
+      size_t prev_id = prefix().Prev(prefix_id(), prefix_storage());
+      if (prev_id == size_t(-1)) {
+      }
+      prefix_id() = prev_id;
+      return false;
+
     }
     else {
       // TODO
@@ -1266,15 +1269,15 @@ public:
   }
 private:
   size_t& prefix_id() {
-    return Map::is_unique::value ? m_id : *second_id();
+    return Map::is_unique::value ? m_id : *map().GetSuffixId(map_storage_);
   }
   size_t prefix_id() const {
-    return Map::is_unique::value ? m_id : *second_id();
+    return Map::is_unique::value ? m_id : *map().GetSuffixId(map_storage_);
   }
-  size_t& map_id() {
+  size_t& suffix_id() {
     return m_id;
   }
-  size_t map_id() const {
+  size_t suffix_id() const {
     return m_id;
   }
 };
@@ -1464,28 +1467,38 @@ using composite_index_detail::CompositeIndexFactory;
 // Impls
 ////////////////////////////////////////////////////////////////////////////////
 
+template<class WithHint>
+struct CompositeIndexUintPrefixIteratorStorage {
+  byte_t buffer[8];
+  size_t pos;
+  size_t* get_hint() {
+    return nullptr;
+  }
+  const size_t* get_hint() const {
+    return nullptr;
+  }
+};
+template<>
+struct CompositeIndexUintPrefixIteratorStorage<std::false_type> {
+  byte_t buffer[8];
+  size_t pos;
+  size_t hint;
+  size_t* get_hint() {
+    return &hint;
+  }
+  const size_t* get_hint() const {
+    return &hint;
+  }
+};
+
+
+
 template<class RankSelect>
-struct CompositeIndexUintPrefix : public composite_index_detail::ComponentBase {
-  struct WithoutHint {
-    byte_t buffer[8];
-    size_t pos;
-    size_t* get_hint() {
-      return nullptr;
-    }
-    const size_t* get_hint() const {
-      return nullptr;
-    }
-  };
-  struct WithHint : WithoutHint {
-    size_t hint;
-    size_t* get_hint() {
-      return &hint;
-    }
-    const size_t* get_hint() const {
-      return &hint;
-    }
-  };
-  typedef typename std::conditional<RankSelectNeedHint<RankSelect>::value, WithHint, WithoutHint>::type IteratorStorage;
+struct CompositeIndexUintPrefix
+  : public composite_index_detail::ComponentBase
+  , public composite_index_detail::ComponentIteratorStorageImpl<CompositeIndexUintPrefixIteratorStorage<typename RankSelectNeedHint<RankSelect>::type>> {
+  using IteratorStorage = CompositeIndexUintPrefixIteratorStorage<typename RankSelectNeedHint<RankSelect>::type>;
+
   CompositeIndexUintPrefix() = default;
   CompositeIndexUintPrefix(CompositeIndexUintPrefix&&) = default;
   CompositeIndexUintPrefix(ComponentBase* base) {
@@ -1507,6 +1520,10 @@ struct CompositeIndexUintPrefix : public composite_index_detail::ComponentBase {
   size_t key_length;
   uint64_t min_value;
   uint64_t max_value;
+
+  using composite_index_detail::ComponentIteratorStorageImpl<IteratorStorage>::IteratorStorageSize;
+  using composite_index_detail::ComponentIteratorStorageImpl<IteratorStorage>::IteratorStorageConstruct;
+  using composite_index_detail::ComponentIteratorStorageImpl<IteratorStorage>::IteratorStorageDestruct;
 
   size_t KeyCount() const {
     return rank_select.max_rank1();
@@ -1547,7 +1564,7 @@ struct CompositeIndexUintPrefix : public composite_index_detail::ComponentBase {
     UpdateBuffer(id, iter);
     return true;
   }
-  bool Seek(size_t& id, IteratorStorage* iter, fstring target) const {
+  bool Seek(size_t& id, fstring target, IteratorStorage* iter) const {
     if (!SeekImpl(target, id, iter->pos, iter->get_hint())) {
       return false;
     }
@@ -1645,9 +1662,13 @@ private:
 };
 
 template<class RankSelect>
-struct CompositeIndexMap : public composite_index_detail::ComponentBase {
+struct CompositeIndexMap
+  : public composite_index_detail::ComponentBase
+  , public composite_index_detail::ComponentIteratorStorageImpl<typename std::conditional<RankSelectNeedHint<RankSelect>::value, size_t, void>> {
   typedef typename std::conditional<RankSelectNeedHint<RankSelect>::value, size_t, void> IteratorStorage;
   typedef std::false_type is_unique;
+  using IteratorStorageImpl = composite_index_detail::ComponentIteratorStorageImpl<IteratorStorage>;
+
   CompositeIndexMap() = default;
   CompositeIndexMap(CompositeIndexMap&&) = default;
   CompositeIndexMap(ComponentBase* base) {
@@ -1663,6 +1684,10 @@ struct CompositeIndexMap : public composite_index_detail::ComponentBase {
     }
   }
   RankSelect rank_select;
+
+  using IteratorStorageImpl::IteratorStorageSize;
+  using IteratorStorageImpl::IteratorStorageConstruct;
+  using IteratorStorageImpl::IteratorStorageDestruct;
 
   size_t SuffixCount() const {
     return rank_select.size();
@@ -1680,9 +1705,11 @@ struct CompositeIndexMap : public composite_index_detail::ComponentBase {
 };
 
 template<>
-struct CompositeIndexMap<rank_select_allone> : public composite_index_detail::ComponentBase {
+struct CompositeIndexMap<rank_select_allone> : public composite_index_detail::ComponentBase, public composite_index_detail::ComponentIteratorStorageImpl<void> {
   typedef void IteratorStorage;
   typedef std::true_type is_unique;
+  using IteratorStorageImpl = composite_index_detail::ComponentIteratorStorageImpl<void>;
+
   CompositeIndexMap() = default;
   CompositeIndexMap(CompositeIndexMap&&) = default;
   CompositeIndexMap(ComponentBase* base) {
@@ -1693,6 +1720,18 @@ struct CompositeIndexMap<rank_select_allone> : public composite_index_detail::Co
     delete other;
   }
   rank_select_allone rank_select;
+
+  using IteratorStorageImpl::IteratorStorageSize;
+  using IteratorStorageImpl::IteratorStorageConstruct;
+  using IteratorStorageImpl::IteratorStorageDestruct;
+
+  size_t* GetSuffixId(void*) const {
+    return nullptr;
+  }
+  size_t Trans(size_t& suffix_id, size_t& prefix_id, void*) const {
+    assert(&suffix_id == &prefix_id);
+    return 1;
+  }
 
   size_t SuffixCount() const {
     return rank_select.size();
@@ -1709,8 +1748,10 @@ struct CompositeIndexMap<rank_select_allone> : public composite_index_detail::Co
   }
 };
 
-struct CompositeIndexEmptySuffix : public composite_index_detail::ComponentBase {
+struct CompositeIndexEmptySuffix : public composite_index_detail::ComponentBase, public composite_index_detail::ComponentIteratorStorageImpl<void> {
   typedef void IteratorStorage;
+  using IteratorStorageImpl = composite_index_detail::ComponentIteratorStorageImpl<void>;
+
   CompositeIndexEmptySuffix() = default;
   CompositeIndexEmptySuffix(CompositeIndexEmptySuffix&&) = default;
   CompositeIndexEmptySuffix(ComponentBase* base) {
@@ -1718,16 +1759,21 @@ struct CompositeIndexEmptySuffix : public composite_index_detail::ComponentBase 
     delete base;
   }
 
+  using IteratorStorageImpl::IteratorStorageSize;
+  using IteratorStorageImpl::IteratorStorageConstruct;
+  using IteratorStorageImpl::IteratorStorageDestruct;
+
   size_t TotalKeySize() const {
     return 0;
   }
 
-  bool Find(fstring another) const {
-    return false;
+  bool Find(fstring key) const {
+    return key.empty();
   }
-
-  size_t Seek() const {
-    return size_t(-1);
+  bool Seek(fstring target, size_t &suffix_id, size_t suffix_count, void*) const {
+    return target.empty();
+  }
+  void Set(size_t suffix_id, void*) const {
   }
 
   bool Load(fstring mem) override {
