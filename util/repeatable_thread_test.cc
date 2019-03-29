@@ -3,17 +3,20 @@
 //  COPYING file in the root directory) and Apache 2.0 License
 //  (found in the LICENSE.Apache file in the root directory).
 
+#include "util/repeatable_thread.h"
+
 #include <atomic>
 #include <memory>
 
 #include "db/db_test_util.h"
-#include "util/repeatable_thread.h"
+#include "util/sync_point.h"
 #include "util/testharness.h"
 
 class RepeatableThreadTest : public testing::Test {
  public:
   RepeatableThreadTest()
-      : mock_env_(new TERARKDB_NAMESPACE::MockTimeEnv(TERARKDB_NAMESPACE::Env::Default())) {}
+      : mock_env_(new TERARKDB_NAMESPACE::MockTimeEnv(
+            TERARKDB_NAMESPACE::Env::Default())) {}
 
  protected:
   std::unique_ptr<TERARKDB_NAMESPACE::MockTimeEnv> mock_env_;
@@ -56,8 +59,39 @@ TEST_F(RepeatableThreadTest, MockEnvTest) {
   constexpr int kIteration = 3;
   mock_env_->set_current_time(0);  // in seconds
   std::atomic<int> count{0};
-  TERARKDB_NAMESPACE::RepeatableThread thread([&] { count++; }, "rt_test", mock_env_.get(),
-                                   1 * kSecond, 1 * kSecond);
+  TERARKDB_NAMESPACE::RepeatableThread thread(
+      [&] { count++; }, "rt_test", mock_env_.get(), 1 * kSecond, 1 * kSecond);
+
+#if defined(OS_MACOSX) && !defined(NDEBUG)
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->DisableProcessing();
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->ClearAllCallBacks();
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->SetCallBack(
+      "InstrumentedCondVar::TimedWaitInternal", [&](void* arg) {
+        // Obtain the current (real) time in seconds and add 1000 extra seconds
+        // to ensure that RepeatableThread::wait invokes TimedWait with a time
+        // greater than (real) current time. This is to prevent the TimedWait
+        // function from returning immediately without sleeping and releasing
+        // the mutex on certain platforms, e.g. OS X. If TimedWait returns
+        // immediately, the mutex will not be released, and
+        // RepeatableThread::TEST_WaitForRun never has a chance to execute the
+        // callback which, in this case, updates the result returned by
+        // mock_env->NowMicros. Consequently, RepeatableThread::wait cannot
+        // break out of the loop, causing test to hang. The extra 1000 seconds
+        // is a best-effort approach because there seems no reliable and
+        // deterministic way to provide the aforementioned guarantee. By the
+        // time RepeatableThread::wait is called, it is no guarantee that the
+        // delay + mock_env->NowMicros will be greater than the current real
+        // time. However, 1000 seconds should be sufficient in most cases.
+        uint64_t time_us = *reinterpret_cast<uint64_t*>(arg);
+        if (time_us < mock_env_->RealNowMicros()) {
+          *reinterpret_cast<uint64_t*>(arg) = mock_env_->RealNowMicros() + 1000;
+        }
+      });
+  TERARKDB_NAMESPACE::SyncPoint::GetInstance()->EnableProcessing();
+#endif  // OS_MACOSX && !NDEBUG
+
+  TERARKDB_NAMESPACE::RepeatableThread thread([&] {
+    count++; }, "rt_test", mock_env_.get(),
   for (int i = 1; i <= kIteration; i++) {
     // Bump current time
     thread.TEST_WaitForRun([&] { mock_env_->set_current_time(i); });
