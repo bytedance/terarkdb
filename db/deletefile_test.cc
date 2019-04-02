@@ -10,9 +10,11 @@
 #ifndef ROCKSDB_LITE
 
 #include <stdlib.h>
+
 #include <map>
 #include <string>
 #include <vector>
+
 #include "db/db_impl.h"
 #include "db/version_set.h"
 #include "db/write_batch_internal.h"
@@ -40,11 +42,11 @@ class DeleteFileTest : public testing::Test {
     env_ = Env::Default();
     options_.delete_obsolete_files_period_micros = 0;  // always do full purge
     options_.enable_thread_tracking = true;
-    options_.write_buffer_size = 1024*1024*1000;
-    options_.target_file_size_base = 1024*1024*1000;
-    options_.max_bytes_for_level_base = 1024*1024*1000;
-    options_.WAL_ttl_seconds = 300; // Used to test log files
-    options_.WAL_size_limit_MB = 1024; // Used to test log files
+    options_.write_buffer_size = 1024 * 1024 * 1000;
+    options_.target_file_size_base = 1024 * 1024 * 1000;
+    options_.max_bytes_for_level_base = 1024 * 1024 * 1000;
+    options_.WAL_ttl_seconds = 300;     // Used to test log files
+    options_.WAL_size_limit_MB = 1024;  // Used to test log files
     dbname_ = test::PerThreadDBPath("deletefile_test");
     options_.wal_dir = dbname_ + "/wal_files";
     options_.enable_lazy_compaction = false;
@@ -85,7 +87,7 @@ class DeleteFileTest : public testing::Test {
     WriteOptions options;
     options.sync = false;
     ReadOptions roptions;
-    for (int i = startkey; i < (numkeys + startkey) ; i++) {
+    for (int i = startkey; i < (numkeys + startkey); i++) {
       std::string temp = ToString(i);
       Slice key(temp);
       Slice value(temp);
@@ -93,10 +95,8 @@ class DeleteFileTest : public testing::Test {
     }
   }
 
-  int numKeysInLevels(
-    std::vector<LiveFileMetaData> &metadata,
-    std::vector<int> *keysperlevel = nullptr) {
-
+  int numKeysInLevels(std::vector<LiveFileMetaData>& metadata,
+                      std::vector<int>* keysperlevel = nullptr) {
     if (keysperlevel != nullptr) {
       keysperlevel->resize(numlevels_);
     }
@@ -112,8 +112,7 @@ class DeleteFileTest : public testing::Test {
       }
       fprintf(stderr, "level %d name %s smallest %s largest %s\n",
               metadata[i].level, metadata[i].name.c_str(),
-              metadata[i].smallestkey.c_str(),
-              metadata[i].largestkey.c_str());
+              metadata[i].smallestkey.c_str(), metadata[i].largestkey.c_str());
     }
     return numKeys;
   }
@@ -133,10 +132,8 @@ class DeleteFileTest : public testing::Test {
     ASSERT_OK(dbi->TEST_CompactRange(0, nullptr, nullptr));
   }
 
-  void CheckFileTypeCounts(std::string& dir,
-                            int required_log,
-                            int required_sst,
-                            int required_manifest) {
+  void CheckFileTypeCounts(std::string& dir, int required_log, int required_sst,
+                           int required_manifest) {
     std::vector<std::string> filenames;
     env_->GetChildren(dir, &filenames);
 
@@ -230,7 +227,7 @@ TEST_F(DeleteFileTest, PurgeObsoleteFilesTest) {
 
   // this time, we keep an iterator alive
   ReopenDB(true);
-  Iterator *itr = nullptr;
+  Iterator* itr = nullptr;
   CreateTwoLevels();
   itr = db_->NewIterator(ReadOptions());
   db_->CompactRange(compact_options, &first_slice, &last_slice);
@@ -243,7 +240,7 @@ TEST_F(DeleteFileTest, PurgeObsoleteFilesTest) {
   CloseDB();
 }
 
-TEST_F(DeleteFileTest, BackgroundPurgeTest) {
+TEST_F(DeleteFileTest, BackgroundPurgeIteratorTest) {
   std::string first("0"), last("999999");
   CompactRangeOptions compact_options;
   compact_options.change_level = true;
@@ -277,6 +274,53 @@ TEST_F(DeleteFileTest, BackgroundPurgeTest) {
   sleeping_task_after.WaitUntilDone();
   // 1 sst after iterator deletion
   CheckFileTypeCounts(dbname_, 0, 1, 1);
+
+  CloseDB();
+}
+
+TEST_F(DeleteFileTest, BackgroundPurgeCFDropTest) {
+  auto do_test = [&](bool bg_purge) {
+    ColumnFamilyOptions co;
+    WriteOptions wo;
+    FlushOptions fo;
+    ColumnFamilyHandle* cfh = nullptr;
+
+    ASSERT_OK(db_->CreateColumnFamily(co, "dropme", &cfh));
+
+    ASSERT_OK(db_->Put(wo, cfh, "pika", "chu"));
+    ASSERT_OK(db_->Flush(fo, cfh));
+    // Expect 1 sst file.
+    CheckFileTypeCounts(dbname_, 0, 1, 1);
+
+    ASSERT_OK(db_->DropColumnFamily(cfh));
+    // Still 1 file, it won't be deleted while ColumnFamilyHandle is alive.
+    CheckFileTypeCounts(dbname_, 0, 1, 1);
+
+    delete cfh;
+    test::SleepingBackgroundTask sleeping_task_after;
+    env_->Schedule(&test::SleepingBackgroundTask::DoSleepTask,
+                   &sleeping_task_after, Env::Priority::HIGH);
+    // If background purge is enabled, the file should still be there.
+    CheckFileTypeCounts(dbname_, 0, bg_purge ? 1 : 0, 1);
+
+    // Execute background purges.
+    sleeping_task_after.WakeUp();
+    sleeping_task_after.WaitUntilDone();
+    // The file should have been deleted.
+    CheckFileTypeCounts(dbname_, 0, 0, 1);
+  };
+
+  {
+    SCOPED_TRACE("avoid_unnecessary_blocking_io = false");
+    do_test(false);
+  }
+
+  options_.avoid_unnecessary_blocking_io = true;
+  ASSERT_OK(ReopenDB(false));
+  {
+    SCOPED_TRACE("avoid_unnecessary_blocking_io = true");
+    do_test(true);
+  }
 
   CloseDB();
 }
@@ -372,12 +416,12 @@ TEST_F(DeleteFileTest, DeleteFileWithIterator) {
   }
 
   Status status = db_->DeleteFile(level2file);
-  fprintf(stdout, "Deletion status %s: %s\n",
-          level2file.c_str(), status.ToString().c_str());
+  fprintf(stdout, "Deletion status %s: %s\n", level2file.c_str(),
+          status.ToString().c_str());
   ASSERT_TRUE(status.ok());
   it->SeekToFirst();
   int numKeysIterated = 0;
-  while(it->Valid()) {
+  while (it->Valid()) {
     numKeysIterated++;
     it->Next();
   }
@@ -492,7 +536,7 @@ TEST_F(DeleteFileTest, DeleteNonDefaultColumnFamily) {
   delete db;
 }
 
-} //namespace rocksdb
+}  // namespace rocksdb
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

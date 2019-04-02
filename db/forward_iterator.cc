@@ -239,7 +239,10 @@ void ForwardIterator::SVCleanup() {
   if (sv_ == nullptr) {
     return;
   }
-  SVCleanup(db_, sv_, read_options_.background_purge_on_iterator_cleanup);
+  bool background_purge =
+      read_options_.background_purge_on_iterator_cleanup ||
+      db_->immutable_db_options().avoid_unnecessary_blocking_io;
+  SVCleanup(db_, sv_, background_purge);
 }
 
 void ForwardIterator::Cleanup(bool release_sv) {
@@ -317,7 +320,7 @@ void ForwardIterator::SeekInternal(const Slice& internal_key,
     if (has_iter_trimmed_for_upper_bound_ &&
         (
             // prev_ is not set yet
-            is_prev_set_ == false ||
+            !is_prev_set_ ||
             // We are doing SeekToFirst() and internal_key.size() = 0
             seek_to_first ||
             // prev_key_ > internal_key

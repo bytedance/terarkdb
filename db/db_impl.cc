@@ -1346,9 +1346,10 @@ InternalIterator* DBImpl::NewInternalIterator(
                                            &merge_iter_builder, range_del_agg);
     }
     internal_iter = merge_iter_builder.Finish();
+    bool background_purge = read_options.background_purge_on_iterator_cleanup ||
+                            immutable_db_options_.avoid_unnecessary_blocking_io;
     IterState* cleanup =
-        new IterState(this, &mutex_, super_version,
-                      read_options.background_purge_on_iterator_cleanup);
+        new IterState(this, &mutex_, super_version, background_purge);
     internal_iter->RegisterCleanup(CleanupIteratorState, cleanup, nullptr);
     if (separate_helper != nullptr) {
       *separate_helper = super_version->current;

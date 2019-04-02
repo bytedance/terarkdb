@@ -69,7 +69,14 @@ ColumnFamilyHandleImpl::~ColumnFamilyHandleImpl() {
     db_->FindObsoleteFiles(&job_context, false, true);
     mutex_->Unlock();
     if (job_context.HaveSomethingToDelete()) {
-      db_->PurgeObsoleteFiles(job_context);
+      bool background_purge =
+          db_->immutable_db_options().avoid_unnecessary_blocking_io;
+      db_->PurgeObsoleteFiles(job_context, background_purge);
+      if (background_purge) {
+        mutex_->Lock();
+        db_->SchedulePurge();
+        mutex_->Unlock();
+      }
     }
     job_context.Clean();
   }

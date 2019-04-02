@@ -1,4 +1,9 @@
 # Rocksdb Change Log
+
+## Lastest
+### New Features
+* Add DBOptions.avoid_unnecessary_blocking_io. If true, we avoid file deletion when destorying ColumnFamilyHandle and Iterator. Instead, a job is scheduled to delete the files in background.
+
 ## 5.18.3 (2/11/2019)
 ### Bug Fixes
 * Fix possible LSM corruption when both range deletions and subcompactions are used. The symptom of this corruption is L1+ files overlapping in the user key space.
