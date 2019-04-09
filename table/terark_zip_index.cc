@@ -1233,27 +1233,35 @@ public:
 ////////////////////////////////////////////////////////////////////////////////
 //  Prefix :
 //    VirtualImpl :
-//      NLTPrefix<>
+//      NestLoudsTriePrefix<>
 //        Mixed_XL_256
 //        SE_512_64
-//      UintPrefix<>
+//      AscendingUintPrefix<>
 //        FewZero32
 //        FewZero64
 //        FewOne32
 //        FewOne64
-//    UintPrefix<>
+//      NonDescendingUintPrefix<>
+//        FewZero32
+//        FewZero64
+//        FewOne32
+//        FewOne64
+//    AscendingUintPrefix<>
 //      AllOne
+//      IL_256_32
+//      SE_512_64
+//    NonDescendingUintPrefix<>
 //      IL_256_32
 //      SE_512_64
 //  Suffix :
 //    VirtualImpl :
-//      DynamicStr
-//      EntropyStr
-//      DictZipStr
+//      DynamicString
+//      EntropyString
+//      DictZipString
 //      Number<>
 //        SortedUintVec
 //    Empty
-//    FixedStr
+//    FixedString
 //    Number<>
 //      BigUintVecMin0
 
@@ -1628,17 +1636,17 @@ struct CompositeIndexNonDescendingUintPrefix
   }
   std::pair<size_t, size_t> Find(fstring key) const {
     if (key.size() != key_length) {
-      return size_t(-1);
+      return { size_t(-1), 0 };
     }
     uint64_t value = ReadBigEndianUint64(key);
     if (value < min_value || value > max_value) {
-      return size_t(-1);
+      return { size_t(-1), 0 };
     }
     uint64_t pos = rank_select.select0(value - min_value);
     assert(pos > 0);
-    size_t count = rank_select.rev_one_seq_len(pos);
+    size_t count = rank_select.one_seq_revlen(pos);
     if (count == 0) {
-      return size_t(-1);
+      return { size_t(-1), 0 };
     }
     return { rank_select.rank1(pos - count), count };
   }
@@ -1666,10 +1674,9 @@ struct CompositeIndexNonDescendingUintPrefix
     return true;
   }
   bool Seek(size_t& id, size_t& count, fstring target, IteratorStorage* iter) const {
-    if (!SeekImpl(target, id, iter->pos, iter->get_hint())) {
+    if (!SeekImpl(target, id, count, iter->pos, iter->get_hint())) {
       return false;
     }
-    count = 1;
     UpdateBuffer(id, iter);
     return true;
   }
@@ -1678,24 +1685,19 @@ struct CompositeIndexNonDescendingUintPrefix
     assert(count > 0);
     assert(rank_select[iter->pos]);
     assert(rank_select.rank1(iter->pos) == id);
+    if (id + count >= rank_select.max_rank1()) {
+      id = size_t(-1);
+      return false;
+    }
+    id += count;
     if (count == 1) {
-      if (id == rank_select.max_rank1() - 1) {
-        id = size_t(-1);
-        return false;
-      }
       size_t zero_seq_len = rank_select.zero_seq_len(iter->pos + 1);
-      ++id;
       iter->pos += zero_seq_len + 1;
       if (zero_seq_len > 0) {
         UpdateBuffer(id, iter);
       }
     }
     else {
-      if (id + count >= rank_select.max_rank1()) {
-        id = size_t(-1);
-        return false;
-      }
-      id += count;
       size_t one_seq_len = rank_select.one_seq_len(iter->pos + 1);
       if (count <= one_seq_len) {
         iter->pos += count;
@@ -1764,12 +1766,8 @@ private:
     }
     pos = rank_select.select0(value - min_value);
     assert(pos > 0);
-    if (!rank_select[pos - 1]) {
-      pos += rank_select.zero_seq_len(pos);
-      id = rank_select.rank1(pos);
-      count = rank_select.one_seq_len(pos);
-    }
-    else if (key.size() == key_length) {
+    assert(!rank_select[pos - 1]);
+    if (key.size() == key_length) {
       count = rank_select.one_seq_revlen(pos);
       pos -= count;
       id = rank_select.rank1(pos);
@@ -1780,7 +1778,7 @@ private:
         return false;
       }
       pos += rank_select.zero_seq_len(pos + 1);
-      id = rank_select.rand1(pos);
+      id = rank_select.rank1(pos);
       count = rank_select.one_seq_len(pos);
     }
     return true;
@@ -3938,10 +3936,10 @@ RegisterCompositeIndex(CompositeIndexAscendingUintPrefix<IL_256_32>, 0, Composit
 RegisterCompositeIndex(CompositeIndexAscendingUintPrefix<IL_256_32>, 1, CompositeIndexEmptySuffix, 0, Unused04);
 RegisterCompositeIndex(CompositeIndexAscendingUintPrefix<IL_256_32>, 1, CompositeIndexEmptySuffix, 1, Unused05);
 
-RegisterCompositeIndex(CompositeIndexAscendingUintPrefix<rs_fewzero_32>, 0, CompositeIndexDynamicStrSuffix, 0, Unused10);
-RegisterCompositeIndex(CompositeIndexAscendingUintPrefix<rs_fewzero_32>, 0, CompositeIndexDynamicStrSuffix, 1, Unused11);
-RegisterCompositeIndex(CompositeIndexAscendingUintPrefix<rs_fewzero_32>, 1, CompositeIndexDynamicStrSuffix, 0, Unused14);
-RegisterCompositeIndex(CompositeIndexAscendingUintPrefix<rs_fewzero_32>, 1, CompositeIndexDynamicStrSuffix, 1, Unused15);
+RegisterCompositeIndex(CompositeIndexNonDescendingUintPrefix<rs_fewzero_32>, 0, CompositeIndexDynamicStrSuffix, 0, Unused10);
+RegisterCompositeIndex(CompositeIndexNonDescendingUintPrefix<rs_fewzero_32>, 0, CompositeIndexDynamicStrSuffix, 1, Unused11);
+RegisterCompositeIndex(CompositeIndexNonDescendingUintPrefix<rs_fewzero_32>, 1, CompositeIndexDynamicStrSuffix, 0, Unused14);
+RegisterCompositeIndex(CompositeIndexNonDescendingUintPrefix<rs_fewzero_32>, 1, CompositeIndexDynamicStrSuffix, 1, Unused15);
 
 RegisterCompositeIndex(CompositeIndexNestLoudsTriePrefix<NestLoudsTrieDAWG_Mixed_XL_256_32_FL>, 0, CompositeIndexEmptySuffix, 0, Unused20);
 RegisterCompositeIndex(CompositeIndexNestLoudsTriePrefix<NestLoudsTrieDAWG_Mixed_XL_256_32_FL>, 0, CompositeIndexEmptySuffix, 1, Unused21);
