@@ -92,7 +92,8 @@ private:
   struct KeyValueStatus {
     valvec<char> prefix;
     valvec<char> commonPrefix;
-    Uint64Histogram key;
+    size_t numKeys = 0;
+    size_t sumKeyLen = 0;
     Uint64Histogram value;
     febitvec valueBits;
     bitfield_array<2> type;
@@ -109,7 +110,7 @@ private:
     std::future<Status> wait;
     valvec<std::unique_ptr<BuildIndexParams>> build;
   };
-  void AddPrevUserKey();
+  void AddPrevUserKey(size_t samePrefix);
   void AddLastUserKey();
   void OfflineZipValueData();
   void UpdateValueLenHistogram();
@@ -191,6 +192,7 @@ private:
   valvec<std::unique_ptr<KeyValueStatus>> prefixBuildInfos_;
   TerarkIndex::KeyStat *currentStat_ = nullptr;
   valvec<byte_t> prevUserKey_;
+  size_t prevSamePrefix_;
   TempFileDeleteOnClose tmpSentryFile_;
   TempFileDeleteOnClose tmpSampleFile_;
   AutoDeleteFile tmpIndexFile_;

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <terark/fstring.hpp>
+#include <terark/histogram.hpp>
 #include <terark/valvec.hpp>
 #include <terark/util/refcount.hpp>
 #include <terark/int_vector.hpp>
@@ -19,6 +20,7 @@ using terark::byte_t;
 using terark::NativeDataInput;
 using terark::InputBuffer;
 using terark::fstrvec;
+using terark::Uint64Histogram;
 using std::unique_ptr;
 
 struct TerarkZipTableOptions;
@@ -44,10 +46,11 @@ public:
   };
   struct KeyStat {
     size_t commonPrefixLen = 0;
+    Uint64Histogram prefix;
+    Uint64Histogram suffix;
     size_t minKeyLen = size_t(-1);
     size_t maxKeyLen = 0;
     size_t sumKeyLen = 0;
-    size_t numKeys   = 0;
     valvec<byte_t> minKey;
     valvec<byte_t> maxKey;
   };
