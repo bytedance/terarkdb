@@ -306,7 +306,7 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
         }
 
       protected:
-        bool init_value(void* valptr, size_t valsize) override {
+        bool init_value(void* valptr, size_t valsize) noexcept override {
           assert(valsize == sizeof(uint32_t));
 
           size_t data_loc = trie()->mem_alloc(sizeof(value_wrap_t));
@@ -364,7 +364,6 @@ const WriteBatchEntryIndexFactory* patricia_WriteBatchEntryIndexFactory(const Wr
    public:
     WriteBatchEntryIndexContext* fallback_context;
     terark::MainPatricia patricia;
-
     WriteBatchEntryPTrieIndexContext()
       : fallback_context(nullptr),
         patricia(terark::valvec_reserve(), 0, terark::Patricia::SingleThreadShared) {
