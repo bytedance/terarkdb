@@ -112,7 +112,7 @@ public:
       }
 
     protected:
-      bool init_value(void* valptr, size_t valsize) override {
+      bool init_value(void* valptr, size_t valsize) noexcept override {
         assert(valsize == sizeof(uint32_t));
         size_t vector_loc = terark::MainPatricia::mem_alloc_fail;
         size_t data_loc = terark::MainPatricia::mem_alloc_fail;
