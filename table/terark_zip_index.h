@@ -47,9 +47,11 @@ public:
   struct KeyStat {
     size_t commonPrefixLen = 0;
     Uint64Histogram prefix;
-    Uint64Histogram suffix;
+    Uint64Histogram diff;
     size_t minKeyLen = size_t(-1);
     size_t maxKeyLen = 0;
+    size_t minSuffixLen = size_t(-1);
+    size_t maxSuffixLen = 0;
     size_t sumKeyLen = 0;
     valvec<byte_t> minKey;
     valvec<byte_t> maxKey;

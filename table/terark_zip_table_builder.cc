@@ -655,9 +655,8 @@ std::future<Status> TerarkZipTableBuilder::Async(std::function<Status()> func) {
 
 void TerarkZipTableBuilder::BuildIndex(BuildIndexParams& param, KeyValueStatus& kvs) {
   param.stat.prefix.finish();
-  param.stat.suffix.finish();
-  assert(param.stat.prefix.m_cnt_sum == param.stat.suffix.m_cnt_sum);
-  param.stat.sumKeyLen = param.stat.prefix.m_total_key_len + param.stat.suffix.m_total_key_len;
+  param.stat.diff.finish();
+  assert(param.stat.prefix.m_cnt_sum == param.stat.diff.m_cnt_sum);
   assert(param.stat.prefix.m_cnt_sum > 0);
 #if defined(TerocksPrivateCode)
   if (kvs.split == 0) {
@@ -2401,9 +2400,9 @@ void TerarkZipTableBuilder::AddPrevUserKey(size_t samePrefix) {
   currentBuildInfo.sumKeyLen += prevUserKey_.size();
   currentBuildInfo.build.back()->data.writer << prevUserKey_;
   currentBuildInfo.valueBits.push_back(false);
-  size_t prefixSize = std::max(samePrefix, prevSamePrefix_);
-  ++currentStat_->prefix[prefixSize];
-  ++currentStat_->suffix[prevUserKey_.size() - prefixSize];
+  size_t prefixSize = std::max(samePrefix, prevSamePrefix_) + 1;
+  ++currentStat_->prefix[std::min(prefixSize, prevUserKey_.size())];
+  ++currentStat_->diff[samePrefix];
   prevSamePrefix_ = samePrefix;
 }
 
