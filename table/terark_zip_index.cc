@@ -14,6 +14,8 @@
 #include <terark/fsa/nest_trie_dawg.hpp>
 #include <terark/util/mmap.hpp>
 #include <terark/util/sortable_strvec.hpp>
+#include <terark/zbs/zip_offset_blob_store.hpp>
+#include <terark/zbs/dict_zip_blob_store.hpp>
 #include <terark/num_to_str.hpp>
 #if defined(TerocksPrivateCode)
 #include <terark/fsa/fsa_for_union_dfa.hpp>
@@ -161,15 +163,15 @@ TerarkIndex::~TerarkIndex() {}
 TerarkIndex::Factory::~Factory() {}
 TerarkIndex::Iterator::~Iterator() {}
 
-template<class NLTrie>
-void NestLoudsTrieBuildCache(NLTrie* trie, double cacheRatio) {
+template<class NestLoudsTrieDAWG>
+void NestLoudsTrieBuildCache(NestLoudsTrieDAWG* trie, double cacheRatio) {
   trie->build_fsa_cache(cacheRatio, NULL);
 }
 void NestLoudsTrieBuildCache(MatchingDFA* dfa, double cacheRatio) {}
 
 
-template<class NLTrie>
-void NestLoudsTrieGetOrderMap(const NLTrie* trie, UintVecMin0& newToOld) {
+template<class NestLoudsTrieDAWG>
+void NestLoudsTrieGetOrderMap(const NestLoudsTrieDAWG* trie, UintVecMin0& newToOld) {
   NonRecursiveDictionaryOrderToStateMapGenerator gen;
   gen(*trie, [&](size_t dictOrderOldId, size_t state) {
     size_t newId = trie->state_to_word_id(state);
@@ -188,16 +190,7 @@ void NestLoudsTrieGetOrderMap(const MatchingDFA* dfa, UintVecMin0& newToOld) {
 //
 //  struct MyBaseFactory : public Factory {
 //
-//    template<class StrVec>
-//    static void AssertSorted(const StrVec& keyVec) {
-//#if !defined(NDEBUG)
-//      for (size_t i = 1; i < keyVec.size(); ++i) {
-//        fstring prev = keyVec[i - 1];
-//        fstring curr = keyVec[i];
-//        assert(prev < curr);
-//      }
-//#endif
-//    }
+
 //
 //    size_t MemSizeForBuild(const KeyStat& ks) const override {
 //      size_t sumRealKeyLen = ks.sumKeyLen - ks.commonPrefixLen * ks.prefix.m_cnt_sum;
@@ -397,7 +390,7 @@ namespace composite_index_detail {
   };
 
   struct SuffixLowerBound {
-    virtual std::pair<size_t, size_t> LowerBound(fstring target, size_t suffix_id, size_t suffix_count) const = 0;
+    virtual std::pair<size_t, fstring> LowerBound(fstring target, size_t suffix_id, size_t suffix_count, valvec<byte_t>* ctx) const = 0;
   };
 
   struct VirtualPrefixBase {
@@ -409,8 +402,8 @@ namespace composite_index_detail {
 
     virtual size_t KeyCount() const = 0;
     virtual size_t TotalKeySize() const = 0;
-    virtual size_t Find(fstring key, SuffixLowerBound const* slb) const = 0;
-    virtual size_t DictRank(fstring key, SuffixLowerBound const* slb) const = 0;
+    virtual size_t Find(fstring key, SuffixLowerBound const* slb, valvec<byte_t>* ctx) const = 0;
+    virtual size_t DictRank(fstring key, SuffixLowerBound const* slb, valvec<byte_t>* ctx) const = 0;
     virtual bool NeedsReorder() const = 0;
 
     virtual bool IterSeekToFirst(size_t& id, void* iter) const = 0;
@@ -445,11 +438,11 @@ namespace composite_index_detail {
     size_t TotalKeySize() const override {
       return Prefix::TotalKeySize();
     }
-    size_t Find(fstring key, SuffixLowerBound const *slb) const override {
-      return Prefix::Find(key, slb);
+    size_t Find(fstring key, SuffixLowerBound const *slb, valvec<byte_t>* ctx) const override {
+      return Prefix::Find(key, slb, ctx);
     }
-    size_t DictRank(fstring key, SuffixLowerBound const *slb) const override {
-      return Prefix::DictRank(key, slb);
+    size_t DictRank(fstring key, SuffixLowerBound const *slb, valvec<byte_t>* ctx) const override {
+      return Prefix::DictRank(key, slb, ctx);
     }
     bool NeedsReorder() const override {
       return Prefix::NeedsReorder();
@@ -513,11 +506,11 @@ namespace composite_index_detail {
     size_t TotalKeySize() const {
       return prefix->TotalKeySize();
     }
-    size_t Find(fstring key, SuffixLowerBound const *slb) const {
-      return prefix->Find(key, slb);
+    size_t Find(fstring key, SuffixLowerBound const *slb, valvec<byte_t>* ctx) const {
+      return prefix->Find(key, slb, ctx);
     }
-    size_t DictRank(fstring key, SuffixLowerBound const *slb) const {
-      return prefix->DictRank(key, slb);
+    size_t DictRank(fstring key, SuffixLowerBound const *slb, valvec<byte_t>* ctx) const {
+      return prefix->DictRank(key, slb, ctx);
     }
     bool NeedsReorder() const {
       return prefix->NeedsReorder();
@@ -588,8 +581,8 @@ namespace composite_index_detail {
     size_t TotalKeySize() const override {
       return Suffix::TotalKeySize();
     }
-    std::pair<size_t, size_t> LowerBound(fstring target, size_t suffix_id, size_t suffix_count) const override {
-      return Suffix::LowerBound(target, suffix_id, suffix_count);
+    std::pair<size_t, fstring> LowerBound(fstring target, size_t suffix_id, size_t suffix_count, valvec<byte_t>* ctx) const override {
+      return Suffix::LowerBound(target, suffix_id, suffix_count, ctx);
     }
 
     void IterSet(size_t suffix_id, void* iter) const override {
@@ -635,8 +628,8 @@ namespace composite_index_detail {
     size_t TotalKeySize() const {
       return suffix->TotalKeySize();
     }
-    std::pair<size_t, size_t> LowerBound(fstring target, size_t suffix_id, size_t suffix_count) const override {
-      return suffix->LowerBound(target, suffix_id, suffix_count);
+    std::pair<size_t, fstring> LowerBound(fstring target, size_t suffix_id, size_t suffix_count, valvec<byte_t>* ctx) const override {
+      return suffix->LowerBound(target, suffix_id, suffix_count, ctx);
     }
 
     void IterSet(size_t suffix_id, void* iter) const {
@@ -775,6 +768,18 @@ public:
     std::string& name) const;
 
   ComponentBase* BuildEmptySuffix(std::string& name) const;
+
+  template<class InputBufferType>
+  ComponentBase* BuildFixedStringSuffix(
+      InputBufferType& input,
+      size_t numKeys, size_t sumKeyLen, size_t fixedLen,
+      bool isReverse, std::string& name) const;
+
+  template<class InputBufferType>
+  ComponentBase* BuildDynamicStringSuffix(
+      InputBufferType& input,
+      size_t numKeys, size_t sumKeyLen,
+      bool isReverse, std::string& name) const;
 
   TerarkIndex* Build(NativeDataInput<InputBuffer>& reader,
     const TerarkZipTableOptions& tzopt,
@@ -986,15 +991,16 @@ public:
 //      SE_512_64
 //  Suffix :
 //    VirtualImpl :
-//      DynamicString
-//      EntropyString
-//      DictZipString
+//      BlobStoreSuffix<>
+//        ZipOffsetBlobStore
+//        DictZipBlobStore
 //      Number<>
 //        SortedUintVec
 //    Empty
 //    FixedString
 //    Number<>
 //      BigUintVecMin0
+////////////////////////////////////////////////////////////////////////////////
 
 template<class Prefix, class Suffix>
 class CompositeIndex : public TerarkIndex, public composite_index_detail::CompositeIndexParts<Prefix, Suffix> {
@@ -1024,14 +1030,14 @@ public:
   void SaveMmap(std::function<void(const void *, size_t)> write) const override {
     factory_->SaveMmap(this, write);
   }
-  size_t Find(fstring key) const override {
+  size_t Find(fstring key, valvec<byte_t>* ctx) const override {
     if (key.commonPrefixLen(common_) != common_.size()) {
       return size_t(-1);
     }
     key = key.substr(common_.size());
-    return prefix_.Find(key, suffix_.TotalKeySize() != 0 ? &suffix_ : nullptr);
+    return prefix_.Find(key, suffix_.TotalKeySize() != 0 ? &suffix_ : nullptr, ctx);
   }
-  size_t DictRank(fstring key) const override {
+  size_t DictRank(fstring key, valvec<byte_t>* ctx) const override {
     size_t cplen = key.commonPrefixLen(common_);
     if (cplen != common_.size()) {
       assert(key.size() >= cplen);
@@ -1044,7 +1050,7 @@ public:
       }
     }
     key = key.substr(common_.size());
-    return prefix_.DictRank(key, suffix_.TotalKeySize() != 0 ? &suffix_ : nullptr);
+    return prefix_.DictRank(key, suffix_.TotalKeySize() != 0 ? &suffix_ : nullptr, ctx);
   }
   size_t NumKeys() const override {
     return prefix_.KeyCount();
@@ -1183,7 +1189,7 @@ struct CompositeIndexAscendingUintPrefix
   size_t TotalKeySize() const {
     return key_length * rank_select.max_rank1();
   }
-  size_t Find(fstring key, composite_index_detail::SuffixLowerBound const *slb) const {
+  size_t Find(fstring key, composite_index_detail::SuffixLowerBound const *slb, valvec<byte_t>* ctx) const {
     if (key.size() < key_length) {
       return size_t(-1);
     }
@@ -1199,14 +1205,16 @@ struct CompositeIndexAscendingUintPrefix
     if (slb == nullptr) {
       return key.size() == key_length ? id : size_t(-1);
     }
-    size_t suffix_id, common;
-    std::tie(suffix_id, common) = slb->LowerBound(key.substr(key_length), id, 1);
-    if (suffix_id != id || key_length + common != key.size()) {
+    size_t suffix_id;
+    fstring suffix;
+    key = key.substr(key_length);
+    std::tie(suffix_id, suffix) = slb->LowerBound(key, id, 1, ctx);
+    if (suffix_id != id || suffix != key) {
       return size_t(-1);
     }
     return suffix_id;
   }
-  size_t DictRank(fstring key, composite_index_detail::SuffixLowerBound const *slb) const {
+  size_t DictRank(fstring key, composite_index_detail::SuffixLowerBound const *slb, valvec<byte_t>* ctx) const {
     size_t id, pos, hint;
     bool seek_result, is_find;
     std::tie(seek_result, is_find) = SeekImpl(key, id, pos, &hint);
@@ -1216,12 +1224,10 @@ struct CompositeIndexAscendingUintPrefix
     if (key.size() != key_length || !is_find) {
       return id + 1;
     }
-    size_t suffix_id, common;
-    std::tie(suffix_id, common) = slb->LowerBound(key.substr(key_length), id, 1);
-    if (suffix_id != id || key_length + common != key.size()) {
-      return rank_select.max_rank1();
+    if (slb == nullptr) {
+      return id;
     }
-    return suffix_id;
+    return slb->LowerBound(key.substr(key_length), id, 1, ctx).first;
   }
   bool NeedsReorder() const {
     return false;
@@ -1374,7 +1380,8 @@ struct CompositeIndexNonDescendingUintPrefix
   size_t TotalKeySize() const {
     return key_length * rank_select.max_rank1();
   }
-  size_t Find(fstring key, composite_index_detail::SuffixLowerBound const *slb) const {
+  size_t Find(fstring key, composite_index_detail::SuffixLowerBound const *slb, valvec<byte_t>* ctx) const {
+    assert(slb != nullptr);
     if (key.size() < key_length) {
       return size_t(-1);
     }
@@ -1392,14 +1399,17 @@ struct CompositeIndexNonDescendingUintPrefix
     if (slb == nullptr) {
       return key.size() == key_length ? id : size_t(-1);
     }
-    size_t suffix_id, common;
-    std::tie(suffix_id, common) = slb->LowerBound(key.substr(key_length), id, count);
-    if (suffix_id == id + count || key_length + common != key.size()) {
+    size_t suffix_id;
+    fstring suffix;
+    key = key.substr(key_length);
+    std::tie(suffix_id, suffix) = slb->LowerBound(key, id, count, ctx);
+    if (suffix_id == id + count || suffix != key) {
       return size_t(-1);
     }
     return suffix_id;
   }
-  size_t DictRank(fstring key, composite_index_detail::SuffixLowerBound const *slb) const {
+  size_t DictRank(fstring key, composite_index_detail::SuffixLowerBound const *slb, valvec<byte_t>* ctx) const {
+    assert(slb != nullptr);
     size_t id, count, pos, hint;
     bool seek_result, is_find;
     std::tie(seek_result, is_find) = SeekImpl(key, id, count, pos, &hint);
@@ -1409,12 +1419,7 @@ struct CompositeIndexNonDescendingUintPrefix
     if (key.size() != key_length || !is_find) {
       return id + 1;
     }
-    size_t suffix_id, common;
-    std::tie(suffix_id, common) = slb->LowerBound(key.substr(key_length), id, count);
-    if (suffix_id != id || key_length + common != key.size()) {
-      return rank_select.max_rank1();
-    }
-    return suffix_id;
+    return slb->LowerBound(key.substr(key_length), id, count, ctx).first;
   }
   bool NeedsReorder() const {
     return false;
@@ -1549,17 +1554,17 @@ private:
   }
 };
 
-template<class NLTrie>
+template<class NestLoudsTrieDAWG>
 class CompositeIndexNestLoudsTriePrefixIterator {
 protected:
-  typename NLTrie::Iterator iter_;
+  typename NestLoudsTrieDAWG::Iterator iter_;
   bool Done(size_t& id, bool ok) {
-    auto dawg = static_cast<const NLTrie*>(iter_.get_dfa());
+    auto dawg = static_cast<const NestLoudsTrieDAWG*>(iter_.get_dfa());
     id = ok ? dawg->state_to_word_id(iter_.word_state()) : size_t(-1);
     return ok;
   }
 public:
-  CompositeIndexNestLoudsTriePrefixIterator(const NLTrie* trie) : iter_(trie) {}
+  CompositeIndexNestLoudsTriePrefixIterator(const NestLoudsTrieDAWG* trie) : iter_(trie) {}
 
   fstring GetKey(size_t id) const { return iter_.word(); }
   bool SeekToFirst(size_t& id) { return Done(id, iter_.seek_begin()); }
@@ -1568,7 +1573,7 @@ public:
   bool Next(size_t& id) { return Done(id, iter_.incr()); }
   bool Prev(size_t& id) { return Done(id, iter_.decr()); }
   size_t DictRank(size_t id) const {
-    auto dawg = static_cast<const NLTrie*>(iter_.get_dfa());
+    auto dawg = static_cast<const NestLoudsTrieDAWG*>(iter_.get_dfa());
     assert(id != size_t(-1));
     return dawg->state_to_dict_rank(iter_.word_state());
   }
@@ -1599,20 +1604,24 @@ public:
   }
 };
 
-template<class NLTrie>
+template<class NestLoudsTrieDAWG>
 struct CompositeIndexNestLoudsTriePrefix
   : public composite_index_detail::ComponentBase {
-  using IteratorStorage = CompositeIndexNestLoudsTriePrefixIterator<NLTrie>;
+  using IteratorStorage = CompositeIndexNestLoudsTriePrefixIterator<NestLoudsTrieDAWG>;
 
   CompositeIndexNestLoudsTriePrefix() = default;
   CompositeIndexNestLoudsTriePrefix(CompositeIndexNestLoudsTriePrefix&&) = default;
   CompositeIndexNestLoudsTriePrefix(ComponentBase* base) {
-    assert(dynamic_cast<CompositeIndexNestLoudsTriePrefix<NLTrie>*>(base) != nullptr);
-    auto other = static_cast<CompositeIndexNestLoudsTriePrefix<NLTrie>*>(base);
-
-    // TODO
+    assert(dynamic_cast<CompositeIndexNestLoudsTriePrefix<NestLoudsTrieDAWG>*>(base) != nullptr);
+    auto other = static_cast<CompositeIndexNestLoudsTriePrefix<NestLoudsTrieDAWG>*>(base);
+    dawg_ = other->dawg_;
+    trie_ = std::move(other->trie_);
     working_state = base->working_state;
     delete other;
+  }
+  CompositeIndexNestLoudsTriePrefix(BaseDFA* trie) : trie_(trie) {
+    dawg_ = trie->get_dawg();
+    working_state = WorkingState::Building;
   }
   ~CompositeIndexNestLoudsTriePrefix() {
     if (working_state != WorkingState::Building) {
@@ -1626,7 +1635,7 @@ struct CompositeIndexNestLoudsTriePrefix
     return sizeof(IteratorStorage);
   }
   void IteratorStorageConstruct(void* ptr) const {
-    ::new(ptr) IteratorStorage(static_cast<const NLTrie*>(trie_.get()));
+    ::new(ptr) IteratorStorage(static_cast<const NestLoudsTrieDAWG*>(trie_.get()));
   }
   void IteratorStorageDestruct(void* ptr) const {
     static_cast<IteratorStorage*>(ptr)->~IteratorStorage();
@@ -1638,11 +1647,11 @@ struct CompositeIndexNestLoudsTriePrefix
   size_t TotalKeySize() const {
     return trie_->adfa_total_words_len();
   }
-  size_t Find(fstring key, composite_index_detail::SuffixLowerBound const *slb) const {
+  size_t Find(fstring key, composite_index_detail::SuffixLowerBound const *slb, valvec<byte_t>* ctx) const {
     if (slb == nullptr) {
       return dawg_->index(key);
     }
-    std::unique_ptr<IteratorStorage> iter(new IteratorStorage(static_cast<const NLTrie*>(trie_.get())));
+    std::unique_ptr<IteratorStorage> iter(new IteratorStorage(static_cast<const NestLoudsTrieDAWG*>(trie_.get())));
     size_t id;
     if (!iter->Seek(id, key)) {
       return size_t(-1);
@@ -1651,18 +1660,20 @@ struct CompositeIndexNestLoudsTriePrefix
     if (prefix_key.commonPrefixLen(key) != prefix_key.size()) {
       return size_t(-1);
     }
-    size_t suffix_id, common;
-    std::tie(suffix_id, common) = slb->LowerBound(key.substr(prefix_key.size()), id, 1);
-    if (suffix_id != id || prefix_key.size() + common == key.size()) {
+    size_t suffix_id;
+    fstring suffix;
+    key = key.substr(prefix_key.size());
+    std::tie(suffix_id, suffix) = slb->LowerBound(key, id, 1, ctx);
+    if (suffix_id != id || suffix != key) {
       return size_t(-1);
     }
     return id;
   }
-  size_t DictRank(fstring key, composite_index_detail::SuffixLowerBound const *slb) const {
+  size_t DictRank(fstring key, composite_index_detail::SuffixLowerBound const *slb, valvec<byte_t>* ctx) const {
     if (slb == nullptr) {
       return dawg_->dict_rank(key);
     }
-    std::unique_ptr<IteratorStorage> iter(new IteratorStorage(static_cast<const NLTrie*>(trie_.get())));
+    std::unique_ptr<IteratorStorage> iter(new IteratorStorage(static_cast<const NestLoudsTrieDAWG*>(trie_.get())));
     size_t id;
     if (!iter->Seek(id, key)) {
       return KeyCount();
@@ -1671,9 +1682,11 @@ struct CompositeIndexNestLoudsTriePrefix
     if (prefix_key.commonPrefixLen(key) != prefix_key.size()) {
       return iter->DictRank(id);
     }
-    size_t suffix_id, common;
-    std::tie(suffix_id, common) = slb->LowerBound(key.substr(prefix_key.size()), id, 1);
-    if (suffix_id == id && prefix_key.size() + common == key.size()) {
+    size_t suffix_id;
+    fstring suffix;
+    key = key.substr(prefix_key.size());
+    std::tie(suffix_id, suffix) = slb->LowerBound(key, id, 1, ctx);
+    if (suffix_id == id && suffix == key) {
       return iter->DictRank(id);
     }
     assert(suffix_id = id + 1);
@@ -1738,8 +1751,8 @@ struct CompositeIndexEmptySuffix
   size_t TotalKeySize() const {
     return 0;
   }
-  std::pair<size_t, size_t> LowerBound(fstring target, size_t suffix_id, size_t suffix_count) const override {
-    return { suffix_id, 0 };
+  std::pair<size_t, fstring> LowerBound(fstring target, size_t suffix_id, size_t suffix_count, valvec<byte_t>* ctx) const override {
+    return { suffix_id, {} };
   }
 
   void IterSet(size_t suffix_id, void*) const {
@@ -1758,42 +1771,92 @@ struct CompositeIndexEmptySuffix
   }
 };
 
-struct CompositeIndexDynamicStringSuffix
+struct CompositeIndexFixedStringSuffix
   : public composite_index_detail::ComponentBase
   , public composite_index_detail::SuffixLowerBound
   , public composite_index_detail::ComponentIteratorStorageImpl<void> {
   typedef void IteratorStorage;
 
-  CompositeIndexDynamicStringSuffix() = default;
-  CompositeIndexDynamicStringSuffix(CompositeIndexDynamicStringSuffix&&) = default;
-  CompositeIndexDynamicStringSuffix(ComponentBase* base) {
+  CompositeIndexFixedStringSuffix() = default;
+  CompositeIndexFixedStringSuffix(CompositeIndexFixedStringSuffix&&) = default;
+  CompositeIndexFixedStringSuffix(ComponentBase* base) {
     working_state = WorkingState::UserMemory;
     delete base;
   }
-  SortedStrVec str_pool_;
+  FixedLenStrVec str_pool_;
 
   size_t TotalKeySize() const {
     return str_pool_.mem_size();
   }
-  std::pair<size_t, size_t> LowerBound(fstring target, size_t suffix_id, size_t suffix_count) const override {
+  std::pair<size_t, fstring> LowerBound(fstring target, size_t suffix_id, size_t suffix_count, valvec<byte_t>* ctx) const override {
     size_t end = suffix_id + suffix_count;
-    suffix_id = str_pool_.lower_bound(target, suffix_id, end);
+    suffix_id = str_pool_.lower_bound(suffix_id, end, target);
     if (suffix_id == end) {
-      return { suffix_id, 0 };
+      return { suffix_id, {} };
     }
-    auto key = str_pool_[suffix_id];
-    return { suffix_id, key.commonPrefixLen(target) };
+    return { suffix_id, str_pool_[suffix_id] };
   }
 
   void IterSet(size_t suffix_id, void*) const {
   }
   bool IterSeek(fstring target, size_t& suffix_id, size_t suffix_count, void*) const {
     size_t end = suffix_id + suffix_count;
-    suffix_id = str_pool_.lower_bound(target, suffix_id, end);
+    suffix_id = str_pool_.lower_bound(suffix_id, end, target);
     return suffix_id != end;
   }
   fstring IterGetKey(size_t suffix_id, const void*) const {
     return str_pool_[suffix_id];
+  }
+
+  bool Load(fstring mem) override {
+    return false;
+  }
+  void Save(std::function<void(void*, size_t)> append) const override {
+  }
+};
+
+template<class BlobStoreType>
+struct CompositeIndexBlobStoreSuffix
+  : public composite_index_detail::ComponentBase
+  , public composite_index_detail::SuffixLowerBound
+  , public composite_index_detail::ComponentIteratorStorageImpl<void> {
+  typedef BlobStore::CacheOffsets IteratorStorage;
+
+  CompositeIndexBlobStoreSuffix() = default;
+  CompositeIndexBlobStoreSuffix(CompositeIndexBlobStoreSuffix&& other) {
+    store_.swap(other.store_);
+  }
+  CompositeIndexBlobStoreSuffix(ComponentBase* base) {
+    working_state = WorkingState::UserMemory;
+    delete base;
+  }
+  BlobStoreType store_;
+
+  size_t TotalKeySize() const {
+    return store_.total_data_size();
+  }
+  std::pair<size_t, fstring> LowerBound(fstring target, size_t suffix_id, size_t suffix_count, valvec<byte_t>* ctx) const override {
+    BlobStore::CacheOffsets co;
+    ctx->swap(co.recData);
+    size_t end = suffix_id + suffix_count;
+    suffix_id = store_.lower_bound(suffix_id, end, target, &co);
+    if (suffix_id == end) {
+      return { suffix_id, {} };
+    }
+    ctx->swap(co.recData);
+    return { suffix_id, *ctx };
+  }
+
+  void IterSet(size_t suffix_id, IteratorStorage* iter) const {
+    store_.get_record_append(suffix_id, iter);
+  }
+  bool IterSeek(fstring target, size_t& suffix_id, size_t suffix_count, IteratorStorage* iter) const {
+    size_t end = suffix_id + suffix_count;
+    suffix_id = store_.lower_bound(suffix_id, end, target, iter);
+    return suffix_id != end;
+  }
+  fstring IterGetKey(size_t suffix_id, const IteratorStorage* iter) const {
+    return iter->recData;
   }
 
   bool Load(fstring mem) override {
@@ -1989,7 +2052,67 @@ void NestLoudsTriePrefixSetConfig(NestLoudsTrieConfig& conf,
   conf.isInputSorted = true;
 }
 
-template<class RankSelect, class InputBufferType>
+template<class NestLoudsTrieDAWG, class StrVec>
+composite_index_detail::ComponentBase*
+NestLoudsTriePrefixProcess(const NestLoudsTrieConfig& cfg, StrVec& keyVec) {
+#if !defined(NDEBUG)
+  for (size_t i = 1; i < keyVec.size(); ++i) {
+    fstring prev = keyVec[i - 1];
+    fstring curr = keyVec[i];
+    assert(prev < curr);
+  }
+#endif
+  std::unique_ptr<NestLoudsTrieDAWG> trie(new NestLoudsTrieDAWG());
+  trie->build_from(keyVec, cfg);
+  return new CompositeIndexNestLoudsTriePrefix<NestLoudsTrieDAWG>(trie.release());
+}
+
+template<class InputBufferType>
+void CompositeIndexFillKeyVector(InputBufferType& input, FixedLenStrVec& keyVec, size_t numKeys, size_t sumKeyLen, size_t fixedLen, bool isReverse) {
+  if (isReverse) {
+    keyVec.m_size = numKeys;
+    keyVec.m_strpool.resize(sumKeyLen);
+    for (size_t i = numKeys; i > 0; ) {
+      --i;
+      auto str = input.next();
+      assert(str.size() == fixedLen);
+      memcpy(keyVec.m_strpool.data() + fixedLen * i
+        , str.data(), fixedLen);
+    }
+  }
+  else {
+    keyVec.reserve(numKeys, sumKeyLen);
+    for (size_t i = 0; i < numKeys; ++i) {
+      keyVec.push_back(input.next());
+    }
+  }
+}
+
+template<class InputBufferType>
+void CompositeIndexFillKeyVector(InputBufferType& input, SortedStrVec& keyVec, size_t numKeys, size_t sumKeyLen, bool isReverse) {
+  if (isReverse) {
+    keyVec.m_offsets.resize_with_wire_max_val(numKeys + 1, sumKeyLen);
+    keyVec.m_offsets.set_wire(numKeys, sumKeyLen);
+    keyVec.m_strpool.resize(sumKeyLen);
+    size_t offset = sumKeyLen;
+    for (size_t i = numKeys; i > 0; ) {
+      --i;
+      auto str = input.next();
+      offset -= str.size();
+      memcpy(keyVec.m_strpool.data() + offset, str.data(), str.size());
+      keyVec.m_offsets.set_wire(i, offset);
+    }
+    assert(offset == 0);
+  }
+  else {
+    keyVec.reserve(numKeys, sumKeyLen);
+    for (size_t i = 0; i < numKeys; ++i) {
+      keyVec.push_back(input.next());
+    }
+  }
+}
+
+template<class NestLoudsTrieDAWG, class InputBufferType>
 composite_index_detail::ComponentBase*
 CompositeIndexFactoryBase::BuildNestLoudsTriePrefix(
   InputBufferType& input,
@@ -1998,57 +2121,20 @@ CompositeIndexFactoryBase::BuildNestLoudsTriePrefix(
   bool isReverse, bool isFixedLen,
   const ImmutableCFOptions* ioption,
   std::string& name) const {
-  name = typeid(CompositeIndexAscendingUintPrefix<RankSelect>).name();
+  name = typeid(CompositeIndexNestLoudsTriePrefix<NestLoudsTrieDAWG>).name();
   NestLoudsTrieConfig cfg;
   if (isFixedLen) {
     FixedLenStrVec keyVec;
-    if (isReverse) {
-      keyVec.m_size = numKeys;
-      keyVec.m_strpool.resize(sumKeyLen);
-      for (size_t i = numKeys; i > 0; ) {
-        --i;
-        reader >> keyBuf;
-        memcpy(keyVec.m_strpool.data() + fixlen * i
-          , fstring(keyBuf).substr(commonPrefixLen).data()
-          , fixlen);
-      }
-    }
-    else {
-      keyVec.reserve(numKeys, sumRealKeyLen);
-      for (size_t i = 0; i < numKeys; ++i) {
-        reader >> keyBuf;
-        keyVec.push_back(fstring(keyBuf).substr(commonPrefixLen));
-      }
-    }
-    NestLoudsTriePrefixSetConfig(cfg, keyVec.mem_size(), keyVec.agv_size(), tzopt);
-    return nullptr;
+    assert(sumKeyLen % numKeys == 0);
+    CompositeIndexFillKeyVector(input, keyVec, numKeys, sumKeyLen, sumKeyLen / numKeys, isReverse);
+    NestLoudsTriePrefixSetConfig(cfg, keyVec.mem_size(), keyVec.avg_size(), tzopt);
+    return NestLoudsTriePrefixProcess<NestLoudsTrieDAWG>(cfg, keyVec);
   }
   else {
     SortedStrVec keyVec;
-    if (isReverse) {
-      keyVec.m_offsets.resize_with_wire_max_val(numKeys + 1, sumKeyLen);
-      keyVec.m_offsets.set_wire(numKeys, sumKeyLen);
-      keyVec.m_strpool.resize(sumKeyLen);
-      size_t offset = sumRealKeyLen;
-      for (size_t i = numKeys; i > 0; ) {
-        --i;
-        reader >> keyBuf;
-        fstring str = fstring(keyBuf).substr(commonPrefixLen);
-        offset -= str.size();
-        memcpy(keyVec.m_strpool.data() + offset, str.data(), str.size());
-        keyVec.m_offsets.set_wire(i, offset);
-      }
-      assert(offset == 0);
-    }
-    else {
-      keyVec.reserve(numKeys, totaKeyLen);
-      for (size_t i = 0; i < numKeys; ++i) {
-        reader >> keyBuf;
-        keyVec.push_back(fstring(keyBuf).substr(commonPrefixLen));
-      }
-    }
-    NestLoudsTriePrefixSetConfig(cfg, keyVec.mem_size(), keyVec.agv_size(), tzopt);
-    return nullptr;
+    CompositeIndexFillKeyVector(input, keyVec, numKeys, sumKeyLen, isReverse);
+    NestLoudsTriePrefixSetConfig(cfg, keyVec.mem_size(), keyVec.avg_size(), tzopt);
+    return NestLoudsTriePrefixProcess<NestLoudsTrieDAWG>(cfg, keyVec);
   }
 }
 
@@ -2056,6 +2142,32 @@ composite_index_detail::ComponentBase*
 CompositeIndexFactoryBase::BuildEmptySuffix(std::string& name) const {
   name = typeid(CompositeIndexEmptySuffix).name();
   return new CompositeIndexEmptySuffix();
+}
+
+template<class InputBufferType>
+composite_index_detail::ComponentBase*
+CompositeIndexFactoryBase::BuildFixedStringSuffix(
+  InputBufferType& input,
+  size_t numKeys, size_t sumKeyLen, size_t fixedLen,
+  bool isReverse, std::string& name) const {
+  // TODO
+  return BuildDynamicStringSuffix(input, numKeys, sumKeyLen, isReverse, name);
+  FixedLenStrVec keyVec;
+  CompositeIndexFillKeyVector(input, keyVec, numKeys, sumKeyLen, fixedLen, isReverse);
+  return nullptr;
+}
+
+template<class InputBufferType>
+composite_index_detail::ComponentBase*
+CompositeIndexFactoryBase::BuildDynamicStringSuffix(
+  InputBufferType& input,
+  size_t numKeys, size_t sumKeyLen,
+  bool isReverse, std::string& name) const {
+  name = typeid(CompositeIndexEmptySuffix).name();
+  SortedStrVec keyVec;
+  CompositeIndexFillKeyVector(input, keyVec, numKeys, sumKeyLen, isReverse);
+  // TODO
+  return new CompositeIndexBlobStoreSuffix<DictZipBlobStore>();
 }
 
 TerarkIndex*
@@ -2212,14 +2324,8 @@ CompositeIndexFactoryBase::Build(
   };
 
   assert(ks.prefix.m_cnt_sum > 0);
-  SortedStrVec raw_suffix;
-  Common common;
-  ComponentBase* prefix = nullptr;
-  ComponentBase* suffix = nullptr;
-  std::string combin, name;
   size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
   assert(cplen >= ks.commonPrefixLen);
-  common.reset(fstring(ks.minKey).substr(ks.commonPrefixLen, cplen - ks.commonPrefixLen), true);
   auto getFixedPrefixLength = [](const TerarkIndex::KeyStat& ks, size_t cplen) {
     size_t keyCount = ks.prefix.m_cnt_sum;
     size_t maxPrefixLen = std::min<size_t>(8, ks.minKeyLen - cplen);
@@ -2325,6 +2431,11 @@ CompositeIndexFactoryBase::Build(
     return result;
   };
   UintPrefixBuildInfo uint_prefix_info = getFixedPrefixLength(ks, cplen);
+  Common common;
+  common.reset(fstring(ks.minKey).substr(ks.commonPrefixLen, cplen - ks.commonPrefixLen), true);
+  ComponentBase* prefix;
+  ComponentBase* suffix;
+  std::string combin, name;
   if (uint_prefix_info.key_length > 0) {
     if (ks.minKeyLen == ks.maxKeyLen && ks.maxKeyLen == cplen + uint_prefix_info.key_length) {
       DefaultInputBuffer input_reader{ reader, cplen, ks.maxKeyLen };
@@ -2358,6 +2469,7 @@ CompositeIndexFactoryBase::Build(
           input_reader, tzopt, ks, uint_prefix_info, ioption, name);
         break;
       case UintPrefixBuildInfo::fail:
+      default:
       case UintPrefixBuildInfo::non_desc_il_256:
       case UintPrefixBuildInfo::non_desc_se_512:
       case UintPrefixBuildInfo::non_desc_few_one_32:
@@ -2421,16 +2533,27 @@ CompositeIndexFactoryBase::Build(
           prefix_input_reader, tzopt, ks, uint_prefix_info, ioption, name);
         break;
       case UintPrefixBuildInfo::fail:
+      default:
         assert(false);
         return nullptr;
       }
+      combin += name;
       FixPrefixRemainingInputBuffer suffix_input_reader{ reader, cplen, uint_prefix_info.key_length, ks.maxKeyLen };
       if (ks.minKeyLen == ks.maxKeyLen) {
-        // BuildFixedStringSuffix
+        suffix = BuildFixedStringSuffix(
+          suffix_input_reader, uint_prefix_info.key_count, ks.sumKeyLen - ks.prefix.m_cnt_sum * prefix_input_reader.cplenPrefixSize,
+          ks.maxKeyLen - prefix_input_reader.cplenPrefixSize, ks.minKey > ks.maxKey, name);
       }
       else {
-        // BuildDynamicStringSuffix
+        suffix = BuildDynamicStringSuffix(
+          suffix_input_reader, uint_prefix_info.key_count, ks.sumKeyLen - ks.prefix.m_cnt_sum * prefix_input_reader.cplenPrefixSize,
+          ks.minKey > ks.maxKey, name);
       }
+      combin += name;
+      assert(dynamic_cast<const CompositeIndexFactoryBase*>(GetFactoryByCombinName(combin)) != nullptr);
+      auto factory = static_cast<const CompositeIndexFactoryBase*>(GetFactoryByCombinName(combin));
+      auto index = factory->CreateIndex(std::move(common), prefix, suffix);
+      return index;
     }
   }
   else if (ks.sumKeyLen - ks.minSuffixLen * ks.prefix.m_cnt_sum < ks.prefix.m_total_key_len * 5 / 4) {
@@ -2453,8 +2576,17 @@ CompositeIndexFactoryBase::Build(
 
   } else {
     DefaultInputBuffer input_reader{ reader, cplen, ks.maxKeyLen };
-    // BuildNestLoudsTriePrefix
-    // BuildEmptySuffix
+    // TODO select a NestLoudsTrieDAWG type
+    prefix = BuildNestLoudsTriePrefix<NestLoudsTrieDAWG_SE_512_64_FL>(
+      input_reader, tzopt, ks.prefix.m_cnt_sum, ks.sumKeyLen - ks.prefix.m_cnt_sum * cplen,
+      ks.minKey > ks.maxKey, ks.minKeyLen == ks.maxKeyLen, ioption, name);
+    combin += name;
+    suffix = BuildEmptySuffix(name);
+    combin += name;
+    assert(dynamic_cast<const CompositeIndexFactoryBase*>(GetFactoryByCombinName(combin)) != nullptr);
+    auto factory = static_cast<const CompositeIndexFactoryBase*>(GetFactoryByCombinName(combin));
+    auto index = factory->CreateIndex(std::move(common), prefix, suffix);
+    return index;
   }
   return nullptr;
 }
@@ -2692,20 +2824,20 @@ RegisterCompositeIndex(CompositeIndexAscendingUintPrefix<IL_256_32>, 0, Composit
 RegisterCompositeIndex(CompositeIndexAscendingUintPrefix<IL_256_32>, 1, CompositeIndexEmptySuffix, 0, Unused02);
 RegisterCompositeIndex(CompositeIndexAscendingUintPrefix<IL_256_32>, 1, CompositeIndexEmptySuffix, 1, Unused03);
 
-RegisterCompositeIndex(CompositeIndexNonDescendingUintPrefix<rs_fewzero_32>, 0, CompositeIndexDynamicStringSuffix, 0, Unused10);
-RegisterCompositeIndex(CompositeIndexNonDescendingUintPrefix<rs_fewzero_32>, 0, CompositeIndexDynamicStringSuffix, 1, Unused11);
-RegisterCompositeIndex(CompositeIndexNonDescendingUintPrefix<rs_fewzero_32>, 1, CompositeIndexDynamicStringSuffix, 0, Unused12);
-RegisterCompositeIndex(CompositeIndexNonDescendingUintPrefix<rs_fewzero_32>, 1, CompositeIndexDynamicStringSuffix, 1, Unused13);
+RegisterCompositeIndex(CompositeIndexNonDescendingUintPrefix<rs_fewzero_32>, 0, CompositeIndexFixedStringSuffix, 0, Unused10);
+RegisterCompositeIndex(CompositeIndexNonDescendingUintPrefix<rs_fewzero_32>, 0, CompositeIndexFixedStringSuffix, 1, Unused11);
+RegisterCompositeIndex(CompositeIndexNonDescendingUintPrefix<rs_fewzero_32>, 1, CompositeIndexFixedStringSuffix, 0, Unused12);
+RegisterCompositeIndex(CompositeIndexNonDescendingUintPrefix<rs_fewzero_32>, 1, CompositeIndexFixedStringSuffix, 1, Unused13);
 
 RegisterCompositeIndex(CompositeIndexNestLoudsTriePrefix<NestLoudsTrieDAWG_Mixed_XL_256_32_FL>, 0, CompositeIndexEmptySuffix, 0, Unused20);
 RegisterCompositeIndex(CompositeIndexNestLoudsTriePrefix<NestLoudsTrieDAWG_Mixed_XL_256_32_FL>, 0, CompositeIndexEmptySuffix, 1, Unused21);
 RegisterCompositeIndex(CompositeIndexNestLoudsTriePrefix<NestLoudsTrieDAWG_Mixed_XL_256_32_FL>, 1, CompositeIndexEmptySuffix, 0, Unused22);
 RegisterCompositeIndex(CompositeIndexNestLoudsTriePrefix<NestLoudsTrieDAWG_Mixed_XL_256_32_FL>, 1, CompositeIndexEmptySuffix, 1, Unused23);
 
-RegisterCompositeIndex(CompositeIndexNestLoudsTriePrefix<MatchingDFA>, 0, CompositeIndexDynamicStringSuffix, 0, Unused30);
-RegisterCompositeIndex(CompositeIndexNestLoudsTriePrefix<MatchingDFA>, 0, CompositeIndexDynamicStringSuffix, 1, Unused31);
-RegisterCompositeIndex(CompositeIndexNestLoudsTriePrefix<MatchingDFA>, 1, CompositeIndexDynamicStringSuffix, 0, Unused32);
-RegisterCompositeIndex(CompositeIndexNestLoudsTriePrefix<MatchingDFA>, 1, CompositeIndexDynamicStringSuffix, 1, Unused33);
+RegisterCompositeIndex(CompositeIndexNestLoudsTriePrefix<MatchingDFA>, 0, CompositeIndexBlobStoreSuffix<DictZipBlobStore>, 0, Unused30);
+RegisterCompositeIndex(CompositeIndexNestLoudsTriePrefix<MatchingDFA>, 0, CompositeIndexBlobStoreSuffix<DictZipBlobStore>, 1, Unused31);
+RegisterCompositeIndex(CompositeIndexNestLoudsTriePrefix<MatchingDFA>, 1, CompositeIndexBlobStoreSuffix<DictZipBlobStore>, 0, Unused32);
+RegisterCompositeIndex(CompositeIndexNestLoudsTriePrefix<MatchingDFA>, 1, CompositeIndexBlobStoreSuffix<DictZipBlobStore>, 1, Unused33);
 
 
 } // namespace rocksdb

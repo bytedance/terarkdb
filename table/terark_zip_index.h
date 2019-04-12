@@ -78,15 +78,13 @@ public:
         const char* rtti_name, Factory* factory);
   };
   static const Factory* GetFactory(fstring name);
-  static const Factory* SelectFactory(const KeyStat&, fstring name);
-  static bool SeekCostEffectiveIndexLen(const KeyStat& ks, size_t& ceLen);
   static unique_ptr<TerarkIndex> LoadFile(fstring fpath);
   static unique_ptr<TerarkIndex> LoadMemory(fstring mem);
   virtual ~TerarkIndex();
   virtual const char* Name() const = 0;
   virtual void SaveMmap(std::function<void(const void *, size_t)> write) const = 0;
-  virtual size_t Find(fstring key) const = 0;
-  virtual size_t DictRank(fstring key) const = 0;
+  virtual size_t Find(fstring key, valvec<byte_t>* ctx) const = 0;
+  virtual size_t DictRank(fstring key, valvec<byte_t>* ctx) const = 0;
   virtual size_t NumKeys() const = 0;
   virtual size_t TotalKeySize() const = 0;
   virtual fstring Memory() const = 0;
