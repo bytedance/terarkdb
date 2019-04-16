@@ -23,6 +23,8 @@
 // third party
 #include <zstd/zstd.h>
 
+MY_THREAD_LOCAL(terark::valvec<terark::byte_t>, g_tbuf);
+
 namespace {
 using namespace rocksdb;
 
@@ -295,7 +297,7 @@ public:
   {
     subReader_ = subReader;
     if (subReader_ != nullptr) {
-      iter_.reset(subReader_->index_->NewIterator());
+      iter_.reset(subReader_->index_->NewIterator(nullptr));
       iter_->SetInvalid();
     }
     pinned_iters_mgr_ = NULL;
@@ -802,7 +804,7 @@ public:
 protected:
   void ResetIter(const TerarkZipSubReader* subReader) {
     subReader_ = subReader;
-    iter_.reset(subReader->index_->NewIterator());
+    iter_.reset(subReader->index_->NewIterator(nullptr));
     invalidate_offsets_cache();
   }
   bool IndexIterSeekToFirst() override {
@@ -948,7 +950,6 @@ Status TerarkZipSubReader::Get(SequenceNumber global_seqno,
                                GetContext* get_context, int flag)
 const {
   TERARK_UNUSED_VAR(flag);
-  MY_THREAD_LOCAL(valvec<byte_t>, g_tbuf);
   ParsedInternalKey pikey;
   if (!ParseInternalKey(ikey, &pikey)) {
     return Status::InvalidArgument("TerarkZipTableReader::Get()",
@@ -969,7 +970,7 @@ const {
   if (commonPrefix_.size() != cplen) {
     return Status::OK();
   }
-  size_t recId = index_->Find(fstringOf(user_key).substr(cplen));
+  size_t recId = index_->Find(fstringOf(user_key).substr(cplen), &g_tbuf);
   if (size_t(-1) == recId) {
     return Status::OK();
   }
@@ -1078,7 +1079,7 @@ size_t TerarkZipSubReader::DictRank(fstring key) const {
     }
   }
   else {
-    return index_->DictRank(key.substr(cplen));
+    return index_->DictRank(key.substr(cplen), &g_tbuf);
   }
 }
 

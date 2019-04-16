@@ -681,7 +681,9 @@ void TerarkZipTableBuilder::BuildIndex(BuildIndexParams& param, KeyValueStatus& 
     else
 #endif // TerocksPrivateCode
     {
-      factory = TerarkIndex::SelectFactory(keyStat, table_options_.indexType);
+      // TODO
+      factory = nullptr;
+      //factory = TerarkIndex::SelectFactory(keyStat, table_options_.indexType);
     }
     if (!factory) {
       THROW_STD(invalid_argument,
@@ -708,7 +710,7 @@ void TerarkZipTableBuilder::BuildIndex(BuildIndexParams& param, KeyValueStatus& 
       // check index correctness
       tempKeyFileReader.resetbuf();
       param.data.fp.rewind();
-      auto it = UniquePtrOf(indexPtr->NewIterator());
+      auto it = UniquePtrOf(indexPtr->NewIterator(nullptr));
       auto commonPrefixLen = param.stat.commonPrefixLen;
       valvec<byte_t> value;
       if (fstring(param.stat.minKey) < fstring(param.stat.maxKey)) {
@@ -1712,10 +1714,11 @@ Status TerarkZipTableBuilder::WriteStore(fstring indexMmap, AbstractBlobStore* s
   BuildReorderMap(params, kvs, indexMmap, store, t6);
   if (params.type.size() != 0) {
     params.type.swap(kvs.type);
-    ZReorderMap reorder(params.tmpReorderFile.fpath);
+    ZReorderMap::Reader reorderReader(params.tmpReorderFile.fpath);
     t7 = g_pf.now();
     try {
       dataBlock.set_offset(offset_);
+      auto reorder = reorderReader.get_global();
       store->reorder_zip_data(reorder, std::ref(writeAppend), tmpSentryFile_.path + ".reorder-tmp");
       dataBlock.set_size(offset_ - dataBlock.offset());
     }

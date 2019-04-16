@@ -258,35 +258,7 @@ void NestLoudsTrieGetOrderMap(const MatchingDFA* dfa, UintVecMin0& newToOld) {
 //      NestLoudsTrieBuildCache(trie, cacheRatio);
 //    }
 //  }
-//  class MyFactory : public MyBaseFactory {
-//  public:
-//    TerarkIndex* Build(NativeDataInput<InputBuffer>& reader,
-//      const TerarkZipTableOptions& tzopt,
-//      const KeyStat& ks,
-//      const ImmutableCFOptions* ioptions) const override {
-//      valvec<byte_t> keyBuf;
-//      if (ks.minKeyLen != ks.maxKeyLen) {
-//        SortedStrVec keyVec;
-//        Read_SortedStrVec(keyVec, reader, ks);
-//        return BuildImpl(tzopt, keyVec);
-//      }
-//      else {
-//        FixedLenStrVec keyVec;
-//        Read_FixedLenStrVec(keyVec, reader, ks);
-//        return BuildImpl(tzopt, keyVec);
-//      }
-//    }
-//  private:
-//    template<class StrVec>
-//    TerarkIndex*
-//      BuildImpl(const TerarkZipTableOptions& tzopt, StrVec& keyVec) const {
-//      AssertSorted(keyVec);
-//      NestLoudsTrieConfig conf;
-//      Set_NestLoudsTrieConfig(conf, keyVec, tzopt);
-//      std::unique_ptr<NLTrie> trie(new NLTrie());
-//      trie->build_from(keyVec, conf);
-//      return new NestLoudsTrieIndex(trie.release());
-//    }
+
 //  public:
 //    unique_ptr<TerarkIndex> LoadMemory(fstring mem) const override {
 //      unique_ptr<BaseDFA>
@@ -294,18 +266,6 @@ void NestLoudsTrieGetOrderMap(const MatchingDFA* dfa, UintVecMin0& newToOld) {
 //      auto trie = dynamic_cast<NLTrie*>(dfa.get());
 //      if (NULL == trie) {
 //        throw std::invalid_argument("Bad trie class: " + ClassName(*dfa)
-//          + ", should be " + ClassName<NLTrie>());
-//      }
-//      auto index = new NestLoudsTrieIndex(trie);
-//      dfa.release();
-//      return unique_ptr<TerarkIndex>(index);
-//    }
-//    unique_ptr<TerarkIndex> LoadFile(fstring fpath) const override {
-//      unique_ptr<BaseDFA> dfa(BaseDFA::load_mmap(fpath));
-//      auto trie = dynamic_cast<NLTrie*>(dfa.get());
-//      if (NULL == trie) {
-//        throw std::invalid_argument(
-//          "File: " + fpath + ", Bad trie class: " + ClassName(*dfa)
 //          + ", should be " + ClassName<NLTrie>());
 //      }
 //      auto index = new NestLoudsTrieIndex(trie);
@@ -368,12 +328,23 @@ namespace composite_index_detail {
     WorkingState working_state;
   };
 
-  struct ComponentBase {
+  struct PrefixBase {
     WorkingState working_state;
 
     virtual bool Load(fstring mem) = 0;
     virtual void Save(std::function<void(void*, size_t)> append) const = 0;
-    virtual ~ComponentBase() {}
+    virtual ~PrefixBase() {}
+  };
+
+  struct SuffixBase {
+    WorkingState working_state;
+
+    virtual std::pair<size_t, fstring> LowerBound(fstring target, size_t suffix_id, size_t suffix_count, valvec<byte_t>* ctx) const = 0;
+
+    virtual bool Load(fstring mem) = 0;
+    virtual void Save(std::function<void(void*, size_t)> append) const = 0;
+    virtual void Reorder(ZReorderMap& newToOld, std::function<void(void*, size_t)> append, fstring tmpFile) const = 0;
+    virtual ~SuffixBase() {}
   };
 
   template<class T>
@@ -389,10 +360,6 @@ namespace composite_index_detail {
     void IteratorStorageDestruct(void* ptr) const { }
   };
 
-  struct SuffixLowerBound {
-    virtual std::pair<size_t, fstring> LowerBound(fstring target, size_t suffix_id, size_t suffix_count, valvec<byte_t>* ctx) const = 0;
-  };
-
   struct VirtualPrefixBase {
     virtual ~VirtualPrefixBase() {}
 
@@ -402,9 +369,11 @@ namespace composite_index_detail {
 
     virtual size_t KeyCount() const = 0;
     virtual size_t TotalKeySize() const = 0;
-    virtual size_t Find(fstring key, SuffixLowerBound const* slb, valvec<byte_t>* ctx) const = 0;
-    virtual size_t DictRank(fstring key, SuffixLowerBound const* slb, valvec<byte_t>* ctx) const = 0;
+    virtual size_t Find(fstring key, const SuffixBase* suffix, valvec<byte_t>* ctx) const = 0;
+    virtual size_t DictRank(fstring key, const SuffixBase* suffix, valvec<byte_t>* ctx) const = 0;
     virtual bool NeedsReorder() const = 0;
+    virtual void GetOrderMap(UintVecMin0& newToOld) const = 0;
+    virtual void BuildCache(double cacheRatio) = 0;
 
     virtual bool IterSeekToFirst(size_t& id, void* iter) const = 0;
     virtual bool IterSeekToLast(size_t& id, void* iter) const = 0;
@@ -438,14 +407,20 @@ namespace composite_index_detail {
     size_t TotalKeySize() const override {
       return Prefix::TotalKeySize();
     }
-    size_t Find(fstring key, SuffixLowerBound const *slb, valvec<byte_t>* ctx) const override {
-      return Prefix::Find(key, slb, ctx);
+    size_t Find(fstring key, const SuffixBase* suffix, valvec<byte_t>* ctx) const override {
+      return Prefix::Find(key, suffix, ctx);
     }
-    size_t DictRank(fstring key, SuffixLowerBound const *slb, valvec<byte_t>* ctx) const override {
-      return Prefix::DictRank(key, slb, ctx);
+    size_t DictRank(fstring key, const SuffixBase* suffix, valvec<byte_t>* ctx) const override {
+      return Prefix::DictRank(key, suffix, ctx);
     }
     bool NeedsReorder() const override {
       return Prefix::NeedsReorder();
+    }
+    void GetOrderMap(UintVecMin0& newToOld) const {
+      Prefix::GetOrderMap(newToOld);
+    }
+    void BuildCache(double cacheRatio) {
+      Prefix::BuildCache(cacheRatio);
     }
 
     bool IterSeekToFirst(size_t& id, void* iter) const override {
@@ -477,7 +452,7 @@ namespace composite_index_detail {
       Prefix::Save(append);
     }
   };
-  struct VirtualPrefix : public ComponentBase {
+  struct VirtualPrefix : public PrefixBase {
     typedef void* IteratorStorage;
     template<class Prefix>
     VirtualPrefix(Prefix* p) {
@@ -506,14 +481,20 @@ namespace composite_index_detail {
     size_t TotalKeySize() const {
       return prefix->TotalKeySize();
     }
-    size_t Find(fstring key, SuffixLowerBound const *slb, valvec<byte_t>* ctx) const {
-      return prefix->Find(key, slb, ctx);
+    size_t Find(fstring key, const SuffixBase* suffix, valvec<byte_t>* ctx) const {
+      return prefix->Find(key, suffix, ctx);
     }
-    size_t DictRank(fstring key, SuffixLowerBound const *slb, valvec<byte_t>* ctx) const {
-      return prefix->DictRank(key, slb, ctx);
+    size_t DictRank(fstring key, const SuffixBase* suffix, valvec<byte_t>* ctx) const {
+      return prefix->DictRank(key, suffix, ctx);
     }
     bool NeedsReorder() const {
       return prefix->NeedsReorder();
+    }
+    void GetOrderMap(UintVecMin0& newToOld) const {
+      prefix->GetOrderMap(newToOld);
+    }
+    void BuildCache(double cacheRatio) {
+      prefix->BuildCache(cacheRatio);
     }
 
     bool IterSeekToFirst(size_t& id, void* iter) const {
@@ -546,7 +527,7 @@ namespace composite_index_detail {
     }
   };
 
-  struct VirtualSuffixBase : public SuffixLowerBound {
+  struct VirtualSuffixBase {
     virtual ~VirtualSuffixBase() {}
 
     virtual size_t IteratorStorageSize() const = 0;
@@ -554,7 +535,7 @@ namespace composite_index_detail {
     virtual void IteratorStorageDestruct(void* ptr) const = 0;
 
     virtual size_t TotalKeySize() const = 0;
-    using SuffixLowerBound::LowerBound;
+    virtual std::pair<size_t, fstring> LowerBound(fstring target, size_t suffix_id, size_t suffix_count, valvec<byte_t>* ctx) const = 0;
 
     virtual void IterSet(size_t suffix_id, void* iter) const = 0;
     virtual bool IterSeek(fstring target, size_t& suffix_id, size_t suffix_count, void* iter) const = 0;
@@ -562,6 +543,7 @@ namespace composite_index_detail {
 
     virtual bool Load(fstring mem) = 0;
     virtual void Save(std::function<void(void*, size_t)> append) const = 0;
+    virtual void Reorder(ZReorderMap& newToOld, std::function<void(void*, size_t)> append, fstring tmpFile) const = 0;
   };
   template<class Suffix>
   struct VirtualSuffixWrapper : public VirtualSuffixBase, public Suffix {
@@ -601,8 +583,11 @@ namespace composite_index_detail {
     void Save(std::function<void(void*, size_t)> append) const override {
       Suffix::Save(append);
     }
+    void Reorder(ZReorderMap& newToOld, std::function<void(void*, size_t)> append, fstring tmpFile) const override {
+      Suffix::Reorder(newToOld, append, tmpFile);
+    }
   };
-  struct VirtualSuffix : public ComponentBase, public SuffixLowerBound {
+  struct VirtualSuffix : public SuffixBase {
     typedef void* IteratorStorage;
     template<class Suffix>
     VirtualSuffix(Suffix* s) {
@@ -648,6 +633,9 @@ namespace composite_index_detail {
     void Save(std::function<void(void*, size_t)> append) const override {
       suffix->Save(append);
     }
+    void Reorder(ZReorderMap& newToOld, std::function<void(void*, size_t)> append, fstring tmpFile) const override {
+      suffix->Reorder(newToOld, append, tmpFile);
+    }
   };
 
   template<class Prefix, class Suffix>
@@ -666,8 +654,8 @@ namespace composite_index_detail {
 
   struct IteratorStorage {
     const fstring common_;
-    const ComponentBase& prefix_;
-    const ComponentBase& suffix_;
+    const PrefixBase& prefix_;
+    const SuffixBase& suffix_;
     void* prefix_storage_;
     void* suffix_storage_;
     std::function<void(void*, void*)> destructor_;
@@ -713,8 +701,9 @@ namespace composite_index_detail {
 
 class CompositeIndexFactoryBase : public TerarkIndex::Factory {
 public:
-  typedef composite_index_detail::ComponentBase ComponentBase;
   typedef composite_index_detail::Common Common;
+  typedef composite_index_detail::PrefixBase PrefixBase;
+  typedef composite_index_detail::SuffixBase SuffixBase;
 
   struct UintPrefixBuildInfo {
     size_t key_length;
@@ -741,7 +730,7 @@ public:
   };
 
   template<class RankSelect, class InputBufferType>
-  ComponentBase* BuildAscendingUintPrefix(
+  PrefixBase* BuildAscendingUintPrefix(
     InputBufferType& reader,
     const TerarkZipTableOptions& tzopt,
     const TerarkIndex::KeyStat& ks,
@@ -751,7 +740,7 @@ public:
 
 
   template<class RankSelect, class InputBufferType>
-  ComponentBase* BuildNonDescendingUintPrefix(
+  PrefixBase* BuildNonDescendingUintPrefix(
     InputBufferType& reader,
     const TerarkZipTableOptions& tzopt,
     const TerarkIndex::KeyStat& ks,
@@ -760,26 +749,26 @@ public:
     std::string& name) const;
 
   template<class RankSelect, class InputBufferType>
-  ComponentBase* BuildNestLoudsTriePrefix(InputBufferType& reader,
+  PrefixBase* BuildNestLoudsTriePrefix(InputBufferType& reader,
     const TerarkZipTableOptions& tzopt,
     size_t numKeys, size_t sumKeyLen,
     bool isReverse, bool isFixedLen,
     const ImmutableCFOptions* ioption,
     std::string& name) const;
 
-  ComponentBase* BuildEmptySuffix(std::string& name) const;
+  SuffixBase* BuildEmptySuffix(std::string& name) const;
 
   template<class InputBufferType>
-  ComponentBase* BuildFixedStringSuffix(
+  SuffixBase* BuildFixedStringSuffix(
       InputBufferType& input,
       size_t numKeys, size_t sumKeyLen, size_t fixedLen,
-      bool isReverse, std::string& name) const;
+      std::string& name) const;
 
   template<class InputBufferType>
-  ComponentBase* BuildDynamicStringSuffix(
+  SuffixBase* BuildBlobStoreSuffix(
       InputBufferType& input,
       size_t numKeys, size_t sumKeyLen,
-      bool isReverse, std::string& name) const;
+      std::string& name) const;
 
   TerarkIndex* Build(NativeDataInput<InputBuffer>& reader,
     const TerarkZipTableOptions& tzopt,
@@ -795,25 +784,35 @@ public:
     // TODO;
     return nullptr;
   }
-  unique_ptr<TerarkIndex> LoadFile(fstring fpath) const {
-    // TODO;
-    return nullptr;
+  template<class Prefix, class Suffix>
+  void SaveMmap(const composite_index_detail::CompositeIndexParts<Prefix, Suffix>* index,
+    std::function<void(const void *, size_t)> write) const {
+    SaveMmap(index->common_, index->prefix_, index->suffix_, write);
   }
-  virtual void SaveMmap(const TerarkIndex* index, std::function<void(const void *, size_t)> write) const {
+  template<class Prefix, class Suffix>
+  void Reorder(const composite_index_detail::CompositeIndexParts<Prefix, Suffix>* index,
+    ZReorderMap& newToOld, std::function<void(const void *, size_t)> write, fstring tmpFile) const {
+    Reorder(index->common_, index->prefix_, index->suffix_, newToOld, write, tmpFile);
+  }
+
+  virtual void SaveMmap(const Common& common, const PrefixBase& prefix, const SuffixBase& suffix, std::function<void(const void *, size_t)> write) const {
+    // TODO;
+  }
+  virtual void Reorder(const Common& common, const PrefixBase& prefix, const SuffixBase& suffix, ZReorderMap& newToOld, std::function<void(const void *, size_t)> write, fstring tmpFile) const {
     // TODO;
   }
 protected:
   virtual TerarkIndex* CreateIndex(Common&& common,
-    ComponentBase* prefix,
-    ComponentBase* suffix) const {
+    PrefixBase* prefix,
+    SuffixBase* suffix) const {
     TERARK_RT_assert(0, std::logic_error);
     return nullptr;
   }
-  virtual ComponentBase* CreatePrefix() const {
+  virtual PrefixBase* CreatePrefix() const {
     TERARK_RT_assert(0, std::logic_error);
     return nullptr;
   }
-  virtual ComponentBase* CreateSuffix() const {
+  virtual SuffixBase* CreateSuffix() const {
     TERARK_RT_assert(0, std::logic_error);
     return nullptr;
   }
@@ -1030,6 +1029,9 @@ public:
   void SaveMmap(std::function<void(const void *, size_t)> write) const override {
     factory_->SaveMmap(this, write);
   }
+  void Reorder(ZReorderMap& newToOld, std::function<void(const void *, size_t)> write, fstring tmpFile) const override {
+    factory_->Reorder(this, newToOld, write, tmpFile);
+  }
   size_t Find(fstring key, valvec<byte_t>* ctx) const override {
     if (key.commonPrefixLen(common_) != common_.size()) {
       return size_t(-1);
@@ -1064,15 +1066,28 @@ public:
   fstring Memory() const override {
     return fstring();
   }
-  Iterator* NewIterator() const override {
-    return new CompositeIndexIterator<Prefix, Suffix>(this);
+  Iterator* NewIterator(void* ptr) const override {
+    if (ptr == nullptr) {
+      return new CompositeIndexIterator<Prefix, Suffix>(this);
+    }
+    else {
+      auto storage = (uint8_t*)ptr + sizeof(CompositeIndexIterator<Prefix, Suffix>);
+      size_t storage_size = composite_index_detail::IteratorStorage::GetIteratorStorageSize(this);
+      return ::new(ptr) CompositeIndexIterator<Prefix, Suffix>(this, storage, storage_size);
+    }
+  }
+  size_t IteratorSize() const override {
+    return sizeof(CompositeIndexIterator<Prefix, Suffix>) +
+      composite_index_detail::IteratorStorage::GetIteratorStorageSize(this);
   }
   bool NeedsReorder() const override {
     return prefix_.NeedsReorder();
   }
   void GetOrderMap(terark::UintVecMin0& newToOld) const  override {
+    prefix_.GetOrderMap(newToOld);
   }
   void BuildCache(double cacheRatio) override {
+    prefix_.BuildCache(cacheRatio);
   }
 };
 
@@ -1100,14 +1115,14 @@ namespace composite_index_detail {
   protected:
     TerarkIndex* CreateIndex(
       Common&& common,
-      ComponentBase* prefix,
-      ComponentBase* suffix) const override {
+      PrefixBase* prefix,
+      SuffixBase* suffix) const override {
       return new index_type(this, std::move(common), Prefix(prefix), Suffix(suffix));
     }
-    ComponentBase* CreatePrefix() const override {
+    PrefixBase* CreatePrefix() const override {
       return new Prefix();
     }
-    ComponentBase* CreateSuffix() const override {
+    SuffixBase* CreateSuffix() const override {
       return new Suffix();
     }
   };
@@ -1157,13 +1172,13 @@ struct CompositeIndexUintPrefixIteratorStorage<std::false_type> {
 
 template<class RankSelect>
 struct CompositeIndexAscendingUintPrefix
-  : public composite_index_detail::ComponentBase
+  : public composite_index_detail::PrefixBase
   , public composite_index_detail::ComponentIteratorStorageImpl<CompositeIndexUintPrefixIteratorStorage<typename RankSelectNeedHint<RankSelect>::type>> {
   using IteratorStorage = CompositeIndexUintPrefixIteratorStorage<typename RankSelectNeedHint<RankSelect>::type>;
 
   CompositeIndexAscendingUintPrefix() = default;
   CompositeIndexAscendingUintPrefix(CompositeIndexAscendingUintPrefix&&) = default;
-  CompositeIndexAscendingUintPrefix(ComponentBase* base) {
+  CompositeIndexAscendingUintPrefix(PrefixBase* base) {
     assert(dynamic_cast<CompositeIndexAscendingUintPrefix<RankSelect>*>(base) != nullptr);
     auto other = static_cast<CompositeIndexAscendingUintPrefix<RankSelect>*>(base);
     rank_select.swap(other->rank_select);
@@ -1189,7 +1204,7 @@ struct CompositeIndexAscendingUintPrefix
   size_t TotalKeySize() const {
     return key_length * rank_select.max_rank1();
   }
-  size_t Find(fstring key, composite_index_detail::SuffixLowerBound const *slb, valvec<byte_t>* ctx) const {
+  size_t Find(fstring key, const composite_index_detail::SuffixBase* suffix, valvec<byte_t>* ctx) const {
     if (key.size() < key_length) {
       return size_t(-1);
     }
@@ -1202,19 +1217,19 @@ struct CompositeIndexAscendingUintPrefix
       return size_t(-1);
     }
     size_t id = rank_select.rank1(pos);
-    if (slb == nullptr) {
+    if (suffix == nullptr) {
       return key.size() == key_length ? id : size_t(-1);
     }
     size_t suffix_id;
-    fstring suffix;
+    fstring suffix_key;
     key = key.substr(key_length);
-    std::tie(suffix_id, suffix) = slb->LowerBound(key, id, 1, ctx);
-    if (suffix_id != id || suffix != key) {
+    std::tie(suffix_id, suffix_key) = suffix->LowerBound(key, id, 1, ctx);
+    if (suffix_id != id || suffix_key != key) {
       return size_t(-1);
     }
     return suffix_id;
   }
-  size_t DictRank(fstring key, composite_index_detail::SuffixLowerBound const *slb, valvec<byte_t>* ctx) const {
+  size_t DictRank(fstring key, const composite_index_detail::SuffixBase* suffix, valvec<byte_t>* ctx) const {
     size_t id, pos, hint;
     bool seek_result, is_find;
     std::tie(seek_result, is_find) = SeekImpl(key, id, pos, &hint);
@@ -1224,13 +1239,18 @@ struct CompositeIndexAscendingUintPrefix
     if (key.size() != key_length || !is_find) {
       return id + 1;
     }
-    if (slb == nullptr) {
+    if (suffix == nullptr) {
       return id;
     }
-    return slb->LowerBound(key.substr(key_length), id, 1, ctx).first;
+    return suffix->LowerBound(key.substr(key_length), id, 1, ctx).first;
   }
   bool NeedsReorder() const {
     return false;
+  }
+  void GetOrderMap(terark::UintVecMin0& newToOld) const {
+    assert(false);
+  }
+  void BuildCache(double cacheRatio) {
   }
 
   bool IterSeekToFirst(size_t& id, IteratorStorage* iter) const {
@@ -1348,13 +1368,13 @@ private:
 
 template<class RankSelect>
 struct CompositeIndexNonDescendingUintPrefix
-  : public composite_index_detail::ComponentBase
+  : public composite_index_detail::PrefixBase
   , public composite_index_detail::ComponentIteratorStorageImpl<CompositeIndexUintPrefixIteratorStorage<typename RankSelectNeedHint<RankSelect>::type>> {
   using IteratorStorage = CompositeIndexUintPrefixIteratorStorage<typename RankSelectNeedHint<RankSelect>::type>;
 
   CompositeIndexNonDescendingUintPrefix() = default;
   CompositeIndexNonDescendingUintPrefix(CompositeIndexNonDescendingUintPrefix&&) = default;
-  CompositeIndexNonDescendingUintPrefix(ComponentBase* base) {
+  CompositeIndexNonDescendingUintPrefix(PrefixBase* base) {
     assert(dynamic_cast<CompositeIndexNonDescendingUintPrefix<RankSelect>*>(base) != nullptr);
     auto other = static_cast<CompositeIndexNonDescendingUintPrefix<RankSelect>*>(base);
     rank_select.swap(other->rank_select);
@@ -1380,8 +1400,8 @@ struct CompositeIndexNonDescendingUintPrefix
   size_t TotalKeySize() const {
     return key_length * rank_select.max_rank1();
   }
-  size_t Find(fstring key, composite_index_detail::SuffixLowerBound const *slb, valvec<byte_t>* ctx) const {
-    assert(slb != nullptr);
+  size_t Find(fstring key, const composite_index_detail::SuffixBase* suffix, valvec<byte_t>* ctx) const {
+    assert(suffix != nullptr);
     if (key.size() < key_length) {
       return size_t(-1);
     }
@@ -1396,20 +1416,17 @@ struct CompositeIndexNonDescendingUintPrefix
       return size_t(-1);
     }
     size_t id = rank_select.rank1(pos - count);
-    if (slb == nullptr) {
-      return key.size() == key_length ? id : size_t(-1);
-    }
     size_t suffix_id;
-    fstring suffix;
+    fstring suffix_key;
     key = key.substr(key_length);
-    std::tie(suffix_id, suffix) = slb->LowerBound(key, id, count, ctx);
-    if (suffix_id == id + count || suffix != key) {
+    std::tie(suffix_id, suffix_key) = suffix->LowerBound(key, id, count, ctx);
+    if (suffix_id == id + count || suffix_key != key) {
       return size_t(-1);
     }
     return suffix_id;
   }
-  size_t DictRank(fstring key, composite_index_detail::SuffixLowerBound const *slb, valvec<byte_t>* ctx) const {
-    assert(slb != nullptr);
+  size_t DictRank(fstring key, const composite_index_detail::SuffixBase* suffix, valvec<byte_t>* ctx) const {
+    assert(suffix != nullptr);
     size_t id, count, pos, hint;
     bool seek_result, is_find;
     std::tie(seek_result, is_find) = SeekImpl(key, id, count, pos, &hint);
@@ -1419,10 +1436,15 @@ struct CompositeIndexNonDescendingUintPrefix
     if (key.size() != key_length || !is_find) {
       return id + 1;
     }
-    return slb->LowerBound(key.substr(key_length), id, count, ctx).first;
+    return suffix->LowerBound(key.substr(key_length), id, count, ctx).first;
   }
   bool NeedsReorder() const {
     return false;
+  }
+  void GetOrderMap(terark::UintVecMin0& newToOld) const {
+    assert(false);
+  }
+  void BuildCache(double cacheRatio) {
   }
 
   bool IterSeekToFirst(size_t& id, IteratorStorage* iter) const {
@@ -1606,12 +1628,12 @@ public:
 
 template<class NestLoudsTrieDAWG>
 struct CompositeIndexNestLoudsTriePrefix
-  : public composite_index_detail::ComponentBase {
+  : public composite_index_detail::PrefixBase {
   using IteratorStorage = CompositeIndexNestLoudsTriePrefixIterator<NestLoudsTrieDAWG>;
 
   CompositeIndexNestLoudsTriePrefix() = default;
   CompositeIndexNestLoudsTriePrefix(CompositeIndexNestLoudsTriePrefix&&) = default;
-  CompositeIndexNestLoudsTriePrefix(ComponentBase* base) {
+  CompositeIndexNestLoudsTriePrefix(PrefixBase* base) {
     assert(dynamic_cast<CompositeIndexNestLoudsTriePrefix<NestLoudsTrieDAWG>*>(base) != nullptr);
     auto other = static_cast<CompositeIndexNestLoudsTriePrefix<NestLoudsTrieDAWG>*>(base);
     dawg_ = other->dawg_;
@@ -1647,8 +1669,8 @@ struct CompositeIndexNestLoudsTriePrefix
   size_t TotalKeySize() const {
     return trie_->adfa_total_words_len();
   }
-  size_t Find(fstring key, composite_index_detail::SuffixLowerBound const *slb, valvec<byte_t>* ctx) const {
-    if (slb == nullptr) {
+  size_t Find(fstring key, const composite_index_detail::SuffixBase* suffix, valvec<byte_t>* ctx) const {
+    if (suffix == nullptr) {
       return dawg_->index(key);
     }
     std::unique_ptr<IteratorStorage> iter(new IteratorStorage(static_cast<const NestLoudsTrieDAWG*>(trie_.get())));
@@ -1661,16 +1683,16 @@ struct CompositeIndexNestLoudsTriePrefix
       return size_t(-1);
     }
     size_t suffix_id;
-    fstring suffix;
+    fstring suffix_key;
     key = key.substr(prefix_key.size());
-    std::tie(suffix_id, suffix) = slb->LowerBound(key, id, 1, ctx);
-    if (suffix_id != id || suffix != key) {
+    std::tie(suffix_id, suffix_key) = suffix->LowerBound(key, id, 1, ctx);
+    if (suffix_id != id || suffix_key != key) {
       return size_t(-1);
     }
     return id;
   }
-  size_t DictRank(fstring key, composite_index_detail::SuffixLowerBound const *slb, valvec<byte_t>* ctx) const {
-    if (slb == nullptr) {
+  size_t DictRank(fstring key, const composite_index_detail::SuffixBase* suffix, valvec<byte_t>* ctx) const {
+    if (suffix == nullptr) {
       return dawg_->dict_rank(key);
     }
     std::unique_ptr<IteratorStorage> iter(new IteratorStorage(static_cast<const NestLoudsTrieDAWG*>(trie_.get())));
@@ -1683,10 +1705,10 @@ struct CompositeIndexNestLoudsTriePrefix
       return iter->DictRank(id);
     }
     size_t suffix_id;
-    fstring suffix;
+    fstring suffix_key;
     key = key.substr(prefix_key.size());
-    std::tie(suffix_id, suffix) = slb->LowerBound(key, id, 1, ctx);
-    if (suffix_id == id && suffix == key) {
+    std::tie(suffix_id, suffix_key) = suffix->LowerBound(key, id, 1, ctx);
+    if (suffix_id == id && suffix_key == key) {
       return iter->DictRank(id);
     }
     assert(suffix_id = id + 1);
@@ -1697,6 +1719,16 @@ struct CompositeIndexNestLoudsTriePrefix
   }
   bool NeedsReorder() const {
     return true;
+  }
+  void GetOrderMap(terark::UintVecMin0& newToOld) const {
+    auto trie = static_cast<const NestLoudsTrieDAWG*>(trie_.get());
+    NestLoudsTrieGetOrderMap(trie, newToOld);
+  }
+  void BuildCache(double cacheRatio) {
+    if (cacheRatio > 1e-8) {
+      auto trie = static_cast<NestLoudsTrieDAWG*>(trie_.get());
+      NestLoudsTrieBuildCache(trie, cacheRatio);
+    }
   }
 
   bool IterSeekToFirst(size_t& id, IteratorStorage* iter) const {
@@ -1736,14 +1768,13 @@ struct CompositeIndexNestLoudsTriePrefix
 };
 
 struct CompositeIndexEmptySuffix
-  : public composite_index_detail::ComponentBase
-  , public composite_index_detail::SuffixLowerBound
+  : public composite_index_detail::SuffixBase
   , public composite_index_detail::ComponentIteratorStorageImpl<void> {
   typedef void IteratorStorage;
 
   CompositeIndexEmptySuffix() = default;
   CompositeIndexEmptySuffix(CompositeIndexEmptySuffix&&) = default;
-  CompositeIndexEmptySuffix(ComponentBase* base) {
+  CompositeIndexEmptySuffix(SuffixBase* base) {
     working_state = WorkingState::UserMemory;
     delete base;
   }
@@ -1769,17 +1800,18 @@ struct CompositeIndexEmptySuffix
   }
   void Save(std::function<void(void*, size_t)> append) const override {
   }
+  void Reorder(ZReorderMap& newToOld, std::function<void(void*, size_t)> append, fstring tmpFile) const {
+  }
 };
 
 struct CompositeIndexFixedStringSuffix
-  : public composite_index_detail::ComponentBase
-  , public composite_index_detail::SuffixLowerBound
+  : public composite_index_detail::SuffixBase
   , public composite_index_detail::ComponentIteratorStorageImpl<void> {
   typedef void IteratorStorage;
 
   CompositeIndexFixedStringSuffix() = default;
   CompositeIndexFixedStringSuffix(CompositeIndexFixedStringSuffix&&) = default;
-  CompositeIndexFixedStringSuffix(ComponentBase* base) {
+  CompositeIndexFixedStringSuffix(SuffixBase* base) {
     working_state = WorkingState::UserMemory;
     delete base;
   }
@@ -1813,12 +1845,13 @@ struct CompositeIndexFixedStringSuffix
   }
   void Save(std::function<void(void*, size_t)> append) const override {
   }
+  void Reorder(ZReorderMap& newToOld, std::function<void(void*, size_t)> append, fstring tmpFile) const {
+  }
 };
 
 template<class BlobStoreType>
 struct CompositeIndexBlobStoreSuffix
-  : public composite_index_detail::ComponentBase
-  , public composite_index_detail::SuffixLowerBound
+  : public composite_index_detail::SuffixBase
   , public composite_index_detail::ComponentIteratorStorageImpl<void> {
   typedef BlobStore::CacheOffsets IteratorStorage;
 
@@ -1826,7 +1859,7 @@ struct CompositeIndexBlobStoreSuffix
   CompositeIndexBlobStoreSuffix(CompositeIndexBlobStoreSuffix&& other) {
     store_.swap(other.store_);
   }
-  CompositeIndexBlobStoreSuffix(ComponentBase* base) {
+  CompositeIndexBlobStoreSuffix(SuffixBase* base) {
     working_state = WorkingState::UserMemory;
     delete base;
   }
@@ -1863,6 +1896,8 @@ struct CompositeIndexBlobStoreSuffix
     return false;
   }
   void Save(std::function<void(void*, size_t)> append) const override {
+  }
+  void Reorder(ZReorderMap& newToOld, std::function<void(void*, size_t)> append, fstring tmpFile) const {
   }
 };
 
@@ -1911,7 +1946,7 @@ void AscendingUintPrefixFillRankSelect(
 }
 
 template<class RankSelect, class InputBufferType>
-composite_index_detail::ComponentBase*
+composite_index_detail::PrefixBase*
 CompositeIndexFactoryBase::BuildAscendingUintPrefix(
   InputBufferType& input,
   const TerarkZipTableOptions& tzopt,
@@ -1988,7 +2023,7 @@ void NonDescendingUintPrefixFillRankSelect(
 }
 
 template<class RankSelect, class InputBufferType>
-composite_index_detail::ComponentBase*
+composite_index_detail::PrefixBase*
 CompositeIndexFactoryBase::BuildNonDescendingUintPrefix(
   InputBufferType& input,
   const TerarkZipTableOptions& tzopt,
@@ -2053,7 +2088,7 @@ void NestLoudsTriePrefixSetConfig(NestLoudsTrieConfig& conf,
 }
 
 template<class NestLoudsTrieDAWG, class StrVec>
-composite_index_detail::ComponentBase*
+composite_index_detail::PrefixBase*
 NestLoudsTriePrefixProcess(const NestLoudsTrieConfig& cfg, StrVec& keyVec) {
 #if !defined(NDEBUG)
   for (size_t i = 1; i < keyVec.size(); ++i) {
@@ -2113,7 +2148,7 @@ void CompositeIndexFillKeyVector(InputBufferType& input, SortedStrVec& keyVec, s
 }
 
 template<class NestLoudsTrieDAWG, class InputBufferType>
-composite_index_detail::ComponentBase*
+composite_index_detail::PrefixBase*
 CompositeIndexFactoryBase::BuildNestLoudsTriePrefix(
   InputBufferType& input,
   const TerarkZipTableOptions& tzopt,
@@ -2138,34 +2173,34 @@ CompositeIndexFactoryBase::BuildNestLoudsTriePrefix(
   }
 }
 
-composite_index_detail::ComponentBase*
+composite_index_detail::SuffixBase*
 CompositeIndexFactoryBase::BuildEmptySuffix(std::string& name) const {
   name = typeid(CompositeIndexEmptySuffix).name();
   return new CompositeIndexEmptySuffix();
 }
 
 template<class InputBufferType>
-composite_index_detail::ComponentBase*
+composite_index_detail::SuffixBase*
 CompositeIndexFactoryBase::BuildFixedStringSuffix(
   InputBufferType& input,
   size_t numKeys, size_t sumKeyLen, size_t fixedLen,
-  bool isReverse, std::string& name) const {
+  std::string& name) const {
   // TODO
-  return BuildDynamicStringSuffix(input, numKeys, sumKeyLen, isReverse, name);
+  return BuildBlobStoreSuffix(input, numKeys, sumKeyLen, name);
   FixedLenStrVec keyVec;
-  CompositeIndexFillKeyVector(input, keyVec, numKeys, sumKeyLen, fixedLen, isReverse);
+  CompositeIndexFillKeyVector(input, keyVec, numKeys, sumKeyLen, fixedLen, false);
   return nullptr;
 }
 
 template<class InputBufferType>
-composite_index_detail::ComponentBase*
-CompositeIndexFactoryBase::BuildDynamicStringSuffix(
+composite_index_detail::SuffixBase*
+CompositeIndexFactoryBase::BuildBlobStoreSuffix(
   InputBufferType& input,
   size_t numKeys, size_t sumKeyLen,
-  bool isReverse, std::string& name) const {
+  std::string& name) const {
   name = typeid(CompositeIndexEmptySuffix).name();
   SortedStrVec keyVec;
-  CompositeIndexFillKeyVector(input, keyVec, numKeys, sumKeyLen, isReverse);
+  CompositeIndexFillKeyVector(input, keyVec, numKeys, sumKeyLen, false);
   // TODO
   return new CompositeIndexBlobStoreSuffix<DictZipBlobStore>();
 }
@@ -2383,6 +2418,9 @@ CompositeIndexFactoryBase::Build(
         info.type = UintPrefixBuildInfo::asc_allone;
         prefixCost = 0;
       }
+      else if (info.entry_count * 2 < keyCount) {
+        continue;
+      }
       else if (info.bit_count1 < fewCount && info.bit_count1 < (1ULL << 48)) {
         if (diff <= std::numeric_limits<uint32_t>::max()) {
           info.type = info.entry_count == keyCount ? UintPrefixBuildInfo::asc_few_one_32 : UintPrefixBuildInfo::non_desc_few_one_32;
@@ -2433,8 +2471,8 @@ CompositeIndexFactoryBase::Build(
   UintPrefixBuildInfo uint_prefix_info = getFixedPrefixLength(ks, cplen);
   Common common;
   common.reset(fstring(ks.minKey).substr(ks.commonPrefixLen, cplen - ks.commonPrefixLen), true);
-  ComponentBase* prefix;
-  ComponentBase* suffix;
+  PrefixBase* prefix;
+  SuffixBase* suffix;
   std::string combin, name;
   if (uint_prefix_info.key_length > 0) {
     if (ks.minKeyLen == ks.maxKeyLen && ks.maxKeyLen == cplen + uint_prefix_info.key_length) {
@@ -2480,10 +2518,6 @@ CompositeIndexFactoryBase::Build(
       combin += name;
       suffix = BuildEmptySuffix(name);
       combin += name;
-      assert(dynamic_cast<const CompositeIndexFactoryBase*>(GetFactoryByCombinName(combin)) != nullptr);
-      auto factory = static_cast<const CompositeIndexFactoryBase*>(GetFactoryByCombinName(combin));
-      auto index = factory->CreateIndex(std::move(common), prefix, suffix);
-      return index;
     }
     else {
       FixPrefixInputBuffer prefix_input_reader{ reader, cplen, uint_prefix_info.key_length, ks.maxKeyLen };
@@ -2541,39 +2575,50 @@ CompositeIndexFactoryBase::Build(
       FixPrefixRemainingInputBuffer suffix_input_reader{ reader, cplen, uint_prefix_info.key_length, ks.maxKeyLen };
       if (ks.minKeyLen == ks.maxKeyLen) {
         suffix = BuildFixedStringSuffix(
-          suffix_input_reader, uint_prefix_info.key_count, ks.sumKeyLen - ks.prefix.m_cnt_sum * prefix_input_reader.cplenPrefixSize,
-          ks.maxKeyLen - prefix_input_reader.cplenPrefixSize, ks.minKey > ks.maxKey, name);
+          suffix_input_reader, uint_prefix_info.key_count,
+          ks.sumKeyLen - ks.prefix.m_cnt_sum * prefix_input_reader.cplenPrefixSize, ks.maxKeyLen - prefix_input_reader.cplenPrefixSize, name);
       }
       else {
-        suffix = BuildDynamicStringSuffix(
-          suffix_input_reader, uint_prefix_info.key_count, ks.sumKeyLen - ks.prefix.m_cnt_sum * prefix_input_reader.cplenPrefixSize,
-          ks.minKey > ks.maxKey, name);
+        suffix = BuildBlobStoreSuffix(
+          suffix_input_reader, uint_prefix_info.key_count,
+          ks.sumKeyLen - ks.prefix.m_cnt_sum * prefix_input_reader.cplenPrefixSize, name);
       }
       combin += name;
-      assert(dynamic_cast<const CompositeIndexFactoryBase*>(GetFactoryByCombinName(combin)) != nullptr);
-      auto factory = static_cast<const CompositeIndexFactoryBase*>(GetFactoryByCombinName(combin));
-      auto index = factory->CreateIndex(std::move(common), prefix, suffix);
-      return index;
     }
   }
   else if (ks.sumKeyLen - ks.minSuffixLen * ks.prefix.m_cnt_sum < ks.prefix.m_total_key_len * 5 / 4) {
     size_t suffixLen = ks.minSuffixLen;
     FixSuffixPrefixInputBuffer prefix_input_reader{ reader, cplen, suffixLen, ks.maxKeyLen };
-    // BuildNestLoudsTriePrefix
+    // TODO select a NestLoudsTrieDAWG type
+    prefix = BuildNestLoudsTriePrefix<NestLoudsTrieDAWG_SE_512_64_FL>(
+      prefix_input_reader, tzopt, ks.prefix.m_cnt_sum, ks.sumKeyLen - ks.prefix.m_cnt_sum * (cplen + suffixLen),
+      ks.minKey > ks.maxKey, ks.minKeyLen == ks.maxKeyLen, ioption, name);
+    combin += name;
     FixSuffixInputBuffer suffix_input_reader{ reader, suffixLen, ks.maxKeyLen };
-    // BuildFixedStringSuffix
+    suffix = BuildFixedStringSuffix(
+      suffix_input_reader, uint_prefix_info.key_count,
+      ks.sumKeyLen - ks.prefix.m_cnt_sum * suffixLen, suffixLen, name);
+    combin += name;
   }
   else if (ks.prefix.m_total_key_len < ks.sumKeyLen * 31 / 32) {
     MinimizePrefixInputBuffer prefix_input_reader{ reader, cplen, ks.prefix.m_cnt_sum, ks.maxKeyLen };
-    // BuildNestLoudsTriePrefix
+    // TODO select a NestLoudsTrieDAWG type
+    prefix = BuildNestLoudsTriePrefix<NestLoudsTrieDAWG_SE_512_64_FL>(
+      prefix_input_reader, tzopt, ks.prefix.m_cnt_sum, ks.prefix.m_total_key_len - ks.prefix.m_cnt_sum * cplen,
+      ks.minKey > ks.maxKey, ks.minKeyLen == ks.maxKeyLen, ioption, name);
+    combin += name;
     MinimizePrefixRemainingInputBuffer suffix_input_reader{ reader, cplen, ks.prefix.m_cnt_sum, ks.maxKeyLen };
     if (ks.minSuffixLen == ks.maxSuffixLen) {
-      // BuildFixedStringSuffix
+      suffix = BuildFixedStringSuffix(
+        suffix_input_reader, uint_prefix_info.key_count,
+        ks.sumKeyLen - ks.prefix.m_total_key_len, ks.maxSuffixLen, name);
     }
     else {
-      // BuildDynamicStringSuffix
+      suffix = BuildBlobStoreSuffix(
+        suffix_input_reader, uint_prefix_info.key_count,
+        ks.sumKeyLen - ks.prefix.m_total_key_len, name);
     }
-
+    combin += name;
   } else {
     DefaultInputBuffer input_reader{ reader, cplen, ks.maxKeyLen };
     // TODO select a NestLoudsTrieDAWG type
@@ -2583,12 +2628,11 @@ CompositeIndexFactoryBase::Build(
     combin += name;
     suffix = BuildEmptySuffix(name);
     combin += name;
-    assert(dynamic_cast<const CompositeIndexFactoryBase*>(GetFactoryByCombinName(combin)) != nullptr);
-    auto factory = static_cast<const CompositeIndexFactoryBase*>(GetFactoryByCombinName(combin));
-    auto index = factory->CreateIndex(std::move(common), prefix, suffix);
-    return index;
   }
-  return nullptr;
+  assert(dynamic_cast<const CompositeIndexFactoryBase*>(GetFactoryByCombinName(combin)) != nullptr);
+  auto factory = static_cast<const CompositeIndexFactoryBase*>(GetFactoryByCombinName(combin));
+  auto index = factory->CreateIndex(std::move(common), prefix, suffix);
+  return index;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -2679,128 +2723,145 @@ typedef rs_fewzero_64          FewZero64;
 //RegisterCompositeUintIndex(IL_256_32, IL_256_32);
 //RegisterCompositeUintIndex(SE_512_64, SE_512_64);
 
-template<class RankSelect>
-using UintIndex = typename CompositeIndexDeclare<
-  CompositeIndexAscendingUintPrefix<RankSelect>, 0,
-  CompositeIndexEmptySuffix, 0
->::index_type;
+class TerarkUnionSuffix
+  : public composite_index_detail::SuffixBase {
+  typedef void IteratorStorage;
 
-
-const char* UintIndexName = "UintIndex";
-template<class RankSelect>
-class UintIndexFactory
-  : public CompositeIndexFactory<CompositeIndexAscendingUintPrefix<RankSelect>, 0,
-  CompositeIndexEmptySuffix, 0> {
-  ~UintIndexFactory() {}
-
-  typedef typename CompositeIndexFactory<
-    CompositeIndexAscendingUintPrefix<RankSelect>, 0,
-    CompositeIndexEmptySuffix, 0
-  >::index_type index_type;
-
-  struct FileHeader : public TerarkIndexHeader {
-    uint64_t min_value;
-    uint64_t max_value;
-    uint64_t index_mem_size;
-    uint32_t key_length;
-    uint32_t common_prefix_length;
-
-    FileHeader(size_t body_size, const std::type_info& ti) {
-      memset(this, 0, sizeof *this);
-      magic_len = strlen(UintIndexName);
-      strncpy(magic, UintIndexName, sizeof magic);
-      size_t name_i = g_TerarkIndexName.find_i(ti.name());
-      strncpy(class_name, g_TerarkIndexName.val(name_i).c_str(), sizeof class_name);
-      header_size = sizeof *this;
-      version = 1;
-      file_size = sizeof *this + body_size;
-    }
-  };
-
-  unique_ptr<TerarkIndex> LoadMemory(fstring mem) const override {
-    unique_ptr<index_type> index(new index_type(this));
-    const FileHeader* h = (const FileHeader*)mem.data();
-    if (mem.size() < sizeof(FileHeader)
-      || h->magic_len != strlen(UintIndexName)
-      || strcmp(h->magic, UintIndexName) != 0
-      || h->header_size != sizeof(FileHeader)
-      || h->version != 1
-      || h->file_size != mem.size()
-      ) {
-      throw std::invalid_argument("UintIndex::Load(): Bad file header");
-    }
-    auto ptr = &index->prefix_;
-    ptr->min_value = h->min_value;
-    ptr->max_value = h->max_value;
-    ptr->key_length = h->key_length;
-    if (h->common_prefix_length > 0) {
-      index->common_.reset(mem.substr(h->header_size, h->common_prefix_length), false);
-    }
-    ptr->rank_select.risk_mmap_from(
-      (unsigned char*)mem.data() + h->header_size + align_up(h->common_prefix_length, 8), h->index_mem_size);
-
-    index->prefix_.working_state = WorkingState::UserMemory;
-    index->suffix_.working_state = WorkingState::UserMemory;
-    return unique_ptr<TerarkIndex>(index.release());
+  TerarkUnionSuffix() = default;
+  TerarkUnionSuffix(TerarkUnionSuffix&& other) {
+    // TODO
   }
-  unique_ptr<TerarkIndex> LoadFile(fstring fpath) const override {
-    MmapWholeFile mmapFile(fpath);
-    auto ret = LoadMemory(mmapFile.memory());
-    assert(dynamic_cast<index_type*>(ret.get()) != nullptr);
-    index_type* index = static_cast<index_type*>(ret.get());
-    index->header_ = (const FileHeader*)mmapFile.base;
-    mmapFile.base = nullptr;
-    return ret;
+  TerarkUnionSuffix(SuffixBase* base) {
+    assert(false);
   }
 
-  void SaveMmap(const TerarkIndex* index, std::function<void(const void *, size_t)> write) const override {
-    assert(dynamic_cast<const index_type*>(index) != nullptr);
-    auto uint_index = static_cast<const index_type*>(index);
-    auto ptr = &uint_index->prefix_;
-    FileHeader header(ptr->rank_select.mem_size(), typeid(UintIndex<RankSelect>));
-    header.min_value = ptr->min_value;
-    header.max_value = ptr->max_value;
-    header.index_mem_size = ptr->rank_select.mem_size();
-    header.key_length = ptr->key_length;
-    header.common_prefix_length = uint_index->common_.size();
-    write(&header, sizeof header);
-    if (uint_index->common_.size() > 0) {
-      write(uint_index->common_.data(), uint_index->common_.size());
-      Padzero<8>(write, uint_index->common_.size());
-    }
-    write(ptr->rank_select.data(), ptr->rank_select.mem_size());
+  size_t IteratorStorageSize() const {
+    // TODO
+    return 0;
+  }
+  void IteratorStorageConstruct(void* ptr) const {
+    // TODO
+  }
+  void IteratorStorageDestruct(void* ptr) const {
+    // TODO
+  }
+
+  size_t TotalKeySize() const {
+    // TODO
+    return 0;
+  }
+  std::pair<size_t, fstring> LowerBound(fstring target, size_t suffix_id, size_t suffix_count, valvec<byte_t>* ctx) const override {
+    // TODO
+    return { 0, {} };
+  }
+
+  void IterSet(size_t suffix_id, IteratorStorage* iter) const {
+    // TODO
+  }
+  bool IterSeek(fstring target, size_t& suffix_id, size_t suffix_count, IteratorStorage* iter) const {
+    // TODO
+    return false;
+  }
+  fstring IterGetKey(size_t suffix_id, const IteratorStorage* iter) const {
+    // TODO
+    return fstring();
+  }
+
+  bool Load(fstring mem) override {
+    assert(false);
+  }
+  void Save(std::function<void(void*, size_t)> append) const override {
+    assert(false);
+  }
+  void Reorder(ZReorderMap& newToOld, std::function<void(void*, size_t)> append, fstring tmpFile) const override {
+    assert(false);
   }
 };
 
-#define RegisterUintIndex(RankSelect)               \
-RegisterCompositeIndexWithFactory(                  \
-  CompositeIndexAscendingUintPrefix<RankSelect>, 0, \
-  CompositeIndexEmptySuffix, 0,                     \
-  UintIndex_##RankSelect,                           \
-  UintIndexFactory<RankSelect>                      \
-)
-RegisterUintIndex(IL_256_32);
-RegisterUintIndex(SE_512_64);
-RegisterUintIndex(AllOne);
+class TerarkUnionIndex : public TerarkIndex {
+  struct Item {
+    unique_ptr<TerarkIndex> index;
+    valvec<byte> upper_bound;
+    size_t num_keys_acc;
+  };
+  size_t total_key_size_;
+  fstring memory_;
+  size_t iter_size_;
+  std::vector<Item> index_vec_;
 
-unique_ptr<TerarkIndex> TerarkIndex::LoadFile(fstring fpath) {
-  TerarkIndex::Factory* factory = NULL;
-  {
-    MmapWholeFile mmap(fpath);
-    auto header = (const TerarkIndexHeader*)mmap.base;
-    size_t idx = g_TerarkIndexFactroy.find_i(header->class_name);
-    if (idx >= g_TerarkIndexFactroy.end_i()) {
-      throw std::invalid_argument(
-        "TerarkIndex::LoadFile(" + fpath + "): Unknown class: "
-        + header->class_name);
+  class UnionIterator : public TerarkIndex::Iterator {
+
+  public:
+    bool SeekToFirst() override {
+
     }
-    factory = g_TerarkIndexFactroy.val(idx).get();
+    bool SeekToLast() override {
+
+    }
+    bool Seek(fstring target) override {
+
+    }
+    bool Next() override {
+
+    }
+    bool Prev() override {
+
+    }
+    size_t DictRank() const override {
+
+    }
+    fstring key() const override {
+
+    }
+  };
+public:
+
+  const char* Name() const override {
+    return "TerarkUnionIndex";
   }
-  return factory->LoadFile(fpath);
-}
-//
-//unique_ptr<TerarkIndex> TerarkIndex::LoadMemory(fstring mem) {
-//  auto header = (const TerarkIndexHeader*)mem.data();
+  void SaveMmap(std::function<void(const void *, size_t)> write) const override {
+    assert(false);
+  }
+  void Reorder(ZReorderMap& newToOld, std::function<void(const void *, size_t)> write, fstring tmpFile) const override {
+    assert(false);
+  }
+  size_t Find(fstring key, valvec<byte_t>* ctx) const override {
+    // TODO
+  }
+  size_t DictRank(fstring key, valvec<byte_t>* ctx) const override {
+    // TODO
+  }
+  size_t NumKeys() const override {
+    return index_vec_.back().num_keys_acc;
+  }
+  size_t TotalKeySize() const override {
+    return total_key_size_;
+  }
+  fstring Memory() const override {
+    return memory_;
+  }
+  Iterator* NewIterator(void* ptr) const override {
+    // TODO
+  }
+  size_t IteratorSize() const override {
+    return sizeof(UnionIterator) + iter_size_;
+  }
+  bool NeedsReorder() const override {
+    assert(false);
+    return false;
+  }
+  void GetOrderMap(terark::UintVecMin0& newToOld) const override {
+    assert(false);
+  }
+  void BuildCache(double cacheRatio) override {
+    for (auto& i : index_vec_) {
+      i.index->BuildCache(cacheRatio);
+    }
+  }
+};
+
+unique_ptr<TerarkIndex> TerarkIndex::LoadMemory(fstring mem) {
+  auto header = (const TerarkIndexHeader*)mem.data();
 //#if defined(TerocksPrivateCode)
 //  if (header->file_size < mem.size()) {
 //    auto dfa = loadAsLazyUnionDFA(mem, true);
@@ -2808,16 +2869,36 @@ unique_ptr<TerarkIndex> TerarkIndex::LoadFile(fstring fpath) {
 //    return unique_ptr<TerarkIndex>(new NestLoudsTrieIndex<MatchingDFA>(dfa));
 //  }
 //#endif // TerocksPrivateCode
-//  size_t idx = g_TerarkIndexFactroy.find_i(header->class_name);
-//  if (idx >= g_TerarkIndexFactroy.end_i()) {
-//    throw std::invalid_argument(
-//      std::string("TerarkIndex::LoadMemory(): Unknown class: ")
-//      + header->class_name);
-//  }
-//  TerarkIndex::Factory* factory = g_TerarkIndexFactroy.val(idx).get();
-//  return factory->LoadMemory(mem);
-//}
-
+  valvec<unique_ptr<TerarkIndex>> index_vec;
+  size_t offset = 0;
+  size_t luDFA = 0;
+  do {
+    size_t idx = g_TerarkIndexFactroy.find_i(header->class_name);
+    if (idx >= g_TerarkIndexFactroy.end_i()) {
+      throw std::invalid_argument(
+        std::string("TerarkIndex::LoadMemory(): Unknown class: ")
+        + header->class_name);
+    }
+    TerarkIndex::Factory* factory = g_TerarkIndexFactroy.val(idx).get();
+    index_vec.emplace_back(factory->LoadMemory(mem));
+    if (fstring(index_vec.back()->Name()).startsWith("is_32bit_NLT_???")) {
+      ++luDFA;
+    }
+    offset += header->file_size;
+  } while (offset < mem.size());
+  if (index_vec.size() == 1) {
+    return std::move(index_vec.front());
+  }
+  else if (luDFA == index_vec.size()) {
+    // TODO CompositeIndexNestLoudsTriePrefix<MatchingDFA> + TerarkUnionSuffix
+    // TODO CompositeIndex<composite_index_detail::VirtualPrefix, TerarkUnionSuffix>;
+    return nullptr;
+  }
+  else {
+    // TODO TerarkUnionIndex
+    return nullptr;
+  }
+}
 
 RegisterCompositeIndex(CompositeIndexAscendingUintPrefix<IL_256_32>, 0, CompositeIndexEmptySuffix, 0, Unused00);
 RegisterCompositeIndex(CompositeIndexAscendingUintPrefix<IL_256_32>, 0, CompositeIndexEmptySuffix, 1, Unused01);

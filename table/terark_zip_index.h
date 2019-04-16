@@ -12,6 +12,10 @@
 #include <boost/noncopyable.hpp>
 #include <memory>
 
+namespace terark {
+class ZReorderMap;
+}
+
 namespace rocksdb {
 
 using terark::fstring;
@@ -21,6 +25,7 @@ using terark::NativeDataInput;
 using terark::InputBuffer;
 using terark::fstrvec;
 using terark::Uint64Histogram;
+using terark::ZReorderMap;
 using std::unique_ptr;
 
 struct TerarkZipTableOptions;
@@ -65,7 +70,6 @@ public:
                                const KeyStat&,
                                const ImmutableCFOptions* ioption = nullptr) const = 0;
     virtual unique_ptr<TerarkIndex> LoadMemory(fstring mem) const = 0;
-    virtual unique_ptr<TerarkIndex> LoadFile(fstring fpath) const = 0;
     virtual size_t MemSizeForBuild(const KeyStat&) const = 0;
     virtual const char* CombinName() const {
       return nullptr;
@@ -78,17 +82,18 @@ public:
         const char* rtti_name, Factory* factory);
   };
   static const Factory* GetFactory(fstring name);
-  static unique_ptr<TerarkIndex> LoadFile(fstring fpath);
   static unique_ptr<TerarkIndex> LoadMemory(fstring mem);
   virtual ~TerarkIndex();
   virtual const char* Name() const = 0;
   virtual void SaveMmap(std::function<void(const void *, size_t)> write) const = 0;
+  virtual void Reorder(ZReorderMap& newToOld, std::function<void(const void *, size_t)> write, fstring tmpFile) const = 0;
   virtual size_t Find(fstring key, valvec<byte_t>* ctx) const = 0;
   virtual size_t DictRank(fstring key, valvec<byte_t>* ctx) const = 0;
   virtual size_t NumKeys() const = 0;
   virtual size_t TotalKeySize() const = 0;
   virtual fstring Memory() const = 0;
-  virtual Iterator* NewIterator() const = 0;
+  virtual Iterator* NewIterator(void* ptr) const = 0;
+  virtual size_t IteratorSize() const = 0;
   virtual bool NeedsReorder() const = 0;
   virtual void GetOrderMap(terark::UintVecMin0& newToOld) const = 0;
   virtual void BuildCache(double cacheRatio) = 0;
