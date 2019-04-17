@@ -63,25 +63,17 @@ public:
   };
   class Factory : public terark::RefCounter {
   public:
-    size_t  mapIndex = size_t(-1);
     virtual ~Factory();
-    virtual TerarkIndex* Build(NativeDataInput<InputBuffer>& tmpKeyFileReader,
-                               const TerarkZipTableOptions& tzopt,
-                               const KeyStat&,
-                               const ImmutableCFOptions* ioption = nullptr) const = 0;
+    static TerarkIndex* Build(NativeDataInput<InputBuffer>& tmpKeyFileReader,
+                              const TerarkZipTableOptions& tzopt,
+                              const KeyStat&,
+                              const ImmutableCFOptions* ioption = nullptr);
+    static size_t MemSizeForBuild(const KeyStat&);
+
     virtual unique_ptr<TerarkIndex> LoadMemory(fstring mem) const = 0;
-    virtual size_t MemSizeForBuild(const KeyStat&) const = 0;
-    virtual const char* CombinName() const {
-      return nullptr;
-    }
-    const char* WireName() const;
   };
   typedef boost::intrusive_ptr<Factory> FactoryPtr;
-  struct AutoRegisterFactory {
-    AutoRegisterFactory(std::initializer_list<const char*> names,
-        const char* rtti_name, Factory* factory);
-  };
-  static const Factory* GetFactory(fstring name);
+
   static unique_ptr<TerarkIndex> LoadMemory(fstring mem);
   virtual ~TerarkIndex();
   virtual const char* Name() const = 0;
@@ -98,31 +90,6 @@ public:
   virtual void GetOrderMap(terark::UintVecMin0& newToOld) const = 0;
   virtual void BuildCache(double cacheRatio) = 0;
 };
-
-#define TerarkIndexRegister(clazz, ...) \
-    TerarkIndexRegisterImp(clazz, clazz::MyFactory, #clazz, ##__VA_ARGS__)
-
-#define TerarkIndexRegisterWithFactory(clazz, factory, ...) \
-    TerarkIndexRegisterImp(clazz, factory, #clazz, ##__VA_ARGS__)
-
-#define TerarkIndexRegisterNLT(clazzSuffix, ...)                        \
-    TerarkIndexRegisterNLTImp(TrieDAWG_##clazzSuffix,                   \
-        BOOST_STRINGIZE(BOOST_PP_CAT(NestLoudsTrieDAWG_, clazzSuffix)), \
-        BOOST_STRINGIZE(clazzSuffix),                                   \
-        ##__VA_ARGS__)
-
-#define TerarkIndexRegisterNLTImp(clazz, ...) \
-    TerarkIndexRegisterImp(clazz, clazz::MyFactory, ##__VA_ARGS__)
-
-#define TerarkIndexRegisterImp(clazz, factory, WireName, ...)   \
-    BOOST_STATIC_ASSERT(sizeof(WireName) <= 60);                \
-    TerarkIndex::AutoRegisterFactory                            \
-    terark_used_static_obj                                      \
-    g_AutoRegister_##clazz(                                     \
-        {WireName,__VA_ARGS__},                                 \
-        typeid(clazz).name(),                                   \
-        new factory()                                           \
-    )
 
 }
 
