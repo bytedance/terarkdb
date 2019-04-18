@@ -550,7 +550,6 @@ struct VirtualSuffix : public SuffixBase {
 
 template<class Prefix, class Suffix>
 struct IndexParts {
-  typedef Common Common;
   IndexParts() {}
   IndexParts(Common&& common, Prefix&& prefix, Suffix&& suffix)
     : common_(std::move(common))
@@ -651,10 +650,6 @@ struct UintPrefixBuildInfo {
 
 class IndexFactoryBase : public TerarkIndex::Factory {
 public:
-  typedef Common Common;
-  typedef PrefixBase PrefixBase;
-  typedef SuffixBase SuffixBase;
-
   virtual fstring Name() const = 0;
 
   unique_ptr<TerarkIndex> LoadMemory(fstring mem) const {
@@ -974,7 +969,6 @@ template<class Prefix, class Suffix>
 class Index : public TerarkIndex, public IndexParts<Prefix, Suffix> {
 public:
   typedef IndexParts<Prefix, Suffix> base_t;
-  typedef Common Common;
   using base_t::common_;
   using base_t::prefix_;
   using base_t::suffix_;
@@ -2857,25 +2851,25 @@ class TerarkUnionIndex : public TerarkIndex {
 
   public:
     bool SeekToFirst() override {
-
+      return false;
     }
     bool SeekToLast() override {
-
+      return false;
     }
     bool Seek(fstring target) override {
-
+      return false;
     }
     bool Next() override {
-
+      return false;
     }
     bool Prev() override {
-
+      return false;
     }
     size_t DictRank() const override {
-
+      return 0;
     }
     fstring key() const override {
-
+      return "";
     }
   };
 public:
@@ -2891,9 +2885,11 @@ public:
   }
   size_t Find(fstring key, valvec<byte_t>* ctx) const override {
     // TODO
+    return 0;
   }
   size_t DictRank(fstring key, valvec<byte_t>* ctx) const override {
     // TODO
+    return 0;
   }
   size_t NumKeys() const override {
     return index_vec_.back().num_keys_acc;
@@ -2906,6 +2902,7 @@ public:
   }
   Iterator* NewIterator(void* ptr) const override {
     // TODO
+    return nullptr;
   }
   size_t IteratorSize() const override {
     return sizeof(UnionIterator) + iter_size_;
