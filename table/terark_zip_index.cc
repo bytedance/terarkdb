@@ -4,6 +4,7 @@
 #endif
 
 #include "terark_zip_index.h"
+#include <typeindex>
 #include "terark_zip_table.h"
 #include "terark_zip_common.h"
 #include <terark/bitmap.hpp>
@@ -84,25 +85,16 @@ static bool g_indexEnableSortedUint = getEnvBool("TerarkZipTable_enableSortedUin
 static bool g_indexEnableBigUint0 = getEnvBool("TerarkZipTable_enableBigUint0", true);
 
 static hash_strmap<TerarkIndex::FactoryPtr> g_TerarkIndexFactroy;
-static hash_strmap<std::string,
-  fstring_func::hash_align,
-  fstring_func::equal_align,
-  ValueInline,
-  SafeCopy ///< some std::string is not memmovable
-> g_TerarkIndexName;
-static hash_strmap<TerarkIndex::FactoryPtr> g_TerarkIndexCombin;
-
-
-template<class IndexClass>
-bool VerifyClassName(fstring class_name) {
-  size_t name_i = g_TerarkIndexName.find_i(typeid(IndexClass).name());
-  size_t self_i = g_TerarkIndexFactroy.find_i(g_TerarkIndexName.val(name_i));
-  assert(self_i < g_TerarkIndexFactroy.end_i());
-  size_t head_i = g_TerarkIndexFactroy.find_i(class_name);
-  return head_i < g_TerarkIndexFactroy.end_i() &&
-    g_TerarkIndexFactroy.val(head_i) == g_TerarkIndexFactroy.val(self_i);
-}
-
+struct TerarkIndexTypeFactroyHash {
+  size_t operator()(const std::pair<std::type_index, std::type_index>& key) const {
+    return std::hash<std::type_index>()(key.first) ^ std::hash<std::type_index>()(key.second);
+  }
+};
+static std::unordered_map<
+  std::pair<std::type_index, std::type_index>,
+  TerarkIndex::FactoryPtr,
+  TerarkIndexTypeFactroyHash
+> g_TerarkIndexTypeFactroy;
 
 template<size_t Align, class Writer>
 void Padzero(const Writer& write, size_t offset) {
@@ -658,6 +650,8 @@ public:
   typedef PrefixBase PrefixBase;
   typedef SuffixBase SuffixBase;
 
+  virtual fstring Name() const = 0;
+
   unique_ptr<TerarkIndex> LoadMemory(fstring mem) const {
     // TODO;
     return nullptr;
@@ -680,9 +674,12 @@ public:
     // TODO;
   }
 
-  static IndexFactoryBase* GetFactoryByCombinName(fstring prefix, fstring suffix) {
-    // TODO
-    return nullptr;
+  static IndexFactoryBase* GetFactoryByType(std::type_index prefix, std::type_index suffix) {
+    auto find = g_TerarkIndexTypeFactroy.find(std::make_pair(prefix, suffix));
+    if (find == g_TerarkIndexTypeFactroy.end()) {
+      return nullptr;
+    }
+    return static_cast<IndexFactoryBase*>(find->second.get());
   }
 
   virtual ~IndexFactoryBase() {}
@@ -930,9 +927,8 @@ public:
   const IndexFactoryBase* factory_;
   const TerarkIndexHeader* header_;
 
-  const char* Name() const override {
-    // TODO
-    return nullptr;
+  fstring Name() const override {
+    return factory_->Name();
   }
   void SaveMmap(std::function<void(const void *, size_t)> write) const override {
     factory_->SaveMmap(this, write);
@@ -1008,13 +1004,29 @@ struct IndexDeclare {
 };
 
 
-template<class Prefix, class PrefixInfo, class Suffix, class SuffixInfo>
+template<class PrefixInfo, class Prefix, class SuffixInfo, class Suffix>
 class IndexFactory : public IndexFactoryBase {
 public:
   typedef typename IndexDeclare<Prefix, PrefixInfo::use_virtual, Suffix, SuffixInfo::use_virtual>::index_type index_type;
 
   IndexFactory() {
-    // TODO init
+    auto prefix_name = PrefixInfo::Name();
+    auto suffix_name = SuffixInfo::Name();
+    valvec<char> name(prefix_name.size() + suffix_name.size(), valvec_reserve());
+    name.assign(prefix_name);
+    name.append(suffix_name);
+    for (auto &c : name) {
+      if (c == 0) {
+        c = ' ';
+      }
+    }
+    name.append('\0');
+    map_id = g_TerarkIndexFactroy.insert_i(name, this).first;
+    g_TerarkIndexTypeFactroy[std::make_pair(std::type_index(typeid(Prefix)), std::type_index(typeid(Prefix)))] = this;
+  }
+
+  fstring Name() const override {
+    return g_TerarkIndexFactroy.key(map_id);
   }
 
 protected:
@@ -1030,6 +1042,7 @@ protected:
   SuffixBase* CreateSuffix() const override {
     return new Suffix();
   }
+  size_t map_id;
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -2708,9 +2721,8 @@ TerarkIndex::Factory::Build(
       ks.minKey > ks.maxKey, ks.minKeyLen == ks.maxKeyLen, ioption);
     suffix = BuildEmptySuffix();
   }
-  //auto factory = IndexFactoryBase::GetFactoryByCombinName(prefix->Name(), suffix->Name());
-  // TODO
-  auto factory = IndexFactoryBase::GetFactoryByCombinName("", "");
+  auto factory = IndexFactoryBase::GetFactoryByType(std::type_index(typeid(*prefix)), std::type_index(typeid(*suffix)));
+  assert(factory != nullptr);
   return factory->CreateIndex(std::move(common), prefix, suffix);
 }
 
@@ -2761,7 +2773,7 @@ class TerarkUnionIndex : public TerarkIndex {
   };
 public:
 
-  const char* Name() const override {
+  fstring Name() const override {
     return "TerarkUnionIndex";
   }
   void SaveMmap(std::function<void(const void *, size_t)> write) const override {
@@ -2834,9 +2846,9 @@ unique_ptr<TerarkIndex> TerarkIndex::LoadMemory(fstring mem) {
 
 template<char... chars_t>
 struct StringHolder {
-  const char* Name() const {
+  static fstring Name() {
     static char str[] = { chars_t ... };
-    return str;
+    return fstring{ str, sizeof(str) };
   }
 };
 #define _G(name,i) ((i)<sizeof(#name)?#name[i]:0)
@@ -2848,16 +2860,16 @@ struct StringHolder {
 
 template<class N, size_t V>
 struct ComponentInfo {
-  const char* Name() const {
+  static fstring Name() {
     return N::Name();
   }
   static constexpr size_t use_virtual = V;
 };
 
-template<class T, class I>
+template<class I, class T>
 struct Component {
-  using type = T;
   using info = I;
+  using type = T;
 };
 
 template<class ...args_t>
@@ -2879,59 +2891,59 @@ struct ComponentList<> {
 template<class list_t = ComponentList<>>
 struct ComponentRegister {
   using list = list_t;
-  template<class N, class T, size_t V>
-  using reg = ComponentRegister<typename list::template push_back<Component<T, ComponentInfo<N, V>>>::type>;
+  template<class N, size_t V, class T>
+  using reg = ComponentRegister<typename list::template push_back<Component<ComponentInfo<N, V>, T>>::type>;
 };
 
 using namespace index_detail;
 
 using PrefixComponentList = ComponentRegister<>
-::reg<NAME(IL_256      ), IndexNestLoudsTriePrefix<NestLoudsTrieDAWG_IL_256            >, 1>
-::reg<NAME(IL_256_FL   ), IndexNestLoudsTriePrefix<NestLoudsTrieDAWG_IL_256_32_FL      >, 1>
-::reg<NAME(M_SE_512    ), IndexNestLoudsTriePrefix<NestLoudsTrieDAWG_Mixed_SE_512      >, 1>
-::reg<NAME(M_SE_512_FL ), IndexNestLoudsTriePrefix<NestLoudsTrieDAWG_Mixed_SE_512_32_FL>, 1>
-::reg<NAME(M_IL_256    ), IndexNestLoudsTriePrefix<NestLoudsTrieDAWG_Mixed_IL_256      >, 1>
-::reg<NAME(M_IL_256_FL ), IndexNestLoudsTriePrefix<NestLoudsTrieDAWG_Mixed_IL_256_32_FL>, 1>
-::reg<NAME(M_XL_256    ), IndexNestLoudsTriePrefix<NestLoudsTrieDAWG_Mixed_XL_256      >, 1>
-::reg<NAME(M_XL_256_FL ), IndexNestLoudsTriePrefix<NestLoudsTrieDAWG_Mixed_XL_256_32_FL>, 1>
-::reg<NAME(SE_512_64   ), IndexNestLoudsTriePrefix<NestLoudsTrieDAWG_SE_512_64         >, 1>
-::reg<NAME(SE_512_64_FL), IndexNestLoudsTriePrefix<NestLoudsTrieDAWG_SE_512_64_FL      >, 1>
-::reg<NAME(A_allone    ), IndexAscendingUintPrefix<rank_select_allone   >, 0>
-::reg<NAME(A_fewzero_1 ), IndexAscendingUintPrefix<rank_select_fewzero_1>, 1>
-::reg<NAME(A_fewzero_2 ), IndexAscendingUintPrefix<rank_select_fewzero_2>, 1>
-::reg<NAME(A_fewzero_3 ), IndexAscendingUintPrefix<rank_select_fewzero_3>, 1>
-::reg<NAME(A_fewzero_4 ), IndexAscendingUintPrefix<rank_select_fewzero_4>, 1>
-::reg<NAME(A_fewzero_5 ), IndexAscendingUintPrefix<rank_select_fewzero_5>, 1>
-::reg<NAME(A_fewzero_6 ), IndexAscendingUintPrefix<rank_select_fewzero_6>, 1>
-::reg<NAME(A_fewzero_7 ), IndexAscendingUintPrefix<rank_select_fewzero_7>, 1>
-::reg<NAME(A_fewzero_8 ), IndexAscendingUintPrefix<rank_select_fewzero_8>, 1>
-::reg<NAME(A_il_256_32 ), IndexAscendingUintPrefix<rank_select_il_256_32>, 0>
-::reg<NAME(A_se_512_64 ), IndexAscendingUintPrefix<rank_select_se_512_64>, 0>
-::reg<NAME(A_fewone_1  ), IndexAscendingUintPrefix<rank_select_fewone_1 >, 1>
-::reg<NAME(A_fewone_2  ), IndexAscendingUintPrefix<rank_select_fewone_2 >, 1>
-::reg<NAME(A_fewone_3  ), IndexAscendingUintPrefix<rank_select_fewone_3 >, 1>
-::reg<NAME(A_fewone_4  ), IndexAscendingUintPrefix<rank_select_fewone_4 >, 1>
-::reg<NAME(A_fewone_5  ), IndexAscendingUintPrefix<rank_select_fewone_5 >, 1>
-::reg<NAME(A_fewone_6  ), IndexAscendingUintPrefix<rank_select_fewone_6 >, 1>
-::reg<NAME(A_fewone_7  ), IndexAscendingUintPrefix<rank_select_fewone_7 >, 1>
-::reg<NAME(A_fewone_8  ), IndexAscendingUintPrefix<rank_select_fewone_8 >, 1>
-::reg<NAME(ND_il_256_32), IndexNonDescendingUintPrefix<rank_select_il_256_32>, 0>
-::reg<NAME(ND_se_512_64), IndexNonDescendingUintPrefix<rank_select_se_512_64>, 0>
-::reg<NAME(ND_fewone_1 ), IndexNonDescendingUintPrefix<rank_select_fewone_1 >, 1>
-::reg<NAME(ND_fewone_2 ), IndexNonDescendingUintPrefix<rank_select_fewone_2 >, 1>
-::reg<NAME(ND_fewone_3 ), IndexNonDescendingUintPrefix<rank_select_fewone_3 >, 1>
-::reg<NAME(ND_fewone_4 ), IndexNonDescendingUintPrefix<rank_select_fewone_4 >, 1>
-::reg<NAME(ND_fewone_5 ), IndexNonDescendingUintPrefix<rank_select_fewone_5 >, 1>
-::reg<NAME(ND_fewone_6 ), IndexNonDescendingUintPrefix<rank_select_fewone_6 >, 1>
-::reg<NAME(ND_fewone_7 ), IndexNonDescendingUintPrefix<rank_select_fewone_7 >, 1>
-::reg<NAME(ND_fewone_8 ), IndexNonDescendingUintPrefix<rank_select_fewone_8 >, 1>
+::reg<NAME(IL_256      ), 1, IndexNestLoudsTriePrefix<NestLoudsTrieDAWG_IL_256            >>
+::reg<NAME(IL_256_FL   ), 1, IndexNestLoudsTriePrefix<NestLoudsTrieDAWG_IL_256_32_FL      >>
+::reg<NAME(M_SE_512    ), 1, IndexNestLoudsTriePrefix<NestLoudsTrieDAWG_Mixed_SE_512      >>
+::reg<NAME(M_SE_512_FL ), 1, IndexNestLoudsTriePrefix<NestLoudsTrieDAWG_Mixed_SE_512_32_FL>>
+::reg<NAME(M_IL_256    ), 1, IndexNestLoudsTriePrefix<NestLoudsTrieDAWG_Mixed_IL_256      >>
+::reg<NAME(M_IL_256_FL ), 1, IndexNestLoudsTriePrefix<NestLoudsTrieDAWG_Mixed_IL_256_32_FL>>
+::reg<NAME(M_XL_256    ), 1, IndexNestLoudsTriePrefix<NestLoudsTrieDAWG_Mixed_XL_256      >>
+::reg<NAME(M_XL_256_FL ), 1, IndexNestLoudsTriePrefix<NestLoudsTrieDAWG_Mixed_XL_256_32_FL>>
+::reg<NAME(SE_512_64   ), 1, IndexNestLoudsTriePrefix<NestLoudsTrieDAWG_SE_512_64         >>
+::reg<NAME(SE_512_64_FL), 1, IndexNestLoudsTriePrefix<NestLoudsTrieDAWG_SE_512_64_FL      >>
+::reg<NAME(A_allone    ), 0, IndexAscendingUintPrefix<rank_select_allone   >>
+::reg<NAME(A_fewzero_1 ), 1, IndexAscendingUintPrefix<rank_select_fewzero_1>>
+::reg<NAME(A_fewzero_2 ), 1, IndexAscendingUintPrefix<rank_select_fewzero_2>>
+::reg<NAME(A_fewzero_3 ), 1, IndexAscendingUintPrefix<rank_select_fewzero_3>>
+::reg<NAME(A_fewzero_4 ), 1, IndexAscendingUintPrefix<rank_select_fewzero_4>>
+::reg<NAME(A_fewzero_5 ), 1, IndexAscendingUintPrefix<rank_select_fewzero_5>>
+::reg<NAME(A_fewzero_6 ), 1, IndexAscendingUintPrefix<rank_select_fewzero_6>>
+::reg<NAME(A_fewzero_7 ), 1, IndexAscendingUintPrefix<rank_select_fewzero_7>>
+::reg<NAME(A_fewzero_8 ), 1, IndexAscendingUintPrefix<rank_select_fewzero_8>>
+::reg<NAME(A_il_256_32 ), 0, IndexAscendingUintPrefix<rank_select_il_256_32>>
+::reg<NAME(A_se_512_64 ), 0, IndexAscendingUintPrefix<rank_select_se_512_64>>
+::reg<NAME(A_fewone_1  ), 1, IndexAscendingUintPrefix<rank_select_fewone_1 >>
+::reg<NAME(A_fewone_2  ), 1, IndexAscendingUintPrefix<rank_select_fewone_2 >>
+::reg<NAME(A_fewone_3  ), 1, IndexAscendingUintPrefix<rank_select_fewone_3 >>
+::reg<NAME(A_fewone_4  ), 1, IndexAscendingUintPrefix<rank_select_fewone_4 >>
+::reg<NAME(A_fewone_5  ), 1, IndexAscendingUintPrefix<rank_select_fewone_5 >>
+::reg<NAME(A_fewone_6  ), 1, IndexAscendingUintPrefix<rank_select_fewone_6 >>
+::reg<NAME(A_fewone_7  ), 1, IndexAscendingUintPrefix<rank_select_fewone_7 >>
+::reg<NAME(A_fewone_8  ), 1, IndexAscendingUintPrefix<rank_select_fewone_8 >>
+::reg<NAME(ND_il_256_32), 0, IndexNonDescendingUintPrefix<rank_select_il_256_32>>
+::reg<NAME(ND_se_512_64), 0, IndexNonDescendingUintPrefix<rank_select_se_512_64>>
+::reg<NAME(ND_fewone_1 ), 1, IndexNonDescendingUintPrefix<rank_select_fewone_1 >>
+::reg<NAME(ND_fewone_2 ), 1, IndexNonDescendingUintPrefix<rank_select_fewone_2 >>
+::reg<NAME(ND_fewone_3 ), 1, IndexNonDescendingUintPrefix<rank_select_fewone_3 >>
+::reg<NAME(ND_fewone_4 ), 1, IndexNonDescendingUintPrefix<rank_select_fewone_4 >>
+::reg<NAME(ND_fewone_5 ), 1, IndexNonDescendingUintPrefix<rank_select_fewone_5 >>
+::reg<NAME(ND_fewone_6 ), 1, IndexNonDescendingUintPrefix<rank_select_fewone_6 >>
+::reg<NAME(ND_fewone_7 ), 1, IndexNonDescendingUintPrefix<rank_select_fewone_7 >>
+::reg<NAME(ND_fewone_8 ), 1, IndexNonDescendingUintPrefix<rank_select_fewone_8 >>
 ::list;
 
 using SuffixComponentList = ComponentRegister<>
-::reg<NAME(Empty  ), IndexEmptySuffix                        , 0>
-::reg<NAME(Fixed  ), IndexFixedStringSuffix                  , 0>
-::reg<NAME(Dynamic), IndexBlobStoreSuffix<ZipOffsetBlobStore>, 1>
-::reg<NAME(DictZip), IndexBlobStoreSuffix<DictZipBlobStore  >, 1>
+::reg<NAME(Empty  ), 0, IndexEmptySuffix                        >
+::reg<NAME(Fixed  ), 0, IndexFixedStringSuffix                  >
+::reg<NAME(Dynamic), 1, IndexBlobStoreSuffix<ZipOffsetBlobStore>>
+::reg<NAME(DictZip), 1, IndexBlobStoreSuffix<DictZipBlobStore  >>
 ::list;
 
 template<class PrefixComponentList, class SuffixComponentList>
@@ -2957,8 +2969,8 @@ struct FactoryExpander {
     template<class SuffixComponent, class ...args_t>
     struct invoke<FactorySet<args_t...>, SuffixComponent> {
       using factory = IndexFactory<
-        typename PreifxComponent::type, typename PreifxComponent::info,
-        typename SuffixComponent::type, typename SuffixComponent::info>;
+        typename PreifxComponent::info, typename PreifxComponent::type,
+        typename SuffixComponent::info, typename SuffixComponent::type>;
       using type = FactorySet<args_t..., factory>;
     };
   };

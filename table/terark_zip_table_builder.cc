@@ -673,36 +673,20 @@ void TerarkZipTableBuilder::BuildIndex(BuildIndexParams& param, KeyValueStatus& 
   param.data.complete_write();
   param.wait = Async([this, &param, &kvs]() {
     auto& keyStat = param.stat;
-    const TerarkIndex::Factory* factory;
-#if defined(TerocksPrivateCode)
-    if (kvs.split != 0) {
-      factory = TerarkIndex::GetFactory(table_options_.indexType);
-    }
-    else
-#endif // TerocksPrivateCode
-    {
-      // TODO
-      factory = nullptr;
-      //factory = TerarkIndex::SelectFactory(keyStat, table_options_.indexType);
-    }
-    if (!factory) {
-      THROW_STD(invalid_argument,
-        "invalid indexType: %s", table_options_.indexType.c_str());
-    }
     NativeDataInput<InputBuffer> tempKeyFileReader(&param.data.fp);
-    const size_t myWorkMem = factory->MemSizeForBuild(keyStat);
+    const size_t myWorkMem = TerarkIndex::Factory::MemSizeForBuild(keyStat);
     auto waitHandle = WaitForMemory("nltTrie", myWorkMem);
 
     long long t1 = g_pf.now();
     std::unique_ptr<TerarkIndex> indexPtr;
     try {
-      indexPtr.reset(factory->Build(tempKeyFileReader,
-        table_options_, keyStat, &ioptions_));
+      indexPtr.reset(TerarkIndex::Factory::Build(
+        tempKeyFileReader, table_options_, keyStat, &ioptions_));
     }
     catch (const std::exception& ex) {
       INFO(ioptions_.info_log
-        , "TerarkZipTableBuilder::Finish():this=%012p:  index build fail , type = %s , error = %s\n"
-        , this, factory->WireName(), ex.what()
+        , "TerarkZipTableBuilder::Finish():this=%012p:  index build fail , error = %s\n"
+        , this, ex.what()
       );
       return Status::Corruption("TerarkZipTableBuilder index build error", ex.what());
     }
@@ -733,7 +717,7 @@ void TerarkZipTableBuilder::BuildIndex(BuildIndexParams& param, KeyValueStatus& 
     };
     if (table_options_.debugLevel == 2 && !verify_index()) {
       return Status::Corruption("TerarkZipTableBuilder index check fail",
-        indexPtr->Name());
+        indexPtr->Name().data());
     }
     size_t fileSize = 0;
     {
@@ -757,7 +741,7 @@ void TerarkZipTableBuilder::BuildIndex(BuildIndexParams& param, KeyValueStatus& 
       indexPtr = TerarkIndex::LoadMemory(mmap_file.memory().substr(param.indexFileBegin, fileSize));
       if (!verify_index()) {
         return Status::Corruption("TerarkZipTableBuilder index check fail after reload",
-          indexPtr->Name());
+          indexPtr->Name().data());
       }
     }
     long long tt = g_pf.now();
@@ -769,7 +753,7 @@ void TerarkZipTableBuilder::BuildIndex(BuildIndexParams& param, KeyValueStatus& 
       "    usrkeys = %zd  min-keylen = %zd  max-keylen = %zd  prefix = %zd\n"
       "    raw-key =%9.4f GB  zip-key =%9.4f GB  avg-key =%7.2f  avg-zkey =%7.2f\n"
       , this, g_pf.sf(t1, tt), rawKeySize*1.0 / g_pf.uf(t1, tt)
-      , indexPtr->Name()
+      , indexPtr->Name().data()
       , param.stat.prefix.m_cnt_sum, param.stat.minKeyLen, param.stat.maxKeyLen, prefixLen
       , rawKeySize*1.0 / 1e9, fileSize*1.0 / 1e9
       , rawKeySize*1.0 / param.stat.prefix.m_cnt_sum, fileSize*1.0 / param.stat.prefix.m_cnt_sum

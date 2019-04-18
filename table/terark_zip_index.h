@@ -76,7 +76,7 @@ public:
 
   static unique_ptr<TerarkIndex> LoadMemory(fstring mem);
   virtual ~TerarkIndex();
-  virtual const char* Name() const = 0;
+  virtual fstring Name() const = 0;
   virtual void SaveMmap(std::function<void(const void *, size_t)> write) const = 0;
   virtual void Reorder(ZReorderMap& newToOld, std::function<void(const void *, size_t)> write, fstring tmpFile) const = 0;
   virtual size_t Find(fstring key, valvec<byte_t>* ctx) const = 0;
