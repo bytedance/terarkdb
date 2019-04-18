@@ -656,6 +656,9 @@ std::future<Status> TerarkZipTableBuilder::Async(std::function<Status()> func) {
 void TerarkZipTableBuilder::BuildIndex(BuildIndexParams& param, KeyValueStatus& kvs) {
   param.stat.prefix.finish();
   param.stat.diff.finish();
+  key_freq_.finish();
+  param.stat.entropyLen = freq_hist_o1::estimate_size(key_freq_.histogram());
+  key_freq_ = freq_hist_o1();
   assert(param.stat.prefix.m_cnt_sum == param.stat.diff.m_cnt_sum);
   assert(param.stat.prefix.m_cnt_sum > 0);
 #if defined(TerocksPrivateCode)
@@ -2391,6 +2394,7 @@ void TerarkZipTableBuilder::AddPrevUserKey(size_t samePrefix) {
   ++currentStat_->prefix[std::min(prefixSize, prevUserKey_.size())];
   ++currentStat_->diff[samePrefix];
   prevSamePrefix_ = samePrefix;
+  key_freq_.add_record(prevUserKey_);
 }
 
 void TerarkZipTableBuilder::AddLastUserKey() {

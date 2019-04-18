@@ -58,6 +58,7 @@ public:
     size_t minSuffixLen = size_t(-1);
     size_t maxSuffixLen = 0;
     size_t sumKeyLen = 0;
+    size_t entropyLen = 0;
     valvec<byte_t> minKey;
     valvec<byte_t> maxKey;
   };

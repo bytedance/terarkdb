@@ -900,18 +900,6 @@ const {
     return Status::InvalidArgument("TerarkZipTableFactory::SanitizeOptions()",
       "user comparator must be 'leveldb.BytewiseComparator'");
   }
-  auto indexFactory = TerarkIndex::GetFactory(table_options_.indexType);
-  if (!indexFactory) {
-    std::string msg = "invalid indexType: " + table_options_.indexType;
-    return Status::InvalidArgument(msg);
-  }
-  fstring wireName = indexFactory->WireName();
-  if (!wireName.startsWith("NestLoudsTrieDAWG")) {
-    std::string msg = "indexType is not a NestLoudsTrieDAWG: "
-                      "WireName = " + wireName + " , ConfName = "
-                    + table_options_.indexType;
-    return Status::InvalidArgument(msg);
-  }
   return Status::OK();
 }
 

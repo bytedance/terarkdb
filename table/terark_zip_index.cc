@@ -13,13 +13,16 @@
 #include <terark/fsa/fsa_cache.hpp>
 #include <terark/fsa/nest_louds_trie_inline.hpp>
 #include <terark/fsa/nest_trie_dawg.hpp>
+#include <terark/util/crc.hpp>
 #include <terark/util/mmap.hpp>
 #include <terark/util/sortable_strvec.hpp>
 #include <terark/zbs/zip_offset_blob_store.hpp>
 #include <terark/zbs/dict_zip_blob_store.hpp>
 #include <terark/zbs/zip_reorder_map.hpp>
 #include <terark/zbs/blob_store_file_header.hpp>
+#include <terark/zbs/xxhash_helper.hpp>
 #include <terark/num_to_str.hpp>
+#include <terark/io/MemStream.hpp>
 #if defined(TerocksPrivateCode)
 #include <terark/fsa/fsa_for_union_dfa.hpp>
 #endif // TerocksPrivateCode
@@ -27,6 +30,9 @@
 namespace rocksdb {
 
 using namespace terark;
+
+static const uint64_t g_terark_index_prefix_seed = 0x505f6b7261726554ull; // echo Terark_P | od -t x8
+static const uint64_t g_terark_index_suffix_seed = 0x535f6b7261726554ull; // echo Terark_S | od -t x8
 
 // TODO new impl
 typedef rank_select_fewzero<uint32_t> rank_select_fewzero_1;
@@ -104,18 +110,17 @@ void Padzero(const Writer& write, size_t offset) {
   }
 }
 
-struct TerarkIndexHeader {
-  uint8_t   magic_len;
-  char      magic[19];
-  char      class_name[60];
+struct TerarkIndexFooter {
+  uint64_t  prefix_size;
+  uint64_t  prefix_xxhash;
+  uint64_t  suffix_size;
+  uint64_t  suffix_xxhash;
 
-  uint32_t  reserved_80_4;
-  uint32_t  header_size;
-  uint32_t  version;
-  uint32_t  reserved_92_4;
-
-  uint64_t  file_size;
-  uint64_t  reserved_102_24;
+  uint32_t  common_size;
+  uint32_t  format_version;
+  char      class_name[40];
+  uint32_t  footer_size;
+  uint32_t  footer_crc32;
 };
 
 TerarkIndex::~TerarkIndex() {}
@@ -653,8 +658,16 @@ public:
   virtual fstring Name() const = 0;
 
   unique_ptr<TerarkIndex> LoadMemory(fstring mem) const {
-    // TODO;
-    return nullptr;
+    auto& footer = ((const TerarkIndexFooter*)(mem.data() + mem.size()))[-1];
+    fstring suffix = mem.substr(mem.size() - footer.footer_size - footer.suffix_size, footer.suffix_size);
+    fstring prefix = fstring(suffix.data() - footer.prefix_size, footer.prefix_size);
+    fstring common = fstring(prefix.data() - align_up(footer.common_size, 8), footer.common_size);
+    Common c(common, false);
+    PrefixBase* p = CreatePrefix();
+    p->Load(prefix);
+    SuffixBase* s = CreateSuffix();
+    s->Load(suffix);
+    return unique_ptr<TerarkIndex>(CreateIndex(std::move(c), p, s));
   }
   template<class Prefix, class Suffix>
   void SaveMmap(const IndexParts<Prefix, Suffix>* index,
@@ -668,10 +681,62 @@ public:
   }
 
   virtual void SaveMmap(const Common& common, const PrefixBase& prefix, const SuffixBase& suffix, std::function<void(const void *, size_t)> write) const {
-    // TODO;
+    TerarkIndexFooter footer;
+    footer.format_version = 0;
+    footer.footer_size = sizeof footer;
+    footer.common_size = common.size();
+    write(common.data(), common.size());
+    Padzero<8>(write, common.size());
+    XXHash64 dist(g_terark_index_prefix_seed);
+    footer.prefix_size = 0;
+    prefix.Save([&](const void *data, size_t size) {
+      dist.update(data, size);
+      write(data, size);
+      footer.prefix_size += size;
+    });
+    footer.prefix_xxhash = dist.digest();
+    dist.reset(g_terark_index_suffix_seed);
+    footer.suffix_size = 0;
+    suffix.Save([&](const void *data, size_t size) {
+      dist.update(data, size);
+      write(data, size);
+      footer.suffix_size += size;
+    });
+    footer.suffix_xxhash = dist.digest();
+    auto name = Name();
+    assert(name.size() == sizeof footer.class_name);
+    memcpy(footer.class_name, name.data(), sizeof footer.class_name);
+    footer.footer_crc32 = Crc32c_update(0, &footer, sizeof footer - sizeof(uint32_t));
+    write(&footer, sizeof footer);
   }
   virtual void Reorder(const Common& common, const PrefixBase& prefix, const SuffixBase& suffix, ZReorderMap& newToOld, std::function<void(const void *, size_t)> write, fstring tmpFile) const {
-    // TODO;
+    TerarkIndexFooter footer;
+    footer.format_version = 0;
+    footer.footer_size = sizeof footer;
+    footer.common_size = common.size();
+    write(common.data(), common.size());
+    Padzero<8>(write, common.size());
+    XXHash64 dist(g_terark_index_prefix_seed);
+    footer.prefix_size = 0;
+    prefix.Save([&](const void *data, size_t size) {
+      dist.update(data, size);
+      write(data, size);
+      footer.prefix_size += size;
+    });
+    footer.prefix_xxhash = dist.digest();
+    dist.reset(g_terark_index_suffix_seed);
+    footer.suffix_size = 0;
+    suffix.Reorder(newToOld, [&](const void *data, size_t size) {
+      dist.update(data, size);
+      write(data, size);
+      footer.suffix_size += size;
+    }, tmpFile);
+    footer.suffix_xxhash = dist.digest();
+    auto name = Name();
+    assert(name.size() == sizeof footer.class_name);
+    memcpy(footer.class_name, name.data(), sizeof footer.class_name);
+    footer.footer_crc32 = Crc32c_update(0, &footer, sizeof footer - sizeof(uint32_t));
+    write(&footer, sizeof footer);
   }
 
   static IndexFactoryBase* GetFactoryByType(std::type_index prefix, std::type_index suffix) {
@@ -914,18 +979,13 @@ public:
   using base_t::prefix_;
   using base_t::suffix_;
 
-  Index(const IndexFactoryBase* factory)
-    : factory_(factory)
-    , header_(nullptr) {
-  }
+  Index(const IndexFactoryBase* factory) : factory_(factory) {}
   Index(const IndexFactoryBase* factory, Common&& common, Prefix&& prefix, Suffix&& suffix)
     : base_t(std::move(common), std::move(prefix), std::move(suffix))
-    , factory_(factory)
-    , header_(nullptr) {
+    , factory_(factory) {
   }
 
   const IndexFactoryBase* factory_;
-  const TerarkIndexHeader* header_;
 
   fstring Name() const override {
     return factory_->Name();
@@ -1015,11 +1075,6 @@ public:
     valvec<char> name(prefix_name.size() + suffix_name.size(), valvec_reserve());
     name.assign(prefix_name);
     name.append(suffix_name);
-    for (auto &c : name) {
-      if (c == 0) {
-        c = ' ';
-      }
-    }
     name.append('\0');
     map_id = g_TerarkIndexFactroy.insert_i(name, this).first;
     g_TerarkIndexTypeFactroy[std::make_pair(std::type_index(typeid(Prefix)), std::type_index(typeid(Prefix)))] = this;
@@ -1837,14 +1892,20 @@ struct IndexBlobStoreSuffix
     *this = std::move(*other);
     delete other;
   }
-  IndexBlobStoreSuffix(BlobStoreType* store) : store_(store) {}
+  IndexBlobStoreSuffix(BlobStoreType* store, AutoGrownMemIO& mem) {
+    store_.swap(*store);
+    memory_.swap(mem);
+    delete store;
+  }
   IndexBlobStoreSuffix& operator = (const IndexBlobStoreSuffix&) = delete;
   IndexBlobStoreSuffix& operator = (IndexBlobStoreSuffix&& other) {
     store_.swap(other.store_);
+    memory_.swap(other.memory_);
     return *this;
   }
 
   BlobStoreType store_;
+  AutoGrownMemIO memory_;
 
   size_t TotalKeySize() const {
     return store_.total_data_size();
@@ -2338,12 +2399,57 @@ BuildBlobStoreSuffix(
     size_t numKeys, size_t sumKeyLen) {
   input.rewind();
   if (numKeys * 4 < sumKeyLen) {
-    // TODO
+    AutoGrownMemIO memory;
+    terark::ZipOffsetBlobStore::MyBuilder builder(128, memory);
+    for (size_t i = 0; i < numKeys; ++i) {
+      auto str = input.next();
+      builder.addRecord(str);
+    }
+    builder.finish();
+    auto store = BlobStore::load_from_user_memory(fstring(memory.begin(), memory.size()));
+    assert(dynamic_cast<ZipOffsetBlobStore*>(store) != nullptr);
+    return new IndexBlobStoreSuffix<ZipOffsetBlobStore>(static_cast<ZipOffsetBlobStore*>(store), memory);
   }
   else {
-    // TODO
+    std::unique_ptr<DictZipBlobStore::ZipBuilder> zbuilder;
+    DictZipBlobStore::Options dzopt;
+    dzopt.checksumLevel = 3;
+    dzopt.entropyAlgo = DictZipBlobStore::Options::kHuffmanO1;
+    dzopt.useSuffixArrayLocalMatch = false;
+    dzopt.compressGlobalDict = true;
+    dzopt.entropyInterleaved = 1;
+    dzopt.offsetArrayBlockUnits = 128;
+    dzopt.entropyZipRatioRequire = 0.95f;
+    zbuilder.reset(DictZipBlobStore::createZipBuilder(dzopt));
+
+    std::mt19937_64 randomGenerator;
+    uint64_t upperBoundSample = uint64_t(randomGenerator.max() * 0.1 / numKeys);
+    uint64_t sampleLenSum = 0;
+    for (size_t i = 0; i < numKeys; ++i) {
+      auto str = input.next();
+      if (randomGenerator() < upperBoundSample) {
+        zbuilder->addSample(str);
+        sampleLenSum += str.size();
+      }
+    }
+    if (sampleLenSum == 0) {
+      zbuilder->addSample("Hello World!");
+    }
+    zbuilder->finishSample();
+    zbuilder->prepareDict();
+    AutoGrownMemIO memory;
+    zbuilder->prepare(numKeys, memory);
+    input.rewind();
+    for (size_t i = 0; i < numKeys; ++i) {
+      auto str = input.next();
+      zbuilder->addRecord(str);
+    }
+    zbuilder->finish(DictZipBlobStore::ZipBuilder::FinishFreeDict);
+    zbuilder.reset();
+    auto store = BlobStore::load_from_user_memory(fstring(memory.begin(), memory.size()));
+    assert(dynamic_cast<DictZipBlobStore*>(store) != nullptr);
+    return new IndexBlobStoreSuffix<DictZipBlobStore>(static_cast<DictZipBlobStore*>(store), memory);
   }
-  return nullptr;
 }
 
 }
@@ -2521,6 +2627,7 @@ TerarkIndex::Factory::Build(
   auto getFixedPrefixLength = [](const TerarkIndex::KeyStat& ks, size_t cplen) {
     size_t keyCount = ks.prefix.m_cnt_sum;
     size_t maxPrefixLen = std::min<size_t>(8, ks.minKeyLen - cplen);
+    double zipRatio = double(ks.entropyLen) / ks.sumKeyLen;
     size_t totalKeySize = ks.sumKeyLen - keyCount * cplen;
     size_t bestCost = totalKeySize;
     if (ks.minKeyLen != ks.maxKeyLen) {
@@ -2647,7 +2754,7 @@ TerarkIndex::Factory::Build(
         }
         prefixCost = bit_count * 21 / 16;
       }
-      size_t suffixCost = totalKeySize - i * keyCount;
+      size_t suffixCost = (totalKeySize - i * keyCount) * zipRatio;
       if (ks.minSuffixLen != ks.maxSuffixLen) {
         suffixCost += keyCount;
       }
@@ -2818,24 +2925,35 @@ public:
 };
 
 unique_ptr<TerarkIndex> TerarkIndex::LoadMemory(fstring mem) {
-  auto header = (const TerarkIndexHeader*)mem.data();
   valvec<unique_ptr<TerarkIndex>> index_vec;
   size_t offset = 0;
   do {
-    size_t idx = g_TerarkIndexFactroy.find_i(header->class_name);
+    if (mem.size() - offset < sizeof(TerarkIndexFooter)) {
+      throw std::invalid_argument("TerarkIndex::LoadMemory(): Bad mem size");
+    }
+    auto& footer = ((const TerarkIndexFooter*)(mem.data() + mem.size() - offset))[-1];
+    auto crc = terark::Crc32c_update(0, &footer, sizeof footer - sizeof(uint32_t));
+    if (crc != footer.footer_crc32) {
+      throw terark::BadCrc32cException("TerarkIndex::LoadMemory(): Bad footer crc",
+        footer.footer_crc32, crc);
+    }
+    size_t idx = g_TerarkIndexFactroy.find_i(fstring(footer.class_name, sizeof footer.class_name));
     if (idx >= g_TerarkIndexFactroy.end_i()) {
+      std::string class_name(footer.class_name, sizeof footer.class_name);
       throw std::invalid_argument(
         std::string("TerarkIndex::LoadMemory(): Unknown class: ")
-        + header->class_name);
+        + class_name.c_str());
     }
     TerarkIndex::Factory* factory = g_TerarkIndexFactroy.val(idx).get();
-    index_vec.emplace_back(factory->LoadMemory(mem));
-    offset += header->file_size;
+    size_t index_size = footer.footer_size + align_up(footer.common_size, 8) + footer.prefix_size + footer.suffix_size;
+    index_vec.emplace_back(factory->LoadMemory(mem.substr(mem.size() - index_size)));
+    offset += index_size;
   } while (offset < mem.size());
   if (index_vec.size() == 1) {
     return std::move(index_vec.front());
   }
   else {
+    std::reverse(index_vec.begin(), index_vec.end());
     // TODO TerarkUnionIndex
     return nullptr;
   }
@@ -2851,7 +2969,7 @@ struct StringHolder {
     return fstring{ str, sizeof(str) };
   }
 };
-#define _G(name,i) ((i)<sizeof(#name)?#name[i]:0)
+#define _G(name,i) ((i)<sizeof(#name)?#name[i]:' ')
 #define NAME(s) StringHolder<                   \
   _G(s, 0),_G(s, 1),_G(s, 2),_G(s, 3),_G(s, 4), \
   _G(s, 5),_G(s, 6),_G(s, 7),_G(s, 8),_G(s, 9), \

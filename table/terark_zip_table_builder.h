@@ -223,6 +223,7 @@ private:
   BlockBuilder range_del_block_;
   fstrvec valueBuf_; // collect multiple values for one key
   PipelineProcessor pipeline_;
+  freq_hist_o1 key_freq_;
   freq_hist_o1 freq_;
   uint64_t next_freq_size_ = 1ULL << 20;
   bool waitInited_ = false;
