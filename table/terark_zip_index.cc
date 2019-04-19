@@ -34,27 +34,8 @@ using namespace terark;
 static const uint64_t g_terark_index_prefix_seed = 0x505f6b7261726554ull; // echo Terark_P | od -t x8
 static const uint64_t g_terark_index_suffix_seed = 0x535f6b7261726554ull; // echo Terark_S | od -t x8
 
-// TODO new impl
-typedef rank_select_fewzero<uint32_t> rank_select_fewzero_1;
-typedef rank_select_fewzero<uint32_t> rank_select_fewzero_2;
-typedef rank_select_fewzero<uint32_t> rank_select_fewzero_3;
-typedef rank_select_fewzero<uint32_t> rank_select_fewzero_4;
-typedef rank_select_fewzero<uint64_t> rank_select_fewzero_5;
-typedef rank_select_fewzero<uint64_t> rank_select_fewzero_6;
-typedef rank_select_fewzero<uint64_t> rank_select_fewzero_7;
-typedef rank_select_fewzero<uint64_t> rank_select_fewzero_8;
-typedef rank_select_fewone<uint32_t> rank_select_fewone_1;
-typedef rank_select_fewone<uint32_t> rank_select_fewone_2;
-typedef rank_select_fewone<uint32_t> rank_select_fewone_3;
-typedef rank_select_fewone<uint32_t> rank_select_fewone_4;
-typedef rank_select_fewone<uint64_t> rank_select_fewone_5;
-typedef rank_select_fewone<uint64_t> rank_select_fewone_6;
-typedef rank_select_fewone<uint64_t> rank_select_fewone_7;
-typedef rank_select_fewone<uint64_t> rank_select_fewone_8;
-
 template<class RankSelect> struct RankSelectNeedHint : public std::false_type {};
-template<class T> struct RankSelectNeedHint<rank_select_fewzero<T>> : public std::true_type {};
-template<class T> struct RankSelectNeedHint<rank_select_fewone<T>> : public std::true_type {};
+template<size_t P, size_t W> struct RankSelectNeedHint<rank_select_few<P, W>> : public std::true_type {};
 
 //// -- fast zero-seq-len
 //template<class RankSelect>
@@ -122,6 +103,16 @@ struct TerarkIndexFooter {
   uint16_t  format_version;
   uint16_t  footer_size;
   uint32_t  footer_crc32;
+};
+
+struct IndexUintPrefixHeader {
+  uint8_t   key_length;
+  uint8_t   padding_1;
+  uint16_t  format_version;
+  uint32_t  padding_4;
+  uint64_t  min_value;
+  uint64_t  max_value;
+  uint64_t  rank_select_size;
 };
 
 TerarkIndex::~TerarkIndex() {}
@@ -949,31 +940,31 @@ namespace index_detail {
   //        NestLoudsTrieDAWG_SE_512_64         
   //        NestLoudsTrieDAWG_SE_512_64_FL      
   //      AscendingUintPrefix<>
-  //        rank_select_fewzero_1
-  //        rank_select_fewzero_2
-  //        rank_select_fewzero_3
-  //        rank_select_fewzero_4
-  //        rank_select_fewzero_5
-  //        rank_select_fewzero_6
-  //        rank_select_fewzero_7
-  //        rank_select_fewzero_8
-  //        rank_select_fewone_1
-  //        rank_select_fewone_2
-  //        rank_select_fewone_3
-  //        rank_select_fewone_4
-  //        rank_select_fewone_5
-  //        rank_select_fewone_6
-  //        rank_select_fewone_7
-  //        rank_select_fewone_8
+  //        rank_select_fewzero<1>
+  //        rank_select_fewzero<2>
+  //        rank_select_fewzero<3>
+  //        rank_select_fewzero<4>
+  //        rank_select_fewzero<5>
+  //        rank_select_fewzero<6>
+  //        rank_select_fewzero<7>
+  //        rank_select_fewzero<8>
+  //        rank_select_fewone<1>
+  //        rank_select_fewone<2>
+  //        rank_select_fewone<3>
+  //        rank_select_fewone<4>
+  //        rank_select_fewone<5>
+  //        rank_select_fewone<6>
+  //        rank_select_fewone<7>
+  //        rank_select_fewone<8>
   //      NonDescendingUintPrefix<>
-  //        rank_select_fewone_1
-  //        rank_select_fewone_2
-  //        rank_select_fewone_3
-  //        rank_select_fewone_4
-  //        rank_select_fewone_5
-  //        rank_select_fewone_6
-  //        rank_select_fewone_7
-  //        rank_select_fewone_8
+  //        rank_select_fewone<1>
+  //        rank_select_fewone<2>
+  //        rank_select_fewone<3>
+  //        rank_select_fewone<4>
+  //        rank_select_fewone<5>
+  //        rank_select_fewone<6>
+  //        rank_select_fewone<7>
+  //        rank_select_fewone<8>
   //    AscendingUintPrefix<>
   //      rank_select_allone
   //      rank_select_il_256_32
@@ -1303,9 +1294,30 @@ namespace index_detail {
     }
 
     bool Load(fstring mem) override {
-      return false;
+      if (mem.size() < sizeof(IndexUintPrefixHeader)) {
+        return false;
+      }
+      auto header = reinterpret_cast<const IndexUintPrefixHeader*>(mem.data());
+      if (mem.size() != sizeof(IndexUintPrefixHeader) + header->rank_select_size) {
+        return false;
+      }
+      key_length = header->key_length;
+      min_value = header->min_value;
+      max_value = header->max_value;
+      rank_select.risk_mmap_from((byte_t*)mem.data() + sizeof(IndexUintPrefixHeader), header->rank_select_size);
+      flags.is_user_mem = true;
+      return true;
     }
     void Save(std::function<void(const void*, size_t)> append) const override {
+      IndexUintPrefixHeader header;
+      memset(&header, 0, sizeof header);
+      header.format_version = 0;
+      header.key_length = key_length;
+      header.min_value = min_value;
+      header.max_value = max_value;
+      header.rank_select_size = rank_select.mem_size();
+      append(&header, sizeof header);
+      append(rank_select.data(), rank_select.mem_size());
     }
 
   private:
@@ -1521,9 +1533,30 @@ namespace index_detail {
     }
 
     bool Load(fstring mem) override {
-      return false;
+      if (mem.size() < sizeof(IndexUintPrefixHeader)) {
+        return false;
+      }
+      auto header = reinterpret_cast<const IndexUintPrefixHeader*>(mem.data());
+      if (mem.size() != sizeof(IndexUintPrefixHeader) + header->rank_select_size) {
+        return false;
+      }
+      key_length = header->key_length;
+      min_value = header->min_value;
+      max_value = header->max_value;
+      rank_select.risk_mmap_from((byte_t*)mem.data() + sizeof(IndexUintPrefixHeader), header->rank_select_size);
+      flags.is_user_mem = true;
+      return true;
     }
     void Save(std::function<void(const void*, size_t)> append) const override {
+      IndexUintPrefixHeader header;
+      memset(&header, 0, sizeof header);
+      header.format_version = 0;
+      header.key_length = key_length;
+      header.min_value = min_value;
+      header.max_value = max_value;
+      header.rank_select_size = rank_select.mem_size();
+      append(&header, sizeof header);
+      append(rank_select.data(), rank_select.mem_size());
     }
 
   private:
@@ -1911,7 +1944,7 @@ namespace index_detail {
       *this = std::move(*other);
       delete other;
     }
-    IndexBlobStoreSuffix(BlobStoreType* store, AutoGrownMemIO& mem) {
+    IndexBlobStoreSuffix(BlobStoreType* store, FileMemIO& mem) {
       store_.swap(*store);
       memory_.swap(mem);
       delete store;
@@ -1924,7 +1957,7 @@ namespace index_detail {
     }
 
     BlobStoreType store_;
-    AutoGrownMemIO memory_;
+    FileMemIO memory_;
 
     size_t TotalKeySize() const {
       return store_.total_data_size();
@@ -1998,20 +2031,19 @@ namespace index_detail {
     rs.resize(info.max_value - info.min_value + 1);
   }
 
-  template<class T, class InputBufferType>
+  template<size_t P, size_t W, class InputBufferType>
   void AscendingUintPrefixFillRankSelect(
     const UintPrefixBuildInfo& info,
     const TerarkIndex::KeyStat& ks,
-    rank_select_fewone<T> &rs, InputBufferType& input) {
-    // TODO
-  }
-
-  template<class T, class InputBufferType>
-  void AscendingUintPrefixFillRankSelect(
-    const UintPrefixBuildInfo& info,
-    const TerarkIndex::KeyStat& ks,
-    rank_select_fewzero<T> &rs, InputBufferType& input) {
-    // TODO
+    rank_select_few<P, W> &rs, InputBufferType& input) {
+    rank_select_few_builder<P, W> builder(info.bit_count0, info.bit_count1, ks.minKey > ks.maxKey);
+    for (size_t seq_id = 0; seq_id < info.key_count; ++seq_id) {
+      auto key = input.next();
+      assert(key.size() == info.key_length);
+      auto cur = ReadBigEndianUint64(key);
+      builder.insert(cur - info.min_value);
+    }
+    builder.finish(&rs);
   }
 
   template<class RankSelect, class InputBufferType>
@@ -2072,20 +2104,43 @@ namespace index_detail {
     rs.build_cache(true, true);
   }
 
-  template<class T, class InputBufferType>
+  template<size_t P, size_t W, class InputBufferType>
   void NonDescendingUintPrefixFillRankSelect(
     const UintPrefixBuildInfo& info,
     const TerarkIndex::KeyStat& ks,
-    rank_select_fewone<T> &rs, InputBufferType& input) {
-    // TODO
-  }
-
-  template<class T, class InputBufferType>
-  void NonDescendingUintPrefixFillRankSelect(
-    const UintPrefixBuildInfo& info,
-    const TerarkIndex::KeyStat& ks,
-    rank_select_fewzero<T> &rs, InputBufferType& input) {
-    // TODO
+    rank_select_few<P, W> &rs, InputBufferType& input) {
+    bool isReverse = ks.minKey > ks.maxKey;
+    rank_select_few_builder<P, W> builder(info.bit_count0, info.bit_count1, isReverse);
+    size_t bit_count = info.bit_count0 + info.bit_count1;
+    if (!isReverse) {
+      size_t pos = 0;
+      uint64_t last = info.min_value;
+      for (size_t seq_id = 0; seq_id < info.key_count; ++seq_id) {
+        auto key = input.next();
+        assert(key.size() == info.key_length);
+        auto cur = ReadBigEndianUint64(key);
+        pos += cur - last;
+        last = cur;
+        builder.insert(pos++);
+      }
+      assert(last = info.max_value);
+      assert(pos == bit_count);
+    }
+    else {
+      size_t pos = bit_count - 1;
+      uint64_t last = info.max_value;
+      for (size_t seq_id = 0; seq_id < info.key_count; ++seq_id) {
+        auto key = input.next();
+        assert(key.size() == info.key_length);
+        auto cur = ReadBigEndianUint64(key);
+        pos -= last - cur;
+        last = cur;
+        builder.insert(--pos);
+      }
+      assert(last = info.min_value);
+      assert(pos == 0);
+    }
+    builder.finish(&rs);
   }
 
   template<class RankSelect, class InputBufferType>
@@ -2118,28 +2173,28 @@ namespace index_detail {
     input.rewind();
     switch (info.type) {
     case UintPrefixBuildInfo::asc_few_zero_1:
-      return BuildAscendingUintPrefix<rank_select_fewzero_1>(
+      return BuildAscendingUintPrefix<rank_select_fewzero<1>>(
         input, tzopt, ks, info, ioption);
     case UintPrefixBuildInfo::asc_few_zero_2:
-      return BuildAscendingUintPrefix<rank_select_fewzero_2>(
+      return BuildAscendingUintPrefix<rank_select_fewzero<2>>(
         input, tzopt, ks, info, ioption);
     case UintPrefixBuildInfo::asc_few_zero_3:
-      return BuildAscendingUintPrefix<rank_select_fewzero_3>(
+      return BuildAscendingUintPrefix<rank_select_fewzero<3>>(
         input, tzopt, ks, info, ioption);
     case UintPrefixBuildInfo::asc_few_zero_4:
-      return BuildAscendingUintPrefix<rank_select_fewzero_4>(
+      return BuildAscendingUintPrefix<rank_select_fewzero<4>>(
         input, tzopt, ks, info, ioption);
     case UintPrefixBuildInfo::asc_few_zero_5:
-      return BuildAscendingUintPrefix<rank_select_fewzero_5>(
+      return BuildAscendingUintPrefix<rank_select_fewzero<5>>(
         input, tzopt, ks, info, ioption);
     case UintPrefixBuildInfo::asc_few_zero_6:
-      return BuildAscendingUintPrefix<rank_select_fewzero_6>(
+      return BuildAscendingUintPrefix<rank_select_fewzero<6>>(
         input, tzopt, ks, info, ioption);
     case UintPrefixBuildInfo::asc_few_zero_7:
-      return BuildAscendingUintPrefix<rank_select_fewzero_7>(
+      return BuildAscendingUintPrefix<rank_select_fewzero<7>>(
         input, tzopt, ks, info, ioption);
     case UintPrefixBuildInfo::asc_few_zero_8:
-      return BuildAscendingUintPrefix<rank_select_fewzero_8>(
+      return BuildAscendingUintPrefix<rank_select_fewzero<8>>(
         input, tzopt, ks, info, ioption);
     case UintPrefixBuildInfo::asc_allone:
       return BuildAscendingUintPrefix<rank_select_allone>(
@@ -2151,28 +2206,28 @@ namespace index_detail {
       return BuildAscendingUintPrefix<rank_select_se_512_64>(
         input, tzopt, ks, info, ioption);
     case UintPrefixBuildInfo::asc_few_one_1:
-      return BuildAscendingUintPrefix<rank_select_fewone_1>(
+      return BuildAscendingUintPrefix<rank_select_fewone<1>>(
         input, tzopt, ks, info, ioption);
     case UintPrefixBuildInfo::asc_few_one_2:
-      return BuildAscendingUintPrefix<rank_select_fewone_2>(
+      return BuildAscendingUintPrefix<rank_select_fewone<2>>(
         input, tzopt, ks, info, ioption);
     case UintPrefixBuildInfo::asc_few_one_3:
-      return BuildAscendingUintPrefix<rank_select_fewone_3>(
+      return BuildAscendingUintPrefix<rank_select_fewone<3>>(
         input, tzopt, ks, info, ioption);
     case UintPrefixBuildInfo::asc_few_one_4:
-      return BuildAscendingUintPrefix<rank_select_fewone_4>(
+      return BuildAscendingUintPrefix<rank_select_fewone<4>>(
         input, tzopt, ks, info, ioption);
     case UintPrefixBuildInfo::asc_few_one_5:
-      return BuildAscendingUintPrefix<rank_select_fewone_5>(
+      return BuildAscendingUintPrefix<rank_select_fewone<5>>(
         input, tzopt, ks, info, ioption);
     case UintPrefixBuildInfo::asc_few_one_6:
-      return BuildAscendingUintPrefix<rank_select_fewone_6>(
+      return BuildAscendingUintPrefix<rank_select_fewone<6>>(
         input, tzopt, ks, info, ioption);
     case UintPrefixBuildInfo::asc_few_one_7:
-      return BuildAscendingUintPrefix<rank_select_fewone_7>(
+      return BuildAscendingUintPrefix<rank_select_fewone<7>>(
         input, tzopt, ks, info, ioption);
     case UintPrefixBuildInfo::asc_few_one_8:
-      return BuildAscendingUintPrefix<rank_select_fewone_8>(
+      return BuildAscendingUintPrefix<rank_select_fewone<8>>(
         input, tzopt, ks, info, ioption);
     case UintPrefixBuildInfo::non_desc_il_256:
       assert(ks.maxKeyLen > commonPrefixLen(ks.minKey, ks.maxKey) + info.key_length);
@@ -2184,35 +2239,35 @@ namespace index_detail {
         input, tzopt, ks, info, ioption);
     case UintPrefixBuildInfo::non_desc_few_one_1:
       assert(ks.maxKeyLen > commonPrefixLen(ks.minKey, ks.maxKey) + info.key_length);
-      return BuildNonDescendingUintPrefix<rank_select_fewone_1>(
+      return BuildNonDescendingUintPrefix<rank_select_fewone<1>>(
         input, tzopt, ks, info, ioption);
     case UintPrefixBuildInfo::non_desc_few_one_2:
       assert(ks.maxKeyLen > commonPrefixLen(ks.minKey, ks.maxKey) + info.key_length);
-      return BuildNonDescendingUintPrefix<rank_select_fewone_2>(
+      return BuildNonDescendingUintPrefix<rank_select_fewone<2>>(
         input, tzopt, ks, info, ioption);
     case UintPrefixBuildInfo::non_desc_few_one_3:
       assert(ks.maxKeyLen > commonPrefixLen(ks.minKey, ks.maxKey) + info.key_length);
-      return BuildNonDescendingUintPrefix<rank_select_fewone_3>(
+      return BuildNonDescendingUintPrefix<rank_select_fewone<3>>(
         input, tzopt, ks, info, ioption);
     case UintPrefixBuildInfo::non_desc_few_one_4:
       assert(ks.maxKeyLen > commonPrefixLen(ks.minKey, ks.maxKey) + info.key_length);
-      return BuildNonDescendingUintPrefix<rank_select_fewone_4>(
+      return BuildNonDescendingUintPrefix<rank_select_fewone<4>>(
         input, tzopt, ks, info, ioption);
     case UintPrefixBuildInfo::non_desc_few_one_5:
       assert(ks.maxKeyLen > commonPrefixLen(ks.minKey, ks.maxKey) + info.key_length);
-      return BuildNonDescendingUintPrefix<rank_select_fewone_6>(
+      return BuildNonDescendingUintPrefix<rank_select_fewone<6>>(
         input, tzopt, ks, info, ioption);
     case UintPrefixBuildInfo::non_desc_few_one_6:
       assert(ks.maxKeyLen > commonPrefixLen(ks.minKey, ks.maxKey) + info.key_length);
-      return BuildNonDescendingUintPrefix<rank_select_fewone_6>(
+      return BuildNonDescendingUintPrefix<rank_select_fewone<6>>(
         input, tzopt, ks, info, ioption);
     case UintPrefixBuildInfo::non_desc_few_one_7:
       assert(ks.maxKeyLen > commonPrefixLen(ks.minKey, ks.maxKey) + info.key_length);
-      return BuildNonDescendingUintPrefix<rank_select_fewone_7>(
+      return BuildNonDescendingUintPrefix<rank_select_fewone<7>>(
         input, tzopt, ks, info, ioption);
     case UintPrefixBuildInfo::non_desc_few_one_8:
       assert(ks.maxKeyLen > commonPrefixLen(ks.minKey, ks.maxKey) + info.key_length);
-      return BuildNonDescendingUintPrefix<rank_select_fewone_8>(
+      return BuildNonDescendingUintPrefix<rank_select_fewone<8>>(
         input, tzopt, ks, info, ioption);
     case UintPrefixBuildInfo::fail:
     default:
@@ -2418,13 +2473,14 @@ namespace index_detail {
       size_t numKeys, size_t sumKeyLen) {
     input.rewind();
     if (numKeys * 4 < sumKeyLen) {
-      AutoGrownMemIO memory;
+      FileMemIO memory;
       terark::ZipOffsetBlobStore::MyBuilder builder(128, memory);
       for (size_t i = 0; i < numKeys; ++i) {
         auto str = input.next();
         builder.addRecord(str);
       }
       builder.finish();
+      memory.shrink_to_fit();
       auto store = BlobStore::load_from_user_memory(fstring(memory.begin(), memory.size()));
       assert(dynamic_cast<ZipOffsetBlobStore*>(store) != nullptr);
       return new IndexBlobStoreSuffix<ZipOffsetBlobStore>(static_cast<ZipOffsetBlobStore*>(store), memory);
@@ -2457,7 +2513,7 @@ namespace index_detail {
       }
       zbuilder->finishSample();
       zbuilder->prepareDict();
-      AutoGrownMemIO memory;
+      FileMemIO memory;
       zbuilder->prepare(numKeys, memory);
       input.rewind();
       for (size_t i = 0; i < numKeys; ++i) {
@@ -2466,6 +2522,7 @@ namespace index_detail {
       }
       zbuilder->finish(DictZipBlobStore::ZipBuilder::FinishFreeDict);
       zbuilder.reset();
+      memory.shrink_to_fit();
       auto store = BlobStore::load_from_user_memory(fstring(memory.begin(), memory.size()));
       assert(dynamic_cast<DictZipBlobStore*>(store) != nullptr);
       return new IndexBlobStoreSuffix<DictZipBlobStore>(static_cast<DictZipBlobStore*>(store), memory);
@@ -2653,7 +2710,7 @@ TerarkIndex*
     if (ks.minKeyLen != ks.maxKeyLen) {
       bestCost += keyCount;
     }
-    size_t targetCost = bestCost * 10 / 6;
+    size_t targetCost = bestCost * 10 / 8;
     UintPrefixBuildInfo result = {
       0, 0, 0, 0, 0, 0, 0, UintPrefixBuildInfo::fail
     };
@@ -2681,20 +2738,28 @@ TerarkIndex*
       uint64_t diff = info.max_value - info.min_value;
       info.entry_count = entryCnt[i - 1];
       assert(diff >= info.entry_count);
+      size_t bit_count;
       if (info.entry_count == keyCount) {
         // ascending
         info.bit_count0 = diff - keyCount + 1;
         info.bit_count1 = keyCount;
+        bit_count = info.bit_count0 + info.bit_count1;
       }
       else {
         // non descending
-        if (keyCount + 1 > std::numeric_limits<uint64_t>::max() - diff) {
+        if (diff == std::numeric_limits<uint64_t>::max()) {
           info.bit_count0 = size_t(-1);
         }
         else {
-          info.bit_count0 = diff + keyCount + 1;
+          info.bit_count0 = diff + 1;
         }
         info.bit_count1 = keyCount;
+        if (keyCount + 1 > std::numeric_limits<uint64_t>::max() - diff) {
+          bit_count = size_t(-1);
+        }
+        else {
+          bit_count = diff + keyCount + 1;
+        }
       }
       size_t fewCount = info.bit_count0 / 100 + info.bit_count1 / 100;
       size_t prefixCost;
@@ -2705,26 +2770,26 @@ TerarkIndex*
       else if (info.entry_count * 2 < keyCount) {
         continue;
       }
-      else if (info.bit_count1 < fewCount && info.bit_count1 < (1ULL << 48)) {
-        if (diff < (1ULL << 8)) {
+      else if (bit_count != size_t(-1) && info.bit_count1 < fewCount && info.bit_count1 < (1ULL << 48)) {
+        if (bit_count < (1ULL << 8)) {
           info.type = info.entry_count == keyCount ? UintPrefixBuildInfo::asc_few_one_1 : UintPrefixBuildInfo::non_desc_few_one_1;
         }
-        else if (diff < (1ULL << 16)) {
+        else if (bit_count < (1ULL << 16)) {
           info.type = info.entry_count == keyCount ? UintPrefixBuildInfo::asc_few_one_2 : UintPrefixBuildInfo::non_desc_few_one_2;
         }
-        else if (diff < (1ULL << 24)) {
+        else if (bit_count < (1ULL << 24)) {
           info.type = info.entry_count == keyCount ? UintPrefixBuildInfo::asc_few_one_3 : UintPrefixBuildInfo::non_desc_few_one_3;
         }
-        else if (diff < (1ULL << 32)) {
+        else if (bit_count < (1ULL << 32)) {
           info.type = info.entry_count == keyCount ? UintPrefixBuildInfo::asc_few_one_4 : UintPrefixBuildInfo::non_desc_few_one_4;
         }
-        else if (diff < (1ULL << 40)) {
+        else if (bit_count < (1ULL << 40)) {
           info.type = info.entry_count == keyCount ? UintPrefixBuildInfo::asc_few_one_5 : UintPrefixBuildInfo::non_desc_few_one_5;
         }
-        else if (diff < (1ULL << 48)) {
+        else if (bit_count < (1ULL << 48)) {
           info.type = info.entry_count == keyCount ? UintPrefixBuildInfo::asc_few_one_6 : UintPrefixBuildInfo::non_desc_few_one_6;
         }
-        else if (diff < (1ULL << 56)) {
+        else if (bit_count < (1ULL << 56)) {
           info.type = info.entry_count == keyCount ? UintPrefixBuildInfo::asc_few_one_7 : UintPrefixBuildInfo::non_desc_few_one_7;
         }
         else {
@@ -2732,27 +2797,27 @@ TerarkIndex*
         }
         prefixCost = info.bit_count1 * sizeof(uint32_t) * 33 / 32;
       }
-      else if (info.bit_count0 < fewCount && info.bit_count0 < (1ULL << 48)) {
+      else if (bit_count != size_t(-1) && info.bit_count0 < fewCount && info.bit_count0 < (1ULL << 48)) {
         assert(info.entry_count == keyCount);
-        if (diff < (1ULL << 8)) {
+        if (bit_count < (1ULL << 8)) {
           info.type = UintPrefixBuildInfo::asc_few_zero_1;
         }
-        else if (diff < (1ULL << 16)) {
+        else if (bit_count < (1ULL << 16)) {
           info.type = UintPrefixBuildInfo::asc_few_zero_2;
         }
-        else if (diff < (1ULL << 24)) {
+        else if (bit_count < (1ULL << 24)) {
           info.type = UintPrefixBuildInfo::asc_few_zero_3;
         }
-        else if (diff < (1ULL << 32)) {
+        else if (bit_count < (1ULL << 32)) {
           info.type = UintPrefixBuildInfo::asc_few_zero_4;
         }
-        else if (diff < (1ULL << 40)) {
+        else if (bit_count < (1ULL << 40)) {
           info.type = UintPrefixBuildInfo::asc_few_zero_5;
         }
-        else if (diff < (1ULL << 48)) {
+        else if (bit_count < (1ULL << 48)) {
           info.type = UintPrefixBuildInfo::asc_few_zero_6;
         }
-        else if (diff < (1ULL << 56)) {
+        else if (bit_count < (1ULL << 56)) {
           info.type = UintPrefixBuildInfo::asc_few_zero_7;
         }
         else {
@@ -2899,6 +2964,9 @@ class TerarkUnionIndex : public TerarkIndex {
     }
   };
 public:
+  TerarkUnionIndex(valvec<unique_ptr<TerarkIndex>> index_vec) {
+
+  }
 
   fstring Name() const override {
     return "TerarkUnionIndex";
@@ -3049,35 +3117,35 @@ using PrefixComponentList = ComponentRegister<>
 ::reg<NAME(M_XL_256_FL ), 1, IndexNestLoudsTriePrefix<NestLoudsTrieDAWG_Mixed_XL_256_32_FL>>
 ::reg<NAME(SE_512_64   ), 1, IndexNestLoudsTriePrefix<NestLoudsTrieDAWG_SE_512_64         >>
 ::reg<NAME(SE_512_64_FL), 1, IndexNestLoudsTriePrefix<NestLoudsTrieDAWG_SE_512_64_FL      >>
-::reg<NAME(A_allone    ), 0, IndexAscendingUintPrefix<rank_select_allone   >>
-::reg<NAME(A_fewzero_1 ), 1, IndexAscendingUintPrefix<rank_select_fewzero_1>>
-::reg<NAME(A_fewzero_2 ), 1, IndexAscendingUintPrefix<rank_select_fewzero_2>>
-::reg<NAME(A_fewzero_3 ), 1, IndexAscendingUintPrefix<rank_select_fewzero_3>>
-::reg<NAME(A_fewzero_4 ), 1, IndexAscendingUintPrefix<rank_select_fewzero_4>>
-::reg<NAME(A_fewzero_5 ), 1, IndexAscendingUintPrefix<rank_select_fewzero_5>>
-::reg<NAME(A_fewzero_6 ), 1, IndexAscendingUintPrefix<rank_select_fewzero_6>>
-::reg<NAME(A_fewzero_7 ), 1, IndexAscendingUintPrefix<rank_select_fewzero_7>>
-::reg<NAME(A_fewzero_8 ), 1, IndexAscendingUintPrefix<rank_select_fewzero_8>>
+::reg<NAME(A_allone    ), 0, IndexAscendingUintPrefix<rank_select_allone    >>
+::reg<NAME(A_fewzero_1 ), 1, IndexAscendingUintPrefix<rank_select_fewzero<1>>>
+::reg<NAME(A_fewzero_2 ), 1, IndexAscendingUintPrefix<rank_select_fewzero<2>>>
+::reg<NAME(A_fewzero_3 ), 1, IndexAscendingUintPrefix<rank_select_fewzero<3>>>
+::reg<NAME(A_fewzero_4 ), 1, IndexAscendingUintPrefix<rank_select_fewzero<4>>>
+::reg<NAME(A_fewzero_5 ), 1, IndexAscendingUintPrefix<rank_select_fewzero<5>>>
+::reg<NAME(A_fewzero_6 ), 1, IndexAscendingUintPrefix<rank_select_fewzero<6>>>
+::reg<NAME(A_fewzero_7 ), 1, IndexAscendingUintPrefix<rank_select_fewzero<7>>>
+::reg<NAME(A_fewzero_8 ), 1, IndexAscendingUintPrefix<rank_select_fewzero<8>>>
 ::reg<NAME(A_il_256_32 ), 0, IndexAscendingUintPrefix<rank_select_il_256_32>>
 ::reg<NAME(A_se_512_64 ), 0, IndexAscendingUintPrefix<rank_select_se_512_64>>
-::reg<NAME(A_fewone_1  ), 1, IndexAscendingUintPrefix<rank_select_fewone_1 >>
-::reg<NAME(A_fewone_2  ), 1, IndexAscendingUintPrefix<rank_select_fewone_2 >>
-::reg<NAME(A_fewone_3  ), 1, IndexAscendingUintPrefix<rank_select_fewone_3 >>
-::reg<NAME(A_fewone_4  ), 1, IndexAscendingUintPrefix<rank_select_fewone_4 >>
-::reg<NAME(A_fewone_5  ), 1, IndexAscendingUintPrefix<rank_select_fewone_5 >>
-::reg<NAME(A_fewone_6  ), 1, IndexAscendingUintPrefix<rank_select_fewone_6 >>
-::reg<NAME(A_fewone_7  ), 1, IndexAscendingUintPrefix<rank_select_fewone_7 >>
-::reg<NAME(A_fewone_8  ), 1, IndexAscendingUintPrefix<rank_select_fewone_8 >>
+::reg<NAME(A_fewone_1  ), 1, IndexAscendingUintPrefix<rank_select_fewone<1>>>
+::reg<NAME(A_fewone_2  ), 1, IndexAscendingUintPrefix<rank_select_fewone<2>>>
+::reg<NAME(A_fewone_3  ), 1, IndexAscendingUintPrefix<rank_select_fewone<3>>>
+::reg<NAME(A_fewone_4  ), 1, IndexAscendingUintPrefix<rank_select_fewone<4>>>
+::reg<NAME(A_fewone_5  ), 1, IndexAscendingUintPrefix<rank_select_fewone<5>>>
+::reg<NAME(A_fewone_6  ), 1, IndexAscendingUintPrefix<rank_select_fewone<6>>>
+::reg<NAME(A_fewone_7  ), 1, IndexAscendingUintPrefix<rank_select_fewone<7>>>
+::reg<NAME(A_fewone_8  ), 1, IndexAscendingUintPrefix<rank_select_fewone<8>>>
 ::reg<NAME(ND_il_256_32), 0, IndexNonDescendingUintPrefix<rank_select_il_256_32>>
 ::reg<NAME(ND_se_512_64), 0, IndexNonDescendingUintPrefix<rank_select_se_512_64>>
-::reg<NAME(ND_fewone_1 ), 1, IndexNonDescendingUintPrefix<rank_select_fewone_1 >>
-::reg<NAME(ND_fewone_2 ), 1, IndexNonDescendingUintPrefix<rank_select_fewone_2 >>
-::reg<NAME(ND_fewone_3 ), 1, IndexNonDescendingUintPrefix<rank_select_fewone_3 >>
-::reg<NAME(ND_fewone_4 ), 1, IndexNonDescendingUintPrefix<rank_select_fewone_4 >>
-::reg<NAME(ND_fewone_5 ), 1, IndexNonDescendingUintPrefix<rank_select_fewone_5 >>
-::reg<NAME(ND_fewone_6 ), 1, IndexNonDescendingUintPrefix<rank_select_fewone_6 >>
-::reg<NAME(ND_fewone_7 ), 1, IndexNonDescendingUintPrefix<rank_select_fewone_7 >>
-::reg<NAME(ND_fewone_8 ), 1, IndexNonDescendingUintPrefix<rank_select_fewone_8 >>
+::reg<NAME(ND_fewone_1 ), 1, IndexNonDescendingUintPrefix<rank_select_fewone<1>>>
+::reg<NAME(ND_fewone_2 ), 1, IndexNonDescendingUintPrefix<rank_select_fewone<2>>>
+::reg<NAME(ND_fewone_3 ), 1, IndexNonDescendingUintPrefix<rank_select_fewone<3>>>
+::reg<NAME(ND_fewone_4 ), 1, IndexNonDescendingUintPrefix<rank_select_fewone<4>>>
+::reg<NAME(ND_fewone_5 ), 1, IndexNonDescendingUintPrefix<rank_select_fewone<5>>>
+::reg<NAME(ND_fewone_6 ), 1, IndexNonDescendingUintPrefix<rank_select_fewone<6>>>
+::reg<NAME(ND_fewone_7 ), 1, IndexNonDescendingUintPrefix<rank_select_fewone<7>>>
+::reg<NAME(ND_fewone_8 ), 1, IndexNonDescendingUintPrefix<rank_select_fewone<8>>>
 ::list;
 
 using SuffixComponentList = ComponentRegister<>
