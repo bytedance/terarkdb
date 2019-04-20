@@ -402,6 +402,10 @@ try {
       }
       else {
         AddLastUserKey();
+        auto& sumKeyLen = prefixBuildInfos_.back()->sumKeyLen;
+        for (auto &build : prefixBuildInfos_.back()->build) {
+          sumKeyLen += build->stat.sumKeyLen;
+        }
         BuildIndex(*prefixBuildInfos_.back()->build.back(), *prefixBuildInfos_.back());
         BuildStore(*prefixBuildInfos_.back(), nullptr, BuildStoreInit);
       }
@@ -655,11 +659,9 @@ std::future<Status> TerarkZipTableBuilder::Async(std::function<Status()> func) {
 
 void TerarkZipTableBuilder::BuildIndex(BuildIndexParams& param, KeyValueStatus& kvs) {
   param.stat.prefix.finish();
-  param.stat.diff.finish();
   key_freq_.finish();
   param.stat.entropyLen = freq_hist_o1::estimate_size(key_freq_.histogram());
   key_freq_ = freq_hist_o1();
-  assert(param.stat.prefix.m_cnt_sum == param.stat.diff.m_cnt_sum);
   assert(param.stat.prefix.m_cnt_sum > 0);
 #if defined(TerocksPrivateCode)
   if (kvs.split == 0) {
@@ -2387,12 +2389,23 @@ void TerarkZipTableBuilder::AddPrevUserKey(size_t samePrefix) {
   valueBuf_.erase_all();
   auto& currentBuildInfo = *prefixBuildInfos_.back();
   ++currentBuildInfo.numKeys;
-  currentBuildInfo.sumKeyLen += prevUserKey_.size();
   currentBuildInfo.build.back()->data.writer << prevUserKey_;
   currentBuildInfo.valueBits.push_back(false);
   size_t prefixSize = std::max(samePrefix, prevSamePrefix_) + 1;
   ++currentStat_->prefix[std::min(prefixSize, prevUserKey_.size())];
-  ++currentStat_->diff[samePrefix];
+  currentStat_->sumKeyLen += prevUserKey_.size();
+  auto& diff = currentStat_->diff;
+  if (diff.size() < samePrefix) {
+      diff.resize(samePrefix);
+  }
+  for (size_t i = 0; i < samePrefix; ++i) {
+    ++diff[i].cur;
+    ++diff[i].cnt;
+  }
+  for (size_t i = samePrefix; i < diff.size(); ++i) {
+    diff[i].max = std::max(diff[i].cur, diff[i].max);
+    diff[i].cur = 0;
+  }
   prevSamePrefix_ = samePrefix;
   key_freq_.add_record(prevUserKey_);
 }

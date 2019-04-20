@@ -291,7 +291,7 @@ namespace index_detail {
   template<class Prefix>
   struct VirtualPrefixWrapper : public VirtualPrefixBase, public Prefix {
     using IteratorStorage = typename Prefix::IteratorStorage;
-    VirtualPrefixWrapper(Prefix *prefix) : Prefix(prefix) {}
+    VirtualPrefixWrapper(Prefix&& prefix) : Prefix(std::move(prefix)) {}
 
     size_t IteratorStorageSize() const override {
       return Prefix::IteratorStorageSize();
@@ -357,13 +357,17 @@ namespace index_detail {
   struct VirtualPrefix : public PrefixBase {
     typedef void* IteratorStorage;
     template<class Prefix>
-    VirtualPrefix(Prefix* p) {
-      prefix = new VirtualPrefixWrapper<Prefix>(p);
+    VirtualPrefix(Prefix&& p) {
+      prefix = new VirtualPrefixWrapper<Prefix>(std::move(p));
     }
-    template<class Prefix>
-    VirtualPrefix(Prefix&& p) : VirtualPrefix(&p) {}
+    VirtualPrefix(VirtualPrefix&& o) {
+      prefix = o.prefix;
+      o.prefix = nullptr;
+    }
     ~VirtualPrefix() {
-      delete prefix;
+      if (prefix != nullptr) {
+        delete prefix;
+      }
     }
     VirtualPrefixBase* prefix;
 
@@ -450,7 +454,7 @@ namespace index_detail {
   template<class Suffix>
   struct VirtualSuffixWrapper : public VirtualSuffixBase, public Suffix {
     using IteratorStorage = typename Suffix::IteratorStorage;
-    VirtualSuffixWrapper(Suffix *suffix) : Suffix(suffix) {}
+    VirtualSuffixWrapper(Suffix&& suffix) : Suffix(std::move(suffix)) {}
 
     size_t IteratorStorageSize() const override {
       return Suffix::IteratorStorageSize();
@@ -492,13 +496,17 @@ namespace index_detail {
   struct VirtualSuffix : public SuffixBase {
     typedef void* IteratorStorage;
     template<class Suffix>
-    VirtualSuffix(Suffix* s) {
-      suffix = new VirtualSuffixWrapper<Suffix>(s);
+    VirtualSuffix(Suffix&& s) {
+      suffix = new VirtualSuffixWrapper<Suffix>(std::move(s));
     }
-    template<class Suffix>
-    VirtualSuffix(Suffix&& s) : VirtualSuffix(&s) {}
+    VirtualSuffix(VirtualSuffix&& o) {
+      suffix = o.suffix;
+      o.suffix = nullptr;
+    }
     ~VirtualSuffix() {
-      delete suffix;
+      if (suffix != nullptr) {
+        delete suffix;
+      }
     }
     VirtualSuffixBase* suffix;
 
@@ -2124,7 +2132,7 @@ namespace index_detail {
         builder.insert(pos++);
       }
       assert(last = info.max_value);
-      assert(pos == bit_count);
+      assert(pos + 1 == bit_count);
     }
     else {
       size_t pos = bit_count - 1;
@@ -2342,32 +2350,32 @@ namespace index_detail {
       if (type.endsWith("IL_256_32") || type.endsWith("IL_256")) {
         return NestLoudsTriePrefixProcess<NestLoudsTrieDAWG_IL_256>(cfg, keyVec);
       }
-      if (type.endsWith("IL_256_32_FL")) {
+      if (type.endsWith("IL_256_32_FL") || type.endsWith("IL_256_FL")) {
         return NestLoudsTriePrefixProcess<NestLoudsTrieDAWG_IL_256_32_FL>(cfg, keyVec);
       }
       if (type.endsWith("Mixed_SE_512")) {
         return NestLoudsTriePrefixProcess<NestLoudsTrieDAWG_Mixed_SE_512>(cfg, keyVec);
       }
-      if (type.endsWith("Mixed_SE_512_32_FL")) {
+      if (type.endsWith("Mixed_SE_512_32_FL") || type.endsWith("Mixed_SE_512_FL")) {
         return NestLoudsTriePrefixProcess<NestLoudsTrieDAWG_Mixed_SE_512_32_FL>(cfg, keyVec);
       }
       if (type.endsWith("Mixed_IL_256")) {
         return NestLoudsTriePrefixProcess<NestLoudsTrieDAWG_Mixed_IL_256>(cfg, keyVec);
       }
-      if (type.endsWith("Mixed_IL_256_32_FL")) {
+      if (type.endsWith("Mixed_IL_256_32_FL") || type.endsWith("Mixed_IL_256_FL")) {
         return NestLoudsTriePrefixProcess<NestLoudsTrieDAWG_Mixed_IL_256_32_FL>(cfg, keyVec);
       }
       if (type.endsWith("Mixed_XL_256")) {
         return NestLoudsTriePrefixProcess<NestLoudsTrieDAWG_Mixed_XL_256>(cfg, keyVec);
       }
-      if (type.endsWith("Mixed_XL_256_32_FL")) {
+      if (type.endsWith("Mixed_XL_256_32_FL") || type.endsWith("Mixed_XL_256_FL")) {
         return NestLoudsTriePrefixProcess<NestLoudsTrieDAWG_Mixed_XL_256_32_FL>(cfg, keyVec);
       }
     }
-    if (type.endsWith("SE_512_64")) {
+    if (type.endsWith("SE_512_64") || type.endsWith("SE_512")) {
       return NestLoudsTriePrefixProcess<NestLoudsTrieDAWG_SE_512_64>(cfg, keyVec);
     }
-    if (type.endsWith("SE_512_64_FL")) {
+    if (type.endsWith("SE_512_64_FL") || type.endsWith("SE_512_FL")) {
       return NestLoudsTriePrefixProcess<NestLoudsTrieDAWG_SE_512_64_FL>(cfg, keyVec);
     }
     if (keyVec.mem_size() < 0x1E0000000) {
@@ -2470,10 +2478,10 @@ namespace index_detail {
   SuffixBase*
     BuildBlobStoreSuffix(
       InputBufferType& input,
-      size_t numKeys, size_t sumKeyLen) {
+      size_t numKeys, size_t sumKeyLen, double zipRatio) {
     input.rewind();
-    if (numKeys * 4 < sumKeyLen) {
-      FileMemIO memory;
+    FileMemIO memory;
+    if ((numKeys * 4 + sumKeyLen) * zipRatio > sumKeyLen) {
       terark::ZipOffsetBlobStore::MyBuilder builder(128, memory);
       for (size_t i = 0; i < numKeys; ++i) {
         auto str = input.next();
@@ -2499,7 +2507,7 @@ namespace index_detail {
       zbuilder.reset(DictZipBlobStore::createZipBuilder(dzopt));
 
       std::mt19937_64 randomGenerator;
-      uint64_t upperBoundSample = uint64_t(randomGenerator.max() * 0.1 / numKeys);
+      uint64_t upperBoundSample = uint64_t(randomGenerator.max() * 0.1);
       uint64_t sampleLenSum = 0;
       for (size_t i = 0; i < numKeys; ++i) {
         auto str = input.next();
@@ -2523,7 +2531,8 @@ namespace index_detail {
       zbuilder->finish(DictZipBlobStore::ZipBuilder::FinishFreeDict);
       zbuilder.reset();
       memory.shrink_to_fit();
-      auto store = BlobStore::load_from_user_memory(fstring(memory.begin(), memory.size()));
+      auto store = AbstractBlobStore::load_from_user_memory(
+        fstring(memory.begin(), memory.size()), AbstractBlobStore::Dictionary());
       assert(dynamic_cast<DictZipBlobStore*>(store) != nullptr);
       return new IndexBlobStoreSuffix<DictZipBlobStore>(static_cast<DictZipBlobStore*>(store), memory);
     }
@@ -2559,13 +2568,15 @@ TerarkIndex*
     NativeDataInput<InputBuffer> &reader;
     size_t cplen;
     size_t count;
+    size_t pos;
     valvec<byte_t> last;
     valvec<byte_t> buffer;
     size_t lastSamePrefix;
     fstring next() {
       size_t maxSamePrefix;
-      if (--count == 0) {
+      if (++pos == count) {
         maxSamePrefix = lastSamePrefix + 1;
+        last.swap(buffer);
       }
       else {
         reader >> buffer;
@@ -2574,32 +2585,35 @@ TerarkIndex*
         maxSamePrefix = std::max(samePrefix, lastSamePrefix) + 1;
         lastSamePrefix = samePrefix;
       }
-      return { last.data() + cplen, ptrdiff_t(std::min(maxSamePrefix, last.size()) - cplen) };
+      return { buffer.data() + cplen, ptrdiff_t(std::min(maxSamePrefix, buffer.size()) - cplen) };
     }
     void rewind() {
       reader.resetbuf();
       static_cast<FileStream*>(reader.getInputStream())->rewind();
       assert(count > 0);
       reader >> last;
+      lastSamePrefix = 0;
+      pos = 0;
     }
     MinimizePrefixInputBuffer(NativeDataInput<InputBuffer> &_reader, size_t _cplen, size_t _keyCount, size_t _maxKeyLen)
       : reader(_reader), cplen(_cplen), count(_keyCount)
       , last(_maxKeyLen, valvec_reserve())
-      , buffer(_maxKeyLen, valvec_reserve())
-      , lastSamePrefix(0) {
+      , buffer(_maxKeyLen, valvec_reserve()) {
     }
   };
   struct MinimizePrefixRemainingInputBuffer {
     NativeDataInput<InputBuffer> &reader;
     size_t cplen;
     size_t count;
+    size_t pos;
     valvec<byte_t> last;
     valvec<byte_t> buffer;
     size_t lastSamePrefix;
     fstring next() {
       size_t maxSamePrefix;
-      if (--count == 0) {
+      if (++pos == count) {
         maxSamePrefix = lastSamePrefix + 1;
+        last.swap(buffer);
       }
       else {
         reader >> buffer;
@@ -2608,19 +2622,20 @@ TerarkIndex*
         maxSamePrefix = std::max(samePrefix, lastSamePrefix) + 1;
         lastSamePrefix = samePrefix;
       }
-      return fstring(last).substr(std::min(maxSamePrefix, last.size()));
+      return fstring(buffer).substr(std::min(maxSamePrefix, buffer.size()));
     }
     void rewind() {
       reader.resetbuf();
       static_cast<FileStream*>(reader.getInputStream())->rewind();
       assert(count > 0);
       reader >> last;
+      lastSamePrefix = 0;
+      pos = 0;
     }
     MinimizePrefixRemainingInputBuffer(NativeDataInput<InputBuffer> &_reader, size_t _cplen, size_t _keyCount, size_t _maxKeyLen)
       : reader(_reader), cplen(_cplen), count(_keyCount)
       , last(_maxKeyLen, valvec_reserve())
-      , buffer(_maxKeyLen, valvec_reserve())
-      , lastSamePrefix(0) {
+      , buffer(_maxKeyLen, valvec_reserve()) {
     }
   };
   struct FixPrefixInputBuffer {
@@ -2701,34 +2716,26 @@ TerarkIndex*
   assert(ks.prefix.m_cnt_sum > 0);
   size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
   assert(cplen >= ks.commonPrefixLen);
-  auto getFixedPrefixLength = [](const TerarkIndex::KeyStat& ks, size_t cplen) {
+  auto getFixedPrefixLength = [](const TerarkIndex::KeyStat& ks, size_t cplen, double zipRatio) {
     size_t keyCount = ks.prefix.m_cnt_sum;
     size_t maxPrefixLen = std::min<size_t>(8, ks.minKeyLen - cplen);
-    double zipRatio = double(ks.entropyLen) / ks.sumKeyLen;
     size_t totalKeySize = ks.sumKeyLen - keyCount * cplen;
     size_t bestCost = totalKeySize;
     if (ks.minKeyLen != ks.maxKeyLen) {
       bestCost += keyCount;
     }
-    size_t targetCost = bestCost * 10 / 8;
+    size_t targetCost = bestCost * 4 / 5;
     UintPrefixBuildInfo result = {
       0, 0, 0, 0, 0, 0, 0, UintPrefixBuildInfo::fail
     };
     size_t entryCnt[8] = {};
-    ks.diff.for_each([&](size_t len, size_t cnt) {
-      if (len > cplen + 0) entryCnt[0] += cnt;
-      if (len > cplen + 1) entryCnt[1] += cnt;
-      if (len > cplen + 2) entryCnt[2] += cnt;
-      if (len > cplen + 3) entryCnt[3] += cnt;
-      if (len > cplen + 4) entryCnt[4] += cnt;
-      if (len > cplen + 5) entryCnt[5] += cnt;
-      if (len > cplen + 6) entryCnt[6] += cnt;
-      if (len > cplen + 7) entryCnt[7] += cnt;
-    });
-    for (size_t &i : entryCnt) {
-      i = keyCount - i;
+    for (size_t i = cplen, e = cplen + 8; i < e; ++i) {
+      entryCnt[i - cplen] = keyCount - (i < ks.diff.size() ? ks.diff[i].cnt : 0);
     }
     for (size_t i = 1; i <= maxPrefixLen; ++i) {
+      if (cplen + i < ks.diff.size() && ks.diff[cplen + i].max > 8) {
+        continue;
+      }
       UintPrefixBuildInfo info;
       info.key_length = i;
       info.key_count = keyCount;
@@ -2766,9 +2773,6 @@ TerarkIndex*
       if (info.entry_count == diff) {
         info.type = UintPrefixBuildInfo::asc_allone;
         prefixCost = 0;
-      }
-      else if (info.entry_count * 2 < keyCount) {
-        continue;
       }
       else if (bit_count != size_t(-1) && info.bit_count1 < fewCount && info.bit_count1 < (1ULL << 48)) {
         if (bit_count < (1ULL << 8)) {
@@ -2851,7 +2855,8 @@ TerarkIndex*
     }
     return result;
   };
-  UintPrefixBuildInfo uint_prefix_info = getFixedPrefixLength(ks, cplen);
+  double zipRatio = double(ks.entropyLen) / ks.sumKeyLen;
+  UintPrefixBuildInfo uint_prefix_info = getFixedPrefixLength(ks, cplen, zipRatio);
   Common common;
   common.reset(fstring(ks.minKey).substr(ks.commonPrefixLen, cplen - ks.commonPrefixLen), true);
   PrefixBase* prefix;
@@ -2874,7 +2879,7 @@ TerarkIndex*
       else {
         suffix = BuildBlobStoreSuffix(
           suffix_input_reader, uint_prefix_info.key_count,
-          ks.sumKeyLen - ks.prefix.m_cnt_sum * prefix_input_reader.cplenPrefixSize);
+          ks.sumKeyLen - ks.prefix.m_cnt_sum * prefix_input_reader.cplenPrefixSize, zipRatio);
       }
     }
   }
@@ -2886,7 +2891,7 @@ TerarkIndex*
       ks.minKey > ks.maxKey, ks.minKeyLen == ks.maxKeyLen, ioption);
     FixSuffixInputBuffer suffix_input_reader{ reader, suffixLen, ks.maxKeyLen };
     suffix = BuildFixedStringSuffix(
-      suffix_input_reader, uint_prefix_info.key_count,
+      suffix_input_reader, ks.prefix.m_cnt_sum,
       ks.sumKeyLen - ks.prefix.m_cnt_sum * suffixLen, suffixLen);
   }
   else if (ks.prefix.m_total_key_len < ks.sumKeyLen * 31 / 32) {
@@ -2897,13 +2902,13 @@ TerarkIndex*
     MinimizePrefixRemainingInputBuffer suffix_input_reader{ reader, cplen, ks.prefix.m_cnt_sum, ks.maxKeyLen };
     if (ks.minSuffixLen == ks.maxSuffixLen) {
       suffix = BuildFixedStringSuffix(
-        suffix_input_reader, uint_prefix_info.key_count,
+        suffix_input_reader, ks.prefix.m_cnt_sum,
         ks.sumKeyLen - ks.prefix.m_total_key_len, ks.maxSuffixLen);
     }
     else {
       suffix = BuildBlobStoreSuffix(
-        suffix_input_reader, uint_prefix_info.key_count,
-        ks.sumKeyLen - ks.prefix.m_total_key_len);
+        suffix_input_reader, ks.prefix.m_cnt_sum,
+        ks.sumKeyLen - ks.prefix.m_total_key_len, zipRatio);
     }
   }
   else {

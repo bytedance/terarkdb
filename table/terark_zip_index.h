@@ -50,9 +50,12 @@ public:
     inline void SetInvalid() { m_id = size_t(-1); }
   };
   struct KeyStat {
+    struct DiffItem {
+      size_t cur = 0, max = 0, cnt = 0;
+    };
     size_t commonPrefixLen = 0;
     Uint64Histogram prefix;
-    Uint64Histogram diff;
+    valvec<DiffItem> diff;
     size_t minKeyLen = size_t(-1);
     size_t maxKeyLen = 0;
     size_t minSuffixLen = size_t(-1);
