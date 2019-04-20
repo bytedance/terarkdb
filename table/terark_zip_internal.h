@@ -65,7 +65,6 @@ extern const std::string kTerarkZipTableIndexBlock;
 extern const std::string kTerarkZipTableValueTypeBlock;
 extern const std::string kTerarkZipTableValueDictBlock;
 extern const std::string kTerarkZipTableOffsetBlock;
-extern const std::string kTerarkZipTableCommonPrefixBlock;
 extern const std::string kTerarkEmptyTableKey;
 #if defined(TerocksPrivateCode)
 extern const std::string kTerarkZipTableExtendedBlock;
@@ -222,7 +221,6 @@ struct TerarkZipMultiOffsetInfo {
     size_t key;
     size_t value;
     size_t type;
-    size_t commonPrefix;
   };
   size_t partCount_, prefixLen_;
   valvec<KeyValueOffset> offset_;
@@ -234,8 +232,7 @@ struct TerarkZipMultiOffsetInfo {
     , fstring prefix
     , size_t key
     , size_t value
-    , size_t type
-    , size_t commonPrefix);
+    , size_t type);
   valvec<byte_t> dump();
   bool risk_set_memory(const void*, size_t);
   void risk_release_ownership();

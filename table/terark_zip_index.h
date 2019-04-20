@@ -53,17 +53,20 @@ public:
     struct DiffItem {
       size_t cur = 0, max = 0, cnt = 0;
     };
-    size_t commonPrefixLen = 0;
-    Uint64Histogram prefix;
-    valvec<DiffItem> diff;
+    size_t keyCount = 0;
+    size_t sumKeyLen = 0;
     size_t minKeyLen = size_t(-1);
     size_t maxKeyLen = 0;
+    size_t minPrefixLen = size_t(-1);
+    size_t maxPrefixLen = 0;
+    size_t sumPrefixLen = 0;
     size_t minSuffixLen = size_t(-1);
     size_t maxSuffixLen = 0;
-    size_t sumKeyLen = 0;
     size_t entropyLen = 0;
     valvec<byte_t> minKey;
     valvec<byte_t> maxKey;
+    fstring prefix;
+    valvec<DiffItem> diff;
   };
   class Factory : public terark::RefCounter {
   public:

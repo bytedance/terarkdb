@@ -91,7 +91,6 @@ private:
   };
   struct KeyValueStatus {
     valvec<char> prefix;
-    valvec<char> commonPrefix;
     size_t numKeys = 0;
     size_t sumKeyLen = 0;
     Uint64Histogram value;

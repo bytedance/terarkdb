@@ -119,56 +119,6 @@ TerarkIndex::~TerarkIndex() {}
 TerarkIndex::Factory::~Factory() {}
 TerarkIndex::Iterator::~Iterator() {}
 
-template<class NestLoudsTrieDAWG>
-void NestLoudsTrieBuildCache(NestLoudsTrieDAWG* trie, double cacheRatio) {
-  trie->build_fsa_cache(cacheRatio, NULL);
-}
-void NestLoudsTrieBuildCache(MatchingDFA* dfa, double cacheRatio) {}
-
-
-template<class NestLoudsTrieDAWG>
-void NestLoudsTrieGetOrderMap(const NestLoudsTrieDAWG* trie, UintVecMin0& newToOld) {
-  NonRecursiveDictionaryOrderToStateMapGenerator gen;
-  gen(*trie, [&](size_t dictOrderOldId, size_t state) {
-    size_t newId = trie->state_to_word_id(state);
-    //assert(trie->state_to_dict_index(state) == dictOrderOldId);
-    //assert(trie->dict_index_to_state(dictOrderOldId) == state);
-    newToOld.set_wire(newId, dictOrderOldId);
-  });
-}
-void NestLoudsTrieGetOrderMap(const MatchingDFA* dfa, UintVecMin0& newToOld) {
-  assert(0);
-}
-
-
-//  const char* Name() const override {
-//    if (m_trie->is_mmap()) {
-//      auto header = (const TerarkIndexHeader*)m_trie->get_mmap().data();
-//      return header->class_name;
-//    }
-//    else {
-//      size_t name_i = g_TerarkIndexName.find_i(typeid(*this).name());
-//      TERARK_RT_assert(name_i < g_TerarkIndexName.end_i(), std::logic_error);
-//      return g_TerarkIndexName.val(name_i).c_str();
-//    }
-//  }
-
-//  public:
-//    unique_ptr<TerarkIndex> LoadMemory(fstring mem) const override {
-//      unique_ptr<BaseDFA>
-//        dfa(BaseDFA::load_mmap_user_mem(mem.data(), mem.size()));
-//      auto trie = dynamic_cast<NLTrie*>(dfa.get());
-//      if (NULL == trie) {
-//        throw std::invalid_argument("Bad trie class: " + ClassName(*dfa)
-//          + ", should be " + ClassName<NLTrie>());
-//      }
-//      auto index = new NestLoudsTrieIndex(trie);
-//      dfa.release();
-//      return unique_ptr<TerarkIndex>(index);
-//    }
-//  };
-//};
-
 namespace index_detail {
 
   struct StatusFlags {
@@ -572,8 +522,8 @@ namespace index_detail {
     template<class Prefix, class Suffix>
     static size_t GetIteratorStorageSize(const IndexParts<Prefix, Suffix>* index) {
       return 0
-        + (index->prefix_.IteratorStorageSize() + sizeof(size_t) - 1) / sizeof(size_t)
-        + (index->suffix_.IteratorStorageSize() + sizeof(size_t) - 1) / sizeof(size_t)
+        + align_up(index->prefix_.IteratorStorageSize(), 8)
+        + align_up(index->suffix_.IteratorStorageSize(), 8)
         ;
     }
 
@@ -584,7 +534,7 @@ namespace index_detail {
       , suffix_(index->suffix_) {
       assert(iterator_storage_size >= GetIteratorStorageSize(index));
       prefix_storage_ = iterator_storage;
-      suffix_storage_ = (void*)(uintptr_t(prefix_storage_) + (index->prefix_.IteratorStorageSize() + sizeof(size_t) - 1) / sizeof(size_t));
+      suffix_storage_ = (uint8_t*)prefix_storage_ + align_up(index->prefix_.IteratorStorageSize(), 8);
       if (index->prefix_.IteratorStorageSize() > 0) {
         index->prefix_.IteratorStorageConstruct(prefix_storage_);
       }
@@ -1621,44 +1571,52 @@ namespace index_detail {
       id = ok ? dawg->state_to_word_id(iter_.word_state()) : size_t(-1);
       return ok;
     }
-  public:
-    IndexNestLoudsTriePrefixIterator(const NestLoudsTrieDAWG* trie) : iter_(trie) {}
-
-    fstring GetKey(size_t id) const { return iter_.word(); }
-    bool SeekToFirst(size_t& id) { return Done(id, iter_.seek_begin()); }
-    bool SeekToLast(size_t& id) { return Done(id, iter_.seek_end()); }
-    bool Seek(size_t& id, fstring key) { return Done(id, iter_.seek_lower_bound(key)); }
-    bool Next(size_t& id) { return Done(id, iter_.incr()); }
-    bool Prev(size_t& id) { return Done(id, iter_.decr()); }
-    size_t DictRank(size_t id) const {
+    bool Trans(size_t& id, bool ok) {
       auto dawg = static_cast<const NestLoudsTrieDAWG*>(iter_.get_dfa());
-      assert(id != size_t(-1));
-      return dawg->state_to_dict_rank(iter_.word_state());
-    }
-  };
-  template<>
-  class IndexNestLoudsTriePrefixIterator<MatchingDFA> {
-  protected:
-    unique_ptr<ADFA_LexIterator> iter_;
-    const BaseDAWG* dawg_;
-    bool Done(size_t& id, bool ok) {
-      id = ok ? dawg_->v_state_to_word_id(iter_->word_state()) : size_t(-1);
+      id = ok ? dawg->state_to_dict_rank(iter_.word_state()) : size_t(-1);
       return ok;
     }
   public:
-    IndexNestLoudsTriePrefixIterator(const MatchingDFA* dfa)
-      : iter_(dfa->adfa_make_iter(initial_state))
-      , dawg_(dfa->get_dawg()) {}
+    IndexNestLoudsTriePrefixIterator(const NestLoudsTrieDAWG* trie) : iter_(trie) {}
 
-    fstring GetKey(size_t id) const { return iter_->word(); }
-    bool SeekToFirst(size_t& id) { return Done(id, iter_->seek_begin()); }
-    bool SeekToLast(size_t& id) { return Done(id, iter_->seek_end()); }
-    bool Seek(size_t& id, fstring key) { return Done(id, iter_->seek_lower_bound(key)); }
-    bool Next(size_t& id) { return Done(id, iter_->incr()); }
-    bool Prev(size_t& id) { return Done(id, iter_->decr()); }
-    size_t DictRank(size_t id) const {
+    fstring GetKey() const { return iter_.word(); }
+    bool SeekToFirst(size_t& id, bool dfs_value) {
+      if (dfs_value)
+        return Trans(id, iter_.seek_begin());
+      else
+        return Done(id, iter_.seek_begin());
+    }
+    bool SeekToLast(size_t& id, bool dfs_value) {
+      if (dfs_value)
+        return Trans(id, iter_.seek_end());
+      else
+        return Done(id, iter_.seek_end());
+    }
+    bool Seek(size_t& id, bool dfs_value, fstring key) {
+      if (dfs_value)
+        return Trans(id, iter_.seek_lower_bound(key));
+      else
+        return Done(id, iter_.seek_lower_bound(key));
+    }
+    bool Next(size_t& id, bool dfs_value) {
+      if (dfs_value)
+        return iter_.incr() ? ((id = id + 1), true) : ((id = size_t(-1)), false);
+      else
+        return Done(id, iter_.incr());
+    }
+    bool Prev(size_t& id, bool dfs_value) {
+      if (dfs_value)
+        return iter_.decr() ? ((id = id - 1), true) : ((id = size_t(-1)), false);
+      else
+        return Done(id, iter_.decr());
+    }
+    size_t DictRank(size_t id, bool dfs_value) const {
+      auto dawg = static_cast<const NestLoudsTrieDAWG*>(iter_.get_dfa());
       assert(id != size_t(-1));
-      return dawg_->state_to_dict_rank(iter_->word_state());
+      if (dfs_value)
+        return id;
+      else
+        return dawg->state_to_dict_rank(iter_.word_state());
     }
   };
 
@@ -1676,7 +1634,7 @@ namespace index_detail {
       *this = std::move(*other);
       delete other;
     }
-    IndexNestLoudsTriePrefix(BaseDFA* trie) : trie_(trie) {
+    IndexNestLoudsTriePrefix(BaseDFA* trie) : trie_(trie), dfs_value_(true) {
       dawg_ = trie->get_dawg();
     }
     IndexNestLoudsTriePrefix& operator = (const IndexNestLoudsTriePrefix&) = delete;
@@ -1684,6 +1642,7 @@ namespace index_detail {
 
     const BaseDAWG* dawg_;
     unique_ptr<BaseDFA> trie_;
+    bool dfs_value_;
 
     size_t IteratorStorageSize() const {
       return sizeof(IteratorStorage);
@@ -1707,10 +1666,10 @@ namespace index_detail {
       }
       std::unique_ptr<IteratorStorage> iter(new IteratorStorage(static_cast<const NestLoudsTrieDAWG*>(trie_.get())));
       size_t id;
-      if (!iter->Seek(id, key)) {
+      if (!iter->Seek(id, dfs_value_, key)) {
         return size_t(-1);
       }
-      auto prefix_key = iter->GetKey(id);
+      auto prefix_key = iter->GetKey();
       if (prefix_key.commonPrefixLen(key) != prefix_key.size()) {
         return size_t(-1);
       }
@@ -1729,73 +1688,89 @@ namespace index_detail {
       }
       std::unique_ptr<IteratorStorage> iter(new IteratorStorage(static_cast<const NestLoudsTrieDAWG*>(trie_.get())));
       size_t id;
-      if (!iter->Seek(id, key)) {
+      if (!iter->Seek(id, dfs_value_, key)) {
         return KeyCount();
       }
-      auto prefix_key = iter->GetKey(id);
+      auto prefix_key = iter->GetKey();
       if (prefix_key.commonPrefixLen(key) != prefix_key.size()) {
-        return iter->DictRank(id);
+        return iter->DictRank(id, dfs_value_);
       }
       size_t suffix_id;
       fstring suffix_key;
       key = key.substr(prefix_key.size());
       std::tie(suffix_id, suffix_key) = suffix->LowerBound(key, id, 1, ctx);
       if (suffix_id == id && suffix_key == key) {
-        return iter->DictRank(id);
+        return iter->DictRank(id, dfs_value_);
       }
       assert(suffix_id = id + 1);
-      if (!iter->Next(id)) {
+      if (!iter->Next(id, dfs_value_)) {
         return KeyCount();
       }
-      return iter->DictRank(id);
+      return iter->DictRank(id, dfs_value_);
     }
     bool NeedsReorder() const {
       return true;
     }
     void GetOrderMap(terark::UintVecMin0& newToOld) const {
       auto trie = static_cast<const NestLoudsTrieDAWG*>(trie_.get());
-      NestLoudsTrieGetOrderMap(trie, newToOld);
+      NonRecursiveDictionaryOrderToStateMapGenerator gen;
+      gen(*trie, [&](size_t dictOrderOldId, size_t state) {
+        size_t newId = trie->state_to_word_id(state);
+        //assert(trie->state_to_dict_index(state) == dictOrderOldId);
+        //assert(trie->dict_index_to_state(dictOrderOldId) == state);
+        newToOld.set_wire(newId, dictOrderOldId);
+      });
     }
     void BuildCache(double cacheRatio) {
       if (cacheRatio > 1e-8) {
         auto trie = static_cast<NestLoudsTrieDAWG*>(trie_.get());
-        NestLoudsTrieBuildCache(trie, cacheRatio);
+        trie->build_fsa_cache(cacheRatio, NULL);
       }
     }
 
     bool IterSeekToFirst(size_t& id, IteratorStorage* iter) const {
-      return iter->SeekToFirst(id);
+      return iter->SeekToFirst(id, dfs_value_);
     }
     bool IterSeekToLast(size_t& id, IteratorStorage* iter) const {
-      return iter->SeekToLast(id);
+      return iter->SeekToLast(id, dfs_value_);
     }
     bool IterSeek(size_t& id, size_t& count, fstring target, IteratorStorage* iter) const {
       count = 1;
-      return iter->Seek(id, target);
+      return iter->Seek(id, dfs_value_, target);
     }
     bool IterNext(size_t& id, size_t count, IteratorStorage* iter) const {
       assert(count > 0);
       do {
-        if (!iter->Next(id)) {
+        if (!iter->Next(id, dfs_value_)) {
           return false;
         }
       } while (--count > 0);
       return true;
     }
     bool IterPrev(size_t& id, IteratorStorage* iter) const {
-      return iter->Prev(id);
+      return iter->Prev(id, dfs_value_);
     }
     size_t IterDictRank(size_t id, const IteratorStorage* iter) const {
-      return iter->DictRank(id);
+      return iter->DictRank(id, dfs_value_);
     }
     fstring IterGetKey(size_t id, const IteratorStorage* iter) const {
-      return iter->GetKey(id);
+      return iter->GetKey();
     }
 
     bool Load(fstring mem) override {
-      return false;
+      std::unique_ptr<BaseDFA> dfa(BaseDFA::load_mmap_user_mem(mem.data(), mem.size()));
+      trie_.reset(dynamic_cast<NestLoudsTrieDAWG*>(dfa.get()));
+      if (!trie_) {
+        throw std::invalid_argument("Bad trie class: " + ClassName(*dfa)
+          + ", should be " + ClassName<NestLoudsTrieDAWG>());
+      }
+      dfa.release();
+      dawg_ = trie_->get_dawg();
+      dfs_value_ = false;
+      return true;
     }
     void Save(std::function<void(const void*, size_t)> append) const override {
+      trie_->save_mmap(append);
     }
   };
 
@@ -1938,7 +1913,7 @@ namespace index_detail {
   template<class BlobStoreType>
   struct IndexBlobStoreSuffix
     : public SuffixBase
-    , public ComponentIteratorStorageImpl<void> {
+    , public ComponentIteratorStorageImpl<BlobStore::CacheOffsets> {
     typedef BlobStore::CacheOffsets IteratorStorage;
 
     IndexBlobStoreSuffix() = default;
@@ -1983,6 +1958,7 @@ namespace index_detail {
     }
 
     void IterSet(size_t suffix_id, IteratorStorage* iter) const {
+      iter->recData.risk_set_size(0);
       store_.get_record_append(suffix_id, iter);
     }
     bool IterSeek(fstring target, size_t& suffix_id, size_t suffix_count, IteratorStorage* iter) const {
@@ -2521,7 +2497,6 @@ namespace index_detail {
       }
       zbuilder->finishSample();
       zbuilder->prepareDict();
-      FileMemIO memory;
       zbuilder->prepare(numKeys, memory);
       input.rewind();
       for (size_t i = 0; i < numKeys; ++i) {
@@ -2713,11 +2688,9 @@ TerarkIndex*
     }
   };
 
-  assert(ks.prefix.m_cnt_sum > 0);
-  size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
-  assert(cplen >= ks.commonPrefixLen);
+  assert(ks.keyCount > 0);
   auto getFixedPrefixLength = [](const TerarkIndex::KeyStat& ks, size_t cplen, double zipRatio) {
-    size_t keyCount = ks.prefix.m_cnt_sum;
+    size_t keyCount = ks.keyCount;
     size_t maxPrefixLen = std::min<size_t>(8, ks.minKeyLen - cplen);
     size_t totalKeySize = ks.sumKeyLen - keyCount * cplen;
     size_t bestCost = totalKeySize;
@@ -2855,10 +2828,9 @@ TerarkIndex*
     }
     return result;
   };
+  size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
   double zipRatio = double(ks.entropyLen) / ks.sumKeyLen;
   UintPrefixBuildInfo uint_prefix_info = getFixedPrefixLength(ks, cplen, zipRatio);
-  Common common;
-  common.reset(fstring(ks.minKey).substr(ks.commonPrefixLen, cplen - ks.commonPrefixLen), true);
   PrefixBase* prefix;
   SuffixBase* suffix;
   if (uint_prefix_info.key_length > 0) {
@@ -2874,59 +2846,62 @@ TerarkIndex*
       if (ks.minKeyLen == ks.maxKeyLen) {
         suffix = BuildFixedStringSuffix(
           suffix_input_reader, uint_prefix_info.key_count,
-          ks.sumKeyLen - ks.prefix.m_cnt_sum * prefix_input_reader.cplenPrefixSize, ks.maxKeyLen - prefix_input_reader.cplenPrefixSize);
+          ks.sumKeyLen - ks.keyCount * prefix_input_reader.cplenPrefixSize, ks.maxKeyLen - prefix_input_reader.cplenPrefixSize);
       }
       else {
         suffix = BuildBlobStoreSuffix(
           suffix_input_reader, uint_prefix_info.key_count,
-          ks.sumKeyLen - ks.prefix.m_cnt_sum * prefix_input_reader.cplenPrefixSize, zipRatio);
+          ks.sumKeyLen - ks.keyCount * prefix_input_reader.cplenPrefixSize, zipRatio);
       }
     }
   }
-  else if (ks.sumKeyLen - ks.minSuffixLen * ks.prefix.m_cnt_sum < ks.prefix.m_total_key_len * 5 / 4) {
+  else if (ks.sumKeyLen - ks.minSuffixLen * ks.keyCount < ks.sumPrefixLen * 5 / 4) {
     size_t suffixLen = ks.minSuffixLen;
     FixSuffixPrefixInputBuffer prefix_input_reader{ reader, cplen, suffixLen, ks.maxKeyLen };
     prefix = BuildNestLoudsTriePrefix(
-      prefix_input_reader, tzopt, ks.prefix.m_cnt_sum, ks.sumKeyLen - ks.prefix.m_cnt_sum * (cplen + suffixLen),
+      prefix_input_reader, tzopt, ks.keyCount, ks.sumKeyLen - ks.keyCount * (cplen + suffixLen),
       ks.minKey > ks.maxKey, ks.minKeyLen == ks.maxKeyLen, ioption);
     FixSuffixInputBuffer suffix_input_reader{ reader, suffixLen, ks.maxKeyLen };
     suffix = BuildFixedStringSuffix(
-      suffix_input_reader, ks.prefix.m_cnt_sum,
-      ks.sumKeyLen - ks.prefix.m_cnt_sum * suffixLen, suffixLen);
+      suffix_input_reader, ks.keyCount,
+      ks.sumKeyLen - ks.keyCount * suffixLen, suffixLen);
   }
-  else if (ks.prefix.m_total_key_len < ks.sumKeyLen * 31 / 32) {
-    MinimizePrefixInputBuffer prefix_input_reader{ reader, cplen, ks.prefix.m_cnt_sum, ks.maxKeyLen };
+  else if (ks.sumPrefixLen < ks.sumKeyLen * 31 / 32) {
+    MinimizePrefixInputBuffer prefix_input_reader{ reader, cplen, ks.keyCount, ks.maxKeyLen };
     prefix = BuildNestLoudsTriePrefix(
-      prefix_input_reader, tzopt, ks.prefix.m_cnt_sum, ks.prefix.m_total_key_len - ks.prefix.m_cnt_sum * cplen,
+      prefix_input_reader, tzopt, ks.keyCount, ks.sumPrefixLen - ks.keyCount * cplen,
       ks.minKey > ks.maxKey, ks.minKeyLen == ks.maxKeyLen, ioption);
-    MinimizePrefixRemainingInputBuffer suffix_input_reader{ reader, cplen, ks.prefix.m_cnt_sum, ks.maxKeyLen };
+    MinimizePrefixRemainingInputBuffer suffix_input_reader{ reader, cplen, ks.keyCount, ks.maxKeyLen };
     if (ks.minSuffixLen == ks.maxSuffixLen) {
       suffix = BuildFixedStringSuffix(
-        suffix_input_reader, ks.prefix.m_cnt_sum,
-        ks.sumKeyLen - ks.prefix.m_total_key_len, ks.maxSuffixLen);
+        suffix_input_reader, ks.keyCount,
+        ks.sumKeyLen - ks.sumPrefixLen, ks.maxSuffixLen);
     }
     else {
       suffix = BuildBlobStoreSuffix(
-        suffix_input_reader, ks.prefix.m_cnt_sum,
-        ks.sumKeyLen - ks.prefix.m_total_key_len, zipRatio);
+        suffix_input_reader, ks.keyCount,
+        ks.sumKeyLen - ks.sumPrefixLen, zipRatio);
     }
   }
   else {
     DefaultInputBuffer input_reader{ reader, cplen, ks.maxKeyLen };
     prefix = BuildNestLoudsTriePrefix(
-      input_reader, tzopt, ks.prefix.m_cnt_sum, ks.sumKeyLen - ks.prefix.m_cnt_sum * cplen,
+      input_reader, tzopt, ks.keyCount, ks.sumKeyLen - ks.keyCount * cplen,
       ks.minKey > ks.maxKey, ks.minKeyLen == ks.maxKeyLen, ioption);
     suffix = BuildEmptySuffix();
   }
+  valvec<char> common(ks.prefix.size() + cplen, valvec_reserve());
+  common.append(ks.prefix);
+  common.append(ks.minKey.data(), cplen);
   auto factory = IndexFactoryBase::GetFactoryByType(std::type_index(typeid(*prefix)), std::type_index(typeid(*suffix)));
   assert(factory != nullptr);
-  return factory->CreateIndex(std::move(common), prefix, suffix);
+  return factory->CreateIndex(Common(common, true), prefix, suffix);
 }
 
 size_t TerarkIndex::Factory::MemSizeForBuild(const TerarkIndex::KeyStat& ks) {
   size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
-  size_t indexSize = UintVecMin0::compute_mem_size_by_max_val(ks.sumKeyLen - cplen, ks.prefix.m_cnt_sum);
-  return ks.sumKeyLen - ks.prefix.m_cnt_sum * commonPrefixLen(ks.minKey, ks.maxKey) + indexSize;
+  size_t indexSize = UintVecMin0::compute_mem_size_by_max_val(ks.sumKeyLen - cplen, ks.keyCount);
+  return ks.sumKeyLen - ks.keyCount * commonPrefixLen(ks.minKey, ks.maxKey) + indexSize;
 }
 
 ////////////////////////////////////////////////////////////////////////////////

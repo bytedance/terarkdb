@@ -127,7 +127,6 @@ const std::string kTerarkZipTableIndexBlock        = "TerarkZipTableIndexBlock";
 const std::string kTerarkZipTableValueTypeBlock    = "TerarkZipTableValueTypeBlock";
 const std::string kTerarkZipTableValueDictBlock    = "TerarkZipTableValueDictBlock";
 const std::string kTerarkZipTableOffsetBlock       = "TerarkZipTableOffsetBlock";
-const std::string kTerarkZipTableCommonPrefixBlock = "TerarkZipTableCommonPrefixBlock";
 const std::string kTerarkEmptyTableKey             = "ThisIsAnEmptyTable";
 
 #if defined(TerocksPrivateCode)
@@ -487,7 +486,6 @@ float CollectInfo::estimate(float def_value) const {
 }
 
 size_t TerarkZipMultiOffsetInfo::calc_size(size_t prefixLen, size_t partCount) {
-  BOOST_STATIC_ASSERT(sizeof(KeyValueOffset) % 16 == 0);
   return 16 + partCount * sizeof(KeyValueOffset) + terark::align_up(prefixLen * partCount, 16);
 }
 
@@ -498,13 +496,12 @@ void TerarkZipMultiOffsetInfo::Init(size_t prefixLen, size_t partCount) {
   prefixSet_.resize_no_init(prefixLen * partCount);
 }
 
-void TerarkZipMultiOffsetInfo::set(size_t i, fstring p, size_t k, size_t v, size_t t, size_t c) {
+void TerarkZipMultiOffsetInfo::set(size_t i, fstring p, size_t k, size_t v, size_t t) {
   assert(p.size() == prefixLen_);
   memcpy(prefixSet_.data() + i * prefixLen_, p.data(), p.size());
   offset_[i].key = k;
   offset_[i].value = v;
   offset_[i].type = t;
-  offset_[i].commonPrefix = c;
 }
 
 valvec<byte_t> TerarkZipMultiOffsetInfo::dump() {

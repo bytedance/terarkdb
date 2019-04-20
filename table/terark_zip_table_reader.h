@@ -127,11 +127,10 @@ struct TerarkZipSubReader {
   intptr_t   storeFD_;
   RandomAccessFile* storeFileObj_;
   size_t storeOffset_;
-  std::string prefix_;
+  fstring prefix_;
   unique_ptr<TerarkIndex> index_;
   unique_ptr<terark::AbstractBlobStore> store_;
   bitfield_array<2> type_;
-  std::string commonPrefix_;
 
   enum {
     FlagNone = 0,
@@ -286,7 +285,6 @@ public:
       fstring storeMemory,
       terark::AbstractBlobStore::Dictionary dict,
       fstring typeMemory,
-      fstring commonPrefixMemory,
       int minPreadLen,
       RandomAccessFile* fileObj,
       LruReadonlyCache* cache,
