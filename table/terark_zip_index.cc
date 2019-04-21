@@ -100,7 +100,8 @@ struct TerarkIndexFooter {
   uint64_t  suffix_xxhash;
 
   char      class_name[40];
-  uint16_t  format_version;
+  uint16_t  bfs_suffix : 1;
+  uint16_t  format_version : 15;
   uint16_t  footer_size;
   uint32_t  footer_crc32;
 };
@@ -122,9 +123,10 @@ TerarkIndex::Iterator::~Iterator() {}
 namespace index_detail {
 
   struct StatusFlags {
-    StatusFlags() : is_user_mem(0) {}
+    StatusFlags() : is_user_mem(0), is_bfs_suffix(0) {}
 
     uint64_t is_user_mem : 1;
+    uint64_t is_bfs_suffix : 1;
     uint64_t : 0;
   };
 
@@ -182,21 +184,21 @@ namespace index_detail {
 
   struct PrefixBase {
     StatusFlags flags;
+    virtual ~PrefixBase() {}
 
     virtual bool Load(fstring mem) = 0;
     virtual void Save(std::function<void(const void*, size_t)> append) const = 0;
-    virtual ~PrefixBase() {}
   };
 
   struct SuffixBase {
     StatusFlags flags;
+    virtual ~SuffixBase() {}
 
     virtual std::pair<size_t, fstring> LowerBound(fstring target, size_t suffix_id, size_t suffix_count, valvec<byte_t>* ctx) const = 0;
 
     virtual bool Load(fstring mem) = 0;
     virtual void Save(std::function<void(const void*, size_t)> append) const = 0;
     virtual void Reorder(ZReorderMap& newToOld, std::function<void(const void*, size_t)> append, fstring tmpFile) const = 0;
-    virtual ~SuffixBase() {}
   };
 
   template<class T>
@@ -227,11 +229,11 @@ namespace index_detail {
     virtual void GetOrderMap(UintVecMin0& newToOld) const = 0;
     virtual void BuildCache(double cacheRatio) = 0;
 
-    virtual bool IterSeekToFirst(size_t& id, void* iter) const = 0;
-    virtual bool IterSeekToLast(size_t& id, void* iter) const = 0;
+    virtual bool IterSeekToFirst(size_t& id, size_t& count, void* iter) const = 0;
+    virtual bool IterSeekToLast(size_t& id, size_t* count, void* iter) const = 0;
     virtual bool IterSeek(size_t& id, size_t& count, fstring target, void* iter) const = 0;
     virtual bool IterNext(size_t& id, size_t count, void* iter) const = 0;
-    virtual bool IterPrev(size_t& id, void* iter) const = 0;
+    virtual bool IterPrev(size_t& id, size_t* count, void* iter) const = 0;
     virtual fstring IterGetKey(size_t id, const void* iter) const = 0;
     virtual size_t IterDictRank(size_t id, const void* iter) const = 0;
 
@@ -275,11 +277,11 @@ namespace index_detail {
       Prefix::BuildCache(cacheRatio);
     }
 
-    bool IterSeekToFirst(size_t& id, void* iter) const override {
-      return Prefix::IterSeekToFirst(id, (IteratorStorage*)iter);
+    bool IterSeekToFirst(size_t& id, size_t& count, void* iter) const override {
+      return Prefix::IterSeekToFirst(id, count, (IteratorStorage*)iter);
     }
-    bool IterSeekToLast(size_t& id, void* iter) const override {
-      return Prefix::IterSeekToLast(id, (IteratorStorage*)iter);
+    bool IterSeekToLast(size_t& id, size_t* count, void* iter) const override {
+      return Prefix::IterSeekToLast(id, count, (IteratorStorage*)iter);
     }
     bool IterSeek(size_t& id, size_t& count, fstring target, void* iter) const override {
       return Prefix::IterSeek(id, count, target, (IteratorStorage*)iter);
@@ -287,8 +289,8 @@ namespace index_detail {
     bool IterNext(size_t& id, size_t count, void* iter) const override {
       return Prefix::IterNext(id, count, (IteratorStorage*)iter);
     }
-    bool IterPrev(size_t& id, void* iter) const override {
-      return Prefix::IterPrev(id, (IteratorStorage*)iter);
+    bool IterPrev(size_t& id, size_t* count, void* iter) const override {
+      return Prefix::IterPrev(id, count, (IteratorStorage*)iter);
     }
     fstring IterGetKey(size_t id, const void* iter) const override {
       return Prefix::IterGetKey(id, (const IteratorStorage*)iter);
@@ -353,11 +355,11 @@ namespace index_detail {
       prefix->BuildCache(cacheRatio);
     }
 
-    bool IterSeekToFirst(size_t& id, void* iter) const {
-      return prefix->IterSeekToFirst(id, iter);
+    bool IterSeekToFirst(size_t& id, size_t& count, void* iter) const {
+      return prefix->IterSeekToFirst(id, count, iter);
     }
-    bool IterSeekToLast(size_t& id, void* iter) const {
-      return prefix->IterSeekToLast(id, iter);
+    bool IterSeekToLast(size_t& id, size_t* count, void* iter) const {
+      return prefix->IterSeekToLast(id, count, iter);
     }
     bool IterSeek(size_t& id, size_t& count, fstring target, void* iter) const {
       return prefix->IterSeek(id, count, target, iter);
@@ -365,8 +367,8 @@ namespace index_detail {
     bool IterNext(size_t& id, size_t count, void* iter) const {
       return prefix->IterNext(id, count, iter);
     }
-    bool IterPrev(size_t& id, void* iter) const {
-      return prefix->IterPrev(id, iter);
+    bool IterPrev(size_t& id, size_t* count, void* iter) const {
+      return prefix->IterPrev(id, count, iter);
     }
     fstring IterGetKey(size_t id, const void* iter) const {
       return prefix->IterGetKey(id, iter);
@@ -628,6 +630,7 @@ namespace index_detail {
         }
       }
       unique_ptr<PrefixBase> p(CreatePrefix());
+      p->flags.is_bfs_suffix = footer.bfs_suffix;
       if (!p->Load(prefix)) {
         throw std::invalid_argument("TerarkIndex::LoadMemory Prefix Fail, bad mem");
       }
@@ -651,6 +654,7 @@ namespace index_detail {
     virtual void SaveMmap(const Common& common, const PrefixBase& prefix, const SuffixBase& suffix, std::function<void(const void *, size_t)> write) const {
       TerarkIndexFooter footer;
       footer.format_version = 0;
+      footer.bfs_suffix = prefix.flags.is_bfs_suffix;
       footer.footer_size = sizeof footer;
       footer.common_size = common.size();
       footer.common_crc32 = Crc32c_update(0, common.data(), common.size());
@@ -681,6 +685,7 @@ namespace index_detail {
     virtual void Reorder(const Common& common, const PrefixBase& prefix, const SuffixBase& suffix, ZReorderMap& newToOld, std::function<void(const void *, size_t)> write, fstring tmpFile) const {
       TerarkIndexFooter footer;
       footer.format_version = 0;
+      footer.bfs_suffix = true;
       footer.footer_size = sizeof footer;
       footer.common_size = common.size();
       write(common.data(), common.size());
@@ -792,7 +797,8 @@ namespace index_detail {
       : IndexIterator(index, AllocIteratorStorage_(index)) {}
 
     bool SeekToFirst() override {
-      if (!prefix().IterSeekToFirst(m_id, prefix_storage())) {
+      size_t suffix_count;
+      if (!prefix().IterSeekToFirst(m_id, suffix_count, prefix_storage())) {
         assert(m_id == size_t(-1));
         return false;
       }
@@ -801,7 +807,7 @@ namespace index_detail {
 
     }
     bool SeekToLast() override {
-      if (!prefix().IterSeekToLast(m_id, prefix_storage())) {
+      if (!prefix().IterSeekToLast(m_id, nullptr, prefix_storage())) {
         assert(m_id == size_t(-1));
         return false;
       }
@@ -823,33 +829,59 @@ namespace index_detail {
       }
       target = target.substr(cplen);
       size_t suffix_count;
-      if (!prefix().IterSeek(m_id, suffix_count, target, prefix_storage())) {
-        assert(m_id == size_t(-1));
-        return false;
-      }
-      fstring prefix_key = prefix().IterGetKey(m_id, prefix_storage());
-      assert(prefix_key <= target);
-      if (prefix_key.size() != target.size()) {
-        suffix().IterSet(m_id, suffix_storage());
-        return true;
-      }
-      target = target.substr(prefix_key.size());
-      size_t suffix_id = m_id;
-      if (suffix().IterSeek(target, suffix_id, suffix_count, suffix_storage())) {
-        assert(suffix_id >= m_id);
-        assert(suffix_id < m_id + suffix_count);
-        if (suffix_id > m_id && !prefix().IterNext(m_id, suffix_id - m_id, prefix_storage())) {
-          assert(m_id == size_t(-1));
+      if (suffix().TotalKeySize() == 0) {
+        if (prefix().IterSeek(m_id, suffix_count, target, prefix_storage())) {
+          suffix().IterSet(m_id, suffix_storage());
+          return true;
+        }
+        else {
+          m_id = size_t(-1);
           return false;
+        }
+      }
+      fstring prefix_key;
+      if (prefix().IterSeek(m_id, suffix_count, target, prefix_storage())) {
+        prefix_key = prefix().IterGetKey(m_id, prefix_storage());
+        if (prefix_key != target) {
+          if (prefix().IterPrev(m_id, &suffix_count, prefix_storage())) {
+            prefix_key = prefix().IterGetKey(m_id, prefix_storage());
+          }
+          else {
+            if (prefix().IterSeekToFirst(m_id, suffix_count, prefix_storage())) {
+              suffix().IterSet(m_id, suffix_storage());
+              return true;
+            }
+            else {
+              assert(m_id == size_t(-1));
+              return false;
+            }
+          }
         }
       }
       else {
-        if (!prefix().IterNext(m_id, suffix_count, prefix_storage())) {
+        if (!prefix().IterSeekToLast(m_id, &suffix_count, prefix_storage())) {
           assert(m_id == size_t(-1));
           return false;
         }
-        suffix().IterSet(m_id, suffix_storage());
+        prefix_key = prefix().IterGetKey(m_id, prefix_storage());
       }
+      if (target.startsWith(prefix_key)) {
+        target = target.substr(prefix_key.size());
+        size_t suffix_id = m_id;
+        if (suffix().IterSeek(target, suffix_id, suffix_count, suffix_storage())) {
+          assert(suffix_id >= m_id);
+          assert(suffix_id < m_id + suffix_count);
+          if (suffix_id > m_id && !prefix().IterNext(m_id, suffix_id - m_id, prefix_storage())) {
+            assert(m_id == size_t(-1));
+            return false;
+          }
+        }
+      }
+      if (!prefix().IterNext(m_id, suffix_count, prefix_storage())) {
+        assert(m_id == size_t(-1));
+        return false;
+      }
+      suffix().IterSet(m_id, suffix_storage());
       return true;
     }
     bool Next() override {
@@ -863,7 +895,7 @@ namespace index_detail {
       }
     }
     bool Prev() override {
-      if (prefix().IterPrev(m_id, prefix_storage())) {
+      if (prefix().IterPrev(m_id, nullptr, prefix_storage())) {
         suffix().IterSet(m_id, suffix_storage());
         return true;
       }
@@ -1188,15 +1220,19 @@ namespace index_detail {
     void BuildCache(double cacheRatio) {
     }
 
-    bool IterSeekToFirst(size_t& id, IteratorStorage* iter) const {
+    bool IterSeekToFirst(size_t& id, size_t& count, IteratorStorage* iter) const {
       id = 0;
       iter->pos = 0;
+      count = 1;
       UpdateBuffer(id, iter);
       return true;
     }
-    bool IterSeekToLast(size_t& id, IteratorStorage* iter) const {
+    bool IterSeekToLast(size_t& id, size_t* count, IteratorStorage* iter) const {
       id = rank_select.max_rank1() - 1;
       iter->pos = rank_select.size() - 1;
+      if (count != nullptr) {
+        *count = 1;
+      }
       UpdateBuffer(id, iter);
       return true;
     }
@@ -1226,7 +1262,7 @@ namespace index_detail {
       UpdateBuffer(id, iter);
       return true;
     }
-    bool IterPrev(size_t& id, IteratorStorage* iter) const {
+    bool IterPrev(size_t& id, size_t* count, IteratorStorage* iter) const {
       assert(id != size_t(-1));
       assert(rank_select[iter->pos]);
       assert(rank_select.rank1(iter->pos) == id);
@@ -1237,6 +1273,9 @@ namespace index_detail {
       else {
         --id;
         iter->pos = iter->pos - rank_select.zero_seq_revlen(iter->pos) - 1;
+        if (count != nullptr) {
+          *count = 1;
+        }
         UpdateBuffer(id, iter);
         return true;
       }
@@ -1412,17 +1451,28 @@ namespace index_detail {
     void BuildCache(double cacheRatio) {
     }
 
-    bool IterSeekToFirst(size_t& id, IteratorStorage* iter) const {
+    bool IterSeekToFirst(size_t& id, size_t& count, IteratorStorage* iter) const {
       id = 0;
       iter->pos = 0;
+      count = rank_select.one_seq_len(0);
       UpdateBuffer(id, iter);
       assert(rank_select[iter->pos]);
       return true;
     }
-    bool IterSeekToLast(size_t& id, IteratorStorage* iter) const {
-      id = rank_select.max_rank1() - 1;
-      iter->pos = rank_select.size() - 2;
-      assert(rank_select[iter->pos]);
+    bool IterSeekToLast(size_t& id, size_t* count, IteratorStorage* iter) const {
+      if (count == nullptr) {
+        id = rank_select.max_rank1() - 1;
+        iter->pos = rank_select.size() - 2;
+        assert(rank_select[iter->pos]);
+      }
+      else {
+        size_t one_seq_revlen = rank_select.one_seq_revlen(rank_select.size() - 1);
+        assert(one_seq_revlen > 0);
+        id = rank_select.max_rank1() - one_seq_revlen;
+        iter->pos = rank_select.size() - 1 - one_seq_revlen;
+        *count = one_seq_revlen;
+        assert(rank_select[iter->pos]);
+      }
       UpdateBuffer(id, iter);
       return true;
     }
@@ -1462,7 +1512,7 @@ namespace index_detail {
       }
       return true;
     }
-    bool IterPrev(size_t& id, IteratorStorage* iter) const {
+    bool IterPrev(size_t& id, size_t* count, IteratorStorage* iter) const {
       assert(id != size_t(-1));
       assert(rank_select[iter->pos]);
       assert(rank_select.rank1(iter->pos) == id);
@@ -1470,13 +1520,28 @@ namespace index_detail {
         id = size_t(-1);
         return false;
       }
-      else {
+      else if (count == nullptr) {
         size_t zero_seq_revlen = rank_select.zero_seq_revlen(iter->pos);
         --id;
         iter->pos -= zero_seq_revlen + 1;
         if (zero_seq_revlen > 0) {
           UpdateBuffer(id, iter);
         }
+        return true;
+      }
+      else {
+        size_t one_seq_revlen = rank_select.one_seq_revlen(iter->pos);
+        id -= one_seq_revlen;
+        if (id == 0) {
+          id = size_t(-1);
+          return false;
+        }
+        iter->pos = rank_select.select1(--id);
+        one_seq_revlen = rank_select.one_seq_revlen(iter->pos);
+        id -= one_seq_revlen;
+        iter->pos -= one_seq_revlen;
+        *count = one_seq_revlen + 1;
+        UpdateBuffer(id, iter);
         return true;
       }
     }
@@ -1580,43 +1645,43 @@ namespace index_detail {
     IndexNestLoudsTriePrefixIterator(const NestLoudsTrieDAWG* trie) : iter_(trie) {}
 
     fstring GetKey() const { return iter_.word(); }
-    bool SeekToFirst(size_t& id, bool dfs_value) {
-      if (dfs_value)
-        return Trans(id, iter_.seek_begin());
-      else
+    bool SeekToFirst(size_t& id, bool bfs_sufflx) {
+      if (bfs_sufflx)
         return Done(id, iter_.seek_begin());
-    }
-    bool SeekToLast(size_t& id, bool dfs_value) {
-      if (dfs_value)
-        return Trans(id, iter_.seek_end());
       else
+        return Trans(id, iter_.seek_begin());
+    }
+    bool SeekToLast(size_t& id, bool bfs_sufflx) {
+      if (bfs_sufflx)
         return Done(id, iter_.seek_end());
-    }
-    bool Seek(size_t& id, bool dfs_value, fstring key) {
-      if (dfs_value)
-        return Trans(id, iter_.seek_lower_bound(key));
       else
+        return Trans(id, iter_.seek_end());
+    }
+    bool Seek(size_t& id, bool bfs_sufflx, fstring key) {
+      if (bfs_sufflx)
         return Done(id, iter_.seek_lower_bound(key));
-    }
-    bool Next(size_t& id, bool dfs_value) {
-      if (dfs_value)
-        return iter_.incr() ? ((id = id + 1), true) : ((id = size_t(-1)), false);
       else
+        return Trans(id, iter_.seek_lower_bound(key));
+    }
+    bool Next(size_t& id, bool bfs_sufflx) {
+      if (bfs_sufflx)
         return Done(id, iter_.incr());
-    }
-    bool Prev(size_t& id, bool dfs_value) {
-      if (dfs_value)
-        return iter_.decr() ? ((id = id - 1), true) : ((id = size_t(-1)), false);
       else
-        return Done(id, iter_.decr());
+        return iter_.incr() ? (id = id + 1, true) : (id = size_t(-1), false);
     }
-    size_t DictRank(size_t id, bool dfs_value) const {
+    bool Prev(size_t& id, bool bfs_sufflx) {
+      if (bfs_sufflx)
+        return Done(id, iter_.decr());
+      else
+        return iter_.decr() ? (id = id - 1, true) : (id = size_t(-1), false);
+    }
+    size_t DictRank(size_t id, bool bfs_sufflx) const {
       auto dawg = static_cast<const NestLoudsTrieDAWG*>(iter_.get_dfa());
       assert(id != size_t(-1));
-      if (dfs_value)
-        return id;
-      else
+      if (bfs_sufflx)
         return dawg->state_to_dict_rank(iter_.word_state());
+      else
+        return id;
     }
   };
 
@@ -1634,43 +1699,54 @@ namespace index_detail {
       *this = std::move(*other);
       delete other;
     }
-    IndexNestLoudsTriePrefix(BaseDFA* trie) : trie_(trie), dfs_value_(true) {
-      dawg_ = trie->get_dawg();
+    IndexNestLoudsTriePrefix(NestLoudsTrieDAWG* trie, bool bfs_sufflx)
+        : trie_(trie), bfs_sufflx_(bfs_sufflx) {
+      flags.is_bfs_suffix = bfs_sufflx;
     }
     IndexNestLoudsTriePrefix& operator = (const IndexNestLoudsTriePrefix&) = delete;
     IndexNestLoudsTriePrefix& operator = (IndexNestLoudsTriePrefix&&) = default;
 
-    const BaseDAWG* dawg_;
-    unique_ptr<BaseDFA> trie_;
-    bool dfs_value_;
+    unique_ptr<NestLoudsTrieDAWG> trie_;
+    bool bfs_sufflx_;
 
     size_t IteratorStorageSize() const {
       return sizeof(IteratorStorage);
     }
     void IteratorStorageConstruct(void* ptr) const {
-      ::new(ptr) IteratorStorage(static_cast<const NestLoudsTrieDAWG*>(trie_.get()));
+      ::new(ptr) IteratorStorage(trie_.get());
     }
     void IteratorStorageDestruct(void* ptr) const {
       static_cast<IteratorStorage*>(ptr)->~IteratorStorage();
     }
 
     size_t KeyCount() const {
-      return dawg_->num_words();
+      return trie_->num_words();
     }
     size_t TotalKeySize() const {
       return trie_->adfa_total_words_len();
     }
     size_t Find(fstring key, const SuffixBase* suffix, valvec<byte_t>* ctx) const {
       if (suffix == nullptr) {
-        return dawg_->index(key);
+        if (bfs_sufflx_) {
+          return trie_->index(key);
+        }
+        else {
+          size_t index, rank;
+          trie_->lower_bound(key, &index, &rank);
+          if (index == size_t(-1)) {
+            return size_t(-1);
+          }
+          trie_->nth_word(index, ctx);
+          return *ctx == key ? rank : size_t(-1);
+        }
       }
-      std::unique_ptr<IteratorStorage> iter(new IteratorStorage(static_cast<const NestLoudsTrieDAWG*>(trie_.get())));
+      std::unique_ptr<IteratorStorage> iter(new IteratorStorage(trie_.get()));
       size_t id;
-      if (!iter->Seek(id, dfs_value_, key)) {
+      if (!iter->Seek(id, bfs_sufflx_, key)) {
         return size_t(-1);
       }
       auto prefix_key = iter->GetKey();
-      if (prefix_key.commonPrefixLen(key) != prefix_key.size()) {
+      if (!key.startsWith(prefix_key)) {
         return size_t(-1);
       }
       size_t suffix_id;
@@ -1683,39 +1759,53 @@ namespace index_detail {
       return id;
     }
     size_t DictRank(fstring key, const SuffixBase* suffix, valvec<byte_t>* ctx) const {
+      size_t id, rank;
       if (suffix == nullptr) {
-        return dawg_->dict_rank(key);
+        trie_->lower_bound(key, nullptr, &rank);
+        return rank;
       }
-      std::unique_ptr<IteratorStorage> iter(new IteratorStorage(static_cast<const NestLoudsTrieDAWG*>(trie_.get())));
-      size_t id;
-      if (!iter->Seek(id, dfs_value_, key)) {
-        return KeyCount();
+      fstring prefix_key;
+      trie_->lower_bound(key, &id, &rank);
+      if (id != size_t(-1)) {
+        trie_->nth_word(id, ctx);
+        prefix_key = fstring(*ctx);
+        if (prefix_key != key) {
+          id = trie_->index_prev(id);
+          if (id != size_t(-1)) {
+            trie_->nth_word(id, ctx);
+            prefix_key = fstring(*ctx);
+            --rank;
+          }
+          else {
+            assert(rank == 0);
+            return 0;
+          }
+        }
       }
-      auto prefix_key = iter->GetKey();
-      if (prefix_key.commonPrefixLen(key) != prefix_key.size()) {
-        return iter->DictRank(id, dfs_value_);
+      else {
+        id = trie_->index_end();
+        trie_->nth_word(id, ctx);
+        prefix_key = fstring(*ctx);
       }
-      size_t suffix_id;
-      fstring suffix_key;
-      key = key.substr(prefix_key.size());
-      std::tie(suffix_id, suffix_key) = suffix->LowerBound(key, id, 1, ctx);
-      if (suffix_id == id && suffix_key == key) {
-        return iter->DictRank(id, dfs_value_);
+      if (key.startsWith(prefix_key)) {
+        key = key.substr(prefix_key.size());
+        size_t suffix_id;
+        fstring suffix_key;
+        size_t seek_id = bfs_sufflx_ ? id : rank;
+        std::tie(suffix_id, suffix_key) = suffix->LowerBound(key, seek_id, 1, ctx);
+        if (suffix_id == seek_id && suffix_key == key) {
+          return rank;
+        }
       }
-      assert(suffix_id = id + 1);
-      if (!iter->Next(id, dfs_value_)) {
-        return KeyCount();
-      }
-      return iter->DictRank(id, dfs_value_);
+      return rank + 1;
     }
     bool NeedsReorder() const {
       return true;
     }
     void GetOrderMap(terark::UintVecMin0& newToOld) const {
-      auto trie = static_cast<const NestLoudsTrieDAWG*>(trie_.get());
       NonRecursiveDictionaryOrderToStateMapGenerator gen;
-      gen(*trie, [&](size_t dictOrderOldId, size_t state) {
-        size_t newId = trie->state_to_word_id(state);
+      gen(*trie_, [&](size_t dictOrderOldId, size_t state) {
+        size_t newId = trie_->state_to_word_id(state);
         //assert(trie->state_to_dict_index(state) == dictOrderOldId);
         //assert(trie->dict_index_to_state(dictOrderOldId) == state);
         newToOld.set_wire(newId, dictOrderOldId);
@@ -1723,35 +1813,41 @@ namespace index_detail {
     }
     void BuildCache(double cacheRatio) {
       if (cacheRatio > 1e-8) {
-        auto trie = static_cast<NestLoudsTrieDAWG*>(trie_.get());
-        trie->build_fsa_cache(cacheRatio, NULL);
+        trie_->build_fsa_cache(cacheRatio, NULL);
       }
     }
 
-    bool IterSeekToFirst(size_t& id, IteratorStorage* iter) const {
-      return iter->SeekToFirst(id, dfs_value_);
+    bool IterSeekToFirst(size_t& id, size_t& count, IteratorStorage* iter) const {
+      count = 1;
+      return iter->SeekToFirst(id, bfs_sufflx_);
     }
-    bool IterSeekToLast(size_t& id, IteratorStorage* iter) const {
-      return iter->SeekToLast(id, dfs_value_);
+    bool IterSeekToLast(size_t& id, size_t* count, IteratorStorage* iter) const {
+      if (count != nullptr) {
+        *count = 1;
+      }
+      return iter->SeekToLast(id, bfs_sufflx_);
     }
     bool IterSeek(size_t& id, size_t& count, fstring target, IteratorStorage* iter) const {
       count = 1;
-      return iter->Seek(id, dfs_value_, target);
+      return iter->Seek(id, bfs_sufflx_, target);
     }
     bool IterNext(size_t& id, size_t count, IteratorStorage* iter) const {
       assert(count > 0);
       do {
-        if (!iter->Next(id, dfs_value_)) {
+        if (!iter->Next(id, bfs_sufflx_)) {
           return false;
         }
       } while (--count > 0);
       return true;
     }
-    bool IterPrev(size_t& id, IteratorStorage* iter) const {
-      return iter->Prev(id, dfs_value_);
+    bool IterPrev(size_t& id, size_t* count, IteratorStorage* iter) const {
+      if (count != nullptr) {
+        *count = 1;
+      }
+      return iter->Prev(id, bfs_sufflx_);
     }
     size_t IterDictRank(size_t id, const IteratorStorage* iter) const {
-      return iter->DictRank(id, dfs_value_);
+      return iter->DictRank(id, bfs_sufflx_);
     }
     fstring IterGetKey(size_t id, const IteratorStorage* iter) const {
       return iter->GetKey();
@@ -1765,8 +1861,7 @@ namespace index_detail {
           + ", should be " + ClassName<NestLoudsTrieDAWG>());
       }
       dfa.release();
-      dawg_ = trie_->get_dawg();
-      dfs_value_ = false;
+      bfs_sufflx_ = flags.is_bfs_suffix;
       return true;
     }
     void Save(std::function<void(const void*, size_t)> append) const override {
@@ -2309,7 +2404,7 @@ namespace index_detail {
     NestLoudsTriePrefixProcess(const NestLoudsTrieConfig& cfg, StrVec& keyVec) {
     std::unique_ptr<NestLoudsTrieDAWG> trie(new NestLoudsTrieDAWG());
     trie->build_from(keyVec, cfg);
-    return new IndexNestLoudsTriePrefix<NestLoudsTrieDAWG>(trie.release());
+    return new IndexNestLoudsTriePrefix<NestLoudsTrieDAWG>(trie.release(), true);
   }
 
   template<class StrVec>
