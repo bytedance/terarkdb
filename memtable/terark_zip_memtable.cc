@@ -103,8 +103,8 @@ public:
         , tag_(tag)
         , value_(value) {}
 
-      terark::MainPatricia* trie() {
-        return static_cast<terark::MainPatricia*>(main());
+      terark::MainPatricia* main_trie() {
+        return static_cast<terark::MainPatricia*>(trie());
       }
 
       uint64_t get_tag() {
@@ -119,26 +119,26 @@ public:
         size_t value_loc = terark::MainPatricia::mem_alloc_fail;
         size_t value_size = VarintLength(value_.size()) + value_.size();
         do {
-          vector_loc = trie()->mem_alloc(sizeof(tag_vector_t));
+          vector_loc = main_trie()->mem_alloc(sizeof(tag_vector_t));
           if (vector_loc == terark::MainPatricia::mem_alloc_fail) {
             break;
           }
-          data_loc = trie()->mem_alloc(sizeof(tag_vector_t::data_t));
+          data_loc = main_trie()->mem_alloc(sizeof(tag_vector_t::data_t));
           if (data_loc == terark::MainPatricia::mem_alloc_fail) {
             break;
           }
-          value_loc = trie()->mem_alloc(value_size);
+          value_loc = main_trie()->mem_alloc(value_size);
           if (value_loc == terark::MainPatricia::mem_alloc_fail) {
             break;
           }
 
-          char* value_dst = EncodeVarint32((char*)trie()->mem_get(value_loc),
+          char* value_dst = EncodeVarint32((char*)main_trie()->mem_get(value_loc),
                                            (uint32_t)value_.size());
           memcpy(value_dst, value_.data(), value_.size());
-          auto* data = (tag_vector_t::data_t*)trie()->mem_get(data_loc);
+          auto* data = (tag_vector_t::data_t*)main_trie()->mem_get(data_loc);
           data->loc = (uint32_t)value_loc;
           data->tag = tag_;
-          auto* vector = (tag_vector_t*)trie()->mem_get(vector_loc);
+          auto* vector = (tag_vector_t*)main_trie()->mem_get(vector_loc);
           vector->loc = (uint32_t)data_loc;
           vector->size = 1;
 
@@ -147,13 +147,13 @@ public:
           return true;
         } while (false);
         if (value_loc != terark::MainPatricia::mem_alloc_fail) {
-          trie()->mem_free(value_loc, value_size);
+          main_trie()->mem_free(value_loc, value_size);
         }
         if (data_loc != terark::MainPatricia::mem_alloc_fail) {
-          trie()->mem_free(data_loc, sizeof(tag_vector_t::data_t));
+          main_trie()->mem_free(data_loc, sizeof(tag_vector_t::data_t));
         }
         if (vector_loc != terark::MainPatricia::mem_alloc_fail) {
-          trie()->mem_free(vector_loc, sizeof(tag_vector_t));
+          main_trie()->mem_free(vector_loc, sizeof(tag_vector_t));
         }
         return false;
       }
@@ -368,14 +368,14 @@ public:
         const tag_vector_t::data_t* data;
       };
       VectorData GetVector() {
-        auto trie = static_cast<terark::MainPatricia*>(iter.main());
+        auto trie = static_cast<terark::MainPatricia*>(iter.trie());
         auto vector = (tag_vector_t*)trie->mem_get(*(uint32_t*)iter.value());
         size_t size = vector->size;
         auto data = (tag_vector_t::data_t*)trie->mem_get(vector->loc);
         return { size, data };
       }
       uint32_t GetValue() const {
-        auto trie = static_cast<terark::MainPatricia*>(iter.main());
+        auto trie = static_cast<terark::MainPatricia*>(iter.trie());
         auto vector = (tag_vector_t*)trie->mem_get(*(uint32_t*)iter.value());
         auto data = (tag_vector_t::data_t*)trie->mem_get(vector->loc);
         return data[index].loc;
@@ -603,7 +603,7 @@ public:
     virtual Slice GetValue() const override {
       const HeapItem* item = Current();
       uint32_t value_loc = item->GetValue();
-      auto trie = static_cast<terark::MainPatricia*>(item->iter.main());
+      auto trie = static_cast<terark::MainPatricia*>(item->iter.trie());
       return GetLengthPrefixedSlice((const char*)trie->mem_get(value_loc));
     }
 
