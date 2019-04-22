@@ -847,14 +847,7 @@ namespace index_detail {
             prefix_key = prefix().IterGetKey(m_id, prefix_storage());
           }
           else {
-            if (prefix().IterSeekToFirst(m_id, suffix_count, prefix_storage())) {
-              suffix().IterSet(m_id, suffix_storage());
-              return true;
-            }
-            else {
-              assert(m_id == size_t(-1));
-              return false;
-            }
+            return SeekToFirst();
           }
         }
       }
@@ -1075,7 +1068,6 @@ namespace index_detail {
       valvec<char> name(prefix_name.size() + suffix_name.size(), valvec_reserve());
       name.assign(prefix_name);
       name.append(suffix_name);
-      name.append('\0');
       map_id = g_TerarkIndexFactroy.insert_i(name, this).first;
       g_TerarkIndexTypeFactroy[std::make_pair(std::type_index(typeid(Prefix)), std::type_index(typeid(Suffix)))] = this;
     }
@@ -1726,37 +1718,31 @@ namespace index_detail {
       return trie_->adfa_total_words_len();
     }
     size_t Find(fstring key, const SuffixBase* suffix, valvec<byte_t>* ctx) const {
-      if (suffix == nullptr) {
-        if (bfs_sufflx_) {
-          return trie_->index(key);
-        }
-        else {
-          size_t index, rank;
-          trie_->lower_bound(key, &index, &rank);
-          if (index == size_t(-1)) {
-            return size_t(-1);
-          }
-          trie_->nth_word(index, ctx);
-          return *ctx == key ? rank : size_t(-1);
-        }
+      if (suffix == nullptr && bfs_sufflx_) {
+        return trie_->index(key);
       }
-      std::unique_ptr<IteratorStorage> iter(new IteratorStorage(trie_.get()));
-      size_t id;
-      if (!iter->Seek(id, bfs_sufflx_, key)) {
+      size_t index, rank;
+      trie_->lower_bound(key, &index, &rank);
+      if (index == size_t(-1)) {
         return size_t(-1);
       }
-      auto prefix_key = iter->GetKey();
+      trie_->nth_word(index, ctx);
+      auto prefix_key = fstring(*ctx);
+      if (suffix == nullptr) {
+        return prefix_key == key ? rank : size_t(-1);
+      }
       if (!key.startsWith(prefix_key)) {
         return size_t(-1);
       }
       size_t suffix_id;
       fstring suffix_key;
       key = key.substr(prefix_key.size());
-      std::tie(suffix_id, suffix_key) = suffix->LowerBound(key, id, 1, ctx);
-      if (suffix_id != id || suffix_key != key) {
+      size_t seek_id = bfs_sufflx_ ? index : rank;
+      std::tie(suffix_id, suffix_key) = suffix->LowerBound(key, seek_id, 1, ctx);
+      if (suffix_id != seek_id || suffix_key != key) {
         return size_t(-1);
       }
-      return id;
+      return suffix_id;
     }
     size_t DictRank(fstring key, const SuffixBase* suffix, valvec<byte_t>* ctx) const {
       size_t id, rank;
@@ -2066,7 +2052,8 @@ namespace index_detail {
     }
 
     bool Load(fstring mem) override {
-      std::unique_ptr<BlobStore> base_store(BlobStore::load_from_user_memory(mem));
+      std::unique_ptr<BlobStore> base_store(
+        AbstractBlobStore::load_from_user_memory(mem, AbstractBlobStore::Dictionary()));
       auto store = dynamic_cast<BlobStoreType*>(base_store.get());
       if (store == nullptr) {
         return false;
@@ -2404,7 +2391,7 @@ namespace index_detail {
     NestLoudsTriePrefixProcess(const NestLoudsTrieConfig& cfg, StrVec& keyVec) {
     std::unique_ptr<NestLoudsTrieDAWG> trie(new NestLoudsTrieDAWG());
     trie->build_from(keyVec, cfg);
-    return new IndexNestLoudsTriePrefix<NestLoudsTrieDAWG>(trie.release(), true);
+    return new IndexNestLoudsTriePrefix<NestLoudsTrieDAWG>(trie.release(), false);
   }
 
   template<class StrVec>
@@ -2560,7 +2547,8 @@ namespace index_detail {
       }
       builder.finish();
       memory.shrink_to_fit();
-      auto store = BlobStore::load_from_user_memory(fstring(memory.begin(), memory.size()));
+      auto store = AbstractBlobStore::load_from_user_memory(
+        fstring(memory.begin(), memory.size()), AbstractBlobStore::Dictionary());
       assert(dynamic_cast<ZipOffsetBlobStore*>(store) != nullptr);
       return new IndexBlobStoreSuffix<ZipOffsetBlobStore>(static_cast<ZipOffsetBlobStore*>(store), memory);
     }
