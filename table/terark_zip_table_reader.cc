@@ -1170,6 +1170,7 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   size_t indexSize = info.offset_.front().key;
   size_t storeSize = info.offset_.front().value;
   size_t typeSize = info.offset_.front().type;
+  info.risk_release_ownership();
   try {
     subReader_.store_.reset(AbstractBlobStore::load_from_user_memory(
       fstring(file_data.data() + indexSize, storeSize),

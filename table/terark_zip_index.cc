@@ -995,7 +995,7 @@ namespace index_detail {
       factory_->Reorder(this, newToOld, write, tmpFile);
     }
     size_t Find(fstring key, valvec<byte_t>* ctx) const override {
-      if (key.commonPrefixLen(common_) != common_.size()) {
+      if (!key.startsWith(common_)) {
         return size_t(-1);
       }
       key = key.substr(common_.size());
@@ -1730,31 +1730,37 @@ namespace index_detail {
       if (suffix == nullptr && bfs_sufflx_) {
         return trie_->index(key);
       }
-      size_t index, rank;
-      trie_->lower_bound(key, &index, &rank);
-      if (index == size_t(-1)) {
-        return size_t(-1);
+      size_t id, rank;
+      fstring prefix_key;
+      trie_->lower_bound(key, &id, &rank);
+      if (id != size_t(-1)) {
+        trie_->nth_word(id, ctx);
+        prefix_key = fstring(*ctx);
+        if (prefix_key != key) {
+          id = trie_->index_prev(id);
+          if (id != size_t(-1)) {
+            trie_->nth_word(id, ctx);
+            prefix_key = fstring(*ctx);
+            --rank;
+          }
+          else {
+            assert(rank == 0);
+            return size_t(-1);
+          }
+        }
       }
-      trie_->nth_word(index, ctx);
-      auto prefix_key = fstring(*ctx);
-      if (suffix == nullptr) {
-        return prefix_key == key ? rank : size_t(-1);
+      else {
+        id = trie_->index_end();
+        trie_->nth_word(id, ctx);
+        prefix_key = fstring(*ctx);
       }
       if (!key.startsWith(prefix_key)) {
-        index = trie_->index_prev(index);
-        if (index == size_t(-1)) {
-          return size_t(-1);
-        }
-        trie_->nth_word(index, ctx);
-        prefix_key = fstring(*ctx);
-        if (!key.startsWith(prefix_key)) {
-          return size_t(-1);
-        }
+        return size_t(-1);
       }
       size_t suffix_id;
       fstring suffix_key;
       key = key.substr(prefix_key.size());
-      size_t seek_id = bfs_sufflx_ ? index : rank;
+      size_t seek_id = bfs_sufflx_ ? id : rank;
       std::tie(suffix_id, suffix_key) = suffix->LowerBound(key, seek_id, 1, ctx);
       if (suffix_id != seek_id || suffix_key != key) {
         return size_t(-1);
@@ -1903,7 +1909,7 @@ namespace index_detail {
     }
 
     bool Load(fstring mem) override {
-      return false;
+      return mem.empty();
     }
     void Save(std::function<void(const void*, size_t)> append) const override {
     }
@@ -2523,9 +2529,9 @@ namespace index_detail {
     input.rewind();
     NestLoudsTrieConfig cfg;
     if (isFixedLen) {
-      FixedLenStrVec keyVec(isFixedLen);
+      FixedLenStrVec keyVec(sumKeyLen / numKeys);
       assert(sumKeyLen % numKeys == 0);
-      IndexFillKeyVector(input, keyVec, numKeys, sumKeyLen, sumKeyLen / numKeys, isReverse);
+      IndexFillKeyVector(input, keyVec, numKeys, sumKeyLen, keyVec.m_fixlen, isReverse);
       NestLoudsTriePrefixSetConfig(cfg, keyVec.mem_size(), keyVec.avg_size(), tzopt);
       return NestLoudsTriePrefixSelect(tzopt.indexType, cfg, keyVec);
     }
@@ -2774,7 +2780,7 @@ namespace index_detail {
   };
 
   bool UseDictZipSuffix(size_t numKeys, size_t sumKeyLen, double zipRatio) {
-    return g_indexEnableDictZipSuffix && (numKeys * 4 + sumKeyLen) * zipRatio < sumKeyLen + numKeys;
+    return g_indexEnableDictZipSuffix && (sumKeyLen + numKeys * 8) * zipRatio < sumKeyLen + numKeys;
   }
 }
 
