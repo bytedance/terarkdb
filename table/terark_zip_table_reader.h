@@ -280,15 +280,16 @@ public:
 
   public:
     ~SubIndex();
-    Status Init(fstring offsetMemory,
-      fstring indexMemory,
-      fstring storeMemory,
+    Status Init(
+      fstring offsetMemory,
+      const byte_t* baseAddress,
       terark::AbstractBlobStore::Dictionary dict,
-      fstring typeMemory,
       int minPreadLen,
       RandomAccessFile* fileObj,
       LruReadonlyCache* cache,
+      bool warmUpIndexOnOpen,
       bool reverse);
+
     size_t GetPrefixLen() const;
     size_t GetSubCount() const;
     const TerarkZipSubReader* GetSubReader(size_t i) const;

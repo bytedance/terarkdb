@@ -102,6 +102,7 @@ private:
     uint64_t valueFileBegin = 0;
     uint64_t valueFileEnd = 0;
     uint64_t seqType = 0;
+    uint64_t zeroSeqCount = 0;
     TempFileDeleteOnClose valueFile;
     bool isValueBuild = false;
     bool isUseDictZip = false;
@@ -140,7 +141,8 @@ private:
     AutoDeleteFile tmpReorderFile;
     bitfield_array<2> type;
   };
-  void BuildReorderMap(BuildReorderParams& params,
+  void BuildReorderMap(valvec<std::unique_ptr<TerarkIndex>>& index_vec,
+                       BuildReorderParams& params,
                        KeyValueStatus& kvs,
                        fstring mmap_memory,
                        AbstractBlobStore* store,
@@ -160,9 +162,8 @@ private:
   Status ZipValueToFinishMulti();
   Status BuilderWriteValues(KeyValueStatus& kvs, std::function<void(fstring val)> write);
   void DoWriteAppend(const void* data, size_t size);
-  Status WriteStore(fstring indexMmap, AbstractBlobStore* store,
-                    KeyValueStatus& kvs,
-                    BlockHandle& dataBlock,
+  Status WriteIndexStore(fstring indexMmap, AbstractBlobStore* store, KeyValueStatus& kvs,
+                    BlockHandle& dataBlock, size_t kvs_index,
                     long long& t5, long long& t6, long long& t7);
   Status WriteSSTFile(long long t3, long long t4, long long td,
                       fstring tmpDictFile,

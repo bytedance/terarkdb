@@ -1128,7 +1128,7 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   isUint64Comparator_ =
     fstring(ioptions.user_comparator->Name()) == "rocksdb.Uint64Comparator";
 #endif
-  BlockContents valueDictBlock, indexBlock, zValueTypeBlock;
+  BlockContents valueDictBlock, offsetBlock;
 #if defined(TerocksPrivateCode)
   BlockContents licenseBlock;
   s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber, ioptions,
@@ -1153,33 +1153,39 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   }
   props->user_collected_properties.emplace(kTerarkZipTableDictSize, lcast(dict.size()));
   // PlainBlobStore & MixedLenBlobStore no dict
-  s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber, ioptions,
-    kTerarkZipTableIndexBlock, &indexBlock);
-  if (!s.ok()) {
-    return s;
-  }
   s = LoadTombstone(file, file_size);
   if (global_seqno_ == kDisableGlobalSequenceNumber) {
     global_seqno_ = 0;
   }
+  s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber, ioptions,
+    kTerarkZipTableOffsetBlock, &offsetBlock);
+  if (!s.ok()) {
+    return s;
+  }
+  TerarkZipMultiOffsetInfo info;
+  if (!info.risk_set_memory(offsetBlock.data.data(), offsetBlock.data.size())) {
+    return Status::InvalidArgument("TerarkZipTableReader::Open()",
+      "Invalid TerarkZipMultiOffsetInfo");
+  }
+  size_t indexSize = info.offset_.front().key;
+  size_t storeSize = info.offset_.front().value;
+  size_t typeSize = info.offset_.front().type;
   try {
     subReader_.store_.reset(AbstractBlobStore::load_from_user_memory(
-      fstring(file_data.data(), props->data_size),
+      fstring(file_data.data() + indexSize, storeSize),
       getVerifyDict(dict)
     ));
   }
   catch (const BadCrc32cException& ex) {
     return Status::Corruption("TerarkZipTableReader::Open()", ex.what());
   }
-  s = LoadIndex(indexBlock.data);
+  s = LoadIndex(Slice(file_data.data(), indexSize));
   if (!s.ok()) {
     return s;
   }
   size_t recNum = subReader_.index_->NumKeys();
-  s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber, ioptions,
-    kTerarkZipTableValueTypeBlock, &zValueTypeBlock);
-  if (s.ok()) {
-    subReader_.type_.risk_set_data((byte_t*)zValueTypeBlock.data.data(), recNum);
+  if (typeSize > 0) {
+    subReader_.type_.risk_set_data((byte_t*)file_data.data() + indexSize + storeSize, recNum);
   }
   subReader_.subIndex_ = 0;
   subReader_.storeFD_ = file_->file()->FileDescriptor();
@@ -1187,7 +1193,7 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   subReader_.storeOffset_ = 0;
   subReader_.InitUsePread(tzto_.minPreadLen);
   subReader_.rawReaderOffset_ = 0;
-  subReader_.rawReaderSize_ = indexBlock.data.size() + props->data_size;
+  subReader_.rawReaderSize_ = indexSize + storeSize + typeSize;
   if (subReader_.storeUsePread_) {
     subReader_.cache_ = table_factory_->cache();
     if (subReader_.cache_) {
@@ -1196,7 +1202,7 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   }
   long long t0 = g_pf.now();
   if (tzto_.warmUpIndexOnOpen) {
-    MmapWarmUp(fstringOf(indexBlock.data));
+    MmapWarmUp(fstring(file_data.data(), indexSize));
     if (!tzto_.warmUpValueOnOpen) {
       for (fstring block : subReader_.store_->get_meta_blocks()) {
         MmapWarmUp(block);
@@ -1452,32 +1458,30 @@ TerarkZipTableMultiReader::SubIndex::~SubIndex() {
 
 Status TerarkZipTableMultiReader::SubIndex::Init(
                       fstring offsetMemory,
-                      fstring indexMemory,
-                      fstring storeMemory,
+                      const byte_t* baseAddress,
                       AbstractBlobStore::Dictionary dict,
-                      fstring typeMemory,
                       int minPreadLen,
                       RandomAccessFile* fileObj,
                       LruReadonlyCache* cache,
-                      bool reverse)
-{
-  TerarkZipMultiOffsetInfo offset;
-  if (!offset.risk_set_memory(offsetMemory.data(), offsetMemory.size())) {
+                      bool warmUpIndexOnOpen,
+                      bool reverse) {
+  TerarkZipMultiOffsetInfo offsetInfo;
+  if (!offsetInfo.risk_set_memory(offsetMemory.data(), offsetMemory.size())) {
     return Status::Corruption("bad offset block");
   }
-  TERARK_SCOPE_EXIT(offset.risk_release_ownership());
-  subReader_.reserve(offset.partCount_);
+  TERARK_SCOPE_EXIT(offsetInfo.risk_release_ownership());
+  subReader_.reserve(offsetInfo.partCount_);
 
   cache_ = cache;
-  partCount_ = offset.partCount_;
-  prefixLen_ = offset.prefixLen_;
+  partCount_ = offsetInfo.partCount_;
+  prefixLen_ = offsetInfo.prefixLen_;
   alignedPrefixLen_ = terark::align_up(prefixLen_, 8);
   prefixSet_.resize(alignedPrefixLen_ * partCount_);
 
   if (prefixLen_ <= 8) {
     for (size_t i = 0; i < partCount_; ++i) {
       auto u64p = (uint64_t*)(prefixSet_.data() + i * alignedPrefixLen_);
-      auto src = (const byte_t *)offset.prefixSet_.data() + i * prefixLen_;
+      auto src = (const byte_t *)offsetInfo.prefixSet_.data() + i * prefixLen_;
       *u64p = ReadBigEndianUint64(src, src + prefixLen_);
     }
     if (reverse) {
@@ -1491,13 +1495,13 @@ Status TerarkZipTableMultiReader::SubIndex::Init(
   else {
     for (size_t i = 0; i < partCount_; ++i) {
       memcpy(prefixSet_.data() + i * alignedPrefixLen_,
-        offset.prefixSet_.data() + i * prefixLen_, prefixLen_);
+        offsetInfo.prefixSet_.data() + i * prefixLen_, prefixLen_);
     }
     LowerBoundSubReaderFunc = reverse ? &SubIndex::LowerBoundSubReaderBytewiseReverse
                               : &SubIndex::LowerBoundSubReaderBytewise;
   }
 
-  TerarkZipMultiOffsetInfo::KeyValueOffset last = {0, 0, 0};
+  size_t offset = 0;
   size_t rawSize = 0;
   intptr_t fileFD = fileObj->FileDescriptor();
   hasAnyZipOffset_ = false;
@@ -1506,24 +1510,29 @@ Status TerarkZipTableMultiReader::SubIndex::Init(
     for (size_t i = 0; i < partCount_; ++i) {
       subReader_.push_back();
       auto& part = subReader_.back();
-      auto& curr = offset.offset_[i];
+      auto& curr = offsetInfo.offset_[i];
       part.subIndex_ = i;
       part.storeFileObj_ = fileObj;
       part.storeFD_ = fileFD;
-      part.storeOffset_ = last.value;
-      part.prefix_ = fstring(offset.prefixSet_.data() + i * prefixLen_, prefixLen_);
-      part.index_ = TerarkIndex::LoadMemory({indexMemory.data() + last.key,
-                                             ptrdiff_t(curr.key - last.key)});
-      fstring dataMem(storeMemory.data() + last.value, curr.value - last.value);
-      part.store_.reset(AbstractBlobStore::load_from_user_memory(dataMem, dict));
+      part.rawReaderOffset_ = offset;
+      part.rawReaderSize_ = curr.key + curr.value + curr.type;
+      part.prefix_ = fstring(offsetInfo.prefixSet_.data() + i * prefixLen_, prefixLen_);
+      part.index_ = TerarkIndex::LoadMemory(fstring(baseAddress + offset, curr.key));
+      if (warmUpIndexOnOpen) {
+        MmapWarmUp(baseAddress + offset, curr.key);
+      }
+      part.storeOffset_ = offset += curr.key;
+      part.store_.reset(AbstractBlobStore::load_from_user_memory(fstring(baseAddress + offset, curr.value), dict));
       if (part.store_->is_offsets_zipped()) {
           hasAnyZipOffset_ = true;
       }
       part.InitUsePread(minPreadLen);
-      assert(bitfield_array<2>::compute_mem_size(part.index_->NumKeys()) == curr.type - last.type);
-      part.type_.risk_set_data((byte_t*)(typeMemory.data() + last.type), part.index_->NumKeys());
-      part.rawReaderOffset_ = rawSize;
-      part.rawReaderSize_ = (curr.key - last.key) + dataMem.size();
+      assert(curr.type == 0 || bitfield_array<2>::compute_mem_size(part.index_->NumKeys()) == curr.type);
+      offset += curr.value;
+      if (curr.type > 0) {
+        part.type_.risk_set_data((byte_t*)(baseAddress + offset), part.index_->NumKeys());
+        offset += curr.type;
+      }
       if (part.storeUsePread_ && cache) {
         if (cache_fi_ < 0) {
           cache_fi_ = cache->open(fileFD);
@@ -1532,7 +1541,6 @@ Status TerarkZipTableMultiReader::SubIndex::Init(
         part.storeFD_ = cache_fi_;
       }
       rawSize += part.rawReaderSize_;
-      last = curr;
     }
 #ifndef _MSC_VER
     if (cache_fi_ >= 0) {
@@ -1741,7 +1749,7 @@ TerarkZipTableMultiReader::Open(RandomAccessFileReader* file, uint64_t file_size
 #if defined(TERARK_SUPPORT_UINT64_COMPARATOR) && BOOST_ENDIAN_LITTLE_BYTE
   assert(fstring(ioptions.user_comparator->Name()) != "rocksdb.Uint64Comparator");
 #endif
-  BlockContents valueDictBlock, indexBlock, zValueTypeBlock, offsetBlock;
+  BlockContents valueDictBlock, offsetBlock;
 #if defined(TerocksPrivateCode)
   BlockContents licenseBlock;
   s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber, ioptions,
@@ -1770,28 +1778,17 @@ TerarkZipTableMultiReader::Open(RandomAccessFileReader* file, uint64_t file_size
     dict = dict_.empty() ? valueDictBlock.data : SliceOf(dict_);
   }
   props->user_collected_properties.emplace(kTerarkZipTableDictSize, lcast(dict.size()));
-  s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber, ioptions,
-    kTerarkZipTableIndexBlock, &indexBlock);
-  if (!s.ok()) {
-    return s;
-  }
   s = LoadTombstone(file, file_size);
   if (global_seqno_ == kDisableGlobalSequenceNumber) {
     global_seqno_ = 0;
   }
-  s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber, ioptions,
-    kTerarkZipTableValueTypeBlock, &zValueTypeBlock);
-  if (!s.ok()) {
-    return s;
-  }
   s = subIndex_.Init(fstringOf(offsetBlock.data)
-    , fstringOf(indexBlock.data)
-    , fstring(file_data.data(), props->data_size)
+    , (const byte_t*)file_data.data()
     , getVerifyDict(dict)
-    , fstringOf(zValueTypeBlock.data)
     , tzto_.minPreadLen
     , file_->file()
     , table_factory_->cache()
+    , tzto_.warmUpIndexOnOpen
     , isReverseBytewiseOrder_
   );
   if (!s.ok()) {
@@ -1800,7 +1797,6 @@ TerarkZipTableMultiReader::Open(RandomAccessFileReader* file, uint64_t file_size
   long long t0 = g_pf.now();
 
   if (tzto_.warmUpIndexOnOpen) {
-    MmapWarmUp(fstringOf(indexBlock.data));
     if (!tzto_.warmUpValueOnOpen) {
       MmapWarmUp(fstringOf(valueDictBlock.data));
       for (size_t i = 0; i < subIndex_.GetSubCount(); ++i) {

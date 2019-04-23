@@ -123,8 +123,6 @@ terark::profiling g_pf;
 
 const uint64_t kTerarkZipTableMagicNumber = 0x1122334455667788;
 
-const std::string kTerarkZipTableIndexBlock        = "TerarkZipTableIndexBlock";
-const std::string kTerarkZipTableValueTypeBlock    = "TerarkZipTableValueTypeBlock";
 const std::string kTerarkZipTableValueDictBlock    = "TerarkZipTableValueDictBlock";
 const std::string kTerarkZipTableOffsetBlock       = "TerarkZipTableOffsetBlock";
 const std::string kTerarkEmptyTableKey             = "ThisIsAnEmptyTable";
@@ -708,22 +706,34 @@ TerarkZipTableFactory::NewTableReader(
   s = ReadMetaBlockAdapte(file.get(), file_size, kTerarkZipTableMagicNumber
     , table_reader_options.ioptions, kTerarkZipTableOffsetBlock, &offsetBC);
   if (s.ok()) {
-    std::unique_ptr<TerarkZipTableMultiReader>
-      t(new TerarkZipTableMultiReader(this, table_reader_options, table_options_));
-    s = t->Open(file.release(), file_size);
-    if (!s.ok()) {
+    TerarkZipMultiOffsetInfo info;
+    if (info.risk_set_memory(offsetBC.data.data(), offsetBC.data.size())) {
+      if (info.offset_.size() > 1) {
+        std::unique_ptr<TerarkZipTableMultiReader>
+          t(new TerarkZipTableMultiReader(this, table_reader_options, table_options_));
+        s = t->Open(file.release(), file_size);
+        if (s.ok()) {
+          *table = std::move(t);
+        }
+      }
+      else {
+        std::unique_ptr<TerarkZipTableReader>
+          t(new TerarkZipTableReader(this, table_reader_options, table_options_));
+        s = t->Open(file.release(), file_size);
+        if (s.ok()) {
+          *table = std::move(t);
+        }
+      }
+      info.risk_release_ownership();
       return s;
     }
-    *table = std::move(t);
-    return s;
+    return Status::InvalidArgument(
+      "TerarkZipTableFactory::NewTableReader()", "bad TerarkZipMultiOffsetInfo"
+    );
   }
-  std::unique_ptr<TerarkZipTableReader>
-    t(new TerarkZipTableReader(this, table_reader_options, table_options_));
-  s = t->Open(file.release(), file_size);
-  if (s.ok()) {
-    *table = std::move(t);
-  }
-  return s;
+  return Status::InvalidArgument(
+    "TerarkZipTableFactory::NewTableReader()", "missing TerarkZipMultiOffsetInfo"
+  );
 }
 
 // defined in terark_zip_table_builder.cc

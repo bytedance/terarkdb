@@ -34,6 +34,14 @@ using namespace terark;
 static const uint64_t g_terark_index_prefix_seed = 0x505f6b7261726554ull; // echo Terark_P | od -t x8
 static const uint64_t g_terark_index_suffix_seed = 0x535f6b7261726554ull; // echo Terark_S | od -t x8
 
+using terark::getEnvBool;
+static bool g_indexEnableCompositeIndex = getEnvBool("TerarkZipTable_enableCompositeIndex", true);
+static bool g_indexEnableUintIndex = getEnvBool("TerarkZipTable_enableUintIndex", true);
+static bool g_indexEnableFewZero = getEnvBool("TerarkZipTable_enableFewZero", false);
+static bool g_indexEnableNonDescUint = getEnvBool("TerarkZipTable_enableNonDescUint", true);
+static bool g_indexEnableDynamicSuffix = getEnvBool("TerarkZipTable_enableDynamicSuffix", true);
+static bool g_indexEnableDictZipSuffix = getEnvBool("TerarkZipTable_enableDictZipSuffix", true);
+
 template<class RankSelect> struct RankSelectNeedHint : public std::false_type {};
 template<size_t P, size_t W> struct RankSelectNeedHint<rank_select_few<P, W>> : public std::true_type {};
 
@@ -63,13 +71,6 @@ template<size_t P, size_t W> struct RankSelectNeedHint<rank_select_few<P, W>> : 
 //size_t rs_zero_seq_revlen(const rank_select_fewone<Uint>& rs, size_t pos, size_t* hint) {
 //  return rs.zero_seq_revlen(pos, hint);
 //}
-
-using terark::getEnvBool;
-static bool g_indexEnableFewZero = getEnvBool("TerarkZipTable_enableFewZero", false);
-static bool g_indexEnableUintIndex = getEnvBool("TerarkZipTable_enableUintIndex", true);
-static bool g_indexEnableCompositeUintIndex = getEnvBool("TerarkZipTable_enableCompositeUintIndex", true);
-static bool g_indexEnableSortedUint = getEnvBool("TerarkZipTable_enableSortedUint", true);
-static bool g_indexEnableBigUint0 = getEnvBool("TerarkZipTable_enableBigUint0", true);
 
 static hash_strmap<TerarkIndex::FactoryPtr> g_TerarkIndexFactroy;
 struct TerarkIndexTypeFactroyHash {
@@ -667,6 +668,7 @@ namespace index_detail {
         write(data, size);
         footer.prefix_size += size;
       });
+      assert(footer.prefix_size % 8 == 0);
       footer.prefix_xxhash = dist.digest();
       dist.reset(g_terark_index_suffix_seed);
       footer.suffix_size = 0;
@@ -675,6 +677,7 @@ namespace index_detail {
         write(data, size);
         footer.suffix_size += size;
       });
+      assert(footer.suffix_size % 8 == 0);
       footer.suffix_xxhash = dist.digest();
       auto name = Name();
       assert(name.size() == sizeof footer.class_name);
@@ -688,6 +691,7 @@ namespace index_detail {
       footer.bfs_suffix = true;
       footer.footer_size = sizeof footer;
       footer.common_size = common.size();
+      footer.common_crc32 = Crc32c_update(0, common.data(), common.size());
       write(common.data(), common.size());
       Padzero<8>(write, common.size());
       XXHash64 dist(g_terark_index_prefix_seed);
@@ -868,6 +872,7 @@ namespace index_detail {
             assert(m_id == size_t(-1));
             return false;
           }
+          return true;
         }
       }
       if (!prefix().IterNext(m_id, suffix_count, prefix_storage())) {
@@ -1167,7 +1172,9 @@ namespace index_detail {
       if (key.size() < key_length) {
         return size_t(-1);
       }
-      uint64_t value = ReadBigEndianUint64(key);
+      byte_t buffer[8] = {};
+      memcpy(buffer + (8 - key_length), key.data(), std::min<size_t>(key_length, key.size()));
+      uint64_t value = ReadBigEndianUint64Aligned(buffer, 8);
       if (value < min_value || value > max_value) {
         return size_t(-1);
       }
@@ -1401,7 +1408,9 @@ namespace index_detail {
       if (key.size() < key_length) {
         return size_t(-1);
       }
-      uint64_t value = ReadBigEndianUint64(key);
+      byte_t buffer[8] = {};
+      memcpy(buffer + (8 - key_length), key.data(), std::min<size_t>(key_length, key.size()));
+      uint64_t value = ReadBigEndianUint64Aligned(buffer, 8);
       if (value < min_value || value > max_value) {
         return size_t(-1);
       }
@@ -1608,7 +1617,7 @@ namespace index_detail {
           id = size_t(-1);
           return { false, false };
         }
-        pos += rank_select.zero_seq_len(pos + 1);
+        pos += rank_select.zero_seq_len(pos);
         id = rank_select.rank1(pos);
         count = rank_select.one_seq_len(pos);
         return { true, false };
@@ -1732,7 +1741,15 @@ namespace index_detail {
         return prefix_key == key ? rank : size_t(-1);
       }
       if (!key.startsWith(prefix_key)) {
-        return size_t(-1);
+        index = trie_->index_prev(index);
+        if (index == size_t(-1)) {
+          return size_t(-1);
+        }
+        trie_->nth_word(index, ctx);
+        prefix_key = fstring(*ctx);
+        if (!key.startsWith(prefix_key)) {
+          return size_t(-1);
+        }
       }
       size_t suffix_id;
       fstring suffix_key;
@@ -1963,7 +1980,8 @@ namespace index_detail {
       }
       str_pool_.m_fixlen = header.fixlen;
       str_pool_.m_size = header.size;
-      str_pool_.m_strpool.risk_set_data((byte_t*)mem.data() + sizeof header, mem.size() - sizeof header);
+      assert(mem.size() - sizeof header >= header.fixlen * header.size);
+      str_pool_.m_strpool.risk_set_data((byte_t*)mem.data() + sizeof header, header.fixlen * header.size);
       flags.is_user_mem = true;
       return true;
     }
@@ -1973,6 +1991,7 @@ namespace index_detail {
       };
       append(&header, sizeof header);
       append(str_pool_.data(), str_pool_.mem_size());
+      Padzero<16>(append, sizeof header + header.fixlen * header.size);
     }
     void Reorder(ZReorderMap& newToOld, std::function<void(const void*, size_t)> append, fstring tmpFile) const {
       FunctionAdaptBuffer adaptBuffer(append);
@@ -2102,6 +2121,7 @@ namespace index_detail {
     const UintPrefixBuildInfo& info,
     const TerarkIndex::KeyStat& ks,
     rank_select_few<P, W> &rs, InputBufferType& input) {
+    assert(g_indexEnableFewZero);
     rank_select_few_builder<P, W> builder(info.bit_count0, info.bit_count1, ks.minKey > ks.maxKey);
     for (size_t seq_id = 0; seq_id < info.key_count; ++seq_id) {
       auto key = input.next();
@@ -2150,8 +2170,8 @@ namespace index_detail {
         last = cur;
         rs.set1(pos++);
       }
-      assert(last = info.max_value);
-      assert(pos == bit_count);
+      assert(last == info.max_value);
+      assert(pos + 1 == bit_count);
     }
     else {
       size_t pos = bit_count - 1;
@@ -2164,7 +2184,7 @@ namespace index_detail {
         last = cur;
         rs.set1(--pos);
       }
-      assert(last = info.min_value);
+      assert(last == info.min_value);
       assert(pos == 0);
     }
     rs.build_cache(true, true);
@@ -2175,6 +2195,7 @@ namespace index_detail {
     const UintPrefixBuildInfo& info,
     const TerarkIndex::KeyStat& ks,
     rank_select_few<P, W> &rs, InputBufferType& input) {
+    assert(g_indexEnableFewZero);
     bool isReverse = ks.minKey > ks.maxKey;
     rank_select_few_builder<P, W> builder(info.bit_count0, info.bit_count1, isReverse);
     size_t bit_count = info.bit_count0 + info.bit_count1;
@@ -2189,7 +2210,7 @@ namespace index_detail {
         last = cur;
         builder.insert(pos++);
       }
-      assert(last = info.max_value);
+      assert(last == info.max_value);
       assert(pos + 1 == bit_count);
     }
     else {
@@ -2203,7 +2224,7 @@ namespace index_detail {
         last = cur;
         builder.insert(--pos);
       }
-      assert(last = info.min_value);
+      assert(last == info.min_value);
       assert(pos == 0);
     }
     builder.finish(&rs);
@@ -2217,6 +2238,7 @@ namespace index_detail {
       const TerarkIndex::KeyStat& ks,
       const UintPrefixBuildInfo& info,
       const ImmutableCFOptions* ioption) {
+    assert(g_indexEnableNonDescUint);
     RankSelect rank_select;
     assert(info.min_value <= info.max_value);
     NonDescendingUintPrefixFillRankSelect(info, ks, rank_select, input);
@@ -2236,6 +2258,7 @@ namespace index_detail {
       const TerarkIndex::KeyStat& ks,
       const UintPrefixBuildInfo& info,
       const ImmutableCFOptions* ioption) {
+    assert(g_indexEnableUintIndex);
     input.rewind();
     switch (info.type) {
     case UintPrefixBuildInfo::asc_few_zero_1:
@@ -2500,7 +2523,7 @@ namespace index_detail {
     input.rewind();
     NestLoudsTrieConfig cfg;
     if (isFixedLen) {
-      FixedLenStrVec keyVec;
+      FixedLenStrVec keyVec(isFixedLen);
       assert(sumKeyLen % numKeys == 0);
       IndexFillKeyVector(input, keyVec, numKeys, sumKeyLen, sumKeyLen / numKeys, isReverse);
       NestLoudsTriePrefixSetConfig(cfg, keyVec.mem_size(), keyVec.avg_size(), tzopt);
@@ -2524,8 +2547,9 @@ namespace index_detail {
     BuildFixedStringSuffix(
       InputBufferType& input,
       size_t numKeys, size_t sumKeyLen, size_t fixedLen) {
+    assert(g_indexEnableCompositeIndex);
     input.rewind();
-    FixedLenStrVec keyVec;
+    FixedLenStrVec keyVec(fixedLen);
     IndexFillKeyVector(input, keyVec, numKeys, sumKeyLen, fixedLen, false);
     auto suffix = new IndexFixedStringSuffix();
     suffix->str_pool_.swap(keyVec);
@@ -2537,9 +2561,11 @@ namespace index_detail {
     BuildBlobStoreSuffix(
       InputBufferType& input,
       size_t numKeys, size_t sumKeyLen, double zipRatio) {
+    assert(g_indexEnableCompositeIndex);
+    assert(g_indexEnableDynamicSuffix);
     input.rewind();
     FileMemIO memory;
-    if ((numKeys * 4 + sumKeyLen) * zipRatio > sumKeyLen) {
+    if (!UseDictZipSuffix(numKeys, sumKeyLen, zipRatio)) {
       terark::ZipOffsetBlobStore::MyBuilder builder(128, memory);
       for (size_t i = 0; i < numKeys; ++i) {
         auto str = input.next();
@@ -2596,6 +2622,160 @@ namespace index_detail {
     }
   }
 
+  UintPrefixBuildInfo GetUintPrefixBuildInfo(const TerarkIndex::KeyStat& ks, size_t cplen, double zipRatio) {
+    UintPrefixBuildInfo result = {
+      0, 0, 0, 0, 0, 0, 0, UintPrefixBuildInfo::fail
+    };
+    if (!g_indexEnableUintIndex || (!g_indexEnableDynamicSuffix && ks.maxKeyLen != ks.minKeyLen)) {
+      return result;
+    }
+    size_t keyCount = ks.keyCount;
+    size_t maxPrefixLen = std::min<size_t>(8, ks.minKeyLen - cplen);
+    size_t totalKeySize = ks.sumKeyLen - keyCount * cplen;
+    size_t bestCost = totalKeySize;
+    if (ks.minKeyLen != ks.maxKeyLen) {
+      bestCost += keyCount;
+    }
+    size_t targetCost = bestCost * 4 / 5;
+    size_t entryCnt[8] = {};
+    for (size_t i = cplen, e = cplen + 8; i < e; ++i) {
+      entryCnt[i - cplen] = keyCount - (i < ks.diff.size() ? ks.diff[i].cnt : 0);
+    }
+    for (size_t i = 1; i <= maxPrefixLen; ++i) {
+      if (cplen + i < ks.diff.size() && ks.diff[cplen + i].max > 8) {
+        continue;
+      }
+      if (!g_indexEnableCompositeIndex && ks.maxKeyLen != ks.minKeyLen && cplen + i != ks.maxKeyLen) {
+        continue;
+      }
+      UintPrefixBuildInfo info;
+      info.key_length = i;
+      info.key_count = keyCount;
+      info.min_value = ReadBigEndianUint64(ks.minKey.begin() + cplen, i);
+      info.max_value = ReadBigEndianUint64(ks.maxKey.begin() + cplen, i);
+      if (info.min_value > info.max_value) std::swap(info.min_value, info.max_value);
+      uint64_t diff = info.max_value - info.min_value;
+      info.entry_count = entryCnt[i - 1];
+      assert(info.entry_count > 0);
+      assert(diff >= info.entry_count - 1);
+      size_t bit_count;
+      if (info.entry_count == keyCount) {
+        // ascending
+        info.bit_count0 = diff - keyCount + 1;
+        info.bit_count1 = keyCount;
+        bit_count = info.bit_count0 + info.bit_count1;
+      }
+      else {
+        // non descending
+        if (diff == std::numeric_limits<uint64_t>::max()) {
+          info.bit_count0 = size_t(-1);
+        }
+        else {
+          info.bit_count0 = diff + 1;
+        }
+        info.bit_count1 = keyCount;
+        if (keyCount + 1 > std::numeric_limits<uint64_t>::max() - diff) {
+          bit_count = size_t(-1);
+        }
+        else {
+          bit_count = diff + keyCount + 1;
+        }
+      }
+      size_t fewCount = info.bit_count0 / 100 + info.bit_count1 / 100;
+      size_t prefixCost;
+      if (info.entry_count == diff) {
+        info.type = UintPrefixBuildInfo::asc_allone;
+        prefixCost = 0;
+      }
+      else if ((g_indexEnableNonDescUint || info.entry_count == keyCount) &&
+        g_indexEnableFewZero && bit_count != size_t(-1) && info.bit_count1 < fewCount && info.bit_count1 < (1ULL << 48)) {
+        if (bit_count < (1ULL << 8)) {
+          info.type = info.entry_count == keyCount ? UintPrefixBuildInfo::asc_few_one_1 : UintPrefixBuildInfo::non_desc_few_one_1;
+        }
+        else if (bit_count < (1ULL << 16)) {
+          info.type = info.entry_count == keyCount ? UintPrefixBuildInfo::asc_few_one_2 : UintPrefixBuildInfo::non_desc_few_one_2;
+        }
+        else if (bit_count < (1ULL << 24)) {
+          info.type = info.entry_count == keyCount ? UintPrefixBuildInfo::asc_few_one_3 : UintPrefixBuildInfo::non_desc_few_one_3;
+        }
+        else if (bit_count < (1ULL << 32)) {
+          info.type = info.entry_count == keyCount ? UintPrefixBuildInfo::asc_few_one_4 : UintPrefixBuildInfo::non_desc_few_one_4;
+        }
+        else if (bit_count < (1ULL << 40)) {
+          info.type = info.entry_count == keyCount ? UintPrefixBuildInfo::asc_few_one_5 : UintPrefixBuildInfo::non_desc_few_one_5;
+        }
+        else if (bit_count < (1ULL << 48)) {
+          info.type = info.entry_count == keyCount ? UintPrefixBuildInfo::asc_few_one_6 : UintPrefixBuildInfo::non_desc_few_one_6;
+        }
+        else if (bit_count < (1ULL << 56)) {
+          info.type = info.entry_count == keyCount ? UintPrefixBuildInfo::asc_few_one_7 : UintPrefixBuildInfo::non_desc_few_one_7;
+        }
+        else {
+          info.type = info.entry_count == keyCount ? UintPrefixBuildInfo::asc_few_one_8 : UintPrefixBuildInfo::non_desc_few_one_8;
+        }
+        prefixCost = info.bit_count1 * sizeof(uint32_t) * 33 / 32;
+      }
+      else if (g_indexEnableFewZero && bit_count != size_t(-1) && info.bit_count0 < fewCount && info.bit_count0 < (1ULL << 48)) {
+        assert(info.entry_count == keyCount);
+        if (bit_count < (1ULL << 8)) {
+          info.type = UintPrefixBuildInfo::asc_few_zero_1;
+        }
+        else if (bit_count < (1ULL << 16)) {
+          info.type = UintPrefixBuildInfo::asc_few_zero_2;
+        }
+        else if (bit_count < (1ULL << 24)) {
+          info.type = UintPrefixBuildInfo::asc_few_zero_3;
+        }
+        else if (bit_count < (1ULL << 32)) {
+          info.type = UintPrefixBuildInfo::asc_few_zero_4;
+        }
+        else if (bit_count < (1ULL << 40)) {
+          info.type = UintPrefixBuildInfo::asc_few_zero_5;
+        }
+        else if (bit_count < (1ULL << 48)) {
+          info.type = UintPrefixBuildInfo::asc_few_zero_6;
+        }
+        else if (bit_count < (1ULL << 56)) {
+          info.type = UintPrefixBuildInfo::asc_few_zero_7;
+        }
+        else {
+          info.type = UintPrefixBuildInfo::asc_few_zero_8;
+        }
+        prefixCost = info.bit_count0 * sizeof(uint32_t) * 33 / 32;
+      }
+      else {
+        if (!g_indexEnableNonDescUint && info.entry_count != keyCount) {
+          continue;
+        }
+        if (info.bit_count0 >= (1ULL << 56) || info.bit_count1 >= (1ULL << 56)) {
+          // too large
+          continue;
+        }
+        size_t bit_count = info.bit_count0 + info.bit_count1;
+        if (bit_count <= std::numeric_limits<uint32_t>::max()) {
+          info.type = info.entry_count == keyCount ? UintPrefixBuildInfo::asc_il_256 : UintPrefixBuildInfo::non_desc_il_256;
+        }
+        else {
+          info.type = info.entry_count == keyCount ? UintPrefixBuildInfo::asc_se_512 : UintPrefixBuildInfo::non_desc_se_512;
+        }
+        prefixCost = bit_count * 21 / 16;
+      }
+      size_t suffixCost = (totalKeySize - i * keyCount) * zipRatio;
+      if (ks.minSuffixLen != ks.maxSuffixLen) {
+        suffixCost += keyCount;
+      }
+      size_t currCost = prefixCost + suffixCost;
+      if (currCost < bestCost && currCost < targetCost) {
+        result = info;
+        bestCost = currCost;
+      }
+    }
+    return result;
+  };
+
+  bool UseDictZipSuffix(size_t numKeys, size_t sumKeyLen, double zipRatio) {
+    return g_indexEnableDictZipSuffix && (numKeys * 4 + sumKeyLen) * zipRatio < sumKeyLen + numKeys;
+  }
 }
 
 TerarkIndex*
@@ -2772,148 +2952,9 @@ TerarkIndex*
   };
 
   assert(ks.keyCount > 0);
-  auto getFixedPrefixLength = [](const TerarkIndex::KeyStat& ks, size_t cplen, double zipRatio) {
-    size_t keyCount = ks.keyCount;
-    size_t maxPrefixLen = std::min<size_t>(8, ks.minKeyLen - cplen);
-    size_t totalKeySize = ks.sumKeyLen - keyCount * cplen;
-    size_t bestCost = totalKeySize;
-    if (ks.minKeyLen != ks.maxKeyLen) {
-      bestCost += keyCount;
-    }
-    size_t targetCost = bestCost * 4 / 5;
-    UintPrefixBuildInfo result = {
-      0, 0, 0, 0, 0, 0, 0, UintPrefixBuildInfo::fail
-    };
-    size_t entryCnt[8] = {};
-    for (size_t i = cplen, e = cplen + 8; i < e; ++i) {
-      entryCnt[i - cplen] = keyCount - (i < ks.diff.size() ? ks.diff[i].cnt : 0);
-    }
-    for (size_t i = 1; i <= maxPrefixLen; ++i) {
-      if (cplen + i < ks.diff.size() && ks.diff[cplen + i].max > 8) {
-        continue;
-      }
-      UintPrefixBuildInfo info;
-      info.key_length = i;
-      info.key_count = keyCount;
-      info.min_value = ReadBigEndianUint64(ks.minKey.begin() + cplen, i);
-      info.max_value = ReadBigEndianUint64(ks.maxKey.begin() + cplen, i);
-      if (info.min_value > info.max_value) std::swap(info.min_value, info.max_value);
-      uint64_t diff = info.max_value - info.min_value;
-      info.entry_count = entryCnt[i - 1];
-      assert(diff >= info.entry_count);
-      size_t bit_count;
-      if (info.entry_count == keyCount) {
-        // ascending
-        info.bit_count0 = diff - keyCount + 1;
-        info.bit_count1 = keyCount;
-        bit_count = info.bit_count0 + info.bit_count1;
-      }
-      else {
-        // non descending
-        if (diff == std::numeric_limits<uint64_t>::max()) {
-          info.bit_count0 = size_t(-1);
-        }
-        else {
-          info.bit_count0 = diff + 1;
-        }
-        info.bit_count1 = keyCount;
-        if (keyCount + 1 > std::numeric_limits<uint64_t>::max() - diff) {
-          bit_count = size_t(-1);
-        }
-        else {
-          bit_count = diff + keyCount + 1;
-        }
-      }
-      size_t fewCount = info.bit_count0 / 100 + info.bit_count1 / 100;
-      size_t prefixCost;
-      if (info.entry_count == diff) {
-        info.type = UintPrefixBuildInfo::asc_allone;
-        prefixCost = 0;
-      }
-      else if (bit_count != size_t(-1) && info.bit_count1 < fewCount && info.bit_count1 < (1ULL << 48)) {
-        if (bit_count < (1ULL << 8)) {
-          info.type = info.entry_count == keyCount ? UintPrefixBuildInfo::asc_few_one_1 : UintPrefixBuildInfo::non_desc_few_one_1;
-        }
-        else if (bit_count < (1ULL << 16)) {
-          info.type = info.entry_count == keyCount ? UintPrefixBuildInfo::asc_few_one_2 : UintPrefixBuildInfo::non_desc_few_one_2;
-        }
-        else if (bit_count < (1ULL << 24)) {
-          info.type = info.entry_count == keyCount ? UintPrefixBuildInfo::asc_few_one_3 : UintPrefixBuildInfo::non_desc_few_one_3;
-        }
-        else if (bit_count < (1ULL << 32)) {
-          info.type = info.entry_count == keyCount ? UintPrefixBuildInfo::asc_few_one_4 : UintPrefixBuildInfo::non_desc_few_one_4;
-        }
-        else if (bit_count < (1ULL << 40)) {
-          info.type = info.entry_count == keyCount ? UintPrefixBuildInfo::asc_few_one_5 : UintPrefixBuildInfo::non_desc_few_one_5;
-        }
-        else if (bit_count < (1ULL << 48)) {
-          info.type = info.entry_count == keyCount ? UintPrefixBuildInfo::asc_few_one_6 : UintPrefixBuildInfo::non_desc_few_one_6;
-        }
-        else if (bit_count < (1ULL << 56)) {
-          info.type = info.entry_count == keyCount ? UintPrefixBuildInfo::asc_few_one_7 : UintPrefixBuildInfo::non_desc_few_one_7;
-        }
-        else {
-          info.type = info.entry_count == keyCount ? UintPrefixBuildInfo::asc_few_one_8 : UintPrefixBuildInfo::non_desc_few_one_8;
-        }
-        prefixCost = info.bit_count1 * sizeof(uint32_t) * 33 / 32;
-      }
-      else if (bit_count != size_t(-1) && info.bit_count0 < fewCount && info.bit_count0 < (1ULL << 48)) {
-        assert(info.entry_count == keyCount);
-        if (bit_count < (1ULL << 8)) {
-          info.type = UintPrefixBuildInfo::asc_few_zero_1;
-        }
-        else if (bit_count < (1ULL << 16)) {
-          info.type = UintPrefixBuildInfo::asc_few_zero_2;
-        }
-        else if (bit_count < (1ULL << 24)) {
-          info.type = UintPrefixBuildInfo::asc_few_zero_3;
-        }
-        else if (bit_count < (1ULL << 32)) {
-          info.type = UintPrefixBuildInfo::asc_few_zero_4;
-        }
-        else if (bit_count < (1ULL << 40)) {
-          info.type = UintPrefixBuildInfo::asc_few_zero_5;
-        }
-        else if (bit_count < (1ULL << 48)) {
-          info.type = UintPrefixBuildInfo::asc_few_zero_6;
-        }
-        else if (bit_count < (1ULL << 56)) {
-          info.type = UintPrefixBuildInfo::asc_few_zero_7;
-        }
-        else {
-          info.type = UintPrefixBuildInfo::asc_few_zero_8;
-        }
-        prefixCost = info.bit_count0 * sizeof(uint32_t) * 33 / 32;
-      }
-      else {
-        if (info.bit_count0 >= (1ULL << 56) || info.bit_count1 >= (1ULL << 56)) {
-          // too large
-          continue;
-        }
-        size_t bit_count = info.bit_count0 + info.bit_count1;
-        if (bit_count <= std::numeric_limits<uint32_t>::max()) {
-          info.type = info.entry_count == keyCount ? UintPrefixBuildInfo::asc_il_256 : UintPrefixBuildInfo::non_desc_il_256;
-        }
-        else {
-          info.type = info.entry_count == keyCount ? UintPrefixBuildInfo::asc_se_512 : UintPrefixBuildInfo::non_desc_se_512;
-        }
-        prefixCost = bit_count * 21 / 16;
-      }
-      size_t suffixCost = (totalKeySize - i * keyCount) * zipRatio;
-      if (ks.minSuffixLen != ks.maxSuffixLen) {
-        suffixCost += keyCount;
-      }
-      size_t currCost = prefixCost + suffixCost;
-      if (currCost < bestCost && currCost < targetCost) {
-        result = info;
-        bestCost = currCost;
-      }
-    }
-    return result;
-  };
-  size_t cplen = commonPrefixLen(ks.minKey, ks.maxKey);
+  size_t cplen = ks.keyCount > 1 ? commonPrefixLen(ks.minKey, ks.maxKey) : 0;
   double zipRatio = double(ks.entropyLen) / ks.sumKeyLen;
-  UintPrefixBuildInfo uint_prefix_info = getFixedPrefixLength(ks, cplen, zipRatio);
+  UintPrefixBuildInfo uint_prefix_info = GetUintPrefixBuildInfo(ks, cplen, zipRatio);
   PrefixBase* prefix;
   SuffixBase* suffix;
   if (uint_prefix_info.key_length > 0) {
@@ -2938,7 +2979,9 @@ TerarkIndex*
       }
     }
   }
-  else if (ks.sumKeyLen - ks.minSuffixLen * ks.keyCount < ks.sumPrefixLen * 5 / 4) {
+  else if (g_indexEnableCompositeIndex && ks.minSuffixLen > 0 &&
+    !UseDictZipSuffix(ks.keyCount, ks.sumKeyLen - ks.sumPrefixLen, zipRatio) &&
+    ks.sumKeyLen - ks.sumPrefixLen - ks.minSuffixLen * ks.keyCount < (ks.sumKeyLen - ks.sumPrefixLen) / 8) {
     size_t suffixLen = ks.minSuffixLen;
     FixSuffixPrefixInputBuffer prefix_input_reader{ reader, cplen, suffixLen, ks.maxKeyLen };
     prefix = BuildNestLoudsTriePrefix(
@@ -2949,13 +2992,14 @@ TerarkIndex*
       suffix_input_reader, ks.keyCount,
       ks.sumKeyLen - ks.keyCount * suffixLen, suffixLen);
   }
-  else if (ks.sumPrefixLen < ks.sumKeyLen * 31 / 32) {
+  else if ((g_indexEnableDynamicSuffix || ks.minSuffixLen == ks.maxSuffixLen) &&
+    g_indexEnableCompositeIndex && ks.sumPrefixLen < ks.sumKeyLen * 31 / 32) {
     MinimizePrefixInputBuffer prefix_input_reader{ reader, cplen, ks.keyCount, ks.maxKeyLen };
     prefix = BuildNestLoudsTriePrefix(
       prefix_input_reader, tzopt, ks.keyCount, ks.sumPrefixLen - ks.keyCount * cplen,
-      ks.minKey > ks.maxKey, ks.minKeyLen == ks.maxKeyLen, ioption);
+      ks.minKey > ks.maxKey, ks.minPrefixLen == ks.maxPrefixLen, ioption);
     MinimizePrefixRemainingInputBuffer suffix_input_reader{ reader, cplen, ks.keyCount, ks.maxKeyLen };
-    if (ks.minSuffixLen == ks.maxSuffixLen) {
+    if (!UseDictZipSuffix(ks.keyCount, ks.sumKeyLen - ks.sumPrefixLen, zipRatio) && ks.minSuffixLen == ks.maxSuffixLen) {
       suffix = BuildFixedStringSuffix(
         suffix_input_reader, ks.keyCount,
         ks.sumKeyLen - ks.sumPrefixLen, ks.maxSuffixLen);
