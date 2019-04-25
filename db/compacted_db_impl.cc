@@ -8,7 +8,7 @@
 #include "db/db_impl.h"
 #include "db/version_set.h"
 #include "table/get_context.h"
-#ifndef _MSC_VER
+#if !defined(_MSC_VER) && !defined(__APPLE__)
 # include <sys/unistd.h>
 # include <table/terark_zip_weak_function.h>
 #endif
@@ -141,7 +141,7 @@ Status CompactedDBImpl::Init(const Options& options) {
 Status CompactedDBImpl::Open(const Options& options,
                              const std::string& dbname, DB** dbptr) {
   *dbptr = nullptr;
-#ifndef _MSC_VER
+#if !defined(_MSC_VER) && !defined(__APPLE__)
   const char* terarkdb_localTempDir = getenv("TerarkZipTable_localTempDir");
   if (terarkdb_localTempDir) {
     if (TerarkZipIsBlackListCF) {
