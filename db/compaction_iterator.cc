@@ -52,6 +52,10 @@ void CompactionIteratorToInternalIterator::Seek(const Slice& target) {
     v = 0;
   }
 
+  if (c_iter_->pinned_iters_mgr_.PinningEnabled()) {
+    c_iter_->pinned_iters_mgr_.ReleasePinnedData();
+  }
+
   IterKey key_for_seek;
   key_for_seek.SetInternalKey(ExtractUserKey(target), kMaxSequenceNumber,
                               kValueTypeForSeek);
