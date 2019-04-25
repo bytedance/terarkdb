@@ -660,7 +660,7 @@ std::future<Status> TerarkZipTableBuilder::Async(std::function<Status()> func) {
 void TerarkZipTableBuilder::BuildIndex(BuildIndexParams& param, KeyValueStatus& kvs) {
   key_freq_.finish();
   param.stat.entropyLen = freq_hist_o1::estimate_size(key_freq_.histogram());
-  key_freq_ = freq_hist_o1();
+  key_freq_.clear();
   assert(param.stat.keyCount > 0);
   param.data.complete_write();
   param.stat.prefix = fstring(kvs.prefix);

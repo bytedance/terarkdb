@@ -2694,7 +2694,7 @@ namespace index_detail {
       }
       size_t fewCount = info.bit_count0 / 100 + info.bit_count1 / 100;
       size_t prefixCost;
-      if (info.entry_count == diff) {
+      if (info.entry_count == keyCount && info.entry_count == diff + 1) {
         info.type = UintPrefixBuildInfo::asc_allone;
         prefixCost = 0;
       }
