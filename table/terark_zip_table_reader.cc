@@ -310,7 +310,7 @@ public:
     value_count_ = 0;
   }
 
-  void SetPinnedItersMgr(PinnedIteratorsManager* pinned_iters_mgr) {
+  void SetPinnedItersMgr(PinnedIteratorsManager* pinned_iters_mgr) override {
     pinned_iters_mgr_ = pinned_iters_mgr;
   }
 
@@ -405,10 +405,10 @@ public:
     return table_reader_options_->file_number;
   }
 
-  bool IsKeyPinned() const {
+  bool IsKeyPinned() const override {
     return pinned_iters_mgr_ && pinned_iters_mgr_->PinningEnabled();
   }
-  bool IsValuePinned() const {
+  bool IsValuePinned() const override {
     return pinned_iters_mgr_ && pinned_iters_mgr_->PinningEnabled();
   }
 
@@ -877,7 +877,7 @@ void TerarkZipSubReader::InitUsePread(int minPreadLen) {
 }
 
 static const byte_t*
-FsPread(void* vself, uint64_t offset, size_t len, valvec<byte_t>* buf) {
+FsPread(void* vself, size_t offset, size_t len, valvec<byte_t>* buf) {
   TerarkZipSubReader* self = (TerarkZipSubReader*)vself;
   buf->resize_no_init(len);
   Status s = self->storeFileObj_->FsRead(offset, len, buf->data());
@@ -1547,8 +1547,8 @@ Status TerarkZipTableMultiReader::SubIndex::Init(
     if (cache_fi_ >= 0) {
       assert(nullptr != cache_);
 #ifdef OS_MACOSX
-      if (fcntl(fd, F_NOCACHE, 1) == -1) {
-        return IOError("While fcntl NoCache"
+      if (fcntl(fileFD, F_NOCACHE, 1) == -1) {
+        return Status::IOError("While fcntl NoCache"
             , "O_DIRECT is required for terark user space cache");
       }
 #else

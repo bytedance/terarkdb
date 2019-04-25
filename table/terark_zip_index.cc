@@ -23,9 +23,6 @@
 #include <terark/zbs/xxhash_helper.hpp>
 #include <terark/num_to_str.hpp>
 #include <terark/io/MemStream.hpp>
-#if defined(TerocksPrivateCode)
-#include <terark/fsa/fsa_for_union_dfa.hpp>
-#endif // TerocksPrivateCode
 
 namespace rocksdb {
 
@@ -249,10 +246,10 @@ namespace index_detail {
     size_t IteratorStorageSize() const override {
       return Prefix::IteratorStorageSize();
     }
-    void IteratorStorageConstruct(void* ptr) const {
+    void IteratorStorageConstruct(void* ptr) const override {
       Prefix::IteratorStorageConstruct(ptr);
     }
-    void IteratorStorageDestruct(void* ptr) const {
+    void IteratorStorageDestruct(void* ptr) const override {
       Prefix::IteratorStorageDestruct(ptr);
     }
 
@@ -271,10 +268,10 @@ namespace index_detail {
     bool NeedsReorder() const override {
       return Prefix::NeedsReorder();
     }
-    void GetOrderMap(UintVecMin0& newToOld) const {
+    void GetOrderMap(UintVecMin0& newToOld) const override {
       Prefix::GetOrderMap(newToOld);
     }
-    void BuildCache(double cacheRatio) {
+    void BuildCache(double cacheRatio) override {
       Prefix::BuildCache(cacheRatio);
     }
 
@@ -412,10 +409,10 @@ namespace index_detail {
     size_t IteratorStorageSize() const override {
       return Suffix::IteratorStorageSize();
     }
-    void IteratorStorageConstruct(void* ptr) const {
+    void IteratorStorageConstruct(void* ptr) const override {
       Suffix::IteratorStorageConstruct(ptr);
     }
-    void IteratorStorageDestruct(void* ptr) const {
+    void IteratorStorageDestruct(void* ptr) const override {
       Suffix::IteratorStorageDestruct(ptr);
     }
 
@@ -787,18 +784,22 @@ namespace index_detail {
   private:
     std::pair<void*, size_t> AllocIteratorStorage_(const IndexParts<Prefix, Suffix>* index) {
       size_t iterator_storage_size = index == nullptr ? 0 : IteratorStorage::GetIteratorStorageSize(index);
-      iterator_storage_.reset(iterator_storage_size > 0 ? ::new byte_t[iterator_storage_size] : nullptr);
-      return { iterator_storage_.get(), iterator_storage_size };
+      void* ptr = iterator_storage_size > 0 ? ::new byte_t[iterator_storage_size] : nullptr;
+      return { ptr, iterator_storage_size };
     }
-    IndexIterator(const IndexParts<Prefix, Suffix>* index, std::pair<void*, size_t> iterator_storage)
-      : IteratorStorage(index, iterator_storage.first, iterator_storage.second) {}
+    IndexIterator(const IndexParts<Prefix, Suffix>* index, bool user_mem, std::pair<void*, size_t> iterator_storage)
+      : IteratorStorage(index, iterator_storage.first, iterator_storage.second) {
+      if (user_mem) {
+        iterator_storage_.reset((byte_t*)iterator_storage.first);
+      }
+    }
 
   public:
     IndexIterator(const IndexParts<Prefix, Suffix>* index, void* iterator_storage, size_t iterator_storage_size)
-      : IndexIterator(index, { iterator_storage, iterator_storage_size }) {}
+      : IndexIterator(index, true, { iterator_storage, iterator_storage_size }) {}
 
     IndexIterator(const IndexParts<Prefix, Suffix>* index)
-      : IndexIterator(index, AllocIteratorStorage_(index)) {}
+      : IndexIterator(index, false, AllocIteratorStorage_(index)) {}
 
     bool SeekToFirst() override {
       size_t suffix_count;
@@ -1913,7 +1914,7 @@ namespace index_detail {
     }
     void Save(std::function<void(const void*, size_t)> append) const override {
     }
-    void Reorder(ZReorderMap& newToOld, std::function<void(const void*, size_t)> append, fstring tmpFile) const {
+    void Reorder(ZReorderMap& newToOld, std::function<void(const void*, size_t)> append, fstring tmpFile) const override {
     }
   };
 
@@ -1999,7 +2000,7 @@ namespace index_detail {
       append(str_pool_.data(), str_pool_.mem_size());
       Padzero<16>(append, sizeof header + header.fixlen * header.size);
     }
-    void Reorder(ZReorderMap& newToOld, std::function<void(const void*, size_t)> append, fstring tmpFile) const {
+    void Reorder(ZReorderMap& newToOld, std::function<void(const void*, size_t)> append, fstring tmpFile) const override {
       FunctionAdaptBuffer adaptBuffer(append);
       OutputBuffer buffer(&adaptBuffer);
       Header header = {
@@ -2089,7 +2090,7 @@ namespace index_detail {
     void Save(std::function<void(const void*, size_t)> append) const override {
       store_.save_mmap(append);
     }
-    void Reorder(ZReorderMap& newToOld, std::function<void(const void*, size_t)> append, fstring tmpFile) const {
+    void Reorder(ZReorderMap& newToOld, std::function<void(const void*, size_t)> append, fstring tmpFile) const override {
       store_.reorder_zip_data(newToOld, append, tmpFile);
     }
   };
@@ -2562,6 +2563,10 @@ namespace index_detail {
     return suffix;
   }
 
+  bool UseDictZipSuffix(size_t numKeys, size_t sumKeyLen, double zipRatio) {
+    return g_indexEnableDictZipSuffix && (sumKeyLen + numKeys * 8) * zipRatio < sumKeyLen + numKeys;
+  }
+
   template<class InputBufferType>
   SuffixBase*
     BuildBlobStoreSuffix(
@@ -2778,10 +2783,6 @@ namespace index_detail {
     }
     return result;
   };
-
-  bool UseDictZipSuffix(size_t numKeys, size_t sumKeyLen, double zipRatio) {
-    return g_indexEnableDictZipSuffix && (sumKeyLen + numKeys * 8) * zipRatio < sumKeyLen + numKeys;
-  }
 }
 
 TerarkIndex*

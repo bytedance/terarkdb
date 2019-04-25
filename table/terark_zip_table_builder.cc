@@ -974,7 +974,7 @@ void TerarkZipTableBuilder::BuildReorderMap(valvec<std::unique_ptr<TerarkIndex>>
     "    usrkeys = %zd  key-segment = %zd  prefix = %zd\n"
     "    raw-key =%9.4f GB  zip-key =%9.4f GB  avg-key =%7.2f  avg-zkey =%7.2f\n"
     "    raw-val =%9.4f GB  zip-val =%9.4f GB  avg-val =%7.2f  avg-zval =%7.2f\n"
-    , this, index_vec.size() == 1 ? index_vec.front()->Name() : "LazyUnionDFA", store->name()
+    , this, index_vec.size() == 1 ? index_vec.front()->Name().data() : "LazyUnionDFA", store->name()
     , store->num_records(), index_vec.size(), kvs.prefix.size()
 
     , rawKeySize*1.0 / 1e9, zipKeySize*1.0 / 1e9

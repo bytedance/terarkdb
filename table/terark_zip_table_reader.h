@@ -58,7 +58,7 @@ class TerarkEmptyTableReader : public TerarkZipTableReaderBase {
   public:
     Iter() {}
     ~Iter() {}
-    void SetPinnedItersMgr(PinnedIteratorsManager*) {}
+    void SetPinnedItersMgr(PinnedIteratorsManager*) override {}
     bool Valid() const override { return false; }
     void SeekToFirst() override {}
     void SeekToLast() override {}
