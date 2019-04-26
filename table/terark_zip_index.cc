@@ -3231,27 +3231,27 @@ using PrefixComponentList = ComponentRegister<>
 ::reg<NAME(M_XL_256_FL ), 1, IndexNestLoudsTriePrefix<NestLoudsTrieDAWG_Mixed_XL_256_32_FL>>
 ::reg<NAME(SE_512_64   ), 1, IndexNestLoudsTriePrefix<NestLoudsTrieDAWG_SE_512_64         >>
 ::reg<NAME(SE_512_64_FL), 1, IndexNestLoudsTriePrefix<NestLoudsTrieDAWG_SE_512_64_FL      >>
-::reg<NAME(A_allone    ), 0, IndexAscendingUintPrefix<rank_select_allone    >>
-::reg<NAME(A_fewzero_1 ), 1, IndexAscendingUintPrefix<rank_select_fewzero<1>>>
-::reg<NAME(A_fewzero_2 ), 1, IndexAscendingUintPrefix<rank_select_fewzero<2>>>
-::reg<NAME(A_fewzero_3 ), 1, IndexAscendingUintPrefix<rank_select_fewzero<3>>>
-::reg<NAME(A_fewzero_4 ), 1, IndexAscendingUintPrefix<rank_select_fewzero<4>>>
-::reg<NAME(A_fewzero_5 ), 1, IndexAscendingUintPrefix<rank_select_fewzero<5>>>
-::reg<NAME(A_fewzero_6 ), 1, IndexAscendingUintPrefix<rank_select_fewzero<6>>>
-::reg<NAME(A_fewzero_7 ), 1, IndexAscendingUintPrefix<rank_select_fewzero<7>>>
-::reg<NAME(A_fewzero_8 ), 1, IndexAscendingUintPrefix<rank_select_fewzero<8>>>
-::reg<NAME(A_il_256_32 ), 0, IndexAscendingUintPrefix<rank_select_il_256_32>>
-::reg<NAME(A_se_512_64 ), 0, IndexAscendingUintPrefix<rank_select_se_512_64>>
-::reg<NAME(A_fewone_1  ), 1, IndexAscendingUintPrefix<rank_select_fewone<1>>>
-::reg<NAME(A_fewone_2  ), 1, IndexAscendingUintPrefix<rank_select_fewone<2>>>
-::reg<NAME(A_fewone_3  ), 1, IndexAscendingUintPrefix<rank_select_fewone<3>>>
-::reg<NAME(A_fewone_4  ), 1, IndexAscendingUintPrefix<rank_select_fewone<4>>>
-::reg<NAME(A_fewone_5  ), 1, IndexAscendingUintPrefix<rank_select_fewone<5>>>
-::reg<NAME(A_fewone_6  ), 1, IndexAscendingUintPrefix<rank_select_fewone<6>>>
-::reg<NAME(A_fewone_7  ), 1, IndexAscendingUintPrefix<rank_select_fewone<7>>>
-::reg<NAME(A_fewone_8  ), 1, IndexAscendingUintPrefix<rank_select_fewone<8>>>
-::reg<NAME(ND_il_256_32), 0, IndexNonDescendingUintPrefix<rank_select_il_256_32>>
-::reg<NAME(ND_se_512_64), 0, IndexNonDescendingUintPrefix<rank_select_se_512_64>>
+::reg<NAME(A_AllOne    ), 0, IndexAscendingUintPrefix<rank_select_allone    >>
+::reg<NAME(A_FewZero_1 ), 1, IndexAscendingUintPrefix<rank_select_fewzero<1>>>
+::reg<NAME(A_FewZero_2 ), 1, IndexAscendingUintPrefix<rank_select_fewzero<2>>>
+::reg<NAME(A_FewZero_3 ), 1, IndexAscendingUintPrefix<rank_select_fewzero<3>>>
+::reg<NAME(A_FewZero_4 ), 1, IndexAscendingUintPrefix<rank_select_fewzero<4>>>
+::reg<NAME(A_FewZero_5 ), 1, IndexAscendingUintPrefix<rank_select_fewzero<5>>>
+::reg<NAME(A_FewZero_6 ), 1, IndexAscendingUintPrefix<rank_select_fewzero<6>>>
+::reg<NAME(A_FewZero_7 ), 1, IndexAscendingUintPrefix<rank_select_fewzero<7>>>
+::reg<NAME(A_FewZero_8 ), 1, IndexAscendingUintPrefix<rank_select_fewzero<8>>>
+::reg<NAME(A_IL_256_32 ), 0, IndexAscendingUintPrefix<rank_select_il_256_32>>
+::reg<NAME(A_SE_512_64 ), 0, IndexAscendingUintPrefix<rank_select_se_512_64>>
+::reg<NAME(A_FewOne_1  ), 1, IndexAscendingUintPrefix<rank_select_fewone<1>>>
+::reg<NAME(A_FewOne_2  ), 1, IndexAscendingUintPrefix<rank_select_fewone<2>>>
+::reg<NAME(A_FewOne_3  ), 1, IndexAscendingUintPrefix<rank_select_fewone<3>>>
+::reg<NAME(A_FewOne_4  ), 1, IndexAscendingUintPrefix<rank_select_fewone<4>>>
+::reg<NAME(A_FewOne_5  ), 1, IndexAscendingUintPrefix<rank_select_fewone<5>>>
+::reg<NAME(A_FewOne_6  ), 1, IndexAscendingUintPrefix<rank_select_fewone<6>>>
+::reg<NAME(A_FewOne_7  ), 1, IndexAscendingUintPrefix<rank_select_fewone<7>>>
+::reg<NAME(A_FewOne_8  ), 1, IndexAscendingUintPrefix<rank_select_fewone<8>>>
+::reg<NAME(ND_IL_256_32), 0, IndexNonDescendingUintPrefix<rank_select_il_256_32>>
+::reg<NAME(ND_SE_512_64), 0, IndexNonDescendingUintPrefix<rank_select_se_512_64>>
 ::reg<NAME(ND_fewone_1 ), 1, IndexNonDescendingUintPrefix<rank_select_fewone<1>>>
 ::reg<NAME(ND_fewone_2 ), 1, IndexNonDescendingUintPrefix<rank_select_fewone<2>>>
 ::reg<NAME(ND_fewone_3 ), 1, IndexNonDescendingUintPrefix<rank_select_fewone<3>>>
