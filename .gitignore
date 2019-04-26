@@ -45,3 +45,5 @@ vs2017
 
 # vim backup file
 *~
+
+cmake-build-debug
