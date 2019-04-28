@@ -4,17 +4,18 @@
 #make shared_lib DEBUG_LEVEL=0 -j 4 DISABLE_WARNING_AS_ERROR=1
 
 
-pkgdir=pkg
+pkgdir=output
 # copy all header files
 mkdir -p $pkgdir
-cp -r db        $pkgdir
-cp -r env       $pkgdir
 cp -r include   $pkgdir
-cp -r memtable  $pkgdir
-cp -r port      $pkgdir
-cp -r table     $pkgdir
-cp -r util      $pkgdir
+cp -r db        $pkgdir/include
+cp -r env       $pkgdir/include
+cp -r memtable  $pkgdir/include
+cp -r port      $pkgdir/include
+cp -r table     $pkgdir/include
+cp -r util      $pkgdir/include
 
+rm -f `find $pkgdir -name '*.cc' -o -name '*.d'`
 
 # detect output dir name
 WITH_BMI2=0
@@ -30,5 +31,4 @@ mkdir -p $pkgdir/lib
 cp build/$PLATFORM_DIR/shared_lib/dbg-0/librocksdb.* $pkgdir/lib
 
 # change directory to fit CICD directory
-mv pkg output
 
