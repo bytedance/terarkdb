@@ -41,4 +41,6 @@ PLATFORM_DIR=$SYSTEM-$COMPILER-bmi2-$WITH_BMI2
 
 # copy dynamic lib
 mkdir -p $pkgdir/lib
-cp build/$PLATFORM_DIR/shared_lib/dbg-0/librocksdb.* $pkgdir/lib
+cp -l build/$PLATFORM_DIR/shared_lib/dbg-0/librocksdb.* $pkgdir/lib
+
+# change directory to fit CICD directory
