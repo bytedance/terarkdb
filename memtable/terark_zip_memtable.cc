@@ -65,15 +65,13 @@ private:
   trie_item_t* current_;
   std::atomic_bool immutable_;
   std::atomic_size_t num_entries_;
-  size_t mem_size_;
 
 public:
   explicit PTrieRep(size_t write_buffer_size, const MemTableRep::KeyComparator &compare,
                     Allocator *allocator, const SliceTransform *)
     : MemTableRep(allocator)
     , immutable_(false)
-    , num_entries_(0)
-    , mem_size_(0) {
+    , num_entries_(0) {
     write_buffer_size = std::min(write_buffer_size, (size_t(1) << 34) - 64*1024);
     current_ = trie_arr_;
     current_->accumulate_mem_size = 0;
@@ -795,7 +793,7 @@ public:
 
     virtual bool IsKeyPinned() const override { return false; }
 
-    virtual bool IsSeekForPrevSupported() const { return true; }
+    virtual bool IsSeekForPrevSupported() const override { return true; }
   };
   virtual MemTableRep::Iterator *GetIterator(Arena *arena = nullptr) override {
     if (current_ == trie_arr_) {

@@ -715,6 +715,7 @@ void TerarkZipTableBuilder::BuildIndex(BuildIndexParams& param, KeyValueStatus& 
       return true;
     };
     if (table_options_.debugLevel == 2 && !verify_index()) {
+      verify_index();
       return Status::Corruption("TerarkZipTableBuilder index check fail",
         indexPtr->Name().data());
     }
@@ -739,6 +740,7 @@ void TerarkZipTableBuilder::BuildIndex(BuildIndexParams& param, KeyValueStatus& 
       indexPtr.reset();
       indexPtr = TerarkIndex::LoadMemory(mmap_file.memory().substr(param.indexFileBegin, fileSize));
       if (!verify_index()) {
+        verify_index();
         return Status::Corruption("TerarkZipTableBuilder index check fail after reload",
           indexPtr->Name().data());
       }
@@ -914,14 +916,11 @@ TerarkZipTableBuilder::CompressDict(fstring tmpDictFile, fstring dict,
 
 Status TerarkZipTableBuilder::WaitBuildIndex() {
   Status result = Status::OK();
-  size_t offset = 0;
   for (auto& kvs : prefixBuildInfos_) {
-    kvs->indexFileBegin = offset;
     for (auto& ptr : kvs->build) {
       auto& param = *ptr;
       assert(param.wait.valid());
       auto s = param.wait.get();
-      offset += param.indexFileEnd - param.indexFileBegin;
       if (terark_unlikely(!s.ok() && result.ok())) {
         result = std::move(s);
       }
@@ -929,7 +928,6 @@ Status TerarkZipTableBuilder::WaitBuildIndex() {
         param.data.close();
       }
     }
-    kvs->indexFileEnd = offset;
   }
   return result;
 }

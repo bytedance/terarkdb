@@ -2679,7 +2679,7 @@ namespace index_detail {
       if (cplen + i < ks.diff.size() && ks.diff[cplen + i].max > 8) {
         continue;
       }
-      if (!g_indexEnableCompositeIndex && ks.maxKeyLen != ks.minKeyLen && cplen + i != ks.maxKeyLen) {
+      if (!g_indexEnableCompositeIndex && (ks.maxKeyLen != ks.minKeyLen || cplen + i != ks.maxKeyLen)) {
         continue;
       }
       UintPrefixBuildInfo info;
@@ -2969,7 +2969,7 @@ TerarkIndex*
     fstring next() {
       reader >> buffer;
       assert(buffer.size() >= suffixSize);
-      return { buffer.data() + suffixSize, ptrdiff_t(suffixSize) };
+      return { buffer.data() + buffer.size() - suffixSize, ptrdiff_t(suffixSize) };
     }
     void rewind() {
       reader.resetbuf();
@@ -3020,7 +3020,7 @@ TerarkIndex*
     FixSuffixInputBuffer suffix_input_reader{ reader, suffixLen, ks.maxKeyLen };
     suffix = BuildFixedStringSuffix(
       suffix_input_reader, ks.keyCount,
-      ks.sumKeyLen - ks.keyCount * suffixLen, suffixLen);
+      ks.keyCount * suffixLen, suffixLen);
   }
   else if ((g_indexEnableDynamicSuffix || ks.minSuffixLen == ks.maxSuffixLen) &&
     g_indexEnableCompositeIndex && ks.sumPrefixLen < ks.sumKeyLen * 31 / 32) {
@@ -3041,7 +3041,7 @@ TerarkIndex*
     }
   }
   else {
-    DefaultInputBuffer input_reader{ reader, cplen, ks.maxKeyLen };
+	    DefaultInputBuffer input_reader{ reader, cplen, ks.maxKeyLen };
     prefix = BuildNestLoudsTriePrefix(
       input_reader, tzopt, ks.keyCount, ks.sumKeyLen - ks.keyCount * cplen,
       ks.minKey > ks.maxKey, ks.minKeyLen == ks.maxKeyLen, ioption);
