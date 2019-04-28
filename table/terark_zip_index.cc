@@ -15,9 +15,6 @@
 #include <terark/util/mmap.hpp>
 #include <terark/util/sortable_strvec.hpp>
 #include <terark/num_to_str.hpp>
-#if defined(TerocksPrivateCode)
-#include <terark/fsa/fsa_for_union_dfa.hpp>
-#endif // TerocksPrivateCode
 
 namespace rocksdb {
 
@@ -2409,13 +2406,6 @@ unique_ptr<TerarkIndex> TerarkIndex::LoadFile(fstring fpath) {
 
 unique_ptr<TerarkIndex> TerarkIndex::LoadMemory(fstring mem) {
   auto header = (const TerarkIndexHeader*)mem.data();
-#if defined(TerocksPrivateCode)
-  if (header->file_size < mem.size()) {
-    auto dfa = loadAsLazyUnionDFA(mem, true);
-    assert(dfa);
-    return unique_ptr<TerarkIndex>(new NestLoudsTrieIndex<MatchingDFA>(dfa));
-  }
-#endif // TerocksPrivateCode
   size_t idx = g_TerarkIndexFactroy.find_i(header->class_name);
   if (idx >= g_TerarkIndexFactroy.end_i()) {
     throw std::invalid_argument(
