@@ -243,64 +243,64 @@ namespace index_detail {
     using IteratorStorage = typename Prefix::IteratorStorage;
     VirtualPrefixWrapper(Prefix&& prefix) : Prefix(std::move(prefix)) {}
 
-    size_t IteratorStorageSize() const override {
+    size_t IteratorStorageSize() const override final {
       return Prefix::IteratorStorageSize();
     }
-    void IteratorStorageConstruct(void* ptr) const override {
+    void IteratorStorageConstruct(void* ptr) const override final {
       Prefix::IteratorStorageConstruct(ptr);
     }
-    void IteratorStorageDestruct(void* ptr) const override {
+    void IteratorStorageDestruct(void* ptr) const override final {
       Prefix::IteratorStorageDestruct(ptr);
     }
 
-    size_t KeyCount() const override {
+    size_t KeyCount() const override final {
       return Prefix::KeyCount();
     }
-    size_t TotalKeySize() const override {
+    size_t TotalKeySize() const override final {
       return Prefix::TotalKeySize();
     }
-    size_t Find(fstring key, const SuffixBase* suffix, valvec<byte_t>* ctx) const override {
+    size_t Find(fstring key, const SuffixBase* suffix, valvec<byte_t>* ctx) const override final {
       return Prefix::Find(key, suffix, ctx);
     }
-    size_t DictRank(fstring key, const SuffixBase* suffix, valvec<byte_t>* ctx) const override {
+    size_t DictRank(fstring key, const SuffixBase* suffix, valvec<byte_t>* ctx) const override final {
       return Prefix::DictRank(key, suffix, ctx);
     }
-    bool NeedsReorder() const override {
+    bool NeedsReorder() const override final {
       return Prefix::NeedsReorder();
     }
-    void GetOrderMap(UintVecMin0& newToOld) const override {
+    void GetOrderMap(UintVecMin0& newToOld) const override final {
       Prefix::GetOrderMap(newToOld);
     }
-    void BuildCache(double cacheRatio) override {
+    void BuildCache(double cacheRatio) override final {
       Prefix::BuildCache(cacheRatio);
     }
 
-    bool IterSeekToFirst(size_t& id, size_t& count, void* iter) const override {
+    bool IterSeekToFirst(size_t& id, size_t& count, void* iter) const override final {
       return Prefix::IterSeekToFirst(id, count, (IteratorStorage*)iter);
     }
-    bool IterSeekToLast(size_t& id, size_t* count, void* iter) const override {
+    bool IterSeekToLast(size_t& id, size_t* count, void* iter) const override final {
       return Prefix::IterSeekToLast(id, count, (IteratorStorage*)iter);
     }
-    bool IterSeek(size_t& id, size_t& count, fstring target, void* iter) const override {
+    bool IterSeek(size_t& id, size_t& count, fstring target, void* iter) const override final {
       return Prefix::IterSeek(id, count, target, (IteratorStorage*)iter);
     }
-    bool IterNext(size_t& id, size_t count, void* iter) const override {
+    bool IterNext(size_t& id, size_t count, void* iter) const override final {
       return Prefix::IterNext(id, count, (IteratorStorage*)iter);
     }
-    bool IterPrev(size_t& id, size_t* count, void* iter) const override {
+    bool IterPrev(size_t& id, size_t* count, void* iter) const override final {
       return Prefix::IterPrev(id, count, (IteratorStorage*)iter);
     }
-    fstring IterGetKey(size_t id, const void* iter) const override {
+    fstring IterGetKey(size_t id, const void* iter) const override final {
       return Prefix::IterGetKey(id, (const IteratorStorage*)iter);
     }
-    size_t IterDictRank(size_t id, const void* iter) const override {
+    size_t IterDictRank(size_t id, const void* iter) const override final {
       return Prefix::IterDictRank(id, (const IteratorStorage*)iter);
     }
 
-    bool Load(fstring mem) override {
+    bool Load(fstring mem) override final {
       return Prefix::Load(mem);
     }
-    void Save(std::function<void(const void*, size_t)> append) const override {
+    void Save(std::function<void(const void*, size_t)> append) const override final {
       Prefix::Save(append);
     }
   };
@@ -375,10 +375,10 @@ namespace index_detail {
       return prefix->IterDictRank(id, iter);
     }
 
-    bool Load(fstring mem) override {
+    bool Load(fstring mem) override final {
       return prefix->Load(mem);
     }
-    void Save(std::function<void(const void*, size_t)> append) const override {
+    void Save(std::function<void(const void*, size_t)> append) const override final {
       prefix->Save(append);
     }
   };
@@ -406,40 +406,40 @@ namespace index_detail {
     using IteratorStorage = typename Suffix::IteratorStorage;
     VirtualSuffixWrapper(Suffix&& suffix) : Suffix(std::move(suffix)) {}
 
-    size_t IteratorStorageSize() const override {
+    size_t IteratorStorageSize() const override final {
       return Suffix::IteratorStorageSize();
     }
-    void IteratorStorageConstruct(void* ptr) const override {
+    void IteratorStorageConstruct(void* ptr) const override final {
       Suffix::IteratorStorageConstruct(ptr);
     }
-    void IteratorStorageDestruct(void* ptr) const override {
+    void IteratorStorageDestruct(void* ptr) const override final {
       Suffix::IteratorStorageDestruct(ptr);
     }
 
-    size_t TotalKeySize() const override {
+    size_t TotalKeySize() const override final {
       return Suffix::TotalKeySize();
     }
-    std::pair<size_t, fstring> LowerBound(fstring target, size_t suffix_id, size_t suffix_count, valvec<byte_t>* ctx) const override {
+    std::pair<size_t, fstring> LowerBound(fstring target, size_t suffix_id, size_t suffix_count, valvec<byte_t>* ctx) const override final {
       return Suffix::LowerBound(target, suffix_id, suffix_count, ctx);
     }
 
-    void IterSet(size_t suffix_id, void* iter) const override {
+    void IterSet(size_t suffix_id, void* iter) const override final {
       Suffix::IterSet(suffix_id, (IteratorStorage*)iter);
     }
-    bool IterSeek(fstring target, size_t& suffix_id, size_t suffix_count, void* iter) const override {
+    bool IterSeek(fstring target, size_t& suffix_id, size_t suffix_count, void* iter) const override final {
       return Suffix::IterSeek(target, suffix_id, suffix_count, (IteratorStorage*)iter);
     }
-    fstring IterGetKey(size_t id, const void* iter) const override {
+    fstring IterGetKey(size_t id, const void* iter) const override final {
       return Suffix::IterGetKey(id, (const IteratorStorage*)iter);
     }
 
-    bool Load(fstring mem) override {
+    bool Load(fstring mem) override final {
       return Suffix::Load(mem);
     }
-    void Save(std::function<void(const void*, size_t)> append) const override {
+    void Save(std::function<void(const void*, size_t)> append) const override final {
       Suffix::Save(append);
     }
-    void Reorder(ZReorderMap& newToOld, std::function<void(const void*, size_t)> append, fstring tmpFile) const override {
+    void Reorder(ZReorderMap& newToOld, std::function<void(const void*, size_t)> append, fstring tmpFile) const override final {
       Suffix::Reorder(newToOld, append, tmpFile);
     }
   };
@@ -473,7 +473,7 @@ namespace index_detail {
     size_t TotalKeySize() const {
       return suffix->TotalKeySize();
     }
-    std::pair<size_t, fstring> LowerBound(fstring target, size_t suffix_id, size_t suffix_count, valvec<byte_t>* ctx) const override {
+    std::pair<size_t, fstring> LowerBound(fstring target, size_t suffix_id, size_t suffix_count, valvec<byte_t>* ctx) const override final {
       return suffix->LowerBound(target, suffix_id, suffix_count, ctx);
     }
 
@@ -487,13 +487,13 @@ namespace index_detail {
       return suffix->IterGetKey(id, iter);
     }
 
-    bool Load(fstring mem) override {
+    bool Load(fstring mem) override final {
       return suffix->Load(mem);
     }
-    void Save(std::function<void(const void*, size_t)> append) const override {
+    void Save(std::function<void(const void*, size_t)> append) const override final {
       suffix->Save(append);
     }
-    void Reorder(ZReorderMap& newToOld, std::function<void(const void*, size_t)> append, fstring tmpFile) const override {
+    void Reorder(ZReorderMap& newToOld, std::function<void(const void*, size_t)> append, fstring tmpFile) const override final {
       suffix->Reorder(newToOld, append, tmpFile);
     }
   };
@@ -517,7 +517,6 @@ namespace index_detail {
     const SuffixBase& suffix_;
     void* prefix_storage_;
     void* suffix_storage_;
-    std::function<void(void*, void*)> destructor_;
 
     template<class Prefix, class Suffix>
     static size_t GetIteratorStorageSize(const IndexParts<Prefix, Suffix>* index) {
@@ -541,17 +540,16 @@ namespace index_detail {
       if (index->suffix_.IteratorStorageSize() > 0) {
         index->suffix_.IteratorStorageConstruct(suffix_storage_);
       }
-      destructor_ = [index](void* prefix_storage, void* suffix_storage) {
+    }
+
+    template<class Prefix, class Suffix>
+    void Destroy(const IndexParts<Prefix, Suffix>* index) {
         if (index->prefix_.IteratorStorageSize() > 0) {
-          index->prefix_.IteratorStorageDestruct(prefix_storage);
+            index->prefix_.IteratorStorageDestruct(prefix_storage_);
         }
         if (index->suffix_.IteratorStorageSize() > 0) {
-          index->suffix_.IteratorStorageDestruct(suffix_storage);
+            index->suffix_.IteratorStorageDestruct(suffix_storage_);
         }
-      };
-    }
-    ~IteratorStorage() {
-      destructor_(prefix_storage_, suffix_storage_);
     }
 
   };
@@ -754,8 +752,9 @@ namespace index_detail {
     using IteratorStorage::suffix_;
     using IteratorStorage::prefix_storage_;
     using IteratorStorage::suffix_storage_;
-    std::unique_ptr<byte_t> iterator_storage_;
-    mutable valvec<byte_t> iterator_key_;
+    const IndexParts<Prefix, Suffix>* index_;
+    byte_t* iterator_storage_ptr_;
+    valvec<byte_t> iterator_key_;
 
     fstring common() const {
       return common_;
@@ -788,10 +787,17 @@ namespace index_detail {
       return { ptr, iterator_storage_size };
     }
     IndexIterator(const IndexParts<Prefix, Suffix>* index, bool user_mem, std::pair<void*, size_t> iterator_storage)
-      : IteratorStorage(index, iterator_storage.first, iterator_storage.second) {
-      if (user_mem) {
-        iterator_storage_.reset((byte_t*)iterator_storage.first);
+      : IteratorStorage(index, iterator_storage.first, iterator_storage.second)
+      , index_(index), iterator_storage_ptr_(nullptr) {
+      if (!user_mem) {
+        iterator_storage_ptr_ = (byte_t*)iterator_storage.first;
       }
+    }
+    bool UpdateKey() {
+      iterator_key_.assign(common_);
+      iterator_key_.append(prefix().IterGetKey(m_id, prefix_storage()));
+      iterator_key_.append(suffix().IterGetKey(m_id, suffix_storage()));
+      return true;
     }
 
   public:
@@ -801,25 +807,31 @@ namespace index_detail {
     IndexIterator(const IndexParts<Prefix, Suffix>* index)
       : IndexIterator(index, false, AllocIteratorStorage_(index)) {}
 
-    bool SeekToFirst() override {
+    ~IndexIterator() {
+      IteratorStorage::Destroy(index_);
+      if (iterator_storage_ptr_ != nullptr) {
+        delete[] iterator_storage_ptr_;
+      }
+    }
+
+    bool SeekToFirst() override final {
       size_t suffix_count;
       if (!prefix().IterSeekToFirst(m_id, suffix_count, prefix_storage())) {
         assert(m_id == size_t(-1));
         return false;
       }
       suffix().IterSet(m_id, suffix_storage());
-      return true;
-
+      return UpdateKey();
     }
-    bool SeekToLast() override {
+    bool SeekToLast() override final {
       if (!prefix().IterSeekToLast(m_id, nullptr, prefix_storage())) {
         assert(m_id == size_t(-1));
         return false;
       }
       suffix().IterSet(m_id, suffix_storage());
-      return true;
+      return UpdateKey();
     }
-    bool Seek(fstring target) override {
+    bool Seek(fstring target) override final {
       size_t cplen = target.commonPrefixLen(common());
       if (cplen != common().size()) {
         assert(target.size() >= cplen);
@@ -837,7 +849,7 @@ namespace index_detail {
       if (suffix().TotalKeySize() == 0) {
         if (prefix().IterSeek(m_id, suffix_count, target, prefix_storage())) {
           suffix().IterSet(m_id, suffix_storage());
-          return true;
+          return UpdateKey();
         }
         else {
           m_id = size_t(-1);
@@ -873,7 +885,7 @@ namespace index_detail {
             assert(m_id == size_t(-1));
             return false;
           }
-          return true;
+          return UpdateKey();
         }
       }
       if (!prefix().IterNext(m_id, suffix_count, prefix_storage())) {
@@ -881,35 +893,32 @@ namespace index_detail {
         return false;
       }
       suffix().IterSet(m_id, suffix_storage());
-      return true;
+      return UpdateKey();
     }
-    bool Next() override {
+    bool Next() override final {
       if (prefix().IterNext(m_id, 1, prefix_storage())) {
         suffix().IterSet(m_id, suffix_storage());
-        return true;
+        return UpdateKey();
       }
       else {
         m_id = size_t(-1);
         return false;
       }
     }
-    bool Prev() override {
+    bool Prev() override final {
       if (prefix().IterPrev(m_id, nullptr, prefix_storage())) {
         suffix().IterSet(m_id, suffix_storage());
-        return true;
+        return UpdateKey();
       }
       else {
         m_id = size_t(-1);
         return false;
       }
     }
-    size_t DictRank() const override {
+    size_t DictRank() const override final {
       return prefix().IterDictRank(m_id, prefix_storage());
     }
-    fstring key() const override {
-      iterator_key_.assign(common_);
-      iterator_key_.append(prefix().IterGetKey(m_id, prefix_storage()));
-      iterator_key_.append(suffix().IterGetKey(m_id, suffix_storage()));
+    fstring key() const override final {
       return iterator_key_;
     }
   };
@@ -986,23 +995,23 @@ namespace index_detail {
 
     const IndexFactoryBase* factory_;
 
-    fstring Name() const override {
+    fstring Name() const override final {
       return factory_->Name();
     }
-    void SaveMmap(std::function<void(const void *, size_t)> write) const override {
+    void SaveMmap(std::function<void(const void *, size_t)> write) const override final {
       factory_->SaveMmap(this, write);
     }
-    void Reorder(ZReorderMap& newToOld, std::function<void(const void *, size_t)> write, fstring tmpFile) const override {
+    void Reorder(ZReorderMap& newToOld, std::function<void(const void *, size_t)> write, fstring tmpFile) const override final {
       factory_->Reorder(this, newToOld, write, tmpFile);
     }
-    size_t Find(fstring key, valvec<byte_t>* ctx) const override {
+    size_t Find(fstring key, valvec<byte_t>* ctx) const override final {
       if (!key.startsWith(common_)) {
         return size_t(-1);
       }
       key = key.substr(common_.size());
       return prefix_.Find(key, suffix_.TotalKeySize() != 0 ? &suffix_ : nullptr, ctx);
     }
-    size_t DictRank(fstring key, valvec<byte_t>* ctx) const override {
+    size_t DictRank(fstring key, valvec<byte_t>* ctx) const override final {
       size_t cplen = key.commonPrefixLen(common_);
       if (cplen != common_.size()) {
         assert(key.size() >= cplen);
@@ -1017,19 +1026,19 @@ namespace index_detail {
       key = key.substr(common_.size());
       return prefix_.DictRank(key, suffix_.TotalKeySize() != 0 ? &suffix_ : nullptr, ctx);
     }
-    size_t NumKeys() const override {
+    size_t NumKeys() const override final {
       return prefix_.KeyCount();
     }
-    size_t TotalKeySize() const override {
+    size_t TotalKeySize() const override final {
       size_t size = NumKeys() * common_.size();
       size += prefix_.TotalKeySize();
       size += suffix_.TotalKeySize();
       return size;
     }
-    fstring Memory() const override {
+    fstring Memory() const override final {
       return fstring();
     }
-    Iterator* NewIterator(void* ptr) const override {
+    Iterator* NewIterator(void* ptr) const override final {
       if (ptr == nullptr) {
         return new IndexIterator<Prefix, Suffix>(this);
       }
@@ -1039,17 +1048,17 @@ namespace index_detail {
         return ::new(ptr) IndexIterator<Prefix, Suffix>(this, storage, storage_size);
       }
     }
-    size_t IteratorSize() const override {
+    size_t IteratorSize() const override final {
       return sizeof(IndexIterator<Prefix, Suffix>) +
         IteratorStorage::GetIteratorStorageSize(this);
     }
-    bool NeedsReorder() const override {
+    bool NeedsReorder() const override final {
       return prefix_.NeedsReorder();
     }
-    void GetOrderMap(terark::UintVecMin0& newToOld) const  override {
+    void GetOrderMap(terark::UintVecMin0& newToOld) const  override final {
       prefix_.GetOrderMap(newToOld);
     }
-    void BuildCache(double cacheRatio) override {
+    void BuildCache(double cacheRatio) override final {
       prefix_.BuildCache(cacheRatio);
     }
   };
@@ -1078,7 +1087,7 @@ namespace index_detail {
       g_TerarkIndexTypeFactroy[std::make_pair(std::type_index(typeid(Prefix)), std::type_index(typeid(Suffix)))] = this;
     }
 
-    fstring Name() const override {
+    fstring Name() const override final {
       return g_TerarkIndexFactroy.key(map_id);
     }
 
@@ -1086,13 +1095,13 @@ namespace index_detail {
     TerarkIndex* CreateIndex(
       Common&& common,
       PrefixBase* prefix,
-      SuffixBase* suffix) const override {
+      SuffixBase* suffix) const override final {
       return new index_type(this, std::move(common), Prefix(prefix), Suffix(suffix));
     }
-    PrefixBase* CreatePrefix() const override {
+    PrefixBase* CreatePrefix() const override final {
       return new Prefix();
     }
-    SuffixBase* CreateSuffix() const override {
+    SuffixBase* CreateSuffix() const override final {
       return new Suffix();
     }
     size_t map_id;
@@ -2564,7 +2573,7 @@ namespace index_detail {
   }
 
   bool UseDictZipSuffix(size_t numKeys, size_t sumKeyLen, double zipRatio) {
-    return g_indexEnableDictZipSuffix && (sumKeyLen + numKeys * 8) * zipRatio < sumKeyLen + numKeys;
+    return g_indexEnableDictZipSuffix && numKeys > 8192 && (sumKeyLen + numKeys * 8) * zipRatio < sumKeyLen + numKeys;
   }
 
   template<class InputBufferType>
@@ -2587,6 +2596,13 @@ namespace index_detail {
       auto store = AbstractBlobStore::load_from_user_memory(
         fstring(memory.begin(), memory.size()), AbstractBlobStore::Dictionary());
       assert(dynamic_cast<ZipOffsetBlobStore*>(store) != nullptr);
+#ifndef NDEBUG
+      input.rewind();
+      for (size_t i = 0; i < numKeys; ++i) {
+        auto str = input.next();
+        assert(str == store->get_record(i));
+      }
+#endif
       return new IndexBlobStoreSuffix<ZipOffsetBlobStore>(static_cast<ZipOffsetBlobStore*>(store), memory);
     }
     else {
@@ -2629,6 +2645,13 @@ namespace index_detail {
       auto store = AbstractBlobStore::load_from_user_memory(
         fstring(memory.begin(), memory.size()), AbstractBlobStore::Dictionary());
       assert(dynamic_cast<DictZipBlobStore*>(store) != nullptr);
+#ifndef NDEBUG
+      input.rewind();
+      for (size_t i = 0; i < numKeys; ++i) {
+        auto str = input.next();
+        assert(str == store->get_record(i));
+      }
+#endif
       return new IndexBlobStoreSuffix<DictZipBlobStore>(static_cast<DictZipBlobStore*>(store), memory);
     }
   }
@@ -3055,25 +3078,25 @@ class TerarkUnionIndex : public TerarkIndex {
   class UnionIterator : public TerarkIndex::Iterator {
 
   public:
-    bool SeekToFirst() override {
+    bool SeekToFirst() override final {
       return false;
     }
-    bool SeekToLast() override {
+    bool SeekToLast() override final {
       return false;
     }
-    bool Seek(fstring target) override {
+    bool Seek(fstring target) override final {
       return false;
     }
-    bool Next() override {
+    bool Next() override final {
       return false;
     }
-    bool Prev() override {
+    bool Prev() override final {
       return false;
     }
-    size_t DictRank() const override {
+    size_t DictRank() const override final {
       return 0;
     }
-    fstring key() const override {
+    fstring key() const override final {
       return "";
     }
   };
@@ -3082,47 +3105,47 @@ public:
 
   }
 
-  fstring Name() const override {
+  fstring Name() const override final {
     return "TerarkUnionIndex";
   }
-  void SaveMmap(std::function<void(const void *, size_t)> write) const override {
+  void SaveMmap(std::function<void(const void *, size_t)> write) const override final {
     assert(false);
   }
-  void Reorder(ZReorderMap& newToOld, std::function<void(const void *, size_t)> write, fstring tmpFile) const override {
+  void Reorder(ZReorderMap& newToOld, std::function<void(const void *, size_t)> write, fstring tmpFile) const override final {
     assert(false);
   }
-  size_t Find(fstring key, valvec<byte_t>* ctx) const override {
+  size_t Find(fstring key, valvec<byte_t>* ctx) const override final {
     // TODO
     return 0;
   }
-  size_t DictRank(fstring key, valvec<byte_t>* ctx) const override {
+  size_t DictRank(fstring key, valvec<byte_t>* ctx) const override final {
     // TODO
     return 0;
   }
-  size_t NumKeys() const override {
+  size_t NumKeys() const override final {
     return index_vec_.back().num_keys_acc;
   }
-  size_t TotalKeySize() const override {
+  size_t TotalKeySize() const override final {
     return total_key_size_;
   }
-  fstring Memory() const override {
+  fstring Memory() const override final {
     return memory_;
   }
-  Iterator* NewIterator(void* ptr) const override {
+  Iterator* NewIterator(void* ptr) const override final {
     // TODO
     return nullptr;
   }
-  size_t IteratorSize() const override {
+  size_t IteratorSize() const override final {
     return sizeof(UnionIterator) + iter_size_;
   }
-  bool NeedsReorder() const override {
+  bool NeedsReorder() const override final {
     assert(false);
     return false;
   }
-  void GetOrderMap(terark::UintVecMin0& newToOld) const override {
+  void GetOrderMap(terark::UintVecMin0& newToOld) const override final {
     assert(false);
   }
-  void BuildCache(double cacheRatio) override {
+  void BuildCache(double cacheRatio) override final {
     for (auto& i : index_vec_) {
       i.index->BuildCache(cacheRatio);
     }

@@ -214,7 +214,6 @@ private:
   uint64_t estimateOffset_ = 0;
   size_t dictSize_ = 0;
   float estimateRatio_ = 0;
-  uint64_t zeroSeqCount_ = 0;
   size_t seqExpandSize_ = 0;
   size_t multiValueExpandSize_ = 0;
   Status status_;

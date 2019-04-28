@@ -625,6 +625,10 @@ Status TerarkZipTableBuilder::Finish() try {
   }
 
   AddLastUserKey();
+  auto& sumKeyLen = prefixBuildInfos_.back()->sumKeyLen;
+  for (auto &build : prefixBuildInfos_.back()->build) {
+    sumKeyLen += build->stat.sumKeyLen;
+  }
   BuildIndex(*prefixBuildInfos_.back()->build.back(), *prefixBuildInfos_.back());
   BuildStore(*prefixBuildInfos_.back(), nullptr, BuildStoreInit);
   if (zbuilder_) {
@@ -925,7 +929,6 @@ Status TerarkZipTableBuilder::WaitBuildIndex() {
         param.data.close();
       }
     }
-    auto minKey = fstring(kvs->build.front()->stat.minKey);
     kvs->indexFileEnd = offset;
   }
   return result;
@@ -1001,7 +1004,7 @@ void TerarkZipTableBuilder::BuildReorderMap(valvec<std::unique_ptr<TerarkIndex>>
       ho -= count;
       if (index->NeedsReorder()) {
         size_t memory = UintVecMin0::compute_mem_size_by_max_val(count, count - 1);
-        WaitHandle handle = std::move(WaitForMemory("reorder", memory));
+        WaitHandle handle = WaitForMemory("reorder", memory);
         UintVecMin0 newToOld(index->NumKeys(), index->NumKeys() - 1);
         index->GetOrderMap(newToOld);
         for (size_t n = 0; n < count; ++n) {
@@ -1029,7 +1032,7 @@ void TerarkZipTableBuilder::BuildReorderMap(valvec<std::unique_ptr<TerarkIndex>>
       size_t count = index->NumKeys();
       if (index->NeedsReorder()) {
         size_t memory = UintVecMin0::compute_mem_size_by_max_val(count, count - 1);
-        WaitHandle handle = std::move(WaitForMemory("reorder", memory));
+        WaitHandle handle = WaitForMemory("reorder", memory);
         UintVecMin0 newToOld(index->NumKeys(), index->NumKeys() - 1);
         index->GetOrderMap(newToOld);
         for (size_t n = 0; n < count; ++n) {
@@ -1835,12 +1838,14 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4, long long
     { &kTerarkZipTableOffsetBlock                                  , offsetBlock       },
     { !tombstoneBlock.IsNull() ? &kRangeDelBlock : NULL            , tombstoneBlock    },
   });
+
+  size_t sumKeyLen = kvs.sumKeyLen + kvs.prefix.size() * kvs.numKeys;
   long long t8 = g_pf.now();
   {
     std::unique_lock<std::mutex> lock(g_sumMutex);
     g_sumKeyLen += properties_.raw_key_size;
     g_sumValueLen += properties_.raw_value_size;
-    g_sumUserKeyLen += kvs.sumKeyLen;
+    g_sumUserKeyLen += sumKeyLen;
     g_sumUserKeyNum += kvs.numKeys;
     g_sumEntryNum += properties_.num_entries;
   }
@@ -1901,14 +1906,14 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4, long long
 , double(properties_.data_size)      / properties_.num_entries
 
 , kvs.numKeys
-, double(kvs.sumKeyLen)              / kvs.numKeys
+, double(sumKeyLen)              / kvs.numKeys
 , double(properties_.index_size)     / kvs.numKeys
 , double(properties_.raw_value_size + seqExpandSize_ + multiValueExpandSize_) / kvs.numKeys
 , double(properties_.data_size)      / kvs.numKeys
 
 , seqExpandSize_, multiValueExpandSize_, entropy / 1e9
 
-, kvs.sumKeyLen / 1e9
+, sumKeyLen / 1e9
 , properties_.raw_value_size / 1e9
 , dictSize_ / 1e6
 , rawBytes / 1e9
@@ -1918,12 +1923,12 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4, long long
 , dictBlockSize / 1e6
 , offset_ / 1e9
 
-, double(kvs.sumKeyLen) / properties_.index_size
+, double(sumKeyLen) / properties_.index_size
 , double(properties_.raw_value_size) / properties_.data_size
 , double(dictSize_) / std::max<size_t>(dictBlockSize, 1)
 , double(rawBytes) / offset_
 
-, properties_.index_size / double(kvs.sumKeyLen)
+, properties_.index_size / double(sumKeyLen)
 , properties_.data_size / double(properties_.raw_value_size)
 , dictBlockSize / std::max<double>(dictSize_, 1)
 , offset_ / double(rawBytes)
