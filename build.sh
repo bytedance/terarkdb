@@ -8,6 +8,7 @@ fi
 
 # clone terark-zip-rocksdb: terark-rocksdb depends on some header files from zip-rocksdb
 
+rm -rf terark-zip-rocksdb
 git clone --depth=1 git@code.byted.org:storage/terark-zip-rocksdb.git
 
 # build targets 
@@ -41,6 +42,10 @@ PLATFORM_DIR=$SYSTEM-$COMPILER-bmi2-$WITH_BMI2
 
 # copy dynamic lib
 mkdir -p $pkgdir/lib
-cp -l build/$PLATFORM_DIR/shared_lib/dbg-0/librocksdb.* $pkgdir/lib
+if [ `uname` == Darwin ]; then
+	cp build/$PLATFORM_DIR/shared_lib/dbg-0/librocksdb.* $pkgdir/lib
+else
+	cp -l build/$PLATFORM_DIR/shared_lib/dbg-0/librocksdb.* $pkgdir/lib
+fi
 
 # change directory to fit CICD directory
