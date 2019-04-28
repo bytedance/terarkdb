@@ -23,6 +23,8 @@
 // third party
 #include <zstd/zstd.h>
 
+MY_THREAD_LOCAL(terark::valvec<terark::byte_t>, g_tbuf);
+
 namespace {
 using namespace rocksdb;
 
@@ -295,7 +297,7 @@ public:
   {
     subReader_ = subReader;
     if (subReader_ != nullptr) {
-      iter_.reset(subReader_->index_->NewIterator());
+      iter_.reset(subReader_->index_->NewIterator(nullptr));
       iter_->SetInvalid();
     }
     pinned_iters_mgr_ = NULL;
@@ -308,7 +310,7 @@ public:
     value_count_ = 0;
   }
 
-  void SetPinnedItersMgr(PinnedIteratorsManager* pinned_iters_mgr) {
+  void SetPinnedItersMgr(PinnedIteratorsManager* pinned_iters_mgr) override {
     pinned_iters_mgr_ = pinned_iters_mgr;
   }
 
@@ -403,10 +405,10 @@ public:
     return table_reader_options_->file_number;
   }
 
-  bool IsKeyPinned() const {
+  bool IsKeyPinned() const override {
     return pinned_iters_mgr_ && pinned_iters_mgr_->PinningEnabled();
   }
-  bool IsValuePinned() const {
+  bool IsValuePinned() const override {
     return pinned_iters_mgr_ && pinned_iters_mgr_->PinningEnabled();
   }
 
@@ -427,76 +429,51 @@ protected:
   }
   void SeekInternal(const ParsedInternalKey& pikey) {
     // Damn MySQL-rocksdb may use "rev:" comparator
-    size_t cplen = fstringOf(pikey.user_key).commonPrefixLen(subReader_->commonPrefix_);
-    if (subReader_->commonPrefix_.size() != cplen) {
-      if (pikey.user_key.size() == cplen) {
-        assert(pikey.user_key.size() < subReader_->commonPrefix_.size());
-        if (reverse)
-          SetIterInvalid();
-        else
-          SeekToAscendingFirst();
+    bool ok;
+    int cmp; // compare(iterKey, searchKey)
+    auto seek_key = fstringOf(pikey.user_key);
+    ok = iter_->Seek(seek_key);
+    if (reverse) {
+      if (!ok) {
+        // searchKey is reverse_bytewise less than all keys in database
+        iter_->SeekToLast();
+        assert(iter_->Valid()); // TerarkIndex should not empty
+        ok = true;
+        cmp = -1;
       }
       else {
-        assert(pikey.user_key.size() > cplen);
-        assert(pikey.user_key[cplen] != subReader_->commonPrefix_[cplen]);
-        if ((byte_t(pikey.user_key[cplen]) < byte_t(subReader_->commonPrefix_[cplen])) ^ reverse) {
-          if (reverse)
-            SeekToAscendingLast();
-          else
-            SeekToAscendingFirst();
-        }
-        else {
-          SetIterInvalid();
+        cmp = terark::fstring_func::compare3()(iter_->key(), seek_key);
+        if (cmp != 0) {
+          assert(cmp > 0);
+          iter_->Prev();
+          ok = iter_->Valid();
         }
       }
     }
     else {
-      bool ok;
-      int cmp; // compare(iterKey, searchKey)
-      auto seek_key = fstringOf(pikey.user_key).substr(cplen);
-      ok = iter_->Seek(seek_key);
-      if (reverse) {
-        if (!ok) {
-          // searchKey is reverse_bytewise less than all keys in database
-          iter_->SeekToLast();
-          assert(iter_->Valid()); // TerarkIndex should not empty
-          ok = true;
-          cmp = -1;
-        }
-        else {
-          cmp = terark::fstring_func::compare3()(iter_->key(), seek_key);
-          if (cmp != 0) {
-            assert(cmp > 0);
-            iter_->Prev();
-            ok = iter_->Valid();
+      cmp = 0;
+      if (ok)
+        cmp = terark::fstring_func::compare3()(iter_->key(), seek_key);
+    }
+    if (UnzipIterRecord(ok)) {
+      if (0 == cmp) {
+        value_index_ = size_t(-1);
+        do {
+          value_index_++;
+          DecodeCurrKeyValue();
+          if (key_tag_ == port::kMaxUint64) {
+            continue;
           }
-        }
+          if ((key_tag_ >> 8) <= pikey.sequence) {
+            return; // done
+          }
+        } while (value_index_ + 1 < value_count_);
+        // no visible version/sequence for target, use Next();
+        // if using Next(), version check is not needed
+        Next();
       }
       else {
-        cmp = 0;
-        if (ok)
-          cmp = terark::fstring_func::compare3()(iter_->key(), seek_key);
-      }
-      if (UnzipIterRecord(ok)) {
-        if (0 == cmp) {
-          value_index_ = size_t(-1);
-          do {
-            value_index_++;
-            DecodeCurrKeyValue();
-            if (key_tag_ == port::kMaxUint64) {
-              continue;
-            }
-            if ((key_tag_ >> 8) <= pikey.sequence) {
-              return; // done
-            }
-          } while (value_index_ + 1 < value_count_);
-          // no visible version/sequence for target, use Next();
-          // if using Next(), version check is not needed
-          Next();
-        }
-        else {
-          DecodeCurrKeyValue();
-        }
+        DecodeCurrKeyValue();
       }
     }
   }
@@ -552,8 +529,7 @@ protected:
         zip_value_type_ = subReader_->type_.size()
           ? ZipValueType(subReader_->type_[recId])
           : ZipValueType::kZeroSeq;
-        key_length_ = subReader_->prefix_.size() + subReader_->commonPrefix_.size() +
-                      user_key.size() + sizeof key_tag_;
+        key_length_ = user_key.size() + sizeof key_tag_;
         size_t mulnum_size = 0;
         if (ZipValueType::kMulti == zip_value_type_) {
           mulnum_size = sizeof(uint32_t); // for offsets[valnum_]
@@ -650,10 +626,6 @@ protected:
     }
     byte_t* key_ptr = key_ptr_;
     fstring user_key = iter_->key();
-    memcpy(key_ptr, subReader_->prefix_.data(), subReader_->prefix_.size());
-    key_ptr += subReader_->prefix_.size();
-    memcpy(key_ptr, subReader_->commonPrefix_.data(), subReader_->commonPrefix_.size());
-    key_ptr += subReader_->commonPrefix_.size();
     memcpy(key_ptr, user_key.data(), user_key.size());
     key_ptr += user_key.size();
     EncodeFixed64((char*)key_ptr, key_tag_);
@@ -770,14 +742,13 @@ public:
     if (subReader_ != subReader) {
       ResetIter(subReader);
     }
-    if (!pikey.user_key.starts_with(SliceOf(subReader->prefix_))) {
+    if (!fstringOf(pikey.user_key).startsWith(subReader->prefix_)) {
       if (reverse)
         SeekToAscendingLast();
       else
         SeekToAscendingFirst();
     }
     else {
-      pikey.user_key.remove_prefix(subReader->prefix_.size());
       SeekInternal(pikey);
       if (!Valid()) {
         if (reverse) {
@@ -802,7 +773,7 @@ public:
 protected:
   void ResetIter(const TerarkZipSubReader* subReader) {
     subReader_ = subReader;
-    iter_.reset(subReader->index_->NewIterator());
+    iter_.reset(subReader->index_->NewIterator(nullptr));
     invalidate_offsets_cache();
   }
   bool IndexIterSeekToFirst() override {
@@ -906,7 +877,7 @@ void TerarkZipSubReader::InitUsePread(int minPreadLen) {
 }
 
 static const byte_t*
-FsPread(void* vself, uint64_t offset, size_t len, valvec<byte_t>* buf) {
+FsPread(void* vself, size_t offset, size_t len, valvec<byte_t>* buf) {
   TerarkZipSubReader* self = (TerarkZipSubReader*)vself;
   buf->resize_no_init(len);
   Status s = self->storeFileObj_->FsRead(offset, len, buf->data());
@@ -948,7 +919,6 @@ Status TerarkZipSubReader::Get(SequenceNumber global_seqno,
                                GetContext* get_context, int flag)
 const {
   TERARK_UNUSED_VAR(flag);
-  MY_THREAD_LOCAL(valvec<byte_t>, g_tbuf);
   ParsedInternalKey pikey;
   if (!ParseInternalKey(ikey, &pikey)) {
     return Status::InvalidArgument("TerarkZipTableReader::Get()",
@@ -963,13 +933,8 @@ const {
     user_key = Slice(reinterpret_cast<const char*>(&u64_target), 8);
   }
 #endif
-  assert(user_key.starts_with(prefix_));
-  user_key.remove_prefix(prefix_.size());
-  size_t cplen = user_key.difference_offset(commonPrefix_);
-  if (commonPrefix_.size() != cplen) {
-    return Status::OK();
-  }
-  size_t recId = index_->Find(fstringOf(user_key).substr(cplen));
+  assert(fstringOf(user_key).startsWith(prefix_));
+  size_t recId = index_->Find(fstringOf(user_key), &g_tbuf);
   if (size_t(-1) == recId) {
     return Status::OK();
   }
@@ -1061,25 +1026,7 @@ const {
 }
 
 size_t TerarkZipSubReader::DictRank(fstring key) const {
-  auto& cp = commonPrefix_;
-  size_t cplen = key.commonPrefixLen(cp);
-  if (cp.size() != cplen) {
-    if (key.size() == cplen) {
-      assert(key.size() < cp.size());
-      return 0;
-    }
-    else {
-      assert(key.size() > cplen);
-      assert(key[cplen] != cp[cplen]);
-      if ((byte_t(key[cplen]) < byte_t(cp[cplen])))
-        return 0;
-      else
-        return index_->NumKeys();
-    }
-  }
-  else {
-    return index_->DictRank(key.substr(cplen));
-  }
+  return index_->DictRank(key, &g_tbuf);
 }
 
 TerarkZipSubReader::~TerarkZipSubReader() {
@@ -1181,7 +1128,7 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   isUint64Comparator_ =
     fstring(ioptions.user_comparator->Name()) == "rocksdb.Uint64Comparator";
 #endif
-  BlockContents valueDictBlock, indexBlock, zValueTypeBlock, commonPrefixBlock;
+  BlockContents valueDictBlock, offsetBlock;
 #if defined(TerocksPrivateCode)
   BlockContents licenseBlock;
   s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber, ioptions,
@@ -1206,47 +1153,40 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   }
   props->user_collected_properties.emplace(kTerarkZipTableDictSize, lcast(dict.size()));
   // PlainBlobStore & MixedLenBlobStore no dict
-  s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber, ioptions,
-    kTerarkZipTableIndexBlock, &indexBlock);
-  if (!s.ok()) {
-    return s;
-  }
   s = LoadTombstone(file, file_size);
   if (global_seqno_ == kDisableGlobalSequenceNumber) {
     global_seqno_ = 0;
   }
   s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber, ioptions,
-    kTerarkZipTableCommonPrefixBlock, &commonPrefixBlock);
-  if (s.ok()) {
-    subReader_.commonPrefix_.assign(commonPrefixBlock.data.data(),
-      commonPrefixBlock.data.size());
+    kTerarkZipTableOffsetBlock, &offsetBlock);
+  if (!s.ok()) {
+    return s;
   }
-  else {
-    // some error, usually is
-    // Status::Corruption("Cannot find the meta block", meta_block_name)
-    WARN(ioptions.info_log
-      , "Read %s block failed, treat as old SST version, error: %s\n"
-      , kTerarkZipTableCommonPrefixBlock.c_str()
-      , s.ToString().c_str());
+  TerarkZipMultiOffsetInfo info;
+  if (!info.risk_set_memory(offsetBlock.data.data(), offsetBlock.data.size())) {
+    return Status::InvalidArgument("TerarkZipTableReader::Open()",
+      "Invalid TerarkZipMultiOffsetInfo");
   }
+  size_t indexSize = info.offset_.front().key;
+  size_t storeSize = info.offset_.front().value;
+  size_t typeSize = info.offset_.front().type;
+  info.risk_release_ownership();
   try {
     subReader_.store_.reset(AbstractBlobStore::load_from_user_memory(
-      fstring(file_data.data(), props->data_size),
+      fstring(file_data.data() + indexSize, storeSize),
       getVerifyDict(dict)
     ));
   }
   catch (const BadCrc32cException& ex) {
     return Status::Corruption("TerarkZipTableReader::Open()", ex.what());
   }
-  s = LoadIndex(indexBlock.data);
+  s = LoadIndex(Slice(file_data.data(), indexSize));
   if (!s.ok()) {
     return s;
   }
   size_t recNum = subReader_.index_->NumKeys();
-  s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber, ioptions,
-    kTerarkZipTableValueTypeBlock, &zValueTypeBlock);
-  if (s.ok()) {
-    subReader_.type_.risk_set_data((byte_t*)zValueTypeBlock.data.data(), recNum);
+  if (typeSize > 0) {
+    subReader_.type_.risk_set_data((byte_t*)file_data.data() + indexSize + storeSize, recNum);
   }
   subReader_.subIndex_ = 0;
   subReader_.storeFD_ = file_->file()->FileDescriptor();
@@ -1254,7 +1194,7 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   subReader_.storeOffset_ = 0;
   subReader_.InitUsePread(tzto_.minPreadLen);
   subReader_.rawReaderOffset_ = 0;
-  subReader_.rawReaderSize_ = indexBlock.data.size() + props->data_size;
+  subReader_.rawReaderSize_ = indexSize + storeSize + typeSize;
   if (subReader_.storeUsePread_) {
     subReader_.cache_ = table_factory_->cache();
     if (subReader_.cache_) {
@@ -1263,7 +1203,7 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   }
   long long t0 = g_pf.now();
   if (tzto_.warmUpIndexOnOpen) {
-    MmapWarmUp(fstringOf(indexBlock.data));
+    MmapWarmUp(fstring(file_data.data(), indexSize));
     if (!tzto_.warmUpValueOnOpen) {
       for (fstring block : subReader_.store_->get_meta_blocks()) {
         MmapWarmUp(block);
@@ -1519,33 +1459,30 @@ TerarkZipTableMultiReader::SubIndex::~SubIndex() {
 
 Status TerarkZipTableMultiReader::SubIndex::Init(
                       fstring offsetMemory,
-                      fstring indexMemory,
-                      fstring storeMemory,
+                      const byte_t* baseAddress,
                       AbstractBlobStore::Dictionary dict,
-                      fstring typeMemory,
-                      fstring commonPrefixMemory,
                       int minPreadLen,
                       RandomAccessFile* fileObj,
                       LruReadonlyCache* cache,
-                      bool reverse)
-{
-  TerarkZipMultiOffsetInfo offset;
-  if (!offset.risk_set_memory(offsetMemory.data(), offsetMemory.size())) {
+                      bool warmUpIndexOnOpen,
+                      bool reverse) {
+  TerarkZipMultiOffsetInfo offsetInfo;
+  if (!offsetInfo.risk_set_memory(offsetMemory.data(), offsetMemory.size())) {
     return Status::Corruption("bad offset block");
   }
-  TERARK_SCOPE_EXIT(offset.risk_release_ownership());
-  subReader_.reserve(offset.partCount_);
+  TERARK_SCOPE_EXIT(offsetInfo.risk_release_ownership());
+  subReader_.reserve(offsetInfo.partCount_);
 
   cache_ = cache;
-  partCount_ = offset.partCount_;
-  prefixLen_ = offset.prefixLen_;
+  partCount_ = offsetInfo.partCount_;
+  prefixLen_ = offsetInfo.prefixLen_;
   alignedPrefixLen_ = terark::align_up(prefixLen_, 8);
   prefixSet_.resize(alignedPrefixLen_ * partCount_);
 
   if (prefixLen_ <= 8) {
     for (size_t i = 0; i < partCount_; ++i) {
       auto u64p = (uint64_t*)(prefixSet_.data() + i * alignedPrefixLen_);
-      auto src = (const byte_t *)offset.prefixSet_.data() + i * prefixLen_;
+      auto src = (const byte_t *)offsetInfo.prefixSet_.data() + i * prefixLen_;
       *u64p = ReadBigEndianUint64(src, src + prefixLen_);
     }
     if (reverse) {
@@ -1559,13 +1496,13 @@ Status TerarkZipTableMultiReader::SubIndex::Init(
   else {
     for (size_t i = 0; i < partCount_; ++i) {
       memcpy(prefixSet_.data() + i * alignedPrefixLen_,
-        offset.prefixSet_.data() + i * prefixLen_, prefixLen_);
+        offsetInfo.prefixSet_.data() + i * prefixLen_, prefixLen_);
     }
     LowerBoundSubReaderFunc = reverse ? &SubIndex::LowerBoundSubReaderBytewiseReverse
                               : &SubIndex::LowerBoundSubReaderBytewise;
   }
 
-  TerarkZipMultiOffsetInfo::KeyValueOffset last = {0, 0, 0, 0};
+  size_t offset = 0;
   size_t rawSize = 0;
   intptr_t fileFD = fileObj->FileDescriptor();
   hasAnyZipOffset_ = false;
@@ -1574,26 +1511,29 @@ Status TerarkZipTableMultiReader::SubIndex::Init(
     for (size_t i = 0; i < partCount_; ++i) {
       subReader_.push_back();
       auto& part = subReader_.back();
-      auto& curr = offset.offset_[i];
+      auto& curr = offsetInfo.offset_[i];
       part.subIndex_ = i;
       part.storeFileObj_ = fileObj;
       part.storeFD_ = fileFD;
-      part.storeOffset_ = last.value;
-      part.prefix_.assign(offset.prefixSet_.data() + i * prefixLen_, prefixLen_);
-      part.index_ = TerarkIndex::LoadMemory({indexMemory.data() + last.key,
-                                             ptrdiff_t(curr.key - last.key)});
-      fstring dataMem(storeMemory.data() + last.value, curr.value - last.value);
-      part.store_.reset(AbstractBlobStore::load_from_user_memory(dataMem, dict));
+      part.rawReaderOffset_ = offset;
+      part.rawReaderSize_ = curr.key + curr.value + curr.type;
+      part.prefix_ = fstring(offsetInfo.prefixSet_.data() + i * prefixLen_, prefixLen_);
+      part.index_ = TerarkIndex::LoadMemory(fstring(baseAddress + offset, curr.key));
+      if (warmUpIndexOnOpen) {
+        MmapWarmUp(baseAddress + offset, curr.key);
+      }
+      part.storeOffset_ = offset += curr.key;
+      part.store_.reset(AbstractBlobStore::load_from_user_memory(fstring(baseAddress + offset, curr.value), dict));
       if (part.store_->is_offsets_zipped()) {
           hasAnyZipOffset_ = true;
       }
       part.InitUsePread(minPreadLen);
-      assert(bitfield_array<2>::compute_mem_size(part.index_->NumKeys()) == curr.type - last.type);
-      part.type_.risk_set_data((byte_t*)(typeMemory.data() + last.type), part.index_->NumKeys());
-      part.commonPrefix_.assign(commonPrefixMemory.data() + last.commonPrefix,
-                                curr.commonPrefix - last.commonPrefix);
-      part.rawReaderOffset_ = rawSize;
-      part.rawReaderSize_ = (curr.key - last.key) + dataMem.size();
+      assert(curr.type == 0 || bitfield_array<2>::compute_mem_size(part.index_->NumKeys()) == curr.type);
+      offset += curr.value;
+      if (curr.type > 0) {
+        part.type_.risk_set_data((byte_t*)(baseAddress + offset), part.index_->NumKeys());
+        offset += curr.type;
+      }
       if (part.storeUsePread_ && cache) {
         if (cache_fi_ < 0) {
           cache_fi_ = cache->open(fileFD);
@@ -1602,14 +1542,13 @@ Status TerarkZipTableMultiReader::SubIndex::Init(
         part.storeFD_ = cache_fi_;
       }
       rawSize += part.rawReaderSize_;
-      last = curr;
     }
 #ifndef _MSC_VER
     if (cache_fi_ >= 0) {
       assert(nullptr != cache_);
 #ifdef OS_MACOSX
-      if (fcntl(fd, F_NOCACHE, 1) == -1) {
-        return IOError("While fcntl NoCache"
+      if (fcntl(fileFD, F_NOCACHE, 1) == -1) {
+        return Status::IOError("While fcntl NoCache"
             , "O_DIRECT is required for terark user space cache");
       }
 #else
@@ -1683,7 +1622,7 @@ TerarkZipTableMultiReader::Get(const ReadOptions& ro, const Slice& ikey, GetCont
       "param target.size() < 8 + PrefixLen");
   }
   auto subReader = subIndex_.LowerBoundSubReader(fstringOf(ikey).substr(0, ikey.size() - 8));
-  if (subReader == nullptr || !ikey.starts_with(subReader->prefix_)) {
+  if (subReader == nullptr || !fstringOf(ikey).startsWith(subReader->prefix_)) {
     return Status::OK();
   }
   return subReader->Get(global_seqno_, ro, ikey, get_context, flag);
@@ -1811,8 +1750,7 @@ TerarkZipTableMultiReader::Open(RandomAccessFileReader* file, uint64_t file_size
 #if defined(TERARK_SUPPORT_UINT64_COMPARATOR) && BOOST_ENDIAN_LITTLE_BYTE
   assert(fstring(ioptions.user_comparator->Name()) != "rocksdb.Uint64Comparator");
 #endif
-  BlockContents valueDictBlock, indexBlock, zValueTypeBlock, commonPrefixBlock;
-  BlockContents offsetBlock;
+  BlockContents valueDictBlock, offsetBlock;
 #if defined(TerocksPrivateCode)
   BlockContents licenseBlock;
   s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber, ioptions,
@@ -1841,34 +1779,17 @@ TerarkZipTableMultiReader::Open(RandomAccessFileReader* file, uint64_t file_size
     dict = dict_.empty() ? valueDictBlock.data : SliceOf(dict_);
   }
   props->user_collected_properties.emplace(kTerarkZipTableDictSize, lcast(dict.size()));
-  s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber, ioptions,
-    kTerarkZipTableIndexBlock, &indexBlock);
-  if (!s.ok()) {
-    return s;
-  }
   s = LoadTombstone(file, file_size);
   if (global_seqno_ == kDisableGlobalSequenceNumber) {
     global_seqno_ = 0;
   }
-  s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber, ioptions,
-    kTerarkZipTableCommonPrefixBlock, &commonPrefixBlock);
-  if (!s.ok()) {
-    return s;
-  }
-  s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber, ioptions,
-    kTerarkZipTableValueTypeBlock, &zValueTypeBlock);
-  if (!s.ok()) {
-    return s;
-  }
   s = subIndex_.Init(fstringOf(offsetBlock.data)
-    , fstringOf(indexBlock.data)
-    , fstring(file_data.data(), props->data_size)
+    , (const byte_t*)file_data.data()
     , getVerifyDict(dict)
-    , fstringOf(zValueTypeBlock.data)
-    , fstringOf(commonPrefixBlock.data)
     , tzto_.minPreadLen
     , file_->file()
     , table_factory_->cache()
+    , tzto_.warmUpIndexOnOpen
     , isReverseBytewiseOrder_
   );
   if (!s.ok()) {
@@ -1877,7 +1798,6 @@ TerarkZipTableMultiReader::Open(RandomAccessFileReader* file, uint64_t file_size
   long long t0 = g_pf.now();
 
   if (tzto_.warmUpIndexOnOpen) {
-    MmapWarmUp(fstringOf(indexBlock.data));
     if (!tzto_.warmUpValueOnOpen) {
       MmapWarmUp(fstringOf(valueDictBlock.data));
       for (size_t i = 0; i < subIndex_.GetSubCount(); ++i) {

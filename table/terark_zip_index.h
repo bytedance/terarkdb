@@ -1,6 +1,7 @@
 #pragma once
 
 #include <terark/fstring.hpp>
+#include <terark/histogram.hpp>
 #include <terark/valvec.hpp>
 #include <terark/util/refcount.hpp>
 #include <terark/int_vector.hpp>
@@ -11,6 +12,10 @@
 #include <boost/noncopyable.hpp>
 #include <memory>
 
+namespace terark {
+class ZReorderMap;
+}
+
 namespace rocksdb {
 
 using terark::fstring;
@@ -19,6 +24,8 @@ using terark::byte_t;
 using terark::NativeDataInput;
 using terark::InputBuffer;
 using terark::fstrvec;
+using terark::Uint64Histogram;
+using terark::ZReorderMap;
 using std::unique_ptr;
 
 struct TerarkZipTableOptions;
@@ -43,69 +50,53 @@ public:
     inline void SetInvalid() { m_id = size_t(-1); }
   };
   struct KeyStat {
-    size_t commonPrefixLen = 0;
+    struct DiffItem {
+      size_t cur = 0, max = 0, cnt = 0;
+    };
+    size_t keyCount = 0;
+    size_t sumKeyLen = 0;
     size_t minKeyLen = size_t(-1);
     size_t maxKeyLen = 0;
-    size_t sumKeyLen = 0;
-    size_t numKeys   = 0;
+    size_t minPrefixLen = size_t(-1);
+    size_t maxPrefixLen = 0;
+    size_t sumPrefixLen = 0;
+    size_t minSuffixLen = size_t(-1);
+    size_t maxSuffixLen = 0;
+    size_t entropyLen = 0;
     valvec<byte_t> minKey;
     valvec<byte_t> maxKey;
+    fstring prefix;
+    valvec<DiffItem> diff;
   };
   class Factory : public terark::RefCounter {
   public:
-    size_t  mapIndex = size_t(-1);
     virtual ~Factory();
-    virtual TerarkIndex* Build(NativeDataInput<InputBuffer>& tmpKeyFileReader,
-                               const TerarkZipTableOptions& tzopt,
-                               const KeyStat&,
-                               const ImmutableCFOptions* ioption = nullptr) const = 0;
+    static TerarkIndex* Build(NativeDataInput<InputBuffer>& tmpKeyFileReader,
+                              const TerarkZipTableOptions& tzopt,
+                              const KeyStat&,
+                              const ImmutableCFOptions* ioption = nullptr);
+    static size_t MemSizeForBuild(const KeyStat&);
+
     virtual unique_ptr<TerarkIndex> LoadMemory(fstring mem) const = 0;
-    virtual unique_ptr<TerarkIndex> LoadFile(fstring fpath) const = 0;
-    virtual size_t MemSizeForBuild(const KeyStat&) const = 0;
-    const char* WireName() const;
   };
   typedef boost::intrusive_ptr<Factory> FactoryPtr;
-  struct AutoRegisterFactory {
-    AutoRegisterFactory(std::initializer_list<const char*> names,
-        const char* rtti_name, Factory* factory);
-  };
-  static const Factory* GetFactory(fstring name);
-  static const Factory* SelectFactory(const KeyStat&, fstring name);
-  static bool SeekCostEffectiveIndexLen(const KeyStat& ks, size_t& ceLen);
-  static unique_ptr<TerarkIndex> LoadFile(fstring fpath);
+
   static unique_ptr<TerarkIndex> LoadMemory(fstring mem);
   virtual ~TerarkIndex();
-  virtual const char* Name() const = 0;
+  virtual fstring Name() const = 0;
   virtual void SaveMmap(std::function<void(const void *, size_t)> write) const = 0;
-  virtual size_t Find(fstring key) const = 0;
-  virtual size_t DictRank(fstring key) const = 0;
+  virtual void Reorder(ZReorderMap& newToOld, std::function<void(const void *, size_t)> write, fstring tmpFile) const = 0;
+  virtual size_t Find(fstring key, valvec<byte_t>* ctx) const = 0;
+  virtual size_t DictRank(fstring key, valvec<byte_t>* ctx) const = 0;
   virtual size_t NumKeys() const = 0;
   virtual size_t TotalKeySize() const = 0;
   virtual fstring Memory() const = 0;
-  virtual Iterator* NewIterator() const = 0;
+  virtual Iterator* NewIterator(void* ptr) const = 0;
+  virtual size_t IteratorSize() const = 0;
   virtual bool NeedsReorder() const = 0;
   virtual void GetOrderMap(terark::UintVecMin0& newToOld) const = 0;
   virtual void BuildCache(double cacheRatio) = 0;
 };
-
-#define TerarkIndexRegister(clazz, ...) \
-    TerarkIndexRegisterImp(clazz, #clazz, ##__VA_ARGS__)
-
-#define TerarkIndexRegisterNLT(clazzSuffix, ...)          \
-    TerarkIndexRegisterImp(TrieDAWG_##clazzSuffix,                      \
-        BOOST_STRINGIZE(BOOST_PP_CAT(NestLoudsTrieDAWG_, clazzSuffix)), \
-        BOOST_STRINGIZE(clazzSuffix), \
-        ##__VA_ARGS__)
-
-#define TerarkIndexRegisterImp(clazz, WireName, ...)            \
-	  BOOST_STATIC_ASSERT(sizeof(WireName) <= 60);                \
-    TerarkIndex::AutoRegisterFactory                            \
-    terark_used_static_obj                                      \
-    g_AutoRegister_##clazz(                                     \
-        {WireName,__VA_ARGS__},                                 \
-        typeid(clazz).name(),                                   \
-        new clazz::MyFactory()                                  \
-    )
 
 }
 

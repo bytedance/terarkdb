@@ -58,7 +58,7 @@ class TerarkEmptyTableReader : public TerarkZipTableReaderBase {
   public:
     Iter() {}
     ~Iter() {}
-    void SetPinnedItersMgr(PinnedIteratorsManager*) {}
+    void SetPinnedItersMgr(PinnedIteratorsManager*) override {}
     bool Valid() const override { return false; }
     void SeekToFirst() override {}
     void SeekToLast() override {}
@@ -127,11 +127,10 @@ struct TerarkZipSubReader {
   intptr_t   storeFD_;
   RandomAccessFile* storeFileObj_;
   size_t storeOffset_;
-  std::string prefix_;
+  fstring prefix_;
   unique_ptr<TerarkIndex> index_;
   unique_ptr<terark::AbstractBlobStore> store_;
   bitfield_array<2> type_;
-  std::string commonPrefix_;
 
   enum {
     FlagNone = 0,
@@ -281,16 +280,16 @@ public:
 
   public:
     ~SubIndex();
-    Status Init(fstring offsetMemory,
-      fstring indexMemory,
-      fstring storeMemory,
+    Status Init(
+      fstring offsetMemory,
+      const byte_t* baseAddress,
       terark::AbstractBlobStore::Dictionary dict,
-      fstring typeMemory,
-      fstring commonPrefixMemory,
       int minPreadLen,
       RandomAccessFile* fileObj,
       LruReadonlyCache* cache,
+      bool warmUpIndexOnOpen,
       bool reverse);
+
     size_t GetPrefixLen() const;
     size_t GetSubCount() const;
     const TerarkZipSubReader* GetSubReader(size_t i) const;

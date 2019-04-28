@@ -123,11 +123,8 @@ terark::profiling g_pf;
 
 const uint64_t kTerarkZipTableMagicNumber = 0x1122334455667788;
 
-const std::string kTerarkZipTableIndexBlock        = "TerarkZipTableIndexBlock";
-const std::string kTerarkZipTableValueTypeBlock    = "TerarkZipTableValueTypeBlock";
 const std::string kTerarkZipTableValueDictBlock    = "TerarkZipTableValueDictBlock";
 const std::string kTerarkZipTableOffsetBlock       = "TerarkZipTableOffsetBlock";
-const std::string kTerarkZipTableCommonPrefixBlock = "TerarkZipTableCommonPrefixBlock";
 const std::string kTerarkEmptyTableKey             = "ThisIsAnEmptyTable";
 
 #if defined(TerocksPrivateCode)
@@ -487,7 +484,6 @@ float CollectInfo::estimate(float def_value) const {
 }
 
 size_t TerarkZipMultiOffsetInfo::calc_size(size_t prefixLen, size_t partCount) {
-  BOOST_STATIC_ASSERT(sizeof(KeyValueOffset) % 16 == 0);
   return 16 + partCount * sizeof(KeyValueOffset) + terark::align_up(prefixLen * partCount, 16);
 }
 
@@ -498,13 +494,12 @@ void TerarkZipMultiOffsetInfo::Init(size_t prefixLen, size_t partCount) {
   prefixSet_.resize_no_init(prefixLen * partCount);
 }
 
-void TerarkZipMultiOffsetInfo::set(size_t i, fstring p, size_t k, size_t v, size_t t, size_t c) {
+void TerarkZipMultiOffsetInfo::set(size_t i, fstring p, size_t k, size_t v, size_t t) {
   assert(p.size() == prefixLen_);
   memcpy(prefixSet_.data() + i * prefixLen_, p.data(), p.size());
   offset_[i].key = k;
   offset_[i].value = v;
   offset_[i].type = t;
-  offset_[i].commonPrefix = c;
 }
 
 valvec<byte_t> TerarkZipMultiOffsetInfo::dump() {
@@ -711,22 +706,34 @@ TerarkZipTableFactory::NewTableReader(
   s = ReadMetaBlockAdapte(file.get(), file_size, kTerarkZipTableMagicNumber
     , table_reader_options.ioptions, kTerarkZipTableOffsetBlock, &offsetBC);
   if (s.ok()) {
-    std::unique_ptr<TerarkZipTableMultiReader>
-      t(new TerarkZipTableMultiReader(this, table_reader_options, table_options_));
-    s = t->Open(file.release(), file_size);
-    if (!s.ok()) {
+    TerarkZipMultiOffsetInfo info;
+    if (info.risk_set_memory(offsetBC.data.data(), offsetBC.data.size())) {
+      if (info.offset_.size() > 1) {
+        std::unique_ptr<TerarkZipTableMultiReader>
+          t(new TerarkZipTableMultiReader(this, table_reader_options, table_options_));
+        s = t->Open(file.release(), file_size);
+        if (s.ok()) {
+          *table = std::move(t);
+        }
+      }
+      else {
+        std::unique_ptr<TerarkZipTableReader>
+          t(new TerarkZipTableReader(this, table_reader_options, table_options_));
+        s = t->Open(file.release(), file_size);
+        if (s.ok()) {
+          *table = std::move(t);
+        }
+      }
+      info.risk_release_ownership();
       return s;
     }
-    *table = std::move(t);
-    return s;
+    return Status::InvalidArgument(
+      "TerarkZipTableFactory::NewTableReader()", "bad TerarkZipMultiOffsetInfo"
+    );
   }
-  std::unique_ptr<TerarkZipTableReader>
-    t(new TerarkZipTableReader(this, table_reader_options, table_options_));
-  s = t->Open(file.release(), file_size);
-  if (s.ok()) {
-    *table = std::move(t);
-  }
-  return s;
+  return Status::InvalidArgument(
+    "TerarkZipTableFactory::NewTableReader()", "missing TerarkZipMultiOffsetInfo"
+  );
 }
 
 // defined in terark_zip_table_builder.cc
@@ -899,18 +906,6 @@ const {
   if (!IsBytewiseComparator(cf_opts.comparator)) {
     return Status::InvalidArgument("TerarkZipTableFactory::SanitizeOptions()",
       "user comparator must be 'leveldb.BytewiseComparator'");
-  }
-  auto indexFactory = TerarkIndex::GetFactory(table_options_.indexType);
-  if (!indexFactory) {
-    std::string msg = "invalid indexType: " + table_options_.indexType;
-    return Status::InvalidArgument(msg);
-  }
-  fstring wireName = indexFactory->WireName();
-  if (!wireName.startsWith("NestLoudsTrieDAWG")) {
-    std::string msg = "indexType is not a NestLoudsTrieDAWG: "
-                      "WireName = " + wireName + " , ConfName = "
-                    + table_options_.indexType;
-    return Status::InvalidArgument(msg);
   }
   return Status::OK();
 }

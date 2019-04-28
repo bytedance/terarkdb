@@ -91,8 +91,8 @@ private:
   };
   struct KeyValueStatus {
     valvec<char> prefix;
-    valvec<char> commonPrefix;
-    Uint64Histogram key;
+    size_t numKeys = 0;
+    size_t sumKeyLen = 0;
     Uint64Histogram value;
     febitvec valueBits;
     bitfield_array<2> type;
@@ -102,6 +102,7 @@ private:
     uint64_t valueFileBegin = 0;
     uint64_t valueFileEnd = 0;
     uint64_t seqType = 0;
+    uint64_t zeroSeqCount = 0;
     TempFileDeleteOnClose valueFile;
     bool isValueBuild = false;
     bool isUseDictZip = false;
@@ -109,7 +110,7 @@ private:
     std::future<Status> wait;
     valvec<std::unique_ptr<BuildIndexParams>> build;
   };
-  void AddPrevUserKey();
+  void AddPrevUserKey(size_t samePrefix);
   void AddLastUserKey();
   void OfflineZipValueData();
   void UpdateValueLenHistogram();
@@ -140,7 +141,8 @@ private:
     AutoDeleteFile tmpReorderFile;
     bitfield_array<2> type;
   };
-  void BuildReorderMap(BuildReorderParams& params,
+  void BuildReorderMap(valvec<std::unique_ptr<TerarkIndex>>& index_vec,
+                       BuildReorderParams& params,
                        KeyValueStatus& kvs,
                        fstring mmap_memory,
                        AbstractBlobStore* store,
@@ -160,9 +162,8 @@ private:
   Status ZipValueToFinishMulti();
   Status BuilderWriteValues(KeyValueStatus& kvs, std::function<void(fstring val)> write);
   void DoWriteAppend(const void* data, size_t size);
-  Status WriteStore(fstring indexMmap, AbstractBlobStore* store,
-                    KeyValueStatus& kvs,
-                    BlockHandle& dataBlock,
+  Status WriteIndexStore(fstring indexMmap, AbstractBlobStore* store, KeyValueStatus& kvs,
+                    BlockHandle& dataBlock, size_t kvs_index,
                     long long& t5, long long& t6, long long& t7);
   Status WriteSSTFile(long long t3, long long t4, long long td,
                       fstring tmpDictFile,
@@ -191,6 +192,7 @@ private:
   valvec<std::unique_ptr<KeyValueStatus>> prefixBuildInfos_;
   TerarkIndex::KeyStat *currentStat_ = nullptr;
   valvec<byte_t> prevUserKey_;
+  size_t prevSamePrefix_;
   TempFileDeleteOnClose tmpSentryFile_;
   TempFileDeleteOnClose tmpSampleFile_;
   AutoDeleteFile tmpIndexFile_;
@@ -212,7 +214,6 @@ private:
   uint64_t estimateOffset_ = 0;
   size_t dictSize_ = 0;
   float estimateRatio_ = 0;
-  uint64_t zeroSeqCount_ = 0;
   size_t seqExpandSize_ = 0;
   size_t multiValueExpandSize_ = 0;
   Status status_;
@@ -221,6 +222,7 @@ private:
   BlockBuilder range_del_block_;
   fstrvec valueBuf_; // collect multiple values for one key
   PipelineProcessor pipeline_;
+  freq_hist_o1 key_freq_;
   freq_hist_o1 freq_;
   uint64_t next_freq_size_ = 1ULL << 20;
   bool waitInited_ = false;

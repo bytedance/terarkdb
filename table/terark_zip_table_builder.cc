@@ -290,7 +290,7 @@ uint64_t TerarkZipTableBuilder::FileSize() const {
     for (auto& item : prefixBuildInfos_) {
       for (auto& ptr : item->build) {
         auto &stat = ptr->stat;
-        size_t indexSize = UintVecMin0::compute_mem_size_by_max_val(stat.sumKeyLen, stat.numKeys);
+        size_t indexSize = UintVecMin0::compute_mem_size_by_max_val(stat.sumKeyLen, stat.keyCount);
         nltTrieMemSize = std::max(nltTrieMemSize, stat.sumKeyLen + indexSize);
       }
     }
@@ -376,7 +376,7 @@ try {
         assert((prevUserKey_ < userKey) ^ isReverseBytewiseOrder_);
 #if defined(TerocksPrivateCode)
         size_t indexSize = UintVecMin0::compute_mem_size_by_max_val(
-          currentStat_->sumKeyLen, currentStat_->numKeys);
+          currentStat_->sumKeyLen, currentStat_->keyCount);
         size_t nltTrieMemSize = currentStat_->sumKeyLen + indexSize;
         if (terark_unlikely(nltTrieMemSize > singleIndexMemLimit)) {
           AddLastUserKey();
@@ -384,11 +384,12 @@ try {
           BuildIndex(*prefixBuildInfos_.back()->build.back(), *prefixBuildInfos_.back());
           prefixBuildInfos_.back()->build.emplace_back(newBuildIndex());
           currentStat_->minKey.assign(userKey);
+          prevSamePrefix_ = 0;
         }
         else
 #endif // TerocksPrivateCode
         {
-          AddPrevUserKey();
+          AddPrevUserKey(userKey.commonPrefixLen(prevUserKey_));
         }
         currentStat_->minKeyLen = std::min(userKey.size(), currentStat_->minKeyLen);
         currentStat_->maxKeyLen = std::max(userKey.size(), currentStat_->maxKeyLen);
@@ -401,6 +402,10 @@ try {
       }
       else {
         AddLastUserKey();
+        auto& sumKeyLen = prefixBuildInfos_.back()->sumKeyLen;
+        for (auto &build : prefixBuildInfos_.back()->build) {
+          sumKeyLen += build->stat.sumKeyLen;
+        }
         BuildIndex(*prefixBuildInfos_.back()->build.back(), *prefixBuildInfos_.back());
         BuildStore(*prefixBuildInfos_.back(), nullptr, BuildStoreInit);
       }
@@ -412,6 +417,7 @@ try {
       currentStat_->minKeyLen = userKey.size();
       currentStat_->maxKeyLen = userKey.size();
       currentStat_->minKey.assign(userKey);
+      prevSamePrefix_ = 0;
       prevUserKey_.assign(userKey);
       currentBuildInfo.seqType = seqType;
       char buffer[32];
@@ -619,6 +625,10 @@ Status TerarkZipTableBuilder::Finish() try {
   }
 
   AddLastUserKey();
+  auto& sumKeyLen = prefixBuildInfos_.back()->sumKeyLen;
+  for (auto &build : prefixBuildInfos_.back()->build) {
+    sumKeyLen += build->stat.sumKeyLen;
+  }
   BuildIndex(*prefixBuildInfos_.back()->build.back(), *prefixBuildInfos_.back());
   BuildStore(*prefixBuildInfos_.back(), nullptr, BuildStoreInit);
   if (zbuilder_) {
@@ -652,50 +662,28 @@ std::future<Status> TerarkZipTableBuilder::Async(std::function<Status()> func) {
 }
 
 void TerarkZipTableBuilder::BuildIndex(BuildIndexParams& param, KeyValueStatus& kvs) {
-  assert(param.stat.numKeys > 0);
-#if defined(TerocksPrivateCode)
-  if (kvs.split == 0) {
-    param.stat.commonPrefixLen = commonPrefixLen(param.stat.minKey, param.stat.maxKey);
-  }
-  else if (0)
-#endif // TerocksPrivateCode
-  {
-    // nlt don't support only one key which is empty ...
-    if (kvs.split == 0 && param.stat.numKeys > 1) {
-      param.stat.commonPrefixLen = commonPrefixLen(param.stat.minKey, param.stat.maxKey);
-    }
-  }
+  key_freq_.finish();
+  param.stat.entropyLen = freq_hist_o1::estimate_size(key_freq_.histogram());
+  key_freq_.clear();
+  assert(param.stat.keyCount > 0);
   param.data.complete_write();
+  param.stat.prefix = fstring(kvs.prefix);
   param.wait = Async([this, &param, &kvs]() {
     auto& keyStat = param.stat;
-    const TerarkIndex::Factory* factory;
-#if defined(TerocksPrivateCode)
-    if (kvs.split != 0) {
-      factory = TerarkIndex::GetFactory(table_options_.indexType);
-    }
-    else
-#endif // TerocksPrivateCode
-    {
-      factory = TerarkIndex::SelectFactory(keyStat, table_options_.indexType);
-    }
-    if (!factory) {
-      THROW_STD(invalid_argument,
-        "invalid indexType: %s", table_options_.indexType.c_str());
-    }
     NativeDataInput<InputBuffer> tempKeyFileReader(&param.data.fp);
-    const size_t myWorkMem = factory->MemSizeForBuild(keyStat);
+    const size_t myWorkMem = TerarkIndex::Factory::MemSizeForBuild(keyStat);
     auto waitHandle = WaitForMemory("nltTrie", myWorkMem);
 
     long long t1 = g_pf.now();
     std::unique_ptr<TerarkIndex> indexPtr;
     try {
-      indexPtr.reset(factory->Build(tempKeyFileReader,
-        table_options_, keyStat, &ioptions_));
+      indexPtr.reset(TerarkIndex::Factory::Build(
+        tempKeyFileReader, table_options_, keyStat, &ioptions_));
     }
     catch (const std::exception& ex) {
       INFO(ioptions_.info_log
-        , "TerarkZipTableBuilder::Finish():this=%012p:  index build fail , type = %s , error = %s\n"
-        , this, factory->WireName(), ex.what()
+        , "TerarkZipTableBuilder::Finish():this=%012p:  index build fail , error = %s\n"
+        , this, ex.what()
       );
       return Status::Corruption("TerarkZipTableBuilder index build error", ex.what());
     }
@@ -703,13 +691,14 @@ void TerarkZipTableBuilder::BuildIndex(BuildIndexParams& param, KeyValueStatus& 
       // check index correctness
       tempKeyFileReader.resetbuf();
       param.data.fp.rewind();
-      auto it = UniquePtrOf(indexPtr->NewIterator());
-      auto commonPrefixLen = param.stat.commonPrefixLen;
+      auto it = UniquePtrOf(indexPtr->NewIterator(nullptr));
       valvec<byte_t> value;
+      auto prefix = param.stat.prefix;
       if (fstring(param.stat.minKey) < fstring(param.stat.maxKey)) {
         for (it->SeekToFirst(); it->Valid(); it->Next()) {
           tempKeyFileReader >> value;
-          if (it->key() != fstring(value).substr(commonPrefixLen)) {
+          auto key = it->key();
+          if (key.substr(0, prefix.size()) != prefix || key.substr(prefix.size()) != value) {
             return false;
           }
         }
@@ -717,7 +706,8 @@ void TerarkZipTableBuilder::BuildIndex(BuildIndexParams& param, KeyValueStatus& 
       else {
         for (it->SeekToLast(); it->Valid(); it->Prev()) {
           tempKeyFileReader >> value;
-          if (it->key() != fstring(value).substr(commonPrefixLen)) {
+          auto key = it->key();
+          if (key.substr(0, prefix.size()) != prefix || key.substr(prefix.size()) != value) {
             return false;
           }
         }
@@ -726,7 +716,7 @@ void TerarkZipTableBuilder::BuildIndex(BuildIndexParams& param, KeyValueStatus& 
     };
     if (table_options_.debugLevel == 2 && !verify_index()) {
       return Status::Corruption("TerarkZipTableBuilder index check fail",
-        indexPtr->Name());
+        indexPtr->Name().data());
     }
     size_t fileSize = 0;
     {
@@ -750,22 +740,22 @@ void TerarkZipTableBuilder::BuildIndex(BuildIndexParams& param, KeyValueStatus& 
       indexPtr = TerarkIndex::LoadMemory(mmap_file.memory().substr(param.indexFileBegin, fileSize));
       if (!verify_index()) {
         return Status::Corruption("TerarkZipTableBuilder index check fail after reload",
-          indexPtr->Name());
+          indexPtr->Name().data());
       }
     }
     long long tt = g_pf.now();
-    size_t prefixLen = param.stat.commonPrefixLen + kvs.prefix.size();
-    size_t rawKeySize = param.stat.sumKeyLen - param.stat.numKeys * param.stat.commonPrefixLen;
+    size_t prefixLen = kvs.prefix.size();
+    size_t rawKeySize = param.stat.sumKeyLen;
     INFO(ioptions_.info_log,
       "TerarkZipTableBuilder::Finish():this=%012p:  index pass time =%8.2f's,%8.3f'MB/sec\n"
       "    index type = %s\n"
       "    usrkeys = %zd  min-keylen = %zd  max-keylen = %zd  prefix = %zd\n"
       "    raw-key =%9.4f GB  zip-key =%9.4f GB  avg-key =%7.2f  avg-zkey =%7.2f\n"
       , this, g_pf.sf(t1, tt), rawKeySize*1.0 / g_pf.uf(t1, tt)
-      , indexPtr->Name()
-      , param.stat.numKeys, param.stat.minKeyLen, param.stat.maxKeyLen, prefixLen
+      , indexPtr->Name().data()
+      , param.stat.keyCount, param.stat.minKeyLen, param.stat.maxKeyLen, prefixLen
       , rawKeySize*1.0 / 1e9, fileSize*1.0 / 1e9
-      , rawKeySize*1.0 / param.stat.numKeys, fileSize*1.0 / param.stat.numKeys
+      , rawKeySize*1.0 / param.stat.keyCount, fileSize*1.0 / param.stat.keyCount
     );
     if (--param.ref == 0) {
       param.data.close();
@@ -783,7 +773,7 @@ Status TerarkZipTableBuilder::BuildStore(KeyValueStatus& kvs,
       || tmpStoreFileSize_ == FileStream(tmpStoreFile_.fpath, "rb").fsize());
 
     size_t fixedNum = kvs.value.m_cnt_of_max_cnt_key;
-    size_t variaNum = kvs.key.m_cnt_sum - fixedNum;
+    size_t variaNum = kvs.numKeys - fixedNum;
     BuildStoreParams params = { kvs, 0, tmpStoreFile_, tmpStoreFileSize_ };
     Status s;
     try {
@@ -791,7 +781,7 @@ Status TerarkZipTableBuilder::BuildStore(KeyValueStatus& kvs,
         s = buildZeroLengthBlobStore(params);
       }
       else if (table_options_.offsetArrayBlockUnits) {
-        if (variaNum * 64 < kvs.key.m_cnt_sum) {
+        if (variaNum * 64 < kvs.numKeys) {
           s = buildMixedLenBlobStore(params);
         }
         else {
@@ -799,7 +789,7 @@ Status TerarkZipTableBuilder::BuildStore(KeyValueStatus& kvs,
         }
       }
       else {
-        if (4 * variaNum + kvs.key.m_cnt_sum * 5 / 4 < 4 * kvs.key.m_cnt_sum) {
+        if (4 * variaNum + kvs.numKeys * 5 / 4 < 4 * kvs.numKeys) {
           s = buildMixedLenBlobStore(params);
         }
         else {
@@ -826,7 +816,7 @@ Status TerarkZipTableBuilder::BuildStore(KeyValueStatus& kvs,
     assert(tmpZipStoreFileSize_ == 0
       || tmpZipStoreFileSize_ == FileStream(tmpZipStoreFile_.fpath, "rb").fsize());
 
-    zbuilder->prepare(kvs.key.m_cnt_sum, tmpZipStoreFile_, tmpZipStoreFileSize_);
+    zbuilder->prepare(kvs.numKeys, tmpZipStoreFile_, tmpZipStoreFileSize_);
     Status s;
     try {
       s = BuilderWriteValues(kvs, [&](fstring value) {zbuilder->addRecord(value); });
@@ -854,9 +844,8 @@ Status TerarkZipTableBuilder::BuildStore(KeyValueStatus& kvs,
     if (kvs.valueFile.fp) {
       kvs.valueFile.complete_write();
     }
-    kvs.key.finish();
     kvs.value.finish();
-    auto avgValueLen = kvs.value.m_total_key_len / kvs.key.m_cnt_sum;
+    auto avgValueLen = kvs.value.m_total_key_len / kvs.numKeys;
     if (avgValueLen < table_options_.minDictZipValueSize) {
       if (kvs.valueFile.fp && table_options_.debugLevel != 2) {
         kvs.isValueBuild = true;
@@ -927,14 +916,12 @@ Status TerarkZipTableBuilder::WaitBuildIndex() {
   Status result = Status::OK();
   size_t offset = 0;
   for (auto& kvs : prefixBuildInfos_) {
-    size_t commonPrefixLength = size_t(-1);
     kvs->indexFileBegin = offset;
     for (auto& ptr : kvs->build) {
       auto& param = *ptr;
       assert(param.wait.valid());
       auto s = param.wait.get();
       offset += param.indexFileEnd - param.indexFileBegin;
-      commonPrefixLength = std::min(commonPrefixLength, param.stat.commonPrefixLen);
       if (terark_unlikely(!s.ok() && result.ok())) {
         result = std::move(s);
       }
@@ -942,8 +929,6 @@ Status TerarkZipTableBuilder::WaitBuildIndex() {
         param.data.close();
       }
     }
-    auto minKey = fstring(kvs->build.front()->stat.minKey);
-    kvs->commonPrefix.assign(minKey.substr(0, commonPrefixLength));
     kvs->indexFileEnd = offset;
   }
   return result;
@@ -962,12 +947,12 @@ Status TerarkZipTableBuilder::WaitBuildStore() {
   return result;
 }
 
-void TerarkZipTableBuilder::BuildReorderMap(BuildReorderParams& params,
+void TerarkZipTableBuilder::BuildReorderMap(valvec<std::unique_ptr<TerarkIndex>>& index_vec,
+                                            BuildReorderParams& params,
                                             KeyValueStatus& kvs,
                                             fstring mmap_memory,
                                             AbstractBlobStore* store,
                                             long long& t6) {
-  valvec<std::unique_ptr<TerarkIndex>> indexes;
   size_t rawKeySize = 0;
   size_t zipKeySize = 0;
   size_t reoder = 0;
@@ -975,7 +960,7 @@ void TerarkZipTableBuilder::BuildReorderMap(BuildReorderParams& params,
     auto &param = *ptr;
     rawKeySize += param.stat.sumKeyLen;
     zipKeySize += param.indexFileEnd - param.indexFileBegin;
-    indexes.emplace_back(
+    index_vec.emplace_back(
       TerarkIndex::LoadMemory(
         fstring(
           mmap_memory.data() + param.indexFileBegin,
@@ -983,7 +968,7 @@ void TerarkZipTableBuilder::BuildReorderMap(BuildReorderParams& params,
         )
       ).release()
     );
-    if (indexes.back()->NeedsReorder() || isReverseBytewiseOrder_) {
+    if (index_vec.back()->NeedsReorder() || isReverseBytewiseOrder_) {
       ++reoder;
     }
   }
@@ -992,8 +977,8 @@ void TerarkZipTableBuilder::BuildReorderMap(BuildReorderParams& params,
     "    usrkeys = %zd  key-segment = %zd  prefix = %zd\n"
     "    raw-key =%9.4f GB  zip-key =%9.4f GB  avg-key =%7.2f  avg-zkey =%7.2f\n"
     "    raw-val =%9.4f GB  zip-val =%9.4f GB  avg-val =%7.2f  avg-zval =%7.2f\n"
-    , this, indexes.size() == 1 ? indexes.front()->Name() : "LazyUnionDFA", store->name()
-    , store->num_records(), indexes.size(), kvs.prefix.size()
+    , this, index_vec.size() == 1 ? index_vec.front()->Name().data() : "LazyUnionDFA", store->name()
+    , store->num_records(), index_vec.size(), kvs.prefix.size()
 
     , rawKeySize*1.0 / 1e9, zipKeySize*1.0 / 1e9
     , rawKeySize*1.0 / store->num_records(), zipKeySize*1.0 / store->num_records()
@@ -1007,19 +992,19 @@ void TerarkZipTableBuilder::BuildReorderMap(BuildReorderParams& params,
     params.tmpReorderFile.Delete();
     return;
   }
-  params.type.resize_no_init(kvs.key.m_cnt_sum);
-  ZReorderMap::Builder builder(kvs.key.m_cnt_sum,
+  params.type.resize_no_init(kvs.numKeys);
+  ZReorderMap::Builder builder(kvs.numKeys,
     isReverseBytewiseOrder_ ? -1 : 1, params.tmpReorderFile.fpath, "wb");
   if (isReverseBytewiseOrder_) {
-    size_t ho = kvs.key.m_cnt_sum;
+    size_t ho = kvs.numKeys;
     size_t hn = 0;
-    for (auto it = indexes.rbegin(); it != indexes.rend(); ++it) {
+    for (auto it = index_vec.rbegin(); it != index_vec.rend(); ++it) {
       auto index = it->get();
       size_t count = index->NumKeys();
       ho -= count;
       if (index->NeedsReorder()) {
         size_t memory = UintVecMin0::compute_mem_size_by_max_val(count, count - 1);
-        WaitHandle handle = std::move(WaitForMemory("reorder", memory));
+        WaitHandle handle = WaitForMemory("reorder", memory);
         UintVecMin0 newToOld(index->NumKeys(), index->NumKeys() - 1);
         index->GetOrderMap(newToOld);
         for (size_t n = 0; n < count; ++n) {
@@ -1035,19 +1020,19 @@ void TerarkZipTableBuilder::BuildReorderMap(BuildReorderParams& params,
         }
       }
       hn += count;
-      it->reset();
+      builder.push_slice();
     }
     assert(ho == 0);
-    assert(hn == kvs.key.m_cnt_sum);
+    assert(hn == kvs.numKeys);
   }
   else {
     size_t h = 0;
-    for (auto& ptr : indexes) {
+    for (auto& ptr : index_vec) {
       auto index = ptr.get();
       size_t count = index->NumKeys();
       if (index->NeedsReorder()) {
         size_t memory = UintVecMin0::compute_mem_size_by_max_val(count, count - 1);
-        WaitHandle handle = std::move(WaitForMemory("reorder", memory));
+        WaitHandle handle = WaitForMemory("reorder", memory);
         UintVecMin0 newToOld(index->NumKeys(), index->NumKeys() - 1);
         index->GetOrderMap(newToOld);
         for (size_t n = 0; n < count; ++n) {
@@ -1064,9 +1049,9 @@ void TerarkZipTableBuilder::BuildReorderMap(BuildReorderParams& params,
         }
       }
       h += count;
-      ptr.reset();
+      builder.push_slice();
     }
-    assert(h == kvs.key.m_cnt_sum);
+    assert(h == kvs.numKeys);
   }
   builder.finish();
 }
@@ -1149,7 +1134,7 @@ Status TerarkZipTableBuilder::buildZeroLengthBlobStore(BuildStoreParams &params)
   auto store = UniquePtrOf(new terark::ZeroLengthBlobStore());
   auto s = BuilderWriteValues(kvs, [&](fstring value) { assert(value.empty()); });
   if (s.ok()) {
-    store->finish(kvs.key.m_cnt_sum);
+    store->finish(kvs.numKeys);
     FileStream file(params.fpath, "ab+");
     store->save_mmap([&](const void* d, size_t s) {
       file.ensureWrite(d, s);
@@ -1348,7 +1333,7 @@ Status TerarkZipTableBuilder::ZipValueToFinishMulti() {
 Status
 TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<void(fstring)> write) {
   auto& bzvType = kvs.type;
-  bzvType.resize(kvs.key.m_cnt_sum);
+  bzvType.resize(kvs.numKeys);
   auto seekSecondPassIter = [&] {
     auto& stat = kvs.build.front()->stat;
     std::string target;
@@ -1381,7 +1366,7 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
     key.resize(kvs.prefix.size());
     keyInput.load_add(key);
     key.append((char*)&seqType, 8);
-    if (++keyFileCount == kvs.build[keyFileIndex]->stat.numKeys) {
+    if (++keyFileCount == kvs.build[keyFileIndex]->stat.keyCount) {
       keyFileCount = 0;
       keyInput.resetbuf();
       keyFile.close();
@@ -1403,7 +1388,7 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
     }
     size_t entryId = 0;
     size_t bitPos = 0;
-    for (size_t recId = 0; recId < kvs.key.m_cnt_sum; recId++) {
+    for (size_t recId = 0; recId < kvs.numKeys; recId++) {
       uint64_t seqType = input.load_as<uint64_t>();
       uint64_t seqNum;
       ValueType vType;
@@ -1489,7 +1474,7 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
     value.erase_all();
 
     if (!ioptions_.filter_idempotent) {
-      while (recId < kvs.key.m_cnt_sum && second_pass_iter_->Valid()) {
+      while (recId < kvs.numKeys && second_pass_iter_->Valid()) {
         curKey = second_pass_iter_->key();
         curVal = second_pass_iter_->value();
         TERARK_RT_assert(ParseInternalKey(curKey, &pIKey), std::logic_error);
@@ -1527,13 +1512,13 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
             }
             value.erase_all();
             ITER_MOVE_NEXT(second_pass_iter_);
-            if (++recId < kvs.key.m_cnt_sum) bufKey = readInternalKey(true);
+            if (++recId < kvs.numKeys) bufKey = readInternalKey(true);
           }
           else if (cmpRet > 0) { // curKey > bufKey
             bzvType.set0(recId, size_t(ZipValueType::kMulti));
             write(fstring()); // write nothing
             value.erase_all();
-            if (++recId < kvs.key.m_cnt_sum) bufKey = readInternalKey(true);
+            if (++recId < kvs.numKeys) bufKey = readInternalKey(true);
           }
           else { // curKey < bufKey
             ITER_MOVE_NEXT(second_pass_iter_);
@@ -1583,13 +1568,13 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
             write(value);
           }
           value.erase_all();
-          if (++recId < kvs.key.m_cnt_sum) bufKey = readInternalKey(true);
+          if (++recId < kvs.numKeys) bufKey = readInternalKey(true);
         }
         bitPos += varNum + 1;
         entryId += varNum;
       }
 
-      while (recId < kvs.key.m_cnt_sum) {
+      while (recId < kvs.numKeys) {
         value.erase_all();
         varNum = kvs.valueBits.one_seq_len(bitPos); assert(varNum >= 1);
         TERARK_RT_assert(ParseInternalKey(bufKey, &pIKey), std::logic_error);
@@ -1612,12 +1597,12 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
         write(fstring()); // write nothing
         bitPos += varNum + 1;
         entryId += varNum;
-        if (++recId < kvs.key.m_cnt_sum) bufKey = readInternalKey(true);
+        if (++recId < kvs.numKeys) bufKey = readInternalKey(true);
       }
     }
     else {
       // original method
-      for (size_t recId = 0; recId < kvs.key.m_cnt_sum; recId++) {
+      for (size_t recId = 0; recId < kvs.numKeys; recId++) {
         value.erase_all();
         assert(second_pass_iter_->Valid());
         Slice curKey = second_pass_iter_->key();
@@ -1697,23 +1682,40 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
   return Status::OK();
 }
 
-Status TerarkZipTableBuilder::WriteStore(fstring indexMmap, AbstractBlobStore* store
-  , KeyValueStatus& kvs
-  , BlockHandle& dataBlock
+Status TerarkZipTableBuilder::WriteIndexStore(fstring indexMmap, AbstractBlobStore* store
+  , KeyValueStatus& kvs , BlockHandle& dataBlock, size_t kvs_index
   , long long& t5, long long& t6, long long& t7) {
   using namespace std::placeholders;
   auto writeAppend = std::bind(&TerarkZipTableBuilder::DoWriteAppend, this, _1, _2);
   BuildReorderParams params;
   params.tmpReorderFile.fpath = tmpSentryFile_.path + ".reorder";
-  BuildReorderMap(params, kvs, indexMmap, store, t6);
+  valvec<std::unique_ptr<TerarkIndex>> index_vec;
+  BuildReorderMap(index_vec, params, kvs, indexMmap, store, t6);
+  size_t indexSize;
+  size_t storeSize;
+  size_t typeSize;
+  size_t offset;
   if (params.type.size() != 0) {
     params.type.swap(kvs.type);
-    ZReorderMap reorder(params.tmpReorderFile.fpath);
+    ZReorderMap::Reader reorderReader(params.tmpReorderFile.fpath);
     t7 = g_pf.now();
     try {
-      dataBlock.set_offset(offset_);
+      offset = offset_;
+      for (size_t i = 0; i < index_vec.size(); ++i) {
+        auto index = index_vec[isReverseBytewiseOrder_ ? index_vec.size() - 1 - i : i].get();
+        if (index->NeedsReorder()) {
+          auto reorder = reorderReader.get_slice(i);
+          index->Reorder(reorder, std::ref(writeAppend), tmpSentryFile_.path + ".reorder-tmp");
+        }
+        else {
+          index->SaveMmap(std::ref(writeAppend));
+        }
+      }
+      indexSize = offset_ - offset;
+      offset = offset_;
+      auto reorder = reorderReader.get_global();
       store->reorder_zip_data(reorder, std::ref(writeAppend), tmpSentryFile_.path + ".reorder-tmp");
-      dataBlock.set_size(offset_ - dataBlock.offset());
+      storeSize = offset_ - offset;
     }
     catch (const Status& s) {
       return s;
@@ -1722,14 +1724,35 @@ Status TerarkZipTableBuilder::WriteStore(fstring indexMmap, AbstractBlobStore* s
   else {
     t7 = t6;
     try {
-      dataBlock.set_offset(offset_);
+      offset = offset_;
+      for (size_t i = 0; i < index_vec.size(); ++i) {
+        auto index = index_vec[isReverseBytewiseOrder_ ? index_vec.size() - 1 - i : i].get();
+        index->SaveMmap(std::ref(writeAppend));
+      }
+      indexSize = offset_ - offset;
+      offset = offset_;
       store->save_mmap(std::ref(writeAppend));
-      dataBlock.set_size(offset_ - dataBlock.offset());
+      storeSize = offset_ - offset;
     }
     catch (const Status& s) {
       return s;
     }
   }
+  try {
+    if (kvs.zeroSeqCount != kvs.type.size()) {
+      DoWriteAppend(kvs.type.data(), kvs.type.mem_size());
+      typeSize = kvs.type.mem_size();
+    }
+    else {
+      typeSize = 0;
+    }
+  }
+  catch (const Status& s) {
+    return s;
+  }
+  offset_info_.set(kvs_index, kvs.prefix, indexSize, storeSize, typeSize);
+  properties_.index_size += indexSize;
+  properties_.data_size += storeSize;
   return Status::OK();
 }
 
@@ -1749,6 +1772,7 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4, long long
   terark::MmapWholeFile dictMmap;
   AbstractBlobStore::Dictionary dict(dictSize_, dictHash);
   auto& kvs = *prefixBuildInfos_.front();
+  offset_info_.Init(kvs.prefix.size(), 1);
   terark::MmapWholeFile mmapIndexFile(tmpIndexFile_.fpath);
   terark::MmapWholeFile mmapStoreFile((kvs.isUseDictZip ? tmpZipStoreFile_ : tmpStoreFile_).fpath);
   assert(mmapIndexFile.base != nullptr);
@@ -1759,8 +1783,7 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4, long long
   long long rawBytes = properties_.raw_key_size + properties_.raw_value_size;
   long long t5 = g_pf.now();
   Status s;
-  BlockHandle dataBlock, dictBlock, indexBlock, zvTypeBlock(0, 0), tombstoneBlock(0, 0);
-  BlockHandle commonPrefixBlock;
+  BlockHandle dataBlock, dictBlock, offsetBlock, tombstoneBlock(0, 0);
   {
     size_t real_size = mmapIndexFile.size + store->mem_size() + bzvType.mem_size();
     size_t block_size, last_allocated_block;
@@ -1773,36 +1796,15 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4, long long
   }
   long long t6, t7;
   offset_ = 0;
-  s = WriteStore(mmapIndexFile.memory(), store.get(), kvs, dataBlock, t5, t6, t7);
+  dataBlock.set_offset(offset_);
+  s = WriteIndexStore(mmapIndexFile.memory(), store.get(), kvs, dataBlock, 0, t5, t6, t7);
+  dataBlock.set_size(offset_ - dataBlock.offset());
   if (!s.ok()) {
     return s;
   }
-  properties_.data_size = dataBlock.size();
-  indexBlock.set_offset(offset_);
-  indexBlock.set_size(mmapIndexFile.size);
-  if (isReverseBytewiseOrder_) {
-    for (size_t j = kvs.build.size(); j > 0; ) {
-      auto& param = *kvs.build[--j];
-      DoWriteAppend((const char*)mmapIndexFile.base + param.indexFileBegin,
-        param.indexFileEnd - param.indexFileBegin);
-    }
-  }
-  else {
-    for (auto& ptr : kvs.build) {
-      auto& param = *ptr;
-      DoWriteAppend((const char*)mmapIndexFile.base + param.indexFileBegin,
-        param.indexFileEnd - param.indexFileBegin);
-    }
-  }
-  assert(offset_ == indexBlock.offset() + indexBlock.size());
-  properties_.index_size = indexBlock.size();
-  if (zeroSeqCount_ != bzvType.size()) {
-    assert(zeroSeqCount_ < bzvType.size());
-    fstring zvTypeMem(bzvType.data(), bzvType.mem_size());
-    s = WriteBlock(zvTypeMem, file_, &offset_, &zvTypeBlock);
-    if (!s.ok()) {
-      return s;
-    }
+  s = WriteBlock(offset_info_.dump(), file_, &offset_, &offsetBlock);
+  if (!s.ok()) {
+    return s;
   }
 #if defined(TerocksPrivateCode)
   auto& license = table_factory_->GetLicense();
@@ -1819,25 +1821,13 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4, long long
     }
   }
   range_del_block_.Reset();
-  std::string commonPrefix;
-  commonPrefix.reserve(kvs.prefix.size() + kvs.commonPrefix.size());
-  commonPrefix.append(kvs.prefix.data(), kvs.prefix.size());
-  commonPrefix.append(kvs.commonPrefix.data(), kvs.commonPrefix.size());
-  WriteBlock(commonPrefix, file_, &offset_, &commonPrefixBlock);
   if (!dict.memory.empty()) {
     s = WriteBlock(MmapWholeFile(tmpDictFile).memory(), file_, &offset_, &dictBlock);
     if (!s.ok()) {
       return s;
     }
   }
-  properties_.num_data_blocks = kvs.key.m_cnt_sum;
-  offset_info_.Init(kvs.prefix.size(), 1);
-  offset_info_.set(0,
-                   kvs.prefix,
-                   indexBlock.size(),
-                   properties_.data_size,
-                   zvTypeBlock.size(),
-                   commonPrefixBlock.size());
+  properties_.num_data_blocks = kvs.numKeys;
   freq_.finish();
   size_t entropy = freq_hist_o1::estimate_size(freq_.histogram());
   WriteMetaData(dictInfo, entropy, {
@@ -1845,18 +1835,18 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4, long long
     { &kTerarkZipTableExtendedBlock                                , licenseHandle     },
 #endif // TerocksPrivateCode
     { !dict.memory.empty() ? &kTerarkZipTableValueDictBlock : NULL , dictBlock         },
-    { &kTerarkZipTableIndexBlock                                   , indexBlock        },
-    { !zvTypeBlock.IsNull() ? &kTerarkZipTableValueTypeBlock : NULL, zvTypeBlock       },
-    { &kTerarkZipTableCommonPrefixBlock                            , commonPrefixBlock },
+    { &kTerarkZipTableOffsetBlock                                  , offsetBlock       },
     { !tombstoneBlock.IsNull() ? &kRangeDelBlock : NULL            , tombstoneBlock    },
   });
+
+  size_t sumKeyLen = kvs.sumKeyLen + kvs.prefix.size() * kvs.numKeys;
   long long t8 = g_pf.now();
   {
     std::unique_lock<std::mutex> lock(g_sumMutex);
     g_sumKeyLen += properties_.raw_key_size;
     g_sumValueLen += properties_.raw_value_size;
-    g_sumUserKeyLen += kvs.key.m_total_key_len;
-    g_sumUserKeyNum += kvs.key.m_cnt_sum;
+    g_sumUserKeyLen += sumKeyLen;
+    g_sumUserKeyNum += kvs.numKeys;
     g_sumEntryNum += properties_.num_entries;
   }
   size_t dictBlockSize = dict.memory.empty() ? 0 : dictBlock.size();
@@ -1896,7 +1886,7 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4, long long
 
 , g_pf.sf(t5, t6), properties_.index_size / g_pf.uf(t5, t6) // index lex walk
 
-, g_pf.sf(t6, t7), kvs.key.m_cnt_sum * 2 / 8 / (g_pf.uf(t6, t7) + 1.0) // rebuild zvType
+, g_pf.sf(t6, t7), kvs.numKeys * 2 / 8 / (g_pf.uf(t6, t7) + 1.0) // rebuild zvType
 
 , g_pf.sf(t7, t8), double(offset_) / g_pf.uf(t7, t8) // write SST data
 
@@ -1915,15 +1905,15 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4, long long
 , double(properties_.raw_value_size) / properties_.num_entries
 , double(properties_.data_size)      / properties_.num_entries
 
-, kvs.key.m_cnt_sum
-, double(kvs.key.m_total_key_len)    / kvs.key.m_cnt_sum
-, double(properties_.index_size)     / kvs.key.m_cnt_sum
-, double(properties_.raw_value_size + seqExpandSize_ + multiValueExpandSize_) / kvs.key.m_cnt_sum
-, double(properties_.data_size)      / kvs.key.m_cnt_sum
+, kvs.numKeys
+, double(sumKeyLen)              / kvs.numKeys
+, double(properties_.index_size)     / kvs.numKeys
+, double(properties_.raw_value_size + seqExpandSize_ + multiValueExpandSize_) / kvs.numKeys
+, double(properties_.data_size)      / kvs.numKeys
 
 , seqExpandSize_, multiValueExpandSize_, entropy / 1e9
 
-, kvs.key.m_total_key_len / 1e9
+, sumKeyLen / 1e9
 , properties_.raw_value_size / 1e9
 , dictSize_ / 1e6
 , rawBytes / 1e9
@@ -1933,12 +1923,12 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4, long long
 , dictBlockSize / 1e6
 , offset_ / 1e9
 
-, double(kvs.key.m_total_key_len) / properties_.index_size
+, double(sumKeyLen) / properties_.index_size
 , double(properties_.raw_value_size) / properties_.data_size
 , double(dictSize_) / std::max<size_t>(dictBlockSize, 1)
 , double(rawBytes) / offset_
 
-, properties_.index_size / double(kvs.key.m_total_key_len)
+, properties_.index_size / double(sumKeyLen)
 , properties_.data_size / double(properties_.raw_value_size)
 , dictBlockSize / std::max<double>(dictSize_, 1)
 , offset_ / double(rawBytes)
@@ -1976,22 +1966,18 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4, long
     assert(mmapZipStoreFile.base != nullptr);
   }
   Status s;
-  BlockHandle dataBlock, dictBlock, indexBlock, zvTypeBlock, offsetBlock, tombstoneBlock(0, 0);
-  BlockHandle commonPrefixBlock;
+  BlockHandle dataBlock, dictBlock, offsetBlock, tombstoneBlock(0, 0);
   offset_info_.Init(key_prefixLen_, prefixBuildInfos_.size());
   size_t typeSize = 0;
-  size_t commonPrefixLenSize = 0;
   for (size_t i = 0; i < prefixBuildInfos_.size(); ++i) {
     auto& kvs = *prefixBuildInfos_[i];
     typeSize += kvs.type.mem_size();
-    commonPrefixLenSize += kvs.commonPrefix.size();
   }
   {
     size_t real_size = TerarkZipMultiOffsetInfo::calc_size(key_prefixLen_, prefixBuildInfos_.size())
       + mmapIndexFile.size
       + mmapStoreFile.size
-      + typeSize
-      + terark::align_up(commonPrefixLenSize, 16);
+      + typeSize;
     size_t block_size, last_allocated_block;
     file_->writable_file()->GetPreallocationStatus(&block_size, &last_allocated_block);
     INFO(ioptions_.info_log
@@ -2008,77 +1994,27 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4, long
     auto base = (const char*)(mmap.base);
     return fstring(base + beg, base + end);
   };
-  valvec<byte_t> commonPrefix;
   size_t sumKeyLen = 0;
   size_t numKeys = 0;
-  size_t keyOffset = 0;
-  size_t valueOffset = 0;
-  typeSize = 0;
-  commonPrefix.reserve(terark::align_up(commonPrefixLenSize, 16));
+  dataBlock.set_offset(offset_);
   for (size_t i = 0; i < prefixBuildInfos_.size(); ++i) {
-    auto& kvs = *prefixBuildInfos_[isReverseBytewiseOrder_ ? prefixBuildInfos_.size() - 1 - i : i];
-    sumKeyLen += kvs.key.m_total_key_len + kvs.prefix.size() * kvs.key.m_cnt_sum;
-    numKeys += kvs.key.m_cnt_sum ;
-    commonPrefix.append(kvs.commonPrefix);
+    size_t kvs_index = isReverseBytewiseOrder_ ? prefixBuildInfos_.size() - 1 - i : i;
+    auto& kvs = *prefixBuildInfos_[kvs_index];
+    sumKeyLen += kvs.sumKeyLen + kvs.prefix.size() * kvs.numKeys;
+    numKeys += kvs.numKeys;
     unique_ptr<AbstractBlobStore> store(AbstractBlobStore::load_from_user_memory(
         getMmapPart(kvs.isUseDictZip ? mmapZipStoreFile : mmapStoreFile,
           kvs.valueFileBegin, kvs.valueFileEnd
         ), dict));
     long long t6p, t7p;
-    s = WriteStore(mmapIndexFile.memory(), store.get(), kvs, dataBlock, t7, t6p, t7p);
+    s = WriteIndexStore(mmapIndexFile.memory(), store.get(), kvs, dataBlock, kvs_index, t7, t6p, t7p);
     if (!s.ok()) {
       return s;
     }
     t6 += t6p - t7;
     t7 = t7p;
-    keyOffset += kvs.indexFileEnd - kvs.indexFileBegin;
-    valueOffset = offset_;
-    typeSize += kvs.type.mem_size();
-    offset_info_.set(i, kvs.prefix, keyOffset, valueOffset, typeSize, commonPrefix.size());
   }
-  properties_.data_size = offset_;
-  try {
-    indexBlock.set_offset(offset_);
-    indexBlock.set_size(mmapIndexFile.size);
-    if (isReverseBytewiseOrder_) {
-      for (size_t i = prefixBuildInfos_.size(); i > 0; ) {
-        auto& kvs = *prefixBuildInfos_[--i];
-        for (size_t j = kvs.build.size(); j > 0; ) {
-          auto& param = *kvs.build[--j];
-          DoWriteAppend((const char*)mmapIndexFile.base + param.indexFileBegin,
-            param.indexFileEnd - param.indexFileBegin);
-        }
-      }
-    }
-    else {
-      for (auto& kvs : prefixBuildInfos_) {
-        for (auto& ptr : kvs->build) {
-          auto& param = *ptr;
-          DoWriteAppend((const char*)mmapIndexFile.base + param.indexFileBegin,
-            param.indexFileEnd - param.indexFileBegin);
-        }
-      }
-    }
-    assert(offset_ == indexBlock.offset() + indexBlock.size());
-    zvTypeBlock.set_offset(offset_);
-    zvTypeBlock.set_size(typeSize);
-    if (isReverseBytewiseOrder_) {
-      for (size_t i = prefixBuildInfos_.size(); i > 0; ) {
-        auto& kvs = *prefixBuildInfos_[--i];
-        DoWriteAppend(kvs.type.data(), kvs.type.mem_size());
-      }
-    }
-    else {
-      for (size_t i = 0; i < prefixBuildInfos_.size(); ++i) {
-        auto& kvs = *prefixBuildInfos_[i];
-        DoWriteAppend(kvs.type.data(), kvs.type.mem_size());
-      }
-    }
-    assert(offset_ == zvTypeBlock.offset() + zvTypeBlock.size());
-  }
-  catch (const Status& s) {
-    return s;
-  }
+  dataBlock.set_size(offset_ - dataBlock.offset());
   s = WriteBlock(offset_info_.dump(), file_, &offset_, &offsetBlock);
   if (!s.ok()) {
     return s;
@@ -2098,15 +2034,12 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4, long
     }
   }
   range_del_block_.Reset();
-  commonPrefix.resize(terark::align_up(commonPrefix.size(), 16), 0);
-  WriteBlock(commonPrefix, file_, &offset_, &commonPrefixBlock);
   if (!dict.memory.empty()) {
       s = WriteBlock(MmapWholeFile(tmpDictFile).memory(), file_, &offset_, &dictBlock);
       if (!s.ok()) {
           return s;
       }
   }
-  properties_.index_size = indexBlock.size();
   properties_.num_data_blocks = numKeys;
   freq_.finish();
   size_t entropy = freq_hist_o1::estimate_size(freq_.histogram());
@@ -2115,10 +2048,7 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4, long
     { &kTerarkZipTableExtendedBlock                                , licenseHandle     },
 #endif // TerocksPrivateCode
     { !dict.memory.empty() ? &kTerarkZipTableValueDictBlock : NULL , dictBlock         },
-    { &kTerarkZipTableIndexBlock                                   , indexBlock        },
-    { !zvTypeBlock.IsNull() ? &kTerarkZipTableValueTypeBlock : NULL, zvTypeBlock       },
     { &kTerarkZipTableOffsetBlock                                  , offsetBlock       },
-    { &kTerarkZipTableCommonPrefixBlock                            , commonPrefixBlock },
     { !tombstoneBlock.IsNull() ? &kRangeDelBlock : NULL            , tombstoneBlock    },
   });
   size_t dictBlockSize = dict.memory.empty() ? 0 : dictBlock.size();
@@ -2385,22 +2315,43 @@ Status TerarkZipTableBuilder::AbortFinish(const std::exception& ex) {
   return Status::Aborted("exception", ex.what());
 }
 
-void TerarkZipTableBuilder::AddPrevUserKey() {
+void TerarkZipTableBuilder::AddPrevUserKey(size_t samePrefix) {
   UpdateValueLenHistogram(); // will use valueBuf_
   if (zbuilder_) {
     OfflineZipValueData(); // will change valueBuf_
   }
   valueBuf_.erase_all();
-  auto& currentHistogram = *prefixBuildInfos_.back();
-  currentHistogram.key[prevUserKey_.size()]++;
-  currentHistogram.build.back()->data.writer << prevUserKey_;
-  currentHistogram.valueBits.push_back(false);
+  auto& currentBuildInfo = *prefixBuildInfos_.back();
+  ++currentBuildInfo.numKeys;
+  currentBuildInfo.build.back()->data.writer << prevUserKey_;
+  currentBuildInfo.valueBits.push_back(false);
+  size_t prefixSize = std::min(prevUserKey_.size(), std::max(samePrefix, prevSamePrefix_) + 1);
+  size_t suffixSize = prevUserKey_.size() - prefixSize;
+  ++currentStat_->keyCount;
   currentStat_->sumKeyLen += prevUserKey_.size();
-  currentStat_->numKeys++;
+  currentStat_->sumPrefixLen += prefixSize;
+  currentStat_->minPrefixLen = std::min(currentStat_->minPrefixLen, prefixSize);
+  currentStat_->maxPrefixLen = std::max(currentStat_->maxPrefixLen, prefixSize);
+  currentStat_->minSuffixLen = std::min(currentStat_->minSuffixLen, suffixSize);
+  currentStat_->maxSuffixLen = std::max(currentStat_->maxSuffixLen, suffixSize);
+  auto& diff = currentStat_->diff;
+  if (diff.size() < samePrefix) {
+      diff.resize(samePrefix);
+  }
+  for (size_t i = 0; i < samePrefix; ++i) {
+    ++diff[i].cur;
+    ++diff[i].cnt;
+  }
+  for (size_t i = samePrefix; i < diff.size(); ++i) {
+    diff[i].max = std::max(diff[i].cur, diff[i].max);
+    diff[i].cur = 0;
+  }
+  prevSamePrefix_ = samePrefix;
+  key_freq_.add_record(prevUserKey_);
 }
 
 void TerarkZipTableBuilder::AddLastUserKey() {
-  AddPrevUserKey();
+  AddPrevUserKey(0);
   currentStat_->maxKey.assign(prevUserKey_);
 }
 
@@ -2452,7 +2403,7 @@ void TerarkZipTableBuilder::UpdateValueLenHistogram() {
   if (vNum == 1 && (kTypeDeletion == type || kTypeValue == type)) {
     if (0 == seq && kTypeValue == type) {
       valueLen = valueBuf_.strpool.size() - 8;
-      ++zeroSeqCount_;
+      ++prefixBuildInfos_.back()->zeroSeqCount;
     }
     else {
       valueLen = valueBuf_.strpool.size() - 1;
