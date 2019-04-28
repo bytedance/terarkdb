@@ -26,7 +26,7 @@ cp -r table        $pkgdir/include
 cp -r util         $pkgdir/include
 cp -r utilities    $pkgdir/include
 cp -r options      $pkgdir/include
-cp -r monitoring   $pkgdir/monitoring
+cp -r monitoring   $pkgdir/include
 
 rm -f `find $pkgdir -name '*.cc' -o -name '*.d' -o -name '*.o'`
 
