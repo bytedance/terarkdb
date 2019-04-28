@@ -6,7 +6,7 @@ else
 	cpuNum=`nproc`
 fi
 
-make libzstd.a libsnappy.a liblz4.a libbz2.a -j $cpuNum
+make libzstd.a libsnappy.a liblz4.a -j $cpuNum
 make shared_lib DEBUG_LEVEL=0 -j $cpuNum DISABLE_WARNING_AS_ERROR=1
 
 pkgdir=output
