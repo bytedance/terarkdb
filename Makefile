@@ -8,7 +8,10 @@
 BMI2 ?= 0
 USE_RTTI = 1
 
-COMPILER=$(shell t=`mktemp --suffix=.exe`; ${CXX} terark-tools/detect-compiler.cpp -o $$t && $$t && rm -f $$t)
+tmpfile := $(shell mktemp compiler-XXXXXX)
+COMPILER := $(shell ${CXX} terark-tools/detect-compiler.cpp -o ${tmpfile}.exe && ./${tmpfile}.exe && rm -f ${tmpfile}*)
+
+# COMPILER=$(shell t=`mktemp --suffix=.exe`; ${CXX} terark-tools/detect-compiler.cpp -o $$t && $$t && rm -f $$t)
 UNAME_MachineSystem=$(shell uname -m -s | sed 's:[ /]:-:g')
 TERARK_ZIP_ROCKSDB_HOME ?= ../terark-zip-rocksdb
 TerarkDir := ${TERARK_ZIP_ROCKSDB_HOME}/pkg/terark-zip-rocksdb-${UNAME_MachineSystem}-${COMPILER}-bmi2-${BMI2}
