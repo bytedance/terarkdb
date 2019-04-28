@@ -17,14 +17,16 @@ make shared_lib DEBUG_LEVEL=0 -j $cpuNum DISABLE_WARNING_AS_ERROR=1
 pkgdir=output
 # copy all header files
 mkdir -p $pkgdir
-cp -r include   $pkgdir
-cp -r db        $pkgdir/include
-cp -r env       $pkgdir/include
-cp -r memtable  $pkgdir/include
-cp -r port      $pkgdir/include
-cp -r table     $pkgdir/include
-cp -r util      $pkgdir/include
-cp -r utilities $pkgdir/include
+cp -r include      $pkgdir
+cp -r db           $pkgdir/include
+cp -r env          $pkgdir/include
+cp -r memtable     $pkgdir/include
+cp -r port         $pkgdir/include
+cp -r table        $pkgdir/include
+cp -r util         $pkgdir/include
+cp -r utilities    $pkgdir/include
+cp -r options      $pkgdir/include
+cp -r monitoring   $pkgdir/monitoring
 
 rm -f `find $pkgdir -name '*.cc' -o -name '*.d' -o -name '*.o'`
 
