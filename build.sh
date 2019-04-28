@@ -6,6 +6,11 @@ else
 	cpuNum=`nproc`
 fi
 
+# clone terark-zip-rocksdb: terark-rocksdb depends on some header files from zip-rocksdb
+
+git clone --depth=1 git@code.byted.org:storage/terark-zip-rocksdb.git
+
+# build targets 
 make libzstd.a libsnappy.a liblz4.a -j $cpuNum
 make shared_lib DEBUG_LEVEL=0 -j $cpuNum DISABLE_WARNING_AS_ERROR=1
 
