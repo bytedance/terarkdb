@@ -41,7 +41,7 @@
 
 #include "port/port.h"
 
-#ifndef _MSC_VER
+#if !defined(_MSC_VER) && !defined(__APPLE__)
 # include <sys/unistd.h>
 # include <table/terark_zip_weak_function.h>
 #endif
@@ -109,7 +109,7 @@ Status SstFileReader::GetTableReader(const std::string& file_path) {
     bool use_mmap_reads = magic_number == kPlainTableMagicNumber ||
                           magic_number == kLegacyPlainTableMagicNumber;
 
-#ifndef _MSC_VER
+#if !defined(_MSC_VER) && !defined(__APPLE__)
     use_mmap_reads = use_mmap_reads || getenv("TerarkZipTable_localTempDir");
 #endif
     if (use_mmap_reads) {
@@ -282,7 +282,7 @@ Status SstFileReader::SetTableOptionsByMagicNumber(
 
     options_.table_factory.reset(NewPlainTableFactory(plain_table_options));
     fprintf(stdout, "Sst file format: plain table\n");
-#ifndef _MSC_VER
+#if !defined(_MSC_VER) && !defined(__APPLE__)
   } else if (const char* terarkdb_localTempDir =
                  getenv("TerarkZipTable_localTempDir")) {
     if (TerarkZipConfigFromEnv) {

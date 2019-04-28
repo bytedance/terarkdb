@@ -21,7 +21,7 @@
 #include "util/rate_limiter.h"
 #include "util/sst_file_manager_impl.h"
 #include "util/sync_point.h"
-#ifndef _MSC_VER
+#if !defined(_MSC_VER) && !defined(__APPLE__)
 # include <sys/unistd.h>
 # include <table/terark_zip_weak_function.h>
 #endif
@@ -1089,7 +1089,7 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
   handles->clear();
 
   size_t max_write_buffer_size = 0;
-#ifndef _MSC_VER
+#if !defined(_MSC_VER) && !defined(__APPLE__)
   const char* terarkdb_localTempDir = getenv("TerarkZipTable_localTempDir");
   if (terarkdb_localTempDir) {
     if (TerarkZipMultiCFOptionsFromEnv) {

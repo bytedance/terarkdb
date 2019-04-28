@@ -78,3 +78,7 @@ buckifier/*.pyc
 vs2017
 /msvc14/build_version.dir
 /msvc14
+
+
+cmake-build-debug
+pkg

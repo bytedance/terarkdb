@@ -95,7 +95,7 @@
 #include "util/stop_watch.h"
 #include "util/string_util.h"
 #include "util/sync_point.h"
-#ifndef _MSC_VER
+#if !defined(_MSC_VER) && !defined(__APPLE__)
 # include <sys/unistd.h>
 # include <table/terark_zip_weak_function.h>
 #endif
@@ -1507,7 +1507,7 @@ Status DBImpl::CreateColumnFamilyImpl(const ColumnFamilyOptions& cf_options,
   Status s;
   Status persist_options_status;
   *handle = nullptr;
-#ifndef _MSC_VER
+#if !defined(_MSC_VER) && !defined(__APPLE__)
   const char* terarkdb_localTempDir = getenv("TerarkZipTable_localTempDir");
   if (terarkdb_localTempDir) {
     if (TerarkZipCFOptionsFromEnv && TerarkZipIsBlackListCF) {
