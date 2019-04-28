@@ -11,7 +11,10 @@ fi
 git submodule update --init
 
 
-ROCKSDB_SRC=../terark-rocksdb/output TERARK_CORE_HOME=../terark-core/output make pkg -j $cpuNum
+ROCKSDB_SRC=../terark-rocksdb/output \
+TERARK_CORE_HOME=../terark-core/output \
+TerarkLibDir=../terark-core/output/lib \
+make pkg -j $cpuNum
 
 
 # move all binaries to output/ dir for next CICD steps
