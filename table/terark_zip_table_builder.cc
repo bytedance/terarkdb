@@ -687,7 +687,7 @@ void TerarkZipTableBuilder::BuildIndex(BuildIndexParams& param, KeyValueStatus& 
       );
       return Status::Corruption("TerarkZipTableBuilder index build error", ex.what());
     }
-    auto verify_index = [&] {
+    auto verify_index_impl = [&] {
       // check index correctness
       tempKeyFileReader.resetbuf();
       param.data.fp.rewind();
@@ -714,8 +714,21 @@ void TerarkZipTableBuilder::BuildIndex(BuildIndexParams& param, KeyValueStatus& 
       }
       return true;
     };
+    auto verify_index = [&] {
+      if (verify_index_impl()) {
+        return true;
+      }
+#ifdef _MSV_VER
+      BOOL IsDbgPresent = FALSE;
+      CheckRemoteDebuggerPresent(GetCurrentProcess(), &IsDbgPresent);
+      if (IsDbgPresent || IsDebuggerPresent()) {
+        verify_index_impl();
+      }
+#endif
+      verify_index_impl(); 
+      return false;
+    };
     if (table_options_.debugLevel == 2 && !verify_index()) {
-      verify_index();
       return Status::Corruption("TerarkZipTableBuilder index check fail",
         indexPtr->Name().data());
     }
@@ -740,7 +753,6 @@ void TerarkZipTableBuilder::BuildIndex(BuildIndexParams& param, KeyValueStatus& 
       indexPtr.reset();
       indexPtr = TerarkIndex::LoadMemory(mmap_file.memory().substr(param.indexFileBegin, fileSize));
       if (!verify_index()) {
-        verify_index();
         return Status::Corruption("TerarkZipTableBuilder index check fail after reload",
           indexPtr->Name().data());
       }
