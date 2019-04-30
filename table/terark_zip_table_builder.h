@@ -97,8 +97,6 @@ private:
     febitvec valueBits;
     bitfield_array<2> type;
     size_t split = 0;
-    uint64_t indexFileBegin = 0;
-    uint64_t indexFileEnd = 0;
     uint64_t valueFileBegin = 0;
     uint64_t valueFileEnd = 0;
     uint64_t seqType = 0;
