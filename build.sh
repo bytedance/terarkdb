@@ -40,12 +40,10 @@ PLATFORM_DIR=$SYSTEM-$COMPILER-bmi2-$WITH_BMI2
 
 #echo build/$PLATFORM_DIR/shared_lib/dbg-0/
 
-# copy dynamic lib
+# copy terark-rocksdb dynamic lib
 mkdir -p $pkgdir/lib
 if [ `uname` == Darwin ]; then
 	cp build/$PLATFORM_DIR/shared_lib/dbg-0/librocksdb.* $pkgdir/lib
 else
-	cp -l build/$PLATFORM_DIR/shared_lib/dbg-0/librocksdb.* $pkgdir/lib
+	cp -lP build/$PLATFORM_DIR/shared_lib/dbg-0/librocksdb.so* output/lib/
 fi
-
-# change directory to fit CICD directory
