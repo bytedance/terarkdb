@@ -7,7 +7,6 @@
 #include "util/arena.h"
 #include "util/coding.h"
 #include "utilities/write_batch_with_index/write_batch_with_index_internal.h"
-
 #include <terark/fsa/dynamic_patricia_trie.inl>
 
 namespace rocksdb {
@@ -375,7 +374,7 @@ const WriteBatchEntryIndexFactory* patricia_WriteBatchEntryIndexFactory(const Wr
   };
   class PTrieIndexFactory : public WriteBatchEntryIndexFactory {
    public:
-    virtual WriteBatchEntryIndexContext* NewContext(Arena* a) const {
+    WriteBatchEntryIndexContext* NewContext(Arena* a) const override {
       typedef WriteBatchEntryPTrieIndexContext ctx_t;
       auto ctx = new (a->AllocateAligned(sizeof(ctx_t))) ctx_t();
       ctx->fallback_context = fallback->NewContext(a);

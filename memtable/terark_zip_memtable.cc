@@ -17,9 +17,9 @@
 #include "rocksdb/memtablerep.h"
 #include "terark_zip_internal.h"
 #include "util/arena.h"
-#include <terark/fsa/dynamic_patricia_trie.inl>
 #include <terark/heap_ext.hpp>
 #include <terark/io/byte_swap.hpp>
+#include <terark/fsa/dynamic_patricia_trie.inl>
 
 namespace rocksdb {
 namespace {

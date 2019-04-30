@@ -3326,10 +3326,16 @@ using PrefixComponentList = ComponentRegister<>
 
 using SuffixComponentList = ComponentRegister<>
 ::reg<NAME(Empty  ), 0, IndexEmptySuffix                        >
-::reg<NAME(Fixed  ), 0, IndexFixedStringSuffix                  >
-::reg<NAME(Dynamic), 1, IndexBlobStoreSuffix<ZipOffsetBlobStore>>
+::reg<NAME(FixLen ), 0, IndexFixedStringSuffix                  >
+::reg<NAME(VarLen ), 1, IndexBlobStoreSuffix<ZipOffsetBlobStore>>
 ::reg<NAME(DictZip), 1, IndexBlobStoreSuffix<DictZipBlobStore  >>
 ::list;
+
+
+#if __clang__
+# pragma clang diagnostic push
+# pragma clang diagnostic ignored "-Wunused-value"
+#endif
 
 template<class PrefixComponentList, class SuffixComponentList>
 struct FactoryExpander {
@@ -3377,5 +3383,9 @@ struct FactoryExpander {
 };
 
 FactoryExpander<PrefixComponentList, SuffixComponentList>::ExpandedFactorySet g_factory_init;
+
+#if __clang__
+# pragma clang diagnostic pop
+#endif
 
 } // namespace rocksdb
