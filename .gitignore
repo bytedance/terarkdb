@@ -82,3 +82,4 @@ vs2017
 
 cmake-build-debug
 pkg
+.DS_Store
