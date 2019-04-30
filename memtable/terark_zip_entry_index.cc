@@ -264,8 +264,9 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
   };
 
  public:
-   WriteBatchEntryPTrieIndex(WriteBatchKeyExtractor e, const Comparator* c, Arena* a)
-      : index_(trie_value_size, 0, terark::Patricia::SingleThreadShared),
+   WriteBatchEntryPTrieIndex(WriteBatchKeyExtractor e,
+                             const Comparator* c, Arena* a)
+      : index_(trie_value_size),
         extractor_(e) {
   }
 
@@ -299,22 +300,18 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
         Token(terark::Patricia* trie, WriteBatchIndexEntry* value)
           : terark::Patricia::WriterToken(trie),
             value_(value) {}
-        terark::MainPatricia* main_trie() {
-          return static_cast<terark::MainPatricia*>(trie());
-        }
-
       protected:
         bool init_value(void* valptr, size_t valsize) noexcept override {
           assert(valsize == sizeof(uint32_t));
 
-          size_t data_loc = main_trie()->mem_alloc(sizeof(value_wrap_t));
+          size_t data_loc = m_trie->mem_alloc(sizeof(value_wrap_t));
           assert(data_loc != terark::MainPatricia::mem_alloc_fail);
-          auto* data = (value_wrap_t*)main_trie()->mem_get(data_loc);
+          auto* data = (value_wrap_t*)m_trie->mem_get(data_loc);
           data->value = value_;
 
-          size_t vector_loc = main_trie()->mem_alloc(sizeof(value_vector_t));
+          size_t vector_loc = m_trie->mem_alloc(sizeof(value_vector_t));
           assert(vector_loc != terark::MainPatricia::mem_alloc_fail);
-          auto* vector = (value_vector_t*)main_trie()->mem_get(vector_loc);
+          auto* vector = (value_vector_t*)m_trie->mem_get(vector_loc);
           vector->loc = (uint32_t)data_loc;
           vector->size = 1;
 
@@ -361,7 +358,6 @@ const WriteBatchEntryIndexFactory* patricia_WriteBatchEntryIndexFactory(const Wr
   class WriteBatchEntryPTrieIndexContext : public WriteBatchEntryIndexContext {
    public:
     WriteBatchEntryIndexContext* fallback_context;
-
     WriteBatchEntryPTrieIndexContext()
       : fallback_context(nullptr) {
     }

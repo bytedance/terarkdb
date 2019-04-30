@@ -3226,9 +3226,6 @@ unique_ptr<TerarkIndex> TerarkIndex::LoadMemory(fstring mem) {
   }
 }
 
-
-
-
 template<char... chars_t>
 struct StringHolder {
   static fstring Name() {
