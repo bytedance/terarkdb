@@ -840,6 +840,7 @@ namespace index_detail {
       fstring prefix_key;
       if (prefix().IterSeek(m_id, suffix_count, target, prefix_storage())) {
         prefix_key = prefix().IterGetKey(m_id, prefix_storage());
+        assert(prefix_key >= target);
         if (prefix_key != target) {
           if (prefix().IterPrev(m_id, &suffix_count, prefix_storage())) {
             prefix_key = prefix().IterGetKey(m_id, prefix_storage());
@@ -1210,7 +1211,7 @@ namespace index_detail {
       id = 0;
       iter->pos = 0;
       count = 1;
-      UpdateBuffer(id, iter);
+      UpdateBuffer(iter);
       return true;
     }
     bool IterSeekToLast(size_t& id, size_t* count, IteratorStorage* iter) const {
@@ -1219,7 +1220,7 @@ namespace index_detail {
       if (count != nullptr) {
         *count = 1;
       }
-      UpdateBuffer(id, iter);
+      UpdateBuffer(iter);
       return true;
     }
     bool IterSeek(size_t& id, size_t& count, fstring target, IteratorStorage* iter) const {
@@ -1227,7 +1228,7 @@ namespace index_detail {
         return false;
       }
       count = 1;
-      UpdateBuffer(id, iter);
+      UpdateBuffer(iter);
       return true;
     }
     bool IterNext(size_t& id, size_t count, IteratorStorage* iter) const {
@@ -1246,7 +1247,7 @@ namespace index_detail {
           iter->pos = iter->pos + rs.zero_seq_len(iter->pos + 1) + 1;
         }
       } while (--count > 0);
-      UpdateBuffer(id, iter);
+      UpdateBuffer(iter);
       return true;
     }
     bool IterPrev(size_t& id, size_t* count, IteratorStorage* iter) const {
@@ -1264,7 +1265,7 @@ namespace index_detail {
         if (count != nullptr) {
           *count = 1;
         }
-        UpdateBuffer(id, iter);
+        UpdateBuffer(iter);
         return true;
       }
     }
@@ -1308,12 +1309,12 @@ namespace index_detail {
   private:
     std::pair<bool, bool> SeekImpl(fstring target, size_t& id, size_t& pos, size_t* hint) const {
       /*
-        *    key.size() == 4;
-        *    key_length == 6;
-        *    | - - - - - - - - |  <- buffer
-        *        | - - - - - - |  <- index
-        *        | - - - - |      <- key
-        */
+       *    key.size() == 4;
+       *    key_length == 6;
+       *    | - - - - - - - - |  <- buffer
+       *        | - - - - - - |  <- index
+       *        | - - - - |      <- key
+       */
       byte_t buffer[8] = {};
       memcpy(buffer + (8 - key_length), target.data(), std::min<size_t>(key_length, target.size()));
       uint64_t value = ReadBigEndianUint64Aligned(buffer, 8);
@@ -1344,7 +1345,8 @@ namespace index_detail {
       }
       return { true, true };
     }
-    void UpdateBuffer(size_t id, IteratorStorage* iter) const {
+    void UpdateBuffer(IteratorStorage* iter) const {
+      assert(make_rank_select_hint_wrapper(rank_select, iter->get_hint())[iter->pos]);
       SaveAsBigEndianUint64(iter->buffer, key_length, iter->pos + min_value);
     }
   };
@@ -1450,7 +1452,6 @@ namespace index_detail {
       iter->pos = 0;
       count = rs.one_seq_len(0);
       UpdateBuffer(iter);
-      assert(rs[iter->pos]);
       return true;
     }
     bool IterSeekToLast(size_t& id, size_t* count, IteratorStorage* iter) const {
@@ -1458,7 +1459,6 @@ namespace index_detail {
       if (count == nullptr) {
         id = rs.max_rank1() - 1;
         iter->pos = rs.size() - 2;
-        assert(rs[iter->pos]);
       }
       else {
         size_t one_seq_revlen = rs.one_seq_revlen(rs.size() - 1);
@@ -1466,7 +1466,6 @@ namespace index_detail {
         id = rs.max_rank1() - one_seq_revlen;
         iter->pos = rs.size() - 1 - one_seq_revlen;
         *count = one_seq_revlen;
-        assert(rs[iter->pos]);
       }
       UpdateBuffer(iter);
       return true;
@@ -1527,9 +1526,9 @@ namespace index_detail {
         }
         assert(iter->pos > 0);
         assert(!rs[iter->pos - 1]);
-        iter->pos -= rs.zero_seq_revlen(iter->pos) - 1;
+        iter->pos -= rs.zero_seq_revlen(iter->pos) + 1;
         size_t one_seq_revlen = rs.one_seq_revlen(iter->pos);
-        id -= one_seq_revlen;
+        id -= one_seq_revlen + 1;
         iter->pos -= one_seq_revlen;
         *count = one_seq_revlen + 1;
         UpdateBuffer(iter);
@@ -1576,37 +1575,40 @@ namespace index_detail {
   private:
     std::pair<bool, bool> SeekImpl(fstring target, size_t& id, size_t& count, size_t& pos, size_t* hint) const {
       /*
-        *    key.size() == 4;
-        *    key_length == 6;
-        *    | - - - - - - - - |  <- buffer
-        *        | - - - - - - |  <- index
-        *        | - - - - |      <- key
-        */
+       *    key.size() == 4;
+       *    key_length == 6;
+       *    | - - - - - - - - |  <- buffer
+       *        | - - - - - - |  <- index
+       *        | - - - - |      <- key
+       */
       byte_t buffer[8] = {};
       memcpy(buffer + (8 - key_length), target.data(), std::min<size_t>(key_length, target.size()));
       uint64_t value = ReadBigEndianUint64Aligned(buffer, 8);
+      auto rs = make_rank_select_hint_wrapper(rank_select, hint);
       if (value > max_value) {
         id = size_t(-1);
         return { false, false };
       }
-      auto rs = make_rank_select_hint_wrapper(rank_select, hint);
-      if (value <= min_value) {
+      if (value < min_value) {
         id = 0;
         pos = 0;
-        count = rs.one_seq_len(0);
-        return { true, value == min_value };
+        count = rs.one_seq_revlen(0);
+        return { true, false };
       }
-      value -= min_value;
-      pos = rs.select0(value - 1);
+      pos = rs.select0(value - min_value);
       assert(pos > 0);
-      if (target.size() == key_length && rs[pos + 1]) {
+      if (target.size() <= key_length && rs[pos - 1]) {
+        count = rs.one_seq_revlen(pos);
+        pos -= count;
         id = rs.rank1(pos);
-        count = rs.one_seq_len(pos);
-        return { true, true };
+        return { true, target.size() == key_length };
       }
       else {
-        assert(pos < rs.size() - 1);
-        pos = rs.select0(value);
+        if (pos == rs.size() - 1) {
+          id = size_t(-1);
+          return { false, false };
+        }
+        pos += rs.zero_seq_len(pos);
         id = rs.rank1(pos);
         count = rs.one_seq_len(pos);
         return { true, false };
@@ -1614,6 +1616,7 @@ namespace index_detail {
     }
     void UpdateBuffer(IteratorStorage* iter) const {
       auto rs = make_rank_select_hint_wrapper(rank_select, iter->get_hint());
+      assert(rs[iter->pos]);
       SaveAsBigEndianUint64(iter->buffer, key_length, rs.rank0(iter->pos) + min_value);
     }
   };
