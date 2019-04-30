@@ -34,7 +34,7 @@ static const uint64_t g_terark_index_suffix_seed = 0x535f6b7261726554ull; // ech
 using terark::getEnvBool;
 static bool g_indexEnableCompositeIndex = getEnvBool("TerarkZipTable_enableCompositeIndex", true);
 static bool g_indexEnableUintIndex = getEnvBool("TerarkZipTable_enableUintIndex", true);
-static bool g_indexEnableFewZero = getEnvBool("TerarkZipTable_enableFewZero", false);
+static bool g_indexEnableFewZero = getEnvBool("TerarkZipTable_enableFewZero", true);
 static bool g_indexEnableNonDescUint = getEnvBool("TerarkZipTable_enableNonDescUint", true);
 static bool g_indexEnableDynamicSuffix = getEnvBool("TerarkZipTable_enableDynamicSuffix", true);
 static bool g_indexEnableDictZipSuffix = getEnvBool("TerarkZipTable_enableDictZipSuffix", true);
@@ -2747,10 +2747,7 @@ namespace index_detail {
       }
       else if ((g_indexEnableNonDescUint || info.entry_count == keyCount) &&
         g_indexEnableFewZero && bit_count != size_t(-1) && info.bit_count1 < fewCount && info.bit_count1 < (1ULL << 48)) {
-        if (bit_count < (1ULL << 8)) {
-          info.type = info.entry_count == keyCount ? UintPrefixBuildInfo::asc_few_one_1 : UintPrefixBuildInfo::non_desc_few_one_1;
-        }
-        else if (bit_count < (1ULL << 16)) {
+        if (bit_count < (1ULL << 16)) {
           info.type = info.entry_count == keyCount ? UintPrefixBuildInfo::asc_few_one_2 : UintPrefixBuildInfo::non_desc_few_one_2;
         }
         else if (bit_count < (1ULL << 24)) {
@@ -2775,10 +2772,7 @@ namespace index_detail {
       }
       else if (g_indexEnableFewZero && bit_count != size_t(-1) && info.bit_count0 < fewCount && info.bit_count0 < (1ULL << 48)) {
         assert(info.entry_count == keyCount);
-        if (bit_count < (1ULL << 8)) {
-          info.type = UintPrefixBuildInfo::asc_few_zero_1;
-        }
-        else if (bit_count < (1ULL << 16)) {
+        if (bit_count < (1ULL << 16)) {
           info.type = UintPrefixBuildInfo::asc_few_zero_2;
         }
         else if (bit_count < (1ULL << 24)) {
