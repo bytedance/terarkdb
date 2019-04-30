@@ -543,7 +543,6 @@ namespace index_detail {
     enum {
       fail = 0,
       asc_allone,
-      asc_few_zero_1,
       asc_few_zero_2,
       asc_few_zero_3,
       asc_few_zero_4,
@@ -553,7 +552,6 @@ namespace index_detail {
       asc_few_zero_8,
       asc_il_256,
       asc_se_512,
-      asc_few_one_1,
       asc_few_one_2,
       asc_few_one_3,
       asc_few_one_4,
@@ -563,7 +561,6 @@ namespace index_detail {
       asc_few_one_8,
       non_desc_il_256,
       non_desc_se_512,
-      non_desc_few_one_1,
       non_desc_few_one_2,
       non_desc_few_one_3,
       non_desc_few_one_4,
@@ -920,7 +917,6 @@ namespace index_detail {
   //        NestLoudsTrieDAWG_SE_512_64         
   //        NestLoudsTrieDAWG_SE_512_64_FL      
   //      AscendingUintPrefix<>
-  //        rank_select_fewzero<1>
   //        rank_select_fewzero<2>
   //        rank_select_fewzero<3>
   //        rank_select_fewzero<4>
@@ -928,7 +924,6 @@ namespace index_detail {
   //        rank_select_fewzero<6>
   //        rank_select_fewzero<7>
   //        rank_select_fewzero<8>
-  //        rank_select_fewone<1>
   //        rank_select_fewone<2>
   //        rank_select_fewone<3>
   //        rank_select_fewone<4>
@@ -937,7 +932,6 @@ namespace index_detail {
   //        rank_select_fewone<7>
   //        rank_select_fewone<8>
   //      NonDescendingUintPrefix<>
-  //        rank_select_fewone<1>
   //        rank_select_fewone<2>
   //        rank_select_fewone<3>
   //        rank_select_fewone<4>
@@ -2316,9 +2310,6 @@ namespace index_detail {
     assert(g_indexEnableUintIndex);
     input.rewind();
     switch (info.type) {
-    case UintPrefixBuildInfo::asc_few_zero_1:
-      return BuildAscendingUintPrefix<rank_select_fewzero<1>>(
-        input, tzopt, ks, info, ioption);
     case UintPrefixBuildInfo::asc_few_zero_2:
       return BuildAscendingUintPrefix<rank_select_fewzero<2>>(
         input, tzopt, ks, info, ioption);
@@ -2349,9 +2340,6 @@ namespace index_detail {
     case UintPrefixBuildInfo::asc_se_512:
       return BuildAscendingUintPrefix<rank_select_se_512_64>(
         input, tzopt, ks, info, ioption);
-    case UintPrefixBuildInfo::asc_few_one_1:
-      return BuildAscendingUintPrefix<rank_select_fewone<1>>(
-        input, tzopt, ks, info, ioption);
     case UintPrefixBuildInfo::asc_few_one_2:
       return BuildAscendingUintPrefix<rank_select_fewone<2>>(
         input, tzopt, ks, info, ioption);
@@ -2380,10 +2368,6 @@ namespace index_detail {
     case UintPrefixBuildInfo::non_desc_se_512:
       assert(ks.maxKeyLen > commonPrefixLen(ks.minKey, ks.maxKey) + info.key_length);
       return BuildNonDescendingUintPrefix<rank_select_se_512_64>(
-        input, tzopt, ks, info, ioption);
-    case UintPrefixBuildInfo::non_desc_few_one_1:
-      assert(ks.maxKeyLen > commonPrefixLen(ks.minKey, ks.maxKey) + info.key_length);
-      return BuildNonDescendingUintPrefix<rank_select_fewone<1>>(
         input, tzopt, ks, info, ioption);
     case UintPrefixBuildInfo::non_desc_few_one_2:
       assert(ks.maxKeyLen > commonPrefixLen(ks.minKey, ks.maxKey) + info.key_length);
@@ -2715,8 +2699,8 @@ namespace index_detail {
     for (size_t i = cplen, e = cplen + 8; i < e; ++i) {
       entryCnt[i - cplen] = keyCount - (i < ks.diff.size() ? ks.diff[i].cnt : 0);
     }
-    for (size_t i = 1; i <= maxPrefixLen; ++i) {
-      if (cplen + i < ks.diff.size() && ks.diff[cplen + i].max > 8) {
+    for (size_t i = 2; i <= maxPrefixLen; ++i) {
+      if (cplen + i < ks.diff.size() && ks.diff[cplen + i].max > 128) {
         continue;
       }
       if (!g_indexEnableCompositeIndex && (ks.maxKeyLen != ks.minKeyLen || cplen + i != ks.maxKeyLen)) {
@@ -2787,7 +2771,7 @@ namespace index_detail {
         else {
           info.type = info.entry_count == keyCount ? UintPrefixBuildInfo::asc_few_one_8 : UintPrefixBuildInfo::non_desc_few_one_8;
         }
-        prefixCost = info.bit_count1 * sizeof(uint32_t) * 33 / 32;
+        prefixCost = info.bit_count1 * i * 256 / 255;
       }
       else if (g_indexEnableFewZero && bit_count != size_t(-1) && info.bit_count0 < fewCount && info.bit_count0 < (1ULL << 48)) {
         assert(info.entry_count == keyCount);
@@ -2815,7 +2799,7 @@ namespace index_detail {
         else {
           info.type = UintPrefixBuildInfo::asc_few_zero_8;
         }
-        prefixCost = info.bit_count0 * sizeof(uint32_t) * 33 / 32;
+        prefixCost = info.bit_count0 * i * 256 / 255;
       }
       else {
         if (!g_indexEnableNonDescUint && info.entry_count != keyCount) {
@@ -2832,10 +2816,13 @@ namespace index_detail {
         else {
           info.type = info.entry_count == keyCount ? UintPrefixBuildInfo::asc_se_512 : UintPrefixBuildInfo::non_desc_se_512;
         }
-        prefixCost = bit_count * 21 / 16;
+        prefixCost = bit_count * 21 / 128;
       }
-      size_t suffixCost = (totalKeySize - i * keyCount) * zipRatio;
-      if (ks.minSuffixLen != ks.maxSuffixLen) {
+      size_t suffixCost = totalKeySize - i * keyCount;
+      if (UseDictZipSuffix(ks.keyCount, suffixCost, zipRatio)) {
+        suffixCost = (suffixCost + 8 * keyCount) * zipRatio;
+      }
+      else if (ks.minSuffixLen != ks.maxSuffixLen) {
         suffixCost += keyCount;
       }
       size_t currCost = prefixCost + suffixCost;
@@ -3291,7 +3278,6 @@ using PrefixComponentList = ComponentRegister<>
 ::reg<NAME(SE_512_64   ), 1, IndexNestLoudsTriePrefix<NestLoudsTrieDAWG_SE_512_64         >>
 ::reg<NAME(SE_512_64_FL), 1, IndexNestLoudsTriePrefix<NestLoudsTrieDAWG_SE_512_64_FL      >>
 ::reg<NAME(A_AllOne    ), 0, IndexAscendingUintPrefix<rank_select_allone    >>
-::reg<NAME(A_FewZero_1 ), 1, IndexAscendingUintPrefix<rank_select_fewzero<1>>>
 ::reg<NAME(A_FewZero_2 ), 1, IndexAscendingUintPrefix<rank_select_fewzero<2>>>
 ::reg<NAME(A_FewZero_3 ), 1, IndexAscendingUintPrefix<rank_select_fewzero<3>>>
 ::reg<NAME(A_FewZero_4 ), 1, IndexAscendingUintPrefix<rank_select_fewzero<4>>>
@@ -3301,7 +3287,6 @@ using PrefixComponentList = ComponentRegister<>
 ::reg<NAME(A_FewZero_8 ), 1, IndexAscendingUintPrefix<rank_select_fewzero<8>>>
 ::reg<NAME(A_IL_256_32 ), 0, IndexAscendingUintPrefix<rank_select_il_256_32>>
 ::reg<NAME(A_SE_512_64 ), 0, IndexAscendingUintPrefix<rank_select_se_512_64>>
-::reg<NAME(A_FewOne_1  ), 1, IndexAscendingUintPrefix<rank_select_fewone<1>>>
 ::reg<NAME(A_FewOne_2  ), 1, IndexAscendingUintPrefix<rank_select_fewone<2>>>
 ::reg<NAME(A_FewOne_3  ), 1, IndexAscendingUintPrefix<rank_select_fewone<3>>>
 ::reg<NAME(A_FewOne_4  ), 1, IndexAscendingUintPrefix<rank_select_fewone<4>>>
@@ -3311,7 +3296,6 @@ using PrefixComponentList = ComponentRegister<>
 ::reg<NAME(A_FewOne_8  ), 1, IndexAscendingUintPrefix<rank_select_fewone<8>>>
 ::reg<NAME(ND_IL_256_32), 0, IndexNonDescendingUintPrefix<rank_select_il_256_32>>
 ::reg<NAME(ND_SE_512_64), 0, IndexNonDescendingUintPrefix<rank_select_se_512_64>>
-::reg<NAME(ND_fewone_1 ), 1, IndexNonDescendingUintPrefix<rank_select_fewone<1>>>
 ::reg<NAME(ND_fewone_2 ), 1, IndexNonDescendingUintPrefix<rank_select_fewone<2>>>
 ::reg<NAME(ND_fewone_3 ), 1, IndexNonDescendingUintPrefix<rank_select_fewone<3>>>
 ::reg<NAME(ND_fewone_4 ), 1, IndexNonDescendingUintPrefix<rank_select_fewone<4>>>
