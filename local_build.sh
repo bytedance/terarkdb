@@ -29,7 +29,7 @@ fi
 
 
 rm -rf pkg
-TerarkLibDir=terark-core/lib PKG_WITH_ROCKSDB=0 make pkg -j $cpuNum
+TerarkLibDir=terark-core/lib PKG_WITH_ROCKSDB=1 make pkg -j $cpuNum
 
 
 # move all binaries to output/ dir for next CICD steps
