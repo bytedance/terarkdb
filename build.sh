@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# author : guokuankuan@bytedance.com
 
 if [ `uname` == Darwin ]; then
 	cpuNum=`sysctl -n machdep.cpu.thread_count`
