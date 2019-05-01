@@ -725,7 +725,6 @@ void TerarkZipTableBuilder::BuildIndex(BuildIndexParams& param, KeyValueStatus& 
         verify_index_impl();
       }
 #endif
-      verify_index_impl(); 
       return false;
     };
     if (table_options_.debugLevel == 2 && !verify_index()) {
@@ -1713,13 +1712,8 @@ Status TerarkZipTableBuilder::WriteIndexStore(fstring indexMmap, AbstractBlobSto
       offset = offset_;
       for (size_t i = 0; i < index_vec.size(); ++i) {
         auto index = index_vec[isReverseBytewiseOrder_ ? index_vec.size() - 1 - i : i].get();
-        if (index->NeedsReorder()) {
-          auto reorder = reorderReader.get_slice(i);
-          index->Reorder(reorder, std::ref(writeAppend), tmpSentryFile_.path + ".reorder-tmp");
-        }
-        else {
-          index->SaveMmap(std::ref(writeAppend));
-        }
+        auto reorder = reorderReader.get_slice(i);
+        index->Reorder(reorder, std::ref(writeAppend), tmpSentryFile_.path + ".reorder-tmp");
       }
       indexSize = offset_ - offset;
       offset = offset_;
@@ -2017,7 +2011,7 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4, long
           kvs.valueFileBegin, kvs.valueFileEnd
         ), dict));
     long long t6p, t7p;
-    s = WriteIndexStore(mmapIndexFile.memory(), store.get(), kvs, dataBlock, kvs_index, t7, t6p, t7p);
+    s = WriteIndexStore(mmapIndexFile.memory(), store.get(), kvs, dataBlock, i, t7, t6p, t7p);
     if (!s.ok()) {
       return s;
     }
