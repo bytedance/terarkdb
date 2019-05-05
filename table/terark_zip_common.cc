@@ -20,7 +20,7 @@ const char* StrDateTimeNow() {
   time_t rawtime;
   time(&rawtime);
   struct tm* timeinfo = localtime(&rawtime);
-  strftime(buf, sizeof(buf), "%F %T",timeinfo);
+  strftime(buf, sizeof(buf), "%F %T", timeinfo);
   return buf;
 }
 
@@ -55,7 +55,7 @@ TempFileDeleteOnClose::~TempFileDeleteOnClose() {
 void TempFileDeleteOnClose::open_temp() {
   if (!terark::fstring(path).endsWith("XXXXXX")) {
     THROW_STD(invalid_argument,
-        "ERROR: path = \"%s\", must ends with \"XXXXXX\"", path.c_str());
+              "ERROR: path = \"%s\", must ends with \"XXXXXX\"", path.c_str());
   }
 #if _MSC_VER
   if (int err = _mktemp_s(&path[0], path.size() + 1)) {
@@ -67,8 +67,7 @@ void TempFileDeleteOnClose::open_temp() {
   int fd = mkstemp(&path[0]);
   if (fd < 0) {
     int err = errno;
-    THROW_STD(invalid_argument, "ERROR: mkstemp(%s) = %s"
-        , path.c_str(), strerror(err));
+    THROW_STD(invalid_argument, "ERROR: mkstemp(%s) = %s", path.c_str(), strerror(err));
   }
   this->dopen(fd);
 #endif

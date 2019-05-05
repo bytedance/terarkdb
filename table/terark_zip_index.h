@@ -65,7 +65,6 @@ public:
     size_t entropyLen = 0;
     valvec<byte_t> minKey;
     valvec<byte_t> maxKey;
-    fstring prefix;
     valvec<DiffItem> diff;
   };
   class Factory : public terark::RefCounter {
@@ -80,17 +79,20 @@ public:
     virtual unique_ptr<TerarkIndex> LoadMemory(fstring mem) const = 0;
   };
   typedef boost::intrusive_ptr<Factory> FactoryPtr;
-
   static unique_ptr<TerarkIndex> LoadMemory(fstring mem);
   virtual ~TerarkIndex();
   virtual fstring Name() const = 0;
-  virtual void SaveMmap(std::function<void(const void *, size_t)> write) const = 0;
-  virtual void Reorder(ZReorderMap& newToOld, std::function<void(const void *, size_t)> write, fstring tmpFile) const = 0;
+  virtual void SaveMmap(std::function<void(const void*, size_t)> write) const = 0;
+  virtual void
+  Reorder(ZReorderMap& newToOld, std::function<void(const void*, size_t)> write, fstring tmpFile) const = 0;
   virtual size_t Find(fstring key, valvec<byte_t>* ctx) const = 0;
   virtual size_t DictRank(fstring key, valvec<byte_t>* ctx) const = 0;
+  virtual fstring MinKey(valvec<byte_t>* ctx) const = 0;
+  virtual fstring MaxKey(valvec<byte_t>* ctx) const = 0;
   virtual size_t NumKeys() const = 0;
   virtual size_t TotalKeySize() const = 0;
   virtual fstring Memory() const = 0;
+  virtual const char* Info(char* buffer, size_t size) const = 0;
   virtual Iterator* NewIterator(void* ptr) const = 0;
   virtual size_t IteratorSize() const = 0;
   virtual bool NeedsReorder() const = 0;
