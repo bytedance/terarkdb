@@ -34,40 +34,13 @@ static const uint64_t g_terark_index_suffix_seed = 0x535f6b7261726554ull; // ech
 using terark::getEnvBool;
 static bool g_indexEnableCompositeIndex = getEnvBool("TerarkZipTable_enableCompositeIndex", true);
 static bool g_indexEnableUintIndex = getEnvBool("TerarkZipTable_enableUintIndex", true);
-static bool g_indexEnableFewZero = getEnvBool("TerarkZipTable_enableFewZero", false);
+static bool g_indexEnableFewZero = getEnvBool("TerarkZipTable_enableFewZero", true);
 static bool g_indexEnableNonDescUint = getEnvBool("TerarkZipTable_enableNonDescUint", true);
 static bool g_indexEnableDynamicSuffix = getEnvBool("TerarkZipTable_enableDynamicSuffix", true);
 static bool g_indexEnableDictZipSuffix = getEnvBool("TerarkZipTable_enableDictZipSuffix", true);
 
 template<class RankSelect> struct RankSelectNeedHint : public std::false_type {};
 template<size_t P, size_t W> struct RankSelectNeedHint<rank_select_few<P, W>> : public std::true_type {};
-
-//// -- fast zero-seq-len
-//template<class RankSelect>
-//size_t rs_zero_seq_len(const RankSelect& rs, size_t pos, size_t* hint) {
-//  return rs.zero_seq_len(pos);
-//}
-//template<class Uint>
-//size_t rs_zero_seq_len(const rank_select_fewzero<Uint>& rs, size_t pos, size_t* hint) {
-//  return rs.zero_seq_len(pos, hint);
-//}
-//template<class Uint>
-//size_t rs_zero_seq_len(const rank_select_fewone<Uint>& rs, size_t pos, size_t* hint) {
-//  return rs.zero_seq_len(pos, hint);
-//}
-//// -- fast zero-seq-revlen
-//template<class RankSelect>
-//size_t rs_zero_seq_revlen(const RankSelect& rs, size_t pos, size_t* hint) {
-//  return rs.zero_seq_revlen(pos);
-//}
-//template<class Uint>
-//size_t rs_zero_seq_revlen(const rank_select_fewzero<Uint>& rs, size_t pos, size_t* hint) {
-//  return rs.zero_seq_revlen(pos, hint);
-//}
-//template<class Uint>
-//size_t rs_zero_seq_revlen(const rank_select_fewone<Uint>& rs, size_t pos, size_t* hint) {
-//  return rs.zero_seq_revlen(pos, hint);
-//}
 
 static hash_strmap<TerarkIndex::FactoryPtr> g_TerarkIndexFactroy;
 struct TerarkIndexTypeFactroyHash {
@@ -99,7 +72,8 @@ struct TerarkIndexFooter {
 
   char      class_name[40];
   uint16_t  bfs_suffix : 1;
-  uint16_t  format_version : 15;
+  uint16_t  rev_suffix : 1;
+  uint16_t  format_version : 14;
   uint16_t  footer_size;
   uint32_t  footer_crc32;
 };
@@ -121,11 +95,11 @@ TerarkIndex::Iterator::~Iterator() {}
 namespace index_detail {
 
   struct StatusFlags {
-    StatusFlags() : is_user_mem(0), is_bfs_suffix(0) {}
+    StatusFlags() : is_user_mem(0), is_bfs_suffix(0), is_rev_suffix(0) {}
 
-    uint64_t is_user_mem : 1;
-    uint64_t is_bfs_suffix : 1;
-    uint64_t : 0;
+    bool is_user_mem;
+    bool is_bfs_suffix;
+    bool is_rev_suffix;
   };
 
   struct Common {
@@ -308,10 +282,12 @@ namespace index_detail {
     typedef void* IteratorStorage;
     template<class Prefix>
     VirtualPrefix(Prefix&& p) {
+      flags = p.flags;
       prefix = new VirtualPrefixWrapper<Prefix>(std::move(p));
     }
     VirtualPrefix(VirtualPrefix&& o) {
       prefix = o.prefix;
+      flags = o.flags;
       o.prefix = nullptr;
     }
     ~VirtualPrefix() {
@@ -447,10 +423,12 @@ namespace index_detail {
     typedef void* IteratorStorage;
     template<class Suffix>
     VirtualSuffix(Suffix&& s) {
+      flags = s.flags;
       suffix = new VirtualSuffixWrapper<Suffix>(std::move(s));
     }
     VirtualSuffix(VirtualSuffix&& o) {
       suffix = o.suffix;
+      flags = o.flags;
       o.suffix = nullptr;
     }
     ~VirtualSuffix() {
@@ -565,7 +543,6 @@ namespace index_detail {
     enum {
       fail = 0,
       asc_allone,
-      asc_few_zero_1,
       asc_few_zero_2,
       asc_few_zero_3,
       asc_few_zero_4,
@@ -575,7 +552,6 @@ namespace index_detail {
       asc_few_zero_8,
       asc_il_256,
       asc_se_512,
-      asc_few_one_1,
       asc_few_one_2,
       asc_few_one_3,
       asc_few_one_4,
@@ -585,7 +561,6 @@ namespace index_detail {
       asc_few_one_8,
       non_desc_il_256,
       non_desc_se_512,
-      non_desc_few_one_1,
       non_desc_few_one_2,
       non_desc_few_one_3,
       non_desc_few_one_4,
@@ -631,6 +606,7 @@ namespace index_detail {
         throw std::invalid_argument("TerarkIndex::LoadMemory Prefix Fail, bad mem");
       }
       unique_ptr<SuffixBase> s(CreateSuffix());
+      s->flags.is_rev_suffix = footer.rev_suffix;
       if (!s->Load(suffix)) {
         throw std::invalid_argument("TerarkIndex::LoadMemory Suffix Fail, bad mem");
       }
@@ -651,6 +627,7 @@ namespace index_detail {
       TerarkIndexFooter footer;
       footer.format_version = 0;
       footer.bfs_suffix = prefix.flags.is_bfs_suffix;
+      footer.rev_suffix = suffix.flags.is_rev_suffix;
       footer.footer_size = sizeof footer;
       footer.common_size = common.size();
       footer.common_crc32 = Crc32c_update(0, common.data(), common.size());
@@ -684,6 +661,7 @@ namespace index_detail {
       TerarkIndexFooter footer;
       footer.format_version = 0;
       footer.bfs_suffix = true;
+      footer.rev_suffix = false;
       footer.footer_size = sizeof footer;
       footer.common_size = common.size();
       footer.common_crc32 = Crc32c_update(0, common.data(), common.size());
@@ -859,6 +837,7 @@ namespace index_detail {
       fstring prefix_key;
       if (prefix().IterSeek(m_id, suffix_count, target, prefix_storage())) {
         prefix_key = prefix().IterGetKey(m_id, prefix_storage());
+        assert(prefix_key >= target);
         if (prefix_key != target) {
           if (prefix().IterPrev(m_id, &suffix_count, prefix_storage())) {
             prefix_key = prefix().IterGetKey(m_id, prefix_storage());
@@ -938,7 +917,6 @@ namespace index_detail {
   //        NestLoudsTrieDAWG_SE_512_64         
   //        NestLoudsTrieDAWG_SE_512_64_FL      
   //      AscendingUintPrefix<>
-  //        rank_select_fewzero<1>
   //        rank_select_fewzero<2>
   //        rank_select_fewzero<3>
   //        rank_select_fewzero<4>
@@ -946,7 +924,6 @@ namespace index_detail {
   //        rank_select_fewzero<6>
   //        rank_select_fewzero<7>
   //        rank_select_fewzero<8>
-  //        rank_select_fewone<1>
   //        rank_select_fewone<2>
   //        rank_select_fewone<3>
   //        rank_select_fewone<4>
@@ -955,7 +932,6 @@ namespace index_detail {
   //        rank_select_fewone<7>
   //        rank_select_fewone<8>
   //      NonDescendingUintPrefix<>
-  //        rank_select_fewone<1>
   //        rank_select_fewone<2>
   //        rank_select_fewone<3>
   //        rank_select_fewone<4>
@@ -1115,23 +1091,17 @@ namespace index_detail {
   struct IndexUintPrefixIteratorStorage {
     byte_t buffer[8];
     size_t pos;
-    size_t* get_hint() {
-      return nullptr;
-    }
-    const size_t* get_hint() const {
-      return nullptr;
+    mutable size_t hint = 0;
+    size_t* get_hint() const {
+      return &hint;
     }
   };
   template<>
   struct IndexUintPrefixIteratorStorage<std::false_type> {
     byte_t buffer[8];
     size_t pos;
-    size_t hint;
-    size_t* get_hint() {
-      return &hint;
-    }
-    const size_t* get_hint() const {
-      return &hint;
+    size_t* get_hint() const {
+      return nullptr;
     }
   };
 
@@ -1188,11 +1158,13 @@ namespace index_detail {
       if (value < min_value || value > max_value) {
         return size_t(-1);
       }
+      size_t hint = 0;
+      auto rs = make_rank_select_hint_wrapper(rank_select, &hint);
       uint64_t pos = value - min_value;
-      if (!rank_select[pos]) {
+      if (!rs[pos]) {
         return size_t(-1);
       }
-      size_t id = rank_select.rank1(pos);
+      size_t id = rs.rank1(pos);
       if (suffix == nullptr) {
         return key.size() == key_length ? id : size_t(-1);
       }
@@ -1206,7 +1178,7 @@ namespace index_detail {
       return suffix_id;
     }
     size_t DictRank(fstring key, const SuffixBase* suffix, valvec<byte_t>* ctx) const {
-      size_t id, pos, hint;
+      size_t id, pos, hint = 0;
       bool seek_result, is_find;
       std::tie(seek_result, is_find) = SeekImpl(key, id, pos, &hint);
       if (!seek_result) {
@@ -1233,7 +1205,7 @@ namespace index_detail {
       id = 0;
       iter->pos = 0;
       count = 1;
-      UpdateBuffer(id, iter);
+      UpdateBuffer(iter);
       return true;
     }
     bool IterSeekToLast(size_t& id, size_t* count, IteratorStorage* iter) const {
@@ -1242,7 +1214,7 @@ namespace index_detail {
       if (count != nullptr) {
         *count = 1;
       }
-      UpdateBuffer(id, iter);
+      UpdateBuffer(iter);
       return true;
     }
     bool IterSeek(size_t& id, size_t& count, fstring target, IteratorStorage* iter) const {
@@ -1250,42 +1222,44 @@ namespace index_detail {
         return false;
       }
       count = 1;
-      UpdateBuffer(id, iter);
+      UpdateBuffer(iter);
       return true;
     }
     bool IterNext(size_t& id, size_t count, IteratorStorage* iter) const {
+      auto rs = make_rank_select_hint_wrapper(rank_select, iter->get_hint());
       assert(id != size_t(-1));
       assert(count > 0);
-      assert(rank_select[iter->pos]);
-      assert(rank_select.rank1(iter->pos) == id);
+      assert(rs[iter->pos]);
+      assert(rs.rank1(iter->pos) == id);
       do {
-        if (id == rank_select.max_rank1() - 1) {
+        if (id == rs.max_rank1() - 1) {
           id = size_t(-1);
           return false;
         }
         else {
           ++id;
-          iter->pos = iter->pos + rank_select.zero_seq_len(iter->pos + 1) + 1;
+          iter->pos = iter->pos + rs.zero_seq_len(iter->pos + 1) + 1;
         }
       } while (--count > 0);
-      UpdateBuffer(id, iter);
+      UpdateBuffer(iter);
       return true;
     }
     bool IterPrev(size_t& id, size_t* count, IteratorStorage* iter) const {
+      auto rs = make_rank_select_hint_wrapper(rank_select, iter->get_hint());
       assert(id != size_t(-1));
-      assert(rank_select[iter->pos]);
-      assert(rank_select.rank1(iter->pos) == id);
+      assert(rs[iter->pos]);
+      assert(rs.rank1(iter->pos) == id);
       if (id == 0) {
         id = size_t(-1);
         return false;
       }
       else {
         --id;
-        iter->pos = iter->pos - rank_select.zero_seq_revlen(iter->pos) - 1;
+        iter->pos = iter->pos - rs.zero_seq_revlen(iter->pos) - 1;
         if (count != nullptr) {
           *count = 1;
         }
-        UpdateBuffer(id, iter);
+        UpdateBuffer(iter);
         return true;
       }
     }
@@ -1329,12 +1303,12 @@ namespace index_detail {
   private:
     std::pair<bool, bool> SeekImpl(fstring target, size_t& id, size_t& pos, size_t* hint) const {
       /*
-        *    key.size() == 4;
-        *    key_length == 6;
-        *    | - - - - - - - - |  <- buffer
-        *        | - - - - - - |  <- index
-        *        | - - - - |      <- key
-        */
+       *    key.size() == 4;
+       *    key_length == 6;
+       *    | - - - - - - - - |  <- buffer
+       *        | - - - - - - |  <- index
+       *        | - - - - |      <- key
+       */
       byte_t buffer[8] = {};
       memcpy(buffer + (8 - key_length), target.data(), std::min<size_t>(key_length, target.size()));
       uint64_t value = ReadBigEndianUint64Aligned(buffer, 8);
@@ -1347,24 +1321,26 @@ namespace index_detail {
         pos = 0;
         return { true, false };
       }
+      auto rs = make_rank_select_hint_wrapper(rank_select, hint);
       pos = value - min_value;
-      id = rank_select.rank1(pos);
-      if (!rank_select[pos]) {
-        pos += rank_select.zero_seq_len(pos);
+      id = rs.rank1(pos);
+      if (!rs[pos]) {
+        pos += rs.zero_seq_len(pos);
         return { true, false };
       }
       else if (target.size() > key_length) {
-        if (pos == rank_select.size() - 1) {
+        if (pos == rs.size() - 1) {
           id = size_t(-1);
           return { false, false };
         }
         ++id;
-        pos += rank_select.zero_seq_len(pos + 1) + 1;
+        pos += rs.zero_seq_len(pos + 1) + 1;
         return { true, false };
       }
       return { true, true };
     }
-    void UpdateBuffer(size_t id, IteratorStorage* iter) const {
+    void UpdateBuffer(IteratorStorage* iter) const {
+      assert(make_rank_select_hint_wrapper(rank_select, iter->get_hint())[iter->pos]);
       SaveAsBigEndianUint64(iter->buffer, key_length, iter->pos + min_value);
     }
   };
@@ -1424,13 +1400,15 @@ namespace index_detail {
       if (value < min_value || value > max_value) {
         return size_t(-1);
       }
-      uint64_t pos = rank_select.select0(value - min_value);
+      size_t hint = 0;
+      auto rs = make_rank_select_hint_wrapper(rank_select, &hint);
+      uint64_t pos = rs.select0(value - min_value);
       assert(pos > 0);
-      size_t count = rank_select.one_seq_revlen(pos);
+      size_t count = rs.one_seq_revlen(pos);
       if (count == 0) {
         return size_t(-1);
       }
-      size_t id = rank_select.rank1(pos - count);
+      size_t id = rs.rank1(pos - count);
       size_t suffix_id;
       fstring suffix_key;
       key = key.substr(key_length);
@@ -1442,7 +1420,7 @@ namespace index_detail {
     }
     size_t DictRank(fstring key, const SuffixBase* suffix, valvec<byte_t>* ctx) const {
       assert(suffix != nullptr);
-      size_t id, count, pos, hint;
+      size_t id, count, pos, hint = 0;
       bool seek_result, is_find;
       std::tie(seek_result, is_find) = SeekImpl(key, id, count, pos, &hint);
       if (!seek_result) {
@@ -1463,96 +1441,91 @@ namespace index_detail {
     }
 
     bool IterSeekToFirst(size_t& id, size_t& count, IteratorStorage* iter) const {
+      auto rs = make_rank_select_hint_wrapper(rank_select, iter->get_hint());
       id = 0;
       iter->pos = 0;
-      count = rank_select.one_seq_len(0);
-      UpdateBuffer(id, iter);
-      assert(rank_select[iter->pos]);
+      count = rs.one_seq_len(0);
+      UpdateBuffer(iter);
       return true;
     }
     bool IterSeekToLast(size_t& id, size_t* count, IteratorStorage* iter) const {
+      auto rs = make_rank_select_hint_wrapper(rank_select, iter->get_hint());
       if (count == nullptr) {
-        id = rank_select.max_rank1() - 1;
-        iter->pos = rank_select.size() - 2;
-        assert(rank_select[iter->pos]);
+        id = rs.max_rank1() - 1;
+        iter->pos = rs.size() - 2;
       }
       else {
-        size_t one_seq_revlen = rank_select.one_seq_revlen(rank_select.size() - 1);
+        size_t one_seq_revlen = rs.one_seq_revlen(rs.size() - 1);
         assert(one_seq_revlen > 0);
-        id = rank_select.max_rank1() - one_seq_revlen;
-        iter->pos = rank_select.size() - 1 - one_seq_revlen;
+        id = rs.max_rank1() - one_seq_revlen;
+        iter->pos = rs.size() - 1 - one_seq_revlen;
         *count = one_seq_revlen;
-        assert(rank_select[iter->pos]);
       }
-      UpdateBuffer(id, iter);
+      UpdateBuffer(iter);
       return true;
     }
     bool IterSeek(size_t& id, size_t& count, fstring target, IteratorStorage* iter) const {
       if (!SeekImpl(target, id, count, iter->pos, iter->get_hint()).first) {
         return false;
       }
-      UpdateBuffer(id, iter);
+      UpdateBuffer(iter);
       return true;
     }
     bool IterNext(size_t& id, size_t count, IteratorStorage* iter) const {
+      auto rs = make_rank_select_hint_wrapper(rank_select, iter->get_hint());
       assert(id != size_t(-1));
       assert(count > 0);
-      assert(rank_select[iter->pos]);
-      assert(rank_select.rank1(iter->pos) == id);
-      if (id + count >= rank_select.max_rank1()) {
+      assert(rs[iter->pos]);
+      assert(rs.rank1(iter->pos) == id);
+      if (id + count >= rs.max_rank1()) {
         id = size_t(-1);
         return false;
       }
       id += count;
       if (count == 1) {
-        size_t zero_seq_len = rank_select.zero_seq_len(iter->pos + 1);
+        size_t zero_seq_len = rs.zero_seq_len(iter->pos + 1);
         iter->pos += zero_seq_len + 1;
         if (zero_seq_len > 0) {
-          UpdateBuffer(id, iter);
+          UpdateBuffer(iter);
         }
       }
       else {
-        size_t one_seq_len = rank_select.one_seq_len(iter->pos + 1);
-        if (count <= one_seq_len) {
-          iter->pos += count;
-        }
-        else {
-          iter->pos = rank_select.select1(id);
-          UpdateBuffer(id, iter);
-        }
+        iter->pos = rs.select1(id);
+        UpdateBuffer(iter);
       }
       return true;
     }
     bool IterPrev(size_t& id, size_t* count, IteratorStorage* iter) const {
+      auto rs = make_rank_select_hint_wrapper(rank_select, iter->get_hint());
       assert(id != size_t(-1));
-      assert(rank_select[iter->pos]);
-      assert(rank_select.rank1(iter->pos) == id);
+      assert(rs[iter->pos]);
+      assert(rs.rank1(iter->pos) == id);
       if (id == 0) {
         id = size_t(-1);
         return false;
       }
       else if (count == nullptr) {
-        size_t zero_seq_revlen = rank_select.zero_seq_revlen(iter->pos);
+        size_t zero_seq_revlen = rs.zero_seq_revlen(iter->pos);
         --id;
         iter->pos -= zero_seq_revlen + 1;
         if (zero_seq_revlen > 0) {
-          UpdateBuffer(id, iter);
+          UpdateBuffer(iter);
         }
         return true;
       }
       else {
-        size_t one_seq_revlen = rank_select.one_seq_revlen(iter->pos);
-        id -= one_seq_revlen;
-        if (id == 0) {
+        if (iter->pos == 0) {
           id = size_t(-1);
           return false;
         }
-        iter->pos = rank_select.select1(--id);
-        one_seq_revlen = rank_select.one_seq_revlen(iter->pos);
-        id -= one_seq_revlen;
+        assert(iter->pos > 0);
+        assert(!rs[iter->pos - 1]);
+        iter->pos -= rs.zero_seq_revlen(iter->pos) + 1;
+        size_t one_seq_revlen = rs.one_seq_revlen(iter->pos);
+        id -= one_seq_revlen + 1;
         iter->pos -= one_seq_revlen;
         *count = one_seq_revlen + 1;
-        UpdateBuffer(id, iter);
+        UpdateBuffer(iter);
         return true;
       }
     }
@@ -1596,15 +1569,16 @@ namespace index_detail {
   private:
     std::pair<bool, bool> SeekImpl(fstring target, size_t& id, size_t& count, size_t& pos, size_t* hint) const {
       /*
-        *    key.size() == 4;
-        *    key_length == 6;
-        *    | - - - - - - - - |  <- buffer
-        *        | - - - - - - |  <- index
-        *        | - - - - |      <- key
-        */
+       *    key.size() == 4;
+       *    key_length == 6;
+       *    | - - - - - - - - |  <- buffer
+       *        | - - - - - - |  <- index
+       *        | - - - - |      <- key
+       */
       byte_t buffer[8] = {};
       memcpy(buffer + (8 - key_length), target.data(), std::min<size_t>(key_length, target.size()));
       uint64_t value = ReadBigEndianUint64Aligned(buffer, 8);
+      auto rs = make_rank_select_hint_wrapper(rank_select, hint);
       if (value > max_value) {
         id = size_t(-1);
         return { false, false };
@@ -1612,29 +1586,32 @@ namespace index_detail {
       if (value < min_value) {
         id = 0;
         pos = 0;
+        count = rs.one_seq_revlen(0);
         return { true, false };
       }
-      pos = rank_select.select0(value - min_value);
+      pos = rs.select0(value - min_value);
       assert(pos > 0);
-      if (target.size() == key_length && rank_select[pos - 1]) {
-        count = rank_select.one_seq_revlen(pos);
+      if (target.size() <= key_length && rs[pos - 1]) {
+        count = rs.one_seq_revlen(pos);
         pos -= count;
-        id = rank_select.rank1(pos);
-        return { true, true };
+        id = rs.rank1(pos);
+        return { true, target.size() == key_length };
       }
       else {
-        if (pos == rank_select.size() - 1) {
+        if (pos == rs.size() - 1) {
           id = size_t(-1);
           return { false, false };
         }
-        pos += rank_select.zero_seq_len(pos);
-        id = rank_select.rank1(pos);
-        count = rank_select.one_seq_len(pos);
+        pos += rs.zero_seq_len(pos);
+        id = rs.rank1(pos);
+        count = rs.one_seq_len(pos);
         return { true, false };
       }
     }
-    void UpdateBuffer(size_t id, IteratorStorage* iter) const {
-      SaveAsBigEndianUint64(iter->buffer, key_length, rank_select.rank0(iter->pos) + min_value);
+    void UpdateBuffer(IteratorStorage* iter) const {
+      auto rs = make_rank_select_hint_wrapper(rank_select, iter->get_hint());
+      assert(rs[iter->pos]);
+      SaveAsBigEndianUint64(iter->buffer, key_length, rs.rank0(iter->pos) + min_value);
     }
   };
 
@@ -1711,14 +1688,13 @@ namespace index_detail {
       delete other;
     }
     IndexNestLoudsTriePrefix(NestLoudsTrieDAWG* trie, bool bfs_sufflx)
-        : trie_(trie), bfs_sufflx_(bfs_sufflx) {
+        : trie_(trie) {
       flags.is_bfs_suffix = bfs_sufflx;
     }
     IndexNestLoudsTriePrefix& operator = (const IndexNestLoudsTriePrefix&) = delete;
     IndexNestLoudsTriePrefix& operator = (IndexNestLoudsTriePrefix&&) = default;
 
     unique_ptr<NestLoudsTrieDAWG> trie_;
-    bool bfs_sufflx_;
 
     size_t IteratorStorageSize() const {
       return sizeof(IteratorStorage);
@@ -1737,7 +1713,7 @@ namespace index_detail {
       return trie_->adfa_total_words_len();
     }
     size_t Find(fstring key, const SuffixBase* suffix, valvec<byte_t>* ctx) const {
-      if (suffix == nullptr && bfs_sufflx_) {
+      if (suffix == nullptr && flags.is_bfs_suffix) {
         return trie_->index(key);
       }
       size_t id, rank;
@@ -1770,7 +1746,7 @@ namespace index_detail {
       size_t suffix_id;
       fstring suffix_key;
       key = key.substr(prefix_key.size());
-      size_t seek_id = bfs_sufflx_ ? id : rank;
+      size_t seek_id = flags.is_bfs_suffix ? id : rank;
       std::tie(suffix_id, suffix_key) = suffix->LowerBound(key, seek_id, 1, ctx);
       if (suffix_id != seek_id || suffix_key != key) {
         return size_t(-1);
@@ -1810,7 +1786,7 @@ namespace index_detail {
         key = key.substr(prefix_key.size());
         size_t suffix_id;
         fstring suffix_key;
-        size_t seek_id = bfs_sufflx_ ? id : rank;
+        size_t seek_id = flags.is_bfs_suffix ? id : rank;
         std::tie(suffix_id, suffix_key) = suffix->LowerBound(key, seek_id, 1, ctx);
         if (suffix_id == seek_id && suffix_key == key) {
           return rank;
@@ -1838,22 +1814,22 @@ namespace index_detail {
 
     bool IterSeekToFirst(size_t& id, size_t& count, IteratorStorage* iter) const {
       count = 1;
-      return iter->SeekToFirst(id, bfs_sufflx_);
+      return iter->SeekToFirst(id, flags.is_bfs_suffix);
     }
     bool IterSeekToLast(size_t& id, size_t* count, IteratorStorage* iter) const {
       if (count != nullptr) {
         *count = 1;
       }
-      return iter->SeekToLast(id, bfs_sufflx_);
+      return iter->SeekToLast(id, flags.is_bfs_suffix);
     }
     bool IterSeek(size_t& id, size_t& count, fstring target, IteratorStorage* iter) const {
       count = 1;
-      return iter->Seek(id, bfs_sufflx_, target);
+      return iter->Seek(id, flags.is_bfs_suffix, target);
     }
     bool IterNext(size_t& id, size_t count, IteratorStorage* iter) const {
       assert(count > 0);
       do {
-        if (!iter->Next(id, bfs_sufflx_)) {
+        if (!iter->Next(id, flags.is_bfs_suffix)) {
           return false;
         }
       } while (--count > 0);
@@ -1863,10 +1839,10 @@ namespace index_detail {
       if (count != nullptr) {
         *count = 1;
       }
-      return iter->Prev(id, bfs_sufflx_);
+      return iter->Prev(id, flags.is_bfs_suffix);
     }
     size_t IterDictRank(size_t id, const IteratorStorage* iter) const {
-      return iter->DictRank(id, bfs_sufflx_);
+      return iter->DictRank(id, flags.is_bfs_suffix);
     }
     fstring IterGetKey(size_t id, const IteratorStorage* iter) const {
       return iter->GetKey();
@@ -1880,7 +1856,6 @@ namespace index_detail {
           + ", should be " + ClassName<NestLoudsTrieDAWG>());
       }
       dfa.release();
-      bfs_sufflx_ = flags.is_bfs_suffix;
       return true;
     }
     void Save(std::function<void(const void*, size_t)> append) const override {
@@ -1966,23 +1941,50 @@ namespace index_detail {
       return str_pool_.mem_size();
     }
     std::pair<size_t, fstring> LowerBound(fstring target, size_t suffix_id, size_t suffix_count, valvec<byte_t>* ctx) const override {
-      size_t end = suffix_id + suffix_count;
-      suffix_id = str_pool_.lower_bound(suffix_id, end, target);
-      if (suffix_id == end) {
-        return { suffix_id, {} };
+      if (flags.is_rev_suffix) {
+        size_t num_records = str_pool_.m_size;
+        suffix_id = num_records - suffix_id - suffix_count;
+        size_t end = suffix_id + suffix_count;
+        suffix_id = str_pool_.lower_bound(suffix_id, end, target);
+        if (suffix_id == end) {
+          return { num_records - suffix_id - 1, {} };
+        }
+        return { num_records - suffix_id - 1, str_pool_[suffix_id] };
       }
-      return { suffix_id, str_pool_[suffix_id] };
+      else {
+        size_t end = suffix_id + suffix_count;
+        suffix_id = str_pool_.lower_bound(suffix_id, end, target);
+        if (suffix_id == end) {
+          return {suffix_id, {}};
+        }
+        return { suffix_id, str_pool_[suffix_id] };
+      }
     }
 
-    void IterSet(size_t suffix_id, void*) const {
+    void IterSet(size_t /*suffix_id*/, void*) const {
     }
     bool IterSeek(fstring target, size_t& suffix_id, size_t suffix_count, void*) const {
-      size_t end = suffix_id + suffix_count;
-      suffix_id = str_pool_.lower_bound(suffix_id, end, target);
-      return suffix_id != end;
+      if (flags.is_rev_suffix) {
+        size_t num_records = str_pool_.m_size;
+        suffix_id = num_records - suffix_id - suffix_count;
+        size_t end = suffix_id + suffix_count;
+        suffix_id = str_pool_.lower_bound(suffix_id, end, target);
+        bool success = suffix_id != end;
+        suffix_id = num_records - suffix_id - suffix_count;
+        return success;
+      }
+      else {
+        size_t end = suffix_id + suffix_count;
+        suffix_id = str_pool_.lower_bound(suffix_id, end, target);
+        return suffix_id != end;
+      }
     }
     fstring IterGetKey(size_t suffix_id, const void*) const {
-      return str_pool_[suffix_id];
+      if (flags.is_rev_suffix) {
+        return str_pool_[str_pool_.m_size - suffix_id - 1];
+      } else {
+        return str_pool_[suffix_id];
+      }
     }
 
     bool Load(fstring mem) override {
@@ -2043,15 +2045,17 @@ namespace index_detail {
       *this = std::move(*other);
       delete other;
     }
-    IndexBlobStoreSuffix(BlobStoreType* store, FileMemIO& mem) {
+    IndexBlobStoreSuffix(BlobStoreType* store, FileMemIO& mem, bool rev_suffix) {
       store_.swap(*store);
       memory_.swap(mem);
+      flags.is_rev_suffix = rev_suffix;
       delete store;
     }
     IndexBlobStoreSuffix& operator = (const IndexBlobStoreSuffix&) = delete;
     IndexBlobStoreSuffix& operator = (IndexBlobStoreSuffix&& other) {
       store_.swap(other.store_);
       memory_.swap(other.memory_);
+      std::swap(flags, other.flags);
       return *this;
     }
 
@@ -2064,25 +2068,54 @@ namespace index_detail {
     std::pair<size_t, fstring> LowerBound(fstring target, size_t suffix_id, size_t suffix_count, valvec<byte_t>* ctx) const override {
       BlobStore::CacheOffsets co;
       ctx->swap(co.recData);
-      size_t end = suffix_id + suffix_count;
-      suffix_id = store_.lower_bound(suffix_id, end, target, &co);
-      if (suffix_id == end) {
-        return { suffix_id, {} };
+      if (flags.is_rev_suffix) {
+        size_t num_records = store_.num_records();
+        suffix_id = num_records - suffix_id - suffix_count;
+        size_t end = suffix_id + suffix_count;
+        suffix_id = store_.lower_bound(suffix_id, end, target, &co);
+        if (suffix_id == end) {
+          return { num_records - suffix_id - 1, {} };
+        }
+        ctx->swap(co.recData);
+        return { num_records - suffix_id - 1, *ctx };
       }
-      ctx->swap(co.recData);
-      return { suffix_id, *ctx };
+      else {
+        size_t end = suffix_id + suffix_count;
+        suffix_id = store_.lower_bound(suffix_id, end, target, &co);
+        if (suffix_id == end) {
+          return { suffix_id, {} };
+        }
+        ctx->swap(co.recData);
+        return { suffix_id, *ctx };
+      }
     }
 
     void IterSet(size_t suffix_id, IteratorStorage* iter) const {
       iter->recData.risk_set_size(0);
-      store_.get_record_append(suffix_id, iter);
+      if (flags.is_rev_suffix) {
+        store_.get_record_append(store_.num_records() - suffix_id - 1, iter);
+      }
+      else {
+        store_.get_record_append(suffix_id, iter);
+      }
     }
     bool IterSeek(fstring target, size_t& suffix_id, size_t suffix_count, IteratorStorage* iter) const {
-      size_t end = suffix_id + suffix_count;
-      suffix_id = store_.lower_bound(suffix_id, end, target, iter);
-      return suffix_id != end;
+      if (flags.is_rev_suffix) {
+        size_t num_records = store_.num_records();
+        suffix_id = num_records - suffix_id - suffix_count;
+        size_t end = suffix_id + suffix_count;
+        suffix_id = store_.lower_bound(suffix_id, end, target, iter);
+        bool success = suffix_id != end;
+        suffix_id = num_records - suffix_id - suffix_count;
+        return success;
+      }
+      else {
+        size_t end = suffix_id + suffix_count;
+        suffix_id = store_.lower_bound(suffix_id, end, target, iter);
+        return suffix_id != end;
+      }
     }
-    fstring IterGetKey(size_t suffix_id, const IteratorStorage* iter) const {
+    fstring IterGetKey(size_t /*suffix_id*/, const IteratorStorage* iter) const {
       return iter->recData;
     }
 
@@ -2277,9 +2310,6 @@ namespace index_detail {
     assert(g_indexEnableUintIndex);
     input.rewind();
     switch (info.type) {
-    case UintPrefixBuildInfo::asc_few_zero_1:
-      return BuildAscendingUintPrefix<rank_select_fewzero<1>>(
-        input, tzopt, ks, info, ioption);
     case UintPrefixBuildInfo::asc_few_zero_2:
       return BuildAscendingUintPrefix<rank_select_fewzero<2>>(
         input, tzopt, ks, info, ioption);
@@ -2310,9 +2340,6 @@ namespace index_detail {
     case UintPrefixBuildInfo::asc_se_512:
       return BuildAscendingUintPrefix<rank_select_se_512_64>(
         input, tzopt, ks, info, ioption);
-    case UintPrefixBuildInfo::asc_few_one_1:
-      return BuildAscendingUintPrefix<rank_select_fewone<1>>(
-        input, tzopt, ks, info, ioption);
     case UintPrefixBuildInfo::asc_few_one_2:
       return BuildAscendingUintPrefix<rank_select_fewone<2>>(
         input, tzopt, ks, info, ioption);
@@ -2341,10 +2368,6 @@ namespace index_detail {
     case UintPrefixBuildInfo::non_desc_se_512:
       assert(ks.maxKeyLen > commonPrefixLen(ks.minKey, ks.maxKey) + info.key_length);
       return BuildNonDescendingUintPrefix<rank_select_se_512_64>(
-        input, tzopt, ks, info, ioption);
-    case UintPrefixBuildInfo::non_desc_few_one_1:
-      assert(ks.maxKeyLen > commonPrefixLen(ks.minKey, ks.maxKey) + info.key_length);
-      return BuildNonDescendingUintPrefix<rank_select_fewone<1>>(
         input, tzopt, ks, info, ioption);
     case UintPrefixBuildInfo::non_desc_few_one_2:
       assert(ks.maxKeyLen > commonPrefixLen(ks.minKey, ks.maxKey) + info.key_length);
@@ -2562,13 +2585,14 @@ namespace index_detail {
   SuffixBase*
     BuildFixedStringSuffix(
       InputBufferType& input,
-      size_t numKeys, size_t sumKeyLen, size_t fixedLen) {
+      size_t numKeys, size_t sumKeyLen, size_t fixedLen, bool isReverse) {
     assert(g_indexEnableCompositeIndex);
     input.rewind();
     FixedLenStrVec keyVec(fixedLen);
     IndexFillKeyVector(input, keyVec, numKeys, sumKeyLen, fixedLen, false);
     auto suffix = new IndexFixedStringSuffix();
     suffix->str_pool_.swap(keyVec);
+    suffix->flags.is_rev_suffix = isReverse;
     return suffix;
   }
 
@@ -2580,7 +2604,7 @@ namespace index_detail {
   SuffixBase*
     BuildBlobStoreSuffix(
       InputBufferType& input,
-      size_t numKeys, size_t sumKeyLen, double zipRatio) {
+      size_t numKeys, size_t sumKeyLen, bool isReverse, double zipRatio) {
     assert(g_indexEnableCompositeIndex);
     assert(g_indexEnableDynamicSuffix);
     input.rewind();
@@ -2603,7 +2627,7 @@ namespace index_detail {
         assert(str == store->get_record(i));
       }
 #endif
-      return new IndexBlobStoreSuffix<ZipOffsetBlobStore>(static_cast<ZipOffsetBlobStore*>(store), memory);
+      return new IndexBlobStoreSuffix<ZipOffsetBlobStore>(static_cast<ZipOffsetBlobStore*>(store), memory, isReverse);
     }
     else {
       std::unique_ptr<DictZipBlobStore::ZipBuilder> zbuilder;
@@ -2652,7 +2676,7 @@ namespace index_detail {
         assert(str == store->get_record(i));
       }
 #endif
-      return new IndexBlobStoreSuffix<DictZipBlobStore>(static_cast<DictZipBlobStore*>(store), memory);
+      return new IndexBlobStoreSuffix<DictZipBlobStore>(static_cast<DictZipBlobStore*>(store), memory, isReverse);
     }
   }
 
@@ -2675,11 +2699,11 @@ namespace index_detail {
     for (size_t i = cplen, e = cplen + 8; i < e; ++i) {
       entryCnt[i - cplen] = keyCount - (i < ks.diff.size() ? ks.diff[i].cnt : 0);
     }
-    for (size_t i = 1; i <= maxPrefixLen; ++i) {
-      if (cplen + i < ks.diff.size() && ks.diff[cplen + i].max > 8) {
+    for (size_t i = 2; i <= maxPrefixLen; ++i) {
+      if (cplen + i < ks.diff.size() && ks.diff[cplen + i].max > 128) {
         continue;
       }
-      if (!g_indexEnableCompositeIndex && ks.maxKeyLen != ks.minKeyLen && cplen + i != ks.maxKeyLen) {
+      if (!g_indexEnableCompositeIndex && (ks.maxKeyLen != ks.minKeyLen || cplen + i != ks.maxKeyLen)) {
         continue;
       }
       UintPrefixBuildInfo info;
@@ -2723,10 +2747,7 @@ namespace index_detail {
       }
       else if ((g_indexEnableNonDescUint || info.entry_count == keyCount) &&
         g_indexEnableFewZero && bit_count != size_t(-1) && info.bit_count1 < fewCount && info.bit_count1 < (1ULL << 48)) {
-        if (bit_count < (1ULL << 8)) {
-          info.type = info.entry_count == keyCount ? UintPrefixBuildInfo::asc_few_one_1 : UintPrefixBuildInfo::non_desc_few_one_1;
-        }
-        else if (bit_count < (1ULL << 16)) {
+        if (bit_count < (1ULL << 16)) {
           info.type = info.entry_count == keyCount ? UintPrefixBuildInfo::asc_few_one_2 : UintPrefixBuildInfo::non_desc_few_one_2;
         }
         else if (bit_count < (1ULL << 24)) {
@@ -2747,14 +2768,11 @@ namespace index_detail {
         else {
           info.type = info.entry_count == keyCount ? UintPrefixBuildInfo::asc_few_one_8 : UintPrefixBuildInfo::non_desc_few_one_8;
         }
-        prefixCost = info.bit_count1 * sizeof(uint32_t) * 33 / 32;
+        prefixCost = info.bit_count1 * i * 256 / 255;
       }
       else if (g_indexEnableFewZero && bit_count != size_t(-1) && info.bit_count0 < fewCount && info.bit_count0 < (1ULL << 48)) {
         assert(info.entry_count == keyCount);
-        if (bit_count < (1ULL << 8)) {
-          info.type = UintPrefixBuildInfo::asc_few_zero_1;
-        }
-        else if (bit_count < (1ULL << 16)) {
+        if (bit_count < (1ULL << 16)) {
           info.type = UintPrefixBuildInfo::asc_few_zero_2;
         }
         else if (bit_count < (1ULL << 24)) {
@@ -2775,7 +2793,7 @@ namespace index_detail {
         else {
           info.type = UintPrefixBuildInfo::asc_few_zero_8;
         }
-        prefixCost = info.bit_count0 * sizeof(uint32_t) * 33 / 32;
+        prefixCost = info.bit_count0 * i * 256 / 255;
       }
       else {
         if (!g_indexEnableNonDescUint && info.entry_count != keyCount) {
@@ -2792,10 +2810,13 @@ namespace index_detail {
         else {
           info.type = info.entry_count == keyCount ? UintPrefixBuildInfo::asc_se_512 : UintPrefixBuildInfo::non_desc_se_512;
         }
-        prefixCost = bit_count * 21 / 16;
+        prefixCost = bit_count * 21 / 128;
       }
-      size_t suffixCost = (totalKeySize - i * keyCount) * zipRatio;
-      if (ks.minSuffixLen != ks.maxSuffixLen) {
+      size_t suffixCost = totalKeySize - i * keyCount;
+      if (UseDictZipSuffix(ks.keyCount, suffixCost, zipRatio)) {
+        suffixCost = (suffixCost + 8 * keyCount) * zipRatio;
+      }
+      else if (ks.minSuffixLen != ks.maxSuffixLen) {
         suffixCost += keyCount;
       }
       size_t currCost = prefixCost + suffixCost;
@@ -2969,7 +2990,7 @@ TerarkIndex*
     fstring next() {
       reader >> buffer;
       assert(buffer.size() >= suffixSize);
-      return { buffer.data() + suffixSize, ptrdiff_t(suffixSize) };
+      return { buffer.data() + buffer.size() - suffixSize, ptrdiff_t(suffixSize) };
     }
     void rewind() {
       reader.resetbuf();
@@ -2984,6 +3005,7 @@ TerarkIndex*
   assert(ks.keyCount > 0);
   size_t cplen = ks.keyCount > 1 ? commonPrefixLen(ks.minKey, ks.maxKey) : 0;
   double zipRatio = double(ks.entropyLen) / ks.sumKeyLen;
+  bool isReverse = ks.minKey > ks.maxKey;
   UintPrefixBuildInfo uint_prefix_info = GetUintPrefixBuildInfo(ks, cplen, zipRatio);
   PrefixBase* prefix;
   SuffixBase* suffix;
@@ -3000,12 +3022,13 @@ TerarkIndex*
       if (ks.minKeyLen == ks.maxKeyLen) {
         suffix = BuildFixedStringSuffix(
           suffix_input_reader, uint_prefix_info.key_count,
-          ks.sumKeyLen - ks.keyCount * prefix_input_reader.cplenPrefixSize, ks.maxKeyLen - prefix_input_reader.cplenPrefixSize);
+          ks.sumKeyLen - ks.keyCount * prefix_input_reader.cplenPrefixSize,
+          ks.maxKeyLen - prefix_input_reader.cplenPrefixSize, isReverse);
       }
       else {
         suffix = BuildBlobStoreSuffix(
           suffix_input_reader, uint_prefix_info.key_count,
-          ks.sumKeyLen - ks.keyCount * prefix_input_reader.cplenPrefixSize, zipRatio);
+          ks.sumKeyLen - ks.keyCount * prefix_input_reader.cplenPrefixSize, isReverse, zipRatio);
       }
     }
   }
@@ -3016,35 +3039,32 @@ TerarkIndex*
     FixSuffixPrefixInputBuffer prefix_input_reader{ reader, cplen, suffixLen, ks.maxKeyLen };
     prefix = BuildNestLoudsTriePrefix(
       prefix_input_reader, tzopt, ks.keyCount, ks.sumKeyLen - ks.keyCount * (cplen + suffixLen),
-      ks.minKey > ks.maxKey, ks.minKeyLen == ks.maxKeyLen, ioption);
+      isReverse, ks.minKeyLen == ks.maxKeyLen, ioption);
     FixSuffixInputBuffer suffix_input_reader{ reader, suffixLen, ks.maxKeyLen };
     suffix = BuildFixedStringSuffix(
-      suffix_input_reader, ks.keyCount,
-      ks.sumKeyLen - ks.keyCount * suffixLen, suffixLen);
+      suffix_input_reader, ks.keyCount, ks.keyCount * suffixLen, suffixLen, isReverse);
   }
   else if ((g_indexEnableDynamicSuffix || ks.minSuffixLen == ks.maxSuffixLen) &&
     g_indexEnableCompositeIndex && ks.sumPrefixLen < ks.sumKeyLen * 31 / 32) {
     MinimizePrefixInputBuffer prefix_input_reader{ reader, cplen, ks.keyCount, ks.maxKeyLen };
     prefix = BuildNestLoudsTriePrefix(
       prefix_input_reader, tzopt, ks.keyCount, ks.sumPrefixLen - ks.keyCount * cplen,
-      ks.minKey > ks.maxKey, ks.minPrefixLen == ks.maxPrefixLen, ioption);
+      isReverse, ks.minPrefixLen == ks.maxPrefixLen, ioption);
     MinimizePrefixRemainingInputBuffer suffix_input_reader{ reader, cplen, ks.keyCount, ks.maxKeyLen };
     if (!UseDictZipSuffix(ks.keyCount, ks.sumKeyLen - ks.sumPrefixLen, zipRatio) && ks.minSuffixLen == ks.maxSuffixLen) {
       suffix = BuildFixedStringSuffix(
-        suffix_input_reader, ks.keyCount,
-        ks.sumKeyLen - ks.sumPrefixLen, ks.maxSuffixLen);
+        suffix_input_reader, ks.keyCount, ks.sumKeyLen - ks.sumPrefixLen, ks.maxSuffixLen, isReverse);
     }
     else {
       suffix = BuildBlobStoreSuffix(
-        suffix_input_reader, ks.keyCount,
-        ks.sumKeyLen - ks.sumPrefixLen, zipRatio);
+        suffix_input_reader, ks.keyCount, ks.sumKeyLen - ks.sumPrefixLen, isReverse, zipRatio);
     }
   }
   else {
-    DefaultInputBuffer input_reader{ reader, cplen, ks.maxKeyLen };
+	    DefaultInputBuffer input_reader{ reader, cplen, ks.maxKeyLen };
     prefix = BuildNestLoudsTriePrefix(
       input_reader, tzopt, ks.keyCount, ks.sumKeyLen - ks.keyCount * cplen,
-      ks.minKey > ks.maxKey, ks.minKeyLen == ks.maxKeyLen, ioption);
+      isReverse, ks.minKeyLen == ks.maxKeyLen, ioption);
     suffix = BuildEmptySuffix();
   }
   valvec<char> common(ks.prefix.size() + cplen, valvec_reserve());
@@ -3252,7 +3272,6 @@ using PrefixComponentList = ComponentRegister<>
 ::reg<NAME(SE_512_64   ), 1, IndexNestLoudsTriePrefix<NestLoudsTrieDAWG_SE_512_64         >>
 ::reg<NAME(SE_512_64_FL), 1, IndexNestLoudsTriePrefix<NestLoudsTrieDAWG_SE_512_64_FL      >>
 ::reg<NAME(A_AllOne    ), 0, IndexAscendingUintPrefix<rank_select_allone    >>
-::reg<NAME(A_FewZero_1 ), 1, IndexAscendingUintPrefix<rank_select_fewzero<1>>>
 ::reg<NAME(A_FewZero_2 ), 1, IndexAscendingUintPrefix<rank_select_fewzero<2>>>
 ::reg<NAME(A_FewZero_3 ), 1, IndexAscendingUintPrefix<rank_select_fewzero<3>>>
 ::reg<NAME(A_FewZero_4 ), 1, IndexAscendingUintPrefix<rank_select_fewzero<4>>>
@@ -3262,7 +3281,6 @@ using PrefixComponentList = ComponentRegister<>
 ::reg<NAME(A_FewZero_8 ), 1, IndexAscendingUintPrefix<rank_select_fewzero<8>>>
 ::reg<NAME(A_IL_256_32 ), 0, IndexAscendingUintPrefix<rank_select_il_256_32>>
 ::reg<NAME(A_SE_512_64 ), 0, IndexAscendingUintPrefix<rank_select_se_512_64>>
-::reg<NAME(A_FewOne_1  ), 1, IndexAscendingUintPrefix<rank_select_fewone<1>>>
 ::reg<NAME(A_FewOne_2  ), 1, IndexAscendingUintPrefix<rank_select_fewone<2>>>
 ::reg<NAME(A_FewOne_3  ), 1, IndexAscendingUintPrefix<rank_select_fewone<3>>>
 ::reg<NAME(A_FewOne_4  ), 1, IndexAscendingUintPrefix<rank_select_fewone<4>>>
@@ -3272,7 +3290,6 @@ using PrefixComponentList = ComponentRegister<>
 ::reg<NAME(A_FewOne_8  ), 1, IndexAscendingUintPrefix<rank_select_fewone<8>>>
 ::reg<NAME(ND_IL_256_32), 0, IndexNonDescendingUintPrefix<rank_select_il_256_32>>
 ::reg<NAME(ND_SE_512_64), 0, IndexNonDescendingUintPrefix<rank_select_se_512_64>>
-::reg<NAME(ND_fewone_1 ), 1, IndexNonDescendingUintPrefix<rank_select_fewone<1>>>
 ::reg<NAME(ND_fewone_2 ), 1, IndexNonDescendingUintPrefix<rank_select_fewone<2>>>
 ::reg<NAME(ND_fewone_3 ), 1, IndexNonDescendingUintPrefix<rank_select_fewone<3>>>
 ::reg<NAME(ND_fewone_4 ), 1, IndexNonDescendingUintPrefix<rank_select_fewone<4>>>
@@ -3284,10 +3301,16 @@ using PrefixComponentList = ComponentRegister<>
 
 using SuffixComponentList = ComponentRegister<>
 ::reg<NAME(Empty  ), 0, IndexEmptySuffix                        >
-::reg<NAME(Fixed  ), 0, IndexFixedStringSuffix                  >
-::reg<NAME(Dynamic), 1, IndexBlobStoreSuffix<ZipOffsetBlobStore>>
+::reg<NAME(FixLen ), 0, IndexFixedStringSuffix                  >
+::reg<NAME(VarLen ), 1, IndexBlobStoreSuffix<ZipOffsetBlobStore>>
 ::reg<NAME(DictZip), 1, IndexBlobStoreSuffix<DictZipBlobStore  >>
 ::list;
+
+
+#if __clang__
+# pragma clang diagnostic push
+# pragma clang diagnostic ignored "-Wunused-value"
+#endif
 
 template<class PrefixComponentList, class SuffixComponentList>
 struct FactoryExpander {
@@ -3335,5 +3358,9 @@ struct FactoryExpander {
 };
 
 FactoryExpander<PrefixComponentList, SuffixComponentList>::ExpandedFactorySet g_factory_init;
+
+#if __clang__
+# pragma clang diagnostic pop
+#endif
 
 } // namespace rocksdb
