@@ -30,7 +30,9 @@ using std::unique_ptr;
 
 struct TerarkZipTableOptions;
 class TempFileDeleteOnClose;
+class TerarkKeyReader;
 struct ImmutableCFOptions;
+
 class TerarkIndex : boost::noncopyable {
 public:
   class Iterator : boost::noncopyable {
@@ -67,18 +69,58 @@ public:
     valvec<byte_t> maxKey;
     valvec<DiffItem> diff;
   };
+  struct UintPrefixBuildInfo {
+    size_t common_prefix;
+    size_t key_length;
+    size_t key_count;
+    size_t entry_count;
+    size_t bit_count0;
+    size_t bit_count1;
+    uint64_t min_value;
+    uint64_t max_value;
+    enum {
+      fail = 0,
+      asc_allone,
+      asc_few_zero_2,
+      asc_few_zero_3,
+      asc_few_zero_4,
+      asc_few_zero_5,
+      asc_few_zero_6,
+      asc_few_zero_7,
+      asc_few_zero_8,
+      asc_il_256,
+      asc_se_512,
+      asc_few_one_2,
+      asc_few_one_3,
+      asc_few_one_4,
+      asc_few_one_5,
+      asc_few_one_6,
+      asc_few_one_7,
+      asc_few_one_8,
+      non_desc_il_256,
+      non_desc_se_512,
+      non_desc_few_one_2,
+      non_desc_few_one_3,
+      non_desc_few_one_4,
+      non_desc_few_one_5,
+      non_desc_few_one_6,
+      non_desc_few_one_7,
+      non_desc_few_one_8,
+    } type;
+  };
   class Factory : public terark::RefCounter {
   public:
     virtual ~Factory();
-    static TerarkIndex* Build(NativeDataInput<InputBuffer>& tmpKeyFileReader,
+    static KeyStat GetStat(TerarkKeyReader* tmpKeyFileReader);
+    static TerarkIndex* Build(TerarkKeyReader* tmpKeyFileReader,
                               const TerarkZipTableOptions& tzopt,
-                              const KeyStat&,
-                              const ImmutableCFOptions* ioption = nullptr);
+                              const KeyStat&);
     static size_t MemSizeForBuild(const KeyStat&);
 
     virtual unique_ptr<TerarkIndex> LoadMemory(fstring mem) const = 0;
   };
   typedef boost::intrusive_ptr<Factory> FactoryPtr;
+  static UintPrefixBuildInfo GetUintPrefixBuildInfo(const TerarkIndex::KeyStat& ks, double zipRatio);
   static unique_ptr<TerarkIndex> LoadMemory(fstring mem);
   virtual ~TerarkIndex();
   virtual fstring Name() const = 0;

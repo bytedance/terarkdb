@@ -83,20 +83,21 @@ struct TerarkZipTableOptions {
   std::string    indexType                = "Mixed_XL_256_32_FL";
   std::string    extendedConfigFile;
 
-  size_t softZipWorkingMemLimit = 16ull << 30;
-  size_t hardZipWorkingMemLimit = 32ull << 30;
-  size_t smallTaskMemory = 1200 << 20; // 1.2G
+  uint64_t softZipWorkingMemLimit = 16ull << 30;
+  uint64_t hardZipWorkingMemLimit = 32ull << 30;
+  uint64_t smallTaskMemory = 1200 << 20; // 1.2G
   // use dictZip for value when average value length >= minDictZipValueSize
   // otherwise do not use dictZip
-  size_t minDictZipValueSize = 15;
-  size_t keyPrefixLen = 0; // for IndexID
+  uint32_t minDictZipValueSize = 15;
+  uint32_t keyPrefixLen = 0; // for IndexID
 
   // should be a small value, typically 0.001
   // default is to disable indexCache, because the improvement
   // is about only 10% when set to 0.001
   double indexCacheRatio = 0;//0.001;
 
-  size_t singleIndexMemLimit = 0x1E0000000; // 7.5G
+  uint64_t singleIndexMinSize = 32ULL << 20; // 32M
+  uint64_t singleIndexMaxSize = 0x1E0000000; // 7.5G
 
   ///  < 0: do not use pread
   /// == 0: always use pread

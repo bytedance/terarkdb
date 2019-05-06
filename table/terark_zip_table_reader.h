@@ -125,7 +125,6 @@ struct TerarkZipSubReader {
   intptr_t storeFD_;
   RandomAccessFile* storeFileObj_;
   size_t storeOffset_;
-  fstring prefix_;
   unique_ptr<TerarkIndex> index_;
   unique_ptr<terark::AbstractBlobStore> store_;
   bitfield_array<2> type_;
@@ -257,9 +256,7 @@ public:
     LruReadonlyCache* cache_ = nullptr;
     intptr_t cache_fi_ = -1;
     size_t partCount_;
-    size_t prefixLen_;
-    size_t alignedPrefixLen_;
-    valvec<byte_t> prefixSet_;
+    fstrvec bounds_;
     valvec<TerarkZipSubReader> subReader_;
     bool hasAnyZipOffset_;
 
@@ -270,9 +267,6 @@ public:
 
     const TerarkZipSubReader* (SubIndex::*LowerBoundSubReaderFunc)(fstring) const;
 
-    const TerarkZipSubReader* LowerBoundSubReaderU64Sequential(fstring key) const;
-    const TerarkZipSubReader* LowerBoundSubReaderU64Binary(fstring key) const;
-    const TerarkZipSubReader* LowerBoundSubReaderU64BinaryReverse(fstring key) const;
     const TerarkZipSubReader* LowerBoundSubReaderBytewise(fstring key) const;
     const TerarkZipSubReader* LowerBoundSubReaderBytewiseReverse(fstring key) const;
 
@@ -289,7 +283,6 @@ public:
       bool warmUpIndexOnOpen,
       bool reverse);
 
-    size_t GetPrefixLen() const;
     size_t GetSubCount() const;
     const TerarkZipSubReader* GetSubReader(size_t i) const;
     const TerarkZipSubReader* LowerBoundSubReader(fstring key) const;

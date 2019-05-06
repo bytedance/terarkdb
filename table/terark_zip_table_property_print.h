@@ -8,8 +8,8 @@
   M_NumFmt(indexNestScale           , "%d");
   M_NumFmt(indexTempLevel           , "%d");
   M_NumFmt(terarkZipMinLevel        , "%d");
-  M_NumFmt(minDictZipValueSize      , "%zd");
-  M_NumFmt(keyPrefixLen             , "%zd");
+  M_NumFmt(minDictZipValueSize      , "%u");
+  M_NumFmt(keyPrefixLen             , "%u");
   M_NumFmt(debugLevel               , "%d");
   M_Boolea(enableCompressionProbe);
   M_Boolea(useSuffixArrayLocalMatch);
@@ -24,7 +24,8 @@
   M_NumGiB(softZipWorkingMemLimit);
   M_NumGiB(hardZipWorkingMemLimit);
   M_NumGiB(smallTaskMemory);
-  M_NumGiB(singleIndexMemLimit);
+  M_NumGiB(singleIndexMinSize);
+  M_NumGiB(singleIndexMaxSize);
   M_NumGiB(cacheCapacityBytes);
   M_NumFmt(cacheShards              , "%d");
 

@@ -156,4 +156,33 @@ public:
   void complete_write();
 };
 
+
+struct FilePair {
+  TempFileDeleteOnClose key;
+  TempFileDeleteOnClose value;
+};
+
+class TerarkKeyReader {
+public:
+  ~TerarkKeyReader(){}
+  static TerarkKeyReader* MakeReader(fstring fileName, size_t fileBegin, size_t fileEnd);
+  static TerarkKeyReader* MakeReader(const valvec<std::shared_ptr<FilePair>>& files, bool attach);
+  virtual fstring next() = 0;
+  virtual void rewind() = 0;
+};
+
+class TerarkValueReader {
+  const valvec<std::shared_ptr<FilePair>>& files;
+  size_t index;
+  NativeDataInput<InputBuffer> reader;
+  valvec<byte_t> buffer;
+
+  void checkEOF();
+public:
+  TerarkValueReader(const valvec<std::shared_ptr<FilePair>>& files);
+  uint64_t readUInt64();
+  void appendBuffer(valvec<byte_t>* buffer);
+  void rewind();
+};
+
 } // namespace rocksdb

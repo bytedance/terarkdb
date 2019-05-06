@@ -92,6 +92,8 @@ TerarkIndex::~TerarkIndex() {}
 TerarkIndex::Factory::~Factory() {}
 TerarkIndex::Iterator::~Iterator() {}
 
+using UintPrefixBuildInfo = TerarkIndex::UintPrefixBuildInfo;
+
 namespace index_detail {
 
 struct StatusFlags {
@@ -572,45 +574,6 @@ struct IteratorStorage {
 
 };
 
-struct UintPrefixBuildInfo {
-  size_t key_length;
-  size_t key_count;
-  size_t entry_count;
-  size_t bit_count0;
-  size_t bit_count1;
-  uint64_t min_value;
-  uint64_t max_value;
-  enum {
-    fail = 0,
-    asc_allone,
-    asc_few_zero_2,
-    asc_few_zero_3,
-    asc_few_zero_4,
-    asc_few_zero_5,
-    asc_few_zero_6,
-    asc_few_zero_7,
-    asc_few_zero_8,
-    asc_il_256,
-    asc_se_512,
-    asc_few_one_2,
-    asc_few_one_3,
-    asc_few_one_4,
-    asc_few_one_5,
-    asc_few_one_6,
-    asc_few_one_7,
-    asc_few_one_8,
-    non_desc_il_256,
-    non_desc_se_512,
-    non_desc_few_one_2,
-    non_desc_few_one_3,
-    non_desc_few_one_4,
-    non_desc_few_one_5,
-    non_desc_few_one_6,
-    non_desc_few_one_7,
-    non_desc_few_one_8,
-  } type;
-};
-
 class IndexFactoryBase : public TerarkIndex::Factory {
 public:
   virtual fstring Name() const = 0;
@@ -1078,7 +1041,9 @@ public:
   }
 
   fstring Memory() const override final {
-    return fstring();
+    auto f = footer_;
+    size_t index_size = f ? align_up(f->common_size, 8) + f->prefix_size + f->suffix_size : 0;
+    return index_size == 0 ? fstring() : fstring((byte_t*)footer_ - index_size, index_size + f->footer_size);
   }
 
   const char* Info(char* buffer, size_t size) const override final {
@@ -1218,7 +1183,6 @@ struct IndexAscendingUintPrefix
     delete other;
   }
   IndexAscendingUintPrefix& operator = (const IndexAscendingUintPrefix&) = delete;
-
   IndexAscendingUintPrefix& operator = (IndexAscendingUintPrefix&& other) {
     rank_select.swap(other.rank_select);
     key_length = other.key_length;
@@ -2327,10 +2291,8 @@ template<class RankSelect, class InputBufferType>
 PrefixBase*
 BuildAscendingUintPrefix(
   InputBufferType& input,
-  const TerarkZipTableOptions& tzopt,
   const TerarkIndex::KeyStat& ks,
-  const UintPrefixBuildInfo& info,
-  const ImmutableCFOptions* ioption) {
+  const UintPrefixBuildInfo& info) {
   RankSelect rank_select;
   assert(info.min_value <= info.max_value);
   AscendingUintPrefixFillRankSelect(info, ks, rank_select, input);
@@ -2423,10 +2385,8 @@ template<class RankSelect, class InputBufferType>
 PrefixBase*
 BuildNonDescendingUintPrefix(
   InputBufferType& input,
-  const TerarkZipTableOptions& tzopt,
   const TerarkIndex::KeyStat& ks,
-  const UintPrefixBuildInfo& info,
-  const ImmutableCFOptions* ioption) {
+  const UintPrefixBuildInfo& info) {
   assert(g_indexEnableNonDescUint);
   RankSelect rank_select;
   assert(info.min_value <= info.max_value);
@@ -2443,77 +2403,72 @@ template<class InputBufferType>
 PrefixBase*
 BuildUintPrefix(
   InputBufferType& input,
-  const TerarkZipTableOptions& tzopt,
   const TerarkIndex::KeyStat& ks,
-  const UintPrefixBuildInfo& info,
-  const ImmutableCFOptions* ioption) {
+  const UintPrefixBuildInfo& info) {
   assert(g_indexEnableUintIndex);
   input.rewind();
   switch (info.type) {
   case UintPrefixBuildInfo::asc_few_zero_2:
-    return BuildAscendingUintPrefix<rank_select_fewzero<2>>(input, tzopt, ks, info, ioption);
+    return BuildAscendingUintPrefix<rank_select_fewzero<2>>(input, ks, info);
   case UintPrefixBuildInfo::asc_few_zero_3:
-    return BuildAscendingUintPrefix<rank_select_fewzero<3>>(input, tzopt, ks, info, ioption);
+    return BuildAscendingUintPrefix<rank_select_fewzero<3>>(input, ks, info);
   case UintPrefixBuildInfo::asc_few_zero_4:
-    return BuildAscendingUintPrefix<rank_select_fewzero<4>>(input, tzopt, ks, info, ioption);
+    return BuildAscendingUintPrefix<rank_select_fewzero<4>>(input, ks, info);
   case UintPrefixBuildInfo::asc_few_zero_5:
-    return BuildAscendingUintPrefix<rank_select_fewzero<5>>(input, tzopt, ks, info, ioption);
+    return BuildAscendingUintPrefix<rank_select_fewzero<5>>(input, ks, info);
   case UintPrefixBuildInfo::asc_few_zero_6:
-    return BuildAscendingUintPrefix<rank_select_fewzero<6>>(input, tzopt, ks, info, ioption);
+    return BuildAscendingUintPrefix<rank_select_fewzero<6>>(input, ks, info);
   case UintPrefixBuildInfo::asc_few_zero_7:
-    return BuildAscendingUintPrefix<rank_select_fewzero<7>>(input, tzopt, ks, info, ioption);
+    return BuildAscendingUintPrefix<rank_select_fewzero<7>>(input, ks, info);
   case UintPrefixBuildInfo::asc_few_zero_8:
-    return BuildAscendingUintPrefix<rank_select_fewzero<8>>(input, tzopt, ks, info, ioption);
+    return BuildAscendingUintPrefix<rank_select_fewzero<8>>(input, ks, info);
   case UintPrefixBuildInfo::asc_allone:
-    return BuildAscendingUintPrefix<rank_select_allone>(
-      input, tzopt, ks, info, ioption);
+    return BuildAscendingUintPrefix<rank_select_allone>(input, ks, info);
   case UintPrefixBuildInfo::asc_il_256:
-    return BuildAscendingUintPrefix<rank_select_il_256_32>(
-      input, tzopt, ks, info, ioption);
+    return BuildAscendingUintPrefix<rank_select_il_256_32>(input, ks, info);
   case UintPrefixBuildInfo::asc_se_512:
-    return BuildAscendingUintPrefix<rank_select_se_512_64>(
-      input, tzopt, ks, info, ioption);
+    return BuildAscendingUintPrefix<rank_select_se_512_64>(input, ks, info);
   case UintPrefixBuildInfo::asc_few_one_2:
-    return BuildAscendingUintPrefix<rank_select_fewone<2>>(input, tzopt, ks, info, ioption);
+    return BuildAscendingUintPrefix<rank_select_fewone<2>>(input, ks, info);
   case UintPrefixBuildInfo::asc_few_one_3:
-    return BuildAscendingUintPrefix<rank_select_fewone<3>>(input, tzopt, ks, info, ioption);
+    return BuildAscendingUintPrefix<rank_select_fewone<3>>(input, ks, info);
   case UintPrefixBuildInfo::asc_few_one_4:
-    return BuildAscendingUintPrefix<rank_select_fewone<4>>(input, tzopt, ks, info, ioption);
+    return BuildAscendingUintPrefix<rank_select_fewone<4>>(input, ks, info);
   case UintPrefixBuildInfo::asc_few_one_5:
-    return BuildAscendingUintPrefix<rank_select_fewone<5>>(input, tzopt, ks, info, ioption);
+    return BuildAscendingUintPrefix<rank_select_fewone<5>>(input, ks, info);
   case UintPrefixBuildInfo::asc_few_one_6:
-    return BuildAscendingUintPrefix<rank_select_fewone<6>>(input, tzopt, ks, info, ioption);
+    return BuildAscendingUintPrefix<rank_select_fewone<6>>(input, ks, info);
   case UintPrefixBuildInfo::asc_few_one_7:
-    return BuildAscendingUintPrefix<rank_select_fewone<7>>(input, tzopt, ks, info, ioption);
+    return BuildAscendingUintPrefix<rank_select_fewone<7>>(input, ks, info);
   case UintPrefixBuildInfo::asc_few_one_8:
-    return BuildAscendingUintPrefix<rank_select_fewone<8>>(input, tzopt, ks, info, ioption);
+    return BuildAscendingUintPrefix<rank_select_fewone<8>>(input, ks, info);
   case UintPrefixBuildInfo::non_desc_il_256:
     assert(ks.maxKeyLen > commonPrefixLen(ks.minKey, ks.maxKey) + info.key_length);
-    return BuildNonDescendingUintPrefix<rank_select_il_256_32>(input, tzopt, ks, info, ioption);
+    return BuildNonDescendingUintPrefix<rank_select_il_256_32>(input, ks, info);
   case UintPrefixBuildInfo::non_desc_se_512:
     assert(ks.maxKeyLen > commonPrefixLen(ks.minKey, ks.maxKey) + info.key_length);
-    return BuildNonDescendingUintPrefix<rank_select_se_512_64>(input, tzopt, ks, info, ioption);
+    return BuildNonDescendingUintPrefix<rank_select_se_512_64>(input, ks, info);
   case UintPrefixBuildInfo::non_desc_few_one_2:
     assert(ks.maxKeyLen > commonPrefixLen(ks.minKey, ks.maxKey) + info.key_length);
-    return BuildNonDescendingUintPrefix<rank_select_fewone<2>>(input, tzopt, ks, info, ioption);
+    return BuildNonDescendingUintPrefix<rank_select_fewone<2>>(input, ks, info);
   case UintPrefixBuildInfo::non_desc_few_one_3:
     assert(ks.maxKeyLen > commonPrefixLen(ks.minKey, ks.maxKey) + info.key_length);
-    return BuildNonDescendingUintPrefix<rank_select_fewone<3>>(input, tzopt, ks, info, ioption);
+    return BuildNonDescendingUintPrefix<rank_select_fewone<3>>(input, ks, info);
   case UintPrefixBuildInfo::non_desc_few_one_4:
     assert(ks.maxKeyLen > commonPrefixLen(ks.minKey, ks.maxKey) + info.key_length);
-    return BuildNonDescendingUintPrefix<rank_select_fewone<5>>(input, tzopt, ks, info, ioption);
+    return BuildNonDescendingUintPrefix<rank_select_fewone<5>>(input, ks, info);
   case UintPrefixBuildInfo::non_desc_few_one_5:
     assert(ks.maxKeyLen > commonPrefixLen(ks.minKey, ks.maxKey) + info.key_length);
-    return BuildNonDescendingUintPrefix<rank_select_fewone<6>>(input, tzopt, ks, info, ioption);
+    return BuildNonDescendingUintPrefix<rank_select_fewone<6>>(input, ks, info);
   case UintPrefixBuildInfo::non_desc_few_one_6:
     assert(ks.maxKeyLen > commonPrefixLen(ks.minKey, ks.maxKey) + info.key_length);
-    return BuildNonDescendingUintPrefix<rank_select_fewone<6>>(input, tzopt, ks, info, ioption);
+    return BuildNonDescendingUintPrefix<rank_select_fewone<6>>(input, ks, info);
   case UintPrefixBuildInfo::non_desc_few_one_7:
     assert(ks.maxKeyLen > commonPrefixLen(ks.minKey, ks.maxKey) + info.key_length);
-    return BuildNonDescendingUintPrefix<rank_select_fewone<7>>(input, tzopt, ks, info, ioption);
+    return BuildNonDescendingUintPrefix<rank_select_fewone<7>>(input, ks, info);
   case UintPrefixBuildInfo::non_desc_few_one_8:
     assert(ks.maxKeyLen > commonPrefixLen(ks.minKey, ks.maxKey) + info.key_length);
-    return BuildNonDescendingUintPrefix<rank_select_fewone<8>>(input, tzopt, ks, info, ioption);
+    return BuildNonDescendingUintPrefix<rank_select_fewone<8>>(input, ks, info);
   case UintPrefixBuildInfo::fail:
   default:
     assert(false);
@@ -2671,8 +2626,7 @@ BuildNestLoudsTriePrefix(
   InputBufferType& input,
   const TerarkZipTableOptions& tzopt,
   size_t numKeys, size_t sumKeyLen,
-  bool isReverse, bool isFixedLen,
-  const ImmutableCFOptions* ioption) {
+  bool isReverse, bool isFixedLen) {
   input.rewind();
   NestLoudsTrieConfig cfg;
   if (isFixedLen) {
@@ -2793,9 +2747,12 @@ BuildBlobStoreSuffix(
   }
 }
 
-UintPrefixBuildInfo GetUintPrefixBuildInfo(const TerarkIndex::KeyStat& ks, size_t cplen, double zipRatio) {
+}
+
+UintPrefixBuildInfo TerarkIndex::GetUintPrefixBuildInfo(const TerarkIndex::KeyStat& ks, double zipRatio) {
+  size_t cplen = ks.keyCount > 1 ? commonPrefixLen(ks.minKey, ks.maxKey) : 0;
   UintPrefixBuildInfo result = {
-    0, 0, 0, 0, 0, 0, 0, UintPrefixBuildInfo::fail
+      cplen, 0, 0, 0, 0, 0, 0, 0, UintPrefixBuildInfo::fail
   };
   if (!g_indexEnableUintIndex || (!g_indexEnableDynamicSuffix && ks.maxKeyLen != ks.minKeyLen)) {
     return result;
@@ -2918,7 +2875,7 @@ UintPrefixBuildInfo GetUintPrefixBuildInfo(const TerarkIndex::KeyStat& ks, size_
       prefixCost = bit_count * 21 / 128;
     }
     size_t suffixCost = totalKeySize - i * keyCount;
-    if (UseDictZipSuffix(ks.keyCount, suffixCost, zipRatio)) {
+    if (index_detail::UseDictZipSuffix(ks.keyCount, suffixCost, zipRatio)) {
       suffixCost = (suffixCost + 8 * keyCount) * zipRatio;
     } else if (ks.minSuffixLen != ks.maxSuffixLen) {
       suffixCost += keyCount;
@@ -2931,36 +2888,32 @@ UintPrefixBuildInfo GetUintPrefixBuildInfo(const TerarkIndex::KeyStat& ks, size_
   }
   return result;
 };
-}
 
 TerarkIndex*
 TerarkIndex::Factory::Build(
-  NativeDataInput<InputBuffer>& reader,
+  TerarkKeyReader* reader,
   const TerarkZipTableOptions& tzopt,
-  const TerarkIndex::KeyStat& ks,
-  const ImmutableCFOptions* ioption) {
+  const TerarkIndex::KeyStat& ks) {
   using namespace index_detail;
   struct DefaultInputBuffer {
-    NativeDataInput<InputBuffer>& reader;
+    TerarkKeyReader* reader;
     size_t cplen;
-    valvec<byte_t> buffer;
 
     fstring next() {
-      reader >> buffer;
+      auto buffer = reader->next();
       return {buffer.data() + cplen, ptrdiff_t(buffer.size() - cplen)};
     }
 
     void rewind() {
-      reader.resetbuf();
-      static_cast<FileStream*>(reader.getInputStream())->rewind();
+      reader->rewind();
     }
 
-    DefaultInputBuffer(NativeDataInput<InputBuffer>& _reader, size_t _cplen, size_t _maxKeyLen)
-        : reader(_reader), cplen(_cplen), buffer(_maxKeyLen, valvec_reserve()) {
+    DefaultInputBuffer(TerarkKeyReader* _reader, size_t _cplen)
+        : reader(_reader), cplen(_cplen) {
     }
   };
   struct MinimizePrefixInputBuffer {
-    NativeDataInput<InputBuffer>& reader;
+    TerarkKeyReader* reader;
     size_t cplen;
     size_t count;
     size_t pos;
@@ -2974,7 +2927,7 @@ TerarkIndex::Factory::Build(
         maxSamePrefix = lastSamePrefix + 1;
         last.swap(buffer);
       } else {
-        reader >> buffer;
+        buffer.assign(reader->next());
         size_t samePrefix = commonPrefixLen(buffer, last);
         last.swap(buffer);
         maxSamePrefix = std::max(samePrefix, lastSamePrefix) + 1;
@@ -2984,22 +2937,21 @@ TerarkIndex::Factory::Build(
     }
 
     void rewind() {
-      reader.resetbuf();
-      static_cast<FileStream*>(reader.getInputStream())->rewind();
+      reader->rewind();
       assert(count > 0);
-      reader >> last;
+      last.assign(reader->next());
       lastSamePrefix = 0;
       pos = 0;
     }
 
-    MinimizePrefixInputBuffer(NativeDataInput<InputBuffer>& _reader, size_t _cplen, size_t _keyCount,
+    MinimizePrefixInputBuffer(TerarkKeyReader* _reader, size_t _cplen, size_t _keyCount,
                               size_t _maxKeyLen)
         : reader(_reader), cplen(_cplen), count(_keyCount), last(_maxKeyLen, valvec_reserve()),
           buffer(_maxKeyLen, valvec_reserve()) {
     }
   };
   struct MinimizePrefixRemainingInputBuffer {
-    NativeDataInput<InputBuffer>& reader;
+    TerarkKeyReader* reader;
     size_t cplen;
     size_t count;
     size_t pos;
@@ -3013,7 +2965,7 @@ TerarkIndex::Factory::Build(
         maxSamePrefix = lastSamePrefix + 1;
         last.swap(buffer);
       } else {
-        reader >> buffer;
+        buffer.assign(reader->next());
         size_t samePrefix = commonPrefixLen(buffer, last);
         last.swap(buffer);
         maxSamePrefix = std::max(samePrefix, lastSamePrefix) + 1;
@@ -3023,120 +2975,111 @@ TerarkIndex::Factory::Build(
     }
 
     void rewind() {
-      reader.resetbuf();
-      static_cast<FileStream*>(reader.getInputStream())->rewind();
+      reader->rewind();
       assert(count > 0);
-      reader >> last;
+      last.assign(reader->next());
       lastSamePrefix = 0;
       pos = 0;
     }
 
-    MinimizePrefixRemainingInputBuffer(NativeDataInput<InputBuffer>& _reader, size_t _cplen, size_t _keyCount,
+    MinimizePrefixRemainingInputBuffer(TerarkKeyReader* _reader, size_t _cplen, size_t _keyCount,
                                        size_t _maxKeyLen)
         : reader(_reader), cplen(_cplen), count(_keyCount), last(_maxKeyLen, valvec_reserve()),
           buffer(_maxKeyLen, valvec_reserve()) {
     }
   };
   struct FixPrefixInputBuffer {
-    NativeDataInput<InputBuffer>& reader;
+    TerarkKeyReader* reader;
     size_t cplen;
     size_t cplenPrefixSize;
-    valvec<byte_t> buffer;
 
     fstring next() {
-      reader >> buffer;
+      auto buffer = reader->next();
       assert(buffer.size() >= cplenPrefixSize);
       return {buffer.data() + cplen, buffer.data() + cplenPrefixSize};
     }
 
     void rewind() {
-      reader.resetbuf();
-      static_cast<FileStream*>(reader.getInputStream())->rewind();
+      reader->rewind();
     }
 
-    FixPrefixInputBuffer(NativeDataInput<InputBuffer>& _reader, size_t _cplen, size_t _prefixSize, size_t _maxKeyLen)
-        : reader(_reader), cplen(_cplen), cplenPrefixSize(_cplen + _prefixSize), buffer(_maxKeyLen, valvec_reserve()) {
+    FixPrefixInputBuffer(TerarkKeyReader* _reader, size_t _cplen, size_t _prefixSize, size_t _maxKeyLen)
+        : reader(_reader), cplen(_cplen), cplenPrefixSize(_cplen + _prefixSize) {
     }
   };
   struct FixPrefixRemainingInputBuffer {
-    NativeDataInput<InputBuffer>& reader;
+    TerarkKeyReader* reader;
     size_t cplenPrefixSize;
-    valvec<byte_t> buffer;
 
     fstring next() {
-      reader >> buffer;
+      auto buffer = reader->next();
       assert(buffer.size() >= cplenPrefixSize);
       return {buffer.data() + cplenPrefixSize, ptrdiff_t(buffer.size() - cplenPrefixSize)};
     }
 
     void rewind() {
-      reader.resetbuf();
-      static_cast<FileStream*>(reader.getInputStream())->rewind();
+      reader->rewind();
     }
 
-    FixPrefixRemainingInputBuffer(NativeDataInput<InputBuffer>& _reader, size_t _cplen, size_t _prefixSize,
+    FixPrefixRemainingInputBuffer(TerarkKeyReader* _reader, size_t _cplen, size_t _prefixSize,
                                   size_t _maxKeyLen)
-        : reader(_reader), cplenPrefixSize(_cplen + _prefixSize), buffer(_maxKeyLen, valvec_reserve()) {
+        : reader(_reader), cplenPrefixSize(_cplen + _prefixSize) {
     }
   };
   struct FixSuffixPrefixInputBuffer {
-    NativeDataInput<InputBuffer>& reader;
+    TerarkKeyReader* reader;
     size_t cplen;
     size_t suffixSize;
-    valvec<byte_t> buffer;
 
     fstring next() {
-      reader >> buffer;
+      auto buffer = reader->next();
       assert(buffer.size() >= cplen + suffixSize);
       return {buffer.data() + cplen, ptrdiff_t(buffer.size() - cplen - suffixSize)};
     }
 
     void rewind() {
-      reader.resetbuf();
-      static_cast<FileStream*>(reader.getInputStream())->rewind();
+      reader->rewind();
     }
 
-    FixSuffixPrefixInputBuffer(NativeDataInput<InputBuffer>& _reader, size_t _cplen, size_t _suffixSize,
+    FixSuffixPrefixInputBuffer(TerarkKeyReader* _reader, size_t _cplen, size_t _suffixSize,
                                size_t _maxKeyLen)
-        : reader(_reader), cplen(_cplen), suffixSize(_suffixSize), buffer(_maxKeyLen, valvec_reserve()) {
+        : reader(_reader), cplen(_cplen), suffixSize(_suffixSize) {
     }
   };
   struct FixSuffixInputBuffer {
-    NativeDataInput<InputBuffer>& reader;
+    TerarkKeyReader* reader;
     size_t suffixSize;
-    valvec<byte_t> buffer;
 
     fstring next() {
-      reader >> buffer;
+      auto buffer = reader->next();
       assert(buffer.size() >= suffixSize);
       return {buffer.data() + buffer.size() - suffixSize, ptrdiff_t(suffixSize)};
     }
 
     void rewind() {
-      reader.resetbuf();
-      static_cast<FileStream*>(reader.getInputStream())->rewind();
+      reader->rewind();
     }
 
-    FixSuffixInputBuffer(NativeDataInput<InputBuffer>& _reader, size_t _suffixSize, size_t _maxKeyLen)
-        : reader(_reader), suffixSize(_suffixSize), buffer(_maxKeyLen, valvec_reserve()) {
+    FixSuffixInputBuffer(TerarkKeyReader* _reader, size_t _suffixSize, size_t _maxKeyLen)
+        : reader(_reader), suffixSize(_suffixSize) {
     }
   };
 
   assert(ks.keyCount > 0);
-  size_t cplen = ks.keyCount > 1 ? commonPrefixLen(ks.minKey, ks.maxKey) : 0;
   double zipRatio = double(ks.entropyLen) / ks.sumKeyLen;
   bool isReverse = ks.minKey > ks.maxKey;
-  UintPrefixBuildInfo uint_prefix_info = GetUintPrefixBuildInfo(ks, cplen, zipRatio);
+  UintPrefixBuildInfo uint_prefix_info = GetUintPrefixBuildInfo(ks, zipRatio);
+  size_t cplen = uint_prefix_info.common_prefix;
   PrefixBase* prefix;
   SuffixBase* suffix;
   if (uint_prefix_info.key_length > 0) {
     if (ks.minKeyLen == ks.maxKeyLen && ks.maxKeyLen == cplen + uint_prefix_info.key_length) {
-      DefaultInputBuffer input_reader{reader, cplen, ks.maxKeyLen};
-      prefix = BuildUintPrefix(input_reader, tzopt, ks, uint_prefix_info, ioption);
+      DefaultInputBuffer input_reader{reader, cplen};
+      prefix = BuildUintPrefix(input_reader, ks, uint_prefix_info);
       suffix = BuildEmptySuffix();
     } else {
       FixPrefixInputBuffer prefix_input_reader{reader, cplen, uint_prefix_info.key_length, ks.maxKeyLen};
-      prefix = BuildUintPrefix(prefix_input_reader, tzopt, ks, uint_prefix_info, ioption);
+      prefix = BuildUintPrefix(prefix_input_reader, ks, uint_prefix_info);
       FixPrefixRemainingInputBuffer suffix_input_reader{reader, cplen, uint_prefix_info.key_length, ks.maxKeyLen};
       if (ks.minKeyLen == ks.maxKeyLen) {
         suffix = BuildFixedStringSuffix(
@@ -3156,7 +3099,7 @@ TerarkIndex::Factory::Build(
     FixSuffixPrefixInputBuffer prefix_input_reader{reader, cplen, suffixLen, ks.maxKeyLen};
     prefix = BuildNestLoudsTriePrefix(
       prefix_input_reader, tzopt, ks.keyCount, ks.sumKeyLen - ks.keyCount * (cplen + suffixLen),
-      isReverse, ks.minKeyLen == ks.maxKeyLen, ioption);
+      isReverse, ks.minKeyLen == ks.maxKeyLen);
     FixSuffixInputBuffer suffix_input_reader{reader, suffixLen, ks.maxKeyLen};
     suffix = BuildFixedStringSuffix(
       suffix_input_reader, ks.keyCount, ks.keyCount * suffixLen, suffixLen, isReverse);
@@ -3165,7 +3108,7 @@ TerarkIndex::Factory::Build(
     MinimizePrefixInputBuffer prefix_input_reader{reader, cplen, ks.keyCount, ks.maxKeyLen};
     prefix = BuildNestLoudsTriePrefix(
       prefix_input_reader, tzopt, ks.keyCount, ks.sumPrefixLen - ks.keyCount * cplen,
-      isReverse, ks.minPrefixLen == ks.maxPrefixLen, ioption);
+      isReverse, ks.minPrefixLen == ks.maxPrefixLen);
     MinimizePrefixRemainingInputBuffer suffix_input_reader{reader, cplen, ks.keyCount, ks.maxKeyLen};
     if (!UseDictZipSuffix(ks.keyCount, ks.sumKeyLen - ks.sumPrefixLen, zipRatio) &&
         ks.minSuffixLen == ks.maxSuffixLen) {
@@ -3176,10 +3119,10 @@ TerarkIndex::Factory::Build(
         suffix_input_reader, ks.keyCount, ks.sumKeyLen - ks.sumPrefixLen, isReverse, zipRatio);
     }
   } else {
-    DefaultInputBuffer input_reader{reader, cplen, ks.maxKeyLen};
+    DefaultInputBuffer input_reader{reader, cplen};
     prefix = BuildNestLoudsTriePrefix(
       input_reader, tzopt, ks.keyCount, ks.sumKeyLen - ks.keyCount * cplen,
-      isReverse, ks.minKeyLen == ks.maxKeyLen, ioption);
+      isReverse, ks.minKeyLen == ks.maxKeyLen);
     suffix = BuildEmptySuffix();
   }
   valvec<char> common(cplen, valvec_reserve());
