@@ -15,6 +15,7 @@ git clone --depth=1 git@code.byted.org:storage/terark-zip-rocksdb.git
 # build targets 
 make libzstd.a libsnappy.a liblz4.a -j $cpuNum
 make shared_lib DEBUG_LEVEL=0 -j $cpuNum DISABLE_WARNING_AS_ERROR=1
+make shared_lib DEBUG_LEVEL=2 -j $cpuNum DISABLE_WARNING_AS_ERROR=1
 
 pkgdir=output
 # copy all header files
@@ -45,6 +46,8 @@ PLATFORM_DIR=$SYSTEM-$COMPILER-bmi2-$WITH_BMI2
 mkdir -p $pkgdir/lib
 if [ `uname` == Darwin ]; then
 	cp build/$PLATFORM_DIR/shared_lib/dbg-0/librocksdb.* $pkgdir/lib
+	cp build/$PLATFORM_DIR/shared_lib/dbg-2/librocksdb.* $pkgdir/lib
 else
 	cp -lP build/$PLATFORM_DIR/shared_lib/dbg-0/librocksdb.so* output/lib/
+	cp -lP build/$PLATFORM_DIR/shared_lib/dbg-2/librocksdb.so* output/lib/
 fi
