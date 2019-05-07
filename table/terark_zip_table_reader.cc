@@ -715,7 +715,12 @@ public:
       SetIterInvalid();
       return;
     }
-    auto subReader = subIndex_->LowerBoundSubReader(fstringOf(pikey.user_key));
+    const TerarkZipSubReader* subReader;
+    if (reverse) {
+      subReader = subIndex_->LowerBoundSubReaderReverse(fstringOf(pikey.user_key));
+    } else {
+      subReader = subIndex_->LowerBoundSubReader(fstringOf(pikey.user_key));
+    }
     if (subReader == nullptr) {
       SetIterInvalid();
       return;
@@ -724,19 +729,7 @@ public:
       ResetIter(subReader);
     }
     SeekInternal(pikey);
-    if (!Valid()) {
-      if (reverse) {
-        if (subReader->subIndex_ != 0) {
-          ResetIter(subIndex_->GetSubReader(subReader->subIndex_ - 1));
-          SeekToAscendingLast();
-        }
-      } else {
-        if (subReader->subIndex_ != subIndex_->GetSubCount() - 1) {
-          ResetIter(subIndex_->GetSubReader(subReader->subIndex_ + 1));
-          SeekToAscendingFirst();
-        }
-      }
-    }
+    assert(Valid());
     if (key_tag_ == port::kMaxUint64) {
       Next();
     }
@@ -1333,7 +1326,7 @@ fstring TerarkZipTableMultiReader::SubIndex::PartIndexOperator::operator[](size_
 };
 
 const TerarkZipSubReader*
-TerarkZipTableMultiReader::SubIndex::LowerBoundSubReaderBytewise(fstring key)
+TerarkZipTableMultiReader::SubIndex::LowerBoundSubReader(fstring key)
 const {
   PartIndexOperator ptr = {this};
   auto index = terark::lower_bound_n(ptr, 0, partCount_, key);
@@ -1344,7 +1337,7 @@ const {
 }
 
 const TerarkZipSubReader*
-TerarkZipTableMultiReader::SubIndex::LowerBoundSubReaderBytewiseReverse(fstring key)
+TerarkZipTableMultiReader::SubIndex::LowerBoundSubReaderReverse(fstring key)
 const {
   PartIndexOperator ptr = {this};
   auto index = terark::upper_bound_n(ptr, 0, partCount_, key);
@@ -1379,8 +1372,6 @@ Status TerarkZipTableMultiReader::SubIndex::Init(
 
   cache_ = cache;
   partCount_ = offsetInfo.offset_.size();
-  LowerBoundSubReaderFunc = reverse ? &SubIndex::LowerBoundSubReaderBytewiseReverse
-                                    : &SubIndex::LowerBoundSubReaderBytewise;
 
   size_t offset = 0;
   size_t rawSize = 0;
@@ -1422,8 +1413,17 @@ Status TerarkZipTableMultiReader::SubIndex::Init(
         part.storeFD_ = cache_fi_;
       }
       rawSize += part.rawReaderSize_;
-      bounds_.push_back(part.index_->MinKey(&buffer));
+      if (reverse) {
+        bounds_.push_back(part.index_->MinKey(&buffer));
+      } else {
+        bounds_.push_back(part.index_->MaxKey(&buffer));
+      }
     }
+#if !defined(NDEBUG)
+    for (size_t i = 1; i < bounds_.size(); ++i) {
+      assert(bounds_[i - 1] < bounds_[i]);
+    }
+#endif
 #ifndef _MSC_VER
     if (cache_fi_ >= 0) {
       assert(nullptr != cache_);
@@ -1454,11 +1454,6 @@ size_t TerarkZipTableMultiReader::SubIndex::GetSubCount() const {
 const TerarkZipSubReader*
 TerarkZipTableMultiReader::SubIndex::GetSubReader(size_t i) const {
   return &subReader_[i];
-}
-
-const TerarkZipSubReader*
-TerarkZipTableMultiReader::SubIndex::LowerBoundSubReader(fstring key) const {
-  return (this->*LowerBoundSubReaderFunc)(key);
 }
 
 InternalIterator*
@@ -1496,7 +1491,12 @@ TerarkZipTableMultiReader::Get(const ReadOptions& ro, const Slice& ikey, GetCont
     return Status::InvalidArgument("TerarkZipTableMultiReader::Get()",
                                    "param target.size() < 8 + PrefixLen");
   }
-  auto subReader = subIndex_.LowerBoundSubReader(fstringOf(ikey).substr(0, ikey.size() - 8));
+  const TerarkZipSubReader* subReader;
+  if (isReverseBytewiseOrder_) {
+    subReader = subIndex_.LowerBoundSubReaderReverse(fstringOf(ikey).substr(0, ikey.size() - 8));
+  } else {
+    subReader = subIndex_.LowerBoundSubReader(fstringOf(ikey).substr(0, ikey.size() - 8));
+  }
   if (subReader == nullptr) {
     return Status::OK();
   }
@@ -1546,13 +1546,24 @@ uint64_t TerarkZipTableMultiReader::ApproximateOffsetOf_old(const Slice& ikey) {
 
 uint64_t TerarkZipTableMultiReader::ApproximateOffsetOf_new(const Slice& ikey) {
   fstring key = fstringOf(ExtractUserKey(ikey));
-  const TerarkZipSubReader* subReader = subIndex_.LowerBoundSubReader(key);
+  const TerarkZipSubReader* subReader;
   size_t numRecords;
   size_t rank;
+  if (isReverseBytewiseOrder_) {
+    subReader = subIndex_.LowerBoundSubReaderReverse(key);
+  } else {
+    subReader = subIndex_.LowerBoundSubReader(key);
+  }
   if (subReader == nullptr) {
-    subReader = subIndex_.GetSubReader(subIndex_.GetSubCount() - 1);
-    numRecords = subReader->index_->NumKeys();
-    rank = numRecords;
+    if (isReverseBytewiseOrder_) {
+      subReader = subIndex_.GetSubReader(0);
+      numRecords = subReader->index_->NumKeys();
+      rank = 0;
+    } else {
+      subReader = subIndex_.GetSubReader(subIndex_.GetSubCount() - 1);
+      numRecords = subReader->index_->NumKeys();
+      rank = numRecords;
+    }
   } else {
     numRecords = subReader->index_->NumKeys();
     rank = subReader->DictRank(key);

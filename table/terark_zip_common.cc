@@ -150,6 +150,7 @@ public:
         fp = &files[++index]->key.fp;
       }
       else {
+        stream.close();
         stream.open(files[++index]->key.path, "rb");
         stream.disbuf();
         fp = &stream;
@@ -169,6 +170,9 @@ public:
       fp = &files.front()->key.fp;
     }
     else {
+      if (stream) {
+        stream.close();
+      }
       stream.open(files.front()->key.path, "rb");
       stream.disbuf();
       fp = &stream;

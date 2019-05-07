@@ -79,6 +79,7 @@ public:
     uint64_t min_value;
     uint64_t max_value;
     double zip_ratio;
+    size_t estimate_size;
     enum {
       fail = 0,
       asc_allone,

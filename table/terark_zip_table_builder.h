@@ -119,7 +119,8 @@ private:
     KeyValueStatus(RangeStatus&& s);
   };
   std::shared_ptr<FilePair> NewFilePair();
-  void AddPrevUserKey(size_t samePrefix);
+  void
+  AddPrevUserKey(size_t samePrefix, std::initializer_list<RangeStatus*> r, std::initializer_list<RangeStatus*> e);
   void AddValueBit();
   bool MergeRangeStatus(RangeStatus* aa, RangeStatus* bb, RangeStatus* ab);
   void OfflineZipValueData();

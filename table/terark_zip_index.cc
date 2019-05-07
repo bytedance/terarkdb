@@ -1050,6 +1050,7 @@ public:
     auto f = footer_;
     double c = prefix_.KeyCount();
     double r = 1e9;
+    size_t t = prefix_.TotalKeySize() + suffix_.TotalKeySize() + prefix_.KeyCount() * common_.size();
     size_t index_size = f ? f->footer_size + align_up(f->common_size, 8) + f->prefix_size + f->suffix_size : 0;
     snprintf(
       buffer, size,
@@ -1063,8 +1064,7 @@ public:
       , prefix_.TotalKeySize() / c, (f ? f->prefix_size : 0) / c
       , suffix_.TotalKeySize() / r, (f ? f->suffix_size : 0) / r
       , suffix_.TotalKeySize() / c, (f ? f->suffix_size : 0) / c
-      , (prefix_.TotalKeySize() + suffix_.TotalKeySize()) / r, index_size / r
-      , (prefix_.TotalKeySize() + suffix_.TotalKeySize()) / c, index_size / c
+      , t / r, index_size / r , t / c, index_size / c
     );
     return buffer;
   }
@@ -1255,13 +1255,15 @@ struct IndexAscendingUintPrefix
     return suffix->LowerBound(key.substr(key_length), id, 1, ctx).first;
   }
   size_t AppendMinKey(valvec<byte_t>* buffer) const {
-    buffer->resize_no_init(buffer->size() + key_length);
-    SaveAsBigEndianUint64(buffer->data() - key_length, key_length, min_value);
+    size_t pos = buffer->size();
+    buffer->resize_no_init(pos + key_length);
+    SaveAsBigEndianUint64(buffer->data() + pos, key_length, min_value);
     return 0;
   }
   size_t AppendMaxKey(valvec<byte_t>* buffer) const {
-    buffer->resize_no_init(buffer->size() + key_length);
-    SaveAsBigEndianUint64(buffer->data() - key_length, key_length, max_value);
+    size_t pos = buffer->size();
+    buffer->resize_no_init(pos + key_length);
+    SaveAsBigEndianUint64(buffer->data() + pos, key_length, max_value);
     return rank_select.max_rank1() - 1;
   }
 
@@ -1503,13 +1505,15 @@ struct IndexNonDescendingUintPrefix
     return suffix->LowerBound(key.substr(key_length), id, count, ctx).first;
   }
   size_t AppendMinKey(valvec<byte_t>* buffer) const {
-    buffer->resize_no_init(buffer->size() + key_length);
-    SaveAsBigEndianUint64(buffer->data() - key_length, key_length, min_value);
+    size_t pos = buffer->size();
+    buffer->resize_no_init(pos + key_length);
+    SaveAsBigEndianUint64(buffer->data() + pos, key_length, min_value);
     return 0;
   }
   size_t AppendMaxKey(valvec<byte_t>* buffer) const {
-    buffer->resize_no_init(buffer->size() + key_length);
-    SaveAsBigEndianUint64(buffer->data() - key_length, key_length, max_value);
+    size_t pos = buffer->size();
+    buffer->resize_no_init(pos + key_length);
+    SaveAsBigEndianUint64(buffer->data() + pos, key_length, max_value);
     return rank_select.max_rank1() - 1;
   }
 
@@ -2753,7 +2757,7 @@ UintPrefixBuildInfo TerarkIndex::GetUintPrefixBuildInfo(const TerarkIndex::KeySt
   size_t cplen = ks.keyCount > 1 ? commonPrefixLen(ks.minKey, ks.maxKey) : 0;
   double zipRatio = double(ks.entropyLen) / ks.sumKeyLen;
   UintPrefixBuildInfo result = {
-      cplen, 0, 0, 0, 0, 0, 0, 0, zipRatio, UintPrefixBuildInfo::fail
+      cplen, 0, 0, 0, 0, 0, 0, 0, zipRatio, 0, UintPrefixBuildInfo::fail
   };
   if (!g_indexEnableUintIndex || (!g_indexEnableDynamicSuffix && ks.maxKeyLen != ks.minKeyLen)) {
     return result;
@@ -2761,11 +2765,11 @@ UintPrefixBuildInfo TerarkIndex::GetUintPrefixBuildInfo(const TerarkIndex::KeySt
   size_t keyCount = ks.keyCount;
   size_t maxPrefixLen = std::min<size_t>(8, ks.minKeyLen - cplen);
   size_t totalKeySize = ks.sumKeyLen - keyCount * cplen;
-  size_t bestCost = totalKeySize;
+  size_t best_estimate_size = totalKeySize;
   if (ks.minKeyLen != ks.maxKeyLen) {
-    bestCost += keyCount;
+    best_estimate_size += keyCount;
   }
-  size_t targetCost = bestCost * 4 / 5;
+  size_t target_estimate_size = best_estimate_size * 4 / 5;
   size_t entryCnt[8] = {};
   for (size_t i = cplen, e = cplen + 8; i < e; ++i) {
     entryCnt[i - cplen] = keyCount - (i < ks.diff.size() ? ks.diff[i].cnt : 0);
@@ -2778,10 +2782,12 @@ UintPrefixBuildInfo TerarkIndex::GetUintPrefixBuildInfo(const TerarkIndex::KeySt
       continue;
     }
     UintPrefixBuildInfo info;
+    info.common_prefix = cplen;
     info.key_length = i;
     info.key_count = keyCount;
     info.min_value = ReadBigEndianUint64(ks.minKey.begin() + cplen, i);
     info.max_value = ReadBigEndianUint64(ks.maxKey.begin() + cplen, i);
+    info.zip_ratio = zipRatio;
     if (info.min_value > info.max_value) std::swap(info.min_value, info.max_value);
     uint64_t diff = info.max_value - info.min_value;
     info.entry_count = entryCnt[i - 1];
@@ -2838,9 +2844,8 @@ UintPrefixBuildInfo TerarkIndex::GetUintPrefixBuildInfo(const TerarkIndex::KeySt
           info.entry_count == keyCount ? UintPrefixBuildInfo::asc_few_one_8 : UintPrefixBuildInfo::non_desc_few_one_8;
       }
       prefixCost = info.bit_count1 * i * 256 / 255;
-    } else if (g_indexEnableFewZero && bit_count != size_t(-1) && info.bit_count0 < fewCount &&
-               info.bit_count0 < (1ULL << 48)) {
-      assert(info.entry_count == keyCount);
+    } else if (g_indexEnableFewZero && info.entry_count == keyCount && bit_count != size_t(-1) &&
+               info.bit_count0 < fewCount && info.bit_count0 < (1ULL << 48)) {
       if (bit_count < (1ULL << 16)) {
         info.type = UintPrefixBuildInfo::asc_few_zero_2;
       } else if (bit_count < (1ULL << 24)) {
@@ -2881,10 +2886,10 @@ UintPrefixBuildInfo TerarkIndex::GetUintPrefixBuildInfo(const TerarkIndex::KeySt
     } else if (ks.minSuffixLen != ks.maxSuffixLen) {
       suffixCost += keyCount;
     }
-    size_t currCost = prefixCost + suffixCost;
-    if (currCost < bestCost && currCost < targetCost) {
+    info.estimate_size = prefixCost + suffixCost;
+    if (info.estimate_size < best_estimate_size && info.estimate_size < target_estimate_size) {
       result = info;
-      bestCost = currCost;
+      best_estimate_size = info.estimate_size;
     }
   }
   return result;

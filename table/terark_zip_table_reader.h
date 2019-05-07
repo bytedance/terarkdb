@@ -265,11 +265,6 @@ public:
       fstring operator[](size_t i) const;
     };
 
-    const TerarkZipSubReader* (SubIndex::*LowerBoundSubReaderFunc)(fstring) const;
-
-    const TerarkZipSubReader* LowerBoundSubReaderBytewise(fstring key) const;
-    const TerarkZipSubReader* LowerBoundSubReaderBytewiseReverse(fstring key) const;
-
   public:
     ~SubIndex();
 
@@ -286,6 +281,7 @@ public:
     size_t GetSubCount() const;
     const TerarkZipSubReader* GetSubReader(size_t i) const;
     const TerarkZipSubReader* LowerBoundSubReader(fstring key) const;
+    const TerarkZipSubReader* LowerBoundSubReaderReverse(fstring key) const;
     bool HasAnyZipOffset() const { return hasAnyZipOffset_; }
   };
 
