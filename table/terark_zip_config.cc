@@ -267,17 +267,18 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo) {
   MyGetDouble(tzo, sampleRatio             , 0.06 );
   MyGetDouble(tzo, indexCacheRatio         , 0.00 );
 
+  MyGetInt(tzo, minDictZipValueSize, 15);
   MyGetInt(tzo, minPreadLen, 0);
 
   MyGetXiB(tzo, softZipWorkingMemLimit);
   MyGetXiB(tzo, hardZipWorkingMemLimit);
   MyGetXiB(tzo, smallTaskMemory);
-  MyGetXiB(tzo, singleIndexMemLimit);
+  MyGetXiB(tzo, singleIndexMinSize);
+  MyGetXiB(tzo, singleIndexMaxSize);
   MyGetXiB(tzo, cacheCapacityBytes);
   MyGetInt(tzo, cacheShards, 67);
-  MyGetInt(tzo, minDictZipValueSize, 15);
 
-  tzo.singleIndexMemLimit = std::min<size_t>(tzo.singleIndexMemLimit, 0x1E0000000);
+  tzo.singleIndexMaxSize = std::min<size_t>(tzo.singleIndexMaxSize, 0x1E0000000);
 
   cfo.table_factory = SingleTerarkZipTableFactory(
     tzo, std::shared_ptr<TableFactory>(NewAdaptiveTableFactory()));

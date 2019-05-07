@@ -160,12 +160,13 @@ public:
 struct FilePair {
   TempFileDeleteOnClose key;
   TempFileDeleteOnClose value;
+  bool isFullValue = true;
 };
 
 class TerarkKeyReader {
 public:
-  ~TerarkKeyReader(){}
-  static TerarkKeyReader* MakeReader(fstring fileName, size_t fileBegin, size_t fileEnd);
+  virtual ~TerarkKeyReader(){}
+  static TerarkKeyReader* MakeReader(fstring fileName, size_t fileBegin, size_t fileEnd, bool reverse);
   static TerarkKeyReader* MakeReader(const valvec<std::shared_ptr<FilePair>>& files, bool attach);
   virtual fstring next() = 0;
   virtual void rewind() = 0;

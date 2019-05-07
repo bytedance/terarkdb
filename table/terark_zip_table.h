@@ -96,7 +96,7 @@ struct TerarkZipTableOptions {
   // is about only 10% when set to 0.001
   double indexCacheRatio = 0;//0.001;
 
-  uint64_t singleIndexMinSize = 32ULL << 20; // 32M
+  uint64_t singleIndexMinSize = 8ULL << 20; // 8M
   uint64_t singleIndexMaxSize = 0x1E0000000; // 7.5G
 
   ///  < 0: do not use pread

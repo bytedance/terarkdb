@@ -700,7 +700,7 @@ createTerarkZipTableBuilder(const TerarkZipTableFactory* table_factory,
                             const TableBuilderOptions& tbo,
                             uint32_t column_family_id,
                             WritableFileWriter* file,
-                            size_t key_prefixLen);
+                            uint32_t key_prefixLen);
 extern long long g_lastTime;
 
 TableBuilder*
@@ -722,7 +722,7 @@ const {
   if (minlevel < 0) {
     minlevel = numlevel - 1;
   }
-  size_t keyPrefixLen = 0;
+  uint32_t keyPrefixLen = 0;
   if (table_options_.isOfflineBuild) {
     if (table_options_.keyPrefixLen != 0) {
       WARN(table_builder_options.ioptions.info_log,
@@ -740,7 +740,7 @@ const {
                table_options_.keyPrefixLen, keyPrefixLen
           );
         }
-        keyPrefixLen = std::min(keyPrefixLen, table_options_.keyPrefixLen);
+        keyPrefixLen = std::min<uint32_t>(keyPrefixLen, table_options_.keyPrefixLen);
       }
     } else {
       keyPrefixLen = table_options_.keyPrefixLen;

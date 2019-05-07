@@ -93,14 +93,17 @@ private:
     valvec<std::shared_ptr<FilePair>> fileVec;
 
     RangeStatus(fstring key, size_t globalPrefixLen, uint64_t seqType);
+    RangeStatus() = default;
     RangeStatus(const RangeStatus&) = default;
+    RangeStatus(RangeStatus&&) = default;
     RangeStatus& operator = (const RangeStatus&) = default;
+    RangeStatus& operator = (RangeStatus&&) = default;
 
     void AddKey(fstring key, size_t globalPrefixLen, size_t samePrefix, size_t valueLen, bool zeroSeq);
     void AddValueBit();
   };
   struct KeyValueStatus {
-    std::unique_ptr<RangeStatus> status;
+    RangeStatus status;
     bitfield_array<2> type;
     uint64_t indexFileBegin = 0;
     uint64_t indexFileEnd = 0;
@@ -108,14 +111,17 @@ private:
     uint64_t valueFileEnd = 0;
     bool isValueBuild = false;
     bool isUseDictZip = false;
-    bool isReadFromFile = true;
+    bool isFullValue = false;
     std::future<Status> indexWait;
     std::future<Status> storeWait;
     std::atomic<size_t> keyFileRef = {2};
+
+    KeyValueStatus(RangeStatus&& s);
   };
   std::shared_ptr<FilePair> NewFilePair();
   void AddPrevUserKey(size_t samePrefix);
   void AddValueBit();
+  bool MergeRangeStatus(RangeStatus* aa, RangeStatus* bb, RangeStatus* ab);
   void OfflineZipValueData();
   struct WaitHandle : boost::noncopyable {
     WaitHandle();
@@ -196,7 +202,6 @@ private:
   std::unique_ptr<RangeStatus> r00_, r11_, r22_, r01_, r12_, r02_;
   valvec<std::unique_ptr<KeyValueStatus>> prefixBuildInfos_;
   std::shared_ptr<FilePair> filePair_;
-  KeyValueStatus* currKVS_ = nullptr;
   valvec<byte_t> prevUserKey_;
   TempFileDeleteOnClose tmpSentryFile_;
   TempFileDeleteOnClose tmpSampleFile_;

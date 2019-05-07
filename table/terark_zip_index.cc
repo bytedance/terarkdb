@@ -2749,10 +2749,11 @@ BuildBlobStoreSuffix(
 
 }
 
-UintPrefixBuildInfo TerarkIndex::GetUintPrefixBuildInfo(const TerarkIndex::KeyStat& ks, double zipRatio) {
+UintPrefixBuildInfo TerarkIndex::GetUintPrefixBuildInfo(const TerarkIndex::KeyStat& ks) {
   size_t cplen = ks.keyCount > 1 ? commonPrefixLen(ks.minKey, ks.maxKey) : 0;
+  double zipRatio = double(ks.entropyLen) / ks.sumKeyLen;
   UintPrefixBuildInfo result = {
-      cplen, 0, 0, 0, 0, 0, 0, 0, UintPrefixBuildInfo::fail
+      cplen, 0, 0, 0, 0, 0, 0, 0, zipRatio, UintPrefixBuildInfo::fail
   };
   if (!g_indexEnableUintIndex || (!g_indexEnableDynamicSuffix && ks.maxKeyLen != ks.minKeyLen)) {
     return result;
@@ -3066,9 +3067,8 @@ TerarkIndex::Factory::Build(
   };
 
   assert(ks.keyCount > 0);
-  double zipRatio = double(ks.entropyLen) / ks.sumKeyLen;
   bool isReverse = ks.minKey > ks.maxKey;
-  UintPrefixBuildInfo uint_prefix_info = GetUintPrefixBuildInfo(ks, zipRatio);
+  UintPrefixBuildInfo uint_prefix_info = GetUintPrefixBuildInfo(ks);
   size_t cplen = uint_prefix_info.common_prefix;
   PrefixBase* prefix;
   SuffixBase* suffix;
@@ -3089,11 +3089,11 @@ TerarkIndex::Factory::Build(
       } else {
         suffix = BuildBlobStoreSuffix(
           suffix_input_reader, uint_prefix_info.key_count,
-          ks.sumKeyLen - ks.keyCount * prefix_input_reader.cplenPrefixSize, isReverse, zipRatio);
+          ks.sumKeyLen - ks.keyCount * prefix_input_reader.cplenPrefixSize, isReverse, uint_prefix_info.zip_ratio);
       }
     }
   } else if (g_indexEnableCompositeIndex && ks.minSuffixLen > 0 &&
-             !UseDictZipSuffix(ks.keyCount, ks.sumKeyLen - ks.sumPrefixLen, zipRatio) &&
+             !UseDictZipSuffix(ks.keyCount, ks.sumKeyLen - ks.sumPrefixLen, uint_prefix_info.zip_ratio) &&
              ks.sumKeyLen - ks.sumPrefixLen - ks.minSuffixLen * ks.keyCount < (ks.sumKeyLen - ks.sumPrefixLen) / 8) {
     size_t suffixLen = ks.minSuffixLen;
     FixSuffixPrefixInputBuffer prefix_input_reader{reader, cplen, suffixLen, ks.maxKeyLen};
@@ -3110,13 +3110,13 @@ TerarkIndex::Factory::Build(
       prefix_input_reader, tzopt, ks.keyCount, ks.sumPrefixLen - ks.keyCount * cplen,
       isReverse, ks.minPrefixLen == ks.maxPrefixLen);
     MinimizePrefixRemainingInputBuffer suffix_input_reader{reader, cplen, ks.keyCount, ks.maxKeyLen};
-    if (!UseDictZipSuffix(ks.keyCount, ks.sumKeyLen - ks.sumPrefixLen, zipRatio) &&
+    if (!UseDictZipSuffix(ks.keyCount, ks.sumKeyLen - ks.sumPrefixLen, uint_prefix_info.zip_ratio) &&
         ks.minSuffixLen == ks.maxSuffixLen) {
       suffix = BuildFixedStringSuffix(
         suffix_input_reader, ks.keyCount, ks.sumKeyLen - ks.sumPrefixLen, ks.maxSuffixLen, isReverse);
     } else {
       suffix = BuildBlobStoreSuffix(
-        suffix_input_reader, ks.keyCount, ks.sumKeyLen - ks.sumPrefixLen, isReverse, zipRatio);
+        suffix_input_reader, ks.keyCount, ks.sumKeyLen - ks.sumPrefixLen, isReverse, uint_prefix_info.zip_ratio);
     }
   } else {
     DefaultInputBuffer input_reader{reader, cplen};

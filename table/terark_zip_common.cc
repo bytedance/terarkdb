@@ -95,33 +95,40 @@ void TempFileDeleteOnClose::complete_write() {
   fp.rewind();
 }
 
-class TerarkKeyIndexReader : public TerarkKeyReader {
+class TerarkKeyIndexReaderBase : public TerarkKeyReader {
+protected:
   terark::MmapWholeFile mmap;
   std::unique_ptr<TerarkIndex> index;
   void* buffer;
   TerarkIndex::Iterator* iter;
   bool move_next;
 public:
-  TerarkKeyIndexReader(fstring fileName, size_t fileBegin, size_t fileEnd) {
+  TerarkKeyIndexReaderBase(fstring fileName, size_t fileBegin, size_t fileEnd) {
     terark::MmapWholeFile(fileName).swap(mmap);
     index = TerarkIndex::LoadMemory(mmap.memory().substr(fileBegin, fileEnd - fileBegin));
     buffer = malloc(index->IteratorSize());
     iter = index->NewIterator(buffer);
   }
-  ~TerarkKeyIndexReader() {
+  ~TerarkKeyIndexReaderBase() {
     iter->~Iterator();
     free(buffer);
     index.reset();
     terark::MmapWholeFile().swap(mmap);
   }
 
-  fstring next() override final {
-    move_next = move_next ? iter->SeekToFirst() : iter->Next();
-    assert(move_next);
-    return iter->key();
-  }
   void rewind() override final {
     move_next = false;
+  }
+};
+
+template<bool reverse>
+class TerarkKeyIndexReader : public TerarkKeyIndexReaderBase {
+public:
+  using TerarkKeyIndexReaderBase::TerarkKeyIndexReaderBase;
+  fstring next() override final {
+    move_next = move_next ? reverse ? iter->SeekToLast() : iter->SeekToFirst() : reverse ? iter->Prev() : iter->Next();
+    assert(move_next);
+    return iter->key();
   }
 };
 
@@ -168,11 +175,17 @@ public:
     }
     fp->rewind();
     reader.attach(fp);
+    shared = 0;
   }
 };
 
-TerarkKeyReader* TerarkKeyReader::MakeReader(fstring fileName, size_t fileBegin, size_t fileEnd) {
-  return new TerarkKeyIndexReader(fileName, fileBegin, fileEnd);
+TerarkKeyReader* TerarkKeyReader::MakeReader(fstring fileName, size_t fileBegin, size_t fileEnd, bool reverse) {
+  if (reverse) {
+    return new TerarkKeyIndexReader<true>(fileName, fileBegin, fileEnd);
+  }
+  else {
+    return new TerarkKeyIndexReader<false>(fileName, fileBegin, fileEnd);
+  }
 }
 TerarkKeyReader* TerarkKeyReader::MakeReader(const valvec<std::shared_ptr<FilePair>>& files, bool attach) {
   return new TerarkKeyFileReader(files, attach);
@@ -182,7 +195,7 @@ TerarkValueReader::TerarkValueReader(const valvec<std::shared_ptr<FilePair>>& _f
 
 void TerarkValueReader::checkEOF() {
   if (reader.eof()) {
-    FileStream* fp = &files[++index]->key.fp;
+    FileStream* fp = &files[++index]->value.fp;
     fp->rewind();
     reader.attach(fp);
   }
@@ -199,7 +212,7 @@ void TerarkValueReader::appendBuffer(valvec<byte_t>* buffer) {
 
 void TerarkValueReader::rewind() {
   index = 0;
-  FileStream* fp = &files.front()->key.fp;
+  FileStream* fp = &files.front()->value.fp;
   fp->rewind();
   reader.attach(fp);
 }

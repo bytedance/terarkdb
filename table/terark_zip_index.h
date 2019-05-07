@@ -78,6 +78,7 @@ public:
     size_t bit_count1;
     uint64_t min_value;
     uint64_t max_value;
+    double zip_ratio;
     enum {
       fail = 0,
       asc_allone,
@@ -120,7 +121,7 @@ public:
     virtual unique_ptr<TerarkIndex> LoadMemory(fstring mem) const = 0;
   };
   typedef boost::intrusive_ptr<Factory> FactoryPtr;
-  static UintPrefixBuildInfo GetUintPrefixBuildInfo(const TerarkIndex::KeyStat& ks, double zipRatio);
+  static UintPrefixBuildInfo GetUintPrefixBuildInfo(const TerarkIndex::KeyStat& ks);
   static unique_ptr<TerarkIndex> LoadMemory(fstring mem);
   virtual ~TerarkIndex();
   virtual fstring Name() const = 0;
