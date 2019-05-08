@@ -8,6 +8,7 @@
 #include "terark_zip_table.h"
 #include "terark_zip_common.h"
 #include <terark/bitmap.hpp>
+#include <terark/entropy/huffman_encoding.hpp>
 #include <terark/hash_strmap.hpp>
 #include <terark/fsa/dfa_mmap_header.hpp>
 #include <terark/fsa/fsa_cache.hpp>
@@ -37,6 +38,7 @@ static bool g_indexEnableUintIndex = getEnvBool("TerarkZipTable_enableUintIndex"
 static bool g_indexEnableFewZero = getEnvBool("TerarkZipTable_enableFewZero", true);
 static bool g_indexEnableNonDescUint = getEnvBool("TerarkZipTable_enableNonDescUint", true);
 static bool g_indexEnableDynamicSuffix = getEnvBool("TerarkZipTable_enableDynamicSuffix", true);
+static bool g_indexEnableEntropySuffix = getEnvBool("TerarkZipTable_enableEntropySuffix", false);
 static bool g_indexEnableDictZipSuffix = getEnvBool("TerarkZipTable_enableDictZipSuffix", true);
 
 template<class RankSelect> struct RankSelectNeedHint : public std::false_type {};
@@ -95,6 +97,8 @@ TerarkIndex::Iterator::~Iterator() {}
 using UintPrefixBuildInfo = TerarkIndex::UintPrefixBuildInfo;
 
 namespace index_detail {
+
+using Context = TerarkIndex::Context;
 
 struct StatusFlags {
   StatusFlags() : is_user_mem(0), is_bfs_suffix(0), is_rev_suffix(0) {}
@@ -170,7 +174,7 @@ struct SuffixBase {
   virtual ~SuffixBase() {}
 
   virtual std::pair<size_t, fstring>
-  LowerBound(fstring target, size_t suffix_id, size_t suffix_count, valvec<byte_t>* ctx) const = 0;
+  LowerBound(fstring target, size_t suffix_id, size_t suffix_count, Context* ctx) const = 0;
 
   virtual bool Load(fstring mem) = 0;
   virtual void Save(std::function<void(const void*, size_t)> append) const = 0;
@@ -201,10 +205,10 @@ struct VirtualPrefixBase {
 
   virtual size_t KeyCount() const = 0;
   virtual size_t TotalKeySize() const = 0;
-  virtual size_t Find(fstring key, const SuffixBase* suffix, valvec<byte_t>* ctx) const = 0;
-  virtual size_t DictRank(fstring key, const SuffixBase* suffix, valvec<byte_t>* ctx) const = 0;
-  virtual size_t AppendMinKey(valvec<byte_t>* buffer) const = 0;
-  virtual size_t AppendMaxKey(valvec<byte_t>* buffer) const = 0;
+  virtual size_t Find(fstring key, const SuffixBase* suffix, Context* ctx) const = 0;
+  virtual size_t DictRank(fstring key, const SuffixBase* suffix, Context* ctx) const = 0;
+  virtual size_t AppendMinKey(valvec<byte_t>* buffer, Context* ctx) const = 0;
+  virtual size_t AppendMaxKey(valvec<byte_t>* buffer, Context* ctx) const = 0;
 
   virtual bool NeedsReorder() const = 0;
   virtual void GetOrderMap(UintVecMin0& newToOld) const = 0;
@@ -243,17 +247,17 @@ struct VirtualPrefixWrapper : public VirtualPrefixBase, public Prefix {
   size_t TotalKeySize() const override final {
     return Prefix::TotalKeySize();
   }
-  size_t Find(fstring key, const SuffixBase* suffix, valvec<byte_t>* ctx) const override final {
+  size_t Find(fstring key, const SuffixBase* suffix, Context* ctx) const override final {
     return Prefix::Find(key, suffix, ctx);
   }
-  size_t DictRank(fstring key, const SuffixBase* suffix, valvec<byte_t>* ctx) const override final {
+  size_t DictRank(fstring key, const SuffixBase* suffix, Context* ctx) const override final {
     return Prefix::DictRank(key, suffix, ctx);
   }
-  size_t AppendMinKey(valvec<byte_t>* buffer) const override final {
-    return Prefix::AppendMinKey(buffer);
+  size_t AppendMinKey(valvec<byte_t>* buffer, Context* ctx) const override final {
+    return Prefix::AppendMinKey(buffer, ctx);
   }
-  size_t AppendMaxKey(valvec<byte_t>* buffer) const override final {
-    return Prefix::AppendMaxKey(buffer);
+  size_t AppendMaxKey(valvec<byte_t>* buffer, Context* ctx) const override final {
+    return Prefix::AppendMaxKey(buffer, ctx);
   }
 
   bool NeedsReorder() const override final {
@@ -334,17 +338,17 @@ struct VirtualPrefix : public PrefixBase {
   size_t TotalKeySize() const {
     return prefix->TotalKeySize();
   }
-  size_t Find(fstring key, const SuffixBase* suffix, valvec<byte_t>* ctx) const {
+  size_t Find(fstring key, const SuffixBase* suffix, Context* ctx) const {
     return prefix->Find(key, suffix, ctx);
   }
-  size_t DictRank(fstring key, const SuffixBase* suffix, valvec<byte_t>* ctx) const {
+  size_t DictRank(fstring key, const SuffixBase* suffix, Context* ctx) const {
     return prefix->DictRank(key, suffix, ctx);
   }
-  size_t AppendMinKey(valvec<byte_t>* buffer) const {
-    return prefix->AppendMinKey(buffer);
+  size_t AppendMinKey(valvec<byte_t>* buffer, Context* ctx) const {
+    return prefix->AppendMinKey(buffer, ctx);
   }
-  size_t AppendMaxKey(valvec<byte_t>* buffer) const {
-    return prefix->AppendMaxKey(buffer);
+  size_t AppendMaxKey(valvec<byte_t>* buffer, Context* ctx) const {
+    return prefix->AppendMaxKey(buffer, ctx);
   }
 
   bool NeedsReorder() const {
@@ -396,8 +400,8 @@ struct VirtualSuffixBase {
 
   virtual size_t TotalKeySize() const = 0;
   virtual std::pair<size_t, fstring>
-  LowerBound(fstring target, size_t suffix_id, size_t suffix_count, valvec<byte_t>* ctx) const = 0;
-  virtual void AppendKey(size_t suffix_id, valvec<byte_t>* ctx) const = 0;
+  LowerBound(fstring target, size_t suffix_id, size_t suffix_count, Context* ctx) const = 0;
+  virtual void AppendKey(size_t suffix_id, valvec<byte_t>* buffer, Context* ctx) const = 0;
 
   virtual void IterSet(size_t suffix_id, void* iter) const = 0;
   virtual bool IterSeek(fstring target, size_t& suffix_id, size_t suffix_count, void* iter) const = 0;
@@ -428,11 +432,11 @@ struct VirtualSuffixWrapper : public VirtualSuffixBase, public Suffix {
     return Suffix::TotalKeySize();
   }
   std::pair<size_t, fstring>
-  LowerBound(fstring target, size_t suffix_id, size_t suffix_count, valvec<byte_t>* ctx) const override final {
+  LowerBound(fstring target, size_t suffix_id, size_t suffix_count, Context* ctx) const override final {
     return Suffix::LowerBound(target, suffix_id, suffix_count, ctx);
   }
-  void AppendKey(size_t suffix_id, valvec<byte_t>* buffer) const override final {
-    return Suffix::AppendKey(suffix_id, buffer);
+  void AppendKey(size_t suffix_id, valvec<byte_t>* buffer, Context* ctx) const override final {
+    return Suffix::AppendKey(suffix_id, buffer, ctx);
   }
 
   void IterSet(size_t suffix_id, void* iter) const override final {
@@ -493,11 +497,11 @@ struct VirtualSuffix : public SuffixBase {
     return suffix->TotalKeySize();
   }
   std::pair<size_t, fstring>
-  LowerBound(fstring target, size_t suffix_id, size_t suffix_count, valvec<byte_t>* ctx) const override final {
+  LowerBound(fstring target, size_t suffix_id, size_t suffix_count, Context* ctx) const override final {
     return suffix->LowerBound(target, suffix_id, suffix_count, ctx);
   }
-  void AppendKey(size_t suffix_id, valvec<byte_t>* buffer) const {
-    return suffix->AppendKey(suffix_id, buffer);
+  void AppendKey(size_t suffix_id, valvec<byte_t>* buffer, Context* ctx) const {
+    return suffix->AppendKey(suffix_id, buffer, ctx);
   }
 
   void IterSet(size_t suffix_id, void* iter) const {
@@ -992,7 +996,7 @@ public:
     factory_->Reorder(this, newToOld, write, tmpFile);
   }
 
-  size_t Find(fstring key, valvec<byte_t>* ctx) const override final {
+  size_t Find(fstring key, Context* ctx) const override final {
     if (!key.startsWith(common_)) {
       return size_t(-1);
     }
@@ -1000,7 +1004,7 @@ public:
     return prefix_.Find(key, suffix_.TotalKeySize() != 0 ? &suffix_ : nullptr, ctx);
   }
 
-  size_t DictRank(fstring key, valvec<byte_t>* ctx) const override final {
+  size_t DictRank(fstring key, Context* ctx) const override final {
     size_t cplen = key.commonPrefixLen(common_);
     if (cplen != common_.size()) {
       assert(key.size() >= cplen);
@@ -1015,18 +1019,16 @@ public:
     return prefix_.DictRank(key, suffix_.TotalKeySize() != 0 ? &suffix_ : nullptr, ctx);
   }
 
-  fstring MinKey(valvec<byte_t>* ctx) const override final {
-    ctx->assign(common_.data(), common_.size());
-    size_t id = prefix_.AppendMinKey(ctx);
-    suffix_.AppendKey(id, ctx);
-    return *ctx;
+  void MinKey(valvec<byte_t>* key, Context* ctx) const override final {
+    key->assign(common_.data(), common_.size());
+    size_t id = prefix_.AppendMinKey(key, ctx);
+    suffix_.AppendKey(id, key, ctx);
   }
 
-  fstring MaxKey(valvec<byte_t>* ctx) const override final {
-    ctx->assign(common_.data(), common_.size());
-    size_t id = prefix_.AppendMaxKey(ctx);
-    suffix_.AppendKey(id, ctx);
-    return *ctx;
+  void MaxKey(valvec<byte_t>* key, Context* ctx) const override final {
+    key->assign(common_.data(), common_.size());
+    size_t id = prefix_.AppendMaxKey(key, ctx);
+    suffix_.AppendKey(id, key, ctx);
   }
 
   size_t NumKeys() const override final {
@@ -1210,7 +1212,7 @@ struct IndexAscendingUintPrefix
   size_t TotalKeySize() const {
     return key_length * rank_select.max_rank1();
   }
-  size_t Find(fstring key, const SuffixBase* suffix, valvec<byte_t>* ctx) const {
+  size_t Find(fstring key, const SuffixBase* suffix, Context* ctx) const {
     if (key.size() < key_length) {
       return size_t(-1);
     }
@@ -1239,7 +1241,7 @@ struct IndexAscendingUintPrefix
     }
     return suffix_id;
   }
-  size_t DictRank(fstring key, const SuffixBase* suffix, valvec<byte_t>* ctx) const {
+  size_t DictRank(fstring key, const SuffixBase* suffix, Context* ctx) const {
     size_t id, pos, hint = 0;
     bool seek_result, is_find;
     std::tie(seek_result, is_find) = SeekImpl(key, id, pos, &hint);
@@ -1254,13 +1256,13 @@ struct IndexAscendingUintPrefix
     }
     return suffix->LowerBound(key.substr(key_length), id, 1, ctx).first;
   }
-  size_t AppendMinKey(valvec<byte_t>* buffer) const {
+  size_t AppendMinKey(valvec<byte_t>* buffer, Context* ctx) const {
     size_t pos = buffer->size();
     buffer->resize_no_init(pos + key_length);
     SaveAsBigEndianUint64(buffer->data() + pos, key_length, min_value);
     return 0;
   }
-  size_t AppendMaxKey(valvec<byte_t>* buffer) const {
+  size_t AppendMaxKey(valvec<byte_t>* buffer, Context* ctx) const {
     size_t pos = buffer->size();
     buffer->resize_no_init(pos + key_length);
     SaveAsBigEndianUint64(buffer->data() + pos, key_length, max_value);
@@ -1462,7 +1464,7 @@ struct IndexNonDescendingUintPrefix
   size_t TotalKeySize() const {
     return key_length * rank_select.max_rank1();
   }
-  size_t Find(fstring key, const SuffixBase* suffix, valvec<byte_t>* ctx) const {
+  size_t Find(fstring key, const SuffixBase* suffix, Context* ctx) const {
     assert(suffix != nullptr);
     if (key.size() < key_length) {
       return size_t(-1);
@@ -1491,7 +1493,7 @@ struct IndexNonDescendingUintPrefix
     }
     return suffix_id;
   }
-  size_t DictRank(fstring key, const SuffixBase* suffix, valvec<byte_t>* ctx) const {
+  size_t DictRank(fstring key, const SuffixBase* suffix, Context* ctx) const {
     assert(suffix != nullptr);
     size_t id, count, pos, hint = 0;
     bool seek_result, is_find;
@@ -1504,13 +1506,13 @@ struct IndexNonDescendingUintPrefix
     }
     return suffix->LowerBound(key.substr(key_length), id, count, ctx).first;
   }
-  size_t AppendMinKey(valvec<byte_t>* buffer) const {
+  size_t AppendMinKey(valvec<byte_t>* buffer, Context* ctx) const {
     size_t pos = buffer->size();
     buffer->resize_no_init(pos + key_length);
     SaveAsBigEndianUint64(buffer->data() + pos, key_length, min_value);
     return 0;
   }
-  size_t AppendMaxKey(valvec<byte_t>* buffer) const {
+  size_t AppendMaxKey(valvec<byte_t>* buffer, Context* ctx) const {
     size_t pos = buffer->size();
     buffer->resize_no_init(pos + key_length);
     SaveAsBigEndianUint64(buffer->data() + pos, key_length, max_value);
@@ -1793,7 +1795,7 @@ struct IndexNestLoudsTriePrefix
   size_t TotalKeySize() const {
     return trie_->adfa_total_words_len();
   }
-  size_t Find(fstring key, const SuffixBase* suffix, valvec<byte_t>* ctx) const {
+  size_t Find(fstring key, const SuffixBase* suffix, Context* ctx) const {
     if (suffix == nullptr && flags.is_bfs_suffix) {
       return trie_->index(key);
     }
@@ -1801,13 +1803,13 @@ struct IndexNestLoudsTriePrefix
     fstring prefix_key;
     trie_->lower_bound(key, &id, &rank);
     if (id != size_t(-1)) {
-      trie_->nth_word(id, ctx);
-      prefix_key = fstring(*ctx);
+      trie_->nth_word(id, &ctx->buf0);
+      prefix_key = fstring(ctx->buf0);
       if (prefix_key != key) {
         id = trie_->index_prev(id);
         if (id != size_t(-1)) {
-          trie_->nth_word(id, ctx);
-          prefix_key = fstring(*ctx);
+          trie_->nth_word(id, &ctx->buf0);
+          prefix_key = fstring(ctx->buf0);
           --rank;
         } else {
           assert(rank == 0);
@@ -1816,8 +1818,8 @@ struct IndexNestLoudsTriePrefix
       }
     } else {
       id = trie_->index_end();
-      trie_->nth_word(id, ctx);
-      prefix_key = fstring(*ctx);
+      trie_->nth_word(id, &ctx->buf0);
+      prefix_key = fstring(ctx->buf0);
     }
     if (!key.startsWith(prefix_key)) {
       return size_t(-1);
@@ -1832,7 +1834,7 @@ struct IndexNestLoudsTriePrefix
     }
     return suffix_id;
   }
-  size_t DictRank(fstring key, const SuffixBase* suffix, valvec<byte_t>* ctx) const {
+  size_t DictRank(fstring key, const SuffixBase* suffix, Context* ctx) const {
     size_t id, rank;
     if (suffix == nullptr) {
       trie_->lower_bound(key, nullptr, &rank);
@@ -1841,13 +1843,13 @@ struct IndexNestLoudsTriePrefix
     fstring prefix_key;
     trie_->lower_bound(key, &id, &rank);
     if (id != size_t(-1)) {
-      trie_->nth_word(id, ctx);
-      prefix_key = fstring(*ctx);
+      trie_->nth_word(id, &ctx->buf0);
+      prefix_key = fstring(ctx->buf0);
       if (prefix_key != key) {
         id = trie_->index_prev(id);
         if (id != size_t(-1)) {
-          trie_->nth_word(id, ctx);
-          prefix_key = fstring(*ctx);
+          trie_->nth_word(id, &ctx->buf0);
+          prefix_key = fstring(ctx->buf0);
           --rank;
         } else {
           assert(rank == 0);
@@ -1856,8 +1858,8 @@ struct IndexNestLoudsTriePrefix
       }
     } else {
       id = trie_->index_end();
-      trie_->nth_word(id, ctx);
-      prefix_key = fstring(*ctx);
+      trie_->nth_word(id, &ctx->buf0);
+      prefix_key = fstring(ctx->buf0);
     }
     if (key.startsWith(prefix_key)) {
       key = key.substr(prefix_key.size());
@@ -1871,18 +1873,18 @@ struct IndexNestLoudsTriePrefix
     }
     return rank + 1;
   }
-  size_t AppendMinKey(valvec<byte_t>* buffer) const {
+  size_t AppendMinKey(valvec<byte_t>* buffer, Context* ctx) const {
     size_t id = trie_->index_begin();
-    valvec<byte_t> ctx;
-    trie_->nth_word(id, &ctx);
-    buffer->append(ctx.data(), ctx.size());
+    auto& buf = ctx->buf0;
+    trie_->nth_word(id, &buf);
+    buffer->append(buf.data(), buf.size());
     return flags.is_bfs_suffix ? id : 0;
   }
-  size_t AppendMaxKey(valvec<byte_t>* buffer) const {
+  size_t AppendMaxKey(valvec<byte_t>* buffer, Context* ctx) const {
     size_t id = trie_->index_end();
-    valvec<byte_t> ctx;
-    trie_->nth_word(id, &ctx);
-    buffer->append(ctx.data(), ctx.size());
+    auto& buf = ctx->buf0;
+    trie_->nth_word(id, &buf);
+    buffer->append(buf.data(), buf.size());
     return flags.is_bfs_suffix ? id : trie_->num_words() - 1;
   }
 
@@ -1972,10 +1974,10 @@ struct IndexEmptySuffix
     return 0;
   }
   std::pair<size_t, fstring>
-  LowerBound(fstring target, size_t suffix_id, size_t suffix_count, valvec<byte_t>* ctx) const override {
+  LowerBound(fstring target, size_t suffix_id, size_t suffix_count, Context* ctx) const override {
     return {suffix_id, {}};
   }
-  void AppendKey(size_t suffix_id, valvec<byte_t>* buffer) const {
+  void AppendKey(size_t suffix_id, valvec<byte_t>* buffer, Context* ctx) const {
   }
 
   void IterSet(size_t suffix_id, void*) const {
@@ -2027,8 +2029,8 @@ struct IndexFixedStringSuffix
   }
 
   struct Header {
-    size_t fixlen;
-    size_t size;
+    uint64_t fixlen;
+    uint64_t size;
   };
   FixedLenStrVec str_pool_;
 
@@ -2036,7 +2038,7 @@ struct IndexFixedStringSuffix
     return str_pool_.mem_size();
   }
   std::pair<size_t, fstring>
-  LowerBound(fstring target, size_t suffix_id, size_t suffix_count, valvec<byte_t>* ctx) const override {
+  LowerBound(fstring target, size_t suffix_id, size_t suffix_count, Context* ctx) const override {
     if (flags.is_rev_suffix) {
       size_t num_records = str_pool_.m_size;
       suffix_id = num_records - suffix_id - suffix_count;
@@ -2055,7 +2057,7 @@ struct IndexFixedStringSuffix
       return {suffix_id, str_pool_[suffix_id]};
     }
   }
-  void AppendKey(size_t suffix_id, valvec<byte_t>* buffer) const {
+  void AppendKey(size_t suffix_id, valvec<byte_t>* buffer, Context* ctx) const {
     fstring key;
     if (flags.is_rev_suffix) {
       key = str_pool_[str_pool_.m_size - suffix_id - 1];
@@ -2112,7 +2114,7 @@ struct IndexFixedStringSuffix
     };
     append(&header, sizeof header);
     append(str_pool_.data(), str_pool_.mem_size());
-    Padzero<16>(append, sizeof header + header.fixlen * header.size);
+    Padzero<8>(append, sizeof header + header.fixlen * header.size);
   }
   void
   Reorder(ZReorderMap& newToOld, std::function<void(const void*, size_t)> append, fstring tmpFile) const override {
@@ -2128,9 +2130,265 @@ struct IndexFixedStringSuffix
       auto rec = str_pool_[oldId];
       buffer.ensureWrite(rec.data(), rec.size());
     }
-    PadzeroForAlign<16>(buffer, sizeof header + header.fixlen * header.size);
+    PadzeroForAlign<8>(buffer, sizeof header + header.fixlen * header.size);
   }
 };
+
+struct EntropySuffixIteratorStorage {
+  EntropyContext ctx;
+  valvec <byte_t> key;
+  size_t blockId = size_t(-1);
+  size_t offsets[129];
+
+  EntropySuffixIteratorStorage() {}
+  EntropySuffixIteratorStorage(Context* _ctx) {
+    ctx.buffer.swap(_ctx->buf0);
+    key.swap(_ctx->buf1);
+  }
+
+  void Release(Context* _ctx) {
+    ctx.buffer.swap(_ctx->buf0);
+    key.swap(_ctx->buf1);
+  }
+};
+
+struct IndexEntropySuffix
+    : public SuffixBase, public ComponentIteratorStorageImpl<EntropySuffixIteratorStorage> {
+  typedef EntropySuffixIteratorStorage IteratorStorage;
+
+  IndexEntropySuffix() = default;
+  IndexEntropySuffix(const IndexEntropySuffix&) = delete;
+  IndexEntropySuffix(IndexEntropySuffix&& other) {
+    *this = std::move(other);
+  }
+  IndexEntropySuffix(SuffixBase* base) {
+    assert(dynamic_cast<IndexEntropySuffix*>(base) != nullptr);
+    auto other = static_cast<IndexEntropySuffix*>(base);
+    *this = std::move(*other);
+    delete other;
+  }
+  IndexEntropySuffix& operator = (const IndexEntropySuffix&) = delete;
+  IndexEntropySuffix& operator = (IndexEntropySuffix&& other) {
+    offsets_.swap(other.offsets_);
+    memcpy(&decoder_, &other.decoder_, sizeof decoder_);
+    data_.swap(other.data_);
+    table_.swap(other.table_);
+    raw_size_ = other.raw_size_;
+    std::swap(flags, other.flags);
+    return *this;
+  }
+
+  ~IndexEntropySuffix() {
+    if (flags.is_user_mem) {
+      offsets_.risk_release_ownership();
+      data_.risk_release_ownership();
+      table_.risk_release_ownership();
+    }
+  }
+
+  struct Header {
+    uint64_t offset_size;
+    uint64_t table_size;
+    uint64_t data_size;
+    uint64_t raw_size;
+
+    size_t size() const {
+      return sizeof(Header) + offset_size + align_up(table_size + data_size, 8);
+    }
+  };
+  SortedUintVec offsets_;
+  Huffman::decoder_o1 decoder_;
+  valvec<byte_t> data_;
+  valvec<byte_t> table_;
+  uint64_t raw_size_;
+
+  size_t TotalKeySize() const {
+    return raw_size_;
+  }
+  std::pair<size_t, fstring>
+  LowerBound(fstring target, size_t suffix_id, size_t suffix_count, Context* ctx) const override {
+    IteratorStorage iter(ctx);
+    if (flags.is_rev_suffix) {
+      size_t num_records = offsets_.size() - 1;
+      suffix_id = num_records - suffix_id - suffix_count;
+      size_t end = suffix_id + suffix_count;
+      suffix_id = LowerBoundImpl(suffix_id, end, target, &iter);
+      iter.Release(ctx);
+      if (suffix_id == end) {
+        return {num_records - suffix_id - 1, {}};
+      }
+      return {num_records - suffix_id - 1, iter.key};
+    } else {
+      size_t end = suffix_id + suffix_count;
+      suffix_id = LowerBoundImpl(suffix_id, end, target, &iter);
+      iter.Release(ctx);
+      if (suffix_id == end) {
+        return {suffix_id, {}};
+      }
+      return {suffix_id, iter.key};
+    }
+  }
+  void AppendKey(size_t suffix_id, valvec<byte_t>* buffer, Context* ctx) const {
+    if (flags.is_rev_suffix) {
+      suffix_id = offsets_.size() - suffix_id - 2;
+    }
+    EntropyContext ectx;
+    ectx.buffer.swap(ctx->buf0);
+    auto& key = ctx->buf1;
+    size_t BegEnd[2];
+    offsets_.get2(suffix_id, BegEnd);
+    EntropyBits bits = {
+        (byte_t*)data_.data(), BegEnd[0], BegEnd[1] - BegEnd[0]
+    };
+    bool ok = decoder_.bitwise_decode_x1(bits, &key, &ectx);
+    assert(ok); (void)ok;
+    ectx.buffer.swap(ctx->buf0);
+    buffer->append(key.data(), key.size());
+  }
+
+  void IterSet(size_t suffix_id, IteratorStorage* iter) const {
+    if (flags.is_rev_suffix) {
+      suffix_id = offsets_.size() - suffix_id - 2;
+    }
+    UnzipRecord(suffix_id, iter);
+  }
+  bool IterSeek(fstring target, size_t& suffix_id, size_t suffix_count, IteratorStorage* iter) const {
+    if (flags.is_rev_suffix) {
+      size_t num_records = offsets_.size() - 1;
+      suffix_id = num_records - suffix_id - suffix_count;
+      size_t end = suffix_id + suffix_count;
+      suffix_id = LowerBoundImpl(suffix_id, end, target, iter);
+      bool success = suffix_id != end;
+      suffix_id = num_records - suffix_id - suffix_count;
+      return success;
+    } else {
+      size_t end = suffix_id + suffix_count;
+      suffix_id = LowerBoundImpl(suffix_id, end, target, iter);
+      return suffix_id != end;
+    }
+  }
+  fstring IterGetKey(size_t suffix_id, const IteratorStorage* iter) const {
+    return iter->key;
+  }
+
+  bool Load(fstring mem) override {
+    Header header;
+    if (mem.size() < sizeof header) {
+      return false;
+    }
+    memcpy(&header, mem.data() + mem.size() - sizeof header, sizeof header);
+    if (mem.size() < header.size()) {
+      return false;
+    }
+    raw_size_ = header.raw_size;
+    byte_t* ptr = (byte_t*)mem.data() + mem.size() - sizeof header;
+    ptr -= header.offset_size;
+    offsets_.risk_set_data(ptr, header.offset_size);
+    ptr -= (8 - (header.data_size + header.table_size) % 8) % 8;
+    table_.risk_set_data(ptr -= header.table_size, header.table_size);
+    data_.risk_set_data(ptr -= header.data_size, header.data_size);
+    assert(ptr == (byte_t*)mem.data());
+    size_t table_size;
+    decoder_.init(table_, &table_size);
+    assert(table_size == table_.size());
+    flags.is_user_mem = true;
+    return true;
+  }
+  void Save(std::function<void(const void*, size_t)> append) const override {
+    append(data_.data(), data_.size());
+    append(table_.data(), table_.size());
+    Padzero<8>(append, table_.size() + data_.size());
+    append(offsets_.data(), offsets_.mem_size());
+    Header header = {
+        offsets_.mem_size(), table_.size(), data_.size(), raw_size_
+    };
+    append(&header, sizeof header);
+  }
+  void
+  Reorder(ZReorderMap& newToOld, std::function<void(const void*, size_t)> append, fstring tmpFile) const override {
+    FunctionAdaptBuffer adaptBuffer(append);
+    OutputBuffer buffer(&adaptBuffer);
+    auto builder = std::unique_ptr<SortedUintVec::Builder>(SortedUintVec::createBuilder(128, tmpFile.c_str()));
+    auto output_data = [&buffer](const void* data, size_t size) {
+      buffer.ensureWrite(data, size);
+    };
+    EntropyBitsWriter<decltype(output_data)> writer(output_data);
+    size_t bit_count = 0;
+    builder->push_back(0);
+    for (assert(newToOld.size() == offsets_.size() - 1); !newToOld.eof(); ++newToOld) {
+      size_t oldId = *newToOld;
+      assert(oldId < offsets_.size() - 1);
+      size_t BegEnd[2];
+      offsets_.get2(oldId, BegEnd);
+      EntropyBitsReader reader(EntropyBits{(byte_t*)data_.data(), BegEnd[0], BegEnd[1] - BegEnd[0]});
+      builder->push_back(bit_count += reader.size());
+      while (reader.size() >= 64) {
+        uint64_t bits = 0;
+        size_t bit_shift = 0;
+        reader.read(64, &bits, &bit_shift);
+        assert(bit_shift == 64);
+        writer.write(bits, 64);
+      }
+      if (reader.size() > 0) {
+        uint64_t bits = 0;
+        size_t bit_shift = 0;
+        reader.read(reader.size(), &bits, &bit_shift);
+        assert(reader.size() == 0);
+        writer.write(bits, bit_shift);
+      }
+    }
+    auto bits = writer.finish();
+    assert(bits.skip == 0);
+    size_t data_size = (bits.size + 7) / 8;
+    buffer.ensureWrite(table_.data(), table_.size());
+    PadzeroForAlign<8>(buffer, data_size + table_.size());
+    size_t offset_size = builder->finish(nullptr).mem_size;
+    builder.reset();
+    Header header = {
+        offset_size, table_.size(), data_size, raw_size_
+    };
+    append(&header, sizeof header);
+  }
+
+  void UnzipRecord(size_t rec_id, IteratorStorage* iter) const {
+    size_t log2 = offsets_.log2_block_units(); // must be 6 or 7
+    size_t mask = (size_t(1) << log2) - 1;
+    if (terark_unlikely(rec_id >> log2 != iter->blockId)) {
+      // cache miss, load the block
+      size_t blockIdx = rec_id >> log2;
+      offsets_.get_block(blockIdx, iter->offsets);
+      iter->offsets[mask + 1] = offsets_.get_block_min_val(blockIdx + 1);
+      iter->blockId = blockIdx;
+    }
+    size_t inBlockID = rec_id & mask;
+    size_t BegEnd[2] = {iter->offsets[inBlockID], iter->offsets[inBlockID + 1]};
+    EntropyBits bits = {
+        (byte_t*)data_.data(), BegEnd[0], BegEnd[1] - BegEnd[0]
+    };
+    bool ok = decoder_.bitwise_decode_x1(bits, &iter->key, &iter->ctx);
+    assert(ok); (void)ok;
+  }
+  size_t LowerBoundImpl(size_t lo, size_t hi, fstring target, IteratorStorage* iter) const {
+    assert(lo <= hi);
+    assert(hi <= offsets_.size() - 1);
+    struct {
+      fstring operator[](ptrdiff_t i) {
+        this_->UnzipRecord(i, iter);
+        last_ = i;
+        return iter->key;
+      }
+      const IndexEntropySuffix* this_;
+      IteratorStorage* iter;
+      size_t last_;
+    } it{this, iter, hi};
+    size_t rec_id = lower_bound_n(it, lo, hi, target);
+    if (rec_id != it.last_) {
+      it[rec_id];
+    }
+    return rec_id;
+  }
+};
+
 
 template<class BlobStoreType>
 struct IndexBlobStoreSuffix
@@ -2170,30 +2428,30 @@ struct IndexBlobStoreSuffix
     return store_.total_data_size();
   }
   std::pair<size_t, fstring>
-  LowerBound(fstring target, size_t suffix_id, size_t suffix_count, valvec<byte_t>* ctx) const override {
+  LowerBound(fstring target, size_t suffix_id, size_t suffix_count, Context* ctx) const override {
     BlobStore::CacheOffsets co;
-    ctx->swap(co.recData);
+    co.recData.swap(ctx->buf0);
     if (flags.is_rev_suffix) {
       size_t num_records = store_.num_records();
       suffix_id = num_records - suffix_id - suffix_count;
       size_t end = suffix_id + suffix_count;
       suffix_id = store_.lower_bound(suffix_id, end, target, &co);
+      co.recData.swap(ctx->buf0);
       if (suffix_id == end) {
         return {num_records - suffix_id - 1, {}};
       }
-      ctx->swap(co.recData);
-      return {num_records - suffix_id - 1, *ctx};
+      return {num_records - suffix_id - 1, ctx->buf0};
     } else {
       size_t end = suffix_id + suffix_count;
       suffix_id = store_.lower_bound(suffix_id, end, target, &co);
+      co.recData.swap(ctx->buf0);
       if (suffix_id == end) {
         return {suffix_id, {}};
       }
-      ctx->swap(co.recData);
-      return {suffix_id, *ctx};
+      return {suffix_id, ctx->buf0};
     }
   }
-  void AppendKey(size_t suffix_id, valvec<byte_t>* buffer) const {
+  void AppendKey(size_t suffix_id, valvec<byte_t>* buffer, Context* ctx) const {
     if (flags.is_rev_suffix) {
       store_.get_record_append(store_.num_records() - suffix_id - 1, buffer);
     } else {
@@ -2651,6 +2909,10 @@ SuffixBase*
 BuildEmptySuffix() {
   return new IndexEmptySuffix();
 }
+  
+bool UseEntropySuffix(size_t numKeys, size_t sumKeyLen, double zipRatio) {
+  return g_indexEnableEntropySuffix && numKeys > 4096 && sumKeyLen * zipRatio + numKeys + 1024 < sumKeyLen + numKeys;
+}
 
 template<class InputBufferType>
 SuffixBase*
@@ -2667,8 +2929,79 @@ BuildFixedStringSuffix(
   return suffix;
 }
 
+template<class InputBufferType>
+SuffixBase*
+BuildEntropySuffix(
+    InputBufferType& input,
+    size_t numKeys, size_t sumKeyLen, bool isReverse) {
+  assert(g_indexEnableCompositeIndex);
+  assert(g_indexEnableEntropySuffix);
+  input.rewind();
+  std::unique_ptr <freq_hist_o1> freq(new freq_hist_o1);
+  for (size_t i = 0; i < numKeys; ++i) {
+    freq->add_record(input.next());
+  }
+  freq->finish();
+  assert(sumKeyLen == freq->histogram().o0_size);
+  size_t estimate_size = freq_hist_o1::estimate_size(freq->histogram());
+  freq->normalise(Huffman::NORMALISE);
+  std::unique_ptr <Huffman::encoder_o1> encoder(new Huffman::encoder_o1(freq->histogram()));
+  freq.reset();
+  EntropyContext ctx;
+  input.rewind();
+  valvec<byte_t> data(estimate_size + numKeys, valvec_reserve());
+  auto builder = std::unique_ptr<SortedUintVec::Builder>(SortedUintVec::createBuilder(128));
+  auto output_data = [&data](const void* d, size_t s) {
+    data.append((const byte_t*)d, s);
+  };
+  EntropyBitsWriter<decltype(output_data)> writer(output_data);
+  size_t bit_count = 0;
+  builder->push_back(0);
+  for (size_t i = 0; i < numKeys; ++i) {
+    EntropyBitsReader reader(encoder->bitwise_encode_x1(input.next(), &ctx));
+    builder->push_back(bit_count += reader.size());
+    while (reader.size() >= 64) {
+      uint64_t bits = 0;
+      size_t bit_shift = 0;
+      reader.read(64, &bits, &bit_shift);
+      assert(bit_shift == 64);
+      writer.write(bits, 64);
+    }
+    if (reader.size() > 0) {
+      uint64_t bits = 0;
+      size_t bit_shift = 0;
+      reader.read(reader.size(), &bits, &bit_shift);
+      assert(reader.size() == 0);
+      writer.write(bits, bit_shift);
+    }
+  }
+  auto bits = writer.finish();
+  assert(bits.skip == 0);
+  data.risk_set_size((bits.size + 7) / 8);
+  auto suffix = new IndexEntropySuffix();
+  suffix->flags.is_rev_suffix = isReverse;
+  builder->finish(&suffix->offsets_);
+  builder.reset();
+  suffix->data_.swap(data);
+  encoder->take_table(&suffix->table_);
+  size_t table_size;
+  suffix->decoder_.init(suffix->table_, &table_size);
+  assert(table_size == suffix->table_.size());
+  suffix->raw_size_ = sumKeyLen;
+#ifndef NDEBUG
+  EntropySuffixIteratorStorage iter;
+  input.rewind();
+  for (size_t i = 0; i < numKeys; ++i) {
+    auto str = input.next();
+    suffix->UnzipRecord(i, &iter);
+    assert(str == iter.key);
+  }
+#endif
+  return suffix;
+}
+
 bool UseDictZipSuffix(size_t numKeys, size_t sumKeyLen, double zipRatio) {
-  return g_indexEnableDictZipSuffix && numKeys > 8192 && (sumKeyLen + numKeys * 8) * zipRatio < sumKeyLen + numKeys;
+  return g_indexEnableDictZipSuffix && numKeys > 8192 && (sumKeyLen + numKeys * 8) * zipRatio + 1024 < sumKeyLen + numKeys;
 }
 
 template<class InputBufferType>
@@ -2749,6 +3082,10 @@ BuildBlobStoreSuffix(
 #endif
     return new IndexBlobStoreSuffix<DictZipBlobStore>(static_cast<DictZipBlobStore*>(store), memory, isReverse);
   }
+}
+  
+bool UseRawSuffix(size_t numKeys, size_t sumKeyLen, double zipRatio) {
+  return !UseEntropySuffix(numKeys, sumKeyLen, zipRatio) && !UseEntropySuffix(numKeys, sumKeyLen, zipRatio);
 }
 
 }
@@ -2882,7 +3219,9 @@ UintPrefixBuildInfo TerarkIndex::GetUintPrefixBuildInfo(const TerarkIndex::KeySt
     }
     size_t suffixCost = totalKeySize - i * keyCount;
     if (index_detail::UseDictZipSuffix(ks.keyCount, suffixCost, zipRatio)) {
-      suffixCost = (suffixCost + 8 * keyCount) * zipRatio;
+      suffixCost = (suffixCost + 8 * keyCount) * zipRatio + 1024;
+    } else if (index_detail::UseEntropySuffix(ks.keyCount, suffixCost, zipRatio)) {
+      suffixCost = suffixCost * zipRatio + keyCount + 1024;
     } else if (ks.minSuffixLen != ks.maxSuffixLen) {
       suffixCost += keyCount;
     }
@@ -3165,7 +3504,7 @@ TerarkIndex* TerarkIndex::Factory::Build(TerarkKeyReader* reader, const TerarkZi
       }
     }
   } else if (g_indexEnableCompositeIndex && ks.minSuffixLen > 0 &&
-             !UseDictZipSuffix(ks.keyCount, ks.sumKeyLen - ks.sumPrefixLen, uint_prefix_info.zip_ratio) &&
+             UseRawSuffix(ks.keyCount, ks.sumKeyLen - ks.sumPrefixLen, uint_prefix_info.zip_ratio) &&
              ks.sumKeyLen - ks.sumPrefixLen - ks.minSuffixLen * ks.keyCount < (ks.sumKeyLen - ks.sumPrefixLen) / 8) {
     size_t suffixLen = ks.minSuffixLen;
     FixSuffixPrefixInputBuffer prefix_input_reader{reader, cplen, suffixLen, ks.maxKeyLen};
@@ -3182,13 +3521,18 @@ TerarkIndex* TerarkIndex::Factory::Build(TerarkKeyReader* reader, const TerarkZi
       prefix_input_reader, tzopt, ks.keyCount, ks.sumPrefixLen - ks.keyCount * cplen,
       isReverse, ks.minPrefixLen == ks.maxPrefixLen);
     MinimizePrefixRemainingInputBuffer suffix_input_reader{reader, cplen, ks.keyCount, ks.maxKeyLen};
-    if (!UseDictZipSuffix(ks.keyCount, ks.sumKeyLen - ks.sumPrefixLen, uint_prefix_info.zip_ratio) &&
-        ks.minSuffixLen == ks.maxSuffixLen) {
+    if (UseDictZipSuffix(ks.keyCount, ks.sumKeyLen - ks.sumPrefixLen, uint_prefix_info.zip_ratio)) {
+      suffix = BuildBlobStoreSuffix(
+          suffix_input_reader, ks.keyCount, ks.sumKeyLen - ks.sumPrefixLen, isReverse, uint_prefix_info.zip_ratio);
+    } else if (UseEntropySuffix(ks.keyCount, ks.sumKeyLen - ks.sumPrefixLen, uint_prefix_info.zip_ratio)) {
+      suffix = BuildEntropySuffix(
+          suffix_input_reader, ks.keyCount, ks.sumKeyLen - ks.sumPrefixLen, isReverse);
+    } else if (ks.minSuffixLen == ks.maxSuffixLen) {
       suffix = BuildFixedStringSuffix(
-        suffix_input_reader, ks.keyCount, ks.sumKeyLen - ks.sumPrefixLen, ks.maxSuffixLen, isReverse);
+          suffix_input_reader, ks.keyCount, ks.sumKeyLen - ks.sumPrefixLen, ks.maxSuffixLen, isReverse);
     } else {
       suffix = BuildBlobStoreSuffix(
-        suffix_input_reader, ks.keyCount, ks.sumKeyLen - ks.sumPrefixLen, isReverse, uint_prefix_info.zip_ratio);
+          suffix_input_reader, ks.keyCount, ks.sumKeyLen - ks.sumPrefixLen, isReverse, uint_prefix_info.zip_ratio);
     }
   } else {
     DefaultInputBuffer input_reader{reader, cplen};
@@ -3342,6 +3686,7 @@ using SuffixComponentList = ComponentRegister<>
 ::reg<NAME(Empty  ), 0, IndexEmptySuffix                        >
 ::reg<NAME(FixLen ), 0, IndexFixedStringSuffix                  >
 ::reg<NAME(VarLen ), 1, IndexBlobStoreSuffix<ZipOffsetBlobStore>>
+::reg<NAME(Entropy), 1, IndexEntropySuffix                      >
 ::reg<NAME(DictZip), 1, IndexBlobStoreSuffix<DictZipBlobStore  >>
 ::list;
 

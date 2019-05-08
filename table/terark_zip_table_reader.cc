@@ -23,7 +23,7 @@
 // third party
 #include <zstd/zstd.h>
 
-MY_THREAD_LOCAL(terark::valvec<terark::byte_t>, g_tbuf);
+MY_THREAD_LOCAL(rocksdb::TerarkIndex::Context, g_tctx);
 
 namespace {
 using namespace rocksdb;
@@ -892,73 +892,72 @@ const {
     user_key = Slice(reinterpret_cast<const char*>(&u64_target), 8);
   }
 #endif
-  size_t recId = index_->Find(fstringOf(user_key), &g_tbuf);
+  size_t recId = index_->Find(fstringOf(user_key), &g_tctx);
   if (size_t(-1) == recId) {
     return Status::OK();
   }
-  auto zvType = type_.size()
-                ? ZipValueType(type_[recId])
-                : ZipValueType::kZeroSeq;
+  auto zvType = type_.size() ? ZipValueType(type_[recId]) : ZipValueType::kZeroSeq;
   bool matched;
+  auto& buf = g_tctx.buf0;
   switch (zvType) {
   default:
     return Status::Aborted("TerarkZipTableReader::Get()", "Bad ZipValueType");
   case ZipValueType::kZeroSeq:
-    g_tbuf.erase_all();
+    buf.erase_all();
     try {
-      GetRecordAppend(recId, &g_tbuf);
+      GetRecordAppend(recId, &buf);
     }
     catch (const std::exception& ex) {
       return Status::Corruption("TerarkZipTableReader::Get()", ex.what());
     }
     get_context->SaveValue(ParsedInternalKey(pikey.user_key, global_seqno, kTypeValue),
-                           Slice((char*)g_tbuf.data(), g_tbuf.size()), &matched);
+                           Slice((char*)buf.data(), buf.size()), &matched);
     break;
   case ZipValueType::kValue: { // should be a kTypeValue, the normal case
-    g_tbuf.erase_all();
+    buf.erase_all();
     try {
-      GetRecordAppend(recId, &g_tbuf);
+      GetRecordAppend(recId, &buf);
     }
     catch (const std::exception& ex) {
       return Status::Corruption("TerarkZipTableReader::Get()", ex.what());
     }
     // little endian uint64_t
-    uint64_t seq = *(uint64_t*)g_tbuf.data() & kMaxSequenceNumber;
+    uint64_t seq = *(uint64_t*)buf.data() & kMaxSequenceNumber;
     if (seq <= pikey.sequence) {
       get_context->SaveValue(ParsedInternalKey(pikey.user_key, seq, kTypeValue),
-                             SliceOf(fstring(g_tbuf).substr(7)), &matched);
+                             SliceOf(fstring(buf).substr(7)), &matched);
     }
     break;
   }
   case ZipValueType::kDelete: {
-    g_tbuf.erase_all();
+    buf.erase_all();
     try {
-      g_tbuf.reserve(sizeof(SequenceNumber));
-      GetRecordAppend(recId, &g_tbuf);
+      buf.reserve(sizeof(SequenceNumber));
+      GetRecordAppend(recId, &buf);
     }
     catch (const std::exception& ex) {
       return Status::Corruption("TerarkZipTableReader::Get()", ex.what());
     }
-    uint64_t seq = *(uint64_t*)g_tbuf.data() & kMaxSequenceNumber;
+    uint64_t seq = *(uint64_t*)buf.data() & kMaxSequenceNumber;
     if (seq <= pikey.sequence) {
       get_context->SaveValue(ParsedInternalKey(pikey.user_key, seq, kTypeDeletion),
-                             SliceOf(fstring(g_tbuf).substr(7)), &matched);
+                             SliceOf(fstring(buf).substr(7)), &matched);
     }
     break;
   }
   case ZipValueType::kMulti: { // more than one value
-    g_tbuf.resize_no_init(sizeof(uint32_t));
+    buf.resize_no_init(sizeof(uint32_t));
     try {
-      GetRecordAppend(recId, &g_tbuf);
+      GetRecordAppend(recId, &buf);
     }
     catch (const std::exception& ex) {
       return Status::Corruption("TerarkZipTableReader::Get()", ex.what());
     }
-    if (g_tbuf.size() == sizeof(uint32_t)) {
+    if (buf.size() == sizeof(uint32_t)) {
       break;
     }
     size_t num = 0;
-    auto mVal = ZipValueMultiValue::decode(g_tbuf, &num);
+    auto mVal = ZipValueMultiValue::decode(buf, &num);
     for (size_t i = 0; i < num; ++i) {
       Slice val = mVal->getValueData(i, num);
       if (val.empty()) {
@@ -980,14 +979,14 @@ const {
     break;
     }
   }
-  if (g_tbuf.capacity() > 512 * 1024) {
-    g_tbuf.clear(); // free large thread local memory
+  if (buf.capacity() > 512 * 1024) {
+    buf.clear(); // free large thread local memory
   }
   return Status::OK();
 }
 
 size_t TerarkZipSubReader::DictRank(fstring key) const {
-  return index_->DictRank(key, &g_tbuf);
+  return index_->DictRank(key, &g_tctx);
 }
 
 TerarkZipSubReader::~TerarkZipSubReader() {
@@ -1414,10 +1413,11 @@ Status TerarkZipTableMultiReader::SubIndex::Init(
       }
       rawSize += part.rawReaderSize_;
       if (reverse) {
-        bounds_.push_back(part.index_->MinKey(&buffer));
+        part.index_->MinKey(&buffer, &g_tctx);
       } else {
-        bounds_.push_back(part.index_->MaxKey(&buffer));
+        part.index_->MaxKey(&buffer, &g_tctx);
       }
+      bounds_.push_back(buffer);
     }
 #if !defined(NDEBUG)
     for (size_t i = 1; i < bounds_.size(); ++i) {
