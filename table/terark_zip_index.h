@@ -110,11 +110,21 @@ public:
       non_desc_few_one_8,
     } type;
   };
+  class TerarkIndexDebugBuilder {
+    KeyStat stat;
+    fstrvec data;
+    size_t keyCount = 0;
+    size_t prevSamePrefix = 0;
+  public:
+
+    void Init(size_t count);
+    void Add(fstring key);
+    TerarkKeyReader* Finish(KeyStat* output);
+  };
   class Factory : public terark::RefCounter {
   public:
     virtual ~Factory();
-    static KeyStat GetStat(TerarkKeyReader* tmpKeyFileReader);
-    static TerarkIndex* Build(TerarkKeyReader* tmpKeyFileReader,
+    static TerarkIndex* Build(TerarkKeyReader* keyReader,
                               const TerarkZipTableOptions& tzopt,
                               const KeyStat&);
     static size_t MemSizeForBuild(const KeyStat&);

@@ -1475,13 +1475,13 @@ struct IndexNonDescendingUintPrefix
     }
     size_t hint = 0;
     auto rs = make_rank_select_hint_wrapper(rank_select, &hint);
-    uint64_t pos = rs.select0(value - min_value);
-    assert(pos > 0);
-    size_t count = rs.one_seq_revlen(pos);
+    uint64_t pos = rs.select0(value - min_value) + 1;
+    assert(pos < rs.size());
+    size_t count = rs.one_seq_len(pos);
     if (count == 0) {
       return size_t(-1);
     }
-    size_t id = rs.rank1(pos - count);
+    size_t id = rs.rank1(pos);
     size_t suffix_id;
     fstring suffix_key;
     key = key.substr(key_length);
@@ -1529,8 +1529,8 @@ struct IndexNonDescendingUintPrefix
   bool IterSeekToFirst(size_t& id, size_t& count, IteratorStorage* iter) const {
     auto rs = make_rank_select_hint_wrapper(rank_select, iter->get_hint());
     id = 0;
-    iter->pos = 0;
-    count = rs.one_seq_len(0);
+    iter->pos = 1;
+    count = rs.one_seq_len(1);
     UpdateBuffer(iter);
     return true;
   }
@@ -1538,12 +1538,12 @@ struct IndexNonDescendingUintPrefix
     auto rs = make_rank_select_hint_wrapper(rank_select, iter->get_hint());
     if (count == nullptr) {
       id = rs.max_rank1() - 1;
-      iter->pos = rs.size() - 2;
+      iter->pos = rs.size() - 1;
     } else {
-      size_t one_seq_revlen = rs.one_seq_revlen(rs.size() - 1);
+      size_t one_seq_revlen = rs.one_seq_revlen(rs.size());
       assert(one_seq_revlen > 0);
       id = rs.max_rank1() - one_seq_revlen;
-      iter->pos = rs.size() - 1 - one_seq_revlen;
+      iter->pos = rs.size() - one_seq_revlen;
       *count = one_seq_revlen;
     }
     UpdateBuffer(iter);
@@ -1596,12 +1596,12 @@ struct IndexNonDescendingUintPrefix
       }
       return true;
     } else {
-      if (iter->pos == 0) {
+      assert(iter->pos >= 1);
+      assert(!rs[iter->pos - 1]);
+      if (iter->pos == 1) {
         id = size_t(-1);
         return false;
       }
-      assert(iter->pos > 0);
-      assert(!rs[iter->pos - 1]);
       iter->pos -= rs.zero_seq_revlen(iter->pos) + 1;
       size_t one_seq_revlen = rs.one_seq_revlen(iter->pos);
       id -= one_seq_revlen + 1;
@@ -1666,23 +1666,23 @@ struct IndexNonDescendingUintPrefix
     }
     if (value < min_value) {
       id = 0;
-      pos = 0;
-      count = rs.one_seq_revlen(0);
+      pos = 1;
+      count = rs.one_seq_len(1);
       return {true, false};
     }
-    pos = rs.select0(value - min_value);
-    assert(pos > 0);
-    if (target.size() <= key_length && rs[pos - 1]) {
-      count = rs.one_seq_revlen(pos);
-      pos -= count;
+    pos = rs.select0(value - min_value) + 1;
+    assert(pos < rs.size());
+    if (target.size() <= key_length && rs[pos]) {
       id = rs.rank1(pos);
+      count = rs.one_seq_len(pos);
       return {true, target.size() == key_length};
     } else {
-      if (pos == rs.size() - 1) {
+      pos += rs.one_seq_len(pos);
+      if (pos == rs.size()) {
         id = size_t(-1);
         return {false, false};
       }
-      pos += rs.zero_seq_len(pos);
+      pos += rs.zero_seq_len(pos + 1) + 1;
       id = rs.rank1(pos);
       count = rs.one_seq_len(pos);
       return {true, false};
@@ -1692,7 +1692,7 @@ struct IndexNonDescendingUintPrefix
   void UpdateBuffer(IteratorStorage* iter) const {
     auto rs = make_rank_select_hint_wrapper(rank_select, iter->get_hint());
     assert(rs[iter->pos]);
-    SaveAsBigEndianUint64(iter->buffer, key_length, rs.rank0(iter->pos) + min_value);
+    SaveAsBigEndianUint64(iter->buffer, key_length, rs.rank0(iter->pos) - 1 + min_value);
   }
 };
 
@@ -2325,7 +2325,7 @@ void NonDescendingUintPrefixFillRankSelect(
       auto cur = ReadBigEndianUint64(key);
       pos += cur - last;
       last = cur;
-      rs.set1(pos++);
+      rs.set1(++pos);
     }
     assert(last == info.max_value);
     assert(pos + 1 == bit_count);
@@ -2338,7 +2338,7 @@ void NonDescendingUintPrefixFillRankSelect(
       auto cur = ReadBigEndianUint64(key);
       pos -= last - cur;
       last = cur;
-      rs.set1(--pos);
+      rs.set1(pos--);
     }
     assert(last == info.min_value);
     assert(pos == 0);
@@ -2364,7 +2364,7 @@ void NonDescendingUintPrefixFillRankSelect(
       auto cur = ReadBigEndianUint64(key);
       pos += cur - last;
       last = cur;
-      builder.insert(pos++);
+      builder.insert(++pos);
     }
     assert(last == info.max_value);
     assert(pos + 1 == bit_count);
@@ -2377,7 +2377,7 @@ void NonDescendingUintPrefixFillRankSelect(
       auto cur = ReadBigEndianUint64(key);
       pos -= last - cur;
       last = cur;
-      builder.insert(--pos);
+      builder.insert(pos--);
     }
     assert(last == info.min_value);
     assert(pos == 0);
@@ -2895,11 +2895,78 @@ UintPrefixBuildInfo TerarkIndex::GetUintPrefixBuildInfo(const TerarkIndex::KeySt
   return result;
 };
 
-TerarkIndex*
-TerarkIndex::Factory::Build(
-  TerarkKeyReader* reader,
-  const TerarkZipTableOptions& tzopt,
-  const TerarkIndex::KeyStat& ks) {
+
+void TerarkIndex::TerarkIndexDebugBuilder::Init(size_t count) {
+  stat.~KeyStat();
+  ::new(&stat) KeyStat;
+  data.erase_all();
+  stat.keyCount = count;
+  keyCount = 0;
+  prevSamePrefix = 0;
+}
+
+void TerarkIndex::TerarkIndexDebugBuilder::Add(fstring key) {
+  auto processKey = [&](fstring key, size_t samePrefix) {
+    size_t prefixSize = std::min(key.size(), std::max(samePrefix, prevSamePrefix) + 1);
+    size_t suffixSize = key.size() - prefixSize;
+    stat.minKeyLen = std::min(key.size(), stat.minKeyLen);
+    stat.maxKeyLen = std::max(key.size(), stat.maxKeyLen);
+    stat.sumKeyLen += key.size();
+    stat.sumPrefixLen += prefixSize;
+    stat.minPrefixLen = std::min(stat.minPrefixLen, prefixSize);
+    stat.maxPrefixLen = std::max(stat.maxPrefixLen, prefixSize);
+    stat.minSuffixLen = std::min(stat.minSuffixLen, suffixSize);
+    stat.maxSuffixLen = std::max(stat.maxSuffixLen, suffixSize);
+    auto& diff = stat.diff;
+    if (diff.size() < samePrefix) {
+      diff.resize(samePrefix);
+    }
+    for (size_t i = 0; i < samePrefix; ++i) {
+      ++diff[i].cur;
+      ++diff[i].cnt;
+    }
+    for (size_t i = samePrefix; i < diff.size(); ++i) {
+      diff[i].max = std::max(diff[i].cur, diff[i].max);
+      diff[i].cur = 0;
+    }
+    prevSamePrefix = samePrefix;
+  };
+  if (keyCount++ == 0) {
+    data.push_back(key);
+    stat.minKey.assign(key);
+  } else {
+    auto last = data.back();
+    processKey(last, key.commonPrefixLen(last));
+    data.push_back(key);
+    if (keyCount == stat.keyCount) {
+      processKey(key, 0);
+      stat.maxKey.assign(key);
+    }
+  }
+}
+
+TerarkKeyReader* TerarkIndex::TerarkIndexDebugBuilder::Finish(KeyStat* output) {
+  *output = std::move(stat);
+  class TerarkKeyDebugReader : public TerarkKeyReader {
+  public:
+    fstrvec data;
+    size_t i;
+
+    fstring next() override final {
+      return data[i++];
+    }
+    void rewind() override final {
+      i = 0;
+    }
+  };
+  auto reader = new TerarkKeyDebugReader;
+  reader->data.swap(data);
+  reader->i = 0;
+  return reader;
+}
+
+TerarkIndex* TerarkIndex::Factory::Build(TerarkKeyReader* reader, const TerarkZipTableOptions& tzopt,
+                                         const TerarkIndex::KeyStat& ks) {
   using namespace index_detail;
   struct DefaultInputBuffer {
     TerarkKeyReader* reader;

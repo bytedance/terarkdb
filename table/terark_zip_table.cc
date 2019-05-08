@@ -722,29 +722,19 @@ const {
   if (minlevel < 0) {
     minlevel = numlevel - 1;
   }
-  uint32_t keyPrefixLen = 0;
-  if (table_options_.isOfflineBuild) {
+  uint32_t keyPrefixLen = GetFixedPrefixLen(table_builder_options.moptions.prefix_extractor.get());
+  if (keyPrefixLen != 0) {
     if (table_options_.keyPrefixLen != 0) {
-      WARN(table_builder_options.ioptions.info_log,
-           "TerarkZipTableFactory::NewTableBuilder() OfflineBuild unsupport keyPrefixLen , keyPrefixLen = %zd\n",
-           table_options_.keyPrefixLen
-      );
+      if (keyPrefixLen != table_options_.keyPrefixLen) {
+        WARN(table_builder_options.ioptions.info_log,
+             "TerarkZipTableFactory::NewTableBuilder() found non best config , keyPrefixLen = %zd , prefix_extractor = %zd\n",
+             table_options_.keyPrefixLen, keyPrefixLen
+        );
+      }
+      keyPrefixLen = std::min<uint32_t>(keyPrefixLen, table_options_.keyPrefixLen);
     }
   } else {
-    keyPrefixLen = GetFixedPrefixLen(table_builder_options.moptions.prefix_extractor.get());
-    if (keyPrefixLen != 0) {
-      if (table_options_.keyPrefixLen != 0) {
-        if (keyPrefixLen != table_options_.keyPrefixLen) {
-          WARN(table_builder_options.ioptions.info_log,
-               "TerarkZipTableFactory::NewTableBuilder() found non best config , keyPrefixLen = %zd , prefix_extractor = %zd\n",
-               table_options_.keyPrefixLen, keyPrefixLen
-          );
-        }
-        keyPrefixLen = std::min<uint32_t>(keyPrefixLen, table_options_.keyPrefixLen);
-      }
-    } else {
-      keyPrefixLen = table_options_.keyPrefixLen;
-    }
+    keyPrefixLen = table_options_.keyPrefixLen;
   }
   if (table_builder_options.sst_purpose != kEssenceSst) {
     keyPrefixLen = 0;

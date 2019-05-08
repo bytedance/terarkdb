@@ -61,7 +61,6 @@ struct TerarkZipTableOptions {
   unsigned char indexNestScale           = 8;
   bool          enableCompressionProbe   = true;
   bool          useSuffixArrayLocalMatch = false;
-  bool          isOfflineBuild           = false;
   bool          warmUpIndexOnOpen        = true;
   bool          warmUpValueOnOpen        = false;
   bool          disableSecondPassIter    = false;

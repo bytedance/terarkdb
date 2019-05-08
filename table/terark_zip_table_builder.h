@@ -123,7 +123,6 @@ private:
   AddPrevUserKey(size_t samePrefix, std::initializer_list<RangeStatus*> r, std::initializer_list<RangeStatus*> e);
   void AddValueBit();
   bool MergeRangeStatus(RangeStatus* aa, RangeStatus* bb, RangeStatus* ab);
-  void OfflineZipValueData();
   struct WaitHandle : boost::noncopyable {
     WaitHandle();
     WaitHandle(size_t);
@@ -135,7 +134,6 @@ private:
   };
   WaitHandle WaitForMemory(const char* who, size_t memorySize);
   Status EmptyTableFinish();
-  Status OfflineFinish();
   std::future<Status> Async(std::function<Status()> func);
   void BuildIndex(KeyValueStatus& kvs);
   enum BuildStoreFlag {
@@ -229,7 +227,6 @@ private:
   size_t multiValueExpandSize_ = 0;
   Status status_;
   TableProperties properties_;
-  std::unique_ptr<DictZipBlobStore::ZipBuilder> zbuilder_;
   BlockBuilder range_del_block_;
   fstrvec valueBuf_; // collect multiple values for one key
   PipelineProcessor pipeline_;
