@@ -837,6 +837,7 @@ public:
     size_t suffix_count;
     if (suffix().TotalKeySize() == 0) {
       if (prefix().IterSeek(m_id, suffix_count, target, prefix_storage())) {
+        assert(suffix_count == 1);
         suffix().IterSet(m_id, suffix_storage());
         return UpdateKey();
       } else {
@@ -1269,7 +1270,7 @@ struct IndexAscendingUintPrefix
     return rank_select.max_rank1() - 1;
   }
 
-  bool NeedsReorder() const {
+  constexpr bool NeedsReorder() const {
     return false;
   }
   void GetOrderMap(terark::UintVecMin0& newToOld) const {
@@ -1478,7 +1479,7 @@ struct IndexNonDescendingUintPrefix
     size_t hint = 0;
     auto rs = make_rank_select_hint_wrapper(rank_select, &hint);
     uint64_t pos = rs.select0(value - min_value) + 1;
-    assert(pos < rs.size());
+    assert(pos > 0);
     size_t count = rs.one_seq_len(pos);
     if (count == 0) {
       return size_t(-1);
@@ -1519,7 +1520,7 @@ struct IndexNonDescendingUintPrefix
     return rank_select.max_rank1() - 1;
   }
 
-  bool NeedsReorder() const {
+  constexpr bool NeedsReorder() const {
     return false;
   }
   void GetOrderMap(terark::UintVecMin0& newToOld) const {
@@ -1888,7 +1889,7 @@ struct IndexNestLoudsTriePrefix
     return flags.is_bfs_suffix ? id : trie_->num_words() - 1;
   }
 
-  bool NeedsReorder() const {
+  constexpr bool NeedsReorder() const {
     return true;
   }
   void GetOrderMap(terark::UintVecMin0& newToOld) const {
@@ -1970,7 +1971,7 @@ struct IndexEmptySuffix
   IndexEmptySuffix& operator = (const IndexEmptySuffix&) = delete;
   IndexEmptySuffix& operator = (IndexEmptySuffix&&) = default;
 
-  size_t TotalKeySize() const {
+  constexpr size_t TotalKeySize() const {
     return 0;
   }
   std::pair<size_t, fstring>
@@ -1981,7 +1982,6 @@ struct IndexEmptySuffix
   }
 
   void IterSet(size_t suffix_id, void*) const {
-
   }
   bool IterSeek(fstring target, size_t& suffix_id, size_t suffix_count, void*) const {
     return true;
@@ -3438,44 +3438,6 @@ TerarkIndex* TerarkIndex::Factory::Build(TerarkKeyReader* reader, const TerarkZi
         : reader(_reader), cplenPrefixSize(_cplen + _prefixSize) {
     }
   };
-  struct FixSuffixPrefixInputBuffer {
-    TerarkKeyReader* reader;
-    size_t cplen;
-    size_t suffixSize;
-
-    fstring next() {
-      auto buffer = reader->next();
-      assert(buffer.size() >= cplen + suffixSize);
-      return {buffer.data() + cplen, ptrdiff_t(buffer.size() - cplen - suffixSize)};
-    }
-
-    void rewind() {
-      reader->rewind();
-    }
-
-    FixSuffixPrefixInputBuffer(TerarkKeyReader* _reader, size_t _cplen, size_t _suffixSize,
-                               size_t _maxKeyLen)
-        : reader(_reader), cplen(_cplen), suffixSize(_suffixSize) {
-    }
-  };
-  struct FixSuffixInputBuffer {
-    TerarkKeyReader* reader;
-    size_t suffixSize;
-
-    fstring next() {
-      auto buffer = reader->next();
-      assert(buffer.size() >= suffixSize);
-      return {buffer.data() + buffer.size() - suffixSize, ptrdiff_t(suffixSize)};
-    }
-
-    void rewind() {
-      reader->rewind();
-    }
-
-    FixSuffixInputBuffer(TerarkKeyReader* _reader, size_t _suffixSize, size_t _maxKeyLen)
-        : reader(_reader), suffixSize(_suffixSize) {
-    }
-  };
 
   assert(ks.keyCount > 0);
   bool isReverse = ks.minKey > ks.maxKey;
@@ -3503,17 +3465,6 @@ TerarkIndex* TerarkIndex::Factory::Build(TerarkKeyReader* reader, const TerarkZi
           ks.sumKeyLen - ks.keyCount * prefix_input_reader.cplenPrefixSize, isReverse, uint_prefix_info.zip_ratio);
       }
     }
-  } else if (g_indexEnableCompositeIndex && ks.minSuffixLen > 0 &&
-             UseRawSuffix(ks.keyCount, ks.sumKeyLen - ks.sumPrefixLen, uint_prefix_info.zip_ratio) &&
-             ks.sumKeyLen - ks.sumPrefixLen - ks.minSuffixLen * ks.keyCount < (ks.sumKeyLen - ks.sumPrefixLen) / 8) {
-    size_t suffixLen = ks.minSuffixLen;
-    FixSuffixPrefixInputBuffer prefix_input_reader{reader, cplen, suffixLen, ks.maxKeyLen};
-    prefix = BuildNestLoudsTriePrefix(
-      prefix_input_reader, tzopt, ks.keyCount, ks.sumKeyLen - ks.keyCount * (cplen + suffixLen),
-      isReverse, ks.minKeyLen == ks.maxKeyLen);
-    FixSuffixInputBuffer suffix_input_reader{reader, suffixLen, ks.maxKeyLen};
-    suffix = BuildFixedStringSuffix(
-      suffix_input_reader, ks.keyCount, ks.keyCount * suffixLen, suffixLen, isReverse);
   } else if ((g_indexEnableDynamicSuffix || ks.minSuffixLen == ks.maxSuffixLen) &&
              g_indexEnableCompositeIndex && ks.sumPrefixLen < ks.sumKeyLen * 31 / 32) {
     MinimizePrefixInputBuffer prefix_input_reader{reader, cplen, ks.keyCount, ks.maxKeyLen};
@@ -3673,13 +3624,13 @@ using PrefixComponentList = ComponentRegister<>
 ::reg<NAME(A_FewOne_8  ), 1, IndexAscendingUintPrefix<rank_select_fewone<8>>>
 ::reg<NAME(ND_IL_256_32), 0, IndexNonDescendingUintPrefix<rank_select_il_256_32>>
 ::reg<NAME(ND_SE_512_64), 0, IndexNonDescendingUintPrefix<rank_select_se_512_64>>
-::reg<NAME(ND_fewone_2 ), 1, IndexNonDescendingUintPrefix<rank_select_fewone<2>>>
-::reg<NAME(ND_fewone_3 ), 1, IndexNonDescendingUintPrefix<rank_select_fewone<3>>>
-::reg<NAME(ND_fewone_4 ), 1, IndexNonDescendingUintPrefix<rank_select_fewone<4>>>
-::reg<NAME(ND_fewone_5 ), 1, IndexNonDescendingUintPrefix<rank_select_fewone<5>>>
-::reg<NAME(ND_fewone_6 ), 1, IndexNonDescendingUintPrefix<rank_select_fewone<6>>>
-::reg<NAME(ND_fewone_7 ), 1, IndexNonDescendingUintPrefix<rank_select_fewone<7>>>
-::reg<NAME(ND_fewone_8 ), 1, IndexNonDescendingUintPrefix<rank_select_fewone<8>>>
+::reg<NAME(ND_FewOne_2 ), 1, IndexNonDescendingUintPrefix<rank_select_fewone<2>>>
+::reg<NAME(ND_FewOne_3 ), 1, IndexNonDescendingUintPrefix<rank_select_fewone<3>>>
+::reg<NAME(ND_FewOne_4 ), 1, IndexNonDescendingUintPrefix<rank_select_fewone<4>>>
+::reg<NAME(ND_FewOne_5 ), 1, IndexNonDescendingUintPrefix<rank_select_fewone<5>>>
+::reg<NAME(ND_FewOne_6 ), 1, IndexNonDescendingUintPrefix<rank_select_fewone<6>>>
+::reg<NAME(ND_FewOne_7 ), 1, IndexNonDescendingUintPrefix<rank_select_fewone<7>>>
+::reg<NAME(ND_FewOne_8 ), 1, IndexNonDescendingUintPrefix<rank_select_fewone<8>>>
 ::list;
 
 using SuffixComponentList = ComponentRegister<>
