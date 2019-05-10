@@ -67,19 +67,17 @@ private:
   std::atomic_size_t num_entries_;
 
 public:
-  explicit PTrieRep(size_t write_buffer_size, const MemTableRep::KeyComparator &compare,
-                    Allocator *allocator, const SliceTransform *)
-    : MemTableRep(allocator)
-    , immutable_(false)
-    , num_entries_(0) {
-    write_buffer_size = std::min(write_buffer_size, (size_t(1) << 34) - 64*1024);
+  explicit PTrieRep(size_t write_buffer_size, const MemTableRep::KeyComparator& compare,
+                    Allocator* allocator, const SliceTransform*)
+      : MemTableRep(allocator), immutable_(false), num_entries_(0) {
+    write_buffer_size = std::min(write_buffer_size, (size_t(1) << 34) - 64 * 1024);
     current_ = trie_arr_;
     current_->accumulate_mem_size = 0;
     current_->trie.reset(new terark::MainPatricia(sizeof(uint32_t), write_buffer_size,
                                                   terark::Patricia::OneWriteMultiRead));
   }
 
-  virtual KeyHandle Allocate(const size_t len, char **buf) override {
+  virtual KeyHandle Allocate(const size_t len, char** buf) override {
     assert(false);
     return nullptr;
   }
@@ -97,9 +95,7 @@ public:
     class Token : public terark::Patricia::WriterToken {
     public:
       Token(terark::Patricia* trie, uint64_t tag, const Slice& value)
-        : terark::Patricia::WriterToken(trie)
-        , tag_(tag)
-        , value_(value) {}
+          : terark::Patricia::WriterToken(trie), tag_(tag), value_(value) {}
 
       terark::MainPatricia* main_trie() {
         return static_cast<terark::MainPatricia*>(trie());
@@ -220,12 +216,12 @@ public:
     }
     size_t new_trie_size =
       std::max(accumulate_mem_size - trie_arr_->trie->mem_size() * 7 / 8,
-        key.size() + VarintLength(value.size()) + value.size()) + 1024;
+               key.size() + VarintLength(value.size()) + value.size()) + 1024;
     auto next = current_ + 1;
     assert(next != trie_arr_ + max_trie_count);
     next->accumulate_mem_size = accumulate_mem_size;
     next->trie.reset(new terark::MainPatricia(sizeof(uint32_t), new_trie_size,
-      terark::Patricia::OneWriteMultiRead));
+                                              terark::Patricia::OneWriteMultiRead));
     current_ = next;
     auto insert_result = insert_impl(current_->trie.get());
     assert(insert_result == InsertResult::Success); (void)insert_result;
@@ -266,12 +262,12 @@ public:
   }
 
   virtual uint64_t ApproximateNumEntries(const Slice& start_ikey,
-    const Slice& end_ikey) override {
+                                         const Slice& end_ikey) override {
     return 0;
   }
 
-  virtual void Get(const LookupKey &k, void *callback_args,
-                   bool(*callback_func)(void *arg, const KeyValuePair*)) override {
+  virtual void Get(const LookupKey& k, void* callback_args,
+                   bool(* callback_func)(void* arg, const KeyValuePair*)) override {
 
     struct HeapItem {
       uint64_t tag;
@@ -284,11 +280,13 @@ public:
       virtual Slice GetKey() const override {
         return buffer;
       }
+
       virtual Slice GetValue() const override {
         return GetLengthPrefixedSlice(prefixed_value);
       }
+
       virtual std::pair<Slice, Slice> GetKeyValue() const override {
-        return { Context::GetKey(), Context::GetValue() };
+        return {Context::GetKey(), Context::GetValue()};
       }
 
       KeyValuePair* Update(HeapItem* heap) {
@@ -323,7 +321,7 @@ public:
       auto data = (tag_vector_t::data_t*)trie->mem_get(vector->loc);
       size_t index = terark::upper_bound_0(data, size, tag) - 1;
       if (index != size_t(-1)) {
-        heap[heap_size++] = HeapItem{ data[index].tag, trie, vector_loc, (uint32_t)index };
+        heap[heap_size++] = HeapItem{data[index].tag, trie, vector_loc, (uint32_t)index};
       }
     }
     auto heap_comp = [](const HeapItem& l, const HeapItem& r) {
@@ -357,9 +355,7 @@ public:
       size_t index;
 
       HeapItem(terark::Patricia* trie)
-        : iter(trie)
-        , tag(uint64_t(-1))
-        , index(size_t(-1))  {
+          : iter(trie), tag(uint64_t(-1)), index(size_t(-1)) {
       }
       struct VectorData {
         size_t size;
@@ -370,7 +366,7 @@ public:
         auto vector = (tag_vector_t*)trie->mem_get(*(uint32_t*)iter.value());
         size_t size = vector->size;
         auto data = (tag_vector_t::data_t*)trie->mem_get(vector->loc);
-        return { size, data };
+        return {size, data};
       }
       uint32_t GetValue() const {
         auto trie = static_cast<terark::MainPatricia*>(iter.trie());
@@ -483,8 +479,7 @@ public:
     int direction_;
 
     Iterator(PTrieRep* rep)
-      : rep_(rep)
-      , direction_(0) {
+        : rep_(rep), direction_(0) {
       if (heap_mode) {
         multi_.count = rep_->current_ - rep_->trie_arr_ + 1;
         multi_.array = (HeapItem*)malloc(sizeof(HeapItem) * multi_.count);
@@ -589,7 +584,7 @@ public:
 
     // Returns the key at the current position.
     // REQUIRES: Valid()
-    virtual const char *key() const override {
+    virtual const char* key() const override {
       assert(false);
       return nullptr;
     }
@@ -606,7 +601,7 @@ public:
     }
 
     virtual std::pair<Slice, Slice> GetKeyValue() const override {
-      return { Iterator::GetKey(), Iterator::GetValue() };
+      return {Iterator::GetKey(), Iterator::GetValue()};
     }
 
     // Advances to the next position.
@@ -682,8 +677,8 @@ public:
     }
 
     // Advance to the first entry with a key >= target
-    virtual void Seek(const Slice &user_key, const char *memtable_key)
-      override {
+    virtual void Seek(const Slice& user_key, const char* memtable_key)
+    override {
       terark::fstring find_key;
       if (memtable_key != nullptr) {
         Slice internal_key = GetLengthPrefixedSlice(memtable_key);
@@ -715,7 +710,7 @@ public:
 
     // retreat to the first entry with a key <= target
     virtual void SeekForPrev(const Slice& user_key, const char* memtable_key)
-      override {
+    override {
       terark::fstring find_key;
       if (memtable_key != nullptr) {
         Slice internal_key = GetLengthPrefixedSlice(memtable_key);
@@ -795,7 +790,7 @@ public:
 
     virtual bool IsSeekForPrevSupported() const override { return true; }
   };
-  virtual MemTableRep::Iterator *GetIterator(Arena *arena = nullptr) override {
+  virtual MemTableRep::Iterator* GetIterator(Arena* arena = nullptr) override {
     if (current_ == trie_arr_) {
       typedef PTrieRep::Iterator<false> i_t;
       return arena ? new(arena->AllocateAligned(sizeof(i_t))) i_t(this) : new i_t(this);
@@ -847,7 +842,7 @@ public:
     }
   }
 
-  virtual const char *Name() const override {
+  virtual const char* Name() const override {
     return "PatriciaTrieRepFactory";
   }
 
