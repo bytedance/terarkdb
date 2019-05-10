@@ -40,9 +40,9 @@ TerarkZipAutoConfigForOnlineDB_DBOptions(struct DBOptions& dbo, size_t cpuNum);
 void
 __attribute__((weak))
 TerarkZipAutoConfigForOnlineDB_CFOptions(struct TerarkZipTableOptions& tzo,
-                                    struct ColumnFamilyOptions& cfo,
-                                    size_t memBytesLimit,
-                                    size_t diskBytesLimit);
+                                         struct ColumnFamilyOptions& cfo,
+                                         size_t memBytesLimit,
+                                         size_t diskBytesLimit);
 
 const class WriteBatchEntryIndexFactory*
 __attribute__((weak))
@@ -69,13 +69,14 @@ TerarkZipConfigFromEnv(struct DBOptions&,
                        struct ColumnFamilyOptions&);
 
 bool __attribute__((weak)) TerarkZipCFOptionsFromEnv(struct ColumnFamilyOptions&);
+
 void __attribute__((weak)) TerarkZipDBOptionsFromEnv(struct DBOptions&);
 
 bool __attribute__((weak)) TerarkZipIsBlackListCF(const std::string& cfname);
 
 void __attribute__((weak))
 TerarkZipMultiCFOptionsFromEnv(const struct DBOptions& db_options,
-      const std::vector<struct ColumnFamilyDescriptor>& cfvec);
+                               const std::vector<struct ColumnFamilyDescriptor>& cfvec);
 
 #endif // _MSC_VER
 

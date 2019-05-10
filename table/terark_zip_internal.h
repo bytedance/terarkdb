@@ -29,22 +29,19 @@
 //#define TERARK_SUPPORT_UINT64_COMPARATOR
 //#define DEBUG_TWO_PASS_ITER
 
-
-#if defined(TerocksPrivateCode)
-//# define USE_CRYPTOPP
-//# define USE_OPENSSL
-#endif // TerocksPrivateCode
+//#define USE_CRYPTOPP
+//#define USE_OPENSSL
 
 #if ROCKSDB_MAJOR * 1000 + ROCKSDB_MINOR >= 5008
-  #define TERARK_ROCKSDB_5008(...) __VA_ARGS__
+# define TERARK_ROCKSDB_5008(...) __VA_ARGS__
 #else
-  #define TERARK_ROCKSDB_5008(...)
+# define TERARK_ROCKSDB_5008(...)
 #endif
 
 #if ROCKSDB_MAJOR * 1000 + ROCKSDB_MINOR >= 5007
-  #define TERARK_ROCKSDB_5007(...) __VA_ARGS__
+# define TERARK_ROCKSDB_5007(...) __VA_ARGS__
 #else
-  #define TERARK_ROCKSDB_5007(...)
+# define TERARK_ROCKSDB_5007(...)
 #endif
 
 void PrintVersion(rocksdb::Logger* info_log);
@@ -64,9 +61,7 @@ extern const uint64_t kTerarkZipTableMagicNumber;
 extern const std::string kTerarkZipTableValueDictBlock;
 extern const std::string kTerarkZipTableOffsetBlock;
 extern const std::string kTerarkEmptyTableKey;
-#if defined(TerocksPrivateCode)
 extern const std::string kTerarkZipTableExtendedBlock;
-#endif // TerocksPrivateCode
 extern const std::string kTerarkZipTableBuildTimestamp;
 extern const std::string kTerarkZipTableDictInfo;
 extern const std::string kTerarkZipTableDictSize;
@@ -92,8 +87,6 @@ bool IsForwardBytewiseComparator(const Comparator* cmp);
 
 bool IsBytewiseComparator(const Comparator* cmp);
 
-#if defined(TerocksPrivateCode)
-
 struct LicenseInfo {
   struct Head {
     char meta[4] = {'E', 'X', 'T', '.'};
@@ -106,17 +99,17 @@ struct LicenseInfo {
     uint16_t size;
   };
   struct KeyInfo {
-    SubHead head = {{ 'k', 'e', 'y', '_' }, 1, sizeof(KeyInfo)};
+    SubHead head = {{'k', 'e', 'y', '_'}, 1, sizeof(KeyInfo)};
     uint64_t sign;
     uint64_t id_hash;
     uint64_t date;
     uint64_t duration;
-  } *key = nullptr, key_storage;
+  }* key = nullptr, key_storage;
   struct SstInfo {
-    SubHead head = {{ 's', 's', 't', '_' }, 1, sizeof(SstInfo)};
+    SubHead head = {{'s', 's', 't', '_'}, 1, sizeof(SstInfo)};
     uint64_t sign;
     uint64_t create_date;
-  } *sst = nullptr, sst_storage;
+  }* sst = nullptr, sst_storage;
 
   mutable std::mutex mutex;
 
@@ -137,8 +130,6 @@ struct LicenseInfo {
   bool check() const;
   void print_error(const char* file_name, bool startup, rocksdb::Logger* logger) const;
 };
-
-#endif // TerocksPrivateCode
 
 struct CollectInfo {
   static const size_t queue_size;
@@ -161,9 +152,7 @@ struct CollectInfo {
 
   CollectInfo() : estimate_compression_ratio{0} {}
 
-  void update(uint64_t timestamp
-    , size_t raw_value, size_t zip_value
-    , size_t raw_store, size_t zip_store);
+  void update(uint64_t timestamp, size_t raw_value, size_t zip_value, size_t raw_store, size_t zip_store);
   static bool hard(size_t raw, size_t zip);
   bool hard() const;
   float estimate(float def_value) const;
@@ -186,19 +175,18 @@ struct ZipValueMultiValue {
 
   ///@size size include the extra uint32, == encoded_size + 4
   static
-    const ZipValueMultiValue* decode(void* data, size_t size, size_t* pNum) {
+  const ZipValueMultiValue* decode(void* data, size_t size, size_t* pNum) {
     // data + 4 is the encoded data
     auto me = (ZipValueMultiValue*)(data);
     size_t num = me->offsets[1];
     assert(num > 0);
-    memmove(me->offsets + 1, me->offsets + 2, sizeof(uint32_t)*(num - 1));
+    memmove(me->offsets + 1, me->offsets + 2, sizeof(uint32_t) * (num - 1));
     me->offsets[0] = 0;
-    me->offsets[num] = size - sizeof(uint32_t)*(num + 1);
+    me->offsets[num] = size - sizeof(uint32_t) * (num + 1);
     *pNum = num;
     return me;
   }
-  static
-    const ZipValueMultiValue* decode(valvec<byte_t>& buf, size_t* pNum) {
+  static const ZipValueMultiValue* decode(valvec<byte_t>& buf, size_t* pNum) {
     return decode(buf.data(), buf.size(), pNum);
   }
   Slice getValueData(size_t nth, size_t num) const {
@@ -216,21 +204,15 @@ struct ZipValueMultiValue {
 
 struct TerarkZipMultiOffsetInfo {
   struct KeyValueOffset {
-    size_t key;
-    size_t value;
-    size_t type;
+    uint64_t key;
+    uint64_t value;
+    uint64_t type;
   };
-  size_t partCount_, prefixLen_;
   valvec<KeyValueOffset> offset_;
-  valvec<char> prefixSet_;
 
-  static size_t calc_size(size_t prefixLen, size_t partCount);
-  void Init(size_t prefixLen, size_t partCount);
-  void set(size_t index
-    , fstring prefix
-    , size_t key
-    , size_t value
-    , size_t type);
+  static size_t calc_size(size_t partCount);
+  void Init(size_t partCount);
+  void set(size_t index, size_t key, size_t value, size_t type);
   valvec<byte_t> dump();
   bool risk_set_memory(const void*, size_t);
   void risk_release_ownership();
@@ -240,28 +222,28 @@ class TerarkZipTableFactory : public TableFactory, boost::noncopyable {
 public:
   explicit
   TerarkZipTableFactory(const TerarkZipTableOptions& tzto,
-      std::shared_ptr<class TableFactory> fallback);
+                        std::shared_ptr<class TableFactory> fallback);
   ~TerarkZipTableFactory();
 
   const char* Name() const override { return "TerarkZipTable"; }
 
   Status
-    NewTableReader(const TableReaderOptions& table_reader_options,
-      unique_ptr<RandomAccessFileReader>&& file,
-      uint64_t file_size,
-      unique_ptr<TableReader>* table,
-      bool prefetch_index_and_filter_in_cache) const override;
+  NewTableReader(const TableReaderOptions& table_reader_options,
+                 unique_ptr<RandomAccessFileReader>&& file,
+                 uint64_t file_size,
+                 unique_ptr<TableReader>* table,
+                 bool prefetch_index_and_filter_in_cache) const override;
 
   TableBuilder*
-    NewTableBuilder(const TableBuilderOptions& table_builder_options,
-      uint32_t column_family_id,
-      WritableFileWriter* file) const override;
+  NewTableBuilder(const TableBuilderOptions& table_builder_options,
+                  uint32_t column_family_id,
+                  WritableFileWriter* file) const override;
 
   std::string GetPrintableTableOptions() const override;
 
   // Sanitizes the specified DB Options.
   Status SanitizeOptions(const DBOptions& db_opts,
-    const ColumnFamilyOptions& cf_opts) const override;
+                         const ColumnFamilyOptions& cf_opts) const override;
 
   void* GetOptions() override { return &table_options_; }
 
@@ -280,16 +262,13 @@ private:
   mutable size_t nth_new_terark_table_ = 0;
   mutable size_t nth_new_fallback_table_ = 0;
 private:
-#if defined(TerocksPrivateCode)
   mutable LicenseInfo license_;
-#endif // TerocksPrivateCode
   mutable CollectInfo collect_;
 public:
-#if defined(TerocksPrivateCode)
   LicenseInfo& GetLicense() const {
     return license_;
   }
-#endif // TerocksPrivateCode
+
   CollectInfo& GetCollect() const {
     return collect_;
   }

@@ -99,7 +99,7 @@ struct IteratorImplWithOffset : public IteratorImplBase {
     auto vector = (value_vector_t*)trie->mem_get(*(uint32_t*)iter.value());
     size_t size = vector->size;
     auto data = (value_wrap_t*)trie->mem_get(vector->loc);
-    return { size, data };
+    return {size, data};
   }
   WriteBatchIndexEntry* Seek(WriteBatchIndexEntry* entry) {
     auto slice_key = extractor(entry);
@@ -180,8 +180,7 @@ struct IteratorImplWithOffset : public IteratorImplBase {
       auto vec = GetVector();
       index = vec.size - 1;
       return vec.data[index].value;
-    }
-    else {
+    } else {
       auto vec = GetVector();
       return vec.data[index].value;
     }
@@ -205,16 +204,16 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
       WriteBatchEntryPTrieIndexDetail::IteratorImplWithOffset;
 
   typedef typename std::conditional<OverwriteKey,
-                                    IteratorImplWithoutOffset,
-                                    IteratorImplWithOffset
-                                    >::type IteratorImpl;
+      IteratorImplWithoutOffset,
+      IteratorImplWithOffset
+  >::type IteratorImpl;
 
   class PTrieIterator : public WriteBatchEntryIndex::Iterator {
    public:
     PTrieIterator(terark::Patricia* index, WriteBatchKeyExtractor e,
                   bool ephemeral)
-      : impl_(nullptr),
-        key_(nullptr) {
+        : impl_(nullptr),
+          key_(nullptr) {
       if (ephemeral) {
         auto& tls_impl = WriteBatchEntryPTrieIndexDetail::tls_impl;
         impl_ = reinterpret_cast<IteratorImpl*>(&tls_impl);
@@ -264,14 +263,14 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
   };
 
  public:
-   WriteBatchEntryPTrieIndex(WriteBatchKeyExtractor e,
-                             const Comparator* c, Arena* a)
+  WriteBatchEntryPTrieIndex(WriteBatchKeyExtractor e,
+                            const Comparator* c, Arena* a)
       : index_(trie_value_size),
         extractor_(e) {
   }
 
   static constexpr size_t trie_value_size =
-      OverwriteKey ? sizeof(void*) : sizeof(uint32_t);
+    OverwriteKey ? sizeof(void*) : sizeof(uint32_t);
 
   virtual Iterator* NewIterator() override {
     return new PTrieIterator(&index_, extractor_, false);
@@ -279,7 +278,7 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
   virtual void NewIterator(IteratorStorage& storage, bool ephemeral) override {
     static_assert(sizeof(PTrieIterator) <= sizeof storage.buffer,
                   "Need larger buffer for PTrieIterator");
-    storage.iter = new (storage.buffer) PTrieIterator(&index_, extractor_, ephemeral);
+    storage.iter = new(storage.buffer) PTrieIterator(&index_, extractor_, ephemeral);
   }
   virtual bool Upsert(WriteBatchIndexEntry* key) override {
     auto slice_key = extractor_(key);
@@ -296,11 +295,11 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
       return false;
     } else {
       class Token : public terark::Patricia::WriterToken {
-      public:
+       public:
         Token(terark::Patricia* trie, WriteBatchIndexEntry* value)
           : terark::Patricia::WriterToken(trie),
             value_(value) {}
-      protected:
+       protected:
         bool init_value(void* valptr, size_t valsize) noexcept override {
           assert(valsize == sizeof(uint32_t));
 
@@ -319,8 +318,8 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
           memcpy(valptr, &u32_vector_loc, valsize);
           return true;
         }
-      private:
-        WriteBatchIndexEntry * value_;
+       private:
+        WriteBatchIndexEntry* value_;
       };
       Token token(&index_, key);
       WriteBatchIndexEntry* value_store;
@@ -372,7 +371,7 @@ const WriteBatchEntryIndexFactory* patricia_WriteBatchEntryIndexFactory(const Wr
    public:
     WriteBatchEntryIndexContext* NewContext(Arena* a) const override {
       typedef WriteBatchEntryPTrieIndexContext ctx_t;
-      auto ctx = new (a->AllocateAligned(sizeof(ctx_t))) ctx_t();
+      auto ctx = new(a->AllocateAligned(sizeof(ctx_t))) ctx_t();
       ctx->fallback_context = fallback->NewContext(a);
       return ctx;
     }
@@ -385,10 +384,10 @@ const WriteBatchEntryIndexFactory* patricia_WriteBatchEntryIndexFactory(const Wr
         return fallback->New(ptrie_ctx->fallback_context, e, c, a, overwrite_key);
       } else if (overwrite_key) {
         typedef WriteBatchEntryPTrieIndex<true> index_t;
-        return new (a->AllocateAligned(sizeof(index_t))) index_t(e, c, a);
+        return new(a->AllocateAligned(sizeof(index_t))) index_t(e, c, a);
       } else {
         typedef WriteBatchEntryPTrieIndex<false> index_t;
-        return new (a->AllocateAligned(sizeof(index_t))) index_t(e, c, a);
+        return new(a->AllocateAligned(sizeof(index_t))) index_t(e, c, a);
       }
     }
     PTrieIndexFactory(const WriteBatchEntryIndexFactory* _fallback)

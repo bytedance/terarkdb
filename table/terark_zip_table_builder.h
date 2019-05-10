@@ -81,51 +81,61 @@ public:
   }
 
 private:
-  struct BuildIndexParams {
-    TempFileDeleteOnClose data;
+  struct RangeStatus {
+    fstrvec prefixVec;
     TerarkIndex::KeyStat stat;
-    std::future<Status> wait;
-    uint64_t indexFileBegin = 0;
-    uint64_t indexFileEnd = 0;
-    std::atomic<size_t> ref = {2};
-  };
-  struct KeyValueStatus {
-    valvec<char> prefix;
-    size_t numKeys = 0;
-    size_t sumKeyLen = 0;
-    Uint64Histogram value;
+    freq_hist_o1 freq;
+    Uint64Histogram valueHist;
     febitvec valueBits;
-    bitfield_array<2> type;
-    size_t split = 0;
-    uint64_t valueFileBegin = 0;
-    uint64_t valueFileEnd = 0;
     uint64_t seqType = 0;
     uint64_t zeroSeqCount = 0;
-    TempFileDeleteOnClose valueFile;
+    size_t prevSamePrefix = 0;
+    valvec<std::shared_ptr<FilePair>> fileVec;
+
+    RangeStatus(fstring key, size_t globalPrefixLen, uint64_t seqType);
+    RangeStatus() = default;
+    RangeStatus(const RangeStatus&) = default;
+    RangeStatus(RangeStatus&&) = default;
+    RangeStatus& operator = (const RangeStatus&) = default;
+    RangeStatus& operator = (RangeStatus&&) = default;
+
+    void AddKey(fstring key, size_t globalPrefixLen, size_t samePrefix, size_t valueLen, bool zeroSeq);
+    void AddValueBit();
+  };
+  struct KeyValueStatus {
+    RangeStatus status;
+    bitfield_array<2> type;
+    uint64_t indexFileBegin = 0;
+    uint64_t indexFileEnd = 0;
+    uint64_t valueFileBegin = 0;
+    uint64_t valueFileEnd = 0;
     bool isValueBuild = false;
     bool isUseDictZip = false;
-	bool isReadFromFile = true;
-    std::future<Status> wait;
-    valvec<std::unique_ptr<BuildIndexParams>> build;
+    bool isFullValue = false;
+    std::future<Status> indexWait;
+    std::future<Status> storeWait;
+    std::atomic<size_t> keyFileRef = {2};
+
+    KeyValueStatus(RangeStatus&& s);
   };
-  void AddPrevUserKey(size_t samePrefix);
-  void AddLastUserKey();
-  void OfflineZipValueData();
-  void UpdateValueLenHistogram();
+  std::shared_ptr<FilePair> NewFilePair();
+  void
+  AddPrevUserKey(size_t samePrefix, std::initializer_list<RangeStatus*> r, std::initializer_list<RangeStatus*> e);
+  void AddValueBit();
+  bool MergeRangeStatus(RangeStatus* aa, RangeStatus* bb, RangeStatus* ab);
   struct WaitHandle : boost::noncopyable {
     WaitHandle();
     WaitHandle(size_t);
     WaitHandle(WaitHandle&&);
-    WaitHandle& operator = (WaitHandle&&);
+    WaitHandle& operator=(WaitHandle&&);
     size_t myWorkMem;
     void Release(size_t size = 0);
     ~WaitHandle();
   };
   WaitHandle WaitForMemory(const char* who, size_t memorySize);
   Status EmptyTableFinish();
-  Status OfflineFinish();
   std::future<Status> Async(std::function<Status()> func);
-  void BuildIndex(BuildIndexParams& param, KeyValueStatus& kvs);
+  void BuildIndex(KeyValueStatus& kvs);
   enum BuildStoreFlag {
     BuildStoreInit = 1,
     BuildStoreSync = 2,
@@ -139,7 +149,7 @@ private:
     AutoDeleteFile tmpReorderFile;
     bitfield_array<2> type;
   };
-  void BuildReorderMap(valvec<std::unique_ptr<TerarkIndex>>& index_vec,
+  void BuildReorderMap(std::unique_ptr<TerarkIndex>& index,
                        BuildReorderParams& params,
                        KeyValueStatus& kvs,
                        fstring mmap_memory,
@@ -161,8 +171,8 @@ private:
   Status BuilderWriteValues(KeyValueStatus& kvs, std::function<void(fstring val)> write);
   void DoWriteAppend(const void* data, size_t size);
   Status WriteIndexStore(fstring indexMmap, AbstractBlobStore* store, KeyValueStatus& kvs,
-                    BlockHandle& dataBlock, size_t kvs_index,
-                    long long& t5, long long& t6, long long& t7);
+                         BlockHandle& dataBlock, size_t kvs_index,
+                         long long& t5, long long& t6, long long& t7);
   Status WriteSSTFile(long long t3, long long t4, long long td,
                       fstring tmpDictFile,
                       const std::string& dictInfo, uint64_t dicthash,
@@ -187,10 +197,11 @@ private:
   size_t nameSeed_ = 0;
   size_t keyDataSize_ = 0;
   size_t valueDataSize_ = 0;
+  size_t prevSamePrefix_ = 0;
+  std::unique_ptr<RangeStatus> r00_, r11_, r22_, r01_, r12_, r02_;
   valvec<std::unique_ptr<KeyValueStatus>> prefixBuildInfos_;
-  TerarkIndex::KeyStat *currentStat_ = nullptr;
+  std::shared_ptr<FilePair> filePair_;
   valvec<byte_t> prevUserKey_;
-  size_t prevSamePrefix_;
   TempFileDeleteOnClose tmpSentryFile_;
   TempFileDeleteOnClose tmpSampleFile_;
   AutoDeleteFile tmpIndexFile_;
@@ -206,7 +217,7 @@ private:
   std::mt19937_64 randomGenerator_;
   uint64_t sampleUpperBound_;
   size_t sampleLenSum_ = 0;
-  size_t singleIndexMemLimit = 0;
+  size_t singleIndexMaxSize_ = 0;
   WritableFileWriter* file_;
   uint64_t offset_ = 0;
   uint64_t estimateOffset_ = 0;
@@ -216,11 +227,9 @@ private:
   size_t multiValueExpandSize_ = 0;
   Status status_;
   TableProperties properties_;
-  std::unique_ptr<DictZipBlobStore::ZipBuilder> zbuilder_;
   BlockBuilder range_del_block_;
   fstrvec valueBuf_; // collect multiple values for one key
   PipelineProcessor pipeline_;
-  freq_hist_o1 key_freq_;
   freq_hist_o1 freq_;
   uint64_t next_freq_size_ = 1ULL << 20;
   bool waitInited_ = false;
@@ -232,7 +241,7 @@ private:
 #endif
 
   long long t0 = 0;
-  size_t key_prefixLen_;
+  size_t prefixLen_;
 };
 
 

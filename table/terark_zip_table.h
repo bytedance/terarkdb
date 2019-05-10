@@ -18,11 +18,6 @@
 
 #include "rocksdb/status.h"
 
-#define TerocksPrivateCode
-#if defined(TerocksPrivateCode)
-// this macro for remove private code ...
-#endif // TerocksPrivateCode
-
 namespace rocksdb {
 
 struct TerarkZipTableOptions {
@@ -66,7 +61,6 @@ struct TerarkZipTableOptions {
   unsigned char indexNestScale           = 8;
   bool          enableCompressionProbe   = true;
   bool          useSuffixArrayLocalMatch = false;
-  bool          isOfflineBuild           = false;
   bool          warmUpIndexOnOpen        = true;
   bool          warmUpValueOnOpen        = false;
   bool          disableSecondPassIter    = false;
@@ -88,20 +82,21 @@ struct TerarkZipTableOptions {
   std::string    indexType                = "Mixed_XL_256_32_FL";
   std::string    extendedConfigFile;
 
-  size_t softZipWorkingMemLimit = 16ull << 30;
-  size_t hardZipWorkingMemLimit = 32ull << 30;
-  size_t smallTaskMemory = 1200 << 20; // 1.2G
+  uint64_t softZipWorkingMemLimit = 16ull << 30;
+  uint64_t hardZipWorkingMemLimit = 32ull << 30;
+  uint64_t smallTaskMemory = 1200 << 20; // 1.2G
   // use dictZip for value when average value length >= minDictZipValueSize
   // otherwise do not use dictZip
-  size_t minDictZipValueSize = 15;
-  size_t keyPrefixLen = 0; // for IndexID
+  uint32_t minDictZipValueSize = 15;
+  uint32_t keyPrefixLen = 0; // for IndexID
 
   // should be a small value, typically 0.001
   // default is to disable indexCache, because the improvement
   // is about only 10% when set to 0.001
   double indexCacheRatio = 0;//0.001;
 
-  size_t singleIndexMemLimit = 0x1E0000000; // 7.5G
+  uint64_t singleIndexMinSize = 8ULL << 20; // 8M
+  uint64_t singleIndexMaxSize = 0x1E0000000; // 7.5G
 
   ///  < 0: do not use pread
   /// == 0: always use pread
@@ -119,29 +114,34 @@ void TerarkZipDeleteTempFiles(const std::string& tmpPath);
 /// @memBytesLimit total memory can be used for the whole process
 ///   memBytesLimit == 0 indicate all physical memory can be used
 void TerarkZipAutoConfigForBulkLoad(struct TerarkZipTableOptions&,
-                         struct DBOptions&,
-                         struct ColumnFamilyOptions&,
-                         size_t cpuNum = 0,
-                         size_t memBytesLimit = 0,
-                         size_t diskBytesLimit = 0);
+                                    struct DBOptions&,
+                                    struct ColumnFamilyOptions&,
+                                    size_t cpuNum = 0,
+                                    size_t memBytesLimit = 0,
+                                    size_t diskBytesLimit = 0);
+
 void TerarkZipAutoConfigForOnlineDB(struct TerarkZipTableOptions&,
-                         struct DBOptions&,
-                         struct ColumnFamilyOptions&,
-                         size_t cpuNum = 0,
-                         size_t memBytesLimit = 0,
-                         size_t diskBytesLimit = 0);
+                                    struct DBOptions&,
+                                    struct ColumnFamilyOptions&,
+                                    size_t cpuNum = 0,
+                                    size_t memBytesLimit = 0,
+                                    size_t diskBytesLimit = 0);
+
 void
 TerarkZipAutoConfigForOnlineDB_DBOptions(struct DBOptions& dbo, size_t cpuNum = 0);
 
 void
 TerarkZipAutoConfigForOnlineDB_CFOptions(struct TerarkZipTableOptions& tzo,
-                                    struct ColumnFamilyOptions& cfo,
-                                    size_t memBytesLimit = 0,
-                                    size_t diskBytesLimit = 0);
+                                         struct ColumnFamilyOptions& cfo,
+                                         size_t memBytesLimit = 0,
+                                         size_t diskBytesLimit = 0);
 
 bool TerarkZipConfigFromEnv(struct DBOptions&, struct ColumnFamilyOptions&);
+
 bool TerarkZipCFOptionsFromEnv(struct ColumnFamilyOptions&);
+
 void TerarkZipDBOptionsFromEnv(struct DBOptions&);
+
 bool TerarkZipIsBlackListCF(const std::string& cfname);
 
 /// will check column family black list in env
@@ -149,7 +149,7 @@ bool TerarkZipIsBlackListCF(const std::string& cfname);
 ///@param cfvec      is const but will be modified in this function
 void
 TerarkZipMultiCFOptionsFromEnv(const struct DBOptions& db_options,
-      const std::vector<struct ColumnFamilyDescriptor>& cfvec);
+                               const std::vector<struct ColumnFamilyDescriptor>& cfvec);
 
 const class WriteBatchEntryIndexFactory*
 patricia_WriteBatchEntryIndexFactory(const WriteBatchEntryIndexFactory* fallback = nullptr);
