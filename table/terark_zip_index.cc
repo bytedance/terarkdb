@@ -2712,10 +2712,10 @@ BuildUintPrefix(
     return BuildNonDescendingUintPrefix<rank_select_fewone<3>>(input, ks, info);
   case UintPrefixBuildInfo::non_desc_few_one_4:
     assert(ks.maxKeyLen > commonPrefixLen(ks.minKey, ks.maxKey) + info.key_length);
-    return BuildNonDescendingUintPrefix<rank_select_fewone<5>>(input, ks, info);
+    return BuildNonDescendingUintPrefix<rank_select_fewone<4>>(input, ks, info);
   case UintPrefixBuildInfo::non_desc_few_one_5:
     assert(ks.maxKeyLen > commonPrefixLen(ks.minKey, ks.maxKey) + info.key_length);
-    return BuildNonDescendingUintPrefix<rank_select_fewone<6>>(input, ks, info);
+    return BuildNonDescendingUintPrefix<rank_select_fewone<5>>(input, ks, info);
   case UintPrefixBuildInfo::non_desc_few_one_6:
     assert(ks.maxKeyLen > commonPrefixLen(ks.minKey, ks.maxKey) + info.key_length);
     return BuildNonDescendingUintPrefix<rank_select_fewone<6>>(input, ks, info);
