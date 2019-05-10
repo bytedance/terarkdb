@@ -11,7 +11,7 @@
 #ifndef TERARK_ZIP_TABLE_READER_H_
 #define TERARK_ZIP_TABLE_READER_H_
 
- // project headers
+// project headers
 #include "terark_zip_table.h"
 #include "terark_zip_internal.h"
 #include "terark_zip_index.h"
@@ -31,11 +31,11 @@
 namespace rocksdb {
 
 Status ReadMetaBlockAdapte(class RandomAccessFileReader* file,
-  uint64_t file_size,
-  uint64_t table_magic_number,
-  const struct ImmutableCFOptions& ioptions,
-  const std::string& meta_block_name,
-  struct BlockContents* contents);
+                           uint64_t file_size,
+                           uint64_t table_magic_number,
+                           const struct ImmutableCFOptions& ioptions,
+                           const std::string& meta_block_name,
+                           struct BlockContents* contents);
 
 class TerarkZipTableReaderBase : public TableReader, boost::noncopyable {
 
@@ -50,7 +50,7 @@ protected:
 
 public:
   virtual InternalIterator*
-    NewRangeTombstoneIterator(const ReadOptions& read_options) override;
+  NewRangeTombstoneIterator(const ReadOptions& read_options) override;
 };
 
 class TerarkEmptyTableReader : public TerarkZipTableReaderBase {
@@ -76,12 +76,12 @@ class TerarkEmptyTableReader : public TerarkZipTableReaderBase {
   const TerarkZipTableFactory* table_factory_;
   std::shared_ptr<const TableProperties> table_properties_;
   SequenceNumber global_seqno_;
-  Slice  file_data_;
+  Slice file_data_;
   unique_ptr<RandomAccessFileReader> file_;
 public:
   InternalIterator*
-    NewIterator(const ReadOptions&, const SliceTransform* prefix_extractor,
-                Arena* a, bool skip_filters, bool for_compaction) override {
+  NewIterator(const ReadOptions&, const SliceTransform* prefix_extractor,
+              Arena* a, bool skip_filters, bool for_compaction) override {
     return a ? new(a->AllocateAligned(sizeof(Iter)))Iter() : new Iter();
   }
   void Prepare(const Slice&) override {}
@@ -90,22 +90,20 @@ public:
     return Status::OK();
   }
   void RangeScan(const Slice* begin, const SliceTransform* prefix_extractor, void* arg,
-                 bool(*callback_func)(void* arg, const Slice& ikey,
-                                      const Slice& value)) override {
+                 bool(* callback_func)(void* arg, const Slice& ikey,
+                                       const Slice& value)) override {
     // do nothing
   }
   size_t ApproximateMemoryUsage() const override { return 100; }
   uint64_t ApproximateOffsetOf(const Slice&) override { return 0; }
   void SetupForCompaction() override {}
   std::shared_ptr<const TableProperties>
-    GetTableProperties() const override { return table_properties_; }
+  GetTableProperties() const override { return table_properties_; }
 
   virtual ~TerarkEmptyTableReader() {}
   TerarkEmptyTableReader(const TerarkZipTableFactory* table_factory,
-    const TableReaderOptions& o)
-    : table_reader_options_(o)
-    , table_factory_(table_factory)
-    , global_seqno_(kDisableGlobalSequenceNumber) {
+                         const TableReaderOptions& o)
+    : table_reader_options_(o), table_factory_(table_factory), global_seqno_(kDisableGlobalSequenceNumber) {
   }
   Status Open(RandomAccessFileReader* file, uint64_t file_size);
 private:
@@ -123,11 +121,10 @@ struct TerarkZipSubReader {
   size_t rawReaderOffset_;
   size_t rawReaderSize_;
   size_t estimateUnzipCap_;
-  bool   storeUsePread_;
-  intptr_t   storeFD_;
+  bool storeUsePread_;
+  intptr_t storeFD_;
   RandomAccessFile* storeFileObj_;
   size_t storeOffset_;
-  fstring prefix_;
   unique_ptr<TerarkIndex> index_;
   unique_ptr<terark::AbstractBlobStore> store_;
   bitfield_array<2> type_;
@@ -146,7 +143,7 @@ struct TerarkZipSubReader {
   void GetRecordAppend(size_t recId, terark::BlobStore::CacheOffsets*) const;
 
   Status Get(SequenceNumber, const ReadOptions&, const Slice& key,
-    GetContext*, int flag) const;
+             GetContext*, int flag) const;
   size_t DictRank(fstring key) const;
 
   ~TerarkZipSubReader();
@@ -160,8 +157,8 @@ struct TerarkZipSubReader {
 class TerarkZipTableReader : public TerarkZipTableReaderBase {
 public:
   InternalIterator*
-    NewIterator(const ReadOptions&, const SliceTransform* prefix_extractor,
-                Arena* a, bool skip_filters, bool for_compaction) override;
+  NewIterator(const ReadOptions&, const SliceTransform* prefix_extractor,
+              Arena* a, bool skip_filters, bool for_compaction) override;
 
   template<bool reverse, bool ZipOffset>
   InternalIterator* NewIteratorImp(const ReadOptions&, Arena* a);
@@ -172,8 +169,8 @@ public:
              const SliceTransform* prefix_extractor, bool skip_filters) override;
 
   void RangeScan(const Slice* begin, const SliceTransform* prefix_extractor, void* arg,
-                 bool(*callback_func)(void* arg, const Slice& ikey,
-                                      const Slice& value)) override;
+                 bool(* callback_func)(void* arg, const Slice& ikey,
+                                       const Slice& value)) override;
 
   uint64_t ApproximateOffsetOf_old(const Slice& key);
   uint64_t ApproximateOffsetOf_new(const Slice& key);
@@ -181,14 +178,14 @@ public:
   void SetupForCompaction() override {}
 
   std::shared_ptr<const TableProperties>
-    GetTableProperties() const override { return table_properties_; }
+  GetTableProperties() const override { return table_properties_; }
 
   size_t ApproximateMemoryUsage() const override { return file_data_.size(); }
 
   virtual ~TerarkZipTableReader();
   TerarkZipTableReader(const TerarkZipTableFactory* table_factory,
-    const TableReaderOptions&,
-    const TerarkZipTableOptions&);
+                       const TableReaderOptions&,
+                       const TerarkZipTableOptions&);
   Status Open(RandomAccessFileReader* file, uint64_t file_size);
 
 private:
@@ -201,7 +198,7 @@ private:
 
   TerarkZipSubReader subReader_;
   static const size_t kNumInternalBytes = 8;
-  Slice  file_data_;
+  Slice file_data_;
   unique_ptr<RandomAccessFileReader> file_;
   valvec<byte_t> dict_;
   const TableReaderOptions table_reader_options_;
@@ -221,8 +218,8 @@ class TerarkZipTableMultiReader : public TerarkZipTableReaderBase {
 public:
 
   InternalIterator*
-    NewIterator(const ReadOptions&, const SliceTransform* prefix_extractor,
-                Arena* a, bool skip_filters, bool for_compaction) override;
+  NewIterator(const ReadOptions&, const SliceTransform* prefix_extractor,
+              Arena* a, bool skip_filters, bool for_compaction) override;
 
   template<bool reverse, bool ZipOffset>
   InternalIterator* NewIteratorImp(const ReadOptions&, Arena* a);
@@ -233,10 +230,10 @@ public:
 
   Status Get(const ReadOptions& readOptions, const Slice& key, GetContext* get_context,
              const SliceTransform* prefix_extractor, bool skip_filters) override;
-  
+
   void RangeScan(const Slice* begin, const SliceTransform* prefix_extractor, void* arg,
-                 bool(*callback_func)(void* arg, const Slice& ikey,
-                                      const Slice& value)) override;
+                 bool(* callback_func)(void* arg, const Slice& ikey,
+                                       const Slice& value)) override;
 
   uint64_t ApproximateOffsetOf_old(const Slice& key);
   uint64_t ApproximateOffsetOf_new(const Slice& key);
@@ -244,14 +241,14 @@ public:
   void SetupForCompaction() override {}
 
   std::shared_ptr<const TableProperties>
-    GetTableProperties() const override { return table_properties_; }
+  GetTableProperties() const override { return table_properties_; }
 
   size_t ApproximateMemoryUsage() const override { return file_data_.size(); }
 
   virtual ~TerarkZipTableMultiReader();
   TerarkZipTableMultiReader(const TerarkZipTableFactory* table_factory,
-    const TableReaderOptions&,
-    const TerarkZipTableOptions&);
+                            const TableReaderOptions&,
+                            const TerarkZipTableOptions&);
   Status Open(RandomAccessFileReader* file, uint64_t file_size);
 
   class SubIndex {
@@ -259,9 +256,7 @@ public:
     LruReadonlyCache* cache_ = nullptr;
     intptr_t cache_fi_ = -1;
     size_t partCount_;
-    size_t prefixLen_;
-    size_t alignedPrefixLen_;
-    valvec<byte_t> prefixSet_;
+    fstrvec bounds_;
     valvec<TerarkZipSubReader> subReader_;
     bool hasAnyZipOffset_;
 
@@ -272,14 +267,12 @@ public:
 
     const TerarkZipSubReader* (SubIndex::*LowerBoundSubReaderFunc)(fstring) const;
 
-    const TerarkZipSubReader* LowerBoundSubReaderU64Sequential(fstring key) const;
-    const TerarkZipSubReader* LowerBoundSubReaderU64Binary(fstring key) const;
-    const TerarkZipSubReader* LowerBoundSubReaderU64BinaryReverse(fstring key) const;
     const TerarkZipSubReader* LowerBoundSubReaderBytewise(fstring key) const;
     const TerarkZipSubReader* LowerBoundSubReaderBytewiseReverse(fstring key) const;
 
   public:
     ~SubIndex();
+
     Status Init(
       fstring offsetMemory,
       const byte_t* baseAddress,
@@ -290,7 +283,6 @@ public:
       bool warmUpIndexOnOpen,
       bool reverse);
 
-    size_t GetPrefixLen() const;
     size_t GetSubCount() const;
     const TerarkZipSubReader* GetSubReader(size_t i) const;
     const TerarkZipSubReader* LowerBoundSubReader(fstring key) const;
@@ -307,7 +299,7 @@ private:
 
   SubIndex subIndex_;
   static const size_t kNumInternalBytes = 8;
-  Slice  file_data_;
+  Slice file_data_;
   unique_ptr<RandomAccessFileReader> file_;
   valvec<byte_t> dict_;
   const TableReaderOptions table_reader_options_;
