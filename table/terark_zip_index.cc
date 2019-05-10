@@ -3236,6 +3236,7 @@ UintPrefixBuildInfo TerarkIndex::GetUintPrefixBuildInfo(const TerarkIndex::KeySt
 
 
 void TerarkIndex::TerarkIndexDebugBuilder::Init(size_t count) {
+  freq.clear();
   stat.~KeyStat();
   ::new(&stat) KeyStat;
   data.erase_all();
@@ -3245,6 +3246,7 @@ void TerarkIndex::TerarkIndexDebugBuilder::Init(size_t count) {
 }
 
 void TerarkIndex::TerarkIndexDebugBuilder::Add(fstring key) {
+  freq.add_record(key);
   auto processKey = [&](fstring key, size_t samePrefix) {
     size_t prefixSize = std::min(key.size(), std::max(samePrefix, prevSamePrefix) + 1);
     size_t suffixSize = key.size() - prefixSize;
@@ -3285,6 +3287,8 @@ void TerarkIndex::TerarkIndexDebugBuilder::Add(fstring key) {
 }
 
 TerarkKeyReader* TerarkIndex::TerarkIndexDebugBuilder::Finish(KeyStat* output) {
+  freq.finish();
+  stat.entropyLen = freq_hist_o1::estimate_size(freq.histogram());
   *output = std::move(stat);
   class TerarkKeyDebugReader : public TerarkKeyReader {
   public:

@@ -2,6 +2,7 @@
 
 #include <terark/fstring.hpp>
 #include <terark/histogram.hpp>
+#include <terark/entropy/entropy_base.hpp>
 #include <terark/valvec.hpp>
 #include <terark/util/refcount.hpp>
 #include <terark/int_vector.hpp>
@@ -19,6 +20,7 @@ class ZReorderMap;
 namespace rocksdb {
 
 using terark::fstring;
+using terark::freq_hist_o1;
 using terark::valvec;
 using terark::byte_t;
 using terark::NativeDataInput;
@@ -111,6 +113,7 @@ public:
     } type;
   };
   class TerarkIndexDebugBuilder {
+    freq_hist_o1 freq;
     KeyStat stat;
     fstrvec data;
     size_t keyCount = 0;
