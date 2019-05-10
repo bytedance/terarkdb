@@ -38,7 +38,7 @@ static bool g_indexEnableUintIndex = getEnvBool("TerarkZipTable_enableUintIndex"
 static bool g_indexEnableFewZero = getEnvBool("TerarkZipTable_enableFewZero", true);
 static bool g_indexEnableNonDescUint = getEnvBool("TerarkZipTable_enableNonDescUint", true);
 static bool g_indexEnableDynamicSuffix = getEnvBool("TerarkZipTable_enableDynamicSuffix", true);
-static bool g_indexEnableEntropySuffix = getEnvBool("TerarkZipTable_enableEntropySuffix", false);
+static bool g_indexEnableEntropySuffix = getEnvBool("TerarkZipTable_enableEntropySuffix", true);
 static bool g_indexEnableDictZipSuffix = getEnvBool("TerarkZipTable_enableDictZipSuffix", true);
 
 template<class RankSelect> struct RankSelectNeedHint : public std::false_type {};
@@ -753,17 +753,17 @@ public:
     return static_cast<const Suffix&>(suffix_);
   }
   typename Prefix::IteratorStorage* prefix_storage() {
-    return (typename Prefix::IteratorStorage*) prefix_storage_;
+    return (typename Prefix::IteratorStorage*)prefix_storage_;
   }
   const typename Prefix::IteratorStorage* prefix_storage() const {
-    return (typename Prefix::IteratorStorage*) prefix_storage_;
+    return (typename Prefix::IteratorStorage*)prefix_storage_;
   }
 
   typename Suffix::IteratorStorage* suffix_storage() {
-    return (typename Suffix::IteratorStorage*) suffix_storage_;
+    return (typename Suffix::IteratorStorage*)suffix_storage_;
   }
   const typename Suffix::IteratorStorage* suffix_storage() const {
-    return (typename Suffix::IteratorStorage*) suffix_storage_;
+    return (typename Suffix::IteratorStorage*)suffix_storage_;
   }
 
 private:
@@ -1056,18 +1056,18 @@ public:
     size_t t = prefix_.TotalKeySize() + suffix_.TotalKeySize() + prefix_.KeyCount() * common_.size();
     size_t index_size = f ? f->footer_size + align_up(f->common_size, 8) + f->prefix_size + f->suffix_size : 0;
     snprintf(
-      buffer, size,
-      "    total_key_len = %zd  common_size = %zd  entry_cnt = %zd\n"
-      "    prefix: raw-key =%9.4f GB  zip-key =%9.4f GB  avg-key =%7.2f  avg-zkey =%7.2f\n"
-      "    suffix: raw-key =%9.4f GB  zip-key =%9.4f GB  avg-key =%7.2f  avg-zkey =%7.2f\n"
-      "    index : raw-key =%9.4f GB  zip-key =%9.4f GB  avg-key =%7.2f  avg-zkey =%7.2f\n"
-      , prefix_.KeyCount() * common_.size() + prefix_.TotalKeySize() + suffix_.TotalKeySize()
-      , common_.size(), prefix_.KeyCount()
-      , prefix_.TotalKeySize() / r, (f ? f->prefix_size : 0) / r
-      , prefix_.TotalKeySize() / c, (f ? f->prefix_size : 0) / c
-      , suffix_.TotalKeySize() / r, (f ? f->suffix_size : 0) / r
-      , suffix_.TotalKeySize() / c, (f ? f->suffix_size : 0) / c
-      , t / r, index_size / r , t / c, index_size / c
+        buffer, size,
+        "    total_key_len = %zd  common_size = %zd  entry_cnt = %zd\n"
+        "    prefix: raw-key =%9.4f GB  zip-key =%9.4f GB  avg-key =%7.2f  avg-zkey =%7.2f\n"
+        "    suffix: raw-key =%9.4f GB  zip-key =%9.4f GB  avg-key =%7.2f  avg-zkey =%7.2f\n"
+        "    index : raw-key =%9.4f GB  zip-key =%9.4f GB  avg-key =%7.2f  avg-zkey =%7.2f\n"
+        , prefix_.KeyCount() * common_.size() + prefix_.TotalKeySize() + suffix_.TotalKeySize()
+        , common_.size(), prefix_.KeyCount()
+        , prefix_.TotalKeySize() / r, (f ? f->prefix_size : 0) / r
+        , prefix_.TotalKeySize() / c, (f ? f->prefix_size : 0) / c
+        , suffix_.TotalKeySize() / r, (f ? f->suffix_size : 0) / r
+        , suffix_.TotalKeySize() / c, (f ? f->suffix_size : 0) / c
+        , t / r, index_size / r , t / c, index_size / c
     );
     return buffer;
   }
@@ -1635,7 +1635,7 @@ struct IndexNonDescendingUintPrefix
     key_length = header->key_length;
     min_value = header->min_value;
     max_value = header->max_value;
-    rank_select.risk_mmap_from((byte_t*) mem.data() + sizeof(IndexUintPrefixHeader), header->rank_select_size);
+    rank_select.risk_mmap_from((byte_t*)mem.data() + sizeof(IndexUintPrefixHeader), header->rank_select_size);
     flags.is_user_mem = true;
     return true;
   }
@@ -1701,7 +1701,7 @@ struct IndexNonDescendingUintPrefix
 
 template<class NestLoudsTrieDAWG>
 class IndexNestLoudsTriePrefixIterator {
- protected:
+protected:
   typename NestLoudsTrieDAWG::Iterator iter_;
   bool Done(size_t& id, bool ok) {
     auto dawg = static_cast<const NestLoudsTrieDAWG*>(iter_.get_dfa());
@@ -1713,7 +1713,7 @@ class IndexNestLoudsTriePrefixIterator {
     id = ok ? dawg->state_to_dict_rank(iter_.word_state()) : size_t(-1);
     return ok;
   }
- public:
+public:
   IndexNestLoudsTriePrefixIterator(const NestLoudsTrieDAWG* trie) : iter_(trie) {}
 
   fstring GetKey() const { return iter_.word(); }
@@ -1772,7 +1772,7 @@ struct IndexNestLoudsTriePrefix
     delete other;
   }
   IndexNestLoudsTriePrefix(NestLoudsTrieDAWG* trie, bool bfs_sufflx)
-    : trie_(trie) {
+      : trie_(trie) {
     flags.is_bfs_suffix = bfs_sufflx;
   }
   IndexNestLoudsTriePrefix& operator = (const IndexNestLoudsTriePrefix&) = delete;
@@ -2104,13 +2104,13 @@ struct IndexFixedStringSuffix
     str_pool_.m_fixlen = header.fixlen;
     str_pool_.m_size = header.size;
     assert(mem.size() - sizeof header >= header.fixlen * header.size);
-    str_pool_.m_strpool.risk_set_data((byte_t*) mem.data() + sizeof header, header.fixlen * header.size);
+    str_pool_.m_strpool.risk_set_data((byte_t*)mem.data() + sizeof header, header.fixlen * header.size);
     flags.is_user_mem = true;
     return true;
   }
   void Save(std::function<void(const void*, size_t)> append) const override {
     Header header = {
-      str_pool_.m_fixlen, str_pool_.m_size
+        str_pool_.m_fixlen, str_pool_.m_size
     };
     append(&header, sizeof header);
     append(str_pool_.data(), str_pool_.mem_size());
@@ -2121,7 +2121,7 @@ struct IndexFixedStringSuffix
     FunctionAdaptBuffer adaptBuffer(append);
     OutputBuffer buffer(&adaptBuffer);
     Header header = {
-      str_pool_.m_fixlen, str_pool_.m_size
+        str_pool_.m_fixlen, str_pool_.m_size
     };
     buffer.ensureWrite(&header, sizeof header);
     for (assert(newToOld.size() == str_pool_.size()); !newToOld.eof(); ++newToOld) {
@@ -2136,7 +2136,7 @@ struct IndexFixedStringSuffix
 
 struct EntropySuffixIteratorStorage {
   EntropyContext ctx;
-  valvec <byte_t> key;
+  valvec<byte_t> key;
   size_t blockId = size_t(-1);
   size_t offsets[129];
 
@@ -2170,7 +2170,7 @@ struct IndexEntropySuffix
   IndexEntropySuffix& operator = (const IndexEntropySuffix&) = delete;
   IndexEntropySuffix& operator = (IndexEntropySuffix&& other) {
     offsets_.swap(other.offsets_);
-    memcpy(&decoder_, &other.decoder_, sizeof decoder_);
+    decoder_.swap(other.decoder_);
     data_.swap(other.data_);
     table_.swap(other.table_);
     raw_size_ = other.raw_size_;
@@ -2186,18 +2186,18 @@ struct IndexEntropySuffix
     }
   }
 
-  struct Header {
+  struct Footer {
     uint64_t offset_size;
     uint64_t table_size;
     uint64_t data_size;
     uint64_t raw_size;
 
     size_t size() const {
-      return sizeof(Header) + offset_size + align_up(table_size + data_size, 8);
+      return align_up(data_size + table_size, 8) + offset_size + sizeof(Footer);
     }
   };
   SortedUintVec offsets_;
-  Huffman::decoder_o1 decoder_;
+  std::unique_ptr<Huffman::decoder_o1> decoder_;
   valvec<byte_t> data_;
   valvec<byte_t> table_;
   uint64_t raw_size_;
@@ -2213,19 +2213,21 @@ struct IndexEntropySuffix
       suffix_id = num_records - suffix_id - suffix_count;
       size_t end = suffix_id + suffix_count;
       suffix_id = LowerBoundImpl(suffix_id, end, target, &iter);
+      fstring key = iter.key;
       iter.Release(ctx);
       if (suffix_id == end) {
         return {num_records - suffix_id - 1, {}};
       }
-      return {num_records - suffix_id - 1, iter.key};
+      return {num_records - suffix_id - 1, key};
     } else {
       size_t end = suffix_id + suffix_count;
       suffix_id = LowerBoundImpl(suffix_id, end, target, &iter);
+      fstring key = iter.key;
       iter.Release(ctx);
       if (suffix_id == end) {
         return {suffix_id, {}};
       }
-      return {suffix_id, iter.key};
+      return {suffix_id, key};
     }
   }
   void AppendKey(size_t suffix_id, valvec<byte_t>* buffer, Context* ctx) const {
@@ -2240,7 +2242,7 @@ struct IndexEntropySuffix
     EntropyBits bits = {
         (byte_t*)data_.data(), BegEnd[0], BegEnd[1] - BegEnd[0]
     };
-    bool ok = decoder_.bitwise_decode_x1(bits, &key, &ectx);
+    bool ok = decoder_->bitwise_decode_x1(bits, &key, &ectx);
     assert(ok); (void)ok;
     ectx.buffer.swap(ctx->buf0);
     buffer->append(key.data(), key.size());
@@ -2272,24 +2274,24 @@ struct IndexEntropySuffix
   }
 
   bool Load(fstring mem) override {
-    Header header;
-    if (mem.size() < sizeof header) {
+    Footer footer;
+    if (mem.size() < sizeof footer) {
       return false;
     }
-    memcpy(&header, mem.data() + mem.size() - sizeof header, sizeof header);
-    if (mem.size() < header.size()) {
+    memcpy(&footer, mem.data() + mem.size() - sizeof footer, sizeof footer);
+    if (mem.size() < footer.size()) {
       return false;
     }
-    raw_size_ = header.raw_size;
-    byte_t* ptr = (byte_t*)mem.data() + mem.size() - sizeof header;
-    ptr -= header.offset_size;
-    offsets_.risk_set_data(ptr, header.offset_size);
-    ptr -= (8 - (header.data_size + header.table_size) % 8) % 8;
-    table_.risk_set_data(ptr -= header.table_size, header.table_size);
-    data_.risk_set_data(ptr -= header.data_size, header.data_size);
+    raw_size_ = footer.raw_size;
+    byte_t* ptr = (byte_t*)mem.data() + mem.size() - sizeof footer;
+    ptr -= footer.offset_size;
+    offsets_.risk_set_data(ptr, footer.offset_size);
+    ptr -= (8 - (footer.data_size + footer.table_size) % 8) % 8;
+    table_.risk_set_data(ptr -= footer.table_size, footer.table_size);
+    data_.risk_set_data(ptr -= footer.data_size, footer.data_size);
     assert(ptr == (byte_t*)mem.data());
     size_t table_size;
-    decoder_.init(table_, &table_size);
+    decoder_.reset(new Huffman::decoder_o1(table_, &table_size));
     assert(table_size == table_.size());
     flags.is_user_mem = true;
     return true;
@@ -2299,10 +2301,10 @@ struct IndexEntropySuffix
     append(table_.data(), table_.size());
     Padzero<8>(append, table_.size() + data_.size());
     append(offsets_.data(), offsets_.mem_size());
-    Header header = {
+    Footer footer = {
         offsets_.mem_size(), table_.size(), data_.size(), raw_size_
     };
-    append(&header, sizeof header);
+    append(&footer, sizeof footer);
   }
   void
   Reorder(ZReorderMap& newToOld, std::function<void(const void*, size_t)> append, fstring tmpFile) const override {
@@ -2320,34 +2322,26 @@ struct IndexEntropySuffix
       assert(oldId < offsets_.size() - 1);
       size_t BegEnd[2];
       offsets_.get2(oldId, BegEnd);
-      EntropyBitsReader reader(EntropyBits{(byte_t*)data_.data(), BegEnd[0], BegEnd[1] - BegEnd[0]});
-      builder->push_back(bit_count += reader.size());
-      while (reader.size() >= 64) {
-        uint64_t bits = 0;
-        size_t bit_shift = 0;
-        reader.read(64, &bits, &bit_shift);
-        assert(bit_shift == 64);
-        writer.write(bits, 64);
-      }
-      if (reader.size() > 0) {
-        uint64_t bits = 0;
-        size_t bit_shift = 0;
-        reader.read(reader.size(), &bits, &bit_shift);
-        assert(reader.size() == 0);
-        writer.write(bits, bit_shift);
-      }
+      EntropyBits bits = {(byte_t*)data_.data(), BegEnd[0], BegEnd[1] - BegEnd[0]};
+      builder->push_back(bit_count += bits.size);
+      writer.write(bits);
     }
     auto bits = writer.finish();
     assert(bits.skip == 0);
     size_t data_size = (bits.size + 7) / 8;
     buffer.ensureWrite(table_.data(), table_.size());
     PadzeroForAlign<8>(buffer, data_size + table_.size());
-    size_t offset_size = builder->finish(nullptr).mem_size;
+    builder->finish(nullptr);
     builder.reset();
-    Header header = {
+    MmapWholeFile mmapOffset(tmpFile);
+    size_t offset_size = mmapOffset.size;
+    buffer.ensureWrite(mmapOffset.base, mmapOffset.size);
+    MmapWholeFile().swap(mmapOffset);
+    ::remove(tmpFile.c_str());
+    Footer footer = {
         offset_size, table_.size(), data_size, raw_size_
     };
-    append(&header, sizeof header);
+    buffer.ensureWrite(&footer, sizeof footer);
   }
 
   void UnzipRecord(size_t rec_id, IteratorStorage* iter) const {
@@ -2365,13 +2359,13 @@ struct IndexEntropySuffix
     EntropyBits bits = {
         (byte_t*)data_.data(), BegEnd[0], BegEnd[1] - BegEnd[0]
     };
-    bool ok = decoder_.bitwise_decode_x1(bits, &iter->key, &iter->ctx);
+    bool ok = decoder_->bitwise_decode_x1(bits, &iter->key, &iter->ctx);
     assert(ok); (void)ok;
   }
   size_t LowerBoundImpl(size_t lo, size_t hi, fstring target, IteratorStorage* iter) const {
     assert(lo <= hi);
     assert(hi <= offsets_.size() - 1);
-    struct {
+    struct Ptr {
       fstring operator[](ptrdiff_t i) {
         this_->UnzipRecord(i, iter);
         last_ = i;
@@ -2380,10 +2374,10 @@ struct IndexEntropySuffix
       const IndexEntropySuffix* this_;
       IteratorStorage* iter;
       size_t last_;
-    } it{this, iter, hi};
-    size_t rec_id = lower_bound_n(it, lo, hi, target);
-    if (rec_id != it.last_) {
-      it[rec_id];
+    } ptr = {this, iter, hi};
+    size_t rec_id = lower_bound_n<Ptr&>(ptr, lo, hi, target);
+    if (rec_id != hi && rec_id != ptr.last_) {
+      ptr[rec_id];
     }
     return rec_id;
   }
@@ -2488,7 +2482,7 @@ struct IndexBlobStoreSuffix
 
   bool Load(fstring mem) override {
     std::unique_ptr<BlobStore> base_store(
-      AbstractBlobStore::load_from_user_memory(mem, AbstractBlobStore::Dictionary()));
+        AbstractBlobStore::load_from_user_memory(mem, AbstractBlobStore::Dictionary()));
     auto store = dynamic_cast<BlobStoreType*>(base_store.get());
     if (store == nullptr) {
       return false;
@@ -2526,20 +2520,20 @@ void AscendingUintPrefixFillRankSelect(
 
 template<class InputBufferType>
 void AscendingUintPrefixFillRankSelect(
-  const UintPrefixBuildInfo& info,
-  const TerarkIndex::KeyStat& ks,
-  rank_select_allone& rs, InputBufferType& input) {
+    const UintPrefixBuildInfo& info,
+    const TerarkIndex::KeyStat& ks,
+    rank_select_allone& rs, InputBufferType& input) {
   assert(info.max_value - info.min_value < std::numeric_limits<uint64_t>::max());
   rs.resize(info.max_value - info.min_value + 1);
 }
 
 template<size_t P, size_t W, class InputBufferType>
 void AscendingUintPrefixFillRankSelect(
-  const UintPrefixBuildInfo& info,
-  const TerarkIndex::KeyStat& ks,
-  rank_select_few<P, W>& rs, InputBufferType& input) {
+    const UintPrefixBuildInfo& info,
+    const TerarkIndex::KeyStat& ks,
+    rank_select_few<P, W>& rs, InputBufferType& input) {
   assert(g_indexEnableFewZero);
-  rank_select_few_builder<P, W> builder(info.bit_count0, info.bit_count1, ks.minKey > ks.maxKey);
+  rank_select_few_builder <P, W> builder(info.bit_count0, info.bit_count1, ks.minKey > ks.maxKey);
   for (size_t seq_id = 0; seq_id < info.key_count; ++seq_id) {
     auto key = input.next();
     assert(key.size() == info.key_length);
@@ -2552,9 +2546,9 @@ void AscendingUintPrefixFillRankSelect(
 template<class RankSelect, class InputBufferType>
 PrefixBase*
 BuildAscendingUintPrefix(
-  InputBufferType& input,
-  const TerarkIndex::KeyStat& ks,
-  const UintPrefixBuildInfo& info) {
+    InputBufferType& input,
+    const TerarkIndex::KeyStat& ks,
+    const UintPrefixBuildInfo& info) {
   RankSelect rank_select;
   assert(info.min_value <= info.max_value);
   AscendingUintPrefixFillRankSelect(info, ks, rank_select, input);
@@ -2568,9 +2562,9 @@ BuildAscendingUintPrefix(
 
 template<class RankSelect, class InputBufferType>
 void NonDescendingUintPrefixFillRankSelect(
-  const UintPrefixBuildInfo& info,
-  const TerarkIndex::KeyStat& ks,
-  RankSelect& rs, InputBufferType& input) {
+    const UintPrefixBuildInfo& info,
+    const TerarkIndex::KeyStat& ks,
+    RankSelect& rs, InputBufferType& input) {
   size_t bit_count = info.bit_count0 + info.bit_count1;
   assert(info.bit_count0 + info.bit_count1 < std::numeric_limits<uint64_t>::max());
   rs.resize(bit_count);
@@ -2606,9 +2600,9 @@ void NonDescendingUintPrefixFillRankSelect(
 
 template<size_t P, size_t W, class InputBufferType>
 void NonDescendingUintPrefixFillRankSelect(
-  const UintPrefixBuildInfo& info,
-  const TerarkIndex::KeyStat& ks,
-  rank_select_few<P, W>& rs, InputBufferType& input) {
+    const UintPrefixBuildInfo& info,
+    const TerarkIndex::KeyStat& ks,
+    rank_select_few<P, W>& rs, InputBufferType& input) {
   assert(g_indexEnableFewZero);
   bool isReverse = ks.minKey > ks.maxKey;
   rank_select_few_builder<P, W> builder(info.bit_count0, info.bit_count1, isReverse);
@@ -2646,9 +2640,9 @@ void NonDescendingUintPrefixFillRankSelect(
 template<class RankSelect, class InputBufferType>
 PrefixBase*
 BuildNonDescendingUintPrefix(
-  InputBufferType& input,
-  const TerarkIndex::KeyStat& ks,
-  const UintPrefixBuildInfo& info) {
+    InputBufferType& input,
+    const TerarkIndex::KeyStat& ks,
+    const UintPrefixBuildInfo& info) {
   assert(g_indexEnableNonDescUint);
   RankSelect rank_select;
   assert(info.min_value <= info.max_value);
@@ -2664,9 +2658,9 @@ BuildNonDescendingUintPrefix(
 template<class InputBufferType>
 PrefixBase*
 BuildUintPrefix(
-  InputBufferType& input,
-  const TerarkIndex::KeyStat& ks,
-  const UintPrefixBuildInfo& info) {
+    InputBufferType& input,
+    const TerarkIndex::KeyStat& ks,
+    const UintPrefixBuildInfo& info) {
   assert(g_indexEnableUintIndex);
   input.rewind();
   switch (info.type) {
@@ -2739,9 +2733,9 @@ BuildUintPrefix(
 }
 
 void NestLoudsTriePrefixSetConfig(
-  NestLoudsTrieConfig& conf,
-  size_t memSize, double avgSize,
-  const TerarkZipTableOptions& tzopt) {
+    NestLoudsTrieConfig& conf,
+    size_t memSize, double avgSize,
+    const TerarkZipTableOptions& tzopt) {
   conf.nestLevel = tzopt.indexNestLevel;
   conf.nestScale = tzopt.indexNestScale;
   if (tzopt.indexTempLevel >= 0 && tzopt.indexTempLevel < 5) {
@@ -2885,10 +2879,10 @@ IndexFillKeyVector(InputBufferType& input, SortedStrVec& keyVec, size_t numKeys,
 template<class InputBufferType>
 PrefixBase*
 BuildNestLoudsTriePrefix(
-  InputBufferType& input,
-  const TerarkZipTableOptions& tzopt,
-  size_t numKeys, size_t sumKeyLen,
-  bool isReverse, bool isFixedLen) {
+    InputBufferType& input,
+    const TerarkZipTableOptions& tzopt,
+    size_t numKeys, size_t sumKeyLen,
+    bool isReverse, bool isFixedLen) {
   input.rewind();
   NestLoudsTrieConfig cfg;
   if (isFixedLen) {
@@ -2909,16 +2903,16 @@ SuffixBase*
 BuildEmptySuffix() {
   return new IndexEmptySuffix();
 }
-  
+
 bool UseEntropySuffix(size_t numKeys, size_t sumKeyLen, double zipRatio) {
-  return g_indexEnableEntropySuffix && numKeys > 4096 && sumKeyLen * zipRatio + numKeys + 1024 < sumKeyLen + numKeys;
+  return g_indexEnableEntropySuffix && numKeys > 4096 && sumKeyLen * zipRatio + 1024 < sumKeyLen;
 }
 
 template<class InputBufferType>
 SuffixBase*
 BuildFixedStringSuffix(
-  InputBufferType& input,
-  size_t numKeys, size_t sumKeyLen, size_t fixedLen, bool isReverse) {
+    InputBufferType& input,
+    size_t numKeys, size_t sumKeyLen, size_t fixedLen, bool isReverse) {
   assert(g_indexEnableCompositeIndex);
   input.rewind();
   FixedLenStrVec keyVec(fixedLen);
@@ -2937,7 +2931,7 @@ BuildEntropySuffix(
   assert(g_indexEnableCompositeIndex);
   assert(g_indexEnableEntropySuffix);
   input.rewind();
-  std::unique_ptr <freq_hist_o1> freq(new freq_hist_o1);
+  std::unique_ptr<freq_hist_o1> freq(new freq_hist_o1);
   for (size_t i = 0; i < numKeys; ++i) {
     freq->add_record(input.next());
   }
@@ -2945,7 +2939,7 @@ BuildEntropySuffix(
   assert(sumKeyLen == freq->histogram().o0_size);
   size_t estimate_size = freq_hist_o1::estimate_size(freq->histogram());
   freq->normalise(Huffman::NORMALISE);
-  std::unique_ptr <Huffman::encoder_o1> encoder(new Huffman::encoder_o1(freq->histogram()));
+  std::unique_ptr<Huffman::encoder_o1> encoder(new Huffman::encoder_o1(freq->histogram()));
   freq.reset();
   EntropyContext ctx;
   input.rewind();
@@ -2958,22 +2952,9 @@ BuildEntropySuffix(
   size_t bit_count = 0;
   builder->push_back(0);
   for (size_t i = 0; i < numKeys; ++i) {
-    EntropyBitsReader reader(encoder->bitwise_encode_x1(input.next(), &ctx));
-    builder->push_back(bit_count += reader.size());
-    while (reader.size() >= 64) {
-      uint64_t bits = 0;
-      size_t bit_shift = 0;
-      reader.read(64, &bits, &bit_shift);
-      assert(bit_shift == 64);
-      writer.write(bits, 64);
-    }
-    if (reader.size() > 0) {
-      uint64_t bits = 0;
-      size_t bit_shift = 0;
-      reader.read(reader.size(), &bits, &bit_shift);
-      assert(reader.size() == 0);
-      writer.write(bits, bit_shift);
-    }
+    auto bits = encoder->bitwise_encode_x1(input.next(), &ctx);
+    builder->push_back(bit_count += bits.size);
+    writer.write(bits);
   }
   auto bits = writer.finish();
   assert(bits.skip == 0);
@@ -2985,7 +2966,7 @@ BuildEntropySuffix(
   suffix->data_.swap(data);
   encoder->take_table(&suffix->table_);
   size_t table_size;
-  suffix->decoder_.init(suffix->table_, &table_size);
+  suffix->decoder_.reset(new Huffman::decoder_o1(suffix->table_, &table_size));
   assert(table_size == suffix->table_.size());
   suffix->raw_size_ = sumKeyLen;
 #ifndef NDEBUG
@@ -3001,14 +2982,15 @@ BuildEntropySuffix(
 }
 
 bool UseDictZipSuffix(size_t numKeys, size_t sumKeyLen, double zipRatio) {
-  return g_indexEnableDictZipSuffix && numKeys > 8192 && (sumKeyLen + numKeys * 8) * zipRatio + 1024 < sumKeyLen + numKeys;
+  return g_indexEnableDictZipSuffix && numKeys > 8192 && sumKeyLen > numKeys * 16 &&
+         (sumKeyLen + numKeys * 8) * zipRatio + 1024 < sumKeyLen + numKeys;
 }
 
 template<class InputBufferType>
 SuffixBase*
 BuildBlobStoreSuffix(
-  InputBufferType& input,
-  size_t numKeys, size_t sumKeyLen, bool isReverse, double zipRatio) {
+    InputBufferType& input,
+    size_t numKeys, size_t sumKeyLen, bool isReverse, double zipRatio) {
   assert(g_indexEnableCompositeIndex);
   assert(g_indexEnableDynamicSuffix);
   input.rewind();
@@ -3022,7 +3004,7 @@ BuildBlobStoreSuffix(
     builder.finish();
     memory.shrink_to_fit();
     auto store = AbstractBlobStore::load_from_user_memory(
-      fstring(memory.begin(), memory.size()), AbstractBlobStore::Dictionary());
+        fstring(memory.begin(), memory.size()), AbstractBlobStore::Dictionary());
     assert(dynamic_cast<ZipOffsetBlobStore*>(store) != nullptr);
 #ifndef NDEBUG
     input.rewind();
@@ -3071,7 +3053,7 @@ BuildBlobStoreSuffix(
     zbuilder.reset();
     memory.shrink_to_fit();
     auto store = AbstractBlobStore::load_from_user_memory(
-      fstring(memory.begin(), memory.size()), AbstractBlobStore::Dictionary());
+        fstring(memory.begin(), memory.size()), AbstractBlobStore::Dictionary());
     assert(dynamic_cast<DictZipBlobStore*>(store) != nullptr);
 #ifndef NDEBUG
     input.rewind();
@@ -3083,7 +3065,7 @@ BuildBlobStoreSuffix(
     return new IndexBlobStoreSuffix<DictZipBlobStore>(static_cast<DictZipBlobStore*>(store), memory, isReverse);
   }
 }
-  
+
 bool UseRawSuffix(size_t numKeys, size_t sumKeyLen, double zipRatio) {
   return !UseEntropySuffix(numKeys, sumKeyLen, zipRatio) && !UseEntropySuffix(numKeys, sumKeyLen, zipRatio);
 }
@@ -3160,25 +3142,25 @@ UintPrefixBuildInfo TerarkIndex::GetUintPrefixBuildInfo(const TerarkIndex::KeySt
                info.bit_count1 < (1ULL << 48)) {
       if (bit_count < (1ULL << 16)) {
         info.type =
-          info.entry_count == keyCount ? UintPrefixBuildInfo::asc_few_one_2 : UintPrefixBuildInfo::non_desc_few_one_2;
+            info.entry_count == keyCount ? UintPrefixBuildInfo::asc_few_one_2 : UintPrefixBuildInfo::non_desc_few_one_2;
       } else if (bit_count < (1ULL << 24)) {
         info.type =
-          info.entry_count == keyCount ? UintPrefixBuildInfo::asc_few_one_3 : UintPrefixBuildInfo::non_desc_few_one_3;
+            info.entry_count == keyCount ? UintPrefixBuildInfo::asc_few_one_3 : UintPrefixBuildInfo::non_desc_few_one_3;
       } else if (bit_count < (1ULL << 32)) {
         info.type =
-          info.entry_count == keyCount ? UintPrefixBuildInfo::asc_few_one_4 : UintPrefixBuildInfo::non_desc_few_one_4;
+            info.entry_count == keyCount ? UintPrefixBuildInfo::asc_few_one_4 : UintPrefixBuildInfo::non_desc_few_one_4;
       } else if (bit_count < (1ULL << 40)) {
         info.type =
-          info.entry_count == keyCount ? UintPrefixBuildInfo::asc_few_one_5 : UintPrefixBuildInfo::non_desc_few_one_5;
+            info.entry_count == keyCount ? UintPrefixBuildInfo::asc_few_one_5 : UintPrefixBuildInfo::non_desc_few_one_5;
       } else if (bit_count < (1ULL << 48)) {
         info.type =
-          info.entry_count == keyCount ? UintPrefixBuildInfo::asc_few_one_6 : UintPrefixBuildInfo::non_desc_few_one_6;
+            info.entry_count == keyCount ? UintPrefixBuildInfo::asc_few_one_6 : UintPrefixBuildInfo::non_desc_few_one_6;
       } else if (bit_count < (1ULL << 56)) {
         info.type =
-          info.entry_count == keyCount ? UintPrefixBuildInfo::asc_few_one_7 : UintPrefixBuildInfo::non_desc_few_one_7;
+            info.entry_count == keyCount ? UintPrefixBuildInfo::asc_few_one_7 : UintPrefixBuildInfo::non_desc_few_one_7;
       } else {
         info.type =
-          info.entry_count == keyCount ? UintPrefixBuildInfo::asc_few_one_8 : UintPrefixBuildInfo::non_desc_few_one_8;
+            info.entry_count == keyCount ? UintPrefixBuildInfo::asc_few_one_8 : UintPrefixBuildInfo::non_desc_few_one_8;
       }
       prefixCost = info.bit_count1 * i * 256 / 255;
     } else if (g_indexEnableFewZero && info.entry_count == keyCount && bit_count != size_t(-1) &&
@@ -3210,10 +3192,10 @@ UintPrefixBuildInfo TerarkIndex::GetUintPrefixBuildInfo(const TerarkIndex::KeySt
       size_t bit_count = info.bit_count0 + info.bit_count1;
       if (bit_count <= std::numeric_limits<uint32_t>::max()) {
         info.type =
-          info.entry_count == keyCount ? UintPrefixBuildInfo::asc_il_256 : UintPrefixBuildInfo::non_desc_il_256;
+            info.entry_count == keyCount ? UintPrefixBuildInfo::asc_il_256 : UintPrefixBuildInfo::non_desc_il_256;
       } else {
         info.type =
-          info.entry_count == keyCount ? UintPrefixBuildInfo::asc_se_512 : UintPrefixBuildInfo::non_desc_se_512;
+            info.entry_count == keyCount ? UintPrefixBuildInfo::asc_se_512 : UintPrefixBuildInfo::non_desc_se_512;
       }
       prefixCost = bit_count * 21 / 128;
     }
@@ -3458,42 +3440,48 @@ TerarkIndex* TerarkIndex::Factory::Build(TerarkKeyReader* reader, const TerarkZi
       FixPrefixInputBuffer prefix_input_reader{reader, cplen, uint_prefix_info.key_length, ks.maxKeyLen};
       prefix = BuildUintPrefix(prefix_input_reader, ks, uint_prefix_info);
       FixPrefixRemainingInputBuffer suffix_input_reader{reader, cplen, uint_prefix_info.key_length, ks.maxKeyLen};
-      if (ks.minKeyLen == ks.maxKeyLen) {
+      size_t sumSuffixLen = ks.sumKeyLen - ks.keyCount * prefix_input_reader.cplenPrefixSize;
+      if (UseDictZipSuffix(ks.keyCount, sumSuffixLen, uint_prefix_info.zip_ratio)) {
+        suffix = BuildBlobStoreSuffix(
+            suffix_input_reader, ks.keyCount, sumSuffixLen, isReverse, uint_prefix_info.zip_ratio);
+      } else if (UseEntropySuffix(ks.keyCount, sumSuffixLen, uint_prefix_info.zip_ratio)) {
+        suffix = BuildEntropySuffix(
+            suffix_input_reader, ks.keyCount, sumSuffixLen, isReverse);
+      } else if (ks.minKeyLen == ks.maxKeyLen) {
         suffix = BuildFixedStringSuffix(
-          suffix_input_reader, uint_prefix_info.key_count,
-          ks.sumKeyLen - ks.keyCount * prefix_input_reader.cplenPrefixSize,
-          ks.maxKeyLen - prefix_input_reader.cplenPrefixSize, isReverse);
+            suffix_input_reader, ks.keyCount, sumSuffixLen, ks.maxKeyLen - prefix_input_reader.cplenPrefixSize,
+            isReverse);
       } else {
         suffix = BuildBlobStoreSuffix(
-          suffix_input_reader, uint_prefix_info.key_count,
-          ks.sumKeyLen - ks.keyCount * prefix_input_reader.cplenPrefixSize, isReverse, uint_prefix_info.zip_ratio);
+            suffix_input_reader, ks.keyCount, sumSuffixLen, isReverse, uint_prefix_info.zip_ratio);
       }
     }
   } else if ((g_indexEnableDynamicSuffix || ks.minSuffixLen == ks.maxSuffixLen) &&
              g_indexEnableCompositeIndex && ks.sumPrefixLen < ks.sumKeyLen * 31 / 32) {
     MinimizePrefixInputBuffer prefix_input_reader{reader, cplen, ks.keyCount, ks.maxKeyLen};
     prefix = BuildNestLoudsTriePrefix(
-      prefix_input_reader, tzopt, ks.keyCount, ks.sumPrefixLen - ks.keyCount * cplen,
-      isReverse, ks.minPrefixLen == ks.maxPrefixLen);
+        prefix_input_reader, tzopt, ks.keyCount, ks.sumPrefixLen - ks.keyCount * cplen,
+        isReverse, ks.minPrefixLen == ks.maxPrefixLen);
     MinimizePrefixRemainingInputBuffer suffix_input_reader{reader, cplen, ks.keyCount, ks.maxKeyLen};
-    if (UseDictZipSuffix(ks.keyCount, ks.sumKeyLen - ks.sumPrefixLen, uint_prefix_info.zip_ratio)) {
+    size_t sumSuffixLen = ks.sumKeyLen - ks.sumPrefixLen;
+    if (UseDictZipSuffix(ks.keyCount, sumSuffixLen, uint_prefix_info.zip_ratio)) {
       suffix = BuildBlobStoreSuffix(
-          suffix_input_reader, ks.keyCount, ks.sumKeyLen - ks.sumPrefixLen, isReverse, uint_prefix_info.zip_ratio);
-    } else if (UseEntropySuffix(ks.keyCount, ks.sumKeyLen - ks.sumPrefixLen, uint_prefix_info.zip_ratio)) {
+          suffix_input_reader, ks.keyCount, sumSuffixLen, isReverse, uint_prefix_info.zip_ratio);
+    } else if (UseEntropySuffix(ks.keyCount, sumSuffixLen, uint_prefix_info.zip_ratio)) {
       suffix = BuildEntropySuffix(
-          suffix_input_reader, ks.keyCount, ks.sumKeyLen - ks.sumPrefixLen, isReverse);
+          suffix_input_reader, ks.keyCount, sumSuffixLen, isReverse);
     } else if (ks.minSuffixLen == ks.maxSuffixLen) {
       suffix = BuildFixedStringSuffix(
-          suffix_input_reader, ks.keyCount, ks.sumKeyLen - ks.sumPrefixLen, ks.maxSuffixLen, isReverse);
+          suffix_input_reader, ks.keyCount, sumSuffixLen, ks.maxSuffixLen, isReverse);
     } else {
       suffix = BuildBlobStoreSuffix(
-          suffix_input_reader, ks.keyCount, ks.sumKeyLen - ks.sumPrefixLen, isReverse, uint_prefix_info.zip_ratio);
+          suffix_input_reader, ks.keyCount, sumSuffixLen, isReverse, uint_prefix_info.zip_ratio);
     }
   } else {
     DefaultInputBuffer input_reader{reader, cplen};
     prefix = BuildNestLoudsTriePrefix(
-      input_reader, tzopt, ks.keyCount, ks.sumKeyLen - ks.keyCount * cplen,
-      isReverse, ks.minKeyLen == ks.maxKeyLen);
+        input_reader, tzopt, ks.keyCount, ks.sumKeyLen - ks.keyCount * cplen,
+        isReverse, ks.minKeyLen == ks.maxKeyLen);
     suffix = BuildEmptySuffix();
   }
   valvec<char> common(cplen, valvec_reserve());
@@ -3518,7 +3506,7 @@ unique_ptr<TerarkIndex> TerarkIndex::LoadMemory(fstring mem) {
     if (mem.size() - offset < sizeof(TerarkIndexFooter)) {
       throw std::invalid_argument("TerarkIndex::LoadMemory(): Bad mem size");
     }
-    auto& footer = ((const TerarkIndexFooter*) (mem.data() + mem.size() - offset))[-1];
+    auto& footer = ((const TerarkIndexFooter*)(mem.data() + mem.size() - offset))[-1];
     auto crc = terark::Crc32c_update(0, &footer, sizeof footer - sizeof(uint32_t));
     if (crc != footer.footer_crc32) {
       throw terark::BadCrc32cException("TerarkIndex::LoadMemory(): Bad footer crc",
@@ -3528,8 +3516,8 @@ unique_ptr<TerarkIndex> TerarkIndex::LoadMemory(fstring mem) {
     if (idx >= g_TerarkIndexFactroy.end_i()) {
       std::string class_name(footer.class_name, sizeof footer.class_name);
       throw std::invalid_argument(
-        std::string("TerarkIndex::LoadMemory(): Unknown class: ")
-        + class_name.c_str());
+          std::string("TerarkIndex::LoadMemory(): Unknown class: ")
+          + class_name.c_str());
     }
     TerarkIndex::Factory* factory = g_TerarkIndexFactroy.val(idx).get();
     size_t index_size = footer.footer_size + align_up(footer.common_size, 8) + footer.prefix_size + footer.suffix_size;
@@ -3678,8 +3666,8 @@ struct FactoryExpander {
     template<class SuffixComponent, class ...args_t>
     struct invoke<FactorySet<args_t...>, SuffixComponent> {
       using factory = IndexFactory<
-        typename PreifxComponent::info, typename PreifxComponent::type,
-        typename SuffixComponent::info, typename SuffixComponent::type>;
+          typename PreifxComponent::info, typename PreifxComponent::type,
+          typename SuffixComponent::info, typename SuffixComponent::type>;
       using type = FactorySet<args_t..., factory>;
     };
   };
