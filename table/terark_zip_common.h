@@ -6,7 +6,7 @@
 
 namespace rocksdb {
 
-#if defined(IOS_CROSS_COMPILE) || defined(__DARWIN_C_LEVEL)
+#if (defined(IOS_CROSS_COMPILE) || defined(__DARWIN_C_LEVEL)) && 0
 # define MY_THREAD_LOCAL(Type, Var)  Type Var
 //#elif defined(_WIN32)
 //  #define MY_THREAD_LOCAL(Type, Var)  static __declspec(thread) Type Var
