@@ -1270,8 +1270,8 @@ struct IndexAscendingUintPrefix
     return rank_select.max_rank1() - 1;
   }
 
-  constexpr bool NeedsReorder() const {
-    return false;
+  std::integral_constant<bool, false> NeedsReorder() const {
+    return std::integral_constant<bool, false>();
   }
   void GetOrderMap(terark::UintVecMin0& newToOld) const {
     assert(false);
@@ -1520,8 +1520,8 @@ struct IndexNonDescendingUintPrefix
     return rank_select.max_rank1() - 1;
   }
 
-  constexpr bool NeedsReorder() const {
-    return false;
+  std::integral_constant<bool, false> NeedsReorder() const {
+    return std::integral_constant<bool, false>();
   }
   void GetOrderMap(terark::UintVecMin0& newToOld) const {
     assert(false);
@@ -1889,8 +1889,8 @@ struct IndexNestLoudsTriePrefix
     return flags.is_bfs_suffix ? id : trie_->num_words() - 1;
   }
 
-  constexpr bool NeedsReorder() const {
-    return true;
+  std::integral_constant<bool, true> NeedsReorder() const {
+    return std::integral_constant<bool, true>();
   }
   void GetOrderMap(terark::UintVecMin0& newToOld) const {
     NonRecursiveDictionaryOrderToStateMapGenerator gen;
@@ -1971,8 +1971,8 @@ struct IndexEmptySuffix
   IndexEmptySuffix& operator = (const IndexEmptySuffix&) = delete;
   IndexEmptySuffix& operator = (IndexEmptySuffix&&) = default;
 
-  constexpr size_t TotalKeySize() const {
-    return 0;
+  std::integral_constant<size_t, 0> TotalKeySize() const {
+    return std::integral_constant<size_t, 0>();
   }
   std::pair<size_t, fstring>
   LowerBound(fstring target, size_t suffix_id, size_t suffix_count, Context* ctx) const override {

@@ -2258,7 +2258,7 @@ bool TerarkZipTableBuilder::MergeRangeStatus(RangeStatus* aa, RangeStatus* bb, R
   assert(aa->stat.sumKeyLen + bb->stat.sumKeyLen == ab->stat.sumKeyLen);
   assert(aa->stat.minKey == ab->stat.minKey);
   assert(bb->stat.maxKey == ab->stat.maxKey);
-  assert(aa->stat.maxKey < bb->stat.minKey ^ isReverseBytewiseOrder_);
+  assert((aa->stat.maxKey < bb->stat.minKey) ^ isReverseBytewiseOrder_);
   auto aai = TerarkIndex::GetUintPrefixBuildInfo(aa->stat);
   auto bbi = TerarkIndex::GetUintPrefixBuildInfo(bb->stat);
   using info_t = TerarkIndex::UintPrefixBuildInfo;
