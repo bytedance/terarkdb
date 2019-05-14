@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# author : guokuankuan@bytedance.com
 
 if [ `uname` == Darwin ]; then
 	cpuNum=`sysctl -n machdep.cpu.thread_count`
@@ -14,10 +15,15 @@ git clone --depth=1 git@code.byted.org:storage/terark-zip-rocksdb.git
 # build targets 
 make libzstd.a libsnappy.a liblz4.a -j $cpuNum
 make shared_lib DEBUG_LEVEL=0 -j $cpuNum DISABLE_WARNING_AS_ERROR=1
+make shared_lib DEBUG_LEVEL=2 -j $cpuNum DISABLE_WARNING_AS_ERROR=1
 
 pkgdir=output
+rm -rf $pkgdir
+
 # copy all header files
 mkdir -p $pkgdir
+mkdir -p $pkgdir/lib
+
 cp -r include      $pkgdir
 cp -r db           $pkgdir/include
 cp -r env          $pkgdir/include
@@ -41,9 +47,12 @@ PLATFORM_DIR=$SYSTEM-$COMPILER-bmi2-$WITH_BMI2
 #echo build/$PLATFORM_DIR/shared_lib/dbg-0/
 
 # copy terark-rocksdb dynamic lib
-mkdir -p $pkgdir/lib
 if [ `uname` == Darwin ]; then
-	cp build/$PLATFORM_DIR/shared_lib/dbg-0/librocksdb.* $pkgdir/lib
+	cp -a build/$PLATFORM_DIR/shared_lib/dbg-0/librocksdb* $pkgdir/lib
+	cp -a build/$PLATFORM_DIR/shared_lib/dbg-2/librocksdb* $pkgdir/lib
 else
-	cp -lP build/$PLATFORM_DIR/shared_lib/dbg-0/librocksdb.so* output/lib/
+	cp -lP build/$PLATFORM_DIR/shared_lib/dbg-0/librocksdb* $pkgdir/lib/
+	cp -lP build/$PLATFORM_DIR/shared_lib/dbg-2/librocksdb* $pkgdir/lib/
 fi
+
+echo "build and package successful!"

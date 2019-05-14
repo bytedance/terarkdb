@@ -19,7 +19,6 @@ BUILD_NAME := ${UNAME_MachineSystem}-${COMPILER}-bmi2-${BMI2}
 BUILD_ROOT := build/${BUILD_NAME}
 export LD_LIBRARY_PATH:=${TerarkDir}/lib:${LD_LIBRARY_PATH}
 
-EXTRA_CXXFLAGS += -I${TERARK_ZIP_ROCKSDB_HOME}/src -fPIC
 BASH_EXISTS := $(shell which bash)
 SHELL := $(shell which bash)
 
@@ -31,6 +30,7 @@ MACHINE ?= $(shell uname -m)
 ARFLAGS = ${EXTRA_ARFLAGS} rs
 STRIPFLAGS = -S -x
 
+CXXFLAGS += -I${TERARK_ZIP_ROCKSDB_HOME}/src -fPIC
 # Transform parallel LOG output into something more readable.
 perl_command = perl -n \
   -e '@a=split("\t",$$_,-1); $$t=$$a[8];'				\
