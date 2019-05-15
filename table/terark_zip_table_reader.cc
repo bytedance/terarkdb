@@ -1146,7 +1146,7 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   subReader_.subIndex_ = 0;
   subReader_.storeFD_ = file_->file()->FileDescriptor();
   subReader_.storeFileObj_ = file_->file();
-  subReader_.storeOffset_ = 0;
+  subReader_.storeOffset_ = indexSize;
   subReader_.InitUsePread(tzto_.minPreadLen);
   subReader_.rawReaderOffset_ = 0;
   subReader_.rawReaderSize_ = indexSize + storeSize + typeSize;

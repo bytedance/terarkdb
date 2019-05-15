@@ -1340,7 +1340,7 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
   auto seekSecondPassIter = [&] {
     std::string target;
     target.resize(stat.minKey.size() + 8);
-    target.append((const char*)stat.minKey.data(), stat.minKey.size());
+    target.assign((const char*)stat.minKey.data(), stat.minKey.size());
     target.append((const char*)&kvs.status.seqType, 8);
     second_pass_iter_->Seek(target);
   };
