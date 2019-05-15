@@ -320,10 +320,9 @@ Compaction* UniversalCompactionPicker::PickCompaction(
           break;
         }
       }
-      size_t reduce_sorted_run_target = std::min<size_t>(
-          mutable_cf_options.level0_slowdown_writes_trigger,
+      size_t reduce_sorted_run_target =
           mutable_cf_options.level0_file_num_compaction_trigger +
-              ioptions_.num_levels - 1);
+          ioptions_.num_levels - 1;
       if (has_map_compaction ||
           (c = PickTrivialMoveCompaction(cf_name, mutable_cf_options, vstorage,
                                          log_buffer)) != nullptr) {
@@ -707,7 +706,7 @@ double GenSortedRunGroup(const std::vector<double>& sr, size_t group,
   auto F = [](double q, size_t n) {
     return (std::pow(q, n + 1) - q) / (q - 1);
   };
-  // let S = ¦²q^i, i in <1..n>, seek q
+  // let S = ï¿½ï¿½q^i, i in <1..n>, seek q
   double q = std::pow(S, 1.0 / group);
   if (S <= sr.size() + 1) {
     q = 1;
