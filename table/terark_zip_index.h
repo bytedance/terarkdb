@@ -82,10 +82,9 @@ public:
     uint64_t max_value;
     double zip_ratio;
     size_t estimate_size;
-    enum {
+    enum UintType{
       fail = 0,
       asc_allone,
-      asc_few_zero_2,
       asc_few_zero_3,
       asc_few_zero_4,
       asc_few_zero_5,
@@ -94,7 +93,6 @@ public:
       asc_few_zero_8,
       asc_il_256,
       asc_se_512,
-      asc_few_one_2,
       asc_few_one_3,
       asc_few_one_4,
       asc_few_one_5,
@@ -103,7 +101,6 @@ public:
       asc_few_one_8,
       non_desc_il_256,
       non_desc_se_512,
-      non_desc_few_one_2,
       non_desc_few_one_3,
       non_desc_few_one_4,
       non_desc_few_one_5,

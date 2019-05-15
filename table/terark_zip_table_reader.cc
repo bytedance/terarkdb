@@ -1412,6 +1412,7 @@ Status TerarkZipTableMultiReader::SubIndex::Init(
         part.storeFD_ = cache_fi_;
       }
       rawSize += part.rawReaderSize_;
+      iteratorSize_ = std::max(iteratorSize_, part.index_->IteratorSize());
       if (reverse) {
         part.index_->MinKey(&buffer, &g_tctx);
       } else {
