@@ -72,7 +72,7 @@ struct TerarkIndexFooter {
   uint64_t suffix_size;
   uint64_t suffix_xxhash;
 
-  char class_name[40];
+  char class_name[32];
   uint16_t bfs_suffix : 1;
   uint16_t rev_suffix : 1;
   uint16_t format_version : 14;
@@ -2664,8 +2664,6 @@ BuildUintPrefix(
   assert(g_indexEnableUintIndex);
   input.rewind();
   switch (info.type) {
-  case UintPrefixBuildInfo::asc_few_zero_2:
-    return BuildAscendingUintPrefix<rank_select_fewzero<2>>(input, ks, info);
   case UintPrefixBuildInfo::asc_few_zero_3:
     return BuildAscendingUintPrefix<rank_select_fewzero<3>>(input, ks, info);
   case UintPrefixBuildInfo::asc_few_zero_4:
@@ -2684,8 +2682,6 @@ BuildUintPrefix(
     return BuildAscendingUintPrefix<rank_select_il_256_32>(input, ks, info);
   case UintPrefixBuildInfo::asc_se_512:
     return BuildAscendingUintPrefix<rank_select_se_512_64>(input, ks, info);
-  case UintPrefixBuildInfo::asc_few_one_2:
-    return BuildAscendingUintPrefix<rank_select_fewone<2>>(input, ks, info);
   case UintPrefixBuildInfo::asc_few_one_3:
     return BuildAscendingUintPrefix<rank_select_fewone<3>>(input, ks, info);
   case UintPrefixBuildInfo::asc_few_one_4:
@@ -2704,9 +2700,6 @@ BuildUintPrefix(
   case UintPrefixBuildInfo::non_desc_se_512:
     assert(ks.maxKeyLen > commonPrefixLen(ks.minKey, ks.maxKey) + info.key_length);
     return BuildNonDescendingUintPrefix<rank_select_se_512_64>(input, ks, info);
-  case UintPrefixBuildInfo::non_desc_few_one_2:
-    assert(ks.maxKeyLen > commonPrefixLen(ks.minKey, ks.maxKey) + info.key_length);
-    return BuildNonDescendingUintPrefix<rank_select_fewone<2>>(input, ks, info);
   case UintPrefixBuildInfo::non_desc_few_one_3:
     assert(ks.maxKeyLen > commonPrefixLen(ks.minKey, ks.maxKey) + info.key_length);
     return BuildNonDescendingUintPrefix<rank_select_fewone<3>>(input, ks, info);
@@ -2983,19 +2976,19 @@ BuildEntropySuffix(
 
 bool UseDictZipSuffix(size_t numKeys, size_t sumKeyLen, double zipRatio) {
   return g_indexEnableDictZipSuffix && numKeys > 8192 && sumKeyLen > numKeys * 16 &&
-         (sumKeyLen + numKeys * 8) * zipRatio + 1024 < sumKeyLen + numKeys;
+         (sumKeyLen + numKeys * 4) * zipRatio + 1024 < sumKeyLen + numKeys;
 }
 
 template<class InputBufferType>
 SuffixBase*
 BuildBlobStoreSuffix(
     InputBufferType& input,
-    size_t numKeys, size_t sumKeyLen, bool isReverse, double zipRatio) {
+    size_t numKeys, size_t sumKeyLen, bool isReverse, bool isDictZip) {
   assert(g_indexEnableCompositeIndex);
   assert(g_indexEnableDynamicSuffix);
   input.rewind();
   FileMemIO memory;
-  if (!UseDictZipSuffix(numKeys, sumKeyLen, zipRatio)) {
+  if (!isDictZip) {
     terark::ZipOffsetBlobStore::MyBuilder builder(128, memory);
     for (size_t i = 0; i < numKeys; ++i) {
       auto str = input.next();
@@ -3070,13 +3063,32 @@ bool UseRawSuffix(size_t numKeys, size_t sumKeyLen, double zipRatio) {
   return !UseEntropySuffix(numKeys, sumKeyLen, zipRatio) && !UseEntropySuffix(numKeys, sumKeyLen, zipRatio);
 }
 
+template<class InputBufferType>
+SuffixBase*
+BuildSuffixAutoSelect(
+    InputBufferType& input, size_t numKeys, size_t sumKeyLen, bool isFixedLen, bool isReverse, double zipRatio) {
+  assert(sumKeyLen > 0);
+  if (UseDictZipSuffix(numKeys, sumKeyLen, zipRatio)) {
+    return BuildBlobStoreSuffix(input, numKeys, sumKeyLen, isReverse, true);
+  } else if (UseEntropySuffix(numKeys, sumKeyLen, zipRatio)) {
+    return BuildEntropySuffix(input, numKeys, sumKeyLen, isReverse);
+  } else if (isFixedLen) {
+    assert(sumKeyLen % numKeys == 0);
+    return BuildFixedStringSuffix(input, numKeys, sumKeyLen, sumKeyLen / numKeys, isReverse);
+  } else {
+    return BuildBlobStoreSuffix(input, numKeys, sumKeyLen, isReverse, false);
+  }
+}
+
 }
 
 UintPrefixBuildInfo TerarkIndex::GetUintPrefixBuildInfo(const TerarkIndex::KeyStat& ks) {
   size_t cplen = ks.keyCount > 1 ? commonPrefixLen(ks.minKey, ks.maxKey) : 0;
-  double zipRatio = double(ks.entropyLen) / ks.sumKeyLen;
+  auto GetZipRatio = [&](size_t p) {
+    return std::pow(double(ks.entropyLen) / ks.sumKeyLen, double(ks.sumKeyLen - p * ks.keyCount) / ks.sumKeyLen);
+  };
   UintPrefixBuildInfo result = {
-      cplen, 0, 0, 0, 0, 0, 0, 0, zipRatio, 0, UintPrefixBuildInfo::fail
+      cplen, 0, 0, 0, 0, 0, 0, 0, GetZipRatio(0), 0, UintPrefixBuildInfo::fail
   };
   if (!g_indexEnableUintIndex || (!g_indexEnableDynamicSuffix && ks.maxKeyLen != ks.minKeyLen)) {
     return result;
@@ -3094,10 +3106,10 @@ UintPrefixBuildInfo TerarkIndex::GetUintPrefixBuildInfo(const TerarkIndex::KeySt
     entryCnt[i - cplen] = keyCount - (i < ks.diff.size() ? ks.diff[i].cnt : 0);
   }
   for (size_t i = 2; i <= maxPrefixLen; ++i) {
-    if (cplen + i < ks.diff.size() && ks.diff[cplen + i].max > 128) {
+    if (!g_indexEnableCompositeIndex && (ks.maxKeyLen != ks.minKeyLen || cplen + i != ks.maxKeyLen)) {
       continue;
     }
-    if (!g_indexEnableCompositeIndex && (ks.maxKeyLen != ks.minKeyLen || cplen + i != ks.maxKeyLen)) {
+    if (cplen + i < ks.diff.size() && (ks.diff[cplen + i].max > 32 || entryCnt[i - 1] * 4 < keyCount)) {
       continue;
     }
     UintPrefixBuildInfo info;
@@ -3106,109 +3118,109 @@ UintPrefixBuildInfo TerarkIndex::GetUintPrefixBuildInfo(const TerarkIndex::KeySt
     info.key_count = keyCount;
     info.min_value = ReadBigEndianUint64(ks.minKey.begin() + cplen, i);
     info.max_value = ReadBigEndianUint64(ks.maxKey.begin() + cplen, i);
-    info.zip_ratio = zipRatio;
+    info.zip_ratio = GetZipRatio(cplen + i);
     if (info.min_value > info.max_value) std::swap(info.min_value, info.max_value);
     uint64_t diff = info.max_value - info.min_value;
     info.entry_count = entryCnt[i - 1];
     assert(info.entry_count > 0);
     assert(diff >= info.entry_count - 1);
     size_t bit_count;
+    bool useFewOne = g_indexEnableFewZero;
+    bool useFewZero = g_indexEnableFewZero;
+    bool useNormal = true;
     if (info.entry_count == keyCount) {
       // ascending
       info.bit_count0 = diff - keyCount + 1;
       info.bit_count1 = keyCount;
-      bit_count = info.bit_count0 + info.bit_count1;
+      if (diff == std::numeric_limits<uint64_t>::max()) {
+        bit_count = 0;
+        useFewZero = false;
+        useNormal = false;
+      } else {
+        bit_count = info.bit_count0 + info.bit_count1;
+        if (info.bit_count0 > bit_count / (i * 9)) {
+          useFewZero = false;
+        }
+        if (info.bit_count1 > bit_count / (i * 9)) {
+          useFewOne = false;
+        }
+      }
     } else {
       // non descending
-      if (diff == std::numeric_limits<uint64_t>::max()) {
-        info.bit_count0 = size_t(-1);
+      info.bit_count1 = keyCount;
+      if (!g_indexEnableNonDescUint || keyCount + 1 > std::numeric_limits<uint64_t>::max() - diff) {
+        info.bit_count0 = 0;
+        bit_count = 0;
+        useFewOne = false;
+        useNormal = false;
       } else {
         info.bit_count0 = diff + 1;
-      }
-      info.bit_count1 = keyCount;
-      if (keyCount + 1 > std::numeric_limits<uint64_t>::max() - diff) {
-        bit_count = size_t(-1);
-      } else {
         bit_count = diff + keyCount + 1;
+        if (info.bit_count1 > bit_count / (i * 9)) {
+          useFewOne = false;
+        }
       }
+      useFewZero = false;
     }
-    size_t fewCount = info.bit_count0 / 100 + info.bit_count1 / 100;
     size_t prefixCost;
+    using UintType = UintPrefixBuildInfo::UintType;
     if (info.entry_count == keyCount && info.entry_count == diff + 1) {
-      info.type = UintPrefixBuildInfo::asc_allone;
+      info.type = UintType::asc_allone;
       prefixCost = 0;
-    } else if ((g_indexEnableNonDescUint || info.entry_count == keyCount) &&
-               g_indexEnableFewZero && bit_count != size_t(-1) && info.bit_count1 < fewCount &&
-               info.bit_count1 < (1ULL << 48)) {
-      if (bit_count < (1ULL << 16)) {
-        info.type =
-            info.entry_count == keyCount ? UintPrefixBuildInfo::asc_few_one_2 : UintPrefixBuildInfo::non_desc_few_one_2;
-      } else if (bit_count < (1ULL << 24)) {
-        info.type =
-            info.entry_count == keyCount ? UintPrefixBuildInfo::asc_few_one_3 : UintPrefixBuildInfo::non_desc_few_one_3;
+    } else if (useFewOne) {
+      assert(bit_count > 0);
+      /*****/if (bit_count < (1ULL << 24)) {
+        info.type = info.entry_count == keyCount ? UintType::asc_few_one_3 : UintType::non_desc_few_one_3;
       } else if (bit_count < (1ULL << 32)) {
-        info.type =
-            info.entry_count == keyCount ? UintPrefixBuildInfo::asc_few_one_4 : UintPrefixBuildInfo::non_desc_few_one_4;
+        info.type = info.entry_count == keyCount ? UintType::asc_few_one_4 : UintType::non_desc_few_one_4;
       } else if (bit_count < (1ULL << 40)) {
-        info.type =
-            info.entry_count == keyCount ? UintPrefixBuildInfo::asc_few_one_5 : UintPrefixBuildInfo::non_desc_few_one_5;
+        info.type = info.entry_count == keyCount ? UintType::asc_few_one_5 : UintType::non_desc_few_one_5;
       } else if (bit_count < (1ULL << 48)) {
-        info.type =
-            info.entry_count == keyCount ? UintPrefixBuildInfo::asc_few_one_6 : UintPrefixBuildInfo::non_desc_few_one_6;
+        info.type = info.entry_count == keyCount ? UintType::asc_few_one_6 : UintType::non_desc_few_one_6;
       } else if (bit_count < (1ULL << 56)) {
-        info.type =
-            info.entry_count == keyCount ? UintPrefixBuildInfo::asc_few_one_7 : UintPrefixBuildInfo::non_desc_few_one_7;
+        info.type = info.entry_count == keyCount ? UintType::asc_few_one_7 : UintType::non_desc_few_one_7;
       } else {
-        info.type =
-            info.entry_count == keyCount ? UintPrefixBuildInfo::asc_few_one_8 : UintPrefixBuildInfo::non_desc_few_one_8;
+        info.type = info.entry_count == keyCount ? UintType::asc_few_one_8 : UintType::non_desc_few_one_8;
       }
       prefixCost = info.bit_count1 * i * 256 / 255;
-    } else if (g_indexEnableFewZero && info.entry_count == keyCount && bit_count != size_t(-1) &&
-               info.bit_count0 < fewCount && info.bit_count0 < (1ULL << 48)) {
-      if (bit_count < (1ULL << 16)) {
-        info.type = UintPrefixBuildInfo::asc_few_zero_2;
-      } else if (bit_count < (1ULL << 24)) {
-        info.type = UintPrefixBuildInfo::asc_few_zero_3;
+    } else if (useFewZero) {
+      assert(bit_count > 0);
+      assert(info.entry_count == keyCount);
+      /*****/if (bit_count < (1ULL << 24)) {
+        info.type = UintType::asc_few_zero_3;
       } else if (bit_count < (1ULL << 32)) {
-        info.type = UintPrefixBuildInfo::asc_few_zero_4;
+        info.type = UintType::asc_few_zero_4;
       } else if (bit_count < (1ULL << 40)) {
-        info.type = UintPrefixBuildInfo::asc_few_zero_5;
+        info.type = UintType::asc_few_zero_5;
       } else if (bit_count < (1ULL << 48)) {
-        info.type = UintPrefixBuildInfo::asc_few_zero_6;
+        info.type = UintType::asc_few_zero_6;
       } else if (bit_count < (1ULL << 56)) {
-        info.type = UintPrefixBuildInfo::asc_few_zero_7;
+        info.type = UintType::asc_few_zero_7;
       } else {
-        info.type = UintPrefixBuildInfo::asc_few_zero_8;
+        info.type = UintType::asc_few_zero_8;
       }
       prefixCost = info.bit_count0 * i * 256 / 255;
-    } else {
-      if (!g_indexEnableNonDescUint && info.entry_count != keyCount) {
-        continue;
-      }
-      if (info.bit_count0 >= (1ULL << 56) || info.bit_count1 >= (1ULL << 56)) {
-        // too large
-        continue;
-      }
-      size_t bit_count = info.bit_count0 + info.bit_count1;
+    } else if (useNormal) {
+      assert(bit_count > 0);
       if (bit_count <= std::numeric_limits<uint32_t>::max()) {
-        info.type =
-            info.entry_count == keyCount ? UintPrefixBuildInfo::asc_il_256 : UintPrefixBuildInfo::non_desc_il_256;
+        info.type = info.entry_count == keyCount ? UintType::asc_il_256 : UintType::non_desc_il_256;
       } else {
-        info.type =
-            info.entry_count == keyCount ? UintPrefixBuildInfo::asc_se_512 : UintPrefixBuildInfo::non_desc_se_512;
+        info.type = info.entry_count == keyCount ? UintType::asc_se_512 : UintType::non_desc_se_512;
       }
       prefixCost = bit_count * 21 / 128;
+    } else {
+      continue;
     }
     size_t suffixCost = totalKeySize - i * keyCount;
-    if (index_detail::UseDictZipSuffix(ks.keyCount, suffixCost, zipRatio)) {
-      suffixCost = (suffixCost + 8 * keyCount) * zipRatio + 1024;
-    } else if (index_detail::UseEntropySuffix(ks.keyCount, suffixCost, zipRatio)) {
-      suffixCost = suffixCost * zipRatio + keyCount + 1024;
-    } else if (ks.minSuffixLen != ks.maxSuffixLen) {
+    if (index_detail::UseDictZipSuffix(keyCount, suffixCost, info.zip_ratio)) {
+      suffixCost = (suffixCost + 8 * keyCount) * info.zip_ratio + 1024;
+    } else if (index_detail::UseEntropySuffix(keyCount, suffixCost, info.zip_ratio)) {
+      suffixCost = suffixCost * info.zip_ratio + keyCount + 1024;
+    } else if (ks.minKeyLen != ks.maxKeyLen) {
       suffixCost += keyCount;
     }
     info.estimate_size = prefixCost + suffixCost;
-    if (info.estimate_size < best_estimate_size && info.estimate_size < target_estimate_size) {
+    if (info.estimate_size <= best_estimate_size && info.estimate_size <= target_estimate_size) {
       result = info;
       best_estimate_size = info.estimate_size;
     }
@@ -3440,49 +3452,25 @@ TerarkIndex* TerarkIndex::Factory::Build(TerarkKeyReader* reader, const TerarkZi
       FixPrefixInputBuffer prefix_input_reader{reader, cplen, uint_prefix_info.key_length, ks.maxKeyLen};
       prefix = BuildUintPrefix(prefix_input_reader, ks, uint_prefix_info);
       FixPrefixRemainingInputBuffer suffix_input_reader{reader, cplen, uint_prefix_info.key_length, ks.maxKeyLen};
-      size_t sumSuffixLen = ks.sumKeyLen - ks.keyCount * prefix_input_reader.cplenPrefixSize;
-      if (UseDictZipSuffix(ks.keyCount, sumSuffixLen, uint_prefix_info.zip_ratio)) {
-        suffix = BuildBlobStoreSuffix(
-            suffix_input_reader, ks.keyCount, sumSuffixLen, isReverse, uint_prefix_info.zip_ratio);
-      } else if (UseEntropySuffix(ks.keyCount, sumSuffixLen, uint_prefix_info.zip_ratio)) {
-        suffix = BuildEntropySuffix(
-            suffix_input_reader, ks.keyCount, sumSuffixLen, isReverse);
-      } else if (ks.minKeyLen == ks.maxKeyLen) {
-        suffix = BuildFixedStringSuffix(
-            suffix_input_reader, ks.keyCount, sumSuffixLen, ks.maxKeyLen - prefix_input_reader.cplenPrefixSize,
-            isReverse);
-      } else {
-        suffix = BuildBlobStoreSuffix(
-            suffix_input_reader, ks.keyCount, sumSuffixLen, isReverse, uint_prefix_info.zip_ratio);
-      }
+      suffix = BuildSuffixAutoSelect(suffix_input_reader, ks.keyCount,
+                                     ks.sumKeyLen - ks.keyCount * prefix_input_reader.cplenPrefixSize,
+                                     ks.minKeyLen == ks.maxKeyLen, isReverse, uint_prefix_info.zip_ratio);
     }
-  } else if ((g_indexEnableDynamicSuffix || ks.minSuffixLen == ks.maxSuffixLen) &&
-             g_indexEnableCompositeIndex && ks.sumPrefixLen < ks.sumKeyLen * 31 / 32) {
-    MinimizePrefixInputBuffer prefix_input_reader{reader, cplen, ks.keyCount, ks.maxKeyLen};
-    prefix = BuildNestLoudsTriePrefix(
-        prefix_input_reader, tzopt, ks.keyCount, ks.sumPrefixLen - ks.keyCount * cplen,
-        isReverse, ks.minPrefixLen == ks.maxPrefixLen);
-    MinimizePrefixRemainingInputBuffer suffix_input_reader{reader, cplen, ks.keyCount, ks.maxKeyLen};
-    size_t sumSuffixLen = ks.sumKeyLen - ks.sumPrefixLen;
-    if (UseDictZipSuffix(ks.keyCount, sumSuffixLen, uint_prefix_info.zip_ratio)) {
-      suffix = BuildBlobStoreSuffix(
-          suffix_input_reader, ks.keyCount, sumSuffixLen, isReverse, uint_prefix_info.zip_ratio);
-    } else if (UseEntropySuffix(ks.keyCount, sumSuffixLen, uint_prefix_info.zip_ratio)) {
-      suffix = BuildEntropySuffix(
-          suffix_input_reader, ks.keyCount, sumSuffixLen, isReverse);
-    } else if (ks.minSuffixLen == ks.maxSuffixLen) {
-      suffix = BuildFixedStringSuffix(
-          suffix_input_reader, ks.keyCount, sumSuffixLen, ks.maxSuffixLen, isReverse);
-    } else {
-      suffix = BuildBlobStoreSuffix(
-          suffix_input_reader, ks.keyCount, sumSuffixLen, isReverse, uint_prefix_info.zip_ratio);
-    }
-  } else {
+  } else if ((!g_indexEnableDynamicSuffix && ks.minSuffixLen != ks.maxSuffixLen) ||
+             !g_indexEnableCompositeIndex || ks.sumPrefixLen > ks.sumKeyLen * 31 / 32) {
     DefaultInputBuffer input_reader{reader, cplen};
     prefix = BuildNestLoudsTriePrefix(
         input_reader, tzopt, ks.keyCount, ks.sumKeyLen - ks.keyCount * cplen,
         isReverse, ks.minKeyLen == ks.maxKeyLen);
     suffix = BuildEmptySuffix();
+  } else {
+    MinimizePrefixInputBuffer prefix_input_reader{reader, cplen, ks.keyCount, ks.maxKeyLen};
+    prefix = BuildNestLoudsTriePrefix(
+        prefix_input_reader, tzopt, ks.keyCount, ks.sumPrefixLen - ks.keyCount * cplen,
+        isReverse, ks.minPrefixLen == ks.maxPrefixLen);
+    MinimizePrefixRemainingInputBuffer suffix_input_reader{reader, cplen, ks.keyCount, ks.maxKeyLen};
+    suffix = BuildSuffixAutoSelect(suffix_input_reader, ks.keyCount, ks.sumKeyLen - ks.sumPrefixLen,
+                                   ks.minSuffixLen == ks.maxSuffixLen, isReverse, uint_prefix_info.zip_ratio);
   }
   valvec<char> common(cplen, valvec_reserve());
   common.append(ks.minKey.data(), cplen);
@@ -3541,11 +3529,9 @@ struct StringHolder {
   }
 };
 #define _G(name,i) ((i+1)<sizeof(#name)?#name[i]:' ')
-#define NAME(s) StringHolder<                   \
-  _G(s, 0),_G(s, 1),_G(s, 2),_G(s, 3),_G(s, 4), \
-  _G(s, 5),_G(s, 6),_G(s, 7),_G(s, 8),_G(s, 9), \
-  _G(s,10),_G(s,11),_G(s,12),_G(s,13),_G(s,14), \
-  _G(s,15),_G(s,16),_G(s,17),_G(s,18),_G(s,19)>
+#define NAME(s) StringHolder<                                              \
+  _G(s, 0),_G(s, 1),_G(s, 2),_G(s, 3),_G(s, 4),_G(s, 5),_G(s, 6),_G(s, 7), \
+  _G(s, 8),_G(s, 9),_G(s,10),_G(s,11),_G(s,12),_G(s,13),_G(s,14),_G(s,15)>
 
 template<class N, size_t V>
 struct ComponentInfo {
@@ -3598,7 +3584,6 @@ using PrefixComponentList = ComponentRegister<>
 ::reg<NAME(SE_512_64   ), 1, IndexNestLoudsTriePrefix<NestLoudsTrieDAWG_SE_512_64         >>
 ::reg<NAME(SE_512_64_FL), 1, IndexNestLoudsTriePrefix<NestLoudsTrieDAWG_SE_512_64_FL      >>
 ::reg<NAME(A_AllOne    ), 0, IndexAscendingUintPrefix<rank_select_allone    >>
-::reg<NAME(A_FewZero_2 ), 1, IndexAscendingUintPrefix<rank_select_fewzero<2>>>
 ::reg<NAME(A_FewZero_3 ), 1, IndexAscendingUintPrefix<rank_select_fewzero<3>>>
 ::reg<NAME(A_FewZero_4 ), 1, IndexAscendingUintPrefix<rank_select_fewzero<4>>>
 ::reg<NAME(A_FewZero_5 ), 1, IndexAscendingUintPrefix<rank_select_fewzero<5>>>
@@ -3607,7 +3592,6 @@ using PrefixComponentList = ComponentRegister<>
 ::reg<NAME(A_FewZero_8 ), 1, IndexAscendingUintPrefix<rank_select_fewzero<8>>>
 ::reg<NAME(A_IL_256_32 ), 0, IndexAscendingUintPrefix<rank_select_il_256_32>>
 ::reg<NAME(A_SE_512_64 ), 0, IndexAscendingUintPrefix<rank_select_se_512_64>>
-::reg<NAME(A_FewOne_2  ), 1, IndexAscendingUintPrefix<rank_select_fewone<2>>>
 ::reg<NAME(A_FewOne_3  ), 1, IndexAscendingUintPrefix<rank_select_fewone<3>>>
 ::reg<NAME(A_FewOne_4  ), 1, IndexAscendingUintPrefix<rank_select_fewone<4>>>
 ::reg<NAME(A_FewOne_5  ), 1, IndexAscendingUintPrefix<rank_select_fewone<5>>>
@@ -3616,7 +3600,6 @@ using PrefixComponentList = ComponentRegister<>
 ::reg<NAME(A_FewOne_8  ), 1, IndexAscendingUintPrefix<rank_select_fewone<8>>>
 ::reg<NAME(ND_IL_256_32), 0, IndexNonDescendingUintPrefix<rank_select_il_256_32>>
 ::reg<NAME(ND_SE_512_64), 0, IndexNonDescendingUintPrefix<rank_select_se_512_64>>
-::reg<NAME(ND_FewOne_2 ), 1, IndexNonDescendingUintPrefix<rank_select_fewone<2>>>
 ::reg<NAME(ND_FewOne_3 ), 1, IndexNonDescendingUintPrefix<rank_select_fewone<3>>>
 ::reg<NAME(ND_FewOne_4 ), 1, IndexNonDescendingUintPrefix<rank_select_fewone<4>>>
 ::reg<NAME(ND_FewOne_5 ), 1, IndexNonDescendingUintPrefix<rank_select_fewone<5>>>

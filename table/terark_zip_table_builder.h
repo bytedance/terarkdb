@@ -84,7 +84,6 @@ private:
   struct RangeStatus {
     fstrvec prefixVec;
     TerarkIndex::KeyStat stat;
-    freq_hist_o1 freq;
     Uint64Histogram valueHist;
     febitvec valueBits;
     uint64_t seqType = 0;
@@ -122,7 +121,7 @@ private:
   void
   AddPrevUserKey(size_t samePrefix, std::initializer_list<RangeStatus*> r, std::initializer_list<RangeStatus*> e);
   void AddValueBit();
-  bool MergeRangeStatus(RangeStatus* aa, RangeStatus* bb, RangeStatus* ab);
+  bool MergeRangeStatus(RangeStatus* aa, RangeStatus* bb, RangeStatus* ab, size_t entropyLen);
   struct WaitHandle : boost::noncopyable {
     WaitHandle();
     WaitHandle(size_t);
@@ -135,7 +134,7 @@ private:
   WaitHandle WaitForMemory(const char* who, size_t memorySize);
   Status EmptyTableFinish();
   std::future<Status> Async(std::function<Status()> func);
-  void BuildIndex(KeyValueStatus& kvs);
+  void BuildIndex(KeyValueStatus& kvs, size_t entropyLen);
   enum BuildStoreFlag {
     BuildStoreInit = 1,
     BuildStoreSync = 2,
@@ -198,7 +197,8 @@ private:
   size_t keyDataSize_ = 0;
   size_t valueDataSize_ = 0;
   size_t prevSamePrefix_ = 0;
-  std::unique_ptr<RangeStatus> r00_, r11_, r22_, r01_, r12_, r02_;
+  std::unique_ptr<RangeStatus> r22_, r11_, r00_, r21_, r10_, r20_;
+  std::unique_ptr<freq_hist_o1> key_freq_[3];
   valvec<std::unique_ptr<KeyValueStatus>> prefixBuildInfos_;
   std::shared_ptr<FilePair> filePair_;
   valvec<byte_t> prevUserKey_;
@@ -230,7 +230,7 @@ private:
   BlockBuilder range_del_block_;
   fstrvec valueBuf_; // collect multiple values for one key
   PipelineProcessor pipeline_;
-  freq_hist_o1 freq_;
+  freq_hist_o1 kv_freq_;
   uint64_t next_freq_size_ = 1ULL << 20;
   bool waitInited_ = false;
   bool closed_ = false;  // Either Finish() or Abandon() has been called.

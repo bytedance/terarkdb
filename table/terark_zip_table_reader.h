@@ -256,6 +256,7 @@ public:
     LruReadonlyCache* cache_ = nullptr;
     intptr_t cache_fi_ = -1;
     size_t partCount_;
+    size_t iteratorSize_ = 0;
     fstrvec bounds_;
     valvec<TerarkZipSubReader> subReader_;
     bool hasAnyZipOffset_;
