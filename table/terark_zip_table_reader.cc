@@ -188,20 +188,6 @@ static void MmapAdviseRandom(fstring mem) {
   MmapAdviseRandom(mem.data(), mem.size());
 }
 
-Status UpdateLicenseInfo(const TerarkZipTableFactory* table_factory,
-                         Logger* info_log,
-                         const BlockContents& licenseBlock) {
-  auto& license = table_factory->GetLicense();
-  auto res = license.merge(licenseBlock.data.data(), licenseBlock.data.size());
-  assert(res == LicenseInfo::Result::OK);
-  TERARK_UNUSED_VAR(res);
-  if (!license.check()) {
-    license.print_error(nullptr, false, info_log);
-    return Status::Corruption("License expired", "contact@terark.com");
-  }
-  return Status::OK();
-}
-
 void UpdateCollectInfo(const TerarkZipTableFactory* table_factory,
                        const TerarkZipTableOptions* tzopt,
                        TableProperties* props,
@@ -1021,15 +1007,6 @@ TerarkEmptyTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   }
   file_data_ = file_data;
   global_seqno_ = GetGlobalSequenceNumber(*props, ioptions.info_log);
-  BlockContents licenseBlock;
-  s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber, ioptions,
-                          kTerarkZipTableExtendedBlock, &licenseBlock);
-  if (s.ok()) {
-    s = UpdateLicenseInfo(table_factory_, ioptions.info_log, licenseBlock);
-    if (!s.ok()) {
-      return s;
-    }
-  }
   s = LoadTombstone(file, file_size);
   if (global_seqno_ == kDisableGlobalSequenceNumber) {
     global_seqno_ = 0;
@@ -1086,15 +1063,7 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   isUint64Comparator_ =
     fstring(ioptions.user_comparator->Name()) == "rocksdb.Uint64Comparator";
 #endif
-  BlockContents valueDictBlock, offsetBlock, licenseBlock;
-  s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber, ioptions,
-                          kTerarkZipTableExtendedBlock, &licenseBlock);
-  if (s.ok()) {
-    s = UpdateLicenseInfo(table_factory_, ioptions.info_log, licenseBlock);
-    if (!s.ok()) {
-      return s;
-    }
-  }
+  BlockContents valueDictBlock, offsetBlock;
   UpdateCollectInfo(table_factory_, &tzto_, props, file_size);
   s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber, ioptions,
                           kTerarkZipTableValueDictBlock, &valueDictBlock);
@@ -1630,15 +1599,7 @@ TerarkZipTableMultiReader::Open(RandomAccessFileReader* file, uint64_t file_size
 #if defined(TERARK_SUPPORT_UINT64_COMPARATOR) && BOOST_ENDIAN_LITTLE_BYTE
   assert(fstring(ioptions.user_comparator->Name()) != "rocksdb.Uint64Comparator");
 #endif
-  BlockContents valueDictBlock, offsetBlock, licenseBlock;
-  s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber, ioptions,
-                          kTerarkZipTableExtendedBlock, &licenseBlock);
-  if (s.ok()) {
-    s = UpdateLicenseInfo(table_factory_, ioptions.info_log, licenseBlock);
-    if (!s.ok()) {
-      return s;
-    }
-  }
+  BlockContents valueDictBlock, offsetBlock;
   UpdateCollectInfo(table_factory_, &tzto_, props, file_size);
   s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber, ioptions,
                           kTerarkZipTableOffsetBlock, &offsetBlock);

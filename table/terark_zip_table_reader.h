@@ -73,7 +73,6 @@ class TerarkEmptyTableReader : public TerarkZipTableReaderBase {
     bool IsValuePinned() const override { return false; }
   };
   const TableReaderOptions table_reader_options_;
-  const TerarkZipTableFactory* table_factory_;
   std::shared_ptr<const TableProperties> table_properties_;
   SequenceNumber global_seqno_;
   Slice file_data_;
@@ -101,9 +100,8 @@ public:
   GetTableProperties() const override { return table_properties_; }
 
   virtual ~TerarkEmptyTableReader() {}
-  TerarkEmptyTableReader(const TerarkZipTableFactory* table_factory,
-                         const TableReaderOptions& o)
-    : table_reader_options_(o), table_factory_(table_factory), global_seqno_(kDisableGlobalSequenceNumber) {
+  TerarkEmptyTableReader(const TableReaderOptions& o)
+    : table_reader_options_(o), global_seqno_(kDisableGlobalSequenceNumber) {
   }
   Status Open(RandomAccessFileReader* file, uint64_t file_size);
 private:
