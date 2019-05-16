@@ -1245,17 +1245,17 @@ struct IndexAscendingUintPrefix
   size_t DictRank(fstring key, const SuffixBase* suffix, Context* ctx) const {
     size_t id, pos, hint = 0;
     bool seek_result, is_find;
-    std::tie(seek_result, is_find) = SeekImpl(key, id, pos, &hint);
+    std::tie(seek_result, is_find) =
+        SeekImpl(key.size() > key_length ? key.substr(0, key_length) : key, id, pos, &hint);
     if (!seek_result) {
       return rank_select.max_rank1();
-    }
-    if (key.size() != key_length || !is_find) {
-      return id + 1;
-    }
-    if (suffix == nullptr) {
+    } else if (key.size() < key_length || !is_find) {
       return id;
+    } else if (suffix == nullptr && key.size() > key_length) {
+      return id;
+    } else {
+      return suffix->LowerBound(key.substr(key_length), id, 1, ctx).first;
     }
-    return suffix->LowerBound(key.substr(key_length), id, 1, ctx).first;
   }
   size_t AppendMinKey(valvec<byte_t>* buffer, Context* ctx) const {
     size_t pos = buffer->size();
@@ -1498,14 +1498,17 @@ struct IndexNonDescendingUintPrefix
     assert(suffix != nullptr);
     size_t id, count, pos, hint = 0;
     bool seek_result, is_find;
-    std::tie(seek_result, is_find) = SeekImpl(key, id, count, pos, &hint);
+    std::tie(seek_result, is_find) =
+        SeekImpl(key.size() > key_length ? key.substr(0, key_length) : key, id, count, pos, &hint);
     if (!seek_result) {
       return rank_select.max_rank1();
+    } else if (key.size() < key_length || !is_find) {
+      return id;
+    } else if (suffix == nullptr && key.size() > key_length) {
+      return id;
+    } else {
+      return suffix->LowerBound(key.substr(key_length), id, count, ctx).first;
     }
-    if (key.size() != key_length || !is_find) {
-      return id + 1;
-    }
-    return suffix->LowerBound(key.substr(key_length), id, count, ctx).first;
   }
   size_t AppendMinKey(valvec<byte_t>* buffer, Context* ctx) const {
     size_t pos = buffer->size();
@@ -3303,7 +3306,7 @@ TerarkKeyReader* TerarkIndex::TerarkIndexDebugBuilder::Finish(KeyStat* output) {
 }
 
 TerarkIndex* TerarkIndex::Factory::Build(TerarkKeyReader* reader, const TerarkZipTableOptions& tzopt,
-                                         const TerarkIndex::KeyStat& ks) {
+                                         const TerarkIndex::KeyStat& ks, const UintPrefixBuildInfo* info_ptr) {
   using namespace index_detail;
   struct DefaultInputBuffer {
     TerarkKeyReader* reader;
@@ -3439,7 +3442,7 @@ TerarkIndex* TerarkIndex::Factory::Build(TerarkKeyReader* reader, const TerarkZi
 
   assert(ks.keyCount > 0);
   bool isReverse = ks.minKey > ks.maxKey;
-  UintPrefixBuildInfo uint_prefix_info = GetUintPrefixBuildInfo(ks);
+  UintPrefixBuildInfo uint_prefix_info = info_ptr != nullptr ? *info_ptr : GetUintPrefixBuildInfo(ks);
   size_t cplen = uint_prefix_info.common_prefix;
   PrefixBase* prefix;
   SuffixBase* suffix;
