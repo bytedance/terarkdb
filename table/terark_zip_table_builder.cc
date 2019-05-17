@@ -750,6 +750,9 @@ void TerarkZipTableBuilder::BuildIndex(KeyValueStatus& kvs, size_t entropyLen) {
       if (verify_index_impl()) {
         return true;
       }
+#ifndef NDEBUG
+      assert(false);
+#endif
 #ifdef _MSV_VER
       BOOL IsDbgPresent = FALSE;
       CheckRemoteDebuggerPresent(GetCurrentProcess(), &IsDbgPresent);
