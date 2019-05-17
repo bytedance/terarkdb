@@ -625,12 +625,6 @@ Status TerarkZipTableBuilder::EmptyTableFinish() {
   if (!s.ok()) {
     return s;
   }
-  auto& license = table_factory_->GetLicense();
-  BlockHandle licenseHandle;
-  s = WriteBlock(SliceOf(license.dump()), file_, &offset_, &licenseHandle);
-  if (!s.ok()) {
-    return s;
-  }
   if (!range_del_block_.empty()) {
     s = WriteBlock(range_del_block_.Finish(), file_, &offset_, &tombstoneBH);
     if (!s.ok()) {
@@ -640,7 +634,6 @@ Status TerarkZipTableBuilder::EmptyTableFinish() {
   range_del_block_.Reset();
   offset_info_.Init(0);
   return WriteMetaData(std::string(), 0, {
-    {&kTerarkZipTableExtendedBlock                 , licenseHandle},
     {&kTerarkEmptyTableKey                         , emptyTableBH },
     {!tombstoneBH.IsNull() ? &kRangeDelBlock : NULL, tombstoneBH  },
   });
@@ -726,8 +719,7 @@ void TerarkZipTableBuilder::BuildIndex(KeyValueStatus& kvs, size_t entropyLen) {
     long long t1 = g_pf.now();
     std::unique_ptr<TerarkIndex> indexPtr;
     try {
-      indexPtr.reset(TerarkIndex::Factory::Build(
-        tempKeyFileReader.get(), table_options_, keyStat));
+      indexPtr.reset(TerarkIndex::Factory::Build(tempKeyFileReader.get(), table_options_, keyStat, nullptr));
     }
     catch (const std::exception& ex) {
       INFO(ioptions_.info_log, "TerarkZipTableBuilder::Finish():this=%012p:\n  index build fail , error = %s\n"
@@ -1761,12 +1753,6 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4, long long
   if (!s.ok()) {
     return s;
   }
-  auto& license = table_factory_->GetLicense();
-  BlockHandle licenseHandle;
-  s = WriteBlock(SliceOf(license.dump()), file_, &offset_, &licenseHandle);
-  if (!s.ok()) {
-    return s;
-  }
   if (!range_del_block_.empty()) {
     s = WriteBlock(range_del_block_.Finish(), file_, &offset_, &tombstoneBlock);
     if (!s.ok()) {
@@ -1785,7 +1771,6 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4, long long
   kv_freq_.finish();
   size_t entropy = freq_hist_o1::estimate_size(kv_freq_.histogram());
   WriteMetaData(dictInfo, entropy, {
-    {&kTerarkZipTableExtendedBlock                               , licenseHandle },
     {!dict.memory.empty() ? &kTerarkZipTableValueDictBlock : NULL, dictBlock     },
     {&kTerarkZipTableOffsetBlock                                 , offsetBlock   },
     {!tombstoneBlock.IsNull() ? &kRangeDelBlock : NULL           , tombstoneBlock},
@@ -1971,12 +1956,6 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4, long
   if (!s.ok()) {
     return s;
   }
-  auto& license = table_factory_->GetLicense();
-  BlockHandle licenseHandle;
-  s = WriteBlock(SliceOf(license.dump()), file_, &offset_, &licenseHandle);
-  if (!s.ok()) {
-    return s;
-  }
   if (!range_del_block_.empty()) {
     s = WriteBlock(range_del_block_.Finish(), file_, &offset_, &tombstoneBlock);
     if (!s.ok()) {
@@ -1994,7 +1973,6 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4, long
   kv_freq_.finish();
   size_t entropy = freq_hist_o1::estimate_size(kv_freq_.histogram());
   WriteMetaData(dictInfo, entropy, {
-    {&kTerarkZipTableExtendedBlock                               , licenseHandle },
     {!dict.memory.empty() ? &kTerarkZipTableValueDictBlock : NULL, dictBlock     },
     {&kTerarkZipTableOffsetBlock                                 , offsetBlock   },
     {!tombstoneBlock.IsNull() ? &kRangeDelBlock : NULL           , tombstoneBlock},

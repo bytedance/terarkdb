@@ -126,7 +126,7 @@ public:
     virtual ~Factory();
     static TerarkIndex* Build(TerarkKeyReader* keyReader,
                               const TerarkZipTableOptions& tzopt,
-                              const KeyStat&);
+                              const KeyStat&, const UintPrefixBuildInfo*);
     static size_t MemSizeForBuild(const KeyStat&);
 
     virtual unique_ptr<TerarkIndex> LoadMemory(fstring mem) const = 0;
