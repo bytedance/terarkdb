@@ -708,9 +708,9 @@ double GenSortedRunGroup(const std::vector<double>& sr, size_t group,
   auto F = [](double q, size_t n) {
     return (std::pow(q, n + 1) - q) / (q - 1);
   };
-  // let S = ��q^i, i in <1..n>, seek q
+  // let S = ∑q^i, i in <1..n>, seek q
   double q = std::pow(S, 1.0 / group);
-  if (S <= sr.size() + 1) {
+  if (S <= group + 1) {
     q = 1;
   } else {
     // Newton-Raphson method
@@ -1386,6 +1386,21 @@ Compaction* UniversalCompactionPicker::PickCompositeCompaction(
         }
       }
     }
+    assert(std::is_sorted(
+        input_range.begin(), input_range.end(),
+        [uc](const RangeStorage& a, const RangeStorage& b) {
+          return uc->Compare(a.start, b.start) < 0;
+        }));
+    assert(std::is_sorted(
+        input_range.begin(), input_range.end(),
+        [uc](const RangeStorage& a, const RangeStorage& b) {
+          return uc->Compare(a.limit, b.limit) < 0;
+        }));
+    assert(std::find_if(
+        input_range.begin(), input_range.end(),
+        [uc](const RangeStorage& r) {
+          return uc->Compare(r.start, r.limit) > 0;
+        }) == input_range.end());
     uint64_t estimated_total_size = 0;
     for (auto f : inputs.files) {
       estimated_total_size += f->fd.file_size;
@@ -1483,7 +1498,7 @@ Compaction* UniversalCompactionPicker::PickCompositeCompaction(
     key.assign(ukey.data(), ukey.size());
   };
 
-  std::multimap<double, InternalKey, std::greater<size_t>> priority_map;
+  std::multimap<double, InternalKey, std::greater<double>> priority_map;
   static constexpr double read_priority = 2.0 / 3;
   static constexpr double size_priority = 1.0 / 3;
   MapSstElement map_element;
