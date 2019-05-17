@@ -1634,7 +1634,17 @@ Compaction* UniversalCompactionPicker::PickCompositeCompaction(
   if (!input_range.empty()) {
     std::sort(input_range.begin(), input_range.end(),
               [=](const RangeStorage& a, const RangeStorage& b) {
-                return uc->Compare(a.limit, b.limit) < 0;
+                int r = uc->Compare(a.limit, b.limit);
+                if (r == 0) {
+                  r = int(a.include_limit) - int(b.include_limit);
+                }
+                if (r == 0) {
+                  r = uc->Compare(a.start, b.start);
+                }
+                if (r == 0) {
+                  r = int(b.include_start) - int(a.include_start);
+                }
+                return r < 0;
               });
     compaction_purpose = kEssenceSst;
     return new_compaction();
