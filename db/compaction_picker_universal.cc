@@ -1377,7 +1377,8 @@ Compaction* UniversalCompactionPicker::PickCompositeCompaction(
     // remove empty ranges
     if (input_range.size() > 1) {
       for (auto it = input_range.begin() + 1; it != input_range.end();) {
-        if (uc->Compare(it->start, it[-1].start) == 0) {
+        if (uc->Compare(it->start, it[-1].start) == 0 ||
+            uc->Compare(it->limit, it[-1].limit) == 0) {
           it[-1].limit = std::move(it->limit);
           it[-1].include_limit = it->include_limit;
           it = input_range.erase(it);
