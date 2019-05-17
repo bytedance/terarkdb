@@ -911,6 +911,14 @@ public:
   fstring key() const override final {
     return iterator_key_;
   }
+
+  fstring pkey() const {
+    return prefix().IterGetKey(m_id, prefix_storage());
+  }
+
+  fstring skey() const {
+    return suffix().IterGetKey(m_id, suffix_storage());
+  }
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1097,6 +1105,17 @@ public:
 
   void BuildCache(double cacheRatio) override final {
     prefix_.BuildCache(cacheRatio);
+  }
+
+  void DumpKeys(std::function<void(fstring, fstring, fstring)> callback) const override final {
+    valvec<byte_t> buffer(IteratorSize(), valvec_no_init());
+    auto storage = buffer.data() + sizeof(IndexIterator<Prefix, Suffix>);
+    size_t storage_size = IteratorStorage::GetIteratorStorageSize(this);
+    auto iter = ::new(buffer.data()) IndexIterator<Prefix, Suffix>(this, storage, storage_size);
+    for (bool ok = iter->SeekToFirst(); ok; ok = iter->Next()) {
+      callback(common_.common, iter->pkey(), iter->skey());
+    }
+    iter->~IndexIterator<Prefix, Suffix>();
   }
 };
 
