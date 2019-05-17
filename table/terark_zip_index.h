@@ -156,6 +156,7 @@ public:
   virtual bool NeedsReorder() const = 0;
   virtual void GetOrderMap(terark::UintVecMin0& newToOld) const = 0;
   virtual void BuildCache(double cacheRatio) = 0;
+  virtual void DumpKeys(std::function<void(fstring, fstring, fstring)>) const = 0;
 };
 
 }
