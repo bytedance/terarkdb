@@ -725,7 +725,7 @@ ${xdir}/$(SHARED4): $(addprefix ${xdir}/, $(subst .cc,.o,$(strip $(LIB_SOURCES) 
 
 ${xdir}/%.o: %.cc
 	@mkdir -p $(dir $@)
-	$(CXX) -c $(CXXFLAGS) $(PLATFORM_SHARED_CFLAGS) $(LDFLAGS) -o $@ $<
+	$(CXX) -c $(CXXFLAGS) $(PLATFORM_SHARED_CFLAGS) -o $@ $<
 
 endif  # PLATFORM_SHARED_EXT
 
