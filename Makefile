@@ -1784,7 +1784,7 @@ liblz4.a:
 	cp -a downloads/lz4-$(LZ4_VER).tar.gz .
 	#wget ${LZ4_DOWNLOAD_BASE}/v$(LZ4_VER).tar.gz
 	#curl -O -L ${CURL_SSL_OPTS} ${LZ4_DOWNLOAD_BASE}/v$(LZ4_VER).tar.gz
-	mv v$(LZ4_VER).tar.gz lz4-$(LZ4_VER).tar.gz
+	#mv v$(LZ4_VER).tar.gz lz4-$(LZ4_VER).tar.gz
 	LZ4_SHA256_ACTUAL=`$(SHA256_CMD) lz4-$(LZ4_VER).tar.gz | cut -d ' ' -f 1`; \
 	if [ "$(LZ4_SHA256)" != "$$LZ4_SHA256_ACTUAL" ]; then \
 		echo lz4-$(LZ4_VER).tar.gz checksum mismatch, expected=\"$(LZ4_SHA256)\" actual=\"$$LZ4_SHA256_ACTUAL\"; \
