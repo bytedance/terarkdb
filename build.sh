@@ -13,9 +13,14 @@ rm -rf terark-zip-rocksdb
 git clone --depth=1 git@code.byted.org:storage/terark-zip-rocksdb.git
 
 # build targets 
-make libzstd.a libsnappy.a liblz4.a -j $cpuNum
-make shared_lib DEBUG_LEVEL=0 -j $cpuNum DISABLE_WARNING_AS_ERROR=1
-make shared_lib DEBUG_LEVEL=2 -j $cpuNum DISABLE_WARNING_AS_ERROR=1
+make libzstd.a libz.a libsnappy.a liblz4.a -j $cpuNum
+make EXTRA_CXXFLAGS="-DSNAPPY=1 -DZLIB=1 -DLZ4=1 -DZSTD=1 -Isnappy-1.1.4 -Ilz4-1.8.0/lib -Izstd-1.3.3/lib/include" \
+     EXTRA_LDFLAGS="-lsnappy -lz -llz4 -lzstd -L." \
+     shared_lib DEBUG_LEVEL=0 -j $cpuNum DISABLE_WARNING_AS_ERROR=1
+
+make EXTRA_CXXFLAGS="-DSNAPPY=1 -DZLIB=1 -DLZ4=1 -DZSTD=1 -Isnappy-1.1.4 -Ilz4-1.8.0/lib -Izstd-1.3.3/lib/include" \
+     EXTRA_LDFLAGS="-lsnappy -lz -llz4 -lzstd -L." \
+     shared_lib DEBUG_LEVEL=2 -j $cpuNum DISABLE_WARNING_AS_ERROR=1
 
 pkgdir=output
 rm -rf $pkgdir
