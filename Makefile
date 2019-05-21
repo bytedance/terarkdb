@@ -1739,7 +1739,8 @@ endif
 
 libz.a:
 	-rm -rf zlib-$(ZLIB_VER)
-	curl -O -L ${ZLIB_DOWNLOAD_BASE}/zlib-$(ZLIB_VER).tar.gz
+	cp -a downloads/zlib-$(ZLIB_VER).tar.gz .
+	#curl -O -L ${ZLIB_DOWNLOAD_BASE}/zlib-$(ZLIB_VER).tar.gz
 	ZLIB_SHA256_ACTUAL=`$(SHA256_CMD) zlib-$(ZLIB_VER).tar.gz | cut -d ' ' -f 1`; \
 	if [ "$(ZLIB_SHA256)" != "$$ZLIB_SHA256_ACTUAL" ]; then \
 		echo zlib-$(ZLIB_VER).tar.gz checksum mismatch, expected=\"$(ZLIB_SHA256)\" actual=\"$$ZLIB_SHA256_ACTUAL\"; \
@@ -1751,8 +1752,9 @@ libz.a:
 
 libbz2.a:
 	-rm -rf bzip2-$(BZIP2_VER)
-	wget ${BZIP2_DOWNLOAD_BASE}/$(BZIP2_VER)/bzip2-$(BZIP2_VER).tar.gz
-#	curl -O -L ${BZIP2_DOWNLOAD_BASE}/$(BZIP2_VER)/bzip2-$(BZIP2_VER).tar.gz
+	cp -a downloads/bzip2-$(BZIP2_VER).tar.gz .
+	#wget ${BZIP2_DOWNLOAD_BASE}/$(BZIP2_VER)/bzip2-$(BZIP2_VER).tar.gz
+	#curl -O -L ${BZIP2_DOWNLOAD_BASE}/$(BZIP2_VER)/bzip2-$(BZIP2_VER).tar.gz
 	BZIP2_SHA256_ACTUAL=`$(SHA256_CMD) bzip2-$(BZIP2_VER).tar.gz | cut -d ' ' -f 1`; \
 	if [ "$(BZIP2_SHA256)" != "$$BZIP2_SHA256_ACTUAL" ]; then \
 		echo bzip2-$(BZIP2_VER).tar.gz checksum mismatch, expected=\"$(BZIP2_SHA256)\" actual=\"$$BZIP2_SHA256_ACTUAL\"; \
@@ -1764,8 +1766,9 @@ libbz2.a:
 
 libsnappy.a:
 	-rm -rf snappy-$(SNAPPY_VER)
-	wget ${SNAPPY_DOWNLOAD_BASE}/$(SNAPPY_VER)/snappy-$(SNAPPY_VER).tar.gz
-#	curl -O -L ${CURL_SSL_OPTS} ${SNAPPY_DOWNLOAD_BASE}/$(SNAPPY_VER)/snappy-$(SNAPPY_VER).tar.gz
+	cp -a downloads/snappy-$(SNAPPY_VER).tar.gz .
+	#wget ${SNAPPY_DOWNLOAD_BASE}/$(SNAPPY_VER)/snappy-$(SNAPPY_VER).tar.gz
+	#curl -O -L ${CURL_SSL_OPTS} ${SNAPPY_DOWNLOAD_BASE}/$(SNAPPY_VER)/snappy-$(SNAPPY_VER).tar.gz
 	SNAPPY_SHA256_ACTUAL=`$(SHA256_CMD) snappy-$(SNAPPY_VER).tar.gz | cut -d ' ' -f 1`; \
 	if [ "$(SNAPPY_SHA256)" != "$$SNAPPY_SHA256_ACTUAL" ]; then \
 		echo snappy-$(SNAPPY_VER).tar.gz checksum mismatch, expected=\"$(SNAPPY_SHA256)\" actual=\"$$SNAPPY_SHA256_ACTUAL\"; \
@@ -1778,8 +1781,9 @@ libsnappy.a:
 
 liblz4.a:
 	-rm -rf lz4-$(LZ4_VER)
-	wget ${LZ4_DOWNLOAD_BASE}/v$(LZ4_VER).tar.gz
-#	curl -O -L ${CURL_SSL_OPTS} ${LZ4_DOWNLOAD_BASE}/v$(LZ4_VER).tar.gz
+	cp -a downloads/lz4-$(LZ4_VER).tar.gz .
+	#wget ${LZ4_DOWNLOAD_BASE}/v$(LZ4_VER).tar.gz
+	#curl -O -L ${CURL_SSL_OPTS} ${LZ4_DOWNLOAD_BASE}/v$(LZ4_VER).tar.gz
 	mv v$(LZ4_VER).tar.gz lz4-$(LZ4_VER).tar.gz
 	LZ4_SHA256_ACTUAL=`$(SHA256_CMD) lz4-$(LZ4_VER).tar.gz | cut -d ' ' -f 1`; \
 	if [ "$(LZ4_SHA256)" != "$$LZ4_SHA256_ACTUAL" ]; then \
@@ -1792,7 +1796,8 @@ liblz4.a:
 
 libzstd.a:
 	-rm -rf zstd-$(ZSTD_VER)
-	wget ${ZSTD_DOWNLOAD_BASE}/v$(ZSTD_VER).tar.gz
+	cp -a downloads/zstd-$(ZSTD_VER).tar.gz .
+	#wget ${ZSTD_DOWNLOAD_BASE}/v$(ZSTD_VER).tar.gz
 #	curl -O -L ${CURL_SSL_OPTS} ${ZSTD_DOWNLOAD_BASE}/v$(ZSTD_VER).tar.gz
 	mv v$(ZSTD_VER).tar.gz zstd-$(ZSTD_VER).tar.gz
 	ZSTD_SHA256_ACTUAL=`$(SHA256_CMD) zstd-$(ZSTD_VER).tar.gz | cut -d ' ' -f 1`; \
