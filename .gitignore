@@ -83,3 +83,6 @@ vs2017
 cmake-build-debug
 pkg
 .DS_Store
+
+table/terark_zip_table.h
+table/terark_zip_weak_function.h
