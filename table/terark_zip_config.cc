@@ -258,6 +258,7 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo) {
   MyGetBool  (tzo, disableSecondPassIter   , false);
   MyGetBool  (tzo, enableCompressionProbe  , true );
   MyGetBool  (tzo, disableCompressDict     , false);
+  MyGetBool  (tzo, dictZipBuilderOptimizeCpuL3Cache, false);
 
 
   MyGetDouble(tzo, estimateCompressionRatio, 1.00 );
