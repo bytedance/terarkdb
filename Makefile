@@ -1798,8 +1798,8 @@ libzstd.a:
 	-rm -rf zstd-$(ZSTD_VER)
 	cp -a downloads/zstd-$(ZSTD_VER).tar.gz .
 	#wget ${ZSTD_DOWNLOAD_BASE}/v$(ZSTD_VER).tar.gz
-#	curl -O -L ${CURL_SSL_OPTS} ${ZSTD_DOWNLOAD_BASE}/v$(ZSTD_VER).tar.gz
-	mv v$(ZSTD_VER).tar.gz zstd-$(ZSTD_VER).tar.gz
+	#curl -O -L ${CURL_SSL_OPTS} ${ZSTD_DOWNLOAD_BASE}/v$(ZSTD_VER).tar.gz
+	#mv v$(ZSTD_VER).tar.gz zstd-$(ZSTD_VER).tar.gz
 	ZSTD_SHA256_ACTUAL=`$(SHA256_CMD) zstd-$(ZSTD_VER).tar.gz | cut -d ' ' -f 1`; \
 	if [ "$(ZSTD_SHA256)" != "$$ZSTD_SHA256_ACTUAL" ]; then \
 		echo zstd-$(ZSTD_VER).tar.gz checksum mismatch, expected=\"$(ZSTD_SHA256)\" actual=\"$$ZSTD_SHA256_ACTUAL\"; \
