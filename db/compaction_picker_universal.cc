@@ -703,51 +703,73 @@ struct SortedRunGroup {
 
 double GenSortedRunGroup(const std::vector<double>& sr, size_t group,
                          std::vector<SortedRunGroup>* output_group) {
-  double S = std::accumulate(sr.begin(), sr.end(), 0.0);
-  // sum of [q, q^2, q^3, ... , q^n]
-  auto F = [](double q, size_t n) {
-    return (std::pow(q, n + 1) - q) / (q - 1);
-  };
-  // let S = ∑q^i, i in <1..n>, seek q
-  double q = std::pow(S, 1.0 / group);
-  if (S <= group + 1) {
-    q = 1;
-  } else {
-    // Newton-Raphson method
-    for (size_t c = 0; c < 8; ++c) {
-      double Fp = q, q_k = q;
-      for (size_t k = 2; k <= group; ++k) {
-        Fp += k * (q_k *= q);
+  auto Q = [](std::vector<double>::const_iterator b,
+              std::vector<double>::const_iterator e, size_t g) {
+    double S = std::accumulate(b, e, 0.0);
+    // sum of [q, q^2, q^3, ... , q^n]
+    auto F = [](double q, size_t n) {
+      return (std::pow(q, n + 1) - q) / (q - 1);
+    };
+    // let S = ∑q^i, i in <1..n>, seek q
+    double q = std::pow(S, 1.0 / g);
+    if (S <= g + 1) {
+      q = 1;
+    } else {
+      // Newton-Raphson method
+      for (size_t c = 0; c < 8; ++c) {
+        double Fp = q, q_k = q;
+        for (size_t k = 2; k <= g; ++k) {
+          Fp += k * (q_k *= q);
+        }
+        q -= (F(q, g) - S) / Fp;
       }
-      q -= (F(q, group) - S) / Fp;
     }
-  }
+    return q;
+  };
   auto& o = *output_group;
   o.resize(group);
+  double ret_q = Q(sr.begin(), sr.end(), group);
+  size_t sr_size = sr.size();
+  size_t g = group;
+  double q = ret_q;
+  for (size_t i = g - 1; q > 1 && i > 0; --i) {
+    size_t e = g - i;
+    double new_q = Q(sr.begin(), sr.begin() + sr_size - e, g - e);
+    if (new_q < q) {
+      for (size_t j = i; j < g; ++j) {
+        size_t start = j + sr_size - g;
+        o[j].ratio = sr[start];
+        o[j].count = 1;
+        o[j].start = start;
+      }
+      sr_size -= e;
+      g -= e;
+      q = new_q;
+    }
+  }
   // Standard Deviation pattern matching
-  double sr_acc = sr[0];
-  double q_acc = q;
-  double q_n = q;
-  size_t q_i = 0;
+  double sr_acc = sr[sr_size - 1];
+  double q_acc = std::pow(q, g);
+  int q_i = int(g) - 1;
+  o[q_i].ratio = sr_acc;
   o[0].start = 0;
-  o[0].ratio = sr[0];
-  for (size_t i = 1; i < sr.size(); ++i) {
-    size_t end_i = sr.size() - (group - q_i);
+  for (int i = int(sr_size) - 2; i >= 0; --i) {
     double new_acc = sr_acc + sr[i];
-    if ((i > end_i || sr_acc > q_acc ||
+    if ((i < q_i || sr_acc > q_acc ||
          std::abs(new_acc - q_acc) > std::abs(sr_acc - q_acc)) &&
-        q_i + 1 < group) {
-      o[q_i].count = i - o[q_i].start;
-      ++q_i;
-      q_acc += q_n *= q;
-      o[q_i].start = i;
+        q_i > 0) {
+      o[q_i].start = i + 1;
+      q_acc += std::pow(q, q_i--);
       o[q_i].ratio = 0;
     }
     sr_acc = new_acc;
     o[q_i].ratio += sr[i];
   }
-  o.back().count = sr.size() - o.back().start;
-  return q;
+  for (size_t i = 1; i < g; ++i) {
+    o[i - 1].count = o[i].start - o[i - 1].start;
+  }
+  o[g - 1].count = sr_size - o[g - 1].start;
+  return ret_q;
 }
 
 }  // namespace
@@ -1468,40 +1490,16 @@ Compaction* UniversalCompactionPicker::PickCompositeCompaction(
             e.include_largest_);
     return IsPrefaceRange(r, f, *icmp_);
   };
-  auto estimate_info = [vstorage, &is_perfect](const MapSstElement& range) {
-    if (is_perfect(range)) {
-      size_t file_size =
-          GetFilesSize(nullptr, range.link_.front().file_number, *vstorage);
-      return std::make_tuple(file_size, file_size, file_size);
-    }
-    size_t sum = 0;
-    size_t max = 0;
-    size_t file_size = 0;
-    for (auto& l : range.link_) {
-      sum += l.size;
-      max = std::max<size_t>(max, l.size);
-      file_size += GetFilesSize(nullptr, l.file_number, *vstorage);
-    }
-    sum = std::max<size_t>(1, sum);
-    max = std::max<size_t>(1, max);
-    file_size = std::max(sum, file_size);
-    return std::make_tuple(sum, max, file_size);
-  };
-  auto estimate_size = [](const MapSstElement& range) {
-    size_t sum = 0;
-    for (auto& l : range.link_) {
-      sum += l.size;
-    }
-    return sum;
-  };
   auto assign_user_key = [](std::string& key, const Slice& ikey) {
     Slice ukey = ExtractUserKey(ikey);
     key.assign(ukey.data(), ukey.size());
   };
 
-  std::multimap<double, InternalKey, std::greater<double>> priority_map;
-  static constexpr double read_priority = 2.0 / 3;
-  static constexpr double size_priority = 1.0 / 3;
+  struct FileUseInfo {
+    uint64_t size;
+    uint64_t used;
+  };
+  std::unordered_map<uint64_t, FileUseInfo> file_used;
   MapSstElement map_element;
   RangeStorage range;
   auto uc = ioptions_.internal_comparator.user_comparator();
@@ -1512,22 +1510,29 @@ Compaction* UniversalCompactionPicker::PickCompositeCompaction(
     range.limit.assign(uend.data(), uend.size());
   };
   bool has_start = false;
-  size_t map_element_count = 0;
+  size_t counter = 0;
   for (iter->SeekToFirst(); iter->Valid(); iter->Next()) {
-    ++map_element_count;
+    ++counter;
     if (!map_element.Decode(iter->key(), iter->value())) {
       // TODO log error info
       return nullptr;
     }
-    size_t sum, max, file_size;
-    std::tie(sum, max, file_size) = estimate_info(map_element);
-    double read_p = map_element.link_.size() * read_priority;
-    double size_p = (file_size * 1.0 / sum - 1) * size_priority + 1;
-    double priority = read_p * size_p;
-    if (priority > 1) {
-      InternalKey internal_key;
-      internal_key.DecodeFrom(iter->key());
-      priority_map.emplace(priority, std::move(internal_key));
+    if (is_perfect(map_element)) {
+      continue;
+    }
+    size_t sum = 0, max = 0;
+    for (auto& l : map_element.link_) {
+      sum += l.size;
+      max = std::max<size_t>(max, l.size);
+      auto find = file_used.find(l.file_number);
+      if (find == file_used.end()) {
+        FileUseInfo info = {
+            GetFilesSize(nullptr, l.file_number, *vstorage), l.size
+        };
+        file_used.emplace(l.file_number, info);
+      } else {
+        find->second.used += l.size;
+      }
     }
     if (map_element.link_.size() > 2 && (sum - max) * 2 < max) {
       if (!has_start) {
@@ -1559,6 +1564,45 @@ Compaction* UniversalCompactionPicker::PickCompositeCompaction(
     compaction_purpose = kLinkSst;
     return new_compaction();
   }
+  std::vector<InternalKey> internal_key_storage;
+  internal_key_storage.resize(counter *= 2);
+  struct HeapItem {
+    Slice k;
+    double s;
+    operator double() const noexcept {
+      return s;
+    }
+  };
+  std::vector<HeapItem> priority_heap;
+  for (iter->SeekToFirst(); iter->Valid(); iter->Next()) {
+    if (!map_element.Decode(iter->key(), iter->value())) {
+      // TODO log error info
+      return nullptr;
+    }
+    double p = map_element.link_.size();
+    size_t size = 0, used = 0;
+    for (auto& l : map_element.link_) {
+      auto find = file_used.find(l.file_number);
+      if (find == file_used.end()) {
+        p = -1;
+        break;
+      }
+      size += find->second.size;
+      used += find->second.used;
+    }
+    if (p < 0) {
+      continue;
+    }
+    p += 2.0 * (size - std::min(used, size)) / size;
+    assert(counter > 0);
+    internal_key_storage[--counter].DecodeFrom(
+        map_element.largest_key_);
+    HeapItem item = {
+        internal_key_storage[counter].Encode(), p
+    };
+    priority_heap.push_back(item);
+  }
+  std::make_heap(priority_heap.begin(), priority_heap.end(), std::less<double>());
   struct Comp {
     const InternalKeyComparator* c;
     bool operator()(const Slice& a, const Slice& b) const {
@@ -1566,20 +1610,26 @@ Compaction* UniversalCompactionPicker::PickCompositeCompaction(
     }
   } c = {icmp_};
   std::set<Slice, Comp> unique_check(c);
-  std::vector<InternalKey> unique_check_storage;
-  unique_check_storage.reserve(map_element_count);
   auto push_unique = [&](const Slice& key) {
-    unique_check_storage.emplace_back();
-    auto& ikey = unique_check_storage.back();
-    ikey.DecodeFrom(key);
-    unique_check.emplace(ikey.Encode());
-    assert(unique_check.size() == unique_check_storage.size());
+    assert(counter > 0);
+    internal_key_storage[--counter].DecodeFrom(key);
+    unique_check.emplace(internal_key_storage[counter].Encode());
   };
   size_t max_file_size_for_leval = size_t(
       MaxFileSizeForLevel(mutable_cf_options, std::max(1, inputs.level),
                           kCompactionStyleUniversal) * 2);
-  for (auto it = priority_map.begin(); it != priority_map.end(); ++it) {
-    iter->Seek(it->second.Encode());
+  auto estimate_size = [](const MapSstElement& element) {
+    size_t sum = 0;
+    for (auto& l : element.link_) {
+      sum += l.size;
+    }
+    return sum;
+  };
+  while (!priority_heap.empty()) {
+    auto key = priority_heap.front().k;
+    std::pop_heap(priority_heap.begin(), priority_heap.end(), std::less<double>());
+    priority_heap.pop_back();
+    iter->Seek(key);
     assert(iter->Valid());
     if (unique_check.count(iter->key()) > 0) {
       continue;
@@ -1611,7 +1661,7 @@ Compaction* UniversalCompactionPicker::PickCompositeCompaction(
       }
     }
     if (sum < max_file_size_for_leval) {
-      iter->SeekForPrev(it->second.Encode());
+      iter->SeekForPrev(key);
       do {
         iter->Prev();
         if (!iter->Valid() || unique_check.count(iter->key()) > 0) {
