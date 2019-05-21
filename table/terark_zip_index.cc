@@ -3041,6 +3041,7 @@ BuildBlobStoreSuffix(
     dzopt.offsetArrayBlockUnits = 128;
     dzopt.entropyZipRatioRequire = 0.95f;
     dzopt.embeddedDict = true;
+    dzopt.enableLake = true;
     zbuilder.reset(DictZipBlobStore::createZipBuilder(dzopt));
 
     std::mt19937_64 randomGenerator;

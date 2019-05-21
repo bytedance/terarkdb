@@ -248,6 +248,7 @@ TerarkZipTableBuilder::createZipBuilder() const {
   dzopt.checksumLevel = table_options_.checksumLevel;
   dzopt.offsetArrayBlockUnits = table_options_.offsetArrayBlockUnits;
   dzopt.useSuffixArrayLocalMatch = table_options_.useSuffixArrayLocalMatch;
+  dzopt.enableLake = table_options_.dictZipBuilderOptimizeCpuL3Cache;
   return DictZipBlobStore::createZipBuilder(dzopt);
 }
 

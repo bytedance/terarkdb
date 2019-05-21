@@ -105,7 +105,8 @@ struct TerarkZipTableOptions {
   size_t cacheCapacityBytes  = 0;  // non-zero implies direct io read
   bool   disableCompressDict = false;
   bool   useOldSecondPassMethod = false;
-  char   reserveBytes[22]    = {};
+  bool   dictZipBuilderOptimizeCpuL3Cache = false;
+  char   reserveBytes[21]    = {};
 };
 
 void TerarkZipDeleteTempFiles(const std::string& tmpPath);
