@@ -13,7 +13,7 @@
 
 namespace rocksdb {
 
-#if !defined(_MSC_VER)
+#if defined(TERARK_ZIP_ENABLE_WEAK_SYMBOL)
 
 void
 __attribute__((weak))
