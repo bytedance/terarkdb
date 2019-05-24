@@ -704,7 +704,7 @@ std::future<Status> TerarkZipTableBuilder::Async(std::function<Status()> func) {
   auto task = new TerarkZipTableBuilderTask;
   task->func = std::move(func);
   auto future = task->promise.get_future();
-  pipeline_.inqueue(task);
+  pipeline_.enqueue(task);
   return future;
 }
 
