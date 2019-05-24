@@ -86,3 +86,7 @@ pkg
 
 table/terark_zip_table.h
 table/terark_zip_weak_function.h
+
+lz4-1.8.0/
+snappy-1.1.4/
+zstd-1.3.3
