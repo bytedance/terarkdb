@@ -150,6 +150,8 @@ public:
   virtual size_t NumKeys() const = 0;
   virtual size_t TotalKeySize() const = 0;
   virtual fstring Memory() const = 0;
+  virtual valvec<fstring> GetMetaData() const = 0;
+  virtual void DetachMetaData(const valvec<fstring>&) = 0;
   virtual const char* Info(char* buffer, size_t size) const = 0;
   virtual Iterator* NewIterator(void* ptr) const = 0;
   virtual size_t IteratorSize() const = 0;

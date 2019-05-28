@@ -199,6 +199,7 @@ private:
   Slice file_data_;
   unique_ptr<RandomAccessFileReader> file_;
   valvec<byte_t> dict_;
+  valvec<byte_t> meta_;
   const TableReaderOptions table_reader_options_;
   const TerarkZipTableFactory* table_factory_;
   std::shared_ptr<const TableProperties> table_properties_;
@@ -297,6 +298,7 @@ private:
   Slice file_data_;
   unique_ptr<RandomAccessFileReader> file_;
   valvec<byte_t> dict_;
+  valvec<byte_t> meta_;
   const TableReaderOptions table_reader_options_;
   const TerarkZipTableFactory* table_factory_;
   std::shared_ptr<const TableProperties> table_properties_;

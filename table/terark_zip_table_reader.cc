@@ -583,7 +583,8 @@ protected:
       assert(value_index_ < value_count_);
       key_ptr_ = value_buf.data() + value_length_ + key_length_ * value_index_;
       Slice d;
-      if (value_length_ == sizeof(uint32_t) || (d = zmValue->getValueData(value_index_, value_count_), d.empty())) {
+      if (value_length_ == sizeof(uint32_t) ||
+          (d = zmValue->getValueData(value_index_, value_count_), d.empty())) {
         key_tag_ = port::kMaxUint64;
         user_value_.clear();
       } else {
@@ -1125,6 +1126,32 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
       subReader_.storeFD_ = subReader_.cache_->open(subReader_.storeFD_);
     }
   }
+  if (tzto_.forceMetaInMemory) {
+    valvec<fstring> index_meta_data = subReader_.index_->GetMetaData();
+    valvec<fstring> store_meta_data = subReader_.store_->get_meta_blocks();
+    size_t size = 0;
+    for (auto b : index_meta_data) {
+      size += b.size();
+    }
+    for (auto b : store_meta_data) {
+      size += b.size();
+    }
+    use_hugepage_resize_no_init(&meta_, size);
+    size = 0;
+    for (auto &b : index_meta_data) {
+      memcpy(meta_.data() + size, b.data(), b.size());
+      b = fstring(meta_.data() + size, b.size());
+      size += b.size();
+    }
+    for (auto &b : store_meta_data) {
+      memcpy(meta_.data() + size, b.data(), b.size());
+      b = fstring(meta_.data() + size, b.size());
+      size += b.size();
+    }
+    assert(size == meta_.size());
+    subReader_.index_->DetachMetaData(index_meta_data);
+    subReader_.store_->detach_meta_blocks(store_meta_data);
+  }
   long long t0 = g_pf.now();
   if (tzto_.warmUpIndexOnOpen) {
     MmapWarmUp(fstring(file_data.data(), indexSize));
@@ -1626,6 +1653,43 @@ TerarkZipTableMultiReader::Open(RandomAccessFileReader* file, uint64_t file_size
                      isReverseBytewiseOrder_);
   if (!s.ok()) {
     return s;
+  }
+  if (tzto_.forceMetaInMemory) {
+    valvec<std::pair<valvec<fstring>, valvec<fstring>>> meta_data;
+    size_t sub_count = subIndex_.GetSubCount();
+    meta_data.reserve(sub_count);
+    for (size_t i = 0; i < sub_count; ++i) {
+      auto subReader = subIndex_.GetSubReader(i);
+      meta_data.emplace_back(subReader->index_->GetMetaData(), subReader->store_->get_meta_blocks());
+    }
+    size_t size = 0;
+    for (auto &pair : meta_data) {
+      for (auto b : pair.first) {
+        size += b.size();
+      }
+      for (auto b : pair.second) {
+        size += b.size();
+      }
+    }
+    use_hugepage_resize_no_init(&meta_, size);
+    size = 0;
+    for (size_t i = 0; i < sub_count; ++i) {
+      auto& pair = meta_data.data()[i];
+      for (auto& b : pair.first) {
+        memcpy(meta_.data() + size, b.data(), b.size());
+        b = fstring(meta_.data() + size, b.size());
+        size += b.size();
+      }
+      for (auto& b : pair.second) {
+        memcpy(meta_.data() + size, b.data(), b.size());
+        b = fstring(meta_.data() + size, b.size());
+        size += b.size();
+      }
+      auto subReader = subIndex_.GetSubReader(i);
+      subReader->index_->DetachMetaData(pair.first);
+      subReader->store_->detach_meta_blocks(pair.second);
+    }
+    assert(size == meta_.size());
   }
   long long t0 = g_pf.now();
 

@@ -107,7 +107,7 @@ struct CollectInfo {
   void update(uint64_t timestamp, size_t raw_value, size_t zip_value, size_t raw_store, size_t zip_store);
   static bool hard(size_t raw, size_t zip);
   bool hard() const;
-  float estimate(float def_value) const;
+  float estimate() const;
 };
 
 enum class ZipValueType : unsigned char {

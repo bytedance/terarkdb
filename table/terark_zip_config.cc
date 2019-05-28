@@ -258,10 +258,9 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo) {
   MyGetBool  (tzo, disableSecondPassIter   , false);
   MyGetBool  (tzo, enableCompressionProbe  , true );
   MyGetBool  (tzo, disableCompressDict     , false);
-  MyGetBool  (tzo, dictZipBuilderOptimizeCpuL3Cache, false);
+  MyGetBool  (tzo, optimizeCpuL3Cache      , false);
+  MyGetBool  (tzo, forceMetaInMemory       , false);
 
-
-  MyGetDouble(tzo, estimateCompressionRatio, 1.00 );
   MyGetDouble(tzo, sampleRatio             , 0.06 );
   MyGetDouble(tzo, indexCacheRatio         , 0.00 );
 
@@ -276,6 +275,7 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo) {
   MyGetXiB(tzo, cacheCapacityBytes);
   MyGetInt(tzo, cacheShards, 67);
 
+  tzo.singleIndexMinSize = std::max<size_t>(tzo.singleIndexMinSize, 1ULL << 20);
   tzo.singleIndexMaxSize = std::min<size_t>(tzo.singleIndexMaxSize, 0x1E0000000);
 
   cfo.table_factory = SingleTerarkZipTableFactory(

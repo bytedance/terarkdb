@@ -15,9 +15,11 @@
   M_Boolea(warmUpIndexOnOpen);
   M_Boolea(warmUpValueOnOpen);
   M_Boolea(disableSecondPassIter);
+  M_Boolea(disableCompressDict);
+  M_Boolea(optimizeCpuL3Cache);
+  M_Boolea(forceMetaInMemory);
   M_NumFmt(minPreadLen              , "%d");
   M_NumFmt(offsetArrayBlockUnits    , "%d");
-  M_NumFmt(estimateCompressionRatio , "%f");
   M_NumFmt(sampleRatio              , "%f");
   M_NumFmt(indexCacheRatio          , "%f");
   M_NumGiB(softZipWorkingMemLimit);

@@ -116,9 +116,9 @@ bool CollectInfo::hard() const {
   return !queue.empty() && hard(raw_value_size, zip_value_size);
 }
 
-float CollectInfo::estimate(float def_value) const {
+float CollectInfo::estimate() const {
   float ret = estimate_compression_ratio;
-  return ret ? ret : def_value;
+  return ret ? ret : 1.0f;
 }
 
 size_t TerarkZipMultiOffsetInfo::calc_size(size_t partCount) {
