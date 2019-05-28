@@ -402,6 +402,8 @@ struct VirtualSuffixBase {
   virtual std::pair<size_t, fstring>
   LowerBound(fstring target, size_t suffix_id, size_t suffix_count, Context* ctx) const = 0;
   virtual void AppendKey(size_t suffix_id, valvec<byte_t>* buffer, Context* ctx) const = 0;
+  virtual void GetMetaData(valvec<fstring>* blocks) const = 0;
+  virtual void DetachMetaData(const valvec<fstring>& blocks) = 0;
 
   virtual void IterSet(size_t suffix_id, void* iter) const = 0;
   virtual bool IterSeek(fstring target, size_t& suffix_id, size_t suffix_count, void* iter) const = 0;
@@ -437,6 +439,12 @@ struct VirtualSuffixWrapper : public VirtualSuffixBase, public Suffix {
   }
   void AppendKey(size_t suffix_id, valvec<byte_t>* buffer, Context* ctx) const override final {
     return Suffix::AppendKey(suffix_id, buffer, ctx);
+  }
+  void GetMetaData(valvec<fstring>* blocks) const override final {
+    return Suffix::GetMetaData(blocks);
+  }
+  void DetachMetaData(const valvec<fstring>& blocks) override final {
+    Suffix::DetachMetaData(blocks);
   }
 
   void IterSet(size_t suffix_id, void* iter) const override final {
@@ -502,6 +510,12 @@ struct VirtualSuffix : public SuffixBase {
   }
   void AppendKey(size_t suffix_id, valvec<byte_t>* buffer, Context* ctx) const {
     return suffix->AppendKey(suffix_id, buffer, ctx);
+  }
+  void GetMetaData(valvec<fstring>* blocks) const {
+    return suffix->GetMetaData(blocks);
+  }
+  void DetachMetaData(const valvec<fstring>& blocks) {
+    suffix->DetachMetaData(blocks);
   }
 
   void IterSet(size_t suffix_id, void* iter) const {
@@ -1057,6 +1071,26 @@ public:
     return index_size == 0 ? fstring() : fstring((byte_t*)footer_ - index_size, index_size + f->footer_size);
   }
 
+  valvec<fstring> GetMetaData() const override final {
+    assert(footer_ != nullptr);
+    auto f = footer_;
+    fstring prefix = fstring((byte_t*)f - f->suffix_size - f->prefix_size, f->prefix_size);
+    valvec<fstring> meta_data;
+    suffix_.GetMetaData(&meta_data);
+    meta_data.append(prefix);
+    return meta_data;
+  }
+
+  void DetachMetaData(const valvec<fstring>& blocks) override final {
+    assert(footer_ != nullptr);
+    bool ok = prefix_.Load(blocks.back());
+    assert(ok); (void)ok;
+    valvec<fstring> suffix_blocks;
+    suffix_blocks.risk_set_data((fstring*)blocks.data(), blocks.size() - 1);
+    suffix_.DetachMetaData(suffix_blocks);
+    suffix_blocks.risk_release_ownership();
+  }
+
   const char* Info(char* buffer, size_t size) const override final {
     auto f = footer_;
     double c = prefix_.KeyCount();
@@ -1379,6 +1413,7 @@ struct IndexAscendingUintPrefix
     key_length = header->key_length;
     min_value = header->min_value;
     max_value = header->max_value;
+    rank_select.risk_release_ownership();
     rank_select.risk_mmap_from((byte_t*)mem.data() + sizeof(IndexUintPrefixHeader), header->rank_select_size);
     flags.is_user_mem = true;
     return true;
@@ -1657,6 +1692,7 @@ struct IndexNonDescendingUintPrefix
     key_length = header->key_length;
     min_value = header->min_value;
     max_value = header->max_value;
+    rank_select.risk_release_ownership();
     rank_select.risk_mmap_from((byte_t*)mem.data() + sizeof(IndexUintPrefixHeader), header->rank_select_size);
     flags.is_user_mem = true;
     return true;
@@ -1967,11 +2003,11 @@ struct IndexNestLoudsTriePrefix
 
   bool Load(fstring mem) override {
     std::unique_ptr<BaseDFA> dfa(BaseDFA::load_mmap_user_mem(mem.data(), mem.size()));
-    trie_.reset(dynamic_cast<NestLoudsTrieDAWG*>(dfa.get()));
-    if (!trie_) {
-      throw std::invalid_argument("Bad trie class: " + ClassName(*dfa)
-                                  + ", should be " + ClassName<NestLoudsTrieDAWG>());
+    auto dawg = dynamic_cast<NestLoudsTrieDAWG*>(dfa.get());
+    if (dawg == nullptr) {
+      return false;
     }
+    trie_.reset(dawg);
     dfa.release();
     return true;
   }
@@ -2001,6 +2037,10 @@ struct IndexEmptySuffix
     return {suffix_id, {}};
   }
   void AppendKey(size_t suffix_id, valvec<byte_t>* buffer, Context* ctx) const {
+  }
+  void GetMetaData(valvec<fstring>* blocks) const {
+  }
+  void DetachMetaData(const valvec<fstring>& blocks) {
   }
 
   void IterSet(size_t suffix_id, void*) const {
@@ -2087,6 +2127,10 @@ struct IndexFixedStringSuffix
       key = str_pool_[suffix_id];
     }
     buffer->append(key.data(), key.size());
+  }
+  void GetMetaData(valvec<fstring>* blocks) const {
+  }
+  void DetachMetaData(const valvec<fstring>& blocks) {
   }
 
   void IterSet(size_t /*suffix_id*/, void*) const {
@@ -2268,6 +2312,14 @@ struct IndexEntropySuffix
     assert(ok); (void)ok;
     ectx.buffer.swap(ctx->buf0);
     buffer->append(key.data(), key.size());
+  }
+  void GetMetaData(valvec<fstring>* blocks) const {
+    blocks->append(fstring(offsets_.data(), offsets_.mem_size()));
+  }
+  void DetachMetaData(const valvec<fstring>& blocks) {
+    fstring offset_mem = blocks.front();
+    offsets_.risk_release_ownership();
+    offsets_.risk_set_data((byte_t*)offset_mem.data(), offset_mem.size());
   }
 
   void IterSet(size_t suffix_id, IteratorStorage* iter) const {
@@ -2473,6 +2525,12 @@ struct IndexBlobStoreSuffix
     } else {
       store_.get_record_append(suffix_id, buffer);
     }
+  }
+  void GetMetaData(valvec<fstring>* blocks) const {
+    store_.get_meta_blocks(blocks);
+  }
+  void DetachMetaData(const valvec<fstring>& blocks) {
+    store_.detach_meta_blocks(blocks);
   }
 
   void IterSet(size_t suffix_id, IteratorStorage* iter) const {

@@ -22,12 +22,12 @@ namespace rocksdb {
 
 struct TerarkZipTableOptions {
   // copy of DictZipBlobStore::Options::EntropyAlgo
-  enum EntropyAlgo {
+  enum EntropyAlgo : uint32_t {
     kNoEntropy,
     kHuffman,
     kFSE,
   };
-  int indexNestLevel = 3;
+  int32_t     indexNestLevel           = 3;
 
   /// 0 : check sum nothing
   /// 1 : check sum meta data and index, check on file load
@@ -35,9 +35,8 @@ struct TerarkZipTableOptions {
   ///     each record, this incurs 4 bytes overhead for each record
   /// 3 : check sum all data with one checksum value, not checksum each record,
   ///     if checksum doesn't match, load will fail
-  int checksumLevel = 1;
-
-  EntropyAlgo entropyAlgo = kNoEntropy;
+  int32_t     checksumLevel            = 1;
+  EntropyAlgo entropyAlgo              = kNoEntropy;
 
   ///    < 0 : only last level using terarkZip
   ///          this is equivalent to terarkZipMinLevel == num_levels-1
@@ -48,7 +47,7 @@ struct TerarkZipTableOptions {
   /// it shown that set terarkZipMinLevel = 0 is the best choice
   /// if mixed with rocksdb's native SST, those SSTs may using too much
   /// memory & SSD, which degrades the performance
-  int terarkZipMinLevel = 0;
+  int         terarkZipMinLevel = 0;
 
   /// please always set to 0
   /// unless you know what it really does for
@@ -56,14 +55,8 @@ struct TerarkZipTableOptions {
   /// 1 : enable infomation output
   /// 2 : verify 2nd pass iter keys & values
   /// 3 : dump 1st & 2nd pass data to file
-  signed char   debugLevel               = 0;
-  bool          reserveBool              = false;
-  unsigned char indexNestScale           = 8;
-  bool          enableCompressionProbe   = true;
-  bool          useSuffixArrayLocalMatch = false;
-  bool          warmUpIndexOnOpen        = true;
-  bool          warmUpValueOnOpen        = false;
-  bool          disableSecondPassIter    = false;
+  uint8_t     debugLevel               = 0;
+  uint8_t     indexNestScale           = 8;
 
   /// -1: dont use temp file for  any  index build
   ///  0: only use temp file for large index build, smart
@@ -72,41 +65,45 @@ struct TerarkZipTableOptions {
   ///  3: only use temp file for large index build, same as NLT.tmpLevel
   ///  4: only use temp file for large index build, same as NLT.tmpLevel
   ///  5:      use temp file for  all  index build
-  signed char    indexTempLevel           = 0;
+  int8_t      indexTempLevel           = 0;
+  bool        enableCompressionProbe   = true;
+  bool        useSuffixArrayLocalMatch = false;
+  bool        warmUpIndexOnOpen        = true;
+  bool        warmUpValueOnOpen        = false;
+  bool        disableSecondPassIter    = false;
+  bool        disableCompressDict      = false;
+  bool        optimizeCpuL3Cache       = true;
+  bool        forceMetaInMemory        = false;
+  uint8_t     reserveBytes0[7]         = {};
+  uint16_t    offsetArrayBlockUnits    = 0;
 
-  unsigned short offsetArrayBlockUnits    = 0;
 
-  float          estimateCompressionRatio = 1.0f;
-  double         sampleRatio              = 0.03;
-  std::string    localTempDir             = "/tmp";
-  std::string    indexType                = "Mixed_XL_256_32_FL";
-
-  uint64_t softZipWorkingMemLimit = 16ull << 30;
-  uint64_t hardZipWorkingMemLimit = 32ull << 30;
-  uint64_t smallTaskMemory = 1200 << 20; // 1.2G
-  // use dictZip for value when average value length >= minDictZipValueSize
-  // otherwise do not use dictZip
-  uint32_t minDictZipValueSize = 15;
-  uint32_t keyPrefixLen = 0; // for IndexID
-
+  double      sampleRatio              = 0.03;
   // should be a small value, typically 0.001
   // default is to disable indexCache, because the improvement
   // is about only 10% when set to 0.001
-  double indexCacheRatio = 0;//0.001;
+  double      indexCacheRatio          = 0;  //0.001;
+  std::string localTempDir             = "/tmp";
+  std::string indexType                = "Mixed_XL_256_32_FL";
 
-  uint64_t singleIndexMinSize = 8ULL << 20; // 8M
-  uint64_t singleIndexMaxSize = 0x1E0000000; // 7.5G
+  uint64_t    softZipWorkingMemLimit   = 16ull << 30;
+  uint64_t    hardZipWorkingMemLimit   = 32ull << 30;
+  uint64_t    smallTaskMemory          = 1200 << 20; // 1.2G
+  // use dictZip for value when average value length >= minDictZipValueSize
+  // otherwise do not use dictZip
+  uint32_t    minDictZipValueSize      = 15;
+  uint32_t    keyPrefixLen             = 0; // for IndexID
+
+  uint64_t    singleIndexMinSize       = 8ULL << 20; // 8M
+  uint64_t    singleIndexMaxSize       = 0x1E0000000; // 7.5G
 
   ///  < 0: do not use pread
   /// == 0: always use pread
   ///  > 0: use pread if BlobStore avg record len > minPreadLen
-  int    minPreadLen         = 0;
-  int    cacheShards         = 17; // to reduce lock competition
-  size_t cacheCapacityBytes  = 0;  // non-zero implies direct io read
-  bool   disableCompressDict = false;
-  bool   useOldSecondPassMethod = false;
-  bool   dictZipBuilderOptimizeCpuL3Cache = false;
-  char   reserveBytes[21]    = {};
+  int32_t     minPreadLen              = 0;
+  int32_t     cacheShards              = 17; // to reduce lock competition
+  uint64_t    cacheCapacityBytes       = 0;  // non-zero implies direct io read
+  uint8_t     reserveBytes1[24]        = {};
 };
 
 void TerarkZipDeleteTempFiles(const std::string& tmpPath);
