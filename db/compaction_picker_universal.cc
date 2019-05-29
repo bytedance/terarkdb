@@ -49,15 +49,15 @@ struct InputFileInfo {
 // This comparator is used for the construction of min heap
 // based on the smallest key of the file.
 struct SmallestKeyHeapComparator {
-  explicit SmallestKeyHeapComparator(const Comparator* ucmp) { ucmp_ = ucmp; }
+  explicit SmallestKeyHeapComparator(const Comparator* icmp) { icmp_ = icmp; }
 
   bool operator()(InputFileInfo i1, InputFileInfo i2) const {
-    return (ucmp_->Compare(i1.f->smallest.user_key(),
-                           i2.f->smallest.user_key()) > 0);
+    return (icmp_->Compare(i1.f->smallest.Encode(),
+                           i2.f->smallest.Encode()) > 0);
   }
 
  private:
-  const Comparator* ucmp_;
+  const Comparator* icmp_;
 };
 
 typedef std::priority_queue<InputFileInfo, std::vector<InputFileInfo>,
@@ -67,9 +67,9 @@ typedef std::priority_queue<InputFileInfo, std::vector<InputFileInfo>,
 // This function creates the heap that is used to find if the files are
 // overlapping during universal compaction when the allow_trivial_move
 // is set.
-SmallestKeyHeap create_level_heap(Compaction* c, const Comparator* ucmp) {
+SmallestKeyHeap create_level_heap(Compaction* c, const Comparator* icmp) {
   SmallestKeyHeap smallest_key_priority_q =
-      SmallestKeyHeap(SmallestKeyHeapComparator(ucmp));
+      SmallestKeyHeap(SmallestKeyHeapComparator(icmp));
 
   InputFileInfo input_file;
 
@@ -121,13 +121,14 @@ void GetSmallestLargestSeqno(const std::vector<FileMetaData*>& files,
 // Algorithm that checks to see if there are any overlapping
 // files in the input
 bool UniversalCompactionPicker::IsInputFilesNonOverlapping(Compaction* c) {
-  auto comparator = icmp_->user_comparator();
   int first_iter = 1;
 
   InputFileInfo prev, curr, next;
 
-  SmallestKeyHeap smallest_key_priority_q =
-      create_level_heap(c, icmp_->user_comparator());
+  SmallestKeyHeap smallest_key_priority_q = create_level_heap(c, icmp_);
+  if (smallest_key_priority_q.size() <= 1) {
+    return true;
+  }
 
   while (!smallest_key_priority_q.empty()) {
     curr = smallest_key_priority_q.top();
@@ -137,13 +138,13 @@ bool UniversalCompactionPicker::IsInputFilesNonOverlapping(Compaction* c) {
       prev = curr;
       first_iter = 0;
     } else {
-      if (comparator->Compare(prev.f->largest.user_key(),
-                              curr.f->smallest.user_key()) >= 0) {
+      if (icmp_->Compare(prev.f->largest.Encode(),
+                         curr.f->smallest.Encode()) >= 0) {
         // found overlapping files, return false
         return false;
       }
-      assert(comparator->Compare(curr.f->largest.user_key(),
-                                 prev.f->largest.user_key()) > 0);
+      assert(icmp_->Compare(curr.f->largest.Encode(),
+                            prev.f->largest.Encode()) > 0);
       prev = curr;
     }
 
