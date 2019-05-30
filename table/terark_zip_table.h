@@ -74,7 +74,8 @@ struct TerarkZipTableOptions {
   bool        disableCompressDict      = false;
   bool        optimizeCpuL3Cache       = true;
   bool        forceMetaInMemory        = false;
-  uint8_t     reserveBytes0[7]         = {};
+  bool        enableEntropyStore       = true;
+  uint8_t     reserveBytes0[6]         = {};
   uint16_t    offsetArrayBlockUnits    = 0;
 
 

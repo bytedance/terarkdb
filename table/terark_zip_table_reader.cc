@@ -23,8 +23,6 @@
 // third party
 #include <zstd/zstd.h>
 
-MY_THREAD_LOCAL(rocksdb::TerarkIndex::Context, g_tctx);
-
 namespace {
 using namespace rocksdb;
 
@@ -192,9 +190,6 @@ void UpdateCollectInfo(const TerarkZipTableFactory* table_factory,
                        const TerarkZipTableOptions* tzopt,
                        TableProperties* props,
                        size_t file_size) {
-  if (!tzopt->enableCompressionProbe) {
-    return;
-  }
   auto find_time = props->user_collected_properties.find(kTerarkZipTableBuildTimestamp);
   if (find_time == props->user_collected_properties.end()) {
     return;
@@ -879,13 +874,14 @@ const {
     user_key = Slice(reinterpret_cast<const char*>(&u64_target), 8);
   }
 #endif
+  auto& g_tctx = *terark::GetTlsEntropyContext();
   size_t recId = index_->Find(fstringOf(user_key), &g_tctx);
   if (size_t(-1) == recId) {
     return Status::OK();
   }
   auto zvType = type_.size() ? ZipValueType(type_[recId]) : ZipValueType::kZeroSeq;
   bool matched;
-  auto& buf = g_tctx.buf0;
+  auto& buf = g_tctx.buffer;
   switch (zvType) {
   default:
     return Status::Aborted("TerarkZipTableReader::Get()", "Bad ZipValueType");
@@ -973,7 +969,7 @@ const {
 }
 
 size_t TerarkZipSubReader::DictRank(fstring key) const {
-  return index_->DictRank(key, &g_tctx);
+  return index_->DictRank(key, terark::GetTlsEntropyContext());
 }
 
 TerarkZipSubReader::~TerarkZipSubReader() {
@@ -1372,6 +1368,7 @@ Status TerarkZipTableMultiReader::SubIndex::Init(
   size_t rawSize = 0;
   intptr_t fileFD = fileObj->FileDescriptor();
   hasAnyZipOffset_ = false;
+  auto& g_tctx = *terark::GetTlsEntropyContext();
   try {
     valvec<byte_t> buffer;
     cache_fi_ = -1;

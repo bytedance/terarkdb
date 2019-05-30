@@ -131,10 +131,7 @@ public:
 
     virtual unique_ptr<TerarkIndex> LoadMemory(fstring mem) const = 0;
   };
-  struct Context {
-    valvec<byte_t> buf0;
-    valvec<byte_t> buf1;
-  };
+  using Context = terark::EntropyContext;
   typedef boost::intrusive_ptr<Factory> FactoryPtr;
   static UintPrefixBuildInfo GetUintPrefixBuildInfo(const TerarkIndex::KeyStat& ks);
   static unique_ptr<TerarkIndex> LoadMemory(fstring mem);

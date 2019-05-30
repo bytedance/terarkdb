@@ -18,6 +18,7 @@
   M_Boolea(disableCompressDict);
   M_Boolea(optimizeCpuL3Cache);
   M_Boolea(forceMetaInMemory);
+  M_Boolea(enableEntropyStore);
   M_NumFmt(minPreadLen              , "%d");
   M_NumFmt(offsetArrayBlockUnits    , "%d");
   M_NumFmt(sampleRatio              , "%f");

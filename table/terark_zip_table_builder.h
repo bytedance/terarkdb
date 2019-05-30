@@ -103,6 +103,8 @@ private:
   };
   struct KeyValueStatus {
     RangeStatus status;
+    freq_hist_o1 valueFreq;
+    size_t valueEntropyLen;
     bitfield_array<2> type;
     uint64_t indexFileBegin = 0;
     uint64_t indexFileEnd = 0;
@@ -115,7 +117,7 @@ private:
     std::future<Status> storeWait;
     std::atomic<size_t> keyFileRef = {2};
 
-    KeyValueStatus(RangeStatus&& s);
+    KeyValueStatus(RangeStatus&& s, freq_hist_o1&& f);
   };
   std::shared_ptr<FilePair> NewFilePair();
   void
@@ -161,6 +163,7 @@ private:
     fstring fpath;
     size_t offset;
   };
+  Status buildEntropyZipBlobStore(BuildStoreParams& params);
   Status buildZeroLengthBlobStore(BuildStoreParams& params);
   Status buildPlainBlobStore(BuildStoreParams& params);
   Status buildMixedLenBlobStore(BuildStoreParams& params);
@@ -198,7 +201,12 @@ private:
   size_t valueDataSize_ = 0;
   size_t prevSamePrefix_ = 0;
   std::unique_ptr<RangeStatus> r22_, r11_, r00_, r21_, r10_, r20_;
-  std::unique_ptr<freq_hist_o1> key_freq_[3];
+  struct FreqPair {
+    freq_hist_o1 k, v;
+    FreqPair() : k(false), v(true) {}
+  };
+  std::unique_ptr<FreqPair> freq_[3];
+  freq_hist_o1 kv_freq_;
   valvec<std::unique_ptr<KeyValueStatus>> prefixBuildInfos_;
   std::shared_ptr<FilePair> filePair_;
   valvec<byte_t> prevUserKey_;
@@ -229,8 +237,8 @@ private:
   TableProperties properties_;
   BlockBuilder range_del_block_;
   fstrvec valueBuf_; // collect multiple values for one key
+  valvec<byte_t> valueTestBuf_;
   PipelineProcessor pipeline_;
-  freq_hist_o1 kv_freq_;
   uint64_t next_freq_size_ = 1ULL << 20;
   bool waitInited_ = false;
   bool closed_ = false;  // Either Finish() or Abandon() has been called.

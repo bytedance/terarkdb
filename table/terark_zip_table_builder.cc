@@ -14,6 +14,7 @@
 #include <terark/io/MemStream.hpp>
 #include <terark/lcast.hpp>
 #include <terark/num_to_str.hpp>
+#include <terark/zbs/entropy_zip_blob_store.hpp>
 #include <terark/zbs/zero_length_blob_store.hpp>
 #include <terark/zbs/plain_blob_store.hpp>
 #include <terark/zbs/mixed_len_blob_store.hpp>
@@ -335,8 +336,10 @@ void TerarkZipTableBuilder::RangeStatus::AddValueBit() {
   valueBits.push_back(true);
 }
 
-TerarkZipTableBuilder::KeyValueStatus::KeyValueStatus(rocksdb::TerarkZipTableBuilder::RangeStatus&& s) {
+TerarkZipTableBuilder::KeyValueStatus::KeyValueStatus(
+    rocksdb::TerarkZipTableBuilder::RangeStatus&& s, freq_hist_o1&& f) {
   status = std::move(s);
+  valueFreq = std::move(f);
   isFullValue = true;
   for (auto& pair : status.fileVec) {
     if (!pair->isFullValue) {
@@ -344,6 +347,8 @@ TerarkZipTableBuilder::KeyValueStatus::KeyValueStatus(rocksdb::TerarkZipTableBui
     }
   }
   status.valueHist.finish();
+  valueFreq.finish();
+  valueEntropyLen = freq_hist_o1::estimate_size(valueFreq.histogram());
   assert(status.stat.keyCount == status.valueHist.m_cnt_sum);
 }
 
@@ -368,15 +373,17 @@ try {
     fprintf(tmpDumpFile_, "DEBUG: 1st pass => %s / %s \n",
             ikey.DebugString(true).c_str(), value.ToString(true).c_str());
   }
-  kv_freq_.add_record(fstringOf(key));
-  kv_freq_.add_record(fstringOf(value));
   ++properties_.num_entries;
   properties_.raw_key_size += key.size();
   properties_.raw_value_size += value.size();
-  size_t freq_size = kv_freq_.histogram().o0_size;
+  size_t freq_size = properties_.raw_key_size + properties_.raw_value_size;
   if (freq_size >= next_freq_size_) {
+    auto kv_freq_copy = std::unique_ptr<freq_hist_o1>(new freq_hist_o1(kv_freq_));
+    kv_freq_copy->add_hist(freq_[0]->k);
+    kv_freq_copy->add_hist(freq_[0]->v);
+    estimateOffset_ =
+        uint64_t(freq_hist_o1::estimate_size_unfinish(kv_freq_copy->histogram()) * estimateRatio_);
     next_freq_size_ = freq_size + (1ULL << 20);
-    estimateOffset_ = uint64_t(freq_hist_o1::estimate_size_unfinish(kv_freq_.histogram()) * estimateRatio_);
   }
   NotifyCollectTableCollectorsOnAdd(key, value, estimateOffset_,
                                     collectors_, ioptions_.info_log);
@@ -402,8 +409,8 @@ try {
         return true;
       }
       return !MergeRangeStatus(r22_.get(), r11_.get(), r21_.get(),
-                               freq_hist_o1::estimate_size_unfinish(key_freq_[2]->histogram(),
-                                                                    key_freq_[1]->histogram()));
+                               freq_hist_o1::estimate_size_unfinish(freq_[2]->k.histogram(),
+                                                                    freq_[1]->k.histogram()));
     };
     size_t samePrefix = userKey.commonPrefixLen(prevUserKey_);
     if (!r00_ || (prevUserKey_ != userKey && keyDataSize_ > table_options_.singleIndexMinSize)) {
@@ -411,22 +418,26 @@ try {
         assert(prefixBuildInfos_.empty());
         t0 = g_pf.now();
         assert(!r22_ && !r11_ && !r21_ && !r10_ && !r20_);
-        key_freq_[0].reset(new freq_hist_o1);
-        key_freq_[1].reset(new freq_hist_o1);
-        key_freq_[2].reset(new freq_hist_o1);
+        freq_[0].reset(new FreqPair);
+        freq_[1].reset(new FreqPair);
+        freq_[2].reset(new FreqPair);
         r00_.reset(new RangeStatus(userKey, prefixLen_, seqType));  // skip
         r10_.reset(new RangeStatus(userKey, prefixLen_, seqType));  // skip
         r20_.reset(new RangeStatus(userKey, prefixLen_, seqType));  // skip
       } else if (!r11_) {
         assert(prefixBuildInfos_.empty());
         assert(!r22_ && !r21_);
-        key_freq_[1].swap(key_freq_[0]);
+        kv_freq_.add_hist(freq_[0]->k);
+        kv_freq_.add_hist(freq_[0]->v);
+        freq_[1].swap(freq_[0]);
         r11_.swap(r00_);                                            // add last
         r00_.reset(new RangeStatus(userKey, prefixLen_, seqType));  // skip
         AddPrevUserKey(samePrefix, {r10_.get(), r20_.get()}, {r11_.get()});
       } else if (!r22_) {
-        key_freq_[2].swap(key_freq_[1]);
-        key_freq_[1].swap(key_freq_[0]);
+        kv_freq_.add_hist(freq_[0]->k);
+        kv_freq_.add_hist(freq_[0]->v);
+        freq_[2].swap(freq_[1]);
+        freq_[1].swap(freq_[0]);
         assert(prefixBuildInfos_.empty());
         r22_.swap(r11_);                                            // ignore
         r11_.reset(new RangeStatus(*r00_));                         // add last
@@ -435,22 +446,26 @@ try {
         r00_.reset(new RangeStatus(userKey, prefixLen_, seqType));  // skip
         AddPrevUserKey(samePrefix, {r10_.get(), r20_.get()}, {r11_.get(), r21_.get()});
       } else {
+        kv_freq_.add_hist(freq_[0]->k);
+        kv_freq_.add_hist(freq_[0]->v);
         if (ShouldStartBuild()) {
-          auto kvs = new KeyValueStatus(std::move(*r22_));
+          auto kvs = new KeyValueStatus(std::move(*r22_), std::move(freq_[2]->v));
           prefixBuildInfos_.emplace_back(kvs);
-          BuildIndex(*kvs, freq_hist_o1::estimate_size_unfinish(key_freq_[2]->histogram()));
+          BuildIndex(*kvs, freq_hist_o1::estimate_size_unfinish(freq_[2]->k.histogram()));
           BuildStore(*kvs, nullptr, BuildStoreInit);
           r22_.swap(r11_);                                          // ignore
           *r21_ = *r10_;                                            // add last
           r20_.swap(r10_);                                          // add prev
         } else {
-          key_freq_[1]->add_hist(*key_freq_[2]);
+          freq_[1]->k.add_hist(freq_[2]->k);
+          freq_[1]->v.add_hist(freq_[2]->v);
           r22_.swap(r21_);                                          // ignore
           *r21_ = *r20_;                                            // add last
         }
-        key_freq_[2].swap(key_freq_[1]);
-        key_freq_[1].swap(key_freq_[0]);
-        key_freq_[0]->clear();
+        freq_[2].swap(freq_[1]);
+        freq_[1].swap(freq_[0]);
+        freq_[0]->k.clear();
+        freq_[0]->v.reset1();
         *r11_ = *r00_;                                              // add last
         r10_.swap(r00_);                                            // add prev
         r00_.reset(new RangeStatus(userKey, prefixLen_, seqType));  // skip
@@ -654,28 +669,32 @@ Status TerarkZipTableBuilder::Finish() try {
   AddPrevUserKey(0, {}, {r00_.get(), r10_.get(), r20_.get()});
   filePair_->key.complete_write();
   filePair_->value.complete_write();
-  key_freq_[1]->add_hist(*key_freq_[0]);
+  kv_freq_.add_hist(freq_[0]->k);
+  kv_freq_.add_hist(freq_[0]->v);
+  freq_[1]->k.add_hist(freq_[0]->k);
+  freq_[1]->v.add_hist(freq_[0]->v);
   if (r22_ && !MergeRangeStatus(r22_.get(), r10_.get(), r20_.get(),
-                                freq_hist_o1::estimate_size_unfinish(key_freq_[2]->histogram(),
-                                                                     key_freq_[1]->histogram()))) {
-    auto kvs = new KeyValueStatus(std::move(*r22_));
+                                freq_hist_o1::estimate_size_unfinish(freq_[2]->k.histogram(),
+                                                                     freq_[1]->k.histogram()))) {
+    auto kvs = new KeyValueStatus(std::move(*r22_), std::move(freq_[2]->v));
     prefixBuildInfos_.emplace_back(kvs);
-    BuildIndex(*kvs, freq_hist_o1::estimate_size_unfinish(key_freq_[2]->histogram()));
+    BuildIndex(*kvs, freq_hist_o1::estimate_size_unfinish(freq_[2]->k.histogram()));
     BuildStore(*kvs, nullptr, BuildStoreInit);
-    kvs = new KeyValueStatus(std::move(*r10_));
+    kvs = new KeyValueStatus(std::move(*r10_), std::move(freq_[1]->v));
     prefixBuildInfos_.emplace_back(kvs);
-    BuildIndex(*kvs, freq_hist_o1::estimate_size_unfinish(key_freq_[1]->histogram()));
+    BuildIndex(*kvs, freq_hist_o1::estimate_size_unfinish(freq_[1]->k.histogram()));
     BuildStore(*kvs, nullptr, BuildStoreInit);
   }
   else {
-    auto kvs = new KeyValueStatus(std::move(*r20_));
+    freq_[2]->v.add_hist(freq_[1]->v);
+    auto kvs = new KeyValueStatus(std::move(*r20_), std::move(freq_[2]->v));
     prefixBuildInfos_.emplace_back(kvs);
-    BuildIndex(*kvs, freq_hist_o1::estimate_size_unfinish(key_freq_[2]->histogram(), key_freq_[1]->histogram()));
+    BuildIndex(*kvs, freq_hist_o1::estimate_size_unfinish(freq_[2]->k.histogram(), freq_[1]->k.histogram()));
     BuildStore(*kvs, nullptr, BuildStoreInit);
   }
-  key_freq_[0].reset();
-  key_freq_[1].reset();
-  key_freq_[2].reset();
+  freq_[0].reset();
+  freq_[1].reset();
+  freq_[2].reset();
   r00_.reset();
   r10_.reset();
   r20_.reset();
@@ -829,6 +848,8 @@ Status TerarkZipTableBuilder::BuildStore(KeyValueStatus& kvs,
     try {
       if (kvs.status.valueHist.m_total_key_len == 0) {
         s = buildZeroLengthBlobStore(params);
+      } else if (stat.keyCount >= 4096 && table_options_.enableEntropyStore) {
+        s = buildEntropyZipBlobStore(params);
       } else if (table_options_.offsetArrayBlockUnits) {
         if (variaNum * 64 < stat.keyCount) {
           s = buildMixedLenBlobStore(params);
@@ -1131,6 +1152,16 @@ LoadSample(std::unique_ptr<DictZipBlobStore::ZipBuilder>& zbuilder) {
   return waitHandle;
 }
 
+Status TerarkZipTableBuilder::buildEntropyZipBlobStore(BuildStoreParams& params) {
+  auto& kvs = params.kvs;
+  size_t blockUnits = table_options_.offsetArrayBlockUnits;
+  terark::EntropyZipBlobStore::MyBuilder builder(kvs.valueFreq, blockUnits, params.fpath, params.offset);
+  auto s = BuilderWriteValues(kvs, [&](fstring value) { builder.addRecord(value); });
+  if (s.ok()) {
+    builder.finish();
+  }
+  return s;
+}
 Status TerarkZipTableBuilder::buildZeroLengthBlobStore(BuildStoreParams& params) {
   auto& kvs = params.kvs;
   auto store = UniquePtrOf(new terark::ZeroLengthBlobStore());
@@ -1444,7 +1475,7 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
     seekSecondPassIter();
     assert(second_pass_iter_->status().ok());
 
-    bool dumpKeyValue = table_options_.debugLevel == 3;
+    bool debugDumpKeyValue = table_options_.debugLevel == 3;
 
     size_t varNum;
     int cmpRet, mulCmpRet;
@@ -1457,7 +1488,7 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
       curKey = second_pass_iter_->key();
       curVal = second_pass_iter_->value();
       TERARK_RT_assert(ParseInternalKey(curKey, &pIKey), std::logic_error);
-      if (dumpKeyValue) {
+      if (debugDumpKeyValue) {
         dumpKeyValueFunc(pIKey, second_pass_iter_->value());
       }
       varNum = kvs.status.valueBits.one_seq_len(bitPos);
@@ -1505,12 +1536,12 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
         value.resize(headerSize);
         ((ZipValueMultiValue*)value.data())->offsets[0] = uint32_t(varNum);
         size_t mulRecId = 0;
-        while (mulRecId < varNum && second_pass_iter_->status().ok()) {
+        while (mulRecId < varNum && second_pass_iter_->Valid()) {
           if (mulRecId > 0) {
             curKey = second_pass_iter_->key();
             curVal = second_pass_iter_->value();
             TERARK_RT_assert(ParseInternalKey(curKey, &pIKey), std::logic_error);
-            if (dumpKeyValue) {
+            if (debugDumpKeyValue) {
               dumpKeyValueFunc(pIKey, second_pass_iter_->value());
             }
           }
@@ -1544,23 +1575,22 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
       bitPos += varNum + 1;
       entryId += varNum;
     }
+    value.erase_all();
     while (recId < stat.keyCount) {
-      value.erase_all();
       varNum = kvs.status.valueBits.one_seq_len(bitPos);
       assert(varNum >= 1);
       TERARK_RT_assert(ParseInternalKey(bufKey, &pIKey), std::logic_error);
-      if (dumpKeyValue) {
-        dumpKeyValueFunc(pIKey, second_pass_iter_->value());
+      if (debugDumpKeyValue) {
+        dumpKeyValueFunc(pIKey, Slice());
       }
       bzvType.set0(recId, size_t(ZipValueType::kMulti));
       for (size_t mulRecId = 0; mulRecId < varNum; mulRecId++) {
         if (mulRecId > 0) {
           TERARK_RT_assert(ParseInternalKey(bufKey, &pIKey), std::logic_error);
-          if (dumpKeyValue) {
-            dumpKeyValueFunc(pIKey, second_pass_iter_->value());
+          if (debugDumpKeyValue) {
+            dumpKeyValueFunc(pIKey, Slice());
           }
         }
-        value.append((byte_t*)&port::kMaxUint64, 8);
         if (mulRecId + 1 < varNum) {
           bufKey = readInternalKey(false);
         }
@@ -2152,15 +2182,29 @@ void TerarkZipTableBuilder::AddPrevUserKey(size_t samePrefix, std::initializer_l
   if (vNum == 1 && (kTypeDeletion == type || kTypeValue == type)) {
     if (0 == seq && kTypeValue == type) {
       valueLen = valueBuf_.strpool.size() - 8;
+      freq_[0]->v.add_record(fstring(valueBuf_.strpool.data() + 8, valueLen));
       zeroSeq = true;
     } else {
       valueLen = valueBuf_.strpool.size() - 1;
+      freq_[0]->v.add_record(fstring(valueBuf_.strpool.data() + 1, valueLen));
       seqExpandSize_ += 7;
     }
   } else {
+    size_t headerSize = ZipValueMultiValue::calcHeaderSize(vNum);
+    valueLen = valueBuf_.strpool.size() + headerSize;
+    valueTestBuf_.reserve(valueLen);
+    valueTestBuf_.risk_set_size(headerSize);
+    ZipValueMultiValue* zmValue = (ZipValueMultiValue*)valueTestBuf_.data();
+    zmValue->offsets[0] = vNum;
+    for (size_t i = 1; i < vNum; ++i) {
+      fstring v = valueBuf_[i - 1];
+      valueTestBuf_.append(v);
+      zmValue->offsets[i] = valueTestBuf_.size() - headerSize;
+    }
+    valueTestBuf_.append(valueBuf_.back());
+    freq_[0]->v.add_record(valueTestBuf_);
     seqExpandSize_ += vNum * 8;
-    multiValueExpandSize_ += vNum * 4;
-    valueLen = valueBuf_.strpool.size() + sizeof(uint32_t) * vNum;
+    multiValueExpandSize_ += headerSize;
   }
   valueBuf_.erase_all();
   if (keyDataSize_ == 0) {
@@ -2175,7 +2219,7 @@ void TerarkZipTableBuilder::AddPrevUserKey(size_t samePrefix, std::initializer_l
   for (auto ptr : e) {
     ptr->AddKey(prevUserKey_, prefixLen_, size_t(-1), valueLen, zeroSeq);
   }
-  key_freq_[0]->add_record(prevUserKey_);
+  freq_[0]->k.add_record(prevUserKey_);
 }
 
 void TerarkZipTableBuilder::AddValueBit() {
