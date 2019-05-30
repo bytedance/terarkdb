@@ -34,9 +34,8 @@ class FlushJobTest : public testing::Test {
         table_cache_(NewLRUCache(50000, 16)),
         write_buffer_manager_(db_options_.db_write_buffer_size),
         versions_(new VersionSet(dbname_, &db_options_, env_options_,
-                                 false, // seq_per_batch
-                                 table_cache_.get(), &write_buffer_manager_,
-                                 &write_controller_)),
+                                 /* seq_per_batch */ false, table_cache_.get(),
+                                 &write_buffer_manager_, &write_controller_)),
         shutting_down_(false),
         mock_table_factory_(new mock::MockTableFactory()) {
     EXPECT_OK(env_->CreateDirIfMissing(dbname_));
@@ -74,11 +73,11 @@ class FlushJobTest : public testing::Test {
     }
 
     const std::string manifest = DescriptorFileName(dbname_, 1);
-    unique_ptr<WritableFile> file;
+    std::unique_ptr<WritableFile> file;
     Status s = env_->NewWritableFile(
         manifest, &file, env_->OptimizeForManifestWrite(env_options_));
     ASSERT_OK(s);
-    unique_ptr<WritableFileWriter> file_writer(
+    std::unique_ptr<WritableFileWriter> file_writer(
         new WritableFileWriter(std::move(file), manifest, EnvOptions()));
     {
       log::Writer log(std::move(file_writer), 0, false);
@@ -138,7 +137,7 @@ TEST_F(FlushJobTest, NonEmpty) {
   JobContext job_context(0);
   auto cfd = versions_->GetColumnFamilySet()->GetDefault();
   auto new_mem = cfd->ConstructNewMemtable(*cfd->GetLatestMutableCFOptions(),
-                                           false, // needs_dup_key_check
+                                           /* needs_dup_key_check */ false,
                                            kMaxSequenceNumber);
   new_mem->Ref();
   auto inserted_keys = mock::MakeMockFile();
@@ -204,7 +203,7 @@ TEST_F(FlushJobTest, FlushMemTablesSingleColumnFamily) {
   std::vector<MemTable*> new_mems;
   for (size_t i = 0; i != num_mems; ++i) {
     MemTable* mem = cfd->ConstructNewMemtable(*cfd->GetLatestMutableCFOptions(),
-                                              false, // needs_dup_key_check
+                                              /* needs_dup_key_check */ false,
                                               kMaxSequenceNumber);
     mem->SetID(i);
     mem->Ref();
@@ -279,12 +278,10 @@ TEST_F(FlushJobTest, FlushMemtablesMultipleColumnFamilies) {
     smallest_seqs.push_back(curr_seqno);
     for (size_t i = 0; i != num_memtables[k]; ++i) {
       MemTable* mem = cfd->ConstructNewMemtable(
-          *cfd->GetLatestMutableCFOptions(),
-          false, // needs_dup_key_check
+          *cfd->GetLatestMutableCFOptions(), /* needs_dup_key_check */ false,
           kMaxSequenceNumber);
       mem->SetID(i);
       mem->Ref();
-      mem->TEST_AtomicFlushSequenceNumber() = 123;
 
       for (size_t j = 0; j != num_keys_per_memtable; ++j) {
         std::string key(ToString(j + i * num_keys_per_memtable));
@@ -314,7 +311,9 @@ TEST_F(FlushJobTest, FlushMemtablesMultipleColumnFamilies) {
     k++;
   }
   HistogramData hist;
-  autovector<FileMetaData> file_metas;
+  std::vector<FileMetaData> file_metas;
+  // Call reserve to avoid auto-resizing
+  file_metas.reserve(flush_jobs.size());
   mutex_.Lock();
   for (auto& job : flush_jobs) {
     job.PickMemTable();
@@ -325,23 +324,23 @@ TEST_F(FlushJobTest, FlushMemtablesMultipleColumnFamilies) {
     ASSERT_OK(job.Run(nullptr /**/, &meta));
     file_metas.emplace_back(meta);
   }
+  autovector<FileMetaData*> file_meta_ptrs;
+  for (auto& meta : file_metas) {
+    file_meta_ptrs.push_back(&meta);
+  }
   autovector<const autovector<MemTable*>*> mems_list;
   for (size_t i = 0; i != all_cfds.size(); ++i) {
     const auto& mems = flush_jobs[i].GetMemTables();
     mems_list.push_back(&mems);
   }
-  autovector<MemTableList*> imm_lists;
   autovector<const MutableCFOptions*> mutable_cf_options_list;
   for (auto cfd : all_cfds) {
-    imm_lists.push_back(cfd->imm());
     mutable_cf_options_list.push_back(cfd->GetLatestMutableCFOptions());
   }
 
-  bool atomic_flush_commit_in_progress = false;
-  Status s = MemTableList::TryInstallMemtableFlushResults(
-      imm_lists, all_cfds, mutable_cf_options_list, mems_list,
-      &atomic_flush_commit_in_progress, nullptr /* logs_prep_tracker */,
-      versions_.get(), &mutex_, file_metas, &job_context.memtables_to_free,
+  Status s = InstallMemtableAtomicFlushResults(
+      nullptr /* imm_lists */, all_cfds, mutable_cf_options_list, mems_list,
+      versions_.get(), &mutex_, file_meta_ptrs, &job_context.memtables_to_free,
       nullptr /* db_directory */, nullptr /* log_buffer */);
   ASSERT_OK(s);
 
@@ -373,7 +372,7 @@ TEST_F(FlushJobTest, Snapshots) {
   JobContext job_context(0);
   auto cfd = versions_->GetColumnFamilySet()->GetDefault();
   auto new_mem = cfd->ConstructNewMemtable(*cfd->GetLatestMutableCFOptions(),
-                                           false, // needs_dup_key_check
+                                           /* needs_dup_key_check */ false,
                                            kMaxSequenceNumber);
 
   std::vector<SequenceNumber> snapshots;

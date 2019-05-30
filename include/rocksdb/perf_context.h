@@ -17,6 +17,8 @@ namespace rocksdb {
 // and transparently.
 // Use SetPerfLevel(PerfLevel::kEnableTime) to enable time stats.
 
+// Break down performance counters by level and store per-level perf context in
+// PerfContextByLevel
 struct PerfContextByLevel {
   // # of times bloom filter has avoided file reads, i.e., negatives.
   uint64_t bloom_filter_useful = 0;
@@ -25,6 +27,13 @@ struct PerfContextByLevel {
   // # of times bloom FullFilter has not avoided the reads and data actually
   // exist.
   uint64_t bloom_filter_full_true_positive = 0;
+
+  // total number of user key returned (only include keys that are found, does
+  // not include keys that are deleted or merged without a final put
+  uint64_t user_key_return_count;
+
+  // total nanos spent on reading data from SST files
+  uint64_t get_from_table_nanos;
 
   void Reset(); // reset all performance counters to zero
 };
@@ -192,8 +201,8 @@ struct PerfContext {
   uint64_t env_lock_file_nanos;
   uint64_t env_unlock_file_nanos;
   uint64_t env_new_logger_nanos;
-  std::map<uint32_t, PerfContextByLevel>* level_to_perf_context;
-  bool per_level_perf_context_enabled;
+  std::map<uint32_t, PerfContextByLevel>* level_to_perf_context = nullptr;
+  bool per_level_perf_context_enabled = false;
 };
 
 // Get Thread-local PerfContext object pointer

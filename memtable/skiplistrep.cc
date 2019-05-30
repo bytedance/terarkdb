@@ -304,10 +304,9 @@ bool InsertKeyValueConcurrently(const Slice& internal_key,
 }
 
 MemTableRep* SkipListFactory::CreateMemTableRep(
-    const MemTableRep::KeyComparator& compare,
-    bool /*needs_dup_key_check*/,
-    Allocator* allocator,
-    const SliceTransform* transform, Logger* /*logger*/) {
+    const MemTableRep::KeyComparator& compare, bool /*needs_dup_key_check*/,
+    Allocator* allocator, const SliceTransform* transform,
+    Logger* /*logger*/) {
   return new SkipListRep(compare, allocator, transform, lookahead_);
 }
 

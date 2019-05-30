@@ -186,7 +186,7 @@ bool VersionEdit::EncodeTo(std::string* dst) const {
         PutLengthPrefixedSlice(dst, Slice(varint_log_number));
         min_log_num_written = true;
       }
-      if (f.sst_purpose != 0) {
+      if (f.sst_purpose != 0 || !f.sst_depend.empty()) {
         PutVarint32(dst, CustomTag::kSstPurpose);
         std::string encode_buffer;
         encode_buffer.push_back((char)f.sst_purpose);
@@ -613,7 +613,7 @@ std::string VersionEdit::DebugString(bool hex_key) const {
     AppendNumberTo(&r, max_column_family_);
   }
   if (is_in_atomic_group_) {
-    r.append("\n AtomicGroup: ");
+    r.append("\n  AtomicGroup: ");
     AppendNumberTo(&r, remaining_entries_);
     r.append(" entries remains");
   }

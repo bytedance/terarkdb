@@ -46,7 +46,7 @@
 #include "db/memtable_list.h"
 #include "db/merge_context.h"
 #include "db/merge_helper.h"
-#include "db/range_del_aggregator.h"
+#include "db/range_tombstone_fragmenter.h"
 #include "db/table_cache.h"
 #include "db/table_properties_collector.h"
 #include "db/transaction_log_impl.h"
@@ -225,7 +225,7 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
       preserve_deletes_(options.preserve_deletes),
       closed_(false),
       error_handler_(this, immutable_db_options_, &mutex_),
-      atomic_flush_commit_in_progress_(false) {
+      atomic_flush_install_cv_(&mutex_) {
   // !batch_per_trx_ implies seq_per_batch_ because it is only unset for
   // WriteUnprepared, which should use seq_per_batch_.
   assert(batch_per_txn_ || seq_per_batch_);
@@ -240,9 +240,8 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
                              immutable_db_options_.table_cache_numshardbits);
 
   versions_.reset(new VersionSet(dbname_, &immutable_db_options_, env_options_,
-                                 seq_per_batch,
-                                 table_cache_.get(), write_buffer_manager_,
-                                 &write_controller_));
+                                 seq_per_batch, table_cache_.get(),
+                                 write_buffer_manager_, &write_controller_));
   column_family_memtables_.reset(
       new ColumnFamilyMemTablesImpl(versions_->GetColumnFamilySet()));
 
@@ -312,7 +311,30 @@ Status DBImpl::ResumeImpl() {
   // We cannot guarantee consistency of the WAL. So force flush Memtables of
   // all the column families
   if (s.ok()) {
-    s = FlushAllCFs(FlushReason::kErrorRecovery);
+    FlushOptions flush_opts;
+    // We allow flush to stall write since we are trying to resume from error.
+    flush_opts.allow_write_stall = true;
+    if (immutable_db_options_.atomic_flush) {
+      autovector<ColumnFamilyData*> cfds;
+      SelectColumnFamiliesForAtomicFlush(&cfds);
+      mutex_.Unlock();
+      s = AtomicFlushMemTables(cfds, flush_opts, FlushReason::kErrorRecovery);
+      mutex_.Lock();
+    } else {
+      for (auto cfd : *versions_->GetColumnFamilySet()) {
+        if (cfd->IsDropped()) {
+          continue;
+        }
+        cfd->Ref();
+        mutex_.Unlock();
+        s = FlushMemTable(cfd, flush_opts, FlushReason::kErrorRecovery);
+        mutex_.Lock();
+        cfd->Unref();
+        if (!s.ok()) {
+          break;
+        }
+      }
+    }
     if (!s.ok()) {
       ROCKS_LOG_INFO(immutable_db_options_.info_log,
                      "DB resume requested but failed due to Flush failure [%s]",
@@ -384,13 +406,21 @@ void DBImpl::CancelAllBackgroundWork(bool wait) {
   if (!shutting_down_.load(std::memory_order_acquire) &&
       has_unpersisted_data_.load(std::memory_order_relaxed) &&
       !mutable_db_options_.avoid_flush_during_shutdown) {
-    for (auto cfd : *versions_->GetColumnFamilySet()) {
-      if (!cfd->IsDropped() && cfd->initialized() && !cfd->mem()->IsEmpty()) {
-        cfd->Ref();
-        mutex_.Unlock();
-        FlushMemTable(cfd, FlushOptions(), FlushReason::kShutDown);
-        mutex_.Lock();
-        cfd->Unref();
+    if (immutable_db_options_.atomic_flush) {
+      autovector<ColumnFamilyData*> cfds;
+      SelectColumnFamiliesForAtomicFlush(&cfds);
+      mutex_.Unlock();
+      AtomicFlushMemTables(cfds, FlushOptions(), FlushReason::kShutDown);
+      mutex_.Lock();
+    } else {
+      for (auto cfd : *versions_->GetColumnFamilySet()) {
+        if (!cfd->IsDropped() && cfd->initialized() && !cfd->mem()->IsEmpty()) {
+          cfd->Ref();
+          mutex_.Unlock();
+          FlushMemTable(cfd, FlushOptions(), FlushReason::kShutDown);
+          mutex_.Lock();
+          cfd->Unref();
+        }
       }
     }
     versions_->GetColumnFamilySet()->FreeDeadColumnFamilies();
@@ -706,7 +736,6 @@ Status DBImpl::SetOptions(
   MutableCFOptions new_options;
   Status s;
   Status persist_options_status;
-  WriteThread::Writer w;
   SuperVersionContext sv_context(/* create_superversion */ true);
   {
     InstrumentedMutexLock l(&mutex_);
@@ -768,7 +797,6 @@ Status DBImpl::SetDBOptions(
   Status s;
   Status persist_options_status;
   bool wal_changed = false;
-  WriteThread::Writer w;
   WriteContext write_context;
   {
     InstrumentedMutexLock l(&mutex_);
@@ -817,6 +845,7 @@ Status DBImpl::SetDBOptions(
           env_options_for_compaction_, immutable_db_options_);
       env_options_for_compaction_.compaction_readahead_size =
           mutable_db_options_.compaction_readahead_size;
+      WriteThread::Writer w;
       write_thread_.EnterUnbatched(&w, &mutex_);
       if (total_log_size_ > GetMaxTotalWalSize() || wal_changed) {
         Status purge_wal_status = SwitchWAL(&write_context);
@@ -1009,7 +1038,7 @@ bool DBImpl::SetPreserveDeletesSequenceNumber(SequenceNumber seqnum) {
 }
 
 InternalIterator* DBImpl::NewInternalIterator(
-    Arena* arena, RangeDelAggregator* range_del_agg,
+    Arena* arena, RangeDelAggregator* range_del_agg, SequenceNumber sequence,
     ColumnFamilyHandle* column_family) {
   ColumnFamilyData* cfd;
   if (column_family == nullptr) {
@@ -1023,8 +1052,8 @@ InternalIterator* DBImpl::NewInternalIterator(
   SuperVersion* super_version = cfd->GetSuperVersion()->Ref();
   mutex_.Unlock();
   ReadOptions roptions;
-  return NewInternalIterator(roptions, cfd, super_version, arena,
-                             range_del_agg);
+  return NewInternalIterator(roptions, cfd, super_version, arena, range_del_agg,
+                             sequence);
 }
 
 void DBImpl::SchedulePurge() {
@@ -1126,10 +1155,12 @@ static void CleanupIteratorState(void* arg1, void* /*arg2*/) {
 }
 }  // namespace
 
-InternalIterator* DBImpl::NewInternalIterator(
-    const ReadOptions& read_options, ColumnFamilyData* cfd,
-    SuperVersion* super_version, Arena* arena,
-    RangeDelAggregator* range_del_agg) {
+InternalIterator* DBImpl::NewInternalIterator(const ReadOptions& read_options,
+                                              ColumnFamilyData* cfd,
+                                              SuperVersion* super_version,
+                                              Arena* arena,
+                                              RangeDelAggregator* range_del_agg,
+                                              SequenceNumber sequence) {
   InternalIterator* internal_iter;
   assert(arena != nullptr);
   assert(range_del_agg != nullptr);
@@ -1141,12 +1172,12 @@ InternalIterator* DBImpl::NewInternalIterator(
   // Collect iterator for mutable mem
   merge_iter_builder.AddIterator(
       super_version->mem->NewIterator(read_options, arena));
-  std::unique_ptr<InternalIterator> range_del_iter;
+  std::unique_ptr<FragmentedRangeTombstoneIterator> range_del_iter;
   Status s;
   if (!read_options.ignore_range_deletions) {
     range_del_iter.reset(
-        super_version->mem->NewRangeTombstoneIterator(read_options));
-    s = range_del_agg->AddTombstones(std::move(range_del_iter));
+        super_version->mem->NewRangeTombstoneIterator(read_options, sequence));
+    range_del_agg->AddTombstones(std::move(range_del_iter));
   }
   // Collect all needed child iterators for immutable memtables
   if (s.ok()) {
@@ -1247,7 +1278,7 @@ Status DBImpl::GetImpl(const ReadOptions& read_options,
 
   // Prepare to store a list of merge operations if merge occurs.
   MergeContext merge_context;
-  RangeDelAggregator range_del_agg(cfd->internal_comparator(), snapshot);
+  SequenceNumber max_covering_tombstone_seq = 0;
 
   Status s;
   // First look in the memtable, then in the immutable memtable (if any).
@@ -1261,13 +1292,14 @@ Status DBImpl::GetImpl(const ReadOptions& read_options,
   bool done = false;
   if (!skip_memtable) {
     if (sv->mem->Get(lkey, pinnable_val->GetSelf(), &s, &merge_context,
-                     &range_del_agg, read_options, callback, is_blob_index)) {
+                     &max_covering_tombstone_seq, read_options, callback,
+                     is_blob_index)) {
       done = true;
       pinnable_val->PinSelf();
       RecordTick(stats_, MEMTABLE_HIT);
     } else if ((s.ok() || s.IsMergeInProgress()) &&
                sv->imm->Get(lkey, pinnable_val->GetSelf(), &s, &merge_context,
-                            &range_del_agg, read_options, callback,
+                            &max_covering_tombstone_seq, read_options, callback,
                             is_blob_index)) {
       done = true;
       pinnable_val->PinSelf();
@@ -1281,8 +1313,8 @@ Status DBImpl::GetImpl(const ReadOptions& read_options,
   if (!done) {
     PERF_TIMER_GUARD(get_from_output_files_time);
     sv->current->Get(read_options, lkey, pinnable_val, &s, &merge_context,
-                     &range_del_agg, value_found, nullptr, nullptr, callback,
-                     is_blob_index);
+                     &max_covering_tombstone_seq, value_found, nullptr, nullptr,
+                     callback, is_blob_index);
     RecordTick(stats_, MEMTABLE_MISS);
   }
 
@@ -1364,8 +1396,7 @@ std::vector<Status> DBImpl::MultiGet(
 
     LookupKey lkey(keys[i], snapshot);
     auto cfh = reinterpret_cast<ColumnFamilyHandleImpl*>(column_family[i]);
-    RangeDelAggregator range_del_agg(cfh->cfd()->internal_comparator(),
-                                     snapshot);
+    SequenceNumber max_covering_tombstone_seq = 0;
     auto mgd_iter = multiget_cf_data.find(cfh->cfd()->GetID());
     assert(mgd_iter != multiget_cf_data.end());
     auto mgd = mgd_iter->second;
@@ -1376,11 +1407,12 @@ std::vector<Status> DBImpl::MultiGet(
     bool done = false;
     if (!skip_memtable) {
       if (super_version->mem->Get(lkey, value, &s, &merge_context,
-                                  &range_del_agg, read_options)) {
+                                  &max_covering_tombstone_seq, read_options)) {
         done = true;
         RecordTick(stats_, MEMTABLE_HIT);
       } else if (super_version->imm->Get(lkey, value, &s, &merge_context,
-                                         &range_del_agg, read_options)) {
+                                         &max_covering_tombstone_seq,
+                                         read_options)) {
         done = true;
         RecordTick(stats_, MEMTABLE_HIT);
       }
@@ -1389,7 +1421,7 @@ std::vector<Status> DBImpl::MultiGet(
       PinnableSlice pinnable_val;
       PERF_TIMER_GUARD(get_from_output_files_time);
       super_version->current->Get(read_options, lkey, &pinnable_val, &s,
-                                  &merge_context, &range_del_agg);
+                                  &merge_context, &max_covering_tombstone_seq);
       value->assign(pinnable_val.data(), pinnable_val.size());
       RecordTick(stats_, MEMTABLE_MISS);
     }
@@ -1836,7 +1868,7 @@ ArenaWrappedDBIter* DBImpl::NewIteratorImpl(const ReadOptions& read_options,
 
   InternalIterator* internal_iter =
       NewInternalIterator(read_options, cfd, sv, db_iter->GetArena(),
-                          db_iter->GetRangeDelAggregator());
+                          db_iter->GetRangeDelAggregator(), snapshot);
   db_iter->SetIterUnderDBIter(internal_iter);
 
   return db_iter;
@@ -2209,16 +2241,16 @@ ColumnFamilyHandle* DBImpl::GetColumnFamilyHandle(uint32_t column_family_id) {
 // REQUIRED: mutex is NOT held.
 std::unique_ptr<ColumnFamilyHandle> DBImpl::GetColumnFamilyHandleUnlocked(
     uint32_t column_family_id) {
-  ColumnFamilyMemTables* cf_memtables = column_family_memtables_.get();
-
   InstrumentedMutexLock l(&mutex_);
 
-  if (!cf_memtables->Seek(column_family_id)) {
+  auto* cfd =
+      versions_->GetColumnFamilySet()->GetColumnFamily(column_family_id);
+  if (cfd == nullptr) {
     return nullptr;
   }
 
   return std::unique_ptr<ColumnFamilyHandleImpl>(
-      new ColumnFamilyHandleImpl(cf_memtables->current(), this, &mutex_));
+      new ColumnFamilyHandleImpl(cfd, this, &mutex_));
 }
 
 void DBImpl::GetApproximateMemTableStats(ColumnFamilyHandle* column_family,
@@ -2289,9 +2321,8 @@ void DBImpl::ReleaseFileNumberFromPendingOutputs(
 
 #ifndef ROCKSDB_LITE
 Status DBImpl::GetUpdatesSince(
-    SequenceNumber seq, unique_ptr<TransactionLogIterator>* iter,
+    SequenceNumber seq, std::unique_ptr<TransactionLogIterator>* iter,
     const TransactionLogIterator::ReadOptions& read_options) {
-
   RecordTick(stats_, GET_UPDATES_SINCE_CALLS);
   if (seq > versions_->LastSequence()) {
     return Status::NotFound("Requested sequence not yet written in the db");
@@ -2676,10 +2707,10 @@ Status DBImpl::CheckConsistency() {
 Status DBImpl::GetDbIdentity(std::string& identity) const {
   std::string idfilename = IdentityFileName(dbname_);
   const EnvOptions soptions;
-  unique_ptr<SequentialFileReader> id_file_reader;
+  std::unique_ptr<SequentialFileReader> id_file_reader;
   Status s;
   {
-    unique_ptr<SequentialFile> idfile;
+    std::unique_ptr<SequentialFile> idfile;
     s = env_->NewSequentialFile(idfilename, &idfile, soptions);
     if (!s.ok()) {
       return s;
@@ -3076,8 +3107,7 @@ Status DBImpl::GetLatestSequenceForKey(SuperVersion* sv, const Slice& key,
                                        bool* is_blob_index) {
   Status s;
   MergeContext merge_context;
-  RangeDelAggregator range_del_agg(sv->mem->GetInternalKeyComparator(),
-                                   kMaxSequenceNumber);
+  SequenceNumber max_covering_tombstone_seq = 0;
 
   ReadOptions read_options;
   SequenceNumber current_seq = versions_->LastSequence();
@@ -3087,8 +3117,8 @@ Status DBImpl::GetLatestSequenceForKey(SuperVersion* sv, const Slice& key,
   *found_record_for_key = false;
 
   // Check if there is a record for this key in the latest memtable
-  sv->mem->Get(lkey, nullptr, &s, &merge_context, &range_del_agg, seq,
-               read_options, nullptr /*read_callback*/, is_blob_index);
+  sv->mem->Get(lkey, nullptr, &s, &merge_context, &max_covering_tombstone_seq,
+               seq, read_options, nullptr /*read_callback*/, is_blob_index);
 
   if (!(s.ok() || s.IsNotFound() || s.IsMergeInProgress())) {
     // unexpected error reading memtable.
@@ -3106,8 +3136,8 @@ Status DBImpl::GetLatestSequenceForKey(SuperVersion* sv, const Slice& key,
   }
 
   // Check if there is a record for this key in the immutable memtables
-  sv->imm->Get(lkey, nullptr, &s, &merge_context, &range_del_agg, seq,
-               read_options, nullptr /*read_callback*/, is_blob_index);
+  sv->imm->Get(lkey, nullptr, &s, &merge_context, &max_covering_tombstone_seq,
+               seq, read_options, nullptr /*read_callback*/, is_blob_index);
 
   if (!(s.ok() || s.IsNotFound() || s.IsMergeInProgress())) {
     // unexpected error reading memtable.
@@ -3125,8 +3155,9 @@ Status DBImpl::GetLatestSequenceForKey(SuperVersion* sv, const Slice& key,
   }
 
   // Check if there is a record for this key in the immutable memtables
-  sv->imm->GetFromHistory(lkey, nullptr, &s, &merge_context, &range_del_agg,
-                          seq, read_options, is_blob_index);
+  sv->imm->GetFromHistory(lkey, nullptr, &s, &merge_context,
+                          &max_covering_tombstone_seq, seq, read_options,
+                          is_blob_index);
 
   if (!(s.ok() || s.IsNotFound() || s.IsMergeInProgress())) {
     // unexpected error reading memtable.
@@ -3149,7 +3180,7 @@ Status DBImpl::GetLatestSequenceForKey(SuperVersion* sv, const Slice& key,
   if (!cache_only) {
     // Check tables
     sv->current->Get(read_options, lkey, nullptr, &s, &merge_context,
-                     &range_del_agg, nullptr /* value_found */,
+                     &max_covering_tombstone_seq, nullptr /* value_found */,
                      found_record_for_key, seq, nullptr /*read_callback*/,
                      is_blob_index);
 
@@ -3248,6 +3279,7 @@ Status DBImpl::IngestExternalFile(
     }
 
     num_running_ingest_file_++;
+    TEST_SYNC_POINT("DBImpl::IngestExternalFile:AfterIncIngestFileCounter");
 
     // We cannot ingest a file into a dropped CF
     if (cfd->IsDropped()) {
@@ -3262,10 +3294,21 @@ Status DBImpl::IngestExternalFile(
       TEST_SYNC_POINT_CALLBACK("DBImpl::IngestExternalFile:NeedFlush",
                                &need_flush);
       if (status.ok() && need_flush) {
-        mutex_.Unlock();
-        status = FlushMemTable(cfd, FlushOptions(),
-                               FlushReason::kExternalFileIngestion,
-                               true /* writes_stopped */);
+        FlushOptions flush_opts;
+        flush_opts.allow_write_stall = true;
+        if (immutable_db_options_.atomic_flush) {
+          autovector<ColumnFamilyData*> cfds;
+          SelectColumnFamiliesForAtomicFlush(&cfds);
+          mutex_.Unlock();
+          status = AtomicFlushMemTables(cfds, flush_opts,
+                                        FlushReason::kExternalFileIngestion,
+                                        true /* writes_stopped */);
+        } else {
+          mutex_.Unlock();
+          status = FlushMemTable(cfd, flush_opts,
+                                 FlushReason::kExternalFileIngestion,
+                                 true /* writes_stopped */);
+        }
         mutex_.Lock();
       }
     }
@@ -3399,10 +3442,10 @@ void DBImpl::WaitForIngestFile() {
   }
 }
 
-Status DBImpl::StartTrace(const TraceOptions& /* options */,
+Status DBImpl::StartTrace(const TraceOptions& trace_options,
                           std::unique_ptr<TraceWriter>&& trace_writer) {
   InstrumentedMutexLock lock(&trace_mutex_);
-  tracer_.reset(new Tracer(env_, std::move(trace_writer)));
+  tracer_.reset(new Tracer(env_, trace_options, std::move(trace_writer)));
   return Status::OK();
 }
 

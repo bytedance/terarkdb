@@ -14,17 +14,6 @@
 
 namespace rocksdb {
 
-struct InternalKeyTablePropertiesNames {
-  static const std::string kDeletedKeys;
-  static const std::string kMergeOperands;
-};
-
-struct CompositeSstTablePropertiesNames {
-  static const std::string kSstPurpose;
-  static const std::string kSstDepend;
-  static const std::string kSstReadAmp;
-};
-
 // Base class for internal table properties collector.
 class IntTblPropCollector {
  public:

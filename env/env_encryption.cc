@@ -426,7 +426,7 @@ class EncryptedEnv : public EnvWrapper {
 
   // NewRandomAccessFile opens a file for random read access.
   virtual Status NewRandomAccessFile(const std::string& fname,
-                                     unique_ptr<RandomAccessFile>* result,
+                                     std::unique_ptr<RandomAccessFile>* result,
                                      const EnvOptions& options) override {
     result->reset();
     if (options.use_mmap_reads) {
@@ -460,10 +460,10 @@ class EncryptedEnv : public EnvWrapper {
     (*result) = std::unique_ptr<RandomAccessFile>(new EncryptedRandomAccessFile(underlying.release(), stream.release(), prefixLength));
     return Status::OK();
   }
-  
+
   // NewWritableFile opens a file for sequential writing.
   virtual Status NewWritableFile(const std::string& fname,
-                                 unique_ptr<WritableFile>* result,
+                                 std::unique_ptr<WritableFile>* result,
                                  const EnvOptions& options) override {
     result->reset();
     if (options.use_mmap_writes) {
@@ -509,8 +509,8 @@ class EncryptedEnv : public EnvWrapper {
   //
   // The returned file will only be accessed by one thread at a time.
   virtual Status ReopenWritableFile(const std::string& fname,
-                                   unique_ptr<WritableFile>* result,
-                                   const EnvOptions& options) override {
+                                    std::unique_ptr<WritableFile>* result,
+                                    const EnvOptions& options) override {
     result->reset();
     if (options.use_mmap_writes) {
       return Status::InvalidArgument();
@@ -550,7 +550,7 @@ class EncryptedEnv : public EnvWrapper {
   // Reuse an existing file by renaming it and opening it as writable.
   virtual Status ReuseWritableFile(const std::string& fname,
                                    const std::string& old_fname,
-                                   unique_ptr<WritableFile>* result,
+                                   std::unique_ptr<WritableFile>* result,
                                    const EnvOptions& options) override {
     result->reset();
     if (options.use_mmap_writes) {
@@ -594,7 +594,7 @@ class EncryptedEnv : public EnvWrapper {
   //
   // The returned file will only be accessed by one thread at a time.
   virtual Status NewRandomRWFile(const std::string& fname,
-                                 unique_ptr<RandomRWFile>* result,
+                                 std::unique_ptr<RandomRWFile>* result,
                                  const EnvOptions& options) override {
     result->reset();
     if (options.use_mmap_reads || options.use_mmap_writes) {
@@ -696,7 +696,7 @@ Status BlockAccessCipherStream::Encrypt(uint64_t fileOffset, char *data, size_t 
   auto blockSize = BlockSize();
   uint64_t blockIndex = fileOffset / blockSize;
   size_t blockOffset = fileOffset % blockSize;
-  unique_ptr<char[]> blockBuffer;
+  std::unique_ptr<char[]> blockBuffer;
 
   std::string scratch;
   AllocateScratch(scratch);
@@ -709,8 +709,8 @@ Status BlockAccessCipherStream::Encrypt(uint64_t fileOffset, char *data, size_t 
       // We're not encrypting a full block. 
       // Copy data to blockBuffer
       if (!blockBuffer.get()) {
-        // Allocate buffer 
-        blockBuffer = unique_ptr<char[]>(new char[blockSize]);
+        // Allocate buffer
+        blockBuffer = std::unique_ptr<char[]>(new char[blockSize]);
       }
       block = blockBuffer.get();
       // Copy plain data to block buffer 
@@ -741,7 +741,7 @@ Status BlockAccessCipherStream::Decrypt(uint64_t fileOffset, char *data, size_t 
   auto blockSize = BlockSize();
   uint64_t blockIndex = fileOffset / blockSize;
   size_t blockOffset = fileOffset % blockSize;
-  unique_ptr<char[]> blockBuffer;
+  std::unique_ptr<char[]> blockBuffer;
 
   std::string scratch;
   AllocateScratch(scratch);
@@ -754,8 +754,8 @@ Status BlockAccessCipherStream::Decrypt(uint64_t fileOffset, char *data, size_t 
       // We're not decrypting a full block. 
       // Copy data to blockBuffer
       if (!blockBuffer.get()) {
-        // Allocate buffer 
-        blockBuffer = unique_ptr<char[]>(new char[blockSize]);
+        // Allocate buffer
+        blockBuffer = std::unique_ptr<char[]>(new char[blockSize]);
       }
       block = blockBuffer.get();
       // Copy encrypted data to block buffer 
@@ -886,7 +886,9 @@ size_t CTREncryptionProvider::PopulateSecretPrefixPart(char* /*prefix*/,
   return 0;
 }
 
-Status CTREncryptionProvider::CreateCipherStream(const std::string& fname, const EnvOptions& options, Slice &prefix, unique_ptr<BlockAccessCipherStream>* result) {
+Status CTREncryptionProvider::CreateCipherStream(
+    const std::string& fname, const EnvOptions& options, Slice& prefix,
+    std::unique_ptr<BlockAccessCipherStream>* result) {
   // Read plain text part of prefix.
   auto blockSize = cipher_.BlockSize();
   uint64_t initialCounter;
@@ -909,8 +911,9 @@ Status CTREncryptionProvider::CreateCipherStream(const std::string& fname, const
 Status CTREncryptionProvider::CreateCipherStreamFromPrefix(
     const std::string& /*fname*/, const EnvOptions& /*options*/,
     uint64_t initialCounter, const Slice& iv, const Slice& /*prefix*/,
-    unique_ptr<BlockAccessCipherStream>* result) {
-  (*result) = unique_ptr<BlockAccessCipherStream>(new CTRCipherStream(cipher_, iv.data(), initialCounter));
+    std::unique_ptr<BlockAccessCipherStream>* result) {
+  (*result) = std::unique_ptr<BlockAccessCipherStream>(
+      new CTRCipherStream(cipher_, iv.data(), initialCounter));
   return Status::OK();
 }
 

@@ -130,17 +130,36 @@ ifeq ("$(LINK_STATIC_TERARK)","1")
     ${TerarkBuild}/lib/libterark-core-${DBG_OR_RLS}.a
 endif
 
+# Lite build flag.
+LITE ?= 0
+ifeq ($(LITE), 0)
+ifneq ($(filter -DROCKSDB_LITE,$(OPT)),)
+  # Be backward compatible and support older format where OPT=-DROCKSDB_LITE is
+  # specified instead of LITE=1 on the command line.
+  LITE=1
+endif
+else ifeq ($(LITE), 1)
+ifeq ($(filter -DROCKSDB_LITE,$(OPT)),)
+	OPT += -DROCKSDB_LITE
+endif
+endif
+
+# Figure out optimize level.
+ifneq ($(DEBUG_LEVEL), 2)
+ifeq ($(LITE), 0)
+	OPT += -O2
+else
+	OPT += -Os
+endif
+endif
+
 # compile with -O2 if debug level is not 2
 ifneq ($(DEBUG_LEVEL), 2)
-OPT += -O2 -fno-omit-frame-pointer
+OPT += -fno-omit-frame-pointer
 # Skip for archs that don't support -momit-leaf-frame-pointer
 ifeq (,$(shell $(CXX) -fsyntax-only -momit-leaf-frame-pointer -xc /dev/null 2>&1))
 OPT += -momit-leaf-frame-pointer
 endif
-endif
-
-ifeq (,$(shell $(CXX) -fsyntax-only -faligned-new -xc++ /dev/null 2>&1))
-CXXFLAGS += -faligned-new -DHAVE_ALIGNED_NEW
 endif
 
 ifeq (,$(shell $(CXX) -fsyntax-only -maltivec -xc /dev/null 2>&1))
@@ -356,7 +375,7 @@ endif
 ifeq ("$(wildcard $(LUA_LIB))", "") # LUA_LIB does not exist
 $(error $(LUA_LIB) does not exist.  Try to specify both LUA_PATH and LUA_LIB manually)
 endif
-LDFLAGS += $(LUA_LIB)
+EXEC_LDFLAGS += $(LUA_LIB)
 
 endif
 
@@ -556,7 +575,6 @@ TESTS = \
 	persistent_cache_test \
 	statistics_test \
 	lua_test \
-	range_del_aggregator_test \
 	lru_cache_test \
 	object_registry_test \
 	repair_test \
@@ -568,6 +586,9 @@ TESTS = \
 	repeatable_thread_test \
 	terark_zip_table_db_test \
 	terark_zip_table_reader_test \
+	range_tombstone_fragmenter_test \
+	range_del_aggregator_test \
+	sst_file_reader_test \
 
 PARALLEL_TEST = \
 	backupable_db_test \
@@ -943,6 +964,7 @@ crash_test: whitebox_crash_test blackbox_crash_test
 
 blackbox_crash_test: db_stress
 	python -u tools/db_crashtest.py --simple blackbox $(CRASH_TEST_EXT_ARGS)
+	python -u tools/db_crashtest.py --enable_atomic_flush blackbox $(CRASH_TEST_EXT_ARGS)
 	python -u tools/db_crashtest.py blackbox $(CRASH_TEST_EXT_ARGS)
 
 ifeq ($(CRASH_TEST_KILL_ODD),)
@@ -951,6 +973,8 @@ endif
 
 whitebox_crash_test: db_stress
 	python -u tools/db_crashtest.py --simple whitebox --random_kill_odd \
+      $(CRASH_TEST_KILL_ODD) $(CRASH_TEST_EXT_ARGS)
+	python -u tools/db_crashtest.py --enable_atomic_flush whitebox  --random_kill_odd \
       $(CRASH_TEST_KILL_ODD) $(CRASH_TEST_EXT_ARGS)
 	python -u tools/db_crashtest.py whitebox  --random_kill_odd \
       $(CRASH_TEST_KILL_ODD) $(CRASH_TEST_EXT_ARGS)
@@ -1620,6 +1644,11 @@ terark_zip_table_db_test: db/terark_zip_table_db_test.o $(LIBOBJECTS) $(TESTHARN
 	$(AM_LINK)
 
 terark_zip_table_reader_test: table/terark_zip_table_reader_test.o db/db_test_util.o $(LIBOBJECTS) $(TESTHARNESS) ${LIBNAME}.so
+
+range_tombstone_fragmenter_test: db/range_tombstone_fragmenter_test.o db/db_test_util.o $(LIBOBJECTS) $(TESTHARNESS)
+	$(AM_LINK)
+
+sst_file_reader_test: table/sst_file_reader_test.o $(LIBOBJECTS) $(TESTHARNESS)
 	$(AM_LINK)
 
 #-------------------------------------------------

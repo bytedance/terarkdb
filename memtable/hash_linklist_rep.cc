@@ -833,10 +833,8 @@ Node* HashLinkListRep::FindGreaterOrEqualInBucket(Node* head,
 } // anon namespace
 
 MemTableRep* HashLinkListRepFactory::CreateMemTableRep(
-    const MemTableRep::KeyComparator& compare,
-    bool /*needs_dup_key_check*/,
-    Allocator* allocator,
-    const SliceTransform* transform, Logger* logger) {
+    const MemTableRep::KeyComparator& compare, bool /*needs_dup_key_check*/,
+    Allocator* allocator, const SliceTransform* transform, Logger* logger) {
   return new HashLinkListRep(compare, allocator, transform, bucket_count_,
                              threshold_use_skiplist_, huge_page_tlb_size_,
                              logger, bucket_entries_logging_threshold_,

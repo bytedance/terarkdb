@@ -71,13 +71,11 @@ is_opt_mode = build_mode.startswith("opt")
 if is_opt_mode:
     rocksdb_compiler_flags.append("-DNDEBUG")
 
-default_allocator = read_config("fbcode", "default_allocator")
-
 sanitizer = read_config("fbcode", "sanitizer")
 
-# Let RocksDB aware of jemalloc existence.
-# Do not enable it if sanitizer presents.
-if default_allocator.startswith("jemalloc") and sanitizer == "":
+# Do not enable jemalloc if sanitizer presents. RocksDB will further detect
+# whether the binary is linked with jemalloc at runtime.
+if sanitizer == "":
     rocksdb_compiler_flags.append("-DROCKSDB_JEMALLOC")
     rocksdb_external_deps.append(("jemalloc", None, "headers"))
 """
@@ -85,13 +83,13 @@ if default_allocator.startswith("jemalloc") and sanitizer == "":
 
 library_template = """
 cpp_library(
-    name = "%s",
-    srcs = [%s],
-    headers = %s,
+    name = "{name}",
+    srcs = [{srcs}],
+    {headers_attr_prefix}headers = {headers},
     arch_preprocessor_flags = rocksdb_arch_preprocessor_flags,
     compiler_flags = rocksdb_compiler_flags,
     preprocessor_flags = rocksdb_preprocessor_flags,
-    deps = [%s],
+    deps = [{deps}],
     external_deps = rocksdb_external_deps,
 )
 """

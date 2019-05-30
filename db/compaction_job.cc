@@ -37,6 +37,7 @@
 #include "db/memtable_list.h"
 #include "db/merge_context.h"
 #include "db/merge_helper.h"
+#include "db/range_del_aggregator.h"
 #include "db/version_set.h"
 #include "monitoring/iostats_context_imp.h"
 #include "monitoring/perf_context_imp.h"
@@ -556,7 +557,10 @@ void CompactionJob::GenSubcompactionBoundaries() {
   // size of data covered by keys in that range
   uint64_t sum = 0;
   std::vector<RangeWithSize> ranges;
-  auto* v = cfd->current();
+  // Get input version from CompactionState since it's already referenced
+  // earlier in SetInputVersioCompaction::SetInputVersion and will not change
+  // when db_mutex_ is released below
+  auto* v = compact_->compaction->input_version();
   for (auto it = bounds.begin();;) {
     const Slice a = *it;
     it++;
@@ -566,7 +570,13 @@ void CompactionJob::GenSubcompactionBoundaries() {
     }
 
     const Slice b = *it;
+
+    // ApproximateSize could potentially create table reader iterator to seek
+    // to the index block and may incur I/O cost in the process. Unlock db
+    // mutex to reduce contention
+    db_mutex_->Unlock();
     uint64_t size = versions_->ApproximateSize(v, a, b, start_lvl, out_lvl + 1);
+    db_mutex_->Lock();
     ranges.emplace_back(a, b, size);
     sum += size;
   }
@@ -744,7 +754,7 @@ Status CompactionJob::Install(const MutableCFOptions& mutable_cf_options) {
   Status status = compact_->status;
   ColumnFamilyData* cfd = compact_->compaction->column_family_data();
   cfd->internal_stats()->AddCompactionStats(
-    compact_->compaction->output_level(), compaction_stats_);
+      compact_->compaction->output_level(), compaction_stats_);
 
   if (status.ok()) {
     status = InstallCompactionResults(mutable_cf_options);
@@ -850,15 +860,18 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
 void CompactionJob::ProcessEssenceCompaction(SubcompactionState* sub_compact) {
   assert(sub_compact != nullptr);
   ColumnFamilyData* cfd = sub_compact->compaction->column_family_data();
-  std::unique_ptr<RangeDelAggregator> range_del_agg(
-      new RangeDelAggregator(cfd->internal_comparator(), existing_snapshots_));
-  std::unique_ptr<InternalIterator> input(versions_->MakeInputIterator(
-      sub_compact->compaction, range_del_agg.get(), env_options_for_read_));
+  CompactionRangeDelAggregator range_del_agg(&cfd->internal_comparator(),
+                                             existing_snapshots_);
 
-  std::unique_ptr<RangeDelAggregator> range_del_agg2(
-      new RangeDelAggregator(cfd->internal_comparator(), existing_snapshots_));
+  // Although the v2 aggregator is what the level iterator(s) know about,
+  // the AddTombstones calls will be propagated down to the v1 aggregator.
+  std::unique_ptr<InternalIterator> input(versions_->MakeInputIterator(
+      sub_compact->compaction, &range_del_agg, env_options_for_read_));
+
+  CompactionRangeDelAggregator range_del_agg2(&cfd->internal_comparator(),
+                                              existing_snapshots_);
   std::unique_ptr<InternalIterator> input2(versions_->MakeInputIterator(
-      sub_compact->compaction, range_del_agg2.get(), env_options_for_read_));
+      sub_compact->compaction, &range_del_agg2, env_options_for_read_));
 
   AutoThreadOperationStageUpdater stage_updater(
       ThreadStatus::STAGE_COMPACTION_PROCESS_KV);
@@ -915,8 +928,8 @@ void CompactionJob::ProcessEssenceCompaction(SubcompactionState* sub_compact) {
     }
   }
 
-  std::unique_ptr<CompactionFilter> compaction_filter_from_factory = nullptr;
   auto compaction_filter = cfd->ioptions()->compaction_filter;
+  std::unique_ptr<CompactionFilter> compaction_filter_from_factory = nullptr;
   if (compaction_filter == nullptr) {
     compaction_filter_from_factory =
         sub_compact->compaction->CreateCompactionFilter();
@@ -932,12 +945,10 @@ void CompactionJob::ProcessEssenceCompaction(SubcompactionState* sub_compact) {
 
   std::unique_ptr<CompactionFilter> compaction_filter_from_factory2 = nullptr;
   auto compaction_filter2 = compaction_filter;
-  if (!cfd->ioptions()->filter_idempotent) {
-    if (cfd->ioptions()->compaction_filter == nullptr) {
-      compaction_filter_from_factory2 =
-          sub_compact->compaction->CreateCompactionFilter();
-      compaction_filter2 = compaction_filter_from_factory2.get();
-    }
+  if (cfd->ioptions()->compaction_filter == nullptr) {
+    compaction_filter_from_factory2 =
+        sub_compact->compaction->CreateCompactionFilter();
+    compaction_filter2 = compaction_filter_from_factory2.get();
   }
   MergeHelper merge2(
       env_, cfd->user_comparator(), cfd->ioptions()->merge_operator,
@@ -963,7 +974,8 @@ void CompactionJob::ProcessEssenceCompaction(SubcompactionState* sub_compact) {
   Status status;
   auto makeCompactionIterator =
       [&](InternalIterator* input_x, MergeHelper& merge_x,
-          bool report_detailed_time, RangeDelAggregator* range_del_agg_x,
+          bool report_detailed_time,
+          CompactionRangeDelAggregator* range_del_agg_x,
           const CompactionFilter* compaction_filter_x) {
         return std::unique_ptr<CompactionIterator>(new CompactionIterator(
             input_x, end, cfd->user_comparator(), &merge_x,
@@ -975,11 +987,11 @@ void CompactionJob::ProcessEssenceCompaction(SubcompactionState* sub_compact) {
       };
   sub_compact->c_iter = makeCompactionIterator(
       input.get(), merge, ShouldReportDetailedTime(env_, stats_),
-      range_del_agg.get(), compaction_filter);
+      &range_del_agg, compaction_filter);
   auto c_iter = sub_compact->c_iter.get();
   c_iter->SeekToFirst();
   auto c_iter2 = makeCompactionIterator(
-      input2.get(), merge2, false, range_del_agg2.get(), compaction_filter2);
+      input2.get(), merge2, false, &range_del_agg2, compaction_filter2);
   c_iter2->SetFilterSampleInterval(0);
   auto second_pass_iter = c_iter2->AdaptToInternalIterator();
   if (c_iter->Valid() && sub_compact->compaction->output_level() != 0) {
@@ -1082,22 +1094,21 @@ void CompactionJob::ProcessEssenceCompaction(SubcompactionState* sub_compact) {
       }
     }
 
-    // Close output file if it is big enough. Two possibilities determine
-    // it's time to close it: (1) the current key should be this file's last
-    // key, (2) the next key should not be in this file.
+    // Close output file if it is big enough. Two possibilities determine it's
+    // time to close it: (1) the current key should be this file's last key, (2)
+    // the next key should not be in this file.
     //
     // TODO(aekmekji): determine if file should be closed earlier than this
-    // during subcompactions (i.e. if output size, estimated by input size,
-    // is going to be 1.2MB and max_output_file_size = 1MB, prefer to have
-    // 0.6MB and 0.6MB instead of 1MB and 0.2MB)
+    // during subcompactions (i.e. if output size, estimated by input size, is
+    // going to be 1.2MB and max_output_file_size = 1MB, prefer to have 0.6MB
+    // and 0.6MB instead of 1MB and 0.2MB)
     bool output_file_ended = false;
     Status input_status;
     if (sub_compact->compaction->max_output_file_size() != 0 &&
         sub_compact->current_output_file_size >=
             sub_compact->compaction->max_output_file_size()) {
-      // (1) this key terminates the file. For historical reasons, the
-      // iterator status before advancing will be given to
-      // FinishCompactionOutputFile().
+      // (1) this key terminates the file. For historical reasons, the iterator
+      // status before advancing will be given to FinishCompactionOutputFile().
       input_status = input->status();
       output_file_ended = true;
     }
@@ -1132,9 +1143,9 @@ void CompactionJob::ProcessEssenceCompaction(SubcompactionState* sub_compact) {
     }
     if (output_file_ended) {
       CompactionIterationStats range_del_out_stats;
-      status = FinishCompactionOutputFile(input_status, sub_compact,
-                                          range_del_agg.get(),
-                                          &range_del_out_stats, next_key);
+      status =
+          FinishCompactionOutputFile(input_status, sub_compact, &range_del_agg,
+                                     &range_del_out_stats, next_key);
       RecordDroppedKeys(range_del_out_stats,
                         &sub_compact->compaction_job_stats);
       if (sub_compact->compaction->partial_compaction()) {
@@ -1189,10 +1200,9 @@ void CompactionJob::ProcessEssenceCompaction(SubcompactionState* sub_compact) {
   if (status.ok()) {
     status = c_iter->status();
   }
-  
+
   if (status.ok() && sub_compact->builder == nullptr &&
-      sub_compact->outputs.size() == 0 &&
-      !range_del_agg->IsEmpty()) {
+      sub_compact->outputs.size() == 0 && !range_del_agg.IsEmpty()) {
     // handle subcompaction containing only range deletions
     status = OpenCompactionOutputFile(sub_compact);
   }
@@ -1201,8 +1211,8 @@ void CompactionJob::ProcessEssenceCompaction(SubcompactionState* sub_compact) {
   // close the output file.
   if (sub_compact->builder != nullptr) {
     CompactionIterationStats range_del_out_stats;
-    Status s = FinishCompactionOutputFile(
-        status, sub_compact, range_del_agg.get(), &range_del_out_stats);
+    Status s = FinishCompactionOutputFile(status, sub_compact, &range_del_agg,
+                                          &range_del_out_stats);
     if (status.ok()) {
       status = s;
     }
@@ -1230,10 +1240,10 @@ void CompactionJob::ProcessEssenceCompaction(SubcompactionState* sub_compact) {
 
 void CompactionJob::ProcessLinkCompaction(SubcompactionState* sub_compact) {
   ColumnFamilyData* cfd = sub_compact->compaction->column_family_data();
-  std::unique_ptr<RangeDelAggregator> range_del_agg(
-      new RangeDelAggregator(cfd->internal_comparator(), existing_snapshots_));
+  CompactionRangeDelAggregator range_del_agg(&cfd->internal_comparator(),
+                                             existing_snapshots_);
   std::unique_ptr<InternalIterator> input(versions_->MakeInputIterator(
-      sub_compact->compaction, range_del_agg.get(), env_options_for_read_));
+      sub_compact->compaction, &range_del_agg, env_options_for_read_));
 
   // Used for write properties
   std::vector<uint64_t> sst_depend;
@@ -1325,7 +1335,7 @@ void CompactionJob::ProcessLinkCompaction(SubcompactionState* sub_compact) {
 
   CompactionIterationStats range_del_out_stats;
   s = FinishCompactionOutputFile(input->status(), sub_compact,
-                                 range_del_agg.get(), &range_del_out_stats);
+                                 &range_del_agg, &range_del_out_stats);
 
   // Update metadata
   meta.sst_purpose = kLinkSst;
@@ -1371,7 +1381,7 @@ void CompactionJob::RecordDroppedKeys(
 
 Status CompactionJob::FinishCompactionOutputFile(
     const Status& input_status, SubcompactionState* sub_compact,
-    RangeDelAggregator* range_del_agg,
+    CompactionRangeDelAggregator* range_del_agg,
     CompactionIterationStats* range_del_out_stats,
     const Slice* next_table_min_key /* = nullptr */) {
   AutoThreadOperationStageUpdater stage_updater(
@@ -1410,10 +1420,19 @@ Status CompactionJob::FinishCompactionOutputFile(
       lower_bound = nullptr;
     }
     if (next_table_min_key != nullptr) {
-      // This isn't the last file in the subcompaction, so extend until the next
-      // file starts.
+      // This may be the last file in the subcompaction in some cases, so we
+      // need to compare the end key of subcompaction with the next file start
+      // key. When the end key is chosen by the subcompaction, we know that
+      // it must be the biggest key in output file. Therefore, it is safe to
+      // use the smaller key as the upper bound of the output file, to ensure
+      // that there is no overlapping between different output files.
       upper_bound_guard = ExtractUserKey(*next_table_min_key);
-      upper_bound = &upper_bound_guard;
+      if (sub_compact->end != nullptr &&
+          ucmp->Compare(upper_bound_guard, *sub_compact->end) >= 0) {
+        upper_bound = sub_compact->end;
+      } else {
+        upper_bound = &upper_bound_guard;
+      }
     } else {
       // This is the last file in the subcompaction, so extend until the
       // subcompaction ends.
@@ -1423,19 +1442,45 @@ Status CompactionJob::FinishCompactionOutputFile(
     if (existing_snapshots_.size() > 0) {
       earliest_snapshot = existing_snapshots_[0];
     }
-    auto it = range_del_agg->NewIterator();
+    bool has_overlapping_endpoints;
+    if (upper_bound != nullptr && meta->largest.size() > 0) {
+      has_overlapping_endpoints =
+          ucmp->Compare(meta->largest.user_key(), *upper_bound) == 0;
+    } else {
+      has_overlapping_endpoints = false;
+    }
+
+    // The end key of the subcompaction must be bigger or equal to the upper
+    // bound. If the end of subcompaction is null or the upper bound is null,
+    // it means that this file is the last file in the compaction. So there
+    // will be no overlapping between this file and others.
+    assert(sub_compact->end == nullptr ||
+           upper_bound == nullptr ||
+           ucmp->Compare(*upper_bound , *sub_compact->end) <= 0);
+    auto it = range_del_agg->NewIterator(lower_bound, upper_bound,
+                                         has_overlapping_endpoints);
+    // Position the range tombstone output iterator. There may be tombstone
+    // fragments that are entirely out of range, so make sure that we do not
+    // include those.
     if (lower_bound != nullptr) {
       it->Seek(*lower_bound);
+    } else {
+      it->SeekToFirst();
     }
     for (; it->Valid(); it->Next()) {
       auto tombstone = it->Tombstone();
-      if (upper_bound != nullptr &&
-          ucmp->Compare(*upper_bound, tombstone.start_key_) < 0) {
-        // Tombstones starting after upper_bound only need to be included in the
-        // next table (if the SSTs overlap, then upper_bound is contained in
-        // this SST and hence must be covered). Break because subsequent
-        // tombstones will start even later.
-        break;
+      if (upper_bound != nullptr) {
+        int cmp = ucmp->Compare(*upper_bound, tombstone.start_key_);
+        if ((has_overlapping_endpoints && cmp < 0) ||
+            (!has_overlapping_endpoints && cmp <= 0)) {
+          // Tombstones starting after upper_bound only need to be included in
+          // the next table. If the current SST ends before upper_bound, i.e.,
+          // `has_overlapping_endpoints == false`, we can also skip over range
+          // tombstones that start exactly at upper_bound. Such range tombstones
+          // will be included in the next file and are not relevant to the point
+          // keys or endpoints of the current file.
+          break;
+        }
       }
 
       if (bottommost_level_ && tombstone.seq_ <= earliest_snapshot) {
@@ -1447,6 +1492,8 @@ Status CompactionJob::FinishCompactionOutputFile(
       }
 
       auto kv = tombstone.Serialize();
+      assert(lower_bound == nullptr ||
+             ucmp->Compare(*lower_bound, kv.second) < 0);
       sub_compact->builder->Add(kv.first.Encode(), kv.second);
       InternalKey smallest_candidate = std::move(kv.first);
       if (lower_bound != nullptr &&
@@ -1717,7 +1764,7 @@ Status CompactionJob::OpenCompactionOutputFile(
       TableFileCreationReason::kCompaction);
 #endif  // !ROCKSDB_LITE
   // Make the output file
-  unique_ptr<WritableFile> writable_file;
+  std::unique_ptr<WritableFile> writable_file;
 #ifndef NDEBUG
   bool syncpoint_arg = env_options_.use_direct_writes;
   TEST_SYNC_POINT_CALLBACK("CompactionJob::OpenCompactionOutputFile",
