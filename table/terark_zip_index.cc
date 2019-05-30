@@ -17,10 +17,11 @@
 #include <terark/util/crc.hpp>
 #include <terark/util/mmap.hpp>
 #include <terark/util/sortable_strvec.hpp>
-#include <terark/zbs/zip_offset_blob_store.hpp>
-#include <terark/zbs/dict_zip_blob_store.hpp>
-#include <terark/zbs/zip_reorder_map.hpp>
 #include <terark/zbs/blob_store_file_header.hpp>
+#include <terark/zbs/zip_reorder_map.hpp>
+#include <terark/zbs/zip_offset_blob_store.hpp>
+#include <terark/zbs/entropy_zip_blob_store.hpp>
+#include <terark/zbs/dict_zip_blob_store.hpp>
 #include <terark/zbs/xxhash_helper.hpp>
 #include <terark/num_to_str.hpp>
 #include <terark/io/MemStream.hpp>
@@ -1862,13 +1863,13 @@ struct IndexNestLoudsTriePrefix
     fstring prefix_key;
     trie_->lower_bound(key, &id, &rank);
     if (id != size_t(-1)) {
-      trie_->nth_word(id, &ctx->buf0);
-      prefix_key = fstring(ctx->buf0);
+      trie_->nth_word(id, &ctx->buffer);
+      prefix_key = fstring(ctx->buffer);
       if (prefix_key != key) {
         id = trie_->index_prev(id);
         if (id != size_t(-1)) {
-          trie_->nth_word(id, &ctx->buf0);
-          prefix_key = fstring(ctx->buf0);
+          trie_->nth_word(id, &ctx->buffer);
+          prefix_key = fstring(ctx->buffer);
           --rank;
         } else {
           assert(rank == 0);
@@ -1877,8 +1878,8 @@ struct IndexNestLoudsTriePrefix
       }
     } else {
       id = trie_->index_end();
-      trie_->nth_word(id, &ctx->buf0);
-      prefix_key = fstring(ctx->buf0);
+      trie_->nth_word(id, &ctx->buffer);
+      prefix_key = fstring(ctx->buffer);
     }
     if (!key.startsWith(prefix_key)) {
       return size_t(-1);
@@ -1902,13 +1903,13 @@ struct IndexNestLoudsTriePrefix
     fstring prefix_key;
     trie_->lower_bound(key, &id, &rank);
     if (id != size_t(-1)) {
-      trie_->nth_word(id, &ctx->buf0);
-      prefix_key = fstring(ctx->buf0);
+      trie_->nth_word(id, &ctx->buffer);
+      prefix_key = fstring(ctx->buffer);
       if (prefix_key != key) {
         id = trie_->index_prev(id);
         if (id != size_t(-1)) {
-          trie_->nth_word(id, &ctx->buf0);
-          prefix_key = fstring(ctx->buf0);
+          trie_->nth_word(id, &ctx->buffer);
+          prefix_key = fstring(ctx->buffer);
           --rank;
         } else {
           assert(rank == 0);
@@ -1917,8 +1918,8 @@ struct IndexNestLoudsTriePrefix
       }
     } else {
       id = trie_->index_end();
-      trie_->nth_word(id, &ctx->buf0);
-      prefix_key = fstring(ctx->buf0);
+      trie_->nth_word(id, &ctx->buffer);
+      prefix_key = fstring(ctx->buffer);
     }
     if (key.startsWith(prefix_key)) {
       key = key.substr(prefix_key.size());
@@ -1934,14 +1935,14 @@ struct IndexNestLoudsTriePrefix
   }
   size_t AppendMinKey(valvec<byte_t>* buffer, Context* ctx) const {
     size_t id = trie_->index_begin();
-    auto& buf = ctx->buf0;
+    auto& buf = ctx->buffer;
     trie_->nth_word(id, &buf);
     buffer->append(buf.data(), buf.size());
     return flags.is_bfs_suffix ? id : 0;
   }
   size_t AppendMaxKey(valvec<byte_t>* buffer, Context* ctx) const {
     size_t id = trie_->index_end();
-    auto& buf = ctx->buf0;
+    auto& buf = ctx->buffer;
     trie_->nth_word(id, &buf);
     buffer->append(buf.data(), buf.size());
     return flags.is_bfs_suffix ? id : trie_->num_words() - 1;
@@ -2200,264 +2201,6 @@ struct IndexFixedStringSuffix
   }
 };
 
-struct EntropySuffixIteratorStorage {
-  EntropyContext ctx;
-  valvec<byte_t> key;
-  size_t blockId = size_t(-1);
-  size_t offsets[129];
-
-  EntropySuffixIteratorStorage() {}
-  EntropySuffixIteratorStorage(Context* _ctx) {
-    ctx.buffer.swap(_ctx->buf0);
-    key.swap(_ctx->buf1);
-  }
-
-  void Release(Context* _ctx) {
-    ctx.buffer.swap(_ctx->buf0);
-    key.swap(_ctx->buf1);
-  }
-};
-
-struct IndexEntropySuffix
-    : public SuffixBase, public ComponentIteratorStorageImpl<EntropySuffixIteratorStorage> {
-  typedef EntropySuffixIteratorStorage IteratorStorage;
-
-  IndexEntropySuffix() = default;
-  IndexEntropySuffix(const IndexEntropySuffix&) = delete;
-  IndexEntropySuffix(IndexEntropySuffix&& other) {
-    *this = std::move(other);
-  }
-  IndexEntropySuffix(SuffixBase* base) {
-    assert(dynamic_cast<IndexEntropySuffix*>(base) != nullptr);
-    auto other = static_cast<IndexEntropySuffix*>(base);
-    *this = std::move(*other);
-    delete other;
-  }
-  IndexEntropySuffix& operator = (const IndexEntropySuffix&) = delete;
-  IndexEntropySuffix& operator = (IndexEntropySuffix&& other) {
-    offsets_.swap(other.offsets_);
-    decoder_.swap(other.decoder_);
-    data_.swap(other.data_);
-    table_.swap(other.table_);
-    raw_size_ = other.raw_size_;
-    std::swap(flags, other.flags);
-    return *this;
-  }
-
-  ~IndexEntropySuffix() {
-    if (flags.is_user_mem) {
-      offsets_.risk_release_ownership();
-      data_.risk_release_ownership();
-      table_.risk_release_ownership();
-    }
-  }
-
-  struct Footer {
-    uint64_t offset_size;
-    uint64_t table_size;
-    uint64_t data_size;
-    uint64_t raw_size;
-
-    size_t size() const {
-      return align_up(data_size + table_size, 8) + offset_size + sizeof(Footer);
-    }
-  };
-  SortedUintVec offsets_;
-  std::unique_ptr<Huffman::decoder_o1> decoder_;
-  valvec<byte_t> data_;
-  valvec<byte_t> table_;
-  uint64_t raw_size_;
-
-  size_t TotalKeySize() const {
-    return raw_size_;
-  }
-  std::pair<size_t, fstring>
-  LowerBound(fstring target, size_t suffix_id, size_t suffix_count, Context* ctx) const override {
-    IteratorStorage iter(ctx);
-    if (flags.is_rev_suffix) {
-      size_t num_records = offsets_.size() - 1;
-      suffix_id = num_records - suffix_id - suffix_count;
-      size_t end = suffix_id + suffix_count;
-      suffix_id = LowerBoundImpl(suffix_id, end, target, &iter);
-      fstring key = iter.key;
-      iter.Release(ctx);
-      if (suffix_id == end) {
-        return {num_records - suffix_id - 1, {}};
-      }
-      return {num_records - suffix_id - 1, key};
-    } else {
-      size_t end = suffix_id + suffix_count;
-      suffix_id = LowerBoundImpl(suffix_id, end, target, &iter);
-      fstring key = iter.key;
-      iter.Release(ctx);
-      if (suffix_id == end) {
-        return {suffix_id, {}};
-      }
-      return {suffix_id, key};
-    }
-  }
-  void AppendKey(size_t suffix_id, valvec<byte_t>* buffer, Context* ctx) const {
-    if (flags.is_rev_suffix) {
-      suffix_id = offsets_.size() - suffix_id - 2;
-    }
-    EntropyContext ectx;
-    ectx.buffer.swap(ctx->buf0);
-    auto& key = ctx->buf1;
-    size_t BegEnd[2];
-    offsets_.get2(suffix_id, BegEnd);
-    EntropyBits bits = {
-        (byte_t*)data_.data(), BegEnd[0], BegEnd[1] - BegEnd[0]
-    };
-    bool ok = decoder_->bitwise_decode_x1(bits, &key, &ectx);
-    assert(ok); (void)ok;
-    ectx.buffer.swap(ctx->buf0);
-    buffer->append(key.data(), key.size());
-  }
-  void GetMetaData(valvec<fstring>* blocks) const {
-    blocks->append(fstring(offsets_.data(), offsets_.mem_size()));
-  }
-  void DetachMetaData(const valvec<fstring>& blocks) {
-    fstring offset_mem = blocks.front();
-    offsets_.risk_release_ownership();
-    offsets_.risk_set_data((byte_t*)offset_mem.data(), offset_mem.size());
-  }
-
-  void IterSet(size_t suffix_id, IteratorStorage* iter) const {
-    if (flags.is_rev_suffix) {
-      suffix_id = offsets_.size() - suffix_id - 2;
-    }
-    UnzipRecord(suffix_id, iter);
-  }
-  bool IterSeek(fstring target, size_t& suffix_id, size_t suffix_count, IteratorStorage* iter) const {
-    if (flags.is_rev_suffix) {
-      size_t num_records = offsets_.size() - 1;
-      suffix_id = num_records - suffix_id - suffix_count;
-      size_t end = suffix_id + suffix_count;
-      suffix_id = LowerBoundImpl(suffix_id, end, target, iter);
-      bool success = suffix_id != end;
-      suffix_id = num_records - suffix_id - suffix_count;
-      return success;
-    } else {
-      size_t end = suffix_id + suffix_count;
-      suffix_id = LowerBoundImpl(suffix_id, end, target, iter);
-      return suffix_id != end;
-    }
-  }
-  fstring IterGetKey(size_t suffix_id, const IteratorStorage* iter) const {
-    return iter->key;
-  }
-
-  bool Load(fstring mem) override {
-    Footer footer;
-    if (mem.size() < sizeof footer) {
-      return false;
-    }
-    memcpy(&footer, mem.data() + mem.size() - sizeof footer, sizeof footer);
-    if (mem.size() < footer.size()) {
-      return false;
-    }
-    raw_size_ = footer.raw_size;
-    byte_t* ptr = (byte_t*)mem.data() + mem.size() - sizeof footer;
-    ptr -= footer.offset_size;
-    offsets_.risk_set_data(ptr, footer.offset_size);
-    ptr -= (8 - (footer.data_size + footer.table_size) % 8) % 8;
-    table_.risk_set_data(ptr -= footer.table_size, footer.table_size);
-    data_.risk_set_data(ptr -= footer.data_size, footer.data_size);
-    assert(ptr == (byte_t*)mem.data());
-    size_t table_size;
-    decoder_.reset(new Huffman::decoder_o1(table_, &table_size));
-    assert(table_size == table_.size());
-    flags.is_user_mem = true;
-    return true;
-  }
-  void Save(std::function<void(const void*, size_t)> append) const override {
-    append(data_.data(), data_.size());
-    append(table_.data(), table_.size());
-    Padzero<8>(append, table_.size() + data_.size());
-    append(offsets_.data(), offsets_.mem_size());
-    Footer footer = {
-        offsets_.mem_size(), table_.size(), data_.size(), raw_size_
-    };
-    append(&footer, sizeof footer);
-  }
-  void
-  Reorder(ZReorderMap& newToOld, std::function<void(const void*, size_t)> append, fstring tmpFile) const override {
-    FunctionAdaptBuffer adaptBuffer(append);
-    OutputBuffer buffer(&adaptBuffer);
-    auto builder = std::unique_ptr<SortedUintVec::Builder>(SortedUintVec::createBuilder(128, tmpFile.c_str()));
-    auto output_data = [&buffer](const void* data, size_t size) {
-      buffer.ensureWrite(data, size);
-    };
-    EntropyBitsWriter<decltype(output_data)> writer(output_data);
-    size_t bit_count = 0;
-    builder->push_back(0);
-    for (assert(newToOld.size() == offsets_.size() - 1); !newToOld.eof(); ++newToOld) {
-      size_t oldId = *newToOld;
-      assert(oldId < offsets_.size() - 1);
-      size_t BegEnd[2];
-      offsets_.get2(oldId, BegEnd);
-      EntropyBits bits = {(byte_t*)data_.data(), BegEnd[0], BegEnd[1] - BegEnd[0]};
-      builder->push_back(bit_count += bits.size);
-      writer.write(bits);
-    }
-    auto bits = writer.finish();
-    assert(bits.skip == 0);
-    size_t data_size = (bits.size + 7) / 8;
-    buffer.ensureWrite(table_.data(), table_.size());
-    PadzeroForAlign<8>(buffer, data_size + table_.size());
-    builder->finish(nullptr);
-    builder.reset();
-    MmapWholeFile mmapOffset(tmpFile);
-    size_t offset_size = mmapOffset.size;
-    buffer.ensureWrite(mmapOffset.base, mmapOffset.size);
-    MmapWholeFile().swap(mmapOffset);
-    ::remove(tmpFile.c_str());
-    Footer footer = {
-        offset_size, table_.size(), data_size, raw_size_
-    };
-    buffer.ensureWrite(&footer, sizeof footer);
-  }
-
-  void UnzipRecord(size_t rec_id, IteratorStorage* iter) const {
-    size_t log2 = offsets_.log2_block_units(); // must be 6 or 7
-    size_t mask = (size_t(1) << log2) - 1;
-    if (terark_unlikely(rec_id >> log2 != iter->blockId)) {
-      // cache miss, load the block
-      size_t blockIdx = rec_id >> log2;
-      offsets_.get_block(blockIdx, iter->offsets);
-      iter->offsets[mask + 1] = offsets_.get_block_min_val(blockIdx + 1);
-      iter->blockId = blockIdx;
-    }
-    size_t inBlockID = rec_id & mask;
-    size_t BegEnd[2] = {iter->offsets[inBlockID], iter->offsets[inBlockID + 1]};
-    EntropyBits bits = {
-        (byte_t*)data_.data(), BegEnd[0], BegEnd[1] - BegEnd[0]
-    };
-    bool ok = decoder_->bitwise_decode_x1(bits, &iter->key, &iter->ctx);
-    assert(ok); (void)ok;
-  }
-  size_t LowerBoundImpl(size_t lo, size_t hi, fstring target, IteratorStorage* iter) const {
-    assert(lo <= hi);
-    assert(hi <= offsets_.size() - 1);
-    struct Ptr {
-      fstring operator[](ptrdiff_t i) {
-        this_->UnzipRecord(i, iter);
-        last_ = i;
-        return iter->key;
-      }
-      const IndexEntropySuffix* this_;
-      IteratorStorage* iter;
-      size_t last_;
-    } ptr = {this, iter, hi};
-    size_t rec_id = lower_bound_n<Ptr&>(ptr, lo, hi, target);
-    if (rec_id != hi && rec_id != ptr.last_) {
-      ptr[rec_id];
-    }
-    return rec_id;
-  }
-};
-
-
 template<class BlobStoreType>
 struct IndexBlobStoreSuffix
     : public SuffixBase, public ComponentIteratorStorageImpl<BlobStore::CacheOffsets> {
@@ -2498,25 +2241,25 @@ struct IndexBlobStoreSuffix
   std::pair<size_t, fstring>
   LowerBound(fstring target, size_t suffix_id, size_t suffix_count, Context* ctx) const override {
     BlobStore::CacheOffsets co;
-    co.recData.swap(ctx->buf0);
+    co.recData.swap(ctx->buffer);
     if (flags.is_rev_suffix) {
       size_t num_records = store_.num_records();
       suffix_id = num_records - suffix_id - suffix_count;
       size_t end = suffix_id + suffix_count;
       suffix_id = store_.lower_bound(suffix_id, end, target, &co);
-      co.recData.swap(ctx->buf0);
+      co.recData.swap(ctx->buffer);
       if (suffix_id == end) {
         return {num_records - suffix_id - 1, {}};
       }
-      return {num_records - suffix_id - 1, ctx->buf0};
+      return {num_records - suffix_id - 1, ctx->buffer};
     } else {
       size_t end = suffix_id + suffix_count;
       suffix_id = store_.lower_bound(suffix_id, end, target, &co);
-      co.recData.swap(ctx->buf0);
+      co.recData.swap(ctx->buffer);
       if (suffix_id == end) {
         return {suffix_id, {}};
       }
-      return {suffix_id, ctx->buf0};
+      return {suffix_id, ctx->buffer};
     }
   }
   void AppendKey(size_t suffix_id, valvec<byte_t>* buffer, Context* ctx) const {
@@ -2576,6 +2319,57 @@ struct IndexBlobStoreSuffix
   void
   Reorder(ZReorderMap& newToOld, std::function<void(const void*, size_t)> append, fstring tmpFile) const override {
     store_.reorder_zip_data(newToOld, append, tmpFile);
+  }
+};
+
+struct IndexEntropySuffix : public IndexBlobStoreSuffix<EntropyZipBlobStore> {
+  using BaseType = IndexBlobStoreSuffix<EntropyZipBlobStore>;
+
+  IndexEntropySuffix() = default;
+  IndexEntropySuffix(const IndexEntropySuffix&) = delete;
+  IndexEntropySuffix(IndexEntropySuffix&& other) = default;
+  IndexEntropySuffix(SuffixBase* base) : BaseType(base) {}
+  IndexEntropySuffix(EntropyZipBlobStore* store, FileMemIO& mem, bool rev_suffix)
+      : BaseType(store, mem, rev_suffix) {}
+  IndexEntropySuffix& operator = (const IndexEntropySuffix&) = delete;
+  IndexEntropySuffix& operator = (IndexEntropySuffix&& other) = default;
+
+  bool Load(fstring mem) override {
+    try {
+      if (BaseType::Load(mem)) {
+        return true;
+      }
+    } catch(...) {}
+    struct Footer {
+      uint64_t offset_size;
+      uint64_t table_size;
+      uint64_t data_size;
+      uint64_t raw_size;
+
+      size_t size() const {
+        return align_up(data_size + table_size, 8) + offset_size + sizeof(Footer);
+      }
+    } footer;
+    if (mem.size() < sizeof footer) {
+      return false;
+    }
+    memcpy(&footer, mem.data() + mem.size() - sizeof footer, sizeof footer);
+    if (mem.size() < footer.size()) {
+      return false;
+    }
+    SortedUintVec offsets;
+    valvec<byte_t> content;
+    valvec<byte_t> table;
+    byte_t* ptr = (byte_t*)mem.data() + mem.size() - sizeof footer;
+    ptr -= footer.offset_size;
+    offsets.risk_set_data(ptr, footer.offset_size);
+    ptr -= (8 - (footer.data_size + footer.table_size) % 8) % 8;
+    table.risk_set_data(ptr -= footer.table_size, footer.table_size);
+    content.risk_set_data(ptr -= footer.data_size, footer.data_size);
+    assert(ptr == (byte_t*)mem.data());
+    flags.is_user_mem = true;
+    store_.init_from_components(std::move(offsets), std::move(content), std::move(table), 1, footer.raw_size);
+    return true;
   }
 };
 
@@ -2996,6 +2790,41 @@ BuildFixedStringSuffix(
   return suffix;
 }
 
+bool UseDictZipSuffix(size_t numKeys, size_t sumKeyLen, double zipRatio) {
+  return g_indexEnableDictZipSuffix && numKeys > 8192 && sumKeyLen > numKeys * 16 &&
+         (sumKeyLen + numKeys * 4) * zipRatio + 1024 < sumKeyLen + numKeys;
+}
+
+template<class InputBufferType>
+SuffixBase*
+BuildVerLenSuffix(
+    InputBufferType& input,
+    size_t numKeys, size_t sumKeyLen, bool isReverse) {
+  assert(g_indexEnableCompositeIndex);
+  assert(g_indexEnableDynamicSuffix);
+  input.rewind();
+  FileMemIO memory;
+  terark::ZipOffsetBlobStore::MyBuilder builder(128, memory);
+  for (size_t i = 0; i < numKeys; ++i) {
+    auto str = input.next();
+    builder.addRecord(str);
+  }
+  builder.finish();
+  memory.shrink_to_fit();
+  auto store = AbstractBlobStore::load_from_user_memory(
+      fstring(memory.begin(), memory.size()), AbstractBlobStore::Dictionary());
+  assert(dynamic_cast<ZipOffsetBlobStore*>(store) != nullptr);
+#ifndef NDEBUG
+  input.rewind();
+  for (size_t i = 0; i < numKeys; ++i) {
+    auto str = input.next();
+    assert(str == store->get_record(i));
+  }
+#endif
+  return new IndexBlobStoreSuffix<ZipOffsetBlobStore>(static_cast<ZipOffsetBlobStore*>(store), memory, isReverse);
+}
+
+
 template<class InputBufferType>
 SuffixBase*
 BuildEntropySuffix(
@@ -3009,135 +2838,85 @@ BuildEntropySuffix(
     freq->add_record(input.next());
   }
   freq->finish();
-  assert(sumKeyLen == freq->histogram().o0_size);
-  size_t estimate_size = freq_hist_o1::estimate_size(freq->histogram());
-  freq->normalise(Huffman::NORMALISE);
-  std::unique_ptr<Huffman::encoder_o1> encoder(new Huffman::encoder_o1(freq->histogram()));
-  freq.reset();
-  EntropyContext ctx;
+  FileMemIO memory;
+  EntropyZipBlobStore::MyBuilder builder(*freq, 128, memory);
   input.rewind();
-  valvec<byte_t> data(estimate_size + numKeys, valvec_reserve());
-  auto builder = std::unique_ptr<SortedUintVec::Builder>(SortedUintVec::createBuilder(128));
-  auto output_data = [&data](const void* d, size_t s) {
-    data.append((const byte_t*)d, s);
-  };
-  EntropyBitsWriter<decltype(output_data)> writer(output_data);
-  size_t bit_count = 0;
-  builder->push_back(0);
   for (size_t i = 0; i < numKeys; ++i) {
-    auto bits = encoder->bitwise_encode_x1(input.next(), &ctx);
-    builder->push_back(bit_count += bits.size);
-    writer.write(bits);
+    builder.addRecord(input.next());
   }
-  auto bits = writer.finish();
-  assert(bits.skip == 0);
-  data.risk_set_size((bits.size + 7) / 8);
-  auto suffix = new IndexEntropySuffix();
-  suffix->flags.is_rev_suffix = isReverse;
-  builder->finish(&suffix->offsets_);
-  builder.reset();
-  suffix->data_.swap(data);
-  encoder->take_table(&suffix->table_);
-  size_t table_size;
-  suffix->decoder_.reset(new Huffman::decoder_o1(suffix->table_, &table_size));
-  assert(table_size == suffix->table_.size());
-  suffix->raw_size_ = sumKeyLen;
+  builder.finish();
+  memory.shrink_to_fit();
+  auto store = AbstractBlobStore::load_from_user_memory(
+      fstring(memory.begin(), memory.size()), AbstractBlobStore::Dictionary());
+  assert(dynamic_cast<EntropyZipBlobStore*>(store) != nullptr);
 #ifndef NDEBUG
-  EntropySuffixIteratorStorage iter;
   input.rewind();
   for (size_t i = 0; i < numKeys; ++i) {
     auto str = input.next();
-    suffix->UnzipRecord(i, &iter);
-    assert(str == iter.key);
+    assert(str == store->get_record(i));
   }
 #endif
-  return suffix;
-}
-
-bool UseDictZipSuffix(size_t numKeys, size_t sumKeyLen, double zipRatio) {
-  return g_indexEnableDictZipSuffix && numKeys > 8192 && sumKeyLen > numKeys * 16 &&
-         (sumKeyLen + numKeys * 4) * zipRatio + 1024 < sumKeyLen + numKeys;
+  return new IndexEntropySuffix(static_cast<EntropyZipBlobStore*>(store), memory, isReverse);
 }
 
 template<class InputBufferType>
 SuffixBase*
-BuildBlobStoreSuffix(
+BuildDictZipSuffix(
     InputBufferType& input,
-    size_t numKeys, size_t sumKeyLen, bool isReverse, bool isDictZip) {
+    size_t numKeys, size_t sumKeyLen, bool isReverse) {
   assert(g_indexEnableCompositeIndex);
   assert(g_indexEnableDynamicSuffix);
   input.rewind();
   FileMemIO memory;
-  if (!isDictZip) {
-    terark::ZipOffsetBlobStore::MyBuilder builder(128, memory);
-    for (size_t i = 0; i < numKeys; ++i) {
-      auto str = input.next();
-      builder.addRecord(str);
-    }
-    builder.finish();
-    memory.shrink_to_fit();
-    auto store = AbstractBlobStore::load_from_user_memory(
-        fstring(memory.begin(), memory.size()), AbstractBlobStore::Dictionary());
-    assert(dynamic_cast<ZipOffsetBlobStore*>(store) != nullptr);
-#ifndef NDEBUG
-    input.rewind();
-    for (size_t i = 0; i < numKeys; ++i) {
-      auto str = input.next();
-      assert(str == store->get_record(i));
-    }
-#endif
-    return new IndexBlobStoreSuffix<ZipOffsetBlobStore>(static_cast<ZipOffsetBlobStore*>(store), memory, isReverse);
-  } else {
-    std::unique_ptr<DictZipBlobStore::ZipBuilder> zbuilder;
-    DictZipBlobStore::Options dzopt;
-    size_t avgLen = sumKeyLen / numKeys;
-    dzopt.checksumLevel = 1;
-    dzopt.entropyAlgo = DictZipBlobStore::Options::kHuffmanO1;
-    dzopt.useSuffixArrayLocalMatch = false;
-    dzopt.compressGlobalDict = true;
-    dzopt.entropyInterleaved = avgLen > 256 ? 8 : avgLen > 128 ? 4 : avgLen > 64 ? 2 : 1;
-    dzopt.offsetArrayBlockUnits = 128;
-    dzopt.entropyZipRatioRequire = 0.95f;
-    dzopt.embeddedDict = true;
-    dzopt.enableLake = true;
-    zbuilder.reset(DictZipBlobStore::createZipBuilder(dzopt));
+  std::unique_ptr<DictZipBlobStore::ZipBuilder> zbuilder;
+  DictZipBlobStore::Options dzopt;
+  size_t avgLen = sumKeyLen / numKeys;
+  dzopt.checksumLevel = 1;
+  dzopt.entropyAlgo = DictZipBlobStore::Options::kHuffmanO1;
+  dzopt.useSuffixArrayLocalMatch = false;
+  dzopt.compressGlobalDict = true;
+  dzopt.entropyInterleaved = avgLen > 256 ? 8 : avgLen > 128 ? 4 : avgLen > 64 ? 2 : 1;
+  dzopt.offsetArrayBlockUnits = 128;
+  dzopt.entropyZipRatioRequire = 0.95f;
+  dzopt.embeddedDict = true;
+  dzopt.enableLake = true;
+  zbuilder.reset(DictZipBlobStore::createZipBuilder(dzopt));
 
-    std::mt19937_64 randomGenerator;
-    uint64_t upperBoundSample = uint64_t(randomGenerator.max() * 0.1);
-    uint64_t sampleLenSum = 0;
-    for (size_t i = 0; i < numKeys; ++i) {
-      auto str = input.next();
-      if (randomGenerator() < upperBoundSample) {
-        zbuilder->addSample(str);
-        sampleLenSum += str.size();
-      }
+  std::mt19937_64 randomGenerator;
+  uint64_t upperBoundSample = uint64_t(randomGenerator.max() * 0.1);
+  uint64_t sampleLenSum = 0;
+  for (size_t i = 0; i < numKeys; ++i) {
+    auto str = input.next();
+    if (randomGenerator() < upperBoundSample) {
+      zbuilder->addSample(str);
+      sampleLenSum += str.size();
     }
-    if (sampleLenSum == 0) {
-      zbuilder->addSample("Hello World!");
-    }
-    zbuilder->finishSample();
-    zbuilder->prepareDict();
-    zbuilder->prepare(numKeys, memory);
-    input.rewind();
-    for (size_t i = 0; i < numKeys; ++i) {
-      auto str = input.next();
-      zbuilder->addRecord(str);
-    }
-    zbuilder->finish(DictZipBlobStore::ZipBuilder::FinishFreeDict);
-    zbuilder.reset();
-    memory.shrink_to_fit();
-    auto store = AbstractBlobStore::load_from_user_memory(
-        fstring(memory.begin(), memory.size()), AbstractBlobStore::Dictionary());
-    assert(dynamic_cast<DictZipBlobStore*>(store) != nullptr);
-#ifndef NDEBUG
-    input.rewind();
-    for (size_t i = 0; i < numKeys; ++i) {
-      auto str = input.next();
-      assert(str == store->get_record(i));
-    }
-#endif
-    return new IndexBlobStoreSuffix<DictZipBlobStore>(static_cast<DictZipBlobStore*>(store), memory, isReverse);
   }
+  if (sampleLenSum == 0) {
+    zbuilder->addSample("Hello World!");
+  }
+  zbuilder->finishSample();
+  zbuilder->prepareDict();
+  zbuilder->prepare(numKeys, memory);
+  input.rewind();
+  for (size_t i = 0; i < numKeys; ++i) {
+    auto str = input.next();
+    zbuilder->addRecord(str);
+  }
+  zbuilder->finish(DictZipBlobStore::ZipBuilder::FinishFreeDict);
+  zbuilder.reset();
+  memory.shrink_to_fit();
+  auto store = AbstractBlobStore::load_from_user_memory(
+      fstring(memory.begin(), memory.size()), AbstractBlobStore::Dictionary());
+  assert(dynamic_cast<DictZipBlobStore*>(store) != nullptr);
+#ifndef NDEBUG
+  input.rewind();
+  for (size_t i = 0; i < numKeys; ++i) {
+    auto str = input.next();
+    assert(str == store->get_record(i));
+  }
+#endif
+  return new IndexBlobStoreSuffix<DictZipBlobStore>(static_cast<DictZipBlobStore*>(store), memory, isReverse);
 }
 
 bool UseRawSuffix(size_t numKeys, size_t sumKeyLen, double zipRatio) {
@@ -3150,14 +2929,14 @@ BuildSuffixAutoSelect(
     InputBufferType& input, size_t numKeys, size_t sumKeyLen, bool isFixedLen, bool isReverse, double zipRatio) {
   assert(sumKeyLen > 0);
   if (UseDictZipSuffix(numKeys, sumKeyLen, zipRatio)) {
-    return BuildBlobStoreSuffix(input, numKeys, sumKeyLen, isReverse, true);
+    return BuildDictZipSuffix(input, numKeys, sumKeyLen, isReverse);
   } else if (UseEntropySuffix(numKeys, sumKeyLen, zipRatio)) {
     return BuildEntropySuffix(input, numKeys, sumKeyLen, isReverse);
   } else if (isFixedLen) {
     assert(sumKeyLen % numKeys == 0);
     return BuildFixedStringSuffix(input, numKeys, sumKeyLen, sumKeyLen / numKeys, isReverse);
   } else {
-    return BuildBlobStoreSuffix(input, numKeys, sumKeyLen, isReverse, false);
+    return BuildVerLenSuffix(input, numKeys, sumKeyLen, isReverse);
   }
 }
 

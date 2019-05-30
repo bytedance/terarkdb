@@ -174,7 +174,7 @@ TableFactory*
 NewTerarkZipTableFactory(const TerarkZipTableOptions& tzto,
                          std::shared_ptr<TableFactory> fallback) {
   TerarkZipTableFactory* factory = new TerarkZipTableFactory(tzto, fallback);
-  if (tzto.debugLevel < 0) {
+  if (tzto.debugLevel > 0) {
     STD_INFO("NewTerarkZipTableFactory(\n%s)\n",
              factory->GetPrintableTableOptions().c_str()
     );
