@@ -40,7 +40,8 @@ struct FragmentedRangeTombstoneList {
   FragmentedRangeTombstoneList(
       std::unique_ptr<InternalIterator> unfragmented_tombstones,
       const InternalKeyComparator& icmp, bool for_compaction = false,
-      const std::vector<SequenceNumber>& snapshots = {});
+      const std::vector<SequenceNumber>& snapshots = {},
+      uint64_t _user_tag = uint64_t(-1));
 
   std::vector<RangeTombstoneStack>::const_iterator begin() const {
     return tombstones_.begin();
@@ -68,6 +69,8 @@ struct FragmentedRangeTombstoneList {
   // number in [lower, upper].
   bool ContainsRange(SequenceNumber lower, SequenceNumber upper) const;
 
+  uint64_t user_tag() const { return user_tag_; }
+
  private:
   // Given an ordered range tombstone iterator unfragmented_tombstones,
   // "fragment" the tombstones into non-overlapping pieces, and store them in
@@ -77,6 +80,7 @@ struct FragmentedRangeTombstoneList {
       const InternalKeyComparator& icmp, bool for_compaction,
       const std::vector<SequenceNumber>& snapshots);
 
+  uint64_t user_tag_;
   std::vector<RangeTombstoneStack> tombstones_;
   std::vector<SequenceNumber> tombstone_seqs_;
   std::set<SequenceNumber> seq_set_;

@@ -21,7 +21,8 @@ namespace rocksdb {
 FragmentedRangeTombstoneList::FragmentedRangeTombstoneList(
     std::unique_ptr<InternalIterator> unfragmented_tombstones,
     const InternalKeyComparator& icmp, bool for_compaction,
-    const std::vector<SequenceNumber>& snapshots) {
+    const std::vector<SequenceNumber>& snapshots, uint64_t _user_tag) {
+  user_tag_ = _user_tag;
   if (unfragmented_tombstones == nullptr) {
     return;
   }

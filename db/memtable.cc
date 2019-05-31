@@ -84,13 +84,14 @@ MemTable::MemTable(const InternalKeyComparator& cmp,
       range_del_table_(SkipListFactory().CreateMemTableRep(
           comparator_, needs_dup_key_check, &arena_, nullptr /* transform */,
           ioptions.info_log, column_family_id)),
-      is_range_del_table_empty_(true),
       data_size_(0),
       num_entries_(0),
       num_deletes_(0),
+      num_range_del_(0),
       write_buffer_size_(mutable_cf_options.write_buffer_size),
       flush_in_progress_(false),
       flush_completed_(false),
+      is_range_del_slow_(false),
       file_number_(0),
       first_seqno_(0),
       earliest_seqno_(latest_seq),
@@ -152,6 +153,9 @@ size_t MemTable::ApproximateMemoryUsage() {
 }
 
 bool MemTable::ShouldFlushNow() const {
+  if (is_range_del_slow_) {
+    return true;
+  }
   size_t write_buffer_size = write_buffer_size_.load(std::memory_order_relaxed);
   // In a lot of times, we cannot allocate arena blocks that exactly matches the
   // buffer size. Thus we have to decide if we should over-allocate or
@@ -409,18 +413,34 @@ InternalIterator* MemTable::NewIterator(const ReadOptions& read_options,
 
 FragmentedRangeTombstoneIterator* MemTable::NewRangeTombstoneIterator(
     const ReadOptions& read_options, SequenceNumber read_seq) {
-  if (read_options.ignore_range_deletions || is_range_del_table_empty_) {
+  size_t num_range_del = num_range_del_.load(std::memory_order_relaxed);
+  if (read_options.ignore_range_deletions || num_range_del == 0) {
     return nullptr;
   }
-  auto* unfragmented_iter = new MemTableIterator(
-      *this, read_options, nullptr /* arena */, true /* use_range_del_table */);
-  if (unfragmented_iter == nullptr) {
-    return nullptr;
+  auto fragmented_tombstone_list = fragmented_range_dels_;
+
+  if (!fragmented_range_dels_ ||
+      fragmented_range_dels_->user_tag() != num_range_del) {
+
+    auto* unfragmented_iter = new MemTableIterator(
+        *this, read_options, nullptr /* arena */,
+        true /* use_range_del_table */);
+    if (unfragmented_iter == nullptr) {
+      return nullptr;
+    }
+    StopWatchNano timer(env_, true);
+    fragmented_tombstone_list =
+        std::make_shared<FragmentedRangeTombstoneList>(
+            std::unique_ptr<InternalIterator>(unfragmented_iter),
+            comparator_.comparator, false /* for_compaction */,
+            std::vector<SequenceNumber>() /* snapshots */, num_range_del);
+    if (timer.ElapsedNanos() > 10000000ULL) {
+      is_range_del_slow_ = true;
+    }
+    if (num_range_del == num_range_del_.load(std::memory_order_relaxed)) {
+      fragmented_range_dels_ = fragmented_tombstone_list;
+    }
   }
-  auto fragmented_tombstone_list =
-      std::make_shared<FragmentedRangeTombstoneList>(
-          std::unique_ptr<InternalIterator>(unfragmented_iter),
-          comparator_.comparator);
 
   auto* fragmented_iter = new FragmentedRangeTombstoneIterator(
       fragmented_tombstone_list, comparator_.comparator, read_seq);
@@ -540,8 +560,9 @@ bool MemTable::Add(SequenceNumber s, ValueType type,
         !first_seqno_.compare_exchange_weak(cur_earliest_seqno, s)) {
     }
   }
-  if (is_range_del_table_empty_ && type == kTypeRangeDeletion) {
-    is_range_del_table_empty_ = false;
+  if (type == kTypeRangeDeletion) {
+    num_range_del_.store(num_range_del_.load(std::memory_order_relaxed) + 1,
+                         std::memory_order_relaxed);
   }
   UpdateOldestKeyTime();
   return true;
