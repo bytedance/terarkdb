@@ -7,7 +7,7 @@
 #include "util/arena.h"
 #include "util/coding.h"
 #include "utilities/write_batch_with_index/write_batch_with_index_internal.h"
-#include <terark/fsa/dynamic_patricia_trie.inl>
+#include <terark/fsa/cspptrie.inl>
 
 namespace rocksdb {
 
