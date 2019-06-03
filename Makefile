@@ -157,7 +157,7 @@ terark-zip-rocksdb/${BUILD_ROOT}/git-version-terark_zip_rocksdb.cc: terark-zip-r
 	make -C terark-zip-rocksdb  ${BUILD_ROOT}/git-version-terark_zip_rocksdb.cpp SKIP_DEP_GEN=1
 	mv ${@:.cc=.cpp} $@
 
-  SRC_NEEDS_TERARK := $(wildcard db/*.cc) $(wildcard tools/*.cc)
+  SRC_NEEDS_TERARK := $(wildcard db/*.cc) $(wildcard tools/*.cc) ${TERARK_ZIP_SRC}
 ${SRC_NEEDS_TERARK}: terark-zip-rocksdb.got
 #------------------------------------------------------------------------------
 
