@@ -97,6 +97,7 @@ endif
 
 ###############################################################################
 ## Terark specific
+
 ifeq (${DEBUG_LEVEL}, 0)
   DBG_OR_RLS=r
 else
@@ -109,20 +110,58 @@ BUILD_ROOT := build/${BUILD_NAME}
 xdir:=${BUILD_ROOT}/dbg-${DEBUG_LEVEL}
 
 ifdef BUNDLE_TERARK_ZIP_ROCKSDB
-  a := $(shell bash get_bundle_dependencies.sh)
   TERARK_ZIP_ROCKSDB_HOME := terark-zip-rocksdb
+  TERARK_CORE_VERSION ?= 1.0.0.58
   TERARK_CORE_PKG_DIR ?= ../terark-core/pkg/terark-fsa_all-${BUILD_NAME}
   CXXFLAGS += -I${TERARK_CORE_PKG_DIR}/include -Iboost-include
   CXXFLAGS += -Iterark-zip-rocksdb/src
 # CXXFLAGS += -march=haswell
-  TERARK_ZIP_SRC = $(wildcard terark-zip-rocksdb/src/table/*.cc) \
-    terark-zip-rocksdb/${BUILD_ROOT}/git-version-terark_zip_rocksdb.cc
-#  $(warning TERARK_ZIP_SRC = ${TERARK_ZIP_SRC})
-#--------------------------------------------------------------------
-terark-zip-rocksdb/${BUILD_ROOT}/git-version-terark_zip_rocksdb.cc:
+
+# do not use wildcard, to kill dependency to terark-zip-rocksdb.got
+  TERARK_ZIP_SRC := \
+      terark-zip-rocksdb/src/table/terark_zip_common.cc         \
+      terark-zip-rocksdb/src/table/terark_zip_config.cc         \
+      terark-zip-rocksdb/src/table/terark_zip_entry_index.cc    \
+      terark-zip-rocksdb/src/table/terark_zip_index.cc          \
+      terark-zip-rocksdb/src/table/terark_zip_memtable.cc       \
+      terark-zip-rocksdb/src/table/terark_zip_table.cc          \
+      terark-zip-rocksdb/src/table/terark_zip_table_builder.cc  \
+      terark-zip-rocksdb/src/table/terark_zip_table_reader.cc   \
+      terark-zip-rocksdb/${BUILD_ROOT}/git-version-terark_zip_rocksdb.cc
+
+#------------------------------------------------------------------------------
+.PHONY:\
+bundle_terark_zip_rocksdb_dep
+bundle_terark_zip_rocksdb_dep: terark-core.got boost-include.got terark-zip-rocksdb.got
+
+ifneq (${TERARK_CORE_PKG_DIR},../terark-core/pkg/terark-fsa_all-${BUILD_NAME})
+terark-core.got:
+	wget -O terark-core.tar.gz http://d.scm.byted.org/api/download/ceph:toutiao.terark.terark_core_${TERARK_CORE_VERSION}.tar.gz
+	rm -rf terark-core
+	mkdir terark-core
+	tar -xvf terark-core.tar.gz -C terark-core
+	rm -rf terark-core.tar.gz
+	touch $@
+endif
+
+boost-include.got:
+	rm -rf terark-zip-rocksdb
+	git clone --depth=1 git@code.byted.org:storage/terark-zip-rocksdb.git
+	touch $@
+
+terark-zip-rocksdb.got:
+	rm -rf boost-include
+	git clone --depth=1 git@code.byted.org:storage/boost-include.git
+	touch $@
+
+terark-zip-rocksdb/${BUILD_ROOT}/git-version-terark_zip_rocksdb.cc: terark-zip-rocksdb.got
 	make -C terark-zip-rocksdb  ${BUILD_ROOT}/git-version-terark_zip_rocksdb.cpp
 	mv ${@:.cc=.cpp} $@
-#--------------------------------------------------------------------
+
+  SRC_NEEDS_TERARK := $(wildcard db/*.cc) $(wildcard tools/*.cc)
+${SRC_NEEDS_TERARK}: bundle_terark_zip_rocksdb_dep
+#------------------------------------------------------------------------------
+
 # just use terark-core libs, set TERARK_ZIP_PKG_DIR as core
   TERARK_ZIP_PKG_DIR = ${TERARK_CORE_PKG_DIR}
   LIB_TERARK_ZIP_STATIC =
@@ -419,10 +458,7 @@ endif
 
 LIBOBJECTS = $(addprefix ${xdir}/, $(LIB_SOURCES:.cc=.o))
 LIB_CC_OBJECTS = $(LIBOBJECTS)
-#$(warning --------------------------)
-$(warning $(shell echo LIB_CC_OBJECTS =; echo ${LIB_CC_OBJECTS}))
-#$(warning --------------------------)
-#$(warning $(shell echo LIB_SOURCES =; echo ${LIB_SOURCES}))
+
 ifeq ($(HAVE_POWER8),1)
 LIBOBJECTS += $(addprefix ${xdir}/, $(LIB_SOURCES_C:.c=.o))
 LIBOBJECTS += $(addprefix ${xdir}/, $(LIB_SOURCES_ASM:.S=.o))
