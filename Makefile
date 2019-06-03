@@ -5,19 +5,7 @@
 # Inherit some settings from environment variables, if available
 
 #-----------------------------------------------
-BMI2 ?= 0
 USE_RTTI = 1
-
-tmpfile := $(shell mktemp compiler-XXXXXX)
-COMPILER := $(shell ${CXX} terark-tools/detect-compiler.cpp -o ${tmpfile}.exe && ./${tmpfile}.exe && rm -f ${tmpfile}*)
-
-# COMPILER=$(shell t=`mktemp --suffix=.exe`; ${CXX} terark-tools/detect-compiler.cpp -o $$t && $$t && rm -f $$t)
-UNAME_MachineSystem=$(shell uname -m -s | sed 's:[ /]:-:g')
-TERARK_ZIP_ROCKSDB_HOME ?= ../terark-zip-rocksdb
-TerarkDir := ${TERARK_ZIP_ROCKSDB_HOME}/pkg/terark-zip-rocksdb-${UNAME_MachineSystem}-${COMPILER}-bmi2-${BMI2}
-BUILD_NAME := ${UNAME_MachineSystem}-${COMPILER}-bmi2-${BMI2}
-BUILD_ROOT := build/${BUILD_NAME}
-export LD_LIBRARY_PATH:=${TerarkDir}/lib:${LD_LIBRARY_PATH}
 
 BASH_EXISTS := $(shell which bash)
 SHELL := $(shell which bash)
@@ -30,7 +18,7 @@ MACHINE ?= $(shell uname -m)
 ARFLAGS = ${EXTRA_ARFLAGS} rs
 STRIPFLAGS = -S -x
 
-CXXFLAGS += -I${TERARK_ZIP_ROCKSDB_HOME}/src -fPIC
+CXXFLAGS += -fPIC
 # Transform parallel LOG output into something more readable.
 perl_command = perl -n \
   -e '@a=split("\t",$$_,-1); $$t=$$a[8];'				\
@@ -107,28 +95,61 @@ ifeq ($(MAKECMDGOALS),rocksdbjavastaticpublish)
 	DEBUG_LEVEL=0
 endif
 
+###############################################################################
+## Terark specific
 ifeq (${DEBUG_LEVEL}, 0)
   DBG_OR_RLS=r
 else
   DBG_OR_RLS=d
 endif
 
-ifeq ("$(LINK_SHARED_TERARK)","1")
-  TerarkLDFLAGS += -L${TerarkDir}/lib \
-                    -lterark-zip-rocksdb-${DBG_OR_RLS} \
+BMI2 ?= 0
+BUILD_NAME := $(shell bash get_terark_build_name.sh ${CXX} ${BMI2})
+BUILD_ROOT := build/${BUILD_NAME}
+xdir:=${BUILD_ROOT}/dbg-${DEBUG_LEVEL}
+
+ifdef BUNDLE_TERARK_ZIP_ROCKSDB
+  a := $(shell bash get_bundle_dependencies.sh)
+  TERARK_ZIP_ROCKSDB_HOME := terark-zip-rocksdb
+  TERARK_CORE_PKG_DIR ?= ../terark-core/pkg/terark-fsa_all-${BUILD_NAME}
+  CXXFLAGS += -I${TERARK_CORE_PKG_DIR}/include -Iboost-include
+  CXXFLAGS += -Iterark-zip-rocksdb/src
+# CXXFLAGS += -march=haswell
+  TERARK_ZIP_SRC = $(wildcard terark-zip-rocksdb/src/table/*.cc) \
+    terark-zip-rocksdb/${BUILD_ROOT}/git-version-terark_zip_rocksdb.cc
+#  $(warning TERARK_ZIP_SRC = ${TERARK_ZIP_SRC})
+#--------------------------------------------------------------------
+terark-zip-rocksdb/${BUILD_ROOT}/git-version-terark_zip_rocksdb.cc:
+	make -C terark-zip-rocksdb  ${BUILD_ROOT}/git-version-terark_zip_rocksdb.cpp
+	mv ${@:.cc=.cpp} $@
+#--------------------------------------------------------------------
+# just use terark-core libs, set TERARK_ZIP_PKG_DIR as core
+  TERARK_ZIP_PKG_DIR = ${TERARK_CORE_PKG_DIR}
+  LIB_TERARK_ZIP_STATIC =
+  LIB_TERARK_ZIP_SHARED = -L${TERARK_CORE_PKG_DIR}/lib
+  export LD_LIBRARY_PATH:=${TERARK_CORE_PKG_DIR}/lib:${LD_LIBRARY_PATH}
+else
+  # TERARK_ZIP_PKG_DIR includes terark-core headers & libs
+  TERARK_ZIP_ROCKSDB_HOME ?= ../terark-zip-rocksdb
+  TERARK_ZIP_PKG_DIR := ${TERARK_ZIP_ROCKSDB_HOME}/pkg/terark-zip-rocksdb-${BUILD_NAME}
+  LIB_TERARK_ZIP_STATIC =   ${TERARK_ZIP_PKG_DIR}/lib_static/libterark-zip-rocksdb-${DBG_OR_RLS}.a
+  LIB_TERARK_ZIP_SHARED = -L${TERARK_ZIP_PKG_DIR}/lib         -lterark-zip-rocksdb-${DBG_OR_RLS}
+  export LD_LIBRARY_PATH:=${TERARK_ZIP_PKG_DIR}/lib:${LD_LIBRARY_PATH}
+endif
+
+ifeq ($(LINK_TERARK),shared)
+  TerarkLDFLAGS +=  ${LIB_TERARK_ZIP_SHARED} \
                     -lterark-zbs-${DBG_OR_RLS} \
                     -lterark-fsa-${DBG_OR_RLS} \
                     -lterark-core-${DBG_OR_RLS} -ldl
 endif
-
-ifeq ("$(LINK_STATIC_TERARK)","1")
-  TerarkBuild = ../terark/build/${UNAME_MachineSystem}-${COMPILER}-bmi2-${BMI2}
-  override LINK_STATIC_TERARK = \
-    ${TerarkDir}/lib_static/libterark-zip-rocksdb-${DBG_OR_RLS}.a \
-    ${TerarkBuild}/lib/libterark-zbs-${DBG_OR_RLS}.a \
-    ${TerarkBuild}/lib/libterark-fsa-${DBG_OR_RLS}.a \
-    ${TerarkBuild}/lib/libterark-core-${DBG_OR_RLS}.a
+ifeq ($(LINK_TERARK),static)
+  override LINK_STATIC_TERARK = ${LIB_TERARK_ZIP_STATIC} \
+    ${TERARK_ZIP_PKG_DIR}/lib_static/libterark-zbs-${DBG_OR_RLS}.a \
+    ${TERARK_ZIP_PKG_DIR}/lib_static/libterark-fsa-${DBG_OR_RLS}.a \
+    ${TERARK_ZIP_PKG_DIR}/lib_static/libterark-core-${DBG_OR_RLS}.a
 endif
+###############################################################################
 
 # compile with -O2 if debug level is not 2
 ifneq ($(DEBUG_LEVEL), 2)
@@ -164,7 +185,7 @@ ifneq ($(USE_RTTI), 0)
 else
 	CXXFLAGS += -fno-rtti
 endif
-
+else
 $(warning Warning: Compiling in debug mode. Don't use the resulting binary in production)
 endif
 
@@ -201,6 +222,8 @@ ifdef ROCKSDB_USE_LIBRADOS
 LIB_SOURCES += utilities/env_librados.cc
 LDFLAGS += -lrados
 endif
+
+LIB_SOURCES += ${TERARK_ZIP_SRC}
 
 AM_LINK = $(AM_V_CCLD)$(CXX) $^ $(EXEC_LDFLAGS) -o $@ ${TerarkLDFLAGS} $(LDFLAGS) $(COVERAGEFLAGS)
 # detect what platform we're building on
@@ -365,7 +388,7 @@ ifeq ($(NO_THREEWAY_CRC32C), 1)
 endif
 
 CFLAGS += $(WARNING_FLAGS) -I. -I./include $(PLATFORM_CCFLAGS) $(OPT)
-CXXFLAGS += $(WARNING_FLAGS) -I. -I./include -I./terark-zip-rocksdb/src $(PLATFORM_CXXFLAGS) $(OPT) -Woverloaded-virtual -Wnon-virtual-dtor -Wno-missing-field-initializers
+CXXFLAGS += $(WARNING_FLAGS) -I. -I./include $(PLATFORM_CXXFLAGS) $(OPT) -Woverloaded-virtual -Wnon-virtual-dtor -Wno-missing-field-initializers
 
 LDFLAGS += $(PLATFORM_LDFLAGS)
 
@@ -394,29 +417,31 @@ util/build_version.cc: FORCE
 	else mv -f $@-t $@; fi
 endif
 
-LIBOBJECTS = $(LIB_SOURCES:.cc=.o)
+LIBOBJECTS = $(addprefix ${xdir}/, $(LIB_SOURCES:.cc=.o))
+LIB_CC_OBJECTS = $(LIBOBJECTS)
+#$(warning --------------------------)
+$(warning $(shell echo LIB_CC_OBJECTS =; echo ${LIB_CC_OBJECTS}))
+#$(warning --------------------------)
+#$(warning $(shell echo LIB_SOURCES =; echo ${LIB_SOURCES}))
 ifeq ($(HAVE_POWER8),1)
-LIB_CC_OBJECTS = $(LIB_SOURCES:.cc=.o)
-LIBOBJECTS += $(LIB_SOURCES_C:.c=.o)
-LIBOBJECTS += $(LIB_SOURCES_ASM:.S=.o)
-else
-LIB_CC_OBJECTS = $(LIB_SOURCES:.cc=.o)
+LIBOBJECTS += $(addprefix ${xdir}/, $(LIB_SOURCES_C:.c=.o))
+LIBOBJECTS += $(addprefix ${xdir}/, $(LIB_SOURCES_ASM:.S=.o))
 endif
 
-LIBOBJECTS += $(TOOL_LIB_SOURCES:.cc=.o)
-MOCKOBJECTS = $(MOCK_LIB_SOURCES:.cc=.o)
+LIBOBJECTS += $(addprefix ${xdir}/, $(TOOL_LIB_SOURCES:.cc=.o))
+MOCKOBJECTS = $(addprefix ${xdir}/, $(MOCK_LIB_SOURCES:.cc=.o))
 
-GTEST = $(GTEST_DIR)/gtest/gtest-all.o
-TESTUTIL = ./util/testutil.o
-TESTHARNESS = ./util/testharness.o $(TESTUTIL) $(MOCKOBJECTS) $(GTEST)
+GTEST = ${xdir}/$(GTEST_DIR)/gtest/gtest-all.o
+TESTUTIL = ${xdir}/util/testutil.o
+TESTHARNESS = ${xdir}/util/testharness.o $(TESTUTIL) $(MOCKOBJECTS) $(GTEST)
 VALGRIND_ERROR = 2
 VALGRIND_VER := $(join $(VALGRIND_VER),valgrind)
 
 VALGRIND_OPTS = --error-exitcode=$(VALGRIND_ERROR) --leak-check=full
 
-BENCHTOOLOBJECTS = $(BENCH_LIB_SOURCES:.cc=.o) $(LIBNAME).so $(TESTUTIL)
+BENCHTOOLOBJECTS = $(addprefix ${xdir}/, $(BENCH_LIB_SOURCES:.cc=.o) $(LIBNAME).so) $(TESTUTIL)
 
-EXPOBJECTS = $(EXP_LIB_SOURCES:.cc=.o) $(LIBOBJECTS) $(TESTUTIL)
+EXPOBJECTS = $(addprefix ${xdir}/, $(EXP_LIB_SOURCES:.cc=.o)) $(LIBOBJECTS) $(TESTUTIL)
 
 TESTS = \
 	db_basic_test \
@@ -664,18 +689,19 @@ SHARED3 = $(SHARED1).$(SHARED_MAJOR).$(SHARED_MINOR)
 SHARED4 = $(SHARED1).$(SHARED_MAJOR).$(SHARED_MINOR).$(SHARED_PATCH)
 endif
 SHARED = $(SHARED1) $(SHARED2) $(SHARED3) $(SHARED4)
-xdir:=${BUILD_ROOT}/shared_lib/dbg-${DEBUG_LEVEL}
 
-$(SHARED1): $(SHARED4)
+$(SHARED1): $(SHARED4) shared-objects/${xdir}/${SHARED1}
 	ln -fs $(SHARED4) $(SHARED1)
-$(SHARED2): $(SHARED4)
+$(SHARED2): $(SHARED4) shared-objects/${xdir}/${SHARED2}
 	ln -fs $(SHARED4) $(SHARED2)
-$(SHARED3): $(SHARED4)
+$(SHARED3): $(SHARED4) shared-objects/${xdir}/${SHARED3}
 	ln -fs $(SHARED4) $(SHARED3)
+$(SHARED4): shared-objects/${xdir}/${SHARED4}
+	ln -sf $< $@
 
 ifeq ($(HAVE_POWER8),1)
-SHARED_C_OBJECTS = $(LIB_SOURCES_C:.c=.o)
-SHARED_ASM_OBJECTS = $(LIB_SOURCES_ASM:.S=.o)
+SHARED_C_OBJECTS = $(addprefix ${xdir}/, $(LIB_SOURCES_C:.c=.o))
+SHARED_ASM_OBJECTS = $(addprefix ${xdir}/, $(LIB_SOURCES_ASM:.S=.o))
 SHARED_C_LIBOBJECTS = $(patsubst %.o,shared-objects/%.o,$(SHARED_C_OBJECTS))
 SHARED_ASM_LIBOBJECTS = $(patsubst %.o,shared-objects/%.o,$(SHARED_ASM_OBJECTS))
 shared_libobjects = $(patsubst %,shared-objects/%,$(LIB_CC_OBJECTS))
@@ -689,39 +715,31 @@ shared_all_libobjects = $(shared_libobjects)
 ifeq ($(HAVE_POWER8),1)
 shared-ppc-objects = $(SHARED_C_LIBOBJECTS) $(SHARED_ASM_LIBOBJECTS)
 
-shared-objects/util/crc32c_ppc.o: util/crc32c_ppc.c
+shared-objects/${xdir}/util/crc32c_ppc.o: util/crc32c_ppc.c
 	$(AM_V_CC)$(CC) $(CFLAGS) -c $< -o $@
 
-shared-objects/util/crc32c_ppc_asm.o: util/crc32c_ppc_asm.S
+shared-objects/${xdir}/util/crc32c_ppc_asm.o: util/crc32c_ppc_asm.S
 	$(AM_V_CC)$(CC) $(CFLAGS) -c $< -o $@
 endif
-$(shared_libobjects): shared-objects/%.o: %.cc
+shared-objects/${xdir}/%.o: %.cc
 	$(AM_V_CC)mkdir -p $(@D) && $(CXX) $(CXXFLAGS) $(PLATFORM_SHARED_CFLAGS) -c $< -o $@
 
 ifeq ($(HAVE_POWER8),1)
 shared_all_libobjects = $(shared_libobjects) $(shared-ppc-objects)
 endif
-$(SHARED4): $(shared_all_libobjects)
-	$(CXX) $(PLATFORM_SHARED_LDFLAGS)$(SHARED3) $(CXXFLAGS) $(PLATFORM_SHARED_CFLAGS) $(shared_libobjects) $(LDFLAGS) -o $@
 
-${xdir}/$(SHARED1): ${xdir}/$(SHARED4)
+shared-objects/${xdir}/$(SHARED1): shared-objects/${xdir}/$(SHARED4)
 	cd  $(dir $@) ; ln -fs $(notdir $<) $(notdir $@)
-${xdir}/$(SHARED2): ${xdir}/$(SHARED4)
+shared-objects/${xdir}/$(SHARED2): shared-objects/${xdir}/$(SHARED4)
 	cd  $(dir $@) ; ln -fs $(notdir $<) $(notdir $@)
-${xdir}/$(SHARED3): ${xdir}/$(SHARED4)
+shared-objects/${xdir}/$(SHARED3): shared-objects/${xdir}/$(SHARED4)
 	cd  $(dir $@) ; ln -fs $(notdir $<) $(notdir $@)
 
 endif # PLATFORM_SHARED_VERSIONED
 
-$(SHARED4): ${xdir}/$(SHARED4) \
-			${xdir}/$(SHARED3) \
-			${xdir}/$(SHARED2) \
-			${xdir}/$(SHARED1)
-	ln -fs  $< $@
-
-${xdir}/$(SHARED4): $(addprefix ${xdir}/, $(subst .cc,.o,$(strip $(LIB_SOURCES) $(TOOL_LIB_SOURCES))))
+shared-objects/${xdir}/$(SHARED4): $(shared_all_libobjects)
 	$(CXX) $^ $(PLATFORM_SHARED_LDFLAGS)$(SHARED3) \
-		      $(PLATFORM_SHARED_CFLAGS) $(LDFLAGS) $(LINK_STATIC_TERARK) -o $@
+		      $(PLATFORM_SHARED_CFLAGS) $(LDFLAGS) $(LINK_STATIC_TERARK) $(TerarkLDFLAGS) -o $@
 
 ${xdir}/%.o: %.cc
 	@mkdir -p $(dir $@)
@@ -733,7 +751,6 @@ endif  # PLATFORM_SHARED_EXT
 	release tags tags0 valgrind_check whitebox_crash_test format static_lib shared_lib all \
 	dbg rocksdbjavastatic rocksdbjava install install-static install-shared uninstall \
 	analyze tools tools_lib
-
 
 all: $(LIBRARY) $(BENCHMARKS) tools tools_lib test_libs $(TESTS)
 
@@ -1822,21 +1839,21 @@ JAVA_STATIC_FLAGS = -DZLIB -DBZIP2 -DSNAPPY -DLZ4 -DZSTD
 JAVA_STATIC_INCLUDES = -I./zlib-$(ZLIB_VER) -I./bzip2-$(BZIP2_VER) -I./snappy-$(SNAPPY_VER) -I./lz4-$(LZ4_VER)/lib -I./zstd-$(ZSTD_VER)/lib/include
 
 ifeq ($(HAVE_POWER8),1)
-JAVA_STATIC_C_LIBOBJECTS = $(patsubst %.c.o,jls/%.c.o,$(LIB_SOURCES_C:.c=.o))
-JAVA_STATIC_ASM_LIBOBJECTS = $(patsubst %.S.o,jls/%.S.o,$(LIB_SOURCES_ASM:.S=.o))
+JAVA_STATIC_C_LIBOBJECTS = $(patsubst %.c.o,jls/%.c.o,$(addprefix ${xdir},$(LIB_SOURCES_C:.c=.o)))
+JAVA_STATIC_ASM_LIBOBJECTS = $(patsubst %.S.o,jls/%.S.o,$(addprefix ${xdir},$(LIB_SOURCES_ASM:.S=.o)))
 
 java_static_ppc_libobjects = $(JAVA_STATIC_C_LIBOBJECTS) $(JAVA_STATIC_ASM_LIBOBJECTS)
 
-jls/util/crc32c_ppc.o: util/crc32c_ppc.c
+jls/${xdir}/util/crc32c_ppc.o: util/crc32c_ppc.c
 	$(AM_V_CC)$(CC) $(CFLAGS) $(JAVA_STATIC_FLAGS) $(JAVA_STATIC_INCLUDES) -c $< -o $@
 
-jls/util/crc32c_ppc_asm.o: util/crc32c_ppc_asm.S
+jls/${xdir}/util/crc32c_ppc_asm.o: util/crc32c_ppc_asm.S
 	$(AM_V_CC)$(CC) $(CFLAGS) $(JAVA_STATIC_FLAGS) $(JAVA_STATIC_INCLUDES) -c $< -o $@
 
 java_static_all_libobjects += $(java_static_ppc_libobjects)
 endif
 
-$(java_static_libobjects): jls/%.o: %.cc $(JAVA_COMPRESSIONS)
+$(java_static_libobjects): jls/${xdir}/%.o: %.cc $(JAVA_COMPRESSIONS)
 	$(AM_V_CC)mkdir -p $(@D) && $(CXX) $(CXXFLAGS) $(JAVA_STATIC_FLAGS) $(JAVA_STATIC_INCLUDES) -fPIC -c $< -o $@ $(COVERAGEFLAGS)
 
 rocksdbjavastatic: $(java_static_all_libobjects)
@@ -1920,18 +1937,16 @@ java_all_libobjects = $(java_libobjects)
 ifeq ($(HAVE_POWER8),1)
 java_ppc_libobjects = $(JAVA_C_LIBOBJECTS) $(JAVA_ASM_LIBOBJECTS)
 
-jl/crc32c_ppc.o: util/crc32c_ppc.c
+jl/${xdir}/crc32c_ppc.o: util/crc32c_ppc.c
 	$(AM_V_CC)$(CC) $(CFLAGS) -c $< -o $@
 
-jl/crc32c_ppc_asm.o: util/crc32c_ppc_asm.S
+jl/${xdir}/crc32c_ppc_asm.o: util/crc32c_ppc_asm.S
 	$(AM_V_CC)$(CC) $(CFLAGS) -c $< -o $@
 java_all_libobjects += $(java_ppc_libobjects)
 endif
 
-$(java_libobjects): jl/%.o: %.cc
+$(java_libobjects): jl/${xdir}/%.o: %.cc
 	$(AM_V_CC)mkdir -p $(@D) && $(CXX) $(CXXFLAGS) -fPIC -c $< -o $@ $(COVERAGEFLAGS)
-
-
 
 rocksdbjava: $(java_all_libobjects)
 	$(AM_V_GEN)cd java;$(MAKE) javalib;
