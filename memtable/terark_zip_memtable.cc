@@ -19,7 +19,7 @@
 #include "util/arena.h"
 #include <terark/heap_ext.hpp>
 #include <terark/io/byte_swap.hpp>
-#include <terark/fsa/dynamic_patricia_trie.inl>
+#include <terark/fsa/cspptrie.inl>
 
 namespace rocksdb {
 namespace {

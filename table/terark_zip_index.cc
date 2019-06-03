@@ -99,8 +99,6 @@ using UintPrefixBuildInfo = TerarkIndex::UintPrefixBuildInfo;
 
 namespace index_detail {
 
-using Context = TerarkIndex::Context;
-
 struct StatusFlags {
   StatusFlags() : is_user_mem(0), is_bfs_suffix(0), is_rev_suffix(0) {}
 
@@ -161,9 +159,15 @@ struct Common {
   StatusFlags flags;
 };
 
+struct LowerBoundResult {
+  size_t id;
+  fstring key;
+  ContextBuffer buffer;
+};
+
 struct PrefixBase {
   StatusFlags flags;
-  virtual ~PrefixBase() {}
+  virtual ~PrefixBase() = default;
 
   virtual bool Load(fstring mem) = 0;
   virtual void Save(std::function<void(const void*, size_t)> append) const = 0;
@@ -172,10 +176,10 @@ struct PrefixBase {
 struct SuffixBase {
   StatusFlags flags;
 
-  virtual ~SuffixBase() {}
+  virtual ~SuffixBase() = default;
 
-  virtual std::pair<size_t, fstring>
-  LowerBound(fstring target, size_t suffix_id, size_t suffix_count, Context* ctx) const = 0;
+  virtual LowerBoundResult
+  LowerBound(fstring target, size_t suffix_id, size_t suffix_count, TerarkContext* ctx) const = 0;
 
   virtual bool Load(fstring mem) = 0;
   virtual void Save(std::function<void(const void*, size_t)> append) const = 0;
@@ -206,10 +210,10 @@ struct VirtualPrefixBase {
 
   virtual size_t KeyCount() const = 0;
   virtual size_t TotalKeySize() const = 0;
-  virtual size_t Find(fstring key, const SuffixBase* suffix, Context* ctx) const = 0;
-  virtual size_t DictRank(fstring key, const SuffixBase* suffix, Context* ctx) const = 0;
-  virtual size_t AppendMinKey(valvec<byte_t>* buffer, Context* ctx) const = 0;
-  virtual size_t AppendMaxKey(valvec<byte_t>* buffer, Context* ctx) const = 0;
+  virtual size_t Find(fstring key, const SuffixBase* suffix, TerarkContext* ctx) const = 0;
+  virtual size_t DictRank(fstring key, const SuffixBase* suffix, TerarkContext* ctx) const = 0;
+  virtual size_t AppendMinKey(valvec<byte_t>* buffer, TerarkContext* ctx) const = 0;
+  virtual size_t AppendMaxKey(valvec<byte_t>* buffer, TerarkContext* ctx) const = 0;
 
   virtual bool NeedsReorder() const = 0;
   virtual void GetOrderMap(UintVecMin0& newToOld) const = 0;
@@ -232,71 +236,71 @@ struct VirtualPrefixWrapper : public VirtualPrefixBase, public Prefix {
 
   VirtualPrefixWrapper(Prefix&& prefix) : Prefix(std::move(prefix)) {}
 
-  size_t IteratorStorageSize() const override final {
+  size_t IteratorStorageSize() const final {
     return Prefix::IteratorStorageSize();
   }
-  void IteratorStorageConstruct(void* ptr) const override final {
+  void IteratorStorageConstruct(void* ptr) const final {
     Prefix::IteratorStorageConstruct(ptr);
   }
-  void IteratorStorageDestruct(void* ptr) const override final {
+  void IteratorStorageDestruct(void* ptr) const final {
     Prefix::IteratorStorageDestruct(ptr);
   }
 
-  size_t KeyCount() const override final {
+  size_t KeyCount() const final {
     return Prefix::KeyCount();
   }
-  size_t TotalKeySize() const override final {
+  size_t TotalKeySize() const final {
     return Prefix::TotalKeySize();
   }
-  size_t Find(fstring key, const SuffixBase* suffix, Context* ctx) const override final {
+  size_t Find(fstring key, const SuffixBase* suffix, TerarkContext* ctx) const final {
     return Prefix::Find(key, suffix, ctx);
   }
-  size_t DictRank(fstring key, const SuffixBase* suffix, Context* ctx) const override final {
+  size_t DictRank(fstring key, const SuffixBase* suffix, TerarkContext* ctx) const final {
     return Prefix::DictRank(key, suffix, ctx);
   }
-  size_t AppendMinKey(valvec<byte_t>* buffer, Context* ctx) const override final {
+  size_t AppendMinKey(valvec<byte_t>* buffer, TerarkContext* ctx) const final {
     return Prefix::AppendMinKey(buffer, ctx);
   }
-  size_t AppendMaxKey(valvec<byte_t>* buffer, Context* ctx) const override final {
+  size_t AppendMaxKey(valvec<byte_t>* buffer, TerarkContext* ctx) const final {
     return Prefix::AppendMaxKey(buffer, ctx);
   }
 
-  bool NeedsReorder() const override final {
+  bool NeedsReorder() const final {
     return Prefix::NeedsReorder();
   }
-  void GetOrderMap(UintVecMin0& newToOld) const override final {
+  void GetOrderMap(UintVecMin0& newToOld) const final {
     Prefix::GetOrderMap(newToOld);
   }
-  void BuildCache(double cacheRatio) override final {
+  void BuildCache(double cacheRatio) final {
     Prefix::BuildCache(cacheRatio);
   }
 
-  bool IterSeekToFirst(size_t& id, size_t& count, void* iter) const override final {
+  bool IterSeekToFirst(size_t& id, size_t& count, void* iter) const final {
     return Prefix::IterSeekToFirst(id, count, (IteratorStorage*)iter);
   }
-  bool IterSeekToLast(size_t& id, size_t* count, void* iter) const override final {
+  bool IterSeekToLast(size_t& id, size_t* count, void* iter) const final {
     return Prefix::IterSeekToLast(id, count, (IteratorStorage*)iter);
   }
-  bool IterSeek(size_t& id, size_t& count, fstring target, void* iter) const override final {
+  bool IterSeek(size_t& id, size_t& count, fstring target, void* iter) const final {
     return Prefix::IterSeek(id, count, target, (IteratorStorage*)iter);
   }
-  bool IterNext(size_t& id, size_t count, void* iter) const override final {
+  bool IterNext(size_t& id, size_t count, void* iter) const final {
     return Prefix::IterNext(id, count, (IteratorStorage*)iter);
   }
-  bool IterPrev(size_t& id, size_t* count, void* iter) const override final {
+  bool IterPrev(size_t& id, size_t* count, void* iter) const final {
     return Prefix::IterPrev(id, count, (IteratorStorage*)iter);
   }
-  fstring IterGetKey(size_t id, const void* iter) const override final {
+  fstring IterGetKey(size_t id, const void* iter) const final {
     return Prefix::IterGetKey(id, (const IteratorStorage*)iter);
   }
-  size_t IterDictRank(size_t id, const void* iter) const override final {
+  size_t IterDictRank(size_t id, const void* iter) const final {
     return Prefix::IterDictRank(id, (const IteratorStorage*)iter);
   }
 
-  bool Load(fstring mem) override final {
+  bool Load(fstring mem) final {
     return Prefix::Load(mem);
   }
-  void Save(std::function<void(const void*, size_t)> append) const override final {
+  void Save(std::function<void(const void*, size_t)> append) const final {
     Prefix::Save(append);
   }
 };
@@ -339,16 +343,16 @@ struct VirtualPrefix : public PrefixBase {
   size_t TotalKeySize() const {
     return prefix->TotalKeySize();
   }
-  size_t Find(fstring key, const SuffixBase* suffix, Context* ctx) const {
+  size_t Find(fstring key, const SuffixBase* suffix, TerarkContext* ctx) const {
     return prefix->Find(key, suffix, ctx);
   }
-  size_t DictRank(fstring key, const SuffixBase* suffix, Context* ctx) const {
+  size_t DictRank(fstring key, const SuffixBase* suffix, TerarkContext* ctx) const {
     return prefix->DictRank(key, suffix, ctx);
   }
-  size_t AppendMinKey(valvec<byte_t>* buffer, Context* ctx) const {
+  size_t AppendMinKey(valvec<byte_t>* buffer, TerarkContext* ctx) const {
     return prefix->AppendMinKey(buffer, ctx);
   }
-  size_t AppendMaxKey(valvec<byte_t>* buffer, Context* ctx) const {
+  size_t AppendMaxKey(valvec<byte_t>* buffer, TerarkContext* ctx) const {
     return prefix->AppendMaxKey(buffer, ctx);
   }
 
@@ -384,10 +388,10 @@ struct VirtualPrefix : public PrefixBase {
     return prefix->IterDictRank(id, iter);
   }
 
-  bool Load(fstring mem) override final {
+  bool Load(fstring mem) final {
     return prefix->Load(mem);
   }
-  void Save(std::function<void(const void*, size_t)> append) const override final {
+  void Save(std::function<void(const void*, size_t)> append) const final {
     prefix->Save(append);
   }
 };
@@ -400,9 +404,9 @@ struct VirtualSuffixBase {
   virtual void IteratorStorageDestruct(void* ptr) const = 0;
 
   virtual size_t TotalKeySize() const = 0;
-  virtual std::pair<size_t, fstring>
-  LowerBound(fstring target, size_t suffix_id, size_t suffix_count, Context* ctx) const = 0;
-  virtual void AppendKey(size_t suffix_id, valvec<byte_t>* buffer, Context* ctx) const = 0;
+  virtual LowerBoundResult
+  LowerBound(fstring target, size_t suffix_id, size_t suffix_count, TerarkContext* ctx) const = 0;
+  virtual void AppendKey(size_t suffix_id, valvec<byte_t>* buffer, TerarkContext* ctx) const = 0;
   virtual void GetMetaData(valvec<fstring>* blocks) const = 0;
   virtual void DetachMetaData(const valvec<fstring>& blocks) = 0;
 
@@ -421,51 +425,51 @@ struct VirtualSuffixWrapper : public VirtualSuffixBase, public Suffix {
 
   VirtualSuffixWrapper(Suffix&& suffix) : Suffix(std::move(suffix)) {}
 
-  size_t IteratorStorageSize() const override final {
+  size_t IteratorStorageSize() const final {
     return Suffix::IteratorStorageSize();
   }
-  void IteratorStorageConstruct(void* ptr) const override final {
+  void IteratorStorageConstruct(void* ptr) const final {
     Suffix::IteratorStorageConstruct(ptr);
   }
-  void IteratorStorageDestruct(void* ptr) const override final {
+  void IteratorStorageDestruct(void* ptr) const final {
     Suffix::IteratorStorageDestruct(ptr);
   }
 
-  size_t TotalKeySize() const override final {
+  size_t TotalKeySize() const final {
     return Suffix::TotalKeySize();
   }
-  std::pair<size_t, fstring>
-  LowerBound(fstring target, size_t suffix_id, size_t suffix_count, Context* ctx) const override final {
+  virtual LowerBoundResult
+  LowerBound(fstring target, size_t suffix_id, size_t suffix_count, TerarkContext* ctx) const final {
     return Suffix::LowerBound(target, suffix_id, suffix_count, ctx);
   }
-  void AppendKey(size_t suffix_id, valvec<byte_t>* buffer, Context* ctx) const override final {
+  void AppendKey(size_t suffix_id, valvec<byte_t>* buffer, TerarkContext* ctx) const final {
     return Suffix::AppendKey(suffix_id, buffer, ctx);
   }
-  void GetMetaData(valvec<fstring>* blocks) const override final {
+  void GetMetaData(valvec<fstring>* blocks) const final {
     return Suffix::GetMetaData(blocks);
   }
-  void DetachMetaData(const valvec<fstring>& blocks) override final {
+  void DetachMetaData(const valvec<fstring>& blocks) final {
     Suffix::DetachMetaData(blocks);
   }
 
-  void IterSet(size_t suffix_id, void* iter) const override final {
+  void IterSet(size_t suffix_id, void* iter) const final {
     Suffix::IterSet(suffix_id, (IteratorStorage*)iter);
   }
-  bool IterSeek(fstring target, size_t& suffix_id, size_t suffix_count, void* iter) const override final {
+  bool IterSeek(fstring target, size_t& suffix_id, size_t suffix_count, void* iter) const final {
     return Suffix::IterSeek(target, suffix_id, suffix_count, (IteratorStorage*)iter);
   }
-  fstring IterGetKey(size_t id, const void* iter) const override final {
+  fstring IterGetKey(size_t id, const void* iter) const final {
     return Suffix::IterGetKey(id, (const IteratorStorage*)iter);
   }
 
-  bool Load(fstring mem) override final {
+  bool Load(fstring mem) final {
     return Suffix::Load(mem);
   }
-  void Save(std::function<void(const void*, size_t)> append) const override final {
+  void Save(std::function<void(const void*, size_t)> append) const final {
     Suffix::Save(append);
   }
   void Reorder(ZReorderMap& newToOld, std::function<void(const void*, size_t)> append,
-               fstring tmpFile) const override final {
+               fstring tmpFile) const final {
     Suffix::Reorder(newToOld, append, tmpFile);
   }
 };
@@ -505,11 +509,11 @@ struct VirtualSuffix : public SuffixBase {
   size_t TotalKeySize() const {
     return suffix->TotalKeySize();
   }
-  std::pair<size_t, fstring>
-  LowerBound(fstring target, size_t suffix_id, size_t suffix_count, Context* ctx) const override final {
+  virtual LowerBoundResult
+  LowerBound(fstring target, size_t suffix_id, size_t suffix_count, TerarkContext* ctx) const final {
     return suffix->LowerBound(target, suffix_id, suffix_count, ctx);
   }
-  void AppendKey(size_t suffix_id, valvec<byte_t>* buffer, Context* ctx) const {
+  void AppendKey(size_t suffix_id, valvec<byte_t>* buffer, TerarkContext* ctx) const {
     return suffix->AppendKey(suffix_id, buffer, ctx);
   }
   void GetMetaData(valvec<fstring>* blocks) const {
@@ -529,14 +533,14 @@ struct VirtualSuffix : public SuffixBase {
     return suffix->IterGetKey(id, iter);
   }
 
-  bool Load(fstring mem) override final {
+  bool Load(fstring mem) final {
     return suffix->Load(mem);
   }
-  void Save(std::function<void(const void*, size_t)> append) const override final {
+  void Save(std::function<void(const void*, size_t)> append) const final {
     suffix->Save(append);
   }
   void Reorder(ZReorderMap& newToOld, std::function<void(const void*, size_t)> append,
-               fstring tmpFile) const override final {
+               fstring tmpFile) const final {
     suffix->Reorder(newToOld, append, tmpFile);
   }
 };
@@ -817,7 +821,7 @@ public:
     }
   }
 
-  bool SeekToFirst() override final {
+  bool SeekToFirst() final {
     size_t suffix_count;
     if (!prefix().IterSeekToFirst(m_id, suffix_count, prefix_storage())) {
       assert(m_id == size_t(-1));
@@ -827,7 +831,7 @@ public:
     return UpdateKey();
   }
 
-  bool SeekToLast() override final {
+  bool SeekToLast() final {
     if (!prefix().IterSeekToLast(m_id, nullptr, prefix_storage())) {
       assert(m_id == size_t(-1));
       return false;
@@ -836,7 +840,7 @@ public:
     return UpdateKey();
   }
 
-  bool Seek(fstring target) override final {
+  bool Seek(fstring target) final {
     size_t cplen = target.commonPrefixLen(common());
     if (cplen != common().size()) {
       assert(target.size() >= cplen);
@@ -899,7 +903,7 @@ public:
     return UpdateKey();
   }
 
-  bool Next() override final {
+  bool Next() final {
     if (prefix().IterNext(m_id, 1, prefix_storage())) {
       suffix().IterSet(m_id, suffix_storage());
       return UpdateKey();
@@ -909,7 +913,7 @@ public:
     }
   }
 
-  bool Prev() override final {
+  bool Prev() final {
     if (prefix().IterPrev(m_id, nullptr, prefix_storage())) {
       suffix().IterSet(m_id, suffix_storage());
       return UpdateKey();
@@ -919,11 +923,11 @@ public:
     }
   }
 
-  size_t DictRank() const override final {
+  size_t DictRank() const final {
     return prefix().IterDictRank(m_id, prefix_storage());
   }
 
-  fstring key() const override final {
+  fstring key() const final {
     return iterator_key_;
   }
 
@@ -1007,20 +1011,20 @@ public:
   const IndexFactoryBase* factory_;
   const TerarkIndexFooter* footer_;
 
-  fstring Name() const override final {
+  fstring Name() const final {
     return factory_->Name();
   }
 
-  void SaveMmap(std::function<void(const void*, size_t)> write) const override final {
+  void SaveMmap(std::function<void(const void*, size_t)> write) const final {
     factory_->SaveMmap(this, write);
   }
 
   void Reorder(ZReorderMap& newToOld, std::function<void(const void*, size_t)> write,
-               fstring tmpFile) const override final {
+               fstring tmpFile) const final {
     factory_->Reorder(this, newToOld, write, tmpFile);
   }
 
-  size_t Find(fstring key, Context* ctx) const override final {
+  size_t Find(fstring key, TerarkContext* ctx) const final {
     if (!key.startsWith(common_)) {
       return size_t(-1);
     }
@@ -1028,7 +1032,7 @@ public:
     return prefix_.Find(key, suffix_.TotalKeySize() != 0 ? &suffix_ : nullptr, ctx);
   }
 
-  size_t DictRank(fstring key, Context* ctx) const override final {
+  size_t DictRank(fstring key, TerarkContext* ctx) const final {
     size_t cplen = key.commonPrefixLen(common_);
     if (cplen != common_.size()) {
       assert(key.size() >= cplen);
@@ -1043,36 +1047,36 @@ public:
     return prefix_.DictRank(key, suffix_.TotalKeySize() != 0 ? &suffix_ : nullptr, ctx);
   }
 
-  void MinKey(valvec<byte_t>* key, Context* ctx) const override final {
+  void MinKey(valvec<byte_t>* key, TerarkContext* ctx) const final {
     key->assign(common_.data(), common_.size());
     size_t id = prefix_.AppendMinKey(key, ctx);
     suffix_.AppendKey(id, key, ctx);
   }
 
-  void MaxKey(valvec<byte_t>* key, Context* ctx) const override final {
+  void MaxKey(valvec<byte_t>* key, TerarkContext* ctx) const final {
     key->assign(common_.data(), common_.size());
     size_t id = prefix_.AppendMaxKey(key, ctx);
     suffix_.AppendKey(id, key, ctx);
   }
 
-  size_t NumKeys() const override final {
+  size_t NumKeys() const final {
     return prefix_.KeyCount();
   }
 
-  size_t TotalKeySize() const override final {
+  size_t TotalKeySize() const final {
     size_t size = NumKeys() * common_.size();
     size += prefix_.TotalKeySize();
     size += suffix_.TotalKeySize();
     return size;
   }
 
-  fstring Memory() const override final {
+  fstring Memory() const final {
     auto f = footer_;
     size_t index_size = f ? align_up(f->common_size, 8) + f->prefix_size + f->suffix_size : 0;
     return index_size == 0 ? fstring() : fstring((byte_t*)footer_ - index_size, index_size + f->footer_size);
   }
 
-  valvec<fstring> GetMetaData() const override final {
+  valvec<fstring> GetMetaData() const final {
     assert(footer_ != nullptr);
     auto f = footer_;
     fstring prefix = fstring((byte_t*)f - f->suffix_size - f->prefix_size, f->prefix_size);
@@ -1082,7 +1086,7 @@ public:
     return meta_data;
   }
 
-  void DetachMetaData(const valvec<fstring>& blocks) override final {
+  void DetachMetaData(const valvec<fstring>& blocks) final {
     assert(footer_ != nullptr);
     bool ok = prefix_.Load(blocks.back());
     assert(ok); (void)ok;
@@ -1092,7 +1096,7 @@ public:
     suffix_blocks.risk_release_ownership();
   }
 
-  const char* Info(char* buffer, size_t size) const override final {
+  const char* Info(char* buffer, size_t size) const final {
     auto f = footer_;
     double c = prefix_.KeyCount();
     double r = 1e9;
@@ -1115,7 +1119,7 @@ public:
     return buffer;
   }
 
-  Iterator* NewIterator(void* ptr) const override final {
+  Iterator* NewIterator(void* ptr) const final {
     if (ptr == nullptr) {
       return new IndexIterator<Prefix, Suffix>(this);
     } else {
@@ -1125,24 +1129,24 @@ public:
     }
   }
 
-  size_t IteratorSize() const override final {
+  size_t IteratorSize() const final {
     return sizeof(IndexIterator<Prefix, Suffix>) +
            IteratorStorage::GetIteratorStorageSize(this);
   }
 
-  bool NeedsReorder() const override final {
+  bool NeedsReorder() const final {
     return prefix_.NeedsReorder();
   }
 
-  void GetOrderMap(terark::UintVecMin0& newToOld) const override final {
+  void GetOrderMap(terark::UintVecMin0& newToOld) const final {
     prefix_.GetOrderMap(newToOld);
   }
 
-  void BuildCache(double cacheRatio) override final {
+  void BuildCache(double cacheRatio) final {
     prefix_.BuildCache(cacheRatio);
   }
 
-  void DumpKeys(std::function<void(fstring, fstring, fstring)> callback) const override final {
+  void DumpKeys(std::function<void(fstring, fstring, fstring)> callback) const final {
     valvec<byte_t> buffer(IteratorSize(), valvec_no_init());
     auto storage = buffer.data() + sizeof(IndexIterator<Prefix, Suffix>);
     size_t storage_size = IteratorStorage::GetIteratorStorageSize(this);
@@ -1178,19 +1182,19 @@ public:
     g_TerarkIndexTypeFactroy[std::make_pair(std::type_index(typeid(Prefix)), std::type_index(typeid(Suffix)))] = this;
   }
 
-  fstring Name() const override final {
+  fstring Name() const final {
     return g_TerarkIndexFactroy.key(map_id);
   }
 
 protected:
   TerarkIndex* CreateIndex(const TerarkIndexFooter* footer, Common&& common, PrefixBase* prefix,
-                           SuffixBase* suffix) const override final {
+                           SuffixBase* suffix) const final {
     return new index_type(this, footer, std::move(common), Prefix(prefix), Suffix(suffix));
   }
-  PrefixBase* CreatePrefix() const override final {
+  PrefixBase* CreatePrefix() const final {
     return new Prefix();
   }
-  SuffixBase* CreateSuffix() const override final {
+  SuffixBase* CreateSuffix() const final {
     return new Suffix();
   }
 
@@ -1267,7 +1271,7 @@ struct IndexAscendingUintPrefix
   size_t TotalKeySize() const {
     return key_length * rank_select.max_rank1();
   }
-  size_t Find(fstring key, const SuffixBase* suffix, Context* ctx) const {
+  size_t Find(fstring key, const SuffixBase* suffix, TerarkContext* ctx) const {
     if (key.size() < key_length) {
       return size_t(-1);
     }
@@ -1287,16 +1291,14 @@ struct IndexAscendingUintPrefix
     if (suffix == nullptr) {
       return key.size() == key_length ? id : size_t(-1);
     }
-    size_t suffix_id;
-    fstring suffix_key;
     key = key.substr(key_length);
-    std::tie(suffix_id, suffix_key) = suffix->LowerBound(key, id, 1, ctx);
-    if (suffix_id != id || suffix_key != key) {
+    auto suffix_result = suffix->LowerBound(key, id, 1, ctx);
+    if (suffix_result.id != id || suffix_result.key != key) {
       return size_t(-1);
     }
-    return suffix_id;
+    return suffix_result.id;
   }
-  size_t DictRank(fstring key, const SuffixBase* suffix, Context* ctx) const {
+  size_t DictRank(fstring key, const SuffixBase* suffix, TerarkContext* ctx) const {
     size_t id, pos, hint = 0;
     bool seek_result, is_find;
     std::tie(seek_result, is_find) =
@@ -1308,16 +1310,16 @@ struct IndexAscendingUintPrefix
     } else if (suffix == nullptr && key.size() > key_length) {
       return id;
     } else {
-      return suffix->LowerBound(key.substr(key_length), id, 1, ctx).first;
+      return suffix->LowerBound(key.substr(key_length), id, 1, ctx).id;
     }
   }
-  size_t AppendMinKey(valvec<byte_t>* buffer, Context* ctx) const {
+  size_t AppendMinKey(valvec<byte_t>* buffer, TerarkContext* ctx) const {
     size_t pos = buffer->size();
     buffer->resize_no_init(pos + key_length);
     SaveAsBigEndianUint64(buffer->data() + pos, key_length, min_value);
     return 0;
   }
-  size_t AppendMaxKey(valvec<byte_t>* buffer, Context* ctx) const {
+  size_t AppendMaxKey(valvec<byte_t>* buffer, TerarkContext* ctx) const {
     size_t pos = buffer->size();
     buffer->resize_no_init(pos + key_length);
     SaveAsBigEndianUint64(buffer->data() + pos, key_length, max_value);
@@ -1520,7 +1522,7 @@ struct IndexNonDescendingUintPrefix
   size_t TotalKeySize() const {
     return key_length * rank_select.max_rank1();
   }
-  size_t Find(fstring key, const SuffixBase* suffix, Context* ctx) const {
+  size_t Find(fstring key, const SuffixBase* suffix, TerarkContext* ctx) const {
     assert(suffix != nullptr);
     if (key.size() < key_length) {
       return size_t(-1);
@@ -1540,16 +1542,14 @@ struct IndexNonDescendingUintPrefix
       return size_t(-1);
     }
     size_t id = rs.rank1(pos);
-    size_t suffix_id;
-    fstring suffix_key;
     key = key.substr(key_length);
-    std::tie(suffix_id, suffix_key) = suffix->LowerBound(key, id, count, ctx);
-    if (suffix_id == id + count || suffix_key != key) {
+    auto suffix_result = suffix->LowerBound(key, id, count, ctx);
+    if (suffix_result.id == id + count || suffix_result.key != key) {
       return size_t(-1);
     }
-    return suffix_id;
+    return suffix_result.id;
   }
-  size_t DictRank(fstring key, const SuffixBase* suffix, Context* ctx) const {
+  size_t DictRank(fstring key, const SuffixBase* suffix, TerarkContext* ctx) const {
     assert(suffix != nullptr);
     size_t id, count, pos, hint = 0;
     bool seek_result, is_find;
@@ -1562,16 +1562,16 @@ struct IndexNonDescendingUintPrefix
     } else if (suffix == nullptr && key.size() > key_length) {
       return id;
     } else {
-      return suffix->LowerBound(key.substr(key_length), id, count, ctx).first;
+      return suffix->LowerBound(key.substr(key_length), id, count, ctx).id;
     }
   }
-  size_t AppendMinKey(valvec<byte_t>* buffer, Context* ctx) const {
+  size_t AppendMinKey(valvec<byte_t>* buffer, TerarkContext* ctx) const {
     size_t pos = buffer->size();
     buffer->resize_no_init(pos + key_length);
     SaveAsBigEndianUint64(buffer->data() + pos, key_length, min_value);
     return 0;
   }
-  size_t AppendMaxKey(valvec<byte_t>* buffer, Context* ctx) const {
+  size_t AppendMaxKey(valvec<byte_t>* buffer, TerarkContext* ctx) const {
     size_t pos = buffer->size();
     buffer->resize_no_init(pos + key_length);
     SaveAsBigEndianUint64(buffer->data() + pos, key_length, max_value);
@@ -1855,21 +1855,22 @@ struct IndexNestLoudsTriePrefix
   size_t TotalKeySize() const {
     return trie_->adfa_total_words_len();
   }
-  size_t Find(fstring key, const SuffixBase* suffix, Context* ctx) const {
+  size_t Find(fstring key, const SuffixBase* suffix, TerarkContext* ctx) const {
     if (suffix == nullptr && flags.is_bfs_suffix) {
       return trie_->index(key);
     }
     size_t id, rank;
     fstring prefix_key;
     trie_->lower_bound(key, &id, &rank);
+    ContextBuffer ctx_buffer = ctx->alloc();
     if (id != size_t(-1)) {
-      trie_->nth_word(id, &ctx->buffer);
-      prefix_key = fstring(ctx->buffer);
+      trie_->nth_word(id, &ctx_buffer.get());
+      prefix_key = ctx_buffer;
       if (prefix_key != key) {
         id = trie_->index_prev(id);
         if (id != size_t(-1)) {
-          trie_->nth_word(id, &ctx->buffer);
-          prefix_key = fstring(ctx->buffer);
+          trie_->nth_word(id, &ctx_buffer.get());
+          prefix_key = ctx_buffer;
           --rank;
         } else {
           assert(rank == 0);
@@ -1878,23 +1879,21 @@ struct IndexNestLoudsTriePrefix
       }
     } else {
       id = trie_->index_end();
-      trie_->nth_word(id, &ctx->buffer);
-      prefix_key = fstring(ctx->buffer);
+      trie_->nth_word(id, &ctx_buffer.get());
+      prefix_key = ctx_buffer;
     }
     if (!key.startsWith(prefix_key)) {
       return size_t(-1);
     }
-    size_t suffix_id;
-    fstring suffix_key;
     key = key.substr(prefix_key.size());
     size_t seek_id = flags.is_bfs_suffix ? id : rank;
-    std::tie(suffix_id, suffix_key) = suffix->LowerBound(key, seek_id, 1, ctx);
-    if (suffix_id != seek_id || suffix_key != key) {
+    auto suffix_result = suffix->LowerBound(key, seek_id, 1, ctx);
+    if (suffix_result.id != seek_id || suffix_result.key != key) {
       return size_t(-1);
     }
-    return suffix_id;
+    return suffix_result.id;
   }
-  size_t DictRank(fstring key, const SuffixBase* suffix, Context* ctx) const {
+  size_t DictRank(fstring key, const SuffixBase* suffix, TerarkContext* ctx) const {
     size_t id, rank;
     if (suffix == nullptr) {
       trie_->lower_bound(key, nullptr, &rank);
@@ -1902,14 +1901,15 @@ struct IndexNestLoudsTriePrefix
     }
     fstring prefix_key;
     trie_->lower_bound(key, &id, &rank);
+    ContextBuffer ctx_buffer = ctx->alloc();
     if (id != size_t(-1)) {
-      trie_->nth_word(id, &ctx->buffer);
-      prefix_key = fstring(ctx->buffer);
+      trie_->nth_word(id, &ctx_buffer.get());
+      prefix_key = ctx_buffer;
       if (prefix_key != key) {
         id = trie_->index_prev(id);
         if (id != size_t(-1)) {
-          trie_->nth_word(id, &ctx->buffer);
-          prefix_key = fstring(ctx->buffer);
+          trie_->nth_word(id, &ctx_buffer.get());
+          prefix_key = ctx_buffer;
           --rank;
         } else {
           assert(rank == 0);
@@ -1918,33 +1918,31 @@ struct IndexNestLoudsTriePrefix
       }
     } else {
       id = trie_->index_end();
-      trie_->nth_word(id, &ctx->buffer);
-      prefix_key = fstring(ctx->buffer);
+      trie_->nth_word(id, &ctx_buffer.get());
+      prefix_key = ctx_buffer;
     }
     if (key.startsWith(prefix_key)) {
       key = key.substr(prefix_key.size());
-      size_t suffix_id;
-      fstring suffix_key;
       size_t seek_id = flags.is_bfs_suffix ? id : rank;
-      std::tie(suffix_id, suffix_key) = suffix->LowerBound(key, seek_id, 1, ctx);
-      if (suffix_id == seek_id && suffix_key == key) {
+      auto suffix_result = suffix->LowerBound(key, seek_id, 1, ctx);
+      if (suffix_result.id == seek_id && suffix_result.key == key) {
         return rank;
       }
     }
     return rank + 1;
   }
-  size_t AppendMinKey(valvec<byte_t>* buffer, Context* ctx) const {
+  size_t AppendMinKey(valvec<byte_t>* buffer, TerarkContext* ctx) const {
     size_t id = trie_->index_begin();
-    auto& buf = ctx->buffer;
-    trie_->nth_word(id, &buf);
-    buffer->append(buf.data(), buf.size());
+    auto ctx_buffer = ctx->alloc();
+    trie_->nth_word(id, &ctx_buffer.get());
+    buffer->append(ctx_buffer.get());
     return flags.is_bfs_suffix ? id : 0;
   }
-  size_t AppendMaxKey(valvec<byte_t>* buffer, Context* ctx) const {
+  size_t AppendMaxKey(valvec<byte_t>* buffer, TerarkContext* ctx) const {
     size_t id = trie_->index_end();
-    auto& buf = ctx->buffer;
-    trie_->nth_word(id, &buf);
-    buffer->append(buf.data(), buf.size());
+    auto ctx_buffer = ctx->alloc();
+    trie_->nth_word(id, &ctx_buffer.get());
+    buffer->append(ctx_buffer.get());
     return flags.is_bfs_suffix ? id : trie_->num_words() - 1;
   }
 
@@ -2031,13 +2029,13 @@ struct IndexEmptySuffix
   IndexEmptySuffix& operator = (IndexEmptySuffix&&) = default;
 
   std::integral_constant<size_t, 0> TotalKeySize() const {
-    return std::integral_constant<size_t, 0>();
+    return {};
   }
-  std::pair<size_t, fstring>
-  LowerBound(fstring target, size_t suffix_id, size_t suffix_count, Context* ctx) const override {
-    return {suffix_id, {}};
+  LowerBoundResult
+  LowerBound(fstring target, size_t suffix_id, size_t suffix_count, TerarkContext* ctx) const override {
+    return {suffix_id, {}, {}};
   }
-  void AppendKey(size_t suffix_id, valvec<byte_t>* buffer, Context* ctx) const {
+  void AppendKey(size_t suffix_id, valvec<byte_t>* buffer, TerarkContext* ctx) const {
   }
   void GetMetaData(valvec<fstring>* blocks) const {
   }
@@ -2100,27 +2098,27 @@ struct IndexFixedStringSuffix
   size_t TotalKeySize() const {
     return str_pool_.mem_size();
   }
-  std::pair<size_t, fstring>
-  LowerBound(fstring target, size_t suffix_id, size_t suffix_count, Context* ctx) const override {
+  LowerBoundResult
+  LowerBound(fstring target, size_t suffix_id, size_t suffix_count, TerarkContext* ctx) const override {
     if (flags.is_rev_suffix) {
       size_t num_records = str_pool_.m_size;
       suffix_id = num_records - suffix_id - suffix_count;
       size_t end = suffix_id + suffix_count;
       suffix_id = str_pool_.lower_bound(suffix_id, end, target);
       if (suffix_id == end) {
-        return {num_records - suffix_id - 1, {}};
+        return {num_records - suffix_id - 1, {}, {}};
       }
-      return {num_records - suffix_id - 1, str_pool_[suffix_id]};
+      return {num_records - suffix_id - 1, str_pool_[suffix_id], {}};
     } else {
       size_t end = suffix_id + suffix_count;
       suffix_id = str_pool_.lower_bound(suffix_id, end, target);
       if (suffix_id == end) {
-        return {suffix_id, {}};
+        return {suffix_id, {}, {}};
       }
-      return {suffix_id, str_pool_[suffix_id]};
+      return {suffix_id, str_pool_[suffix_id], {}};
     }
   }
-  void AppendKey(size_t suffix_id, valvec<byte_t>* buffer, Context* ctx) const {
+  void AppendKey(size_t suffix_id, valvec<byte_t>* buffer, TerarkContext* ctx) const {
     fstring key;
     if (flags.is_rev_suffix) {
       key = str_pool_[str_pool_.m_size - suffix_id - 1];
@@ -2238,31 +2236,32 @@ struct IndexBlobStoreSuffix
   size_t TotalKeySize() const {
     return store_.total_data_size();
   }
-  std::pair<size_t, fstring>
-  LowerBound(fstring target, size_t suffix_id, size_t suffix_count, Context* ctx) const override {
+  LowerBoundResult
+  LowerBound(fstring target, size_t suffix_id, size_t suffix_count, TerarkContext* ctx) const override {
     BlobStore::CacheOffsets co;
-    co.recData.swap(ctx->buffer);
+    ContextBuffer ctx_buffer = ctx->alloc();
+    co.recData.swap(ctx_buffer);
     if (flags.is_rev_suffix) {
       size_t num_records = store_.num_records();
       suffix_id = num_records - suffix_id - suffix_count;
       size_t end = suffix_id + suffix_count;
       suffix_id = store_.lower_bound(suffix_id, end, target, &co);
-      co.recData.swap(ctx->buffer);
+      co.recData.swap(ctx_buffer);
       if (suffix_id == end) {
-        return {num_records - suffix_id - 1, {}};
+        return {num_records - suffix_id - 1, {}, {}};
       }
-      return {num_records - suffix_id - 1, ctx->buffer};
+      return {num_records - suffix_id - 1, ctx_buffer, std::move(ctx_buffer)};
     } else {
       size_t end = suffix_id + suffix_count;
       suffix_id = store_.lower_bound(suffix_id, end, target, &co);
-      co.recData.swap(ctx->buffer);
+      co.recData.swap(ctx_buffer);
       if (suffix_id == end) {
-        return {suffix_id, {}};
+        return {suffix_id, {}, {}};
       }
-      return {suffix_id, ctx->buffer};
+      return {suffix_id, ctx_buffer, std::move(ctx_buffer)};
     }
   }
-  void AppendKey(size_t suffix_id, valvec<byte_t>* buffer, Context* ctx) const {
+  void AppendKey(size_t suffix_id, valvec<byte_t>* buffer, TerarkContext* ctx) const {
     if (flags.is_rev_suffix) {
       store_.get_record_append(store_.num_records() - suffix_id - 1, buffer);
     } else {
@@ -3149,10 +3148,10 @@ TerarkKeyReader* TerarkIndex::TerarkIndexDebugBuilder::Finish(KeyStat* output) {
     fstrvec data;
     size_t i;
 
-    fstring next() override final {
+    fstring next() final {
       return data[i++];
     }
-    void rewind() override final {
+    void rewind() final {
       i = 0;
     }
   };

@@ -1366,7 +1366,7 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
   bzvType.resize(kvs.status.stat.keyCount);
   auto seekSecondPassIter = [&] {
     std::string target;
-    target.resize(stat.minKey.size() + 8);
+    target.reserve(stat.minKey.size() + 8);
     target.assign((const char*)stat.minKey.data(), stat.minKey.size());
     target.append((const char*)&kvs.status.seqType, 8);
     second_pass_iter_->Seek(target);
@@ -1473,7 +1473,9 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
     auto& ic = ioptions_.internal_comparator;
 
     seekSecondPassIter();
-    assert(second_pass_iter_->status().ok());
+    if (!second_pass_iter_->status().ok()) {
+      return second_pass_iter_->status();
+    }
 
     bool debugDumpKeyValue = table_options_.debugLevel == 3;
 

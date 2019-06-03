@@ -873,14 +873,15 @@ const {
     user_key = Slice(reinterpret_cast<const char*>(&u64_target), 8);
   }
 #endif
-  auto& g_tctx = *terark::GetTlsEntropyContext();
+  auto& g_tctx = *terark::GetTlsTerarkContext();
   size_t recId = index_->Find(fstringOf(user_key), &g_tctx);
   if (size_t(-1) == recId) {
     return Status::OK();
   }
   auto zvType = type_.size() ? ZipValueType(type_[recId]) : ZipValueType::kZeroSeq;
   bool matched;
-  auto& buf = g_tctx.buffer;
+  auto ctx_buffer = g_tctx.alloc();
+  auto& buf = ctx_buffer.get();
   switch (zvType) {
   default:
     return Status::Aborted("TerarkZipTableReader::Get()", "Bad ZipValueType");
@@ -968,7 +969,7 @@ const {
 }
 
 size_t TerarkZipSubReader::DictRank(fstring key) const {
-  return index_->DictRank(key, terark::GetTlsEntropyContext());
+  return index_->DictRank(key, terark::GetTlsTerarkContext());
 }
 
 TerarkZipSubReader::~TerarkZipSubReader() {
@@ -1367,7 +1368,7 @@ Status TerarkZipTableMultiReader::SubIndex::Init(
   size_t rawSize = 0;
   intptr_t fileFD = fileObj->FileDescriptor();
   hasAnyZipOffset_ = false;
-  auto& g_tctx = *terark::GetTlsEntropyContext();
+  auto& g_tctx = *terark::GetTlsTerarkContext();
   try {
     valvec<byte_t> buffer;
     cache_fi_ = -1;
