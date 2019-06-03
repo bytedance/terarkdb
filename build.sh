@@ -16,11 +16,13 @@ git clone --depth=1 git@code.byted.org:storage/terark-zip-rocksdb.git
 make libzstd.a libz.a libsnappy.a liblz4.a -j $cpuNum
 make EXTRA_CXXFLAGS="-DSNAPPY=1 -DZLIB=1 -DLZ4=1 -DZSTD=1 -Isnappy-1.1.4 -Ilz4-1.8.0/lib -Izstd-1.3.3/lib/include" \
      EXTRA_LDFLAGS="-lsnappy -lz -llz4 -lzstd -L." \
-     shared_lib DEBUG_LEVEL=0 -j $cpuNum DISABLE_WARNING_AS_ERROR=1
+     BUNDLE_TERARK_ZIP_ROCKSDB=1 LINK_TERARK=static TERARK_CORE_PKG_DIR=terark-core \
+     DEBUG_LEVEL=0 shared_lib -j $cpuNum
 
 make EXTRA_CXXFLAGS="-DSNAPPY=1 -DZLIB=1 -DLZ4=1 -DZSTD=1 -Isnappy-1.1.4 -Ilz4-1.8.0/lib -Izstd-1.3.3/lib/include" \
      EXTRA_LDFLAGS="-lsnappy -lz -llz4 -lzstd -L." \
-     shared_lib DEBUG_LEVEL=2 -j $cpuNum DISABLE_WARNING_AS_ERROR=1
+     BUNDLE_TERARK_ZIP_ROCKSDB=1 LINK_TERARK=static TERARK_CORE_PKG_DIR=terark-core \
+     DEBUG_LEVEL=2 shared_lib -j $cpuNum
 
 pkgdir=output
 rm -rf $pkgdir
@@ -52,12 +54,7 @@ PLATFORM_DIR=$SYSTEM-$COMPILER-bmi2-$WITH_BMI2
 #echo build/$PLATFORM_DIR/shared_lib/dbg-0/
 
 # copy terark-rocksdb dynamic lib
-if [ `uname` == Darwin ]; then
-	cp -a build/$PLATFORM_DIR/shared_lib/dbg-0/librocksdb* $pkgdir/lib
-	cp -a build/$PLATFORM_DIR/shared_lib/dbg-2/librocksdb* $pkgdir/lib
-else
-	cp -lP build/$PLATFORM_DIR/shared_lib/dbg-0/librocksdb* $pkgdir/lib/
-	cp -lP build/$PLATFORM_DIR/shared_lib/dbg-2/librocksdb* $pkgdir/lib/
-fi
+cp -a shared-objects/build/$PLATFORM_DIR/dbg-0/librocksdb* $pkgdir/lib
+cp -a shared-objects/build/$PLATFORM_DIR/dbg-2/librocksdb* $pkgdir/lib
 
 echo "build and package successful!"

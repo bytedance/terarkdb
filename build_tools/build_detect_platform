@@ -44,7 +44,7 @@ if test -z "$OUTPUT"; then
 fi
 
 # we depend on C++11
-PLATFORM_CXXFLAGS="-std=c++11"
+PLATFORM_CXXFLAGS="-std=c++14"
 # we currently depend on POSIX platform
 COMMON_FLAGS="-DROCKSDB_PLATFORM_POSIX -DROCKSDB_LIB_IO_POSIX"
 
@@ -194,7 +194,7 @@ case "$TARGET_OS" in
     Cygwin)
         PLATFORM=CYGWIN
         PLATFORM_SHARED_CFLAGS=""
-        PLATFORM_CXXFLAGS="-std=gnu++11"
+        PLATFORM_CXXFLAGS="-std=gnu++1y"
         COMMON_FLAGS="$COMMON_FLAGS -DCYGWIN"
         if [ -z "$USE_CLANG" ]; then
             COMMON_FLAGS="$COMMON_FLAGS -fno-builtin-memcmp"
