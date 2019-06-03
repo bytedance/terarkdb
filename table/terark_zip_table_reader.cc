@@ -85,15 +85,8 @@ Block* DetachBlockContents(BlockContents& tombstoneBlock, SequenceNumber global_
     }
   }
 #endif
-  return new Block(
-    BlockContents(std::move(tombstoneBuf), tombstoneBlock.data.size(), false, kNoCompression),
-    global_seqno);
+  return new Block(BlockContents(std::move(tombstoneBuf), tombstoneBlock.data.size()), global_seqno);
 }
-
-void SharedBlockCleanupFunction(void* arg1, void* arg2) {
-  delete reinterpret_cast<std::shared_ptr<Block>*>(arg1);
-}
-
 
 static void MmapWarmUpBytes(const void* addr, size_t len) {
   auto base = (const byte_t*)(uintptr_t(addr) & uintptr_t(~4095));
@@ -783,23 +776,29 @@ LoadTombstone(RandomAccessFileReader* file, uint64_t file_size) {
   Status s = ReadMetaBlockAdapte(file, file_size, kTerarkZipTableMagicNumber,
                                  GetTableReaderOptions().ioptions, kRangeDelBlock, &tombstoneBlock);
   if (s.ok()) {
-    tombstone_.reset(DetachBlockContents(tombstoneBlock, GetSequenceNumber()));
+    auto block = DetachBlockContents(tombstoneBlock, GetSequenceNumber());
+    auto icomp = &GetTableReaderOptions().internal_comparator;
+    auto iter = std::unique_ptr<InternalIterator>(block->NewIterator<DataBlockIter>(
+        icomp, icomp->user_comparator(), nullptr, GetTableReaderOptions().ioptions.statistics));
+    iter->RegisterCleanup([](void* arg0, void* arg1){ delete static_cast<Block*>(arg0); }, block, nullptr);
+    fragmented_range_dels_ = std::make_shared<FragmentedRangeTombstoneList>(
+        std::move(iter), *icomp);
   }
   return s;
 }
 
-InternalIterator* TerarkZipTableReaderBase::
+FragmentedRangeTombstoneIterator* TerarkZipTableReaderBase::
 NewRangeTombstoneIterator(const ReadOptions& read_options) {
-  if (tombstone_) {
-    auto icomp = &GetTableReaderOptions().internal_comparator;
-    auto iter = tombstone_->NewIterator<DataBlockIter>(
-      icomp, icomp->user_comparator(), nullptr,
-      GetTableReaderOptions().ioptions.statistics);
-    iter->RegisterCleanup(SharedBlockCleanupFunction,
-                          new std::shared_ptr<Block>(tombstone_), nullptr);
-    return iter;
+  if (fragmented_range_dels_ == nullptr) {
+    return nullptr;
   }
-  return nullptr;
+  SequenceNumber snapshot = kMaxSequenceNumber;
+  if (read_options.snapshot != nullptr) {
+    snapshot = read_options.snapshot->GetSequenceNumber();
+  }
+  auto icomp = &GetTableReaderOptions().internal_comparator;
+  return new FragmentedRangeTombstoneIterator(
+      fragmented_range_dels_, *icomp, snapshot);
 }
 
 void TerarkZipSubReader::InitUsePread(int minPreadLen) {
@@ -874,14 +873,15 @@ const {
     user_key = Slice(reinterpret_cast<const char*>(&u64_target), 8);
   }
 #endif
-  auto& g_tctx = *terark::GetTlsEntropyContext();
+  auto& g_tctx = *terark::GetTlsTerarkContext();
   size_t recId = index_->Find(fstringOf(user_key), &g_tctx);
   if (size_t(-1) == recId) {
     return Status::OK();
   }
   auto zvType = type_.size() ? ZipValueType(type_[recId]) : ZipValueType::kZeroSeq;
   bool matched;
-  auto& buf = g_tctx.buffer;
+  auto ctx_buffer = g_tctx.alloc();
+  auto& buf = ctx_buffer.get();
   switch (zvType) {
   default:
     return Status::Aborted("TerarkZipTableReader::Get()", "Bad ZipValueType");
@@ -969,7 +969,7 @@ const {
 }
 
 size_t TerarkZipSubReader::DictRank(fstring key) const {
-  return index_->DictRank(key, terark::GetTlsEntropyContext());
+  return index_->DictRank(key, terark::GetTlsTerarkContext());
 }
 
 TerarkZipSubReader::~TerarkZipSubReader() {
@@ -1368,7 +1368,7 @@ Status TerarkZipTableMultiReader::SubIndex::Init(
   size_t rawSize = 0;
   intptr_t fileFD = fileObj->FileDescriptor();
   hasAnyZipOffset_ = false;
-  auto& g_tctx = *terark::GetTlsEntropyContext();
+  auto& g_tctx = *terark::GetTlsTerarkContext();
   try {
     valvec<byte_t> buffer;
     cache_fi_ = -1;

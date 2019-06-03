@@ -40,7 +40,7 @@ Status ReadMetaBlockAdapte(class RandomAccessFileReader* file,
 class TerarkZipTableReaderBase : public TableReader, boost::noncopyable {
 
 private:
-  std::shared_ptr<Block> tombstone_;
+  std::shared_ptr<const FragmentedRangeTombstoneList> fragmented_range_dels_;
 
 protected:
   virtual SequenceNumber GetSequenceNumber() const = 0;
@@ -49,7 +49,7 @@ protected:
   Status LoadTombstone(RandomAccessFileReader* file, uint64_t file_size);
 
 public:
-  virtual InternalIterator*
+  virtual FragmentedRangeTombstoneIterator*
   NewRangeTombstoneIterator(const ReadOptions& read_options) override;
 };
 
