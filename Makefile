@@ -110,7 +110,6 @@ BUILD_ROOT := build/${BUILD_NAME}
 xdir:=${BUILD_ROOT}/dbg-${DEBUG_LEVEL}
 
 ifdef BUNDLE_TERARK_ZIP_ROCKSDB
-  TERARK_ZIP_ROCKSDB_HOME := terark-zip-rocksdb
   TERARK_CORE_VERSION ?= 1.0.0.58
   TERARK_CORE_PKG_DIR ?= ../terark-core/pkg/terark-fsa_all-${BUILD_NAME}
   CXXFLAGS += -I${TERARK_CORE_PKG_DIR}/include -Iboost-include
@@ -144,22 +143,22 @@ terark-core.got:
 	touch $@
 endif
 
-boost-include.got:
+terark-zip-rocksdb.got:
 	rm -rf terark-zip-rocksdb
 	git clone --depth=1 git@code.byted.org:storage/terark-zip-rocksdb.git
 	touch $@
 
-terark-zip-rocksdb.got:
+boost-include.got:
 	rm -rf boost-include
 	git clone --depth=1 git@code.byted.org:storage/boost-include.git
 	touch $@
 
 terark-zip-rocksdb/${BUILD_ROOT}/git-version-terark_zip_rocksdb.cc: terark-zip-rocksdb.got
-	make -C terark-zip-rocksdb  ${BUILD_ROOT}/git-version-terark_zip_rocksdb.cpp
+	make -C terark-zip-rocksdb  ${BUILD_ROOT}/git-version-terark_zip_rocksdb.cpp SKIP_DEP_GEN=1
 	mv ${@:.cc=.cpp} $@
 
   SRC_NEEDS_TERARK := $(wildcard db/*.cc) $(wildcard tools/*.cc)
-${SRC_NEEDS_TERARK}: bundle_terark_zip_rocksdb_dep
+${SRC_NEEDS_TERARK}: terark-zip-rocksdb.got
 #------------------------------------------------------------------------------
 
 # just use terark-core libs, set TERARK_ZIP_PKG_DIR as core
@@ -169,10 +168,10 @@ ${SRC_NEEDS_TERARK}: bundle_terark_zip_rocksdb_dep
   export LD_LIBRARY_PATH:=${TERARK_CORE_PKG_DIR}/lib:${LD_LIBRARY_PATH}
 else
   # TERARK_ZIP_PKG_DIR includes terark-core headers & libs
-  TERARK_ZIP_ROCKSDB_HOME ?= ../terark-zip-rocksdb
-  TERARK_ZIP_PKG_DIR := ${TERARK_ZIP_ROCKSDB_HOME}/pkg/terark-zip-rocksdb-${BUILD_NAME}
+  TERARK_ZIP_PKG_DIR := ../terark-zip-rocksdb/pkg/terark-zip-rocksdb-${BUILD_NAME}
   LIB_TERARK_ZIP_STATIC =   ${TERARK_ZIP_PKG_DIR}/lib_static/libterark-zip-rocksdb-${DBG_OR_RLS}.a
   LIB_TERARK_ZIP_SHARED = -L${TERARK_ZIP_PKG_DIR}/lib         -lterark-zip-rocksdb-${DBG_OR_RLS}
+  CXXFLAGS += -I${TERARK_ZIP_PKG_DIR}/include
   export LD_LIBRARY_PATH:=${TERARK_ZIP_PKG_DIR}/lib:${LD_LIBRARY_PATH}
 endif
 
