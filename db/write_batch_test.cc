@@ -31,8 +31,7 @@ static std::string PrintContents(WriteBatch* b) {
   ImmutableCFOptions ioptions(options);
   WriteBufferManager wb(options.db_write_buffer_size);
   MemTable* mem = new MemTable(cmp, ioptions, MutableCFOptions(options),
-                               false, // needs_dup_key_check
-                               &wb,
+                               /* needs_dup_key_check */ false, &wb,
                                kMaxSequenceNumber, 0 /* column_family_id */);
   mem->Ref();
   std::string state;
@@ -53,7 +52,8 @@ static std::string PrintContents(WriteBatch* b) {
       iter = mem->NewIterator(ReadOptions(), &arena);
       arena_iter_guard.set(iter);
     } else {
-      iter = mem->NewRangeTombstoneIterator(ReadOptions());
+      iter = mem->NewRangeTombstoneIterator(ReadOptions(),
+                                            kMaxSequenceNumber /* read_seq */);
       iter_guard.reset(iter);
     }
     if (iter == nullptr) {

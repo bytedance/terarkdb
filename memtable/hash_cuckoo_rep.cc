@@ -339,8 +339,8 @@ void HashCuckooRep::Insert(KeyHandle handle) {
       VectorRepFactory factory(10);
       const bool needs_dup_key_check = false;
       backup_table_.reset(
-          factory.CreateMemTableRep(compare_, needs_dup_key_check,
-                                    allocator_, nullptr, nullptr));
+          factory.CreateMemTableRep(compare_, needs_dup_key_check, allocator_,
+                                    nullptr, nullptr));
       is_nearly_full_ = true;
     }
     backup_table_->Insert(key);
@@ -629,10 +629,9 @@ void HashCuckooRep::Iterator::SeekToLast() {
 }  // anom namespace
 
 MemTableRep* HashCuckooRepFactory::CreateMemTableRep(
-    const MemTableRep::KeyComparator& compare,
-    bool /*needs_dup_key_check*/,
-    Allocator* allocator,
-    const SliceTransform* /*transform*/, Logger* /*logger*/) {
+    const MemTableRep::KeyComparator& compare, bool /*needs_dup_key_check*/,
+    Allocator* allocator, const SliceTransform* /*transform*/,
+    Logger* /*logger*/) {
   // The estimated average fullness.  The write performance of any close hash
   // degrades as the fullness of the mem-table increases.  Setting kFullness
   // to a value around 0.7 can better avoid write performance degradation while

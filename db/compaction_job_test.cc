@@ -74,9 +74,8 @@ class CompactionJobTest : public testing::Test {
         table_cache_(NewLRUCache(50000, 16)),
         write_buffer_manager_(db_options_.db_write_buffer_size),
         versions_(new VersionSet(dbname_, &db_options_, env_options_,
-                                 false, // seq_per_batch
-                                 table_cache_.get(), &write_buffer_manager_,
-                                 &write_controller_)),
+                                 /* seq_per_batch */ false, table_cache_.get(),
+                                 &write_buffer_manager_, &write_controller_)),
         shutting_down_(false),
         preserve_deletes_seqnum_(0),
         mock_table_factory_(new mock::MockTableFactory()),
@@ -201,11 +200,11 @@ class CompactionJobTest : public testing::Test {
     new_db.SetLastSequence(0);
 
     const std::string manifest = DescriptorFileName(dbname_, 1);
-    unique_ptr<WritableFile> file;
+    std::unique_ptr<WritableFile> file;
     Status s = env_->NewWritableFile(
         manifest, &file, env_->OptimizeForManifestWrite(env_options_));
     ASSERT_OK(s);
-    unique_ptr<WritableFileWriter> file_writer(
+    std::unique_ptr<WritableFileWriter> file_writer(
         new WritableFileWriter(std::move(file), manifest, env_options_));
     {
       log::Writer log(std::move(file_writer), 0, false);

@@ -11,63 +11,17 @@
 
 namespace rocksdb {
 
-Status InternalKeyPropertiesCollector::InternalAdd(const Slice& key,
-                                                   const Slice& /*value*/,
-                                                   uint64_t /*file_size*/) {
-  ParsedInternalKey ikey;
-  if (!ParseInternalKey(key, &ikey)) {
-    return Status::InvalidArgument("Invalid internal key");
-  }
-
-  // Note: We count both, deletions and single deletions here.
-  if (ikey.type == ValueType::kTypeDeletion ||
-      ikey.type == ValueType::kTypeSingleDeletion) {
-    ++deleted_keys_;
-  } else if (ikey.type == ValueType::kTypeMerge) {
-    ++merge_operands_;
-  }
-
-  return Status::OK();
-}
-
-Status InternalKeyPropertiesCollector::Finish(
-    UserCollectedProperties* properties) {
-  assert(properties);
-  assert(properties->find(InternalKeyTablePropertiesNames::kDeletedKeys) ==
-         properties->end());
-  assert(properties->find(InternalKeyTablePropertiesNames::kMergeOperands) ==
-         properties->end());
-
-  std::string val_deleted_keys;
-  PutVarint64(&val_deleted_keys, deleted_keys_);
-  properties->insert(
-      {InternalKeyTablePropertiesNames::kDeletedKeys, val_deleted_keys});
-
-  std::string val_merge_operands;
-  PutVarint64(&val_merge_operands, merge_operands_);
-  properties->insert(
-      {InternalKeyTablePropertiesNames::kMergeOperands, val_merge_operands});
-
-  return Status::OK();
-}
-
-UserCollectedProperties
-InternalKeyPropertiesCollector::GetReadableProperties() const {
-  return {{"kDeletedKeys", ToString(deleted_keys_)},
-          {"kMergeOperands", ToString(merge_operands_)}};
-}
-
 Status CompositeSstPropertiesCollector::Finish(
     UserCollectedProperties* properties) {
   assert(properties);
-  assert(properties->find(CompositeSstTablePropertiesNames::kSstPurpose) ==
+  assert(properties->find(TablePropertiesNames::kSstPurpose) ==
          properties->end());
-  assert(properties->find(CompositeSstTablePropertiesNames::kSstDepend) ==
+  assert(properties->find(TablePropertiesNames::kSstDepend) ==
          properties->end());
 
   auto sst_purpose_value = std::string((const char*)&sst_purpose_, 1);
   properties->insert(
-      {CompositeSstTablePropertiesNames::kSstPurpose, sst_purpose_value});
+      {TablePropertiesNames::kSstPurpose, sst_purpose_value});
 
   std::string sst_depend;
   PutVarint64(&sst_depend, sst_depend_->size());
@@ -75,13 +29,13 @@ Status CompositeSstPropertiesCollector::Finish(
     PutVarint64(&sst_depend, depend);
   }
   properties->insert(
-      {CompositeSstTablePropertiesNames::kSstDepend, sst_depend});
+      {TablePropertiesNames::kSstDepend, sst_depend});
 
   std::string sst_read_amp;
   PutVarint64(&sst_read_amp, *sst_read_amp_);
 
   properties->insert(
-      {CompositeSstTablePropertiesNames::kSstReadAmp, sst_read_amp});
+      {TablePropertiesNames::kSstReadAmp, sst_read_amp});
 
   return Status::OK();
 }
@@ -144,31 +98,21 @@ UserCollectedProperties UserKeyTablePropertiesCollector::GetReadableProperties()
   return collector_->GetReadableProperties();
 }
 
-const std::string InternalKeyTablePropertiesNames::kDeletedKeys =
-    "rocksdb.deleted.keys";
-const std::string InternalKeyTablePropertiesNames::kMergeOperands =
-    "rocksdb.merge.operands";
-const std::string CompositeSstTablePropertiesNames::kSstPurpose =
-    "rocksdb.sst.purpose";
-const std::string CompositeSstTablePropertiesNames::kSstDepend =
-    "rocksdb.sst.depend";
-const std::string CompositeSstTablePropertiesNames::kSstReadAmp =
-    "rocksdb.sst.read_amp";
 
 uint64_t GetDeletedKeys(const UserCollectedProperties& props) {
   bool property_present_ignored;
-  return GetUint64Property(props, InternalKeyTablePropertiesNames::kDeletedKeys,
+  return GetUint64Property(props, TablePropertiesNames::kDeletedKeys,
                            &property_present_ignored);
 }
 
 uint64_t GetMergeOperands(const UserCollectedProperties& props,
                           bool* property_present) {
   return GetUint64Property(
-      props, InternalKeyTablePropertiesNames::kMergeOperands, property_present);
+      props, TablePropertiesNames::kMergeOperands, property_present);
 }
 
 uint8_t GetSstPurpose(const UserCollectedProperties& props) {
-  auto pos = props.find(CompositeSstTablePropertiesNames::kSstPurpose);
+  auto pos = props.find(TablePropertiesNames::kSstPurpose);
   if (pos == props.end()) {
     return 0;
   }
@@ -178,7 +122,7 @@ uint8_t GetSstPurpose(const UserCollectedProperties& props) {
 
 std::vector<uint64_t> GetSstDepend(const UserCollectedProperties& props) {
   std::vector<uint64_t> result;
-  auto pos = props.find(CompositeSstTablePropertiesNames::kSstDepend);
+  auto pos = props.find(TablePropertiesNames::kSstDepend);
   if (pos == props.end()) {
     return result;
   }
@@ -201,7 +145,7 @@ std::vector<uint64_t> GetSstDepend(const UserCollectedProperties& props) {
 size_t GetSstReadAmp(const UserCollectedProperties& props) {
   bool ignore;
   return GetUint64Property(
-      props, CompositeSstTablePropertiesNames::kSstReadAmp, &ignore);
+      props, TablePropertiesNames::kSstReadAmp, &ignore);
 }
 
 }  // namespace rocksdb

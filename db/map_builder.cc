@@ -841,7 +841,7 @@ Status MapBuilder::WriteOutputFile(
 #endif  // !ROCKSDB_LITE
 
   // Make the output file
-  unique_ptr<WritableFile> writable_file;
+  std::unique_ptr<WritableFile> writable_file;
   auto s = NewWritableFile(env_, fname, &writable_file, env_options_);
   if (!s.ok()) {
     ROCKS_LOG_ERROR(db_options_.info_log,

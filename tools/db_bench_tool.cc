@@ -33,10 +33,12 @@
 #include <unordered_map>
 
 #include "db/db_impl.h"
+#include "db/malloc_stats.h"
 #include "db/version_set.h"
 #include "hdfs/env_hdfs.h"
 #include "monitoring/histogram.h"
 #include "monitoring/statistics.h"
+#include "options/cf_options.h"
 #include "port/port.h"
 #include "port/stack_trace.h"
 #include "rocksdb/cache.h"
@@ -45,7 +47,6 @@
 #include "rocksdb/filter_policy.h"
 #include "rocksdb/memtablerep.h"
 #include "rocksdb/options.h"
-#include "options/cf_options.h"
 #include "rocksdb/perf_context.h"
 #include "rocksdb/persistent_cache.h"
 #include "rocksdb/rate_limiter.h"
@@ -247,6 +248,10 @@ DEFINE_int32(seek_nexts, 0,
 DEFINE_bool(reverse_iterator, false,
             "When true use Prev rather than Next for iterators that do "
             "Seek and then Next");
+
+DEFINE_int64(max_scan_distance, 0,
+             "Used to define iterate_upper_bound (or iterate_lower_bound "
+             "if FLAGS_reverse_iterator is set to true) when value is nonzero");
 
 DEFINE_bool(use_uint64_comparator, false, "use Uint64 user comparator");
 
@@ -937,6 +942,9 @@ DEFINE_uint64(max_compaction_bytes, rocksdb::Options().max_compaction_bytes,
 
 #ifndef ROCKSDB_LITE
 DEFINE_bool(readonly, false, "Run read only benchmarks.");
+
+DEFINE_bool(print_malloc_stats, false,
+            "Print malloc stats to stdout after benchmarks finish.");
 #endif  // ROCKSDB_LITE
 
 DEFINE_bool(disable_auto_compactions, false, "Do not auto trigger compactions");
@@ -1141,15 +1149,16 @@ class ReportFileOpEnv : public EnvWrapper {
     counters_.bytes_written_ = 0;
   }
 
-  Status NewSequentialFile(const std::string& f, unique_ptr<SequentialFile>* r,
+  Status NewSequentialFile(const std::string& f,
+                           std::unique_ptr<SequentialFile>* r,
                            const EnvOptions& soptions) override {
     class CountingFile : public SequentialFile {
      private:
-      unique_ptr<SequentialFile> target_;
+      std::unique_ptr<SequentialFile> target_;
       ReportFileOpCounters* counters_;
 
      public:
-      CountingFile(unique_ptr<SequentialFile>&& target,
+      CountingFile(std::unique_ptr<SequentialFile>&& target,
                    ReportFileOpCounters* counters)
           : target_(std::move(target)), counters_(counters) {}
 
@@ -1173,15 +1182,15 @@ class ReportFileOpEnv : public EnvWrapper {
   }
 
   Status NewRandomAccessFile(const std::string& f,
-                             unique_ptr<RandomAccessFile>* r,
+                             std::unique_ptr<RandomAccessFile>* r,
                              const EnvOptions& soptions) override {
     class CountingFile : public RandomAccessFile {
      private:
-      unique_ptr<RandomAccessFile> target_;
+      std::unique_ptr<RandomAccessFile> target_;
       ReportFileOpCounters* counters_;
 
      public:
-      CountingFile(unique_ptr<RandomAccessFile>&& target,
+      CountingFile(std::unique_ptr<RandomAccessFile>&& target,
                    ReportFileOpCounters* counters)
           : target_(std::move(target)), counters_(counters) {}
       virtual Status Read(uint64_t offset, size_t n, Slice* result,
@@ -1205,15 +1214,15 @@ class ReportFileOpEnv : public EnvWrapper {
     return s;
   }
 
-  Status NewWritableFile(const std::string& f, unique_ptr<WritableFile>* r,
+  Status NewWritableFile(const std::string& f, std::unique_ptr<WritableFile>* r,
                          const EnvOptions& soptions) override {
     class CountingFile : public WritableFile {
      private:
-      unique_ptr<WritableFile> target_;
+      std::unique_ptr<WritableFile> target_;
       ReportFileOpCounters* counters_;
 
      public:
-      CountingFile(unique_ptr<WritableFile>&& target,
+      CountingFile(std::unique_ptr<WritableFile>&& target,
                    ReportFileOpCounters* counters)
           : target_(std::move(target)), counters_(counters) {}
 
@@ -1981,7 +1990,9 @@ class Benchmark {
   int64_t max_num_range_tombstones_;
   WriteOptions write_options_;
   Options open_options_;  // keep options around to properly destroy db later
+#ifndef ROCKSDB_LITE
   TraceOptions trace_options_;
+#endif
   int64_t reads_;
   int64_t deletes_;
   double read_random_exp_range_;
@@ -4243,7 +4254,7 @@ void VerifyDBFromDB(std::string& truth_db_name) {
         }
         if (levelMeta.level == 0) {
           for (auto& fileMeta : levelMeta.files) {
-            fprintf(stdout, "Level[%d]: %s(size: %" PRIu64 " bytes)\n",
+            fprintf(stdout, "Level[%d]: %s(size: %" ROCKSDB_PRIszt " bytes)\n",
                     levelMeta.level, fileMeta.name.c_str(), fileMeta.size);
           }
         } else {
@@ -4562,9 +4573,31 @@ void VerifyDBFromDB(std::string& truth_db_name) {
     std::unique_ptr<const char[]> key_guard;
     Slice key = AllocateKey(&key_guard);
 
+    std::unique_ptr<const char[]> upper_bound_key_guard;
+    Slice upper_bound = AllocateKey(&upper_bound_key_guard);
+    std::unique_ptr<const char[]> lower_bound_key_guard;
+    Slice lower_bound = AllocateKey(&lower_bound_key_guard);
+
     Duration duration(FLAGS_duration, reads_);
     char value_buffer[256];
     while (!duration.Done(1)) {
+      int64_t seek_pos = thread->rand.Next() % FLAGS_num;
+      GenerateKeyFromInt((uint64_t)seek_pos, FLAGS_num, &key);
+      if (FLAGS_max_scan_distance != 0) {
+        if (FLAGS_reverse_iterator) {
+          GenerateKeyFromInt(
+              (uint64_t)std::max((int64_t)0,
+                                 seek_pos - FLAGS_max_scan_distance),
+              FLAGS_num, &lower_bound);
+          options.iterate_lower_bound = &lower_bound;
+        } else {
+          GenerateKeyFromInt(
+              (uint64_t)std::min(FLAGS_num, seek_pos + FLAGS_max_scan_distance),
+              FLAGS_num, &upper_bound);
+          options.iterate_upper_bound = &upper_bound;
+        }
+      }
+
       if (!FLAGS_use_tailing_iterator) {
         if (db_.db != nullptr) {
           delete single_iter;
@@ -4585,7 +4618,6 @@ void VerifyDBFromDB(std::string& truth_db_name) {
         iter_to_use = multi_iters[thread->rand.Next() % multi_iters.size()];
       }
 
-      GenerateKeyFromInt(thread->rand.Next() % FLAGS_num, FLAGS_num, &key);
       iter_to_use->Seek(key);
       read++;
       if (iter_to_use->Valid() && iter_to_use->key().compare(key) == 0) {
@@ -5682,7 +5714,7 @@ void VerifyDBFromDB(std::string& truth_db_name) {
 
   void Replay(ThreadState* /*thread*/, DBWithColumnFamilies* db_with_cfh) {
     Status s;
-    unique_ptr<TraceReader> trace_reader;
+    std::unique_ptr<TraceReader> trace_reader;
     s = NewFileTraceReader(FLAGS_env, EnvOptions(), FLAGS_trace_file,
                            &trace_reader);
     if (!s.ok()) {
@@ -5810,6 +5842,15 @@ int db_bench_tool(int argc, char** argv) {
 
   rocksdb::Benchmark benchmark;
   benchmark.Run();
+
+#ifndef ROCKSDB_LITE
+  if (FLAGS_print_malloc_stats) {
+    std::string stats_string;
+    rocksdb::DumpMallocStats(&stats_string);
+    fprintf(stdout, "Malloc stats:\n%s\n", stats_string.c_str());
+  }
+#endif  // ROCKSDB_LITE
+
   return 0;
 }
 }  // namespace rocksdb

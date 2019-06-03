@@ -31,12 +31,18 @@ struct WriteBatchIndexEntry {
         key_offset(ko),
         key_size(ksz),
         search_key(nullptr) {}
-  WriteBatchIndexEntry(const Slice* sk, uint32_t c)
+  // Create a dummy entry as the search key. This index entry won't be backed
+  // by an entry from the write batch, but a pointer to the search key.
+  // @_search_key: the search key
+  // @_column_family: column family
+  WriteBatchIndexEntry(const Slice* _search_key, uint32_t _column_family)
       : offset(0),
-        column_family(c),
+        column_family(_column_family),
         key_offset(0),
         key_size(0),
-        search_key(sk) {}
+        search_key(_search_key) {
+    assert(_search_key != nullptr);
+  }
 
   size_t offset;           // offset of an entry in write batch's string buffer.
   uint32_t column_family;  // column family of the entry.

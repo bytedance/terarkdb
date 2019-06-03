@@ -8,6 +8,7 @@
 
 #include "db/db_test_util.h"
 #include "db/memtable.h"
+#include "db/range_del_aggregator.h"
 #include "port/stack_trace.h"
 #include "rocksdb/memtablerep.h"
 #include "rocksdb/slice_transform.h"
@@ -77,8 +78,8 @@ class MockMemTableRepFactory : public MemTableRepFactory {
                                          Logger* logger) override {
     SkipListFactory factory;
     MemTableRep* skiplist_rep =
-        factory.CreateMemTableRep(cmp, needs_dup_key_check,
-                                  allocator, transform, logger);
+        factory.CreateMemTableRep(cmp, needs_dup_key_check, allocator,
+                                  transform, logger);
     mock_rep_ = new MockMemTableRep(allocator, skiplist_rep);
     return mock_rep_;
   }
@@ -90,8 +91,8 @@ class MockMemTableRepFactory : public MemTableRepFactory {
                                          Logger* logger,
                                          uint32_t column_family_id) override {
     last_column_family_id_ = column_family_id;
-    return CreateMemTableRep(cmp, needs_dup_key_check,
-                             allocator, transform, logger);
+    return CreateMemTableRep(cmp, needs_dup_key_check, allocator, transform,
+                             logger);
   }
   virtual const char* Name() const override { return "MockMemTableRepFactory"; }
 
@@ -139,7 +140,8 @@ TEST_F(DBMemTableTest, DuplicateSeq) {
   MergeContext merge_context;
   Options options;
   InternalKeyComparator ikey_cmp(options.comparator);
-  RangeDelAggregator range_del_agg(ikey_cmp, {} /* snapshots */);
+  ReadRangeDelAggregator range_del_agg(&ikey_cmp,
+                                       kMaxSequenceNumber /* upper_bound */);
 
   // Create a MemTable
   InternalKeyComparator cmp(BytewiseComparator());
@@ -148,8 +150,7 @@ TEST_F(DBMemTableTest, DuplicateSeq) {
   ImmutableCFOptions ioptions(options);
   WriteBufferManager wb(options.db_write_buffer_size);
   MemTable* mem = new MemTable(cmp, ioptions, MutableCFOptions(options),
-                               false, // needs_dup_key_check
-                               &wb,
+                               /* needs_dup_key_check */ false, &wb,
                                kMaxSequenceNumber, 0 /* column_family_id */);
 
   // Write some keys and make sure it returns false on duplicates
@@ -190,9 +191,8 @@ TEST_F(DBMemTableTest, DuplicateSeq) {
       new TestPrefixExtractor());  // which uses _ to extract the prefix
   ioptions = ImmutableCFOptions(options);
   mem = new MemTable(cmp, ioptions, MutableCFOptions(options),
-                     false, // needs_dup_key_check
-                     &wb,
-                     kMaxSequenceNumber, 0 /* column_family_id */);
+                     /* needs_dup_key_check */ false, &wb, kMaxSequenceNumber,
+                     0 /* column_family_id */);
   // Insert a duplicate key with _ in it
   res = mem->Add(seq, kTypeValue, "key_1", "value");
   ASSERT_TRUE(res);
@@ -204,9 +204,8 @@ TEST_F(DBMemTableTest, DuplicateSeq) {
   options.allow_concurrent_memtable_write = true;
   ioptions = ImmutableCFOptions(options);
   mem = new MemTable(cmp, ioptions, MutableCFOptions(options),
-                     false, // needs_dup_key_check
-                     &wb,
-                     kMaxSequenceNumber, 0 /* column_family_id */);
+                     /* needs_dup_key_check */ false, &wb, kMaxSequenceNumber,
+                     0 /* column_family_id */);
   MemTablePostProcessInfo post_process_info;
   res = mem->Add(seq, kTypeValue, "key", "value", true, &post_process_info);
   ASSERT_TRUE(res);

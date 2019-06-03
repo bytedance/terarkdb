@@ -169,7 +169,7 @@ class HashSkipListRep : public MemTableRep {
     Bucket* list_;
     Bucket::Iterator iter_;
     // here we track if we own list_. If we own it, we are also
-    // responsible for it's cleaning. This is a poor man's shared_ptr
+    // responsible for it's cleaning. This is a poor man's std::shared_ptr
     bool own_list_;
     std::unique_ptr<Arena> arena_;
     std::string tmp_;       // For passing to EncodeKey
@@ -339,10 +339,9 @@ MemTableRep::Iterator* HashSkipListRep::GetDynamicPrefixIterator(Arena* arena) {
 } // anon namespace
 
 MemTableRep* HashSkipListRepFactory::CreateMemTableRep(
-    const MemTableRep::KeyComparator& compare,
-    bool /*needs_dup_key_check*/,
-    Allocator* allocator,
-    const SliceTransform* transform, Logger* /*logger*/) {
+    const MemTableRep::KeyComparator& compare, bool /*needs_dup_key_check*/,
+    Allocator* allocator, const SliceTransform* transform,
+    Logger* /*logger*/) {
   return new HashSkipListRep(compare, allocator, transform, bucket_count_,
                              skiplist_height_, skiplist_branching_factor_);
 }

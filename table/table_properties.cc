@@ -78,6 +78,9 @@ std::string TableProperties::ToString(
   AppendProperty(result, "# data blocks", num_data_blocks, prop_delim,
                  kv_delim);
   AppendProperty(result, "# entries", num_entries, prop_delim, kv_delim);
+  AppendProperty(result, "# deletions", num_deletions, prop_delim, kv_delim);
+  AppendProperty(result, "# merge operands", num_merge_operands, prop_delim,
+                 kv_delim);
   AppendProperty(result, "# range deletions", num_range_deletions, prop_delim,
                  kv_delim);
 
@@ -170,6 +173,8 @@ void TableProperties::Add(const TableProperties& tp) {
   raw_value_size += tp.raw_value_size;
   num_data_blocks += tp.num_data_blocks;
   num_entries += tp.num_entries;
+  num_deletions += tp.num_deletions;
+  num_merge_operands += tp.num_merge_operands;
   num_range_deletions += tp.num_range_deletions;
 }
 
@@ -195,6 +200,9 @@ const std::string TablePropertiesNames::kNumDataBlocks =
     "rocksdb.num.data.blocks";
 const std::string TablePropertiesNames::kNumEntries =
     "rocksdb.num.entries";
+const std::string TablePropertiesNames::kDeletedKeys = "rocksdb.deleted.keys";
+const std::string TablePropertiesNames::kMergeOperands =
+    "rocksdb.merge.operands";
 const std::string TablePropertiesNames::kNumRangeDeletions =
     "rocksdb.num.range-deletions";
 const std::string TablePropertiesNames::kFilterPolicy =
@@ -218,6 +226,12 @@ const std::string TablePropertiesNames::kCompression = "rocksdb.compression";
 const std::string TablePropertiesNames::kCreationTime = "rocksdb.creation.time";
 const std::string TablePropertiesNames::kOldestKeyTime =
     "rocksdb.oldest.key.time";
+const std::string TablePropertiesNames::kSstPurpose =
+    "rocksdb.sst.purpose";
+const std::string TablePropertiesNames::kSstDepend =
+    "rocksdb.sst.depend";
+const std::string TablePropertiesNames::kSstReadAmp =
+    "rocksdb.sst.read_amp";
 
 extern const std::string kPropertiesBlock = "rocksdb.properties";
 // Old property block name for backward compatibility

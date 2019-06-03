@@ -16,7 +16,7 @@ namespace rocksdb {
 // Env's.  This is useful for debugging purposes.
 class SequentialFileMirror : public SequentialFile {
  public:
-  unique_ptr<SequentialFile> a_, b_;
+  std::unique_ptr<SequentialFile> a_, b_;
   std::string fname;
   explicit SequentialFileMirror(std::string f) : fname(f) {}
 
@@ -60,7 +60,7 @@ class SequentialFileMirror : public SequentialFile {
 
 class RandomAccessFileMirror : public RandomAccessFile {
  public:
-  unique_ptr<RandomAccessFile> a_, b_;
+  std::unique_ptr<RandomAccessFile> a_, b_;
   std::string fname;
   explicit RandomAccessFileMirror(std::string f) : fname(f) {}
 
@@ -99,7 +99,7 @@ class RandomAccessFileMirror : public RandomAccessFile {
 
 class WritableFileMirror : public WritableFile {
  public:
-  unique_ptr<WritableFile> a_, b_;
+  std::unique_ptr<WritableFile> a_, b_;
   std::string fname;
   explicit WritableFileMirror(std::string f) : fname(f) {}
 
@@ -195,7 +195,7 @@ class WritableFileMirror : public WritableFile {
 };
 
 Status EnvMirror::NewSequentialFile(const std::string& f,
-                                    unique_ptr<SequentialFile>* r,
+                                    std::unique_ptr<SequentialFile>* r,
                                     const EnvOptions& options) {
   if (f.find("/proc/") == 0) {
     return a_->NewSequentialFile(f, r, options);
@@ -212,7 +212,7 @@ Status EnvMirror::NewSequentialFile(const std::string& f,
 }
 
 Status EnvMirror::NewRandomAccessFile(const std::string& f,
-                                      unique_ptr<RandomAccessFile>* r,
+                                      std::unique_ptr<RandomAccessFile>* r,
                                       const EnvOptions& options) {
   if (f.find("/proc/") == 0) {
     return a_->NewRandomAccessFile(f, r, options);
@@ -229,7 +229,7 @@ Status EnvMirror::NewRandomAccessFile(const std::string& f,
 }
 
 Status EnvMirror::NewWritableFile(const std::string& f,
-                                  unique_ptr<WritableFile>* r,
+                                  std::unique_ptr<WritableFile>* r,
                                   const EnvOptions& options) {
   if (f.find("/proc/") == 0) return a_->NewWritableFile(f, r, options);
   WritableFileMirror* mf = new WritableFileMirror(f);
@@ -245,7 +245,7 @@ Status EnvMirror::NewWritableFile(const std::string& f,
 
 Status EnvMirror::ReuseWritableFile(const std::string& fname,
                                     const std::string& old_fname,
-                                    unique_ptr<WritableFile>* r,
+                                    std::unique_ptr<WritableFile>* r,
                                     const EnvOptions& options) {
   if (fname.find("/proc/") == 0)
     return a_->ReuseWritableFile(fname, old_fname, r, options);

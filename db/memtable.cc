@@ -17,6 +17,7 @@
 #include "db/merge_context.h"
 #include "db/merge_helper.h"
 #include "db/pinned_iterators_manager.h"
+#include "db/range_tombstone_fragmenter.h"
 #include "db/read_callback.h"
 #include "monitoring/perf_context_imp.h"
 #include "monitoring/statistics.h"
@@ -69,27 +70,28 @@ MemTable::MemTable(const InternalKeyComparator& cmp,
       refs_(0),
       kArenaBlockSize(OptimizeBlockSize(moptions_.arena_block_size)),
       mem_tracker_(write_buffer_manager),
-      arena_(
-          moptions_.arena_block_size,
-          (write_buffer_manager != nullptr && write_buffer_manager->enabled())
-              ? &mem_tracker_
-              : nullptr,
-          mutable_cf_options.memtable_huge_page_size),
+      arena_(moptions_.arena_block_size,
+             (write_buffer_manager != nullptr &&
+              (write_buffer_manager->enabled() ||
+               write_buffer_manager->cost_to_cache()))
+                 ? &mem_tracker_
+                 : nullptr,
+             mutable_cf_options.memtable_huge_page_size),
       table_(mutable_cf_options.memtable_factory->CreateMemTableRep(
-          comparator_, needs_dup_key_check,
-          &arena_, ioptions, mutable_cf_options,
+          comparator_, needs_dup_key_check, &arena_,
+          mutable_cf_options.prefix_extractor.get(), ioptions.info_log,
           column_family_id)),
       range_del_table_(SkipListFactory().CreateMemTableRep(
-          comparator_, needs_dup_key_check,
-          &arena_, nullptr /* transform */, ioptions.info_log,
-          column_family_id)),
-      is_range_del_table_empty_(true),
+          comparator_, needs_dup_key_check, &arena_, nullptr /* transform */,
+          ioptions.info_log, column_family_id)),
       data_size_(0),
       num_entries_(0),
       num_deletes_(0),
+      num_range_del_(0),
       write_buffer_size_(mutable_cf_options.write_buffer_size),
       flush_in_progress_(false),
       flush_completed_(false),
+      is_range_del_slow_(false),
       file_number_(0),
       first_seqno_(0),
       earliest_seqno_(latest_seq),
@@ -119,12 +121,9 @@ MemTable::MemTable(const InternalKeyComparator& cmp,
 }
 
 MemTableRep* MemTableRepFactory::CreateMemTableRep(
-    const MemTableRep::KeyComparator& key_cmp,
-    bool needs_dup_key_check,
-    Allocator* allocator,
-    const ImmutableCFOptions& ioptions,
-    const MutableCFOptions& mutable_cf_options,
-    uint32_t column_family_id) {
+    const MemTableRep::KeyComparator& key_cmp, bool needs_dup_key_check,
+    Allocator* allocator, const ImmutableCFOptions& ioptions,
+    const MutableCFOptions& mutable_cf_options, uint32_t column_family_id) {
   return CreateMemTableRep(key_cmp, needs_dup_key_check, allocator,
                            mutable_cf_options.prefix_extractor.get(),
                            ioptions.info_log, column_family_id);
@@ -154,6 +153,9 @@ size_t MemTable::ApproximateMemoryUsage() {
 }
 
 bool MemTable::ShouldFlushNow() const {
+  if (is_range_del_slow_) {
+    return true;
+  }
   size_t write_buffer_size = write_buffer_size_.load(std::memory_order_relaxed);
   // In a lot of times, we cannot allocate arena blocks that exactly matches the
   // buffer size. Thus we have to decide if we should over-allocate or
@@ -409,13 +411,40 @@ InternalIterator* MemTable::NewIterator(const ReadOptions& read_options,
   return new (mem) MemTableIterator(*this, read_options, arena);
 }
 
-InternalIterator* MemTable::NewRangeTombstoneIterator(
-    const ReadOptions& read_options) {
-  if (read_options.ignore_range_deletions || is_range_del_table_empty_) {
+FragmentedRangeTombstoneIterator* MemTable::NewRangeTombstoneIterator(
+    const ReadOptions& read_options, SequenceNumber read_seq) {
+  size_t num_range_del = num_range_del_.load(std::memory_order_relaxed);
+  if (read_options.ignore_range_deletions || num_range_del == 0) {
     return nullptr;
   }
-  return new MemTableIterator(*this, read_options, nullptr /* arena */,
-                              true /* use_range_del_table */);
+  auto fragmented_tombstone_list = fragmented_range_dels_;
+
+  if (!fragmented_range_dels_ ||
+      fragmented_range_dels_->user_tag() != num_range_del) {
+
+    auto* unfragmented_iter = new MemTableIterator(
+        *this, read_options, nullptr /* arena */,
+        true /* use_range_del_table */);
+    if (unfragmented_iter == nullptr) {
+      return nullptr;
+    }
+    StopWatchNano timer(env_, true);
+    fragmented_tombstone_list =
+        std::make_shared<FragmentedRangeTombstoneList>(
+            std::unique_ptr<InternalIterator>(unfragmented_iter),
+            comparator_.comparator, false /* for_compaction */,
+            std::vector<SequenceNumber>() /* snapshots */, num_range_del);
+    if (timer.ElapsedNanos() > 10000000ULL) {
+      is_range_del_slow_ = true;
+    }
+    if (num_range_del == num_range_del_.load(std::memory_order_relaxed)) {
+      fragmented_range_dels_ = fragmented_tombstone_list;
+    }
+  }
+
+  auto* fragmented_iter = new FragmentedRangeTombstoneIterator(
+      fragmented_tombstone_list, comparator_.comparator, read_seq);
+  return fragmented_iter;
 }
 
 port::RWMutex* MemTable::GetLock(const Slice& key) {
@@ -531,8 +560,9 @@ bool MemTable::Add(SequenceNumber s, ValueType type,
         !first_seqno_.compare_exchange_weak(cur_earliest_seqno, s)) {
     }
   }
-  if (is_range_del_table_empty_ && type == kTypeRangeDeletion) {
-    is_range_del_table_empty_ = false;
+  if (type == kTypeRangeDeletion) {
+    num_range_del_.store(num_range_del_.load(std::memory_order_relaxed) + 1,
+                         std::memory_order_relaxed);
   }
   UpdateOldestKeyTime();
   return true;
@@ -551,7 +581,7 @@ struct Saver {
   const MergeOperator* merge_operator;
   // the merge operations encountered;
   MergeContext* merge_context;
-  RangeDelAggregator* range_del_agg;
+  SequenceNumber max_covering_tombstone_seq;
   MemTable* mem;
   Logger* logger;
   Statistics* statistics;
@@ -572,10 +602,10 @@ struct Saver {
 static bool SaveValue(void* arg, const MemTableRep::KeyValuePair* pair) {
   Saver* s = reinterpret_cast<Saver*>(arg);
   MergeContext* merge_context = s->merge_context;
-  RangeDelAggregator* range_del_agg = s->range_del_agg;
+  SequenceNumber max_covering_tombstone_seq = s->max_covering_tombstone_seq;
   const MergeOperator* merge_operator = s->merge_operator;
 
-  assert(s != nullptr && merge_context != nullptr && range_del_agg != nullptr);
+  assert(merge_context != nullptr);
 
   Slice internal_key, value;
   std::tie(internal_key, value) = pair->GetKeyValue();
@@ -598,7 +628,7 @@ static bool SaveValue(void* arg, const MemTableRep::KeyValuePair* pair) {
     s->seq = seq;
 
     if ((type == kTypeValue || type == kTypeMerge || type == kTypeBlobIndex) &&
-        range_del_agg->ShouldDelete(internal_key)) {
+        max_covering_tombstone_seq > seq) {
       type = kTypeRangeDeletion;
     }
     switch (type) {
@@ -693,9 +723,9 @@ static bool SaveValue(void* arg, const MemTableRep::KeyValuePair* pair) {
 
 bool MemTable::Get(const LookupKey& key, std::string* value, Status* s,
                    MergeContext* merge_context,
-                   RangeDelAggregator* range_del_agg, SequenceNumber* seq,
-                   const ReadOptions& read_opts, ReadCallback* callback,
-                   bool* is_blob_index) {
+                   SequenceNumber* max_covering_tombstone_seq,
+                   SequenceNumber* seq, const ReadOptions& read_opts,
+                   ReadCallback* callback, bool* is_blob_index) {
   // The sequence number is updated synchronously in version_set.h
   if (IsEmpty()) {
     // Avoiding recording stats for speed.
@@ -703,12 +733,13 @@ bool MemTable::Get(const LookupKey& key, std::string* value, Status* s,
   }
   PERF_TIMER_GUARD(get_from_memtable_time);
 
-  std::unique_ptr<InternalIterator> range_del_iter(
-      NewRangeTombstoneIterator(read_opts));
-  Status status = range_del_agg->AddTombstones(std::move(range_del_iter));
-  if (!status.ok()) {
-    *s = status;
-    return false;
+  std::unique_ptr<FragmentedRangeTombstoneIterator> range_del_iter(
+      NewRangeTombstoneIterator(read_opts,
+                                GetInternalKeySeqno(key.internal_key())));
+  if (range_del_iter != nullptr) {
+    *max_covering_tombstone_seq =
+        std::max(*max_covering_tombstone_seq,
+                 range_del_iter->MaxCoveringTombstoneSeqnum(key.user_key()));
   }
 
   Slice user_key = key.user_key();
@@ -735,7 +766,7 @@ bool MemTable::Get(const LookupKey& key, std::string* value, Status* s,
     saver.seq = kMaxSequenceNumber;
     saver.mem = this;
     saver.merge_context = merge_context;
-    saver.range_del_agg = range_del_agg;
+    saver.max_covering_tombstone_seq = *max_covering_tombstone_seq;
     saver.merge_operator = moptions_.merge_operator;
     saver.logger = moptions_.info_log;
     saver.inplace_update_support = moptions_.inplace_update_support;
