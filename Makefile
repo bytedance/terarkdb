@@ -110,7 +110,7 @@ BUILD_ROOT := build/${BUILD_NAME}
 xdir:=${BUILD_ROOT}/dbg-${DEBUG_LEVEL}
 
 ifdef BUNDLE_TERARK_ZIP_ROCKSDB
-  TERARK_CORE_VERSION ?= 1.0.0.58
+  TERARK_CORE_VERSION ?= 1.0.0.59
   TERARK_CORE_PKG_DIR ?= ../terark-core/pkg/terark-fsa_all-${BUILD_NAME}
   CXXFLAGS += -I${TERARK_CORE_PKG_DIR}/include -Iboost-include
   CXXFLAGS += -Iterark-zip-rocksdb/src
