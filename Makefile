@@ -141,8 +141,8 @@ terark-core.got:
 	tar -xvf terark-core.tar.gz -C terark-core
 	rm -rf terark-core.tar.gz
 	touch $@
-$(addprefix ${xdir}/,${TERARK_ZIP_SRC:.cc=.o}): terark-core.got
-$(addprefix shared-objects/${xdir}/,${TERARK_ZIP_SRC:.cc=.o}): terark-core.got
+$(addprefix ${xdir}/,${TERARK_ZIP_SRC:.cc=.o}): terark-core.got boost-include.got
+$(addprefix shared-objects/${xdir}/,${TERARK_ZIP_SRC:.cc=.o}): terark-core.got boost-include.got
 endif
 
 terark-zip-rocksdb.got:
