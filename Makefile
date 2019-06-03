@@ -129,10 +129,6 @@ ifdef BUNDLE_TERARK_ZIP_ROCKSDB
       terark-zip-rocksdb/${BUILD_ROOT}/git-version-terark_zip_rocksdb.cc
 
 #------------------------------------------------------------------------------
-.PHONY:\
-bundle_terark_zip_rocksdb_dep
-bundle_terark_zip_rocksdb_dep: terark-core.got boost-include.got terark-zip-rocksdb.got
-
 ifneq (${TERARK_CORE_PKG_DIR},../terark-core/pkg/terark-fsa_all-${BUILD_NAME})
 terark-core.got:
 	wget -O terark-core.tar.gz http://d.scm.byted.org/api/download/ceph:toutiao.terark.terark_core_${TERARK_CORE_VERSION}.tar.gz
