@@ -128,8 +128,11 @@ ifdef BUNDLE_TERARK_ZIP_ROCKSDB
       terark-zip-rocksdb/src/table/terark_zip_table_reader.cc   \
       terark-zip-rocksdb/${BUILD_ROOT}/git-version-terark_zip_rocksdb.cc
 
+  TERARK_ZIP_OBJ := $(addprefix ${xdir}/,${TERARK_ZIP_SRC:.cc=.o}) \
+     $(addprefix shared-objects/${xdir}/,${TERARK_ZIP_SRC:.cc=.o})
+
 #------------------------------------------------------------------------------
-ifneq (${TERARK_CORE_PKG_DIR},../terark-core/pkg/terark-fsa_all-${BUILD_NAME})
+ifeq (${TERARK_CORE_PKG_DIR},terark-core)
 terark-core.got:
 	wget -O terark-core.tar.gz http://d.scm.byted.org/api/download/ceph:toutiao.terark.terark_core_${TERARK_CORE_VERSION}.tar.gz
 	rm -rf terark-core
@@ -137,9 +140,9 @@ terark-core.got:
 	tar -xvf terark-core.tar.gz -C terark-core
 	rm -rf terark-core.tar.gz
 	touch $@
-$(addprefix ${xdir}/,${TERARK_ZIP_SRC:.cc=.o}): terark-core.got boost-include.got
-$(addprefix shared-objects/${xdir}/,${TERARK_ZIP_SRC:.cc=.o}): terark-core.got boost-include.got
+${TERARK_ZIP_OBJ}: terark-core.got
 endif
+${TERARK_ZIP_OBJ}: boost-include.got
 
 terark-zip-rocksdb.got:
 	rm -rf terark-zip-rocksdb
