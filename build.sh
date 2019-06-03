@@ -6,6 +6,7 @@ if [ `uname` == Darwin ]; then
 else
 	cpuNum=`nproc`
 fi
+WITH_BMI2=1
 
 # clone terark-zip-rocksdb: terark-rocksdb depends on some header files from zip-rocksdb
 
@@ -14,12 +15,14 @@ make libzstd.a libz.a libsnappy.a liblz4.a -j $cpuNum
 make EXTRA_CXXFLAGS="-DSNAPPY=1 -DZLIB=1 -DLZ4=1 -DZSTD=1 -Isnappy-1.1.4 -Ilz4-1.8.0/lib -Izstd-1.3.3/lib/include" \
      EXTRA_LDFLAGS="-lsnappy -lz -llz4 -lzstd -L." \
      BUNDLE_TERARK_ZIP_ROCKSDB=1 LINK_TERARK=static TERARK_CORE_PKG_DIR=terark-core \
+     BMI2=$WITH_BMI2 \
      DISABLE_WARNING_AS_ERROR=1 \
      DEBUG_LEVEL=0 shared_lib -j $cpuNum
 
 make EXTRA_CXXFLAGS="-DSNAPPY=1 -DZLIB=1 -DLZ4=1 -DZSTD=1 -Isnappy-1.1.4 -Ilz4-1.8.0/lib -Izstd-1.3.3/lib/include" \
      EXTRA_LDFLAGS="-lsnappy -lz -llz4 -lzstd -L." \
      BUNDLE_TERARK_ZIP_ROCKSDB=1 LINK_TERARK=static TERARK_CORE_PKG_DIR=terark-core \
+     BMI2=$WITH_BMI2 \
      DISABLE_WARNING_AS_ERROR=1 \
      DEBUG_LEVEL=2 shared_lib -j $cpuNum
 
@@ -44,7 +47,6 @@ cp -r monitoring   $pkgdir/include
 rm -f `find $pkgdir -name '*.cc' -o -name '*.d' -o -name '*.o'`
 
 # detect output dir name
-WITH_BMI2=0
 SYSTEM=`uname -m -s | sed 's:[ /]:-:g'`
 tmpfile=`mktemp compiler-XXXXXX`
 COMPILER=`gcc terark-tools/detect-compiler.cpp -o $tmpfile.exe && ./$tmpfile.exe && rm -f $tmpfile*`
