@@ -7,6 +7,7 @@ if [ `uname` = Linux ]; then
     tar -xvf terark_core.tar.gz -C terark-core
     rm -rf terark_core.tar.gz
 fi
-
+rm -rf terark-zip-rocksdb
 git clone --depth=1 git@code.byted.org:storage/terark-zip-rocksdb.git
+rm -rf boost-include
 git clone --depth=1 git@code.byted.org:storage/boost-include.git
