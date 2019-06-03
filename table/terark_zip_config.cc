@@ -270,7 +270,7 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo) {
   MyGetDouble(tzo, indexCacheRatio         , 0.00 );
 
   MyGetInt(tzo, minDictZipValueSize, 15);
-  MyGetInt(tzo, minPreadLen, -1);
+  MyGetInt(tzo, minPreadLen, 0);
 
   MyGetXiB(tzo, softZipWorkingMemLimit);
   MyGetXiB(tzo, hardZipWorkingMemLimit);
