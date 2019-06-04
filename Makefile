@@ -159,8 +159,18 @@ terark-zip-rocksdb/${BUILD_ROOT}/git-version-terark_zip_rocksdb.cc: terark-zip-r
 	make -C terark-zip-rocksdb  ${BUILD_ROOT}/git-version-terark_zip_rocksdb.cpp SKIP_DEP_GEN=1
 	mv ${@:.cc=.cpp} $@
 
-  SRC_NEEDS_TERARK := $(wildcard db/*.cc) $(wildcard tools/*.cc) ${TERARK_ZIP_SRC}
-${SRC_NEEDS_TERARK}: terark-zip-rocksdb.got
+  SRC_NEEDS_TERARK_ZIP := ${TERARK_ZIP_SRC}               \
+                          db/compacted_db_impl.cc         \
+                          db/db_impl.cc                   \
+                          db/db_impl_compaction_flush.cc  \
+                          db/db_impl_debug.cc             \
+                          db/db_impl_experimental.cc      \
+                          db/db_impl_files.cc             \
+                          db/db_impl_open.cc              \
+                          db/db_impl_readonly.cc          \
+                          db/db_impl_write.cc             \
+                          tools/sst_dump_tool.cc
+${SRC_NEEDS_TERARK_ZIP} : terark-zip-rocksdb.got
 #------------------------------------------------------------------------------
 
 # just use terark-core libs, set TERARK_ZIP_PKG_DIR as core
