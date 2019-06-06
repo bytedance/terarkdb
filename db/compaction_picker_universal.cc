@@ -1521,10 +1521,7 @@ Compaction* UniversalCompactionPicker::PickCompositeCompaction(
     if (is_perfect(map_element)) {
       continue;
     }
-    size_t sum = 0, max = 0;
     for (auto& l : map_element.link_) {
-      sum += l.size;
-      max = std::max<size_t>(max, l.size);
       auto find = file_used.find(l.file_number);
       if (find == file_used.end()) {
         FileUseInfo info = {
@@ -1535,35 +1532,6 @@ Compaction* UniversalCompactionPicker::PickCompositeCompaction(
         find->second.used += l.size;
       }
     }
-    if (map_element.link_.size() > 2 && (sum - max) * 2 < max) {
-      if (!has_start) {
-        has_start = true;
-        assign_user_key(range.start, map_element.smallest_key_);
-      }
-      assign_user_key(range.limit, map_element.largest_key_);
-    } else {
-      if (has_start) {
-        has_start = false;
-        if (uc->Compare(ExtractUserKey(map_element.smallest_key_),
-                        range.limit) != 0) {
-          assign_user_key(range.limit, map_element.smallest_key_);
-          range.include_start = true;
-          range.include_limit = false;
-          input_range.emplace_back(std::move(range));
-          if (input_range.size() >= ioptions_.max_subcompactions) {
-            break;
-          }
-        }
-      }
-    }
-  }
-  if (has_start) {
-    set_include_limit();
-    input_range.emplace_back(std::move(range));
-  }
-  if (!input_range.empty()) {
-    compaction_purpose = kLinkSst;
-    return new_compaction();
   }
   std::vector<InternalKey> internal_key_storage;
   internal_key_storage.resize(counter *= 2);
