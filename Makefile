@@ -137,7 +137,7 @@ terark-core.got:
 	rm -rf terark-core
 ifdef TERARK_CORE_BRANCH
 	git clone git@code.byted.org:storage/terark-core.git
-	git submodule update --init
+	cd terark-core && git submodule update --init
 	cd terark-core && git checkout ${TERARK_CORE_BRANCH}
 	+$(MAKE) -C terark-core pkg PKG_WITH_DBG=1 PKG_WITH_STATIC=1 WITH_BMI2=${BMI2}
 	mv terark-core/pkg/${BUILD_NAME}/* terark-core
