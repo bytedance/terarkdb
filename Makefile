@@ -140,7 +140,7 @@ ifdef TERARK_CORE_BRANCH
 	cd terark-core && git submodule update --init
 	cd terark-core && git checkout ${TERARK_CORE_BRANCH}
 	+$(MAKE) -C terark-core pkg PKG_WITH_DBG=1 PKG_WITH_STATIC=1 WITH_BMI2=${BMI2}
-	mv terark-core/pkg/${BUILD_NAME}/* terark-core
+	mv terark-core/pkg/terark-fsa_all-${BUILD_NAME}/* terark-core
 else
 	wget -O terark-core.tar.gz http://d.scm.byted.org/api/download/ceph:toutiao.terark.terark_core_${TERARK_CORE_VERSION}.tar.gz
 	mkdir terark-core
