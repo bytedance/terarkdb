@@ -134,11 +134,17 @@ ifdef BUNDLE_TERARK_ZIP_ROCKSDB
 #------------------------------------------------------------------------------
 ifeq (${TERARK_CORE_PKG_DIR},terark-core)
 terark-core.got:
-	wget -O terark-core.tar.gz http://d.scm.byted.org/api/download/ceph:toutiao.terark.terark_core_${TERARK_CORE_VERSION}.tar.gz
 	rm -rf terark-core
+ifdef TERARK_CORE_BRANCH
+	git clone git@code.byted.org:storage/terark-core.git
+	cd terark-core && git checkout ${TERARK_CORE_BRANCH}
+	+$(MAKE) -C terark-core pkg PKG_WITH_DBG=1 PKG_WITH_STATIC=1 WITH_BMI2=${BMI2}
+else
+	wget -O terark-core.tar.gz http://d.scm.byted.org/api/download/ceph:toutiao.terark.terark_core_${TERARK_CORE_VERSION}.tar.gz
 	mkdir terark-core
 	tar -xvf terark-core.tar.gz -C terark-core
 	rm -rf terark-core.tar.gz
+endif
 	touch $@
 ${TERARK_ZIP_OBJ}: terark-core.got
 endif
@@ -147,7 +153,10 @@ ${TERARK_ZIP_OBJ}: CXXFLAGS += -Wno-unused-parameter
 
 terark-zip-rocksdb.got:
 	rm -rf terark-zip-rocksdb
-	git clone --depth=1 git@code.byted.org:storage/terark-zip-rocksdb.git
+	git clone git@code.byted.org:storage/terark-zip-rocksdb.git
+ifdef TERARK_ZIP_ROCKSDB_BRANCH
+	cd terark-zip-rocksdb && git checkout ${TERARK_ZIP_ROCKSDB_BRANCH}
+endif
 	touch $@
 
 boost-include.got:
