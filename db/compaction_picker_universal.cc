@@ -364,9 +364,10 @@ Compaction* UniversalCompactionPicker::PickCompaction(
           }
         }
         if (level_read_amp_count < reduce_sorted_run_target) {
-          reduce_sorted_run_target = std::max<size_t>(
-              mutable_cf_options.level0_file_num_compaction_trigger,
-              sorted_runs.size() - 1);
+          reduce_sorted_run_target = std::max({
+              (size_t)mutable_cf_options.level0_file_num_compaction_trigger,
+              (size_t)ioptions_.num_levels,
+              sorted_runs.size()}) - 1;
         }
       }
       if (sorted_runs.size() > reduce_sorted_run_target &&
