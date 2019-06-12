@@ -10,15 +10,13 @@ USE_RTTI = 1
 BASH_EXISTS := $(shell which bash)
 SHELL := $(shell which bash)
 
-# set default properly
-EXTRA_CXXFLAGS ?= -DSNAPPY=1 -DZLIB=1 -DLZ4=1 -DZSTD=1 -Isnappy-1.1.4 -Ilz4-1.8.0/lib -Izstd-1.3.3/lib/include
-EXTRA_LDFLAGS  ?= -L. -lsnappy -lz -llz4 -lzstd
-# -----
+COMPRESSION_CXXFLAGS ?= -DSNAPPY=1 -DZLIB=1 -DLZ4=1 -DZSTD=1 -Isnappy-1.1.4 -Ilz4-1.8.0/lib -Izstd-1.3.3/lib/include
+COMPRESSION_LDFLAGS  ?= -L. -lsnappy -lz -llz4 -lzstd
 
 CLEAN_FILES = # deliberately empty, so we can append below.
 CFLAGS += ${EXTRA_CFLAGS}
-CXXFLAGS += ${EXTRA_CXXFLAGS}
-LDFLAGS += $(EXTRA_LDFLAGS)
+CXXFLAGS += ${EXTRA_CXXFLAGS} ${COMPRESSION_CXXFLAGS}
+LDFLAGS += $(EXTRA_LDFLAGS) ${COMPRESSION_LDFLAGS}
 MACHINE ?= $(shell uname -m)
 ARFLAGS = ${EXTRA_ARFLAGS} rs
 STRIPFLAGS = -S -x
