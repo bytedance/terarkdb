@@ -848,7 +848,7 @@ all: $(LIBRARY) $(BENCHMARKS) tools tools_lib test_libs $(TESTS)
 all_but_some_tests: $(LIBRARY) $(BENCHMARKS) tools tools_lib test_libs $(SUBSET)
 
 # to force compile libzstd.a libz.a libsnappy.a liblz4.a
-$(LIBRARY) $(SHARED) : libzstd.a libz.a libsnappy.a liblz4.a
+util/compression.h: libzstd.a libz.a libsnappy.a liblz4.a
 
 static_lib: $(LIBRARY)
 
