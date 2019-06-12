@@ -10,6 +10,11 @@ USE_RTTI = 1
 BASH_EXISTS := $(shell which bash)
 SHELL := $(shell which bash)
 
+# set default properly
+EXTRA_CXXFLAGS ?= -DSNAPPY=1 -DZLIB=1 -DLZ4=1 -DZSTD=1 -Isnappy-1.1.4 -Ilz4-1.8.0/lib -Izstd-1.3.3/lib/include
+EXTRA_LDFLAGS  ?= -L. -lsnappy -lz -llz4 -lzstd
+# -----
+
 CLEAN_FILES = # deliberately empty, so we can append below.
 CFLAGS += ${EXTRA_CFLAGS}
 CXXFLAGS += ${EXTRA_CXXFLAGS}
@@ -841,6 +846,9 @@ endif  # PLATFORM_SHARED_EXT
 all: $(LIBRARY) $(BENCHMARKS) tools tools_lib test_libs $(TESTS)
 
 all_but_some_tests: $(LIBRARY) $(BENCHMARKS) tools tools_lib test_libs $(SUBSET)
+
+# to force compile libzstd.a libz.a libsnappy.a liblz4.a
+$(LIBRARY) $(SHARED) : libzstd.a libz.a libsnappy.a liblz4.a
 
 static_lib: $(LIBRARY)
 
