@@ -846,7 +846,10 @@ all: $(LIBRARY) $(BENCHMARKS) tools tools_lib test_libs $(TESTS)
 all_but_some_tests: $(LIBRARY) $(BENCHMARKS) tools tools_lib test_libs $(SUBSET)
 
 # to force compile libzstd.a libz.a libsnappy.a liblz4.a
-util/compression.h: libzstd.a libz.a libsnappy.a liblz4.a
+util/compression.h: snappy-1.1.4/snappy.h \
+					lz4-1.8.0/lib/lz4.h \
+					zstd-1.3.3/lib/include/zstd.h \
+					zlib-1.2.11/zlib.h
 
 static_lib: $(LIBRARY)
 
@@ -1854,7 +1857,7 @@ ifeq ($(PLATFORM), OS_OPENBSD)
         ROCKSDB_JAR = rocksdbjni-$(ROCKSDB_MAJOR).$(ROCKSDB_MINOR).$(ROCKSDB_PATCH)-openbsd$(ARCH).jar
 endif
 
-libz.a:
+libz.a zlib-1.2.11/zlib.h:
 	-rm -rf zlib-$(ZLIB_VER)
 	cp -a downloads/zlib-$(ZLIB_VER).tar.gz .
 	#curl -O -L ${ZLIB_DOWNLOAD_BASE}/zlib-$(ZLIB_VER).tar.gz
@@ -1881,7 +1884,7 @@ libbz2.a:
 	cd bzip2-$(BZIP2_VER) && $(MAKE) CFLAGS='-fPIC -O2 -g -D_FILE_OFFSET_BITS=64 ${EXTRA_CFLAGS}' AR='ar ${EXTRA_ARFLAGS}'
 	cp bzip2-$(BZIP2_VER)/libbz2.a .
 
-libsnappy.a:
+libsnappy.a snappy-1.1.4/snappy.h:
 	-rm -rf snappy-$(SNAPPY_VER)
 	cp -a downloads/snappy-$(SNAPPY_VER).tar.gz .
 	#wget ${SNAPPY_DOWNLOAD_BASE}/$(SNAPPY_VER)/snappy-$(SNAPPY_VER).tar.gz
@@ -1896,7 +1899,7 @@ libsnappy.a:
 	cd snappy-$(SNAPPY_VER) && $(MAKE) ${SNAPPY_MAKE_TARGET}
 	cp snappy-$(SNAPPY_VER)/.libs/libsnappy.a .
 
-liblz4.a:
+liblz4.a lz4-1.8.0/lib/lz4.h:
 	-rm -rf lz4-$(LZ4_VER)
 	cp -a downloads/lz4-$(LZ4_VER).tar.gz .
 	#wget ${LZ4_DOWNLOAD_BASE}/v$(LZ4_VER).tar.gz
@@ -1911,7 +1914,7 @@ liblz4.a:
 	cd lz4-$(LZ4_VER)/lib && $(MAKE) CFLAGS='-fPIC -O2 ${EXTRA_CFLAGS}' all
 	cp lz4-$(LZ4_VER)/lib/liblz4.a .
 
-libzstd.a:
+libzstd.a zstd-1.3.3/lib/include/zstd.h:
 	-rm -rf zstd-$(ZSTD_VER)
 	cp -a downloads/zstd-$(ZSTD_VER).tar.gz .
 	#wget ${ZSTD_DOWNLOAD_BASE}/v$(ZSTD_VER).tar.gz
