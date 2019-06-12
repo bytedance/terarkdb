@@ -845,12 +845,6 @@ all: $(LIBRARY) $(BENCHMARKS) tools tools_lib test_libs $(TESTS)
 
 all_but_some_tests: $(LIBRARY) $(BENCHMARKS) tools tools_lib test_libs $(SUBSET)
 
-# to force compile libzstd.a libz.a libsnappy.a liblz4.a
-util/compression.h: snappy-1.1.4/snappy.h \
-					lz4-1.8.0/lib/lz4.h \
-					zstd-1.3.3/lib/include/zstd.h \
-					zlib-1.2.11/zlib.h
-
 static_lib: $(LIBRARY)
 
 shared_lib: $(SHARED)
@@ -2154,6 +2148,14 @@ depend: $(DEPFILES) $(DEPFILES_C) $(DEPFILES_ASM)
 else
 depend: $(DEPFILES)
 endif
+
+COMPRESSION_HEADERS :=          \
+  snappy-1.1.4/snappy.h         \
+  lz4-1.8.0/lib/lz4.h           \
+  zstd-1.3.3/lib/include/zstd.h \
+  zlib-1.2.11/zlib.h
+
+${DEPFILES} : ${COMPRESSION_HEADERS}
 
 # if the make goal is either "clean" or "format", we shouldn't
 # try to import the *.d files.
