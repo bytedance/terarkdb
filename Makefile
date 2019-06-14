@@ -10,7 +10,7 @@ USE_RTTI = 1
 BASH_EXISTS := $(shell which bash)
 SHELL := $(shell which bash)
 
-COMPRESSION_CXXFLAGS ?= -DSNAPPY=1 -DZLIB=1 -DLZ4=1 -DLZ4_DISABLE_DEPRECATE_WARNINGS -DZSTD=1 -Isnappy-1.1.4 -Ilz4-1.8.0/lib -Izstd-1.3.3/lib/include
+COMPRESSION_CXXFLAGS ?= -DSNAPPY=1 -DZLIB=1 -DLZ4=1 -DLZ4_DISABLE_DEPRECATE_WARNINGS -DZSTD=1 -Isnappy-1.1.4 -Ilz4-1.8.0/lib -Izstd-1.3.3/lib/include -Izlib-1.2.11
 COMPRESSION_LDFLAGS  ?= -L. -lsnappy -lz -llz4 -lzstd
 
 CLEAN_FILES = # deliberately empty, so we can append below.
