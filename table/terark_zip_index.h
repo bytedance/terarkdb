@@ -29,6 +29,7 @@ using terark::fstrvec;
 using terark::Uint64Histogram;
 using terark::ZReorderMap;
 using terark::TerarkContext;
+using terark::ContextBuffer;
 using std::unique_ptr;
 
 struct TerarkZipTableOptions;
@@ -150,7 +151,7 @@ public:
   virtual valvec<fstring> GetMetaData() const = 0;
   virtual void DetachMetaData(const valvec<fstring>&) = 0;
   virtual const char* Info(char* buffer, size_t size) const = 0;
-  virtual Iterator* NewIterator(void* ptr) const = 0;
+  virtual Iterator* NewIterator(valvec<byte_t>* buffer = nullptr, TerarkContext* ctx = nullptr) const = 0;
   virtual size_t IteratorSize() const = 0;
   virtual bool NeedsReorder() const = 0;
   virtual void GetOrderMap(terark::UintVecMin0& newToOld) const = 0;

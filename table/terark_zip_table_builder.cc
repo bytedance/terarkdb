@@ -193,10 +193,6 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(const TerarkZipTableFactory* table_
 
     isReverseBytewiseOrder_ =
       fstring(properties_.comparator_name).startsWith("rev:");
-#if defined(TERARK_SUPPORT_UINT64_COMPARATOR) && BOOST_ENDIAN_LITTLE_BYTE
-    isUint64Comparator_ =
-      fstring(properties_.comparator_name) == "rocksdb.Uint64Comparator";
-#endif
 
     if (tbo.int_tbl_prop_collector_factories) {
       const auto& factories = *tbo.int_tbl_prop_collector_factories;
@@ -394,14 +390,6 @@ try {
     assert(key.size() >= 8);
     fstring userKey(key.data(), key.size() - 8);
     assert(userKey.size() >= prefixLen_);
-#if defined(TERARK_SUPPORT_UINT64_COMPARATOR) && BOOST_ENDIAN_LITTLE_BYTE
-    uint64_t u64_key;
-    if (isUint64Comparator_) {
-      assert(userKey.size() == 8);
-      u64_key = byte_swap(*reinterpret_cast<const uint64_t*>(userKey.data()));
-      userKey = fstring(reinterpret_cast<const char*>(&u64_key), 8);
-    }
-#endif
     auto ShouldStartBuild = [&] {
       size_t indexSize = UintVecMin0::compute_mem_size_by_max_val(r22_->stat.sumKeyLen, r22_->stat.keyCount);
       size_t indexBuildMemSize = r22_->stat.sumKeyLen + indexSize;

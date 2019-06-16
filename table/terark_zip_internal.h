@@ -26,7 +26,6 @@
 #include <terark/util/profiling.hpp>
 #include <terark/zbs/lru_page_cache.hpp>
 
-//#define TERARK_SUPPORT_UINT64_COMPARATOR
 //#define DEBUG_TWO_PASS_ITER
 
 #if ROCKSDB_MAJOR * 1000 + ROCKSDB_MINOR >= 5008
