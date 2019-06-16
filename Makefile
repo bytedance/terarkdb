@@ -107,12 +107,21 @@ else
   DBG_OR_RLS=d
 endif
 
-BMI2 ?= 0
+BMI2 ?= $(shell bash cpu_has_bmi2.sh)
 BUILD_NAME := $(shell bash get_terark_build_name.sh ${CXX} ${BMI2})
 BUILD_ROOT := build/${BUILD_NAME}
 xdir:=${BUILD_ROOT}/dbg-${DEBUG_LEVEL}
 
 ifdef BUNDLE_TERARK_ZIP_ROCKSDB
+  ifdef TERARK_CORE_BRANCH
+    ifdef TERARK_CORE_PKG_DIR
+      ifneq (${TERARK_CORE_PKG_DIR},terark-core)
+        $(error when both TERARK_CORE_BRANCH and TERARK_CORE_PKG_DIR are defined, TERARK_CORE_PKG_DIR must be terark-core)
+      endif
+    else
+      TERARK_CORE_PKG_DIR := terark-core
+    endif
+  endif
   TERARK_CORE_VERSION ?= 1.0.0.60
   TERARK_CORE_PKG_DIR ?= ../terark-core/pkg/terark-fsa_all-${BUILD_NAME}
   CXXFLAGS += -I${TERARK_CORE_PKG_DIR}/include -Iboost-include
@@ -219,6 +228,11 @@ ifeq ($(LINK_TERARK),static)
     ${TERARK_ZIP_PKG_DIR}/lib_static/libterark-zbs-${DBG_OR_RLS}.a \
     ${TERARK_ZIP_PKG_DIR}/lib_static/libterark-fsa-${DBG_OR_RLS}.a \
     ${TERARK_ZIP_PKG_DIR}/lib_static/libterark-core-${DBG_OR_RLS}.a
+  ifdef BUNDLE_TERARK_ZIP_ROCKSDB
+    ifneq ($(shell uname),Darwin)
+      BUNDLE_ALL_TERARK_STATIC = 1
+    endif
+  endif
 endif
 ###############################################################################
 
@@ -1213,6 +1227,20 @@ package:
 $(LIBRARY): $(LIBOBJECTS)
 	$(AM_V_AR)rm -f $@
 	$(AM_V_at)$(AR) $(ARFLAGS) $@ $(LIBOBJECTS)
+ifeq (${BUNDLE_ALL_TERARK_STATIC},1)
+	mv $@ orgin-$@
+	ln -s ${TERARK_ZIP_PKG_DIR}/lib_static/libterark-{zbs,fsa,core}-${DBG_OR_RLS}.a .
+	(\
+	echo create $@; \
+	echo addlib libterark-zbs-${DBG_OR_RLS}.a; \
+	echo addlib libterark-fsa-${DBG_OR_RLS}.a; \
+	echo addlib libterark-core-${DBG_OR_RLS}.a; \
+	echo addlib orgin-$@; \
+	echo save; \
+	echo end; \
+	) | ar -M
+	rm -f libterark-{zbs,fsa,core}-${DBG_OR_RLS}.a
+endif
 
 $(TOOLS_LIBRARY): $(BENCH_LIB_SOURCES:.cc=.o) $(TOOL_LIB_SOURCES:.cc=.o) $(LIB_SOURCES:.cc=.o) $(TESTUTIL) $(ANALYZER_LIB_SOURCES:.cc=.o)
 	$(AM_V_AR)rm -f $@
