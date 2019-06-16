@@ -101,9 +101,20 @@ Status GetFromCompositeSst(const FileMetaData& file_meta,
                                                 uint64_t file_number,
                                                 Status& status)) {
   Status s;
+  std::vector<char> key_storage;
+  char key_buffer[200];
+  auto dup_key = [&](Slice ikey) {
+    if (ikey.size() <= sizeof key_buffer) {
+      memcpy(key_buffer, ikey.data(), ikey.size());
+      return Slice(key_buffer, ikey.size());
+    } else {
+      key_storage.assign(ikey.data(), ikey.data() + ikey.size());
+      return Slice(key_storage.data(), ikey.size());
+    }
+  };
   switch (file_meta.sst_purpose) {
     case kLinkSst: {
-      InternalKey smallest_key;
+      Slice smallest_key;
       auto get_from_link = [&](const Slice& largest_key,
                                const Slice& link_value) {
         // Manual inline LinkSstElement::Decode
@@ -121,10 +132,10 @@ Status GetFromCompositeSst(const FileMetaData& file_meta,
             find_k = file_meta.smallest.Encode();
           }
         } else {
-          assert(icomp.user_comparator()->Compare(smallest_key.user_key(),
+          assert(icomp.user_comparator()->Compare(ExtractUserKey(smallest_key),
                                                   ExtractUserKey(k)) == 0);
           // shrink to smallest_key
-          find_k = smallest_key.Encode();
+          find_k = smallest_key;
         }
 
         if (!GetFixed64(&link_input, &file_number)) {
@@ -144,9 +155,9 @@ Status GetFromCompositeSst(const FileMetaData& file_meta,
         }
         // trans largest_key to next smallest_key
         assert(ExtractInternalKeyFooter(largest_key) > 0);
-        smallest_key.DecodeFrom(largest_key);
+        smallest_key = dup_key(largest_key);
         EncodeFixed64(
-            &smallest_key.rep()->front() + smallest_key.user_key().size(),
+            const_cast<char*>(smallest_key.data() + smallest_key.size() - 8),
             ExtractInternalKeyFooter(largest_key) - 1);
         return true;
       };
@@ -163,7 +174,6 @@ Status GetFromCompositeSst(const FileMetaData& file_meta,
         uint64_t link_count;
         uint64_t flags;
         Slice find_k = k;
-        InternalKey find_storage;
 
         if (!GetLengthPrefixedSlice(&map_input, &smallest_key) ||
             !GetVarint64(&map_input, &link_count) ||
@@ -196,11 +206,10 @@ Status GetFromCompositeSst(const FileMetaData& file_meta,
               return false;
             }
             // make find_k a bit greater than k
-            find_storage.DecodeFrom(smallest_key);
+            find_k = dup_key(smallest_key);
             EncodeFixed64(
-                &find_storage.rep()->front() + find_storage.user_key().size(),
+                const_cast<char*>(find_k.data() + find_k.size() - 8),
                 seq_type - 1);
-            find_k = find_storage.Encode();
           }
         }
 

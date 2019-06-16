@@ -407,7 +407,7 @@ Compaction* UniversalCompactionPicker::PickCompaction(
         // Get the total number of sorted runs that are not being compacted
         int num_sr_not_compacted = 0;
         for (size_t i = 0; i < sorted_runs.size(); i++) {
-          if (sorted_runs[i].being_compacted == false) {
+          if (!sorted_runs[i].being_compacted) {
             num_sr_not_compacted++;
           }
         }
@@ -734,6 +734,7 @@ double GenSortedRunGroup(const std::vector<double>& sr, size_t group,
   size_t sr_size = sr.size();
   size_t g = group;
   double q = ret_q;
+  // Skip oversized element of ending
   for (size_t i = g - 1; q > 1 && i > 0; --i) {
     size_t e = g - i;
     double new_q = Q(sr.begin(), sr.begin() + sr_size - e, g - e);
@@ -1818,7 +1819,7 @@ Compaction* UniversalCompactionPicker::PickRangeCompaction(
             has_start = false;
             break;
           }
-          subcompact_size += map_element.EstimateSize();
+          subcompact_size = map_element.EstimateSize();
           assign_user_key(range.start, map_element.smallest_key_);
           assign_user_key(range.limit, map_element.largest_key_);
         }
