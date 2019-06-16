@@ -130,9 +130,6 @@ struct TerarkZipSubReader {
   enum {
     FlagNone = 0,
     FlagSkipFilter = 1,
-#if defined(TERARK_SUPPORT_UINT64_COMPARATOR) && BOOST_ENDIAN_LITTLE_BYTE
-    FlagUint64Comparator = 2,
-#endif
   };
 
   void InitUsePread(int minPreadLen);
@@ -159,7 +156,8 @@ public:
               Arena* a, bool skip_filters, bool for_compaction) override;
 
   template<bool reverse, bool ZipOffset>
-  InternalIterator* NewIteratorImp(const ReadOptions&, Arena* a);
+  InternalIterator* NewIteratorImpl(const ReadOptions&, Arena* a, ContextBuffer* buffer,
+                                    TerarkContext* ctx);
 
   void Prepare(const Slice& target) override {}
 
@@ -170,8 +168,6 @@ public:
                  bool(* callback_func)(void* arg, const Slice& ikey,
                                        const Slice& value)) override;
 
-  uint64_t ApproximateOffsetOf_old(const Slice& key);
-  uint64_t ApproximateOffsetOf_new(const Slice& key);
   uint64_t ApproximateOffsetOf(const Slice& key) override;
   void SetupForCompaction() override {}
 
@@ -206,9 +202,6 @@ private:
   SequenceNumber global_seqno_;
   const TerarkZipTableOptions& tzto_;
   bool isReverseBytewiseOrder_;
-#if defined(TERARK_SUPPORT_UINT64_COMPARATOR) && BOOST_ENDIAN_LITTLE_BYTE
-  bool isUint64Comparator_;
-#endif
   Status LoadIndex(Slice mem);
 };
 
@@ -221,7 +214,8 @@ public:
               Arena* a, bool skip_filters, bool for_compaction) override;
 
   template<bool reverse, bool ZipOffset>
-  InternalIterator* NewIteratorImp(const ReadOptions&, Arena* a);
+  InternalIterator* NewIteratorImpl(const ReadOptions&, Arena* a, ContextBuffer* buffer,
+                                    TerarkContext* ctx);
 
   using TerarkZipTableReaderBase::NewRangeTombstoneIterator;
 
@@ -234,8 +228,6 @@ public:
                  bool(* callback_func)(void* arg, const Slice& ikey,
                                        const Slice& value)) override;
 
-  uint64_t ApproximateOffsetOf_old(const Slice& key);
-  uint64_t ApproximateOffsetOf_new(const Slice& key);
   uint64_t ApproximateOffsetOf(const Slice& key) override;
   void SetupForCompaction() override {}
 
@@ -282,6 +274,7 @@ public:
     const TerarkZipSubReader* GetSubReader(size_t i) const;
     const TerarkZipSubReader* LowerBoundSubReader(fstring key) const;
     const TerarkZipSubReader* LowerBoundSubReaderReverse(fstring key) const;
+    size_t IteratorSize() const { return iteratorSize_; }
     bool HasAnyZipOffset() const { return hasAnyZipOffset_; }
   };
 

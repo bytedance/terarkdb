@@ -190,23 +190,23 @@ struct SuffixBase {
 template<class T>
 struct ComponentIteratorStorageImpl {
   size_t IteratorStorageSize() const { return sizeof(T); }
-  void IteratorStorageConstruct(void* ptr) const { ::new(ptr) T(); }
-  void IteratorStorageDestruct(void* ptr) const { static_cast<T*>(ptr)->~T(); }
+  void IteratorStorageConstruct(TerarkContext* ctx, void* ptr) const { ::new(ptr) T(); }
+  void IteratorStorageDestruct(TerarkContext* ctx, void* ptr) const { static_cast<T*>(ptr)->~T(); }
 };
 
 template<>
 struct ComponentIteratorStorageImpl<void> {
   size_t IteratorStorageSize() const { return 0; }
-  void IteratorStorageConstruct(void* ptr) const {}
-  void IteratorStorageDestruct(void* ptr) const {}
+  void IteratorStorageConstruct(TerarkContext* ctx, void* ptr) const {}
+  void IteratorStorageDestruct(TerarkContext* ctx, void* ptr) const {}
 };
 
 struct VirtualPrefixBase {
   virtual ~VirtualPrefixBase() {}
 
   virtual size_t IteratorStorageSize() const = 0;
-  virtual void IteratorStorageConstruct(void* ptr) const = 0;
-  virtual void IteratorStorageDestruct(void* ptr) const = 0;
+  virtual void IteratorStorageConstruct(TerarkContext* ctx, void* ptr) const = 0;
+  virtual void IteratorStorageDestruct(TerarkContext* ctx, void* ptr) const = 0;
 
   virtual size_t KeyCount() const = 0;
   virtual size_t TotalKeySize() const = 0;
@@ -239,11 +239,11 @@ struct VirtualPrefixWrapper : public VirtualPrefixBase, public Prefix {
   size_t IteratorStorageSize() const final {
     return Prefix::IteratorStorageSize();
   }
-  void IteratorStorageConstruct(void* ptr) const final {
-    Prefix::IteratorStorageConstruct(ptr);
+  void IteratorStorageConstruct(TerarkContext* ctx, void* ptr) const final {
+    Prefix::IteratorStorageConstruct(ctx, ptr);
   }
-  void IteratorStorageDestruct(void* ptr) const final {
-    Prefix::IteratorStorageDestruct(ptr);
+  void IteratorStorageDestruct(TerarkContext* ctx, void* ptr) const final {
+    Prefix::IteratorStorageDestruct(ctx, ptr);
   }
 
   size_t KeyCount() const final {
@@ -330,11 +330,11 @@ struct VirtualPrefix : public PrefixBase {
   size_t IteratorStorageSize() const {
     return prefix->IteratorStorageSize();
   }
-  void IteratorStorageConstruct(void* ptr) const {
-    prefix->IteratorStorageConstruct(ptr);
+  void IteratorStorageConstruct(TerarkContext* ctx, void* ptr) const {
+    prefix->IteratorStorageConstruct(ctx, ptr);
   }
-  void IteratorStorageDestruct(void* ptr) const {
-    prefix->IteratorStorageDestruct(ptr);
+  void IteratorStorageDestruct(TerarkContext* ctx, void* ptr) const {
+    prefix->IteratorStorageDestruct(ctx, ptr);
   }
 
   size_t KeyCount() const {
@@ -400,8 +400,8 @@ struct VirtualSuffixBase {
   virtual ~VirtualSuffixBase() {}
 
   virtual size_t IteratorStorageSize() const = 0;
-  virtual void IteratorStorageConstruct(void* ptr) const = 0;
-  virtual void IteratorStorageDestruct(void* ptr) const = 0;
+  virtual void IteratorStorageConstruct(TerarkContext* ctx, void* ptr) const = 0;
+  virtual void IteratorStorageDestruct(TerarkContext* ctx, void* ptr) const = 0;
 
   virtual size_t TotalKeySize() const = 0;
   virtual LowerBoundResult
@@ -428,11 +428,11 @@ struct VirtualSuffixWrapper : public VirtualSuffixBase, public Suffix {
   size_t IteratorStorageSize() const final {
     return Suffix::IteratorStorageSize();
   }
-  void IteratorStorageConstruct(void* ptr) const final {
-    Suffix::IteratorStorageConstruct(ptr);
+  void IteratorStorageConstruct(TerarkContext* ctx, void* ptr) const final {
+    Suffix::IteratorStorageConstruct(ctx, ptr);
   }
-  void IteratorStorageDestruct(void* ptr) const final {
-    Suffix::IteratorStorageDestruct(ptr);
+  void IteratorStorageDestruct(TerarkContext* ctx, void* ptr) const final {
+    Suffix::IteratorStorageDestruct(ctx, ptr);
   }
 
   size_t TotalKeySize() const final {
@@ -499,11 +499,11 @@ struct VirtualSuffix : public SuffixBase {
   size_t IteratorStorageSize() const {
     return suffix->IteratorStorageSize();
   }
-  void IteratorStorageConstruct(void* ptr) const {
-    suffix->IteratorStorageConstruct(ptr);
+  void IteratorStorageConstruct(TerarkContext* ctx, void* ptr) const {
+    suffix->IteratorStorageConstruct(ctx, ptr);
   }
-  void IteratorStorageDestruct(void* ptr) const {
-    suffix->IteratorStorageDestruct(ptr);
+  void IteratorStorageDestruct(TerarkContext* ctx, void* ptr) const {
+    suffix->IteratorStorageDestruct(ctx, ptr);
   }
 
   size_t TotalKeySize() const {
@@ -572,26 +572,25 @@ struct IteratorStorage {
   }
 
   template<class Prefix, class Suffix>
-  IteratorStorage(const IndexParts<Prefix, Suffix>* index, void* iterator_storage, size_t iterator_storage_size)
+  IteratorStorage(const IndexParts<Prefix, Suffix>* index, TerarkContext* ctx, void* storage)
       : common_(index->common_), prefix_(index->prefix_), suffix_(index->suffix_) {
-    assert(iterator_storage_size >= GetIteratorStorageSize(index));
-    prefix_storage_ = iterator_storage;
-    suffix_storage_ = (uint8_t*)prefix_storage_ + align_up(index->prefix_.IteratorStorageSize(), 8);
+    prefix_storage_ = storage;
+    suffix_storage_ = (uint8_t*)storage + align_up(index->prefix_.IteratorStorageSize(), 8);
     if (index->prefix_.IteratorStorageSize() > 0) {
-      index->prefix_.IteratorStorageConstruct(prefix_storage_);
+      index->prefix_.IteratorStorageConstruct(ctx, prefix_storage_);
     }
     if (index->suffix_.IteratorStorageSize() > 0) {
-      index->suffix_.IteratorStorageConstruct(suffix_storage_);
+      index->suffix_.IteratorStorageConstruct(ctx, suffix_storage_);
     }
   }
 
   template<class Prefix, class Suffix>
-  void Destroy(const IndexParts<Prefix, Suffix>* index) {
+  void Destroy(const IndexParts<Prefix, Suffix>* index, TerarkContext* ctx) {
     if (index->prefix_.IteratorStorageSize() > 0) {
-      index->prefix_.IteratorStorageDestruct(prefix_storage_);
+      index->prefix_.IteratorStorageDestruct(ctx, prefix_storage_);
     }
     if (index->suffix_.IteratorStorageSize() > 0) {
-      index->suffix_.IteratorStorageDestruct(suffix_storage_);
+      index->suffix_.IteratorStorageDestruct(ctx, suffix_storage_);
     }
   }
 
@@ -759,8 +758,9 @@ public:
   using IteratorStorage::prefix_storage_;
   using IteratorStorage::suffix_storage_;
   const IndexParts<Prefix, Suffix>* index_;
-  byte_t* iterator_storage_ptr_;
-  valvec<byte_t> iterator_key_;
+  TerarkContext* ctx_;
+  valvec<byte_t> storage_;
+  valvec<byte_t> key_;
 
   fstring common() const {
     return common_;
@@ -786,38 +786,50 @@ public:
   }
 
 private:
-  std::pair<void*, size_t> AllocIteratorStorage_(const IndexParts<Prefix, Suffix>* index) {
-    size_t iterator_storage_size = index == nullptr ? 0 : IteratorStorage::GetIteratorStorageSize(index);
-    void* ptr = iterator_storage_size > 0 ? ::new byte_t[iterator_storage_size] : nullptr;
-    return {ptr, iterator_storage_size};
+  ContextBuffer AllocIteratorStorage_(const IndexParts<Prefix, Suffix>* index, TerarkContext* ctx, void* storage) {
+    size_t storage_size = IteratorStorage::GetIteratorStorageSize(index);
+    ContextBuffer buffer;
+    if (storage != nullptr) {
+      buffer.get().risk_set_data(reinterpret_cast<byte_t*>(storage));
+      buffer.get().risk_set_size(storage_size); // mark as user memory
+      buffer.get().risk_set_capacity(storage_size);
+      return buffer;
+    } else if (ctx == nullptr || storage_size == 0) {
+      return ContextBuffer(valvec<byte_t>(storage_size, valvec_reserve()), nullptr);
+    } else {
+      return ctx->alloc(storage_size);
+    }
   }
 
-  IndexIterator(const IndexParts<Prefix, Suffix>* index, bool user_mem, std::pair<void*, size_t> iterator_storage)
-      : IteratorStorage(index, iterator_storage.first, iterator_storage.second), index_(index),
-        iterator_storage_ptr_(nullptr) {
-    if (!user_mem) {
-      iterator_storage_ptr_ = (byte_t*)iterator_storage.first;
+  IndexIterator(const IndexParts<Prefix, Suffix>* index, TerarkContext* ctx, valvec<byte_t>& buffer)
+      : IteratorStorage(index, ctx, buffer.data()), index_(index), ctx_(ctx),
+        storage_(std::move(buffer)) {
+    if (ctx_ != nullptr) {
+      key_.swap(ctx_->alloc());
     }
   }
 
   bool UpdateKey() {
-    iterator_key_.assign(common_);
-    iterator_key_.append(prefix().IterGetKey(m_id, prefix_storage()));
-    iterator_key_.append(suffix().IterGetKey(m_id, suffix_storage()));
+    key_.assign(common_);
+    key_.append(prefix().IterGetKey(m_id, prefix_storage()));
+    key_.append(suffix().IterGetKey(m_id, suffix_storage()));
     return true;
   }
 
 public:
-  IndexIterator(const IndexParts<Prefix, Suffix>* index, void* iterator_storage, size_t iterator_storage_size)
-      : IndexIterator(index, true, {iterator_storage, iterator_storage_size}) {}
+  IndexIterator(const IndexParts<Prefix, Suffix>* index, TerarkContext* ctx, void* storage)
+      : IndexIterator(index, ctx, AllocIteratorStorage_(index, ctx, storage)) {}
 
-  IndexIterator(const IndexParts<Prefix, Suffix>* index)
-      : IndexIterator(index, false, AllocIteratorStorage_(index)) {}
 
   ~IndexIterator() {
-    IteratorStorage::Destroy(index_);
-    if (iterator_storage_ptr_ != nullptr) {
-      delete[] iterator_storage_ptr_;
+    IteratorStorage::Destroy(index_, ctx_);
+    if (storage_.size() != 0) {
+      storage_.risk_release_ownership();
+    } else if (ctx_ != nullptr) {
+      ContextBuffer(std::move(storage_), ctx_);
+    }
+    if (ctx_ != nullptr) {
+      ContextBuffer(std::move(key_), ctx_);
     }
   }
 
@@ -928,7 +940,7 @@ public:
   }
 
   fstring key() const final {
-    return iterator_key_;
+    return key_;
   }
 
   fstring pkey() const {
@@ -1119,13 +1131,13 @@ public:
     return buffer;
   }
 
-  Iterator* NewIterator(void* ptr) const final {
-    if (ptr == nullptr) {
-      return new IndexIterator<Prefix, Suffix>(this);
+  Iterator* NewIterator(valvec<byte_t>* buffer, TerarkContext* ctx) const final {
+    if (buffer == nullptr) {
+      return new IndexIterator<Prefix, Suffix>(this, ctx, nullptr);
     } else {
-      auto storage = (uint8_t*)ptr + sizeof(IndexIterator<Prefix, Suffix>);
-      size_t storage_size = IteratorStorage::GetIteratorStorageSize(this);
-      return ::new(ptr) IndexIterator<Prefix, Suffix>(this, storage, storage_size);
+      buffer->ensure_capacity(IteratorSize());
+      auto storage = buffer->data() + sizeof(IndexIterator<Prefix, Suffix>);
+      return ::new(buffer->data()) IndexIterator<Prefix, Suffix>(this, ctx, storage);
     }
   }
 
@@ -1147,10 +1159,10 @@ public:
   }
 
   void DumpKeys(std::function<void(fstring, fstring, fstring)> callback) const final {
-    valvec<byte_t> buffer(IteratorSize(), valvec_no_init());
+    auto g_ctx = terark::GetTlsTerarkContext();
+    auto buffer = g_ctx->alloc(IteratorStorage::GetIteratorStorageSize(this));
     auto storage = buffer.data() + sizeof(IndexIterator<Prefix, Suffix>);
-    size_t storage_size = IteratorStorage::GetIteratorStorageSize(this);
-    auto iter = ::new(buffer.data()) IndexIterator<Prefix, Suffix>(this, storage, storage_size);
+    auto iter = ::new(buffer.data()) IndexIterator<Prefix, Suffix>(this, g_ctx, storage);
     for (bool ok = iter->SeekToFirst(); ok; ok = iter->Next()) {
       callback(common_.common, iter->pkey(), iter->skey());
     }
@@ -1761,7 +1773,8 @@ struct IndexNonDescendingUintPrefix
 template<class NestLoudsTrieDAWG>
 class IndexNestLoudsTriePrefixIterator {
 protected:
-  typename NestLoudsTrieDAWG::Iterator iter_;
+  valvec<byte_t> buffer_;
+  typename NestLoudsTrieDAWG::UserMemIterator iter_;
   bool Done(size_t& id, bool ok) {
     auto dawg = static_cast<const NestLoudsTrieDAWG*>(iter_.get_dfa());
     id = ok ? dawg->state_to_word_id(iter_.word_state()) : size_t(-1);
@@ -1773,7 +1786,12 @@ protected:
     return ok;
   }
 public:
-  IndexNestLoudsTriePrefixIterator(const NestLoudsTrieDAWG* trie) : iter_(trie) {}
+  IndexNestLoudsTriePrefixIterator(valvec<byte_t>&& buffer, const NestLoudsTrieDAWG* trie)
+      : buffer_(std::move(buffer)), iter_(trie, buffer_.data()) {}
+
+  void ReclaimContextBuffer(TerarkContext* ctx) {
+    ContextBuffer(std::move(buffer_), ctx);
+  }
 
   fstring GetKey() const { return iter_.word(); }
   bool SeekToFirst(size_t& id, bool bfs_sufflx) {
@@ -1842,11 +1860,22 @@ struct IndexNestLoudsTriePrefix
   size_t IteratorStorageSize() const {
     return sizeof(IteratorStorage);
   }
-  void IteratorStorageConstruct(void* ptr) const {
-    ::new(ptr) IteratorStorage(trie_.get());
+  void IteratorStorageConstruct(TerarkContext* ctx, void* ptr) const {
+    ContextBuffer buffer;
+    size_t mem_size = trie_->iterator_max_mem_size();
+    if (ctx != nullptr) {
+      buffer = ctx->alloc(mem_size);
+    } else {
+      buffer.ensure_capacity(mem_size);
+    }
+    ::new(ptr) IteratorStorage(std::move(buffer.get()), trie_.get());
   }
-  void IteratorStorageDestruct(void* ptr) const {
-    static_cast<IteratorStorage*>(ptr)->~IteratorStorage();
+  void IteratorStorageDestruct(TerarkContext* ctx, void* ptr) const {
+    auto iter = static_cast<IteratorStorage*>(ptr);
+    if (ctx != nullptr) {
+      iter->ReclaimContextBuffer(ctx);
+    }
+    iter->~IteratorStorage();
   }
 
   size_t KeyCount() const {
@@ -2201,7 +2230,7 @@ struct IndexFixedStringSuffix
 
 template<class BlobStoreType>
 struct IndexBlobStoreSuffix
-    : public SuffixBase, public ComponentIteratorStorageImpl<BlobStore::CacheOffsets> {
+    : public SuffixBase {
   typedef BlobStore::CacheOffsets IteratorStorage;
 
   IndexBlobStoreSuffix() = default;
@@ -2228,6 +2257,21 @@ struct IndexBlobStoreSuffix
     memory_.swap(other.memory_);
     std::swap(flags, other.flags);
     return *this;
+  }
+
+  size_t IteratorStorageSize() const { return sizeof(IteratorStorage); }
+  void IteratorStorageConstruct(TerarkContext* ctx, void* ptr) const {
+    auto iter = ::new(ptr) IteratorStorage();
+    if (ctx != nullptr) {
+      iter->recData.swap(ctx->alloc());
+    }
+  }
+  void IteratorStorageDestruct(TerarkContext* ctx, void* ptr) const {
+    auto iter = static_cast<IteratorStorage*>(ptr);
+    if (ctx != nullptr) {
+      ContextBuffer(std::move(iter->recData), ctx);
+    }
+    iter->~IteratorStorage();
   }
 
   BlobStoreType store_;

@@ -244,9 +244,6 @@ private:
   bool closed_ = false;  // Either Finish() or Abandon() has been called.
   bool isReverseBytewiseOrder_;
   bool ignore_key_type_;
-#if defined(TERARK_SUPPORT_UINT64_COMPARATOR) && BOOST_ENDIAN_LITTLE_BYTE
-  bool isUint64Comparator_;
-#endif
 
   long long t0 = 0;
   size_t prefixLen_;

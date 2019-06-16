@@ -99,19 +99,18 @@ class TerarkKeyIndexReaderBase : public TerarkKeyReader {
 protected:
   terark::MmapWholeFile mmap;
   std::unique_ptr<TerarkIndex> index;
-  void* buffer;
+  valvec<byte_t> buffer;
   TerarkIndex::Iterator* iter;
   bool move_next;
 public:
   TerarkKeyIndexReaderBase(fstring fileName, size_t fileBegin, size_t fileEnd) {
     terark::MmapWholeFile(fileName).swap(mmap);
     index = TerarkIndex::LoadMemory(mmap.memory().substr(fileBegin, fileEnd - fileBegin));
-    buffer = malloc(index->IteratorSize());
-    iter = index->NewIterator(buffer);
+    buffer.resize(index->IteratorSize());
+    iter = index->NewIterator(&buffer, nullptr);
   }
   ~TerarkKeyIndexReaderBase() {
     iter->~Iterator();
-    free(buffer);
     index.reset();
     terark::MmapWholeFile().swap(mmap);
   }

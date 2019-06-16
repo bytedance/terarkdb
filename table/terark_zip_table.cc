@@ -58,12 +58,6 @@ void PrintVersionHashInfo(rocksdb::Logger* info_log) {
   });
 }
 
-#ifdef TERARK_SUPPORT_UINT64_COMPARATOR
-# if !BOOST_ENDIAN_LITTLE_BYTE && !BOOST_ENDIAN_BIG_BYTE
-#   error Unsupported endian !
-# endif
-#endif
-
 namespace rocksdb {
 
 terark::profiling g_pf;
@@ -212,11 +206,6 @@ bool IsBytewiseComparator(const Comparator* cmp) {
     // reverse bytewise compare, needs reverse in iterator
     return true;
   }
-# if defined(TERARK_SUPPORT_UINT64_COMPARATOR)
-  if (name == "rocksdb.Uint64Comparator") {
-    return true;
-  }
-# endif
   return name == "leveldb.BytewiseComparator";
 #else
   return BytewiseComparator() == cmp;
@@ -388,11 +377,6 @@ const {
   if (table_builder_options.sst_purpose != kEssenceSst) {
     keyPrefixLen = 0;
   }
-#if defined(TERARK_SUPPORT_UINT64_COMPARATOR) && BOOST_ENDIAN_LITTLE_BYTE
-  if (fstring(userCmp->Name()) == "rocksdb.Uint64Comparator") {
-    keyPrefixLen = 0;
-  }
-#endif
 #if 1
   INFO(table_builder_options.ioptions.info_log,
        "nth_newtable{ terark = %3zd fallback = %3zd } curlevel = %d minlevel = %d numlevel = %d fallback = %p\n",
