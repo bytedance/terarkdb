@@ -539,6 +539,7 @@ TEST_F(DBOptionsTest, SetStatsDumpPeriodSec) {
   Close();
 }
 
+<<<<<<< HEAD
 TEST_F(DBOptionsTest, RunStatsDumpPeriodSec) {
   Options options;
   options.create_if_missing = true;
@@ -685,6 +686,7 @@ TEST_F(DBOptionsTest, SetOptionsStatsPersistPeriodSec) {
   ASSERT_EQ(12345, dbfull()->GetDBOptions().stats_persist_period_sec);
 }
 
+<<<<<<< HEAD
 TEST_F(DBOptionsTest, GetStatsHistory) {
   Options options;
   options.create_if_missing = true;

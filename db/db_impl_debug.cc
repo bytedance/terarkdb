@@ -264,8 +264,8 @@ StatsDumpTestScheduler* DBImpl::TEST_GetStatsDumpScheduler() const {
 }
 #endif  // !ROCKSDB_LITE
 
-size_t DBImpl::TEST_EstiamteStatsHistorySize() const {
-  return EstiamteStatsHistorySize();
+size_t DBImpl::TEST_EstimateInMemoryStatsHistorySize() const {
+  return EstimateInMemoryStatsHistorySize();
 }
 }  // namespace rocksdb
 #endif  // NDEBUG

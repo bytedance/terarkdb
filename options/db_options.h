@@ -86,6 +86,7 @@ struct ImmutableDBOptions {
   bool manual_wal_flush;
   bool atomic_flush;
   bool avoid_unnecessary_blocking_io;
+  bool persist_stats_to_disk;
 };
 
 struct MutableDBOptions {

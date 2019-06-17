@@ -563,7 +563,6 @@ set(SOURCES
         db/flush_scheduler.cc
         db/forward_iterator.cc
         db/internal_stats.cc
-        db/in_memory_stats_history.cc
         db/logs_with_prep_tracker.cc
         db/log_reader.cc
         db/log_writer.cc
@@ -604,10 +603,12 @@ set(SOURCES
         memtable/write_buffer_manager.cc
         monitoring/histogram.cc
         monitoring/histogram_windowing.cc
+        monitoring/in_memory_stats_history.cc
         monitoring/instrumented_mutex.cc
         monitoring/iostats_context.cc
         monitoring/perf_context.cc
         monitoring/perf_level.cc
+        monitoring/persistent_stats_history.cc
         monitoring/statistics.cc
         monitoring/stats_dump_scheduler.cc
         monitoring/thread_status_impl.cc
@@ -933,6 +934,11 @@ if(WITH_TESTS)
           db/db_impl_gc_ttl_test.cc
           options/options_settable_test.cc
           util/timer_test.cc
+
+        monitoring/histogram_test.cc
+        monitoring/iostats_context_test.cc
+        monitoring/statistics_test.cc
+        monitoring/stats_history_test.cc
   )
   if(WITH_LIBRADOS)
     list(APPEND TESTS utilities/env_librados_test.cc)
