@@ -518,10 +518,160 @@ ALL_SOURCES += $(TEST_MAIN_SOURCES) $(TOOL_MAIN_SOURCES) $(BENCH_MAIN_SOURCES)
 TESTS = $(patsubst %.cc, %, $(notdir $(TEST_MAIN_SOURCES)))
 TESTS += $(patsubst %.c, %, $(notdir $(TEST_MAIN_SOURCES_C)))
 
+<<<<<<< HEAD
 ifeq ($(USE_FOLLY_DISTRIBUTED_MUTEX),1)
 	TESTS += folly_synchronization_distributed_mutex_test
 	ALL_SOURCES += third-party/folly/folly/synchronization/test/DistributedMutexTest.cc
 endif
+=======
+TESTS = \
+	db_basic_test \
+	db_encryption_test \
+	db_test2 \
+	external_sst_file_basic_test \
+	auto_roll_logger_test \
+	bloom_test \
+	dynamic_bloom_test \
+	c_test \
+	checkpoint_test \
+	crc32c_test \
+	coding_test \
+	inlineskiplist_test \
+	env_basic_test \
+	env_test \
+	hash_test \
+	thread_local_test \
+	rate_limiter_test \
+	perf_context_test \
+	iostats_context_test \
+	db_wal_test \
+	db_block_cache_test \
+	db_test \
+	db_blob_index_test \
+	db_bloom_filter_test \
+	db_iter_test \
+	db_iter_stress_test \
+	db_log_iter_test \
+	db_compaction_filter_test \
+	db_compaction_test \
+	db_dynamic_level_test \
+	db_flush_test \
+	db_inplace_update_test \
+	db_iterator_test \
+	db_memtable_test \
+	db_merge_operator_test \
+	db_options_test \
+	db_range_del_test \
+	db_secondary_test \
+	db_sst_test \
+	db_tailing_iter_test \
+	db_io_failure_test \
+	db_properties_test \
+	db_table_properties_test \
+	db_statistics_test \
+	db_write_test \
+	error_handler_test \
+	autovector_test \
+	blob_db_test \
+	cleanable_test \
+	column_family_test \
+	table_properties_collector_test \
+	arena_test \
+	block_test \
+	data_block_hash_index_test \
+	cache_test \
+	corruption_test \
+	slice_transform_test \
+	dbformat_test \
+	fault_injection_test \
+	filelock_test \
+	filename_test \
+	file_reader_writer_test \
+	block_based_filter_block_test \
+	full_filter_block_test \
+	partitioned_filter_block_test \
+	hash_table_test \
+	histogram_test \
+	log_test \
+	manual_compaction_test \
+	mock_env_test \
+	memtable_list_test \
+	merge_helper_test \
+	memory_test \
+	merge_test \
+	merger_test \
+	util_merge_operators_test \
+	options_file_test \
+	reduce_levels_test \
+	plain_table_db_test \
+	comparator_db_test \
+	external_sst_file_test \
+	prefix_test \
+	skiplist_test \
+	write_buffer_manager_test \
+	stringappend_test \
+	cassandra_format_test \
+	cassandra_functional_test \
+	cassandra_row_merge_test \
+	cassandra_serialize_test \
+	ttl_test \
+	backupable_db_test \
+	sim_cache_test \
+	version_edit_test \
+	version_set_test \
+	compaction_picker_test \
+	version_builder_test \
+	file_indexer_test \
+	write_batch_test \
+	write_batch_with_index_test \
+	write_controller_test\
+	deletefile_test \
+	obsolete_files_test \
+	table_test \
+	delete_scheduler_test \
+	options_test \
+	options_settable_test \
+	options_util_test \
+	event_logger_test \
+	timer_queue_test \
+	cuckoo_table_builder_test \
+	cuckoo_table_reader_test \
+	cuckoo_table_db_test \
+	flush_job_test \
+	wal_manager_test \
+	listener_test \
+	compaction_iterator_test \
+	compaction_job_test \
+	thread_list_test \
+	sst_dump_test \
+	compact_files_test \
+	optimistic_transaction_test \
+	write_callback_test \
+	heap_test \
+	compact_on_deletion_collector_test \
+	compaction_job_stats_test \
+	option_change_migration_test \
+	transaction_test \
+	ldb_cmd_test \
+	persistent_cache_test \
+	statistics_test \
+	stats_history_test \
+	lru_cache_test \
+	object_registry_test \
+	repair_test \
+	env_timed_test \
+	write_prepared_transaction_test \
+	write_unprepared_transaction_test \
+	db_universal_compaction_test \
+	trace_analyzer_test \
+	repeatable_thread_test \
+	range_tombstone_fragmenter_test \
+	range_del_aggregator_test \
+	sst_file_reader_test \
+	db_secondary_test \
+	block_cache_tracer_test \
+	block_cache_trace_analyzer_test \
+>>>>>>> 671d15cbd... Persistent Stats: persist stats history to disk (#5046)
 
 PARALLEL_TEST = \
 	backupable_db_test \
@@ -1781,7 +1931,14 @@ blob_db_test: $(OBJ_DIR)/utilities/blob_db/blob_db_test.o $(TEST_LIBRARY) $(LIBR
 repeatable_thread_test: $(OBJ_DIR)/util/repeatable_thread_test.o $(TEST_LIBRARY) $(LIBRARY)
 	$(AM_LINK)
 
+<<<<<<< HEAD
 range_tombstone_fragmenter_test: $(OBJ_DIR)/db/range_tombstone_fragmenter_test.o $(TEST_LIBRARY) $(LIBRARY)
+=======
+stats_history_test: monitoring/stats_history_test.o db/db_test_util.o $(LIBOBJECTS) $(TESTHARNESS)
+	$(AM_LINK)
+
+lru_cache_test: cache/lru_cache_test.o $(LIBOBJECTS) $(TESTHARNESS)
+>>>>>>> 671d15cbd... Persistent Stats: persist stats history to disk (#5046)
 	$(AM_LINK)
 
 sst_file_reader_test: $(OBJ_DIR)/table/sst_file_reader_test.o $(TEST_LIBRARY) $(LIBRARY)

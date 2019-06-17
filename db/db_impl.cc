@@ -37,7 +37,6 @@
 #include "db/external_sst_file_ingestion_job.h"
 #include "db/flush_job.h"
 #include "db/forward_iterator.h"
-#include "db/in_memory_stats_history.h"
 #include "db/job_context.h"
 #include "db/log_reader.h"
 #include "db/log_writer.h"
@@ -56,10 +55,12 @@
 #include "db/write_callback.h"
 #include "memtable/hash_linklist_rep.h"
 #include "memtable/hash_skiplist_rep.h"
+#include "monitoring/in_memory_stats_history.h"
 #include "monitoring/iostats_context_imp.h"
 #include "monitoring/perf_context_imp.h"
 #include "trace_replay/block_cache_tracer.h"
 #include "monitoring/stats_dump_scheduler.h"
+#include "monitoring/persistent_stats_history.h"
 #include "monitoring/thread_status_updater.h"
 #include "monitoring/thread_status_util.h"
 #include "options/cf_options.h"
@@ -215,6 +216,7 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
       log_dir_synced_(false),
       log_empty_(true),
       default_cf_handle_(nullptr),
+      persist_stats_cf_handle_(nullptr),
       log_sync_cv_(&mutex_),
       total_log_size_(0),
       max_total_in_memory_state_(0),
@@ -625,10 +627,17 @@ Status DBImpl::CloseHelper() {
   }
   memtable_info_queue_.clear();
 
-  if (default_cf_handle_ != nullptr) {
+  if (default_cf_handle_ != nullptr || persist_stats_cf_handle_ != nullptr) {
     // we need to delete handle outside of lock because it does its own locking
     mutex_.Unlock();
-    delete default_cf_handle_;
+    if (default_cf_handle_) {
+      delete default_cf_handle_;
+      default_cf_handle_ = nullptr;
+    }
+    if (persist_stats_cf_handle_) {
+      delete persist_stats_cf_handle_;
+      persist_stats_cf_handle_ = nullptr;
+    }
     mutex_.Lock();
   }
 
@@ -780,7 +789,7 @@ void DBImpl::StartStatsDumpScheduler() {
 }
 
 // esitmate the total size of stats_history_
-size_t DBImpl::EstiamteStatsHistorySize() const {
+size_t DBImpl::EstimateInMemoryStatsHistorySize() const {
   size_t size_total =
       sizeof(std::map<uint64_t, std::map<std::string, uint64_t>>);
   if (stats_history_.size() == 0) return size_total;
@@ -814,12 +823,40 @@ void DBImpl::PersistStats() {
     stats_history_size_limit = mutable_db_options_.stats_history_buffer_size;
   }
 
-  // TODO(Zhongyi): also persist immutable_db_options_.statistics
-  {
-    std::map<std::string, uint64_t> stats_map;
-    if (!statistics->getTickerMap(&stats_map)) {
-      return;
+  std::map<std::string, uint64_t> stats_map;
+  if (!statistics->getTickerMap(&stats_map)) {
+    return;
+  }
+
+  if (immutable_db_options_.persist_stats_to_disk) {
+    WriteBatch batch;
+    if (stats_slice_initialized_) {
+      for (const auto& stat : stats_map) {
+        char key[100];
+        int length =
+            EncodePersistentStatsKey(now_seconds, stat.first, 100, key);
+        // calculate the delta from last time
+        if (stats_slice_.find(stat.first) != stats_slice_.end()) {
+          uint64_t delta = stat.second - stats_slice_[stat.first];
+          batch.Put(persist_stats_cf_handle_, Slice(key, std::min(100, length)),
+                    ToString(delta));
+        }
+      }
     }
+    stats_slice_initialized_ = true;
+    std::swap(stats_slice_, stats_map);
+    WriteOptions wo;
+    wo.low_pri = true;
+    wo.no_slowdown = true;
+    wo.sync = false;
+    Status s = Write(wo, &batch);
+    if (!s.ok()) {
+      ROCKS_LOG_INFO(immutable_db_options_.info_log,
+                     "Writing to persistent stats CF failed -- %s\n",
+                     s.ToString().c_str());
+    }
+    // TODO(Zhongyi): add purging for persisted data
+  } else {
     InstrumentedMutexLock l(&stats_history_mutex_);
     // calculate the delta from last time
     if (stats_slice_initialized_) {
@@ -829,17 +866,19 @@ void DBImpl::PersistStats() {
           stats_delta[stat.first] = stat.second - stats_slice_[stat.first];
         }
       }
-      stats_history_[now_micros] = stats_delta;
+      stats_history_[now_seconds] = stats_delta;
     }
     stats_slice_initialized_ = true;
     std::swap(stats_slice_, stats_map);
     TEST_SYNC_POINT("DBImpl::PersistStats:StatsCopied");
 
     // delete older stats snapshots to control memory consumption
-    bool purge_needed = EstiamteStatsHistorySize() > stats_history_size_limit;
+    bool purge_needed =
+        EstimateInMemoryStatsHistorySize() > stats_history_size_limit;
     while (purge_needed && !stats_history_.empty()) {
       stats_history_.erase(stats_history_.begin());
-      purge_needed = EstiamteStatsHistorySize() > stats_history_size_limit;
+      purge_needed =
+          EstimateInMemoryStatsHistorySize() > stats_history_size_limit;
     }
   }
 
@@ -874,8 +913,13 @@ Status DBImpl::GetStatsHistory(
   if (!stats_iterator) {
     return Status::InvalidArgument("stats_iterator not preallocated.");
   }
-  stats_iterator->reset(
-      new InMemoryStatsHistoryIterator(start_time, end_time, this));
+  if (immutable_db_options_.persist_stats_to_disk) {
+    stats_iterator->reset(
+        new PersistentStatsHistoryIterator(start_time, end_time, this));
+  } else {
+    stats_iterator->reset(
+        new InMemoryStatsHistoryIterator(start_time, end_time, this));
+  }
   return (*stats_iterator)->status();
 }
 void DBImpl::ScheduleGCTTL() {
@@ -1131,14 +1175,14 @@ Status DBImpl::SetDBOptions(
           stats_dump_scheduler_->Unregister(this);
           mutex_.Lock();
         }
-        if (new_options.stats_dump_period_sec > 0 ||
-            new_options.stats_persist_period_sec > 0) {
+      }
+      if (new_options.stats_persist_period_sec !=
+          mutable_db_options_.stats_persist_period_sec) {
           mutex_.Unlock();
           stats_dump_scheduler_->Register(this,
                                           new_options.stats_dump_period_sec,
                                           new_options.stats_persist_period_sec);
           mutex_.Lock();
-        }
       }
       write_controller_.set_max_delayed_write_rate(
           new_options.delayed_write_rate);
@@ -1559,6 +1603,10 @@ InternalIterator* DBImpl::NewInternalIterator(
 
 ColumnFamilyHandle* DBImpl::DefaultColumnFamily() const {
   return default_cf_handle_;
+}
+
+ColumnFamilyHandle* DBImpl::PersistentStatsColumnFamily() const {
+  return persist_stats_cf_handle_;
 }
 
 Status DBImpl::Get(const ReadOptions& read_options,

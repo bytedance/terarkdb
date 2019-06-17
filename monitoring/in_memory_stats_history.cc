@@ -7,7 +7,7 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #include "db/db_impl.h"
-#include "db/in_memory_stats_history.h"
+#include "monitoring/in_memory_stats_history.h"
 
 namespace rocksdb {
 
