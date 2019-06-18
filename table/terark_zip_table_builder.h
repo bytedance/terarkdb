@@ -127,8 +127,8 @@ private:
   struct WaitHandle : boost::noncopyable {
     WaitHandle();
     WaitHandle(size_t);
-    WaitHandle(WaitHandle&&);
-    WaitHandle& operator=(WaitHandle&&);
+    WaitHandle(WaitHandle&&) noexcept;
+    WaitHandle& operator=(WaitHandle&&) noexcept;
     size_t myWorkMem;
     void Release(size_t size = 0);
     ~WaitHandle();
