@@ -180,6 +180,7 @@ struct SuffixBase {
 
   virtual LowerBoundResult
   LowerBound(fstring target, size_t suffix_id, size_t suffix_count, TerarkContext* ctx) const = 0;
+  virtual void AppendKey(size_t suffix_id, valvec<byte_t>* buffer, TerarkContext* ctx) const = 0;
 
   virtual bool Load(fstring mem) = 0;
   virtual void Save(std::function<void(const void*, size_t)> append) const = 0;
@@ -509,11 +510,10 @@ struct VirtualSuffix : public SuffixBase {
   size_t TotalKeySize() const {
     return suffix->TotalKeySize();
   }
-  virtual LowerBoundResult
-  LowerBound(fstring target, size_t suffix_id, size_t suffix_count, TerarkContext* ctx) const final {
+  LowerBoundResult LowerBound(fstring target, size_t suffix_id, size_t suffix_count, TerarkContext* ctx) const final {
     return suffix->LowerBound(target, suffix_id, suffix_count, ctx);
   }
-  void AppendKey(size_t suffix_id, valvec<byte_t>* buffer, TerarkContext* ctx) const {
+  void AppendKey(size_t suffix_id, valvec<byte_t>* buffer, TerarkContext* ctx) const final {
     return suffix->AppendKey(suffix_id, buffer, ctx);
   }
   void GetMetaData(valvec<fstring>* blocks) const {
@@ -1304,11 +1304,9 @@ struct IndexAscendingUintPrefix
       return key.size() == key_length ? id : size_t(-1);
     }
     key = key.substr(key_length);
-    auto suffix_result = suffix->LowerBound(key, id, 1, ctx);
-    if (suffix_result.id != id || suffix_result.key != key) {
-      return size_t(-1);
-    }
-    return suffix_result.id;
+    ContextBuffer suffix_key = ctx->alloc();
+    suffix->AppendKey(id, &suffix_key.get(), ctx);
+    return key == suffix_key ? id : size_t(-1);
   }
   size_t DictRank(fstring key, const SuffixBase* suffix, TerarkContext* ctx) const {
     size_t id, pos, hint = 0;
@@ -1322,7 +1320,9 @@ struct IndexAscendingUintPrefix
     } else if (suffix == nullptr) {
       return id + (key.size() > key_length);
     } else {
-      return suffix->LowerBound(key.substr(key_length), id, 1, ctx).id;
+      ContextBuffer suffix_key = ctx->alloc();
+      suffix->AppendKey(id, &suffix_key.get(), ctx);
+      return id + (key.substr(key_length) > suffix_key);
     }
   }
   size_t AppendMinKey(valvec<byte_t>* buffer, TerarkContext* ctx) const {
@@ -1555,11 +1555,17 @@ struct IndexNonDescendingUintPrefix
     }
     size_t id = rs.rank1(pos);
     key = key.substr(key_length);
-    auto suffix_result = suffix->LowerBound(key, id, count, ctx);
-    if (suffix_result.id == id + count || suffix_result.key != key) {
-      return size_t(-1);
+    if (count == 1) {
+      ContextBuffer suffix_key = ctx->alloc();
+      suffix->AppendKey(id, &suffix_key.get(), ctx);
+      return suffix_key == key ? id : size_t(-1);
+    } else {
+      auto suffix_result = suffix->LowerBound(key, id, count, ctx);
+      if (suffix_result.id == id + count || suffix_result.key != key) {
+        return size_t(-1);
+      }
+      return suffix_result.id;
     }
-    return suffix_result.id;
   }
   size_t DictRank(fstring key, const SuffixBase* suffix, TerarkContext* ctx) const {
     assert(suffix != nullptr);
@@ -1573,6 +1579,10 @@ struct IndexNonDescendingUintPrefix
       return id;
     } else if (suffix == nullptr) {
       return id + (key.size() > key_length);
+    } else if (count == 1) {
+      ContextBuffer suffix_key = ctx->alloc();
+      suffix->AppendKey(id, &suffix_key.get(), ctx);
+      return id + (key.substr(key_length) > suffix_key);
     } else {
       return suffix->LowerBound(key.substr(key_length), id, count, ctx).id;
     }
@@ -1888,90 +1898,75 @@ struct IndexNestLoudsTriePrefix
     if (suffix == nullptr && flags.is_bfs_suffix) {
       return trie_->index(key);
     }
-    size_t id, rank;
-    fstring prefix_key;
-    trie_->lower_bound(key, &id, &rank);
-    ContextBuffer ctx_buffer = ctx->alloc();
-    if (id != size_t(-1)) {
-      trie_->nth_word(id, &ctx_buffer.get());
-      prefix_key = ctx_buffer;
-      if (prefix_key != key) {
-        id = trie_->index_prev(id);
-        if (id != size_t(-1)) {
-          trie_->nth_word(id, &ctx_buffer.get());
-          prefix_key = ctx_buffer;
-          --rank;
-        } else {
-          assert(rank == 0);
+    auto buffer = ctx->alloc(trie_->iterator_max_mem_size());
+    typename NestLoudsTrieDAWG::UserMemIterator iter(trie_.get(), buffer.data());
+    if (iter.seek_lower_bound(key)) {
+      if (iter.word() != key) {
+        if (!iter.decr()) {
           return size_t(-1);
         }
       }
     } else {
-      id = trie_->index_end();
-      trie_->nth_word(id, &ctx_buffer.get());
-      prefix_key = ctx_buffer;
+      iter.seek_end();
     }
-    if (!key.startsWith(prefix_key)) {
+    if (!key.startsWith(iter.word())) {
       return size_t(-1);
     }
-    key = key.substr(prefix_key.size());
-    size_t seek_id = flags.is_bfs_suffix ? id : rank;
-    auto suffix_result = suffix->LowerBound(key, seek_id, 1, ctx);
-    if (suffix_result.id != seek_id || suffix_result.key != key) {
-      return size_t(-1);
+    key = key.substr(iter.word().size());
+    size_t suffix_id;
+    if (flags.is_bfs_suffix) {
+      suffix_id = trie_->state_to_word_id(iter.word_state());
+    } else {
+      suffix_id = trie_->state_to_dict_rank(iter.word_state());
     }
-    return suffix_result.id;
+    ContextBuffer suffix_key = ctx->alloc();
+    suffix->AppendKey(suffix_id, &suffix_key.get(), ctx);
+    return key == suffix_key ? suffix_id : size_t(-1);
   }
   size_t DictRank(fstring key, const SuffixBase* suffix, TerarkContext* ctx) const {
-    size_t id, rank;
+    size_t rank;
     if (suffix == nullptr) {
       trie_->lower_bound(key, nullptr, &rank);
       return rank;
     }
-    fstring prefix_key;
-    trie_->lower_bound(key, &id, &rank);
-    ContextBuffer ctx_buffer = ctx->alloc();
-    if (id != size_t(-1)) {
-      trie_->nth_word(id, &ctx_buffer.get());
-      prefix_key = ctx_buffer;
-      if (prefix_key != key) {
-        id = trie_->index_prev(id);
-        if (id != size_t(-1)) {
-          trie_->nth_word(id, &ctx_buffer.get());
-          prefix_key = ctx_buffer;
-          --rank;
-        } else {
-          assert(rank == 0);
+    auto buffer = ctx->alloc(trie_->iterator_max_mem_size());
+    typename NestLoudsTrieDAWG::UserMemIterator iter(trie_.get(), buffer.data());
+    if (iter.seek_lower_bound(key)) {
+      if (iter.word() != key) {
+        if (!iter.decr()) {
           return 0;
         }
       }
     } else {
-      id = trie_->index_end();
-      trie_->nth_word(id, &ctx_buffer.get());
-      prefix_key = ctx_buffer;
+      iter.seek_end();
     }
-    if (key.startsWith(prefix_key)) {
-      key = key.substr(prefix_key.size());
-      size_t seek_id = flags.is_bfs_suffix ? id : rank;
-      auto suffix_result = suffix->LowerBound(key, seek_id, 1, ctx);
-      if (suffix_result.id == seek_id && suffix_result.key == key) {
-        return rank;
-      }
+    rank = trie_->state_to_dict_rank(iter.word_state());
+    if (!key.startsWith(iter.word())) {
+      return rank;
     }
-    return rank + 1;
+    key = key.substr(iter.word().size());
+    size_t suffix_id;
+    if (flags.is_bfs_suffix) {
+      suffix_id = trie_->state_to_word_id(iter.word_state());
+    } else {
+      suffix_id = rank;
+    }
+    ContextBuffer suffix_key = ctx->alloc();
+    suffix->AppendKey(suffix_id, &suffix_key.get(), ctx);
+    return rank + (key > suffix_key);
   }
   size_t AppendMinKey(valvec<byte_t>* buffer, TerarkContext* ctx) const {
     size_t id = trie_->index_begin();
-    auto ctx_buffer = ctx->alloc();
-    trie_->nth_word(id, &ctx_buffer.get());
-    buffer->append(ctx_buffer.get());
+    auto key_buffer = ctx->alloc();
+    trie_->nth_word(id, &key_buffer.get());
+    buffer->append(key_buffer.get());
     return flags.is_bfs_suffix ? id : 0;
   }
   size_t AppendMaxKey(valvec<byte_t>* buffer, TerarkContext* ctx) const {
     size_t id = trie_->index_end();
-    auto ctx_buffer = ctx->alloc();
-    trie_->nth_word(id, &ctx_buffer.get());
-    buffer->append(ctx_buffer.get());
+    auto key_buffer = ctx->alloc();
+    trie_->nth_word(id, &key_buffer.get());
+    buffer->append(key_buffer.get());
     return flags.is_bfs_suffix ? id : trie_->num_words() - 1;
   }
 
@@ -2064,7 +2059,7 @@ struct IndexEmptySuffix
   LowerBound(fstring target, size_t suffix_id, size_t suffix_count, TerarkContext* ctx) const override {
     return {suffix_id, {}, {}};
   }
-  void AppendKey(size_t suffix_id, valvec<byte_t>* buffer, TerarkContext* ctx) const {
+  void AppendKey(size_t suffix_id, valvec<byte_t>* buffer, TerarkContext* ctx) const override {
   }
   void GetMetaData(valvec<fstring>* blocks) const {
   }
@@ -2147,7 +2142,7 @@ struct IndexFixedStringSuffix
       return {suffix_id, str_pool_[suffix_id], {}};
     }
   }
-  void AppendKey(size_t suffix_id, valvec<byte_t>* buffer, TerarkContext* ctx) const {
+  void AppendKey(size_t suffix_id, valvec<byte_t>* buffer, TerarkContext* ctx) const override {
     fstring key;
     if (flags.is_rev_suffix) {
       key = str_pool_[str_pool_.m_size - suffix_id - 1];
@@ -2282,30 +2277,28 @@ struct IndexBlobStoreSuffix
   }
   LowerBoundResult
   LowerBound(fstring target, size_t suffix_id, size_t suffix_count, TerarkContext* ctx) const override {
-    BlobStore::CacheOffsets co;
-    ContextBuffer ctx_buffer = ctx->alloc();
-    co.recData.swap(ctx_buffer);
+    ContextBuffer buffer = ctx->alloc();
     if (flags.is_rev_suffix) {
       size_t num_records = store_.num_records();
       suffix_id = num_records - suffix_id - suffix_count;
       size_t end = suffix_id + suffix_count;
-      suffix_id = store_.lower_bound(suffix_id, end, target, &co);
-      co.recData.swap(ctx_buffer);
+      suffix_id = store_.lower_bound(suffix_id, end, target, &buffer.get());
       if (suffix_id == end) {
         return {num_records - suffix_id - 1, {}, {}};
       }
-      return {num_records - suffix_id - 1, ctx_buffer, std::move(ctx_buffer)};
+      fstring suffix_key = buffer;
+      return {num_records - suffix_id - 1, suffix_key, std::move(buffer)};
     } else {
       size_t end = suffix_id + suffix_count;
-      suffix_id = store_.lower_bound(suffix_id, end, target, &co);
-      co.recData.swap(ctx_buffer);
+      suffix_id = store_.lower_bound(suffix_id, end, target, &buffer.get());
       if (suffix_id == end) {
         return {suffix_id, {}, {}};
       }
-      return {suffix_id, ctx_buffer, std::move(ctx_buffer)};
+      fstring suffix_key = buffer;
+      return {suffix_id, suffix_key, std::move(buffer)};
     }
   }
-  void AppendKey(size_t suffix_id, valvec<byte_t>* buffer, TerarkContext* ctx) const {
+  void AppendKey(size_t suffix_id, valvec<byte_t>* buffer, TerarkContext* ctx) const override {
     if (flags.is_rev_suffix) {
       store_.get_record_append(store_.num_records() - suffix_id - 1, buffer);
     } else {
