@@ -1319,8 +1319,8 @@ struct IndexAscendingUintPrefix
       return rank_select.max_rank1();
     } else if (key.size() < key_length || !is_find) {
       return id;
-    } else if (suffix == nullptr && key.size() > key_length) {
-      return id;
+    } else if (suffix == nullptr) {
+      return id + (key.size() > key_length);
     } else {
       return suffix->LowerBound(key.substr(key_length), id, 1, ctx).id;
     }
@@ -1571,8 +1571,8 @@ struct IndexNonDescendingUintPrefix
       return rank_select.max_rank1();
     } else if (key.size() < key_length || !is_find) {
       return id;
-    } else if (suffix == nullptr && key.size() > key_length) {
-      return id;
+    } else if (suffix == nullptr) {
+      return id + (key.size() > key_length);
     } else {
       return suffix->LowerBound(key.substr(key_length), id, count, ctx).id;
     }
