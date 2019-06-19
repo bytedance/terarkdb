@@ -841,18 +841,29 @@ const {
                                    "bad internal key causing ParseInternalKey() failed");
   }
   Slice user_key = pikey.user_key;
-  auto& g_tctx = *terark::GetTlsTerarkContext();
-  size_t recId = index_->Find(fstringOf(user_key), &g_tctx);
+  auto g_tctx = terark::GetTlsTerarkContext();
+  size_t recId = index_->Find(fstringOf(user_key), g_tctx);
   if (size_t(-1) == recId) {
     return Status::OK();
   }
   auto zvType = type_.size() ? ZipValueType(type_[recId]) : ZipValueType::kZeroSeq;
   bool matched;
-  auto ctx_buffer = g_tctx.alloc();
+  auto ctx_buffer = g_tctx->alloc();
   auto& buf = ctx_buffer.get();
+  auto set_value = [&](const ParsedInternalKey& k, Slice v) {
+    assert(pik.type != kTypeMerge);
+    static constexpr size_t pin_size = 8192;
+    bool pin_value = v.size() >= pin_size;
+    if (pin_value) {
+      Cleanable value_cleanup;
+      value_cleanup.RegisterCleanup([](void* arg1, void*){ free(arg1); }, buf.data(), nullptr);
+      buf.risk_release_ownership();
+      get_context->SaveValue(k, v, &matched, &value_cleanup);
+    } else {
+      get_context->SaveValue(k, v, &matched);
+    }
+  };
   switch (zvType) {
-  default:
-    return Status::Aborted("TerarkZipTableReader::Get()", "Bad ZipValueType");
   case ZipValueType::kZeroSeq:
     buf.erase_all();
     try {
@@ -861,8 +872,7 @@ const {
     catch (const std::exception& ex) {
       return Status::Corruption("TerarkZipTableReader::Get()", ex.what());
     }
-    get_context->SaveValue(ParsedInternalKey(pikey.user_key, global_seqno, kTypeValue),
-                           Slice((char*)buf.data(), buf.size()), &matched);
+    set_value(ParsedInternalKey(user_key, global_seqno, kTypeValue), Slice((char*)buf.data(), buf.size()));
     break;
   case ZipValueType::kValue: { // should be a kTypeValue, the normal case
     buf.erase_all();
@@ -875,15 +885,14 @@ const {
     // little endian uint64_t
     uint64_t seq = *(uint64_t*)buf.data() & kMaxSequenceNumber;
     if (seq <= pikey.sequence) {
-      get_context->SaveValue(ParsedInternalKey(pikey.user_key, seq, kTypeValue),
-                             SliceOf(fstring(buf).substr(7)), &matched);
+      set_value(ParsedInternalKey(user_key, seq, kTypeValue), SliceOf(fstring(buf).substr(7)));
     }
     break;
   }
   case ZipValueType::kDelete: {
     buf.erase_all();
+    buf.reserve(sizeof(SequenceNumber));
     try {
-      buf.reserve(sizeof(SequenceNumber));
       GetRecordAppend(recId, &buf);
     }
     catch (const std::exception& ex) {
@@ -891,8 +900,7 @@ const {
     }
     uint64_t seq = *(uint64_t*)buf.data() & kMaxSequenceNumber;
     if (seq <= pikey.sequence) {
-      get_context->SaveValue(ParsedInternalKey(pikey.user_key, seq, kTypeDeletion),
-                             SliceOf(fstring(buf).substr(7)), &matched);
+      set_value(ParsedInternalKey(user_key, seq, kTypeDeletion), SliceOf(fstring(buf).substr(7)));
     }
     break;
   }
@@ -908,30 +916,28 @@ const {
       break;
     }
     size_t num = 0;
-    auto mVal = ZipValueMultiValue::decode(buf, &num);
+    auto multi_val = ZipValueMultiValue::decode(buf, &num);
     for (size_t i = 0; i < num; ++i) {
-      Slice val = mVal->getValueData(i, num);
+      Slice val = multi_val->getValueData(i, num);
       if (val.empty()) {
         continue;
       }
       auto tag = unaligned_load<SequenceNumber>(val.data());
-      SequenceNumber sn;
-      ValueType valtype;
-      UnPackSequenceAndType(tag, &sn, &valtype);
-      if (sn <= pikey.sequence) {
+      SequenceNumber seq;
+      ValueType val_type;
+      UnPackSequenceAndType(tag, &seq, &val_type);
+      if (seq <= pikey.sequence) {
         val.remove_prefix(sizeof(SequenceNumber));
-        bool hasMoreValue = get_context->SaveValue(
-          ParsedInternalKey(pikey.user_key, sn, valtype), val, &matched);
-        if (!hasMoreValue) {
+        bool more = get_context->SaveValue(ParsedInternalKey(user_key, seq, val_type), val, &matched);
+        if (!more) {
           break;
         }
       }
     }
     break;
-    }
   }
-  if (buf.capacity() > 512 * 1024) {
-    buf.clear(); // free large thread local memory
+  default:
+    return Status::Aborted("TerarkZipTableReader::Get()", "Bad ZipValueType");
   }
   return Status::OK();
 }
