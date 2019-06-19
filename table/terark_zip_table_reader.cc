@@ -851,7 +851,7 @@ const {
   auto ctx_buffer = g_tctx->alloc();
   auto& buf = ctx_buffer.get();
   auto set_value = [&](const ParsedInternalKey& k, Slice v) {
-    assert(pik.type != kTypeMerge);
+    assert(pikey.type != kTypeMerge);
     static constexpr size_t pin_size = 8192;
     bool pin_value = v.size() >= pin_size;
     if (pin_value) {
