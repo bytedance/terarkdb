@@ -189,6 +189,10 @@ class CompactionFilter {
   // Returns a name that identifies this compaction filter.
   // The name will be printed to LOG file on start up for diagnosis.
   virtual const char* Name() const = 0;
+
+  virtual bool SupportSerialization() const { return false; }
+  virtual void Serialize(std::string* bytes) const { assert(false); }
+  virtual void Deserialize(const Slice& bytes) { assert(false); }
 };
 
 // Each compaction will create a new CompactionFilter allowing the

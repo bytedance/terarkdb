@@ -202,6 +202,10 @@ class MergeOperator {
   virtual bool ShouldMerge(const std::vector<Slice>& /*operands*/) const {
     return false;
   }
+
+  virtual bool SupportSerialization() const { return false; }
+  virtual void Serialize(std::string* bytes) const { assert(false); }
+  virtual void Deserialize(const Slice& bytes) { assert(false); }
 };
 
 // The simpler, associative merge operator.
