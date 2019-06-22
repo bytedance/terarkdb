@@ -2963,8 +2963,9 @@ template<class InputBufferType>
 SuffixBase*
 BuildSuffixAutoSelect(
     InputBufferType& input, size_t numKeys, size_t sumKeyLen, bool isFixedLen, bool isReverse, double zipRatio) {
-  assert(sumKeyLen > 0);
-  if (UseDictZipSuffix(numKeys, sumKeyLen, zipRatio)) {
+  if (sumKeyLen == 0) {
+    return BuildEmptySuffix();
+  } else if (UseDictZipSuffix(numKeys, sumKeyLen, zipRatio)) {
     return BuildDictZipSuffix(input, numKeys, sumKeyLen, isReverse);
   } else if (UseEntropySuffix(numKeys, sumKeyLen, zipRatio)) {
     return BuildEntropySuffix(input, numKeys, sumKeyLen, isReverse);
@@ -2981,6 +2982,9 @@ BuildSuffixAutoSelect(
 UintPrefixBuildInfo TerarkIndex::GetUintPrefixBuildInfo(const TerarkIndex::KeyStat& ks) {
   size_t cplen = ks.keyCount > 1 ? commonPrefixLen(ks.minKey, ks.maxKey) : 0;
   auto GetZipRatio = [&](size_t p) {
+    if (ks.sumKeyLen < 1024) {
+      return 1.0;
+    }
     return std::pow(double(ks.entropyLen) / ks.sumKeyLen, double(ks.sumKeyLen - p * ks.keyCount) / ks.sumKeyLen);
   };
   UintPrefixBuildInfo result = {
@@ -3353,7 +3357,7 @@ TerarkIndex* TerarkIndex::Factory::Build(TerarkKeyReader* reader, const TerarkZi
                                      ks.minKeyLen == ks.maxKeyLen, isReverse, uint_prefix_info.zip_ratio);
     }
   } else if ((!g_indexEnableDynamicSuffix && ks.minSuffixLen != ks.maxSuffixLen) ||
-             !g_indexEnableCompositeIndex || ks.sumPrefixLen > ks.sumKeyLen * 31 / 32) {
+             !g_indexEnableCompositeIndex || ks.sumPrefixLen >= ks.sumKeyLen * 31 / 32) {
     DefaultInputBuffer input_reader{reader, cplen};
     prefix = BuildNestLoudsTriePrefix(
         input_reader, tzopt, ks.keyCount, ks.sumKeyLen - ks.keyCount * cplen,

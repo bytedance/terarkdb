@@ -1140,7 +1140,7 @@ LoadSample(std::unique_ptr<DictZipBlobStore::ZipBuilder>& zbuilder) {
 
 Status TerarkZipTableBuilder::buildEntropyZipBlobStore(BuildStoreParams& params) {
   auto& kvs = params.kvs;
-  size_t blockUnits = table_options_.offsetArrayBlockUnits;
+  size_t blockUnits = table_options_.offsetArrayBlockUnits != 0 ? table_options_.offsetArrayBlockUnits : 128;
   terark::EntropyZipBlobStore::MyBuilder builder(kvs.valueFreq, blockUnits, params.fpath, params.offset);
   auto s = BuilderWriteValues(kvs, [&](fstring value) { builder.addRecord(value); });
   if (s.ok()) {
