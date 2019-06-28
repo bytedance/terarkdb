@@ -326,6 +326,7 @@ TEST_F(DBCompactionTest, LazyCompactionTest) {
   ReadOptions ro;
   FlushOptions fo;
   CompactionOptions co;
+  co.map_compaction = true;
 
   std::vector<const Snapshot*> snapshots;
 
@@ -356,12 +357,10 @@ TEST_F(DBCompactionTest, LazyCompactionTest) {
   std::vector<LiveFileMetaData> level_files;
 
   dbfull()->GetLiveFilesMetaData(&level_files);
-  co.compaction_purpose = kLinkSst;
   dbfull()->CompactFiles(co, {level_files[1].name, level_files[2].name}, 1);
   level_files.clear();
 
   dbfull()->GetLiveFilesMetaData(&level_files);
-  co.compaction_purpose = kMapSst;
   dbfull()->CompactFiles(co, {level_files[0].name, level_files[1].name}, 2);
   level_files.clear();
 

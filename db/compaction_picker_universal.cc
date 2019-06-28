@@ -318,7 +318,7 @@ Compaction* UniversalCompactionPicker::PickCompaction(
     if (mutable_cf_options.enable_lazy_compaction) {
       bool has_map_compaction = false;
       for (auto cip : compactions_in_progress_) {
-        if (cip->compaction_purpose() == kMapSst) {
+        if (cip->map_compaction()) {
           has_map_compaction = true;
           break;
         }
@@ -637,7 +637,7 @@ Compaction* UniversalCompactionPicker::CompactRange(
     params.manual_compaction = true;
     if (enable_lazy_compaction) {
       params.max_subcompactions = 1;
-      params.compaction_purpose = kMapSst;
+      params.map_compaction = true;
     } else {
       *compaction_end = nullptr;
     }
@@ -1236,10 +1236,10 @@ Compaction* UniversalCompactionPicker::PickDeleteTriggeredCompaction(
   }
   uint32_t path_id =
       GetPathId(ioptions_, mutable_cf_options, estimated_total_size);
-  SstPurpose compaction_purpose = kEssenceSst;
+  bool map_compaction = false;
   uint32_t max_subcompactions = 0;
   if (mutable_cf_options.enable_lazy_compaction && output_level != 0) {
-    compaction_purpose = kMapSst;
+    map_compaction = true;
     max_subcompactions = 1;
   }
   CompactionParams params(vstorage, ioptions_, mutable_cf_options);
@@ -1256,7 +1256,7 @@ Compaction* UniversalCompactionPicker::PickDeleteTriggeredCompaction(
   params.max_subcompactions = max_subcompactions;
   params.manual_compaction = true;
   params.score = score;
-  params.compaction_purpose = compaction_purpose;
+  params.map_compaction = map_compaction;
   params.compaction_reason = CompactionReason::kFilesMarkedForCompaction;
 
   return new Compaction(std::move(params));
@@ -1393,7 +1393,7 @@ Compaction* UniversalCompactionPicker::PickCompositeCompaction(
   if (inputs.level == -1) {
     return nullptr;
   }
-  SstPurpose compaction_purpose = kEssenceSst;
+  bool map_compaction = false;
   uint32_t max_subcompactions = ioptions_.max_subcompactions;
   std::vector<RangeStorage> input_range;
 
@@ -1449,7 +1449,7 @@ Compaction* UniversalCompactionPicker::PickCompositeCompaction(
     params.max_subcompactions = max_subcompactions;
     params.score = 0;
     params.partial_compaction = true;
-    params.compaction_purpose = compaction_purpose;
+    params.map_compaction = map_compaction;
     params.input_range = std::move(input_range);
     params.compaction_reason = CompactionReason::kCompositeAmplification;
 
@@ -1459,7 +1459,7 @@ Compaction* UniversalCompactionPicker::PickCompositeCompaction(
   if (inputs.files.empty()) {
     inputs.files = vstorage->LevelFiles(inputs.level);
     assert(inputs.files.size() > 1);
-    compaction_purpose = kMapSst;
+    map_compaction = true;
     max_subcompactions = 1;
     return new_compaction();
   }
@@ -1667,7 +1667,7 @@ Compaction* UniversalCompactionPicker::PickCompositeCompaction(
                 }
                 return r < 0;
               });
-    compaction_purpose = kEssenceSst;
+    map_compaction = false;
     return new_compaction();
   }
   has_start = false;
@@ -1705,12 +1705,12 @@ Compaction* UniversalCompactionPicker::PickCompositeCompaction(
     input_range.emplace_back(std::move(range));
   }
   if (!input_range.empty()) {
-    compaction_purpose = kEssenceSst;
+    map_compaction = false;
     return new_compaction();
   }
   if (inputs.level != 0) {
     max_subcompactions = 1;
-    compaction_purpose = kMapSst;
+    map_compaction = true;
     return new_compaction();
   }
   return nullptr;
@@ -1747,7 +1747,7 @@ Compaction* UniversalCompactionPicker::PickRangeCompaction(
     params.output_path_id = path_id;
     params.compression_opts = ioptions_.compression_opts;
     params.score = 0;
-    params.compaction_purpose = kMapSst;
+    params.map_compaction = true;
     return new Compaction(std::move(params));
   }
 
@@ -1883,7 +1883,7 @@ Compaction* UniversalCompactionPicker::PickRangeCompaction(
   params.score = 0;
   params.input_range = std::move(input_range);
   params.partial_compaction = true;
-  params.compaction_purpose = kEssenceSst;
+  params.map_compaction = false;
   return new Compaction(std::move(params));
 }
 
@@ -2025,7 +2025,7 @@ Compaction* UniversalCompactionPicker::PickCompactionToReduceSortedRuns(
       ioptions_, vstorage, start_level, enable_compression);
   params.max_subcompactions = 1;
   params.score = score;
-  params.compaction_purpose = kMapSst;
+  params.map_compaction = true;
   params.compaction_reason = CompactionReason::kUniversalSortedRunNum;
 
   return new Compaction(std::move(params));

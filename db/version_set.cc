@@ -731,7 +731,9 @@ class BaseReferencedVersionBuilder {
   explicit BaseReferencedVersionBuilder(ColumnFamilyData* cfd)
       : version_builder_(new VersionBuilder(
             cfd->current()->version_set()->env_options(), cfd->table_cache(),
-            cfd->current()->storage_info(), cfd->ioptions()->info_log)),
+            cfd->current()->storage_info(),
+            cfd->current()->GetMutableCFOptions().prefix_extractor.get(),
+            cfd->ioptions()->info_log)),
         version_(cfd->current()) {
     version_->Ref();
   }

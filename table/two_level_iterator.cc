@@ -206,180 +206,6 @@ void TwoLevelIndexIterator::InitDataBlock() {
   }
 }
 
-class LinkSstIterator final : public InternalIterator {
- private:
-  const FileMetaData& file_meta_;
-  InternalIterator* first_level_iter_;
-  InternalIterator* second_level_iter_;
-  Slice bound_;
-  InternalKey bound_storage_;
-  bool has_bound_;
-  bool is_backword_;
-  Status status_;
-  const InternalKeyComparator& icomp_;
-  IteratorCache iterator_cache_;
-
-  bool InitFirstLevelIter() {
-    if (!first_level_iter_->Valid()) {
-      second_level_iter_ = nullptr;
-      return false;
-    }
-    bound_ = first_level_iter_->key();
-    return InitSecondLevelIter();
-  }
-
-  bool InitSecondLevelIter() {
-    // Manual inline LinkSstElement::Decode
-    uint64_t file_number;
-    Slice value_copy = first_level_iter_->value();
-    if (!GetFixed64(&value_copy, &file_number)) {
-      status_ = Status::Corruption("Link sst invalid value");
-      second_level_iter_ = nullptr;
-      return false;
-    }
-    assert(std::binary_search(file_meta_.sst_depend.begin(),
-                              file_meta_.sst_depend.end(), file_number));
-    second_level_iter_ = iterator_cache_.GetIterator(file_number);
-    if (!second_level_iter_->status().ok()) {
-      status_ = second_level_iter_->status();
-      second_level_iter_ = nullptr;
-      return false;
-    }
-    return true;
-  }
-
- public:
-  LinkSstIterator(const FileMetaData& file_meta, InternalIterator* iter,
-                  const DependFileMap& depend_files,
-                  const InternalKeyComparator& icomp, void* create_arg,
-                  const IteratorCache::CreateIterCallback& create)
-      : file_meta_(file_meta),
-        first_level_iter_(iter),
-        second_level_iter_(nullptr),
-        has_bound_(false),
-        is_backword_(false),
-        icomp_(icomp),
-        iterator_cache_(depend_files, create_arg, create) {
-    if (file_meta_.sst_purpose != kLinkSst) {
-      abort();
-    }
-  }
-
-  virtual bool Valid() const override {
-    return second_level_iter_ != nullptr && second_level_iter_->Valid();
-  }
-  virtual void SeekToFirst() override {
-    is_backword_ = false;
-    first_level_iter_->SeekToFirst();
-    if (InitFirstLevelIter()) {
-      second_level_iter_->Seek(file_meta_.smallest.Encode());
-    }
-  }
-  virtual void SeekToLast() override {
-    is_backword_ = false;
-    first_level_iter_->SeekToLast();
-    if (InitFirstLevelIter()) {
-      second_level_iter_->SeekForPrev(file_meta_.largest.Encode());
-    }
-  }
-  virtual void Seek(const Slice& target) override {
-    is_backword_ = false;
-    Slice seek_target = target;
-    if (icomp_.Compare(target, file_meta_.smallest.Encode()) < 0) {
-      seek_target = file_meta_.smallest.Encode();
-    }
-    first_level_iter_->Seek(seek_target);
-    if (InitFirstLevelIter()) {
-      second_level_iter_->Seek(seek_target);
-      assert(second_level_iter_->Valid());
-      assert(icomp_.Compare(second_level_iter_->key(), bound_) <= 0);
-      assert(icomp_.Compare(second_level_iter_->key(), target) >= 0);
-      if (icomp_.Compare(second_level_iter_->key(),
-                         file_meta_.largest.Encode()) > 0) {
-        second_level_iter_ = nullptr;
-      }
-    }
-  }
-  virtual void SeekForPrev(const Slice& target) override {
-    LinkSstIterator::Seek(target);
-    if (!LinkSstIterator::Valid()) {
-      LinkSstIterator::SeekToLast();
-    } else if (icomp_.Compare(LinkSstIterator::key(), target) != 0) {
-      LinkSstIterator::Prev();
-    }
-  }
-  virtual void Next() override {
-    if (is_backword_) {
-      if (has_bound_) {
-        first_level_iter_->Next();
-      } else {
-        first_level_iter_->SeekToFirst();
-      }
-      bound_ = first_level_iter_->key();
-      is_backword_ = false;
-    }
-    second_level_iter_->Next();
-    if (!second_level_iter_->Valid() ||
-        icomp_.Compare(second_level_iter_->key(), bound_) > 0) {
-      bound_storage_.DecodeFrom(bound_);
-      first_level_iter_->Next();
-      if (InitFirstLevelIter()) {
-        second_level_iter_->Seek(bound_storage_.Encode());
-        assert(second_level_iter_->Valid());
-        assert(icomp_.Compare(second_level_iter_->key(),
-                              bound_storage_.Encode()) > 0);
-      }
-    }
-  }
-  virtual void Prev() override {
-    if (!is_backword_) {
-      first_level_iter_->Prev();
-      has_bound_ = first_level_iter_->Valid();
-      if (has_bound_) {
-        bound_ = first_level_iter_->key();
-      }
-      is_backword_ = true;
-    }
-    second_level_iter_->Prev();
-    if (has_bound_) {
-      if ((!second_level_iter_->Valid() ||
-           icomp_.Compare(second_level_iter_->key(), bound_) <= 0) &&
-          InitSecondLevelIter()) {
-        second_level_iter_->SeekForPrev(bound_);
-        assert(second_level_iter_->Valid());
-        assert(icomp_.Compare(second_level_iter_->key(), bound_) == 0);
-        first_level_iter_->Prev();
-        has_bound_ = first_level_iter_->Valid();
-        if (has_bound_) {
-          bound_ = first_level_iter_->key();
-        }
-      }
-    } else if (second_level_iter_->Valid() &&
-               icomp_.Compare(second_level_iter_->key(),
-                              file_meta_.smallest.Encode()) < 0) {
-      second_level_iter_ = nullptr;
-    }
-  }
-  virtual Slice key() const override { return second_level_iter_->key(); }
-  virtual Slice value() const override { return second_level_iter_->value(); }
-  virtual Status status() const override { return status_; }
-  virtual uint64_t FileNumber() const override {
-    return second_level_iter_ != nullptr ? second_level_iter_->FileNumber()
-                                         : uint64_t(-1);
-  }
-  virtual void SetPinnedItersMgr(
-      PinnedIteratorsManager* pinned_iters_mgr) override {
-    iterator_cache_.SetPinnedItersMgr(pinned_iters_mgr);
-  }
-  virtual bool IsKeyPinned() const override {
-    return second_level_iter_ != nullptr && second_level_iter_->IsKeyPinned();
-  }
-  virtual bool IsValuePinned() const override {
-    return second_level_iter_ != nullptr &&
-           second_level_iter_->IsValuePinned();
-  }
-};
-
 class MapSstIterator final : public InternalIterator {
  private:
   const FileMetaData& file_meta_;
@@ -721,23 +547,6 @@ class MapSstIterator final : public InternalIterator {
   }
 };
 
-template <class IteratorType>
-InternalIterator* NewCompositeSstIteratorTpl(
-    const FileMetaData& file_meta, InternalIterator* mediate_sst_iter,
-    const DependFileMap& depend_files, const InternalKeyComparator& icomp,
-    void* callback_arg, const IteratorCache::CreateIterCallback& create_iter,
-    Arena* arena) {
-  if (arena == nullptr) {
-    return new IteratorType(file_meta, mediate_sst_iter, depend_files, icomp,
-                            callback_arg, create_iter);
-  } else {
-    void* buffer = arena->AllocateAligned(sizeof(IteratorType));
-    return new (buffer)
-        IteratorType(file_meta, mediate_sst_iter, depend_files, icomp,
-                     callback_arg, create_iter);
-  }
-}
-
 }  // namespace
 
 InternalIteratorBase<BlockHandle>* NewTwoLevelIterator(
@@ -746,23 +555,20 @@ InternalIteratorBase<BlockHandle>* NewTwoLevelIterator(
   return new TwoLevelIndexIterator(state, first_level_iter);
 }
 
-InternalIterator* NewCompositeSstIterator(
+InternalIterator* NewMapSstIterator(
     const FileMetaData& file_meta, InternalIterator* mediate_sst_iter,
     const DependFileMap& depend_files, const InternalKeyComparator& icomp,
     void* callback_arg, const IteratorCache::CreateIterCallback& create_iter,
     Arena* arena) {
-  switch (file_meta.sst_purpose) {
-    case kLinkSst:
-      return NewCompositeSstIteratorTpl<LinkSstIterator>(
-          file_meta, mediate_sst_iter, depend_files, icomp, callback_arg,
-          create_iter, arena);
-    case kMapSst:
-      return NewCompositeSstIteratorTpl<MapSstIterator>(
-          file_meta, mediate_sst_iter, depend_files, icomp, callback_arg,
-          create_iter, arena);
-    default:
-      assert(file_meta.sst_purpose != 0);
-      return mediate_sst_iter;
+  assert(file_meta.sst_purpose == kMapSst);
+  if (arena == nullptr) {
+    return new MapSstIterator(file_meta, mediate_sst_iter, depend_files, icomp,
+                              callback_arg, create_iter);
+  } else {
+    void* buffer = arena->AllocateAligned(sizeof(MapSstIterator));
+    return new (buffer)
+        MapSstIterator(file_meta, mediate_sst_iter, depend_files, icomp,
+                       callback_arg, create_iter);
   }
 }
 

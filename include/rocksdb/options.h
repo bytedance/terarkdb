@@ -77,9 +77,9 @@ enum CompressionType : unsigned char {
 
 // Sst purpose
 enum SstPurpose {
-  kEssenceSst,  // Essence sst is actual data storage sst
-  kLinkSst,     // Link sst is composite sst
-  kMapSst,      // Map sst is composite sst
+  kEssenceSst,  // Actual data storage sst
+  kBlobSst,     // Blob data storage sst
+  kMapSst,      // Dummy sst
 };
 
 struct Options;
@@ -1271,13 +1271,13 @@ struct CompactionOptions {
   // If > 0, it will replace the option in the DBOptions for this compaction.
   uint32_t max_subcompactions;
   // Compaction target output sst variety
-  SstPurpose compaction_purpose;
+  bool map_compaction;
 
   CompactionOptions()
       : compression(kSnappyCompression),
         output_file_size_limit(std::numeric_limits<uint64_t>::max()),
         max_subcompactions(0),
-        compaction_purpose(kEssenceSst) {}
+        map_compaction(false) {}
 };
 
 // For level based compaction, we can configure if we want to skip/force

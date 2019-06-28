@@ -360,7 +360,6 @@ Status LoadRangeWithDepend(std::vector<RangeWithDepend>& ranges,
 
 enum class PartitionType {
   kMerge,
-  kReplace,
   kDelete,
 };
 
@@ -425,16 +424,6 @@ std::vector<RangeWithDepend> PartitionRangeWithDepend(
           depend = b->depend;
         }
         assert(!depend.empty());
-        break;
-      case PartitionType::kReplace:
-        if (b == nullptr) {
-          no_records = a->no_records;
-          stable = a->stable;
-          depend = a->depend;
-        } else if (a != nullptr) {
-          stable = false;
-          depend = b->depend;
-        }
         break;
       case PartitionType::kDelete:
         if (b == nullptr) {
@@ -559,16 +548,11 @@ MapBuilder::MapBuilder(int job_id, const ImmutableDBOptions& db_options,
 Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
                          const std::vector<Range>& deleted_range,
                          const std::vector<const FileMetaData*>& added_files,
-                         SstPurpose compaction_purpose, int output_level,
-                         uint32_t output_path_id, VersionStorageInfo* vstorage,
-                         ColumnFamilyData* cfd, VersionEdit* edit,
-                         FileMetaData* file_meta_ptr,
+                         int output_level, uint32_t output_path_id,
+                         VersionStorageInfo* vstorage, ColumnFamilyData* cfd,
+                         VersionEdit* edit, FileMetaData* file_meta_ptr,
                          std::unique_ptr<TableProperties>* prop_ptr,
                          std::set<FileMetaData*>* deleted_files) {
-  assert(compaction_purpose != kMapSst || deleted_range.empty() ||
-         added_files.empty());
-  assert(compaction_purpose != kLinkSst || !added_files.empty());
-
   auto& icomp = cfd->internal_comparator();
   DependFileMap empty_depend_files;
 
@@ -663,8 +647,7 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
     level_ranges.erase(union_b);
   }
 
-  if (!level_ranges.empty() && !deleted_range.empty() &&
-      compaction_purpose != kLinkSst) {
+  if (!level_ranges.empty() && !deleted_range.empty()) {
     std::vector<RangeWithDepend> ranges;
     ranges.reserve(deleted_range.size());
     for (auto& r : deleted_range) {
@@ -695,14 +678,11 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
       return s;
     }
     if (level_ranges.empty()) {
-      assert(compaction_purpose == kEssenceSst);
       level_ranges.emplace_back(std::move(ranges));
     } else {
-      PartitionType type = compaction_purpose == kLinkSst
-                               ? PartitionType::kReplace
-                               : PartitionType::kMerge;
       level_ranges.front() = PartitionRangeWithDepend(
-          level_ranges.front(), ranges, cfd->internal_comparator(), type);
+          level_ranges.front(), ranges, cfd->internal_comparator(),
+          PartitionType::kMerge);
     }
   }
 
