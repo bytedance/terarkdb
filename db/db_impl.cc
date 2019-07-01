@@ -58,6 +58,7 @@
 #include "memtable/hash_skiplist_rep.h"
 #include "monitoring/iostats_context_imp.h"
 #include "monitoring/perf_context_imp.h"
+#include "trace_replay/block_cache_tracer.h"
 //#include "monitoring/persistent_stats_history.h"
 #include "monitoring/stats_dump_scheduler.h"
 #include "monitoring/thread_status_updater.h"
@@ -132,6 +133,8 @@
 namespace rocksdb {
 const std::string kDefaultColumnFamilyName("default");
 const uint64_t kDumpStatsWaitMicroseconds = 10000;
+const std::string kPersistentStatsColumnFamilyName(
+    "___rocksdb_stats_history___");
 void DumpRocksDBBuildVersion(Logger* log);
 
 CompressionType GetCompressionFlush(
