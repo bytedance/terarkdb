@@ -367,17 +367,13 @@ public:
     return Slice((const char*)key_ptr_, key_length_);
   }
 
-  Slice value() const override {
+  KeyValuePair pair() const override {
     assert(iter_->Valid());
-    return user_value_;
+    return KeyValuePair(Slice((const char*)key_ptr_, key_length_), user_value_, table_reader_options_->file_number);
   }
 
   Status status() const override {
     return status_;
-  }
-
-  uint64_t FileNumber() const override {
-    return table_reader_options_->file_number;
   }
 
   bool IsKeyPinned() const override {
@@ -1237,15 +1233,13 @@ TerarkZipTableReader::Get(const ReadOptions& ro, const Slice& ikey,
 }
 
 void TerarkZipTableReader::RangeScan(const Slice* begin, const SliceTransform* prefix_extractor, void* arg,
-                                     bool(* callback_func)(void* arg, const Slice& ikey,
-                                                           const Slice& value)) {
+                                     bool(* callback_func)(void* arg, const KeyValuePair& pair)) {
   auto g_tctx = terark::GetTlsTerarkContext();
   ContextBuffer buffer;
   ScopedArenaIterator iter(NewIteratorSelect(this, ReadOptions(), isReverseBytewiseOrder_,
                                              subReader_.store_->is_offsets_zipped(), nullptr, &buffer, g_tctx));
   for (begin == nullptr ? iter->SeekToFirst() : iter->Seek(*begin);
-       iter->Valid() && callback_func(arg, iter->key(), iter->value());
-       iter->Next()) {
+       iter->Valid() && callback_func(arg, iter->pair()); iter->Next()) {
   }
 }
 
@@ -1462,15 +1456,13 @@ TerarkZipTableMultiReader::Get(const ReadOptions& ro, const Slice& ikey, GetCont
 }
 
 void TerarkZipTableMultiReader::RangeScan(const Slice* begin, const SliceTransform* prefix_extractor, void* arg,
-                                          bool(* callback_func)(void* arg, const Slice& ikey,
-                                                                const Slice& value)) {
+                                          bool(* callback_func)(void* arg, const KeyValuePair& pair)) {
   auto g_tctx = terark::GetTlsTerarkContext();
   ContextBuffer buffer;
   ScopedArenaIterator iter(NewIteratorSelect(this, ReadOptions(), isReverseBytewiseOrder_,
                            subIndex_.HasAnyZipOffset(), nullptr, &buffer, g_tctx));
   for (begin == nullptr ? iter->SeekToFirst() : iter->Seek(*begin);
-       iter->Valid() && callback_func(arg, iter->key(), iter->value());
-       iter->Next()) {
+       iter->Valid() && callback_func(arg, iter->pair()); iter->Next()) {
   }
 }
 

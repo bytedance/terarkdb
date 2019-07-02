@@ -361,8 +361,13 @@ std::shared_ptr<FilePair> TerarkZipTableBuilder::NewFilePair() {
   return pair;
 };
 
-void TerarkZipTableBuilder::Add(const Slice& key, const Slice& value)
-try {
+void TerarkZipTableBuilder::Add(const KeyValuePair& pair) try {
+  auto s = pair.decode();
+  if (!s.ok()) {
+    status_ = s;
+    return;
+  }
+  Slice key = pair.key(), value = pair.value();
   if (table_options_.debugLevel == 3) {
     rocksdb::ParsedInternalKey ikey;
     rocksdb::ParseInternalKey(key, &ikey);
@@ -1472,11 +1477,16 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
     value.erase_all();
 
     while (recId < stat.keyCount && second_pass_iter_->Valid()) {
-      curKey = second_pass_iter_->key();
-      curVal = second_pass_iter_->value();
+      KeyValuePair pair = second_pass_iter_->pair();
+      auto s = pair.decode();
+      if (!s.ok()) {
+        return s;
+      }
+      curKey = pair.key();
+      curVal = pair.value();
       TERARK_RT_assert(ParseInternalKey(curKey, &pIKey), std::logic_error);
       if (debugDumpKeyValue) {
-        dumpKeyValueFunc(pIKey, second_pass_iter_->value());
+        dumpKeyValueFunc(pIKey, curVal);
       }
       varNum = kvs.status.valueBits.one_seq_len(bitPos);
       assert(varNum >= 1);
@@ -1525,11 +1535,16 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
         size_t mulRecId = 0;
         while (mulRecId < varNum && second_pass_iter_->Valid()) {
           if (mulRecId > 0) {
-            curKey = second_pass_iter_->key();
-            curVal = second_pass_iter_->value();
+            pair = second_pass_iter_->pair();
+            s = pair.decode();
+            if (!s.ok()) {
+              return s;
+            }
+            curKey = pair.key();
+            curVal = pair.value();
             TERARK_RT_assert(ParseInternalKey(curKey, &pIKey), std::logic_error);
             if (debugDumpKeyValue) {
-              dumpKeyValueFunc(pIKey, second_pass_iter_->value());
+              dumpKeyValueFunc(pIKey, curVal);
             }
           }
           mulCmpRet = ic.Compare(curKey, bufKey);

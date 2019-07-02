@@ -67,7 +67,7 @@ class TerarkEmptyTableReader : public TerarkZipTableReaderBase {
     void Next() override {}
     void Prev() override {}
     Slice key() const override { THROW_STD(invalid_argument, "Invalid call"); }
-    Slice value() const override { THROW_STD(invalid_argument, "Invalid call"); }
+    KeyValuePair pair() const override { THROW_STD(invalid_argument, "Invalid call"); }
     Status status() const override { return Status::OK(); }
     bool IsKeyPinned() const override { return false; }
     bool IsValuePinned() const override { return false; }
@@ -89,8 +89,7 @@ public:
     return Status::OK();
   }
   void RangeScan(const Slice* begin, const SliceTransform* prefix_extractor, void* arg,
-                 bool(* callback_func)(void* arg, const Slice& ikey,
-                                       const Slice& value)) override {
+                 bool(* callback_func)(void* arg, const KeyValuePair&)) override {
     // do nothing
   }
   size_t ApproximateMemoryUsage() const override { return 100; }
@@ -165,8 +164,7 @@ public:
              const SliceTransform* prefix_extractor, bool skip_filters) override;
 
   void RangeScan(const Slice* begin, const SliceTransform* prefix_extractor, void* arg,
-                 bool(* callback_func)(void* arg, const Slice& ikey,
-                                       const Slice& value)) override;
+                 bool(* callback_func)(void* arg, const KeyValuePair&)) override;
 
   uint64_t ApproximateOffsetOf(const Slice& key) override;
   void SetupForCompaction() override {}
@@ -225,8 +223,7 @@ public:
              const SliceTransform* prefix_extractor, bool skip_filters) override;
 
   void RangeScan(const Slice* begin, const SliceTransform* prefix_extractor, void* arg,
-                 bool(* callback_func)(void* arg, const Slice& ikey,
-                                       const Slice& value)) override;
+                 bool(* callback_func)(void* arg, const KeyValuePair& pair)) override;
 
   uint64_t ApproximateOffsetOf(const Slice& key) override;
   void SetupForCompaction() override {}
