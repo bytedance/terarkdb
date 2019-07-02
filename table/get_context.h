@@ -44,7 +44,6 @@ class GetContext {
     kDeleted,
     kCorrupt,
     kMerge,  // saver contains the current merge result (the operands)
-    kBlobIndex,
   };
   GetContextStats get_context_stats_;
 
@@ -55,7 +54,7 @@ class GetContext {
              SequenceNumber* max_covering_tombstone_seq, Env* env,
              SequenceNumber* seq = nullptr,
              PinnedIteratorsManager* _pinned_iters_mgr = nullptr,
-             ReadCallback* callback = nullptr, bool* is_blob_index = nullptr);
+             ReadCallback* callback = nullptr);
 
   void MarkKeyMayExist();
 
@@ -134,7 +133,6 @@ class GetContext {
   PinnedIteratorsManager* pinned_iters_mgr_;
   ReadCallback* callback_;
   bool sample_;
-  bool* is_blob_index_;
 };
 
 void replayGetContextLog(const Slice& replay_log, const Slice& user_key,

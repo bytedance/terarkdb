@@ -59,16 +59,8 @@ class IteratorWrapperBase {
   // Iterator interface methods
   bool Valid() const        { return valid_; }
   Slice key() const         { assert(Valid()); return key_; }
-  TValue value() const {
-    assert(Valid());
-    return iter_->value();
-  }
   // Methods below require iter() != nullptr
   Status status() const     { assert(iter_); return iter_->status(); }
-  uint64_t FileNumber() const {
-    assert(iter_);
-    return valid_ ? iter_->FileNumber() : uint64_t(-1);
-  }
   void Next()               { assert(iter_); iter_->Next();        Update(); }
   void Prev()               { assert(iter_); iter_->Prev();        Update(); }
   void Seek(const Slice& k) { assert(iter_); iter_->Seek(k);       Update(); }

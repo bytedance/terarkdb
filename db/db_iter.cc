@@ -194,7 +194,13 @@ class DBIter final: public Iterator {
     } else if (direction_ == kReverse) {
       return pinned_value_;
     } else {
-      return iter_->value();
+      auto s = pair_.decode();
+      if (!s.ok()) {
+        valid_ = false;
+        status_ = pair_.decode();
+        return Slice::Invalid();
+      }
+      return pair_.value();
     }
   }
   virtual Status status() const override {
@@ -314,16 +320,17 @@ class DBIter final: public Iterator {
   InternalIterator* iter_;
   SequenceNumber sequence_;
 
-  Status status_;
+  mutable Status status_;
   IterKey saved_key_;
   // Reusable internal key data structure. This is only used inside one function
   // and should not be used across functions. Reusing this object can reduce
   // overhead of calling construction of the function if creating it each time.
   ParsedInternalKey ikey_;
+  KeyValuePair pair_;
   std::string saved_value_;
   Slice pinned_value_;
   Direction direction_;
-  bool valid_;
+  mutable bool valid_;
   bool current_entry_is_merged_;
   // for prefix seek mode to support prev()
   Statistics* statistics_;
@@ -359,11 +366,12 @@ class DBIter final: public Iterator {
 };
 
 inline bool DBIter::ParseKey(ParsedInternalKey* ikey) {
-  if (!ParseInternalKey(iter_->key(), ikey)) {
+  pair_ = iter_->pair();
+  if (!ParseInternalKey(pair_.key(), ikey)) {
     status_ = Status::Corruption("corrupted internal key in DBIter");
     valid_ = false;
     ROCKS_LOG_ERROR(logger_, "corrupted internal key in DBIter: %s",
-                    iter_->key().ToString(true).c_str());
+                    pair_.key().ToString(true).c_str());
     return false;
   } else {
     return true;
@@ -498,13 +506,8 @@ bool DBIter::FindNextUserEntryInternal(bool skipping, bool prefix_check) {
             }
             break;
           case kTypeValue:
-          case kTypeBlobIndex:
+          case kTypeValueIndex:
             if (start_seqnum_ > 0) {
-              // we are taking incremental snapshot here
-              // incremental snapshots aren't supported on DB with range deletes
-              assert(!(
-                (ikey_.type == kTypeBlobIndex) && (start_seqnum_ > 0)
-              ));
               if (ikey_.sequence >= start_seqnum_) {
                 saved_key_.SetInternalKey(ikey_);
                 valid_ = true;
@@ -527,19 +530,6 @@ bool DBIter::FindNextUserEntryInternal(bool skipping, bool prefix_check) {
                 skipping = true;
                 num_skipped = 0;
                 PERF_COUNTER_ADD(internal_delete_skipped_count, 1);
-              } else if (ikey_.type == kTypeBlobIndex) {
-                if (!allow_blob_) {
-                  ROCKS_LOG_ERROR(logger_, "Encounter unexpected blob index.");
-                  status_ = Status::NotSupported(
-                      "Encounter unexpected blob index. Please open DB with "
-                      "rocksdb::blob_db::BlobDB instead.");
-                  valid_ = false;
-                  return false;
-                }
-
-                is_blob_ = true;
-                valid_ = true;
-                return true;
               } else {
                 valid_ = true;
                 return true;
@@ -547,6 +537,7 @@ bool DBIter::FindNextUserEntryInternal(bool skipping, bool prefix_check) {
             }
             break;
           case kTypeMerge:
+          case kTypeMergeIndex:
             saved_key_.SetUserKey(
                 ikey_.user_key,
                 !pin_thru_lifetime_ || !iter_->IsKeyPinned() /* copy */);
@@ -636,17 +627,22 @@ bool DBIter::MergeValuesNewToOld() {
     valid_ = false;
     return false;
   }
+  Status s = pair_.decode();
+  if (!s.ok()) {
+    valid_ = false;
+    status_ = s;
+    return false;
+  }
 
   // Temporarily pin the blocks that hold merge operands
   TempPinData();
   merge_context_.Clear();
   // Start the merge process by pushing the first operand
-  merge_context_.PushOperand(iter_->value(),
+  merge_context_.PushOperand(pair_.value(),
                              iter_->IsValuePinned() /* operand_pinned */);
   TEST_SYNC_POINT("DBIter::MergeValuesNewToOld:PushedFirstOperand");
 
   ParsedInternalKey ikey;
-  Status s;
   for (iter_->Next(); iter_->Valid(); iter_->Next()) {
     TEST_SYNC_POINT("DBIter::MergeValuesNewToOld:SteppedToNextOperand");
     if (!ParseKey(&ikey)) {
@@ -656,17 +652,24 @@ bool DBIter::MergeValuesNewToOld() {
     if (!user_comparator_->Equal(ikey.user_key, saved_key_.GetUserKey())) {
       // hit the next user key, stop right here
       break;
-    } else if (kTypeDeletion == ikey.type || kTypeSingleDeletion == ikey.type ||
+    }
+    s = pair_.decode();
+    if (!s.ok()) {
+      valid_ = false;
+      status_ = s;
+      return false;
+    }
+    if (kTypeDeletion == ikey.type || kTypeSingleDeletion == ikey.type ||
                range_del_agg_.ShouldDelete(
                    ikey, RangeDelPositioningMode::kForwardTraversal)) {
       // hit a delete with the same user key, stop right here
       // iter_ is positioned after delete
       iter_->Next();
       break;
-    } else if (kTypeValue == ikey.type) {
+    } else if (kTypeValue == ikey.type || kTypeValueIndex == ikey.type) {
       // hit a put, merge the put value with operands and store the
       // final result in saved_value_. We are done!
-      const Slice val = iter_->value();
+      const Slice val = pair_.value();
       s = MergeHelper::TimedFullMerge(
           merge_operator_, ikey.user_key, &val, merge_context_.GetOperands(),
           &saved_value_, logger_, statistics_, env_, &pinned_value_, true);
@@ -682,24 +685,12 @@ bool DBIter::MergeValuesNewToOld() {
         return false;
       }
       return true;
-    } else if (kTypeMerge == ikey.type) {
+    } else if (kTypeMerge == ikey.type || kTypeMergeIndex == ikey.type) {
       // hit a merge, add the value as an operand and run associative merge.
       // when complete, add result to operands and continue.
-      merge_context_.PushOperand(iter_->value(),
+      merge_context_.PushOperand(pair_.value(),
                                  iter_->IsValuePinned() /* operand_pinned */);
       PERF_COUNTER_ADD(internal_merge_count, 1);
-    } else if (kTypeBlobIndex == ikey.type) {
-      if (!allow_blob_) {
-        ROCKS_LOG_ERROR(logger_, "Encounter unexpected blob index.");
-        status_ = Status::NotSupported(
-            "Encounter unexpected blob index. Please open DB with "
-            "rocksdb::blob_db::BlobDB instead.");
-      } else {
-        status_ =
-            Status::NotSupported("Blob DB does not support merge operator.");
-      }
-      valid_ = false;
-      return false;
     } else {
       assert(false);
     }
@@ -890,6 +881,7 @@ bool DBIter::FindValueForCurrentKey() {
   ReleaseTempPinnedData();
   TempPinData();
   size_t num_skipped = 0;
+  Status s;
   while (iter_->Valid()) {
     ParsedInternalKey ikey;
     if (!ParseKey(&ikey)) {
@@ -914,14 +906,20 @@ bool DBIter::FindValueForCurrentKey() {
     last_key_entry_type = ikey.type;
     switch (last_key_entry_type) {
       case kTypeValue:
-      case kTypeBlobIndex:
+      case kTypeValueIndex:
         if (range_del_agg_.ShouldDelete(
                 ikey, RangeDelPositioningMode::kBackwardTraversal)) {
           last_key_entry_type = kTypeRangeDeletion;
           PERF_COUNTER_ADD(internal_delete_skipped_count, 1);
         } else {
+          s = pair_.decode();
+          if (!s.ok()) {
+            valid_ = false;
+            status_ = s;
+            return false;
+          }
           assert(iter_->IsValuePinned());
-          pinned_value_ = iter_->value();
+          pinned_value_ = pair_.value();
         }
         merge_context_.Clear();
         last_not_merge_type = last_key_entry_type;
@@ -933,6 +931,7 @@ bool DBIter::FindValueForCurrentKey() {
         PERF_COUNTER_ADD(internal_delete_skipped_count, 1);
         break;
       case kTypeMerge:
+      case kTypeMergeIndex:
         if (range_del_agg_.ShouldDelete(
                 ikey, RangeDelPositioningMode::kBackwardTraversal)) {
           merge_context_.Clear();
@@ -940,9 +939,15 @@ bool DBIter::FindValueForCurrentKey() {
           last_not_merge_type = last_key_entry_type;
           PERF_COUNTER_ADD(internal_delete_skipped_count, 1);
         } else {
+          s = pair_.decode();
+          if (!s.ok()) {
+            valid_ = false;
+            status_ = s;
+            return false;
+          }
           assert(merge_operator_ != nullptr);
           merge_context_.PushOperandBack(
-              iter_->value(), iter_->IsValuePinned() /* operand_pinned */);
+              pair_.value(), iter_->IsValuePinned() /* operand_pinned */);
           PERF_COUNTER_ADD(internal_merge_count, 1);
         }
         break;
@@ -960,7 +965,6 @@ bool DBIter::FindValueForCurrentKey() {
     return false;
   }
 
-  Status s;
   is_blob_ = false;
   switch (last_key_entry_type) {
     case kTypeDeletion:
@@ -969,6 +973,7 @@ bool DBIter::FindValueForCurrentKey() {
       valid_ = false;
       return true;
     case kTypeMerge:
+    case kTypeMergeIndex:
       current_entry_is_merged_ = true;
       if (last_not_merge_type == kTypeDeletion ||
           last_not_merge_type == kTypeSingleDeletion ||
@@ -977,39 +982,18 @@ bool DBIter::FindValueForCurrentKey() {
             merge_operator_, saved_key_.GetUserKey(), nullptr,
             merge_context_.GetOperands(), &saved_value_, logger_, statistics_,
             env_, &pinned_value_, true);
-      } else if (last_not_merge_type == kTypeBlobIndex) {
-        if (!allow_blob_) {
-          ROCKS_LOG_ERROR(logger_, "Encounter unexpected blob index.");
-          status_ = Status::NotSupported(
-              "Encounter unexpected blob index. Please open DB with "
-              "rocksdb::blob_db::BlobDB instead.");
-        } else {
-          status_ =
-              Status::NotSupported("Blob DB does not support merge operator.");
-        }
-        valid_ = false;
-        return false;
       } else {
-        assert(last_not_merge_type == kTypeValue);
+        assert(last_not_merge_type == kTypeValue ||
+               last_not_merge_type == kTypeValueIndex);
         s = MergeHelper::TimedFullMerge(
             merge_operator_, saved_key_.GetUserKey(), &pinned_value_,
             merge_context_.GetOperands(), &saved_value_, logger_, statistics_,
             env_, &pinned_value_, true);
       }
       break;
+    case kTypeValueIndex:
     case kTypeValue:
       // do nothing - we've already has value in pinned_value_
-      break;
-    case kTypeBlobIndex:
-      if (!allow_blob_) {
-        ROCKS_LOG_ERROR(logger_, "Encounter unexpected blob index.");
-        status_ = Status::NotSupported(
-            "Encounter unexpected blob index. Please open DB with "
-            "rocksdb::blob_db::BlobDB instead.");
-        valid_ = false;
-        return false;
-      }
-      is_blob_ = true;
       break;
     default:
       assert(false);
@@ -1041,6 +1025,7 @@ bool DBIter::FindValueForCurrentKeyUsingSeek() {
   // In case read_callback presents, the value we seek to may not be visible.
   // Find the next value that's visible.
   ParsedInternalKey ikey;
+  Status s;
   while (true) {
     if (!iter_->Valid()) {
       valid_ = false;
@@ -1071,27 +1056,31 @@ bool DBIter::FindValueForCurrentKeyUsingSeek() {
     valid_ = false;
     return true;
   }
-  if (ikey.type == kTypeBlobIndex && !allow_blob_) {
-    ROCKS_LOG_ERROR(logger_, "Encounter unexpected blob index.");
-    status_ = Status::NotSupported(
-        "Encounter unexpected blob index. Please open DB with "
-        "rocksdb::blob_db::BlobDB instead.");
-    valid_ = false;
-    return false;
-  }
-  if (ikey.type == kTypeValue || ikey.type == kTypeBlobIndex) {
+  if (ikey.type == kTypeValue || ikey.type == kTypeValueIndex) {
     assert(iter_->IsValuePinned());
-    pinned_value_ = iter_->value();
+    s = pair_.decode();
+    if (!s.ok()) {
+      valid_ = false;
+      status_ = s;
+      return false;
+    }
+    pinned_value_ = pair_.value();
     valid_ = true;
     return true;
   }
 
   // kTypeMerge. We need to collect all kTypeMerge values and save them
   // in operands
-  assert(ikey.type == kTypeMerge);
+  assert(ikey.type == kTypeMerge || ikey.type == kTypeMergeIndex);
   current_entry_is_merged_ = true;
   merge_context_.Clear();
-  merge_context_.PushOperand(iter_->value(),
+  s = pair_.decode();
+  if (!s.ok()) {
+    valid_ = false;
+    status_ = s;
+    return false;
+  }
+  merge_context_.PushOperand(pair_.value(),
                              iter_->IsValuePinned() /* operand_pinned */);
   while (true) {
     iter_->Next();
@@ -1114,41 +1103,30 @@ bool DBIter::FindValueForCurrentKeyUsingSeek() {
         range_del_agg_.ShouldDelete(
             ikey, RangeDelPositioningMode::kForwardTraversal)) {
       break;
-    } else if (ikey.type == kTypeValue) {
-      const Slice val = iter_->value();
-      Status s = MergeHelper::TimedFullMerge(
+    }
+    if (!s.ok()) {
+      valid_ = false;
+      status_ = s;
+      return false;
+    }
+    if (ikey.type == kTypeValue || ikey.type == kTypeValueIndex) {
+      const Slice val = pair_.value();
+      s = MergeHelper::TimedFullMerge(
           merge_operator_, saved_key_.GetUserKey(), &val,
           merge_context_.GetOperands(), &saved_value_, logger_, statistics_,
           env_, &pinned_value_, true);
-      if (!s.ok()) {
-        valid_ = false;
-        status_ = s;
-        return false;
-      }
       valid_ = true;
       return true;
-    } else if (ikey.type == kTypeMerge) {
-      merge_context_.PushOperand(iter_->value(),
+    } else if (ikey.type == kTypeMerge || ikey.type == kTypeMergeIndex) {
+      merge_context_.PushOperand(pair_.value(),
                                  iter_->IsValuePinned() /* operand_pinned */);
       PERF_COUNTER_ADD(internal_merge_count, 1);
-    } else if (ikey.type == kTypeBlobIndex) {
-      if (!allow_blob_) {
-        ROCKS_LOG_ERROR(logger_, "Encounter unexpected blob index.");
-        status_ = Status::NotSupported(
-            "Encounter unexpected blob index. Please open DB with "
-            "rocksdb::blob_db::BlobDB instead.");
-      } else {
-        status_ =
-            Status::NotSupported("Blob DB does not support merge operator.");
-      }
-      valid_ = false;
-      return false;
     } else {
       assert(false);
     }
   }
 
-  Status s = MergeHelper::TimedFullMerge(
+  s = MergeHelper::TimedFullMerge(
       merge_operator_, saved_key_.GetUserKey(), nullptr,
       merge_context_.GetOperands(), &saved_value_, logger_, statistics_, env_,
       &pinned_value_, true);

@@ -86,8 +86,8 @@ class MergeHelper {
   // in the constructor. Returns the decision that the filter made.
   // Uses compaction_filter_value_ and compaction_filter_skip_until_ for the
   // optional outputs of compaction filter.
-  CompactionFilter::Decision FilterMerge(const Slice& user_key,
-                                         const Slice& value_slice);
+  CompactionFilter::Decision FilterMerge(
+      const Slice& user_key, const KeyValuePair& pair);
 
   // Query the merge result
   // These are valid until the next MergeUntil call

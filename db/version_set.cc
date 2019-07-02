@@ -510,16 +510,12 @@ class LevelIterator final : public InternalIterator {
     assert(Valid());
     return file_iter_.key();
   }
-  virtual Slice value() const override {
+  virtual KeyValuePair pair() const override {
     assert(Valid());
-    return file_iter_.value();
+    return file_iter_.iter()->pair();
   }
   virtual Status status() const override {
     return file_iter_.iter() ? file_iter_.status() : Status::OK();
-  }
-  virtual uint64_t FileNumber() const override {
-    assert(Valid());
-    return file_iter_.iter()->FileNumber();
   }
   virtual void SetPinnedItersMgr(
       PinnedIteratorsManager* pinned_iters_mgr) override {
@@ -1225,8 +1221,7 @@ void Version::Get(const ReadOptions& read_options, const LookupKey& k,
                   PinnableSlice* value, Status* status,
                   MergeContext* merge_context,
                   SequenceNumber* max_covering_tombstone_seq, bool* value_found,
-                  bool* key_exists, SequenceNumber* seq, ReadCallback* callback,
-                  bool* is_blob) {
+                  bool* key_exists, SequenceNumber* seq, ReadCallback* callback) {
   Slice ikey = k.internal_key();
   Slice user_key = k.user_key();
 
@@ -1242,7 +1237,7 @@ void Version::Get(const ReadOptions& read_options, const LookupKey& k,
       user_comparator(), merge_operator_, info_log_, db_statistics_,
       status->ok() ? GetContext::kNotFound : GetContext::kMerge, user_key,
       value, value_found, merge_context, max_covering_tombstone_seq, this->env_,
-      seq, merge_operator_ ? &pinned_iters_mgr : nullptr, callback, is_blob);
+      seq, merge_operator_ ? &pinned_iters_mgr : nullptr, callback);
 
   // Pin blocks that we read to hold merge operands
   if (merge_operator_) {
@@ -1315,12 +1310,6 @@ void Version::Get(const ReadOptions& read_options, const LookupKey& k,
         return;
       case GetContext::kCorrupt:
         *status = Status::Corruption("corrupted key for ", user_key);
-        return;
-      case GetContext::kBlobIndex:
-        ROCKS_LOG_ERROR(info_log_, "Encounter unexpected blob index.");
-        *status = Status::NotSupported(
-            "Encounter unexpected blob index. Please open DB with "
-            "rocksdb::blob_db::BlobDB instead.");
         return;
     }
     f = fp.GetNextFile();

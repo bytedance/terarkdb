@@ -427,10 +427,12 @@ class TruncatedRangeDelMergingIter : public InternalIterator {
     return cur_start_key_.Encode();
   }
 
-  Slice value() const override {
+  KeyValuePair pair() const override {
     auto* top = heap_.top();
+    cur_start_key_.Set(top->start_key().user_key, top->seq(),
+                       kTypeRangeDeletion);
     assert(top->end_key().sequence == kMaxSequenceNumber);
-    return top->end_key().user_key;
+    return KeyValuePair(cur_start_key_.Encode(), top->end_key().user_key);
   }
 
   // Unused InternalIterator methods

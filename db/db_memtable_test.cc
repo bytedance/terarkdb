@@ -45,7 +45,7 @@ class MockMemTableRep : public MemTableRep {
 
   virtual void Get(const LookupKey& k, void* callback_args,
                    bool (*callback_func)(void* arg,
-                                         const KeyValuePair*)) override {
+                                         const KeyValuePair&)) override {
     rep_->Get(k, callback_args, callback_func);
   }
 

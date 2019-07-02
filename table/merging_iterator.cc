@@ -95,10 +95,6 @@ class MergingIterator : public InternalIterator {
 
   virtual Status status() const override { return status_; }
 
-  virtual uint64_t FileNumber() const override {
-    return current_->FileNumber();
-  }
-
   virtual void SeekToFirst() override {
     ClearHeaps();
     status_ = Status::OK();
@@ -282,9 +278,9 @@ class MergingIterator : public InternalIterator {
     return current_->key();
   }
 
-  virtual Slice value() const override {
+  virtual KeyValuePair pair() const override {
     assert(Valid());
-    return current_->value();
+    return current_->iter()->pair();
   }
 
   virtual void SetPinnedItersMgr(

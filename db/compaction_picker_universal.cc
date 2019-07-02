@@ -116,6 +116,26 @@ void GetSmallestLargestSeqno(const std::vector<FileMetaData*>& files,
   }
 }
 #endif
+
+bool ReadMapElement(MapSstElement& map_element, InternalIterator* iter,
+                      LogBuffer* log_buffer, const std::string& cf_name) {
+  KeyValuePair pair = iter->pair();
+  auto s = pair.decode();
+  if (!s.ok()) {
+    ROCKS_LOG_BUFFER(
+        log_buffer,
+        "[%s] UniversalCompactionPicker KeyValuePair decode fail: %s\n",
+        cf_name.c_str(), s.ToString().c_str());
+  }
+  if (!map_element.Decode(pair.key(), pair.value())) {
+    ROCKS_LOG_BUFFER(
+        log_buffer,
+        "[%s] UniversalCompactionPicker MapSstElement Decode fail\n",
+        cf_name.c_str());
+  }
+  return false;
+}
+
 }  // namespace
 
 // Algorithm that checks to see if there are any overlapping
@@ -1516,8 +1536,7 @@ Compaction* UniversalCompactionPicker::PickCompositeCompaction(
   size_t counter = 0;
   for (iter->SeekToFirst(); iter->Valid(); iter->Next()) {
     ++counter;
-    if (!map_element.Decode(iter->key(), iter->value())) {
-      // TODO log error info
+    if (!ReadMapElement(map_element, iter.get(), log_buffer, cf_name)) {
       return nullptr;
     }
     if (is_perfect(map_element)) {
@@ -1546,8 +1565,7 @@ Compaction* UniversalCompactionPicker::PickCompositeCompaction(
   };
   std::vector<HeapItem> priority_heap;
   for (iter->SeekToFirst(); iter->Valid(); iter->Next()) {
-    if (!map_element.Decode(iter->key(), iter->value())) {
-      // TODO log error info
+    if (!ReadMapElement(map_element, iter.get(), log_buffer, cf_name)) {
       return nullptr;
     }
     double p = map_element.link_.size();
@@ -1605,7 +1623,9 @@ Compaction* UniversalCompactionPicker::PickCompositeCompaction(
     if (unique_check.count(iter->key()) > 0) {
       continue;
     }
-    map_element.Decode(iter->key(), iter->value());
+    if (!ReadMapElement(map_element, iter.get(), log_buffer, cf_name)) {
+      return nullptr;
+    }
     assign_user_key(range.start, map_element.smallest_key_);
     assign_user_key(range.limit, map_element.largest_key_);
     range.include_start = true;
@@ -1618,7 +1638,9 @@ Compaction* UniversalCompactionPicker::PickCompositeCompaction(
         set_include_limit();
         break;
       }
-      map_element.Decode(iter->key(), iter->value());
+      if (!ReadMapElement(map_element, iter.get(), log_buffer, cf_name)) {
+        return nullptr;
+      }
       if (unique_check.count(iter->key()) > 0 ||
           (is_perfect(map_element) &&
            uc->Compare(ExtractUserKey(map_element.smallest_key_),
@@ -1638,7 +1660,9 @@ Compaction* UniversalCompactionPicker::PickCompositeCompaction(
         if (!iter->Valid() || unique_check.count(iter->key()) > 0) {
           break;
         }
-        map_element.Decode(iter->key(), iter->value());
+        if (!ReadMapElement(map_element, iter.get(), log_buffer, cf_name)) {
+          return nullptr;
+        }
         if (is_perfect(map_element)) {
           break;
         }
@@ -1672,7 +1696,9 @@ Compaction* UniversalCompactionPicker::PickCompositeCompaction(
   }
   has_start = false;
   for (iter->SeekToFirst(); iter->Valid(); iter->Next()) {
-    map_element.Decode(iter->key(), iter->value());
+    if (!ReadMapElement(map_element, iter.get(), log_buffer, cf_name)) {
+      return nullptr;
+    }
     assert(map_element.link_.size() == 1);
 
     if (has_start) {
@@ -1811,8 +1837,9 @@ Compaction* UniversalCompactionPicker::PickRangeCompaction(
   size_t subcompact_size = 0;
   size_t estimated_total_size = 0;
   for (iter->SeekToFirst(); iter->Valid(); iter->Next()) {
-    map_element.Decode(iter->key(), iter->value());
-
+    if (!ReadMapElement(map_element, iter.get(), log_buffer, cf_name)) {
+      return nullptr;
+    }
     if (has_start) {
       if (need_compact(map_element)) {
         if (subcompact_size < max_compaction_bytes) {

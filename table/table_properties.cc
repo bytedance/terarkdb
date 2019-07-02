@@ -53,10 +53,15 @@ namespace {
     *is_found = true;
     meta_iter->Seek(block_name);
     if (meta_iter->status().ok()) {
-      if (meta_iter->Valid() && meta_iter->key() == block_name) {
+      auto pair = meta_iter->pair();
+      if (meta_iter->Valid() && pair.key() == block_name) {
         *is_found = true;
         if (block_handle) {
-          Slice v = meta_iter->value();
+          auto s = pair.decode();
+          if (!s.ok()) {
+            return s;
+          }
+          Slice v = pair.value();
           return block_handle->DecodeFrom(&v);
         }
       } else {

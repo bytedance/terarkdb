@@ -207,9 +207,8 @@ class CuckooTableIterator : public InternalIterator {
   void Next() override;
   void Prev() override;
   Slice key() const override;
-  Slice value() const override;
+  KeyValuePair pair() const override;
   Status status() const override { return Status::OK(); }
-  uint64_t FileNumber() const override;
   void InitIfNeeded();
 
  private:
@@ -371,13 +370,10 @@ Slice CuckooTableIterator::key() const {
   return curr_key_.GetInternalKey();
 }
 
-Slice CuckooTableIterator::value() const {
+KeyValuePair CuckooTableIterator::pair() const {
   assert(Valid());
-  return curr_value_;
-}
-
-uint64_t CuckooTableIterator::FileNumber() const {
-  return reader_->file_number_;
+  return KeyValuePair(curr_key_.GetInternalKey(), curr_value_,
+                      reader_->file_number_);
 }
 
 InternalIterator* CuckooTableReader::NewIterator(

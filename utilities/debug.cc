@@ -35,8 +35,13 @@ Status GetAllKeyVersions(DB* db, Slice begin_key, Slice end_key,
 
   size_t num_keys = 0;
   for (; iter->Valid(); iter->Next()) {
+    KeyValuePair pair = iter->pair();
+    auto s = pair.decode();
+    if (!s.ok()) {
+      return s;
+    }
     ParsedInternalKey ikey;
-    if (!ParseInternalKey(iter->key(), &ikey)) {
+    if (!ParseInternalKey(pair.key(), &ikey)) {
       return Status::Corruption("Internal Key [" + iter->key().ToString() +
                                 "] parse error!");
     }
@@ -47,7 +52,7 @@ Status GetAllKeyVersions(DB* db, Slice begin_key, Slice end_key,
     }
 
     key_versions->emplace_back(ikey.user_key.ToString() /* _user_key */,
-                               iter->value().ToString() /* _value */,
+                               pair.value().ToString() /* _value */,
                                ikey.sequence /* _sequence */,
                                static_cast<int>(ikey.type) /* _type */);
     if (++num_keys >= max_num_ikeys) {

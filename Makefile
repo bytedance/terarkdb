@@ -575,7 +575,6 @@ TESTS = \
 	db_wal_test \
 	db_block_cache_test \
 	db_test \
-	db_blob_index_test \
 	db_bloom_filter_test \
 	db_iter_test \
 	db_iter_stress_test \
@@ -599,7 +598,6 @@ TESTS = \
 	db_write_test \
 	error_handler_test \
 	autovector_test \
-	blob_db_test \
 	cleanable_test \
 	column_family_test \
 	table_properties_collector_test \
@@ -1370,9 +1368,6 @@ db_test: db/db_test.o db/db_test_util.o $(LIBOBJECTS) $(TESTHARNESS)
 db_test2: db/db_test2.o db/db_test_util.o $(LIBOBJECTS) $(TESTHARNESS)
 	$(AM_LINK)
 
-db_blob_index_test: db/db_blob_index_test.o db/db_test_util.o $(LIBOBJECTS) $(TESTHARNESS)
-	$(AM_LINK)
-
 db_block_cache_test: db/db_block_cache_test.o db/db_test_util.o $(LIBOBJECTS) $(TESTHARNESS)
 	$(AM_LINK)
 
@@ -1757,9 +1752,6 @@ range_del_aggregator_test: db/range_del_aggregator_test.o db/db_test_util.o $(LI
 	$(AM_LINK)
 
 range_del_aggregator_bench: db/range_del_aggregator_bench.o $(LIBOBJECTS) $(TESTUTIL)
-	$(AM_LINK)
-
-blob_db_test: utilities/blob_db/blob_db_test.o $(LIBOBJECTS) $(TESTHARNESS)
 	$(AM_LINK)
 
 repeatable_thread_test: util/repeatable_thread_test.o $(LIBOBJECTS) $(TESTHARNESS)

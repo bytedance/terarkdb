@@ -98,15 +98,6 @@ public class WriteBatchGetter extends WriteBatch.Handler {
   }
 
   @Override
-  public void putBlobIndex(final int columnFamilyId, final byte[] key,
-                           final byte[] value) {
-    if(Arrays.equals(this.key, key)) {
-      this.columnFamilyId = columnFamilyId;
-      this.value = value;
-    }
-  }
-
-  @Override
   public void markBeginPrepare() throws RocksDBException {
     throw new UnsupportedOperationException();
   }

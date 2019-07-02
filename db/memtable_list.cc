@@ -107,26 +107,25 @@ bool MemTableListVersion::Get(const LookupKey& key, std::string* value,
                               Status* s, MergeContext* merge_context,
                               SequenceNumber* max_covering_tombstone_seq,
                               SequenceNumber* seq, const ReadOptions& read_opts,
-                              ReadCallback* callback, bool* is_blob_index) {
+                              ReadCallback* callback) {
   return GetFromList(&memlist_, key, value, s, merge_context,
-                     max_covering_tombstone_seq, seq, read_opts, callback,
-                     is_blob_index);
+                     max_covering_tombstone_seq, seq, read_opts, callback);
 }
 
 bool MemTableListVersion::GetFromHistory(
     const LookupKey& key, std::string* value, Status* s,
     MergeContext* merge_context, SequenceNumber* max_covering_tombstone_seq,
-    SequenceNumber* seq, const ReadOptions& read_opts, bool* is_blob_index) {
+    SequenceNumber* seq, const ReadOptions& read_opts) {
   return GetFromList(&memlist_history_, key, value, s, merge_context,
                      max_covering_tombstone_seq, seq, read_opts,
-                     nullptr /*read_callback*/, is_blob_index);
+                     nullptr /*read_callback*/);
 }
 
 bool MemTableListVersion::GetFromList(
     std::list<MemTable*>* list, const LookupKey& key, std::string* value,
     Status* s, MergeContext* merge_context,
     SequenceNumber* max_covering_tombstone_seq, SequenceNumber* seq,
-    const ReadOptions& read_opts, ReadCallback* callback, bool* is_blob_index) {
+    const ReadOptions& read_opts, ReadCallback* callback) {
   *seq = kMaxSequenceNumber;
 
   for (auto& memtable : *list) {
@@ -134,7 +133,7 @@ bool MemTableListVersion::GetFromList(
 
     bool done =
         memtable->Get(key, value, s, merge_context, max_covering_tombstone_seq,
-                      &current_seq, read_opts, callback, is_blob_index);
+                      &current_seq, read_opts, callback);
     if (*seq == kMaxSequenceNumber) {
       // Store the most recent sequence number of any operation on this key.
       // Since we only care about the most recent change, we only need to

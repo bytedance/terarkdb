@@ -22,7 +22,8 @@ enum EntryType {
   kEntrySingleDelete,
   kEntryMerge,
   kEntryRangeDeletion,
-  kEntryBlobIndex,
+  kEntryValueIndex,
+  kEntryMergeIndex,
   kEntryOther,
 };
 

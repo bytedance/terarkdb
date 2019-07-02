@@ -70,7 +70,6 @@
 #include "util/testutil.h"
 #include "util/transaction_test_util.h"
 #include "util/xxhash.h"
-#include "utilities/blob_db/blob_db.h"
 #include "utilities/merge_operators.h"
 #include "utilities/merge_operators/bytesxor.h"
 #include "utilities/persistent_cache/block_cache_tier.h"
@@ -709,33 +708,6 @@ DEFINE_bool(fifo_compaction_allow_compaction, true,
             "Allow compaction in FIFO compaction.");
 
 DEFINE_uint64(fifo_compaction_ttl, 0, "TTL for the SST Files in seconds.");
-
-// Blob DB Options
-DEFINE_bool(use_blob_db, false,
-            "Open a BlobDB instance. "
-            "Required for large value benchmark.");
-
-DEFINE_bool(blob_db_enable_gc, false, "Enable BlobDB garbage collection.");
-
-DEFINE_bool(blob_db_is_fifo, false, "Enable FIFO eviction strategy in BlobDB.");
-
-DEFINE_uint64(blob_db_max_db_size, 0,
-              "Max size limit of the directory where blob files are stored.");
-
-DEFINE_uint64(blob_db_max_ttl_range, 86400,
-              "TTL range to generate BlobDB data (in seconds).");
-
-DEFINE_uint64(blob_db_ttl_range_secs, 3600,
-              "TTL bucket size to use when creating blob files.");
-
-DEFINE_uint64(blob_db_min_blob_size, 0,
-              "Smallest blob to store in a file. Blobs smaller than this "
-              "will be inlined with the key in the LSM tree.");
-
-DEFINE_uint64(blob_db_bytes_per_sync, 0, "Bytes to sync blob file at.");
-
-DEFINE_uint64(blob_db_file_size, 256 * 1024 * 1024,
-              "Target size of each blob file.");
 
 #endif  // ROCKSDB_LITE
 
@@ -2000,7 +1972,6 @@ class Benchmark {
   int64_t readwrites_;
   int64_t merge_keys_;
   bool report_file_operations_;
-  bool use_blob_db_;
 
   class ErrorHandlerListener : public EventListener {
    public:
@@ -2322,12 +2293,7 @@ class Benchmark {
                 ? FLAGS_num
                 : ((FLAGS_writes > FLAGS_reads) ? FLAGS_writes : FLAGS_reads)),
         merge_keys_(FLAGS_merge_keys < 0 ? FLAGS_num : FLAGS_merge_keys),
-        report_file_operations_(FLAGS_report_file_operations),
-#ifndef ROCKSDB_LITE
-        use_blob_db_(FLAGS_use_blob_db)
-#else
-        use_blob_db_(false)
-#endif  // !ROCKSDB_LITE
+        report_file_operations_(FLAGS_report_file_operations)
   {
     // use simcache instead of cache
     if (FLAGS_simcache_size >= 0) {
@@ -2366,11 +2332,6 @@ class Benchmark {
       if (!FLAGS_wal_dir.empty()) {
         options.wal_dir = FLAGS_wal_dir;
       }
-#ifndef ROCKSDB_LITE
-      if (use_blob_db_) {
-        blob_db::DestroyBlobDB(FLAGS_db, options, blob_db::BlobDBOptions());
-      }
-#endif  // !ROCKSDB_LITE
       DestroyDB(FLAGS_db, options);
       if (!FLAGS_wal_dir.empty()) {
         FLAGS_env->DeleteDir(FLAGS_wal_dir);
@@ -3685,20 +3646,6 @@ void VerifyDBFromDB(std::string& truth_db_name) {
       if (s.ok()) {
         db->db = ptr;
       }
-    } else if (FLAGS_use_blob_db) {
-      blob_db::BlobDBOptions blob_db_options;
-      blob_db_options.enable_garbage_collection = FLAGS_blob_db_enable_gc;
-      blob_db_options.is_fifo = FLAGS_blob_db_is_fifo;
-      blob_db_options.max_db_size = FLAGS_blob_db_max_db_size;
-      blob_db_options.ttl_range_secs = FLAGS_blob_db_ttl_range_secs;
-      blob_db_options.min_blob_size = FLAGS_blob_db_min_blob_size;
-      blob_db_options.bytes_per_sync = FLAGS_blob_db_bytes_per_sync;
-      blob_db_options.blob_file_size = FLAGS_blob_db_file_size;
-      blob_db::BlobDB* ptr = nullptr;
-      s = blob_db::BlobDB::Open(options, blob_db_options, db_name, &ptr);
-      if (s.ok()) {
-        db->db = ptr;
-      }
 #endif  // ROCKSDB_LITE
     } else {
       s = DB::Open(options, db_name, &db->db);
@@ -3877,15 +3824,7 @@ void VerifyDBFromDB(std::string& truth_db_name) {
       for (int64_t j = 0; j < entries_per_batch_; j++) {
         int64_t rand_num = key_gens[id]->Next();
         GenerateKeyFromInt(rand_num, FLAGS_num, &key);
-        if (use_blob_db_) {
-#ifndef ROCKSDB_LITE
-          Slice val = gen.Generate(value_size_);
-          int ttl = rand() % FLAGS_blob_db_max_ttl_range;
-          blob_db::BlobDB* blobdb =
-              static_cast<blob_db::BlobDB*>(db_with_cfh->db);
-          s = blobdb->PutWithTTL(write_options_, key, val, ttl);
-#endif  //  ROCKSDB_LITE
-        } else if (FLAGS_num_column_families <= 1) {
+        if (FLAGS_num_column_families <= 1) {
           batch.Put(key, gen.Generate(value_size_));
         } else {
           // We use same rand_num as seed for key and column family so that we
@@ -3910,12 +3849,7 @@ void VerifyDBFromDB(std::string& truth_db_name) {
                  ++offset) {
               GenerateKeyFromInt(begin_num + offset, FLAGS_num,
                                  &expanded_keys[offset]);
-              if (use_blob_db_) {
-#ifndef ROCKSDB_LITE
-                s = db_with_cfh->db->Delete(write_options_,
-                                            expanded_keys[offset]);
-#endif  //  ROCKSDB_LITE
-              } else if (FLAGS_num_column_families <= 1) {
+              if (FLAGS_num_column_families <= 1) {
                 batch.Delete(expanded_keys[offset]);
               } else {
                 batch.Delete(db_with_cfh->GetCfh(rand_num),
@@ -3926,13 +3860,7 @@ void VerifyDBFromDB(std::string& truth_db_name) {
             GenerateKeyFromInt(begin_num, FLAGS_num, &begin_key);
             GenerateKeyFromInt(begin_num + range_tombstone_width_, FLAGS_num,
                                &end_key);
-            if (use_blob_db_) {
-#ifndef ROCKSDB_LITE
-              s = db_with_cfh->db->DeleteRange(
-                  write_options_, db_with_cfh->db->DefaultColumnFamily(),
-                  begin_key, end_key);
-#endif  //  ROCKSDB_LITE
-            } else if (FLAGS_num_column_families <= 1) {
+            if (FLAGS_num_column_families <= 1) {
               batch.DeleteRange(begin_key, end_key);
             } else {
               batch.DeleteRange(db_with_cfh->GetCfh(rand_num), begin_key,
@@ -3941,9 +3869,7 @@ void VerifyDBFromDB(std::string& truth_db_name) {
           }
         }
       }
-      if (!use_blob_db_) {
-        s = db_with_cfh->db->Write(write_options_, &batch);
-      }
+      s = db_with_cfh->db->Write(write_options_, &batch);
       thread->stats.FinishedOps(db_with_cfh, db_with_cfh->db,
                                 entries_per_batch_, kWrite);
       if (FLAGS_sine_write_rate) {

@@ -72,11 +72,9 @@ class PlainTableIterator : public InternalIterator {
 
   Slice key() const override;
 
-  Slice value() const override;
+  KeyValuePair pair() const override;
 
   Status status() const override;
-
-  uint64_t FileNumber() const override;
 
  private:
   PlainTableReader* table_;
@@ -747,18 +745,13 @@ Slice PlainTableIterator::key() const {
   return key_;
 }
 
-Slice PlainTableIterator::value() const {
+KeyValuePair PlainTableIterator::pair() const {
   assert(Valid());
-  return value_;
+  return KeyValuePair(key_, value_, table_->file_number_);
 }
 
 Status PlainTableIterator::status() const {
   return status_;
-}
-
-
-uint64_t PlainTableIterator::FileNumber() const {
-  return table_->file_number_;
 }
 
 }  // namespace rocksdb

@@ -373,11 +373,11 @@ class MemTableIterator : public InternalIterator {
   }
   virtual Slice key() const override {
     assert(Valid());
-    return iter_->GetKey();
+    return iter_->key();
   }
-  virtual Slice value() const override {
+  virtual KeyValuePair pair() const override {
     assert(Valid());
-    return iter_->GetValue();
+    return iter_->pair();
   }
 
   virtual Status status() const override { return Status::OK(); }
@@ -588,7 +588,6 @@ struct Saver {
   bool inplace_update_support;
   Env* env_;
   ReadCallback* callback_;
-  bool* is_blob_index;
 
   bool CheckCallback(SequenceNumber _seq) {
     if (callback_) {
@@ -599,7 +598,7 @@ struct Saver {
 };
 }  // namespace
 
-static bool SaveValue(void* arg, const MemTableRep::KeyValuePair* pair) {
+static bool SaveValue(void* arg, const KeyValuePair& pair) {
   Saver* s = reinterpret_cast<Saver*>(arg);
   MergeContext* merge_context = s->merge_context;
   SequenceNumber max_covering_tombstone_seq = s->max_covering_tombstone_seq;
@@ -607,8 +606,7 @@ static bool SaveValue(void* arg, const MemTableRep::KeyValuePair* pair) {
 
   assert(merge_context != nullptr);
 
-  Slice internal_key, value;
-  std::tie(internal_key, value) = pair->GetKeyValue();
+  Slice internal_key = pair.key(), value;
   // Check that it belongs to same user key.  We do not check the
   // sequence number since the Seek() call above should have skipped
   // all entries with overly large sequence numbers.
@@ -627,27 +625,17 @@ static bool SaveValue(void* arg, const MemTableRep::KeyValuePair* pair) {
 
     s->seq = seq;
 
-    if ((type == kTypeValue || type == kTypeMerge || type == kTypeBlobIndex) &&
-        max_covering_tombstone_seq > seq) {
+    if ((type == kTypeValue || type == kTypeMerge || type == kTypeValueIndex ||
+         type == kTypeMergeIndex) && max_covering_tombstone_seq > seq) {
       type = kTypeRangeDeletion;
     }
     switch (type) {
-      case kTypeBlobIndex:
-        if (s->is_blob_index == nullptr) {
-          ROCKS_LOG_ERROR(s->logger, "Encounter unexpected blob index.");
-          *(s->status) = Status::NotSupported(
-              "Encounter unsupported blob value. Please open DB with "
-              "rocksdb::blob_db::BlobDB instead.");
-        } else if (*(s->merge_in_progress)) {
-          *(s->status) =
-              Status::NotSupported("Blob DB does not support merge operator.");
-        }
-        if (!s->status->ok()) {
-          *(s->found_final_value) = true;
+      case kTypeValue:
+      case kTypeValueIndex: {
+        if (!(*s->status = pair.decode()).ok()) {
           return false;
         }
-        FALLTHROUGH_INTENDED;
-      case kTypeValue: {
+        value = pair.value();
         if (s->inplace_update_support) {
           s->mem->GetLock(s->key->user_key())->ReadLock();
         }
@@ -666,9 +654,6 @@ static bool SaveValue(void* arg, const MemTableRep::KeyValuePair* pair) {
           s->mem->GetLock(s->key->user_key())->ReadUnlock();
         }
         *(s->found_final_value) = true;
-        if (s->is_blob_index != nullptr) {
-          *(s->is_blob_index) = (type == kTypeBlobIndex);
-        }
         return false;
       }
       case kTypeDeletion:
@@ -687,7 +672,8 @@ static bool SaveValue(void* arg, const MemTableRep::KeyValuePair* pair) {
         *(s->found_final_value) = true;
         return false;
       }
-      case kTypeMerge: {
+      case kTypeMerge:
+      case kTypeMergeIndex: {
         if (!merge_operator) {
           *(s->status) = Status::InvalidArgument(
               "merge_operator is not properly initialized.");
@@ -698,9 +684,13 @@ static bool SaveValue(void* arg, const MemTableRep::KeyValuePair* pair) {
           *(s->found_final_value) = true;
           return false;
         }
+        if (!(*s->status = pair.decode()).ok()) {
+          return false;
+        }
+        value = pair.value();
         *(s->merge_in_progress) = true;
         merge_context->PushOperand(
-            value, s->inplace_update_support == false /* operand_pinned */);
+            value, !s->inplace_update_support /* operand_pinned */);
         if (merge_operator->ShouldMerge(merge_context->GetOperandsDirectionBackward())) {
           *(s->status) = MergeHelper::TimedFullMerge(
               merge_operator, s->key->user_key(), nullptr,
@@ -725,7 +715,7 @@ bool MemTable::Get(const LookupKey& key, std::string* value, Status* s,
                    MergeContext* merge_context,
                    SequenceNumber* max_covering_tombstone_seq,
                    SequenceNumber* seq, const ReadOptions& read_opts,
-                   ReadCallback* callback, bool* is_blob_index) {
+                   ReadCallback* callback) {
   // The sequence number is updated synchronously in version_set.h
   if (IsEmpty()) {
     // Avoiding recording stats for speed.
@@ -773,7 +763,6 @@ bool MemTable::Get(const LookupKey& key, std::string* value, Status* s,
     saver.statistics = moptions_.statistics;
     saver.env_ = env_;
     saver.callback_ = callback;
-    saver.is_blob_index = is_blob_index;
     table_->Get(key, &saver, SaveValue);
 
     *seq = saver.seq;
@@ -800,30 +789,33 @@ void MemTable::Update(SequenceNumber seq,
   if (iter->Valid()) {
     // sequence number since the Seek() call above should have skipped
     // all entries with overly large sequence numbers.
-    Slice internal_key, old_value;
-    std::tie(internal_key, old_value) = iter->GetKeyValue();
+    KeyValuePair pair = iter->pair();
     if (comparator_.comparator.user_comparator()->Equal(
-            ExtractUserKey(internal_key), lkey.user_key())) {
-      // Correct user key
-      const uint64_t tag =
-          DecodeFixed64(internal_key.data() + internal_key .size() - 8);
+            ExtractUserKey(pair.key()), lkey.user_key())) {
+      // Correct usFer key
+      const uint64_t tag = ExtractInternalKeyFooter(pair.key());
       ValueType type;
       SequenceNumber unused;
       UnPackSequenceAndType(tag, &unused, &type);
-      if (type == kTypeValue) {
-        uint32_t old_size = static_cast<uint32_t>(old_value.size());
+      Status s;
+      if (type == kTypeValue && (s = pair.decode()).ok()) {
+        uint32_t old_size = static_cast<uint32_t>(pair.value().size());
         uint32_t new_size = static_cast<uint32_t>(value.size());
 
         // Update value, if new value size <= old value size
         if (new_size <= old_size) {
           char* p =
-              const_cast<char*>(old_value.data()) - VarintLength(old_size);
+              const_cast<char*>(pair.value().data()) - VarintLength(old_size);
           p = EncodeVarint32(p, new_size);
           WriteLock wl(GetLock(lkey.user_key()));
           memcpy(p, value.data(), value.size());
           RecordTick(moptions_.statistics, NUMBER_KEYS_UPDATED);
           return;
         }
+      } else if (!s.ok()) {
+        ROCKS_LOG_ERROR(moptions_.info_log,
+                        "Memtable::Update value decode error %s",
+                        s.ToString().c_str());
       }
     }
   }
@@ -849,57 +841,55 @@ bool MemTable::UpdateCallback(SequenceNumber seq,
     // Check that it belongs to same user key.  We do not check the
     // sequence number since the Seek() call above should have skipped
     // all entries with overly large sequence numbers.
-    Slice internal_key, old_value;
-    std::tie(internal_key, old_value) = iter->GetKeyValue();
+    KeyValuePair pair = iter->pair();
     if (comparator_.comparator.user_comparator()->Equal(
-            ExtractUserKey(internal_key), lkey.user_key())) {
+            ExtractUserKey(pair.key()), lkey.user_key())) {
       // Correct user key
-      const uint64_t tag =
-          DecodeFixed64(internal_key.data() + internal_key.size() - 8);
+      const uint64_t tag = ExtractInternalKeyFooter(pair.key());
       ValueType type;
       uint64_t unused;
       UnPackSequenceAndType(tag, &unused, &type);
-      switch (type) {
-        case kTypeValue: {
-          uint32_t old_size = static_cast<uint32_t>(old_value.size());
+      Status s;
+      if(type == kTypeValue && (s = pair.decode()).ok()) {
+        uint32_t old_size = static_cast<uint32_t>(pair.value().size());
 
-          char* old_buffer = const_cast<char*>(old_value.data());
-          uint32_t new_inplace_size = old_size;
+        char* old_buffer = const_cast<char*>(pair.value().data());
+        uint32_t new_inplace_size = old_size;
 
-          std::string merged_value;
-          WriteLock wl(GetLock(lkey.user_key()));
-          auto status = moptions_.inplace_callback(old_buffer, &new_inplace_size,
-                                                   delta, &merged_value);
-          if (status == UpdateStatus::UPDATED_INPLACE) {
-            // Value already updated by callback.
-            assert(new_inplace_size <= old_size);
-            if (new_inplace_size < old_size) {
-              // overwrite the new inplace size
-              char* p =
-                const_cast<char*>(old_value.data()) - VarintLength(old_size);
-              p = EncodeVarint32(p, new_inplace_size);
-              if (p < old_buffer) {
-                // shift the value buffer as well.
-                memmove(p, old_buffer, new_inplace_size);
-              }
+        std::string merged_value;
+        WriteLock wl(GetLock(lkey.user_key()));
+        auto status = moptions_.inplace_callback(old_buffer, &new_inplace_size,
+                                                 delta, &merged_value);
+        if (status == UpdateStatus::UPDATED_INPLACE) {
+          // Value already updated by callback.
+          assert(new_inplace_size <= old_size);
+          if (new_inplace_size < old_size) {
+            // overwrite the new inplace size
+            char* p =
+              const_cast<char*>(pair.value().data()) - VarintLength(old_size);
+            p = EncodeVarint32(p, new_inplace_size);
+            if (p < old_buffer) {
+              // shift the value buffer as well.
+              memmove(p, old_buffer, new_inplace_size);
             }
-            RecordTick(moptions_.statistics, NUMBER_KEYS_UPDATED);
-            UpdateFlushState();
-            return true;
-          } else if (status == UpdateStatus::UPDATED) {
-            Add(seq, kTypeValue, key, Slice(merged_value));
-            RecordTick(moptions_.statistics, NUMBER_KEYS_WRITTEN);
-            UpdateFlushState();
-            return true;
-          } else if (status == UpdateStatus::UPDATE_FAILED) {
-            // No action required. Return.
-            UpdateFlushState();
-            return true;
           }
+          RecordTick(moptions_.statistics, NUMBER_KEYS_UPDATED);
+          UpdateFlushState();
+          return true;
+        } else if (status == UpdateStatus::UPDATED) {
+          Add(seq, kTypeValue, key, Slice(merged_value));
+          RecordTick(moptions_.statistics, NUMBER_KEYS_WRITTEN);
+          UpdateFlushState();
+          return true;
+        } else if (status == UpdateStatus::UPDATE_FAILED) {
+          // No action required. Return.
+          UpdateFlushState();
+          return true;
         }
-          break;
-        default:
-          break;
+      } else if (!s.ok()) {
+        ROCKS_LOG_ERROR(moptions_.info_log,
+                        "Memtable::UpdateCallback value decode error %s",
+                        s.ToString().c_str());
       }
     }
   }
@@ -919,9 +909,8 @@ size_t MemTable::CountSuccessiveMergeEntries(const LookupKey& key) {
   iter->Seek(key.internal_key(), memkey.data());
 
   size_t num_successive_merges = 0;
-
   for (; iter->Valid(); iter->Next()) {
-    Slice internal_key = iter->GetKey();
+    Slice internal_key = iter->key();
     if (!comparator_.comparator.user_comparator()->Equal(
             ExtractUserKey(internal_key), key.user_key())) {
       break;
@@ -932,7 +921,7 @@ size_t MemTable::CountSuccessiveMergeEntries(const LookupKey& key) {
     ValueType type;
     uint64_t unused;
     UnPackSequenceAndType(tag, &unused, &type);
-    if (type != kTypeMerge) {
+    if (type != kTypeMerge && type != kTypeMergeIndex) {
       break;
     }
 

@@ -69,6 +69,12 @@ class Slice {
   // Return true iff the length of the referenced data is zero
   bool empty() const { return size_ == 0; }
 
+  // Return true if Slice valid
+  bool valid() const { return data_ != nullptr || size_ != size_t(-1); }
+
+  // Return an invalid Slice
+  static Slice Invalid() { return Slice(nullptr, size_t(-1)); }
+
   // Return the ith byte in the referenced data.
   // REQUIRES: n < size()
   char operator[](size_t n) const {

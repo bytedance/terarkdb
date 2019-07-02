@@ -149,8 +149,8 @@ Status MergeHelper::MergeUntil(InternalIterator* iter,
 
     ParsedInternalKey ikey;
     assert(keys_.size() == merge_context_.GetNumOperands());
-
-    if (!ParseInternalKey(iter->key(), &ikey)) {
+    auto pair = iter->pair();
+    if (!ParseInternalKey(pair.key(), &ikey)) {
       // stop at corrupted key
       if (assert_valid_internal_key_) {
         assert(!"Corrupted internal key not expected.");
@@ -175,7 +175,7 @@ Status MergeHelper::MergeUntil(InternalIterator* iter,
     // At this point we are guaranteed that we need to process this key.
 
     assert(IsValueType(ikey.type));
-    if (ikey.type != kTypeMerge) {
+    if (ikey.type != kTypeMerge && ikey.type != kTypeMergeIndex) {
 
       // hit a put/delete/single delete
       //   => merge the put value or a nullptr with operands_
@@ -194,9 +194,13 @@ Status MergeHelper::MergeUntil(InternalIterator* iter,
       // (almost) silently dropping the put/delete. That's probably not what we
       // want. Also if we're in compaction and it's a put, it would be nice to
       // run compaction filter on it.
-      const Slice val = iter->value();
+      s = pair.decode();
+      if (!s.ok()) {
+        return s;
+      }
+      const Slice val = pair.value();
       const Slice* val_ptr;
-      if (kTypeValue == ikey.type &&
+      if ((kTypeValue == ikey.type || kTypeValueIndex == ikey.type) &&
           (range_del_agg == nullptr ||
            !range_del_agg->ShouldDelete(
                ikey, RangeDelPositioningMode::kForwardTraversal))) {
@@ -236,7 +240,11 @@ Status MergeHelper::MergeUntil(InternalIterator* iter,
       // Keep queuing keys and operands until we either meet a put / delete
       // request or later did a partial merge.
 
-      Slice value_slice = iter->value();
+      s = pair.decode();
+      if (!s.ok()) {
+        return s;
+      }
+      Slice value_slice = pair.value();
       // add an operand to the list if:
       // 1) it's included in one of the snapshots. in that case we *must* write
       // it out, no matter what compaction filter says
@@ -244,11 +252,12 @@ Status MergeHelper::MergeUntil(InternalIterator* iter,
       CompactionFilter::Decision filter =
           ikey.sequence <= latest_snapshot_
               ? CompactionFilter::Decision::kKeep
-              : FilterMerge(orig_ikey.user_key, value_slice);
+              : FilterMerge(orig_ikey.user_key,
+                            KeyValuePair(original_key, value_slice));
       if (filter != CompactionFilter::Decision::kRemoveAndSkipUntil &&
           range_del_agg != nullptr &&
           range_del_agg->ShouldDelete(
-              iter->key(), RangeDelPositioningMode::kForwardTraversal)) {
+              pair.key(), RangeDelPositioningMode::kForwardTraversal)) {
         filter = CompactionFilter::Decision::kRemove;
       }
       if (filter == CompactionFilter::Decision::kKeep ||
@@ -257,7 +266,7 @@ Status MergeHelper::MergeUntil(InternalIterator* iter,
           // this is just an optimization that saves us one memcpy
           keys_.push_front(std::move(original_key));
         } else {
-          keys_.push_front(iter->key().ToString());
+          keys_.push_front(pair.key().ToString());
         }
         if (keys_.size() == 1) {
           // we need to re-anchor the orig_ikey because it was anchored by
@@ -307,7 +316,7 @@ Status MergeHelper::MergeUntil(InternalIterator* iter,
   if (surely_seen_the_beginning) {
     // do a final merge with nullptr as the existing value and say
     // bye to the merge type (it's now converted to a Put)
-    assert(kTypeMerge == orig_ikey.type);
+    assert(kTypeMerge == orig_ikey.type || kTypeMergeIndex == orig_ikey.type);
     assert(merge_context_.GetNumOperands() >= 1);
     assert(merge_context_.GetNumOperands() == keys_.size());
     std::string merge_result;
@@ -378,8 +387,8 @@ void MergeOutputIterator::Next() {
   ++it_values_;
 }
 
-CompactionFilter::Decision MergeHelper::FilterMerge(const Slice& user_key,
-                                                    const Slice& value_slice) {
+CompactionFilter::Decision MergeHelper::FilterMerge(
+    const Slice& user_key, const KeyValuePair& pair) {
   if (compaction_filter_ == nullptr) {
     return CompactionFilter::Decision::kKeep;
   }
@@ -388,8 +397,8 @@ CompactionFilter::Decision MergeHelper::FilterMerge(const Slice& user_key,
   }
   compaction_filter_value_.clear();
   compaction_filter_skip_until_.Clear();
-  auto ret = compaction_filter_->FilterV2(
-      level_, user_key, CompactionFilter::ValueType::kMergeOperand, value_slice,
+  auto ret = compaction_filter_->FilterPairV2(
+      level_, user_key, CompactionFilter::ValueType::kMergeOperand, pair,
       &compaction_filter_value_, compaction_filter_skip_until_.rep());
   if (ret == CompactionFilter::Decision::kRemoveAndSkipUntil) {
     if (user_comparator_->Compare(*compaction_filter_skip_until_.rep(),

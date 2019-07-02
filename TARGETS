@@ -244,15 +244,6 @@ cpp_library(
         "util/transaction_test_util.cc",
         "util/xxhash.cc",
         "utilities/backupable/backupable_db.cc",
-        "utilities/blob_db/blob_compaction_filter.cc",
-        "utilities/blob_db/blob_db.cc",
-        "utilities/blob_db/blob_db_impl.cc",
-        "utilities/blob_db/blob_db_impl_filesnapshot.cc",
-        "utilities/blob_db/blob_dump_tool.cc",
-        "utilities/blob_db/blob_file.cc",
-        "utilities/blob_db/blob_log_format.cc",
-        "utilities/blob_db/blob_log_reader.cc",
-        "utilities/blob_db/blob_log_writer.cc",
         "utilities/cassandra/cassandra_compaction_filter.cc",
         "utilities/cassandra/format.cc",
         "utilities/cassandra/merge_operator.cc",
@@ -382,11 +373,6 @@ ROCKS_TESTS = [
         "backupable_db_test",
         "utilities/backupable/backupable_db_test.cc",
         "parallel",
-    ],
-    [
-        "blob_db_test",
-        "utilities/blob_db/blob_db_test.cc",
-        "serial",
     ],
     [
         "block_based_filter_block_test",
@@ -531,11 +517,6 @@ ROCKS_TESTS = [
     [
         "db_basic_test",
         "db/db_basic_test.cc",
-        "serial",
-    ],
-    [
-        "db_blob_index_test",
-        "db/db_blob_index_test.cc",
         "serial",
     ],
     [

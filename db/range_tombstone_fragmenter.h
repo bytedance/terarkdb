@@ -70,6 +70,7 @@ struct FragmentedRangeTombstoneList {
   bool ContainsRange(SequenceNumber lower, SequenceNumber upper) const;
 
   uint64_t user_tag() const { return user_tag_; }
+  Status status() const { return status_; }
 
  private:
   // Given an ordered range tombstone iterator unfragmented_tombstones,
@@ -81,6 +82,7 @@ struct FragmentedRangeTombstoneList {
       const std::vector<SequenceNumber>& snapshots);
 
   uint64_t user_tag_;
+  Status status_;
   std::vector<RangeTombstoneStack> tombstones_;
   std::vector<SequenceNumber> tombstone_seqs_;
   std::set<SequenceNumber> seq_set_;
@@ -97,7 +99,7 @@ struct FragmentedRangeTombstoneList {
 // before proceeding). If there are few overlaps, creating a
 // FragmentedRangeTombstoneIterator should be O(n), while the RangeDelAggregator
 // tombstone collapsing is always O(n log n).
-class FragmentedRangeTombstoneIterator : public InternalIterator {
+class FragmentedRangeTombstoneIterator {
  public:
   FragmentedRangeTombstoneIterator(
       const FragmentedRangeTombstoneList* tombstones,
@@ -108,8 +110,8 @@ class FragmentedRangeTombstoneIterator : public InternalIterator {
       const InternalKeyComparator& icmp, SequenceNumber upper_bound,
       SequenceNumber lower_bound = 0);
 
-  void SeekToFirst() override;
-  void SeekToLast() override;
+  void SeekToFirst();
+  void SeekToLast();
 
   void SeekToTopFirst();
   void SeekToTopLast();
@@ -122,27 +124,27 @@ class FragmentedRangeTombstoneIterator : public InternalIterator {
   // Seeks to the range tombstone that covers target at a seqnum in the
   // snapshot. If no such tombstone exists, seek to the earliest tombstone in
   // the snapshot that ends after target.
-  void Seek(const Slice& target) override;
+  void Seek(const Slice& target);
   // Seeks to the range tombstone that covers target at a seqnum in the
   // snapshot. If no such tombstone exists, seek to the latest tombstone in the
   // snapshot that starts before target.
-  void SeekForPrev(const Slice& target) override;
+  void SeekForPrev(const Slice& target);
 
-  void Next() override;
-  void Prev() override;
+  void Next();
+  void Prev();
 
   void TopNext();
   void TopPrev();
 
-  bool Valid() const override;
-  Slice key() const override {
+  bool Valid() const;
+  Slice key() const {
     MaybePinKey();
     return current_start_key_.Encode();
   }
-  Slice value() const override { return pos_->end_key; }
-  bool IsKeyPinned() const override { return false; }
-  bool IsValuePinned() const override { return true; }
-  Status status() const override { return Status::OK(); }
+  Slice value() const { return pos_->end_key; }
+  bool IsKeyPinned() const { return false; }
+  bool IsValuePinned() const { return true; }
+  Status status() const { return tombstones_->status(); }
 
   bool empty() const { return tombstones_->empty(); }
   void Invalidate() {

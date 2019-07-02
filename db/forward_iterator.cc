@@ -157,9 +157,9 @@ class ForwardLevelIterator : public InternalIterator {
     assert(valid_);
     return file_iter_->key();
   }
-  Slice value() const override {
+  KeyValuePair pair() const override {
     assert(valid_);
-    return file_iter_->value();
+    return file_iter_->pair();
   }
   Status status() const override {
     if (!status_.ok()) {
@@ -538,9 +538,9 @@ Slice ForwardIterator::key() const {
   return current_->key();
 }
 
-Slice ForwardIterator::value() const {
+KeyValuePair ForwardIterator::pair() const {
   assert(valid_);
-  return current_->value();
+  return current_->pair();
 }
 
 Status ForwardIterator::status() const {

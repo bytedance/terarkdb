@@ -254,14 +254,18 @@ Status ReadProperties(const Slice& handle_value, RandomAccessFileReader* file,
     if (!s.ok()) {
       break;
     }
-
-    auto key = iter.key().ToString();
+    auto pair = iter.pair();
+    s = pair.decode();
+    if (!s.ok()) {
+      break;
+    }
+    auto key = pair.key().ToString();
     // properties block is strictly sorted with no duplicate key.
     assert(last_key.empty() ||
            BytewiseComparator()->Compare(key, last_key) > 0);
     last_key = key;
 
-    auto raw_val = iter.value();
+    auto raw_val = pair.value();
     auto pos = predefined_uint64_properties.find(key);
 
     new_table_properties->properties_offsets.insert(
@@ -358,10 +362,15 @@ Status ReadTableProperties(RandomAccessFileReader* file, uint64_t file_size,
   if (!s.ok()) {
     return s;
   }
+  auto pair = meta_iter->pair();
+  s = pair.decode();
+  if (!s.ok()) {
+    return s;
+  }
 
   TableProperties table_properties;
   if (found_properties_block == true) {
-    s = ReadProperties(meta_iter->value(), file, nullptr /* prefetch_buffer */,
+    s = ReadProperties(pair.value(), file, nullptr /* prefetch_buffer */,
                        footer, ioptions, properties, compression_type_missing,
                        memory_allocator);
   } else {
@@ -377,7 +386,12 @@ Status FindMetaBlock(InternalIterator* meta_index_iter,
   meta_index_iter->Seek(meta_block_name);
   if (meta_index_iter->status().ok() && meta_index_iter->Valid() &&
       meta_index_iter->key() == meta_block_name) {
-    Slice v = meta_index_iter->value();
+    KeyValuePair pair = meta_index_iter->pair();
+    auto s = pair.decode();
+    if (!s.ok()) {
+      return s;
+    }
+    Slice v = pair.value();
     return block_handle->DecodeFrom(&v);
   } else {
     return Status::Corruption("Cannot find the meta block", meta_block_name);

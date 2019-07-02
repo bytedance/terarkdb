@@ -88,6 +88,14 @@ class ThreadedRBTreeRep : public MemTableRep {
         return key_type(p, vlen);
       }
 
+      std::pair<key_type, key_type> pair() const {
+        auto k = key();
+        auto p = k.data() + k.size();
+        uint32_t vlen;
+        p = GetVarint32Ptr(p, p + 8, &vlen);
+        return {k, key_type(p, vlen)};
+      }
+
       void set_key_value(const key_type &key, const key_type &val,
                          uint32_t klnln, uint32_t vlnln, bool mag) {
         char *p = datum;
@@ -497,6 +505,18 @@ class ThreadedRBTreeRep : public MemTableRep {
       return !rbt_.empty() && rbt_.front().Valid();
     }
 
+    virtual const char *EncodedKey() const override {
+      assert(false);
+      return nullptr;
+    }
+
+    virtual Slice GetKey() const override { return rbt_.front().Key(); }
+
+    virtual KeyValuePair pair() const override {
+      auto kv = rbt_.front().pair();
+      return KeyValuePair(kv.first, kv.second);
+    }
+
     virtual void Next() override {
       assert(Valid());
       if (!forward_) Seek(GetKey(), nullptr);
@@ -546,35 +566,23 @@ class ThreadedRBTreeRep : public MemTableRep {
       std::make_heap(rbt_.begin(), rbt_.end(), BackwardCmp{icmp_});
       forward_ = false;
     }
-
-    virtual const char *key() const override {
-      assert(false);
-      return nullptr;
-    }
-
-    virtual Slice GetKey() const override { return rbt_.front().Key(); }
-
-    virtual Slice GetValue() const override { return rbt_.front().Value(); }
-
-    virtual std::pair<Slice, Slice> GetKeyValue() const override {
-      return std::pair<Slice, Slice>(rbt_.front().Key(), rbt_.front().Value());
-    }
   };
 
   virtual void Get(const LookupKey &k, void *callback_args,
                    bool (*callback_func)(void *arg,
-                                         const KeyValuePair *kv)) override {
-    EncodedKeyValuePair pair;
+                                         const KeyValuePair &)) override {
     Slice dummy;
     if (immutable_) {
       ThreadedRBTreeRep::HeapIterator<DummyLock> iter(this);
       for (iter.Seek(dummy, k.memtable_key().data());
-           iter.Valid() && callback_func(callback_args, &iter); iter.Next()) {
+           iter.Valid() && callback_func(callback_args, iter.pair());
+           iter.Next()) {
       }
     } else {
       ThreadedRBTreeRep::HeapIterator<ReadLock> iter(this);
       for (iter.Seek(dummy, k.memtable_key().data());
-           iter.Valid() && callback_func(callback_args, &iter); iter.Next()) {
+           iter.Valid() && callback_func(callback_args, iter.pair());
+           iter.Next()) {
       }
     }
   }

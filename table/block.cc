@@ -182,19 +182,24 @@ void DataBlockIter::Prev() {
     if (!ParseNextDataKey()) {
       break;
     }
-    Slice current_key = key();
-
+    KeyValuePair kv = pair();
+    Slice current_key = kv.key();
+    auto s = kv.decode();
+    if (!s.ok()) {
+      Invalidate(s);
+      return;
+    }
     if (key_.IsKeyPinned()) {
       // The key is not delta encoded
       prev_entries_.emplace_back(current_, current_key.data(), 0,
-                                 current_key.size(), value());
+                                 current_key.size(), kv.value());
     } else {
       // The key is delta encoded, cache decoded key in buffer
       size_t new_key_offset = prev_entries_keys_buff_.size();
       prev_entries_keys_buff_.append(current_key.data(), current_key.size());
 
       prev_entries_.emplace_back(current_, nullptr, new_key_offset,
-                                 current_key.size(), value());
+                                 current_key.size(), kv.value());
     }
     // Loop until end of current entry hits the start of original entry
   } while (NextEntryOffset() < original);
@@ -228,10 +233,10 @@ void DataBlockIter::Seek(const Slice& target) {
 // target = "seek_user_key @ type | seqno".
 //
 // For any type other than kTypeValue, kTypeDeletion, kTypeSingleDeletion,
-// or kTypeBlobIndex, this function behaves identically as Seek().
+// or kTypeValueIndex, this function behaves identically as Seek().
 //
 // For any type in kTypeValue, kTypeDeletion, kTypeSingleDeletion,
-// or kTypeBlobIndex:
+// or kTypeValueIndex:
 //
 // If the return value is FALSE, iter location is undefined, and it means:
 // 1) there is no key in this block falling into the range:
@@ -332,7 +337,7 @@ bool DataBlockIter::SeekForGetImpl(const Slice& target) {
   if (value_type != ValueType::kTypeValue &&
       value_type != ValueType::kTypeDeletion &&
       value_type != ValueType::kTypeSingleDeletion &&
-      value_type != ValueType::kTypeBlobIndex) {
+      value_type != ValueType::kTypeValueIndex) {
     Seek(target);
     return true;
   }

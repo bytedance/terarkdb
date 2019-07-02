@@ -37,7 +37,7 @@ class HashSkipListRep : public MemTableRep {
 
   virtual void Get(const LookupKey& k, void* callback_args,
                    bool (*callback_func)(void* arg,
-                                         const KeyValuePair*)) override;
+                                         const KeyValuePair&)) override;
 
   virtual ~HashSkipListRep();
 
@@ -101,9 +101,23 @@ class HashSkipListRep : public MemTableRep {
 
     // Returns the key at the current position.
     // REQUIRES: Valid()
-    virtual const char* key() const override {
+    virtual const char* EncodedKey() const override {
       assert(Valid());
       return iter_.key();
+    }
+
+    // Returns the key at the current position.
+    // REQUIRES: Valid()
+    virtual Slice key() const override {
+      assert(Valid());
+      return GetLengthPrefixedSlice(iter_.key());
+    }
+
+    // Return KeyValuePair at the current position.
+    // REQUIRES: Valid()
+    virtual KeyValuePair pair() const override {
+      assert(Valid());
+      return DecodeKeyValuePair(iter_.key());
     }
 
     // Advances to the next position.
@@ -214,10 +228,15 @@ class HashSkipListRep : public MemTableRep {
    public:
     EmptyIterator() { }
     virtual bool Valid() const override { return false; }
-    virtual const char* key() const override {
+    virtual const char* EncodedKey() const override {
       assert(false);
       return nullptr;
     }
+    virtual Slice key() const override {
+      assert(false);
+      return Slice();
+    }
+    virtual KeyValuePair pair() const override { assert(false); }
     virtual void Next() override {}
     virtual void Prev() override {}
     virtual void Seek(const Slice& /*internal_key*/,
@@ -293,14 +312,14 @@ size_t HashSkipListRep::ApproximateMemoryUsage() {
 
 void HashSkipListRep::Get(const LookupKey& k, void* callback_args,
                           bool (*callback_func)(void* arg,
-                                                const KeyValuePair*)) {
+                                                const KeyValuePair&)) {
   auto transformed = transform_->Transform(k.user_key());
   auto bucket = GetBucket(transformed);
   if (bucket != nullptr) {
-    EncodedKeyValuePair pair;
     Bucket::Iterator iter(bucket);
     for (iter.Seek(k.memtable_key().data());
-         iter.Valid() && callback_func(callback_args, pair.SetKey(iter.key()));
+         iter.Valid() && callback_func(callback_args,
+                                       DecodeKeyValuePair(iter.key()));
          iter.Next()) {
     }
   }

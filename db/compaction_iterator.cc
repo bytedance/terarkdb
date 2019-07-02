@@ -27,7 +27,7 @@ class CompactionIteratorToInternalIterator : public InternalIterator {
   virtual void Next() override { c_iter_->Next(); }
   virtual void Prev() override { abort(); }  // do not support
   virtual Slice key() const override { return c_iter_->key(); }
-  virtual Slice value() const override { return c_iter_->value(); }
+  virtual KeyValuePair pair() const override { return c_iter_->pair(); }
   virtual Status status() const override {
     auto ci = c_iter_;
     if (ci->IsShuttingDown()) {
@@ -185,7 +185,7 @@ void CompactionIterator::Next() {
     // Check if we returned all records of the merge output.
     if (merge_out_iter_.Valid()) {
       key_ = merge_out_iter_.key();
-      value_ = merge_out_iter_.value();
+      pair_.reset(key_, merge_out_iter_.value());
       bool valid_key __attribute__((__unused__));
       valid_key =  ParseInternalKey(key_, &ikey_);
       // MergeUntil stops when it encounters a corrupt key and does not
@@ -224,7 +224,7 @@ void CompactionIterator::Next() {
 void CompactionIterator::InvokeFilterIfNeeded(bool* need_skip,
                                               Slice* skip_until) {
   if (compaction_filter_ != nullptr &&
-      (ikey_.type == kTypeValue || ikey_.type == kTypeBlobIndex) &&
+      (ikey_.type == kTypeValue || ikey_.type == kTypeValueIndex) &&
       (visible_at_tip_ || ignore_snapshots_ ||
        ikey_.sequence > latest_snapshot_ ||
        (snapshot_checker_ != nullptr &&
@@ -237,15 +237,10 @@ void CompactionIterator::InvokeFilterIfNeeded(bool* need_skip,
     CompactionFilter::Decision filter;
     compaction_filter_value_.clear();
     compaction_filter_skip_until_.Clear();
-    CompactionFilter::ValueType value_type =
-        ikey_.type == kTypeValue ? CompactionFilter::ValueType::kValue
-                                 : CompactionFilter::ValueType::kBlobIndex;
-    // Hack: pass internal key to BlobIndexCompactionFilter since it needs
-    // to get sequence number.
-    Slice& filter_key = ikey_.type == kTypeValue ? ikey_.user_key : key_;
     auto doFilter = [&]() {
-      filter = compaction_filter_->FilterV2(
-          compaction_->level(), filter_key, value_type, value_,
+      filter = compaction_filter_->FilterPairV2(
+          compaction_->level(), ikey_.user_key,
+          CompactionFilter::ValueType::kValue, pair_,
           &compaction_filter_value_, compaction_filter_skip_until_.rep());
     };
     auto sample = filter_sample_interval_;
@@ -272,10 +267,10 @@ void CompactionIterator::InvokeFilterIfNeeded(bool* need_skip,
       ikey_.type = kTypeDeletion;
       current_key_.UpdateInternalKey(ikey_.sequence, kTypeDeletion);
       // no value associated with delete
-      value_.clear();
+      pair_.reset();
       iter_stats_.num_record_drop_user++;
     } else if (filter == CompactionFilter::Decision::kChangeValue) {
-      value_ = compaction_filter_value_;
+      pair_.reset(key_, compaction_filter_value_);
     } else if (filter == CompactionFilter::Decision::kRemoveAndSkipUntil) {
       *need_skip = true;
       compaction_filter_skip_until_.ConvertFromUserKey(kMaxSequenceNumber,
@@ -295,8 +290,8 @@ void CompactionIterator::NextFromInput() {
   valid_ = false;
 
   while (!valid_ && input_->Valid() && !IsShuttingDown()) {
-    key_ = input_->key();
-    value_ = input_->value();
+    pair_ = input_->pair();
+    key_ = pair_.key();
     iter_stats_.num_input_records++;
 
     if (!ParseInternalKey(key_, &ikey_)) {
@@ -327,7 +322,8 @@ void CompactionIterator::NextFromInput() {
       iter_stats_.num_input_deletion_records++;
     }
     iter_stats_.total_input_raw_key_bytes += key_.size();
-    iter_stats_.total_input_raw_value_bytes += value_.size();
+    iter_stats_.total_input_raw_value_bytes +=
+        pair_.raw().valid() ? pair_.raw().size() : pair_.value().size();
 
     // If need_skip is true, we should seek the input iterator
     // to internal key skip_until and continue from there.
@@ -411,7 +407,7 @@ void CompactionIterator::NextFromInput() {
       assert(ikey_.type == kTypeValue);
       assert(current_user_key_snapshot_ == last_snapshot);
 
-      value_.clear();
+      pair_.reset();
       valid_ = true;
       clear_and_output_next_key_ = false;
     } else if (ikey_.type == kTypeSingleDeletion) {
@@ -616,7 +612,7 @@ void CompactionIterator::NextFromInput() {
         valid_ = true;
         at_next_ = true;
       }
-    } else if (ikey_.type == kTypeMerge) {
+    } else if (ikey_.type == kTypeMerge || ikey_.type == kTypeMergeIndex) {
       if (!merge_helper_->HasOperator()) {
         status_ = Status::InvalidArgument(
             "merge_operator is not properly initialized.");
@@ -639,7 +635,7 @@ void CompactionIterator::NextFromInput() {
         // NOTE: key, value, and ikey_ refer to old entries.
         //       These will be correctly set below.
         key_ = merge_out_iter_.key();
-        value_ = merge_out_iter_.value();
+        pair_.reset(key_, merge_out_iter_.value());
         bool valid_key __attribute__((__unused__));
         valid_key = ParseInternalKey(key_, &ikey_);
         // MergeUntil stops when it encounters a corrupt key and does not
@@ -703,7 +699,8 @@ void CompactionIterator::PrepareOutput() {
       bottommost_level_ && valid_ && ikey_.sequence <= earliest_snapshot_ &&
       (snapshot_checker_ == nullptr || LIKELY(snapshot_checker_->IsInSnapshot(
         ikey_.sequence, earliest_snapshot_))) &&
-      ikey_.type != kTypeMerge &&
+      ikey_.type != kTypeMerge && ikey_.type != kTypeValueIndex &&
+      ikey_.type != kTypeMergeIndex &&
       !cmp_->Equal(compaction_->GetLargestUserKey(), ikey_.user_key)) {
     assert(ikey_.type != kTypeDeletion && ikey_.type != kTypeSingleDeletion);
     ikey_.sequence = 0;

@@ -47,7 +47,7 @@ class TwoLevelIndexIterator : public InternalIteratorBase<BlockHandle> {
   }
   virtual BlockHandle value() const override {
     assert(Valid());
-    return second_level_iter_.value();
+    return second_level_iter_.iter()->value();
   }
   virtual Status status() const override {
     if (!first_level_iter_.status().ok()) {
@@ -59,9 +59,6 @@ class TwoLevelIndexIterator : public InternalIteratorBase<BlockHandle> {
     } else {
       return status_;
     }
-  }
-  virtual uint64_t FileNumber() const override {
-    return second_level_iter_.FileNumber();
   }
   virtual void SetPinnedItersMgr(
       PinnedIteratorsManager* /*pinned_iters_mgr*/) override {}
@@ -191,7 +188,7 @@ void TwoLevelIndexIterator::InitDataBlock() {
   if (!first_level_iter_.Valid()) {
     SetSecondLevelIterator(nullptr);
   } else {
-    BlockHandle handle = first_level_iter_.value();
+    BlockHandle handle = first_level_iter_.iter()->value();
     if (second_level_iter_.iter() != nullptr &&
         !second_level_iter_.status().IsIncomplete() &&
         handle.offset() == data_block_handle_.offset()) {
@@ -533,14 +530,10 @@ class MapSstIterator final : public InternalIterator {
     }
   }
   virtual Slice key() const override { return min_heap_.top().key; }
-  virtual Slice value() const override {
-    return min_heap_.top().iter->value();
+  virtual KeyValuePair pair() const override {
+    return min_heap_.top().iter->pair();
   }
   virtual Status status() const override { return status_; }
-  virtual uint64_t FileNumber() const override {
-    return !min_heap_.empty() ? min_heap_.top().iter->FileNumber()
-                              : uint64_t(-1);
-  }
   virtual void SetPinnedItersMgr(
       PinnedIteratorsManager* pinned_iters_mgr) override {
     iterator_cache_.SetPinnedItersMgr(pinned_iters_mgr);

@@ -631,15 +631,6 @@ set(SOURCES
         util/transaction_test_util.cc
         util/xxhash.cc
         utilities/backupable/backupable_db.cc
-        utilities/blob_db/blob_compaction_filter.cc
-        utilities/blob_db/blob_db.cc
-        utilities/blob_db/blob_db_impl.cc
-        utilities/blob_db/blob_db_impl_filesnapshot.cc
-        utilities/blob_db/blob_dump_tool.cc
-        utilities/blob_db/blob_file.cc
-        utilities/blob_db/blob_log_reader.cc
-        utilities/blob_db/blob_log_writer.cc
-        utilities/blob_db/blob_log_format.cc
         utilities/cassandra/cassandra_compaction_filter.cc
         utilities/cassandra/format.cc
         utilities/cassandra/merge_operator.cc
@@ -866,7 +857,6 @@ if(WITH_TESTS)
         db/corruption_test.cc
         db/cuckoo_table_db_test.cc
         db/db_basic_test.cc
-        db/db_blob_index_test.cc
         db/db_block_cache_test.cc
         db/db_bloom_filter_test.cc
         db/db_compaction_filter_test.cc
@@ -969,7 +959,6 @@ if(WITH_TESTS)
         util/thread_list_test.cc
         util/thread_local_test.cc
         utilities/backupable/backupable_db_test.cc
-        utilities/blob_db/blob_db_test.cc
         utilities/cassandra/cassandra_functional_test.cc
         utilities/cassandra/cassandra_format_test.cc
         utilities/cassandra/cassandra_row_merge_test.cc

@@ -371,7 +371,7 @@ Status ExternalSstFileIngestionJob::GetIngestedFileInfo(
   ro.fill_cache = false;
   std::unique_ptr<InternalIterator> iter(table_reader->NewIterator(
       ro, sv->mutable_cf_options.prefix_extractor.get()));
-  std::unique_ptr<InternalIterator> range_del_iter(
+  std::unique_ptr<FragmentedRangeTombstoneIterator> range_del_iter(
       table_reader->NewRangeTombstoneIterator(ro));
 
   // Get first (smallest) and last (largest) key from file.

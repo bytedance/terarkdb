@@ -46,7 +46,7 @@ GetContext::GetContext(const Comparator* ucmp,
                        SequenceNumber* _max_covering_tombstone_seq, Env* env,
                        SequenceNumber* seq,
                        PinnedIteratorsManager* _pinned_iters_mgr,
-                       ReadCallback* callback, bool* is_blob_index)
+                       ReadCallback* callback)
     : ucmp_(ucmp),
       merge_operator_(merge_operator),
       logger_(logger),
@@ -62,8 +62,7 @@ GetContext::GetContext(const Comparator* ucmp,
       min_seq_type_(0),
       replay_log_(nullptr),
       pinned_iters_mgr_(_pinned_iters_mgr),
-      callback_(callback),
-      is_blob_index_(is_blob_index) {
+      callback_(callback) {
   if (seq_) {
     *seq_ = kMaxSequenceNumber;
   }
@@ -90,19 +89,6 @@ void GetContext::SaveValue(const Slice& value, SequenceNumber /*seq*/) {
   if (LIKELY(pinnable_val_ != nullptr)) {
     pinnable_val_->PinSelf(value);
   }
-}
-
-void GetContext::SetReplayLog(std::string* replay_log) {
-  if (replay_log_ != nullptr && replay_log == nullptr &&
-      (state_ == kNotFound || state_ == kMerge) &&
-      max_covering_tombstone_seq_ != nullptr &&
-      *max_covering_tombstone_seq_ != 0) {
-    // Replay log ended, we found a range deletion that won't delete current
-    // key. The remaining files we look at will only contain covered keys, so we
-    // append an range deletion to stop.
-    appendToReplayLog(replay_log_, kTypeRangeDeletion, Slice());
-  }
-  replay_log_ = replay_log;
 }
 
 void GetContext::ReportCounters() {
@@ -192,6 +178,8 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
       return true;  // to continue to the next seq
     }
 
+    appendToReplayLog(replay_log_, parsed_key.type, value);
+
     if (seq_ != nullptr) {
       // Set the sequence number if it is uninitialized
       if (*seq_ == kMaxSequenceNumber) {
@@ -200,25 +188,16 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
     }
 
     auto type = parsed_key.type;
-    // No matter whether Key matched or not, append replay log fn should to be
-    // called after range deletion were handled
-    if ((type == kTypeValue || type == kTypeMerge || type == kTypeBlobIndex) &&
-        max_covering_tombstone_seq_ != nullptr &&
+    // Key matches. Process it
+    if ((type == kTypeValue || type == kTypeMerge || type == kTypeValueIndex ||
+         type == kTypeMergeIndex) && max_covering_tombstone_seq_ != nullptr &&
         *max_covering_tombstone_seq_ > parsed_key.sequence) {
       type = kTypeRangeDeletion;
-      appendToReplayLog(replay_log_, type, Slice());
-    } else {
-      appendToReplayLog(replay_log_, type, value);
     }
     switch (type) {
       case kTypeValue:
-      case kTypeBlobIndex:
+      case kTypeValueIndex:
         assert(state_ == kNotFound || state_ == kMerge);
-        if (type == kTypeBlobIndex && is_blob_index_ == nullptr) {
-          // Blob value not supported. Stop.
-          state_ = kBlobIndex;
-          return false;
-        }
         if (kNotFound == state_) {
           state_ = kFound;
           if (LIKELY(pinnable_val_ != nullptr)) {
@@ -243,9 +222,6 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
               state_ = kCorrupt;
             }
           }
-        }
-        if (is_blob_index_ != nullptr) {
-          *is_blob_index_ = (type == kTypeBlobIndex);
         }
         return false;
 
@@ -273,6 +249,7 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
         return false;
 
       case kTypeMerge:
+      case kTypeMergeIndex:
         assert(state_ == kNotFound || state_ == kMerge);
         state_ = kMerge;
         // value_pinner is not set from plain_table_reader.cc for example.

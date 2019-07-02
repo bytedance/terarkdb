@@ -908,11 +908,15 @@ Status BlockBasedTable::Open(const ImmutableCFOptions& ioptions,
     s = meta_iter->status();
     TableProperties* table_properties = nullptr;
     if (s.ok()) {
-      s = ReadProperties(meta_iter->value(), rep->file.get(),
-                         prefetch_buffer.get(), rep->footer, rep->ioptions,
-                         &table_properties,
-                         false /* compression_type_missing */,
-                         nullptr /* memory_allocator */);
+      auto pair = meta_iter->pair();
+      s = pair.decode();
+      if (s.ok()) {
+        s = ReadProperties(pair.value(), rep->file.get(),
+                           prefetch_buffer.get(), rep->footer, rep->ioptions,
+                           &table_properties,
+                           false /* compression_type_missing */,
+                           nullptr /* memory_allocator */);
+      }
     }
 
     if (!s.ok()) {
@@ -1928,7 +1932,7 @@ BlockBasedTable::PartitionedIndexIteratorState::PartitionedIndexIteratorState(
       index_key_is_full_(index_key_is_full) {}
 
 template <class TBlockIter, typename TValue>
-const size_t BlockBasedTableIterator<TBlockIter, TValue>::kMaxReadaheadSize =
+const size_t BlockBasedTableIteratorBase<TBlockIter, TValue>::kMaxReadaheadSize =
     256 * 1024;
 
 InternalIteratorBase<BlockHandle>*
@@ -2086,7 +2090,7 @@ bool BlockBasedTable::PrefixMayMatch(
 }
 
 template <class TBlockIter, typename TValue>
-void BlockBasedTableIterator<TBlockIter, TValue>::Seek(const Slice& target) {
+void BlockBasedTableIteratorBase<TBlockIter, TValue>::Seek(const Slice& target) {
   is_out_of_bound_ = false;
   if (!CheckPrefixMayMatch(target)) {
     ResetDataIter();
@@ -2116,7 +2120,7 @@ void BlockBasedTableIterator<TBlockIter, TValue>::Seek(const Slice& target) {
 }
 
 template <class TBlockIter, typename TValue>
-void BlockBasedTableIterator<TBlockIter, TValue>::SeekForPrev(
+void BlockBasedTableIteratorBase<TBlockIter, TValue>::SeekForPrev(
     const Slice& target) {
   is_out_of_bound_ = false;
   if (!CheckPrefixMayMatch(target)) {
@@ -2160,7 +2164,7 @@ void BlockBasedTableIterator<TBlockIter, TValue>::SeekForPrev(
 }
 
 template <class TBlockIter, typename TValue>
-void BlockBasedTableIterator<TBlockIter, TValue>::SeekToFirst() {
+void BlockBasedTableIteratorBase<TBlockIter, TValue>::SeekToFirst() {
   is_out_of_bound_ = false;
   SavePrevIndexValue();
   index_iter_->SeekToFirst();
@@ -2174,7 +2178,7 @@ void BlockBasedTableIterator<TBlockIter, TValue>::SeekToFirst() {
 }
 
 template <class TBlockIter, typename TValue>
-void BlockBasedTableIterator<TBlockIter, TValue>::SeekToLast() {
+void BlockBasedTableIteratorBase<TBlockIter, TValue>::SeekToLast() {
   is_out_of_bound_ = false;
   SavePrevIndexValue();
   index_iter_->SeekToLast();
@@ -2188,21 +2192,21 @@ void BlockBasedTableIterator<TBlockIter, TValue>::SeekToLast() {
 }
 
 template <class TBlockIter, typename TValue>
-void BlockBasedTableIterator<TBlockIter, TValue>::Next() {
+void BlockBasedTableIteratorBase<TBlockIter, TValue>::Next() {
   assert(block_iter_points_to_real_block_);
   block_iter_.Next();
   FindKeyForward();
 }
 
 template <class TBlockIter, typename TValue>
-void BlockBasedTableIterator<TBlockIter, TValue>::Prev() {
+void BlockBasedTableIteratorBase<TBlockIter, TValue>::Prev() {
   assert(block_iter_points_to_real_block_);
   block_iter_.Prev();
   FindKeyBackward();
 }
 
 template <class TBlockIter, typename TValue>
-void BlockBasedTableIterator<TBlockIter, TValue>::InitDataBlock() {
+void BlockBasedTableIteratorBase<TBlockIter, TValue>::InitDataBlock() {
   BlockHandle data_block_handle = index_iter_->value();
   if (!block_iter_points_to_real_block_ ||
       data_block_handle.offset() != prev_index_value_.offset() ||
@@ -2252,7 +2256,7 @@ void BlockBasedTableIterator<TBlockIter, TValue>::InitDataBlock() {
 }
 
 template <class TBlockIter, typename TValue>
-void BlockBasedTableIterator<TBlockIter, TValue>::FindKeyForward() {
+void BlockBasedTableIteratorBase<TBlockIter, TValue>::FindKeyForward() {
   assert(!is_out_of_bound_);
   // TODO the while loop inherits from two-level-iterator. We don't know
   // whether a block can be empty so it can be replaced by an "if".
@@ -2292,7 +2296,7 @@ void BlockBasedTableIterator<TBlockIter, TValue>::FindKeyForward() {
 }
 
 template <class TBlockIter, typename TValue>
-void BlockBasedTableIterator<TBlockIter, TValue>::FindKeyBackward() {
+void BlockBasedTableIteratorBase<TBlockIter, TValue>::FindKeyBackward() {
   assert(!is_out_of_bound_);
   while (!block_iter_.Valid()) {
     if (!block_iter_.status().ok()) {
@@ -2500,19 +2504,29 @@ Status BlockBasedTable::Get(const ReadOptions& read_options, const Slice& key,
 
         // Call the *saver function on each entry/block until it returns false
         for (; biter.Valid(); biter.Next()) {
+          KeyValuePair pair = biter.pair();
           ParsedInternalKey parsed_key;
-          if (!ParseInternalKey(biter.key(), &parsed_key)) {
+          if (!ParseInternalKey(pair.key(), &parsed_key)) {
             s = Status::Corruption(Slice());
+            break;
           }
-
+          s = pair.decode();
+          if (!s.ok()) {
+            break;
+          }
           if (!get_context->SaveValue(
-                  parsed_key, biter.value(), &matched,
-                  biter.IsValuePinned() ? &biter : nullptr)) {
+              parsed_key, pair.value(), &matched,
+              biter.IsValuePinned() ? &biter : nullptr)) {
             done = true;
             break;
           }
         }
-        s = biter.status();
+        if (s.ok()) {
+          s = biter.status();
+        }
+        if (!s.ok()) {
+          break;
+        }
       }
       if (done) {
         // Avoid the extra Next which is expensive in two-level indexes
@@ -2658,8 +2672,13 @@ Status BlockBasedTable::VerifyChecksumInBlocks(
     if (!s.ok()) {
       break;
     }
+    KeyValuePair pair = index_iter->pair();
+    s = pair.decode();
+    if (!s.ok()) {
+      break;
+    }
     BlockHandle handle;
-    Slice input = index_iter->value();
+    Slice input = pair.value();
     s = handle.DecodeFrom(&input);
     BlockContents contents;
     Slice dummy_comp_dict;
@@ -2884,13 +2903,15 @@ Status BlockBasedTable::GetKVPairsFromDataBlocks(
         // Error reading the block - Skipped
         break;
       }
-      const Slice& key = datablock_iter->key();
-      const Slice& value = datablock_iter->value();
-      std::string key_copy = std::string(key.data(), key.size());
-      std::string value_copy = std::string(value.data(), value.size());
-
-      kv_pair_block.push_back(
-          std::make_pair(std::move(key_copy), std::move(value_copy)));
+      KeyValuePair pair = datablock_iter->pair();
+      s = pair.decode();
+      if (!s.ok()) {
+        break;
+      }
+      const Slice& key = pair.key();
+      const Slice& value = pair.value();
+      kv_pair_block.emplace_back(std::string(key.data(), key.size()),
+                                 std::string(value.data(), value.size()));
     }
     kv_pair_blocks->push_back(std::move(kv_pair_block));
   }
@@ -2921,22 +2942,27 @@ Status BlockBasedTable::DumpTable(WritableFile* out_file,
       if (!s.ok()) {
         return s;
       }
+      KeyValuePair pair = meta_iter->pair();
+      s = pair.decode();
+      if (!s.ok()) {
+        return s;
+      }
       if (meta_iter->key() == rocksdb::kPropertiesBlock) {
         out_file->Append("  Properties block handle: ");
-        out_file->Append(meta_iter->value().ToString(true).c_str());
+        out_file->Append(pair.value().ToString(true).c_str());
         out_file->Append("\n");
       } else if (meta_iter->key() == rocksdb::kCompressionDictBlock) {
         out_file->Append("  Compression dictionary block handle: ");
-        out_file->Append(meta_iter->value().ToString(true).c_str());
+        out_file->Append(pair.value().ToString(true).c_str());
         out_file->Append("\n");
       } else if (strstr(meta_iter->key().ToString().c_str(),
                         "filter.rocksdb.") != nullptr) {
         out_file->Append("  Filter block handle: ");
-        out_file->Append(meta_iter->value().ToString(true).c_str());
+        out_file->Append(pair.value().ToString(true).c_str());
         out_file->Append("\n");
       } else if (meta_iter->key() == rocksdb::kRangeDelBlock) {
         out_file->Append("  Range deletion block handle: ");
-        out_file->Append(meta_iter->value().ToString(true).c_str());
+        out_file->Append(pair.value().ToString(true).c_str());
         out_file->Append("\n");
       }
     }
@@ -3164,7 +3190,13 @@ Status BlockBasedTable::DumpDataBlocks(WritableFile* out_file) {
         out_file->Append("Error reading the block - Skipped \n");
         break;
       }
-      DumpKeyValue(datablock_iter->key(), datablock_iter->value(), out_file);
+      KeyValuePair pair = datablock_iter->pair();
+      s = pair.decode();
+      if (!s.ok()) {
+        out_file->Append("Error decoding the value - Skipped \n");
+        continue;
+      }
+      DumpKeyValue(pair.key(), pair.value(), out_file);
     }
     out_file->Append("\n");
   }

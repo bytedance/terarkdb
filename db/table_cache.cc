@@ -250,12 +250,6 @@ InternalIterator* TableCache::NewIterator(
     } else {
       result = table_reader->NewIterator(options, prefix_extractor, arena,
                                          skip_filters, for_compaction);
-      if (result->FileNumber() != fd.GetNumber()) {
-        assert(result->FileNumber() == uint64_t(-1));
-        result = NewFileNumberInternalIteratorWrapper(result, fd.GetNumber(),
-                                                      arena);
-        assert(result->FileNumber() == fd.GetNumber());
-      }
       if (file_meta.sst_purpose == kMapSst && !depend_files.empty()) {
         // Store params for create depend table iterator in future
         // DON'T REF THIS OBJECT, DEEP COPY IT !

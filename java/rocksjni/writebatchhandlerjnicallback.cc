@@ -82,13 +82,6 @@ WriteBatchHandlerJniCallback::WriteBatchHandlerJniCallback(
     return;
   }
 
-  m_jPutBlobIndexCfMethodId =
-      WriteBatchHandlerJni::getPutBlobIndexCfMethodId(env);
-  if(m_jPutBlobIndexCfMethodId == nullptr) {
-    // exception thrown
-    return;
-  }
-
   m_jMarkBeginPrepareMethodId =
       WriteBatchHandlerJni::getMarkBeginPrepareMethodId(env);
   if(m_jMarkBeginPrepareMethodId == nullptr) {
@@ -284,25 +277,6 @@ void WriteBatchHandlerJniCallback::LogData(const Slice& blob) {
       j_blob);
   };
   WriteBatchHandlerJniCallback::k_op(blob, logData);
-}
-
-rocksdb::Status WriteBatchHandlerJniCallback::PutBlobIndexCF(uint32_t column_family_id,
-    const Slice& key, const Slice& value) {
-  auto putBlobIndex = [this, column_family_id] (
-      jbyteArray j_key, jbyteArray j_value) {
-    m_env->CallVoidMethod(
-      m_jcallback_obj,
-      m_jPutBlobIndexCfMethodId,
-      static_cast<jint>(column_family_id),
-      j_key,
-      j_value);
-  };
-  auto status = WriteBatchHandlerJniCallback::kv_op(key, value, putBlobIndex);
-  if(status == nullptr) {
-    return rocksdb::Status::OK();   // TODO(AR) what to do if there is an Exception but we don't know the rocksdb::Status?
-  } else {
-    return rocksdb::Status(*status);
-  }
 }
 
 rocksdb::Status WriteBatchHandlerJniCallback::MarkBeginPrepare(bool unprepare) {

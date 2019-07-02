@@ -190,7 +190,9 @@ class MapSstElementIterator {
   }
   void Next() { PrepareNext(); }
   Slice key() const { return map_elements_.Key(); }
-  Slice value() const { return buffer_; }
+  KeyValuePair pair() const {
+    return KeyValuePair(map_elements_.Key(), buffer_);
+  }
   Status status() const { return status_; }
 
   const std::unordered_set<uint64_t>& GetSstDepend() const {
@@ -335,7 +337,12 @@ Status LoadRangeWithDepend(std::vector<RangeWithDepend>& ranges,
         return iter->status();
       }
       for (iter->SeekToFirst(); iter->Valid(); iter->Next()) {
-        if (!map_element.Decode(iter->key(), iter->value())) {
+        auto pair = iter->pair();
+        auto s = pair.decode();
+        if (!s.ok()) {
+          return s;
+        }
+        if (!map_element.Decode(pair.key(), pair.value())) {
           return Status::Corruption("Map sst invalid key or value");
         }
         ranges.emplace_back(map_element);
@@ -883,7 +890,7 @@ Status MapBuilder::WriteOutputFile(
   file_meta->fd.largest_seqno = bound_builder.largest_seqno;
 
   for (range_iter->SeekToFirst(); range_iter->Valid(); range_iter->Next()) {
-    builder->Add(range_iter->key(), range_iter->value());
+    builder->Add(range_iter->pair());
   }
   if (!range_iter->status().ok()) {
     s = range_iter->status();
@@ -1111,8 +1118,8 @@ struct MapElementIterator : public InternalIterator {
     }
     Update();
   }
-  Slice key() const override { return key_slice; }
-  Slice value() const override { return value_slice; }
+  Slice key() const override { return pair_.key(); }
+  KeyValuePair pair() const override { return pair_; }
   virtual Status status() const override {
     return iter_ ? iter_->status() : Status::OK();
   }
@@ -1129,8 +1136,7 @@ struct MapElementIterator : public InternalIterator {
   }
   void Update() {
     if (iter_) {
-      key_slice = iter_->key();
-      value_slice = iter_->value();
+      pair_ = iter_->pair();
     } else {
       const FileMetaData* f = meta_array_[where_];
       element_.smallest_key_ = f->smallest.Encode();
@@ -1141,8 +1147,7 @@ struct MapElementIterator : public InternalIterator {
       element_.link_.clear();
       element_.link_.emplace_back(
           MapSstElement::LinkTarget{f->fd.GetNumber(), f->fd.GetFileSize()});
-      key_slice = element_.Key();
-      value_slice = element_.Value(&buffer_);
+      pair_.reset(element_.Key(), element_.Value(&buffer_));
     }
   }
 
@@ -1155,7 +1160,7 @@ struct MapElementIterator : public InternalIterator {
   MapSstElement element_;
   std::string buffer_;
   std::unique_ptr<InternalIterator> iter_;
-  Slice key_slice, value_slice;
+  KeyValuePair pair_;
 };
 
 InternalIterator* NewMapElementIterator(

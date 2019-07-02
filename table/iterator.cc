@@ -155,44 +155,29 @@ class EmptyInternalIteratorBase : public InternalIteratorBase<TValue> {
  private:
   Status status_;
 };
+template <>
+class EmptyInternalIteratorBase<Slice> : public InternalIteratorBase<Slice> {
+public:
+  explicit EmptyInternalIteratorBase(const Status& s) : status_(s) {}
+  virtual bool Valid() const override { return false; }
+  virtual void Seek(const Slice& /*target*/) override {}
+  virtual void SeekForPrev(const Slice& /*target*/) override {}
+  virtual void SeekToFirst() override {}
+  virtual void SeekToLast() override {}
+  virtual void Next() override { assert(false); }
+  virtual void Prev() override { assert(false); }
+  Slice key() const override {
+    assert(false);
+    return Slice();
+  }
+  KeyValuePair pair() const override {
+    assert(false);
+    return KeyValuePair();
+  }
+  virtual Status status() const override { return status_; }
 
-template <class TValue = Slice>
-class FileNumberInternalIteratorWrapperBase
-    : public InternalIteratorBase<TValue> {
- public:
-  FileNumberInternalIteratorWrapperBase(InternalIteratorBase<TValue>* inner,
-                                        uint64_t file_number)
-      : inner_(inner), file_number_(file_number) {}
-  virtual bool Valid() const override { return inner_->Valid(); }
-  virtual void Seek(const Slice& target) override { inner_->Seek(target); }
-  virtual void SeekForPrev(const Slice& target) override {
-    inner_->SeekForPrev(target);
-  }
-  virtual void SeekToFirst() override { inner_->SeekToFirst(); }
-  virtual void SeekToLast() override { inner_->SeekToLast(); }
-  virtual void Next() override { inner_->Next(); }
-  virtual void Prev() override { inner_->Prev(); }
-  Slice key() const override { return inner_->key(); }
-  TValue value() const override { return inner_->value(); }
-  virtual Status status() const override { return inner_->status(); }
-  virtual uint64_t FileNumber() const override { return file_number_; }
-  virtual bool IsOutOfBound() override { return inner_->IsOutOfBound(); }
-  virtual void SetPinnedItersMgr(
-      PinnedIteratorsManager* pinned_iters_mgr) override {
-    inner_->SetPinnedItersMgr(pinned_iters_mgr);
-  }
-  virtual bool IsKeyPinned() const override { return inner_->IsKeyPinned(); }
-  virtual bool IsValuePinned() const override {
-    return inner_->IsValuePinned();
-  }
-  virtual Status GetProperty(std::string prop_name,
-                             std::string* prop) override {
-    return inner_->GetProperty(prop_name, prop);
-  }
-
- private:
-  InternalIteratorBase<TValue>* inner_;
-  uint64_t file_number_;
+private:
+  Status status_;
 };
 
 }  // namespace
@@ -232,31 +217,5 @@ template InternalIteratorBase<BlockHandle>* NewErrorInternalIterator(
     const Status& status, Arena* arena);
 template InternalIteratorBase<Slice>* NewErrorInternalIterator(
     const Status& status, Arena* arena);
-
-template <class TValue>
-InternalIteratorBase<TValue>* NewFileNumberInternalIteratorWrapper(
-    InternalIteratorBase<TValue>* inner, uint64_t file_number, Arena* arena) {
-  using Wrapper = FileNumberInternalIteratorWrapperBase<TValue>;
-  using Inner = InternalIteratorBase<TValue>;
-  Wrapper* wrapper;
-  if (arena == nullptr) {
-    wrapper = new Wrapper(inner, file_number);
-    wrapper->RegisterCleanup(
-        [](void* arg1, void*) { delete static_cast<Inner*>(arg1); }, inner,
-        nullptr);
-  } else {
-    auto mem = arena->AllocateAligned(sizeof(Wrapper));
-    wrapper = new (mem) Wrapper(inner, file_number);
-    wrapper->RegisterCleanup(
-        [](void* arg1, void*) { static_cast<Inner*>(arg1)->~Inner(); }, inner,
-        nullptr);
-  }
-  return wrapper;
-}
-template InternalIteratorBase<BlockHandle>*
-NewFileNumberInternalIteratorWrapper(InternalIteratorBase<BlockHandle>* inner,
-                                     uint64_t file_number, Arena* arena);
-template InternalIteratorBase<Slice>* NewFileNumberInternalIteratorWrapper(
-    InternalIteratorBase<Slice>* inner, uint64_t file_number, Arena* arena);
 
 }  // namespace rocksdb

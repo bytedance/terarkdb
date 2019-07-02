@@ -112,8 +112,8 @@ class DBImpl : public DB {
   // Note: 'value_found' from KeyMayExist propagates here
   Status GetImpl(const ReadOptions& options, ColumnFamilyHandle* column_family,
                  const Slice& key, PinnableSlice* value,
-                 bool* value_found = nullptr, ReadCallback* callback = nullptr,
-                 bool* is_blob_index = nullptr);
+                 bool* value_found = nullptr,
+                 ReadCallback* callback = nullptr);
 
   using DB::MultiGet;
   virtual std::vector<Status> MultiGet(
@@ -328,8 +328,7 @@ class DBImpl : public DB {
   // TODO(andrewkr): this API need to be aware of range deletion operations
   Status GetLatestSequenceForKey(SuperVersion* sv, const Slice& key,
                                  bool cache_only, SequenceNumber* seq,
-                                 bool* found_record_for_key,
-                                 bool* is_blob_index = nullptr);
+                                 bool* found_record_for_key);
 
   using DB::IngestExternalFile;
   virtual Status IngestExternalFile(
@@ -835,7 +834,6 @@ class DBImpl : public DB {
   friend class DBTest2_ReadCallbackTest_Test;
   friend class WriteCallbackTest_WriteWithCallbackTest_Test;
   friend class XFTransactionWriteHandler;
-  friend class DBBlobIndexTest;
   friend class WriteUnpreparedTransactionTest_RecoveryTest_Test;
 #endif
   struct CompactionState;

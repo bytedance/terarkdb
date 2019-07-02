@@ -91,13 +91,13 @@ class TableReader {
   // Specialization for performance
   virtual void RangeScan(const Slice* begin,
                          const SliceTransform* prefix_extractor, void* arg,
-                         bool (*callback_func)(void* arg, const Slice& ikey,
-                                               const Slice& value)) {
+                         bool (*callback_func)(void* arg,
+                                               const KeyValuePair&)) {
     Arena arena;
     ScopedArenaIterator iter(
         NewIterator(ReadOptions(), prefix_extractor, &arena));
     for (begin == nullptr ? iter->SeekToFirst() : iter->Seek(*begin);
-         iter->Valid() && callback_func(arg, iter->key(), iter->value());
+         iter->Valid() && callback_func(arg, iter->pair());
          iter->Next()) {
     }
   }

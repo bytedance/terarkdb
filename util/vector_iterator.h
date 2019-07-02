@@ -59,8 +59,9 @@ class VectorIterator : public InternalIterator {
   virtual Slice key() const override {
     return Slice(keys_[indices_[current_]]);
   }
-  virtual Slice value() const override {
-    return Slice(values_[indices_[current_]]);
+  virtual KeyValuePair pair() const override {
+    return KeyValuePair(keys_[indices_[current_]],
+                        values_[indices_[current_]]);
   }
 
   virtual Status status() const override { return Status::OK(); }

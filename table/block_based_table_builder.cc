@@ -414,10 +414,16 @@ BlockBasedTableBuilder::~BlockBasedTableBuilder() {
   delete rep_;
 }
 
-void BlockBasedTableBuilder::Add(const Slice& key, const Slice& value) {
+void BlockBasedTableBuilder::Add(const KeyValuePair& pair) {
   Rep* r = rep_;
   assert(!r->closed);
   if (!ok()) return;
+  auto s = pair.decode();
+  if (!s.ok()) {
+    r->status = s;
+    return;
+  }
+  Slice key = pair.key(), value = pair.value();
   ValueType value_type = ExtractValueType(key);
   if (r->ignore_key_type || IsValueType(value_type)) {
     if (r->props.num_entries > 0) {

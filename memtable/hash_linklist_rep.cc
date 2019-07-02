@@ -179,7 +179,7 @@ class HashLinkListRep : public MemTableRep {
 
   virtual void Get(const LookupKey& k, void* callback_args,
                    bool (*callback_func)(void* arg,
-                                         const KeyValuePair*)) override;
+                                         const KeyValuePair&)) override;
 
   virtual ~HashLinkListRep();
 
@@ -274,11 +274,24 @@ class HashLinkListRep : public MemTableRep {
 
     // Returns the key at the current position.
     // REQUIRES: Valid()
-    virtual const char* key() const override {
+    virtual const char* EncodedKey() const override {
       assert(Valid());
       return iter_.key();
     }
 
+    // Returns the key at the current position.
+    // REQUIRES: Valid()
+    virtual Slice key() const override {
+      assert(Valid());
+      return GetLengthPrefixedSlice(iter_.key());
+    }
+
+    // Reset KeyValuePair at the current position.
+    // REQUIRES: Valid()
+    virtual KeyValuePair pair() const override {
+      assert(Valid());
+      return DecodeKeyValuePair(iter_.key());
+    }
     // Advances to the next position.
     // REQUIRES: Valid()
     virtual void Next() override {
@@ -343,9 +356,23 @@ class HashLinkListRep : public MemTableRep {
 
     // Returns the key at the current position.
     // REQUIRES: Valid()
-    virtual const char* key() const override {
+    virtual const char* EncodedKey() const override {
       assert(Valid());
       return node_->key;
+    }
+
+    // Returns the key at the current position.
+    // REQUIRES: Valid()
+    virtual Slice key() const override {
+      assert(Valid());
+      return GetLengthPrefixedSlice(node_->key);
+    }
+
+    // Reset KeyValuePair at the current position.
+    // REQUIRES: Valid()
+    virtual KeyValuePair pair() const override {
+      assert(Valid());
+      return DecodeKeyValuePair(node_->key);
     }
 
     // Advances to the next position.
@@ -453,11 +480,21 @@ class HashLinkListRep : public MemTableRep {
       return HashLinkListRep::LinkListIterator::Valid();
     }
 
-    virtual const char* key() const override {
+    virtual const char* EncodedKey() const override {
       if (skip_list_iter_) {
         return skip_list_iter_->key();
       }
-      return HashLinkListRep::LinkListIterator::key();
+      return HashLinkListRep::LinkListIterator::EncodedKey();
+    }
+
+    virtual Slice key() const override {
+      assert(Valid());
+      return GetLengthPrefixedSlice(EncodedKey());
+    }
+
+    virtual KeyValuePair pair() const override {
+      assert(Valid());
+      return DecodeKeyValuePair(EncodedKey());
     }
 
     virtual void Next() override {
@@ -480,10 +517,15 @@ class HashLinkListRep : public MemTableRep {
    public:
     EmptyIterator() { }
     virtual bool Valid() const override { return false; }
-    virtual const char* key() const override {
+    virtual const char* EncodedKey() const override {
       assert(false);
       return nullptr;
     }
+    virtual Slice key() const override {
+      assert(false);
+      return Slice::Invalid();
+    }
+    virtual KeyValuePair pair() const override { assert(false); }
     virtual void Next() override {}
     virtual void Prev() override {}
     virtual void Seek(const Slice& /*user_key*/,
@@ -643,7 +685,7 @@ void HashLinkListRep::Insert(KeyHandle handle) {
 
     // Add all current entries to the skip list
     for (bucket_iter.SeekToHead(); bucket_iter.Valid(); bucket_iter.Next()) {
-      skip_list.Insert(bucket_iter.key());
+      skip_list.Insert(bucket_iter.EncodedKey());
     }
 
     // insert the new entry
@@ -721,17 +763,17 @@ size_t HashLinkListRep::ApproximateMemoryUsage() {
 
 void HashLinkListRep::Get(const LookupKey& k, void* callback_args,
                           bool (*callback_func)(void* arg,
-                                                const KeyValuePair*)) {
+                                                const KeyValuePair&)) {
   auto transformed = transform_->Transform(k.user_key());
   auto bucket = GetBucket(transformed);
 
-  EncodedKeyValuePair pair;
   auto* skip_list_header = GetSkipListBucketHeader(bucket);
   if (skip_list_header != nullptr) {
     // Is a skip list
     MemtableSkipList::Iterator iter(&skip_list_header->skip_list);
     for (iter.Seek(k.memtable_key().data());
-         iter.Valid() && callback_func(callback_args, pair.SetKey(iter.key()));
+         iter.Valid() && callback_func(callback_args,
+                                       DecodeKeyValuePair(iter.key()));
          iter.Next()) {
     }
   } else {
@@ -740,7 +782,7 @@ void HashLinkListRep::Get(const LookupKey& k, void* callback_args,
       LinkListIterator iter(this, link_list_head);
       for (iter.Seek(k.internal_key(), nullptr);
            iter.Valid() &&
-           callback_func(callback_args, pair.SetKey(iter.key()));
+           callback_func(callback_args, iter.pair());
            iter.Next()) {
       }
     }
@@ -770,7 +812,7 @@ MemTableRep::Iterator* HashLinkListRep::GetIterator(Arena* alloc_arena) {
         if (link_list_head != nullptr) {
           LinkListIterator itr(this, link_list_head);
           for (itr.SeekToHead(); itr.Valid(); itr.Next()) {
-            list->Insert(itr.key());
+            list->Insert(itr.EncodedKey());
             count++;
           }
         }

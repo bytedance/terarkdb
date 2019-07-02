@@ -301,8 +301,6 @@ public class WriteBatch extends AbstractWriteBatch {
     public abstract void deleteRange(final byte[] beginKey,
         final byte[] endKey);
     public abstract void logData(final byte[] blob);
-    public abstract void putBlobIndex(final int columnFamilyId,
-        final byte[] key, final byte[] value) throws RocksDBException;
     public abstract void markBeginPrepare() throws RocksDBException;
     public abstract void markEndPrepare(final byte[] xid)
         throws RocksDBException;

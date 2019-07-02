@@ -104,8 +104,9 @@ class CompactionIterator {
   void Next();
 
   // Getters
+
   const Slice& key() const { return key_; }
-  const Slice& value() const { return value_; }
+  const KeyValuePair& pair() const { return pair_; }
   const Status& status() const { return status_; }
   const ParsedInternalKey& ikey() const { return ikey_; }
   bool Valid() const { return valid_; }
@@ -168,7 +169,7 @@ class CompactionIterator {
   Slice key_;
   // Points to the value in the underlying iterator that corresponds to the
   // current output.
-  Slice value_;
+  KeyValuePair pair_;
   // The status is OK unless compaction iterator encounters a merge operand
   // while not having a merge operator defined.
   Status status_;

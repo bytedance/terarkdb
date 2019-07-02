@@ -544,17 +544,17 @@ struct BlockBasedTable::Rep {
 };
 
 template <class TBlockIter, typename TValue = Slice>
-class BlockBasedTableIterator : public InternalIteratorBase<TValue> {
+class BlockBasedTableIteratorBase : public InternalIteratorBase<TValue> {
  public:
-  BlockBasedTableIterator(BlockBasedTable* table,
-                          const ReadOptions& read_options,
-                          const InternalKeyComparator& icomp,
-                          InternalIteratorBase<BlockHandle>* index_iter,
-                          bool check_filter, bool need_upper_bound_check,
-                          const SliceTransform* prefix_extractor, bool is_index,
-                          bool key_includes_seq = true,
-                          bool index_key_is_full = true,
-                          bool for_compaction = false)
+  BlockBasedTableIteratorBase(BlockBasedTable* table,
+                              const ReadOptions& read_options,
+                              const InternalKeyComparator& icomp,
+                              InternalIteratorBase<BlockHandle>* index_iter,
+                              bool check_filter, bool need_upper_bound_check,
+                              const SliceTransform* prefix_extractor,
+                              bool is_index, bool key_includes_seq = true,
+                              bool index_key_is_full = true,
+                              bool for_compaction = false)
       : table_(table),
         read_options_(read_options),
         icomp_(icomp),
@@ -569,7 +569,7 @@ class BlockBasedTableIterator : public InternalIteratorBase<TValue> {
         index_key_is_full_(index_key_is_full),
         for_compaction_(for_compaction) {}
 
-  ~BlockBasedTableIterator() { delete index_iter_; }
+  ~BlockBasedTableIteratorBase() { delete index_iter_; }
 
   void Seek(const Slice& target) override;
   void SeekForPrev(const Slice& target) override;
@@ -585,10 +585,6 @@ class BlockBasedTableIterator : public InternalIteratorBase<TValue> {
     assert(Valid());
     return block_iter_.key();
   }
-  TValue value() const override {
-    assert(Valid());
-    return block_iter_.value();
-  }
   Status status() const override {
     if (!index_iter_->status().ok()) {
       return index_iter_->status();
@@ -597,9 +593,6 @@ class BlockBasedTableIterator : public InternalIteratorBase<TValue> {
     } else {
       return Status::OK();
     }
-  }
-  uint64_t FileNumber() const override {
-    return table_->FileNumber();
   }
 
   bool IsOutOfBound() override { return is_out_of_bound_; }
@@ -653,7 +646,7 @@ class BlockBasedTableIterator : public InternalIteratorBase<TValue> {
   void FindKeyForward();
   void FindKeyBackward();
 
- private:
+ protected:
   BlockBasedTable* table_;
   const ReadOptions read_options_;
   const InternalKeyComparator& icomp_;
@@ -683,6 +676,35 @@ class BlockBasedTableIterator : public InternalIteratorBase<TValue> {
   size_t readahead_limit_ = 0;
   int num_file_reads_ = 0;
   std::unique_ptr<FilePrefetchBuffer> prefetch_buffer_;
+};
+
+template <class TBlockIter, typename TValue = Slice>
+class BlockBasedTableIterator
+    : public BlockBasedTableIteratorBase<TBlockIter, TValue> {
+  using Base = BlockBasedTableIteratorBase<TBlockIter, TValue>;
+  using Base::Valid;
+  using Base::block_iter_;
+ public:
+  using Base::Base;
+  TValue value() const override {
+    assert(Valid());
+    return block_iter_.value();
+  }
+};
+
+template <class TBlockIter>
+class BlockBasedTableIterator<TBlockIter, Slice>
+    : public BlockBasedTableIteratorBase<TBlockIter, Slice> {
+  using Base = BlockBasedTableIteratorBase<TBlockIter, Slice>;
+  using Base::Valid;
+  using Base::block_iter_;
+  using Base::table_;
+ public:
+  using Base::Base;
+  KeyValuePair pair() const override {
+    assert(Valid());
+    return KeyValuePair(block_iter_.pair(), table_->FileNumber());
+  }
 };
 
 }  // namespace rocksdb
