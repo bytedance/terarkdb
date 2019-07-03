@@ -14,8 +14,7 @@ IteratorCache::IteratorCache(const DependFileMap& depend_files,
                              const CreateIterCallback& create_iter)
     : depend_files_(depend_files),
       callback_arg_(callback_arg),
-      create_iter_(create_iter),
-      pinned_iters_mgr_(nullptr) {}
+      create_iter_(create_iter) {}
 
 IteratorCache::~IteratorCache() {
   for (auto pair : iterator_map_) {
@@ -37,7 +36,6 @@ InternalIterator* IteratorCache::GetIterator(const FileMetaData* f,
       create_iter_(callback_arg_, f, depend_files_, &arena_, &item.reader);
   item.meta = f;
   assert(item.iter != nullptr);
-  item.iter->SetPinnedItersMgr(pinned_iters_mgr_);
   iterator_map_.emplace(f->fd.GetNumber(), item);
   if (reader_ptr != nullptr) {
     *reader_ptr = item.reader;
@@ -68,7 +66,6 @@ InternalIterator* IteratorCache::GetIterator(uint64_t file_number,
     item.meta = f;
     assert(item.iter != nullptr);
   }
-  item.iter->SetPinnedItersMgr(pinned_iters_mgr_);
   iterator_map_.emplace(file_number, item);
   if (reader_ptr != nullptr) {
     *reader_ptr = item.reader;
@@ -86,14 +83,6 @@ const FileMetaData* IteratorCache::GetFileMetaData(uint64_t file_number) {
     return find_depend->second;
   }
   return nullptr;
-}
-
-void IteratorCache::SetPinnedItersMgr(
-    PinnedIteratorsManager* pinned_iters_mgr) {
-  pinned_iters_mgr_ = pinned_iters_mgr;
-  for (auto pair : iterator_map_) {
-    pair.second.iter->SetPinnedItersMgr(pinned_iters_mgr);
-  }
 }
 
 }  // namespace rocksdb

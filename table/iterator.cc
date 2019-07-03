@@ -95,15 +95,124 @@ void Cleanable::RegisterCleanup(CleanupFunction func, void* arg1, void* arg2) {
   c->arg2 = arg2;
 }
 
-Status Iterator::GetProperty(std::string prop_name, std::string* prop) {
+Status Iterator::GetProperty(std::string /*prop_name*/, std::string* prop) {
   if (prop == nullptr) {
     return Status::InvalidArgument("prop is nullptr");
   }
-  if (prop_name == "rocksdb.iterator.is-key-pinned") {
-    *prop = "0";
+  return Status::InvalidArgument("Unidentified property.");
+}
+
+void LazyValue::reset() {
+  raw_ = Slice::Invalid();
+  value_ = Slice::Invalid();
+  arg0_ = arg1_ = nullptr;
+  decoder_ = nullptr;
+  buffer_ = nullptr;
+  file_number_ = uint64_t(-1);
+}
+
+void LazyValue::reset(const Slice& _value, uint64_t _file_number) {
+  raw_ = Slice::Invalid();
+  value_ = _value;
+  arg0_ = arg1_ = nullptr;
+  decoder_ = nullptr;
+  buffer_ = nullptr;
+  file_number_ = _file_number;
+}
+
+void LazyValue::reset(const Slice& _raw, void* _arg0, void* _arg1,
+                      const LazuValueDecoder* _decoder, std::string* _buffer,
+                      uint64_t _file_number) {
+  raw_ = _raw;
+  value_ = Slice::Invalid();
+  arg0_ = _arg0;
+  arg1_ = _arg1;
+  decoder_ = _decoder;
+  buffer_ = _buffer;
+  file_number_ = _file_number;
+}
+
+void LazyValue::reset(const LazyValue& _value, uint64_t _file_number) {
+  raw_ = _value.raw_;
+  value_ = _value.value_;
+  arg0_ = _value.arg0_;
+  arg1_ = _value.arg1_;
+  decoder_ = _value.decoder_;
+  buffer_ = _value.buffer_;
+  file_number_ = _file_number;
+}
+
+Status LazyValue::decode() const {
+  if (value_.data() != nullptr) {
     return Status::OK();
   }
-  return Status::InvalidArgument("Unidentified property.");
+  assert(raw_.valid() && decoder_ != nullptr);
+  return decoder_->decode_value(raw_, arg0_, arg1_, &value_, buffer_);
+}
+
+FutureValue::FutureValue(const LazyValue& value) {
+  struct ValueDecoderImpl
+      : public FutureValueDecoder, public LazuValueDecoder {
+    LazyValue decode_lazy_value(const Slice& storage) const override {
+      return LazyValue(storage, nullptr, nullptr, this, nullptr);
+    }
+    Status decode_value(const Slice& raw, void* arg0, void* arg1, Slice* value,
+                        std::string* /*buffer*/) const override {
+      if (raw.empty()) {
+        return Status::Corruption("LazyValue decode fail");
+      }
+      if (raw[raw.size() - 1]) {
+        *value = Slice(raw.data(), raw.size() - 1);
+        return Status::OK();
+      }
+      return Status::Corruption(Slice(raw.data(), raw.size() - 1));
+    }
+  };
+  static ValueDecoderImpl decoder;
+  auto s = value.decode();
+  if (s.ok()) {
+    PutVarint64(&storage_, value.get().size());
+    storage_.append(value.get().data(), value.get().size());
+  } else {
+    auto err_msg = s.ToString();
+    PutVarint64(&storage_, err_msg.size());
+    storage_.append(err_msg.data(), err_msg.size());
+  }
+  storage_.push_back(s.ok());
+  decoder_ = &decoder;
+}
+
+FutureValue::FutureValue(const Slice& value, bool pinned, uint64_t file_number) {
+  struct ValueDecoderImpl : public FutureValueDecoder {
+    LazyValue decode_lazy_value(const Slice& storage) const override {
+      Slice input = storage;
+      uint64_t file_number, value_size;
+      if (!GetVarint64(&input, &file_number) ||
+          !GetVarint64(&input, &value_size)) {
+        return LazyValue();
+      }
+      char flag = input[input.size() - 1];
+      if (!flag) {
+        return LazyValue(Slice(input.data(), value_size));
+      }
+      uint64_t value_ptr;
+      if (!GetVarint64(&input, &value_ptr)) {
+        return LazyValue();
+      }
+      return LazyValue(Slice(reinterpret_cast<const char*>(value_ptr),
+                             value_size));
+    }
+  };
+  static ValueDecoderImpl decoder;
+
+  PutVarint64Varint64(&storage_, file_number, value.size());
+  if (pinned) {
+    PutFixed64(&storage_, reinterpret_cast<uint64_t>(value.data()));
+  } else {
+    storage_.append(value.data(), value.size());
+  }
+  storage_.push_back(pinned);
+  decoder_ = &decoder;
 }
 
 namespace {
@@ -170,9 +279,13 @@ public:
     assert(false);
     return Slice();
   }
-  KeyValuePair pair() const override {
+  LazyValue value() const override {
     assert(false);
-    return KeyValuePair();
+    return LazyValue();
+  }
+  FutureValue future_value() const override {
+    assert(false);
+    return FutureValue();
   }
   virtual Status status() const override { return status_; }
 

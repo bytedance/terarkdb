@@ -16,7 +16,6 @@
 #include "db/dbformat.h"
 #include "db/merge_context.h"
 #include "db/merge_helper.h"
-#include "db/pinned_iterators_manager.h"
 #include "db/range_tombstone_fragmenter.h"
 #include "db/read_callback.h"
 #include "monitoring/perf_context_imp.h"
@@ -287,25 +286,12 @@ class MemTableIterator : public InternalIterator {
   }
 
   ~MemTableIterator() {
-#ifndef NDEBUG
-    // Assert that the MemTableIterator is never deleted while
-    // Pinning is Enabled.
-    assert(!pinned_iters_mgr_ || !pinned_iters_mgr_->PinningEnabled());
-#endif
     if (arena_mode_) {
       iter_->~Iterator();
     } else {
       delete iter_;
     }
   }
-
-#ifndef NDEBUG
-  virtual void SetPinnedItersMgr(
-      PinnedIteratorsManager* pinned_iters_mgr) override {
-    pinned_iters_mgr_ = pinned_iters_mgr;
-  }
-  PinnedIteratorsManager* pinned_iters_mgr_ = nullptr;
-#endif
 
   virtual bool Valid() const override { return valid_; }
   virtual void Seek(const Slice& k) override {
@@ -375,19 +361,17 @@ class MemTableIterator : public InternalIterator {
     assert(Valid());
     return iter_->key();
   }
-  virtual KeyValuePair pair() const override {
+  virtual LazyValue value() const override {
     assert(Valid());
-    return iter_->pair();
+    return iter_->value();
+  }
+  virtual FutureValue future_value() const override {
+    assert(Valid());
+    return FutureValue(iter_->value(),
+                       value_pinned_ && iter_->IsValuePinned());
   }
 
   virtual Status status() const override { return Status::OK(); }
-
-  virtual bool IsKeyPinned() const override { return iter_->IsKeyPinned(); }
-
-  virtual bool IsValuePinned() const override {
-    // memtable value is always pinned, except if we allow inplace update.
-    return value_pinned_;
-  }
 
  private:
   DynamicBloom* bloom_;
@@ -598,7 +582,7 @@ struct Saver {
 };
 }  // namespace
 
-static bool SaveValue(void* arg, const KeyValuePair& pair) {
+static bool SaveValue(void* arg, const LazyValue& pair) {
   Saver* s = reinterpret_cast<Saver*>(arg);
   MergeContext* merge_context = s->merge_context;
   SequenceNumber max_covering_tombstone_seq = s->max_covering_tombstone_seq;
@@ -632,7 +616,7 @@ static bool SaveValue(void* arg, const KeyValuePair& pair) {
     switch (type) {
       case kTypeValue:
       case kTypeValueIndex: {
-        if (!(*s->status = pair.decode()).ok()) {
+        if (!(*s->status = pair.decode_value()).ok()) {
           return false;
         }
         value = pair.value();
@@ -684,13 +668,8 @@ static bool SaveValue(void* arg, const KeyValuePair& pair) {
           *(s->found_final_value) = true;
           return false;
         }
-        if (!(*s->status = pair.decode()).ok()) {
-          return false;
-        }
-        value = pair.value();
         *(s->merge_in_progress) = true;
-        merge_context->PushOperand(
-            value, !s->inplace_update_support /* operand_pinned */);
+        merge_context->PushOperand(FutureValue(pair));
         if (merge_operator->ShouldMerge(merge_context->GetOperandsDirectionBackward())) {
           *(s->status) = MergeHelper::TimedFullMerge(
               merge_operator, s->key->user_key(), nullptr,
@@ -789,7 +768,7 @@ void MemTable::Update(SequenceNumber seq,
   if (iter->Valid()) {
     // sequence number since the Seek() call above should have skipped
     // all entries with overly large sequence numbers.
-    KeyValuePair pair = iter->pair();
+    LazyValue pair = iter->value();
     if (comparator_.comparator.user_comparator()->Equal(
             ExtractUserKey(pair.key()), lkey.user_key())) {
       // Correct usFer key
@@ -798,7 +777,7 @@ void MemTable::Update(SequenceNumber seq,
       SequenceNumber unused;
       UnPackSequenceAndType(tag, &unused, &type);
       Status s;
-      if (type == kTypeValue && (s = pair.decode()).ok()) {
+      if (type == kTypeValue && (s = pair.decode_value()).ok()) {
         uint32_t old_size = static_cast<uint32_t>(pair.value().size());
         uint32_t new_size = static_cast<uint32_t>(value.size());
 
@@ -841,7 +820,7 @@ bool MemTable::UpdateCallback(SequenceNumber seq,
     // Check that it belongs to same user key.  We do not check the
     // sequence number since the Seek() call above should have skipped
     // all entries with overly large sequence numbers.
-    KeyValuePair pair = iter->pair();
+    LazyValue pair = iter->value();
     if (comparator_.comparator.user_comparator()->Equal(
             ExtractUserKey(pair.key()), lkey.user_key())) {
       // Correct user key
@@ -850,7 +829,7 @@ bool MemTable::UpdateCallback(SequenceNumber seq,
       uint64_t unused;
       UnPackSequenceAndType(tag, &unused, &type);
       Status s;
-      if(type == kTypeValue && (s = pair.decode()).ok()) {
+      if(type == kTypeValue && (s = pair.decode_value()).ok()) {
         uint32_t old_size = static_cast<uint32_t>(pair.value().size());
 
         char* old_buffer = const_cast<char*>(pair.value().data());

@@ -89,7 +89,7 @@ struct SstFileWriter::Rep {
       default:
         return Status::InvalidArgument("Value type is not supported");
     }
-    builder->Add(KeyValuePair(ikey.Encode(), value));
+    builder->Add(LazyValue(ikey.Encode(), value));
 
     // update file info
     file_info.num_entries++;
@@ -126,7 +126,7 @@ struct SstFileWriter::Rep {
     }
 
     auto ikey_and_end_key = tombstone.Serialize();
-    builder->Add(KeyValuePair(ikey_and_end_key.first.Encode(),
+    builder->Add(LazyValue(ikey_and_end_key.first.Encode(),
                               ikey_and_end_key.second));
 
     // update file info

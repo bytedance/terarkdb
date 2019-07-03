@@ -559,7 +559,6 @@ class BlockBasedTableIteratorBase : public InternalIteratorBase<TValue> {
         read_options_(read_options),
         icomp_(icomp),
         index_iter_(index_iter),
-        pinned_iters_mgr_(nullptr),
         block_iter_points_to_real_block_(false),
         check_filter_(check_filter),
         need_upper_bound_check_(need_upper_bound_check),
@@ -597,19 +596,6 @@ class BlockBasedTableIteratorBase : public InternalIteratorBase<TValue> {
 
   bool IsOutOfBound() override { return is_out_of_bound_; }
 
-  void SetPinnedItersMgr(PinnedIteratorsManager* pinned_iters_mgr) override {
-    pinned_iters_mgr_ = pinned_iters_mgr;
-  }
-  bool IsKeyPinned() const override {
-    return pinned_iters_mgr_ && pinned_iters_mgr_->PinningEnabled() &&
-           block_iter_points_to_real_block_ && block_iter_.IsKeyPinned();
-  }
-  bool IsValuePinned() const override {
-    // BlockIter::IsValuePinned() is always true. No need to check
-    return pinned_iters_mgr_ && pinned_iters_mgr_->PinningEnabled() &&
-           block_iter_points_to_real_block_;
-  }
-
   bool CheckPrefixMayMatch(const Slice& ikey) {
     if (check_filter_ &&
         !table_->PrefixMayMatch(ikey, read_options_, prefix_extractor_,
@@ -626,9 +612,6 @@ class BlockBasedTableIteratorBase : public InternalIteratorBase<TValue> {
 
   void ResetDataIter() {
     if (block_iter_points_to_real_block_) {
-      if (pinned_iters_mgr_ != nullptr && pinned_iters_mgr_->PinningEnabled()) {
-        block_iter_.DelegateCleanupsTo(pinned_iters_mgr_);
-      }
       block_iter_.Invalidate(Status::OK());
       block_iter_points_to_real_block_ = false;
     }
@@ -651,7 +634,6 @@ class BlockBasedTableIteratorBase : public InternalIteratorBase<TValue> {
   const ReadOptions read_options_;
   const InternalKeyComparator& icomp_;
   InternalIteratorBase<BlockHandle>* index_iter_;
-  PinnedIteratorsManager* pinned_iters_mgr_;
   TBlockIter block_iter_;
   bool block_iter_points_to_real_block_;
   bool is_out_of_bound_ = false;
@@ -701,9 +683,13 @@ class BlockBasedTableIterator<TBlockIter, Slice>
   using Base::table_;
  public:
   using Base::Base;
-  KeyValuePair pair() const override {
+  LazyValue value() const override {
     assert(Valid());
-    return KeyValuePair(block_iter_.pair(), table_->FileNumber());
+    return LazyValue(block_iter_.value(), table_->FileNumber());
+  }
+  FutureValue future_value() const override {
+    assert(Valid());
+    return FutureValue(block_iter_.value(), false, table_->FileNumber());
   }
 };
 

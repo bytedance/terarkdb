@@ -21,7 +21,6 @@
 #endif
 
 #include "db/dbformat.h"
-#include "db/pinned_iterators_manager.h"
 #include "format.h"
 #include "rocksdb/iterator.h"
 #include "rocksdb/options.h"
@@ -243,9 +242,6 @@ class BlockIter : public InternalIteratorBase<TValue> {
   // nothing. Calls cleanup functions.
   void InvalidateBase(Status s) {
     // Assert that the BlockIter is never deleted while Pinning is Enabled.
-    assert(!pinned_iters_mgr_ ||
-           (pinned_iters_mgr_ && !pinned_iters_mgr_->PinningEnabled()));
-
     data_ = nullptr;
     current_ = restarts_;
     status_ = s;
@@ -259,22 +255,8 @@ class BlockIter : public InternalIteratorBase<TValue> {
 
 #ifndef NDEBUG
   virtual ~BlockIter() {
-    // Assert that the BlockIter is never deleted while Pinning is Enabled.
-    assert(!pinned_iters_mgr_ ||
-           (pinned_iters_mgr_ && !pinned_iters_mgr_->PinningEnabled()));
   }
-  virtual void SetPinnedItersMgr(
-      PinnedIteratorsManager* pinned_iters_mgr) override {
-    pinned_iters_mgr_ = pinned_iters_mgr;
-  }
-  PinnedIteratorsManager* pinned_iters_mgr_ = nullptr;
 #endif
-
-  virtual bool IsKeyPinned() const override {
-    return block_contents_pinned_ && key_pinned_;
-  }
-
-  virtual bool IsValuePinned() const override { return block_contents_pinned_; }
 
   size_t TEST_CurrentEntrySize() { return NextEntryOffset() - current_; }
 
@@ -333,7 +315,8 @@ class BlockIter : public InternalIteratorBase<TValue> {
                          uint32_t* index, const Comparator* comp);
 };
 
-class DataBlockIter final : public BlockIter<Slice>, public ValueDecoder {
+class DataBlockIter final
+    : public BlockIter<Slice>, public LazuValueDecoder {
  public:
   DataBlockIter()
       : BlockIter(), read_amp_bitmap_(nullptr), last_bitmap_offset_(0) {}
@@ -366,8 +349,11 @@ class DataBlockIter final : public BlockIter<Slice>, public ValueDecoder {
   virtual Slice key() const override {
     return key_.GetKey();
   }
-  virtual KeyValuePair pair() const override {
-    return KeyValuePair(key_.GetKey(), value_, uint64_t(-1), this, nullptr);
+  virtual LazyValue value() const override {
+    return LazyValue(value_, nullptr, nullptr, this, nullptr);
+  }
+  virtual FutureValue future_value() const override {
+    return FutureValue(value_, false);
   }
 
   virtual void Seek(const Slice& target) override;
@@ -439,8 +425,9 @@ class DataBlockIter final : public BlockIter<Slice>, public ValueDecoder {
 
   bool SeekForGetImpl(const Slice& target);
 
-  virtual Status decode(Slice /*_key*/, Slice _raw, Slice* _value,
-                        std::string* /*_buffer*/) const override {
+  virtual Status decode_value(const Slice& /*_key*/, const Slice& _raw,
+                              Slice* _value,
+                              std::string* /*_buffer*/) const override {
     if (read_amp_bitmap_ && current_ < restarts_ &&
         current_ != last_bitmap_offset_) {
       read_amp_bitmap_->Mark(current_ /* current entry offset */,

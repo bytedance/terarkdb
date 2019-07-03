@@ -77,7 +77,7 @@ class MergeOperator {
   struct MergeOperationInput {
     explicit MergeOperationInput(const Slice& _key,
                                  const Slice* _existing_value,
-                                 const std::vector<Slice>& _operand_list,
+                                 const std::vector<FutureValue>& _operand_list,
                                  Logger* _logger)
         : key(_key),
           existing_value(_existing_value),
@@ -90,7 +90,7 @@ class MergeOperator {
     // value doesn't exist.
     const Slice* existing_value;
     // A list of operands to apply.
-    const std::vector<Slice>& operand_list;
+    const std::vector<FutureValue>& operand_list;
     // Logger could be used by client to log any errors that happen during
     // the merge operation.
     Logger* logger;

@@ -35,7 +35,6 @@
 
 #pragma once
 
-#include <rocksdb/key_value_pair.h>
 #include <rocksdb/slice.h>
 #include <rocksdb/status.h>
 #include <stdint.h>
@@ -90,7 +89,7 @@ class MemTableRep {
 
   static size_t EncodeKeyValueSize(const Slice& key, const Slice& value);
   static void EncodeKeyValue(const Slice& key, const Slice& value, char* buf);
-  static KeyValuePair DecodeKeyValuePair(const char* key);
+  static LazyValue DecodeKeyValuePair(const char* key);
 
   explicit MemTableRep(Allocator* allocator) : allocator_(allocator) {}
 
@@ -172,7 +171,7 @@ class MemTableRep {
   // Get() function with a default value of dynamically construct an iterator,
   // seek and call the call back function.
   virtual void Get(const LookupKey& k, void* callback_args,
-                   bool (*callback_func)(void* arg, const KeyValuePair& pair));
+                   bool (*callback_func)(void* arg, const LazyValue& pair));
 
   virtual uint64_t ApproximateNumEntries(const Slice& /*start_ikey*/,
                                          const Slice& /*end_key*/) {
@@ -204,9 +203,10 @@ class MemTableRep {
     // REQUIRES: Valid()
     virtual Slice key() const = 0;
 
-    // Returns KeyValuePair at the current position.
+    // Returns LazyValue at the current position.
     // REQUIRES: Valid()
-    virtual KeyValuePair pair() const = 0;
+    virtual LazyValue value() const = 0;
+
     // Advances to the next position.
     // REQUIRES: Valid()
     virtual void Next() = 0;
@@ -230,8 +230,8 @@ class MemTableRep {
     // Final state of iterator is Valid() iff collection is not empty.
     virtual void SeekToLast() = 0;
 
-    // If true, this means that the Slice returned by key() is always valid
-    virtual bool IsKeyPinned() const { return true; }
+    // If true, this means that the Slice returned by value() is always valid
+    virtual bool IsValuePinned() const { return true; }
 
     virtual bool IsSeekForPrevSupported() const { return false; }
   };

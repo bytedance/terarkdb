@@ -13,7 +13,6 @@
 namespace rocksdb {
 
 struct FileMetaData;
-class PinnedIteratorsManager;
 class RangeDelAggregator;
 class TableReader;
 
@@ -37,8 +36,6 @@ class IteratorCache {
 
   const FileMetaData* GetFileMetaData(uint64_t file_number);
 
-  void SetPinnedItersMgr(PinnedIteratorsManager* pinned_iters_mgr);
-
   Arena* GetArena() { return &arena_; }
 
  private:
@@ -46,7 +43,6 @@ class IteratorCache {
   void* callback_arg_;
   CreateIterCallback create_iter_;
   Arena arena_;
-  PinnedIteratorsManager* pinned_iters_mgr_;
 
   struct CacheItem {
     InternalIterator* iter;

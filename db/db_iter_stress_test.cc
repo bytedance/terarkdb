@@ -235,13 +235,10 @@ struct StressTestIterator : public InternalIterator {
     assert(Valid());
     return data->entries[iter].ikey;
   }
-  Slice value() const override {
+  LazyValue value() const override {
     assert(Valid());
-    return data->entries[iter].value;
+    return LazyValue(data->entries[iter].ikey, data->entries[iter].value);
   }
-
-  bool IsKeyPinned() const override { return true; }
-  bool IsValuePinned() const override { return true; }
 };
 
 // A small reimplementation of DBIter, supporting only some of the features,
@@ -395,8 +392,6 @@ struct ReferenceIterator {
 // adds/removes entries on the fly. Do random operations on a DBIter and
 // check results.
 // TODO: can be improved for more coverage:
-//   * Override IsKeyPinned() and IsValuePinned() to actually use
-//     PinnedIteratorManager and check that there's no use-after free.
 //   * Try different combinations of prefix_extractor, total_order_seek,
 //     prefix_same_as_start, iterate_lower_bound, iterate_upper_bound.
 TEST_F(DBIteratorStressTest, StressTest) {

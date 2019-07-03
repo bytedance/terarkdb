@@ -72,19 +72,6 @@ class IteratorWrapperBase {
   void SeekToFirst()        { assert(iter_); iter_->SeekToFirst(); Update(); }
   void SeekToLast()         { assert(iter_); iter_->SeekToLast();  Update(); }
 
-  void SetPinnedItersMgr(PinnedIteratorsManager* pinned_iters_mgr) {
-    assert(iter_);
-    iter_->SetPinnedItersMgr(pinned_iters_mgr);
-  }
-  bool IsKeyPinned() const {
-    assert(Valid());
-    return iter_->IsKeyPinned();
-  }
-  bool IsValuePinned() const {
-    assert(Valid());
-    return iter_->IsValuePinned();
-  }
-
  private:
   void Update() {
     valid_ = iter_->Valid();

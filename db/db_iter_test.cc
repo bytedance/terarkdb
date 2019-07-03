@@ -203,9 +203,6 @@ class TestIterator : public InternalIterator {
     return Status::OK();
   }
 
-  virtual bool IsKeyPinned() const override { return true; }
-  virtual bool IsValuePinned() const override { return true; }
-
  private:
   bool initialized_;
   bool valid_;

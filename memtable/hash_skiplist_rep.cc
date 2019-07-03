@@ -37,7 +37,7 @@ class HashSkipListRep : public MemTableRep {
 
   virtual void Get(const LookupKey& k, void* callback_args,
                    bool (*callback_func)(void* arg,
-                                         const KeyValuePair&)) override;
+                                         const LazyValue&)) override;
 
   virtual ~HashSkipListRep();
 
@@ -113,9 +113,9 @@ class HashSkipListRep : public MemTableRep {
       return GetLengthPrefixedSlice(iter_.key());
     }
 
-    // Return KeyValuePair at the current position.
+    // Return LazyValue at the current position.
     // REQUIRES: Valid()
-    virtual KeyValuePair pair() const override {
+    virtual LazyValue value() const override {
       assert(Valid());
       return DecodeKeyValuePair(iter_.key());
     }
@@ -236,7 +236,10 @@ class HashSkipListRep : public MemTableRep {
       assert(false);
       return Slice();
     }
-    virtual KeyValuePair pair() const override { assert(false); }
+    virtual LazyValue value() const override {
+      assert(false);
+      return LazyValue();
+    }
     virtual void Next() override {}
     virtual void Prev() override {}
     virtual void Seek(const Slice& /*internal_key*/,
@@ -312,7 +315,7 @@ size_t HashSkipListRep::ApproximateMemoryUsage() {
 
 void HashSkipListRep::Get(const LookupKey& k, void* callback_args,
                           bool (*callback_func)(void* arg,
-                                                const KeyValuePair&)) {
+                                                const LazyValue&)) {
   auto transformed = transform_->Transform(k.user_key());
   auto bucket = GetBucket(transformed);
   if (bucket != nullptr) {

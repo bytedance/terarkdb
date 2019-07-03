@@ -12,7 +12,7 @@
 #include <memory>
 #include <string>
 #include <vector>
-#include "rocksdb/key_value_pair.h"
+#include "rocksdb/lazy_value.h"
 
 #include "rocksdb/status.h"
 
@@ -156,36 +156,30 @@ class CompactionFilter {
   // failed. Instead, it is better to implement any Merge filtering inside the
   // MergeOperator.
   virtual Decision FilterV2(int level, const Slice& key, ValueType value_type,
-                            const Slice& existing_value, std::string* new_value,
+                            const LazyValue& existing_pair,
+                            std::string* new_value,
                             std::string* /*skip_until*/) const {
+    if (!existing_pair.decode().ok()) {
+      assert(false);
+      return Decision::kKeep;
+    }
     switch (value_type) {
       case ValueType::kValue: {
         bool value_changed = false;
-        bool rv = Filter(level, key, existing_value, new_value, &value_changed);
+        bool rv = Filter(level, key, existing_pair.value(), new_value,
+                         &value_changed);
         if (rv) {
           return Decision::kRemove;
         }
         return value_changed ? Decision::kChangeValue : Decision::kKeep;
       }
       case ValueType::kMergeOperand: {
-        bool rv = FilterMergeOperand(level, key, existing_value);
+        bool rv = FilterMergeOperand(level, key, existing_pair.value());
         return rv ? Decision::kRemove : Decision::kKeep;
       }
     }
     assert(false);
     return Decision::kKeep;
-  }
-  virtual Decision FilterPairV2(int level, const Slice& key,
-                                ValueType value_type,
-                                const KeyValuePair& existing_pair,
-                                std::string* new_value,
-                                std::string* skip_until) const {
-    if (!existing_pair.decode().ok()) {
-      assert(false);
-      return Decision::kKeep;
-    }
-    return FilterV2(level, key, value_type, existing_pair.value(), new_value,
-                    skip_until);
   }
 
   // By default, compaction will only call Filter() on keys written after the

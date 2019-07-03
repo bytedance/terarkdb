@@ -43,7 +43,7 @@ class VectorRep : public MemTableRep {
 
   virtual void Get(const LookupKey& k, void* callback_args,
                    bool (*callback_func)(void* arg,
-                                         const KeyValuePair&)) override;
+                                         const LazyValue&)) override;
 
   virtual ~VectorRep() override { }
 
@@ -76,9 +76,9 @@ class VectorRep : public MemTableRep {
     // REQUIRES: Valid()
     virtual Slice key() const override;
 
-    // Return KeyValuePair at the current position.
+    // Return LazyValue at the current position.
     // REQUIRES: Valid()
-    virtual KeyValuePair pair() const override;
+    virtual LazyValue value() const override;
 
     // Advances to the next position.
     // REQUIRES: Valid()
@@ -208,9 +208,9 @@ Slice VectorRep::Iterator::key() const {
   return GetLengthPrefixedSlice(*cit_);
 }
 
-// Return KeyValuePair at the current position.
+// Return LazyValue at the current position.
 // REQUIRES: Valid()
-KeyValuePair VectorRep::Iterator::pair() const {
+LazyValue VectorRep::Iterator::value() const {
   assert(Valid());
   return DecodeKeyValuePair(*cit_);
 }
@@ -284,7 +284,7 @@ void VectorRep::Iterator::SeekToLast() {
 }
 
 void VectorRep::Get(const LookupKey& k, void* callback_args,
-                    bool (*callback_func)(void* arg, const KeyValuePair&)) {
+                    bool (*callback_func)(void* arg, const LazyValue&)) {
   rwlock_.ReadLock();
   VectorRep* vector_rep;
   std::shared_ptr<Bucket> bucket;

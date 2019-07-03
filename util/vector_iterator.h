@@ -59,15 +59,14 @@ class VectorIterator : public InternalIterator {
   virtual Slice key() const override {
     return Slice(keys_[indices_[current_]]);
   }
-  virtual KeyValuePair pair() const override {
-    return KeyValuePair(keys_[indices_[current_]],
-                        values_[indices_[current_]]);
+  virtual LazyValue value() const override {
+    return LazyValue(values_[indices_[current_]]);
+  }
+  virtual FutureValue future_value() const override {
+    return FutureValue(values_[indices_[current_]], true);
   }
 
   virtual Status status() const override { return Status::OK(); }
-
-  virtual bool IsKeyPinned() const override { return true; }
-  virtual bool IsValuePinned() const override { return true; }
 
  private:
   struct IndexedKeyComparator {

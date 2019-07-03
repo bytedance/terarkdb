@@ -1180,7 +1180,8 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
   while (status.ok() && !cfd->IsDropped() && c_iter->Valid()) {
     // Invariant: c_iter.status() is guaranteed to be OK if c_iter->Valid()
     // returns true.
-    KeyValuePair pair = c_iter->pair();
+    const Slice& key = c_iter->key();
+    LazyValue value = c_iter->value();
 
     assert(end == nullptr ||
            cfd->user_comparator()->Compare(c_iter->user_key(), *end) < 0);
@@ -1201,10 +1202,10 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
     }
     assert(sub_compact->builder != nullptr);
     assert(sub_compact->current_output() != nullptr);
-    sub_compact->builder->Add(pair);
+    sub_compact->builder->Add(key, value);
     sub_compact->current_output_file_size = sub_compact->builder->FileSize();
     sub_compact->current_output()->meta.UpdateBoundaries(
-        pair.key(), c_iter->ikey().sequence);
+        key, c_iter->ikey().sequence);
     sub_compact->num_output_records++;
 
     // partial_compaction always output single sst, don't need sample
@@ -1212,11 +1213,11 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
         sub_compact->outputs.size() == 1) { // first output file
       // Check if this key/value overlaps any sample intervals; if so, appends
       // overlapping portions to the dictionary.
-      status = pair.decode();
+      status = value.decode();
       if (!status.ok()) {
         break;
       }
-      for (const auto& data_elmt : {pair.key(), pair.value()}) {
+      for (const auto& data_elmt : {key, value.get()}) {
         size_t data_end_offset = data_begin_offset + data_elmt.size();
         while (sample_begin_offset_iter != sample_begin_offsets.cend() &&
                *sample_begin_offset_iter < data_end_offset) {
@@ -1560,7 +1561,7 @@ Status CompactionJob::FinishCompactionOutputFile(
       auto kv = tombstone.Serialize();
       assert(lower_bound == nullptr ||
              ucmp->Compare(*lower_bound, kv.second) < 0);
-      sub_compact->builder->Add(KeyValuePair(kv.first.Encode(), kv.second));
+      sub_compact->builder->Add(kv.first.Encode(), LazyValue(kv.second));
       InternalKey smallest_candidate = std::move(kv.first);
       if (lower_bound != nullptr &&
           ucmp->Compare(smallest_candidate.user_key(), *lower_bound) <= 0) {

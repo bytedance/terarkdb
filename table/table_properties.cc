@@ -53,7 +53,7 @@ namespace {
     *is_found = true;
     meta_iter->Seek(block_name);
     if (meta_iter->status().ok()) {
-      auto pair = meta_iter->pair();
+      auto pair = meta_iter->value();
       if (meta_iter->Valid() && pair.key() == block_name) {
         *is_found = true;
         if (block_handle) {

@@ -12,7 +12,6 @@
 #include "db/compaction.h"
 #include "db/compaction_iteration_stats.h"
 #include "db/merge_helper.h"
-#include "db/pinned_iterators_manager.h"
 #include "db/range_del_aggregator.h"
 #include "db/snapshot_checker.h"
 #include "options/cf_options.h"
@@ -106,7 +105,7 @@ class CompactionIterator {
   // Getters
 
   const Slice& key() const { return key_; }
-  const KeyValuePair& pair() const { return pair_; }
+  const LazyValue& value() const { return value_; }
   const Status& status() const { return status_; }
   const ParsedInternalKey& ikey() const { return ikey_; }
   bool Valid() const { return valid_; }
@@ -169,7 +168,7 @@ class CompactionIterator {
   Slice key_;
   // Points to the value in the underlying iterator that corresponds to the
   // current output.
-  KeyValuePair pair_;
+  LazyValue value_;
   // The status is OK unless compaction iterator encounters a merge operand
   // while not having a merge operator defined.
   Status status_;
@@ -196,9 +195,6 @@ class CompactionIterator {
   bool clear_and_output_next_key_ = false;
 
   MergeOutputIterator merge_out_iter_;
-  // PinnedIteratorsManager used to pin input_ Iterator blocks while reading
-  // merge operands and then releasing them after consuming them.
-  PinnedIteratorsManager pinned_iters_mgr_;
   std::string compaction_filter_value_;
   InternalKey compaction_filter_skip_until_;
   // "level_ptrs" holds indices that remember which file of an associated

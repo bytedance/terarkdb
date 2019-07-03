@@ -14,7 +14,6 @@
 
 namespace rocksdb {
 class MergeContext;
-class PinnedIteratorsManager;
 
 struct GetContextStats {
   uint64_t num_cache_hit = 0;
@@ -52,9 +51,7 @@ class GetContext {
              const Slice& user_key, PinnableSlice* value, bool* value_found,
              MergeContext* merge_context,
              SequenceNumber* max_covering_tombstone_seq, Env* env,
-             SequenceNumber* seq = nullptr,
-             PinnedIteratorsManager* _pinned_iters_mgr = nullptr,
-             ReadCallback* callback = nullptr);
+             SequenceNumber* seq = nullptr, ReadCallback* callback = nullptr);
 
   void MarkKeyMayExist();
 
@@ -78,8 +75,6 @@ class GetContext {
   SequenceNumber* max_covering_tombstone_seq() {
     return max_covering_tombstone_seq_;
   }
-
-  PinnedIteratorsManager* pinned_iters_mgr() { return pinned_iters_mgr_; }
 
   // If a non-null string is passed, all the SaveValue calls will be
   // logged into the string. The operations can then be replayed on
@@ -129,8 +124,6 @@ class GetContext {
   // For Merge, don't accept key while seq type less than min_seq_type
   uint64_t min_seq_type_;
   std::string* replay_log_;
-  // Used to temporarily pin blocks when state_ == GetContext::kMerge
-  PinnedIteratorsManager* pinned_iters_mgr_;
   ReadCallback* callback_;
   bool sample_;
 };

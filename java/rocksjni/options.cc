@@ -6391,28 +6391,6 @@ void Java_org_rocksdb_ReadOptions_setPrefixSameAsStart(
 
 /*
  * Class:     org_rocksdb_ReadOptions
- * Method:    pinData
- * Signature: (J)Z
- */
-jboolean Java_org_rocksdb_ReadOptions_pinData(JNIEnv* /*env*/, jobject /*jobj*/,
-                                              jlong jhandle) {
-  return reinterpret_cast<rocksdb::ReadOptions*>(jhandle)->pin_data;
-}
-
-/*
- * Class:     org_rocksdb_ReadOptions
- * Method:    setPinData
- * Signature: (JZ)V
- */
-void Java_org_rocksdb_ReadOptions_setPinData(JNIEnv* /*env*/, jobject /*jobj*/,
-                                             jlong jhandle,
-                                             jboolean jpin_data) {
-  reinterpret_cast<rocksdb::ReadOptions*>(jhandle)->pin_data =
-      static_cast<bool>(jpin_data);
-}
-
-/*
- * Class:     org_rocksdb_ReadOptions
  * Method:    backgroundPurgeOnIteratorCleanup
  * Signature: (J)Z
  */

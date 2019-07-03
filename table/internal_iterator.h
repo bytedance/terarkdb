@@ -9,13 +9,88 @@
 #include <string>
 #include "rocksdb/comparator.h"
 #include "rocksdb/iterator.h"
-#include "rocksdb/key_value_pair.h"
 #include "rocksdb/status.h"
 #include "table/format.h"
 
 namespace rocksdb {
 
-class PinnedIteratorsManager;
+class LazuValueDecoder {
+public:
+  virtual Status decode_value(const Slice& raw, void* _arg0, void* _arg1,
+                              Slice* value, std::string* buffer) const = 0;
+  virtual ~LazuValueDecoder() {}
+};
+
+class LazyValue {
+protected:
+  mutable Slice value_;
+  Slice raw_;
+  void *arg0_, *arg1_;
+  const LazuValueDecoder* decoder_;
+  std::string* buffer_;
+  uint64_t file_number_;
+
+public:
+  LazyValue() { reset(); }
+  explicit LazyValue(const Slice& _value, uint64_t _file_number = uint64_t(-1)) {
+    reset(_value, _file_number);
+  }
+  LazyValue(const Slice& _raw, void* _arg0, void* _arg1,
+            const LazuValueDecoder* _decoder, std::string* _buffer,
+            uint64_t _file_number = uint64_t(-1)) {
+    reset(_raw, _arg0, _arg1, _decoder, _buffer, _file_number);
+  }
+  LazyValue(const LazyValue& _value, uint64_t _file_number) {
+    reset(_value, _file_number);
+  }
+
+  void reset();
+  void reset(const Slice& _value, uint64_t _file_number = uint64_t(-1));
+  void reset(const Slice& _raw, void* _arg0, void* _arg1,
+             const LazuValueDecoder* _decoder, std::string* _buffer,
+             uint64_t _file_number = uint64_t(-1));
+  void reset(const LazyValue& _value, uint64_t _file_number);
+
+  const Slice& raw() const { return raw_; }
+  const Slice& get() const { assert(value_.valid()); return value_; }
+  uint64_t file_number() const { return file_number_; }
+  const LazuValueDecoder *decoder() const { return decoder_; }
+
+  Status decode() const;
+};
+
+class FutureValueDecoder {
+public:
+  virtual LazyValue decode_lazy_value(const Slice& storage) const = 0;
+  virtual ~FutureValueDecoder() {}
+};
+
+
+class FutureValue {
+protected:
+  std::string storage_;
+  const FutureValueDecoder* decoder_;
+public:
+  FutureValue() : decoder_(nullptr) {}
+  FutureValue(std::string &&storage, const FutureValueDecoder* decoder)
+      : storage_(std::move(storage)), decoder_(decoder) {}
+  explicit FutureValue(const LazyValue& value);
+  FutureValue(const Slice& value, bool pinned,
+              uint64_t file_number = uint64_t(-1));
+
+  FutureValue(FutureValue&&) = default;
+  FutureValue(const FutureValue&) = default;
+  FutureValue& operator = (FutureValue&&) = default;
+  FutureValue& operator = (const FutureValue&) = default;
+
+  void reset() { storage_.clear(); decoder_ = nullptr; }
+  bool valid() const { return decoder_ != nullptr; }
+
+  LazyValue value() const{
+    assert(valid());
+    return decoder_->decode_lazy_value(storage_);
+  }
+};
 
 class InternalIteratorCommon : public Cleanable {
  public:
@@ -73,29 +148,6 @@ class InternalIteratorCommon : public Cleanable {
   // upper bound
   virtual bool IsOutOfBound() { return false; }
 
-  // Pass the PinnedIteratorsManager to the Iterator, most Iterators dont
-  // communicate with PinnedIteratorsManager so default implementation is no-op
-  // but for Iterators that need to communicate with PinnedIteratorsManager
-  // they will implement this function and use the passed pointer to communicate
-  // with PinnedIteratorsManager.
-  virtual void SetPinnedItersMgr(PinnedIteratorsManager* /*pinned_iters_mgr*/) {
-  }
-
-  // If true, this means that the Slice returned by key() is valid as long as
-  // PinnedIteratorsManager::ReleasePinnedData is not called and the
-  // Iterator is not deleted.
-  //
-  // IsKeyPinned() is guaranteed to always return true if
-  //  - Iterator is created with ReadOptions::pin_data = true
-  //  - DB tables were created with BlockBasedTableOptions::use_delta_encoding
-  //    set to false.
-  virtual bool IsKeyPinned() const { return false; }
-
-  // If true, this means that the Slice returned by value() is valid as long as
-  // PinnedIteratorsManager::ReleasePinnedData is not called and the
-  // Iterator is not deleted.
-  virtual bool IsValuePinned() const { return false; }
-
   virtual Status GetProperty(std::string /*prop_name*/, std::string* /*prop*/) {
     return Status::NotSupported("");
   }
@@ -131,11 +183,16 @@ class InternalIteratorBase : public InternalIteratorCommon {
 template<>
 class InternalIteratorBase<Slice> : public InternalIteratorCommon {
  public:
-  // Return the key & value for the current entry.  The underlying storage for
+  // Return the value for the current entry. The underlying storage for
   // the returned slice is valid only until the next modification of
   // the iterator.
   // REQUIRES: Valid()
-  virtual KeyValuePair pair() const = 0;
+  virtual LazyValue value() const = 0;
+
+  // Return the key & value for the current entry. The underlying storage for
+  // the returned slice is valid until version expired.
+  // REQUIRES: Valid()
+  virtual FutureValue future_value() const = 0;
 };
 
 using InternalIterator = InternalIteratorBase<Slice>;

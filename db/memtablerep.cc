@@ -37,11 +37,11 @@ void MemTableRep::EncodeKeyValue(const Slice& key, const Slice& value,
   memcpy(p, value.data(), value.size());
 }
 
-KeyValuePair MemTableRep::DecodeKeyValuePair(const char* key) {
+LazyValue MemTableRep::DecodeKeyValuePair(const char* key) {
   Slice key_slice = GetLengthPrefixedSlice(key);
   Slice value_slice =
       GetLengthPrefixedSlice(key_slice.data() + key_slice.size());
-  return KeyValuePair(key_slice, value_slice);
+  return LazyValue(key_slice, value_slice);
 }
 
 bool MemTableRep::InsertKeyValue(const Slice& internal_key,
@@ -81,7 +81,7 @@ KeyHandle MemTableRep::Allocate(const size_t len, char** buf) {
 }
 
 void MemTableRep::Get(const LookupKey& k, void* callback_args,
-                      bool (*callback_func)(void* arg, const KeyValuePair&)) {
+                      bool (*callback_func)(void* arg, const LazyValue&)) {
   auto iter = GetDynamicPrefixIterator();
   for (iter->Seek(k.internal_key(), k.memtable_key().data());
        iter->Valid() && callback_func(callback_args, iter->pair());

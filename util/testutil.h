@@ -133,7 +133,7 @@ class SimpleSuffixReverseComparator : public Comparator {
 extern const Comparator* Uint64Comparator();
 
 // Iterator over a vector of keys/values
-class VectorIterator : public InternalIterator {
+class VectorIterator : public InternalIteratorBase<Slice> {
  public:
   explicit VectorIterator(const std::vector<std::string>& keys)
       : keys_(keys), current_(keys.size()) {
@@ -171,12 +171,9 @@ class VectorIterator : public InternalIterator {
   virtual void Prev() override { current_--; }
 
   virtual Slice key() const override { return Slice(keys_[current_]); }
-  virtual Slice value() const override { return Slice(values_[current_]); }
+  virtual Slice value() const override { return values_[current_]; }
 
   virtual Status status() const override { return Status::OK(); }
-
-  virtual bool IsKeyPinned() const override { return true; }
-  virtual bool IsValuePinned() const override { return true; }
 
  private:
   std::vector<std::string> keys_;

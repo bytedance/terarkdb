@@ -179,7 +179,7 @@ class HashLinkListRep : public MemTableRep {
 
   virtual void Get(const LookupKey& k, void* callback_args,
                    bool (*callback_func)(void* arg,
-                                         const KeyValuePair&)) override;
+                                         const LazyValue&)) override;
 
   virtual ~HashLinkListRep();
 
@@ -286,9 +286,9 @@ class HashLinkListRep : public MemTableRep {
       return GetLengthPrefixedSlice(iter_.key());
     }
 
-    // Reset KeyValuePair at the current position.
+    // Reset LazyValue at the current position.
     // REQUIRES: Valid()
-    virtual KeyValuePair pair() const override {
+    virtual LazyValue value() const override {
       assert(Valid());
       return DecodeKeyValuePair(iter_.key());
     }
@@ -368,9 +368,9 @@ class HashLinkListRep : public MemTableRep {
       return GetLengthPrefixedSlice(node_->key);
     }
 
-    // Reset KeyValuePair at the current position.
+    // Reset LazyValue at the current position.
     // REQUIRES: Valid()
-    virtual KeyValuePair pair() const override {
+    virtual LazyValue value() const override {
       assert(Valid());
       return DecodeKeyValuePair(node_->key);
     }
@@ -492,7 +492,7 @@ class HashLinkListRep : public MemTableRep {
       return GetLengthPrefixedSlice(EncodedKey());
     }
 
-    virtual KeyValuePair pair() const override {
+    virtual LazyValue value() const override {
       assert(Valid());
       return DecodeKeyValuePair(EncodedKey());
     }
@@ -525,7 +525,10 @@ class HashLinkListRep : public MemTableRep {
       assert(false);
       return Slice::Invalid();
     }
-    virtual KeyValuePair pair() const override { assert(false); }
+    virtual LazyValue value() const override {
+      assert(false);
+      return LazyValue();
+    }
     virtual void Next() override {}
     virtual void Prev() override {}
     virtual void Seek(const Slice& /*user_key*/,
@@ -763,7 +766,7 @@ size_t HashLinkListRep::ApproximateMemoryUsage() {
 
 void HashLinkListRep::Get(const LookupKey& k, void* callback_args,
                           bool (*callback_func)(void* arg,
-                                                const KeyValuePair&)) {
+                                                const LazyValue&)) {
   auto transformed = transform_->Transform(k.user_key());
   auto bucket = GetBucket(transformed);
 

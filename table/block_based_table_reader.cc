@@ -16,7 +16,6 @@
 #include <vector>
 
 #include "db/dbformat.h"
-#include "db/pinned_iterators_manager.h"
 
 #include "rocksdb/cache.h"
 #include "rocksdb/comparator.h"
@@ -908,7 +907,7 @@ Status BlockBasedTable::Open(const ImmutableCFOptions& ioptions,
     s = meta_iter->status();
     TableProperties* table_properties = nullptr;
     if (s.ok()) {
-      auto pair = meta_iter->pair();
+      auto pair = meta_iter->value();
       s = pair.decode();
       if (s.ok()) {
         s = ReadProperties(pair.value(), rep->file.get(),
@@ -2504,7 +2503,7 @@ Status BlockBasedTable::Get(const ReadOptions& read_options, const Slice& key,
 
         // Call the *saver function on each entry/block until it returns false
         for (; biter.Valid(); biter.Next()) {
-          KeyValuePair pair = biter.pair();
+          LazyValue pair = biter.value();
           ParsedInternalKey parsed_key;
           if (!ParseInternalKey(pair.key(), &parsed_key)) {
             s = Status::Corruption(Slice());
@@ -2514,9 +2513,7 @@ Status BlockBasedTable::Get(const ReadOptions& read_options, const Slice& key,
           if (!s.ok()) {
             break;
           }
-          if (!get_context->SaveValue(
-              parsed_key, pair.value(), &matched,
-              biter.IsValuePinned() ? &biter : nullptr)) {
+          if (!get_context->SaveValue(parsed_key, pair.value(), &matched)) {
             done = true;
             break;
           }
@@ -2672,7 +2669,7 @@ Status BlockBasedTable::VerifyChecksumInBlocks(
     if (!s.ok()) {
       break;
     }
-    KeyValuePair pair = index_iter->pair();
+    LazyValue pair = index_iter->value();
     s = pair.decode();
     if (!s.ok()) {
       break;
@@ -2903,7 +2900,7 @@ Status BlockBasedTable::GetKVPairsFromDataBlocks(
         // Error reading the block - Skipped
         break;
       }
-      KeyValuePair pair = datablock_iter->pair();
+      LazyValue pair = datablock_iter->value();
       s = pair.decode();
       if (!s.ok()) {
         break;
@@ -2942,7 +2939,7 @@ Status BlockBasedTable::DumpTable(WritableFile* out_file,
       if (!s.ok()) {
         return s;
       }
-      KeyValuePair pair = meta_iter->pair();
+      LazyValue pair = meta_iter->value();
       s = pair.decode();
       if (!s.ok()) {
         return s;
@@ -3190,7 +3187,7 @@ Status BlockBasedTable::DumpDataBlocks(WritableFile* out_file) {
         out_file->Append("Error reading the block - Skipped \n");
         break;
       }
-      KeyValuePair pair = datablock_iter->pair();
+      LazyValue pair = datablock_iter->value();
       s = pair.decode();
       if (!s.ok()) {
         out_file->Append("Error decoding the value - Skipped \n");

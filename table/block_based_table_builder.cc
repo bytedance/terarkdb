@@ -414,7 +414,7 @@ BlockBasedTableBuilder::~BlockBasedTableBuilder() {
   delete rep_;
 }
 
-void BlockBasedTableBuilder::Add(const KeyValuePair& pair) {
+void BlockBasedTableBuilder::Add(const LazyValue& pair) {
   Rep* r = rep_;
   assert(!r->closed);
   if (!ok()) return;

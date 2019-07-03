@@ -254,7 +254,7 @@ Status ReadProperties(const Slice& handle_value, RandomAccessFileReader* file,
     if (!s.ok()) {
       break;
     }
-    auto pair = iter.pair();
+    auto pair = iter.value();
     s = pair.decode();
     if (!s.ok()) {
       break;
@@ -362,7 +362,7 @@ Status ReadTableProperties(RandomAccessFileReader* file, uint64_t file_size,
   if (!s.ok()) {
     return s;
   }
-  auto pair = meta_iter->pair();
+  auto pair = meta_iter->value();
   s = pair.decode();
   if (!s.ok()) {
     return s;
@@ -386,7 +386,7 @@ Status FindMetaBlock(InternalIterator* meta_index_iter,
   meta_index_iter->Seek(meta_block_name);
   if (meta_index_iter->status().ok() && meta_index_iter->Valid() &&
       meta_index_iter->key() == meta_block_name) {
-    KeyValuePair pair = meta_index_iter->pair();
+    LazyValue pair = meta_index_iter->value();
     auto s = pair.decode();
     if (!s.ok()) {
       return s;

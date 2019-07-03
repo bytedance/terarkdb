@@ -189,9 +189,8 @@ class MapSstElementIterator {
     PrepareNext();
   }
   void Next() { PrepareNext(); }
-  Slice key() const { return map_elements_.Key(); }
-  KeyValuePair pair() const {
-    return KeyValuePair(map_elements_.Key(), buffer_);
+  LazyValue value() const {
+    return LazyValue(map_elements_.Key(), buffer_);
   }
   Status status() const { return status_; }
 
@@ -337,7 +336,7 @@ Status LoadRangeWithDepend(std::vector<RangeWithDepend>& ranges,
         return iter->status();
       }
       for (iter->SeekToFirst(); iter->Valid(); iter->Next()) {
-        auto pair = iter->pair();
+        auto pair = iter->value();
         auto s = pair.decode();
         if (!s.ok()) {
           return s;
@@ -1119,7 +1118,10 @@ struct MapElementIterator : public InternalIterator {
     Update();
   }
   Slice key() const override { return pair_.key(); }
-  KeyValuePair pair() const override { return pair_; }
+  LazyValue value() const override { return pair_; }
+  FutureValue future_value() const override {
+    return FutureValue(pair_);
+  }
   virtual Status status() const override {
     return iter_ ? iter_->status() : Status::OK();
   }
@@ -1136,7 +1138,7 @@ struct MapElementIterator : public InternalIterator {
   }
   void Update() {
     if (iter_) {
-      pair_ = iter_->pair();
+      pair_ = iter_->value();
     } else {
       const FileMetaData* f = meta_array_[where_];
       element_.smallest_key_ = f->smallest.Encode();
@@ -1160,7 +1162,7 @@ struct MapElementIterator : public InternalIterator {
   MapSstElement element_;
   std::string buffer_;
   std::unique_ptr<InternalIterator> iter_;
-  KeyValuePair pair_;
+  LazyValue pair_;
 };
 
 InternalIterator* NewMapElementIterator(

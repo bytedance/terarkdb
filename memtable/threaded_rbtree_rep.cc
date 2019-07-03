@@ -88,7 +88,7 @@ class ThreadedRBTreeRep : public MemTableRep {
         return key_type(p, vlen);
       }
 
-      std::pair<key_type, key_type> pair() const {
+      std::pair<key_type, key_type> value() const {
         auto k = key();
         auto p = k.data() + k.size();
         uint32_t vlen;
@@ -512,9 +512,9 @@ class ThreadedRBTreeRep : public MemTableRep {
 
     virtual Slice GetKey() const override { return rbt_.front().Key(); }
 
-    virtual KeyValuePair pair() const override {
-      auto kv = rbt_.front().pair();
-      return KeyValuePair(kv.first, kv.second);
+    virtual LazyValue value() const override {
+      auto kv = rbt_.front().value();
+      return LazyValue(kv.first, kv.second);
     }
 
     virtual void Next() override {
@@ -570,7 +570,7 @@ class ThreadedRBTreeRep : public MemTableRep {
 
   virtual void Get(const LookupKey &k, void *callback_args,
                    bool (*callback_func)(void *arg,
-                                         const KeyValuePair &)) override {
+                                         const LazyValue &)) override {
     Slice dummy;
     if (immutable_) {
       ThreadedRBTreeRep::HeapIterator<DummyLock> iter(this);

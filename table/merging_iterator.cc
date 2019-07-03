@@ -11,7 +11,6 @@
 #include <string>
 #include <vector>
 #include "db/dbformat.h"
-#include "db/pinned_iterators_manager.h"
 #include "monitoring/perf_context_imp.h"
 #include "rocksdb/comparator.h"
 #include "rocksdb/iterator.h"
@@ -44,8 +43,7 @@ class MergingIterator : public InternalIterator {
         current_(nullptr),
         direction_(kForward),
         minHeap_(comparator_),
-        prefix_seek_mode_(prefix_seek_mode),
-        pinned_iters_mgr_(nullptr) {
+        prefix_seek_mode_(prefix_seek_mode) {
     children_.resize(n);
     for (int i = 0; i < n; i++) {
       children_[i].Set(children[i]);
@@ -70,9 +68,6 @@ class MergingIterator : public InternalIterator {
   virtual void AddIterator(InternalIterator* iter) {
     assert(direction_ == kForward);
     children_.emplace_back(iter);
-    if (pinned_iters_mgr_) {
-      iter->SetPinnedItersMgr(pinned_iters_mgr_);
-    }
     auto new_wrapper = children_.back();
     if (new_wrapper.Valid()) {
       assert(new_wrapper.status().ok());
@@ -278,29 +273,14 @@ class MergingIterator : public InternalIterator {
     return current_->key();
   }
 
-  virtual KeyValuePair pair() const override {
+  virtual LazyValue value() const override {
     assert(Valid());
-    return current_->iter()->pair();
+    return current_->iter()->value();
   }
 
-  virtual void SetPinnedItersMgr(
-      PinnedIteratorsManager* pinned_iters_mgr) override {
-    pinned_iters_mgr_ = pinned_iters_mgr;
-    for (auto& child : children_) {
-      child.SetPinnedItersMgr(pinned_iters_mgr);
-    }
-  }
-
-  virtual bool IsKeyPinned() const override {
+  virtual FutureValue future_value() const override {
     assert(Valid());
-    return pinned_iters_mgr_ && pinned_iters_mgr_->PinningEnabled() &&
-           current_->IsKeyPinned();
-  }
-
-  virtual bool IsValuePinned() const override {
-    assert(Valid());
-    return pinned_iters_mgr_ && pinned_iters_mgr_->PinningEnabled() &&
-           current_->IsValuePinned();
+    return current_->iter()->future_value();
   }
 
  private:
@@ -332,7 +312,6 @@ class MergingIterator : public InternalIterator {
   // Max heap is used for reverse iteration, which is way less common than
   // forward.  Lazily initialize it to save memory.
   std::unique_ptr<MergerMaxIterHeap> maxHeap_;
-  PinnedIteratorsManager* pinned_iters_mgr_;
 
   void SwitchToForward();
 

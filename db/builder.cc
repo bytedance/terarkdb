@@ -159,7 +159,7 @@ Status BuildTable(
     builder->SetSecondPassIterator(second_pass_iter.get());
     c_iter.SeekToFirst();
     for (; c_iter.Valid(); c_iter.Next()) {
-      KeyValuePair pair = c_iter.pair();
+      LazyValue pair = c_iter.value();
       builder->Add(pair);
       meta->UpdateBoundaries(pair.key(), c_iter.ikey().sequence);
 
@@ -176,7 +176,7 @@ Status BuildTable(
          range_del_it->Next()) {
       auto tombstone = range_del_it->Tombstone();
       auto kv = tombstone.Serialize();
-      builder->Add(KeyValuePair(kv.first.Encode(), kv.second));
+      builder->Add(LazyValue(kv.first.Encode(), kv.second));
       meta->UpdateBoundariesForRange(kv.first, tombstone.SerializeEndKey(),
                                      tombstone.seq_, internal_comparator);
     }

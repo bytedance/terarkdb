@@ -588,8 +588,9 @@ void CompactionPicker::InitFilesBeingCompact(
     for (level == 0 || begin == nullptr ? iter->SeekToFirst()
                                         : iter->Seek(begin->Encode());
          iter->Valid(); iter->Next()) {
-      KeyValuePair pair = iter->pair();
-      if (!pair.decode().ok() || !element.Decode(pair.key(), pair.value())) {
+      LazyValue pair = iter->value();
+      if (!pair.decode().ok()
+          || !element.Decode(pair.key(), pair.value())) {
         // TODO: log error ?
         break;
       }

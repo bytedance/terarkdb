@@ -46,7 +46,7 @@ class MergeHelper {
   // - Corruption: Merge operator reported unsuccessful merge.
   static Status TimedFullMerge(const MergeOperator* merge_operator,
                                const Slice& key, const Slice* value,
-                               const std::vector<Slice>& operands,
+                               const std::vector<FutureValue>& operands,
                                std::string* result, Logger* logger,
                                Statistics* statistics, Env* env,
                                Slice* result_operand = nullptr,
@@ -87,7 +87,7 @@ class MergeHelper {
   // Uses compaction_filter_value_ and compaction_filter_skip_until_ for the
   // optional outputs of compaction filter.
   CompactionFilter::Decision FilterMerge(
-      const Slice& user_key, const KeyValuePair& pair);
+      const Slice& user_key, const LazyValue& pair);
 
   // Query the merge result
   // These are valid until the next MergeUntil call

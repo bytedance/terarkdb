@@ -8,7 +8,6 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #include "table/two_level_iterator.h"
-#include "db/pinned_iterators_manager.h"
 #include "db/version_edit.h"
 #include "rocksdb/options.h"
 #include "rocksdb/table.h"
@@ -60,10 +59,6 @@ class TwoLevelIndexIterator : public InternalIteratorBase<BlockHandle> {
       return status_;
     }
   }
-  virtual void SetPinnedItersMgr(
-      PinnedIteratorsManager* /*pinned_iters_mgr*/) override {}
-  virtual bool IsKeyPinned() const override { return false; }
-  virtual bool IsValuePinned() const override { return false; }
 
  private:
   void SaveError(const Status& s) {
@@ -530,20 +525,13 @@ class MapSstIterator final : public InternalIterator {
     }
   }
   virtual Slice key() const override { return min_heap_.top().key; }
-  virtual KeyValuePair pair() const override {
-    return min_heap_.top().iter->pair();
+  virtual LazyValue value() const override {
+    return min_heap_.top().iter->value();
+  }
+  virtual FutureValue future_value() const override {
+    return min_heap_.top().iter->future_value();
   }
   virtual Status status() const override { return status_; }
-  virtual void SetPinnedItersMgr(
-      PinnedIteratorsManager* pinned_iters_mgr) override {
-    iterator_cache_.SetPinnedItersMgr(pinned_iters_mgr);
-  }
-  virtual bool IsKeyPinned() const override {
-    return !min_heap_.empty() && min_heap_.top().iter->IsKeyPinned();
-  }
-  virtual bool IsValuePinned() const override {
-    return !min_heap_.empty() && min_heap_.top().iter->IsValuePinned();
-  }
 };
 
 }  // namespace

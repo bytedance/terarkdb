@@ -37,12 +37,8 @@ FragmentedRangeTombstoneList::FragmentedRangeTombstoneList(
       is_sorted = false;
       break;
     }
-    if (unfragmented_tombstones->IsKeyPinned()) {
-      last_start_key = unfragmented_tombstones->key();
-    } else {
-      pinned_last_start_key.DecodeFrom(unfragmented_tombstones->key());
-      last_start_key = pinned_last_start_key.Encode();
-    }
+    pinned_last_start_key.DecodeFrom(unfragmented_tombstones->key());
+    last_start_key = pinned_last_start_key.Encode();
   }
   if (is_sorted) {
     FragmentTombstones(std::move(unfragmented_tombstones), icmp, for_compaction,
@@ -56,7 +52,7 @@ FragmentedRangeTombstoneList::FragmentedRangeTombstoneList(
   values.reserve(num_tombstones);
   for (unfragmented_tombstones->SeekToFirst(); unfragmented_tombstones->Valid();
        unfragmented_tombstones->Next()) {
-    auto pair = unfragmented_tombstones->pair();
+    auto pair = unfragmented_tombstones->value();
     status_ = pair.decode();
     if (!status_.ok()) {
       return;
@@ -72,7 +68,7 @@ FragmentedRangeTombstoneList::FragmentedRangeTombstoneList(
 }
 
 void FragmentedRangeTombstoneList::FragmentTombstones(
-    std::unique_ptr<InternalIterator> unfragmented_tombstones,
+    std::unique_ptr<InternalIteratorBase<Slice>> unfragmented_tombstones,
     const InternalKeyComparator& icmp, bool for_compaction,
     const std::vector<SequenceNumber>& snapshots) {
   Slice cur_start_key(nullptr, 0);
@@ -171,31 +167,25 @@ void FragmentedRangeTombstoneList::FragmentTombstones(
     cur_start_key = next_start_key;
   };
 
-  pinned_iters_mgr_.StartPinning();
-
   bool no_tombstones = true;
   for (unfragmented_tombstones->SeekToFirst(); unfragmented_tombstones->Valid();
        unfragmented_tombstones->Next()) {
-    KeyValuePair pair = unfragmented_tombstones->pair();
+    LazyValue pair = unfragmented_tombstones->value();
     status_ = pair.decode();
     if (!status_.ok()) {
       return;
     }
     Slice tombstone_start_key = ExtractUserKey(pair.key());
     SequenceNumber tombstone_seq = GetInternalKeySeqno(pair.key());
-    if (!unfragmented_tombstones->IsKeyPinned()) {
-      pinned_slices_.emplace_back(tombstone_start_key.data(),
-                                  tombstone_start_key.size());
-      tombstone_start_key = pinned_slices_.back();
-    }
+    pinned_slices_.emplace_back(tombstone_start_key.data(),
+                                tombstone_start_key.size());
+    tombstone_start_key = pinned_slices_.back();
     no_tombstones = false;
 
     Slice tombstone_end_key = pair.value();
-    if (!unfragmented_tombstones->IsValuePinned()) {
-      pinned_slices_.emplace_back(tombstone_end_key.data(),
-                                  tombstone_end_key.size());
-      tombstone_end_key = pinned_slices_.back();
-    }
+    pinned_slices_.emplace_back(tombstone_end_key.data(),
+                                tombstone_end_key.size());
+    tombstone_end_key = pinned_slices_.back();
     if (!cur_end_keys.empty() && icmp.user_comparator()->Compare(
                                      cur_start_key, tombstone_start_key) != 0) {
       // The start key has changed. Flush all tombstones that start before
@@ -209,11 +199,6 @@ void FragmentedRangeTombstoneList::FragmentTombstones(
   if (!cur_end_keys.empty()) {
     ParsedInternalKey last_end_key = *std::prev(cur_end_keys.end());
     flush_current_tombstones(last_end_key.user_key);
-  }
-
-  if (!no_tombstones) {
-    pinned_iters_mgr_.PinIterator(unfragmented_tombstones.release(),
-                                  false /* arena */);
   }
 }
 

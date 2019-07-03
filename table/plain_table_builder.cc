@@ -115,7 +115,7 @@ PlainTableBuilder::PlainTableBuilder(
 PlainTableBuilder::~PlainTableBuilder() {
 }
 
-void PlainTableBuilder::Add(const KeyValuePair& pair) {
+void PlainTableBuilder::Add(const LazyValue& pair) {
   auto s = pair.decode();
   if (!s.ok()) {
     status_ = s;

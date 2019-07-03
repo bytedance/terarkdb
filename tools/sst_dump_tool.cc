@@ -337,7 +337,7 @@ Status SstFileDumper::ReadSequential(bool print_kv, uint64_t read_num,
     iter->SeekToFirst();
   }
   for (; iter->Valid(); iter->Next()) {
-    KeyValuePair pair = iter->pair();
+    LazyValue pair = iter->value();
     auto s = pair.decode();
     if (!s.ok()) {
       return s;

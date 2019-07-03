@@ -73,13 +73,10 @@ class ForwardIterator : public InternalIterator {
   virtual void Seek(const Slice& target) override;
   virtual void Next() override;
   virtual Slice key() const override;
-  virtual KeyValuePair pair() const override;
+  virtual LazyValue value() const override;
+  virtual FutureValue future_value() const override;
   virtual Status status() const override;
   virtual Status GetProperty(std::string prop_name, std::string* prop) override;
-  virtual void SetPinnedItersMgr(
-      PinnedIteratorsManager* pinned_iters_mgr) override;
-  virtual bool IsKeyPinned() const override;
-  virtual bool IsValuePinned() const override;
 
   bool TEST_CheckDeletedIters(int* deleted_iters, int* num_iters);
 
@@ -107,10 +104,6 @@ class ForwardIterator : public InternalIterator {
 
   bool IsOverUpperBound(const Slice& internal_key) const;
 
-  // Set PinnedIteratorsManager for all children Iterators, this function should
-  // be called whenever we update children Iterators or pinned_iters_mgr_.
-  void UpdateChildrenPinnedItersMgr();
-
   // A helper function that will release iter in the proper manner, or pass it
   // to pinned_iters_mgr_ to release it later if pinning is enabled.
   void DeleteIterator(InternalIterator* iter, bool is_arena = false);
@@ -128,13 +121,15 @@ class ForwardIterator : public InternalIterator {
   std::vector<InternalIterator*> l0_iters_;
   std::vector<ForwardLevelIterator*> level_iters_;
   InternalIterator* current_;
-  bool valid_;
 
   // Internal iterator status; set only by one of the unsupported methods.
   Status status_;
   // Status of immutable iterators, maintained here to avoid iterating over
   // all of them in status().
   Status immutable_status_;
+
+  bool valid_;
+
   // Indicates that at least one of the immutable iterators pointed to a key
   // larger than iterate_upper_bound and was therefore destroyed. Seek() may
   // need to rebuild such iterators.
@@ -148,11 +143,10 @@ class ForwardIterator : public InternalIterator {
   // iterators don't need to be moved; see NeedToSeekImmutable(). This key is
   // included in the range after a Seek(), but excluded when advancing the
   // iterator using Next().
-  IterKey prev_key_;
   bool is_prev_set_;
   bool is_prev_inclusive_;
+  IterKey prev_key_;
 
-  PinnedIteratorsManager* pinned_iters_mgr_;
   Arena arena_;
 };
 

@@ -29,7 +29,6 @@
 #include "db/memtable.h"
 #include "db/merge_context.h"
 #include "db/merge_helper.h"
-#include "db/pinned_iterators_manager.h"
 #include "db/table_cache.h"
 #include "db/version_builder.h"
 #include "monitoring/file_read_sample.h"
@@ -490,7 +489,6 @@ class LevelIterator final : public InternalIterator {
         file_index_(flevel_->num_files),
         level_(level),
         range_del_agg_(range_del_agg),
-        pinned_iters_mgr_(nullptr),
         compaction_boundaries_(compaction_boundaries) {
     // Empty level is not supported.
     assert(flevel_ != nullptr && flevel_->num_files > 0);
@@ -510,27 +508,16 @@ class LevelIterator final : public InternalIterator {
     assert(Valid());
     return file_iter_.key();
   }
-  virtual KeyValuePair pair() const override {
+  virtual LazyValue value() const override {
     assert(Valid());
-    return file_iter_.iter()->pair();
+    return file_iter_.iter()->value();
+  }
+  virtual FutureValue future_value() const override {
+    assert(Valid());
+    return file_iter_.iter()->future_value();
   }
   virtual Status status() const override {
     return file_iter_.iter() ? file_iter_.status() : Status::OK();
-  }
-  virtual void SetPinnedItersMgr(
-      PinnedIteratorsManager* pinned_iters_mgr) override {
-    pinned_iters_mgr_ = pinned_iters_mgr;
-    if (file_iter_.iter()) {
-      file_iter_.SetPinnedItersMgr(pinned_iters_mgr);
-    }
-  }
-  virtual bool IsKeyPinned() const override {
-    return pinned_iters_mgr_ && pinned_iters_mgr_->PinningEnabled() &&
-           file_iter_.iter() && file_iter_.IsKeyPinned();
-  }
-  virtual bool IsValuePinned() const override {
-    return pinned_iters_mgr_ && pinned_iters_mgr_->PinningEnabled() &&
-           file_iter_.iter() && file_iter_.IsValuePinned();
   }
 
  private:
@@ -589,7 +576,6 @@ class LevelIterator final : public InternalIterator {
   int level_;
   RangeDelAggregator* range_del_agg_;
   IteratorWrapper file_iter_;  // May be nullptr
-  PinnedIteratorsManager* pinned_iters_mgr_;
 
   // To be propagated to RangeDelAggregator in order to safely truncate range
   // tombstones.
@@ -685,16 +671,7 @@ void LevelIterator::SkipEmptyFileBackward() {
 }
 
 void LevelIterator::SetFileIterator(InternalIterator* iter) {
-  if (pinned_iters_mgr_ && iter) {
-    iter->SetPinnedItersMgr(pinned_iters_mgr_);
-  }
-
-  InternalIterator* old_iter = file_iter_.Set(iter);
-  if (pinned_iters_mgr_ && pinned_iters_mgr_->PinningEnabled()) {
-    pinned_iters_mgr_->PinIterator(old_iter);
-  } else {
-    delete old_iter;
-  }
+  delete file_iter_.Set(iter);
 }
 
 void LevelIterator::InitFileIterator(size_t new_file_index) {
@@ -1232,17 +1209,11 @@ void Version::Get(const ReadOptions& read_options, const LookupKey& k,
     *key_exists = true;
   }
 
-  PinnedIteratorsManager pinned_iters_mgr;
   GetContext get_context(
       user_comparator(), merge_operator_, info_log_, db_statistics_,
       status->ok() ? GetContext::kNotFound : GetContext::kMerge, user_key,
-      value, value_found, merge_context, max_covering_tombstone_seq, this->env_,
-      seq, merge_operator_ ? &pinned_iters_mgr : nullptr, callback);
-
-  // Pin blocks that we read to hold merge operands
-  if (merge_operator_) {
-    pinned_iters_mgr.StartPinning();
-  }
+      value, value_found, merge_context, max_covering_tombstone_seq,
+      this->env_, seq, callback);
 
   FilePicker fp(
       storage_info_.files_, user_key, ikey, &storage_info_.level_files_brief_,
@@ -3725,7 +3696,7 @@ Status VersionSet::Recover(
   }
 
   if (s.ok()) {
-    for (auto cfd : *column_family_set_) {
+     for (auto cfd : *column_family_set_) {
       if (cfd->IsDropped()) {
         continue;
       }

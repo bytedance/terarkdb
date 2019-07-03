@@ -81,7 +81,7 @@ CuckooTableBuilder::CuckooTableBuilder(
   properties_.column_family_name = column_family_name;
 }
 
-void CuckooTableBuilder::Add(const KeyValuePair& pair) {
+void CuckooTableBuilder::Add(const LazyValue& pair) {
   auto s = pair.decode();
   if (!s.ok()) {
     status_ = s;

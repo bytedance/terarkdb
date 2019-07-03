@@ -12,7 +12,6 @@
 #include <vector>
 
 #include "db/dbformat.h"
-#include "db/pinned_iterators_manager.h"
 #include "rocksdb/status.h"
 #include "table/internal_iterator.h"
 
@@ -38,7 +37,7 @@ struct FragmentedRangeTombstoneList {
     size_t seq_end_idx;
   };
   FragmentedRangeTombstoneList(
-      std::unique_ptr<InternalIterator> unfragmented_tombstones,
+      std::unique_ptr<InternalIteratorBase<Slice>> unfragmented_tombstones,
       const InternalKeyComparator& icmp, bool for_compaction = false,
       const std::vector<SequenceNumber>& snapshots = {},
       uint64_t _user_tag = uint64_t(-1));
@@ -87,7 +86,6 @@ struct FragmentedRangeTombstoneList {
   std::vector<SequenceNumber> tombstone_seqs_;
   std::set<SequenceNumber> seq_set_;
   std::list<std::string> pinned_slices_;
-  PinnedIteratorsManager pinned_iters_mgr_;
 };
 
 // FragmentedRangeTombstoneIterator converts an InternalIterator of a range-del
@@ -142,8 +140,6 @@ class FragmentedRangeTombstoneIterator {
     return current_start_key_.Encode();
   }
   Slice value() const { return pos_->end_key; }
-  bool IsKeyPinned() const { return false; }
-  bool IsValuePinned() const { return true; }
   Status status() const { return tombstones_->status(); }
 
   bool empty() const { return tombstones_->empty(); }

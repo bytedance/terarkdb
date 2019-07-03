@@ -5,7 +5,6 @@
 
 #include "table/get_context.h"
 #include "db/merge_helper.h"
-#include "db/pinned_iterators_manager.h"
 #include "db/read_callback.h"
 #include "monitoring/file_read_sample.h"
 #include "monitoring/perf_context_imp.h"
@@ -44,9 +43,7 @@ GetContext::GetContext(const Comparator* ucmp,
                        const Slice& user_key, PinnableSlice* pinnable_val,
                        bool* value_found, MergeContext* merge_context,
                        SequenceNumber* _max_covering_tombstone_seq, Env* env,
-                       SequenceNumber* seq,
-                       PinnedIteratorsManager* _pinned_iters_mgr,
-                       ReadCallback* callback)
+                       SequenceNumber* seq, ReadCallback* callback)
     : ucmp_(ucmp),
       merge_operator_(merge_operator),
       logger_(logger),
@@ -61,7 +58,6 @@ GetContext::GetContext(const Comparator* ucmp,
       seq_(seq),
       min_seq_type_(0),
       replay_log_(nullptr),
-      pinned_iters_mgr_(_pinned_iters_mgr),
       callback_(callback) {
   if (seq_) {
     *seq_ = kMaxSequenceNumber;
@@ -252,14 +248,7 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
       case kTypeMergeIndex:
         assert(state_ == kNotFound || state_ == kMerge);
         state_ = kMerge;
-        // value_pinner is not set from plain_table_reader.cc for example.
-        if (pinned_iters_mgr() && pinned_iters_mgr()->PinningEnabled() &&
-            value_pinner != nullptr) {
-          value_pinner->DelegateCleanupsTo(pinned_iters_mgr());
-          merge_context_->PushOperand(value, true /*value_pinned*/);
-        } else {
-          merge_context_->PushOperand(value, false);
-        }
+        merge_context_->PushOperand(value);
         if (merge_operator_ != nullptr &&
             merge_operator_->ShouldMerge(
                 merge_context_->GetOperandsDirectionBackward())) {

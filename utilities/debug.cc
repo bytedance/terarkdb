@@ -35,7 +35,7 @@ Status GetAllKeyVersions(DB* db, Slice begin_key, Slice end_key,
 
   size_t num_keys = 0;
   for (; iter->Valid(); iter->Next()) {
-    KeyValuePair pair = iter->pair();
+    LazyValue pair = iter->value();
     auto s = pair.decode();
     if (!s.ok()) {
       return s;

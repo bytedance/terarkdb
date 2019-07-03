@@ -8,10 +8,11 @@
 #include <vector>
 #include "db/dbformat.h"
 #include "rocksdb/slice.h"
+#include "table/internal_iterator.h"
 
 namespace rocksdb {
 
-const std::vector<Slice> empty_operand_list;
+const std::vector<FutureValue> empty_operand_list;
 
 // The merge context for merging a user key.
 // When doing a Get(), DB will create such a class and pass it when
@@ -23,39 +24,37 @@ class MergeContext {
   void Clear() {
     if (operand_list_) {
       operand_list_->clear();
-      copied_operands_->clear();
     }
   }
 
   // Push a merge operand
-  void PushOperand(const Slice& operand_slice, bool operand_pinned = false) {
+  void PushOperand(const FutureValue& operand_pair) {
     Initialize();
     SetDirectionBackward();
 
-    if (operand_pinned) {
-      operand_list_->push_back(operand_slice);
-    } else {
-      // We need to have our own copy of the operand since it's not pinned
-      copied_operands_->emplace_back(
-          new std::string(operand_slice.data(), operand_slice.size()));
-      operand_list_->push_back(*copied_operands_->back());
-    }
+    operand_list_->push_back(operand_pair);
+  }
+  // Push a merge operand
+  void PushOperand(const Slice& operand_slice) {
+    Initialize();
+    SetDirectionBackward();
+
+    operand_list_->push_back(FutureValue(operand_slice, false));
   }
 
   // Push back a merge operand
-  void PushOperandBack(const Slice& operand_slice,
-                       bool operand_pinned = false) {
+  void PushOperandBack(const FutureValue& operand_pair) {
     Initialize();
     SetDirectionForward();
 
-    if (operand_pinned) {
-      operand_list_->push_back(operand_slice);
-    } else {
-      // We need to have our own copy of the operand since it's not pinned
-      copied_operands_->emplace_back(
-          new std::string(operand_slice.data(), operand_slice.size()));
-      operand_list_->push_back(*copied_operands_->back());
-    }
+    operand_list_->push_back(operand_pair);
+  }
+  // Push back a merge operand
+  void PushOperandBack(const Slice& operand_slice) {
+    Initialize();
+    SetDirectionForward();
+
+    operand_list_->push_back(FutureValue(operand_slice, false));
   }
 
   // return total number of operands in the list
@@ -67,7 +66,7 @@ class MergeContext {
   }
 
   // Get the operand at the index.
-  Slice GetOperand(int index) {
+  const FutureValue& GetOperand(int index) {
     assert(operand_list_);
 
     SetDirectionForward();
@@ -75,13 +74,13 @@ class MergeContext {
   }
 
   // Same as GetOperandsDirectionForward
-  const std::vector<Slice>& GetOperands() {
+  const std::vector<FutureValue>& GetOperands() {
     return GetOperandsDirectionForward();
   }
 
   // Return all the operands in the order as they were merged (passed to
   // FullMerge or FullMergeV2)
-  const std::vector<Slice>& GetOperandsDirectionForward() {
+  const std::vector<FutureValue>& GetOperandsDirectionForward() {
     if (!operand_list_) {
       return empty_operand_list;
     }
@@ -92,7 +91,7 @@ class MergeContext {
 
   // Return all the operands in the reversed order relative to how they were
   // merged (passed to FullMerge or FullMergeV2)
-  const std::vector<Slice>& GetOperandsDirectionBackward() {
+  const std::vector<FutureValue>& GetOperandsDirectionBackward() {
     if (!operand_list_) {
       return empty_operand_list;
     }
@@ -104,8 +103,7 @@ class MergeContext {
  private:
   void Initialize() {
     if (!operand_list_) {
-      operand_list_.reset(new std::vector<Slice>());
-      copied_operands_.reset(new std::vector<std::unique_ptr<std::string>>());
+      operand_list_.reset(new std::vector<FutureValue>());
     }
   }
 
@@ -124,9 +122,7 @@ class MergeContext {
   }
 
   // List of operands
-  std::unique_ptr<std::vector<Slice>> operand_list_;
-  // Copy of operands that are not pinned.
-  std::unique_ptr<std::vector<std::unique_ptr<std::string>>> copied_operands_;
+  std::unique_ptr<std::vector<FutureValue>> operand_list_;
   bool operands_reversed_ = true;
 };
 

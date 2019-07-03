@@ -45,16 +45,11 @@ class ForwardLevelIterator : public InternalIterator {
         valid_(false),
         file_index_(std::numeric_limits<uint32_t>::max()),
         file_iter_(nullptr),
-        pinned_iters_mgr_(nullptr),
         prefix_extractor_(prefix_extractor) {}
 
   ~ForwardLevelIterator() {
     // Reset current pointer
-    if (pinned_iters_mgr_ && pinned_iters_mgr_->PinningEnabled()) {
-      pinned_iters_mgr_->PinIterator(file_iter_);
-    } else {
-      delete file_iter_;
-    }
+    delete file_iter_;
   }
 
   void SetFileIndex(uint32_t file_index) {
@@ -69,11 +64,7 @@ class ForwardLevelIterator : public InternalIterator {
     assert(file_index_ < files_.size());
 
     // Reset current pointer
-    if (pinned_iters_mgr_ && pinned_iters_mgr_->PinningEnabled()) {
-      pinned_iters_mgr_->PinIterator(file_iter_);
-    } else {
-      delete file_iter_;
-    }
+    delete file_iter_;
 
     ReadRangeDelAggregator range_del_agg(&cfd_->internal_comparator(),
                                          kMaxSequenceNumber /* upper_bound */);
@@ -82,7 +73,6 @@ class ForwardLevelIterator : public InternalIterator {
         *files_[file_index_], depend_files_,
         read_options_.ignore_range_deletions ? nullptr : &range_del_agg,
         prefix_extractor_, nullptr /* table_reader_ptr */, nullptr, false);
-    file_iter_->SetPinnedItersMgr(pinned_iters_mgr_);
     valid_ = false;
     if (!range_del_agg.IsEmpty()) {
       status_ = Status::NotSupported(
@@ -157,9 +147,13 @@ class ForwardLevelIterator : public InternalIterator {
     assert(valid_);
     return file_iter_->key();
   }
-  KeyValuePair pair() const override {
+  LazyValue value() const override {
     assert(valid_);
-    return file_iter_->pair();
+    return file_iter_->value();
+  }
+  FutureValue future_value() const override {
+    assert(valid_);
+    return file_iter_->future_value();
   }
   Status status() const override {
     if (!status_.ok()) {
@@ -168,20 +162,6 @@ class ForwardLevelIterator : public InternalIterator {
       return file_iter_->status();
     }
     return Status::OK();
-  }
-  bool IsKeyPinned() const override {
-    return pinned_iters_mgr_ && pinned_iters_mgr_->PinningEnabled() &&
-           file_iter_->IsKeyPinned();
-  }
-  bool IsValuePinned() const override {
-    return pinned_iters_mgr_ && pinned_iters_mgr_->PinningEnabled() &&
-           file_iter_->IsValuePinned();
-  }
-  void SetPinnedItersMgr(PinnedIteratorsManager* pinned_iters_mgr) override {
-    pinned_iters_mgr_ = pinned_iters_mgr;
-    if (file_iter_) {
-      file_iter_->SetPinnedItersMgr(pinned_iters_mgr_);
-    }
   }
 
  private:
@@ -194,7 +174,6 @@ class ForwardLevelIterator : public InternalIterator {
   uint32_t file_index_;
   Status status_;
   InternalIterator* file_iter_;
-  PinnedIteratorsManager* pinned_iters_mgr_;
   const SliceTransform* prefix_extractor_;
 };
 
@@ -210,14 +189,13 @@ ForwardIterator::ForwardIterator(DBImpl* db, const ReadOptions& read_options,
       sv_(current_sv),
       mutable_iter_(nullptr),
       current_(nullptr),
-      valid_(false),
       status_(Status::OK()),
       immutable_status_(Status::OK()),
+      valid_(false),
       has_iter_trimmed_for_upper_bound_(false),
       current_over_upper_bound_(false),
       is_prev_set_(false),
-      is_prev_inclusive_(false),
-      pinned_iters_mgr_(nullptr) {
+      is_prev_inclusive_(false) {
   if (sv_) {
     RebuildIterators(false);
   }
@@ -268,17 +246,7 @@ void ForwardIterator::SVCleanup() {
   if (sv_ == nullptr) {
     return;
   }
-  if (pinned_iters_mgr_ && pinned_iters_mgr_->PinningEnabled()) {
-    // pinned_iters_mgr_ tells us to make sure that all visited key-value slices
-    // are alive until pinned_iters_mgr_->ReleasePinnedData() is called.
-    // The slices may point into some memtables owned by sv_, so we need to keep
-    // sv_ referenced until pinned_iters_mgr_ unpins everything.
-    auto p = new SVCleanupParams{
-        db_, sv_, read_options_.background_purge_on_iterator_cleanup};
-    pinned_iters_mgr_->PinPtr(p, &ForwardIterator::DeferredSVCleanup);
-  } else {
-    SVCleanup(db_, sv_, read_options_.background_purge_on_iterator_cleanup);
-  }
+  SVCleanup(db_, sv_, read_options_.background_purge_on_iterator_cleanup);
 }
 
 void ForwardIterator::Cleanup(bool release_sv) {
@@ -538,9 +506,14 @@ Slice ForwardIterator::key() const {
   return current_->key();
 }
 
-KeyValuePair ForwardIterator::pair() const {
+LazyValue ForwardIterator::value() const {
   assert(valid_);
-  return current_->pair();
+  return current_->value();
+}
+
+FutureValue ForwardIterator::future_value() const {
+  assert(valid_);
+  return current_->future_value();
 }
 
 Status ForwardIterator::status() const {
@@ -560,50 +533,6 @@ Status ForwardIterator::GetProperty(std::string prop_name, std::string* prop) {
     return Status::OK();
   }
   return Status::InvalidArgument();
-}
-
-void ForwardIterator::SetPinnedItersMgr(
-    PinnedIteratorsManager* pinned_iters_mgr) {
-  pinned_iters_mgr_ = pinned_iters_mgr;
-  UpdateChildrenPinnedItersMgr();
-}
-
-void ForwardIterator::UpdateChildrenPinnedItersMgr() {
-  // Set PinnedIteratorsManager for mutable memtable iterator.
-  if (mutable_iter_) {
-    mutable_iter_->SetPinnedItersMgr(pinned_iters_mgr_);
-  }
-
-  // Set PinnedIteratorsManager for immutable memtable iterators.
-  for (InternalIterator* child_iter : imm_iters_) {
-    if (child_iter) {
-      child_iter->SetPinnedItersMgr(pinned_iters_mgr_);
-    }
-  }
-
-  // Set PinnedIteratorsManager for L0 files iterators.
-  for (InternalIterator* child_iter : l0_iters_) {
-    if (child_iter) {
-      child_iter->SetPinnedItersMgr(pinned_iters_mgr_);
-    }
-  }
-
-  // Set PinnedIteratorsManager for L1+ levels iterators.
-  for (ForwardLevelIterator* child_iter : level_iters_) {
-    if (child_iter) {
-      child_iter->SetPinnedItersMgr(pinned_iters_mgr_);
-    }
-  }
-}
-
-bool ForwardIterator::IsKeyPinned() const {
-  return pinned_iters_mgr_ && pinned_iters_mgr_->PinningEnabled() &&
-         current_->IsKeyPinned();
-}
-
-bool ForwardIterator::IsValuePinned() const {
-  return pinned_iters_mgr_ && pinned_iters_mgr_->PinningEnabled() &&
-         current_->IsValuePinned();
 }
 
 void ForwardIterator::RebuildIterators(bool refresh_sv) {
@@ -650,7 +579,6 @@ void ForwardIterator::RebuildIterators(bool refresh_sv) {
   current_ = nullptr;
   is_prev_set_ = false;
 
-  UpdateChildrenPinnedItersMgr();
   if (!range_del_agg.IsEmpty()) {
     status_ = Status::NotSupported(
         "Range tombstones unsupported with ForwardIterator");
@@ -735,7 +663,6 @@ void ForwardIterator::RenewIterators() {
   SVCleanup();
   sv_ = svnew;
 
-  UpdateChildrenPinnedItersMgr();
   if (!range_del_agg.IsEmpty()) {
     status_ = Status::NotSupported(
         "Range tombstones unsupported with ForwardIterator");
@@ -777,7 +704,6 @@ void ForwardIterator::ResetIncompleteIterators() {
         read_options_, *cfd_->soptions(), cfd_->internal_comparator(),
         *l0_files[i], vstorage.depend_files(), nullptr /* range_del_agg */,
         sv_->mutable_cf_options.prefix_extractor.get());
-    l0_iters_[i]->SetPinnedItersMgr(pinned_iters_mgr_);
   }
 
   for (auto* level_iter : level_iters_) {
@@ -938,15 +864,10 @@ void ForwardIterator::DeleteIterator(InternalIterator* iter, bool is_arena) {
   if (iter == nullptr) {
     return;
   }
-
-  if (pinned_iters_mgr_ && pinned_iters_mgr_->PinningEnabled()) {
-    pinned_iters_mgr_->PinIterator(iter, is_arena);
+  if (is_arena) {
+    iter->~InternalIterator();
   } else {
-    if (is_arena) {
-      iter->~InternalIterator();
-    } else {
-      delete iter;
-    }
+    delete iter;
   }
 }
 

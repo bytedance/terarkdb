@@ -19,15 +19,19 @@ class CompactionIteratorToInternalIterator : public InternalIterator {
   CompactionIteratorToInternalIterator(CompactionIterator* i) : c_iter_(i) {}
   virtual bool Valid() const override { return c_iter_->Valid(); }
   virtual void SeekToFirst() override { c_iter_->SeekToFirst(); }
-  virtual void SeekToLast() override { abort(); }  // do not support
+  virtual void SeekToLast() override { assert(false); }
   virtual void SeekForPrev(const rocksdb::Slice&) override {
-    abort();
-  }  // do not support
+    assert(false);
+  }
   virtual void Seek(const Slice& target) override;
   virtual void Next() override { c_iter_->Next(); }
   virtual void Prev() override { abort(); }  // do not support
   virtual Slice key() const override { return c_iter_->key(); }
-  virtual KeyValuePair pair() const override { return c_iter_->pair(); }
+  virtual LazyValue value() const override { return c_iter_->value(); }
+  virtual FutureValue future_value() const override {
+    assert(false);
+    return FutureValue();
+  }
   virtual Status status() const override {
     auto ci = c_iter_;
     if (ci->IsShuttingDown()) {
@@ -50,10 +54,6 @@ void CompactionIteratorToInternalIterator::Seek(const Slice& target) {
   c_iter_->current_key_committed_ = false;
   for (auto& v : c_iter_->level_ptrs_) {
     v = 0;
-  }
-
-  if (c_iter_->pinned_iters_mgr_.PinningEnabled()) {
-    c_iter_->pinned_iters_mgr_.ReleasePinnedData();
   }
 
   IterKey key_for_seek;
@@ -148,12 +148,9 @@ CompactionIterator::CompactionIterator(
   } else {
     ignore_snapshots_ = false;
   }
-  input_->SetPinnedItersMgr(&pinned_iters_mgr_);
 }
 
 CompactionIterator::~CompactionIterator() {
-  // input_ Iteartor lifetime is longer than pinned_iters_mgr_ lifetime
-  input_->SetPinnedItersMgr(nullptr);
 }
 
 void CompactionIterator::ResetRecordCounts() {
@@ -197,8 +194,6 @@ void CompactionIterator::Next() {
       ikey_.user_key = current_key_.GetUserKey();
       valid_ = true;
     } else {
-      // We consumed all pinned merge operands, release pinned iterators
-      pinned_iters_mgr_.ReleasePinnedData();
       // MergeHelper moves the iterator to the first record after the merged
       // records, so even though we reached the end of the merge output, we do
       // not want to advance the iterator.
@@ -238,7 +233,7 @@ void CompactionIterator::InvokeFilterIfNeeded(bool* need_skip,
     compaction_filter_value_.clear();
     compaction_filter_skip_until_.Clear();
     auto doFilter = [&]() {
-      filter = compaction_filter_->FilterPairV2(
+      filter = compaction_filter_->FilterV2(
           compaction_->level(), ikey_.user_key,
           CompactionFilter::ValueType::kValue, pair_,
           &compaction_filter_value_, compaction_filter_skip_until_.rep());
@@ -267,7 +262,7 @@ void CompactionIterator::InvokeFilterIfNeeded(bool* need_skip,
       ikey_.type = kTypeDeletion;
       current_key_.UpdateInternalKey(ikey_.sequence, kTypeDeletion);
       // no value associated with delete
-      pair_.reset();
+      pair_.reset(key_, Slice());
       iter_stats_.num_record_drop_user++;
     } else if (filter == CompactionFilter::Decision::kChangeValue) {
       pair_.reset(key_, compaction_filter_value_);
@@ -290,7 +285,7 @@ void CompactionIterator::NextFromInput() {
   valid_ = false;
 
   while (!valid_ && input_->Valid() && !IsShuttingDown()) {
-    pair_ = input_->pair();
+    pair_ = input_->value();
     key_ = pair_.key();
     iter_stats_.num_input_records++;
 
@@ -407,7 +402,7 @@ void CompactionIterator::NextFromInput() {
       assert(ikey_.type == kTypeValue);
       assert(current_user_key_snapshot_ == last_snapshot);
 
-      pair_.reset();
+      pair_.reset(key_, Slice());
       valid_ = true;
       clear_and_output_next_key_ = false;
     } else if (ikey_.type == kTypeSingleDeletion) {
@@ -618,8 +613,6 @@ void CompactionIterator::NextFromInput() {
             "merge_operator is not properly initialized.");
         return;
       }
-
-      pinned_iters_mgr_.StartPinning();
       // We know the merge type entry is not hidden, otherwise we would
       // have hit (A)
       // We encapsulate the merge related state machine in a different
@@ -651,7 +644,6 @@ void CompactionIterator::NextFromInput() {
         // batch consumed by the merge operator should not shadow any keys
         // coming after the merges
         has_current_user_key_ = false;
-        pinned_iters_mgr_.ReleasePinnedData();
 
         if (merge_helper_->FilteredUntil(&skip_until)) {
           need_skip = true;

@@ -50,7 +50,7 @@ MergeHelper::MergeHelper(Env* env, const Comparator* user_comparator,
 
 Status MergeHelper::TimedFullMerge(const MergeOperator* merge_operator,
                                    const Slice& key, const Slice* value,
-                                   const std::vector<Slice>& operands,
+                                   const std::vector<FutureValue>& operands,
                                    std::string* result, Logger* logger,
                                    Statistics* statistics, Env* env,
                                    Slice* result_operand,
@@ -89,7 +89,7 @@ Status MergeHelper::TimedFullMerge(const MergeOperator* merge_operator,
         result->assign(tmp_result_operand.data(), tmp_result_operand.size());
       }
     } else if (result_operand) {
-      *result_operand = Slice(nullptr, 0);
+      *result_operand = Slice::Invalid();
     }
 
     RecordTick(statistics, MERGE_OPERATION_TOTAL_TIME,
@@ -149,7 +149,7 @@ Status MergeHelper::MergeUntil(InternalIterator* iter,
 
     ParsedInternalKey ikey;
     assert(keys_.size() == merge_context_.GetNumOperands());
-    auto pair = iter->pair();
+    auto pair = iter->value();
     if (!ParseInternalKey(pair.key(), &ikey)) {
       // stop at corrupted key
       if (assert_valid_internal_key_) {
@@ -253,7 +253,7 @@ Status MergeHelper::MergeUntil(InternalIterator* iter,
           ikey.sequence <= latest_snapshot_
               ? CompactionFilter::Decision::kKeep
               : FilterMerge(orig_ikey.user_key,
-                            KeyValuePair(original_key, value_slice));
+                            LazyValue(original_key, value_slice));
       if (filter != CompactionFilter::Decision::kRemoveAndSkipUntil &&
           range_del_agg != nullptr &&
           range_del_agg->ShouldDelete(
@@ -274,12 +274,11 @@ Status MergeHelper::MergeUntil(InternalIterator* iter,
           ParseInternalKey(keys_.back(), &orig_ikey);
         }
         if (filter == CompactionFilter::Decision::kKeep) {
-          merge_context_.PushOperand(
-              value_slice, iter->IsValuePinned() /* operand_pinned */);
+          merge_context_.PushOperand(value_slice);
         } else {  // kChangeValue
           // Compaction filter asked us to change the operand from value_slice
           // to compaction_filter_value_.
-          merge_context_.PushOperand(compaction_filter_value_, false);
+          merge_context_.PushOperand(compaction_filter_value_);
         }
       } else if (filter == CompactionFilter::Decision::kRemoveAndSkipUntil) {
         // Compaction filter asked us to remove this key altogether
@@ -388,7 +387,7 @@ void MergeOutputIterator::Next() {
 }
 
 CompactionFilter::Decision MergeHelper::FilterMerge(
-    const Slice& user_key, const KeyValuePair& pair) {
+    const Slice& user_key, const LazyValue& pair) {
   if (compaction_filter_ == nullptr) {
     return CompactionFilter::Decision::kKeep;
   }
@@ -397,7 +396,7 @@ CompactionFilter::Decision MergeHelper::FilterMerge(
   }
   compaction_filter_value_.clear();
   compaction_filter_skip_until_.Clear();
-  auto ret = compaction_filter_->FilterPairV2(
+  auto ret = compaction_filter_->FilterV2(
       level_, user_key, CompactionFilter::ValueType::kMergeOperand, pair,
       &compaction_filter_value_, compaction_filter_skip_until_.rep());
   if (ret == CompactionFilter::Decision::kRemoveAndSkipUntil) {

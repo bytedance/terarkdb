@@ -7,7 +7,6 @@
 
 #include "db/compaction_iteration_stats.h"
 #include "db/dbformat.h"
-#include "db/pinned_iterators_manager.h"
 #include "db/range_del_aggregator.h"
 #include "db/range_tombstone_fragmenter.h"
 #include "db/version_edit.h"
@@ -427,12 +426,16 @@ class TruncatedRangeDelMergingIter : public InternalIterator {
     return cur_start_key_.Encode();
   }
 
-  KeyValuePair pair() const override {
+  LazyValue value() const override {
     auto* top = heap_.top();
     cur_start_key_.Set(top->start_key().user_key, top->seq(),
                        kTypeRangeDeletion);
     assert(top->end_key().sequence == kMaxSequenceNumber);
-    return KeyValuePair(cur_start_key_.Encode(), top->end_key().user_key);
+    return LazyValue(top->end_key().user_key);
+  }
+
+  FutureValue future_value() const override {
+    return FutureValue(value());
   }
 
   // Unused InternalIterator methods

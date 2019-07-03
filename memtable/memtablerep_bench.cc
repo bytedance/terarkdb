@@ -306,7 +306,7 @@ class ReadBenchmarkThread : public BenchmarkThread {
       : BenchmarkThread(table, key_gen, bytes_written, bytes_read, sequence,
                         num_ops, read_hits) {}
 
-  static bool callback(void* arg, const KeyValuePair& pair) {
+  static bool callback(void* arg, const LazyValue& pair) {
     CallbackVerifyArgs* callback_args = static_cast<CallbackVerifyArgs*>(arg);
     assert(callback_args != nullptr);
     Slice internal_key = pair.key();
