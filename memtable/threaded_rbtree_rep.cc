@@ -512,9 +512,9 @@ class ThreadedRBTreeRep : public MemTableRep {
 
     virtual Slice GetKey() const override { return rbt_.front().Key(); }
 
-    virtual LazyValue value() const override {
+    virtual LazySlice value() const override {
       auto kv = rbt_.front().value();
-      return LazyValue(kv.first, kv.second);
+      return LazySlice(kv.first, kv.second);
     }
 
     virtual void Next() override {
@@ -570,7 +570,7 @@ class ThreadedRBTreeRep : public MemTableRep {
 
   virtual void Get(const LookupKey &k, void *callback_args,
                    bool (*callback_func)(void *arg,
-                                         const LazyValue &)) override {
+                                         const LazySlice &)) override {
     Slice dummy;
     if (immutable_) {
       ThreadedRBTreeRep::HeapIterator<DummyLock> iter(this);

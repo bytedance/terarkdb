@@ -207,8 +207,8 @@ class CuckooTableIterator : public InternalIterator {
   void Next() override;
   void Prev() override;
   Slice key() const override;
-  LazyValue value() const override;
-  FutureValue future_value() const override;
+  LazySlice value() const override;
+  FutureSlice future_value() const override;
   Status status() const override { return Status::OK(); }
   void InitIfNeeded();
 
@@ -371,14 +371,14 @@ Slice CuckooTableIterator::key() const {
   return curr_key_.GetInternalKey();
 }
 
-LazyValue CuckooTableIterator::value() const {
+LazySlice CuckooTableIterator::value() const {
   assert(Valid());
-  return LazyValue(curr_value_, reader_->file_number_);
+  return LazySlice(curr_value_, reader_->file_number_);
 }
 
-FutureValue CuckooTableIterator::future_value() const {
+FutureSlice CuckooTableIterator::future_value() const {
   assert(Valid());
-  return FutureValue(curr_value_, false, reader_->file_number_);
+  return FutureSlice(curr_value_, false, reader_->file_number_);
 }
 
 InternalIterator* CuckooTableReader::NewIterator(
@@ -386,7 +386,7 @@ InternalIterator* CuckooTableReader::NewIterator(
     const SliceTransform* /* prefix_extractor */, Arena* arena,
     bool /*skip_filters*/, bool /*for_compaction*/) {
   if (!status().ok()) {
-    return NewErrorInternalIterator<Slice>(
+    return NewErrorInternalIterator<LazySlice>(
         Status::Corruption("CuckooTableReader status is not okay."), arena);
   }
   CuckooTableIterator* iter;

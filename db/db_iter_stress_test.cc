@@ -235,9 +235,9 @@ struct StressTestIterator : public InternalIterator {
     assert(Valid());
     return data->entries[iter].ikey;
   }
-  LazyValue value() const override {
+  LazySlice value() const override {
     assert(Valid());
-    return LazyValue(data->entries[iter].ikey, data->entries[iter].value);
+    return LazySlice(data->entries[iter].ikey, data->entries[iter].value);
   }
 };
 

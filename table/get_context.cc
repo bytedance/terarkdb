@@ -209,8 +209,9 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
           assert(merge_operator_ != nullptr);
           state_ = kFound;
           if (LIKELY(pinnable_val_ != nullptr)) {
+            FutureSlice future_value(value, true);
             Status merge_status = MergeHelper::TimedFullMerge(
-                merge_operator_, user_key_, &value,
+                merge_operator_, user_key_, &future_value,
                 merge_context_->GetOperands(), pinnable_val_->GetSelf(),
                 logger_, statistics_, env_);
             pinnable_val_->PinSelf();

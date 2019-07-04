@@ -345,7 +345,7 @@ class BlockBasedTable : public TableReader {
   // helps avoid re-reading meta index block if caller already created one.
   Status CreateIndexReader(
       FilePrefetchBuffer* prefetch_buffer, IndexReader** index_reader,
-      InternalIterator* preloaded_meta_index_iter = nullptr,
+      InternalIteratorBase<Slice>* preloaded_meta_index_iter = nullptr,
       const int level = -1);
 
   bool FullFilterKeyMayMatch(
@@ -354,9 +354,10 @@ class BlockBasedTable : public TableReader {
       const SliceTransform* prefix_extractor = nullptr) const;
 
   // Read the meta block from sst.
-  static Status ReadMetaBlock(Rep* rep, FilePrefetchBuffer* prefetch_buffer,
-                              std::unique_ptr<Block>* meta_block,
-                              std::unique_ptr<InternalIterator>* iter);
+  static Status ReadMetaBlock(
+      Rep* rep, FilePrefetchBuffer* prefetch_buffer,
+      std::unique_ptr<Block>* meta_block,
+      std::unique_ptr<InternalIteratorBase<Slice>>* iter);
 
   Status VerifyChecksumInBlocks(InternalIteratorBase<Slice>* index_iter);
   Status VerifyChecksumInBlocks(InternalIteratorBase<BlockHandle>* index_iter);
@@ -388,7 +389,7 @@ class BlockBasedTable : public TableReader {
   friend class PartitionedFilterBlockReader;
   friend class PartitionedFilterBlockTest;
 
-  InternalIterator* NewUnfragmentedRangeTombstoneIterator(
+  InternalIteratorBase<Slice>* NewUnfragmentedRangeTombstoneIterator(
       const ReadOptions& read_options);
 };
 
@@ -543,7 +544,7 @@ struct BlockBasedTable::Rep {
   }
 };
 
-template <class TBlockIter, typename TValue = Slice>
+template <class TBlockIter, typename TValue = LazySlice>
 class BlockBasedTableIteratorBase : public InternalIteratorBase<TValue> {
  public:
   BlockBasedTableIteratorBase(BlockBasedTable* table,
@@ -675,21 +676,21 @@ class BlockBasedTableIterator
 };
 
 template <class TBlockIter>
-class BlockBasedTableIterator<TBlockIter, Slice>
-    : public BlockBasedTableIteratorBase<TBlockIter, Slice> {
-  using Base = BlockBasedTableIteratorBase<TBlockIter, Slice>;
+class BlockBasedTableIterator<TBlockIter, LazySlice>
+    : public BlockBasedTableIteratorBase<TBlockIter, LazySlice> {
+  using Base = BlockBasedTableIteratorBase<TBlockIter, LazySlice>;
   using Base::Valid;
   using Base::block_iter_;
   using Base::table_;
  public:
   using Base::Base;
-  LazyValue value() const override {
+  LazySlice value() const override {
     assert(Valid());
-    return LazyValue(block_iter_.value(), table_->FileNumber());
+    return LazySlice(block_iter_.value(), table_->FileNumber());
   }
-  FutureValue future_value() const override {
+  FutureSlice future_value() const override {
     assert(Valid());
-    return FutureValue(block_iter_.value(), false, table_->FileNumber());
+    return FutureSlice(block_iter_.value(), false, table_->FileNumber());
   }
 };
 

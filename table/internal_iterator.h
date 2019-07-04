@@ -9,88 +9,11 @@
 #include <string>
 #include "rocksdb/comparator.h"
 #include "rocksdb/iterator.h"
+#include "rocksdb/lazy_slice.h"
 #include "rocksdb/status.h"
 #include "table/format.h"
 
 namespace rocksdb {
-
-class LazuValueDecoder {
-public:
-  virtual Status decode_value(const Slice& raw, void* _arg0, void* _arg1,
-                              Slice* value, std::string* buffer) const = 0;
-  virtual ~LazuValueDecoder() {}
-};
-
-class LazyValue {
-protected:
-  mutable Slice value_;
-  Slice raw_;
-  void *arg0_, *arg1_;
-  const LazuValueDecoder* decoder_;
-  std::string* buffer_;
-  uint64_t file_number_;
-
-public:
-  LazyValue() { reset(); }
-  explicit LazyValue(const Slice& _value, uint64_t _file_number = uint64_t(-1)) {
-    reset(_value, _file_number);
-  }
-  LazyValue(const Slice& _raw, void* _arg0, void* _arg1,
-            const LazuValueDecoder* _decoder, std::string* _buffer,
-            uint64_t _file_number = uint64_t(-1)) {
-    reset(_raw, _arg0, _arg1, _decoder, _buffer, _file_number);
-  }
-  LazyValue(const LazyValue& _value, uint64_t _file_number) {
-    reset(_value, _file_number);
-  }
-
-  void reset();
-  void reset(const Slice& _value, uint64_t _file_number = uint64_t(-1));
-  void reset(const Slice& _raw, void* _arg0, void* _arg1,
-             const LazuValueDecoder* _decoder, std::string* _buffer,
-             uint64_t _file_number = uint64_t(-1));
-  void reset(const LazyValue& _value, uint64_t _file_number);
-
-  const Slice& raw() const { return raw_; }
-  const Slice& get() const { assert(value_.valid()); return value_; }
-  uint64_t file_number() const { return file_number_; }
-  const LazuValueDecoder *decoder() const { return decoder_; }
-
-  Status decode() const;
-};
-
-class FutureValueDecoder {
-public:
-  virtual LazyValue decode_lazy_value(const Slice& storage) const = 0;
-  virtual ~FutureValueDecoder() {}
-};
-
-
-class FutureValue {
-protected:
-  std::string storage_;
-  const FutureValueDecoder* decoder_;
-public:
-  FutureValue() : decoder_(nullptr) {}
-  FutureValue(std::string &&storage, const FutureValueDecoder* decoder)
-      : storage_(std::move(storage)), decoder_(decoder) {}
-  explicit FutureValue(const LazyValue& value);
-  FutureValue(const Slice& value, bool pinned,
-              uint64_t file_number = uint64_t(-1));
-
-  FutureValue(FutureValue&&) = default;
-  FutureValue(const FutureValue&) = default;
-  FutureValue& operator = (FutureValue&&) = default;
-  FutureValue& operator = (const FutureValue&) = default;
-
-  void reset() { storage_.clear(); decoder_ = nullptr; }
-  bool valid() const { return decoder_ != nullptr; }
-
-  LazyValue value() const{
-    assert(valid());
-    return decoder_->decode_lazy_value(storage_);
-  }
-};
 
 class InternalIteratorCommon : public Cleanable {
  public:
@@ -172,7 +95,6 @@ class InternalIteratorCommon : public Cleanable {
 template <class TValue>
 class InternalIteratorBase : public InternalIteratorCommon {
  public:
-
   // Return the value for the current entry.  The underlying storage for
   // the returned slice is valid only until the next modification of
   // the iterator.
@@ -181,31 +103,31 @@ class InternalIteratorBase : public InternalIteratorCommon {
 };
 
 template<>
-class InternalIteratorBase<Slice> : public InternalIteratorCommon {
+class InternalIteratorBase<LazySlice> : public InternalIteratorCommon {
  public:
-  // Return the value for the current entry. The underlying storage for
+  // Return the value for the current entry.  The underlying storage for
   // the returned slice is valid only until the next modification of
   // the iterator.
   // REQUIRES: Valid()
-  virtual LazyValue value() const = 0;
+  virtual LazySlice value() const = 0;
 
   // Return the key & value for the current entry. The underlying storage for
   // the returned slice is valid until version expired.
   // REQUIRES: Valid()
-  virtual FutureValue future_value() const = 0;
+  virtual FutureSlice future_value() const = 0;
 };
 
-using InternalIterator = InternalIteratorBase<Slice>;
+using InternalIterator = InternalIteratorBase<LazySlice>;
 
 // Return an empty iterator (yields nothing).
 // allocated arena if not nullptr.
-template <class TValue = Slice>
+template <class TValue = LazySlice>
 extern InternalIteratorBase<TValue>* NewEmptyInternalIterator(
     Arena* arena = nullptr);
 
 // Return an empty iterator with the specified status.
 // allocated arena if not nullptr.
-template <class TValue = Slice>
+template <class TValue = LazySlice>
 extern InternalIteratorBase<TValue>* NewErrorInternalIterator(
     const Status& status, Arena* arena = nullptr);
 

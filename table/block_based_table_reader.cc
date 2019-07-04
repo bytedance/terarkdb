@@ -481,7 +481,7 @@ class HashIndexReader : public IndexReader {
       RandomAccessFileReader* file, FilePrefetchBuffer* prefetch_buffer,
       const ImmutableCFOptions& ioptions,
       const InternalKeyComparator* icomparator, const BlockHandle& index_handle,
-      InternalIterator* meta_index_iter, IndexReader** index_reader,
+      InternalIteratorBase<Slice>* meta_index_iter, IndexReader** index_reader,
       bool /*hash_index_allow_collision*/,
       const PersistentCacheOptions& cache_options,
       const bool index_key_includes_seq, const bool index_value_is_full,
@@ -860,7 +860,7 @@ Status BlockBasedTable::Open(const ImmutableCFOptions& ioptions,
 
   // Read meta index
   std::unique_ptr<Block> meta;
-  std::unique_ptr<InternalIterator> meta_iter;
+  std::unique_ptr<InternalIteratorBase<Slice>> meta_iter;
   s = ReadMetaBlock(rep, prefetch_buffer.get(), &meta, &meta_iter);
   if (!s.ok()) {
     return s;
@@ -907,15 +907,11 @@ Status BlockBasedTable::Open(const ImmutableCFOptions& ioptions,
     s = meta_iter->status();
     TableProperties* table_properties = nullptr;
     if (s.ok()) {
-      auto pair = meta_iter->value();
-      s = pair.decode();
-      if (s.ok()) {
-        s = ReadProperties(pair.value(), rep->file.get(),
-                           prefetch_buffer.get(), rep->footer, rep->ioptions,
-                           &table_properties,
-                           false /* compression_type_missing */,
-                           nullptr /* memory_allocator */);
-      }
+      s = ReadProperties(meta_iter->value(), rep->file.get(),
+                         prefetch_buffer.get(), rep->footer, rep->ioptions,
+                         &table_properties,
+                         false /* compression_type_missing */,
+                         nullptr /* memory_allocator */);
     }
 
     if (!s.ok()) {
@@ -1016,7 +1012,7 @@ Status BlockBasedTable::Open(const ImmutableCFOptions& ioptions,
           "Encountered error while reading data from range del block %s",
           s.ToString().c_str());
     }
-    auto iter = std::unique_ptr<InternalIterator>(
+    auto iter = std::unique_ptr<InternalIteratorBase<Slice>>(
         new_table->NewUnfragmentedRangeTombstoneIterator(read_options));
     rep->fragmented_range_dels = std::make_shared<FragmentedRangeTombstoneList>(
         std::move(iter), internal_comparator);
@@ -1185,10 +1181,10 @@ uint64_t BlockBasedTable::FileNumber() const {
 
 // Load the meta-block from the file. On success, return the loaded meta block
 // and its iterator.
-Status BlockBasedTable::ReadMetaBlock(Rep* rep,
-                                      FilePrefetchBuffer* prefetch_buffer,
-                                      std::unique_ptr<Block>* meta_block,
-                                      std::unique_ptr<InternalIterator>* iter) {
+Status BlockBasedTable::ReadMetaBlock(
+    Rep* rep, FilePrefetchBuffer* prefetch_buffer,
+    std::unique_ptr<Block>* meta_block,
+    std::unique_ptr<InternalIteratorBase<Slice>>* iter) {
   // TODO(sanjay): Skip this if footer.metaindex_handle() size indicates
   // it is an empty block.
   std::unique_ptr<Block> meta;
@@ -2324,7 +2320,7 @@ InternalIterator* BlockBasedTable::NewIterator(
       PrefixExtractorChanged(rep_->table_properties.get(), prefix_extractor);
   const bool kIsNotIndex = false;
   if (arena == nullptr) {
-    return new BlockBasedTableIterator<DataBlockIter>(
+    return new BlockBasedTableIterator<DataBlockIter, LazySlice>(
         this, read_options, rep_->internal_comparator,
         NewIndexIterator(
             read_options,
@@ -2336,8 +2332,9 @@ InternalIterator* BlockBasedTable::NewIterator(
         true /*key_includes_seq*/, for_compaction);
   } else {
     auto* mem =
-        arena->AllocateAligned(sizeof(BlockBasedTableIterator<DataBlockIter>));
-    return new (mem) BlockBasedTableIterator<DataBlockIter>(
+        arena->AllocateAligned(
+            sizeof(BlockBasedTableIterator<DataBlockIter, LazySlice>));
+    return new (mem) BlockBasedTableIterator<DataBlockIter, LazySlice>(
         this, read_options, rep_->internal_comparator,
         NewIndexIterator(read_options, need_upper_bound_check),
         !skip_filters && !read_options.total_order_seek &&
@@ -2360,7 +2357,8 @@ FragmentedRangeTombstoneIterator* BlockBasedTable::NewRangeTombstoneIterator(
       rep_->fragmented_range_dels, rep_->internal_comparator, snapshot);
 }
 
-InternalIterator* BlockBasedTable::NewUnfragmentedRangeTombstoneIterator(
+InternalIteratorBase<Slice>*
+BlockBasedTable::NewUnfragmentedRangeTombstoneIterator(
     const ReadOptions& read_options) {
   if (rep_->range_del_handle.IsNull()) {
     // The block didn't exist, nullptr indicates no range tombstones.
@@ -2503,27 +2501,17 @@ Status BlockBasedTable::Get(const ReadOptions& read_options, const Slice& key,
 
         // Call the *saver function on each entry/block until it returns false
         for (; biter.Valid(); biter.Next()) {
-          LazyValue pair = biter.value();
           ParsedInternalKey parsed_key;
-          if (!ParseInternalKey(pair.key(), &parsed_key)) {
+          if (!ParseInternalKey(biter.key(), &parsed_key)) {
             s = Status::Corruption(Slice());
-            break;
           }
-          s = pair.decode();
-          if (!s.ok()) {
-            break;
-          }
-          if (!get_context->SaveValue(parsed_key, pair.value(), &matched)) {
+
+          if (!get_context->SaveValue(parsed_key, biter.value(), &matched)) {
             done = true;
             break;
           }
         }
-        if (s.ok()) {
-          s = biter.status();
-        }
-        if (!s.ok()) {
-          break;
-        }
+        s = biter.status();
       }
       if (done) {
         // Avoid the extra Next which is expensive in two-level indexes
@@ -2610,7 +2598,7 @@ Status BlockBasedTable::VerifyChecksum() {
   Status s;
   // Check Meta blocks
   std::unique_ptr<Block> meta;
-  std::unique_ptr<InternalIterator> meta_iter;
+  std::unique_ptr<InternalIteratorBase<Slice>> meta_iter;
   s = ReadMetaBlock(rep_, nullptr /* prefetch buffer */, &meta, &meta_iter);
   if (s.ok()) {
     s = VerifyChecksumInBlocks(meta_iter.get());
@@ -2669,13 +2657,8 @@ Status BlockBasedTable::VerifyChecksumInBlocks(
     if (!s.ok()) {
       break;
     }
-    LazyValue pair = index_iter->value();
-    s = pair.decode();
-    if (!s.ok()) {
-      break;
-    }
     BlockHandle handle;
-    Slice input = pair.value();
+    Slice input = index_iter->value();
     s = handle.DecodeFrom(&input);
     BlockContents contents;
     Slice dummy_comp_dict;
@@ -2750,7 +2733,7 @@ BlockBasedTableOptions::IndexType BlockBasedTable::UpdateIndexType() {
 //  5. index_type
 Status BlockBasedTable::CreateIndexReader(
     FilePrefetchBuffer* prefetch_buffer, IndexReader** index_reader,
-    InternalIterator* preloaded_meta_index_iter, int level) {
+    InternalIteratorBase<Slice>* preloaded_meta_index_iter, int level) {
   auto index_type_on_file = UpdateIndexType();
 
   auto file = rep_->file.get();
@@ -2787,7 +2770,7 @@ Status BlockBasedTable::CreateIndexReader(
     }
     case BlockBasedTableOptions::kHashSearch: {
       std::unique_ptr<Block> meta_guard;
-      std::unique_ptr<InternalIterator> meta_iter_guard;
+      std::unique_ptr<InternalIteratorBase<Slice>> meta_iter_guard;
       auto meta_index_iter = preloaded_meta_index_iter;
       if (meta_index_iter == nullptr) {
         auto s =
@@ -2882,7 +2865,7 @@ Status BlockBasedTable::GetKVPairsFromDataBlocks(
       break;
     }
 
-    std::unique_ptr<InternalIterator> datablock_iter;
+    std::unique_ptr<InternalIteratorBase<Slice>> datablock_iter;
     datablock_iter.reset(NewDataBlockIterator<DataBlockIter>(
         rep_, ReadOptions(), blockhandles_iter->value()));
     s = datablock_iter->status();
@@ -2900,15 +2883,13 @@ Status BlockBasedTable::GetKVPairsFromDataBlocks(
         // Error reading the block - Skipped
         break;
       }
-      LazyValue pair = datablock_iter->value();
-      s = pair.decode();
-      if (!s.ok()) {
-        break;
-      }
-      const Slice& key = pair.key();
-      const Slice& value = pair.value();
-      kv_pair_block.emplace_back(std::string(key.data(), key.size()),
-                                 std::string(value.data(), value.size()));
+      const Slice& key = datablock_iter->key();
+      const Slice& value = datablock_iter->value();
+      std::string key_copy = std::string(key.data(), key.size());
+      std::string value_copy = std::string(value.data(), value.size());
+
+      kv_pair_block.push_back(
+          std::make_pair(std::move(key_copy), std::move(value_copy)));
     }
     kv_pair_blocks->push_back(std::move(kv_pair_block));
   }
@@ -2930,7 +2911,7 @@ Status BlockBasedTable::DumpTable(WritableFile* out_file,
       "Metaindex Details:\n"
       "--------------------------------------\n");
   std::unique_ptr<Block> meta;
-  std::unique_ptr<InternalIterator> meta_iter;
+  std::unique_ptr<InternalIteratorBase<Slice>> meta_iter;
   Status s =
       ReadMetaBlock(rep_, nullptr /* prefetch_buffer */, &meta, &meta_iter);
   if (s.ok()) {
@@ -2939,27 +2920,22 @@ Status BlockBasedTable::DumpTable(WritableFile* out_file,
       if (!s.ok()) {
         return s;
       }
-      LazyValue pair = meta_iter->value();
-      s = pair.decode();
-      if (!s.ok()) {
-        return s;
-      }
       if (meta_iter->key() == rocksdb::kPropertiesBlock) {
         out_file->Append("  Properties block handle: ");
-        out_file->Append(pair.value().ToString(true).c_str());
+        out_file->Append(meta_iter->value().ToString(true).c_str());
         out_file->Append("\n");
       } else if (meta_iter->key() == rocksdb::kCompressionDictBlock) {
         out_file->Append("  Compression dictionary block handle: ");
-        out_file->Append(pair.value().ToString(true).c_str());
+        out_file->Append(meta_iter->value().ToString(true).c_str());
         out_file->Append("\n");
       } else if (strstr(meta_iter->key().ToString().c_str(),
                         "filter.rocksdb.") != nullptr) {
         out_file->Append("  Filter block handle: ");
-        out_file->Append(pair.value().ToString(true).c_str());
+        out_file->Append(meta_iter->value().ToString(true).c_str());
         out_file->Append("\n");
       } else if (meta_iter->key() == rocksdb::kRangeDelBlock) {
         out_file->Append("  Range deletion block handle: ");
-        out_file->Append(pair.value().ToString(true).c_str());
+        out_file->Append(meta_iter->value().ToString(true).c_str());
         out_file->Append("\n");
       }
     }
@@ -3170,7 +3146,7 @@ Status BlockBasedTable::DumpDataBlocks(WritableFile* out_file) {
     out_file->Append("\n");
     out_file->Append("--------------------------------------\n");
 
-    std::unique_ptr<InternalIterator> datablock_iter;
+    std::unique_ptr<InternalIteratorBase<Slice>> datablock_iter;
     datablock_iter.reset(NewDataBlockIterator<DataBlockIter>(
         rep_, ReadOptions(), blockhandles_iter->value()));
     s = datablock_iter->status();
@@ -3187,13 +3163,7 @@ Status BlockBasedTable::DumpDataBlocks(WritableFile* out_file) {
         out_file->Append("Error reading the block - Skipped \n");
         break;
       }
-      LazyValue pair = datablock_iter->value();
-      s = pair.decode();
-      if (!s.ok()) {
-        out_file->Append("Error decoding the value - Skipped \n");
-        continue;
-      }
-      DumpKeyValue(pair.key(), pair.value(), out_file);
+      DumpKeyValue(datablock_iter->key(), datablock_iter->value(), out_file);
     }
     out_file->Append("\n");
   }

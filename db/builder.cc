@@ -159,9 +159,8 @@ Status BuildTable(
     builder->SetSecondPassIterator(second_pass_iter.get());
     c_iter.SeekToFirst();
     for (; c_iter.Valid(); c_iter.Next()) {
-      LazyValue pair = c_iter.value();
-      builder->Add(pair);
-      meta->UpdateBoundaries(pair.key(), c_iter.ikey().sequence);
+      builder->Add(c_iter.key(), c_iter.value());
+      meta->UpdateBoundaries(c_iter.key(), c_iter.ikey().sequence);
 
       // TODO(noetzli): Update stats after flush, too.
       if (io_priority == Env::IO_HIGH &&
@@ -176,7 +175,7 @@ Status BuildTable(
          range_del_it->Next()) {
       auto tombstone = range_del_it->Tombstone();
       auto kv = tombstone.Serialize();
-      builder->Add(LazyValue(kv.first.Encode(), kv.second));
+      builder->Add(kv.first.Encode(), LazySlice(kv.second));
       meta->UpdateBoundariesForRange(kv.first, tombstone.SerializeEndKey(),
                                      tombstone.seq_, internal_comparator);
     }

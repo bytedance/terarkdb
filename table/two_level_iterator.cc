@@ -249,7 +249,12 @@ class MapSstIterator final : public InternalIterator {
     }
     // Manual inline MapSstElement::Decode
     const char* err_msg = "Invalid MapSstElement";
-    Slice map_input = first_level_iter_->value();
+    LazySlice value = first_level_iter_->value();
+    status_ = value.decode();
+    if (!status_.ok()) {
+      return kInitFirstIterInvalid;
+    }
+    Slice map_input = *value;
     link_.clear();
     largest_key_ = first_level_iter_->key();
     uint64_t flags;
@@ -525,10 +530,10 @@ class MapSstIterator final : public InternalIterator {
     }
   }
   virtual Slice key() const override { return min_heap_.top().key; }
-  virtual LazyValue value() const override {
+  virtual LazySlice value() const override {
     return min_heap_.top().iter->value();
   }
-  virtual FutureValue future_value() const override {
+  virtual FutureSlice future_value() const override {
     return min_heap_.top().iter->future_value();
   }
   virtual Status status() const override { return status_; }

@@ -1181,7 +1181,7 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
     // Invariant: c_iter.status() is guaranteed to be OK if c_iter->Valid()
     // returns true.
     const Slice& key = c_iter->key();
-    LazyValue value = c_iter->value();
+    const LazySlice& value = c_iter->value();
 
     assert(end == nullptr ||
            cfd->user_comparator()->Compare(c_iter->user_key(), *end) < 0);
@@ -1217,7 +1217,7 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
       if (!status.ok()) {
         break;
       }
-      for (const auto& data_elmt : {key, value.get()}) {
+      for (const auto& data_elmt : {key, *value}) {
         size_t data_end_offset = data_begin_offset + data_elmt.size();
         while (sample_begin_offset_iter != sample_begin_offsets.cend() &&
                *sample_begin_offset_iter < data_end_offset) {
@@ -1561,7 +1561,7 @@ Status CompactionJob::FinishCompactionOutputFile(
       auto kv = tombstone.Serialize();
       assert(lower_bound == nullptr ||
              ucmp->Compare(*lower_bound, kv.second) < 0);
-      sub_compact->builder->Add(kv.first.Encode(), LazyValue(kv.second));
+      sub_compact->builder->Add(kv.first.Encode(), LazySlice(kv.second));
       InternalKey smallest_candidate = std::move(kv.first);
       if (lower_bound != nullptr &&
           ucmp->Compare(smallest_candidate.user_key(), *lower_bound) <= 0) {

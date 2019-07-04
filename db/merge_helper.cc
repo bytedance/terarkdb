@@ -49,17 +49,22 @@ MergeHelper::MergeHelper(Env* env, const Comparator* user_comparator,
 }
 
 Status MergeHelper::TimedFullMerge(const MergeOperator* merge_operator,
-                                   const Slice& key, const Slice* value,
-                                   const std::vector<FutureValue>& operands,
+                                   const Slice& key, const FutureSlice* value,
+                                   const std::vector<FutureSlice>& operands,
                                    std::string* result, Logger* logger,
                                    Statistics* statistics, Env* env,
-                                   Slice* result_operand,
+                                   LazySlice* result_operand,
                                    bool update_num_ops_stats) {
   assert(merge_operator != nullptr);
 
   if (operands.size() == 0) {
     assert(value != nullptr && result != nullptr);
-    result->assign(value->data(), value->size());
+    auto slice = value->get();
+    auto s = slice.decode();
+    if (!s.ok()) {
+      return s;
+    }
+    result->assign(slice->data(), slice->size());
     return Status::OK();
   }
 
@@ -69,7 +74,7 @@ Status MergeHelper::TimedFullMerge(const MergeOperator* merge_operator,
   }
 
   bool success;
-  Slice tmp_result_operand(nullptr, 0);
+  const FutureSlice* tmp_result_operand = nullptr;
   const MergeOperator::MergeOperationInput merge_in(key, value, operands,
                                                     logger);
   MergeOperator::MergeOperationOutput merge_out(*result, tmp_result_operand);
@@ -81,15 +86,20 @@ Status MergeHelper::TimedFullMerge(const MergeOperator* merge_operator,
     // Do the merge
     success = merge_operator->FullMergeV2(merge_in, &merge_out);
 
-    if (tmp_result_operand.data()) {
+    if (tmp_result_operand != nullptr) {
       // FullMergeV2 result is an existing operand
       if (result_operand != nullptr) {
-        *result_operand = tmp_result_operand;
+        *result_operand = tmp_result_operand->get();
       } else {
-        result->assign(tmp_result_operand.data(), tmp_result_operand.size());
+        LazySlice slice = tmp_result_operand->get();
+        auto s = slice.decode();
+        if (!s.ok()) {
+          return s;
+        }
+        result->assign(slice->data(), slice->size());
       }
-    } else if (result_operand) {
-      *result_operand = Slice::Invalid();
+    } else if (result_operand != nullptr) {
+      result_operand->reset();
     }
 
     RecordTick(statistics, MERGE_OPERATION_TOTAL_TIME,
@@ -149,8 +159,8 @@ Status MergeHelper::MergeUntil(InternalIterator* iter,
 
     ParsedInternalKey ikey;
     assert(keys_.size() == merge_context_.GetNumOperands());
-    auto pair = iter->value();
-    if (!ParseInternalKey(pair.key(), &ikey)) {
+
+    if (!ParseInternalKey(iter->key(), &ikey)) {
       // stop at corrupted key
       if (assert_valid_internal_key_) {
         assert(!"Corrupted internal key not expected.");
@@ -194,12 +204,8 @@ Status MergeHelper::MergeUntil(InternalIterator* iter,
       // (almost) silently dropping the put/delete. That's probably not what we
       // want. Also if we're in compaction and it's a put, it would be nice to
       // run compaction filter on it.
-      s = pair.decode();
-      if (!s.ok()) {
-        return s;
-      }
-      const Slice val = pair.value();
-      const Slice* val_ptr;
+      FutureSlice val = iter->future_value();
+      const FutureSlice* val_ptr;
       if ((kTypeValue == ikey.type || kTypeValueIndex == ikey.type) &&
           (range_del_agg == nullptr ||
            !range_del_agg->ShouldDelete(
@@ -208,10 +214,10 @@ Status MergeHelper::MergeUntil(InternalIterator* iter,
       } else {
         val_ptr = nullptr;
       }
-      std::string merge_result;
+      FutureSlice merge_result;
       s = TimedFullMerge(user_merge_operator_, ikey.user_key, val_ptr,
-                         merge_context_.GetOperands(), &merge_result, logger_,
-                         stats_, env_);
+                         merge_context_.GetOperands(), merge_result.buffer(),
+                         logger_, stats_, env_);
 
       // We store the result in keys_.back() and operands_.back()
       // if nothing went wrong (i.e.: no operand corruption on disk)
@@ -240,11 +246,7 @@ Status MergeHelper::MergeUntil(InternalIterator* iter,
       // Keep queuing keys and operands until we either meet a put / delete
       // request or later did a partial merge.
 
-      s = pair.decode();
-      if (!s.ok()) {
-        return s;
-      }
-      Slice value_slice = pair.value();
+      LazySlice value_slice = iter->value();
       // add an operand to the list if:
       // 1) it's included in one of the snapshots. in that case we *must* write
       // it out, no matter what compaction filter says
@@ -252,12 +254,11 @@ Status MergeHelper::MergeUntil(InternalIterator* iter,
       CompactionFilter::Decision filter =
           ikey.sequence <= latest_snapshot_
               ? CompactionFilter::Decision::kKeep
-              : FilterMerge(orig_ikey.user_key,
-                            LazyValue(original_key, value_slice));
+              : FilterMerge(orig_ikey.user_key, value_slice);
       if (filter != CompactionFilter::Decision::kRemoveAndSkipUntil &&
           range_del_agg != nullptr &&
           range_del_agg->ShouldDelete(
-              pair.key(), RangeDelPositioningMode::kForwardTraversal)) {
+              iter->key(), RangeDelPositioningMode::kForwardTraversal)) {
         filter = CompactionFilter::Decision::kRemove;
       }
       if (filter == CompactionFilter::Decision::kKeep ||
@@ -266,7 +267,7 @@ Status MergeHelper::MergeUntil(InternalIterator* iter,
           // this is just an optimization that saves us one memcpy
           keys_.push_front(std::move(original_key));
         } else {
-          keys_.push_front(pair.key().ToString());
+          keys_.push_front(iter->key().ToString());
         }
         if (keys_.size() == 1) {
           // we need to re-anchor the orig_ikey because it was anchored by
@@ -318,10 +319,10 @@ Status MergeHelper::MergeUntil(InternalIterator* iter,
     assert(kTypeMerge == orig_ikey.type || kTypeMergeIndex == orig_ikey.type);
     assert(merge_context_.GetNumOperands() >= 1);
     assert(merge_context_.GetNumOperands() == keys_.size());
-    std::string merge_result;
+    FutureSlice merge_result;
     s = TimedFullMerge(user_merge_operator_, orig_ikey.user_key, nullptr,
-                       merge_context_.GetOperands(), &merge_result, logger_,
-                       stats_, env_);
+                       merge_context_.GetOperands(), merge_result.buffer(),
+                       logger_, stats_, env_);
     if (s.ok()) {
       // The original key encountered
       // We are certain that keys_ is not empty here (see assertions couple of
@@ -342,15 +343,13 @@ Status MergeHelper::MergeUntil(InternalIterator* iter,
     if (merge_context_.GetNumOperands() >= 2 ||
         (allow_single_operand_ && merge_context_.GetNumOperands() == 1)) {
       bool merge_success = false;
-      std::string merge_result;
+      FutureSlice merge_result;
       {
         StopWatchNano timer(env_, stats_ != nullptr);
         PERF_TIMER_GUARD(merge_operator_time_nanos);
         merge_success = user_merge_operator_->PartialMergeMulti(
-            orig_ikey.user_key,
-            std::deque<Slice>(merge_context_.GetOperands().begin(),
-                              merge_context_.GetOperands().end()),
-            &merge_result, logger_);
+            orig_ikey.user_key, merge_context_.GetOperands(),
+            merge_result.buffer(), logger_);
         RecordTick(stats_, MERGE_OPERATION_TOTAL_TIME,
                    stats_ ? timer.ElapsedNanosSafe() : 0);
       }
@@ -387,7 +386,7 @@ void MergeOutputIterator::Next() {
 }
 
 CompactionFilter::Decision MergeHelper::FilterMerge(
-    const Slice& user_key, const LazyValue& pair) {
+    const Slice& user_key, const LazySlice& value) {
   if (compaction_filter_ == nullptr) {
     return CompactionFilter::Decision::kKeep;
   }
@@ -397,8 +396,9 @@ CompactionFilter::Decision MergeHelper::FilterMerge(
   compaction_filter_value_.clear();
   compaction_filter_skip_until_.Clear();
   auto ret = compaction_filter_->FilterV2(
-      level_, user_key, CompactionFilter::ValueType::kMergeOperand, pair,
-      &compaction_filter_value_, compaction_filter_skip_until_.rep());
+      level_, user_key, CompactionFilter::ValueType::kMergeOperand, value,
+      compaction_filter_value_.buffer(),
+      compaction_filter_skip_until_.rep());
   if (ret == CompactionFilter::Decision::kRemoveAndSkipUntil) {
     if (user_comparator_->Compare(*compaction_filter_skip_until_.rep(),
                                   user_key) <= 0) {

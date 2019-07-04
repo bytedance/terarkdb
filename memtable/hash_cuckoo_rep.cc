@@ -114,8 +114,8 @@ class HashCuckooRep : public MemTableRep {
   }
 
   virtual void Get(const LookupKey& k, void* callback_args,
-                   bool (*callback_func)(void* arg,
-                                         const LazyValue&)) override;
+                   bool (*callback_func)(void* arg, const Slice& key,
+                                         const LazySlice&)) override;
 
   class Iterator : public MemTableRep::Iterator {
     std::shared_ptr<std::vector<const char*>> bucket_;
@@ -140,14 +140,6 @@ class HashCuckooRep : public MemTableRep {
     // Returns the key at the current position.
     // REQUIRES: Valid()
     virtual const char* EncodedKey() const override;
-
-    // Returns the key at the current position.
-    // REQUIRES: Valid()
-    virtual Slice key() const override;
-
-    // Reset LazyValue at the current position.
-    // REQUIRES: Valid()
-    virtual LazyValue value() const override;
 
     // Advances to the next position.
     // REQUIRES: Valid()
@@ -306,16 +298,16 @@ class HashCuckooRep : public MemTableRep {
 };
 
 void HashCuckooRep::Get(const LookupKey& key, void* callback_args,
-                        bool (*callback_func)(void* arg, const LazyValue&)) {
+                        bool (*callback_func)(void* arg, const Slice& key,
+                                              const LazySlice&)) {
   Slice user_key = key.user_key();
   for (unsigned int hid = 0; hid < hash_function_count_; ++hid) {
     const char* bucket =
         cuckoo_array_[GetHash(user_key, hid)].load(std::memory_order_acquire);
     if (bucket != nullptr) {
-      LazyValue pair = DecodeKeyValuePair(bucket);
-      Slice bucket_user_key = ExtractUserKey(pair.key());
-      if (user_key == bucket_user_key) {
-        callback_func(callback_args, pair);
+      Slice bucket_key = GetLengthPrefixedSlice(bucket);
+      if (user_key == ExtractUserKey(bucket_key)) {
+        callback_func(callback_args, bucket_key, DecodeToLazyValue(bucket));
         break;
       }
     } else {
@@ -573,19 +565,6 @@ bool HashCuckooRep::Iterator::Valid() const {
 // REQUIRES: Valid()
 const char* HashCuckooRep::Iterator::EncodedKey() const {
   return *cit_;
-}
-
-// Returns the key at the current position.
-// REQUIRES: Valid()
-Slice HashCuckooRep::Iterator::key() const {
-  return GetLengthPrefixedSlice(*cit_);
-}
-
-// Reset LazyValue at the current position.
-// REQUIRES: Valid()
-LazyValue HashCuckooRep::Iterator::value() const {
-  assert(Valid());
-  return DecodeKeyValuePair(*cit_);
 }
 
 // Advances to the next position.

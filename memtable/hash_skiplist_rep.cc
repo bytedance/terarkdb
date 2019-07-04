@@ -36,8 +36,8 @@ class HashSkipListRep : public MemTableRep {
   virtual size_t ApproximateMemoryUsage() override;
 
   virtual void Get(const LookupKey& k, void* callback_args,
-                   bool (*callback_func)(void* arg,
-                                         const LazyValue&)) override;
+                   bool (*callback_func)(void* arg, const Slice& key,
+                                         const LazySlice&)) override;
 
   virtual ~HashSkipListRep();
 
@@ -104,20 +104,6 @@ class HashSkipListRep : public MemTableRep {
     virtual const char* EncodedKey() const override {
       assert(Valid());
       return iter_.key();
-    }
-
-    // Returns the key at the current position.
-    // REQUIRES: Valid()
-    virtual Slice key() const override {
-      assert(Valid());
-      return GetLengthPrefixedSlice(iter_.key());
-    }
-
-    // Return LazyValue at the current position.
-    // REQUIRES: Valid()
-    virtual LazyValue value() const override {
-      assert(Valid());
-      return DecodeKeyValuePair(iter_.key());
     }
 
     // Advances to the next position.
@@ -236,9 +222,9 @@ class HashSkipListRep : public MemTableRep {
       assert(false);
       return Slice();
     }
-    virtual LazyValue value() const override {
+    virtual LazySlice value() const override {
       assert(false);
-      return LazyValue();
+      return LazySlice();
     }
     virtual void Next() override {}
     virtual void Prev() override {}
@@ -314,15 +300,16 @@ size_t HashSkipListRep::ApproximateMemoryUsage() {
 }
 
 void HashSkipListRep::Get(const LookupKey& k, void* callback_args,
-                          bool (*callback_func)(void* arg,
-                                                const LazyValue&)) {
+                          bool (*callback_func)(void* arg, const Slice& key,
+                                                const LazySlice&)) {
   auto transformed = transform_->Transform(k.user_key());
   auto bucket = GetBucket(transformed);
   if (bucket != nullptr) {
     Bucket::Iterator iter(bucket);
     for (iter.Seek(k.memtable_key().data());
          iter.Valid() && callback_func(callback_args,
-                                       DecodeKeyValuePair(iter.key()));
+                                       GetLengthPrefixedSlice(iter.key()),
+                                       DecodeToLazyValue(iter.key()));
          iter.Next()) {
     }
   }

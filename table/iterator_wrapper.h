@@ -19,7 +19,7 @@ namespace rocksdb {
 // the valid() and key() results for an underlying iterator.
 // This can help avoid virtual function calls and also gives better
 // cache locality.
-template <class TValue = Slice>
+template <class TValue = LazySlice>
 class IteratorWrapperBase {
  public:
   IteratorWrapperBase() : iter_(nullptr), valid_(false) {}
@@ -59,6 +59,10 @@ class IteratorWrapperBase {
   // Iterator interface methods
   bool Valid() const        { return valid_; }
   Slice key() const         { assert(Valid()); return key_; }
+  TValue value() const {
+    assert(Valid());
+    return iter_->value();
+  }
   // Methods below require iter() != nullptr
   Status status() const     { assert(iter_); return iter_->status(); }
   void Next()               { assert(iter_); iter_->Next();        Update(); }
@@ -86,7 +90,7 @@ class IteratorWrapperBase {
   Slice key_;
 };
 
-using IteratorWrapper = IteratorWrapperBase<Slice>;
+using IteratorWrapper = IteratorWrapperBase<LazySlice>;
 
 
 }  // namespace rocksdb

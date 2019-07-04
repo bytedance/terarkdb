@@ -27,10 +27,12 @@ class CompactionIteratorToInternalIterator : public InternalIterator {
   virtual void Next() override { c_iter_->Next(); }
   virtual void Prev() override { abort(); }  // do not support
   virtual Slice key() const override { return c_iter_->key(); }
-  virtual LazyValue value() const override { return c_iter_->value(); }
-  virtual FutureValue future_value() const override {
+  virtual LazySlice value() const override {
+    return MakeLazySliceReference(c_iter_->value());
+  }
+  virtual FutureSlice future_value() const override {
     assert(false);
-    return FutureValue();
+    return FutureSlice();
   }
   virtual Status status() const override {
     auto ci = c_iter_;
@@ -182,7 +184,7 @@ void CompactionIterator::Next() {
     // Check if we returned all records of the merge output.
     if (merge_out_iter_.Valid()) {
       key_ = merge_out_iter_.key();
-      pair_.reset(key_, merge_out_iter_.value());
+      value_ = merge_out_iter_.value().get();
       bool valid_key __attribute__((__unused__));
       valid_key =  ParseInternalKey(key_, &ikey_);
       // MergeUntil stops when it encounters a corrupt key and does not
@@ -235,8 +237,9 @@ void CompactionIterator::InvokeFilterIfNeeded(bool* need_skip,
     auto doFilter = [&]() {
       filter = compaction_filter_->FilterV2(
           compaction_->level(), ikey_.user_key,
-          CompactionFilter::ValueType::kValue, pair_,
-          &compaction_filter_value_, compaction_filter_skip_until_.rep());
+          CompactionFilter::ValueType::kValue, value_,
+          compaction_filter_value_.buffer(),
+          compaction_filter_skip_until_.rep());
     };
     auto sample = filter_sample_interval_;
     if (env_ && sample && (filter_hit_count_ & (sample - 1)) == 0) {
@@ -262,10 +265,10 @@ void CompactionIterator::InvokeFilterIfNeeded(bool* need_skip,
       ikey_.type = kTypeDeletion;
       current_key_.UpdateInternalKey(ikey_.sequence, kTypeDeletion);
       // no value associated with delete
-      pair_.reset(key_, Slice());
+      value_.reset(Slice());
       iter_stats_.num_record_drop_user++;
     } else if (filter == CompactionFilter::Decision::kChangeValue) {
-      pair_.reset(key_, compaction_filter_value_);
+      value_ = compaction_filter_value_.get();
     } else if (filter == CompactionFilter::Decision::kRemoveAndSkipUntil) {
       *need_skip = true;
       compaction_filter_skip_until_.ConvertFromUserKey(kMaxSequenceNumber,
@@ -285,8 +288,8 @@ void CompactionIterator::NextFromInput() {
   valid_ = false;
 
   while (!valid_ && input_->Valid() && !IsShuttingDown()) {
-    pair_ = input_->value();
-    key_ = pair_.key();
+    key_ = input_->key();
+    value_ = input_->value();
     iter_stats_.num_input_records++;
 
     if (!ParseInternalKey(key_, &ikey_)) {
@@ -317,8 +320,8 @@ void CompactionIterator::NextFromInput() {
       iter_stats_.num_input_deletion_records++;
     }
     iter_stats_.total_input_raw_key_bytes += key_.size();
-    iter_stats_.total_input_raw_value_bytes +=
-        pair_.raw().valid() ? pair_.raw().size() : pair_.value().size();
+    // need decode ... damn
+    // iter_stats_.total_input_raw_value_bytes += value_.size();
 
     // If need_skip is true, we should seek the input iterator
     // to internal key skip_until and continue from there.
@@ -402,7 +405,7 @@ void CompactionIterator::NextFromInput() {
       assert(ikey_.type == kTypeValue);
       assert(current_user_key_snapshot_ == last_snapshot);
 
-      pair_.reset(key_, Slice());
+      value_.reset(Slice());
       valid_ = true;
       clear_and_output_next_key_ = false;
     } else if (ikey_.type == kTypeSingleDeletion) {
@@ -628,7 +631,7 @@ void CompactionIterator::NextFromInput() {
         // NOTE: key, value, and ikey_ refer to old entries.
         //       These will be correctly set below.
         key_ = merge_out_iter_.key();
-        pair_.reset(key_, merge_out_iter_.value());
+        value_ = merge_out_iter_.value().get();
         bool valid_key __attribute__((__unused__));
         valid_key = ParseInternalKey(key_, &ikey_);
         // MergeUntil stops when it encounters a corrupt key and does not

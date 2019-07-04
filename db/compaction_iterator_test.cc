@@ -42,7 +42,8 @@ class NoMergingMergeOp : public MergeOperator {
 class StallingFilter : public CompactionFilter {
  public:
   Decision FilterV2(int /*level*/, const Slice& key, ValueType /*type*/,
-                    const Slice& /*existing_value*/, std::string* /*new_value*/,
+                    const LazySlice& /*existing_value*/,
+                    std::string* /*new_value*/,
                     std::string* /*skip_until*/) const override {
     int k = std::atoi(key.ToString().c_str());
     last_seen.store(k);
@@ -78,7 +79,8 @@ class StallingFilter : public CompactionFilter {
 class FilterAllKeysCompactionFilter : public CompactionFilter {
  public:
   Decision FilterV2(int /*level*/, const Slice& /*key*/, ValueType /*type*/,
-                    const Slice& /*existing_value*/, std::string* /*new_value*/,
+                    const LazySlice& /*existing_value*/,
+                    std::string* /*new_value*/,
                     std::string* /*skip_until*/) const override {
     return Decision::kRemove;
   }
@@ -374,9 +376,12 @@ TEST_P(CompactionIteratorTest, RangeDeletionWithSnapshots) {
 TEST_P(CompactionIteratorTest, CompactionFilterSkipUntil) {
   class Filter : public CompactionFilter {
     virtual Decision FilterV2(int /*level*/, const Slice& key, ValueType t,
-                              const Slice& existing_value,
+                              const LazySlice& existing_value,
                               std::string* /*new_value*/,
                               std::string* skip_until) const override {
+      if (!existing_value.decode().ok()) {
+        return Decision::kKeep;
+      }
       std::string k = key.ToString();
       std::string v = existing_value.ToString();
       // See InitIterators() call below for the sequence of keys and their
@@ -557,9 +562,12 @@ TEST_P(CompactionIteratorTest, ShuttingDownInMerge) {
 TEST_P(CompactionIteratorTest, SingleMergeOperand) {
   class Filter : public CompactionFilter {
     virtual Decision FilterV2(int /*level*/, const Slice& key, ValueType t,
-                              const Slice& existing_value,
+                              const LazySlice& existing_value,
                               std::string* /*new_value*/,
                               std::string* /*skip_until*/) const override {
+      if (!existing_value.decode().ok()) {
+        return Decision::kKeep;
+      }
       std::string k = key.ToString();
       std::string v = existing_value.ToString();
 

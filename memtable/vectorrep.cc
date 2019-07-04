@@ -42,8 +42,8 @@ class VectorRep : public MemTableRep {
   virtual size_t ApproximateMemoryUsage() override;
 
   virtual void Get(const LookupKey& k, void* callback_args,
-                   bool (*callback_func)(void* arg,
-                                         const LazyValue&)) override;
+                   bool (*callback_func)(void* arg, const Slice& key,
+                                         const LazySlice&)) override;
 
   virtual ~VectorRep() override { }
 
@@ -71,14 +71,6 @@ class VectorRep : public MemTableRep {
     // Returns the key at the current position.
     // REQUIRES: Valid()
     virtual const char* EncodedKey() const override;
-
-    // Returns the key at the current position.
-    // REQUIRES: Valid()
-    virtual Slice key() const override;
-
-    // Return LazyValue at the current position.
-    // REQUIRES: Valid()
-    virtual LazyValue value() const override;
 
     // Advances to the next position.
     // REQUIRES: Valid()
@@ -201,20 +193,6 @@ const char* VectorRep::Iterator::EncodedKey() const {
   return *cit_;
 }
 
-// Returns the key at the current position.
-// REQUIRES: Valid()
-Slice VectorRep::Iterator::key() const {
-  assert(sorted_);
-  return GetLengthPrefixedSlice(*cit_);
-}
-
-// Return LazyValue at the current position.
-// REQUIRES: Valid()
-LazyValue VectorRep::Iterator::value() const {
-  assert(Valid());
-  return DecodeKeyValuePair(*cit_);
-}
-
 // Advances to the next position.
 // REQUIRES: Valid()
 void VectorRep::Iterator::Next() {
@@ -284,7 +262,8 @@ void VectorRep::Iterator::SeekToLast() {
 }
 
 void VectorRep::Get(const LookupKey& k, void* callback_args,
-                    bool (*callback_func)(void* arg, const LazyValue&)) {
+                    bool (*callback_func)(void* arg, const Slice& key,
+                                          const LazySlice&)) {
   rwlock_.ReadLock();
   VectorRep* vector_rep;
   std::shared_ptr<Bucket> bucket;
@@ -297,7 +276,7 @@ void VectorRep::Get(const LookupKey& k, void* callback_args,
   VectorRep::Iterator iter(vector_rep, immutable_ ? bucket_ : bucket, compare_);
   rwlock_.ReadUnlock();
   for (iter.Seek(k.user_key(), k.memtable_key().data());
-       iter.Valid() && callback_func(callback_args, iter.pair());
+       iter.Valid() && callback_func(callback_args, iter.key(), iter.value());
        iter.Next()) {
   }
 }

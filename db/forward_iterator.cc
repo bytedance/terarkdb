@@ -147,11 +147,11 @@ class ForwardLevelIterator : public InternalIterator {
     assert(valid_);
     return file_iter_->key();
   }
-  LazyValue value() const override {
+  LazySlice value() const override {
     assert(valid_);
     return file_iter_->value();
   }
-  FutureValue future_value() const override {
+  FutureSlice future_value() const override {
     assert(valid_);
     return file_iter_->future_value();
   }
@@ -506,12 +506,12 @@ Slice ForwardIterator::key() const {
   return current_->key();
 }
 
-LazyValue ForwardIterator::value() const {
+LazySlice ForwardIterator::value() const {
   assert(valid_);
   return current_->value();
 }
 
-FutureValue ForwardIterator::future_value() const {
+FutureSlice ForwardIterator::future_value() const {
   assert(valid_);
   return current_->future_value();
 }

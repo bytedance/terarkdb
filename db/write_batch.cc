@@ -1488,7 +1488,7 @@ class MemTableInserter : public WriteBatch::Handler {
 
     if (perform_merge) {
       // 1) Get the existing value
-      std::string get_value;
+      FutureSlice get_value;
 
       // Pass in the sequence number so that we also include previous merge
       // operations in the same batch.
@@ -1501,8 +1501,7 @@ class MemTableInserter : public WriteBatch::Handler {
       if (cf_handle == nullptr) {
         cf_handle = db_->DefaultColumnFamily();
       }
-      db_->Get(read_options, cf_handle, key, &get_value);
-      Slice get_value_slice = Slice(get_value);
+      db_->Get(read_options, cf_handle, key, get_value.buffer());
 
       // 2) Apply this merge
       auto merge_operator = moptions->merge_operator;
@@ -1511,8 +1510,9 @@ class MemTableInserter : public WriteBatch::Handler {
       std::string new_value;
 
       Status merge_status = MergeHelper::TimedFullMerge(
-          merge_operator, key, &get_value_slice, {value}, &new_value,
-          moptions->info_log, moptions->statistics, Env::Default());
+          merge_operator, key, &get_value, {FutureSlice(value, true)},
+          &new_value, moptions->info_log, moptions->statistics,
+          Env::Default());
 
       if (!merge_status.ok()) {
         // Failed to merge!

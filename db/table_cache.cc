@@ -246,7 +246,7 @@ InternalIterator* TableCache::NewIterator(
   if (s.ok()) {
     if (options.table_filter &&
         !options.table_filter(*table_reader->GetTableProperties())) {
-      result = NewEmptyInternalIterator<Slice>(arena);
+      result = NewEmptyInternalIterator<LazySlice>(arena);
     } else {
       result = table_reader->NewIterator(options, prefix_extractor, arena,
                                          skip_filters, for_compaction);
@@ -356,7 +356,7 @@ InternalIterator* TableCache::NewIterator(
   }
   if (!s.ok()) {
     assert(result == nullptr);
-    result = NewErrorInternalIterator<Slice>(s, arena);
+    result = NewErrorInternalIterator<LazySlice>(s, arena);
   }
   return result;
 }
@@ -474,10 +474,14 @@ Status TableCache::Get(const ReadOptions& options,
           }
         };
         auto get_from_map = [&](const Slice& largest_key,
-                                const Slice& map_value) {
+                                const LazySlice& map_value) {
+          s = map_value.decode();
+          if (!s.ok()) {
+            return false;
+          }
           // Manual inline MapSstElement::Decode
           const char* err_msg = "Invalid MapSstElement";
-          Slice map_input = map_value;
+          Slice map_input = *map_value;
           Slice smallest_key;
           uint64_t link_count;
           uint64_t flags;

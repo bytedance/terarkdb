@@ -12,7 +12,7 @@
 namespace rocksdb {
 
 // Iterator over a vector of keys/values
-class VectorIterator : public InternalIterator {
+class VectorIterator : public InternalIteratorBase<Slice> {
  public:
   VectorIterator(std::vector<std::string> keys, std::vector<std::string> values,
                  const InternalKeyComparator* icmp)
@@ -59,11 +59,8 @@ class VectorIterator : public InternalIterator {
   virtual Slice key() const override {
     return Slice(keys_[indices_[current_]]);
   }
-  virtual LazyValue value() const override {
-    return LazyValue(values_[indices_[current_]]);
-  }
-  virtual FutureValue future_value() const override {
-    return FutureValue(values_[indices_[current_]], true);
+  virtual Slice value() const override {
+    return Slice(values_[indices_[current_]]);
   }
 
   virtual Status status() const override { return Status::OK(); }

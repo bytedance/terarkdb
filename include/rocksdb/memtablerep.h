@@ -35,7 +35,7 @@
 
 #pragma once
 
-#include <rocksdb/slice.h>
+#include <rocksdb/lazy_slice.h>
 #include <rocksdb/status.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -89,7 +89,8 @@ class MemTableRep {
 
   static size_t EncodeKeyValueSize(const Slice& key, const Slice& value);
   static void EncodeKeyValue(const Slice& key, const Slice& value, char* buf);
-  static LazyValue DecodeKeyValuePair(const char* key);
+  static LazySlice DecodeToLazyValue(const char* key);
+  static FutureSlice DecodeToFutureValue(const char* key);
 
   explicit MemTableRep(Allocator* allocator) : allocator_(allocator) {}
 
@@ -171,7 +172,8 @@ class MemTableRep {
   // Get() function with a default value of dynamically construct an iterator,
   // seek and call the call back function.
   virtual void Get(const LookupKey& k, void* callback_args,
-                   bool (*callback_func)(void* arg, const LazyValue& pair));
+                   bool (*callback_func)(void* arg, const Slice& key,
+                                         const LazySlice& value));
 
   virtual uint64_t ApproximateNumEntries(const Slice& /*start_ikey*/,
                                          const Slice& /*end_key*/) {
@@ -201,11 +203,21 @@ class MemTableRep {
 
     // Returns the key at the current position.
     // REQUIRES: Valid()
-    virtual Slice key() const = 0;
+    virtual Slice key() const {
+      return GetLengthPrefixedSlice(EncodedKey());
+    }
 
-    // Returns LazyValue at the current position.
+    // Returns LazySlice at the current position.
     // REQUIRES: Valid()
-    virtual LazyValue value() const = 0;
+    virtual LazySlice value() const {
+      return DecodeToLazyValue(EncodedKey());
+    }
+
+    // Returns FutureSlice at the current position.
+    // REQUIRES: Valid()
+    virtual FutureSlice future_value() const {
+      return DecodeToFutureValue(EncodedKey());
+    }
 
     // Advances to the next position.
     // REQUIRES: Valid()

@@ -178,8 +178,8 @@ class HashLinkListRep : public MemTableRep {
   virtual size_t ApproximateMemoryUsage() override;
 
   virtual void Get(const LookupKey& k, void* callback_args,
-                   bool (*callback_func)(void* arg,
-                                         const LazyValue&)) override;
+                   bool (*callback_func)(void* arg, const Slice& key,
+                                         const LazySlice&)) override;
 
   virtual ~HashLinkListRep();
 
@@ -279,19 +279,6 @@ class HashLinkListRep : public MemTableRep {
       return iter_.key();
     }
 
-    // Returns the key at the current position.
-    // REQUIRES: Valid()
-    virtual Slice key() const override {
-      assert(Valid());
-      return GetLengthPrefixedSlice(iter_.key());
-    }
-
-    // Reset LazyValue at the current position.
-    // REQUIRES: Valid()
-    virtual LazyValue value() const override {
-      assert(Valid());
-      return DecodeKeyValuePair(iter_.key());
-    }
     // Advances to the next position.
     // REQUIRES: Valid()
     virtual void Next() override {
@@ -359,20 +346,6 @@ class HashLinkListRep : public MemTableRep {
     virtual const char* EncodedKey() const override {
       assert(Valid());
       return node_->key;
-    }
-
-    // Returns the key at the current position.
-    // REQUIRES: Valid()
-    virtual Slice key() const override {
-      assert(Valid());
-      return GetLengthPrefixedSlice(node_->key);
-    }
-
-    // Reset LazyValue at the current position.
-    // REQUIRES: Valid()
-    virtual LazyValue value() const override {
-      assert(Valid());
-      return DecodeKeyValuePair(node_->key);
     }
 
     // Advances to the next position.
@@ -487,16 +460,6 @@ class HashLinkListRep : public MemTableRep {
       return HashLinkListRep::LinkListIterator::EncodedKey();
     }
 
-    virtual Slice key() const override {
-      assert(Valid());
-      return GetLengthPrefixedSlice(EncodedKey());
-    }
-
-    virtual LazyValue value() const override {
-      assert(Valid());
-      return DecodeKeyValuePair(EncodedKey());
-    }
-
     virtual void Next() override {
       if (skip_list_iter_) {
         skip_list_iter_->Next();
@@ -525,9 +488,9 @@ class HashLinkListRep : public MemTableRep {
       assert(false);
       return Slice::Invalid();
     }
-    virtual LazyValue value() const override {
+    virtual LazySlice value() const override {
       assert(false);
-      return LazyValue();
+      return LazySlice();
     }
     virtual void Next() override {}
     virtual void Prev() override {}
@@ -765,8 +728,8 @@ size_t HashLinkListRep::ApproximateMemoryUsage() {
 }
 
 void HashLinkListRep::Get(const LookupKey& k, void* callback_args,
-                          bool (*callback_func)(void* arg,
-                                                const LazyValue&)) {
+                          bool (*callback_func)(void* arg, const Slice& key,
+                                                const LazySlice&)) {
   auto transformed = transform_->Transform(k.user_key());
   auto bucket = GetBucket(transformed);
 
@@ -776,7 +739,8 @@ void HashLinkListRep::Get(const LookupKey& k, void* callback_args,
     MemtableSkipList::Iterator iter(&skip_list_header->skip_list);
     for (iter.Seek(k.memtable_key().data());
          iter.Valid() && callback_func(callback_args,
-                                       DecodeKeyValuePair(iter.key()));
+                                       GetLengthPrefixedSlice(iter.key()),
+                                       DecodeToLazyValue(iter.key()));
          iter.Next()) {
     }
   } else {
@@ -785,7 +749,7 @@ void HashLinkListRep::Get(const LookupKey& k, void* callback_args,
       LinkListIterator iter(this, link_list_head);
       for (iter.Seek(k.internal_key(), nullptr);
            iter.Valid() &&
-           callback_func(callback_args, iter.pair());
+           callback_func(callback_args, iter.key(), iter.value());
            iter.Next()) {
       }
     }

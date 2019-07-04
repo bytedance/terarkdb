@@ -263,10 +263,11 @@ const char* EncodeKey(std::string* scratch, const Slice& target) {
   return scratch->data();
 }
 
-class MemTableIterator : public InternalIterator {
+template<class TValue>
+class MemTableIteratorBase : public InternalIteratorBase<TValue> {
  public:
-  MemTableIterator(const MemTable& mem, const ReadOptions& read_options,
-                   Arena* arena, bool use_range_del_table = false)
+  MemTableIteratorBase(const MemTable& mem, const ReadOptions& read_options,
+                       Arena* arena, bool use_range_del_table = false)
       : bloom_(nullptr),
         prefix_extractor_(mem.prefix_extractor_),
         comparator_(mem.comparator_),
@@ -285,7 +286,7 @@ class MemTableIterator : public InternalIterator {
     is_seek_for_prev_supported_ = iter_->IsSeekForPrevSupported();
   }
 
-  ~MemTableIterator() {
+  ~MemTableIteratorBase() {
     if (arena_mode_) {
       iter_->~Iterator();
     } else {
@@ -361,19 +362,10 @@ class MemTableIterator : public InternalIterator {
     assert(Valid());
     return iter_->key();
   }
-  virtual LazyValue value() const override {
-    assert(Valid());
-    return iter_->value();
-  }
-  virtual FutureValue future_value() const override {
-    assert(Valid());
-    return FutureValue(iter_->value(),
-                       value_pinned_ && iter_->IsValuePinned());
-  }
 
   virtual Status status() const override { return Status::OK(); }
 
- private:
+ protected:
   DynamicBloom* bloom_;
   const SliceTransform* const prefix_extractor_;
   const MemTable::KeyComparator comparator_;
@@ -384,8 +376,50 @@ class MemTableIterator : public InternalIterator {
   bool is_seek_for_prev_supported_;
 
   // No copying allowed
-  MemTableIterator(const MemTableIterator&);
-  void operator=(const MemTableIterator&);
+  MemTableIteratorBase(const MemTableIteratorBase&);
+  void operator=(const MemTableIteratorBase&);
+};
+
+class MemTableTombstoneIterator : public MemTableIteratorBase<Slice> {
+  using Base = MemTableIteratorBase<Slice>;
+  using Base::value_pinned_;
+  using Base::iter_;
+ public:
+  MemTableTombstoneIterator(const MemTable& mem,
+                            const ReadOptions& read_options, Arena* arena,
+                            bool use_range_del_table = false)
+      : MemTableIteratorBase<Slice>(mem, read_options, arena,
+                                    use_range_del_table) {}
+
+  virtual Slice value() const override {
+    assert(Valid());
+    LazySlice v = iter_->value();
+    return v.decode().ok() ? *v : Slice::Invalid();
+  }
+};
+
+class MemTableIterator : public MemTableIteratorBase<LazySlice> {
+  using Base = MemTableIteratorBase<LazySlice>;
+  using Base::value_pinned_;
+  using Base::iter_;
+ public:
+  MemTableIterator(const MemTable& mem, const ReadOptions& read_options,
+                   Arena* arena, bool use_range_del_table = false)
+    : MemTableIteratorBase<LazySlice>(mem, read_options, arena,
+                                      use_range_del_table) {}
+
+  virtual LazySlice value() const override {
+    assert(Valid());
+    return iter_->value();
+  }
+  virtual FutureSlice future_value() const override {
+    assert(Valid());
+    if (value_pinned_ && iter_->IsValuePinned()) {
+      return iter_->future_value();
+    } else {
+      return FutureSlice(iter_->value(), true);
+    }
+  }
 };
 
 InternalIterator* MemTable::NewIterator(const ReadOptions& read_options,
@@ -406,7 +440,7 @@ FragmentedRangeTombstoneIterator* MemTable::NewRangeTombstoneIterator(
   if (!fragmented_range_dels_ ||
       fragmented_range_dels_->user_tag() != num_range_del) {
 
-    auto* unfragmented_iter = new MemTableIterator(
+    auto* unfragmented_iter = new MemTableTombstoneIterator(
         *this, read_options, nullptr /* arena */,
         true /* use_range_del_table */);
     if (unfragmented_iter == nullptr) {
@@ -415,7 +449,7 @@ FragmentedRangeTombstoneIterator* MemTable::NewRangeTombstoneIterator(
     StopWatchNano timer(env_, true);
     fragmented_tombstone_list =
         std::make_shared<FragmentedRangeTombstoneList>(
-            std::unique_ptr<InternalIterator>(unfragmented_iter),
+            std::unique_ptr<InternalIteratorBase<Slice>>(unfragmented_iter),
             comparator_.comparator, false /* for_compaction */,
             std::vector<SequenceNumber>() /* snapshots */, num_range_del);
     if (timer.ElapsedNanos() > 10000000ULL) {
@@ -582,7 +616,8 @@ struct Saver {
 };
 }  // namespace
 
-static bool SaveValue(void* arg, const LazyValue& pair) {
+static bool SaveValue(void* arg, const Slice& internal_key,
+                      const LazySlice& value) {
   Saver* s = reinterpret_cast<Saver*>(arg);
   MergeContext* merge_context = s->merge_context;
   SequenceNumber max_covering_tombstone_seq = s->max_covering_tombstone_seq;
@@ -590,7 +625,6 @@ static bool SaveValue(void* arg, const LazyValue& pair) {
 
   assert(merge_context != nullptr);
 
-  Slice internal_key = pair.key(), value;
   // Check that it belongs to same user key.  We do not check the
   // sequence number since the Seek() call above should have skipped
   // all entries with overly large sequence numbers.
@@ -616,23 +650,23 @@ static bool SaveValue(void* arg, const LazyValue& pair) {
     switch (type) {
       case kTypeValue:
       case kTypeValueIndex: {
-        if (!(*s->status = pair.decode_value()).ok()) {
-          return false;
-        }
-        value = pair.value();
         if (s->inplace_update_support) {
           s->mem->GetLock(s->key->user_key())->ReadLock();
         }
         *(s->status) = Status::OK();
         if (*(s->merge_in_progress)) {
           if (s->value != nullptr) {
+            FutureSlice future_value(value, false);
             *(s->status) = MergeHelper::TimedFullMerge(
-                merge_operator, s->key->user_key(), &value,
+                merge_operator, s->key->user_key(), &future_value,
                 merge_context->GetOperands(), s->value, s->logger,
                 s->statistics, s->env_, nullptr /* result_operand */, true);
           }
         } else if (s->value != nullptr) {
-          s->value->assign(value.data(), value.size());
+          if (!(*s->status = value.decode()).ok()) {
+            return false;
+          }
+          s->value->assign(value->data(), value->size());
         }
         if (s->inplace_update_support) {
           s->mem->GetLock(s->key->user_key())->ReadUnlock();
@@ -669,7 +703,7 @@ static bool SaveValue(void* arg, const LazyValue& pair) {
           return false;
         }
         *(s->merge_in_progress) = true;
-        merge_context->PushOperand(FutureValue(pair));
+        merge_context->PushOperand(value);
         if (merge_operator->ShouldMerge(merge_context->GetOperandsDirectionBackward())) {
           *(s->status) = MergeHelper::TimedFullMerge(
               merge_operator, s->key->user_key(), nullptr,
@@ -768,23 +802,23 @@ void MemTable::Update(SequenceNumber seq,
   if (iter->Valid()) {
     // sequence number since the Seek() call above should have skipped
     // all entries with overly large sequence numbers.
-    LazyValue pair = iter->value();
     if (comparator_.comparator.user_comparator()->Equal(
-            ExtractUserKey(pair.key()), lkey.user_key())) {
+            ExtractUserKey(iter->key()), lkey.user_key())) {
       // Correct usFer key
-      const uint64_t tag = ExtractInternalKeyFooter(pair.key());
+      const uint64_t tag = ExtractInternalKeyFooter(iter->key());
       ValueType type;
       SequenceNumber unused;
       UnPackSequenceAndType(tag, &unused, &type);
+      auto old_slice = iter->value();
       Status s;
-      if (type == kTypeValue && (s = pair.decode_value()).ok()) {
-        uint32_t old_size = static_cast<uint32_t>(pair.value().size());
+      if (type == kTypeValue && (s = old_slice.decode()).ok()) {
+        uint32_t old_size = static_cast<uint32_t>(old_slice->size());
         uint32_t new_size = static_cast<uint32_t>(value.size());
 
         // Update value, if new value size <= old value size
         if (new_size <= old_size) {
           char* p =
-              const_cast<char*>(pair.value().data()) - VarintLength(old_size);
+              const_cast<char*>(old_slice->data()) - VarintLength(old_size);
           p = EncodeVarint32(p, new_size);
           WriteLock wl(GetLock(lkey.user_key()));
           memcpy(p, value.data(), value.size());
@@ -820,19 +854,19 @@ bool MemTable::UpdateCallback(SequenceNumber seq,
     // Check that it belongs to same user key.  We do not check the
     // sequence number since the Seek() call above should have skipped
     // all entries with overly large sequence numbers.
-    LazyValue pair = iter->value();
     if (comparator_.comparator.user_comparator()->Equal(
-            ExtractUserKey(pair.key()), lkey.user_key())) {
+            ExtractUserKey(iter->key()), lkey.user_key())) {
       // Correct user key
-      const uint64_t tag = ExtractInternalKeyFooter(pair.key());
+      const uint64_t tag = ExtractInternalKeyFooter(iter->key());
       ValueType type;
       uint64_t unused;
       UnPackSequenceAndType(tag, &unused, &type);
+      auto old_slice = iter->value();
       Status s;
-      if(type == kTypeValue && (s = pair.decode_value()).ok()) {
-        uint32_t old_size = static_cast<uint32_t>(pair.value().size());
+      if(type == kTypeValue && (s = old_slice.decode()).ok()) {
+        uint32_t old_size = static_cast<uint32_t>(old_slice->size());
 
-        char* old_buffer = const_cast<char*>(pair.value().data());
+        char* old_buffer = const_cast<char*>(old_slice->data());
         uint32_t new_inplace_size = old_size;
 
         std::string merged_value;
@@ -844,8 +878,7 @@ bool MemTable::UpdateCallback(SequenceNumber seq,
           assert(new_inplace_size <= old_size);
           if (new_inplace_size < old_size) {
             // overwrite the new inplace size
-            char* p =
-              const_cast<char*>(pair.value().data()) - VarintLength(old_size);
+            char* p = old_buffer - VarintLength(old_size);
             p = EncodeVarint32(p, new_inplace_size);
             if (p < old_buffer) {
               // shift the value buffer as well.

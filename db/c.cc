@@ -21,6 +21,7 @@
 #include "rocksdb/env.h"
 #include "rocksdb/filter_policy.h"
 #include "rocksdb/iterator.h"
+#include "rocksdb/lazy_slice.h"
 #include "rocksdb/memtablerep.h"
 #include "rocksdb/merge_operator.h"
 #include "rocksdb/options.h"
@@ -67,8 +68,10 @@ using rocksdb::InfoLogLevel;
 using rocksdb::FileLock;
 using rocksdb::FilterPolicy;
 using rocksdb::FlushOptions;
+using rocksdb::FutureSlice;
 using rocksdb::IngestExternalFileOptions;
 using rocksdb::Iterator;
+using rocksdb::LazySlice;
 using rocksdb::Logger;
 using rocksdb::MergeOperator;
 using rocksdb::MergeOperators;
@@ -358,19 +361,29 @@ struct rocksdb_mergeoperator_t : public MergeOperator {
   virtual bool FullMergeV2(const MergeOperationInput& merge_in,
                            MergeOperationOutput* merge_out) const override {
     size_t n = merge_in.operand_list.size();
+    std::vector<LazySlice> operand_slice(n);
     std::vector<const char*> operand_pointers(n);
     std::vector<size_t> operand_sizes(n);
     for (size_t i = 0; i < n; i++) {
-      Slice operand(merge_in.operand_list[i]);
+      operand_slice[i] = merge_in.operand_list[i].get();
+      if (!operand_slice[i].decode().ok()) {
+        return false;
+      }
+      Slice operand(*operand_slice[i]);
       operand_pointers[i] = operand.data();
       operand_sizes[i] = operand.size();
     }
 
     const char* existing_value_data = nullptr;
     size_t existing_value_len = 0;
+    LazySlice existing_value;
     if (merge_in.existing_value != nullptr) {
-      existing_value_data = merge_in.existing_value->data();
-      existing_value_len = merge_in.existing_value->size();
+      existing_value = merge_in.existing_value->get();
+      if (!existing_value.decode().ok()) {
+        return false;
+      }
+      existing_value_data = existing_value->data();
+      existing_value_len = existing_value->size();
     }
 
     unsigned char success;
@@ -391,14 +404,19 @@ struct rocksdb_mergeoperator_t : public MergeOperator {
   }
 
   virtual bool PartialMergeMulti(const Slice& key,
-                                 const std::deque<Slice>& operand_list,
+                                 const std::vector<FutureSlice>& operand_list,
                                  std::string* new_value,
                                  Logger* /*logger*/) const override {
     size_t operand_count = operand_list.size();
+    std::vector<LazySlice> operand_slice(operand_count);
     std::vector<const char*> operand_pointers(operand_count);
     std::vector<size_t> operand_sizes(operand_count);
     for (size_t i = 0; i < operand_count; ++i) {
-      Slice operand(operand_list[i]);
+      operand_slice[i] = operand_list[i].get();
+      if (!operand_slice[i].decode().ok()) {
+        return false;
+      }
+      Slice operand(*operand_slice[i]);
       operand_pointers[i] = operand.data();
       operand_sizes[i] = operand.size();
     }

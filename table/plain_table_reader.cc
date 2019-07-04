@@ -72,9 +72,9 @@ class PlainTableIterator : public InternalIterator {
 
   Slice key() const override;
 
-  LazyValue value() const override;
+  LazySlice value() const override;
 
-  FutureValue future_value() const override;
+  FutureSlice future_value() const override;
 
   Status status() const override;
 
@@ -747,14 +747,14 @@ Slice PlainTableIterator::key() const {
   return key_;
 }
 
-LazyValue PlainTableIterator::value() const {
+LazySlice PlainTableIterator::value() const {
   assert(Valid());
-  return LazyValue(value_, table_->file_number_);
+  return LazySlice(value_, table_->file_number_);
 }
 
-FutureValue PlainTableIterator::future_value() const {
+FutureSlice PlainTableIterator::future_value() const {
   assert(Valid());
-  return FutureValue(value_, false, table_->file_number_);
+  return FutureSlice(value_, false, table_->file_number_);
 }
 
 

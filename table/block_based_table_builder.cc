@@ -414,16 +414,16 @@ BlockBasedTableBuilder::~BlockBasedTableBuilder() {
   delete rep_;
 }
 
-void BlockBasedTableBuilder::Add(const LazyValue& pair) {
+void BlockBasedTableBuilder::Add(const Slice& key, const LazySlice& lazy_value) {
   Rep* r = rep_;
   assert(!r->closed);
   if (!ok()) return;
-  auto s = pair.decode();
+  auto s = lazy_value.decode();
   if (!s.ok()) {
     r->status = s;
     return;
   }
-  Slice key = pair.key(), value = pair.value();
+  Slice value = *lazy_value;
   ValueType value_type = ExtractValueType(key);
   if (r->ignore_key_type || IsValueType(value_type)) {
     if (r->props.num_entries > 0) {

@@ -370,7 +370,7 @@ bool CompactionRangeDelAggregator::ShouldDelete(const ParsedInternalKey& parsed,
 
 namespace {
 
-class TruncatedRangeDelMergingIter : public InternalIterator {
+class TruncatedRangeDelMergingIter : public InternalIteratorBase<Slice> {
  public:
   TruncatedRangeDelMergingIter(
       const InternalKeyComparator* icmp, const Slice* lower_bound,
@@ -426,16 +426,10 @@ class TruncatedRangeDelMergingIter : public InternalIterator {
     return cur_start_key_.Encode();
   }
 
-  LazyValue value() const override {
+  Slice value() const override {
     auto* top = heap_.top();
-    cur_start_key_.Set(top->start_key().user_key, top->seq(),
-                       kTypeRangeDeletion);
     assert(top->end_key().sequence == kMaxSequenceNumber);
-    return LazyValue(top->end_key().user_key);
-  }
-
-  FutureValue future_value() const override {
-    return FutureValue(value());
+    return top->end_key().user_key;
   }
 
   // Unused InternalIterator methods

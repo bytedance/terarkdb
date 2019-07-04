@@ -1204,7 +1204,7 @@ InternalIterator* DBImpl::NewInternalIterator(const ReadOptions& read_options,
   } else {
     CleanupSuperVersion(super_version);
   }
-  return NewErrorInternalIterator<Slice>(s, arena);
+  return NewErrorInternalIterator<LazySlice>(s, arena);
 }
 
 ColumnFamilyHandle* DBImpl::DefaultColumnFamily() const {

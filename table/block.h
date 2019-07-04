@@ -252,6 +252,10 @@ class BlockIter : public InternalIteratorBase<TValue> {
 
   virtual bool Valid() const override { return current_ < restarts_; }
   virtual Status status() const override { return status_; }
+  virtual Slice key() const override {
+    assert(Valid());
+    return key_.GetKey();
+  }
 
 #ifndef NDEBUG
   virtual ~BlockIter() {
@@ -315,8 +319,7 @@ class BlockIter : public InternalIteratorBase<TValue> {
                          uint32_t* index, const Comparator* comp);
 };
 
-class DataBlockIter final
-    : public BlockIter<Slice>, public LazuValueDecoder {
+class DataBlockIter final : public BlockIter<Slice> {
  public:
   DataBlockIter()
       : BlockIter(), read_amp_bitmap_(nullptr), last_bitmap_offset_(0) {}
@@ -346,14 +349,15 @@ class DataBlockIter final
     data_block_hash_index_ = data_block_hash_index;
   }
 
-  virtual Slice key() const override {
-    return key_.GetKey();
-  }
-  virtual LazyValue value() const override {
-    return LazyValue(value_, nullptr, nullptr, this, nullptr);
-  }
-  virtual FutureValue future_value() const override {
-    return FutureValue(value_, false);
+  virtual Slice value() const override {
+    assert(Valid());
+    if (read_amp_bitmap_ && current_ < restarts_ &&
+        current_ != last_bitmap_offset_) {
+      read_amp_bitmap_->Mark(current_ /* current entry offset */,
+                             NextEntryOffset() - 1);
+      last_bitmap_offset_ = current_;
+    }
+    return value_;
   }
 
   virtual void Seek(const Slice& target) override;
@@ -424,25 +428,16 @@ class DataBlockIter final
   }
 
   bool SeekForGetImpl(const Slice& target);
-
-  virtual Status decode_value(const Slice& /*_key*/, const Slice& _raw,
-                              Slice* _value,
-                              std::string* /*_buffer*/) const override {
-    if (read_amp_bitmap_ && current_ < restarts_ &&
-        current_ != last_bitmap_offset_) {
-      read_amp_bitmap_->Mark(current_ /* current entry offset */,
-          NextEntryOffset() - 1);
-      last_bitmap_offset_ = current_;
-    }
-    *_value = _raw;
-    return Status::OK();
-  }
 };
 
 class IndexBlockIter final : public BlockIter<BlockHandle> {
  public:
   IndexBlockIter() : BlockIter(), prefix_index_(nullptr) {}
 
+  virtual Slice key() const override {
+    assert(Valid());
+    return key_.GetKey();
+  }
   // key_includes_seq, default true, means that the keys are in internal key
   // format.
   // value_is_full, default true, means that no delta encoding is
@@ -473,10 +468,6 @@ class IndexBlockIter final : public BlockIter<BlockHandle> {
     value_delta_encoded_ = !value_is_full;
   }
 
-  virtual Slice key() const override {
-    assert(Valid());
-    return key_.GetKey();
-  }
   virtual BlockHandle value() const override {
     assert(Valid());
     if (value_delta_encoded_) {

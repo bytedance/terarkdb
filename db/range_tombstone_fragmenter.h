@@ -76,7 +76,7 @@ struct FragmentedRangeTombstoneList {
   // "fragment" the tombstones into non-overlapping pieces, and store them in
   // tombstones_ and tombstone_seqs_.
   void FragmentTombstones(
-      std::unique_ptr<InternalIterator> unfragmented_tombstones,
+      std::unique_ptr<InternalIteratorBase<Slice>> unfragmented_tombstones,
       const InternalKeyComparator& icmp, bool for_compaction,
       const std::vector<SequenceNumber>& snapshots);
 

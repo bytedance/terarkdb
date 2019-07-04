@@ -32,7 +32,8 @@
 namespace rocksdb {
 
 class Mutex;
-class MemTableIterator;
+template<class TValue>
+class MemTableIteratorBase;
 class MergeContext;
 
 struct ImmutableMemTableOptions {
@@ -399,7 +400,8 @@ class MemTable {
  private:
   enum FlushStateEnum { FLUSH_NOT_REQUESTED, FLUSH_REQUESTED, FLUSH_SCHEDULED };
 
-  friend class MemTableIterator;
+  template<class TValue>
+  friend class MemTableIteratorBase;
   friend class MemTableBackwardIterator;
   friend class MemTableList;
 

@@ -190,7 +190,7 @@ uint64_t SstFileDumper::CalculateCompressedTableSize(
       fputs(iter->status().ToString().c_str(), stderr);
       exit(1);
     }
-    table_builder->Add(iter->pair());
+    table_builder->Add(iter->key(), iter->value());
   }
   Status s = table_builder->Finish();
   if (!s.ok()) {
@@ -337,19 +337,14 @@ Status SstFileDumper::ReadSequential(bool print_kv, uint64_t read_num,
     iter->SeekToFirst();
   }
   for (; iter->Valid(); iter->Next()) {
-    LazyValue pair = iter->value();
-    auto s = pair.decode();
-    if (!s.ok()) {
-      return s;
-    }
     ++i;
     if (read_num > 0 && i > read_num)
       break;
 
     ParsedInternalKey ikey;
-    if (!ParseInternalKey(pair.key(), &ikey)) {
+    if (!ParseInternalKey(iter->key(), &ikey)) {
       std::cerr << "Internal Key ["
-                << pair.key().ToString(true /* in hex*/)
+                << iter->key().ToString(true /* in hex*/)
                 << "] parse error!\n";
       continue;
     }
@@ -365,9 +360,14 @@ Status SstFileDumper::ReadSequential(bool print_kv, uint64_t read_num,
     }
 
     if (print_kv) {
+      LazySlice value = iter->value();
+      auto s = value.decode();
+      if (!s.ok()) {
+        return s;
+      }
       fprintf(stdout, "%s => %s\n",
           ikey.DebugString(output_hex_).c_str(),
-          pair.value().ToString(output_hex_).c_str());
+          value->ToString(output_hex_).c_str());
     }
   }
 

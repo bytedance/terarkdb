@@ -182,19 +182,20 @@ void DataBlockIter::Prev() {
     if (!ParseNextDataKey()) {
       break;
     }
-    LazyValue kv = value();
-    Slice current_key = kv.key();
-    auto s = kv.decode();
-    if (!s.ok()) {
-      Invalidate(s);
-      return;
-    }
-    // The key is delta encoded, cache decoded key in buffer
-    size_t new_key_offset = prev_entries_keys_buff_.size();
-    prev_entries_keys_buff_.append(current_key.data(), current_key.size());
+    Slice current_key = key();
 
-    prev_entries_.emplace_back(current_, nullptr, new_key_offset,
-                               current_key.size(), kv.value());
+    if (key_.IsKeyPinned()) {
+      // The key is not delta encoded
+      prev_entries_.emplace_back(current_, current_key.data(), 0,
+                                 current_key.size(), value());
+    } else {
+      // The key is delta encoded, cache decoded key in buffer
+      size_t new_key_offset = prev_entries_keys_buff_.size();
+      prev_entries_keys_buff_.append(current_key.data(), current_key.size());
+
+      prev_entries_.emplace_back(current_, nullptr, new_key_offset,
+                                 current_key.size(), value());
+    }
     // Loop until end of current entry hits the start of original entry
   } while (NextEntryOffset() < original);
   prev_entries_idx_ = static_cast<int32_t>(prev_entries_.size()) - 1;

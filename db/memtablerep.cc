@@ -37,11 +37,39 @@ void MemTableRep::EncodeKeyValue(const Slice& key, const Slice& value,
   memcpy(p, value.data(), value.size());
 }
 
-LazyValue MemTableRep::DecodeKeyValuePair(const char* key) {
-  Slice key_slice = GetLengthPrefixedSlice(key);
-  Slice value_slice =
-      GetLengthPrefixedSlice(key_slice.data() + key_slice.size());
-  return LazyValue(key_slice, value_slice);
+LazySlice MemTableRep::DecodeToLazyValue(const char* key) {
+  struct SliceMetaImpl : public LazySliceMeta {
+    Status decode(const Slice& /*raw*/, const void* arg0,
+                  const void* /*arg1*/, Slice* value) const override {
+      const char* k = reinterpret_cast<const char*>(arg0);
+      Slice key_slice = GetLengthPrefixedSlice(k);
+      *value = GetLengthPrefixedSlice(key_slice.data() + key_slice.size());
+      return Status::OK();
+    }
+    Status to_future(const LazySlice& slice,
+                     FutureSlice* future_slice) const override {
+      const char* k = reinterpret_cast<const char*>(slice.args().first);
+      *future_slice = DecodeToFutureValue(k);
+      return Status::OK();
+    }
+  };
+  static SliceMetaImpl meta_impl;
+  return LazySlice(Slice(), &meta_impl, key);
+}
+
+FutureSlice MemTableRep::DecodeToFutureValue(const char* key) {
+  struct SliceMetaImpl : public FutureSliceMeta {
+    LazySlice to_lazy_slice(const Slice& storage) const override {
+      Slice input = storage;
+      uint64_t key_ptr;
+      GetFixed64(&input, &key_ptr);
+      return DecodeToLazyValue(reinterpret_cast<const char*>(key_ptr));
+    }
+  };
+  static SliceMetaImpl meta_impl;
+  std::string storage;
+  PutFixed64(&storage, reinterpret_cast<uint64_t>(key));
+  return FutureSlice(std::move(storage), &meta_impl);
 }
 
 bool MemTableRep::InsertKeyValue(const Slice& internal_key,
@@ -81,10 +109,12 @@ KeyHandle MemTableRep::Allocate(const size_t len, char** buf) {
 }
 
 void MemTableRep::Get(const LookupKey& k, void* callback_args,
-                      bool (*callback_func)(void* arg, const LazyValue&)) {
+                      bool (*callback_func)(void* arg, const Slice& key,
+                                            const LazySlice&)) {
   auto iter = GetDynamicPrefixIterator();
   for (iter->Seek(k.internal_key(), k.memtable_key().data());
-       iter->Valid() && callback_func(callback_args, iter->pair());
+       iter->Valid() && callback_func(callback_args, iter->key(),
+                                      iter->value());
        iter->Next()) {
   }
   delete iter;

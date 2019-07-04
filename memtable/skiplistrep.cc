@@ -87,12 +87,13 @@ bool InsertKeyValueConcurrently(const Slice& internal_key,
   }
 
   virtual void Get(const LookupKey& k, void* callback_args,
-                   bool (*callback_func)(void* arg,
-                                         const LazyValue&)) override {
+                   bool (*callback_func)(void* arg, const Slice& key,
+                                         const LazySlice&)) override {
     SkipListRep::Iterator iter(&skip_list_);
     Slice dummy_slice;
     for (iter.Seek(dummy_slice, k.memtable_key().data());
-         iter.Valid() && callback_func(callback_args, iter.pair());
+         iter.Valid() && callback_func(callback_args, iter.key(),
+                                       iter.value());
          iter.Next()) {
     }
   }
@@ -130,20 +131,6 @@ bool InsertKeyValueConcurrently(const Slice& internal_key,
     // REQUIRES: Valid()
     virtual const char* EncodedKey() const override {
       return iter_.key();
-    }
-
-    // Returns the key at the current position.
-    // REQUIRES: Valid()
-    virtual Slice key() const override {
-      assert(Valid());
-      return GetLengthPrefixedSlice(iter_.key());
-    }
-
-    // Reset LazyValue at the current position.
-    // REQUIRES: Valid()
-    virtual LazyValue value() const override {
-      assert(Valid());
-      return DecodeKeyValuePair(iter_.key());
     }
 
     // Advances to the next position.
@@ -215,17 +202,6 @@ bool InsertKeyValueConcurrently(const Slice& internal_key,
       return iter_.key();
     }
 
-
-    virtual Slice key() const override {
-      assert(Valid());
-      return GetLengthPrefixedSlice(iter_.key());
-    }
-
-
-    virtual LazyValue value() const override {
-      assert(Valid());
-      return DecodeKeyValuePair(iter_.key());
-    }
     virtual void Next() override {
       assert(Valid());
 

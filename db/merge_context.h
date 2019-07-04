@@ -12,7 +12,7 @@
 
 namespace rocksdb {
 
-const std::vector<FutureValue> empty_operand_list;
+const std::vector<FutureSlice> empty_operand_list;
 
 // The merge context for merging a user key.
 // When doing a Get(), DB will create such a class and pass it when
@@ -28,33 +28,21 @@ class MergeContext {
   }
 
   // Push a merge operand
-  void PushOperand(const FutureValue& operand_pair) {
+  template<class ...Args>
+  void PushOperand(Args&&...args) {
     Initialize();
     SetDirectionBackward();
 
-    operand_list_->push_back(operand_pair);
-  }
-  // Push a merge operand
-  void PushOperand(const Slice& operand_slice) {
-    Initialize();
-    SetDirectionBackward();
-
-    operand_list_->push_back(FutureValue(operand_slice, false));
+    operand_list_->emplace_back(std::forward<Args>(args)...);
   }
 
   // Push back a merge operand
-  void PushOperandBack(const FutureValue& operand_pair) {
+  template<class ...Args>
+  void PushOperandBack(Args&&...args) {
     Initialize();
     SetDirectionForward();
 
-    operand_list_->push_back(operand_pair);
-  }
-  // Push back a merge operand
-  void PushOperandBack(const Slice& operand_slice) {
-    Initialize();
-    SetDirectionForward();
-
-    operand_list_->push_back(FutureValue(operand_slice, false));
+    operand_list_->emplace_back(std::forward<Args>(args)...);
   }
 
   // return total number of operands in the list
@@ -66,7 +54,7 @@ class MergeContext {
   }
 
   // Get the operand at the index.
-  const FutureValue& GetOperand(int index) {
+  const FutureSlice& GetOperand(int index) {
     assert(operand_list_);
 
     SetDirectionForward();
@@ -74,13 +62,13 @@ class MergeContext {
   }
 
   // Same as GetOperandsDirectionForward
-  const std::vector<FutureValue>& GetOperands() {
+  const std::vector<FutureSlice>& GetOperands() {
     return GetOperandsDirectionForward();
   }
 
   // Return all the operands in the order as they were merged (passed to
   // FullMerge or FullMergeV2)
-  const std::vector<FutureValue>& GetOperandsDirectionForward() {
+  const std::vector<FutureSlice>& GetOperandsDirectionForward() {
     if (!operand_list_) {
       return empty_operand_list;
     }
@@ -91,7 +79,7 @@ class MergeContext {
 
   // Return all the operands in the reversed order relative to how they were
   // merged (passed to FullMerge or FullMergeV2)
-  const std::vector<FutureValue>& GetOperandsDirectionBackward() {
+  const std::vector<FutureSlice>& GetOperandsDirectionBackward() {
     if (!operand_list_) {
       return empty_operand_list;
     }
@@ -103,7 +91,7 @@ class MergeContext {
  private:
   void Initialize() {
     if (!operand_list_) {
-      operand_list_.reset(new std::vector<FutureValue>());
+      operand_list_.reset(new std::vector<FutureSlice>());
     }
   }
 
@@ -122,7 +110,7 @@ class MergeContext {
   }
 
   // List of operands
-  std::unique_ptr<std::vector<FutureValue>> operand_list_;
+  std::unique_ptr<std::vector<FutureSlice>> operand_list_;
   bool operands_reversed_ = true;
 };
 

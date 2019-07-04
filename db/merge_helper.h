@@ -15,7 +15,7 @@
 #include "db/snapshot_checker.h"
 #include "rocksdb/compaction_filter.h"
 #include "rocksdb/env.h"
-#include "rocksdb/slice.h"
+#include "rocksdb/lazy_slice.h"
 #include "util/stop_watch.h"
 
 namespace rocksdb {
@@ -45,11 +45,11 @@ class MergeHelper {
   // - OK: Entries were successfully merged.
   // - Corruption: Merge operator reported unsuccessful merge.
   static Status TimedFullMerge(const MergeOperator* merge_operator,
-                               const Slice& key, const Slice* value,
-                               const std::vector<FutureValue>& operands,
+                               const Slice& key, const FutureSlice* value,
+                               const std::vector<FutureSlice>& operands,
                                std::string* result, Logger* logger,
                                Statistics* statistics, Env* env,
-                               Slice* result_operand = nullptr,
+                               LazySlice* result_operand = nullptr,
                                bool update_num_ops_stats = false);
 
   // Merge entries until we hit
@@ -87,7 +87,7 @@ class MergeHelper {
   // Uses compaction_filter_value_ and compaction_filter_skip_until_ for the
   // optional outputs of compaction filter.
   CompactionFilter::Decision FilterMerge(
-      const Slice& user_key, const LazyValue& pair);
+      const Slice& user_key, const LazySlice& value);
 
   // Query the merge result
   // These are valid until the next MergeUntil call
@@ -115,7 +115,7 @@ class MergeHelper {
   //                So keys().back() was the first key seen by iterator.
   // TODO: Re-style this comment to be like the first one
   const std::deque<std::string>& keys() const { return keys_; }
-  const std::vector<Slice>& values() const {
+  const std::vector<FutureSlice>& values() const {
     return merge_context_.GetOperands();
   }
   uint64_t TotalFilterTime() const { return total_filter_time_; }
@@ -161,7 +161,7 @@ class MergeHelper {
   Statistics* stats_;
 
   bool has_compaction_filter_skip_until_ = false;
-  std::string compaction_filter_value_;
+  FutureSlice compaction_filter_value_;
   InternalKey compaction_filter_skip_until_;
 
   bool IsShuttingDown() {
@@ -181,14 +181,14 @@ class MergeOutputIterator {
   // Advances to the next record in the output.
   void Next();
 
-  Slice key() { return Slice(*it_keys_); }
-  Slice value() { return Slice(*it_values_); }
+  Slice key() { return *it_keys_; }
+  FutureSlice value() { return *it_values_; }
   bool Valid() { return it_keys_ != merge_helper_->keys().rend(); }
 
  private:
   const MergeHelper* merge_helper_;
   std::deque<std::string>::const_reverse_iterator it_keys_;
-  std::vector<Slice>::const_reverse_iterator it_values_;
+  std::vector<FutureSlice>::const_reverse_iterator it_values_;
 };
 
 } // namespace rocksdb

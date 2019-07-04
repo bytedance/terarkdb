@@ -19,7 +19,7 @@
 namespace rocksdb {
 
 FragmentedRangeTombstoneList::FragmentedRangeTombstoneList(
-    std::unique_ptr<InternalIterator> unfragmented_tombstones,
+    std::unique_ptr<InternalIteratorBase<Slice>> unfragmented_tombstones,
     const InternalKeyComparator& icmp, bool for_compaction,
     const std::vector<SequenceNumber>& snapshots, uint64_t _user_tag) {
   user_tag_ = _user_tag;
@@ -52,15 +52,11 @@ FragmentedRangeTombstoneList::FragmentedRangeTombstoneList(
   values.reserve(num_tombstones);
   for (unfragmented_tombstones->SeekToFirst(); unfragmented_tombstones->Valid();
        unfragmented_tombstones->Next()) {
-    auto pair = unfragmented_tombstones->value();
-    status_ = pair.decode();
-    if (!status_.ok()) {
-      return;
-    }
-    keys.emplace_back(pair.key().data(), pair.key().size());
-    values.emplace_back(pair.value().data(), pair.value().size());
+    keys.emplace_back(unfragmented_tombstones->key().data(),
+                      unfragmented_tombstones->key().size());
+    values.emplace_back(unfragmented_tombstones->value().data(),
+                        unfragmented_tombstones->value().size());
   }
-  status_ = unfragmented_tombstones->status();
   // VectorIterator implicitly sorts by key during construction.
   auto iter = std::unique_ptr<VectorIterator>(
       new VectorIterator(std::move(keys), std::move(values), &icmp));
@@ -170,19 +166,15 @@ void FragmentedRangeTombstoneList::FragmentTombstones(
   bool no_tombstones = true;
   for (unfragmented_tombstones->SeekToFirst(); unfragmented_tombstones->Valid();
        unfragmented_tombstones->Next()) {
-    LazyValue pair = unfragmented_tombstones->value();
-    status_ = pair.decode();
-    if (!status_.ok()) {
-      return;
-    }
-    Slice tombstone_start_key = ExtractUserKey(pair.key());
-    SequenceNumber tombstone_seq = GetInternalKeySeqno(pair.key());
+    const Slice& ikey = unfragmented_tombstones->key();
+    Slice tombstone_start_key = ExtractUserKey(ikey);
+    SequenceNumber tombstone_seq = GetInternalKeySeqno(ikey);
     pinned_slices_.emplace_back(tombstone_start_key.data(),
                                 tombstone_start_key.size());
     tombstone_start_key = pinned_slices_.back();
     no_tombstones = false;
 
-    Slice tombstone_end_key = pair.value();
+    Slice tombstone_end_key = unfragmented_tombstones->value();
     pinned_slices_.emplace_back(tombstone_end_key.data(),
                                 tombstone_end_key.size());
     tombstone_end_key = pinned_slices_.back();
