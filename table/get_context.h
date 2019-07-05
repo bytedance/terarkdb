@@ -63,7 +63,7 @@ class GetContext {
   //
   // Returns True if more keys need to be read (due to merges) or
   //         False if the complete value has been found.
-  bool SaveValue(const ParsedInternalKey& parsed_key, const Slice& value,
+  bool SaveValue(const ParsedInternalKey& parsed_key, const LazySlice& value,
                  bool* matched, Cleanable* value_pinner = nullptr);
 
   // Simplified version of the previous function. Should only be used when we

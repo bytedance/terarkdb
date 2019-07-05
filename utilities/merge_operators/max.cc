@@ -41,7 +41,7 @@ class MaxOperator : public MergeOperator {
       }
       if (max_slice->compare(*op_slice) < 0) {
         max = &op;
-        max_slice = op_slice;
+        max_slice = std::move(op_slice);
       }
     }
 
@@ -80,11 +80,11 @@ class MaxOperator : public MergeOperator {
         return false;
       }
       if (max->compare(*operand_slice) < 0) {
-        max = operand;
+        max = std::move(operand_slice);
       }
     }
 
-    new_value->assign(max.data(), max.size());
+    new_value->assign(max->data(), max->size());
     return true;
   }
 

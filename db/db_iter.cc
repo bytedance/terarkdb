@@ -114,8 +114,7 @@ class DBIter final: public Iterator {
          const MutableCFOptions& mutable_cf_options, const Comparator* cmp,
          InternalIterator* iter, SequenceNumber s, bool arena_mode,
          uint64_t max_sequential_skip_in_iterations,
-         ReadCallback* read_callback, DBImpl* db_impl, ColumnFamilyData* cfd,
-         bool allow_blob)
+         ReadCallback* read_callback, DBImpl* db_impl, ColumnFamilyData* cfd)
       : arena_mode_(arena_mode),
         env_(_env),
         logger_(cf_options.info_log),
@@ -136,8 +135,6 @@ class DBIter final: public Iterator {
         read_callback_(read_callback),
         db_impl_(db_impl),
         cfd_(cfd),
-        allow_blob_(allow_blob),
-        is_blob_(false),
         start_seqnum_(read_options.iter_start_seqnum) {
     RecordTick(statistics_, NO_ITERATOR_CREATED);
     prefix_extractor_ = mutable_cf_options.prefix_extractor.get();
@@ -189,10 +186,6 @@ class DBIter final: public Iterator {
       assert(!valid_);
       return status_;
     }
-  }
-  bool IsBlob() const {
-    assert(valid_ && (allow_blob_ || !is_blob_));
-    return is_blob_;
   }
 
   virtual Status GetProperty(std::string prop_name,
@@ -311,8 +304,6 @@ class DBIter final: public Iterator {
   ReadCallback* read_callback_;
   DBImpl* db_impl_;
   ColumnFamilyData* cfd_;
-  bool allow_blob_;
-  bool is_blob_;
   // for diff snapshots we want the lower bound on the seqnum;
   // if this value > 0 iterator will return internal keys
   SequenceNumber start_seqnum_;
@@ -407,8 +398,6 @@ bool DBIter::FindNextUserEntryInternal(bool skipping, bool prefix_check) {
   //                         greater than that,
   //  - none of the above  : saved_key_ can contain anything, it doesn't matter.
   uint64_t num_skipped = 0;
-
-  is_blob_ = false;
 
   do {
     if (!ParseKey(&ikey_)) {
@@ -878,7 +867,6 @@ bool DBIter::FindValueForCurrentKey() {
   }
 
   Status s;
-  is_blob_ = false;
   switch (last_key_entry_type) {
     case kTypeDeletion:
     case kTypeSingleDeletion:
@@ -1336,11 +1324,11 @@ Iterator* NewDBIterator(Env* env, const ReadOptions& read_options,
                         const SequenceNumber& sequence,
                         uint64_t max_sequential_skip_in_iterations,
                         ReadCallback* read_callback, DBImpl* db_impl,
-                        ColumnFamilyData* cfd, bool allow_blob) {
+                        ColumnFamilyData* cfd) {
   DBIter* db_iter = new DBIter(
       env, read_options, cf_options, mutable_cf_options, user_key_comparator,
       internal_iter, sequence, false, max_sequential_skip_in_iterations,
-      read_callback, db_impl, cfd, allow_blob);
+      read_callback, db_impl, cfd);
   return db_iter;
 }
 
@@ -1368,7 +1356,6 @@ inline void ArenaWrappedDBIter::Prev() { db_iter_->Prev(); }
 inline Slice ArenaWrappedDBIter::key() const { return db_iter_->key(); }
 inline Slice ArenaWrappedDBIter::value() const { return db_iter_->value(); }
 inline Status ArenaWrappedDBIter::status() const { return db_iter_->status(); }
-bool ArenaWrappedDBIter::IsBlob() const { return db_iter_->IsBlob(); }
 inline Status ArenaWrappedDBIter::GetProperty(std::string prop_name,
                                               std::string* prop) {
   if (prop_name == "rocksdb.iterator.super-version-number") {
@@ -1388,13 +1375,12 @@ void ArenaWrappedDBIter::Init(Env* env, const ReadOptions& read_options,
                               uint64_t max_sequential_skip_in_iteration,
                               uint64_t version_number,
                               ReadCallback* read_callback, DBImpl* db_impl,
-                              ColumnFamilyData* cfd, bool allow_blob,
-                              bool allow_refresh) {
+                              ColumnFamilyData* cfd, bool allow_refresh) {
   auto mem = arena_.AllocateAligned(sizeof(DBIter));
   db_iter_ = new (mem) DBIter(env, read_options, cf_options, mutable_cf_options,
                               cf_options.user_comparator, nullptr, sequence,
                               true, max_sequential_skip_in_iteration,
-                              read_callback, db_impl, cfd, allow_blob);
+                              read_callback, db_impl, cfd);
   sv_number_ = version_number;
   allow_refresh_ = allow_refresh;
 }
@@ -1418,8 +1404,7 @@ Status ArenaWrappedDBIter::Refresh() {
     SuperVersion* sv = cfd_->GetReferencedSuperVersion(db_impl_->mutex());
     Init(env, read_options_, *(cfd_->ioptions()), sv->mutable_cf_options,
          latest_seq, sv->mutable_cf_options.max_sequential_skip_in_iterations,
-         cur_sv_number, read_callback_, db_impl_, cfd_, allow_blob_,
-         allow_refresh_);
+         cur_sv_number, read_callback_, db_impl_, cfd_, allow_refresh_);
 
     InternalIterator* internal_iter = db_impl_->NewInternalIterator(
         read_options_, cfd_, sv, &arena_, db_iter_->GetRangeDelAggregator(),
@@ -1438,14 +1423,13 @@ ArenaWrappedDBIter* NewArenaWrappedDbIterator(
     const MutableCFOptions& mutable_cf_options, const SequenceNumber& sequence,
     uint64_t max_sequential_skip_in_iterations, uint64_t version_number,
     ReadCallback* read_callback, DBImpl* db_impl, ColumnFamilyData* cfd,
-    bool allow_blob, bool allow_refresh) {
+    bool allow_refresh) {
   ArenaWrappedDBIter* iter = new ArenaWrappedDBIter();
   iter->Init(env, read_options, cf_options, mutable_cf_options, sequence,
              max_sequential_skip_in_iterations, version_number, read_callback,
-             db_impl, cfd, allow_blob, allow_refresh);
+             db_impl, cfd, allow_refresh);
   if (db_impl != nullptr && cfd != nullptr && allow_refresh) {
-    iter->StoreRefreshInfo(read_options, db_impl, cfd, read_callback,
-                           allow_blob);
+    iter->StoreRefreshInfo(read_options, db_impl, cfd, read_callback);
   }
 
   return iter;

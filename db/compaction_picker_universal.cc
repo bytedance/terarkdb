@@ -126,14 +126,16 @@ bool ReadMapElement(MapSstElement& map_element, InternalIterator* iter,
         log_buffer,
         "[%s] UniversalCompactionPicker LazySlice decode fail: %s\n",
         cf_name.c_str(), s.ToString().c_str());
+    return false;
   }
   if (!map_element.Decode(iter->key(), *value)) {
     ROCKS_LOG_BUFFER(
         log_buffer,
         "[%s] UniversalCompactionPicker MapSstElement Decode fail\n",
         cf_name.c_str());
+    return false;
   }
-  return false;
+  return true;
 }
 
 }  // namespace
@@ -343,54 +345,24 @@ Compaction* UniversalCompactionPicker::PickCompaction(
           break;
         }
       }
-      size_t reduce_sorted_run_target =
+      int reduce_sorted_run_target =
           mutable_cf_options.level0_file_num_compaction_trigger +
           ioptions_.num_levels - 1;
       if (has_map_compaction ||
           (c = PickTrivialMoveCompaction(cf_name, mutable_cf_options, vstorage,
                                          log_buffer)) != nullptr) {
-        reduce_sorted_run_target = size_t(-1);
+        reduce_sorted_run_target = std::numeric_limits<int>::max();
       } else if (table_cache_ != nullptr && sorted_runs.size() > 1 &&
-                 sorted_runs.size() <= reduce_sorted_run_target) {
-        size_t level_read_amp_count = 0;
-        for (auto& sr : sorted_runs) {
-          FileMetaData* f;
-          if (sr.level > 0) {
-            if (!vstorage->has_space_amplification(sr.level)) {
-              continue;
-            }
-            auto& level_files = vstorage->LevelFiles(sr.level);
-            if (level_files.size() > 1) {
-              // PickCompositeCompaction for rebuild map
-              reduce_sorted_run_target = size_t(-1);
-              break;
-            }
-            f = level_files.front();
-          } else {
-            if (sr.file->sst_purpose != kMapSst) {
-              continue;
-            }
-            f = sr.file;
-          }
-          std::shared_ptr<const TableProperties> porps;
-          auto s = table_cache_->GetTableProperties(
-              env_options_, *icmp_, f->fd, &porps,
-              mutable_cf_options.prefix_extractor.get(), false);
-          if (s.ok()) {
-            size_t read_amp = GetSstReadAmp(porps->user_collected_properties);
-            if (read_amp > 1) {
-              level_read_amp_count += read_amp;
-            }
-          }
-        }
-        if (level_read_amp_count < reduce_sorted_run_target) {
+                 int(sorted_runs.size()) <= reduce_sorted_run_target) {
+        if (vstorage->read_amplification() < reduce_sorted_run_target) {
           reduce_sorted_run_target = std::max({
-              (size_t)mutable_cf_options.level0_file_num_compaction_trigger,
-              (size_t)ioptions_.num_levels,
-              sorted_runs.size()}) - 1;
+              mutable_cf_options.level0_file_num_compaction_trigger,
+              ioptions_.num_levels,
+              int(sorted_runs.size())}) - 1;
+          assert(reduce_sorted_run_target > 0);
         }
       }
-      if (sorted_runs.size() > reduce_sorted_run_target &&
+      if (int(sorted_runs.size()) > reduce_sorted_run_target &&
           (c = PickCompactionToReduceSortedRuns(
                cf_name, mutable_cf_options, vstorage, score, &sorted_runs,
                reduce_sorted_run_target, log_buffer)) != nullptr) {

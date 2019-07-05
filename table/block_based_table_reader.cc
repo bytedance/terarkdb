@@ -2506,7 +2506,8 @@ Status BlockBasedTable::Get(const ReadOptions& read_options, const Slice& key,
             s = Status::Corruption(Slice());
           }
 
-          if (!get_context->SaveValue(parsed_key, biter.value(), &matched)) {
+          if (!get_context->SaveValue(parsed_key, LazySlice(biter.value()),
+                                      &matched)) {
             done = true;
             break;
           }

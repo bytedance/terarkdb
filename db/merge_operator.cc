@@ -45,7 +45,7 @@ bool MergeOperator::PartialMergeMulti(
      std::string* new_value, Logger* logger) const {
   assert(operand_list.size() >= 2);
   // Simply loop through the operands
-  FutureSlice temp_slice = operand_list[0];
+  FutureSlice temp_slice = MakeReferenceOfFutureSlice(operand_list[0]);
 
   for (size_t i = 1; i < operand_list.size(); ++i) {
     auto& operand = operand_list[i];

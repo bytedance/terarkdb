@@ -510,7 +510,7 @@ class LevelIterator final : public InternalIterator {
   }
   virtual LazySlice value() const override {
     assert(Valid());
-    return file_iter_.iter()->value();
+    return file_iter_.value();
   }
   virtual FutureSlice future_value() const override {
     assert(Valid());

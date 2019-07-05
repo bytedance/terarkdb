@@ -100,7 +100,11 @@ class MockTableIterator : public InternalIterator {
 
   Slice key() const override { return Slice(itr_->first); }
 
-  Slice value() const override { return Slice(itr_->second); }
+  LazySlice value() const override { return LazySlice(itr_->second); }
+
+  FutureSlice future_value() const override {
+    return FutureSlice(itr_->second);
+  }
 
   Status status() const override { return Status::OK(); }
 

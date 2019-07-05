@@ -1510,9 +1510,9 @@ class MemTableInserter : public WriteBatch::Handler {
       std::string new_value;
 
       Status merge_status = MergeHelper::TimedFullMerge(
-          merge_operator, key, &get_value, {FutureSlice(value, true)},
-          &new_value, moptions->info_log, moptions->statistics,
-          Env::Default());
+          merge_operator, key, &get_value,
+          {FutureSlice(value, false/* copy */)}, &new_value,
+          moptions->info_log, moptions->statistics, Env::Default());
 
       if (!merge_status.ok()) {
         // Failed to merge!

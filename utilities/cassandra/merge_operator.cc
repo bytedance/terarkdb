@@ -24,13 +24,20 @@ bool CassandraValueMergeOperator::FullMergeV2(
   merge_out->new_value.clear();
   std::vector<RowValue> row_values;
   if (merge_in.existing_value) {
+    LazySlice value = merge_in.existing_value->get();
+    if (!value.decode().ok()) {
+      return false;
+    }
     row_values.push_back(
-      RowValue::Deserialize(merge_in.existing_value->data(),
-                            merge_in.existing_value->size()));
+        RowValue::Deserialize(value->data(), value->size()));
   }
 
   for (auto& operand : merge_in.operand_list) {
-    row_values.push_back(RowValue::Deserialize(operand.data(), operand.size()));
+    LazySlice value = operand.get();
+    if (!value.decode().ok()) {
+      return false;
+    }
+    row_values.push_back(RowValue::Deserialize(value->data(), value->size()));
   }
 
   RowValue merged = RowValue::Merge(std::move(row_values));
@@ -42,7 +49,7 @@ bool CassandraValueMergeOperator::FullMergeV2(
 }
 
 bool CassandraValueMergeOperator::PartialMergeMulti(
-    const Slice& /*key*/, const std::deque<Slice>& operand_list,
+    const Slice& /*key*/, const std::vector<FutureSlice>& operand_list,
     std::string* new_value, Logger* /*logger*/) const {
   // Clear the *new_value for writing.
   assert(new_value);
@@ -50,7 +57,11 @@ bool CassandraValueMergeOperator::PartialMergeMulti(
 
   std::vector<RowValue> row_values;
   for (auto& operand : operand_list) {
-    row_values.push_back(RowValue::Deserialize(operand.data(), operand.size()));
+    LazySlice value = operand.get();
+    if (!value.decode().ok()) {
+      return false;
+    }
+    row_values.push_back(RowValue::Deserialize(value->data(), value->size()));
   }
   RowValue merged = RowValue::Merge(std::move(row_values));
   new_value->reserve(merged.Size());

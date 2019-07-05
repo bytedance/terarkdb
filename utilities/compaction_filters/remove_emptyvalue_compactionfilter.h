@@ -17,7 +17,7 @@ namespace rocksdb {
 class RemoveEmptyValueCompactionFilter : public CompactionFilter {
  public:
     const char* Name() const override;
-    bool Filter(int level, const Slice& key, const LazySlice& existing_value,
+    bool Filter(int level, const Slice& key, const Slice& existing_value,
                 std::string* new_value, bool* value_changed) const override;
 };
 }  // namespace rocksdb

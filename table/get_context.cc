@@ -157,7 +157,7 @@ void GetContext::ReportCounters() {
 }
 
 bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
-                           const Slice& value, bool* matched,
+                           const LazySlice& value, bool* matched,
                            Cleanable* value_pinner) {
   assert(matched);
   assert((state_ != kMerge && parsed_key.type != kTypeMerge) ||
@@ -174,7 +174,13 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
       return true;  // to continue to the next seq
     }
 
-    appendToReplayLog(replay_log_, parsed_key.type, value);
+    if (replay_log_) {
+      if (!value.decode().ok()) {
+        state_ = kCorrupt;
+        return false;
+      }
+      appendToReplayLog(replay_log_, parsed_key.type, *value);
+    }
 
     if (seq_ != nullptr) {
       // Set the sequence number if it is uninitialized
@@ -197,19 +203,24 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
         if (kNotFound == state_) {
           state_ = kFound;
           if (LIKELY(pinnable_val_ != nullptr)) {
+            if (!value.decode().ok()) {
+              state_ = kCorrupt;
+              return false;
+            }
             if (LIKELY(value_pinner != nullptr)) {
               // If the backing resources for the value are provided, pin them
-              pinnable_val_->PinSlice(value, value_pinner);
+              pinnable_val_->PinSlice(*value, value_pinner);
             } else {
               // Otherwise copy the value
-              pinnable_val_->PinSelf(value);
+              pinnable_val_->PinSelf(*value);
             }
           }
         } else if (kMerge == state_) {
           assert(merge_operator_ != nullptr);
           state_ = kFound;
           if (LIKELY(pinnable_val_ != nullptr)) {
-            FutureSlice future_value(value, true);
+            FutureSlice future_value =
+                MakeFutureSliceWrapperOfLazySlice(value);
             Status merge_status = MergeHelper::TimedFullMerge(
                 merge_operator_, user_key_, &future_value,
                 merge_context_->GetOperands(), pinnable_val_->GetSelf(),
@@ -294,8 +305,8 @@ void replayGetContextLog(const Slice& replay_log, const Slice& user_key,
     // Since SequenceNumber is not stored and unknown, we will use
     // kMaxSequenceNumber.
     get_context->SaveValue(
-        ParsedInternalKey(user_key, kMaxSequenceNumber, type), value,
-        &dont_care, value_pinner);
+        ParsedInternalKey(user_key, kMaxSequenceNumber, type),
+        LazySlice(value), &dont_care, value_pinner);
   }
 #else   // ROCKSDB_LITE
   (void)replay_log;

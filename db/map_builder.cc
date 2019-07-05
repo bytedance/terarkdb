@@ -1118,7 +1118,7 @@ struct MapElementIterator : public InternalIterator {
   }
   Slice key() const override { return key_slice; }
   LazySlice value() const override {
-    return MakeLazySliceReference(value_slice);
+    return MakeReferenceOfLazySlice(value_slice);
   }
   FutureSlice future_value() const override {
     return FutureSlice(value_slice);

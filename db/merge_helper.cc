@@ -99,7 +99,7 @@ Status MergeHelper::TimedFullMerge(const MergeOperator* merge_operator,
         result->assign(slice->data(), slice->size());
       }
     } else if (result_operand != nullptr) {
-      result_operand->reset();
+      result_operand->reset(*result);
     }
 
     RecordTick(statistics, MERGE_OPERATION_TOTAL_TIME,
@@ -229,7 +229,7 @@ Status MergeHelper::MergeUntil(InternalIterator* iter,
         keys_.clear();
         merge_context_.Clear();
         keys_.emplace_front(std::move(original_key));
-        merge_context_.PushOperand(merge_result);
+        merge_context_.PushOperand(std::move(merge_result));
       }
 
       // move iter to the next entry
@@ -279,7 +279,7 @@ Status MergeHelper::MergeUntil(InternalIterator* iter,
         } else {  // kChangeValue
           // Compaction filter asked us to change the operand from value_slice
           // to compaction_filter_value_.
-          merge_context_.PushOperand(compaction_filter_value_);
+          merge_context_.PushOperand(std::move(compaction_filter_value_));
         }
       } else if (filter == CompactionFilter::Decision::kRemoveAndSkipUntil) {
         // Compaction filter asked us to remove this key altogether
@@ -333,7 +333,7 @@ Status MergeHelper::MergeUntil(InternalIterator* iter,
       keys_.clear();
       merge_context_.Clear();
       keys_.emplace_front(std::move(original_key));
-      merge_context_.PushOperand(merge_result);
+      merge_context_.PushOperand(std::move(merge_result));
     }
   } else {
     // We haven't seen the beginning of the key nor a Put/Delete.
@@ -357,7 +357,7 @@ Status MergeHelper::MergeUntil(InternalIterator* iter,
         // Merging of operands (associative merge) was successful.
         // Replace operands with the merge result
         merge_context_.Clear();
-        merge_context_.PushOperand(merge_result);
+        merge_context_.PushOperand(std::move(merge_result));
         keys_.erase(keys_.begin(), keys_.end() - 1);
       }
     }

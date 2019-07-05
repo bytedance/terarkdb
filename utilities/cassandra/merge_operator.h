@@ -24,7 +24,7 @@ public:
                           MergeOperationOutput* merge_out) const override;
 
  virtual bool PartialMergeMulti(const Slice& key,
-                                const std::deque<Slice>& operand_list,
+                                const std::vector<FutureSlice>& operand_list,
                                 std::string* new_value,
                                 Logger* logger) const override;
 
@@ -32,7 +32,7 @@ public:
 
  virtual bool AllowSingleOperand() const override { return true; }
 
- virtual bool ShouldMerge(const std::vector<Slice>& operands) const override {
+ virtual bool ShouldMerge(const std::vector<FutureSlice>& operands) const override {
    return operands_limit_ > 0 && operands.size() >= operands_limit_;
  }
 

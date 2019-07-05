@@ -150,7 +150,7 @@ WriteBatchWithIndexInternal::Result WriteBatchWithIndexInternal::GetFromBatch(
       }
       case kMergeRecord: {
         result = WriteBatchWithIndexInternal::Result::kMergeInProgress;
-        merge_context->PushOperand(entry.value);
+        merge_context->PushOperand(entry.value, false/* copy */);
         break;
       }
       case kDeleteRecord:
@@ -207,7 +207,8 @@ WriteBatchWithIndexInternal::Result WriteBatchWithIndexInternal::GetFromBatch(
         Logger* logger = immuable_db_options.info_log.get();
 
         if (merge_operator) {
-          *s = MergeHelper::TimedFullMerge(merge_operator, key, &entry_value,
+          FutureSlice future_slice(entry_value, false/* copy */);
+          *s = MergeHelper::TimedFullMerge(merge_operator, key, &future_slice,
                                            merge_context->GetOperands(), value,
                                            logger, statistics, env);
         } else {

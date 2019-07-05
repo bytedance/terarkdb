@@ -690,7 +690,7 @@ class BlockBasedTableIterator<TBlockIter, LazySlice>
   }
   FutureSlice future_value() const override {
     assert(Valid());
-    return FutureSlice(block_iter_.value(), false, table_->FileNumber());
+    return FutureSlice(block_iter_.value(), true/* copy */, table_->FileNumber());
   }
 };
 

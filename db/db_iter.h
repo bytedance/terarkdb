@@ -34,7 +34,7 @@ extern Iterator* NewDBIterator(
     const Comparator* user_key_comparator, InternalIterator* internal_iter,
     const SequenceNumber& sequence, uint64_t max_sequential_skip_in_iterations,
     ReadCallback* read_callback, DBImpl* db_impl = nullptr,
-    ColumnFamilyData* cfd = nullptr, bool allow_blob = false);
+    ColumnFamilyData* cfd = nullptr);
 
 // A wrapper iterator which wraps DB Iterator and the arena, with which the DB
 // iterator is supposed be allocated. This class is used as an entry point of
@@ -64,7 +64,6 @@ class ArenaWrappedDBIter : public Iterator {
   virtual Slice value() const override;
   virtual Status status() const override;
   virtual Status Refresh() override;
-  bool IsBlob() const;
 
   virtual Status GetProperty(std::string prop_name, std::string* prop) override;
 
@@ -74,16 +73,14 @@ class ArenaWrappedDBIter : public Iterator {
             const SequenceNumber& sequence,
             uint64_t max_sequential_skip_in_iterations, uint64_t version_number,
             ReadCallback* read_callback, DBImpl* db_impl, ColumnFamilyData* cfd,
-            bool allow_blob, bool allow_refresh);
+            bool allow_refresh);
 
   void StoreRefreshInfo(const ReadOptions& read_options, DBImpl* db_impl,
-                        ColumnFamilyData* cfd, ReadCallback* read_callback,
-                        bool allow_blob) {
+                        ColumnFamilyData* cfd, ReadCallback* read_callback) {
     read_options_ = read_options;
     db_impl_ = db_impl;
     cfd_ = cfd;
     read_callback_ = read_callback;
-    allow_blob_ = allow_blob;
   }
 
  private:
@@ -94,7 +91,6 @@ class ArenaWrappedDBIter : public Iterator {
   DBImpl* db_impl_ = nullptr;
   ReadOptions read_options_;
   ReadCallback* read_callback_;
-  bool allow_blob_ = false;
   bool allow_refresh_ = true;
 };
 
@@ -107,6 +103,5 @@ extern ArenaWrappedDBIter* NewArenaWrappedDbIterator(
     const MutableCFOptions& mutable_cf_options, const SequenceNumber& sequence,
     uint64_t max_sequential_skip_in_iterations, uint64_t version_number,
     ReadCallback* read_callback, DBImpl* db_impl = nullptr,
-    ColumnFamilyData* cfd = nullptr, bool allow_blob = false,
-    bool allow_refresh = true);
+    ColumnFamilyData* cfd = nullptr, bool allow_refresh = true);
 }  // namespace rocksdb

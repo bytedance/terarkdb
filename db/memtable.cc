@@ -417,7 +417,7 @@ class MemTableIterator : public MemTableIteratorBase<LazySlice> {
     if (value_pinned_ && iter_->IsValuePinned()) {
       return iter_->future_value();
     } else {
-      return FutureSlice(iter_->value(), true);
+      return FutureSlice(iter_->value(), true/* copy */);
     }
   }
 };
@@ -656,7 +656,8 @@ static bool SaveValue(void* arg, const Slice& internal_key,
         *(s->status) = Status::OK();
         if (*(s->merge_in_progress)) {
           if (s->value != nullptr) {
-            FutureSlice future_value(value, false);
+            FutureSlice future_value =
+                MakeFutureSliceWrapperOfLazySlice(value);
             *(s->status) = MergeHelper::TimedFullMerge(
                 merge_operator, s->key->user_key(), &future_value,
                 merge_context->GetOperands(), s->value, s->logger,

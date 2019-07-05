@@ -27,14 +27,16 @@ namespace rocksdb {
 class LazySliceMeta;
 class FutureSliceMeta;
 
-extern const LazySliceMeta* InvalidLazySliceMeta();
+extern const LazySliceMeta* EmptyLazySliceMeta();
 
 class LazySlice {
 protected:
   mutable Slice slice_;
+  mutable void *temp_;
   Slice raw_;
   const LazySliceMeta* meta_;
-  const void *arg0_, *arg1_;
+  void *arg_;
+  const void *const_arg_;
   uint64_t file_number_;
 
   void destroy();
@@ -44,7 +46,7 @@ public:
   explicit LazySlice(const Slice& _slice,
                      uint64_t _file_number = uint64_t(-1));
   LazySlice(const Slice& _raw, const LazySliceMeta* _meta,
-            const void* _arg0 = nullptr, const void* _arg1 = nullptr,
+            void* _arg = nullptr, const void* _const_arg = nullptr,
             uint64_t _file_number = uint64_t(-1));
   LazySlice(LazySlice&& _slice, uint64_t _file_number);
   LazySlice(LazySlice&& _slice) noexcept ;
@@ -62,16 +64,16 @@ public:
   void reset();
   void reset(const Slice& _slice, uint64_t _file_number = uint64_t(-1));
   void reset(const Slice& _raw, const LazySliceMeta* _meta,
-             const void* _arg0, const void* _arg1,
+             void* arg, const void* _const_arg,
              uint64_t _file_number = uint64_t(-1));
   void reset(LazySlice&& _slice, uint64_t _file_number);
 
-  bool valid() const { return meta_ != InvalidLazySliceMeta(); }
+  void clear() { reset(Slice()); }
+  bool valid() const { return meta_ != nullptr; }
   const Slice& raw() const { return raw_; }
   const LazySliceMeta *meta() const { return meta_; }
-  std::pair<const void*, const void*> args() const {
-    return {arg0_, arg1_};
-  }
+  void* arg() const { return arg_; }
+  const void* const_arg() const { return const_arg_; }
   uint64_t file_number() const { return file_number_; }
 
   const Slice* get() const { assert(slice_.valid()); return &slice_; }
@@ -81,8 +83,6 @@ public:
   Status decode() const;
 };
 
-extern LazySlice MakeLazySliceReference(const LazySlice& slice);
-
 class FutureSliceMeta {
 public:
   virtual LazySlice to_lazy_slice(const Slice& storage) const = 0;
@@ -91,8 +91,8 @@ public:
 
 class FutureSlice {
 protected:
-  std::string storage_;
   const FutureSliceMeta* meta_;
+  std::string storage_;
 public:
   FutureSlice() : meta_(nullptr) {}
   explicit FutureSlice(const Slice& slice, bool copy = true,
@@ -100,12 +100,12 @@ public:
       : meta_(nullptr) {
     reset(slice, copy, file_number);
   }
-  explicit FutureSlice(const LazySlice& slice, bool copy = true)
+  explicit FutureSlice(const LazySlice& slice, bool copy = false)
       : meta_(nullptr) {
     reset(slice, copy);
   }
-  FutureSlice(std::string &&storage, const FutureSliceMeta* meta)
-      : storage_(std::move(storage)), meta_(meta) {}
+  FutureSlice(const FutureSliceMeta* meta, std::string &&storage)
+      : meta_(meta), storage_(std::move(storage)) {}
   FutureSlice(FutureSlice&&) = default;
   FutureSlice(const FutureSlice&) = default;
 
@@ -113,16 +113,16 @@ public:
   FutureSlice& operator = (const FutureSlice&) = default;
 
   void reset() { storage_.clear(); meta_ = nullptr; }
-  void reset(const Slice& slice, bool pinned = false,
+  void reset(const Slice& slice, bool copy = true,
              uint64_t file_number = uint64_t(-1));
-  void reset(const LazySlice& slice, bool copy = true);
-  void reset(std::string &&storage, const FutureSliceMeta* meta) {
-    storage_ = std::move(storage);
+  void reset(const LazySlice& slice, bool copy = false);
+  void reset(const FutureSliceMeta* meta, std::string &&storage) {
     meta_ = meta;
+    storage_ = std::move(storage);
   }
 
   std::string* buffer();
-  void clear() { *this = FutureSlice(Slice(), false); }
+  void clear() { buffer()->clear(); }
   bool valid() const { return meta_ != nullptr; }
 
   LazySlice get() const{
@@ -133,98 +133,109 @@ public:
 
 class LazySliceMeta {
 public:
-  virtual void destroy(Slice& /*raw*/, const void* /*_arg0*/,
-                       const void* /*_arg1*/) const {}
-  virtual Status decode(const Slice& raw, const void* _arg0,
-                        const void* _arg1, Slice* value) const = 0;
+  virtual void destroy(Slice& /*raw*/, void* /*arg*/,
+                       const void* /*const_arg*/, void* /*temp*/) const {}
+  virtual Status decode(const Slice& raw, void* arg, const void* const_arg,
+                        void*& /*temp*/, Slice* value) const = 0;
   virtual Status to_future(const LazySlice& /*slice*/,
                            FutureSlice* /*future_slice*/) const {
-    return Status::NotSupported("LazySlice to FutureSlice");
+    return Status::NotSupported();
   }
   virtual ~LazySliceMeta() = default;
 };
 
 inline LazySlice::LazySlice()
     : slice_(Slice::Invalid()),
+      temp_(nullptr),
       raw_(Slice::Invalid()),
-      meta_(InvalidLazySliceMeta()),
-      arg0_(nullptr),
-      arg1_(nullptr),
+      meta_(EmptyLazySliceMeta()),
+      arg_(nullptr),
+      const_arg_(nullptr),
       file_number_(uint64_t(-1)) {}
 
 inline LazySlice::LazySlice(const Slice& _slice, uint64_t _file_number)
     : slice_(_slice),
+      temp_(nullptr),
       raw_(Slice::Invalid()),
-      meta_(nullptr),
-      arg0_(nullptr),
-      arg1_(nullptr),
+      meta_(EmptyLazySliceMeta()),
+      arg_(nullptr),
+      const_arg_(nullptr),
       file_number_(_file_number) {}
 
-inline LazySlice::LazySlice(const Slice& _raw,
-                            const LazySliceMeta* _meta,
-                            const void* _arg0, const void* _arg1,
+inline LazySlice::LazySlice(const Slice& _raw, const LazySliceMeta* _meta,
+                            void* _arg, const void* _const_arg,
                             uint64_t _file_number)
     : slice_(Slice::Invalid()),
+      temp_(nullptr),
       raw_(_raw),
       meta_(_meta),
-      arg0_(_arg0),
-      arg1_(_arg1),
-      file_number_(_file_number) {}
+      arg_(_arg),
+      const_arg_(_const_arg),
+      file_number_(_file_number) {
+  assert(_meta != nullptr);
+}
 
 inline LazySlice::LazySlice(LazySlice&& _slice, uint64_t _file_number)
     : slice_(_slice.slice_),
+      temp_(_slice.temp_),
       raw_(_slice.raw_),
       meta_(_slice.meta_),
-      arg0_(_slice.arg0_),
-      arg1_(_slice.arg1_),
+      arg_(_slice.arg_),
+      const_arg_(_slice.const_arg_),
       file_number_(_file_number) {
   _slice.meta_ = nullptr;
 }
 
 inline LazySlice::LazySlice(LazySlice&& _slice) noexcept
     : slice_(_slice.slice_),
+      temp_(_slice.temp_),
       raw_(_slice.raw_),
       meta_(_slice.meta_),
-      arg0_(_slice.arg0_),
-      arg1_(_slice.arg1_),
+      arg_(_slice.arg_),
+      const_arg_(_slice.const_arg_),
       file_number_(_slice.file_number_) {
   _slice.meta_ = nullptr;
 }
 
 inline void LazySlice::destroy() {
   if (meta_ != nullptr) {
-    meta_->destroy(raw_, arg0_, arg1_);
+    meta_->destroy(raw_, arg_, const_arg_, temp_);
   }
 }
 
 inline void LazySlice::reset() {
   destroy();
   slice_ = Slice::Invalid();
+  temp_ = nullptr;
   raw_ = Slice::Invalid();
-  arg0_ = arg1_ = nullptr;
-  meta_ = InvalidLazySliceMeta();
+  arg_ = nullptr;
+  const_arg_ = nullptr;
+  meta_ = nullptr;
   file_number_ = uint64_t(-1);
 }
 
 inline void LazySlice::reset(const Slice& _slice, uint64_t _file_number) {
   destroy();
   slice_ = _slice;
+  temp_ = nullptr;
   raw_ = Slice::Invalid();
-  meta_ = nullptr;
-  arg0_ = arg1_ = nullptr;
+  meta_ = EmptyLazySliceMeta();
+  arg_ = nullptr;
+  const_arg_ = nullptr;
   file_number_ = _file_number;
 }
 
-inline void LazySlice::reset(const Slice& _raw,
-                             const LazySliceMeta* _meta,
-                             const void* _arg0, const void* _arg1,
+inline void LazySlice::reset(const Slice& _raw, const LazySliceMeta* _meta,
+                             void* _arg, const void* _const_arg,
                              uint64_t _file_number) {
+  assert(_meta != nullptr);
   destroy();
   slice_ = Slice::Invalid();
+  temp_ = nullptr;
   raw_ = _raw;
   meta_ = _meta;
-  arg0_ = _arg0;
-  arg1_ = _arg1;
+  arg_ = _arg;
+  const_arg_ = _const_arg;
   file_number_ = _file_number;
 }
 
@@ -232,10 +243,11 @@ inline void LazySlice::reset(LazySlice&& _slice, uint64_t _file_number) {
   assert(this != &_slice);
   destroy();
   slice_ = _slice.slice_;
+  temp_ = _slice.temp_;
   raw_ = _slice.raw_;
   meta_ = _slice.meta_;
-  arg0_ = _slice.arg0_;
-  arg1_ = _slice.arg1_;
+  arg_ = _slice.arg_;
+  const_arg_ = _slice.const_arg_;
   file_number_ = _file_number;
   _slice.meta_ = nullptr;
 }
@@ -247,7 +259,13 @@ inline Status LazySlice::decode() const {
   if (meta_ == nullptr) {
     return Status::Corruption("Invalid LazySlice");
   }
-  return meta_->decode(raw_, arg0_, arg1_, &slice_);
+  return meta_->decode(raw_, arg_, const_arg_, temp_, &slice_);
 }
+
+extern LazySlice MakeReferenceOfLazySlice(const LazySlice& slice);
+extern FutureSlice MakeReferenceOfFutureSlice(const FutureSlice& slice);
+extern FutureSlice MakeRemoveSuffixReferenceOfFutureSlice(
+    const FutureSlice& slice, size_t fixed_len);
+extern FutureSlice MakeFutureSliceWrapperOfLazySlice(const LazySlice& slice);
 
 }  // namespace rocksdb

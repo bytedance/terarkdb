@@ -46,7 +46,7 @@ class TwoLevelIndexIterator : public InternalIteratorBase<BlockHandle> {
   }
   virtual BlockHandle value() const override {
     assert(Valid());
-    return second_level_iter_.iter()->value();
+    return second_level_iter_.value();
   }
   virtual Status status() const override {
     if (!first_level_iter_.status().ok()) {
@@ -183,7 +183,7 @@ void TwoLevelIndexIterator::InitDataBlock() {
   if (!first_level_iter_.Valid()) {
     SetSecondLevelIterator(nullptr);
   } else {
-    BlockHandle handle = first_level_iter_.iter()->value();
+    BlockHandle handle = first_level_iter_.value();
     if (second_level_iter_.iter() != nullptr &&
         !second_level_iter_.status().IsIncomplete() &&
         handle.offset() == data_block_handle_.offset()) {

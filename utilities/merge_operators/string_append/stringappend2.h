@@ -28,7 +28,7 @@ class StringAppendTESTOperator : public MergeOperator {
                            MergeOperationOutput* merge_out) const override;
 
   virtual bool PartialMergeMulti(const Slice& key,
-                                 const std::deque<Slice>& operand_list,
+                                 const std::vector<FutureSlice>& operand_list,
                                  std::string* new_value, Logger* logger) const
       override;
 

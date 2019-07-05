@@ -947,20 +947,19 @@ Status WriteBatchWithIndex::GetFromBatchAndDB(
       Env* env = immuable_db_options.env;
       Logger* logger = immuable_db_options.info_log.get();
 
-      Slice* merge_data;
+      FutureSlice* merge_data_ptr;
+      FutureSlice merge_data;
       if (s.ok()) {
-        merge_data = pinnable_val;
+        merge_data.reset(*pinnable_val, false/* copy */);
+        merge_data_ptr = &merge_data;
       } else {  // Key not present in db (s.IsNotFound())
-        merge_data = nullptr;
+        merge_data_ptr = nullptr;
       }
 
       if (merge_operator) {
-        std::string merge_result;
         s = MergeHelper::TimedFullMerge(
-            merge_operator, key, merge_data, merge_context.GetOperands(),
-            &merge_result, logger, statistics, env);
-        pinnable_val->Reset();
-        *pinnable_val->GetSelf() = std::move(merge_result);
+            merge_operator, key, merge_data_ptr, merge_context.GetOperands(),
+            pinnable_val->GetSelf(), logger, statistics, env);
         pinnable_val->PinSelf();
       } else {
         s = Status::InvalidArgument("Options::merge_operator must be set");

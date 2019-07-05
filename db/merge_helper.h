@@ -182,7 +182,7 @@ class MergeOutputIterator {
   void Next();
 
   Slice key() { return *it_keys_; }
-  FutureSlice value() { return *it_values_; }
+  const FutureSlice& value() { return *it_values_; }
   bool Valid() { return it_keys_ != merge_helper_->keys().rend(); }
 
  private:

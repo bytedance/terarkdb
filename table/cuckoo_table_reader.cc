@@ -173,7 +173,7 @@ Status CuckooTableReader::Get(const ReadOptions& /*readOptions*/,
           ParsedInternalKey found_ikey;
           ParseInternalKey(full_key, &found_ikey);
           bool dont_care __attribute__((__unused__));
-          get_context->SaveValue(found_ikey, value, &dont_care);
+          get_context->SaveValue(found_ikey, LazySlice(value), &dont_care);
         }
         // We don't support merge operations. So, we return here.
         return Status::OK();
@@ -378,7 +378,7 @@ LazySlice CuckooTableIterator::value() const {
 
 FutureSlice CuckooTableIterator::future_value() const {
   assert(Valid());
-  return FutureSlice(curr_value_, false, reader_->file_number_);
+  return FutureSlice(curr_value_, true/* copy */, reader_->file_number_);
 }
 
 InternalIterator* CuckooTableReader::NewIterator(

@@ -28,7 +28,7 @@ class CompactionIteratorToInternalIterator : public InternalIterator {
   virtual void Prev() override { abort(); }  // do not support
   virtual Slice key() const override { return c_iter_->key(); }
   virtual LazySlice value() const override {
-    return MakeLazySliceReference(c_iter_->value());
+    return MakeReferenceOfLazySlice(c_iter_->value());
   }
   virtual FutureSlice future_value() const override {
     assert(false);
@@ -265,7 +265,7 @@ void CompactionIterator::InvokeFilterIfNeeded(bool* need_skip,
       ikey_.type = kTypeDeletion;
       current_key_.UpdateInternalKey(ikey_.sequence, kTypeDeletion);
       // no value associated with delete
-      value_.reset(Slice());
+      value_.clear();
       iter_stats_.num_record_drop_user++;
     } else if (filter == CompactionFilter::Decision::kChangeValue) {
       value_ = compaction_filter_value_.get();
@@ -405,7 +405,7 @@ void CompactionIterator::NextFromInput() {
       assert(ikey_.type == kTypeValue);
       assert(current_user_key_snapshot_ == last_snapshot);
 
-      value_.reset(Slice());
+      value_.clear();
       valid_ = true;
       clear_and_output_next_key_ = false;
     } else if (ikey_.type == kTypeSingleDeletion) {

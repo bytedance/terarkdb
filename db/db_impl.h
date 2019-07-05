@@ -157,7 +157,6 @@ class DBImpl : public DB {
                                       ColumnFamilyData* cfd,
                                       SequenceNumber snapshot,
                                       ReadCallback* read_callback,
-                                      bool allow_blob = false,
                                       bool allow_refresh = true);
 
   virtual const Snapshot* GetSnapshot() override;

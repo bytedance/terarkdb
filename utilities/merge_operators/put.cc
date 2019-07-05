@@ -33,19 +33,29 @@ class PutOperator : public MergeOperator {
     return true;
   }
 
-  virtual bool PartialMerge(const Slice& /*key*/, const Slice& /*left_operand*/,
-                            const Slice& right_operand, std::string* new_value,
+  virtual bool PartialMerge(const Slice& /*key*/,
+                            const FutureSlice& /*left_operand*/,
+                            const FutureSlice& right_operand,
+                            std::string* new_value,
                             Logger* /*logger*/) const override {
-    new_value->assign(right_operand.data(), right_operand.size());
+    LazySlice right = right_operand.get();
+    if (!right.decode().ok()) {
+      return false;
+    }
+    new_value->assign(right->data(), right->size());
     return true;
   }
 
   using MergeOperator::PartialMergeMulti;
   virtual bool PartialMergeMulti(const Slice& /*key*/,
-                                 const std::deque<Slice>& operand_list,
+                                 const std::vector<FutureSlice>& operand_list,
                                  std::string* new_value,
                                  Logger* /*logger*/) const override {
-    new_value->assign(operand_list.back().data(), operand_list.back().size());
+    LazySlice operand = operand_list.back().get();
+    if (!operand.decode().ok()) {
+      return false;
+    }
+    new_value->assign(operand->data(), operand->size());
     return true;
   }
 
@@ -67,7 +77,7 @@ class PutOperatorV2 : public PutOperator {
                            MergeOperationOutput* merge_out) const override {
     // Put basically only looks at the current/latest value
     assert(!merge_in.operand_list.empty());
-    merge_out->existing_operand = merge_in.operand_list.back();
+    merge_out->existing_operand = &merge_in.operand_list.back();
     return true;
   }
 };

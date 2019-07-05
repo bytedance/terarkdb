@@ -275,7 +275,7 @@ class MergingIterator : public InternalIterator {
 
   virtual LazySlice value() const override {
     assert(Valid());
-    return current_->iter()->value();
+    return current_->value();
   }
 
   virtual FutureSlice future_value() const override {
