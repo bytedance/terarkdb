@@ -66,7 +66,7 @@ public:
 
   ~TerarkZipTableBuilder();
 
-  void Add(const KeyValuePair& pair) override;
+  void Add(const Slice& key, const LazySlice& value) override;
   Status status() const override { return status_; }
   Status Finish() override;
   Status AbortFinish(const std::exception& ex);

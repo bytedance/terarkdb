@@ -249,7 +249,6 @@ protected:
   size_t                  value_count_;
   size_t                  value_index_;
   Status                  status_;
-  PinnedIteratorsManager* pinned_iters_mgr_;
   TerarkContext           ctx_;
   TerarkContext*          ctx_ptr_;
   valvec<byte_t>          iter_storage_;
@@ -271,7 +270,6 @@ public:
     } else {
       iter_ = nullptr;
     }
-    pinned_iters_mgr_ = NULL;
     key_tag_ = 0;
     key_ptr_ = nullptr;
     key_length_ = 0;
@@ -285,10 +283,6 @@ public:
       CallDestructor(iter_);
     }
     ContextBuffer(std::move(iter_storage_), ctx_ptr_);
-  }
-
-  void SetPinnedItersMgr(PinnedIteratorsManager* pinned_iters_mgr) override {
-    pinned_iters_mgr_ = pinned_iters_mgr;
   }
 
   bool Valid() const override {
@@ -367,20 +361,20 @@ public:
     return Slice((const char*)key_ptr_, key_length_);
   }
 
-  KeyValuePair pair() const override {
+  LazySlice value() const override {
     assert(iter_->Valid());
-    return KeyValuePair(Slice((const char*)key_ptr_, key_length_), user_value_, table_reader_options_->file_number);
+    // TODO support real lazy unzip
+    return LazySlice(user_value_, table_reader_options_->file_number);
+  }
+
+  FutureSlice future_value() const override {
+    assert(iter_->Valid());
+    // TODO support real future pair
+    return FutureSlice(user_value_, true, table_reader_options_->file_number);
   }
 
   Status status() const override {
     return status_;
-  }
-
-  bool IsKeyPinned() const override {
-    return pinned_iters_mgr_ && pinned_iters_mgr_->PinningEnabled();
-  }
-  bool IsValuePinned() const override {
-    return pinned_iters_mgr_ && pinned_iters_mgr_->PinningEnabled();
   }
 
 protected:
@@ -480,18 +474,11 @@ protected:
     else
       return iter_->Next();
   }
-  void TryPinBuffer(valvec<byte_t>& buf) {
-    if (pinned_iters_mgr_ && pinned_iters_mgr_->PinningEnabled()) {
-      pinned_iters_mgr_->PinPtr(buf.data(), free);
-      buf.risk_release_ownership();
-    }
-  }
   bool UnzipIterRecord(bool hasRecord) {
     if (hasRecord) {
       auto& value_buf = ValueBuf();
       fstring user_key = iter_->key();
       try {
-        TryPinBuffer(ValueBuf());
         size_t recId = iter_->id();
         zip_value_type_ = subReader_->type_.size()
                           ? ZipValueType(subReader_->type_[recId])
@@ -761,7 +748,7 @@ LoadTombstone(RandomAccessFileReader* file, uint64_t file_size) {
   if (s.ok()) {
     auto block = DetachBlockContents(tombstoneBlock, GetSequenceNumber());
     auto icomp = &GetTableReaderOptions().internal_comparator;
-    auto iter = std::unique_ptr<InternalIterator>(block->NewIterator<DataBlockIter>(
+    auto iter = std::unique_ptr<InternalIteratorBase<Slice>>(block->NewIterator<DataBlockIter>(
         icomp, icomp->user_comparator(), nullptr, GetTableReaderOptions().ioptions.statistics));
     iter->RegisterCleanup([](void* arg0, void* arg1){ delete static_cast<Block*>(arg0); }, block, nullptr);
     fragmented_range_dels_ = std::make_shared<FragmentedRangeTombstoneList>(
@@ -865,9 +852,9 @@ const {
       Cleanable value_cleanup;
       value_cleanup.RegisterCleanup([](void* arg1, void*){ free(arg1); }, buf.data(), nullptr);
       buf.risk_release_ownership();
-      get_context->SaveValue(k, v, &matched, &value_cleanup);
+      get_context->SaveValue(k, LazySlice(v), &matched, &value_cleanup);
     } else {
-      get_context->SaveValue(k, v, &matched);
+      get_context->SaveValue(k, LazySlice(v), &matched);
     }
   };
   switch (zvType) {
@@ -935,7 +922,7 @@ const {
         ValueType val_type;
         UnPackSequenceAndType(tag, &seq, &val_type);
         val.remove_prefix(sizeof(SequenceNumber));
-        bool more = get_context->SaveValue(ParsedInternalKey(user_key, seq, val_type), val, &matched);
+        bool more = get_context->SaveValue(ParsedInternalKey(user_key, seq, val_type), LazySlice(val), &matched);
         if (!more) {
           break;
         }
@@ -1233,13 +1220,13 @@ TerarkZipTableReader::Get(const ReadOptions& ro, const Slice& ikey,
 }
 
 void TerarkZipTableReader::RangeScan(const Slice* begin, const SliceTransform* prefix_extractor, void* arg,
-                                     bool(* callback_func)(void* arg, const KeyValuePair& pair)) {
+                                     bool(* callback_func)(void* arg, const Slice& key, const LazySlice& value)) {
   auto g_tctx = terark::GetTlsTerarkContext();
   ContextBuffer buffer;
   ScopedArenaIterator iter(NewIteratorSelect(this, ReadOptions(), isReverseBytewiseOrder_,
                                              subReader_.store_->is_offsets_zipped(), nullptr, &buffer, g_tctx));
   for (begin == nullptr ? iter->SeekToFirst() : iter->Seek(*begin);
-       iter->Valid() && callback_func(arg, iter->pair()); iter->Next()) {
+       iter->Valid() && callback_func(arg, iter->key(), iter->value()); iter->Next()) {
   }
 }
 
@@ -1456,13 +1443,13 @@ TerarkZipTableMultiReader::Get(const ReadOptions& ro, const Slice& ikey, GetCont
 }
 
 void TerarkZipTableMultiReader::RangeScan(const Slice* begin, const SliceTransform* prefix_extractor, void* arg,
-                                          bool(* callback_func)(void* arg, const KeyValuePair& pair)) {
+                                          bool(* callback_func)(void* arg, const Slice& key, const LazySlice& value)) {
   auto g_tctx = terark::GetTlsTerarkContext();
   ContextBuffer buffer;
   ScopedArenaIterator iter(NewIteratorSelect(this, ReadOptions(), isReverseBytewiseOrder_,
                            subIndex_.HasAnyZipOffset(), nullptr, &buffer, g_tctx));
   for (begin == nullptr ? iter->SeekToFirst() : iter->Seek(*begin);
-       iter->Valid() && callback_func(arg, iter->pair()); iter->Next()) {
+       iter->Valid() && callback_func(arg, iter->key(), iter->value()); iter->Next()) {
   }
 }
 

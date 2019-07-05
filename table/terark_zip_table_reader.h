@@ -58,7 +58,6 @@ class TerarkEmptyTableReader : public TerarkZipTableReaderBase {
   public:
     Iter() {}
     ~Iter() {}
-    void SetPinnedItersMgr(PinnedIteratorsManager*) override {}
     bool Valid() const override { return false; }
     void SeekToFirst() override {}
     void SeekToLast() override {}
@@ -67,10 +66,9 @@ class TerarkEmptyTableReader : public TerarkZipTableReaderBase {
     void Next() override {}
     void Prev() override {}
     Slice key() const override { THROW_STD(invalid_argument, "Invalid call"); }
-    KeyValuePair pair() const override { THROW_STD(invalid_argument, "Invalid call"); }
+    LazySlice value() const override { THROW_STD(invalid_argument, "Invalid call"); }
+    FutureSlice future_value() const override { THROW_STD(invalid_argument, "Invalid call"); }
     Status status() const override { return Status::OK(); }
-    bool IsKeyPinned() const override { return false; }
-    bool IsValuePinned() const override { return false; }
   };
   const TableReaderOptions table_reader_options_;
   std::shared_ptr<const TableProperties> table_properties_;
@@ -89,7 +87,7 @@ public:
     return Status::OK();
   }
   void RangeScan(const Slice* begin, const SliceTransform* prefix_extractor, void* arg,
-                 bool(* callback_func)(void* arg, const KeyValuePair&)) override {
+                 bool(* callback_func)(void* arg, const Slice& key, const LazySlice& value)) override {
     // do nothing
   }
   size_t ApproximateMemoryUsage() const override { return 100; }
@@ -164,7 +162,7 @@ public:
              const SliceTransform* prefix_extractor, bool skip_filters) override;
 
   void RangeScan(const Slice* begin, const SliceTransform* prefix_extractor, void* arg,
-                 bool(* callback_func)(void* arg, const KeyValuePair&)) override;
+                 bool(* callback_func)(void* arg, const Slice& key, const LazySlice& value)) override;
 
   uint64_t ApproximateOffsetOf(const Slice& key) override;
   void SetupForCompaction() override {}
@@ -223,7 +221,7 @@ public:
              const SliceTransform* prefix_extractor, bool skip_filters) override;
 
   void RangeScan(const Slice* begin, const SliceTransform* prefix_extractor, void* arg,
-                 bool(* callback_func)(void* arg, const KeyValuePair& pair)) override;
+                 bool(* callback_func)(void* arg, const Slice& key, const LazySlice& value)) override;
 
   uint64_t ApproximateOffsetOf(const Slice& key) override;
   void SetupForCompaction() override {}

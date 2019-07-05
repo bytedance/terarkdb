@@ -361,13 +361,13 @@ std::shared_ptr<FilePair> TerarkZipTableBuilder::NewFilePair() {
   return pair;
 };
 
-void TerarkZipTableBuilder::Add(const KeyValuePair& pair) try {
-  auto s = pair.decode();
+void TerarkZipTableBuilder::Add(const Slice& key, const LazySlice& lazy_value) try {
+  auto s = lazy_value.decode();
   if (!s.ok()) {
     status_ = s;
     return;
   }
-  Slice key = pair.key(), value = pair.value();
+  Slice value = *lazy_value;
   if (table_options_.debugLevel == 3) {
     rocksdb::ParsedInternalKey ikey;
     rocksdb::ParseInternalKey(key, &ikey);
@@ -1477,13 +1477,13 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
     value.erase_all();
 
     while (recId < stat.keyCount && second_pass_iter_->Valid()) {
-      KeyValuePair pair = second_pass_iter_->pair();
-      auto s = pair.decode();
+      LazySlice lazy_value = second_pass_iter_->value();
+      auto s = lazy_value.decode();
       if (!s.ok()) {
         return s;
       }
-      curKey = pair.key();
-      curVal = pair.value();
+      curKey = second_pass_iter_->key();
+      curVal = *lazy_value;
       TERARK_RT_assert(ParseInternalKey(curKey, &pIKey), std::logic_error);
       if (debugDumpKeyValue) {
         dumpKeyValueFunc(pIKey, curVal);
@@ -1535,13 +1535,13 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
         size_t mulRecId = 0;
         while (mulRecId < varNum && second_pass_iter_->Valid()) {
           if (mulRecId > 0) {
-            pair = second_pass_iter_->pair();
-            s = pair.decode();
+            lazy_value = second_pass_iter_->value();
+            s = lazy_value.decode();
             if (!s.ok()) {
               return s;
             }
-            curKey = pair.key();
-            curVal = pair.value();
+            curKey = second_pass_iter_->key();
+            curVal = *lazy_value;
             TERARK_RT_assert(ParseInternalKey(curKey, &pIKey), std::logic_error);
             if (debugDumpKeyValue) {
               dumpKeyValueFunc(pIKey, curVal);
