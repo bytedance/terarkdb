@@ -67,7 +67,7 @@ class TerarkEmptyTableReader : public TerarkZipTableReaderBase {
     void Prev() override {}
     Slice key() const override { THROW_STD(invalid_argument, "Invalid call"); }
     LazySlice value() const override { THROW_STD(invalid_argument, "Invalid call"); }
-    FutureSlice future_value() const override { THROW_STD(invalid_argument, "Invalid call"); }
+    FutureSlice future_value(Slice) const override { THROW_STD(invalid_argument, "Invalid call"); }
     Status status() const override { return Status::OK(); }
   };
   const TableReaderOptions table_reader_options_;

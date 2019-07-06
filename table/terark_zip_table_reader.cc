@@ -367,8 +367,11 @@ public:
     return LazySlice(user_value_, table_reader_options_->file_number);
   }
 
-  FutureSlice future_value() const override {
+  FutureSlice future_value(Slice pinned_user_key) const override {
     assert(iter_->Valid());
+    assert(key_length_ >= 8);
+    assert(pinned_user_key == Slice((const char*)key_ptr_, key_length_ - 8));
+    (void)pinned_user_key;
     // TODO support real future pair
     return FutureSlice(user_value_, true, table_reader_options_->file_number);
   }
