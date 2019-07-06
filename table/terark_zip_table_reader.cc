@@ -925,8 +925,7 @@ const {
         ValueType val_type;
         UnPackSequenceAndType(tag, &seq, &val_type);
         val.remove_prefix(sizeof(SequenceNumber));
-        bool more = get_context->SaveValue(ParsedInternalKey(user_key, seq, val_type), LazySlice(val), &matched);
-        if (!more) {
+        if (!get_context->SaveValue(ParsedInternalKey(user_key, seq, val_type), LazySlice(val), &matched)) {
           break;
         }
       }
