@@ -77,7 +77,7 @@ class MergeHelper {
   // - ShutdownInProgress: interrupted by shutdown (*shutting_down == true).
   //
   // REQUIRED: The first key in the input is not corrupted.
-  Status MergeUntil(InternalIterator* iter,
+  Status MergeUntil(Slice current_user_key, InternalIterator* iter,
                     CompactionRangeDelAggregator* range_del_agg = nullptr,
                     const SequenceNumber stop_before = 0,
                     const bool at_bottom = false);
@@ -133,6 +133,13 @@ class MergeHelper {
     assert(compaction_filter_skip_until_.Valid());
     *skip_until = compaction_filter_skip_until_.Encode();
     return true;
+  }
+
+  void Clear() {
+    keys_.clear();
+    merge_context_.Clear();
+    compaction_filter_value_.reset();
+    compaction_filter_skip_until_.Clear();
   }
 
  private:

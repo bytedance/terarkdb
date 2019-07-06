@@ -123,7 +123,7 @@ Status MergeHelper::TimedFullMerge(const MergeOperator* merge_operator,
 //
 // TODO: Avoid the snapshot stripe map lookup in CompactionRangeDelAggregator
 // and just pass the StripeRep corresponding to the stripe being merged.
-Status MergeHelper::MergeUntil(InternalIterator* iter,
+Status MergeHelper::MergeUntil(Slice current_user_key, InternalIterator* iter,
                                CompactionRangeDelAggregator* range_del_agg,
                                const SequenceNumber stop_before,
                                const bool at_bottom) {
@@ -204,7 +204,7 @@ Status MergeHelper::MergeUntil(InternalIterator* iter,
       // (almost) silently dropping the put/delete. That's probably not what we
       // want. Also if we're in compaction and it's a put, it would be nice to
       // run compaction filter on it.
-      FutureSlice val = iter->future_value();
+      FutureSlice val = iter->future_value(ikey.user_key);
       const FutureSlice* val_ptr;
       if ((kTypeValue == ikey.type || kTypeValueIndex == ikey.type) &&
           (range_del_agg == nullptr ||
@@ -275,7 +275,7 @@ Status MergeHelper::MergeUntil(InternalIterator* iter,
           ParseInternalKey(keys_.back(), &orig_ikey);
         }
         if (filter == CompactionFilter::Decision::kKeep) {
-          merge_context_.PushOperand(value_slice);
+          merge_context_.PushOperand(value_slice, current_user_key);
         } else {  // kChangeValue
           // Compaction filter asked us to change the operand from value_slice
           // to compaction_filter_value_.

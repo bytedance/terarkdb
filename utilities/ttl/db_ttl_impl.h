@@ -244,8 +244,8 @@ class TtlMergeOperator : public MergeOperator {
     // Extract time-stamp from each operand to be passed to user_merge_op_
     std::vector<FutureSlice> operands_without_ts;
     for (const auto& operand : merge_in.operand_list) {
-      operands_without_ts.push_back(
-          MakeRemoveSuffixReferenceOfFutureSlice(operand, ts_len));
+      operands_without_ts.push_back(FutureSliceRemoveSuffixWrapper(&operand,
+                                                                   ts_len));
     }
 
     // Apply the user merge operator (store result in *new_value)
@@ -254,8 +254,7 @@ class TtlMergeOperator : public MergeOperator {
                                         merge_out->existing_operand);
     if (merge_in.existing_value) {
       FutureSlice existing_value_without_ts =
-          MakeRemoveSuffixReferenceOfFutureSlice(*merge_in.existing_value,
-                                                 ts_len);
+          FutureSliceRemoveSuffixWrapper(merge_in.existing_value, ts_len);
       good = user_merge_op_->FullMergeV2(
           MergeOperationInput(merge_in.key, &existing_value_without_ts,
                               operands_without_ts, merge_in.logger),
@@ -306,8 +305,8 @@ class TtlMergeOperator : public MergeOperator {
     std::vector<FutureSlice> operands_without_ts;
 
     for (const auto& operand : operand_list) {
-      operands_without_ts.push_back(
-          MakeRemoveSuffixReferenceOfFutureSlice(operand, ts_len));
+      operands_without_ts.push_back(FutureSliceRemoveSuffixWrapper(&operand,
+                                                                   ts_len));
     }
 
     // Apply the user partial-merge operator (store result in *new_value)

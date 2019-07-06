@@ -100,9 +100,13 @@ public:
       : meta_(nullptr) {
     reset(slice, copy, file_number);
   }
-  explicit FutureSlice(const LazySlice& slice, bool copy = false)
+  explicit FutureSlice(const LazySlice& slice)
       : meta_(nullptr) {
-    reset(slice, copy);
+    reset(slice);
+  }
+  explicit FutureSlice(const LazySlice& slice, Slice pinned_user_key)
+      : meta_(nullptr) {
+    reset(slice, pinned_user_key);
   }
   FutureSlice(const FutureSliceMeta* meta, std::string &&storage)
       : meta_(meta), storage_(std::move(storage)) {}
@@ -115,7 +119,8 @@ public:
   void reset() { storage_.clear(); meta_ = nullptr; }
   void reset(const Slice& slice, bool copy = true,
              uint64_t file_number = uint64_t(-1));
-  void reset(const LazySlice& slice, bool copy = false);
+  void reset(const LazySlice& slice);
+  void reset(const LazySlice& slice, Slice pinned_user_key);
   void reset(const FutureSliceMeta* meta, std::string &&storage) {
     meta_ = meta;
     storage_ = std::move(storage);
@@ -138,6 +143,7 @@ public:
   virtual Status decode(const Slice& raw, void* arg, const void* const_arg,
                         void*& /*temp*/, Slice* value) const = 0;
   virtual Status to_future(const LazySlice& /*slice*/,
+                           Slice /*pinned_user_key*/,
                            FutureSlice* /*future_slice*/) const {
     return Status::NotSupported();
   }
@@ -262,10 +268,10 @@ inline Status LazySlice::decode() const {
   return meta_->decode(raw_, arg_, const_arg_, temp_, &slice_);
 }
 
-extern LazySlice MakeReferenceOfLazySlice(const LazySlice& slice);
-extern FutureSlice MakeReferenceOfFutureSlice(const FutureSlice& slice);
-extern FutureSlice MakeRemoveSuffixReferenceOfFutureSlice(
-    const FutureSlice& slice, size_t fixed_len);
-extern FutureSlice MakeFutureSliceWrapperOfLazySlice(const LazySlice& slice);
+extern LazySlice LazySliceWrapper(const LazySlice* slice);
+extern FutureSlice FutureSliceWrapper(const FutureSlice* slice);
+extern FutureSlice FutureSliceRemoveSuffixWrapper(const FutureSlice* slice,
+                                                  size_t fixed_len);
+extern FutureSlice LazySliceToFutureSliceWrapper(const LazySlice* slice);
 
 }  // namespace rocksdb

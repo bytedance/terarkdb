@@ -665,8 +665,8 @@ template <class TBlockIter, typename TValue = Slice>
 class BlockBasedTableIterator
     : public BlockBasedTableIteratorBase<TBlockIter, TValue> {
   using Base = BlockBasedTableIteratorBase<TBlockIter, TValue>;
-  using Base::Valid;
   using Base::block_iter_;
+  using Base::Valid;
  public:
   using Base::Base;
   TValue value() const override {
@@ -679,17 +679,21 @@ template <class TBlockIter>
 class BlockBasedTableIterator<TBlockIter, LazySlice>
     : public BlockBasedTableIteratorBase<TBlockIter, LazySlice> {
   using Base = BlockBasedTableIteratorBase<TBlockIter, LazySlice>;
-  using Base::Valid;
   using Base::block_iter_;
+  using Base::icomp_;
   using Base::table_;
+  using Base::Valid;
  public:
   using Base::Base;
   LazySlice value() const override {
     assert(Valid());
     return LazySlice(block_iter_.value(), table_->FileNumber());
   }
-  FutureSlice future_value() const override {
+  FutureSlice future_value(Slice pinned_user_key) const override {
     assert(Valid());
+    assert(icomp_.user_comparator()->Compare(
+        pinned_user_key, ExtractUserKey(block_iter_.key())) == 0);
+    (void)pinned_user_key;
     return FutureSlice(block_iter_.value(), true/* copy */, table_->FileNumber());
   }
 };

@@ -151,9 +151,9 @@ class ForwardLevelIterator : public InternalIterator {
     assert(valid_);
     return file_iter_->value();
   }
-  FutureSlice future_value() const override {
+  FutureSlice future_value(Slice pinned_user_key) const override {
     assert(valid_);
-    return file_iter_->future_value();
+    return file_iter_->future_value(pinned_user_key);
   }
   Status status() const override {
     if (!status_.ok()) {
@@ -511,9 +511,11 @@ LazySlice ForwardIterator::value() const {
   return current_->value();
 }
 
-FutureSlice ForwardIterator::future_value() const {
+FutureSlice ForwardIterator::future_value(Slice pinned_user_key) const {
   assert(valid_);
-  return current_->future_value();
+  assert(user_comparator_->Compare(pinned_user_key,
+                                   ExtractUserKey(current_->key())) == 0);
+  return current_->future_value(pinned_user_key);
 }
 
 Status ForwardIterator::status() const {

@@ -566,7 +566,7 @@ bool DBIter::MergeValuesNewToOld() {
 
   merge_context_.Clear();
   // Start the merge process by pushing the first operand
-  merge_context_.PushOperand(iter_->future_value());
+  merge_context_.PushOperand(iter_->future_value(saved_key_.GetUserKey()));
   TEST_SYNC_POINT("DBIter::MergeValuesNewToOld:PushedFirstOperand");
 
   ParsedInternalKey ikey;
@@ -590,7 +590,7 @@ bool DBIter::MergeValuesNewToOld() {
     } else if (kTypeValue == ikey.type || kTypeValueIndex == ikey.type) {
       // hit a put, merge the put value with operands and store the
       // final result in saved_value_. We are done!
-      FutureSlice val = iter_->future_value();
+      FutureSlice val = iter_->future_value(saved_key_.GetUserKey());
       s = MergeHelper::TimedFullMerge(
           merge_operator_, ikey.user_key, &val, merge_context_.GetOperands(),
           saved_value_.buffer(), logger_, statistics_, env_,
@@ -610,7 +610,7 @@ bool DBIter::MergeValuesNewToOld() {
     } else if (kTypeMerge == ikey.type || kTypeMergeIndex == ikey.type) {
       // hit a merge, add the value as an operand and run associative merge.
       // when complete, add result to operands and continue.
-      merge_context_.PushOperand(iter_->future_value());
+      merge_context_.PushOperand(iter_->future_value(saved_key_.GetUserKey()));
       PERF_COUNTER_ADD(internal_merge_count, 1);
     } else {
       assert(false);
@@ -826,8 +826,7 @@ bool DBIter::FindValueForCurrentKey() {
           last_key_entry_type = kTypeRangeDeletion;
           PERF_COUNTER_ADD(internal_delete_skipped_count, 1);
         } else {
-          pinned_value_ = iter_->future_value();
-          value_ = pinned_value_.get();
+          pinned_value_ = iter_->future_value(saved_key_.GetUserKey());
         }
         merge_context_.Clear();
         last_not_merge_type = last_key_entry_type;
@@ -848,7 +847,7 @@ bool DBIter::FindValueForCurrentKey() {
           PERF_COUNTER_ADD(internal_delete_skipped_count, 1);
         } else {
           assert(merge_operator_ != nullptr);
-          merge_context_.PushOperandBack(iter_->future_value());
+          merge_context_.PushOperandBack(iter_->future_value(saved_key_.GetUserKey()));
           PERF_COUNTER_ADD(internal_merge_count, 1);
         }
         break;
@@ -894,7 +893,7 @@ bool DBIter::FindValueForCurrentKey() {
       break;
     case kTypeValueIndex:
     case kTypeValue:
-      // do nothing
+      value_ = pinned_value_.get();
       break;
     default:
       assert(false);
@@ -956,8 +955,7 @@ bool DBIter::FindValueForCurrentKeyUsingSeek() {
     return true;
   }
   if (ikey.type == kTypeValue || ikey.type == kTypeValueIndex) {
-    pinned_value_ = iter_->future_value();
-    value_ = pinned_value_.get();
+    value_ = iter_->value();
     valid_ = true;
     return true;
   }
@@ -967,7 +965,7 @@ bool DBIter::FindValueForCurrentKeyUsingSeek() {
   assert(ikey.type == kTypeMerge || ikey.type == kTypeMergeIndex);
   current_entry_is_merged_ = true;
   merge_context_.Clear();
-  merge_context_.PushOperand(iter_->future_value());
+  merge_context_.PushOperand(iter_->future_value(saved_key_.GetUserKey()));
   while (true) {
     iter_->Next();
 
@@ -990,7 +988,7 @@ bool DBIter::FindValueForCurrentKeyUsingSeek() {
             ikey, RangeDelPositioningMode::kForwardTraversal)) {
       break;
     } else if (ikey.type == kTypeValue || ikey.type == kTypeValueIndex) {
-      FutureSlice val = iter_->future_value();
+      FutureSlice val = iter_->future_value(saved_key_.GetUserKey());
       Status s = MergeHelper::TimedFullMerge(
           merge_operator_, saved_key_.GetUserKey(), &val,
           merge_context_.GetOperands(), saved_value_.buffer(), logger_,
@@ -1003,7 +1001,7 @@ bool DBIter::FindValueForCurrentKeyUsingSeek() {
       valid_ = true;
       return true;
     } else if (ikey.type == kTypeMerge || ikey.type == kTypeMergeIndex) {
-      merge_context_.PushOperand(iter_->future_value());
+      merge_context_.PushOperand(iter_->future_value(saved_key_.GetUserKey()));
       PERF_COUNTER_ADD(internal_merge_count, 1);
     } else {
       assert(false);

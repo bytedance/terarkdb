@@ -296,7 +296,7 @@ void FutureSlice::reset(const Slice& slice, bool copy, uint64_t file_number) {
   }
 }
 
-void FutureSlice::reset(const LazySlice& slice, bool copy) {
+void FutureSlice::reset(const LazySlice& slice) {
   struct SliceMetaImpl : public FutureSliceMeta, public LazySliceMeta {
     LazySlice to_lazy_slice(const Slice& storage) const override {
       return LazySlice(storage, this);
@@ -307,21 +307,19 @@ void FutureSlice::reset(const LazySlice& slice, bool copy) {
     }
   };
   static SliceMetaImpl meta_impl;
-  Status s;
-  if (!copy && slice.meta() != nullptr) {
-    s = slice.meta()->to_future(slice, this);
-    if (s.ok()) {
-      return;
-    }
-  }
-  if (copy || s.IsNotSupported()) {
-    s = slice.decode();
-  }
+  Status s = slice.decode();
   if (s.ok()) {
     reset(*slice, true, slice.file_number());
   } else {
     storage_ = s.ToString();
     meta_ = &meta_impl;
+  }
+}
+
+void FutureSlice::reset(const LazySlice& slice, Slice pinned_user_key) {
+  if (slice.meta() == nullptr ||
+      !slice.meta()->to_future(slice, pinned_user_key, this).ok()) {
+    reset(slice);
   }
 }
 
@@ -336,7 +334,7 @@ std::string* FutureSlice::buffer() {
   return &storage_;
 }
 
-LazySlice MakeReferenceOfLazySlice(const LazySlice& slice) {
+LazySlice LazySliceWrapper(const LazySlice* slice) {
   class SliceMetaImpl : public LazySliceMeta{
     Status decode(const Slice& /*raw*/, void* /*arg*/, const void* const_arg,
                   void*& /*temp*/, Slice* value) const override {
@@ -350,11 +348,12 @@ LazySlice MakeReferenceOfLazySlice(const LazySlice& slice) {
     }
   };
   static SliceMetaImpl meta_impl;
-  return LazySlice(slice.raw(), &meta_impl, nullptr, &slice,
-                   slice.file_number());
+  assert(slice != nullptr);
+  return LazySlice(slice->raw(), &meta_impl, nullptr, slice,
+                   slice->file_number());
 }
 
-FutureSlice MakeReferenceOfFutureSlice(const FutureSlice& slice) {
+FutureSlice FutureSliceWrapper(const FutureSlice* slice) {
   struct SliceMetaImpl : public FutureSliceMeta {
     LazySlice to_lazy_slice(const Slice& storage) const override {
       Slice input = storage;
@@ -368,13 +367,14 @@ FutureSlice MakeReferenceOfFutureSlice(const FutureSlice& slice) {
     }
   };
   static SliceMetaImpl meta_impl;
+  assert(slice != nullptr);
   std::string storage;
-  PutFixed64(&storage, reinterpret_cast<uint64_t>(&slice));
+  PutFixed64(&storage, reinterpret_cast<uint64_t>(slice));
   return FutureSlice(&meta_impl, std::move(storage));
 }
 
-FutureSlice MakeRemoveSuffixReferenceOfFutureSlice(const FutureSlice& slice,
-                                                   size_t fixed_len) {
+FutureSlice FutureSliceRemoveSuffixWrapper(const FutureSlice* slice,
+                                           size_t fixed_len) {
   struct SliceMetaImpl : public FutureSliceMeta, public LazySliceMeta {
     LazySlice to_lazy_slice(const Slice& storage) const override {
       Slice input = storage;
@@ -411,12 +411,13 @@ FutureSlice MakeRemoveSuffixReferenceOfFutureSlice(const FutureSlice& slice,
     }
   };
   static SliceMetaImpl meta_impl;
+  assert(slice != nullptr);
   std::string storage;
-  PutVarint64Varint64(&storage, reinterpret_cast<uint64_t>(&slice), fixed_len);
+  PutVarint64Varint64(&storage, reinterpret_cast<uint64_t>(slice), fixed_len);
   return FutureSlice(&meta_impl, std::move(storage));
 }
 
-FutureSlice MakeFutureSliceWrapperOfLazySlice(const LazySlice& slice) {
+FutureSlice LazySliceToFutureSliceWrapper(const LazySlice* slice) {
   struct SliceMetaImpl : public FutureSliceMeta, public LazySliceMeta {
     LazySlice to_lazy_slice(const Slice& storage) const override {
       uint64_t slice_ptr;
@@ -442,8 +443,9 @@ FutureSlice MakeFutureSliceWrapperOfLazySlice(const LazySlice& slice) {
     }
   };
   static SliceMetaImpl meta_impl;
+  assert(slice != nullptr);
   std::string storage;
-  PutFixed64(&storage, reinterpret_cast<uint64_t>(&slice));
+  PutFixed64(&storage, reinterpret_cast<uint64_t>(slice));
   return FutureSlice(&meta_impl, std::move(storage));
 }
 

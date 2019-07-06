@@ -111,10 +111,10 @@ class InternalIteratorBase<LazySlice> : public InternalIteratorCommon {
   // REQUIRES: Valid()
   virtual LazySlice value() const = 0;
 
-  // Return the key & value for the current entry. The underlying storage for
+  // Return the value for the current entry. The underlying storage for
   // the returned slice is valid until version expired.
   // REQUIRES: Valid()
-  virtual FutureSlice future_value() const = 0;
+  virtual FutureSlice future_value(Slice pinned_user_key) const = 0;
 };
 
 using InternalIterator = InternalIteratorBase<LazySlice>;

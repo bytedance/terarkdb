@@ -219,8 +219,7 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
           assert(merge_operator_ != nullptr);
           state_ = kFound;
           if (LIKELY(pinnable_val_ != nullptr)) {
-            FutureSlice future_value =
-                MakeFutureSliceWrapperOfLazySlice(value);
+            FutureSlice future_value = LazySliceToFutureSliceWrapper(&value);
             Status merge_status = MergeHelper::TimedFullMerge(
                 merge_operator_, user_key_, &future_value,
                 merge_context_->GetOperands(), pinnable_val_->GetSelf(),
@@ -260,7 +259,7 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
       case kTypeMergeIndex:
         assert(state_ == kNotFound || state_ == kMerge);
         state_ = kMerge;
-        merge_context_->PushOperand(value);
+        merge_context_->PushOperand(value, user_key_);
         if (merge_operator_ != nullptr &&
             merge_operator_->ShouldMerge(
                 merge_context_->GetOperandsDirectionBackward())) {

@@ -28,9 +28,9 @@ class CompactionIteratorToInternalIterator : public InternalIterator {
   virtual void Prev() override { abort(); }  // do not support
   virtual Slice key() const override { return c_iter_->key(); }
   virtual LazySlice value() const override {
-    return MakeReferenceOfLazySlice(c_iter_->value());
+    return LazySliceWrapper(&c_iter_->value());
   }
-  virtual FutureSlice future_value() const override {
+  virtual FutureSlice future_value(Slice /*pinned_user_key*/) const override {
     assert(false);
     return FutureSlice();
   }
@@ -44,7 +44,12 @@ class CompactionIteratorToInternalIterator : public InternalIterator {
 };
 
 void CompactionIteratorToInternalIterator::Seek(const Slice& target) {
+  if (c_iter_->merge_helper_ != nullptr) {
+    c_iter_->merge_helper_->Clear();
+  }
   c_iter_->valid_ = false;
+  c_iter_->value_.reset();
+  c_iter_->status_ = Status::OK();
   c_iter_->has_current_user_key_ = false;
   c_iter_->at_next_ = false;
   c_iter_->has_outputted_key_ = false;
@@ -620,8 +625,10 @@ void CompactionIterator::NextFromInput() {
       // have hit (A)
       // We encapsulate the merge related state machine in a different
       // object to minimize change to the existing flow.
-      Status s = merge_helper_->MergeUntil(input_, range_del_agg_,
-                                           prev_snapshot, bottommost_level_);
+      assert(has_current_user_key_);
+      Status s = merge_helper_->MergeUntil(current_user_key_, input_,
+                                           range_del_agg_, prev_snapshot,
+                                           bottommost_level_);
       merge_out_iter_.SeekToFirst();
 
       if (!s.ok() && !s.IsMergeInProgress()) {

@@ -278,9 +278,11 @@ class MergingIterator : public InternalIterator {
     return current_->value();
   }
 
-  virtual FutureSlice future_value() const override {
+  virtual FutureSlice future_value(Slice pinned_user_key) const override {
     assert(Valid());
-    return current_->iter()->future_value();
+    assert(comparator_->user_comparator()->Compare(
+               pinned_user_key, ExtractUserKey(current_->key())) == 0);
+    return current_->iter()->future_value(pinned_user_key);
   }
 
  private:

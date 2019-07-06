@@ -215,7 +215,7 @@ class MemTableRep {
 
     // Returns FutureSlice at the current position.
     // REQUIRES: Valid()
-    virtual FutureSlice future_value() const {
+    virtual FutureSlice future_value(Slice /*pinned_user_key*/) const {
       return DecodeToFutureValue(EncodedKey());
     }
 

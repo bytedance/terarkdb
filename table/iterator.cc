@@ -165,7 +165,7 @@ public:
   explicit EmptyInternalIteratorBase(const Status& s)
       : EmptyInternalIteratorCommon<LazySlice>(s) {}
 
-  FutureSlice future_value() const override {
+  FutureSlice future_value(Slice /*pinned_user_key*/) const override {
     assert(false);
     return FutureSlice();
   }

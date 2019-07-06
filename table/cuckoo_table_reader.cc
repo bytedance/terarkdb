@@ -208,7 +208,7 @@ class CuckooTableIterator : public InternalIterator {
   void Prev() override;
   Slice key() const override;
   LazySlice value() const override;
-  FutureSlice future_value() const override;
+  FutureSlice future_value(Slice pinned_user_key) const override;
   Status status() const override { return Status::OK(); }
   void InitIfNeeded();
 
@@ -376,8 +376,10 @@ LazySlice CuckooTableIterator::value() const {
   return LazySlice(curr_value_, reader_->file_number_);
 }
 
-FutureSlice CuckooTableIterator::future_value() const {
+FutureSlice CuckooTableIterator::future_value(Slice pinned_user_key) const {
   assert(Valid());
+  assert(pinned_user_key == ExtractUserKey(key()));
+  (void)pinned_user_key;
   return FutureSlice(curr_value_, true/* copy */, reader_->file_number_);
 }
 

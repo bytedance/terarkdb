@@ -505,16 +505,18 @@ class LevelIterator final : public InternalIterator {
 
   virtual bool Valid() const override { return file_iter_.Valid(); }
   virtual Slice key() const override {
-    assert(Valid());
+    assert(file_iter_.Valid());
     return file_iter_.key();
   }
   virtual LazySlice value() const override {
-    assert(Valid());
+    assert(file_iter_.Valid());
     return file_iter_.value();
   }
-  virtual FutureSlice future_value() const override {
-    assert(Valid());
-    return file_iter_.iter()->future_value();
+  virtual FutureSlice future_value(Slice pinned_user_key) const override {
+    assert(file_iter_.Valid());
+    assert(icomparator_.user_comparator()->Compare(
+        pinned_user_key, ExtractUserKey(file_iter_.key())) == 0);
+    return file_iter_.iter()->future_value(pinned_user_key);
   }
   virtual Status status() const override {
     return file_iter_.iter() ? file_iter_.status() : Status::OK();

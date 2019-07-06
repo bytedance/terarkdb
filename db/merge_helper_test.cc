@@ -29,7 +29,10 @@ class MergeHelperTest : public testing::Test {
     merge_helper_.reset(new MergeHelper(env_, BytewiseComparator(),
                                         merge_op_.get(), filter_.get(), nullptr,
                                         false, latest_snapshot));
-    return merge_helper_->MergeUntil(iter_.get(), nullptr /* range_del_agg */,
+    assert(iter_->Valid());
+    std::string current_user_key = ExtractUserKey(iter_->key()).ToString();
+    return merge_helper_->MergeUntil(current_user_key, iter_.get(),
+                                     nullptr /* range_del_agg */,
                                      stop_before, at_bottom);
   }
 

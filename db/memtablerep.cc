@@ -46,7 +46,7 @@ LazySlice MemTableRep::DecodeToLazyValue(const char* key) {
       *value = GetLengthPrefixedSlice(key_slice.data() + key_slice.size());
       return Status::OK();
     }
-    Status to_future(const LazySlice& slice,
+    Status to_future(const LazySlice& slice, Slice /*pinned_user_key*/,
                      FutureSlice* future_slice) const override {
       const char* k = reinterpret_cast<const char*>(slice.const_arg());
       *future_slice = DecodeToFutureValue(k);

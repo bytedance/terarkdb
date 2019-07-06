@@ -133,15 +133,16 @@ class SimpleSuffixReverseComparator : public Comparator {
 extern const Comparator* Uint64Comparator();
 
 // Iterator over a vector of keys/values
-class VectorIterator : public InternalIteratorBase<Slice> {
+template<class TValue>
+class VectorIteratorBase : public InternalIteratorBase<TValue> {
  public:
-  explicit VectorIterator(const std::vector<std::string>& keys)
+  explicit VectorIteratorBase(const std::vector<std::string>& keys)
       : keys_(keys), current_(keys.size()) {
     std::sort(keys_.begin(), keys_.end());
     values_.resize(keys.size());
   }
 
-  VectorIterator(const std::vector<std::string>& keys,
+  VectorIteratorBase(const std::vector<std::string>& keys,
       const std::vector<std::string>& values)
     : keys_(keys), values_(values), current_(keys.size()) {
     assert(keys_.size() == values_.size());
@@ -171,15 +172,25 @@ class VectorIterator : public InternalIteratorBase<Slice> {
   virtual void Prev() override { current_--; }
 
   virtual Slice key() const override { return Slice(keys_[current_]); }
-  virtual Slice value() const override { return values_[current_]; }
+  virtual TValue value() const override { return TValue(values_[current_]); }
 
   virtual Status status() const override { return Status::OK(); }
 
- private:
+ protected:
   std::vector<std::string> keys_;
   std::vector<std::string> values_;
   size_t current_;
 };
+class VectorIterator : public VectorIteratorBase<LazySlice> {
+  using Base = VectorIteratorBase<LazySlice>;
+  using Base::Base;
+  using Base::values_;
+ public:
+  virtual FutureSlice future_value(Slice /*pinned_user_key*/) const override {
+    return FutureSlice(values_[current_], false);
+  }
+};
+
 extern WritableFileWriter* GetWritableFileWriter(WritableFile* wf,
                                                  const std::string& fname);
 

@@ -348,18 +348,18 @@ class MemTableIteratorBase : public InternalIteratorBase<TValue> {
   }
   virtual void Next() override {
     PERF_COUNTER_ADD(next_on_memtable_count, 1);
-    assert(Valid());
+    assert(valid_);
     iter_->Next();
     valid_ = iter_->Valid();
   }
   virtual void Prev() override {
     PERF_COUNTER_ADD(prev_on_memtable_count, 1);
-    assert(Valid());
+    assert(valid_);
     iter_->Prev();
     valid_ = iter_->Valid();
   }
   virtual Slice key() const override {
-    assert(Valid());
+    assert(valid_);
     return iter_->key();
   }
 
@@ -382,8 +382,9 @@ class MemTableIteratorBase : public InternalIteratorBase<TValue> {
 
 class MemTableTombstoneIterator : public MemTableIteratorBase<Slice> {
   using Base = MemTableIteratorBase<Slice>;
-  using Base::value_pinned_;
   using Base::iter_;
+  using Base::valid_;
+  using Base::value_pinned_;
  public:
   MemTableTombstoneIterator(const MemTable& mem,
                             const ReadOptions& read_options, Arena* arena,
@@ -392,7 +393,7 @@ class MemTableTombstoneIterator : public MemTableIteratorBase<Slice> {
                                     use_range_del_table) {}
 
   virtual Slice value() const override {
-    assert(Valid());
+    assert(valid_);
     LazySlice v = iter_->value();
     return v.decode().ok() ? *v : Slice::Invalid();
   }
@@ -400,8 +401,9 @@ class MemTableTombstoneIterator : public MemTableIteratorBase<Slice> {
 
 class MemTableIterator : public MemTableIteratorBase<LazySlice> {
   using Base = MemTableIteratorBase<LazySlice>;
-  using Base::value_pinned_;
   using Base::iter_;
+  using Base::valid_;
+  using Base::value_pinned_;
  public:
   MemTableIterator(const MemTable& mem, const ReadOptions& read_options,
                    Arena* arena, bool use_range_del_table = false)
@@ -409,15 +411,17 @@ class MemTableIterator : public MemTableIteratorBase<LazySlice> {
                                       use_range_del_table) {}
 
   virtual LazySlice value() const override {
-    assert(Valid());
+    assert(valid_);
     return iter_->value();
   }
-  virtual FutureSlice future_value() const override {
-    assert(Valid());
+  virtual FutureSlice future_value(Slice pinned_user_key) const override {
+    assert(valid_);
+    assert(comparator_.icomparator()->user_comparator()->Compare(
+        pinned_user_key, ExtractUserKey(iter_->key())) == 0);
     if (value_pinned_ && iter_->IsValuePinned()) {
-      return iter_->future_value();
+      return iter_->future_value(pinned_user_key);
     } else {
-      return FutureSlice(iter_->value(), true/* copy */);
+      return FutureSlice(iter_->value());
     }
   }
 };
@@ -656,8 +660,7 @@ static bool SaveValue(void* arg, const Slice& internal_key,
         *(s->status) = Status::OK();
         if (*(s->merge_in_progress)) {
           if (s->value != nullptr) {
-            FutureSlice future_value =
-                MakeFutureSliceWrapperOfLazySlice(value);
+            FutureSlice future_value = LazySliceToFutureSliceWrapper(&value);
             *(s->status) = MergeHelper::TimedFullMerge(
                 merge_operator, s->key->user_key(), &future_value,
                 merge_context->GetOperands(), s->value, s->logger,
@@ -704,7 +707,7 @@ static bool SaveValue(void* arg, const Slice& internal_key,
           return false;
         }
         *(s->merge_in_progress) = true;
-        merge_context->PushOperand(value);
+        merge_context->PushOperand(value, s->key->user_key());
         if (merge_operator->ShouldMerge(merge_context->GetOperandsDirectionBackward())) {
           *(s->status) = MergeHelper::TimedFullMerge(
               merge_operator, s->key->user_key(), nullptr,
