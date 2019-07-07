@@ -181,15 +181,7 @@ class VectorIteratorBase : public InternalIteratorBase<TValue> {
   std::vector<std::string> values_;
   size_t current_;
 };
-class VectorIterator : public VectorIteratorBase<LazySlice> {
-  using Base = VectorIteratorBase<LazySlice>;
-  using Base::Base;
-  using Base::values_;
- public:
-  virtual FutureSlice future_value(Slice /*pinned_user_key*/) const override {
-    return FutureSlice(values_[current_], false);
-  }
-};
+using VectorIterator = VectorIteratorBase<LazySlice>;
 
 extern WritableFileWriter* GetWritableFileWriter(WritableFile* wf,
                                                  const std::string& fname);

@@ -68,7 +68,6 @@ using rocksdb::InfoLogLevel;
 using rocksdb::FileLock;
 using rocksdb::FilterPolicy;
 using rocksdb::FlushOptions;
-using rocksdb::FutureSlice;
 using rocksdb::IngestExternalFileOptions;
 using rocksdb::Iterator;
 using rocksdb::LazySlice;
@@ -404,19 +403,17 @@ struct rocksdb_mergeoperator_t : public MergeOperator {
   }
 
   virtual bool PartialMergeMulti(const Slice& key,
-                                 const std::vector<FutureSlice>& operand_list,
-                                 std::string* new_value,
+                                 const std::vector<LazySlice>& operand_list,
+                                 LazySlice* new_value,
                                  Logger* /*logger*/) const override {
     size_t operand_count = operand_list.size();
-    std::vector<LazySlice> operand_slice(operand_count);
     std::vector<const char*> operand_pointers(operand_count);
     std::vector<size_t> operand_sizes(operand_count);
     for (size_t i = 0; i < operand_count; ++i) {
-      operand_slice[i] = operand_list[i].get();
-      if (!operand_slice[i].decode().ok()) {
+      if (!operand_list[i].decode().ok()) {
         return false;
       }
-      Slice operand(*operand_slice[i]);
+      Slice operand(*operand_list[i]);
       operand_pointers[i] = operand.data();
       operand_sizes[i] = operand.size();
     }
@@ -426,7 +423,10 @@ struct rocksdb_mergeoperator_t : public MergeOperator {
     char* tmp_new_value = (*partial_merge_)(
         state_, key.data(), key.size(), &operand_pointers[0], &operand_sizes[0],
         static_cast<int>(operand_count), &success, &new_value_len);
-    new_value->assign(tmp_new_value, new_value_len);
+    if (!new_value->is_buffer()) {
+      new_value->reset_to_buffer();
+    }
+    new_value->get_buffer()->assign(tmp_new_value, new_value_len);
 
     if (delete_value_ != nullptr) {
       (*delete_value_)(state_, tmp_new_value, new_value_len);

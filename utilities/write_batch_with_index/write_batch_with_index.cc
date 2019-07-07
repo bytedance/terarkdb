@@ -891,7 +891,7 @@ Status WriteBatchWithIndex::GetFromBatchAndDB(DB* db,
 
 Status WriteBatchWithIndex::GetFromBatchAndDB(
     DB* db, const ReadOptions& read_options, ColumnFamilyHandle* column_family,
-    const Slice& key, PinnableSlice* pinnable_val, ReadCallback* callback) {
+    const Slice& key, LazySlice* pinnable_val, ReadCallback* callback) {
   Status s;
   MergeContext merge_context;
   const ImmutableDBOptions& immuable_db_options =
@@ -947,8 +947,8 @@ Status WriteBatchWithIndex::GetFromBatchAndDB(
       Env* env = immuable_db_options.env;
       Logger* logger = immuable_db_options.info_log.get();
 
-      FutureSlice* merge_data_ptr;
-      FutureSlice merge_data;
+      LazySlice* merge_data_ptr;
+      LazySlice merge_data;
       if (s.ok()) {
         merge_data.reset(*pinnable_val, false/* copy */);
         merge_data_ptr = &merge_data;

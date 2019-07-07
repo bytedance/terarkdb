@@ -98,7 +98,7 @@ WriteBatchWithIndexInternal::Result WriteBatchWithIndexInternal::GetFromBatch(
     const ImmutableDBOptions& immuable_db_options, WriteBatchWithIndex* batch,
     ColumnFamilyHandle* column_family, const Slice& key,
     MergeContext* merge_context, const Comparator* cmp,
-    std::string* value, bool overwrite_key, Status* s) {
+    LazySlice* value, bool overwrite_key, Status* s) {
   *s = Status::OK();
   WriteBatchWithIndexInternal::Result result =
       WriteBatchWithIndexInternal::Result::kNotFound;
@@ -207,8 +207,8 @@ WriteBatchWithIndexInternal::Result WriteBatchWithIndexInternal::GetFromBatch(
         Logger* logger = immuable_db_options.info_log.get();
 
         if (merge_operator) {
-          FutureSlice future_slice(entry_value, false/* copy */);
-          *s = MergeHelper::TimedFullMerge(merge_operator, key, &future_slice,
+          LazySlice lazy_slice(entry_value, false/* copy */);
+          *s = MergeHelper::TimedFullMerge(merge_operator, key, &lazy_slice,
                                            merge_context->GetOperands(), value,
                                            logger, statistics, env);
         } else {

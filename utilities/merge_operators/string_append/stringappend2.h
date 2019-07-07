@@ -28,8 +28,8 @@ class StringAppendTESTOperator : public MergeOperator {
                            MergeOperationOutput* merge_out) const override;
 
   virtual bool PartialMergeMulti(const Slice& key,
-                                 const std::vector<FutureSlice>& operand_list,
-                                 std::string* new_value, Logger* logger) const
+                                 const std::vector<LazySlice>& operand_list,
+                                 LazySlice* new_value, Logger* logger) const
       override;
 
   virtual const char* Name() const override;

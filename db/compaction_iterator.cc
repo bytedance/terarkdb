@@ -28,11 +28,7 @@ class CompactionIteratorToInternalIterator : public InternalIterator {
   virtual void Prev() override { abort(); }  // do not support
   virtual Slice key() const override { return c_iter_->key(); }
   virtual LazySlice value() const override {
-    return LazySliceWrapper(&c_iter_->value());
-  }
-  virtual FutureSlice future_value(Slice /*pinned_user_key*/) const override {
-    assert(false);
-    return FutureSlice();
+    return LazySliceReference(c_iter_->value());
   }
   virtual Status status() const override {
     auto ci = c_iter_;

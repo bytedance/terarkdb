@@ -1122,13 +1122,7 @@ struct MapElementIterator : public InternalIterator {
   }
   LazySlice value() const override {
     assert(where_ < meta_size_);
-    return LazySliceWrapper(&value_slice);
-  }
-  FutureSlice future_value(Slice pinned_user_key) const override {
-    assert(where_ < meta_size_);
-    assert(icmp_->user_comparator()->Compare(pinned_user_key,
-                                             ExtractUserKey(key_slice)) == 0);
-    return FutureSlice(value_slice, pinned_user_key);
+    return LazySliceReference(value_slice);
   }
   virtual Status status() const override {
     return iter_ ? iter_->status() : Status::OK();

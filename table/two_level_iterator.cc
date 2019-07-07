@@ -537,13 +537,6 @@ class MapSstIterator final : public InternalIterator {
     assert(Valid());
     return min_heap_.top().iter->value();
   }
-  virtual FutureSlice future_value(Slice pinned_user_key) const override {
-    assert(Valid());
-    assert(min_heap_.comparator().internal_comparator().user_comparator()
-               ->Compare(pinned_user_key,
-                         ExtractUserKey(min_heap_.top().key)) == 0);
-    return min_heap_.top().iter->future_value(pinned_user_key);
-  }
   virtual Status status() const override { return status_; }
 };
 

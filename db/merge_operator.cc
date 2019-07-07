@@ -18,43 +18,40 @@ bool MergeOperator::FullMergeV2(const MergeOperationInput& merge_in,
   // std::deque<std::string> and pass it to FullMerge
   std::deque<std::string> operand_list_str;
   for (auto& op : merge_in.operand_list) {
-    LazySlice slice = op.get();
-    if (!slice.decode().ok()) {
+    if (!op.decode().ok()) {
       return false;
     }
-    operand_list_str.emplace_back(slice->data(), slice->size());
+    operand_list_str.emplace_back(op->data(), op->size());
   }
   const Slice* existing_value_ptr = nullptr;
-  LazySlice slice;
   if (merge_in.existing_value != nullptr) {
-    slice = merge_in.existing_value->get();
-    if (!slice.decode().ok()) {
+    if (!merge_in.existing_value->decode().ok()) {
       return false;
     }
-    existing_value_ptr = slice.get();
+    existing_value_ptr = merge_in.existing_value->get();
   }
   return FullMerge(merge_in.key, existing_value_ptr, operand_list_str,
-                   &merge_out->new_value, merge_in.logger);
+                   merge_out->new_value.get_buffer(), merge_in.logger);
 }
 
 // The default implementation of PartialMergeMulti, which invokes
 // PartialMerge multiple times internally and merges two operands at
 // a time.
 bool MergeOperator::PartialMergeMulti(
-    const Slice& key, const std::vector<FutureSlice>& operand_list,
-     std::string* new_value, Logger* logger) const {
+    const Slice& key, const std::vector<LazySlice>& operand_list,
+    LazySlice* new_value, Logger* logger) const {
   assert(operand_list.size() >= 2);
   // Simply loop through the operands
-  FutureSlice temp_slice = FutureSliceWrapper(&operand_list[0]);
+  LazySlice temp_slice = LazySliceReference(operand_list[0]);
 
+  LazySlice temp_value;
   for (size_t i = 1; i < operand_list.size(); ++i) {
     auto& operand = operand_list[i];
-    std::string temp_value;
     if (!PartialMerge(key, temp_slice, operand, &temp_value, logger)) {
       return false;
     }
-    swap(temp_value, *new_value);
-    temp_slice.reset(*new_value, false/* copy */);
+    temp_value.swap(*new_value);
+    temp_slice = LazySliceReference(*new_value);
   }
 
   // The result will be in *new_value. All merges succeeded.
@@ -68,29 +65,26 @@ bool AssociativeMergeOperator::FullMergeV2(
     const MergeOperationInput& merge_in,
     MergeOperationOutput* merge_out) const {
   // Simply loop through the operands
-  FutureSlice temp_existing;
-  LazySlice existing_slice;
-  LazySlice operand_slice;
-  const FutureSlice* existing_value = merge_in.existing_value;
+  LazySlice temp_existing;
+  LazySlice temp_value;
+  const LazySlice* existing_value = merge_in.existing_value;
   for (const auto& operand : merge_in.operand_list) {
-    const Slice* existing_slice_ptr = nullptr;
+    const Slice* existing_value_slice = nullptr;
     if (existing_value != nullptr) {
-      if (!(existing_slice = existing_value->get()).decode().ok()) {
+      if (!existing_value->decode().ok()) {
         return false;
       }
-      existing_slice_ptr = existing_slice.get();
+      existing_value_slice = existing_value->get();
     }
-    operand_slice = operand.get();
-    if (!operand_slice.decode().ok()) {
+    if (!operand.decode().ok()) {
       return false;
     }
-    std::string temp_value;
-    if (!Merge(merge_in.key, existing_slice_ptr, *operand_slice, &temp_value,
-               merge_in.logger)) {
+    if (!Merge(merge_in.key, existing_value_slice, *operand,
+               temp_value.get_buffer(), merge_in.logger)) {
       return false;
     }
-    swap(temp_value, merge_out->new_value);
-    temp_existing.reset(merge_out->new_value, false/* copy */);
+    temp_value.swap(merge_out->new_value);
+    temp_existing = LazySliceReference(merge_out->new_value);
     existing_value = &temp_existing;
   }
 
@@ -101,16 +95,14 @@ bool AssociativeMergeOperator::FullMergeV2(
 // Call the user defined simple merge on the operands;
 // NOTE: It is assumed that the client's merge-operator will handle any errors.
 bool AssociativeMergeOperator::PartialMerge(const Slice& key,
-                                            const FutureSlice& left_operand,
-                                            const FutureSlice& right_operand,
+                                            const LazySlice& left_operand,
+                                            const LazySlice& right_operand,
                                             std::string* new_value,
                                             Logger* logger) const {
-  LazySlice left = left_operand.get();
-  LazySlice right = right_operand.get();
-  if (!left.decode().ok() || !right.decode().ok()) {
+  if (!left_operand.decode().ok() || !right_operand.decode().ok()) {
     return false;
   }
-  return Merge(key, left.get(), *right, new_value, logger);
+  return Merge(key, left_operand.get(), *right_operand, new_value, logger);
 }
 
 } // namespace rocksdb

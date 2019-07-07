@@ -74,8 +74,6 @@ class PlainTableIterator : public InternalIterator {
 
   LazySlice value() const override;
 
-  FutureSlice future_value(Slice pinned_user_key) const override;
-
   Status status() const override;
 
  private:
@@ -749,17 +747,8 @@ Slice PlainTableIterator::key() const {
 
 LazySlice PlainTableIterator::value() const {
   assert(Valid());
-  return LazySlice(value_, table_->file_number_);
+  return LazySlice(value_, true, table_->file_number_);
 }
-
-FutureSlice PlainTableIterator::future_value(Slice pinned_user_key) const {
-  assert(Valid());
-  assert(table_->internal_comparator_.user_comparator()->Compare(
-      pinned_user_key, ExtractUserKey(key_)) == 0);
-  (void)pinned_user_key;
-  return FutureSlice(value_, true/* copy */, table_->file_number_);
-}
-
 
 Status PlainTableIterator::status() const {
   return status_;

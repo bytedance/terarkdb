@@ -64,7 +64,7 @@ bool StringAppendTESTOperator::FullMergeV2(
 }
 
 bool StringAppendTESTOperator::PartialMergeMulti(
-    const Slice& /*key*/, const std::vector<FutureSlice>& /*operand_list*/,
+    const Slice& /*key*/, const std::vector<LazySlice>& /*operand_list*/,
     std::string* /*new_value*/, Logger* /*logger*/) const {
   return false;
 }

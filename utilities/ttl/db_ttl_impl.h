@@ -242,10 +242,9 @@ class TtlMergeOperator : public MergeOperator {
     const uint32_t ts_len = DBWithTTLImpl::kTSLength;
 
     // Extract time-stamp from each operand to be passed to user_merge_op_
-    std::vector<FutureSlice> operands_without_ts;
+    std::vector<LazySlice> operands_without_ts;
     for (const auto& operand : merge_in.operand_list) {
-      operands_without_ts.push_back(FutureSliceRemoveSuffixWrapper(&operand,
-                                                                   ts_len));
+      operands_without_ts.push_back(LazySliceRemoveSuffix(&operand, ts_len));
     }
 
     // Apply the user merge operator (store result in *new_value)
@@ -253,8 +252,8 @@ class TtlMergeOperator : public MergeOperator {
     MergeOperationOutput user_merge_out(merge_out->new_value,
                                         merge_out->existing_operand);
     if (merge_in.existing_value) {
-      FutureSlice existing_value_without_ts =
-          FutureSliceRemoveSuffixWrapper(merge_in.existing_value, ts_len);
+      LazySlice existing_value_without_ts =
+          LazySliceRemoveSuffix(merge_in.existing_value, ts_len);
       good = user_merge_op_->FullMergeV2(
           MergeOperationInput(merge_in.key, &existing_value_without_ts,
                               operands_without_ts, merge_in.logger),
@@ -272,13 +271,18 @@ class TtlMergeOperator : public MergeOperator {
     }
 
     if (merge_out->existing_operand != nullptr) {
-      LazySlice existing_operand_slice = merge_out->existing_operand->get();
-      if (!existing_operand_slice.decode().ok()) {
+      if (!merge_out->existing_operand->decode().ok()) {
         return false;
       }
-      merge_out->new_value.assign(existing_operand_slice->data(),
-                                  existing_operand_slice->size());
+      if (!merge_out->new_value.is_buffer()) {
+        merge_out->new_value.reset_to_buffer();
+      }
+      auto slice_ptr = merge_out->existing_operand->get();
+      merge_out->new_value.get_buffer()->assign(slice_ptr->data(),
+                                                slice_ptr->size());
       merge_out->existing_operand = nullptr;
+    } else if (!LazySliceTransToBuffer(merge_out->new_value)) {
+      return false;
     }
 
     // Augment the *new_value with the ttl time-stamp
@@ -292,27 +296,29 @@ class TtlMergeOperator : public MergeOperator {
     } else {
       char ts_string[ts_len];
       EncodeFixed32(ts_string, (int32_t)curtime);
-      merge_out->new_value.append(ts_string, ts_len);
+      merge_out->new_value.get_buffer()->append(ts_string, ts_len);
       return true;
     }
   }
 
   virtual bool PartialMergeMulti(const Slice& key,
-                                 const std::vector<FutureSlice>& operand_list,
-                                 std::string* new_value, Logger* logger) const
+                                 const std::vector<LazySlice>& operand_list,
+                                 LazySlice* new_value, Logger* logger) const
       override {
     const uint32_t ts_len = DBWithTTLImpl::kTSLength;
-    std::vector<FutureSlice> operands_without_ts;
+    std::vector<LazySlice> operands_without_ts;
 
     for (const auto& operand : operand_list) {
-      operands_without_ts.push_back(FutureSliceRemoveSuffixWrapper(&operand,
-                                                                   ts_len));
+      operands_without_ts.push_back(LazySliceRemoveSuffix(&operand, ts_len));
     }
 
     // Apply the user partial-merge operator (store result in *new_value)
     assert(new_value);
     if (!user_merge_op_->PartialMergeMulti(key, operands_without_ts, new_value,
                                            logger)) {
+      return false;
+    }
+    if (!LazySliceTransToBuffer(*new_value)) {
       return false;
     }
 
@@ -327,7 +333,7 @@ class TtlMergeOperator : public MergeOperator {
     } else {
       char ts_string[ts_len];
       EncodeFixed32(ts_string, (int32_t)curtime);
-      new_value->append(ts_string, ts_len);
+      new_value->get_buffer()->append(ts_string, ts_len);
       return true;
     }
   }

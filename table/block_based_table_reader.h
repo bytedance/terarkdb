@@ -667,8 +667,10 @@ class BlockBasedTableIterator
   using Base = BlockBasedTableIteratorBase<TBlockIter, TValue>;
   using Base::block_iter_;
   using Base::Valid;
+
  public:
   using Base::Base;
+
   TValue value() const override {
     assert(Valid());
     return block_iter_.value();
@@ -683,18 +685,13 @@ class BlockBasedTableIterator<TBlockIter, LazySlice>
   using Base::icomp_;
   using Base::table_;
   using Base::Valid;
+
  public:
   using Base::Base;
+
   LazySlice value() const override {
     assert(Valid());
     return LazySlice(block_iter_.value(), table_->FileNumber());
-  }
-  FutureSlice future_value(Slice pinned_user_key) const override {
-    assert(Valid());
-    assert(icomp_.user_comparator()->Compare(
-        pinned_user_key, ExtractUserKey(block_iter_.key())) == 0);
-    (void)pinned_user_key;
-    return FutureSlice(block_iter_.value(), true/* copy */, table_->FileNumber());
   }
 };
 

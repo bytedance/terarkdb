@@ -90,7 +90,6 @@ class MemTableRep {
   static size_t EncodeKeyValueSize(const Slice& key, const Slice& value);
   static void EncodeKeyValue(const Slice& key, const Slice& value, char* buf);
   static LazySlice DecodeToLazyValue(const char* key);
-  static FutureSlice DecodeToFutureValue(const char* key);
 
   explicit MemTableRep(Allocator* allocator) : allocator_(allocator) {}
 
@@ -211,12 +210,6 @@ class MemTableRep {
     // REQUIRES: Valid()
     virtual LazySlice value() const {
       return DecodeToLazyValue(EncodedKey());
-    }
-
-    // Returns FutureSlice at the current position.
-    // REQUIRES: Valid()
-    virtual FutureSlice future_value(Slice /*pinned_user_key*/) const {
-      return DecodeToFutureValue(EncodedKey());
     }
 
     // Advances to the next position.

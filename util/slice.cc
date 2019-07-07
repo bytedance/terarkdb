@@ -210,243 +210,236 @@ const SliceTransform* NewNoopTransform() {
   return new NoopTransform;
 }
 
-const LazySliceMeta* EmptyLazySliceMeta() {
-  class SliceMetaImpl : public LazySliceMeta{
-    Status decode(const Slice& /*raw*/, void* /*arg*/,
-                  const void* /*const_arg*/, void*& /*temp*/,
-                  Slice* /*value*/) const override {
-      return Status::Corruption("Invalid LazySlice");
+// arg       -> pointer to free
+// const_arg -> if not null, pointer to error message
+class DefaultLazySliceMetaImpl : public LazySliceMeta{
+  void destroy(const Slice& raw, void* arg, const void* /*const_arg*/,
+               void* temp) const override {
+    assert(!raw.valid()); (void)raw;
+    assert(temp == nullptr); (void)temp;
+    if (arg != nullptr) {
+      free(arg);
     }
-  };
-  static SliceMetaImpl meta_impl;
+  }
+  void detach(Slice& value, const LazySliceMeta*& meta, Slice& raw,
+              void*& arg, const void*& const_arg,
+              void*& temp) const override {
+    assert(meta == this); (void)meta;
+    assert(!raw.valid()); (void)raw;
+    assert(temp == nullptr); (void)temp;
+    if (value.empty() || arg != nullptr || const_arg != nullptr) {
+      return;
+    }
+    value = copy_value(arg, const_arg, value);
+  }
+  Status decode(const Slice& raw, void* arg, const void* const_arg,
+                void*& temp, Slice* value) const override {
+    assert(!raw.valid()); (void)raw;
+    assert(temp == nullptr); (void)temp;
+    if (const_arg != nullptr) {
+      return Status::Corruption(reinterpret_cast<const char*>(const_arg));
+    }
+    return Status::OK();
+  }
+ public:
+  static Slice copy_value(void*& arg, const void*& const_arg,
+                          const Slice& value) {
+    void* ptr = malloc(value.size());
+    if (ptr == nullptr) {
+      arg = nullptr;
+      const_arg = "bad alloc error";
+      return Slice::Invalid();
+    } else {
+      memcpy(ptr, value.data(), value.size());
+      arg = ptr;
+      const_arg = nullptr;
+      return Slice(reinterpret_cast<char*>(ptr), value.size());
+    }
+  }
+  static void copy_status(void*& arg, const void*& const_arg,
+                          Status& status) {
+    char* err_msg =
+        strdup(status.getState() != nullptr
+                   ? status.getState()
+                   : status.ToString().c_str());
+    if (err_msg == nullptr) {
+      arg = nullptr;
+      const_arg = "LazySlice decode fail & error msg strdup fail";
+    } else {
+      arg = err_msg;
+      const_arg = err_msg;
+    }
+  }
+};
+
+// arg       -> pointer to std::string
+// const_arg -> if nullptr, need delete arg
+struct BufferLazySliceMetaImpl : public LazySliceMeta {
+  void destroy(const Slice& raw, void* arg, const void* const_arg,
+               void* temp) const override {
+    assert(!raw.valid()); (void)raw;
+    assert(temp == nullptr); (void)temp;
+    assert(arg != nullptr);
+    if (const_arg == nullptr) {
+      delete reinterpret_cast<std::string*>(arg);
+    }
+  }
+  void detach(Slice& value, const LazySliceMeta*& meta, Slice& raw,
+              void*& arg, const void*& const_arg,
+              void*& temp) const override {
+    assert(meta == this); (void)meta;
+    assert(!raw.valid()); (void)raw;
+    assert(temp == nullptr); (void)temp;
+    if (const_arg == nullptr) {
+      return;
+    }
+    value = *reinterpret_cast<const std::string*>(arg);
+    meta = default_meta();
+    if (!value.empty()) {
+      value = DefaultLazySliceMetaImpl::copy_value(arg, const_arg, value);
+    } else {
+      arg = nullptr;
+      const_arg = nullptr;
+    }
+  }
+  Status decode(const Slice& raw, void* arg, const void* /*const_arg*/,
+                void*& temp, Slice* value) const override {
+    assert(!raw.valid()); (void)raw;
+    assert(temp == nullptr); (void)temp;
+    *value = *reinterpret_cast<const std::string*>(arg);
+    return Status::OK();
+  }
+};
+
+// const_arg -> pointer to slice
+struct ReferenceLazySliceMetaImpl : public LazySliceMeta {
+  void destroy(const Slice& /*raw*/, void* arg, const void* const_arg,
+               void* temp) const override {
+    assert(arg == nullptr); (void)arg;
+    assert(const_arg != nullptr); (void)const_arg;
+    assert(temp == nullptr); (void)temp;
+  }
+  Status decode(const Slice& raw, void* arg, const void* const_arg,
+                void*& temp, Slice* value) const override {
+    assert(!raw.valid()); (void)raw;
+    assert(const_arg == nullptr); (void)const_arg;
+    assert(temp == nullptr); (void)temp;
+    const LazySlice& slice_ref =
+        *reinterpret_cast<const LazySlice*>(const_arg);
+    auto s = slice_ref.decode();
+    if (s.ok()) {
+      *value = *slice_ref;
+    }
+    return s;
+  }
+};
+
+void LazySliceMeta::detach(Slice& value, const LazySliceMeta*& meta,
+                           Slice& raw, void*& arg, const void*& const_arg,
+                           void*& temp) const {
+  assert(meta == this); (void)meta;
+  assert(const_arg != nullptr);
+  if (value.valid()) {
+    value = DefaultLazySliceMetaImpl::copy_value(arg, const_arg, value);
+  } else {
+    Status s = decode(raw, arg, const_arg, temp, &value);
+    if (s.ok()) {
+      value = DefaultLazySliceMetaImpl::copy_value(arg, const_arg, value);
+    } else {
+      value = Slice::Invalid();
+      DefaultLazySliceMetaImpl::copy_status(arg, const_arg, s);
+    }
+  }
+  meta = default_meta();
+  raw = Slice::Invalid();
+  temp = nullptr;
+}
+
+const LazySliceMeta* LazySliceMeta::default_meta() {
+  static DefaultLazySliceMetaImpl meta_impl;
   return &meta_impl;
 }
 
-void FutureSlice::reset(const Slice& slice, bool copy, uint64_t file_number) {
-  enum {
-    kIsCopySlice = 1, kHasFileNumber = 2
-  };
-  struct SliceMetaImpl : public FutureSliceMeta {
-    LazySlice to_lazy_slice(const Slice& storage) const override {
-      assert(!storage.empty());
-      Slice input(storage.data() + 1, storage.size() - 1);
-      uint64_t file_number, slice_ptr, slice_size;
-      switch(storage[0]) {
-      case 0:
-        if (GetVarint64(&input, &slice_ptr) &&
-            GetVarint64(&input, &slice_size)) {
-          return LazySlice(Slice(reinterpret_cast<const char*>(slice_ptr),
-                                 slice_size));
-        }
-        break;
-      case kHasFileNumber:
-        if (GetVarint64(&input, &file_number) &&
-            GetVarint64(&input, &slice_ptr) &&
-            GetVarint64(&input, &slice_size)) {
-          return LazySlice(Slice(reinterpret_cast<const char*>(slice_ptr),
-                                 slice_size), file_number);
-        }
-        break;
-      case kIsCopySlice | kHasFileNumber:
-        if (GetVarint64(&input, &file_number)) {
-          return LazySlice(input, file_number);
-        }
-        break;
-      default:
-        break;
-      }
-      assert(false);
-      return LazySlice();
-    }
-  };
-  static SliceMetaImpl meta_impl;
-  if (copy) {
-    if (file_number == size_t(-1)) {
-      buffer()->assign(slice.data(), slice.size());
-    } else {
-      char buf[kMaxVarint64Length * 1 + 1];
-      buf[0] = kIsCopySlice | kHasFileNumber;
-      char* ptr = buf + 1;
-      ptr = EncodeVarint64(ptr, file_number);
-      auto size = static_cast<size_t>(ptr - buf);
-      storage_.reserve(size + slice.size());
-      storage_.assign(buf, size);
-      storage_.append(slice.data(), slice.size());
-      meta_ = &meta_impl;
-    }
+const LazySliceMeta* LazySliceMeta::reference_meta() {
+  static ReferenceLazySliceMetaImpl meta_impl;
+  return &meta_impl;
+}
+
+const LazySliceMeta* LazySliceMeta::buffer_meta() {
+  static BufferLazySliceMetaImpl meta_impl;
+  return &meta_impl;
+}
+
+void LazySlice::reset(const Slice& _value, bool copy, uint64_t _file_number) {
+  destroy();
+  if (copy && !_value.empty()) {
+    value_ = DefaultLazySliceMetaImpl::copy_value(arg_, const_arg_, _value);
   } else {
-    if (file_number == size_t(-1)) {
-      char buf[kMaxVarint64Length * 2 + 1];
-      buf[0] = 0;
-      char* ptr = buf + 1;
-      ptr = EncodeVarint64(ptr, reinterpret_cast<uint64_t>(slice.data()));
-      ptr = EncodeVarint64(ptr, slice.size());
-      storage_.assign(buf, static_cast<size_t>(ptr - buf));
-      meta_ = &meta_impl;
-    } else {
-      char buf[kMaxVarint64Length * 3 + 1];
-      buf[0] = kHasFileNumber;
-      char* ptr = buf + 1;
-      ptr = EncodeVarint64(ptr, file_number);
-      ptr = EncodeVarint64(ptr, reinterpret_cast<uint64_t>(slice.data()));
-      ptr = EncodeVarint64(ptr, slice.size());
-      storage_.assign(buf, static_cast<size_t>(ptr - buf));
-      meta_ = &meta_impl;
-    }
+    value_ = _value;
+    arg_ = nullptr;
+    const_arg_ = nullptr;
   }
+  meta_ = LazySliceMeta::default_meta();
+  raw_ = Slice::Invalid();
+  temp_ = nullptr;
+  file_number_ = _file_number;
 }
 
-void FutureSlice::reset(const LazySlice& slice) {
-  struct SliceMetaImpl : public FutureSliceMeta, public LazySliceMeta {
-    LazySlice to_lazy_slice(const Slice& storage) const override {
-      return LazySlice(storage, this);
-    }
-    Status decode(const Slice& raw, void* /*arg*/, const void* /*const_arg*/,
-                  void*& /*temp*/, Slice* /*value*/) const override {
-      return Status::Corruption(raw);
-    }
-  };
-  static SliceMetaImpl meta_impl;
-  Status s = slice.decode();
-  if (s.ok()) {
-    reset(*slice, true, slice.file_number());
-  } else {
-    storage_ = s.ToString();
-    meta_ = &meta_impl;
-  }
+LazySlice LazySliceReference(const LazySlice& slice) {
+  return LazySlice(LazySliceMeta::reference_meta(), slice.raw(), nullptr,
+                   &slice, slice.file_number());
 }
 
-void FutureSlice::reset(const LazySlice& slice, Slice pinned_user_key) {
-  if (slice.meta() == nullptr ||
-      !slice.meta()->to_future(slice, pinned_user_key, this).ok()) {
-    reset(slice);
-  }
+void LazySliceCopy(LazySlice& dst, const LazySlice& src) {
+  dst = LazySliceReference(src);
+  dst.detach();
 }
 
-std::string* FutureSlice::buffer() {
-  struct SliceMetaImpl : public FutureSliceMeta {
-    LazySlice to_lazy_slice(const Slice& storage) const override {
-      return LazySlice(storage);
+LazySlice LazySliceRemoveSuffix(const LazySlice* slice, size_t fixed_len) {
+  // arg       -> fixed_len
+  // const_arg -> pointer to slice
+  struct LazySliceMetaImpl : public LazySliceMeta {
+    void destroy(const Slice& /*raw*/, void* /*arg*/,
+                 const void* const_arg, void* temp) const override {
+      assert(const_arg != nullptr); (void)const_arg;
+      assert(temp == nullptr); (void)temp;
     }
-  };
-  static SliceMetaImpl meta_impl;
-  meta_ = &meta_impl;
-  return &storage_;
-}
-
-LazySlice LazySliceWrapper(const LazySlice* slice) {
-  class SliceMetaImpl : public LazySliceMeta{
-    Status decode(const Slice& /*raw*/, void* /*arg*/, const void* const_arg,
-                  void*& /*temp*/, Slice* value) const override {
-      const LazySlice& slice_ref =
-          *reinterpret_cast<const LazySlice*>(const_arg);
-      auto s = slice_ref.decode();
-      if (s.ok()) {
-        *value = *slice_ref;
-      }
-      return s;
-    }
-  };
-  static SliceMetaImpl meta_impl;
-  assert(slice != nullptr);
-  return LazySlice(slice->raw(), &meta_impl, nullptr, slice,
-                   slice->file_number());
-}
-
-FutureSlice FutureSliceWrapper(const FutureSlice* slice) {
-  struct SliceMetaImpl : public FutureSliceMeta {
-    LazySlice to_lazy_slice(const Slice& storage) const override {
-      Slice input = storage;
-      uint64_t slice_ptr;
-      if (!GetFixed64(&input, &slice_ptr)) {
-        return LazySlice();
-      }
-      const FutureSlice& slice_ref =
-          *reinterpret_cast<const FutureSlice*>(slice_ptr);
-      return slice_ref.get();
-    }
-  };
-  static SliceMetaImpl meta_impl;
-  assert(slice != nullptr);
-  std::string storage;
-  PutFixed64(&storage, reinterpret_cast<uint64_t>(slice));
-  return FutureSlice(&meta_impl, std::move(storage));
-}
-
-FutureSlice FutureSliceRemoveSuffixWrapper(const FutureSlice* slice,
-                                           size_t fixed_len) {
-  struct SliceMetaImpl : public FutureSliceMeta, public LazySliceMeta {
-    LazySlice to_lazy_slice(const Slice& storage) const override {
-      Slice input = storage;
-      uint64_t slice_ptr, len;
-      if (!GetVarint64(&input, &slice_ptr) || !GetVarint64(&input, &len)) {
-        return LazySlice();
-      }
-      const FutureSlice& slice_ref =
-          *reinterpret_cast<const FutureSlice*>(slice_ptr);
-      LazySlice* lazy_slice_ptr = new LazySlice(slice_ref.get());
-      return LazySlice(lazy_slice_ptr->raw(), this, lazy_slice_ptr,
-                       reinterpret_cast<void*>(len),
-                       lazy_slice_ptr->file_number());
-    }
-    void destroy(Slice& /*raw*/, void* arg, const void* /*const_arg*/,
-                 void* /*temp*/) const override {
-      assert(arg != nullptr);
-      delete reinterpret_cast<LazySlice*>(arg);
-    }
-    Status decode(const Slice& /*raw*/, void* arg, const void* const_arg,
-                  void*& /*temp*/, Slice* value) const override {
-      LazySlice& lazy_slice = *reinterpret_cast<LazySlice*>(arg);
-      uint64_t len = reinterpret_cast<uint64_t>(const_arg);
-      auto s = lazy_slice.decode();
-      if (!s.ok()) {
-        return s;
-      }
-      if (lazy_slice->size() < len) {
-        return Status::Corruption(
-            "Error: Could not remove suffix from value.");
-      }
-      *value = Slice(lazy_slice->data(), lazy_slice->size() - len);
-      return s;
-    }
-  };
-  static SliceMetaImpl meta_impl;
-  assert(slice != nullptr);
-  std::string storage;
-  PutVarint64Varint64(&storage, reinterpret_cast<uint64_t>(slice), fixed_len);
-  return FutureSlice(&meta_impl, std::move(storage));
-}
-
-FutureSlice LazySliceToFutureSliceWrapper(const LazySlice* slice) {
-  struct SliceMetaImpl : public FutureSliceMeta, public LazySliceMeta {
-    LazySlice to_lazy_slice(const Slice& storage) const override {
-      uint64_t slice_ptr;
-      Slice input = storage;
-      if (!GetFixed64(&input, &slice_ptr)) {
-        return LazySlice();
-      }
-      const LazySlice& slice_ref =
-          *reinterpret_cast<const LazySlice*>(slice_ptr);
-      return LazySlice(slice_ref.raw(), this, nullptr, &slice_ref,
-                       slice_ref.file_number());
-    }
-    Status decode(const Slice& /*raw*/, void* /*arg0*/,
+    Status decode(const Slice& /*raw*/, void* arg,
                   const void* const_arg, void*& /*temp*/,
                   Slice* value) const override {
       const LazySlice& slice_ref =
           *reinterpret_cast<const LazySlice*>(const_arg);
+      uint64_t len = reinterpret_cast<uint64_t>(arg);
       auto s = slice_ref.decode();
-      if (s.ok()) {
-        *value = *slice_ref;
+      if (!s.ok()) {
+        return s;
       }
+      if (slice_ref->size() < len) {
+        return Status::Corruption(
+            "Error: Could not remove suffix.");
+      }
+      *value = Slice(slice_ref->data(), slice_ref->size() - len);
       return s;
     }
   };
-  static SliceMetaImpl meta_impl;
+  static LazySliceMetaImpl meta_impl;
   assert(slice != nullptr);
-  std::string storage;
-  PutFixed64(&storage, reinterpret_cast<uint64_t>(slice));
-  return FutureSlice(&meta_impl, std::move(storage));
+  return LazySlice(&meta_impl, slice->raw(),
+                   reinterpret_cast<void*>(fixed_len), slice,
+                   slice->file_number());
+}
+
+bool LazySliceTransToBuffer(LazySlice& slice) {
+  if (slice.is_buffer()) {
+    return true;
+  }
+  if (!slice.decode().ok()) {
+    return false;
+  }
+  LazySlice buffer;
+  buffer.reset_to_buffer();
+  buffer.get_buffer()->assign(slice->data(), slice->size());
+  buffer.swap(slice);
 }
 
 }  // namespace rocksdb

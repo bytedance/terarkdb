@@ -15,10 +15,11 @@
 
 namespace rocksdb {
 
-class InternalIteratorCommon : public Cleanable {
+template <class TValue>
+class InternalIteratorBase : public Cleanable {
  public:
-  InternalIteratorCommon() {}
-  virtual ~InternalIteratorCommon() {}
+  InternalIteratorBase() {}
+  virtual ~InternalIteratorBase() {}
 
   // An iterator is either positioned at a key/value pair, or
   // not valid.  This method returns true iff the iterator is valid.
@@ -62,6 +63,12 @@ class InternalIteratorCommon : public Cleanable {
   // REQUIRES: Valid()
   virtual Slice key() const = 0;
 
+  // Return the value for the current entry.  The underlying storage for
+  // the returned slice is valid only until the next modification of
+  // the iterator.
+  // REQUIRES: Valid()
+  virtual TValue value() const = 0;
+
   // If an error has occurred, return it.  Else return an ok status.
   // If non-blocking IO is requested and this operation cannot be
   // satisfied without doing some IO, then this returns Status::Incomplete().
@@ -88,33 +95,8 @@ class InternalIteratorCommon : public Cleanable {
 
  private:
   // No copying allowed
-  InternalIteratorCommon(const InternalIteratorCommon&) = delete;
-  InternalIteratorCommon& operator=(const InternalIteratorCommon&) = delete;
-};
-
-template <class TValue>
-class InternalIteratorBase : public InternalIteratorCommon {
- public:
-  // Return the value for the current entry.  The underlying storage for
-  // the returned slice is valid only until the next modification of
-  // the iterator.
-  // REQUIRES: Valid()
-  virtual TValue value() const = 0;
-};
-
-template<>
-class InternalIteratorBase<LazySlice> : public InternalIteratorCommon {
- public:
-  // Return the value for the current entry.  The underlying storage for
-  // the returned slice is valid only until the next modification of
-  // the iterator.
-  // REQUIRES: Valid()
-  virtual LazySlice value() const = 0;
-
-  // Return the value for the current entry. The underlying storage for
-  // the returned slice is valid until version expired.
-  // REQUIRES: Valid()
-  virtual FutureSlice future_value(Slice pinned_user_key) const = 0;
+  InternalIteratorBase(const InternalIteratorBase&) = delete;
+  InternalIteratorBase& operator=(const InternalIteratorBase&) = delete;
 };
 
 using InternalIterator = InternalIteratorBase<LazySlice>;

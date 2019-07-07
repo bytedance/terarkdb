@@ -127,10 +127,10 @@ class EmptyIterator : public Iterator {
   Status status_;
 };
 
-template <class TValue>
-class EmptyInternalIteratorCommon : public InternalIteratorBase<TValue> {
+template <class TValue = Slice>
+class EmptyInternalIteratorBase : public InternalIteratorBase<TValue> {
  public:
-  explicit EmptyInternalIteratorCommon(const Status& s) : status_(s) {}
+  explicit EmptyInternalIteratorBase(const Status& s) : status_(s) {}
   virtual bool Valid() const override { return false; }
   virtual void Seek(const Slice& /*target*/) override {}
   virtual void SeekForPrev(const Slice& /*target*/) override {}
@@ -150,25 +150,6 @@ class EmptyInternalIteratorCommon : public InternalIteratorBase<TValue> {
 
  private:
   Status status_;
-};
-template <class TValue>
-class EmptyInternalIteratorBase : public EmptyInternalIteratorCommon<TValue> {
-public:
-  explicit EmptyInternalIteratorBase(const Status& s)
-      : EmptyInternalIteratorCommon<TValue>(s) {}
-};
-
-template <>
-class EmptyInternalIteratorBase<LazySlice>
-    : public EmptyInternalIteratorCommon<LazySlice> {
-public:
-  explicit EmptyInternalIteratorBase(const Status& s)
-      : EmptyInternalIteratorCommon<LazySlice>(s) {}
-
-  FutureSlice future_value(Slice /*pinned_user_key*/) const override {
-    assert(false);
-    return FutureSlice();
-  }
 };
 
 }  // namespace

@@ -1488,7 +1488,7 @@ class MemTableInserter : public WriteBatch::Handler {
 
     if (perform_merge) {
       // 1) Get the existing value
-      FutureSlice get_value;
+      LazySlice get_value;
 
       // Pass in the sequence number so that we also include previous merge
       // operations in the same batch.
@@ -1501,17 +1501,17 @@ class MemTableInserter : public WriteBatch::Handler {
       if (cf_handle == nullptr) {
         cf_handle = db_->DefaultColumnFamily();
       }
-      db_->Get(read_options, cf_handle, key, get_value.buffer());
+      db_->Get(read_options, cf_handle, key, &get_value);
 
       // 2) Apply this merge
       auto merge_operator = moptions->merge_operator;
       assert(merge_operator);
 
-      std::string new_value;
+      LazySlice new_value;
 
       Status merge_status = MergeHelper::TimedFullMerge(
           merge_operator, key, &get_value,
-          {FutureSlice(value, false/* copy */)}, &new_value,
+          {LazySlice(value, false/* copy */)}, &new_value,
           moptions->info_log, moptions->statistics, Env::Default());
 
       if (!merge_status.ok()) {
@@ -1520,13 +1520,17 @@ class MemTableInserter : public WriteBatch::Handler {
         perform_merge = false;
       } else {
         // 3) Add value to memtable
-        bool mem_res = mem->Add(sequence_, kTypeValue, key, new_value);
-        if (UNLIKELY(!mem_res)) {
-          assert(seq_per_batch_);
-          ret_status = Status::TryAgain("key+seq exists");
-          const bool BATCH_BOUNDRY = true;
-          MaybeAdvanceSeq(BATCH_BOUNDRY);
+        auto s = new_value.decode();
+        if (s.ok()) {
+          bool mem_res = mem->Add(sequence_, kTypeValue, key, *new_value);
+          if (UNLIKELY(!mem_res)) {
+            assert(seq_per_batch_);
+            ret_status = Status::TryAgain("key+seq exists");
+            const bool BATCH_BOUNDRY = true;
+            MaybeAdvanceSeq(BATCH_BOUNDRY);
+          }
         }
+        ret_status = s;
       }
     }
 

@@ -12,7 +12,7 @@
 
 namespace rocksdb {
 
-const std::vector<FutureSlice> empty_operand_list;
+const std::vector<LazySlice> empty_operand_list;
 
 // The merge context for merging a user key.
 // When doing a Get(), DB will create such a class and pass it when
@@ -54,7 +54,7 @@ class MergeContext {
   }
 
   // Get the operand at the index.
-  const FutureSlice& GetOperand(int index) {
+  const LazySlice& GetOperand(int index) {
     assert(operand_list_);
 
     SetDirectionForward();
@@ -62,13 +62,13 @@ class MergeContext {
   }
 
   // Same as GetOperandsDirectionForward
-  const std::vector<FutureSlice>& GetOperands() {
+  const std::vector<LazySlice>& GetOperands() {
     return GetOperandsDirectionForward();
   }
 
   // Return all the operands in the order as they were merged (passed to
   // FullMerge or FullMergeV2)
-  const std::vector<FutureSlice>& GetOperandsDirectionForward() {
+  const std::vector<LazySlice>& GetOperandsDirectionForward() {
     if (!operand_list_) {
       return empty_operand_list;
     }
@@ -79,7 +79,7 @@ class MergeContext {
 
   // Return all the operands in the reversed order relative to how they were
   // merged (passed to FullMerge or FullMergeV2)
-  const std::vector<FutureSlice>& GetOperandsDirectionBackward() {
+  const std::vector<LazySlice>& GetOperandsDirectionBackward() {
     if (!operand_list_) {
       return empty_operand_list;
     }
@@ -91,7 +91,7 @@ class MergeContext {
  private:
   void Initialize() {
     if (!operand_list_) {
-      operand_list_.reset(new std::vector<FutureSlice>());
+      operand_list_.reset(new std::vector<LazySlice>());
     }
   }
 
@@ -110,7 +110,7 @@ class MergeContext {
   }
 
   // List of operands
-  std::unique_ptr<std::vector<FutureSlice>> operand_list_;
+  std::unique_ptr<std::vector<LazySlice>> operand_list_;
   bool operands_reversed_ = true;
 };
 

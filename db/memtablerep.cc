@@ -39,6 +39,22 @@ void MemTableRep::EncodeKeyValue(const Slice& key, const Slice& value,
 
 LazySlice MemTableRep::DecodeToLazyValue(const char* key) {
   struct SliceMetaImpl : public LazySliceMeta {
+    void destroy(const Slice& raw, void* arg, const void* const_arg,
+                 void* temp) const override {
+      assert(!raw.valid()); (void)raw;
+      assert(arg == nullptr); (void)arg;
+      assert(const_arg != nullptr); (void)const_arg;
+      assert(temp); (void)temp;
+    }
+    void detach(Slice& /*value*/, const LazySliceMeta*& meta, Slice& raw,
+                void*& arg, const void*& const_arg,
+                void*& temp) const override {
+      assert(meta == this); (void)meta;
+      assert(!raw.valid()); (void)raw;
+      assert(arg == nullptr); (void)arg;
+      assert(const_arg != nullptr); (void)const_arg;
+      assert(temp); (void)temp;
+    }
     Status decode(const Slice& /*raw*/, void* /*arg*/, const void* const_arg,
                   void*& /*temp*/, Slice* value) const override {
       const char* k = reinterpret_cast<const char*>(const_arg);
@@ -46,30 +62,9 @@ LazySlice MemTableRep::DecodeToLazyValue(const char* key) {
       *value = GetLengthPrefixedSlice(key_slice.data() + key_slice.size());
       return Status::OK();
     }
-    Status to_future(const LazySlice& slice, Slice /*pinned_user_key*/,
-                     FutureSlice* future_slice) const override {
-      const char* k = reinterpret_cast<const char*>(slice.const_arg());
-      *future_slice = DecodeToFutureValue(k);
-      return Status::OK();
-    }
   };
   static SliceMetaImpl meta_impl;
-  return LazySlice(Slice(), &meta_impl, nullptr, key);
-}
-
-FutureSlice MemTableRep::DecodeToFutureValue(const char* key) {
-  struct SliceMetaImpl : public FutureSliceMeta {
-    LazySlice to_lazy_slice(const Slice& storage) const override {
-      Slice input = storage;
-      uint64_t key_ptr;
-      GetFixed64(&input, &key_ptr);
-      return DecodeToLazyValue(reinterpret_cast<const char*>(key_ptr));
-    }
-  };
-  static SliceMetaImpl meta_impl;
-  std::string storage;
-  PutFixed64(&storage, reinterpret_cast<uint64_t>(key));
-  return FutureSlice(&meta_impl, std::move(storage));
+  return LazySlice(&meta_impl, Slice::Invalid(), nullptr, key);
 }
 
 bool MemTableRep::InsertKeyValue(const Slice& internal_key,

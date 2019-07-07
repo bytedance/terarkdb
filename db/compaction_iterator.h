@@ -195,7 +195,8 @@ class CompactionIterator {
   bool clear_and_output_next_key_ = false;
 
   MergeOutputIterator merge_out_iter_;
-  FutureSlice compaction_filter_value_;
+  LazySlice compaction_filter_value_;
+  std::string compaction_filter_value_storage_;
   InternalKey compaction_filter_skip_until_;
   // "level_ptrs" holds indices that remember which file of an associated
   // level we were last checking during the last call to compaction->

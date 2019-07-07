@@ -24,48 +24,46 @@ bool CassandraValueMergeOperator::FullMergeV2(
   merge_out->new_value.clear();
   std::vector<RowValue> row_values;
   if (merge_in.existing_value) {
-    LazySlice value = merge_in.existing_value->get();
-    if (!value.decode().ok()) {
+    if (!merge_in.existing_value->decode().ok()) {
       return false;
     }
+    const Slice& value = merge_in.existing_value;
     row_values.push_back(
-        RowValue::Deserialize(value->data(), value->size()));
+        RowValue::Deserialize(value.data(), value.size()));
   }
 
   for (auto& operand : merge_in.operand_list) {
-    LazySlice value = operand.get();
-    if (!value.decode().ok()) {
+    if (!operand.decode().ok()) {
       return false;
     }
-    row_values.push_back(RowValue::Deserialize(value->data(), value->size()));
+    row_values.push_back(RowValue::Deserialize(operand->data(), operand->size()));
   }
 
   RowValue merged = RowValue::Merge(std::move(row_values));
   merged = merged.RemoveTombstones(gc_grace_period_in_seconds_);
   merge_out->new_value.reserve(merged.Size());
-  merged.Serialize(&(merge_out->new_value));
+  merged.Serialize(merge_out->new_value.get_buffer());
 
   return true;
 }
 
 bool CassandraValueMergeOperator::PartialMergeMulti(
-    const Slice& /*key*/, const std::vector<FutureSlice>& operand_list,
-    std::string* new_value, Logger* /*logger*/) const {
+    const Slice& /*key*/, const std::vector<LazySlice>& operand_list,
+    LazySlice* new_value, Logger* /*logger*/) const {
   // Clear the *new_value for writing.
   assert(new_value);
   new_value->clear();
 
   std::vector<RowValue> row_values;
   for (auto& operand : operand_list) {
-    LazySlice value = operand.get();
-    if (!value.decode().ok()) {
+    if (!operand.decode().ok()) {
       return false;
     }
-    row_values.push_back(RowValue::Deserialize(value->data(), value->size()));
+    row_values.push_back(RowValue::Deserialize(operand->data(), operand->size()));
   }
   RowValue merged = RowValue::Merge(std::move(row_values));
   new_value->reserve(merged.Size());
-  merged.Serialize(new_value);
+  merged.Serialize(new_value->get_buffer());
   return true;
 }
 

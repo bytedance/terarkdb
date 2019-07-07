@@ -102,10 +102,6 @@ class MockTableIterator : public InternalIterator {
 
   LazySlice value() const override { return LazySlice(itr_->second); }
 
-  FutureSlice future_value(Slice /*pinned_user_key*/) const override {
-    return FutureSlice(itr_->second);
-  }
-
   Status status() const override { return Status::OK(); }
 
  private:

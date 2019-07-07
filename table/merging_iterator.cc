@@ -278,13 +278,6 @@ class MergingIterator : public InternalIterator {
     return current_->value();
   }
 
-  virtual FutureSlice future_value(Slice pinned_user_key) const override {
-    assert(Valid());
-    assert(comparator_->user_comparator()->Compare(
-               pinned_user_key, ExtractUserKey(current_->key())) == 0);
-    return current_->iter()->future_value(pinned_user_key);
-  }
-
  private:
   // Clears heaps for both directions, used when changing direction or seeking
   void ClearHeaps();

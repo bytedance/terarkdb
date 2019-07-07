@@ -385,16 +385,14 @@ class MemTableTombstoneIterator : public MemTableIteratorBase<Slice> {
   using Base::iter_;
   using Base::valid_;
   using Base::value_pinned_;
+
  public:
-  MemTableTombstoneIterator(const MemTable& mem,
-                            const ReadOptions& read_options, Arena* arena,
-                            bool use_range_del_table = false)
-      : MemTableIteratorBase<Slice>(mem, read_options, arena,
-                                    use_range_del_table) {}
+  using Base::Base;
 
   virtual Slice value() const override {
     assert(valid_);
     LazySlice v = iter_->value();
+    assert(v.decode().ok());
     return v.decode().ok() ? *v : Slice::Invalid();
   }
 };
@@ -404,24 +402,16 @@ class MemTableIterator : public MemTableIteratorBase<LazySlice> {
   using Base::iter_;
   using Base::valid_;
   using Base::value_pinned_;
+
  public:
-  MemTableIterator(const MemTable& mem, const ReadOptions& read_options,
-                   Arena* arena, bool use_range_del_table = false)
-    : MemTableIteratorBase<LazySlice>(mem, read_options, arena,
-                                      use_range_del_table) {}
+  using Base::Base;
 
   virtual LazySlice value() const override {
     assert(valid_);
-    return iter_->value();
-  }
-  virtual FutureSlice future_value(Slice pinned_user_key) const override {
-    assert(valid_);
-    assert(comparator_.icomparator()->user_comparator()->Compare(
-        pinned_user_key, ExtractUserKey(iter_->key())) == 0);
     if (value_pinned_ && iter_->IsValuePinned()) {
-      return iter_->future_value(pinned_user_key);
+      return iter_->value();
     } else {
-      return FutureSlice(iter_->value());
+      return LazySliceCopy(iter_->value());
     }
   }
 };
@@ -598,7 +588,7 @@ struct Saver {
   const LookupKey* key;
   bool* found_final_value;  // Is value set correctly? Used by KeyMayExist
   bool* merge_in_progress;
-  std::string* value;
+  LazySlice value;
   SequenceNumber seq;
   const MergeOperator* merge_operator;
   // the merge operations encountered;
@@ -621,7 +611,7 @@ struct Saver {
 }  // namespace
 
 static bool SaveValue(void* arg, const Slice& internal_key,
-                      const LazySlice& value) {
+                      LazySlice&& value) {
   Saver* s = reinterpret_cast<Saver*>(arg);
   MergeContext* merge_context = s->merge_context;
   SequenceNumber max_covering_tombstone_seq = s->max_covering_tombstone_seq;
@@ -660,9 +650,8 @@ static bool SaveValue(void* arg, const Slice& internal_key,
         *(s->status) = Status::OK();
         if (*(s->merge_in_progress)) {
           if (s->value != nullptr) {
-            FutureSlice future_value = LazySliceToFutureSliceWrapper(&value);
             *(s->status) = MergeHelper::TimedFullMerge(
-                merge_operator, s->key->user_key(), &future_value,
+                merge_operator, s->key->user_key(), &value,
                 merge_context->GetOperands(), s->value, s->logger,
                 s->statistics, s->env_, nullptr /* result_operand */, true);
           }

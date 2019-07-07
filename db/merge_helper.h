@@ -45,11 +45,10 @@ class MergeHelper {
   // - OK: Entries were successfully merged.
   // - Corruption: Merge operator reported unsuccessful merge.
   static Status TimedFullMerge(const MergeOperator* merge_operator,
-                               const Slice& key, const FutureSlice* value,
-                               const std::vector<FutureSlice>& operands,
-                               std::string* result, Logger* logger,
+                               const Slice& key, const LazySlice* value,
+                               const std::vector<LazySlice>& operands,
+                               LazySlice* result, Logger* logger,
                                Statistics* statistics, Env* env,
-                               LazySlice* result_operand = nullptr,
                                bool update_num_ops_stats = false);
 
   // Merge entries until we hit
@@ -77,7 +76,7 @@ class MergeHelper {
   // - ShutdownInProgress: interrupted by shutdown (*shutting_down == true).
   //
   // REQUIRED: The first key in the input is not corrupted.
-  Status MergeUntil(Slice current_user_key, InternalIterator* iter,
+  Status MergeUntil(InternalIterator* iter,
                     CompactionRangeDelAggregator* range_del_agg = nullptr,
                     const SequenceNumber stop_before = 0,
                     const bool at_bottom = false);
@@ -115,7 +114,7 @@ class MergeHelper {
   //                So keys().back() was the first key seen by iterator.
   // TODO: Re-style this comment to be like the first one
   const std::deque<std::string>& keys() const { return keys_; }
-  const std::vector<FutureSlice>& values() const {
+  const std::vector<LazySlice>& values() const {
     return merge_context_.GetOperands();
   }
   uint64_t TotalFilterTime() const { return total_filter_time_; }
@@ -168,7 +167,8 @@ class MergeHelper {
   Statistics* stats_;
 
   bool has_compaction_filter_skip_until_ = false;
-  FutureSlice compaction_filter_value_;
+  LazySlice compaction_filter_value_;
+  std::string compaction_filter_value_buffer_;
   InternalKey compaction_filter_skip_until_;
 
   bool IsShuttingDown() {
@@ -189,13 +189,13 @@ class MergeOutputIterator {
   void Next();
 
   Slice key() { return *it_keys_; }
-  const FutureSlice& value() { return *it_values_; }
+  const LazySlice& value() { return *it_values_; }
   bool Valid() { return it_keys_ != merge_helper_->keys().rend(); }
 
  private:
   const MergeHelper* merge_helper_;
   std::deque<std::string>::const_reverse_iterator it_keys_;
-  std::vector<FutureSlice>::const_reverse_iterator it_values_;
+  std::vector<LazySlice>::const_reverse_iterator it_values_;
 };
 
 } // namespace rocksdb

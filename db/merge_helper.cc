@@ -49,11 +49,10 @@ MergeHelper::MergeHelper(Env* env, const Comparator* user_comparator,
 }
 
 Status MergeHelper::TimedFullMerge(const MergeOperator* merge_operator,
-                                   const Slice& key, const FutureSlice* value,
-                                   const std::vector<FutureSlice>& operands,
-                                   std::string* result, Logger* logger,
+                                   const Slice& key, const LazySlice* value,
+                                   const std::vector<LazySlice>& operands,
+                                   LazySlice* result, Logger* logger,
                                    Statistics* statistics, Env* env,
-                                   LazySlice* result_operand,
                                    bool update_num_ops_stats) {
   assert(merge_operator != nullptr);
 
@@ -74,7 +73,7 @@ Status MergeHelper::TimedFullMerge(const MergeOperator* merge_operator,
   }
 
   bool success;
-  const FutureSlice* tmp_result_operand = nullptr;
+  const LazySlice* tmp_result_operand = nullptr;
   const MergeOperator::MergeOperationInput merge_in(key, value, operands,
                                                     logger);
   MergeOperator::MergeOperationOutput merge_out(*result, tmp_result_operand);
@@ -204,8 +203,8 @@ Status MergeHelper::MergeUntil(Slice current_user_key, InternalIterator* iter,
       // (almost) silently dropping the put/delete. That's probably not what we
       // want. Also if we're in compaction and it's a put, it would be nice to
       // run compaction filter on it.
-      FutureSlice val = iter->future_value(ikey.user_key);
-      const FutureSlice* val_ptr;
+      LazySlice val = iter->value();
+      const LazySlice* val_ptr;
       if ((kTypeValue == ikey.type || kTypeValueIndex == ikey.type) &&
           (range_del_agg == nullptr ||
            !range_del_agg->ShouldDelete(
@@ -214,7 +213,7 @@ Status MergeHelper::MergeUntil(Slice current_user_key, InternalIterator* iter,
       } else {
         val_ptr = nullptr;
       }
-      FutureSlice merge_result;
+      LazySlice merge_result;
       s = TimedFullMerge(user_merge_operator_, ikey.user_key, val_ptr,
                          merge_context_.GetOperands(), merge_result.buffer(),
                          logger_, stats_, env_);
@@ -319,7 +318,7 @@ Status MergeHelper::MergeUntil(Slice current_user_key, InternalIterator* iter,
     assert(kTypeMerge == orig_ikey.type || kTypeMergeIndex == orig_ikey.type);
     assert(merge_context_.GetNumOperands() >= 1);
     assert(merge_context_.GetNumOperands() == keys_.size());
-    FutureSlice merge_result;
+    LazySlice merge_result;
     s = TimedFullMerge(user_merge_operator_, orig_ikey.user_key, nullptr,
                        merge_context_.GetOperands(), merge_result.buffer(),
                        logger_, stats_, env_);
@@ -343,7 +342,7 @@ Status MergeHelper::MergeUntil(Slice current_user_key, InternalIterator* iter,
     if (merge_context_.GetNumOperands() >= 2 ||
         (allow_single_operand_ && merge_context_.GetNumOperands() == 1)) {
       bool merge_success = false;
-      FutureSlice merge_result;
+      LazySlice merge_result;
       {
         StopWatchNano timer(env_, stats_ != nullptr);
         PERF_TIMER_GUARD(merge_operator_time_nanos);

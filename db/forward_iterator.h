@@ -74,7 +74,6 @@ class ForwardIterator : public InternalIterator {
   virtual void Next() override;
   virtual Slice key() const override;
   virtual LazySlice value() const override;
-  virtual FutureSlice future_value(Slice pinned_user_key) const override;
   virtual Status status() const override;
   virtual Status GetProperty(std::string prop_name, std::string* prop) override;
 
