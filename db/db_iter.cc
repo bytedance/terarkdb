@@ -177,7 +177,7 @@ class DBIter final: public Iterator {
       status_ = s;
       return Slice::Invalid();
     }
-    return *value_;
+    return value_;
   }
   virtual Status status() const override {
     if (status_.ok()) {
@@ -245,10 +245,10 @@ class DBIter final: public Iterator {
   inline SequenceNumber MaxVisibleSequenceNumber();
 
   inline void ClearSavedValue() {
-    if (saved_value_.capacity() > 1048576) {
-      std::string().swap(*ptr);
+    if (value_buffer_.capacity() > 1048576) {
+      std::string().swap(value_buffer_);
     } else {
-      saved_value_.clear();
+      value_buffer_.clear();
     }
   }
 
@@ -276,7 +276,7 @@ class DBIter final: public Iterator {
   // overhead of calling construction of the function if creating it each time.
   ParsedInternalKey ikey_;
   LazySlice value_;
-  std::string saved_value_;
+  std::string value_buffer_;
   Direction direction_;
   mutable bool valid_;
   bool current_entry_is_merged_;
@@ -583,12 +583,11 @@ bool DBIter::MergeValuesNewToOld() {
       break;
     } else if (kTypeValue == ikey.type || kTypeValueIndex == ikey.type) {
       // hit a put, merge the put value with operands and store the
-      // final result in saved_value_. We are done!
+      // final result in value_. We are done!
       LazySlice val = iter_->value();
       s = MergeHelper::TimedFullMerge(
           merge_operator_, ikey.user_key, &val, merge_context_.GetOperands(),
-          saved_value_.buffer(), logger_, statistics_, env_,
-          &value_, true);
+          &value_, logger_, statistics_, env_, true);
       if (!s.ok()) {
         valid_ = false;
         status_ = s;
@@ -622,8 +621,7 @@ bool DBIter::MergeValuesNewToOld() {
   // client can differentiate this scenario and do things accordingly.
   s = MergeHelper::TimedFullMerge(merge_operator_, saved_key_.GetUserKey(),
                                   nullptr, merge_context_.GetOperands(),
-                                  saved_value_.buffer(), logger_,
-                                  statistics_, env_, &value_, true);
+                                  &value_, logger_, statistics_, env_, true);
   if (!s.ok()) {
     valid_ = false;
     status_ = s;
@@ -821,6 +819,7 @@ bool DBIter::FindValueForCurrentKey() {
           PERF_COUNTER_ADD(internal_delete_skipped_count, 1);
         } else {
           value_ = iter_->value();
+          value_.detach();
         }
         merge_context_.Clear();
         last_not_merge_type = last_key_entry_type;
@@ -848,7 +847,6 @@ bool DBIter::FindValueForCurrentKey() {
       default:
         assert(false);
     }
-
     PERF_COUNTER_ADD(internal_key_skipped_count, 1);
     iter_->Prev();
     ++num_skipped;
@@ -874,20 +872,21 @@ bool DBIter::FindValueForCurrentKey() {
           last_not_merge_type == kTypeRangeDeletion) {
         s = MergeHelper::TimedFullMerge(
             merge_operator_, saved_key_.GetUserKey(), nullptr,
-            merge_context_.GetOperands(), saved_value_.buffer(), logger_,
-            statistics_, env_, &value_, true);
+            merge_context_.GetOperands(), &value_, logger_, statistics_, env_,
+            true);
       } else {
         assert(last_not_merge_type == kTypeValue ||
                last_not_merge_type == kTypeValueIndex);
+        LazySlice merge_output(&value_buffer_);
         s = MergeHelper::TimedFullMerge(
-            merge_operator_, saved_key_.GetUserKey(), &pinned_value_,
-            merge_context_.GetOperands(), saved_value_.buffer(), logger_,
-            statistics_, env_, &value_, true);
+            merge_operator_, saved_key_.GetUserKey(), &value_,
+            merge_context_.GetOperands(), &merge_output, logger_, statistics_,
+            env_, true);
+        value_.swap(merge_output);
       }
       break;
     case kTypeValueIndex:
     case kTypeValue:
-      value_ = pinned_value_.get();
       break;
     default:
       assert(false);
@@ -982,11 +981,11 @@ bool DBIter::FindValueForCurrentKeyUsingSeek() {
             ikey, RangeDelPositioningMode::kForwardTraversal)) {
       break;
     } else if (ikey.type == kTypeValue || ikey.type == kTypeValueIndex) {
-      Slice val = iter_->value();
+      LazySlice val = iter_->value();
       Status s = MergeHelper::TimedFullMerge(
           merge_operator_, saved_key_.GetUserKey(), &val,
-          merge_context_.GetOperands(), saved_value_.buffer(), logger_,
-          statistics_, env_, &value_, true);
+          merge_context_.GetOperands(), &value_, logger_, statistics_, env_,
+          true);
       if (!s.ok()) {
         valid_ = false;
         status_ = s;
@@ -1004,8 +1003,7 @@ bool DBIter::FindValueForCurrentKeyUsingSeek() {
 
   Status s = MergeHelper::TimedFullMerge(
       merge_operator_, saved_key_.GetUserKey(), nullptr,
-      merge_context_.GetOperands(), saved_value_.buffer(), logger_,
-      statistics_, env_, &value_, true);
+      merge_context_.GetOperands(), &value_, logger_, statistics_, env_, true);
   if (!s.ok()) {
     valid_ = false;
     status_ = s;

@@ -44,7 +44,7 @@ void CompactionIteratorToInternalIterator::Seek(const Slice& target) {
     c_iter_->merge_helper_->Clear();
   }
   c_iter_->valid_ = false;
-  c_iter_->value_.reset();
+  c_iter_->value_.clear();
   c_iter_->status_ = Status::OK();
   c_iter_->has_current_user_key_ = false;
   c_iter_->at_next_ = false;
@@ -185,7 +185,7 @@ void CompactionIterator::Next() {
     // Check if we returned all records of the merge output.
     if (merge_out_iter_.Valid()) {
       key_ = merge_out_iter_.key();
-      value_ = merge_out_iter_.value().get();
+      value_ = LazySliceReference(merge_out_iter_.value());
       bool valid_key __attribute__((__unused__));
       valid_key =  ParseInternalKey(key_, &ikey_);
       // MergeUntil stops when it encounters a corrupt key and does not
@@ -239,7 +239,7 @@ void CompactionIterator::InvokeFilterIfNeeded(bool* need_skip,
       filter = compaction_filter_->FilterV2(
           compaction_->level(), ikey_.user_key,
           CompactionFilter::ValueType::kValue, value_,
-          compaction_filter_value_.buffer(),
+          &compaction_filter_value_,
           compaction_filter_skip_until_.rep());
     };
     auto sample = filter_sample_interval_;
@@ -269,7 +269,7 @@ void CompactionIterator::InvokeFilterIfNeeded(bool* need_skip,
       value_.clear();
       iter_stats_.num_record_drop_user++;
     } else if (filter == CompactionFilter::Decision::kChangeValue) {
-      value_ = compaction_filter_value_.get();
+      value_ = std::move(compaction_filter_value_);
     } else if (filter == CompactionFilter::Decision::kRemoveAndSkipUntil) {
       *need_skip = true;
       compaction_filter_skip_until_.ConvertFromUserKey(kMaxSequenceNumber,
@@ -622,7 +622,7 @@ void CompactionIterator::NextFromInput() {
       // We encapsulate the merge related state machine in a different
       // object to minimize change to the existing flow.
       assert(has_current_user_key_);
-      Status s = merge_helper_->MergeUntil(current_user_key_, input_,
+      Status s = merge_helper_->MergeUntil(input_,
                                            range_del_agg_, prev_snapshot,
                                            bottommost_level_);
       merge_out_iter_.SeekToFirst();
@@ -634,7 +634,7 @@ void CompactionIterator::NextFromInput() {
         // NOTE: key, value, and ikey_ refer to old entries.
         //       These will be correctly set below.
         key_ = merge_out_iter_.key();
-        value_ = merge_out_iter_.value().get();
+        value_ = LazySliceReference(merge_out_iter_.value());
         bool valid_key __attribute__((__unused__));
         valid_key = ParseInternalKey(key_, &ikey_);
         // MergeUntil stops when it encounters a corrupt key and does not

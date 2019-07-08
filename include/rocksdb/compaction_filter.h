@@ -157,7 +157,7 @@ class CompactionFilter {
   // MergeOperator.
   virtual Decision FilterV2(int level, const Slice& key, ValueType value_type,
                             const LazySlice& existing_value,
-                            std::string* new_value,
+                            LazySlice* new_value,
                             std::string* /*skip_until*/) const {
     if (!existing_value.decode().ok()) {
       assert(false);
@@ -166,15 +166,15 @@ class CompactionFilter {
     switch (value_type) {
       case ValueType::kValue: {
         bool value_changed = false;
-        bool rv = Filter(level, key, *existing_value, new_value,
-                         &value_changed);
+        bool rv = Filter(level, key, existing_value,
+                         new_value->trans_to_buffer(), &value_changed);
         if (rv) {
           return Decision::kRemove;
         }
         return value_changed ? Decision::kChangeValue : Decision::kKeep;
       }
       case ValueType::kMergeOperand: {
-        bool rv = FilterMergeOperand(level, key, *existing_value);
+        bool rv = FilterMergeOperand(level, key, existing_value);
         return rv ? Decision::kRemove : Decision::kKeep;
       }
     }

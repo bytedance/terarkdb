@@ -837,7 +837,7 @@ class DBTestBase : public testing::Test {
   std::string Get(int cf, const std::string& k,
                   const Snapshot* snapshot = nullptr);
 
-  Status Get(const std::string& k, PinnableSlice* v);
+  Status Get(const std::string& k, LazySlice* v);
 
   uint64_t GetNumSnapshots();
 

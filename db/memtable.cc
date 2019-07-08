@@ -393,11 +393,12 @@ class MemTableTombstoneIterator : public MemTableIteratorBase<Slice> {
     assert(valid_);
     LazySlice v = iter_->value();
     assert(v.decode().ok());
-    return v.decode().ok() ? *v : Slice::Invalid();
+    return v.decode().ok() ? v : Slice::Invalid();
   }
 };
 
-class MemTableIterator : public MemTableIteratorBase<LazySlice> {
+class MemTableIterator
+    : public MemTableIteratorBase<LazySlice>, public LazySliceMeta {
   using Base = MemTableIteratorBase<LazySlice>;
   using Base::iter_;
   using Base::valid_;
@@ -405,6 +406,19 @@ class MemTableIterator : public MemTableIteratorBase<LazySlice> {
 
  public:
   using Base::Base;
+
+  virtual void lazy_slice_destroy(const Slice& /*raw*/, void* /*arg*/,
+                                  const void* /*const_arg*/,
+                                  void* /*temp*/) const override {}
+  virtual void lazy_slice_detach(Slice& value, const LazySliceMeta*& meta,
+                                 Slice& raw, void*& arg,
+                                 const void*& const_arg,
+                                 void*& temp) const override {
+
+  }
+  virtual Status lazy_slice_decode(const Slice& raw, void* arg,
+                                   const void* const_arg,
+                                   void*& temp, Slice* value) const = 0;
 
   virtual LazySlice value() const override {
     assert(valid_);
@@ -588,7 +602,7 @@ struct Saver {
   const LookupKey* key;
   bool* found_final_value;  // Is value set correctly? Used by KeyMayExist
   bool* merge_in_progress;
-  LazySlice value;
+  LazySlice* value;
   SequenceNumber seq;
   const MergeOperator* merge_operator;
   // the merge operations encountered;
@@ -717,7 +731,7 @@ static bool SaveValue(void* arg, const Slice& internal_key,
   return false;
 }
 
-bool MemTable::Get(const LookupKey& key, std::string* value, Status* s,
+bool MemTable::Get(const LookupKey& key, LazySlice* value, Status* s,
                    MergeContext* merge_context,
                    SequenceNumber* max_covering_tombstone_seq,
                    SequenceNumber* seq, const ReadOptions& read_opts,

@@ -257,6 +257,35 @@ public class ReadOptions extends RocksObject {
   }
 
   /**
+   * Returns whether the blocks loaded by the iterator will be pinned in memory
+   *
+   * @return the setting of whether the blocks loaded by the iterator will be
+   *   pinned in memory
+   */
+  public boolean pinData() {
+    assert(isOwningHandle());
+    //return pinData(nativeHandle_);
+    return false;
+  }
+
+  /**
+   * Keep the blocks loaded by the iterator pinned in memory as long as the
+   * iterator is not deleted, If used when reading from tables created with
+   * BlockBasedTableOptions::use_delta_encoding = false,
+   * Iterator's property "rocksdb.iterator.is-key-pinned" is guaranteed to
+   * return 1.
+   *
+   * @param pinData if true, the blocks loaded by the iterator will be pinned
+   * @return the reference to the current ReadOptions.
+   */
+  public ReadOptions setPinData(final boolean pinData) {
+    //assert(isOwningHandle());
+    //setPinData(nativeHandle_, pinData);
+    //return this;
+    throw new UnsupportedOperationException();
+  }
+
+  /**
    * If true, when PurgeObsoleteFile is called in CleanupIteratorState, we
    * schedule a background job in the flush job queue and delete obsolete files
    * in background.

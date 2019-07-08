@@ -103,7 +103,6 @@ using rocksdb::CompactRangeOptions;
 using rocksdb::BottommostLevelCompaction;
 using rocksdb::RateLimiter;
 using rocksdb::NewGenericRateLimiter;
-using rocksdb::PinnableSlice;
 using rocksdb::TransactionDBOptions;
 using rocksdb::TransactionDB;
 using rocksdb::TransactionOptions;
@@ -169,7 +168,7 @@ struct rocksdb_ratelimiter_t {
 };
 struct rocksdb_perfcontext_t     { PerfContext*      rep; };
 struct rocksdb_pinnableslice_t {
-  PinnableSlice rep;
+  LazySlice rep;
 };
 struct rocksdb_transactiondb_options_t {
   TransactionDBOptions rep;
@@ -360,29 +359,25 @@ struct rocksdb_mergeoperator_t : public MergeOperator {
   virtual bool FullMergeV2(const MergeOperationInput& merge_in,
                            MergeOperationOutput* merge_out) const override {
     size_t n = merge_in.operand_list.size();
-    std::vector<LazySlice> operand_slice(n);
     std::vector<const char*> operand_pointers(n);
     std::vector<size_t> operand_sizes(n);
     for (size_t i = 0; i < n; i++) {
-      operand_slice[i] = merge_in.operand_list[i].get();
-      if (!operand_slice[i].decode().ok()) {
+      const LazySlice& operand = merge_in.operand_list[i];
+      if (!operand.decode().ok()) {
         return false;
       }
-      Slice operand(*operand_slice[i]);
       operand_pointers[i] = operand.data();
       operand_sizes[i] = operand.size();
     }
 
     const char* existing_value_data = nullptr;
     size_t existing_value_len = 0;
-    LazySlice existing_value;
     if (merge_in.existing_value != nullptr) {
-      existing_value = merge_in.existing_value->get();
-      if (!existing_value.decode().ok()) {
+      if (!merge_in.existing_value->decode().ok()) {
         return false;
       }
-      existing_value_data = existing_value->data();
-      existing_value_len = existing_value->size();
+      existing_value_data = merge_in.existing_value->data();
+      existing_value_len = merge_in.existing_value->size();
     }
 
     unsigned char success;
@@ -391,7 +386,7 @@ struct rocksdb_mergeoperator_t : public MergeOperator {
         state_, merge_in.key.data(), merge_in.key.size(), existing_value_data,
         existing_value_len, &operand_pointers[0], &operand_sizes[0],
         static_cast<int>(n), &success, &new_value_len);
-    merge_out->new_value.assign(tmp_new_value, new_value_len);
+    merge_out->new_value.reset(Slice(tmp_new_value, new_value_len), true);
 
     if (delete_value_ != nullptr) {
       (*delete_value_)(state_, tmp_new_value, new_value_len);
@@ -410,10 +405,10 @@ struct rocksdb_mergeoperator_t : public MergeOperator {
     std::vector<const char*> operand_pointers(operand_count);
     std::vector<size_t> operand_sizes(operand_count);
     for (size_t i = 0; i < operand_count; ++i) {
-      if (!operand_list[i].decode().ok()) {
+      const LazySlice& operand = operand_list[i];
+      if (!operand.decode().ok()) {
         return false;
       }
-      Slice operand(*operand_list[i]);
       operand_pointers[i] = operand.data();
       operand_sizes[i] = operand.size();
     }
@@ -423,10 +418,7 @@ struct rocksdb_mergeoperator_t : public MergeOperator {
     char* tmp_new_value = (*partial_merge_)(
         state_, key.data(), key.size(), &operand_pointers[0], &operand_sizes[0],
         static_cast<int>(operand_count), &success, &new_value_len);
-    if (!new_value->is_buffer()) {
-      new_value->reset_to_buffer();
-    }
-    new_value->get_buffer()->assign(tmp_new_value, new_value_len);
+    new_value->reset(Slice(tmp_new_value, new_value_len), true);
 
     if (delete_value_ != nullptr) {
       (*delete_value_)(state_, tmp_new_value, new_value_len);
@@ -3107,6 +3099,11 @@ void rocksdb_readoptions_set_readahead_size(
 void rocksdb_readoptions_set_prefix_same_as_start(
     rocksdb_readoptions_t* opt, unsigned char v) {
   opt->rep.prefix_same_as_start = v;
+}
+
+void rocksdb_readoptions_set_pin_data(rocksdb_readoptions_t* opt,
+                                      unsigned char v) {
+  assert(false);
 }
 
 void rocksdb_readoptions_set_total_order_seek(rocksdb_readoptions_t* opt,

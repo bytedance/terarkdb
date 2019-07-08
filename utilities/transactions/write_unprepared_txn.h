@@ -97,7 +97,7 @@ class WriteUnpreparedTxn : public WritePreparedTxn {
   using Transaction::Get;
   virtual Status Get(const ReadOptions& options,
                      ColumnFamilyHandle* column_family, const Slice& key,
-                     PinnableSlice* value) override;
+                     LazySlice* value) override;
 
   using Transaction::GetIterator;
   virtual Iterator* GetIterator(const ReadOptions& options) override;

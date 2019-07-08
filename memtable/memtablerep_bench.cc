@@ -307,7 +307,7 @@ class ReadBenchmarkThread : public BenchmarkThread {
                         num_ops, read_hits) {}
 
   static bool callback(void* arg, const Slice& internal_key,
-                       const LazySlice& value) {
+                       LazySlice&& value) {
     CallbackVerifyArgs* callback_args = static_cast<CallbackVerifyArgs*>(arg);
     assert(callback_args != nullptr);
     if ((callback_args->comparator)

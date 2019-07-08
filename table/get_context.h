@@ -48,7 +48,7 @@ class GetContext {
 
   GetContext(const Comparator* ucmp, const MergeOperator* merge_operator,
              Logger* logger, Statistics* statistics, GetState init_state,
-             const Slice& user_key, PinnableSlice* value, bool* value_found,
+             const Slice& user_key, LazySlice* value, bool* value_found,
              MergeContext* merge_context,
              SequenceNumber* max_covering_tombstone_seq, Env* env,
              SequenceNumber* seq = nullptr, ReadCallback* callback = nullptr);
@@ -63,12 +63,12 @@ class GetContext {
   //
   // Returns True if more keys need to be read (due to merges) or
   //         False if the complete value has been found.
-  bool SaveValue(const ParsedInternalKey& parsed_key, const LazySlice& value,
-                 bool* matched, Cleanable* value_pinner = nullptr);
+  bool SaveValue(const ParsedInternalKey& parsed_key, LazySlice&& value,
+                 bool* matched);
 
   // Simplified version of the previous function. Should only be used when we
   // know that the operation is a Put.
-  void SaveValue(const Slice& value, SequenceNumber seq);
+  void SaveValue(LazySlice&& value, SequenceNumber seq);
 
   GetState State() const { return state_; }
 
@@ -113,7 +113,7 @@ class GetContext {
 
   GetState state_;
   Slice user_key_;
-  PinnableSlice* pinnable_val_;
+  LazySlice* lazy_val_;
   bool* value_found_;  // Is value set correctly? Used by KeyMayExist
   MergeContext* merge_context_;
   SequenceNumber* max_covering_tombstone_seq_;

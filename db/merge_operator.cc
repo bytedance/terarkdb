@@ -21,17 +21,15 @@ bool MergeOperator::FullMergeV2(const MergeOperationInput& merge_in,
     if (!op.decode().ok()) {
       return false;
     }
-    operand_list_str.emplace_back(op->data(), op->size());
+    operand_list_str.emplace_back(op.data(), op.size());
   }
-  const Slice* existing_value_ptr = nullptr;
   if (merge_in.existing_value != nullptr) {
     if (!merge_in.existing_value->decode().ok()) {
       return false;
     }
-    existing_value_ptr = merge_in.existing_value->get();
   }
-  return FullMerge(merge_in.key, existing_value_ptr, operand_list_str,
-                   merge_out->new_value.get_buffer(), merge_in.logger);
+  return FullMerge(merge_in.key, merge_in.existing_value, operand_list_str,
+                   merge_out->new_value.trans_to_buffer(), merge_in.logger);
 }
 
 // The default implementation of PartialMergeMulti, which invokes
@@ -65,27 +63,20 @@ bool AssociativeMergeOperator::FullMergeV2(
     const MergeOperationInput& merge_in,
     MergeOperationOutput* merge_out) const {
   // Simply loop through the operands
-  LazySlice temp_existing;
   LazySlice temp_value;
   const LazySlice* existing_value = merge_in.existing_value;
   for (const auto& operand : merge_in.operand_list) {
-    const Slice* existing_value_slice = nullptr;
-    if (existing_value != nullptr) {
-      if (!existing_value->decode().ok()) {
-        return false;
-      }
-      existing_value_slice = existing_value->get();
-    }
-    if (!operand.decode().ok()) {
+    if ((existing_value != nullptr && !existing_value->decode().ok()) ||
+        !operand.decode().ok()) {
       return false;
     }
-    if (!Merge(merge_in.key, existing_value_slice, *operand,
-               temp_value.get_buffer(), merge_in.logger)) {
+    temp_value.clear();
+    if (!Merge(merge_in.key, existing_value, operand,
+               temp_value.trans_to_buffer(), merge_in.logger)) {
       return false;
     }
     temp_value.swap(merge_out->new_value);
-    temp_existing = LazySliceReference(merge_out->new_value);
-    existing_value = &temp_existing;
+    existing_value = &merge_out->new_value;
   }
 
   // The result will be in *new_value. All merges succeeded.
@@ -97,12 +88,13 @@ bool AssociativeMergeOperator::FullMergeV2(
 bool AssociativeMergeOperator::PartialMerge(const Slice& key,
                                             const LazySlice& left_operand,
                                             const LazySlice& right_operand,
-                                            std::string* new_value,
+                                            LazySlice* new_value,
                                             Logger* logger) const {
   if (!left_operand.decode().ok() || !right_operand.decode().ok()) {
     return false;
   }
-  return Merge(key, left_operand.get(), *right_operand, new_value, logger);
+  return Merge(key, &left_operand, right_operand, new_value->trans_to_buffer(),
+               logger);
 }
 
 } // namespace rocksdb

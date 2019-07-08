@@ -232,18 +232,18 @@ class WriteBatchWithIndex : public WriteBatchBase {
   Status GetFromBatchAndDB(DB* db, const ReadOptions& read_options,
                            const Slice& key, std::string* value);
 
-  // An overload of the above method that receives a PinnableSlice
+  // An overload of the above method that receives a LazySlice
   Status GetFromBatchAndDB(DB* db, const ReadOptions& read_options,
-                           const Slice& key, PinnableSlice* value);
+                           const Slice& key, LazySlice* value);
 
   Status GetFromBatchAndDB(DB* db, const ReadOptions& read_options,
                            ColumnFamilyHandle* column_family, const Slice& key,
                            std::string* value);
 
-  // An overload of the above method that receives a PinnableSlice
+  // An overload of the above method that receives a LazySlice
   Status GetFromBatchAndDB(DB* db, const ReadOptions& read_options,
                            ColumnFamilyHandle* column_family, const Slice& key,
-                           PinnableSlice* value);
+                           LazySlice* value);
 
   // Records the state of the batch for future calls to RollbackToSavePoint().
   // May be called multiple times to set multiple save points.
@@ -283,7 +283,7 @@ class WriteBatchWithIndex : public WriteBatchBase {
 
   Status GetFromBatchAndDB(DB* db, const ReadOptions& read_options,
                            ColumnFamilyHandle* column_family, const Slice& key,
-                           PinnableSlice* value, ReadCallback* callback);
+                           LazySlice* value, ReadCallback* callback);
   struct Rep;
   std::unique_ptr<Rep> rep;
 };

@@ -137,7 +137,7 @@ class MergeHelper {
   void Clear() {
     keys_.clear();
     merge_context_.Clear();
-    compaction_filter_value_.reset();
+    compaction_filter_value_.clear();
     compaction_filter_skip_until_.Clear();
   }
 
@@ -168,7 +168,6 @@ class MergeHelper {
 
   bool has_compaction_filter_skip_until_ = false;
   LazySlice compaction_filter_value_;
-  std::string compaction_filter_value_buffer_;
   InternalKey compaction_filter_skip_until_;
 
   bool IsShuttingDown() {

@@ -40,7 +40,7 @@ void appendToReplayLog(std::string* replay_log, ValueType type, Slice value) {
 GetContext::GetContext(const Comparator* ucmp,
                        const MergeOperator* merge_operator, Logger* logger,
                        Statistics* statistics, GetState init_state,
-                       const Slice& user_key, PinnableSlice* pinnable_val,
+                       const Slice& user_key, LazySlice* lazy_val,
                        bool* value_found, MergeContext* merge_context,
                        SequenceNumber* _max_covering_tombstone_seq, Env* env,
                        SequenceNumber* seq, ReadCallback* callback)
@@ -50,7 +50,7 @@ GetContext::GetContext(const Comparator* ucmp,
       statistics_(statistics),
       state_(init_state),
       user_key_(user_key),
-      pinnable_val_(pinnable_val),
+      lazy_val_(lazy_val),
       value_found_(value_found),
       merge_context_(merge_context),
       max_covering_tombstone_seq_(_max_covering_tombstone_seq),
@@ -77,14 +77,12 @@ void GetContext::MarkKeyMayExist() {
   }
 }
 
-void GetContext::SaveValue(const Slice& value, SequenceNumber /*seq*/) {
+void GetContext::SaveValue(LazySlice&& value, SequenceNumber /*seq*/) {
   assert(state_ == kNotFound);
   appendToReplayLog(replay_log_, kTypeValue, value);
 
   state_ = kFound;
-  if (LIKELY(pinnable_val_ != nullptr)) {
-    pinnable_val_->PinSelf(value);
-  }
+  *lazy_val_ = std::move(value);
 }
 
 void GetContext::ReportCounters() {
@@ -157,8 +155,7 @@ void GetContext::ReportCounters() {
 }
 
 bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
-                           const LazySlice& value, bool* matched,
-                           Cleanable* value_pinner) {
+                           LazySlice&& value, bool* matched) {
   assert(matched);
   assert((state_ != kMerge && parsed_key.type != kTypeMerge) ||
          merge_context_ != nullptr);
@@ -179,7 +176,7 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
         state_ = kCorrupt;
         return false;
       }
-      appendToReplayLog(replay_log_, parsed_key.type, *value);
+      appendToReplayLog(replay_log_, parsed_key.type, value);
     }
 
     if (seq_ != nullptr) {
@@ -202,28 +199,17 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
         assert(state_ == kNotFound || state_ == kMerge);
         if (kNotFound == state_) {
           state_ = kFound;
-          if (LIKELY(pinnable_val_ != nullptr)) {
-            if (!value.decode().ok()) {
-              state_ = kCorrupt;
-              return false;
-            }
-            if (LIKELY(value_pinner != nullptr)) {
-              // If the backing resources for the value are provided, pin them
-              pinnable_val_->PinSlice(*value, value_pinner);
-            } else {
-              // Otherwise copy the value
-              pinnable_val_->PinSelf(*value);
-            }
+          if (LIKELY(lazy_val_ != nullptr)) {
+            *lazy_val_ = std::move(value);
           }
         } else if (kMerge == state_) {
           assert(merge_operator_ != nullptr);
           state_ = kFound;
-          if (LIKELY(pinnable_val_ != nullptr)) {
+          if (LIKELY(lazy_val_ != nullptr)) {
             Status merge_status = MergeHelper::TimedFullMerge(
                 merge_operator_, user_key_, &value,
-                merge_context_->GetOperands(), pinnable_val_->GetSelf(),
-                logger_, statistics_, env_);
-            pinnable_val_->PinSelf();
+                merge_context_->GetOperands(), lazy_val_, logger_, statistics_,
+                env_);
             if (!merge_status.ok()) {
               state_ = kCorrupt;
             }
@@ -241,12 +227,11 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
           state_ = kDeleted;
         } else if (kMerge == state_) {
           state_ = kFound;
-          if (LIKELY(pinnable_val_ != nullptr)) {
+          if (LIKELY(lazy_val_ != nullptr)) {
             Status merge_status = MergeHelper::TimedFullMerge(
                 merge_operator_, user_key_, nullptr,
-                merge_context_->GetOperands(), pinnable_val_->GetSelf(),
-                logger_, statistics_, env_);
-            pinnable_val_->PinSelf();
+                merge_context_->GetOperands(), lazy_val_, logger_, statistics_,
+                env_);
             if (!merge_status.ok()) {
               state_ = kCorrupt;
             }
@@ -258,17 +243,16 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
       case kTypeMergeIndex:
         assert(state_ == kNotFound || state_ == kMerge);
         state_ = kMerge;
-        merge_context_->PushOperand(value, user_key_);
+        merge_context_->PushOperand(std::move(value));
         if (merge_operator_ != nullptr &&
             merge_operator_->ShouldMerge(
                 merge_context_->GetOperandsDirectionBackward())) {
           state_ = kFound;
-          if (LIKELY(pinnable_val_ != nullptr)) {
+          if (LIKELY(lazy_val_ != nullptr)) {
             Status merge_status = MergeHelper::TimedFullMerge(
                 merge_operator_, user_key_, nullptr,
-                merge_context_->GetOperands(), pinnable_val_->GetSelf(),
-                logger_, statistics_, env_);
-            pinnable_val_->PinSelf();
+                merge_context_->GetOperands(), lazy_val_, logger_, statistics_,
+                env_);
             if (!merge_status.ok()) {
               state_ = kCorrupt;
             }

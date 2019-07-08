@@ -82,6 +82,13 @@ WriteBatchHandlerJniCallback::WriteBatchHandlerJniCallback(
     return;
   }
 
+  m_jPutBlobIndexCfMethodId =
+      WriteBatchHandlerJni::getPutBlobIndexCfMethodId(env);
+  if(m_jPutBlobIndexCfMethodId == nullptr) {
+    // exception thrown
+    return;
+  }
+
   m_jMarkBeginPrepareMethodId =
       WriteBatchHandlerJni::getMarkBeginPrepareMethodId(env);
   if(m_jMarkBeginPrepareMethodId == nullptr) {
@@ -277,6 +284,11 @@ void WriteBatchHandlerJniCallback::LogData(const Slice& blob) {
       j_blob);
   };
   WriteBatchHandlerJniCallback::k_op(blob, logData);
+}
+
+rocksdb::Status WriteBatchHandlerJniCallback::PutBlobIndexCF(uint32_t column_family_id,
+    const Slice& key, const Slice& value) {
+  return rocksdb::Status::NotSupported();
 }
 
 rocksdb::Status WriteBatchHandlerJniCallback::MarkBeginPrepare(bool unprepare) {

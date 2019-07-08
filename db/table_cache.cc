@@ -474,13 +474,12 @@ Status TableCache::Get(const ReadOptions& options,
           }
         };
         auto get_from_map = [&](const Slice& largest_key,
-                                const LazySlice& map_value) {
+                                LazySlice&& map_value) {
           s = map_value.decode();
           if (!s.ok()) {
             return false;
           }
           // Manual inline MapSstElement::Decode
-          const char* err_msg = "Invalid MapSstElement";
           Slice map_input = *map_value;
           Slice smallest_key;
           uint64_t link_count;

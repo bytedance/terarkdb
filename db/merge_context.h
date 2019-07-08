@@ -34,6 +34,7 @@ class MergeContext {
     SetDirectionBackward();
 
     operand_list_->emplace_back(std::forward<Args>(args)...);
+    operand_list_->back().detach();
   }
 
   // Push back a merge operand
@@ -43,6 +44,7 @@ class MergeContext {
     SetDirectionForward();
 
     operand_list_->emplace_back(std::forward<Args>(args)...);
+    operand_list_->back().detach();
   }
 
   // return total number of operands in the list

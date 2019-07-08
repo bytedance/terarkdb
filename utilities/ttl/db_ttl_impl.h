@@ -51,7 +51,7 @@ class DBWithTTLImpl : public DBWithTTL {
   using StackableDB::Get;
   virtual Status Get(const ReadOptions& options,
                      ColumnFamilyHandle* column_family, const Slice& key,
-                     PinnableSlice* value) override;
+                     LazySlice* value) override;
 
   using StackableDB::MultiGet;
   virtual std::vector<Status> MultiGet(
@@ -87,7 +87,7 @@ class DBWithTTLImpl : public DBWithTTL {
 
   static Status StripTS(std::string* str);
 
-  static Status StripTS(PinnableSlice* str);
+  static Status StripTS(LazySlice* str);
 
   static const uint32_t kTSLength = sizeof(int32_t);  // size of timestamp
 
@@ -274,15 +274,10 @@ class TtlMergeOperator : public MergeOperator {
       if (!merge_out->existing_operand->decode().ok()) {
         return false;
       }
-      if (!merge_out->new_value.is_buffer()) {
-        merge_out->new_value.reset_to_buffer();
-      }
-      auto slice_ptr = merge_out->existing_operand->get();
-      merge_out->new_value.get_buffer()->assign(slice_ptr->data(),
-                                                slice_ptr->size());
+      merge_out->new_value.trans_to_buffer()->assgin(
+          merge_out->existing_operand->data(),
+          merge_out->existing_operand->size());
       merge_out->existing_operand = nullptr;
-    } else if (!LazySliceTransToBuffer(merge_out->new_value)) {
-      return false;
     }
 
     // Augment the *new_value with the ttl time-stamp
@@ -296,7 +291,7 @@ class TtlMergeOperator : public MergeOperator {
     } else {
       char ts_string[ts_len];
       EncodeFixed32(ts_string, (int32_t)curtime);
-      merge_out->new_value.get_buffer()->append(ts_string, ts_len);
+      merge_out->new_value.trans_to_buffer()->append(ts_string, ts_len);
       return true;
     }
   }
@@ -318,9 +313,6 @@ class TtlMergeOperator : public MergeOperator {
                                            logger)) {
       return false;
     }
-    if (!LazySliceTransToBuffer(*new_value)) {
-      return false;
-    }
 
     // Augment the *new_value with the ttl time-stamp
     int64_t curtime;
@@ -333,7 +325,7 @@ class TtlMergeOperator : public MergeOperator {
     } else {
       char ts_string[ts_len];
       EncodeFixed32(ts_string, (int32_t)curtime);
-      new_value->get_buffer()->append(ts_string, ts_len);
+      new_value->trans_to_buffer()->append(ts_string, ts_len);
       return true;
     }
   }

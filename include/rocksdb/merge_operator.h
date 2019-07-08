@@ -245,7 +245,7 @@ class AssociativeMergeOperator : public MergeOperator {
 
   bool PartialMerge(const Slice& key, const LazySlice& left_operand,
                     const LazySlice& right_operand,
-                    std::string* new_value,
+                    LazySlice* new_value,
                     Logger* logger) const override;
 };
 

@@ -55,7 +55,7 @@ class TransactionBaseImpl : public Transaction {
              const Slice& key, std::string* value) override;
 
   Status Get(const ReadOptions& options, ColumnFamilyHandle* column_family,
-             const Slice& key, PinnableSlice* value) override;
+             const Slice& key, LazySlice* value) override;
 
   Status Get(const ReadOptions& options, const Slice& key,
              std::string* value) override {
@@ -69,7 +69,7 @@ class TransactionBaseImpl : public Transaction {
 
   Status GetForUpdate(const ReadOptions& options,
                       ColumnFamilyHandle* column_family, const Slice& key,
-                      PinnableSlice* pinnable_val, bool exclusive) override;
+                      LazySlice* lazy_val, bool exclusive) override;
 
   Status GetForUpdate(const ReadOptions& options, const Slice& key,
                       std::string* value, bool exclusive) override {

@@ -39,24 +39,25 @@ void MemTableRep::EncodeKeyValue(const Slice& key, const Slice& value,
 
 LazySlice MemTableRep::DecodeToLazyValue(const char* key) {
   struct SliceMetaImpl : public LazySliceMeta {
-    void destroy(const Slice& raw, void* arg, const void* const_arg,
-                 void* temp) const override {
+    void lazy_slice_destroy(const Slice& raw, void* arg, const void* const_arg,
+                            void* temp) const override {
       assert(!raw.valid()); (void)raw;
       assert(arg == nullptr); (void)arg;
       assert(const_arg != nullptr); (void)const_arg;
       assert(temp); (void)temp;
     }
-    void detach(Slice& /*value*/, const LazySliceMeta*& meta, Slice& raw,
-                void*& arg, const void*& const_arg,
-                void*& temp) const override {
+    void lazy_slice_detach(Slice& /*value*/, const LazySliceMeta*& meta,
+                           Slice& raw, void*& arg, const void*& const_arg,
+                           void*& temp) const override {
       assert(meta == this); (void)meta;
       assert(!raw.valid()); (void)raw;
       assert(arg == nullptr); (void)arg;
       assert(const_arg != nullptr); (void)const_arg;
       assert(temp); (void)temp;
     }
-    Status decode(const Slice& /*raw*/, void* /*arg*/, const void* const_arg,
-                  void*& /*temp*/, Slice* value) const override {
+    Status lazy_slice_decode(const Slice& /*raw*/, void* /*arg*/,
+                             const void* const_arg, void*& /*temp*/,
+                             Slice* value) const override {
       const char* k = reinterpret_cast<const char*>(const_arg);
       Slice key_slice = GetLengthPrefixedSlice(k);
       *value = GetLengthPrefixedSlice(key_slice.data() + key_slice.size());
@@ -105,7 +106,7 @@ KeyHandle MemTableRep::Allocate(const size_t len, char** buf) {
 
 void MemTableRep::Get(const LookupKey& k, void* callback_args,
                       bool (*callback_func)(void* arg, const Slice& key,
-                                            const LazySlice&)) {
+                                            LazySlice&&)) {
   auto iter = GetDynamicPrefixIterator();
   for (iter->Seek(k.internal_key(), k.memtable_key().data());
        iter->Valid() && callback_func(callback_args, iter->key(),

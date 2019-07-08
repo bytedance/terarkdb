@@ -128,7 +128,7 @@ bool ReadMapElement(MapSstElement& map_element, InternalIterator* iter,
         cf_name.c_str(), s.ToString().c_str());
     return false;
   }
-  if (!map_element.Decode(iter->key(), *value)) {
+  if (!map_element.Decode(iter->key(), value)) {
     ROCKS_LOG_BUFFER(
         log_buffer,
         "[%s] UniversalCompactionPicker MapSstElement Decode fail\n",

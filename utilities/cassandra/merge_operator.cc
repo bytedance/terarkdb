@@ -27,22 +27,23 @@ bool CassandraValueMergeOperator::FullMergeV2(
     if (!merge_in.existing_value->decode().ok()) {
       return false;
     }
-    const Slice& value = merge_in.existing_value;
     row_values.push_back(
-        RowValue::Deserialize(value.data(), value.size()));
+        RowValue::Deserialize(merge_in.existing_value->data(),
+                              merge_in.existing_value->size()));
   }
 
   for (auto& operand : merge_in.operand_list) {
     if (!operand.decode().ok()) {
       return false;
     }
-    row_values.push_back(RowValue::Deserialize(operand->data(), operand->size()));
+    row_values.push_back(RowValue::Deserialize(operand.data(),
+                                               operand.size()));
   }
 
   RowValue merged = RowValue::Merge(std::move(row_values));
   merged = merged.RemoveTombstones(gc_grace_period_in_seconds_);
   merge_out->new_value.reserve(merged.Size());
-  merged.Serialize(merge_out->new_value.get_buffer());
+  merged.Serialize(merge_out->new_value.trans_to_buffer());
 
   return true;
 }
@@ -59,11 +60,12 @@ bool CassandraValueMergeOperator::PartialMergeMulti(
     if (!operand.decode().ok()) {
       return false;
     }
-    row_values.push_back(RowValue::Deserialize(operand->data(), operand->size()));
+    row_values.push_back(RowValue::Deserialize(operand.data(),
+                                               operand.size()));
   }
   RowValue merged = RowValue::Merge(std::move(row_values));
   new_value->reserve(merged.Size());
-  merged.Serialize(new_value->get_buffer());
+  merged.Serialize(new_value->trans_to_buffer());
   return true;
 }
 

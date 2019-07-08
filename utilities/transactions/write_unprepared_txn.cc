@@ -380,13 +380,13 @@ Status WriteUnpreparedTxn::RollbackInternal() {
     const auto& keys = cfkey.second;
     for (const auto& key : keys) {
       const auto& cf_handle = cf_map.at(cfid);
-      PinnableSlice pinnable_val;
+      LazySlice lazy_val;
       bool not_used;
-      s = db_impl_->GetImpl(roptions, cf_handle, key, &pinnable_val, &not_used,
+      s = db_impl_->GetImpl(roptions, cf_handle, key, &lazy_val, &not_used,
                             &callback);
 
       if (s.ok()) {
-        s = rollback_batch.Put(cf_handle, key, pinnable_val);
+        s = rollback_batch.Put(cf_handle, key, lazy_val);
         assert(s.ok());
       } else if (s.IsNotFound()) {
         s = rollback_batch.Delete(cf_handle, key);

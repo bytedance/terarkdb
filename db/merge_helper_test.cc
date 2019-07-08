@@ -30,8 +30,7 @@ class MergeHelperTest : public testing::Test {
                                         merge_op_.get(), filter_.get(), nullptr,
                                         false, latest_snapshot));
     assert(iter_->Valid());
-    std::string current_user_key = ExtractUserKey(iter_->key()).ToString();
-    return merge_helper_->MergeUntil(current_user_key, iter_.get(),
+    return merge_helper_->MergeUntil(iter_.get(),
                                      nullptr /* range_del_agg */,
                                      stop_before, at_bottom);
   }

@@ -58,12 +58,7 @@ Status MergeHelper::TimedFullMerge(const MergeOperator* merge_operator,
 
   if (operands.size() == 0) {
     assert(value != nullptr && result != nullptr);
-    auto slice = value->get();
-    auto s = slice.decode();
-    if (!s.ok()) {
-      return s;
-    }
-    result->assign(slice->data(), slice->size());
+    LazySliceCopy(*result, *value);
     return Status::OK();
   }
 
@@ -87,18 +82,7 @@ Status MergeHelper::TimedFullMerge(const MergeOperator* merge_operator,
 
     if (tmp_result_operand != nullptr) {
       // FullMergeV2 result is an existing operand
-      if (result_operand != nullptr) {
-        *result_operand = tmp_result_operand->get();
-      } else {
-        LazySlice slice = tmp_result_operand->get();
-        auto s = slice.decode();
-        if (!s.ok()) {
-          return s;
-        }
-        result->assign(slice->data(), slice->size());
-      }
-    } else if (result_operand != nullptr) {
-      result_operand->reset(*result);
+      LazySliceCopy(*result, *tmp_result_operand);
     }
 
     RecordTick(statistics, MERGE_OPERATION_TOTAL_TIME,
@@ -122,7 +106,7 @@ Status MergeHelper::TimedFullMerge(const MergeOperator* merge_operator,
 //
 // TODO: Avoid the snapshot stripe map lookup in CompactionRangeDelAggregator
 // and just pass the StripeRep corresponding to the stripe being merged.
-Status MergeHelper::MergeUntil(Slice current_user_key, InternalIterator* iter,
+Status MergeHelper::MergeUntil(InternalIterator* iter,
                                CompactionRangeDelAggregator* range_del_agg,
                                const SequenceNumber stop_before,
                                const bool at_bottom) {
@@ -215,7 +199,7 @@ Status MergeHelper::MergeUntil(Slice current_user_key, InternalIterator* iter,
       }
       LazySlice merge_result;
       s = TimedFullMerge(user_merge_operator_, ikey.user_key, val_ptr,
-                         merge_context_.GetOperands(), merge_result.buffer(),
+                         merge_context_.GetOperands(), &merge_result,
                          logger_, stats_, env_);
 
       // We store the result in keys_.back() and operands_.back()
@@ -274,7 +258,7 @@ Status MergeHelper::MergeUntil(Slice current_user_key, InternalIterator* iter,
           ParseInternalKey(keys_.back(), &orig_ikey);
         }
         if (filter == CompactionFilter::Decision::kKeep) {
-          merge_context_.PushOperand(value_slice, current_user_key);
+          merge_context_.PushOperand(value_slice);
         } else {  // kChangeValue
           // Compaction filter asked us to change the operand from value_slice
           // to compaction_filter_value_.
@@ -320,8 +304,8 @@ Status MergeHelper::MergeUntil(Slice current_user_key, InternalIterator* iter,
     assert(merge_context_.GetNumOperands() == keys_.size());
     LazySlice merge_result;
     s = TimedFullMerge(user_merge_operator_, orig_ikey.user_key, nullptr,
-                       merge_context_.GetOperands(), merge_result.buffer(),
-                       logger_, stats_, env_);
+                       merge_context_.GetOperands(), &merge_result, logger_,
+                       stats_, env_);
     if (s.ok()) {
       // The original key encountered
       // We are certain that keys_ is not empty here (see assertions couple of
@@ -347,8 +331,8 @@ Status MergeHelper::MergeUntil(Slice current_user_key, InternalIterator* iter,
         StopWatchNano timer(env_, stats_ != nullptr);
         PERF_TIMER_GUARD(merge_operator_time_nanos);
         merge_success = user_merge_operator_->PartialMergeMulti(
-            orig_ikey.user_key, merge_context_.GetOperands(),
-            merge_result.buffer(), logger_);
+            orig_ikey.user_key, merge_context_.GetOperands(), &merge_result,
+            logger_);
         RecordTick(stats_, MERGE_OPERATION_TOTAL_TIME,
                    stats_ ? timer.ElapsedNanosSafe() : 0);
       }
@@ -396,8 +380,7 @@ CompactionFilter::Decision MergeHelper::FilterMerge(
   compaction_filter_skip_until_.Clear();
   auto ret = compaction_filter_->FilterV2(
       level_, user_key, CompactionFilter::ValueType::kMergeOperand, value,
-      compaction_filter_value_.buffer(),
-      compaction_filter_skip_until_.rep());
+      &compaction_filter_value_, compaction_filter_skip_until_.rep());
   if (ret == CompactionFilter::Decision::kRemoveAndSkipUntil) {
     if (user_comparator_->Compare(*compaction_filter_skip_until_.rep(),
                                   user_key) <= 0) {

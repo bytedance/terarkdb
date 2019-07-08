@@ -190,12 +190,12 @@ class MemTable {
   // returned).  Otherwise, *seq will be set to kMaxSequenceNumber.
   // On success, *s may be set to OK, NotFound, or MergeInProgress.  Any other
   // status returned indicates a corruption or other unexpected error.
-  bool Get(const LookupKey& key, std::string* value, Status* s,
+  bool Get(const LookupKey& key, LazySlice* value, Status* s,
            MergeContext* merge_context,
            SequenceNumber* max_covering_tombstone_seq, SequenceNumber* seq,
            const ReadOptions& read_opts, ReadCallback* callback = nullptr);
 
-  bool Get(const LookupKey& key, std::string* value, Status* s,
+  bool Get(const LookupKey& key, LazySlice* value, Status* s,
            MergeContext* merge_context,
            SequenceNumber* max_covering_tombstone_seq,
            const ReadOptions& read_opts, ReadCallback* callback = nullptr) {
