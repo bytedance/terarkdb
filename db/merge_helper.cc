@@ -58,7 +58,7 @@ Status MergeHelper::TimedFullMerge(const MergeOperator* merge_operator,
 
   if (operands.size() == 0) {
     assert(value != nullptr && result != nullptr);
-    LazySliceCopy(*result, *value);
+    result->assign(*value);
     return Status::OK();
   }
 
@@ -82,7 +82,7 @@ Status MergeHelper::TimedFullMerge(const MergeOperator* merge_operator,
 
     if (tmp_result_operand != nullptr) {
       // FullMergeV2 result is an existing operand
-      LazySliceCopy(*result, *tmp_result_operand);
+      result->assign(*tmp_result_operand);
     }
 
     RecordTick(statistics, MERGE_OPERATION_TOTAL_TIME,
@@ -258,7 +258,7 @@ Status MergeHelper::MergeUntil(InternalIterator* iter,
           ParseInternalKey(keys_.back(), &orig_ikey);
         }
         if (filter == CompactionFilter::Decision::kKeep) {
-          merge_context_.PushOperand(value_slice);
+          merge_context_.PushOperand(std::move(value_slice));
         } else {  // kChangeValue
           // Compaction filter asked us to change the operand from value_slice
           // to compaction_filter_value_.

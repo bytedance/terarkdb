@@ -38,7 +38,7 @@ class PutOperator : public MergeOperator {
                             const LazySlice& right_operand,
                             LazySlice* new_value,
                             Logger* /*logger*/) const override {
-    LazySliceCopy(*new_value, right_operand);
+    new_value->assign(right_operand);
     return true;
   }
 
@@ -47,7 +47,7 @@ class PutOperator : public MergeOperator {
                                  const std::vector<LazySlice>& operand_list,
                                  LazySlice* new_value,
                                  Logger* /*logger*/) const override {
-    LazySliceCopy(*new_value, operand_list.back());
+    new_value->assign(operand_list.back());
     return true;
   }
 

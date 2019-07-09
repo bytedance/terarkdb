@@ -3250,4 +3250,13 @@ void DeleteCachedIndexEntry(const Slice& /*key*/, void* value) {
 
 }  // anonymous namespace
 
+void BlockBasedTableIterator<DataBlockIter, LazySlice>::meta_detach(
+    rocksdb::LazySlice* slice, rocksdb::LazySliceRep* /*rep*/) const {
+  //TODO ref block
+  //[block handle]->ref()
+  //Cleanable cleanup = [](args...){ [block handle]->deref() };
+  //slice->reset(*slice, &cleanup, slice->file_number());
+  slice->reset(block_iter_.value(), true, slice->file_number());
+}
+
 }  // namespace rocksdb

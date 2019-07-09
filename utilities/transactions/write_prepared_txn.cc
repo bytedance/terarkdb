@@ -41,7 +41,7 @@ void WritePreparedTxn::Initialize(const TransactionOptions& txn_options) {
 
 Status WritePreparedTxn::Get(const ReadOptions& read_options,
                              ColumnFamilyHandle* column_family,
-                             const Slice& key, PinnableSlice* pinnable_val) {
+                             const Slice& key, LazySlice* lazy_val) {
   auto snapshot = read_options.snapshot;
   auto snap_seq =
       snapshot != nullptr ? snapshot->GetSequenceNumber() : kMaxSequenceNumber;
@@ -54,7 +54,7 @@ Status WritePreparedTxn::Get(const ReadOptions& read_options,
 
   WritePreparedTxnReadCallback callback(wpt_db_, snap_seq, min_uncommitted);
   return write_batch_.GetFromBatchAndDB(db_, read_options, column_family, key,
-                                        pinnable_val, &callback);
+                                        lazy_val, &callback);
 }
 
 Iterator* WritePreparedTxn::GetIterator(const ReadOptions& options) {
@@ -247,24 +247,26 @@ Status WritePreparedTxn::RollbackInternal() {
     Status Rollback(uint32_t cf, const Slice& key) {
       Status s;
       CFKeys& cf_keys = keys_[cf];
-      if (cf_keys.size() == 0) {  // just inserted
+      if (cf_keys.empty()) {  // just inserted
         auto cmp = comparators_[cf];
         keys_[cf] = CFKeys(SetComparator(cmp));
       }
       auto it = cf_keys.insert(key);
-      if (it.second ==
-          false) {  // second is false if a element already existed.
+      if (!it.second) {  // second is false if a element already existed.
         return s;
       }
 
-      PinnableSlice pinnable_val;
+      LazySlice lazy_val;
       bool not_used;
       auto cf_handle = handles_[cf];
-      s = db_->GetImpl(roptions, cf_handle, key, &pinnable_val, &not_used,
+      s = db_->GetImpl(roptions, cf_handle, key, &lazy_val, &not_used,
                        &callback);
       assert(s.ok() || s.IsNotFound());
       if (s.ok()) {
-        s = rollback_batch_->Put(cf_handle, key, pinnable_val);
+        s = lazy_val.decode();
+      }
+      if (s.ok()) {
+        s = rollback_batch_->Put(cf_handle, key, lazy_val);
         assert(s.ok());
       } else if (s.IsNotFound()) {
         // There has been no readable value before txn. By adding a delete we

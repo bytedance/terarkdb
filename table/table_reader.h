@@ -92,7 +92,7 @@ class TableReader {
   virtual void RangeScan(const Slice* begin,
                          const SliceTransform* prefix_extractor, void* arg,
                          bool (*callback_func)(void* arg, const Slice& key,
-                                               const LazySlice&)) {
+                                               LazySlice&& value)) {
     Arena arena;
     ScopedArenaIterator iter(
         NewIterator(ReadOptions(), prefix_extractor, &arena));

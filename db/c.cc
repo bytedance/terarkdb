@@ -3101,9 +3101,9 @@ void rocksdb_readoptions_set_prefix_same_as_start(
   opt->rep.prefix_same_as_start = v;
 }
 
-void rocksdb_readoptions_set_pin_data(rocksdb_readoptions_t* opt,
-                                      unsigned char v) {
-  assert(false);
+void rocksdb_readoptions_set_pin_data(rocksdb_readoptions_t* /*opt*/,
+                                      unsigned char /*v*/) {
+  //opt->rep.pin_data = v;
 }
 
 void rocksdb_readoptions_set_total_order_seek(rocksdb_readoptions_t* opt,

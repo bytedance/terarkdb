@@ -254,7 +254,7 @@ class MapSstIterator final : public InternalIterator {
     if (!status_.ok()) {
       return kInitFirstIterInvalid;
     }
-    Slice map_input = *value;
+    Slice map_input = value;
     link_.clear();
     largest_key_ = first_level_iter_->key();
     uint64_t flags;

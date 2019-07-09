@@ -42,8 +42,10 @@ bool CassandraValueMergeOperator::FullMergeV2(
 
   RowValue merged = RowValue::Merge(std::move(row_values));
   merged = merged.RemoveTombstones(gc_grace_period_in_seconds_);
-  merge_out->new_value.reserve(merged.Size());
-  merged.Serialize(merge_out->new_value.trans_to_buffer());
+
+  std::string* buffer = merge_out->new_value.trans_to_buffer();
+  buffer->reserve(merged.Size());
+  merged.Serialize(buffer);
 
   return true;
 }
@@ -64,8 +66,10 @@ bool CassandraValueMergeOperator::PartialMergeMulti(
                                                operand.size()));
   }
   RowValue merged = RowValue::Merge(std::move(row_values));
-  new_value->reserve(merged.Size());
-  merged.Serialize(new_value->trans_to_buffer());
+
+  std::string* buffer = new_value->trans_to_buffer();
+  buffer->reserve(merged.Size());
+  merged.Serialize(buffer);
   return true;
 }
 

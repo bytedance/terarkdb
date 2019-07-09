@@ -79,10 +79,14 @@ void GetContext::MarkKeyMayExist() {
 
 void GetContext::SaveValue(LazySlice&& value, SequenceNumber /*seq*/) {
   assert(state_ == kNotFound);
+  if (!value.decode().ok()) {
+    state_ = kCorrupt;
+    return;
+  }
   appendToReplayLog(replay_log_, kTypeValue, value);
 
   state_ = kFound;
-  *lazy_val_ = std::move(value);
+  lazy_val_->extract(value);
 }
 
 void GetContext::ReportCounters() {
@@ -200,7 +204,7 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
         if (kNotFound == state_) {
           state_ = kFound;
           if (LIKELY(lazy_val_ != nullptr)) {
-            *lazy_val_ = std::move(value);
+            lazy_val_->extract(value);
           }
         } else if (kMerge == state_) {
           assert(merge_operator_ != nullptr);
@@ -213,6 +217,7 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
             if (!merge_status.ok()) {
               state_ = kCorrupt;
             }
+            lazy_val_->detach();
           }
         }
         return false;
@@ -235,6 +240,7 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
             if (!merge_status.ok()) {
               state_ = kCorrupt;
             }
+            lazy_val_->detach();
           }
         }
         return false;
@@ -256,6 +262,7 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
             if (!merge_status.ok()) {
               state_ = kCorrupt;
             }
+            lazy_val_->detach();
           }
           return false;
         }
@@ -288,7 +295,7 @@ void replayGetContextLog(const Slice& replay_log, const Slice& user_key,
     // kMaxSequenceNumber.
     get_context->SaveValue(
         ParsedInternalKey(user_key, kMaxSequenceNumber, type),
-        LazySlice(value), &dont_care, value_pinner);
+        LazySlice(value, value_pinner), &dont_care);
   }
 #else   // ROCKSDB_LITE
   (void)replay_log;

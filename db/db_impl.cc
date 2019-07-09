@@ -1214,7 +1214,11 @@ ColumnFamilyHandle* DBImpl::DefaultColumnFamily() const {
 Status DBImpl::Get(const ReadOptions& read_options,
                    ColumnFamilyHandle* column_family, const Slice& key,
                    LazySlice* value) {
-  return GetImpl(read_options, column_family, key, value);
+  auto s = GetImpl(read_options, column_family, key, value);
+  if (s.ok()) {
+    s = value->decode();
+  }
+  return s;
 }
 
 Status DBImpl::GetImpl(const ReadOptions& read_options,
@@ -1314,21 +1318,17 @@ Status DBImpl::GetImpl(const ReadOptions& read_options,
                      callback);
     RecordTick(stats_, MEMTABLE_MISS);
   }
-  lazy_val->detach();
-  s = lazy_val->decode();
-  if (!s.ok()) {
-    return s;
-  }
+
   {
     PERF_TIMER_GUARD(get_post_process_time);
 
     ReturnAndCleanupSuperVersion(cfd, sv);
 
     RecordTick(stats_, NUMBER_KEYS_READ);
-    size_t size = lazy_val->size();
-    RecordTick(stats_, BYTES_READ, size);
-    MeasureTime(stats_, BYTES_PER_READ, size);
-    PERF_COUNTER_ADD(get_read_bytes, size);
+    //size_t size = lazy_val->size();
+    //RecordTick(stats_, BYTES_READ, size);
+    //MeasureTime(stats_, BYTES_PER_READ, size);
+    //PERF_COUNTER_ADD(get_read_bytes, size);
   }
   return s;
 }
@@ -1394,6 +1394,7 @@ std::vector<Status> DBImpl::MultiGet(
     merge_context.Clear();
     Status& s = stat_list[i];
     std::string* value = &(*values)[i];
+    LazySlice lazy_val(value);
 
     LookupKey lkey(keys[i], snapshot);
     auto cfh = reinterpret_cast<ColumnFamilyHandleImpl*>(column_family[i]);
@@ -1407,11 +1408,11 @@ std::vector<Status> DBImpl::MultiGet(
          has_unpersisted_data_.load(std::memory_order_relaxed));
     bool done = false;
     if (!skip_memtable) {
-      if (super_version->mem->Get(lkey, value, &s, &merge_context,
+      if (super_version->mem->Get(lkey, &lazy_val, &s, &merge_context,
                                   &max_covering_tombstone_seq, read_options)) {
         done = true;
         RecordTick(stats_, MEMTABLE_HIT);
-      } else if (super_version->imm->Get(lkey, value, &s, &merge_context,
+      } else if (super_version->imm->Get(lkey, &lazy_val, &s, &merge_context,
                                          &max_covering_tombstone_seq,
                                          read_options)) {
         done = true;
@@ -1419,14 +1420,14 @@ std::vector<Status> DBImpl::MultiGet(
       }
     }
     if (!done) {
-      LazySlice lazy_val(value);
       PERF_TIMER_GUARD(get_from_output_files_time);
       super_version->current->Get(read_options, lkey, &lazy_val, &s,
                                   &merge_context, &max_covering_tombstone_seq);
-      s = lazy_val.save_to_buffer(value);
       RecordTick(stats_, MEMTABLE_MISS);
     }
-
+    if (s.ok()) {
+      s = lazy_val.save_to_buffer(value);
+    }
     if (s.ok()) {
       bytes_read += value->size();
       num_found++;

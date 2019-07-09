@@ -130,7 +130,7 @@ class MemTableListVersion {
   void TrimHistory(autovector<MemTable*>* to_delete);
 
   bool GetFromList(std::list<MemTable*>* list, const LookupKey& key,
-                   std::string* value, Status* s, MergeContext* merge_context,
+                   LazySlice* value, Status* s, MergeContext* merge_context,
                    SequenceNumber* max_covering_tombstone_seq,
                    SequenceNumber* seq, const ReadOptions& read_opts,
                    ReadCallback* callback = nullptr);

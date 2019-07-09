@@ -677,10 +677,11 @@ class BlockBasedTableIterator
   }
 };
 
-template <class TBlockIter>
-class BlockBasedTableIterator<TBlockIter, LazySlice>
-    : public BlockBasedTableIteratorBase<TBlockIter, LazySlice> {
-  using Base = BlockBasedTableIteratorBase<TBlockIter, LazySlice>;
+template <>
+class BlockBasedTableIterator<DataBlockIter, LazySlice>
+    : public BlockBasedTableIteratorBase<DataBlockIter, LazySlice>,
+      public LazySliceMeta {
+  using Base = BlockBasedTableIteratorBase<DataBlockIter, LazySlice>;
   using Base::block_iter_;
   using Base::icomp_;
   using Base::table_;
@@ -689,9 +690,18 @@ class BlockBasedTableIterator<TBlockIter, LazySlice>
  public:
   using Base::Base;
 
+  virtual void meta_destroy(LazySliceRep* /*rep*/) const override {}
+  virtual void meta_detach(LazySlice* slice,
+                           LazySliceRep* rep) const override;
+  virtual Status meta_decode(LazySlice* /*slice*/, LazySliceRep* /*rep*/,
+                             Slice* value) const override {
+    *value = block_iter_.value();
+    return Status::OK();
+  }
+
   LazySlice value() const override {
     assert(Valid());
-    return LazySlice(block_iter_.value(), table_->FileNumber());
+    return LazySlice(this, {}, table_->FileNumber());
   }
 };
 

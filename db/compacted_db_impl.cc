@@ -80,7 +80,7 @@ std::vector<Status> CompactedDBImpl::MultiGet(const ReadOptions& options,
       r->Get(options, lkey.internal_key(), &get_context, nullptr);
       auto s = lazy_val.decode();
       if (s.ok()) {
-        value.assign(lazy_val->data(), lazy_val->size());
+        value.assign(lazy_val.data(), lazy_val.size());
         if (get_context.State() == GetContext::kFound) {
           statuses[idx] = Status::OK();
         }

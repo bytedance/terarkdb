@@ -367,7 +367,7 @@ Status SstFileDumper::ReadSequential(bool print_kv, uint64_t read_num,
       }
       fprintf(stdout, "%s => %s\n",
           ikey.DebugString(output_hex_).c_str(),
-          value->ToString(output_hex_).c_str());
+          value.ToString(output_hex_).c_str());
     }
   }
 

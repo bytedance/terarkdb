@@ -62,13 +62,12 @@ Status WriteUnpreparedTxnDB::RollbackRecoveredTransaction(
       Status Rollback(uint32_t cf, const Slice& key) {
         Status s;
         CFKeys& cf_keys = keys_[cf];
-        if (cf_keys.size() == 0) {  // just inserted
+        if (cf_keys.empty()) {  // just inserted
           auto cmp = comparators_[cf];
           keys_[cf] = CFKeys(SetComparator(cmp));
         }
         auto res = cf_keys.insert(key);
-        if (res.second ==
-            false) {  // second is false if a element already existed.
+        if (!res.second) {  // second is false if a element already existed.
           return s;
         }
 
@@ -78,6 +77,9 @@ Status WriteUnpreparedTxnDB::RollbackRecoveredTransaction(
         s = db_->GetImpl(roptions, cf_handle, key, &lazy_val, &not_used,
                          &callback);
         assert(s.ok() || s.IsNotFound());
+        if (s.ok()) {
+          s = lazy_val.decode();
+        }
         if (s.ok()) {
           s = rollback_batch_->Put(cf_handle, key, lazy_val);
           assert(s.ok());

@@ -35,7 +35,7 @@ class MaxOperator : public MergeOperator {
       if (!max_slice.decode().ok() || !op.decode().ok()) {
         return false;
       }
-      if (max_slice->compare(*op) < 0) {
+      if (max_slice.compare(op) < 0) {
         max = &op;
         max_slice = LazySliceReference(op);
       }
@@ -52,10 +52,10 @@ class MaxOperator : public MergeOperator {
     if (!left_operand.decode().ok() || !right_operand.decode().ok()) {
       return false;
     }
-    if (left_operand->compare(*right_operand) >= 0) {
-      LazySliceCopy(*new_value, left_operand);
+    if (left_operand.compare(right_operand) >= 0) {
+      new_value->assign(left_operand);
     } else {
-      LazySliceCopy(*new_value, right_operand);
+      new_value->assign(right_operand);
     }
     return true;
   }
@@ -69,12 +69,12 @@ class MaxOperator : public MergeOperator {
       if (!max.decode().ok() || !operand.decode().ok()) {
         return false;
       }
-      if (max->compare(*operand) < 0) {
+      if (max.compare(operand) < 0) {
         max = LazySliceReference(operand);
       }
     }
 
-    LazySliceCopy(*new_value, max);
+    new_value->assign(max);
     return true;
   }
 

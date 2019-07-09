@@ -258,6 +258,7 @@ class DBIter final: public Iterator {
       local_stats_.skip_count_--;
     }
     num_internal_keys_skipped_ = 0;
+    value_.release();
   }
 
   const SliceTransform* prefix_extractor_;

@@ -1508,10 +1508,11 @@ class MemTableInserter : public WriteBatch::Handler {
       assert(merge_operator);
 
       LazySlice new_value;
+      std::vector<LazySlice> operands;
+      operands.emplace_back(value);
 
       Status merge_status = MergeHelper::TimedFullMerge(
-          merge_operator, key, &get_value,
-          {LazySlice(value, false/* copy */)}, &new_value,
+          merge_operator, key, &get_value, operands, &new_value,
           moptions->info_log, moptions->statistics, Env::Default());
 
       if (!merge_status.ok()) {
@@ -1522,7 +1523,7 @@ class MemTableInserter : public WriteBatch::Handler {
         // 3) Add value to memtable
         auto s = new_value.decode();
         if (s.ok()) {
-          bool mem_res = mem->Add(sequence_, kTypeValue, key, *new_value);
+          bool mem_res = mem->Add(sequence_, kTypeValue, key, new_value);
           if (UNLIKELY(!mem_res)) {
             assert(seq_per_batch_);
             ret_status = Status::TryAgain("key+seq exists");

@@ -17,7 +17,7 @@
 
 #include "rocksdb/comparator.h"
 #include "rocksdb/iterator.h"
-#include "rocksdb/slice.h"
+#include "rocksdb/lazy_slice.h"
 #include "rocksdb/status.h"
 #include "rocksdb/write_batch.h"
 #include "rocksdb/write_batch_base.h"

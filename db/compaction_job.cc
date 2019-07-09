@@ -1217,7 +1217,7 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
       if (!status.ok()) {
         break;
       }
-      for (const auto& data_elmt : {key, *value}) {
+      for (const auto& data_elmt : {key, static_cast<const Slice&>(value)}) {
         size_t data_end_offset = data_begin_offset + data_elmt.size();
         while (sample_begin_offset_iter != sample_begin_offsets.cend() &&
                *sample_begin_offset_iter < data_end_offset) {

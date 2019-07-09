@@ -177,7 +177,7 @@ WriteBatchWithIndexInternal::Result WriteBatchWithIndexInternal::GetFromBatch(
       break;
     }
     if (result == WriteBatchWithIndexInternal::Result::kMergeInProgress &&
-        overwrite_key == true) {
+        overwrite_key) {
       // Since we've overwritten keys, we do not know what other operations are
       // in this batch for this key, so we cannot do a Merge to compute the
       // result.  Instead, we will simply return MergeInProgress.
@@ -207,7 +207,7 @@ WriteBatchWithIndexInternal::Result WriteBatchWithIndexInternal::GetFromBatch(
         Logger* logger = immuable_db_options.info_log.get();
 
         if (merge_operator) {
-          LazySlice lazy_slice(entry_value, false/* copy */);
+          LazySlice lazy_slice(entry_value);
           *s = MergeHelper::TimedFullMerge(merge_operator, key, &lazy_slice,
                                            merge_context->GetOperands(), value,
                                            logger, statistics, env);
@@ -221,7 +221,7 @@ WriteBatchWithIndexInternal::Result WriteBatchWithIndexInternal::GetFromBatch(
         }
       } else {  // nothing to merge
         if (result == WriteBatchWithIndexInternal::Result::kFound) {  // PUT
-          value->assign(entry_value.data(), entry_value.size());
+          value->reset(entry_value);
         }
       }
     }

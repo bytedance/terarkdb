@@ -479,7 +479,7 @@ Status WriteUnpreparedTxn::RollbackInternal() {
 
 Status WriteUnpreparedTxn::Get(const ReadOptions& options,
                                ColumnFamilyHandle* column_family,
-                               const Slice& key, PinnableSlice* value) {
+                               const Slice& key, LazySlice* value) {
   auto snapshot = options.snapshot;
   auto snap_seq =
       snapshot != nullptr ? snapshot->GetSequenceNumber() : kMaxSequenceNumber;

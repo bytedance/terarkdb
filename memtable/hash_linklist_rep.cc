@@ -179,7 +179,7 @@ class HashLinkListRep : public MemTableRep {
 
   virtual void Get(const LookupKey& k, void* callback_args,
                    bool (*callback_func)(void* arg, const Slice& key,
-                                         const LazySlice&)) override;
+                                         LazySlice&& value)) override;
 
   virtual ~HashLinkListRep();
 
@@ -729,7 +729,7 @@ size_t HashLinkListRep::ApproximateMemoryUsage() {
 
 void HashLinkListRep::Get(const LookupKey& k, void* callback_args,
                           bool (*callback_func)(void* arg, const Slice& key,
-                                                const LazySlice&)) {
+                                                LazySlice&& value)) {
   auto transformed = transform_->Transform(k.user_key());
   auto bucket = GetBucket(transformed);
 

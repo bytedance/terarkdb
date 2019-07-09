@@ -39,33 +39,19 @@ void MemTableRep::EncodeKeyValue(const Slice& key, const Slice& value,
 
 LazySlice MemTableRep::DecodeToLazyValue(const char* key) {
   struct SliceMetaImpl : public LazySliceMeta {
-    void lazy_slice_destroy(const Slice& raw, void* arg, const void* const_arg,
-                            void* temp) const override {
-      assert(!raw.valid()); (void)raw;
-      assert(arg == nullptr); (void)arg;
-      assert(const_arg != nullptr); (void)const_arg;
-      assert(temp); (void)temp;
-    }
-    void lazy_slice_detach(Slice& /*value*/, const LazySliceMeta*& meta,
-                           Slice& raw, void*& arg, const void*& const_arg,
-                           void*& temp) const override {
-      assert(meta == this); (void)meta;
-      assert(!raw.valid()); (void)raw;
-      assert(arg == nullptr); (void)arg;
-      assert(const_arg != nullptr); (void)const_arg;
-      assert(temp); (void)temp;
-    }
-    Status lazy_slice_decode(const Slice& /*raw*/, void* /*arg*/,
-                             const void* const_arg, void*& /*temp*/,
-                             Slice* value) const override {
-      const char* k = reinterpret_cast<const char*>(const_arg);
+    void meta_destroy(LazySliceRep* /*rep*/) const override {}
+    void meta_detach(LazySlice* /*slice*/,
+                     LazySliceRep* /*rep*/) const override {}
+    Status meta_decode(LazySlice* /*slice*/, LazySliceRep* rep,
+                       Slice* value) const override {
+      const char* k = reinterpret_cast<const char*>(rep->data[0]);
       Slice key_slice = GetLengthPrefixedSlice(k);
       *value = GetLengthPrefixedSlice(key_slice.data() + key_slice.size());
       return Status::OK();
     }
   };
   static SliceMetaImpl meta_impl;
-  return LazySlice(&meta_impl, Slice::Invalid(), nullptr, key);
+  return LazySlice(&meta_impl, {reinterpret_cast<uint64_t>(key)});
 }
 
 bool MemTableRep::InsertKeyValue(const Slice& internal_key,
@@ -106,7 +92,7 @@ KeyHandle MemTableRep::Allocate(const size_t len, char** buf) {
 
 void MemTableRep::Get(const LookupKey& k, void* callback_args,
                       bool (*callback_func)(void* arg, const Slice& key,
-                                            LazySlice&&)) {
+                                            LazySlice&& value)) {
   auto iter = GetDynamicPrefixIterator();
   for (iter->Seek(k.internal_key(), k.memtable_key().data());
        iter->Valid() && callback_func(callback_args, iter->key(),

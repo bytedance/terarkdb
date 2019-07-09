@@ -52,13 +52,10 @@ class TransactionBaseImpl : public Transaction {
 
   using Transaction::Get;
   Status Get(const ReadOptions& options, ColumnFamilyHandle* column_family,
-             const Slice& key, std::string* value) override;
-
-  Status Get(const ReadOptions& options, ColumnFamilyHandle* column_family,
              const Slice& key, LazySlice* value) override;
 
   Status Get(const ReadOptions& options, const Slice& key,
-             std::string* value) override {
+             LazySlice* value) override {
     return Get(options, db_->DefaultColumnFamily(), key, value);
   }
 

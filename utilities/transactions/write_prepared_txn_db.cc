@@ -210,7 +210,7 @@ Status WritePreparedTxnDB::WriteInternal(const WriteOptions& write_options_orig,
 
 Status WritePreparedTxnDB::Get(const ReadOptions& options,
                                ColumnFamilyHandle* column_family,
-                               const Slice& key, PinnableSlice* value) {
+                               const Slice& key, LazySlice* value) {
   // We are fine with the latest committed value. This could be done by
   // specifying the snapshot as kMaxSequenceNumber.
   SequenceNumber seq = kMaxSequenceNumber;
@@ -227,8 +227,12 @@ Status WritePreparedTxnDB::Get(const ReadOptions& options,
   bool* dont_care = nullptr;
   // Note: no need to specify a snapshot for read options as no specific
   // snapshot is requested by the user.
-  return db_impl_->GetImpl(options, column_family, key, value, dont_care,
-                           &callback);
+  auto s = db_impl_->GetImpl(options, column_family, key, value, dont_care,
+                             &callback);
+  if (s.ok()) {
+    s = value->decode();
+  }
+  return s;
 }
 
 void WritePreparedTxnDB::UpdateCFComparatorMap(

@@ -480,7 +480,7 @@ Status TableCache::Get(const ReadOptions& options,
             return false;
           }
           // Manual inline MapSstElement::Decode
-          Slice map_input = *map_value;
+          Slice map_input = map_value;
           Slice smallest_key;
           uint64_t link_count;
           uint64_t flags;

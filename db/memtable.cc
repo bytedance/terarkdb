@@ -407,26 +407,25 @@ class MemTableIterator
  public:
   using Base::Base;
 
-  virtual void lazy_slice_destroy(const Slice& /*raw*/, void* /*arg*/,
-                                  const void* /*const_arg*/,
-                                  void* /*temp*/) const override {}
-  virtual void lazy_slice_detach(Slice& value, const LazySliceMeta*& meta,
-                                 Slice& raw, void*& arg,
-                                 const void*& const_arg,
-                                 void*& temp) const override {
-
+  virtual void meta_destroy(LazySliceRep* /*rep*/) const override {}
+  virtual void meta_detach(LazySlice* slice,
+                           LazySliceRep* rep) const override {
+    if (!value_pinned_ || !iter_->IsValuePinned()) {
+      LazySliceMeta::meta_detach(slice, rep);
+    } if (!slice->valid()) {
+      iter_->value().swap(*slice);
+      slice->detach();
+    }
   }
-  virtual Status lazy_slice_decode(const Slice& raw, void* arg,
-                                   const void* const_arg,
-                                   void*& temp, Slice* value) const = 0;
+  virtual Status meta_decode(LazySlice* slice, LazySliceRep* /*rep*/,
+                             Slice* /*value*/) const override {
+    iter_->value().swap(*slice);
+    return slice->decode();
+  }
 
   virtual LazySlice value() const override {
     assert(valid_);
-    if (value_pinned_ && iter_->IsValuePinned()) {
-      return iter_->value();
-    } else {
-      return LazySliceCopy(iter_->value());
-    }
+    return LazySlice(this, {});
   }
 };
 
@@ -661,19 +660,19 @@ static bool SaveValue(void* arg, const Slice& internal_key,
         if (s->inplace_update_support) {
           s->mem->GetLock(s->key->user_key())->ReadLock();
         }
-        *(s->status) = Status::OK();
-        if (*(s->merge_in_progress)) {
+        *s->status = Status::OK();
+        if (*s->merge_in_progress) {
           if (s->value != nullptr) {
-            *(s->status) = MergeHelper::TimedFullMerge(
+            *s->status = MergeHelper::TimedFullMerge(
                 merge_operator, s->key->user_key(), &value,
                 merge_context->GetOperands(), s->value, s->logger,
-                s->statistics, s->env_, nullptr /* result_operand */, true);
+                s->statistics, s->env_, true);
+            if (s->status->ok()) {
+              s->value->detach();
+            }
           }
         } else if (s->value != nullptr) {
-          if (!(*s->status = value.decode()).ok()) {
-            return false;
-          }
-          s->value->assign(value->data(), value->size());
+          s->value->extract(value);
         }
         if (s->inplace_update_support) {
           s->mem->GetLock(s->key->user_key())->ReadUnlock();
@@ -684,39 +683,45 @@ static bool SaveValue(void* arg, const Slice& internal_key,
       case kTypeDeletion:
       case kTypeSingleDeletion:
       case kTypeRangeDeletion: {
-        if (*(s->merge_in_progress)) {
+        if (*s->merge_in_progress) {
           if (s->value != nullptr) {
-            *(s->status) = MergeHelper::TimedFullMerge(
+            *s->status = MergeHelper::TimedFullMerge(
                 merge_operator, s->key->user_key(), nullptr,
                 merge_context->GetOperands(), s->value, s->logger,
-                s->statistics, s->env_, nullptr /* result_operand */, true);
+                s->statistics, s->env_, true);
+            if (s->status->ok()) {
+              s->value->detach();
+            }
           }
         } else {
-          *(s->status) = Status::NotFound();
+          *s->status = Status::NotFound();
         }
-        *(s->found_final_value) = true;
+        *s->found_final_value = true;
         return false;
       }
       case kTypeMerge:
       case kTypeMergeIndex: {
         if (!merge_operator) {
-          *(s->status) = Status::InvalidArgument(
+          *s->status = Status::InvalidArgument(
               "merge_operator is not properly initialized.");
           // Normally we continue the loop (return true) when we see a merge
           // operand.  But in case of an error, we should stop the loop
           // immediately and pretend we have found the value to stop further
           // seek.  Otherwise, the later call will override this error status.
-          *(s->found_final_value) = true;
+          *s->found_final_value = true;
           return false;
         }
-        *(s->merge_in_progress) = true;
-        merge_context->PushOperand(value, s->key->user_key());
+        *s->merge_in_progress = true;
+        merge_context->PushOperand(std::move(value));
         if (merge_operator->ShouldMerge(merge_context->GetOperandsDirectionBackward())) {
-          *(s->status) = MergeHelper::TimedFullMerge(
+          *s->status = MergeHelper::TimedFullMerge(
               merge_operator, s->key->user_key(), nullptr,
               merge_context->GetOperands(), s->value, s->logger, s->statistics,
-              s->env_, nullptr /* result_operand */, true);
-          *(s->found_final_value) = true;
+              s->env_, true);
+          if (s->status->ok()) {
+            s->value->detach();
+          }
+          *s->found_final_value = true;
           return false;
         }
         return true;
@@ -811,31 +816,26 @@ void MemTable::Update(SequenceNumber seq,
     // all entries with overly large sequence numbers.
     if (comparator_.comparator.user_comparator()->Equal(
             ExtractUserKey(iter->key()), lkey.user_key())) {
-      // Correct usFer key
+      // Correct user key
       const uint64_t tag = ExtractInternalKeyFooter(iter->key());
       ValueType type;
       SequenceNumber unused;
       UnPackSequenceAndType(tag, &unused, &type);
-      auto old_slice = iter->value();
-      Status s;
-      if (type == kTypeValue && (s = old_slice.decode()).ok()) {
-        uint32_t old_size = static_cast<uint32_t>(old_slice->size());
+      LazySlice old_value = iter->value();
+      if (type == kTypeValue && old_value.valid()) {
+        uint32_t old_size = static_cast<uint32_t>(old_value.size());
         uint32_t new_size = static_cast<uint32_t>(value.size());
 
         // Update value, if new value size <= old value size
         if (new_size <= old_size) {
           char* p =
-              const_cast<char*>(old_slice->data()) - VarintLength(old_size);
+              const_cast<char*>(old_value.data()) - VarintLength(old_size);
           p = EncodeVarint32(p, new_size);
           WriteLock wl(GetLock(lkey.user_key()));
           memcpy(p, value.data(), value.size());
           RecordTick(moptions_.statistics, NUMBER_KEYS_UPDATED);
           return;
         }
-      } else if (!s.ok()) {
-        ROCKS_LOG_ERROR(moptions_.info_log,
-                        "Memtable::Update value decode error %s",
-                        s.ToString().c_str());
       }
     }
   }
@@ -868,12 +868,11 @@ bool MemTable::UpdateCallback(SequenceNumber seq,
       ValueType type;
       uint64_t unused;
       UnPackSequenceAndType(tag, &unused, &type);
-      auto old_slice = iter->value();
-      Status s;
-      if(type == kTypeValue && (s = old_slice.decode()).ok()) {
-        uint32_t old_size = static_cast<uint32_t>(old_slice->size());
+      LazySlice old_value = iter->value();
+      if(type == kTypeValue && old_value.valid()) {
+        uint32_t old_size = static_cast<uint32_t>(old_value.size());
 
-        char* old_buffer = const_cast<char*>(old_slice->data());
+        char* old_buffer = const_cast<char*>(old_value.data());
         uint32_t new_inplace_size = old_size;
 
         std::string merged_value;
@@ -905,10 +904,6 @@ bool MemTable::UpdateCallback(SequenceNumber seq,
           UpdateFlushState();
           return true;
         }
-      } else if (!s.ok()) {
-        ROCKS_LOG_ERROR(moptions_.info_log,
-                        "Memtable::UpdateCallback value decode error %s",
-                        s.ToString().c_str());
       }
     }
   }
