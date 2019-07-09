@@ -367,7 +367,7 @@ void TerarkZipTableBuilder::Add(const Slice& key, const LazySlice& lazy_value) t
     status_ = s;
     return;
   }
-  Slice value = *lazy_value;
+  Slice value = lazy_value;
   if (table_options_.debugLevel == 3) {
     rocksdb::ParsedInternalKey ikey;
     rocksdb::ParseInternalKey(key, &ikey);
@@ -1483,7 +1483,7 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
         return s;
       }
       curKey = second_pass_iter_->key();
-      curVal = *lazy_value;
+      curVal = lazy_value;
       TERARK_RT_assert(ParseInternalKey(curKey, &pIKey), std::logic_error);
       if (debugDumpKeyValue) {
         dumpKeyValueFunc(pIKey, curVal);
@@ -1541,7 +1541,7 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
               return s;
             }
             curKey = second_pass_iter_->key();
-            curVal = *lazy_value;
+            curVal = lazy_value;
             TERARK_RT_assert(ParseInternalKey(curKey, &pIKey), std::logic_error);
             if (debugDumpKeyValue) {
               dumpKeyValueFunc(pIKey, curVal);

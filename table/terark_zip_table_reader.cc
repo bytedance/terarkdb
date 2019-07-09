@@ -235,7 +235,7 @@ public:
 };
 
 template<bool reverse>
-class TerarkZipTableIterator : public TerarkZipTableIndexIterator {
+class TerarkZipTableIterator : public TerarkZipTableIndexIterator, public LazySliceMeta {
 protected:
   const TableReaderOptions* table_reader_options_;
   SequenceNumber          global_seqno_;
@@ -364,20 +364,22 @@ public:
   LazySlice value() const override {
     assert(iter_->Valid());
     // TODO support real lazy unzip
-    return LazySlice(user_value_, table_reader_options_->file_number);
-  }
-
-  FutureSlice future_value(Slice pinned_user_key) const override {
-    assert(iter_->Valid());
-    assert(key_length_ >= 8);
-    assert(pinned_user_key == Slice((const char*)key_ptr_, key_length_ - 8));
-    (void)pinned_user_key;
-    // TODO support real future pair
-    return FutureSlice(user_value_, true, table_reader_options_->file_number);
+    return LazySlice(this, {}, table_reader_options_->file_number);
   }
 
   Status status() const override {
     return status_;
+  }
+
+  void meta_destroy(LazySliceRep* /*rep*/) const override {}
+
+  void meta_detach(LazySlice* slice, LazySliceRep* /*rep*/) const override {
+    slice->reset(user_value_, true, slice->file_number());
+  }
+
+  Status meta_decode(LazySlice* /*slice*/, LazySliceRep* /*rep*/, Slice* value) const override {
+    *value = user_value_;
+    return Status::OK();
   }
 
 protected:
@@ -855,7 +857,7 @@ const {
       Cleanable value_cleanup;
       value_cleanup.RegisterCleanup([](void* arg1, void*){ free(arg1); }, buf.data(), nullptr);
       buf.risk_release_ownership();
-      get_context->SaveValue(k, LazySlice(v), &matched, &value_cleanup);
+      get_context->SaveValue(k, LazySlice(v, &value_cleanup), &matched);
     } else {
       get_context->SaveValue(k, LazySlice(v), &matched);
     }
@@ -1222,7 +1224,7 @@ TerarkZipTableReader::Get(const ReadOptions& ro, const Slice& ikey,
 }
 
 void TerarkZipTableReader::RangeScan(const Slice* begin, const SliceTransform* prefix_extractor, void* arg,
-                                     bool(* callback_func)(void* arg, const Slice& key, const LazySlice& value)) {
+                                     bool(* callback_func)(void* arg, const Slice& key, LazySlice&& value)) {
   auto g_tctx = terark::GetTlsTerarkContext();
   ContextBuffer buffer;
   ScopedArenaIterator iter(NewIteratorSelect(this, ReadOptions(), isReverseBytewiseOrder_,
@@ -1445,7 +1447,7 @@ TerarkZipTableMultiReader::Get(const ReadOptions& ro, const Slice& ikey, GetCont
 }
 
 void TerarkZipTableMultiReader::RangeScan(const Slice* begin, const SliceTransform* prefix_extractor, void* arg,
-                                          bool(* callback_func)(void* arg, const Slice& key, const LazySlice& value)) {
+                                          bool(* callback_func)(void* arg, const Slice& key, LazySlice&& value)) {
   auto g_tctx = terark::GetTlsTerarkContext();
   ContextBuffer buffer;
   ScopedArenaIterator iter(NewIteratorSelect(this, ReadOptions(), isReverseBytewiseOrder_,
