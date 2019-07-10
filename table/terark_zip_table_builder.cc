@@ -362,7 +362,7 @@ std::shared_ptr<FilePair> TerarkZipTableBuilder::NewFilePair() {
 };
 
 void TerarkZipTableBuilder::Add(const Slice& key, const LazySlice& lazy_value) try {
-  auto s = lazy_value.decode();
+  auto s = lazy_value.inplace_decode();
   if (!s.ok()) {
     status_ = s;
     return;
@@ -1478,7 +1478,7 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
 
     while (recId < stat.keyCount && second_pass_iter_->Valid()) {
       LazySlice lazy_value = second_pass_iter_->value();
-      auto s = lazy_value.decode();
+      auto s = lazy_value.inplace_decode();
       if (!s.ok()) {
         return s;
       }
@@ -1536,7 +1536,7 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
         while (mulRecId < varNum && second_pass_iter_->Valid()) {
           if (mulRecId > 0) {
             lazy_value = second_pass_iter_->value();
-            s = lazy_value.decode();
+            s = lazy_value.inplace_decode();
             if (!s.ok()) {
               return s;
             }

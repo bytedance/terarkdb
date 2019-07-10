@@ -363,7 +363,6 @@ public:
 
   LazySlice value() const override {
     assert(iter_->Valid());
-    // TODO support real lazy unzip
     return LazySlice(this, {}, table_reader_options_->file_number);
   }
 
@@ -373,12 +372,20 @@ public:
 
   void meta_destroy(LazySliceRep* /*rep*/) const override {}
 
-  void meta_detach(LazySlice* slice, LazySliceRep* /*rep*/) const override {
-    slice->reset(user_value_, true, slice->file_number());
+  void meta_pin_resource(LazySlice* slice, LazySliceRep* /*rep*/) const override {
+    // TODO support real lazy unzip
+    slice->reset(user_value_, true, table_reader_options_->file_number);
   }
 
-  Status meta_decode(LazySlice* /*slice*/, LazySliceRep* /*rep*/, Slice* value) const override {
-    *value = user_value_;
+  Status meta_decode_destructive(LazySlice* /*slice*/, LazySliceRep* /*rep*/,
+                                 LazySlice* target) const override {
+    // TODO support real lazy unzip
+    target->reset(user_value_, true, table_reader_options_->file_number);
+    return Status::OK();
+  }
+
+  Status meta_inplace_decode(LazySlice* slice, LazySliceRep* /*rep*/) const override {
+    *slice = user_value_;
     return Status::OK();
   }
 
