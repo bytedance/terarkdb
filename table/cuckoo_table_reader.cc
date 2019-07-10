@@ -372,7 +372,7 @@ Slice CuckooTableIterator::key() const {
 
 LazySlice CuckooTableIterator::value() const {
   assert(Valid());
-  return LazySlice(curr_value_, true, reader_->file_number_);
+  return LazySlice(curr_value_, false, reader_->file_number_);
 }
 
 InternalIterator* CuckooTableReader::NewIterator(

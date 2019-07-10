@@ -45,8 +45,8 @@ class MergeHelper {
   // - OK: Entries were successfully merged.
   // - Corruption: Merge operator reported unsuccessful merge.
   static Status TimedFullMerge(const MergeOperator* merge_operator,
-                               const Slice& key, const LazySlice* value,
-                               const std::vector<LazySlice>& operands,
+                               const Slice& key, LazySlice* value,
+                               std::vector<LazySlice>& operands,
                                LazySlice* result, Logger* logger,
                                Statistics* statistics, Env* env,
                                bool update_num_ops_stats = false);

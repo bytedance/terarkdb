@@ -504,6 +504,8 @@ public class ReadOptions extends RocksObject {
   private native void setTotalOrderSeek(long handle, boolean totalOrderSeek);
   private native boolean prefixSameAsStart(long handle);
   private native void setPrefixSameAsStart(long handle, boolean prefixSameAsStart);
+  private native boolean pinData(long handle);
+  private native void setPinData(long handle, boolean pinData);
   private native boolean backgroundPurgeOnIteratorCleanup(final long handle);
   private native void setBackgroundPurgeOnIteratorCleanup(final long handle,
       final boolean backgroundPurgeOnIteratorCleanup);

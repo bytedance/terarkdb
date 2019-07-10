@@ -271,7 +271,7 @@ class TtlMergeOperator : public MergeOperator {
     }
 
     if (merge_out->existing_operand != nullptr) {
-      if (!merge_out->existing_operand->decode().ok()) {
+      if (!merge_out->existing_operand->inplace_decode().ok()) {
         return false;
       }
       merge_out->new_value.trans_to_buffer()->assign(

@@ -40,11 +40,11 @@ class CompactionIteratorToInternalIterator : public InternalIterator {
 };
 
 void CompactionIteratorToInternalIterator::Seek(const Slice& target) {
+  c_iter_->value_.reset();
   if (c_iter_->merge_helper_ != nullptr) {
     c_iter_->merge_helper_->Clear();
   }
   c_iter_->valid_ = false;
-  c_iter_->value_.release();
   c_iter_->status_ = Status::OK();
   c_iter_->has_current_user_key_ = false;
   c_iter_->at_next_ = false;
@@ -206,7 +206,7 @@ void CompactionIterator::Next() {
     // Only advance the input iterator if there is no merge output and the
     // iterator is not already at the next record.
     if (!at_next_) {
-      value_.release();
+      value_.reset();
       input_->Next();
     }
     NextFromInput();
@@ -234,7 +234,7 @@ void CompactionIterator::InvokeFilterIfNeeded(bool* need_skip,
     // filter. If the return value of the compaction filter is true,
     // replace the entry with a deletion marker.
     CompactionFilter::Decision filter;
-    compaction_filter_value_.release();
+    compaction_filter_value_.reset();
     compaction_filter_skip_until_.Clear();
     auto doFilter = [&]() {
       filter = compaction_filter_->FilterV2(
@@ -267,7 +267,7 @@ void CompactionIterator::InvokeFilterIfNeeded(bool* need_skip,
       ikey_.type = kTypeDeletion;
       current_key_.UpdateInternalKey(ikey_.sequence, kTypeDeletion);
       // no value associated with delete
-      value_.clear();
+      value_.reset();
       iter_stats_.num_record_drop_user++;
     } else if (filter == CompactionFilter::Decision::kChangeValue) {
       value_ = std::move(compaction_filter_value_);
@@ -407,7 +407,7 @@ void CompactionIterator::NextFromInput() {
       assert(ikey_.type == kTypeValue);
       assert(current_user_key_snapshot_ == last_snapshot);
 
-      value_.clear();
+      value_.reset();
       valid_ = true;
       clear_and_output_next_key_ = false;
     } else if (ikey_.type == kTypeSingleDeletion) {
@@ -446,7 +446,7 @@ void CompactionIterator::NextFromInput() {
       // The easiest way to process a SingleDelete during iteration is to peek
       // ahead at the next key.
       ParsedInternalKey next_ikey;
-      value_.release();
+      value_.pin_resource();
       input_->Next();
 
       // Check whether the next key exists, is not corrupt, and is the same key
@@ -544,7 +544,6 @@ void CompactionIterator::NextFromInput() {
         at_next_ = true;
       }
     } else if (last_snapshot == current_user_key_snapshot_) {
-      value_.release();
       // If the earliest snapshot is which this key is visible in
       // is the same as the visibility of a previous instance of the
       // same key, then this kv is not visible in any snapshot.
@@ -556,7 +555,7 @@ void CompactionIterator::NextFromInput() {
       // in this snapshot.
       assert(last_sequence >= current_user_key_sequence_);
       ++iter_stats_.num_record_drop_hidden;  // (A)
-      value_.release();
+      value_.reset();
       input_->Next();
     } else if (compaction_ != nullptr && ikey_.type == kTypeDeletion &&
                ikey_.sequence <= earliest_snapshot_ &&
@@ -589,7 +588,7 @@ void CompactionIterator::NextFromInput() {
       if (!bottommost_level_) {
         ++iter_stats_.num_optimized_del_drop_obsolete;
       }
-      value_.release();
+      value_.reset();
       input_->Next();
     } else if ((ikey_.type == kTypeDeletion) && bottommost_level_ &&
                ikeyNotNeededForIncrementalSnapshot()) {
@@ -597,7 +596,7 @@ void CompactionIterator::NextFromInput() {
       // We can skip outputting the key iff there are no subsequent puts for this
       // key
       ParsedInternalKey next_ikey;
-      value_.release();
+      value_.pin_resource();
       input_->Next();
       // Skip over all versions of this key that happen to occur in the same snapshot
       // range as the delete
@@ -627,10 +626,9 @@ void CompactionIterator::NextFromInput() {
       // have hit (A)
       // We encapsulate the merge related state machine in a different
       // object to minimize change to the existing flow.
-      assert(has_current_user_key_);
-      Status s = merge_helper_->MergeUntil(input_,
-                                           range_del_agg_, prev_snapshot,
-                                           bottommost_level_);
+      value_.reset(); // MergeUntil will get iter value and move iter
+      Status s = merge_helper_->MergeUntil(input_, range_del_agg_,
+                                           prev_snapshot, bottommost_level_);
       merge_out_iter_.SeekToFirst();
 
       if (!s.ok() && !s.IsMergeInProgress()) {
@@ -669,7 +667,7 @@ void CompactionIterator::NextFromInput() {
       if (should_delete) {
         ++iter_stats_.num_record_drop_hidden;
         ++iter_stats_.num_record_drop_range_del;
-        value_.release();
+        value_.reset();
         input_->Next();
       } else {
         valid_ = true;

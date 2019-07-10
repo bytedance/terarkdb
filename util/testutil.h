@@ -176,7 +176,7 @@ class VectorIteratorBase : public InternalIteratorBase<TValue> {
 
   virtual Status status() const override { return Status::OK(); }
 
- protected:
+ private:
   std::vector<std::string> keys_;
   std::vector<std::string> values_;
   size_t current_;

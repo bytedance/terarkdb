@@ -88,14 +88,6 @@ class ThreadedRBTreeRep : public MemTableRep {
         return key_type(p, vlen);
       }
 
-      std::pair<key_type, key_type> value() const {
-        auto k = key();
-        auto p = k.data() + k.size();
-        uint32_t vlen;
-        p = GetVarint32Ptr(p, p + 8, &vlen);
-        return {k, key_type(p, vlen)};
-      }
-
       void set_key_value(const key_type &key, const key_type &val,
                          uint32_t klnln, uint32_t vlnln, bool mag) {
         char *p = datum;
@@ -510,11 +502,10 @@ class ThreadedRBTreeRep : public MemTableRep {
       return nullptr;
     }
 
-    virtual Slice GetKey() const override { return rbt_.front().Key(); }
+    virtual Slice key() const override { return rbt_.front().Key(); }
 
     virtual LazySlice value() const override {
-      auto kv = rbt_.front().value();
-      return LazySlice(kv.first, kv.second);
+      return LazySlice(rbt_.front().Value());
     }
 
     virtual void Next() override {
@@ -569,19 +560,21 @@ class ThreadedRBTreeRep : public MemTableRep {
   };
 
   virtual void Get(const LookupKey &k, void *callback_args,
-                   bool (*callback_func)(void *arg,
-                                         const LazySlice &)) override {
+                   bool (*callback_func)(void *arg, const Slice& key,
+                                         LazySlice &&)) override {
     Slice dummy;
     if (immutable_) {
       ThreadedRBTreeRep::HeapIterator<DummyLock> iter(this);
       for (iter.Seek(dummy, k.memtable_key().data());
-           iter.Valid() && callback_func(callback_args, iter.pair());
+           iter.Valid() && callback_func(callback_args, iter.key(),
+                                         iter.value());
            iter.Next()) {
       }
     } else {
       ThreadedRBTreeRep::HeapIterator<ReadLock> iter(this);
       for (iter.Seek(dummy, k.memtable_key().data());
-           iter.Valid() && callback_func(callback_args, iter.pair());
+           iter.Valid() && callback_func(callback_args, iter.key(),
+                                         iter.value());
            iter.Next()) {
       }
     }

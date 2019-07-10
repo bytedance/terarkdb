@@ -418,7 +418,7 @@ void BlockBasedTableBuilder::Add(const Slice& key, const LazySlice& lazy_value) 
   Rep* r = rep_;
   assert(!r->closed);
   if (!ok()) return;
-  auto s = lazy_value.decode();
+  auto s = lazy_value.inplace_decode();
   if (!s.ok()) {
     r->status = s;
     return;

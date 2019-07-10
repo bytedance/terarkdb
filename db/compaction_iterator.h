@@ -103,7 +103,6 @@ class CompactionIterator {
   void Next();
 
   // Getters
-
   const Slice& key() const { return key_; }
   const LazySlice& value() const { return value_; }
   const Status& status() const { return status_; }
@@ -196,7 +195,6 @@ class CompactionIterator {
 
   MergeOutputIterator merge_out_iter_;
   LazySlice compaction_filter_value_;
-  std::string compaction_filter_value_storage_;
   InternalKey compaction_filter_skip_until_;
   // "level_ptrs" holds indices that remember which file of an associated
   // level we were last checking during the last call to compaction->

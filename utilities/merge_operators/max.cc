@@ -32,7 +32,7 @@ class MaxOperator : public MergeOperator {
     }
 
     for (const auto& op : merge_in.operand_list) {
-      if (!max_slice.decode().ok() || !op.decode().ok()) {
+      if (!max_slice.inplace_decode().ok() || !op.inplace_decode().ok()) {
         return false;
       }
       if (max_slice.compare(op) < 0) {
@@ -49,7 +49,7 @@ class MaxOperator : public MergeOperator {
                             const LazySlice& right_operand,
                             LazySlice* new_value,
                             Logger* /*logger*/) const override {
-    if (!left_operand.decode().ok() || !right_operand.decode().ok()) {
+    if (!left_operand.inplace_decode().ok() || !right_operand.inplace_decode().ok()) {
       return false;
     }
     if (left_operand.compare(right_operand) >= 0) {
@@ -66,7 +66,7 @@ class MaxOperator : public MergeOperator {
                                  Logger* /*logger*/) const override {
     LazySlice max;
     for (const auto& operand : operand_list) {
-      if (!max.decode().ok() || !operand.decode().ok()) {
+      if (!max.inplace_decode().ok() || !operand.inplace_decode().ok()) {
         return false;
       }
       if (max.compare(operand) < 0) {

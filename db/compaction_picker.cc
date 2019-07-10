@@ -589,7 +589,7 @@ void CompactionPicker::InitFilesBeingCompact(
                                         : iter->Seek(begin->Encode());
          iter->Valid(); iter->Next()) {
       LazySlice value = iter->value();
-      if (!value.decode().ok() || !element.Decode(iter->key(), value)) {
+      if (!value.inplace_decode().ok() || !element.Decode(iter->key(), value)) {
         // TODO: log error ?
         break;
       }

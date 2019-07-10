@@ -1521,7 +1521,7 @@ class MemTableInserter : public WriteBatch::Handler {
         perform_merge = false;
       } else {
         // 3) Add value to memtable
-        auto s = new_value.decode();
+        auto s = new_value.inplace_decode();
         if (s.ok()) {
           bool mem_res = mem->Add(sequence_, kTypeValue, key, new_value);
           if (UNLIKELY(!mem_res)) {

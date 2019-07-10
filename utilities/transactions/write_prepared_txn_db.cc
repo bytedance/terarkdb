@@ -230,7 +230,7 @@ Status WritePreparedTxnDB::Get(const ReadOptions& options,
   auto s = db_impl_->GetImpl(options, column_family, key, value, dont_care,
                              &callback);
   if (s.ok()) {
-    s = value->decode();
+    s = value->inplace_decode();
   }
   return s;
 }

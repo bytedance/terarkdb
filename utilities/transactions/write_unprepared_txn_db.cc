@@ -78,7 +78,7 @@ Status WriteUnpreparedTxnDB::RollbackRecoveredTransaction(
                          &callback);
         assert(s.ok() || s.IsNotFound());
         if (s.ok()) {
-          s = lazy_val.decode();
+          s = lazy_val.inplace_decode();
         }
         if (s.ok()) {
           s = rollback_batch_->Put(cf_handle, key, lazy_val);

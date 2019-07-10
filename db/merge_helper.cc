@@ -49,16 +49,16 @@ MergeHelper::MergeHelper(Env* env, const Comparator* user_comparator,
 }
 
 Status MergeHelper::TimedFullMerge(const MergeOperator* merge_operator,
-                                   const Slice& key, const LazySlice* value,
-                                   const std::vector<LazySlice>& operands,
+                                   const Slice& key, LazySlice* value,
+                                   std::vector<LazySlice>& operands,
                                    LazySlice* result, Logger* logger,
                                    Statistics* statistics, Env* env,
                                    bool update_num_ops_stats) {
   assert(merge_operator != nullptr);
 
-  if (operands.size() == 0) {
+  if (operands.empty()) {
     assert(value != nullptr && result != nullptr);
-    result->assign(*value);
+    *result = std::move(*value);
     return Status::OK();
   }
 
@@ -82,7 +82,11 @@ Status MergeHelper::TimedFullMerge(const MergeOperator* merge_operator,
 
     if (tmp_result_operand != nullptr) {
       // FullMergeV2 result is an existing operand
-      result->assign(*tmp_result_operand);
+      ptrdiff_t tmp_result_operand_index =
+          tmp_result_operand - operands.data();
+      assert(tmp_result_operand_index >= 0 &&
+             size_t(tmp_result_operand_index) < operands.size());
+      *result = std::move(operands[tmp_result_operand_index]);
     }
 
     RecordTick(statistics, MERGE_OPERATION_TOTAL_TIME,
@@ -188,7 +192,7 @@ Status MergeHelper::MergeUntil(InternalIterator* iter,
       // want. Also if we're in compaction and it's a put, it would be nice to
       // run compaction filter on it.
       LazySlice val = iter->value();
-      const LazySlice* val_ptr;
+      LazySlice* val_ptr;
       if ((kTypeValue == ikey.type || kTypeValueIndex == ikey.type) &&
           (range_del_agg == nullptr ||
            !range_del_agg->ShouldDelete(
@@ -368,8 +372,8 @@ void MergeOutputIterator::Next() {
   ++it_values_;
 }
 
-CompactionFilter::Decision MergeHelper::FilterMerge(
-    const Slice& user_key, const LazySlice& value) {
+CompactionFilter::Decision MergeHelper::FilterMerge(const Slice& user_key,
+                                                    const LazySlice& value) {
   if (compaction_filter_ == nullptr) {
     return CompactionFilter::Decision::kKeep;
   }

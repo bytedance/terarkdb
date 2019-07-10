@@ -336,7 +336,7 @@ Status LoadRangeWithDepend(std::vector<RangeWithDepend>& ranges,
       }
       for (iter->SeekToFirst(); iter->Valid(); iter->Next()) {
         auto value = iter->value();
-        auto s = value.decode();
+        auto s = value.inplace_decode();
         if (!s.ok()) {
           return s;
         }

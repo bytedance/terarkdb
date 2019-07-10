@@ -202,6 +202,7 @@ class MapSstIterator final : public InternalIterator {
  private:
   const FileMetaData* file_meta_;
   InternalIterator* first_level_iter_;
+  LazySlice first_level_value_;
   bool is_backword_;
   Status status_;
   IteratorCache iterator_cache_;
@@ -249,12 +250,12 @@ class MapSstIterator final : public InternalIterator {
     }
     // Manual inline MapSstElement::Decode
     const char* err_msg = "Invalid MapSstElement";
-    LazySlice value = first_level_iter_->value();
-    status_ = value.decode();
+    first_level_value_ = first_level_iter_->value();
+    status_ = first_level_value_.inplace_decode();
     if (!status_.ok()) {
       return kInitFirstIterInvalid;
     }
-    Slice map_input = value;
+    Slice map_input = first_level_value_;
     link_.clear();
     largest_key_ = first_level_iter_->key();
     uint64_t flags;
@@ -288,6 +289,7 @@ class MapSstIterator final : public InternalIterator {
   bool InitFirstLevelIter() {
     auto result = TryInitFirstLevelIter();
     while (result == kInitFirstIterEmpty) {
+      first_level_value_.reset();
       if (is_backword_) {
         first_level_iter_->Prev();
       } else {
@@ -376,11 +378,15 @@ class MapSstIterator final : public InternalIterator {
     }
   }
 
-  ~MapSstIterator() { min_heap_.~BinaryHeap(); }
+  ~MapSstIterator() {
+    first_level_value_.reset();
+    min_heap_.~BinaryHeap();
+  }
 
   virtual bool Valid() const override { return !min_heap_.empty(); }
   virtual void SeekToFirst() override {
     is_backword_ = false;
+    first_level_value_.reset();
     first_level_iter_->SeekToFirst();
     if (InitFirstLevelIter()) {
       InitSecondLevelMinHeap(smallest_key_, include_smallest_);
@@ -390,6 +396,7 @@ class MapSstIterator final : public InternalIterator {
   }
   virtual void SeekToLast() override {
     is_backword_ = true;
+    first_level_value_.reset();
     first_level_iter_->SeekToLast();
     if (InitFirstLevelIter()) {
       InitSecondLevelMaxHeap(largest_key_, include_largest_);
@@ -399,6 +406,7 @@ class MapSstIterator final : public InternalIterator {
   }
   virtual void Seek(const Slice& target) override {
     is_backword_ = false;
+    first_level_value_.reset();
     first_level_iter_->Seek(target);
     if (!InitFirstLevelIter()) {
       assert(min_heap_.empty());
@@ -434,6 +442,7 @@ class MapSstIterator final : public InternalIterator {
   }
   virtual void SeekForPrev(const Slice& target) override {
     is_backword_ = true;
+    first_level_value_.reset();
     first_level_iter_->Seek(target);
     if (!InitFirstLevelIter()) {
       MapSstIterator::SeekToLast();
@@ -487,6 +496,7 @@ class MapSstIterator final : public InternalIterator {
     if (min_heap_.empty() ||
         icomp.Compare(min_heap_.top().key, largest_key_) >= include_largest_) {
       // out of largest bound
+      first_level_value_.reset();
       first_level_iter_->Next();
       if (InitFirstLevelIter()) {
         InitSecondLevelMinHeap(smallest_key_, include_smallest_);
@@ -519,6 +529,7 @@ class MapSstIterator final : public InternalIterator {
         icomp.Compare(smallest_key_, max_heap_.top().key) >=
             include_smallest_) {
       // out of smallest bound
+      first_level_value_.reset();
       first_level_iter_->Prev();
       if (InitFirstLevelIter()) {
         InitSecondLevelMaxHeap(largest_key_, include_largest_);

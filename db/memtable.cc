@@ -392,8 +392,8 @@ class MemTableTombstoneIterator : public MemTableIteratorBase<Slice> {
   virtual Slice value() const override {
     assert(valid_);
     LazySlice v = iter_->value();
-    assert(v.decode().ok());
-    return v.decode().ok() ? v : Slice::Invalid();
+    assert(v.inplace_decode().ok());
+    return v.inplace_decode().ok() ? v : Slice::Invalid();
   }
 };
 
@@ -408,19 +408,25 @@ class MemTableIterator
   using Base::Base;
 
   virtual void meta_destroy(LazySliceRep* /*rep*/) const override {}
-  virtual void meta_detach(LazySlice* slice,
-                           LazySliceRep* rep) const override {
+  virtual void meta_pin_resource(LazySlice* slice,
+                                 LazySliceRep* rep) const override {
     if (!value_pinned_ || !iter_->IsValuePinned()) {
-      LazySliceMeta::meta_detach(slice, rep);
-    } if (!slice->valid()) {
+      LazySliceMeta::meta_pin_resource(slice, rep);
+    } else {
       iter_->value().swap(*slice);
-      slice->detach();
+      slice->pin_resource();
     }
   }
-  virtual Status meta_decode(LazySlice* slice, LazySliceRep* /*rep*/,
-                             Slice* /*value*/) const override {
+  virtual Status meta_decode_destructive(LazySlice* slice,
+                                         LazySliceRep* /*rep*/,
+                                         LazySlice* target) const override {
     iter_->value().swap(*slice);
-    return slice->decode();
+    return slice->decode_destructive(*target);
+  }
+  virtual Status meta_inplace_decode(LazySlice* slice,
+                                     LazySliceRep* /*rep*/) const override {
+    iter_->value().swap(*slice);
+    return slice->inplace_decode();
   }
 
   virtual LazySlice value() const override {
@@ -668,11 +674,11 @@ static bool SaveValue(void* arg, const Slice& internal_key,
                 merge_context->GetOperands(), s->value, s->logger,
                 s->statistics, s->env_, true);
             if (s->status->ok()) {
-              s->value->detach();
+              s->value->pin_resource();
             }
           }
         } else if (s->value != nullptr) {
-          s->value->extract(value);
+          value.decode_destructive(*s->value);
         }
         if (s->inplace_update_support) {
           s->mem->GetLock(s->key->user_key())->ReadUnlock();
@@ -690,7 +696,7 @@ static bool SaveValue(void* arg, const Slice& internal_key,
                 merge_context->GetOperands(), s->value, s->logger,
                 s->statistics, s->env_, true);
             if (s->status->ok()) {
-              s->value->detach();
+              s->value->pin_resource();
             }
           }
         } else {
@@ -719,7 +725,7 @@ static bool SaveValue(void* arg, const Slice& internal_key,
               merge_context->GetOperands(), s->value, s->logger, s->statistics,
               s->env_, true);
           if (s->status->ok()) {
-            s->value->detach();
+            s->value->pin_resource();
           }
           *s->found_final_value = true;
           return false;

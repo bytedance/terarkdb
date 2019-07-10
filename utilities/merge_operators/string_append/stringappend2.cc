@@ -39,7 +39,7 @@ bool StringAppendTESTOperator::FullMergeV2(
 
   // Prepend the *existing_value if one exists.
   if (merge_in.existing_value) {
-    if (!merge_in.existing_value->decode().ok()) {
+    if (!merge_in.existing_value->inplace_decode().ok()) {
       return false;
     }
     buffer->append(merge_in.existing_value->data(),
@@ -53,7 +53,7 @@ bool StringAppendTESTOperator::FullMergeV2(
     if (printDelim) {
       buffer->append(1, delim_);
     }
-    if (!it->decode().ok()) {
+    if (!it->inplace_decode().ok()) {
       return false;
     }
     buffer->append(it->data(), it->size());

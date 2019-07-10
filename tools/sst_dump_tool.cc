@@ -361,7 +361,7 @@ Status SstFileDumper::ReadSequential(bool print_kv, uint64_t read_num,
 
     if (print_kv) {
       LazySlice value = iter->value();
-      auto s = value.decode();
+      auto s = value.inplace_decode();
       if (!s.ok()) {
         return s;
       }

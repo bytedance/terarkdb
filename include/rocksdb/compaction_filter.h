@@ -159,7 +159,7 @@ class CompactionFilter {
                             const LazySlice& existing_value,
                             LazySlice* new_value,
                             std::string* /*skip_until*/) const {
-    if (!existing_value.decode().ok()) {
+    if (!existing_value.inplace_decode().ok()) {
       assert(false);
       return Decision::kKeep;
     }

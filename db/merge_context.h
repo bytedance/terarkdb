@@ -12,8 +12,6 @@
 
 namespace rocksdb {
 
-const std::vector<LazySlice> empty_operand_list;
-
 // The merge context for merging a user key.
 // When doing a Get(), DB will create such a class and pass it when
 // issuing Get() operation to memtables and version_set. The operands
@@ -22,97 +20,76 @@ class MergeContext {
  public:
   // Clear all the operands
   void Clear() {
-    if (operand_list_) {
-      operand_list_->clear();
-    }
+    operand_list_.clear();
   }
 
   // Push a merge operand
-  template<class ...Args>
-  void PushOperand(Args&&...args) {
-    Initialize();
+  void PushOperand(LazySlice&& operand_slice, bool operand_pinned = true) {
     SetDirectionBackward();
 
-    operand_list_->emplace_back(std::forward<Args>(args)...);
-    operand_list_->back().detach();
+    operand_list_.emplace_back(std::move(operand_slice));
+    if (operand_pinned) {
+      operand_list_.back().pin_resource();
+    }
   }
 
   // Push back a merge operand
-  template<class ...Args>
-  void PushOperandBack(Args&&...args) {
-    Initialize();
+  void PushOperandBack(LazySlice&& operand_slice, bool operand_pinned = true) {
     SetDirectionForward();
 
-    operand_list_->emplace_back(std::forward<Args>(args)...);
-    operand_list_->back().detach();
+    operand_list_.emplace_back(std::move(operand_slice));
+    if (operand_pinned) {
+      operand_list_.back().pin_resource();
+    }
   }
 
   // return total number of operands in the list
   size_t GetNumOperands() const {
-    if (!operand_list_) {
-      return 0;
-    }
-    return operand_list_->size();
+    return operand_list_.size();
   }
 
   // Get the operand at the index.
   const LazySlice& GetOperand(int index) {
-    assert(operand_list_);
-
     SetDirectionForward();
-    return (*operand_list_)[index];
+    return operand_list_[index];
   }
 
   // Same as GetOperandsDirectionForward
-  const std::vector<LazySlice>& GetOperands() {
+  std::vector<LazySlice>& GetOperands() {
     return GetOperandsDirectionForward();
   }
 
   // Return all the operands in the order as they were merged (passed to
   // FullMerge or FullMergeV2)
-  const std::vector<LazySlice>& GetOperandsDirectionForward() {
-    if (!operand_list_) {
-      return empty_operand_list;
-    }
-
+  std::vector<LazySlice>& GetOperandsDirectionForward() {
     SetDirectionForward();
-    return *operand_list_;
+    return operand_list_;
   }
 
   // Return all the operands in the reversed order relative to how they were
   // merged (passed to FullMerge or FullMergeV2)
-  const std::vector<LazySlice>& GetOperandsDirectionBackward() {
-    if (!operand_list_) {
-      return empty_operand_list;
-    }
-
+  std::vector<LazySlice>& GetOperandsDirectionBackward() {
     SetDirectionBackward();
-    return *operand_list_;
+    return operand_list_;
   }
 
  private:
-  void Initialize() {
-    if (!operand_list_) {
-      operand_list_.reset(new std::vector<LazySlice>());
-    }
-  }
-
   void SetDirectionForward() {
     if (operands_reversed_ == true) {
-      std::reverse(operand_list_->begin(), operand_list_->end());
+      std::reverse(operand_list_.begin(), operand_list_.end());
       operands_reversed_ = false;
     }
   }
 
   void SetDirectionBackward() {
     if (operands_reversed_ == false) {
-      std::reverse(operand_list_->begin(), operand_list_->end());
+      std::reverse(operand_list_.begin(), operand_list_.end());
       operands_reversed_ = true;
     }
   }
 
   // List of operands
-  std::unique_ptr<std::vector<LazySlice>> operand_list_;
+  std::vector<LazySlice> operand_list_;
   bool operands_reversed_ = true;
 };
 

@@ -86,6 +86,13 @@ public class CapturingWriteBatchHandler extends WriteBatch.Handler {
   }
 
   @Override
+  public void putBlobIndex(final int columnFamilyId, final byte[] key,
+                           final byte[] value) {
+    //events.add(new Event(Action.PUT_BLOB_INDEX, key, value));
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
   public void markBeginPrepare() throws RocksDBException {
     events.add(new Event(Action.MARK_BEGIN_PREPARE, (byte[])null,
         (byte[])null));
@@ -159,7 +166,7 @@ public class CapturingWriteBatchHandler extends WriteBatch.Handler {
    * event actions
    */
   public enum Action {
-    PUT, MERGE, DELETE, SINGLE_DELETE, DELETE_RANGE, LOG,
+    PUT, MERGE, DELETE, SINGLE_DELETE, DELETE_RANGE, LOG, PUT_BLOB_INDEX,
     MARK_BEGIN_PREPARE, MARK_END_PREPARE, MARK_NOOP, MARK_COMMIT,
     MARK_ROLLBACK }
 }

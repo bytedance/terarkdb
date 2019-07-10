@@ -18,13 +18,13 @@ bool MergeOperator::FullMergeV2(const MergeOperationInput& merge_in,
   // std::deque<std::string> and pass it to FullMerge
   std::deque<std::string> operand_list_str;
   for (auto& op : merge_in.operand_list) {
-    if (!op.decode().ok()) {
+    if (!op.inplace_decode().ok()) {
       return false;
     }
     operand_list_str.emplace_back(op.data(), op.size());
   }
   if (merge_in.existing_value != nullptr) {
-    if (!merge_in.existing_value->decode().ok()) {
+    if (!merge_in.existing_value->inplace_decode().ok()) {
       return false;
     }
   }
@@ -66,8 +66,9 @@ bool AssociativeMergeOperator::FullMergeV2(
   LazySlice temp_value;
   const LazySlice* existing_value = merge_in.existing_value;
   for (const auto& operand : merge_in.operand_list) {
-    if ((existing_value != nullptr && !existing_value->decode().ok()) ||
-        !operand.decode().ok()) {
+    if ((existing_value != nullptr &&
+         !existing_value->inplace_decode().ok()) ||
+        !operand.inplace_decode().ok()) {
       return false;
     }
     temp_value.clear();
@@ -90,7 +91,8 @@ bool AssociativeMergeOperator::PartialMerge(const Slice& key,
                                             const LazySlice& right_operand,
                                             LazySlice* new_value,
                                             Logger* logger) const {
-  if (!left_operand.decode().ok() || !right_operand.decode().ok()) {
+  if (!left_operand.inplace_decode().ok() ||
+      !right_operand.inplace_decode().ok()) {
     return false;
   }
   return Merge(key, &left_operand, right_operand, new_value->trans_to_buffer(),

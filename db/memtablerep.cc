@@ -40,13 +40,13 @@ void MemTableRep::EncodeKeyValue(const Slice& key, const Slice& value,
 LazySlice MemTableRep::DecodeToLazyValue(const char* key) {
   struct SliceMetaImpl : public LazySliceMeta {
     void meta_destroy(LazySliceRep* /*rep*/) const override {}
-    void meta_detach(LazySlice* /*slice*/,
-                     LazySliceRep* /*rep*/) const override {}
-    Status meta_decode(LazySlice* /*slice*/, LazySliceRep* rep,
-                       Slice* value) const override {
+    void meta_pin_resource(LazySlice* /*slice*/,
+                           LazySliceRep* /*rep*/) const override {}
+    Status meta_inplace_decode(LazySlice* slice,
+                               LazySliceRep* rep) const override {
       const char* k = reinterpret_cast<const char*>(rep->data[0]);
       Slice key_slice = GetLengthPrefixedSlice(k);
-      *value = GetLengthPrefixedSlice(key_slice.data() + key_slice.size());
+      *slice = GetLengthPrefixedSlice(key_slice.data() + key_slice.size());
       return Status::OK();
     }
   };

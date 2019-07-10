@@ -1353,6 +1353,27 @@ class WriteBatchHandlerJni : public RocksDBNativeClass<
   }
 
   /**
+   * Get the Java Method: WriteBatch.Handler#putBlobIndex
+   *
+   * @param env A pointer to the Java environment
+   *
+   * @return The Java Method ID or nullptr if the class or method id could not
+   *     be retieved
+   */
+  static jmethodID getPutBlobIndexCfMethodId(JNIEnv* env) {
+    //jclass jclazz = getJClass(env);
+    //if(jclazz == nullptr) {
+    //  // exception occurred accessing class
+    //  return nullptr;
+    //}
+
+    //static jmethodID mid = env->GetMethodID(jclazz, "putBlobIndex", "(I[B[B)V");
+    //assert(mid != nullptr);
+    //return mid;
+    return nullptr;
+  }
+
+  /**
    * Get the Java Method: WriteBatch.Handler#markBeginPrepare
    *
    * @param env A pointer to the Java environment

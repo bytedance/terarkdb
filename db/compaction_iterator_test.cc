@@ -43,7 +43,7 @@ class StallingFilter : public CompactionFilter {
  public:
   Decision FilterV2(int /*level*/, const Slice& key, ValueType /*type*/,
                     const LazySlice& /*existing_value*/,
-                    std::string* /*new_value*/,
+                    LazySlice* /*new_value*/,
                     std::string* /*skip_until*/) const override {
     int k = std::atoi(key.ToString().c_str());
     last_seen.store(k);
@@ -80,7 +80,7 @@ class FilterAllKeysCompactionFilter : public CompactionFilter {
  public:
   Decision FilterV2(int /*level*/, const Slice& /*key*/, ValueType /*type*/,
                     const LazySlice& /*existing_value*/,
-                    std::string* /*new_value*/,
+                    LazySlice* /*new_value*/,
                     std::string* /*skip_until*/) const override {
     return Decision::kRemove;
   }
@@ -377,9 +377,9 @@ TEST_P(CompactionIteratorTest, CompactionFilterSkipUntil) {
   class Filter : public CompactionFilter {
     virtual Decision FilterV2(int /*level*/, const Slice& key, ValueType t,
                               const LazySlice& existing_value,
-                              std::string* /*new_value*/,
+                              LazySlice* /*new_value*/,
                               std::string* skip_until) const override {
-      if (!existing_value.decode().ok()) {
+      if (!existing_value.inplace_decode().ok()) {
         return Decision::kKeep;
       }
       std::string k = key.ToString();
@@ -563,9 +563,9 @@ TEST_P(CompactionIteratorTest, SingleMergeOperand) {
   class Filter : public CompactionFilter {
     virtual Decision FilterV2(int /*level*/, const Slice& key, ValueType t,
                               const LazySlice& existing_value,
-                              std::string* /*new_value*/,
+                              LazySlice* /*new_value*/,
                               std::string* /*skip_until*/) const override {
-      if (!existing_value.decode().ok()) {
+      if (!existing_value.inplace_decode().ok()) {
         return Decision::kKeep;
       }
       std::string k = key.ToString();

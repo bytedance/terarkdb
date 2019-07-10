@@ -363,7 +363,7 @@ struct rocksdb_mergeoperator_t : public MergeOperator {
     std::vector<size_t> operand_sizes(n);
     for (size_t i = 0; i < n; i++) {
       const LazySlice& operand = merge_in.operand_list[i];
-      if (!operand.decode().ok()) {
+      if (!operand.inplace_decode().ok()) {
         return false;
       }
       operand_pointers[i] = operand.data();
@@ -373,7 +373,7 @@ struct rocksdb_mergeoperator_t : public MergeOperator {
     const char* existing_value_data = nullptr;
     size_t existing_value_len = 0;
     if (merge_in.existing_value != nullptr) {
-      if (!merge_in.existing_value->decode().ok()) {
+      if (!merge_in.existing_value->inplace_decode().ok()) {
         return false;
       }
       existing_value_data = merge_in.existing_value->data();
@@ -406,7 +406,7 @@ struct rocksdb_mergeoperator_t : public MergeOperator {
     std::vector<size_t> operand_sizes(operand_count);
     for (size_t i = 0; i < operand_count; ++i) {
       const LazySlice& operand = operand_list[i];
-      if (!operand.decode().ok()) {
+      if (!operand.inplace_decode().ok()) {
         return false;
       }
       operand_pointers[i] = operand.data();

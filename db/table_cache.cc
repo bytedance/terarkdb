@@ -475,7 +475,7 @@ Status TableCache::Get(const ReadOptions& options,
         };
         auto get_from_map = [&](const Slice& largest_key,
                                 LazySlice&& map_value) {
-          s = map_value.decode();
+          s = map_value.inplace_decode();
           if (!s.ok()) {
             return false;
           }

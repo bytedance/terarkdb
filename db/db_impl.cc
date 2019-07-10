@@ -1216,7 +1216,7 @@ Status DBImpl::Get(const ReadOptions& read_options,
                    LazySlice* value) {
   auto s = GetImpl(read_options, column_family, key, value);
   if (s.ok()) {
-    s = value->decode();
+    s = value->inplace_decode();
   }
   return s;
 }

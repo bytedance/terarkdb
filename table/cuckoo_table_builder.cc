@@ -82,7 +82,7 @@ CuckooTableBuilder::CuckooTableBuilder(
 }
 
 void CuckooTableBuilder::Add(const Slice& key, const LazySlice& lazy_value) {
-  auto s = lazy_value.decode();
+  auto s = lazy_value.inplace_decode();
   if (!s.ok()) {
     status_ = s;
     return;

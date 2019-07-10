@@ -747,7 +747,7 @@ Slice PlainTableIterator::key() const {
 
 LazySlice PlainTableIterator::value() const {
   assert(Valid());
-  return LazySlice(value_, true, table_->file_number_);
+  return LazySlice(value_, false, table_->file_number_);
 }
 
 Status PlainTableIterator::status() const {

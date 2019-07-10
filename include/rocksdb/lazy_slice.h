@@ -18,40 +18,53 @@
 
 #pragma once
 
+#include <string>
 #include <utility>
+#include "rocksdb/cleanable.h"
 #include "rocksdb/slice.h"
 #include "rocksdb/status.h"
-#include "rocksdb/cleanable.h"
 
 namespace rocksdb {
 
 class LazySlice;
 
-struct LazySliceRep {
+union LazySliceRep {
   uint64_t data[4];
 };
 
 class LazySliceMeta {
 public:
+  // release resource
   virtual void meta_destroy(LazySliceRep* rep) const = 0;
+
+  // save value into slice
   virtual void meta_assign(LazySlice* slice, LazySliceRep* rep,
                            Slice value) const;
-  virtual void meta_detach(LazySlice* slice, LazySliceRep* rep) const;
-  virtual Status meta_decode(LazySlice* slice, LazySliceRep* rep,
-                             Slice* value) const = 0;
+
+  // pin the slice, turn the meta into editable
+  virtual void meta_pin_resource(LazySlice* slice, LazySliceRep* rep) const;
+
+  // decode slice and save to target, the slice will be destroyed
+  virtual Status meta_decode_destructive(LazySlice* slice, LazySliceRep* rep,
+                                         LazySlice* target) const;
+
+  // inplace decode slice
+  virtual Status meta_inplace_decode(LazySlice* slice,
+                                     LazySliceRep* rep) const = 0;
+
   virtual ~LazySliceMeta() = default;
 
-  // 0 -> mem ptr
-  // 1 -> mem size
-  // 2 -> mem cap
-  // 3 -> error
+  // data[0] -> mem ptr
+  // data[1] -> mem size
+  // data[2] -> mem cap
+  // data[3] -> error
   static const LazySliceMeta* default_meta();
-  // 0 -> std::string ptr
-  // 1 -> is owner
-  // 2 -> mem ptr
-  // 3 -> error
+  // data[0] -> std::string ptr
+  // data[1] -> is owner
+  // data[2] -> mem ptr
+  // data[3] -> error
   static const LazySliceMeta* buffer_meta();
-  // 0 -> ptr to lazy slice
+  // data[0] -> ptr to lazy slice
   static const LazySliceMeta* reference_meta();
   // rep -> Cleanable
   static const LazySliceMeta* cleanable_meta();
@@ -60,7 +73,6 @@ public:
 extern const LazySliceMeta* EmptyLazySliceMeta();
 
 class LazySlice : public Slice {
-  friend class LazySliceMeta;
  private:
   using Slice::data_;
   using Slice::size_;
@@ -71,20 +83,30 @@ class LazySlice : public Slice {
   void destroy();
 
  public:
+
   LazySlice() noexcept;
 
   LazySlice(LazySlice&& _slice) noexcept;
 
+  // non copyable
   LazySlice(const LazySlice& _slice) = delete;
 
-  LazySlice(const Slice& _value, bool copy = false,
-            uint64_t _file_number = uint64_t(-1));
+  // init with slice from copying or referring
+  explicit LazySlice(const Slice& _value, bool _copy = false,
+                     uint64_t _file_number = uint64_t(-1));
 
-  LazySlice(std::string* _buffer) noexcept;
+  // init with outer buffer, DO NOT take life cycle of buffer
+  explicit LazySlice(std::string* _buffer) noexcept;
 
+  // init from cleanup function for slice
+  LazySlice(const Slice& _value, Cleanable::CleanupFunction _func, void* _arg1,
+            void* _arg2, uint64_t _file_number = uint64_t(-1)) noexcept;
+
+  // init from cleanup function for slice
   LazySlice(const Slice& _value, Cleanable* _cleanable,
             uint64_t _file_number = uint64_t(-1)) noexcept;
 
+  // init from user defined meta data
   LazySlice(const LazySliceMeta* _meta, const LazySliceRep& _rep,
             uint64_t _file_number = uint64_t(-1)) noexcept;
 
@@ -97,53 +119,70 @@ class LazySlice : public Slice {
     return *this;
   }
 
+  // non copyable
   LazySlice& operator = (const LazySlice& _slice) = delete;
 
+  // assign from a slice
   LazySlice& operator = (const Slice& _slice) {
     static_cast<Slice&>(*this) = _slice;
     return *this;
   }
 
+  // reset empty slice
+  void reset();
+
+  // reset slice from copying or referring
   void reset(const Slice& _value, bool _copy = false,
              uint64_t _file_number = uint64_t(-1));
 
+  // move assign slice with file number
   void reset(LazySlice&& _slice, uint64_t _file_number);
 
+  // reset outer buffer, DO NOT take life cycle of buffer
+  void reset(std::string* _buffer);
+
+  // reset cleanup function for slice
+  void reset(const Slice& _value, Cleanable::CleanupFunction _func,
+             void* _arg1, void* _arg2, uint64_t _file_number = uint64_t(-1));
+
+  // reset cleanup function for slice
   void reset(const Slice& _value, Cleanable* _cleanable,
              uint64_t _file_number = uint64_t(-1));
 
+  // reset to user defined meta data
   void reset(const LazySliceMeta* _meta, const LazySliceRep& _rep,
              uint64_t _file_number = uint64_t(-1));
 
-  void assign(const LazySlice& slice);
+  // decode source and copy it
+  void assign(const LazySlice& _source);
 
-  void extract(LazySlice& slice);
-
-  void reset_to_buffer(std::string* _buffer = nullptr);
-
+  // trans this to buffer for modification
   std::string* trans_to_buffer();
 
+  // save data to buffer
   Status save_to_buffer(std::string* _buffer) const;
 
-  bool is_buffer() const { return meta_ == LazySliceMeta::buffer_meta(); }
-
+  // return the certain file number of SST, -1 for unknown
   uint64_t file_number() const { return file_number_; }
 
   const LazySliceMeta* meta() const { return meta_; }
 
-  void release();
-
   void swap(LazySlice& _slice) noexcept;
 
-  void detach();
+  // pin this slice, turn the meta into editable
+  void pin_resource();
 
-  Status decode() const;
+  // decode this slice and save to target, this slice will be destroyed
+  Status decode_destructive(LazySlice& _target);
+
+  // decode this slice inplace
+  Status inplace_decode() const;
 };
 
 inline LazySlice::LazySlice() noexcept
     : Slice(),
       meta_(LazySliceMeta::default_meta()),
-      rep_({}),
+      rep_{},
       file_number_(uint64_t(-1)) {}
 
 inline LazySlice::LazySlice(LazySlice&& _slice) noexcept
@@ -151,33 +190,48 @@ inline LazySlice::LazySlice(LazySlice&& _slice) noexcept
       meta_(_slice.meta_),
       rep_(_slice.rep_),
       file_number_(_slice.file_number_) {
+  _slice = Slice::Invalid();
   _slice.meta_ = nullptr;
 }
 
 inline LazySlice::LazySlice(const Slice& _value, bool _copy, uint64_t _file_number)
     : Slice(_value),
       meta_(LazySliceMeta::default_meta()),
-      rep_({}),
+      rep_{},
       file_number_(_file_number) {
   if (_copy) {
-    reset(_value, true, _file_number);
+    meta_->meta_assign(this, &rep_, _value);
   }
 }
 
 inline LazySlice::LazySlice(std::string* _buffer) noexcept
-    : Slice(Slice::Invalid()),
+    : Slice(*_buffer),
       meta_(LazySliceMeta::buffer_meta()),
-      rep_({reinterpret_cast<uint64_t>(_buffer)}),
+      rep_{reinterpret_cast<uint64_t>(_buffer)},
       file_number_(uint64_t(-1)) {
   assert(_buffer != nullptr);
+}
+
+inline LazySlice::LazySlice(const Slice& _value,
+                            Cleanable::CleanupFunction _func,
+                            void* _arg1, void* _arg2,
+                            uint64_t _file_number) noexcept
+    : Slice(_value),
+      meta_(LazySliceMeta::cleanable_meta()),
+      rep_{reinterpret_cast<uint64_t>(_func),
+           reinterpret_cast<uint64_t>(_arg1),
+           reinterpret_cast<uint64_t>(_arg2)},
+      file_number_(_file_number) {
+  assert(_func != nullptr);
 }
 
 inline LazySlice::LazySlice(const Slice& _value, Cleanable* _cleanable,
                             uint64_t _file_number) noexcept
     : Slice(_value),
       meta_(LazySliceMeta::cleanable_meta()),
-      rep_({}),
+      rep_{},
       file_number_(_file_number) {
+  assert(_cleanable != nullptr);
   ::new(&rep_) Cleanable(std::move(*_cleanable));
 }
 
@@ -197,24 +251,49 @@ inline void LazySlice::destroy() {
   }
 }
 
+inline void LazySlice::reset() {
+  Slice::clear();
+  if (meta_ != LazySliceMeta::default_meta() &&
+      meta_ != LazySliceMeta::buffer_meta()) {
+    destroy();
+    meta_ = LazySliceMeta::default_meta();
+    rep_ = {};
+  }
+  file_number_ = uint64_t(-1);
+}
+
 inline void LazySlice::reset(const Slice& _value, bool _copy, uint64_t _file_number) {
   file_number_ = _file_number;
-  if (!_copy) {
+  if (_copy) {
+    meta_->meta_assign(this, &rep_, _value);
+  } else {
     *this = _value;
-    return;
   }
-  meta_->meta_assign(this, &rep_, _value);
 }
 
 inline void LazySlice::reset(LazySlice&& _slice, uint64_t _file_number) {
-  assert(this != &_slice);
-  destroy();
-  data_ = _slice.data_;
-  size_ = _slice.size_;
-  meta_ = _slice.meta_;
-  rep_ = _slice.rep_;
+  if (this != &_slice) {
+    destroy();
+    data_ = _slice.data_;
+    size_ = _slice.size_;
+    meta_ = _slice.meta_;
+    rep_ = _slice.rep_;
+    _slice = Slice::Invalid();
+    _slice.meta_ = nullptr;
+  }
   file_number_ = _file_number;
-  _slice.meta_ = nullptr;
+}
+
+inline void LazySlice::reset(const Slice& _value,
+                             Cleanable::CleanupFunction _func, void* _arg1,
+                             void* _arg2, uint64_t _file_number) {
+  destroy();
+  meta_ = LazySliceMeta::cleanable_meta();
+  *this = _value;
+  rep_ = {reinterpret_cast<uint64_t>(_func),
+          reinterpret_cast<uint64_t>(_arg1),
+          reinterpret_cast<uint64_t>(_arg2)};
+  file_number_ = _file_number;
 }
 
 inline void LazySlice::reset(const Slice& _value, Cleanable* _cleanable,
@@ -238,42 +317,70 @@ inline void LazySlice::reset(const LazySliceMeta* _meta,
 }
 
 inline Status LazySlice::save_to_buffer(std::string* buffer) const {
+  assert(meta_ != nullptr);
   if (!Slice::valid()) {
-    auto s = decode();
+    auto s = inplace_decode();
     if (!s.ok()) {
       return s;
     }
   }
-  if (!is_buffer() || reinterpret_cast<std::string*>(rep_.data[0]) != buffer) {
+  if (meta_ != LazySliceMeta::buffer_meta() ||
+      reinterpret_cast<std::string*>(rep_.data[0]) != buffer ||
+      data_ != buffer->data()) {
     buffer->assign(data_, size_);
+  } else if (size_ < buffer->size()) {
+    buffer->resize(size_);
+  } else {
+    assert(size_ == buffer->size());
   }
   return Status::OK();
 }
 
 inline void LazySlice::swap(LazySlice& _slice) noexcept {
-  std::swap(data_, _slice.data_);
-  std::swap(size_, _slice.size_);
-  std::swap(meta_, _slice.meta_);
-  std::swap(rep_, _slice.rep_);
-  std::swap(file_number_, _slice.file_number_);
+  if (this != &_slice) {
+    std::swap(data_, _slice.data_);
+    std::swap(size_, _slice.size_);
+    std::swap(meta_, _slice.meta_);
+    std::swap(rep_, _slice.rep_);
+    std::swap(file_number_, _slice.file_number_);
+  }
 }
 
-inline void LazySlice::detach() {
-  meta_->meta_detach(this, &rep_);
+inline void LazySlice::pin_resource() {
+  assert(meta_ != nullptr);
+  return meta_->meta_pin_resource(this, &rep_);
 }
 
-inline Status LazySlice::decode() const {
+inline Status LazySlice::decode_destructive(LazySlice& _target) {
+  assert(meta_ != nullptr);
+  auto s = meta_->meta_decode_destructive(this, &rep_, &_target);
+  if (s.ok() || !s.IsNotSupported()) {
+    return s;
+  }
+  if (!Slice::valid()) {
+    s = meta_->meta_inplace_decode(this, &rep_);
+    if (!s.ok()) {
+      return s;
+    }
+  }
+  _target.reset(*this, true, file_number_);
+  reset();
+  return Status::OK();
+}
+
+inline Status LazySlice::inplace_decode() const {
+  assert(meta_ != nullptr);
   if (Slice::valid()) {
     return Status::OK();
   }
-  if (meta_ == nullptr) {
-    return Status::Corruption("Invalid LazySlice");
-  }
   auto self = const_cast<LazySlice*>(this);
-  return meta_->meta_decode(self, &self->rep_, self);
+  return meta_->meta_inplace_decode(self, &self->rep_);
 }
 
+// make a slice reference
 extern LazySlice LazySliceReference(const LazySlice& slice);
+
+// make a slice reference, drop the last "fixed_len" bytes from the slice.
 extern LazySlice LazySliceRemoveSuffix(const LazySlice* slice,
                                        size_t fixed_len);
 

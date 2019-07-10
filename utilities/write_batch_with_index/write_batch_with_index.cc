@@ -911,7 +911,8 @@ Status WriteBatchWithIndex::GetFromBatchAndDB(
           rep->GetComparator(column_family), lazy_val, rep->overwrite_key, &s);
 
   if (result == WriteBatchWithIndexInternal::Result::kFound) {
-    s = lazy_val->decode();
+    lazy_val->pin_resource();
+    s = lazy_val->inplace_decode();
     return s;
   }
   if (result == WriteBatchWithIndexInternal::Result::kDeleted) {
@@ -954,13 +955,13 @@ Status WriteBatchWithIndex::GetFromBatchAndDB(
       }
 
       if (merge_operator) {
-        LazySlice value;
+        LazySlice merge_result;
         s = MergeHelper::TimedFullMerge(
             merge_operator, key, merge_data, merge_context.GetOperands(),
-            &value, logger, statistics, env);
+            &merge_result, logger, statistics, env);
         if (s.ok()) {
-          lazy_val->swap(value);
-          lazy_val->detach();
+          merge_result.decode_destructive(*lazy_val);
+          lazy_val->pin_resource();
         }
       } else {
         s = Status::InvalidArgument("Options::merge_operator must be set");
@@ -968,7 +969,7 @@ Status WriteBatchWithIndex::GetFromBatchAndDB(
     }
   }
   if (s.ok()) {
-    s = lazy_val->decode();
+    s = lazy_val->inplace_decode();
   }
   return s;
 }

@@ -32,7 +32,8 @@ public:
 
  virtual bool AllowSingleOperand() const override { return true; }
 
- virtual bool ShouldMerge(const std::vector<LazySlice>& operands) const override {
+ virtual bool ShouldMerge(
+     const std::vector<LazySlice>& operands) const override {
    return operands_limit_ > 0 && operands.size() >= operands_limit_;
  }
 

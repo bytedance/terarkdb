@@ -79,14 +79,21 @@ void GetContext::MarkKeyMayExist() {
 
 void GetContext::SaveValue(LazySlice&& value, SequenceNumber /*seq*/) {
   assert(state_ == kNotFound);
-  if (!value.decode().ok()) {
-    state_ = kCorrupt;
-    return;
+  if (LIKELY(lazy_val_ != nullptr)) {
+    if (!value.decode_destructive(*lazy_val_).ok()) {
+      state_ = kCorrupt;
+      return;
+    }
+    state_ = kFound;
+    appendToReplayLog(replay_log_, kTypeValue, *lazy_val_);
+  } else {
+    if (!value.inplace_decode().ok()) {
+      state_ = kCorrupt;
+      return;
+    }
+    state_ = kFound;
+    appendToReplayLog(replay_log_, kTypeValue, value);
   }
-  appendToReplayLog(replay_log_, kTypeValue, value);
-
-  state_ = kFound;
-  lazy_val_->extract(value);
 }
 
 void GetContext::ReportCounters() {
@@ -176,7 +183,7 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
     }
 
     if (replay_log_) {
-      if (!value.decode().ok()) {
+      if (!value.inplace_decode().ok()) {
         state_ = kCorrupt;
         return false;
       }
@@ -204,7 +211,7 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
         if (kNotFound == state_) {
           state_ = kFound;
           if (LIKELY(lazy_val_ != nullptr)) {
-            lazy_val_->extract(value);
+            value.decode_destructive(*lazy_val_);
           }
         } else if (kMerge == state_) {
           assert(merge_operator_ != nullptr);
@@ -217,7 +224,7 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
             if (!merge_status.ok()) {
               state_ = kCorrupt;
             }
-            lazy_val_->detach();
+            lazy_val_->pin_resource();
           }
         }
         return false;
@@ -240,7 +247,7 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
             if (!merge_status.ok()) {
               state_ = kCorrupt;
             }
-            lazy_val_->detach();
+            lazy_val_->pin_resource();
           }
         }
         return false;
@@ -262,7 +269,7 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
             if (!merge_status.ok()) {
               state_ = kCorrupt;
             }
-            lazy_val_->detach();
+            lazy_val_->pin_resource();
           }
           return false;
         }

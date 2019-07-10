@@ -1296,6 +1296,9 @@ void Version::Get(const ReadOptions& read_options, const LookupKey& k,
     *status = MergeHelper::TimedFullMerge(
         merge_operator_, user_key, nullptr, merge_context->GetOperands(),
         value, info_log_, db_statistics_, env_, true);
+    if (status->ok()) {
+      value->pin_resource();
+    }
   } else {
     if (key_exists != nullptr) {
       *key_exists = false;
@@ -3687,7 +3690,7 @@ Status VersionSet::Recover(
   }
 
   if (s.ok()) {
-     for (auto cfd : *column_family_set_) {
+    for (auto cfd : *column_family_set_) {
       if (cfd->IsDropped()) {
         continue;
       }

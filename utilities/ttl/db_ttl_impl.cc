@@ -172,7 +172,7 @@ bool DBWithTTLImpl::IsStale(const Slice& value, int32_t ttl, Env* env) {
 
 // Strips the TS from the end of the slice
 Status DBWithTTLImpl::StripTS(LazySlice* lazy_val) {
-  Status st = lazy_val->decode();
+  Status st = lazy_val->inplace_decode();
   if (!st.ok()) {
     return st;
   }

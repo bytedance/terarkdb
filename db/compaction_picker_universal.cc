@@ -120,7 +120,7 @@ void GetSmallestLargestSeqno(const std::vector<FileMetaData*>& files,
 bool ReadMapElement(MapSstElement& map_element, InternalIterator* iter,
                       LogBuffer* log_buffer, const std::string& cf_name) {
   LazySlice value = iter->value();
-  auto s = value.decode();
+  auto s = value.inplace_decode();
   if (!s.ok()) {
     ROCKS_LOG_BUFFER(
         log_buffer,

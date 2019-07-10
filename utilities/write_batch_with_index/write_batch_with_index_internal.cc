@@ -150,7 +150,8 @@ WriteBatchWithIndexInternal::Result WriteBatchWithIndexInternal::GetFromBatch(
       }
       case kMergeRecord: {
         result = WriteBatchWithIndexInternal::Result::kMergeInProgress;
-        merge_context->PushOperand(entry.value, false/* copy */);
+        merge_context->PushOperand(LazySlice(entry.value),
+                                   false/* operand_pinned */);
         break;
       }
       case kDeleteRecord:
@@ -216,12 +217,13 @@ WriteBatchWithIndexInternal::Result WriteBatchWithIndexInternal::GetFromBatch(
         }
         if (s->ok()) {
           result = WriteBatchWithIndexInternal::Result::kFound;
+          value->pin_resource();
         } else {
           result = WriteBatchWithIndexInternal::Result::kError;
         }
       } else {  // nothing to merge
         if (result == WriteBatchWithIndexInternal::Result::kFound) {  // PUT
-          value->reset(entry_value);
+          value->reset(entry_value, true); // data in batch maybe changed
         }
       }
     }

@@ -143,7 +143,7 @@ class DBIter final: public Iterator {
   }
   virtual ~DBIter() {
     RecordTick(statistics_, NO_ITERATOR_DELETED);
-    ResetInternalKeysSkippedCounter();
+    ResetValueAndCounter();
     local_stats_.BumpGlobalStatistics(statistics_);
     if (!arena_mode_) {
       delete iter_;
@@ -171,7 +171,7 @@ class DBIter final: public Iterator {
   }
   virtual Slice value() const override {
     assert(valid_);
-    auto s = value_.decode();
+    auto s = value_.inplace_decode();
     if (!s.ok()) {
       valid_ = false;
       status_ = s;
@@ -244,21 +244,16 @@ class DBIter final: public Iterator {
   // have a higher sequence number.
   inline SequenceNumber MaxVisibleSequenceNumber();
 
-  inline void ClearSavedValue() {
-    if (value_buffer_.capacity() > 1048576) {
-      std::string().swap(value_buffer_);
-    } else {
-      value_buffer_.clear();
-    }
-  }
-
-  inline void ResetInternalKeysSkippedCounter() {
+  inline void ResetValueAndCounter() {
     local_stats_.skip_count_ += num_internal_keys_skipped_;
     if (valid_) {
       local_stats_.skip_count_--;
     }
     num_internal_keys_skipped_ = 0;
-    value_.release();
+    value_.reset();
+    if (value_buffer_.capacity() > 1048576) {
+      std::string().swap(value_buffer_);
+    }
   }
 
   const SliceTransform* prefix_extractor_;
@@ -324,7 +319,7 @@ void DBIter::Next() {
   assert(valid_);
   assert(status_.ok());
 
-  ResetInternalKeysSkippedCounter();
+  ResetValueAndCounter();
   bool ok = true;
   if (direction_ == kReverse) {
     if (!ReverseToForward()) {
@@ -586,6 +581,7 @@ bool DBIter::MergeValuesNewToOld() {
       // hit a put, merge the put value with operands and store the
       // final result in value_. We are done!
       LazySlice val = iter_->value();
+      value_.reset(&value_buffer_);
       s = MergeHelper::TimedFullMerge(
           merge_operator_, ikey.user_key, &val, merge_context_.GetOperands(),
           &value_, logger_, statistics_, env_, true);
@@ -594,6 +590,7 @@ bool DBIter::MergeValuesNewToOld() {
         status_ = s;
         return false;
       }
+      value_.pin_resource();
       // iter_ is positioned after put
       iter_->Next();
       if (!iter_->status().ok()) {
@@ -620,6 +617,7 @@ bool DBIter::MergeValuesNewToOld() {
   // a deletion marker.
   // feed null as the existing value to the merge operator, such that
   // client can differentiate this scenario and do things accordingly.
+  value_.reset(&value_buffer_);
   s = MergeHelper::TimedFullMerge(merge_operator_, saved_key_.GetUserKey(),
                                   nullptr, merge_context_.GetOperands(),
                                   &value_, logger_, statistics_, env_, true);
@@ -636,7 +634,7 @@ bool DBIter::MergeValuesNewToOld() {
 void DBIter::Prev() {
   assert(valid_);
   assert(status_.ok());
-  ResetInternalKeysSkippedCounter();
+  ResetValueAndCounter();
   bool ok = true;
   if (direction_ == kForward) {
     if (!ReverseToBackward()) {
@@ -820,7 +818,7 @@ bool DBIter::FindValueForCurrentKey() {
           PERF_COUNTER_ADD(internal_delete_skipped_count, 1);
         } else {
           value_ = iter_->value();
-          value_.detach();
+          value_.pin_resource();
         }
         merge_context_.Clear();
         last_not_merge_type = last_key_entry_type;
@@ -848,6 +846,7 @@ bool DBIter::FindValueForCurrentKey() {
       default:
         assert(false);
     }
+
     PERF_COUNTER_ADD(internal_key_skipped_count, 1);
     iter_->Prev();
     ++num_skipped;
@@ -871,6 +870,7 @@ bool DBIter::FindValueForCurrentKey() {
       if (last_not_merge_type == kTypeDeletion ||
           last_not_merge_type == kTypeSingleDeletion ||
           last_not_merge_type == kTypeRangeDeletion) {
+        value_.reset(&value_buffer_);
         s = MergeHelper::TimedFullMerge(
             merge_operator_, saved_key_.GetUserKey(), nullptr,
             merge_context_.GetOperands(), &value_, logger_, statistics_, env_,
@@ -878,12 +878,12 @@ bool DBIter::FindValueForCurrentKey() {
       } else {
         assert(last_not_merge_type == kTypeValue ||
                last_not_merge_type == kTypeValueIndex);
-        LazySlice merge_output(&value_buffer_);
+        LazySlice merge_result(&value_buffer_);
         s = MergeHelper::TimedFullMerge(
             merge_operator_, saved_key_.GetUserKey(), &value_,
-            merge_context_.GetOperands(), &merge_output, logger_, statistics_,
+            merge_context_.GetOperands(), &merge_result, logger_, statistics_,
             env_, true);
-        value_.swap(merge_output);
+        value_.swap(merge_result);
       }
       break;
     case kTypeValueIndex:
@@ -983,6 +983,7 @@ bool DBIter::FindValueForCurrentKeyUsingSeek() {
       break;
     } else if (ikey.type == kTypeValue || ikey.type == kTypeValueIndex) {
       LazySlice val = iter_->value();
+      value_.reset(&value_buffer_);
       Status s = MergeHelper::TimedFullMerge(
           merge_operator_, saved_key_.GetUserKey(), &val,
           merge_context_.GetOperands(), &value_, logger_, statistics_, env_,
@@ -1002,6 +1003,7 @@ bool DBIter::FindValueForCurrentKeyUsingSeek() {
     }
   }
 
+  value_.reset(&value_buffer_);
   Status s = MergeHelper::TimedFullMerge(
       merge_operator_, saved_key_.GetUserKey(), nullptr,
       merge_context_.GetOperands(), &value_, logger_, statistics_, env_, true);
@@ -1116,7 +1118,7 @@ SequenceNumber DBIter::MaxVisibleSequenceNumber() {
 void DBIter::Seek(const Slice& target) {
   StopWatch sw(env_, statistics_, DB_SEEK);
   status_ = Status::OK();
-  ResetInternalKeysSkippedCounter();
+  ResetValueAndCounter();
 
   SequenceNumber seq = MaxVisibleSequenceNumber();
   saved_key_.Clear();
@@ -1146,7 +1148,6 @@ void DBIter::Seek(const Slice& target) {
       prefix_start_key_ = prefix_extractor_->Transform(target);
     }
     direction_ = kForward;
-    ClearSavedValue();
     FindNextUserEntry(false /* not skipping */, prefix_same_as_start_);
     if (!valid_) {
       prefix_start_key_.clear();
@@ -1172,7 +1173,7 @@ void DBIter::Seek(const Slice& target) {
 void DBIter::SeekForPrev(const Slice& target) {
   StopWatch sw(env_, statistics_, DB_SEEK);
   status_ = Status::OK();
-  ResetInternalKeysSkippedCounter();
+  ResetValueAndCounter();
   saved_key_.Clear();
   // now saved_key is used to store internal key.
   saved_key_.SetInternalKey(target, 0 /* sequence_number */,
@@ -1203,7 +1204,6 @@ void DBIter::SeekForPrev(const Slice& target) {
       prefix_start_key_ = prefix_extractor_->Transform(target);
     }
     direction_ = kReverse;
-    ClearSavedValue();
     PrevInternal();
     if (!valid_) {
       prefix_start_key_.clear();
@@ -1236,8 +1236,7 @@ void DBIter::SeekToFirst() {
   }
   status_ = Status::OK();
   direction_ = kForward;
-  ResetInternalKeysSkippedCounter();
-  ClearSavedValue();
+  ResetValueAndCounter();
 
   {
     PERF_TIMER_GUARD(seek_internal_seek_time);
@@ -1283,8 +1282,7 @@ void DBIter::SeekToLast() {
   }
   status_ = Status::OK();
   direction_ = kReverse;
-  ResetInternalKeysSkippedCounter();
-  ClearSavedValue();
+  ResetValueAndCounter();
 
   {
     PERF_TIMER_GUARD(seek_internal_seek_time);

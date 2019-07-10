@@ -71,21 +71,20 @@ std::vector<Status> CompactedDBImpl::MultiGet(const ReadOptions& options,
   int idx = 0;
   for (auto* r : reader_list) {
     if (r != nullptr) {
-      LazySlice lazy_val;
       std::string& value = (*values)[idx];
+      LazySlice lazy_val(&value);
       GetContext get_context(user_comparator_, nullptr, nullptr, nullptr,
                              GetContext::kNotFound, keys[idx], &lazy_val,
                              nullptr, nullptr, nullptr, nullptr);
       LookupKey lkey(keys[idx], kMaxSequenceNumber);
       r->Get(options, lkey.internal_key(), &get_context, nullptr);
-      auto s = lazy_val.decode();
+      auto s = lazy_val.save_to_buffer(&value);
       if (s.ok()) {
-        value.assign(lazy_val.data(), lazy_val.size());
         if (get_context.State() == GetContext::kFound) {
           statuses[idx] = Status::OK();
         }
       } else {
-        statuses[idx] = s;
+        statuses[idx] = std::move(s);
       }
     }
     ++idx;

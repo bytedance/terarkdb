@@ -69,7 +69,6 @@ struct FragmentedRangeTombstoneList {
   bool ContainsRange(SequenceNumber lower, SequenceNumber upper) const;
 
   uint64_t user_tag() const { return user_tag_; }
-  Status status() const { return status_; }
 
  private:
   // Given an ordered range tombstone iterator unfragmented_tombstones,
@@ -81,7 +80,6 @@ struct FragmentedRangeTombstoneList {
       const std::vector<SequenceNumber>& snapshots);
 
   uint64_t user_tag_;
-  Status status_;
   std::vector<RangeTombstoneStack> tombstones_;
   std::vector<SequenceNumber> tombstone_seqs_;
   std::set<SequenceNumber> seq_set_;
@@ -140,7 +138,7 @@ class FragmentedRangeTombstoneIterator {
     return current_start_key_.Encode();
   }
   Slice value() const { return pos_->end_key; }
-  Status status() const { return tombstones_->status(); }
+  Status status() const { return Status::OK(); }
 
   bool empty() const { return tombstones_->empty(); }
   void Invalidate() {

@@ -1213,7 +1213,7 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
         sub_compact->outputs.size() == 1) { // first output file
       // Check if this key/value overlaps any sample intervals; if so, appends
       // overlapping portions to the dictionary.
-      status = value.decode();
+      status = value.inplace_decode();
       if (!status.ok()) {
         break;
       }
