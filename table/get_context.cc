@@ -181,8 +181,8 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
   assert((state_ != kMerge && parsed_key.type != kTypeMerge) ||
          merge_context_ != nullptr);
   if (ucmp_->Equal(parsed_key.user_key, user_key_)) {
-    if (DecodeFixed64(parsed_key.user_key.data() +
-                      parsed_key.user_key.size()) < min_seq_type_) {
+    if (PackSequenceAndType(parsed_key.sequence, parsed_key.type) <
+        min_seq_type_) {
       // for map sst, this key is masked
       return false;
     }
