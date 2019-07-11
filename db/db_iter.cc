@@ -950,6 +950,7 @@ bool DBIter::FindValueForCurrentKeyUsingSeek() {
   }
   if (ikey.type == kTypeValue || ikey.type == kTypeValueIndex) {
     value_ = iter_->value();
+    value_.pin_resource();
     valid_ = true;
     return true;
   }
@@ -993,6 +994,7 @@ bool DBIter::FindValueForCurrentKeyUsingSeek() {
         status_ = s;
         return false;
       }
+      value_.pin_resource();
       valid_ = true;
       return true;
     } else if (ikey.type == kTypeMerge || ikey.type == kTypeMergeIndex) {
@@ -1012,6 +1014,7 @@ bool DBIter::FindValueForCurrentKeyUsingSeek() {
     status_ = s;
     return false;
   }
+  value_.pin_resource();
 
   // Make sure we leave iter_ in a good state. If it's valid and we don't care
   // about prefixes, that's already good enough. Otherwise it needs to be
