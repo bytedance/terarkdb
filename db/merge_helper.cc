@@ -135,7 +135,11 @@ Status MergeHelper::MergeUntil(InternalIterator* iter,
   // orig_ikey is backed by original_key if keys_.empty()
   // orig_ikey is backed by keys_.back() if !keys_.empty()
   ParsedInternalKey orig_ikey;
-  ParseInternalKey(original_key, &orig_ikey);
+  bool succ = ParseInternalKey(original_key, &orig_ikey);
+  assert(succ);
+  if (!succ) {
+    return Status::Corruption("Cannot parse key in MergeUntil");
+  }
 
   Status s;
   bool hit_the_next_user_key = false;
@@ -147,16 +151,16 @@ Status MergeHelper::MergeUntil(InternalIterator* iter,
     ParsedInternalKey ikey;
     assert(keys_.size() == merge_context_.GetNumOperands());
 
-    if (!ParseInternalKey(iter->key(), &ikey)) {
+    if (first_key) {
+      ikey = orig_ikey;
+      first_key = false;
+    } else if (!ParseInternalKey(iter->key(), &ikey)) {
       // stop at corrupted key
       if (assert_valid_internal_key_) {
         assert(!"Corrupted internal key not expected.");
         return Status::Corruption("Corrupted internal key not expected.");
       }
       break;
-    } else if (first_key) {
-      assert(user_comparator_->Equal(ikey.user_key, orig_ikey.user_key));
-      first_key = false;
     } else if (!user_comparator_->Equal(ikey.user_key, orig_ikey.user_key)) {
       // hit a different user key, stop right here
       hit_the_next_user_key = true;
@@ -224,8 +228,8 @@ Status MergeHelper::MergeUntil(InternalIterator* iter,
       return s;
     } else {
       // hit a merge
-      //   => if there is a compaction filter, apply it.
       //   => check for range tombstones covering the operand
+      //   => if there is a compaction filter, apply it.
       //   => merge the operand into the front of the operands_ list
       //      if not filtered
       //   => then continue because we haven't yet seen a Put/Delete.
@@ -233,20 +237,23 @@ Status MergeHelper::MergeUntil(InternalIterator* iter,
       // Keep queuing keys and operands until we either meet a put / delete
       // request or later did a partial merge.
 
-      LazySlice value_slice = iter->value();
-      // add an operand to the list if:
-      // 1) it's included in one of the snapshots. in that case we *must* write
-      // it out, no matter what compaction filter says
-      // 2) it's not filtered by a compaction filter
-      CompactionFilter::Decision filter =
-          ikey.sequence <= latest_snapshot_
-              ? CompactionFilter::Decision::kKeep
-              : FilterMerge(orig_ikey.user_key, value_slice);
-      if (filter != CompactionFilter::Decision::kRemoveAndSkipUntil &&
-          range_del_agg != nullptr &&
+      CompactionFilter::Decision filter = CompactionFilter::Decision::kKeep;
+      LazySlice value_slice;
+      if (range_del_agg != nullptr &&
           range_del_agg->ShouldDelete(
               iter->key(), RangeDelPositioningMode::kForwardTraversal)) {
         filter = CompactionFilter::Decision::kRemove;
+      } else {
+        value_slice = iter->value();
+      }
+
+      // add an operand to the list if:
+      if (ikey.sequence <= latest_snapshot_) {
+        // 1) it's included in one of the snapshots. in that case we *must*
+        // write it out, no matter what compaction filter says
+      } else if (filter == CompactionFilter::Decision::kKeep) {
+        // 2) it's not filtered by a compaction filter
+        filter = FilterMerge(orig_ikey.user_key, value_slice);
       }
       if (filter == CompactionFilter::Decision::kKeep ||
           filter == CompactionFilter::Decision::kChangeValue) {
@@ -372,8 +379,8 @@ void MergeOutputIterator::Next() {
   ++it_values_;
 }
 
-CompactionFilter::Decision MergeHelper::FilterMerge(const Slice& user_key,
-                                                    const LazySlice& value) {
+CompactionFilter::Decision MergeHelper::FilterMerge(
+    const Slice& user_key, const LazySlice& value_slice) {
   if (compaction_filter_ == nullptr) {
     return CompactionFilter::Decision::kKeep;
   }
@@ -383,8 +390,9 @@ CompactionFilter::Decision MergeHelper::FilterMerge(const Slice& user_key,
   compaction_filter_value_.clear();
   compaction_filter_skip_until_.Clear();
   auto ret = compaction_filter_->FilterV2(
-      level_, user_key, CompactionFilter::ValueType::kMergeOperand, value,
-      &compaction_filter_value_, compaction_filter_skip_until_.rep());
+      level_, user_key, CompactionFilter::ValueType::kMergeOperand,
+      value_slice, &compaction_filter_value_,
+      compaction_filter_skip_until_.rep());
   if (ret == CompactionFilter::Decision::kRemoveAndSkipUntil) {
     if (user_comparator_->Compare(*compaction_filter_skip_until_.rep(),
                                   user_key) <= 0) {
