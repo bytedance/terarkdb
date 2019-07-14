@@ -147,7 +147,7 @@ class BlockBasedTable : public TableReader {
 
   size_t ApproximateMemoryUsage() const override;
 
-  uint64_t FileNumber() const;
+  uint64_t FileNumber() const override;
 
   // convert SST file to a human readable form
   Status DumpTable(WritableFile* out_file,

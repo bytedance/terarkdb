@@ -588,6 +588,7 @@ set(SOURCES
         table/sst_file_reader.cc
         table/sst_file_writer.cc
         table/table_properties.cc
+        table/table_reader.cc
         table/two_level_iterator.cc
         tools/db_bench_tool.cc
         tools/dump/db_dump_tool.cc

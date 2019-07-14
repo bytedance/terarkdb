@@ -161,18 +161,20 @@ Status CuckooTableReader::Get(const ReadOptions& /*readOptions*/,
       // per user key and we don't support snapshot.
       if (ucomp_->Equal(user_key, Slice(bucket, user_key.size()))) {
         LazySlice value(bucket + key_length_, value_length_);
+        bool dont_care __attribute__((__unused__));
         if (is_last_level_) {
           // Sequence number is not stored at the last level, so we will use
           // kMaxSequenceNumber since it is unknown.  This could cause some
           // transactions to fail to lock a key due to known sequence number.
           // However, it is expected for anyone to use a CuckooTable in a
           // TransactionDB.
-          get_context->SaveValue(std::move(value), kMaxSequenceNumber);
+          get_context->SaveValue(
+              ParsedInternalKey(user_key, kMaxSequenceNumber, kTypeValue),
+              std::move(value), &dont_care);
         } else {
           Slice full_key(bucket, key_length_);
           ParsedInternalKey found_ikey;
           ParseInternalKey(full_key, &found_ikey);
-          bool dont_care __attribute__((__unused__));
           get_context->SaveValue(found_ikey, std::move(value), &dont_care);
         }
         // We don't support merge operations. So, we return here.

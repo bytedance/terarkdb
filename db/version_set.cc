@@ -1232,8 +1232,8 @@ void Version::Get(const ReadOptions& read_options, const LookupKey& k,
         get_perf_context()->per_level_perf_context_enabled;
     StopWatchNano timer(env_, timer_enabled /* auto_start */);
     *status = table_cache_->Get(
-        read_options, *internal_comparator(), *f->file_metadata,
-        storage_info_.depend_files(), ikey, &get_context,
+        read_options, cfd_->is_row_cache_supported(), *internal_comparator(),
+        *f->file_metadata, storage_info_.depend_files(), ikey, &get_context,
         mutable_cf_options_.prefix_extractor.get(),
         cfd_->internal_stats()->GetFileReadHist(fp.GetHitFileLevel()),
         IsFilterSkipped(static_cast<int>(fp.GetHitFileLevel()),

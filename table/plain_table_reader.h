@@ -104,7 +104,7 @@ class PlainTableReader: public TableReader {
     return arena_.MemoryAllocatedBytes();
   }
 
-  uint64_t FileNumber() const {
+  uint64_t FileNumber() const override {
     return file_number_;
   }
 

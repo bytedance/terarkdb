@@ -37,6 +37,8 @@ struct GetContextStats {
 
 class GetContext {
  public:
+  using AddReplayLogCallback = void (*)(void* arg, ValueType type,
+                                        const LazySlice& value);
   enum GetState {
     kNotFound,
     kFound,
@@ -66,10 +68,6 @@ class GetContext {
   bool SaveValue(const ParsedInternalKey& parsed_key, LazySlice&& value,
                  bool* matched);
 
-  // Simplified version of the previous function. Should only be used when we
-  // know that the operation is a Put.
-  void SaveValue(LazySlice&& value, SequenceNumber seq);
-
   GetState State() const { return state_; }
 
   SequenceNumber* max_covering_tombstone_seq() {
@@ -79,7 +77,8 @@ class GetContext {
   // If a non-null string is passed, all the SaveValue calls will be
   // logged into the string. The operations can then be replayed on
   // another GetContext with replayGetContextLog.
-  void SetReplayLog(std::string* replay_log);
+  void SetReplayLog(AddReplayLogCallback replay_log_callback,
+                    void* replay_log_arg);
 
   // Do we need to fetch the SequenceNumber for this key?
   bool NeedToReadSequence() const {
@@ -88,7 +87,11 @@ class GetContext {
 
   bool sample() const { return sample_; }
 
-  bool is_finished() const { return state_ != kNotFound && state_ != kMerge; }
+  bool is_finished() const {
+    return (state_ != kNotFound && state_ != kMerge) ||
+           (max_covering_tombstone_seq_ != nullptr &&
+            *max_covering_tombstone_seq_ != 0);
+  }
 
   void SetMinSequenceAndType(uint64_t min_seq_type) {
     min_seq_type_ = min_seq_type;
@@ -123,13 +126,32 @@ class GetContext {
   SequenceNumber* seq_;
   // For Merge, don't accept key while seq type less than min_seq_type
   uint64_t min_seq_type_;
-  std::string* replay_log_;
+  AddReplayLogCallback replay_log_callback_;
+  void* replay_log_arg_;
   ReadCallback* callback_;
   bool sample_;
 };
 
-void replayGetContextLog(const Slice& replay_log, const Slice& user_key,
-                         GetContext* get_context,
-                         Cleanable* value_pinner = nullptr);
+#ifndef ROCKSDB_LITE
+
+struct DefaultRowCache {
+public:
+  static bool GetFromCache(const ReadOptions& readOptions, const Slice& key,
+                           SequenceNumber largest_seqno, IterKey* cache_key,
+                           Cache* cache, const Slice& cache_id,
+                           uint64_t file_number, Statistics* statistics,
+                           GetContext* get_context);
+
+  static void AddReplayLog(void* arg, ValueType type,
+                           const LazySlice& value);
+
+  Status AddToCache(const IterKey& cache_key, Cache* cache);
+
+  std::unique_ptr<std::string> buffer;
+  Status status;
+};
+
+#endif  // ROCKSDB_LITE
+
 
 }  // namespace rocksdb
