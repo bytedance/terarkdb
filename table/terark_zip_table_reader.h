@@ -48,6 +48,10 @@ protected:
 
   Status LoadTombstone(RandomAccessFileReader* file, uint64_t file_size);
 
+  uint64_t FileNumber() const override {
+    return GetTableReaderOptions().file_number;
+  }
+
 public:
   virtual FragmentedRangeTombstoneIterator*
   NewRangeTombstoneIterator(const ReadOptions& read_options) override;
