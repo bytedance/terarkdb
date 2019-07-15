@@ -222,6 +222,7 @@ Status MergeHelper::MergeUntil(InternalIterator* iter,
         keys_.emplace_front(std::move(original_key));
         merge_context_.PushOperand(std::move(merge_result));
       }
+      val.reset();
 
       // move iter to the next entry
       iter->Next();
