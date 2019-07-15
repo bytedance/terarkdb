@@ -362,7 +362,7 @@ Status TableCache::Get(const ReadOptions& options, bool no_global_row_cache,
   auto& fd = file_meta.fd;
   IterKey key_buffer;
 #ifndef ROCKSDB_LITE
-  DefaultRowCache row_cache_context;
+  RowCacheContext row_cache_context;
   bool enable_row_cache = ioptions_.row_cache &&
                           !get_context->NeedToReadSequence() &&
                           file_meta.sst_purpose != kMapSst;
@@ -370,10 +370,10 @@ Status TableCache::Get(const ReadOptions& options, bool no_global_row_cache,
   // Check row cache if enabled. Since row cache does not currently store
   // sequence numbers, we cannot use it if we need to fetch the sequence.
   if (enable_row_cache && !no_global_row_cache &&
-      DefaultRowCache::GetFromCache(options, k, fd.largest_seqno, &key_buffer,
-                                    ioptions_.row_cache.get(), row_cache_id_,
-                                    fd.GetNumber(), ioptions_.statistics,
-                                    get_context)) {
+      RowCacheContext::GetFromRowCache(options, k, fd.largest_seqno,
+                                       &key_buffer, ioptions_.row_cache.get(),
+                                       row_cache_id_, fd.GetNumber(),
+                                       ioptions_.statistics, get_context)) {
     return Status::OK();
   }
 #endif  // ROCKSDB_LITE
@@ -392,18 +392,18 @@ Status TableCache::Get(const ReadOptions& options, bool no_global_row_cache,
   if (s.ok()) {
     if (file_meta.sst_purpose != kMapSst) {
       if (enable_row_cache && no_global_row_cache) {
-        s = t->CachedGet(options, k, fd.largest_seqno,
-                         ioptions_.row_cache.get(), row_cache_id_,
-                         ioptions_.statistics, get_context, prefix_extractor,
-                         skip_filters);
+        s = t->RowCachedGet(options, k, fd.largest_seqno,
+                            ioptions_.row_cache.get(), row_cache_id_,
+                            ioptions_.statistics, get_context, prefix_extractor,
+                            skip_filters);
       } else {
 #ifndef ROCKSDB_LITE
-        get_context->SetReplayLog(DefaultRowCache::AddReplayLog,
+        get_context->SetReplayLog(RowCacheContext::AddReplayLog,
                                   &row_cache_context);
 #endif  // ROCKSDB_LITE
         t->UpdateMaxCoveringTombstoneSeq(
-               options, ExtractUserKey(k),
-               get_context->max_covering_tombstone_seq());
+            options, ExtractUserKey(k),
+            get_context->max_covering_tombstone_seq());
         s = t->Get(options, k, get_context, prefix_extractor, skip_filters);
 #ifndef ROCKSDB_LITE
         get_context->SetReplayLog(nullptr, nullptr);

@@ -90,8 +90,6 @@ class CompactionIterator {
 
   void ResetRecordCounts();
 
-  std::unique_ptr<InternalIterator> AdaptToInternalIterator();
-
   // Seek to the beginning of the compaction iterator output.
   //
   // REQUIRED: Call only once.
@@ -217,4 +215,9 @@ class CompactionIterator {
     return shutting_down_ && shutting_down_->load(std::memory_order_relaxed);
   }
 };
+
+InternalIterator* NewCompactionIterator(
+    CompactionIterator*(*new_compaction_iter_callback)(void*), void* arg,
+    const Slice* start_user_key = nullptr);
+
 }  // namespace rocksdb

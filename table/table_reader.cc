@@ -8,31 +8,31 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #include "table_reader.h"
+#include "rocksdb/statistics.h"
 #include "table/get_context.h"
 #include "table/scoped_arena_iterator.h"
 #include "util/arena.h"
 
 namespace rocksdb {
 
-Status TableReader::CachedGet(const rocksdb::ReadOptions& readOptions,
-                              const Slice& key, SequenceNumber largest_seqno,
-                              Cache* cache, const rocksdb::Slice& cache_id,
-                              rocksdb::Statistics* statistics,
-                              rocksdb::GetContext* get_context,
-                              const rocksdb::SliceTransform* prefix_extractor,
-                              bool skip_filters) {
-  assert(cache != nullptr && !get_context->NeedToReadSequence());
+Status TableReader::RowCachedGet(
+    const rocksdb::ReadOptions& readOptions, const Slice& key,
+    SequenceNumber largest_seqno, Cache* row_cache,
+    const rocksdb::Slice& row_cache_id, rocksdb::Statistics* statistics,
+    rocksdb::GetContext* get_context,
+    const rocksdb::SliceTransform* prefix_extractor, bool skip_filters) {
+  assert(row_cache != nullptr && !get_context->NeedToReadSequence());
 
 #ifndef ROCKSDB_LITE
   IterKey cache_key;
-  if (DefaultRowCache::GetFromCache(readOptions, key, largest_seqno, &cache_key,
-                                    cache, cache_id, FileNumber(), statistics,
-                                    get_context)) {
+  if (RowCacheContext::GetFromRowCache(readOptions, key, largest_seqno,
+                                       &cache_key, row_cache, row_cache_id,
+                                       FileNumber(), statistics, get_context)) {
     return Status::OK();
   }
   assert(!cache_key.GetUserKey().empty());
-  DefaultRowCache row_cache_context;
-  get_context->SetReplayLog(DefaultRowCache::AddReplayLog,
+  RowCacheContext row_cache_context;
+  get_context->SetReplayLog(RowCacheContext::AddReplayLog,
                             &row_cache_context);
 #endif  // ROCKSDB_LITE
   UpdateMaxCoveringTombstoneSeq(readOptions, ExtractUserKey(key),
@@ -41,7 +41,7 @@ Status TableReader::CachedGet(const rocksdb::ReadOptions& readOptions,
 #ifndef ROCKSDB_LITE
   get_context->SetReplayLog(nullptr, nullptr);
   if (s.ok()) {
-    s = row_cache_context.AddToCache(cache_key, cache);
+    s = row_cache_context.AddToCache(cache_key, row_cache);
   }
 #endif  // ROCKSDB_LITE
   return s;

@@ -18,6 +18,7 @@
 #include "options/options_helper.h"
 #include "rocksdb/wal_filter.h"
 #include "table/block_based_table_factory.h"
+#include "util/c_style_callback.h"
 #include "util/rate_limiter.h"
 #include "util/sst_file_manager_impl.h"
 #include "util/sync_point.h"
@@ -985,11 +986,9 @@ Status DBImpl::WriteLevel0TableForRecovery(int job_id, ColumnFamilyData* cfd,
   meta.fd = FileDescriptor(versions_->NewFileNumber(), 0, 0);
   ReadOptions ro;
   ro.total_order_seek = true;
-  Arena arena;
   Status s;
   TableProperties table_properties;
   {
-    ScopedArenaIterator iter(mem->NewIterator(ro, &arena));
     ROCKS_LOG_DEBUG(immutable_db_options_.info_log,
                     "[%s] [WriteLevel0TableForRecovery]"
                     " Level-0 table #%" PRIu64 ": started",
@@ -1016,19 +1015,27 @@ Status DBImpl::WriteLevel0TableForRecovery(int job_id, ColumnFamilyData* cfd,
       if (use_custom_gc_ && snapshot_checker == nullptr) {
         snapshot_checker = DisableGCSnapshotChecker::Instance();
       }
-      std::vector<std::unique_ptr<FragmentedRangeTombstoneIterator>>
-          range_del_iters;
-      auto range_del_iter =
-          mem->NewRangeTombstoneIterator(ro, kMaxSequenceNumber);
-      if (range_del_iter != nullptr) {
-        range_del_iters.emplace_back(range_del_iter);
-      }
+      auto get_arena_input_iter = [&](Arena& arena) {
+        return mem->NewIterator(ro, &arena);
+      };
+      auto get_range_del_iters = [&] {
+        std::vector<std::unique_ptr<FragmentedRangeTombstoneIterator>>
+            range_del_iters;
+        auto range_del_iter =
+            mem->NewRangeTombstoneIterator(ro, kMaxSequenceNumber);
+        if (range_del_iter != nullptr) {
+          range_del_iters.emplace_back(range_del_iter);
+        }
+        return range_del_iters;
+      };
       s = BuildTable(
           dbname_, env_, *cfd->ioptions(), mutable_cf_options,
-          env_options_for_compaction_, cfd->table_cache(), iter.get(),
-          std::move(range_del_iters), &meta, cfd->internal_comparator(),
-          cfd->int_tbl_prop_collector_factories(), cfd->GetID(), cfd->GetName(),
-          snapshot_seqs, earliest_write_conflict_snapshot, snapshot_checker,
+          env_options_for_compaction_, cfd->table_cache(),
+          c_style_callback(get_arena_input_iter), &get_arena_input_iter,
+          c_style_callback(get_range_del_iters), &get_range_del_iters, &meta,
+          cfd->internal_comparator(), cfd->int_tbl_prop_collector_factories(),
+          cfd->GetID(), cfd->GetName(), snapshot_seqs,
+          earliest_write_conflict_snapshot, snapshot_checker,
           GetCompressionFlush(*cfd->ioptions(), mutable_cf_options),
           cfd->ioptions()->compression_opts, paranoid_file_checks,
           cfd->internal_stats(), TableFileCreationReason::kRecovery,

@@ -277,12 +277,12 @@ void GetContext::SetReplayLog(AddReplayLogCallback replay_log_callback,
 
 #ifndef ROCKSDB_LITE
 
-bool DefaultRowCache::GetFromCache(
+bool RowCacheContext::GetFromRowCache(
     const rocksdb::ReadOptions& options, const rocksdb::Slice& key,
-    SequenceNumber largest_seqno, IterKey* cache_key, rocksdb::Cache* cache,
-    const rocksdb::Slice& cache_id, uint64_t file_number,
+    SequenceNumber largest_seqno, IterKey* cache_key, rocksdb::Cache* row_cache,
+    const rocksdb::Slice& row_cache_id, uint64_t file_number,
     Statistics* statistics, GetContext* get_context) {
-  assert(cache != nullptr && !get_context->NeedToReadSequence());
+  assert(row_cache != nullptr && !get_context->NeedToReadSequence());
 
   auto user_key = ExtractUserKey(key);
   // We use the user key as cache key instead of the internal key,
@@ -295,12 +295,13 @@ bool DefaultRowCache::GetFromCache(
           : std::min(largest_seqno, GetInternalKeySeqno(key));
 
   // Compute row cache key.
-  cache_key->TrimAppend(cache_key->Size(), cache_id.data(), cache_id.size());
+  cache_key->TrimAppend(cache_key->Size(), row_cache_id.data(),
+                        row_cache_id.size());
   AppendVarint64(cache_key, file_number);
   AppendVarint64(cache_key, seq_no);
   cache_key->TrimAppend(cache_key->Size(), user_key.data(), user_key.size());
 
-  auto row_handle = cache->Lookup(cache_key->GetUserKey());
+  auto row_handle = row_cache->Lookup(cache_key->GetUserKey());
   if (!row_handle) {
     RecordTick(statistics, ROW_CACHE_MISS);
     return false;
@@ -319,7 +320,7 @@ bool DefaultRowCache::GetFromCache(
   // get_context.lazy_slice_. Cache entry is released when
   // get_context.lazy_slice_ is reset.
   Slice replay_log =
-      *static_cast<const std::string*>(cache->Value(row_handle));
+      *static_cast<const std::string*>(row_cache->Value(row_handle));
   bool first_log = true;
   LazySlice lazy_value;
   while (replay_log.size()) {
@@ -332,7 +333,7 @@ bool DefaultRowCache::GetFromCache(
 
     if (first_log) {
       Cleanable value_pinner;
-      value_pinner.RegisterCleanup(release_cache_entry_func, cache,
+      value_pinner.RegisterCleanup(release_cache_entry_func, row_cache,
                                    row_handle);
       lazy_value.reset(value, &value_pinner);
       first_log = false;
@@ -361,7 +362,7 @@ bool DefaultRowCache::GetFromCache(
         lazy_value.reset(&meta_impl, {
             reinterpret_cast<uint64_t>(value.data()),
             value.size(),
-            reinterpret_cast<uint64_t>(cache),
+            reinterpret_cast<uint64_t>(row_cache),
             reinterpret_cast<uint64_t>(row_handle),
         });
       }
@@ -378,16 +379,16 @@ bool DefaultRowCache::GetFromCache(
   return true;
 }
 
-void DefaultRowCache::AddReplayLog(void* arg, rocksdb::ValueType type,
+void RowCacheContext::AddReplayLog(void* arg, rocksdb::ValueType type,
                                    const rocksdb::LazySlice& value) {
-  DefaultRowCache* self = static_cast<DefaultRowCache*>(arg);
-  if (self->status.ok()) {
-    self->status = value.inplace_decode();
+  RowCacheContext* context = static_cast<RowCacheContext*>(arg);
+  if (context->status.ok()) {
+    context->status = value.inplace_decode();
   }
-  if (!self->status.ok()) {
+  if (!context->status.ok()) {
     return;
   }
-  auto& replay_log = self->buffer;
+  auto& replay_log = context->buffer;
   if (!replay_log) {
     // Optimization: in the common case of only one operation in the
     // log, we allocate the exact amount of space needed.
@@ -398,9 +399,10 @@ void DefaultRowCache::AddReplayLog(void* arg, rocksdb::ValueType type,
   PutLengthPrefixedSlice(replay_log.get(), value);
 }
 
-Status DefaultRowCache::AddToCache(const IterKey& cache_key,
+Status RowCacheContext::AddToCache(const IterKey& cache_key,
                                    rocksdb::Cache* cache) {
   if (status.ok() && buffer) {
+    assert(!cache_key.GetUserKey().empty());
     size_t charge = cache_key.Size() + buffer->size() + sizeof(std::string);
     cache->Insert(cache_key.GetUserKey(), buffer.release(), charge,
                   &DeleteEntry<std::string>);

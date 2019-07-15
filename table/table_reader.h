@@ -11,7 +11,6 @@
 #include <memory>
 #include "db/range_tombstone_fragmenter.h"
 #include "rocksdb/slice_transform.h"
-#include "rocksdb/statistics.h"
 #include "table/internal_iterator.h"
 
 namespace rocksdb {
@@ -90,12 +89,12 @@ class TableReader {
                      const SliceTransform* prefix_extractor,
                      bool skip_filters = false) = 0;
 
-  virtual Status CachedGet(const ReadOptions& readOptions, const Slice& key,
-                           SequenceNumber largest_seqno, Cache* cache,
-                           const Slice& cache_id, Statistics* statistics,
-                           GetContext* get_context,
-                           const SliceTransform* prefix_extractor,
-                           bool skip_filters = false);
+  virtual Status RowCachedGet(const ReadOptions& readOptions, const Slice& key,
+                              SequenceNumber largest_seqno, Cache* row_cache,
+                              const Slice& row_cache_id, Statistics* statistics,
+                              GetContext* get_context,
+                              const SliceTransform* prefix_extractor,
+                              bool skip_filters = false);
 
   // Logic same as for(it->Seek(begin); it->Valid() && callback(*it); ++it) {}
   // Specialization for performance

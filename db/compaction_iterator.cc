@@ -13,12 +13,28 @@
 namespace rocksdb {
 
 class CompactionIteratorToInternalIterator : public InternalIterator {
-  CompactionIterator* c_iter_;
+  CompactionIterator*(*new_compaction_iter_callback_)(void*);
+  void* arg_;
+  const Slice* start_user_key_;
+  std::unique_ptr<CompactionIterator> c_iter_;
 
  public:
-  CompactionIteratorToInternalIterator(CompactionIterator* i) : c_iter_(i) {}
+  CompactionIteratorToInternalIterator(
+      CompactionIterator*(*new_compaction_iter_callback)(void*), void* arg,
+      const Slice* start_user_key)
+      : new_compaction_iter_callback_(new_compaction_iter_callback),
+        arg_(arg),
+        start_user_key_(start_user_key) {}
   virtual bool Valid() const override { return c_iter_->Valid(); }
-  virtual void SeekToFirst() override { c_iter_->SeekToFirst(); }
+  virtual void SeekToFirst() override {
+    if (start_user_key_ == nullptr) {
+      Seek(Slice::Invalid());
+    } else {
+      InternalKey internal_key;
+      internal_key.SetMinPossibleForUserKey(*start_user_key_);
+      Seek(internal_key.Encode());
+    }
+  }
   virtual void SeekToLast() override { assert(false); }
   virtual void SeekForPrev(const rocksdb::Slice&) override {
     assert(false);
@@ -31,43 +47,62 @@ class CompactionIteratorToInternalIterator : public InternalIterator {
     return LazySliceReference(c_iter_->value());
   }
   virtual Status status() const override {
-    auto ci = c_iter_;
-    if (ci->IsShuttingDown()) {
+    if (!c_iter_) {
+      return Status::OK();
+    }
+    auto iter = c_iter_.get();
+    if (iter->IsShuttingDown()) {
       return Status::ShutdownInProgress();
     }
-    return ci->status();
+    return iter->status();
   }
 };
 
 void CompactionIteratorToInternalIterator::Seek(const Slice& target) {
-  c_iter_->value_.reset();
-  if (c_iter_->merge_helper_ != nullptr) {
-    c_iter_->merge_helper_->Clear();
-  }
-  c_iter_->valid_ = false;
-  c_iter_->status_ = Status::OK();
-  c_iter_->has_current_user_key_ = false;
-  c_iter_->at_next_ = false;
-  c_iter_->has_outputted_key_ = false;
-  c_iter_->clear_and_output_next_key_ = false;
+  if (c_iter_) {
+    c_iter_->value_.reset();
+    if (c_iter_->merge_helper_ != nullptr) {
+      c_iter_->merge_helper_->Clear();
+    }
+    c_iter_->valid_ = false;
+    c_iter_->status_ = Status::OK();
+    c_iter_->has_current_user_key_ = false;
+    c_iter_->at_next_ = false;
+    c_iter_->has_outputted_key_ = false;
+    c_iter_->clear_and_output_next_key_ = false;
 
-  c_iter_->current_user_key_sequence_ = 0;
-  c_iter_->current_user_key_snapshot_ = 0;
-  c_iter_->merge_out_iter_ = MergeOutputIterator(c_iter_->merge_helper_);
-  c_iter_->current_key_committed_ = false;
-  for (auto& v : c_iter_->level_ptrs_) {
-    v = 0;
+    c_iter_->current_user_key_sequence_ = 0;
+    c_iter_->current_user_key_snapshot_ = 0;
+    c_iter_->merge_out_iter_ = MergeOutputIterator(c_iter_->merge_helper_);
+    c_iter_->current_key_committed_ = false;
+    for (auto& v : c_iter_->level_ptrs_) {
+      v = 0;
+    }
+  } else {
+    c_iter_.reset(new_compaction_iter_callback_(arg_));
   }
 
-  IterKey key_for_seek;
-  key_for_seek.SetInternalKey(ExtractUserKey(target), kMaxSequenceNumber,
-                              kValueTypeForSeek);
-  c_iter_->input_->Seek(key_for_seek.GetInternalKey());
-  c_iter_->SeekToFirst();
-  InternalKeyComparator ic(c_iter_->cmp_);
-  while (c_iter_->Valid() && ic.Compare(c_iter_->key(), target) < 0) {
-    c_iter_->Next();
+  if (target.valid()) {
+    IterKey key_for_seek;
+    key_for_seek.SetInternalKey(ExtractUserKey(target), kMaxSequenceNumber,
+                                kValueTypeForSeek);
+    c_iter_->input_->Seek(key_for_seek.GetInternalKey());
+    c_iter_->SeekToFirst();
+    InternalKeyComparator ic(c_iter_->cmp_);
+    while (c_iter_->Valid() && ic.Compare(c_iter_->key(), target) < 0) {
+      c_iter_->Next();
+    }
+  } else {
+    c_iter_->input_->SeekToFirst();
+    c_iter_->SeekToFirst();
   }
+}
+
+InternalIterator* NewCompactionIterator(
+    CompactionIterator*(*new_compaction_iter_callback)(void*), void* arg,
+    const Slice* start_user_key) {
+  return new CompactionIteratorToInternalIterator(
+      new_compaction_iter_callback, arg, start_user_key);
 }
 
 CompactionIterator::CompactionIterator(
@@ -163,12 +198,6 @@ void CompactionIterator::ResetRecordCounts() {
   iter_stats_.num_record_drop_range_del = 0;
   iter_stats_.num_range_del_drop_obsolete = 0;
   iter_stats_.num_optimized_del_drop_obsolete = 0;
-}
-
-std::unique_ptr<InternalIterator>
-CompactionIterator::AdaptToInternalIterator() {
-  return std::unique_ptr<InternalIterator>(
-      new CompactionIteratorToInternalIterator(this));
 }
 
 void CompactionIterator::SeekToFirst() {
@@ -699,9 +728,11 @@ void CompactionIterator::PrepareOutput() {
   if ((compaction_ != nullptr && !compaction_->allow_ingest_behind()) &&
       ikeyNotNeededForIncrementalSnapshot() && bottommost_level_ && valid_ &&
       ikey_.sequence <= earliest_snapshot_ &&
-      (snapshot_checker_ == nullptr || LIKELY(snapshot_checker_->IsInSnapshot(
-        ikey_.sequence, earliest_snapshot_))) && ikey_.type != kTypeMerge &&
-      ikey_.type != kTypeValueIndex && ikey_.type != kTypeMergeIndex) {
+      (snapshot_checker_ == nullptr ||
+       LIKELY(snapshot_checker_->IsInSnapshot(ikey_.sequence,
+                                              earliest_snapshot_))) &&
+      ikey_.type != kTypeMerge && ikey_.type != kTypeValueIndex &&
+      ikey_.type != kTypeMergeIndex) {
     assert(ikey_.type != kTypeDeletion && ikey_.type != kTypeSingleDeletion);
     ikey_.sequence = 0;
     current_key_.UpdateInternalKey(0, ikey_.type);

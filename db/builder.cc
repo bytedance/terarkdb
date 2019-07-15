@@ -31,6 +31,7 @@
 #include "table/block_based_table_builder.h"
 #include "table/format.h"
 #include "table/internal_iterator.h"
+#include "util/c_style_callback.h"
 #include "util/file_reader_writer.h"
 #include "util/filename.h"
 #include "util/stop_watch.h"
@@ -66,9 +67,11 @@ TableBuilder* NewTableBuilder(
 Status BuildTable(
     const std::string& dbname, Env* env, const ImmutableCFOptions& ioptions,
     const MutableCFOptions& mutable_cf_options, const EnvOptions& env_options,
-    TableCache* table_cache, InternalIterator* iter,
+    TableCache* table_cache,
+    InternalIterator* (*get_input_iter_callback)(void*, Arena&),
+    void* get_input_iter_arg,
     std::vector<std::unique_ptr<FragmentedRangeTombstoneIterator>>
-        range_del_iters,
+        (*get_range_del_iters_callback)(void*), void* get_range_del_iters_arg,
     FileMetaData* meta, const InternalKeyComparator& internal_comparator,
     const std::vector<std::unique_ptr<IntTblPropCollectorFactory>>*
         int_tbl_prop_collector_factories,
@@ -88,10 +91,13 @@ Status BuildTable(
   const size_t kReportFlushIOStatsEvery = 1048576;
   Status s;
   meta->fd.file_size = 0;
+  Arena arena;
+  ScopedArenaIterator iter(get_input_iter_callback(get_input_iter_arg, arena));
   iter->SeekToFirst();
   std::unique_ptr<CompactionRangeDelAggregator> range_del_agg(
       new CompactionRangeDelAggregator(&internal_comparator, snapshots));
-  for (auto& range_del_iter : range_del_iters) {
+  for (auto& range_del_iter :
+       get_range_del_iters_callback(get_range_del_iters_arg)) {
     range_del_agg->AddTombstones(std::move(range_del_iter));
   }
 
@@ -138,24 +144,57 @@ Status BuildTable(
                       true /* internal key corruption is not ok */,
                       snapshots.empty() ? 0 : snapshots.back(),
                       snapshot_checker);
-    MergeHelper merge2(env, internal_comparator.user_comparator(),
-                       ioptions.merge_operator, nullptr, ioptions.info_log,
-                       true /* internal key corruption is not ok */,
-                       snapshots.empty() ? 0 : snapshots.back(),
-                       snapshot_checker);
 
     CompactionIterator c_iter(
-        iter, nullptr, internal_comparator.user_comparator(), &merge,
+        iter.get(), nullptr, internal_comparator.user_comparator(), &merge,
         kMaxSequenceNumber, &snapshots, earliest_write_conflict_snapshot,
         snapshot_checker, env,
         ShouldReportDetailedTime(env, ioptions.statistics),
         true /* internal key corruption is not ok */, range_del_agg.get());
-    CompactionIterator c_iter2(
-        iter, nullptr, internal_comparator.user_comparator(), &merge2,
-        kMaxSequenceNumber, &snapshots, earliest_write_conflict_snapshot,
-        snapshot_checker, env, false /* report_detailed_time */,
-        true /* internal key corruption is not ok */, range_del_agg.get());
-    auto second_pass_iter = c_iter2.AdaptToInternalIterator();
+
+    struct SecondPassIterStorage {
+      std::unique_ptr<CompactionRangeDelAggregator> range_del_agg;
+      ScopedArenaIterator iter;
+      std::aligned_storage<sizeof(MergeHelper), alignof(MergeHelper)>::type
+          merge;
+
+      ~SecondPassIterStorage() {
+        if (iter.get() != nullptr) {
+          range_del_agg.reset();
+          iter = ScopedArenaIterator();
+          auto merge_ptr = reinterpret_cast<MergeHelper*>(&merge);
+          merge_ptr->~MergeHelper();
+        }
+      }
+    } second_pass_iter_storage;
+
+    auto make_compaction_iterator = [&] {
+      second_pass_iter_storage.range_del_agg.reset(
+          new CompactionRangeDelAggregator(&internal_comparator, snapshots));
+      for (auto& range_del_iter :
+          get_range_del_iters_callback(get_range_del_iters_arg)) {
+        second_pass_iter_storage.range_del_agg->AddTombstones(
+            std::move(range_del_iter));
+      }
+      second_pass_iter_storage.iter = ScopedArenaIterator(
+          get_input_iter_callback(get_input_iter_arg, arena));
+      auto merge_ptr =
+          new(&second_pass_iter_storage.merge) MergeHelper(
+              env, internal_comparator.user_comparator(),
+              ioptions.merge_operator, nullptr, ioptions.info_log,
+              true /* internal key corruption is not ok */,
+              snapshots.empty() ? 0 : snapshots.back(),
+              snapshot_checker);
+      return new CompactionIterator(
+          second_pass_iter_storage.iter.get(), nullptr,
+          internal_comparator.user_comparator(), merge_ptr, kMaxSequenceNumber,
+          &snapshots, earliest_write_conflict_snapshot, snapshot_checker, env,
+          false /* report_detailed_time */,
+          true /* internal key corruption is not ok */, range_del_agg.get());
+    };
+    std::unique_ptr<InternalIterator> second_pass_iter(
+        NewCompactionIterator(c_style_callback(make_compaction_iterator),
+                              &make_compaction_iterator));
     builder->SetSecondPassIterator(second_pass_iter.get());
     c_iter.SeekToFirst();
     for (; c_iter.Valid(); c_iter.Next()) {

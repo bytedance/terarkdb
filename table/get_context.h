@@ -134,13 +134,12 @@ class GetContext {
 
 #ifndef ROCKSDB_LITE
 
-struct DefaultRowCache {
-public:
-  static bool GetFromCache(const ReadOptions& readOptions, const Slice& key,
-                           SequenceNumber largest_seqno, IterKey* cache_key,
-                           Cache* cache, const Slice& cache_id,
-                           uint64_t file_number, Statistics* statistics,
-                           GetContext* get_context);
+struct RowCacheContext {
+  static bool GetFromRowCache(const ReadOptions& readOptions, const Slice& key,
+                              SequenceNumber largest_seqno, IterKey* cache_key,
+                              Cache* row_cache, const Slice& row_cache_id,
+                              uint64_t file_number, Statistics* statistics,
+                              GetContext* get_context);
 
   static void AddReplayLog(void* arg, ValueType type,
                            const LazySlice& value);

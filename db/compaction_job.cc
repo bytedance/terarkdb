@@ -53,6 +53,7 @@
 #include "table/merging_iterator.h"
 #include "table/table_builder.h"
 #include "util/coding.h"
+#include "util/c_style_callback.h"
 #include "util/file_reader_writer.h"
 #include "util/filename.h"
 #include "util/log_buffer.h"
@@ -1033,11 +1034,6 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
   std::unique_ptr<InternalIterator> input(versions_->MakeInputIterator(
       sub_compact->compaction, &range_del_agg, env_options_for_read_));
 
-  CompactionRangeDelAggregator range_del_agg2(&cfd->internal_comparator(),
-                                              existing_snapshots_);
-  std::unique_ptr<InternalIterator> input2(versions_->MakeInputIterator(
-      sub_compact->compaction, &range_del_agg2, env_options_for_read_));
-
   AutoThreadOperationStageUpdater stage_updater(
       ThreadStatus::STAGE_COMPACTION_PROCESS_KV);
 
@@ -1108,21 +1104,6 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
       snapshot_checker_, compact_->compaction->level(),
       db_options_.statistics.get(), shutting_down_);
 
-  std::unique_ptr<CompactionFilter> compaction_filter_from_factory2 = nullptr;
-  auto compaction_filter2 = compaction_filter;
-  if (cfd->ioptions()->compaction_filter == nullptr) {
-    compaction_filter_from_factory2 =
-        sub_compact->compaction->CreateCompactionFilter();
-    compaction_filter2 = compaction_filter_from_factory2.get();
-  }
-  MergeHelper merge2(
-      env_, cfd->user_comparator(), cfd->ioptions()->merge_operator,
-      compaction_filter2, db_options_.info_log.get(),
-      false /* internal key corruption is expected */,
-      existing_snapshots_.empty() ? 0 : existing_snapshots_.back(),
-      snapshot_checker_, compact_->compaction->level(),
-      db_options_.statistics.get(), shutting_down_);
-
   TEST_SYNC_POINT("CompactionJob::Run():Inprogress");
 
   const Slice* start = sub_compact->start;
@@ -1137,28 +1118,74 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
   }
 
   Status status;
-  auto makeCompactionIterator =
-      [&](InternalIterator* input_x, MergeHelper& merge_x,
-          bool report_detailed_time,
-          CompactionRangeDelAggregator* range_del_agg_x,
-          const CompactionFilter* compaction_filter_x) {
-        return std::unique_ptr<CompactionIterator>(new CompactionIterator(
-            input_x, end, cfd->user_comparator(), &merge_x,
-            versions_->LastSequence(), &existing_snapshots_,
-            earliest_write_conflict_snapshot_, snapshot_checker_, env_,
-            report_detailed_time, false, range_del_agg_x,
-            sub_compact->compaction, compaction_filter_x, shutting_down_,
-            preserve_deletes_seqnum_));
-      };
-  sub_compact->c_iter = makeCompactionIterator(
-      input.get(), merge, ShouldReportDetailedTime(env_, stats_),
-      &range_del_agg, compaction_filter);
+  sub_compact->c_iter.reset(new CompactionIterator(
+      input.get(), end, cfd->user_comparator(), &merge,
+      versions_->LastSequence(), &existing_snapshots_,
+      earliest_write_conflict_snapshot_, snapshot_checker_, env_,
+      ShouldReportDetailedTime(env_, stats_), false, &range_del_agg,
+      sub_compact->compaction, compaction_filter, shutting_down_,
+      preserve_deletes_seqnum_));
   auto c_iter = sub_compact->c_iter.get();
   c_iter->SeekToFirst();
-  auto c_iter2 = makeCompactionIterator(
-      input2.get(), merge2, false, &range_del_agg2, compaction_filter2);
-  c_iter2->SetFilterSampleInterval(0);
-  auto second_pass_iter = c_iter2->AdaptToInternalIterator();
+
+  struct SecondPassIterStorage {
+    std::aligned_storage<sizeof(CompactionRangeDelAggregator),
+        alignof(CompactionRangeDelAggregator)>::type
+        range_del_agg;
+    std::unique_ptr<InternalIterator> input;
+    std::unique_ptr<CompactionFilter> compaction_filter_holder;
+    const CompactionFilter* compaction_filter;
+    std::aligned_storage<sizeof(MergeHelper), alignof(MergeHelper)>::type
+        merge;
+
+    ~SecondPassIterStorage() {
+      if (input) {
+        auto range_del_agg_ptr =
+            reinterpret_cast<CompactionRangeDelAggregator*>(&range_del_agg);
+        range_del_agg_ptr->~CompactionRangeDelAggregator();
+        input.reset();
+        compaction_filter_holder.reset();
+        auto merge_ptr = reinterpret_cast<MergeHelper*>(&merge);
+        merge_ptr->~MergeHelper();
+      }
+    }
+  } second_pass_iter_storage;
+
+  auto make_compaction_iterator = [&] {
+    auto range_del_agg_ptr =
+        new(&second_pass_iter_storage.range_del_agg)
+            CompactionRangeDelAggregator(&cfd->internal_comparator(),
+                                         existing_snapshots_);
+    second_pass_iter_storage.input.reset(versions_->MakeInputIterator(
+        sub_compact->compaction, range_del_agg_ptr, env_options_for_read_));
+    second_pass_iter_storage.compaction_filter =
+        cfd->ioptions()->compaction_filter;
+    if (second_pass_iter_storage.compaction_filter == nullptr) {
+      second_pass_iter_storage.compaction_filter_holder =
+          sub_compact->compaction->CreateCompactionFilter();
+      compaction_filter =
+          second_pass_iter_storage.compaction_filter_holder.get();
+    }
+    auto merge_ptr =
+        new(&second_pass_iter_storage.merge) MergeHelper(
+            env_, cfd->user_comparator(), cfd->ioptions()->merge_operator,
+            second_pass_iter_storage.compaction_filter,
+            db_options_.info_log.get(),
+            false /* internal key corruption is expected */,
+            existing_snapshots_.empty() ? 0 : existing_snapshots_.back(),
+            snapshot_checker_, compact_->compaction->level(),
+            db_options_.statistics.get(), shutting_down_);
+    return new CompactionIterator(
+        second_pass_iter_storage.input.get(), end, cfd->user_comparator(),
+        merge_ptr, versions_->LastSequence(), &existing_snapshots_,
+        earliest_write_conflict_snapshot_, snapshot_checker_, env_,
+        false, false, range_del_agg_ptr, sub_compact->compaction,
+        second_pass_iter_storage.compaction_filter, shutting_down_,
+        preserve_deletes_seqnum_);
+  };
+  std::unique_ptr<InternalIterator> second_pass_iter(
+      NewCompactionIterator(c_style_callback(make_compaction_iterator),
+                            &make_compaction_iterator, start));
   if (c_iter->Valid() && sub_compact->compaction->output_level() != 0) {
     // ShouldStopBefore() maintains state based on keys processed so far. The
     // compaction loop always calls it on the "next" key, thus won't tell it the

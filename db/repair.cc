@@ -81,6 +81,7 @@
 #include "rocksdb/options.h"
 #include "rocksdb/write_buffer_manager.h"
 #include "table/scoped_arena_iterator.h"
+#include "util/c_style_callback.h"
 #include "util/file_reader_writer.h"
 #include "util/filename.h"
 #include "util/string_util.h"
@@ -410,24 +411,30 @@ class Repairer {
       meta.fd = FileDescriptor(next_file_number_++, 0, 0);
       ReadOptions ro;
       ro.total_order_seek = true;
-      Arena arena;
-      ScopedArenaIterator iter(mem->NewIterator(ro, &arena));
       int64_t _current_time = 0;
       status = env_->GetCurrentTime(&_current_time);  // ignore error
       const uint64_t current_time = static_cast<uint64_t>(_current_time);
       SnapshotChecker* snapshot_checker = DisableGCSnapshotChecker::Instance();
 
       auto write_hint = cfd->CalculateSSTWriteHint(0);
-      std::vector<std::unique_ptr<FragmentedRangeTombstoneIterator>>
-          range_del_iters;
-      auto range_del_iter =
-          mem->NewRangeTombstoneIterator(ro, kMaxSequenceNumber);
-      if (range_del_iter != nullptr) {
-        range_del_iters.emplace_back(range_del_iter);
-      }
+      auto get_arena_input_iter = [&](Arena& arena) {
+        return mem->NewIterator(ro, &arena);
+      };
+      auto get_range_del_iters = [&] {
+        std::vector<std::unique_ptr<FragmentedRangeTombstoneIterator>>
+            range_del_iters;
+        auto range_del_iter =
+            mem->NewRangeTombstoneIterator(ro, kMaxSequenceNumber);
+        if (range_del_iter != nullptr) {
+          range_del_iters.emplace_back(range_del_iter);
+        }
+        return range_del_iters;
+      };
       status = BuildTable(
           dbname_, env_, *cfd->ioptions(), *cfd->GetLatestMutableCFOptions(),
-          env_options_, table_cache_, iter.get(), std::move(range_del_iters),
+          env_options_, table_cache_,
+          c_style_callback(get_arena_input_iter), &get_arena_input_iter,
+          c_style_callback(get_range_del_iters), &get_range_del_iters,
           &meta, cfd->internal_comparator(),
           cfd->int_tbl_prop_collector_factories(), cfd->GetID(), cfd->GetName(),
           {}, kMaxSequenceNumber, snapshot_checker, kNoCompression,

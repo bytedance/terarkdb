@@ -44,6 +44,7 @@
 #include "table/table_builder.h"
 #include "table/two_level_iterator.h"
 #include "util/coding.h"
+#include "util/c_style_callback.h"
 #include "util/event_logger.h"
 #include "util/file_util.h"
 #include "util/filename.h"
@@ -301,9 +302,6 @@ Status FlushJob::WriteLevel0Table() {
     // memtables and range_del_iters store internal iterators over each data
     // memtable and its associated range deletion memtable, respectively, at
     // corresponding indexes.
-    std::vector<InternalIterator*> memtables;
-    std::vector<std::unique_ptr<FragmentedRangeTombstoneIterator>>
-        range_del_iters;
     ReadOptions ro;
     ro.total_order_seek = true;
     Arena arena;
@@ -314,12 +312,6 @@ Status FlushJob::WriteLevel0Table() {
           db_options_.info_log,
           "[%s] [JOB %d] Flushing memtable with next log file: %" PRIu64 "\n",
           cfd_->GetName().c_str(), job_context_->job_id, m->GetNextLogNumber());
-      memtables.push_back(m->NewIterator(ro, &arena));
-      auto* range_del_iter =
-          m->NewRangeTombstoneIterator(ro, kMaxSequenceNumber);
-      if (range_del_iter != nullptr) {
-        range_del_iters.emplace_back(range_del_iter);
-      }
       total_num_entries += m->num_entries();
       total_num_deletes += m->num_deletes();
       total_memory_usage += m->ApproximateMemoryUsage();
@@ -334,9 +326,6 @@ Status FlushJob::WriteLevel0Table() {
         << GetFlushReasonString(cfd_->GetFlushReason());
 
     {
-      ScopedArenaIterator iter(
-          NewMergingIterator(&cfd_->internal_comparator(), &memtables[0],
-                             static_cast<int>(memtables.size()), &arena));
       ROCKS_LOG_INFO(db_options_.info_log,
                      "[%s] [JOB %d] Level-0 flush table #%" PRIu64 ": started",
                      cfd_->GetName().c_str(), job_context_->job_id,
@@ -359,12 +348,42 @@ Status FlushJob::WriteLevel0Table() {
       uint64_t oldest_key_time =
           mems_.front()->ApproximateOldestKeyTime();
 
+      auto get_arena_input_iter = [&](Arena& arena) {
+        auto memtables =
+            new(arena.AllocateAligned(sizeof(std::vector<InternalIterator*>)))
+            std::vector<InternalIterator*>();
+        for (MemTable* m : mems_) {
+          memtables->push_back(m->NewIterator(ro, &arena));
+        }
+        auto input = NewMergingIterator(&cfd_->internal_comparator(),
+                                        memtables->data(),
+                                        static_cast<int>(memtables->size()),
+                                        &arena);
+        input->RegisterCleanup([](void* arg1, void* /*arg2*/) {
+          auto ptr = reinterpret_cast<std::vector<InternalIterator*>*>(arg1);
+          ptr->~vector();
+        }, memtables, nullptr);
+        return input;
+      };
+      auto get_range_del_iters = [&] {
+        std::vector<std::unique_ptr<FragmentedRangeTombstoneIterator>>
+            range_del_iters;
+        for (MemTable* m : mems_) {
+          auto* range_del_iter =
+              m->NewRangeTombstoneIterator(ro, kMaxSequenceNumber);
+          if (range_del_iter != nullptr) {
+            range_del_iters.emplace_back(range_del_iter);
+          }
+        }
+        return range_del_iters;
+      };
       s = BuildTable(
           dbname_, db_options_.env, *cfd_->ioptions(), mutable_cf_options_,
-          env_options_, cfd_->table_cache(), iter.get(),
-          std::move(range_del_iters), &meta_, cfd_->internal_comparator(),
-          cfd_->int_tbl_prop_collector_factories(), cfd_->GetID(),
-          cfd_->GetName(), existing_snapshots_,
+          env_options_, cfd_->table_cache(),
+          c_style_callback(get_arena_input_iter), &get_arena_input_iter,
+          c_style_callback(get_range_del_iters), &get_range_del_iters, &meta_,
+          cfd_->internal_comparator(), cfd_->int_tbl_prop_collector_factories(),
+          cfd_->GetID(), cfd_->GetName(), existing_snapshots_,
           earliest_write_conflict_snapshot_, snapshot_checker_,
           output_compression_, cfd_->ioptions()->compression_opts,
           mutable_cf_options_.paranoid_file_checks, cfd_->internal_stats(),
