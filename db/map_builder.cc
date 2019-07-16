@@ -81,9 +81,9 @@ struct RangeWithDepend {
   RangeWithDepend() = default;
 
   RangeWithDepend(const FileMetaData* f) {
-    assert(ExtractSequenceNumber(f->smallest.Encode()) != kMaxSequenceNumber);
+    assert(GetInternalKeySeqno(f->smallest.Encode()) != kMaxSequenceNumber);
     point[0] = f->smallest;
-    if (ExtractSequenceNumber(f->largest.Encode()) == kMaxSequenceNumber) {
+    if (GetInternalKeySeqno(f->largest.Encode()) == kMaxSequenceNumber) {
       point[1].Set(f->largest.user_key(), kMaxSequenceNumber, kTypeDeletion);
     } else {
       point[1] = f->largest;
@@ -105,7 +105,7 @@ struct RangeWithDepend {
     depend = map_element.link_;
   }
   RangeWithDepend(const Range& range) {
-    if (ExtractSequenceNumber(range.start) == kMaxSequenceNumber) {
+    if (GetInternalKeySeqno(range.start) == kMaxSequenceNumber) {
       point[0].Set(ExtractUserKey(range.start), kMaxSequenceNumber,
                    kTypeDeletion);
       include[0] = false;
@@ -113,7 +113,7 @@ struct RangeWithDepend {
       point[0].DecodeFrom(range.limit);
       include[0] = range.include_limit;
     }
-    if (ExtractSequenceNumber(range.limit) == kMaxSequenceNumber) {
+    if (GetInternalKeySeqno(range.limit) == kMaxSequenceNumber) {
       point[1].Set(ExtractUserKey(range.limit), kMaxSequenceNumber,
                    kTypeDeletion);
       include[1] = true;

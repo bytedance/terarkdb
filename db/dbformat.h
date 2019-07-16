@@ -147,10 +147,6 @@ inline uint64_t ExtractInternalKeyFooter(const Slice& internal_key) {
   return DecodeFixed64(internal_key.data() + n - 8);
 }
 
-inline SequenceNumber ExtractSequenceNumber(const Slice& internal_key) {
-  return ExtractInternalKeyFooter(internal_key) >> 8;
-}
-
 inline ValueType ExtractValueType(const Slice& internal_key) {
   uint64_t num = ExtractInternalKeyFooter(internal_key);
   unsigned char c = num & 0xff;
