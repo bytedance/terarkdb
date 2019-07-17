@@ -88,7 +88,9 @@ class GetContext {
   void SetReplayLog(std::string* replay_log);
 
   // Do we need to fetch the SequenceNumber for this key?
-  bool NeedToReadSequence() const { return (seq_ != nullptr); }
+  bool NeedToReadSequence() const {
+    return seq_ != nullptr || min_seq_type_ != 0;
+  }
 
   bool sample() const { return sample_; }
 
