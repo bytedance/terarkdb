@@ -315,14 +315,13 @@ public:
   }
 
   void Seek(const Slice& target) override {
-    ParsedInternalKey pikey;
-    if (!ParseInternalKey(target, &pikey)) {
+    if (target.size() < 8) {
       status_ = Status::InvalidArgument("TerarkZipTableIterator::Seek()",
                                         "param target.size() < 8");
       SetIterInvalid();
       return;
     }
-    SeekInternal(pikey);
+    SeekInternal(fstringOf(ExtractUserKey(target)), ExtractInternalKeyFooter(target));
     if (key_tag_ == port::kMaxUint64) {
       Next();
     }
@@ -364,6 +363,7 @@ public:
   Slice key() const override {
     assert(iter_->Valid());
     assert(key_tag_ != port::kMaxUint64);
+    assert(key_length_ >= 8);
     return Slice((const char*)key_ptr_, key_length_);
   }
 
@@ -402,11 +402,10 @@ protected:
       DecodeCurrKeyValue();
     }
   }
-  void SeekInternal(const ParsedInternalKey& pikey) {
+  void SeekInternal(fstring seek_key, uint64_t seek_tag) {
     // Damn MySQL-rocksdb may use "rev:" comparator
     bool ok;
     int cmp; // compare(iterKey, searchKey)
-    auto seek_key = fstringOf(pikey.user_key);
     ok = iter_->Seek(seek_key);
     if (reverse) {
       if (!ok) {
@@ -437,7 +436,7 @@ protected:
           if (key_tag_ == port::kMaxUint64) {
             continue;
           }
-          if ((key_tag_ >> 8) <= pikey.sequence) {
+          if (key_tag_ <= seek_tag) {
             return; // done
           }
         } while (value_index_ + 1 < value_count_);
@@ -636,25 +635,25 @@ public:
   }
 
   void Seek(const Slice& target) override {
-    ParsedInternalKey pikey;
-    if (!ParseInternalKey(target, &pikey)) {
+    if (target.size() < 8) {
       status_ = Status::InvalidArgument("TerarkZipTableMultiIterator::Seek()",
                                         "param target.size() < 8");
       SetIterInvalid();
       return;
     }
+    fstring seek_key = fstringOf(ExtractUserKey(target));
     const TerarkZipSubReader* subReader;
     if (reverse) {
-      subReader = subIndex_->LowerBoundSubReaderReverse(fstringOf(pikey.user_key));
+      subReader = subIndex_->LowerBoundSubReaderReverse(seek_key);
     } else {
-      subReader = subIndex_->LowerBoundSubReader(fstringOf(pikey.user_key));
+      subReader = subIndex_->LowerBoundSubReader(seek_key);
     }
     if (subReader == nullptr) {
       SetIterInvalid();
       return;
     }
     ResetIter(subReader);
-    SeekInternal(pikey);
+    SeekInternal(seek_key, ExtractInternalKeyFooter(target));
     assert(Valid());
     if (key_tag_ == port::kMaxUint64) {
       Next();
@@ -835,12 +834,12 @@ Status TerarkZipSubReader::Get(SequenceNumber global_seqno,
                                GetContext* get_context, int flag)
 const {
   TERARK_UNUSED_VAR(flag);
-  ParsedInternalKey pikey;
-  if (!ParseInternalKey(ikey, &pikey)) {
+  if (ikey.size() < 8) {
     return Status::InvalidArgument("TerarkZipTableReader::Get()",
                                    "bad internal key causing ParseInternalKey() failed");
   }
-  Slice user_key = pikey.user_key;
+  Slice user_key = ExtractUserKey(ikey);
+  uint64_t ikey_tag = ExtractInternalKeyFooter(ikey);
   auto g_tctx = terark::GetTlsTerarkContext();
   size_t recId = index_->Find(fstringOf(user_key), g_tctx);
   if (size_t(-1) == recId) {
@@ -884,7 +883,7 @@ const {
     }
     // little endian uint64_t
     uint64_t seq = *(uint64_t*)buf.data() & kMaxSequenceNumber;
-    if (seq <= pikey.sequence) {
+    if (PackSequenceAndType(seq, kTypeValue) <= ikey_tag) {
       set_value(ParsedInternalKey(user_key, seq, kTypeValue), SliceOf(fstring(buf).substr(7)));
     }
     break;
@@ -899,7 +898,7 @@ const {
       return Status::Corruption("TerarkZipTableReader::Get()", ex.what());
     }
     uint64_t seq = *(uint64_t*)buf.data() & kMaxSequenceNumber;
-    if (seq <= pikey.sequence) {
+    if (PackSequenceAndType(seq, kTypeDeletion) <= ikey_tag) {
       set_value(ParsedInternalKey(user_key, seq, kTypeDeletion), SliceOf(fstring(buf).substr(7)));
     }
     break;
@@ -923,10 +922,10 @@ const {
         continue;
       }
       auto tag = unaligned_load<SequenceNumber>(val.data());
-      SequenceNumber seq;
-      ValueType val_type;
-      UnPackSequenceAndType(tag, &seq, &val_type);
-      if (seq <= pikey.sequence) {
+      if (tag <= ikey_tag) {
+        SequenceNumber seq;
+        ValueType val_type;
+        UnPackSequenceAndType(tag, &seq, &val_type);
         val.remove_prefix(sizeof(SequenceNumber));
         bool more = get_context->SaveValue(ParsedInternalKey(user_key, seq, val_type), val, &matched);
         if (!more) {
