@@ -20,6 +20,9 @@ TransactionLogIteratorImpl::TransactionLogIteratorImpl(
     const TransactionLogIterator::ReadOptions& read_options,
     const EnvOptions& soptions, const SequenceNumber seq,
     std::unique_ptr<VectorLogPtr> files, VersionSet const* const versions,
+#ifndef ROCKSDB_LITE
+    WalManager* wal_manager,
+#endif  // ROCKSDB_LITE
     const bool seq_per_batch)
     : dir_(dir),
       options_(options),
@@ -32,6 +35,9 @@ TransactionLogIteratorImpl::TransactionLogIteratorImpl(
       currentFileIndex_(0),
       currentBatchSeq_(0),
       currentLastSeq_(0),
+#ifndef ROCKSDB_LITE
+      wal_manager_(wal_manager),
+#endif  // ROCKSDB_LITE
       versions_(versions),
       seq_per_batch_(seq_per_batch) {
   assert(files_ != nullptr);
@@ -199,6 +205,20 @@ void TransactionLogIteratorImpl::NextImpl(bool internal) {
         return;
       }
     } else {
+#ifndef ROCKSDB_LITE
+      auto log_number =
+          wal_manager_->GetNextLogNumber(files_->back()->LogNumber());
+      if (log_number != 0) {
+        files_->clear();
+        files_->emplace_back(new LogFileImpl(log_number, kAliveLogFile, 0, 0));
+        currentFileIndex_ = 0;
+        auto s = OpenLogReader(files_->at(currentFileIndex_).get());
+        if (s.ok()) {
+          continue;
+        }
+      }
+#endif  // ROCKSDB_LITE
+
       isValid_ = false;
       if (currentLastSeq_ == versions_->LastSequence()) {
         currentStatus_ = Status::OK();

@@ -1191,6 +1191,9 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
       lfile->SetPreallocationBlockSize(
           impl->GetWalPreallocateBlockSize(max_write_buffer_size));
       {
+#ifndef ROCKSDB_LITE
+        impl->wal_manager_.AddLogNumber(new_log_number);
+#endif
         InstrumentedMutexLock wl(&impl->log_write_mutex_);
         impl->logfile_number_ = new_log_number;
         const auto& listeners = impl->immutable_db_options_.listeners;
