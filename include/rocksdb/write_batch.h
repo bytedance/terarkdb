@@ -29,6 +29,7 @@
 #include <string>
 #include <stdint.h>
 #include "rocksdb/status.h"
+#include "rocksdb/types.h"
 #include "rocksdb/write_batch_base.h"
 
 namespace rocksdb {
@@ -283,6 +284,9 @@ class WriteBatch : public WriteBatchBase {
 
   // Returns the number of updates in the batch
   int Count() const;
+
+  // Returns the first sequence number of in the batch
+  SequenceNumber Sequence() const;
 
   // Returns true if PutCF will be called during Iterate
   bool HasPut() const;

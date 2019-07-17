@@ -110,6 +110,13 @@ std::string AdaptiveTableFactory::GetPrintableTableOptions() const {
   return ret;
 }
 
+Status AdaptiveTableFactory::GetOptionString(
+    std::string* opt_string, const std::string& delimiter) const {
+  opt_string->clear();
+  table_factory_to_write_->GetOptionString(opt_string, delimiter);
+  return Status::OK();
+}
+
 extern TableFactory* NewAdaptiveTableFactory(
     std::shared_ptr<TableFactory> table_factory_to_write,
     std::shared_ptr<TableFactory> block_based_table_factory,

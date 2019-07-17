@@ -221,6 +221,10 @@ int WriteBatch::Count() const {
   return WriteBatchInternal::Count(this);
 }
 
+SequenceNumber WriteBatch::Sequence() const {
+  return WriteBatchInternal::Sequence(this);
+}
+
 uint32_t WriteBatch::ComputeContentFlags() const {
   auto rv = content_flags_.load(std::memory_order_relaxed);
   if ((rv & ContentFlags::DEFERRED) != 0) {

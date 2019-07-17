@@ -865,8 +865,11 @@ Status DBImpl::WriteToWAL(const WriteThread::WriteGroup& write_group,
   if (merged_batch == write_group.leader->batch) {
     write_group.leader->log_used = logfile_number_;
   } else if (write_with_wal > 1) {
+    auto batch_seq = sequence;
     for (auto writer : write_group) {
       writer->log_used = logfile_number_;
+      WriteBatchInternal::SetSequence(writer->batch, batch_seq);
+      batch_seq += WriteBatchInternal::Count(writer->batch);
     }
   }
 
@@ -876,7 +879,7 @@ Status DBImpl::WriteToWAL(const WriteThread::WriteGroup& write_group,
   status = WriteToWAL(*merged_batch, log_writer, log_used, &log_size);
   if (to_be_cached_state) {
     cached_recoverable_state_ = *to_be_cached_state;
-      cached_recoverable_state_empty_ = false;
+    cached_recoverable_state_empty_ = false;
   }
 
   if (status.ok() && need_log_sync) {
@@ -952,7 +955,7 @@ Status DBImpl::ConcurrentWriteToWAL(const WriteThread::WriteGroup& write_group,
   status = WriteToWAL(*merged_batch, log_writer, log_used, &log_size);
   if (to_be_cached_state) {
     cached_recoverable_state_ = *to_be_cached_state;
-      cached_recoverable_state_empty_ = false;
+    cached_recoverable_state_empty_ = false;
   }
   log_write_mutex_.Unlock();
 
@@ -1427,7 +1430,7 @@ Status DBImpl::SwitchMemtable(ColumnFamilyData* cfd, WriteContext* context) {
   DBOptions db_options =
       BuildDBOptions(immutable_db_options_, mutable_db_options_);
   const auto preallocate_block_size =
-    GetWalPreallocateBlockSize(mutable_cf_options.write_buffer_size);
+      GetWalPreallocateBlockSize(mutable_cf_options.write_buffer_size);
   auto write_hint = CalculateWALWriteHint();
   mutex_.Unlock();
   {
@@ -1466,7 +1469,8 @@ Status DBImpl::SwitchMemtable(ColumnFamilyData* cfd, WriteContext* context) {
 
     if (s.ok()) {
       SequenceNumber seq = versions_->LastSequence();
-      new_mem = cfd->ConstructNewMemtable(mutable_cf_options, seq_per_batch_, seq);
+      new_mem = cfd->ConstructNewMemtable(mutable_cf_options, seq_per_batch_,
+                                          seq);
       context->superversion_context.NewSuperVersion();
     }
 
@@ -1483,6 +1487,9 @@ Status DBImpl::SwitchMemtable(ColumnFamilyData* cfd, WriteContext* context) {
                  cfd->GetName().c_str(), new_log_number, num_imm_unflushed);
   mutex_.Lock();
   if (s.ok() && creating_new_log) {
+#ifndef ROCKSDB_LITE
+    wal_manager_.AddLogNumber(new_log_number);
+#endif
     log_write_mutex_.Lock();
     logfile_number_ = new_log_number;
     assert(new_log != nullptr);

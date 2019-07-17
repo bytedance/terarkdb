@@ -39,11 +39,27 @@ namespace rocksdb {
 
 #ifndef ROCKSDB_LITE
 
+void WalManager::AddLogNumber(const uint64_t number) {
+  MutexLock l(&read_first_record_cache_mutex_);
+  log_numbers_.emplace(number);
+}
+
+uint64_t WalManager::GetNextLogNumber(const uint64_t number) {
+  MutexLock l(&read_first_record_cache_mutex_);
+  auto it = log_numbers_.find(number);
+  if (it != log_numbers_.end() && ++it != log_numbers_.end()) {
+    return *it;
+  } else {
+    return 0;
+  }
+}
+
 Status WalManager::DeleteFile(const std::string& fname, uint64_t number) {
   auto s = env_->DeleteFile(db_options_.wal_dir + "/" + fname);
   if (s.ok()) {
     MutexLock l(&read_first_record_cache_mutex_);
     read_first_record_cache_.erase(number);
+    log_numbers_.erase(number);
   }
   return s;
 }
@@ -124,7 +140,7 @@ Status WalManager::GetUpdatesSince(
   }
   iter->reset(new TransactionLogIteratorImpl(
       db_options_.wal_dir, &db_options_, read_options, env_options_, seq,
-      std::move(wal_files), version_set, seq_per_batch_));
+      std::move(wal_files), version_set, this, seq_per_batch_));
   return (*iter)->status();
 }
 
@@ -172,8 +188,8 @@ void WalManager::PurgeObsoleteWALFiles() {
     return;
   }
 
-  size_t log_files_num = 0;
-  uint64_t log_file_size = 0;
+
+  uint64_t total_log_file_size = 0;
 
   for (auto& f : files) {
     uint64_t number;
@@ -198,6 +214,7 @@ void WalManager::PurgeObsoleteWALFiles() {
           } else {
             MutexLock l(&read_first_record_cache_mutex_);
             read_first_record_cache_.erase(number);
+            log_numbers_.erase(number);
           }
           continue;
         }
@@ -213,8 +230,7 @@ void WalManager::PurgeObsoleteWALFiles() {
           return;
         } else {
           if (file_size > 0) {
-            log_file_size = std::max(log_file_size, file_size);
-            ++log_files_num;
+            total_log_file_size += file_size;
           } else {
             s = env_->DeleteFile(file_path);
             if (!s.ok()) {
@@ -225,6 +241,7 @@ void WalManager::PurgeObsoleteWALFiles() {
             } else {
               MutexLock l(&read_first_record_cache_mutex_);
               read_first_record_cache_.erase(number);
+              log_numbers_.erase(number);
             }
           }
         }
@@ -232,37 +249,41 @@ void WalManager::PurgeObsoleteWALFiles() {
     }
   }
 
-  if (0 == log_files_num || !size_limit_enabled) {
+  if (total_log_file_size == 0) {
     return;
   }
 
-  size_t const files_keep_num =
-      static_cast<size_t>(db_options_.wal_size_limit_mb * 1024 * 1024 / log_file_size);
-  if (log_files_num <= files_keep_num) {
+  if (total_log_file_size <= db_options_.wal_size_limit_mb * 1024 * 1024) {
     return;
   }
+  uint64_t overflow_size =
+      total_log_file_size - db_options_.wal_size_limit_mb * 1024 * 1024;
 
-  size_t files_del_num = log_files_num - files_keep_num;
   VectorLogPtr archived_logs;
   GetSortedWalsOfType(archival_dir, archived_logs, kArchivedLogFile);
 
-  if (files_del_num > archived_logs.size()) {
-    ROCKS_LOG_WARN(db_options_.info_log,
-                   "Trying to delete more archived log files than "
-                   "exist. Deleting all");
-    files_del_num = archived_logs.size();
-  }
-
-  for (size_t i = 0; i < files_del_num; ++i) {
-    std::string const file_path = archived_logs[i]->PathName();
-    s = env_->DeleteFile(db_options_.wal_dir + "/" + file_path);
+  for (const auto& log: archived_logs) {
+    std::string const file_path =
+        db_options_.wal_dir + "/" + log->PathName();
+    uint64_t file_size;
+    s = env_->GetFileSize(file_path, &file_size);
+    if (!s.ok()) {
+      ROCKS_LOG_ERROR(db_options_.info_log, "Unable to get file size: %s: %s",
+                      file_path.c_str(), s.ToString().c_str());
+      return;
+    }
+    if (file_size > overflow_size) {
+      break;
+    }
+    overflow_size -= file_size;
+    s = env_->DeleteFile(file_path);
     if (!s.ok()) {
       ROCKS_LOG_WARN(db_options_.info_log, "Unable to delete file: %s: %s",
                      file_path.c_str(), s.ToString().c_str());
       continue;
     } else {
       MutexLock l(&read_first_record_cache_mutex_);
-      read_first_record_cache_.erase(archived_logs[i]->LogNumber());
+      read_first_record_cache_.erase(log->LogNumber());
     }
   }
 }
@@ -321,12 +342,18 @@ Status WalManager::GetSortedWalsOfType(const std::string& path,
 
       uint64_t size_bytes;
       s = env_->GetFileSize(LogFileName(path, number), &size_bytes);
-      // re-try in case the alive log file has been moved to archive.
-      std::string archived_file = ArchivedLogFileName(path, number);
-      if (!s.ok() && log_type == kAliveLogFile &&
-          env_->FileExists(archived_file).ok()) {
-        s = env_->GetFileSize(archived_file, &size_bytes);
-        if (!s.ok() && env_->FileExists(archived_file).IsNotFound()) {
+
+      if (!s.ok() && env_->FileExists(LogFileName(path, number)).IsNotFound()) {
+        if (log_type == kAliveLogFile) {
+          // re-try in case the alive log file has been moved to archive.
+          std::string archived_file = ArchivedLogFileName(path, number);
+          s = env_->GetFileSize(archived_file, &size_bytes);
+          if (!s.ok() && env_->FileExists(archived_file).IsNotFound()) {
+            // oops, the file just got deleted from archived dir! move on
+            s = Status::OK();
+            continue;
+          }
+        } else if (log_type == kArchivedLogFile) {
           // oops, the file just got deleted from archived dir! move on
           s = Status::OK();
           continue;
@@ -352,7 +379,8 @@ Status WalManager::RetainProbableWalFiles(VectorLogPtr& all_logs,
   // Binary Search. avoid opening all files.
   while (end >= start) {
     int64_t mid = start + (end - start) / 2;  // Avoid overflow.
-    SequenceNumber current_seq_num = all_logs.at(static_cast<size_t>(mid))->StartSequence();
+    SequenceNumber current_seq_num =
+        all_logs.at(static_cast<size_t>(mid))->StartSequence();
     if (current_seq_num == target) {
       end = mid;
       break;
@@ -363,7 +391,8 @@ Status WalManager::RetainProbableWalFiles(VectorLogPtr& all_logs,
     }
   }
   // end could be -ve.
-  size_t start_index = static_cast<size_t>(std::max(static_cast<int64_t>(0), end));
+  size_t start_index =
+      static_cast<size_t>(std::max(static_cast<int64_t>(0), end));
   // The last wal file is always included
   all_logs.erase(all_logs.begin(), all_logs.begin() + start_index);
   return Status::OK();

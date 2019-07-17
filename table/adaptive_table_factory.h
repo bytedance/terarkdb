@@ -52,6 +52,9 @@ class AdaptiveTableFactory : public TableFactory {
 
   std::string GetPrintableTableOptions() const override;
 
+  Status GetOptionString(std::string* /*opt_string*/,
+                         const std::string& /*delimiter*/) const override;
+
  private:
   std::shared_ptr<TableFactory> table_factory_to_write_;
   std::shared_ptr<TableFactory> block_based_table_factory_;
