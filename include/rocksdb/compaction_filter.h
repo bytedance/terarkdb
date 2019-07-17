@@ -13,6 +13,8 @@
 #include <string>
 #include <vector>
 
+#include "rocksdb/status.h"
+
 namespace rocksdb {
 
 class Slice;
@@ -191,8 +193,12 @@ class CompactionFilter {
   virtual const char* Name() const = 0;
 
   virtual bool SupportSerialization() const { return false; }
-  virtual void Serialize(std::string* bytes) const { assert(false); }
-  virtual void Deserialize(const Slice& bytes) { assert(false); }
+  virtual Status Serialize(std::string* /*bytes*/) const {
+    return Status::NotSupported();
+  }
+  virtual Status Deserialize(const Slice& /*bytes*/) {
+    return Status::NotSupported();
+  }
 };
 
 // Each compaction will create a new CompactionFilter allowing the

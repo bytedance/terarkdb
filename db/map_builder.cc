@@ -57,28 +57,16 @@ struct FileMetaDataBoundBuilder {
 
 bool IsPrefaceRange(const Range& range, const FileMetaData* f,
                     const InternalKeyComparator& icomp) {
-  assert(f->sst_purpose != kMapSst);
-  if (f->sst_purpose != kEssenceSst || !range.include_start ||
-      icomp.Compare(f->smallest.Encode(), range.start) != 0) {
-    return false;
-  }
-  if (range.include_limit) {
-    if (icomp.Compare(f->largest.Encode(), range.limit) != 0) {
-      return false;
-    }
-  } else {
-    ParsedInternalKey pikey;
-    if (!ParseInternalKey(range.limit, &pikey)) {
-      // TODO log error
-      return false;
-    }
-    if (pikey.sequence != kMaxSequenceNumber ||
-        icomp.user_comparator()->Compare(f->largest.user_key(),
-                                         pikey.user_key) >= 0) {
-      return false;
-    }
-  }
-  return true;
+  auto uc = icomp.user_comparator();
+  return
+      f->sst_purpose == kEssenceSst && range.include_start &&
+      icomp.Compare(range.start, f->smallest.Encode()) == 0 &&
+      uc->Compare(ExtractUserKey(range.limit), f->largest.user_key()) == 0 &&
+      (ExtractInternalKeyFooter(f->largest.Encode()) == kMaxSequenceNumber
+           ? ExtractInternalKeyFooter(range.limit) == kMaxSequenceNumber
+           : range.include_limit &&
+             ExtractInternalKeyFooter(range.limit) ==
+             ExtractInternalKeyFooter(f->largest.Encode()));
 }
 
 namespace {
@@ -93,8 +81,13 @@ struct RangeWithDepend {
   RangeWithDepend() = default;
 
   RangeWithDepend(const FileMetaData* f) {
+    assert(GetInternalKeySeqno(f->smallest.Encode()) != kMaxSequenceNumber);
     point[0] = f->smallest;
-    point[1] = f->largest;
+    if (GetInternalKeySeqno(f->largest.Encode()) == kMaxSequenceNumber) {
+      point[1].Set(f->largest.user_key(), kMaxSequenceNumber, kTypeDeletion);
+    } else {
+      point[1] = f->largest;
+    }
     include[0] = true;
     include[1] = true;
     no_records = false;
@@ -112,10 +105,22 @@ struct RangeWithDepend {
     depend = map_element.link_;
   }
   RangeWithDepend(const Range& range) {
-    point[0].DecodeFrom(range.start);
-    point[1].DecodeFrom(range.limit);
-    include[0] = range.include_start;
-    include[1] = range.include_limit;
+    if (GetInternalKeySeqno(range.start) == kMaxSequenceNumber) {
+      point[0].Set(ExtractUserKey(range.start), kMaxSequenceNumber,
+                   kTypeDeletion);
+      include[0] = false;
+    } else {
+      point[0].DecodeFrom(range.limit);
+      include[0] = range.include_limit;
+    }
+    if (GetInternalKeySeqno(range.limit) == kMaxSequenceNumber) {
+      point[1].Set(ExtractUserKey(range.limit), kMaxSequenceNumber,
+                   kTypeDeletion);
+      include[1] = true;
+    } else {
+      point[1].DecodeFrom(range.limit);
+      include[1] = range.include_limit;
+    }
     no_records = false;
     stable = false;
   }

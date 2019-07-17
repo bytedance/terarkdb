@@ -254,7 +254,13 @@ Status FlushJob::Run(LogsWithPrepTracker* prep_tracker,
   stream.StartArray();
   auto vstorage = cfd_->current()->storage_info();
   for (int level = 0; level < vstorage->num_levels(); ++level) {
-    stream << vstorage->NumLevelFiles(level);
+    if (vstorage->LevelFiles(level).size() == 1 &&
+        vstorage->LevelFiles(level).front()->sst_purpose == kMapSst) {
+      stream <<
+          std::to_string(vstorage->LevelFiles(level).front()->num_entries);
+    } else {
+      stream << vstorage->NumLevelFiles(level);
+    }
   }
   stream.EndArray();
   stream << "immutable_memtables" << cfd_->imm()->NumNotFlushed();
