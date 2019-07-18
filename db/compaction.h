@@ -81,7 +81,7 @@ struct CompactionParams {
   double score = -1;
   bool deletion_compaction = false;
   bool partial_compaction = false;
-  SstPurpose compaction_purpose = kEssenceSst;
+  bool map_compaction = false;
   std::vector<RangeStorage> input_range = {};
   CompactionReason compaction_reason = CompactionReason::kUnknown;
 
@@ -196,7 +196,7 @@ class Compaction {
   bool partial_compaction() const { return partial_compaction_; }
 
   // Compaction purpose
-  SstPurpose compaction_purpose() const { return compaction_purpose_; }
+  bool map_compaction() const { return map_compaction_; }
 
   // Range limit for inputs
   const std::vector<RangeStorage>& input_range() const {
@@ -378,8 +378,8 @@ class Compaction {
   // If true, then enable partial compaction
   const bool partial_compaction_;
 
-  // Compaction purpose
-  const SstPurpose compaction_purpose_;
+  // If true, then output map sst
+  const bool map_compaction_;
 
   // Range limit for inputs
   const std::vector<RangeStorage> input_range_;

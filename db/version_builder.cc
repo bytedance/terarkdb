@@ -111,6 +111,7 @@ class VersionBuilder::Rep {
   Logger* info_log_;
   TableCache* table_cache_;
   VersionStorageInfo* base_vstorage_;
+  const SliceTransform* prefix_extractor_;
   int num_levels_;
   LevelState* levels_;
   std::unordered_map<uint64_t, size_t> depend_map_;
@@ -128,11 +129,13 @@ class VersionBuilder::Rep {
 
  public:
   Rep(const EnvOptions& env_options, Logger* info_log, TableCache* table_cache,
-      VersionStorageInfo* base_vstorage)
+      VersionStorageInfo* base_vstorage,
+      const SliceTransform* prefix_extractor)
       : env_options_(env_options),
         info_log_(info_log),
         table_cache_(table_cache),
         base_vstorage_(base_vstorage),
+        prefix_extractor_(prefix_extractor),
         num_levels_(base_vstorage->num_levels()),
         has_invalid_levels_(false) {
     levels_ = new LevelState[num_levels_];
@@ -421,6 +424,8 @@ class VersionBuilder::Rep {
 
     // Deep copy base depend files to deleted files
     auto deleted_files = base_vstorage_->LevelFiles(-1);
+    std::vector<int> read_amp;
+    read_amp.resize(num_levels_);
 
     for (int level = 0; level < num_levels_; level++) {
       const auto& cmp = (level == 0) ? level_zero_cmp_ : level_nonzero_cmp_;
@@ -456,6 +461,21 @@ class VersionBuilder::Rep {
         } else {
           LoadSstDepend(f, depend_map_);
           vstorage->AddFile(level, f, info_log_);
+          int f_read_amp = 1;
+          if (f->sst_purpose == kMapSst) {
+            std::shared_ptr<const TableProperties> tp;
+            auto s = table_cache_->GetTableProperties(
+                env_options_, *base_vstorage_->InternalComparator(), f->fd, &tp,
+                prefix_extractor_);
+            if (s.ok()) {
+              f_read_amp = (int)GetSstReadAmp(tp->user_collected_properties);
+            }
+          }
+          if (level == 0) {
+            read_amp[level] += f_read_amp;
+          } else {
+            read_amp[level] = std::max(read_amp[level], f_read_amp);
+          }
         }
       };
 
@@ -497,6 +517,9 @@ class VersionBuilder::Rep {
       // f is to-be-deleted table file
       vstorage->RemoveCurrentStats(f);
     }
+
+    vstorage->set_read_amplification(
+        std::accumulate(read_amp.begin(), read_amp.end(), 0));
 
     CheckConsistency(vstorage);
   }
@@ -557,8 +580,10 @@ class VersionBuilder::Rep {
 VersionBuilder::VersionBuilder(const EnvOptions& env_options,
                                TableCache* table_cache,
                                VersionStorageInfo* base_vstorage,
+                               const SliceTransform* prefix_extractor,
                                Logger* info_log)
-    : rep_(new Rep(env_options, info_log, table_cache, base_vstorage)) {}
+    : rep_(new Rep(env_options, info_log, table_cache, base_vstorage,
+                   prefix_extractor)) {}
 
 VersionBuilder::~VersionBuilder() { delete rep_; }
 

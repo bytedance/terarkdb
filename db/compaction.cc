@@ -224,7 +224,7 @@ Compaction::Compaction(CompactionParams&& params)
       output_compression_opts_(params.compression_opts),
       deletion_compaction_(params.deletion_compaction),
       partial_compaction_(params.partial_compaction),
-      compaction_purpose_(params.compaction_purpose),
+      map_compaction_(params.map_compaction),
       input_range_(std::move(params.input_range)),
       inputs_(PopulateWithAtomicBoundaries(params.input_version,
                                            std::move(params.inputs))),

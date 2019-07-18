@@ -634,26 +634,6 @@ struct RangeTombstone {
   }
 };
 
-struct LinkSstElement {
-  Slice largest_key_;
-  uint64_t file_number_;
-
-  LinkSstElement() : file_number_(uint64_t(-1)) {}
-
-  bool Decode(Slice ikey, Slice value) {
-    largest_key_ = ikey;
-    return GetFixed64(&value, &file_number_);
-  }
-
-  Slice Key() const { return largest_key_; }
-
-  Slice Value(std::string* buffer) {
-    buffer->clear();
-    PutFixed64(buffer, file_number_);
-    return Slice(*buffer);
-  }
-};
-
 struct MapSstElement {
   Slice smallest_key_;
   Slice largest_key_;

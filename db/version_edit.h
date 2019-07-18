@@ -103,6 +103,7 @@ struct FileMetaData {
   // single-threaded LogAndApply thread
   uint64_t num_entries;            // the number of entries.
   uint64_t num_deletions;          // the number of deletion entries.
+  uint64_t num_antiquation;        // the number of out-dated entries.
   uint64_t raw_key_size;           // total uncompressed key size.
   uint64_t raw_value_size;         // total uncompressed value size.
 
@@ -115,7 +116,7 @@ struct FileMetaData {
   bool marked_for_compaction;  // True if client asked us nicely to compact this
                                // file.
 
-  uint8_t sst_purpose;               // Zero for normal sst
+  uint8_t sst_purpose;               // Zero for essence sst
   std::vector<uint64_t> sst_depend;  // Make these sst hidden
 
   FileMetaData()
@@ -265,6 +266,12 @@ class VersionEdit {
     deleted_files_.insert({level, file});
   }
 
+  void SetAntiquation(
+      const std::unordered_map<uint64_t, uint64_t>& antiquation) {
+    update_antiquation_.reserve(antiquation.size());
+    update_antiquation_.assign(antiquation.begin(), antiquation.end());
+  }
+
   // Number of edits
   size_t NumEntries() { return new_files_.size() + deleted_files_.size(); }
 
@@ -305,6 +312,9 @@ class VersionEdit {
   const std::vector<std::pair<int, FileMetaData>>& GetNewFiles() {
     return new_files_;
   }
+  const std::vector<std::pair<uint64_t, uint64_t>>& GetAntiquation() {
+    return update_antiquation_;
+  }
 
   void MarkAtomicGroup(uint32_t remaining_entries) {
     is_in_atomic_group_ = true;
@@ -339,6 +349,7 @@ class VersionEdit {
 
   DeletedFileSet deleted_files_;
   std::vector<std::pair<int, FileMetaData>> new_files_;
+  std::vector<std::pair<uint64_t, uint64_t>> update_antiquation_;
 
   // Each version edit record should have column_family_ set
   // If it's not set, it is default (0)
