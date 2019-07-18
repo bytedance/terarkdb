@@ -2154,26 +2154,29 @@ endif
 # ---------------------------------------------------------------------------
 
 all_sources = $(LIB_SOURCES) $(MAIN_SOURCES) $(MOCK_LIB_SOURCES) $(TOOL_LIB_SOURCES) $(BENCH_LIB_SOURCES) $(TEST_LIB_SOURCES) $(EXP_LIB_SOURCES) $(ANALYZER_LIB_SOURCES)
-DEPFILES = $(all_sources:.cc=.cc.d)
+DEPFILES = $(addprefix ${xdir}/,$(all_sources:.cc=.cc.d))
 
 # Add proper dependency support so changing a .h file forces a .cc file to
 # rebuild.
 
 # The .d file indicates .cc file's dependencies on .h files. We generate such
 # dependency by g++'s -MM option, whose output is a make dependency rule.
-%.cc.d: %.cc
+${xdir}/%.cc.d: %.cc
+	@mkdir -p $(dir $@)
 	@$(CXX) $(CXXFLAGS) $(PLATFORM_SHARED_CFLAGS) \
 	  -MM -MT'$@' -MT'$(<:.cc=.o)' "$<" -o '$@'
 
 ifeq ($(HAVE_POWER8),1)
-DEPFILES_C = $(LIB_SOURCES_C:.c=.c.d)
-DEPFILES_ASM = $(LIB_SOURCES_ASM:.S=.S.d)
+DEPFILES_C = $(addprefix ${xdir}/,$(LIB_SOURCES_C:.c=.c.d))
+DEPFILES_ASM = $(addprefix ${xdir}/,$(LIB_SOURCES_ASM:.S=.S.d))
 
-%.c.d: %.c
+${xdir}/%.c.d: %.c
+	@mkdir -p $(dir $@)
 	@$(CXX) $(CXXFLAGS) $(PLATFORM_SHARED_CFLAGS) \
 	  -MM -MT'$@' -MT'$(<:.c=.o)' "$<" -o '$@'
 
-%.S.d: %.S
+${xdir}/%.S.d: %.S
+	@mkdir -p $(dir $@)
 	@$(CXX) $(CXXFLAGS) $(PLATFORM_SHARED_CFLAGS) \
 	  -MM -MT'$@' -MT'$(<:.S=.o)' "$<" -o '$@'
 
