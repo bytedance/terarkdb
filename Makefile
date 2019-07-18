@@ -101,9 +101,13 @@ endif
 ###############################################################################
 ## Terark specific
 
-ifeq (${DEBUG_LEVEL}, 0)
+ifeq (${DEBUG_LEVEL},0)
   DBG_OR_RLS=r
-else
+endif
+ifeq (${DEBUG_LEVEL},1)
+  DBG_OR_RLS=a
+endif
+ifeq (${DEBUG_LEVEL},2)
   DBG_OR_RLS=d
 endif
 
