@@ -90,7 +90,7 @@ class PosixLogger : public Logger {
     // We try twice: the first time with a fixed-size stack allocated buffer,
     // and the second time with a larger dynamically allocated buffer.
     char buffer[500];
-    int bufsize = sizeof(buffer);
+    ptrdiff_t bufsize = sizeof(buffer);
     for (int iter = 0; iter < 2; iter++) {
       char* base;
       if (iter == 0) {

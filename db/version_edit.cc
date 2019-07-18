@@ -42,7 +42,6 @@ enum Tag : uint32_t {
   kMaxColumnFamily = 203,
 
   kInAtomicGroup = 300,
-  kUpdateAntiquation = 399,
 };
 
 enum CustomTag : uint32_t {
@@ -53,7 +52,6 @@ enum CustomTag : uint32_t {
   // kMinLogNumberToKeep as part of a CustomTag as a hack. This should be
   // removed when manifest becomes forward-comptabile.
   kMinLogNumberToKeepHack = 3,
-  kNumAntiquation = 63,
   kSstPurpose = 64,
   kPathId = 65,
 };
@@ -202,13 +200,6 @@ bool VersionEdit::EncodeTo(std::string* dst) const {
                                dst);
 
       PutVarint32(dst, CustomTag::kTerminate);
-    }
-  }
-
-  if (!update_antiquation_.empty()) {
-    PutVarint32Varint64(dst, kUpdateAntiquation, update_antiquation_.size());
-    for (auto pair : update_antiquation_) {
-      PutVarint64Varint64(dst, pair.first, pair.second);
     }
   }
 
@@ -508,28 +499,6 @@ Status VersionEdit::DecodeFrom(const Slice& src) {
 
       case kNewFile4: {
         msg = DecodeNewFile4From(&input);
-        break;
-      }
-
-      case kUpdateAntiquation: {
-        uint64_t update_antiquation_size;
-        const char* update_antiquation_msg = "update antiquation";
-        if (!GetVarint64(&input, &update_antiquation_size)) {
-          if (!msg) {
-            msg = update_antiquation_msg;
-            break;
-          }
-        }
-        update_antiquation_.resize(update_antiquation_size);
-        for (auto& pair : update_antiquation_) {
-          if (!GetVarint64(&input, &pair.first) ||
-              !GetVarint64(&input, &pair.second)) {
-            if (!msg) {
-              msg = update_antiquation_msg;
-            }
-            break;
-          }
-        }
         break;
       }
 

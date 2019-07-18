@@ -193,7 +193,6 @@ InternalIterator* TableCache::NewIterator(
     bool skip_filters, int level, const InternalKey* smallest_compaction_key,
     const InternalKey* largest_compaction_key) {
   PERF_TIMER_GUARD(new_table_iterator_nanos);
-  assert(file_meta.sst_purpose != kBlobSst);
 
   Status s;
   bool create_new_table_reader = false;

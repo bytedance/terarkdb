@@ -2549,8 +2549,8 @@ Status DBImpl::DeleteFilesInRanges(ColumnFamilyHandle* column_family,
             !level_being_compacted(i)) {
           status = map_builder.Build(
               {CompactionInputFiles{i, vstorage->LevelFiles(i)}}, deleted_range,
-              {}, kMapSst, i, vstorage->LevelFiles(i)[0]->fd.GetPathId(),
-              vstorage, cfd, &edit, nullptr, nullptr, &deleted_files);
+              {}, i, vstorage->LevelFiles(i)[0]->fd.GetPathId(), vstorage, cfd,
+              &edit, nullptr, nullptr, &deleted_files);
           if (!status.ok()) {
             return status;
           }
@@ -2560,9 +2560,9 @@ Status DBImpl::DeleteFilesInRanges(ColumnFamilyHandle* column_family,
               continue;
             }
             status = map_builder.Build({CompactionInputFiles{i, {f}}},
-                                       deleted_range, {}, kMapSst, i,
-                                       f->fd.GetPathId(), vstorage, cfd, &edit,
-                                       nullptr, nullptr, &deleted_files);
+                                       deleted_range, {}, i, f->fd.GetPathId(),
+                                       vstorage, cfd, &edit, nullptr, nullptr,
+                                       &deleted_files);
             if (!status.ok()) {
               return status;
             }
