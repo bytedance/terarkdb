@@ -19,6 +19,11 @@ make BUNDLE_TERARK_ZIP_ROCKSDB=1 LINK_TERARK=static TERARK_CORE_PKG_DIR=terark-c
 make BUNDLE_TERARK_ZIP_ROCKSDB=1 LINK_TERARK=static TERARK_CORE_PKG_DIR=terark-core \
      BMI2=$WITH_BMI2 \
      DISABLE_WARNING_AS_ERROR=1 \
+     DEBUG_LEVEL=1 shared_lib -j $cpuNum
+
+make BUNDLE_TERARK_ZIP_ROCKSDB=1 LINK_TERARK=static TERARK_CORE_PKG_DIR=terark-core \
+     BMI2=$WITH_BMI2 \
+     DISABLE_WARNING_AS_ERROR=1 \
      DEBUG_LEVEL=2 shared_lib -j $cpuNum
 
 pkgdir=output
@@ -51,6 +56,7 @@ PLATFORM_DIR=$SYSTEM-$COMPILER-bmi2-$WITH_BMI2
 
 # copy terark-rocksdb dynamic lib
 cp -a shared-objects/build/$PLATFORM_DIR/dbg-0/librocksdb* $pkgdir/lib
+cp -a shared-objects/build/$PLATFORM_DIR/dbg-1/librocksdb* $pkgdir/lib
 cp -a shared-objects/build/$PLATFORM_DIR/dbg-2/librocksdb* $pkgdir/lib
 
 echo "build and package successful!"

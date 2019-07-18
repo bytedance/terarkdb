@@ -756,7 +756,11 @@ ifeq ($(LIBNAME),)
 # we should only run rocksdb in production with DEBUG_LEVEL 0
 ifeq ($(DEBUG_LEVEL),0)
         LIBNAME=librocksdb
-else
+endif
+ifeq ($(DEBUG_LEVEL),1)
+        LIBNAME=librocksdb_assert
+endif
+ifeq ($(DEBUG_LEVEL),2)
         LIBNAME=librocksdb_debug
 endif
 endif
