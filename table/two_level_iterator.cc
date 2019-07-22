@@ -256,16 +256,18 @@ class MapSstIterator final : public InternalIterator {
       return kInitFirstIterInvalid;
     }
     // Manual inline MapSstElement::Decode
+    const char* err_msg = "Invalid MapSstElement";
     Slice map_input = first_level_iter_->value();
     link_.clear();
     largest_key_ = first_level_iter_->key();
-    uint64_t link_count;
     uint64_t flags;
-    if (!GetLengthPrefixedSlice(&map_input, &smallest_key_) ||
+    uint64_t link_count;
+    if (!GetVarint64(&map_input, &flags) ||
         !GetVarint64(&map_input, &link_count) ||
-        !GetVarint64(&map_input, &flags) ||
-        map_input.size() < link_count * sizeof(uint64_t)) {
-      status_ = Status::Corruption("Map sst invalid value");
+        // TODO support kNoSmallest
+        ((flags >> MapSstElement::kNoSmallest) & 1) ||
+        !GetLengthPrefixedSlice(&map_input, &smallest_key_)) {
+      status_ = Status::Corruption(err_msg);
       return kInitFirstIterInvalid;
     }
     if ((flags >> MapSstElement::kNoRecords) & 1) {
@@ -275,7 +277,10 @@ class MapSstIterator final : public InternalIterator {
     include_largest_ = (flags >> MapSstElement::kIncludeLargest) & 1;
     link_.resize(link_count);
     for (uint64_t i = 0; i < link_count; ++i) {
-      GetFixed64(&map_input, &link_[i]);
+      if (!GetVarint64(&map_input, &link_[i])) {
+        status_ = Status::Corruption(err_msg);
+        return kInitFirstIterInvalid;
+      }
       assert(std::binary_search(file_meta_.sst_depend.begin(),
                                 file_meta_.sst_depend.end(), link_[i]));
     }

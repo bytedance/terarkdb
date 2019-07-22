@@ -639,6 +639,7 @@ struct MapSstElement {
   Slice largest_key_;
   bool include_smallest_;
   bool include_largest_;
+  bool no_smallest_;
   bool no_records_;
   struct LinkTarget {
     uint64_t file_number;
@@ -648,54 +649,64 @@ struct MapSstElement {
   enum Flags : uint64_t {
     kIncludeSmallest,
     kIncludeLargest,
+    kNoSmallest,
     kNoRecords,
   };
 
   MapSstElement()
       : include_smallest_(false),
         include_largest_(false),
+        no_smallest_(false),
         no_records_(false) {}
 
   bool Decode(Slice ikey, Slice value) {
     link_.clear();
+    smallest_key_.clear();
     largest_key_ = ikey;
-    uint64_t link_count;
     uint64_t flags;
-    if (!GetLengthPrefixedSlice(&value, &smallest_key_) ||
-        !GetVarint64(&value, &link_count) || !GetVarint64(&value, &flags) ||
-        value.size() < link_count * sizeof(uint64_t) * 2) {
+    uint64_t link_count;
+    if (!GetVarint64(&value, &flags) || !GetVarint64(&value, &link_count)) {
       return false;
     }
     include_smallest_ = (flags >> kIncludeSmallest) & 1;
     include_largest_  = (flags >> kIncludeLargest ) & 1;
+    no_smallest_      = (flags >> kNoSmallest     ) & 1;
     no_records_       = (flags >> kNoRecords      ) & 1;
+    if (!no_smallest_ && !GetLengthPrefixedSlice(&value, &smallest_key_)) {
+      return false;
+    }
     link_.resize(link_count);
 
     for (uint64_t i = 0; i < link_count; ++i) {
-      GetFixed64(&value, &link_[i].file_number);
+      if (!GetVarint64(&value, &link_[i].file_number)) {
+        return false;
+      }
     }
     for (uint64_t i = 0; i < link_count; ++i) {
-      GetFixed64(&value, &link_[i].size);
+      if (!GetVarint64(&value, &link_[i].size)) {
+        return false;
+      }
     }
-    return true;
+    return value.empty();
   }
 
   Slice Key() const { return largest_key_; }
 
   Slice Value(std::string* buffer) {
     buffer->clear();
-    PutLengthPrefixedSlice(buffer, smallest_key_);
-    PutVarint64(buffer, link_.size());
     uint64_t flags = ((include_smallest_ ? 1ULL : 0ULL) << kIncludeSmallest) |
                      (( include_largest_ ? 1ULL : 0ULL) << kIncludeLargest ) |
+                     ((     no_smallest_ ? 1ULL : 0ULL) << kNoSmallest     ) |
                      ((      no_records_ ? 1ULL : 0ULL) << kNoRecords      );
-    PutVarint64(buffer, flags);
-    buffer->reserve(buffer->size() + sizeof(LinkTarget) * link_.size());
-    for (auto& l : link_) {
-      PutFixed64(buffer, l.file_number);
+    PutVarint64Varint64(buffer, flags, link_.size());
+    if (!no_smallest_) {
+      PutLengthPrefixedSlice(buffer, smallest_key_);
     }
     for (auto& l : link_) {
-      PutFixed64(buffer, l.size);
+      PutVarint64(buffer, l.file_number);
+    }
+    for (auto& l : link_) {
+      PutVarint64(buffer, l.size);
     }
     return Slice(*buffer);
   }
