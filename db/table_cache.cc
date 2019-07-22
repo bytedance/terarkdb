@@ -482,6 +482,7 @@ Status TableCache::Get(const ReadOptions& options,
         auto get_from_map = [&](const Slice& largest_key,
                                 const Slice& map_value) {
           // Manual inline MapSstElement::Decode
+          const char* err_msg = "Invalid MapSstElement";
           Slice map_input = map_value;
           Slice smallest_key;
           uint64_t link_count;
@@ -489,14 +490,16 @@ Status TableCache::Get(const ReadOptions& options,
           Slice find_k = k;
           auto& icomp = internal_comparator;
 
-          if (!GetLengthPrefixedSlice(&map_input, &smallest_key) ||
+          if (!GetVarint64(&map_input, &flags) ||
               !GetVarint64(&map_input, &link_count) ||
-              !GetVarint64(&map_input, &flags) ||
-              map_input.size() < link_count * sizeof(uint64_t)) {
-            s = Status::Corruption("Map sst invalid link_value");
+              // TODO support kNoSmallest
+              ((flags >> MapSstElement::kNoSmallest) & 1) ||
+              !GetLengthPrefixedSlice(&map_input, &smallest_key)) {
+            s = Status::Corruption(err_msg);
             return false;
           }
-          // don't care kNoRecords, Get call need load RangeDelAggregator
+          // don't care kNoRecords, Get call need load
+          // max_covering_tombstone_seq
           int include_smallest = (flags >> MapSstElement::kIncludeSmallest) & 1;
           int include_largest = (flags >> MapSstElement::kIncludeLargest) & 1;
 
@@ -546,9 +549,12 @@ Status TableCache::Get(const ReadOptions& options,
                 std::max(min_seq_type_backup, seq_type + !include_largest));
           }
 
+          uint64_t file_number;
           for (uint64_t i = 0; i < link_count; ++i) {
-            // Manual inline GetFixed64
-            uint64_t file_number = DecodeFixed64(map_input.data());
+            if (!GetVarint64(&map_input, &file_number)) {
+              s = Status::Corruption(err_msg);
+              return false;
+            }
             auto find = depend_files.find(file_number);
             if (find == depend_files.end()) {
               s = Status::Corruption("Map sst depend files missing");
@@ -562,7 +568,6 @@ Status TableCache::Get(const ReadOptions& options,
               // error or found, recovery min_seq_type_backup is unnecessary
               return false;
             }
-            map_input.remove_prefix(sizeof(uint64_t));
           }
           // recovery min_seq_backup
           get_context->SetMinSequenceAndType(min_seq_type_backup);
