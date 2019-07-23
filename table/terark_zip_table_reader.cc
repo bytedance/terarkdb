@@ -654,7 +654,19 @@ public:
     }
     ResetIter(subReader);
     SeekInternal(seek_key, ExtractInternalKeyFooter(target));
-    assert(Valid());
+    if (!iter_->Valid()) {
+      if (reverse) {
+        if (subReader->subIndex_ != 0) {
+          ResetIter(subIndex_->GetSubReader(subReader->subIndex_ - 1));
+          SeekToAscendingLast();
+        }
+      } else {
+        if (subReader->subIndex_ != subIndex_->GetSubCount() - 1) {
+          ResetIter(subIndex_->GetSubReader(subReader->subIndex_ + 1));
+          SeekToAscendingFirst();
+        }
+      }
+    }
     if (key_tag_ == port::kMaxUint64) {
       Next();
     }
