@@ -36,7 +36,7 @@ typedef typename value_vector_t::data_t value_wrap_t;
 struct IteratorImplBase {
   bool is_tls;
   uint32_t index;
-  terark::Patricia::Iterator iter;
+  terark::Patricia::IterMem handle;
   WriteBatchKeyExtractor extractor;
 
   IteratorImplBase() : is_tls(false), extractor(nullptr) {}
@@ -45,44 +45,44 @@ struct IteratorImplBase {
 struct IteratorImplWithoutOffset : public IteratorImplBase {
 
   WriteBatchIndexEntry* GetValue() {
-    return *(WriteBatchIndexEntry**)iter.value();
+    return *(WriteBatchIndexEntry**)handle.iter()->value();
   }
   WriteBatchIndexEntry* Seek(WriteBatchIndexEntry* entry) {
     auto key = extractor(entry);
-    if (!iter.seek_lower_bound(terark::fstring(key.data(), key.size()))) {
+    if (!handle.iter()->seek_lower_bound(terark::fstring(key.data(), key.size()))) {
       return nullptr;
     }
     return GetValue();
   }
   WriteBatchIndexEntry* SeekForPrev(WriteBatchIndexEntry* entry) {
     auto key = extractor(entry);
-    if (!iter.seek_rev_lower_bound(terark::fstring(key.data(), key.size()))) {
+    if (!handle.iter()->seek_rev_lower_bound(terark::fstring(key.data(), key.size()))) {
       return nullptr;
     }
     return GetValue();
   }
   WriteBatchIndexEntry* SeekToFirst() {
-    if (!iter.seek_begin()) {
+    if (!handle.iter()->seek_begin()) {
       return nullptr;
     }
     return GetValue();
   }
   WriteBatchIndexEntry* SeekToLast() {
-    if (!iter.seek_end()) {
+    if (!handle.iter()->seek_end()) {
       return nullptr;
     }
     return GetValue();
   }
   WriteBatchIndexEntry* Next() {
-    iter.update_now();
-    if (!iter.incr()) {
+    handle.iter()->update_now();
+    if (!handle.iter()->incr()) {
       return nullptr;
     }
     return GetValue();
   }
   WriteBatchIndexEntry* Prev() {
-    iter.update_now();
-    if (!iter.decr()) {
+    handle.iter()->update_now();
+    if (!handle.iter()->decr()) {
       return nullptr;
     }
     return GetValue();
@@ -95,8 +95,8 @@ struct IteratorImplWithOffset : public IteratorImplBase {
     const value_wrap_t* data;
   };
   VectorData GetVector() {
-    auto trie = static_cast<terark::MainPatricia*>(iter.trie());
-    auto vector = (value_vector_t*)trie->mem_get(*(uint32_t*)iter.value());
+    auto trie = static_cast<terark::MainPatricia*>(handle.iter()->trie());
+    auto vector = (value_vector_t*)trie->mem_get(*(uint32_t*)handle.iter()->value());
     size_t size = vector->size;
     auto data = (value_wrap_t*)trie->mem_get(vector->loc);
     return {size, data};
@@ -104,47 +104,47 @@ struct IteratorImplWithOffset : public IteratorImplBase {
   WriteBatchIndexEntry* Seek(WriteBatchIndexEntry* entry) {
     auto slice_key = extractor(entry);
     auto find_key = terark::fstring(slice_key.data(), slice_key.size());
-    if (!iter.seek_lower_bound(find_key)) {
+    if (!handle.iter()->seek_lower_bound(find_key)) {
       return nullptr;
     }
     auto vec = GetVector();
-    if (iter.word() == find_key) {
+    if (handle.iter()->word() == find_key) {
       index = terark::lower_bound_0(vec.data, vec.size, entry->offset);
       if (index != vec.size) {
         return vec.data[index].value;
       }
-      if (!iter.incr()) {
+      if (!handle.iter()->incr()) {
         return nullptr;
       }
       vec = GetVector();
     }
-    assert(iter.word() > find_key);
+    assert(handle.iter()->word() > find_key);
     index = 0;
     return vec.data[index].value;
   }
   WriteBatchIndexEntry* SeekForPrev(WriteBatchIndexEntry* entry) {
     auto slice_key = extractor(entry);
     auto find_key = terark::fstring(slice_key.data(), slice_key.size());
-    if (!iter.seek_rev_lower_bound(find_key)) {
+    if (!handle.iter()->seek_rev_lower_bound(find_key)) {
       return nullptr;
     }
     auto vec = GetVector();
-    if (iter.word() == find_key) {
+    if (handle.iter()->word() == find_key) {
       index = terark::upper_bound_0(vec.data, vec.size, entry->offset) - 1;
       if (index != vec.size) {
         return vec.data[index].value;
       }
-      if (!iter.decr()) {
+      if (!handle.iter()->decr()) {
         return nullptr;
       }
       vec = GetVector();
     }
-    assert(iter.word() < find_key);
+    assert(handle.iter()->word() < find_key);
     index = vec.size - 1;
     return vec.data[index].value;
   }
   WriteBatchIndexEntry* SeekToFirst() {
-    if (!iter.seek_begin()) {
+    if (!handle.iter()->seek_begin()) {
       return nullptr;
     }
     auto vec = GetVector();
@@ -152,7 +152,7 @@ struct IteratorImplWithOffset : public IteratorImplBase {
     return vec.data[index].value;
   }
   WriteBatchIndexEntry* SeekToLast() {
-    if (!iter.seek_end()) {
+    if (!handle.iter()->seek_end()) {
       return nullptr;
     }
     auto vec = GetVector();
@@ -160,10 +160,10 @@ struct IteratorImplWithOffset : public IteratorImplBase {
     return vec.data[index].value;
   }
   WriteBatchIndexEntry* Next() {
-    iter.update_now();
+    handle.iter()->update_now();
     auto vec = GetVector();
     if (++index == vec.size) {
-      if (!iter.incr()) {
+      if (!handle.iter()->incr()) {
         return nullptr;
       }
       vec = GetVector();
@@ -172,9 +172,9 @@ struct IteratorImplWithOffset : public IteratorImplBase {
     return vec.data[index].value;
   }
   WriteBatchIndexEntry* Prev() {
-    iter.update_now();
+    handle.iter()->update_now();
     if (index-- == 0) {
-      if (!iter.decr()) {
+      if (!handle.iter()->decr()) {
         return nullptr;
       }
       auto vec = GetVector();
@@ -221,12 +221,12 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
       } else {
         impl_ = new IteratorImpl();
       }
-      impl_->iter.reset(index);
+      impl_->handle.iter()->reset(index);
       impl_->extractor = e;
     }
     ~PTrieIterator() {
       if (impl_->is_tls) {
-        impl_->iter.reset(nullptr);
+        impl_->handle.iter()->reset(nullptr);
       } else {
         delete impl_;
       }
@@ -302,15 +302,15 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
        protected:
         bool init_value(void* valptr, size_t valsize) noexcept override {
           assert(valsize == sizeof(uint32_t));
-
-          size_t data_loc = m_trie->mem_alloc(sizeof(value_wrap_t));
+          auto trie = static_cast<terark::MainPatricia *>(m_trie);
+          size_t data_loc = trie->mem_alloc(sizeof(value_wrap_t));
           assert(data_loc != terark::MainPatricia::mem_alloc_fail);
-          auto* data = (value_wrap_t*)m_trie->mem_get(data_loc);
+          auto* data = (value_wrap_t*)trie->mem_get(data_loc);
           data->value = value_;
 
-          size_t vector_loc = m_trie->mem_alloc(sizeof(value_vector_t));
+          size_t vector_loc = trie->mem_alloc(sizeof(value_vector_t));
           assert(vector_loc != terark::MainPatricia::mem_alloc_fail);
-          auto* vector = (value_vector_t*)m_trie->mem_get(vector_loc);
+          auto* vector = (value_vector_t*)trie->mem_get(vector_loc);
           vector->loc = (uint32_t)data_loc;
           vector->size = 1;
 

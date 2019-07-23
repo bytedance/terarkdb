@@ -227,7 +227,7 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(const TerarkZipTableFactory* table_
     if (table_options_.debugLevel == 3) {
       tmpDumpFile_.open(tmpSentryFile_.path + ".dump", "wb+");
     }
-    pipeline_.m_silent = true;
+    pipeline_.setLogLevel(0);
     pipeline_ >> new TerarkZipTableBuilderStage;
     pipeline_.setQueueSize(50); // we thought it's enough ...
     pipeline_.compile();

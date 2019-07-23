@@ -46,6 +46,12 @@ vs2017
 # vim backup file
 *~
 
+# got files
+*.got
+
+# vscode file
+.vscode
+
 cmake-build-debug
 .DS_Store
 
