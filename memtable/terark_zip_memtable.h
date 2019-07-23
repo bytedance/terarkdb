@@ -109,7 +109,6 @@ class PatriciaMemtableRep : public MemTableRep {
   std::atomic_bool immutable_;
 
   std::vector<MemPatricia *> trie_vec_;
-  MemPatricia * target_trie_;
   int64_t write_buffer_size_;
   static const int64_t size_limit_ = 1LL << 30;
 
@@ -133,28 +132,26 @@ public:
                                             concurrent_level_));             
   }
 
-  ~PatriciaMemtableRep();
-
   virtual size_t ApproximateMemoryUsage() override;
 
   virtual uint64_t ApproximateNumEntries(
     const Slice &start_ikey,
     const Slice &end_ikey) override { return 0; }
 
-  virtual bool Contains(const Slice &internal_key) const;
+  virtual bool Contains(const Slice &internal_key) const override;
 
   virtual void Get(
     const LookupKey &k,
     void *callback_args,
-    bool (*callback_func)(void *arg, const KeyValuePair *));
+    bool (*callback_func)(void *arg, const KeyValuePair *)) override;
 
-  virtual MemTableRep::Iterator *GetIterator(Arena *arena);
+  virtual MemTableRep::Iterator *GetIterator(Arena *arena) override;
 
   virtual void Insert(KeyHandle handle) override { assert(false); }
 
   virtual bool InsertKeyValue(
     const Slice &internal_key,
-    const Slice &value);
+    const Slice &value) override;
 
   virtual bool InsertKeyValueConcurrently(
     const Slice &internal_key,
@@ -241,7 +238,7 @@ public:
     }
 
     virtual bool IsKeyPinned() const override { return false; }
-    virtual bool IsSeekForPrevSupported() const { return true; }
+    virtual bool IsSeekForPrevSupported() const override { return true; }
 
     virtual const char *key() const override { assert(false); return nullptr; }
 
@@ -712,7 +709,7 @@ public:
 
   virtual bool IsKeyPinned() const override { return false; }
 
-  virtual bool IsSeekForPrevSupported() const { return true; }
+  virtual bool IsSeekForPrevSupported() const override { return true; }
 };
 
 class PatriciaMemTableRepFactory : public MemTableRepFactory {
@@ -725,9 +722,9 @@ private:
 public:
   PatriciaMemTableRepFactory(
     std::shared_ptr<class MemTableRepFactory> &fallback,
-    detail::ConcurrentType concurrent_type,
-    detail::PatriciaKeyType patricia_key_type,
-    int64_t write_buffer_size)
+    detail::ConcurrentType concurrent_type = detail::ConcurrentType::Native,
+    detail::PatriciaKeyType patricia_key_type = detail::PatriciaKeyType::UserKey,
+    int64_t write_buffer_size = 512LL * 1048576)
   : fallback_(fallback),
     concurrent_type_(concurrent_type),
     patricia_key_type_(patricia_key_type),
@@ -813,7 +810,5 @@ MemTableRepFactory *NewPatriciaMemTableRepFactory(
       patricia_key_type,
       write_buffer_size);
 }
-
-ROCKSDB_REGISTER_MEM_TABLE("patricia", PatriciaMemTableRepFactory);
 
 }

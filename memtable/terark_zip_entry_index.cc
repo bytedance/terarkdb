@@ -221,12 +221,12 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
       } else {
         impl_ = new IteratorImpl();
       }
-      impl_->handle.iter()->reset(index);
+      impl_->handle.reset(index);
       impl_->extractor = e;
     }
     ~PTrieIterator() {
       if (impl_->is_tls) {
-        impl_->handle.iter()->reset(nullptr);
+        impl_->handle.reset(nullptr);
       } else {
         delete impl_;
       }
@@ -265,7 +265,8 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
  public:
   WriteBatchEntryPTrieIndex(WriteBatchKeyExtractor e,
                             const Comparator* c, Arena* a)
-      : index_(trie_value_size),
+      : index_(trie_value_size, 512ull << 10,
+               terark::MainPatricia::SingleThreadShared),
         extractor_(e) {
   }
 

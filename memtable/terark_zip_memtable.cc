@@ -242,7 +242,7 @@ bool PatriciaMemtableRep::InsertKeyValue(
       if (write_buffer_size_ > size_limit_)
         write_buffer_size_ = size_limit_;
       size_t bound = key.size() + VarintLength(value.size()) + value.size();
-      if (write_buffer_size_ < bound)
+      if (size_t(write_buffer_size_) < bound)
         write_buffer_size_ = std::min(bound + (16 << 20), size_t(-1) >> 1);
     }
     return new MemPatricia(4, write_buffer_size_, concurrent_level_);
@@ -565,5 +565,28 @@ MemTableRep* PatriciaMemTableRepFactory::CreateMemTableRep(
                                         column_family_id);
   }
 }
+
+MemTableRepFactory*
+NewPatriciaTrieRepFactory(std::shared_ptr<class MemTableRepFactory> fallback) {
+  if (!fallback) {
+    fallback.reset(new SkipListFactory());
+  }
+  return new PatriciaMemTableRepFactory(fallback);
+}
+
+MemTableRepFactory*
+NewPatriciaTrieRepFactory(const std::unordered_map<std::string, std::string>& options, Status* s) {
+  auto f = options.find("fallback");
+  std::shared_ptr<class MemTableRepFactory> fallback;
+  if (f != options.end() && f->second != "patricia") {
+    fallback.reset(CreateMemTableRepFactory(f->second, options, s));
+    if (!s->ok()) {
+      *s = Status::InvalidArgument("NewPatriciaTrieRepFactory", s->getState());
+      return nullptr;
+    }
+  }
+  return NewPatriciaTrieRepFactory(fallback);
+}
+
 
 } // namespace rocksdb
