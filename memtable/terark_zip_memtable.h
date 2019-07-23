@@ -475,7 +475,7 @@ class PatriciaRepIterator : public MemTableRep::Iterator, boost::noncopyable {
   }
 
 public:
-  PatriciaRepIterator(std::vector<terark::Patricia *> tries) : direction_(0) {
+  PatriciaRepIterator(std::vector<MemPatricia *> tries) : direction_(0) {
     assert(tries.size() > 0);
     if (heap_mode) {
       // reserve m_tls_vec.size() for optimization!
@@ -521,7 +521,7 @@ public:
   virtual Slice GetValue() const override {
     const HeapItem *item = Current();
     uint32_t value_loc = item->GetValue();
-    auto trie = static_cast<terark::MainPatricia *>(item->handle.iter()->main());
+    auto trie = static_cast<terark::MainPatricia *>(item->handle.iter()->trie());
     return GetLengthPrefixedSlice((const char *)trie->mem_get(value_loc));
   }
 

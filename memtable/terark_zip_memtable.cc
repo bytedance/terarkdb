@@ -163,15 +163,13 @@ void PatriciaMemtableRep::Get(
 MemTableRep::Iterator *PatriciaMemtableRep::GetIterator(Arena *arena) {
   MemTableRep::Iterator *iter;
   if (trie_vec_.size() == 1) {
-    typedef MemPatricia::Iterator iter_t;
-    // FIX
-    // auto p_trie = trie_vec_.front();
-    // iter = arena ? new (arena->AllocateAligned(sizeof(iter_t))) iter_t(p_trie)
-                //  : new iter_t(p_trie);
+    typedef PatriciaRepIterator<false> iter_t;
+    iter = arena ? new (arena->AllocateAligned(sizeof(iter_t))) iter_t(trie_vec_)
+                 : new iter_t(trie_vec_);
   } else {
-    typedef HeapIterator iter_t;
-    iter = arena ? new (arena->AllocateAligned(sizeof(iter_t))) iter_t(this)
-                 : new iter_t(this);
+    typedef PatriciaRepIterator<true> iter_t;
+    iter = arena ? new (arena->AllocateAligned(sizeof(iter_t))) iter_t(trie_vec_)
+                 : new iter_t(trie_vec_);
   }
   return iter;
 }
