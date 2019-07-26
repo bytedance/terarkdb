@@ -959,19 +959,15 @@ Status MapBuilder::WriteOutputFile(
 }
 
 struct MapElementIterator : public InternalIterator {
-  explicit MapElementIterator(FileMetaData* const* meta_array, size_t meta_size,
-                              TableCache* table_cache,
-                              const ReadOptions& read_options,
-                              const EnvOptions& env_options,
-                              const InternalKeyComparator* icmp,
-                              const SliceTransform* slice_transform)
+  explicit MapElementIterator(
+      FileMetaData* const* meta_array, size_t meta_size,
+      const InternalKeyComparator* icmp, void* callback_arg,
+      const IteratorCache::CreateIterCallback& create_iter)
       : meta_array_(meta_array),
         meta_size_(meta_size),
-        table_cache_(table_cache),
-        read_options_(read_options),
-        env_options_(env_options),
         icmp_(icmp),
-        slice_transform_(slice_transform),
+        callback_arg_(callback_arg),
+        create_iter_(create_iter),
         where_(meta_size) {
     assert(meta_size > 0);
   }
@@ -1123,10 +1119,8 @@ struct MapElementIterator : public InternalIterator {
 
   bool InitMapSstIterator() {
     DependFileMap empty_depend_files;
-    iter_.reset(table_cache_->NewIterator(
-        read_options_, env_options_, *icmp_, *meta_array_[where_],
-        empty_depend_files, nullptr, slice_transform_, nullptr, nullptr, false,
-        nullptr, true, -1));
+    iter_.reset(create_iter_(callback_arg_, meta_array_[where_],
+                             empty_depend_files, nullptr, nullptr));
     if (iter_->status().ok()) {
       return true;
     }
@@ -1154,11 +1148,9 @@ struct MapElementIterator : public InternalIterator {
 
   FileMetaData* const* meta_array_;
   size_t meta_size_;
-  TableCache* table_cache_;
-  const ReadOptions& read_options_;
-  const EnvOptions& env_options_;
   const InternalKeyComparator* icmp_;
-  const SliceTransform* slice_transform_;
+  void* callback_arg_;
+  const IteratorCache::CreateIterCallback& create_iter_;
   size_t where_;
   MapSstElement element_;
   std::string buffer_;
@@ -1167,25 +1159,22 @@ struct MapElementIterator : public InternalIterator {
 };
 
 InternalIterator* NewMapElementIterator(
-    FileMetaData* const* meta_array, size_t meta_size, TableCache* table_cache,
-    const ReadOptions& read_options, const EnvOptions& env_options,
-    const InternalKeyComparator* icmp, const SliceTransform* slice_transform,
-    Arena* arena) {
+    FileMetaData* const* meta_array, size_t meta_size,
+    const InternalKeyComparator* icmp, void* callback_arg,
+    const IteratorCache::CreateIterCallback& create_iter, Arena* arena) {
   if (meta_size == 0) {
     return NewEmptyInternalIterator(arena);
   } else if (meta_size == 1 && meta_array[0]->sst_purpose == kMapSst) {
     DependFileMap empty_depend_files;
-    return table_cache->NewIterator(
-        read_options, env_options, *icmp, *meta_array[0], empty_depend_files,
-        nullptr, slice_transform, nullptr, nullptr, false, arena, true, -1);
+    return create_iter(callback_arg, meta_array[0], empty_depend_files, arena,
+                       nullptr);
   } else if (arena == nullptr) {
-    return new MapElementIterator(meta_array, meta_size, table_cache,
-                                  read_options, env_options, icmp,
-                                  slice_transform);
+    return new MapElementIterator(meta_array, meta_size, icmp, callback_arg,
+                                  create_iter);
   } else {
     return new (arena->AllocateAligned(sizeof(MapElementIterator)))
-        MapElementIterator(meta_array, meta_size, table_cache, read_options,
-                           env_options, icmp, slice_transform);
+        MapElementIterator(meta_array, meta_size, icmp, callback_arg,
+                           create_iter);
   }
 }
 

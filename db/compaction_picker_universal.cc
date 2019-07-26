@@ -1755,9 +1755,18 @@ Compaction* UniversalCompactionPicker::PickRangeCompaction(
   Arena arena;
   DependFileMap empty_depend_files;
   ReadOptions options;
+  auto create_iter = [&](const FileMetaData* file_metadata,
+                         const DependFileMap& depend_map, Arena* arena,
+                         TableReader** table_reader_ptr) {
+    return table_cache_->NewIterator(options, env_options_, *icmp_,
+                                     *file_metadata, depend_map, nullptr,
+                                     mutable_cf_options.prefix_extractor.get(),
+                                     nullptr, nullptr, false, nullptr, true,
+                                     -1);
+  };
   ScopedArenaIterator iter(NewMapElementIterator(
-      level_files.data(), level_files.size(), table_cache_, options,
-      env_options_, icmp_, mutable_cf_options.prefix_extractor.get(), &arena));
+      level_files.data(), level_files.size(), icmp_, &create_iter,
+      c_style_callback(create_iter), &arena));
   if (!iter->status().ok()) {
     ROCKS_LOG_BUFFER(log_buffer, "[%s] Universal: Read level files error %s.",
                      cf_name.c_str(), iter->status().getState());

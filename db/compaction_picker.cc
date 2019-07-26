@@ -22,6 +22,7 @@
 #include "db/column_family.h"
 #include "db/map_builder.h"
 #include "monitoring/statistics.h"
+#include "util/c_style_callback.h"
 #include "util/filename.h"
 #include "util/log_buffer.h"
 #include "util/random.h"
@@ -564,9 +565,17 @@ void CompactionPicker::InitFilesBeingCompact(
   if (!enable_lazy_compaction) {
     return;
   }
-  auto& icmp = ioptions_.internal_comparator;
   ReadOptions options;
   MapSstElement element;
+  auto create_iter = [&](const FileMetaData* file_metadata,
+                         const DependFileMap& depend_map, Arena* arena,
+                         TableReader** table_reader_ptr) {
+    return table_cache_->NewIterator(options, env_options_, *icmp_,
+                                     *file_metadata, depend_map, nullptr,
+                                     mutable_cf_options.prefix_extractor.get(),
+                                     nullptr, nullptr, false, nullptr, true,
+                                     -1);
+  };
   for (int level = 0; level < vstorage->num_levels(); ++level) {
     auto& level_files = vstorage->LevelFiles(level);
     if (level_files.empty()) {
@@ -574,9 +583,8 @@ void CompactionPicker::InitFilesBeingCompact(
     }
     Arena arena;
     ScopedArenaIterator iter(NewMapElementIterator(
-        level_files.data(), level_files.size(), table_cache_, options,
-        env_options_, &icmp, mutable_cf_options.prefix_extractor.get(),
-        &arena));
+        level_files.data(), level_files.size(), icmp_, &create_iter,
+        c_style_callback(create_iter), &arena));
     for (level == 0 || begin == nullptr ? iter->SeekToFirst()
                                         : iter->Seek(begin->Encode());
          iter->Valid(); iter->Next()) {
@@ -585,7 +593,7 @@ void CompactionPicker::InitFilesBeingCompact(
         break;
       }
       if (begin != nullptr &&
-          icmp.Compare(element.largest_key_, begin->Encode()) < 0) {
+          icmp_->Compare(element.largest_key_, begin->Encode()) < 0) {
         if (level == 0) {
           continue;
         } else {
@@ -593,7 +601,7 @@ void CompactionPicker::InitFilesBeingCompact(
         }
       }
       if (end != nullptr &&
-          icmp.Compare(element.smallest_key_, end->Encode()) > 0) {
+          icmp_->Compare(element.smallest_key_, end->Encode()) > 0) {
         if (level == 0) {
           continue;
         } else {

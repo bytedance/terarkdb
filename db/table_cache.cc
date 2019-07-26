@@ -293,7 +293,7 @@ InternalIterator* TableCache::NewIterator(
                                   range_del_agg, prefix_extractor,
                                   for_compaction, skip_filters, level};
         auto map_sst_iter =
-            NewMapSstIterator(file_meta, result, depend_files, icomparator,
+            NewMapSstIterator(&file_meta, result, depend_files, icomparator,
                               create_iter_fn,
                               c_style_callback(*create_iter_fn), arena);
         if (arena != nullptr) {

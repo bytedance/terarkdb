@@ -11,6 +11,7 @@
 #include <future>
 #include <string>
 
+#include "rocksdb/env.h"
 #include "rocksdb/status.h"
 #include "rocksdb/compaction_filter.h"
 #include "rocksdb/merge_operator.h"
@@ -40,7 +41,7 @@ class CompactionWorker {
       VersionStorageInfo* input_version,
       const ImmutableCFOptions& immutable_cf_options,
       const MutableCFOptions& mutable_cf_options,
-      std::vector<std::pair<int, const FileMetaData*>> inputs,
+      std::vector<std::pair<int, std::vector<const FileMetaData*>>> inputs,
       uint64_t target_file_size, CompressionType compression,
       CompressionOptions compression_opts,
       const Slice* start, const Slice* end) = 0;
@@ -54,7 +55,7 @@ class RemoteCompactionWorker : CompactionWorker {
       VersionStorageInfo* input_version,
       const ImmutableCFOptions& immutable_cf_options,
       const MutableCFOptions& mutable_cf_options,
-      std::vector<std::pair<int, const FileMetaData*>> inputs,
+      std::vector<std::pair<int, std::vector<const FileMetaData*>>> inputs,
       uint64_t target_file_size, CompressionType compression,
       CompressionOptions compression_opts, const Slice* start,
       const Slice* end) override;
@@ -68,14 +69,15 @@ class RemoteCompactionWorker : CompactionWorker {
 
   class Client {
    public:
-    Client();
-    ~Client();
+    Client(EnvOptions env_options, Env* env);
+    virtual ~Client();
 
+    void RegistComparator(const Comparator*);
     void RegistTableFactory(std::shared_ptr<TableFactory>);
     void RegistMergeOperator(std::shared_ptr<MergeOperator>);
     void RegistCompactionFilter(std::shared_ptr<CompactionFilterFactory>);
 
-    std::string DoCompaction(const std::string& data);
+    virtual std::string DoCompaction(const std::string& data);
 
    protected:
     Client(const Client&) = delete;

@@ -15,6 +15,7 @@
 #include "db/dbformat.h"
 #include "db/log_writer.h"
 #include "rocksdb/db.h"
+#include "util/iterator_cache.h"
 
 namespace rocksdb {
 
@@ -78,10 +79,10 @@ class MapBuilder {
 };
 
 extern InternalIterator* NewMapElementIterator(
-    FileMetaData* const* meta_array, size_t meta_size, TableCache* table_cache,
-    const ReadOptions& read_options, const EnvOptions& env_options,
-    const InternalKeyComparator* icmp,
-    const SliceTransform* slice_transform = nullptr, Arena* arena = nullptr);
+    FileMetaData* const* meta_array, size_t meta_size,
+    const InternalKeyComparator* icmp, void* callback_arg,
+    const IteratorCache::CreateIterCallback& create_iter,
+    Arena* arena = nullptr);
 
 extern bool IsPrefaceRange(const Range& range, const FileMetaData* f,
                            const InternalKeyComparator& icomp);
