@@ -453,8 +453,12 @@ endif
 # This (the first rule) must depend on "all".
 default: all
 
-WARNING_FLAGS = -W -Wextra -Wall -Wsign-compare -Wshadow \
+WARNING_FLAGS = -W -Wextra -Wall -Wsign-compare \
   -Wunused-parameter
+
+ifdef Wshadow_local
+    WARNING_FLAGS += -Wshadow=local
+endif
 
 ifeq ($(PLATFORM), OS_OPENBSD)
 	WARNING_FLAGS += -Wno-unused-lambda-capture
