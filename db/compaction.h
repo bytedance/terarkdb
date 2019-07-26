@@ -86,7 +86,7 @@ struct CompactionParams {
   CompactionReason compaction_reason = CompactionReason::kUnknown;
 
   CompactionParams(VersionStorageInfo* _input_version,
-      const ImmutableCFOptions& _immutable_cf_options,
+                   const ImmutableCFOptions& _immutable_cf_options,
                    const MutableCFOptions& _mutable_cf_options)
       : input_version(_input_version),
         immutable_cf_options(_immutable_cf_options),

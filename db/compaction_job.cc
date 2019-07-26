@@ -621,6 +621,56 @@ void CompactionJob::GenSubcompactionBoundaries() {
 }
 
 Status CompactionJob::Run() {
+  ColumnFamilyData* cfd = compact_->compaction->column_family_data();
+  CompactionWorker* worker = cfd->ioptions()->compaction_worker;
+  if (worker == nullptr) {
+    return RunSelf();
+  }
+  Compaction* c = compact_->compaction;
+  std::vector<std::pair<int, const FileMetaData*>> inputs;
+  for (auto& files : *c->inputs()) {
+    for (auto f : files.files) {
+      inputs.emplace_back(files.level, f);
+    }
+  }
+  struct CompactionWorkerHandle {
+    std::packaged_task<CompactionWorkerResult()> task;
+    CompactionWorkerResult result;
+  };
+  std::vector<CompactionWorkerHandle> handles;
+  for (const auto& state : compact_->sub_compact_states) {
+    CompactionWorkerHandle handle;
+    handle.task = worker->StartCompaction(
+        c->input_version()->storage_info(), *cfd->ioptions(),
+        *cfd->GetCurrentMutableCFOptions(), inputs,
+        c->max_output_file_size(), c->output_compression(),
+        c->output_compression_opts(), state.start, state.end);
+    handles.push_back(std::move(handle));
+  }
+  Status status = Status::Corruption();
+  for (size_t i = 0; i < compact_->sub_compact_states.size(); ++i) {
+    auto& handle = handles[i];
+    handle.result = handle.task.get_future().get();
+    auto& s = compact_->sub_compact_states[i].status;
+    s = std::move(handle.result.status);
+    if (s.ok()) {
+      status = Status::OK();
+    } else {
+      status = s;
+    }
+  }
+  if (!status.ok()) {
+    return status;
+  }
+  for (const auto& state : compact_->sub_compact_states) {
+    if (state.status.ok()) {
+      // TODO read files & file state->output_files
+    }
+  }
+  return Status::OK();
+}
+
+Status CompactionJob::RunSelf() {
   AutoThreadOperationStageUpdater stage_updater(
       ThreadStatus::STAGE_COMPACTION_RUN);
   TEST_SYNC_POINT("CompactionJob::Run():Start");

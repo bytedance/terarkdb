@@ -84,6 +84,7 @@ class CompactionJob {
   void Prepare();
   // REQUIRED mutex not held
   Status Run();
+  Status RunSelf();
 
   // REQUIRED: mutex held
   Status Install(const MutableCFOptions& mutable_cf_options);

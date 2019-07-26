@@ -32,6 +32,7 @@ ImmutableCFOptions::ImmutableCFOptions(const ImmutableDBOptions& db_options,
       merge_operator(cf_options.merge_operator.get()),
       compaction_filter(cf_options.compaction_filter),
       compaction_filter_factory(cf_options.compaction_filter_factory.get()),
+      compaction_worker(cf_options.compaction_worker.get()),
       min_write_buffer_number_to_merge(
           cf_options.min_write_buffer_number_to_merge),
       max_write_buffer_number_to_maintain(

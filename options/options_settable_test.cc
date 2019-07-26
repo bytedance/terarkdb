@@ -345,6 +345,8 @@ TEST_F(OptionsSettableTest, ColumnFamilyOptionsAllFieldsSettable) {
        sizeof(const CompactionFilter*)},
       {offset_of(&ColumnFamilyOptions::compaction_filter_factory),
        sizeof(std::shared_ptr<CompactionFilterFactory>)},
+      {offset_of(&ColumnFamilyOptions::compaction_worker),
+       sizeof(std::shared_ptr<CompactionWorker>)},
       {offset_of(&ColumnFamilyOptions::prefix_extractor),
        sizeof(std::shared_ptr<const SliceTransform>)},
       {offset_of(&ColumnFamilyOptions::table_factory),

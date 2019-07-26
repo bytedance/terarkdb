@@ -13,6 +13,7 @@ LIB_SOURCES =                                                   \
   db/compaction_picker.cc                                       \
   db/compaction_picker_fifo.cc                                  \
   db/compaction_picker_universal.cc                             \
+  db/compaction_worker.cc                                       \
   db/convenience.cc                                             \
   db/db_filesnapshot.cc                                         \
   db/db_impl.cc                                                 \
