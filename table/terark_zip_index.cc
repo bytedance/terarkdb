@@ -1160,7 +1160,7 @@ public:
 
   void DumpKeys(std::function<void(fstring, fstring, fstring)> callback) const final {
     auto g_ctx = terark::GetTlsTerarkContext();
-    auto buffer = g_ctx->alloc(IteratorStorage::GetIteratorStorageSize(this));
+    auto buffer = g_ctx->alloc(IteratorSize());
     auto storage = buffer.data() + sizeof(IndexIterator<Prefix, Suffix>);
     auto iter = ::new(buffer.data()) IndexIterator<Prefix, Suffix>(this, g_ctx, storage);
     for (bool ok = iter->SeekToFirst(); ok; ok = iter->Next()) {
