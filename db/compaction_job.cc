@@ -1583,7 +1583,7 @@ Status CompactionJob::InstallCompactionResults(
   }
 
   if (compaction->map_compaction() || !compaction->input_range().empty() ||
-      compaction->mutable_cf_options()->enable_lazy_compaction) {
+      mutable_cf_options.enable_lazy_compaction) {
     MapBuilder map_builder(job_id_, db_options_, env_options_, versions_,
                            stats_, dbname_);
     auto cfd = compaction->column_family_data();
@@ -1618,16 +1618,15 @@ Status CompactionJob::InstallCompactionResults(
     auto s = map_builder.Build(*compaction->inputs(), deleted_range,
                                added_files, compaction->output_level(),
                                compaction->output_path_id(), vstorage, cfd,
-                               compact_->compaction->edit(), &file_meta,
-                               &prop);
+                               mutable_cf_options, compact_->compaction->edit(),
+                               &file_meta, &prop);
     if (file_meta.fd.file_size > 0) {
       // test map sst
       DependFileMap empty_depend_files;
       InternalIterator* iter = cfd->table_cache()->NewIterator(
           ReadOptions(), env_options_, cfd->internal_comparator(),
           file_meta, empty_depend_files, nullptr /* range_del_agg */,
-          compaction->mutable_cf_options()->prefix_extractor.get(),
-          nullptr,
+          mutable_cf_options.prefix_extractor.get(), nullptr,
           cfd->internal_stats()->GetFileReadHist(compaction->output_level()),
           false, nullptr /* arena */, false /* skip_filters */,
           compaction->output_level());

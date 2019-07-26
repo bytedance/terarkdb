@@ -50,6 +50,7 @@ class MapBuilder {
                const std::vector<const FileMetaData*>& added_files,
                int output_level, uint32_t output_path_id,
                VersionStorageInfo* vstorage, ColumnFamilyData* cfd,
+               const MutableCFOptions& mutable_cf_options,
                VersionEdit* edit, FileMetaData* file_meta = nullptr,
                std::unique_ptr<TableProperties>* porp = nullptr,
                std::set<FileMetaData*>* deleted_files = nullptr);
@@ -58,6 +59,7 @@ class MapBuilder {
   Status WriteOutputFile(const FileMetaDataBoundBuilder& bound_builder,
                          MapSstElementIterator* range_iter,
                          uint32_t output_path_id, ColumnFamilyData* cfd,
+                         const MutableCFOptions& mutable_cf_options,
                          FileMetaData* file_meta,
                          std::unique_ptr<TableProperties>* porp);
 

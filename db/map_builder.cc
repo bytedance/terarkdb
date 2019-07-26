@@ -550,6 +550,7 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
                          const std::vector<const FileMetaData*>& added_files,
                          int output_level, uint32_t output_path_id,
                          VersionStorageInfo* vstorage, ColumnFamilyData* cfd,
+                         const MutableCFOptions& mutable_cf_options,
                          VersionEdit* edit, FileMetaData* file_meta_ptr,
                          std::unique_ptr<TableProperties>* prop_ptr,
                          std::set<FileMetaData*>* deleted_files) {
@@ -778,7 +779,7 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
   std::unique_ptr<TableProperties> prop;
 
   s = WriteOutputFile(bound_builder, output_iter.get(), output_path_id, cfd,
-                      &file_meta, &prop);
+                      mutable_cf_options, &file_meta, &prop);
 
   if (s.ok()) {
     for (auto& input_level : inputs) {
@@ -805,8 +806,8 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
 Status MapBuilder::WriteOutputFile(
     const FileMetaDataBoundBuilder& bound_builder,
     MapSstElementIterator* range_iter, uint32_t output_path_id,
-    ColumnFamilyData* cfd, FileMetaData* file_meta,
-    std::unique_ptr<TableProperties>* prop) {
+    ColumnFamilyData* cfd, const MutableCFOptions& mutable_cf_options,
+    FileMetaData* file_meta, std::unique_ptr<TableProperties>* prop) {
   // Used for write properties
   std::vector<uint64_t> sst_depend;
   size_t sst_read_amp = 1;
@@ -868,12 +869,11 @@ Status MapBuilder::WriteOutputFile(
 
   // map sst don't need compression or filters
   std::unique_ptr<TableBuilder> builder(NewTableBuilder(
-      *cfd->ioptions(), *cfd->GetCurrentMutableCFOptions(),
-      cfd->internal_comparator(), &collectors, cfd->GetID(), cfd->GetName(),
-      outfile.get(), kNoCompression, CompressionOptions(), -1 /*level*/,
-      nullptr /*compression_dict*/, true /*skip_filters*/,
-      true /*ignore_key_type*/, output_file_creation_time,
-      0 /* oldest_key_time */, kMapSst));
+      *cfd->ioptions(), mutable_cf_options, cfd->internal_comparator(),
+      &collectors, cfd->GetID(), cfd->GetName(), outfile.get(), kNoCompression,
+      CompressionOptions(), -1 /*level*/, nullptr /*compression_dict*/,
+      true /*skip_filters*/, true /*ignore_key_type*/,
+      output_file_creation_time, 0 /* oldest_key_time */, kMapSst));
   LogFlush(db_options_.info_log);
 
   // Update boundaries
