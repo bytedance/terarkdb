@@ -2,6 +2,33 @@
 
 namespace rocksdb {
 
+inline const char *build_key(terark::fstring user_key, uint64_t tag,
+                               valvec<char> *buffer) {
+  buffer->resize(0);
+  buffer->reserve(user_key.size() + 8);
+  buffer->append(user_key.data(), user_key.size());
+  if (rocksdb::port::kLittleEndian) {
+    buffer->append(const_cast<const char *>(reinterpret_cast<char *>(&tag)),
+                    sizeof(tag));
+  } else {
+    char buf[sizeof(tag)];
+    EncodeFixed64(buf, tag);
+    buffer->append(buf, sizeof(buf));
+  }
+  return buffer->data();
+}
+
+inline const char *build_key(terark::fstring user_key, uint64_t tag,
+                              std::string *buffer) {
+  buffer->resize(0);
+  buffer->reserve(user_key.size() + 8);
+  buffer->append(user_key.data(), user_key.size());
+  PutFixed64(buffer, tag);
+  return buffer->data();
+}
+
+namespace detail = terark_memtable_details;
+
 bool MemWriterToken::init_value(void *valptr, size_t valsize) noexcept {
   assert(valsize == sizeof(uint32_t));
   size_t data_loc = MemPatricia::mem_alloc_fail;
@@ -38,14 +65,33 @@ bool MemWriterToken::init_value(void *valptr, size_t valsize) noexcept {
   return false;
 }
 
-size_t PatriciaMemtableRep::ApproximateMemoryUsage() {
+PatriciaTrieRep::PatriciaTrieRep(detail::ConcurrentType concurrent_type,
+                                 detail::PatriciaKeyType patricia_key_type,
+                                 bool handle_duplicate,
+                                 intptr_t write_buffer_size,
+                                 Allocator *allocator,
+                                 const MemTableRep::KeyComparator &compare)
+                               : MemTableRep(allocator){
+  immutable_ = false;
+  patricia_key_type_ = patricia_key_type;
+  handle_duplicate_ = handle_duplicate;
+  write_buffer_size_ = write_buffer_size;
+  if (concurrent_type == detail::ConcurrentType::Native)
+    concurrent_level_ = terark::Patricia::ConcurrentLevel::MultiWriteMultiRead;
+  else
+    concurrent_level_ = terark::Patricia::ConcurrentLevel::OneWriteMultiRead;
+  trie_vec_.emplace_back(new MemPatricia(4, write_buffer_size_,
+                                          concurrent_level_));             
+}
+
+size_t PatriciaTrieRep::ApproximateMemoryUsage() {
   size_t sum = 0;
   for (auto trie : trie_vec_)
     sum += trie->mem_size_inline();
   return sum;
 }
 
-bool PatriciaMemtableRep::Contains(
+bool PatriciaTrieRep::Contains(
     const Slice &internal_key) const {
   terark::fstring find_key(internal_key.data(), internal_key.size() - 8);
   uint64_t tag = DecodeFixed64(find_key.end());
@@ -61,7 +107,7 @@ bool PatriciaMemtableRep::Contains(
   return false;
 }
 
-void PatriciaMemtableRep::Get(
+void PatriciaTrieRep::Get(
     const LookupKey &k,
     void *callback_args,
     bool (*callback_func)(void *arg, const KeyValuePair *)){
@@ -95,7 +141,7 @@ void PatriciaMemtableRep::Get(
     KeyValuePair *Update(HeapItem *heap) {
       auto vector = (detail::tag_vector_t *)heap->trie->mem_get(heap->loc);
       auto data = (detail::tag_vector_t::data_t *)heap->trie->mem_get(vector->loc);
-      detail::build_key(find_key, heap->tag, buffer);
+      build_key(find_key, heap->tag, buffer);
       prefixed_value =
           (const char *)heap->trie->mem_get(data[heap->idx].loc);
       return this;
@@ -160,7 +206,7 @@ void PatriciaMemtableRep::Get(
   heap.erase_all();
 }
 
-MemTableRep::Iterator *PatriciaMemtableRep::GetIterator(Arena *arena) {
+MemTableRep::Iterator *PatriciaTrieRep::GetIterator(Arena *arena) {
   MemTableRep::Iterator *iter;
   if (trie_vec_.size() == 1) {
     typedef PatriciaRepIterator<false> iter_t;
@@ -174,7 +220,7 @@ MemTableRep::Iterator *PatriciaMemtableRep::GetIterator(Arena *arena) {
   return iter;
 }
 
-bool PatriciaMemtableRep::InsertKeyValue(
+bool PatriciaTrieRep::InsertKeyValue(
     const Slice &internal_key, const Slice &value) {
   // immutable check
   if (immutable_) return false;
@@ -266,14 +312,29 @@ bool PatriciaMemtableRep::InsertKeyValue(
   return insert_result == detail::InsertResult::Success;
 }
 
-uint32_t PatriciaMemtableRep::HeapItem::GetValue() {
-  auto trie = static_cast<MemPatricia *>(handle.iter()->trie());
+template <bool heap_mode>
+typename PatriciaRepIterator<heap_mode>::HeapItem::VectorData
+PatriciaRepIterator<heap_mode>::HeapItem::GetVector() {
+  auto trie = static_cast<terark::MainPatricia *>(handle.iter()->trie());
+  auto vector = (detail::tag_vector_t *)trie->mem_get(*(uint32_t *)handle.iter()->value());
+  size_t size = vector->size;
+  auto data = (typename detail::tag_vector_t::data_t *)trie->mem_get(vector->loc);
+  return {size, data};
+}
+
+template <bool heap_mode>
+uint32_t
+PatriciaRepIterator<heap_mode>::HeapItem::GetValue() const {
+  auto trie = static_cast<terark::MainPatricia *>(handle.iter()->trie());
   auto vector = (detail::tag_vector_t *)trie->mem_get(*(uint32_t *)handle.iter()->value());
   auto data = (detail::tag_vector_t::data_t *)trie->mem_get(vector->loc);
   return data[index].loc;
 }
 
-void PatriciaMemtableRep::HeapItem::Seek(terark::fstring find_key, uint64_t find_tag) {
+template <bool heap_mode>
+void
+PatriciaRepIterator<heap_mode>::HeapItem::Seek(terark::fstring find_key,
+                                               uint64_t find_tag) {
   if (!handle.iter()->seek_lower_bound(find_key)) {
     index = size_t(-1);
     return;
@@ -296,7 +357,10 @@ void PatriciaMemtableRep::HeapItem::Seek(terark::fstring find_key, uint64_t find
   tag = vec.data[index].tag;
 }
 
-void PatriciaMemtableRep::HeapItem::SeekForPrev(terark::fstring find_key, uint64_t find_tag) {
+template <bool heap_mode>
+void
+PatriciaRepIterator<heap_mode>::HeapItem::SeekForPrev(terark::fstring find_key,
+                                                      uint64_t find_tag) {
   if (!handle.iter()->seek_rev_lower_bound(find_key)) {
     index = size_t(-1);
     return;
@@ -319,7 +383,9 @@ void PatriciaMemtableRep::HeapItem::SeekForPrev(terark::fstring find_key, uint64
   tag = vec.data[index].tag;
 }
 
-void PatriciaMemtableRep::HeapItem::SeekToFirst() {
+template <bool heap_mode>
+void
+PatriciaRepIterator<heap_mode>::HeapItem::SeekToFirst() {
   if (!handle.iter()->seek_begin()) {
     index = size_t(-1);
     return;
@@ -329,7 +395,9 @@ void PatriciaMemtableRep::HeapItem::SeekToFirst() {
   tag = vec.data[index].tag;
 }
 
-void PatriciaMemtableRep::HeapItem::SeekToLast() {
+template <bool heap_mode>
+void
+PatriciaRepIterator<heap_mode>::HeapItem::SeekToLast() {
   if (!handle.iter()->seek_end()) {
     index = size_t(-1);
     return;
@@ -339,7 +407,9 @@ void PatriciaMemtableRep::HeapItem::SeekToLast() {
   tag = vec.data[index].tag;
 }
 
-void PatriciaMemtableRep::HeapItem::Next() {
+template <bool heap_mode>
+void
+PatriciaRepIterator<heap_mode>::HeapItem::Next() {
   assert(index != size_t(-1));
   if (index-- == 0) {
     if (!handle.iter()->incr()) {
@@ -355,7 +425,9 @@ void PatriciaMemtableRep::HeapItem::Next() {
   }
 }
 
-void PatriciaMemtableRep::HeapItem::Prev() {
+template <bool heap_mode>
+void
+PatriciaRepIterator<heap_mode>::HeapItem::Prev() {
   assert(index != size_t(-1));
   auto vec = GetVector();
   if (++index == vec.size) {
@@ -369,176 +441,271 @@ void PatriciaMemtableRep::HeapItem::Prev() {
   tag = vec.data[index].tag;
 }
 
-PatriciaMemtableRep::HeapIterator::HeapIterator(PatriciaMemtableRep *rep) : direction_(0) {
-  assert(rep != nullptr);
-  assert(rep->trie_vec_.size() > 1);
-  valvec<HeapItem> hitem(rep->trie_vec_.size(), terark::valvec_reserve());
-  valvec<HeapItem *> hptrs(rep->trie_vec_.size(), terark::valvec_reserve());
-  for (auto trie : rep->trie_vec_) {
-    hptrs.push_back(new (hitem.grow_no_init(1)) HeapItem(trie));
+
+template <bool heap_mode>
+template <int direction, class func_t>
+void
+PatriciaRepIterator<heap_mode>::Rebuild(func_t &&callback_func) {
+  static_assert(direction == 1 || direction == -1,
+                "direction must be 1 or -1");
+  direction_ = direction;
+  multi_.size = multi_.count;
+  if (direction == 1) {
+    for (size_t i = 0; i < multi_.size;) {
+      if (callback_func(multi_.heap[i])) {
+        ++i;
+      } else {
+        --multi_.size;
+        std::swap(multi_.heap[i], multi_.heap[multi_.size]);
+      }
+    }
+    std::make_heap(multi_.heap, multi_.heap + multi_.size, ForwardComp());
+  } else {
+    for (size_t i = 0; i < multi_.size;) {
+      if (callback_func(multi_.heap[i])) {
+        ++i;
+      } else {
+        --multi_.size;
+        std::swap(multi_.heap[i], multi_.heap[multi_.size]);
+      }
+    }
+    std::make_heap(multi_.heap, multi_.heap + multi_.size, BackwardComp());
   }
-  assert(hitem.size() == hptrs.size());
-  count = hitem.size();
-  array = hitem.risk_release_ownership();
-  heap = hptrs.risk_release_ownership();
-  size = 0;
 }
 
-PatriciaMemtableRep::HeapIterator::~HeapIterator() {
-  free(heap);
-  for (size_t i = 0; i < count; ++i)
-    array[i].~HeapItem();
-  free(array);
+template <bool heap_mode>
+PatriciaRepIterator<heap_mode>::PatriciaRepIterator(std::vector<MemPatricia *> tries)
+  : direction_(0) {
+  assert(tries.size() > 0);
+  if (heap_mode) {
+    valvec<HeapItem> hitem(tries.size(), terark::valvec_reserve());
+    valvec<HeapItem *> hptrs(tries.size(), terark::valvec_reserve());
+    for (auto trie : tries) {
+      hptrs.push_back(new (hitem.grow_no_init(1)) HeapItem(trie));
+    }
+    assert(hitem.size() == hptrs.size());
+    multi_.count = hitem.size();
+    multi_.array = hitem.risk_release_ownership();
+    multi_.heap = hptrs.risk_release_ownership();
+    multi_.size = 0;
+  } else {
+    new (&single_) HeapItem(tries.front());
+  }
+}
+template <bool heap_mode>
+PatriciaRepIterator<heap_mode>::~PatriciaRepIterator() {
+  if (heap_mode) {
+    free(multi_.heap);
+    for (size_t i = 0; i < multi_.count; ++i) {
+      multi_.array[i].~HeapItem();
+    }
+    free(multi_.array);
+  } else {
+    single_.~HeapItem();
+  }
 }
 
-void PatriciaMemtableRep::HeapIterator::Next() {
-  if (direction_ != 1) {
-    terark::fstring find_key(buffer_.data(), buffer_.size() - 8);
-    uint64_t tag = DecodeFixed64(find_key.end());
+template <bool heap_mode>
+Slice 
+PatriciaRepIterator<heap_mode>::GetValue() const {
+  const HeapItem *item = Current();
+  uint32_t value_loc = item->GetValue();
+  auto trie = static_cast<terark::MainPatricia *>(item->handle.iter()->trie());
+  return GetLengthPrefixedSlice((const char *)trie->mem_get(value_loc));
+}
+
+template <bool heap_mode>
+void 
+PatriciaRepIterator<heap_mode>::Next() {
+  if (heap_mode) {
+    if (direction_ != 1) {
+      terark::fstring find_key(buffer_.data(), buffer_.size() - 8);
+      uint64_t tag = DecodeFixed64(find_key.end());
+      Rebuild<1>([&](HeapItem *item) {
+        item->Seek(find_key, tag);
+        return item->index != size_t(-1);
+      });
+      if (multi_.size == 0) {
+        direction_ = 0;
+        return;
+      }
+    }
+    multi_.heap[0]->Next();
+    if (multi_.heap[0]->index == size_t(-1)) {
+      std::pop_heap(multi_.heap, multi_.heap + multi_.size, ForwardComp());
+      if (--multi_.size == 0) {
+        direction_ = 0;
+        return;
+      }
+    } else {
+      terark::adjust_heap_top(multi_.heap, multi_.size, ForwardComp());
+    }
+  } else {
+    single_.Next();
+    if (single_.index == size_t(-1)) {
+      direction_ = 0;
+      return;
+    }
+  }
+  build_key(CurrentKey(), CurrentTag(), &buffer_);
+}
+
+template <bool heap_mode>
+void
+PatriciaRepIterator<heap_mode>::Prev() {
+  if (heap_mode) {
+    if (direction_ != -1) {
+      terark::fstring find_key(buffer_.data(), buffer_.size() - 8);
+      uint64_t tag = DecodeFixed64(find_key.end());
+      Rebuild<-1>([&](HeapItem *item) {
+        item->SeekForPrev(find_key, tag);
+        return item->index != size_t(-1);
+      });
+      if (multi_.size == 0) {
+        direction_ = 0;
+        return;
+      }
+    }
+    multi_.heap[0]->Prev();
+    if (multi_.heap[0]->index == size_t(-1)) {
+      std::pop_heap(multi_.heap, multi_.heap + multi_.size, BackwardComp());
+      if (--multi_.size == 0) {
+        direction_ = 0;
+        return;
+      }
+    } else {
+      terark::adjust_heap_top(multi_.heap, multi_.size, BackwardComp());
+    }
+  } else {
+    single_.Prev();
+    if (single_.index == size_t(-1)) {
+      direction_ = 0;
+      return;
+    }
+  }
+  build_key(CurrentKey(), CurrentTag(), &buffer_);
+}
+
+template <bool heap_mode>
+void
+PatriciaRepIterator<heap_mode>::Seek(const Slice &user_key,
+                                     const char *memtable_key) {
+  terark::fstring find_key;
+  if (memtable_key != nullptr) {
+    Slice internal_key = GetLengthPrefixedSlice(memtable_key);
+    find_key = terark::fstring(internal_key.data(), internal_key.size() - 8);
+  } else {
+    find_key = terark::fstring(user_key.data(), user_key.size() - 8);
+  }
+  uint64_t tag = DecodeFixed64(find_key.end());
+
+  if (heap_mode) {
     Rebuild<1>([&](HeapItem *item) {
       item->Seek(find_key, tag);
       return item->index != size_t(-1);
     });
-    if (size == 0) {
-      direction_ = 0;
-      return;
-    }
-  }
-  heap[0]->Next();
-  if (heap[0]->index == size_t(-1)) {
-    std::pop_heap(heap, heap + size, ForwardComp());
-    if (--size == 0) {
+    if (multi_.size == 0) {
       direction_ = 0;
       return;
     }
   } else {
-    terark::adjust_heap_top(heap, size, ForwardComp());
+    single_.Seek(find_key, tag);
+    if (single_.index == size_t(-1)) {
+      direction_ = 0;
+      return;
+    }
+    direction_ = 1;
   }
-  detail::build_key(heap[0]->handle.iter()->word(), heap[0]->tag, &buffer_);
+  build_key(CurrentKey(), CurrentTag(), &buffer_);
 }
 
-void PatriciaMemtableRep::HeapIterator::Prev() {
-  if (direction_ != -1) {
-    terark::fstring find_key(buffer_.data(), buffer_.size() - 8);
-    uint64_t tag = DecodeFixed64(find_key.end());
+template <bool heap_mode>
+void
+PatriciaRepIterator<heap_mode>::SeekForPrev(const Slice &user_key,
+                                            const char *memtable_key) {
+  terark::fstring find_key;
+  if (memtable_key != nullptr) {
+    Slice internal_key = GetLengthPrefixedSlice(memtable_key);
+    find_key = terark::fstring(internal_key.data(), internal_key.size() - 8);
+  } else {
+    find_key = terark::fstring(user_key.data(), user_key.size() - 8);
+  }
+  uint64_t tag = DecodeFixed64(find_key.end());
+
+  if (heap_mode) {
     Rebuild<-1>([&](HeapItem *item) {
       item->SeekForPrev(find_key, tag);
       return item->index != size_t(-1);
     });
-    if (size == 0) {
+    if (multi_.size == 0) {
       direction_ = 0;
       return;
     }
-  }
-  heap[0]->Prev();
-  if (heap[0]->index == size_t(-1)) {
-    std::pop_heap(heap, heap + size, BackwardComp());
-    if (--size == 0) {
+  } else {
+    single_.SeekForPrev(find_key, tag);
+    if (single_.index == size_t(-1)) {
       direction_ = 0;
       return;
     }
-  } else
-    terark::adjust_heap_top(heap, size, BackwardComp());
-  detail::build_key(heap[0]->handle.iter()->word(), heap[0]->tag, &buffer_);
+    direction_ = -1;
+  }
+  build_key(CurrentKey(), CurrentTag(), &buffer_);
 }
 
-template <int direction, class func_t> 
-void PatriciaMemtableRep::HeapIterator::Rebuild(func_t &&callback_func) {
-  static_assert(direction == 1 || direction == -1,
-                "direction must be 1 or -1");
-  direction_ = direction;
-  size = count;
-  if (direction == 1) {
-    for (size_t i = 0; i < size;)
-      if (callback_func(heap[i]))
-        ++i;
-      else
-        std::swap(heap[i], heap[--size]);
-    std::make_heap(heap, heap + size, ForwardComp());
+template <bool heap_mode>
+void
+PatriciaRepIterator<heap_mode>::SeekToFirst() {
+  if (heap_mode) {
+    Rebuild<1>([&](HeapItem *item) {
+      item->SeekToFirst();
+      return item->index != size_t(-1);
+    });
+    if (multi_.size == 0) {
+      direction_ = 0;
+      return;
+    }
   } else {
-    for (size_t i = 0; i < size;)
-      if (callback_func(heap[i]))
-        ++i;
-      else
-        std::swap(heap[i], heap[--size]);
-    std::make_heap(heap, heap + size, BackwardComp());
+    single_.SeekToFirst();
+    if (single_.index == size_t(-1)) {
+      direction_ = 0;
+      return;
+    }
+    direction_ = 1;
   }
+  build_key(CurrentKey(), CurrentTag(), &buffer_);
 }
 
-void PatriciaMemtableRep::HeapIterator::Seek(const Slice &user_key, const char *memtable_key) {
-  terark::fstring find_key;
-  if (memtable_key != nullptr) {
-    Slice internal_key = GetLengthPrefixedSlice(memtable_key);
-    find_key = terark::fstring(internal_key.data(), internal_key.size() - 8);
-  } else
-    find_key = terark::fstring(user_key.data(), user_key.size() - 8);
-  uint64_t tag = DecodeFixed64(find_key.end());
-
-  Rebuild<1>([&](HeapItem *item) {
-    item->Seek(find_key, tag);
-    return item->index != size_t(-1);
-  });
-  if (size == 0) {
-    direction_ = 0;
-    return;
-  }
-  detail::build_key(heap[0]->handle.iter()->word(), heap[0]->tag, &buffer_);
-}
-
-void PatriciaMemtableRep::HeapIterator::SeekForPrev(const Slice &user_key,
-                          const char *memtable_key) {
-  terark::fstring find_key;
-  if (memtable_key != nullptr) {
-    Slice internal_key = GetLengthPrefixedSlice(memtable_key);
-    find_key = terark::fstring(internal_key.data(), internal_key.size() - 8);
+template <bool heap_mode>
+void
+PatriciaRepIterator<heap_mode>::SeekToLast() {
+  if (heap_mode) {
+    Rebuild<-1>([&](HeapItem *item) {
+      item->SeekToLast();
+      return item->index != size_t(-1);
+    });
+    if (multi_.size == 0) {
+      direction_ = 0;
+      return;
+    }
   } else {
-    find_key = terark::fstring(user_key.data(), user_key.size() - 8);
+    single_.SeekToLast();
+    if (single_.index == size_t(-1)) {
+      direction_ = 0;
+      return;
+    }
+    direction_ = -1;
   }
-  uint64_t tag = DecodeFixed64(find_key.end());
-
-  Rebuild<-1>([&](HeapItem *item) {
-    item->SeekForPrev(find_key, tag);
-    return item->index != size_t(-1);
-  });
-  if (size == 0) {
-    direction_ = 0;
-    return;
-  }
-  detail::build_key(heap[0]->handle.iter()->word(), heap[0]->tag, &buffer_);
+  build_key(CurrentKey(), CurrentTag(), &buffer_);
 }
-
-void PatriciaMemtableRep::HeapIterator::SeekToFirst() {
-  Rebuild<1>([&](HeapItem *item) {
-    item->SeekToFirst();
-    return item->index != size_t(-1);
-  });
-  if (size == 0) {
-    direction_ = 0;
-    return;
-  }
-  detail::build_key(heap[0]->handle.iter()->word(), heap[0]->tag, &buffer_);
-}
-
-void PatriciaMemtableRep::HeapIterator::SeekToLast() {
-  Rebuild<-1>([&](HeapItem *item) {
-    item->SeekToLast();
-    return item->index != size_t(-1);
-  });
-  if (size == 0) {
-    direction_ = 0;
-    return;
-  }
-  detail::build_key(heap[0]->handle.iter()->word(), heap[0]->tag, &buffer_);
-}
-
-MemTableRep* PatriciaMemTableRepFactory::CreateMemTableRep(
+  
+MemTableRep* PatriciaTrieRepFactory::CreateMemTableRep(
     const MemTableRep::KeyComparator &key_cmp,
     bool needs_dup_key_check,
     Allocator *allocator,
     const SliceTransform *transform,
     Logger *logger) {
   if (IsForwardBytewiseComparator(key_cmp.icomparator())) {
-    return new PatriciaMemtableRep(concurrent_type_, patricia_key_type_,
+    return new PatriciaTrieRep(concurrent_type_, patricia_key_type_,
                                    needs_dup_key_check, write_buffer_size_,
                                    allocator, key_cmp);
   } else {
@@ -547,7 +714,7 @@ MemTableRep* PatriciaMemTableRepFactory::CreateMemTableRep(
   }
 }
 
-MemTableRep* PatriciaMemTableRepFactory::CreateMemTableRep(
+MemTableRep* PatriciaTrieRepFactory::CreateMemTableRep(
     const MemTableRep::KeyComparator &key_cmp,
     bool needs_dup_key_check,
     Allocator *allocator,
@@ -555,9 +722,9 @@ MemTableRep* PatriciaMemTableRepFactory::CreateMemTableRep(
     const MutableCFOptions &mutable_cf_options,
     uint32_t column_family_id) {
   if (IsForwardBytewiseComparator(key_cmp.icomparator())) {
-    return new PatriciaMemtableRep(concurrent_type_, patricia_key_type_,
-                                    needs_dup_key_check, write_buffer_size_,
-                                    allocator, key_cmp);
+    return new PatriciaTrieRep(concurrent_type_, patricia_key_type_,
+                               needs_dup_key_check, write_buffer_size_,
+                               allocator, key_cmp);
   } else {
     return fallback_->CreateMemTableRep(key_cmp, needs_dup_key_check,
                                         allocator, ioptions, 
@@ -566,18 +733,40 @@ MemTableRep* PatriciaMemTableRepFactory::CreateMemTableRep(
   }
 }
 
-MemTableRepFactory*
-NewPatriciaTrieRepFactory(std::shared_ptr<class MemTableRepFactory> fallback) {
-  if (!fallback) {
-    fallback.reset(new SkipListFactory());
-  }
-  return new PatriciaMemTableRepFactory(fallback);
+static MemTableRepFactory *CreatePatriciaTrieRepFactory(
+    std::shared_ptr<class MemTableRepFactory> &fallback,
+    detail::ConcurrentType concurrent_type,
+    detail::PatriciaKeyType patricia_key_type,
+    int64_t write_buffer_size) {
+  if (!fallback) fallback.reset(new SkipListFactory());
+  return new PatriciaTrieRepFactory(
+      fallback,
+      concurrent_type,
+      patricia_key_type,
+      write_buffer_size);
 }
 
-MemTableRepFactory*
-NewPatriciaTrieRepFactory(const std::unordered_map<std::string, std::string>& options, Status* s) {
-  auto f = options.find("fallback");
+MemTableRepFactory *NewPatriciaTrieRepFactory(
+    const std::unordered_map<std::string, std::string> &options, Status *s) {
+  detail::ConcurrentType concurrent_type = detail::ConcurrentType::Native;
+  int64_t write_buffer_size = 64 * 1024 * 1024;
   std::shared_ptr<class MemTableRepFactory> fallback;
+  detail::PatriciaKeyType patricia_key_type = detail::PatriciaKeyType::UserKey;
+
+  auto c = options.find("concurrent_type");
+  if (c != options.end() && c->second == "none")
+    concurrent_type = detail::ConcurrentType::None;
+
+  auto u = options.find("use_virtual_mem");
+  if (u != options.end() && u->second == "enable"){
+#if defined(_WIN32) || defined(_WIN64)
+    write_buffer_size = -1LL * 1073741824;
+#else
+    write_buffer_size = -16LL * 1073741824;
+#endif
+  }
+
+  auto f = options.find("fallback");
   if (f != options.end() && f->second != "patricia") {
     fallback.reset(CreateMemTableRepFactory(f->second, options, s));
     if (!s->ok()) {
@@ -585,8 +774,15 @@ NewPatriciaTrieRepFactory(const std::unordered_map<std::string, std::string>& op
       return nullptr;
     }
   }
-  return NewPatriciaTrieRepFactory(fallback);
-}
+  
+  auto p = options.find("key_catagory");
+  if (p != options.end() && p->second == "full")
+    patricia_key_type = detail::PatriciaKeyType::FullKey;
 
+  return CreatePatriciaTrieRepFactory(fallback,
+                                      concurrent_type,
+                                      patricia_key_type,
+                                      write_buffer_size);
+}
 
 } // namespace rocksdb
