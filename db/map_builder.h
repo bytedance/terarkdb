@@ -79,7 +79,7 @@ class MapBuilder {
 };
 
 extern InternalIterator* NewMapElementIterator(
-    FileMetaData* const* meta_array, size_t meta_size,
+    const FileMetaData* const* meta_array, size_t meta_size,
     const InternalKeyComparator* icmp, void* callback_arg,
     const IteratorCache::CreateIterCallback& create_iter,
     Arena* arena = nullptr);

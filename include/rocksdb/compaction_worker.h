@@ -11,8 +11,10 @@
 #include <future>
 #include <string>
 
+#include "rocksdb/comparator.h"
 #include "rocksdb/env.h"
 #include "rocksdb/status.h"
+#include "rocksdb/types.h"
 #include "rocksdb/compaction_filter.h"
 #include "rocksdb/merge_operator.h"
 #include "rocksdb/advanced_options.h"
@@ -29,6 +31,7 @@ struct CompactionWorkerResult {
   Status status;
   struct FileInfo {
     std::string input_start, input_end, file_name;
+    SequenceNumber smallest_seqno, largest_seqno;
   };
   std::vector<FileInfo> files;
 };
@@ -77,7 +80,9 @@ class RemoteCompactionWorker : CompactionWorker {
     void RegistMergeOperator(std::shared_ptr<MergeOperator>);
     void RegistCompactionFilter(std::shared_ptr<CompactionFilterFactory>);
 
-    virtual std::string DoCompaction(const std::string& data);
+    virtual std::string GenerateOutputFileName(size_t file_index) = 0;
+
+    std::string DoCompaction(const std::string& data);
 
    protected:
     Client(const Client&) = delete;

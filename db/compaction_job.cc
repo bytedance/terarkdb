@@ -627,11 +627,12 @@ Status CompactionJob::Run() {
     return RunSelf();
   }
   Compaction* c = compact_->compaction;
-  std::vector<std::pair<int, const FileMetaData*>> inputs;
+  std::vector<std::pair<int, std::vector<const FileMetaData*>>> inputs;
   for (auto& files : *c->inputs()) {
-    for (auto f : files.files) {
-      inputs.emplace_back(files.level, f);
-    }
+    inputs.emplace_back(files.level,
+                        std::vector<const FileMetaData*>(files.files.size()));
+    std::copy(files.files.begin(), files.files.end(),
+              inputs.back().second.begin());
   }
   struct CompactionWorkerHandle {
     std::packaged_task<CompactionWorkerResult()> task;

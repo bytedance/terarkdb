@@ -566,7 +566,7 @@ InternalIterator* NewMapSstIterator(
     const DependFileMap& depend_files, const InternalKeyComparator& icomp,
     void* callback_arg, const IteratorCache::CreateIterCallback& create_iter,
     Arena* arena) {
-  assert(file_meta.sst_purpose == kMapSst);
+  assert(file_meta == nullptr || file_meta->sst_purpose == kMapSst);
   if (arena == nullptr) {
     return new MapSstIterator(file_meta, mediate_sst_iter, depend_files, icomp,
                               callback_arg, create_iter);

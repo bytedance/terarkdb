@@ -960,7 +960,7 @@ Status MapBuilder::WriteOutputFile(
 
 struct MapElementIterator : public InternalIterator {
   explicit MapElementIterator(
-      FileMetaData* const* meta_array, size_t meta_size,
+      const FileMetaData* const* meta_array, size_t meta_size,
       const InternalKeyComparator* icmp, void* callback_arg,
       const IteratorCache::CreateIterCallback& create_iter)
       : meta_array_(meta_array),
@@ -975,7 +975,7 @@ struct MapElementIterator : public InternalIterator {
   virtual void Seek(const Slice& target) override {
     where_ =
         std::lower_bound(meta_array_, meta_array_ + meta_size_, target,
-                         [this](FileMetaData* f, const Slice& t) {
+                         [this](const FileMetaData* f, const Slice& t) {
                            return icmp_->Compare(f->largest.Encode(), t) < 0;
                          }) -
         meta_array_;
@@ -1008,7 +1008,7 @@ struct MapElementIterator : public InternalIterator {
   virtual void SeekForPrev(const Slice& target) override {
     where_ =
         std::upper_bound(meta_array_, meta_array_ + meta_size_, target,
-                         [this](const Slice& t, FileMetaData* f) {
+                         [this](const Slice& t, const FileMetaData* f) {
                            return icmp_->Compare(t, f->largest.Encode()) < 0;
                          }) -
         meta_array_;
@@ -1132,7 +1132,7 @@ struct MapElementIterator : public InternalIterator {
       key_slice = iter_->key();
       value_slice = iter_->value();
     } else {
-      FileMetaData* f = meta_array_[where_];
+      const FileMetaData* f = meta_array_[where_];
       element_.smallest_key_ = f->smallest.Encode();
       element_.largest_key_ = f->largest.Encode();
       element_.include_smallest_ = true;
@@ -1146,7 +1146,7 @@ struct MapElementIterator : public InternalIterator {
     }
   }
 
-  FileMetaData* const* meta_array_;
+  const FileMetaData* const* meta_array_;
   size_t meta_size_;
   const InternalKeyComparator* icmp_;
   void* callback_arg_;
@@ -1159,7 +1159,7 @@ struct MapElementIterator : public InternalIterator {
 };
 
 InternalIterator* NewMapElementIterator(
-    FileMetaData* const* meta_array, size_t meta_size,
+    const FileMetaData* const* meta_array, size_t meta_size,
     const InternalKeyComparator* icmp, void* callback_arg,
     const IteratorCache::CreateIterCallback& create_iter, Arena* arena) {
   if (meta_size == 0) {
