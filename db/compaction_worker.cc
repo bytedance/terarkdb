@@ -30,6 +30,7 @@ struct AJsonStatus {
   std::string state;
 };
 AJSON(AJsonStatus, code, subcode, sev, state);
+
 namespace ajson {
 template<>
 struct json_impl<rocksdb::Status, void> {
@@ -38,7 +39,6 @@ struct json_impl<rocksdb::Status, void> {
     json_impl<AJsonStatus>::read(rd, s);
     v = rocksdb::Status(s.code, s.subcode, s.sev, s.state.c_str());
   }
-
   template<typename write_ty>
   static inline void write(write_ty& wt, rocksdb::Status const& v) {
     AJsonStatus s = {
@@ -47,11 +47,28 @@ struct json_impl<rocksdb::Status, void> {
     json_impl<AJsonStatus>::template write<write_ty>(wt, s);
   }
 };
+
+template<>
+struct json_impl<rocksdb::InternalKey, void> {
+  static inline void read(reader& rd, rocksdb::InternalKey& v) {
+    json_impl<std::string>::read(rd, *v.rep());
+  }
+  template<typename write_ty>
+  static inline void write(write_ty& wt, rocksdb::InternalKey const& v) {
+    json_impl<std::string>::template write<write_ty>(wt, *v.rep());
+  }
+};
 }
 
-AJSON(rocksdb::CompactionWorkerResult::FileInfo, input_start, input_end,
-      file_name, smallest_seqno, largest_seqno);
-AJSON(rocksdb::CompactionWorkerResult, status, files);
+AJSON(rocksdb::CompactionWorkerResult::FileInfo, smallest, largest, file_name,
+      smallest_seqno, largest_seqno, file_size, being_compacted);
+
+AJSON(rocksdb::CompactionWorkerResult, status, actual_start, actual_end, files);
+
+AJSON(rocksdb::FileDescriptor, packed_number_and_path_id, file_size,
+      smallest_seqno, largest_seqno);
+
+AJSON(rocksdb::FileMetaData, fd, smallest, largest);
 
 namespace rocksdb {
 
@@ -88,6 +105,7 @@ struct RemoteCompactionWorker::Client::Rep {
   MapType<TableFactory> table_factory_map;
   MapType<MergeOperator> merge_operator_map;
   MapType<CompactionFilterFactory> compaction_filter_factory_map;
+  MapType<TablePropertiesCollectorFactory> table_prop_collector_factory_map;
   EnvOptions env_options;
   Env* env;
 };
@@ -111,6 +129,13 @@ void RemoteCompactionWorker::Client::RegistCompactionFilter(
     std::shared_ptr<CompactionFilterFactory> compaction_filter_factory) {
   rep_->compaction_filter_factory_map.emplace(compaction_filter_factory->Name(),
                                               compaction_filter_factory);
+}
+
+void RemoteCompactionWorker::Client::RegistCompactionFilter(
+    std::shared_ptr<TablePropertiesCollectorFactory>
+        table_prop_collector_factory) {
+  rep_->table_prop_collector_factory_map.emplace(
+      table_prop_collector_factory->Name(), table_prop_collector_factory);
 }
 
 RemoteCompactionWorker::Client::Client(EnvOptions env_options, Env* env) {
@@ -141,6 +166,8 @@ struct CompactionContext {
   CompressionOptions compression_opts;
   std::vector<SequenceNumber> existing_snapshots;
   bool bottommost_level;
+  std::vector<std::unique_ptr<IntTblPropCollectorFactory>>
+      int_tbl_prop_collector_factories;
 };
 
 std::string RemoteCompactionWorker::Client::DoCompaction(
@@ -175,22 +202,21 @@ std::string RemoteCompactionWorker::Client::DoCompaction(
     auto find = table_cache.find(file_number);
     if (find == table_cache.end()) {
       std::string file_name =
-          MakeTableFileName(
-              immutable_cf_options.cf_paths[file_meta->fd.GetPathId()].path,
-              file_meta->fd.GetNumber());
-      uint64_t file_size;
-      auto s = rep_->env->GetFileSize(file_name, &file_size);
+          TableFileName(immutable_cf_options.cf_paths,
+                        file_meta->fd.GetNumber(), file_meta->fd.GetPathId());
+      std::unique_ptr<rocksdb::RandomAccessFile> file;
+      auto s = rep_->env->NewRandomAccessFile(file_name, &file,
+                                              rep_->env_options);
       if (!s.ok()) {
         return NewErrorInternalIterator(s);
       }
-      std::unique_ptr<rocksdb::RandomAccessFile> file;
-      rep_->env->NewRandomAccessFile(file_name, &file, rep_->env_options);
       std::unique_ptr<rocksdb::RandomAccessFileReader> file_reader(
           new rocksdb::RandomAccessFileReader(std::move(file), file_name,
                                               rep_->env));
       std::unique_ptr<rocksdb::TableReader> reader;
       s = ctx->table_factory->NewTableReader(table_reader_options,
-                                             std::move(file_reader), file_size,
+                                             std::move(file_reader),
+                                             file_meta->fd.file_size,
                                              &reader, false);
       if (!s.ok()) {
         return NewErrorInternalIterator(s);
@@ -283,9 +309,6 @@ std::string RemoteCompactionWorker::Client::DoCompaction(
 
   CompactionWorkerResult result;
 
-  std::vector<std::unique_ptr<IntTblPropCollectorFactory>>
-  int_tbl_prop_collector_factories;
-
   auto create_builder =
       [&](std::unique_ptr<WritableFileWriter>* writer_ptr,
           std::unique_ptr<TableBuilder>* builder_ptr)->Status {
@@ -293,7 +316,7 @@ std::string RemoteCompactionWorker::Client::DoCompaction(
     Status s;
     TableBuilderOptions table_builder_options(
         immutable_cf_options, mutable_cf_options, ctx->internal_comparator,
-        &int_tbl_prop_collector_factories, ctx->compression,
+        &ctx->int_tbl_prop_collector_factories, ctx->compression,
         ctx->compression_opts, nullptr, true, false, ctx->cf_name, -1);
     std::unique_ptr<WritableFile> sst_file;
     s = rep_->env->NewWritableFile(file_name, &sst_file, rep_->env_options);
@@ -436,16 +459,16 @@ std::string RemoteCompactionWorker::Client::DoCompaction(
         actual_end.rep()->clear();
       }
       CompactionWorkerResult::FileInfo file_info;
-      file_info.input_start = *actual_start.rep();
-      file_info.input_end = *actual_end.rep();
       if (current_entries > 0 || tp.num_range_deletions > 0) {
         file_info.file_name = writer->file_name();
       }
+      file_info.smallest = std::move(*meta->smallest.rep());
+      file_info.largest = std::move(*meta->largest.rep());
       file_info.smallest_seqno = meta->fd.smallest_seqno;
       file_info.largest_seqno = meta->fd.largest_seqno;
+      file_info.file_size = meta->fd.file_size;
+      file_info.being_compacted = builder->NeedCompact();
       result.files.emplace_back(file_info);
-      actual_start = std::move(actual_end);
-      actual_end.rep()->clear();
     }
     *meta = FileMetaData();
     builder_ptr->reset();
@@ -520,6 +543,8 @@ std::string RemoteCompactionWorker::Client::DoCompaction(
   }
   c_iter.reset();
   input.reset();
+  result.actual_start = std::move(*actual_start.rep());
+  result.actual_end = std::move(*actual_end.rep());
 
   ajson::string_stream stream;
   ajson::save_to(stream, result);

@@ -652,23 +652,69 @@ Status CompactionJob::Run() {
   for (size_t i = 0; i < compact_->sub_compact_states.size(); ++i) {
     auto& handle = handles[i];
     handle.result = handle.task.get_future().get();
-    auto& s = compact_->sub_compact_states[i].status;
-    s = std::move(handle.result.status);
+    auto& sub_compact = compact_->sub_compact_states[i];
+    sub_compact.status = std::move(handle.result.status);
+    auto& s = sub_compact.status;
+    if (s.ok()) {
+      for (auto& file_info : handle.result.files) {
+        uint64_t file_number = versions_->NewFileNumber();
+        std::string fname =
+            TableFileName(cfd->ioptions()->cf_paths, file_number,
+                          c->output_path_id());
+        env_->RenameFile(file_info.file_name, fname);
+        sub_compact.outputs.emplace_back();
+        auto& output = sub_compact.outputs.back();
+        output.meta.fd = FileDescriptor(file_number, c->output_path_id(),
+                                        file_info.file_size,
+                                        file_info.smallest_seqno,
+                                        file_info.largest_seqno);
+        output.meta.smallest.DecodeFrom(file_info.smallest);
+        output.meta.largest.DecodeFrom(file_info.largest);
+        output.meta.being_compacted = file_info.being_compacted;
+        std::unique_ptr<rocksdb::RandomAccessFile> file;
+        s = env_->NewRandomAccessFile(fname, &file, env_options_);
+        if (!s.ok()) {
+          break;
+        }
+        std::unique_ptr<rocksdb::RandomAccessFileReader> file_reader(
+            new rocksdb::RandomAccessFileReader(std::move(file), fname, env_));
+        std::unique_ptr<rocksdb::TableReader> reader;
+        TableReaderOptions table_reader_options(
+            *c->immutable_cf_options(),
+            c->mutable_cf_options()->prefix_extractor.get(), env_options_,
+            c->immutable_cf_options()->internal_comparator);
+        s = c->immutable_cf_options()->table_factory->NewTableReader(
+            table_reader_options, std::move(file_reader),
+            output.meta.fd.file_size, &reader, false);
+        if (!s.ok()) {
+          break;
+        }
+        output.table_properties = reader->GetTableProperties();
+        auto tp = output.table_properties.get();
+        output.meta.num_entries = tp->num_entries;
+        output.meta.num_deletions = tp->num_deletions;
+        output.meta.raw_value_size = tp->raw_value_size;
+        output.meta.raw_key_size = tp->raw_key_size;
+        output.meta.sst_purpose = GetSstPurpose(tp->user_collected_properties);
+        output.meta.sst_depend = GetSstDepend(tp->user_collected_properties);
+        output.finished = true;
+        c->AddOutputTableFileNumber(file_number);
+      }
+      if (s.ok()) {
+        sub_compact.actual_start.DecodeFrom(handle.result.actual_start);
+        sub_compact.actual_end.DecodeFrom(handle.result.actual_end);
+      }
+    }
     if (s.ok()) {
       status = Status::OK();
     } else {
       status = s;
     }
   }
-  if (!status.ok()) {
-    return status;
+  if (status.ok()) {
+    status = VerifyFiles();
   }
-  for (const auto& state : compact_->sub_compact_states) {
-    if (state.status.ok()) {
-      // TODO read files & file state->output_files
-    }
-  }
-  return Status::OK();
+  return status;
 }
 
 Status CompactionJob::RunSelf() {
@@ -723,77 +769,8 @@ Status CompactionJob::RunSelf() {
     status = output_directory_->Fsync();
   }
 
-  while (status.ok()) {
-    thread_pool.clear();
-    std::vector<const FileMetaData*> files_meta;
-    for (const auto& state : compact_->sub_compact_states) {
-      for (const auto& output : state.outputs) {
-        files_meta.emplace_back(&output.meta);
-      }
-    }
-    if (files_meta.empty()) {
-      break;
-    }
-    ColumnFamilyData* cfd = compact_->compaction->column_family_data();
-    auto prefix_extractor =
-        compact_->compaction->mutable_cf_options()->prefix_extractor.get();
-    std::atomic<size_t> next_file_meta_idx(0);
-    auto verify_table = [&](Status& output_status) {
-      while (true) {
-        size_t file_idx = next_file_meta_idx.fetch_add(1);
-        if (file_idx >= files_meta.size()) {
-          break;
-        }
-        // Use empty depend files to disable map or link sst forward calls.
-        // depend files will build in InstallCompactionResults
-        DependFileMap empty_depend_files;
-        // Verify that the table is usable
-        // We set for_compaction to false and don't OptimizeForCompactionTableRead
-        // here because this is a special case after we finish the table building
-        // No matter whether use_direct_io_for_flush_and_compaction is true,
-        // we will regard this verification as user reads since the goal is
-        // to cache it here for further user reads
-        InternalIterator* iter = cfd->table_cache()->NewIterator(
-            ReadOptions(), env_options_, cfd->internal_comparator(),
-            *files_meta[file_idx], empty_depend_files,
-            nullptr /* range_del_agg */, prefix_extractor, nullptr,
-            cfd->internal_stats()->GetFileReadHist(
-                compact_->compaction->output_level()),
-            false, nullptr /* arena */, false /* skip_filters */,
-            compact_->compaction->output_level());
-        auto s = iter->status();
-
-        if (s.ok() && paranoid_file_checks_) {
-          for (iter->SeekToFirst(); iter->Valid(); iter->Next()) {}
-          s = iter->status();
-        }
-
-        delete iter;
-
-        if (!s.ok()) {
-          output_status = s;
-          break;
-        }
-      }
-    };
-    size_t thread_count =
-        std::min(files_meta.size(), compact_->sub_compact_states.size());
-    for (size_t i = 1; i < thread_count; i++) {
-      thread_pool.emplace_back(verify_table,
-                               std::ref(compact_->sub_compact_states[i].status));
-    }
-    verify_table(compact_->sub_compact_states[0].status);
-    for (auto& thread : thread_pool) {
-      thread.join();
-    }
-    for (const auto& state : compact_->sub_compact_states) {
-      if (!state.status.ok()) {
-        status = state.status;
-        break;
-      }
-    }
-    // always break
-    break;
+  if (status.ok()) {
+    status = VerifyFiles();
   }
 
   // Finish up all book-keeping to unify the subcompaction results
@@ -805,6 +782,77 @@ Status CompactionJob::RunSelf() {
 
   compact_->status = status;
   return status;
+}
+
+Status CompactionJob::VerifyFiles() {
+  std::vector<port::Thread> thread_pool;
+  std::vector<const FileMetaData*> files_meta;
+  for (const auto& state : compact_->sub_compact_states) {
+    for (const auto& output : state.outputs) {
+      files_meta.emplace_back(&output.meta);
+    }
+  }
+  if (files_meta.empty()) {
+    return Status::OK();
+  }
+  ColumnFamilyData* cfd = compact_->compaction->column_family_data();
+  auto prefix_extractor =
+      compact_->compaction->mutable_cf_options()->prefix_extractor.get();
+  std::atomic<size_t> next_file_meta_idx(0);
+  auto verify_table = [&](Status& output_status) {
+    while (true) {
+      size_t file_idx = next_file_meta_idx.fetch_add(1);
+      if (file_idx >= files_meta.size()) {
+        break;
+      }
+      // Use empty depend files to disable map or link sst forward calls.
+      // depend files will build in InstallCompactionResults
+      DependFileMap empty_depend_files;
+      // Verify that the table is usable
+      // We set for_compaction to false and don't OptimizeForCompactionTableRead
+      // here because this is a special case after we finish the table building
+      // No matter whether use_direct_io_for_flush_and_compaction is true,
+      // we will regard this verification as user reads since the goal is
+      // to cache it here for further user reads
+      InternalIterator* iter = cfd->table_cache()->NewIterator(
+          ReadOptions(), env_options_, cfd->internal_comparator(),
+          *files_meta[file_idx], empty_depend_files,
+          nullptr /* range_del_agg */, prefix_extractor, nullptr,
+          cfd->internal_stats()->GetFileReadHist(
+              compact_->compaction->output_level()),
+          false, nullptr /* arena */, false /* skip_filters */,
+          compact_->compaction->output_level());
+      auto s = iter->status();
+
+      if (s.ok() && paranoid_file_checks_) {
+        for (iter->SeekToFirst(); iter->Valid(); iter->Next()) {}
+        s = iter->status();
+      }
+
+      delete iter;
+
+      if (!s.ok()) {
+        output_status = s;
+        break;
+      }
+    }
+  };
+  size_t thread_count =
+      std::min(files_meta.size(), compact_->sub_compact_states.size());
+  for (size_t i = 1; i < thread_count; i++) {
+    thread_pool.emplace_back(verify_table,
+                             std::ref(compact_->sub_compact_states[i].status));
+  }
+  verify_table(compact_->sub_compact_states[0].status);
+  for (auto& thread : thread_pool) {
+    thread.join();
+  }
+  for (const auto& state : compact_->sub_compact_states) {
+    if (!state.status.ok()) {
+      return state.status;
+    }
+  }
+  return Status::OK();
 }
 
 Status CompactionJob::Install(const MutableCFOptions& mutable_cf_options) {
@@ -1633,11 +1681,12 @@ Status CompactionJob::InstallCompactionResults(
         compaction->InputLevelSummary(&inputs_summary), compact_->total_bytes);
   }
 
+  auto cfd = compaction->column_family_data();
   if (compaction->map_compaction() || !compaction->input_range().empty() ||
-      mutable_cf_options.enable_lazy_compaction) {
+      mutable_cf_options.enable_lazy_compaction ||
+      cfd->ioptions()->compaction_worker != nullptr) {
     MapBuilder map_builder(job_id_, db_options_, env_options_, versions_,
                            stats_, dbname_);
-    auto cfd = compaction->column_family_data();
     auto vstorage = compaction->input_version()->storage_info();
     std::unique_ptr<TableProperties> prop;
     FileMetaData file_meta;

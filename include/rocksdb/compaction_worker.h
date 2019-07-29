@@ -29,9 +29,12 @@ struct MutableCFOptions;
 
 struct CompactionWorkerResult {
   Status status;
+  std::string actual_start, actual_end;
   struct FileInfo {
-    std::string input_start, input_end, file_name;
+    std::string smallest, largest, file_name;
     SequenceNumber smallest_seqno, largest_seqno;
+    size_t file_size;
+    bool being_compacted;
   };
   std::vector<FileInfo> files;
 };
@@ -79,6 +82,8 @@ class RemoteCompactionWorker : CompactionWorker {
     void RegistTableFactory(std::shared_ptr<TableFactory>);
     void RegistMergeOperator(std::shared_ptr<MergeOperator>);
     void RegistCompactionFilter(std::shared_ptr<CompactionFilterFactory>);
+    void RegistCompactionFilter(
+        std::shared_ptr<TablePropertiesCollectorFactory>);
 
     virtual std::string GenerateOutputFileName(size_t file_index) = 0;
 

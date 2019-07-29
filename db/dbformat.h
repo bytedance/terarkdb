@@ -241,6 +241,7 @@ class InternalKey {
   // The underlying representation.
   // Intended only to be used together with ConvertFromUserKey().
   std::string* rep() { return &rep_; }
+  const std::string* rep() const { return &rep_; }
 
   // Assuming that *rep() contains a user key, this method makes internal key
   // out of it in-place. This saves a memcpy compared to Set()/SetFrom().
