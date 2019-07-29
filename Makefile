@@ -116,21 +116,18 @@ BUILD_NAME := $(shell bash get_terark_build_name.sh ${CXX} ${BMI2})
 BUILD_ROOT := build/${BUILD_NAME}
 xdir:=${BUILD_ROOT}/dbg-${DEBUG_LEVEL}
 
+ifdef TERARK_CORE_BRANCH
+  TERARK_CORE_HOME := terark-core
+else
+  TERARK_CORE_HOME ?= ../terark-core
+endif
+TERARK_CORE_PKG_DIR := ${TERARK_CORE_HOME}/pkg/terark-fsa_all-${BUILD_NAME}
+CXXFLAGS += -march=haswell
+CXXFLAGS += -I${TERARK_CORE_HOME}/src -I${TERARK_CORE_HOME}/boost-include
+
+# BUNDLE_TERARK_ZIP_ROCKSDB can use precompiled terark-core
 ifdef BUNDLE_TERARK_ZIP_ROCKSDB
-  ifdef TERARK_CORE_BRANCH
-    ifdef TERARK_CORE_PKG_DIR
-      ifneq (${TERARK_CORE_PKG_DIR},terark-core)
-        $(error when both TERARK_CORE_BRANCH and TERARK_CORE_PKG_DIR are defined, TERARK_CORE_PKG_DIR must be terark-core)
-      endif
-    else
-      TERARK_CORE_PKG_DIR := terark-core
-    endif
-  endif
-  TERARK_CORE_VERSION ?= 1.0.0.60
-  TERARK_CORE_PKG_DIR ?= ../terark-core/pkg/terark-fsa_all-${BUILD_NAME}
-  CXXFLAGS += -I${TERARK_CORE_PKG_DIR}/include -Iboost-include
   CXXFLAGS += -Iterark-zip-rocksdb/src
-# CXXFLAGS += -march=haswell
 
 # do not use wildcard, to kill dependency to terark-zip-rocksdb.got
   TERARK_ZIP_SRC := \
@@ -148,26 +145,19 @@ ifdef BUNDLE_TERARK_ZIP_ROCKSDB
      $(addprefix shared-objects/${xdir}/,${TERARK_ZIP_SRC:.cc=.o})
 
 #------------------------------------------------------------------------------
-ifeq (${TERARK_CORE_PKG_DIR},terark-core)
+ifeq (${TERARK_CORE_HOME},terark-core)
 terark-core.got:
 	rm -rf terark-core
-ifdef TERARK_CORE_BRANCH
 	git clone git@code.byted.org:storage/terark-core.git
 	cd terark-core && git submodule update --init
+ifdef TERARK_CORE_BRANCH
 	cd terark-core && git checkout ${TERARK_CORE_BRANCH}
-	+$(MAKE) -C terark-core pkg PKG_WITH_DBG=1 PKG_WITH_STATIC=1 WITH_BMI2=${BMI2}
-	mv terark-core/pkg/terark-fsa_all-${BUILD_NAME}/* terark-core
-else
-	wget -O terark-core.tar.gz http://d.scm.byted.org/api/download/ceph:toutiao.terark.terark_core_${TERARK_CORE_VERSION}.tar.gz
-	mkdir terark-core
-	tar -xvf terark-core.tar.gz -C terark-core
-	rm -rf terark-core.tar.gz
 endif
+	+$(MAKE) -C terark-core pkg PKG_WITH_DBG=1 PKG_WITH_STATIC=1 WITH_BMI2=${BMI2}
 	touch $@
 ${TERARK_ZIP_OBJ}: terark-core.got
 endif
-${TERARK_ZIP_OBJ}: boost-include.got
-${TERARK_ZIP_OBJ}: CXXFLAGS += -Wno-unused-parameter
+${TERARK_ZIP_OBJ}: CXXFLAGS += -Wno-unused-parameter -I${TERARK_CORE_HOME}/3rdparty/zstd{,/zstd}
 
 terark-zip-rocksdb.got:
 	rm -rf terark-zip-rocksdb
@@ -175,11 +165,6 @@ terark-zip-rocksdb.got:
 ifdef TERARK_ZIP_ROCKSDB_BRANCH
 	cd terark-zip-rocksdb && git checkout ${TERARK_ZIP_ROCKSDB_BRANCH}
 endif
-	touch $@
-
-boost-include.got:
-	rm -rf boost-include
-	git clone --depth=1 git@code.byted.org:storage/boost-include.git
 	touch $@
 
 terark-zip-rocksdb/${BUILD_ROOT}/git-version-terark_zip_rocksdb.cc: terark-zip-rocksdb.got
@@ -198,6 +183,11 @@ terark-zip-rocksdb/${BUILD_ROOT}/git-version-terark_zip_rocksdb.cc: terark-zip-r
                           db/db_impl_write.cc             \
                           tools/sst_dump_tool.cc
 ${SRC_NEEDS_TERARK_ZIP} : terark-zip-rocksdb.got
+
+SRC_NEEDS_BOOST := env/io_posix.cc util/thread_local.cc \
+                   ${TERARK_ZIP_SRC}
+${SRC_NEEDS_BOOST}: terark-core.got
+
 #------------------------------------------------------------------------------
 
 # just use terark-core libs, set TERARK_ZIP_PKG_DIR as core
@@ -205,7 +195,7 @@ ${SRC_NEEDS_TERARK_ZIP} : terark-zip-rocksdb.got
   LIB_TERARK_ZIP_STATIC =
   LIB_TERARK_ZIP_SHARED = -L${TERARK_CORE_PKG_DIR}/lib
   export LD_LIBRARY_PATH:=${TERARK_CORE_PKG_DIR}/lib:${LD_LIBRARY_PATH}
-else
+else # not BUNDLE_TERARK_ZIP_ROCKSDB, ${TERARK_CORE_HOME} must be compiled
  ifdef TERARK_ZIP_PKG_DIR
   # TERARK_ZIP_PKG_DIR must be fresh git terark-zip-rocksdb dir, has no any compiled output
   # only for Linux, not support macos dynamic lib
@@ -219,7 +209,9 @@ else
   CXXFLAGS += -I${TERARK_ZIP_PKG_DIR}/include
   export LD_LIBRARY_PATH:=${TERARK_ZIP_PKG_DIR}/lib:${LD_LIBRARY_PATH}
  endif
-endif
+endif # BUNDLE_TERARK_ZIP_ROCKSDB
+
+LINK_TERARK ?= static
 
 ifeq ($(LINK_TERARK),shared)
   TerarkLDFLAGS +=  ${LIB_TERARK_ZIP_SHARED} \
@@ -228,16 +220,31 @@ ifeq ($(LINK_TERARK),shared)
                     -lterark-core-${DBG_OR_RLS} -ldl
 endif
 ifeq ($(LINK_TERARK),static)
-  override LINK_STATIC_TERARK = ${LIB_TERARK_ZIP_STATIC} \
+  override LINK_STATIC_TERARK := ${LIB_TERARK_ZIP_STATIC} \
     ${TERARK_ZIP_PKG_DIR}/lib_static/libterark-zbs-${DBG_OR_RLS}.a \
     ${TERARK_ZIP_PKG_DIR}/lib_static/libterark-fsa-${DBG_OR_RLS}.a \
     ${TERARK_ZIP_PKG_DIR}/lib_static/libterark-core-${DBG_OR_RLS}.a
+  ifeq ($(shell uname),Darwin)
+    override LINK_STATIC_TERARK += \
+        ${TERARK_CORE_HOME}/boost-include/stage/lib/libboost_fiber.a \
+        ${TERARK_CORE_HOME}/boost-include/stage/lib/libboost_context.a \
+        ${TERARK_CORE_HOME}/boost-include/stage/lib/libboost_system.a
+  endif
   ifdef BUNDLE_TERARK_ZIP_ROCKSDB
     ifneq ($(shell uname),Darwin)
       BUNDLE_ALL_TERARK_STATIC = 1
     endif
   endif
 endif
+
+ifneq ($(LINK_TERARK),shared)
+ifneq ($(LINK_TERARK),static)
+  override TerarkLDFLAGS += \
+    -L${TERARK_CORE_HOME}/boost-include/stage/lib \
+    -llibboost_fiber -lboost_context -lboost_system
+endif
+endif
+
 ###############################################################################
 
 # Lite build flag.
