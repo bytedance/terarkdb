@@ -217,7 +217,7 @@ ifeq ($(LINK_TERARK),shared)
   TerarkLDFLAGS +=  ${LIB_TERARK_ZIP_SHARED} \
                     -lterark-zbs-${DBG_OR_RLS} \
                     -lterark-fsa-${DBG_OR_RLS} \
-                    -lterark-core-${DBG_OR_RLS} -ldl
+                    -lterark-core-${DBG_OR_RLS} -ldl -lgomp
 endif
 ifeq ($(LINK_TERARK),static)
   override LINK_STATIC_TERARK := ${LIB_TERARK_ZIP_STATIC} \
@@ -235,6 +235,7 @@ ifeq ($(LINK_TERARK),static)
     override LINK_STATIC_TERARK := \
       -Wl,--whole-archive ${LINK_STATIC_TERARK} -Wl,--no-whole-archive
   endif
+  override LINK_STATIC_TERARK += -lgomp
 
   ifdef BUNDLE_TERARK_ZIP_ROCKSDB
     ifneq ($(shell uname),Darwin)
