@@ -671,6 +671,10 @@ struct DBOptions {
   // NOT SUPPORTED ANYMORE -- this options is no longer used
   bool skip_log_error_on_recovery = false;
 
+  // use_direct_reads should be set together
+  // since aio on non-direct-io is really synchronous on linux
+  bool use_aio_reads = false;
+
   // if not zero, dump rocksdb.stats to LOG every stats_dump_period_sec
   //
   // Default: 600 (10 min)

@@ -15,6 +15,7 @@
 #if defined(OS_LINUX)
 #include <linux/fs.h>
 #endif
+#include <aio.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -34,6 +35,8 @@
 #include "util/coding.h"
 #include "util/string_util.h"
 #include "util/sync_point.h"
+
+#include <boost/fiber/all.hpp>
 
 #if defined(OS_LINUX) && !defined(F_SET_RW_HINT)
 #define F_LINUX_SPECIFIC_BASE 1024
@@ -310,12 +313,34 @@ PosixRandomAccessFile::PosixRandomAccessFile(const std::string& fname, int fd,
     : filename_(fname),
       fd_(fd),
       use_direct_io_(options.use_direct_reads),
+      use_aio_reads_(options.use_aio_reads),
       logical_sector_size_(GetLogicalBufferSize(fd_)) {
   assert(!options.use_direct_reads || !options.use_mmap_reads);
   assert(!options.use_mmap_reads || sizeof(void*) < 8);
 }
 
 PosixRandomAccessFile::~PosixRandomAccessFile() { close(fd_); }
+
+static ssize_t my_aio_read(int fd, void* buf, size_t len, off_t offset) {
+  struct aiocb acb = {0};
+  acb.aio_fildes = fd;
+  acb.aio_offset = offset;
+  acb.aio_buf = buf;
+  acb.aio_nbytes = len;
+  int err = aio_read(&acb);
+  if (err) {
+    return -1;
+  }
+  do {
+    boost::this_fiber::yield();
+    err = aio_error(&acb);
+  } while (EINPROGRESS == err);
+
+  if (err) {
+    return -1;
+  }
+  return aio_return(&acb);
+}
 
 Status PosixRandomAccessFile::Read(uint64_t offset, size_t n, Slice* result,
                                    char* scratch) const {
@@ -329,7 +354,12 @@ Status PosixRandomAccessFile::Read(uint64_t offset, size_t n, Slice* result,
   size_t left = n;
   char* ptr = scratch;
   while (left > 0) {
-    r = pread(fd_, ptr, left, static_cast<off_t>(offset));
+    if (use_aio_reads_) {
+      r = my_aio_read(fd_, ptr, left, static_cast<off_t>(offset));
+    }
+    else {
+      r = pread(fd_, ptr, left, static_cast<off_t>(offset));
+    }
     if (r <= 0) {
       if (r == -1 && errno == EINTR) {
         continue;

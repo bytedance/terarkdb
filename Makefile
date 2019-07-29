@@ -11,7 +11,7 @@ BASH_EXISTS := $(shell which bash)
 SHELL := $(shell which bash)
 
 COMPRESSION_CXXFLAGS ?= -DSNAPPY=1 -DZLIB=1 -DLZ4=1 -DLZ4_DISABLE_DEPRECATE_WARNINGS -DZSTD=1 -Isnappy-1.1.4 -Ilz4-1.8.0/lib -Izstd-1.3.3/lib/include -Izlib-1.2.11
-COMPRESSION_LDFLAGS  ?= -L. -lsnappy -lz -llz4 -lzstd
+COMPRESSION_LDFLAGS  ?= -L. -lsnappy -lz -llz4
 
 CLEAN_FILES = # deliberately empty, so we can append below.
 CFLAGS += ${EXTRA_CFLAGS}
@@ -229,7 +229,13 @@ ifeq ($(LINK_TERARK),static)
         ${TERARK_CORE_HOME}/boost-include/stage/lib/libboost_fiber.a \
         ${TERARK_CORE_HOME}/boost-include/stage/lib/libboost_context.a \
         ${TERARK_CORE_HOME}/boost-include/stage/lib/libboost_system.a
+    override LINK_STATIC_TERARK := \
+      -Wl,-all_load ${LINK_STATIC_TERARK} -Wl,-noall_load
+  else
+    override LINK_STATIC_TERARK := \
+      -Wl,--whole-archive ${LINK_STATIC_TERARK} -Wl,--no-whole-archive
   endif
+
   ifdef BUNDLE_TERARK_ZIP_ROCKSDB
     ifneq ($(shell uname),Darwin)
       BUNDLE_ALL_TERARK_STATIC = 1
@@ -750,6 +756,7 @@ TOOLS = \
 	db_stress \
 	write_stress \
 	ldb \
+	kvpipe \
 	db_repl_stress \
 	rocksdb_dump \
 	rocksdb_undump \
@@ -1743,6 +1750,9 @@ ldb_cmd_test: tools/ldb_cmd_test.o $(LIBOBJECTS) $(TESTHARNESS) ${LIBNAME}.so
 	$(AM_LINK)
 
 ldb: tools/ldb.o $(LIBOBJECTS) ${LIBNAME}.so
+	$(AM_LINK)
+
+kvpipe: tools/kvpipe.o ${SHARED1}
 	$(AM_LINK)
 
 iostats_context_test: monitoring/iostats_context_test.o $(LIBOBJECTS) $(TESTHARNESS)
