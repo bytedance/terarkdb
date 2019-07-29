@@ -2118,6 +2118,56 @@ namespace ajson
     return;
   }
 
+  template<class F, class S>
+  struct json_impl<std::pair<F, S>, void>
+  {
+    static inline detail::field_list& this_field_list()
+    {
+      static auto fields = detail::split_fields(STRINGFY_LIST(first, second));
+      return fields;
+    }
+    static inline void read(reader& rd, std::pair<F, S>& v)
+    {
+      auto& fields = this_field_list();
+      if (rd.expect('{') == false){ rd.error("read object must start with {!"); }
+      rd.next();
+      if (rd.expect('}'))
+        return;
+      auto mber = rd.peek();
+      do
+      {
+        if (mber.type != token::t_string){ rd.error("object key must be string"); }
+        rd.next();
+        if (rd.expect(':') == false){ rd.error("invalid json document!"); }
+        rd.next();
+        if (read_members(rd, &fields[0], mber.str, 0, v.first, v.second) == 0)
+        {
+          skip(rd);
+        }
+        if (rd.expect('}'))
+        {
+          rd.next();
+          return;
+        }
+        else if (rd.expect(','))
+        {
+          rd.next();
+          mber = rd.peek();
+          continue;
+        }
+        rd.error("invalid json document!");
+      } while (true);
+    }
+    template<typename write_ty>
+    static inline void write(write_ty& wt, std::pair<F, S> const& v)
+    {
+      auto& fields = this_field_list();
+      wt.putc('{');
+      write_members(wt, &fields[0], 0, v.first, v.second);
+      wt.putc('}');
+    }
+  };
+
   template<typename ty, typename stream_ty, class write_tp = lite_write<stream_ty> >
   inline void save_to(stream_ty& ss, ty& val)
   {
@@ -2138,7 +2188,7 @@ namespace ajson
 namespace ajson\
 {\
   template<>\
-  struct json_impl < TYPE , void >\
+  struct json_impl<TYPE , void>\
   {\
     struct json_helper : public TYPE\
     {\

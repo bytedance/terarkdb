@@ -13,7 +13,9 @@
 #define __STDC_FORMAT_MACROS
 #endif
 
+#include "rocksdb/convenience.h"
 #include "rocksdb/table.h"
+#include "rocksdb/filter_policy.h"
 #include "db/compaction_iterator.h"
 #include "db/map_builder.h"
 #include "db/merge_helper.h"
@@ -61,30 +63,50 @@ struct json_impl<rocksdb::InternalKey, void> {
 }
 
 AJSON(rocksdb::CompactionWorkerResult::FileInfo, smallest, largest, file_name,
-      smallest_seqno, largest_seqno, file_size, being_compacted);
+                                                 smallest_seqno, largest_seqno,
+                                                 file_size, being_compacted);
 
 AJSON(rocksdb::CompactionWorkerResult, status, actual_start, actual_end, files);
 
 AJSON(rocksdb::FileDescriptor, packed_number_and_path_id, file_size,
-      smallest_seqno, largest_seqno);
+                               smallest_seqno, largest_seqno);
 
 AJSON(rocksdb::FileMetaData, fd, smallest, largest);
+
+AJSON(rocksdb::CompressionOptions, window_bits, level, strategy, max_dict_bytes,
+                                   zstd_max_train_bytes, enabled);
+
+AJSON(rocksdb::CompactionFilter::Context, is_full_compaction,
+                                          is_manual_compaction,
+                                          column_family_id);
+
+AJSON(rocksdb::CompactionContext, user_comparator, merge_operator,
+                                  merge_operator_data, compaction_filter,
+                                  compaction_filter_factory,
+                                  compaction_filter_context,
+                                  compaction_filter_data, table_factory,
+                                  table_factory_options, bloom_locality,
+                                  cf_paths, prefix_extractor, has_start,
+                                  has_end, start, end, last_sequence,
+                                  earliest_write_conflict_snapshot,
+                                  preserve_deletes_seqnum, file_metadata,
+                                  inputs, cf_name, target_file_size,
+                                  compression, compression_opts,
+                                  existing_snapshots, bottommost_level,
+                                  int_tbl_prop_collector_factories);
 
 namespace rocksdb {
 
 template<class T>
-using MapType = std::unordered_map<std::string, std::shared_ptr<T>>;
+using TMap = std::unordered_map<std::string, T>;
+template<class T>
+using STMap = std::unordered_map<std::string, std::shared_ptr<T>>;
 
 std::packaged_task<CompactionWorkerResult()>
 RemoteCompactionWorker::StartCompaction(
-    VersionStorageInfo* input_version,
-    const ImmutableCFOptions& immutable_cf_options,
-    const MutableCFOptions& mutable_cf_options,
-    std::vector<std::pair<int, std::vector<const FileMetaData*>>> inputs,
-    uint64_t target_file_size, CompressionType compression,
-    CompressionOptions compression_opts, const Slice* start, const Slice* end) {
-  std::string data;
-  // TODO encode all params into data
+    const CompactionContext& context) {
+  ajson::string_stream stream;
+  ajson::save_to(stream, context);
   struct ResultDecoder {
     std::future<std::string> future;
     CompactionWorkerResult operator()() {
@@ -96,16 +118,17 @@ RemoteCompactionWorker::StartCompaction(
     }
   };
   ResultDecoder decoder;
-  decoder.future = DoCompaction(data);
+  decoder.future = DoCompaction(stream.str());
   return std::packaged_task<CompactionWorkerResult()>(std::move(decoder));
 }
 
 struct RemoteCompactionWorker::Client::Rep {
-  std::unordered_map<std::string, const Comparator*> comparator_map;
-  MapType<TableFactory> table_factory_map;
-  MapType<MergeOperator> merge_operator_map;
-  MapType<CompactionFilterFactory> compaction_filter_factory_map;
-  MapType<TablePropertiesCollectorFactory> table_prop_collector_factory_map;
+  TMap<const Comparator*> comparator_map;
+  STMap<const SliceTransform> prefix_extractor_map;
+  TMap<CreateTableFactoryCallback> table_factory_map;
+  TMap<CreateMergeOperatorCallback> merge_operator_map;
+  STMap<CompactionFilterFactory> compaction_filter_factory_map;
+  STMap<TablePropertiesCollectorFactory> table_prop_collector_factory_map;
   EnvOptions env_options;
   Env* env;
 };
@@ -115,14 +138,21 @@ void RemoteCompactionWorker::Client::RegistComparator(
   rep_->comparator_map.emplace(comparator->Name(), comparator);
 }
 
+void RemoteCompactionWorker::Client::RegistPrefixExtractor(
+    std::shared_ptr<const SliceTransform> prefix_extractor) {
+  rep_->prefix_extractor_map.emplace(prefix_extractor->Name(),
+                                     prefix_extractor);
+}
+
 void RemoteCompactionWorker::Client::RegistTableFactory(
-    std::shared_ptr<TableFactory> table_factory) {
-  rep_->table_factory_map.emplace(table_factory->Name(), table_factory);
+    const char* Name, CreateTableFactoryCallback callback) {
+  rep_->table_factory_map.emplace(Name, callback);
 }
 
 void RemoteCompactionWorker::Client::RegistMergeOperator(
-    std::shared_ptr<MergeOperator> merge_operator) {
-  rep_->merge_operator_map.emplace(merge_operator->Name(), merge_operator);
+    CreateMergeOperatorCallback merge_operator_callback) {
+  rep_->merge_operator_map.emplace(
+      merge_operator_callback()->Name(), merge_operator_callback);
 }
 
 void RemoteCompactionWorker::Client::RegistCompactionFilter(
@@ -142,13 +172,69 @@ RemoteCompactionWorker::Client::Client(EnvOptions env_options, Env* env) {
   rep_ = new Rep();
   rep_->env_options = env_options;
   rep_->env = env;
+  RegistComparator(BytewiseComparator());
+  RegistComparator(ReverseBytewiseComparator());
+  RegistTableFactory(
+      NewBlockBasedTableFactory(BlockBasedTableOptions())->Name(),
+      [](const std::string& options) {
+        BlockBasedTableOptions base, bbto;
+        auto s = GetBlockBasedTableOptionsFromString(base, options, &bbto);
+        if (!s.ok()) {
+          return std::shared_ptr<TableFactory>{};
+        }
+        return std::shared_ptr<TableFactory>(NewBlockBasedTableFactory(bbto));
+      });
+  RegistTableFactory(
+      NewCuckooTableFactory(CuckooTableOptions())->Name(),
+      [](const std::string& options) {
+        CuckooTableOptions cto;
+        std::unordered_map<std::string, std::string> opts_map;
+        Status s = StringToMap(options, &opts_map);
+        if (!s.ok()) {
+          return std::shared_ptr<TableFactory>{};
+        }
+        auto get_option = [&](const char* opt) {
+          auto find = opts_map.find(opt);
+          if (find == opts_map.end()) {
+            return std::string();
+          }
+          return find->second;
+        };
+        std::string opt;
+        if (!(opt = get_option("hash_table_ratio")).empty()) {
+          cto.hash_table_ratio = std::atof(opt.c_str());
+        }
+        if (!(opt = get_option("max_search_depth")).empty()) {
+          cto.max_search_depth = std::atoi(opt.c_str());
+        }
+        if (!(opt = get_option("cuckoo_block_size")).empty()) {
+          cto.cuckoo_block_size = std::atoi(opt.c_str());
+        }
+        if (!(opt = get_option("identity_as_first_hash")).empty()) {
+          cto.identity_as_first_hash = std::atoi(opt.c_str());
+        }
+        return std::shared_ptr<TableFactory>(NewCuckooTableFactory(cto));
+      });
+  RegistTableFactory(
+      NewPlainTableFactory(PlainTableOptions())->Name(),
+      [](const std::string& options) {
+        PlainTableOptions base, pto;
+        auto s = GetPlainTableOptionsFromString(base, options, &pto);
+        if (!s.ok()) {
+          return std::shared_ptr<TableFactory>{};
+        }
+        return std::shared_ptr<TableFactory>(NewPlainTableFactory(pto));
+      });
 }
 
 RemoteCompactionWorker::Client::~Client() {
   delete rep_;
 }
 
-struct CompactionContext {
+struct DecodedCompactionContext {
+  ImmutableDBOptions immutable_db_options;
+  ImmutableCFOptions immutable_cf_options;
+  MutableCFOptions mutable_cf_options;
   const Slice* start;
   const Slice* end;
   SequenceNumber last_sequence;
@@ -156,11 +242,7 @@ struct CompactionContext {
   SequenceNumber preserve_deletes_seqnum;
   std::vector<FileMetaData> file_metadata;
   std::vector<std::pair<int, std::vector<const FileMetaData*>>> inputs;
-  TableFactory* table_factory;
-  CompactionFilter* compaction_filter;
-  MergeOperator* merge_operator;
   std::string cf_name;
-  InternalKeyComparator internal_comparator;
   uint64_t target_file_size;
   CompressionType compression;
   CompressionOptions compression_opts;
@@ -168,19 +250,22 @@ struct CompactionContext {
   bool bottommost_level;
   std::vector<std::unique_ptr<IntTblPropCollectorFactory>>
       int_tbl_prop_collector_factories;
+  CompactionFilter::Context compaction_filter_context;
+  std::string compaction_filter_data;
 };
 
 std::string RemoteCompactionWorker::Client::DoCompaction(
     const std::string& data) {
   // TODO load ctx & options from data;
-  CompactionContext *ctx = nullptr;
+  (void)data;
+  DecodedCompactionContext *ctx = nullptr;
 
-  ImmutableDBOptions immutable_db_options;
-  ImmutableCFOptions immutable_cf_options(immutable_db_options,
-                                          ColumnFamilyOptions());
-  MutableCFOptions mutable_cf_options;
+  ImmutableDBOptions& immutable_db_options = ctx->immutable_db_options;
+  ImmutableCFOptions& immutable_cf_options = ctx->immutable_cf_options;
+  MutableCFOptions& mutable_cf_options = ctx->mutable_cf_options;
 
-  auto ucmp = ctx->internal_comparator.user_comparator();
+  auto icmp = &immutable_cf_options.internal_comparator;
+  auto ucmp = icmp->user_comparator();
 
   // start run
   std::unordered_map<uint64_t, std::unique_ptr<rocksdb::TableReader>>
@@ -190,9 +275,9 @@ std::string RemoteCompactionWorker::Client::DoCompaction(
     depend_map.emplace(f.fd.GetNumber(), &f);
   }
   std::mutex table_cache_mutex;
-  TableReaderOptions table_reader_options(immutable_cf_options, nullptr,
-                                          rep_->env_options,
-                                          ctx->internal_comparator);
+  TableReaderOptions table_reader_options(
+      immutable_cf_options, mutable_cf_options.prefix_extractor.get(),
+      rep_->env_options, *icmp);
   void* create_iter_arg;
   IteratorCache::CreateIterCallback create_iter_callback;
   auto new_iterator = [&](uint64_t file_number)->InternalIterator* {
@@ -214,10 +299,9 @@ std::string RemoteCompactionWorker::Client::DoCompaction(
           new rocksdb::RandomAccessFileReader(std::move(file), file_name,
                                               rep_->env));
       std::unique_ptr<rocksdb::TableReader> reader;
-      s = ctx->table_factory->NewTableReader(table_reader_options,
-                                             std::move(file_reader),
-                                             file_meta->fd.file_size,
-                                             &reader, false);
+      s = immutable_cf_options.table_factory->NewTableReader(
+          table_reader_options, std::move(file_reader),
+          file_meta->fd.file_size, &reader, false);
       if (!s.ok()) {
         return NewErrorInternalIterator(s);
       }
@@ -226,8 +310,7 @@ std::string RemoteCompactionWorker::Client::DoCompaction(
     auto iterator = find->second->NewIterator(ReadOptions(), nullptr);
     if (file_meta->sst_purpose == kMapSst) {
       auto sst_iterator = NewMapSstIterator(file_meta, iterator, depend_map,
-                                            ctx->internal_comparator,
-                                            create_iter_arg,
+                                            *icmp, create_iter_arg,
                                             create_iter_callback);
       sst_iterator->RegisterCleanup([](void* arg1, void* /*arg2*/) {
         delete static_cast<InternalIterator*>(arg1);
@@ -250,22 +333,19 @@ std::string RemoteCompactionWorker::Client::DoCompaction(
   create_iter_arg = &create_iter_arg;
   create_iter_callback = c_style_callback(create_iter);
 
-  CompactionRangeDelAggregator range_del_agg(&ctx->internal_comparator,
-                                             ctx->existing_snapshots);
+  CompactionRangeDelAggregator range_del_agg(icmp, ctx->existing_snapshots);
 
-  MergeIteratorBuilder merge_iter_builder(&ctx->internal_comparator, nullptr);
+  MergeIteratorBuilder merge_iter_builder(icmp, nullptr);
   for (auto& pair : ctx->inputs) {
     if (pair.first == 0 || pair.second.size() == 1) {
       merge_iter_builder.AddIterator(
           new_iterator(pair.second.front()->fd.GetNumber()));
     } else {
       auto map_iter = NewMapElementIterator(pair.second.data(),
-                                            pair.second.size(),
-                                            &ctx->internal_comparator,
+                                            pair.second.size(), icmp,
                                             create_iter_arg,
                                             create_iter_callback);
-      auto level_iter = NewMapSstIterator(nullptr, map_iter, depend_map,
-                                          ctx->internal_comparator,
+      auto level_iter = NewMapSstIterator(nullptr, map_iter, depend_map, *icmp,
                                           create_iter_arg,
                                           create_iter_callback);
       level_iter->RegisterCleanup([](void* arg1, void* /*arg2*/) {
@@ -276,11 +356,21 @@ std::string RemoteCompactionWorker::Client::DoCompaction(
   }
   std::unique_ptr<InternalIterator> input(merge_iter_builder.Finish());
 
-  auto compaction_filter = ctx->compaction_filter;
+  auto compaction_filter = ctx->immutable_cf_options.compaction_filter;
+  std::unique_ptr<CompactionFilter> compaction_filter_from_factory = nullptr;
+  if (compaction_filter == nullptr) {
+    auto factory = ctx->immutable_cf_options.compaction_filter_factory;
+    compaction_filter_from_factory =
+        factory->CreateCompactionFilter(ctx->compaction_filter_context);
+    if (compaction_filter_from_factory) {
+      compaction_filter_from_factory->Deserialize(ctx->compaction_filter_data);
+    }
+    compaction_filter = compaction_filter_from_factory.get();
+  }
 
   MergeHelper merge(
-      rep_->env, ucmp, ctx->merge_operator, compaction_filter,
-      immutable_db_options.info_log.get(),
+      rep_->env, ucmp, ctx->immutable_cf_options.merge_operator,
+      compaction_filter, immutable_db_options.info_log.get(),
       false /* internal key corruption is expected */,
       ctx->existing_snapshots.empty() ? 0 : ctx->existing_snapshots.back());
 
@@ -315,7 +405,7 @@ std::string RemoteCompactionWorker::Client::DoCompaction(
     std::string file_name = GenerateOutputFileName(result.files.size());
     Status s;
     TableBuilderOptions table_builder_options(
-        immutable_cf_options, mutable_cf_options, ctx->internal_comparator,
+        immutable_cf_options, mutable_cf_options, *icmp,
         &ctx->int_tbl_prop_collector_factories, ctx->compression,
         ctx->compression_opts, nullptr, true, false, ctx->cf_name, -1);
     std::unique_ptr<WritableFile> sst_file;
@@ -326,7 +416,7 @@ std::string RemoteCompactionWorker::Client::DoCompaction(
     writer_ptr->reset(
         new WritableFileWriter(std::move(sst_file), file_name,
             rep_->env_options, nullptr, immutable_db_options.listeners));
-    builder_ptr->reset(ctx->table_factory->NewTableBuilder(
+    builder_ptr->reset(immutable_cf_options.table_factory->NewTableBuilder(
         table_builder_options, 0, writer_ptr->get()));
     (*builder_ptr)->SetSecondPassIterator(second_pass_iter.get());
     return s;
@@ -421,8 +511,7 @@ std::string RemoteCompactionWorker::Client::DoCompaction(
         }
 #endif
         meta->UpdateBoundariesForRange(smallest_candidate, largest_candidate,
-                                       tombstone.seq_,
-                                       ctx->internal_comparator);
+                                       tombstone.seq_, *icmp);
         assert(smallest_ikey_seqnum == 0 ||
                ExtractInternalKeyFooter(meta->smallest.Encode()) !=
                PackSequenceAndType(0, kTypeRangeDeletion));

@@ -638,14 +638,88 @@ Status CompactionJob::Run() {
     std::packaged_task<CompactionWorkerResult()> task;
     CompactionWorkerResult result;
   };
+  Status s;
   std::vector<CompactionWorkerHandle> handles;
+  const ImmutableCFOptions* iopt = c->immutable_cf_options();
+  CompactionContext context;
+  context.user_comparator = iopt->user_comparator->Name();
+  if (iopt->merge_operator != nullptr) {
+    context.merge_operator = iopt->merge_operator->Name();
+    s = iopt->merge_operator->Serialize(&context.merge_operator_data);
+    if (s.IsNotSupported()) {
+      return RunSelf();
+    } else if (!s.ok()) {
+      return s;
+    }
+  }
+  if (iopt->compaction_filter != nullptr) {
+    context.compaction_filter = iopt->compaction_filter->Name();
+  }
+  if (iopt->compaction_filter_factory != nullptr) {
+    context.compaction_filter_factory = iopt->compaction_filter_factory->Name();
+    context.compaction_filter_context.is_full_compaction =
+        c->is_full_compaction();
+    context.compaction_filter_context.is_manual_compaction =
+        c->is_manual_compaction();
+    context.compaction_filter_context.column_family_id = cfd->GetID();
+    auto filter = iopt->compaction_filter_factory->CreateCompactionFilter(
+        context.compaction_filter_context);
+    s = filter->Serialize(&context.compaction_filter_data);
+    if (s.IsNotSupported()) {
+      return RunSelf();
+    } else if (!s.ok()) {
+      return s;
+    }
+  }
+  context.table_factory = iopt->table_factory->Name();
+  context.table_factory_options =
+      iopt->table_factory->GetPrintableTableOptions();
+  context.bloom_locality = iopt->bloom_locality;
+  for (auto& p : iopt->cf_paths) {
+    context.cf_paths.push_back(p.path);
+  }
+  if (c->mutable_cf_options()->prefix_extractor) {
+    context.prefix_extractor =
+        c->mutable_cf_options()->prefix_extractor->Name();
+  }
+  context.last_sequence = versions_->LastSequence();
+  context.earliest_write_conflict_snapshot = earliest_write_conflict_snapshot_;
+  context.preserve_deletes_seqnum = preserve_deletes_seqnum_;
+  for (auto& f : c->input_version()->storage_info()->LevelFiles(-1)) {
+    context.file_metadata.emplace_back(*f);
+  }
+  for (auto& files : *c->inputs()) {
+    for (auto& f : files.files) {
+      context.file_metadata.emplace_back(*f);
+      context.inputs.emplace_back(files.level, f->fd.GetNumber());
+    }
+  }
+  context.cf_name = cfd->GetName();
+  context.target_file_size = c->max_output_file_size();
+  context.compression = c->output_compression();
+  context.compression_opts = c->output_compression_opts();
+  context.existing_snapshots = existing_snapshots_;
+  context.bottommost_level = bottommost_level_;
+  for (auto& collector : *cfd->int_tbl_prop_collector_factories()) {
+    context.int_tbl_prop_collector_factories.push_back(collector->Name());
+  }
   for (const auto& state : compact_->sub_compact_states) {
     CompactionWorkerHandle handle;
-    handle.task = worker->StartCompaction(
-        c->input_version()->storage_info(), *cfd->ioptions(),
-        *cfd->GetCurrentMutableCFOptions(), inputs,
-        c->max_output_file_size(), c->output_compression(),
-        c->output_compression_opts(), state.start, state.end);
+    if (state.start != nullptr) {
+      context.has_start = true;
+      context.start.assign(state.start->data(), state.start->size());
+    } else {
+      context.has_start = false;
+      context.start.clear();
+    }
+    if (state.end != nullptr) {
+      context.has_end = true;
+      context.end.assign(state.end->data(), state.end->size());
+    } else {
+      context.has_end = false;
+      context.end.clear();
+    }
+    handle.task = worker->StartCompaction(context);
     handles.push_back(std::move(handle));
   }
   Status status = Status::Corruption();
@@ -1694,6 +1768,9 @@ Status CompactionJob::InstallCompactionResults(
     std::vector<const FileMetaData*> added_files;
     if (!compaction->map_compaction()) {
       for (auto& sub_compact : compact_->sub_compact_states) {
+        if (sub_compact.actual_start.size() == 0) {
+          continue;
+        }
         bool include_start = true;
         bool include_end = false;
         if (sub_compact.actual_end.size() == 0) {

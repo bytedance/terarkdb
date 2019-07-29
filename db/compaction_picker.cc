@@ -573,8 +573,8 @@ void CompactionPicker::InitFilesBeingCompact(
     return table_cache_->NewIterator(options, env_options_, *icmp_,
                                      *file_metadata, depend_map, nullptr,
                                      mutable_cf_options.prefix_extractor.get(),
-                                     nullptr, nullptr, false, nullptr, true,
-                                     -1);
+                                     table_reader_ptr, nullptr, false, arena,
+                                     true, -1);
   };
   for (int level = 0; level < vstorage->num_levels(); ++level) {
     auto& level_files = vstorage->LevelFiles(level);

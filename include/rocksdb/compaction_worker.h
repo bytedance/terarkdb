@@ -39,18 +39,43 @@ struct CompactionWorkerResult {
   std::vector<FileInfo> files;
 };
 
+struct CompactionContext {
+  // options
+  std::string user_comparator;
+  std::string merge_operator;
+  std::string merge_operator_data;
+  std::string compaction_filter;
+  std::string compaction_filter_factory;
+  rocksdb::CompactionFilter::Context compaction_filter_context;
+  std::string compaction_filter_data;
+  std::string table_factory;
+  std::string table_factory_options;
+  uint32_t bloom_locality;
+  std::vector<std::string> cf_paths;
+  std::string prefix_extractor;
+  // compaction
+  bool has_start, has_end;
+  std::string start, end;
+  rocksdb::SequenceNumber last_sequence;
+  rocksdb::SequenceNumber earliest_write_conflict_snapshot;
+  rocksdb::SequenceNumber preserve_deletes_seqnum;
+  std::vector<rocksdb::FileMetaData> file_metadata;
+  std::vector<std::pair<int, uint64_t>> inputs;
+  std::string cf_name;
+  uint64_t target_file_size;
+  rocksdb::CompressionType compression;
+  rocksdb::CompressionOptions compression_opts;
+  std::vector<rocksdb::SequenceNumber> existing_snapshots;
+  bool bottommost_level;
+  std::vector<std::string> int_tbl_prop_collector_factories;
+};
+
 class CompactionWorker {
  public:
   virtual ~CompactionWorker() = default;
 
   virtual std::packaged_task<CompactionWorkerResult()> StartCompaction(
-      VersionStorageInfo* input_version,
-      const ImmutableCFOptions& immutable_cf_options,
-      const MutableCFOptions& mutable_cf_options,
-      std::vector<std::pair<int, std::vector<const FileMetaData*>>> inputs,
-      uint64_t target_file_size, CompressionType compression,
-      CompressionOptions compression_opts,
-      const Slice* start, const Slice* end) = 0;
+      const CompactionContext& context) = 0;
 
   virtual const char* Name() const = 0;
 };
@@ -58,13 +83,7 @@ class CompactionWorker {
 class RemoteCompactionWorker : CompactionWorker {
  public:
   virtual std::packaged_task<CompactionWorkerResult()> StartCompaction(
-      VersionStorageInfo* input_version,
-      const ImmutableCFOptions& immutable_cf_options,
-      const MutableCFOptions& mutable_cf_options,
-      std::vector<std::pair<int, std::vector<const FileMetaData*>>> inputs,
-      uint64_t target_file_size, CompressionType compression,
-      CompressionOptions compression_opts, const Slice* start,
-      const Slice* end) override;
+      const CompactionContext& context) override;
 
   virtual const char* Name() const override {
     return "RemoteCompactionWorker";
@@ -78,9 +97,14 @@ class RemoteCompactionWorker : CompactionWorker {
     Client(EnvOptions env_options, Env* env);
     virtual ~Client();
 
+    using CreateTableFactoryCallback =
+        std::shared_ptr<TableFactory> (*)(const std::string& options);
+    using CreateMergeOperatorCallback = std::shared_ptr<MergeOperator> (*)();
+
     void RegistComparator(const Comparator*);
-    void RegistTableFactory(std::shared_ptr<TableFactory>);
-    void RegistMergeOperator(std::shared_ptr<MergeOperator>);
+    void RegistPrefixExtractor(std::shared_ptr<const SliceTransform>);
+    void RegistTableFactory(const char* Name, CreateTableFactoryCallback);
+    void RegistMergeOperator(CreateMergeOperatorCallback);
     void RegistCompactionFilter(std::shared_ptr<CompactionFilterFactory>);
     void RegistCompactionFilter(
         std::shared_ptr<TablePropertiesCollectorFactory>);
