@@ -192,7 +192,6 @@ class CompactionFilter {
   // The name will be printed to LOG file on start up for diagnosis.
   virtual const char* Name() const = 0;
 
-  virtual bool SupportSerialization() const { return false; }
   virtual Status Serialize(std::string* /*bytes*/) const {
     return Status::NotSupported();
   }

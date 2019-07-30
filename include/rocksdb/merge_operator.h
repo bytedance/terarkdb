@@ -204,7 +204,6 @@ class MergeOperator {
     return false;
   }
 
-  virtual bool SupportSerialization() const { return false; }
   virtual Status Serialize(std::string* /*bytes*/) const {
     return Status::NotSupported();
   }

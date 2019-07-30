@@ -627,25 +627,13 @@ Status CompactionJob::Run() {
     return RunSelf();
   }
   Compaction* c = compact_->compaction;
-  std::vector<std::pair<int, std::vector<const FileMetaData*>>> inputs;
-  for (auto& files : *c->inputs()) {
-    inputs.emplace_back(files.level,
-                        std::vector<const FileMetaData*>(files.files.size()));
-    std::copy(files.files.begin(), files.files.end(),
-              inputs.back().second.begin());
-  }
-  struct CompactionWorkerHandle {
-    std::packaged_task<CompactionWorkerResult()> task;
-    CompactionWorkerResult result;
-  };
   Status s;
-  std::vector<CompactionWorkerHandle> handles;
   const ImmutableCFOptions* iopt = c->immutable_cf_options();
-  CompactionContext context;
+  CompactionWorkerContext context;
   context.user_comparator = iopt->user_comparator->Name();
   if (iopt->merge_operator != nullptr) {
     context.merge_operator = iopt->merge_operator->Name();
-    s = iopt->merge_operator->Serialize(&context.merge_operator_data);
+    s = iopt->merge_operator->Serialize(&context.merge_operator_data.data);
     if (s.IsNotSupported()) {
       return RunSelf();
     } else if (!s.ok()) {
@@ -664,7 +652,7 @@ Status CompactionJob::Run() {
     context.compaction_filter_context.column_family_id = cfd->GetID();
     auto filter = iopt->compaction_filter_factory->CreateCompactionFilter(
         context.compaction_filter_context);
-    s = filter->Serialize(&context.compaction_filter_data);
+    s = filter->Serialize(&context.compaction_filter_data.data);
     if (s.IsNotSupported()) {
       return RunSelf();
     } else if (!s.ok()) {
@@ -672,8 +660,13 @@ Status CompactionJob::Run() {
     }
   }
   context.table_factory = iopt->table_factory->Name();
-  context.table_factory_options =
-      iopt->table_factory->GetPrintableTableOptions();
+  s = iopt->table_factory->GetOptionString(&context.table_factory_options,
+                                           "\n");
+  if (s.IsNotSupported()) {
+    return RunSelf();
+  } else if (!s.ok()) {
+    return s;
+  }
   context.bloom_locality = iopt->bloom_locality;
   for (auto& p : iopt->cf_paths) {
     context.cf_paths.push_back(p.path);
@@ -701,36 +694,34 @@ Status CompactionJob::Run() {
   context.existing_snapshots = existing_snapshots_;
   context.bottommost_level = bottommost_level_;
   for (auto& collector : *cfd->int_tbl_prop_collector_factories()) {
-    context.int_tbl_prop_collector_factories.push_back(collector->Name());
+    context.int_tbl_prop_collector_factories.emplace_back(collector->Name());
   }
+  std::vector<std::function<CompactionWorkerResult()>> results;
   for (const auto& state : compact_->sub_compact_states) {
-    CompactionWorkerHandle handle;
     if (state.start != nullptr) {
       context.has_start = true;
-      context.start.assign(state.start->data(), state.start->size());
+      context.start = *state.start;
     } else {
       context.has_start = false;
       context.start.clear();
     }
     if (state.end != nullptr) {
       context.has_end = true;
-      context.end.assign(state.end->data(), state.end->size());
+      context.end = *state.end;
     } else {
       context.has_end = false;
       context.end.clear();
     }
-    handle.task = worker->StartCompaction(context);
-    handles.push_back(std::move(handle));
+    results.emplace_back(worker->StartCompaction(context));
   }
   Status status = Status::Corruption();
   for (size_t i = 0; i < compact_->sub_compact_states.size(); ++i) {
-    auto& handle = handles[i];
-    handle.result = handle.task.get_future().get();
+    auto result = results[i]();
     auto& sub_compact = compact_->sub_compact_states[i];
-    sub_compact.status = std::move(handle.result.status);
+    sub_compact.status = std::move(result.status);
     auto& s = sub_compact.status;
     if (s.ok()) {
-      for (auto& file_info : handle.result.files) {
+      for (auto& file_info : result.files) {
         uint64_t file_number = versions_->NewFileNumber();
         std::string fname =
             TableFileName(cfd->ioptions()->cf_paths, file_number,
@@ -775,13 +766,13 @@ Status CompactionJob::Run() {
         c->AddOutputTableFileNumber(file_number);
       }
       if (s.ok()) {
-        sub_compact.actual_start.DecodeFrom(handle.result.actual_start);
-        sub_compact.actual_end.DecodeFrom(handle.result.actual_end);
+        sub_compact.actual_start.DecodeFrom(result.actual_start);
+        sub_compact.actual_end.DecodeFrom(result.actual_end);
       }
     }
     if (s.ok()) {
       status = Status::OK();
-    } else {
+    } else if (!status.ok()) {
       status = s;
     }
   }
