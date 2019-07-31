@@ -102,7 +102,7 @@ public:
   virtual void Get(
     const LookupKey &k,
     void *callback_args,
-    bool (*callback_func)(void *arg, const KeyValuePair *)) override;
+    bool (*callback_func)(void *arg, const Slice& key, LazySlice&& value)) override;
 
   virtual MemTableRep::Iterator *GetIterator(Arena *arena) override;
 
@@ -123,7 +123,7 @@ public:
 };
 
 template <bool heap_mode>
-class PatriciaRepIterator : public MemTableRep::Iterator, boost::noncopyable {
+class PatriciaRepIterator : public MemTableRep::Iterator, public LazySliceMeta, boost::noncopyable {
   typedef terark::Patricia::ReaderToken token_t;
 
   class HeapItem : boost::noncopyable {
@@ -200,16 +200,26 @@ public:
 
   virtual ~PatriciaRepIterator();
 
+  virtual void meta_destroy(LazySliceRep* /*rep*/) const override {}
+
+  virtual void meta_pin_resource(LazySlice* slice, LazySliceRep* /*rep*/) const override {
+    *slice = LazySlice(slice->valid() ? static_cast<Slice&>(*slice) : GetValue());
+  }
+
+  Status meta_inplace_decode(LazySlice* slice, LazySliceRep* /*rep*/) const override {
+    *slice = GetValue();
+    return Status::OK();
+  }
+
   virtual bool Valid() const override { return direction_ != 0; }
 
-  virtual const char *key() const override { assert(false); return nullptr; }
+  virtual const char* EncodedKey() const override { assert(false); return nullptr; }
 
-  virtual Slice GetKey() const override { return buffer_; }
+  virtual Slice key() const override { assert(direction_ != 0); return buffer_; }
 
-  virtual Slice GetValue() const override;
+  virtual Slice GetValue() const;
 
-  virtual std::pair<Slice, Slice>
-  GetKeyValue() const override { return {GetKey(), GetValue()}; }
+  virtual LazySlice value() const override { assert(direction_ != 0); return LazySlice(this, {}); }
 
   virtual void Next() override;
 
@@ -223,8 +233,6 @@ public:
   virtual void SeekToFirst() override;
 
   virtual void SeekToLast() override;
-
-  virtual bool IsKeyPinned() const override { return false; }
 
   virtual bool IsSeekForPrevSupported() const override { return true; }
 };
@@ -280,11 +288,8 @@ public:
   virtual bool CanHandleDuplicatedKey() const override { return true; }
 };
 
-MemTableRepFactory *NewPatriciaTrieRepFactory(
-    std::shared_ptr<class MemTableRepFactory> &fallback,
-    detail::ConcurrentType concurrent_type,
-    detail::PatriciaKeyType patricia_key_type,
-    int64_t write_buffer_size);
+MemTableRepFactory* NewPatriciaTrieRepFactory(
+    std::shared_ptr<MemTableRepFactory> fallback);
 
 MemTableRepFactory *NewPatriciaTrieRepFactory(
     const std::unordered_map<std::string, std::string> &options, Status *s);

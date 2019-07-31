@@ -81,7 +81,7 @@ PatriciaTrieRep::PatriciaTrieRep(detail::ConcurrentType concurrent_type,
   else
     concurrent_level_ = terark::Patricia::ConcurrentLevel::OneWriteMultiRead;
   trie_vec_.emplace_back(new MemPatricia(4, write_buffer_size_,
-                                          concurrent_level_));             
+                                         concurrent_level_));
 }
 
 size_t PatriciaTrieRep::ApproximateMemoryUsage() {
@@ -110,7 +110,7 @@ bool PatriciaTrieRep::Contains(
 void PatriciaTrieRep::Get(
     const LookupKey &k,
     void *callback_args,
-    bool (*callback_func)(void *arg, const KeyValuePair *)){
+    bool (*callback_func)(void *arg, const Slice& key, LazySlice&& value)){
   // assistant structure define start
   struct HeapItem {
     uint32_t idx;
@@ -124,45 +124,42 @@ void PatriciaTrieRep::Get(
     valvec<char> buffer;
   };
 
-  class Context : public KeyValuePair {
+  class Meta : public LazySliceMeta {
   public:
-    virtual Slice GetKey() const override {
-      return Slice(buffer->data(), buffer->size());
+    virtual void meta_destroy(LazySliceRep* /*rep*/) const override {}
+
+    virtual void meta_pin_resource(LazySlice* slice, LazySliceRep* /*rep*/) const override {
+      *slice = LazySlice(slice->valid() ? static_cast<Slice&>(*slice) : GetValue());
     }
 
-    virtual Slice GetValue() const override {
-      return GetLengthPrefixedSlice(prefixed_value);
-    }
-    
-    virtual std::pair<Slice, Slice> GetKeyValue() const override {
-      return {Context::GetKey(), Context::GetValue()};
+    Status meta_inplace_decode(LazySlice* slice, LazySliceRep* /*rep*/) const override {
+      *slice = GetValue();
+      return Status::OK();
     }
 
-    KeyValuePair *Update(HeapItem *heap) {
-      auto vector = (detail::tag_vector_t *)heap->trie->mem_get(heap->loc);
-      auto data = (detail::tag_vector_t::data_t *)heap->trie->mem_get(vector->loc);
-      build_key(find_key, heap->tag, buffer);
-      prefixed_value =
-          (const char *)heap->trie->mem_get(data[heap->idx].loc);
-      return this;
+    Slice GetValue() const {
+      auto vector = (detail::tag_vector_t*)heap->trie->mem_get(heap->loc);
+      auto data = (detail::tag_vector_t::data_t*)heap->trie->mem_get(vector->loc);
+      return GetLengthPrefixedSlice((const char*)heap->trie->mem_get(data[heap->idx].loc));
     }
-
-    terark::fstring find_key;
-    valvec<char> *buffer;
-    const char *prefixed_value;
-
-    Context(valvec<char> *_buffer) : buffer(_buffer) {}
-  };
+    HeapItem* heap;
+  } meta;
 
   // assistant structure define end
 
   // varible define
   static thread_local TlsItem tls_ctx;
-  Context ctx(&tls_ctx.buffer);
+  auto buffer = &tls_ctx.buffer;
 
   Slice internal_key = k.internal_key();
-  ctx.find_key = terark::fstring(internal_key.data(), internal_key.size() - 8);
-  uint64_t tag = DecodeFixed64(ctx.find_key.end());
+  auto find_key = terark::fstring(internal_key.data(), internal_key.size() - 8);
+  uint64_t tag = DecodeFixed64(find_key.end());
+
+  auto do_callback = [&](HeapItem* heap) {
+    build_key(find_key, heap->tag, buffer);
+    meta.heap = heap;
+    return callback_func(callback_args, Slice(buffer->data(), buffer->size()), LazySlice(&meta, {}));
+  };
 
   valvec<HeapItem> &heap = tls_ctx.heap;
   assert(heap.empty());
@@ -172,7 +169,7 @@ void PatriciaTrieRep::Get(
   for (auto trie : trie_vec_) {
     auto token = trie->acquire_tls_reader_token();
     token->update_lazy();
-    if (trie->lookup(ctx.find_key, token)) {
+    if (trie->lookup(find_key, token)) {
       uint32_t loc = *(uint32_t *)token->value();
       auto vector = (detail::tag_vector_t *)trie->mem_get(loc);
       size_t size = vector->size;
@@ -191,7 +188,7 @@ void PatriciaTrieRep::Get(
   // elements heap functioning
   std::make_heap(heap.begin(), heap.end(), heap_comp);
   auto item = heap.front();
-  while (heap.size() > 0 && callback_func(callback_args, ctx.Update(&item))) {
+  while (heap.size() > 0 && do_callback(&item)) {
     if (item.idx == 0) {
       std::pop_heap(heap.begin(), heap.end(), heap_comp);
       heap.pop_back();
@@ -506,7 +503,7 @@ PatriciaRepIterator<heap_mode>::~PatriciaRepIterator() {
 }
 
 template <bool heap_mode>
-Slice 
+Slice
 PatriciaRepIterator<heap_mode>::GetValue() const {
   const HeapItem *item = Current();
   uint32_t value_loc = item->GetValue();
@@ -515,7 +512,7 @@ PatriciaRepIterator<heap_mode>::GetValue() const {
 }
 
 template <bool heap_mode>
-void 
+void
 PatriciaRepIterator<heap_mode>::Next() {
   if (heap_mode) {
     if (direction_ != 1) {
@@ -697,7 +694,7 @@ PatriciaRepIterator<heap_mode>::SeekToLast() {
   }
   build_key(CurrentKey(), CurrentTag(), &buffer_);
 }
-  
+
 MemTableRep* PatriciaTrieRepFactory::CreateMemTableRep(
     const MemTableRep::KeyComparator &key_cmp,
     bool needs_dup_key_check,
@@ -739,11 +736,15 @@ static MemTableRepFactory *CreatePatriciaTrieRepFactory(
     detail::PatriciaKeyType patricia_key_type,
     int64_t write_buffer_size) {
   if (!fallback) fallback.reset(new SkipListFactory());
-  return new PatriciaTrieRepFactory(
-      fallback,
-      concurrent_type,
-      patricia_key_type,
-      write_buffer_size);
+  return new PatriciaTrieRepFactory(fallback, concurrent_type,
+                                    patricia_key_type, write_buffer_size);
+}
+
+MemTableRepFactory*
+NewPatriciaTrieRepFactory(std::shared_ptr<class MemTableRepFactory> fallback) {
+  return CreatePatriciaTrieRepFactory(fallback, detail::ConcurrentType::Native,
+                                      detail::PatriciaKeyType::FullKey,
+                                      64ull << 20);
 }
 
 MemTableRepFactory *NewPatriciaTrieRepFactory(
@@ -774,7 +775,7 @@ MemTableRepFactory *NewPatriciaTrieRepFactory(
       return nullptr;
     }
   }
-  
+
   auto p = options.find("key_catagory");
   if (p != options.end() && p->second == "full")
     patricia_key_type = detail::PatriciaKeyType::FullKey;
