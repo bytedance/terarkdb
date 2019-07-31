@@ -107,8 +107,6 @@ class InternalStats {
     READ_AMP_LIMIT_SLOWDOWNS,
     READ_AMP_LIMIT_STOPS,
     INTERNAL_CF_STATS_ENUM_MAX,
-    READ_AMP_LIMIT_SLOWDOWNS,
-    READ_AMP_LIMIT_STOPS,
   };
 
   enum InternalDBStatsType {

@@ -464,29 +464,33 @@ std::string RemoteCompactionWorker::Client::DoCompaction(
   CompactionRangeDelAggregator range_del_agg(icmp, context.existing_snapshots);
 
   Arena arena;
-  MergeIteratorBuilder merge_iter_builder(icmp, &arena);
-  for (auto& pair : inputs) {
-    if (pair.first == 0 || pair.second.size() == 1) {
-      merge_iter_builder.AddIterator(new_iterator(pair.second.front(),
-                                                  context_depend_map, &arena,
-                                                  nullptr));
-    } else {
-      auto map_iter = NewMapElementIterator(pair.second.data(),
-                                            pair.second.size(), icmp,
-                                            c_style_new_iterator.arg,
+  auto create_input_iterator = [&] {
+    MergeIteratorBuilder merge_iter_builder(icmp, &arena);
+    for (auto& pair : inputs) {
+      if (pair.first == 0 || pair.second.size() == 1) {
+        merge_iter_builder.AddIterator(new_iterator(pair.second.front(),
+                                                    context_depend_map, &arena,
+                                                    nullptr));
+      } else {
+        auto map_iter = NewMapElementIterator(pair.second.data(),
+                                              pair.second.size(), icmp,
+                                              c_style_new_iterator.arg,
+                                              c_style_new_iterator.callback,
+                                              &arena);
+        auto level_iter = NewMapSstIterator(nullptr, map_iter,
+                                            context_depend_map,
+                                            *icmp, c_style_new_iterator.arg,
                                             c_style_new_iterator.callback,
                                             &arena);
-      auto level_iter = NewMapSstIterator(nullptr, map_iter, context_depend_map,
-                                          *icmp, c_style_new_iterator.arg,
-                                          c_style_new_iterator.callback,
-                                          &arena);
-      level_iter->RegisterCleanup([](void* arg1, void* /*arg2*/) {
-        static_cast<InternalIterator*>(arg1)->~InternalIterator();
-      }, map_iter, nullptr);
-      merge_iter_builder.AddIterator(level_iter);
+        level_iter->RegisterCleanup([](void* arg1, void* /*arg2*/) {
+          static_cast<InternalIterator*>(arg1)->~InternalIterator();
+        }, map_iter, nullptr);
+        merge_iter_builder.AddIterator(level_iter);
+      }
     }
-  }
-  ScopedArenaIterator input(merge_iter_builder.Finish());
+    return merge_iter_builder.Finish();
+  };
+  ScopedArenaIterator input(create_input_iterator());
 
   auto compaction_filter = immutable_cf_options.compaction_filter;
   std::unique_ptr<CompactionFilter> compaction_filter_from_factory = nullptr;
@@ -528,10 +532,72 @@ std::string RemoteCompactionWorker::Client::DoCompaction(
     actual_start.SetMinPossibleForUserKey(ExtractUserKey(input->key()));
   }
   c_iter->SeekToFirst();
-  // TODO init citer_2
-  //std::unique_ptr<CompactionIterator> c_iter2;
-  //auto second_pass_iter = c_iter2->AdaptToInternalIterator();
-  std::unique_ptr<InternalIterator> second_pass_iter;
+
+  struct SecondPassIterStorage {
+    std::aligned_storage<sizeof(CompactionRangeDelAggregator),
+        alignof(CompactionRangeDelAggregator)>::type
+        range_del_agg;
+    std::unique_ptr<CompactionFilter> compaction_filter_holder;
+    const CompactionFilter* compaction_filter;
+    std::aligned_storage<sizeof(MergeHelper), alignof(MergeHelper)>::type
+        merge;
+    ScopedArenaIterator input;
+
+    ~SecondPassIterStorage() {
+      if (input.get() != nullptr) {
+        auto range_del_agg_ptr =
+            reinterpret_cast<CompactionRangeDelAggregator*>(&range_del_agg);
+        range_del_agg_ptr->~CompactionRangeDelAggregator();
+        compaction_filter_holder.reset();
+        auto merge_ptr = reinterpret_cast<MergeHelper*>(&merge);
+        merge_ptr->~MergeHelper();
+        input.set(nullptr);
+      }
+    }
+  } second_pass_iter_storage;
+
+  auto make_compaction_iterator = [&] {
+    Status s;
+    auto range_del_agg_ptr =
+        new(&second_pass_iter_storage.range_del_agg)
+            CompactionRangeDelAggregator(icmp, context.existing_snapshots);
+    second_pass_iter_storage.compaction_filter =
+        immutable_cf_options.compaction_filter;
+    if (second_pass_iter_storage.compaction_filter == nullptr &&
+        immutable_cf_options.compaction_filter_factory != nullptr) {
+      second_pass_iter_storage.compaction_filter_holder =
+          immutable_cf_options.compaction_filter_factory->
+              CreateCompactionFilter(context.compaction_filter_context);
+      auto compaction_filter_from_factory =
+          second_pass_iter_storage.compaction_filter_holder.get();
+      if (compaction_filter_from_factory != nullptr) {
+        s = compaction_filter_from_factory->Deserialize(
+            context.compaction_filter_data);
+      }
+    }
+    auto merge_ptr =
+        new(&second_pass_iter_storage.merge) MergeHelper(
+            rep_->env, ucmp, immutable_cf_options.merge_operator,
+            compaction_filter, immutable_db_options.info_log.get(),
+            false /* internal key corruption is expected */,
+            context.existing_snapshots.empty()
+            ? 0 : context.existing_snapshots.back());
+    if (s.ok()) {
+      second_pass_iter_storage.input.set(create_input_iterator());
+    } else {
+      second_pass_iter_storage.input.set(NewErrorInternalIterator(s, &arena));
+    }
+    return new CompactionIterator(
+        second_pass_iter_storage.input.get(), end, ucmp, merge_ptr,
+        context.last_sequence, &context.existing_snapshots,
+        context.earliest_write_conflict_snapshot, nullptr, rep_->env,
+        false, false, range_del_agg_ptr, nullptr,
+        second_pass_iter_storage.compaction_filter, nullptr,
+        context.preserve_deletes_seqnum);
+  };
+  std::unique_ptr<InternalIterator> second_pass_iter(
+      NewCompactionIterator(c_style_callback(make_compaction_iterator),
+                            &make_compaction_iterator, start));
 
   CompactionWorkerResult result;
 
@@ -628,7 +694,7 @@ std::string RemoteCompactionWorker::Client::DoCompaction(
         auto kv = tombstone.Serialize();
         assert(lower_bound == nullptr ||
                ucmp->Compare(*lower_bound, kv.second) < 0);
-        builder->Add(kv.first.Encode(), kv.second);
+        builder->Add(kv.first.Encode(), LazySlice(kv.second));
         InternalKey smallest_candidate = std::move(kv.first);
         if (lower_bound != nullptr &&
             ucmp->Compare(smallest_candidate.user_key(), *lower_bound) <= 0) {
@@ -712,7 +778,7 @@ std::string RemoteCompactionWorker::Client::DoCompaction(
     // Invariant: c_iter.status() is guaranteed to be OK if c_iter->Valid()
     // returns true.
     const Slice& key = c_iter->key();
-    const Slice& value = c_iter->value();
+    const LazySlice& value = c_iter->value();
 
     assert(end == nullptr || ucmp->Compare(c_iter->user_key(), *end) < 0);
 

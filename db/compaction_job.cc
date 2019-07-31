@@ -1132,21 +1132,21 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
     std::aligned_storage<sizeof(CompactionRangeDelAggregator),
         alignof(CompactionRangeDelAggregator)>::type
         range_del_agg;
-    std::unique_ptr<InternalIterator> input;
     std::unique_ptr<CompactionFilter> compaction_filter_holder;
     const CompactionFilter* compaction_filter;
     std::aligned_storage<sizeof(MergeHelper), alignof(MergeHelper)>::type
         merge;
+    std::unique_ptr<InternalIterator> input;
 
     ~SecondPassIterStorage() {
       if (input) {
         auto range_del_agg_ptr =
             reinterpret_cast<CompactionRangeDelAggregator*>(&range_del_agg);
         range_del_agg_ptr->~CompactionRangeDelAggregator();
-        input.reset();
         compaction_filter_holder.reset();
         auto merge_ptr = reinterpret_cast<MergeHelper*>(&merge);
         merge_ptr->~MergeHelper();
+        input.reset();
       }
     }
   } second_pass_iter_storage;
@@ -1156,14 +1156,12 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
         new(&second_pass_iter_storage.range_del_agg)
             CompactionRangeDelAggregator(&cfd->internal_comparator(),
                                          existing_snapshots_);
-    second_pass_iter_storage.input.reset(versions_->MakeInputIterator(
-        sub_compact->compaction, range_del_agg_ptr, env_options_for_read_));
     second_pass_iter_storage.compaction_filter =
         cfd->ioptions()->compaction_filter;
     if (second_pass_iter_storage.compaction_filter == nullptr) {
       second_pass_iter_storage.compaction_filter_holder =
           sub_compact->compaction->CreateCompactionFilter();
-      compaction_filter =
+      second_pass_iter_storage.compaction_filter =
           second_pass_iter_storage.compaction_filter_holder.get();
     }
     auto merge_ptr =
@@ -1175,6 +1173,8 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
             existing_snapshots_.empty() ? 0 : existing_snapshots_.back(),
             snapshot_checker_, compact_->compaction->level(),
             db_options_.statistics.get(), shutting_down_);
+    second_pass_iter_storage.input.reset(versions_->MakeInputIterator(
+        sub_compact->compaction, range_del_agg_ptr, env_options_for_read_));
     return new CompactionIterator(
         second_pass_iter_storage.input.get(), end, cfd->user_comparator(),
         merge_ptr, versions_->LastSequence(), &existing_snapshots_,

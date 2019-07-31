@@ -1759,8 +1759,8 @@ Compaction* UniversalCompactionPicker::PickRangeCompaction(
     return table_cache_->NewIterator(options, env_options_, *icmp_,
                                      *file_metadata, depend_map, nullptr,
                                      mutable_cf_options.prefix_extractor.get(),
-                                     nullptr, nullptr, false, nullptr, true,
-                                     -1);
+                                     table_reader_ptr, nullptr, false, arena,
+                                     true, -1);
   };
   ScopedArenaIterator iter(NewMapElementIterator(
       level_files.data(), level_files.size(), icmp_, &create_iter,
