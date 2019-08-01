@@ -16,15 +16,15 @@ struct FileMetaData;
 class RangeDelAggregator;
 class TableReader;
 
-typedef std::unordered_map<uint64_t, const FileMetaData*> DependFileMap;
+typedef std::unordered_map<uint64_t, const FileMetaData*> DependenceMap;
 
 class IteratorCache {
  public:
   using CreateIterCallback =
       InternalIterator* (*)(void* arg, const FileMetaData*,
-                            const DependFileMap&, Arena*, TableReader**);
+                            const DependenceMap&, Arena*, TableReader**);
 
-  IteratorCache(const DependFileMap& depend_files, void* create_iter_arg,
+  IteratorCache(const DependenceMap& dependence_map, void* create_iter_arg,
                 const CreateIterCallback& create_iter);
   ~IteratorCache();
 
@@ -39,7 +39,7 @@ class IteratorCache {
   Arena* GetArena() { return &arena_; }
 
  private:
-  const std::unordered_map<uint64_t, const FileMetaData*>& depend_files_;
+  const std::unordered_map<uint64_t, const FileMetaData*>& dependence_map_;
   void* callback_arg_;
   CreateIterCallback create_iter_;
   Arena arena_;

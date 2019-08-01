@@ -18,6 +18,7 @@
 #include <string>
 #include <unordered_map>
 #include <utility>
+#include <db/version_edit.h>
 
 #include "db/dbformat.h"
 
@@ -884,12 +885,19 @@ void BlockBasedTableBuilder::WriteRangeDelBlock(
   }
 }
 
-Status BlockBasedTableBuilder::Finish() {
+Status BlockBasedTableBuilder::Finish(const TablePropertyCache* prop) {
   Rep* r = rep_;
   bool empty_data_block = r->data_block.empty();
   Flush();
   assert(!r->closed);
   r->closed = true;
+
+  if (prop != nullptr) {
+    r->props.purpose = prop->purpose;
+    r->props.read_amp = prop->read_amp;
+    r->props.dependence = prop->dependence;
+    r->props.inheritance_chain = prop->inheritance_chain;
+  }
 
   // To make sure properties block is able to keep the accurate size of index
   // block, we will finish writing all index entries first.

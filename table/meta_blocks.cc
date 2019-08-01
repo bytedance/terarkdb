@@ -264,9 +264,6 @@ Status ReadProperties(const Slice& handle_value, RandomAccessFileReader* file,
     auto raw_val = iter.value();
     auto pos = predefined_uint64_properties.find(key);
 
-    new_table_properties->properties_offsets.insert(
-        {key, handle.offset() + iter.ValueOffset()});
-
     if (pos != predefined_uint64_properties.end()) {
       if (key == TablePropertiesNames::kDeletedKeys ||
           key == TablePropertiesNames::kMergeOperands) {

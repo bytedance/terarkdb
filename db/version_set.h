@@ -294,7 +294,7 @@ class VersionStorageInfo {
   }
 
   // REQUIRES: This version has been saved (see VersionSet::SaveTo)
-  const DependFileMap& depend_files() const { return depend_files_; }
+  const DependenceMap& dependence_map() const { return dependence_map_; }
 
   const rocksdb::LevelFilesBrief& LevelFilesBrief(int level) const {
     assert(level < static_cast<int>(level_files_brief_.size()));
@@ -454,8 +454,8 @@ class VersionStorageInfo {
   // in increasing order of keys
   std::vector<FileMetaData*>* files_;
 
-  // depend files both in files[num_levels] and depend_files
-  DependFileMap depend_files_;
+  // Dependence files both in files[-1] and dependence_map
+  DependenceMap dependence_map_;
 
   // Level that L0 data should be compacted to. All levels < base_level_ should
   // be empty. -1 if it is not level-compaction so it's not applicable.

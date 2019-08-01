@@ -46,7 +46,7 @@ extern InternalIteratorBase<BlockHandle>* NewTwoLevelIterator(
 // keep all params lifecycle please
 extern InternalIterator* NewMapSstIterator(
     const FileMetaData* file_meta, InternalIterator* mediate_sst_iter,
-    const DependFileMap& depend_files, const InternalKeyComparator& icomp,
+    const DependenceMap& dependence_map, const InternalKeyComparator& icomp,
     void* callback_arg, const IteratorCache::CreateIterCallback& create_iter,
     Arena* arena = nullptr);
 

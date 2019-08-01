@@ -36,12 +36,12 @@ class ForwardLevelIterator : public InternalIterator {
   ForwardLevelIterator(const ColumnFamilyData* const cfd,
                        const ReadOptions& read_options,
                        const std::vector<FileMetaData*>& files,
-                       const DependFileMap& depend_files,
+                       const DependenceMap& dependence_map,
                        const SliceTransform* prefix_extractor)
       : cfd_(cfd),
         read_options_(read_options),
         files_(files),
-        depend_files_(depend_files),
+        dependence_map_(dependence_map),
         valid_(false),
         file_index_(std::numeric_limits<uint32_t>::max()),
         file_iter_(nullptr),
@@ -70,7 +70,7 @@ class ForwardLevelIterator : public InternalIterator {
                                          kMaxSequenceNumber /* upper_bound */);
     file_iter_ = cfd_->table_cache()->NewIterator(
         read_options_, *(cfd_->soptions()), cfd_->internal_comparator(),
-        *files_[file_index_], depend_files_,
+        *files_[file_index_], dependence_map_,
         read_options_.ignore_range_deletions ? nullptr : &range_del_agg,
         prefix_extractor_, nullptr /* table_reader_ptr */, nullptr, false);
     valid_ = false;
@@ -164,7 +164,7 @@ class ForwardLevelIterator : public InternalIterator {
   const ColumnFamilyData* const cfd_;
   const ReadOptions& read_options_;
   const std::vector<FileMetaData*>& files_;
-  const DependFileMap& depend_files_;
+  const DependenceMap& dependence_map_;
 
   bool valid_;
   uint32_t file_index_;
@@ -562,7 +562,7 @@ void ForwardIterator::RebuildIterators(bool refresh_sv) {
     }
     l0_iters_.push_back(cfd_->table_cache()->NewIterator(
         read_options_, *cfd_->soptions(), cfd_->internal_comparator(), *l0,
-        vstorage->depend_files(),
+        vstorage->dependence_map(),
         read_options_.ignore_range_deletions ? nullptr : &range_del_agg,
         sv_->mutable_cf_options.prefix_extractor.get()));
   }
@@ -633,7 +633,7 @@ void ForwardIterator::RenewIterators() {
     }
     l0_iters_new.push_back(cfd_->table_cache()->NewIterator(
         read_options_, *cfd_->soptions(), cfd_->internal_comparator(),
-        *l0_files_new[inew], vstorage_new->depend_files(),
+        *l0_files_new[inew], vstorage_new->dependence_map(),
         read_options_.ignore_range_deletions ? nullptr : &range_del_agg,
         svnew->mutable_cf_options.prefix_extractor.get()));
   }
@@ -676,7 +676,7 @@ void ForwardIterator::BuildLevelIterators(const VersionStorageInfo* vstorage) {
       }
     } else {
       level_iters_.push_back(new ForwardLevelIterator(
-          cfd_, read_options_, level_files, vstorage->depend_files(),
+          cfd_, read_options_, level_files, vstorage->dependence_map(),
           sv_->mutable_cf_options.prefix_extractor.get()));
     }
   }
@@ -693,7 +693,7 @@ void ForwardIterator::ResetIncompleteIterators() {
     DeleteIterator(l0_iters_[i]);
     l0_iters_[i] = cfd_->table_cache()->NewIterator(
         read_options_, *cfd_->soptions(), cfd_->internal_comparator(),
-        *l0_files[i], vstorage.depend_files(), nullptr /* range_del_agg */,
+        *l0_files[i], vstorage.dependence_map(), nullptr /* range_del_agg */,
         sv_->mutable_cf_options.prefix_extractor.get());
   }
 

@@ -53,7 +53,7 @@ class TableCache {
   InternalIterator* NewIterator(
       const ReadOptions& options, const EnvOptions& toptions,
       const InternalKeyComparator& internal_comparator,
-      const FileMetaData& file_meta, const DependFileMap& depend_files,
+      const FileMetaData& file_meta, const DependenceMap& dependence_map,
       RangeDelAggregator* range_del_agg,
       const SliceTransform* prefix_extractor = nullptr,
       TableReader** table_reader_ptr = nullptr,
@@ -72,7 +72,7 @@ class TableCache {
   // @param level The level this table is at, -1 for "not set / don't know"
   Status Get(const ReadOptions& options, bool no_global_row_cache,
              const InternalKeyComparator& internal_comparator,
-             const FileMetaData& file_meta, const DependFileMap& depend_files,
+             const FileMetaData& file_meta, const DependenceMap& dependence_map,
              const Slice& k, GetContext* get_context,
              const SliceTransform* prefix_extractor = nullptr,
              HistogramImpl* file_read_hist = nullptr, bool skip_filters = false,

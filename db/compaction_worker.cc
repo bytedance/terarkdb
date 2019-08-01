@@ -96,7 +96,10 @@ AJSON(rocksdb::CompactionWorkerResult, status, actual_start, actual_end, files);
 AJSON(rocksdb::FileDescriptor, packed_number_and_path_id, file_size,
                                smallest_seqno, largest_seqno);
 
-AJSON(rocksdb::FileMetaData, fd, smallest, largest, sst_purpose, sst_depend);
+AJSON(rocksdb::TablePropertyCache, purpose, read_amp, dependence,
+                                   inheritance_chain);
+
+AJSON(rocksdb::FileMetaData, fd, smallest, largest, prop);
 
 AJSON(rocksdb::CompressionOptions, window_bits, level, strategy, max_dict_bytes,
                                    zstd_max_train_bytes, enabled);
@@ -387,14 +390,15 @@ std::string RemoteCompactionWorker::Client::DoCompaction(
   auto ucmp = icmp->user_comparator();
 
   // start run
-  DependFileMap context_depend_map;
+  DependenceMap contxt_dependence_map;
   for (auto& f : context.file_metadata) {
-    context_depend_map.emplace(f.fd.GetNumber(), &f);
+    contxt_dependence_map.emplace(f.fd.GetNumber(), &f);
   }
   std::unordered_map<int, std::vector<const FileMetaData*>> inputs;
   for (auto pair : context.inputs) {
-    assert(context_depend_map.find(pair.second) != context_depend_map.end());
-    inputs[pair.first].push_back(context_depend_map[pair.second]);
+    assert(contxt_dependence_map.find(pair.second) !=
+           contxt_dependence_map.end());
+    inputs[pair.first].push_back(contxt_dependence_map[pair.second]);
   }
   std::unordered_map<uint64_t, std::unique_ptr<rocksdb::TableReader>>
       table_cache;
@@ -407,7 +411,7 @@ std::string RemoteCompactionWorker::Client::DoCompaction(
     IteratorCache::CreateIterCallback callback;
   } c_style_new_iterator;
   auto new_iterator = [&](const FileMetaData* file_metadata,
-                          const DependFileMap& depend_map, Arena* arena,
+                          const DependenceMap& depend_map, Arena* arena,
                           TableReader** reader_ptr) -> InternalIterator* {
     std::lock_guard<std::mutex> lock(table_cache_mutex);
     uint64_t file_number = file_metadata->fd.GetNumber();
@@ -441,7 +445,7 @@ std::string RemoteCompactionWorker::Client::DoCompaction(
         find->second->NewIterator(ReadOptions(),
                                   mutable_cf_options.prefix_extractor.get(),
                                   arena);
-    if (file_metadata->sst_purpose == kMapSst && !depend_map.empty()) {
+    if (file_metadata->prop.purpose == kMapSst && !depend_map.empty()) {
       auto sst_iterator = NewMapSstIterator(file_metadata, iterator, depend_map,
                                             *icmp, c_style_new_iterator.arg,
                                             c_style_new_iterator.callback,
@@ -469,8 +473,8 @@ std::string RemoteCompactionWorker::Client::DoCompaction(
     for (auto& pair : inputs) {
       if (pair.first == 0 || pair.second.size() == 1) {
         merge_iter_builder.AddIterator(new_iterator(pair.second.front(),
-                                                    context_depend_map, &arena,
-                                                    nullptr));
+                                                    contxt_dependence_map,
+                                                    &arena, nullptr));
       } else {
         auto map_iter = NewMapElementIterator(pair.second.data(),
                                               pair.second.size(), icmp,
@@ -478,7 +482,7 @@ std::string RemoteCompactionWorker::Client::DoCompaction(
                                               c_style_new_iterator.callback,
                                               &arena);
         auto level_iter = NewMapSstIterator(nullptr, map_iter,
-                                            context_depend_map,
+                                            contxt_dependence_map,
                                             *icmp, c_style_new_iterator.arg,
                                             c_style_new_iterator.callback,
                                             &arena);
@@ -724,7 +728,7 @@ std::string RemoteCompactionWorker::Client::DoCompaction(
     }
     const uint64_t current_entries = builder->NumEntries();
     if (s.ok()) {
-      s = builder->Finish();
+      s = builder->Finish(nullptr);
     } else {
       builder->Abandon();
     }

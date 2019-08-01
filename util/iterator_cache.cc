@@ -9,10 +9,10 @@
 
 namespace rocksdb {
 
-IteratorCache::IteratorCache(const DependFileMap& depend_files,
+IteratorCache::IteratorCache(const DependenceMap& dependence_map,
                              void* callback_arg,
                              const CreateIterCallback& create_iter)
-    : depend_files_(depend_files),
+    : dependence_map_(dependence_map),
       callback_arg_(callback_arg),
       create_iter_(create_iter) {}
 
@@ -33,7 +33,7 @@ InternalIterator* IteratorCache::GetIterator(const FileMetaData* f,
   }
   CacheItem item;
   item.iter =
-      create_iter_(callback_arg_, f, depend_files_, &arena_, &item.reader);
+      create_iter_(callback_arg_, f, dependence_map_, &arena_, &item.reader);
   item.meta = f;
   assert(item.iter != nullptr);
   iterator_map_.emplace(f->fd.GetNumber(), item);
@@ -53,8 +53,8 @@ InternalIterator* IteratorCache::GetIterator(uint64_t file_number,
     return find->second.iter;
   }
   CacheItem item;
-  auto find_f = depend_files_.find(file_number);
-  if (find_f == depend_files_.end()) {
+  auto find_f = dependence_map_.find(file_number);
+  if (find_f == dependence_map_.end()) {
     auto s = Status::Corruption("Composite sst depend files missing");
     item.iter = NewErrorInternalIterator<LazySlice>(s, &arena_);
     item.reader = nullptr;
@@ -62,7 +62,7 @@ InternalIterator* IteratorCache::GetIterator(uint64_t file_number,
   } else {
     auto f = find_f->second;
     item.iter =
-        create_iter_(callback_arg_, f, depend_files_, &arena_, &item.reader);
+        create_iter_(callback_arg_, f, dependence_map_, &arena_, &item.reader);
     item.meta = f;
     assert(item.iter != nullptr);
   }
@@ -78,8 +78,8 @@ const FileMetaData* IteratorCache::GetFileMetaData(uint64_t file_number) {
   if (find != iterator_map_.end()) {
     return find->second.meta;
   }
-  auto find_depend = depend_files_.find(file_number);
-  if (find_depend != depend_files_.end()) {
+  auto find_depend = dependence_map_.find(file_number);
+  if (find_depend != dependence_map_.end()) {
     return find_depend->second;
   }
   return nullptr;

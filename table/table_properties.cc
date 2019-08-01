@@ -226,12 +226,6 @@ const std::string TablePropertiesNames::kCompression = "rocksdb.compression";
 const std::string TablePropertiesNames::kCreationTime = "rocksdb.creation.time";
 const std::string TablePropertiesNames::kOldestKeyTime =
     "rocksdb.oldest.key.time";
-const std::string TablePropertiesNames::kSstPurpose =
-    "rocksdb.sst.purpose";
-const std::string TablePropertiesNames::kSstDepend =
-    "rocksdb.sst.depend";
-const std::string TablePropertiesNames::kSstReadAmp =
-    "rocksdb.sst.read_amp";
 
 extern const std::string kPropertiesBlock = "rocksdb.properties";
 // Old property block name for backward compatibility

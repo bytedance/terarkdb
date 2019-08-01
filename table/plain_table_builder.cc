@@ -19,6 +19,7 @@
 #include "rocksdb/table.h"
 #include "table/plain_table_factory.h"
 #include "db/dbformat.h"
+#include "db/version_edit.h"
 #include "table/block_builder.h"
 #include "table/bloom_block.h"
 #include "table/plain_table_index.h"
@@ -186,9 +187,16 @@ void PlainTableBuilder::Add(const Slice& key, const LazySlice& lazy_value) {
 
 Status PlainTableBuilder::status() const { return status_; }
 
-Status PlainTableBuilder::Finish() {
+Status PlainTableBuilder::Finish(const TablePropertyCache* prop) {
   assert(!closed_);
   closed_ = true;
+
+  if (prop != nullptr) {
+    properties_.purpose = prop->purpose;
+    properties_.read_amp = prop->read_amp;
+    properties_.dependence = prop->dependence;
+    properties_.inheritance_chain = prop->inheritance_chain;
+  }
 
   properties_.data_size = offset_;
 

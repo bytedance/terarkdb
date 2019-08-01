@@ -226,7 +226,7 @@ Status BuildTable(
     if (!s.ok() || empty) {
       builder->Abandon();
     } else {
-      s = builder->Finish();
+      s = builder->Finish(&meta->prop);
     }
 
     if (s.ok() && !empty) {
@@ -252,8 +252,8 @@ Status BuildTable(
 
     if (s.ok() && !empty) {
       // this sst has no depend ...
-      DependFileMap empty_depend_files;
-      assert(meta->sst_purpose == 0);
+      DependenceMap empty_dependence_map;
+      assert(meta->prop.purpose == 0);
       // Verify that the table is usable
       // We set for_compaction to false and don't OptimizeForCompactionTableRead
       // here because this is a special case after we finish the table building
@@ -262,7 +262,7 @@ Status BuildTable(
       // to cache it here for further user reads
       std::unique_ptr<InternalIterator> it(table_cache->NewIterator(
           ReadOptions(), env_options, internal_comparator, *meta,
-          empty_depend_files, nullptr /* range_del_agg */,
+          empty_dependence_map, nullptr /* range_del_agg */,
           mutable_cf_options.prefix_extractor.get(), nullptr,
           (internal_stats == nullptr) ? nullptr
                                       : internal_stats->GetFileReadHist(0),

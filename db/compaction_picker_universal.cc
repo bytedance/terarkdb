@@ -241,10 +241,10 @@ void UniversalCompactionPicker::SortedRun::DumpSizeInfo(
 
 static size_t GetFilesSize(const FileMetaData* f, uint64_t file_number,
                            const VersionStorageInfo& vstorage) {
-  auto& depend_files = vstorage.depend_files();
+  auto& dependence_map = vstorage.dependence_map();
   if (f == nullptr) {
-    auto find = depend_files.find(file_number);
-    if (find == depend_files.end()) {
+    auto find = dependence_map.find(file_number);
+    if (find == dependence_map.end()) {
       // TODO log error
       return 0;
     }
@@ -253,9 +253,9 @@ static size_t GetFilesSize(const FileMetaData* f, uint64_t file_number,
     assert(file_number == uint64_t(-1));
   }
   uint64_t file_size = f->fd.GetFileSize();
-  if (f->sst_purpose != 0) {
-    for (auto depend : f->sst_depend) {
-      file_size += GetFilesSize(nullptr, depend, vstorage);
+  if (f->prop.purpose != 0) {
+    for (auto dependence_file_number : f->prop.dependence) {
+      file_size += GetFilesSize(nullptr, dependence_file_number, vstorage);
     }
   }
   return file_size;
@@ -524,18 +524,18 @@ Compaction* UniversalCompactionPicker::CompactRange(
       if (files_being_compact->count(f->fd.GetNumber()) > 0) {
         return true;
       }
-      auto& depend_files = vstorage->depend_files();
-      for (auto file_number : f->sst_depend) {
+      auto& dependence_map = vstorage->dependence_map();
+      for (auto file_number : f->prop.dependence) {
         if (files_being_compact->count(file_number) > 0) {
           return true;
         }
-        auto find = depend_files.find(file_number);
-        if (find == depend_files.end()) {
+        auto find = dependence_map.find(file_number);
+        if (find == dependence_map.end()) {
           // TODO: log error
           continue;
         }
-        for (auto file_number_depend : find->second->sst_depend) {
-          if (files_being_compact->count(file_number_depend) > 0) {
+        for (auto dependence_file_number : find->second->prop.dependence) {
+          if (files_being_compact->count(dependence_file_number) > 0) {
             return true;
           }
         };
@@ -1363,23 +1363,15 @@ Compaction* UniversalCompactionPicker::PickCompositeCompaction(
       }
       f = level_files.front();
     } else {
-      if (sr.file->being_compacted || sr.file->sst_purpose != kMapSst) {
+      if (sr.file->being_compacted || sr.file->prop.purpose != kMapSst) {
         continue;
       }
       f = sr.file;
     }
-    std::shared_ptr<const TableProperties> porps;
-    auto s = table_cache_->GetTableProperties(
-        env_options_, *icmp_, f->fd, &porps,
-        mutable_cf_options.prefix_extractor.get(), false);
-    if (s.ok()) {
-      size_t level_space_amplification =
-          GetSstReadAmp(porps->user_collected_properties);
-      if (level_space_amplification >= max_read_amp) {
-        max_read_amp = level_space_amplification;
-        inputs.level = sr.level;
-        inputs.files = {f};
-      }
+    if (f->prop.read_amp >= max_read_amp) {
+      max_read_amp = f->prop.read_amp;
+      inputs.level = sr.level;
+      inputs.files = {f};
     }
   }
   if (inputs.level == -1) {
@@ -1456,10 +1448,10 @@ Compaction* UniversalCompactionPicker::PickCompositeCompaction(
     return new_compaction();
   }
   Arena arena;
-  DependFileMap empty_depend_files;
+  DependenceMap empty_dependence_map;
   ReadOptions options;
   ScopedArenaIterator iter(table_cache_->NewIterator(
-      options, env_options_, *icmp_, *inputs.files.front(), empty_depend_files,
+      options, env_options_, *icmp_, *inputs.files.front(), empty_dependence_map,
       nullptr, mutable_cf_options.prefix_extractor.get(), nullptr, nullptr,
       false, &arena, true, inputs.level));
   if (!iter->status().ok()) {
@@ -1471,14 +1463,14 @@ Compaction* UniversalCompactionPicker::PickCompositeCompaction(
     if (e.link_.size() != 1) {
       return false;
     }
-    auto& depend_files = vstorage->depend_files();
-    auto find = depend_files.find(e.link_.front().file_number);
-    if (find == depend_files.end()) {
+    auto& dependence_map = vstorage->dependence_map();
+    auto find = dependence_map.find(e.link_.front().file_number);
+    if (find == dependence_map.end()) {
       // TODO log error
       return false;
     }
     auto f = find->second;
-    if (f->sst_purpose != 0) {
+    if (f->prop.purpose != 0) {
       return false;
     }
     Range r(e.smallest_key_, e.largest_key_, e.include_smallest_,
@@ -1751,10 +1743,10 @@ Compaction* UniversalCompactionPicker::PickRangeCompaction(
 
   std::vector<RangeStorage> input_range;
   Arena arena;
-  DependFileMap empty_depend_files;
+  DependenceMap empty_dependence_map;
   ReadOptions options;
   auto create_iter = [&](const FileMetaData* file_metadata,
-                         const DependFileMap& depend_map, Arena* arena,
+                         const DependenceMap& depend_map, Arena* arena,
                          TableReader** table_reader_ptr) {
     return table_cache_->NewIterator(options, env_options_, *icmp_,
                                      *file_metadata, depend_map, nullptr,
@@ -1785,18 +1777,18 @@ Compaction* UniversalCompactionPicker::PickRangeCompaction(
     if (end != nullptr && ic.Compare(e.smallest_key_, end->Encode()) > 0) {
       return false;
     }
-    auto& depend_files = vstorage->depend_files();
+    auto& dependence_map = vstorage->dependence_map();
     for (auto& link : e.link_) {
       if (files_being_compact->count(link.file_number) > 0) {
         return true;
       }
-      auto find = depend_files.find(link.file_number);
-      if (find == depend_files.end()) {
+      auto find = dependence_map.find(link.file_number);
+      if (find == dependence_map.end()) {
         // TODO: log error
         continue;
       }
       auto f = find->second;
-      for (auto file_number : f->sst_depend) {
+      for (auto file_number : f->prop.dependence) {
         if (files_being_compact->count(file_number) > 0) {
           return true;
         }

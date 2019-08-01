@@ -83,6 +83,13 @@ struct FileSampledStats {
   mutable std::atomic<uint64_t> num_reads_sampled;
 };
 
+struct TablePropertyCache {
+  uint8_t purpose = 0;                      // Zero for essence sst
+  uint8_t read_amp = 1;                     // Read amp from sst
+  std::vector<uint64_t> dependence;         // Make these sst hidden
+  std::vector<uint64_t> inheritance_chain;  // Inheritance chain
+};
+
 struct FileMetaData {
   FileDescriptor fd;
   InternalKey smallest;            // Smallest internal key served by table
@@ -116,8 +123,7 @@ struct FileMetaData {
   bool marked_for_compaction;  // True if client asked us nicely to compact this
                                // file.
 
-  uint8_t sst_purpose;               // Zero for essence sst
-  std::vector<uint64_t> sst_depend;  // Make these sst hidden
+  TablePropertyCache prop;     // Cache some TableProperty fields into manifest
 
   FileMetaData()
       : table_reader_handle(nullptr),
@@ -129,8 +135,7 @@ struct FileMetaData {
         refs(0),
         being_compacted(false),
         init_stats_from_file(false),
-        marked_for_compaction(false),
-        sst_purpose(0) {}
+        marked_for_compaction(false) {}
 
   // REQUIRED: Keys must be given to the function in sorted order (it expects
   // the last key to be the largest).
@@ -240,8 +245,8 @@ class VersionEdit {
   void AddFile(int level, uint64_t file, uint32_t file_path_id,
                uint64_t file_size, const InternalKey& smallest,
                const InternalKey& largest, const SequenceNumber& smallest_seqno,
-               const SequenceNumber& largest_seqno, bool marked_for_compaction,
-               uint8_t sst_purpose, const std::vector<uint64_t>& sst_depend) {
+               const SequenceNumber& largest_seqno, uint64_t num_antiquation,
+               bool marked_for_compaction, const TablePropertyCache& prop) {
     assert(smallest_seqno <= largest_seqno);
     FileMetaData f;
     f.fd = FileDescriptor(file, file_path_id, file_size, smallest_seqno,
@@ -250,9 +255,12 @@ class VersionEdit {
     f.largest = largest;
     f.fd.smallest_seqno = smallest_seqno;
     f.fd.largest_seqno = largest_seqno;
+    f.num_antiquation = num_antiquation;
     f.marked_for_compaction = marked_for_compaction;
-    f.sst_purpose = sst_purpose;
-    f.sst_depend = sst_depend;
+    f.prop.purpose = prop.purpose;
+    f.prop.read_amp = prop.read_amp;
+    f.prop.dependence = prop.dependence;
+    f.prop.inheritance_chain = prop.inheritance_chain;
     new_files_.emplace_back(level, std::move(f));
   }
 

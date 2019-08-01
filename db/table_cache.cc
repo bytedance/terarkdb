@@ -177,7 +177,7 @@ Status TableCache::FindTable(const EnvOptions& env_options,
 InternalIterator* TableCache::NewIterator(
     const ReadOptions& options, const EnvOptions& env_options,
     const InternalKeyComparator& icomparator, const FileMetaData& file_meta,
-    const DependFileMap& depend_files, RangeDelAggregator* range_del_agg,
+    const DependenceMap& dependence_map, RangeDelAggregator* range_del_agg,
     const SliceTransform* prefix_extractor, TableReader** table_reader_ptr,
     HistogramImpl* file_read_hist, bool for_compaction, Arena* arena,
     bool skip_filters, int level, const InternalKey* smallest_compaction_key,
@@ -240,7 +240,7 @@ InternalIterator* TableCache::NewIterator(
     } else {
       result = table_reader->NewIterator(options, prefix_extractor, arena,
                                          skip_filters, for_compaction);
-      if (file_meta.sst_purpose == kMapSst && !depend_files.empty()) {
+      if (file_meta.prop.purpose == kMapSst && !dependence_map.empty()) {
         // Store params for create depend table iterator in future
         // DON'T REF THIS OBJECT, DEEP COPY IT !
         struct CreateIteratorFuncion {
@@ -255,11 +255,11 @@ InternalIterator* TableCache::NewIterator(
           int level;
 
           InternalIterator* operator()(const FileMetaData* _f,
-                                       const DependFileMap& _depend_files,
+                                       const DependenceMap& _dependence_map,
                                        Arena* _arena,
                                        TableReader** _reader_ptr) {
             return table_cache->NewIterator(
-                options, env_options, icomparator, *_f, _depend_files,
+                options, env_options, icomparator, *_f, _dependence_map,
                 range_del_agg, prefix_extractor, _reader_ptr, nullptr,
                 for_compaction, _arena, skip_filters, level);
           }
@@ -277,7 +277,7 @@ InternalIterator* TableCache::NewIterator(
                                   range_del_agg, prefix_extractor,
                                   for_compaction, skip_filters, level};
         auto map_sst_iter =
-            NewMapSstIterator(&file_meta, result, depend_files, icomparator,
+            NewMapSstIterator(&file_meta, result, dependence_map, icomparator,
                               create_iter_fn,
                               c_style_callback(*create_iter_fn), arena);
         if (arena != nullptr) {
@@ -318,7 +318,7 @@ InternalIterator* TableCache::NewIterator(
     }
   }
   if (s.ok() && range_del_agg != nullptr && !options.ignore_range_deletions &&
-      file_meta.sst_purpose != kMapSst) {
+      file_meta.prop.purpose != kMapSst) {
     if (range_del_agg->AddFile(fd.GetNumber())) {
       std::unique_ptr<FragmentedRangeTombstoneIterator> range_del_iter(
           static_cast<FragmentedRangeTombstoneIterator*>(
@@ -354,7 +354,7 @@ InternalIterator* TableCache::NewIterator(
 Status TableCache::Get(const ReadOptions& options, bool no_global_row_cache,
                        const InternalKeyComparator& internal_comparator,
                        const FileMetaData& file_meta,
-                       const DependFileMap& depend_files, const Slice& k,
+                       const DependenceMap& dependence_map, const Slice& k,
                        GetContext* get_context,
                        const SliceTransform* prefix_extractor,
                        HistogramImpl* file_read_hist, bool skip_filters,
@@ -365,7 +365,7 @@ Status TableCache::Get(const ReadOptions& options, bool no_global_row_cache,
   RowCacheContext row_cache_context;
   bool enable_row_cache = ioptions_.row_cache &&
                           !get_context->NeedToReadSequence() &&
-                          file_meta.sst_purpose != kMapSst;
+                          file_meta.prop.purpose != kMapSst;
 
   // Check row cache if enabled. Since row cache does not currently store
   // sequence numbers, we cannot use it if we need to fetch the sequence.
@@ -390,7 +390,7 @@ Status TableCache::Get(const ReadOptions& options, bool no_global_row_cache,
     }
   }
   if (s.ok()) {
-    if (file_meta.sst_purpose != kMapSst) {
+    if (file_meta.prop.purpose != kMapSst) {
       if (enable_row_cache && no_global_row_cache) {
         s = t->RowCachedGet(options, k, fd.largest_seqno,
                             ioptions_.row_cache.get(), row_cache_id_,
@@ -413,7 +413,7 @@ Status TableCache::Get(const ReadOptions& options, bool no_global_row_cache,
         }
 #endif  // ROCKSDB_LITE
       }
-    } else if (depend_files.empty()) {
+    } else if (dependence_map.empty()) {
       s = Status::Corruption("Composite sst depend files missing");
     } else {
       // Forward query to target sst
@@ -498,13 +498,13 @@ Status TableCache::Get(const ReadOptions& options, bool no_global_row_cache,
             s = Status::Corruption(err_msg);
             return false;
           }
-          auto find = depend_files.find(file_number);
-          if (find == depend_files.end()) {
+          auto find = dependence_map.find(file_number);
+          if (find == dependence_map.end()) {
             s = Status::Corruption("Map sst depend files missing");
             return false;
           }
           s = Get(options, no_global_row_cache, internal_comparator,
-                  *find->second, depend_files, find_k, get_context,
+                  *find->second, dependence_map, find_k, get_context,
                   prefix_extractor, file_read_hist, skip_filters, level);
 
           if (!s.ok() || get_context->is_finished()) {

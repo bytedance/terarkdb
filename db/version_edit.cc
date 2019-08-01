@@ -54,7 +54,7 @@ enum CustomTag : uint32_t {
   // removed when manifest becomes forward-comptabile.
   kMinLogNumberToKeepHack = 3,
   kNumAntiquation = 63,
-  kSstPurpose = 64,
+  kPropertyCache = 64,
   kPathId = 65,
 };
 // If this bit for the custom tag is set, opening DB should fail if
@@ -123,10 +123,12 @@ bool VersionEdit::EncodeTo(std::string* dst) const {
     if (!f.smallest.Valid() || !f.largest.Valid()) {
       return false;
     }
+    bool has_property_cache = f.prop.purpose != 0 || f.prop.read_amp != 1 ||
+                              !f.prop.dependence.empty() ||
+                              !f.prop.inheritance_chain.empty();
     bool has_customized_fields = false;
-    if (f.num_antiquation > 0 || f.marked_for_compaction ||
-        has_min_log_number_to_keep_ || f.sst_purpose != 0 ||
-        !f.sst_depend.empty()) {
+    if (f.num_antiquation != 0 || f.marked_for_compaction ||
+        has_min_log_number_to_keep_ || has_property_cache) {
       PutVarint32(dst, kNewFile4);
       has_customized_fields = true;
     } else if (f.fd.GetPathId() == 0) {
@@ -192,15 +194,22 @@ bool VersionEdit::EncodeTo(std::string* dst) const {
         PutLengthPrefixedSlice(dst, Slice(varint_log_number));
         min_log_num_written = true;
       }
-      if (f.sst_purpose != 0 || !f.sst_depend.empty()) {
-        PutVarint32(dst, CustomTag::kSstPurpose);
-        std::string encode_buffer;
-        encode_buffer.push_back((char)f.sst_purpose);
-        PutVarint64(&encode_buffer, f.sst_depend.size());
-        for (auto depend : f.sst_depend) {
-          PutVarint64(&encode_buffer, depend);
+      if (has_property_cache) {
+        PutVarint32(dst, CustomTag::kPropertyCache);
+        std::string encode_property_cache;
+        encode_property_cache.push_back((char)f.prop.purpose);
+        PutVarint64(&encode_property_cache, f.prop.dependence.size());
+        for (auto file_number : f.prop.dependence) {
+          PutVarint64(&encode_property_cache, file_number);
         }
-        PutLengthPrefixedSlice(dst, Slice(encode_buffer));
+        if (f.prop.read_amp != 1 || !f.prop.inheritance_chain.empty()) {
+          encode_property_cache.push_back((char)f.prop.read_amp);
+          PutVarint64(&encode_property_cache, f.prop.inheritance_chain.size());
+          for (auto file_number : f.prop.inheritance_chain) {
+            PutVarint64(&encode_property_cache, file_number);
+          }
+        }
+        PutLengthPrefixedSlice(dst, encode_property_cache);
       }
       TEST_SYNC_POINT_CALLBACK("VersionEdit::EncodeTo:NewFile4:CustomizeFields",
                                dst);
@@ -318,27 +327,41 @@ const char* VersionEdit::DecodeNewFile4From(Slice* input) {
           }
           has_min_log_number_to_keep_ = true;
           break;
-        case kSstPurpose:
-          do {
-            const char* error_msg = "sst_purpose field wrong size";
-            if (field.empty()) {
-              return error_msg;
-            }
-            f.sst_purpose = (uint8_t)field[0];
+        case kPropertyCache:
+          if (field.empty()) {
+            return "prop field wrong size";
+          } else {
+            const char* error_msg = "prop field";
+            f.prop.purpose = (uint8_t)field[0];
             field.remove_prefix(1);
             uint64_t size;
             if (!GetVarint64(&field, &size)) {
               return error_msg;
             }
-            f.sst_depend.reserve(size);
+            f.prop.dependence.reserve(size);
             for (size_t i = 0; i < size; ++i) {
               uint64_t file_number;
               if (!GetVarint64(&field, &file_number)) {
                 return error_msg;
               }
-              f.sst_depend.emplace_back(file_number);
+              f.prop.dependence.emplace_back(file_number);
             }
-          } while (false);
+            if (!field.empty()) {
+              f.prop.read_amp = (uint8_t)field[0];
+              field.remove_prefix(1);
+              if (!GetVarint64(&field, &size)) {
+                return error_msg;
+              }
+              f.prop.inheritance_chain.reserve(size);
+              for (size_t i = 0; i < size; ++i) {
+                uint64_t file_number;
+                if (!GetVarint64(&field, &file_number)) {
+                  return error_msg;
+                }
+                f.prop.inheritance_chain.emplace_back(file_number);
+              }
+            }
+          }
           break;
         default:
           if ((custom_tag & kCustomTagNonSafeIgnoreMask) != 0) {

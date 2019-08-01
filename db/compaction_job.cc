@@ -522,12 +522,13 @@ void CompactionJob::GenSubcompactionBoundaries() {
           }
         }
         for (size_t i = 0; i < num_files; i++) {
-          if (flevel->files[i].file_metadata->sst_purpose == kMapSst) {
-            auto& depend_files =
-                c->input_version()->storage_info()->depend_files();
-            for (auto depend : flevel->files[i].file_metadata->sst_depend) {
-              auto find = depend_files.find(depend);
-              if (find == depend_files.end()) {
+          if (flevel->files[i].file_metadata->prop.purpose == kMapSst) {
+            auto& dependence_map =
+                c->input_version()->storage_info()->dependence_map();
+            for (auto file_number :
+                 flevel->files[i].file_metadata->prop.dependence) {
+              auto find = dependence_map.find(file_number);
+              if (find == dependence_map.end()) {
                 assert(false);
                 continue;
               }
@@ -761,8 +762,10 @@ Status CompactionJob::Run() {
         output.meta.num_deletions = tp->num_deletions;
         output.meta.raw_value_size = tp->raw_value_size;
         output.meta.raw_key_size = tp->raw_key_size;
-        output.meta.sst_purpose = GetSstPurpose(tp->user_collected_properties);
-        output.meta.sst_depend = GetSstDepend(tp->user_collected_properties);
+        output.meta.prop.purpose = tp->purpose;
+        output.meta.prop.read_amp = tp->read_amp;
+        output.meta.prop.dependence = tp->dependence;
+        output.meta.prop.inheritance_chain = tp->inheritance_chain;
         output.finished = true;
         c->AddOutputTableFileNumber(file_number);
       }
@@ -873,7 +876,7 @@ Status CompactionJob::VerifyFiles() {
       }
       // Use empty depend files to disable map or link sst forward calls.
       // depend files will build in InstallCompactionResults
-      DependFileMap empty_depend_files;
+      DependenceMap empty_dependence_map;
       // Verify that the table is usable
       // We set for_compaction to false and don't OptimizeForCompactionTableRead
       // here because this is a special case after we finish the table building
@@ -882,7 +885,7 @@ Status CompactionJob::VerifyFiles() {
       // to cache it here for further user reads
       InternalIterator* iter = cfd->table_cache()->NewIterator(
           ReadOptions(), env_options_, cfd->internal_comparator(),
-          *files_meta[file_idx], empty_depend_files,
+          *files_meta[file_idx], empty_dependence_map,
           nullptr /* range_del_agg */, prefix_extractor, nullptr,
           cfd->internal_stats()->GetFileReadHist(
               compact_->compaction->output_level()),
@@ -1010,7 +1013,7 @@ Status CompactionJob::Install(const MutableCFOptions& mutable_cf_options) {
   stream.StartArray();
   for (int level = 0; level < vstorage->num_levels(); ++level) {
     if (vstorage->LevelFiles(level).size() == 1 &&
-        vstorage->LevelFiles(level).front()->sst_purpose == kMapSst) {
+        vstorage->LevelFiles(level).front()->prop.purpose == kMapSst) {
       stream <<
           std::to_string(vstorage->LevelFiles(level).front()->num_entries);
     } else {
@@ -1657,7 +1660,7 @@ Status CompactionJob::FinishCompactionOutputFile(
   }
   const uint64_t current_entries = sub_compact->builder->NumEntries();
   if (s.ok()) {
-    s = sub_compact->builder->Finish();
+    s = sub_compact->builder->Finish(&meta->prop);
   } else {
     sub_compact->builder->Abandon();
   }
@@ -1821,10 +1824,10 @@ Status CompactionJob::InstallCompactionResults(
                                &file_meta, &prop);
     if (file_meta.fd.file_size > 0) {
       // test map sst
-      DependFileMap empty_depend_files;
+      DependenceMap empty_dependence_map;
       InternalIterator* iter = cfd->table_cache()->NewIterator(
           ReadOptions(), env_options_, cfd->internal_comparator(),
-          file_meta, empty_depend_files, nullptr /* range_del_agg */,
+          file_meta, empty_dependence_map, nullptr /* range_del_agg */,
           mutable_cf_options.prefix_extractor.get(), nullptr,
           cfd->internal_stats()->GetFileReadHist(compaction->output_level()),
           false, nullptr /* arena */, false /* skip_filters */,

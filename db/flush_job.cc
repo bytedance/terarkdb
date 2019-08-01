@@ -256,7 +256,7 @@ Status FlushJob::Run(LogsWithPrepTracker* prep_tracker,
   auto vstorage = cfd_->current()->storage_info();
   for (int level = 0; level < vstorage->num_levels(); ++level) {
     if (vstorage->LevelFiles(level).size() == 1 &&
-        vstorage->LevelFiles(level).front()->sst_purpose == kMapSst) {
+        vstorage->LevelFiles(level).front()->prop.purpose == kMapSst) {
       stream <<
           std::to_string(vstorage->LevelFiles(level).front()->num_entries);
     } else {
@@ -420,8 +420,8 @@ Status FlushJob::WriteLevel0Table() {
     edit_->AddFile(0 /* level */, meta_.fd.GetNumber(), meta_.fd.GetPathId(),
                    meta_.fd.GetFileSize(), meta_.smallest, meta_.largest,
                    meta_.fd.smallest_seqno, meta_.fd.largest_seqno,
-                   meta_.marked_for_compaction, meta_.sst_purpose,
-                   meta_.sst_depend);
+                   meta_.num_antiquation, meta_.marked_for_compaction,
+                   meta_.prop);
   }
 
   // Note that here we treat flush as level 0 compaction in internal stats

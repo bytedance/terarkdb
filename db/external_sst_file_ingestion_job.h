@@ -29,9 +29,6 @@ struct IngestedFileInfo {
   std::string largest_user_key;
   // Sequence number for keys in external file
   SequenceNumber original_seqno;
-  // Offset of the global sequence number field in the file, will
-  // be zero if version is 1 (global seqno is not supported)
-  size_t global_seqno_offset;
   // External file size
   uint64_t file_size;
   // total number of keys in external file

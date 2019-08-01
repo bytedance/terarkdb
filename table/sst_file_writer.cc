@@ -284,7 +284,7 @@ Status SstFileWriter::Finish(ExternalSstFileInfo* file_info) {
     return Status::InvalidArgument("Cannot create sst file with no entries");
   }
 
-  Status s = r->builder->Finish();
+  Status s = r->builder->Finish(nullptr);
   r->file_info.file_size = r->builder->FileSize();
 
   if (s.ok()) {

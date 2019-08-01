@@ -280,8 +280,8 @@ class MapSstIterator final : public InternalIterator {
         return kInitFirstIterInvalid;
       }
       assert(file_meta_ == nullptr ||
-             std::binary_search(file_meta_->sst_depend.begin(),
-                                file_meta_->sst_depend.end(), link_[i]));
+             std::binary_search(file_meta_->prop.dependence.begin(),
+                                file_meta_->prop.dependence.end(), link_[i]));
     }
     return kInitFirstIterOK;
   }
@@ -363,17 +363,17 @@ class MapSstIterator final : public InternalIterator {
 
  public:
   MapSstIterator(const FileMetaData* file_meta, InternalIterator* iter,
-                 const DependFileMap& depend_files,
+                 const DependenceMap& dependence_map,
                  const InternalKeyComparator& icomp, void* create_arg,
                  const IteratorCache::CreateIterCallback& create)
       : file_meta_(file_meta),
         first_level_iter_(iter),
         is_backword_(false),
-        iterator_cache_(depend_files, create_arg, create),
+        iterator_cache_(dependence_map, create_arg, create),
         include_smallest_(false),
         include_largest_(false),
         min_heap_(icomp) {
-    if (file_meta != nullptr && file_meta_->sst_purpose != kMapSst) {
+    if (file_meta != nullptr && file_meta_->prop.purpose != kMapSst) {
       abort();
     }
   }
@@ -561,17 +561,17 @@ InternalIteratorBase<BlockHandle>* NewTwoLevelIterator(
 
 InternalIterator* NewMapSstIterator(
     const FileMetaData* file_meta, InternalIterator* mediate_sst_iter,
-    const DependFileMap& depend_files, const InternalKeyComparator& icomp,
+    const DependenceMap& dependence_map, const InternalKeyComparator& icomp,
     void* callback_arg, const IteratorCache::CreateIterCallback& create_iter,
     Arena* arena) {
-  assert(file_meta == nullptr || file_meta->sst_purpose == kMapSst);
+  assert(file_meta == nullptr || file_meta->prop.purpose == kMapSst);
   if (arena == nullptr) {
-    return new MapSstIterator(file_meta, mediate_sst_iter, depend_files, icomp,
-                              callback_arg, create_iter);
+    return new MapSstIterator(file_meta, mediate_sst_iter, dependence_map,
+                              icomp, callback_arg, create_iter);
   } else {
     void* buffer = arena->AllocateAligned(sizeof(MapSstIterator));
     return new (buffer)
-        MapSstIterator(file_meta, mediate_sst_iter, depend_files, icomp,
+        MapSstIterator(file_meta, mediate_sst_iter, dependence_map, icomp,
                        callback_arg, create_iter);
   }
 }

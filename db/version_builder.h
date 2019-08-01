@@ -25,9 +25,7 @@ class InternalStats;
 class VersionBuilder {
  public:
   VersionBuilder(const EnvOptions& env_options, TableCache* table_cache,
-                 VersionStorageInfo* base_vstorage,
-                 const SliceTransform* prefix_extractor = nullptr,
-                 Logger* info_log = nullptr);
+                 VersionStorageInfo* base_vstorage, Logger* info_log = nullptr);
   ~VersionBuilder();
   void CheckConsistency(VersionStorageInfo* vstorage);
   void CheckConsistencyForDeletes(VersionEdit* edit, uint64_t number,

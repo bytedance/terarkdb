@@ -568,7 +568,7 @@ void CompactionPicker::InitFilesBeingCompact(
   ReadOptions options;
   MapSstElement element;
   auto create_iter = [&](const FileMetaData* file_metadata,
-                         const DependFileMap& depend_map, Arena* arena,
+                         const DependenceMap& depend_map, Arena* arena,
                          TableReader** table_reader_ptr) {
     return table_cache_->NewIterator(options, env_options_, *icmp_,
                                      *file_metadata, depend_map, nullptr,
@@ -609,16 +609,16 @@ void CompactionPicker::InitFilesBeingCompact(
           break;
         }
       }
-      auto& depend_files = vstorage->depend_files();
+      auto& dependence_map = vstorage->dependence_map();
       for (auto& link : element.link_) {
         files_being_compact->emplace(link.file_number);
-        auto find = depend_files.find(link.file_number);
-        if (find == depend_files.end()) {
+        auto find = dependence_map.find(link.file_number);
+        if (find == dependence_map.end()) {
           // TODO: log error
           continue;
         }
         auto f = find->second;
-        for (auto file_number : f->sst_depend) {
+        for (auto file_number : f->prop.dependence) {
           files_being_compact->emplace(file_number);
         };
       }

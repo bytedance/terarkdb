@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "db/dbformat.h"
+#include "db/version_edit.h"
 #include "rocksdb/env.h"
 #include "rocksdb/table.h"
 #include "table/block_builder.h"
@@ -246,9 +247,15 @@ Status CuckooTableBuilder::MakeHashTable(std::vector<CuckooBucket>* buckets) {
   return Status::OK();
 }
 
-Status CuckooTableBuilder::Finish() {
+Status CuckooTableBuilder::Finish(const TablePropertyCache* prop) {
   assert(!closed_);
   closed_ = true;
+  if (prop != nullptr) {
+    properties_.purpose = prop->purpose;
+    properties_.read_amp = prop->read_amp;
+    properties_.dependence = prop->dependence;
+    properties_.inheritance_chain = prop->inheritance_chain;
+  }
   std::vector<CuckooBucket> buckets;
   Status s;
   std::string unused_bucket;

@@ -192,7 +192,7 @@ uint64_t SstFileDumper::CalculateCompressedTableSize(
     }
     table_builder->Add(iter->key(), iter->value());
   }
-  Status s = table_builder->Finish();
+  Status s = table_builder->Finish(nullptr);
   if (!s.ok()) {
     fputs(s.ToString().c_str(), stderr);
     exit(1);

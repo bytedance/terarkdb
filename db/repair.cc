@@ -459,7 +459,7 @@ class Repairer {
   }
 
   void ExtractMetaData() {
-    DependFileMap depend_files;
+    DependenceMap dependence_map;
     std::map<uint64_t, TableInfo*> mediate_sst; // map or link sst
     // make sure tables_ enouth, so we can hold ptr of elements
     tables_.reserve(table_fds_.size());
@@ -478,8 +478,8 @@ class Repairer {
         ArchiveFile(fname);
       } else {
         tables_.push_back(t);
-        depend_files.emplace(t.meta.fd.GetNumber(), &tables_.back().meta);
-        if (t.meta.sst_purpose != 0) {
+        dependence_map.emplace(t.meta.fd.GetNumber(), &tables_.back().meta);
+        if (t.meta.prop.purpose != 0) {
           mediate_sst.emplace(t.meta.fd.GetNumber(), &tables_.back());
         }
       }
@@ -496,9 +496,9 @@ class Repairer {
         enum {
           kOK, kError, kRetry,
         } result = kOK;
-        for (auto file_number : t.meta.sst_depend) {
-          auto find = depend_files.find(file_number);
-          if (find == depend_files.end()) {
+        for (auto file_number : t.meta.prop.dependence) {
+          auto find = dependence_map.find(file_number);
+          if (find == dependence_map.end()) {
             result = kError;
             break;
           }
@@ -610,10 +610,10 @@ class Repairer {
     if (status.ok()) {
       // Use empty depend files to disable map or link sst forward calls.
       // P.S. depend files in VersionStorage has not build yet ...
-      DependFileMap empty_depend_files;
+      DependenceMap empty_dependence_map;
       InternalIterator* iter = table_cache_->NewIterator(
           ReadOptions(), env_options_, cfd->internal_comparator(), t->meta,
-          empty_depend_files, nullptr /* range_del_agg */,
+          empty_dependence_map, nullptr /* range_del_agg */,
           cfd->GetLatestMutableCFOptions()->prefix_extractor.get());
       bool empty = true;
       ParsedInternalKey parsed;
@@ -651,8 +651,10 @@ class Repairer {
                      t->meta.fd.GetNumber(), counter,
                      status.ToString().c_str());
 
-      t->meta.sst_purpose = GetSstPurpose(props->user_collected_properties);
-      t->meta.sst_depend = GetSstDepend(props->user_collected_properties);
+      t->meta.prop.purpose = props->purpose;
+      t->meta.prop.read_amp = props->read_amp;
+      t->meta.prop.dependence = props->dependence;
+      t->meta.prop.inheritance_chain = props->inheritance_chain;
     }
     return status;
   }
@@ -679,25 +681,26 @@ class Repairer {
       edit.SetNextFile(next_file_number_);
       edit.SetColumnFamily(cfd->GetID());
 
-      std::set<uint64_t> depend_set;
+      std::set<uint64_t> dependence_set;
       for (const auto* table : cf_id_and_tables.second) {
-        if (table->meta.sst_purpose != 0) {
-          auto& sst_depend = table->meta.sst_depend;
-          depend_set.insert(sst_depend.begin(), sst_depend.end());
+        if (table->meta.prop.purpose != 0) {
+          auto& dependence = table->meta.prop.dependence;
+          dependence_set.insert(dependence.begin(), dependence.end());
         }
       }
       // TODO(opt): separate out into multiple levels
       for (const auto* table : cf_id_and_tables.second) {
         int level = 0;
-        if (depend_set.count(table->meta.fd.GetNumber()) > 0) {
+        if (dependence_set.count(table->meta.fd.GetNumber()) > 0) {
           // This sst should insert into depend level
           level = -1;
         }
-        edit.AddFile(level, table->meta.fd.GetNumber(), table->meta.fd.GetPathId(),
-                     table->meta.fd.GetFileSize(), table->meta.smallest,
-                     table->meta.largest, table->min_sequence,
-                     table->max_sequence, table->meta.marked_for_compaction,
-                     table->meta.sst_purpose, table->meta.sst_depend);
+        edit.AddFile(level, table->meta.fd.GetNumber(),
+                     table->meta.fd.GetPathId(), table->meta.fd.GetFileSize(),
+                     table->meta.smallest, table->meta.largest,
+                     table->min_sequence, table->max_sequence,
+                     0 /* num_antiquation */, table->meta.marked_for_compaction,
+                     table->meta.prop);
       }
       assert(next_file_number_ > 0);
       vset_.MarkFileNumberUsed(next_file_number_ - 1);
