@@ -5,6 +5,7 @@
 #include <cfloat>
 // boost headers
 // rocksdb headers
+#include <db/version_edit.h>
 #include <rocksdb/merge_operator.h>
 #include <rocksdb/compaction_filter.h>
 #include <table/meta_blocks.h>
@@ -648,9 +649,16 @@ Status TerarkZipTableBuilder::EmptyTableFinish() {
 }
 
 
-Status TerarkZipTableBuilder::Finish() try {
+Status TerarkZipTableBuilder::Finish(const TablePropertyCache* prop) try {
   assert(!closed_);
   closed_ = true;
+
+  if (prop != nullptr) {
+    properties_.purpose = prop->purpose;
+    properties_.read_amp = prop->read_amp;
+    properties_.dependence = prop->dependence;
+    properties_.inheritance_chain = prop->inheritance_chain;
+  }
 
   if (!r00_) {
     return EmptyTableFinish();

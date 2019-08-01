@@ -68,7 +68,7 @@ public:
 
   void Add(const Slice& key, const LazySlice& value) override;
   Status status() const override { return status_; }
-  Status Finish() override;
+  Status Finish(const TablePropertyCache* prop) override;
   Status AbortFinish(const std::exception& ex);
   void Abandon() override;
   uint64_t NumEntries() const override { return properties_.num_entries; }
