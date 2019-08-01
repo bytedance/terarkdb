@@ -2551,6 +2551,14 @@ void rocksdb_options_set_enable_lazy_compaction(rocksdb_options_t* opt, int enab
   opt->rep.enable_lazy_compaction = enable;
 }
 
+void rocksdb_options_set_blob_size(rocksdb_options_t* opt, size_t blob_size) {
+  opt->rep.blob_size = blob_size;
+}
+
+void rocksdb_options_set_blob_gc_ratio(rocksdb_options_t* opt, int ratio) {
+  opt->rep.blob_gc_ratio = ratio;
+}
+
 void rocksdb_options_set_optimize_filters_for_hits(rocksdb_options_t* opt, int v) {
   opt->rep.optimize_filters_for_hits = v;
 }

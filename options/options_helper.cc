@@ -153,6 +153,8 @@ ColumnFamilyOptions BuildColumnFamilyOptions(
       mutable_cf_options.disable_auto_compactions;
   cf_opts.enable_lazy_compaction =
       mutable_cf_options.enable_lazy_compaction;
+  cf_opts.blob_size = mutable_cf_options.blob_size;
+  cf_opts.blob_gc_ratio = mutable_cf_options.blob_gc_ratio;
   cf_opts.soft_pending_compaction_bytes_limit =
       mutable_cf_options.soft_pending_compaction_bytes_limit;
   cf_opts.hard_pending_compaction_bytes_limit =
@@ -1689,6 +1691,14 @@ std::unordered_map<std::string, OptionTypeInfo>
          {offset_of(&ColumnFamilyOptions::enable_lazy_compaction),
           OptionType::kBoolean, OptionVerificationType::kNormal, true,
           offsetof(struct MutableCFOptions, enable_lazy_compaction)}},
+        {"blob_size",
+         {offset_of(&ColumnFamilyOptions::blob_size),
+          OptionType::kSizeT, OptionVerificationType::kNormal, true,
+          offsetof(struct MutableCFOptions, blob_size)}},
+        {"enable_lazy_compaction",
+         {offset_of(&ColumnFamilyOptions::blob_gc_ratio),
+          OptionType::kDouble, OptionVerificationType::kNormal, true,
+          offsetof(struct MutableCFOptions, blob_gc_ratio)}},
         {"filter_deletes",
          {0, OptionType::kBoolean, OptionVerificationType::kDeprecated, true,
           0}},

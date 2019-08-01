@@ -147,6 +147,10 @@ void MutableCFOptions::Dump(Logger* log) const {
                  disable_auto_compactions);
   ROCKS_LOG_INFO(log, "                   enable_lazy_compaction: %d",
                  enable_lazy_compaction);
+  ROCKS_LOG_INFO(log, "                                blob_size: %d",
+                 blob_size);
+  ROCKS_LOG_INFO(log, "                            blob_gc_ratio: %d",
+                 blob_gc_ratio);
   ROCKS_LOG_INFO(log, "      soft_pending_compaction_bytes_limit: %" PRIu64,
                  soft_pending_compaction_bytes_limit);
   ROCKS_LOG_INFO(log, "      hard_pending_compaction_bytes_limit: %" PRIu64,

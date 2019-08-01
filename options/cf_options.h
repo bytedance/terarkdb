@@ -138,6 +138,8 @@ struct MutableCFOptions {
         prefix_extractor(options.prefix_extractor),
         disable_auto_compactions(options.disable_auto_compactions),
         enable_lazy_compaction(options.enable_lazy_compaction),
+        blob_size(options.blob_size),
+        blob_gc_ratio(options.blob_gc_ratio),
         soft_pending_compaction_bytes_limit(
             options.soft_pending_compaction_bytes_limit),
         hard_pending_compaction_bytes_limit(
@@ -175,6 +177,8 @@ struct MutableCFOptions {
         prefix_extractor(nullptr),
         disable_auto_compactions(false),
         enable_lazy_compaction(false),
+        blob_size(0),
+        blob_gc_ratio(0),
         soft_pending_compaction_bytes_limit(0),
         hard_pending_compaction_bytes_limit(0),
         level0_file_num_compaction_trigger(0),
@@ -225,6 +229,8 @@ struct MutableCFOptions {
   // Compaction related options
   bool disable_auto_compactions;
   bool enable_lazy_compaction;
+  size_t blob_size;
+  double blob_gc_ratio;
   uint64_t soft_pending_compaction_bytes_limit;
   uint64_t hard_pending_compaction_bytes_limit;
   int level0_file_num_compaction_trigger;

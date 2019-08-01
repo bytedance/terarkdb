@@ -286,6 +286,12 @@ struct ColumnFamilyOptions : public AdvancedColumnFamilyOptions {
   // Enable map or link compaction
   bool enable_lazy_compaction = false;
 
+  //
+  size_t blob_size = 1024;
+
+  //
+  double blob_gc_ratio = 0.05;
+
   // This is a factory that provides TableFactory objects.
   // Default: a block-based table factory that provides a default
   // implementation of TableBuilder and TableReader with default

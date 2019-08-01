@@ -124,8 +124,9 @@ bool VersionEdit::EncodeTo(std::string* dst) const {
       return false;
     }
     bool has_customized_fields = false;
-    if (f.marked_for_compaction || has_min_log_number_to_keep_ ||
-        f.sst_purpose != 0) {
+    if (f.num_antiquation > 0 || f.marked_for_compaction ||
+        has_min_log_number_to_keep_ || f.sst_purpose != 0 ||
+        !f.sst_depend.empty()) {
       PutVarint32(dst, kNewFile4);
       has_customized_fields = true;
     } else if (f.fd.GetPathId() == 0) {
@@ -175,6 +176,9 @@ bool VersionEdit::EncodeTo(std::string* dst) const {
         PutVarint32(dst, CustomTag::kPathId);
         char p = static_cast<char>(f.fd.GetPathId());
         PutLengthPrefixedSlice(dst, Slice(&p, 1));
+      }
+      if (f.num_antiquation > 0) {
+        PutVarint32Varint64(dst, CustomTag::kNumAntiquation, f.num_antiquation);
       }
       if (f.marked_for_compaction) {
         PutVarint32(dst, CustomTag::kNeedCompaction);
@@ -293,9 +297,13 @@ const char* VersionEdit::DecodeNewFile4From(Slice* input) {
           }
           path_id = field[0];
           if (path_id > 3) {
-            return "path_id wrong vaue";
+            return "path_id wrong value";
           }
           break;
+        case kNumAntiquation:
+          if (!GetVarint64(&field, &f.num_antiquation)) {
+            return "num_antiquation field";
+          }
         case kNeedCompaction:
           if (field.size() != 1) {
             return "need_compaction field wrong size";
@@ -517,8 +525,8 @@ Status VersionEdit::DecodeFrom(const Slice& src) {
         if (!GetVarint64(&input, &update_antiquation_size)) {
           if (!msg) {
             msg = update_antiquation_msg;
-            break;
           }
+          break;
         }
         update_antiquation_.resize(update_antiquation_size);
         for (auto& pair : update_antiquation_) {

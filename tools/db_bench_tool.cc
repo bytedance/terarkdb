@@ -923,6 +923,10 @@ DEFINE_bool(disable_auto_compactions, false, "Do not auto trigger compactions");
 
 DEFINE_bool(enable_lazy_compaction, false, "Enable map or link compaction");
 
+DEFINE_uint64(blob_size, 1024, "Key Value Separate blob size");
+
+DEFINE_double(blob_gc_ratio, 0.05, "Blob SST gc ratio");
+
 DEFINE_uint64(wal_ttl_seconds, 0, "Set the TTL for the WAL Files in seconds.");
 DEFINE_uint64(wal_size_limit_MB, 0, "Set the size limit for the WAL Files"
               " in MB.");
@@ -3408,6 +3412,8 @@ void VerifyDBFromDB(std::string& truth_db_name) {
     options.max_compaction_bytes = FLAGS_max_compaction_bytes;
     options.disable_auto_compactions = FLAGS_disable_auto_compactions;
     options.enable_lazy_compaction = FLAGS_enable_lazy_compaction;
+    options.blob_size = FLAGS_blob_size;
+    options.blob_gc_tario = FLOAGS_blob_gc_ratio;
     options.optimize_filters_for_hits = FLAGS_optimize_filters_for_hits;
 
     // fill storage options

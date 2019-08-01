@@ -116,6 +116,7 @@ class VersionBuilder::Rep {
   LevelState* levels_;
   std::unordered_map<uint64_t, size_t> depend_map_;
   std::vector<FileMetaData*> depend_files_;
+  std::unordered_map<uint64_t, uint64_t> update_antiquation_;
   // Store states of levels larger than num_levels_. We do this instead of
   // storing them in levels_ to avoid regression in case there are no files
   // on invalid levels. The version is not consistent if in the end the files
@@ -408,6 +409,10 @@ class VersionBuilder::Rep {
       UnrefFile(depend_files_[i]);
     }
     depend_files_.resize(depend_file_count);
+
+    for (auto& pair : edit->GetAntiquation()) {
+      update_antiquation_[pair.first] += pair.second;
+    }
   }
 
   // Save the current state in *v.
@@ -456,6 +461,10 @@ class VersionBuilder::Rep {
 #endif
 
       auto maybe_add_file = [&](FileMetaData* f) {
+        auto find = update_antiquation_.find(f->fd.GetNumber());
+        if (find != update_antiquation_.end()) {
+          f->num_antiquation += find->second;
+        }
         if (levels_[level].deleted_files.count(f->fd.GetNumber()) > 0) {
           deleted_files.push_back(f);
         } else {
