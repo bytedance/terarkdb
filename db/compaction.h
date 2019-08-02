@@ -141,17 +141,17 @@ struct CompactionWorkerContext {
 };
 
 struct CompactionWorkerResult {
-  using EncodedString = CompactionWorkerContext::EncodedString;
   Status status;
-  EncodedString actual_start, actual_end;
+  InternalKey actual_start, actual_end;
   struct FileInfo {
-    EncodedString smallest, largest;
+    InternalKey smallest, largest;
     std::string file_name;
     SequenceNumber smallest_seqno, largest_seqno;
     size_t file_size;
     bool being_compacted;
   };
   std::vector<FileInfo> files;
+  std::unordered_map<uint64_t, uint64_t> delta_antiquation;
 };
 
 // A Compaction encapsulates information about a compaction.

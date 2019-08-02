@@ -276,8 +276,8 @@ class VersionEdit {
 
   void SetAntiquation(
       const std::unordered_map<uint64_t, uint64_t>& antiquation) {
-    update_antiquation_.reserve(antiquation.size());
-    update_antiquation_.assign(antiquation.begin(), antiquation.end());
+    delta_antiquation_.reserve(antiquation.size());
+    delta_antiquation_.assign(antiquation.begin(), antiquation.end());
   }
 
   // Number of edits
@@ -321,7 +321,7 @@ class VersionEdit {
     return new_files_;
   }
   const std::vector<std::pair<uint64_t, uint64_t>>& GetAntiquation() {
-    return update_antiquation_;
+    return delta_antiquation_;
   }
 
   void MarkAtomicGroup(uint32_t remaining_entries) {
@@ -357,7 +357,7 @@ class VersionEdit {
 
   DeletedFileSet deleted_files_;
   std::vector<std::pair<int, FileMetaData>> new_files_;
-  std::vector<std::pair<uint64_t, uint64_t>> update_antiquation_;
+  std::vector<std::pair<uint64_t, uint64_t>> delta_antiquation_;
 
   // Each version edit record should have column_family_ set
   // If it's not set, it is default (0)

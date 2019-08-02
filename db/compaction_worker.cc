@@ -91,7 +91,8 @@ AJSON(rocksdb::CompactionWorkerResult::FileInfo, smallest, largest, file_name,
                                                  smallest_seqno, largest_seqno,
                                                  file_size, being_compacted);
 
-AJSON(rocksdb::CompactionWorkerResult, status, actual_start, actual_end, files);
+AJSON(rocksdb::CompactionWorkerResult, status, actual_start, actual_end, files,
+                                       delta_antiquation);
 
 AJSON(rocksdb::FileDescriptor, packed_number_and_path_id, file_size,
                                smallest_seqno, largest_seqno);
@@ -520,13 +521,16 @@ std::string RemoteCompactionWorker::Client::DoCompaction(
       context.existing_snapshots.empty()
           ? 0 : context.existing_snapshots.back());
 
+  CompactionWorkerResult result;
+  InternalKey& actual_start = result.actual_start;
+  InternalKey& actual_end = result.actual_end;
+
   std::unique_ptr<CompactionIterator> c_iter(new CompactionIterator(
       input.get(), end, ucmp, &merge, context.last_sequence,
       &context.existing_snapshots, context.earliest_write_conflict_snapshot,
       nullptr, rep_->env, false, false, &range_del_agg, nullptr,
-      compaction_filter, nullptr, context.preserve_deletes_seqnum));
-
-  InternalKey actual_start, actual_end;
+      compaction_filter, nullptr, context.preserve_deletes_seqnum,
+      &result.delta_antiquation));
 
   if (start != nullptr) {
     actual_start.SetMinPossibleForUserKey(*start);
@@ -597,13 +601,11 @@ std::string RemoteCompactionWorker::Client::DoCompaction(
         context.earliest_write_conflict_snapshot, nullptr, rep_->env,
         false, false, range_del_agg_ptr, nullptr,
         second_pass_iter_storage.compaction_filter, nullptr,
-        context.preserve_deletes_seqnum);
+        context.preserve_deletes_seqnum, nullptr);
   };
   std::unique_ptr<InternalIterator> second_pass_iter(
       NewCompactionIterator(c_style_callback(make_compaction_iterator),
                             &make_compaction_iterator, start));
-
-  CompactionWorkerResult result;
 
   auto create_builder =
       [&](std::unique_ptr<WritableFileWriter>* writer_ptr,
@@ -759,8 +761,8 @@ std::string RemoteCompactionWorker::Client::DoCompaction(
       if (current_entries > 0 || tp.num_range_deletions > 0) {
         file_info.file_name = writer->file_name();
       }
-      file_info.smallest = std::move(*meta->smallest.rep());
-      file_info.largest = std::move(*meta->largest.rep());
+      file_info.smallest = meta->smallest;
+      file_info.largest = meta->largest;
       file_info.smallest_seqno = meta->fd.smallest_seqno;
       file_info.largest_seqno = meta->fd.largest_seqno;
       file_info.file_size = meta->fd.file_size;
@@ -839,10 +841,9 @@ std::string RemoteCompactionWorker::Client::DoCompaction(
   if (builder) {
     status = finish_output_file(status, &meta, &writer, &builder, nullptr);
   }
+
   c_iter.reset();
   input.set(nullptr);
-  result.actual_start = std::move(*actual_start.rep());
-  result.actual_end = std::move(*actual_end.rep());
 
   ajson::string_stream stream;
   ajson::save_to(stream, result);

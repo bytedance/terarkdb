@@ -115,14 +115,16 @@ CompactionIterator::CompactionIterator(
     CompactionRangeDelAggregator* range_del_agg, const Compaction* compaction,
     const CompactionFilter* compaction_filter,
     const std::atomic<bool>* shutting_down,
-    const SequenceNumber preserve_deletes_seqnum)
+    const SequenceNumber preserve_deletes_seqnum,
+    std::unordered_map<uint64_t, uint64_t>* delta_antiquation)
     : CompactionIterator(
           input, end, cmp, merge_helper, last_sequence, snapshots,
           earliest_write_conflict_snapshot, snapshot_checker, env,
           report_detailed_time, expect_valid_internal_key, range_del_agg,
           std::unique_ptr<CompactionProxy>(
               compaction ? new CompactionProxy(compaction) : nullptr),
-          compaction_filter, shutting_down, preserve_deletes_seqnum) {}
+          compaction_filter, shutting_down, preserve_deletes_seqnum,
+          delta_antiquation) {}
 
 CompactionIterator::CompactionIterator(
     InternalIterator* input, const Slice* end, const Comparator* cmp,
@@ -135,7 +137,8 @@ CompactionIterator::CompactionIterator(
     std::unique_ptr<CompactionProxy> compaction,
     const CompactionFilter* compaction_filter,
     const std::atomic<bool>* shutting_down,
-    const SequenceNumber preserve_deletes_seqnum)
+    const SequenceNumber preserve_deletes_seqnum,
+    std::unordered_map<uint64_t, uint64_t>* delta_antiquation)
     : input_(input),
       end_(end),
       cmp_(cmp),
@@ -155,6 +158,7 @@ CompactionIterator::CompactionIterator(
       current_user_key_sequence_(0),
       current_user_key_snapshot_(0),
       merge_out_iter_(merge_helper_),
+      delta_antiquation_(delta_antiquation),
       current_key_committed_(false) {
   assert(compaction_filter_ == nullptr || compaction_ != nullptr);
   bottommost_level_ =
@@ -321,6 +325,9 @@ void CompactionIterator::NextFromInput() {
   while (!valid_ && input_->Valid() && !IsShuttingDown()) {
     key_ = input_->key();
     value_ = input_->value();
+    if (delta_antiquation_ != nullptr && value_.file_number() != uint64_t(-1)) {
+      ++(*delta_antiquation_)[value_.file_number()];
+    }
     iter_stats_.num_input_records++;
 
     if (!ParseInternalKey(key_, &ikey_)) {
@@ -656,8 +663,9 @@ void CompactionIterator::NextFromInput() {
       // We encapsulate the merge related state machine in a different
       // object to minimize change to the existing flow.
       value_.reset(); // MergeUntil will get iter value and move iter
-      Status s = merge_helper_->MergeUntil(input_, range_del_agg_,
-                                           prev_snapshot, bottommost_level_);
+      Status s = merge_helper_->MergeUntil(input_, delta_antiquation_,
+                                           range_del_agg_, prev_snapshot,
+                                           bottommost_level_);
       merge_out_iter_.SeekToFirst();
 
       if (!s.ok() && !s.IsMergeInProgress()) {

@@ -60,6 +60,18 @@ void PropertyBlockBuilder::Add(const std::string& name, uint64_t val) {
 }
 
 void PropertyBlockBuilder::Add(
+    const std::string& name, const std::vector<uint64_t>& val) {
+
+  std::string dst;
+  PutVarint64(&dst, val.size());
+  for (const auto& v : val) {
+    PutVarint64(&dst, v);
+  }
+
+  Add(name, dst);
+}
+
+void PropertyBlockBuilder::Add(
     const UserCollectedProperties& user_collected_properties) {
   for (const auto& prop : user_collected_properties) {
     Add(prop.first, prop.second);
@@ -89,6 +101,18 @@ void PropertyBlockBuilder::AddTableProperty(const TableProperties& props) {
   Add(TablePropertiesNames::kColumnFamilyId, props.column_family_id);
   Add(TablePropertiesNames::kCreationTime, props.creation_time);
   Add(TablePropertiesNames::kOldestKeyTime, props.oldest_key_time);
+  if (props.purpose != 0) {
+    Add(TablePropertiesNames::kPurpose, props.purpose);
+  }
+  if (props.read_amp > 1) {
+    Add(TablePropertiesNames::kReadAmp, props.read_amp);
+  }
+  if (!props.dependence.empty()) {
+    Add(TablePropertiesNames::kDependence, props.dependence);
+  }
+  if (!props.inheritance_chain.empty()) {
+    Add(TablePropertiesNames::kInheritanceChain, props.inheritance_chain);
+  }
 
   if (!props.filter_policy_name.empty()) {
     Add(TablePropertiesNames::kFilterPolicy, props.filter_policy_name);
@@ -248,6 +272,29 @@ Status ReadProperties(const Slice& handle_value, RandomAccessFileReader* file,
        &new_table_properties->oldest_key_time},
   };
 
+  auto GetUint64Vector = [&](const std::string& key, Slice* raw_val,
+                             std::vector<uint64_t>& val) {
+    bool ok = true;
+    uint64_t size;
+    if (GetVarint64(raw_val, &size)) {
+      val.resize(size);
+      for (auto& v : val) {
+        if (!GetVarint64(raw_val, &v)) {
+          ok = false;
+          break;
+        }
+      }
+      if (ok) {
+        return;
+      }
+    }
+    val.clear();
+    auto error_msg =
+        "Detect malformed value in properties meta-block:"
+        "\tkey: " + key + "\tval: " + raw_val->ToString();
+    ROCKS_LOG_ERROR(ioptions.info_log, "%s", error_msg.c_str());
+  };
+
   std::string last_key;
   for (iter.SeekToFirst(); iter.Valid(); iter.Next()) {
     s = iter.status();
@@ -281,7 +328,7 @@ Status ReadProperties(const Slice& handle_value, RandomAccessFileReader* file,
         ROCKS_LOG_ERROR(ioptions.info_log, "%s", error_msg.c_str());
         continue;
       }
-      *(pos->second) = val;
+      *pos->second = val;
     } else if (key == TablePropertiesNames::kFilterPolicy) {
       new_table_properties->filter_policy_name = raw_val.ToString();
     } else if (key == TablePropertiesNames::kColumnFamilyName) {
@@ -296,6 +343,18 @@ Status ReadProperties(const Slice& handle_value, RandomAccessFileReader* file,
       new_table_properties->property_collectors_names = raw_val.ToString();
     } else if (key == TablePropertiesNames::kCompression) {
       new_table_properties->compression_name = raw_val.ToString();
+    } else if (key == TablePropertiesNames::kPurpose) {
+      uint64_t val;
+      GetVarint64(&raw_val, &val);
+      new_table_properties->purpose = val;
+    } else if (key == TablePropertiesNames::kReadAmp) {
+      uint64_t val;
+      GetVarint64(&raw_val, &val);
+      new_table_properties->read_amp = val;
+    } else if (key == TablePropertiesNames::kDependence) {
+      GetUint64Vector(key, &raw_val, new_table_properties->dependence);
+    } else if (key == TablePropertiesNames::kInheritanceChain) {
+      GetUint64Vector(key, &raw_val, new_table_properties->inheritance_chain);
     } else {
       // handle user-collected properties
       new_table_properties->user_collected_properties.insert(

@@ -56,6 +56,10 @@ struct TablePropertiesNames {
   static const std::string kCompression;
   static const std::string kCreationTime;
   static const std::string kOldestKeyTime;
+  static const std::string kPurpose;
+  static const std::string kReadAmp;
+  static const std::string kDependence;
+  static const std::string kInheritanceChain;
 };
 
 extern const std::string kPropertiesBlock;

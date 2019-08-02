@@ -110,10 +110,11 @@ Status MergeHelper::TimedFullMerge(const MergeOperator* merge_operator,
 //
 // TODO: Avoid the snapshot stripe map lookup in CompactionRangeDelAggregator
 // and just pass the StripeRep corresponding to the stripe being merged.
-Status MergeHelper::MergeUntil(InternalIterator* iter,
-                               CompactionRangeDelAggregator* range_del_agg,
-                               const SequenceNumber stop_before,
-                               const bool at_bottom) {
+Status MergeHelper::MergeUntil(
+    InternalIterator* iter,
+    std::unordered_map<uint64_t, uint64_t>* delta_antiquation,
+    CompactionRangeDelAggregator* range_del_agg,
+    const SequenceNumber stop_before, const bool at_bottom) {
   // Get a copy of the internal key, before it's invalidated by iter->Next()
   // Also maintain the list of merge operands seen.
   assert(HasOperator());
@@ -172,6 +173,11 @@ Status MergeHelper::MergeUntil(InternalIterator* iter,
       // hit an entry that's visible by the previous snapshot, can't touch that
       break;
     }
+    LazySlice val = iter->value();
+    if (delta_antiquation != nullptr && !original_key_is_iter &&
+        val.file_number() != uint64_t(-1)) {
+      ++(*delta_antiquation)[val.file_number()];
+    }
 
     // At this point we are guaranteed that we need to process this key.
 
@@ -195,7 +201,6 @@ Status MergeHelper::MergeUntil(InternalIterator* iter,
       // (almost) silently dropping the put/delete. That's probably not what we
       // want. Also if we're in compaction and it's a put, it would be nice to
       // run compaction filter on it.
-      LazySlice val = iter->value();
       LazySlice* val_ptr;
       if ((kTypeValue == ikey.type || kTypeValueIndex == ikey.type) &&
           (range_del_agg == nullptr ||
@@ -239,13 +244,11 @@ Status MergeHelper::MergeUntil(InternalIterator* iter,
       // request or later did a partial merge.
 
       CompactionFilter::Decision filter = CompactionFilter::Decision::kKeep;
-      LazySlice value_slice;
       if (range_del_agg != nullptr &&
           range_del_agg->ShouldDelete(
               iter->key(), RangeDelPositioningMode::kForwardTraversal)) {
+        val.reset();
         filter = CompactionFilter::Decision::kRemove;
-      } else {
-        value_slice = iter->value();
       }
 
       // add an operand to the list if:
@@ -254,7 +257,7 @@ Status MergeHelper::MergeUntil(InternalIterator* iter,
         // write it out, no matter what compaction filter says
       } else if (filter == CompactionFilter::Decision::kKeep) {
         // 2) it's not filtered by a compaction filter
-        filter = FilterMerge(orig_ikey.user_key, value_slice);
+        filter = FilterMerge(orig_ikey.user_key, val);
       }
       if (filter == CompactionFilter::Decision::kKeep ||
           filter == CompactionFilter::Decision::kChangeValue) {
@@ -270,10 +273,10 @@ Status MergeHelper::MergeUntil(InternalIterator* iter,
           ParseInternalKey(keys_.back(), &orig_ikey);
         }
         if (filter == CompactionFilter::Decision::kKeep) {
-          merge_context_.PushOperand(std::move(value_slice));
+          merge_context_.PushOperand(std::move(val));
         } else {  // kChangeValue
-          // Compaction filter asked us to change the operand from value_slice
-          // to compaction_filter_value_.
+          // Compaction filter asked us to change the operand from val to
+          // compaction_filter_value_.
           merge_context_.PushOperand(std::move(compaction_filter_value_));
         }
       } else if (filter == CompactionFilter::Decision::kRemoveAndSkipUntil) {

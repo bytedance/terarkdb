@@ -76,10 +76,11 @@ class MergeHelper {
   // - ShutdownInProgress: interrupted by shutdown (*shutting_down == true).
   //
   // REQUIRED: The first key in the input is not corrupted.
-  Status MergeUntil(InternalIterator* iter,
-                    CompactionRangeDelAggregator* range_del_agg = nullptr,
-                    const SequenceNumber stop_before = 0,
-                    const bool at_bottom = false);
+  Status MergeUntil(
+      InternalIterator* iter,
+      std::unordered_map<uint64_t, uint64_t>* delta_antiquation = nullptr,
+      CompactionRangeDelAggregator* range_del_agg = nullptr,
+      const SequenceNumber stop_before = 0, const bool at_bottom = false);
 
   // Filters a merge operand using the compaction filter specified
   // in the constructor. Returns the decision that the filter made.

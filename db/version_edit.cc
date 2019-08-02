@@ -42,7 +42,7 @@ enum Tag : uint32_t {
   kMaxColumnFamily = 203,
 
   kInAtomicGroup = 300,
-  kUpdateAntiquation = 399,
+  kDeltaAntiquation = 399,
 };
 
 enum CustomTag : uint32_t {
@@ -218,9 +218,9 @@ bool VersionEdit::EncodeTo(std::string* dst) const {
     }
   }
 
-  if (!update_antiquation_.empty()) {
-    PutVarint32Varint64(dst, kUpdateAntiquation, update_antiquation_.size());
-    for (auto pair : update_antiquation_) {
+  if (!delta_antiquation_.empty()) {
+    PutVarint32Varint64(dst, kDeltaAntiquation, delta_antiquation_.size());
+    for (auto pair : delta_antiquation_) {
       PutVarint64Varint64(dst, pair.first, pair.second);
     }
   }
@@ -542,21 +542,21 @@ Status VersionEdit::DecodeFrom(const Slice& src) {
         break;
       }
 
-      case kUpdateAntiquation: {
-        uint64_t update_antiquation_size;
-        const char* update_antiquation_msg = "update antiquation";
-        if (!GetVarint64(&input, &update_antiquation_size)) {
+      case kDeltaAntiquation: {
+        uint64_t delta_antiquation_size;
+        const char* delta_antiquation_msg = "update antiquation";
+        if (!GetVarint64(&input, &delta_antiquation_size)) {
           if (!msg) {
-            msg = update_antiquation_msg;
+            msg = delta_antiquation_msg;
           }
           break;
         }
-        update_antiquation_.resize(update_antiquation_size);
-        for (auto& pair : update_antiquation_) {
+        delta_antiquation_.resize(delta_antiquation_size);
+        for (auto& pair : delta_antiquation_) {
           if (!GetVarint64(&input, &pair.first) ||
               !GetVarint64(&input, &pair.second)) {
             if (!msg) {
-              msg = update_antiquation_msg;
+              msg = delta_antiquation_msg;
             }
             break;
           }

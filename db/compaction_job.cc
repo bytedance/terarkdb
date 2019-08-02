@@ -157,6 +157,7 @@ struct CompactionJob::SubcompactionState {
   uint64_t total_bytes;
   uint64_t num_input_records;
   uint64_t num_output_records;
+  std::unordered_map<uint64_t, uint64_t> delta_antiquation;
   CompactionJobStats compaction_job_stats;
   uint64_t approx_size;
   // An index that used to speed up ShouldStopBefore().
@@ -735,8 +736,8 @@ Status CompactionJob::Run() {
                                         file_info.file_size,
                                         file_info.smallest_seqno,
                                         file_info.largest_seqno);
-        output.meta.smallest.DecodeFrom(file_info.smallest);
-        output.meta.largest.DecodeFrom(file_info.largest);
+        output.meta.smallest = std::move(file_info.smallest);
+        output.meta.largest = std::move(file_info.largest);
         output.meta.being_compacted = file_info.being_compacted;
         std::unique_ptr<rocksdb::RandomAccessFile> file;
         s = env_->NewRandomAccessFile(fname, &file, env_options_);
@@ -770,8 +771,9 @@ Status CompactionJob::Run() {
         c->AddOutputTableFileNumber(file_number);
       }
       if (s.ok()) {
-        sub_compact.actual_start.DecodeFrom(result.actual_start);
-        sub_compact.actual_end.DecodeFrom(result.actual_end);
+        sub_compact.actual_start = std::move(result.actual_start);
+        sub_compact.actual_end = std::move(result.actual_end);
+        sub_compact.delta_antiquation = std::move(result.delta_antiquation);
       }
     }
     if (s.ok()) {
@@ -1127,7 +1129,7 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
       earliest_write_conflict_snapshot_, snapshot_checker_, env_,
       ShouldReportDetailedTime(env_, stats_), false, &range_del_agg,
       sub_compact->compaction, compaction_filter, shutting_down_,
-      preserve_deletes_seqnum_));
+      preserve_deletes_seqnum_, &sub_compact->delta_antiquation));
   auto c_iter = sub_compact->c_iter.get();
   c_iter->SeekToFirst();
 
@@ -1184,7 +1186,7 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
         earliest_write_conflict_snapshot_, snapshot_checker_, env_,
         false, false, range_del_agg_ptr, sub_compact->compaction,
         second_pass_iter_storage.compaction_filter, shutting_down_,
-        preserve_deletes_seqnum_);
+        preserve_deletes_seqnum_, nullptr);
   };
   std::unique_ptr<InternalIterator> second_pass_iter(
       NewCompactionIterator(c_style_callback(make_compaction_iterator),
@@ -1864,6 +1866,7 @@ Status CompactionJob::InstallCompactionResults(
     }
   }
 
+  std::unordered_map<uint64_t, uint64_t> delta_antiquation;
   TablePropertiesCollection tp;
   for (const auto& state : compact_->sub_compact_states) {
     for (const auto& output : state.outputs) {
@@ -1872,7 +1875,11 @@ Status CompactionJob::InstallCompactionResults(
                         output.meta.fd.GetNumber(), output.meta.fd.GetPathId());
       tp[fn] = output.table_properties;
     }
+    for (auto& pair : state.delta_antiquation) {
+      delta_antiquation[pair.first] += pair.second;
+    }
   }
+  compaction->edit()->SetAntiquation(delta_antiquation);
   compact_->compaction->SetOutputTableProperties(std::move(tp));
 
   return versions_->LogAndApply(compaction->column_family_data(),

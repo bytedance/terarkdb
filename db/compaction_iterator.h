@@ -59,32 +59,34 @@ class CompactionIterator {
     const Compaction* compaction_;
   };
 
-  CompactionIterator(InternalIterator* input, const Slice* end,
-                     const Comparator* cmp, MergeHelper* merge_helper,
-                     SequenceNumber last_sequence,
-                     std::vector<SequenceNumber>* snapshots,
-                     SequenceNumber earliest_write_conflict_snapshot,
-                     const SnapshotChecker* snapshot_checker, Env* env,
-                     bool report_detailed_time, bool expect_valid_internal_key,
-                     CompactionRangeDelAggregator* range_del_agg,
-                     const Compaction* compaction = nullptr,
-                     const CompactionFilter* compaction_filter = nullptr,
-                     const std::atomic<bool>* shutting_down = nullptr,
-                     const SequenceNumber preserve_deletes_seqnum = 0);
+  CompactionIterator(
+      InternalIterator* input, const Slice* end, const Comparator* cmp,
+      MergeHelper* merge_helper, SequenceNumber last_sequence,
+      std::vector<SequenceNumber>* snapshots,
+      SequenceNumber earliest_write_conflict_snapshot,
+      const SnapshotChecker* snapshot_checker, Env* env,
+      bool report_detailed_time, bool expect_valid_internal_key,
+      CompactionRangeDelAggregator* range_del_agg,
+      const Compaction* compaction = nullptr,
+      const CompactionFilter* compaction_filter = nullptr,
+      const std::atomic<bool>* shutting_down = nullptr,
+      const SequenceNumber preserve_deletes_seqnum = 0,
+      std::unordered_map<uint64_t, uint64_t>* delta_antiquation = nullptr);
 
   // Constructor with custom CompactionProxy, used for tests.
-  CompactionIterator(InternalIterator* input, const Slice* end,
-                     const Comparator* cmp, MergeHelper* merge_helper,
-                     SequenceNumber last_sequence,
-                     std::vector<SequenceNumber>* snapshots,
-                     SequenceNumber earliest_write_conflict_snapshot,
-                     const SnapshotChecker* snapshot_checker, Env* env,
-                     bool report_detailed_time, bool expect_valid_internal_key,
-                     CompactionRangeDelAggregator* range_del_agg,
-                     std::unique_ptr<CompactionProxy> compaction,
-                     const CompactionFilter* compaction_filter = nullptr,
-                     const std::atomic<bool>* shutting_down = nullptr,
-                     const SequenceNumber preserve_deletes_seqnum = 0);
+  CompactionIterator(
+      InternalIterator* input, const Slice* end, const Comparator* cmp,
+      MergeHelper* merge_helper, SequenceNumber last_sequence,
+      std::vector<SequenceNumber>* snapshots,
+      SequenceNumber earliest_write_conflict_snapshot,
+      const SnapshotChecker* snapshot_checker, Env* env,
+      bool report_detailed_time, bool expect_valid_internal_key,
+      CompactionRangeDelAggregator* range_del_agg,
+      std::unique_ptr<CompactionProxy> compaction,
+      const CompactionFilter* compaction_filter = nullptr,
+      const std::atomic<bool>* shutting_down = nullptr,
+      const SequenceNumber preserve_deletes_seqnum = 0,
+      std::unordered_map<uint64_t, uint64_t>* delta_antiquation = nullptr);
 
   ~CompactionIterator();
 
@@ -202,6 +204,7 @@ class CompactionIterator {
   // is in or beyond the last file checked during the previous call
   std::vector<size_t> level_ptrs_;
   CompactionIterationStats iter_stats_;
+  std::unordered_map<uint64_t, uint64_t>* delta_antiquation_;
 
   // Used to avoid purging uncommitted values. The application can specify
   // uncommitted values by providing a SnapshotChecker object.
