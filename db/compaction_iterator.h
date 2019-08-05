@@ -204,15 +204,16 @@ class CompactionIterator {
   // is in or beyond the last file checked during the previous call
   std::vector<size_t> level_ptrs_;
   CompactionIterationStats iter_stats_;
-  std::unordered_map<uint64_t, uint64_t>* delta_antiquation_;
+
+  DeltaAntiquationCollector delta_antiquation_collector_;
 
   // Used to avoid purging uncommitted values. The application can specify
   // uncommitted values by providing a SnapshotChecker object.
   bool current_key_committed_;
 
- public:
   size_t filter_sample_interval_ = 64;
   size_t filter_hit_count_ = 0;
+ public:
   bool IsShuttingDown() {
     // This is a best-effort facility, so memory_order_relaxed is sufficient.
     return shutting_down_ && shutting_down_->load(std::memory_order_relaxed);

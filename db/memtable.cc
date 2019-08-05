@@ -398,7 +398,7 @@ class MemTableTombstoneIterator : public MemTableIteratorBase<Slice> {
 };
 
 class MemTableIterator
-    : public MemTableIteratorBase<LazySlice>, public LazySliceMeta {
+    : public MemTableIteratorBase<LazySlice>, public LazySliceController {
   using Base = MemTableIteratorBase<LazySlice>;
   using Base::iter_;
   using Base::valid_;
@@ -407,24 +407,23 @@ class MemTableIterator
  public:
   using Base::Base;
 
-  virtual void meta_destroy(LazySliceRep* /*rep*/) const override {}
-  virtual void meta_pin_resource(LazySlice* slice,
-                                 LazySliceRep* rep) const override {
+  virtual void destroy(LazySliceRep* /*rep*/) const override {}
+  virtual void pin_resource(LazySlice* slice,
+                            LazySliceRep* rep) const override {
     if (!value_pinned_ || !iter_->IsValuePinned()) {
-      LazySliceMeta::meta_pin_resource(slice, rep);
+      LazySliceController::pin_resource(slice, rep);
     } else {
       iter_->value().swap(*slice);
       slice->pin_resource();
     }
   }
-  virtual Status meta_decode_destructive(LazySlice* slice,
-                                         LazySliceRep* /*rep*/,
-                                         LazySlice* target) const override {
+  virtual Status decode_destructive(LazySlice* slice, LazySliceRep* /*rep*/,
+                                    LazySlice* target) const override {
     iter_->value().swap(*slice);
     return slice->decode_destructive(*target);
   }
-  virtual Status meta_inplace_decode(LazySlice* slice,
-                                     LazySliceRep* /*rep*/) const override {
+  virtual Status inplace_decode(LazySlice* slice,
+                                LazySliceRep* /*rep*/) const override {
     iter_->value().swap(*slice);
     return slice->inplace_decode();
   }

@@ -158,7 +158,7 @@ CompactionIterator::CompactionIterator(
       current_user_key_sequence_(0),
       current_user_key_snapshot_(0),
       merge_out_iter_(merge_helper_),
-      delta_antiquation_(delta_antiquation),
+      delta_antiquation_collector_(delta_antiquation),
       current_key_committed_(false) {
   assert(compaction_filter_ == nullptr || compaction_ != nullptr);
   bottommost_level_ =
@@ -304,6 +304,7 @@ void CompactionIterator::InvokeFilterIfNeeded(bool* need_skip,
       iter_stats_.num_record_drop_user++;
     } else if (filter == CompactionFilter::Decision::kChangeValue) {
       value_ = std::move(compaction_filter_value_);
+      value_.reset_file_number();
     } else if (filter == CompactionFilter::Decision::kRemoveAndSkipUntil) {
       *need_skip = true;
       compaction_filter_skip_until_.ConvertFromUserKey(kMaxSequenceNumber,
@@ -325,10 +326,6 @@ void CompactionIterator::NextFromInput() {
   while (!valid_ && input_->Valid() && !IsShuttingDown()) {
     key_ = input_->key();
     value_ = input_->value();
-    if (delta_antiquation_ != nullptr && value_.file_number() != uint64_t(-1)) {
-      ++(*delta_antiquation_)[value_.file_number()];
-    }
-    iter_stats_.num_input_records++;
 
     if (!ParseInternalKey(key_, &ikey_)) {
       // If `expect_valid_internal_key_` is false, return the corrupted key
@@ -352,6 +349,8 @@ void CompactionIterator::NextFromInput() {
     if (end_ != nullptr && cmp_->Compare(ikey_.user_key, *end_) >= 0) {
       break;
     }
+    delta_antiquation_collector_.add(value_.file_number());
+    iter_stats_.num_input_records++;
 
     // Update input statistics
     if (ikey_.type == kTypeDeletion || ikey_.type == kTypeSingleDeletion) {
@@ -663,7 +662,7 @@ void CompactionIterator::NextFromInput() {
       // We encapsulate the merge related state machine in a different
       // object to minimize change to the existing flow.
       value_.reset(); // MergeUntil will get iter value and move iter
-      Status s = merge_helper_->MergeUntil(input_, delta_antiquation_,
+      Status s = merge_helper_->MergeUntil(input_, delta_antiquation_collector_,
                                            range_del_agg_, prev_snapshot,
                                            bottommost_level_);
       merge_out_iter_.SeekToFirst();
@@ -733,14 +732,16 @@ void CompactionIterator::PrepareOutput() {
   //
   // Can we do the same for levels above bottom level as long as
   // KeyNotExistsBeyondOutputLevel() return true?
-  if ((compaction_ != nullptr && !compaction_->allow_ingest_behind()) &&
-      ikeyNotNeededForIncrementalSnapshot() && bottommost_level_ && valid_ &&
-      ikey_.sequence <= earliest_snapshot_ &&
-      (snapshot_checker_ == nullptr ||
-       LIKELY(snapshot_checker_->IsInSnapshot(ikey_.sequence,
-                                              earliest_snapshot_))) &&
-      ikey_.type != kTypeMerge && ikey_.type != kTypeValueIndex &&
-      ikey_.type != kTypeMergeIndex) {
+  if (ikey_.type == kTypeValueIndex || ikey_.type == kTypeMergeIndex) {
+    assert(value_.file_number() != uint64_t(-1));
+    delta_antiquation_collector_.sub(value_.file_number());
+  } else if ((compaction_ != nullptr && !compaction_->allow_ingest_behind()) &&
+             ikeyNotNeededForIncrementalSnapshot() && bottommost_level_ &&
+             valid_ && ikey_.sequence <= earliest_snapshot_ &&
+             (snapshot_checker_ == nullptr ||
+              LIKELY(snapshot_checker_->IsInSnapshot(ikey_.sequence,
+                                                     earliest_snapshot_))) &&
+             ikey_.type != kTypeMerge) {
     assert(ikey_.type != kTypeDeletion && ikey_.type != kTypeSingleDeletion);
     ikey_.sequence = 0;
     current_key_.UpdateInternalKey(0, ikey_.type);

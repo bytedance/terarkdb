@@ -220,7 +220,7 @@ T* union_cast(S* src) {
 }
 }
 
-class DefaultLazySliceMetaImpl : public LazySliceMeta {
+class DefaultLazySliceControllerImpl : public LazySliceController {
  public:
   struct DefaultLazySliceRep {
     char* ptr;
@@ -229,21 +229,21 @@ class DefaultLazySliceMetaImpl : public LazySliceMeta {
     const char* err;
   };
 
-  void meta_destroy(LazySliceRep* _rep) const override {
+  void destroy(LazySliceRep* _rep) const override {
     auto rep = union_cast<DefaultLazySliceRep>(_rep);
     free(rep->ptr);
   }
-  void meta_pin_resource(LazySlice* slice, LazySliceRep* _rep) const override {
+  void pin_resource(LazySlice* slice, LazySliceRep* _rep) const override {
     auto rep = union_cast<DefaultLazySliceRep>(_rep);
     if (slice->empty() || rep->ptr != nullptr || rep->err != nullptr) {
       return;
     }
     *slice = copy_value(rep, *slice);
   }
-  Status meta_decode_destructive(LazySlice* slice, LazySliceRep* _rep,
-                                 LazySlice* target) const override {
+  Status decode_destructive(LazySlice* slice, LazySliceRep* _rep,
+                            LazySlice* target) const override {
     if (!slice->valid()) {
-      auto s = DefaultLazySliceMetaImpl::meta_inplace_decode(slice, _rep);
+      auto s = DefaultLazySliceControllerImpl::inplace_decode(slice, _rep);
       if (!s.ok()) {
         return s;
       }
@@ -257,8 +257,7 @@ class DefaultLazySliceMetaImpl : public LazySliceMeta {
     }
     return Status::OK();
   }
-  Status meta_inplace_decode(LazySlice* slice,
-                             LazySliceRep* _rep) const override {
+  Status inplace_decode(LazySlice* slice, LazySliceRep* _rep) const override {
     auto rep = union_cast<const DefaultLazySliceRep>(_rep);
     if (rep->err != nullptr) {
       return Status::Corruption(rep->err);
@@ -273,7 +272,7 @@ class DefaultLazySliceMetaImpl : public LazySliceMeta {
     if (rep->cap < value.size()) {
       auto ptr = (char*)realloc(rep->ptr, value.size());
       if (ptr == nullptr) {
-        rep->err = "DefaultLazySliceMetaImpl: bad alloc";
+        rep->err = "DefaultLazySliceControllerImpl: bad alloc";
         return Slice::Invalid();
       }
       rep->ptr = ptr;
@@ -286,7 +285,7 @@ class DefaultLazySliceMetaImpl : public LazySliceMeta {
   }
 };
 
-struct BufferLazySliceMetaImpl : public LazySliceMeta {
+struct BufferLazySliceControllerImpl : public LazySliceController {
  public:
   struct BufferLazySliceRep {
     std::string* buffer;
@@ -294,26 +293,26 @@ struct BufferLazySliceMetaImpl : public LazySliceMeta {
     char* ptr;
     const char* err;
   };
-  void meta_destroy(LazySliceRep* _rep) const override {
+  void destroy(LazySliceRep* _rep) const override {
     auto rep = union_cast<BufferLazySliceRep>(_rep);
     if (rep->is_owner) {
       delete rep->buffer;
     }
     free(rep->ptr);
   }
-  void meta_assign(LazySlice* slice, LazySliceRep* _rep,
-                   Slice value) const override {
+  void assign(LazySlice* slice, LazySliceRep* _rep,
+              Slice value) const override {
     auto rep = union_cast<BufferLazySliceRep>(_rep);
     rep->buffer->assign(value.data(), value.size());
     rep->err = nullptr;
     *slice = *rep->buffer;
   }
-  void meta_pin_resource(LazySlice* /*slice*/,
-                         LazySliceRep* /*rep*/) const override {}
-  Status meta_decode_destructive(LazySlice* slice, LazySliceRep* _rep,
-                                 LazySlice* target) const override {
+  void pin_resource(LazySlice* /*slice*/,
+                    LazySliceRep* /*rep*/) const override {}
+  Status decode_destructive(LazySlice* slice, LazySliceRep* _rep,
+                            LazySlice* target) const override {
     if (!slice->valid()) {
-      auto s = BufferLazySliceMetaImpl::meta_inplace_decode(slice, _rep);
+      auto s = BufferLazySliceControllerImpl::inplace_decode(slice, _rep);
       if (!s.ok()) {
         return s;
       }
@@ -327,8 +326,7 @@ struct BufferLazySliceMetaImpl : public LazySliceMeta {
     }
     return Status::OK();
   }
-  Status meta_inplace_decode(LazySlice* slice,
-                             LazySliceRep* _rep) const override {
+  Status inplace_decode(LazySlice* slice, LazySliceRep* _rep) const override {
     auto rep = union_cast<const BufferLazySliceRep>(_rep);
     if (rep->err != nullptr) {
       return Status::Corruption(rep->err);
@@ -340,10 +338,9 @@ struct BufferLazySliceMetaImpl : public LazySliceMeta {
 };
 
 // 0 -> pointer to slice
-struct ReferenceLazySliceMetaImpl : public LazySliceMeta {
-  void meta_destroy(LazySliceRep* /*rep*/) const override {}
-  Status meta_inplace_decode(LazySlice* slice,
-                             LazySliceRep* rep) const override {
+struct ReferenceLazySliceControllerImpl : public LazySliceController {
+  void destroy(LazySliceRep* /*rep*/) const override {}
+  Status inplace_decode(LazySlice* slice, LazySliceRep* rep) const override {
     const LazySlice& slice_ref =
         *reinterpret_cast<const LazySlice*>(rep->data[0]);
     auto s = slice_ref.inplace_decode();
@@ -354,75 +351,77 @@ struct ReferenceLazySliceMetaImpl : public LazySliceMeta {
   }
 };
 
-struct CleanableLazySliceMetaImpl : public LazySliceMeta {
-  void meta_destroy(LazySliceRep* rep) const override {
+struct CleanableLazySliceControllerImpl : public LazySliceController {
+  void destroy(LazySliceRep* rep) const override {
     union_cast<Cleanable>(rep)->Reset();
   }
-  void meta_pin_resource(LazySlice* /*slice*/,
-                         LazySliceRep* /*rep*/) const override {}
-  Status meta_decode_destructive(LazySlice* slice, LazySliceRep* /*rep*/,
-                                 LazySlice* target) const override {
+  void pin_resource(LazySlice* /*slice*/,
+                    LazySliceRep* /*rep*/) const override {}
+  Status decode_destructive(LazySlice* slice, LazySliceRep* /*rep*/,
+                            LazySlice* target) const override {
     *target = std::move(*slice);
     return Status::OK();
   }
-  Status meta_inplace_decode(LazySlice* /*slice*/,
-                             LazySliceRep* /*rep*/) const override {
+  Status inplace_decode(LazySlice* /*slice*/,
+                        LazySliceRep* /*rep*/) const override {
     return Status::OK();
   }
 };
 
-void LazySliceMeta::meta_assign(LazySlice* slice, LazySliceRep* _rep,
-                                Slice value) const {
-  if (slice->meta() == default_meta()) {
-    auto rep = union_cast<DefaultLazySliceMetaImpl::DefaultLazySliceRep>(_rep);
-    *slice = DefaultLazySliceMetaImpl::copy_value(rep, value);
-  } else {
-    LazySliceRep new_rep = {};
+void LazySliceController::assign(LazySlice* slice, LazySliceRep* _rep,
+                                 Slice value) const {
+  if (slice->controller() == default_coltroller()) {
     auto rep =
-        union_cast<DefaultLazySliceMetaImpl::DefaultLazySliceRep>(&new_rep);
-    value = DefaultLazySliceMetaImpl::copy_value(rep, value);
-    slice->reset(default_meta(), new_rep, slice->file_number());
+        union_cast<DefaultLazySliceControllerImpl::DefaultLazySliceRep>(_rep);
+    *slice = DefaultLazySliceControllerImpl::copy_value(rep, value);
+  } else {
+    DefaultLazySliceControllerImpl::DefaultLazySliceRep rep = {};
+    value = DefaultLazySliceControllerImpl::copy_value(&rep, value);
+    slice->reset(default_coltroller(), *union_cast<LazySliceRep>(&rep),
+                 slice->file_number());
     *slice = value;
   }
 }
 
-void LazySliceMeta::meta_pin_resource(LazySlice* slice, LazySliceRep* /*rep*/) const{
+void LazySliceController::pin_resource(LazySlice* slice,
+                                       LazySliceRep* /*rep*/) const{
   LazySlice pinned_slice;
   pinned_slice.assign(*slice);
   slice->swap(pinned_slice);
 }
 
-Status LazySliceMeta::meta_decode_destructive(LazySlice* /*slice*/,
-                                              LazySliceRep* /*rep*/,
-                                              LazySlice* /*target*/) const {
+Status LazySliceController::decode_destructive(LazySlice* /*slice*/,
+                                               LazySliceRep* /*rep*/,
+                                               LazySlice* /*target*/) const {
   return Status::NotSupported();
 }
 
-const LazySliceMeta* LazySliceMeta::default_meta() {
-  static DefaultLazySliceMetaImpl meta_impl;
-  return &meta_impl;
+const LazySliceController* LazySliceController::default_coltroller() {
+  static DefaultLazySliceControllerImpl controller_impl;
+  return &controller_impl;
 }
 
-const LazySliceMeta* LazySliceMeta::reference_meta() {
-  static ReferenceLazySliceMetaImpl meta_impl;
-  return &meta_impl;
+const LazySliceController* LazySliceController::reference_controller() {
+  static ReferenceLazySliceControllerImpl controller_impl;
+  return &controller_impl;
 }
 
-const LazySliceMeta* LazySliceMeta::buffer_meta() {
-  static BufferLazySliceMetaImpl meta_impl;
-  return &meta_impl;
+const LazySliceController* LazySliceController::buffer_controller() {
+  static BufferLazySliceControllerImpl controller_impl;
+  return &controller_impl;
 }
 
-const LazySliceMeta* LazySliceMeta::cleanable_meta() {
-  static CleanableLazySliceMetaImpl meta_impl;
-  return &meta_impl;
+const LazySliceController* LazySliceController::cleanable_controller() {
+  static CleanableLazySliceControllerImpl controller_impl;
+  return &controller_impl;
 }
 
 void LazySlice::reset(std::string* _buffer) {
   assert(_buffer != nullptr);
   *this = *_buffer;
-  auto rep = union_cast<BufferLazySliceMetaImpl::BufferLazySliceRep>(&rep_);
-  if (meta_ == LazySliceMeta::buffer_meta()) {
+  auto rep =
+      union_cast<BufferLazySliceControllerImpl::BufferLazySliceRep>(&rep_);
+  if (controller_ == LazySliceController::buffer_controller()) {
     if (rep->buffer != _buffer) {
       if (rep->is_owner) {
         delete rep->buffer;
@@ -436,7 +435,7 @@ void LazySlice::reset(std::string* _buffer) {
     return;
   } else {
     destroy();
-    meta_ = LazySliceMeta::buffer_meta();
+    controller_ = LazySliceController::buffer_controller();
     rep->buffer = _buffer;
     rep->is_owner = 0;
     rep->ptr = nullptr;
@@ -451,22 +450,24 @@ void LazySlice::assign(const LazySlice& _source) {
     return;
   }
   *this = Slice::Invalid();
-  if (meta_ != LazySliceMeta::default_meta()) {
+  if (controller_ != LazySliceController::default_coltroller()) {
     destroy();
-    meta_ = LazySliceMeta::default_meta();
+    controller_ = LazySliceController::default_coltroller();
     rep_ = {};
   }
-  auto rep = union_cast<DefaultLazySliceMetaImpl::DefaultLazySliceRep>(&rep_);
-  DefaultLazySliceMetaImpl::copy_value(rep, s.ToString());
+  auto rep =
+      union_cast<DefaultLazySliceControllerImpl::DefaultLazySliceRep>(&rep_);
+  DefaultLazySliceControllerImpl::copy_value(rep, s.ToString());
   if (rep->err != nullptr) {
     rep->err = "LazySlice::assign decode fail & bad alloc";
   }
 }
 
 std::string* LazySlice::trans_to_buffer() {
-  assert(meta_ != nullptr);
-  auto rep = union_cast<BufferLazySliceMetaImpl::BufferLazySliceRep>(&rep_);
-  if (meta_ == LazySliceMeta::buffer_meta()) {
+  assert(controller_ != nullptr);
+  auto rep =
+      union_cast<BufferLazySliceControllerImpl::BufferLazySliceRep>(&rep_);
+  if (controller_ == LazySliceController::buffer_controller()) {
     if (valid()) {
       if (data_ != rep->buffer->data() || size_ != rep->buffer->size()) {
         rep->buffer->assign(data_, size_);
@@ -480,7 +481,7 @@ std::string* LazySlice::trans_to_buffer() {
     auto buffer = new std::string(data_, size_);
     destroy();
     *this = Slice::Invalid();
-    meta_ = LazySliceMeta::buffer_meta();
+    controller_ = LazySliceController::buffer_controller();
     rep->buffer = buffer;
     rep->is_owner = 1;
     rep->ptr = nullptr;
@@ -490,7 +491,7 @@ std::string* LazySlice::trans_to_buffer() {
   destroy();
   auto buffer = new std::string();
   *this = Slice::Invalid();
-  meta_ = LazySliceMeta::buffer_meta();
+  controller_ = LazySliceController::buffer_controller();
   rep->buffer = buffer;
   rep->is_owner = 1;
   std::string err_msg = s.ToString();
@@ -505,15 +506,14 @@ std::string* LazySlice::trans_to_buffer() {
 }
 
 LazySlice LazySliceReference(const LazySlice& slice) {
-  return LazySlice(LazySliceMeta::reference_meta(),
+  return LazySlice(LazySliceController::reference_controller(),
                    {reinterpret_cast<uint64_t>(&slice)}, slice.file_number());
 }
 
 LazySlice LazySliceRemoveSuffix(const LazySlice* slice, size_t fixed_len) {
-  struct LazySliceMetaImpl : public LazySliceMeta {
-    void meta_destroy(LazySliceRep* /*rep*/) const override {}
-    Status meta_inplace_decode(LazySlice* slice,
-                               LazySliceRep* rep) const override {
+  struct LazySliceControllerImpl : public LazySliceController {
+    void destroy(LazySliceRep* /*rep*/) const override {}
+    Status inplace_decode(LazySlice* slice, LazySliceRep* rep) const override {
       const LazySlice& slice_ref =
           *reinterpret_cast<const LazySlice*>(rep->data[0]);
       uint64_t len = rep->data[1];
@@ -529,9 +529,10 @@ LazySlice LazySliceRemoveSuffix(const LazySlice* slice, size_t fixed_len) {
       return s;
     }
   };
-  static LazySliceMetaImpl meta_impl;
+  static LazySliceControllerImpl controller_impl;
   assert(slice != nullptr);
-  return LazySlice(&meta_impl, {reinterpret_cast<uint64_t>(slice), fixed_len},
+  return LazySlice(&controller_impl, {reinterpret_cast<uint64_t>(slice),
+                                      fixed_len},
                    slice->file_number());
 }
 

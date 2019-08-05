@@ -722,7 +722,7 @@ Status CompactionJob::Run() {
     auto result = results[i]();
     auto& sub_compact = compact_->sub_compact_states[i];
     sub_compact.status = std::move(result.status);
-    auto& s = sub_compact.status;
+    s = sub_compact.status;
     if (s.ok()) {
       for (auto& file_info : result.files) {
         uint64_t file_number = versions_->NewFileNumber();
@@ -1876,7 +1876,9 @@ Status CompactionJob::InstallCompactionResults(
       tp[fn] = output.table_properties;
     }
     for (auto& pair : state.delta_antiquation) {
-      delta_antiquation[pair.first] += pair.second;
+      if (pair.second > 0) {
+        delta_antiquation[pair.first] += pair.second;
+      }
     }
   }
   compaction->edit()->SetAntiquation(delta_antiquation);

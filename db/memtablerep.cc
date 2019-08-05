@@ -38,20 +38,19 @@ void MemTableRep::EncodeKeyValue(const Slice& key, const Slice& value,
 }
 
 LazySlice MemTableRep::DecodeToLazyValue(const char* key) {
-  struct SliceMetaImpl : public LazySliceMeta {
-    void meta_destroy(LazySliceRep* /*rep*/) const override {}
-    void meta_pin_resource(LazySlice* /*slice*/,
-                           LazySliceRep* /*rep*/) const override {}
-    Status meta_inplace_decode(LazySlice* slice,
-                               LazySliceRep* rep) const override {
+  struct SliceControllerImpl : public LazySliceController {
+    void destroy(LazySliceRep* /*rep*/) const override {}
+    void pin_resource(LazySlice* /*slice*/,
+                      LazySliceRep* /*rep*/) const override {}
+    Status inplace_decode(LazySlice* slice, LazySliceRep* rep) const override {
       const char* k = reinterpret_cast<const char*>(rep->data[0]);
       Slice key_slice = GetLengthPrefixedSlice(k);
       *slice = GetLengthPrefixedSlice(key_slice.data() + key_slice.size());
       return Status::OK();
     }
   };
-  static SliceMetaImpl meta_impl;
-  return LazySlice(&meta_impl, {reinterpret_cast<uint64_t>(key)});
+  static SliceControllerImpl controller_impl;
+  return LazySlice(&controller_impl, {reinterpret_cast<uint64_t>(key)});
 }
 
 bool MemTableRep::InsertKeyValue(const Slice& internal_key,

@@ -338,28 +338,27 @@ bool RowCacheContext::GetFromRowCache(
       lazy_value.reset(value, &value_pinner);
       first_log = false;
     } else {
-      struct LazySliceMetaImpl : public LazySliceMeta {
+      struct LazySliceControllerImpl : public LazySliceController {
       public:
-        void meta_destroy(LazySliceRep* /*rep*/) const override {}
-        void meta_pin_resource(LazySlice* slice,
-                               LazySliceRep* rep) const override {
+        void destroy(LazySliceRep* /*rep*/) const override {}
+        void pin_resource(LazySlice* slice, LazySliceRep* rep) const override {
           auto c = reinterpret_cast<Cache*>(rep->data[2]);
           auto h = reinterpret_cast<Cache::Handle*>(rep->data[3]);
           c->Ref(h);
           *slice = Slice(reinterpret_cast<const char*>(rep->data[0]),
                          rep->data[1]);
         }
-        Status meta_inplace_decode(LazySlice* slice,
-                                   LazySliceRep* rep) const override {
-          meta_pin_resource(slice, rep);
+        Status inplace_decode(LazySlice* slice,
+                              LazySliceRep* rep) const override {
+          pin_resource(slice, rep);
           return Status::OK();
         }
       };
-      static LazySliceMetaImpl meta_impl;
+      static LazySliceControllerImpl controller_impl;
       if (value.empty()) {
         lazy_value.reset();
       } else {
-        lazy_value.reset(&meta_impl, {
+        lazy_value.reset(&controller_impl, {
             reinterpret_cast<uint64_t>(value.data()),
             value.size(),
             reinterpret_cast<uint64_t>(row_cache),

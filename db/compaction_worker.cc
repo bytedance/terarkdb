@@ -81,8 +81,8 @@ struct json_impl<rocksdb::InternalKey, void> {
   }
   template<typename write_ty>
   static inline void write(write_ty& wt, rocksdb::InternalKey const& v) {
-    json_impl<std::string>::template write<write_ty>(wt,
-                                                     v.Encode().ToString(true));
+    rocksdb::Slice s(*v.rep());
+    json_impl<std::string>::template write<write_ty>(wt, s.ToString(true));
   }
 };
 }
@@ -404,9 +404,6 @@ std::string RemoteCompactionWorker::Client::DoCompaction(
   std::unordered_map<uint64_t, std::unique_ptr<rocksdb::TableReader>>
       table_cache;
   std::mutex table_cache_mutex;
-  TableReaderOptions table_reader_options(
-      immutable_cf_options, mutable_cf_options.prefix_extractor.get(),
-      rep_->env_options, *icmp);
   struct {
     void* arg;
     IteratorCache::CreateIterCallback callback;
@@ -431,6 +428,9 @@ std::string RemoteCompactionWorker::Client::DoCompaction(
           new rocksdb::RandomAccessFileReader(std::move(file), file_name,
                                               rep_->env));
       std::unique_ptr<rocksdb::TableReader> reader;
+      TableReaderOptions table_reader_options(
+          immutable_cf_options, mutable_cf_options.prefix_extractor.get(),
+          rep_->env_options, *icmp, true, false, -1, file_number);
       s = immutable_cf_options.table_factory->NewTableReader(
           table_reader_options, std::move(file_reader),
           file_metadata->fd.file_size, &reader, false);

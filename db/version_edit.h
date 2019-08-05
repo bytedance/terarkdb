@@ -130,6 +130,7 @@ struct FileMetaData {
         compensated_file_size(0),
         num_entries(0),
         num_deletions(0),
+        num_antiquation(0),
         raw_key_size(0),
         raw_value_size(0),
         refs(0),
@@ -196,6 +197,32 @@ struct LevelFilesBrief {
   LevelFilesBrief() {
     num_files = 0;
     files = nullptr;
+  }
+};
+
+class DeltaAntiquationCollector {
+  std::unordered_map<uint64_t, uint64_t>* delta_antiquation;
+
+ public:
+  DeltaAntiquationCollector()
+    : delta_antiquation(nullptr) {}
+
+  DeltaAntiquationCollector(
+      std::unordered_map<uint64_t, uint64_t>* _delta_antiquation)
+    : delta_antiquation(_delta_antiquation) {}
+
+  void add(uint64_t file_number) {
+    if (delta_antiquation != nullptr && file_number != uint64_t(-1)) {
+      ++(*delta_antiquation)[file_number];
+    }
+  }
+
+  void sub(uint64_t file_number) {
+    if (delta_antiquation != nullptr && file_number != uint64_t(-1)) {
+      assert(delta_antiquation->count(file_number) > 0 &&
+             delta_antiquation->find(file_number)->second > 0);
+      --(*delta_antiquation)[file_number];
+    }
   }
 };
 

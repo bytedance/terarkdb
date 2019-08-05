@@ -13,6 +13,7 @@
 #include "db/merge_context.h"
 #include "db/range_del_aggregator.h"
 #include "db/snapshot_checker.h"
+#include "db/version_edit.h"
 #include "rocksdb/compaction_filter.h"
 #include "rocksdb/env.h"
 #include "rocksdb/lazy_slice.h"
@@ -78,7 +79,7 @@ class MergeHelper {
   // REQUIRED: The first key in the input is not corrupted.
   Status MergeUntil(
       InternalIterator* iter,
-      std::unordered_map<uint64_t, uint64_t>* delta_antiquation = nullptr,
+      DeltaAntiquationCollector& delta_antiquation_collector,
       CompactionRangeDelAggregator* range_del_agg = nullptr,
       const SequenceNumber stop_before = 0, const bool at_bottom = false);
 

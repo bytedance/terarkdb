@@ -680,7 +680,7 @@ class BlockBasedTableIterator
 template <>
 class BlockBasedTableIterator<DataBlockIter, LazySlice>
     : public BlockBasedTableIteratorBase<DataBlockIter, LazySlice>,
-      public LazySliceMeta {
+      public LazySliceController {
   using Base = BlockBasedTableIteratorBase<DataBlockIter, LazySlice>;
   using Base::block_iter_;
   using Base::icomp_;
@@ -690,11 +690,10 @@ class BlockBasedTableIterator<DataBlockIter, LazySlice>
  public:
   using Base::Base;
 
-  virtual void meta_destroy(LazySliceRep* /*rep*/) const override {}
-  virtual void meta_pin_resource(LazySlice* slice,
-                                 LazySliceRep* rep) const override;
-  virtual Status meta_inplace_decode(LazySlice* slice,
-                                     LazySliceRep* /*rep*/) const override {
+  virtual void destroy(LazySliceRep* /*rep*/) const override {}
+  virtual void pin_resource(LazySlice* slice, LazySliceRep* rep) const override;
+  virtual Status inplace_decode(LazySlice* slice,
+                                LazySliceRep* /*rep*/) const override {
     *slice = block_iter_.value();
     return Status::OK();
   }

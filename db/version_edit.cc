@@ -180,7 +180,10 @@ bool VersionEdit::EncodeTo(std::string* dst) const {
         PutLengthPrefixedSlice(dst, Slice(&p, 1));
       }
       if (f.num_antiquation > 0) {
-        PutVarint32Varint64(dst, CustomTag::kNumAntiquation, f.num_antiquation);
+        PutVarint32(dst, CustomTag::kNumAntiquation);
+        std::string varint_num_antiquation;
+        PutVarint64(&varint_num_antiquation, f.num_antiquation);
+        PutLengthPrefixedSlice(dst, varint_num_antiquation);
       }
       if (f.marked_for_compaction) {
         PutVarint32(dst, CustomTag::kNeedCompaction);
@@ -191,7 +194,7 @@ bool VersionEdit::EncodeTo(std::string* dst) const {
         PutVarint32(dst, CustomTag::kMinLogNumberToKeepHack);
         std::string varint_log_number;
         PutFixed64(&varint_log_number, min_log_number_to_keep_);
-        PutLengthPrefixedSlice(dst, Slice(varint_log_number));
+        PutLengthPrefixedSlice(dst, varint_log_number);
         min_log_num_written = true;
       }
       if (has_property_cache) {
@@ -313,6 +316,7 @@ const char* VersionEdit::DecodeNewFile4From(Slice* input) {
           if (!GetVarint64(&field, &f.num_antiquation)) {
             return "num_antiquation field";
           }
+          break;
         case kNeedCompaction:
           if (field.size() != 1) {
             return "need_compaction field wrong size";
