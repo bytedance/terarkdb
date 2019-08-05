@@ -235,7 +235,7 @@ public:
 };
 
 template<bool reverse>
-class TerarkZipTableIterator : public TerarkZipTableIndexIterator, public LazySliceMeta {
+class TerarkZipTableIterator : public TerarkZipTableIndexIterator, public LazySliceController {
 protected:
   const TableReaderOptions* table_reader_options_;
   SequenceNumber          global_seqno_;
@@ -370,21 +370,21 @@ public:
     return status_;
   }
 
-  void meta_destroy(LazySliceRep* /*rep*/) const override {}
+  void destroy(LazySliceRep* /*rep*/) const override {}
 
-  void meta_pin_resource(LazySlice* slice, LazySliceRep* /*rep*/) const override {
+  void pin_resource(LazySlice* slice, LazySliceRep* /*rep*/) const override {
     // TODO support real lazy unzip
     slice->reset(user_value_, true, table_reader_options_->file_number);
   }
 
-  Status meta_decode_destructive(LazySlice* /*slice*/, LazySliceRep* /*rep*/,
+  Status decode_destructive(LazySlice* /*slice*/, LazySliceRep* /*rep*/,
                                  LazySlice* target) const override {
     // TODO support real lazy unzip
     target->reset(user_value_, true, table_reader_options_->file_number);
     return Status::OK();
   }
 
-  Status meta_inplace_decode(LazySlice* slice, LazySliceRep* /*rep*/) const override {
+  Status inplace_decode(LazySlice* slice, LazySliceRep* /*rep*/) const override {
     *slice = user_value_;
     return Status::OK();
   }

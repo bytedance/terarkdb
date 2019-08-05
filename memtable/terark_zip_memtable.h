@@ -123,7 +123,7 @@ public:
 };
 
 template <bool heap_mode>
-class PatriciaRepIterator : public MemTableRep::Iterator, public LazySliceMeta, boost::noncopyable {
+class PatriciaRepIterator : public MemTableRep::Iterator, public LazySliceController, boost::noncopyable {
   typedef terark::Patricia::ReaderToken token_t;
 
   class HeapItem : boost::noncopyable {
@@ -200,13 +200,13 @@ public:
 
   virtual ~PatriciaRepIterator();
 
-  virtual void meta_destroy(LazySliceRep* /*rep*/) const override {}
+  virtual void destroy(LazySliceRep* /*rep*/) const override {}
 
-  virtual void meta_pin_resource(LazySlice* slice, LazySliceRep* /*rep*/) const override {
+  virtual void pin_resource(LazySlice* slice, LazySliceRep* /*rep*/) const override {
     *slice = LazySlice(slice->valid() ? static_cast<Slice&>(*slice) : GetValue());
   }
 
-  Status meta_inplace_decode(LazySlice* slice, LazySliceRep* /*rep*/) const override {
+  Status inplace_decode(LazySlice* slice, LazySliceRep* /*rep*/) const override {
     *slice = GetValue();
     return Status::OK();
   }

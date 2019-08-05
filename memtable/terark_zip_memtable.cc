@@ -124,15 +124,15 @@ void PatriciaTrieRep::Get(
     valvec<char> buffer;
   };
 
-  class Meta : public LazySliceMeta {
+  class Controller : public LazySliceController {
   public:
-    virtual void meta_destroy(LazySliceRep* /*rep*/) const override {}
+    virtual void destroy(LazySliceRep* /*rep*/) const override {}
 
-    virtual void meta_pin_resource(LazySlice* slice, LazySliceRep* /*rep*/) const override {
+    virtual void pin_resource(LazySlice* slice, LazySliceRep* /*rep*/) const override {
       *slice = LazySlice(slice->valid() ? static_cast<Slice&>(*slice) : GetValue());
     }
 
-    Status meta_inplace_decode(LazySlice* slice, LazySliceRep* /*rep*/) const override {
+    Status inplace_decode(LazySlice* slice, LazySliceRep* /*rep*/) const override {
       *slice = GetValue();
       return Status::OK();
     }
@@ -143,7 +143,7 @@ void PatriciaTrieRep::Get(
       return GetLengthPrefixedSlice((const char*)heap->trie->mem_get(data[heap->idx].loc));
     }
     HeapItem* heap;
-  } meta;
+  } controller;
 
   // assistant structure define end
 
@@ -157,8 +157,8 @@ void PatriciaTrieRep::Get(
 
   auto do_callback = [&](HeapItem* heap) {
     build_key(find_key, heap->tag, buffer);
-    meta.heap = heap;
-    return callback_func(callback_args, Slice(buffer->data(), buffer->size()), LazySlice(&meta, {}));
+    controller.heap = heap;
+    return callback_func(callback_args, Slice(buffer->data(), buffer->size()), LazySlice(&controller, {}));
   };
 
   valvec<HeapItem> &heap = tls_ctx.heap;
