@@ -323,11 +323,28 @@ PosixRandomAccessFile::PosixRandomAccessFile(const std::string& fname, int fd,
 PosixRandomAccessFile::~PosixRandomAccessFile() { close(fd_); }
 
 #ifdef OS_LINUX
+
+///@returns
+//  0: posix aio
+//  1: linux aio immediate mode (default)
+//  2: linux aio batch     mode
+//  3: io uring (not supported now)
+static int get_aio_method() {
+  const char* env = getenv("aio_method");
+  if (env) {
+    int val = atoi(env);
+    return val;
+  }
+  return 1; // default
+}
+static int g_aio_method = get_aio_method();
+
 static std::atomic<size_t> g_ft_num;
 
-struct io_fiber_context {
+class io_fiber_context {
   static const int io_batch = 128;
   size_t               ft_num;
+  unsigned long long   counter;
   boost::fibers::fiber io_fiber;
   io_context_t         io_ctx;
   size_t               io_reqnum;
@@ -340,11 +357,28 @@ struct io_fiber_context {
   };
 
   void fiber_proc() {
+    if (1 == g_aio_method)
+      fiber_proc_immediate_mode();
+    else if (2 == g_aio_method)
+      fiber_proc_batch_mode();
+    else {
+      fprintf(stderr, "ERROR: bad aio_method = %d\n", g_aio_method);
+      exit(1);
+    }
+  }
+  void fiber_proc_immediate_mode() {
+    while (true) {
+      io_reap();
+      boost::this_fiber::yield();
+      counter++;
+    }
+  }
+  void fiber_proc_batch_mode() {
     io_reqnum = 0;
-    uint64_t counter = 0;
     for (;; counter++) {
       if (counter % 2 == 0) {
         if (io_reqnum) {
+          // should io_reqvec keep valid before reaped?
           int ret = io_submit(io_ctx, io_reqnum, io_reqvec);
           if (ret < 0) {
             int err = -ret;
@@ -361,29 +395,34 @@ struct io_fiber_context {
           }
         }
         else {
-          fprintf(stderr, "fiber_proc: io_reqnum==0, counter = %zd\n", counter);
+          fprintf(stderr, "fiber_proc: io_reqnum==0, counter = %llu\n", counter);
         }
       }
       else {
-        struct io_event     io_events[io_batch];
-        int ret = io_getevents(io_ctx, 0, io_batch, io_events, NULL);
-        if (ret < 0) {
-          int err = -ret;
-          fprintf(stderr, "ERROR: io_getevents(nr=%d) = %s\n", io_batch, strerror(err));
-        }
-        else {
-          for (int i = 0; i < ret; i++) {
-            io_return* ior = (io_return*)(io_events[i].data);
-            ior->len = io_events[i].res;
-            ior->err = io_events[i].res2;
-            ior->done = true;
-          }
-        }
+        io_reap();
       }
       boost::this_fiber::yield();
     }
   }
 
+  void io_reap() {
+    struct io_event     io_events[io_batch];
+    int ret = io_getevents(io_ctx, 0, io_batch, io_events, NULL);
+    if (ret < 0) {
+      int err = -ret;
+      fprintf(stderr, "ERROR: io_getevents(nr=%d) = %s\n", io_batch, strerror(err));
+    }
+    else {
+      for (int i = 0; i < ret; i++) {
+        io_return* ior = (io_return*)(io_events[i].data);
+        ior->len = io_events[i].res;
+        ior->err = io_events[i].res2;
+        ior->done = true;
+      }
+    }
+  }
+
+public:
   intptr_t io_pread(int fd, void* buf, size_t len, off_t offset) {
     io_return io_ret = {0, -1, false};
     struct iocb io = {0};
@@ -393,10 +432,22 @@ struct io_fiber_context {
     io.u.c.buf = buf;
     io.u.c.nbytes = len;
     io.u.c.offset = offset;
-    while (UNLIKELY(io_reqnum >= io_batch)) {
-      boost::this_fiber::yield();
+    if (1 == g_aio_method) {
+      struct iocb* iop = &io;
+      int ret = io_submit(io_ctx, 1, &iop);
+      if (ret < 0) {
+        int err = -ret;
+        fprintf(stderr, "ERROR: io_submit(nr=1) = %s\n", strerror(err));
+        errno = err;
+        return -1;
+      }
     }
-    io_reqvec[io_reqnum++] = &io; // submit to user space queue
+    else {
+        while (UNLIKELY(io_reqnum >= io_batch)) {
+          boost::this_fiber::yield();
+        }
+        io_reqvec[io_reqnum++] = &io; // submit to user space queue
+    }
     do {
       boost::this_fiber::yield();
     } while (!io_ret.done);
@@ -418,34 +469,24 @@ struct io_fiber_context {
       perror("io_setup");
       exit(3);
     }
+    counter = 0;
   }
 
   ~io_fiber_context() {
-    fprintf(stderr, "INFO: io_fiber_context::~io_fiber_context(): ft_num = %zd\n", ft_num);
+    fprintf(stderr,
+            "INFO: io_fiber_context::~io_fiber_context(): ft_num = %zd, counter = %llu\n",
+            ft_num, counter);
     int err = io_destroy(io_ctx);
     if (err) {
       perror("io_destroy");
     }
   }
 };
-///@returns
-//  0: posix aio
-//  1: linux aio (default)
-//  2: io uring (not supported now)
-static int aio_method() {
-  const char* env = getenv("aio_method");
-  if (env) {
-    int val = atoi(env);
-    return val;
-  }
-  return 1; // default
-}
 #endif
 
 static ssize_t my_aio_read(int fd, void* buf, size_t len, off_t offset) {
 #ifdef OS_LINUX
-  static int method = aio_method();
-  if (1 == method) {
+  if (1 == g_aio_method || 2 == g_aio_method) {
     static thread_local io_fiber_context io_fiber;
     return io_fiber.io_pread(fd, buf, len, offset);
   }
