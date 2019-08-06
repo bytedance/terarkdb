@@ -341,18 +341,24 @@ struct io_fiber_context {
     uint64_t counter = 0;
     for (;; counter++) {
       if (counter % 2 == 0) {
-        int ret = io_submit(io_ctx, io_reqnum, io_reqvec);
-        if (ret < 0) {
-          int err = -ret;
-          fprintf(stderr, "ERROR: io_submit(nr=%zd) = %s\n", io_reqnum, strerror(err));
-        }
-        else if (size_t(ret) == io_reqnum) {
-          io_reqnum = 0; // reset
+        if (0 == io_reqnum) {
+          int ret = io_submit(io_ctx, io_reqnum, io_reqvec);
+          if (ret < 0) {
+            int err = -ret;
+            fprintf(stderr, "ERROR: io_submit(nr=%zd) = %s\n", io_reqnum, strerror(err));
+          }
+          else if (size_t(ret) == io_reqnum) {
+            io_reqnum = 0; // reset
+          }
+          else {
+            fprintf(stderr, "WARN: io_submit(nr=%zd) = %d : %s\n", io_reqnum, ret, strerror(err));
+            assert(size_t(ret) < io_reqnum);
+            memmove(io_reqvec, io_reqvec + ret, io_reqnum - ret);
+            io_reqnum -= ret;
+          }
         }
         else {
-          assert(size_t(ret) < io_reqnum);
-          memmove(io_reqvec, io_reqvec + ret, io_reqnum - ret);
-          io_reqnum -= ret;
+          fprintf(stderr, "fiber_proc: io_reqnum==0, counter = %zd\n", counter);
         }
       }
       else {
@@ -392,6 +398,9 @@ struct io_fiber_context {
       boost::this_fiber::yield();
     } while (!io_ret.done);
 
+    if (io_ret.err) {
+      errno = io_ret.err;
+    }
     return io_ret.len;
   }
 
