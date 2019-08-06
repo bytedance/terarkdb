@@ -29,9 +29,10 @@ int main(int argc, char* argv[]) {
   int queue_depth = 32;
   int concurrency = 32;
   int log_level = 0;
+  bool quite = false;
   const char* parallel_type = "fiber";
   for (int opt=0; -1 != opt && '?' != opt;) {
-    opt = getopt(argc, argv, "c:d:p:l:");
+    opt = getopt(argc, argv, "c:d:p:l:q");
     switch (opt) {
       default:
         usage(argv[0]);
@@ -49,6 +50,9 @@ int main(int argc, char* argv[]) {
         break;
       case 'p':
         parallel_type = optarg;
+        break;
+      case 'q':
+        quite = true;
         break;
     }
   }
@@ -75,7 +79,10 @@ GetoptDone:
     rocksdb::ReadOptions rdopt;
     task->status = db->Get(rdopt, task->key, &task->value);
   });
-  pipeline | std::make_pair(0, [](PipelineTask* ptask) {
+  pipeline | std::make_pair(0, [quite](PipelineTask* ptask) {
+    if (quite) {
+      return; // do nothing
+    }
     KVTask* task = static_cast<KVTask*>(ptask);
     if (task->status.ok()) {
       printf("OK\t%s\n", task->value.c_str());
