@@ -3,6 +3,7 @@
 #include <getopt.h>
 #include <terark/thread/pipeline.hpp>
 #include <terark/util/linebuf.hpp>
+#include <terark/util/profiling.hpp>
 
 static void usage(const char* prog) {
   fprintf(stderr, R"EOS(usage: %s
@@ -40,16 +41,21 @@ int main(int argc, char* argv[]) {
   int queue_depth = 32;
   int concurrency = 32;
   int log_level = 0;
+  size_t bench_report = 0;
+  size_t cnt1 = 0;
   bool quite = false;
   const char* parallel_type = "fiber";
   for (int opt=0; -1 != opt && '?' != opt;) {
-    opt = getopt(argc, argv, "c:d:p:l:q");
+    opt = getopt(argc, argv, "b:c:d:p:l:q");
     switch (opt) {
       default:
         usage(argv[0]);
         return 1;
       case -1:
         goto GetoptDone;
+      case 'b':
+        bench_report = atoi(optarg);
+        break;
       case 'c':
         concurrency = atoi(optarg);
         break;
@@ -82,6 +88,7 @@ GetoptDone:
     return 1;
   }
   using namespace terark;
+  profiling pf;
   PipelineProcessor pipeline;
   pipeline.setFiberMode(strcmp(parallel_type, "fiber") == 0);
   pipeline.setQueueSize(queue_depth);
@@ -92,7 +99,16 @@ GetoptDone:
     task->status = db->Get(rdopt, task->key, &task->value);
     chomp(task->value);
   });
-  pipeline | std::make_pair(0, [quite](PipelineTask* ptask) {
+  auto t0 = pf.now();
+  pipeline | std::make_pair(0, [&,quite,bench_report](PipelineTask* ptask) {
+    if (bench_report) {
+      if (++cnt1 == bench_report) {
+        auto t1 = pf.now();
+        fprintf(stderr, "qps = %f M/sec\n", cnt1/pf.uf(t0,t1));
+        t0 = t1;
+        cnt1 = 0;
+      }
+    }
     if (quite) {
       return; // do nothing
     }
