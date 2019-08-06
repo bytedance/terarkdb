@@ -371,6 +371,7 @@ struct io_fiber_context {
           }
         }
       }
+      boost::this_fiber::yield();
     }
   }
 
