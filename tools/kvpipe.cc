@@ -5,7 +5,7 @@
 #include <terark/util/linebuf.hpp>
 
 static void usage(const char* prog) {
-  fprintf(stderr, R"EOS(usage: %s\n"
+  fprintf(stderr, R"EOS(usage: %s
 
   -p parallel_type
      parallel_type should be "fiber" or "thread"
@@ -91,6 +91,7 @@ GetoptDone:
     auto t = new KVTask(line.p, line.n);
     pipeline.enqueue(t);
   }
+  pipeline.wait();
   delete db;
   return 0;
 }
