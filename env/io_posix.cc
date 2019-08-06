@@ -373,6 +373,8 @@ class io_fiber_context {
       fprintf(stderr, "ERROR: bad aio_method = %d\n", g_aio_method);
       exit(1);
     }
+    assert(state::stopping == m_state);
+    m_state = state::stopped;
   }
   void fiber_proc_immediate_mode() {
     while (state::running == m_state) {
@@ -411,8 +413,6 @@ class io_fiber_context {
       }
       boost::this_fiber::yield();
     }
-    assert(state::stopping == m_state);
-    m_state = state::stopped;
   }
 
   void io_reap() {
@@ -489,6 +489,9 @@ public:
             ft_num, counter);
     m_state = state::stopping;
     while (state::stopping == m_state) {
+      fprintf(stderr,
+            "INFO: io_fiber_context::~io_fiber_context(): ft_num = %zd, counter = %llu, yield ...\n",
+            ft_num, counter);
       boost::this_fiber::yield();
     }
     assert(state::stopped == m_state);
