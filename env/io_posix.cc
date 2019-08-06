@@ -360,7 +360,7 @@ struct io_fiber_context {
         int ret = io_getevents(io_ctx, 0, io_batch, io_events, NULL);
         if (ret < 0) {
           int err = -ret;
-          fprintf(stderr, "ERROR: io_getevents(nr=%zd) = %s\n", io_batch, strerror(err));
+          fprintf(stderr, "ERROR: io_getevents(nr=%d) = %s\n", io_batch, strerror(err));
         }
         else {
           for (int i = 0; i < ret; i++) {
@@ -406,7 +406,7 @@ struct io_fiber_context {
   }
 
   ~io_fiber_context() {
-    int err = io_destroy(&io_ctx);
+    int err = io_destroy(io_ctx);
     if (err) {
       perror("io_destroy");
     }
