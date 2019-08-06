@@ -351,7 +351,7 @@ struct io_fiber_context {
             io_reqnum = 0; // reset
           }
           else {
-            fprintf(stderr, "WARN: io_submit(nr=%zd) = %d : %s\n", io_reqnum, ret, strerror(err));
+            fprintf(stderr, "WARN: io_submit(nr=%zd) = %d\n", io_reqnum, ret);
             assert(size_t(ret) < io_reqnum);
             memmove(io_reqvec, io_reqvec + ret, io_reqnum - ret);
             io_reqnum -= ret;
