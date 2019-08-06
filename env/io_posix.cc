@@ -323,8 +323,11 @@ PosixRandomAccessFile::PosixRandomAccessFile(const std::string& fname, int fd,
 PosixRandomAccessFile::~PosixRandomAccessFile() { close(fd_); }
 
 #ifdef OS_LINUX
+static std::atomic<size_t> g_ft_num;
+
 struct io_fiber_context {
   static const int io_batch = 128;
+  size_t               ft_num;
   boost::fibers::fiber io_fiber;
   io_context_t         io_ctx;
   size_t               io_reqnum;
@@ -407,6 +410,8 @@ struct io_fiber_context {
   io_fiber_context()
     : io_fiber(std::bind(&io_fiber_context::fiber_proc, this))
   {
+    ft_num = g_ft_num++;
+    fprintf(stderr, "INFO: io_fiber_context::io_fiber_context(): ft_num = %zd\n", ft_num);
     int maxevents = io_batch*2 - 1;
     int err = io_setup(maxevents, &io_ctx);
     if (err) {
@@ -416,6 +421,7 @@ struct io_fiber_context {
   }
 
   ~io_fiber_context() {
+    fprintf(stderr, "INFO: io_fiber_context::~io_fiber_context(): ft_num = %zd\n", ft_num);
     int err = io_destroy(io_ctx);
     if (err) {
       perror("io_destroy");
