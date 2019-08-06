@@ -832,11 +832,11 @@ SHARED4 = $(SHARED1).$(SHARED_MAJOR).$(SHARED_MINOR).$(SHARED_PATCH)
 endif
 SHARED = $(SHARED1) $(SHARED2) $(SHARED3) $(SHARED4)
 
-$(SHARED1): $(SHARED4) shared-objects/${xdir}/${SHARED1}
-	ln -fs $(SHARED4) $(SHARED1)
-$(SHARED2): $(SHARED4) shared-objects/${xdir}/${SHARED2}
-	ln -fs $(SHARED4) $(SHARED2)
-$(SHARED3): $(SHARED4) shared-objects/${xdir}/${SHARED3}
+$(SHARED1): $(SHARED2)
+	ln -fs $(SHARED2) $(SHARED1)
+$(SHARED2): $(SHARED3)
+	ln -fs $(SHARED3) $(SHARED2)
+$(SHARED3): $(SHARED4)
 	ln -fs $(SHARED4) $(SHARED3)
 $(SHARED4): shared-objects/${xdir}/${SHARED4}
 	ln -sf $< $@
