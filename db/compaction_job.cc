@@ -1849,10 +1849,10 @@ Status CompactionJob::InstallCompactionResults(
     if (file_meta.fd.file_size > 0) {
       compact_->sub_compact_states[0].outputs.emplace_back();
       auto current = compact_->sub_compact_states[0].current_output();
-      current->meta = file_meta;
+      current->meta = std::move(file_meta);
       current->finished = true;
       current->table_properties.reset(prop.release());
-      compaction->AddOutputTableFileNumber(file_meta.fd.GetNumber());
+      compaction->AddOutputTableFileNumber(current->meta.fd.GetNumber());
     }
   } else {
     // Add compaction inputs

@@ -346,8 +346,8 @@ Compaction* UniversalCompactionPicker::PickCompaction(
         }
       }
       int reduce_sorted_run_target =
-          mutable_cf_options.level0_file_num_compaction_trigger +
-          ioptions_.num_levels - 1;
+          std::max(mutable_cf_options.level0_file_num_compaction_trigger +
+                   ioptions_.num_levels - 2, 1);
       if (has_map_compaction ||
           (c = PickTrivialMoveCompaction(cf_name, mutable_cf_options, vstorage,
                                          log_buffer)) != nullptr) {
@@ -356,10 +356,8 @@ Compaction* UniversalCompactionPicker::PickCompaction(
                  int(sorted_runs.size()) <= reduce_sorted_run_target) {
         if (vstorage->read_amplification() < reduce_sorted_run_target) {
           reduce_sorted_run_target = std::max({
-              mutable_cf_options.level0_file_num_compaction_trigger,
-              ioptions_.num_levels,
-              int(sorted_runs.size())}) - 1;
-          assert(reduce_sorted_run_target > 0);
+              mutable_cf_options.level0_file_num_compaction_trigger - 1,
+              ioptions_.num_levels - 1, int(sorted_runs.size()) - 2, 1});
         }
       }
       if (int(sorted_runs.size()) > reduce_sorted_run_target &&

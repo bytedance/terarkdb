@@ -894,13 +894,13 @@ Status MapBuilder::WriteOutputFile(
 
   // Prepare prop
   file_meta->prop.purpose = kMapSst;
+  file_meta->prop.read_amp = range_iter->GetReadAmp();
   auto& dependence_build = range_iter->GetDependence();
   auto& dependence = file_meta->prop.dependence;
   dependence.reserve(dependence_build.size());
   dependence.insert(dependence.end(), dependence_build.begin(),
                     dependence_build.end());
   std::sort(dependence.begin(), dependence.end());
-  file_meta->prop.read_amp = range_iter->GetReadAmp();
 
   // Map sst don't write tombstones
   if (s.ok()) {
