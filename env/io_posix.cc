@@ -349,7 +349,7 @@ class io_fiber_context {
     stopping,
     stopped,
   };
-  state_t              m_state;
+  state                m_state;
   size_t               ft_num;
   unsigned long long   counter;
   boost::fibers::fiber io_fiber;
@@ -412,7 +412,7 @@ class io_fiber_context {
       boost::this_fiber::yield();
     }
     assert(state::stopping == m_state);
-    m_state = state::stoped;
+    m_state = state::stopped;
   }
 
   void io_reap() {
@@ -479,7 +479,7 @@ public:
       perror("io_setup");
       exit(3);
     }
-    running = true;
+    m_state = state::ready;
     counter = 0;
   }
 
