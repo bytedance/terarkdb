@@ -341,7 +341,7 @@ struct io_fiber_context {
     uint64_t counter = 0;
     for (;; counter++) {
       if (counter % 2 == 0) {
-        if (0 == io_reqnum) {
+        if (io_reqnum) {
           int ret = io_submit(io_ctx, io_reqnum, io_reqvec);
           if (ret < 0) {
             int err = -ret;
