@@ -53,9 +53,13 @@ int main(int argc, char* argv[]) {
     }
   }
 GetoptDone:
+  if (optind >= argc) {
+    usage(argv[0]);
+    return 1;
+  }
   rocksdb::DB* db = nullptr;
   rocksdb::Options opt;
-  std::string path = argv[1];
+  std::string path = argv[optind];
   rocksdb::Status s = rocksdb::DB::Open(opt, path, &db);
   if (!s.ok()) {
     fprintf(stderr, "ERROR: Open(%s) = %s\n", path.c_str(), s.ToString().c_str());
