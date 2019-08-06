@@ -343,6 +343,13 @@ static std::atomic<size_t> g_ft_num;
 
 class io_fiber_context {
   static const int io_batch = 128;
+  enum class state {
+    ready,
+    running,
+    stopping,
+    stopped,
+  };
+  state_t              m_state;
   size_t               ft_num;
   unsigned long long   counter;
   boost::fibers::fiber io_fiber;
@@ -357,6 +364,7 @@ class io_fiber_context {
   };
 
   void fiber_proc() {
+    m_state = state::running;
     if (1 == g_aio_method)
       fiber_proc_immediate_mode();
     else if (2 == g_aio_method)
@@ -367,7 +375,7 @@ class io_fiber_context {
     }
   }
   void fiber_proc_immediate_mode() {
-    while (true) {
+    while (state::running == m_state) {
       io_reap();
       boost::this_fiber::yield();
       counter++;
@@ -375,7 +383,7 @@ class io_fiber_context {
   }
   void fiber_proc_batch_mode() {
     io_reqnum = 0;
-    for (;; counter++) {
+    for (; state::running == m_state; counter++) {
       if (counter % 2 == 0) {
         if (io_reqnum) {
           // should io_reqvec keep valid before reaped?
@@ -403,6 +411,8 @@ class io_fiber_context {
       }
       boost::this_fiber::yield();
     }
+    assert(state::stopping == m_state);
+    m_state = state::stoped;
   }
 
   void io_reap() {
@@ -469,6 +479,7 @@ public:
       perror("io_setup");
       exit(3);
     }
+    running = true;
     counter = 0;
   }
 
@@ -476,6 +487,13 @@ public:
     fprintf(stderr,
             "INFO: io_fiber_context::~io_fiber_context(): ft_num = %zd, counter = %llu\n",
             ft_num, counter);
+    m_state = state::stopping;
+    while (state::stopping == m_state) {
+      boost::this_fiber::yield();
+    }
+    assert(state::stopped == m_state);
+    io_fiber.join();
+
     int err = io_destroy(io_ctx);
     if (err) {
       perror("io_destroy");
