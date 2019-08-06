@@ -25,6 +25,17 @@ struct KVTask : terark::PipelineTask {
     KVTask(const char* k, size_t n) : key(k, n) {}
 };
 
+inline void chomp(std::string& s) {
+  while (!s.empty()) {
+    const char c = s.back();
+    if ('\n' == c || '\r' == c) {
+      s.pop_back();
+    } else {
+      break;
+    }
+  }
+}
+
 int main(int argc, char* argv[]) {
   int queue_depth = 32;
   int concurrency = 32;
@@ -79,6 +90,7 @@ GetoptDone:
     KVTask* task = static_cast<KVTask*>(ptask);
     rocksdb::ReadOptions rdopt;
     task->status = db->Get(rdopt, task->key, &task->value);
+    chomp(task->value);
   });
   pipeline | std::make_pair(0, [quite](PipelineTask* ptask) {
     if (quite) {
