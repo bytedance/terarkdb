@@ -27,6 +27,7 @@
 #include <sys/statfs.h>
 #include <sys/syscall.h>
 #include <sys/sysmacros.h>
+#include <libaio.h> // requires libaio-dev
 #endif
 #include "env/posix_logger.h"
 #include "monitoring/iostats_context_imp.h"
@@ -321,7 +322,118 @@ PosixRandomAccessFile::PosixRandomAccessFile(const std::string& fname, int fd,
 
 PosixRandomAccessFile::~PosixRandomAccessFile() { close(fd_); }
 
+#ifdef OS_LINUX
+struct io_fiber_context {
+  static const int io_batch = 128;
+  boost::fibers::fiber io_fiber;
+  io_context_t         io_ctx;
+  size_t               io_reqnum;
+  struct iocb*         io_reqvec[io_batch];
+
+  struct io_return {
+    intptr_t len;
+    int err;
+    bool done;
+  };
+
+  void fiber_proc() {
+    io_reqnum = 0;
+    uint64_t counter = 0;
+    for (;; counter++) {
+      if (counter % 2 == 0) {
+        int ret = io_submit(io_ctx, io_reqnum, io_reqvec);
+        if (ret < 0) {
+          int err = -ret;
+          fprintf(stderr, "ERROR: io_submit(nr=%zd) = %s\n", io_reqnum, strerror(err));
+        }
+        else if (size_t(ret) == io_reqnum) {
+          io_reqnum = 0; // reset
+        }
+        else {
+          assert(size_t(ret) < io_reqnum);
+          memmove(io_reqvec, io_reqvec + ret, io_reqnum - ret);
+          io_reqnum -= ret;
+        }
+      }
+      else {
+        struct io_event     io_events[io_batch];
+        int ret = io_getevents(io_ctx, 0, io_batch, io_events, NULL);
+        if (ret < 0) {
+          int err = -ret;
+          fprintf(stderr, "ERROR: io_getevents(nr=%zd) = %s\n", io_batch, strerror(err));
+        }
+        else {
+          for (int i = 0; i < ret; i++) {
+            io_return* ior = (io_return*)(io_events[i].data);
+            ior->len = io_events[i].res;
+            ior->err = io_events[i].res2;
+            ior->done = true;
+          }
+        }
+      }
+    }
+  }
+
+  intptr_t io_pread(int fd, void* buf, size_t len, off_t offset) {
+    io_return io_ret = {0, -1, false};
+    struct iocb io = {0};
+    io.data = &io_ret;
+    io.aio_lio_opcode = IO_CMD_PREAD;
+    io.aio_fildes = fd;
+    io.u.c.buf = buf;
+    io.u.c.nbytes = len;
+    io.u.c.offset = offset;
+    while (UNLIKELY(io_reqnum >= io_batch)) {
+      boost::this_fiber::yield();
+    }
+    io_reqvec[io_reqnum++] = &io; // submit to user space queue
+    do {
+      boost::this_fiber::yield();
+    } while (!io_ret.done);
+
+    return io_ret.len;
+  }
+
+  io_fiber_context()
+    : io_fiber(std::bind(&io_fiber_context::fiber_proc, this))
+  {
+    int maxevents = io_batch*2 - 1;
+    int err = io_setup(maxevents, &io_ctx);
+    if (err) {
+      perror("io_setup");
+      exit(3);
+    }
+  }
+
+  ~io_fiber_context() {
+    int err = io_destroy(&io_ctx);
+    if (err) {
+      perror("io_destroy");
+    }
+  }
+};
+///@returns
+//  0: posix aio
+//  1: linux aio (default)
+//  2: io uring (not supported now)
+static int aio_method() {
+  const char* env = getenv("aio_method");
+  if (env) {
+    int val = atoi(env);
+    return val;
+  }
+  return 1; // default
+}
+#endif
+
 static ssize_t my_aio_read(int fd, void* buf, size_t len, off_t offset) {
+#ifdef OS_LINUX
+  static int method = aio_method();
+  if (1 == method) {
+    static thread_local io_fiber_context io_fiber;
+    return io_fiber.io_pread(fd, buf, len, offset);
+  }
+#endif
   struct aiocb acb = {0};
   acb.aio_fildes = fd;
   acb.aio_offset = offset;
