@@ -485,7 +485,7 @@ public:
 
   ~io_fiber_context() {
     fprintf(stderr,
-            "INFO: io_fiber_context::~io_fiber_context(): ft_num = %zd, counter = %llu\n",
+            "INFO: io_fiber_context::~io_fiber_context(): ft_num = %zd, counter = %llu ...\n",
             ft_num, counter);
     m_state = state::stopping;
     while (state::stopping == m_state) {
@@ -493,6 +493,10 @@ public:
     }
     assert(state::stopped == m_state);
     io_fiber.join();
+
+    fprintf(stderr,
+            "INFO: io_fiber_context::~io_fiber_context(): ft_num = %zd, counter = %llu, done\n",
+            ft_num, counter);
 
     int err = io_destroy(io_ctx);
     if (err) {
