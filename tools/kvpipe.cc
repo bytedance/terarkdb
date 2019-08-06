@@ -83,7 +83,7 @@ GetoptDone:
   opt.use_aio_reads = true;
   opt.use_direct_reads = true;
   std::string path = argv[optind];
-  rocksdb::Status s = rocksdb::DB::Open(opt, path, &db);
+  rocksdb::Status s = rocksdb::DB::OpenForReadOnly(opt, path, &db);
   if (!s.ok()) {
     fprintf(stderr, "ERROR: Open(%s) = %s\n", path.c_str(), s.ToString().c_str());
     return 1;
