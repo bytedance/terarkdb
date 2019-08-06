@@ -213,11 +213,17 @@ endif # BUNDLE_TERARK_ZIP_ROCKSDB
 
 LINK_TERARK ?= static
 
+ifeq ($(shell uname),Darwin)
+  LIB_GOMP :=
+else
+  LIB_GOMP := -lgomp
+endif
+
 ifeq ($(LINK_TERARK),shared)
   TerarkLDFLAGS +=  ${LIB_TERARK_ZIP_SHARED} \
                     -lterark-zbs-${DBG_OR_RLS} \
                     -lterark-fsa-${DBG_OR_RLS} \
-                    -lterark-core-${DBG_OR_RLS} -ldl -lgomp
+                    -lterark-core-${DBG_OR_RLS} -ldl ${LIB_GOMP}
 endif
 ifeq ($(LINK_TERARK),static)
   override LINK_STATIC_TERARK := ${LIB_TERARK_ZIP_STATIC} \
@@ -235,7 +241,7 @@ ifeq ($(LINK_TERARK),static)
     override LINK_STATIC_TERARK := \
       -Wl,--whole-archive ${LINK_STATIC_TERARK} -Wl,--no-whole-archive
   endif
-  override LINK_STATIC_TERARK += -lgomp
+  override LINK_STATIC_TERARK += ${LIB_GOMP}
 
   ifdef BUNDLE_TERARK_ZIP_ROCKSDB
     ifneq ($(shell uname),Darwin)
