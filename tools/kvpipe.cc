@@ -63,6 +63,7 @@ GetoptDone:
   }
   rocksdb::DB* db = nullptr;
   rocksdb::Options opt;
+  opt.use_aio_reads = true;
   std::string path = argv[optind];
   rocksdb::Status s = rocksdb::DB::Open(opt, path, &db);
   if (!s.ok()) {
