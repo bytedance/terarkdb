@@ -8,13 +8,11 @@
 static void usage(const char* prog) {
   fprintf(stderr, R"EOS(usage: %s
 
-  -p parallel_type
-     parallel_type should be "fiber" or "thread"
-
   -d queue_depth
 
   -c concurrency
-     number of thread or fiber
+     format is thread_num:fiber_num
+
 )EOS"
 , prog);
 }
@@ -39,14 +37,15 @@ inline void chomp(std::string& s) {
 
 int main(int argc, char* argv[]) {
   int queue_depth = 32;
-  int concurrency = 32;
+  int nthr = 1;
+  int nfib = 32;
   int log_level = 0;
   size_t bench_report = 0;
   size_t cnt1 = 0;
   bool quite = false;
   const char* parallel_type = "fiber";
   for (int opt=0; -1 != opt && '?' != opt;) {
-    opt = getopt(argc, argv, "b:c:d:p:l:q");
+    opt = getopt(argc, argv, "b:c:d:l:q");
     switch (opt) {
       default:
         usage(argv[0]);
@@ -57,7 +56,19 @@ int main(int argc, char* argv[]) {
         bench_report = atoi(optarg);
         break;
       case 'c':
-        concurrency = atoi(optarg);
+        if (':' == optarg[0]) {
+          nthr = 0;
+          nfib = atoi(optarg+1);
+        }
+        else {
+          char* endp = NULL;
+          nthr = strtol(optarg, &endp, 10);
+          if (':' == endp[0]) {
+            nfib = atoi(endp+1);
+          } else {
+            nfib = 0; // thread mode
+          }
+        }
         break;
       case 'd':
         queue_depth = atoi(optarg);
@@ -91,10 +102,19 @@ GetoptDone:
   using namespace terark;
   profiling pf;
   PipelineProcessor pipeline;
-  pipeline.setFiberMode(strcmp(parallel_type, "fiber") == 0);
+  typedef PipelineProcessor::EUType EUT;
+  EUT euType;
+  if (0 == nfib)
+    euType = EUT::thread;
+  else if (0 == nthr)
+    euType = EUT::fiber;
+  else
+    euType = EUT::mixed;
+
+  pipeline.setEUType(euType);
   pipeline.setQueueSize(queue_depth);
   pipeline.setLogLevel(log_level);
-  pipeline | std::make_pair(concurrency, [db](PipelineTask* ptask) {
+  pipeline | std::make_tuple(nthr, nfib, [db](PipelineTask* ptask) {
     KVTask* task = static_cast<KVTask*>(ptask);
     rocksdb::ReadOptions rdopt;
     task->status = db->Get(rdopt, task->key, &task->value);
