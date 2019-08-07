@@ -354,7 +354,7 @@ class io_fiber_context {
   unsigned long long   counter;
   boost::fibers::fiber io_fiber;
   io_context_t         io_ctx;
-  size_t               io_reqnum;
+  volatile size_t      io_reqnum;
   struct iocb*         io_reqvec[io_batch];
 
   struct io_return {
