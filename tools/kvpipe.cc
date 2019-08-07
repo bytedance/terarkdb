@@ -107,7 +107,7 @@ GetoptDone:
   else
     euType = EUT::mixed;
 
-  int ncon = EUT::fiber == euType ? nthr : nfib;
+  int ncon = EUT::fiber == euType ? nfib : nthr;
 
   pipeline.setEUType(euType);
   pipeline.setQueueSize(queue_depth);
