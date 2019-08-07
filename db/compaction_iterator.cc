@@ -113,7 +113,7 @@ CompactionIterator::CompactionIterator(
     const SnapshotChecker* snapshot_checker, Env* env,
     bool report_detailed_time, bool expect_valid_internal_key,
     CompactionRangeDelAggregator* range_del_agg, const Compaction* compaction,
-    const CompactionFilter* compaction_filter,
+    size_t blob_size, const CompactionFilter* compaction_filter,
     const std::atomic<bool>* shutting_down,
     const SequenceNumber preserve_deletes_seqnum,
     std::unordered_map<uint64_t, uint64_t>* delta_antiquation)
@@ -123,7 +123,7 @@ CompactionIterator::CompactionIterator(
           report_detailed_time, expect_valid_internal_key, range_del_agg,
           std::unique_ptr<CompactionProxy>(
               compaction ? new CompactionProxy(compaction) : nullptr),
-          compaction_filter, shutting_down, preserve_deletes_seqnum,
+          blob_size, compaction_filter, shutting_down, preserve_deletes_seqnum,
           delta_antiquation) {}
 
 CompactionIterator::CompactionIterator(
@@ -134,7 +134,7 @@ CompactionIterator::CompactionIterator(
     const SnapshotChecker* snapshot_checker, Env* env,
     bool report_detailed_time, bool expect_valid_internal_key,
     CompactionRangeDelAggregator* range_del_agg,
-    std::unique_ptr<CompactionProxy> compaction,
+    std::unique_ptr<CompactionProxy> compaction, size_t blob_size,
     const CompactionFilter* compaction_filter,
     const std::atomic<bool>* shutting_down,
     const SequenceNumber preserve_deletes_seqnum,
@@ -151,6 +151,7 @@ CompactionIterator::CompactionIterator(
       expect_valid_internal_key_(expect_valid_internal_key),
       range_del_agg_(range_del_agg),
       compaction_(std::move(compaction)),
+      blob_size_(blob_size),
       compaction_filter_(compaction_filter),
       shutting_down_(shutting_down),
       preserve_deletes_seqnum_(preserve_deletes_seqnum),
@@ -732,6 +733,21 @@ void CompactionIterator::PrepareOutput() {
   //
   // Can we do the same for levels above bottom level as long as
   // KeyNotExistsBeyondOutputLevel() return true?
+  if (blob_size_ > 0 &&
+      (ikey_.type == kTypeValue || ikey_.type == kTypeMerge)) {
+    auto s = value_.inplace_decode();
+    if (s.ok()) {
+      if (value_.size() >= blob_size_) {
+        ikey_.type =
+            ikey_.type == kTypeValue ? kTypeValueIndex : kTypeMergeIndex;
+        current_key_.UpdateInternalKey(ikey_.sequence, ikey_.type);
+        SeparateHelper::TransToSeparate(value_);
+      }
+    } else {
+      valid_ = false;
+      status_ = std::move(s);
+    }
+  }
   if (ikey_.type == kTypeValueIndex || ikey_.type == kTypeMergeIndex) {
     assert(value_.file_number() != uint64_t(-1));
     delta_antiquation_collector_.sub(value_.file_number());

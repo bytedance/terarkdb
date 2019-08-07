@@ -500,7 +500,7 @@ Status TableCache::Get(const ReadOptions& options, bool no_global_row_cache,
           }
           auto find = dependence_map.find(file_number);
           if (find == dependence_map.end()) {
-            s = Status::Corruption("Map sst depend files missing");
+            s = Status::Corruption("Map sst dependence missing");
             return false;
           }
           s = Get(options, no_global_row_cache, internal_comparator,

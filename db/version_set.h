@@ -562,7 +562,7 @@ class VersionStorageInfo {
   void operator=(const VersionStorageInfo&) = delete;
 };
 
-class Version {
+class Version : public SeparateHelper, private LazySliceController {
  public:
   // Append to *iters a sequence of iterators that will
   // yield the contents of this Version when merged together.
@@ -729,6 +729,17 @@ class Version {
           MutableCFOptions mutable_cf_options, uint64_t version_number = 0);
 
   ~Version();
+
+
+  void destroy(LazySliceRep* /*rep*/) const override {}
+
+  void pin_resource(LazySlice* /*slice*/,
+                    LazySliceRep* /*rep*/) const override {}
+
+  Status inplace_decode(LazySlice* slice, LazySliceRep* rep) const override;
+
+  void TransToInline(const Slice& user_key, uint64_t seq_type,
+                     LazySlice& value) const override;
 
   // No copying allowed
   Version(const Version&);

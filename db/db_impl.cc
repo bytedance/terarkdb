@@ -1039,7 +1039,7 @@ bool DBImpl::SetPreserveDeletesSequenceNumber(SequenceNumber seqnum) {
 
 InternalIterator* DBImpl::NewInternalIterator(
     Arena* arena, RangeDelAggregator* range_del_agg, SequenceNumber sequence,
-    ColumnFamilyHandle* column_family) {
+    ColumnFamilyHandle* column_family, SeparateHelper** separate_helper) {
   ColumnFamilyData* cfd;
   if (column_family == nullptr) {
     cfd = default_cf_handle_->cfd();
@@ -1052,6 +1052,9 @@ InternalIterator* DBImpl::NewInternalIterator(
   SuperVersion* super_version = cfd->GetSuperVersion()->Ref();
   mutex_.Unlock();
   ReadOptions roptions;
+  if (separate_helper != nullptr) {
+    *separate_helper = super_version->current;
+  }
   return NewInternalIterator(roptions, cfd, super_version, arena, range_del_agg,
                              sequence);
 }
@@ -1798,7 +1801,7 @@ Iterator* DBImpl::NewIterator(const ReadOptions& read_options,
     auto iter = new ForwardIterator(this, read_options, cfd, sv);
     result = NewDBIterator(
         env_, read_options, *cfd->ioptions(), sv->mutable_cf_options,
-        cfd->user_comparator(), iter, kMaxSequenceNumber,
+        cfd->user_comparator(), iter, kMaxSequenceNumber, sv->current,
         sv->mutable_cf_options.max_sequential_skip_in_iterations, read_callback,
         this, cfd);
 #endif
@@ -1872,7 +1875,7 @@ ArenaWrappedDBIter* DBImpl::NewIteratorImpl(const ReadOptions& read_options,
   InternalIterator* internal_iter =
       NewInternalIterator(read_options, cfd, sv, db_iter->GetArena(),
                           db_iter->GetRangeDelAggregator(), snapshot);
-  db_iter->SetIterUnderDBIter(internal_iter);
+  db_iter->SetIterUnderDBIter(internal_iter, sv->current);
 
   return db_iter;
 }
@@ -1902,7 +1905,7 @@ Status DBImpl::NewIterators(
       auto iter = new ForwardIterator(this, read_options, cfd, sv);
       iterators->push_back(NewDBIterator(
           env_, read_options, *cfd->ioptions(), sv->mutable_cf_options,
-          cfd->user_comparator(), iter, kMaxSequenceNumber,
+          cfd->user_comparator(), iter, kMaxSequenceNumber, sv->current,
           sv->mutable_cf_options.max_sequential_skip_in_iterations,
           read_callback, this, cfd));
     }

@@ -28,7 +28,7 @@ namespace rocksdb {
 
 class LazySlice;
 
-union LazySliceRep {
+struct LazySliceRep {
   uint64_t data[4];
 };
 
@@ -52,11 +52,13 @@ public:
 
   virtual ~LazySliceController() = default;
 
+  // data -> 31 bytes storage
+  static const LazySliceController* default_coltroller();
   // data[0] -> mem ptr
   // data[1] -> mem size
   // data[2] -> mem cap
   // data[3] -> error
-  static const LazySliceController* default_coltroller();
+  static const LazySliceController* malloc_coltroller();
   // data[0] -> std::string ptr
   // data[1] -> is owner
   // data[2] -> mem ptr
@@ -255,6 +257,7 @@ inline void LazySlice::destroy() {
 inline void LazySlice::reset() {
   Slice::clear();
   if (controller_ != LazySliceController::default_coltroller() &&
+      controller_ != LazySliceController::malloc_coltroller() &&
       controller_ != LazySliceController::buffer_controller()) {
     destroy();
     controller_ = LazySliceController::default_coltroller();

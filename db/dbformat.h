@@ -773,4 +773,34 @@ struct ParsedInternalKeyComparator {
   const InternalKeyComparator* cmp;
 };
 
+class SeparateHelper {
+ public:
+  virtual ~SeparateHelper() = default;
+
+  static Slice EncodeFileNumber(uint64_t& file_number) {
+    if (!port::kLittleEndian) {
+      file_number = EndianTransform(file_number, sizeof file_number);
+    }
+    return Slice(reinterpret_cast<char*>(&file_number), sizeof file_number);
+  }
+  static uint64_t DecodeFileNumber(const Slice& slice) {
+    assert(slice.size() == sizeof(uint64_t));
+    uint64_t file_number;
+    memcpy(&file_number, slice.data(), sizeof(uint64_t));
+    if (!port::kLittleEndian) {
+      file_number = EndianTransform(file_number, sizeof file_number);
+    }
+    return file_number;
+  }
+
+  static void TransToSeparate(LazySlice& value) {
+    uint64_t file_number = value.file_number();
+    value.reset(EncodeFileNumber(file_number), true, value.file_number());
+  }
+
+  virtual void TransToInline(const Slice& ukey, uint64_t seq_type,
+                             LazySlice& value) const = 0;
+};
+
+
 }  // namespace rocksdb

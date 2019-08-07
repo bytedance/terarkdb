@@ -32,9 +32,9 @@ extern Iterator* NewDBIterator(
     const ImmutableCFOptions& cf_options,
     const MutableCFOptions& mutable_cf_options,
     const Comparator* user_key_comparator, InternalIterator* internal_iter,
-    const SequenceNumber& sequence, uint64_t max_sequential_skip_in_iterations,
-    ReadCallback* read_callback, DBImpl* db_impl = nullptr,
-    ColumnFamilyData* cfd = nullptr);
+    const SequenceNumber& sequence, const SeparateHelper* separate_helper,
+    uint64_t max_sequential_skip_in_iterations, ReadCallback* read_callback,
+    DBImpl* db_impl = nullptr, ColumnFamilyData* cfd = nullptr);
 
 // A wrapper iterator which wraps DB Iterator and the arena, with which the DB
 // iterator is supposed be allocated. This class is used as an entry point of
@@ -52,7 +52,8 @@ class ArenaWrappedDBIter : public Iterator {
 
   // Set the internal iterator wrapped inside the DB Iterator. Usually it is
   // a merging iterator.
-  virtual void SetIterUnderDBIter(InternalIterator* iter);
+  virtual void SetIterUnderDBIter(InternalIterator* iter,
+                                  const SeparateHelper* separate_helper);
   virtual bool Valid() const override;
   virtual void SeekToFirst() override;
   virtual void SeekToLast() override;

@@ -660,8 +660,10 @@ static bool SaveValue(void* arg, const Slice& internal_key,
       type = kTypeRangeDeletion;
     }
     switch (type) {
-      case kTypeValue:
-      case kTypeValueIndex: {
+      case kTypeValueIndex:
+        assert(false);
+        FALLTHROUGH_INTENDED;
+      case kTypeValue: {
         if (s->inplace_update_support) {
           s->mem->GetLock(s->key->user_key())->ReadLock();
         }
@@ -704,8 +706,10 @@ static bool SaveValue(void* arg, const Slice& internal_key,
         *s->found_final_value = true;
         return false;
       }
-      case kTypeMerge:
-      case kTypeMergeIndex: {
+      case kTypeMergeIndex:
+        assert(false);
+        FALLTHROUGH_INTENDED;
+      case kTypeMerge: {
         if (!merge_operator) {
           *s->status = Status::InvalidArgument(
               "merge_operator is not properly initialized.");

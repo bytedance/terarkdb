@@ -372,7 +372,8 @@ class DBImpl : public DB {
   // The returned iterator should be deleted when no longer needed.
   InternalIterator* NewInternalIterator(
       Arena* arena, RangeDelAggregator* range_del_agg, SequenceNumber sequence,
-      ColumnFamilyHandle* column_family = nullptr);
+      ColumnFamilyHandle* column_family = nullptr,
+      SeparateHelper** separate_helper = nullptr);
 
   LogsWithPrepTracker* logs_with_prep_tracker() {
     return &logs_with_prep_tracker_;

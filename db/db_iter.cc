@@ -27,6 +27,7 @@
 #include "util/mutexlock.h"
 #include "util/string_util.h"
 #include "util/trace_replay.h"
+#include "util/util.h"
 
 namespace rocksdb {
 
@@ -112,7 +113,8 @@ class DBIter final: public Iterator {
   DBIter(Env* _env, const ReadOptions& read_options,
          const ImmutableCFOptions& cf_options,
          const MutableCFOptions& mutable_cf_options, const Comparator* cmp,
-         InternalIterator* iter, SequenceNumber s, bool arena_mode,
+         InternalIterator* iter, SequenceNumber s,
+         const SeparateHelper* separate_helper, bool arena_mode,
          uint64_t max_sequential_skip_in_iterations,
          ReadCallback* read_callback, DBImpl* db_impl, ColumnFamilyData* cfd)
       : arena_mode_(arena_mode),
@@ -122,6 +124,7 @@ class DBIter final: public Iterator {
         merge_operator_(cf_options.merge_operator),
         iter_(iter),
         sequence_(s),
+        separate_helper_(separate_helper),
         direction_(kForward),
         valid_(false),
         current_entry_is_merged_(false),
@@ -151,9 +154,11 @@ class DBIter final: public Iterator {
       iter_->~InternalIterator();
     }
   }
-  virtual void SetIter(InternalIterator* iter) {
+  virtual void SetIter(InternalIterator* iter,
+                       const SeparateHelper* separate_helper) {
     assert(iter_ == nullptr);
     iter_ = iter;
+    separate_helper_ = separate_helper;
   }
   virtual ReadRangeDelAggregator* GetRangeDelAggregator() {
     return &range_del_agg_;
@@ -227,6 +232,15 @@ class DBIter final: public Iterator {
   bool FindNextUserEntryInternal(bool skipping, bool prefix_check);
   bool ParseKey(ParsedInternalKey* key);
   bool MergeValuesNewToOld();
+  LazySlice GetValue(ValueType index_type) {
+    LazySlice v = iter_->value();
+    if (ikey_.type == index_type && separate_helper_ != nullptr) {
+      separate_helper_->TransToInline(
+          saved_key_.GetUserKey(),
+          PackSequenceAndType(ikey_.sequence, ikey_.type), v);
+    }
+    return v;
+  }
 
   void PrevInternal();
   bool TooManyInternalKeysSkipped(bool increment = true);
@@ -264,6 +278,7 @@ class DBIter final: public Iterator {
   const MergeOperator* const merge_operator_;
   InternalIterator* iter_;
   SequenceNumber sequence_;
+  const SeparateHelper* separate_helper_;
 
   mutable Status status_;
   IterKey saved_key_;
@@ -436,12 +451,12 @@ bool DBIter::FindNextUserEntryInternal(bool skipping, bool prefix_check) {
               PERF_COUNTER_ADD(internal_delete_skipped_count, 1);
             }
             break;
-          case kTypeValue:
           case kTypeValueIndex:
+          case kTypeValue:
             if (start_seqnum_ > 0) {
               if (ikey_.sequence >= start_seqnum_) {
                 saved_key_.SetInternalKey(ikey_);
-                value_ = iter_->value();
+                value_ = GetValue(kTypeValueIndex);
                 valid_ = true;
                 return true;
               } else {
@@ -460,7 +475,7 @@ bool DBIter::FindNextUserEntryInternal(bool skipping, bool prefix_check) {
                 num_skipped = 0;
                 PERF_COUNTER_ADD(internal_delete_skipped_count, 1);
               } else {
-                value_ = iter_->value();
+                value_ = GetValue(kTypeValueIndex);
                 valid_ = true;
                 return true;
               }
@@ -556,7 +571,7 @@ bool DBIter::MergeValuesNewToOld() {
 
   merge_context_.Clear();
   // Start the merge process by pushing the first operand
-  merge_context_.PushOperand(iter_->value());
+  merge_context_.PushOperand(GetValue(kTypeMergeIndex));
   TEST_SYNC_POINT("DBIter::MergeValuesNewToOld:PushedFirstOperand");
 
   ParsedInternalKey ikey;
@@ -580,7 +595,7 @@ bool DBIter::MergeValuesNewToOld() {
     } else if (kTypeValue == ikey.type || kTypeValueIndex == ikey.type) {
       // hit a put, merge the put value with operands and store the
       // final result in value_. We are done!
-      LazySlice val = iter_->value();
+      LazySlice val = GetValue(kTypeValueIndex);
       value_.reset(&value_buffer_);
       s = MergeHelper::TimedFullMerge(
           merge_operator_, ikey.user_key, &val, merge_context_.GetOperands(),
@@ -601,7 +616,7 @@ bool DBIter::MergeValuesNewToOld() {
     } else if (kTypeMerge == ikey.type || kTypeMergeIndex == ikey.type) {
       // hit a merge, add the value as an operand and run associative merge.
       // when complete, add result to operands and continue.
-      merge_context_.PushOperand(iter_->value());
+      merge_context_.PushOperand(GetValue(kTypeMergeIndex));
       PERF_COUNTER_ADD(internal_merge_count, 1);
     } else {
       assert(false);
@@ -817,7 +832,7 @@ bool DBIter::FindValueForCurrentKey() {
           last_key_entry_type = kTypeRangeDeletion;
           PERF_COUNTER_ADD(internal_delete_skipped_count, 1);
         } else {
-          value_ = iter_->value();
+          value_ = GetValue(kTypeValueIndex);
           value_.pin_resource();
         }
         merge_context_.Clear();
@@ -839,7 +854,7 @@ bool DBIter::FindValueForCurrentKey() {
           PERF_COUNTER_ADD(internal_delete_skipped_count, 1);
         } else {
           assert(merge_operator_ != nullptr);
-          merge_context_.PushOperandBack(iter_->value());
+          merge_context_.PushOperandBack(GetValue(kTypeMergeIndex));
           PERF_COUNTER_ADD(internal_merge_count, 1);
         }
         break;
@@ -949,7 +964,7 @@ bool DBIter::FindValueForCurrentKeyUsingSeek() {
     return true;
   }
   if (ikey.type == kTypeValue || ikey.type == kTypeValueIndex) {
-    value_ = iter_->value();
+    value_ = GetValue(kTypeValueIndex);
     value_.pin_resource();
     valid_ = true;
     return true;
@@ -960,7 +975,7 @@ bool DBIter::FindValueForCurrentKeyUsingSeek() {
   assert(ikey.type == kTypeMerge || ikey.type == kTypeMergeIndex);
   current_entry_is_merged_ = true;
   merge_context_.Clear();
-  merge_context_.PushOperand(iter_->value());
+  merge_context_.PushOperand(GetValue(kTypeMergeIndex));
   while (true) {
     iter_->Next();
 
@@ -983,7 +998,7 @@ bool DBIter::FindValueForCurrentKeyUsingSeek() {
             ikey, RangeDelPositioningMode::kForwardTraversal)) {
       break;
     } else if (ikey.type == kTypeValue || ikey.type == kTypeValueIndex) {
-      LazySlice val = iter_->value();
+      LazySlice val = GetValue(kTypeValueIndex);
       value_.reset(&value_buffer_);
       Status s = MergeHelper::TimedFullMerge(
           merge_operator_, saved_key_.GetUserKey(), &val,
@@ -998,7 +1013,7 @@ bool DBIter::FindValueForCurrentKeyUsingSeek() {
       valid_ = true;
       return true;
     } else if (ikey.type == kTypeMerge || ikey.type == kTypeMergeIndex) {
-      merge_context_.PushOperand(iter_->value());
+      merge_context_.PushOperand(GetValue(kTypeMergeIndex));
       PERF_COUNTER_ADD(internal_merge_count, 1);
     } else {
       assert(false);
@@ -1313,13 +1328,14 @@ Iterator* NewDBIterator(Env* env, const ReadOptions& read_options,
                         const MutableCFOptions& mutable_cf_options,
                         const Comparator* user_key_comparator,
                         InternalIterator* internal_iter,
+                        const SeparateHelper* separate_helper,
                         const SequenceNumber& sequence,
                         uint64_t max_sequential_skip_in_iterations,
                         ReadCallback* read_callback, DBImpl* db_impl,
                         ColumnFamilyData* cfd) {
   DBIter* db_iter = new DBIter(
       env, read_options, cf_options, mutable_cf_options, user_key_comparator,
-      internal_iter, sequence, false, max_sequential_skip_in_iterations,
+      internal_iter, sequence, separate_helper, false, max_sequential_skip_in_iterations,
       read_callback, db_impl, cfd);
   return db_iter;
 }
@@ -1330,8 +1346,9 @@ ReadRangeDelAggregator* ArenaWrappedDBIter::GetRangeDelAggregator() {
   return db_iter_->GetRangeDelAggregator();
 }
 
-void ArenaWrappedDBIter::SetIterUnderDBIter(InternalIterator* iter) {
-  static_cast<DBIter*>(db_iter_)->SetIter(iter);
+void ArenaWrappedDBIter::SetIterUnderDBIter(
+    InternalIterator* iter, const SeparateHelper* separate_helper) {
+  static_cast<DBIter*>(db_iter_)->SetIter(iter, separate_helper);
 }
 
 inline bool ArenaWrappedDBIter::Valid() const { return db_iter_->Valid(); }
@@ -1371,7 +1388,7 @@ void ArenaWrappedDBIter::Init(Env* env, const ReadOptions& read_options,
   auto mem = arena_.AllocateAligned(sizeof(DBIter));
   db_iter_ = new (mem) DBIter(env, read_options, cf_options, mutable_cf_options,
                               cf_options.user_comparator, nullptr, sequence,
-                              true, max_sequential_skip_in_iteration,
+                              nullptr, true, max_sequential_skip_in_iteration,
                               read_callback, db_impl, cfd);
   sv_number_ = version_number;
   allow_refresh_ = allow_refresh;

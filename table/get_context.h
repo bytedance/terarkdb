@@ -51,9 +51,10 @@ class GetContext {
   GetContext(const Comparator* ucmp, const MergeOperator* merge_operator,
              Logger* logger, Statistics* statistics, GetState init_state,
              const Slice& user_key, LazySlice* value, bool* value_found,
-             MergeContext* merge_context,
+             MergeContext* merge_context, const SeparateHelper* separate_helper,
              SequenceNumber* max_covering_tombstone_seq, Env* env,
-             SequenceNumber* seq = nullptr, ReadCallback* callback = nullptr);
+             SequenceNumber* seq = nullptr, ReadCallback* callback = nullptr,
+             bool trivial = false);
 
   void MarkKeyMayExist();
 
@@ -119,6 +120,7 @@ class GetContext {
   LazySlice* lazy_val_;
   bool* value_found_;  // Is value set correctly? Used by KeyMayExist
   MergeContext* merge_context_;
+  const SeparateHelper* separate_helper_;
   SequenceNumber* max_covering_tombstone_seq_;
   Env* env_;
   // If a key is found, seq_ will be set to the SequenceNumber of most recent
@@ -130,6 +132,7 @@ class GetContext {
   void* replay_log_arg_;
   ReadCallback* callback_;
   bool sample_;
+  bool trivial_;
 };
 
 #ifndef ROCKSDB_LITE

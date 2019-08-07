@@ -67,7 +67,7 @@ class CompactionIterator {
       const SnapshotChecker* snapshot_checker, Env* env,
       bool report_detailed_time, bool expect_valid_internal_key,
       CompactionRangeDelAggregator* range_del_agg,
-      const Compaction* compaction = nullptr,
+      const Compaction* compaction = nullptr, size_t blob_size = 0,
       const CompactionFilter* compaction_filter = nullptr,
       const std::atomic<bool>* shutting_down = nullptr,
       const SequenceNumber preserve_deletes_seqnum = 0,
@@ -82,7 +82,7 @@ class CompactionIterator {
       const SnapshotChecker* snapshot_checker, Env* env,
       bool report_detailed_time, bool expect_valid_internal_key,
       CompactionRangeDelAggregator* range_del_agg,
-      std::unique_ptr<CompactionProxy> compaction,
+      std::unique_ptr<CompactionProxy> compaction, size_t blob_size = 0,
       const CompactionFilter* compaction_filter = nullptr,
       const std::atomic<bool>* shutting_down = nullptr,
       const SequenceNumber preserve_deletes_seqnum = 0,
@@ -150,6 +150,7 @@ class CompactionIterator {
   bool expect_valid_internal_key_;
   CompactionRangeDelAggregator* range_del_agg_;
   std::unique_ptr<CompactionProxy> compaction_;
+  const size_t blob_size_;
   const CompactionFilter* compaction_filter_;
   const std::atomic<bool>* shutting_down_;
   const SequenceNumber preserve_deletes_seqnum_;

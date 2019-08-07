@@ -1188,11 +1188,69 @@ Version::Version(ColumnFamilyData* column_family_data, VersionSet* vset,
       mutable_cf_options_(mutable_cf_options),
       version_number_(version_number) {}
 
+Status Version::inplace_decode(LazySlice* slice, LazySliceRep* rep) const {
+  Slice user_key(reinterpret_cast<const char*>(rep->data[0]), rep->data[1]);
+  uint64_t seq_type = rep->data[2];
+  uint64_t file_number = slice->file_number();
+  auto dependence_map = storage_info_.dependence_map();
+  auto find = dependence_map.find(file_number);
+  if (find == dependence_map.end()) {
+    return Status::Corruption("Separate value dependence missing");
+  }
+  const FileMetaData* file_metadata = find->second;
+  bool value_found = false;
+  SequenceNumber origin_seq;
+  GetContext get_context(cfd_->internal_comparator().user_comparator(), nullptr,
+                         cfd_->ioptions()->info_log, db_statistics_,
+                         GetContext::kNotFound, user_key, slice, &value_found,
+                         nullptr, const_cast<Version*>(this), nullptr, env_,
+                         &origin_seq, nullptr, true);
+  ReadOptions options;
+  options.ignore_range_deletions = true;
+  IterKey iter_key;
+  SequenceNumber seq;
+  ValueType type, origin_type;
+  UnPackSequenceAndType(seq_type, &seq, &type);
+  origin_type = type == kTypeValueIndex ? kTypeValue : kTypeMerge;
+  iter_key.SetInternalKey(user_key, seq, origin_type);
+  auto s = table_cache_->Get(options, true, cfd_->internal_comparator(),
+                             *file_metadata, dependence_map,
+                             iter_key.GetInternalKey(), &get_context,
+                             mutable_cf_options_.prefix_extractor.get(),
+                             nullptr, true);
+  if (!s.ok()) {
+    return s;
+  }
+  switch (get_context.State()) {
+    case GetContext::kFound:
+      if (origin_type == kTypeValue && origin_seq == seq) {
+        return Status::OK();
+      }
+      break;
+    case GetContext::kMerge:
+      if (origin_type == kTypeMerge && origin_seq == seq) {
+        return Status::OK();
+      }
+      break;
+    default:
+      break;
+  }
+  return Status::Corruption("Separate value get fail");
+}
+
+void Version::TransToInline(const Slice& user_key, uint64_t seq_type,
+                            LazySlice& value) const {
+  uint64_t file_number = SeparateHelper::DecodeFileNumber(value);
+  value.reset(this, {reinterpret_cast<uint64_t>(user_key.data()),
+                     user_key.size(), seq_type, 0}, file_number);
+}
+
 void Version::Get(const ReadOptions& read_options, const LookupKey& k,
                   LazySlice* value, Status* status,
                   MergeContext* merge_context,
                   SequenceNumber* max_covering_tombstone_seq, bool* value_found,
-                  bool* key_exists, SequenceNumber* seq, ReadCallback* callback) {
+                  bool* key_exists, SequenceNumber* seq,
+                  ReadCallback* callback) {
   Slice ikey = k.internal_key();
   Slice user_key = k.user_key();
 
@@ -1206,7 +1264,7 @@ void Version::Get(const ReadOptions& read_options, const LookupKey& k,
   GetContext get_context(
       user_comparator(), merge_operator_, info_log_, db_statistics_,
       status->ok() ? GetContext::kNotFound : GetContext::kMerge, user_key,
-      value, value_found, merge_context, max_covering_tombstone_seq,
+      value, value_found, merge_context, this, max_covering_tombstone_seq,
       this->env_, seq, callback);
 
   FilePicker fp(

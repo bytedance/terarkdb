@@ -12,6 +12,7 @@
 #include "rocksdb/env.h"
 #include "rocksdb/merge_operator.h"
 #include "rocksdb/statistics.h"
+#include "util/util.h"
 
 namespace rocksdb {
 
@@ -40,8 +41,10 @@ GetContext::GetContext(const Comparator* ucmp,
                        Statistics* statistics, GetState init_state,
                        const Slice& user_key, LazySlice* lazy_val,
                        bool* value_found, MergeContext* merge_context,
+                       const SeparateHelper* separate_helper,
                        SequenceNumber* _max_covering_tombstone_seq, Env* env,
-                       SequenceNumber* seq, ReadCallback* callback)
+                       SequenceNumber* seq, ReadCallback* callback,
+                       bool trivial)
     : ucmp_(ucmp),
       merge_operator_(merge_operator),
       logger_(logger),
@@ -51,13 +54,15 @@ GetContext::GetContext(const Comparator* ucmp,
       lazy_val_(lazy_val),
       value_found_(value_found),
       merge_context_(merge_context),
+      separate_helper_(separate_helper),
       max_covering_tombstone_seq_(_max_covering_tombstone_seq),
       env_(env),
       seq_(seq),
       min_seq_type_(0),
       replay_log_callback_(nullptr),
       replay_log_arg_(nullptr),
-      callback_(callback) {
+      callback_(callback),
+      trivial_(trivial) {
   if (seq_) {
     *seq_ = kMaxSequenceNumber;
   }
@@ -151,8 +156,9 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
   assert((state_ != kMerge && parsed_key.type != kTypeMerge) ||
          merge_context_ != nullptr);
   if (ucmp_->Equal(parsed_key.user_key, user_key_)) {
-    if (PackSequenceAndType(parsed_key.sequence, parsed_key.type) <
-        min_seq_type_) {
+    uint64_t seq_type =
+        PackSequenceAndType(parsed_key.sequence, parsed_key.type);
+    if (seq_type < min_seq_type_) {
       // for map sst, this key is masked
       return false;
     }
@@ -181,8 +187,10 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
       replay_log_callback_(replay_log_arg_, type, value);
     }
     switch (type) {
-      case kTypeValue:
       case kTypeValueIndex:
+        separate_helper_->TransToInline(user_key_, seq_type, value);
+        FALLTHROUGH_INTENDED;
+      case kTypeValue:
         assert(state_ == kNotFound || state_ == kMerge);
         if (kNotFound == state_) {
           state_ = kFound;
@@ -228,10 +236,16 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
         }
         return false;
 
-      case kTypeMerge:
       case kTypeMergeIndex:
+        separate_helper_->TransToInline(user_key_, seq_type, value);
+        FALLTHROUGH_INTENDED;
+      case kTypeMerge:
         assert(state_ == kNotFound || state_ == kMerge);
         state_ = kMerge;
+        if (trivial_) {
+          *lazy_val_ = std::move(value);
+          return false;
+        }
         merge_context_->PushOperand(std::move(value));
         if (merge_operator_ != nullptr &&
             merge_operator_->ShouldMerge(

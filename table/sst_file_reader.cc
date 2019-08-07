@@ -67,7 +67,7 @@ Iterator* SstFileReader::NewIterator(const ReadOptions& options) {
       options, r->moptions.prefix_extractor.get());
   return NewDBIterator(r->options.env, options, r->ioptions, r->moptions,
                        r->ioptions.user_comparator, internal_iter, sequence,
-                       r->moptions.max_sequential_skip_in_iterations,
+                       nullptr, r->moptions.max_sequential_skip_in_iterations,
                        nullptr /* read_callback */);
 }
 
