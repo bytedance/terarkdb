@@ -107,10 +107,12 @@ GetoptDone:
   else
     euType = EUT::mixed;
 
+  int ncon = EUT::fiber == euType ? nthr : nfib;
+
   pipeline.setEUType(euType);
   pipeline.setQueueSize(queue_depth);
   pipeline.setLogLevel(log_level);
-  pipeline | std::make_tuple(nthr, nfib, [db](PipelineTask* ptask) {
+  pipeline | std::make_tuple(ncon, nfib, [db](PipelineTask* ptask) {
     KVTask* task = static_cast<KVTask*>(ptask);
     rocksdb::ReadOptions rdopt;
     task->status = db->Get(rdopt, task->key, &task->value);
