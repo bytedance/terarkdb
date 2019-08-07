@@ -75,9 +75,6 @@ int main(int argc, char* argv[]) {
       case 'l':
         log_level = atoi(optarg);
         break;
-      case 'p':
-        parallel_type = optarg;
-        break;
       case 'q':
         quite = true;
         break;
