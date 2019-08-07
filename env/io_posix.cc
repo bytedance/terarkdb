@@ -417,8 +417,8 @@ class io_fiber_context {
     }
     else {
       idle_cnt++;
-      fprintf(stderr, "INFO: fiber_proc: ft_num = %zd, idle_cnt = %zd, counter = %llu\n", ft_num, idle_cnt, counter);
       if (idle_cnt > 128) {
+        fprintf(stderr, "INFO: fiber_proc: ft_num = %zd, idle_cnt = %zd, counter = %llu\n", ft_num, idle_cnt, counter);
         //std::this_thread::yield();
         usleep(100); // 100 us
         idle_cnt = 0;
