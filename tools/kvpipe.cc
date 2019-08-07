@@ -43,7 +43,6 @@ int main(int argc, char* argv[]) {
   size_t bench_report = 0;
   size_t cnt1 = 0;
   bool quite = false;
-  const char* parallel_type = "fiber";
   for (int opt=0; -1 != opt && '?' != opt;) {
     opt = getopt(argc, argv, "b:c:d:l:q");
     switch (opt) {
