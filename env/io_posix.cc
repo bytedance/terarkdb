@@ -394,7 +394,7 @@ class io_fiber_context {
       boost::this_fiber::yield();
     }
   }
-
+  size_t idle_cnt = 0;
   void batch_submit() {
     if (io_reqnum) {
       // should io_reqvec keep valid before reaped?
@@ -412,9 +412,11 @@ class io_fiber_context {
         memmove(io_reqvec, io_reqvec + ret, io_reqnum - ret);
         io_reqnum -= ret;
       }
+      idle_cnt = 0;
     }
     else {
-      fprintf(stderr, "INFO: fiber_proc: ft_num = %zd, io_reqnum==0, counter = %llu\n", ft_num, counter);
+      idle_cnt++;
+      fprintf(stderr, "INFO: fiber_proc: ft_num = %zd, idle_cnt = %zd, counter = %llu\n", ft_num, idle_cnt, counter);
     }
   }
 
