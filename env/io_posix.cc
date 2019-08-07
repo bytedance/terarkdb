@@ -401,14 +401,14 @@ class io_fiber_context {
       int ret = io_submit(io_ctx, io_reqnum, io_reqvec);
       if (ret < 0) {
         int err = -ret;
-        fprintf(stderr, "ERROR: io_submit(nr=%zd) = %s\n", io_reqnum, strerror(err));
+        fprintf(stderr, "ERROR: ft_num = %zd, io_submit(nr=%zd) = %s\n", ft_num, io_reqnum, strerror(err));
       }
       else if (size_t(ret) == io_reqnum) {
-        fprintf(stderr, "INFO: io_submit(nr=%zd) = %d, graceful\n", io_reqnum, ret);
+        fprintf(stderr, "INFO: ft_num = %zd, io_submit(nr=%zd) = %d, graceful\n", ft_num, io_reqnum, ret);
         io_reqnum = 0; // reset
       }
       else {
-        fprintf(stderr, "WARN: io_submit(nr=%zd) = %d\n", io_reqnum, ret);
+        fprintf(stderr, "WARN: ft_num = %zd, io_submit(nr=%zd) = %d\n", ft_num, io_reqnum, ret);
         assert(size_t(ret) < io_reqnum);
         memmove(io_reqvec, io_reqvec + ret, io_reqnum - ret);
         io_reqnum -= ret;
@@ -433,7 +433,7 @@ class io_fiber_context {
       int ret = io_getevents(io_ctx, 0, reap_batch, io_events, NULL);
       if (ret < 0) {
         int err = -ret;
-        fprintf(stderr, "ERROR: io_getevents(nr=%d) = %s\n", io_batch, strerror(err));
+        fprintf(stderr, "ERROR: ft_num = %zd, io_getevents(nr=%d) = %s\n", ft_num, io_batch, strerror(err));
       }
       else {
         for (int i = 0; i < ret; i++) {
@@ -463,18 +463,18 @@ public:
       int ret = io_submit(io_ctx, 1, &iop);
       if (ret < 0) {
         int err = -ret;
-        fprintf(stderr, "ERROR: io_submit(nr=1) = %s\n", strerror(err));
+        fprintf(stderr, "ERROR: ft_num = %zd, io_submit(nr=1) = %s\n", ft_num, strerror(err));
         errno = err;
         return -1;
       }
     }
     else {
         while (UNLIKELY(io_reqnum >= io_batch)) {
-          fprintf(stderr, "WARN: io_reqnum = %zd >= io_batch = %d, yield fiber\n", io_reqnum, io_batch);
+          fprintf(stderr, "WARN: ft_num = %zd, io_reqnum = %zd >= io_batch = %d, yield fiber\n", ft_num, io_reqnum, io_batch);
           boost::this_fiber::yield();
         }
         io_reqvec[io_reqnum++] = &io; // submit to user space queue
-        fprintf(stderr, "INFO: io_reqnum = %zd, yield for io fiber submit\n", io_reqnum);
+        fprintf(stderr, "INFO: ft_num = %zd, io_reqnum = %zd, yield for io fiber submit\n", ft_num, io_reqnum);
     }
     do {
       boost::this_fiber::yield();
