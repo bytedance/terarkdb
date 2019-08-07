@@ -404,6 +404,7 @@ class io_fiber_context {
         fprintf(stderr, "ERROR: io_submit(nr=%zd) = %s\n", io_reqnum, strerror(err));
       }
       else if (size_t(ret) == io_reqnum) {
+        fprintf(stderr, "INFO: io_submit(nr=%zd) = %d, graceful\n", io_reqnum, ret);
         io_reqnum = 0; // reset
       }
       else {
@@ -417,6 +418,11 @@ class io_fiber_context {
     else {
       idle_cnt++;
       fprintf(stderr, "INFO: fiber_proc: ft_num = %zd, idle_cnt = %zd, counter = %llu\n", ft_num, idle_cnt, counter);
+      if (idle_cnt > 128) {
+        //std::this_thread::yield();
+        usleep(100); // 100 us
+        idle_cnt = 0;
+      }
     }
   }
 
