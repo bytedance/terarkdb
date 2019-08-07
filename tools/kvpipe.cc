@@ -121,7 +121,8 @@ GetoptDone:
     if (bench_report) {
       if (++cnt1 == bench_report) {
         auto t1 = pf.now();
-        fprintf(stderr, "qps = %f M/sec\n", cnt1/pf.uf(t0,t1));
+        fprintf(stderr, "%s(%d:%d) qps = %f M/sec\n",
+                pipeline.euTypeName(), nthr, nfib, cnt1/pf.uf(t0,t1));
         t0 = t1;
         cnt1 = 0;
       }
