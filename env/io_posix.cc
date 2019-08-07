@@ -414,7 +414,7 @@ class io_fiber_context {
       }
     }
     else {
-      fprintf(stderr, "fiber_proc: io_reqnum==0, counter = %llu\n", counter);
+      fprintf(stderr, "INFO: fiber_proc: ft_num = %zd, io_reqnum==0, counter = %llu\n", ft_num, counter);
     }
   }
 
