@@ -387,47 +387,55 @@ class io_fiber_context {
     io_reqnum = 0;
     for (; state::running == m_state; counter++) {
       if (counter % 2 == 0) {
-        if (io_reqnum) {
-          // should io_reqvec keep valid before reaped?
-          int ret = io_submit(io_ctx, io_reqnum, io_reqvec);
-          if (ret < 0) {
-            int err = -ret;
-            fprintf(stderr, "ERROR: io_submit(nr=%zd) = %s\n", io_reqnum, strerror(err));
-          }
-          else if (size_t(ret) == io_reqnum) {
-            io_reqnum = 0; // reset
-          }
-          else {
-            fprintf(stderr, "WARN: io_submit(nr=%zd) = %d\n", io_reqnum, ret);
-            assert(size_t(ret) < io_reqnum);
-            memmove(io_reqvec, io_reqvec + ret, io_reqnum - ret);
-            io_reqnum -= ret;
-          }
-        }
-        else {
-          fprintf(stderr, "fiber_proc: io_reqnum==0, counter = %llu\n", counter);
-        }
-      }
-      else {
+        batch_submit();
+      } else {
         io_reap();
       }
       boost::this_fiber::yield();
     }
   }
 
-  void io_reap() {
-    struct io_event     io_events[io_batch];
-    int ret = io_getevents(io_ctx, 0, io_batch, io_events, NULL);
-    if (ret < 0) {
-      int err = -ret;
-      fprintf(stderr, "ERROR: io_getevents(nr=%d) = %s\n", io_batch, strerror(err));
+  void batch_submit() {
+    if (io_reqnum) {
+      // should io_reqvec keep valid before reaped?
+      int ret = io_submit(io_ctx, io_reqnum, io_reqvec);
+      if (ret < 0) {
+        int err = -ret;
+        fprintf(stderr, "ERROR: io_submit(nr=%zd) = %s\n", io_reqnum, strerror(err));
+      }
+      else if (size_t(ret) == io_reqnum) {
+        io_reqnum = 0; // reset
+      }
+      else {
+        fprintf(stderr, "WARN: io_submit(nr=%zd) = %d\n", io_reqnum, ret);
+        assert(size_t(ret) < io_reqnum);
+        memmove(io_reqvec, io_reqvec + ret, io_reqnum - ret);
+        io_reqnum -= ret;
+      }
     }
     else {
-      for (int i = 0; i < ret; i++) {
-        io_return* ior = (io_return*)(io_events[i].data);
-        ior->len = io_events[i].res;
-        ior->err = io_events[i].res2;
-        ior->done = true;
+      fprintf(stderr, "fiber_proc: io_reqnum==0, counter = %llu\n", counter);
+    }
+  }
+
+  void io_reap() {
+    static const int reap_batch = 32;
+    struct io_event  io_events[reap_batch];
+    for (;;) {
+      int ret = io_getevents(io_ctx, 0, reap_batch, io_events, NULL);
+      if (ret < 0) {
+        int err = -ret;
+        fprintf(stderr, "ERROR: io_getevents(nr=%d) = %s\n", io_batch, strerror(err));
+      }
+      else {
+        for (int i = 0; i < ret; i++) {
+          io_return* ior = (io_return*)(io_events[i].data);
+          ior->len = io_events[i].res;
+          ior->err = io_events[i].res2;
+          ior->done = true;
+        }
+        if (ret < reap_batch)
+          break;
       }
     }
   }
