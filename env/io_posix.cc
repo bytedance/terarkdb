@@ -489,7 +489,7 @@ public:
     : io_fiber(std::bind(&io_fiber_context::fiber_proc, this))
   {
     ft_num = g_ft_num++;
-    fprintf(stderr, "INFO: io_fiber_context::io_fiber_context(): ft_num = %zd\n", ft_num);
+    //fprintf(stderr, "INFO: io_fiber_context::io_fiber_context(): ft_num = %zd\n", ft_num);
     int maxevents = io_batch*2 - 1;
     int err = io_setup(maxevents, &io_ctx);
     if (err) {
