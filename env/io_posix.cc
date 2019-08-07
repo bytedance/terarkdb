@@ -349,7 +349,7 @@ class io_fiber_context {
     stopping,
     stopped,
   };
-  state                m_state;
+  volatile state       m_state;
   size_t               ft_num;
   unsigned long long   counter;
   boost::fibers::fiber io_fiber;
