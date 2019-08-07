@@ -354,7 +354,7 @@ class io_fiber_context {
   unsigned long long   counter;
   boost::fibers::fiber io_fiber;
   io_context_t         io_ctx;
-  volatile size_t      io_reqnum;
+  volatile size_t      io_reqnum = 0;
   struct iocb*         io_reqvec[io_batch];
 
   struct io_return {
@@ -384,7 +384,6 @@ class io_fiber_context {
     }
   }
   void fiber_proc_batch_mode() {
-    io_reqnum = 0;
     for (; state::running == m_state; counter++) {
       if (counter % 2 == 0) {
         batch_submit();
