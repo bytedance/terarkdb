@@ -470,10 +470,11 @@ public:
     }
     else {
         while (UNLIKELY(io_reqnum >= io_batch)) {
-          fprintf(stderr, "WARN: io_reqnum = %d >= io_batch = %d, yield fiber\n", io_reqnum, io_batch);
+          fprintf(stderr, "WARN: io_reqnum = %zd >= io_batch = %d, yield fiber\n", io_reqnum, io_batch);
           boost::this_fiber::yield();
         }
         io_reqvec[io_reqnum++] = &io; // submit to user space queue
+        fprintf(stderr, "INFO: io_reqnum = %zd, yield for io fiber submit\n", io_reqnum);
     }
     do {
       boost::this_fiber::yield();
