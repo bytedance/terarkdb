@@ -403,7 +403,7 @@ class io_fiber_context {
         fprintf(stderr, "ERROR: ft_num = %zd, io_submit(nr=%zd) = %s\n", ft_num, io_reqnum, strerror(err));
       }
       else if (size_t(ret) == io_reqnum) {
-        fprintf(stderr, "INFO: ft_num = %zd, io_submit(nr=%zd) = %d, graceful\n", ft_num, io_reqnum, ret);
+        //fprintf(stderr, "INFO: ft_num = %zd, io_submit(nr=%zd) = %d, graceful\n", ft_num, io_reqnum, ret);
         io_reqnum = 0; // reset
       }
       else {
@@ -417,7 +417,7 @@ class io_fiber_context {
     else {
       idle_cnt++;
       if (idle_cnt > 128) {
-        fprintf(stderr, "INFO: fiber_proc: ft_num = %zd, idle_cnt = %zd, counter = %llu\n", ft_num, idle_cnt, counter);
+        //fprintf(stderr, "INFO: fiber_proc: ft_num = %zd, idle_cnt = %zd, counter = %llu\n", ft_num, idle_cnt, counter);
         //std::this_thread::yield();
         usleep(100); // 100 us
         idle_cnt = 0;
@@ -473,7 +473,7 @@ public:
           boost::this_fiber::yield();
         }
         io_reqvec[io_reqnum++] = &io; // submit to user space queue
-        fprintf(stderr, "INFO: ft_num = %zd, io_reqnum = %zd, yield for io fiber submit\n", ft_num, io_reqnum);
+        //fprintf(stderr, "INFO: ft_num = %zd, io_reqnum = %zd, yield for io fiber submit\n", ft_num, io_reqnum);
     }
     do {
       boost::this_fiber::yield();
