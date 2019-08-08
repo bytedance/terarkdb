@@ -99,6 +99,7 @@
 # include <sys/unistd.h>
 # include <table/terark_zip_weak_function.h>
 #endif
+#include <terark/util/run_once_fiber.hpp>
 
 namespace rocksdb {
 const std::string kDefaultColumnFamilyName("default");
@@ -1372,9 +1373,6 @@ std::vector<Status> DBImpl::MultiGet(
   }
   mutex_.Unlock();
 
-  // Contain a list of merge operations if merge occurs.
-  MergeContext merge_context;
-
   // Note: this always resizes the values array
   size_t num_keys = keys.size();
   std::vector<Status> stat_list(num_keys);
@@ -1389,8 +1387,10 @@ std::vector<Status> DBImpl::MultiGet(
   // s is both in/out. When in, s could either be OK or MergeInProgress.
   // merge_operands will contain the sequence of merges in the latter case.
   size_t num_found = 0;
-  for (size_t i = 0; i < num_keys; ++i) {
-    merge_context.Clear();
+  size_t counting = num_keys;
+  auto get_one = [&](int i) {
+    // Contain a list of merge operations if merge occurs.
+    MergeContext merge_context;
     Status& s = stat_list[i];
     std::string* value = &(*values)[i];
 
@@ -1430,7 +1430,17 @@ std::vector<Status> DBImpl::MultiGet(
       bytes_read += value->size();
       num_found++;
     }
+    counting--;
+  };
+
+  static thread_local terark::RunOnceFiberPool fiber_pool(16);
+  // current calling fiber's list head, can be treated as a handle
+  int myhead = -1; // must be initialized to -1
+  for (int i = 0; i < (int)num_keys; ++i) {
+    fiber_pool.submit(myhead, get_one, i);
   }
+  fiber_pool.reap(myhead);
+  assert(0 == counting);
 
   // Post processing (decrement reference counts and record statistics)
   PERF_TIMER_GUARD(get_post_process_time);
