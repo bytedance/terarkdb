@@ -42,7 +42,7 @@ Status CompactedDBImpl::Get(const ReadOptions& options, ColumnFamilyHandle*,
                             const Slice& key, LazySlice* value) {
   GetContext get_context(user_comparator_, nullptr, nullptr, nullptr,
                          GetContext::kNotFound, key, value, nullptr, nullptr,
-                         nullptr, nullptr);
+                         version_, nullptr, nullptr);
   LookupKey lkey(key, kMaxSequenceNumber);
   files_.files[FindFile(key)].fd.table_reader->Get(options, lkey.internal_key(),
                                                    &get_context, nullptr);
@@ -75,7 +75,7 @@ std::vector<Status> CompactedDBImpl::MultiGet(const ReadOptions& options,
       LazySlice lazy_val(&value);
       GetContext get_context(user_comparator_, nullptr, nullptr, nullptr,
                              GetContext::kNotFound, keys[idx], &lazy_val,
-                             nullptr, nullptr, nullptr, nullptr);
+                             nullptr, nullptr, version_, nullptr, nullptr);
       LookupKey lkey(keys[idx], kMaxSequenceNumber);
       r->Get(options, lkey.internal_key(), &get_context, nullptr);
       auto s = lazy_val.save_to_buffer(&value);

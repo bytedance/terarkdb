@@ -15,11 +15,10 @@
 
 namespace rocksdb {
 
-template <class TValue>
-class InternalIteratorBase : public Cleanable {
+class InternalIteratorCommon : public Cleanable {
  public:
-  InternalIteratorBase() {}
-  virtual ~InternalIteratorBase() {}
+  InternalIteratorCommon() {}
+  virtual ~InternalIteratorCommon() {}
 
   // An iterator is either positioned at a key/value pair, or
   // not valid.  This method returns true iff the iterator is valid.
@@ -63,12 +62,6 @@ class InternalIteratorBase : public Cleanable {
   // REQUIRES: Valid()
   virtual Slice key() const = 0;
 
-  // Return the value for the current entry.  The underlying storage for
-  // the returned slice is valid only until the next modification of
-  // the iterator.
-  // REQUIRES: Valid()
-  virtual TValue value() const = 0;
-
   // If an error has occurred, return it.  Else return an ok status.
   // If non-blocking IO is requested and this operation cannot be
   // satisfied without doing some IO, then this returns Status::Incomplete().
@@ -95,8 +88,36 @@ class InternalIteratorBase : public Cleanable {
 
  private:
   // No copying allowed
-  InternalIteratorBase(const InternalIteratorBase&) = delete;
-  InternalIteratorBase& operator=(const InternalIteratorBase&) = delete;
+  InternalIteratorCommon(const InternalIteratorCommon&) = delete;
+  InternalIteratorCommon& operator=(const InternalIteratorCommon&) = delete;
+};
+
+template <class TValue>
+class InternalIteratorBase : public InternalIteratorCommon {
+ public:
+  // Return the value for the current entry.  The underlying storage for
+  // the returned slice is valid only until the next modification of
+  // the iterator.
+  // REQUIRES: Valid()
+  virtual TValue value() const = 0;
+};
+
+template <>
+class InternalIteratorBase<LazySlice> : public InternalIteratorCommon {
+public:
+  // Return the value for the current entry.  The underlying storage for
+  // the returned slice is valid only until the next modification of
+  // the iterator.
+  // REQUIRES: Valid()
+  virtual LazySlice value() const = 0;
+
+  // Return the value for the current entry.  The underlying storage for
+  // the returned slice is valid only until the next modification of
+  // the iterator.
+  // REQUIRES: Valid()
+  virtual LazySlice combined_value(const Slice& /*user_key*/) const {
+    return value();
+  }
 };
 
 using InternalIterator = InternalIteratorBase<LazySlice>;

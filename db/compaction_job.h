@@ -110,6 +110,7 @@ class CompactionJob {
       const Status& input_status, SubcompactionState* sub_compact,
       CompactionRangeDelAggregator* range_del_agg,
       CompactionIterationStats* range_del_out_stats,
+      const std::unordered_set<uint64_t>& dependence,
       const Slice* next_table_min_key = nullptr);
   Status InstallCompactionResults(const MutableCFOptions& mutable_cf_options);
   void RecordCompactionIOStats();

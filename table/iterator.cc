@@ -8,6 +8,7 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #include "rocksdb/iterator.h"
+#include "db/dbformat.h"
 #include "table/internal_iterator.h"
 #include "table/iterator_wrapper.h"
 #include "util/arena.h"
@@ -100,6 +101,19 @@ Status Iterator::GetProperty(std::string /*prop_name*/, std::string* prop) {
     return Status::InvalidArgument("prop is nullptr");
   }
   return Status::InvalidArgument("Unidentified property.");
+}
+
+LazySlice CombinedInternalIterator::combined_value(
+    const rocksdb::Slice& user_key) const {
+  Slice internal_key = iter_->key();
+  ValueType type = GetInternalKeyType(internal_key);
+  if (type != kTypeValueIndex && type != kTypeMergeIndex) {
+    return iter_->value();
+  }
+  LazySlice v = iter_->value();
+  separate_helper_->TransToCombined(user_key,
+                                    ExtractInternalKeyFooter(internal_key), v);
+  return v;
 }
 
 namespace {

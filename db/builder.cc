@@ -146,9 +146,9 @@ Status BuildTable(
                       snapshot_checker);
 
     CompactionIterator c_iter(
-        iter.get(), nullptr, internal_comparator.user_comparator(), &merge,
-        kMaxSequenceNumber, &snapshots, earliest_write_conflict_snapshot,
-        snapshot_checker, env,
+        iter.get(), nullptr, nullptr, internal_comparator.user_comparator(),
+        &merge, kMaxSequenceNumber, &snapshots,
+        earliest_write_conflict_snapshot, snapshot_checker, env,
         ShouldReportDetailedTime(env, ioptions.statistics),
         true /* internal key corruption is not ok */, range_del_agg.get());
 
@@ -161,7 +161,7 @@ Status BuildTable(
       ~SecondPassIterStorage() {
         if (iter.get() != nullptr) {
           range_del_agg.reset();
-          iter = ScopedArenaIterator();
+          iter.set(nullptr);
           auto merge_ptr = reinterpret_cast<MergeHelper*>(&merge);
           merge_ptr->~MergeHelper();
         }
@@ -186,7 +186,7 @@ Status BuildTable(
               snapshots.empty() ? 0 : snapshots.back(),
               snapshot_checker);
       return new CompactionIterator(
-          second_pass_iter_storage.iter.get(), nullptr,
+          second_pass_iter_storage.iter.get(), nullptr, nullptr,
           internal_comparator.user_comparator(), merge_ptr, kMaxSequenceNumber,
           &snapshots, earliest_write_conflict_snapshot, snapshot_checker, env,
           false /* report_detailed_time */,

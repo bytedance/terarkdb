@@ -113,7 +113,7 @@ Status MergeHelper::TimedFullMerge(const MergeOperator* merge_operator,
 // TODO: Avoid the snapshot stripe map lookup in CompactionRangeDelAggregator
 // and just pass the StripeRep corresponding to the stripe being merged.
 Status MergeHelper::MergeUntil(
-    InternalIterator* iter,
+    const Slice& user_key, InternalIterator* iter,
     DeltaAntiquationCollector& delta_antiquation_collector,
     CompactionRangeDelAggregator* range_del_agg,
     const SequenceNumber stop_before, const bool at_bottom) {
@@ -175,7 +175,7 @@ Status MergeHelper::MergeUntil(
       // hit an entry that's visible by the previous snapshot, can't touch that
       break;
     }
-    LazySlice val = iter->value();
+    LazySlice val = iter->combined_value(user_key);
     if (!original_key_is_iter) {
       delta_antiquation_collector.add(val.file_number());
     }
@@ -358,10 +358,14 @@ Status MergeHelper::MergeUntil(
       if (merge_success) {
         // Merging of operands (associative merge) was successful.
         // Replace operands with the merge result
+        original_key = std::move(keys_.back());
+        orig_ikey.type = kTypeMerge;
+        UpdateInternalKey(&original_key, orig_ikey.sequence, orig_ikey.type);
+        keys_.clear();
         merge_context_.Clear();
+        keys_.emplace_front(std::move(original_key));
         merge_result.reset_file_number();
         merge_context_.PushOperand(std::move(merge_result));
-        keys_.erase(keys_.begin(), keys_.end() - 1);
       }
     }
   }

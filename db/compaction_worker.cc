@@ -8,6 +8,7 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #include "rocksdb/compaction_worker.h"
+#include "table/get_context.h"
 
 #ifndef __STDC_FORMAT_MACROS
 #define __STDC_FORMAT_MACROS
@@ -130,6 +131,36 @@ template<class T>
 using TMap = std::unordered_map<std::string, T>;
 template<class T>
 using STMap = std::unordered_map<std::string, std::shared_ptr<T>>;
+
+class WorkerSeparateHelper : public SeparateHelper, public LazySliceController {
+ public:
+  void destroy(LazySliceRep* /*rep*/) const override {}
+
+  void pin_resource(LazySlice* /*slice*/,
+                    LazySliceRep* /*rep*/) const override {}
+
+  Status inplace_decode(LazySlice* slice, LazySliceRep* rep) const override {
+    return inplace_decode_callback_(inplace_decode_arg_, slice, rep);
+  }
+
+  void TransToCombined(const Slice& user_key, uint64_t seq_type,
+                       LazySlice& value) const override {
+    uint64_t file_number = SeparateHelper::DecodeFileNumber(value);
+    value.reset(this, {reinterpret_cast<uint64_t>(user_key.data()),
+                       user_key.size(), seq_type, 0}, file_number);
+  }
+
+  WorkerSeparateHelper(void* inplace_decode_arg,
+                       Status (*inplace_decode_callback)(void* arg,
+                                                         LazySlice* slice,
+                                                         LazySliceRep* rep))
+    : inplace_decode_arg_(inplace_decode_arg),
+      inplace_decode_callback_(inplace_decode_callback) {}
+
+  void* inplace_decode_arg_;
+  Status (*inplace_decode_callback_)(void* arg, LazySlice* slice,
+                                     LazySliceRep* rep);
+};
 
 std::function<CompactionWorkerResult()>
 RemoteCompactionWorker::StartCompaction(
@@ -404,17 +435,12 @@ std::string RemoteCompactionWorker::Client::DoCompaction(
   std::unordered_map<uint64_t, std::unique_ptr<rocksdb::TableReader>>
       table_cache;
   std::mutex table_cache_mutex;
-  struct {
-    void* arg;
-    IteratorCache::CreateIterCallback callback;
-  } c_style_new_iterator;
-  auto new_iterator = [&](const FileMetaData* file_metadata,
-                          const DependenceMap& depend_map, Arena* arena,
-                          TableReader** reader_ptr) -> InternalIterator* {
+  auto get_table_reader = [&](uint64_t file_number, TableReader** reader_ptr) {
     std::lock_guard<std::mutex> lock(table_cache_mutex);
-    uint64_t file_number = file_metadata->fd.GetNumber();
     auto find = table_cache.find(file_number);
     if (find == table_cache.end()) {
+      assert(contxt_dependence_map.count(file_number) > 0);
+      const FileMetaData* file_metadata = contxt_dependence_map[file_number];
       std::string file_name =
           TableFileName(immutable_cf_options.cf_paths, file_number,
                         file_metadata->fd.GetPathId());
@@ -422,7 +448,7 @@ std::string RemoteCompactionWorker::Client::DoCompaction(
       auto s = rep_->env->NewRandomAccessFile(file_name, &file,
                                               rep_->env_options);
       if (!s.ok()) {
-        return NewErrorInternalIterator(s);
+        return s;
       }
       std::unique_ptr<rocksdb::RandomAccessFileReader> file_reader(
           new rocksdb::RandomAccessFileReader(std::move(file), file_name,
@@ -435,17 +461,33 @@ std::string RemoteCompactionWorker::Client::DoCompaction(
           table_reader_options, std::move(file_reader),
           file_metadata->fd.file_size, &reader, false);
       if (!s.ok()) {
-        return NewErrorInternalIterator(s);
+        return s;
       }
       find = table_cache.emplace(file_number, std::move(reader)).first;
-      if (reader_ptr != nullptr) {
-        *reader_ptr = find->second.get();
-      }
+    }
+    if (reader_ptr != nullptr) {
+      *reader_ptr = find->second.get();
+    }
+    return Status::OK();
+  };
+  struct {
+    void* arg;
+    IteratorCache::CreateIterCallback callback;
+  } c_style_new_iterator;
+  auto new_iterator = [&](const FileMetaData* file_metadata,
+                          const DependenceMap& depend_map, Arena* arena,
+                          TableReader** reader_ptr) -> InternalIterator* {
+    TableReader* reader;
+    auto s = get_table_reader(file_metadata->fd.GetNumber(), &reader);
+    if (!s.ok()) {
+      return NewErrorInternalIterator(s);
+    }
+    if (reader_ptr != nullptr) {
+      *reader_ptr = reader;
     }
     auto iterator =
-        find->second->NewIterator(ReadOptions(),
-                                  mutable_cf_options.prefix_extractor.get(),
-                                  arena);
+        reader->NewIterator(ReadOptions(),
+                            mutable_cf_options.prefix_extractor.get(), arena);
     if (file_metadata->prop.purpose == kMapSst && !depend_map.empty()) {
       auto sst_iterator = NewMapSstIterator(file_metadata, iterator, depend_map,
                                             *icmp, c_style_new_iterator.arg,
@@ -465,6 +507,52 @@ std::string RemoteCompactionWorker::Client::DoCompaction(
   };
   c_style_new_iterator.arg = &new_iterator;
   c_style_new_iterator.callback = c_style_callback(new_iterator);
+
+  auto separate_inplace_decode = [&](LazySlice* slice, LazySliceRep* rep) {
+    Slice user_key(reinterpret_cast<const char*>(rep->data[0]), rep->data[1]);
+    uint64_t seq_type = rep->data[2];
+    uint64_t file_number = slice->file_number();
+    bool value_found = false;
+    SequenceNumber context_seq;
+    GetContext get_context(ucmp, nullptr, immutable_cf_options.info_log,
+                           nullptr, GetContext::kNotFound, user_key, slice,
+                           &value_found, nullptr, nullptr, nullptr, rep_->env,
+                           &context_seq, nullptr, true);
+    SequenceNumber seq;
+    ValueType type;
+    UnPackSequenceAndType(seq_type, &seq, &type);
+    IterKey iter_key;
+    iter_key.SetInternalKey(user_key, seq, type);
+    TableReader* reader;
+    auto s = get_table_reader(file_number, &reader);
+    if (!s.ok()) {
+      return s;
+    }
+    ReadOptions options;
+    reader->Get(options, iter_key.GetInternalKey(), &get_context,
+                mutable_cf_options.prefix_extractor.get(), true);
+    if (!s.ok()) {
+      return s;
+    }
+    switch (get_context.State()) {
+      case GetContext::kFound:
+        if (type == kTypeValueIndex && context_seq == seq) {
+          return Status::OK();
+        }
+        break;
+      case GetContext::kMerge:
+        if (type == kTypeMergeIndex && context_seq == seq) {
+          return Status::OK();
+        }
+        break;
+      default:
+        break;
+    }
+    return Status::Corruption("Separate value get fail");
+  };
+
+  WorkerSeparateHelper separate_helper(
+      &separate_inplace_decode, c_style_callback(separate_inplace_decode));
 
   CompactionRangeDelAggregator range_del_agg(icmp, context.existing_snapshots);
 
@@ -526,11 +614,11 @@ std::string RemoteCompactionWorker::Client::DoCompaction(
   InternalKey& actual_end = result.actual_end;
 
   std::unique_ptr<CompactionIterator> c_iter(new CompactionIterator(
-      input.get(), end, ucmp, &merge, context.last_sequence,
+      input.get(), &separate_helper, end, ucmp, &merge, context.last_sequence,
       &context.existing_snapshots, context.earliest_write_conflict_snapshot,
       nullptr, rep_->env, false, false, &range_del_agg, nullptr,
-      compaction_filter, nullptr, context.preserve_deletes_seqnum,
-      &result.delta_antiquation));
+      mutable_cf_options.blob_size, compaction_filter, nullptr,
+      context.preserve_deletes_seqnum, &result.delta_antiquation));
 
   if (start != nullptr) {
     actual_start.SetMinPossibleForUserKey(*start);
@@ -553,13 +641,13 @@ std::string RemoteCompactionWorker::Client::DoCompaction(
 
     ~SecondPassIterStorage() {
       if (input.get() != nullptr) {
+        input.set(nullptr);
+        auto merge_ptr = reinterpret_cast<MergeHelper*>(&merge);
+        merge_ptr->~MergeHelper();
+        compaction_filter_holder.reset();
         auto range_del_agg_ptr =
             reinterpret_cast<CompactionRangeDelAggregator*>(&range_del_agg);
         range_del_agg_ptr->~CompactionRangeDelAggregator();
-        compaction_filter_holder.reset();
-        auto merge_ptr = reinterpret_cast<MergeHelper*>(&merge);
-        merge_ptr->~MergeHelper();
-        input.set(nullptr);
       }
     }
   } second_pass_iter_storage;
@@ -596,10 +684,10 @@ std::string RemoteCompactionWorker::Client::DoCompaction(
       second_pass_iter_storage.input.set(NewErrorInternalIterator(s, &arena));
     }
     return new CompactionIterator(
-        second_pass_iter_storage.input.get(), end, ucmp, merge_ptr,
-        context.last_sequence, &context.existing_snapshots,
-        context.earliest_write_conflict_snapshot, nullptr, rep_->env,
-        false, false, range_del_agg_ptr, nullptr,
+        second_pass_iter_storage.input.get(), &separate_helper, end, ucmp,
+        merge_ptr, context.last_sequence, &context.existing_snapshots,
+        context.earliest_write_conflict_snapshot, nullptr, rep_->env, false,
+        false, range_del_agg_ptr, nullptr, mutable_cf_options.blob_size,
         second_pass_iter_storage.compaction_filter, nullptr,
         context.preserve_deletes_seqnum, nullptr);
   };
@@ -634,6 +722,7 @@ std::string RemoteCompactionWorker::Client::DoCompaction(
   auto finish_output_file = [&](Status s, FileMetaData* meta,
                                 std::unique_ptr<WritableFileWriter>* writer_ptr,
                                 std::unique_ptr<TableBuilder>* builder_ptr,
+                                const std::unordered_set<uint64_t>& dependence,
                                 const Slice* next_key) {
     auto writer = writer_ptr->get();
     auto builder = builder_ptr->get();
@@ -729,8 +818,10 @@ std::string RemoteCompactionWorker::Client::DoCompaction(
       meta->marked_for_compaction = builder->NeedCompact();
     }
     const uint64_t current_entries = builder->NumEntries();
+    meta->prop.dependence.assign(dependence.begin(), dependence.end());
+    std::sort(meta->prop.dependence.begin(), meta->prop.dependence.end());
     if (s.ok()) {
-      s = builder->Finish(nullptr);
+      s = builder->Finish(&meta->prop);
     } else {
       builder->Abandon();
     }
@@ -777,6 +868,7 @@ std::string RemoteCompactionWorker::Client::DoCompaction(
   std::unique_ptr<WritableFileWriter> writer;
   std::unique_ptr<TableBuilder> builder;
   FileMetaData meta;
+  std::unordered_set<uint64_t> dependence;
 
   Status& status = result.status;
   const Slice* next_key = nullptr;
@@ -785,6 +877,11 @@ std::string RemoteCompactionWorker::Client::DoCompaction(
     // returns true.
     const Slice& key = c_iter->key();
     const LazySlice& value = c_iter->value();
+    if (c_iter->ikey().type == kTypeValueIndex ||
+        c_iter->ikey().type == kTypeMergeIndex) {
+      assert(value.file_number() != uint64_t(-1));
+      dependence.emplace(value.file_number());
+    }
 
     assert(end == nullptr || ucmp->Compare(c_iter->user_key(), *end) < 0);
 
@@ -819,7 +916,8 @@ std::string RemoteCompactionWorker::Client::DoCompaction(
     }
     if (output_file_ended) {
       status = finish_output_file(input_status, &meta, &writer, &builder,
-                                  next_key);
+                                  dependence, next_key);
+      dependence.clear();
       if (next_key != nullptr) {
         actual_end.SetMinPossibleForUserKey(ExtractUserKey(*next_key));
       }
@@ -839,7 +937,9 @@ std::string RemoteCompactionWorker::Client::DoCompaction(
     status = create_builder(&writer, &builder);
   }
   if (builder) {
-    status = finish_output_file(status, &meta, &writer, &builder, nullptr);
+    status = finish_output_file(status, &meta, &writer, &builder, dependence,
+                                nullptr);
+    dependence.clear();
   }
 
   c_iter.reset();

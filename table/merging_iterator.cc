@@ -404,6 +404,21 @@ void MergeIteratorBuilder::AddIterator(InternalIterator* iter) {
   }
 }
 
+void MergeIteratorBuilder::AddIterator(InternalIterator* iter,
+                                       const SeparateHelper* separate_helper) {
+  if (separate_helper == nullptr) {
+    AddIterator(iter);
+    return;
+  }
+  auto ptr = arena->AllocateAligned(sizeof(CombinedInternalIterator));
+  InternalIterator* separate_iter =
+      new(ptr) CombinedInternalIterator(iter, separate_helper);
+  separate_iter->RegisterCleanup([](void* arg1, void* /*arg2*/) {
+    reinterpret_cast<InternalIterator*>(arg1)->~InternalIterator();
+  }, iter, nullptr);
+  AddIterator(separate_iter);
+}
+
 InternalIterator* MergeIteratorBuilder::Finish() {
   InternalIterator* ret = nullptr;
   if (!use_merging_iter) {

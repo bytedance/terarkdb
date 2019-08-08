@@ -373,7 +373,7 @@ class DBImpl : public DB {
   InternalIterator* NewInternalIterator(
       Arena* arena, RangeDelAggregator* range_del_agg, SequenceNumber sequence,
       ColumnFamilyHandle* column_family = nullptr,
-      SeparateHelper** separate_helper = nullptr);
+      const SeparateHelper** separate_helper = nullptr);
 
   LogsWithPrepTracker* logs_with_prep_tracker() {
     return &logs_with_prep_tracker_;
@@ -578,7 +578,8 @@ class DBImpl : public DB {
 
   InternalIterator* NewInternalIterator(
       const ReadOptions&, ColumnFamilyData* cfd, SuperVersion* super_version,
-      Arena* arena, RangeDelAggregator* range_del_agg, SequenceNumber sequence);
+      Arena* arena, RangeDelAggregator* range_del_agg, SequenceNumber sequence,
+      const SeparateHelper** separate_helper = nullptr);
 
   // hollow transactions shell used for recovery.
   // these will then be passed to TransactionDB so that

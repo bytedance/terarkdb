@@ -1199,20 +1199,19 @@ Status Version::inplace_decode(LazySlice* slice, LazySliceRep* rep) const {
   }
   const FileMetaData* file_metadata = find->second;
   bool value_found = false;
-  SequenceNumber origin_seq;
+  SequenceNumber context_seq;
   GetContext get_context(cfd_->internal_comparator().user_comparator(), nullptr,
                          cfd_->ioptions()->info_log, db_statistics_,
                          GetContext::kNotFound, user_key, slice, &value_found,
-                         nullptr, const_cast<Version*>(this), nullptr, env_,
-                         &origin_seq, nullptr, true);
+                         nullptr, nullptr, nullptr, env_, &context_seq, nullptr,
+                         true);
   ReadOptions options;
   options.ignore_range_deletions = true;
-  IterKey iter_key;
   SequenceNumber seq;
-  ValueType type, origin_type;
+  ValueType type;
   UnPackSequenceAndType(seq_type, &seq, &type);
-  origin_type = type == kTypeValueIndex ? kTypeValue : kTypeMerge;
-  iter_key.SetInternalKey(user_key, seq, origin_type);
+  IterKey iter_key;
+  iter_key.SetInternalKey(user_key, seq, type);
   auto s = table_cache_->Get(options, true, cfd_->internal_comparator(),
                              *file_metadata, dependence_map,
                              iter_key.GetInternalKey(), &get_context,
@@ -1223,12 +1222,12 @@ Status Version::inplace_decode(LazySlice* slice, LazySliceRep* rep) const {
   }
   switch (get_context.State()) {
     case GetContext::kFound:
-      if (origin_type == kTypeValue && origin_seq == seq) {
+      if (type == kTypeValueIndex && context_seq == seq) {
         return Status::OK();
       }
       break;
     case GetContext::kMerge:
-      if (origin_type == kTypeMerge && origin_seq == seq) {
+      if (type == kTypeMergeIndex && context_seq == seq) {
         return Status::OK();
       }
       break;
@@ -1238,8 +1237,8 @@ Status Version::inplace_decode(LazySlice* slice, LazySliceRep* rep) const {
   return Status::Corruption("Separate value get fail");
 }
 
-void Version::TransToInline(const Slice& user_key, uint64_t seq_type,
-                            LazySlice& value) const {
+void Version::TransToCombined(const Slice& user_key, uint64_t seq_type,
+                              LazySlice& value) const {
   uint64_t file_number = SeparateHelper::DecodeFileNumber(value);
   value.reset(this, {reinterpret_cast<uint64_t>(user_key.data()),
                      user_key.size(), seq_type, 0}, file_number);

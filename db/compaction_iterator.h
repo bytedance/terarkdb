@@ -16,6 +16,7 @@
 #include "db/snapshot_checker.h"
 #include "options/cf_options.h"
 #include "rocksdb/compaction_filter.h"
+#include "table/iterator_wrapper.h"
 
 namespace rocksdb {
 
@@ -60,14 +61,14 @@ class CompactionIterator {
   };
 
   CompactionIterator(
-      InternalIterator* input, const Slice* end, const Comparator* cmp,
-      MergeHelper* merge_helper, SequenceNumber last_sequence,
-      std::vector<SequenceNumber>* snapshots,
+      InternalIterator* input, const SeparateHelper* separate_helper,
+      const Slice* end, const Comparator* cmp, MergeHelper* merge_helper,
+      SequenceNumber last_sequence, std::vector<SequenceNumber>* snapshots,
       SequenceNumber earliest_write_conflict_snapshot,
       const SnapshotChecker* snapshot_checker, Env* env,
       bool report_detailed_time, bool expect_valid_internal_key,
       CompactionRangeDelAggregator* range_del_agg,
-      const Compaction* compaction = nullptr, size_t blob_size = 0,
+      const Compaction* compaction = nullptr, size_t blob_size = uint64_t(-1),
       const CompactionFilter* compaction_filter = nullptr,
       const std::atomic<bool>* shutting_down = nullptr,
       const SequenceNumber preserve_deletes_seqnum = 0,
@@ -75,14 +76,14 @@ class CompactionIterator {
 
   // Constructor with custom CompactionProxy, used for tests.
   CompactionIterator(
-      InternalIterator* input, const Slice* end, const Comparator* cmp,
-      MergeHelper* merge_helper, SequenceNumber last_sequence,
-      std::vector<SequenceNumber>* snapshots,
+      InternalIterator* input, const SeparateHelper* separate_helper,
+      const Slice* end, const Comparator* cmp, MergeHelper* merge_helper,
+      SequenceNumber last_sequence, std::vector<SequenceNumber>* snapshots,
       SequenceNumber earliest_write_conflict_snapshot,
       const SnapshotChecker* snapshot_checker, Env* env,
       bool report_detailed_time, bool expect_valid_internal_key,
       CompactionRangeDelAggregator* range_del_agg,
-      std::unique_ptr<CompactionProxy> compaction, size_t blob_size = 0,
+      std::unique_ptr<CompactionProxy> compaction, size_t blob_size,
       const CompactionFilter* compaction_filter = nullptr,
       const std::atomic<bool>* shutting_down = nullptr,
       const SequenceNumber preserve_deletes_seqnum = 0,
@@ -138,6 +139,7 @@ class CompactionIterator {
   // or seqnum be zero-ed out even if all other conditions for it are met.
   inline bool ikeyNotNeededForIncrementalSnapshot();
 
+  CombinedInternalIterator combined_input_;
   InternalIterator* input_;
   const Slice* end_;
   const Comparator* cmp_;

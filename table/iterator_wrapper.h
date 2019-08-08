@@ -15,6 +15,8 @@
 
 namespace rocksdb {
 
+class SeparateHelper;
+
 // A internal wrapper class with an interface similar to Iterator that caches
 // the valid() and key() results for an underlying iterator.
 // This can help avoid virtual function calls and also gives better
@@ -76,7 +78,7 @@ class IteratorWrapperBase {
   void SeekToFirst()        { assert(iter_); iter_->SeekToFirst(); Update(); }
   void SeekToLast()         { assert(iter_); iter_->SeekToLast();  Update(); }
 
- private:
+ protected:
   void Update() {
     valid_ = iter_->Valid();
     if (valid_) {
@@ -90,7 +92,37 @@ class IteratorWrapperBase {
   Slice key_;
 };
 
-using IteratorWrapper = IteratorWrapperBase<LazySlice>;
+class IteratorWrapper : public IteratorWrapperBase<LazySlice> {
+  using IteratorWrapperBase<LazySlice>::iter_;
+ public:
+  using IteratorWrapperBase<LazySlice>::IteratorWrapperBase;
+
+  LazySlice combined_value(const Slice& user_key) const {
+    return iter_->combined_value(user_key);
+  }
+};
+
+class CombinedInternalIterator : public InternalIterator {
+ public:
+  CombinedInternalIterator(InternalIterator* iter,
+                           const SeparateHelper* separate_helper)
+      : iter_(iter), separate_helper_(separate_helper) {}
+
+  bool Valid() const { return iter_->Valid(); }
+  Slice key() const { return iter_->key(); }
+  LazySlice value() const { return iter_->value(); }
+  LazySlice combined_value(const Slice& user_key) const;
+  Status status() const { return iter_->status(); }
+  void Next() { iter_->Next(); }
+  void Prev() { iter_->Prev(); }
+  void Seek(const Slice& k) { iter_->Seek(k); }
+  void SeekForPrev(const Slice& k) { iter_->SeekForPrev(k); }
+  void SeekToFirst() { iter_->SeekToFirst(); }
+  void SeekToLast() { iter_->SeekToLast(); }
+
+  InternalIterator* iter_;
+  const SeparateHelper* separate_helper_;
+};
 
 
 }  // namespace rocksdb

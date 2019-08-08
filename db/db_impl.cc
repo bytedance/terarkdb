@@ -1039,7 +1039,7 @@ bool DBImpl::SetPreserveDeletesSequenceNumber(SequenceNumber seqnum) {
 
 InternalIterator* DBImpl::NewInternalIterator(
     Arena* arena, RangeDelAggregator* range_del_agg, SequenceNumber sequence,
-    ColumnFamilyHandle* column_family, SeparateHelper** separate_helper) {
+    ColumnFamilyHandle* column_family, const SeparateHelper** separate_helper) {
   ColumnFamilyData* cfd;
   if (column_family == nullptr) {
     cfd = default_cf_handle_->cfd();
@@ -1158,12 +1158,11 @@ static void CleanupIteratorState(void* arg1, void* /*arg2*/) {
 }
 }  // namespace
 
-InternalIterator* DBImpl::NewInternalIterator(const ReadOptions& read_options,
-                                              ColumnFamilyData* cfd,
-                                              SuperVersion* super_version,
-                                              Arena* arena,
-                                              RangeDelAggregator* range_del_agg,
-                                              SequenceNumber sequence) {
+InternalIterator* DBImpl::NewInternalIterator(
+    const ReadOptions& read_options, ColumnFamilyData* cfd,
+    SuperVersion* super_version, Arena* arena,
+    RangeDelAggregator* range_del_agg, SequenceNumber sequence,
+    const SeparateHelper** separate_helper) {
   InternalIterator* internal_iter;
   assert(arena != nullptr);
   assert(range_del_agg != nullptr);
@@ -1176,19 +1175,17 @@ InternalIterator* DBImpl::NewInternalIterator(const ReadOptions& read_options,
   merge_iter_builder.AddIterator(
       super_version->mem->NewIterator(read_options, arena));
   std::unique_ptr<FragmentedRangeTombstoneIterator> range_del_iter;
-  Status s;
   if (!read_options.ignore_range_deletions) {
     range_del_iter.reset(
         super_version->mem->NewRangeTombstoneIterator(read_options, sequence));
     range_del_agg->AddTombstones(std::move(range_del_iter));
   }
   // Collect all needed child iterators for immutable memtables
-  if (s.ok()) {
-    super_version->imm->AddIterators(read_options, &merge_iter_builder);
-    if (!read_options.ignore_range_deletions) {
-      s = super_version->imm->AddRangeTombstoneIterators(read_options, arena,
-                                                         range_del_agg);
-    }
+  Status s;
+  super_version->imm->AddIterators(read_options, &merge_iter_builder);
+  if (!read_options.ignore_range_deletions) {
+    s = super_version->imm->AddRangeTombstoneIterators(read_options, arena,
+                                                       range_del_agg);
   }
   TEST_SYNC_POINT_CALLBACK("DBImpl::NewInternalIterator:StatusCallback", &s);
   if (s.ok()) {
@@ -1202,7 +1199,9 @@ InternalIterator* DBImpl::NewInternalIterator(const ReadOptions& read_options,
         new IterState(this, &mutex_, super_version,
                       read_options.background_purge_on_iterator_cleanup);
     internal_iter->RegisterCleanup(CleanupIteratorState, cleanup, nullptr);
-
+    if (separate_helper != nullptr) {
+      *separate_helper = super_version->current;
+    }
     return internal_iter;
   } else {
     CleanupSuperVersion(super_version);

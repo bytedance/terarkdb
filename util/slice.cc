@@ -228,10 +228,12 @@ public:
   };
 
   void destroy(LazySliceRep* /*rep*/) const override {}
-  void pin_resource(LazySlice* /*slice*/, LazySliceRep* /*rep*/) const override {}
+  void pin_resource(LazySlice* /*slice*/,
+                    LazySliceRep* /*rep*/) const override {}
   Status decode_destructive(LazySlice* slice, LazySliceRep* _rep,
                             LazySlice* target) const override {
-    target->reset(this, *_rep, slice->file_number());
+    auto rep = union_cast<const Rep>(_rep);
+    target->reset(Slice(rep->data, rep->size), true, slice->file_number());
     return Status::OK();
   }
   Status inplace_decode(LazySlice* slice, LazySliceRep* _rep) const override {

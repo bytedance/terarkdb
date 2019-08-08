@@ -188,10 +188,17 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
     }
     switch (type) {
       case kTypeValueIndex:
-        separate_helper_->TransToInline(user_key_, seq_type, value);
+        separate_helper_->TransToCombined(user_key_, seq_type, value);
         FALLTHROUGH_INTENDED;
       case kTypeValue:
         assert(state_ == kNotFound || state_ == kMerge);
+        if (trivial_) {
+          assert(kNotFound == state_);
+          assert(lazy_val_ != nullptr);
+          state_ = kFound;
+          *lazy_val_ = std::move(value);
+          return false;
+        }
         if (kNotFound == state_) {
           state_ = kFound;
           if (LIKELY(lazy_val_ != nullptr)) {
@@ -237,12 +244,14 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
         return false;
 
       case kTypeMergeIndex:
-        separate_helper_->TransToInline(user_key_, seq_type, value);
+        separate_helper_->TransToCombined(user_key_, seq_type, value);
         FALLTHROUGH_INTENDED;
       case kTypeMerge:
         assert(state_ == kNotFound || state_ == kMerge);
         state_ = kMerge;
         if (trivial_) {
+          assert(kNotFound == state_);
+          assert(lazy_val_ != nullptr);
           *lazy_val_ = std::move(value);
           return false;
         }

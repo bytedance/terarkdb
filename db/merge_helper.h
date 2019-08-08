@@ -78,7 +78,7 @@ class MergeHelper {
   //
   // REQUIRED: The first key in the input is not corrupted.
   Status MergeUntil(
-      InternalIterator* iter,
+      const Slice& user_key, InternalIterator* iter,
       DeltaAntiquationCollector& delta_antiquation_collector,
       CompactionRangeDelAggregator* range_del_agg = nullptr,
       const SequenceNumber stop_before = 0, const bool at_bottom = false);

@@ -8,6 +8,7 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #include "db/compaction_job.h"
+#include "table/iterator_wrapper.h"
 
 #ifndef __STDC_FORMAT_MACROS
 #define __STDC_FORMAT_MACROS
@@ -1124,12 +1125,13 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
 
   Status status;
   sub_compact->c_iter.reset(new CompactionIterator(
-      input.get(), end, cfd->user_comparator(), &merge,
-      versions_->LastSequence(), &existing_snapshots_,
-      earliest_write_conflict_snapshot_, snapshot_checker_, env_,
-      ShouldReportDetailedTime(env_, stats_), false, &range_del_agg,
-      sub_compact->compaction, compaction_filter, shutting_down_,
-      preserve_deletes_seqnum_, &sub_compact->delta_antiquation));
+      input.get(), sub_compact->compaction->input_version(), end,
+      cfd->user_comparator(), &merge, versions_->LastSequence(),
+      &existing_snapshots_, earliest_write_conflict_snapshot_,
+      snapshot_checker_, env_, ShouldReportDetailedTime(env_, stats_), false,
+      &range_del_agg, sub_compact->compaction, mutable_cf_options->blob_size,
+      compaction_filter, shutting_down_, preserve_deletes_seqnum_,
+      &sub_compact->delta_antiquation));
   auto c_iter = sub_compact->c_iter.get();
   c_iter->SeekToFirst();
 
@@ -1145,13 +1147,13 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
 
     ~SecondPassIterStorage() {
       if (input) {
+        input.reset();
+        auto merge_ptr = reinterpret_cast<MergeHelper*>(&merge);
+        merge_ptr->~MergeHelper();
+        compaction_filter_holder.reset();
         auto range_del_agg_ptr =
             reinterpret_cast<CompactionRangeDelAggregator*>(&range_del_agg);
         range_del_agg_ptr->~CompactionRangeDelAggregator();
-        compaction_filter_holder.reset();
-        auto merge_ptr = reinterpret_cast<MergeHelper*>(&merge);
-        merge_ptr->~MergeHelper();
-        input.reset();
       }
     }
   } second_pass_iter_storage;
@@ -1181,10 +1183,12 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
     second_pass_iter_storage.input.reset(versions_->MakeInputIterator(
         sub_compact->compaction, range_del_agg_ptr, env_options_for_read_));
     return new CompactionIterator(
-        second_pass_iter_storage.input.get(), end, cfd->user_comparator(),
+        second_pass_iter_storage.input.get(),
+        sub_compact->compaction->input_version(), end, cfd->user_comparator(),
         merge_ptr, versions_->LastSequence(), &existing_snapshots_,
         earliest_write_conflict_snapshot_, snapshot_checker_, env_,
         false, false, range_del_agg_ptr, sub_compact->compaction,
+        mutable_cf_options->blob_size,
         second_pass_iter_storage.compaction_filter, shutting_down_,
         preserve_deletes_seqnum_, nullptr);
   };
@@ -1208,12 +1212,18 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
   if (!sub_compact->compaction->partial_compaction()) {
     dict_sample_data.reserve(kSampleBytes);
   }
+  std::unordered_set<uint64_t> dependence;
 
   while (status.ok() && !cfd->IsDropped() && c_iter->Valid()) {
     // Invariant: c_iter.status() is guaranteed to be OK if c_iter->Valid()
     // returns true.
     const Slice& key = c_iter->key();
     const LazySlice& value = c_iter->value();
+    if (c_iter->ikey().type == kTypeValueIndex ||
+        c_iter->ikey().type == kTypeMergeIndex) {
+      assert(value.file_number() != uint64_t(-1));
+      dependence.emplace(value.file_number());
+    }
 
     assert(end == nullptr ||
            cfd->user_comparator()->Compare(c_iter->user_key(), *end) < 0);
@@ -1346,7 +1356,9 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
       CompactionIterationStats range_del_out_stats;
       status =
           FinishCompactionOutputFile(input_status, sub_compact, &range_del_agg,
-                                     &range_del_out_stats, next_key);
+                                     &range_del_out_stats, dependence,
+                                     next_key);
+      dependence.clear();
       RecordDroppedKeys(range_del_out_stats,
                         &sub_compact->compaction_job_stats);
       if (sub_compact->compaction->partial_compaction()) {
@@ -1413,7 +1425,8 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
   if (sub_compact->builder != nullptr) {
     CompactionIterationStats range_del_out_stats;
     Status s = FinishCompactionOutputFile(status, sub_compact, &range_del_agg,
-                                          &range_del_out_stats);
+                                          &range_del_out_stats, dependence);
+    dependence.clear();
     if (status.ok()) {
       status = s;
     }
@@ -1480,6 +1493,7 @@ Status CompactionJob::FinishCompactionOutputFile(
     const Status& input_status, SubcompactionState* sub_compact,
     CompactionRangeDelAggregator* range_del_agg,
     CompactionIterationStats* range_del_out_stats,
+    const std::unordered_set<uint64_t>& dependence,
     const Slice* next_table_min_key /* = nullptr */) {
   AutoThreadOperationStageUpdater stage_updater(
       ThreadStatus::STAGE_COMPACTION_SYNC_FILE);
@@ -1661,6 +1675,8 @@ Status CompactionJob::FinishCompactionOutputFile(
     meta->marked_for_compaction = sub_compact->builder->NeedCompact();
   }
   const uint64_t current_entries = sub_compact->builder->NumEntries();
+  meta->prop.dependence.assign(dependence.begin(), dependence.end());
+  std::sort(meta->prop.dependence.begin(), meta->prop.dependence.end());
   if (s.ok()) {
     s = sub_compact->builder->Finish(&meta->prop);
   } else {

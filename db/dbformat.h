@@ -290,6 +290,12 @@ inline uint64_t GetInternalKeySeqno(const Slice& internal_key) {
   uint64_t num = DecodeFixed64(internal_key.data() + n - 8);
   return num >> 8;
 }
+// Get value type from the internal key
+inline ValueType GetInternalKeyType(const Slice& internal_key) {
+  const size_t n = internal_key.size();
+  assert(n >= 8);
+  return static_cast<ValueType>(internal_key[n - 8]);
+}
 
 
 // A helper class useful for DBImpl::Get()
@@ -795,11 +801,12 @@ class SeparateHelper {
 
   static void TransToSeparate(LazySlice& value) {
     uint64_t file_number = value.file_number();
-    value.reset(EncodeFileNumber(file_number), true, value.file_number());
+    assert(file_number != uint64_t(-1));
+    value.reset(EncodeFileNumber(file_number), true, file_number);
   }
 
-  virtual void TransToInline(const Slice& ukey, uint64_t seq_type,
-                             LazySlice& value) const = 0;
+  virtual void TransToCombined(const Slice& user_key, uint64_t seq_type,
+                               LazySlice& value) const = 0;
 };
 
 

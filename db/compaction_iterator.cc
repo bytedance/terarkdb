@@ -106,9 +106,9 @@ InternalIterator* NewCompactionIterator(
 }
 
 CompactionIterator::CompactionIterator(
-    InternalIterator* input, const Slice* end, const Comparator* cmp,
-    MergeHelper* merge_helper, SequenceNumber last_sequence,
-    std::vector<SequenceNumber>* snapshots,
+    InternalIterator* input, const SeparateHelper* separate_helper,
+    const Slice* end, const Comparator* cmp, MergeHelper* merge_helper,
+    SequenceNumber last_sequence, std::vector<SequenceNumber>* snapshots,
     SequenceNumber earliest_write_conflict_snapshot,
     const SnapshotChecker* snapshot_checker, Env* env,
     bool report_detailed_time, bool expect_valid_internal_key,
@@ -118,8 +118,8 @@ CompactionIterator::CompactionIterator(
     const SequenceNumber preserve_deletes_seqnum,
     std::unordered_map<uint64_t, uint64_t>* delta_antiquation)
     : CompactionIterator(
-          input, end, cmp, merge_helper, last_sequence, snapshots,
-          earliest_write_conflict_snapshot, snapshot_checker, env,
+          input, separate_helper, end, cmp, merge_helper, last_sequence,
+          snapshots, earliest_write_conflict_snapshot, snapshot_checker, env,
           report_detailed_time, expect_valid_internal_key, range_del_agg,
           std::unique_ptr<CompactionProxy>(
               compaction ? new CompactionProxy(compaction) : nullptr),
@@ -127,9 +127,9 @@ CompactionIterator::CompactionIterator(
           delta_antiquation) {}
 
 CompactionIterator::CompactionIterator(
-    InternalIterator* input, const Slice* end, const Comparator* cmp,
-    MergeHelper* merge_helper, SequenceNumber /*last_sequence*/,
-    std::vector<SequenceNumber>* snapshots,
+    InternalIterator* input, const SeparateHelper* separate_helper,
+    const Slice* end, const Comparator* cmp, MergeHelper* merge_helper,
+    SequenceNumber /*last_sequence*/, std::vector<SequenceNumber>* snapshots,
     SequenceNumber earliest_write_conflict_snapshot,
     const SnapshotChecker* snapshot_checker, Env* env,
     bool report_detailed_time, bool expect_valid_internal_key,
@@ -139,7 +139,8 @@ CompactionIterator::CompactionIterator(
     const std::atomic<bool>* shutting_down,
     const SequenceNumber preserve_deletes_seqnum,
     std::unordered_map<uint64_t, uint64_t>* delta_antiquation)
-    : input_(input),
+    : combined_input_(input, separate_helper),
+      input_(separate_helper == nullptr ? input : &combined_input_),
       end_(end),
       cmp_(cmp),
       merge_helper_(merge_helper),
@@ -326,7 +327,6 @@ void CompactionIterator::NextFromInput() {
 
   while (!valid_ && input_->Valid() && !IsShuttingDown()) {
     key_ = input_->key();
-    value_ = input_->value();
 
     if (!ParseInternalKey(key_, &ikey_)) {
       // If `expect_valid_internal_key_` is false, return the corrupted key
@@ -350,6 +350,7 @@ void CompactionIterator::NextFromInput() {
     if (end_ != nullptr && cmp_->Compare(ikey_.user_key, *end_) >= 0) {
       break;
     }
+    value_ = input_->combined_value(current_key_.GetUserKey());
     delta_antiquation_collector_.add(value_.file_number());
     iter_stats_.num_input_records++;
 
@@ -663,7 +664,8 @@ void CompactionIterator::NextFromInput() {
       // We encapsulate the merge related state machine in a different
       // object to minimize change to the existing flow.
       value_.reset(); // MergeUntil will get iter value and move iter
-      Status s = merge_helper_->MergeUntil(input_, delta_antiquation_collector_,
+      Status s = merge_helper_->MergeUntil(current_key_.GetUserKey(), input_,
+                                           delta_antiquation_collector_,
                                            range_del_agg_, prev_snapshot,
                                            bottommost_level_);
       merge_out_iter_.SeekToFirst();
@@ -741,7 +743,6 @@ void CompactionIterator::PrepareOutput() {
         ikey_.type =
             ikey_.type == kTypeValue ? kTypeValueIndex : kTypeMergeIndex;
         current_key_.UpdateInternalKey(ikey_.sequence, ikey_.type);
-        SeparateHelper::TransToSeparate(value_);
       }
     } else {
       valid_ = false;
@@ -750,6 +751,7 @@ void CompactionIterator::PrepareOutput() {
   }
   if (ikey_.type == kTypeValueIndex || ikey_.type == kTypeMergeIndex) {
     assert(value_.file_number() != uint64_t(-1));
+    SeparateHelper::TransToSeparate(value_);
     delta_antiquation_collector_.sub(value_.file_number());
   } else if ((compaction_ != nullptr && !compaction_->allow_ingest_behind()) &&
              ikeyNotNeededForIncrementalSnapshot() && bottommost_level_ &&

@@ -233,13 +233,17 @@ class DBIter final: public Iterator {
   bool ParseKey(ParsedInternalKey* key);
   bool MergeValuesNewToOld();
   LazySlice GetValue(ValueType index_type) {
-    LazySlice v = iter_->value();
-    if (ikey_.type == index_type && separate_helper_ != nullptr) {
-      separate_helper_->TransToInline(
-          saved_key_.GetUserKey(),
-          PackSequenceAndType(ikey_.sequence, ikey_.type), v);
+    if (separate_helper_ != nullptr) {
+      LazySlice v = iter_->value();
+      if (ikey_.type == index_type) {
+        separate_helper_->TransToCombined(
+            saved_key_.GetUserKey(),
+            PackSequenceAndType(ikey_.sequence, ikey_.type), v);
+      }
+      return v;
+    } else {
+      return iter_->combined_value(saved_key_.GetUserKey());
     }
-    return v;
   }
 
   void PrevInternal();
@@ -1328,8 +1332,8 @@ Iterator* NewDBIterator(Env* env, const ReadOptions& read_options,
                         const MutableCFOptions& mutable_cf_options,
                         const Comparator* user_key_comparator,
                         InternalIterator* internal_iter,
-                        const SeparateHelper* separate_helper,
                         const SequenceNumber& sequence,
+                        const SeparateHelper* separate_helper,
                         uint64_t max_sequential_skip_in_iterations,
                         ReadCallback* read_callback, DBImpl* db_impl,
                         ColumnFamilyData* cfd) {
@@ -1418,7 +1422,7 @@ Status ArenaWrappedDBIter::Refresh() {
     InternalIterator* internal_iter = db_impl_->NewInternalIterator(
         read_options_, cfd_, sv, &arena_, db_iter_->GetRangeDelAggregator(),
         latest_seq);
-    SetIterUnderDBIter(internal_iter);
+    SetIterUnderDBIter(internal_iter, sv->current);
   } else {
     db_iter_->set_sequence(latest_seq);
     db_iter_->set_valid(false);
