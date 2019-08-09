@@ -100,7 +100,8 @@ GetoptDone:
     }
     auto sv = db->MultiGet(ropt, keys, &values);
     if (bench_report) {
-      if (++cnt1 == bench_report) {
+      cnt1 += mget_num;
+      if (cnt1 >= bench_report) {
         auto t1 = pf.now();
         fprintf(stderr,
                 "mget(use_fiber=%d,direct_io=%d,aio=%d) qps = %f M/sec\n",
