@@ -97,7 +97,7 @@ GetoptDone:
     for (size_t i = 0; i < mget_num && line.getline(stdin) > 0; ++i) {
       line.chomp();
       keystore.append(line.p, line.n);
-      keys.emplace_back(NULL, line.n);
+      keys.emplace_back("", line.n);
     }
     const char* p = keystore.c_str();
     for (size_t i = 0; i < keys.size(); ++i) {
