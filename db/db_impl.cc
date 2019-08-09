@@ -99,7 +99,7 @@
 # include <sys/unistd.h>
 # include <table/terark_zip_weak_function.h>
 #endif
-#include <terark/util/run_once_fiber.hpp>
+#include <terark/util/fiber_pool.hpp>
 
 namespace rocksdb {
 const std::string kDefaultColumnFamilyName("default");
