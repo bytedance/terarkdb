@@ -99,7 +99,7 @@ GetoptDone:
       keystore.append(line.p, line.n);
       keys.emplace_back(NULL, line.n);
     }
-    const char* p = keystore.size();
+    const char* p = keystore.c_str();
     for (size_t i = 0; i < keys.size(); ++i) {
       keys[i].data_ = p;
       p += keys[i].size();
