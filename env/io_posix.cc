@@ -343,6 +343,7 @@ static std::atomic<size_t> g_ft_num;
 
 class io_fiber_context {
   static const int io_batch = 128;
+  static const int reap_batch = 32;
   enum class state {
     ready,
     running,
@@ -351,10 +352,12 @@ class io_fiber_context {
   };
   volatile state       m_state;
   size_t               ft_num;
+  size_t               idle_cnt = 0;
   unsigned long long   counter;
   boost::fibers::fiber io_fiber;
   io_context_t         io_ctx;
   volatile size_t      io_reqnum = 0;
+  struct io_event      io_events[reap_batch];
   struct iocb*         io_reqvec[io_batch];
 
   struct io_return {
@@ -393,7 +396,6 @@ class io_fiber_context {
       boost::this_fiber::yield();
     }
   }
-  size_t idle_cnt = 0;
   void batch_submit() {
     if (io_reqnum) {
       // should io_reqvec keep valid before reaped?
@@ -426,8 +428,6 @@ class io_fiber_context {
   }
 
   void io_reap() {
-    static const int reap_batch = 32;
-    struct io_event  io_events[reap_batch];
     for (;;) {
       int ret = io_getevents(io_ctx, 0, reap_batch, io_events, NULL);
       if (ret < 0) {
