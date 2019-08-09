@@ -1387,8 +1387,10 @@ std::vector<Status> DBImpl::MultiGet(
   // s is both in/out. When in, s could either be OK or MergeInProgress.
   // merge_operands will contain the sequence of merges in the latter case.
   size_t num_found = 0;
+#if !defined(NDEBUG)
   size_t counting = num_keys;
-  auto get_one = [&](int i) {
+#endif
+  auto get_one = [&](size_t i) {
     // Contain a list of merge operations if merge occurs.
     MergeContext merge_context;
     Status& s = stat_list[i];
@@ -1430,17 +1432,26 @@ std::vector<Status> DBImpl::MultiGet(
       bytes_read += value->size();
       num_found++;
     }
+#if !defined(NDEBUG)
     counting--;
+#endif
   };
 
-  static thread_local terark::RunOnceFiberPool fiber_pool(16);
-  // current calling fiber's list head, can be treated as a handle
-  int myhead = -1; // must be initialized to -1
-  for (int i = 0; i < (int)num_keys; ++i) {
-    fiber_pool.submit(myhead, get_one, i);
+  if (read_options.use_fiber) {
+    static thread_local terark::RunOnceFiberPool fiber_pool(16);
+    // current calling fiber's list head, can be treated as a handle
+    int myhead = -1; // must be initialized to -1
+    for (size_t i = 0; i < num_keys; ++i) {
+      fiber_pool.submit(myhead, get_one, i);
+    }
+    fiber_pool.reap(myhead);
+    assert(0 == counting);
   }
-  fiber_pool.reap(myhead);
-  assert(0 == counting);
+  else {
+    for (size_t i = 0; i < num_keys; ++i) {
+      get_one(i);
+    }
+  }
 
   // Post processing (decrement reference counts and record statistics)
   PERF_TIMER_GUARD(get_post_process_time);

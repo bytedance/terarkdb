@@ -1768,6 +1768,9 @@ ldb: tools/ldb.o $(LIBOBJECTS) ${LIBNAME}.so
 kvpipe: tools/kvpipe.o ${SHARED1}
 	$(AM_LINK)
 
+multi_get: tools/multi_get.o ${SHARED1}
+	$(AM_LINK)
+
 iostats_context_test: monitoring/iostats_context_test.o $(LIBOBJECTS) $(TESTHARNESS)
 	$(AM_V_CCLD)$(CXX) $^ $(EXEC_LDFLAGS) -o $@ $(LDFLAGS) $(TerarkLDFLAGS)
 
