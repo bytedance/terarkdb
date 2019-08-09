@@ -96,7 +96,13 @@ GetoptDone:
     keys.resize(0);
     for (size_t i = 0; i < mget_num && line.getline(stdin) > 0; ++i) {
       line.chomp();
-      keys.emplace_back(line.p, line.n);
+      keystore.append(line.p, line.n);
+      keys.emplace_back(NULL, line.n);
+    }
+    const char* p = keystore.size();
+    for (size_t i = 0; i < keys.size(); ++i) {
+      keys[i].data_ = p;
+      p += keys[i].size();
     }
     auto sv = db->MultiGet(ropt, keys, &values);
     if (bench_report) {
