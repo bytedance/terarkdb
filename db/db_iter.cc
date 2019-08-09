@@ -902,7 +902,7 @@ bool DBIter::FindValueForCurrentKey() {
             merge_operator_, saved_key_.GetUserKey(), &value_,
             merge_context_.GetOperands(), &merge_result, logger_, statistics_,
             env_, true);
-        value_.swap(merge_result);
+        value_ = std::move(merge_result);
       }
       break;
     case kTypeValueIndex:

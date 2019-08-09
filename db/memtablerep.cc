@@ -42,7 +42,23 @@ LazySlice MemTableRep::DecodeToLazyValue(const char* key) {
     void destroy(LazySliceRep* /*rep*/) const override {}
     void pin_resource(LazySlice* /*slice*/,
                       LazySliceRep* /*rep*/) const override {}
+    Status decode_destructive(LazySlice* slice, LazySliceRep* rep,
+                              LazySlice* target) const override {
+      const char* k = reinterpret_cast<const char*>(rep->data[0]);
+      Slice key_slice = GetLengthPrefixedSlice(k);
+      if (!slice->valid()) {
+        *slice = key_slice;
+      } else {
+        if (slice->data() != key_slice.data()) {
+          target->reset(*slice, true, slice->file_number());
+          return Status::OK();
+        }
+      }
+      *target = std::move(*slice);
+      return Status::OK();
+    }
     Status inplace_decode(LazySlice* slice, LazySliceRep* rep) const override {
+      assert(!slice->valid());
       const char* k = reinterpret_cast<const char*>(rep->data[0]);
       Slice key_slice = GetLengthPrefixedSlice(k);
       *slice = GetLengthPrefixedSlice(key_slice.data() + key_slice.size());

@@ -1188,6 +1188,18 @@ Version::Version(ColumnFamilyData* column_family_data, VersionSet* vset,
       mutable_cf_options_(mutable_cf_options),
       version_number_(version_number) {}
 
+Status Version::decode_destructive(LazySlice* slice, LazySliceRep* rep,
+                                   LazySlice* target) const {
+  if (slice->valid()) {
+    return Status::NotSupported();
+  }
+  auto s = Version::inplace_decode(slice, rep);
+  if (!s.ok()) {
+    return s;
+  }
+  return slice->decode_destructive(*target);
+}
+
 Status Version::inplace_decode(LazySlice* slice, LazySliceRep* rep) const {
   Slice user_key(reinterpret_cast<const char*>(rep->data[0]), rep->data[1]);
   uint64_t seq_type = rep->data[2];
@@ -1203,8 +1215,7 @@ Status Version::inplace_decode(LazySlice* slice, LazySliceRep* rep) const {
   GetContext get_context(cfd_->internal_comparator().user_comparator(), nullptr,
                          cfd_->ioptions()->info_log, db_statistics_,
                          GetContext::kNotFound, user_key, slice, &value_found,
-                         nullptr, nullptr, nullptr, env_, &context_seq, nullptr,
-                         true);
+                         nullptr, nullptr, nullptr, env_, &context_seq);
   ReadOptions options;
   options.ignore_range_deletions = true;
   SequenceNumber seq;
@@ -1239,6 +1250,8 @@ Status Version::inplace_decode(LazySlice* slice, LazySliceRep* rep) const {
 
 void Version::TransToCombined(const Slice& user_key, uint64_t seq_type,
                               LazySlice& value) const {
+  auto s = value.inplace_decode();
+  assert(s.ok()); (void)s;
   uint64_t file_number = SeparateHelper::DecodeFileNumber(value);
   value.reset(this, {reinterpret_cast<uint64_t>(user_key.data()),
                      user_key.size(), seq_type, 0}, file_number);

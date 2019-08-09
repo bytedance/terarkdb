@@ -48,7 +48,7 @@ bool MergeOperator::PartialMergeMulti(
     if (!PartialMerge(key, temp_slice, operand, &temp_value, logger)) {
       return false;
     }
-    temp_value.swap(*new_value);
+    std::swap(temp_value, *new_value);
     temp_slice = LazySliceReference(*new_value);
   }
 
@@ -76,7 +76,7 @@ bool AssociativeMergeOperator::FullMergeV2(
                temp_value.trans_to_buffer(), merge_in.logger)) {
       return false;
     }
-    temp_value.swap(merge_out->new_value);
+    std::swap(temp_value, merge_out->new_value);
     existing_value = &merge_out->new_value;
   }
 

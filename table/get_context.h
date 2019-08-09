@@ -53,8 +53,7 @@ class GetContext {
              const Slice& user_key, LazySlice* value, bool* value_found,
              MergeContext* merge_context, const SeparateHelper* separate_helper,
              SequenceNumber* max_covering_tombstone_seq, Env* env,
-             SequenceNumber* seq = nullptr, ReadCallback* callback = nullptr,
-             bool trivial = false);
+             SequenceNumber* seq = nullptr, ReadCallback* callback = nullptr);
 
   void MarkKeyMayExist();
 
@@ -132,7 +131,6 @@ class GetContext {
   void* replay_log_arg_;
   ReadCallback* callback_;
   bool sample_;
-  bool trivial_;
 };
 
 #ifndef ROCKSDB_LITE

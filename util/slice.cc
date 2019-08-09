@@ -230,23 +230,30 @@ public:
   void destroy(LazySliceRep* /*rep*/) const override {}
   void pin_resource(LazySlice* /*slice*/,
                     LazySliceRep* /*rep*/) const override {}
-  Status decode_destructive(LazySlice* slice, LazySliceRep* _rep,
+  Status decode_destructive(LazySlice* slice, LazySliceRep* rep,
                             LazySlice* target) const override {
-    auto rep = union_cast<const Rep>(_rep);
-    target->reset(Slice(rep->data, rep->size), true, slice->file_number());
+    if (slice->valid()) {
+      target->reset(*slice, true, slice->file_number());
+    } else {
+      target->reset(load_slice(rep), true, slice->file_number());
+    }
     return Status::OK();
   }
-  Status inplace_decode(LazySlice* slice, LazySliceRep* _rep) const override {
-    auto rep = union_cast<const Rep>(_rep);
-    *slice = Slice(rep->data, rep->size);
+  Status inplace_decode(LazySlice* slice, LazySliceRep* rep) const override {
+    assert(!slice->valid());
+    *slice = load_slice(rep);
     return Status::OK();
   }
 
-  static Slice store_slice(Rep* rep, const Slice& value) {
+  static Slice load_slice(LazySliceRep* _rep) {
+    auto rep = union_cast<const Rep>(_rep);
+    return Slice(rep->data, rep->size);
+  }
+  static void save_slice(LazySliceRep* _rep, const Slice& value) {
+    auto rep = union_cast<Rep>(_rep);
     assert(value.size() <= sizeof rep->data);
     memcpy(rep->data, value.data(), value.size());
     rep->size = value.size();
-    return Slice(rep->data, rep->size);
   }
 };
 
@@ -280,17 +287,25 @@ class MallocLazySliceControllerImpl : public LazySliceController {
     rep->err = nullptr;
     *slice = Slice(rep->ptr, rep->size);
   }
-  void pin_resource(LazySlice* /*slice*/, LazySliceRep* /*rep*/) const override {}
+  void pin_resource(LazySlice* /*slice*/,
+                    LazySliceRep* /*rep*/) const override {}
   Status decode_destructive(LazySlice* slice, LazySliceRep* _rep,
                             LazySlice* target) const override {
-    auto s = MallocLazySliceControllerImpl::inplace_decode(slice, _rep);
-    if (!s.ok()) {
-      return s;
+    auto rep = union_cast<const Rep>(_rep);
+    if (!slice->valid()) {
+      auto s = MallocLazySliceControllerImpl::inplace_decode(slice, _rep);
+      if (!s.ok()) {
+        return s;
+      }
+    } else if (slice->data() != rep->ptr) {
+      target->reset(*slice, true, slice->file_number());
+      return Status::OK();
     }
     *target = std::move(*slice);
     return Status::OK();
   }
   Status inplace_decode(LazySlice* slice, LazySliceRep* _rep) const override {
+    assert(!slice->valid());
     auto rep = union_cast<const Rep>(_rep);
     if (rep->err != nullptr) {
       return Status::Corruption(rep->err);
@@ -336,22 +351,21 @@ struct BufferLazySliceControllerImpl : public LazySliceController {
                     LazySliceRep* /*rep*/) const override {}
   Status decode_destructive(LazySlice* slice, LazySliceRep* _rep,
                             LazySlice* target) const override {
+    auto rep = union_cast<const Rep>(_rep);
     if (!slice->valid()) {
       auto s = BufferLazySliceControllerImpl::inplace_decode(slice, _rep);
       if (!s.ok()) {
         return s;
       }
-    }
-    auto rep = union_cast<const Rep>(_rep);
-    if (rep->buffer->data() == slice->data() && rep->is_owner) {
-      *target = std::move(*slice);
-    } else {
+    } else if (slice->data() != rep->buffer->data() || !rep->is_owner) {
       target->reset(*slice, true, slice->file_number());
-      slice->reset();
+      return Status::OK();
     }
+    *target = std::move(*slice);
     return Status::OK();
   }
   Status inplace_decode(LazySlice* slice, LazySliceRep* _rep) const override {
+    assert(!slice->valid());
     auto rep = union_cast<const Rep>(_rep);
     if (rep->err != nullptr) {
       return Status::Corruption(rep->err);
@@ -366,6 +380,7 @@ struct BufferLazySliceControllerImpl : public LazySliceController {
 struct ReferenceLazySliceControllerImpl : public LazySliceController {
   void destroy(LazySliceRep* /*rep*/) const override {}
   Status inplace_decode(LazySlice* slice, LazySliceRep* rep) const override {
+    assert(!slice->valid());
     const LazySlice& slice_ref =
         *reinterpret_cast<const LazySlice*>(rep->data[0]);
     auto s = slice_ref.inplace_decode();
@@ -387,23 +402,23 @@ struct CleanableLazySliceControllerImpl : public LazySliceController {
     *target = std::move(*slice);
     return Status::OK();
   }
-  Status inplace_decode(LazySlice* /*slice*/,
+  Status inplace_decode(LazySlice* slice,
                         LazySliceRep* /*rep*/) const override {
+    assert(!slice->valid());
+    slice->reset(default_coltroller(), {}, slice->file_number());
     return Status::OK();
   }
 };
 
-void LazySliceController::assign(LazySlice* slice, LazySliceRep* _rep,
+void LazySliceController::assign(LazySlice* slice, LazySliceRep* rep,
                                  Slice value) const {
-  if (slice->controller() == malloc_coltroller()) {
-    MallocLazySliceControllerImpl::call_assign(slice, _rep, value);
-  } else if (slice->size() < sizeof(LazySliceRep)) {
+  if (value.size() < sizeof(LazySliceRep)) {
     slice->reset(default_coltroller(), {}, slice->file_number());
-    auto rep = union_cast<DefaultLazySliceControllerImpl::Rep>(_rep);
-    *slice = DefaultLazySliceControllerImpl::store_slice(rep, value);
+    DefaultLazySliceControllerImpl::save_slice(rep, value);
+    *slice = DefaultLazySliceControllerImpl::load_slice(rep);
   } else {
     slice->reset(malloc_coltroller(), {}, slice->file_number());
-    MallocLazySliceControllerImpl::call_assign(slice, _rep, value);
+    MallocLazySliceControllerImpl::call_assign(slice, rep, value);
   }
 }
 
@@ -411,7 +426,7 @@ void LazySliceController::pin_resource(LazySlice* slice,
                                        LazySliceRep* /*rep*/) const{
   LazySlice pinned_slice;
   pinned_slice.assign(*slice);
-  slice->swap(pinned_slice);
+  *slice = std::move(pinned_slice);
 }
 
 Status LazySliceController::decode_destructive(LazySlice* /*slice*/,
@@ -535,6 +550,7 @@ LazySlice LazySliceRemoveSuffix(const LazySlice* slice, size_t fixed_len) {
   struct LazySliceControllerImpl : public LazySliceController {
     void destroy(LazySliceRep* /*rep*/) const override {}
     Status inplace_decode(LazySlice* slice, LazySliceRep* rep) const override {
+      assert(!slice->valid());
       const LazySlice& slice_ref =
           *reinterpret_cast<const LazySlice*>(rep->data[0]);
       uint64_t len = rep->data[1];

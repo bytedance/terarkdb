@@ -169,8 +169,6 @@ class LazySlice : public Slice {
 
   const LazySliceController* controller() const { return controller_; }
 
-  void swap(LazySlice& _slice) noexcept;
-
   // pin this slice, turn the controller into editable
   void pin_resource();
 
@@ -194,6 +192,11 @@ inline LazySlice::LazySlice(LazySlice&& _slice) noexcept
       file_number_(_slice.file_number_) {
   _slice = Slice::Invalid();
   _slice.controller_ = nullptr;
+  const char* base = reinterpret_cast<const char*>(_slice.rep_.data);
+  if (controller_ == LazySliceController::default_coltroller() &&
+      data_ >= base && data_ < base + sizeof(LazySliceRep)) {
+    data_ = reinterpret_cast<const char*>(rep_.data) + (data_ - base);
+  }
 }
 
 inline LazySlice::LazySlice(const Slice& _value, bool _copy,
@@ -238,14 +241,14 @@ inline LazySlice::LazySlice(const Slice& _value, Cleanable* _cleanable,
   ::new(&rep_) Cleanable(std::move(*_cleanable));
 }
 
-inline LazySlice::LazySlice(const LazySliceController* _meta,
+inline LazySlice::LazySlice(const LazySliceController* _controller,
                             const LazySliceRep& _rep,
                             uint64_t _file_number) noexcept
     : Slice(Slice::Invalid()),
-      controller_(_meta),
+      controller_(_controller),
       rep_(_rep),
       file_number_(_file_number) {
-  assert(_meta != nullptr);
+  assert(_controller != nullptr);
 }
 
 inline void LazySlice::destroy() {
@@ -285,6 +288,11 @@ inline void LazySlice::reset(LazySlice&& _slice, uint64_t _file_number) {
     rep_ = _slice.rep_;
     _slice = Slice::Invalid();
     _slice.controller_ = nullptr;
+    const char* base = reinterpret_cast<const char*>(_slice.rep_.data);
+    if (controller_ == LazySliceController::default_coltroller() &&
+        data_ >= base && data_ < base + sizeof(LazySliceRep)) {
+      data_ = reinterpret_cast<const char*>(rep_.data) + (data_ - base);
+    }
   }
   file_number_ = _file_number;
 }
@@ -310,13 +318,13 @@ inline void LazySlice::reset(const Slice& _value, Cleanable* _cleanable,
   file_number_ = _file_number;
 }
 
-inline void LazySlice::reset(const LazySliceController* _meta,
+inline void LazySlice::reset(const LazySliceController* _controller,
                              const LazySliceRep& _rep,
                              uint64_t _file_number) {
-  assert(_meta != nullptr);
+  assert(_controller != nullptr);
   destroy();
   *this = Slice::Invalid();
-  controller_ = _meta;
+  controller_ = _controller;
   rep_ = _rep;
   file_number_ = _file_number;
 }
@@ -339,16 +347,6 @@ inline Status LazySlice::save_to_buffer(std::string* buffer) const {
     assert(size_ == buffer->size());
   }
   return Status::OK();
-}
-
-inline void LazySlice::swap(LazySlice& _slice) noexcept {
-  if (this != &_slice) {
-    std::swap(data_, _slice.data_);
-    std::swap(size_, _slice.size_);
-    std::swap(controller_, _slice.controller_);
-    std::swap(rep_, _slice.rep_);
-    std::swap(file_number_, _slice.file_number_);
-  }
 }
 
 inline void LazySlice::pin_resource() {

@@ -413,18 +413,22 @@ class MemTableIterator
     if (!value_pinned_ || !iter_->IsValuePinned()) {
       LazySliceController::pin_resource(slice, rep);
     } else {
-      iter_->value().swap(*slice);
+      *slice = iter_->value();
       slice->pin_resource();
     }
   }
   virtual Status decode_destructive(LazySlice* slice, LazySliceRep* /*rep*/,
                                     LazySlice* target) const override {
-    iter_->value().swap(*slice);
+    if (slice->valid()) {
+      return Status::NotSupported();
+    }
+    *slice = iter_->value();
     return slice->decode_destructive(*target);
   }
   virtual Status inplace_decode(LazySlice* slice,
                                 LazySliceRep* /*rep*/) const override {
-    iter_->value().swap(*slice);
+    assert(!slice->valid());
+    *slice = iter_->value();
     return slice->inplace_decode();
   }
 

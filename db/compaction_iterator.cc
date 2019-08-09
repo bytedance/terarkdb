@@ -250,9 +250,8 @@ void CompactionIterator::Next() {
   if (valid_) {
     // Record that we've outputted a record for the current key.
     has_outputted_key_ = true;
+    PrepareOutput();
   }
-
-  PrepareOutput();
 }
 
 void CompactionIterator::InvokeFilterIfNeeded(bool* need_skip,
@@ -735,7 +734,7 @@ void CompactionIterator::PrepareOutput() {
   //
   // Can we do the same for levels above bottom level as long as
   // KeyNotExistsBeyondOutputLevel() return true?
-  if (blob_size_ > 0 &&
+  if (blob_size_blob_size_ > 0 && value_.file_number() != uint64_t(-1) &&
       (ikey_.type == kTypeValue || ikey_.type == kTypeMerge)) {
     auto s = value_.inplace_decode();
     if (s.ok()) {

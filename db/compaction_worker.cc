@@ -139,12 +139,27 @@ class WorkerSeparateHelper : public SeparateHelper, public LazySliceController {
   void pin_resource(LazySlice* /*slice*/,
                     LazySliceRep* /*rep*/) const override {}
 
+  Status decode_destructive(LazySlice* slice, LazySliceRep* rep,
+                            LazySlice* target) const override {
+    if (slice->valid()) {
+      return Status::NotSupported();
+    }
+    auto s = inplace_decode_callback_(inplace_decode_arg_, slice, rep);
+    if (!s.ok()) {
+      return s;
+    }
+    return slice->decode_destructive(*target);
+  }
+
   Status inplace_decode(LazySlice* slice, LazySliceRep* rep) const override {
+    assert(!slice->valid());
     return inplace_decode_callback_(inplace_decode_arg_, slice, rep);
   }
 
   void TransToCombined(const Slice& user_key, uint64_t seq_type,
                        LazySlice& value) const override {
+    auto s = value.inplace_decode();
+    assert(s.ok()); (void)s;
     uint64_t file_number = SeparateHelper::DecodeFileNumber(value);
     value.reset(this, {reinterpret_cast<uint64_t>(user_key.data()),
                        user_key.size(), seq_type, 0}, file_number);
@@ -517,7 +532,7 @@ std::string RemoteCompactionWorker::Client::DoCompaction(
     GetContext get_context(ucmp, nullptr, immutable_cf_options.info_log,
                            nullptr, GetContext::kNotFound, user_key, slice,
                            &value_found, nullptr, nullptr, nullptr, rep_->env,
-                           &context_seq, nullptr, true);
+                           &context_seq);
     SequenceNumber seq;
     ValueType type;
     UnPackSequenceAndType(seq_type, &seq, &type);

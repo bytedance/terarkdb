@@ -43,8 +43,7 @@ GetContext::GetContext(const Comparator* ucmp,
                        bool* value_found, MergeContext* merge_context,
                        const SeparateHelper* separate_helper,
                        SequenceNumber* _max_covering_tombstone_seq, Env* env,
-                       SequenceNumber* seq, ReadCallback* callback,
-                       bool trivial)
+                       SequenceNumber* seq, ReadCallback* callback)
     : ucmp_(ucmp),
       merge_operator_(merge_operator),
       logger_(logger),
@@ -61,8 +60,7 @@ GetContext::GetContext(const Comparator* ucmp,
       min_seq_type_(0),
       replay_log_callback_(nullptr),
       replay_log_arg_(nullptr),
-      callback_(callback),
-      trivial_(trivial) {
+      callback_(callback) {
   if (seq_) {
     *seq_ = kMaxSequenceNumber;
   }
@@ -188,11 +186,12 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
     }
     switch (type) {
       case kTypeValueIndex:
+        assert(separate_helper_ != nullptr);
         separate_helper_->TransToCombined(user_key_, seq_type, value);
         FALLTHROUGH_INTENDED;
       case kTypeValue:
         assert(state_ == kNotFound || state_ == kMerge);
-        if (trivial_) {
+        if (separate_helper_ == nullptr) {
           assert(kNotFound == state_);
           assert(lazy_val_ != nullptr);
           state_ = kFound;
@@ -244,12 +243,13 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
         return false;
 
       case kTypeMergeIndex:
+        assert(separate_helper_ != nullptr);
         separate_helper_->TransToCombined(user_key_, seq_type, value);
         FALLTHROUGH_INTENDED;
       case kTypeMerge:
         assert(state_ == kNotFound || state_ == kMerge);
         state_ = kMerge;
-        if (trivial_) {
+        if (separate_helper_ == nullptr) {
           assert(kNotFound == state_);
           assert(lazy_val_ != nullptr);
           *lazy_val_ = std::move(value);
@@ -330,9 +330,10 @@ bool RowCacheContext::GetFromRowCache(
     return false;
   }
   // Cleanable routine to release the cache entry
-  auto release_cache_entry_func = [](void* cache_to_clean,
-                                     void* cache_handle) {
-    ((Cache*)cache_to_clean)->Release((Cache::Handle*)cache_handle);
+  struct release_cache_entry_func {
+    static void invoke(void* cache_to_clean, void* cache_handle) {
+      ((Cache*)cache_to_clean)->Release((Cache::Handle*)cache_handle);
+    }
   };
   // If it comes here value is located on the cache.
   // found_row_cache_entry points to the value on cache,
@@ -356,7 +357,7 @@ bool RowCacheContext::GetFromRowCache(
 
     if (first_log) {
       Cleanable value_pinner;
-      value_pinner.RegisterCleanup(release_cache_entry_func, row_cache,
+      value_pinner.RegisterCleanup(release_cache_entry_func::invoke, row_cache,
                                    row_handle);
       lazy_value.reset(value, &value_pinner);
       first_log = false;
@@ -368,12 +369,28 @@ bool RowCacheContext::GetFromRowCache(
           auto c = reinterpret_cast<Cache*>(rep->data[2]);
           auto h = reinterpret_cast<Cache::Handle*>(rep->data[3]);
           c->Ref(h);
-          *slice = Slice(reinterpret_cast<const char*>(rep->data[0]),
-                         rep->data[1]);
+          Cleanable fn;
+          fn.RegisterCleanup(release_cache_entry_func::invoke, c, h);
+          slice->reset(Slice(reinterpret_cast<const char*>(rep->data[0]),
+                       rep->data[1]), &fn, slice->file_number());
+        }
+        Status decode_destructive(LazySlice* slice, LazySliceRep* rep,
+                                  LazySlice* target) const override {
+          const char* data = reinterpret_cast<const char*>(rep->data[0]);
+          if (!slice->valid()) {
+            *slice = Slice(data, rep->data[1]);
+          } else if (slice->data() != data) {
+            target->reset(*slice, true, slice->file_number());
+            return Status::OK();
+          }
+          *target = std::move(*slice);
+          return Status::OK();
         }
         Status inplace_decode(LazySlice* slice,
                               LazySliceRep* rep) const override {
-          pin_resource(slice, rep);
+          assert(!slice->valid());
+          *slice = Slice(reinterpret_cast<const char*>(rep->data[0]),
+                         rep->data[1]);
           return Status::OK();
         }
       };
