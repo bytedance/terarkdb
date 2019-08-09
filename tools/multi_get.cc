@@ -93,6 +93,7 @@ GetoptDone:
   LineBuf line;
   long long t0 = pf.now();
   do {
+    keystore.resize(0);
     keys.resize(0);
     for (size_t i = 0; i < mget_num && line.getline(stdin) > 0; ++i) {
       line.chomp();
