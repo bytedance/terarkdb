@@ -129,11 +129,11 @@ void PatriciaTrieRep::Get(
     virtual void destroy(LazySliceRep* /*rep*/) const override {}
 
     virtual void pin_resource(LazySlice* slice, LazySliceRep* /*rep*/) const override {
-      *slice = LazySlice(slice->valid() ? static_cast<Slice&>(*slice) : GetValue());
+      *slice = LazySlice(slice->valid() ? slice->slice_ref() : GetValue());
     }
 
     Status inplace_decode(LazySlice* slice, LazySliceRep* /*rep*/) const override {
-      *slice = GetValue();
+      assign_slice(*slice, GetValue());
       return Status::OK();
     }
 

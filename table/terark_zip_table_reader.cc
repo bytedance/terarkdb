@@ -385,7 +385,7 @@ public:
   }
 
   Status inplace_decode(LazySlice* slice, LazySliceRep* /*rep*/) const override {
-    *slice = user_value_;
+    assign_slice(*slice, user_value_);
     return Status::OK();
   }
 
