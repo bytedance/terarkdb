@@ -36,6 +36,9 @@ struct TerarkZipTableOptions {
   /// 3 : check sum all data with one checksum value, not checksum each record,
   ///     if checksum doesn't match, load will fail
   int32_t     checksumLevel            = 1;
+  /// checksumSmallValSize only makes sense when checksumLevel == 2(record level)
+  /// any value that is less than checksumSmallValSize will be verified by crc16c otherwise crc32c is used
+  int32_t     checksumSmallValSize     = 40;
   EntropyAlgo entropyAlgo              = kNoEntropy;
 
   ///    < 0 : only last level using terarkZip

@@ -2404,7 +2404,8 @@ struct IndexEntropySuffix : public IndexBlobStoreSuffix<EntropyZipBlobStore> {
     content.risk_set_data(ptr -= footer.data_size, footer.data_size);
     assert(ptr == (byte_t*)mem.data());
     flags.is_user_mem = true;
-    store_.init_from_components(std::move(offsets), std::move(content), std::move(table), 1, footer.raw_size);
+    store_.init_from_components(std::move(offsets), std::move(content), std::move(table), 1, footer.raw_size,
+                                3 /* check data area */, 0 /* ignored */);
     return true;
   }
 };

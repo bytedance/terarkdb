@@ -234,6 +234,7 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo) {
 #define MyOverrideInt(obj, name) MyGetInt(obj, name, obj.name)
 
   MyGetInt   (tzo, checksumLevel           , 3    );
+  MyGetInt   (tzo, checksumSmallValSize    , 40   );
   MyGetInt   (tzo, indexNestLevel          , 3    );
   MyGetInt   (tzo, terarkZipMinLevel       , 0    );
   MyGetInt   (tzo, debugLevel              , 0    );

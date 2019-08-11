@@ -14,6 +14,7 @@
 #include <terark/io/MemStream.hpp>
 #include <terark/lcast.hpp>
 #include <terark/num_to_str.hpp>
+#include <terark/zbs/blob_store_file_header.hpp>
 #include <terark/zbs/entropy_zip_blob_store.hpp>
 #include <terark/zbs/zero_length_blob_store.hpp>
 #include <terark/zbs/plain_blob_store.hpp>
@@ -1140,8 +1141,11 @@ LoadSample(std::unique_ptr<DictZipBlobStore::ZipBuilder>& zbuilder) {
 
 Status TerarkZipTableBuilder::buildEntropyZipBlobStore(BuildStoreParams& params) {
   auto& kvs = params.kvs;
+  auto& hist = kvs.status.valueHist;
+  auto checksumType = (hist.m_total_key_len / hist.m_cnt_sum < static_cast<size_t>(table_options_.checksumSmallValSize)) ? kCRC16C : kCRC32C;
   size_t blockUnits = table_options_.offsetArrayBlockUnits != 0 ? table_options_.offsetArrayBlockUnits : 128;
-  terark::EntropyZipBlobStore::MyBuilder builder(kvs.valueFreq, blockUnits, params.fpath, params.offset);
+  terark::EntropyZipBlobStore::MyBuilder builder(kvs.valueFreq, blockUnits, params.fpath, params.offset,
+                                                 table_options_.checksumLevel, checksumType);
   auto s = BuilderWriteValues(kvs, [&](fstring value) { builder.addRecord(value); });
   if (s.ok()) {
     builder.finish();
@@ -1163,7 +1167,10 @@ Status TerarkZipTableBuilder::buildZeroLengthBlobStore(BuildStoreParams& params)
 }
 Status TerarkZipTableBuilder::buildPlainBlobStore(BuildStoreParams& params) {
   auto& kvs = params.kvs;
-  terark::PlainBlobStore::MyBuilder builder(kvs.status.valueHist.m_total_key_len, params.fpath, params.offset);
+  auto& hist = kvs.status.valueHist;
+  auto checksumType = (hist.m_total_key_len / hist.m_cnt_sum < static_cast<size_t>(table_options_.checksumSmallValSize)) ? kCRC16C : kCRC32C;
+  terark::PlainBlobStore::MyBuilder builder(hist.m_total_key_len, hist.m_cnt_sum, params.fpath, params.offset,
+                                            table_options_.checksumLevel, checksumType);
   auto s = BuilderWriteValues(kvs, [&](fstring value) { builder.addRecord(value); });
   if (s.ok()) {
     builder.finish();
@@ -1172,16 +1179,19 @@ Status TerarkZipTableBuilder::buildPlainBlobStore(BuildStoreParams& params) {
 }
 Status TerarkZipTableBuilder::buildMixedLenBlobStore(BuildStoreParams& params) {
   auto& kvs = params.kvs;
-  size_t fixedLen = kvs.status.valueHist.m_max_cnt_key;
-  size_t fixedLenCount = kvs.status.valueHist.m_cnt_of_max_cnt_key;
-  size_t varDataLen = kvs.status.valueHist.m_total_key_len - fixedLen * fixedLenCount;
+  auto& hist = kvs.status.valueHist;
+  size_t fixedLen = hist.m_max_cnt_key;
+  size_t fixedLenCount = hist.m_cnt_of_max_cnt_key;
+  size_t varDataLen = hist.m_total_key_len - fixedLen * fixedLenCount;
+  size_t varDataLenCount = hist.m_cnt_sum - fixedLenCount;
+  auto checksumType = (hist.m_total_key_len / hist.m_cnt_sum < static_cast<size_t>(table_options_.checksumSmallValSize)) ? kCRC16C : kCRC32C;
   std::unique_ptr<AbstractBlobStore::Builder> builder;
-  if (kvs.status.valueHist.m_cnt_sum < (4ULL << 30)) {
+  if (hist.m_cnt_sum < (4ULL << 30)) {
     builder.reset(new terark::MixedLenBlobStore::MyBuilder(
-      fixedLen, varDataLen, params.fpath, params.offset));
+      fixedLen, varDataLen, varDataLenCount, params.fpath, params.offset, table_options_.checksumLevel, checksumType));
   } else {
     builder.reset(new terark::MixedLenBlobStore64::MyBuilder(
-      fixedLen, varDataLen, params.fpath, params.offset));
+      fixedLen, varDataLen, varDataLenCount, params.fpath, params.offset, table_options_.checksumLevel, checksumType));
   }
   auto s = BuilderWriteValues(kvs, [&](fstring value) { builder->addRecord(value); });
   if (s.ok()) {
@@ -1191,8 +1201,10 @@ Status TerarkZipTableBuilder::buildMixedLenBlobStore(BuildStoreParams& params) {
 }
 Status TerarkZipTableBuilder::buildZipOffsetBlobStore(BuildStoreParams& params) {
   auto& kvs = params.kvs;
+  auto& hist = kvs.status.valueHist;
+  auto checksumType = (hist.m_total_key_len / hist.m_cnt_sum < static_cast<size_t>(table_options_.checksumSmallValSize)) ? kCRC16C : kCRC32C;
   size_t blockUnits = table_options_.offsetArrayBlockUnits;
-  terark::ZipOffsetBlobStore::MyBuilder builder(blockUnits, params.fpath, params.offset);
+  terark::ZipOffsetBlobStore::MyBuilder builder(blockUnits, params.fpath, params.offset, table_options_.checksumLevel, checksumType);
   auto s = BuilderWriteValues(kvs, [&](fstring value) { builder.addRecord(value); });
   if (s.ok()) {
     builder.finish();
