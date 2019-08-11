@@ -736,9 +736,6 @@ class Version : public SeparateHelper, private LazySliceController {
   void pin_resource(LazySlice* /*slice*/,
                     LazySliceRep* /*rep*/) const override {}
 
-  Status decode_destructive(LazySlice* slice, LazySliceRep* rep,
-                            LazySlice* target) const override;
-
   Status inplace_decode(LazySlice* slice, LazySliceRep* rep) const override;
 
   void TransToCombined(const Slice& user_key, uint64_t seq_type,

@@ -228,32 +228,30 @@ public:
   };
 
   void destroy(LazySliceRep* /*rep*/) const override {}
-  void pin_resource(LazySlice* /*slice*/,
-                    LazySliceRep* /*rep*/) const override {}
-  Status decode_destructive(LazySlice* slice, LazySliceRep* rep,
-                            LazySlice* target) const override {
-    if (slice->valid()) {
-      target->reset(*slice, true, slice->file_number());
-    } else {
-      target->reset(load_slice(rep), true, slice->file_number());
+  void pin_resource(LazySlice* slice,
+                    LazySliceRep* _rep) const override {
+    auto rep = union_cast<const Rep>(_rep);
+    if (slice->data() < rep->data || slice->data() >= rep->data + rep->size) {
+      LazySliceController::assign(slice, _rep, *slice);
     }
+  }
+  Status decode_destructive(LazySlice* slice, LazySliceRep* /*rep*/,
+                            LazySlice* target) const override {
+    target->reset(*slice, true, slice->file_number());
     return Status::OK();
   }
-  Status inplace_decode(LazySlice* slice, LazySliceRep* rep) const override {
-    assert(!slice->valid());
-    *slice = load_slice(rep);
-    return Status::OK();
+  Status inplace_decode(LazySlice* /*slice*/,
+                        LazySliceRep* /*rep*/) const override {
+    assert(false);
+    return Status::Corruption("Invalid Slice");
   }
 
-  static Slice load_slice(LazySliceRep* _rep) {
-    auto rep = union_cast<const Rep>(_rep);
-    return Slice(rep->data, rep->size);
-  }
-  static void save_slice(LazySliceRep* _rep, const Slice& value) {
+  static Slice save_slice(LazySliceRep* _rep, const Slice& value) {
     auto rep = union_cast<Rep>(_rep);
     assert(value.size() <= sizeof rep->data);
-    memcpy(rep->data, value.data(), value.size());
+    memmove(rep->data, value.data(), value.size());
     rep->size = value.size();
+    return Slice(rep->data, rep->size);
   }
 };
 
@@ -270,25 +268,16 @@ class MallocLazySliceControllerImpl : public LazySliceController {
     auto rep = union_cast<Rep>(_rep);
     free(rep->ptr);
   }
-  void assign(LazySlice* slice, LazySliceRep* _rep,
-              Slice value) const override {
-    auto rep = union_cast<Rep>(_rep);
-    if (rep->cap < value.size()) {
-      auto ptr = (char*)realloc(rep->ptr, value.size());
-      if (ptr == nullptr) {
-        rep->err = "MallocLazySliceControllerImpl::assign : bad alloc";
-        *slice = Slice::Invalid();
-      }
-      rep->ptr = ptr;
-      rep->cap = value.size();
-    }
-    memcpy(rep->ptr, value.data(), value.size());
-    rep->size = value.size();
-    rep->err = nullptr;
-    *slice = Slice(rep->ptr, rep->size);
+  void assign(LazySlice* slice, LazySliceRep* rep, Slice value) const override {
+    assign_slice(*slice, save_slice(rep, value));
   }
-  void pin_resource(LazySlice* /*slice*/,
-                    LazySliceRep* /*rep*/) const override {}
+  void pin_resource(LazySlice* slice, LazySliceRep* _rep) const override {
+    auto rep = union_cast<const Rep>(_rep);
+    if (slice->valid() && (slice->data() < rep->ptr ||
+                           slice->data() >= rep->ptr + rep->size)) {
+      MallocLazySliceControllerImpl::assign(slice, _rep, *slice);
+    }
+  }
   Status decode_destructive(LazySlice* slice, LazySliceRep* _rep,
                             LazySlice* target) const override {
     auto rep = union_cast<const Rep>(_rep);
@@ -297,7 +286,8 @@ class MallocLazySliceControllerImpl : public LazySliceController {
       if (!s.ok()) {
         return s;
       }
-    } else if (slice->data() != rep->ptr) {
+    } else if (slice->data() < rep->ptr ||
+               slice->data() >= rep->ptr + rep->size) {
       target->reset(*slice, true, slice->file_number());
       return Status::OK();
     }
@@ -307,21 +297,25 @@ class MallocLazySliceControllerImpl : public LazySliceController {
   Status inplace_decode(LazySlice* slice, LazySliceRep* _rep) const override {
     assert(!slice->valid());
     auto rep = union_cast<const Rep>(_rep);
-    if (rep->err != nullptr) {
-      return Status::Corruption(rep->err);
-    }
-    if (!slice->valid()) {
-      return Status::Corruption("Invalid Slice");
-    }
-    return Status::OK();
+    assert(rep->err != nullptr);
+    return Status::Corruption(rep->err);
   }
 
-  static void call_assign(LazySlice* slice, LazySliceRep* rep,
-                          const Slice& value) {
-    assert(slice->controller() == malloc_coltroller());
-    auto coltroller =
-        static_cast<const MallocLazySliceControllerImpl*>(malloc_coltroller());
-    coltroller->MallocLazySliceControllerImpl::assign(slice, rep, value);
+  static Slice save_slice(LazySliceRep* _rep, const Slice& value) {
+    auto rep = union_cast<Rep>(_rep);
+    if (rep->cap < value.size()) {
+      auto ptr = (char*)realloc(rep->ptr, value.size());
+      if (ptr == nullptr) {
+        rep->err = "MallocLazySliceControllerImpl::assign : bad alloc";
+        return Slice::Invalid();
+      }
+      rep->ptr = ptr;
+      rep->cap = value.size();
+    }
+    memmove(rep->ptr, value.data(), value.size());
+    rep->size = value.size();
+    rep->err = nullptr;
+    return Slice(rep->ptr, rep->size);
   }
 };
 
@@ -345,19 +339,28 @@ struct BufferLazySliceControllerImpl : public LazySliceController {
     auto rep = union_cast<Rep>(_rep);
     rep->buffer->assign(value.data(), value.size());
     rep->err = nullptr;
-    *slice = *rep->buffer;
+    assign_slice(*slice, *rep->buffer);
   }
-  void pin_resource(LazySlice* /*slice*/,
-                    LazySliceRep* /*rep*/) const override {}
+  void pin_resource(LazySlice* slice,
+                    LazySliceRep* _rep) const override {
+    auto buffer = union_cast<Rep>(_rep)->buffer;
+    if (slice->valid() && (slice->data() < buffer->data() ||
+                           slice->data() >= buffer->data() + buffer->size())) {
+      buffer->assign(slice->data(), slice->size());
+      assign_slice(*slice, *buffer);
+    }
+  }
   Status decode_destructive(LazySlice* slice, LazySliceRep* _rep,
                             LazySlice* target) const override {
-    auto rep = union_cast<const Rep>(_rep);
+    auto rep = union_cast<Rep>(_rep);
+    auto buffer = rep->buffer;
     if (!slice->valid()) {
       auto s = BufferLazySliceControllerImpl::inplace_decode(slice, _rep);
       if (!s.ok()) {
         return s;
       }
-    } else if (slice->data() != rep->buffer->data() || !rep->is_owner) {
+    } else if (!rep->is_owner || slice->data() < buffer->data() ||
+               slice->data() >= buffer->data() + buffer->size()) {
       target->reset(*slice, true, slice->file_number());
       return Status::OK();
     }
@@ -370,7 +373,7 @@ struct BufferLazySliceControllerImpl : public LazySliceController {
     if (rep->err != nullptr) {
       return Status::Corruption(rep->err);
     } else {
-      *slice = *rep->buffer;
+      assign_slice(*slice, *rep->buffer);
     }
     return Status::OK();
   }
@@ -385,7 +388,7 @@ struct ReferenceLazySliceControllerImpl : public LazySliceController {
         *reinterpret_cast<const LazySlice*>(rep->data[0]);
     auto s = slice_ref.inplace_decode();
     if (s.ok()) {
-      *slice = static_cast<const Slice&>(slice_ref);
+      assign_slice(*slice, slice_ref);
     }
     return s;
   }
@@ -402,37 +405,48 @@ struct CleanableLazySliceControllerImpl : public LazySliceController {
     *target = std::move(*slice);
     return Status::OK();
   }
-  Status inplace_decode(LazySlice* slice,
+  Status inplace_decode(LazySlice* /*slice*/,
                         LazySliceRep* /*rep*/) const override {
-    assert(!slice->valid());
-    slice->reset(default_coltroller(), {}, slice->file_number());
     return Status::OK();
   }
 };
 
 void LazySliceController::assign(LazySlice* slice, LazySliceRep* rep,
                                  Slice value) const {
+  assert(value.valid());
   if (value.size() < sizeof(LazySliceRep)) {
     slice->reset(default_coltroller(), {}, slice->file_number());
-    DefaultLazySliceControllerImpl::save_slice(rep, value);
-    *slice = DefaultLazySliceControllerImpl::load_slice(rep);
+    slice->assign_slice(DefaultLazySliceControllerImpl::save_slice(rep, value));
   } else {
     slice->reset(malloc_coltroller(), {}, slice->file_number());
-    MallocLazySliceControllerImpl::call_assign(slice, rep, value);
+    slice->assign_slice(MallocLazySliceControllerImpl::save_slice(rep, value));
   }
 }
 
 void LazySliceController::pin_resource(LazySlice* slice,
                                        LazySliceRep* /*rep*/) const{
   LazySlice pinned_slice;
-  pinned_slice.assign(*slice);
-  *slice = std::move(pinned_slice);
+  auto s = slice->decode_destructive(pinned_slice);
+  if (s.ok()) {
+    *slice = std::move(pinned_slice);
+  } else {
+    slice->assign_error(s.ToString());
+  }
 }
 
-Status LazySliceController::decode_destructive(LazySlice* /*slice*/,
-                                               LazySliceRep* /*rep*/,
-                                               LazySlice* /*target*/) const {
-  return Status::NotSupported();
+Status LazySliceController::decode_destructive(LazySlice* slice,
+                                               LazySliceRep* rep,
+                                               LazySlice* target) const {
+  if (!slice->slice_.valid()) {
+    auto s = inplace_decode(slice, rep);
+    if (!s.ok()) {
+      return s;
+    }
+  }
+  assign(target, &target->rep_, *slice);
+  target->file_number_ = slice->file_number_;
+  slice->clear();
+  return Status::OK();
 }
 
 const LazySliceController* LazySliceController::default_coltroller() {
@@ -460,17 +474,40 @@ const LazySliceController* LazySliceController::cleanable_controller() {
   return &controller_impl;
 }
 
-void LazySlice::reset(std::string* _buffer) {
-  assert(_buffer != nullptr);
-  *this = *_buffer;
+void LazySlice::assign_error(const Slice& error) {
+  if (controller_ != LazySliceController::malloc_coltroller()) {
+    reset(LazySliceController::malloc_coltroller(), {}, file_number_);
+  } else {
+    slice_ = Slice::Invalid();
+  }
+  MallocLazySliceControllerImpl::save_slice(&rep_, error);
+  auto rep = union_cast<MallocLazySliceControllerImpl::Rep>(&rep_);
+  if (rep->err == nullptr) {
+    rep->err = rep->ptr;
+  } else {
+    rep->err = "LazySlice unknow error & bad alloc";
+  }
+}
+
+void LazySlice::fix_default_coltroller(const LazySlice& other) {
+  assert(controller_ == LazySliceController::default_coltroller());
+  if (other.slice_.size() < sizeof(LazySliceRep)) {
+    assign_slice(DefaultLazySliceControllerImpl::save_slice(&rep_,
+                                                            other.slice_));
+  }
+}
+
+void LazySlice::reset(std::string* buffer) {
+  assert(buffer != nullptr);
+  assign_slice(*buffer);
   auto rep = union_cast<BufferLazySliceControllerImpl::Rep>(&rep_);
   if (controller_ == LazySliceController::buffer_controller()) {
-    if (rep->buffer != _buffer) {
+    if (rep->buffer != buffer) {
       if (rep->is_owner) {
         delete rep->buffer;
         rep->is_owner = 0;
       }
-      rep->buffer = _buffer;
+      rep->buffer = buffer;
     }
     free(rep->ptr);
     rep->ptr = nullptr;
@@ -479,24 +516,19 @@ void LazySlice::reset(std::string* _buffer) {
   } else {
     destroy();
     controller_ = LazySliceController::buffer_controller();
-    rep->buffer = _buffer;
+    rep->buffer = buffer;
     rep->is_owner = 0;
     rep->ptr = nullptr;
     rep->err = nullptr;
   }
 }
 
-void LazySlice::assign(const LazySlice& _source) {
-  Status s = _source.inplace_decode();
+void LazySlice::assign(const LazySlice& source) {
+  Status s = source.inplace_decode();
   if (s.ok()) {
-    reset(_source, true, _source.file_number());
-    return;
-  }
-  reset(LazySliceController::malloc_coltroller(), {});
-  MallocLazySliceControllerImpl::call_assign(this, &rep_, s.ToString());
-  auto rep = union_cast<MallocLazySliceControllerImpl::Rep>(&rep_);
-  if (rep->err != nullptr) {
-    rep->err = "LazySlice::assign decode fail & bad alloc";
+    reset(source, true, source.file_number());
+  } else {
+    assign_error(s.ToString());
   }
 }
 
@@ -504,19 +536,20 @@ std::string* LazySlice::trans_to_buffer() {
   assert(controller_ != nullptr);
   auto rep = union_cast<BufferLazySliceControllerImpl::Rep>(&rep_);
   if (controller_ == LazySliceController::buffer_controller()) {
-    if (valid()) {
-      if (data_ != rep->buffer->data() || size_ != rep->buffer->size()) {
-        rep->buffer->assign(data_, size_);
+    if (slice_.valid()) {
+      if (slice_.data() != rep->buffer->data() ||
+          slice_.size() != rep->buffer->size()) {
+        rep->buffer->assign(slice_.data(), slice_.size());
       }
-      *this = Slice::Invalid();
+      assign_slice(Slice::Invalid());
     }
     return rep->buffer;
   }
   auto s = inplace_decode();
   if (s.ok()) {
-    auto buffer = new std::string(data_, size_);
+    auto buffer = new std::string(slice_.data(), slice_.size());
     destroy();
-    *this = Slice::Invalid();
+    assign_slice(Slice::Invalid());
     controller_ = LazySliceController::buffer_controller();
     rep->buffer = buffer;
     rep->is_owner = 1;
@@ -526,7 +559,7 @@ std::string* LazySlice::trans_to_buffer() {
   }
   destroy();
   auto buffer = new std::string();
-  *this = Slice::Invalid();
+  assign_slice(Slice::Invalid());
   controller_ = LazySliceController::buffer_controller();
   rep->buffer = buffer;
   rep->is_owner = 1;
@@ -562,7 +595,7 @@ LazySlice LazySliceRemoveSuffix(const LazySlice* slice, size_t fixed_len) {
         return Status::Corruption(
             "Error: Could not remove suffix");
       }
-      *slice = Slice(slice_ref.data(), slice_ref.size() - len);
+      assign_slice(*slice, Slice(slice_ref.data(), slice_ref.size() - len));
       return s;
     }
   };

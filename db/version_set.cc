@@ -1188,18 +1188,6 @@ Version::Version(ColumnFamilyData* column_family_data, VersionSet* vset,
       mutable_cf_options_(mutable_cf_options),
       version_number_(version_number) {}
 
-Status Version::decode_destructive(LazySlice* slice, LazySliceRep* rep,
-                                   LazySlice* target) const {
-  if (slice->valid()) {
-    return Status::NotSupported();
-  }
-  auto s = Version::inplace_decode(slice, rep);
-  if (!s.ok()) {
-    return s;
-  }
-  return slice->decode_destructive(*target);
-}
-
 Status Version::inplace_decode(LazySlice* slice, LazySliceRep* rep) const {
   Slice user_key(reinterpret_cast<const char*>(rep->data[0]), rep->data[1]);
   uint64_t seq_type = rep->data[2];

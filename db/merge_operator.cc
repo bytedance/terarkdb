@@ -23,12 +23,14 @@ bool MergeOperator::FullMergeV2(const MergeOperationInput& merge_in,
     }
     operand_list_str.emplace_back(op.data(), op.size());
   }
+  const Slice* existing_value = nullptr;
   if (merge_in.existing_value != nullptr) {
     if (!merge_in.existing_value->inplace_decode().ok()) {
       return false;
     }
+    existing_value = merge_in.existing_value->slice_ptr();
   }
-  return FullMerge(merge_in.key, merge_in.existing_value, operand_list_str,
+  return FullMerge(merge_in.key, existing_value, operand_list_str,
                    merge_out->new_value.trans_to_buffer(), merge_in.logger);
 }
 
@@ -72,7 +74,9 @@ bool AssociativeMergeOperator::FullMergeV2(
       return false;
     }
     temp_value.clear();
-    if (!Merge(merge_in.key, existing_value, operand,
+    const Slice* existing_value_slice =
+        existing_value == nullptr ? nullptr : existing_value->slice_ptr();
+    if (!Merge(merge_in.key, existing_value_slice, operand,
                temp_value.trans_to_buffer(), merge_in.logger)) {
       return false;
     }
@@ -95,8 +99,8 @@ bool AssociativeMergeOperator::PartialMerge(const Slice& key,
       !right_operand.inplace_decode().ok()) {
     return false;
   }
-  return Merge(key, &left_operand, right_operand, new_value->trans_to_buffer(),
-               logger);
+  return Merge(key, left_operand.slice_ptr(), right_operand,
+               new_value->trans_to_buffer(), logger);
 }
 
 } // namespace rocksdb

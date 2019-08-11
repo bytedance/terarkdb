@@ -417,14 +417,6 @@ class MemTableIterator
       slice->pin_resource();
     }
   }
-  virtual Status decode_destructive(LazySlice* slice, LazySliceRep* /*rep*/,
-                                    LazySlice* target) const override {
-    if (slice->valid()) {
-      return Status::NotSupported();
-    }
-    *slice = iter_->value();
-    return slice->decode_destructive(*target);
-  }
   virtual Status inplace_decode(LazySlice* slice,
                                 LazySliceRep* /*rep*/) const override {
     assert(!slice->valid());

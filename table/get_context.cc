@@ -179,7 +179,7 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
          type == kTypeMergeIndex) && max_covering_tombstone_seq_ != nullptr &&
         *max_covering_tombstone_seq_ > parsed_key.sequence) {
       type = kTypeRangeDeletion;
-      value.reset();
+      value.clear();
     }
     if (replay_log_callback_) {
       replay_log_callback_(replay_log_arg_, type, value);
@@ -369,16 +369,15 @@ bool RowCacheContext::GetFromRowCache(
           auto c = reinterpret_cast<Cache*>(rep->data[2]);
           auto h = reinterpret_cast<Cache::Handle*>(rep->data[3]);
           c->Ref(h);
-          Cleanable fn;
-          fn.RegisterCleanup(release_cache_entry_func::invoke, c, h);
           slice->reset(Slice(reinterpret_cast<const char*>(rep->data[0]),
-                       rep->data[1]), &fn, slice->file_number());
+                             rep->data[1]), release_cache_entry_func::invoke, c,
+                       h, slice->file_number());
         }
         Status decode_destructive(LazySlice* slice, LazySliceRep* rep,
                                   LazySlice* target) const override {
           const char* data = reinterpret_cast<const char*>(rep->data[0]);
           if (!slice->valid()) {
-            *slice = Slice(data, rep->data[1]);
+            assign_slice(*slice, Slice(data, rep->data[1]));
           } else if (slice->data() != data) {
             target->reset(*slice, true, slice->file_number());
             return Status::OK();
@@ -389,14 +388,15 @@ bool RowCacheContext::GetFromRowCache(
         Status inplace_decode(LazySlice* slice,
                               LazySliceRep* rep) const override {
           assert(!slice->valid());
-          *slice = Slice(reinterpret_cast<const char*>(rep->data[0]),
-                         rep->data[1]);
+          assign_slice(*slice,
+                       Slice(reinterpret_cast<const char*>(rep->data[0]),
+                             rep->data[1]));
           return Status::OK();
         }
       };
       static LazySliceControllerImpl controller_impl;
       if (value.empty()) {
-        lazy_value.reset();
+        lazy_value.clear();
       } else {
         lazy_value.reset(&controller_impl, {
             reinterpret_cast<uint64_t>(value.data()),

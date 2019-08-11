@@ -694,7 +694,7 @@ class BlockBasedTableIterator<DataBlockIter, LazySlice>
   virtual void pin_resource(LazySlice* slice, LazySliceRep* rep) const override;
   virtual Status inplace_decode(LazySlice* slice,
                                 LazySliceRep* /*rep*/) const override {
-    *slice = block_iter_.value();
+    assign_slice(*slice, block_iter_.value());
     return Status::OK();
   }
 

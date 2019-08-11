@@ -92,6 +92,7 @@ class Slice {
     size_ -= n;
   }
 
+  // Drop the last "n" bytes from this slice.
   void remove_suffix(size_t n) {
     assert(n <= size());
     size_ -= n;

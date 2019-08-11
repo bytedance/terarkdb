@@ -229,7 +229,7 @@ Status MergeHelper::MergeUntil(
         merge_result.reset_file_number();
         merge_context_.PushOperand(std::move(merge_result));
       }
-      val.reset();
+      val.clear();
 
       // move iter to the next entry
       iter->Next();
@@ -249,7 +249,7 @@ Status MergeHelper::MergeUntil(
       if (range_del_agg != nullptr &&
           range_del_agg->ShouldDelete(
               iter->key(), RangeDelPositioningMode::kForwardTraversal)) {
-        val.reset();
+        val.clear();
         filter = CompactionFilter::Decision::kRemove;
       }
 

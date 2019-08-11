@@ -52,7 +52,7 @@ public:
 
   virtual ~LazySliceController() = default;
 
-  // data -> 31 bytes storage
+  // data -> 31 bytes local storage
   static const LazySliceController* default_coltroller();
   // data[0] -> mem ptr
   // data[1] -> mem size
@@ -68,19 +68,25 @@ public:
   static const LazySliceController* reference_controller();
   // rep -> Cleanable
   static const LazySliceController* cleanable_controller();
+
+  static void assign_slice(LazySlice& lazy_slice, const Slice& slice);
 };
 
-extern const LazySliceController* EmptyLazySliceController();
-
-class LazySlice : public Slice {
+class LazySlice {
+  friend class LazySliceController;
  private:
-  using Slice::data_;
-  using Slice::size_;
+  Slice slice_;
   const LazySliceController* controller_;
   LazySliceRep rep_;
   uint64_t file_number_;
 
   void destroy();
+
+  void assign_slice(const Slice& _slice) { slice_ = _slice; }
+
+  void assign_error(const Slice& error);
+
+  void fix_default_coltroller(const LazySlice& other);
 
  public:
 
@@ -124,12 +130,93 @@ class LazySlice : public Slice {
 
   // assign from a slice
   LazySlice& operator = (const Slice& _slice) {
-    static_cast<Slice&>(*this) = _slice;
+    reset(_slice);
     return *this;
   }
 
-  // reset empty slice
-  void reset();
+  operator const Slice&() const { assert(valid()); return slice_; }
+
+  const Slice& slice_ref() const { assert(valid()); return slice_; }
+  const Slice* slice_ptr() const { assert(valid()); return &slice_; }
+
+  // Return a pointer to the beginning of the referenced data
+  const char* data() const { assert(valid()); return slice_.data(); }
+
+  // Return the length (in bytes) of the referenced data
+  size_t size() const { assert(valid()); return slice_.size(); }
+
+  // Return true iff the length of the referenced data is zero
+  bool empty() const { assert(valid()); return slice_.empty(); }
+
+  // Return true if Slice valid
+  bool valid() const { return slice_.valid(); }
+
+  // Return an invalid Slice
+  static Slice Invalid() { return Slice::Invalid(); }
+
+  // Return the ith byte in the referenced data.
+  // REQUIRES: n < size()
+  char operator[](size_t n) const { assert(valid()); return slice_[n]; }
+
+  // Change this slice to refer to an empty array
+  void clear();
+
+  // Drop the first "n" bytes from this slice.
+  void remove_prefix(size_t n) { assert(valid()); slice_.remove_prefix(n); }
+
+  // Drop the last "n" bytes from this slice.
+  void remove_suffix(size_t n) { assert(valid()); slice_.remove_suffix(n); }
+
+  // Return a string that contains the copy of the referenced data.
+  // when hex is true, returns a string of twice the length hex encoded (0-9A-F)
+  std::string ToString(bool hex = false) const {
+    assert(valid());
+    return slice_.ToString(hex);
+  }
+
+#ifdef __cpp_lib_string_view
+  // Return a string_view that references the same data as this slice.
+  std::string_view ToStringView() const {
+    assert(valid());
+    return slice_.ToStringView();
+  }
+#endif
+
+  // Decodes the current slice interpreted as an hexadecimal string into result,
+  // if successful returns true, if this isn't a valid hex string
+  // (e.g not coming from Slice::ToString(true)) DecodeHex returns false.
+  // This slice is expected to have an even number of 0-9A-F characters
+  // also accepts lowercase (a-f)
+  bool DecodeHex(std::string* result) const {
+    assert(valid());
+    return slice_.DecodeHex(result);
+  }
+
+  // Three-way comparison.  Returns value:
+  //   <  0 iff "*this" <  "b",
+  //   == 0 iff "*this" == "b",
+  //   >  0 iff "*this" >  "b"
+  int compare(const Slice& b) const {
+    assert(valid());
+    return slice_.compare(b);
+  }
+
+  // Return true iff "x" is a prefix of "*this"
+  bool starts_with(const Slice& x) const {
+    assert(valid());
+    return slice_.starts_with(x);
+  }
+
+  bool ends_with(const Slice& x) const {
+    assert(valid());
+    return slice_.ends_with(x);
+  }
+
+  // Compare two slices and returns the first byte where they differ
+  size_t difference_offset(const Slice& b) const {
+    assert(valid());
+    return slice_.difference_offset(b);
+  }
 
   // reset slice from copying or referring
   void reset(const Slice& _value, bool _copy = false,
@@ -179,39 +266,48 @@ class LazySlice : public Slice {
   Status inplace_decode() const;
 };
 
+inline void LazySliceController::assign_slice(LazySlice& lazy_slice,
+                                              const Slice& slice) {
+  lazy_slice.assign_slice(slice);
+}
+
+inline void LazySlice::destroy() {
+  if (controller_ != nullptr) {
+    controller_->destroy(&rep_);
+  }
+}
+
 inline LazySlice::LazySlice() noexcept
-    : Slice(),
-      controller_(LazySliceController::default_coltroller()),
+    : controller_(LazySliceController::default_coltroller()),
       rep_{},
       file_number_(uint64_t(-1)) {}
 
 inline LazySlice::LazySlice(LazySlice&& _slice) noexcept
-    : Slice(_slice),
+    : slice_(_slice),
       controller_(_slice.controller_),
       rep_(_slice.rep_),
       file_number_(_slice.file_number_) {
-  _slice = Slice::Invalid();
-  _slice.controller_ = nullptr;
-  const char* base = reinterpret_cast<const char*>(_slice.rep_.data);
-  if (controller_ == LazySliceController::default_coltroller() &&
-      data_ >= base && data_ < base + sizeof(LazySliceRep)) {
-    data_ = reinterpret_cast<const char*>(rep_.data) + (data_ - base);
+  if (controller_ == LazySliceController::default_coltroller()) {
+    fix_default_coltroller(_slice);
   }
+  _slice.slice_ = Slice::Invalid();
+  _slice.controller_ = nullptr;
 }
 
 inline LazySlice::LazySlice(const Slice& _value, bool _copy,
                             uint64_t _file_number)
-    : Slice(_value),
+    : slice_(_value),
       controller_(LazySliceController::default_coltroller()),
       rep_{},
       file_number_(_file_number) {
+  assert(_value.valid());
   if (_copy) {
     controller_->assign(this, &rep_, _value);
   }
 }
 
 inline LazySlice::LazySlice(std::string* _buffer) noexcept
-    : Slice(*_buffer),
+    : slice_(*_buffer),
       controller_(LazySliceController::buffer_controller()),
       rep_{reinterpret_cast<uint64_t>(_buffer)},
       file_number_(uint64_t(-1)) {
@@ -222,21 +318,23 @@ inline LazySlice::LazySlice(const Slice& _value,
                             Cleanable::CleanupFunction _func,
                             void* _arg1, void* _arg2,
                             uint64_t _file_number) noexcept
-    : Slice(_value),
+    : slice_(_value),
       controller_(LazySliceController::cleanable_controller()),
       rep_{reinterpret_cast<uint64_t>(_func),
            reinterpret_cast<uint64_t>(_arg1),
            reinterpret_cast<uint64_t>(_arg2)},
       file_number_(_file_number) {
+  assert(_value.valid());
   assert(_func != nullptr);
 }
 
 inline LazySlice::LazySlice(const Slice& _value, Cleanable* _cleanable,
                             uint64_t _file_number) noexcept
-    : Slice(_value),
+    : slice_(_value),
       controller_(LazySliceController::cleanable_controller()),
       rep_{},
       file_number_(_file_number) {
+  assert(_value.valid());
   assert(_cleanable != nullptr);
   ::new(&rep_) Cleanable(std::move(*_cleanable));
 }
@@ -244,55 +342,41 @@ inline LazySlice::LazySlice(const Slice& _value, Cleanable* _cleanable,
 inline LazySlice::LazySlice(const LazySliceController* _controller,
                             const LazySliceRep& _rep,
                             uint64_t _file_number) noexcept
-    : Slice(Slice::Invalid()),
+    : slice_(Slice::Invalid()),
       controller_(_controller),
       rep_(_rep),
       file_number_(_file_number) {
   assert(_controller != nullptr);
 }
 
-inline void LazySlice::destroy() {
-  if (controller_ != nullptr) {
-    controller_->destroy(&rep_);
-  }
-}
-
-inline void LazySlice::reset() {
-  Slice::clear();
-  if (controller_ != LazySliceController::default_coltroller() &&
-      controller_ != LazySliceController::malloc_coltroller() &&
-      controller_ != LazySliceController::buffer_controller()) {
-    destroy();
-    controller_ = LazySliceController::default_coltroller();
-    rep_ = {};
-  }
+inline void LazySlice::clear() {
+  controller_->assign(this, &rep_, Slice());
   file_number_ = uint64_t(-1);
 }
 
 inline void LazySlice::reset(const Slice& _value, bool _copy,
                              uint64_t _file_number) {
-  file_number_ = _file_number;
+  assert(_value.valid());
   if (_copy) {
     controller_->assign(this, &rep_, _value);
   } else {
-    *this = _value;
+    controller_->assign(this, &rep_, Slice());
+    assign_slice(_value);
   }
+  file_number_ = _file_number;
 }
 
 inline void LazySlice::reset(LazySlice&& _slice, uint64_t _file_number) {
   if (this != &_slice) {
     destroy();
-    data_ = _slice.data_;
-    size_ = _slice.size_;
+    slice_ = _slice.slice_;
     controller_ = _slice.controller_;
     rep_ = _slice.rep_;
-    _slice = Slice::Invalid();
-    _slice.controller_ = nullptr;
-    const char* base = reinterpret_cast<const char*>(_slice.rep_.data);
-    if (controller_ == LazySliceController::default_coltroller() &&
-        data_ >= base && data_ < base + sizeof(LazySliceRep)) {
-      data_ = reinterpret_cast<const char*>(rep_.data) + (data_ - base);
+    if (controller_ == LazySliceController::default_coltroller()) {
+      fix_default_coltroller(_slice);
     }
+    _slice.slice_ = Slice::Invalid();
+    _slice.controller_ = nullptr;
   }
   file_number_ = _file_number;
 }
@@ -300,9 +384,10 @@ inline void LazySlice::reset(LazySlice&& _slice, uint64_t _file_number) {
 inline void LazySlice::reset(const Slice& _value,
                              Cleanable::CleanupFunction _func, void* _arg1,
                              void* _arg2, uint64_t _file_number) {
+  assert(_value.valid());
   destroy();
   controller_ = LazySliceController::cleanable_controller();
-  *this = _value;
+  slice_ = _value;
   rep_ = {reinterpret_cast<uint64_t>(_func),
           reinterpret_cast<uint64_t>(_arg1),
           reinterpret_cast<uint64_t>(_arg2)};
@@ -311,9 +396,10 @@ inline void LazySlice::reset(const Slice& _value,
 
 inline void LazySlice::reset(const Slice& _value, Cleanable* _cleanable,
                              uint64_t _file_number) {
+  assert(_value.valid());
   destroy();
   controller_ = LazySliceController::cleanable_controller();
-  *this = _value;
+  slice_ = _value;
   new(&rep_) Cleanable(std::move(*_cleanable));
   file_number_ = _file_number;
 }
@@ -323,7 +409,7 @@ inline void LazySlice::reset(const LazySliceController* _controller,
                              uint64_t _file_number) {
   assert(_controller != nullptr);
   destroy();
-  *this = Slice::Invalid();
+  slice_ = Slice::Invalid();
   controller_ = _controller;
   rep_ = _rep;
   file_number_ = _file_number;
@@ -331,7 +417,7 @@ inline void LazySlice::reset(const LazySliceController* _controller,
 
 inline Status LazySlice::save_to_buffer(std::string* buffer) const {
   assert(controller_ != nullptr);
-  if (!Slice::valid()) {
+  if (!slice_.valid()) {
     auto s = inplace_decode();
     if (!s.ok()) {
       return s;
@@ -339,12 +425,12 @@ inline Status LazySlice::save_to_buffer(std::string* buffer) const {
   }
   if (controller_ != LazySliceController::buffer_controller() ||
       reinterpret_cast<std::string*>(rep_.data[0]) != buffer ||
-      data_ != buffer->data()) {
-    buffer->assign(data_, size_);
-  } else if (size_ < buffer->size()) {
-    buffer->resize(size_);
+      slice_.data() != buffer->data()) {
+    buffer->assign(slice_.data(), slice_.size());
+  } else if (slice_.size() < buffer->size()) {
+    buffer->resize(slice_.size());
   } else {
-    assert(size_ == buffer->size());
+    assert(slice_.size() == buffer->size());
   }
   return Status::OK();
 }
@@ -356,24 +442,12 @@ inline void LazySlice::pin_resource() {
 
 inline Status LazySlice::decode_destructive(LazySlice& _target) {
   assert(controller_ != nullptr);
-  auto s = controller_->decode_destructive(this, &rep_, &_target);
-  if (s.ok() || !s.IsNotSupported()) {
-    return s;
-  }
-  if (!Slice::valid()) {
-    s = controller_->inplace_decode(this, &rep_);
-    if (!s.ok()) {
-      return s;
-    }
-  }
-  _target.reset(*this, true, file_number_);
-  reset();
-  return Status::OK();
+  return controller_->decode_destructive(this, &rep_, &_target);
 }
 
 inline Status LazySlice::inplace_decode() const {
   assert(controller_ != nullptr);
-  if (Slice::valid()) {
+  if (slice_.valid()) {
     return Status::OK();
   }
   auto self = const_cast<LazySlice*>(this);

@@ -139,18 +139,6 @@ class WorkerSeparateHelper : public SeparateHelper, public LazySliceController {
   void pin_resource(LazySlice* /*slice*/,
                     LazySliceRep* /*rep*/) const override {}
 
-  Status decode_destructive(LazySlice* slice, LazySliceRep* rep,
-                            LazySlice* target) const override {
-    if (slice->valid()) {
-      return Status::NotSupported();
-    }
-    auto s = inplace_decode_callback_(inplace_decode_arg_, slice, rep);
-    if (!s.ok()) {
-      return s;
-    }
-    return slice->decode_destructive(*target);
-  }
-
   Status inplace_decode(LazySlice* slice, LazySliceRep* rep) const override {
     assert(!slice->valid());
     return inplace_decode_callback_(inplace_decode_arg_, slice, rep);
