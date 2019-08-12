@@ -70,7 +70,7 @@ class TableCache {
   //    returns non-ok status.
   // @param skip_filters Disables loading/accessing the filter block
   // @param level The level this table is at, -1 for "not set / don't know"
-  Status Get(const ReadOptions& options, bool no_global_row_cache,
+  Status Get(const ReadOptions& options,
              const InternalKeyComparator& internal_comparator,
              const FileMetaData& file_meta, const DependenceMap& dependence_map,
              const Slice& k, GetContext* get_context,

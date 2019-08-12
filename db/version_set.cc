@@ -1204,14 +1204,12 @@ Status Version::inplace_decode(LazySlice* slice, LazySliceRep* rep) const {
                          cfd_->ioptions()->info_log, db_statistics_,
                          GetContext::kNotFound, user_key, slice, &value_found,
                          nullptr, nullptr, nullptr, env_, &context_seq);
-  ReadOptions options;
-  options.ignore_range_deletions = true;
   SequenceNumber seq;
   ValueType type;
   UnPackSequenceAndType(seq_type, &seq, &type);
   IterKey iter_key;
   iter_key.SetInternalKey(user_key, seq, type);
-  auto s = table_cache_->Get(options, true, cfd_->internal_comparator(),
+  auto s = table_cache_->Get(ReadOptions(), cfd_->internal_comparator(),
                              *file_metadata, dependence_map,
                              iter_key.GetInternalKey(), &get_context,
                              mutable_cf_options_.prefix_extractor.get(),
@@ -1219,21 +1217,11 @@ Status Version::inplace_decode(LazySlice* slice, LazySliceRep* rep) const {
   if (!s.ok()) {
     return s;
   }
-  switch (get_context.State()) {
-    case GetContext::kFound:
-      if (type == kTypeValueIndex && context_seq == seq) {
-        return Status::OK();
-      }
-      break;
-    case GetContext::kMerge:
-      if (type == kTypeMergeIndex && context_seq == seq) {
-        return Status::OK();
-      }
-      break;
-    default:
-      break;
+  if (context_seq != seq || (get_context.State() != GetContext::kFound &&
+                             get_context.State() != GetContext::kMerge)) {
+    return Status::Corruption("Separate value get fail");
   }
-  return Status::Corruption("Separate value get fail");
+  return Status::OK();
 }
 
 void Version::TransToCombined(const Slice& user_key, uint64_t seq_type,
@@ -1245,14 +1233,13 @@ void Version::TransToCombined(const Slice& user_key, uint64_t seq_type,
                      user_key.size(), seq_type, 0}, file_number);
 }
 
-void Version::Get(const ReadOptions& read_options, const LookupKey& k,
-                  LazySlice* value, Status* status,
+void Version::Get(const ReadOptions& read_options, const Slice& user_key,
+                  const LookupKey& k, LazySlice* value, Status* status,
                   MergeContext* merge_context,
                   SequenceNumber* max_covering_tombstone_seq, bool* value_found,
                   bool* key_exists, SequenceNumber* seq,
                   ReadCallback* callback) {
   Slice ikey = k.internal_key();
-  Slice user_key = k.user_key();
 
   assert(status->ok() || status->IsMergeInProgress());
 
@@ -1288,8 +1275,8 @@ void Version::Get(const ReadOptions& read_options, const LookupKey& k,
         get_perf_context()->per_level_perf_context_enabled;
     StopWatchNano timer(env_, timer_enabled /* auto_start */);
     *status = table_cache_->Get(
-        read_options, cfd_->is_row_cache_supported(), *internal_comparator(),
-        *f->file_metadata, storage_info_.dependence_map(), ikey, &get_context,
+        read_options, *internal_comparator(), *f->file_metadata,
+        storage_info_.dependence_map(), ikey, &get_context,
         mutable_cf_options_.prefix_extractor.get(),
         cfd_->internal_stats()->GetFileReadHist(fp.GetHitFileLevel()),
         IsFilterSkipped(static_cast<int>(fp.GetHitFileLevel()),

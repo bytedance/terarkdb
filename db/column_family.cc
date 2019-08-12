@@ -414,7 +414,6 @@ ColumnFamilyData::ColumnFamilyData(
       mutable_cf_options_(initial_cf_options_),
       is_delete_range_supported_(
           cf_options.table_factory->IsDeleteRangeSupported()),
-      is_row_cache_supported_(cf_options.table_factory->IsRowCacheSupported()),
       write_buffer_manager_(write_buffer_manager),
       mem_(nullptr),
       imm_(ioptions_.min_write_buffer_number_to_merge,

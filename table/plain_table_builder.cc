@@ -122,7 +122,7 @@ void PlainTableBuilder::Add(const Slice& key, const LazySlice& lazy_value) {
     status_ = s;
     return;
   }
-  Slice value = lazy_value;
+  const Slice& value = lazy_value;
   // temp buffer for metadata bytes between key and value.
   char meta_bytes_buf[6];
   size_t meta_bytes_buf_size = 0;

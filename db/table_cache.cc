@@ -351,7 +351,7 @@ InternalIterator* TableCache::NewIterator(
   return result;
 }
 
-Status TableCache::Get(const ReadOptions& options, bool no_global_row_cache,
+Status TableCache::Get(const ReadOptions& options,
                        const InternalKeyComparator& internal_comparator,
                        const FileMetaData& file_meta,
                        const DependenceMap& dependence_map, const Slice& k,
@@ -361,22 +361,6 @@ Status TableCache::Get(const ReadOptions& options, bool no_global_row_cache,
                        int level) {
   auto& fd = file_meta.fd;
   IterKey key_buffer;
-#ifndef ROCKSDB_LITE
-  RowCacheContext row_cache_context;
-  bool enable_row_cache = ioptions_.row_cache &&
-                          !get_context->NeedToReadSequence() &&
-                          file_meta.prop.purpose != kMapSst;
-
-  // Check row cache if enabled. Since row cache does not currently store
-  // sequence numbers, we cannot use it if we need to fetch the sequence.
-  if (enable_row_cache && !no_global_row_cache &&
-      RowCacheContext::GetFromRowCache(options, k, fd.largest_seqno,
-                                       &key_buffer, ioptions_.row_cache.get(),
-                                       row_cache_id_, fd.GetNumber(),
-                                       ioptions_.statistics, get_context)) {
-    return Status::OK();
-  }
-#endif  // ROCKSDB_LITE
   Status s;
   TableReader* t = fd.table_reader;
   Cache::Handle* handle = nullptr;
@@ -391,28 +375,10 @@ Status TableCache::Get(const ReadOptions& options, bool no_global_row_cache,
   }
   if (s.ok()) {
     if (file_meta.prop.purpose != kMapSst) {
-      if (enable_row_cache && no_global_row_cache) {
-        s = t->RowCachedGet(options, k, fd.largest_seqno,
-                            ioptions_.row_cache.get(), row_cache_id_,
-                            ioptions_.statistics, get_context, prefix_extractor,
-                            skip_filters);
-      } else {
-#ifndef ROCKSDB_LITE
-        get_context->SetReplayLog(RowCacheContext::AddReplayLog,
-                                  &row_cache_context);
-#endif  // ROCKSDB_LITE
-        t->UpdateMaxCoveringTombstoneSeq(
-            options, ExtractUserKey(k),
-            get_context->max_covering_tombstone_seq());
-        s = t->Get(options, k, get_context, prefix_extractor, skip_filters);
-#ifndef ROCKSDB_LITE
-        get_context->SetReplayLog(nullptr, nullptr);
-        if (s.ok() && !key_buffer.GetUserKey().empty()) {
-          s = row_cache_context.AddToCache(key_buffer,
-                                           ioptions_.row_cache.get());
-        }
-#endif  // ROCKSDB_LITE
-      }
+      t->UpdateMaxCoveringTombstoneSeq(
+          options, ExtractUserKey(k),
+          get_context->max_covering_tombstone_seq());
+      s = t->Get(options, k, get_context, prefix_extractor, skip_filters);
     } else if (dependence_map.empty()) {
       s = Status::Corruption("Composite sst depend files missing");
     } else {
@@ -503,7 +469,7 @@ Status TableCache::Get(const ReadOptions& options, bool no_global_row_cache,
             s = Status::Corruption("Map sst dependence missing");
             return false;
           }
-          s = Get(options, no_global_row_cache, internal_comparator,
+          s = Get(options, internal_comparator,
                   *find->second, dependence_map, find_k, get_context,
                   prefix_extractor, file_read_hist, skip_filters, level);
 

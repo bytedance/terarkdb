@@ -596,8 +596,8 @@ class Version : public SeparateHelper, private LazySliceController {
   // for the key if a key was found.
   //
   // REQUIRES: lock is not held
-  void Get(const ReadOptions&, const LookupKey& key, LazySlice* value,
-           Status* status, MergeContext* merge_context,
+  void Get(const ReadOptions&, const Slice& user_key, const LookupKey& key,
+           LazySlice* value, Status* status, MergeContext* merge_context,
            SequenceNumber* max_covering_tombstone_seq,
            bool* value_found = nullptr, bool* key_exists = nullptr,
            SequenceNumber* seq = nullptr, ReadCallback* callback = nullptr);

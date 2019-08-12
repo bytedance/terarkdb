@@ -151,9 +151,6 @@ class LazySlice {
   // Return true if Slice valid
   bool valid() const { return slice_.valid(); }
 
-  // Return an invalid Slice
-  static Slice Invalid() { return Slice::Invalid(); }
-
   // Return the ith byte in the referenced data.
   // REQUIRES: n < size()
   char operator[](size_t n) const { assert(valid()); return slice_[n]; }
@@ -162,10 +159,16 @@ class LazySlice {
   void clear();
 
   // Drop the first "n" bytes from this slice.
-  void remove_prefix(size_t n) { assert(valid()); slice_.remove_prefix(n); }
+  void remove_prefix(size_t n) {
+    assert(valid());
+    n > 0 ? file_number_ = uint64_t(-1), slice_.remove_prefix(n): (void)0;
+  }
 
   // Drop the last "n" bytes from this slice.
-  void remove_suffix(size_t n) { assert(valid()); slice_.remove_suffix(n); }
+  void remove_suffix(size_t n) {
+    assert(valid());
+    n > 0 ? file_number_ = uint64_t(-1), slice_.remove_suffix(n): (void)0;
+  }
 
   // Return a string that contains the copy of the referenced data.
   // when hex is true, returns a string of twice the length hex encoded (0-9A-F)
@@ -240,8 +243,6 @@ class LazySlice {
   void reset(const LazySliceController* _controller, const LazySliceRep& _rep,
              uint64_t _file_number = uint64_t(-1));
 
-  void reset_file_number() { file_number_ = uint64_t(-1); }
-
   // decode source and copy it
   void assign(const LazySlice& _source);
 
@@ -283,7 +284,7 @@ inline LazySlice::LazySlice() noexcept
       file_number_(uint64_t(-1)) {}
 
 inline LazySlice::LazySlice(LazySlice&& _slice) noexcept
-    : slice_(_slice),
+    : slice_(_slice.slice_),
       controller_(_slice.controller_),
       rep_(_slice.rep_),
       file_number_(_slice.file_number_) {

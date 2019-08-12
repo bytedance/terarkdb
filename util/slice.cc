@@ -535,6 +535,7 @@ void LazySlice::assign(const LazySlice& source) {
 std::string* LazySlice::trans_to_buffer() {
   assert(controller_ != nullptr);
   auto rep = union_cast<BufferLazySliceControllerImpl::Rep>(&rep_);
+  file_number_ = uint64_t(-1);
   if (controller_ == LazySliceController::buffer_controller()) {
     if (slice_.valid()) {
       if (slice_.data() != rep->buffer->data() ||

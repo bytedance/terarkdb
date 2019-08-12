@@ -15,38 +15,6 @@
 
 namespace rocksdb {
 
-Status TableReader::RowCachedGet(
-    const rocksdb::ReadOptions& readOptions, const Slice& key,
-    SequenceNumber largest_seqno, Cache* row_cache,
-    const rocksdb::Slice& row_cache_id, rocksdb::Statistics* statistics,
-    rocksdb::GetContext* get_context,
-    const rocksdb::SliceTransform* prefix_extractor, bool skip_filters) {
-  assert(row_cache != nullptr && !get_context->NeedToReadSequence());
-
-#ifndef ROCKSDB_LITE
-  IterKey cache_key;
-  if (RowCacheContext::GetFromRowCache(readOptions, key, largest_seqno,
-                                       &cache_key, row_cache, row_cache_id,
-                                       FileNumber(), statistics, get_context)) {
-    return Status::OK();
-  }
-  assert(!cache_key.GetUserKey().empty());
-  RowCacheContext row_cache_context;
-  get_context->SetReplayLog(RowCacheContext::AddReplayLog,
-                            &row_cache_context);
-#endif  // ROCKSDB_LITE
-  UpdateMaxCoveringTombstoneSeq(readOptions, ExtractUserKey(key),
-                                get_context->max_covering_tombstone_seq());
-  Status s = Get(readOptions, key, get_context, prefix_extractor, skip_filters);
-#ifndef ROCKSDB_LITE
-  get_context->SetReplayLog(nullptr, nullptr);
-  if (s.ok()) {
-    s = row_cache_context.AddToCache(cache_key, row_cache);
-  }
-#endif  // ROCKSDB_LITE
-  return s;
-}
-
 void TableReader::RangeScan(const Slice* begin,
                             const SliceTransform* prefix_extractor, void* arg,
                             bool (*callback_func)(void* arg, const Slice& key,

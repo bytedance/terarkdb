@@ -89,13 +89,6 @@ class TableReader {
                      const SliceTransform* prefix_extractor,
                      bool skip_filters = false) = 0;
 
-  virtual Status RowCachedGet(const ReadOptions& readOptions, const Slice& key,
-                              SequenceNumber largest_seqno, Cache* row_cache,
-                              const Slice& row_cache_id, Statistics* statistics,
-                              GetContext* get_context,
-                              const SliceTransform* prefix_extractor,
-                              bool skip_filters = false);
-
   // Logic same as for(it->Seek(begin); it->Valid() && callback(*it); ++it) {}
   // Specialization for performance
   virtual void RangeScan(const Slice* begin,

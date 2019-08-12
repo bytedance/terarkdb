@@ -232,7 +232,6 @@ class ColumnFamilyData {
   ColumnFamilyOptions GetLatestCFOptions() const;
 
   bool is_delete_range_supported() { return is_delete_range_supported_; }
-  bool is_row_cache_supported() { return is_row_cache_supported_; }
 
 #ifndef ROCKSDB_LITE
   // REQUIRES: DB mutex held
@@ -427,7 +426,6 @@ class ColumnFamilyData {
   MutableCFOptions mutable_cf_options_;
 
   const bool is_delete_range_supported_;
-  const bool is_row_cache_supported_;
 
   std::unique_ptr<TableCache> table_cache_;
 

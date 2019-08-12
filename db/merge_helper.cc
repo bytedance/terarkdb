@@ -87,8 +87,6 @@ Status MergeHelper::TimedFullMerge(const MergeOperator* merge_operator,
       assert(tmp_result_operand_index >= 0 &&
              size_t(tmp_result_operand_index) < operands.size());
       *result = std::move(operands[tmp_result_operand_index]);
-    } else {
-      result->reset_file_number();
     }
 
     RecordTick(statistics, MERGE_OPERATION_TOTAL_TIME,
@@ -226,7 +224,6 @@ Status MergeHelper::MergeUntil(
         keys_.clear();
         merge_context_.Clear();
         keys_.emplace_front(std::move(original_key));
-        merge_result.reset_file_number();
         merge_context_.PushOperand(std::move(merge_result));
       }
       val.clear();
@@ -279,7 +276,7 @@ Status MergeHelper::MergeUntil(
         } else {  // kChangeValue
           // Compaction filter asked us to change the operand from val to
           // compaction_filter_value_.
-          compaction_filter_value_.reset_file_number();
+          assert(compaction_filter_value_.file_number() == uint64_t(-1));
           merge_context_.PushOperand(std::move(compaction_filter_value_));
         }
       } else if (filter == CompactionFilter::Decision::kRemoveAndSkipUntil) {
@@ -334,7 +331,6 @@ Status MergeHelper::MergeUntil(
       keys_.clear();
       merge_context_.Clear();
       keys_.emplace_front(std::move(original_key));
-      merge_result.reset_file_number();
       merge_context_.PushOperand(std::move(merge_result));
     }
   } else {
@@ -364,7 +360,6 @@ Status MergeHelper::MergeUntil(
         keys_.clear();
         merge_context_.Clear();
         keys_.emplace_front(std::move(original_key));
-        merge_result.reset_file_number();
         merge_context_.PushOperand(std::move(merge_result));
       }
     }

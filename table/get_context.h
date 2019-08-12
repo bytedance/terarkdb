@@ -74,12 +74,6 @@ class GetContext {
     return max_covering_tombstone_seq_;
   }
 
-  // If a non-null string is passed, all the SaveValue calls will be
-  // logged into the string. The operations can then be replayed on
-  // another GetContext with replayGetContextLog.
-  void SetReplayLog(AddReplayLogCallback replay_log_callback,
-                    void* replay_log_arg);
-
   // Do we need to fetch the SequenceNumber for this key?
   bool NeedToReadSequence() const {
     return seq_ != nullptr || min_seq_type_ != 0;
@@ -127,31 +121,8 @@ class GetContext {
   SequenceNumber* seq_;
   // For Merge, don't accept key while seq type less than min_seq_type
   uint64_t min_seq_type_;
-  AddReplayLogCallback replay_log_callback_;
-  void* replay_log_arg_;
   ReadCallback* callback_;
   bool sample_;
 };
-
-#ifndef ROCKSDB_LITE
-
-struct RowCacheContext {
-  static bool GetFromRowCache(const ReadOptions& readOptions, const Slice& key,
-                              SequenceNumber largest_seqno, IterKey* cache_key,
-                              Cache* row_cache, const Slice& row_cache_id,
-                              uint64_t file_number, Statistics* statistics,
-                              GetContext* get_context);
-
-  static void AddReplayLog(void* arg, ValueType type,
-                           const LazySlice& value);
-
-  Status AddToCache(const IterKey& cache_key, Cache* cache);
-
-  std::unique_ptr<std::string> buffer;
-  Status status;
-};
-
-#endif  // ROCKSDB_LITE
-
 
 }  // namespace rocksdb

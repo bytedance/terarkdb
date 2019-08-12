@@ -305,7 +305,7 @@ void CompactionIterator::InvokeFilterIfNeeded(bool* need_skip,
       iter_stats_.num_record_drop_user++;
     } else if (filter == CompactionFilter::Decision::kChangeValue) {
       value_ = std::move(compaction_filter_value_);
-      value_.reset_file_number();
+      assert(value_.file_number() == uint64_t(-1));
     } else if (filter == CompactionFilter::Decision::kRemoveAndSkipUntil) {
       *need_skip = true;
       compaction_filter_skip_until_.ConvertFromUserKey(kMaxSequenceNumber,

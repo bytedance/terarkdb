@@ -26,12 +26,6 @@ static void DeleteEntry(const Slice& /*key*/, void* value) {
   delete typed_value;
 }
 
-void AppendVarint64(IterKey* key, uint64_t v) {
-  char buf[10];
-  auto ptr = EncodeVarint64(buf, v);
-  key->TrimAppend(key->Size(), buf, ptr - buf);
-}
-
 }
 
 #endif  // ROCKSDB_LITE
@@ -58,8 +52,6 @@ GetContext::GetContext(const Comparator* ucmp,
       env_(env),
       seq_(seq),
       min_seq_type_(0),
-      replay_log_callback_(nullptr),
-      replay_log_arg_(nullptr),
       callback_(callback) {
   if (seq_) {
     *seq_ = kMaxSequenceNumber;
@@ -151,8 +143,9 @@ void GetContext::ReportCounters() {
 bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
                            LazySlice&& value, bool* matched) {
   assert(matched);
-  assert((state_ != kMerge && parsed_key.type != kTypeMerge) ||
-         merge_context_ != nullptr);
+  assert((state_ != kMerge && parsed_key.type != kTypeMerge &&
+         parsed_key.type != kTypeMergeIndex) ||
+         merge_context_ != nullptr || separate_helper_ == nullptr);
   if (ucmp_->Equal(parsed_key.user_key, user_key_)) {
     uint64_t seq_type =
         PackSequenceAndType(parsed_key.sequence, parsed_key.type);
@@ -180,9 +173,6 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
         *max_covering_tombstone_seq_ > parsed_key.sequence) {
       type = kTypeRangeDeletion;
       value.clear();
-    }
-    if (replay_log_callback_) {
-      replay_log_callback_(replay_log_arg_, type, value);
     }
     switch (type) {
       case kTypeValueIndex:
@@ -248,13 +238,14 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
         FALLTHROUGH_INTENDED;
       case kTypeMerge:
         assert(state_ == kNotFound || state_ == kMerge);
-        state_ = kMerge;
         if (separate_helper_ == nullptr) {
           assert(kNotFound == state_);
           assert(lazy_val_ != nullptr);
+          state_ = kMerge;
           *lazy_val_ = std::move(value);
           return false;
         }
+        state_ = kMerge;
         merge_context_->PushOperand(std::move(value));
         if (merge_operator_ != nullptr &&
             merge_operator_->ShouldMerge(
@@ -283,172 +274,5 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
   // state_ could be Corrupt, merge or notfound
   return false;
 }
-
-void GetContext::SetReplayLog(AddReplayLogCallback replay_log_callback,
-                              void* replay_log_arg) {
-#ifndef ROCKSDB_LITE
-  if (replay_log_callback == nullptr && replay_log_callback_ != nullptr &&
-      (state_ == kNotFound || state_ == kMerge) &&
-      max_covering_tombstone_seq_ != nullptr &&
-      *max_covering_tombstone_seq_ != 0) {
-    replay_log_callback_(replay_log_arg_, kTypeRangeDeletion, LazySlice());
-  }
-  replay_log_callback_ = replay_log_callback;
-  replay_log_arg_ = replay_log_arg;
-#endif  // ROCKSDB_LITE
-}
-
-#ifndef ROCKSDB_LITE
-
-bool RowCacheContext::GetFromRowCache(
-    const rocksdb::ReadOptions& options, const rocksdb::Slice& key,
-    SequenceNumber largest_seqno, IterKey* cache_key, rocksdb::Cache* row_cache,
-    const rocksdb::Slice& row_cache_id, uint64_t file_number,
-    Statistics* statistics, GetContext* get_context) {
-  assert(row_cache != nullptr && !get_context->NeedToReadSequence());
-
-  auto user_key = ExtractUserKey(key);
-  // We use the user key as cache key instead of the internal key,
-  // otherwise the whole cache would be invalidated every time the
-  // sequence key increases. However, to support caching snapshot
-  // reads, we append the sequence number only in this case.
-  uint64_t seq_no =
-      options.snapshot == nullptr
-          ? largest_seqno
-          : std::min(largest_seqno, GetInternalKeySeqno(key));
-
-  // Compute row cache key.
-  cache_key->TrimAppend(cache_key->Size(), row_cache_id.data(),
-                        row_cache_id.size());
-  AppendVarint64(cache_key, file_number);
-  AppendVarint64(cache_key, seq_no);
-  cache_key->TrimAppend(cache_key->Size(), user_key.data(), user_key.size());
-
-  auto row_handle = row_cache->Lookup(cache_key->GetUserKey());
-  if (!row_handle) {
-    RecordTick(statistics, ROW_CACHE_MISS);
-    return false;
-  }
-  // Cleanable routine to release the cache entry
-  struct release_cache_entry_func {
-    static void invoke(void* cache_to_clean, void* cache_handle) {
-      ((Cache*)cache_to_clean)->Release((Cache::Handle*)cache_handle);
-    }
-  };
-  // If it comes here value is located on the cache.
-  // found_row_cache_entry points to the value on cache,
-  // and value_pinner has cleanup procedure for the cached entry.
-  // After replayGetContextLog() returns, get_context.pinnable_slice_
-  // will point to cache entry buffer (or a copy based on that) and
-  // cleanup routine under value_pinner will be delegated to
-  // get_context.lazy_slice_. Cache entry is released when
-  // get_context.lazy_slice_ is reset.
-  Slice replay_log =
-      *static_cast<const std::string*>(row_cache->Value(row_handle));
-  bool first_log = true;
-  LazySlice lazy_value;
-  while (replay_log.size()) {
-    auto type = static_cast<ValueType>(*replay_log.data());
-    replay_log.remove_prefix(1);
-    Slice value;
-    bool ret = GetLengthPrefixedSlice(&replay_log, &value);
-    assert(ret);
-    (void)ret;
-
-    if (first_log) {
-      Cleanable value_pinner;
-      value_pinner.RegisterCleanup(release_cache_entry_func::invoke, row_cache,
-                                   row_handle);
-      lazy_value.reset(value, &value_pinner);
-      first_log = false;
-    } else {
-      struct LazySliceControllerImpl : public LazySliceController {
-      public:
-        void destroy(LazySliceRep* /*rep*/) const override {}
-        void pin_resource(LazySlice* slice, LazySliceRep* rep) const override {
-          auto c = reinterpret_cast<Cache*>(rep->data[2]);
-          auto h = reinterpret_cast<Cache::Handle*>(rep->data[3]);
-          c->Ref(h);
-          slice->reset(Slice(reinterpret_cast<const char*>(rep->data[0]),
-                             rep->data[1]), release_cache_entry_func::invoke, c,
-                       h, slice->file_number());
-        }
-        Status decode_destructive(LazySlice* slice, LazySliceRep* rep,
-                                  LazySlice* target) const override {
-          const char* data = reinterpret_cast<const char*>(rep->data[0]);
-          if (!slice->valid()) {
-            assign_slice(*slice, Slice(data, rep->data[1]));
-          } else if (slice->data() != data) {
-            target->reset(*slice, true, slice->file_number());
-            return Status::OK();
-          }
-          *target = std::move(*slice);
-          return Status::OK();
-        }
-        Status inplace_decode(LazySlice* slice,
-                              LazySliceRep* rep) const override {
-          assert(!slice->valid());
-          assign_slice(*slice,
-                       Slice(reinterpret_cast<const char*>(rep->data[0]),
-                             rep->data[1]));
-          return Status::OK();
-        }
-      };
-      static LazySliceControllerImpl controller_impl;
-      if (value.empty()) {
-        lazy_value.clear();
-      } else {
-        lazy_value.reset(&controller_impl, {
-            reinterpret_cast<uint64_t>(value.data()),
-            value.size(),
-            reinterpret_cast<uint64_t>(row_cache),
-            reinterpret_cast<uint64_t>(row_handle),
-        });
-      }
-    }
-
-    bool dont_care __attribute__((__unused__));
-    // Since SequenceNumber is not stored and unknown, we will use
-    // kMaxSequenceNumber.
-    get_context->SaveValue(
-        ParsedInternalKey(user_key, kMaxSequenceNumber, type),
-        std::move(lazy_value), &dont_care);
-  }
-  RecordTick(statistics, ROW_CACHE_HIT);
-  return true;
-}
-
-void RowCacheContext::AddReplayLog(void* arg, rocksdb::ValueType type,
-                                   const rocksdb::LazySlice& value) {
-  RowCacheContext* context = static_cast<RowCacheContext*>(arg);
-  if (context->status.ok()) {
-    context->status = value.inplace_decode();
-  }
-  if (!context->status.ok()) {
-    return;
-  }
-  auto& replay_log = context->buffer;
-  if (!replay_log) {
-    // Optimization: in the common case of only one operation in the
-    // log, we allocate the exact amount of space needed.
-    replay_log.reset(new std::string());
-    replay_log->reserve(1 + VarintLength(value.size()) + value.size());
-  }
-  replay_log->push_back(type);
-  PutLengthPrefixedSlice(replay_log.get(), value);
-}
-
-Status RowCacheContext::AddToCache(const IterKey& cache_key,
-                                   rocksdb::Cache* cache) {
-  if (status.ok() && buffer) {
-    assert(!cache_key.GetUserKey().empty());
-    size_t charge = cache_key.Size() + buffer->size() + sizeof(std::string);
-    cache->Insert(cache_key.GetUserKey(), buffer.release(), charge,
-                  &DeleteEntry<std::string>);
-  }
-  return status;
-}
-
-#endif  // ROCKSDB_LITE
 
 }  // namespace rocksdb

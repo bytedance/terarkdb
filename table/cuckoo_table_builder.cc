@@ -88,7 +88,7 @@ void CuckooTableBuilder::Add(const Slice& key, const LazySlice& lazy_value) {
     status_ = s;
     return;
   }
-  Slice value = lazy_value;
+  const Slice& value = lazy_value;
   if (num_entries_ >= kMaxVectorIdx - 1) {
     status_ = Status::NotSupported("Number of keys in a file must be < 2^32-1");
     return;
