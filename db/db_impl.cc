@@ -1435,7 +1435,7 @@ std::vector<Status> DBImpl::MultiGet(
     counting--;
   };
 
-  if (read_options.use_fiber) {
+  if (read_options.use_num_fibers) {
   #if 0
     static thread_local terark::RunOnceFiberPool fiber_pool(16);
     // current calling fiber's list head, can be treated as a handle
@@ -1448,7 +1448,8 @@ std::vector<Status> DBImpl::MultiGet(
   #else
     static thread_local boost::context::pooled_fixedsize_stack stack_pool;
     size_t next_idx = 0;
-    for (size_t i = 0; i < std::min<size_t>(num_keys, 16); ++i) {
+    size_t num_fibers = std::min<size_t>(num_keys, read_options.use_num_fibers);
+    for (size_t i = 0; i < num_fibers; ++i) {
         using namespace boost::fibers;
         fiber f(launch::dispatch, std::allocator_arg, stack_pool, [&]() {
             while (next_idx < num_keys) {

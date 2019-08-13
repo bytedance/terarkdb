@@ -43,7 +43,7 @@ int main(int argc, char* argv[]) {
   rocksdb::ReadOptions ropt;
   dopt.use_aio_reads = true;
   dopt.use_direct_reads = true;
-  ropt.use_fiber = true;
+  ropt.use_num_fibers = 16;
   bool quite = false;
   for (int opt=0; -1 != opt && '?' != opt;) {
     opt = getopt(argc, argv, "a:b:d:f:m:q");
@@ -63,7 +63,7 @@ int main(int argc, char* argv[]) {
         dopt.use_direct_reads = atoi(optarg) != 0;
         break;
       case 'f':
-        ropt.use_fiber = atoi(optarg) != 0;
+        ropt.use_num_fibers = atoi(optarg);
         break;
       case 'm':
         mget_num = atoi(optarg);
@@ -111,8 +111,8 @@ GetoptDone:
       if (cnt1 >= bench_report) {
         auto t1 = pf.now();
         fprintf(stderr,
-                "mget(use_fiber=%d,direct_io=%d,aio=%d) qps = %f M/sec\n",
-                ropt.use_fiber,
+                "mget(fibers=%d,direct_io=%d,aio=%d) qps = %f M/sec\n",
+                ropt.use_num_fibers,
                 dopt.use_aio_reads,
                 dopt.use_aio_reads,
                 cnt1/pf.uf(t0,t1));
