@@ -144,13 +144,13 @@ class WorkerSeparateHelper : public SeparateHelper, public LazySliceController {
     return inplace_decode_callback_(inplace_decode_arg_, slice, rep);
   }
 
-  void TransToCombined(const Slice& user_key, uint64_t seq_type,
+  void TransToCombined(const Slice& user_key, uint64_t sequence,
                        LazySlice& value) const override {
     auto s = value.inplace_decode();
     assert(s.ok()); (void)s;
     uint64_t file_number = SeparateHelper::DecodeFileNumber(value);
     value.reset(this, {reinterpret_cast<uint64_t>(user_key.data()),
-                       user_key.size(), seq_type, 0}, file_number);
+                       user_key.size(), sequence, 0}, file_number);
   }
 
   WorkerSeparateHelper(void* inplace_decode_arg,
@@ -513,7 +513,7 @@ std::string RemoteCompactionWorker::Client::DoCompaction(
 
   auto separate_inplace_decode = [&](LazySlice* slice, LazySliceRep* rep) {
     Slice user_key(reinterpret_cast<const char*>(rep->data[0]), rep->data[1]);
-    uint64_t seq_type = rep->data[2];
+    uint64_t sequence = rep->data[2];
     uint64_t file_number = slice->file_number();
     bool value_found = false;
     SequenceNumber context_seq;
@@ -521,11 +521,8 @@ std::string RemoteCompactionWorker::Client::DoCompaction(
                            nullptr, GetContext::kNotFound, user_key, slice,
                            &value_found, nullptr, nullptr, nullptr, rep_->env,
                            &context_seq);
-    SequenceNumber seq;
-    ValueType type;
-    UnPackSequenceAndType(seq_type, &seq, &type);
     IterKey iter_key;
-    iter_key.SetInternalKey(user_key, seq, type);
+    iter_key.SetInternalKey(user_key, sequence, kValueTypeForSeek);
     TableReader* reader;
     auto s = get_table_reader(file_number, &reader);
     if (!s.ok()) {
@@ -537,21 +534,11 @@ std::string RemoteCompactionWorker::Client::DoCompaction(
     if (!s.ok()) {
       return s;
     }
-    switch (get_context.State()) {
-      case GetContext::kFound:
-        if (type == kTypeValueIndex && context_seq == seq) {
-          return Status::OK();
-        }
-        break;
-      case GetContext::kMerge:
-        if (type == kTypeMergeIndex && context_seq == seq) {
-          return Status::OK();
-        }
-        break;
-      default:
-        break;
+    if (context_seq != sequence || (get_context.State() != GetContext::kFound &&
+                                    get_context.State() != GetContext::kMerge)) {
+      return Status::Corruption("Separate value get fail");
     }
-    return Status::Corruption("Separate value get fail");
+    return Status::OK();
   };
 
   WorkerSeparateHelper separate_helper(

@@ -738,7 +738,7 @@ class Version : public SeparateHelper, private LazySliceController {
 
   Status inplace_decode(LazySlice* slice, LazySliceRep* rep) const override;
 
-  void TransToCombined(const Slice& user_key, uint64_t seq_type,
+  void TransToCombined(const Slice& user_key, uint64_t sequence,
                        LazySlice& value) const override;
 
   // No copying allowed

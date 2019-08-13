@@ -805,7 +805,7 @@ class SeparateHelper {
     value.reset(EncodeFileNumber(file_number), true, file_number);
   }
 
-  virtual void TransToCombined(const Slice& user_key, uint64_t seq_type,
+  virtual void TransToCombined(const Slice& user_key, uint64_t sequence,
                                LazySlice& value) const = 0;
 };
 

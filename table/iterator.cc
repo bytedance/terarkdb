@@ -111,8 +111,8 @@ LazySlice CombinedInternalIterator::combined_value(
     return iter_->value();
   }
   LazySlice v = iter_->value();
-  separate_helper_->TransToCombined(user_key,
-                                    ExtractInternalKeyFooter(internal_key), v);
+  separate_helper_->TransToCombined(user_key, GetInternalKeySeqno(internal_key),
+                                    v);
   return v;
 }
 

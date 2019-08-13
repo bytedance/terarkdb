@@ -1190,7 +1190,7 @@ Version::Version(ColumnFamilyData* column_family_data, VersionSet* vset,
 
 Status Version::inplace_decode(LazySlice* slice, LazySliceRep* rep) const {
   Slice user_key(reinterpret_cast<const char*>(rep->data[0]), rep->data[1]);
-  uint64_t seq_type = rep->data[2];
+  uint64_t sequence = rep->data[2];
   uint64_t file_number = slice->file_number();
   auto dependence_map = storage_info_.dependence_map();
   auto find = dependence_map.find(file_number);
@@ -1204,11 +1204,8 @@ Status Version::inplace_decode(LazySlice* slice, LazySliceRep* rep) const {
                          cfd_->ioptions()->info_log, db_statistics_,
                          GetContext::kNotFound, user_key, slice, &value_found,
                          nullptr, nullptr, nullptr, env_, &context_seq);
-  SequenceNumber seq;
-  ValueType type;
-  UnPackSequenceAndType(seq_type, &seq, &type);
   IterKey iter_key;
-  iter_key.SetInternalKey(user_key, seq, type);
+  iter_key.SetInternalKey(user_key, sequence, kValueTypeForSeek);
   auto s = table_cache_->Get(ReadOptions(), cfd_->internal_comparator(),
                              *file_metadata, dependence_map,
                              iter_key.GetInternalKey(), &get_context,
@@ -1217,20 +1214,20 @@ Status Version::inplace_decode(LazySlice* slice, LazySliceRep* rep) const {
   if (!s.ok()) {
     return s;
   }
-  if (context_seq != seq || (get_context.State() != GetContext::kFound &&
-                             get_context.State() != GetContext::kMerge)) {
+  if (context_seq != sequence || (get_context.State() != GetContext::kFound &&
+                                  get_context.State() != GetContext::kMerge)) {
     return Status::Corruption("Separate value get fail");
   }
   return Status::OK();
 }
 
-void Version::TransToCombined(const Slice& user_key, uint64_t seq_type,
+void Version::TransToCombined(const Slice& user_key, uint64_t sequence,
                               LazySlice& value) const {
   auto s = value.inplace_decode();
   assert(s.ok()); (void)s;
   uint64_t file_number = SeparateHelper::DecodeFileNumber(value);
   value.reset(this, {reinterpret_cast<uint64_t>(user_key.data()),
-                     user_key.size(), seq_type, 0}, file_number);
+                     user_key.size(), sequence, 0}, file_number);
 }
 
 void Version::Get(const ReadOptions& read_options, const Slice& user_key,

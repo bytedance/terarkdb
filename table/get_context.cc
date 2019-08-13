@@ -147,9 +147,8 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
          parsed_key.type != kTypeMergeIndex) ||
          merge_context_ != nullptr || separate_helper_ == nullptr);
   if (ucmp_->Equal(parsed_key.user_key, user_key_)) {
-    uint64_t seq_type =
-        PackSequenceAndType(parsed_key.sequence, parsed_key.type);
-    if (seq_type < min_seq_type_) {
+    if (PackSequenceAndType(parsed_key.sequence, parsed_key.type) <
+        min_seq_type_) {
       // for map sst, this key is masked
       return false;
     }
@@ -177,7 +176,8 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
     switch (type) {
       case kTypeValueIndex:
         assert(separate_helper_ != nullptr);
-        separate_helper_->TransToCombined(user_key_, seq_type, value);
+        separate_helper_->TransToCombined(user_key_, parsed_key.sequence,
+                                          value);
         FALLTHROUGH_INTENDED;
       case kTypeValue:
         assert(state_ == kNotFound || state_ == kMerge);
@@ -234,7 +234,8 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
 
       case kTypeMergeIndex:
         assert(separate_helper_ != nullptr);
-        separate_helper_->TransToCombined(user_key_, seq_type, value);
+        separate_helper_->TransToCombined(user_key_, parsed_key.sequence,
+                                          value);
         FALLTHROUGH_INTENDED;
       case kTypeMerge:
         assert(state_ == kNotFound || state_ == kMerge);

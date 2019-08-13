@@ -237,8 +237,7 @@ class DBIter final: public Iterator {
       LazySlice v = iter_->value();
       if (ikey.type == index_type) {
         separate_helper_->TransToCombined(
-            saved_key_.GetUserKey(),
-            PackSequenceAndType(ikey.sequence, ikey.type), v);
+            saved_key_.GetUserKey(), ikey.sequence, v);
       }
       return v;
     } else {

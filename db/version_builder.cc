@@ -56,25 +56,27 @@ bool BySmallestKey(FileMetaData* a, FileMetaData* b,
   return (a->fd.GetNumber() < b->fd.GetNumber());
 }
 
-void LoadSstDepend(FileMetaData* f,
-                   std::unordered_map<uint64_t, size_t>& depend_map) {
+bool LoadSstDependence(FileMetaData* f,
+                       std::unordered_map<uint64_t, size_t>& dependence_map) {
   for (auto file_number : f->prop.dependence) {
-    auto ib = depend_map.emplace(file_number, 1);
+    auto ib = dependence_map.emplace(file_number, 1);
     if (!ib.second) {
       ++ib.first->second;
     }
   }
+  return !f->prop.dependence.empty();
 }
 
-void UnloadSstDepend(FileMetaData* f,
-                     std::unordered_map<uint64_t, size_t>& depend_map) {
+bool UnLoadSstDependence(FileMetaData* f,
+                         std::unordered_map<uint64_t, size_t>& dependence_map) {
   for (auto file_number : f->prop.dependence) {
-    auto find = depend_map.find(file_number);
-    assert(find != depend_map.end());
+    auto find = dependence_map.find(file_number);
+    assert(find != dependence_map.end());
     if (--find->second == 0) {
-      depend_map.erase(find);
+      dependence_map.erase(find);
     }
   }
+  return !f->prop.dependence.empty();
 }
 }  // namespace
 
@@ -307,8 +309,7 @@ class VersionBuilder::Rep {
         auto exising = levels_[level].added_files.find(number);
         if (exising != levels_[level].added_files.end()) {
           auto f = exising->second;
-          if (f->prop.purpose != 0) {
-            UnloadSstDepend(f, dependence_map_);
+          if (UnLoadSstDependence(f, dependence_map_)) {
             depend_changed = true;
           }
           dependence_vec_.emplace_back(f);
@@ -324,11 +325,11 @@ class VersionBuilder::Rep {
         }
       }
     }
-    // Remove recursive depend
+    // Remove recursive dependence
     if (depend_changed && depend_file_count > 0) {
       do {
         depend_changed = false;
-        // depend files <- mid -> deleted files
+        // dependence files <- mid -> deleted files
         size_t mid =
             std::partition(dependence_vec_.begin(),
                            dependence_vec_.begin() + depend_file_count,
@@ -338,8 +339,7 @@ class VersionBuilder::Rep {
             dependence_vec_.begin();
         while (depend_file_count > mid) {
           auto f = dependence_vec_[--depend_file_count];
-          if (f->prop.purpose != 0) {
-            UnloadSstDepend(f, dependence_map_);
+          if (UnLoadSstDependence(f, dependence_map_)) {
             depend_changed = true;
           }
         }
@@ -359,13 +359,12 @@ class VersionBuilder::Rep {
           assert(dependence_map_.count(f->fd.GetNumber()) == 0);
           levels_[level].deleted_files.erase(f->fd.GetNumber());
           levels_[level].added_files[f->fd.GetNumber()] = f;
-          if (f->prop.purpose != 0) {
-            LoadSstDepend(f, dependence_map_);
-            depend_changed = true;
-          }
-        } else {
-          dependence_vec_.emplace_back(f);
+          ++f->refs;
         }
+        if (LoadSstDependence(f, dependence_map_)) {
+          depend_changed = true;
+        }
+        dependence_vec_.emplace_back(f);
       } else {
         uint64_t number = new_file.second.fd.GetNumber();
         if (invalid_levels_[level].count(number) == 0) {
@@ -377,13 +376,13 @@ class VersionBuilder::Rep {
       }
     }
 
-    // Reclaim depend files
+    // Reclaim dependence files
     if (dependence_map_.empty()) {
       depend_file_count = 0;
     } else if (depend_changed && dependence_vec_.size() > depend_file_count) {
       do {
         depend_changed = false;
-        // depend files <- mid -> deleted files
+        // dependence files <- mid -> deleted files
         size_t mid =
             std::partition(dependence_vec_.begin() + depend_file_count,
                            dependence_vec_.end(),
@@ -393,8 +392,7 @@ class VersionBuilder::Rep {
             dependence_vec_.begin();
         for (; depend_file_count < mid; ++depend_file_count) {
           auto f = dependence_vec_[depend_file_count];
-          if (f->prop.purpose != 0) {
-            LoadSstDepend(f, dependence_map_);
+          if (LoadSstDependence(f, dependence_map_)) {
             depend_changed = true;
           }
         }
@@ -417,14 +415,14 @@ class VersionBuilder::Rep {
     CheckConsistency(base_vstorage_);
     CheckConsistency(vstorage);
 
-    // Apply added depend files
+    // Apply added dependence files
     for (auto f : dependence_vec_) {
       vstorage->AddFile(-1, f, info_log_);
       UnrefFile(f);
     }
     dependence_vec_.clear();
 
-    // Deep copy base depend files to deleted files
+    // Deep copy base dependence files to deleted files
     auto deleted_files = base_vstorage_->LevelFiles(-1);
     std::vector<int> read_amp;
     read_amp.resize(num_levels_);
@@ -465,7 +463,7 @@ class VersionBuilder::Rep {
         if (levels_[level].deleted_files.count(f->fd.GetNumber()) > 0) {
           deleted_files.push_back(f);
         } else {
-          LoadSstDepend(f, dependence_map_);
+          LoadSstDependence(f, dependence_map_);
           vstorage->AddFile(level, f, info_log_);
           if (level == 0) {
             read_amp[level] += f->prop.read_amp;
@@ -488,10 +486,10 @@ class VersionBuilder::Rep {
         }
       }
     }
-    // Reclaim depend files form deleted files
+    // Reclaim dependence files form deleted files
     size_t depend_file_count = 0;
     while (!dependence_map_.empty()) {
-      // depend files <- mid -> deleted files
+      // dependence files <- mid -> deleted files
       size_t mid =
           std::partition(deleted_files.begin() + depend_file_count,
                          deleted_files.end(),
@@ -502,9 +500,9 @@ class VersionBuilder::Rep {
       dependence_map_.clear();
       for (; depend_file_count < mid; ++depend_file_count) {
         auto f = deleted_files[depend_file_count];
-        // got a depend file !
+        // got a dependence file !
         vstorage->AddFile(-1, f, info_log_);
-        LoadSstDepend(f, dependence_map_);
+        LoadSstDependence(f, dependence_map_);
       }
     }
     // Handle actual deleted files
