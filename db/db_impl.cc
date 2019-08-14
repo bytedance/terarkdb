@@ -99,6 +99,9 @@
 # include <sys/unistd.h>
 # include <table/terark_zip_weak_function.h>
 #endif
+//#include <terark/util/fiber_pool.hpp>
+#include <boost/fiber/all.hpp>
+#include <boost/context/pooled_fixedsize_stack.hpp>
 
 namespace rocksdb {
 const std::string kDefaultColumnFamilyName("default");
@@ -1372,9 +1375,6 @@ std::vector<Status> DBImpl::MultiGet(
   }
   mutex_.Unlock();
 
-  // Contain a list of merge operations if merge occurs.
-  MergeContext merge_context;
-
   // Note: this always resizes the values array
   size_t num_keys = keys.size();
   std::vector<Status> stat_list(num_keys);
@@ -1389,8 +1389,10 @@ std::vector<Status> DBImpl::MultiGet(
   // s is both in/out. When in, s could either be OK or MergeInProgress.
   // merge_operands will contain the sequence of merges in the latter case.
   size_t num_found = 0;
-  for (size_t i = 0; i < num_keys; ++i) {
-    merge_context.Clear();
+  size_t counting = num_keys;
+  auto get_one = [&](size_t i) {
+    // Contain a list of merge operations if merge occurs.
+    MergeContext merge_context;
     Status& s = stat_list[i];
     std::string* value = &(*values)[i];
 
@@ -1429,6 +1431,41 @@ std::vector<Status> DBImpl::MultiGet(
     if (s.ok()) {
       bytes_read += value->size();
       num_found++;
+    }
+    counting--;
+  };
+
+  if (read_options.use_num_fibers) {
+  #if 0
+    static thread_local terark::RunOnceFiberPool fiber_pool(16);
+    // current calling fiber's list head, can be treated as a handle
+    int myhead = -1; // must be initialized to -1
+    for (size_t i = 0; i < num_keys; ++i) {
+      fiber_pool.submit(myhead, get_one, i);
+    }
+    fiber_pool.reap(myhead);
+    assert(0 == counting);
+  #else
+    static thread_local boost::context::pooled_fixedsize_stack stack_pool;
+    size_t next_idx = 0;
+    size_t num_fibers = std::min<size_t>(num_keys, read_options.use_num_fibers);
+    for (size_t i = 0; i < num_fibers; ++i) {
+        using namespace boost::fibers;
+        fiber f(launch::dispatch, std::allocator_arg, stack_pool, [&]() {
+            while (next_idx < num_keys) {
+                get_one(next_idx++);
+            }
+        });
+        if (f.joinable()) f.detach();
+    }
+    while (counting) {
+        boost::this_fiber::yield();
+    }
+  #endif
+  }
+  else {
+    for (size_t i = 0; i < num_keys; ++i) {
+      get_one(i);
     }
   }
 

@@ -15,6 +15,7 @@
 #if defined(OS_LINUX)
 #include <linux/fs.h>
 #endif
+#include <aio.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -26,6 +27,7 @@
 #include <sys/statfs.h>
 #include <sys/syscall.h>
 #include <sys/sysmacros.h>
+#include <libaio.h> // requires libaio-dev
 #endif
 #include "env/posix_logger.h"
 #include "monitoring/iostats_context_imp.h"
@@ -34,6 +36,8 @@
 #include "util/coding.h"
 #include "util/string_util.h"
 #include "util/sync_point.h"
+
+#include <boost/fiber/all.hpp>
 
 #if defined(OS_LINUX) && !defined(F_SET_RW_HINT)
 #define F_LINUX_SPECIFIC_BASE 1024
@@ -310,12 +314,249 @@ PosixRandomAccessFile::PosixRandomAccessFile(const std::string& fname, int fd,
     : filename_(fname),
       fd_(fd),
       use_direct_io_(options.use_direct_reads),
+      use_aio_reads_(options.use_aio_reads),
       logical_sector_size_(GetLogicalBufferSize(fd_)) {
   assert(!options.use_direct_reads || !options.use_mmap_reads);
   assert(!options.use_mmap_reads || sizeof(void*) < 8);
 }
 
 PosixRandomAccessFile::~PosixRandomAccessFile() { close(fd_); }
+
+#ifdef OS_LINUX
+
+///@returns
+//  0: posix aio
+//  1: linux aio immediate mode (default)
+//  2: linux aio batch     mode
+//  3: io uring (not supported now)
+static int get_aio_method() {
+  const char* env = getenv("aio_method");
+  if (env) {
+    int val = atoi(env);
+    return val;
+  }
+  return 1; // default
+}
+static int g_aio_method = get_aio_method();
+
+static std::atomic<size_t> g_ft_num;
+
+class io_fiber_context {
+  static const int io_batch = 128;
+  static const int reap_batch = 32;
+  enum class state {
+    ready,
+    running,
+    stopping,
+    stopped,
+  };
+  volatile state       m_state;
+  size_t               ft_num;
+  size_t               idle_cnt = 0;
+  unsigned long long   counter;
+  boost::fibers::fiber io_fiber;
+  io_context_t         io_ctx;
+  volatile size_t      io_reqnum = 0;
+  struct io_event      io_events[reap_batch];
+  struct iocb*         io_reqvec[io_batch];
+
+  struct io_return {
+    intptr_t len;
+    int err;
+    bool done;
+  };
+
+  void fiber_proc() {
+    m_state = state::running;
+    if (1 == g_aio_method)
+      fiber_proc_immediate_mode();
+    else if (2 == g_aio_method)
+      fiber_proc_batch_mode();
+    else {
+      fprintf(stderr, "ERROR: bad aio_method = %d\n", g_aio_method);
+      exit(1);
+    }
+    assert(state::stopping == m_state);
+    m_state = state::stopped;
+  }
+  void fiber_proc_immediate_mode() {
+    while (state::running == m_state) {
+      io_reap();
+      boost::this_fiber::yield();
+      counter++;
+    }
+  }
+  void fiber_proc_batch_mode() {
+    for (; state::running == m_state; counter++) {
+      if (counter % 2 == 0) {
+        batch_submit();
+      } else {
+        io_reap();
+      }
+      boost::this_fiber::yield();
+    }
+  }
+  void batch_submit() {
+    if (io_reqnum) {
+      // should io_reqvec keep valid before reaped?
+      int ret = io_submit(io_ctx, io_reqnum, io_reqvec);
+      if (ret < 0) {
+        int err = -ret;
+        fprintf(stderr, "ERROR: ft_num = %zd, io_submit(nr=%zd) = %s\n", ft_num, io_reqnum, strerror(err));
+      }
+      else if (size_t(ret) == io_reqnum) {
+        //fprintf(stderr, "INFO: ft_num = %zd, io_submit(nr=%zd) = %d, graceful\n", ft_num, io_reqnum, ret);
+        io_reqnum = 0; // reset
+      }
+      else {
+        fprintf(stderr, "WARN: ft_num = %zd, io_submit(nr=%zd) = %d\n", ft_num, io_reqnum, ret);
+        assert(size_t(ret) < io_reqnum);
+        memmove(io_reqvec, io_reqvec + ret, io_reqnum - ret);
+        io_reqnum -= ret;
+      }
+      idle_cnt = 0;
+    }
+    else {
+      idle_cnt++;
+      if (idle_cnt > 128) {
+        //fprintf(stderr, "INFO: fiber_proc: ft_num = %zd, idle_cnt = %zd, counter = %llu\n", ft_num, idle_cnt, counter);
+        //std::this_thread::yield();
+        usleep(100); // 100 us
+        idle_cnt = 0;
+      }
+    }
+  }
+
+  void io_reap() {
+    for (;;) {
+      int ret = io_getevents(io_ctx, 0, reap_batch, io_events, NULL);
+      if (ret < 0) {
+        int err = -ret;
+        fprintf(stderr, "ERROR: ft_num = %zd, io_getevents(nr=%d) = %s\n", ft_num, io_batch, strerror(err));
+      }
+      else {
+        for (int i = 0; i < ret; i++) {
+          io_return* ior = (io_return*)(io_events[i].data);
+          ior->len = io_events[i].res;
+          ior->err = io_events[i].res2;
+          ior->done = true;
+        }
+        if (ret < reap_batch)
+          break;
+      }
+    }
+  }
+
+public:
+  intptr_t io_pread(int fd, void* buf, size_t len, off_t offset) {
+    io_return io_ret = {0, -1, false};
+    struct iocb io = {0};
+    io.data = &io_ret;
+    io.aio_lio_opcode = IO_CMD_PREAD;
+    io.aio_fildes = fd;
+    io.u.c.buf = buf;
+    io.u.c.nbytes = len;
+    io.u.c.offset = offset;
+    if (1 == g_aio_method) {
+      struct iocb* iop = &io;
+      int ret = io_submit(io_ctx, 1, &iop);
+      if (ret < 0) {
+        int err = -ret;
+        fprintf(stderr, "ERROR: ft_num = %zd, io_submit(nr=1) = %s\n", ft_num, strerror(err));
+        errno = err;
+        return -1;
+      }
+    }
+    else {
+        while (UNLIKELY(io_reqnum >= io_batch)) {
+          fprintf(stderr, "WARN: ft_num = %zd, io_reqnum = %zd >= io_batch = %d, yield fiber\n", ft_num, io_reqnum, io_batch);
+          boost::this_fiber::yield();
+        }
+        io_reqvec[io_reqnum++] = &io; // submit to user space queue
+        //fprintf(stderr, "INFO: ft_num = %zd, io_reqnum = %zd, yield for io fiber submit\n", ft_num, io_reqnum);
+    }
+    do {
+      boost::this_fiber::yield();
+    } while (!io_ret.done);
+
+    if (io_ret.err) {
+      errno = io_ret.err;
+    }
+    return io_ret.len;
+  }
+
+  io_fiber_context()
+    : io_fiber(std::bind(&io_fiber_context::fiber_proc, this))
+  {
+    ft_num = g_ft_num++;
+    //fprintf(stderr, "INFO: io_fiber_context::io_fiber_context(): ft_num = %zd\n", ft_num);
+    int maxevents = io_batch*2 - 1;
+    int err = io_setup(maxevents, &io_ctx);
+    if (err) {
+      perror("io_setup");
+      exit(3);
+    }
+    m_state = state::ready;
+    counter = 0;
+  }
+
+  ~io_fiber_context() {
+#if 0
+    fprintf(stderr,
+            "INFO: io_fiber_context::~io_fiber_context(): ft_num = %zd, counter = %llu ...\n",
+            ft_num, counter);
+#endif
+    m_state = state::stopping;
+    while (state::stopping == m_state) {
+#if 0
+      fprintf(stderr,
+            "INFO: io_fiber_context::~io_fiber_context(): ft_num = %zd, counter = %llu, yield ...\n",
+            ft_num, counter);
+#endif
+      boost::this_fiber::yield();
+    }
+    assert(state::stopped == m_state);
+    io_fiber.join();
+
+#if 0
+    fprintf(stderr,
+            "INFO: io_fiber_context::~io_fiber_context(): ft_num = %zd, counter = %llu, done\n",
+            ft_num, counter);
+#endif
+    int err = io_destroy(io_ctx);
+    if (err) {
+      perror("io_destroy");
+    }
+  }
+};
+#endif
+
+static ssize_t my_aio_read(int fd, void* buf, size_t len, off_t offset) {
+#ifdef OS_LINUX
+  if (1 == g_aio_method || 2 == g_aio_method) {
+    static thread_local io_fiber_context io_fiber;
+    return io_fiber.io_pread(fd, buf, len, offset);
+  }
+#endif
+  struct aiocb acb = {0};
+  acb.aio_fildes = fd;
+  acb.aio_offset = offset;
+  acb.aio_buf = buf;
+  acb.aio_nbytes = len;
+  int err = aio_read(&acb);
+  if (err) {
+    return -1;
+  }
+  do {
+    boost::this_fiber::yield();
+    err = aio_error(&acb);
+  } while (EINPROGRESS == err);
+
+  if (err) {
+    return -1;
+  }
+  return aio_return(&acb);
+}
 
 Status PosixRandomAccessFile::Read(uint64_t offset, size_t n, Slice* result,
                                    char* scratch) const {
@@ -329,7 +570,12 @@ Status PosixRandomAccessFile::Read(uint64_t offset, size_t n, Slice* result,
   size_t left = n;
   char* ptr = scratch;
   while (left > 0) {
-    r = pread(fd_, ptr, left, static_cast<off_t>(offset));
+    if (use_aio_reads_) {
+      r = my_aio_read(fd_, ptr, left, static_cast<off_t>(offset));
+    }
+    else {
+      r = pread(fd_, ptr, left, static_cast<off_t>(offset));
+    }
     if (r <= 0) {
       if (r == -1 && errno == EINTR) {
         continue;

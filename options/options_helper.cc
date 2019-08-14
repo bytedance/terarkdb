@@ -76,6 +76,7 @@ DBOptions BuildDBOptions(const ImmutableDBOptions& immutable_db_options,
   options.use_direct_reads = immutable_db_options.use_direct_reads;
   options.use_direct_io_for_flush_and_compaction =
       immutable_db_options.use_direct_io_for_flush_and_compaction;
+  options.use_aio_reads = immutable_db_options.use_aio_reads;
   options.allow_fallocate = immutable_db_options.allow_fallocate;
   options.is_fd_close_on_exec = immutable_db_options.is_fd_close_on_exec;
   options.stats_dump_period_sec = mutable_db_options.stats_dump_period_sec;
@@ -1357,6 +1358,9 @@ std::unordered_map<std::string, OptionTypeInfo>
         {"use_direct_io_for_flush_and_compaction",
          {offsetof(struct DBOptions, use_direct_io_for_flush_and_compaction),
           OptionType::kBoolean, OptionVerificationType::kNormal, false, 0}},
+        {"use_aio_reads",
+         {offsetof(struct DBOptions, use_aio_reads), OptionType::kBoolean,
+          OptionVerificationType::kNormal, false, 0}},
         {"allow_2pc",
          {offsetof(struct DBOptions, allow_2pc), OptionType::kBoolean,
           OptionVerificationType::kNormal, false, 0}},

@@ -671,6 +671,10 @@ struct DBOptions {
   // NOT SUPPORTED ANYMORE -- this options is no longer used
   bool skip_log_error_on_recovery = false;
 
+  // use_direct_reads should be set together
+  // since aio on non-direct-io is really synchronous on linux
+  bool use_aio_reads = false;
+
   // if not zero, dump rocksdb.stats to LOG every stats_dump_period_sec
   //
   // Default: 600 (10 min)
@@ -1165,6 +1169,9 @@ struct ReadOptions {
   // read performance in DBs with many range deletions.
   // Default: false
   bool ignore_range_deletions;
+
+  // now only used by MultiGet
+  int use_num_fibers;
 
   // A callback to determine whether relevant keys for this scan exist in a
   // given table based on the table's properties. The callback is passed the

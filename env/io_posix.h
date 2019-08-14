@@ -81,6 +81,7 @@ class PosixRandomAccessFile : public RandomAccessFile {
   std::string filename_;
   int fd_;
   bool use_direct_io_;
+  bool use_aio_reads_;
   size_t logical_sector_size_;
 
  public:

@@ -12,6 +12,15 @@
 #include "port/likely.h"
 #include <stdlib.h>
 
+#define MY_USE_FIBER_LOCAL_STORAGE 1
+
+#if MY_USE_FIBER_LOCAL_STORAGE
+  #include <boost/fiber/fss.hpp>
+  #define LOCAL_GET_RAW_PTR(p) (p).get()
+#else
+  #define LOCAL_GET_RAW_PTR(p) (p)
+#endif
+
 namespace rocksdb {
 
 struct Entry {
@@ -140,17 +149,23 @@ private:
   // The private mutex.  Developers should always use Mutex() instead of
   // using this variable directly.
   port::Mutex mutex_;
+#if MY_USE_FIBER_LOCAL_STORAGE
+  static boost::fibers::fiber_specific_ptr<ThreadData> tls_;
+#else
 #ifdef ROCKSDB_SUPPORT_THREAD_LOCAL
   // Thread local storage
   static __thread ThreadData* tls_;
 #endif
-
+#endif
   // Used to make thread exit trigger possible if !defined(OS_MACOSX).
   // Otherwise, used to retrieve thread data.
   pthread_key_t pthread_key_;
 };
 
 
+#if MY_USE_FIBER_LOCAL_STORAGE
+  boost::fibers::fiber_specific_ptr<ThreadData> ThreadLocalPtr::StaticMeta::tls_;
+#else
 #ifdef ROCKSDB_SUPPORT_THREAD_LOCAL
 __thread ThreadData* ThreadLocalPtr::StaticMeta::tls_ = nullptr;
 #endif
@@ -243,6 +258,8 @@ BOOL WINAPI DllMain(HINSTANCE h, DWORD dwReason, PVOID pv) {
 
 #endif  // OS_WIN
 
+#endif // MY_USE_FIBER_LOCAL_STORAGE
+
 void ThreadLocalPtr::InitSingletons() { ThreadLocalPtr::Instance(); }
 
 ThreadLocalPtr::StaticMeta* ThreadLocalPtr::Instance() {
@@ -309,6 +326,7 @@ ThreadLocalPtr::StaticMeta::StaticMeta()
   : next_instance_id_(0),
     head_(this),
     pthread_key_(0) {
+#if !MY_USE_FIBER_LOCAL_STORAGE
   if (pthread_key_create(&pthread_key_, &OnThreadExit) != 0) {
     abort();
   }
@@ -338,14 +356,17 @@ ThreadLocalPtr::StaticMeta::StaticMeta()
     }
   } a;
 #endif  // !defined(OS_WIN)
+#endif
 
   head_.next = &head_;
   head_.prev = &head_;
 
+#if !MY_USE_FIBER_LOCAL_STORAGE
 #ifdef OS_WIN
   // Share with Windows its cleanup routine and the key
   wintlscleanup::thread_local_inclass_routine = OnThreadExit;
   wintlscleanup::thread_local_key = pthread_key_;
+#endif
 #endif
 }
 
@@ -366,6 +387,13 @@ void ThreadLocalPtr::StaticMeta::RemoveThreadData(
 }
 
 ThreadData* ThreadLocalPtr::StaticMeta::GetThreadLocal() {
+#if MY_USE_FIBER_LOCAL_STORAGE
+  if (UNLIKELY(tls_.get() == nullptr)) {
+    auto* inst = Instance();
+    tls_.reset(new ThreadData(inst));
+  }
+  return tls_.get();
+#else
 #ifndef ROCKSDB_SUPPORT_THREAD_LOCAL
   // Make this local variable name look like a member variable so that we
   // can share all the code below
@@ -394,6 +422,7 @@ ThreadData* ThreadLocalPtr::StaticMeta::GetThreadLocal() {
     }
   }
   return tls_;
+#endif
 }
 
 void* ThreadLocalPtr::StaticMeta::Get(uint32_t id) const {

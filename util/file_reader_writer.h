@@ -86,9 +86,9 @@ class RandomAccessFileReader {
   Env*            env_;
   Statistics*     stats_;
   uint32_t        hist_type_;
+  bool            for_compaction_;
   HistogramImpl*  file_read_hist_;
   RateLimiter* rate_limiter_;
-  bool for_compaction_;
   std::vector<std::shared_ptr<EventListener>> listeners_;
 
  public:
@@ -103,9 +103,9 @@ class RandomAccessFileReader {
         env_(env),
         stats_(stats),
         hist_type_(hist_type),
+        for_compaction_(for_compaction),
         file_read_hist_(file_read_hist),
         rate_limiter_(rate_limiter),
-        for_compaction_(for_compaction),
         listeners_() {
 #ifndef ROCKSDB_LITE
     std::for_each(listeners.begin(), listeners.end(),
