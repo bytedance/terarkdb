@@ -346,6 +346,9 @@ DEFINE_bool(use_direct_io_for_flush_and_compaction,
             rocksdb::Options().use_direct_io_for_flush_and_compaction,
             "Use O_DIRECT for writing data");
 
+DEFINE_bool(use_aio_reads, rocksdb::Options().use_aio_reads,
+            "Use aio for reading data");
+
 // Database statistics
 static std::shared_ptr<rocksdb::Statistics> dbstats;
 DEFINE_bool(statistics, false, "Create database statistics");
@@ -2425,6 +2428,7 @@ class StressTest {
       options_.use_direct_reads = FLAGS_use_direct_reads;
       options_.use_direct_io_for_flush_and_compaction =
           FLAGS_use_direct_io_for_flush_and_compaction;
+      options_.use_aio_reads = FLAGS_use_aio_reads;
       options_.target_file_size_base = FLAGS_target_file_size_base;
       options_.target_file_size_multiplier = FLAGS_target_file_size_multiplier;
       options_.max_bytes_for_level_base = FLAGS_max_bytes_for_level_base;

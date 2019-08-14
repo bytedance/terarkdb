@@ -969,6 +969,9 @@ DEFINE_bool(use_direct_io_for_flush_and_compaction,
             rocksdb::Options().use_direct_io_for_flush_and_compaction,
             "Use O_DIRECT for background flush and compaction writes");
 
+DEFINE_bool(use_aio_reads, rocksdb::Options().use_aio_reads,
+            "Use aio_read+fiber for reading data");
+
 DEFINE_bool(advise_random_on_open, rocksdb::Options().advise_random_on_open,
             "Advise random access on table file open");
 
@@ -3172,6 +3175,7 @@ void VerifyDBFromDB(std::string& truth_db_name) {
     options.use_direct_reads = FLAGS_use_direct_reads;
     options.use_direct_io_for_flush_and_compaction =
         FLAGS_use_direct_io_for_flush_and_compaction;
+    options.use_aio_reads = FLAGS_use_aio_reads;
 #ifndef ROCKSDB_LITE
     options.compaction_options_fifo = CompactionOptionsFIFO(
         FLAGS_fifo_compaction_max_table_files_size_mb * 1024 * 1024,

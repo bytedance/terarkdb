@@ -82,6 +82,8 @@ struct EnvOptions {
   // If true, set the FD_CLOEXEC on open fd.
   bool set_fd_cloexec = true;
 
+  bool use_aio_reads = false;
+
   // Allows OS to incrementally sync files to disk while they are being
   // written, in the background. Issue one request for every bytes_per_sync
   // written. 0 turns it off.

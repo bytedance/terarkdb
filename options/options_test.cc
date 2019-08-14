@@ -124,6 +124,7 @@ TEST_F(OptionsTest, GetOptionsFromMapTest) {
       {"allow_mmap_writes", "false"},
       {"use_direct_reads", "false"},
       {"use_direct_io_for_flush_and_compaction", "false"},
+      {"use_aio_reads", "false"},
       {"is_fd_close_on_exec", "true"},
       {"skip_log_error_on_recovery", "false"},
       {"stats_dump_period_sec", "46"},
