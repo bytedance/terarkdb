@@ -1448,15 +1448,14 @@ std::vector<Status> DBImpl::MultiGet(
   #else
     static thread_local boost::context::pooled_fixedsize_stack stack_pool;
     size_t next_idx = 0;
-    size_t num_fibers = std::min<size_t>(num_keys, read_options.use_num_fibers);
+    size_t num_fibers = std::min<size_t>(num_keys,read_options.use_num_fibers);
     for (size_t i = 0; i < num_fibers; ++i) {
         using namespace boost::fibers;
-        fiber f(launch::dispatch, std::allocator_arg, stack_pool, [&]() {
+        fiber(launch::dispatch,std::allocator_arg,stack_pool,[&,num_keys](){
             while (next_idx < num_keys) {
                 get_one(next_idx++);
             }
-        });
-        if (f.joinable()) f.detach();
+        }).detach();
     }
     while (counting) {
         boost::this_fiber::yield();

@@ -27,7 +27,7 @@
 #include <sys/statfs.h>
 #include <sys/syscall.h>
 #include <sys/sysmacros.h>
-#include <libaio.h> // requires libaio-dev
+#include "libaio_fix.h"
 #endif
 #include "env/posix_logger.h"
 #include "monitoring/iostats_context_imp.h"
