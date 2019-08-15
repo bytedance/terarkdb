@@ -8,7 +8,8 @@ else
 fi
 WITH_BMI2=1
 
-#sudo apt-get install libaio-dev
+cat /etc/apt/sources.list /etc/apt/sources.list.d/*
+sudo apt-get install libaio-dev
 
 # clone terark-zip-rocksdb: terark-rocksdb depends on some header files from zip-rocksdb
 
