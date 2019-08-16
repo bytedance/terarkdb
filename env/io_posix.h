@@ -155,6 +155,7 @@ class PosixWritableFile : public WritableFile {
 class PosixMmapReadableFile : public RandomAccessFile {
  private:
   int fd_;
+  bool use_aio_reads_;
   std::string filename_;
   void* mmapped_region_;
   size_t length_;
