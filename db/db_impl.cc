@@ -1435,7 +1435,7 @@ std::vector<Status> DBImpl::MultiGet(
     counting--;
   };
 
-  if (read_options.use_num_fibers) {
+  if (read_options.use_num_fibers && immutable_db_options_.use_aio_reads) {
   #if 0
     static thread_local terark::RunOnceFiberPool fiber_pool(16);
     // current calling fiber's list head, can be treated as a handle
