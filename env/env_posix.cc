@@ -58,6 +58,8 @@
 #include "util/thread_local.h"
 #include "util/threadpool_imp.h"
 
+#include <boost/fiber/operations.hpp>
+
 #if !defined(TMPFS_MAGIC)
 #define TMPFS_MAGIC 0x01021994
 #endif
@@ -843,7 +845,10 @@ class PosixEnv : public Env {
 #endif
   }
 
-  virtual void SleepForMicroseconds(int micros) override { usleep(micros); }
+  virtual void SleepForMicroseconds(int micros) override {
+      boost::this_fiber::sleep_for(std::chrono::microseconds(micros));
+      //usleep(micros);
+  }
 
   virtual Status GetHostName(char* name, uint64_t len) override {
     int ret = gethostname(name, static_cast<size_t>(len));
