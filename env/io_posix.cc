@@ -691,10 +691,8 @@ PosixMmapReadableFile::PosixMmapReadableFile(const int fd,
                                              void* base, size_t length,
                                              const EnvOptions& options)
     : fd_(fd), filename_(fname), mmapped_region_(base), length_(length) {
-#ifdef NDEBUG
-  (void)options;
-#endif
   fd_ = fd_ + 0;  // suppress the warning for used variables
+  use_aio_reads_ = options.use_aio_reads;
   assert(options.use_mmap_reads);
   assert(!options.use_direct_reads);
 }
@@ -723,14 +721,22 @@ Status PosixMmapReadableFile::Read(uint64_t offset, size_t n, Slice* result,
   return s;
 }
 
+// Now FsRead is only used by TerarkDB
 Status PosixMmapReadableFile::FsRead(uint64_t offset, size_t len, void* buf)
 const {
     Status s;
-    ssize_t nRead = ::pread(fd_, buf, len, offset);
+    ssize_t nRead;
+    if (use_aio_reads_) {
+        assert(size_t(buf) % 4096 == 0);
+        nRead = my_aio_read(fd_, buf, len, offset);
+    } else {
+        nRead = ::pread(fd_, buf, len, offset);
+    }
     if (nRead != ssize_t(len)) {
         s = IOError("PosixMmapReadableFile::FsRead(): pread(offset = "
                     + ToString(offset)
                     + ", len = " + ToString(len)
+                    + ", aio = " + ToString(use_aio_reads_)
                     + ") = " + ToString(nRead),
                 filename_, errno);
     }
