@@ -64,6 +64,13 @@ class LevelFileContainer;
 class Version;
 class VersionStorageInfo;
 
+enum CompactionType {
+  kKeyValueCompaction = 0,
+  kMapCompaction = 1,
+  kLinkCompaction = 2,
+  kGarbageCollection = 3,
+};
+
 struct CompactionParams {
   VersionStorageInfo* input_version;
   const ImmutableCFOptions& immutable_cf_options;
@@ -81,7 +88,7 @@ struct CompactionParams {
   double score = -1;
   bool deletion_compaction = false;
   bool partial_compaction = false;
-  bool map_compaction = false;
+  CompactionType compaction_type = kKeyValueCompaction;
   std::vector<RangeStorage> input_range = {};
   CompactionReason compaction_reason = CompactionReason::kUnknown;
 
@@ -256,8 +263,8 @@ class Compaction {
   // If true, then enable partial compaction
   bool partial_compaction() const { return partial_compaction_; }
 
-  // Compaction purpose
-  bool map_compaction() const { return map_compaction_; }
+  // CompactionType
+  CompactionType compaction_type() const { return compaction_type_; }
 
   // Range limit for inputs
   const std::vector<RangeStorage>& input_range() const {
@@ -440,7 +447,7 @@ class Compaction {
   const bool partial_compaction_;
 
   // If true, then output map sst
-  const bool map_compaction_;
+  const CompactionType compaction_type_;
 
   // Range limit for inputs
   const std::vector<RangeStorage> input_range_;
@@ -489,5 +496,7 @@ class Compaction {
 
 // Utility function
 extern uint64_t TotalFileSize(const std::vector<FileMetaData*>& files);
+
+extern const char* CompactionTypeName(CompactionType type);
 
 }  // namespace rocksdb

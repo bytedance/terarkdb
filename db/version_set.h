@@ -103,6 +103,8 @@ class VersionStorageInfo {
 
   void AddFile(int level, FileMetaData* f, Logger* info_log = nullptr);
 
+  void ShrinkDependenceMap(const std::unordered_map<uint64_t, size_t>& target);
+
   void SetFinalized();
 
   // Update num_non_empty_levels_.
@@ -602,6 +604,9 @@ class Version : public SeparateHelper, private LazySliceController {
            bool* value_found = nullptr, bool* key_exists = nullptr,
            SequenceNumber* seq = nullptr, ReadCallback* callback = nullptr);
 
+  void GetKey(const Slice& user_key, const Slice& ikey, Status* status,
+              ValueType* type, SequenceNumber* seq);
+
   // Loads some stats information from files. Call without mutex held. It needs
   // to be called before applying the version to the version set.
   void PrepareApply(const MutableCFOptions& mutable_cf_options,
@@ -737,6 +742,8 @@ class Version : public SeparateHelper, private LazySliceController {
                     LazySliceRep* /*rep*/) const override {}
 
   Status inplace_decode(LazySlice* slice, LazySliceRep* rep) const override;
+
+  void TransToSeparate(LazySlice& value) const override;
 
   void TransToCombined(const Slice& user_key, uint64_t sequence,
                        LazySlice& value) const override;

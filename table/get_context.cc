@@ -175,9 +175,12 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
     }
     switch (type) {
       case kTypeValueIndex:
-        assert(separate_helper_ != nullptr);
+        if (separate_helper_ == nullptr) {
+          return false;
+        }
         separate_helper_->TransToCombined(user_key_, parsed_key.sequence,
                                           value);
+        // TODO modify for GC
         FALLTHROUGH_INTENDED;
       case kTypeValue:
         assert(state_ == kNotFound || state_ == kMerge);
@@ -185,7 +188,9 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
           assert(kNotFound == state_);
           assert(lazy_val_ != nullptr);
           state_ = kFound;
-          *lazy_val_ = std::move(value);
+          if (lazy_val_ != nullptr) {
+            *lazy_val_ = std::move(value);
+          }
           return false;
         }
         if (kNotFound == state_) {
@@ -233,9 +238,12 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
         return false;
 
       case kTypeMergeIndex:
-        assert(separate_helper_ != nullptr);
+        if (separate_helper_ == nullptr) {
+          return false;
+        }
         separate_helper_->TransToCombined(user_key_, parsed_key.sequence,
                                           value);
+        // TODO modify for GC
         FALLTHROUGH_INTENDED;
       case kTypeMerge:
         assert(state_ == kNotFound || state_ == kMerge);
@@ -243,7 +251,9 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
           assert(kNotFound == state_);
           assert(lazy_val_ != nullptr);
           state_ = kMerge;
-          *lazy_val_ = std::move(value);
+          if (lazy_val_ != nullptr) {
+            *lazy_val_ = std::move(value);
+          }
           return false;
         }
         state_ = kMerge;

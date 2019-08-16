@@ -355,7 +355,6 @@ Compaction* CompactionPicker::CompactFiles(
       GetCompressionOptions(ioptions_, vstorage, output_level);
   params.max_subcompactions = compact_options.max_subcompactions;
   params.manual_compaction = true;
-  params.map_compaction = compact_options.map_compaction;
 
   auto c = new Compaction(std::move(params));
   RegisterCompaction(c);

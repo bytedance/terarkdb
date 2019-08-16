@@ -68,6 +68,16 @@ uint64_t TotalFileSize(const std::vector<FileMetaData*>& files) {
   return sum;
 }
 
+const char* CompactionTypeName(CompactionType type) {
+  switch (type) {
+    case kKeyValueCompaction: return "Compaction";
+    case kMapCompaction: return "Map Compaction";
+    case kLinkCompaction: return "Link Compaction";
+    case kGarbageCollection: return "Garbage Collection";
+    default: return "Unknow Compaction";
+  }
+}
+
 void Compaction::SetInputVersion(Version* _input_version) {
   input_version_ = _input_version;
   cfd_ = input_version_->cfd();
@@ -224,7 +234,7 @@ Compaction::Compaction(CompactionParams&& params)
       output_compression_opts_(params.compression_opts),
       deletion_compaction_(params.deletion_compaction),
       partial_compaction_(params.partial_compaction),
-      map_compaction_(params.map_compaction),
+      compaction_type_(params.compaction_type),
       input_range_(std::move(params.input_range)),
       inputs_(PopulateWithAtomicBoundaries(params.input_version,
                                            std::move(params.inputs))),

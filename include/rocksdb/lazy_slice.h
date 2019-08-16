@@ -101,6 +101,11 @@ class LazySlice {
   explicit LazySlice(const Slice& _value, bool _copy = false,
                      uint64_t _file_number = uint64_t(-1));
 
+  // init with Status
+  explicit LazySlice(const Status& status) {
+    if (!status.ok()) { assign_error(status.ToString()); };
+  }
+
   // init with outer buffer, DO NOT take life cycle of buffer
   explicit LazySlice(std::string* _buffer) noexcept;
 
@@ -227,6 +232,11 @@ class LazySlice {
 
   // move assign slice with file number
   void reset(LazySlice&& _slice, uint64_t _file_number);
+
+  // reset with Status
+  void reset(const Status& status) {
+    status.ok() ? clear() : assign_error(status.ToString());
+  }
 
   // reset outer buffer, DO NOT take life cycle of buffer
   void reset(std::string* _buffer);

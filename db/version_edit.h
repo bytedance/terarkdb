@@ -122,6 +122,7 @@ struct FileMetaData {
 
   bool marked_for_compaction;  // True if client asked us nicely to compact this
                                // file.
+  bool is_skip_gc;             // True if the SST in LSM
 
   TablePropertyCache prop;     // Cache some TableProperty fields into manifest
 
@@ -136,7 +137,8 @@ struct FileMetaData {
         refs(0),
         being_compacted(false),
         init_stats_from_file(false),
-        marked_for_compaction(false) {}
+        marked_for_compaction(false),
+        is_skip_gc(false) {}
 
   // REQUIRED: Keys must be given to the function in sorted order (it expects
   // the last key to be the largest).

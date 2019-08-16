@@ -120,9 +120,58 @@ class CombinedInternalIterator : public InternalIterator {
   void SeekToFirst() { iter_->SeekToFirst(); }
   void SeekToLast() { iter_->SeekToLast(); }
 
+  const SeparateHelper* separate_helper() const { return separate_helper_; }
+
   InternalIterator* iter_;
   const SeparateHelper* separate_helper_;
 };
 
+class LazyInternalIteratorWrapper : public InternalIterator {
+ public:
+  LazyInternalIteratorWrapper(
+      InternalIterator*(*new_iter_callback)(void*), void* arg,
+      const std::atomic<bool>* shutting_down = nullptr)
+  : new_iter_callback_(new_iter_callback),
+    arg_(arg),
+    shutting_down_(shutting_down) {}
+
+  bool Valid() const { return iter_ && iter_->Valid(); }
+  Slice key() const { assert(iter_); return iter_->key(); }
+  LazySlice value() const { assert(iter_); return iter_->value(); }
+  LazySlice combined_value(const Slice& user_key) const {
+    assert(iter_);
+    return iter_->combined_value(user_key);
+  }
+  Status status() const {
+    if (!iter_) {
+      return Status::OK();
+    }
+    if (shutting_down_ != nullptr && *shutting_down_) {
+      return Status::ShutdownInProgress();
+    }
+    return iter_->status();
+  }
+  void Next() { assert(iter_); iter_->Next(); }
+  void Prev() { assert(iter_); iter_->Prev(); }
+  void Seek(const Slice& k) { Init(); iter_->Seek(k); }
+  void SeekForPrev(const Slice& k) { Init(); iter_->SeekForPrev(k); }
+  void SeekToFirst() { Init(); iter_->SeekToFirst(); }
+  void SeekToLast() { Init(); iter_->SeekToLast(); }
+
+  void Reset() {
+    iter_.reset();
+  }
+
+ private:
+  void Init() {
+    if (!iter_) {
+      iter_.reset(new_iter_callback_(arg_));
+    }
+  }
+  InternalIterator*(*new_iter_callback_)(void*);
+  void* arg_;
+  const std::atomic<bool>* shutting_down_;
+  std::unique_ptr<InternalIterator> iter_;
+};
 
 }  // namespace rocksdb

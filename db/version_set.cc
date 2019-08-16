@@ -1014,7 +1014,7 @@ void Version::AddIteratorsForLevel(const ReadOptions& read_options,
   bool should_sample = should_sample_file_read();
 
   auto* arena = merge_iter_builder->GetArena();
-  if (level == 0 || storage_info_.LevelFilesBrief(level).num_files == 1) {
+  if (level <= 0 || storage_info_.LevelFilesBrief(level).num_files == 1) {
     // Merge all level zero files together since they may overlap.
     // Or there is only one file ...
     for (size_t i = 0; i < storage_info_.LevelFilesBrief(level).num_files;
@@ -1221,6 +1221,18 @@ Status Version::inplace_decode(LazySlice* slice, LazySliceRep* rep) const {
   return Status::OK();
 }
 
+void Version::TransToSeparate(LazySlice& value) const {
+  assert(value.file_number() != uint64_t(-1));
+  auto dependence_map = storage_info_.dependence_map();
+  auto find = dependence_map.find(value.file_number());
+  if (find == dependence_map.end()) {
+    value.reset(Status::Corruption("Missing dependence files"));
+  } else {
+    uint64_t file_number = find->second->fd.GetNumber();
+    value.reset(EncodeFileNumber(file_number), true, file_number);
+  }
+}
+
 void Version::TransToCombined(const Slice& user_key, uint64_t sequence,
                               LazySlice& value) const {
   auto s = value.inplace_decode();
@@ -1345,6 +1357,51 @@ void Version::Get(const ReadOptions& read_options, const Slice& user_key,
     }
     *status = Status::NotFound(); // Use an empty error message for speed
   }
+}
+
+void Version::GetKey(const Slice& user_key, const Slice& ikey, Status* status,
+                     ValueType* type, SequenceNumber* seq) {
+  bool value_found;
+  GetContext get_context(cfd_->internal_comparator().user_comparator(), nullptr,
+                         cfd_->ioptions()->info_log, db_statistics_,
+                         GetContext::kNotFound, user_key, nullptr, &value_found,
+                         nullptr, nullptr, nullptr, env_, seq);
+  ReadOptions options;
+
+  FilePicker fp(
+      storage_info_.files_, user_key, ikey, &storage_info_.level_files_brief_,
+      storage_info_.num_non_empty_levels_, &storage_info_.file_indexer_,
+      user_comparator(), internal_comparator());
+  FdWithKeyRange* f = fp.GetNextFile();
+
+  while (f != nullptr) {
+    *status = table_cache_->Get(
+        options, *internal_comparator(), *f->file_metadata,
+        storage_info_.dependence_map(), ikey, &get_context,
+        mutable_cf_options_.prefix_extractor.get(),
+        nullptr, true, fp.GetCurrentLevel());
+    if (!status->ok()) {
+      return;
+    }
+    switch (get_context.State()) {
+      case GetContext::kNotFound:
+        break;
+      case GetContext::kMerge:
+        *type = kTypeMerge;
+        return;
+      case GetContext::kFound:
+        *type = kTypeValue;
+        return;
+      case GetContext::kDeleted:
+        *status = Status::NotFound();
+        return;
+      case GetContext::kCorrupt:
+        *status = Status::Corruption("corrupted key for ", user_key);
+        return;
+    }
+    f = fp.GetNextFile();
+  }
+  *status = Status::NotFound();
 }
 
 bool Version::IsFilterSkipped(int level, bool is_file_last_in_level) {
@@ -1854,8 +1911,26 @@ void VersionStorageInfo::AddFile(int level, FileMetaData* f, Logger* info_log) {
   level_files->push_back(f);
   if (level == -1) {
     dependence_map_.emplace(f->fd.GetNumber(), f);
-  } else if (f->prop.purpose != 0) {
-    has_space_amplification_.emplace(level);
+    for (auto file_number : f->prop.inheritance_chain) {
+      assert(dependence_map_.count(file_number) == 0);
+      dependence_map_.emplace(file_number, f);
+    }
+  } else {
+    if (f->prop.purpose != 0) {
+      has_space_amplification_.emplace(level);
+    }
+    f->is_skip_gc = true;
+  }
+}
+
+void VersionStorageInfo::ShrinkDependenceMap(
+    const std::unordered_map<uint64_t, size_t>& target) {
+  for (auto it = dependence_map_.begin(); it != dependence_map_.end(); ) {
+    if (target.count(it->first) == 0) {
+      it = dependence_map_.erase(it);
+    } else {
+      ++it;
+    }
   }
 }
 
@@ -4452,7 +4527,7 @@ InternalIterator* VersionSet::MakeInputIterator(
   size_t num = 0;
   for (size_t which = 0; which < c->num_input_levels(); which++) {
     if (c->input_levels(which)->num_files != 0) {
-      if (c->level(which) == 0 || c->input_levels(which)->num_files == 1) {
+      if (c->level(which) <= 0 || c->input_levels(which)->num_files == 1) {
         const LevelFilesBrief* flevel = c->input_levels(which);
         for (size_t i = 0; i < flevel->num_files; i++) {
           list[num++] = cfd->table_cache()->NewIterator(

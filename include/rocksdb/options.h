@@ -1271,14 +1271,11 @@ struct CompactionOptions {
   uint64_t output_file_size_limit;
   // If > 0, it will replace the option in the DBOptions for this compaction.
   uint32_t max_subcompactions;
-  // Compaction target output sst variety
-  bool map_compaction;
 
   CompactionOptions()
       : compression(kSnappyCompression),
         output_file_size_limit(std::numeric_limits<uint64_t>::max()),
-        max_subcompactions(0),
-        map_compaction(false) {}
+        max_subcompactions(0) {}
 };
 
 // For level based compaction, we can configure if we want to skip/force

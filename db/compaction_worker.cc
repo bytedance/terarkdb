@@ -144,6 +144,17 @@ class WorkerSeparateHelper : public SeparateHelper, public LazySliceController {
     return inplace_decode_callback_(inplace_decode_arg_, slice, rep);
   }
 
+  void TransToSeparate(LazySlice& value) const override {
+    assert(value.file_number() != uint64_t(-1));
+    auto find = dependence_map_->find(value.file_number());
+    if (find == dependence_map_->end()) {
+      value.reset(Status::Corruption("Missing dependence files"));
+    } else {
+      uint64_t file_number = find->second->fd.GetNumber();
+      value.reset(EncodeFileNumber(file_number), true, file_number);
+    }
+  }
+
   void TransToCombined(const Slice& user_key, uint64_t sequence,
                        LazySlice& value) const override {
     auto s = value.inplace_decode();
@@ -153,13 +164,15 @@ class WorkerSeparateHelper : public SeparateHelper, public LazySliceController {
                        user_key.size(), sequence, 0}, file_number);
   }
 
-  WorkerSeparateHelper(void* inplace_decode_arg,
+  WorkerSeparateHelper(DependenceMap* dependence_map, void* inplace_decode_arg,
                        Status (*inplace_decode_callback)(void* arg,
                                                          LazySlice* slice,
                                                          LazySliceRep* rep))
-    : inplace_decode_arg_(inplace_decode_arg),
+    : dependence_map_(dependence_map),
+      inplace_decode_arg_(inplace_decode_arg),
       inplace_decode_callback_(inplace_decode_callback) {}
 
+  DependenceMap* dependence_map_;
   void* inplace_decode_arg_;
   Status (*inplace_decode_callback_)(void* arg, LazySlice* slice,
                                      LazySliceRep* rep);
@@ -542,7 +555,8 @@ std::string RemoteCompactionWorker::Client::DoCompaction(
   };
 
   WorkerSeparateHelper separate_helper(
-      &separate_inplace_decode, c_style_callback(separate_inplace_decode));
+      &contxt_dependence_map, &separate_inplace_decode,
+      c_style_callback(separate_inplace_decode));
 
   CompactionRangeDelAggregator range_del_agg(icmp, context.existing_snapshots);
 

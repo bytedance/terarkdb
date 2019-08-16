@@ -750,7 +750,7 @@ void CompactionIterator::PrepareOutput() {
   }
   if (ikey_.type == kTypeValueIndex || ikey_.type == kTypeMergeIndex) {
     assert(value_.file_number() != uint64_t(-1));
-    SeparateHelper::TransToSeparate(value_);
+    combined_input_.separate_helper()->TransToSeparate(value_);
     delta_antiquation_collector_.sub(value_.file_number());
   } else if ((compaction_ != nullptr && !compaction_->allow_ingest_behind()) &&
              ikeyNotNeededForIncrementalSnapshot() && bottommost_level_ &&
