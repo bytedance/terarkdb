@@ -600,7 +600,7 @@ TerarkZipTableBuilder::WaitForMemory(const char* who, size_t myWorkMem) {
   sumWaitingMem += myWorkMem;
   while (shouldWait()) {
     INFO(ioptions_.info_log,
-         "TerarkZipTableBuilder::Finish():this=%012p:\n sumWaitingMem =%8.3f GB, "
+         "TerarkZipTableBuilder::Finish():this=%12p:\n sumWaitingMem =%8.3f GB, "
          "sumWorkingMem =%8.3f GB, %-10s workingMem =%8.4f GB, wait...\n"
          , this, sumWaitingMem / 1e9, sumWorkingMem / 1e9, who, myWorkMem / 1e9
     );
@@ -616,7 +616,7 @@ TerarkZipTableBuilder::WaitForMemory(const char* who, size_t myWorkMem) {
     }
   }
   INFO(ioptions_.info_log,
-       "TerarkZipTableBuilder::Finish():this=%012p:\n sumWaitingMem =%8.3f GB, sumWorkingMem =%8.3f GB, %-10s "
+       "TerarkZipTableBuilder::Finish():this=%12p:\n sumWaitingMem =%8.3f GB, sumWorkingMem =%8.3f GB, %-10s "
        "workingMem =%8.4f GB, waited %9.3f sec, Key+Value bytes =%8.3f GB\n"
        , this, sumWaitingMem / 1e9, sumWorkingMem / 1e9, who, myWorkMem / 1e9
        , g_pf.sf(myStartTime, now), (properties_.raw_key_size + properties_.raw_value_size) / 1e9
@@ -627,7 +627,7 @@ TerarkZipTableBuilder::WaitForMemory(const char* who, size_t myWorkMem) {
 }
 
 Status TerarkZipTableBuilder::EmptyTableFinish() {
-  INFO(ioptions_.info_log, "TerarkZipTableBuilder::EmptyFinish():this=%012p\n", this);
+  INFO(ioptions_.info_log, "TerarkZipTableBuilder::EmptyFinish():this=%12p\n", this);
   offset_ = 0;
   BlockHandle emptyTableBH, tombstoneBH(0, 0);
   Status s = WriteBlock(Slice("Empty"), file_, &offset_, &emptyTableBH);
@@ -705,7 +705,7 @@ Status TerarkZipTableBuilder::Finish(const TablePropertyCache* prop) try {
   {
     long long rawBytes = properties_.raw_key_size + properties_.raw_value_size;
     long long tt = g_pf.now();
-    INFO(ioptions_.info_log, "TerarkZipTableBuilder::Finish():this=%012p:\n  first pass time =%8.2f's,%8.3f'MB/sec\n"
+    INFO(ioptions_.info_log, "TerarkZipTableBuilder::Finish():this=%12p:\n  first pass time =%8.2f's,%8.3f'MB/sec\n"
         , this, g_pf.sf(t0, tt), rawBytes * 1.0 / g_pf.uf(t0, tt)
     );
   }
@@ -741,9 +741,8 @@ void TerarkZipTableBuilder::BuildIndex(KeyValueStatus& kvs, size_t entropyLen) {
       indexPtr.reset(TerarkIndex::Factory::Build(tempKeyFileReader.get(), table_options_, keyStat, nullptr));
     }
     catch (const std::exception& ex) {
-      INFO(ioptions_.info_log, "TerarkZipTableBuilder::Finish():this=%012p:\n  index build fail , error = %s\n"
-          , this, ex.what()
-      );
+      WARN_EXCEPT(ioptions_.info_log, "TerarkZipTableBuilder::Finish():this=%12p:\n  index build fail , error = %s\n",
+                  this, ex.what());
       return Status::Corruption("TerarkZipTableBuilder index build error", ex.what());
     }
     auto verify_index_impl = [&] {
@@ -814,7 +813,7 @@ void TerarkZipTableBuilder::BuildIndex(KeyValueStatus& kvs, size_t entropyLen) {
     size_t rawKeySize = kvs.status.stat.sumKeyLen;
     size_t keyCount = kvs.status.stat.keyCount;
     INFO(ioptions_.info_log,
-         "TerarkZipTableBuilder::Finish():this=%012p:\n  index pass time =%8.2f's,%8.3f'MB/sec\n"
+         "TerarkZipTableBuilder::Finish():this=%12p:\n  index pass time =%8.2f's,%8.3f'MB/sec\n"
          "    index type = %s\n"
          "    usrkeys = %zd  min-keylen = %zd  max-keylen = %zd\n"
          "    raw-key =%9.4f GB  zip-key =%9.4f GB  avg-key =%7.2f  avg-zkey =%7.2f\n"
@@ -1017,7 +1016,7 @@ void TerarkZipTableBuilder::BuildReorderMap(std::unique_ptr<TerarkIndex>& index,
   reoder = index->NeedsReorder() || isReverseBytewiseOrder_;
   char buffer[512];
   INFO(ioptions_.info_log,
-       "TerarkZipTableBuilder::Finish():this=%012p:\n    index type = %-32s, store type = %-20s\n%s"
+       "TerarkZipTableBuilder::Finish():this=%12p:\n    index type = %-32s, store type = %-20s\n%s"
        "    raw-val =%9.4f GB  zip-val =%9.4f GB  avg-val =%7.2f  avg-zval =%7.2f\n",
        this, index->Name().data(),
        store->name(), index->Info(buffer, sizeof buffer), store->num_records(),
@@ -1714,7 +1713,7 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4, long long
     size_t real_size = mmapIndexFile.size + store->mem_size() + bzvType.mem_size();
     size_t block_size, last_allocated_block;
     file_->writable_file()->GetPreallocationStatus(&block_size, &last_allocated_block);
-    INFO(ioptions_.info_log, "TerarkZipTableBuilder::Finish():this=%012p:\n old prealloc_size = %zd, real_size = %zd\n"
+    INFO(ioptions_.info_log, "TerarkZipTableBuilder::Finish():this=%12p:\n old prealloc_size = %zd, real_size = %zd\n"
         , this, block_size, real_size
     );
     file_->writable_file()->SetPreallocationBlockSize(1 * 1024 * 1024 + real_size);
@@ -1766,7 +1765,7 @@ Status TerarkZipTableBuilder::WriteSSTFile(long long t3, long long t4, long long
   }
   size_t dictBlockSize = dict.memory.empty() ? 0 : dictBlock.size();
   INFO(ioptions_.info_log,
-       "TerarkZipTableBuilder::Finish():this=%012p:\n"
+       "TerarkZipTableBuilder::Finish():this=%12p:\n"
        "  second pass time =%8.2f's,%8.3f'MB/sec, value only(%4.1f%% of KV)\n"
        "   wait indexing time = %7.2f's,\n"
        "  remap KeyValue time = %7.2f's, %8.3f'MB/sec (all stages of remap)\n"
@@ -1895,7 +1894,7 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4, long
                        + typeSize;
     size_t block_size, last_allocated_block;
     file_->writable_file()->GetPreallocationStatus(&block_size, &last_allocated_block);
-    INFO(ioptions_.info_log, "TerarkZipTableBuilder::Finish():this=%012p:\n old prealloc_size = %zd, real_size = %zd\n",
+    INFO(ioptions_.info_log, "TerarkZipTableBuilder::Finish():this=%12p:\n old prealloc_size = %zd, real_size = %zd\n",
          this, block_size, real_size
     );
     file_->writable_file()->SetPreallocationBlockSize((1ull << 20) + real_size);
@@ -1965,7 +1964,7 @@ Status TerarkZipTableBuilder::WriteSSTFileMulti(long long t3, long long t4, long
     g_sumEntryNum += properties_.num_entries;
   }
   INFO(ioptions_.info_log,
-       "TerarkZipTableBuilder::FinishMulti():this=%012p:\n"
+       "TerarkZipTableBuilder::FinishMulti():this=%12p:\n"
        "  second pass time =%8.2f's,%8.3f'MB/sec, value only(%4.1f%% of KV)\n"
        "   wait indexing time = %7.2f's,\n"
        "  remap KeyValue time = %7.2f's, %8.3f'MB/sec (all stages of remap)\n"

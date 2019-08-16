@@ -3472,7 +3472,7 @@ struct ComponentRegister {
 
 using namespace index_detail;
 
-using PrefixComponentList = ComponentRegister<>
+using PrefixComponentList_0 = ComponentRegister<>
 ::reg<NAME(IL_256      ), 1, IndexNestLoudsTriePrefix<NestLoudsTrieDAWG_IL_256            >>
 ::reg<NAME(IL_256_FL   ), 1, IndexNestLoudsTriePrefix<NestLoudsTrieDAWG_IL_256_32_FL      >>
 ::reg<NAME(M_SE_512    ), 1, IndexNestLoudsTriePrefix<NestLoudsTrieDAWG_Mixed_SE_512      >>
@@ -3498,6 +3498,17 @@ using PrefixComponentList = ComponentRegister<>
 ::reg<NAME(A_FewOne_6  ), 1, IndexAscendingUintPrefix<rank_select_fewone<6>>>
 ::reg<NAME(A_FewOne_7  ), 1, IndexAscendingUintPrefix<rank_select_fewone<7>>>
 ::reg<NAME(A_FewOne_8  ), 1, IndexAscendingUintPrefix<rank_select_fewone<8>>>
+::list;
+
+using SuffixComponentList_0 = ComponentRegister<>
+::reg<NAME(Empty  ), 0, IndexEmptySuffix                        >
+::reg<NAME(FixLen ), 0, IndexFixedStringSuffix                  >
+::reg<NAME(VarLen ), 1, IndexBlobStoreSuffix<ZipOffsetBlobStore>>
+::reg<NAME(Entropy), 1, IndexEntropySuffix                      >
+::reg<NAME(DictZip), 1, IndexBlobStoreSuffix<DictZipBlobStore  >>
+::list;
+
+using PrefixComponentList_1 = ComponentRegister<>
 ::reg<NAME(ND_IL_256_32), 0, IndexNonDescendingUintPrefix<rank_select_il_256_32>>
 ::reg<NAME(ND_SE_512_64), 0, IndexNonDescendingUintPrefix<rank_select_se_512_64>>
 ::reg<NAME(ND_FewOne_3 ), 1, IndexNonDescendingUintPrefix<rank_select_fewone<3>>>
@@ -3508,8 +3519,7 @@ using PrefixComponentList = ComponentRegister<>
 ::reg<NAME(ND_FewOne_8 ), 1, IndexNonDescendingUintPrefix<rank_select_fewone<8>>>
 ::list;
 
-using SuffixComponentList = ComponentRegister<>
-::reg<NAME(Empty  ), 0, IndexEmptySuffix                        >
+using SuffixComponentList_1 = ComponentRegister<>
 ::reg<NAME(FixLen ), 0, IndexFixedStringSuffix                  >
 ::reg<NAME(VarLen ), 1, IndexBlobStoreSuffix<ZipOffsetBlobStore>>
 ::reg<NAME(Entropy), 1, IndexEntropySuffix                      >
@@ -3567,7 +3577,8 @@ struct FactoryExpander {
   using ExpandedFactorySet = typename Iter<PrefixComponentList, ComponentList<>, FactorySet<>, ExpandSuffix>::result;
 };
 
-FactoryExpander<PrefixComponentList, SuffixComponentList>::ExpandedFactorySet g_factory_init;
+FactoryExpander<PrefixComponentList_0, SuffixComponentList_0>::ExpandedFactorySet g_factory_init_0;
+FactoryExpander<PrefixComponentList_1, SuffixComponentList_1>::ExpandedFactorySet g_factory_init_1;
 
 #if __clang__
 # pragma clang diagnostic pop
