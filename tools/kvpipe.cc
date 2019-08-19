@@ -41,7 +41,7 @@ int main(int argc, char* argv[]) {
   int nfib = 32;
   int log_level = 0;
   size_t bench_report = 0;
-  size_t cnt1 = 0;
+  size_t cnt1 = 0, cnt2 = 0;
   rocksdb::Options opt;
   opt.use_aio_reads = true;
   opt.use_direct_reads = true;
@@ -121,14 +121,16 @@ GetoptDone:
     task->status = db->Get(rdopt, task->key, &task->value);
     chomp(task->value);
   });
-  auto t0 = pf.now();
+  long long start, t0;
   pipeline | std::make_pair(0, [&,quite,bench_report](PipelineTask* ptask) {
     if (bench_report) {
       if (++cnt1 == bench_report) {
         auto t1 = pf.now();
-        fprintf(stderr, "%s(%d:%d) qps = %f M/sec\n",
-                pipeline.euTypeName(), nthr, nfib, cnt1/pf.uf(t0,t1));
+        fprintf(stderr, "%s(%d:%d) qps.recent = %f M/sec, qps.long = %f M/sec\n",
+                pipeline.euTypeName(), nthr, nfib, cnt1/pf.uf(t0,t1),
+                cnt2/pf.uf(start,t1));
         t0 = t1;
+        cnt2 += cnt1;
         cnt1 = 0;
       }
     }
@@ -144,6 +146,7 @@ GetoptDone:
     }
   });
   pipeline.compile();
+  start = t0 = pf.now();
   LineBuf line;
   while (line.getline(stdin) > 0) {
     line.chomp();
