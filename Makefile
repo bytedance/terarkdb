@@ -1240,6 +1240,7 @@ clean:
 	$(FIND) . -name "*.[oda]" -exec rm -f {} \;
 	$(FIND) . -type f -regex ".*\.\(\(gcda\)\|\(gcno\)\)" -exec rm {} \;
 	rm -rf bzip2* snappy* zlib* lz4* zstd*
+	rm -rf librocksdb*
 	cd java; $(MAKE) clean
 
 tags:
@@ -1924,7 +1925,8 @@ ifeq ($(PLATFORM), OS_OPENBSD)
         ROCKSDB_JAR = rocksdbjni-$(ROCKSDB_MAJOR).$(ROCKSDB_MINOR).$(ROCKSDB_PATCH)-openbsd$(ARCH).jar
 endif
 
-libz.a zlib-1.2.11/zlib.h:
+libz.a: zlib-1.2.11/zlib.h
+zlib-1.2.11/zlib.h:
 	-rm -rf zlib-$(ZLIB_VER)
 	cp -a downloads/zlib-$(ZLIB_VER).tar.gz .
 	#curl -O -L ${ZLIB_DOWNLOAD_BASE}/zlib-$(ZLIB_VER).tar.gz
@@ -1934,7 +1936,8 @@ libz.a zlib-1.2.11/zlib.h:
 		exit 1; \
 	fi
 	tar xvzf zlib-$(ZLIB_VER).tar.gz
-	cd zlib-$(ZLIB_VER) && CFLAGS='-fPIC ${EXTRA_CFLAGS}' LDFLAGS='${EXTRA_LDFLAGS}' ./configure --static && $(MAKE)
+	cd zlib-$(ZLIB_VER) && CFLAGS='-fPIC ${EXTRA_CFLAGS}' LDFLAGS='${EXTRA_LDFLAGS}' ./configure --static
+	cd zlib-$(ZLIB_VER) && CFLAGS='-fPIC ${EXTRA_CFLAGS}' LDFLAGS='${EXTRA_LDFLAGS}' $(MAKE)
 	cp zlib-$(ZLIB_VER)/libz.a .
 
 libbz2.a:
@@ -1948,10 +1951,11 @@ libbz2.a:
 		exit 1; \
 	fi
 	tar xvzf bzip2-$(BZIP2_VER).tar.gz
-	cd bzip2-$(BZIP2_VER) && $(MAKE) CFLAGS='-fPIC -O2 -g -D_FILE_OFFSET_BITS=64 ${EXTRA_CFLAGS}' AR='ar ${EXTRA_ARFLAGS}'
+	cd bzip2-$(BZIP2_VER) && $(MAKE) CFLAGS='-fPIC -O2 -g -D_FILE_OFFSET_BITS=64 ${EXTRA_CFLAGS}' AR='ar ${EXTRA_ARFLAGS}' LDFLAGS=
 	cp bzip2-$(BZIP2_VER)/libbz2.a .
 
-libsnappy.a snappy-1.1.4/snappy.h:
+libsnappy.a: snappy-1.1.4/snappy.h
+snappy-1.1.4/snappy.h:
 	-rm -rf snappy-$(SNAPPY_VER)
 	cp -a downloads/snappy-$(SNAPPY_VER).tar.gz .
 	#wget ${SNAPPY_DOWNLOAD_BASE}/$(SNAPPY_VER)/snappy-$(SNAPPY_VER).tar.gz
@@ -1963,10 +1967,11 @@ libsnappy.a snappy-1.1.4/snappy.h:
 	fi
 	tar xvzf snappy-$(SNAPPY_VER).tar.gz
 	cd snappy-$(SNAPPY_VER) && CFLAGS='${EXTRA_CFLAGS}' CXXFLAGS='${EXTRA_CXXFLAGS}' LDFLAGS='${EXTRA_LDFLAGS}' ./configure --with-pic --enable-static --disable-shared
-	cd snappy-$(SNAPPY_VER) && $(MAKE) ${SNAPPY_MAKE_TARGET}
+	cd snappy-$(SNAPPY_VER) && CFLAGS='${EXTRA_CFLAGS}' CXXFLAGS='${EXTRA_CXXFLAGS}' LDFLAGS='${EXTRA_LDFLAGS}' $(MAKE) ${SNAPPY_MAKE_TARGET}
 	cp snappy-$(SNAPPY_VER)/.libs/libsnappy.a .
 
-liblz4.a lz4-1.8.0/lib/lz4.h:
+liblz4.a: lz4-1.8.0/lib/lz4.h
+lz4-1.8.0/lib/lz4.h:
 	-rm -rf lz4-$(LZ4_VER)
 	cp -a downloads/lz4-$(LZ4_VER).tar.gz .
 	#wget ${LZ4_DOWNLOAD_BASE}/v$(LZ4_VER).tar.gz
@@ -1978,10 +1983,11 @@ liblz4.a lz4-1.8.0/lib/lz4.h:
 		exit 1; \
 	fi
 	tar xvzf lz4-$(LZ4_VER).tar.gz
-	cd lz4-$(LZ4_VER)/lib && $(MAKE) CFLAGS='-fPIC -O2 ${EXTRA_CFLAGS}' all
+	cd lz4-$(LZ4_VER)/lib && $(MAKE) CFLAGS='-fPIC -O2 ${EXTRA_CFLAGS}' LDFLAGS= all
 	cp lz4-$(LZ4_VER)/lib/liblz4.a .
 
-libzstd.a zstd-1.3.3/lib/include/zstd.h:
+libzstd.a: zstd-1.3.3/lib/include/zstd.h
+zstd-1.3.3/lib/include/zstd.h:
 	-rm -rf zstd-$(ZSTD_VER)
 	cp -a downloads/zstd-$(ZSTD_VER).tar.gz .
 	#wget ${ZSTD_DOWNLOAD_BASE}/v$(ZSTD_VER).tar.gz
@@ -1993,7 +1999,7 @@ libzstd.a zstd-1.3.3/lib/include/zstd.h:
 		exit 1; \
 	fi
 	tar xvzf zstd-$(ZSTD_VER).tar.gz
-	cd zstd-$(ZSTD_VER)/lib && DESTDIR=. PREFIX= $(MAKE) CFLAGS='-fPIC -O2 ${EXTRA_CFLAGS}' install
+	cd zstd-$(ZSTD_VER)/lib && DESTDIR=. PREFIX= $(MAKE) CFLAGS='-fPIC -O2 ${EXTRA_CFLAGS}' LDFLAGS= install
 	cp zstd-$(ZSTD_VER)/lib/libzstd.a .
 
 # A version of each $(LIBOBJECTS) compiled with -fPIC and a fixed set of static compression libraries
