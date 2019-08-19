@@ -1999,7 +1999,7 @@ zstd-1.3.3/lib/include/zstd.h:
 		exit 1; \
 	fi
 	tar xvzf zstd-$(ZSTD_VER).tar.gz
-	cd zstd-$(ZSTD_VER)/lib && env -i DESTDIR=. PREFIX= $(MAKE) CFLAGS='-fPIC -O2 ${EXTRA_CFLAGS}' install
+	cd zstd-$(ZSTD_VER)/lib && LDFLAGS= DESTDIR=. PREFIX= $(MAKE) CFLAGS='-fPIC -O2 ${EXTRA_CFLAGS}' install
 	cp zstd-$(ZSTD_VER)/lib/libzstd.a .
 
 # A version of each $(LIBOBJECTS) compiled with -fPIC and a fixed set of static compression libraries
