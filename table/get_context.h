@@ -37,8 +37,6 @@ struct GetContextStats {
 
 class GetContext {
  public:
-  using AddReplayLogCallback = void (*)(void* arg, ValueType type,
-                                        const LazySlice& value);
   enum GetState {
     kNotFound,
     kFound,
@@ -80,6 +78,7 @@ class GetContext {
   }
 
   bool sample() const { return sample_; }
+  bool is_index() const { return is_index_; }
 
   bool is_finished() const {
     return (state_ != kNotFound && state_ != kMerge) ||
@@ -123,6 +122,7 @@ class GetContext {
   uint64_t min_seq_type_;
   ReadCallback* callback_;
   bool sample_;
+  bool is_index_;
 };
 
 }  // namespace rocksdb

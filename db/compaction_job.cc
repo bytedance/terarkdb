@@ -628,7 +628,8 @@ void CompactionJob::GenSubcompactionBoundaries() {
 Status CompactionJob::Run() {
   ColumnFamilyData* cfd = compact_->compaction->column_family_data();
   CompactionWorker* worker = cfd->ioptions()->compaction_worker;
-  if (worker == nullptr) {
+  if (worker == nullptr ||
+      compact_->compaction->compaction_type() != kKeyValueCompaction) {
     return RunSelf();
   }
   Compaction* c = compact_->compaction;
@@ -1514,6 +1515,7 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
   Status status = OpenCompactionOutputFile(sub_compact);
   sub_compact->builder->SetSecondPassIterator(&second_pass_iter);
 
+  Version* input_version = sub_compact->compaction->input_version();
   IterKey iter_key;
   while (status.ok() && !cfd->IsDropped() && input->Valid()) {
     Slice key = input->key();
@@ -1529,16 +1531,15 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
     Status s;
     ValueType type;
     SequenceNumber seq;
-    sub_compact->compaction->input_version()->GetKey(ikey.user_key, key, &s,
-                                                     &type, &seq);
+    input_version->GetKey(ikey.user_key, key, &s, &type, &seq);
     if (!s.ok()) {
-      if (s.IsNotFound() || seq != ikey.sequence) {
+      if (s.IsNotFound() || seq != ikey.sequence ||
+          (type != kTypeValueIndex && type != kTypeMergeIndex)) {
         continue;
       }
       status = std::move(s);
       break;
     }
-    assert(type == kTypeValueIndex || type == kTypeMergeIndex);
 
     assert(sub_compact->builder != nullptr);
     assert(sub_compact->current_output() != nullptr);
@@ -1559,12 +1560,15 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
     status = input->status();
   }
   std::vector<uint64_t> inheritance_chain;
+  auto& dependence_map = input_version->storage_info()->dependence_map();
   for (auto& level : *sub_compact->compaction->inputs()) {
     for (auto f : level.files) {
       inheritance_chain.push_back(f->fd.GetNumber());
-      inheritance_chain.insert(inheritance_chain.end(),
-                               f->prop.inheritance_chain.begin(),
-                               f->prop.inheritance_chain.end());
+      for (auto file_number : f->prop.inheritance_chain) {
+        if (dependence_map.count(file_number) > 0) {
+          inheritance_chain.push_back(file_number);
+        }
+      }
     }
   }
   std::sort(inheritance_chain.begin(), inheritance_chain.end());

@@ -1193,11 +1193,8 @@ Status Version::inplace_decode(LazySlice* slice, LazySliceRep* rep) const {
   uint64_t sequence = rep->data[2];
   uint64_t file_number = slice->file_number();
   auto dependence_map = storage_info_.dependence_map();
-  auto find = dependence_map.find(file_number);
-  if (find == dependence_map.end()) {
-    return Status::Corruption("Separate value dependence missing");
-  }
-  const FileMetaData* file_metadata = find->second;
+  assert(dependence_map.count(file_number) > 0);
+  const FileMetaData* file_metadata = dependence_map.find(file_number)->second;
   bool value_found = false;
   SequenceNumber context_seq;
   GetContext get_context(cfd_->internal_comparator().user_comparator(), nullptr,
@@ -1223,23 +1220,27 @@ Status Version::inplace_decode(LazySlice* slice, LazySliceRep* rep) const {
 
 void Version::TransToSeparate(LazySlice& value) const {
   assert(value.file_number() != uint64_t(-1));
-  auto dependence_map = storage_info_.dependence_map();
-  auto find = dependence_map.find(value.file_number());
-  if (find == dependence_map.end()) {
-    value.reset(Status::Corruption("Missing dependence files"));
-  } else {
-    uint64_t file_number = find->second->fd.GetNumber();
-    value.reset(EncodeFileNumber(file_number), true, file_number);
-  }
+  uint64_t file_number = value.file_number();
+  value.reset(EncodeFileNumber(file_number), true, file_number);
 }
 
 void Version::TransToCombined(const Slice& user_key, uint64_t sequence,
                               LazySlice& value) const {
   auto s = value.inplace_decode();
-  assert(s.ok()); (void)s;
+  if (!s.ok()) {
+    value.reset(s);
+    return;
+  }
   uint64_t file_number = SeparateHelper::DecodeFileNumber(value);
-  value.reset(this, {reinterpret_cast<uint64_t>(user_key.data()),
-                     user_key.size(), sequence, 0}, file_number);
+  auto dependence_map = storage_info_.dependence_map();
+  auto find = dependence_map.find(file_number);
+  if (find == dependence_map.end()) {
+    value.reset(Status::Corruption("Separate value dependence missing"));
+  } else {
+    value.reset(this, {reinterpret_cast<uint64_t>(user_key.data()),
+                       user_key.size(), sequence, 0},
+                find->second->fd.GetNumber());
+  }
 }
 
 void Version::Get(const ReadOptions& read_options, const Slice& user_key,
@@ -1387,10 +1388,10 @@ void Version::GetKey(const Slice& user_key, const Slice& ikey, Status* status,
       case GetContext::kNotFound:
         break;
       case GetContext::kMerge:
-        *type = kTypeMerge;
+        *type = get_context.is_index() ? kTypeMergeIndex : kTypeMerge;
         return;
       case GetContext::kFound:
-        *type = kTypeValue;
+        *type = get_context.is_index() ? kTypeValueIndex : kTypeValue;
         return;
       case GetContext::kDeleted:
         *status = Status::NotFound();
@@ -1915,6 +1916,7 @@ void VersionStorageInfo::AddFile(int level, FileMetaData* f, Logger* info_log) {
       assert(dependence_map_.count(file_number) == 0);
       dependence_map_.emplace(file_number, f);
     }
+    f->is_skip_gc = f->prop.purpose != 0;
   } else {
     if (f->prop.purpose != 0) {
       has_space_amplification_.emplace(level);

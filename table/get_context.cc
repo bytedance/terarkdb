@@ -52,7 +52,8 @@ GetContext::GetContext(const Comparator* ucmp,
       env_(env),
       seq_(seq),
       min_seq_type_(0),
-      callback_(callback) {
+      callback_(callback),
+      is_index_(false) {
   if (seq_) {
     *seq_ = kMaxSequenceNumber;
   }
@@ -176,11 +177,12 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
     switch (type) {
       case kTypeValueIndex:
         if (separate_helper_ == nullptr) {
+          state_ = kFound;
+          is_index_ = true;
           return false;
         }
         separate_helper_->TransToCombined(user_key_, parsed_key.sequence,
                                           value);
-        // TODO modify for GC
         FALLTHROUGH_INTENDED;
       case kTypeValue:
         assert(state_ == kNotFound || state_ == kMerge);
@@ -239,11 +241,12 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
 
       case kTypeMergeIndex:
         if (separate_helper_ == nullptr) {
+          state_ = kMerge;
+          is_index_ = true;
           return false;
         }
         separate_helper_->TransToCombined(user_key_, parsed_key.sequence,
                                           value);
-        // TODO modify for GC
         FALLTHROUGH_INTENDED;
       case kTypeMerge:
         assert(state_ == kNotFound || state_ == kMerge);

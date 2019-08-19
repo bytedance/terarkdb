@@ -146,19 +146,17 @@ class WorkerSeparateHelper : public SeparateHelper, public LazySliceController {
 
   void TransToSeparate(LazySlice& value) const override {
     assert(value.file_number() != uint64_t(-1));
-    auto find = dependence_map_->find(value.file_number());
-    if (find == dependence_map_->end()) {
-      value.reset(Status::Corruption("Missing dependence files"));
-    } else {
-      uint64_t file_number = find->second->fd.GetNumber();
-      value.reset(EncodeFileNumber(file_number), true, file_number);
-    }
+    uint64_t file_number = value.file_number();
+    value.reset(EncodeFileNumber(file_number), true, file_number);
   }
 
   void TransToCombined(const Slice& user_key, uint64_t sequence,
                        LazySlice& value) const override {
     auto s = value.inplace_decode();
-    assert(s.ok()); (void)s;
+    if (!s.ok()) {
+      value.reset(s);
+      return;
+    }
     uint64_t file_number = SeparateHelper::DecodeFileNumber(value);
     value.reset(this, {reinterpret_cast<uint64_t>(user_key.data()),
                        user_key.size(), sequence, 0}, file_number);

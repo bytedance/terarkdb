@@ -79,7 +79,7 @@ enum CompressionType : unsigned char {
 // Sst purpose
 enum SstPurpose {
   kEssenceSst,  // Actual data storage sst
-  kBlobSst,     // Blob data storage sst
+  kLogSst,      // Log as sst
   kMapSst,      // Dummy sst
 };
 
