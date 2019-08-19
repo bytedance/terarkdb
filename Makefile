@@ -196,19 +196,18 @@ ${SRC_NEEDS_BOOST}: terark-core.got
   LIB_TERARK_ZIP_SHARED = -L${TERARK_CORE_PKG_DIR}/lib
   export LD_LIBRARY_PATH:=${TERARK_CORE_PKG_DIR}/lib:${LD_LIBRARY_PATH}
 else # not BUNDLE_TERARK_ZIP_ROCKSDB, ${TERARK_CORE_HOME} must be compiled
- ifdef TERARK_ZIP_PKG_DIR
-  # TERARK_ZIP_PKG_DIR must be fresh git terark-zip-rocksdb dir, has no any compiled output
-  # only for Linux, not support macos dynamic lib
-  CXXFLAGS += -I${TERARK_ZIP_PKG_DIR}/src
- else
+  ifneq ($(findstring shared_lib,${MAKECMDGOALS}),)
+    # shared_lib is in MAKECMDGOALS
+    ifeq ($(shell uname),Darwin)
+      $(error unsupported: shared_lib on Darwin/macos without BUNDLE_TERARK_ZIP_ROCKSDB)
+    endif
+  endif
   # TERARK_ZIP_PKG_DIR is precomipled terark-zip-rocksdb pkg
-  # TERARK_ZIP_PKG_DIR includes terark-core headers & libs
-  TERARK_ZIP_PKG_DIR := ../terark-zip-rocksdb/pkg/terark-zip-rocksdb-${BUILD_NAME}
+  TERARK_ZIP_PKG_DIR ?= ../terark-zip-rocksdb/pkg/terark-zip-rocksdb-${BUILD_NAME}
   LIB_TERARK_ZIP_STATIC =   ${TERARK_ZIP_PKG_DIR}/lib_static/libterark-zip-rocksdb-${DBG_OR_RLS}.a
   LIB_TERARK_ZIP_SHARED = -L${TERARK_ZIP_PKG_DIR}/lib         -lterark-zip-rocksdb-${DBG_OR_RLS}
   CXXFLAGS += -I${TERARK_ZIP_PKG_DIR}/include
   export LD_LIBRARY_PATH:=${TERARK_ZIP_PKG_DIR}/lib:${LD_LIBRARY_PATH}
- endif
 endif # BUNDLE_TERARK_ZIP_ROCKSDB
 
 LINK_TERARK ?= static
