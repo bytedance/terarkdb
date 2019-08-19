@@ -42,10 +42,13 @@ int main(int argc, char* argv[]) {
   int log_level = 0;
   size_t bench_report = 0;
   size_t cnt1 = 0;
+  rocksdb::Options opt;
+  opt.use_aio_reads = true;
+  opt.use_direct_reads = true;
   bool quite = false;
-  for (int opt=0; -1 != opt && '?' != opt;) {
-    opt = getopt(argc, argv, "b:c:d:l:q");
-    switch (opt) {
+  for (int gopt=0; -1 != gopt && '?' != gopt;) {
+    gopt = getopt(argc, argv, "b:c:d:l:o:q");
+    switch (gopt) {
       default:
         usage(argv[0]);
         return 1;
@@ -75,6 +78,9 @@ int main(int argc, char* argv[]) {
       case 'l':
         log_level = atoi(optarg);
         break;
+      case 'o':
+        opt.max_file_opening_threads = atoi(optarg);
+        break;
       case 'q':
         quite = true;
         break;
@@ -86,9 +92,6 @@ GetoptDone:
     return 1;
   }
   rocksdb::DB* db = nullptr;
-  rocksdb::Options opt;
-  opt.use_aio_reads = true;
-  opt.use_direct_reads = true;
   std::string path = argv[optind];
   rocksdb::Status s = rocksdb::DB::OpenForReadOnly(opt, path, &db);
   if (!s.ok()) {
