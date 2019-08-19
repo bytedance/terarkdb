@@ -128,7 +128,7 @@ GetoptDone:
         auto t1 = pf.now();
         fprintf(stderr, "%s(%d:%d) qps.recent = %f M/sec, qps.long = %f M/sec\n",
                 pipeline.euTypeName(), nthr, nfib, cnt1/pf.uf(t0,t1),
-                cnt1/pf.uf(start,t1));
+                cnt2/pf.uf(start,t1));
         t0 = t1;
         cnt2 += cnt1;
         cnt1 = 0;
