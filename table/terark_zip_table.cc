@@ -234,6 +234,10 @@ TerarkZipTableFactory::TerarkZipTableFactory(
     cache_.reset(LruReadonlyCache::create(
         tzto.cacheCapacityBytes, tzto.cacheShards));
   }
+  if (tzto.warmUpIndexOnOpen) {
+    // turn off warmUpIndexOnOpen if forceMetaInMemory
+    table_options_.warmUpIndexOnOpen = !tzto.forceMetaInMemory;
+  }
 }
 
 TerarkZipTableFactory::~TerarkZipTableFactory() {
