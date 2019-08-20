@@ -16,6 +16,14 @@ static void usage(const char* prog) {
 
   -f use_fiber for multi_get
 
+  -a use_aio(default true)
+
+  -b bench_report(default 0)
+
+  -d use_direct_io(default true)
+
+  -o max_file_opening_threads(default is 16)
+
   -q
      be quite
 
@@ -46,7 +54,7 @@ int main(int argc, char* argv[]) {
   ropt.use_num_fibers = 16;
   bool quite = false;
   for (int opt=0; -1 != opt && '?' != opt;) {
-    opt = getopt(argc, argv, "a:b:d:f:m:q");
+    opt = getopt(argc, argv, "a:b:d:f:m:o:q");
     switch (opt) {
       default:
         usage(argv[0]);
@@ -67,6 +75,9 @@ int main(int argc, char* argv[]) {
         break;
       case 'm':
         mget_num = atoi(optarg);
+        break;
+      case 'o':
+        dopt.max_file_opening_threads = atoi(optarg);
         break;
       case 'q':
         quite = true;

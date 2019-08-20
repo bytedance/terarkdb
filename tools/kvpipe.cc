@@ -8,10 +8,20 @@
 static void usage(const char* prog) {
   fprintf(stderr, R"EOS(usage: %s
 
-  -d queue_depth
+  -a use_aio(default true)
+
+  -b bench_report(default 0)
+
+  -d use_direct_io(default true)
+
+  -p pipeline_queue_size(default 32)
 
   -c concurrency
-     format is thread_num:fiber_num
+     format is thread_num:fiber_num, default is 1:32
+
+  -l log_level(default 3)
+
+  -o max_file_opening_threads(default is 16)
 
 )EOS"
 , prog);
@@ -36,7 +46,7 @@ inline void chomp(std::string& s) {
 }
 
 int main(int argc, char* argv[]) {
-  int queue_depth = 32;
+  int queue_size = 32;
   int nthr = 1;
   int nfib = 32;
   int log_level = 0;
@@ -47,13 +57,16 @@ int main(int argc, char* argv[]) {
   opt.use_direct_reads = true;
   bool quite = false;
   for (int gopt=0; -1 != gopt && '?' != gopt;) {
-    gopt = getopt(argc, argv, "b:c:d:l:o:q");
+    gopt = getopt(argc, argv, "a:b:c:p:D:l:o:q");
     switch (gopt) {
       default:
         usage(argv[0]);
         return 1;
       case -1:
         goto GetoptDone;
+      case 'a':
+        opt.use_aio_reads = atoi(optarg) != 0;
+        break;
       case 'b':
         bench_report = atoi(optarg);
         break;
@@ -73,7 +86,10 @@ int main(int argc, char* argv[]) {
         }
         break;
       case 'd':
-        queue_depth = atoi(optarg);
+        opt.use_direct_reads = atoi(optarg) != 0;
+        break;
+      case 'p':
+        queue_size = atoi(optarg);
         break;
       case 'l':
         log_level = atoi(optarg);
@@ -113,7 +129,7 @@ GetoptDone:
   int ncon = EUT::fiber == euType ? nfib : nthr;
 
   pipeline.setEUType(euType);
-  pipeline.setQueueSize(queue_depth);
+  pipeline.setQueueSize(queue_size);
   pipeline.setLogLevel(log_level);
   pipeline | std::make_tuple(ncon, nfib, [db](PipelineTask* ptask) {
     KVTask* task = static_cast<KVTask*>(ptask);
