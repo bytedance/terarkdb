@@ -259,7 +259,7 @@ endif
 
 ifeq ($(shell uname),Linux)
   #LINUX_LIBAIO := -laio
-  LDFLAGS += -laio
+  LDFLAGS += -laio -lrt
 endif
 
 
