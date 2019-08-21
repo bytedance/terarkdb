@@ -1035,7 +1035,7 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   if (props->comparator_name != fstring(ioptions.user_comparator->Name()) && 0) {
     return Status::InvalidArgument("TerarkZipTableReader::Open()",
                                    "Invalid user_comparator , need " + props->comparator_name
-                                   + ", but provid " + ioptions.user_comparator->Name());
+                                   + ", but provide " + ioptions.user_comparator->Name());
   }
   file_data_ = file_data;
   global_seqno_ = GetGlobalSequenceNumber(*props, ioptions.info_log);
