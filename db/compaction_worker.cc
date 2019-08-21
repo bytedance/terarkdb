@@ -153,13 +153,13 @@ class WorkerSeparateHelper : public SeparateHelper, public LazySliceController {
   void TransToCombined(const Slice& user_key, uint64_t sequence,
                        LazySlice& value) const override {
     auto s = value.inplace_decode();
-    if (!s.ok()) {
+    if (s.ok()) {
+      uint64_t file_number = SeparateHelper::DecodeFileNumber(value);
+      value.reset(this, {reinterpret_cast<uint64_t>(user_key.data()),
+                         user_key.size(), sequence, 0}, file_number);
+    } else {
       value.reset(s);
-      return;
     }
-    uint64_t file_number = SeparateHelper::DecodeFileNumber(value);
-    value.reset(this, {reinterpret_cast<uint64_t>(user_key.data()),
-                       user_key.size(), sequence, 0}, file_number);
   }
 
   WorkerSeparateHelper(DependenceMap* dependence_map, void* inplace_decode_arg,

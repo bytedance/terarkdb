@@ -198,6 +198,9 @@ bool UniversalCompactionPicker::NeedsCompaction(
   if (vstorage->has_space_amplification()) {
     return true;
   }
+  if (!vstorage->LevelFiles(-1).empty()) {
+    return true;
+  }
   return false;
 }
 
@@ -1706,91 +1709,6 @@ Compaction* UniversalCompactionPicker::PickCompositeCompaction(
     return new_compaction();
   }
   return nullptr;
-}
-
-Compaction* UniversalCompactionPicker::PickGarbageCollection(
-    const std::string& cf_name, const MutableCFOptions& mutable_cf_options,
-    VersionStorageInfo* vstorage, LogBuffer* log_buffer) {
-  struct FileInfo {
-    FileMetaData* f;
-    uint64_t num_entries;
-    double gc_ratio;
-    uint64_t estimated_size;
-  };
-  std::vector<FileInfo> blob_vec;
-  for (auto f : vstorage->LevelFiles(-1)) {
-    if (f->is_skip_gc) {
-      continue;
-    }
-    FileInfo info = {f};
-    if (!f->init_stats_from_file) {
-      std::shared_ptr<const TableProperties> tp;
-      auto s = table_cache_->GetTableProperties(
-          env_options_, *icmp_, f->fd, &tp,
-          mutable_cf_options.prefix_extractor.get(), false);
-      if (!s.ok()) {
-        ROCKS_LOG_BUFFER(
-            log_buffer,
-            "[%s] UniversalCompactionPicker::PickGarbageCollection "
-            "GetTableProperties fail\n", cf_name.c_str(), s.ToString().c_str());
-        continue;
-      }
-      info.num_entries = tp->num_entries;
-    } else {
-      info.num_entries = f->num_entries;
-    }
-    info.gc_ratio = 1.0 * f->num_antiquation / f->num_entries;
-    if (info.gc_ratio < mutable_cf_options.blob_gc_ratio) {
-      continue;
-    }
-    info.estimated_size =
-        static_cast<uint64_t>(f->fd.file_size *
-                              std::max<double>(0, 1 - info.gc_ratio));
-    blob_vec.push_back(info);
-  }
-  if (blob_vec.empty()) {
-    return nullptr;
-  }
-  std::sort(blob_vec.begin(), blob_vec.end(), [](const FileInfo& l,
-                                                 const FileInfo& r) {
-    return l.gc_ratio > r.gc_ratio;
-  });
-  size_t max_file_size_for_leval =
-      size_t(MaxFileSizeForLevel(mutable_cf_options, 1,
-                                 kCompactionStyleUniversal) * 1.1);
-  CompactionInputFiles inputs;
-  inputs.level = -1;
-  size_t estimated_total_size = blob_vec.front().estimated_size;
-  inputs.files.push_back(blob_vec.front().f);
-  for (auto it = blob_vec.rbegin(), end = std::prev(blob_vec.rend()); it != end;
-       ++it) {
-    auto& info = *it;
-    if (estimated_total_size + info.estimated_size > max_file_size_for_leval) {
-      continue;
-    }
-    estimated_total_size += info.estimated_size;
-    inputs.files.push_back(info.f);
-  }
-
-  uint32_t path_id =
-      GetPathId(ioptions_, mutable_cf_options, estimated_total_size);
-
-  CompactionParams params(vstorage, ioptions_, mutable_cf_options);
-  params.inputs = {std::move(inputs)};
-  params.output_level = -1;
-  params.max_compaction_bytes = LLONG_MAX;
-  params.output_path_id = path_id;
-  params.compression = GetCompressionType(
-      ioptions_, vstorage, mutable_cf_options, inputs.level, 1, true);
-  params.compression_opts =
-      GetCompressionOptions(ioptions_, vstorage, inputs.level, true);
-  params.max_subcompactions = 1;
-  params.score = 0;
-  params.partial_compaction = true;
-  params.compaction_type = kGarbageCollection;
-  params.compaction_reason = CompactionReason::kCompositeAmplification;
-
-  return new Compaction(std::move(params));
 }
 
 Compaction* UniversalCompactionPicker::PickRangeCompaction(

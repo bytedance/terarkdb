@@ -105,6 +105,8 @@ const char* GetCompactionReasonString(CompactionReason compaction_reason) {
       return "CompositeAmplification";
     case CompactionReason::kTrivialMoveLevel:
       return "TrivialMoveLevel";
+    case CompactionReason::kGarbageCollection:
+      return "GarbageCollection";
     case CompactionReason::kNumOfReasons:
       // fall through
     default:
@@ -888,14 +890,14 @@ Status CompactionJob::VerifyFiles() {
       // No matter whether use_direct_io_for_flush_and_compaction is true,
       // we will regard this verification as user reads since the goal is
       // to cache it here for further user reads
+      auto output_level = compact_->compaction->output_level();
       InternalIterator* iter = cfd->table_cache()->NewIterator(
           ReadOptions(), env_options_, cfd->internal_comparator(),
           *files_meta[file_idx], empty_dependence_map,
           nullptr /* range_del_agg */, prefix_extractor, nullptr,
-          cfd->internal_stats()->GetFileReadHist(
-              compact_->compaction->output_level()),
-          false, nullptr /* arena */, false /* skip_filters */,
-          compact_->compaction->output_level());
+          output_level == -1
+              ? nullptr : cfd->internal_stats()->GetFileReadHist(output_level),
+          false, nullptr /* arena */, false /* skip_filters */, output_level);
       auto s = iter->status();
 
       if (s.ok() && paranoid_file_checks_) {
@@ -935,8 +937,10 @@ Status CompactionJob::Install(const MutableCFOptions& mutable_cf_options) {
   db_mutex_->AssertHeld();
   Status status = compact_->status;
   ColumnFamilyData* cfd = compact_->compaction->column_family_data();
-  cfd->internal_stats()->AddCompactionStats(
-      compact_->compaction->output_level(), compaction_stats_);
+  if (compact_->compaction->output_level() != -1) {
+    cfd->internal_stats()->AddCompactionStats(
+        compact_->compaction->output_level(), compaction_stats_);
+  }
 
   if (status.ok()) {
     status = InstallCompactionResults(mutable_cf_options);
@@ -1103,7 +1107,7 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
     const size_t kMaxSamples = kSampleBytes >> kSampleLenShift;
     const size_t kOutFileLen =
         static_cast<size_t>(MaxFileSizeForLevel(*mutable_cf_options,
-            compact_->compaction->output_level(),
+            std::max(compact_->compaction->output_level(), 0),
             cfd->ioptions()->compaction_style,
             compact_->compaction->GetInputBaseLevel(),
             cfd->ioptions()->level_compaction_dynamic_level_bytes));
@@ -1525,22 +1529,26 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
       break;
     }
     if (ikey.type != kTypeValue && ikey.type != kTypeMerge) {
+      input->Next();
       continue;
     }
     iter_key.SetInternalKey(ikey.user_key, ikey.sequence, kValueTypeForSeek);
     Status s;
-    ValueType type;
-    SequenceNumber seq;
-    input_version->GetKey(ikey.user_key, key, &s, &type, &seq);
-    if (!s.ok()) {
-      if (s.IsNotFound() || seq != ikey.sequence ||
-          (type != kTypeValueIndex && type != kTypeMergeIndex)) {
-        continue;
-      }
+    ValueType type = kTypeDeletion;
+    SequenceNumber seq = kMaxSequenceNumber;
+    input_version->GetKey(ikey.user_key, iter_key.GetInternalKey(), &s, &type,
+                          &seq);
+    if (s.IsNotFound()) {
+      input->Next();
+      continue;
+    } else if (!s.ok()) {
       status = std::move(s);
       break;
+    } else if (seq != ikey.sequence ||
+               (type != kTypeValueIndex && type != kTypeMergeIndex)) {
+      input->Next();
+      continue;
     }
-
     assert(sub_compact->builder != nullptr);
     assert(sub_compact->current_output() != nullptr);
     sub_compact->builder->Add(key, input->value());
@@ -1564,9 +1572,11 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
   for (auto& level : *sub_compact->compaction->inputs()) {
     for (auto f : level.files) {
       inheritance_chain.push_back(f->fd.GetNumber());
-      for (auto file_number : f->prop.inheritance_chain) {
-        if (dependence_map.count(file_number) > 0) {
-          inheritance_chain.push_back(file_number);
+      for (size_t i = 0; i < f->prop.inheritance_chain.size(); ++i) {
+        if (dependence_map.count(f->prop.inheritance_chain[i]) > 0) {
+          inheritance_chain.insert(inheritance_chain.end(),
+                                   f->prop.inheritance_chain.begin() + i,
+                                   f->prop.inheritance_chain.end());
         }
       }
     }
@@ -1936,7 +1946,8 @@ Status CompactionJob::InstallCompactionResults(
   if (compaction->compaction_type() == kMapCompaction ||
       !compaction->input_range().empty() ||
       mutable_cf_options.enable_lazy_compaction ||
-      cfd->ioptions()->compaction_worker != nullptr) {
+      (compaction->compaction_type() != kGarbageCollection &&
+       cfd->ioptions()->compaction_worker != nullptr)) {
     MapBuilder map_builder(job_id_, db_options_, env_options_, versions_,
                            stats_, dbname_);
     auto vstorage = compaction->input_version()->storage_info();
@@ -2007,7 +2018,9 @@ Status CompactionJob::InstallCompactionResults(
     }
   } else {
     // Add compaction inputs
-    compaction->AddInputDeletions(compact_->compaction->edit());
+    if (compaction->compaction_type() != kGarbageCollection) {
+      compaction->AddInputDeletions(compact_->compaction->edit());
+    }
 
     for (const auto& sub_compact : compact_->sub_compact_states) {
       for (const auto& out : sub_compact.outputs) {

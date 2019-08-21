@@ -188,17 +188,19 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
         assert(state_ == kNotFound || state_ == kMerge);
         if (separate_helper_ == nullptr) {
           assert(kNotFound == state_);
-          assert(lazy_val_ != nullptr);
           state_ = kFound;
           if (lazy_val_ != nullptr) {
             *lazy_val_ = std::move(value);
+            lazy_val_->pin_resource();
           }
           return false;
         }
         if (kNotFound == state_) {
           state_ = kFound;
           if (LIKELY(lazy_val_ != nullptr)) {
-            value.decode_destructive(*lazy_val_);
+            if (!value.decode_destructive(*lazy_val_).ok()) {
+              state_ = kCorrupt;
+            }
           }
         } else if (kMerge == state_) {
           assert(merge_operator_ != nullptr);
@@ -252,10 +254,10 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
         assert(state_ == kNotFound || state_ == kMerge);
         if (separate_helper_ == nullptr) {
           assert(kNotFound == state_);
-          assert(lazy_val_ != nullptr);
           state_ = kMerge;
           if (lazy_val_ != nullptr) {
             *lazy_val_ = std::move(value);
+            lazy_val_->pin_resource();
           }
           return false;
         }

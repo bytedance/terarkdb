@@ -364,7 +364,8 @@ void DBIter::Next() {
   }
   if (statistics_ != nullptr && valid_) {
     local_stats_.next_found_count_++;
-    local_stats_.bytes_read_ += (key().size() + value().size());
+    //local_stats_.bytes_read_ += (key().size() + value().size());
+    local_stats_.bytes_read_ += key().size();
   }
 }
 
@@ -1177,7 +1178,8 @@ void DBIter::Seek(const Slice& target) {
       if (valid_) {
         // Decrement since we don't want to count this key as skipped
         RecordTick(statistics_, NUMBER_DB_SEEK_FOUND);
-        RecordTick(statistics_, ITER_BYTES_READ, key().size() + value().size());
+        //RecordTick(statistics_, ITER_BYTES_READ, key().size() + value().size());
+        RecordTick(statistics_, ITER_BYTES_READ, key().size());
         PERF_COUNTER_ADD(iter_read_bytes, key().size() + value().size());
       }
     }

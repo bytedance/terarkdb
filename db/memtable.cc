@@ -675,12 +675,15 @@ static bool SaveValue(void* arg, const Slice& internal_key,
             }
           }
         } else if (s->value != nullptr) {
-          value.decode_destructive(*s->value);
+          *s->status = value.decode_destructive(*s->value);
+          if (!s->status->ok()) {
+            return false;
+          }
         }
         if (s->inplace_update_support) {
           s->mem->GetLock(s->key->user_key())->ReadUnlock();
         }
-        *(s->found_final_value) = true;
+        *s->found_final_value = true;
         return false;
       }
       case kTypeDeletion:

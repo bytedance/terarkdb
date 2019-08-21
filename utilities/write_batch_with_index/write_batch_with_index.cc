@@ -960,7 +960,9 @@ Status WriteBatchWithIndex::GetFromBatchAndDB(
             merge_operator, key, merge_data, merge_context.GetOperands(),
             &merge_result, logger, statistics, env);
         if (s.ok()) {
-          merge_result.decode_destructive(*lazy_val);
+          s = merge_result.decode_destructive(*lazy_val);
+        }
+        if (s.ok()) {
           lazy_val->pin_resource();
         }
       } else {
