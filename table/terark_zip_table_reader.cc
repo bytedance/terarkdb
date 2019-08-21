@@ -216,6 +216,7 @@ Status ReadMetaBlockAdapte(RandomAccessFileReader* file,
 }
 
 using terark::BadCrc32cException;
+using terark::BadCrc16cException;
 using terark::byte_swap;
 using terark::lcast;
 using terark::AbstractBlobStore;
@@ -1083,6 +1084,9 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   catch (const BadCrc32cException& ex) {
     return Status::Corruption("TerarkZipTableReader::Open()", ex.what());
   }
+  catch (const BadCrc16cException& ex) {
+    return Status::Corruption("TerarkZipTableReader::Open()", ex.what());
+  }
   s = LoadIndex(Slice(file_data.data(), indexSize));
   if (!s.ok()) {
     return s;
@@ -1171,6 +1175,9 @@ Status TerarkZipTableReader::LoadIndex(Slice mem) {
     subReader_.index_ = TerarkIndex::LoadMemory(fstringOf(mem));
   }
   catch (const BadCrc32cException& ex) {
+    return Status::Corruption(func, ex.what());
+  }
+  catch (const BadCrc16cException& ex) {
     return Status::Corruption(func, ex.what());
   }
   catch (const std::exception& ex) {
