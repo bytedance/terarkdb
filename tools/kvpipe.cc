@@ -57,7 +57,7 @@ int main(int argc, char* argv[]) {
   opt.use_direct_reads = true;
   bool quite = false;
   for (int gopt=0; -1 != gopt && '?' != gopt;) {
-    gopt = getopt(argc, argv, "a:b:c:p:D:l:o:q");
+    gopt = getopt(argc, argv, "a:b:c:d:p:D:l:o:q");
     switch (gopt) {
       default:
         usage(argv[0]);
