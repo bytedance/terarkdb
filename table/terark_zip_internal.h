@@ -209,7 +209,8 @@ private:
   TerarkZipTableOptions table_options_;
   std::shared_ptr<class TableFactory> fallback_factory_;
   TableFactory* adaptive_factory_; // just for open table
-  boost::intrusive_ptr<LruReadonlyCache> cache_;
+  mutable std::mutex cache_create_mutex_;
+  mutable boost::intrusive_ptr<LruReadonlyCache> cache_;
   mutable size_t nth_new_terark_table_ = 0;
   mutable size_t nth_new_fallback_table_ = 0;
 private:
