@@ -144,6 +144,21 @@ ifdef BUNDLE_TERARK_ZIP_ROCKSDB
   TERARK_ZIP_OBJ := $(addprefix ${xdir}/,${TERARK_ZIP_SRC:.cc=.o}) \
      $(addprefix shared-objects/${xdir}/,${TERARK_ZIP_SRC:.cc=.o})
 
+  SRC_NEEDS_TERARK_ZIP := ${TERARK_ZIP_SRC}               \
+                          db/compacted_db_impl.cc         \
+                          db/db_impl.cc                   \
+                          db/db_impl_compaction_flush.cc  \
+                          db/db_impl_debug.cc             \
+                          db/db_impl_experimental.cc      \
+                          db/db_impl_files.cc             \
+                          db/db_impl_open.cc              \
+                          db/db_impl_readonly.cc          \
+                          db/db_impl_write.cc             \
+                          tools/sst_dump_tool.cc
+
+  SRC_NEEDS_BOOST := util/thread_local.cc \
+                     ${TERARK_ZIP_SRC}
+
 #------------------------------------------------------------------------------
 ifeq (${TERARK_CORE_HOME},terark-core)
 terark-core.got:
@@ -155,9 +170,10 @@ ifdef TERARK_CORE_BRANCH
 endif
 	+$(MAKE) -C terark-core pkg PKG_WITH_DBG=1 PKG_WITH_STATIC=1 WITH_BMI2=${BMI2}
 	touch $@
-${TERARK_ZIP_OBJ}: terark-core.got
+${SRC_NEEDS_BOOST} ${SRC_NEEDS_BOOST:.o=.cc.d}: terark-core.got
+${TERARK_ZIP_OBJ} ${TERARK_ZIP_OBJ:.o=.cc.d}: terark-core.got
 endif
-${TERARK_ZIP_OBJ}: CXXFLAGS += -Wno-unused-parameter -I${TERARK_CORE_HOME}/3rdparty/zstd{,/zstd}
+${TERARK_ZIP_OBJ} ${TERARK_ZIP_OBJ:.o=.cc.d}: CXXFLAGS += -Wno-unused-parameter -I${TERARK_CORE_HOME}/3rdparty/zstd{,/zstd}
 
 terark-zip-rocksdb.got:
 	rm -rf terark-zip-rocksdb
@@ -171,22 +187,7 @@ terark-zip-rocksdb/${BUILD_ROOT}/git-version-terark_zip_rocksdb.cc: terark-zip-r
 	make -C terark-zip-rocksdb  ${BUILD_ROOT}/git-version-terark_zip_rocksdb.cpp SKIP_DEP_GEN=1
 	mv ${@:.cc=.cpp} $@
 
-  SRC_NEEDS_TERARK_ZIP := ${TERARK_ZIP_SRC}               \
-                          db/compacted_db_impl.cc         \
-                          db/db_impl.cc                   \
-                          db/db_impl_compaction_flush.cc  \
-                          db/db_impl_debug.cc             \
-                          db/db_impl_experimental.cc      \
-                          db/db_impl_files.cc             \
-                          db/db_impl_open.cc              \
-                          db/db_impl_readonly.cc          \
-                          db/db_impl_write.cc             \
-                          tools/sst_dump_tool.cc
 ${SRC_NEEDS_TERARK_ZIP} : terark-zip-rocksdb.got
-
-SRC_NEEDS_BOOST := env/io_posix.cc util/thread_local.cc \
-                   ${TERARK_ZIP_SRC}
-${SRC_NEEDS_BOOST}: terark-core.got
 
 #------------------------------------------------------------------------------
 
@@ -196,12 +197,6 @@ ${SRC_NEEDS_BOOST}: terark-core.got
   LIB_TERARK_ZIP_SHARED = -L${TERARK_CORE_PKG_DIR}/lib
   export LD_LIBRARY_PATH:=${TERARK_CORE_PKG_DIR}/lib:${LD_LIBRARY_PATH}
 else # not BUNDLE_TERARK_ZIP_ROCKSDB, ${TERARK_CORE_HOME} must be compiled
-  ifneq ($(findstring shared_lib,${MAKECMDGOALS}),)
-    # shared_lib is in MAKECMDGOALS
-    ifeq ($(shell uname),Darwin)
-      $(error unsupported: shared_lib on Darwin/macos without BUNDLE_TERARK_ZIP_ROCKSDB)
-    endif
-  endif
   # TERARK_ZIP_PKG_DIR is precomipled terark-zip-rocksdb pkg
   TERARK_ZIP_PKG_DIR ?= ../terark-zip-rocksdb/pkg/terark-zip-rocksdb-${BUILD_NAME}
   LIB_TERARK_ZIP_STATIC =   ${TERARK_ZIP_PKG_DIR}/lib_static/libterark-zip-rocksdb-${DBG_OR_RLS}.a
@@ -230,10 +225,6 @@ ifeq ($(LINK_TERARK),static)
     ${TERARK_ZIP_PKG_DIR}/lib_static/libterark-fsa-${DBG_OR_RLS}.a \
     ${TERARK_ZIP_PKG_DIR}/lib_static/libterark-core-${DBG_OR_RLS}.a
   ifeq ($(shell uname),Darwin)
-    override LINK_STATIC_TERARK += \
-        ${TERARK_CORE_HOME}/boost-include/stage/lib/libboost_fiber.a \
-        ${TERARK_CORE_HOME}/boost-include/stage/lib/libboost_context.a \
-        ${TERARK_CORE_HOME}/boost-include/stage/lib/libboost_system.a
     override LINK_STATIC_TERARK := \
       -Wl,-all_load ${LINK_STATIC_TERARK} -Wl,-noall_load
   else
@@ -248,20 +239,6 @@ ifeq ($(LINK_TERARK),static)
     endif
   endif
 endif
-
-ifneq ($(LINK_TERARK),shared)
-ifneq ($(LINK_TERARK),static)
-  override TerarkLDFLAGS += \
-    -L${TERARK_CORE_HOME}/boost-include/stage/lib \
-    -llibboost_fiber -lboost_context -lboost_system
-endif
-endif
-
-ifeq ($(shell uname),Linux)
-  #LINUX_LIBAIO := -laio
-  LDFLAGS += -laio -lrt
-endif
-
 
 ###############################################################################
 
@@ -1747,10 +1724,10 @@ write_prepared_transaction_test: utilities/transactions/write_prepared_transacti
 write_unprepared_transaction_test: utilities/transactions/write_unprepared_transaction_test.o $(LIBOBJECTS) $(TESTHARNESS)
 	$(AM_LINK)
 
-sst_dump: tools/sst_dump.o $(LIBOBJECTS) ${LIBNAME}.so
+sst_dump: ${xdir}/tools/sst_dump.o $(LIBOBJECTS) ${LIBNAME}.so
 	$(AM_LINK)
 
-blob_dump: tools/blob_dump.o $(LIBOBJECTS)
+blob_dump: ${xdir}/tools/blob_dump.o $(LIBOBJECTS)
 	$(AM_LINK)
 
 column_aware_encoding_exp: utilities/column_aware_encoding_exp.o $(EXPOBJECTS)
@@ -1759,16 +1736,16 @@ column_aware_encoding_exp: utilities/column_aware_encoding_exp.o $(EXPOBJECTS)
 repair_test: db/repair_test.o db/db_test_util.o $(LIBOBJECTS) $(TESTHARNESS)
 	$(AM_LINK)
 
-ldb_cmd_test: tools/ldb_cmd_test.o $(LIBOBJECTS) $(TESTHARNESS) ${LIBNAME}.so
+ldb_cmd_test: ${xdir}/tools/ldb_cmd_test.o $(LIBOBJECTS) $(TESTHARNESS) ${LIBNAME}.so
 	$(AM_LINK)
 
-ldb: tools/ldb.o $(LIBOBJECTS) ${LIBNAME}.so
+ldb: ${xdir}/tools/ldb.o $(LIBOBJECTS)
 	$(AM_LINK)
 
-kvpipe: tools/kvpipe.o ${SHARED1}
+kvpipe: ${xdir}/tools/kvpipe.o ${SHARED1}
 	$(AM_LINK)
 
-multi_get: tools/multi_get.o ${SHARED1}
+multi_get: ${xdir}/tools/multi_get.o ${SHARED1}
 	$(AM_LINK)
 
 iostats_context_test: monitoring/iostats_context_test.o $(LIBOBJECTS) $(TESTHARNESS)

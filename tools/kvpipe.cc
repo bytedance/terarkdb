@@ -77,7 +77,7 @@ int main(int argc, char* argv[]) {
         }
         else {
           char* endp = NULL;
-          nthr = strtol(optarg, &endp, 10);
+          nthr = (int)strtol(optarg, &endp, 10);
           if (':' == endp[0]) {
             nfib = atoi(endp+1);
           } else {
