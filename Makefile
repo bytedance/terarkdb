@@ -240,6 +240,12 @@ ifeq ($(LINK_TERARK),static)
   endif
 endif
 
+ifeq ($(shell uname),Linux)
+  #LINUX_LIBAIO := -laio
+  LDFLAGS += -laio -lrt
+endif
+
+
 ###############################################################################
 
 # Lite build flag.
