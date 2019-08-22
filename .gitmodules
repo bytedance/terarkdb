@@ -1,3 +1,0 @@
-[submodule "boost-include"]
-	path = boost-include
-	url = git@code.byted.org:storage/boost-include.git
