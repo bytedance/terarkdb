@@ -169,6 +169,7 @@ GetoptDone:
     auto t = new KVTask(line.p, line.n);
     pipeline.enqueue(t);
   }
+  pipeline.stop();
   pipeline.wait();
   delete db;
   return 0;

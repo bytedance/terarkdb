@@ -1739,7 +1739,7 @@ repair_test: db/repair_test.o db/db_test_util.o $(LIBOBJECTS) $(TESTHARNESS)
 ldb_cmd_test: ${xdir}/tools/ldb_cmd_test.o $(LIBOBJECTS) $(TESTHARNESS) ${LIBNAME}.so
 	$(AM_LINK)
 
-ldb: ${xdir}/tools/ldb.o $(LIBOBJECTS)
+ldb: ${xdir}/tools/ldb.o $(SHARED1)
 	$(AM_LINK)
 
 kvpipe: ${xdir}/tools/kvpipe.o ${SHARED1}
