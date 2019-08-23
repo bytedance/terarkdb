@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <getopt.h>
 #include <terark/thread/pipeline.hpp>
+#include <terark/fstring.hpp>
 #include <terark/util/linebuf.hpp>
 #include <terark/util/profiling.hpp>
 
@@ -57,7 +58,7 @@ int main(int argc, char* argv[]) {
   opt.use_direct_reads = true;
   bool quite = false;
   for (int gopt=0; -1 != gopt && '?' != gopt;) {
-    gopt = getopt(argc, argv, "a:b:c:d:p:D:l:o:q");
+    gopt = getopt(argc, argv, "a:b:c:C:d:p:D:l:o:q");
     switch (gopt) {
       default:
         usage(argv[0]);
@@ -84,6 +85,9 @@ int main(int argc, char* argv[]) {
             nfib = 0; // thread mode
           }
         }
+        break;
+      case 'C':
+	opt.OptimizeForPointLookup(terark::ParseSizeXiB(optarg)>>20);
         break;
       case 'd':
         opt.use_direct_reads = atoi(optarg) != 0;
@@ -141,12 +145,12 @@ GetoptDone:
   pipeline | std::make_pair(0, [&,quite,bench_report](PipelineTask* ptask) {
     if (bench_report) {
       if (++cnt1 == bench_report) {
+        cnt2 += cnt1;
         auto t1 = pf.now();
         fprintf(stderr, "%s(%d:%d) qps.recent = %f M/sec, qps.long = %f M/sec\n",
                 pipeline.euTypeName(), nthr, nfib, cnt1/pf.uf(t0,t1),
                 cnt2/pf.uf(start,t1));
         t0 = t1;
-        cnt2 += cnt1;
         cnt1 = 0;
       }
     }
