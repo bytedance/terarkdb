@@ -1101,8 +1101,21 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   if (subReader_.storeUsePread_) {
     subReader_.cache_ = table_factory_->cache();
     if (subReader_.cache_) {
-      subReader_.storeFD_ = subReader_.cache_->open(subReader_.storeFD_);
+#ifndef _MSC_VER
+      int fileFD = subReader_.storeFD_;
+  #ifdef OS_MACOSX
+      if (fcntl(fileFD, F_NOCACHE, 1) == -1) {
+        return Status::IOError("While fcntl NoCache"
+            , "O_DIRECT is required for terark user space cache");
+      }
+  #else
+      if (fcntl(fileFD, F_SETFL, fcntl(fileFD, F_GETFD) | O_DIRECT) == -1) {
+        return Status::IOError("While fcntl NoCache", "O_DIRECT is required for terark user space cache");
+      }
+  #endif
     }
+#endif
+    subReader_.storeFD_ = subReader_.cache_->open(subReader_.storeFD_);
   }
   if (tzto_.forceMetaInMemory) {
     valvec<fstring> index_meta_data = subReader_.index_->GetMetaData();
