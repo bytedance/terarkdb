@@ -103,7 +103,7 @@ class VersionStorageInfo {
 
   void AddFile(int level, FileMetaData* f, Logger* info_log = nullptr);
 
-  void ShrinkDependenceMap(const std::unordered_map<uint64_t, size_t>& target);
+  void ShrinkDependenceMap(void* arg, bool (*exists)(void*, FileMetaData*));
 
   void SetFinalized();
 

@@ -1926,12 +1926,12 @@ void VersionStorageInfo::AddFile(int level, FileMetaData* f, Logger* info_log) {
 }
 
 void VersionStorageInfo::ShrinkDependenceMap(
-    const std::unordered_map<uint64_t, size_t>& target) {
+    void* arg, bool (*exists)(void*, FileMetaData*)) {
   for (auto it = dependence_map_.begin(); it != dependence_map_.end(); ) {
-    if (target.count(it->first) == 0) {
-      it = dependence_map_.erase(it);
-    } else {
+    if (exists(arg, it->second)) {
       ++it;
+    } else {
+      it = dependence_map_.erase(it);
     }
   }
 }

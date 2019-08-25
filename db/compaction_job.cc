@@ -667,6 +667,7 @@ Status CompactionJob::Run() {
       return s;
     }
   }
+  context.blob_size = c->mutable_cf_options()->blob_size;
   context.table_factory = iopt->table_factory->Name();
   s = iopt->table_factory->GetOptionString(&context.table_factory_options,
                                            "\n");
@@ -1520,43 +1521,83 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
   sub_compact->builder->SetSecondPassIterator(&second_pass_iter);
 
   Version* input_version = sub_compact->compaction->input_version();
-  IterKey iter_key;
-  while (status.ok() && !cfd->IsDropped() && input->Valid()) {
-    Slice key = input->key();
-    ParsedInternalKey ikey;
-    if (!ParseInternalKey(key, &ikey)) {
-      status = Status::Corruption("Invalid InternalKey");
-      break;
-    }
-    if (ikey.type != kTypeValue && ikey.type != kTypeMerge) {
-      input->Next();
-      continue;
-    }
-    iter_key.SetInternalKey(ikey.user_key, ikey.sequence, kValueTypeForSeek);
-    Status s;
-    ValueType type = kTypeDeletion;
-    SequenceNumber seq = kMaxSequenceNumber;
-    input_version->GetKey(ikey.user_key, iter_key.GetInternalKey(), &s, &type,
-                          &seq);
-    if (s.IsNotFound()) {
-      input->Next();
-      continue;
-    } else if (!s.ok()) {
-      status = std::move(s);
-      break;
-    } else if (seq != ikey.sequence ||
-               (type != kTypeValueIndex && type != kTypeMergeIndex)) {
-      input->Next();
-      continue;
-    }
-    assert(sub_compact->builder != nullptr);
-    assert(sub_compact->current_output() != nullptr);
-    sub_compact->builder->Add(key, input->value());
-    sub_compact->current_output_file_size = sub_compact->builder->FileSize();
-    sub_compact->current_output()->meta.UpdateBoundaries(key, ikey.sequence);
-    sub_compact->num_output_records++;
+  IterKey last_key, iter_key;
+  LazySlice last_value;
+  auto process_key_value = [&](const Slice& key, const ParsedInternalKey& ikey,
+                               LazySlice& value) {
+    do {
+      iter_key.SetInternalKey(ikey.user_key, ikey.sequence, kValueTypeForSeek);
+      Status s;
+      ValueType type = kTypeDeletion;
+      SequenceNumber seq = kMaxSequenceNumber;
+      input_version->GetKey(ikey.user_key, iter_key.GetInternalKey(), &s, &type,
+                            &seq);
+      if (s.IsNotFound()) {
+        break;
+      } else if (!s.ok()) {
+        status = std::move(s);
+        break;
+      } else if (seq != ikey.sequence ||
+                 (type != kTypeValueIndex && type != kTypeMergeIndex)) {
+        break;
+      }
+      assert(sub_compact->builder != nullptr);
+      assert(sub_compact->current_output() != nullptr);
+      sub_compact->builder->Add(key, value);
+      sub_compact->current_output_file_size = sub_compact->builder->FileSize();
+      sub_compact->current_output()->meta.UpdateBoundaries(key, ikey.sequence);
+      sub_compact->num_output_records++;
+    } while (false);
+  };
 
-    input->Next();
+  if (status.ok() && !cfd->IsDropped() && input->Valid()) {
+    ParsedInternalKey last_ikey, ikey;
+    while (true) {
+      last_key.SetInternalKey(input->key(), true);
+      last_value = input->value();
+      last_value.pin_resource();
+      input->Next();
+      if (cfd->IsDropped() || !input->Valid()) {
+        break;
+      }
+      Slice key = input->key();
+      if (!ParseInternalKey(last_key.GetInternalKey(), &last_ikey) ||
+          !ParseInternalKey(key, &ikey)) {
+        status = Status::Corruption("Invalid InternalKey");
+        break;
+      }
+      if (last_ikey.sequence == 0 ||
+          (last_ikey.type != kTypeValue && last_ikey.type != kTypeMerge)) {
+        continue;
+      }
+      if (last_ikey.sequence == ikey.sequence &&
+          cfd->user_comparator()->Compare(last_ikey.user_key,
+                                          ikey.user_key) == 0) {
+#ifndef NDEBUG
+        if (last_ikey.type == ikey.type) {
+          LazySlice value = input->value();
+          assert(last_value.inplace_decode().ok());
+          assert(value.inplace_decode().ok());
+          assert(last_value.slice_ref() == value.slice_ref());
+        } else {
+          assert(last_ikey.type == kTypeMerge);
+          assert(ikey.type == kTypeValue);
+        }
+#endif
+        continue;
+      }
+      process_key_value(last_key.GetInternalKey(), last_ikey, last_value);
+      if (!status.ok()) {
+        break;
+      }
+    }
+    if (status.ok() && !cfd->IsDropped()) {
+      if (!ParseInternalKey(last_key.GetInternalKey(), &last_ikey)) {
+        status = Status::Corruption("Invalid InternalKey");
+      } else {
+        process_key_value(last_key.GetInternalKey(), last_ikey, last_value);
+      }
+    }
   }
 
   if (status.ok() &&

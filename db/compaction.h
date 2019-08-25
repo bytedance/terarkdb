@@ -125,6 +125,7 @@ struct CompactionWorkerContext {
   std::string compaction_filter_factory;
   rocksdb::CompactionFilter::Context compaction_filter_context;
   EncodedString compaction_filter_data;
+  uint64_t blob_size;
   std::string table_factory;
   std::string table_factory_options;
   uint32_t bloom_locality;

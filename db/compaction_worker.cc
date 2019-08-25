@@ -114,10 +114,11 @@ AJSON(rocksdb::CompactionWorkerContext, user_comparator, merge_operator,
                                         merge_operator_data, compaction_filter,
                                         compaction_filter_factory,
                                         compaction_filter_context,
-                                        compaction_filter_data, table_factory,
-                                        table_factory_options, bloom_locality,
-                                        cf_paths, prefix_extractor, has_start,
-                                        has_end, start, end, last_sequence,
+                                        compaction_filter_data, blob_size,
+                                        table_factory, table_factory_options,
+                                        bloom_locality, cf_paths,
+                                        prefix_extractor, has_start, has_end,
+                                        start, end, last_sequence,
                                         earliest_write_conflict_snapshot,
                                         preserve_deletes_seqnum, file_metadata,
                                         inputs, cf_name, target_file_size,
@@ -375,6 +376,7 @@ std::string RemoteCompactionWorker::Client::DoCompaction(
     }
     cf_options.compaction_filter_factory = find->second;
   }
+  cf_options.blob_size = context.blob_size;
   if (context.table_factory.empty()) {
     return make_error(Status::Corruption("Bad table_factory name !"));
   } else {

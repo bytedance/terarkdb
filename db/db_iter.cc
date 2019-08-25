@@ -667,7 +667,8 @@ void DBIter::Prev() {
     local_stats_.prev_count_++;
     if (valid_) {
       local_stats_.prev_found_count_++;
-      local_stats_.bytes_read_ += (key().size() + value().size());
+      //local_stats_.bytes_read_ += (key().size() + value().size());
+      local_stats_.bytes_read_ += key().size();
     }
   }
 }
@@ -1180,7 +1181,8 @@ void DBIter::Seek(const Slice& target) {
         RecordTick(statistics_, NUMBER_DB_SEEK_FOUND);
         //RecordTick(statistics_, ITER_BYTES_READ, key().size() + value().size());
         RecordTick(statistics_, ITER_BYTES_READ, key().size());
-        PERF_COUNTER_ADD(iter_read_bytes, key().size() + value().size());
+        //PERF_COUNTER_ADD(iter_read_bytes, key().size() + value().size());
+        PERF_COUNTER_ADD(iter_read_bytes, key().size());
       }
     }
   } else {
@@ -1234,8 +1236,10 @@ void DBIter::SeekForPrev(const Slice& target) {
     if (statistics_ != nullptr) {
       if (valid_) {
         RecordTick(statistics_, NUMBER_DB_SEEK_FOUND);
-        RecordTick(statistics_, ITER_BYTES_READ, key().size() + value().size());
-        PERF_COUNTER_ADD(iter_read_bytes, key().size() + value().size());
+        //RecordTick(statistics_, ITER_BYTES_READ, key().size() + value().size());
+        RecordTick(statistics_, ITER_BYTES_READ, key().size());
+        //PERF_COUNTER_ADD(iter_read_bytes, key().size() + value().size());
+        PERF_COUNTER_ADD(iter_read_bytes, key().size());
       }
     }
   } else {
@@ -1274,8 +1278,10 @@ void DBIter::SeekToFirst() {
     if (statistics_ != nullptr) {
       if (valid_) {
         RecordTick(statistics_, NUMBER_DB_SEEK_FOUND);
-        RecordTick(statistics_, ITER_BYTES_READ, key().size() + value().size());
-        PERF_COUNTER_ADD(iter_read_bytes, key().size() + value().size());
+        //RecordTick(statistics_, ITER_BYTES_READ, key().size() + value().size());
+        RecordTick(statistics_, ITER_BYTES_READ, key().size());
+        //PERF_COUNTER_ADD(iter_read_bytes, key().size() + value().size());
+        PERF_COUNTER_ADD(iter_read_bytes, key().size());
       }
     }
   } else {
@@ -1317,8 +1323,10 @@ void DBIter::SeekToLast() {
     RecordTick(statistics_, NUMBER_DB_SEEK);
     if (valid_) {
       RecordTick(statistics_, NUMBER_DB_SEEK_FOUND);
-      RecordTick(statistics_, ITER_BYTES_READ, key().size() + value().size());
-      PERF_COUNTER_ADD(iter_read_bytes, key().size() + value().size());
+      //RecordTick(statistics_, ITER_BYTES_READ, key().size() + value().size());
+      RecordTick(statistics_, ITER_BYTES_READ, key().size());
+      //PERF_COUNTER_ADD(iter_read_bytes, key().size() + value().size());
+      PERF_COUNTER_ADD(iter_read_bytes, key().size());
     }
   }
   if (valid_ && prefix_extractor_ && prefix_same_as_start_) {
