@@ -137,7 +137,7 @@ struct CompactionWorkerContext {
   rocksdb::SequenceNumber last_sequence;
   rocksdb::SequenceNumber earliest_write_conflict_snapshot;
   rocksdb::SequenceNumber preserve_deletes_seqnum;
-  std::vector<rocksdb::FileMetaData> file_metadata;
+  std::vector<std::pair<uint64_t, rocksdb::FileMetaData>> file_metadata;
   std::vector<std::pair<int, uint64_t>> inputs;
   std::string cf_name;
   uint64_t target_file_size;

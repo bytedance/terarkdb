@@ -439,8 +439,8 @@ std::string RemoteCompactionWorker::Client::DoCompaction(
 
   // start run
   DependenceMap contxt_dependence_map;
-  for (auto& f : context.file_metadata) {
-    contxt_dependence_map.emplace(f.fd.GetNumber(), &f);
+  for (auto& pair : context.file_metadata) {
+    contxt_dependence_map.emplace(pair.first, &pair.second);
   }
   std::unordered_map<int, std::vector<const FileMetaData*>> inputs;
   for (auto pair : context.inputs) {
@@ -528,6 +528,11 @@ std::string RemoteCompactionWorker::Client::DoCompaction(
     Slice user_key(reinterpret_cast<const char*>(rep->data[0]), rep->data[1]);
     uint64_t sequence = rep->data[2];
     uint64_t file_number = slice->file_number();
+    auto find = contxt_dependence_map.find(file_number);
+    if (find == contxt_dependence_map.end()) {
+      return Status::Corruption("Separate value dependence missing");
+    }
+    file_number = find->second->fd.GetNumber();
     bool value_found = false;
     SequenceNumber context_seq;
     GetContext get_context(ucmp, nullptr, immutable_cf_options.info_log,

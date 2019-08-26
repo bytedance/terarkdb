@@ -81,7 +81,8 @@ class GetContext {
   bool is_index() const { return is_index_; }
 
   bool is_finished() const {
-    return (state_ != kNotFound && state_ != kMerge) ||
+    return (state_ != kNotFound &&
+            (separate_helper_ == nullptr || state_ != kMerge)) ||
            (max_covering_tombstone_seq_ != nullptr &&
             *max_covering_tombstone_seq_ != 0);
   }

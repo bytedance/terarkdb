@@ -687,12 +687,15 @@ Status CompactionJob::Run() {
   context.last_sequence = versions_->LastSequence();
   context.earliest_write_conflict_snapshot = earliest_write_conflict_snapshot_;
   context.preserve_deletes_seqnum = preserve_deletes_seqnum_;
-  for (auto& f : c->input_version()->storage_info()->LevelFiles(-1)) {
-    context.file_metadata.emplace_back(*f);
+  auto& dependence_map = c->input_version()->storage_info()->dependence_map();
+  for (auto& pair : dependence_map) {
+    context.file_metadata.emplace_back(pair.first, *pair.second);
   }
   for (auto& files : *c->inputs()) {
     for (auto& f : files.files) {
-      context.file_metadata.emplace_back(*f);
+      if (dependence_map.count(f->fd.GetNumber()) == 0) {
+        context.file_metadata.emplace_back(f->fd.GetNumber(), *f);
+      }
       context.inputs.emplace_back(files.level, f->fd.GetNumber());
     }
   }
@@ -1618,11 +1621,15 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
           inheritance_chain.insert(inheritance_chain.end(),
                                    f->prop.inheritance_chain.begin() + i,
                                    f->prop.inheritance_chain.end());
+          break;
         }
       }
     }
   }
   std::sort(inheritance_chain.begin(), inheritance_chain.end());
+  inheritance_chain.erase(std::unique(inheritance_chain.begin(),
+                                      inheritance_chain.end()),
+                          inheritance_chain.end());
   Status s = FinishCompactionOutputFile(status, sub_compact, nullptr,
                                         nullptr, {}, inheritance_chain);
   if (status.ok()) {
@@ -1984,10 +1991,10 @@ Status CompactionJob::InstallCompactionResults(
   }
 
   auto cfd = compaction->column_family_data();
-  if (compaction->compaction_type() == kMapCompaction ||
-      !compaction->input_range().empty() ||
-      mutable_cf_options.enable_lazy_compaction ||
-      (compaction->compaction_type() != kGarbageCollection &&
+  if (compaction->compaction_type() != kGarbageCollection &&
+      (compaction->compaction_type() == kMapCompaction ||
+       !compaction->input_range().empty() ||
+       mutable_cf_options.enable_lazy_compaction ||
        cfd->ioptions()->compaction_worker != nullptr)) {
     MapBuilder map_builder(job_id_, db_options_, env_options_, versions_,
                            stats_, dbname_);

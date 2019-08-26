@@ -449,6 +449,7 @@ Compaction* UniversalCompactionPicker::PickCompaction(
   }
 
   bool allow_trivial_move =
+      c->compaction_type() != kGarbageCollection &&
       mutable_cf_options.compaction_options_universal.allow_trivial_move;
   if (c->compaction_reason() != CompactionReason::kTrivialMoveLevel &&
       allow_trivial_move) {

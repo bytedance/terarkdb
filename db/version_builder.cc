@@ -567,6 +567,10 @@ class VersionBuilder::Rep {
     for (auto& pair : dependence_map_) {
       auto& item = pair.second;
       if (item.is_dependence == dependence_version_ && item.level == -1) {
+        auto find = delta_antiquation_.find(pair.first);
+        if (find != delta_antiquation_.end()) {
+          item.f->num_antiquation += find->second;
+        }
         vstorage->AddFile(-1, item.f, info_log_);
       }
     }
