@@ -1541,17 +1541,23 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
         ((ZipValueMultiValue*)value.data())->offsets[0] = uint32_t(varNum);
         size_t mulRecId = 0;
         while (mulRecId < varNum && second_pass_iter_->Valid()) {
-          if (mulRecId > 0) {
+          auto refresh_second_pass_iter_key_value = [&] {
             lazy_value = second_pass_iter_->value();
             s = lazy_value.inplace_decode();
             if (!s.ok()) {
-              return s;
+              return false;
             }
             curKey = second_pass_iter_->key();
             curVal = lazy_value;
             TERARK_RT_assert(ParseInternalKey(curKey, &pIKey), std::logic_error);
             if (debugDumpKeyValue) {
               dumpKeyValueFunc(pIKey, curVal);
+            }
+            return true;
+          };
+          if (mulRecId > 0) {
+            if (!refresh_second_pass_iter_key_value()) {
+              return s;
             }
           }
           mulCmpRet = ic.Compare(curKey, bufKey);
@@ -1571,6 +1577,11 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
             }
           } else if (mulCmpRet < 0) { //curKey < bufKey
             ITER_MOVE_NEXT(second_pass_iter_);
+            if (mulRecId == 0) {
+              if (!refresh_second_pass_iter_key_value()) {
+                return s;
+              }
+            }
           }
         }
         if (value.size() == headerSize) {
