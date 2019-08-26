@@ -288,7 +288,7 @@ endif
 
 # if we're compiling for release, compile without debug code (-DNDEBUG)
 ifeq ($(DEBUG_LEVEL),0)
-OPT += -DNDEBUG
+OPT += -DNDEBUG -DBOOST_DISABLE_ASSERTS
 
 ifneq ($(USE_RTTI), 0)
 	CXXFLAGS += -DROCKSDB_USE_RTTI
@@ -361,7 +361,7 @@ CFLAGS += -g
 CXXFLAGS += -g
 else
 # no debug info for IOS, that will make our library big
-OPT += -DNDEBUG
+OPT += -DNDEBUG -DBOOST_DISABLE_ASSERTS
 endif
 
 ifeq ($(PLATFORM), OS_AIX)
