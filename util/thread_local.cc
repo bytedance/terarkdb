@@ -121,6 +121,8 @@ private:
   // REQUIRES: mutex locked
   UnrefHandler GetHandler(uint32_t id);
 
+  typedef void (*OnThreadExit_type)(ThreadData*);
+
   // Triggered before a thread terminates
   static void OnThreadExit(void* ptr);
 
@@ -152,113 +154,17 @@ private:
 #if MY_USE_FIBER_LOCAL_STORAGE
   static boost::fibers::fiber_specific_ptr<ThreadData> tls_;
 #else
-#ifdef ROCKSDB_SUPPORT_THREAD_LOCAL
-  // Thread local storage
-  static __thread ThreadData* tls_;
+  static thread_local std::unique_ptr<ThreadData, OnThreadExit_void> tls_;
 #endif
-#endif
-  // Used to make thread exit trigger possible if !defined(OS_MACOSX).
-  // Otherwise, used to retrieve thread data.
-  pthread_key_t pthread_key_;
 };
 
-
 #if MY_USE_FIBER_LOCAL_STORAGE
-  boost::fibers::fiber_specific_ptr<ThreadData> ThreadLocalPtr::StaticMeta::tls_;
+  boost::fibers::fiber_specific_ptr<ThreadData>
+    ThreadLocalPtr::StaticMeta::tls_((OnThreadExit_type)&StaticMeta::OnThreadExit);
 #else
-#ifdef ROCKSDB_SUPPORT_THREAD_LOCAL
-__thread ThreadData* ThreadLocalPtr::StaticMeta::tls_ = nullptr;
+  thread_local std::unique_ptr<ThreadData, OnThreadExit_type>
+    ThreadLocalPtr::StaticMeta::tls_(NULL,(OnThreadExit_type)&StaticMeta::OnThreadExit);
 #endif
-
-// Windows doesn't support a per-thread destructor with its
-// TLS primitives.  So, we build it manually by inserting a
-// function to be called on each thread's exit.
-// See http://www.codeproject.com/Articles/8113/Thread-Local-Storage-The-C-Way
-// and http://www.nynaeve.net/?p=183
-//
-// really we do this to have clear conscience since using TLS with thread-pools
-// is iffy
-// although OK within a request. But otherwise, threads have no identity in its
-// modern use.
-
-// This runs on windows only called from the System Loader
-#ifdef OS_WIN
-
-// Windows cleanup routine is invoked from a System Loader with a different
-// signature so we can not directly hookup the original OnThreadExit which is
-// private member
-// so we make StaticMeta class share with the us the address of the function so
-// we can invoke it.
-namespace wintlscleanup {
-
-// This is set to OnThreadExit in StaticMeta singleton constructor
-UnrefHandler thread_local_inclass_routine = nullptr;
-pthread_key_t thread_local_key = pthread_key_t (-1);
-
-// Static callback function to call with each thread termination.
-void NTAPI WinOnThreadExit(PVOID module, DWORD reason, PVOID reserved) {
-  // We decided to punt on PROCESS_EXIT
-  if (DLL_THREAD_DETACH == reason) {
-    if (thread_local_key != pthread_key_t(-1) &&
-        thread_local_inclass_routine != nullptr) {
-      void* tls = TlsGetValue(thread_local_key);
-      if (tls != nullptr) {
-        thread_local_inclass_routine(tls);
-      }
-    }
-  }
-}
-
-}  // wintlscleanup
-
-// extern "C" suppresses C++ name mangling so we know the symbol name for the
-// linker /INCLUDE:symbol pragma above.
-extern "C" {
-
-#ifdef _MSC_VER
-// The linker must not discard thread_callback_on_exit.  (We force a reference
-// to this variable with a linker /include:symbol pragma to ensure that.) If
-// this variable is discarded, the OnThreadExit function will never be called.
-#ifndef _X86_
-
-// .CRT section is merged with .rdata on x64 so it must be constant data.
-#pragma const_seg(".CRT$XLB")
-// When defining a const variable, it must have external linkage to be sure the
-// linker doesn't discard it.
-extern const PIMAGE_TLS_CALLBACK p_thread_callback_on_exit;
-const PIMAGE_TLS_CALLBACK p_thread_callback_on_exit =
-    wintlscleanup::WinOnThreadExit;
-// Reset the default section.
-#pragma const_seg()
-
-#pragma comment(linker, "/include:_tls_used")
-#pragma comment(linker, "/include:p_thread_callback_on_exit")
-
-#else  // _X86_
-
-#pragma data_seg(".CRT$XLB")
-PIMAGE_TLS_CALLBACK p_thread_callback_on_exit = wintlscleanup::WinOnThreadExit;
-// Reset the default section.
-#pragma data_seg()
-
-#pragma comment(linker, "/INCLUDE:__tls_used")
-#pragma comment(linker, "/INCLUDE:_p_thread_callback_on_exit")
-
-#endif  // _X86_
-
-#else
-// https://github.com/couchbase/gperftools/blob/master/src/windows/port.cc
-BOOL WINAPI DllMain(HINSTANCE h, DWORD dwReason, PVOID pv) {
-  if (dwReason == DLL_THREAD_DETACH)
-    wintlscleanup::WinOnThreadExit(h, dwReason, pv);
-  return TRUE;
-}
-#endif
-}  // extern "C"
-
-#endif  // OS_WIN
-
-#endif // MY_USE_FIBER_LOCAL_STORAGE
 
 void ThreadLocalPtr::InitSingletons() { ThreadLocalPtr::Instance(); }
 
@@ -302,7 +208,6 @@ void ThreadLocalPtr::StaticMeta::OnThreadExit(void* ptr) {
   // scope here in case this OnThreadExit is called after the main thread
   // dies.
   auto* inst = tls->inst;
-  pthread_setspecific(inst->pthread_key_, nullptr);
 
   MutexLock l(inst->MemberMutex());
   inst->RemoveThreadData(tls);
@@ -324,50 +229,10 @@ void ThreadLocalPtr::StaticMeta::OnThreadExit(void* ptr) {
 
 ThreadLocalPtr::StaticMeta::StaticMeta()
   : next_instance_id_(0),
-    head_(this),
-    pthread_key_(0) {
-#if !MY_USE_FIBER_LOCAL_STORAGE
-  if (pthread_key_create(&pthread_key_, &OnThreadExit) != 0) {
-    abort();
-  }
-
-  // OnThreadExit is not getting called on the main thread.
-  // Call through the static destructor mechanism to avoid memory leak.
-  //
-  // Caveats: ~A() will be invoked _after_ ~StaticMeta for the global
-  // singleton (destructors are invoked in reverse order of constructor
-  // _completion_); the latter must not mutate internal members. This
-  // cleanup mechanism inherently relies on use-after-release of the
-  // StaticMeta, and is brittle with respect to compiler-specific handling
-  // of memory backing destructed statically-scoped objects. Perhaps
-  // registering with atexit(3) would be more robust.
-  //
-// This is not required on Windows.
-#if !defined(OS_WIN)
-  static struct A {
-    ~A() {
-#ifndef ROCKSDB_SUPPORT_THREAD_LOCAL
-      ThreadData* tls_ =
-        static_cast<ThreadData*>(pthread_getspecific(Instance()->pthread_key_));
-#endif
-      if (tls_) {
-        OnThreadExit(tls_);
-      }
-    }
-  } a;
-#endif  // !defined(OS_WIN)
-#endif
-
+    head_(this)
+{
   head_.next = &head_;
   head_.prev = &head_;
-
-#if !MY_USE_FIBER_LOCAL_STORAGE
-#ifdef OS_WIN
-  // Share with Windows its cleanup routine and the key
-  wintlscleanup::thread_local_inclass_routine = OnThreadExit;
-  wintlscleanup::thread_local_key = pthread_key_;
-#endif
-#endif
 }
 
 void ThreadLocalPtr::StaticMeta::AddThreadData(ThreadData* d) {
@@ -387,42 +252,11 @@ void ThreadLocalPtr::StaticMeta::RemoveThreadData(
 }
 
 ThreadData* ThreadLocalPtr::StaticMeta::GetThreadLocal() {
-#if MY_USE_FIBER_LOCAL_STORAGE
   if (UNLIKELY(tls_.get() == nullptr)) {
     auto* inst = Instance();
     tls_.reset(new ThreadData(inst));
   }
   return tls_.get();
-#else
-#ifndef ROCKSDB_SUPPORT_THREAD_LOCAL
-  // Make this local variable name look like a member variable so that we
-  // can share all the code below
-  ThreadData* tls_ =
-      static_cast<ThreadData*>(pthread_getspecific(Instance()->pthread_key_));
-#endif
-
-  if (UNLIKELY(tls_ == nullptr)) {
-    auto* inst = Instance();
-    tls_ = new ThreadData(inst);
-    {
-      // Register it in the global chain, needs to be done before thread exit
-      // handler registration
-      MutexLock l(Mutex());
-      inst->AddThreadData(tls_);
-    }
-    // Even it is not OS_MACOSX, need to register value for pthread_key_ so that
-    // its exit handler will be triggered.
-    if (pthread_setspecific(inst->pthread_key_, tls_) != 0) {
-      {
-        MutexLock l(Mutex());
-        inst->RemoveThreadData(tls_);
-      }
-      delete tls_;
-      abort();
-    }
-  }
-  return tls_;
-#endif
 }
 
 void* ThreadLocalPtr::StaticMeta::Get(uint32_t id) const {
