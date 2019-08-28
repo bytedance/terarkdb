@@ -230,9 +230,9 @@ TerarkZipTableFactory::TerarkZipTableFactory(
     std::shared_ptr<TableFactory> fallback)
     : table_options_(tzto), fallback_factory_(fallback) {
   adaptive_factory_ = NewAdaptiveTableFactory();
-  if (tzto.minPreadLen >= 0 && tzto.cacheCapacityBytes) {
-    cache_.reset(LruReadonlyCache::create(
-        tzto.cacheCapacityBytes, tzto.cacheShards));
+  if (tzto.warmUpIndexOnOpen) {
+    // turn off warmUpIndexOnOpen if forceMetaInMemory
+    table_options_.warmUpIndexOnOpen = !tzto.forceMetaInMemory;
   }
 }
 
@@ -247,6 +247,19 @@ TerarkZipTableFactory::NewTableReader(
     uint64_t file_size, unique_ptr <TableReader>* table,
     bool prefetch_index_and_filter_in_cache)
 const {
+  if (table_options_.minPreadLen >= 0 && table_options_.cacheCapacityBytes) {
+    if (!cache_) {
+      std::lock_guard<std::mutex> lock(cache_create_mutex_);
+      if (!cache_) {
+        size_t initial_file_num = 2048;
+        cache_.reset(LruReadonlyCache::create(
+            table_options_.cacheCapacityBytes,
+            table_options_.cacheShards,
+            initial_file_num,
+            table_reader_options.env_options.use_aio_reads));
+      }
+    }
+  }
   PrintVersionHashInfo(table_reader_options.ioptions.info_log);
   auto userCmp = table_reader_options.internal_comparator.user_comparator();
   if (!IsBytewiseComparator(userCmp)) {

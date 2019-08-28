@@ -48,7 +48,9 @@ template<size_t P, size_t W> struct RankSelectNeedHint<rank_select_few<P, W>> : 
 static hash_strmap<TerarkIndex::FactoryPtr> g_TerarkIndexFactroy;
 struct TerarkIndexTypeFactroyHash {
   size_t operator()(const std::pair<std::type_index, std::type_index>& key) const {
-    return std::hash<std::type_index>()(key.first) ^ std::hash<std::type_index>()(key.second);
+    return terark::FaboHashCombine(
+            std::hash<std::type_index>()(key.first),
+            std::hash<std::type_index>()(key.second));
   }
 };
 static std::unordered_map<

@@ -16,8 +16,6 @@
 #include <memory>
 #include <stdio.h>
 
-#include "rocksdb/status.h"
-
 namespace rocksdb {
 
 struct TerarkZipTableOptions {
@@ -156,7 +154,7 @@ class MemTableRepFactory*
 NewPatriciaTrieRepFactory(std::shared_ptr<class MemTableRepFactory> fallback = nullptr);
 
 class MemTableRepFactory*
-NewPatriciaTrieRepFactory(const std::unordered_map<std::string, std::string>& options, Status* s);
+NewPatriciaTrieRepFactory(const std::unordered_map<std::string, std::string>& options, class Status* s);
 
 class TableFactory*
 NewTerarkZipTableFactory(const TerarkZipTableOptions&,
