@@ -1350,7 +1350,7 @@ hash_table_test: utilities/persistent_cache/hash_table_test.o $(LIBOBJECTS) $(TE
 histogram_test: monitoring/histogram_test.o $(LIBOBJECTS) $(TESTHARNESS)
 	$(AM_LINK)
 
-thread_local_test: util/thread_local_test.o $(LIBOBJECTS) $(TESTHARNESS)
+thread_local_test: util/thread_local_test.o $(SHARED1) $(TESTHARNESS)
 	$(AM_LINK)
 
 corruption_test: db/corruption_test.o $(LIBOBJECTS) $(TESTHARNESS)
