@@ -9,14 +9,8 @@
 
 #pragma once
 
-#include <atomic>
 #include <functional>
-#include <memory>
-#include <unordered_map>
-#include <vector>
-
 #include "util/autovector.h"
-#include "port/port.h"
 
 namespace rocksdb {
 
@@ -89,12 +83,7 @@ class ThreadLocalPtr {
   // initialized will be no-op.
   static void InitSingletons();
 
-  class StaticMeta;
-
 private:
-
-  static StaticMeta* Instance();
-
   const uint32_t id_;
 };
 
