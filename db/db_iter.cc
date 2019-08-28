@@ -147,6 +147,7 @@ class DBIter final: public Iterator {
   virtual ~DBIter() {
     RecordTick(statistics_, NO_ITERATOR_DELETED);
     ResetValueAndCounter();
+    merge_context_.Clear();
     local_stats_.BumpGlobalStatistics(statistics_);
     if (!arena_mode_) {
       delete iter_;

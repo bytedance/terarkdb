@@ -200,8 +200,8 @@ class VersionBuilder::Rep {
     } else {
       auto& item = ib.first->second;
       assert(item.level == -1);
-      UnrefFile(item.f);
       item.level = level;
+      UnrefFile(item.f);
       item.f = f;
     }
     active_sst_.emplace(f->fd.GetNumber());
@@ -210,22 +210,20 @@ class VersionBuilder::Rep {
   void DelSst(FileMetaData* f, int level, bool add_ref) {
     auto ib = dependence_map_.emplace(f->fd.GetNumber(),
                                       DependenceItem{0, 0, -1, f});
+    if (add_ref) {
+      ++f->refs;
+    }
     if (ib.second) {
-      if (add_ref) {
-        ++f->refs;
-      }
       PutInheritance(f);
     } else {
       auto& item = ib.first->second;
       if (item.level == level) {
         assert(item.level >= 0);
         active_sst_.erase(f->fd.GetNumber());
-        UnrefFile(item.f);
         item.level = -1;
-        item.f = f;
-      } else if (!add_ref) {
-        UnrefFile(f);
       }
+      UnrefFile(item.f);
+      item.f = f;
     }
   }
 

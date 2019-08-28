@@ -379,6 +379,41 @@ void SuperVersion::Init(MemTable* new_mem, MemTableListVersion* new_imm,
   refs.store(1, std::memory_order_relaxed);
 }
 
+void SuperVersion::destroy(LazySliceRep* /*rep*/) const {
+  auto self = const_cast<SuperVersion*>(this);
+  if (self->Unref()) {
+    {
+      InstrumentedMutexLock l(self->db_mutex);
+      self->Cleanup();
+    }
+    delete self;
+  }
+}
+
+Status SuperVersion::inplace_decode(LazySlice* slice, LazySliceRep* rep) const {
+  return current->Version::inplace_decode(slice, rep);
+}
+
+void SuperVersion::TransToCombined(const Slice& user_key, uint64_t sequence,
+                              LazySlice& value) const {
+  auto s = value.inplace_decode();
+  if (!s.ok()) {
+    value.reset(s);
+    return;
+  }
+  uint64_t file_number = SeparateHelper::DecodeFileNumber(value);
+  auto dependence_map = current->storage_info()->dependence_map();
+  auto find = dependence_map.find(file_number);
+  if (find == dependence_map.end()) {
+    value.reset(Status::Corruption("Separate value dependence missing"));
+  } else {
+    auto self = const_cast<SuperVersion*>(this);
+    value.reset(self->Ref(), {reinterpret_cast<uint64_t>(user_key.data()),
+                              user_key.size(), sequence, 0},
+                find->second->fd.GetNumber());
+  }
+}
+
 namespace {
 void SuperVersionUnrefHandle(void* ptr) {
   // UnrefHandle is called when a thread exists or a ThreadLocalPtr gets

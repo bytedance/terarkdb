@@ -145,12 +145,6 @@ class WorkerSeparateHelper : public SeparateHelper, public LazySliceController {
     return inplace_decode_callback_(inplace_decode_arg_, slice, rep);
   }
 
-  void TransToSeparate(LazySlice& value) const override {
-    assert(value.file_number() != uint64_t(-1));
-    uint64_t file_number = value.file_number();
-    value.reset(EncodeFileNumber(file_number), true, file_number);
-  }
-
   void TransToCombined(const Slice& user_key, uint64_t sequence,
                        LazySlice& value) const override {
     auto s = value.inplace_decode();

@@ -619,6 +619,9 @@ Compaction* CompactionPicker::PickGarbageCollection(
     double gc_ratio;
     uint64_t estimated_size;
   };
+  size_t max_file_size_for_leval =
+      MaxFileSizeForLevel(mutable_cf_options, 1, ioptions_.compaction_style);
+  size_t small_file_size = max_file_size_for_leval / 8;
   std::vector<FileInfo> blob_vec;
   for (auto f : vstorage->LevelFiles(-1)) {
     if (f->is_skip_gc || f->being_compacted) {
@@ -642,24 +645,24 @@ Compaction* CompactionPicker::PickGarbageCollection(
       info.num_entries = f->num_entries;
     }
     info.gc_ratio = 1.0 * f->num_antiquation / info.num_entries;
-    if (info.gc_ratio < mutable_cf_options.blob_gc_ratio) {
-      continue;
-    }
     info.estimated_size =
         static_cast<uint64_t>(f->fd.file_size *
                               std::max<double>(0, 1 - info.gc_ratio));
-    blob_vec.push_back(info);
-  }
-  if (blob_vec.empty()) {
-    return nullptr;
+    if (info.gc_ratio > mutable_cf_options.blob_gc_ratio ||
+        info.estimated_size <= small_file_size) {
+      blob_vec.push_back(info);
+    }
   }
   std::sort(blob_vec.begin(), blob_vec.end(), [](const FileInfo& l,
                                                  const FileInfo& r) {
     return l.gc_ratio > r.gc_ratio;
   });
-  size_t max_file_size_for_leval =
-      size_t(MaxFileSizeForLevel(mutable_cf_options, 1,
-                                 ioptions_.compaction_style) * 1.1);
+  if (blob_vec.empty() ||
+      blob_vec.front().gc_ratio <= mutable_cf_options.blob_gc_ratio) {
+    return nullptr;
+  }
+
+  size_t target_file_size = size_t(max_file_size_for_leval * 1.1);
   CompactionInputFiles inputs;
   inputs.level = -1;
   uint64_t estimated_total_size = blob_vec.front().estimated_size;
@@ -667,7 +670,7 @@ Compaction* CompactionPicker::PickGarbageCollection(
   for (auto it = blob_vec.rbegin(), end = std::prev(blob_vec.rend()); it != end;
        ++it) {
     auto& info = *it;
-    if (estimated_total_size + info.estimated_size > max_file_size_for_leval) {
+    if (estimated_total_size + info.estimated_size > target_file_size) {
       continue;
     }
     estimated_total_size += info.estimated_size;

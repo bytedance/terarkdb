@@ -89,7 +89,7 @@ class ColumnFamilyHandleInternal : public ColumnFamilyHandleImpl {
 };
 
 // holds references to memtable, all immutable memtables and version
-struct SuperVersion {
+struct SuperVersion : public SeparateHelper, private LazySliceController {
   // Accessing members of this class is not thread-safe and requires external
   // synchronization (ie db mutex held or on write thread).
   MemTable* mem;
@@ -126,6 +126,16 @@ struct SuperVersion {
   static int dummy;
   static void* const kSVInUse;
   static void* const kSVObsolete;
+
+  void destroy(LazySliceRep* /*rep*/) const override;
+
+  void pin_resource(LazySlice* /*slice*/,
+                    LazySliceRep* /*rep*/) const override {}
+
+  Status inplace_decode(LazySlice* slice, LazySliceRep* rep) const override;
+
+  void TransToCombined(const Slice& user_key, uint64_t sequence,
+                       LazySlice& value) const override;
 
  private:
   std::atomic<uint32_t> refs;

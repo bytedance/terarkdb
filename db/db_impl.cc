@@ -1315,7 +1315,7 @@ Status DBImpl::GetImpl(const ReadOptions& read_options,
   }
   if (!done) {
     PERF_TIMER_GUARD(get_from_output_files_time);
-    sv->current->Get(read_options, key, lkey, lazy_val, &s, &merge_context,
+    sv->current->Get(read_options, key, lkey, lazy_val, &s, &merge_context, sv,
                      &max_covering_tombstone_seq, value_found, nullptr, nullptr,
                      callback);
     RecordTick(stats_, MEMTABLE_MISS);
@@ -1424,7 +1424,8 @@ std::vector<Status> DBImpl::MultiGet(
     if (!done) {
       PERF_TIMER_GUARD(get_from_output_files_time);
       super_version->current->Get(read_options, keys[i], lkey, &lazy_val, &s,
-                                  &merge_context, &max_covering_tombstone_seq);
+                                  &merge_context, super_version,
+                                  &max_covering_tombstone_seq);
       RecordTick(stats_, MEMTABLE_MISS);
     }
     if (s.ok()) {
@@ -1904,7 +1905,7 @@ Status DBImpl::NewIterators(
       auto iter = new ForwardIterator(this, read_options, cfd, sv);
       iterators->push_back(NewDBIterator(
           env_, read_options, *cfd->ioptions(), sv->mutable_cf_options,
-          cfd->user_comparator(), iter, kMaxSequenceNumber, sv->current,
+          cfd->user_comparator(), iter, kMaxSequenceNumber, sv,
           sv->mutable_cf_options.max_sequential_skip_in_iterations,
           read_callback, this, cfd));
     }
@@ -3185,7 +3186,7 @@ Status DBImpl::GetLatestSequenceForKey(SuperVersion* sv, const Slice& key,
   if (!cache_only) {
     // Check tables
     sv->current->Get(read_options, key, lkey, nullptr, &s, &merge_context,
-                     &max_covering_tombstone_seq, nullptr /* value_found */,
+                     sv, &max_covering_tombstone_seq, nullptr /* value_found */,
                      found_record_for_key, seq, nullptr /*read_callback*/);
 
     if (!(s.ok() || s.IsNotFound() || s.IsMergeInProgress())) {
