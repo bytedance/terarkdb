@@ -53,6 +53,10 @@ option(WITH_WINDOWS_UTF8_FILENAMES "use UTF8 as characterset for opening files, 
 if (WITH_WINDOWS_UTF8_FILENAMES)
   add_definitions(-DROCKSDB_WINDOWS_UTF8_FILENAMES)
 endif()
+
+include_directories(${CMAKE_CURRENT_LIST_DIR}/../terark-core/boost-include)
+include_directories(${CMAKE_CURRENT_LIST_DIR}/../terark-core/src)
+
 if(MSVC)
   # Defaults currently different for GFLAGS.
   #  We will address find_package work a little later

@@ -15,6 +15,7 @@
 #if defined(OS_LINUX)
 #include <linux/fs.h>
 #endif
+#include <aio.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -34,6 +35,7 @@
 #include "util/coding.h"
 #include "util/string_util.h"
 #include "util/sync_point.h"
+#include <terark/thread/fiber_aio.hpp>
 
 #if defined(OS_LINUX) && !defined(F_SET_RW_HINT)
 #define F_LINUX_SPECIFIC_BASE 1024
@@ -310,6 +312,7 @@ PosixRandomAccessFile::PosixRandomAccessFile(const std::string& fname, int fd,
     : filename_(fname),
       fd_(fd),
       use_direct_io_(options.use_direct_reads),
+      use_aio_reads_(options.use_aio_reads),
       logical_sector_size_(GetLogicalBufferSize(fd_)) {
   assert(!options.use_direct_reads || !options.use_mmap_reads);
   assert(!options.use_mmap_reads || sizeof(void*) < 8);
@@ -329,7 +332,12 @@ Status PosixRandomAccessFile::Read(uint64_t offset, size_t n, Slice* result,
   size_t left = n;
   char* ptr = scratch;
   while (left > 0) {
-    r = pread(fd_, ptr, left, static_cast<off_t>(offset));
+    if (use_aio_reads_) {
+      r = terark::fiber_aio_read(fd_, ptr, left, static_cast<off_t>(offset));
+    }
+    else {
+      r = pread(fd_, ptr, left, static_cast<off_t>(offset));
+    }
     if (r <= 0) {
       if (r == -1 && errno == EINTR) {
         continue;
@@ -445,10 +453,8 @@ PosixMmapReadableFile::PosixMmapReadableFile(const int fd,
                                              void* base, size_t length,
                                              const EnvOptions& options)
     : fd_(fd), filename_(fname), mmapped_region_(base), length_(length) {
-#ifdef NDEBUG
-  (void)options;
-#endif
   fd_ = fd_ + 0;  // suppress the warning for used variables
+  use_aio_reads_ = options.use_aio_reads;
   assert(options.use_mmap_reads);
   assert(!options.use_direct_reads);
 }
@@ -477,14 +483,22 @@ Status PosixMmapReadableFile::Read(uint64_t offset, size_t n, Slice* result,
   return s;
 }
 
+// Now FsRead is only used by TerarkDB
 Status PosixMmapReadableFile::FsRead(uint64_t offset, size_t len, void* buf)
 const {
     Status s;
-    ssize_t nRead = ::pread(fd_, buf, len, offset);
+    ssize_t nRead;
+    if (use_aio_reads_) {
+        assert(size_t(buf) % 4096 == 0);
+        nRead = terark::fiber_aio_read(fd_, buf, len, offset);
+    } else {
+        nRead = ::pread(fd_, buf, len, offset);
+    }
     if (nRead != ssize_t(len)) {
         s = IOError("PosixMmapReadableFile::FsRead(): pread(offset = "
                     + ToString(offset)
                     + ", len = " + ToString(len)
+                    + ", aio = " + ToString(use_aio_reads_)
                     + ") = " + ToString(nRead),
                 filename_, errno);
     }

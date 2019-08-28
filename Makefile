@@ -11,7 +11,7 @@ BASH_EXISTS := $(shell which bash)
 SHELL := $(shell which bash)
 
 COMPRESSION_CXXFLAGS ?= -DSNAPPY=1 -DZLIB=1 -DLZ4=1 -DLZ4_DISABLE_DEPRECATE_WARNINGS -DZSTD=1 -Isnappy-1.1.4 -Ilz4-1.8.0/lib -Izstd-1.3.3/lib/include -Izlib-1.2.11
-COMPRESSION_LDFLAGS  ?= -L. -lsnappy -lz -llz4 -lzstd
+COMPRESSION_LDFLAGS  ?= -L. -lsnappy -lz -llz4
 
 CLEAN_FILES = # deliberately empty, so we can append below.
 CFLAGS += ${EXTRA_CFLAGS}
@@ -116,21 +116,18 @@ BUILD_NAME := $(shell bash get_terark_build_name.sh ${CXX} ${BMI2})
 BUILD_ROOT := build/${BUILD_NAME}
 xdir:=${BUILD_ROOT}/dbg-${DEBUG_LEVEL}
 
+ifdef TERARK_CORE_BRANCH
+  TERARK_CORE_HOME := terark-core
+else
+  TERARK_CORE_HOME ?= ../terark-core
+endif
+TERARK_CORE_PKG_DIR := ${TERARK_CORE_HOME}/pkg/terark-fsa_all-${BUILD_NAME}
+CXXFLAGS += -march=haswell
+CXXFLAGS += -I${TERARK_CORE_HOME}/src -I${TERARK_CORE_HOME}/boost-include
+
+# BUNDLE_TERARK_ZIP_ROCKSDB can use precompiled terark-core
 ifdef BUNDLE_TERARK_ZIP_ROCKSDB
-  ifdef TERARK_CORE_BRANCH
-    ifdef TERARK_CORE_PKG_DIR
-      ifneq (${TERARK_CORE_PKG_DIR},terark-core)
-        $(error when both TERARK_CORE_BRANCH and TERARK_CORE_PKG_DIR are defined, TERARK_CORE_PKG_DIR must be terark-core)
-      endif
-    else
-      TERARK_CORE_PKG_DIR := terark-core
-    endif
-  endif
-  TERARK_CORE_VERSION ?= 1.0.0.60
-  TERARK_CORE_PKG_DIR ?= ../terark-core/pkg/terark-fsa_all-${BUILD_NAME}
-  CXXFLAGS += -I${TERARK_CORE_PKG_DIR}/include -Iboost-include
   CXXFLAGS += -Iterark-zip-rocksdb/src
-# CXXFLAGS += -march=haswell
 
 # do not use wildcard, to kill dependency to terark-zip-rocksdb.got
   TERARK_ZIP_SRC := \
@@ -147,45 +144,6 @@ ifdef BUNDLE_TERARK_ZIP_ROCKSDB
   TERARK_ZIP_OBJ := $(addprefix ${xdir}/,${TERARK_ZIP_SRC:.cc=.o}) \
      $(addprefix shared-objects/${xdir}/,${TERARK_ZIP_SRC:.cc=.o})
 
-#------------------------------------------------------------------------------
-ifeq (${TERARK_CORE_PKG_DIR},terark-core)
-terark-core.got:
-	rm -rf terark-core
-ifdef TERARK_CORE_BRANCH
-	git clone git@code.byted.org:storage/terark-core.git
-	cd terark-core && git submodule update --init
-	cd terark-core && git checkout ${TERARK_CORE_BRANCH}
-	+$(MAKE) -C terark-core pkg PKG_WITH_DBG=1 PKG_WITH_STATIC=1 WITH_BMI2=${BMI2}
-	mv terark-core/pkg/terark-fsa_all-${BUILD_NAME}/* terark-core
-else
-	wget -O terark-core.tar.gz http://d.scm.byted.org/api/download/ceph:toutiao.terark.terark_core_${TERARK_CORE_VERSION}.tar.gz
-	mkdir terark-core
-	tar -xvf terark-core.tar.gz -C terark-core
-	rm -rf terark-core.tar.gz
-endif
-	touch $@
-${TERARK_ZIP_OBJ}: terark-core.got
-endif
-${TERARK_ZIP_OBJ}: boost-include.got
-${TERARK_ZIP_OBJ}: CXXFLAGS += -Wno-unused-parameter
-
-terark-zip-rocksdb.got:
-	rm -rf terark-zip-rocksdb
-	git clone git@code.byted.org:storage/terark-zip-rocksdb.git
-ifdef TERARK_ZIP_ROCKSDB_BRANCH
-	cd terark-zip-rocksdb && git checkout ${TERARK_ZIP_ROCKSDB_BRANCH}
-endif
-	touch $@
-
-boost-include.got:
-	rm -rf boost-include
-	git clone --depth=1 git@code.byted.org:storage/boost-include.git
-	touch $@
-
-terark-zip-rocksdb/${BUILD_ROOT}/git-version-terark_zip_rocksdb.cc: terark-zip-rocksdb.got
-	make -C terark-zip-rocksdb  ${BUILD_ROOT}/git-version-terark_zip_rocksdb.cpp SKIP_DEP_GEN=1
-	mv ${@:.cc=.cpp} $@
-
   SRC_NEEDS_TERARK_ZIP := ${TERARK_ZIP_SRC}               \
                           db/compacted_db_impl.cc         \
                           db/db_impl.cc                   \
@@ -197,7 +155,40 @@ terark-zip-rocksdb/${BUILD_ROOT}/git-version-terark_zip_rocksdb.cc: terark-zip-r
                           db/db_impl_readonly.cc          \
                           db/db_impl_write.cc             \
                           tools/sst_dump_tool.cc
+
+  SRC_NEEDS_BOOST := util/thread_local.cc \
+                     ${TERARK_ZIP_SRC}
+
+#------------------------------------------------------------------------------
+ifeq (${TERARK_CORE_HOME},terark-core)
+terark-core.got:
+	rm -rf terark-core
+	git clone git@code.byted.org:storage/terark-core.git
+	cd terark-core && git submodule update --init
+ifdef TERARK_CORE_BRANCH
+	cd terark-core && git checkout ${TERARK_CORE_BRANCH}
+endif
+	+$(MAKE) -C terark-core pkg PKG_WITH_DBG=1 PKG_WITH_STATIC=1 WITH_BMI2=${BMI2}
+	touch $@
+${SRC_NEEDS_BOOST} ${SRC_NEEDS_BOOST:.o=.cc.d}: terark-core.got
+${TERARK_ZIP_OBJ} ${TERARK_ZIP_OBJ:.o=.cc.d}: terark-core.got
+endif
+${TERARK_ZIP_OBJ} ${TERARK_ZIP_OBJ:.o=.cc.d}: CXXFLAGS += -Wno-unused-parameter -I${TERARK_CORE_HOME}/3rdparty/zstd{,/zstd}
+
+terark-zip-rocksdb.got:
+	rm -rf terark-zip-rocksdb
+	git clone git@code.byted.org:storage/terark-zip-rocksdb.git
+ifdef TERARK_ZIP_ROCKSDB_BRANCH
+	cd terark-zip-rocksdb && git checkout ${TERARK_ZIP_ROCKSDB_BRANCH}
+endif
+	touch $@
+
+terark-zip-rocksdb/${BUILD_ROOT}/git-version-terark_zip_rocksdb.cc: terark-zip-rocksdb.got
+	make -C terark-zip-rocksdb  ${BUILD_ROOT}/git-version-terark_zip_rocksdb.cpp SKIP_DEP_GEN=1
+	mv ${@:.cc=.cpp} $@
+
 ${SRC_NEEDS_TERARK_ZIP} : terark-zip-rocksdb.got
+
 #------------------------------------------------------------------------------
 
 # just use terark-core libs, set TERARK_ZIP_PKG_DIR as core
@@ -205,39 +196,50 @@ ${SRC_NEEDS_TERARK_ZIP} : terark-zip-rocksdb.got
   LIB_TERARK_ZIP_STATIC =
   LIB_TERARK_ZIP_SHARED = -L${TERARK_CORE_PKG_DIR}/lib
   export LD_LIBRARY_PATH:=${TERARK_CORE_PKG_DIR}/lib:${LD_LIBRARY_PATH}
-else
- ifdef TERARK_ZIP_PKG_DIR
-  # TERARK_ZIP_PKG_DIR must be fresh git terark-zip-rocksdb dir, has no any compiled output
-  # only for Linux, not support macos dynamic lib
-  CXXFLAGS += -I${TERARK_ZIP_PKG_DIR}/src
- else
+else # not BUNDLE_TERARK_ZIP_ROCKSDB, ${TERARK_CORE_HOME} must be compiled
   # TERARK_ZIP_PKG_DIR is precomipled terark-zip-rocksdb pkg
-  # TERARK_ZIP_PKG_DIR includes terark-core headers & libs
-  TERARK_ZIP_PKG_DIR := ../terark-zip-rocksdb/pkg/terark-zip-rocksdb-${BUILD_NAME}
+  TERARK_ZIP_PKG_DIR ?= ../terark-zip-rocksdb/pkg/terark-zip-rocksdb-${BUILD_NAME}
   LIB_TERARK_ZIP_STATIC =   ${TERARK_ZIP_PKG_DIR}/lib_static/libterark-zip-rocksdb-${DBG_OR_RLS}.a
   LIB_TERARK_ZIP_SHARED = -L${TERARK_ZIP_PKG_DIR}/lib         -lterark-zip-rocksdb-${DBG_OR_RLS}
   CXXFLAGS += -I${TERARK_ZIP_PKG_DIR}/include
   export LD_LIBRARY_PATH:=${TERARK_ZIP_PKG_DIR}/lib:${LD_LIBRARY_PATH}
- endif
+endif # BUNDLE_TERARK_ZIP_ROCKSDB
+
+LINK_TERARK ?= static
+
+ifeq ($(shell uname),Darwin)
+  LIB_GOMP :=
+else
+  LIB_GOMP := -lgomp
 endif
 
 ifeq ($(LINK_TERARK),shared)
   TerarkLDFLAGS +=  ${LIB_TERARK_ZIP_SHARED} \
                     -lterark-zbs-${DBG_OR_RLS} \
                     -lterark-fsa-${DBG_OR_RLS} \
-                    -lterark-core-${DBG_OR_RLS} -ldl
+                    -lterark-core-${DBG_OR_RLS} -ldl ${LIB_GOMP}
 endif
 ifeq ($(LINK_TERARK),static)
-  override LINK_STATIC_TERARK = ${LIB_TERARK_ZIP_STATIC} \
+  override LINK_STATIC_TERARK := ${LIB_TERARK_ZIP_STATIC} \
     ${TERARK_ZIP_PKG_DIR}/lib_static/libterark-zbs-${DBG_OR_RLS}.a \
     ${TERARK_ZIP_PKG_DIR}/lib_static/libterark-fsa-${DBG_OR_RLS}.a \
     ${TERARK_ZIP_PKG_DIR}/lib_static/libterark-core-${DBG_OR_RLS}.a
+  ifeq ($(shell uname),Darwin)
+    override LINK_STATIC_TERARK := \
+      -Wl,-all_load ${LINK_STATIC_TERARK} -Wl,-noall_load
+  else
+    override LINK_STATIC_TERARK := \
+      -Wl,--whole-archive ${LINK_STATIC_TERARK} -Wl,--no-whole-archive
+  endif
+  override LINK_STATIC_TERARK += ${LIB_GOMP}
+
   ifdef BUNDLE_TERARK_ZIP_ROCKSDB
     ifneq ($(shell uname),Darwin)
       BUNDLE_ALL_TERARK_STATIC = 1
     endif
   endif
 endif
+
 ###############################################################################
 
 # Lite build flag.
@@ -286,7 +288,7 @@ endif
 
 # if we're compiling for release, compile without debug code (-DNDEBUG)
 ifeq ($(DEBUG_LEVEL),0)
-OPT += -DNDEBUG
+OPT += -DNDEBUG -DBOOST_DISABLE_ASSERTS
 
 ifneq ($(USE_RTTI), 0)
 	CXXFLAGS += -DROCKSDB_USE_RTTI
@@ -359,7 +361,7 @@ CFLAGS += -g
 CXXFLAGS += -g
 else
 # no debug info for IOS, that will make our library big
-OPT += -DNDEBUG
+OPT += -DNDEBUG -DBOOST_DISABLE_ASSERTS
 endif
 
 ifeq ($(PLATFORM), OS_AIX)
@@ -741,6 +743,7 @@ TOOLS = \
 	db_stress \
 	write_stress \
 	ldb \
+	kvpipe \
 	db_repl_stress \
 	rocksdb_dump \
 	rocksdb_undump \
@@ -803,11 +806,11 @@ SHARED4 = $(SHARED1).$(SHARED_MAJOR).$(SHARED_MINOR).$(SHARED_PATCH)
 endif
 SHARED = $(SHARED1) $(SHARED2) $(SHARED3) $(SHARED4)
 
-$(SHARED1): $(SHARED4) shared-objects/${xdir}/${SHARED1}
-	ln -fs $(SHARED4) $(SHARED1)
-$(SHARED2): $(SHARED4) shared-objects/${xdir}/${SHARED2}
-	ln -fs $(SHARED4) $(SHARED2)
-$(SHARED3): $(SHARED4) shared-objects/${xdir}/${SHARED3}
+$(SHARED1): $(SHARED2)
+	ln -fs $(SHARED2) $(SHARED1)
+$(SHARED2): $(SHARED3)
+	ln -fs $(SHARED3) $(SHARED2)
+$(SHARED3): $(SHARED4)
 	ln -fs $(SHARED4) $(SHARED3)
 $(SHARED4): shared-objects/${xdir}/${SHARED4}
 	ln -sf $< $@
@@ -1211,6 +1214,7 @@ clean:
 	$(FIND) . -name "*.[oda]" -exec rm -f {} \;
 	$(FIND) . -type f -regex ".*\.\(\(gcda\)\|\(gcno\)\)" -exec rm {} \;
 	rm -rf bzip2* snappy* zlib* lz4* zstd*
+	rm -rf librocksdb*
 	cd java; $(MAKE) clean
 
 tags:
@@ -1239,7 +1243,7 @@ $(LIBRARY): $(LIBOBJECTS)
 	$(AM_V_at)$(AR) $(ARFLAGS) $@ $(LIBOBJECTS)
 ifeq (${BUNDLE_ALL_TERARK_STATIC},1)
 	mv $@ orgin-$@
-	ln -s ${TERARK_ZIP_PKG_DIR}/lib_static/libterark-{zbs,fsa,core}-${DBG_OR_RLS}.a .
+	ln -s ${TERARK_CORE_PKG_DIR}/lib_static/libterark-{zbs,fsa,core}-${DBG_OR_RLS}.a .
 	(\
 	echo create $@; \
 	echo addlib libterark-zbs-${DBG_OR_RLS}.a; \
@@ -1344,7 +1348,7 @@ hash_table_test: utilities/persistent_cache/hash_table_test.o $(LIBOBJECTS) $(TE
 histogram_test: monitoring/histogram_test.o $(LIBOBJECTS) $(TESTHARNESS)
 	$(AM_LINK)
 
-thread_local_test: util/thread_local_test.o $(LIBOBJECTS) $(TESTHARNESS)
+thread_local_test: util/thread_local_test.o $(SHARED1) $(TESTHARNESS)
 	$(AM_LINK)
 
 corruption_test: db/corruption_test.o $(LIBOBJECTS) $(TESTHARNESS)
@@ -1715,10 +1719,10 @@ write_prepared_transaction_test: utilities/transactions/write_prepared_transacti
 write_unprepared_transaction_test: utilities/transactions/write_unprepared_transaction_test.o $(LIBOBJECTS) $(TESTHARNESS)
 	$(AM_LINK)
 
-sst_dump: tools/sst_dump.o $(LIBOBJECTS) ${LIBNAME}.so
+sst_dump: ${xdir}/tools/sst_dump.o $(LIBOBJECTS) ${LIBNAME}.so
 	$(AM_LINK)
 
-blob_dump: tools/blob_dump.o $(LIBOBJECTS)
+blob_dump: ${xdir}/tools/blob_dump.o $(LIBOBJECTS)
 	$(AM_LINK)
 
 column_aware_encoding_exp: utilities/column_aware_encoding_exp.o $(EXPOBJECTS)
@@ -1727,10 +1731,16 @@ column_aware_encoding_exp: utilities/column_aware_encoding_exp.o $(EXPOBJECTS)
 repair_test: db/repair_test.o db/db_test_util.o $(LIBOBJECTS) $(TESTHARNESS)
 	$(AM_LINK)
 
-ldb_cmd_test: tools/ldb_cmd_test.o $(LIBOBJECTS) $(TESTHARNESS) ${LIBNAME}.so
+ldb_cmd_test: ${xdir}/tools/ldb_cmd_test.o $(LIBOBJECTS) $(TESTHARNESS) ${LIBNAME}.so
 	$(AM_LINK)
 
-ldb: tools/ldb.o $(LIBOBJECTS) ${LIBNAME}.so
+ldb: ${xdir}/tools/ldb.o $(SHARED1)
+	$(AM_LINK)
+
+kvpipe: ${xdir}/tools/kvpipe.o ${SHARED1}
+	$(AM_LINK)
+
+multi_get: ${xdir}/tools/multi_get.o ${SHARED1}
 	$(AM_LINK)
 
 iostats_context_test: monitoring/iostats_context_test.o $(LIBOBJECTS) $(TESTHARNESS)
@@ -1883,7 +1893,8 @@ ifeq ($(PLATFORM), OS_OPENBSD)
         ROCKSDB_JAR = rocksdbjni-$(ROCKSDB_MAJOR).$(ROCKSDB_MINOR).$(ROCKSDB_PATCH)-openbsd$(ARCH).jar
 endif
 
-libz.a zlib-1.2.11/zlib.h:
+libz.a: zlib-1.2.11/zlib.h
+zlib-1.2.11/zlib.h:
 	-rm -rf zlib-$(ZLIB_VER)
 	cp -a downloads/zlib-$(ZLIB_VER).tar.gz .
 	#curl -O -L ${ZLIB_DOWNLOAD_BASE}/zlib-$(ZLIB_VER).tar.gz
@@ -1893,7 +1904,8 @@ libz.a zlib-1.2.11/zlib.h:
 		exit 1; \
 	fi
 	tar xvzf zlib-$(ZLIB_VER).tar.gz
-	cd zlib-$(ZLIB_VER) && CFLAGS='-fPIC ${EXTRA_CFLAGS}' LDFLAGS='${EXTRA_LDFLAGS}' ./configure --static && $(MAKE)
+	cd zlib-$(ZLIB_VER) && CFLAGS='-fPIC ${EXTRA_CFLAGS}' LDFLAGS='${EXTRA_LDFLAGS}' ./configure --static
+	cd zlib-$(ZLIB_VER) && CFLAGS='-fPIC ${EXTRA_CFLAGS}' LDFLAGS='${EXTRA_LDFLAGS}' $(MAKE)
 	cp zlib-$(ZLIB_VER)/libz.a .
 
 libbz2.a:
@@ -1907,10 +1919,11 @@ libbz2.a:
 		exit 1; \
 	fi
 	tar xvzf bzip2-$(BZIP2_VER).tar.gz
-	cd bzip2-$(BZIP2_VER) && $(MAKE) CFLAGS='-fPIC -O2 -g -D_FILE_OFFSET_BITS=64 ${EXTRA_CFLAGS}' AR='ar ${EXTRA_ARFLAGS}'
+	cd bzip2-$(BZIP2_VER) && $(MAKE) CFLAGS='-fPIC -O2 -g -D_FILE_OFFSET_BITS=64 ${EXTRA_CFLAGS}' AR='ar ${EXTRA_ARFLAGS}' LDFLAGS=
 	cp bzip2-$(BZIP2_VER)/libbz2.a .
 
-libsnappy.a snappy-1.1.4/snappy.h:
+libsnappy.a: snappy-1.1.4/snappy.h
+snappy-1.1.4/snappy.h:
 	-rm -rf snappy-$(SNAPPY_VER)
 	cp -a downloads/snappy-$(SNAPPY_VER).tar.gz .
 	#wget ${SNAPPY_DOWNLOAD_BASE}/$(SNAPPY_VER)/snappy-$(SNAPPY_VER).tar.gz
@@ -1922,10 +1935,11 @@ libsnappy.a snappy-1.1.4/snappy.h:
 	fi
 	tar xvzf snappy-$(SNAPPY_VER).tar.gz
 	cd snappy-$(SNAPPY_VER) && CFLAGS='${EXTRA_CFLAGS}' CXXFLAGS='${EXTRA_CXXFLAGS}' LDFLAGS='${EXTRA_LDFLAGS}' ./configure --with-pic --enable-static --disable-shared
-	cd snappy-$(SNAPPY_VER) && $(MAKE) ${SNAPPY_MAKE_TARGET}
+	cd snappy-$(SNAPPY_VER) && CFLAGS='${EXTRA_CFLAGS}' CXXFLAGS='${EXTRA_CXXFLAGS}' LDFLAGS='${EXTRA_LDFLAGS}' $(MAKE) ${SNAPPY_MAKE_TARGET}
 	cp snappy-$(SNAPPY_VER)/.libs/libsnappy.a .
 
-liblz4.a lz4-1.8.0/lib/lz4.h:
+liblz4.a: lz4-1.8.0/lib/lz4.h
+lz4-1.8.0/lib/lz4.h:
 	-rm -rf lz4-$(LZ4_VER)
 	cp -a downloads/lz4-$(LZ4_VER).tar.gz .
 	#wget ${LZ4_DOWNLOAD_BASE}/v$(LZ4_VER).tar.gz
@@ -1937,10 +1951,11 @@ liblz4.a lz4-1.8.0/lib/lz4.h:
 		exit 1; \
 	fi
 	tar xvzf lz4-$(LZ4_VER).tar.gz
-	cd lz4-$(LZ4_VER)/lib && $(MAKE) CFLAGS='-fPIC -O2 ${EXTRA_CFLAGS}' all
+	cd lz4-$(LZ4_VER)/lib && $(MAKE) CFLAGS='-fPIC -O2 ${EXTRA_CFLAGS}' LDFLAGS= all
 	cp lz4-$(LZ4_VER)/lib/liblz4.a .
 
-libzstd.a zstd-1.3.3/lib/include/zstd.h:
+libzstd.a: zstd-1.3.3/lib/include/zstd.h
+zstd-1.3.3/lib/include/zstd.h:
 	-rm -rf zstd-$(ZSTD_VER)
 	cp -a downloads/zstd-$(ZSTD_VER).tar.gz .
 	#wget ${ZSTD_DOWNLOAD_BASE}/v$(ZSTD_VER).tar.gz
@@ -1952,7 +1967,7 @@ libzstd.a zstd-1.3.3/lib/include/zstd.h:
 		exit 1; \
 	fi
 	tar xvzf zstd-$(ZSTD_VER).tar.gz
-	cd zstd-$(ZSTD_VER)/lib && DESTDIR=. PREFIX= $(MAKE) CFLAGS='-fPIC -O2 ${EXTRA_CFLAGS}' install
+	cd zstd-$(ZSTD_VER)/lib && LDFLAGS= DESTDIR=. PREFIX= $(MAKE) CFLAGS='-fPIC -O2 ${EXTRA_CFLAGS}' install
 	cp zstd-$(ZSTD_VER)/lib/libzstd.a .
 
 # A version of each $(LIBOBJECTS) compiled with -fPIC and a fixed set of static compression libraries

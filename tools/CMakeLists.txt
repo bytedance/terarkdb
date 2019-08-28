@@ -4,6 +4,8 @@ set(TOOLS
   db_stress.cc
   write_stress.cc
   ldb.cc
+  kvpipe.cc
+  multi_get.cc
   db_repl_stress.cc
   dump/rocksdb_dump.cc
   dump/rocksdb_undump.cc)

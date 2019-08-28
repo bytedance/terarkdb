@@ -81,6 +81,7 @@ class PosixRandomAccessFile : public RandomAccessFile {
   std::string filename_;
   int fd_;
   bool use_direct_io_;
+  bool use_aio_reads_;
   size_t logical_sector_size_;
 
  public:
@@ -154,6 +155,7 @@ class PosixWritableFile : public WritableFile {
 class PosixMmapReadableFile : public RandomAccessFile {
  private:
   int fd_;
+  bool use_aio_reads_;
   std::string filename_;
   void* mmapped_region_;
   size_t length_;
