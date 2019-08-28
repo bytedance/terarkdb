@@ -600,7 +600,6 @@ class Version : public SeparateHelper, private LazySliceController {
   // REQUIRES: lock is not held
   void Get(const ReadOptions&, const Slice& user_key, const LookupKey& key,
            LazySlice* value, Status* status, MergeContext* merge_context,
-           const SeparateHelper* separate_helper,
            SequenceNumber* max_covering_tombstone_seq,
            bool* value_found = nullptr, bool* key_exists = nullptr,
            SequenceNumber* seq = nullptr, ReadCallback* callback = nullptr);
@@ -678,16 +677,6 @@ class Version : public SeparateHelper, private LazySliceController {
 
   MutableCFOptions GetMutableCFOptions() { return mutable_cf_options_; }
 
-  void destroy(LazySliceRep* /*rep*/) const override {}
-
-  void pin_resource(LazySlice* /*slice*/,
-                    LazySliceRep* /*rep*/) const override {}
-
-  Status inplace_decode(LazySlice* slice, LazySliceRep* rep) const override;
-
-  void TransToCombined(const Slice& user_key, uint64_t sequence,
-                       LazySlice& value) const override;
-
  private:
   Env* env_;
   friend class VersionSet;
@@ -745,6 +734,17 @@ class Version : public SeparateHelper, private LazySliceController {
           MutableCFOptions mutable_cf_options, uint64_t version_number = 0);
 
   ~Version();
+
+
+  void destroy(LazySliceRep* /*rep*/) const override {}
+
+  void pin_resource(LazySlice* /*slice*/,
+                    LazySliceRep* /*rep*/) const override {}
+
+  Status inplace_decode(LazySlice* slice, LazySliceRep* rep) const override;
+
+  void TransToCombined(const Slice& user_key, uint64_t sequence,
+                       LazySlice& value) const override;
 
   // No copying allowed
   Version(const Version&);

@@ -970,9 +970,7 @@ Status WriteBatchWithIndex::GetFromBatchAndDB(
       }
     }
   }
-  if (s.ok()) {
-    s = lazy_val->inplace_decode();
-  }
+  assert(!s.ok() || lazy_val->valid());
   return s;
 }
 

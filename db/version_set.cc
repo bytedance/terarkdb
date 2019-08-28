@@ -1240,7 +1240,6 @@ void Version::TransToCombined(const Slice& user_key, uint64_t sequence,
 void Version::Get(const ReadOptions& read_options, const Slice& user_key,
                   const LookupKey& k, LazySlice* value, Status* status,
                   MergeContext* merge_context,
-                  const SeparateHelper* separate_helper,
                   SequenceNumber* max_covering_tombstone_seq, bool* value_found,
                   bool* key_exists, SequenceNumber* seq,
                   ReadCallback* callback) {
@@ -1256,8 +1255,8 @@ void Version::Get(const ReadOptions& read_options, const Slice& user_key,
   GetContext get_context(
       user_comparator(), merge_operator_, info_log_, db_statistics_,
       status->ok() ? GetContext::kNotFound : GetContext::kMerge, user_key,
-      value, value_found, merge_context, separate_helper,
-      max_covering_tombstone_seq, this->env_, seq, callback);
+      value, value_found, merge_context, this, max_covering_tombstone_seq,
+      this->env_, seq, callback);
 
   FilePicker fp(
       storage_info_.files_, user_key, ikey, &storage_info_.level_files_brief_,

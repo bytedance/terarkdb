@@ -57,8 +57,7 @@ Status DBImplReadOnly::Get(const ReadOptions& read_options,
   } else {
     PERF_TIMER_GUARD(get_from_output_files_time);
     super_version->current->Get(read_options, key, lkey, lazy_val, &s,
-                                &merge_context, super_version->current,
-                                &max_covering_tombstone_seq);
+                                &merge_context, &max_covering_tombstone_seq);
     RecordTick(stats_, MEMTABLE_MISS);
   }
   RecordTick(stats_, NUMBER_KEYS_READ);

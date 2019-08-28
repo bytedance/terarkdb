@@ -384,8 +384,8 @@ Status WriteUnpreparedTxn::RollbackInternal() {
       bool not_used;
       s = db_impl_->GetImpl(roptions, cf_handle, key, &lazy_val, &not_used,
                             &callback);
-
       if (s.ok()) {
+        assert(lazy_val.valid());
         s = rollback_batch.Put(cf_handle, key, lazy_val);
         assert(s.ok());
       } else if (s.IsNotFound()) {

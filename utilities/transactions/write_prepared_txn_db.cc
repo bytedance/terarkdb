@@ -229,9 +229,7 @@ Status WritePreparedTxnDB::Get(const ReadOptions& options,
   // snapshot is requested by the user.
   auto s = db_impl_->GetImpl(options, column_family, key, value, dont_care,
                              &callback);
-  if (s.ok()) {
-    s = value->inplace_decode();
-  }
+  assert(!s.ok() || value->valid());
   return s;
 }
 

@@ -261,10 +261,7 @@ Status WritePreparedTxn::RollbackInternal() {
       auto cf_handle = handles_[cf];
       s = db_->GetImpl(roptions, cf_handle, key, &lazy_val, &not_used,
                        &callback);
-      assert(s.ok() || s.IsNotFound());
-      if (s.ok()) {
-        s = lazy_val.inplace_decode();
-      }
+      assert(s.ok() ? lazy_val.valid() : s.IsNotFound());
       if (s.ok()) {
         s = rollback_batch_->Put(cf_handle, key, lazy_val);
         assert(s.ok());

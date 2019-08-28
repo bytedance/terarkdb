@@ -348,20 +348,27 @@ Compaction* UniversalCompactionPicker::PickCompaction(
           break;
         }
       }
-      int reduce_sorted_run_target =
-          std::max(mutable_cf_options.level0_file_num_compaction_trigger +
-                   ioptions_.num_levels - 2, 1);
-      if (has_map_compaction ||
+      int reduce_sorted_run_target = std::numeric_limits<int>::max();
+      if (!has_map_compaction &&
           (c = PickTrivialMoveCompaction(cf_name, mutable_cf_options, vstorage,
-                                         log_buffer)) != nullptr) {
-        reduce_sorted_run_target = std::numeric_limits<int>::max();
-      } else if (table_cache_ != nullptr && sorted_runs.size() > 1 &&
-                 int(sorted_runs.size()) <= reduce_sorted_run_target) {
-        if (vstorage->read_amplification() < reduce_sorted_run_target) {
-          reduce_sorted_run_target = std::max({
-              mutable_cf_options.level0_file_num_compaction_trigger - 1,
-              ioptions_.num_levels - 1, int(sorted_runs.size()) - 2, 1});
-        }
+                                         log_buffer)) == nullptr &&
+          table_cache_ != nullptr) {
+
+        int min_sorted_run_size = std::max(1, ioptions_.num_levels - 1);
+        int max_sorted_run_size =
+            std::max(1, mutable_cf_options.level0_file_num_compaction_trigger +
+                     ioptions_.num_levels - 2);
+
+        int read_amp_target =
+            vstorage->read_amplification() -
+            llround(sqrt(vstorage->read_amplification()));
+        int sorted_runs_target = int(sorted_runs.size()) - 2;
+
+        reduce_sorted_run_target = std::max({min_sorted_run_size,
+                                             sorted_runs_target,
+                                             read_amp_target});
+        reduce_sorted_run_target = std::min(max_sorted_run_size,
+                                            reduce_sorted_run_target);
       }
       if (int(sorted_runs.size()) > reduce_sorted_run_target &&
           (c = PickCompactionToReduceSortedRuns(
