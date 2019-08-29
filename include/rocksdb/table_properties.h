@@ -236,6 +236,7 @@ extern uint64_t GetMergeOperands(const UserCollectedProperties& props,
 extern uint8_t GetSstPurpose(const UserCollectedProperties&);
 extern std::vector<uint64_t> GetSstDepend(
     const UserCollectedProperties& props);
-extern size_t GetSstReadAmp(const UserCollectedProperties& props);
+extern std::pair<size_t, double> GetSstReadAmp(
+    const UserCollectedProperties& props);
 
 }  // namespace rocksdb

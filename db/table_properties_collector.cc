@@ -33,6 +33,9 @@ Status CompositeSstPropertiesCollector::Finish(
 
   std::string sst_read_amp;
   PutVarint64(&sst_read_amp, *sst_read_amp_);
+  if (*sst_read_amp_ != *sst_read_amp_ratio_) {
+    PutVarint64(&sst_read_amp, int64_t(*sst_read_amp_ratio_ * 65536));
+  }
 
   properties->insert(
       {TablePropertiesNames::kSstReadAmp, sst_read_amp});
@@ -53,9 +56,12 @@ UserCollectedProperties CompositeSstPropertiesCollector::GetReadableProperties()
     }
     sst_depend.back() = ']';
   }
+  std::string sst_read_amp =
+      "[" + ToString(*sst_read_amp_) + "," + ToString(*sst_read_amp_ratio_) +
+      "]";
   return {{"kSstPurpose", ToString((int)sst_purpose_)},
           {"kSstDepend", sst_depend},
-          {"kSstReadAmp", ToString(*sst_read_amp_)}};
+          {"kSstReadAmp", sst_read_amp}};
 }
 
 namespace {
@@ -142,10 +148,24 @@ std::vector<uint64_t> GetSstDepend(const UserCollectedProperties& props) {
   return result;
 }
 
-size_t GetSstReadAmp(const UserCollectedProperties& props) {
-  bool ignore;
-  return GetUint64Property(
-      props, TablePropertiesNames::kSstReadAmp, &ignore);
+std::pair<size_t, double> GetSstReadAmp(const UserCollectedProperties& props) {
+  auto pos = props.find(TablePropertiesNames::kSstReadAmp);
+  std::pair<size_t, double> amp = {1, 1};
+  if (pos == props.end()) {
+    return amp;
+  }
+  Slice raw = pos->second;
+  uint64_t val = 1;
+  if (!GetVarint64(&raw, &val)) {
+    return amp;
+  }
+  amp.first = val;
+  if (GetVarint64(&raw, &val)) {
+    amp.second = 1. * val / 65536;
+  } else {
+    amp.second = amp.first;
+  }
+  return amp;
 }
 
 }  // namespace rocksdb

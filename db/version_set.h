@@ -262,8 +262,16 @@ class VersionStorageInfo {
            has_space_amplification_.end();
   }
 
-  void set_read_amplification(int amp) { read_amplification_ = amp; }
-  int read_amplification() const { return read_amplification_; }
+  void set_read_amplification(const std::vector<double>& read_amp) {
+    read_amplification_ = read_amp;
+  }
+  double read_amplification(int level) const {
+    return read_amplification_[level];
+  }
+  double read_amplification() const {
+    return std::accumulate(read_amplification_.begin(),
+                           read_amplification_.end(), 0.);
+  }
 
   // REQUIRES: This version has been saved (see VersionSet::SaveTo)
   int num_non_empty_levels() const {
@@ -521,7 +529,7 @@ class VersionStorageInfo {
   std::vector<int> compaction_level_;
 
   std::unordered_set<int> has_space_amplification_;
-  int read_amplification_ = 0;
+  std::vector<double> read_amplification_;
 
   int l0_delay_trigger_count_ = 0;  // Count used to trigger slow down and stop
                                     // for number of L0 files.

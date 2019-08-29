@@ -197,12 +197,21 @@ class MapSstElementIterator {
     return sst_depend_build_;
   }
 
-  size_t GetSstReadAmp() const { return sst_read_amp_; }
+  std::pair<size_t, double> GetSstReadAmp() const {
+    return {sst_read_amp_, sst_read_amp_ratio_};
+  }
 
  private:
   void PrepareNext() {
     if (where_ == ranges_.end()) {
       buffer_.clear();
+      if (sst_read_amp_size_ == 0) {
+        sst_read_amp_ratio_ = sst_read_amp_;
+      } else {
+        sst_read_amp_ratio_ /= sst_read_amp_size_;
+      }
+      assert(sst_read_amp_ratio_ >= 1);
+      assert(sst_read_amp_ratio_ <= sst_read_amp_);
       return;
     }
     auto& start = map_elements_.smallest_key_ = where_->point[0].Encode();
@@ -253,9 +262,11 @@ class MapSstElementIterator {
       ++where_;
     }
 
+    size_t range_size = 0;
     if (stable) {
       for (auto& link : map_elements_.link_) {
         sst_depend_build_.emplace(link.file_number);
+        range_size += link.size;
       }
     } else {
       no_records = true;
@@ -295,6 +306,7 @@ class MapSstElementIterator {
               reader->ApproximateOffsetOf(temp_start_.Encode());
           uint64_t end_offset = reader->ApproximateOffsetOf(temp_end_.Encode());
           link.size = end_offset - start_offset;
+          range_size += link.size;
           no_records = false;
         } else {
           link.size = 0;
@@ -302,6 +314,8 @@ class MapSstElementIterator {
       }
     }
     sst_read_amp_ = std::max(sst_read_amp_, map_elements_.link_.size());
+    sst_read_amp_ratio_ += map_elements_.link_.size() * range_size;
+    sst_read_amp_size_ += range_size;
     map_elements_.Value(&buffer_);  // Encode value
   }
 
@@ -314,6 +328,8 @@ class MapSstElementIterator {
   const std::vector<RangeWithDepend>& ranges_;
   std::unordered_set<uint64_t> sst_depend_build_;
   size_t sst_read_amp_ = 0;
+  double sst_read_amp_ratio_ = 0;
+  size_t sst_read_amp_size_ = 0;
   IteratorCache& iterator_cache_;
   const InternalKeyComparator& icomp_;
 };
@@ -811,9 +827,10 @@ Status MapBuilder::WriteOutputFile(
   // Used for write properties
   std::vector<uint64_t> sst_depend;
   size_t sst_read_amp = 1;
+  double sst_read_amp_ratio = 1;
   std::vector<std::unique_ptr<IntTblPropCollectorFactory>> collectors;
   collectors.emplace_back(new SstPurposePropertiesCollectorFactory(
-      (uint8_t)kMapSst, &sst_depend, &sst_read_amp));
+      (uint8_t)kMapSst, &sst_depend, &sst_read_amp, &sst_read_amp_ratio));
 
   // no need to lock because VersionSet::next_file_number_ is atomic
   uint64_t file_number = versions_->NewFileNumber();
@@ -895,7 +912,7 @@ Status MapBuilder::WriteOutputFile(
   sst_depend.insert(sst_depend.end(), sst_depend_build.begin(),
                     sst_depend_build.end());
   std::sort(sst_depend.begin(), sst_depend.end());
-  sst_read_amp = range_iter->GetSstReadAmp();
+  std::tie(sst_read_amp, sst_read_amp_ratio) = range_iter->GetSstReadAmp();
 
   // Map sst don't write tombstones
   file_meta->marked_for_compaction = builder->NeedCompact();
