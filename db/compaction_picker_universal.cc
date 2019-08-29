@@ -357,7 +357,8 @@ Compaction* UniversalCompactionPicker::PickCompaction(
               env_options_, *icmp_, f->fd, &porps,
               mutable_cf_options.prefix_extractor.get(), false);
           if (s.ok()) {
-            size_t read_amp = GetSstReadAmp(porps->user_collected_properties);
+            size_t read_amp =
+                GetSstReadAmp(porps->user_collected_properties).first;
             if (read_amp > 1) {
               level_read_amp_count += read_amp;
             }
@@ -1349,7 +1350,7 @@ Compaction* UniversalCompactionPicker::PickCompositeCompaction(
   }
   CompactionInputFiles inputs;
   inputs.level = -1;
-  size_t max_read_amp = 0;
+  double max_read_amp_ratio = std::numeric_limits<double>::min();
   for (auto rit = sorted_runs.rbegin(); rit != sorted_runs.rend(); ++rit) {
     auto& sr = *rit;
     if (sr.wait_reduce) {
@@ -1381,10 +1382,14 @@ Compaction* UniversalCompactionPicker::PickCompositeCompaction(
         env_options_, *icmp_, f->fd, &porps,
         mutable_cf_options.prefix_extractor.get(), false);
     if (s.ok()) {
-      size_t level_space_amplification =
-          GetSstReadAmp(porps->user_collected_properties);
-      if (level_space_amplification >= max_read_amp) {
-        max_read_amp = level_space_amplification;
+      double level_read_amp =
+          GetSstReadAmp(porps->user_collected_properties).second;
+      double level_read_amp_ratio = 1. * level_read_amp / sr.size;
+      if (level_read_amp <= 1) {
+        level_read_amp_ratio = -level_read_amp_ratio;
+      }
+      if (level_read_amp_ratio >= max_read_amp_ratio) {
+        max_read_amp_ratio = level_read_amp_ratio;
         inputs.level = sr.level;
         inputs.files = {f};
       }

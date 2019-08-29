@@ -83,10 +83,12 @@ class CompositeSstPropertiesCollector final : public IntTblPropCollector {
  public:
   CompositeSstPropertiesCollector(uint8_t _sst_purpose,
                                 std::vector<uint64_t>* _sst_depend,
-                                size_t* _sst_read_amp)
+                                size_t* _sst_read_amp,
+                                double* _sst_read_amp_ratio)
       : sst_purpose_(_sst_purpose),
         sst_depend_(_sst_depend),
-        sst_read_amp_(_sst_read_amp) {}
+        sst_read_amp_(_sst_read_amp),
+        sst_read_amp_ratio_(_sst_read_amp_ratio) {}
 
   virtual Status InternalAdd(const Slice& /*key*/, const Slice& /*value*/,
                              uint64_t /*file_size*/) override {
@@ -105,6 +107,7 @@ class CompositeSstPropertiesCollector final : public IntTblPropCollector {
   uint8_t sst_purpose_;
   std::vector<uint64_t>* sst_depend_;
   size_t* sst_read_amp_;
+  double* sst_read_amp_ratio_;
 };
 
 class SstPurposePropertiesCollectorFactory final
@@ -112,15 +115,18 @@ class SstPurposePropertiesCollectorFactory final
  public:
   SstPurposePropertiesCollectorFactory(uint8_t _sst_composite,
                                        std::vector<uint64_t>* _sst_depend,
-                                       size_t* _sst_read_amp)
+                                       size_t* _sst_read_amp,
+                                       double* _sst_read_amp_ratio)
       : sst_purpose_(_sst_composite),
         sst_depend_(_sst_depend),
-        sst_read_amp_(_sst_read_amp) {}
+        sst_read_amp_(_sst_read_amp),
+        sst_read_amp_ratio_(_sst_read_amp_ratio) {}
 
   virtual IntTblPropCollector* CreateIntTblPropCollector(
       uint32_t /*column_family_id*/) override {
     return new CompositeSstPropertiesCollector(sst_purpose_, sst_depend_,
-                                             sst_read_amp_);
+                                               sst_read_amp_,
+                                               sst_read_amp_ratio_);
   }
 
   virtual const char* Name() const override {
@@ -131,6 +137,7 @@ class SstPurposePropertiesCollectorFactory final
   uint8_t sst_purpose_;
   std::vector<uint64_t>* sst_depend_;
   size_t* sst_read_amp_;
+  double* sst_read_amp_ratio_;
 };
 
 // When rocksdb creates a new table, it will encode all "user keys" into

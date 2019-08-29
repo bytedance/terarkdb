@@ -424,8 +424,7 @@ class VersionBuilder::Rep {
 
     // Deep copy base depend files to deleted files
     auto deleted_files = base_vstorage_->LevelFiles(-1);
-    std::vector<int> read_amp;
-    read_amp.resize(num_levels_);
+    std::vector<double> read_amp(num_levels_);
 
     for (int level = 0; level < num_levels_; level++) {
       const auto& cmp = (level == 0) ? level_zero_cmp_ : level_nonzero_cmp_;
@@ -461,14 +460,14 @@ class VersionBuilder::Rep {
         } else {
           LoadSstDepend(f, depend_map_);
           vstorage->AddFile(level, f, info_log_);
-          int f_read_amp = 1;
+          double f_read_amp = 1;
           if (f->sst_purpose == kMapSst) {
             std::shared_ptr<const TableProperties> tp;
             auto s = table_cache_->GetTableProperties(
                 env_options_, *base_vstorage_->InternalComparator(), f->fd, &tp,
                 prefix_extractor_);
             if (s.ok()) {
-              f_read_amp = (int)GetSstReadAmp(tp->user_collected_properties);
+              f_read_amp = GetSstReadAmp(tp->user_collected_properties).second;
             }
           }
           if (level == 0) {
@@ -518,8 +517,7 @@ class VersionBuilder::Rep {
       vstorage->RemoveCurrentStats(f);
     }
 
-    vstorage->set_read_amplification(
-        std::accumulate(read_amp.begin(), read_amp.end(), 0));
+    vstorage->set_read_amplification(read_amp);
 
     CheckConsistency(vstorage);
   }
