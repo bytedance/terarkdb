@@ -1113,9 +1113,9 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
         return Status::IOError("While fcntl NoCache", "O_DIRECT is required for terark user space cache");
       }
   #endif
-    }
 #endif
-    subReader_.storeFD_ = subReader_.cache_->open(subReader_.storeFD_);
+      subReader_.storeFD_ = subReader_.cache_->open(subReader_.storeFD_);
+    }
   }
   if (tzto_.forceMetaInMemory) {
     valvec<fstring> index_meta_data = subReader_.index_->GetMetaData();
