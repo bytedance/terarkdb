@@ -320,6 +320,10 @@ PosixRandomAccessFile::PosixRandomAccessFile(const std::string& fname, int fd,
 
 PosixRandomAccessFile::~PosixRandomAccessFile() { close(fd_); }
 
+bool PosixRandomAccessFile::use_aio_reads() const {
+    return use_aio_reads_;
+}
+
 Status PosixRandomAccessFile::Read(uint64_t offset, size_t n, Slice* result,
                                    char* scratch) const {
   if (use_direct_io()) {
@@ -466,6 +470,10 @@ PosixMmapReadableFile::~PosixMmapReadableFile() {
             mmapped_region_, length_);
   }
   close(fd_);
+}
+
+bool PosixMmapReadableFile::use_aio_reads() const {
+    return use_aio_reads_;
 }
 
 Status PosixMmapReadableFile::Read(uint64_t offset, size_t n, Slice* result,

@@ -88,7 +88,7 @@ class PosixRandomAccessFile : public RandomAccessFile {
   PosixRandomAccessFile(const std::string& fname, int fd,
                         const EnvOptions& options);
   virtual ~PosixRandomAccessFile();
-
+  virtual bool use_aio_reads() const final;
   virtual Status Read(uint64_t offset, size_t n, Slice* result,
                       char* scratch) const override;
 
@@ -164,6 +164,7 @@ class PosixMmapReadableFile : public RandomAccessFile {
   PosixMmapReadableFile(const int fd, const std::string& fname, void* base,
                         size_t length, const EnvOptions& options);
   virtual ~PosixMmapReadableFile();
+  virtual bool use_aio_reads() const final;
   virtual Status Read(uint64_t offset, size_t n, Slice* result,
                       char* scratch) const override;
   virtual Status FsRead(uint64_t offset, size_t len, void* buf) const override;
