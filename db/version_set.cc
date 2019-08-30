@@ -847,7 +847,8 @@ Status Version::GetPropertiesOfTablesInRange(
       std::vector<FileMetaData*> files;
       storage_info_.GetOverlappingInputs(level, &k1, &k2, &files, -1, nullptr,
                                          false);
-      for (const auto file_meta : files) {
+      for (size_t j = 0; j < files.size(); ++j) {
+        const auto file_meta = files[j];
         if (file_meta->sst_purpose != SstPurpose::kEssenceSst) {
           for (auto file_number : file_meta->sst_depend) {
             auto find = storage_info_.depend_files_.find(file_number);
@@ -2712,7 +2713,7 @@ uint64_t VersionStorageInfo::EstimateLiveDataSize() const {
   // (Ordered) map of largest keys in non-overlapping files
   std::map<InternalKey*, FileMetaData*, decltype(ikey_lt)> ranges(ikey_lt);
 
-  for (int l = num_levels_ - 1; l >= 0; l--) {
+  for (int l = num_levels_ - 1; l >= -1; l--) {
     bool found_end = false;
     for (auto file : files_[l]) {
       // Find the first file where the largest key is larger than the smallest
