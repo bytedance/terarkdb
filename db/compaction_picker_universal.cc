@@ -1350,7 +1350,7 @@ Compaction* UniversalCompactionPicker::PickCompositeCompaction(
   }
   CompactionInputFiles inputs;
   inputs.level = -1;
-  double max_read_amp_ratio = std::numeric_limits<double>::min();
+  double max_read_amp_ratio = -std::numeric_limits<double>::infinity();
   for (auto rit = sorted_runs.rbegin(); rit != sorted_runs.rend(); ++rit) {
     auto& sr = *rit;
     if (sr.wait_reduce) {
