@@ -603,6 +603,8 @@ class RandomAccessFile {
   // uses direct IO.
   virtual bool use_direct_io() const { return false; }
 
+  virtual bool use_aio_reads() const { return false; }
+
   // Use the returned alignment value to allocate
   // aligned buffer for Direct I/O
   virtual size_t GetRequiredBufferAlignment() const { return kDefaultPageSize; }
