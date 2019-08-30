@@ -1079,6 +1079,7 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
       fstring(file_data.data() + indexSize, storeSize),
       getVerifyDict(dict)
     ));
+    subReader_.store_->set_mmap_aio(file->file()->use_aio_reads());
   }
   catch (const BadCrc32cException& ex) {
     return Status::Corruption("TerarkZipTableReader::Open()", ex.what());
@@ -1362,6 +1363,7 @@ Status TerarkZipTableMultiReader::SubIndex::Init(
       }
       part.storeOffset_ = offset += curr.key;
       part.store_.reset(AbstractBlobStore::load_from_user_memory(fstring(baseAddress + offset, curr.value), dict));
+      part.store_->set_mmap_aio(fileObj->use_aio_reads());
       if (part.store_->is_offsets_zipped()) {
         hasAnyZipOffset_ = true;
       }
