@@ -165,7 +165,6 @@ private:
   };
   Status buildEntropyZipBlobStore(BuildStoreParams& params);
   Status buildZeroLengthBlobStore(BuildStoreParams& params);
-  Status buildPlainBlobStore(BuildStoreParams& params);
   Status buildMixedLenBlobStore(BuildStoreParams& params);
   Status buildZipOffsetBlobStore(BuildStoreParams& params);
   Status ZipValueToFinish();

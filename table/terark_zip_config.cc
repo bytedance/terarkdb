@@ -132,7 +132,6 @@ TerarkZipAutoConfigForOnlineDB_DBOptions(struct DBOptions& dbo, size_t cpuNum) {
   dbo.base_background_compactions = 4;
   dbo.max_background_compactions = 8;
   dbo.allow_concurrent_memtable_write = false;
-  dbo.delayed_write_rate = 40ull << 20;
   dbo.max_background_jobs = dbo.max_background_compactions + dbo.max_background_flushes;
 
   dbo.env->SetBackgroundThreads(dbo.max_background_compactions, rocksdb::Env::LOW);

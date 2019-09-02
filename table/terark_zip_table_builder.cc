@@ -840,7 +840,8 @@ Status TerarkZipTableBuilder::BuildStore(KeyValueStatus& kvs,
     try {
       if (kvs.status.valueHist.m_total_key_len == 0) {
         s = buildZeroLengthBlobStore(params);
-      } else if (stat.keyCount >= 4096 && table_options_.enableEntropyStore) {
+      } else if (stat.keyCount >= 4096 && table_options_.enableEntropyStore &&
+                 kvs.status.valueHist.m_total_key_len / stat.keyCount < 32) {
         s = buildEntropyZipBlobStore(params);
       } else if (table_options_.offsetArrayBlockUnits) {
         if (variaNum * 64 < stat.keyCount) {
@@ -849,11 +850,7 @@ Status TerarkZipTableBuilder::BuildStore(KeyValueStatus& kvs,
           s = buildZipOffsetBlobStore(params);
         }
       } else {
-        if (4 * variaNum + stat.keyCount * 5 / 4 < 4 * stat.keyCount) {
-          s = buildMixedLenBlobStore(params);
-        } else {
-          s = buildPlainBlobStore(params);
-        }
+        s = buildMixedLenBlobStore(params);
       }
       size_t newTmpStoreFileSize = FileStream(tmpStoreFile_.fpath, "rb").fsize();
       if (s.ok()) {
@@ -1076,6 +1073,14 @@ void TerarkZipTableBuilder::BuildReorderMap(std::unique_ptr<TerarkIndex>& index,
 TerarkZipTableBuilder::WaitHandle
 TerarkZipTableBuilder::
 LoadSample(std::unique_ptr<DictZipBlobStore::ZipBuilder>& zbuilder) {
+  if (compaction_load_ > 0.99) {
+    INFO(ioptions_.info_log, "TerarkZipTableBuilder::LoadSample():this=%12p:\n sample_len = %zd, real_sample_len = 0, compaction_load = %f\n"
+      , this, sampleLenSum_, compaction_load_
+    );
+    zbuilder.reset();
+    return WaitHandle();
+  }
+
   size_t sampleMax = std::min<size_t>(INT32_MAX, table_options_.softZipWorkingMemLimit / 7);
   size_t dictWorkingMemory = std::min<size_t>(sampleMax, sampleLenSum_) * 6;
   auto waitHandle = WaitForMemory("dictZip", dictWorkingMemory);
@@ -1114,7 +1119,7 @@ LoadSample(std::unique_ptr<DictZipBlobStore::ZipBuilder>& zbuilder) {
   }
   tmpSampleFile_.close();
   if (realSampleLenSum == 0) { // prevent from empty
-    zbuilder->addSample("Hello World!");
+    zbuilder->addSample(sample.empty() ? fstring("Hello World!") : fstring(sample).substr(0, newSampleLen));
   }
   zbuilder->finishSample();
   return waitHandle;
@@ -1140,15 +1145,6 @@ Status TerarkZipTableBuilder::buildZeroLengthBlobStore(BuildStoreParams& params)
     store->save_mmap([&](const void* d, size_t s) {
       file.ensureWrite(d, s);
     });
-  }
-  return s;
-}
-Status TerarkZipTableBuilder::buildPlainBlobStore(BuildStoreParams& params) {
-  auto& kvs = params.kvs;
-  terark::PlainBlobStore::MyBuilder builder(kvs.status.valueHist.m_total_key_len, params.fpath, params.offset);
-  auto s = BuilderWriteValues(kvs, [&](fstring value) { builder.addRecord(value); });
-  if (s.ok()) {
-    builder.finish();
   }
   return s;
 }
