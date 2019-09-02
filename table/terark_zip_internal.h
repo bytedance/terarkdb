@@ -84,18 +84,13 @@ bool IsBytewiseComparator(const Comparator* cmp);
 
 struct CollectInfo {
   static const size_t queue_size;
-  static const double hard_ratio;
 
   struct CompressionInfo {
     uint64_t timestamp;
-    size_t raw_value;
-    size_t zip_value;
     size_t entropy;
     size_t zip_store;
   };
   std::vector<CompressionInfo> queue;
-  size_t raw_value_size = 0;
-  size_t zip_value_size = 0;
   size_t entropy_size = 0;
   size_t zip_store_size = 0;
   std::atomic<float> estimate_compression_ratio;
@@ -103,9 +98,7 @@ struct CollectInfo {
 
   CollectInfo() : estimate_compression_ratio{0} {}
 
-  void update(uint64_t timestamp, size_t raw_value, size_t zip_value, size_t raw_store, size_t zip_store);
-  static bool hard(size_t raw, size_t zip);
-  bool hard() const;
+  void update(uint64_t timestamp, size_t raw_store, size_t zip_store);
   float estimate() const;
 };
 
@@ -133,7 +126,7 @@ struct ZipValueMultiValue {
     assert(num > 0);
     memmove(me->offsets + 1, me->offsets + 2, sizeof(uint32_t) * (num - 1));
     me->offsets[0] = 0;
-    me->offsets[num] = size - sizeof(uint32_t) * (num + 1);
+    me->offsets[num] = uint32_t(size - sizeof(uint32_t) * (num + 1));
     *pNum = num;
     return me;
   }

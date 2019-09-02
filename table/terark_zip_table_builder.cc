@@ -172,10 +172,17 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(const TerarkZipTableFactory* table_
                                              WritableFileWriter* file,
                                              size_t key_prefixLen)
   : table_options_(tzto), table_factory_(table_factory), ioptions_(tbo.ioptions), range_del_block_(1),
-    ignore_key_type_(tbo.ignore_key_type), prefixLen_(key_prefixLen) {
+    ignore_key_type_(tbo.ignore_key_type), prefixLen_(key_prefixLen), compaction_load_(0) {
   try {
     singleIndexMaxSize_ = std::min(table_options_.softZipWorkingMemLimit,
                                    table_options_.singleIndexMaxSize);
+
+    if (tbo.compaction_load > 0) {
+      double load = tbo.compaction_load * tbo.ioptions.num_levels - std::max(0, tbo.level);
+      if (load > 0) {
+        compaction_load_ = std::min(1., load);
+      }
+    }
 
     estimateRatio_ = table_factory_->GetCollect().estimate();
 
@@ -199,7 +206,7 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(const TerarkZipTableFactory* table_
       collectors_.resize(factories.size());
       auto cfId = properties_.column_family_id;
       for (size_t i = 0; i < collectors_.size(); ++i) {
-        collectors_[i].reset(factories[i]->CreateIntTblPropCollector(cfId));
+        collectors_[i].reset(factories[i]->CreateIntTblPropCollector(uint32_t(cfId)));
       }
     }
 
@@ -944,7 +951,7 @@ TerarkZipTableBuilder::CompressDict(fstring tmpDictFile, fstring dict,
     FileStream(tmpDictFile, "wb+").chsize(dict.size());
     MmapWholeFile dictFile(tmpDictFile, true);
     size_t zstd_size = ZSTD_compress(dictFile.base, dictFile.size, dict.data(), dict.size(), 0);
-    if (ZSTD_isError(zstd_size) || CollectInfo::hard(dict.size(), zstd_size)) {
+    if (ZSTD_isError(zstd_size) || zstd_size >= dict.size()) {
       memcpy(dictFile.base, dict.data(), dict.size());
       info->clear();
     } else {
@@ -1074,63 +1081,39 @@ LoadSample(std::unique_ptr<DictZipBlobStore::ZipBuilder>& zbuilder) {
   auto waitHandle = WaitForMemory("dictZip", dictWorkingMemory);
 
   valvec<byte_t> sample;
-  valvec<byte_t> test;
-  const size_t test_size = 32ull << 20;
-  auto hard_test = table_options_.enableCompressionProbe && table_factory_->GetCollect().hard();
   NativeDataInput<InputBuffer> sampleInput(&tmpSampleFile_.fp);
-  size_t realsampleLenSum = 0;
-  if (hard_test && sampleLenSum_ < test_size) {
+  size_t newSampleLen =
+      std::size_t(std::pow(std::min(sampleLenSum_, sampleMax) / 4096.0, 1 - compaction_load_) * 4096);
+  size_t realSampleLenSum = 0;
+
+  if (newSampleLen >= sampleLenSum_) {
     for (size_t len = 0; len < sampleLenSum_; ) {
       sampleInput >> sample;
       zbuilder->addSample(sample);
-      test.append(sample);
       len += sample.size();
     }
-    realsampleLenSum = sampleLenSum_;
+    realSampleLenSum = sampleLenSum_;
   } else {
-    if (sampleLenSum_ < sampleMax) {
-      auto upperBoundTest = uint64_t(
-        randomGenerator_.max() * double(test_size) / sampleLenSum_);
-      for (size_t len = 0; len < sampleLenSum_; ) {
-        sampleInput >> sample;
-        zbuilder->addSample(sample);
-        len += sample.size();
-        if (hard_test && randomGenerator_() < upperBoundTest) {
-          test.append(sample);
-        }
-      }
-      realsampleLenSum = sampleLenSum_;
-    } else {
-      auto upperBoundSample = uint64_t(
-        randomGenerator_.max() * double(sampleMax) / sampleLenSum_);
-      auto upperBoundTest = uint64_t(
-        randomGenerator_.max() * double(test_size) / sampleLenSum_);
-      for (size_t len = 0; len < sampleLenSum_; ) {
-        sampleInput >> sample;
-        if (randomGenerator_() < upperBoundSample) {
+    auto upperBoundSample = uint64_t(randomGenerator_.max() * double(newSampleLen) / sampleLenSum_);
+    for (size_t len = 0; len < sampleLenSum_; ) {
+      sampleInput >> sample;
+      if (randomGenerator_() < upperBoundSample) {
+        realSampleLenSum += sample.size();
+        if (realSampleLenSum < newSampleLen) {
           zbuilder->addSample(sample);
-          realsampleLenSum += sample.size();
+        } else {
+          zbuilder->addSample(fstring(sample).substr(0, realSampleLenSum - newSampleLen));
+          break;
         }
-        if (hard_test && randomGenerator_() < upperBoundTest) {
-          test.append(sample);
-        }
-        len += sample.size();
       }
+      len += sample.size();
     }
+    INFO(ioptions_.info_log, "TerarkZipTableBuilder::LoadSample():this=%12p:\n sample_len = %zd, real_sample_len = %zd, compaction_load = %f\n"
+      , this, sampleLenSum_, realSampleLenSum, compaction_load_
+    );
   }
   tmpSampleFile_.close();
-  if (hard_test) {
-    valvec<byte_t> output(test.size(), valvec_no_init());
-    size_t zstd_size = ZSTD_compress(output.data(), test.size(), test.data(), test.size(), 0);
-    if (ZSTD_isError(zstd_size) || CollectInfo::hard(test.size(), zstd_size)) {
-      // hard to compress ...
-      zbuilder.reset();
-      waitHandle.Release();
-      return waitHandle;
-    }
-    test.clear();
-  }
-  if (0 == realsampleLenSum) { // prevent from empty
+  if (realSampleLenSum == 0) { // prevent from empty
     zbuilder->addSample("Hello World!");
   }
   zbuilder->finishSample();
@@ -1420,7 +1403,7 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
           value.append((byte_t*)&seqType, 8);
           input.appendBuffer(&value);
           if (j + 1 < oneSeqLen) {
-            ((ZipValueMultiValue*)value.data())->offsets[j + 1] = value.size() - headerSize;
+            ((ZipValueMultiValue*)value.data())->offsets[j + 1] = uint32_t(value.size() - headerSize);
           }
         }
       }
@@ -1541,13 +1524,13 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
             ITER_MOVE_NEXT(second_pass_iter_);
             if (++mulRecId < varNum) {
               bufKey = readInternalKey(false);
-              ((ZipValueMultiValue*)value.data())->offsets[mulRecId] = value.size() - headerSize;
+              ((ZipValueMultiValue*)value.data())->offsets[mulRecId] = uint32_t(value.size() - headerSize);
             }
           } else if (mulCmpRet > 0) { // curKey > bufKey
             // write nothing
             if (++mulRecId < varNum) {
               bufKey = readInternalKey(false);
-              ((ZipValueMultiValue*)value.data())->offsets[mulRecId] = value.size() - headerSize;
+              ((ZipValueMultiValue*)value.data())->offsets[mulRecId] = uint32_t(value.size() - headerSize);
             }
           } else if (mulCmpRet < 0) { //curKey < bufKey
             ITER_MOVE_NEXT(second_pass_iter_);
@@ -2186,11 +2169,11 @@ void TerarkZipTableBuilder::AddPrevUserKey(size_t samePrefix, std::initializer_l
     valueTestBuf_.reserve(valueLen);
     valueTestBuf_.risk_set_size(headerSize);
     ZipValueMultiValue* zmValue = (ZipValueMultiValue*)valueTestBuf_.data();
-    zmValue->offsets[0] = vNum;
+    zmValue->offsets[0] = uint32_t(vNum);
     for (size_t i = 1; i < vNum; ++i) {
       fstring v = valueBuf_[i - 1];
       valueTestBuf_.append(v);
-      zmValue->offsets[i] = valueTestBuf_.size() - headerSize;
+      zmValue->offsets[i] = uint32_t(valueTestBuf_.size() - headerSize);
     }
     valueTestBuf_.append(valueBuf_.back());
     freq_[0]->v.add_record(valueTestBuf_);

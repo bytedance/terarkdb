@@ -194,7 +194,7 @@ void UpdateCollectInfo(const TerarkZipTableFactory* table_factory,
   auto& collect = table_factory->GetCollect();
   uint64_t timestamp = terark::lcast(find_time->second);
   size_t entropy = terark::lcast(find_entropy->second);
-  collect.update(timestamp, props->raw_value_size, props->data_size, entropy, file_size);
+  collect.update(timestamp, entropy, file_size);
 }
 
 template<class T> void CallDestructor(T* ptr) {

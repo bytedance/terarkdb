@@ -76,38 +76,24 @@ const std::string kTerarkZipTableDictSize       = "terark.build.dict_size";
 const std::string kTerarkZipTableEntropy        = "terark.build.entropy";
 
 const size_t CollectInfo::queue_size = 1024;
-const double CollectInfo::hard_ratio = 0.9;
 
-void CollectInfo::update(uint64_t timestamp, size_t raw_value, size_t zip_value, size_t entropy, size_t zip_store) {
+void CollectInfo::update(uint64_t timestamp, size_t entropy, size_t zip_store) {
   std::unique_lock<std::mutex> l(mutex);
-  raw_value_size += raw_value;
-  zip_value_size += zip_value;
   entropy_size += entropy;
   zip_store_size += zip_store;
   auto comp = [](const CompressionInfo& l, const CompressionInfo& r) {
     return l.timestamp > r.timestamp;
   };
-  queue.emplace_back(CompressionInfo{timestamp, raw_value, zip_value, entropy, zip_store});
+  queue.emplace_back(CompressionInfo{timestamp, entropy, zip_store});
   std::push_heap(queue.begin(), queue.end(), comp);
   while (queue.size() > queue_size) {
     auto& front = queue.front();
-    raw_value_size -= front.raw_value;
-    zip_value_size -= front.zip_value;
     entropy_size -= front.entropy;
     zip_store_size -= front.zip_store;
     std::pop_heap(queue.begin(), queue.end(), comp);
     queue.pop_back();
   }
   estimate_compression_ratio = float(zip_store_size) / float(entropy_size);
-}
-
-bool CollectInfo::hard(size_t raw, size_t zip) {
-  return double(zip) > hard_ratio * double(raw);
-}
-
-bool CollectInfo::hard() const {
-  std::unique_lock<std::mutex> l(mutex);
-  return !queue.empty() && hard(raw_value_size, zip_value_size);
 }
 
 float CollectInfo::estimate() const {
