@@ -888,7 +888,7 @@ Status MapBuilder::WriteOutputFile(
   std::unique_ptr<TableBuilder> builder(NewTableBuilder(
       *cfd->ioptions(), mutable_cf_options, cfd->internal_comparator(),
       &collectors, cfd->GetID(), cfd->GetName(), outfile.get(), kNoCompression,
-      CompressionOptions(), -1 /*level*/, nullptr /*compression_dict*/,
+      CompressionOptions(), -1 /*level*/, 0, nullptr /*compression_dict*/,
       true /*skip_filters*/, true /*ignore_key_type*/,
       output_file_creation_time, 0 /* oldest_key_time */, kMapSst));
   LogFlush(db_options_.info_log);

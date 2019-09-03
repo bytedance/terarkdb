@@ -1772,15 +1772,15 @@ Status CompactionJob::OpenCompactionOutputFile(
   if (replace_collector_factorys != nullptr) {
     collectors = replace_collector_factorys;
   }
+  auto c = sub_compact->compaction;
   sub_compact->builder.reset(NewTableBuilder(
-      *cfd->ioptions(), *(sub_compact->compaction->mutable_cf_options()),
-      cfd->internal_comparator(), collectors, cfd->GetID(), cfd->GetName(),
-      sub_compact->outfile.get(),
+      *cfd->ioptions(), *c->mutable_cf_options(), cfd->internal_comparator(),
+      collectors, cfd->GetID(), cfd->GetName(), sub_compact->outfile.get(),
       sub_compact->compaction->output_compression(),
       sub_compact->compaction->output_compression_opts(),
-      sub_compact->compaction->output_level(), &sub_compact->compression_dict,
-      skip_filters, false /* ignore_key_type */, output_file_creation_time,
-      0 /* oldest_key_time */,
+      sub_compact->compaction->output_level(), c->compaction_load(),
+      &sub_compact->compression_dict, skip_filters, false /* ignore_key_type */,
+      output_file_creation_time, 0 /* oldest_key_time */,
       sub_compact->compaction->map_compaction() ? kMapSst : kEssenceSst));
   LogFlush(db_options_.info_log);
   return s;

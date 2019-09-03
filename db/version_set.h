@@ -662,6 +662,9 @@ class Version {
 
   size_t GetMemoryUsageByTableReaders();
 
+  // REQUIRES: lock is held
+  double GetCompactionLoad() const;
+
   ColumnFamilyData* cfd() const { return cfd_; }
 
   // Return the next Version in the linked list. Used for debug only
