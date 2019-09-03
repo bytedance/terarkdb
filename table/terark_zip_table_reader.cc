@@ -216,6 +216,7 @@ Status ReadMetaBlockAdapte(RandomAccessFileReader* file,
 }
 
 using terark::BadCrc32cException;
+using terark::BadCrc16cException;
 using terark::byte_swap;
 using terark::lcast;
 using terark::AbstractBlobStore;
@@ -1035,7 +1036,7 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   if (props->comparator_name != fstring(ioptions.user_comparator->Name()) && 0) {
     return Status::InvalidArgument("TerarkZipTableReader::Open()",
                                    "Invalid user_comparator , need " + props->comparator_name
-                                   + ", but provid " + ioptions.user_comparator->Name());
+                                   + ", but provide " + ioptions.user_comparator->Name());
   }
   file_data_ = file_data;
   global_seqno_ = GetGlobalSequenceNumber(*props, ioptions.info_log);
@@ -1082,6 +1083,9 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
     subReader_.store_->set_mmap_aio(file->file()->use_aio_reads());
   }
   catch (const BadCrc32cException& ex) {
+    return Status::Corruption("TerarkZipTableReader::Open()", ex.what());
+  }
+  catch (const BadCrc16cException& ex) {
     return Status::Corruption("TerarkZipTableReader::Open()", ex.what());
   }
   s = LoadIndex(Slice(file_data.data(), indexSize));
@@ -1185,6 +1189,9 @@ Status TerarkZipTableReader::LoadIndex(Slice mem) {
     subReader_.index_ = TerarkIndex::LoadMemory(fstringOf(mem));
   }
   catch (const BadCrc32cException& ex) {
+    return Status::Corruption(func, ex.what());
+  }
+  catch (const BadCrc16cException& ex) {
     return Status::Corruption(func, ex.what());
   }
   catch (const std::exception& ex) {
