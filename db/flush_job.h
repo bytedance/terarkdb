@@ -68,7 +68,7 @@ class FlushJob {
            LogBuffer* log_buffer, Directory* db_directory,
            Directory* output_file_directory, CompressionType output_compression,
            Statistics* stats, EventLogger* event_logger, bool measure_io_stats,
-           const bool sync_output_directory, const bool write_manifest);
+           bool sync_output_directory, bool write_manifest, double flush_load);
 
   ~FlushJob();
 
@@ -130,6 +130,8 @@ class FlushJob {
   // In this case, only after all flush jobs succeed in flush can RocksDB
   // commit to the MANIFEST.
   const bool write_manifest_;
+
+  const double flush_load_;
 
   // Variables below are set by PickMemTable():
   FileMetaData meta_;

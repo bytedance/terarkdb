@@ -919,6 +919,19 @@ size_t Version::GetMemoryUsageByTableReaders() {
   return total_usage;
 }
 
+double Version::GetCompactionLoad() const {
+  double read_amp = storage_info_.read_amplification();
+  int level_add = cfd_->ioptions()->num_levels - 1;
+  int slowdown = mutable_cf_options_.level0_slowdown_writes_trigger + level_add;
+  int stop = mutable_cf_options_.level0_stop_writes_trigger + level_add;
+  if (read_amp < slowdown) {
+    return 0;
+  } else if (read_amp >= stop) {
+    return 1;
+  }
+  return (read_amp - slowdown) / std::max(1, stop - slowdown);
+}
+
 void Version::GetColumnFamilyMetaData(ColumnFamilyMetaData* cf_meta) {
   assert(cf_meta);
   assert(cfd_);

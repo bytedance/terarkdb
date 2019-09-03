@@ -78,10 +78,10 @@ struct CompactionParams {
   uint32_t max_subcompactions = 0;
   std::vector<FileMetaData*> grandparents;
   bool manual_compaction = false;
-  double score = -1;
   bool deletion_compaction = false;
   bool partial_compaction = false;
   bool map_compaction = false;
+  double score = -1;
   std::vector<RangeStorage> input_range = {};
   CompactionReason compaction_reason = CompactionReason::kUnknown;
 
@@ -224,6 +224,10 @@ class Compaction {
 
   // Return the score that was used to pick this compaction run.
   double score() const { return score_; }
+
+  void set_compaction_load(double load) { compaction_load_ = load; }
+  //
+  double compaction_load() const { return compaction_load_; }
 
   // Is this compaction creating a file in the bottom most level?
   bool bottommost_level() const { return bottommost_level_; }
@@ -394,6 +398,7 @@ class Compaction {
   // (grandparent == "output_level_ + 1")
   std::vector<FileMetaData*> grandparents_;
   const double score_;         // score that was used to pick this compaction.
+  double compaction_load_;
 
   // Is this compaction creating a file in the bottom most level?
   const bool bottommost_level_;
