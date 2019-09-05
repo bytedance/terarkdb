@@ -252,6 +252,7 @@ Status CuckooTableBuilder::Finish(const TablePropertyCache* prop) {
   closed_ = true;
   if (prop != nullptr) {
     properties_.purpose = prop->purpose;
+    properties_.max_read_amp = prop->max_read_amp;
     properties_.read_amp = prop->read_amp;
     properties_.dependence = prop->dependence;
     properties_.inheritance_chain = prop->inheritance_chain;

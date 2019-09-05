@@ -452,23 +452,30 @@ Status DBImpl::CloseHelper() {
   // marker. After this we do a variant of the waiting and unschedule work
   // (to consider: moving all the waiting into CancelAllBackgroundWork(true))
   CancelAllBackgroundWork(false);
-  int bottom_compactions_unscheduled =
-      env_->UnSchedule(this, Env::Priority::BOTTOM);
-  int compactions_unscheduled = env_->UnSchedule(this, Env::Priority::LOW);
-  int flushes_unscheduled = env_->UnSchedule(this, Env::Priority::HIGH);
+
   Status ret;
   mutex_.Lock();
-  bg_bottom_compaction_scheduled_ -= bottom_compactions_unscheduled;
-  bg_compaction_scheduled_ -= compactions_unscheduled;
-  bg_flush_scheduled_ -= flushes_unscheduled;
+  int bg_unscheduled =
+      env_->UnSchedule(this, Env::Priority::BOTTOM);
+  bg_unscheduled += env_->UnSchedule(this, Env::Priority::LOW);
+  bg_unscheduled += env_->UnSchedule(this, Env::Priority::HIGH);
 
   // Wait for background work to finish
-  while (bg_bottom_compaction_scheduled_ || bg_compaction_scheduled_ ||
-         bg_flush_scheduled_ || bg_purge_scheduled_ ||
-         pending_purge_obsolete_files_ ||
+  while (true) {
+    int bg_scheduled = bg_bottom_compaction_scheduled_ +
+        bg_compaction_scheduled_ + bg_flush_scheduled_ +
+        bg_purge_scheduled_ - bg_unscheduled;
+    if (bg_scheduled || pending_purge_obsolete_files_ ||
          error_handler_.IsRecoveryInProgress()) {
-    TEST_SYNC_POINT("DBImpl::~DBImpl:WaitJob");
-    bg_cv_.Wait();
+      TEST_SYNC_POINT("DBImpl::~DBImpl:WaitJob");
+      bg_cv_.TimedWait(10000);
+    } else {
+      bg_bottom_compaction_scheduled_ = 0;
+      bg_compaction_scheduled_ = 0;
+      bg_flush_scheduled_ = 0;
+      bg_purge_scheduled_ = 0;
+      break;
+    }
   }
   TEST_SYNC_POINT_CALLBACK("DBImpl::CloseHelper:PendingPurgeFinished",
                            &files_grabbed_for_purge_);

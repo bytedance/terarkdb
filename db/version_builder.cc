@@ -488,8 +488,7 @@ class VersionBuilder::Rep {
     CheckConsistency(base_vstorage_);
     CheckConsistency(vstorage);
 
-    std::vector<int> read_amp;
-    read_amp.resize(num_levels_);
+    std::vector<double> read_amp(num_levels_);
 
     for (auto f : base_vstorage_->LevelFiles(-1)) {
       DelSst(f, -1, true);
@@ -582,8 +581,7 @@ class VersionBuilder::Rep {
       return item.is_dependence == dependence_version_;
     };
     vstorage->ShrinkDependenceMap(&exists, c_style_callback(exists));
-    vstorage->set_read_amplification(
-        std::accumulate(read_amp.begin(), read_amp.end(), 0));
+    vstorage->set_read_amplification(read_amp);
 
     CheckConsistency(vstorage);
   }

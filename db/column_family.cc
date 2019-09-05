@@ -734,7 +734,7 @@ WriteStallCondition ColumnFamilyData::RecalculateWriteStallConditions(
 
     auto write_stall_condition_and_cause = GetWriteStallConditionAndCause(
         imm()->NumNotFlushed(), vstorage->l0_delay_trigger_count(),
-        vstorage->read_amplification(),
+        int(vstorage->read_amplification()),
         vstorage->estimated_compaction_needed_bytes(), ioptions_.num_levels,
         mutable_cf_options);
     write_stall_condition = write_stall_condition_and_cause.first;
@@ -781,7 +781,7 @@ WriteStallCondition ColumnFamilyData::RecalculateWriteStallConditions(
           InternalStats::READ_AMP_LIMIT_STOPS, 1);
       ROCKS_LOG_WARN(
           ioptions_.info_log,
-          "[%s] Stopping writes because we have %d times read amplification "
+          "[%s] Stopping writes because we have %f times read amplification "
           "(waiting for compaction)",
           name_.c_str(), vstorage->read_amplification());
     } else if (write_stall_condition == WriteStallCondition::kDelayed &&
@@ -858,7 +858,7 @@ WriteStallCondition ColumnFamilyData::RecalculateWriteStallConditions(
           InternalStats::READ_AMP_LIMIT_SLOWDOWNS, 1);
       ROCKS_LOG_WARN(
           ioptions_.info_log,
-          "[%s] Stalling writes because we have %d times read amplification "
+          "[%s] Stalling writes because we have %f times read amplification "
           "(waiting for compaction) rate %" PRIu64,
           name_.c_str(), vstorage->read_amplification(),
           write_controller->delayed_write_rate());
@@ -964,6 +964,7 @@ Compaction* ColumnFamilyData::PickCompaction(
       GetName(), mutable_options, current_->storage_info(), log_buffer);
   if (result != nullptr) {
     result->SetInputVersion(current_);
+    result->set_compaction_load(current_->GetCompactionLoad());
   } else {
     current_->storage_info()->SetPickFail();
   }

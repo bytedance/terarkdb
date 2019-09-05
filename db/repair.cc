@@ -652,6 +652,7 @@ class Repairer {
                      status.ToString().c_str());
 
       t->meta.prop.purpose = props->purpose;
+      t->meta.prop.max_read_amp = props->max_read_amp;
       t->meta.prop.read_amp = props->read_amp;
       t->meta.prop.dependence = props->dependence;
       t->meta.prop.inheritance_chain = props->inheritance_chain;

@@ -123,7 +123,7 @@ bool VersionEdit::EncodeTo(std::string* dst) const {
     if (!f.smallest.Valid() || !f.largest.Valid()) {
       return false;
     }
-    bool has_property_cache = f.prop.purpose != 0 || f.prop.read_amp != 1 ||
+    bool has_property_cache = f.prop.purpose != 0 || f.prop.max_read_amp > 1 ||
                               !f.prop.dependence.empty() ||
                               !f.prop.inheritance_chain.empty();
     bool has_customized_fields = false;
@@ -205,8 +205,9 @@ bool VersionEdit::EncodeTo(std::string* dst) const {
         for (auto file_number : f.prop.dependence) {
           PutVarint64(&encode_property_cache, file_number);
         }
-        if (f.prop.read_amp != 1 || !f.prop.inheritance_chain.empty()) {
-          encode_property_cache.push_back((char)f.prop.read_amp);
+        if (f.prop.max_read_amp > 1 || !f.prop.inheritance_chain.empty()) {
+          PutVarint32Varint64(&encode_property_cache, f.prop.max_read_amp,
+                              DoubleToU64(f.prop.read_amp));
           PutVarint64(&encode_property_cache, f.prop.inheritance_chain.size());
           for (auto file_number : f.prop.inheritance_chain) {
             PutVarint64(&encode_property_cache, file_number);
@@ -351,11 +352,12 @@ const char* VersionEdit::DecodeNewFile4From(Slice* input) {
               f.prop.dependence.emplace_back(file_number);
             }
             if (!field.empty()) {
-              f.prop.read_amp = (uint8_t)field[0];
-              field.remove_prefix(1);
-              if (!GetVarint64(&field, &size)) {
+              uint64_t read_amp;
+              if (!GetVarint64(&field, &read_amp) ||
+                  !GetVarint64(&field, &size)) {
                 return error_msg;
               }
+              f.prop.read_amp = U64ToDouble(read_amp);
               f.prop.inheritance_chain.reserve(size);
               for (size_t i = 0; i < size; ++i) {
                 uint64_t file_number;

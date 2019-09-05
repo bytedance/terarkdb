@@ -1354,7 +1354,7 @@ Compaction* UniversalCompactionPicker::PickCompositeCompaction(
   }
   CompactionInputFiles inputs;
   inputs.level = -1;
-  size_t max_read_amp = 0;
+  double max_read_amp_ratio = -std::numeric_limits<double>::infinity();
   for (auto rit = sorted_runs.rbegin(); rit != sorted_runs.rend(); ++rit) {
     auto& sr = *rit;
     if (sr.wait_reduce) {
@@ -1381,8 +1381,13 @@ Compaction* UniversalCompactionPicker::PickCompositeCompaction(
       }
       f = sr.file;
     }
-    if (f->prop.read_amp >= max_read_amp) {
-      max_read_amp = f->prop.read_amp;
+    double level_read_amp = f->prop.read_amp;
+    double level_read_amp_ratio = 1. * level_read_amp / sr.size;
+    if (level_read_amp <= 1) {
+      level_read_amp_ratio = -level_read_amp_ratio;
+    }
+    if (level_read_amp_ratio >= max_read_amp_ratio) {
+      max_read_amp_ratio = level_read_amp_ratio;
       inputs.level = sr.level;
       inputs.files = {f};
     }
@@ -1894,9 +1899,9 @@ Compaction* UniversalCompactionPicker::PickRangeCompaction(
       GetCompressionType(ioptions_, vstorage, mutable_cf_options, level, 1);
   params.compression_opts = GetCompressionOptions(ioptions_, vstorage, level);
   params.score = 0;
-  params.input_range = std::move(input_range);
   params.partial_compaction = true;
   params.compaction_type = kKeyValueCompaction;
+  params.input_range = std::move(input_range);
   return new Compaction(std::move(params));
 }
 

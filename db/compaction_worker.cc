@@ -98,7 +98,7 @@ AJSON(rocksdb::CompactionWorkerResult, status, actual_start, actual_end, files,
 AJSON(rocksdb::FileDescriptor, packed_number_and_path_id, file_size,
                                smallest_seqno, largest_seqno);
 
-AJSON(rocksdb::TablePropertyCache, purpose, read_amp, dependence,
+AJSON(rocksdb::TablePropertyCache, purpose, max_read_amp, read_amp, dependence,
                                    inheritance_chain);
 
 AJSON(rocksdb::FileMetaData, fd, smallest, largest, prop);
@@ -707,7 +707,7 @@ std::string RemoteCompactionWorker::Client::DoCompaction(
             immutable_cf_options, mutable_cf_options, *icmp,
             &int_tbl_prop_collector_factories.data, context.compression,
             context.compression_opts, nullptr, true, false, context.cf_name,
-            -1);
+            -1, 0);
         std::unique_ptr<WritableFile> sst_file;
         s = rep_->env->NewWritableFile(file_name, &sst_file, rep_->env_options);
         if (!s.ok()) {

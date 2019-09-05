@@ -135,6 +135,7 @@ class MockTableBuilder : public TableBuilder {
     file_system_->files.insert({id_, table_});
     if (prop != nullptr) {
       prop_.purpose = prop->purpose;
+      prop_.max_read_amp = prop->max_read_amp;
       prop_.read_amp = prop->read_amp;
       prop_.dependence = prop->dependence;
       prop_.inheritance_chain = prop->inheritance_chain;

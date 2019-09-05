@@ -197,12 +197,21 @@ class MapSstElementIterator {
     return dependence_build_;
   }
 
-  size_t GetReadAmp() const { return sst_read_amp_; }
+  std::pair<size_t, double> GetSstReadAmp() const {
+    return {sst_read_amp_, sst_read_amp_ratio_};
+  }
 
  private:
   void PrepareNext() {
     if (where_ == ranges_.end()) {
       buffer_.clear();
+      if (sst_read_amp_size_ == 0) {
+        sst_read_amp_ratio_ = sst_read_amp_;
+      } else {
+        sst_read_amp_ratio_ /= sst_read_amp_size_;
+      }
+      assert(sst_read_amp_ratio_ >= 1);
+      assert(sst_read_amp_ratio_ <= sst_read_amp_);
       return;
     }
     auto& start = map_elements_.smallest_key_ = where_->point[0].Encode();
@@ -253,9 +262,11 @@ class MapSstElementIterator {
       ++where_;
     }
 
+    size_t range_size = 0;
     if (stable) {
       for (auto& link : map_elements_.link_) {
         dependence_build_.emplace(link.file_number);
+        range_size += link.size;
       }
     } else {
       no_records = true;
@@ -295,6 +306,7 @@ class MapSstElementIterator {
               reader->ApproximateOffsetOf(temp_start_.Encode());
           uint64_t end_offset = reader->ApproximateOffsetOf(temp_end_.Encode());
           link.size = end_offset - start_offset;
+          range_size += link.size;
           no_records = false;
         } else {
           link.size = 0;
@@ -302,6 +314,8 @@ class MapSstElementIterator {
       }
     }
     sst_read_amp_ = std::max(sst_read_amp_, map_elements_.link_.size());
+    sst_read_amp_ratio_ += map_elements_.link_.size() * range_size;
+    sst_read_amp_size_ += range_size;
     map_elements_.Value(&buffer_);  // Encode value
   }
 
@@ -314,6 +328,8 @@ class MapSstElementIterator {
   const std::vector<RangeWithDepend>& ranges_;
   std::unordered_set<uint64_t> dependence_build_;
   size_t sst_read_amp_ = 0;
+  double sst_read_amp_ratio_ = 0;
+  size_t sst_read_amp_size_ = 0;
   IteratorCache& iterator_cache_;
   const InternalKeyComparator& icomp_;
 };
@@ -874,7 +890,7 @@ Status MapBuilder::WriteOutputFile(
   std::unique_ptr<TableBuilder> builder(NewTableBuilder(
       *cfd->ioptions(), mutable_cf_options, cfd->internal_comparator(),
       &collectors, cfd->GetID(), cfd->GetName(), outfile.get(), kNoCompression,
-      CompressionOptions(), -1 /*level*/, nullptr /*compression_dict*/,
+      CompressionOptions(), -1 /*level*/, 0, nullptr /*compression_dict*/,
       true /*skip_filters*/, true /*ignore_key_type*/,
       output_file_creation_time, 0 /* oldest_key_time */, kMapSst));
   LogFlush(db_options_.info_log);
@@ -894,7 +910,8 @@ Status MapBuilder::WriteOutputFile(
 
   // Prepare prop
   file_meta->prop.purpose = kMapSst;
-  file_meta->prop.read_amp = range_iter->GetReadAmp();
+  std::tie(file_meta->prop.max_read_amp, file_meta->prop.read_amp) =
+      range_iter->GetSstReadAmp();
   auto& dependence_build = range_iter->GetDependence();
   auto& dependence = file_meta->prop.dependence;
   dependence.reserve(dependence_build.size());

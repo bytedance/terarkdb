@@ -773,6 +773,7 @@ Status CompactionJob::Run() {
         output.meta.raw_value_size = tp->raw_value_size;
         output.meta.raw_key_size = tp->raw_key_size;
         output.meta.prop.purpose = tp->purpose;
+        output.meta.prop.max_read_amp = tp->max_read_amp;
         output.meta.prop.read_amp = tp->read_amp;
         output.meta.prop.dependence = tp->dependence;
         output.meta.prop.inheritance_chain = tp->inheritance_chain;
@@ -2195,15 +2196,15 @@ Status CompactionJob::OpenCompactionOutputFile(
   if (replace_collector_factorys != nullptr) {
     collectors = replace_collector_factorys;
   }
+  auto c = sub_compact->compaction;
   sub_compact->builder.reset(NewTableBuilder(
-      *cfd->ioptions(), *(sub_compact->compaction->mutable_cf_options()),
-      cfd->internal_comparator(), collectors, cfd->GetID(), cfd->GetName(),
-      sub_compact->outfile.get(),
+      *cfd->ioptions(), *c->mutable_cf_options(), cfd->internal_comparator(),
+      collectors, cfd->GetID(), cfd->GetName(), sub_compact->outfile.get(),
       sub_compact->compaction->output_compression(),
       sub_compact->compaction->output_compression_opts(),
-      sub_compact->compaction->output_level(), &sub_compact->compression_dict,
-      skip_filters, false /* ignore_key_type */, output_file_creation_time,
-      0 /* oldest_key_time */,
+      sub_compact->compaction->output_level(), c->compaction_load(),
+      &sub_compact->compression_dict, skip_filters, false /* ignore_key_type */,
+      output_file_creation_time, 0 /* oldest_key_time */,
       sub_compact->compaction->compaction_type() == kMapCompaction
           ? kMapSst : kEssenceSst));
   LogFlush(db_options_.info_log);

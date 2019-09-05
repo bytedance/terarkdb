@@ -85,7 +85,8 @@ struct FileSampledStats {
 
 struct TablePropertyCache {
   uint8_t purpose = 0;                      // Zero for essence sst
-  uint8_t read_amp = 1;                     // Read amp from sst
+  uint16_t max_read_amp = 1;                // Max read amp from sst
+  float read_amp = 1;                       // Expt read amp from sst
   std::vector<uint64_t> dependence;         // Make these sst hidden
   std::vector<uint64_t> inheritance_chain;  // Inheritance chain
 };
@@ -287,6 +288,7 @@ class VersionEdit {
     f.num_antiquation = num_antiquation;
     f.marked_for_compaction = marked_for_compaction;
     f.prop.purpose = prop.purpose;
+    f.prop.max_read_amp = prop.max_read_amp;
     f.prop.read_amp = prop.read_amp;
     f.prop.dependence = prop.dependence;
     f.prop.inheritance_chain = prop.inheritance_chain;

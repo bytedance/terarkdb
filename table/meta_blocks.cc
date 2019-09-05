@@ -104,8 +104,10 @@ void PropertyBlockBuilder::AddTableProperty(const TableProperties& props) {
   if (props.purpose != 0) {
     Add(TablePropertiesNames::kPurpose, props.purpose);
   }
-  if (props.read_amp > 1) {
-    Add(TablePropertiesNames::kReadAmp, props.read_amp);
+  if (props.max_read_amp > 1) {
+    std::string val;
+    PutVarint32Varint64(&val, props.max_read_amp, DoubleToU64(props.read_amp));
+    Add(TablePropertiesNames::kReadAmp, val);
   }
   if (!props.dependence.empty()) {
     Add(TablePropertiesNames::kDependence, props.dependence);
@@ -311,6 +313,13 @@ Status ReadProperties(const Slice& handle_value, RandomAccessFileReader* file,
     auto raw_val = iter.value();
     auto pos = predefined_uint64_properties.find(key);
 
+    auto log_error = [&] {
+      auto error_msg =
+          "Detect malformed value in properties meta-block:"
+          "\tkey: " + key + "\tval: " + raw_val.ToString();
+      ROCKS_LOG_ERROR(ioptions.info_log, "%s", error_msg.c_str());
+    };
+
     if (pos != predefined_uint64_properties.end()) {
       if (key == TablePropertiesNames::kDeletedKeys ||
           key == TablePropertiesNames::kMergeOperands) {
@@ -322,10 +331,7 @@ Status ReadProperties(const Slice& handle_value, RandomAccessFileReader* file,
       uint64_t val;
       if (!GetVarint64(&raw_val, &val)) {
         // skip malformed value
-        auto error_msg =
-          "Detect malformed value in properties meta-block:"
-          "\tkey: " + key + "\tval: " + raw_val.ToString();
-        ROCKS_LOG_ERROR(ioptions.info_log, "%s", error_msg.c_str());
+        log_error();
         continue;
       }
       *pos->second = val;
@@ -345,12 +351,22 @@ Status ReadProperties(const Slice& handle_value, RandomAccessFileReader* file,
       new_table_properties->compression_name = raw_val.ToString();
     } else if (key == TablePropertiesNames::kPurpose) {
       uint64_t val;
-      GetVarint64(&raw_val, &val);
+      if (!GetVarint64(&raw_val, &val)) {
+        // skip malformed value
+        log_error();
+        continue;
+      }
       new_table_properties->purpose = val;
     } else if (key == TablePropertiesNames::kReadAmp) {
-      uint64_t val;
-      GetVarint64(&raw_val, &val);
-      new_table_properties->read_amp = val;
+      uint32_t u32_val;
+      uint64_t u64_val;
+      if (!GetVarint32(&raw_val, &u32_val) || GetVarint64(&raw_val, &u64_val)) {
+        // skip malformed value
+        log_error();
+        continue;
+      }
+      new_table_properties->max_read_amp = uint16_t(u32_val);
+      new_table_properties->read_amp = U64ToDouble(u64_val);
     } else if (key == TablePropertiesNames::kDependence) {
       GetUint64Vector(key, &raw_val, new_table_properties->dependence);
     } else if (key == TablePropertiesNames::kInheritanceChain) {

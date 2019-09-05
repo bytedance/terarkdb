@@ -894,6 +894,7 @@ Status BlockBasedTableBuilder::Finish(const TablePropertyCache* prop) {
 
   if (prop != nullptr) {
     r->props.purpose = prop->purpose;
+    r->props.max_read_amp = prop->max_read_amp;
     r->props.read_amp = prop->read_amp;
     r->props.dependence = prop->dependence;
     r->props.inheritance_chain = prop->inheritance_chain;

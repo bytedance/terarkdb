@@ -101,7 +101,8 @@ FlushJob::FlushJob(const std::string& dbname, ColumnFamilyData* cfd,
                    Directory* output_file_directory,
                    CompressionType output_compression, Statistics* stats,
                    EventLogger* event_logger, bool measure_io_stats,
-                   const bool sync_output_directory, const bool write_manifest)
+                   bool sync_output_directory, bool write_manifest,
+                   double flush_load)
     : dbname_(dbname),
       cfd_(cfd),
       db_options_(db_options),
@@ -124,6 +125,7 @@ FlushJob::FlushJob(const std::string& dbname, ColumnFamilyData* cfd,
       measure_io_stats_(measure_io_stats),
       sync_output_directory_(sync_output_directory),
       write_manifest_(write_manifest),
+      flush_load_(flush_load),
       edit_(nullptr),
       base_(nullptr),
       pick_memtable_called(false) {
@@ -388,8 +390,8 @@ Status FlushJob::WriteLevel0Table() {
           output_compression_, cfd_->ioptions()->compression_opts,
           mutable_cf_options_.paranoid_file_checks, cfd_->internal_stats(),
           TableFileCreationReason::kFlush, event_logger_, job_context_->job_id,
-          Env::IO_HIGH, &table_properties_, 0 /* level */, current_time,
-          oldest_key_time, write_hint);
+          Env::IO_HIGH, &table_properties_, 0 /* level */, flush_load_,
+          current_time, oldest_key_time, write_hint);
       LogFlush(db_options_.info_log);
     }
     ROCKS_LOG_INFO(db_options_.info_log,

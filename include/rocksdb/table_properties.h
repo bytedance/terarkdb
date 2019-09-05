@@ -209,8 +209,11 @@ struct TableProperties {
   // Zero for essence sst
   uint8_t purpose = 0;
 
-  // Read amp from sst
-  uint8_t read_amp = 1;
+  // Max Read amp from sst
+  uint16_t max_read_amp = 1;
+
+  // Expt read amp from sst
+  float read_amp = 1;
 
   // Make these sst hidden
   std::vector<uint64_t> dependence;

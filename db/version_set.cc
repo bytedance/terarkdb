@@ -814,7 +814,8 @@ Status Version::GetPropertiesOfTablesInRange(
       std::vector<FileMetaData*> files;
       storage_info_.GetOverlappingInputs(level, &k1, &k2, &files, -1, nullptr,
                                          false);
-      for (const auto file_meta : files) {
+      for (size_t j = 0; j < files.size(); ++j) {
+        const auto file_meta = files[j];
         if (file_meta->prop.purpose != SstPurpose::kEssenceSst) {
           for (auto file_number : file_meta->prop.dependence) {
             auto find = storage_info_.dependence_map_.find(file_number);
@@ -883,6 +884,19 @@ size_t Version::GetMemoryUsageByTableReaders() {
         mutable_cf_options_.prefix_extractor.get());
   }
   return total_usage;
+}
+
+double Version::GetCompactionLoad() const {
+  double read_amp = storage_info_.read_amplification();
+  int level_add = cfd_->ioptions()->num_levels - 1;
+  int slowdown = mutable_cf_options_.level0_slowdown_writes_trigger + level_add;
+  int stop = mutable_cf_options_.level0_stop_writes_trigger + level_add;
+  if (read_amp < slowdown) {
+    return 0;
+  } else if (read_amp >= stop) {
+    return 1;
+  }
+  return (read_amp - slowdown) / std::max(1, stop - slowdown);
 }
 
 void Version::GetColumnFamilyMetaData(ColumnFamilyMetaData* cf_meta) {
@@ -2777,7 +2791,7 @@ uint64_t VersionStorageInfo::EstimateLiveDataSize() const {
   // (Ordered) map of largest keys in non-overlapping files
   std::map<InternalKey*, FileMetaData*, decltype(ikey_lt)> ranges(ikey_lt);
 
-  for (int l = num_levels_ - 1; l >= 0; l--) {
+  for (int l = num_levels_ - 1; l >= -1; l--) {
     bool found_end = false;
     for (auto file : files_[l]) {
       // Find the first file where the largest key is larger than the smallest

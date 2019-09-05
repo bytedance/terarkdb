@@ -124,6 +124,10 @@ Status DBImpl::FlushMemTableToOutputFile(
   if (use_custom_gc_ && snapshot_checker == nullptr) {
     snapshot_checker = DisableGCSnapshotChecker::Instance();
   }
+  auto flushes = num_running_flushes() - 1;
+  auto max_flushes = std::max(flushes, GetBGJobLimits().max_flushes - 1);
+  assert(flushes >= 0 && max_flushes >= 0);
+  double flush_load = -1. * flushes / max_flushes ;
   FlushJob flush_job(
       dbname_, cfd, immutable_db_options_, mutable_cf_options,
       nullptr /* memtable_id */, env_options_for_compaction_, versions_.get(),
@@ -132,7 +136,7 @@ Status DBImpl::FlushMemTableToOutputFile(
       GetDataDir(cfd, 0U),
       GetCompressionFlush(*cfd->ioptions(), mutable_cf_options), stats_,
       &event_logger_, mutable_cf_options.report_bg_io_stats,
-      true /* sync_output_directory */, true /* write_manifest */);
+      true /* sync_output_directory */, true /* write_manifest */, flush_load);
 
   FileMetaData file_meta;
 
@@ -279,6 +283,10 @@ Status DBImpl::AtomicFlushMemTablesToOutputFiles(
   std::vector<MutableCFOptions> all_mutable_cf_options;
   int num_cfs = static_cast<int>(cfds.size());
   all_mutable_cf_options.reserve(num_cfs);
+  auto flushes = num_running_flushes() + num_cfs - 2;
+  auto max_flushes = std::max(flushes, GetBGJobLimits().max_flushes - 1);
+  assert(flushes >= 0 && max_flushes >= 0);
+  double flush_load = -1. * flushes / max_flushes ;
   for (int i = 0; i < num_cfs; ++i) {
     auto cfd = cfds[i];
     Directory* data_dir = GetDataDir(cfd, 0U);
@@ -307,7 +315,8 @@ Status DBImpl::AtomicFlushMemTablesToOutputFiles(
         snapshot_checker, job_context, log_buffer, directories_.GetDbDir(),
         data_dir, GetCompressionFlush(*cfd->ioptions(), mutable_cf_options),
         stats_, &event_logger_, mutable_cf_options.report_bg_io_stats,
-        false /* sync_output_directory */, false /* write_manifest */);
+        false /* sync_output_directory */, false /* write_manifest */,
+        flush_load);
     jobs.back().PickMemTable();
   }
 
@@ -1695,7 +1704,7 @@ Status DBImpl::WaitUntilFlushWouldNotStallWrites(ColumnFamilyData* cfd,
           ColumnFamilyData::GetWriteStallConditionAndCause(
               cfd->imm()->NumNotFlushed() + 1,
               vstorage->l0_delay_trigger_count() + 1,
-              vstorage->read_amplification() + 1,
+              int(vstorage->read_amplification()) + 1,
               vstorage->estimated_compaction_needed_bytes(),
               cfd->ioptions()->num_levels, mutable_cf_options)
               .first;

@@ -294,6 +294,12 @@ class Compaction {
   // Return the score that was used to pick this compaction run.
   double score() const { return score_; }
 
+  //
+  void set_compaction_load(double load) { compaction_load_ = load; }
+
+  //
+  double compaction_load() const { return compaction_load_; }
+
   // Is this compaction creating a file in the bottom most level?
   bool bottommost_level() const { return bottommost_level_; }
 
@@ -462,7 +468,12 @@ class Compaction {
   // State used to check for number of overlapping grandparent files
   // (grandparent == "output_level_ + 1")
   std::vector<FileMetaData*> grandparents_;
-  const double score_;         // score that was used to pick this compaction.
+
+  // score that was used to pick this compaction.
+  const double score_;
+
+  //
+  double compaction_load_;
 
   // Is this compaction creating a file in the bottom most level?
   const bool bottommost_level_;
