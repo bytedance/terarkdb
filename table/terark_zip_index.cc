@@ -1944,7 +1944,7 @@ struct IndexNestLoudsTriePrefix
     }
     rank = trie_->state_to_dict_rank(iter.word_state());
     if (!key.startsWith(iter.word())) {
-      return rank;
+      return rank + 1;
     }
     key = key.substr(iter.word().size());
     size_t suffix_id;
