@@ -165,7 +165,6 @@ private:
   };
   Status buildEntropyZipBlobStore(BuildStoreParams& params);
   Status buildZeroLengthBlobStore(BuildStoreParams& params);
-  Status buildPlainBlobStore(BuildStoreParams& params);
   Status buildMixedLenBlobStore(BuildStoreParams& params);
   Status buildZipOffsetBlobStore(BuildStoreParams& params);
   Status ZipValueToFinish();
@@ -244,9 +243,11 @@ private:
   bool closed_ = false;  // Either Finish() or Abandon() has been called.
   bool isReverseBytewiseOrder_;
   bool ignore_key_type_;
+  int level_;
 
   long long t0 = 0;
   size_t prefixLen_;
+  double compaction_load_;
 };
 
 

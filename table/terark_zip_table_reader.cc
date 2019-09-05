@@ -194,7 +194,7 @@ void UpdateCollectInfo(const TerarkZipTableFactory* table_factory,
   auto& collect = table_factory->GetCollect();
   uint64_t timestamp = terark::lcast(find_time->second);
   size_t entropy = terark::lcast(find_entropy->second);
-  collect.update(timestamp, props->raw_value_size, props->data_size, entropy, file_size);
+  collect.update(timestamp, entropy, file_size);
 }
 
 template<class T> void CallDestructor(T* ptr) {
@@ -216,6 +216,7 @@ Status ReadMetaBlockAdapte(RandomAccessFileReader* file,
 }
 
 using terark::BadCrc32cException;
+using terark::BadCrc16cException;
 using terark::byte_swap;
 using terark::lcast;
 using terark::AbstractBlobStore;
@@ -1029,7 +1030,7 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   if (props->comparator_name != fstring(ioptions.user_comparator->Name()) && 0) {
     return Status::InvalidArgument("TerarkZipTableReader::Open()",
                                    "Invalid user_comparator , need " + props->comparator_name
-                                   + ", but provid " + ioptions.user_comparator->Name());
+                                   + ", but provide " + ioptions.user_comparator->Name());
   }
   file_data_ = file_data;
   global_seqno_ = GetGlobalSequenceNumber(*props, ioptions.info_log);
@@ -1073,8 +1074,12 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
       fstring(file_data.data() + indexSize, storeSize),
       getVerifyDict(dict)
     ));
+    subReader_.store_->set_mmap_aio(file->file()->use_aio_reads());
   }
   catch (const BadCrc32cException& ex) {
+    return Status::Corruption("TerarkZipTableReader::Open()", ex.what());
+  }
+  catch (const BadCrc16cException& ex) {
     return Status::Corruption("TerarkZipTableReader::Open()", ex.what());
   }
   s = LoadIndex(Slice(file_data.data(), indexSize));
@@ -1107,9 +1112,9 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
         return Status::IOError("While fcntl NoCache", "O_DIRECT is required for terark user space cache");
       }
   #endif
-    }
 #endif
-    subReader_.storeFD_ = subReader_.cache_->open(subReader_.storeFD_);
+      subReader_.storeFD_ = subReader_.cache_->open(subReader_.storeFD_);
+    }
   }
   if (tzto_.forceMetaInMemory) {
     valvec<fstring> index_meta_data = subReader_.index_->GetMetaData();
@@ -1178,6 +1183,9 @@ Status TerarkZipTableReader::LoadIndex(Slice mem) {
     subReader_.index_ = TerarkIndex::LoadMemory(fstringOf(mem));
   }
   catch (const BadCrc32cException& ex) {
+    return Status::Corruption(func, ex.what());
+  }
+  catch (const BadCrc16cException& ex) {
     return Status::Corruption(func, ex.what());
   }
   catch (const std::exception& ex) {
@@ -1354,6 +1362,7 @@ Status TerarkZipTableMultiReader::SubIndex::Init(
       }
       part.storeOffset_ = offset += curr.key;
       part.store_.reset(AbstractBlobStore::load_from_user_memory(fstring(baseAddress + offset, curr.value), dict));
+      part.store_->set_mmap_aio(fileObj->use_aio_reads());
       if (part.store_->is_offsets_zipped()) {
         hasAnyZipOffset_ = true;
       }
