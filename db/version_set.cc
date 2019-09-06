@@ -1206,7 +1206,7 @@ Status Version::inplace_decode(LazySlice* slice, LazySliceRep* rep) const {
   Slice user_key(reinterpret_cast<const char*>(rep->data[0]), rep->data[1]);
   uint64_t sequence = rep->data[2];
   uint64_t file_number = slice->file_number();
-  auto dependence_map = storage_info_.dependence_map();
+  auto& dependence_map = storage_info_.dependence_map();
   assert(dependence_map.count(file_number) > 0);
   const FileMetaData* file_metadata = dependence_map.find(file_number)->second;
   bool value_found = false;
@@ -1240,7 +1240,7 @@ void Version::TransToCombined(const Slice& user_key, uint64_t sequence,
     return;
   }
   uint64_t file_number = SeparateHelper::DecodeFileNumber(value);
-  auto dependence_map = storage_info_.dependence_map();
+  auto& dependence_map = storage_info_.dependence_map();
   auto find = dependence_map.find(file_number);
   if (find == dependence_map.end()) {
     value.reset(Status::Corruption("Separate value dependence missing"));

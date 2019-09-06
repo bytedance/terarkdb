@@ -1632,7 +1632,8 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
                                       inheritance_chain.end()),
                           inheritance_chain.end());
   Status s = FinishCompactionOutputFile(status, sub_compact, nullptr,
-                                        nullptr, {}, inheritance_chain);
+                                        nullptr, std::unordered_set<uint64_t>(),
+                                        inheritance_chain);
   if (status.ok()) {
     status = s;
   }

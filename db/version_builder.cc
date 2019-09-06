@@ -87,8 +87,8 @@ class VersionBuilder::Rep {
     std::unordered_map<uint64_t, FileMetaData*> added_files;
   };
   struct DependenceItem {
-    size_t is_dependence;
-    size_t is_skip_gc;
+    size_t dependence_version;
+    size_t skip_gc_version;
     int level;
     FileMetaData* f;
   };
@@ -245,9 +245,9 @@ class VersionBuilder::Rep {
         continue;
       }
       auto& item = find->second;
-      item.is_dependence = dependence_version_;
+      item.dependence_version = dependence_version_;
       if (recursive) {
-        item.is_skip_gc = dependence_version_;
+        item.skip_gc_version = dependence_version_;
         SetDependence(item.f, item.f->prop.purpose == kMapSst, check_error);
       }
     }
@@ -261,9 +261,9 @@ class VersionBuilder::Rep {
       }
       assert(dependence_map_.count(file_number) > 0);
       auto& item = dependence_map_[file_number];
-      item.is_skip_gc = dependence_version_;
+      item.skip_gc_version = dependence_version_;
       if (item.level < 0) {
-        item.is_dependence = dependence_version_;
+        item.dependence_version = dependence_version_;
       }
       if (item.f->prop.purpose == kMapSst) {
         SetDependence(item.f, true, check_error);
@@ -273,7 +273,7 @@ class VersionBuilder::Rep {
     }
     for (auto it = dependence_map_.begin(); it != dependence_map_.end(); ) {
       auto& item = it->second;
-      if (item.is_dependence == dependence_version_ || item.level >= 0) {
+      if (item.dependence_version == dependence_version_ || item.level >= 0) {
         assert(inheritance_counter_.count(item.f->fd.GetNumber()) == 0);
         ++it;
       } else {
@@ -563,7 +563,7 @@ class VersionBuilder::Rep {
     }
     for (auto& pair : dependence_map_) {
       auto& item = pair.second;
-      if (item.is_dependence == dependence_version_ && item.level == -1) {
+      if (item.dependence_version == dependence_version_ && item.level == -1) {
         auto find = delta_antiquation_.find(pair.first);
         if (find != delta_antiquation_.end()) {
           item.f->num_antiquation += find->second;
@@ -577,8 +577,8 @@ class VersionBuilder::Rep {
         return false;
       }
       auto& item = find->second;
-      file_metadata->is_skip_gc |= item.is_skip_gc;
-      return item.is_dependence == dependence_version_;
+      file_metadata->is_skip_gc |= item.skip_gc_version == dependence_version_;
+      return item.dependence_version == dependence_version_;
     };
     vstorage->ShrinkDependenceMap(&exists, c_style_callback(exists));
     vstorage->set_read_amplification(read_amp);
@@ -601,7 +601,7 @@ class VersionBuilder::Rep {
     }
     for (auto& pair : dependence_map_) {
       auto& item = pair.second;
-      if (item.is_dependence == dependence_version_ && item.level == -1) {
+      if (item.dependence_version == dependence_version_ && item.level == -1) {
         files_meta.emplace_back(item.f, -1);
       }
     }
