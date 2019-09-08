@@ -51,7 +51,8 @@ void TerarkZipDeleteTempFiles(const std::string& tmpPath) {
   }
 }
 
-// todo(linyuanjin): may use better string impl to replace std::string
+// todo(linyuanjin): may use better string impl to replace std::string,
+//                   better hash impl to replace std::unordered_map
 // config string example: "entropyAlgo=FSE;compaction_style=Universal"
 // fields are separated by ';'
 // key and value are separated by '='
@@ -215,6 +216,11 @@ bool TerarkZipConfigFromEnv(DBOptions& dbo, ColumnFamilyOptions& cfo) {
 }
 
 bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo) {
+  auto configMap = TerarkGetConfigMapFromEnv();
+  if (!configMap.empty()) {
+    return TerarkZipCFOptionsFromConfigMap(cfo, configMap);
+  }
+
   const char* localTempDir = getenv("TerarkZipTable_localTempDir");
   if (!localTempDir) {
     STD_INFO("TerarkZipConfigFromEnv(dbo, cfo) failed because env TerarkZipTable_localTempDir is not defined\n");
@@ -580,6 +586,11 @@ bool TerarkZipCFOptionsFromConfigMap(struct ColumnFamilyOptions& cfo,
 }
 
 void TerarkZipDBOptionsFromEnv(DBOptions& dbo) {
+  auto configMap = TerarkGetConfigMapFromEnv();
+  if (!configMap.empty()) {
+    return TerarkZipDBOptionsFromConfigMap(dbo, configMap);
+  }
+
   TerarkZipAutoConfigForOnlineDB_DBOptions(dbo, 0);
 
   MyGetInt(dbo, base_background_compactions, 4);
