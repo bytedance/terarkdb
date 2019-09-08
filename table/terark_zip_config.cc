@@ -15,7 +15,9 @@
 # include <unistd.h>
 #endif
 #include <mutex>
+
 #include <boost/algorithm/string.hpp>
+#include <boost/lexical_cast.hpp>
 
 namespace terark {
 void DictZipBlobStore_setZipThreads(int zipThreads);
@@ -54,22 +56,22 @@ void TerarkZipDeleteTempFiles(const std::string& tmpPath) {
 // fields are separated by ';'
 // key and value are separated by '='
 static std::map<std::string, std::string>
-TerarkGetConfigMapFromEnvVar() {
+TerarkGetConfigMapFromEnv() {
   std::map<std::string, std::string> configMap;
   const char* configCString = getenv("TerarkConfigString");
   if (!configCString || !*configCString) {
     return configMap;
   }
 
-  std::string cfgStr(configCString);
   std::vector<std::string> fields;
+  std::string cfgStr(configCString);
   boost::algorithm::split(fields, cfgStr, boost::is_any_of(";"));
 
   for (const std::string& f : fields) {
     std::string::size_type pos = f.find('=');
     if (pos != std::string::npos) {
       std::string::size_type p = pos + 1;
-      configMap[std::string(f.data(), pos)] = std::string(f.data() + p,f.size() - p);
+      configMap[std::string(f.data(), pos)] = std::string(f.data() + p, f.size() - p);
     }
   }
   return configMap;
@@ -371,6 +373,207 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo) {
   return true;
 }
 
+// todo(linyuanjin): move those functions to util?
+static long StringToInt(const std::string& src, long default_value) try {
+  return boost::lexical_cast<long>(src);
+} catch (boost::bad_lexical_cast &) {
+  return default_value;
+}
+
+static bool StringToBool(const std::string& src, bool default_value) try {
+  return boost::lexical_cast<bool>(src);
+} catch (boost::bad_lexical_cast &) {
+  return default_value;
+}
+
+static double StringToDouble(const std::string& src, double default_value) try {
+  return boost::lexical_cast<double>(src);
+} catch (boost::bad_lexical_cast &) {
+  return default_value;
+}
+
+static unsigned long long StringToXiB(const std::string& src) {
+  return terark::ParseSizeXiB(src.data());
+}
+
+bool TerarkZipCFOptionsFromConfigMap(struct ColumnFamilyOptions& cfo,
+                                     const std::map<std::string, std::string>& configMap) {
+  struct TerarkZipTableOptions tzo;
+  TerarkZipAutoConfigForOnlineDB_CFOptions(tzo, cfo, 0, 0);
+
+  auto it = configMap.find("localTempDir");
+  if (it != configMap.end()) {
+    if (it->second.empty()){
+      THROW_STD(invalid_argument,
+                "If env localTempDir is defined, it must not be empty");
+    }
+    tzo.localTempDir = it->second;
+  } else if (!cfo.cf_paths.empty()) {
+    tzo.localTempDir = cfo.cf_paths.front().path;
+  } else {
+    STD_INFO("TerarkZipCFOptionsFromConfigMap(cfo, configMap) failed because localTempDir is not defined\n");
+    return false;
+  }
+
+  it = configMap.find("entropyAlgo");
+  if (it != configMap.end()) {
+    const char* algo = it->second.data();
+    if (strcasecmp(algo, "NoEntropy") == 0) {
+      tzo.entropyAlgo = tzo.kNoEntropy;
+    } else if (strcasecmp(algo, "FSE") == 0) {
+      tzo.entropyAlgo = tzo.kFSE;
+    } else if (strcasecmp(algo, "huf") == 0) {
+      tzo.entropyAlgo = tzo.kHuffman;
+    } else if (strcasecmp(algo, "huff") == 0) {
+      tzo.entropyAlgo = tzo.kHuffman;
+    } else if (strcasecmp(algo, "huffman") == 0) {
+      tzo.entropyAlgo = tzo.kHuffman;
+    } else {
+      tzo.entropyAlgo = tzo.kNoEntropy;
+      STD_WARN(
+              "bad env TerarkZipTable_entropyAlgo=%s, must be one of {NoEntropy, FSE, huf}, reset to default 'NoEntropy'\n",
+              algo);
+    }
+  }
+
+  it = configMap.find("indexType");
+  if (it != configMap.end()) {
+    tzo.indexType = it->second;
+  }
+
+#define MyGetIntFromConfigMap(obj, name, Default) \
+    it = configMap.find("" #name ""); \
+    if (it != configMap.end()) { obj.name =  StringToInt(it->second, Default); } \
+    else { obj.name = Default; }
+#define MyGetBoolFromConfigMap(obj, name, Default) \
+    it = configMap.find("" #name ""); \
+    if (it != configMap.end()) { obj.name =  StringToBool(it->second, Default); } \
+    else { obj.name = Default; }
+#define MyGetDoubleFromConfigMap(obj, name, Default) \
+    it = configMap.find("" #name ""); \
+    if (it != configMap.end()) { obj.name =  StringToDouble(it->second, Default); } \
+    else { obj.name = Default; }
+#define MyGetXiBFromConfigMap(obj, name) \
+    it = configMap.find("" #name ""); \
+    if (it != configMap.end()) { obj.name =  StringToXiB(it->second); }
+
+#define MyOverrideIntFromConfigMap(obj, name) MyGetIntFromConfigMap(obj, name, obj.name)
+
+  MyGetIntFromConfigMap   (tzo, checksumLevel           , 3    );
+  MyGetIntFromConfigMap   (tzo, checksumSmallValSize    , 40   );
+  MyGetIntFromConfigMap   (tzo, indexNestLevel          , 3    );
+  MyGetIntFromConfigMap   (tzo, terarkZipMinLevel       , 0    );
+  MyGetIntFromConfigMap   (tzo, debugLevel              , 0    );
+  MyGetIntFromConfigMap   (tzo, keyPrefixLen            , 0    );
+  MyGetIntFromConfigMap   (tzo, offsetArrayBlockUnits   , 128  );
+  MyGetIntFromConfigMap   (tzo, indexNestScale          , 8    );
+  if (true
+      &&   0 != tzo.offsetArrayBlockUnits
+      &&  64 != tzo.offsetArrayBlockUnits
+      && 128 != tzo.offsetArrayBlockUnits
+          ) {
+    STD_WARN(
+            "TerarkZipCFOptionsFromConfigMap: bad offsetArrayBlockUnits = %d, must be one of {0,64,128}, reset to 128\n",
+            tzo.offsetArrayBlockUnits
+    );
+    tzo.offsetArrayBlockUnits = 128;
+  }
+  if (tzo.indexNestScale == 0) {
+    STD_WARN(
+            "TerarkZipCFOptionsFromConfigMap: bad indexNestScale = %d, must be in [1,255], reset to 8\n", int(tzo.indexNestScale)
+    );
+    tzo.indexNestScale = 8;
+  }
+
+  MyGetBoolFromConfigMap  (tzo, useSuffixArrayLocalMatch, false);
+  MyGetBoolFromConfigMap  (tzo, warmUpIndexOnOpen       , true );
+  MyGetBoolFromConfigMap  (tzo, warmUpValueOnOpen       , false);
+  MyGetBoolFromConfigMap  (tzo, disableSecondPassIter   , false);
+  MyGetBoolFromConfigMap  (tzo, enableCompressionProbe  , true );
+  MyGetBoolFromConfigMap  (tzo, disableCompressDict     , false);
+  MyGetBoolFromConfigMap  (tzo, optimizeCpuL3Cache      , true );
+  MyGetBoolFromConfigMap  (tzo, forceMetaInMemory       , false);
+  MyGetBoolFromConfigMap  (tzo, enableEntropyStore      , true );
+
+  MyGetDoubleFromConfigMap(tzo, sampleRatio             , 0.03 );
+  MyGetDoubleFromConfigMap(tzo, indexCacheRatio         , 0.00 );
+
+  MyGetIntFromConfigMap(tzo, minDictZipValueSize, 15);
+  MyGetIntFromConfigMap(tzo, minPreadLen, 0);
+
+  MyGetXiBFromConfigMap(tzo, softZipWorkingMemLimit);
+  MyGetXiBFromConfigMap(tzo, hardZipWorkingMemLimit);
+  MyGetXiBFromConfigMap(tzo, smallTaskMemory);
+  MyGetXiBFromConfigMap(tzo, singleIndexMinSize);
+  MyGetXiBFromConfigMap(tzo, singleIndexMaxSize);
+  MyGetXiBFromConfigMap(tzo, cacheCapacityBytes);
+  MyGetIntFromConfigMap(tzo, cacheShards, 67);
+
+  tzo.singleIndexMinSize = std::max<size_t>(tzo.singleIndexMinSize, 1ull << 20);
+  tzo.singleIndexMaxSize = std::min<size_t>(tzo.singleIndexMaxSize, 0x1E0000000);
+
+  cfo.table_factory = SingleTerarkZipTableFactory(
+          tzo, std::shared_ptr<TableFactory>(NewAdaptiveTableFactory()));
+  const char* compaction_style = "Universal";
+  it = configMap.find("compaction_style");
+  if (it != configMap.end()) {
+    compaction_style = it->second.data();
+  }
+  if (strcasecmp(compaction_style, "Level") == 0) {
+    cfo.compaction_style = kCompactionStyleLevel;
+  } else {
+    if (strcasecmp(compaction_style, "Universal") != 0) {
+      STD_WARN(
+              "bad env TerarkZipTable_compaction_style=%s, use default 'universal'",
+              compaction_style);
+    }
+    cfo.compaction_style = kCompactionStyleUniversal;
+    cfo.compaction_options_universal.allow_trivial_move = true;
+#define MyGetUniversalFromConfigMap_uint(name, Default)  \
+    it = configMap.find("" #name ""); \
+    if (it != configMap.end()) { cfo.compaction_options_universal.name =  StringToInt(it->second, Default); } \
+    else { cfo.compaction_options_universal.name = Default; }
+
+    MyGetUniversalFromConfigMap_uint(min_merge_width, 3);
+    MyGetUniversalFromConfigMap_uint(max_merge_width, 7);
+    cfo.compaction_options_universal.size_ratio = (unsigned)
+            terark::getEnvLong("TerarkZipTable_universal_compaction_size_ratio",
+                               cfo.compaction_options_universal.size_ratio);
+    const char* env_stop_style =
+            getenv("TerarkZipTable_universal_compaction_stop_style");
+    if (env_stop_style) {
+      auto& ou = cfo.compaction_options_universal;
+      if (strncasecmp(env_stop_style, "Similar", 7) == 0) {
+        ou.stop_style = kCompactionStopStyleSimilarSize;
+      } else if (strncasecmp(env_stop_style, "Total", 5) == 0) {
+        ou.stop_style = kCompactionStopStyleTotalSize;
+      } else {
+        STD_WARN(
+                "bad env TerarkZipTable_universal_compaction_stop_style=%s, use rocksdb default 'TotalSize'",
+                env_stop_style);
+        ou.stop_style = kCompactionStopStyleTotalSize;
+      }
+    }
+  }
+  MyGetXiBFromConfigMap(cfo, write_buffer_size);
+  MyGetXiBFromConfigMap(cfo, target_file_size_base);
+  MyGetBoolFromConfigMap(cfo, enable_lazy_compaction, true);
+  MyOverrideIntFromConfigMap(cfo, max_write_buffer_number);
+  MyOverrideIntFromConfigMap(cfo, target_file_size_multiplier);
+  MyOverrideIntFromConfigMap(cfo, num_levels);
+  MyOverrideIntFromConfigMap(cfo, level0_file_num_compaction_trigger);
+  MyOverrideIntFromConfigMap(cfo, level0_slowdown_writes_trigger);
+  MyOverrideIntFromConfigMap(cfo, level0_stop_writes_trigger);
+
+  cfo.max_compaction_bytes = cfo.target_file_size_base;
+  MyGetXiBFromConfigMap(cfo, max_compaction_bytes);
+
+  if (tzo.debugLevel) {
+    STD_INFO("TerarkZipCFOptionsFromConfigMap(cfo, configMap) successed\n");
+  }
+  return true;
+}
+
 void TerarkZipDBOptionsFromEnv(DBOptions& dbo) {
   TerarkZipAutoConfigForOnlineDB_DBOptions(dbo, 0);
 
@@ -378,6 +581,25 @@ void TerarkZipDBOptionsFromEnv(DBOptions& dbo) {
   MyGetInt(dbo,  max_background_compactions, 8);
   MyGetInt(dbo,  max_background_flushes    , 4);
   MyGetInt(dbo,  max_subcompactions        , 4);
+  MyGetBool(dbo, allow_mmap_populate       , false);
+  dbo.max_background_jobs = dbo.max_background_flushes + dbo.max_background_compactions;
+
+  dbo.env->SetBackgroundThreads(dbo.max_background_compactions, rocksdb::Env::LOW);
+  dbo.env->SetBackgroundThreads(dbo.max_background_flushes    , rocksdb::Env::HIGH);
+  dbo.allow_mmap_reads = true;
+  dbo.new_table_reader_for_compaction_inputs = false;
+  dbo.max_open_files = -1;
+}
+
+void TerarkZipDBOptionsFromConfigMap(struct DBOptions& dbo,
+                                     const std::map<std::string, std::string>& configMap) {
+  TerarkZipAutoConfigForOnlineDB_DBOptions(dbo, 0);
+
+  auto it = configMap.end();
+  MyGetIntFromConfigMap(dbo, base_background_compactions, 4);
+  MyGetIntFromConfigMap(dbo,  max_background_compactions, 8);
+  MyGetIntFromConfigMap(dbo,  max_background_flushes    , 4);
+  MyGetIntFromConfigMap(dbo,  max_subcompactions        , 4);
   MyGetBool(dbo, allow_mmap_populate       , false);
   dbo.max_background_jobs = dbo.max_background_flushes + dbo.max_background_compactions;
 
