@@ -414,7 +414,7 @@ bool TerarkZipCFOptionsFromConfigMap(struct ColumnFamilyOptions& cfo,
   TerarkZipAutoConfigForOnlineDB_CFOptions(tzo, cfo, 0, 0);
 
   auto it = configMap.find("localTempDir");
-  if (it != configMap.end() && it->second != "*") {
+  if (it != configMap.end()) {
     if (it->second.empty()){
       THROW_STD(invalid_argument,
                 "If configMap localTempDir is defined, it must not be empty");
