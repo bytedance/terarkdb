@@ -74,6 +74,7 @@ public:
   uint64_t NumEntries() const override { return properties_.num_entries; }
   uint64_t FileSize() const override;
   TableProperties GetTableProperties() const override;
+  bool NeedCompact() const override { return compaction_load_ > 0.1; }
   void SetSecondPassIterator(InternalIterator* reader) override {
     if (!table_options_.disableSecondPassIter) {
       second_pass_iter_ = reader;
@@ -243,6 +244,7 @@ private:
   bool closed_ = false;  // Either Finish() or Abandon() has been called.
   bool isReverseBytewiseOrder_;
   bool ignore_key_type_;
+  int level_;
 
   long long t0 = 0;
   size_t prefixLen_;

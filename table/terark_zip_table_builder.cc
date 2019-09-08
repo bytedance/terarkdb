@@ -177,12 +177,14 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(const TerarkZipTableFactory* table_
   try {
     singleIndexMaxSize_ = std::min(table_options_.softZipWorkingMemLimit,
                                    table_options_.singleIndexMaxSize);
-
+    level_ = tbo.level;
     if (tbo.compaction_load > 0) {
       double load = tbo.compaction_load * tbo.ioptions.num_levels - std::max(0, tbo.level);
       if (load > 0) {
         compaction_load_ = std::min(1., load);
       }
+    } else if (tbo.compaction_load < 0) {
+      compaction_load_ = -tbo.compaction_load;
     }
 
     estimateRatio_ = table_factory_->GetCollect().estimate();
@@ -1075,8 +1077,9 @@ TerarkZipTableBuilder::WaitHandle
 TerarkZipTableBuilder::
 LoadSample(std::unique_ptr<DictZipBlobStore::ZipBuilder>& zbuilder) {
   if (compaction_load_ > 0.99) {
-    INFO(ioptions_.info_log, "TerarkZipTableBuilder::LoadSample():this=%12p:\n sample_len = %zd, real_sample_len = 0, compaction_load = %f\n"
-      , this, sampleLenSum_, compaction_load_
+    INFO(ioptions_.info_log, "TerarkZipTableBuilder::LoadSample():this=%12p:\n"
+                             "sample_len = %zd, real_sample_len = 0, level = %d, compaction_load = %f\n"
+      , this, sampleLenSum_, level_, compaction_load_
     );
     zbuilder.reset();
     return WaitHandle();
@@ -1114,8 +1117,9 @@ LoadSample(std::unique_ptr<DictZipBlobStore::ZipBuilder>& zbuilder) {
       }
       len += sample.size();
     }
-    INFO(ioptions_.info_log, "TerarkZipTableBuilder::LoadSample():this=%12p:\n sample_len = %zd, real_sample_len = %zd, compaction_load = %f\n"
-      , this, sampleLenSum_, realSampleLenSum, compaction_load_
+    INFO(ioptions_.info_log, "TerarkZipTableBuilder::LoadSample():this=%12p:\n"
+                             "sample_len = %zd, real_sample_len = %zd, level = %d, compaction_load = %f\n"
+      , this, sampleLenSum_, realSampleLenSum, level_, compaction_load_
     );
   }
   tmpSampleFile_.close();
