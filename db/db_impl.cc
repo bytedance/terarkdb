@@ -1592,7 +1592,7 @@ Status DBImpl::CreateColumnFamilyImpl(const ColumnFamilyOptions& cf_options,
             "env TerarkZipTable_localTempDir", terarkdb_localTempDir);
       }
       if (!TerarkZipIsBlackListCF(column_family_name)) {
-        TerarkZipCFOptionsFromEnv(const_cast<ColumnFamilyOptions&>(cf_options));
+        TerarkZipCFOptionsFromEnv(const_cast<ColumnFamilyOptions&>(cf_options), dbname_);
       }
     } else {
       return Status::InvalidArgument(

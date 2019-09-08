@@ -174,7 +174,7 @@ Status DB::OpenForReadOnly(
           terarkdb_localTempDir);
     }
     if (TerarkZipMultiCFOptionsFromEnv) {
-      TerarkZipMultiCFOptionsFromEnv(db_options, column_families);
+      TerarkZipMultiCFOptionsFromEnv(db_options, column_families, dbname);
     } else {
       return Status::InvalidArgument(
           "env TerarkZipTable_localTempDir is defined, "
