@@ -529,6 +529,7 @@ bool TerarkZipCFOptionsFromConfigMap(struct ColumnFamilyOptions& cfo,
     }
     cfo.compaction_style = kCompactionStyleUniversal;
     cfo.compaction_options_universal.allow_trivial_move = true;
+
 #define MyGetUniversalFromConfigMap_uint(name, Default)  \
     it = configMap.find("" #name ""); \
     if (it != configMap.end()) { cfo.compaction_options_universal.name =  StringToInt(it->second, Default); } \
@@ -536,12 +537,16 @@ bool TerarkZipCFOptionsFromConfigMap(struct ColumnFamilyOptions& cfo,
 
     MyGetUniversalFromConfigMap_uint(min_merge_width, 3);
     MyGetUniversalFromConfigMap_uint(max_merge_width, 7);
-    cfo.compaction_options_universal.size_ratio = (unsigned)
-            terark::getEnvLong("TerarkZipTable_universal_compaction_size_ratio",
-                               cfo.compaction_options_universal.size_ratio);
-    const char* env_stop_style =
-            getenv("TerarkZipTable_universal_compaction_stop_style");
-    if (env_stop_style) {
+
+    it = configMap.find("universal_compaction_size_ratio");
+    if (it != configMap.end()) {
+      cfo.compaction_options_universal.size_ratio = (unsigned) StringToInt(it->second,
+                                                                           cfo.compaction_options_universal.size_ratio);
+    }
+
+    it = configMap.find("universal_compaction_stop_style");
+    if (it != configMap.end()) {
+      const char* env_stop_style = it->second.data();
       auto& ou = cfo.compaction_options_universal;
       if (strncasecmp(env_stop_style, "Similar", 7) == 0) {
         ou.stop_style = kCompactionStopStyleSimilarSize;
