@@ -405,7 +405,7 @@ bool TerarkZipCFOptionsFromConfigMap(struct ColumnFamilyOptions& cfo,
   if (it != configMap.end() && it->second != "*") {
     if (it->second.empty()){
       THROW_STD(invalid_argument,
-                "If env localTempDir is defined, it must not be empty");
+                "If configMap localTempDir is defined, it must not be empty");
     }
     tzo.localTempDir = it->second;
   } else if (!cfo.cf_paths.empty()) {
@@ -431,7 +431,7 @@ bool TerarkZipCFOptionsFromConfigMap(struct ColumnFamilyOptions& cfo,
     } else {
       tzo.entropyAlgo = tzo.kNoEntropy;
       STD_WARN(
-              "bad env TerarkZipTable_entropyAlgo=%s, must be one of {NoEntropy, FSE, huf}, reset to default 'NoEntropy'\n",
+              "bad configMap entropyAlgo=%s, must be one of {NoEntropy, FSE, huf}, reset to default 'NoEntropy'\n",
               algo);
     }
   }
@@ -524,7 +524,7 @@ bool TerarkZipCFOptionsFromConfigMap(struct ColumnFamilyOptions& cfo,
   } else {
     if (strcasecmp(compaction_style, "Universal") != 0) {
       STD_WARN(
-              "bad env TerarkZipTable_compaction_style=%s, use default 'universal'",
+              "bad configMap compaction_style=%s, use default 'universal'",
               compaction_style);
     }
     cfo.compaction_style = kCompactionStyleUniversal;
@@ -554,7 +554,7 @@ bool TerarkZipCFOptionsFromConfigMap(struct ColumnFamilyOptions& cfo,
         ou.stop_style = kCompactionStopStyleTotalSize;
       } else {
         STD_WARN(
-                "bad env TerarkZipTable_universal_compaction_stop_style=%s, use rocksdb default 'TotalSize'",
+                "bad configMap universal_compaction_stop_style=%s, use rocksdb default 'TotalSize'",
                 env_stop_style);
         ou.stop_style = kCompactionStopStyleTotalSize;
       }
@@ -600,7 +600,7 @@ void TerarkZipDBOptionsFromConfigMap(struct DBOptions& dbo,
                                      const std::unordered_map<std::string, std::string>& configMap) {
   TerarkZipAutoConfigForOnlineDB_DBOptions(dbo, 0);
 
-  auto it = configMap.end();
+  decltype(configMap.end()) it;
   MyGetIntFromConfigMap(dbo, base_background_compactions, 4);
   MyGetIntFromConfigMap(dbo,  max_background_compactions, 8);
   MyGetIntFromConfigMap(dbo,  max_background_flushes    , 4);
