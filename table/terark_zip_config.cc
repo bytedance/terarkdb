@@ -215,13 +215,19 @@ bool TerarkZipConfigFromEnv(DBOptions& dbo, ColumnFamilyOptions& cfo) {
   }
 }
 
-bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo) {
+bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo, const std::string& terarkTempDirIfNotFound) {
   auto configMap = TerarkGetConfigMapFromEnv();
   if (!configMap.empty()) {
+    if (configMap.find("localTempDir") == configMap.end() && !terarkTempDirIfNotFound.empty()) {
+      configMap["localTempDir"] = terarkTempDirIfNotFound;
+    }
     return TerarkZipCFOptionsFromConfigMap(cfo, configMap);
   }
 
   const char* localTempDir = getenv("TerarkZipTable_localTempDir");
+  if ((!localTempDir || !*localTempDir) && !terarkTempDirIfNotFound.empty()) {
+    localTempDir = terarkTempDirIfNotFound.c_str();
+  }
   if (!localTempDir) {
     STD_INFO("TerarkZipConfigFromEnv(dbo, cfo) failed because env TerarkZipTable_localTempDir is not defined\n");
     return false;
@@ -418,7 +424,7 @@ bool TerarkZipCFOptionsFromConfigMap(struct ColumnFamilyOptions& cfo,
     tzo.localTempDir = cfo.cf_paths.front().path;
   } else {
     const char* localTempDir = getenv("TerarkZipTable_localTempDir");
-    if (localTempDir && *localTempDir) { // fallback path
+    if (localTempDir && *localTempDir) { // fallback to the old way
       tzo.localTempDir = localTempDir;
     } else {
       STD_INFO("TerarkZipCFOptionsFromConfigMap(cfo, configMap) failed because localTempDir is not defined\n");

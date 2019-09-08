@@ -137,7 +137,7 @@ TerarkZipAutoConfigForOnlineDB_CFOptions(struct TerarkZipTableOptions& tzo,
 
 bool TerarkZipConfigFromEnv(struct DBOptions&, struct ColumnFamilyOptions&);
 
-bool TerarkZipCFOptionsFromEnv(struct ColumnFamilyOptions&);
+bool TerarkZipCFOptionsFromEnv(struct ColumnFamilyOptions&, const std::string& terarkTempDirIfNotFound = {});
 
 bool TerarkZipCFOptionsFromConfigMap(struct ColumnFamilyOptions&, const std::unordered_map<std::string, std::string>&);
 
