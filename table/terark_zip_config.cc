@@ -15,6 +15,7 @@
 # include <unistd.h>
 #endif
 #include <mutex>
+#include <boost/algorithm/string.hpp>
 
 namespace terark {
 void DictZipBlobStore_setZipThreads(int zipThreads);
@@ -46,6 +47,32 @@ void TerarkZipDeleteTempFiles(const std::string& tmpPath) {
       env->DeleteFile(fpath);
     }
   }
+}
+
+// todo(linyuanjin): may use better string impl to replace std::string
+// config string example: "entropyAlgo=FSE;compaction_style=Universal"
+// fields are separated by ';'
+// key and value are separated by '='
+static std::map<std::string, std::string>
+TerarkGetConfigMapFromEnvVar() {
+  std::map<std::string, std::string> configMap;
+  const char* configCString = getenv("TerarkConfigString");
+  if (!configCString || !*configCString) {
+    return configMap;
+  }
+
+  std::string cfgStr(configCString);
+  std::vector<std::string> fields;
+  boost::algorithm::split(fields, cfgStr, boost::is_any_of(";"));
+
+  for (const std::string& f : fields) {
+    std::string::size_type pos = f.find('=');
+    if (pos != std::string::npos) {
+      std::string::size_type p = pos + 1;
+      configMap[std::string(f.data(), pos)] = std::string(f.data() + p,f.size() - p);
+    }
+  }
+  return configMap;
 }
 
 void TerarkZipAutoConfigForBulkLoad(struct TerarkZipTableOptions& tzo,
