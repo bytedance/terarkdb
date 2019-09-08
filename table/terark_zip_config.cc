@@ -417,8 +417,13 @@ bool TerarkZipCFOptionsFromConfigMap(struct ColumnFamilyOptions& cfo,
   } else if (!cfo.cf_paths.empty()) {
     tzo.localTempDir = cfo.cf_paths.front().path;
   } else {
-    STD_INFO("TerarkZipCFOptionsFromConfigMap(cfo, configMap) failed because localTempDir is not defined\n");
-    return false;
+    const char* localTempDir = getenv("TerarkZipTable_localTempDir");
+    if (localTempDir && *localTempDir) { // fallback path
+      tzo.localTempDir = localTempDir;
+    } else {
+      STD_INFO("TerarkZipCFOptionsFromConfigMap(cfo, configMap) failed because localTempDir is not defined\n");
+      return false;
+    }
   }
 
   it = configMap.find("entropyAlgo");
