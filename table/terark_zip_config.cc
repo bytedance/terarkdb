@@ -380,22 +380,22 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo) {
 }
 
 // todo(linyuanjin): move those functions to util?
-static long StringToInt(const std::string& src, long default_value) try {
+static long StringToInt(const std::string& src, long defaultVal) try {
   return boost::lexical_cast<long>(src);
 } catch (boost::bad_lexical_cast &) {
-  return default_value;
+  return defaultVal;
 }
 
-static bool StringToBool(const std::string& src, bool default_value) try {
+static bool StringToBool(const std::string& src, bool defaultVal) try {
   return boost::lexical_cast<bool>(src);
 } catch (boost::bad_lexical_cast &) {
-  return default_value;
+  return defaultVal;
 }
 
-static double StringToDouble(const std::string& src, double default_value) try {
+static double StringToDouble(const std::string& src, double defaultVal) try {
   return boost::lexical_cast<double>(src);
 } catch (boost::bad_lexical_cast &) {
-  return default_value;
+  return defaultVal;
 }
 
 static unsigned long long StringToXiB(const std::string& src) {
