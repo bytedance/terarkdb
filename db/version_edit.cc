@@ -352,11 +352,14 @@ const char* VersionEdit::DecodeNewFile4From(Slice* input) {
               f.prop.dependence.emplace_back(file_number);
             }
             if (!field.empty()) {
+              uint32_t max_read_amp;
               uint64_t read_amp;
-              if (!GetVarint64(&field, &read_amp) ||
+              if (!GetVarint32(&field, &max_read_amp) ||
+                  !GetVarint64(&field, &read_amp) ||
                   !GetVarint64(&field, &size)) {
                 return error_msg;
               }
+              f.prop.max_read_amp = uint16_t(max_read_amp);
               f.prop.read_amp = U64ToDouble(read_amp);
               f.prop.inheritance_chain.reserve(size);
               for (size_t i = 0; i < size; ++i) {
