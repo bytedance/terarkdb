@@ -13,7 +13,6 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
-#include <map>
 #include <memory>
 #include <stdio.h>
 
@@ -140,11 +139,11 @@ bool TerarkZipConfigFromEnv(struct DBOptions&, struct ColumnFamilyOptions&);
 
 bool TerarkZipCFOptionsFromEnv(struct ColumnFamilyOptions&);
 
-bool TerarkZipCFOptionsFromConfigMap(struct ColumnFamilyOptions&, const std::map<std::string, std::string>&);
+bool TerarkZipCFOptionsFromConfigMap(struct ColumnFamilyOptions&, const std::unordered_map<std::string, std::string>&);
 
 void TerarkZipDBOptionsFromEnv(struct DBOptions&);
 
-void TerarkZipDBOptionsFromConfigMap(struct DBOptions&, const std::map<std::string, std::string>&);
+void TerarkZipDBOptionsFromConfigMap(struct DBOptions&, const std::unordered_map<std::string, std::string>&);
 
 bool TerarkZipIsBlackListCF(const std::string& cfname);
 

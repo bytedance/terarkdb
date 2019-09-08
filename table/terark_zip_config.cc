@@ -55,9 +55,9 @@ void TerarkZipDeleteTempFiles(const std::string& tmpPath) {
 // config string example: "entropyAlgo=FSE;compaction_style=Universal"
 // fields are separated by ';'
 // key and value are separated by '='
-static std::map<std::string, std::string>
+static std::unordered_map<std::string, std::string>
 TerarkGetConfigMapFromEnv() {
-  std::map<std::string, std::string> configMap;
+  std::unordered_map<std::string, std::string> configMap;
   const char* configCString = getenv("TerarkConfigString");
   if (!configCString || !*configCString) {
     return configMap;
@@ -397,7 +397,7 @@ static unsigned long long StringToXiB(const std::string& src) {
 }
 
 bool TerarkZipCFOptionsFromConfigMap(struct ColumnFamilyOptions& cfo,
-                                     const std::map<std::string, std::string>& configMap) {
+                                     const std::unordered_map<std::string, std::string>& configMap) {
   struct TerarkZipTableOptions tzo;
   TerarkZipAutoConfigForOnlineDB_CFOptions(tzo, cfo, 0, 0);
 
@@ -592,7 +592,7 @@ void TerarkZipDBOptionsFromEnv(DBOptions& dbo) {
 }
 
 void TerarkZipDBOptionsFromConfigMap(struct DBOptions& dbo,
-                                     const std::map<std::string, std::string>& configMap) {
+                                     const std::unordered_map<std::string, std::string>& configMap) {
   TerarkZipAutoConfigForOnlineDB_DBOptions(dbo, 0);
 
   auto it = configMap.end();
