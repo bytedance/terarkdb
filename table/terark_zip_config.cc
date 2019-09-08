@@ -663,13 +663,14 @@ T& auto_const_cast(const T& x) {
 
 void
 TerarkZipMultiCFOptionsFromEnv(const DBOptions& db_options,
-                               const std::vector<ColumnFamilyDescriptor>& cfvec) {
+                               const std::vector<ColumnFamilyDescriptor>& cfvec,
+                               const std::string& terarkTempDirIfNotFound) {
   size_t numIsBlackList = 0;
   for (auto& cf : auto_const_cast(cfvec)) {
     if (TerarkZipIsBlackListCF(cf.name)) {
       numIsBlackList++;
     } else {
-      TerarkZipCFOptionsFromEnv(cf.options);
+      TerarkZipCFOptionsFromEnv(cf.options, terarkTempDirIfNotFound);
     }
   }
   if (numIsBlackList < cfvec.size()) {

@@ -152,7 +152,8 @@ bool TerarkZipIsBlackListCF(const std::string& cfname);
 ///@param cfvec      is const but will be modified in this function
 void
 TerarkZipMultiCFOptionsFromEnv(const struct DBOptions& db_options,
-                               const std::vector<struct ColumnFamilyDescriptor>& cfvec);
+                               const std::vector<struct ColumnFamilyDescriptor>& cfvec,
+                               const std::string& terarkTempDirIfNotFound = {});
 
 const class WriteBatchEntryIndexFactory*
 patricia_WriteBatchEntryIndexFactory(const WriteBatchEntryIndexFactory* fallback = nullptr);
