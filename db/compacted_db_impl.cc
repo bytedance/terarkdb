@@ -155,7 +155,7 @@ Status CompactedDBImpl::Open(const Options& options,
         const ColumnFamilyOptions& cf_options = options;
         const DBOptions& db_options = options;
         TerarkZipDBOptionsFromEnv(const_cast<DBOptions&>(db_options));
-        TerarkZipCFOptionsFromEnv(const_cast<ColumnFamilyOptions&>(cf_options));
+        TerarkZipCFOptionsFromEnv(const_cast<ColumnFamilyOptions&>(cf_options), dbname);
         auto& factory = cf_options.table_factory;
         Status s = factory->SanitizeOptions(db_options, cf_options);
         if (!s.ok()) return s;

@@ -1121,7 +1121,7 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
             "env TerarkZipTable_localTempDir",
             terarkdb_localTempDir);
       }
-      TerarkZipMultiCFOptionsFromEnv(db_options, column_families);
+      TerarkZipMultiCFOptionsFromEnv(db_options, column_families, dbname);
     } else {
       return Status::InvalidArgument(
           "env TerarkZipTable_localTempDir is defined, "
