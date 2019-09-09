@@ -909,6 +909,7 @@ Status MapBuilder::WriteOutputFile(
   }
 
   // Prepare prop
+  file_meta->prop.num_entries = builder->NumEntries();
   file_meta->prop.purpose = kMapSst;
   std::tie(file_meta->prop.max_read_amp, file_meta->prop.read_amp) =
       range_iter->GetSstReadAmp();

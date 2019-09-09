@@ -768,10 +768,10 @@ Status CompactionJob::Run() {
         }
         output.table_properties = reader->GetTableProperties();
         auto tp = output.table_properties.get();
-        output.meta.num_entries = tp->num_entries;
         output.meta.num_deletions = tp->num_deletions;
         output.meta.raw_value_size = tp->raw_value_size;
         output.meta.raw_key_size = tp->raw_key_size;
+        output.meta.prop.num_entries = tp->num_entries;
         output.meta.prop.purpose = tp->purpose;
         output.meta.prop.max_read_amp = tp->max_read_amp;
         output.meta.prop.read_amp = tp->read_amp;
@@ -1029,7 +1029,7 @@ Status CompactionJob::Install(const MutableCFOptions& mutable_cf_options) {
     if (vstorage->LevelFiles(level).size() == 1 &&
         vstorage->LevelFiles(level).front()->prop.purpose == kMapSst) {
       stream <<
-          std::to_string(vstorage->LevelFiles(level).front()->num_entries);
+          std::to_string(vstorage->LevelFiles(level).front()->prop.num_entries);
     } else {
       stream << vstorage->NumLevelFiles(level);
     }
@@ -1865,7 +1865,7 @@ Status CompactionJob::FinishCompactionOutputFile(
     }
   }
   meta->marked_for_compaction = sub_compact->builder->NeedCompact();
-  const uint64_t current_entries = sub_compact->builder->NumEntries();
+  meta->prop.num_entries = sub_compact->builder->NumEntries();
   meta->prop.dependence.assign(dependence.begin(), dependence.end());
   std::sort(meta->prop.dependence.begin(), meta->prop.dependence.end());
   assert(std::is_sorted(inheritance_chain.begin(), inheritance_chain.end()));
@@ -1898,7 +1898,7 @@ Status CompactionJob::FinishCompactionOutputFile(
     tp = sub_compact->builder->GetTableProperties();
   }
 
-  if (s.ok() && current_entries == 0 && tp.num_range_deletions == 0) {
+  if (s.ok() && meta->prop.num_entries == 0 && tp.num_range_deletions == 0) {
     // If there is nothing to output, no necessary to generate a sst file.
     // This happens when the output level is bottom level, at the same time
     // the sub_compact output nothing.
@@ -1914,7 +1914,7 @@ Status CompactionJob::FinishCompactionOutputFile(
     meta = nullptr;
   }
 
-  if (s.ok() && (current_entries > 0 || tp.num_range_deletions > 0)) {
+  if (s.ok() && (meta->prop.num_entries > 0 || tp.num_range_deletions > 0)) {
     // Output to event logger and fire events.
     sub_compact->current_output()->table_properties =
         std::make_shared<TableProperties>(tp);
@@ -1922,7 +1922,7 @@ Status CompactionJob::FinishCompactionOutputFile(
                    "[%s] [JOB %d] Generated table #%" PRIu64 ": %" PRIu64
                    " keys, %" PRIu64 " bytes%s",
                    cfd->GetName().c_str(), job_id_, output_number,
-                   current_entries, current_bytes,
+                   meta->prop.num_entries, current_bytes,
                    meta->marked_for_compaction ? " (need compaction)" : "");
   }
   std::string fname;
@@ -2294,7 +2294,7 @@ void CompactionJob::UpdateCompactionInputStatsHelper(int* num_files,
     const auto* file_meta = compaction->input(input_level, i);
     *bytes_read += file_meta->fd.GetFileSize();
     compaction_stats_.num_input_records +=
-        static_cast<uint64_t>(file_meta->num_entries);
+        static_cast<uint64_t>(file_meta->prop.num_entries);
   }
 }
 

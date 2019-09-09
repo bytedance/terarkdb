@@ -651,6 +651,7 @@ class Repairer {
                      t->meta.fd.GetNumber(), counter,
                      status.ToString().c_str());
 
+      t->meta.prop.num_entries = props->num_entries;
       t->meta.prop.purpose = props->purpose;
       t->meta.prop.max_read_amp = props->max_read_amp;
       t->meta.prop.read_amp = props->read_amp;

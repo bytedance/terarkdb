@@ -628,7 +628,7 @@ Compaction* CompactionPicker::PickGarbageCollection(
       continue;
     }
     FileInfo info = {f};
-    if (!f->init_stats_from_file) {
+    if (f->prop.num_entries == 0) {
       std::shared_ptr<const TableProperties> tp;
       auto s = table_cache_->GetTableProperties(
           env_options_, *icmp_, f->fd, &tp,
@@ -642,7 +642,7 @@ Compaction* CompactionPicker::PickGarbageCollection(
       }
       info.num_entries = tp->num_entries;
     } else {
-      info.num_entries = f->num_entries;
+      info.num_entries = f->prop.num_entries;
     }
     info.gc_ratio = 1.0 * f->num_antiquation / info.num_entries;
     info.estimated_size =

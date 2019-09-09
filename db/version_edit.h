@@ -84,11 +84,12 @@ struct FileSampledStats {
 };
 
 struct TablePropertyCache {
-  uint8_t purpose = 0;                      // Zero for essence sst
-  uint16_t max_read_amp = 1;                // Max read amp from sst
-  float read_amp = 1;                       // Expt read amp from sst
-  std::vector<uint64_t> dependence;         // Make these sst hidden
-  std::vector<uint64_t> inheritance_chain;  // Inheritance chain
+  uint64_t num_entries = 0;                 // the number of entries.
+  uint8_t purpose = 0;                      // zero for essence sst
+  uint16_t max_read_amp = 1;                // max read amp from sst
+  float read_amp = 1;                       // rxpt read amp from sst
+  std::vector<uint64_t> dependence;         // make these sst hidden
+  std::vector<uint64_t> inheritance_chain;  // inheritance chain
 };
 
 struct FileMetaData {
@@ -109,7 +110,6 @@ struct FileMetaData {
   uint64_t compensated_file_size;
   // These values can mutate, but they can only be read or written from
   // single-threaded LogAndApply thread
-  uint64_t num_entries;            // the number of entries.
   uint64_t num_deletions;          // the number of deletion entries.
   uint64_t num_antiquation;        // the number of out-dated entries.
   uint64_t raw_key_size;           // total uncompressed key size.
@@ -130,7 +130,6 @@ struct FileMetaData {
   FileMetaData()
       : table_reader_handle(nullptr),
         compensated_file_size(0),
-        num_entries(0),
         num_deletions(0),
         num_antiquation(0),
         raw_key_size(0),
@@ -287,6 +286,7 @@ class VersionEdit {
     f.fd.largest_seqno = largest_seqno;
     f.num_antiquation = num_antiquation;
     f.marked_for_compaction = marked_for_compaction;
+    f.prop.num_entries = prop.num_entries;
     f.prop.purpose = prop.purpose;
     f.prop.max_read_amp = prop.max_read_amp;
     f.prop.read_amp = prop.read_amp;

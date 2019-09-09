@@ -820,7 +820,7 @@ std::string RemoteCompactionWorker::Client::DoCompaction(
       }
       meta->marked_for_compaction = builder->NeedCompact();
     }
-    const uint64_t current_entries = builder->NumEntries();
+    meta->prop.num_entries = builder->NumEntries();
     meta->prop.dependence.assign(dependence.begin(), dependence.end());
     std::sort(meta->prop.dependence.begin(), meta->prop.dependence.end());
     if (s.ok()) {
@@ -852,7 +852,7 @@ std::string RemoteCompactionWorker::Client::DoCompaction(
         actual_end.rep()->clear();
       }
       CompactionWorkerResult::FileInfo file_info;
-      if (current_entries > 0 || tp.num_range_deletions > 0) {
+      if (meta->prop.num_entries > 0 || tp.num_range_deletions > 0) {
         file_info.file_name = writer->file_name();
       }
       file_info.smallest = meta->smallest;

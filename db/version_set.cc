@@ -934,7 +934,7 @@ void Version::GetColumnFamilyMetaData(ColumnFamilyMetaData* cf_meta) {
           file->largest.user_key().ToString(),
           file->stats.num_reads_sampled.load(std::memory_order_relaxed),
           file->being_compacted});
-      files.back().num_entries = file->num_entries;
+      files.back().num_entries = file->prop.num_entries;
       files.back().num_deletions = file->num_deletions;
       level_size += file->fd.GetFileSize();
     }
@@ -1458,7 +1458,7 @@ bool Version::MaybeInitializeFileMetaData(FileMetaData* file_meta) {
     return false;
   }
   if (tp.get() == nullptr) return false;
-  file_meta->num_entries = tp->num_entries;
+  assert(file_meta->prop.num_entries == tp->num_entries);
   file_meta->num_deletions = tp->num_deletions;
   file_meta->raw_value_size = tp->raw_value_size;
   file_meta->raw_key_size = tp->raw_key_size;
@@ -1472,11 +1472,11 @@ void VersionStorageInfo::UpdateAccumulatedStats(FileMetaData* file_meta) {
   accumulated_raw_key_size_ += file_meta->raw_key_size;
   accumulated_raw_value_size_ += file_meta->raw_value_size;
   accumulated_num_non_deletions_ +=
-      file_meta->num_entries - file_meta->num_deletions;
+      file_meta->prop.num_entries - file_meta->num_deletions;
   accumulated_num_deletions_ += file_meta->num_deletions;
 
   current_num_non_deletions_ +=
-      file_meta->num_entries - file_meta->num_deletions;
+      file_meta->prop.num_entries - file_meta->num_deletions;
   current_num_deletions_ += file_meta->num_deletions;
   current_num_samples_++;
 }
@@ -1484,7 +1484,7 @@ void VersionStorageInfo::UpdateAccumulatedStats(FileMetaData* file_meta) {
 void VersionStorageInfo::RemoveCurrentStats(FileMetaData* file_meta) {
   if (file_meta->init_stats_from_file) {
     current_num_non_deletions_ -=
-        file_meta->num_entries - file_meta->num_deletions;
+        file_meta->prop.num_entries - file_meta->num_deletions;
     current_num_deletions_ -= file_meta->num_deletions;
     current_num_samples_--;
   }
@@ -1564,10 +1564,10 @@ void VersionStorageInfo::ComputeCompensatedSizes() {
         // compensation logic might introduce unwanted effet which changes the
         // shape of LSM tree.
         if (f->prop.purpose == 0) {
-          if (f->num_deletions * 2 >= f->num_entries) {
-            compensated_file_size += (f->num_deletions * 2 - f->num_entries) *
-                                     average_value_size *
-                                     kDeletionWeightOnCompaction;
+          if (f->num_deletions * 2 >= f->prop.num_entries) {
+            compensated_file_size +=
+                (f->num_deletions * 2 - f->prop.num_entries) *
+                average_value_size * kDeletionWeightOnCompaction;
           }
         } else {
           for (auto file_number : f->prop.dependence) {
@@ -4672,7 +4672,7 @@ void VersionSet::GetLiveFilesMetaData(std::vector<LiveFileMetaData>* metadata) {
         filemetadata.num_reads_sampled = file->stats.num_reads_sampled.load(
             std::memory_order_relaxed);
         filemetadata.being_compacted = file->being_compacted;
-        filemetadata.num_entries = file->num_entries;
+        filemetadata.num_entries = file->prop.num_entries;
         filemetadata.num_deletions = file->num_deletions;
         metadata->push_back(filemetadata);
       }

@@ -260,7 +260,7 @@ Status FlushJob::Run(LogsWithPrepTracker* prep_tracker,
     if (vstorage->LevelFiles(level).size() == 1 &&
         vstorage->LevelFiles(level).front()->prop.purpose == kMapSst) {
       stream <<
-          std::to_string(vstorage->LevelFiles(level).front()->num_entries);
+          std::to_string(vstorage->LevelFiles(level).front()->prop.num_entries);
     } else {
       stream << vstorage->NumLevelFiles(level);
     }
