@@ -219,6 +219,7 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo, const std::string& tera
   auto configMap = TerarkGetConfigMapFromEnv();
   if (!configMap.empty()) {
     if (configMap.find("localTempDir") == configMap.end() && !terarkTempDirIfNotFound.empty()) {
+      TerarkZipDeleteTempFiles(terarkTempDirIfNotFound);
       configMap["localTempDir"] = terarkTempDirIfNotFound;
     }
     return TerarkZipCFOptionsFromConfigMap(cfo, configMap);
