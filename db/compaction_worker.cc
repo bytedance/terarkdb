@@ -90,7 +90,8 @@ struct json_impl<rocksdb::InternalKey, void> {
 
 AJSON(rocksdb::CompactionWorkerResult::FileInfo, smallest, largest, file_name,
                                                  smallest_seqno, largest_seqno,
-                                                 file_size, being_compacted);
+                                                 file_size,
+                                                 marked_for_compaction);
 
 AJSON(rocksdb::CompactionWorkerResult, status, actual_start, actual_end, files,
                                        delta_antiquation);
@@ -860,7 +861,7 @@ std::string RemoteCompactionWorker::Client::DoCompaction(
       file_info.smallest_seqno = meta->fd.smallest_seqno;
       file_info.largest_seqno = meta->fd.largest_seqno;
       file_info.file_size = meta->fd.file_size;
-      file_info.being_compacted = builder->NeedCompact();
+      file_info.marked_for_compaction = builder->NeedCompact();
       result.files.emplace_back(file_info);
     }
     *meta = FileMetaData();

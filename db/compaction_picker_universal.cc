@@ -282,9 +282,7 @@ UniversalCompactionPicker::CalculateSortedRuns(
       total_compensated_size += f->compensated_file_size;
       total_size += GetFilesSize(f, uint64_t(-1), vstorage);
       if (mutable_cf_options.compaction_options_universal.allow_trivial_move) {
-        if (f->being_compacted) {
-          being_compacted = f->being_compacted;
-        }
+        being_compacted |= f->being_compacted;
       } else {
         // Compaction always includes all files for a non-zero level, so for a
         // non-zero level, all the files should share the same being_compacted
@@ -646,10 +644,7 @@ Compaction* UniversalCompactionPicker::CompactRange(
     } else {
       *compaction_end = nullptr;
     }
-
-    Compaction* c = new Compaction(std::move(params));
-    RegisterCompaction(c);
-    return c;
+    return RegisterCompaction(new Compaction(std::move(params)));
   }
 
   if (!enable_lazy_compaction) {
@@ -1902,7 +1897,8 @@ Compaction* UniversalCompactionPicker::PickRangeCompaction(
   params.partial_compaction = true;
   params.compaction_type = kKeyValueCompaction;
   params.input_range = std::move(input_range);
-  return new Compaction(std::move(params));
+
+  return RegisterCompaction(new Compaction(std::move(params)));
 }
 
 //

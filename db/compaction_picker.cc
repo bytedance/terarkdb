@@ -409,9 +409,7 @@ Compaction* CompactionPicker::CompactFiles(
   params.max_subcompactions = compact_options.max_subcompactions;
   params.manual_compaction = true;
 
-  auto c = new Compaction(std::move(params));
-  RegisterCompaction(c);
-  return c;
+  return RegisterCompaction(new Compaction(std::move(params)));
 }
 
 Status CompactionPicker::GetCompactionInputsFromFileNumbers(
@@ -694,7 +692,7 @@ Compaction* CompactionPicker::PickGarbageCollection(
   params.compaction_type = kGarbageCollection;
   params.compaction_reason = CompactionReason::kGarbageCollection;
 
-  return new Compaction(std::move(params));
+  return RegisterCompaction(new Compaction(std::move(params)));
 }
 
 void CompactionPicker::InitFilesBeingCompact(
@@ -1136,18 +1134,19 @@ Status CompactionPicker::SanitizeCompactionInputFiles(
 }
 #endif  // !ROCKSDB_LITE
 
-void CompactionPicker::RegisterCompaction(Compaction* c) {
+Compaction* CompactionPicker::RegisterCompaction(Compaction* c) {
   if (c == nullptr) {
-    return;
+    return nullptr;
   }
   assert(ioptions_.compaction_style != kCompactionStyleLevel ||
-         c->output_level() == 0 ||
+         c->output_level() <= 0 ||
          !FilesRangeOverlapWithCompaction(*c->inputs(), c->output_level()));
   if (c->start_level() == 0 ||
       ioptions_.compaction_style == kCompactionStyleUniversal) {
     level0_compactions_in_progress_.insert(c);
   }
   compactions_in_progress_.insert(c);
+  return c;
 }
 
 void CompactionPicker::UnregisterCompaction(Compaction* c) {

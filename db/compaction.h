@@ -156,7 +156,7 @@ struct CompactionWorkerResult {
     std::string file_name;
     SequenceNumber smallest_seqno, largest_seqno;
     size_t file_size;
-    bool being_compacted;
+    bool marked_for_compaction;
   };
   std::vector<FileInfo> files;
   std::unordered_map<uint64_t, uint64_t> delta_antiquation;

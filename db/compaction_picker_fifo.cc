@@ -210,8 +210,7 @@ Compaction* FIFOCompactionPicker::PickCompaction(
   if (c == nullptr) {
     c = PickSizeCompaction(cf_name, mutable_cf_options, vstorage, log_buffer);
   }
-  RegisterCompaction(c);
-  return c;
+  return RegisterCompaction(c);
 }
 
 Compaction* FIFOCompactionPicker::CompactRange(

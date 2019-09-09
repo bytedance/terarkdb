@@ -747,7 +747,7 @@ Status CompactionJob::Run() {
                                         file_info.largest_seqno);
         output.meta.smallest = std::move(file_info.smallest);
         output.meta.largest = std::move(file_info.largest);
-        output.meta.being_compacted = file_info.being_compacted;
+        output.meta.marked_for_compaction = file_info.marked_for_compaction;
         std::unique_ptr<rocksdb::RandomAccessFile> file;
         s = env_->NewRandomAccessFile(fname, &file, env_options_);
         if (!s.ok()) {

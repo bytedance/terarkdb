@@ -203,7 +203,7 @@ class CompactionPicker {
                              int output_level, int* parent_index);
 
   // Register this compaction in the set of running compactions
-  void RegisterCompaction(Compaction* c);
+  Compaction* RegisterCompaction(Compaction* c);
 
   // Remove this compaction from the set of running compactions
   void UnregisterCompaction(Compaction* c);

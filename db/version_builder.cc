@@ -189,7 +189,7 @@ class VersionBuilder::Rep {
     }
   }
 
-  void PutSst(FileMetaData* f, int level, bool add_ref) {
+  void ActiveSst(FileMetaData* f, int level, bool add_ref) {
     auto ib = dependence_map_.emplace(f->fd.GetNumber(),
                                       DependenceItem{0, 0, level, f});
     if (add_ref) {
@@ -199,31 +199,27 @@ class VersionBuilder::Rep {
       PutInheritance(f);
     } else {
       auto& item = ib.first->second;
-      assert(item.level == -1);
       item.level = level;
       UnrefFile(item.f);
       item.f = f;
     }
-    active_sst_.emplace(f->fd.GetNumber());
+    if (level >= 0) {
+      active_sst_.emplace(f->fd.GetNumber());
+    } else {
+      active_sst_.erase(f->fd.GetNumber());
+    }
   }
 
-  void DelSst(FileMetaData* f, int level, bool add_ref) {
+  void ReclaimSst(FileMetaData* f, bool add_ref) {
     auto ib = dependence_map_.emplace(f->fd.GetNumber(),
                                       DependenceItem{0, 0, -1, f});
-    if (add_ref) {
-      ++f->refs;
-    }
     if (ib.second) {
+      if (add_ref) {
+        ++f->refs;
+      }
       PutInheritance(f);
     } else {
-      auto& item = ib.first->second;
-      if (item.level == level) {
-        assert(item.level >= 0);
-        active_sst_.erase(f->fd.GetNumber());
-        item.level = -1;
-      }
-      UnrefFile(item.f);
-      item.f = f;
+      assert(!ib.first->second.f->being_compacted);
     }
   }
 
@@ -235,11 +231,11 @@ class VersionBuilder::Rep {
     return file_number;
   }
 
-  void SetDependence(FileMetaData* f, bool recursive, bool check_error) {
+  void SetDependence(FileMetaData* f, bool recursive, bool finish) {
     for (auto file_number : f->prop.dependence) {
       auto find = dependence_map_.find(TransFileNumber(file_number));
       if (find == dependence_map_.end()) {
-        if (check_error) {
+        if (finish) {
           status_ = Status::Aborted("Missing dependence files");
         }
         continue;
@@ -248,32 +244,26 @@ class VersionBuilder::Rep {
       item.dependence_version = dependence_version_;
       if (recursive) {
         item.skip_gc_version = dependence_version_;
-        SetDependence(item.f, item.f->prop.purpose == kMapSst, check_error);
+        SetDependence(item.f, item.f->prop.purpose == kMapSst, finish);
       }
     }
   }
 
-  void CaclDependence(bool check_error) {
+  void CaclDependence(bool finish) {
     ++dependence_version_;
     for (auto file_number : active_sst_) {
-      if (inheritance_counter_.count(file_number) > 0) {
-        continue;
-      }
+      assert(inheritance_counter_.count(file_number) == 0);
       assert(dependence_map_.count(file_number) > 0);
       auto& item = dependence_map_[file_number];
+      assert(item.level >= 0);
       item.skip_gc_version = dependence_version_;
-      if (item.level < 0) {
-        item.dependence_version = dependence_version_;
-      }
-      if (item.f->prop.purpose == kMapSst) {
-        SetDependence(item.f, true, check_error);
-      } else if (item.level >= 0) {
-        SetDependence(item.f, false, check_error);
-      }
+      SetDependence(item.f, item.f->prop.purpose == kMapSst, finish);
     }
     for (auto it = dependence_map_.begin(); it != dependence_map_.end(); ) {
       auto& item = it->second;
-      if (item.dependence_version == dependence_version_ || item.level >= 0) {
+      if (item.dependence_version == dependence_version_ || item.level >= 0 ||
+          (!item.f->prop.inheritance_chain.empty() &&
+           inheritance_counter_.count(item.f->fd.GetNumber()) == 0)) {
         assert(inheritance_counter_.count(item.f->fd.GetNumber()) == 0);
         ++it;
       } else {
@@ -439,7 +429,7 @@ class VersionBuilder::Rep {
         auto exising = levels_[level].added_files.find(number);
         if (exising != levels_[level].added_files.end()) {
           levels_[level].added_files.erase(exising);
-          DelSst(exising->second, level, false);
+          ActiveSst(exising->second, -1, false);
         }
       } else {
         auto exising = invalid_levels_[level].find(number);
@@ -463,7 +453,7 @@ class VersionBuilder::Rep {
                levels_[level].added_files.end());
         levels_[level].deleted_files.erase(f->fd.GetNumber());
         levels_[level].added_files[f->fd.GetNumber()] = f;
-        PutSst(f, level, false);
+        ActiveSst(f, level, false);
       } else {
         uint64_t number = new_file.second.fd.GetNumber();
         if (invalid_levels_[level].count(number) == 0) {
@@ -491,7 +481,7 @@ class VersionBuilder::Rep {
     std::vector<double> read_amp(num_levels_);
 
     for (auto f : base_vstorage_->LevelFiles(-1)) {
-      DelSst(f, -1, true);
+      ReclaimSst(f, true);
     }
     for (int level = 0; level < num_levels_; level++) {
       const auto& cmp = (level == 0) ? level_zero_cmp_ : level_nonzero_cmp_;
@@ -528,10 +518,12 @@ class VersionBuilder::Rep {
         }
         if (levels_[level].deleted_files.count(f->fd.GetNumber()) > 0) {
           assert(is_base_file);
-          DelSst(f, level, true);
+          ReclaimSst(f, true);
         } else {
           if (is_base_file) {
-            PutSst(f, level, true);
+            ActiveSst(f, level, true);
+          } else {
+            assert(active_sst_.count(f->fd.GetNumber()) > 0);
           }
           vstorage->AddFile(level, f, info_log_);
           if (level == 0) {
