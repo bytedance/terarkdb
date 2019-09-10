@@ -4575,6 +4575,9 @@ InternalIterator* VersionSet::MakeInputIterator(
 // in the current version
 bool VersionSet::VerifyCompactionFileConsistency(Compaction* c) {
 #ifndef NDEBUG
+  if (c->compaction_type() == kGarbageCollection) {
+    return true;
+  }
   Version* version = c->column_family_data()->current();
   const VersionStorageInfo* vstorage = version->storage_info();
   if (c->input_version() != version) {

@@ -1898,7 +1898,8 @@ Status CompactionJob::FinishCompactionOutputFile(
     tp = sub_compact->builder->GetTableProperties();
   }
 
-  if (s.ok() && meta->prop.num_entries == 0 && tp.num_range_deletions == 0) {
+  if (s.ok() && tp.num_entries == 0 && tp.num_range_deletions == 0) {
+    assert(meta->prop.num_entries == tp.num_entries);
     // If there is nothing to output, no necessary to generate a sst file.
     // This happens when the output level is bottom level, at the same time
     // the sub_compact output nothing.
@@ -1914,7 +1915,7 @@ Status CompactionJob::FinishCompactionOutputFile(
     meta = nullptr;
   }
 
-  if (s.ok() && (meta->prop.num_entries > 0 || tp.num_range_deletions > 0)) {
+  if (s.ok() && (tp.num_entries > 0 || tp.num_range_deletions > 0)) {
     // Output to event logger and fire events.
     sub_compact->current_output()->table_properties =
         std::make_shared<TableProperties>(tp);
