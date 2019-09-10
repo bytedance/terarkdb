@@ -735,7 +735,6 @@ void CompactionIterator::PrepareOutput() {
   // Can we do the same for levels above bottom level as long as
   // KeyNotExistsBeyondOutputLevel() return true?
   if (blob_size_ > 0 && value_.file_number() != uint64_t(-1) &&
-      ikey_.sequence != 0 &&
       (ikey_.type == kTypeValue || ikey_.type == kTypeMerge)) {
     auto s = value_.inplace_decode();
     if (s.ok()) {

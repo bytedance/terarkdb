@@ -179,6 +179,11 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
         if (separate_helper_ == nullptr) {
           state_ = kFound;
           is_index_ = true;
+          if (LIKELY(lazy_val_ != nullptr)) {
+            if (!value.decode_destructive(*lazy_val_).ok()) {
+              state_ = kCorrupt;
+            }
+          }
           return false;
         }
         separate_helper_->TransToCombined(user_key_, parsed_key.sequence,
@@ -189,7 +194,7 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
         if (separate_helper_ == nullptr) {
           assert(kNotFound == state_);
           state_ = kFound;
-          if (lazy_val_ != nullptr) {
+          if (LIKELY(lazy_val_ != nullptr)) {
             *lazy_val_ = std::move(value);
             lazy_val_->pin_resource();
           }
@@ -245,6 +250,11 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
         if (separate_helper_ == nullptr) {
           state_ = kMerge;
           is_index_ = true;
+          if (LIKELY(lazy_val_ != nullptr)) {
+            if (!value.decode_destructive(*lazy_val_).ok()) {
+              state_ = kCorrupt;
+            }
+          }
           return false;
         }
         separate_helper_->TransToCombined(user_key_, parsed_key.sequence,
@@ -255,7 +265,7 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
         if (separate_helper_ == nullptr) {
           assert(kNotFound == state_);
           state_ = kMerge;
-          if (lazy_val_ != nullptr) {
+          if (LIKELY(lazy_val_ != nullptr)) {
             *lazy_val_ = std::move(value);
             lazy_val_->pin_resource();
           }

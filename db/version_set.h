@@ -613,7 +613,7 @@ class Version : public SeparateHelper, private LazySliceController {
            SequenceNumber* seq = nullptr, ReadCallback* callback = nullptr);
 
   void GetKey(const Slice& user_key, const Slice& ikey, Status* status,
-              ValueType* type, SequenceNumber* seq);
+              ValueType* type, SequenceNumber* seq, LazySlice* value);
 
   // Loads some stats information from files. Call without mutex held. It needs
   // to be called before applying the version to the version set.

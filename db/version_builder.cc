@@ -183,8 +183,8 @@ class VersionBuilder::Rep {
       auto find = inheritance_counter_.find(file_number);
       assert(find != inheritance_counter_.end());
       if (--find->second.count == 0) {
-        if (dependence_map_.count(file_number == 0))
         inheritance_counter_.erase(find);
+        delta_antiquation_.erase(file_number);
       }
     }
   }
@@ -273,6 +273,10 @@ class VersionBuilder::Rep {
         UnrefFile(item.f);
         it = dependence_map_.erase(it);
       }
+    }
+    if (finish) {
+      active_sst_.clear();
+      inheritance_counter_.clear();
     }
   }
 

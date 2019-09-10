@@ -1369,11 +1369,11 @@ void Version::Get(const ReadOptions& read_options, const Slice& user_key,
 }
 
 void Version::GetKey(const Slice& user_key, const Slice& ikey, Status* status,
-                     ValueType* type, SequenceNumber* seq) {
+                     ValueType* type, SequenceNumber* seq, LazySlice* value) {
   bool value_found;
   GetContext get_context(cfd_->internal_comparator().user_comparator(), nullptr,
                          cfd_->ioptions()->info_log, db_statistics_,
-                         GetContext::kNotFound, user_key, nullptr, &value_found,
+                         GetContext::kNotFound, user_key, value, &value_found,
                          nullptr, nullptr, nullptr, env_, seq);
   ReadOptions options;
 

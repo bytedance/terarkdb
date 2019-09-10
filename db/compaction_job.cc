@@ -1525,17 +1525,26 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
   sub_compact->builder->SetSecondPassIterator(&second_pass_iter);
 
   Version* input_version = sub_compact->compaction->input_version();
-  IterKey last_key, iter_key;
-  LazySlice last_value;
-  auto process_key_value = [&](const Slice& key, const ParsedInternalKey& ikey,
-                               LazySlice& value) {
+  auto& dependence_map = input_version->storage_info()->dependence_map();
+  IterKey iter_key;
+  ParsedInternalKey ikey;
+  while (status.ok() && !cfd->IsDropped() && input->Valid()) {
+    Slice key = input->key();
+    if (!ParseInternalKey(key, &ikey)) {
+      status = Status::Corruption("Invalid InternalKey");
+      break;
+    }
     do {
+      if (ikey.type != kTypeValue && ikey.type != kTypeMerge) {
+        break;
+      }
       iter_key.SetInternalKey(ikey.user_key, ikey.sequence, kValueTypeForSeek);
       Status s;
       ValueType type = kTypeDeletion;
       SequenceNumber seq = kMaxSequenceNumber;
+      LazySlice value;
       input_version->GetKey(ikey.user_key, iter_key.GetInternalKey(), &s, &type,
-                            &seq);
+                            &seq, &value);
       if (s.IsNotFound()) {
         break;
       } else if (!s.ok()) {
@@ -1545,6 +1554,21 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
                  (type != kTypeValueIndex && type != kTypeMergeIndex)) {
         break;
       }
+      status = value.inplace_decode();
+      if (!status.ok()) {
+        break;
+      }
+      uint64_t file_number = SeparateHelper::DecodeFileNumber(value);
+      auto find = dependence_map.find(file_number);
+      if (find == dependence_map.end()) {
+        status = Status::Corruption("Separate value dependence missing");
+        break;
+      }
+      value = input->value();
+      if (find->second->fd.GetNumber() != value.file_number()) {
+        break;
+      }
+
       assert(sub_compact->builder != nullptr);
       assert(sub_compact->current_output() != nullptr);
       sub_compact->builder->Add(key, value);
@@ -1552,56 +1576,7 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
       sub_compact->current_output()->meta.UpdateBoundaries(key, ikey.sequence);
       sub_compact->num_output_records++;
     } while (false);
-  };
-
-  if (status.ok() && !cfd->IsDropped() && input->Valid()) {
-    ParsedInternalKey last_ikey, ikey;
-    while (true) {
-      last_key.SetInternalKey(input->key(), true);
-      last_value = input->value();
-      last_value.pin_resource();
-      input->Next();
-      if (cfd->IsDropped() || !input->Valid()) {
-        break;
-      }
-      Slice key = input->key();
-      if (!ParseInternalKey(last_key.GetInternalKey(), &last_ikey) ||
-          !ParseInternalKey(key, &ikey)) {
-        status = Status::Corruption("Invalid InternalKey");
-        break;
-      }
-      if (last_ikey.sequence == 0 ||
-          (last_ikey.type != kTypeValue && last_ikey.type != kTypeMerge)) {
-        continue;
-      }
-      if (last_ikey.sequence == ikey.sequence &&
-          cfd->user_comparator()->Compare(last_ikey.user_key,
-                                          ikey.user_key) == 0) {
-#ifndef NDEBUG
-        if (last_ikey.type == ikey.type) {
-          LazySlice value = input->value();
-          assert(last_value.inplace_decode().ok());
-          assert(value.inplace_decode().ok());
-          assert(last_value.slice_ref() == value.slice_ref());
-        } else {
-          assert(last_ikey.type == kTypeMerge);
-          assert(ikey.type == kTypeValue);
-        }
-#endif
-        continue;
-      }
-      process_key_value(last_key.GetInternalKey(), last_ikey, last_value);
-      if (!status.ok()) {
-        break;
-      }
-    }
-    if (status.ok() && !cfd->IsDropped()) {
-      if (!ParseInternalKey(last_key.GetInternalKey(), &last_ikey)) {
-        status = Status::Corruption("Invalid InternalKey");
-      } else {
-        process_key_value(last_key.GetInternalKey(), last_ikey, last_value);
-      }
-    }
+    input->Next();
   }
 
   if (status.ok() &&
@@ -1613,7 +1588,6 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
     status = input->status();
   }
   std::vector<uint64_t> inheritance_chain;
-  auto& dependence_map = input_version->storage_info()->dependence_map();
   for (auto& level : *sub_compact->compaction->inputs()) {
     for (auto f : level.files) {
       inheritance_chain.push_back(f->fd.GetNumber());
