@@ -250,7 +250,9 @@ class VersionBuilder::Rep {
   }
 
   void CaclDependence(bool finish) {
-    ++dependence_version_;
+    if (++dependence_version_ % 128 != 0 && !finish) {
+      return;
+    }
     for (auto file_number : active_sst_) {
       assert(inheritance_counter_.count(file_number) == 0);
       assert(dependence_map_.count(file_number) > 0);
@@ -262,7 +264,7 @@ class VersionBuilder::Rep {
     for (auto it = dependence_map_.begin(); it != dependence_map_.end(); ) {
       auto& item = it->second;
       if (item.dependence_version == dependence_version_ || item.level >= 0 ||
-          (!item.f->prop.inheritance_chain.empty() &&
+          (!finish && !item.f->prop.inheritance_chain.empty() &&
            inheritance_counter_.count(item.f->fd.GetNumber()) == 0)) {
         assert(inheritance_counter_.count(item.f->fd.GetNumber()) == 0);
         ++it;
