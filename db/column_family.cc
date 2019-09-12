@@ -694,8 +694,8 @@ ColumnFamilyData::GetWriteStallConditionAndCause(
     return {WriteStallCondition::kStopped,
             WriteStallCause::kPendingCompactionBytes};
   } else if (!mutable_cf_options.disable_auto_compactions &&
-             read_amp >=
-                 mutable_cf_options.level0_stop_writes_trigger + num_levels) {
+             read_amp - num_levels >=
+                 mutable_cf_options.level0_stop_writes_trigger) {
     return {WriteStallCondition::kStopped,
             WriteStallCause::kReadAmpLimit};
   } else if (mutable_cf_options.max_write_buffer_number > 3 &&
@@ -715,8 +715,8 @@ ColumnFamilyData::GetWriteStallConditionAndCause(
             WriteStallCause::kPendingCompactionBytes};
   } else if (
       !mutable_cf_options.disable_auto_compactions &&
-      read_amp >=
-           mutable_cf_options.level0_slowdown_writes_trigger + num_levels) {
+      read_amp - num_levels >=
+           mutable_cf_options.level0_slowdown_writes_trigger) {
     return {WriteStallCondition::kDelayed,
             WriteStallCause::kReadAmpLimit};
   }
@@ -847,9 +847,8 @@ WriteStallCondition ColumnFamilyData::RecalculateWriteStallConditions(
     } else if (write_stall_condition == WriteStallCondition::kDelayed &&
                write_stall_cause == WriteStallCause::kReadAmpLimit) {
       bool near_stop =
-          vstorage->read_amplification() >=
-              mutable_cf_options.level0_stop_writes_trigger +
-              ioptions_.num_levels - 2;
+          vstorage->read_amplification() - ioptions_.num_levels >=
+              mutable_cf_options.level0_stop_writes_trigger - 2;
       write_controller_token_ =
           SetupDelay(write_controller, compaction_needed_bytes,
                      prev_compaction_needed_bytes_, was_stopped || near_stop,

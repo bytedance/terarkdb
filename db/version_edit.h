@@ -18,6 +18,8 @@
 #include "util/arena.h"
 #include "util/autovector.h"
 
+#define REF_DEBUG 0
+
 namespace rocksdb {
 
 class VersionSet;
@@ -92,6 +94,63 @@ struct TablePropertyCache {
   std::vector<uint64_t> inheritance_chain;  // inheritance chain
 };
 
+#if REF_DEBUG
+template<class T>
+struct RefDebug {
+  static std::atomic<size_t> g_refs;
+  static std::atomic<size_t> g_live;
+  static std::atomic<size_t> g_step;
+  T refs;
+  operator T() const { return refs; }
+
+  RefDebug() : refs(0) {}
+  RefDebug(const RefDebug& o) : refs(o.refs) {
+    assert(o.refs == 0);
+  }
+  RefDebug(RefDebug&& o) : refs(o.refs) {
+    assert(o.refs == 0);
+  }
+  RefDebug(T v) : refs(v) {
+    assert(v == 0);
+  }
+  RefDebug& operator = (const RefDebug& o) {
+    assert(o.refs == 0);
+    refs = o.refs;
+    return *this;
+  }
+  RefDebug& operator = (RefDebug&& o) {
+    assert(o.refs == 0);
+    refs = o.refs;
+    return *this;
+  }
+  ~RefDebug() {
+    assert(refs == 0);
+  }
+
+  RefDebug& operator ++() {
+    ++g_refs;
+    if (++refs == 1) {
+      ++g_live;
+    }
+    return *this;
+  }
+  RefDebug& operator --() {
+    --g_refs;
+    if (--refs == 0) {
+      --g_live;
+    }
+    return *this;
+  }
+};
+template<class T> std::atomic<size_t> RefDebug<T>::g_refs = {};
+template<class T> std::atomic<size_t> RefDebug<T>::g_live = {};
+template<class T> std::atomic<size_t> RefDebug<T>::g_step = {};
+
+using FileMetaDataRefType = RefDebug<int>;
+#else
+using FileMetaDataRefType = int;
+#endif
+
 struct FileMetaData {
   FileDescriptor fd;
   InternalKey smallest;            // Smallest internal key served by table
@@ -115,7 +174,7 @@ struct FileMetaData {
   uint64_t raw_key_size;           // total uncompressed key size.
   uint64_t raw_value_size;         // total uncompressed value size.
 
-  int refs;  // Reference count
+  FileMetaDataRefType refs;    // Reference count
 
   bool being_compacted;        // Is this file undergoing compaction?
   bool init_stats_from_file;   // true if the data-entry stats of this file

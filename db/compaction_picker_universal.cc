@@ -2006,7 +2006,7 @@ Compaction* UniversalCompactionPicker::PickCompactionToReduceSortedRuns(
     output_level--;
   }
 
-  std::vector<CompactionInputFiles> inputs(end_index - start_index);
+  std::vector<CompactionInputFiles> inputs(ioptions_.num_levels - start_level);
   for (size_t i = 0; i < inputs.size(); ++i) {
     inputs[i].level = start_level + static_cast<int>(i);
   }

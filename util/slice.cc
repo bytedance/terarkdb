@@ -295,7 +295,7 @@ class MallocLazySliceControllerImpl : public LazySliceController {
     return Status::OK();
   }
   Status inplace_decode(LazySlice* slice, LazySliceRep* _rep) const override {
-    assert(!slice->valid());
+    assert(!slice->valid()); (void)slice;
     auto rep = union_cast<const Rep>(_rep);
     assert(rep->err != nullptr);
     return Status::Corruption(rep->err);

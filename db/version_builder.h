@@ -33,9 +33,10 @@ class VersionBuilder {
   bool CheckConsistencyForNumLevels();
   void Apply(VersionEdit* edit);
   void SaveTo(VersionStorageInfo* vstorage);
-  void LoadTableHandlers(InternalStats* internal_stats, int max_threads,
+  void LoadTableHandlers(InternalStats* internal_stats,
                          bool prefetch_index_and_filter_in_cache,
-                         const SliceTransform* prefix_extractor);
+                         const SliceTransform* prefix_extractor,
+                         int max_threads = 1);
 
  private:
   class Rep;
