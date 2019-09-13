@@ -345,7 +345,7 @@ class FilePicker {
 };
 }  // anonymous namespace
 
-VersionStorageInfo::~VersionStorageInfo() { delete[] (files_ - 1); }
+VersionStorageInfo::~VersionStorageInfo() { delete[] --files_; }
 
 Version::~Version() {
   assert(refs_ == 0);
@@ -359,7 +359,7 @@ Version::~Version() {
     for (size_t i = 0; i < storage_info_.files_[level].size(); i++) {
       FileMetaData* f = storage_info_.files_[level][i];
       assert(f->refs > 0);
-      --f->refs;
+      f->refs--;
       if (f->refs <= 0) {
         assert(cfd_ != nullptr);
         uint32_t path_id = f->fd.GetPathId();
@@ -1136,7 +1136,7 @@ VersionStorageInfo::VersionStorageInfo(
       num_non_empty_levels_(0),
       file_indexer_(user_comparator),
       compaction_style_(compaction_style),
-      files_(new std::vector<FileMetaData*>[num_levels_ + 1] + 1),
+      files_(new std::vector<FileMetaData*>[num_levels_ + 1]),
       base_level_(num_levels_ == 1 ? -1 : 1),
       level_multiplier_(0.0),
       files_by_compaction_pri_(num_levels_),
@@ -1157,6 +1157,7 @@ VersionStorageInfo::VersionStorageInfo(
       finalized_(false),
       is_pick_fail_(false),
       force_consistency_checks_(_force_consistency_checks) {
+  ++files_; // level -1 used for dependence files
   if (ref_vstorage != nullptr) {
     accumulated_file_size_ = ref_vstorage->accumulated_file_size_;
     accumulated_raw_key_size_ = ref_vstorage->accumulated_raw_key_size_;
@@ -1915,7 +1916,7 @@ void VersionStorageInfo::AddFile(int level, FileMetaData* f, Logger* info_log) {
 #else
   (void)info_log;
 #endif
-  ++f->refs;
+  f->refs++;
   level_files->push_back(f);
   if (level == -1) {
     dependence_map_.emplace(f->fd.GetNumber(), f);

@@ -130,6 +130,7 @@ class VersionBuilder::Rep {
         num_levels_(base_vstorage->num_levels()),
         dependence_version_(0),
         has_invalid_levels_(false) {
+    // level -1 used for dependence files
     levels_ = new LevelState[num_levels_ + 1] + 1;
     level_zero_cmp_.sort_method = FileComparator::kLevel0;
     level_nonzero_cmp_.sort_method = FileComparator::kLevelNon0;
@@ -141,15 +142,11 @@ class VersionBuilder::Rep {
     for (auto& pair : dependence_map_) {
       UnrefFile(pair.second.f);
     }
-    delete[] (levels_ - 1);
-#if REF_DEBUG
-    fprintf(stderr, "Ref [ live = %zd , refs = %zd ]\n",
-            +rocksdb::RefDebug<int>::g_live, +rocksdb::RefDebug<int>::g_refs);
-#endif
+    delete[] --levels_;
   }
 
   void UnrefFile(FileMetaData* f) {
-    --f->refs;
+    f->refs--;
     if (f->refs <= 0) {
       if (f->table_reader_handle) {
         assert(table_cache_ != nullptr);
@@ -160,9 +157,12 @@ class VersionBuilder::Rep {
     }
   }
 
-  void PutInheritance(FileMetaData* f) {
+  void PutInheritance(FileMetaData* f, bool creation) {
     bool replace = inheritance_counter_.count(f->fd.GetNumber()) == 0;
     for (auto file_number : f->prop.inheritance_chain) {
+      if (creation) {
+        delta_antiquation_.erase(file_number);
+      }
       auto ib =
           inheritance_counter_.emplace(file_number,
                                        InheritanceItem{1, f->fd.GetNumber()});
@@ -182,7 +182,6 @@ class VersionBuilder::Rep {
       assert(find != inheritance_counter_.end());
       if (--find->second.count == 0) {
         inheritance_counter_.erase(find);
-        delta_antiquation_.erase(file_number);
       }
     }
   }
@@ -190,9 +189,9 @@ class VersionBuilder::Rep {
   void PutSst(FileMetaData* f, int level) {
     auto ib = dependence_map_.emplace(f->fd.GetNumber(),
                                       DependenceItem{0, 0, level, f});
-    ++f->refs;
+    f->refs++;
     if (ib.second) {
-      PutInheritance(f);
+      PutInheritance(f, true);
     } else {
       auto& item = ib.first->second;
       item.level = level;
@@ -210,8 +209,8 @@ class VersionBuilder::Rep {
     auto ib = dependence_map_.emplace(f->fd.GetNumber(),
                                       DependenceItem{0, 0, -1, f});
     if (ib.second) {
-      ++f->refs;
-      PutInheritance(f);
+      f->refs++;
+      PutInheritance(f, false);
     } else {
       assert(!ib.first->second.f->being_compacted);
     }
@@ -274,6 +273,16 @@ class VersionBuilder::Rep {
         it = dependence_map_.erase(it);
       }
     }
+    std::unordered_map<uint64_t, uint64_t> new_delta_antiquation;
+    for (auto pair : delta_antiquation_) {
+      auto find = inheritance_counter_.find(pair.first);
+      if (find != inheritance_counter_.end()) {
+        new_delta_antiquation[find->second.file_number] += pair.second;
+      } else {
+        new_delta_antiquation[pair.first] += pair.second;
+      }
+    }
+    delta_antiquation_.swap(new_delta_antiquation);
     if (finish) {
       active_sst_.clear();
       inheritance_counter_.clear();
@@ -429,6 +438,10 @@ class VersionBuilder::Rep {
   // Apply all of the edits in *edit to the current state.
   void Apply(VersionEdit* edit) {
     CheckConsistency(base_vstorage_);
+    
+    for (auto& pair : edit->GetAntiquation()) {
+      delta_antiquation_[pair.first] += pair.second;
+    }
 
     // Delete files
     const VersionEdit::DeletedFileSet& del = edit->GetDeletedFiles();
@@ -480,15 +493,6 @@ class VersionBuilder::Rep {
 
     // Remove files
     CaclDependence(false);
-
-    for (auto& pair : edit->GetAntiquation()) {
-      auto find = dependence_map_.find(pair.first);
-      if (find != dependence_map_.end()) {
-        find->second.f->num_antiquation += pair.second;
-      } else {
-        delta_antiquation_[pair.first] += pair.second;
-      }
-    }
   }
 
   // Save the current state in *v.

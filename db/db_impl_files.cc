@@ -325,7 +325,6 @@ void DBImpl::PurgeObsoleteFiles(JobContext& state, bool schedule_only) {
         MakeTableFileName(kDumbDbName, file.metadata->fd.GetNumber()), file.path);
     if (file.metadata->table_reader_handle) {
       table_cache_->Release(file.metadata->table_reader_handle);
-      file.metadata->table_reader_handle = nullptr;
     }
     file.DeleteMetadata();
   }
