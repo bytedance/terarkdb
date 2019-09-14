@@ -963,7 +963,9 @@ Compaction* ColumnFamilyData::PickCompaction(
       GetName(), mutable_options, current_->storage_info(), log_buffer);
   if (result != nullptr) {
     result->SetInputVersion(current_);
-    result->set_compaction_load(current_->GetCompactionLoad());
+    if (result->compaction_type() != kGarbageCollection) {
+      result->set_compaction_load(current_->GetCompactionLoad());
+    }
   } else {
     current_->storage_info()->SetPickFail();
   }
