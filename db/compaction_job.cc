@@ -1572,7 +1572,9 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
   auto& dependence_map = input_version->storage_info()->dependence_map();
   IterKey iter_key;
   ParsedInternalKey ikey;
+  uint64_t input_count = 0;
   while (status.ok() && !cfd->IsDropped() && input->Valid()) {
+    ++input_count;
     Slice key = input->key();
     if (!ParseInternalKey(key, &ikey)) {
       status = Status::Corruption("Invalid InternalKey");
@@ -1646,14 +1648,28 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
     }
   }
   std::sort(inheritance_chain.begin(), inheritance_chain.end());
-  inheritance_chain.erase(std::unique(inheritance_chain.begin(),
-                                      inheritance_chain.end()),
-                          inheritance_chain.end());
+  assert(std::unique(inheritance_chain.begin(),
+                     inheritance_chain.end()) == inheritance_chain.end());
   Status s = FinishCompactionOutputFile(status, sub_compact, nullptr,
                                         nullptr, std::unordered_set<uint64_t>(),
                                         inheritance_chain);
   if (status.ok()) {
     status = s;
+  }
+  if (status.ok()) {
+    auto& meta = sub_compact->outputs.front().meta;
+    assert(sub_compact->compaction->inputs()->size() == 1 &&
+           sub_compact->compaction->inputs()->front().level == -1);
+    uint64_t expectation = 0;
+    for (auto f : sub_compact->compaction->inputs()->front().files) {
+      expectation += f->num_antiquation;
+    }
+    ROCKS_LOG_INFO(db_options_.info_log,
+                   "[%s] [JOB %d] Table #%" PRIu64 " GC: %" PRIu64
+                   " input, %" PRIu64 " clear, %"  PRIu64 " expectation",
+                   cfd->GetName().c_str(), job_id_, meta.fd.GetNumber(),
+                   input_count, input_count - meta.prop.num_entries,
+                   expectation);
   }
 
   input.reset();

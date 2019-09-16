@@ -102,24 +102,6 @@ class InternalIteratorBase : public InternalIteratorCommon {
   virtual TValue value() const = 0;
 };
 
-template <>
-class InternalIteratorBase<LazySlice> : public InternalIteratorCommon {
-public:
-  // Return the value for the current entry.  The underlying storage for
-  // the returned slice is valid only until the next modification of
-  // the iterator.
-  // REQUIRES: Valid()
-  virtual LazySlice value() const = 0;
-
-  // Return the value for the current entry.  The underlying storage for
-  // the returned slice is valid only until the next modification of
-  // the iterator.
-  // REQUIRES: Valid()
-  virtual LazySlice combined_value(const Slice& /*user_key*/) const {
-    return value();
-  }
-};
-
 using InternalIterator = InternalIteratorBase<LazySlice>;
 
 // Return an empty iterator (yields nothing).

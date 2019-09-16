@@ -92,15 +92,7 @@ class IteratorWrapperBase {
   Slice key_;
 };
 
-class IteratorWrapper : public IteratorWrapperBase<LazySlice> {
-  using IteratorWrapperBase<LazySlice>::iter_;
- public:
-  using IteratorWrapperBase<LazySlice>::IteratorWrapperBase;
-
-  LazySlice combined_value(const Slice& user_key) const {
-    return iter_->combined_value(user_key);
-  }
-};
+using IteratorWrapper = IteratorWrapperBase<LazySlice>;
 
 class CombinedInternalIterator : public InternalIterator {
  public:
@@ -108,17 +100,16 @@ class CombinedInternalIterator : public InternalIterator {
                            const SeparateHelper* separate_helper)
       : iter_(iter), separate_helper_(separate_helper) {}
 
-  bool Valid() const { return iter_->Valid(); }
-  Slice key() const { return iter_->key(); }
-  LazySlice value() const { return iter_->value(); }
-  LazySlice combined_value(const Slice& user_key) const;
-  Status status() const { return iter_->status(); }
-  void Next() { iter_->Next(); }
-  void Prev() { iter_->Prev(); }
-  void Seek(const Slice& k) { iter_->Seek(k); }
-  void SeekForPrev(const Slice& k) { iter_->SeekForPrev(k); }
-  void SeekToFirst() { iter_->SeekToFirst(); }
-  void SeekToLast() { iter_->SeekToLast(); }
+  bool Valid() const override { return iter_->Valid(); }
+  Slice key() const override { return iter_->key(); }
+  LazySlice value() const override;
+  Status status() const override { return iter_->status(); }
+  void Next() override { iter_->Next(); }
+  void Prev() override { iter_->Prev(); }
+  void Seek(const Slice& k) override { iter_->Seek(k); }
+  void SeekForPrev(const Slice& k) override { iter_->SeekForPrev(k); }
+  void SeekToFirst() override { iter_->SeekToFirst(); }
+  void SeekToLast() override { iter_->SeekToLast(); }
 
   const SeparateHelper* separate_helper() const { return separate_helper_; }
 
@@ -135,14 +126,10 @@ class LazyInternalIteratorWrapper : public InternalIterator {
     arg_(arg),
     shutting_down_(shutting_down) {}
 
-  bool Valid() const { return iter_ && iter_->Valid(); }
-  Slice key() const { assert(iter_); return iter_->key(); }
-  LazySlice value() const { assert(iter_); return iter_->value(); }
-  LazySlice combined_value(const Slice& user_key) const {
-    assert(iter_);
-    return iter_->combined_value(user_key);
-  }
-  Status status() const {
+  bool Valid() const override { return iter_ && iter_->Valid(); }
+  Slice key() const override { assert(iter_); return iter_->key(); }
+  LazySlice value() const override { assert(iter_); return iter_->value(); }
+  Status status() const override {
     if (!iter_) {
       return Status::OK();
     }
@@ -151,12 +138,12 @@ class LazyInternalIteratorWrapper : public InternalIterator {
     }
     return iter_->status();
   }
-  void Next() { assert(iter_); iter_->Next(); }
-  void Prev() { assert(iter_); iter_->Prev(); }
-  void Seek(const Slice& k) { Init(); iter_->Seek(k); }
-  void SeekForPrev(const Slice& k) { Init(); iter_->SeekForPrev(k); }
-  void SeekToFirst() { Init(); iter_->SeekToFirst(); }
-  void SeekToLast() { Init(); iter_->SeekToLast(); }
+  void Next() override { assert(iter_); iter_->Next(); }
+  void Prev() override { assert(iter_); iter_->Prev(); }
+  void Seek(const Slice& k) override { Init(); iter_->Seek(k); }
+  void SeekForPrev(const Slice& k) override { Init(); iter_->SeekForPrev(k); }
+  void SeekToFirst() override { Init(); iter_->SeekToFirst(); }
+  void SeekToLast() override { Init(); iter_->SeekToLast(); }
 
   void Reset() {
     iter_.reset();
@@ -172,6 +159,29 @@ class LazyInternalIteratorWrapper : public InternalIterator {
   void* arg_;
   const std::atomic<bool>* shutting_down_;
   std::unique_ptr<InternalIterator> iter_;
+};
+
+class SeparateValueCollector {
+  const SeparateHelper* separate_helper_;
+  std::unordered_map<uint64_t, uint64_t>* delta_antiquation_;
+
+public:
+  SeparateValueCollector()
+      : separate_helper_(nullptr),
+        delta_antiquation_(nullptr) {}
+
+  SeparateValueCollector(
+      const SeparateHelper* _separate_helper,
+      std::unordered_map<uint64_t, uint64_t>* _delta_antiquation)
+      : separate_helper_(_separate_helper),
+        delta_antiquation_(_delta_antiquation) {}
+
+  LazySlice value(InternalIterator* iter, const Slice& user_key) const;
+
+  LazySlice add(InternalIterator* iter, const Slice& user_key);
+  void sub(uint64_t file_number);
+
+  const SeparateHelper* separate_helper() const { return separate_helper_; }
 };
 
 }  // namespace rocksdb

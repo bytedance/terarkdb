@@ -13,6 +13,7 @@
 #include "port/likely.h"
 #include "rocksdb/comparator.h"
 #include "rocksdb/db.h"
+#include "table/iterator_wrapper.h"
 #include "rocksdb/merge_operator.h"
 #include "table/format.h"
 #include "table/internal_iterator.h"
@@ -112,7 +113,7 @@ Status MergeHelper::TimedFullMerge(const MergeOperator* merge_operator,
 // and just pass the StripeRep corresponding to the stripe being merged.
 Status MergeHelper::MergeUntil(
     const Slice& user_key, InternalIterator* iter,
-    DeltaAntiquationCollector& delta_antiquation_collector,
+    SeparateValueCollector& separate_value_collector,
     CompactionRangeDelAggregator* range_del_agg,
     const SequenceNumber stop_before, const bool at_bottom) {
   // Get a copy of the internal key, before it's invalidated by iter->Next()
@@ -173,9 +174,11 @@ Status MergeHelper::MergeUntil(
       // hit an entry that's visible by the previous snapshot, can't touch that
       break;
     }
-    LazySlice val = iter->combined_value(user_key);
-    if (!original_key_is_iter) {
-      delta_antiquation_collector.add(val.file_number());
+    LazySlice val;
+    if (original_key_is_iter) {
+      val = separate_value_collector.value(iter, user_key);
+    } else {
+      val = separate_value_collector.add(iter, user_key);
     }
 
     // At this point we are guaranteed that we need to process this key.

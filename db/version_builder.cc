@@ -157,12 +157,9 @@ class VersionBuilder::Rep {
     }
   }
 
-  void PutInheritance(FileMetaData* f, bool creation) {
+  void PutInheritance(FileMetaData* f) {
     bool replace = inheritance_counter_.count(f->fd.GetNumber()) == 0;
     for (auto file_number : f->prop.inheritance_chain) {
-      if (creation) {
-        delta_antiquation_.erase(file_number);
-      }
       auto ib =
           inheritance_counter_.emplace(file_number,
                                        InheritanceItem{1, f->fd.GetNumber()});
@@ -191,7 +188,7 @@ class VersionBuilder::Rep {
                                       DependenceItem{0, 0, level, f});
     f->refs++;
     if (ib.second) {
-      PutInheritance(f, true);
+      PutInheritance(f);
     } else {
       auto& item = ib.first->second;
       item.level = level;
@@ -210,7 +207,7 @@ class VersionBuilder::Rep {
                                       DependenceItem{0, 0, -1, f});
     if (ib.second) {
       f->refs++;
-      PutInheritance(f, false);
+      PutInheritance(f);
     } else {
       assert(!ib.first->second.f->being_compacted);
     }
@@ -251,6 +248,17 @@ class VersionBuilder::Rep {
   void CaclDependence(bool finish) {
     if (++dependence_version_ % 128 != 0 && !finish) {
       return;
+    } else {
+      std::unordered_map<uint64_t, uint64_t> new_delta_antiquation;
+      for (auto pair : delta_antiquation_) {
+        auto find = inheritance_counter_.find(pair.first);
+        if (find != inheritance_counter_.end()) {
+          new_delta_antiquation[find->second.file_number] += pair.second;
+        } else {
+          new_delta_antiquation[pair.first] += pair.second;
+        }
+      }
+      delta_antiquation_.swap(new_delta_antiquation);
     }
     for (auto file_number : active_sst_) {
       assert(inheritance_counter_.count(file_number) == 0);
@@ -273,16 +281,6 @@ class VersionBuilder::Rep {
         it = dependence_map_.erase(it);
       }
     }
-    std::unordered_map<uint64_t, uint64_t> new_delta_antiquation;
-    for (auto pair : delta_antiquation_) {
-      auto find = inheritance_counter_.find(pair.first);
-      if (find != inheritance_counter_.end()) {
-        new_delta_antiquation[find->second.file_number] += pair.second;
-      } else {
-        new_delta_antiquation[pair.first] += pair.second;
-      }
-    }
-    delta_antiquation_.swap(new_delta_antiquation);
     if (finish) {
       active_sst_.clear();
       inheritance_counter_.clear();
@@ -293,6 +291,7 @@ class VersionBuilder::Rep {
     auto find = delta_antiquation_.find(f->fd.GetNumber());
     if (find != delta_antiquation_.end()) {
       f->num_antiquation += find->second;
+      delta_antiquation_.erase(find);
     }
   }
 
@@ -438,10 +437,6 @@ class VersionBuilder::Rep {
   // Apply all of the edits in *edit to the current state.
   void Apply(VersionEdit* edit) {
     CheckConsistency(base_vstorage_);
-    
-    for (auto& pair : edit->GetAntiquation()) {
-      delta_antiquation_[pair.first] += pair.second;
-    }
 
     // Delete files
     const VersionEdit::DeletedFileSet& del = edit->GetDeletedFiles();
@@ -489,6 +484,10 @@ class VersionBuilder::Rep {
           has_invalid_levels_ = true;
         }
       }
+    }
+
+    for (auto& pair : edit->GetAntiquation()) {
+      delta_antiquation_[pair.first] += pair.second;
     }
 
     // Remove files

@@ -25,6 +25,7 @@ class Comparator;
 class Iterator;
 class Logger;
 class MergeOperator;
+class SeparateValueCollector;
 class Statistics;
 
 class MergeHelper {
@@ -79,7 +80,7 @@ class MergeHelper {
   // REQUIRED: The first key in the input is not corrupted.
   Status MergeUntil(
       const Slice& user_key, InternalIterator* iter,
-      DeltaAntiquationCollector& delta_antiquation_collector,
+      SeparateValueCollector& separate_value_collector,
       CompactionRangeDelAggregator* range_del_agg = nullptr,
       const SequenceNumber stop_before = 0, const bool at_bottom = false);
 

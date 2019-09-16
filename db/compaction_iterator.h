@@ -139,7 +139,6 @@ class CompactionIterator {
   // or seqnum be zero-ed out even if all other conditions for it are met.
   inline bool ikeyNotNeededForIncrementalSnapshot();
 
-  CombinedInternalIterator combined_input_;
   InternalIterator* input_;
   const Slice* end_;
   const Comparator* cmp_;
@@ -208,7 +207,7 @@ class CompactionIterator {
   std::vector<size_t> level_ptrs_;
   CompactionIterationStats iter_stats_;
 
-  DeltaAntiquationCollector delta_antiquation_collector_;
+  SeparateValueCollector separate_value_collector_;
 
   // Used to avoid purging uncommitted values. The application can specify
   // uncommitted values by providing a SnapshotChecker object.

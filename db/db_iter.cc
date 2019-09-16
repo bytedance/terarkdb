@@ -234,16 +234,12 @@ class DBIter final: public Iterator {
   bool ParseKey(ParsedInternalKey* key);
   bool MergeValuesNewToOld();
   LazySlice GetValue(const ParsedInternalKey& ikey, ValueType index_type) {
-    if (separate_helper_ != nullptr) {
-      LazySlice v = iter_->value();
-      if (ikey.type == index_type) {
-        separate_helper_->TransToCombined(
-            saved_key_.GetUserKey(), ikey.sequence, v);
-      }
-      return v;
-    } else {
-      return iter_->combined_value(saved_key_.GetUserKey());
+    LazySlice v = iter_->value();
+    if (separate_helper_ != nullptr && ikey.type == index_type) {
+      separate_helper_->TransToCombined(
+          saved_key_.GetUserKey(), ikey.sequence, v);
     }
+    return v;
   }
 
   void PrevInternal();

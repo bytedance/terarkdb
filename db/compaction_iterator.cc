@@ -139,8 +139,7 @@ CompactionIterator::CompactionIterator(
     const std::atomic<bool>* shutting_down,
     const SequenceNumber preserve_deletes_seqnum,
     std::unordered_map<uint64_t, uint64_t>* delta_antiquation)
-    : combined_input_(input, separate_helper),
-      input_(separate_helper == nullptr ? input : &combined_input_),
+    : input_(input),
       end_(end),
       cmp_(cmp),
       merge_helper_(merge_helper),
@@ -160,7 +159,7 @@ CompactionIterator::CompactionIterator(
       current_user_key_sequence_(0),
       current_user_key_snapshot_(0),
       merge_out_iter_(merge_helper_),
-      delta_antiquation_collector_(delta_antiquation),
+      separate_value_collector_(separate_helper, delta_antiquation),
       current_key_committed_(false) {
   assert(compaction_filter_ == nullptr || compaction_ != nullptr);
   bottommost_level_ =
@@ -349,8 +348,8 @@ void CompactionIterator::NextFromInput() {
     if (end_ != nullptr && cmp_->Compare(ikey_.user_key, *end_) >= 0) {
       break;
     }
-    value_ = input_->combined_value(current_key_.GetUserKey());
-    delta_antiquation_collector_.add(value_.file_number());
+    value_ =
+        separate_value_collector_.add(input_, current_key_.GetUserKey());
     iter_stats_.num_input_records++;
 
     // Update input statistics
@@ -664,7 +663,7 @@ void CompactionIterator::NextFromInput() {
       // object to minimize change to the existing flow.
       value_.clear(); // MergeUntil will get iter value and move iter
       Status s = merge_helper_->MergeUntil(current_key_.GetUserKey(), input_,
-                                           delta_antiquation_collector_,
+                                           separate_value_collector_,
                                            range_del_agg_, prev_snapshot,
                                            bottommost_level_);
       merge_out_iter_.SeekToFirst();
@@ -750,8 +749,8 @@ void CompactionIterator::PrepareOutput() {
   }
   if (ikey_.type == kTypeValueIndex || ikey_.type == kTypeMergeIndex) {
     assert(value_.file_number() != uint64_t(-1));
-    combined_input_.separate_helper()->TransToSeparate(value_);
-    delta_antiquation_collector_.sub(value_.file_number());
+    separate_value_collector_.separate_helper()->TransToSeparate(value_);
+    separate_value_collector_.sub(value_.file_number());
   } else if ((compaction_ != nullptr && !compaction_->allow_ingest_behind()) &&
              ikeyNotNeededForIncrementalSnapshot() && bottommost_level_ &&
              valid_ && ikey_.sequence <= earliest_snapshot_ &&

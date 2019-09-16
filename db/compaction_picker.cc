@@ -642,10 +642,9 @@ Compaction* CompactionPicker::PickGarbageCollection(
     } else {
       info.num_entries = f->prop.num_entries;
     }
-    info.gc_ratio = 1.0 * f->num_antiquation / info.num_entries;
+    info.gc_ratio = std::min(1., 1. * f->num_antiquation / info.num_entries);
     info.estimated_size =
-        static_cast<uint64_t>(f->fd.file_size *
-                              std::max<double>(0, 1 - info.gc_ratio));
+        static_cast<uint64_t>(f->fd.file_size * (1 - info.gc_ratio));
     if (info.gc_ratio > mutable_cf_options.blob_gc_ratio ||
         info.estimated_size <= small_file_size) {
       blob_vec.push_back(info);
@@ -676,6 +675,7 @@ Compaction* CompactionPicker::PickGarbageCollection(
   }
 
   uint32_t path_id = GetPathId(ioptions_, mutable_cf_options, 1);
+  int bottommost_level = vstorage->num_levels() - 1;
 
   CompactionParams params(vstorage, ioptions_, mutable_cf_options);
   params.inputs = {std::move(inputs)};
@@ -683,12 +683,11 @@ Compaction* CompactionPicker::PickGarbageCollection(
   params.max_compaction_bytes = LLONG_MAX;
   params.output_path_id = path_id;
   params.compression = GetCompressionType(
-      ioptions_, vstorage, mutable_cf_options, inputs.level, 1, true);
+      ioptions_, vstorage, mutable_cf_options, bottommost_level, 1, true);
   params.compression_opts =
-      GetCompressionOptions(ioptions_, vstorage, inputs.level, true);
+      GetCompressionOptions(ioptions_, vstorage, bottommost_level, true);
   params.max_subcompactions = 1;
   params.score = 0;
-  params.partial_compaction = true;
   params.compaction_type = kGarbageCollection;
   params.compaction_reason = CompactionReason::kGarbageCollection;
 
