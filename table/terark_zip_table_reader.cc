@@ -1078,7 +1078,7 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   try {
     subReader_.store_.reset(AbstractBlobStore::load_from_user_memory(
       fstring(file_data.data() + indexSize, storeSize),
-      getVerifyDict(dict)
+      AbstractBlobStore::Dictionary(fstringOf(dict), 0, false)
     ));
     subReader_.store_->set_mmap_aio(file->file()->use_aio_reads());
   }
@@ -1594,7 +1594,7 @@ TerarkZipTableMultiReader::Open(RandomAccessFileReader* file, uint64_t file_size
   if (global_seqno_ == kDisableGlobalSequenceNumber) {
     global_seqno_ = 0;
   }
-  s = subIndex_.Init(fstringOf(offsetBlock.data), (const byte_t*)file_data.data(), getVerifyDict(dict),
+  s = subIndex_.Init(fstringOf(offsetBlock.data), (const byte_t*)file_data.data(), AbstractBlobStore::Dictionary(fstringOf(dict), 0, false),
                      tzto_.minPreadLen, file_->file(), table_factory_->cache(), tzto_.warmUpIndexOnOpen,
                      isReverseBytewiseOrder_);
   if (!s.ok()) {
