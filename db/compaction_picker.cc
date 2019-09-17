@@ -664,8 +664,7 @@ Compaction* CompactionPicker::PickGarbageCollection(
   inputs.level = -1;
   uint64_t estimated_total_size = blob_vec.front().estimated_size;
   inputs.files.push_back(blob_vec.front().f);
-  for (auto it = blob_vec.rbegin(), end = std::prev(blob_vec.rend()); it != end;
-       ++it) {
+  for (auto it = std::next(blob_vec.begin()); it != blob_vec.end(); ++it) {
     auto& info = *it;
     if (estimated_total_size + info.estimated_size > target_file_size) {
       continue;
@@ -673,7 +672,6 @@ Compaction* CompactionPicker::PickGarbageCollection(
     estimated_total_size += info.estimated_size;
     inputs.files.push_back(info.f);
   }
-
   uint32_t path_id = GetPathId(ioptions_, mutable_cf_options, 1);
   int bottommost_level = vstorage->num_levels() - 1;
 
