@@ -15,6 +15,8 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+//#include <terark/thread/fiber_future.hpp>
+//#include <boost/fiber/future.hpp>
 #include "rocksdb/iterator.h"
 #include "rocksdb/listener.h"
 #include "rocksdb/metadata.h"
@@ -37,7 +39,15 @@
 #define ROCKSDB_DEPRECATED_FUNC __declspec(deprecated)
 #endif
 
+namespace boost {
+    namespace fibers {
+        template<typename> class future; // forward declaration
+    }
+}
+
 namespace rocksdb {
+
+using boost::fibers::future;
 
 struct Options;
 struct DBOptions;
@@ -363,6 +373,17 @@ class DB {
   virtual Status Get(const ReadOptions& options, const Slice& key, std::string* value) {
     return Get(options, DefaultColumnFamily(), key, value);
   }
+
+  void GetAsync(const ReadOptions&, ColumnFamilyHandle*, Slice key, std::string* value, std::function<void(const Status&)>);
+  void GetAsync(const ReadOptions&, Slice key, std::string* value, std::function<void(const Status&)>);
+  void GetAsync(const ReadOptions&, ColumnFamilyHandle*, Slice key, std::function<void(const Status&, std::string*)>);
+  void GetAsync(const ReadOptions&, Slice key, std::function<void(const Status&, std::string*)>);
+  int WaitAsync(int timeout_us);
+  int WaitAsync();
+  future<Status> GetFuture(const ReadOptions&, ColumnFamilyHandle*, Slice key, std::string* value);
+  future<Status> GetFuture(const ReadOptions&, Slice key, std::string* value);
+  future<std::pair<Status,std::string> > GetFuture(const ReadOptions&, ColumnFamilyHandle*, Slice key);
+  future<std::pair<Status,std::string> > GetFuture(const ReadOptions&, Slice key);
 
   // If keys[i] does not exist in the database, then the i'th returned
   // status will be one for which Status::IsNotFound() is true, and

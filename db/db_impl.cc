@@ -1342,6 +1342,12 @@ Status DBImpl::GetImpl(const ReadOptions& read_options,
   return s;
 }
 
+struct SimpleFiberTls {
+  boost::context::pooled_fixedsize_stack stack_pool;
+  int live_fibers = 0;
+};
+static thread_local SimpleFiberTls gt_fibers;
+
 std::vector<Status> DBImpl::MultiGet(
     const ReadOptions& read_options,
     const std::vector<ColumnFamilyHandle*>& column_family,
@@ -1453,12 +1459,13 @@ std::vector<Status> DBImpl::MultiGet(
     fiber_pool.reap(myhead);
     assert(0 == counting);
   #else
-    static thread_local boost::context::pooled_fixedsize_stack stack_pool;
+    auto tls = &gt_fibers;
     size_t next_idx = 0;
     size_t num_fibers = std::min<size_t>(num_keys,read_options.use_num_fibers);
     for (size_t i = 0; i < num_fibers; ++i) {
         using namespace boost::fibers;
-        fiber(launch::dispatch,std::allocator_arg,stack_pool,[&,num_keys](){
+        fiber(launch::dispatch, std::allocator_arg, tls->stack_pool,
+          [&,num_keys](){
             while (next_idx < num_keys) {
                 get_one(next_idx++);
             }
@@ -2819,6 +2826,145 @@ Status DB::DestroyColumnFamilyHandle(ColumnFamilyHandle* column_family) {
 }
 
 DB::~DB() {}
+
+void DB::GetAsync(const ReadOptions& ro, ColumnFamilyHandle* cfh,
+                  Slice key, std::string* value,
+                  std::function<void(const Status&)> cb) {
+  using namespace boost::fibers;
+  auto tls = &gt_fibers;
+  int num_fibers = std::max(1, ro.use_num_fibers);
+  while (tls->live_fibers >= num_fibers) {
+    boost::this_fiber::yield();
+  }
+  tls->live_fibers++;
+  fiber(launch::dispatch, std::allocator_arg, tls->stack_pool,
+        [=,&ro](){
+           Status s = this->Get(ro, cfh, key, value);
+           cb(s);
+           tls->live_fibers--;
+        }
+  ).detach();
+}
+void DB::GetAsync(const ReadOptions& ro,
+                  Slice key, std::string* value,
+                  std::function<void(const Status&)> cb) {
+    GetAsync(ro, DefaultColumnFamily(), key, value, std::move(cb));
+}
+void DB::GetAsync(const ReadOptions& ro, ColumnFamilyHandle* cfh,
+                  Slice key,
+                  std::function<void(const Status&, std::string*)> cb) {
+  using namespace boost::fibers;
+  auto tls = &gt_fibers;
+  int num_fibers = std::max(1, ro.use_num_fibers);
+  while (tls->live_fibers >= num_fibers) {
+    boost::this_fiber::yield();
+  }
+  tls->live_fibers++;
+  fiber(launch::dispatch, std::allocator_arg, tls->stack_pool,
+        [=,&ro](){
+           std::string value;
+           Status s = this->Get(ro, cfh, key, &value);
+           cb(s, &value);
+           tls->live_fibers--;
+        }
+  ).detach();
+}
+void DB::GetAsync(const ReadOptions& ro,
+                  Slice key,
+                  std::function<void(const Status&, std::string*)> cb) {
+    GetAsync(ro, DefaultColumnFamily(), key, std::move(cb));
+}
+
+///@returns == 0 indicate there is nothing to wait
+///          < 0 indicate number of finished GetAsync/GetFuture requests after timeout
+///          > 0 indicate number of all GetAsync/GetFuture requests have finished within timeout
+int DB::WaitAsync(int timeout_us) {
+  auto tls = &gt_fibers;
+  int remain = tls->live_fibers;
+
+//  do not use sleep_for, because we want to return as soon as possible
+//  boost::this_fiber::sleep_for(std::chrono::microseconds(timeout_us));
+//  return tls->live_fibers - remain;
+
+  auto start = std::chrono::system_clock::now();
+  while (true) {
+    boost::this_fiber::yield(); // wait once
+    if (tls->live_fibers > 0) {
+      auto now = std::chrono::system_clock::now();
+      auto dur = std::chrono::duration_cast<std::chrono::microseconds>(now - start).count();
+      if (dur >= timeout_us) {
+        return tls->live_fibers - remain; // negtive
+      }
+    }
+    else {
+      break;
+    }
+  }
+  return remain;
+}
+
+int DB::WaitAsync() {
+  auto tls = &gt_fibers;
+  int cnt = tls->live_fibers;
+  while (tls->live_fibers > 0) {
+    boost::this_fiber::yield(); // wait once
+  }
+  return cnt;
+}
+
+future<Status>
+DB::GetFuture(const ReadOptions& ro, ColumnFamilyHandle* cfh,
+              Slice key, std::string* value) {
+  using namespace boost::fibers;
+  promise<Status> ap;
+  future<Status> fu = ap.get_future();
+  auto tls = &gt_fibers;
+  int num_fibers = std::max(1, ro.use_num_fibers);
+  while (tls->live_fibers >= num_fibers) {
+    boost::this_fiber::yield();
+  }
+  tls->live_fibers++;
+  fiber(launch::dispatch, std::allocator_arg, tls->stack_pool,
+        [=,&ro](promise<Status> pp){
+           pp.set_value(this->Get(ro, cfh, key, value));
+           tls->live_fibers--;
+        },
+        std::move(ap)
+  ).detach();
+  return fu;
+}
+future<Status>
+DB::GetFuture(const ReadOptions& ro, Slice key, std::string* value) {
+    return GetFuture(ro, DefaultColumnFamily(), key, value);
+}
+
+future<std::pair<Status, std::string> >
+DB::GetFuture(const ReadOptions& ro, ColumnFamilyHandle* cfh, Slice key) {
+  using namespace boost::fibers;
+  promise<std::pair<Status,std::string> > ap;
+  future<std::pair<Status,std::string> > fu = ap.get_future();
+  auto tls = &gt_fibers;
+  int num_fibers = std::max(1, ro.use_num_fibers);
+  while (tls->live_fibers >= num_fibers) {
+    boost::this_fiber::yield();
+  }
+  tls->live_fibers++;
+  fiber(launch::dispatch, std::allocator_arg, tls->stack_pool,
+        [=,&ro](promise<std::pair<Status,std::string> > pp){
+           std::pair<Status,std::string> result;
+           result.first = this->Get(ro, cfh, key, &result.second);
+           pp.set_value(std::move(result));
+           tls->live_fibers--;
+        },
+        std::move(ap)
+  ).detach();
+  return fu;
+}
+future<std::pair<Status, std::string> >
+DB::GetFuture(const ReadOptions& ro, Slice key) {
+    return GetFuture(ro, DefaultColumnFamily(), key);
+}
+
 
 Status DBImpl::Close() {
   if (!closed_) {
