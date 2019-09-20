@@ -51,7 +51,7 @@ int main(int argc, char* argv[]) {
   rocksdb::ReadOptions ropt;
   dopt.use_aio_reads = true;
   dopt.use_direct_reads = true;
-  ropt.use_num_fibers = 16;
+  ropt.aio_queue_depth = 16;
   bool quite = false;
   for (int opt=0; -1 != opt && '?' != opt;) {
     opt = getopt(argc, argv, "a:b:d:f:m:o:q");
@@ -71,7 +71,7 @@ int main(int argc, char* argv[]) {
         dopt.use_direct_reads = atoi(optarg) != 0;
         break;
       case 'f':
-        ropt.use_num_fibers = atoi(optarg);
+        ropt.aio_queue_depth = atoi(optarg);
         break;
       case 'm':
         mget_num = atoi(optarg);
@@ -123,7 +123,7 @@ GetoptDone:
         auto t1 = pf.now();
         fprintf(stderr,
                 "mget(fibers=%d,direct_io=%d,aio=%d) qps = %f M/sec\n",
-                ropt.use_num_fibers,
+                ropt.aio_queue_depth,
                 dopt.use_aio_reads,
                 dopt.use_aio_reads,
                 cnt1/pf.uf(t0,t1));

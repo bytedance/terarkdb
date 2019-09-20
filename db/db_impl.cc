@@ -1448,7 +1448,7 @@ std::vector<Status> DBImpl::MultiGet(
     counting--;
   };
 
-  if (read_options.use_num_fibers && immutable_db_options_.use_aio_reads) {
+  if (read_options.aio_queue_depth && immutable_db_options_.use_aio_reads) {
   #if 0
     static thread_local terark::RunOnceFiberPool fiber_pool(16);
     // current calling fiber's list head, can be treated as a handle
@@ -1461,7 +1461,7 @@ std::vector<Status> DBImpl::MultiGet(
   #else
     auto tls = &gt_fibers;
     size_t next_idx = 0;
-    size_t num_fibers = std::min<size_t>(num_keys,read_options.use_num_fibers);
+    size_t num_fibers = std::min<size_t>(num_keys,read_options.aio_queue_depth);
     for (size_t i = 0; i < num_fibers; ++i) {
         using namespace boost::fibers;
         fiber(launch::dispatch, std::allocator_arg, tls->stack_pool,
@@ -2832,7 +2832,7 @@ void DB::GetAsync(const ReadOptions& ro, ColumnFamilyHandle* cfh,
                   std::function<void(const Status&)> cb) {
   using namespace boost::fibers;
   auto tls = &gt_fibers;
-  int num_fibers = std::max(1, ro.use_num_fibers);
+  int num_fibers = std::max(1, ro.aio_queue_depth);
   while (tls->live_fibers >= num_fibers) {
     boost::this_fiber::yield();
   }
@@ -2855,7 +2855,7 @@ void DB::GetAsync(const ReadOptions& ro, ColumnFamilyHandle* cfh,
                   std::function<void(const Status&, std::string*)> cb) {
   using namespace boost::fibers;
   auto tls = &gt_fibers;
-  int num_fibers = std::max(1, ro.use_num_fibers);
+  int num_fibers = std::max(1, ro.aio_queue_depth);
   while (tls->live_fibers >= num_fibers) {
     boost::this_fiber::yield();
   }
@@ -2919,7 +2919,7 @@ DB::GetFuture(const ReadOptions& ro, ColumnFamilyHandle* cfh,
   promise<Status> ap;
   future<Status> fu = ap.get_future();
   auto tls = &gt_fibers;
-  int num_fibers = std::max(1, ro.use_num_fibers);
+  int num_fibers = std::max(1, ro.aio_queue_depth);
   while (tls->live_fibers >= num_fibers) {
     boost::this_fiber::yield();
   }
@@ -2944,7 +2944,7 @@ DB::GetFuture(const ReadOptions& ro, ColumnFamilyHandle* cfh, Slice key) {
   promise<std::pair<Status,std::string> > ap;
   future<std::pair<Status,std::string> > fu = ap.get_future();
   auto tls = &gt_fibers;
-  int num_fibers = std::max(1, ro.use_num_fibers);
+  int num_fibers = std::max(1, ro.aio_queue_depth);
   while (tls->live_fibers >= num_fibers) {
     boost::this_fiber::yield();
   }
