@@ -1448,7 +1448,7 @@ std::vector<Status> DBImpl::MultiGet(
     counting--;
   };
 
-  if (read_options.aio_queue_depth && immutable_db_options_.use_aio_reads) {
+  if (read_options.aio_concurrency && immutable_db_options_.use_aio_reads) {
   #if 0
     static thread_local terark::RunOnceFiberPool fiber_pool(16);
     // current calling fiber's list head, can be treated as a handle
@@ -1461,7 +1461,7 @@ std::vector<Status> DBImpl::MultiGet(
   #else
     auto tls = &gt_fibers;
     size_t next_idx = 0;
-    size_t num_fibers = std::min<size_t>(num_keys,read_options.aio_queue_depth);
+    size_t num_fibers = std::min<size_t>(num_keys,read_options.aio_concurrency);
     for (size_t i = 0; i < num_fibers; ++i) {
         using namespace boost::fibers;
         fiber(launch::dispatch, std::allocator_arg, tls->stack_pool,
@@ -2832,13 +2832,13 @@ void DB::GetAsync(const ReadOptions& ro, ColumnFamilyHandle* cfh,
                   std::function<void(const Status&)> cb) {
   using namespace boost::fibers;
   auto tls = &gt_fibers;
-  int num_fibers = std::max(1, ro.aio_queue_depth);
+  int num_fibers = std::max(1, ro.aio_concurrency);
   while (tls->live_fibers >= num_fibers) {
     boost::this_fiber::yield();
   }
   tls->live_fibers++;
   fiber(launch::dispatch, std::allocator_arg, tls->stack_pool,
-        [=,&ro](){
+        [=](){
            Status s = this->Get(ro, cfh, key, value);
            cb(s);
            tls->live_fibers--;
@@ -2855,13 +2855,13 @@ void DB::GetAsync(const ReadOptions& ro, ColumnFamilyHandle* cfh,
                   std::function<void(const Status&, std::string*)> cb) {
   using namespace boost::fibers;
   auto tls = &gt_fibers;
-  int num_fibers = std::max(1, ro.aio_queue_depth);
+  int num_fibers = std::max(1, ro.aio_concurrency);
   while (tls->live_fibers >= num_fibers) {
     boost::this_fiber::yield();
   }
   tls->live_fibers++;
   fiber(launch::dispatch, std::allocator_arg, tls->stack_pool,
-        [=,&ro](){
+        [=](){
            std::string value;
            Status s = this->Get(ro, cfh, key, &value);
            cb(s, &value);
@@ -2881,6 +2881,9 @@ void DB::GetAsync(const ReadOptions& ro,
 int DB::WaitAsync(int timeout_us) {
   auto tls = &gt_fibers;
   int remain = tls->live_fibers;
+  if (remain == 0) {
+      return 0;
+  }
 
 //  do not use sleep_for, because we want to return as soon as possible
 //  boost::this_fiber::sleep_for(std::chrono::microseconds(timeout_us));
@@ -2893,7 +2896,7 @@ int DB::WaitAsync(int timeout_us) {
       auto now = std::chrono::system_clock::now();
       auto dur = std::chrono::duration_cast<std::chrono::microseconds>(now - start).count();
       if (dur >= timeout_us) {
-        return tls->live_fibers - remain; // negtive
+        return tls->live_fibers - remain - 1; // negtive
       }
     }
     else {
@@ -2919,13 +2922,13 @@ DB::GetFuture(const ReadOptions& ro, ColumnFamilyHandle* cfh,
   promise<Status> ap;
   future<Status> fu = ap.get_future();
   auto tls = &gt_fibers;
-  int num_fibers = std::max(1, ro.aio_queue_depth);
+  int num_fibers = std::max(1, ro.aio_concurrency);
   while (tls->live_fibers >= num_fibers) {
     boost::this_fiber::yield();
   }
   tls->live_fibers++;
   fiber(launch::dispatch, std::allocator_arg, tls->stack_pool,
-        [=,&ro](promise<Status> pp){
+        [=](promise<Status> pp){
            pp.set_value(this->Get(ro, cfh, key, value));
            tls->live_fibers--;
         },
@@ -2944,13 +2947,13 @@ DB::GetFuture(const ReadOptions& ro, ColumnFamilyHandle* cfh, Slice key) {
   promise<std::pair<Status,std::string> > ap;
   future<std::pair<Status,std::string> > fu = ap.get_future();
   auto tls = &gt_fibers;
-  int num_fibers = std::max(1, ro.aio_queue_depth);
+  int num_fibers = std::max(1, ro.aio_concurrency);
   while (tls->live_fibers >= num_fibers) {
     boost::this_fiber::yield();
   }
   tls->live_fibers++;
   fiber(launch::dispatch, std::allocator_arg, tls->stack_pool,
-        [=,&ro](promise<std::pair<Status,std::string> > pp){
+        [=](promise<std::pair<Status,std::string> > pp){
            std::pair<Status,std::string> result;
            result.first = this->Get(ro, cfh, key, &result.second);
            pp.set_value(std::move(result));
