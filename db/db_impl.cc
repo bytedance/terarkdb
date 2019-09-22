@@ -2935,15 +2935,36 @@ int DB::WaitAsync() {
   return gt_fibers.wait();
 }
 
+// boost::fibers::promise has some problem for being captured by
+// std::move for std::function
+// use intrusive_ptr to workaround (capture by copy intrusive_ptr)
+template<class T>
+struct DB_Promise {
+  DB_Promise(std::string& k) : key(std::move(k)) {}
+  intptr_t refcnt = 0;
+  std::string key;
+  boost::fibers::promise<T> pr;
+  friend void intrusive_ptr_add_ref(DB_Promise* p) { p->refcnt++; }
+  friend void intrusive_ptr_release(DB_Promise* p) {
+      if (0 == --p->refcnt)
+          delete p;
+  }
+};
+template<class T>
+struct DB_PromisePtr : boost::intrusive_ptr<DB_Promise<T> > {
+  DB_PromisePtr(std::string& k)
+    : boost::intrusive_ptr<DB_Promise<T> >(new DB_Promise<T>(k)) {}
+};
+
 future<Status>
 DB::GetFuture(const ReadOptions& ro, ColumnFamilyHandle* cfh,
               std::string key, std::string* value) {
   using namespace boost::fibers;
   using std::move;
-  promise<Status> ap;
-  future<Status> fu = ap.get_future();
-  gt_fibers.push([=,key=move(key),ap=move(ap)]()mutable{
-     ap.set_value(this->Get(ro, cfh, key, value));
+  DB_PromisePtr<Status> p(key);
+  future<Status> fu = p->pr.get_future();
+  gt_fibers.push([this,ro,cfh,p,value](){
+     p->pr.set_value(this->Get(ro, cfh, p->key, value));
   });
   return fu;
 }
@@ -2956,12 +2977,12 @@ future<std::pair<Status, std::string> >
 DB::GetFuture(const ReadOptions& ro, ColumnFamilyHandle* cfh, std::string key) {
   using namespace boost::fibers;
   using std::move;
-  promise<std::pair<Status, std::string> > ap;
-  future<std::pair<Status, std::string> > fu = ap.get_future();
-  gt_fibers.push([=,key=move(key),ap=move(ap)]()mutable{
+  DB_PromisePtr<std::pair<Status, std::string> > p(key);
+  future<std::pair<Status, std::string> > fu = p->pr.get_future();
+  gt_fibers.push([this,ro,cfh,p](){
      std::pair<Status, std::string> result;
-     result.first = this->Get(ro, cfh, key, &result.second);
-     ap.set_value(std::move(result));
+     result.first = this->Get(ro, cfh, p->key, &result.second);
+     p->pr.set_value(std::move(result));
   });
   return fu;
 }
