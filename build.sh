@@ -12,23 +12,24 @@ cat /etc/apt/sources.list /etc/apt/sources.list.d/*
 sudo apt-get update
 sudo apt-get install libaio-dev
 
+BRANCH_NAME=`git rev-parse --abbrev-ref HEAD`
 # clone terark-zip-rocksdb: terark-rocksdb depends on some header files from zip-rocksdb
 
 # build targets
 make BUNDLE_TERARK_ZIP_ROCKSDB=1 LINK_TERARK=static \
-     TERARK_CORE_BRANCH=master TERARK_ZIP_ROCKSDB_BRANCH=master \
+     TERARK_CORE_BRANCH=master TERARK_ZIP_ROCKSDB_BRANCH=$BRANCH_NAME \
      BMI2=$WITH_BMI2 \
      DISABLE_WARNING_AS_ERROR=1 \
      DEBUG_LEVEL=0 shared_lib -j $cpuNum
 
 make BUNDLE_TERARK_ZIP_ROCKSDB=1 LINK_TERARK=static \
-     TERARK_CORE_BRANCH=master TERARK_ZIP_ROCKSDB_BRANCH=master \
+     TERARK_CORE_BRANCH=master TERARK_ZIP_ROCKSDB_BRANCH=$BRANCH_NAME \
      BMI2=$WITH_BMI2 \
      DISABLE_WARNING_AS_ERROR=1 \
      DEBUG_LEVEL=1 shared_lib -j $cpuNum
 
 make BUNDLE_TERARK_ZIP_ROCKSDB=1 LINK_TERARK=static \
-     TERARK_CORE_BRANCH=master TERARK_ZIP_ROCKSDB_BRANCH=master \
+     TERARK_CORE_BRANCH=master TERARK_ZIP_ROCKSDB_BRANCH=$BRANCH_NAME \
      BMI2=$WITH_BMI2 \
      DISABLE_WARNING_AS_ERROR=1 \
      DEBUG_LEVEL=2 shared_lib -j $cpuNum
