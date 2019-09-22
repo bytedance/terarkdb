@@ -1413,7 +1413,14 @@ struct SimpleFiberTls {
     return int(cnt);
   }
 };
-static thread_local SimpleFiberTls gt_fibers;
+static SimpleFiberTls* getFiberTLS() {
+ // ensure fiber thread locals are constructed first
+ // because SimpleFiberTls.channel must be destructed first
+ boost::fibers::context::active();
+
+ static thread_local SimpleFiberTls fiberTls;
+ return &fiberTls;
+}
 
 std::vector<Status> DBImpl::MultiGet(
     const ReadOptions& read_options,
@@ -1526,7 +1533,7 @@ std::vector<Status> DBImpl::MultiGet(
     fiber_pool.reap(myhead);
     assert(0 == counting);
   #else
-    auto tls = &gt_fibers;
+    auto tls = getFiberTLS();
     tls->update_fiber_count(read_options.aio_concurrency);
     for (size_t i = 0; i < num_keys; ++i) {
       tls->push([&,i](){ get_one(i); });
@@ -2892,7 +2899,7 @@ void DB::GetAsync(const ReadOptions& ro, ColumnFamilyHandle* cfh,
                   std::function<void(const Status&)> cb) {
   using namespace boost::fibers;
   using std::move;
-  auto tls = &gt_fibers;
+  auto tls = getFiberTLS();
   tls->update_fiber_count(ro.aio_concurrency);
   tls->push([=,key=move(key),cb=move(cb)](){
     cb(this->Get(ro, cfh, key, value));
@@ -2909,7 +2916,7 @@ void DB::GetAsync(const ReadOptions& ro, ColumnFamilyHandle* cfh,
                   std::function<void(const Status&, std::string*)> cb) {
   using namespace boost::fibers;
   using std::move;
-  auto tls = &gt_fibers;
+  auto tls = getFiberTLS();
   tls->update_fiber_count(ro.aio_concurrency);
   tls->push([=,key=move(key),cb=move(cb)](){
     std::string value;
@@ -2928,11 +2935,11 @@ void DB::GetAsync(const ReadOptions& ro,
 ///          < 0 indicate number of finished GetAsync/GetFuture requests after timeout
 ///          > 0 indicate number of all GetAsync/GetFuture requests have finished within timeout
 int DB::WaitAsync(int timeout_us) {
-  return gt_fibers.wait(timeout_us);
+  return getFiberTLS()->wait(timeout_us);
 }
 
 int DB::WaitAsync() {
-  return gt_fibers.wait();
+  return getFiberTLS()->wait();
 }
 
 // boost::fibers::promise has some problem for being captured by
@@ -2961,9 +2968,11 @@ DB::GetFuture(const ReadOptions& ro, ColumnFamilyHandle* cfh,
               std::string key, std::string* value) {
   using namespace boost::fibers;
   using std::move;
+  auto tls = getFiberTLS();
+  tls->update_fiber_count(ro.aio_concurrency);
   DB_PromisePtr<Status> p(key);
   future<Status> fu = p->pr.get_future();
-  gt_fibers.push([this,ro,cfh,p,value](){
+  tls->push([this,ro,cfh,p,value](){
      p->pr.set_value(this->Get(ro, cfh, p->key, value));
   });
   return fu;
@@ -2977,9 +2986,11 @@ future<std::pair<Status, std::string> >
 DB::GetFuture(const ReadOptions& ro, ColumnFamilyHandle* cfh, std::string key) {
   using namespace boost::fibers;
   using std::move;
+  auto tls = getFiberTLS();
+  tls->update_fiber_count(ro.aio_concurrency);
   DB_PromisePtr<std::pair<Status, std::string> > p(key);
   future<std::pair<Status, std::string> > fu = p->pr.get_future();
-  gt_fibers.push([this,ro,cfh,p](){
+  tls->push([this,ro,cfh,p](){
      std::pair<Status, std::string> result;
      result.first = this->Get(ro, cfh, p->key, &result.second);
      p->pr.set_value(std::move(result));
