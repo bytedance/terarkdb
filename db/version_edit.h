@@ -87,7 +87,7 @@ struct TablePropertyCache {
   uint64_t num_entries = 0;                 // the number of entries.
   uint8_t purpose = 0;                      // zero for essence sst
   uint16_t max_read_amp = 1;                // max read amp from sst
-  float read_amp = 1;                       // rxpt read amp from sst
+  float read_amp = 1;                       // expt read amp from sst
   std::vector<uint64_t> dependence;         // make these sst hidden
   std::vector<uint64_t> inheritance_chain;  // inheritance chain
 };

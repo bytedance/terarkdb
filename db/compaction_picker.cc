@@ -671,6 +671,9 @@ Compaction* CompactionPicker::PickGarbageCollection(
     }
     estimated_total_size += info.estimated_size;
     inputs.files.push_back(info.f);
+    if (inputs.size() >= 8) {
+      break;
+    }
   }
   uint32_t path_id = GetPathId(ioptions_, mutable_cf_options, 1);
   int bottommost_level = vstorage->num_levels() - 1;
