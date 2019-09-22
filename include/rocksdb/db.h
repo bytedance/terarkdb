@@ -374,16 +374,16 @@ class DB {
     return Get(options, DefaultColumnFamily(), key, value);
   }
 
-  void GetAsync(const ReadOptions&, ColumnFamilyHandle*, Slice key, std::string* value, std::function<void(const Status&)>);
-  void GetAsync(const ReadOptions&, Slice key, std::string* value, std::function<void(const Status&)>);
-  void GetAsync(const ReadOptions&, ColumnFamilyHandle*, Slice key, std::function<void(const Status&, std::string*)>);
-  void GetAsync(const ReadOptions&, Slice key, std::function<void(const Status&, std::string*)>);
+  void GetAsync(const ReadOptions&, ColumnFamilyHandle*, std::string key, std::string* value, std::function<void(const Status&)>);
+  void GetAsync(const ReadOptions&, std::string key, std::string* value, std::function<void(const Status&)>);
+  void GetAsync(const ReadOptions&, ColumnFamilyHandle*, std::string key, std::function<void(const Status&, std::string*)>);
+  void GetAsync(const ReadOptions&, std::string key, std::function<void(const Status&, std::string*)>);
   int WaitAsync(int timeout_us);
   int WaitAsync();
-  future<Status> GetFuture(const ReadOptions&, ColumnFamilyHandle*, Slice key, std::string* value);
-  future<Status> GetFuture(const ReadOptions&, Slice key, std::string* value);
-  future<std::pair<Status,std::string> > GetFuture(const ReadOptions&, ColumnFamilyHandle*, Slice key);
-  future<std::pair<Status,std::string> > GetFuture(const ReadOptions&, Slice key);
+  future<Status> GetFuture(const ReadOptions&, ColumnFamilyHandle*, std::string key, std::string* value);
+  future<Status> GetFuture(const ReadOptions&, std::string key, std::string* value);
+  future<std::pair<Status,std::string> > GetFuture(const ReadOptions&, ColumnFamilyHandle*, std::string key);
+  future<std::pair<Status,std::string> > GetFuture(const ReadOptions&, std::string key);
 
   // If keys[i] does not exist in the database, then the i'th returned
   // status will be one for which Status::IsNotFound() is true, and
