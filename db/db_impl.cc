@@ -2896,37 +2896,38 @@ DB::~DB() {}
 
 void DB::GetAsync(const ReadOptions& ro, ColumnFamilyHandle* cfh,
                   std::string key, std::string* value,
-                  std::function<void(const Status&)> cb) {
+                  GetAsyncCallback cb) {
   using namespace boost::fibers;
   using std::move;
   auto tls = getFiberTLS();
   tls->update_fiber_count(ro.aio_concurrency);
-  tls->push([=,key=move(key),cb=move(cb)](){
-    cb(this->Get(ro, cfh, key, value));
+  tls->push([=,key=move(key),cb=move(cb)]()mutable{
+    auto s = this->Get(ro, cfh, key, value);
+    cb(move(s), move(key), value);
   });
 }
 void DB::GetAsync(const ReadOptions& ro,
                   std::string key, std::string* value,
-                  std::function<void(const Status&)> cb) {
+                  GetAsyncCallback cb) {
   using std::move;
   GetAsync(ro, DefaultColumnFamily(), move(key), value, move(cb));
 }
 void DB::GetAsync(const ReadOptions& ro, ColumnFamilyHandle* cfh,
                   std::string key,
-                  std::function<void(const Status&, std::string*)> cb) {
+                  GetAsyncCallback cb) {
   using namespace boost::fibers;
   using std::move;
   auto tls = getFiberTLS();
   tls->update_fiber_count(ro.aio_concurrency);
-  tls->push([=,key=move(key),cb=move(cb)](){
+  tls->push([=,key=move(key),cb=move(cb)]()mutable{
     std::string value;
     Status s = this->Get(ro, cfh, key, &value);
-    cb(s, &value);
+    cb(move(s), move(key), &value);
   });
 }
 void DB::GetAsync(const ReadOptions& ro,
                   std::string key,
-                  std::function<void(const Status&, std::string*)> cb) {
+                  GetAsyncCallback cb) {
   using std::move;
   GetAsync(ro, DefaultColumnFamily(), move(key), move(cb));
 }
@@ -2963,41 +2964,46 @@ struct DB_PromisePtr : boost::intrusive_ptr<DB_Promise<T> > {
     : boost::intrusive_ptr<DB_Promise<T> >(new DB_Promise<T>(k)) {}
 };
 
-future<Status>
+future<std::tuple<Status, std::string, std::string*> >
 DB::GetFuture(const ReadOptions& ro, ColumnFamilyHandle* cfh,
               std::string key, std::string* value) {
   using namespace boost::fibers;
   using std::move;
   auto tls = getFiberTLS();
   tls->update_fiber_count(ro.aio_concurrency);
-  DB_PromisePtr<Status> p(key);
-  future<Status> fu = p->pr.get_future();
+  DB_PromisePtr<std::tuple<Status, std::string, std::string*> > p(key);
+  auto fu = p->pr.get_future();
   tls->push([this,ro,cfh,p,value](){
-     p->pr.set_value(this->Get(ro, cfh, p->key, value));
+     std::tuple<Status, std::string, std::string*> result;
+     std::get<0>(result) = this->Get(ro, cfh, p->key, value);
+     std::get<1>(result) = std::move(p->key);
+     std::get<2>(result) = value;
+     p->pr.set_value(std::move(result));
   });
   return fu;
 }
-future<Status>
+future<std::tuple<Status, std::string, std::string*> >
 DB::GetFuture(const ReadOptions& ro, std::string key, std::string* value) {
     return GetFuture(ro, DefaultColumnFamily(), std::move(key), value);
 }
 
-future<std::pair<Status, std::string> >
+future<std::tuple<Status, std::string, std::string> >
 DB::GetFuture(const ReadOptions& ro, ColumnFamilyHandle* cfh, std::string key) {
   using namespace boost::fibers;
   using std::move;
   auto tls = getFiberTLS();
   tls->update_fiber_count(ro.aio_concurrency);
-  DB_PromisePtr<std::pair<Status, std::string> > p(key);
-  future<std::pair<Status, std::string> > fu = p->pr.get_future();
+  DB_PromisePtr<std::tuple<Status, std::string, std::string> > p(key);
+  auto fu = p->pr.get_future();
   tls->push([this,ro,cfh,p](){
-     std::pair<Status, std::string> result;
-     result.first = this->Get(ro, cfh, p->key, &result.second);
+     std::tuple<Status, std::string, std::string> result;
+     std::get<0>(result) = this->Get(ro, cfh, p->key, &std::get<2>(result));
+     std::get<1>(result) = std::move(p->key);
      p->pr.set_value(std::move(result));
   });
   return fu;
 }
-future<std::pair<Status, std::string> >
+future<std::tuple<Status, std::string, std::string> >
 DB::GetFuture(const ReadOptions& ro, std::string key) {
     return GetFuture(ro, DefaultColumnFamily(), std::move(key));
 }
