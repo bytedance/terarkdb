@@ -74,6 +74,7 @@ public:
   uint64_t NumEntries() const override { return properties_.num_entries; }
   uint64_t FileSize() const override;
   TableProperties GetTableProperties() const override;
+  bool NeedCompact() const override { return compaction_load_ > 0.1; }
   void SetSecondPassIterator(InternalIterator* reader) override {
     if (!table_options_.disableSecondPassIter) {
       second_pass_iter_ = reader;

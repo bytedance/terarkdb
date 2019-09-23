@@ -137,9 +137,13 @@ TerarkZipAutoConfigForOnlineDB_CFOptions(struct TerarkZipTableOptions& tzo,
 
 bool TerarkZipConfigFromEnv(struct DBOptions&, struct ColumnFamilyOptions&);
 
-bool TerarkZipCFOptionsFromEnv(struct ColumnFamilyOptions&);
+bool TerarkZipCFOptionsFromEnv(struct ColumnFamilyOptions&, const std::string& terarkTempDirIfNotFound = {});
+
+bool TerarkZipCFOptionsFromConfigMap(struct ColumnFamilyOptions&, const std::unordered_map<std::string, std::string>&);
 
 void TerarkZipDBOptionsFromEnv(struct DBOptions&);
+
+void TerarkZipDBOptionsFromConfigMap(struct DBOptions&, const std::unordered_map<std::string, std::string>&);
 
 bool TerarkZipIsBlackListCF(const std::string& cfname);
 
@@ -148,7 +152,8 @@ bool TerarkZipIsBlackListCF(const std::string& cfname);
 ///@param cfvec      is const but will be modified in this function
 void
 TerarkZipMultiCFOptionsFromEnv(const struct DBOptions& db_options,
-                               const std::vector<struct ColumnFamilyDescriptor>& cfvec);
+                               const std::vector<struct ColumnFamilyDescriptor>& cfvec,
+                               const std::string& terarkTempDirIfNotFound = {});
 
 const class WriteBatchEntryIndexFactory*
 patricia_WriteBatchEntryIndexFactory(const WriteBatchEntryIndexFactory* fallback = nullptr);
