@@ -85,7 +85,11 @@ static void TerarkSetEnvFromConfigMapIfNeed(std::unordered_map<std::string, std:
         std::lock_guard<std::mutex> guard(mtx);
         if (!done.load()){
             for (auto& kv : configMap) {
+#ifdef _MSC_VER
+                _putenv_s(kv.first.c_str(), kv.second.c_str());
+#else
                 setenv(kv.first.c_str(), kv.second.c_str(), 1);
+#endif
             }
             done.store(true);
         }
@@ -398,29 +402,6 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo, const std::string& tera
     STD_INFO("TerarkZipConfigFromEnv(dbo, cfo) successed\n");
   }
   return true;
-}
-
-// todo(linyuanjin): move those functions to util?
-static long StringToInt(const std::string& src, long defaultVal) try {
-  return boost::lexical_cast<long>(src);
-} catch (boost::bad_lexical_cast &) {
-  return defaultVal;
-}
-
-static bool StringToBool(const std::string& src, bool defaultVal) try {
-  return boost::lexical_cast<bool>(src);
-} catch (boost::bad_lexical_cast &) {
-  return defaultVal;
-}
-
-static double StringToDouble(const std::string& src, double defaultVal) try {
-  return boost::lexical_cast<double>(src);
-} catch (boost::bad_lexical_cast &) {
-  return defaultVal;
-}
-
-static unsigned long long StringToXiB(const std::string& src) {
-  return terark::ParseSizeXiB(src.data());
 }
 
 void TerarkZipDBOptionsFromEnv(DBOptions& dbo) {
