@@ -79,6 +79,7 @@ TerarkGetConfigMapFromEnv() {
 }
 
 static void TerarkSetEnvFromConfigMapIfNeed(std::unordered_map<std::string, std::string>& configMap) {
+    STD_INFO("TerarkSetEnvFromConfigMapIfNeed\n");
     static std::atomic<bool> done{false};
     static std::mutex mtx;
     if (!done.load()){
