@@ -1352,6 +1352,7 @@ struct SimpleFiberTls {
   //boost::context::pooled_fixedsize_stack stack_pool;
   intptr_t fiber_count = 0;
   intptr_t pending_count = 0;
+  boost::fibers::context* m_active = NULL;
   boost::fibers::buffered_channel<task_t> channel;
   SimpleFiberTls() : channel(256) {}
 
@@ -1388,9 +1389,12 @@ struct SimpleFiberTls {
 //    boost::this_fiber::sleep_for(microseconds(timeout_us));
 //    return tls->pending_count - old_pending_count;
 
+    auto active = m_active;
+    auto sched = active->get_scheduler();
     auto start = std::chrono::system_clock::now();
     while (true) {
-      boost::this_fiber::yield(); // wait once
+      //boost::this_fiber::yield(); // wait once
+      sched->yield(active);
       if (pending_count > 0) {
         auto now = system_clock::now();
         auto dur = duration_cast<microseconds>(now - start).count();
@@ -1407,8 +1411,11 @@ struct SimpleFiberTls {
 
   int wait() {
     intptr_t cnt = pending_count;
+    auto active = m_active;
+    auto sched = active->get_scheduler();
     while (pending_count > 0) {
-      boost::this_fiber::yield(); // wait once
+      //boost::this_fiber::yield(); // wait once
+      sched->yield(active);
     }
     return int(cnt);
   }
@@ -1416,9 +1423,10 @@ struct SimpleFiberTls {
 static SimpleFiberTls* getFiberTLS() {
  // ensure fiber thread locals are constructed first
  // because SimpleFiberTls.channel must be destructed first
- boost::fibers::context::active();
+ auto active = boost::fibers::context::active();
 
  static thread_local SimpleFiberTls fiberTls;
+ fiberTls.m_active = active;
  return &fiberTls;
 }
 
@@ -1534,12 +1542,15 @@ std::vector<Status> DBImpl::MultiGet(
     assert(0 == counting);
   #else
     auto tls = getFiberTLS();
+    auto active = tls->m_active;
     tls->update_fiber_count(read_options.aio_concurrency);
     for (size_t i = 0; i < num_keys; ++i) {
       tls->push([&,i](){ get_one(i); });
     }
+    auto sched = active->get_scheduler();
     while (counting) {
-        boost::this_fiber::yield();
+        //boost::this_fiber::yield();
+        sched->yield(active);
     }
   #endif
   }
