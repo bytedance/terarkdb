@@ -90,6 +90,7 @@ static void TerarkSetEnvFromConfigMapIfNeed(std::unordered_map<std::string, std:
 #else
                 setenv(kv.first.c_str(), kv.second.c_str(), 1);
 #endif
+                STD_INFO("%s=%s\n", kv.first.c_str(), kv.second.c_str());
             }
             done.store(true);
         }
