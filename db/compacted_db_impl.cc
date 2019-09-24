@@ -143,9 +143,10 @@ Status CompactedDBImpl::Open(const Options& options,
   *dbptr = nullptr;
 #if !defined(_MSC_VER) && !defined(__APPLE__)
   const char* terarkdb_localTempDir = getenv("TerarkZipTable_localTempDir");
-  if (terarkdb_localTempDir) {
+  const char* terarkConfigString = getenv("TerarkConfigString");
+  if (terarkdb_localTempDir || terarkConfigString) {
     if (TerarkZipIsBlackListCF) {
-      if (::access(terarkdb_localTempDir, R_OK | W_OK) != 0) {
+      if (terarkdb_localTempDir && ::access(terarkdb_localTempDir, R_OK | W_OK) != 0) {
         return Status::InvalidArgument(
             "Must exists, and Permission ReadWrite is required on "
             "env TerarkZipTable_localTempDir",

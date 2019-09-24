@@ -166,8 +166,9 @@ Status DB::OpenForReadOnly(
   SuperVersionContext sv_context(/* create_superversion */ true);
 #if !defined(_MSC_VER) && !defined(__APPLE__)
   const char* terarkdb_localTempDir = getenv("TerarkZipTable_localTempDir");
-  if (terarkdb_localTempDir) {
-    if (::access(terarkdb_localTempDir, R_OK | W_OK) != 0) {
+  const char* terarkConfigString = getenv("TerarkConfigString");
+  if (terarkdb_localTempDir || terarkConfigString) {
+    if (terarkdb_localTempDir && ::access(terarkdb_localTempDir, R_OK | W_OK) != 0) {
       return Status::InvalidArgument(
           "Must exists, and Permission ReadWrite is required on "
           "env TerarkZipTable_localTempDir",
