@@ -17,7 +17,7 @@ class PinnedIteratorsManager;
 class RangeDelAggregator;
 class TableReader;
 
-typedef std::unordered_map<uint64_t, const FileMetaData*> DependFileMap;
+typedef std::unordered_map<uint64_t, FileMetaData*> DependFileMap;
 
 class IteratorCache {
  public:
@@ -42,7 +42,7 @@ class IteratorCache {
   Arena* GetArena() { return &arena_; }
 
  private:
-  const std::unordered_map<uint64_t, const FileMetaData*>& depend_files_;
+  const DependFileMap& depend_files_;
   void* callback_arg_;
   CreateIterCallback create_iter_;
   Arena arena_;
