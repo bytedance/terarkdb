@@ -8,12 +8,20 @@ else
 fi
 WITH_BMI2=1
 
-cat /etc/apt/sources.list /etc/apt/sources.list.d/*
-sudo apt-get update
-sudo apt-get install libaio-dev
+if test -n "$BUILD_BRANCH"; then
+    git checkout "$BUILD_BRANCH"
+fi
 
 BRANCH_NAME=`git rev-parse --abbrev-ref HEAD`
 # clone terark-zip-rocksdb: terark-rocksdb depends on some header files from zip-rocksdb
+
+if test -n "$BUILD_BRANCH"; then
+    # this script is run in SCM auto build
+    sudo apt-get update
+    sudo apt-get install libaio-dev
+else
+    echo you must ensure libaio-dev have been installed
+fi
 
 # build targets
 make BUNDLE_TERARK_ZIP_ROCKSDB=1 LINK_TERARK=static \
