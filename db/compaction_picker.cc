@@ -614,7 +614,7 @@ Compaction* CompactionPicker::PickGarbageCollection(
   struct FileInfo {
     FileMetaData* f;
     uint64_t num_entries;
-    double gc_ratio;
+    double score;
     uint64_t estimated_size;
   };
   size_t max_file_size_for_leval =
@@ -642,17 +642,18 @@ Compaction* CompactionPicker::PickGarbageCollection(
     } else {
       info.num_entries = f->prop.num_entries;
     }
-    info.gc_ratio = std::min(1., 1. * f->num_antiquation / info.num_entries);
+    double gc_ratio = std::min(1., 1. * f->num_antiquation / info.num_entries);
     info.estimated_size =
-        static_cast<uint64_t>(f->fd.file_size * (1 - info.gc_ratio));
-    if (info.gc_ratio > mutable_cf_options.blob_gc_ratio ||
-        info.estimated_size <= small_file_size) {
+        static_cast<uint64_t>(f->fd.file_size * (1 - gc_ratio));
+    if (gc_ratio > mutable_cf_options.blob_gc_ratio ||
+        info.estimated_size <= small_file_size || f->marked_for_compaction) {
+      info.score = gc_ratio;
       blob_vec.push_back(info);
     }
   }
   std::sort(blob_vec.begin(), blob_vec.end(), [](const FileInfo& l,
                                                  const FileInfo& r) {
-    return l.gc_ratio > r.gc_ratio;
+    return l.score > r.score;
   });
   if (blob_vec.empty() ||
       blob_vec.front().gc_ratio <= mutable_cf_options.blob_gc_ratio) {
