@@ -165,7 +165,7 @@ private:
 
 #if MY_USE_FIBER_LOCAL_STORAGE
   boost::fibers::fiber_specific_ptr<ThreadData>
-    StaticMeta::tls_((OnThreadExit_type)&StaticMeta::OnThreadExit);
+    StaticMeta::tls_((boost::fibers::context::active(), (OnThreadExit_type)&StaticMeta::OnThreadExit));
 #else
   thread_local std::unique_ptr<ThreadData, StaticMeta::OnThreadExit_type>
     StaticMeta::tls_(NULL,(OnThreadExit_type)&StaticMeta::OnThreadExit);
