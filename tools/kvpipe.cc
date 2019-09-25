@@ -20,6 +20,9 @@ static void usage(const char* prog) {
   -c concurrency
      format is thread_num:fiber_num, default is 1:32
 
+  -C CacheSize
+     for RocksDB BlockBasedTable
+
   -l log_level(default 3)
 
   -o max_file_opening_threads(default is 16)
