@@ -7,7 +7,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
-#include "rocksdb/compaction_worker.h"
+#include "rocksdb/compaction_dispatcher.h"
 #include "table/get_context.h"
 
 #ifndef __STDC_FORMAT_MACROS
@@ -173,7 +173,7 @@ class WorkerSeparateHelper : public SeparateHelper, public LazySliceController {
 };
 
 std::function<CompactionWorkerResult()>
-RemoteCompactionWorker::StartCompaction(
+RemoteCompactionDispatcher::StartCompaction(
     const CompactionWorkerContext& context) {
   ajson::string_stream stream;
   ajson::save_to(stream, context);
@@ -193,7 +193,7 @@ RemoteCompactionWorker::StartCompaction(
   return Result(DoCompaction(stream.str()));
 }
 
-struct RemoteCompactionWorker::Client::Rep {
+struct RemoteCompactionDispatcher::Worker::Rep {
   EnvOptions env_options;
   Env* env;
   TMap<const Comparator*> comparator_map;
@@ -205,22 +205,22 @@ struct RemoteCompactionWorker::Client::Rep {
   STMap<IntTblPropCollectorFactory> int_tbl_prop_collector_factory_map;
 };
 
-void RemoteCompactionWorker::Client::RegistComparator(
+void RemoteCompactionDispatcher::Worker::RegistComparator(
     const Comparator* comparator) {
   rep_->comparator_map[comparator->Name()] = comparator;
 }
 
-void RemoteCompactionWorker::Client::RegistPrefixExtractor(
+void RemoteCompactionDispatcher::Worker::RegistPrefixExtractor(
     std::shared_ptr<const SliceTransform> prefix_extractor) {
   rep_->prefix_extractor_map[prefix_extractor->Name()] = prefix_extractor;
 }
 
-void RemoteCompactionWorker::Client::RegistTableFactory(
+void RemoteCompactionDispatcher::Worker::RegistTableFactory(
     const char* name, CreateTableFactoryCallback callback) {
   rep_->table_factory_map[name] = callback;
 }
 
-void RemoteCompactionWorker::Client::RegistMergeOperator(
+void RemoteCompactionDispatcher::Worker::RegistMergeOperator(
     CreateMergeOperatorCallback merge_operator_callback) {
   std::shared_ptr<MergeOperator> merge_operator;
   auto s = merge_operator_callback(&merge_operator);
@@ -230,18 +230,18 @@ void RemoteCompactionWorker::Client::RegistMergeOperator(
   }
 }
 
-void RemoteCompactionWorker::Client::RegistCompactionFilter(
+void RemoteCompactionDispatcher::Worker::RegistCompactionFilter(
     const CompactionFilter* compaction_filter) {
   rep_->compaction_filter_map[compaction_filter->Name()] = compaction_filter;
 }
 
-void RemoteCompactionWorker::Client::RegistCompactionFilterFactory(
+void RemoteCompactionDispatcher::Worker::RegistCompactionFilterFactory(
     std::shared_ptr<CompactionFilterFactory> compaction_filter_factory) {
   rep_->compaction_filter_factory_map[compaction_filter_factory->Name()] =
       compaction_filter_factory;
 }
 
-void RemoteCompactionWorker::Client::RegistTablePropertiesCollectorFactory(
+void RemoteCompactionDispatcher::Worker::RegistTablePropertiesCollectorFactory(
     std::shared_ptr<TablePropertiesCollectorFactory>
         table_prop_collector_factory) {
   rep_->int_tbl_prop_collector_factory_map[
@@ -250,7 +250,7 @@ void RemoteCompactionWorker::Client::RegistTablePropertiesCollectorFactory(
           table_prop_collector_factory);
 }
 
-RemoteCompactionWorker::Client::Client(EnvOptions env_options, Env* env) {
+RemoteCompactionDispatcher::Worker::Worker(EnvOptions env_options, Env* env) {
   rep_ = new Rep();
   rep_->env_options = env_options;
   rep_->env = env;
@@ -313,11 +313,11 @@ RemoteCompactionWorker::Client::Client(EnvOptions env_options, Env* env) {
       });
 }
 
-RemoteCompactionWorker::Client::~Client() {
+RemoteCompactionDispatcher::Worker::~Worker() {
   delete rep_;
 }
 
-std::string RemoteCompactionWorker::Client::DoCompaction(
+std::string RemoteCompactionDispatcher::Worker::DoCompaction(
     const std::string& data) {
   CompactionWorkerContext context;
   ajson::load_from_buff(context, &std::string(data)[0], data.size());

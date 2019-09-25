@@ -29,9 +29,9 @@ class VersionStorageInfo;
 struct ImmutableCFOptions;
 struct MutableCFOptions;
 
-class CompactionWorker {
+class CompactionDispatcher {
  public:
-  virtual ~CompactionWorker() = default;
+  virtual ~CompactionDispatcher() = default;
 
   virtual std::function<CompactionWorkerResult()> StartCompaction(
       const CompactionWorkerContext& context) = 0;
@@ -39,22 +39,22 @@ class CompactionWorker {
   virtual const char* Name() const = 0;
 };
 
-class RemoteCompactionWorker : public CompactionWorker {
+class RemoteCompactionDispatcher : public CompactionDispatcher {
  public:
   virtual std::function<CompactionWorkerResult()> StartCompaction(
       const CompactionWorkerContext& context) override;
 
   virtual const char* Name() const override {
-    return "RemoteCompactionWorker";
+    return "RemoteCompactionDispatcher";
   }
 
   virtual std::future<std::string> DoCompaction(
       const std::string& data) = 0;
 
-  class Client {
+  class Worker {
    public:
-    Client(EnvOptions env_options, Env* env);
-    virtual ~Client();
+    Worker(EnvOptions env_options, Env* env);
+    virtual ~Worker();
 
     using CreateTableFactoryCallback =
         std::function<Status(std::shared_ptr<TableFactory>*,
@@ -77,8 +77,8 @@ class RemoteCompactionWorker : public CompactionWorker {
     std::string DoCompaction(const std::string& data);
 
    protected:
-    Client(const Client&) = delete;
-    Client& operator = (const Client&) = delete;
+    Worker(const Worker&) = delete;
+    Worker& operator = (const Worker&) = delete;
 
     struct Rep;
     Rep* rep_;

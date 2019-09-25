@@ -665,8 +665,8 @@ void CompactionJob::GenSubcompactionBoundaries() {
 
 Status CompactionJob::Run() {
   ColumnFamilyData* cfd = compact_->compaction->column_family_data();
-  CompactionWorker* worker = cfd->ioptions()->compaction_worker;
-  if (worker == nullptr ||
+  CompactionDispatcher* dispatcher = cfd->ioptions()->compaction_dispatcher;
+  if (dispatcher == nullptr ||
       compact_->compaction->compaction_type() != kKeyValueCompaction) {
     return RunSelf();
   }
@@ -760,7 +760,7 @@ Status CompactionJob::Run() {
       context.has_end = false;
       context.end.clear();
     }
-    results.emplace_back(worker->StartCompaction(context));
+    results.emplace_back(dispatcher->StartCompaction(context));
   }
   Status status = Status::Corruption();
   for (size_t i = 0; i < compact_->sub_compact_states.size(); ++i) {
@@ -2032,7 +2032,7 @@ Status CompactionJob::InstallCompactionResults(
       (compaction->compaction_type() == kMapCompaction ||
        !compaction->input_range().empty() ||
        mutable_cf_options.enable_lazy_compaction ||
-       cfd->ioptions()->compaction_worker != nullptr)) {
+       cfd->ioptions()->compaction_dispatcher != nullptr)) {
     MapBuilder map_builder(job_id_, db_options_, env_options_, versions_,
                            stats_, dbname_);
     auto vstorage = compaction->input_version()->storage_info();

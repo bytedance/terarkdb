@@ -1458,7 +1458,11 @@ bool Version::MaybeInitializeFileMetaData(FileMetaData* file_meta) {
     return false;
   }
   if (tp.get() == nullptr) return false;
-  assert(file_meta->prop.num_entries == tp->num_entries);
+  if (file_meta->prop.num_entries == 0) {
+    file_meta->prop.num_entries = tp->num_entries;
+  } else {
+    assert(file_meta->prop.num_entries == tp->num_entries);
+  }
   file_meta->num_deletions = tp->num_deletions;
   file_meta->raw_value_size = tp->raw_value_size;
   file_meta->raw_key_size = tp->raw_key_size;

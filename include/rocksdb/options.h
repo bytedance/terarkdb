@@ -23,7 +23,7 @@
 #include "rocksdb/universal_compaction.h"
 #include "rocksdb/version.h"
 #include "rocksdb/write_buffer_manager.h"
-#include "rocksdb/compaction_worker.h"
+#include "rocksdb/compaction_dispatcher.h"
 
 #ifdef max
 #undef max
@@ -175,7 +175,7 @@ struct ColumnFamilyOptions : public AdvancedColumnFamilyOptions {
   // Default: nullptr
   std::shared_ptr<CompactionFilterFactory> compaction_filter_factory = nullptr;
 
-  std::shared_ptr<CompactionWorker> compaction_worker = nullptr;
+  std::shared_ptr<CompactionDispatcher> compaction_dispatcher = nullptr;
 
   // -------------------
   // Parameters that affect performance

@@ -39,7 +39,7 @@ struct ImmutableCFOptions {
 
   CompactionFilterFactory* compaction_filter_factory;
 
-  CompactionWorker* compaction_worker;
+  CompactionDispatcher* compaction_dispatcher;
 
   int min_write_buffer_number_to_merge;
 
