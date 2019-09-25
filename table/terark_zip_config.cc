@@ -240,9 +240,13 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo, const std::string& tera
   auto configMap = TerarkGetConfigMapFromEnv();
   if (!configMap.empty()) {
     TerarkSetEnvFromConfigMapIfNeed(configMap);
-    if (configMap.find("TerarkZipTable_localTempDir") == configMap.end() && !terarkTempDirIfNotFound.empty()) {
+    auto it = configMap.find("TerarkZipTable_localTempDir");
+    if (it == configMap.end() && !terarkTempDirIfNotFound.empty()) {
       TerarkZipDeleteTempFiles(terarkTempDirIfNotFound);
       localTempDir = terarkTempDirIfNotFound.c_str();
+    }
+    if (it != configMap.end()) {
+      localTempDir = it->second.c_str();
     }
   }
 
