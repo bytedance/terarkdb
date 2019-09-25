@@ -47,7 +47,7 @@ Status CompactedDBImpl::Get(const ReadOptions& options, ColumnFamilyHandle*,
   files_.files[FindFile(key)].fd.table_reader->Get(options, lkey.internal_key(),
                                                    &get_context, nullptr);
   if (get_context.State() == GetContext::kFound) {
-    return Status::OK();
+    return value->inplace_decode();
   }
   return Status::NotFound();
 }
@@ -124,6 +124,9 @@ Status CompactedDBImpl::Init(const Options& options) {
     if (vstorage->num_non_empty_levels() > 1) {
       return Status::NotSupported("Both L0 and other level contain files");
     }
+    if (l0.files[0].file_metadata->sst_purpose != kEssenceSst) {
+      return Status::NotSupported("L0 has read amp");
+    }
     files_ = l0;
     return Status::OK();
   }
@@ -135,6 +138,11 @@ Status CompactedDBImpl::Init(const Options& options) {
   }
 
   int level = vstorage->num_non_empty_levels() - 1;
+  for (auto f : vstorage->LevelFiles(level)) {
+    if (f->sst_purpose != kEssenceSst) {
+      return Status::NotSupported("Level has read amp");
+    }
+  }
   if (vstorage->LevelFilesBrief(level).num_files > 0) {
     files_ = vstorage->LevelFilesBrief(level);
     return Status::OK();
