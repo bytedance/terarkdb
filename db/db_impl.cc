@@ -106,7 +106,8 @@
 
 //#include <terark/util/fiber_pool.hpp>
 #include <boost/fiber/all.hpp>
-#include <boost/context/pooled_fixedsize_stack.hpp>
+//#include <boost/context/pooled_fixedsize_stack.hpp>
+#include <terark/thread/fiber_yield.hpp>
 
 namespace rocksdb {
 const std::string kDefaultColumnFamilyName("default");
@@ -1349,12 +1350,15 @@ Status DBImpl::GetImpl(const ReadOptions& read_options,
 
 struct SimpleFiberTls {
   typedef std::function<void()> task_t;
-  //boost::context::pooled_fixedsize_stack stack_pool;
   intptr_t fiber_count = 0;
   intptr_t pending_count = 0;
-  boost::fibers::context* m_active = NULL;
+  terark::FiberYield m_fy;
   boost::fibers::buffered_channel<task_t> channel;
-  SimpleFiberTls() : channel(256) {}
+
+  SimpleFiberTls(terark::FiberYield fy)
+    : m_fy(fy), channel(256)
+  {
+  }
 
   void update_fiber_count(intptr_t count) {
     count = std::max<intptr_t>(1, count);
@@ -1389,12 +1393,10 @@ struct SimpleFiberTls {
 //    boost::this_fiber::sleep_for(microseconds(timeout_us));
 //    return tls->pending_count - old_pending_count;
 
-    auto active = m_active;
-    auto sched = active->get_scheduler();
     auto start = std::chrono::system_clock::now();
     while (true) {
       //boost::this_fiber::yield(); // wait once
-      sched->yield(active);
+      m_fy.unchecked_yield();
       if (pending_count > 0) {
         auto now = system_clock::now();
         auto dur = duration_cast<microseconds>(now - start).count();
@@ -1411,24 +1413,17 @@ struct SimpleFiberTls {
 
   int wait() {
     intptr_t cnt = pending_count;
-    auto active = m_active;
-    auto sched = active->get_scheduler();
     while (pending_count > 0) {
       //boost::this_fiber::yield(); // wait once
-      sched->yield(active);
+      m_fy.unchecked_yield();
     }
     return int(cnt);
   }
 };
-static SimpleFiberTls* getFiberTLS() {
- // ensure fiber thread locals are constructed first
- // because SimpleFiberTls.channel must be destructed first
- auto active = boost::fibers::context::active();
 
- static thread_local SimpleFiberTls fiberTls;
- fiberTls.m_active = active;
- return &fiberTls;
-}
+// ensure fiber thread locals are constructed first
+// because SimpleFiberTls.channel must be destructed first
+static thread_local SimpleFiberTls gt_fibers(terark::FiberYield(1));
 
 std::vector<Status> DBImpl::MultiGet(
     const ReadOptions& read_options,
@@ -1541,16 +1536,14 @@ std::vector<Status> DBImpl::MultiGet(
     fiber_pool.reap(myhead);
     assert(0 == counting);
   #else
-    auto tls = getFiberTLS();
-    auto active = tls->m_active;
+    auto tls = &gt_fibers;
     tls->update_fiber_count(read_options.aio_concurrency);
     for (size_t i = 0; i < num_keys; ++i) {
       tls->push([&,i](){ get_one(i); });
     }
-    auto sched = active->get_scheduler();
     while (counting) {
         //boost::this_fiber::yield();
-        sched->yield(active);
+        tls->m_fy.unchecked_yield();
     }
   #endif
   }
@@ -2910,7 +2903,7 @@ void DB::GetAsync(const ReadOptions& ro, ColumnFamilyHandle* cfh,
                   GetAsyncCallback cb) {
   using namespace boost::fibers;
   using std::move;
-  auto tls = getFiberTLS();
+  auto tls = &gt_fibers;
   tls->update_fiber_count(ro.aio_concurrency);
   tls->push([=,key=move(key),cb=move(cb)]()mutable{
     auto s = this->Get(ro, cfh, key, value);
@@ -2928,7 +2921,7 @@ void DB::GetAsync(const ReadOptions& ro, ColumnFamilyHandle* cfh,
                   GetAsyncCallback cb) {
   using namespace boost::fibers;
   using std::move;
-  auto tls = getFiberTLS();
+  auto tls = &gt_fibers;
   tls->update_fiber_count(ro.aio_concurrency);
   tls->push([=,key=move(key),cb=move(cb)]()mutable{
     std::string value;
@@ -2947,11 +2940,11 @@ void DB::GetAsync(const ReadOptions& ro,
 ///          < 0 indicate number of finished GetAsync/GetFuture requests after timeout
 ///          > 0 indicate number of all GetAsync/GetFuture requests have finished within timeout
 int DB::WaitAsync(int timeout_us) {
-  return getFiberTLS()->wait(timeout_us);
+  return gt_fibers.wait(timeout_us);
 }
 
 int DB::WaitAsync() {
-  return getFiberTLS()->wait();
+  return gt_fibers.wait();
 }
 
 // boost::fibers::promise has some problem for being captured by
@@ -2980,7 +2973,7 @@ DB::GetFuture(const ReadOptions& ro, ColumnFamilyHandle* cfh,
               std::string key, std::string* value) {
   using namespace boost::fibers;
   using std::move;
-  auto tls = getFiberTLS();
+  auto tls = &gt_fibers;
   tls->update_fiber_count(ro.aio_concurrency);
   DB_PromisePtr<std::tuple<Status, std::string, std::string*> > p(key);
   auto fu = p->pr.get_future();
@@ -3002,7 +2995,7 @@ future<std::tuple<Status, std::string, std::string> >
 DB::GetFuture(const ReadOptions& ro, ColumnFamilyHandle* cfh, std::string key) {
   using namespace boost::fibers;
   using std::move;
-  auto tls = getFiberTLS();
+  auto tls = &gt_fibers;
   tls->update_fiber_count(ro.aio_concurrency);
   DB_PromisePtr<std::tuple<Status, std::string, std::string> > p(key);
   auto fu = p->pr.get_future();
