@@ -3105,7 +3105,6 @@ Status VersionSet::ProcessManifestWrites(
         ColumnFamilyData* cfd = versions[i]->cfd_;
         builder_guards[i]->version_builder()->LoadTableHandlers(
             cfd->internal_stats(), cfd->ioptions()->optimize_filters_for_hits,
-            true /* prefetch_index_and_filter_in_cache */,
             mutable_cf_options_ptrs[i]->prefix_extractor.get());
       }
     }
@@ -3767,9 +3766,10 @@ Status VersionSet::Recover(
         // unlimited table cache. Pre-load table handle now.
         // Need to do it out of the mutex.
         builder->LoadTableHandlers(
-            cfd->internal_stats(), db_options_->max_file_opening_threads,
+            cfd->internal_stats(),
             false /* prefetch_index_and_filter_in_cache */,
-            cfd->GetLatestMutableCFOptions()->prefix_extractor.get());
+            cfd->GetLatestMutableCFOptions()->prefix_extractor.get(),
+            db_options_->max_file_opening_threads);
       }
 
       Version* v = new Version(cfd, this, env_options_,
