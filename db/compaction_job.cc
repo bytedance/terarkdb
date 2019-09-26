@@ -663,9 +663,21 @@ void CompactionJob::GenSubcompactionBoundaries() {
   }
 }
 
+static CompactionDispatcher* GetCmdLineDispatcher() {
+  const char* cmdline = getenv("TerarkDB_compactionWorkerCommandLine");
+  if (cmdline) {
+    return RemoteCompactionDispatcher::UseCommandLine(cmdline);
+  }
+  return NULL;
+}
+
 Status CompactionJob::Run() {
   ColumnFamilyData* cfd = compact_->compaction->column_family_data();
   CompactionDispatcher* dispatcher = cfd->ioptions()->compaction_dispatcher;
+  if (!dispatcher) {
+    static std::unique_ptr<CompactionDispatcher> cmdlineDispatcher(GetCmdLineDispatcher());
+    dispatcher = cmdlineDispatcher.get();
+  }
   if (dispatcher == nullptr ||
       compact_->compaction->compaction_type() != kKeyValueCompaction) {
     return RunSelf();
