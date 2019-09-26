@@ -973,14 +973,14 @@ public:
     std::promise<std::string> promise;
     std::future<std::string> fu = promise.get_future();
     std::thread([this,data](std::promise<std::string>&& prom) {
-      bool tmpFileDeleted = true;
+      bool tmpFileCreated = false;
       char szTmpFile[] = "/tmp/trkcpctXXXXXX";
       try {
         int fd = mkstemp(szTmpFile);
         if (fd < 0) {
           THROW_STD(runtime_error, "mkstemp(%s) = %s", szTmpFile, strerror(errno));
         }
-        tmpFileDeleted = false;
+        tmpFileCreated = true;
         using namespace terark;
         {
           // use  " > /dev/fd/xxx" will prevent from szTmpFile being
@@ -1005,7 +1005,7 @@ public:
       catch (...) {
         prom.set_exception(std::current_exception());
       }
-      if (!tmpFileDeleted) {
+      if (tmpFileCreated) {
         ::remove(szTmpFile);
       }
     }, std::move(promise)).detach();
