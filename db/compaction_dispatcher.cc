@@ -28,6 +28,11 @@
 #include "util/c_style_callback.h"
 #include "util/filename.h"
 
+#include <terark/util/process.hpp>
+#include <terark/util/linebuf.hpp>
+#include <terark/util/autoclose.hpp>
+#include <terark/num_to_str.hpp>
+
 struct AJsonStatus {
   unsigned char code, subcode, sev;
   std::string state;
@@ -953,5 +958,63 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
   ajson::save_to(stream, result);
   return stream.str();
 }
+
+const char* RemoteCompactionDispatcher::Name() const {
+  return "RemoteCompactionDispatcher";
+}
+
+class CommandLineCompactionDispatcher : public RemoteCompactionDispatcher {
+  std::string m_cmd;
+
+public:
+  CommandLineCompactionDispatcher(std::string&& cmd) : m_cmd(std::move(cmd)) {}
+
+  std::future<std::string> DoCompaction(const std::string& data) override {
+    std::promise<std::string> promise;
+    std::future<std::string> fu = promise.get_future();
+    std::thread([this,data](std::promise<std::string>&& prom) {
+      bool tmpFileDeleted = true;
+      char szTmpFile[] = "/tmp/trkcpctXXXXXX";
+      try {
+        int fd = mkstemp(szTmpFile);
+        if (fd < 0) {
+          THROW_STD(runtime_error, "mkstemp(%s) = %s", szTmpFile, strerror(errno));
+        }
+        tmpFileDeleted = false;
+        using namespace terark;
+        {
+          // use  " > /dev/fd/xxx" will prevent from szTmpFile being
+          // deleted unexpected
+          static_cast<string_appender<>&>(m_cmd) << " > /dev/fd/" << fd;
+          ProcPipeStream proc(m_cmd, "w");
+          proc.ensureWrite(data.c_str(), data.size());
+        }
+        //
+        // now cmd sub process must have finished
+        //
+        Auto_fclose tmpResultFile(fdopen(fd, "r"));
+        if (!tmpResultFile) {
+          THROW_STD(runtime_error, "fdopen(fd=%d(fname=%s), r) = %s", fd, szTmpFile, strerror(errno));
+        }
+        terark::LineBuf result;
+        result.read_all(tmpResultFile);
+        prom.set_value(std::string(result.p, result.n));
+      }
+      catch (...) {
+        prom.set_exception(std::current_exception());
+      }
+      if (!tmpFileDeleted) {
+        ::remove(szTmpFile);
+      }
+    }, std::move(promise)).detach();
+    return fu;
+  }
+};
+
+CompactionDispatcher*
+RemoteCompactionDispatcher::UseCommandLine(std::string cmd) {
+  return new CommandLineCompactionDispatcher(std::move(cmd));
+}
+
 
 }  // namespace rocksdb

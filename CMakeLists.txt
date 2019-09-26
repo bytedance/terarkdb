@@ -600,6 +600,7 @@ set(SOURCES
         tools/ldb_tool.cc
         tools/sst_dump_tool.cc
         tools/trace_analyzer_tool.cc
+        tools/remote_compaction_worker_101.cc
         util/arena.cc
         util/auto_roll_logger.cc
         util/bloom.cc

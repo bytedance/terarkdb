@@ -44,12 +44,11 @@ class RemoteCompactionDispatcher : public CompactionDispatcher {
   virtual std::function<CompactionWorkerResult()> StartCompaction(
       const CompactionWorkerContext& context) override;
 
-  virtual const char* Name() const override {
-    return "RemoteCompactionDispatcher";
-  }
+  virtual const char* Name() const override;
 
-  virtual std::future<std::string> DoCompaction(
-      const std::string& data) = 0;
+  virtual std::future<std::string> DoCompaction(const std::string& data) = 0;
+
+  static CompactionDispatcher* UseCommandLine(std::string cmd);
 
   class Worker {
    public:
