@@ -985,8 +985,10 @@ public:
         {
           // use  " > /dev/fd/xxx" will prevent from szTmpFile being
           // deleted unexpected
-          static_cast<string_appender<>&>(m_cmd) << " > /dev/fd/" << fd;
-          ProcPipeStream proc(m_cmd, "w");
+          string_appender<> cmdw;
+          cmdw.reserve(m_cmd.size() + 32);
+          cmdw << m_cmd << " > /dev/fd/" << fd;
+          ProcPipeStream proc(cmdw, "w");
           proc.ensureWrite(data.c_str(), data.size());
         }
         //
