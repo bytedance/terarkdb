@@ -48,8 +48,6 @@ class RemoteCompactionDispatcher : public CompactionDispatcher {
 
   virtual std::future<std::string> DoCompaction(const std::string& data) = 0;
 
-  static CompactionDispatcher* UseCommandLine(std::string cmd);
-
   class Worker {
    public:
     Worker(EnvOptions env_options, Env* env);
@@ -83,6 +81,9 @@ class RemoteCompactionDispatcher : public CompactionDispatcher {
     Rep* rep_;
   };
 };
+
+extern std::shared_ptr<CompactionDispatcher>
+    NewCommandLineCompactionDispatcher(std::string cmd);
 
 
 }  // namespace rocksdb

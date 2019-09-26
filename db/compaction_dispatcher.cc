@@ -552,8 +552,9 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
     if (!s.ok()) {
       return s;
     }
-    if (context_seq != sequence || (get_context.State() != GetContext::kFound &&
-                                    get_context.State() != GetContext::kMerge)) {
+    if (context_seq != sequence ||
+        (get_context.State() != GetContext::kFound &&
+         get_context.State() != GetContext::kMerge)) {
       return Status::Corruption("Separate value get fail");
     }
     return Status::OK();
@@ -971,19 +972,20 @@ public:
 
   std::future<std::string> DoCompaction(const std::string& data) override {
     std::promise<std::string> promise;
-    std::future<std::string> fu = promise.get_future();
-    std::thread([this,data](std::promise<std::string>&& prom) {
-      bool tmpFileCreated = false;
-      char szTmpFile[] = "/tmp/trkcpctXXXXXX";
+    std::future<std::string> future = promise.get_future();
+    std::thread([this, data](std::promise<std::string>&& prom) {
+      bool tmp_file_created = false;
+      char tmp_file[] = "/tmp/Compaction-XXXXXX";
       try {
-        int fd = mkstemp(szTmpFile);
+        int fd = mkstemp(tmp_file);
         if (fd < 0) {
-          THROW_STD(runtime_error, "mkstemp(%s) = %s", szTmpFile, strerror(errno));
+          THROW_STD(runtime_error, "mkstemp(%s) = %s", tmp_file,
+                    strerror(errno));
         }
-        tmpFileCreated = true;
+        tmp_file_created = true;
         using namespace terark;
         {
-          // use  " > /dev/fd/xxx" will prevent from szTmpFile being
+          // use  " > /dev/fd/xxx" will prevent from tmp_file being
           // deleted unexpected
           string_appender<> cmdw;
           cmdw.reserve(m_cmd.size() + 32);
@@ -994,29 +996,29 @@ public:
         //
         // now cmd sub process must have finished
         //
-        Auto_fclose tmpResultFile(fdopen(fd, "r"));
-        if (!tmpResultFile) {
-          THROW_STD(runtime_error, "fdopen(fd=%d(fname=%s), r) = %s", fd, szTmpFile, strerror(errno));
+        Auto_fclose tmp_result_file(fdopen(fd, "r"));
+        if (!tmp_result_file) {
+          THROW_STD(runtime_error, "fdopen(fd=%d(fname=%s), r) = %s", fd,
+                    tmp_file, strerror(errno));
         }
         terark::LineBuf result;
-        result.read_all(tmpResultFile);
+        result.read_all(tmp_result_file);
         prom.set_value(std::string(result.p, result.n));
       }
       catch (...) {
         prom.set_exception(std::current_exception());
       }
-      if (tmpFileCreated) {
-        ::remove(szTmpFile);
+      if (tmp_file_created) {
+        ::remove(tmp_file);
       }
     }, std::move(promise)).detach();
-    return fu;
+    return future;
   }
 };
 
-CompactionDispatcher*
-RemoteCompactionDispatcher::UseCommandLine(std::string cmd) {
-  return new CommandLineCompactionDispatcher(std::move(cmd));
+std::shared_ptr<CompactionDispatcher>
+NewCommandLineCompactionDispatcher(std::string cmd) {
+  return std::make_shared<CommandLineCompactionDispatcher>(std::move(cmd));
 }
-
 
 }  // namespace rocksdb
