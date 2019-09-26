@@ -744,6 +744,7 @@ TOOLS = \
 	write_stress \
 	ldb \
 	kvpipe \
+	remote_compaction_worker_101.cc \
 	db_repl_stress \
 	rocksdb_dump \
 	rocksdb_undump \
@@ -1738,6 +1739,9 @@ ldb: ${xdir}/tools/ldb.o $(SHARED1)
 	$(AM_LINK)
 
 kvpipe: ${xdir}/tools/kvpipe.o ${SHARED1}
+	$(AM_LINK)
+
+remote_compaction_worker_101: ${xdir}/tools/remote_compaction_worker_101.o ${SHARED1}
 	$(AM_LINK)
 
 multi_get: ${xdir}/tools/multi_get.o ${SHARED1}
