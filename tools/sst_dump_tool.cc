@@ -110,7 +110,7 @@ Status SstFileDumper::GetTableReader(const std::string& file_path) {
                           magic_number == kLegacyPlainTableMagicNumber;
 
 #if !defined(_MSC_VER) && !defined(__APPLE__)
-    use_mmap_reads = use_mmap_reads || getenv("TerarkZipTable_localTempDir");
+    use_mmap_reads = use_mmap_reads || getenv("TerarkZipTable_localTempDir") || getenv("TerarkConfigString");
 #endif
     if (use_mmap_reads) {
       soptions_.use_mmap_reads = true;
@@ -254,6 +254,10 @@ Status SstFileDumper::ReadTableProperties(uint64_t table_magic_number,
 Status SstFileDumper::SetTableOptionsByMagicNumber(
     uint64_t table_magic_number) {
   assert(table_properties_);
+  const char* terarkdb_localTempDir;
+  const char* terarkConfigString;
+  (void) terarkdb_localTempDir; // suppress unused variable warning
+  (void) terarkConfigString;    //
   if (table_magic_number == kBlockBasedTableMagicNumber ||
       table_magic_number == kLegacyBlockBasedTableMagicNumber) {
     options_.table_factory = std::make_shared<BlockBasedTableFactory>();
@@ -284,10 +288,10 @@ Status SstFileDumper::SetTableOptionsByMagicNumber(
     options_.table_factory.reset(NewPlainTableFactory(plain_table_options));
     fprintf(stdout, "Sst file format: plain table\n");
 #if !defined(_MSC_VER) && !defined(__APPLE__)
-  } else if (const char* terarkdb_localTempDir =
-                 getenv("TerarkZipTable_localTempDir")) {
+  } else if ((terarkdb_localTempDir = getenv("TerarkZipTable_localTempDir")) ||
+             (terarkConfigString = getenv("TerarkConfigString"))) {
     if (TerarkZipConfigFromEnv) {
-      if (::access(terarkdb_localTempDir, R_OK | W_OK) != 0) {
+      if (terarkdb_localTempDir && ::access(terarkdb_localTempDir, R_OK | W_OK) != 0) {
         return Status::InvalidArgument(
             "Must exists, and Permission ReadWrite is required on "
             "env TerarkZipTable_localTempDir",
