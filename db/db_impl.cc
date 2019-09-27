@@ -2484,13 +2484,25 @@ Status DBImpl::DeleteFilesInRanges(ColumnFamilyHandle* column_family,
   Status status;
   auto cfh = reinterpret_cast<ColumnFamilyHandleImpl*>(column_family);
   ColumnFamilyData* cfd = cfh->cfd();
-  VersionEdit edit;
   std::set<FileMetaData*> deleted_files;
   JobContext job_context(next_job_id_.fetch_add(1), true);
   {
+    VersionEdit edit;
     InstrumentedMutexLock l(&mutex_);
     Version* input_version = cfd->current();
     edit.SetColumnFamily(cfd->GetID());
+
+    struct AutoReleasePendingOutputs {
+      std::list<uint64_t>::iterator pending_outputs_inserted_elem;
+      DBImpl* db_impl;
+
+      ~AutoReleasePendingOutputs() {
+        db_impl->ReleaseFileNumberFromPendingOutputs(
+            pending_outputs_inserted_elem);
+      }
+    } auto_release_pending_outputs = {
+        CaptureCurrentFileNumberInPendingOutputs(), this
+    };
 
     auto* vstorage = input_version->storage_info();
     const MutableCFOptions& mutable_cf_options =
@@ -2604,7 +2616,7 @@ Status DBImpl::DeleteFilesInRanges(ColumnFamilyHandle* column_family,
               {}, i, vstorage->LevelFiles(i)[0]->fd.GetPathId(), vstorage, cfd,
               mutable_cf_options, &edit, nullptr, nullptr, &deleted_files);
           if (!status.ok()) {
-            return status;
+            break;
           }
         } else {
           for (auto f : vstorage->LevelFiles(i)) {
@@ -2616,13 +2628,15 @@ Status DBImpl::DeleteFilesInRanges(ColumnFamilyHandle* column_family,
                                        vstorage, cfd, mutable_cf_options, &edit,
                                        nullptr, nullptr, &deleted_files);
             if (!status.ok()) {
-              return status;
+              break;
             }
           }
         }
       }
-      for (auto f : deleted_files) {
-        f->being_compacted = true;
+      if (status.ok()) {
+        for (auto f : deleted_files) {
+          f->being_compacted = true;
+        }
       }
     } else {
       for (size_t r = 0; r < n; r++) {
@@ -2678,9 +2692,10 @@ Status DBImpl::DeleteFilesInRanges(ColumnFamilyHandle* column_family,
         }
       }
     }
-    if (edit.GetNewFiles().empty() && edit.GetDeletedFiles().empty()) {
+    if (!status.ok() ||
+        (edit.GetNewFiles().empty() && edit.GetDeletedFiles().empty())) {
       job_context.Clean();
-      return Status::OK();
+      return status;
     }
     input_version->Ref();
     status = versions_->LogAndApply(cfd, *cfd->GetLatestMutableCFOptions(),
