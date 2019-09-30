@@ -185,6 +185,8 @@ GetoptDone:
     taskpool_mutex.unlock();
     if (!t) {
       t = new KVTask(line.p, line.n);
+    } else {
+      t->key.assign(line.p, line.n);
     }
     pipeline.enqueue(t);
   }
