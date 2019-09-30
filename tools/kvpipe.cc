@@ -135,6 +135,13 @@ GetoptDone:
   pipeline.setEUType(euType);
   pipeline.setQueueSize(queue_size);
   pipeline.setLogLevel(log_level);
+  valvec<std::unique_ptr<PipelineTask> > taskpool(4096);
+  std::mutex taskpool_mutex;
+  pipeline.setDestroyTask([&](PipelineTask* task) {
+    taskpool_mutex.lock();
+    taskpool.emplace_back(task);
+    taskpool_mutex.unlock();
+  });
   pipeline | std::make_tuple(ncon, nfib, [db](PipelineTask* ptask) {
     KVTask* task = static_cast<KVTask*>(ptask);
     rocksdb::ReadOptions rdopt;
@@ -170,7 +177,15 @@ GetoptDone:
   LineBuf line;
   while (line.getline(stdin) > 0) {
     line.chomp();
-    auto t = new KVTask(line.p, line.n);
+    taskpool_mutex.lock();
+    KVTask* t = nullptr;
+    if (!taskpool.empty()) {
+      t = static_cast<KVTask*>(taskpool.pop_val().release());
+    }
+    taskpool_mutex.unlock();
+    if (!t) {
+      t = new KVTask(line.p, line.n);
+    }
     pipeline.enqueue(t);
   }
   pipeline.stop();
