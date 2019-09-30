@@ -621,11 +621,7 @@ Compaction* CompactionPicker::PickGarbageCollection(
       MaxFileSizeForLevel(mutable_cf_options, 1, ioptions_.compaction_style);
   size_t small_file_size = max_file_size_for_leval / 8;
   std::vector<FileInfo> blob_vec;
-  for (auto f : vstorage->LevelFiles(-1)) {
-    if (f->is_skip_gc || f->being_compacted) {
-      continue;
-    }
-    FileInfo info = {f};
+  auto get_num_entries = [&](FileMetaData* f)->uint64_t {
     if (f->prop.num_entries == 0) {
       std::shared_ptr<const TableProperties> tp;
       auto s = table_cache_->GetTableProperties(
@@ -636,20 +632,45 @@ Compaction* CompactionPicker::PickGarbageCollection(
             log_buffer,
             "[%s] CompactionPicker::PickGarbageCollection "
             "GetTableProperties fail\n", cf_name.c_str(), s.ToString().c_str());
-        continue;
+        return 0;
       }
-      info.num_entries = tp->num_entries;
+      return tp->num_entries;
     } else {
-      info.num_entries = f->prop.num_entries;
+      return f->prop.num_entries;
     }
+  };
+  FileMetaData* min_file_number_meta = nullptr;
+  for (auto f : vstorage->LevelFiles(-1)) {
+    if (f->is_skip_gc || f->being_compacted) {
+      continue;
+    }
+    FileInfo info = {f};
+    info.num_entries = get_num_entries(f);
     double gc_ratio = std::min(1., 1. * f->num_antiquation / info.num_entries);
     info.estimated_size =
         static_cast<uint64_t>(f->fd.file_size * (1 - gc_ratio));
     if (gc_ratio >= mutable_cf_options.blob_gc_ratio ||
         info.estimated_size <= small_file_size || f->marked_for_compaction) {
-      info.score = std::max(gc_ratio, mutable_cf_options.blob_gc_ratio);
+      if (f->marked_for_compaction) {
+        info.score = std::max(gc_ratio, mutable_cf_options.blob_gc_ratio);
+      } else {
+        info.score = gc_ratio;
+      }
       blob_vec.push_back(info);
+    } else if (min_file_number_meta == nullptr ||
+               f->fd.GetNumber() < min_file_number_meta->fd.GetNumber()) {
+      min_file_number_meta = f;
     }
+  }
+  if (!blob_vec.empty() && min_file_number_meta != nullptr) {
+    FileInfo info = {min_file_number_meta};
+    info.num_entries = get_num_entries(min_file_number_meta);
+    double gc_ratio =
+        std::min(1., 1. * info.f->num_antiquation / info.num_entries);
+    info.estimated_size =
+        static_cast<uint64_t>(info.f->fd.file_size * (1 - gc_ratio));
+    info.score = std::max(gc_ratio, mutable_cf_options.blob_gc_ratio);
+    blob_vec.push_back(info);
   }
   std::sort(blob_vec.begin(), blob_vec.end(), [](const FileInfo& l,
                                                  const FileInfo& r) {

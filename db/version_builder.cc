@@ -91,6 +91,7 @@ class VersionBuilder::Rep {
     size_t skip_gc_version;
     int level;
     FileMetaData* f;
+    uint64_t delta_antiquation;
   };
   struct InheritanceItem {
     size_t count;
@@ -107,7 +108,6 @@ class VersionBuilder::Rep {
   size_t dependence_version_;
   std::unordered_map<uint64_t, DependenceItem> dependence_map_;
   std::unordered_map<uint64_t, InheritanceItem> inheritance_counter_;
-  std::unordered_map<uint64_t, uint64_t> delta_antiquation_;
   // Store states of levels larger than num_levels_. We do this instead of
   // storing them in levels_ to avoid regression in case there are no files
   // on invalid levels. The version is not consistent if in the end the files
@@ -140,7 +140,9 @@ class VersionBuilder::Rep {
 
   ~Rep() {
     for (auto& pair : dependence_map_) {
-      UnrefFile(pair.second.f);
+      if (pair.second.f != nullptr) {
+        UnrefFile(pair.second.f);
+      }
     }
     delete[] --levels_;
   }
@@ -185,14 +187,18 @@ class VersionBuilder::Rep {
 
   void PutSst(FileMetaData* f, int level) {
     auto ib = dependence_map_.emplace(f->fd.GetNumber(),
-                                      DependenceItem{0, 0, level, f});
+                                      DependenceItem{0, 0, level, f, 0});
     f->refs++;
     if (ib.second) {
       PutInheritance(f);
     } else {
       auto& item = ib.first->second;
       item.level = level;
-      UnrefFile(item.f);
+      if (item.f == nullptr) {
+        PutInheritance(f);
+      } else {
+        UnrefFile(item.f);
+      }
       item.f = f;
     }
     if (level >= 0) {
@@ -204,12 +210,20 @@ class VersionBuilder::Rep {
 
   void PutSst(FileMetaData* f) {
     auto ib = dependence_map_.emplace(f->fd.GetNumber(),
-                                      DependenceItem{0, 0, -1, f});
+                                      DependenceItem{0, 0, -1, f, 0});
     if (ib.second) {
       f->refs++;
       PutInheritance(f);
     } else {
-      assert(!ib.first->second.f->being_compacted);
+      auto& item = ib.first->second;
+      if (item.f == nullptr) {
+        f->refs++;
+        item.level = -1;
+        PutInheritance(f);
+        item.f = f;
+      } else {
+        assert(!ib.first->second.f->being_compacted);
+      }
     }
   }
 
@@ -240,7 +254,11 @@ class VersionBuilder::Rep {
       item.dependence_version = dependence_version_;
       if (recursive) {
         item.skip_gc_version = dependence_version_;
-        SetDependence(item.f, item.f->prop.purpose == kMapSst, finish);
+        if (item.f != nullptr) {
+          SetDependence(item.f, item.f->prop.purpose == kMapSst, finish);
+        } else {
+          assert(!finish);
+        }
       }
     }
   }
@@ -248,17 +266,6 @@ class VersionBuilder::Rep {
   void CaclDependence(bool finish) {
     if (++dependence_version_ % 128 != 0 && !finish) {
       return;
-    } else {
-      std::unordered_map<uint64_t, uint64_t> new_delta_antiquation;
-      for (auto pair : delta_antiquation_) {
-        auto find = inheritance_counter_.find(pair.first);
-        if (find != inheritance_counter_.end()) {
-          new_delta_antiquation[find->second.file_number] += pair.second;
-        } else {
-          new_delta_antiquation[pair.first] += pair.second;
-        }
-      }
-      delta_antiquation_.swap(new_delta_antiquation);
     }
     for (auto file_number : active_sst_) {
       assert(inheritance_counter_.count(file_number) == 0);
@@ -266,18 +273,31 @@ class VersionBuilder::Rep {
       auto& item = dependence_map_[file_number];
       assert(item.level >= 0);
       item.skip_gc_version = dependence_version_;
+      assert(item.f != nullptr);
       SetDependence(item.f, item.f->prop.purpose == kMapSst, finish);
     }
+    auto keep_item = [&](DependenceItem& item) {
+      if (finish) {
+        return item.f != nullptr &&
+               (item.level >= 0 ||
+                item.dependence_version == dependence_version_);
+      } else {
+        return item.f == nullptr || item.level >= 0 ||
+               item.dependence_version == dependence_version_ ||
+               (!item.f->prop.inheritance_chain.empty() &&
+                inheritance_counter_.count(item.f->fd.GetNumber()) == 0);
+      }
+    };
     for (auto it = dependence_map_.begin(); it != dependence_map_.end(); ) {
       auto& item = it->second;
-      if (item.dependence_version == dependence_version_ || item.level >= 0 ||
-          (!finish && !item.f->prop.inheritance_chain.empty() &&
-           inheritance_counter_.count(item.f->fd.GetNumber()) == 0)) {
+      if (keep_item(item)) {
         assert(inheritance_counter_.count(item.f->fd.GetNumber()) == 0);
         ++it;
       } else {
-        DelInheritance(item.f);
-        UnrefFile(item.f);
+        if (item.f != nullptr) {
+          DelInheritance(item.f);
+          UnrefFile(item.f);
+        }
         it = dependence_map_.erase(it);
       }
     }
@@ -288,10 +308,9 @@ class VersionBuilder::Rep {
   }
 
   void ApplyAntiquation(FileMetaData* f) {
-    auto find = delta_antiquation_.find(f->fd.GetNumber());
-    if (find != delta_antiquation_.end()) {
-      f->num_antiquation += find->second;
-      delta_antiquation_.erase(find);
+    auto find = dependence_map_.find(f->fd.GetNumber());
+    if (find != dependence_map_.end()) {
+      f->num_antiquation += find->second.delta_antiquation;
     }
   }
 
@@ -487,7 +506,13 @@ class VersionBuilder::Rep {
     }
 
     for (auto& pair : edit->GetAntiquation()) {
-      delta_antiquation_[pair.first] += pair.second;
+      auto find = dependence_map_.find(TransFileNumber(pair.first));
+      if (find == dependence_map_.end()) {
+        dependence_map_.emplace(pair.first,
+                                DependenceItem{0, 0, 0, nullptr, pair.second});
+      } else {
+        find->second.delta_antiquation += pair.second;
+      }
     }
 
     // Remove files
