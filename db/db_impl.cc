@@ -1349,19 +1349,21 @@ Status DBImpl::GetImpl(const ReadOptions& read_options,
 }
 
 struct SimpleFiberTls {
+  static constexpr intptr_t MAX_QUEUE_LEN = 256;
   typedef std::function<void()> task_t;
   intptr_t fiber_count = 0;
   intptr_t pending_count = 0;
   terark::FiberYield m_fy;
   boost::fibers::buffered_channel<task_t> channel;
 
-  SimpleFiberTls(terark::FiberYield fy)
-    : m_fy(fy), channel(256)
+  SimpleFiberTls(boost::fibers::context** activepp)
+    : m_fy(activepp), channel(MAX_QUEUE_LEN)
   {
   }
 
   void update_fiber_count(intptr_t count) {
-    count = std::max<intptr_t>(1, count);
+    count = std::max<intptr_t>(count, 1);
+    count = std::min<intptr_t>(count, +MAX_QUEUE_LEN);
     using namespace boost::fibers;
     for (intptr_t i = fiber_count; i < count; ++i) {
       fiber([this,i](){
@@ -1423,7 +1425,7 @@ struct SimpleFiberTls {
 
 // ensure fiber thread locals are constructed first
 // because SimpleFiberTls.channel must be destructed first
-static thread_local SimpleFiberTls gt_fibers(terark::FiberYield(1));
+static thread_local SimpleFiberTls gt_fibers(boost::fibers::context::active_pp());
 
 std::vector<Status> DBImpl::MultiGet(
     const ReadOptions& read_options,
