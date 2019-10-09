@@ -714,7 +714,7 @@ Compaction* CompactionPicker::PickGarbageCollection(
   params.compaction_type = kGarbageCollection;
   params.compaction_reason = CompactionReason::kGarbageCollection;
 
-  return RegisterCompaction(new Compaction(std::move(params)));
+  return new Compaction(std::move(params));
 }
 
 void CompactionPicker::InitFilesBeingCompact(
@@ -1686,8 +1686,8 @@ Compaction* LevelCompactionPicker::PickCompaction(
                                  mutable_cf_options, ioptions_);
   auto c = builder.PickCompaction();
   if (c == nullptr) {
-    c = PickGarbageCollection(cf_name, mutable_cf_options, vstorage,
-                              log_buffer);
+    c = RegisterCompaction(PickGarbageCollection(cf_name, mutable_cf_options,
+                                                 vstorage, log_buffer));
   }
   return c;
 }

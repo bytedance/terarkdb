@@ -606,6 +606,7 @@ bool DBIter::MergeValuesNewToOld() {
         status_ = s;
         return false;
       }
+      val.clear();
       value_.pin_resource();
       // iter_ is positioned after put
       iter_->Next();

@@ -1579,6 +1579,9 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
                                                &create_iter, shutting_down_);
 
   Status status = OpenCompactionOutputFile(sub_compact);
+  if (!status.ok()) {
+    return;
+  }
   sub_compact->builder->SetSecondPassIterator(&second_pass_iter);
 
   Version* input_version = sub_compact->compaction->input_version();

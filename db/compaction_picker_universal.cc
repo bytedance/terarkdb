@@ -349,7 +349,7 @@ Compaction* UniversalCompactionPicker::PickCompaction(
       int reduce_sorted_run_target = std::numeric_limits<int>::max();
       if (!has_map_compaction &&
           (c = PickTrivialMoveCompaction(cf_name, mutable_cf_options, vstorage,
-                                         log_buffer)) == nullptr &&
+                                         sorted_runs, log_buffer)) == nullptr &&
           table_cache_ != nullptr) {
 
         int min_sorted_run_size = std::max(1, ioptions_.num_levels - 1);
@@ -474,38 +474,40 @@ Compaction* UniversalCompactionPicker::PickCompaction(
 
 // validate that all the chosen files of L0 are non overlapping in time
 #ifndef NDEBUG
-  SequenceNumber prev_smallest_seqno = 0U;
-  bool is_first = true;
+  if (c->compaction_type() != kGarbageCollection) {
+    SequenceNumber prev_smallest_seqno = 0U;
+    bool is_first = true;
 
-  size_t level_index = 0U;
-  if (c->start_level() == 0) {
-    for (auto f : *c->inputs(0)) {
-      assert(f->fd.smallest_seqno <= f->fd.largest_seqno);
-      if (is_first) {
-        is_first = false;
+    size_t level_index = 0U;
+    if (c->start_level() == 0) {
+      for (auto f : *c->inputs(0)) {
+        assert(f->fd.smallest_seqno <= f->fd.largest_seqno);
+        if (is_first) {
+          is_first = false;
+        }
+        prev_smallest_seqno = f->fd.smallest_seqno;
       }
-      prev_smallest_seqno = f->fd.smallest_seqno;
+      level_index = 1U;
     }
-    level_index = 1U;
-  }
-  for (; level_index < c->num_input_levels(); level_index++) {
-    if (c->num_input_files(level_index) != 0) {
-      SequenceNumber smallest_seqno = 0U;
-      SequenceNumber largest_seqno = 0U;
-      GetSmallestLargestSeqno(*(c->inputs(level_index)), &smallest_seqno,
-                              &largest_seqno);
-      if (is_first) {
-        is_first = false;
-      } else if (prev_smallest_seqno > 0) {
-        // A level is considered as the bottommost level if there are
-        // no files in higher levels or if files in higher levels do
-        // not overlap with the files being compacted. Sequence numbers
-        // of files in bottommost level can be set to 0 to help
-        // compression. As a result, the following assert may not hold
-        // if the prev_smallest_seqno is 0.
-        assert(prev_smallest_seqno > largest_seqno);
+    for (; level_index < c->num_input_levels(); level_index++) {
+      if (c->num_input_files(level_index) != 0) {
+        SequenceNumber smallest_seqno = 0U;
+        SequenceNumber largest_seqno = 0U;
+        GetSmallestLargestSeqno(*c->inputs(level_index), &smallest_seqno,
+                                &largest_seqno);
+        if (is_first) {
+          is_first = false;
+        } else if (prev_smallest_seqno > 0) {
+          // A level is considered as the bottommost level if there are
+          // no files in higher levels or if files in higher levels do
+          // not overlap with the files being compacted. Sequence numbers
+          // of files in bottommost level can be set to 0 to help
+          // compression. As a result, the following assert may not hold
+          // if the prev_smallest_seqno is 0.
+          assert(prev_smallest_seqno > largest_seqno);
+        }
+        prev_smallest_seqno = smallest_seqno;
       }
-      prev_smallest_seqno = smallest_seqno;
     }
   }
 #endif
@@ -1264,16 +1266,16 @@ Compaction* UniversalCompactionPicker::PickDeleteTriggeredCompaction(
 
 Compaction* UniversalCompactionPicker::PickTrivialMoveCompaction(
     const std::string& /*cf_name*/, const MutableCFOptions& mutable_cf_options,
-    VersionStorageInfo* vstorage, LogBuffer* /*log_buffer*/) {
+    VersionStorageInfo* vstorage, const std::vector<SortedRun>& sorted_runs,
+    LogBuffer* /*log_buffer*/) {
   if (!mutable_cf_options.compaction_options_universal.allow_trivial_move) {
     return nullptr;
   }
-  int output_level = vstorage->num_levels() - 1;
+  int max_output_level = vstorage->num_levels() - 1;
   // last level is reserved for the files ingested behind
   if (ioptions_.allow_ingest_behind) {
-    --output_level;
+    --max_output_level;
   }
-  int start_level = 0;
   auto is_compaction_output_level = [&](int l) {
     for (auto c : compactions_in_progress_) {
       if (c->output_level() == l) {
@@ -1282,50 +1284,50 @@ Compaction* UniversalCompactionPicker::PickTrivialMoveCompaction(
     }
     return false;
   };
-  while (true) {
-    // found an empty level
-    for (; output_level >= 1; --output_level) {
-      if (vstorage->LevelFiles(output_level).empty() &&
-          !is_compaction_output_level(output_level)) {
+  int output_level = 0, start_level = -1;
+  for (auto rit = sorted_runs.rbegin(); rit != sorted_runs.rend(); ++rit) {
+    auto& sr = *rit;
+    if (!sr.being_compacted && !is_compaction_output_level(sr.level)) {
+
+      // found start level
+      start_level = sr.level;
+
+      for (int test_output_level = sr.level + 1;
+           test_output_level <= max_output_level; ++test_output_level) {
+
+        if (vstorage->LevelFiles(test_output_level).empty() &&
+            !is_compaction_output_level(test_output_level)) {
+          // found output level
+          output_level = test_output_level;
+        } else {
+          break;
+        }
+
+      }
+      if (output_level > 0) {
         break;
       }
+
     }
-    if (output_level < 1) {
-      return nullptr;
-    }
-    bool found_start_level = false;
-    // found an non empty level
-    for (start_level = output_level - 1; start_level > 0; --start_level) {
-      if (is_compaction_output_level(start_level)) {
-        break;
-      }
-      if (!vstorage->LevelFiles(start_level).empty()) {
-        found_start_level = true;
-        break;
-      }
-    }
-    if (start_level == 0) {
-      // will move lv0 last sst
+    if (sr.level == 0) {
       break;
     }
-    if (found_start_level &&
-        !AreFilesInCompaction(vstorage->LevelFiles(start_level))) {
-      break;
-    }
-    output_level = start_level - 1;
   }
+  if (output_level == 0) {
+    return nullptr;
+  }
+
   CompactionInputFiles inputs;
   inputs.level = start_level;
   uint32_t path_id = 0;
   if (start_level == 0) {
     auto& level0_files = vstorage->LevelFiles(0);
-    if (level0_files.empty() || level0_files.back()->being_compacted) {
-      return nullptr;
-    }
+    assert(!level0_files.empty() && !level0_files.back()->being_compacted);
     FileMetaData* meta = level0_files.back();
     inputs.files = {meta};
     path_id = meta->fd.GetPathId();
   } else {
+    assert(!AreFilesInCompaction(vstorage->LevelFiles(start_level)));
     inputs.files = vstorage->LevelFiles(start_level);
     path_id = inputs.files.front()->fd.GetPathId();
   }
