@@ -474,41 +474,87 @@ Compaction* UniversalCompactionPicker::PickCompaction(
 
 // validate that all the chosen files of L0 are non overlapping in time
 #ifndef NDEBUG
-  if (c->compaction_type() != kGarbageCollection) {
-    SequenceNumber prev_smallest_seqno = 0U;
-    bool is_first = true;
-
-    size_t level_index = 0U;
-    if (c->start_level() == 0) {
-      for (auto f : *c->inputs(0)) {
-        assert(f->fd.smallest_seqno <= f->fd.largest_seqno);
-        if (is_first) {
-          is_first = false;
-        }
-        prev_smallest_seqno = f->fd.smallest_seqno;
-      }
-      level_index = 1U;
+  if (c->compaction_type() != kGarbageCollection &&
+      c->compaction_reason() != CompactionReason::kCompositeAmplification) {
+    struct SortedRunDebug {
+      bool is_vstorage;
+      int level;
+      FileMetaData* f;
+      SequenceNumber smallest, largest;
+    };
+    std::vector<SortedRunDebug> sr_debug;
+    for (auto f : vstorage->LevelFiles(0)) {
+      sr_debug.emplace_back(SortedRunDebug{true, 0, f, f->fd.smallest_seqno,
+                                           f->fd.largest_seqno});
     }
-    for (; level_index < c->num_input_levels(); level_index++) {
-      if (c->num_input_files(level_index) != 0) {
+    for (int i = 1; i < vstorage->num_levels(); ++i) {
+      if (!vstorage->LevelFiles(i).empty()) {
         SequenceNumber smallest_seqno = 0U;
         SequenceNumber largest_seqno = 0U;
-        GetSmallestLargestSeqno(*c->inputs(level_index), &smallest_seqno,
+        GetSmallestLargestSeqno(vstorage->LevelFiles(i), &smallest_seqno,
                                 &largest_seqno);
-        if (is_first) {
-          is_first = false;
-        } else if (prev_smallest_seqno > 0) {
-          // A level is considered as the bottommost level if there are
-          // no files in higher levels or if files in higher levels do
-          // not overlap with the files being compacted. Sequence numbers
-          // of files in bottommost level can be set to 0 to help
-          // compression. As a result, the following assert may not hold
-          // if the prev_smallest_seqno is 0.
-          assert(prev_smallest_seqno > largest_seqno);
-        }
-        prev_smallest_seqno = smallest_seqno;
+        sr_debug.emplace_back(SortedRunDebug{true, i, nullptr, smallest_seqno,
+                                             largest_seqno});
       }
     }
+    SortedRunDebug o{false, c->output_level(), nullptr,
+                     std::numeric_limits<SequenceNumber>::max(), 0U};
+    for (auto& input_level : *c->inputs()) {
+      if (input_level.empty()) {
+        continue;
+      }
+      if (input_level.level == 0) {
+        for (auto f : input_level.files) {
+          auto it = sr_debug.begin();
+          for (; it != sr_debug.end(); ++it) {
+            if (!it->is_vstorage) {
+              continue;
+            }
+            if (it->f == f) {
+              break;
+            }
+          }
+          assert(it != sr_debug.end());
+          o.smallest = std::min(o.smallest, f->fd.smallest_seqno);
+          o.largest = std::max(o.largest, f->fd.largest_seqno);
+          sr_debug.erase(it);
+        }
+      } else {
+        auto it = sr_debug.begin();
+        for (; it != sr_debug.end(); ++it) {
+          if (!it->is_vstorage) {
+            continue;
+          }
+          if (it->level == input_level.level) {
+            break;
+          }
+        }
+        assert(it != sr_debug.end());
+        assert(vstorage->LevelFiles(input_level.level).size() ==
+               input_level.size());
+        assert(input_level.files.end() ==
+               std::mismatch(
+                   input_level.files.begin(), input_level.files.end(),
+                   vstorage->LevelFiles(input_level.level).begin()).first);
+        o.smallest = std::min(o.smallest, it->smallest);
+        o.largest = std::max(o.largest, it->largest);
+        sr_debug.erase(it);
+      }
+    }
+    assert(o.smallest != std::numeric_limits<SequenceNumber>::max());
+    sr_debug.emplace_back(o);
+    std::sort(sr_debug.begin(), sr_debug.end(),
+              [](SortedRunDebug& l, SortedRunDebug& r) {
+                return l.smallest > r.smallest;
+              });
+    assert(std::is_sorted(sr_debug.begin(), sr_debug.end(),
+                          [](SortedRunDebug& l, SortedRunDebug& r) {
+                            return l.largest > r.largest;
+                          }));
+    assert(std::is_sorted(sr_debug.begin(), sr_debug.end(),
+                          [](SortedRunDebug& l, SortedRunDebug& r) {
+                            return l.level < r.level;
+                          }));
   }
 #endif
   // update statistics
