@@ -381,8 +381,8 @@ class VersionBuilder::Rep {
 
         auto exising = levels_[level].added_files.find(number);
         if (exising != levels_[level].added_files.end()) {
-          levels_[level].added_files.erase(exising);
           DelSst(exising->second);
+          levels_[level].added_files.erase(exising);
         }
       } else {
         auto exising = invalid_levels_[level].find(number);
