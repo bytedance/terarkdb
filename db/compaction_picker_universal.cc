@@ -497,6 +497,14 @@ Compaction* UniversalCompactionPicker::PickCompaction(
                                              largest_seqno});
       }
     }
+    assert(std::is_sorted(sr_debug.begin(), sr_debug.end(),
+                          [](SortedRunDebug& l, SortedRunDebug& r) {
+                            return l.smallest > r.smallest;
+                          }));
+    assert(std::is_sorted(sr_debug.begin(), sr_debug.end(),
+                          [](SortedRunDebug& l, SortedRunDebug& r) {
+                            return l.largest > r.largest;
+                          }));
     SortedRunDebug o{false, c->output_level(), nullptr,
                      std::numeric_limits<SequenceNumber>::max(), 0U};
     for (auto& input_level : *c->inputs()) {

@@ -420,6 +420,7 @@ class MapSstIterator final : public InternalIterator {
       seek_target = smallest_key_;
       include = include_smallest_;
     } else if (icomp.Compare(target, largest_key_) == 0 && !include_largest_) {
+      first_level_value_.clear();
       first_level_iter_->Next();
       if (!InitFirstLevelIter()) {
         assert(min_heap_.empty());
@@ -430,6 +431,7 @@ class MapSstIterator final : public InternalIterator {
     }
     InitSecondLevelMinHeap(seek_target, include);
     if (min_heap_.empty()) {
+      first_level_value_.clear();
       first_level_iter_->Next();
       if (InitFirstLevelIter()) {
         InitSecondLevelMinHeap(smallest_key_, include_smallest_);
@@ -453,6 +455,7 @@ class MapSstIterator final : public InternalIterator {
     bool include = true;
     // include_smallest ? cmp_result > 0 : cmp_result >= 0
     if (icomp.Compare(smallest_key_, target) >= include_smallest_) {
+      first_level_value_.clear();
       first_level_iter_->Prev();
       if (!InitFirstLevelIter()) {
         assert(max_heap_.empty());
@@ -465,6 +468,7 @@ class MapSstIterator final : public InternalIterator {
     }
     InitSecondLevelMaxHeap(seek_target, include);
     if (max_heap_.empty()) {
+      first_level_value_.clear();
       first_level_iter_->Prev();
       if (InitFirstLevelIter()) {
         InitSecondLevelMaxHeap(largest_key_, include_largest_);

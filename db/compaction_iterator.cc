@@ -207,7 +207,9 @@ void CompactionIterator::ResetRecordCounts() {
 
 void CompactionIterator::SeekToFirst() {
   NextFromInput();
-  PrepareOutput();
+  if (valid_) {
+    PrepareOutput();
+  }
 }
 
 void CompactionIterator::Next() {
