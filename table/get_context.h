@@ -67,6 +67,7 @@ class GetContext {
                  bool* matched);
 
   GetState State() const { return state_; }
+  Status&& CorruptReason()&& { return std::move(corrupt_); }
 
   SequenceNumber* max_covering_tombstone_seq() {
     return max_covering_tombstone_seq_;
@@ -112,6 +113,7 @@ class GetContext {
   Slice user_key_;
   LazySlice* lazy_val_;
   bool* value_found_;  // Is value set correctly? Used by KeyMayExist
+  Status corrupt_;
   MergeContext* merge_context_;
   const SeparateHelper* separate_helper_;
   SequenceNumber* max_covering_tombstone_seq_;

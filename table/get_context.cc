@@ -174,15 +174,21 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
       type = kTypeRangeDeletion;
       value.clear();
     }
+    auto OK = [this](Status&& s) {
+      if (LIKELY(s.ok())) {
+        return true;
+      }
+      corrupt_ = std::move(s);
+      state_ = kCorrupt;
+      return false;
+    };
     switch (type) {
       case kTypeValueIndex:
         if (separate_helper_ == nullptr) {
           state_ = kFound;
           is_index_ = true;
           if (LIKELY(lazy_val_ != nullptr)) {
-            if (!value.decode_destructive(*lazy_val_).ok()) {
-              state_ = kCorrupt;
-            }
+            OK(value.decode_destructive(*lazy_val_));
           }
           return false;
         }
@@ -203,22 +209,18 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
         if (kNotFound == state_) {
           state_ = kFound;
           if (LIKELY(lazy_val_ != nullptr)) {
-            if (!value.decode_destructive(*lazy_val_).ok()) {
-              state_ = kCorrupt;
-            }
+            OK(value.decode_destructive(*lazy_val_));
           }
         } else if (kMerge == state_) {
           assert(merge_operator_ != nullptr);
           state_ = kFound;
           if (LIKELY(lazy_val_ != nullptr)) {
-            Status merge_status = MergeHelper::TimedFullMerge(
+            if (OK(MergeHelper::TimedFullMerge(
                 merge_operator_, user_key_, &value,
                 merge_context_->GetOperands(), lazy_val_, logger_, statistics_,
-                env_);
-            if (!merge_status.ok()) {
-              state_ = kCorrupt;
+                env_))) {
+              lazy_val_->pin_resource();
             }
-            lazy_val_->pin_resource();
           }
         }
         return false;
@@ -234,14 +236,12 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
         } else if (kMerge == state_) {
           state_ = kFound;
           if (LIKELY(lazy_val_ != nullptr)) {
-            Status merge_status = MergeHelper::TimedFullMerge(
+            if (OK(MergeHelper::TimedFullMerge(
                 merge_operator_, user_key_, nullptr,
                 merge_context_->GetOperands(), lazy_val_, logger_, statistics_,
-                env_);
-            if (!merge_status.ok()) {
-              state_ = kCorrupt;
+                env_))) {
+              lazy_val_->pin_resource();
             }
-            lazy_val_->pin_resource();
           }
         }
         return false;
@@ -251,9 +251,7 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
           state_ = kMerge;
           is_index_ = true;
           if (LIKELY(lazy_val_ != nullptr)) {
-            if (!value.decode_destructive(*lazy_val_).ok()) {
-              state_ = kCorrupt;
-            }
+            OK(value.decode_destructive(*lazy_val_));
           }
           return false;
         }
@@ -278,14 +276,12 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
                 merge_context_->GetOperandsDirectionBackward())) {
           state_ = kFound;
           if (LIKELY(lazy_val_ != nullptr)) {
-            Status merge_status = MergeHelper::TimedFullMerge(
+            if (OK(MergeHelper::TimedFullMerge(
                 merge_operator_, user_key_, nullptr,
                 merge_context_->GetOperands(), lazy_val_, logger_, statistics_,
-                env_);
-            if (!merge_status.ok()) {
-              state_ = kCorrupt;
+                env_))) {
+              lazy_val_->pin_resource();
             }
-            lazy_val_->pin_resource();
           }
           return false;
         }

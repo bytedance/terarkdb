@@ -48,6 +48,8 @@ Status CompactedDBImpl::Get(const ReadOptions& options, ColumnFamilyHandle*,
                                                    &get_context, nullptr);
   if (get_context.State() == GetContext::kFound) {
     return value->inplace_decode();
+  } else if (get_context.State() == GetContext::kCorrupt) {
+    return std::move(get_context).CorruptReason();
   }
   return Status::NotFound();
 }
@@ -82,6 +84,8 @@ std::vector<Status> CompactedDBImpl::MultiGet(const ReadOptions& options,
       if (s.ok()) {
         if (get_context.State() == GetContext::kFound) {
           statuses[idx] = Status::OK();
+        } else if (get_context.State() == GetContext::kCorrupt) {
+          statuses[idx] = std::move(get_context).CorruptReason();
         }
       } else {
         statuses[idx] = std::move(s);

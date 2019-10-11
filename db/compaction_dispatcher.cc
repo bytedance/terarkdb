@@ -555,7 +555,11 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
     if (context_seq != sequence ||
         (get_context.State() != GetContext::kFound &&
          get_context.State() != GetContext::kMerge)) {
-      return Status::Corruption("Separate value get fail");
+      if (get_context.State() == GetContext::kCorrupt) {
+        return std::move(get_context).CorruptReason();
+      } else {
+        return Status::Corruption("Separate value missing");
+      }
     }
     return Status::OK();
   };

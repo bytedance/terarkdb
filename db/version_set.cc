@@ -1227,7 +1227,11 @@ Status Version::inplace_decode(LazySlice* slice, LazySliceRep* rep) const {
   }
   if (context_seq != sequence || (get_context.State() != GetContext::kFound &&
                                   get_context.State() != GetContext::kMerge)) {
-    return Status::Corruption("Separate value get fail");
+    if (get_context.State() == GetContext::kCorrupt) {
+      return std::move(get_context).CorruptReason();
+    } else {
+      return Status::Corruption("Separate value missing");
+    }
   }
   return Status::OK();
 }
@@ -1337,7 +1341,7 @@ void Version::Get(const ReadOptions& read_options, const Slice& user_key,
         *status = Status::NotFound();
         return;
       case GetContext::kCorrupt:
-        *status = Status::Corruption("corrupted key for ", user_key);
+        *status = std::move(get_context).CorruptReason();
         return;
     }
     f = fp.GetNextFile();
@@ -1405,7 +1409,7 @@ void Version::GetKey(const Slice& user_key, const Slice& ikey, Status* status,
         *status = Status::NotFound();
         return;
       case GetContext::kCorrupt:
-        *status = Status::Corruption("corrupted key for ", user_key);
+        *status = std::move(get_context).CorruptReason();
         return;
     }
     f = fp.GetNextFile();
