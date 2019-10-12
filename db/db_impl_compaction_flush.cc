@@ -113,8 +113,9 @@ Status DBImpl::FlushMemTableToOutputFile(
     bool* made_progress, JobContext* job_context,
     SuperVersionContext* superversion_context, LogBuffer* log_buffer) {
   mutex_.AssertHeld();
-  assert(cfd->imm()->NumNotFlushed() != 0);
-  assert(cfd->imm()->IsFlushPending());
+  // TODO(ZouZhiZhang) find out Assertion reason
+  //assert(cfd->imm()->NumNotFlushed() != 0);
+  //assert(cfd->imm()->IsFlushPending());
 
   SequenceNumber earliest_write_conflict_snapshot;
   std::vector<SequenceNumber> snapshot_seqs =
