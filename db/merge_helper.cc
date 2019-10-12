@@ -74,8 +74,9 @@ Status MergeHelper::TimedFullMerge(const MergeOperator* merge_operator,
                                                     logger);
   MergeOperator::MergeOperationOutput merge_out(*result, tmp_result_operand);
   {
+    // too heavy
     // Setup to time the merge
-    StopWatchNano timer(env, statistics != nullptr);
+    //StopWatchNano timer(env, statistics != nullptr);
     PERF_TIMER_GUARD(merge_operator_time_nanos);
 
     // Do the merge
@@ -90,8 +91,8 @@ Status MergeHelper::TimedFullMerge(const MergeOperator* merge_operator,
       *result = std::move(operands[tmp_result_operand_index]);
     }
 
-    RecordTick(statistics, MERGE_OPERATION_TOTAL_TIME,
-               statistics ? timer.ElapsedNanos() : 0);
+    //RecordTick(statistics, MERGE_OPERATION_TOTAL_TIME,
+    //           statistics ? timer.ElapsedNanos() : 0);
   }
 
   if (!success) {
@@ -346,13 +347,14 @@ Status MergeHelper::MergeUntil(
       bool merge_success = false;
       LazySlice merge_result;
       {
-        StopWatchNano timer(env_, stats_ != nullptr);
+        // too heavy
+        //StopWatchNano timer(env_, stats_ != nullptr);
         PERF_TIMER_GUARD(merge_operator_time_nanos);
         merge_success = user_merge_operator_->PartialMergeMulti(
             orig_ikey.user_key, merge_context_.GetOperands(), &merge_result,
             logger_);
-        RecordTick(stats_, MERGE_OPERATION_TOTAL_TIME,
-                   stats_ ? timer.ElapsedNanosSafe() : 0);
+        //RecordTick(stats_, MERGE_OPERATION_TOTAL_TIME,
+        //           stats_ ? timer.ElapsedNanosSafe() : 0);
       }
       if (merge_success) {
         // Merging of operands (associative merge) was successful.

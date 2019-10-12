@@ -214,6 +214,8 @@ namespace {
 template<class T, class S>
 T* union_cast(S* src) {
   static_assert(sizeof(T) == sizeof(S), "");
+  static_assert(alignof(T) == alignof(S), "");
+
   union { S* s; T* t; } u;
   u.s = src;
   return u.t;
@@ -222,7 +224,7 @@ T* union_cast(S* src) {
 
 class DefaultLazySliceControllerImpl : public LazySliceController {
 public:
-  struct Rep {
+  struct alignas(LazySliceRep) Rep {
     char data[sizeof(LazySliceRep) - 1];
     uint8_t size;
   };

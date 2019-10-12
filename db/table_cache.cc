@@ -420,8 +420,8 @@ Status TableCache::Get(const ReadOptions& options,
           }
           assert(ExtractInternalKeyFooter(k) >
                  ExtractInternalKeyFooter(smallest_key));
-          // same user_key, shrink to smallest_key
           if (include_smallest) {
+            // shrink to smallest_key
             find_k = smallest_key;
           } else {
             uint64_t seq_type = ExtractInternalKeyFooter(smallest_key);
@@ -430,7 +430,7 @@ Status TableCache::Get(const ReadOptions& options,
               // k is out of smallest bound
               return false;
             }
-            // make find_k a bit greater than k
+            // make find_k a bit greater than smallest_key
             key_buffer.SetInternalKey(smallest_key, true);
             find_k = key_buffer.GetInternalKey();
             EncodeFixed64(
@@ -469,6 +469,7 @@ Status TableCache::Get(const ReadOptions& options,
             s = Status::Corruption("Map sst dependence missing");
             return false;
           }
+          assert(find->second->fd.GetNumber() == file_number);
           s = Get(options, internal_comparator,
                   *find->second, dependence_map, find_k, get_context,
                   prefix_extractor, file_read_hist, skip_filters, level);
