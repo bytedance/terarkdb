@@ -1588,9 +1588,15 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
   auto& dependence_map = input_version->storage_info()->dependence_map();
   IterKey iter_key;
   ParsedInternalKey ikey;
-  uint64_t input_count = 0;
+  struct {
+    uint64_t input = 0;
+    uint64_t garbage_type = 0;
+    uint64_t get_not_found = 0;
+    uint64_t get_mismatch = 0;
+    uint64_t file_number_mismatch = 0;
+  } counter;
   while (status.ok() && !cfd->IsDropped() && input->Valid()) {
-    ++input_count;
+    ++counter.input;
     Slice key = input->key();
     if (!ParseInternalKey(key, &ikey)) {
       status = Status::Corruption("Invalid InternalKey");
@@ -1598,6 +1604,7 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
     }
     do {
       if (ikey.type != kTypeValue && ikey.type != kTypeMerge) {
+        ++counter.garbage_type;
         break;
       }
       iter_key.SetInternalKey(ikey.user_key, ikey.sequence, kValueTypeForSeek);
@@ -1608,12 +1615,14 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
       input_version->GetKey(ikey.user_key, iter_key.GetInternalKey(), &s, &type,
                             &seq, &value);
       if (s.IsNotFound()) {
+        ++counter.get_not_found;
         break;
       } else if (!s.ok()) {
         status = std::move(s);
         break;
       } else if (seq != ikey.sequence ||
                  (type != kTypeValueIndex && type != kTypeMergeIndex)) {
+        ++counter.get_mismatch;
         break;
       }
       status = value.inplace_decode();
@@ -1628,6 +1637,7 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
       }
       value = input->value();
       if (find->second->fd.GetNumber() != value.file_number()) {
+        ++counter.file_number_mismatch;
         break;
       }
 
@@ -1682,9 +1692,13 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
     }
     ROCKS_LOG_INFO(db_options_.info_log,
                    "[%s] [JOB %d] Table #%" PRIu64 " GC: %" PRIu64
-                   " input, %" PRIu64 " clear, %"  PRIu64 " expectation",
+                   " input, %" PRIu64 " clear, %" PRIu64 " garbage type, %"
+                   PRIu64 " get not found, %" PRIu64 " get mismatch, %" PRIu64
+                   " file number mismatch, %"  PRIu64 " expectation",
                    cfd->GetName().c_str(), job_id_, meta.fd.GetNumber(),
-                   input_count, input_count - meta.prop.num_entries,
+                   counter.input, counter.input - meta.prop.num_entries,
+                   counter.garbage_type, counter.get_not_found,
+                   counter.get_mismatch, counter.file_number_mismatch,
                    expectation);
   }
 
