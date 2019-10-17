@@ -33,7 +33,7 @@
 #include "table/table_reader.h"
 #include "util/c_style_callback.h"
 
-#define ROCKS_VERSION_BUILDER_DEBUG 1
+#define ROCKS_VERSION_BUILDER_DEBUG 0
 
 namespace rocksdb {
 
@@ -812,30 +812,47 @@ void VersionBuilderDebugger::Verify(VersionBuilder::Rep* rep,
       edit->SetAntiquation(antiquation_map);
     }
   };
-  auto verify = [](VersionStorageInfo* l,
-                   VersionStorageInfo* r) -> const char* {
+  auto verify = [rep](VersionStorageInfo* l,
+                   VersionStorageInfo* r) -> std::string {
     auto eq = [](FileMetaData* fl, FileMetaData* fr) {
       return fl->fd.GetNumber() == fr->fd.GetNumber() &&
              fl->num_antiquation == fr->num_antiquation;
     };
     auto lt = [](FileMetaData* fl, FileMetaData* fr) {
-      return fl->fd.GetNumber() < fr->fd.GetNumber();
+      return fl->fd.GetNumber() != fr->fd.GetNumber() ?
+             fl->fd.GetNumber() < fr->fd.GetNumber() :
+             fl->num_antiquation < fr->num_antiquation;
+    };
+    using cmp = std::function<bool(FileMetaData*, FileMetaData*)>;
+    auto debug_show = [&](const std::vector<FileMetaData*>& l_sst,
+                          const std::vector<FileMetaData*>& r_sst,
+                          const cmp& c) {
+      std::vector<FileMetaData*> l_diff, r_diff;
+      std::set_difference(l_sst.begin(), l_sst.end(), r_sst.begin(),
+                          r_sst.end(), std::back_inserter(l_diff), c);
+      std::set_difference(r_sst.begin(), r_sst.end(), l_sst.begin(),
+                          l_sst.end(), std::back_inserter(r_diff), c);
+      fprintf(stderr, "Diff %zd, %zd", l_diff.size(), r_diff.size());
     };
     for (int i = 0; i < l->num_levels(); ++i) {
-      if (l->LevelFiles(i).size() != r->LevelFiles(i).size()) {
-        return "Level n";
-      }
-      if (std::mismatch(l->LevelFiles(i).begin(), l->LevelFiles(i).end(),
+      if (l->LevelFiles(i).size() != r->LevelFiles(i).size() ||
+          std::mismatch(l->LevelFiles(i).begin(), l->LevelFiles(i).end(),
                         r->LevelFiles(i).begin(), eq).first !=
           l->LevelFiles(i).end()) {
-        return "Level n";
+        debug_show(l->LevelFiles(i), r->LevelFiles(i),
+                   i == 0 ? rep->level_zero_cmp_ : rep->level_nonzero_cmp_);
+        char buffer[32];
+        snprintf(buffer, sizeof buffer, "Level %d", i);
+        return buffer;
       }
     }
     auto l_sst = l->LevelFiles(-1), r_sst = r->LevelFiles(-1);
     std::sort(l_sst.begin(), l_sst.end(), lt);
     std::sort(r_sst.begin(), r_sst.end(), lt);
-    if (std::mismatch(l_sst.begin(), l_sst.end(), r_sst.begin(), eq).first !=
+    if (l_sst.size() != r_sst.size() ||
+        std::mismatch(l_sst.begin(), l_sst.end(), r_sst.begin(), eq).first !=
         l_sst.end()) {
+      debug_show(l_sst, r_sst, lt);
       return "Level -1";
     }
     std::vector<std::pair<uint64_t, uint64_t>> l_dep, r_dep;
@@ -850,7 +867,7 @@ void VersionBuilderDebugger::Verify(VersionBuilder::Rep* rep,
     if (l_dep != r_dep) {
       return "Dependence";
     }
-    return nullptr;
+    return std::string();
   };
 
   bool has_err = false;
@@ -880,10 +897,11 @@ void VersionBuilderDebugger::Verify(VersionBuilder::Rep* rep,
     }
     rep_1.SaveTo(&vstorage_1);
     auto err = verify(vstorage, &vstorage_1);
-    if (err != nullptr) {
+    if (!err.empty()) {
       has_err = true;
-      fprintf(stderr, "VersionBuilder Verify fail : edit count = %zd, currnt "
-                      "edit = %zd, error = %s\n", pos.size() - 1, i - 1, err);
+      fprintf(stderr, "VersionBuilder debug verify fail : edit count = %zd, "
+                      "break = %zd, error = %s\n", pos.size() - 1, i,
+                      err.c_str());
     }
     for (int j = -1; j < vstorage->num_levels(); ++j) {
       for (auto f : vstorage_0.LevelFiles(j)) {

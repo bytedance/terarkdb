@@ -61,7 +61,9 @@ Status DBImplReadOnly::Get(const ReadOptions& read_options,
     RecordTick(stats_, MEMTABLE_MISS);
   }
   RecordTick(stats_, NUMBER_KEYS_READ);
-  s = lazy_val->inplace_decode();
+  if (s.ok()) {
+    s = lazy_val->inplace_decode();
+  }
   if (!s.ok()) {
     return s;
   }
