@@ -437,7 +437,7 @@ Compaction* UniversalCompactionPicker::PickCompaction(
                               log_buffer);
   }
 
-  if (c == nullptr) {
+  if (c == nullptr && !mutable_cf_options.enable_lazy_compaction) {
     if ((c = PickDeleteTriggeredCompaction(cf_name, mutable_cf_options,
                                            vstorage, score, sorted_runs,
                                            log_buffer)) != nullptr) {
@@ -539,8 +539,8 @@ Compaction* UniversalCompactionPicker::PickCompaction(
         }
         assert(it != sr_debug.end());
         assert(vstorage->LevelFiles(input_level.level).size() ==
-               input_level.size());
-        assert(input_level.files.end() ==
+               input_level.size() &&
+               input_level.files.end() ==
                std::mismatch(
                    input_level.files.begin(), input_level.files.end(),
                    vstorage->LevelFiles(input_level.level).begin()).first);

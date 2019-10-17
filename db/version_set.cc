@@ -1230,7 +1230,10 @@ Status Version::inplace_decode(LazySlice* slice, LazySliceRep* rep) const {
     if (get_context.State() == GetContext::kCorrupt) {
       return std::move(get_context).CorruptReason();
     } else {
-      return Status::Corruption("Separate value missing");
+      char buffer[64];
+      snprintf(buffer, sizeof buffer, "file number = %" PRIu64 ", sequence = %"
+               PRIu64, file_number, sequence);
+      return Status::Corruption("Separate value missing", buffer);
     }
   }
   return Status::OK();
