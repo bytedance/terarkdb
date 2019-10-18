@@ -330,6 +330,7 @@ class VersionBuilder::Rep {
       assert(dependence_map_.count(file_number) > 0);
       auto& item = dependence_map_[file_number];
       assert(item.level >= 0);
+      item.dependence_version = dependence_version_;
       item.skip_gc_version = dependence_version_;
       assert(item.f != nullptr);
       if (!item.f->prop.dependence.empty()) {
@@ -339,10 +340,9 @@ class VersionBuilder::Rep {
     auto keep_item = [&](DependenceItem& item) {
       if (finish) {
         return item.f != nullptr &&
-               (item.level >= 0 ||
-                item.dependence_version == dependence_version_);
+               item.dependence_version == dependence_version_;
       } else {
-        return item.f == nullptr || item.level >= 0 ||
+        return item.f == nullptr ||
                item.dependence_version == dependence_version_ ||
                (!item.f->prop.inheritance_chain.empty() &&
                 inheritance_counter_.count(item.f->fd.GetNumber()) == 0);
@@ -353,6 +353,22 @@ class VersionBuilder::Rep {
       if (keep_item(item)) {
         assert(item.f == nullptr ||
                inheritance_counter_.count(item.f->fd.GetNumber()) == 0);
+        if (finish) {
+          bool is_skip_gc = item.skip_gc_version == dependence_version_;
+          if (item.f->is_skip_gc != is_skip_gc) {
+            if (item.f->refs > 1 && item.f->is_skip_gc) {
+              // if item.f in other versions, that assigning item.f->is_skip_gc
+              // to false might let this item participate in GC before current
+              // version was installed. It will cause database corruption.
+              auto f = new FileMetaData(*item.f);
+              f->table_reader_handle = nullptr;
+              f->refs = 1;
+              UnrefFile(item.f);
+              item.f = f;
+            }
+            item.f->is_skip_gc = is_skip_gc;
+          }
+        }
         ++it;
       } else {
         if (item.f != nullptr) {
@@ -677,9 +693,7 @@ class VersionBuilder::Rep {
       if (find == dependence_map_.end()) {
         return false;
       }
-      auto& item = find->second;
-      file_metadata->is_skip_gc |= item.skip_gc_version == dependence_version_;
-      return item.dependence_version == dependence_version_;
+      return find->second.dependence_version == dependence_version_;
     };
     vstorage->ShrinkDependenceMap(&exists, c_style_callback(exists));
     vstorage->set_read_amplification(read_amp);

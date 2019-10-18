@@ -1935,12 +1935,10 @@ void VersionStorageInfo::AddFile(int level, FileMetaData* f, Logger* info_log) {
       assert(dependence_map_.count(file_number) == 0);
       dependence_map_.emplace(file_number, f);
     }
-    f->is_skip_gc = f->prop.purpose != 0;
   } else {
     if (f->prop.purpose != 0) {
       has_space_amplification_.emplace(level);
     }
-    f->is_skip_gc = true;
   }
 }
 
