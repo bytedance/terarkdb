@@ -617,9 +617,9 @@ Compaction* CompactionPicker::PickGarbageCollection(
     double score;
     uint64_t estimated_size;
   };
-  size_t max_file_size_for_leval =
+  size_t max_file_size_for_level =
       MaxFileSizeForLevel(mutable_cf_options, 1, ioptions_.compaction_style);
-  size_t small_file_size = max_file_size_for_leval / 8;
+  size_t small_file_size = max_file_size_for_level / 8;
   std::vector<FileInfo> blob_vec;
   auto get_num_entries = [&](FileMetaData* f)->uint64_t {
     if (f->prop.num_entries == 0) {
@@ -681,7 +681,7 @@ Compaction* CompactionPicker::PickGarbageCollection(
     return nullptr;
   }
 
-  size_t target_file_size = size_t(max_file_size_for_leval * 1.1);
+  size_t target_file_size = size_t(max_file_size_for_level * 1.1);
   CompactionInputFiles inputs;
   inputs.level = -1;
   uint64_t estimated_total_size = blob_vec.front().estimated_size;
