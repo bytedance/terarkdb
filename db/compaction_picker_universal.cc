@@ -436,7 +436,7 @@ Compaction* UniversalCompactionPicker::PickCompaction(
                                 sorted_runs, log_buffer);
   }
 
-  if (c == nullptr) {
+  if (c == nullptr && !mutable_cf_options.enable_lazy_compaction) {
     if ((c = PickDeleteTriggeredCompaction(cf_name, mutable_cf_options,
                                            vstorage, score, sorted_runs,
                                            log_buffer)) != nullptr) {
