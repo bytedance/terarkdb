@@ -2941,6 +2941,7 @@ VersionSet::VersionSet(const std::string& dbname,
       prev_log_number_(0),
       current_version_number_(0),
       manifest_file_size_(0),
+      manifest_edit_count_(0),
       seq_per_batch_(seq_per_batch),
       env_options_(storage_options) {}
 
@@ -3146,7 +3147,8 @@ Status VersionSet::ProcessManifestWrites(
 
   assert(pending_manifest_file_number_ == 0);
   if (!descriptor_log_ ||
-      manifest_file_size_ > db_options_->max_manifest_file_size) {
+      manifest_file_size_ > db_options_->max_manifest_file_size ||
+      manifest_edit_count_ > db_options_->max_manifest_edit_count) {
     pending_manifest_file_number_ = NewFileNumber();
     batch_edits.back()->SetNextFile(next_file_number_.load());
     new_descriptor_log = true;
@@ -3319,6 +3321,11 @@ Status VersionSet::ProcessManifestWrites(
     }
     manifest_file_number_ = pending_manifest_file_number_;
     manifest_file_size_ = new_manifest_file_size;
+    if (new_descriptor_log) {
+      manifest_edit_count_ = 0;
+    } else {
+      manifest_edit_count_ += batch_edits.size();
+    }
     prev_log_number_ = first_writer.edit_list.front()->prev_log_number_;
   } else {
     std::string version_edits;
@@ -3673,6 +3680,7 @@ Status VersionSet::Recover(
         new SequentialFileReader(std::move(manifest_file), manifest_filename));
   }
   uint64_t current_manifest_file_size;
+  uint64_t current_manifest_edit_count = 0;
   s = env_->GetFileSize(manifest_filename, &current_manifest_file_size);
   if (!s.ok()) {
     return s;
@@ -3721,6 +3729,7 @@ Status VersionSet::Recover(
       if (!s.ok()) {
         break;
       }
+      ++current_manifest_edit_count;
 
       if (edit.is_in_atomic_group_) {
         if (replay_buffer.empty()) {
@@ -3858,6 +3867,7 @@ Status VersionSet::Recover(
     }
 
     manifest_file_size_ = current_manifest_file_size;
+    manifest_edit_count_ = current_manifest_edit_count;
     next_file_number_.store(next_file + 1);
     last_allocated_sequence_ = last_sequence;
     last_published_sequence_ = last_sequence;

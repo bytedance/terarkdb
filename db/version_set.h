@@ -1120,6 +1120,9 @@ class VersionSet {
   // Current size of manifest file
   uint64_t manifest_file_size_;
 
+  // VersionEdit count of manifest file
+  uint64_t manifest_edit_count_;
+
   std::vector<ObsoleteFileInfo> obsolete_files_;
   std::vector<std::string> obsolete_manifests_;
 

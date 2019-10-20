@@ -2528,6 +2528,11 @@ void rocksdb_options_set_max_manifest_file_size(
   opt->rep.max_manifest_file_size = v;
 }
 
+void rocksdb_options_set_max_manifest_edit_count(
+    rocksdb_options_t* opt, size_t v) {
+  opt->rep.max_manifest_edit_count = v;
+}
+
 void rocksdb_options_set_table_cache_numshardbits(
     rocksdb_options_t* opt, int v) {
   opt->rep.table_cache_numshardbits = v;

@@ -290,6 +290,7 @@ void RandomInitDBOptions(DBOptions* db_opt, Random* rnd) {
   db_opt->delayed_write_rate = uint_max + rnd->Uniform(100000);
   db_opt->delete_obsolete_files_period_micros = uint_max + rnd->Uniform(100000);
   db_opt->max_manifest_file_size = uint_max + rnd->Uniform(100000);
+  db_opt->max_manifest_edit_count = uint_max + rnd->Uniform(100000);
   db_opt->max_total_wal_size = uint_max + rnd->Uniform(100000);
   db_opt->wal_bytes_per_sync = uint_max + rnd->Uniform(100000);
 

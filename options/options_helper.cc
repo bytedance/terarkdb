@@ -65,6 +65,8 @@ DBOptions BuildDBOptions(const ImmutableDBOptions& immutable_db_options,
   options.keep_log_file_num = immutable_db_options.keep_log_file_num;
   options.recycle_log_file_num = immutable_db_options.recycle_log_file_num;
   options.max_manifest_file_size = immutable_db_options.max_manifest_file_size;
+  options.max_manifest_edit_count =
+      immutable_db_options.max_manifest_edit_count;
   options.table_cache_numshardbits =
       immutable_db_options.table_cache_numshardbits;
   options.WAL_ttl_seconds = immutable_db_options.wal_ttl_seconds;
@@ -1488,6 +1490,9 @@ std::unordered_map<std::string, OptionTypeInfo>
                    delete_obsolete_files_period_micros)}},
         {"max_manifest_file_size",
          {offsetof(struct DBOptions, max_manifest_file_size),
+          OptionType::kUInt64T, OptionVerificationType::kNormal, false, 0}},
+        {"max_manifest_edit_count",
+         {offsetof(struct DBOptions, max_manifest_edit_count),
           OptionType::kUInt64T, OptionVerificationType::kNormal, false, 0}},
         {"max_total_wal_size",
          {offsetof(struct DBOptions, max_total_wal_size), OptionType::kUInt64T,
