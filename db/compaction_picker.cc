@@ -681,14 +681,13 @@ Compaction* CompactionPicker::PickGarbageCollection(
     return nullptr;
   }
 
-  size_t target_file_size = size_t(max_file_size_for_level * 1.1);
   CompactionInputFiles inputs;
   inputs.level = -1;
   uint64_t estimated_total_size = blob_vec.front().estimated_size;
   inputs.files.push_back(blob_vec.front().f);
   for (auto it = std::next(blob_vec.begin()); it != blob_vec.end(); ++it) {
     auto& info = *it;
-    if (estimated_total_size + info.estimated_size > target_file_size) {
+    if (estimated_total_size + info.estimated_size > max_file_size_for_level) {
       continue;
     }
     estimated_total_size += info.estimated_size;

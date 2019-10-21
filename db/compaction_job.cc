@@ -1592,7 +1592,6 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
     uint64_t input = 0;
     uint64_t garbage_type = 0;
     uint64_t get_not_found = 0;
-    uint64_t get_mismatch = 0;
     uint64_t file_number_mismatch = 0;
   } counter;
   while (status.ok() && !cfd->IsDropped() && input->Valid()) {
@@ -1622,7 +1621,7 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
         break;
       } else if (seq != ikey.sequence ||
                  (type != kTypeValueIndex && type != kTypeMergeIndex)) {
-        ++counter.get_mismatch;
+        ++counter.get_not_found;
         break;
       }
       status = value.inplace_decode();
@@ -1684,21 +1683,21 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
   }
   if (status.ok()) {
     auto& meta = sub_compact->outputs.front().meta;
-    assert(sub_compact->compaction->inputs()->size() == 1 &&
-           sub_compact->compaction->inputs()->front().level == -1);
+    auto& inputs = *sub_compact->compaction->inputs();
+    assert(inputs.size() == 1 && inputs.front().level == -1);
     uint64_t expectation = 0;
     for (auto f : sub_compact->compaction->inputs()->front().files) {
       expectation += f->num_antiquation;
     }
     ROCKS_LOG_INFO(db_options_.info_log,
                    "[%s] [JOB %d] Table #%" PRIu64 " GC: %" PRIu64
-                   " input, %" PRIu64 " clear, %" PRIu64 " garbage type, %"
-                   PRIu64 " get not found, %" PRIu64 " get mismatch, %" PRIu64
-                   " file number mismatch, %"  PRIu64 " expectation",
+                   " input(s) from %zd file(s). %" PRIu64 " clear: [ %"
+                   PRIu64 " garbage type, %" PRIu64 " get not found, %" PRIu64
+                   " file number mismatch ], %" PRIu64 " expectation",
                    cfd->GetName().c_str(), job_id_, meta.fd.GetNumber(),
-                   counter.input, counter.input - meta.prop.num_entries,
-                   counter.garbage_type, counter.get_not_found,
-                   counter.get_mismatch, counter.file_number_mismatch,
+                   counter.input, inputs.front().size(),
+                   counter.input - meta.prop.num_entries, counter.garbage_type,
+                   counter.get_not_found, counter.file_number_mismatch,
                    expectation);
   }
 

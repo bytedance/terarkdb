@@ -1205,10 +1205,8 @@ Version::Version(ColumnFamilyData* column_family_data, VersionSet* vset,
 Status Version::inplace_decode(LazySlice* slice, LazySliceRep* rep) const {
   Slice user_key(reinterpret_cast<const char*>(rep->data[0]), rep->data[1]);
   uint64_t sequence = rep->data[2];
-  uint64_t file_number = slice->file_number();
-  auto& dependence_map = storage_info_.dependence_map();
-  assert(dependence_map.count(file_number) > 0);
-  const FileMetaData* file_metadata = dependence_map.find(file_number)->second;
+  const FileMetaData* file_metadata =
+      reinterpret_cast<FileMetaData*>(rep->data[3]);
   bool value_found = false;
   SequenceNumber context_seq;
   GetContext get_context(cfd_->internal_comparator().user_comparator(), nullptr,
@@ -1218,7 +1216,7 @@ Status Version::inplace_decode(LazySlice* slice, LazySliceRep* rep) const {
   IterKey iter_key;
   iter_key.SetInternalKey(user_key, sequence, kValueTypeForSeek);
   auto s = table_cache_->Get(ReadOptions(), cfd_->internal_comparator(),
-                             *file_metadata, dependence_map,
+                             *file_metadata, storage_info_.dependence_map(),
                              iter_key.GetInternalKey(), &get_context,
                              mutable_cf_options_.prefix_extractor.get(),
                              nullptr, true);
@@ -1230,9 +1228,10 @@ Status Version::inplace_decode(LazySlice* slice, LazySliceRep* rep) const {
     if (get_context.State() == GetContext::kCorrupt) {
       return std::move(get_context).CorruptReason();
     } else {
-      char buffer[64];
-      snprintf(buffer, sizeof buffer, "file number = %" PRIu64 ", sequence = %"
-               PRIu64, file_number, sequence);
+      char buffer[128];
+      snprintf(buffer, sizeof buffer,
+               "file number = %" PRIu64 "(%" PRIu64 "), sequence = %" PRIu64,
+               file_metadata->fd.GetNumber(), slice->file_number(), sequence);
       return Status::Corruption("Separate value missing", buffer);
     }
   }
@@ -1253,8 +1252,8 @@ void Version::TransToCombined(const Slice& user_key, uint64_t sequence,
     value.reset(Status::Corruption("Separate value dependence missing"));
   } else {
     value.reset(this, {reinterpret_cast<uint64_t>(user_key.data()),
-                       user_key.size(), sequence, 0},
-                find->second->fd.GetNumber());
+                       user_key.size(), sequence,
+                       reinterpret_cast<uint64_t>(find->second)}, file_number);
   }
 }
 
