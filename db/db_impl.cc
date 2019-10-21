@@ -1382,6 +1382,14 @@ struct SimpleFiberTls {
     channel.push(std::move(task));
     pending_count++;
   }
+  bool try_push(const task_t& task) {
+    using boost::fibers::channel_op_status;
+    if (channel.try_push(task) == channel_op_status::success) {
+      pending_count++;
+      return true;
+    }
+    return false;
+  }
 
   int wait(int timeout_us) {
     intptr_t old_pending_count = pending_count;
@@ -2915,6 +2923,27 @@ Status DB::DestroyColumnFamilyHandle(ColumnFamilyHandle* column_family) {
 }
 
 DB::~DB() {}
+
+void DB::SubmitAsyncTask(std::function<void()> fn) {
+  gt_fibers.push(std::move(fn));
+}
+
+void DB::SubmitAsyncTask(std::function<void()> fn, size_t aio_concurrency) {
+  auto tls = &gt_fibers;
+  tls->update_fiber_count(aio_concurrency);
+  gt_fibers.push(std::move(fn));
+}
+
+bool DB::TrySubmitAsyncTask(const std::function<void()>& fn) {
+  auto tls = &gt_fibers;
+  return tls->try_push(fn);
+}
+
+bool DB::TrySubmitAsyncTask(const std::function<void()>& fn, size_t aio_concurrency) {
+  auto tls = &gt_fibers;
+  tls->update_fiber_count(aio_concurrency);
+  return tls->try_push(fn);
+}
 
 void DB::GetAsync(const ReadOptions& ro, ColumnFamilyHandle* cfh,
                   std::string key, std::string* value,
