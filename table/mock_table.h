@@ -53,6 +53,8 @@ class MockTableReader : public TableReader {
 
   virtual size_t ApproximateMemoryUsage() const override { return 0; }
 
+  uint64_t FileNumber() const override  { return uint64_t(-1); }
+
   void SetupForCompaction() override {}
 
   std::shared_ptr<const TableProperties> GetTableProperties() const override;
@@ -123,14 +125,22 @@ class MockTableBuilder : public TableBuilder {
   // Add key,value to the table being constructed.
   // REQUIRES: key is after any previously added key according to comparator.
   // REQUIRES: Finish(), Abandon() have not been called
-  void Add(const Slice& key, const Slice& value) override {
-    table_.insert({key.ToString(), value.ToString()});
+  void Add(const Slice& key, const LazySlice& value) override {
+    auto s = value.inplace_decode();
+    if (s.ok()) {
+      table_.insert({key.ToString(), value.ToString()});
+    } else if (status_.ok()) {
+      status_ = std::move(s);
+    }
   }
 
   // Return non-ok iff some error has been detected.
-  Status status() const override { return Status::OK(); }
+  Status status() const override { return status_; }
 
   Status Finish(const TablePropertyCache* prop) override {
+    if (!status_.ok()) {
+      return status_;
+    }
     MutexLock lock_guard(&file_system_->mutex);
     file_system_->files.insert({id_, table_});
     if (prop != nullptr) {
@@ -158,6 +168,7 @@ class MockTableBuilder : public TableBuilder {
   MockTableFileSystem* file_system_;
   stl_wrappers::KVMap table_;
   TablePropertyCache prop_;
+  Status status_;
 };
 
 class MockTableFactory : public TableFactory {
