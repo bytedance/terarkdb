@@ -1119,15 +1119,17 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
   size_t max_write_buffer_size = 0;
 #if !defined(_MSC_VER) && !defined(__APPLE__)
   const char* terarkdb_localTempDir = getenv("TerarkZipTable_localTempDir");
-  if (terarkdb_localTempDir) {
+  const char* terarkConfigString = getenv("TerarkConfigString");
+  if (terarkdb_localTempDir || terarkConfigString) {
     if (TerarkZipMultiCFOptionsFromEnv) {
-      if (::access(terarkdb_localTempDir, R_OK | W_OK) != 0) {
+      if (terarkdb_localTempDir &&
+          ::access(terarkdb_localTempDir, R_OK | W_OK) != 0) {
         return Status::InvalidArgument(
             "Must exists, and Permission ReadWrite is required on "
             "env TerarkZipTable_localTempDir",
             terarkdb_localTempDir);
       }
-      TerarkZipMultiCFOptionsFromEnv(db_options, column_families);
+      TerarkZipMultiCFOptionsFromEnv(db_options, column_families, dbname);
     } else {
       return Status::InvalidArgument(
           "env TerarkZipTable_localTempDir is defined, "

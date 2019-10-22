@@ -1173,7 +1173,7 @@ struct ReadOptions {
   bool ignore_range_deletions;
 
   // now only used by MultiGet
-  int use_num_fibers;
+  int aio_concurrency;
 
   // A callback to determine whether relevant keys for this scan exist in a
   // given table based on the table's properties. The callback is passed the

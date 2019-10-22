@@ -565,7 +565,7 @@ ReadOptions::ReadOptions()
       prefix_same_as_start(false),
       background_purge_on_iterator_cleanup(false),
       ignore_range_deletions(false),
-      use_num_fibers(32),
+      aio_concurrency(32),
       iter_start_seqnum(0) {}
 
 ReadOptions::ReadOptions(bool cksum, bool cache)
@@ -583,7 +583,7 @@ ReadOptions::ReadOptions(bool cksum, bool cache)
       prefix_same_as_start(false),
       background_purge_on_iterator_cleanup(false),
       ignore_range_deletions(false),
-      use_num_fibers(32),
+      aio_concurrency(32),
       iter_start_seqnum(0) {}
 
 }  // namespace rocksdb

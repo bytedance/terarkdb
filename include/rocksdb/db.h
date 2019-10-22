@@ -15,6 +15,8 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+//#include <terark/thread/fiber_future.hpp>
+//#include <boost/fiber/future.hpp>
 #include "rocksdb/iterator.h"
 #include "rocksdb/listener.h"
 #include "rocksdb/metadata.h"
@@ -37,7 +39,15 @@
 #define ROCKSDB_DEPRECATED_FUNC __declspec(deprecated)
 #endif
 
+namespace boost {
+namespace fibers {
+template<typename> class future; // forward declaration
+}
+}
+
 namespace rocksdb {
+
+using boost::fibers::future;
 
 struct Options;
 struct DBOptions;
@@ -362,6 +372,39 @@ class DB {
   virtual Status Get(const ReadOptions& options, const Slice& key, std::string* value) {
     return Get(options, DefaultColumnFamily(), key, value);
   }
+
+  static void SubmitAsyncTask(std::function<void()>);
+  static void SubmitAsyncTask(std::function<void()>, size_t concurrency);
+  static bool TrySubmitAsyncTask(const std::function<void()>&);
+  static bool TrySubmitAsyncTask(const std::function<void()>&,
+                                 size_t concurrency);
+
+  typedef std::function<void(Status&&, std::string&& key,
+                             std::string* value)> GetAsyncCallback;
+
+  void GetAsync(const ReadOptions&, ColumnFamilyHandle*, std::string key,
+                std::string* value, GetAsyncCallback);
+  void GetAsync(const ReadOptions&, std::string key, std::string* value,
+                GetAsyncCallback);
+  void GetAsync(const ReadOptions&, ColumnFamilyHandle*, std::string key,
+                GetAsyncCallback);
+  void GetAsync(const ReadOptions&, std::string key, GetAsyncCallback);
+
+  static int WaitAsync(int timeout_us);
+  static int WaitAsync();
+
+  future<std::tuple<Status, std::string, std::string*>>
+  GetFuture(const ReadOptions&, ColumnFamilyHandle*, std::string key,
+            std::string* value);
+
+  future<std::tuple<Status, std::string, std::string*>>
+  GetFuture(const ReadOptions&, std::string key, std::string* value);
+
+  future<std::tuple<Status, std::string, std::string>>
+  GetFuture(const ReadOptions&, ColumnFamilyHandle*, std::string key);
+
+  future<std::tuple<Status, std::string, std::string>>
+  GetFuture(const ReadOptions&, std::string key);
 
   // If keys[i] does not exist in the database, then the i'th returned
   // status will be one for which Status::IsNotFound() is true, and
