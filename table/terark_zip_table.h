@@ -139,11 +139,7 @@ bool TerarkZipConfigFromEnv(struct DBOptions&, struct ColumnFamilyOptions&);
 
 bool TerarkZipCFOptionsFromEnv(struct ColumnFamilyOptions&, const std::string& terarkTempDirIfNotFound = {});
 
-bool TerarkZipCFOptionsFromConfigMap(struct ColumnFamilyOptions&, const std::unordered_map<std::string, std::string>&);
-
 void TerarkZipDBOptionsFromEnv(struct DBOptions&);
-
-void TerarkZipDBOptionsFromConfigMap(struct DBOptions&, const std::unordered_map<std::string, std::string>&);
 
 bool TerarkZipIsBlackListCF(const std::string& cfname);
 
