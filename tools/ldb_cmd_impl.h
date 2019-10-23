@@ -355,7 +355,7 @@ class ScanCommand : public LDBCommand {
   std::string end_key_;
   bool start_key_specified_;
   bool end_key_specified_;
-  int max_keys_scanned_;
+  long long max_keys_scanned_;
   bool no_value_;
 };
 

@@ -2289,9 +2289,9 @@ ScanCommand::ScanCommand(const std::vector<std::string>& /*params*/,
   if (itr != options.end()) {
     try {
 #if defined(CYGWIN)
-      max_keys_scanned_ = strtol(itr->second.c_str(), 0, 10);
+      max_keys_scanned_ = strtoll(itr->second.c_str(), 0, 10);
 #else
-      max_keys_scanned_ = std::stoi(itr->second);
+      max_keys_scanned_ = std::stoll(itr->second);
 #endif
     } catch (const std::invalid_argument&) {
       exec_state_ = LDBCommandExecuteResult::Failed(ARG_MAX_KEYS +
@@ -2322,7 +2322,7 @@ void ScanCommand::DoCommand() {
     return;
   }
 
-  int num_keys_scanned = 0;
+  long long num_keys_scanned = 0;
   Iterator* it = db_->NewIterator(ReadOptions(), GetCfHandle());
   if (start_key_specified_) {
     it->Seek(start_key_);
