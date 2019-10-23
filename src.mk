@@ -131,6 +131,7 @@ LIB_SOURCES =                                                   \
   table/sst_file_writer.cc                                      \
   table/table_properties.cc                                     \
   table/table_reader.cc                                         \
+  table/terark_zip_common.cc                                    \
   table/terark_zip_config.cc                                    \
   table/terark_zip_table_builder.cc                             \
   table/terark_zip_table_reader.cc                              \
