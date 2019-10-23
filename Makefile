@@ -121,7 +121,7 @@ ifdef TERARK_CORE_BRANCH
 else
   TERARK_CORE_HOME ?= ../terark-core
 endif
-TERARK_CORE_PKG_DIR := ${TERARK_CORE_HOME}/output
+TERARK_CORE_PKG_DIR := ${TERARK_CORE_HOME}/pkg/terark-fsa_all-${BUILD_NAME}
 
 CXXFLAGS += -march=haswell
 CXXFLAGS += -I${TERARK_CORE_HOME}/src -I${TERARK_CORE_HOME}/boost-include -I${TERARK_CORE_HOME}/output/include
@@ -163,11 +163,11 @@ ifeq (${TERARK_CORE_HOME},terark-core)
 terark-core.got:
 	rm -rf terark-core
 	git clone git@code.byted.org:storage/terark-core.git
-	cd terark-core && git submodule update --init
 ifdef TERARK_CORE_BRANCH
 	cd terark-core && git checkout ${TERARK_CORE_BRANCH}
 endif
-	cd ${TERARK_CORE_HOME} && bash build.sh
+	cd terark-core && git submodule update --init
+	+$(MAKE) -C terark-core pkg PKG_WITH_DBG=1 PKG_WITH_STATIC=1 WITH_BMI2=${BMI2}
 	touch $@
 ${SRC_NEEDS_BOOST} ${SRC_NEEDS_BOOST:.o=.cc.d}: terark-core.got
 ${TERARK_ZIP_OBJ} ${TERARK_ZIP_OBJ:.o=.cc.d}: terark-core.got
