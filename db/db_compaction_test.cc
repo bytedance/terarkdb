@@ -326,7 +326,7 @@ TEST_F(DBCompactionTest, LazyCompactionTest) {
   ReadOptions ro;
   FlushOptions fo;
   CompactionOptions co;
-  co.map_compaction = true;
+  co.compaction_type = kMapCompaction;
 
   std::vector<const Snapshot*> snapshots;
 

@@ -205,7 +205,8 @@ Status ExternalSstFileIngestionJob::Run() {
     edit_.AddFile(f.picked_level, f.fd.GetNumber(), f.fd.GetPathId(),
                   f.fd.GetFileSize(), f.smallest_internal_key(),
                   f.largest_internal_key(), f.assigned_seqno, f.assigned_seqno,
-                  false, 0 /* sst_purpose*/, {} /* sst_depend */);
+                  0 /* num_antiquation */, false /* marked_for_compaction */,
+                  TablePropertyCache());
   }
 
   if (consumed_seqno) {
@@ -337,14 +338,6 @@ Status ExternalSstFileIngestionJob::GetIngestedFileInfo(
 
     // Set the global sequence number
     file_to_ingest->original_seqno = DecodeFixed64(seqno_iter->second.c_str());
-    auto offsets_iter = props->properties_offsets.find(
-        ExternalSstFilePropertyNames::kGlobalSeqno);
-    if (offsets_iter == props->properties_offsets.end() ||
-        offsets_iter->second == 0) {
-      file_to_ingest->global_seqno_offset = 0;
-      return Status::Corruption("Was not able to find file global seqno field");
-    }
-    file_to_ingest->global_seqno_offset = static_cast<size_t>(offsets_iter->second);
   } else if (file_to_ingest->version == 1) {
     // SST file V1 should not have global seqno field
     assert(seqno_iter == uprops.end());
@@ -371,7 +364,7 @@ Status ExternalSstFileIngestionJob::GetIngestedFileInfo(
   ro.fill_cache = false;
   std::unique_ptr<InternalIterator> iter(table_reader->NewIterator(
       ro, sv->mutable_cf_options.prefix_extractor.get()));
-  std::unique_ptr<InternalIterator> range_del_iter(
+  std::unique_ptr<FragmentedRangeTombstoneIterator> range_del_iter(
       table_reader->NewRangeTombstoneIterator(ro));
 
   // Get first (smallest) and last (largest) key from file.
@@ -543,29 +536,6 @@ Status ExternalSstFileIngestionJob::AssignGlobalSeqnoForIngestedFile(
     return Status::OK();
   } else if (!ingestion_options_.allow_global_seqno) {
     return Status::InvalidArgument("Global seqno is required, but disabled");
-  } else if (file_to_ingest->global_seqno_offset == 0) {
-    return Status::InvalidArgument(
-        "Trying to set global seqno for a file that dont have a global seqno "
-        "field");
-  }
-
-  if (ingestion_options_.write_global_seqno) {
-    // Determine if we can write global_seqno to a given offset of file.
-    // If the file system does not support random write, then we should not.
-    // Otherwise we should.
-    std::unique_ptr<RandomRWFile> rwfile;
-    Status status = env_->NewRandomRWFile(file_to_ingest->internal_file_path,
-                                          &rwfile, env_options_);
-    if (status.ok()) {
-      std::string seqno_val;
-      PutFixed64(&seqno_val, seqno);
-      status = rwfile->Write(file_to_ingest->global_seqno_offset, seqno_val);
-      if (!status.ok()) {
-        return status;
-      }
-    } else if (!status.IsNotSupported()) {
-      return status;
-    }
   }
 
   file_to_ingest->assigned_seqno = seqno;

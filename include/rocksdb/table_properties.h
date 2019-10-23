@@ -56,9 +56,10 @@ struct TablePropertiesNames {
   static const std::string kCompression;
   static const std::string kCreationTime;
   static const std::string kOldestKeyTime;
-  static const std::string kSstPurpose;
-  static const std::string kSstDepend;
-  static const std::string kSstReadAmp;
+  static const std::string kPurpose;
+  static const std::string kReadAmp;
+  static const std::string kDependence;
+  static const std::string kInheritanceChain;
 };
 
 extern const std::string kPropertiesBlock;
@@ -205,12 +206,24 @@ struct TableProperties {
   // The compression algo used to compress the SST files.
   std::string compression_name;
 
+  // Zero for essence sst
+  uint8_t purpose = 0;
+
+  // Max Read amp from sst
+  uint16_t max_read_amp = 1;
+
+  // Expt read amp from sst
+  float read_amp = 1;
+
+  // Make these sst hidden
+  std::vector<uint64_t> dependence;
+
+  // Inheritance chain
+  std::vector<uint64_t> inheritance_chain;
+
   // user collected properties
   UserCollectedProperties user_collected_properties;
   UserCollectedProperties readable_properties;
-
-  // The offset of the value of each property in the file.
-  std::map<std::string, uint64_t> properties_offsets;
 
   // convert this object to a human readable form
   //   @prop_delim: delimiter for each property.
@@ -233,10 +246,5 @@ struct TableProperties {
 extern uint64_t GetDeletedKeys(const UserCollectedProperties& props);
 extern uint64_t GetMergeOperands(const UserCollectedProperties& props,
                                  bool* property_present);
-extern uint8_t GetSstPurpose(const UserCollectedProperties&);
-extern std::vector<uint64_t> GetSstDepend(
-    const UserCollectedProperties& props);
-extern std::pair<size_t, double> GetSstReadAmp(
-    const UserCollectedProperties& props);
 
 }  // namespace rocksdb

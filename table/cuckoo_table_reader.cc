@@ -160,20 +160,22 @@ Status CuckooTableReader::Get(const ReadOptions& /*readOptions*/,
       // Here, we compare only the user key part as we support only one entry
       // per user key and we don't support snapshot.
       if (ucomp_->Equal(user_key, Slice(bucket, user_key.size()))) {
-        Slice value(bucket + key_length_, value_length_);
+        LazySlice value(bucket + key_length_, value_length_);
+        bool dont_care __attribute__((__unused__));
         if (is_last_level_) {
           // Sequence number is not stored at the last level, so we will use
           // kMaxSequenceNumber since it is unknown.  This could cause some
           // transactions to fail to lock a key due to known sequence number.
           // However, it is expected for anyone to use a CuckooTable in a
           // TransactionDB.
-          get_context->SaveValue(value, kMaxSequenceNumber);
+          get_context->SaveValue(
+              ParsedInternalKey(user_key, kMaxSequenceNumber, kTypeValue),
+              std::move(value), &dont_care);
         } else {
           Slice full_key(bucket, key_length_);
           ParsedInternalKey found_ikey;
           ParseInternalKey(full_key, &found_ikey);
-          bool dont_care __attribute__((__unused__));
-          get_context->SaveValue(found_ikey, value, &dont_care);
+          get_context->SaveValue(found_ikey, std::move(value), &dont_care);
         }
         // We don't support merge operations. So, we return here.
         return Status::OK();
@@ -207,9 +209,8 @@ class CuckooTableIterator : public InternalIterator {
   void Next() override;
   void Prev() override;
   Slice key() const override;
-  Slice value() const override;
+  LazySlice value() const override;
   Status status() const override { return Status::OK(); }
-  uint64_t FileNumber() const override;
   void InitIfNeeded();
 
  private:
@@ -371,13 +372,9 @@ Slice CuckooTableIterator::key() const {
   return curr_key_.GetInternalKey();
 }
 
-Slice CuckooTableIterator::value() const {
+LazySlice CuckooTableIterator::value() const {
   assert(Valid());
-  return curr_value_;
-}
-
-uint64_t CuckooTableIterator::FileNumber() const {
-  return reader_->file_number_;
+  return LazySlice(curr_value_, false, reader_->file_number_);
 }
 
 InternalIterator* CuckooTableReader::NewIterator(
@@ -385,7 +382,7 @@ InternalIterator* CuckooTableReader::NewIterator(
     const SliceTransform* /* prefix_extractor */, Arena* arena,
     bool /*skip_filters*/, bool /*for_compaction*/) {
   if (!status().ok()) {
-    return NewErrorInternalIterator<Slice>(
+    return NewErrorInternalIterator<LazySlice>(
         Status::Corruption("CuckooTableReader status is not okay."), arena);
   }
   CuckooTableIterator* iter;

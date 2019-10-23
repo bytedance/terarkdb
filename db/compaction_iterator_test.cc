@@ -42,7 +42,8 @@ class NoMergingMergeOp : public MergeOperator {
 class StallingFilter : public CompactionFilter {
  public:
   Decision FilterV2(int /*level*/, const Slice& key, ValueType /*type*/,
-                    const Slice& /*existing_value*/, std::string* /*new_value*/,
+                    const LazySlice& /*existing_value*/,
+                    LazySlice* /*new_value*/,
                     std::string* /*skip_until*/) const override {
     int k = std::atoi(key.ToString().c_str());
     last_seen.store(k);
@@ -78,7 +79,8 @@ class StallingFilter : public CompactionFilter {
 class FilterAllKeysCompactionFilter : public CompactionFilter {
  public:
   Decision FilterV2(int /*level*/, const Slice& /*key*/, ValueType /*type*/,
-                    const Slice& /*existing_value*/, std::string* /*new_value*/,
+                    const LazySlice& /*existing_value*/,
+                    LazySlice* /*new_value*/,
                     std::string* /*skip_until*/) const override {
     return Decision::kRemove;
   }
@@ -374,9 +376,12 @@ TEST_P(CompactionIteratorTest, RangeDeletionWithSnapshots) {
 TEST_P(CompactionIteratorTest, CompactionFilterSkipUntil) {
   class Filter : public CompactionFilter {
     virtual Decision FilterV2(int /*level*/, const Slice& key, ValueType t,
-                              const Slice& existing_value,
-                              std::string* /*new_value*/,
+                              const LazySlice& existing_value,
+                              LazySlice* /*new_value*/,
                               std::string* skip_until) const override {
+      if (!existing_value.inplace_decode().ok()) {
+        return Decision::kKeep;
+      }
       std::string k = key.ToString();
       std::string v = existing_value.ToString();
       // See InitIterators() call below for the sequence of keys and their
@@ -557,9 +562,12 @@ TEST_P(CompactionIteratorTest, ShuttingDownInMerge) {
 TEST_P(CompactionIteratorTest, SingleMergeOperand) {
   class Filter : public CompactionFilter {
     virtual Decision FilterV2(int /*level*/, const Slice& key, ValueType t,
-                              const Slice& existing_value,
-                              std::string* /*new_value*/,
+                              const LazySlice& existing_value,
+                              LazySlice* /*new_value*/,
                               std::string* /*skip_until*/) const override {
+      if (!existing_value.inplace_decode().ok()) {
+        return Decision::kKeep;
+      }
       std::string k = key.ToString();
       std::string v = existing_value.ToString();
 
@@ -751,17 +759,6 @@ TEST_F(CompactionIteratorWithSnapshotCheckerTest,
           {"", "v1"}, 1 /*last_committed_seq*/);
 }
 
-TEST_F(CompactionIteratorWithSnapshotCheckerTest,
-       PreserveUncommittedKeys_BlobIndex) {
-  RunTest({test::KeyStr("foo", 3, kTypeBlobIndex),
-           test::KeyStr("foo", 2, kTypeBlobIndex),
-           test::KeyStr("foo", 1, kTypeBlobIndex)},
-          {"v3", "v2", "v1"},
-          {test::KeyStr("foo", 3, kTypeBlobIndex),
-           test::KeyStr("foo", 2, kTypeBlobIndex)},
-          {"v3", "v2"}, 2 /*last_committed_seq*/);
-}
-
 // Test compaction iterator dedup keys visible to the same snapshot.
 
 TEST_F(CompactionIteratorWithSnapshotCheckerTest, DedupSameSnapshot_Value) {
@@ -812,19 +809,6 @@ TEST_F(CompactionIteratorWithSnapshotCheckerTest,
       {"v4", "", "v2", "v1"},
       {test::KeyStr("foo", 4, kTypeValue), test::KeyStr("foo", 1, kTypeValue)},
       {"v4", "v1"}, 3 /*last_committed_seq*/);
-}
-
-TEST_F(CompactionIteratorWithSnapshotCheckerTest, DedupSameSnapshot_BlobIndex) {
-  AddSnapshot(2, 1);
-  RunTest({test::KeyStr("foo", 4, kTypeBlobIndex),
-           test::KeyStr("foo", 3, kTypeBlobIndex),
-           test::KeyStr("foo", 2, kTypeBlobIndex),
-           test::KeyStr("foo", 1, kTypeBlobIndex)},
-          {"v4", "v3", "v2", "v1"},
-          {test::KeyStr("foo", 4, kTypeBlobIndex),
-           test::KeyStr("foo", 3, kTypeBlobIndex),
-           test::KeyStr("foo", 1, kTypeBlobIndex)},
-          {"v4", "v3", "v1"}, 3 /*last_committed_seq*/);
 }
 
 // At bottom level, sequence numbers can be zero out, and deletions can be

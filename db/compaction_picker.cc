@@ -22,6 +22,7 @@
 #include "db/column_family.h"
 #include "db/map_builder.h"
 #include "monitoring/statistics.h"
+#include "util/c_style_callback.h"
 #include "util/filename.h"
 #include "util/log_buffer.h"
 #include "util/random.h"
@@ -37,6 +38,59 @@ uint64_t TotalCompensatedFileSize(const std::vector<FileMetaData*>& files) {
     sum += files[i]->compensated_file_size;
   }
   return sum;
+}
+/*
+ * Find the optimal path to place a file
+ * Given a level, finds the path where levels up to it will fit in levels
+ * up to and including this path
+ */
+uint32_t GetPathId(
+    const ImmutableCFOptions& ioptions,
+    const MutableCFOptions& mutable_cf_options, int level) {
+  uint32_t p = 0;
+  assert(!ioptions.cf_paths.empty());
+
+  // size remaining in the most recent path
+  uint64_t current_path_size = ioptions.cf_paths[0].target_size;
+
+  uint64_t level_size;
+  int cur_level = 0;
+
+  // max_bytes_for_level_base denotes L1 size.
+  // We estimate L0 size to be the same as L1.
+  level_size = mutable_cf_options.max_bytes_for_level_base;
+
+  // Last path is the fallback
+  while (p < ioptions.cf_paths.size() - 1) {
+    if (level_size <= current_path_size) {
+      if (cur_level == level) {
+        // Does desired level fit in this path?
+        return p;
+      } else {
+        current_path_size -= level_size;
+        if (cur_level > 0) {
+          if (ioptions.level_compaction_dynamic_level_bytes) {
+            // Currently, level_compaction_dynamic_level_bytes is ignored when
+            // multiple db paths are specified. https://github.com/facebook/
+            // rocksdb/blob/master/db/column_family.cc.
+            // Still, adding this check to avoid accidentally using
+            // max_bytes_for_level_multiplier_additional
+            level_size = static_cast<uint64_t>(
+                level_size * mutable_cf_options.max_bytes_for_level_multiplier);
+          } else {
+            level_size = static_cast<uint64_t>(
+                level_size * mutable_cf_options.max_bytes_for_level_multiplier *
+                mutable_cf_options.MaxBytesMultiplerAdditional(cur_level));
+          }
+        }
+        cur_level++;
+        continue;
+      }
+    }
+    p++;
+    current_path_size = ioptions.cf_paths[p].target_size;
+  }
+  return p;
 }
 }  // anonymous namespace
 
@@ -354,11 +408,8 @@ Compaction* CompactionPicker::CompactFiles(
       GetCompressionOptions(ioptions_, vstorage, output_level);
   params.max_subcompactions = compact_options.max_subcompactions;
   params.manual_compaction = true;
-  params.map_compaction = compact_options.map_compaction;
 
-  auto c = new Compaction(std::move(params));
-  RegisterCompaction(c);
-  return c;
+  return RegisterCompaction(new Compaction(std::move(params)));
 }
 
 Status CompactionPicker::GetCompactionInputsFromFileNumbers(
@@ -556,6 +607,115 @@ void CompactionPicker::GetGrandparents(
   }
 }
 
+
+Compaction* CompactionPicker::PickGarbageCollection(
+    const std::string& cf_name, const MutableCFOptions& mutable_cf_options,
+    VersionStorageInfo* vstorage, LogBuffer* log_buffer) {
+  struct FileInfo {
+    FileMetaData* f;
+    uint64_t num_entries;
+    double score;
+    uint64_t estimated_size;
+  };
+  size_t max_file_size_for_level =
+      MaxFileSizeForLevel(mutable_cf_options, 1, ioptions_.compaction_style);
+  size_t small_file_size = max_file_size_for_level / 8;
+  std::vector<FileInfo> blob_vec;
+  auto get_num_entries = [&](FileMetaData* f)->uint64_t {
+    if (f->prop.num_entries == 0) {
+      std::shared_ptr<const TableProperties> tp;
+      auto s = table_cache_->GetTableProperties(
+          env_options_, *icmp_, f->fd, &tp,
+          mutable_cf_options.prefix_extractor.get(), false);
+      if (!s.ok()) {
+        ROCKS_LOG_BUFFER(
+            log_buffer,
+            "[%s] CompactionPicker::PickGarbageCollection "
+            "GetTableProperties fail\n", cf_name.c_str(), s.ToString().c_str());
+        return 0;
+      }
+      return tp->num_entries;
+    } else {
+      return f->prop.num_entries;
+    }
+  };
+  FileMetaData* min_file_number_meta = nullptr;
+  for (auto f : vstorage->LevelFiles(-1)) {
+    if (f->is_skip_gc || f->being_compacted) {
+      continue;
+    }
+    FileInfo info = {f};
+    info.num_entries = get_num_entries(f);
+    double gc_ratio = std::min(1., 1. * f->num_antiquation / info.num_entries);
+    info.estimated_size =
+        static_cast<uint64_t>(f->fd.file_size * (1 - gc_ratio));
+    if (gc_ratio >= mutable_cf_options.blob_gc_ratio ||
+        info.estimated_size <= small_file_size || f->marked_for_compaction) {
+      if (f->marked_for_compaction) {
+        info.score = std::max(gc_ratio, mutable_cf_options.blob_gc_ratio);
+      } else {
+        info.score = gc_ratio;
+      }
+      blob_vec.push_back(info);
+    } else if (min_file_number_meta == nullptr ||
+               f->fd.GetNumber() < min_file_number_meta->fd.GetNumber()) {
+      min_file_number_meta = f;
+    }
+  }
+  if (!blob_vec.empty() && min_file_number_meta != nullptr) {
+    FileInfo info = {min_file_number_meta};
+    info.num_entries = get_num_entries(min_file_number_meta);
+    double gc_ratio =
+        std::min(1., 1. * info.f->num_antiquation / info.num_entries);
+    info.estimated_size =
+        static_cast<uint64_t>(info.f->fd.file_size * (1 - gc_ratio));
+    info.score = std::max(gc_ratio, mutable_cf_options.blob_gc_ratio);
+    blob_vec.push_back(info);
+  }
+  std::sort(blob_vec.begin(), blob_vec.end(), [](const FileInfo& l,
+                                                 const FileInfo& r) {
+    return l.score > r.score;
+  });
+  if (blob_vec.empty() ||
+      blob_vec.front().score < mutable_cf_options.blob_gc_ratio) {
+    return nullptr;
+  }
+
+  CompactionInputFiles inputs;
+  inputs.level = -1;
+  uint64_t estimated_total_size = blob_vec.front().estimated_size;
+  inputs.files.push_back(blob_vec.front().f);
+  for (auto it = std::next(blob_vec.begin()); it != blob_vec.end(); ++it) {
+    auto& info = *it;
+    if (estimated_total_size + info.estimated_size > max_file_size_for_level) {
+      continue;
+    }
+    estimated_total_size += info.estimated_size;
+    inputs.files.push_back(info.f);
+    if (inputs.size() >= 8) {
+      break;
+    }
+  }
+  uint32_t path_id = GetPathId(ioptions_, mutable_cf_options, 1);
+  int bottommost_level = vstorage->num_levels() - 1;
+
+  CompactionParams params(vstorage, ioptions_, mutable_cf_options);
+  params.inputs = {std::move(inputs)};
+  params.output_level = -1;
+  params.max_compaction_bytes = LLONG_MAX;
+  params.output_path_id = path_id;
+  params.compression = GetCompressionType(
+      ioptions_, vstorage, mutable_cf_options, bottommost_level, 1, true);
+  params.compression_opts =
+      GetCompressionOptions(ioptions_, vstorage, bottommost_level, true);
+  params.max_subcompactions = 1;
+  params.score = 0;
+  params.compaction_type = kGarbageCollection;
+  params.compaction_reason = CompactionReason::kGarbageCollection;
+
+  return new Compaction(std::move(params));
+}
+
 void CompactionPicker::InitFilesBeingCompact(
     const MutableCFOptions& mutable_cf_options, VersionStorageInfo* vstorage,
     const InternalKey* begin, const InternalKey* end,
@@ -564,9 +724,17 @@ void CompactionPicker::InitFilesBeingCompact(
   if (!enable_lazy_compaction) {
     return;
   }
-  auto& icmp = ioptions_.internal_comparator;
   ReadOptions options;
   MapSstElement element;
+  auto create_iter = [&](const FileMetaData* file_metadata,
+                         const DependenceMap& depend_map, Arena* arena,
+                         TableReader** table_reader_ptr) {
+    return table_cache_->NewIterator(options, env_options_, *icmp_,
+                                     *file_metadata, depend_map, nullptr,
+                                     mutable_cf_options.prefix_extractor.get(),
+                                     table_reader_ptr, nullptr, false, arena,
+                                     true, -1);
+  };
   for (int level = 0; level < vstorage->num_levels(); ++level) {
     auto& level_files = vstorage->LevelFiles(level);
     if (level_files.empty()) {
@@ -574,18 +742,18 @@ void CompactionPicker::InitFilesBeingCompact(
     }
     Arena arena;
     ScopedArenaIterator iter(NewMapElementIterator(
-        level_files.data(), level_files.size(), table_cache_, options,
-        env_options_, &icmp, mutable_cf_options.prefix_extractor.get(),
-        &arena));
+        level_files.data(), level_files.size(), icmp_, &create_iter,
+        c_style_callback(create_iter), &arena));
     for (level == 0 || begin == nullptr ? iter->SeekToFirst()
                                         : iter->Seek(begin->Encode());
          iter->Valid(); iter->Next()) {
-      if (!element.Decode(iter->key(), iter->value())) {
+      LazySlice value = iter->value();
+      if (!value.inplace_decode().ok() || !element.Decode(iter->key(), value)) {
         // TODO: log error ?
         break;
       }
       if (begin != nullptr &&
-          icmp.Compare(element.largest_key_, begin->Encode()) < 0) {
+          icmp_->Compare(element.largest_key_, begin->Encode()) < 0) {
         if (level == 0) {
           continue;
         } else {
@@ -593,23 +761,23 @@ void CompactionPicker::InitFilesBeingCompact(
         }
       }
       if (end != nullptr &&
-          icmp.Compare(element.smallest_key_, end->Encode()) > 0) {
+          icmp_->Compare(element.smallest_key_, end->Encode()) > 0) {
         if (level == 0) {
           continue;
         } else {
           break;
         }
       }
-      auto& depend_files = vstorage->depend_files();
+      auto& dependence_map = vstorage->dependence_map();
       for (auto& link : element.link_) {
         files_being_compact->emplace(link.file_number);
-        auto find = depend_files.find(link.file_number);
-        if (find == depend_files.end()) {
+        auto find = dependence_map.find(link.file_number);
+        if (find == dependence_map.end()) {
           // TODO: log error
           continue;
         }
         auto f = find->second;
-        for (auto file_number : f->sst_depend) {
+        for (auto file_number : f->prop.dependence) {
           files_being_compact->emplace(file_number);
         };
       }
@@ -987,18 +1155,19 @@ Status CompactionPicker::SanitizeCompactionInputFiles(
 }
 #endif  // !ROCKSDB_LITE
 
-void CompactionPicker::RegisterCompaction(Compaction* c) {
+Compaction* CompactionPicker::RegisterCompaction(Compaction* c) {
   if (c == nullptr) {
-    return;
+    return nullptr;
   }
   assert(ioptions_.compaction_style != kCompactionStyleLevel ||
-         c->output_level() == 0 ||
+         c->output_level() <= 0 ||
          !FilesRangeOverlapWithCompaction(*c->inputs(), c->output_level()));
   if (c->start_level() == 0 ||
       ioptions_.compaction_style == kCompactionStyleUniversal) {
     level0_compactions_in_progress_.insert(c);
   }
   compactions_in_progress_.insert(c);
+  return c;
 }
 
 void CompactionPicker::UnregisterCompaction(Compaction* c) {
@@ -1100,6 +1269,9 @@ bool LevelCompactionPicker::NeedsCompaction(
       return true;
     }
   }
+  if (!vstorage->LevelFiles(-1).empty()) {
+    return true;
+  }
   return false;
 }
 
@@ -1175,10 +1347,6 @@ class LevelCompactionBuilder {
 
   const MutableCFOptions& mutable_cf_options_;
   const ImmutableCFOptions& ioptions_;
-  // Pick a path ID to place a newly generated file, with its level
-  static uint32_t GetPathId(const ImmutableCFOptions& ioptions,
-                            const MutableCFOptions& mutable_cf_options,
-                            int level);
 
   static const int kMinFilesForIntraL0Compaction = 4;
 };
@@ -1419,60 +1587,6 @@ Compaction* LevelCompactionBuilder::GetCompaction() {
   return c;
 }
 
-/*
- * Find the optimal path to place a file
- * Given a level, finds the path where levels up to it will fit in levels
- * up to and including this path
- */
-uint32_t LevelCompactionBuilder::GetPathId(
-    const ImmutableCFOptions& ioptions,
-    const MutableCFOptions& mutable_cf_options, int level) {
-  uint32_t p = 0;
-  assert(!ioptions.cf_paths.empty());
-
-  // size remaining in the most recent path
-  uint64_t current_path_size = ioptions.cf_paths[0].target_size;
-
-  uint64_t level_size;
-  int cur_level = 0;
-
-  // max_bytes_for_level_base denotes L1 size.
-  // We estimate L0 size to be the same as L1.
-  level_size = mutable_cf_options.max_bytes_for_level_base;
-
-  // Last path is the fallback
-  while (p < ioptions.cf_paths.size() - 1) {
-    if (level_size <= current_path_size) {
-      if (cur_level == level) {
-        // Does desired level fit in this path?
-        return p;
-      } else {
-        current_path_size -= level_size;
-        if (cur_level > 0) {
-          if (ioptions.level_compaction_dynamic_level_bytes) {
-            // Currently, level_compaction_dynamic_level_bytes is ignored when
-            // multiple db paths are specified. https://github.com/facebook/
-            // rocksdb/blob/master/db/column_family.cc.
-            // Still, adding this check to avoid accidentally using
-            // max_bytes_for_level_multiplier_additional
-            level_size = static_cast<uint64_t>(
-                level_size * mutable_cf_options.max_bytes_for_level_multiplier);
-          } else {
-            level_size = static_cast<uint64_t>(
-                level_size * mutable_cf_options.max_bytes_for_level_multiplier *
-                mutable_cf_options.MaxBytesMultiplerAdditional(cur_level));
-          }
-        }
-        cur_level++;
-        continue;
-      }
-    }
-    p++;
-    current_path_size = ioptions.cf_paths[p].target_size;
-  }
-  return p;
-}
-
 bool LevelCompactionBuilder::PickFileToCompact() {
   // level 0 files are overlapping. So we cannot pick more
   // than one concurrent compactions at this level. This
@@ -1569,7 +1683,12 @@ Compaction* LevelCompactionPicker::PickCompaction(
     VersionStorageInfo* vstorage, LogBuffer* log_buffer) {
   LevelCompactionBuilder builder(cf_name, vstorage, this, log_buffer,
                                  mutable_cf_options, ioptions_);
-  return builder.PickCompaction();
+  auto c = builder.PickCompaction();
+  if (c == nullptr) {
+    c = RegisterCompaction(PickGarbageCollection(cf_name, mutable_cf_options,
+                                                 vstorage, log_buffer));
+  }
+  return c;
 }
 
 }  // namespace rocksdb

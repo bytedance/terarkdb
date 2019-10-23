@@ -19,7 +19,7 @@ class Env;
 class Arena;
 template <class TValue>
 class InternalIteratorBase;
-using InternalIterator = InternalIteratorBase<Slice>;
+using InternalIterator = InternalIteratorBase<LazySlice>;
 
 // Return an iterator that provided the union of the data in
 // children[0,n-1].  Takes ownership of the child iterators and
@@ -46,6 +46,8 @@ class MergeIteratorBuilder {
 
   // Add iter to the merging iterator.
   void AddIterator(InternalIterator* iter);
+  void AddIterator(InternalIterator* iter,
+                   const SeparateHelper* separate_helper);
 
   // Get arena used to build the merging iterator. It is called one a child
   // iterator needs to be allocated.

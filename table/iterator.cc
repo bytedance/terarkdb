@@ -8,6 +8,7 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #include "rocksdb/iterator.h"
+#include "db/dbformat.h"
 #include "table/internal_iterator.h"
 #include "table/iterator_wrapper.h"
 #include "util/arena.h"
@@ -95,15 +96,67 @@ void Cleanable::RegisterCleanup(CleanupFunction func, void* arg1, void* arg2) {
   c->arg2 = arg2;
 }
 
-Status Iterator::GetProperty(std::string prop_name, std::string* prop) {
+Status Iterator::GetProperty(std::string /*prop_name*/, std::string* prop) {
   if (prop == nullptr) {
     return Status::InvalidArgument("prop is nullptr");
   }
-  if (prop_name == "rocksdb.iterator.is-key-pinned") {
-    *prop = "0";
-    return Status::OK();
-  }
   return Status::InvalidArgument("Unidentified property.");
+}
+
+LazySlice CombinedInternalIterator::value() const {
+  ParsedInternalKey pikey;
+  ParseInternalKey(iter_->key(), &pikey);
+  if (pikey.type != kTypeValueIndex && pikey.type != kTypeMergeIndex) {
+    return iter_->value();
+  }
+  LazySlice v = iter_->value();
+  separate_helper_->TransToCombined(pikey.user_key, pikey.sequence, v);
+  auto s = v.inplace_decode();
+  if (!s.ok()) {
+    v.reset(s);
+  }
+  return v;
+}
+
+LazySlice SeparateValueCollector::value(InternalIterator* iter,
+                                        const Slice& user_key) const {
+  ParsedInternalKey pikey;
+  ParseInternalKey(iter->key(), &pikey);
+  if (pikey.type != kTypeValueIndex && pikey.type != kTypeMergeIndex) {
+    return iter->value();
+  }
+  LazySlice v = iter->value();
+  separate_helper_->TransToCombined(user_key, pikey.sequence, v);
+  return v;
+}
+
+LazySlice SeparateValueCollector::add(InternalIterator* iter,
+                                      const Slice& user_key) {
+  ParsedInternalKey pikey;
+  ParseInternalKey(iter->key(), &pikey);
+  LazySlice v = iter->value();
+  if (delta_antiquation_ != nullptr) {
+    assert(v.file_number() != uint64_t(-1));
+    ++(*delta_antiquation_)[v.file_number()];
+  }
+  if (pikey.type != kTypeValueIndex && pikey.type != kTypeMergeIndex) {
+    return v;
+  }
+  separate_helper_->TransToCombined(user_key, pikey.sequence, v);
+  if (delta_antiquation_ != nullptr) {
+    assert(v.file_number() != uint64_t(-1));
+    ++(*delta_antiquation_)[v.file_number()];
+  }
+  return v;
+}
+
+void SeparateValueCollector::sub(uint64_t file_number) {
+  if (delta_antiquation_ != nullptr) {
+    assert(file_number != uint64_t(-1));
+    assert(delta_antiquation_->count(file_number) > 0 &&
+           delta_antiquation_->find(file_number)->second > 0);
+    --(*delta_antiquation_)[file_number];
+  }
 }
 
 namespace {
@@ -156,45 +209,6 @@ class EmptyInternalIteratorBase : public InternalIteratorBase<TValue> {
   Status status_;
 };
 
-template <class TValue = Slice>
-class FileNumberInternalIteratorWrapperBase
-    : public InternalIteratorBase<TValue> {
- public:
-  FileNumberInternalIteratorWrapperBase(InternalIteratorBase<TValue>* inner,
-                                        uint64_t file_number)
-      : inner_(inner), file_number_(file_number) {}
-  virtual bool Valid() const override { return inner_->Valid(); }
-  virtual void Seek(const Slice& target) override { inner_->Seek(target); }
-  virtual void SeekForPrev(const Slice& target) override {
-    inner_->SeekForPrev(target);
-  }
-  virtual void SeekToFirst() override { inner_->SeekToFirst(); }
-  virtual void SeekToLast() override { inner_->SeekToLast(); }
-  virtual void Next() override { inner_->Next(); }
-  virtual void Prev() override { inner_->Prev(); }
-  Slice key() const override { return inner_->key(); }
-  TValue value() const override { return inner_->value(); }
-  virtual Status status() const override { return inner_->status(); }
-  virtual uint64_t FileNumber() const override { return file_number_; }
-  virtual bool IsOutOfBound() override { return inner_->IsOutOfBound(); }
-  virtual void SetPinnedItersMgr(
-      PinnedIteratorsManager* pinned_iters_mgr) override {
-    inner_->SetPinnedItersMgr(pinned_iters_mgr);
-  }
-  virtual bool IsKeyPinned() const override { return inner_->IsKeyPinned(); }
-  virtual bool IsValuePinned() const override {
-    return inner_->IsValuePinned();
-  }
-  virtual Status GetProperty(std::string prop_name,
-                             std::string* prop) override {
-    return inner_->GetProperty(prop_name, prop);
-  }
-
- private:
-  InternalIteratorBase<TValue>* inner_;
-  uint64_t file_number_;
-};
-
 }  // namespace
 
 Iterator* NewEmptyIterator() { return new EmptyIterator(Status::OK()); }
@@ -216,6 +230,8 @@ InternalIteratorBase<TValue>* NewEmptyInternalIterator(Arena* arena) {
 template InternalIteratorBase<BlockHandle>* NewEmptyInternalIterator(
     Arena* arena);
 template InternalIteratorBase<Slice>* NewEmptyInternalIterator(Arena* arena);
+template InternalIteratorBase<LazySlice>* NewEmptyInternalIterator(
+    Arena* arena);
 
 template <class TValue>
 InternalIteratorBase<TValue>* NewErrorInternalIterator(const Status& status,
@@ -232,31 +248,7 @@ template InternalIteratorBase<BlockHandle>* NewErrorInternalIterator(
     const Status& status, Arena* arena);
 template InternalIteratorBase<Slice>* NewErrorInternalIterator(
     const Status& status, Arena* arena);
-
-template <class TValue>
-InternalIteratorBase<TValue>* NewFileNumberInternalIteratorWrapper(
-    InternalIteratorBase<TValue>* inner, uint64_t file_number, Arena* arena) {
-  using Wrapper = FileNumberInternalIteratorWrapperBase<TValue>;
-  using Inner = InternalIteratorBase<TValue>;
-  Wrapper* wrapper;
-  if (arena == nullptr) {
-    wrapper = new Wrapper(inner, file_number);
-    wrapper->RegisterCleanup(
-        [](void* arg1, void*) { delete static_cast<Inner*>(arg1); }, inner,
-        nullptr);
-  } else {
-    auto mem = arena->AllocateAligned(sizeof(Wrapper));
-    wrapper = new (mem) Wrapper(inner, file_number);
-    wrapper->RegisterCleanup(
-        [](void* arg1, void*) { static_cast<Inner*>(arg1)->~Inner(); }, inner,
-        nullptr);
-  }
-  return wrapper;
-}
-template InternalIteratorBase<BlockHandle>*
-NewFileNumberInternalIteratorWrapper(InternalIteratorBase<BlockHandle>* inner,
-                                     uint64_t file_number, Arena* arena);
-template InternalIteratorBase<Slice>* NewFileNumberInternalIteratorWrapper(
-    InternalIteratorBase<Slice>* inner, uint64_t file_number, Arena* arena);
+template InternalIteratorBase<LazySlice>* NewErrorInternalIterator(
+    const Status& status, Arena* arena);
 
 }  // namespace rocksdb

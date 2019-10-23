@@ -103,6 +103,8 @@ class VersionStorageInfo {
 
   void AddFile(int level, FileMetaData* f, Logger* info_log = nullptr);
 
+  void ShrinkDependenceMap(void* arg, bool (*exists)(void*, FileMetaData*));
+
   void SetFinalized();
 
   // Update num_non_empty_levels_.
@@ -302,7 +304,7 @@ class VersionStorageInfo {
   }
 
   // REQUIRES: This version has been saved (see VersionSet::SaveTo)
-  const DependFileMap& depend_files() const { return depend_files_; }
+  const DependenceMap& dependence_map() const { return dependence_map_; }
 
   const rocksdb::LevelFilesBrief& LevelFilesBrief(int level) const {
     assert(level < static_cast<int>(level_files_brief_.size()));
@@ -462,8 +464,8 @@ class VersionStorageInfo {
   // in increasing order of keys
   std::vector<FileMetaData*>* files_;
 
-  // depend files both in files[num_levels] and depend_files
-  DependFileMap depend_files_;
+  // Dependence files both in files[-1] and dependence_map
+  DependenceMap dependence_map_;
 
   // Level that L0 data should be compacted to. All levels < base_level_ should
   // be empty. -1 if it is not level-compaction so it's not applicable.
@@ -570,7 +572,7 @@ class VersionStorageInfo {
   void operator=(const VersionStorageInfo&) = delete;
 };
 
-class Version {
+class Version : public SeparateHelper, private LazySliceController {
  public:
   // Append to *iters a sequence of iterators that will
   // yield the contents of this Version when merged together.
@@ -604,12 +606,14 @@ class Version {
   // for the key if a key was found.
   //
   // REQUIRES: lock is not held
-  void Get(const ReadOptions&, const LookupKey& key, PinnableSlice* value,
-           Status* status, MergeContext* merge_context,
+  void Get(const ReadOptions&, const Slice& user_key, const LookupKey& key,
+           LazySlice* value, Status* status, MergeContext* merge_context,
            SequenceNumber* max_covering_tombstone_seq,
            bool* value_found = nullptr, bool* key_exists = nullptr,
-           SequenceNumber* seq = nullptr, ReadCallback* callback = nullptr,
-           bool* is_blob = nullptr);
+           SequenceNumber* seq = nullptr, ReadCallback* callback = nullptr);
+
+  void GetKey(const Slice& user_key, const Slice& ikey, Status* status,
+              ValueType* type, SequenceNumber* seq, LazySlice* value);
 
   // Loads some stats information from files. Call without mutex held. It needs
   // to be called before applying the version to the version set.
@@ -741,6 +745,17 @@ class Version {
           MutableCFOptions mutable_cf_options, uint64_t version_number = 0);
 
   ~Version();
+
+
+  void destroy(LazySliceRep* /*rep*/) const override {}
+
+  void pin_resource(LazySlice* /*slice*/,
+                    LazySliceRep* /*rep*/) const override {}
+
+  Status inplace_decode(LazySlice* slice, LazySliceRep* rep) const override;
+
+  void TransToCombined(const Slice& user_key, uint64_t sequence,
+                       LazySlice& value) const override;
 
   // No copying allowed
   Version(const Version&);
@@ -1104,6 +1119,9 @@ class VersionSet {
 
   // Current size of manifest file
   uint64_t manifest_file_size_;
+
+  // VersionEdit count of manifest file
+  uint64_t manifest_edit_count_;
 
   std::vector<ObsoleteFileInfo> obsolete_files_;
   std::vector<std::string> obsolete_manifests_;

@@ -16,7 +16,6 @@
 #include <vector>
 
 #include "db/dbformat.h"
-#include "db/pinned_iterators_manager.h"
 
 #include "rocksdb/cache.h"
 #include "rocksdb/comparator.h"
@@ -482,7 +481,7 @@ class HashIndexReader : public IndexReader {
       RandomAccessFileReader* file, FilePrefetchBuffer* prefetch_buffer,
       const ImmutableCFOptions& ioptions,
       const InternalKeyComparator* icomparator, const BlockHandle& index_handle,
-      InternalIterator* meta_index_iter, IndexReader** index_reader,
+      InternalIteratorBase<Slice>* meta_index_iter, IndexReader** index_reader,
       bool /*hash_index_allow_collision*/,
       const PersistentCacheOptions& cache_options,
       const bool index_key_includes_seq, const bool index_value_is_full,
@@ -861,7 +860,7 @@ Status BlockBasedTable::Open(const ImmutableCFOptions& ioptions,
 
   // Read meta index
   std::unique_ptr<Block> meta;
-  std::unique_ptr<InternalIterator> meta_iter;
+  std::unique_ptr<InternalIteratorBase<Slice>> meta_iter;
   s = ReadMetaBlock(rep, prefetch_buffer.get(), &meta, &meta_iter);
   if (!s.ok()) {
     return s;
@@ -1013,7 +1012,7 @@ Status BlockBasedTable::Open(const ImmutableCFOptions& ioptions,
           "Encountered error while reading data from range del block %s",
           s.ToString().c_str());
     }
-    auto iter = std::unique_ptr<InternalIterator>(
+    auto iter = std::unique_ptr<InternalIteratorBase<Slice>>(
         new_table->NewUnfragmentedRangeTombstoneIterator(read_options));
     rep->fragmented_range_dels = std::make_shared<FragmentedRangeTombstoneList>(
         std::move(iter), internal_comparator);
@@ -1182,10 +1181,10 @@ uint64_t BlockBasedTable::FileNumber() const {
 
 // Load the meta-block from the file. On success, return the loaded meta block
 // and its iterator.
-Status BlockBasedTable::ReadMetaBlock(Rep* rep,
-                                      FilePrefetchBuffer* prefetch_buffer,
-                                      std::unique_ptr<Block>* meta_block,
-                                      std::unique_ptr<InternalIterator>* iter) {
+Status BlockBasedTable::ReadMetaBlock(
+    Rep* rep, FilePrefetchBuffer* prefetch_buffer,
+    std::unique_ptr<Block>* meta_block,
+    std::unique_ptr<InternalIteratorBase<Slice>>* iter) {
   // TODO(sanjay): Skip this if footer.metaindex_handle() size indicates
   // it is an empty block.
   std::unique_ptr<Block> meta;
@@ -1928,7 +1927,7 @@ BlockBasedTable::PartitionedIndexIteratorState::PartitionedIndexIteratorState(
       index_key_is_full_(index_key_is_full) {}
 
 template <class TBlockIter, typename TValue>
-const size_t BlockBasedTableIterator<TBlockIter, TValue>::kMaxReadaheadSize =
+const size_t BlockBasedTableIteratorBase<TBlockIter, TValue>::kMaxReadaheadSize =
     256 * 1024;
 
 InternalIteratorBase<BlockHandle>*
@@ -2086,7 +2085,7 @@ bool BlockBasedTable::PrefixMayMatch(
 }
 
 template <class TBlockIter, typename TValue>
-void BlockBasedTableIterator<TBlockIter, TValue>::Seek(const Slice& target) {
+void BlockBasedTableIteratorBase<TBlockIter, TValue>::Seek(const Slice& target) {
   is_out_of_bound_ = false;
   if (!CheckPrefixMayMatch(target)) {
     ResetDataIter();
@@ -2116,7 +2115,7 @@ void BlockBasedTableIterator<TBlockIter, TValue>::Seek(const Slice& target) {
 }
 
 template <class TBlockIter, typename TValue>
-void BlockBasedTableIterator<TBlockIter, TValue>::SeekForPrev(
+void BlockBasedTableIteratorBase<TBlockIter, TValue>::SeekForPrev(
     const Slice& target) {
   is_out_of_bound_ = false;
   if (!CheckPrefixMayMatch(target)) {
@@ -2160,7 +2159,7 @@ void BlockBasedTableIterator<TBlockIter, TValue>::SeekForPrev(
 }
 
 template <class TBlockIter, typename TValue>
-void BlockBasedTableIterator<TBlockIter, TValue>::SeekToFirst() {
+void BlockBasedTableIteratorBase<TBlockIter, TValue>::SeekToFirst() {
   is_out_of_bound_ = false;
   SavePrevIndexValue();
   index_iter_->SeekToFirst();
@@ -2174,7 +2173,7 @@ void BlockBasedTableIterator<TBlockIter, TValue>::SeekToFirst() {
 }
 
 template <class TBlockIter, typename TValue>
-void BlockBasedTableIterator<TBlockIter, TValue>::SeekToLast() {
+void BlockBasedTableIteratorBase<TBlockIter, TValue>::SeekToLast() {
   is_out_of_bound_ = false;
   SavePrevIndexValue();
   index_iter_->SeekToLast();
@@ -2188,21 +2187,21 @@ void BlockBasedTableIterator<TBlockIter, TValue>::SeekToLast() {
 }
 
 template <class TBlockIter, typename TValue>
-void BlockBasedTableIterator<TBlockIter, TValue>::Next() {
+void BlockBasedTableIteratorBase<TBlockIter, TValue>::Next() {
   assert(block_iter_points_to_real_block_);
   block_iter_.Next();
   FindKeyForward();
 }
 
 template <class TBlockIter, typename TValue>
-void BlockBasedTableIterator<TBlockIter, TValue>::Prev() {
+void BlockBasedTableIteratorBase<TBlockIter, TValue>::Prev() {
   assert(block_iter_points_to_real_block_);
   block_iter_.Prev();
   FindKeyBackward();
 }
 
 template <class TBlockIter, typename TValue>
-void BlockBasedTableIterator<TBlockIter, TValue>::InitDataBlock() {
+void BlockBasedTableIteratorBase<TBlockIter, TValue>::InitDataBlock() {
   BlockHandle data_block_handle = index_iter_->value();
   if (!block_iter_points_to_real_block_ ||
       data_block_handle.offset() != prev_index_value_.offset() ||
@@ -2252,7 +2251,7 @@ void BlockBasedTableIterator<TBlockIter, TValue>::InitDataBlock() {
 }
 
 template <class TBlockIter, typename TValue>
-void BlockBasedTableIterator<TBlockIter, TValue>::FindKeyForward() {
+void BlockBasedTableIteratorBase<TBlockIter, TValue>::FindKeyForward() {
   assert(!is_out_of_bound_);
   // TODO the while loop inherits from two-level-iterator. We don't know
   // whether a block can be empty so it can be replaced by an "if".
@@ -2292,7 +2291,7 @@ void BlockBasedTableIterator<TBlockIter, TValue>::FindKeyForward() {
 }
 
 template <class TBlockIter, typename TValue>
-void BlockBasedTableIterator<TBlockIter, TValue>::FindKeyBackward() {
+void BlockBasedTableIteratorBase<TBlockIter, TValue>::FindKeyBackward() {
   assert(!is_out_of_bound_);
   while (!block_iter_.Valid()) {
     if (!block_iter_.status().ok()) {
@@ -2321,7 +2320,7 @@ InternalIterator* BlockBasedTable::NewIterator(
       PrefixExtractorChanged(rep_->table_properties.get(), prefix_extractor);
   const bool kIsNotIndex = false;
   if (arena == nullptr) {
-    return new BlockBasedTableIterator<DataBlockIter>(
+    return new BlockBasedTableIterator<DataBlockIter, LazySlice>(
         this, read_options, rep_->internal_comparator,
         NewIndexIterator(
             read_options,
@@ -2333,8 +2332,9 @@ InternalIterator* BlockBasedTable::NewIterator(
         true /*key_includes_seq*/, for_compaction);
   } else {
     auto* mem =
-        arena->AllocateAligned(sizeof(BlockBasedTableIterator<DataBlockIter>));
-    return new (mem) BlockBasedTableIterator<DataBlockIter>(
+        arena->AllocateAligned(
+            sizeof(BlockBasedTableIterator<DataBlockIter, LazySlice>));
+    return new (mem) BlockBasedTableIterator<DataBlockIter, LazySlice>(
         this, read_options, rep_->internal_comparator,
         NewIndexIterator(read_options, need_upper_bound_check),
         !skip_filters && !read_options.total_order_seek &&
@@ -2357,7 +2357,8 @@ FragmentedRangeTombstoneIterator* BlockBasedTable::NewRangeTombstoneIterator(
       rep_->fragmented_range_dels, rep_->internal_comparator, snapshot);
 }
 
-InternalIterator* BlockBasedTable::NewUnfragmentedRangeTombstoneIterator(
+InternalIteratorBase<Slice>*
+BlockBasedTable::NewUnfragmentedRangeTombstoneIterator(
     const ReadOptions& read_options) {
   if (rep_->range_del_handle.IsNull()) {
     // The block didn't exist, nullptr indicates no range tombstones.
@@ -2505,9 +2506,8 @@ Status BlockBasedTable::Get(const ReadOptions& read_options, const Slice& key,
             s = Status::Corruption(Slice());
           }
 
-          if (!get_context->SaveValue(
-                  parsed_key, biter.value(), &matched,
-                  biter.IsValuePinned() ? &biter : nullptr)) {
+          if (!get_context->SaveValue(parsed_key, LazySlice(biter.value()),
+                                      &matched)) {
             done = true;
             break;
           }
@@ -2599,7 +2599,7 @@ Status BlockBasedTable::VerifyChecksum() {
   Status s;
   // Check Meta blocks
   std::unique_ptr<Block> meta;
-  std::unique_ptr<InternalIterator> meta_iter;
+  std::unique_ptr<InternalIteratorBase<Slice>> meta_iter;
   s = ReadMetaBlock(rep_, nullptr /* prefetch buffer */, &meta, &meta_iter);
   if (s.ok()) {
     s = VerifyChecksumInBlocks(meta_iter.get());
@@ -2734,7 +2734,7 @@ BlockBasedTableOptions::IndexType BlockBasedTable::UpdateIndexType() {
 //  5. index_type
 Status BlockBasedTable::CreateIndexReader(
     FilePrefetchBuffer* prefetch_buffer, IndexReader** index_reader,
-    InternalIterator* preloaded_meta_index_iter, int level) {
+    InternalIteratorBase<Slice>* preloaded_meta_index_iter, int level) {
   auto index_type_on_file = UpdateIndexType();
 
   auto file = rep_->file.get();
@@ -2771,7 +2771,7 @@ Status BlockBasedTable::CreateIndexReader(
     }
     case BlockBasedTableOptions::kHashSearch: {
       std::unique_ptr<Block> meta_guard;
-      std::unique_ptr<InternalIterator> meta_iter_guard;
+      std::unique_ptr<InternalIteratorBase<Slice>> meta_iter_guard;
       auto meta_index_iter = preloaded_meta_index_iter;
       if (meta_index_iter == nullptr) {
         auto s =
@@ -2866,7 +2866,7 @@ Status BlockBasedTable::GetKVPairsFromDataBlocks(
       break;
     }
 
-    std::unique_ptr<InternalIterator> datablock_iter;
+    std::unique_ptr<InternalIteratorBase<Slice>> datablock_iter;
     datablock_iter.reset(NewDataBlockIterator<DataBlockIter>(
         rep_, ReadOptions(), blockhandles_iter->value()));
     s = datablock_iter->status();
@@ -2912,7 +2912,7 @@ Status BlockBasedTable::DumpTable(WritableFile* out_file,
       "Metaindex Details:\n"
       "--------------------------------------\n");
   std::unique_ptr<Block> meta;
-  std::unique_ptr<InternalIterator> meta_iter;
+  std::unique_ptr<InternalIteratorBase<Slice>> meta_iter;
   Status s =
       ReadMetaBlock(rep_, nullptr /* prefetch_buffer */, &meta, &meta_iter);
   if (s.ok()) {
@@ -3147,7 +3147,7 @@ Status BlockBasedTable::DumpDataBlocks(WritableFile* out_file) {
     out_file->Append("\n");
     out_file->Append("--------------------------------------\n");
 
-    std::unique_ptr<InternalIterator> datablock_iter;
+    std::unique_ptr<InternalIteratorBase<Slice>> datablock_iter;
     datablock_iter.reset(NewDataBlockIterator<DataBlockIter>(
         rep_, ReadOptions(), blockhandles_iter->value()));
     s = datablock_iter->status();
@@ -3249,5 +3249,14 @@ void DeleteCachedIndexEntry(const Slice& /*key*/, void* value) {
 }
 
 }  // anonymous namespace
+
+void BlockBasedTableIterator<DataBlockIter, LazySlice>::pin_resource(
+    rocksdb::LazySlice* slice, rocksdb::LazySliceRep* /*rep*/) const {
+  //TODO ref block
+  //[block handle]->ref()
+  //Cleanable cleanup = [](args...){ [block handle]->deref() };
+  //slice->reset(*slice, &cleanup, slice->file_number());
+  slice->reset(block_iter_.value(), true, slice->file_number());
+}
 
 }  // namespace rocksdb

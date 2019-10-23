@@ -121,6 +121,9 @@ void ColumnFamilyOptions::Dump(Logger* log) const {
   ROCKS_LOG_HEADER(
       log, "       Options.compaction_filter_factory: %s",
       compaction_filter_factory ? compaction_filter_factory->Name() : "None");
+  ROCKS_LOG_HEADER(
+      log, "           Options.compaction_dispatcher: %s",
+      compaction_dispatcher ? compaction_dispatcher->Name() : "None");
   ROCKS_LOG_HEADER(log, "        Options.memtable_factory: %s",
                    memtable_factory->Name());
   ROCKS_LOG_HEADER(log, "           Options.table_factory: %s",
@@ -560,7 +563,6 @@ ReadOptions::ReadOptions()
       managed(false),
       total_order_seek(false),
       prefix_same_as_start(false),
-      pin_data(false),
       background_purge_on_iterator_cleanup(false),
       ignore_range_deletions(false),
       aio_concurrency(32),
@@ -579,7 +581,6 @@ ReadOptions::ReadOptions(bool cksum, bool cache)
       managed(false),
       total_order_seek(false),
       prefix_same_as_start(false),
-      pin_data(false),
       background_purge_on_iterator_cleanup(false),
       ignore_range_deletions(false),
       aio_concurrency(32),

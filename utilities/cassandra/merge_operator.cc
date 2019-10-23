@@ -24,37 +24,52 @@ bool CassandraValueMergeOperator::FullMergeV2(
   merge_out->new_value.clear();
   std::vector<RowValue> row_values;
   if (merge_in.existing_value) {
+    if (!merge_in.existing_value->inplace_decode().ok()) {
+      return false;
+    }
     row_values.push_back(
-      RowValue::Deserialize(merge_in.existing_value->data(),
-                            merge_in.existing_value->size()));
+        RowValue::Deserialize(merge_in.existing_value->data(),
+                              merge_in.existing_value->size()));
   }
 
   for (auto& operand : merge_in.operand_list) {
-    row_values.push_back(RowValue::Deserialize(operand.data(), operand.size()));
+    if (!operand.inplace_decode().ok()) {
+      return false;
+    }
+    row_values.push_back(RowValue::Deserialize(operand.data(),
+                                               operand.size()));
   }
 
   RowValue merged = RowValue::Merge(std::move(row_values));
   merged = merged.RemoveTombstones(gc_grace_period_in_seconds_);
-  merge_out->new_value.reserve(merged.Size());
-  merged.Serialize(&(merge_out->new_value));
+
+  std::string* buffer = merge_out->new_value.trans_to_buffer();
+  buffer->reserve(merged.Size());
+  merged.Serialize(buffer);
 
   return true;
 }
 
 bool CassandraValueMergeOperator::PartialMergeMulti(
-    const Slice& /*key*/, const std::deque<Slice>& operand_list,
-    std::string* new_value, Logger* /*logger*/) const {
+    const Slice& /*key*/, const std::vector<LazySlice>& operand_list,
+    LazySlice* new_value, Logger* /*logger*/) const {
   // Clear the *new_value for writing.
   assert(new_value);
   new_value->clear();
 
   std::vector<RowValue> row_values;
   for (auto& operand : operand_list) {
-    row_values.push_back(RowValue::Deserialize(operand.data(), operand.size()));
+    if (!operand.inplace_decode().ok()) {
+      return false;
+    }
+    row_values.push_back(RowValue::Deserialize(operand.data(),
+                                               operand.size()));
   }
   RowValue merged = RowValue::Merge(std::move(row_values));
-  new_value->reserve(merged.Size());
-  merged.Serialize(new_value);
+
+  std::string* buffer = new_value->trans_to_buffer();
+  buffer->reserve(merged.Size());
+  merged.Serialize(buffer);
   return true;
 }
 

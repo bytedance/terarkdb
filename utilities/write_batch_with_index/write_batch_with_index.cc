@@ -812,18 +812,24 @@ void WriteBatchWithIndex::Clear() { rep->Clear(); }
 
 Status WriteBatchWithIndex::GetFromBatch(ColumnFamilyHandle* column_family,
                                          const DBOptions& options,
-                                         const Slice& key, std::string* value) {
+                                         const Slice& key,
+                                         std::string* value) {
   Status s;
   MergeContext merge_context;
   const ImmutableDBOptions immuable_db_options(options);
 
+  LazySlice lazy_value(value);
   WriteBatchWithIndexInternal::Result result =
       WriteBatchWithIndexInternal::GetFromBatch(
           immuable_db_options, this, column_family, key, &merge_context,
-          rep->GetComparator(column_family), value, rep->overwrite_key, &s);
+          rep->GetComparator(column_family), &lazy_value, rep->overwrite_key,
+          &s);
 
   switch (result) {
     case WriteBatchWithIndexInternal::Result::kFound:
+      assert(s.ok());
+      s = lazy_value.save_to_buffer(value);
+      break;
     case WriteBatchWithIndexInternal::Result::kError:
       // use returned status
       break;
@@ -846,22 +852,21 @@ Status WriteBatchWithIndex::GetFromBatchAndDB(DB* db,
                                               const Slice& key,
                                               std::string* value) {
   assert(value != nullptr);
-  PinnableSlice pinnable_val(value);
-  assert(!pinnable_val.IsPinned());
+  LazySlice lazy_val(value);
   auto s = GetFromBatchAndDB(db, read_options, db->DefaultColumnFamily(), key,
-                             &pinnable_val);
-  if (s.ok() && pinnable_val.IsPinned()) {
-    value->assign(pinnable_val.data(), pinnable_val.size());
-  }  // else value is already assigned
+                             &lazy_val);
+  if (s.ok()) {
+    s = lazy_val.save_to_buffer(value);
+  }
   return s;
 }
 
 Status WriteBatchWithIndex::GetFromBatchAndDB(DB* db,
                                               const ReadOptions& read_options,
                                               const Slice& key,
-                                              PinnableSlice* pinnable_val) {
+                                              LazySlice* lazy_val) {
   return GetFromBatchAndDB(db, read_options, db->DefaultColumnFamily(), key,
-                           pinnable_val);
+                           lazy_val);
 }
 
 Status WriteBatchWithIndex::GetFromBatchAndDB(DB* db,
@@ -870,13 +875,12 @@ Status WriteBatchWithIndex::GetFromBatchAndDB(DB* db,
                                               const Slice& key,
                                               std::string* value) {
   assert(value != nullptr);
-  PinnableSlice pinnable_val(value);
-  assert(!pinnable_val.IsPinned());
+  LazySlice lazy_val(value);
   auto s =
-      GetFromBatchAndDB(db, read_options, column_family, key, &pinnable_val);
-  if (s.ok() && pinnable_val.IsPinned()) {
-    value->assign(pinnable_val.data(), pinnable_val.size());
-  }  // else value is already assigned
+      GetFromBatchAndDB(db, read_options, column_family, key, &lazy_val);
+  if (s.ok()) {
+    s = lazy_val.save_to_buffer(value);
+  }
   return s;
 }
 
@@ -884,14 +888,14 @@ Status WriteBatchWithIndex::GetFromBatchAndDB(DB* db,
                                               const ReadOptions& read_options,
                                               ColumnFamilyHandle* column_family,
                                               const Slice& key,
-                                              PinnableSlice* pinnable_val) {
-  return GetFromBatchAndDB(db, read_options, column_family, key, pinnable_val,
+                                              LazySlice* lazy_val) {
+  return GetFromBatchAndDB(db, read_options, column_family, key, lazy_val,
                            nullptr);
 }
 
 Status WriteBatchWithIndex::GetFromBatchAndDB(
     DB* db, const ReadOptions& read_options, ColumnFamilyHandle* column_family,
-    const Slice& key, PinnableSlice* pinnable_val, ReadCallback* callback) {
+    const Slice& key, LazySlice* lazy_val, ReadCallback* callback) {
   Status s;
   MergeContext merge_context;
   const ImmutableDBOptions& immuable_db_options =
@@ -901,14 +905,14 @@ Status WriteBatchWithIndex::GetFromBatchAndDB(
   // Since the lifetime of the WriteBatch is the same as that of the transaction
   // we cannot pin it as otherwise the returned value will not be available
   // after the transaction finishes.
-  std::string& batch_value = *pinnable_val->GetSelf();
   WriteBatchWithIndexInternal::Result result =
       WriteBatchWithIndexInternal::GetFromBatch(
           immuable_db_options, this, column_family, key, &merge_context,
-          rep->GetComparator(column_family), &batch_value, rep->overwrite_key, &s);
+          rep->GetComparator(column_family), lazy_val, rep->overwrite_key, &s);
 
   if (result == WriteBatchWithIndexInternal::Result::kFound) {
-    pinnable_val->PinSelf();
+    lazy_val->pin_resource();
+    s = lazy_val->inplace_decode();
     return s;
   }
   if (result == WriteBatchWithIndexInternal::Result::kDeleted) {
@@ -918,7 +922,7 @@ Status WriteBatchWithIndex::GetFromBatchAndDB(
     return s;
   }
   if (result == WriteBatchWithIndexInternal::Result::kMergeInProgress &&
-      rep->overwrite_key == true) {
+      rep->overwrite_key) {
     // Since we've overwritten keys, we do not know what other operations are
     // in this batch for this key, so we cannot do a Merge to compute the
     // result.  Instead, we will simply return MergeInProgress.
@@ -929,13 +933,9 @@ Status WriteBatchWithIndex::GetFromBatchAndDB(
          result == WriteBatchWithIndexInternal::Result::kNotFound);
 
   // Did not find key in batch OR could not resolve Merges.  Try DB.
-  if (!callback) {
-    s = db->Get(read_options, column_family, key, pinnable_val);
-  } else {
-    s = static_cast_with_check<DBImpl, DB>(db->GetRootDB())
-            ->GetImpl(read_options, column_family, key, pinnable_val, nullptr,
-                      callback);
-  }
+  s = static_cast_with_check<DBImpl, DB>(db->GetRootDB())
+          ->GetImpl(read_options, column_family, key, lazy_val, nullptr,
+                    callback);
 
   if (s.ok() || s.IsNotFound()) {  // DB Get Succeeded
     if (result == WriteBatchWithIndexInternal::Result::kMergeInProgress) {
@@ -947,27 +947,30 @@ Status WriteBatchWithIndex::GetFromBatchAndDB(
       Env* env = immuable_db_options.env;
       Logger* logger = immuable_db_options.info_log.get();
 
-      Slice* merge_data;
+      LazySlice* merge_data;
       if (s.ok()) {
-        merge_data = pinnable_val;
+        merge_data = lazy_val;
       } else {  // Key not present in db (s.IsNotFound())
         merge_data = nullptr;
       }
 
       if (merge_operator) {
-        std::string merge_result;
+        LazySlice merge_result;
         s = MergeHelper::TimedFullMerge(
             merge_operator, key, merge_data, merge_context.GetOperands(),
             &merge_result, logger, statistics, env);
-        pinnable_val->Reset();
-        *pinnable_val->GetSelf() = std::move(merge_result);
-        pinnable_val->PinSelf();
+        if (s.ok()) {
+          s = merge_result.decode_destructive(*lazy_val);
+        }
+        if (s.ok()) {
+          lazy_val->pin_resource();
+        }
       } else {
         s = Status::InvalidArgument("Options::merge_operator must be set");
       }
     }
   }
-
+  assert(!s.ok() || lazy_val->valid());
   return s;
 }
 

@@ -101,8 +101,8 @@ Compaction* FIFOCompactionPicker::PickTTLCompaction(
   CompactionParams params(vstorage, ioptions_, mutable_cf_options);
   params.inputs = std::move(inputs);
   params.compression_opts = ioptions_.compression_opts;
-  params.deletion_compaction = true;
   params.score = vstorage->CompactionScore(0);
+  params.deletion_compaction = true;
   params.compaction_reason = CompactionReason::kFIFOTtl;
 
   Compaction* c = new Compaction(std::move(params));
@@ -191,8 +191,8 @@ Compaction* FIFOCompactionPicker::PickSizeCompaction(
   CompactionParams params(vstorage, ioptions_, mutable_cf_options);
   params.inputs = std::move(inputs);
   params.compression_opts = ioptions_.compression_opts;
-  params.deletion_compaction = true;
   params.score = vstorage->CompactionScore(0);
+  params.deletion_compaction = true;
   params.compaction_reason = CompactionReason::kFIFOMaxSize;
 
   return new Compaction(std::move(params));
@@ -210,8 +210,7 @@ Compaction* FIFOCompactionPicker::PickCompaction(
   if (c == nullptr) {
     c = PickSizeCompaction(cf_name, mutable_cf_options, vstorage, log_buffer);
   }
-  RegisterCompaction(c);
-  return c;
+  return RegisterCompaction(c);
 }
 
 Compaction* FIFOCompactionPicker::CompactRange(

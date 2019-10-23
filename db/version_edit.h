@@ -83,6 +83,15 @@ struct FileSampledStats {
   mutable std::atomic<uint64_t> num_reads_sampled;
 };
 
+struct TablePropertyCache {
+  uint64_t num_entries = 0;                 // the number of entries.
+  uint8_t purpose = 0;                      // zero for essence sst
+  uint16_t max_read_amp = 1;                // max read amp from sst
+  float read_amp = 1;                       // expt read amp from sst
+  std::vector<uint64_t> dependence;         // make these sst hidden
+  std::vector<uint64_t> inheritance_chain;  // inheritance chain
+};
+
 struct FileMetaData {
   FileDescriptor fd;
   InternalKey smallest;            // Smallest internal key served by table
@@ -101,8 +110,8 @@ struct FileMetaData {
   uint64_t compensated_file_size;
   // These values can mutate, but they can only be read or written from
   // single-threaded LogAndApply thread
-  uint64_t num_entries;            // the number of entries.
   uint64_t num_deletions;          // the number of deletion entries.
+  uint64_t num_antiquation;        // the number of out-dated entries.
   uint64_t raw_key_size;           // total uncompressed key size.
   uint64_t raw_value_size;         // total uncompressed value size.
 
@@ -114,22 +123,22 @@ struct FileMetaData {
 
   bool marked_for_compaction;  // True if client asked us nicely to compact this
                                // file.
+  bool is_skip_gc;             // True if the SST in LSM
 
-  uint8_t sst_purpose;               // Zero for normal sst
-  std::vector<uint64_t> sst_depend;  // Make these sst hidden
+  TablePropertyCache prop;     // Cache some TableProperty fields into manifest
 
   FileMetaData()
       : table_reader_handle(nullptr),
         compensated_file_size(0),
-        num_entries(0),
         num_deletions(0),
+        num_antiquation(0),
         raw_key_size(0),
         raw_value_size(0),
         refs(0),
         being_compacted(false),
         init_stats_from_file(false),
         marked_for_compaction(false),
-        sst_purpose(0) {}
+        is_skip_gc(false) {}
 
   // REQUIRED: Keys must be given to the function in sorted order (it expects
   // the last key to be the largest).
@@ -239,8 +248,8 @@ class VersionEdit {
   void AddFile(int level, uint64_t file, uint32_t file_path_id,
                uint64_t file_size, const InternalKey& smallest,
                const InternalKey& largest, const SequenceNumber& smallest_seqno,
-               const SequenceNumber& largest_seqno, bool marked_for_compaction,
-               uint8_t sst_purpose, const std::vector<uint64_t>& sst_depend) {
+               const SequenceNumber& largest_seqno, uint64_t num_antiquation,
+               bool marked_for_compaction, const TablePropertyCache& prop) {
     assert(smallest_seqno <= largest_seqno);
     FileMetaData f;
     f.fd = FileDescriptor(file, file_path_id, file_size, smallest_seqno,
@@ -249,9 +258,14 @@ class VersionEdit {
     f.largest = largest;
     f.fd.smallest_seqno = smallest_seqno;
     f.fd.largest_seqno = largest_seqno;
+    f.num_antiquation = num_antiquation;
     f.marked_for_compaction = marked_for_compaction;
-    f.sst_purpose = sst_purpose;
-    f.sst_depend = sst_depend;
+    f.prop.num_entries = prop.num_entries;
+    f.prop.purpose = prop.purpose;
+    f.prop.max_read_amp = prop.max_read_amp;
+    f.prop.read_amp = prop.read_amp;
+    f.prop.dependence = prop.dependence;
+    f.prop.inheritance_chain = prop.inheritance_chain;
     new_files_.emplace_back(level, std::move(f));
   }
 
@@ -263,6 +277,12 @@ class VersionEdit {
   // Delete the specified "file" from the specified "level".
   void DeleteFile(int level, uint64_t file) {
     deleted_files_.insert({level, file});
+  }
+
+  void SetAntiquation(
+      const std::unordered_map<uint64_t, uint64_t>& antiquation) {
+    delta_antiquation_.reserve(antiquation.size());
+    delta_antiquation_.assign(antiquation.begin(), antiquation.end());
   }
 
   // Number of edits
@@ -305,6 +325,9 @@ class VersionEdit {
   const std::vector<std::pair<int, FileMetaData>>& GetNewFiles() {
     return new_files_;
   }
+  const std::vector<std::pair<uint64_t, uint64_t>>& GetAntiquation() {
+    return delta_antiquation_;
+  }
 
   void MarkAtomicGroup(uint32_t remaining_entries) {
     is_in_atomic_group_ = true;
@@ -339,6 +362,7 @@ class VersionEdit {
 
   DeletedFileSet deleted_files_;
   std::vector<std::pair<int, FileMetaData>> new_files_;
+  std::vector<std::pair<uint64_t, uint64_t>> delta_antiquation_;
 
   // Each version edit record should have column_family_ set
   // If it's not set, it is default (0)

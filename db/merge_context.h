@@ -8,10 +8,9 @@
 #include <vector>
 #include "db/dbformat.h"
 #include "rocksdb/slice.h"
+#include "table/internal_iterator.h"
 
 namespace rocksdb {
-
-const std::vector<Slice> empty_operand_list;
 
 // The merge context for merging a user key.
 // When doing a Get(), DB will create such a class and pass it when
@@ -21,112 +20,76 @@ class MergeContext {
  public:
   // Clear all the operands
   void Clear() {
-    if (operand_list_) {
-      operand_list_->clear();
-      copied_operands_->clear();
-    }
+    operand_list_.clear();
   }
 
   // Push a merge operand
-  void PushOperand(const Slice& operand_slice, bool operand_pinned = false) {
-    Initialize();
+  void PushOperand(LazySlice&& operand_slice, bool operand_pinned = true) {
     SetDirectionBackward();
 
+    operand_list_.emplace_back(std::move(operand_slice));
     if (operand_pinned) {
-      operand_list_->push_back(operand_slice);
-    } else {
-      // We need to have our own copy of the operand since it's not pinned
-      copied_operands_->emplace_back(
-          new std::string(operand_slice.data(), operand_slice.size()));
-      operand_list_->push_back(*copied_operands_->back());
+      operand_list_.back().pin_resource();
     }
   }
 
   // Push back a merge operand
-  void PushOperandBack(const Slice& operand_slice,
-                       bool operand_pinned = false) {
-    Initialize();
+  void PushOperandBack(LazySlice&& operand_slice, bool operand_pinned = true) {
     SetDirectionForward();
 
+    operand_list_.emplace_back(std::move(operand_slice));
     if (operand_pinned) {
-      operand_list_->push_back(operand_slice);
-    } else {
-      // We need to have our own copy of the operand since it's not pinned
-      copied_operands_->emplace_back(
-          new std::string(operand_slice.data(), operand_slice.size()));
-      operand_list_->push_back(*copied_operands_->back());
+      operand_list_.back().pin_resource();
     }
   }
 
   // return total number of operands in the list
   size_t GetNumOperands() const {
-    if (!operand_list_) {
-      return 0;
-    }
-    return operand_list_->size();
+    return operand_list_.size();
   }
 
   // Get the operand at the index.
-  Slice GetOperand(int index) {
-    assert(operand_list_);
-
+  const LazySlice& GetOperand(int index) {
     SetDirectionForward();
-    return (*operand_list_)[index];
+    return operand_list_[index];
   }
 
   // Same as GetOperandsDirectionForward
-  const std::vector<Slice>& GetOperands() {
+  std::vector<LazySlice>& GetOperands() {
     return GetOperandsDirectionForward();
   }
 
   // Return all the operands in the order as they were merged (passed to
   // FullMerge or FullMergeV2)
-  const std::vector<Slice>& GetOperandsDirectionForward() {
-    if (!operand_list_) {
-      return empty_operand_list;
-    }
-
+  std::vector<LazySlice>& GetOperandsDirectionForward() {
     SetDirectionForward();
-    return *operand_list_;
+    return operand_list_;
   }
 
   // Return all the operands in the reversed order relative to how they were
   // merged (passed to FullMerge or FullMergeV2)
-  const std::vector<Slice>& GetOperandsDirectionBackward() {
-    if (!operand_list_) {
-      return empty_operand_list;
-    }
-
+  std::vector<LazySlice>& GetOperandsDirectionBackward() {
     SetDirectionBackward();
-    return *operand_list_;
+    return operand_list_;
   }
 
  private:
-  void Initialize() {
-    if (!operand_list_) {
-      operand_list_.reset(new std::vector<Slice>());
-      copied_operands_.reset(new std::vector<std::unique_ptr<std::string>>());
-    }
-  }
-
   void SetDirectionForward() {
     if (operands_reversed_ == true) {
-      std::reverse(operand_list_->begin(), operand_list_->end());
+      std::reverse(operand_list_.begin(), operand_list_.end());
       operands_reversed_ = false;
     }
   }
 
   void SetDirectionBackward() {
     if (operands_reversed_ == false) {
-      std::reverse(operand_list_->begin(), operand_list_->end());
+      std::reverse(operand_list_.begin(), operand_list_.end());
       operands_reversed_ = true;
     }
   }
 
   // List of operands
-  std::unique_ptr<std::vector<Slice>> operand_list_;
-  // Copy of operands that are not pinned.
-  std::unique_ptr<std::vector<std::unique_ptr<std::string>>> copied_operands_;
+  std::vector<LazySlice> operand_list_;
   bool operands_reversed_ = true;
 };
 

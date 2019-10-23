@@ -264,7 +264,8 @@ public class ReadOptions extends RocksObject {
    */
   public boolean pinData() {
     assert(isOwningHandle());
-    return pinData(nativeHandle_);
+    //return pinData(nativeHandle_);
+    return false;
   }
 
   /**
@@ -278,9 +279,10 @@ public class ReadOptions extends RocksObject {
    * @return the reference to the current ReadOptions.
    */
   public ReadOptions setPinData(final boolean pinData) {
-    assert(isOwningHandle());
-    setPinData(nativeHandle_, pinData);
-    return this;
+    //assert(isOwningHandle());
+    //setPinData(nativeHandle_, pinData);
+    //return this;
+    throw new UnsupportedOperationException();
   }
 
   /**

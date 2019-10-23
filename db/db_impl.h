@@ -106,14 +106,14 @@ class DBImpl : public DB {
   using DB::Get;
   virtual Status Get(const ReadOptions& options,
                      ColumnFamilyHandle* column_family, const Slice& key,
-                     PinnableSlice* value) override;
+                     LazySlice* value) override;
 
   // Function that Get and KeyMayExist call with no_io true or false
   // Note: 'value_found' from KeyMayExist propagates here
   Status GetImpl(const ReadOptions& options, ColumnFamilyHandle* column_family,
-                 const Slice& key, PinnableSlice* value,
-                 bool* value_found = nullptr, ReadCallback* callback = nullptr,
-                 bool* is_blob_index = nullptr);
+                 const Slice& key, LazySlice* value,
+                 bool* value_found = nullptr,
+                 ReadCallback* callback = nullptr);
 
   using DB::MultiGet;
   virtual std::vector<Status> MultiGet(
@@ -157,7 +157,6 @@ class DBImpl : public DB {
                                       ColumnFamilyData* cfd,
                                       SequenceNumber snapshot,
                                       ReadCallback* read_callback,
-                                      bool allow_blob = false,
                                       bool allow_refresh = true);
 
   virtual const Snapshot* GetSnapshot() override;
@@ -328,8 +327,7 @@ class DBImpl : public DB {
   // TODO(andrewkr): this API need to be aware of range deletion operations
   Status GetLatestSequenceForKey(SuperVersion* sv, const Slice& key,
                                  bool cache_only, SequenceNumber* seq,
-                                 bool* found_record_for_key,
-                                 bool* is_blob_index = nullptr);
+                                 bool* found_record_for_key);
 
   using DB::IngestExternalFile;
   virtual Status IngestExternalFile(
@@ -374,7 +372,8 @@ class DBImpl : public DB {
   // The returned iterator should be deleted when no longer needed.
   InternalIterator* NewInternalIterator(
       Arena* arena, RangeDelAggregator* range_del_agg, SequenceNumber sequence,
-      ColumnFamilyHandle* column_family = nullptr);
+      ColumnFamilyHandle* column_family = nullptr,
+      const SeparateHelper** separate_helper = nullptr);
 
   LogsWithPrepTracker* logs_with_prep_tracker() {
     return &logs_with_prep_tracker_;
@@ -579,7 +578,8 @@ class DBImpl : public DB {
 
   InternalIterator* NewInternalIterator(
       const ReadOptions&, ColumnFamilyData* cfd, SuperVersion* super_version,
-      Arena* arena, RangeDelAggregator* range_del_agg, SequenceNumber sequence);
+      Arena* arena, RangeDelAggregator* range_del_agg, SequenceNumber sequence,
+      const SeparateHelper** separate_helper = nullptr);
 
   // hollow transactions shell used for recovery.
   // these will then be passed to TransactionDB so that
@@ -835,7 +835,6 @@ class DBImpl : public DB {
   friend class DBTest2_ReadCallbackTest_Test;
   friend class WriteCallbackTest_WriteWithCallbackTest_Test;
   friend class XFTransactionWriteHandler;
-  friend class DBBlobIndexTest;
   friend class WriteUnpreparedTransactionTest_RecoveryTest_Test;
 #endif
   struct CompactionState;

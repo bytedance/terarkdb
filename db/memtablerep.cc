@@ -37,6 +37,24 @@ void MemTableRep::EncodeKeyValue(const Slice& key, const Slice& value,
   memcpy(p, value.data(), value.size());
 }
 
+LazySlice MemTableRep::DecodeToLazyValue(const char* key) {
+  struct SliceControllerImpl : public LazySliceController {
+    void destroy(LazySliceRep* /*rep*/) const override {}
+    void pin_resource(LazySlice* /*slice*/,
+                      LazySliceRep* /*rep*/) const override {}
+    Status inplace_decode(LazySlice* slice, LazySliceRep* rep) const override {
+      assert(!slice->valid());
+      const char* k = reinterpret_cast<const char*>(rep->data[0]);
+      Slice key_slice = GetLengthPrefixedSlice(k);
+      assign_slice(*slice,
+                   GetLengthPrefixedSlice(key_slice.data() + key_slice.size()));
+      return Status::OK();
+    }
+  };
+  static SliceControllerImpl controller_impl;
+  return LazySlice(&controller_impl, {reinterpret_cast<uint64_t>(key)});
+}
+
 bool MemTableRep::InsertKeyValue(const Slice& internal_key,
                                  const Slice& value) {
   size_t buf_size = EncodeKeyValueSize(internal_key, value);
@@ -74,52 +92,15 @@ KeyHandle MemTableRep::Allocate(const size_t len, char** buf) {
 }
 
 void MemTableRep::Get(const LookupKey& k, void* callback_args,
-                      bool (*callback_func)(void* arg, const KeyValuePair*)) {
+                      bool (*callback_func)(void* arg, const Slice& key,
+                                            LazySlice&& value)) {
   auto iter = GetDynamicPrefixIterator();
   for (iter->Seek(k.internal_key(), k.memtable_key().data());
-       iter->Valid() && callback_func(callback_args, iter); iter->Next()) {
+       iter->Valid() && callback_func(callback_args, iter->key(),
+                                      iter->value());
+       iter->Next()) {
   }
   delete iter;
-}
-
-Slice MemTableRep::EncodedKeyValuePair::GetKey() const {
-  return GetLengthPrefixedSlice(key_);
-}
-
-Slice MemTableRep::EncodedKeyValuePair::GetValue() const {
-  Slice key_slice = GetLengthPrefixedSlice(key_);
-  return GetLengthPrefixedSlice(key_slice.data() + key_slice.size());
-}
-
-std::pair<Slice, Slice> MemTableRep::EncodedKeyValuePair::GetKeyValue() const {
-  Slice key_slice = GetLengthPrefixedSlice(key_);
-  Slice value_slice =
-      GetLengthPrefixedSlice(key_slice.data() + key_slice.size());
-  return { key_slice, value_slice };
-}
-
-MemTableRep::KeyValuePair*
-MemTableRep::EncodedKeyValuePair::SetKey(const char* key) {
-  key_ = key;
-  return this;
-}
-
-Slice MemTableRep::Iterator::GetKey() const {
-  assert(Valid());
-  return GetLengthPrefixedSlice(key());
-}
-
-Slice MemTableRep::Iterator::GetValue() const {
-  assert(Valid());
-  Slice key_slice = GetLengthPrefixedSlice(key());
-  return GetLengthPrefixedSlice(key_slice.data() + key_slice.size());
-}
-std::pair<Slice, Slice> MemTableRep::Iterator::GetKeyValue() const {
-  assert(Valid());
-  Slice key_slice = GetLengthPrefixedSlice(key());
-  Slice value_slice =
-      GetLengthPrefixedSlice(key_slice.data() + key_slice.size());
-  return { key_slice, value_slice };
 }
 
 static std::unordered_map<std::string, MemTableRegister::FactoryCreator>&

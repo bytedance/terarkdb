@@ -24,15 +24,16 @@ public:
                           MergeOperationOutput* merge_out) const override;
 
  virtual bool PartialMergeMulti(const Slice& key,
-                                const std::deque<Slice>& operand_list,
-                                std::string* new_value,
+                                const std::vector<LazySlice>& operand_list,
+                                LazySlice* new_value,
                                 Logger* logger) const override;
 
  virtual const char* Name() const override;
 
  virtual bool AllowSingleOperand() const override { return true; }
 
- virtual bool ShouldMerge(const std::vector<Slice>& operands) const override {
+ virtual bool ShouldMerge(
+     const std::vector<LazySlice>& operands) const override {
    return operands_limit_ > 0 && operands.size() >= operands_limit_;
  }
 

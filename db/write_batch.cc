@@ -73,8 +73,7 @@ enum ContentFlags : uint32_t {
   HAS_COMMIT = 1 << 7,
   HAS_ROLLBACK = 1 << 8,
   HAS_DELETE_RANGE = 1 << 9,
-  HAS_BLOB_INDEX = 1 << 10,
-  HAS_BEGIN_UNPREPARE = 1 << 11,
+  HAS_BEGIN_UNPREPARE = 1 << 10,
 };
 
 struct BatchContentClassifier : public WriteBatch::Handler {
@@ -102,11 +101,6 @@ struct BatchContentClassifier : public WriteBatch::Handler {
 
   Status MergeCF(uint32_t, const Slice&, const Slice&) override {
     content_flags |= ContentFlags::HAS_MERGE;
-    return Status::OK();
-  }
-
-  Status PutBlobIndexCF(uint32_t, const Slice&, const Slice&) override {
-    content_flags |= ContentFlags::HAS_BLOB_INDEX;
     return Status::OK();
   }
 
@@ -354,17 +348,10 @@ Status ReadRecordFromWriteBatch(Slice* input, char* tag,
         return Status::Corruption("bad WriteBatch Merge");
       }
       break;
-    case kTypeColumnFamilyBlobIndex:
-      if (!GetVarint32(input, column_family)) {
-        return Status::Corruption("bad WriteBatch BlobIndex");
-      }
-      FALLTHROUGH_INTENDED;
-    case kTypeBlobIndex:
-      if (!GetLengthPrefixedSlice(input, key) ||
-          !GetLengthPrefixedSlice(input, value)) {
-        return Status::Corruption("bad WriteBatch BlobIndex");
-      }
-      break;
+    case kTypeValueIndex:
+    case kTypeMergeIndex:
+      return Status::Corruption(
+          "WriteBatch don't contents ValueIndex or MergeIndex");
     case kTypeLogData:
       assert(blob != nullptr);
       if (!GetLengthPrefixedSlice(input, blob)) {
@@ -498,14 +485,10 @@ Status WriteBatch::Iterate(Handler* handler) const {
           found++;
         }
         break;
-      case kTypeColumnFamilyBlobIndex:
-      case kTypeBlobIndex:
-        assert(content_flags_.load(std::memory_order_relaxed) &
-               (ContentFlags::DEFERRED | ContentFlags::HAS_BLOB_INDEX));
-        s = handler->PutBlobIndexCF(column_family, key, value);
-        if (LIKELY(s.ok())) {
-          found++;
-        }
+      case kTypeValueIndex:
+      case kTypeMergeIndex:
+        // WriteBatch don't contents value index or merge index
+        assert(false);
         break;
       case kTypeLogData:
         handler->LogData(blob);
@@ -965,25 +948,6 @@ Status WriteBatch::Merge(ColumnFamilyHandle* column_family,
                          const SliceParts& key, const SliceParts& value) {
   return WriteBatchInternal::Merge(this, GetColumnFamilyID(column_family), key,
                                    value);
-}
-
-Status WriteBatchInternal::PutBlobIndex(WriteBatch* b,
-                                        uint32_t column_family_id,
-                                        const Slice& key, const Slice& value) {
-  LocalSavePoint save(b);
-  WriteBatchInternal::SetCount(b, WriteBatchInternal::Count(b) + 1);
-  if (column_family_id == 0) {
-    b->rep_.push_back(static_cast<char>(kTypeBlobIndex));
-  } else {
-    b->rep_.push_back(static_cast<char>(kTypeColumnFamilyBlobIndex));
-    PutVarint32(&b->rep_, column_family_id);
-  }
-  PutLengthPrefixedSlice(&b->rep_, key);
-  PutLengthPrefixedSlice(&b->rep_, value);
-  b->content_flags_.store(b->content_flags_.load(std::memory_order_relaxed) |
-                              ContentFlags::HAS_BLOB_INDEX,
-                          std::memory_order_relaxed);
-  return save.commit();
 }
 
 Status WriteBatch::PutLogData(const Slice& blob) {
@@ -1524,7 +1488,7 @@ class MemTableInserter : public WriteBatch::Handler {
 
     if (perform_merge) {
       // 1) Get the existing value
-      std::string get_value;
+      LazySlice get_value;
 
       // Pass in the sequence number so that we also include previous merge
       // operations in the same batch.
@@ -1538,16 +1502,17 @@ class MemTableInserter : public WriteBatch::Handler {
         cf_handle = db_->DefaultColumnFamily();
       }
       db_->Get(read_options, cf_handle, key, &get_value);
-      Slice get_value_slice = Slice(get_value);
 
       // 2) Apply this merge
       auto merge_operator = moptions->merge_operator;
       assert(merge_operator);
 
-      std::string new_value;
+      LazySlice new_value;
+      std::vector<LazySlice> operands;
+      operands.emplace_back(value);
 
       Status merge_status = MergeHelper::TimedFullMerge(
-          merge_operator, key, &get_value_slice, {value}, &new_value,
+          merge_operator, key, &get_value, operands, &new_value,
           moptions->info_log, moptions->statistics, Env::Default());
 
       if (!merge_status.ok()) {
@@ -1556,13 +1521,17 @@ class MemTableInserter : public WriteBatch::Handler {
         perform_merge = false;
       } else {
         // 3) Add value to memtable
-        bool mem_res = mem->Add(sequence_, kTypeValue, key, new_value);
-        if (UNLIKELY(!mem_res)) {
-          assert(seq_per_batch_);
-          ret_status = Status::TryAgain("key+seq exists");
-          const bool BATCH_BOUNDRY = true;
-          MaybeAdvanceSeq(BATCH_BOUNDRY);
+        auto s = new_value.inplace_decode();
+        if (s.ok()) {
+          bool mem_res = mem->Add(sequence_, kTypeValue, key, new_value);
+          if (UNLIKELY(!mem_res)) {
+            assert(seq_per_batch_);
+            ret_status = Status::TryAgain("key+seq exists");
+            const bool BATCH_BOUNDRY = true;
+            MaybeAdvanceSeq(BATCH_BOUNDRY);
+          }
         }
+        ret_status = s;
       }
     }
 
@@ -1587,12 +1556,6 @@ class MemTableInserter : public WriteBatch::Handler {
     MaybeAdvanceSeq();
     CheckMemtableFull();
     return ret_status;
-  }
-
-  virtual Status PutBlobIndexCF(uint32_t column_family_id, const Slice& key,
-                                const Slice& value) override {
-    // Same as PutCF except for value type.
-    return PutCFImpl(column_family_id, key, value, kTypeBlobIndex);
   }
 
   void CheckMemtableFull() {

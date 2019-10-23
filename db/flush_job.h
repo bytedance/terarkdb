@@ -131,6 +131,7 @@ class FlushJob {
   // commit to the MANIFEST.
   const bool write_manifest_;
 
+  //
   const double flush_load_;
 
   // Variables below are set by PickMemTable():

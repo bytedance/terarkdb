@@ -9,18 +9,16 @@
 #include <string>
 #include "rocksdb/comparator.h"
 #include "rocksdb/iterator.h"
+#include "rocksdb/lazy_slice.h"
 #include "rocksdb/status.h"
 #include "table/format.h"
 
 namespace rocksdb {
 
-class PinnedIteratorsManager;
-
-template <class TValue>
-class InternalIteratorBase : public Cleanable {
+class InternalIteratorCommon : public Cleanable {
  public:
-  InternalIteratorBase() {}
-  virtual ~InternalIteratorBase() {}
+  InternalIteratorCommon() {}
+  virtual ~InternalIteratorCommon() {}
 
   // An iterator is either positioned at a key/value pair, or
   // not valid.  This method returns true iff the iterator is valid.
@@ -64,49 +62,14 @@ class InternalIteratorBase : public Cleanable {
   // REQUIRES: Valid()
   virtual Slice key() const = 0;
 
-  // Return the value for the current entry.  The underlying storage for
-  // the returned slice is valid only until the next modification of
-  // the iterator.
-  // REQUIRES: Valid()
-  virtual TValue value() const = 0;
-
   // If an error has occurred, return it.  Else return an ok status.
   // If non-blocking IO is requested and this operation cannot be
   // satisfied without doing some IO, then this returns Status::Incomplete().
   virtual Status status() const = 0;
 
-  // Return file number of current key value sst file number
-  // Return uint64_t(-1) if invalid or unknow
-  // If it's TableReader iterator, always return file number no matter invalid
-  // or not
-  virtual uint64_t FileNumber() const { return uint64_t(-1); }
-
   // True if the iterator is invalidated because it is out of the iterator
   // upper bound
   virtual bool IsOutOfBound() { return false; }
-
-  // Pass the PinnedIteratorsManager to the Iterator, most Iterators dont
-  // communicate with PinnedIteratorsManager so default implementation is no-op
-  // but for Iterators that need to communicate with PinnedIteratorsManager
-  // they will implement this function and use the passed pointer to communicate
-  // with PinnedIteratorsManager.
-  virtual void SetPinnedItersMgr(PinnedIteratorsManager* /*pinned_iters_mgr*/) {
-  }
-
-  // If true, this means that the Slice returned by key() is valid as long as
-  // PinnedIteratorsManager::ReleasePinnedData is not called and the
-  // Iterator is not deleted.
-  //
-  // IsKeyPinned() is guaranteed to always return true if
-  //  - Iterator is created with ReadOptions::pin_data = true
-  //  - DB tables were created with BlockBasedTableOptions::use_delta_encoding
-  //    set to false.
-  virtual bool IsKeyPinned() const { return false; }
-
-  // If true, this means that the Slice returned by value() is valid as long as
-  // PinnedIteratorsManager::ReleasePinnedData is not called and the
-  // Iterator is not deleted.
-  virtual bool IsValuePinned() const { return false; }
 
   virtual Status GetProperty(std::string /*prop_name*/, std::string* /*prop*/) {
     return Status::NotSupported("");
@@ -125,27 +88,32 @@ class InternalIteratorBase : public Cleanable {
 
  private:
   // No copying allowed
-  InternalIteratorBase(const InternalIteratorBase&) = delete;
-  InternalIteratorBase& operator=(const InternalIteratorBase&) = delete;
+  InternalIteratorCommon(const InternalIteratorCommon&) = delete;
+  InternalIteratorCommon& operator=(const InternalIteratorCommon&) = delete;
 };
 
-using InternalIterator = InternalIteratorBase<Slice>;
+template <class TValue>
+class InternalIteratorBase : public InternalIteratorCommon {
+ public:
+  // Return the value for the current entry.  The underlying storage for
+  // the returned slice is valid only until the next modification of
+  // the iterator.
+  // REQUIRES: Valid()
+  virtual TValue value() const = 0;
+};
+
+using InternalIterator = InternalIteratorBase<LazySlice>;
 
 // Return an empty iterator (yields nothing).
 // allocated arena if not nullptr.
-template <class TValue = Slice>
+template <class TValue = LazySlice>
 extern InternalIteratorBase<TValue>* NewEmptyInternalIterator(
     Arena* arena = nullptr);
 
 // Return an empty iterator with the specified status.
 // allocated arena if not nullptr.
-template <class TValue = Slice>
+template <class TValue = LazySlice>
 extern InternalIteratorBase<TValue>* NewErrorInternalIterator(
     const Status& status, Arena* arena = nullptr);
-
-// Return a wrapped iterator with appointed file_number
-template <class TValue = Slice>
-extern InternalIteratorBase<TValue>* NewFileNumberInternalIteratorWrapper(
-    InternalIteratorBase<TValue>* inner, uint64_t file_number, Arena* arena);
 
 }  // namespace rocksdb

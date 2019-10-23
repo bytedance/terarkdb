@@ -46,8 +46,13 @@ Status GetAllKeyVersions(DB* db, Slice begin_key, Slice end_key,
       break;
     }
 
+    LazySlice value = iter->value();
+    auto s = value.inplace_decode();
+    if (!s.ok()) {
+      return s;
+    }
     key_versions->emplace_back(ikey.user_key.ToString() /* _user_key */,
-                               iter->value().ToString() /* _value */,
+                               value.ToString() /* _value */,
                                ikey.sequence /* _sequence */,
                                static_cast<int>(ikey.type) /* _type */);
     if (++num_keys >= max_num_ikeys) {

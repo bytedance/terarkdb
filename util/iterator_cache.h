@@ -13,19 +13,18 @@
 namespace rocksdb {
 
 struct FileMetaData;
-class PinnedIteratorsManager;
 class RangeDelAggregator;
 class TableReader;
 
-typedef std::unordered_map<uint64_t, FileMetaData*> DependFileMap;
+typedef std::unordered_map<uint64_t, FileMetaData*> DependenceMap;
 
 class IteratorCache {
  public:
   using CreateIterCallback =
       InternalIterator* (*)(void* arg, const FileMetaData*,
-                            const DependFileMap&, Arena*, TableReader**);
+                            const DependenceMap&, Arena*, TableReader**);
 
-  IteratorCache(const DependFileMap& depend_files, void* create_iter_arg,
+  IteratorCache(const DependenceMap& dependence_map, void* create_iter_arg,
                 const CreateIterCallback& create_iter);
   ~IteratorCache();
 
@@ -37,16 +36,13 @@ class IteratorCache {
 
   const FileMetaData* GetFileMetaData(uint64_t file_number);
 
-  void SetPinnedItersMgr(PinnedIteratorsManager* pinned_iters_mgr);
-
   Arena* GetArena() { return &arena_; }
 
  private:
-  const DependFileMap& depend_files_;
+  const DependenceMap& dependence_map_;
   void* callback_arg_;
   CreateIterCallback create_iter_;
   Arena arena_;
-  PinnedIteratorsManager* pinned_iters_mgr_;
 
   struct CacheItem {
     InternalIterator* iter;

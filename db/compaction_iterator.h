@@ -12,11 +12,11 @@
 #include "db/compaction.h"
 #include "db/compaction_iteration_stats.h"
 #include "db/merge_helper.h"
-#include "db/pinned_iterators_manager.h"
 #include "db/range_del_aggregator.h"
 #include "db/snapshot_checker.h"
 #include "options/cf_options.h"
 #include "rocksdb/compaction_filter.h"
+#include "table/iterator_wrapper.h"
 
 namespace rocksdb {
 
@@ -60,38 +60,38 @@ class CompactionIterator {
     const Compaction* compaction_;
   };
 
-  CompactionIterator(InternalIterator* input, const Slice* end,
-                     const Comparator* cmp, MergeHelper* merge_helper,
-                     SequenceNumber last_sequence,
-                     std::vector<SequenceNumber>* snapshots,
-                     SequenceNumber earliest_write_conflict_snapshot,
-                     const SnapshotChecker* snapshot_checker, Env* env,
-                     bool report_detailed_time, bool expect_valid_internal_key,
-                     CompactionRangeDelAggregator* range_del_agg,
-                     const Compaction* compaction = nullptr,
-                     const CompactionFilter* compaction_filter = nullptr,
-                     const std::atomic<bool>* shutting_down = nullptr,
-                     const SequenceNumber preserve_deletes_seqnum = 0);
+  CompactionIterator(
+      InternalIterator* input, const SeparateHelper* separate_helper,
+      const Slice* end, const Comparator* cmp, MergeHelper* merge_helper,
+      SequenceNumber last_sequence, std::vector<SequenceNumber>* snapshots,
+      SequenceNumber earliest_write_conflict_snapshot,
+      const SnapshotChecker* snapshot_checker, Env* env,
+      bool report_detailed_time, bool expect_valid_internal_key,
+      CompactionRangeDelAggregator* range_del_agg,
+      const Compaction* compaction = nullptr, size_t blob_size = uint64_t(-1),
+      const CompactionFilter* compaction_filter = nullptr,
+      const std::atomic<bool>* shutting_down = nullptr,
+      const SequenceNumber preserve_deletes_seqnum = 0,
+      std::unordered_map<uint64_t, uint64_t>* delta_antiquation = nullptr);
 
   // Constructor with custom CompactionProxy, used for tests.
-  CompactionIterator(InternalIterator* input, const Slice* end,
-                     const Comparator* cmp, MergeHelper* merge_helper,
-                     SequenceNumber last_sequence,
-                     std::vector<SequenceNumber>* snapshots,
-                     SequenceNumber earliest_write_conflict_snapshot,
-                     const SnapshotChecker* snapshot_checker, Env* env,
-                     bool report_detailed_time, bool expect_valid_internal_key,
-                     CompactionRangeDelAggregator* range_del_agg,
-                     std::unique_ptr<CompactionProxy> compaction,
-                     const CompactionFilter* compaction_filter = nullptr,
-                     const std::atomic<bool>* shutting_down = nullptr,
-                     const SequenceNumber preserve_deletes_seqnum = 0);
+  CompactionIterator(
+      InternalIterator* input, const SeparateHelper* separate_helper,
+      const Slice* end, const Comparator* cmp, MergeHelper* merge_helper,
+      SequenceNumber last_sequence, std::vector<SequenceNumber>* snapshots,
+      SequenceNumber earliest_write_conflict_snapshot,
+      const SnapshotChecker* snapshot_checker, Env* env,
+      bool report_detailed_time, bool expect_valid_internal_key,
+      CompactionRangeDelAggregator* range_del_agg,
+      std::unique_ptr<CompactionProxy> compaction, size_t blob_size,
+      const CompactionFilter* compaction_filter = nullptr,
+      const std::atomic<bool>* shutting_down = nullptr,
+      const SequenceNumber preserve_deletes_seqnum = 0,
+      std::unordered_map<uint64_t, uint64_t>* delta_antiquation = nullptr);
 
   ~CompactionIterator();
 
   void ResetRecordCounts();
-
-  std::unique_ptr<InternalIterator> AdaptToInternalIterator();
 
   // Seek to the beginning of the compaction iterator output.
   //
@@ -105,7 +105,7 @@ class CompactionIterator {
 
   // Getters
   const Slice& key() const { return key_; }
-  const Slice& value() const { return value_; }
+  const LazySlice& value() const { return value_; }
   const Status& status() const { return status_; }
   const ParsedInternalKey& ikey() const { return ikey_; }
   bool Valid() const { return valid_; }
@@ -151,6 +151,7 @@ class CompactionIterator {
   bool expect_valid_internal_key_;
   CompactionRangeDelAggregator* range_del_agg_;
   std::unique_ptr<CompactionProxy> compaction_;
+  const size_t blob_size_;
   const CompactionFilter* compaction_filter_;
   const std::atomic<bool>* shutting_down_;
   const SequenceNumber preserve_deletes_seqnum_;
@@ -168,7 +169,7 @@ class CompactionIterator {
   Slice key_;
   // Points to the value in the underlying iterator that corresponds to the
   // current output.
-  Slice value_;
+  LazySlice value_;
   // The status is OK unless compaction iterator encounters a merge operand
   // while not having a merge operator defined.
   Status status_;
@@ -195,10 +196,7 @@ class CompactionIterator {
   bool clear_and_output_next_key_ = false;
 
   MergeOutputIterator merge_out_iter_;
-  // PinnedIteratorsManager used to pin input_ Iterator blocks while reading
-  // merge operands and then releasing them after consuming them.
-  PinnedIteratorsManager pinned_iters_mgr_;
-  std::string compaction_filter_value_;
+  LazySlice compaction_filter_value_;
   InternalKey compaction_filter_skip_until_;
   // "level_ptrs" holds indices that remember which file of an associated
   // level we were last checking during the last call to compaction->
@@ -209,16 +207,23 @@ class CompactionIterator {
   std::vector<size_t> level_ptrs_;
   CompactionIterationStats iter_stats_;
 
+  SeparateValueCollector separate_value_collector_;
+
   // Used to avoid purging uncommitted values. The application can specify
   // uncommitted values by providing a SnapshotChecker object.
   bool current_key_committed_;
 
- public:
   size_t filter_sample_interval_ = 64;
   size_t filter_hit_count_ = 0;
+ public:
   bool IsShuttingDown() {
     // This is a best-effort facility, so memory_order_relaxed is sufficient.
     return shutting_down_ && shutting_down_->load(std::memory_order_relaxed);
   }
 };
+
+InternalIterator* NewCompactionIterator(
+    CompactionIterator*(*new_compaction_iter_callback)(void*), void* arg,
+    const Slice* start_user_key = nullptr);
+
 }  // namespace rocksdb

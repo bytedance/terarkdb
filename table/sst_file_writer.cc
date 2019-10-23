@@ -89,7 +89,7 @@ struct SstFileWriter::Rep {
       default:
         return Status::InvalidArgument("Value type is not supported");
     }
-    builder->Add(ikey.Encode(), value);
+    builder->Add(ikey.Encode(), LazySlice(value));
 
     // update file info
     file_info.num_entries++;
@@ -126,7 +126,8 @@ struct SstFileWriter::Rep {
     }
 
     auto ikey_and_end_key = tombstone.Serialize();
-    builder->Add(ikey_and_end_key.first.Encode(), ikey_and_end_key.second);
+    builder->Add(ikey_and_end_key.first.Encode(),
+                 LazySlice(ikey_and_end_key.second));
 
     // update file info
     file_info.num_range_del_entries++;
@@ -283,7 +284,7 @@ Status SstFileWriter::Finish(ExternalSstFileInfo* file_info) {
     return Status::InvalidArgument("Cannot create sst file with no entries");
   }
 
-  Status s = r->builder->Finish();
+  Status s = r->builder->Finish(nullptr);
   r->file_info.file_size = r->builder->FileSize();
 
   if (s.ok()) {

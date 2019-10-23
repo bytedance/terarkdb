@@ -65,6 +65,8 @@ DBOptions BuildDBOptions(const ImmutableDBOptions& immutable_db_options,
   options.keep_log_file_num = immutable_db_options.keep_log_file_num;
   options.recycle_log_file_num = immutable_db_options.recycle_log_file_num;
   options.max_manifest_file_size = immutable_db_options.max_manifest_file_size;
+  options.max_manifest_edit_count =
+      immutable_db_options.max_manifest_edit_count;
   options.table_cache_numshardbits =
       immutable_db_options.table_cache_numshardbits;
   options.WAL_ttl_seconds = immutable_db_options.wal_ttl_seconds;
@@ -154,6 +156,8 @@ ColumnFamilyOptions BuildColumnFamilyOptions(
       mutable_cf_options.disable_auto_compactions;
   cf_opts.enable_lazy_compaction =
       mutable_cf_options.enable_lazy_compaction;
+  cf_opts.blob_size = mutable_cf_options.blob_size;
+  cf_opts.blob_gc_ratio = mutable_cf_options.blob_gc_ratio;
   cf_opts.soft_pending_compaction_bytes_limit =
       mutable_cf_options.soft_pending_compaction_bytes_limit;
   cf_opts.hard_pending_compaction_bytes_limit =
@@ -1487,6 +1491,9 @@ std::unordered_map<std::string, OptionTypeInfo>
         {"max_manifest_file_size",
          {offsetof(struct DBOptions, max_manifest_file_size),
           OptionType::kUInt64T, OptionVerificationType::kNormal, false, 0}},
+        {"max_manifest_edit_count",
+         {offsetof(struct DBOptions, max_manifest_edit_count),
+          OptionType::kUInt64T, OptionVerificationType::kNormal, false, 0}},
         {"max_total_wal_size",
          {offsetof(struct DBOptions, max_total_wal_size), OptionType::kUInt64T,
           OptionVerificationType::kNormal, true,
@@ -1693,6 +1700,14 @@ std::unordered_map<std::string, OptionTypeInfo>
          {offset_of(&ColumnFamilyOptions::enable_lazy_compaction),
           OptionType::kBoolean, OptionVerificationType::kNormal, true,
           offsetof(struct MutableCFOptions, enable_lazy_compaction)}},
+        {"blob_size",
+         {offset_of(&ColumnFamilyOptions::blob_size),
+          OptionType::kSizeT, OptionVerificationType::kNormal, true,
+          offsetof(struct MutableCFOptions, blob_size)}},
+        {"enable_lazy_compaction",
+         {offset_of(&ColumnFamilyOptions::blob_gc_ratio),
+          OptionType::kDouble, OptionVerificationType::kNormal, true,
+          offsetof(struct MutableCFOptions, blob_gc_ratio)}},
         {"filter_deletes",
          {0, OptionType::kBoolean, OptionVerificationType::kDeprecated, true,
           0}},

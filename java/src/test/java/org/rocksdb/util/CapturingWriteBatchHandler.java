@@ -88,7 +88,8 @@ public class CapturingWriteBatchHandler extends WriteBatch.Handler {
   @Override
   public void putBlobIndex(final int columnFamilyId, final byte[] key,
                            final byte[] value) {
-    events.add(new Event(Action.PUT_BLOB_INDEX, key, value));
+    //events.add(new Event(Action.PUT_BLOB_INDEX, key, value));
+    throw new UnsupportedOperationException();
   }
 
   @Override

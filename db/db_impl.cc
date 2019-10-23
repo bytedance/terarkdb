@@ -101,6 +101,7 @@
 #endif
 
 #ifdef __GNUC__
+# pragma GCC diagnostic push
 # pragma GCC diagnostic ignored "-Wunused-parameter"
 #endif
 
@@ -108,6 +109,10 @@
 #include <boost/fiber/all.hpp>
 //#include <boost/context/pooled_fixedsize_stack.hpp>
 #include <terark/thread/fiber_yield.hpp>
+
+#ifdef __GNUC__
+# pragma GCC diagnostic pop
+#endif
 
 namespace rocksdb {
 const std::string kDefaultColumnFamilyName("default");
@@ -1055,7 +1060,7 @@ bool DBImpl::SetPreserveDeletesSequenceNumber(SequenceNumber seqnum) {
 
 InternalIterator* DBImpl::NewInternalIterator(
     Arena* arena, RangeDelAggregator* range_del_agg, SequenceNumber sequence,
-    ColumnFamilyHandle* column_family) {
+    ColumnFamilyHandle* column_family, const SeparateHelper** separate_helper) {
   ColumnFamilyData* cfd;
   if (column_family == nullptr) {
     cfd = default_cf_handle_->cfd();
@@ -1068,6 +1073,9 @@ InternalIterator* DBImpl::NewInternalIterator(
   SuperVersion* super_version = cfd->GetSuperVersion()->Ref();
   mutex_.Unlock();
   ReadOptions roptions;
+  if (separate_helper != nullptr) {
+    *separate_helper = super_version->current;
+  }
   return NewInternalIterator(roptions, cfd, super_version, arena, range_del_agg,
                              sequence);
 }
@@ -1171,12 +1179,11 @@ static void CleanupIteratorState(void* arg1, void* /*arg2*/) {
 }
 }  // namespace
 
-InternalIterator* DBImpl::NewInternalIterator(const ReadOptions& read_options,
-                                              ColumnFamilyData* cfd,
-                                              SuperVersion* super_version,
-                                              Arena* arena,
-                                              RangeDelAggregator* range_del_agg,
-                                              SequenceNumber sequence) {
+InternalIterator* DBImpl::NewInternalIterator(
+    const ReadOptions& read_options, ColumnFamilyData* cfd,
+    SuperVersion* super_version, Arena* arena,
+    RangeDelAggregator* range_del_agg, SequenceNumber sequence,
+    const SeparateHelper** separate_helper) {
   InternalIterator* internal_iter;
   assert(arena != nullptr);
   assert(range_del_agg != nullptr);
@@ -1189,19 +1196,17 @@ InternalIterator* DBImpl::NewInternalIterator(const ReadOptions& read_options,
   merge_iter_builder.AddIterator(
       super_version->mem->NewIterator(read_options, arena));
   std::unique_ptr<FragmentedRangeTombstoneIterator> range_del_iter;
-  Status s;
   if (!read_options.ignore_range_deletions) {
     range_del_iter.reset(
         super_version->mem->NewRangeTombstoneIterator(read_options, sequence));
     range_del_agg->AddTombstones(std::move(range_del_iter));
   }
   // Collect all needed child iterators for immutable memtables
-  if (s.ok()) {
-    super_version->imm->AddIterators(read_options, &merge_iter_builder);
-    if (!read_options.ignore_range_deletions) {
-      s = super_version->imm->AddRangeTombstoneIterators(read_options, arena,
-                                                         range_del_agg);
-    }
+  Status s;
+  super_version->imm->AddIterators(read_options, &merge_iter_builder);
+  if (!read_options.ignore_range_deletions) {
+    s = super_version->imm->AddRangeTombstoneIterators(read_options, arena,
+                                                       range_del_agg);
   }
   TEST_SYNC_POINT_CALLBACK("DBImpl::NewInternalIterator:StatusCallback", &s);
   if (s.ok()) {
@@ -1215,12 +1220,14 @@ InternalIterator* DBImpl::NewInternalIterator(const ReadOptions& read_options,
         new IterState(this, &mutex_, super_version,
                       read_options.background_purge_on_iterator_cleanup);
     internal_iter->RegisterCleanup(CleanupIteratorState, cleanup, nullptr);
-
+    if (separate_helper != nullptr) {
+      *separate_helper = super_version->current;
+    }
     return internal_iter;
   } else {
     CleanupSuperVersion(super_version);
   }
-  return NewErrorInternalIterator<Slice>(s, arena);
+  return NewErrorInternalIterator<LazySlice>(s, arena);
 }
 
 ColumnFamilyHandle* DBImpl::DefaultColumnFamily() const {
@@ -1229,15 +1236,17 @@ ColumnFamilyHandle* DBImpl::DefaultColumnFamily() const {
 
 Status DBImpl::Get(const ReadOptions& read_options,
                    ColumnFamilyHandle* column_family, const Slice& key,
-                   PinnableSlice* value) {
-  return GetImpl(read_options, column_family, key, value);
+                   LazySlice* value) {
+  auto s = GetImpl(read_options, column_family, key, value);
+  assert(!s.ok() || value->valid());
+  return s;
 }
 
 Status DBImpl::GetImpl(const ReadOptions& read_options,
                        ColumnFamilyHandle* column_family, const Slice& key,
-                       PinnableSlice* pinnable_val, bool* value_found,
-                       ReadCallback* callback, bool* is_blob_index) {
-  assert(pinnable_val != nullptr);
+                       LazySlice* lazy_val, bool* value_found,
+                       ReadCallback* callback) {
+  assert(lazy_val != nullptr);
   StopWatch sw(env_, stats_, DB_GET);
   PERF_TIMER_GUARD(get_snapshot_time);
 
@@ -1307,18 +1316,15 @@ Status DBImpl::GetImpl(const ReadOptions& read_options,
                         has_unpersisted_data_.load(std::memory_order_relaxed));
   bool done = false;
   if (!skip_memtable) {
-    if (sv->mem->Get(lkey, pinnable_val->GetSelf(), &s, &merge_context,
-                     &max_covering_tombstone_seq, read_options, callback,
-                     is_blob_index)) {
+    if (sv->mem->Get(lkey, lazy_val, &s, &merge_context,
+                     &max_covering_tombstone_seq, read_options, callback)) {
       done = true;
-      pinnable_val->PinSelf();
       RecordTick(stats_, MEMTABLE_HIT);
     } else if ((s.ok() || s.IsMergeInProgress()) &&
-               sv->imm->Get(lkey, pinnable_val->GetSelf(), &s, &merge_context,
-                            &max_covering_tombstone_seq, read_options, callback,
-                            is_blob_index)) {
+               sv->imm->Get(lkey, lazy_val, &s, &merge_context,
+                            &max_covering_tombstone_seq, read_options,
+                            callback)) {
       done = true;
-      pinnable_val->PinSelf();
       RecordTick(stats_, MEMTABLE_HIT);
     }
     if (!done && !s.ok() && !s.IsMergeInProgress()) {
@@ -1328,10 +1334,14 @@ Status DBImpl::GetImpl(const ReadOptions& read_options,
   }
   if (!done) {
     PERF_TIMER_GUARD(get_from_output_files_time);
-    sv->current->Get(read_options, lkey, pinnable_val, &s, &merge_context,
+    sv->current->Get(read_options, key, lkey, lazy_val, &s, &merge_context,
                      &max_covering_tombstone_seq, value_found, nullptr, nullptr,
-                     callback, is_blob_index);
+                     callback);
     RecordTick(stats_, MEMTABLE_MISS);
+  }
+
+  if (s.ok()) {
+    s = lazy_val->inplace_decode();
   }
 
   {
@@ -1340,10 +1350,10 @@ Status DBImpl::GetImpl(const ReadOptions& read_options,
     ReturnAndCleanupSuperVersion(cfd, sv);
 
     RecordTick(stats_, NUMBER_KEYS_READ);
-    size_t size = pinnable_val->size();
-    RecordTick(stats_, BYTES_READ, size);
-    MeasureTime(stats_, BYTES_PER_READ, size);
-    PERF_COUNTER_ADD(get_read_bytes, size);
+    //size_t size = lazy_val->size();
+    //RecordTick(stats_, BYTES_READ, size);
+    //MeasureTime(stats_, BYTES_PER_READ, size);
+    //PERF_COUNTER_ADD(get_read_bytes, size);
   }
   return s;
 }
@@ -1357,8 +1367,7 @@ struct SimpleFiberTls {
   boost::fibers::buffered_channel<task_t> channel;
 
   SimpleFiberTls(boost::fibers::context** activepp)
-    : m_fy(activepp), channel(MAX_QUEUE_LEN)
-  {
+      : m_fy(activepp), channel(MAX_QUEUE_LEN) {
   }
 
   void update_fiber_count(intptr_t count) {
@@ -1366,7 +1375,7 @@ struct SimpleFiberTls {
     count = std::min<intptr_t>(count, +MAX_QUEUE_LEN);
     using namespace boost::fibers;
     for (intptr_t i = fiber_count; i < count; ++i) {
-      fiber([this,i](){
+      fiber([this, i]() {
         task_t task;
         while (i < fiber_count &&
                channel.pop(task) == channel_op_status::success) {
@@ -1382,6 +1391,7 @@ struct SimpleFiberTls {
     channel.push(std::move(task));
     pending_count++;
   }
+
   bool try_push(const task_t& task) {
     using boost::fibers::channel_op_status;
     if (channel.try_push(task) == channel_op_status::success) {
@@ -1394,14 +1404,14 @@ struct SimpleFiberTls {
   int wait(int timeout_us) {
     intptr_t old_pending_count = pending_count;
     if (old_pending_count == 0) {
-        return 0;
+      return 0;
     }
 
     using namespace std::chrono;
 
-//    do not use sleep_for, because we want to return as soon as possible
-//    boost::this_fiber::sleep_for(microseconds(timeout_us));
-//    return tls->pending_count - old_pending_count;
+    //do not use sleep_for, because we want to return as soon as possible
+    //boost::this_fiber::sleep_for(microseconds(timeout_us));
+    //return tls->pending_count - old_pending_count;
 
     auto start = std::chrono::system_clock::now();
     while (true) {
@@ -1413,8 +1423,7 @@ struct SimpleFiberTls {
         if (dur >= timeout_us) {
           return int(pending_count - old_pending_count - 1); // negtive
         }
-      }
-      else {
+      } else {
         break;
       }
     }
@@ -1433,7 +1442,8 @@ struct SimpleFiberTls {
 
 // ensure fiber thread locals are constructed first
 // because SimpleFiberTls.channel must be destructed first
-static thread_local SimpleFiberTls gt_fibers(boost::fibers::context::active_pp());
+static thread_local SimpleFiberTls gt_fibers(
+    boost::fibers::context::active_pp());
 
 std::vector<Status> DBImpl::MultiGet(
     const ReadOptions& read_options,
@@ -1495,6 +1505,7 @@ std::vector<Status> DBImpl::MultiGet(
     MergeContext merge_context;
     Status& s = stat_list[i];
     std::string* value = &(*values)[i];
+    LazySlice lazy_val(value);
 
     LookupKey lkey(keys[i], snapshot);
     auto cfh = reinterpret_cast<ColumnFamilyHandleImpl*>(column_family[i]);
@@ -1508,11 +1519,11 @@ std::vector<Status> DBImpl::MultiGet(
          has_unpersisted_data_.load(std::memory_order_relaxed));
     bool done = false;
     if (!skip_memtable) {
-      if (super_version->mem->Get(lkey, value, &s, &merge_context,
+      if (super_version->mem->Get(lkey, &lazy_val, &s, &merge_context,
                                   &max_covering_tombstone_seq, read_options)) {
         done = true;
         RecordTick(stats_, MEMTABLE_HIT);
-      } else if (super_version->imm->Get(lkey, value, &s, &merge_context,
+      } else if (super_version->imm->Get(lkey, &lazy_val, &s, &merge_context,
                                          &max_covering_tombstone_seq,
                                          read_options)) {
         done = true;
@@ -1520,14 +1531,14 @@ std::vector<Status> DBImpl::MultiGet(
       }
     }
     if (!done) {
-      PinnableSlice pinnable_val;
       PERF_TIMER_GUARD(get_from_output_files_time);
-      super_version->current->Get(read_options, lkey, &pinnable_val, &s,
+      super_version->current->Get(read_options, keys[i], lkey, &lazy_val, &s,
                                   &merge_context, &max_covering_tombstone_seq);
-      value->assign(pinnable_val.data(), pinnable_val.size());
       RecordTick(stats_, MEMTABLE_MISS);
     }
-
+    if (s.ok()) {
+      s = lazy_val.save_to_buffer(value);
+    }
     if (s.ok()) {
       bytes_read += value->size();
       num_found++;
@@ -1549,11 +1560,11 @@ std::vector<Status> DBImpl::MultiGet(
     auto tls = &gt_fibers;
     tls->update_fiber_count(read_options.aio_concurrency);
     for (size_t i = 0; i < num_keys; ++i) {
-      tls->push([&,i](){ get_one(i); });
+      tls->push([&, i]() { get_one(i); });
     }
     while (counting) {
-        //boost::this_fiber::yield();
-        tls->m_fy.unchecked_yield();
+      //boost::this_fiber::yield();
+      tls->m_fy.unchecked_yield();
     }
   #endif
   }
@@ -1675,13 +1686,15 @@ Status DBImpl::CreateColumnFamilyImpl(const ColumnFamilyOptions& cf_options,
   const char* terarkConfigString = getenv("TerarkConfigString");
   if (terarkdb_localTempDir || terarkConfigString) {
     if (TerarkZipCFOptionsFromEnv && TerarkZipIsBlackListCF) {
-      if (terarkdb_localTempDir && ::access(terarkdb_localTempDir, R_OK | W_OK) != 0) {
+      if (terarkdb_localTempDir &&
+          ::access(terarkdb_localTempDir, R_OK | W_OK) != 0) {
         return Status::InvalidArgument(
             "Must exists, and Permission ReadWrite is required on "
             "env TerarkZipTable_localTempDir", terarkdb_localTempDir);
       }
       if (!TerarkZipIsBlackListCF(column_family_name)) {
-        TerarkZipCFOptionsFromEnv(const_cast<ColumnFamilyOptions&>(cf_options), dbname_);
+        TerarkZipCFOptionsFromEnv(const_cast<ColumnFamilyOptions&>(cf_options),
+                                  dbname_);
       }
     } else {
       return Status::InvalidArgument(
@@ -1883,9 +1896,11 @@ bool DBImpl::KeyMayExist(const ReadOptions& read_options,
   }
   ReadOptions roptions = read_options;
   roptions.read_tier = kBlockCacheTier;  // read from block cache only
-  PinnableSlice pinnable_val;
-  auto s = GetImpl(roptions, column_family, key, &pinnable_val, value_found);
-  value->assign(pinnable_val.data(), pinnable_val.size());
+  LazySlice lazy_val(value);
+  auto s = GetImpl(roptions, column_family, key, &lazy_val, value_found);
+  if (s.ok()) {
+    s = lazy_val.save_to_buffer(value);
+  }
 
   // If block_cache is enabled and the index block of the table didn't
   // not present in block_cache, the return value will be Status::Incomplete.
@@ -1926,7 +1941,7 @@ Iterator* DBImpl::NewIterator(const ReadOptions& read_options,
     auto iter = new ForwardIterator(this, read_options, cfd, sv);
     result = NewDBIterator(
         env_, read_options, *cfd->ioptions(), sv->mutable_cf_options,
-        cfd->user_comparator(), iter, kMaxSequenceNumber,
+        cfd->user_comparator(), iter, kMaxSequenceNumber, sv->current,
         sv->mutable_cf_options.max_sequential_skip_in_iterations, read_callback,
         this, cfd);
 #endif
@@ -1946,7 +1961,6 @@ ArenaWrappedDBIter* DBImpl::NewIteratorImpl(const ReadOptions& read_options,
                                             ColumnFamilyData* cfd,
                                             SequenceNumber snapshot,
                                             ReadCallback* read_callback,
-                                            bool allow_blob,
                                             bool allow_refresh) {
   SuperVersion* sv = cfd->GetReferencedSuperVersion(&mutex_);
 
@@ -1995,13 +2009,13 @@ ArenaWrappedDBIter* DBImpl::NewIteratorImpl(const ReadOptions& read_options,
   ArenaWrappedDBIter* db_iter = NewArenaWrappedDbIterator(
       env_, read_options, *cfd->ioptions(), sv->mutable_cf_options, snapshot,
       sv->mutable_cf_options.max_sequential_skip_in_iterations,
-      sv->version_number, read_callback, this, cfd, allow_blob,
+      sv->version_number, read_callback, this, cfd,
       ((read_options.snapshot != nullptr) ? false : allow_refresh));
 
   InternalIterator* internal_iter =
       NewInternalIterator(read_options, cfd, sv, db_iter->GetArena(),
                           db_iter->GetRangeDelAggregator(), snapshot);
-  db_iter->SetIterUnderDBIter(internal_iter);
+  db_iter->SetIterUnderDBIter(internal_iter, sv->current);
 
   return db_iter;
 }
@@ -2031,7 +2045,7 @@ Status DBImpl::NewIterators(
       auto iter = new ForwardIterator(this, read_options, cfd, sv);
       iterators->push_back(NewDBIterator(
           env_, read_options, *cfd->ioptions(), sv->mutable_cf_options,
-          cfd->user_comparator(), iter, kMaxSequenceNumber,
+          cfd->user_comparator(), iter, kMaxSequenceNumber, sv->current,
           sv->mutable_cf_options.max_sequential_skip_in_iterations,
           read_callback, this, cfd));
     }
@@ -2939,7 +2953,8 @@ bool DB::TrySubmitAsyncTask(const std::function<void()>& fn) {
   return tls->try_push(fn);
 }
 
-bool DB::TrySubmitAsyncTask(const std::function<void()>& fn, size_t aio_concurrency) {
+bool DB::TrySubmitAsyncTask(const std::function<void()>& fn,
+                            size_t aio_concurrency) {
   auto tls = &gt_fibers;
   tls->update_fiber_count(aio_concurrency);
   return tls->try_push(fn);
@@ -2952,17 +2967,19 @@ void DB::GetAsync(const ReadOptions& ro, ColumnFamilyHandle* cfh,
   using std::move;
   auto tls = &gt_fibers;
   tls->update_fiber_count(ro.aio_concurrency);
-  tls->push([=,key=move(key),cb=move(cb)]()mutable{
+  tls->push([=, key = move(key), cb = move(cb)]()mutable {
     auto s = this->Get(ro, cfh, key, value);
     cb(move(s), move(key), value);
   });
 }
+
 void DB::GetAsync(const ReadOptions& ro,
                   std::string key, std::string* value,
                   GetAsyncCallback cb) {
   using std::move;
   GetAsync(ro, DefaultColumnFamily(), move(key), value, move(cb));
 }
+
 void DB::GetAsync(const ReadOptions& ro, ColumnFamilyHandle* cfh,
                   std::string key,
                   GetAsyncCallback cb) {
@@ -2970,12 +2987,13 @@ void DB::GetAsync(const ReadOptions& ro, ColumnFamilyHandle* cfh,
   using std::move;
   auto tls = &gt_fibers;
   tls->update_fiber_count(ro.aio_concurrency);
-  tls->push([=,key=move(key),cb=move(cb)]()mutable{
+  tls->push([=, key = move(key), cb = move(cb)]()mutable {
     std::string value;
     Status s = this->Get(ro, cfh, key, &value);
     cb(move(s), move(key), &value);
   });
 }
+
 void DB::GetAsync(const ReadOptions& ro,
                   std::string key,
                   GetAsyncCallback cb) {
@@ -2984,8 +3002,10 @@ void DB::GetAsync(const ReadOptions& ro,
 }
 
 ///@returns == 0 indicate there is nothing to wait
-///          < 0 indicate number of finished GetAsync/GetFuture requests after timeout
-///          > 0 indicate number of all GetAsync/GetFuture requests have finished within timeout
+///          < 0 indicate number of finished GetAsync/GetFuture requests after
+///              timeout
+///          > 0 indicate number of all GetAsync/GetFuture requests have
+///              finished within timeout
 int DB::WaitAsync(int timeout_us) {
   return gt_fibers.wait(timeout_us);
 }
@@ -3000,65 +3020,70 @@ int DB::WaitAsync() {
 template<class T>
 struct DB_Promise {
   DB_Promise(std::string& k) : key(std::move(k)) {}
+
   intptr_t refcnt = 0;
   std::string key;
   boost::fibers::promise<T> pr;
+
   friend void intrusive_ptr_add_ref(DB_Promise* p) { p->refcnt++; }
+
   friend void intrusive_ptr_release(DB_Promise* p) {
-      if (0 == --p->refcnt)
-          delete p;
+    if (0 == --p->refcnt)
+      delete p;
   }
 };
+
 template<class T>
-struct DB_PromisePtr : boost::intrusive_ptr<DB_Promise<T> > {
+struct DB_PromisePtr : boost::intrusive_ptr<DB_Promise<T>> {
   DB_PromisePtr(std::string& k)
-    : boost::intrusive_ptr<DB_Promise<T> >(new DB_Promise<T>(k)) {}
+      : boost::intrusive_ptr<DB_Promise<T>>(new DB_Promise<T>(k)) {}
 };
 
-future<std::tuple<Status, std::string, std::string*> >
+future<std::tuple<Status, std::string, std::string*>>
 DB::GetFuture(const ReadOptions& ro, ColumnFamilyHandle* cfh,
               std::string key, std::string* value) {
   using namespace boost::fibers;
   using std::move;
   auto tls = &gt_fibers;
   tls->update_fiber_count(ro.aio_concurrency);
-  DB_PromisePtr<std::tuple<Status, std::string, std::string*> > p(key);
+  DB_PromisePtr<std::tuple<Status, std::string, std::string*>> p(key);
   auto fu = p->pr.get_future();
-  tls->push([this,ro,cfh,p,value](){
-     std::tuple<Status, std::string, std::string*> result;
-     std::get<0>(result) = this->Get(ro, cfh, p->key, value);
-     std::get<1>(result) = std::move(p->key);
-     std::get<2>(result) = value;
-     p->pr.set_value(std::move(result));
+  tls->push([this, ro, cfh, p, value]() {
+    std::tuple<Status, std::string, std::string*> result;
+    std::get<0>(result) = this->Get(ro, cfh, p->key, value);
+    std::get<1>(result) = std::move(p->key);
+    std::get<2>(result) = value;
+    p->pr.set_value(std::move(result));
   });
   return fu;
 }
-future<std::tuple<Status, std::string, std::string*> >
+
+future<std::tuple<Status, std::string, std::string*>>
 DB::GetFuture(const ReadOptions& ro, std::string key, std::string* value) {
-    return GetFuture(ro, DefaultColumnFamily(), std::move(key), value);
+  return GetFuture(ro, DefaultColumnFamily(), std::move(key), value);
 }
 
-future<std::tuple<Status, std::string, std::string> >
+future<std::tuple<Status, std::string, std::string>>
 DB::GetFuture(const ReadOptions& ro, ColumnFamilyHandle* cfh, std::string key) {
   using namespace boost::fibers;
   using std::move;
   auto tls = &gt_fibers;
   tls->update_fiber_count(ro.aio_concurrency);
-  DB_PromisePtr<std::tuple<Status, std::string, std::string> > p(key);
+  DB_PromisePtr<std::tuple<Status, std::string, std::string>> p(key);
   auto fu = p->pr.get_future();
-  tls->push([this,ro,cfh,p](){
-     std::tuple<Status, std::string, std::string> result;
-     std::get<0>(result) = this->Get(ro, cfh, p->key, &std::get<2>(result));
-     std::get<1>(result) = std::move(p->key);
-     p->pr.set_value(std::move(result));
+  tls->push([this, ro, cfh, p]() {
+    std::tuple<Status, std::string, std::string> result;
+    std::get<0>(result) = this->Get(ro, cfh, p->key, &std::get<2>(result));
+    std::get<1>(result) = std::move(p->key);
+    p->pr.set_value(std::move(result));
   });
   return fu;
 }
-future<std::tuple<Status, std::string, std::string> >
-DB::GetFuture(const ReadOptions& ro, std::string key) {
-    return GetFuture(ro, DefaultColumnFamily(), std::move(key));
-}
 
+future<std::tuple<Status, std::string, std::string>>
+DB::GetFuture(const ReadOptions& ro, std::string key) {
+  return GetFuture(ro, DefaultColumnFamily(), std::move(key));
+}
 
 Status DBImpl::Close() {
   if (!closed_) {
@@ -3388,8 +3413,7 @@ SequenceNumber DBImpl::GetEarliestMemTableSequenceNumber(SuperVersion* sv,
 #ifndef ROCKSDB_LITE
 Status DBImpl::GetLatestSequenceForKey(SuperVersion* sv, const Slice& key,
                                        bool cache_only, SequenceNumber* seq,
-                                       bool* found_record_for_key,
-                                       bool* is_blob_index) {
+                                       bool* found_record_for_key) {
   Status s;
   MergeContext merge_context;
   SequenceNumber max_covering_tombstone_seq = 0;
@@ -3403,7 +3427,7 @@ Status DBImpl::GetLatestSequenceForKey(SuperVersion* sv, const Slice& key,
 
   // Check if there is a record for this key in the latest memtable
   sv->mem->Get(lkey, nullptr, &s, &merge_context, &max_covering_tombstone_seq,
-               seq, read_options, nullptr /*read_callback*/, is_blob_index);
+               seq, read_options, nullptr /*read_callback*/);
 
   if (!(s.ok() || s.IsNotFound() || s.IsMergeInProgress())) {
     // unexpected error reading memtable.
@@ -3422,7 +3446,7 @@ Status DBImpl::GetLatestSequenceForKey(SuperVersion* sv, const Slice& key,
 
   // Check if there is a record for this key in the immutable memtables
   sv->imm->Get(lkey, nullptr, &s, &merge_context, &max_covering_tombstone_seq,
-               seq, read_options, nullptr /*read_callback*/, is_blob_index);
+               seq, read_options, nullptr /*read_callback*/);
 
   if (!(s.ok() || s.IsNotFound() || s.IsMergeInProgress())) {
     // unexpected error reading memtable.
@@ -3441,8 +3465,7 @@ Status DBImpl::GetLatestSequenceForKey(SuperVersion* sv, const Slice& key,
 
   // Check if there is a record for this key in the immutable memtables
   sv->imm->GetFromHistory(lkey, nullptr, &s, &merge_context,
-                          &max_covering_tombstone_seq, seq, read_options,
-                          is_blob_index);
+                          &max_covering_tombstone_seq, seq, read_options);
 
   if (!(s.ok() || s.IsNotFound() || s.IsMergeInProgress())) {
     // unexpected error reading memtable.
@@ -3464,10 +3487,9 @@ Status DBImpl::GetLatestSequenceForKey(SuperVersion* sv, const Slice& key,
   // SST files if cache_only=true?
   if (!cache_only) {
     // Check tables
-    sv->current->Get(read_options, lkey, nullptr, &s, &merge_context,
+    sv->current->Get(read_options, key, lkey, nullptr, &s, &merge_context,
                      &max_covering_tombstone_seq, nullptr /* value_found */,
-                     found_record_for_key, seq, nullptr /*read_callback*/,
-                     is_blob_index);
+                     found_record_for_key, seq, nullptr /*read_callback*/);
 
     if (!(s.ok() || s.IsNotFound() || s.IsMergeInProgress())) {
       // unexpected error reading SST files

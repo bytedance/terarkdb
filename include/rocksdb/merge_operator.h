@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 
-#include "rocksdb/slice.h"
+#include "rocksdb/lazy_slice.h"
 #include "rocksdb/status.h"
 
 namespace rocksdb {
@@ -76,8 +76,8 @@ class MergeOperator {
 
   struct MergeOperationInput {
     explicit MergeOperationInput(const Slice& _key,
-                                 const Slice* _existing_value,
-                                 const std::vector<Slice>& _operand_list,
+                                 const LazySlice* _existing_value,
+                                 const std::vector<LazySlice>& _operand_list,
                                  Logger* _logger)
         : key(_key),
           existing_value(_existing_value),
@@ -88,25 +88,25 @@ class MergeOperator {
     const Slice& key;
     // The existing value of the current key, nullptr means that the
     // value doesn't exist.
-    const Slice* existing_value;
+    const LazySlice* existing_value;
     // A list of operands to apply.
-    const std::vector<Slice>& operand_list;
+    const std::vector<LazySlice>& operand_list;
     // Logger could be used by client to log any errors that happen during
     // the merge operation.
     Logger* logger;
   };
 
   struct MergeOperationOutput {
-    explicit MergeOperationOutput(std::string& _new_value,
-                                  Slice& _existing_operand)
+    explicit MergeOperationOutput(LazySlice& _new_value,
+                                  const LazySlice*& _existing_operand)
         : new_value(_new_value), existing_operand(_existing_operand) {}
 
     // Client is responsible for filling the merge result here.
-    std::string& new_value;
+    LazySlice& new_value;
     // If the merge result is one of the existing operands (or existing_value),
     // client can set this field to the operand (or existing_value) instead of
     // using new_value.
-    Slice& existing_operand;
+    const LazySlice*& existing_operand;
   };
 
   virtual bool FullMergeV2(const MergeOperationInput& merge_in,
@@ -143,9 +143,10 @@ class MergeOperator {
   // If there is corruption in the data, handle it in the FullMergeV2() function
   // and return false there.  The default implementation of PartialMerge will
   // always return false.
-  virtual bool PartialMerge(const Slice& /*key*/, const Slice& /*left_operand*/,
-                            const Slice& /*right_operand*/,
-                            std::string* /*new_value*/,
+  virtual bool PartialMerge(const Slice& /*key*/,
+                            const LazySlice& /*left_operand*/,
+                            const LazySlice& /*right_operand*/,
+                            LazySlice* /*new_value*/,
                             Logger* /*logger*/) const {
     return false;
   }
@@ -172,8 +173,8 @@ class MergeOperator {
   // should either implement PartialMergeMulti, or implement PartialMerge which
   // is served as the helper function of the default PartialMergeMulti.
   virtual bool PartialMergeMulti(const Slice& key,
-                                 const std::deque<Slice>& operand_list,
-                                 std::string* new_value, Logger* logger) const;
+                                 const std::vector<LazySlice>& operand_list,
+                                 LazySlice* new_value, Logger* logger) const;
 
   // The name of the MergeOperator. Used to check for MergeOperator
   // mismatches (i.e., a DB created with one MergeOperator is
@@ -200,11 +201,10 @@ class MergeOperator {
   // relative to how they were merged (passed to FullMerge or FullMergeV2)
   // for performance reasons, see also:
   // https://github.com/facebook/rocksdb/issues/3865
-  virtual bool ShouldMerge(const std::vector<Slice>& /*operands*/) const {
+  virtual bool ShouldMerge(const std::vector<LazySlice>& /*operands*/) const {
     return false;
   }
 
-  virtual bool SupportSerialization() const { return false; }
   virtual Status Serialize(std::string* /*bytes*/) const {
     return Status::NotSupported();
   }
@@ -243,8 +243,9 @@ class AssociativeMergeOperator : public MergeOperator {
   bool FullMergeV2(const MergeOperationInput& merge_in,
                    MergeOperationOutput* merge_out) const override;
 
-  bool PartialMerge(const Slice& key, const Slice& left_operand,
-                    const Slice& right_operand, std::string* new_value,
+  bool PartialMerge(const Slice& key, const LazySlice& left_operand,
+                    const LazySlice& right_operand,
+                    LazySlice* new_value,
                     Logger* logger) const override;
 };
 

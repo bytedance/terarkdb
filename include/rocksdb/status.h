@@ -93,6 +93,9 @@ class Status {
   // Returns a C style string indicating the message of the Status
   const char* getState() const { return state_; }
 
+  Status(unsigned char code, unsigned char subcode, unsigned char sev,
+         const char* state);
+
   // Return a success status.
   static Status OK() { return Status(); }
 
@@ -318,6 +321,11 @@ inline Status::Status(Status&& s)
     : Status() {
   *this = std::move(s);
 }
+
+inline Status::Status(unsigned char code, unsigned char subcode,
+                      unsigned char sev, const char* state)
+  : code_((Code)code), subcode_((SubCode)subcode), sev_((Severity)sev),
+    state_(state == nullptr ? nullptr : CopyState(state)) {}
 
 inline Status& Status::operator=(Status&& s)
 #if !(defined _MSC_VER) || ((defined _MSC_VER) && (_MSC_VER >= 1900))

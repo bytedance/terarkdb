@@ -16,7 +16,6 @@
 #include "db/dbformat.h"
 #include "db/merge_context.h"
 #include "db/merge_helper.h"
-#include "db/pinned_iterators_manager.h"
 #include "db/range_tombstone_fragmenter.h"
 #include "db/read_callback.h"
 #include "monitoring/perf_context_imp.h"
@@ -264,10 +263,11 @@ const char* EncodeKey(std::string* scratch, const Slice& target) {
   return scratch->data();
 }
 
-class MemTableIterator : public InternalIterator {
+template<class TValue>
+class MemTableIteratorBase : public InternalIteratorBase<TValue> {
  public:
-  MemTableIterator(const MemTable& mem, const ReadOptions& read_options,
-                   Arena* arena, bool use_range_del_table = false)
+  MemTableIteratorBase(const MemTable& mem, const ReadOptions& read_options,
+                       Arena* arena, bool use_range_del_table = false)
       : bloom_(nullptr),
         prefix_extractor_(mem.prefix_extractor_),
         comparator_(mem.comparator_),
@@ -286,26 +286,13 @@ class MemTableIterator : public InternalIterator {
     is_seek_for_prev_supported_ = iter_->IsSeekForPrevSupported();
   }
 
-  ~MemTableIterator() {
-#ifndef NDEBUG
-    // Assert that the MemTableIterator is never deleted while
-    // Pinning is Enabled.
-    assert(!pinned_iters_mgr_ || !pinned_iters_mgr_->PinningEnabled());
-#endif
+  ~MemTableIteratorBase() {
     if (arena_mode_) {
       iter_->~Iterator();
     } else {
       delete iter_;
     }
   }
-
-#ifndef NDEBUG
-  virtual void SetPinnedItersMgr(
-      PinnedIteratorsManager* pinned_iters_mgr) override {
-    pinned_iters_mgr_ = pinned_iters_mgr;
-  }
-  PinnedIteratorsManager* pinned_iters_mgr_ = nullptr;
-#endif
 
   virtual bool Valid() const override { return valid_; }
   virtual void Seek(const Slice& k) override {
@@ -361,35 +348,24 @@ class MemTableIterator : public InternalIterator {
   }
   virtual void Next() override {
     PERF_COUNTER_ADD(next_on_memtable_count, 1);
-    assert(Valid());
+    assert(valid_);
     iter_->Next();
     valid_ = iter_->Valid();
   }
   virtual void Prev() override {
     PERF_COUNTER_ADD(prev_on_memtable_count, 1);
-    assert(Valid());
+    assert(valid_);
     iter_->Prev();
     valid_ = iter_->Valid();
   }
   virtual Slice key() const override {
-    assert(Valid());
-    return iter_->GetKey();
-  }
-  virtual Slice value() const override {
-    assert(Valid());
-    return iter_->GetValue();
+    assert(valid_);
+    return iter_->key();
   }
 
   virtual Status status() const override { return Status::OK(); }
 
-  virtual bool IsKeyPinned() const override { return iter_->IsKeyPinned(); }
-
-  virtual bool IsValuePinned() const override {
-    // memtable value is always pinned, except if we allow inplace update.
-    return value_pinned_;
-  }
-
- private:
+ protected:
   DynamicBloom* bloom_;
   const SliceTransform* const prefix_extractor_;
   const MemTable::KeyComparator comparator_;
@@ -400,8 +376,58 @@ class MemTableIterator : public InternalIterator {
   bool is_seek_for_prev_supported_;
 
   // No copying allowed
-  MemTableIterator(const MemTableIterator&);
-  void operator=(const MemTableIterator&);
+  MemTableIteratorBase(const MemTableIteratorBase&);
+  void operator=(const MemTableIteratorBase&);
+};
+
+class MemTableTombstoneIterator : public MemTableIteratorBase<Slice> {
+  using Base = MemTableIteratorBase<Slice>;
+  using Base::iter_;
+  using Base::valid_;
+  using Base::value_pinned_;
+
+ public:
+  using Base::Base;
+
+  virtual Slice value() const override {
+    assert(valid_);
+    LazySlice v = iter_->value();
+    assert(v.inplace_decode().ok());
+    return v.inplace_decode().ok() ? v : Slice::Invalid();
+  }
+};
+
+class MemTableIterator
+    : public MemTableIteratorBase<LazySlice>, public LazySliceController {
+  using Base = MemTableIteratorBase<LazySlice>;
+  using Base::iter_;
+  using Base::valid_;
+  using Base::value_pinned_;
+
+ public:
+  using Base::Base;
+
+  virtual void destroy(LazySliceRep* /*rep*/) const override {}
+  virtual void pin_resource(LazySlice* slice,
+                            LazySliceRep* rep) const override {
+    if (!value_pinned_ || !iter_->IsValuePinned()) {
+      LazySliceController::pin_resource(slice, rep);
+    } else {
+      *slice = iter_->value();
+      slice->pin_resource();
+    }
+  }
+  virtual Status inplace_decode(LazySlice* slice,
+                                LazySliceRep* /*rep*/) const override {
+    assert(!slice->valid());
+    *slice = iter_->value();
+    return slice->inplace_decode();
+  }
+
+  virtual LazySlice value() const override {
+    assert(valid_);
+    return LazySlice(this, {});
+  }
 };
 
 InternalIterator* MemTable::NewIterator(const ReadOptions& read_options,
@@ -422,7 +448,7 @@ FragmentedRangeTombstoneIterator* MemTable::NewRangeTombstoneIterator(
   if (!fragmented_range_dels_ ||
       fragmented_range_dels_->user_tag() != num_range_del) {
 
-    auto* unfragmented_iter = new MemTableIterator(
+    auto* unfragmented_iter = new MemTableTombstoneIterator(
         *this, read_options, nullptr /* arena */,
         true /* use_range_del_table */);
     if (unfragmented_iter == nullptr) {
@@ -431,7 +457,7 @@ FragmentedRangeTombstoneIterator* MemTable::NewRangeTombstoneIterator(
     StopWatchNano timer(env_, true);
     fragmented_tombstone_list =
         std::make_shared<FragmentedRangeTombstoneList>(
-            std::unique_ptr<InternalIterator>(unfragmented_iter),
+            std::unique_ptr<InternalIteratorBase<Slice>>(unfragmented_iter),
             comparator_.comparator, false /* for_compaction */,
             std::vector<SequenceNumber>() /* snapshots */, num_range_del);
     if (timer.ElapsedNanos() > 10000000ULL) {
@@ -576,7 +602,7 @@ struct Saver {
   const LookupKey* key;
   bool* found_final_value;  // Is value set correctly? Used by KeyMayExist
   bool* merge_in_progress;
-  std::string* value;
+  LazySlice* value;
   SequenceNumber seq;
   const MergeOperator* merge_operator;
   // the merge operations encountered;
@@ -588,7 +614,6 @@ struct Saver {
   bool inplace_update_support;
   Env* env_;
   ReadCallback* callback_;
-  bool* is_blob_index;
 
   bool CheckCallback(SequenceNumber _seq) {
     if (callback_) {
@@ -599,7 +624,8 @@ struct Saver {
 };
 }  // namespace
 
-static bool SaveValue(void* arg, const MemTableRep::KeyValuePair* pair) {
+static bool SaveValue(void* arg, const Slice& internal_key,
+                      LazySlice&& value) {
   Saver* s = reinterpret_cast<Saver*>(arg);
   MergeContext* merge_context = s->merge_context;
   SequenceNumber max_covering_tombstone_seq = s->max_covering_tombstone_seq;
@@ -607,8 +633,6 @@ static bool SaveValue(void* arg, const MemTableRep::KeyValuePair* pair) {
 
   assert(merge_context != nullptr);
 
-  Slice internal_key, value;
-  std::tie(internal_key, value) = pair->GetKeyValue();
   // Check that it belongs to same user key.  We do not check the
   // sequence number since the Seek() call above should have skipped
   // all entries with overly large sequence numbers.
@@ -627,86 +651,85 @@ static bool SaveValue(void* arg, const MemTableRep::KeyValuePair* pair) {
 
     s->seq = seq;
 
-    if ((type == kTypeValue || type == kTypeMerge || type == kTypeBlobIndex) &&
-        max_covering_tombstone_seq > seq) {
+    if ((type == kTypeValue || type == kTypeMerge || type == kTypeValueIndex ||
+         type == kTypeMergeIndex) && max_covering_tombstone_seq > seq) {
       type = kTypeRangeDeletion;
     }
     switch (type) {
-      case kTypeBlobIndex:
-        if (s->is_blob_index == nullptr) {
-          ROCKS_LOG_ERROR(s->logger, "Encounter unexpected blob index.");
-          *(s->status) = Status::NotSupported(
-              "Encounter unsupported blob value. Please open DB with "
-              "rocksdb::blob_db::BlobDB instead.");
-        } else if (*(s->merge_in_progress)) {
-          *(s->status) =
-              Status::NotSupported("Blob DB does not support merge operator.");
-        }
-        if (!s->status->ok()) {
-          *(s->found_final_value) = true;
-          return false;
-        }
+      case kTypeValueIndex:
+        assert(false);
         FALLTHROUGH_INTENDED;
       case kTypeValue: {
         if (s->inplace_update_support) {
           s->mem->GetLock(s->key->user_key())->ReadLock();
         }
-        *(s->status) = Status::OK();
-        if (*(s->merge_in_progress)) {
+        *s->status = Status::OK();
+        if (*s->merge_in_progress) {
           if (s->value != nullptr) {
-            *(s->status) = MergeHelper::TimedFullMerge(
+            *s->status = MergeHelper::TimedFullMerge(
                 merge_operator, s->key->user_key(), &value,
                 merge_context->GetOperands(), s->value, s->logger,
-                s->statistics, s->env_, nullptr /* result_operand */, true);
+                s->statistics, s->env_, true);
+            if (s->status->ok()) {
+              s->value->pin_resource();
+            }
           }
         } else if (s->value != nullptr) {
-          s->value->assign(value.data(), value.size());
+          *s->status = value.decode_destructive(*s->value);
+          if (!s->status->ok()) {
+            return false;
+          }
         }
         if (s->inplace_update_support) {
           s->mem->GetLock(s->key->user_key())->ReadUnlock();
         }
-        *(s->found_final_value) = true;
-        if (s->is_blob_index != nullptr) {
-          *(s->is_blob_index) = (type == kTypeBlobIndex);
-        }
+        *s->found_final_value = true;
         return false;
       }
       case kTypeDeletion:
       case kTypeSingleDeletion:
       case kTypeRangeDeletion: {
-        if (*(s->merge_in_progress)) {
+        if (*s->merge_in_progress) {
           if (s->value != nullptr) {
-            *(s->status) = MergeHelper::TimedFullMerge(
+            *s->status = MergeHelper::TimedFullMerge(
                 merge_operator, s->key->user_key(), nullptr,
                 merge_context->GetOperands(), s->value, s->logger,
-                s->statistics, s->env_, nullptr /* result_operand */, true);
+                s->statistics, s->env_, true);
+            if (s->status->ok()) {
+              s->value->pin_resource();
+            }
           }
         } else {
-          *(s->status) = Status::NotFound();
+          *s->status = Status::NotFound();
         }
-        *(s->found_final_value) = true;
+        *s->found_final_value = true;
         return false;
       }
+      case kTypeMergeIndex:
+        assert(false);
+        FALLTHROUGH_INTENDED;
       case kTypeMerge: {
         if (!merge_operator) {
-          *(s->status) = Status::InvalidArgument(
+          *s->status = Status::InvalidArgument(
               "merge_operator is not properly initialized.");
           // Normally we continue the loop (return true) when we see a merge
           // operand.  But in case of an error, we should stop the loop
           // immediately and pretend we have found the value to stop further
           // seek.  Otherwise, the later call will override this error status.
-          *(s->found_final_value) = true;
+          *s->found_final_value = true;
           return false;
         }
-        *(s->merge_in_progress) = true;
-        merge_context->PushOperand(
-            value, s->inplace_update_support == false /* operand_pinned */);
+        *s->merge_in_progress = true;
+        merge_context->PushOperand(std::move(value));
         if (merge_operator->ShouldMerge(merge_context->GetOperandsDirectionBackward())) {
-          *(s->status) = MergeHelper::TimedFullMerge(
+          *s->status = MergeHelper::TimedFullMerge(
               merge_operator, s->key->user_key(), nullptr,
               merge_context->GetOperands(), s->value, s->logger, s->statistics,
-              s->env_, nullptr /* result_operand */, true);
-          *(s->found_final_value) = true;
+              s->env_, true);
+          if (s->status->ok()) {
+            s->value->pin_resource();
+          }
+          *s->found_final_value = true;
           return false;
         }
         return true;
@@ -721,11 +744,11 @@ static bool SaveValue(void* arg, const MemTableRep::KeyValuePair* pair) {
   return false;
 }
 
-bool MemTable::Get(const LookupKey& key, std::string* value, Status* s,
+bool MemTable::Get(const LookupKey& key, LazySlice* value, Status* s,
                    MergeContext* merge_context,
                    SequenceNumber* max_covering_tombstone_seq,
                    SequenceNumber* seq, const ReadOptions& read_opts,
-                   ReadCallback* callback, bool* is_blob_index) {
+                   ReadCallback* callback) {
   // The sequence number is updated synchronously in version_set.h
   if (IsEmpty()) {
     // Avoiding recording stats for speed.
@@ -773,7 +796,6 @@ bool MemTable::Get(const LookupKey& key, std::string* value, Status* s,
     saver.statistics = moptions_.statistics;
     saver.env_ = env_;
     saver.callback_ = callback;
-    saver.is_blob_index = is_blob_index;
     table_->Get(key, &saver, SaveValue);
 
     *seq = saver.seq;
@@ -800,17 +822,15 @@ void MemTable::Update(SequenceNumber seq,
   if (iter->Valid()) {
     // sequence number since the Seek() call above should have skipped
     // all entries with overly large sequence numbers.
-    Slice internal_key, old_value;
-    std::tie(internal_key, old_value) = iter->GetKeyValue();
     if (comparator_.comparator.user_comparator()->Equal(
-            ExtractUserKey(internal_key), lkey.user_key())) {
+            ExtractUserKey(iter->key()), lkey.user_key())) {
       // Correct user key
-      const uint64_t tag =
-          DecodeFixed64(internal_key.data() + internal_key .size() - 8);
+      const uint64_t tag = ExtractInternalKeyFooter(iter->key());
       ValueType type;
       SequenceNumber unused;
       UnPackSequenceAndType(tag, &unused, &type);
-      if (type == kTypeValue) {
+      LazySlice old_value = iter->value();
+      if (type == kTypeValue && old_value.valid()) {
         uint32_t old_size = static_cast<uint32_t>(old_value.size());
         uint32_t new_size = static_cast<uint32_t>(value.size());
 
@@ -849,57 +869,49 @@ bool MemTable::UpdateCallback(SequenceNumber seq,
     // Check that it belongs to same user key.  We do not check the
     // sequence number since the Seek() call above should have skipped
     // all entries with overly large sequence numbers.
-    Slice internal_key, old_value;
-    std::tie(internal_key, old_value) = iter->GetKeyValue();
     if (comparator_.comparator.user_comparator()->Equal(
-            ExtractUserKey(internal_key), lkey.user_key())) {
+            ExtractUserKey(iter->key()), lkey.user_key())) {
       // Correct user key
-      const uint64_t tag =
-          DecodeFixed64(internal_key.data() + internal_key.size() - 8);
+      const uint64_t tag = ExtractInternalKeyFooter(iter->key());
       ValueType type;
       uint64_t unused;
       UnPackSequenceAndType(tag, &unused, &type);
-      switch (type) {
-        case kTypeValue: {
-          uint32_t old_size = static_cast<uint32_t>(old_value.size());
+      LazySlice old_value = iter->value();
+      if(type == kTypeValue && old_value.valid()) {
+        uint32_t old_size = static_cast<uint32_t>(old_value.size());
 
-          char* old_buffer = const_cast<char*>(old_value.data());
-          uint32_t new_inplace_size = old_size;
+        char* old_buffer = const_cast<char*>(old_value.data());
+        uint32_t new_inplace_size = old_size;
 
-          std::string merged_value;
-          WriteLock wl(GetLock(lkey.user_key()));
-          auto status = moptions_.inplace_callback(old_buffer, &new_inplace_size,
-                                                   delta, &merged_value);
-          if (status == UpdateStatus::UPDATED_INPLACE) {
-            // Value already updated by callback.
-            assert(new_inplace_size <= old_size);
-            if (new_inplace_size < old_size) {
-              // overwrite the new inplace size
-              char* p =
-                const_cast<char*>(old_value.data()) - VarintLength(old_size);
-              p = EncodeVarint32(p, new_inplace_size);
-              if (p < old_buffer) {
-                // shift the value buffer as well.
-                memmove(p, old_buffer, new_inplace_size);
-              }
+        std::string merged_value;
+        WriteLock wl(GetLock(lkey.user_key()));
+        auto status = moptions_.inplace_callback(old_buffer, &new_inplace_size,
+                                                 delta, &merged_value);
+        if (status == UpdateStatus::UPDATED_INPLACE) {
+          // Value already updated by callback.
+          assert(new_inplace_size <= old_size);
+          if (new_inplace_size < old_size) {
+            // overwrite the new inplace size
+            char* p = old_buffer - VarintLength(old_size);
+            p = EncodeVarint32(p, new_inplace_size);
+            if (p < old_buffer) {
+              // shift the value buffer as well.
+              memmove(p, old_buffer, new_inplace_size);
             }
-            RecordTick(moptions_.statistics, NUMBER_KEYS_UPDATED);
-            UpdateFlushState();
-            return true;
-          } else if (status == UpdateStatus::UPDATED) {
-            Add(seq, kTypeValue, key, Slice(merged_value));
-            RecordTick(moptions_.statistics, NUMBER_KEYS_WRITTEN);
-            UpdateFlushState();
-            return true;
-          } else if (status == UpdateStatus::UPDATE_FAILED) {
-            // No action required. Return.
-            UpdateFlushState();
-            return true;
           }
+          RecordTick(moptions_.statistics, NUMBER_KEYS_UPDATED);
+          UpdateFlushState();
+          return true;
+        } else if (status == UpdateStatus::UPDATED) {
+          Add(seq, kTypeValue, key, Slice(merged_value));
+          RecordTick(moptions_.statistics, NUMBER_KEYS_WRITTEN);
+          UpdateFlushState();
+          return true;
+        } else if (status == UpdateStatus::UPDATE_FAILED) {
+          // No action required. Return.
+          UpdateFlushState();
+          return true;
         }
-          break;
-        default:
-          break;
       }
     }
   }
@@ -919,9 +931,8 @@ size_t MemTable::CountSuccessiveMergeEntries(const LookupKey& key) {
   iter->Seek(key.internal_key(), memkey.data());
 
   size_t num_successive_merges = 0;
-
   for (; iter->Valid(); iter->Next()) {
-    Slice internal_key = iter->GetKey();
+    Slice internal_key = iter->key();
     if (!comparator_.comparator.user_comparator()->Equal(
             ExtractUserKey(internal_key), key.user_key())) {
       break;
@@ -932,7 +943,7 @@ size_t MemTable::CountSuccessiveMergeEntries(const LookupKey& key) {
     ValueType type;
     uint64_t unused;
     UnPackSequenceAndType(tag, &unused, &type);
-    if (type != kTypeMerge) {
+    if (type != kTypeMerge && type != kTypeMergeIndex) {
       break;
     }
 

@@ -210,7 +210,7 @@ Status WritePreparedTxnDB::WriteInternal(const WriteOptions& write_options_orig,
 
 Status WritePreparedTxnDB::Get(const ReadOptions& options,
                                ColumnFamilyHandle* column_family,
-                               const Slice& key, PinnableSlice* value) {
+                               const Slice& key, LazySlice* value) {
   // We are fine with the latest committed value. This could be done by
   // specifying the snapshot as kMaxSequenceNumber.
   SequenceNumber seq = kMaxSequenceNumber;
@@ -227,8 +227,10 @@ Status WritePreparedTxnDB::Get(const ReadOptions& options,
   bool* dont_care = nullptr;
   // Note: no need to specify a snapshot for read options as no specific
   // snapshot is requested by the user.
-  return db_impl_->GetImpl(options, column_family, key, value, dont_care,
-                           &callback);
+  auto s = db_impl_->GetImpl(options, column_family, key, value, dont_care,
+                             &callback);
+  assert(!s.ok() || value->valid());
+  return s;
 }
 
 void WritePreparedTxnDB::UpdateCFComparatorMap(
@@ -303,7 +305,6 @@ static void CleanupWritePreparedTxnDBIterator(void* arg1, void* /*arg2*/) {
 
 Iterator* WritePreparedTxnDB::NewIterator(const ReadOptions& options,
                                           ColumnFamilyHandle* column_family) {
-  constexpr bool ALLOW_BLOB = true;
   constexpr bool ALLOW_REFRESH = true;
   std::shared_ptr<ManagedSnapshot> own_snapshot = nullptr;
   SequenceNumber snapshot_seq = kMaxSequenceNumber;
@@ -330,7 +331,7 @@ Iterator* WritePreparedTxnDB::NewIterator(const ReadOptions& options,
       new IteratorState(this, snapshot_seq, own_snapshot, min_uncommitted);
   auto* db_iter =
       db_impl_->NewIteratorImpl(options, cfd, snapshot_seq, &state->callback,
-                                !ALLOW_BLOB, !ALLOW_REFRESH);
+                                !ALLOW_REFRESH);
   db_iter->RegisterCleanup(CleanupWritePreparedTxnDBIterator, state, nullptr);
   return db_iter;
 }
@@ -339,7 +340,6 @@ Status WritePreparedTxnDB::NewIterators(
     const ReadOptions& options,
     const std::vector<ColumnFamilyHandle*>& column_families,
     std::vector<Iterator*>* iterators) {
-  constexpr bool ALLOW_BLOB = true;
   constexpr bool ALLOW_REFRESH = true;
   std::shared_ptr<ManagedSnapshot> own_snapshot = nullptr;
   SequenceNumber snapshot_seq = kMaxSequenceNumber;
@@ -367,7 +367,7 @@ Status WritePreparedTxnDB::NewIterators(
         new IteratorState(this, snapshot_seq, own_snapshot, min_uncommitted);
     auto* db_iter =
         db_impl_->NewIteratorImpl(options, cfd, snapshot_seq, &state->callback,
-                                  !ALLOW_BLOB, !ALLOW_REFRESH);
+                                  !ALLOW_REFRESH);
     db_iter->RegisterCleanup(CleanupWritePreparedTxnDBIterator, state, nullptr);
     iterators->push_back(db_iter);
   }

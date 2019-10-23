@@ -56,16 +56,6 @@ static Slice GetSliceForFileNumber(const uint64_t* file_number) {
                sizeof(*file_number));
 }
 
-#ifndef ROCKSDB_LITE
-
-void AppendVarint64(IterKey* key, uint64_t v) {
-  char buf[10];
-  auto ptr = EncodeVarint64(buf, v);
-  key->TrimAppend(key->Size(), buf, ptr - buf);
-}
-
-#endif  // ROCKSDB_LITE
-
 }  // namespace
 
 TableCache::TableCache(const ImmutableCFOptions& ioptions,
@@ -187,7 +177,7 @@ Status TableCache::FindTable(const EnvOptions& env_options,
 InternalIterator* TableCache::NewIterator(
     const ReadOptions& options, const EnvOptions& env_options,
     const InternalKeyComparator& icomparator, const FileMetaData& file_meta,
-    const DependFileMap& depend_files, RangeDelAggregator* range_del_agg,
+    const DependenceMap& dependence_map, RangeDelAggregator* range_del_agg,
     const SliceTransform* prefix_extractor, TableReader** table_reader_ptr,
     HistogramImpl* file_read_hist, bool for_compaction, Arena* arena,
     bool skip_filters, int level, const InternalKey* smallest_compaction_key,
@@ -246,17 +236,11 @@ InternalIterator* TableCache::NewIterator(
   if (s.ok()) {
     if (options.table_filter &&
         !options.table_filter(*table_reader->GetTableProperties())) {
-      result = NewEmptyInternalIterator<Slice>(arena);
+      result = NewEmptyInternalIterator<LazySlice>(arena);
     } else {
       result = table_reader->NewIterator(options, prefix_extractor, arena,
                                          skip_filters, for_compaction);
-      if (result->FileNumber() != fd.GetNumber()) {
-        assert(result->FileNumber() == uint64_t(-1));
-        result = NewFileNumberInternalIteratorWrapper(result, fd.GetNumber(),
-                                                      arena);
-        assert(result->FileNumber() == fd.GetNumber());
-      }
-      if (file_meta.sst_purpose == kMapSst && !depend_files.empty()) {
+      if (file_meta.prop.purpose == kMapSst && !dependence_map.empty()) {
         // Store params for create depend table iterator in future
         // DON'T REF THIS OBJECT, DEEP COPY IT !
         struct CreateIteratorFuncion {
@@ -271,11 +255,11 @@ InternalIterator* TableCache::NewIterator(
           int level;
 
           InternalIterator* operator()(const FileMetaData* _f,
-                                       const DependFileMap& _depend_files,
+                                       const DependenceMap& _dependence_map,
                                        Arena* _arena,
                                        TableReader** _reader_ptr) {
             return table_cache->NewIterator(
-                options, env_options, icomparator, *_f, _depend_files,
+                options, env_options, icomparator, *_f, _dependence_map,
                 range_del_agg, prefix_extractor, _reader_ptr, nullptr,
                 for_compaction, _arena, skip_filters, level);
           }
@@ -293,7 +277,7 @@ InternalIterator* TableCache::NewIterator(
                                   range_del_agg, prefix_extractor,
                                   for_compaction, skip_filters, level};
         auto map_sst_iter =
-            NewMapSstIterator(file_meta, result, depend_files, icomparator,
+            NewMapSstIterator(&file_meta, result, dependence_map, icomparator,
                               create_iter_fn,
                               c_style_callback(*create_iter_fn), arena);
         if (arena != nullptr) {
@@ -334,7 +318,7 @@ InternalIterator* TableCache::NewIterator(
     }
   }
   if (s.ok() && range_del_agg != nullptr && !options.ignore_range_deletions &&
-      file_meta.sst_purpose != kMapSst) {
+      file_meta.prop.purpose != kMapSst) {
     if (range_del_agg->AddFile(fd.GetNumber())) {
       std::unique_ptr<FragmentedRangeTombstoneIterator> range_del_iter(
           static_cast<FragmentedRangeTombstoneIterator*>(
@@ -362,7 +346,7 @@ InternalIterator* TableCache::NewIterator(
   }
   if (!s.ok()) {
     assert(result == nullptr);
-    result = NewErrorInternalIterator<Slice>(s, arena);
+    result = NewErrorInternalIterator<LazySlice>(s, arena);
   }
   return result;
 }
@@ -370,232 +354,143 @@ InternalIterator* TableCache::NewIterator(
 Status TableCache::Get(const ReadOptions& options,
                        const InternalKeyComparator& internal_comparator,
                        const FileMetaData& file_meta,
-                       const DependFileMap& depend_files, const Slice& k,
+                       const DependenceMap& dependence_map, const Slice& k,
                        GetContext* get_context,
                        const SliceTransform* prefix_extractor,
                        HistogramImpl* file_read_hist, bool skip_filters,
                        int level) {
   auto& fd = file_meta.fd;
-  std::string* row_cache_entry = nullptr;
-  bool done = false;
-#ifndef ROCKSDB_LITE
-  IterKey row_cache_key;
-  std::string row_cache_entry_buffer;
-
-  // Check row cache if enabled. Since row cache does not currently store
-  // sequence numbers, we cannot use it if we need to fetch the sequence.
-  if (ioptions_.row_cache && !get_context->NeedToReadSequence() &&
-      file_meta.sst_purpose == 0) {
-    uint64_t fd_number = fd.GetNumber();
-    auto user_key = ExtractUserKey(k);
-    // We use the user key as cache key instead of the internal key,
-    // otherwise the whole cache would be invalidated every time the
-    // sequence key increases. However, to support caching snapshot
-    // reads, we append the sequence number (incremented by 1 to
-    // distinguish from 0) only in this case.
-    uint64_t seq_no =
-        options.snapshot == nullptr ? 0 : 1 + GetInternalKeySeqno(k);
-
-    // Compute row cache key.
-    row_cache_key.TrimAppend(row_cache_key.Size(), row_cache_id_.data(),
-                             row_cache_id_.size());
-    AppendVarint64(&row_cache_key, fd_number);
-    AppendVarint64(&row_cache_key, seq_no);
-    row_cache_key.TrimAppend(row_cache_key.Size(), user_key.data(),
-                             user_key.size());
-
-    if (auto row_handle =
-            ioptions_.row_cache->Lookup(row_cache_key.GetUserKey())) {
-      // Cleanable routine to release the cache entry
-      Cleanable value_pinner;
-      auto release_cache_entry_func = [](void* cache_to_clean,
-                                         void* cache_handle) {
-        ((Cache*)cache_to_clean)->Release((Cache::Handle*)cache_handle);
-      };
-      auto found_row_cache_entry = static_cast<const std::string*>(
-          ioptions_.row_cache->Value(row_handle));
-      // If it comes here value is located on the cache.
-      // found_row_cache_entry points to the value on cache,
-      // and value_pinner has cleanup procedure for the cached entry.
-      // After replayGetContextLog() returns, get_context.pinnable_slice_
-      // will point to cache entry buffer (or a copy based on that) and
-      // cleanup routine under value_pinner will be delegated to
-      // get_context.pinnable_slice_. Cache entry is released when
-      // get_context.pinnable_slice_ is reset.
-      value_pinner.RegisterCleanup(release_cache_entry_func,
-                                   ioptions_.row_cache.get(), row_handle);
-      replayGetContextLog(*found_row_cache_entry, user_key, get_context,
-                          &value_pinner);
-      RecordTick(ioptions_.statistics, ROW_CACHE_HIT);
-      done = true;
-    } else {
-      // Not found, setting up the replay log.
-      RecordTick(ioptions_.statistics, ROW_CACHE_MISS);
-      row_cache_entry = &row_cache_entry_buffer;
-    }
-  }
-#endif  // ROCKSDB_LITE
+  IterKey key_buffer;
   Status s;
   TableReader* t = fd.table_reader;
   Cache::Handle* handle = nullptr;
-  if (!done && s.ok()) {
-    if (t == nullptr) {
-      s = FindTable(
-          env_options_, internal_comparator, fd, &handle, prefix_extractor,
-          options.read_tier == kBlockCacheTier /* no_io */,
-          true /* record_read_stats */, file_read_hist, skip_filters, level);
-      if (s.ok()) {
-        t = GetTableReaderFromHandle(handle);
-      }
-    }
-    SequenceNumber* max_covering_tombstone_seq =
-        get_context->max_covering_tombstone_seq();
-    if (s.ok() && max_covering_tombstone_seq != nullptr &&
-        !options.ignore_range_deletions && file_meta.sst_purpose != kMapSst) {
-      std::unique_ptr<FragmentedRangeTombstoneIterator> range_del_iter(
-          t->NewRangeTombstoneIterator(options));
-      if (range_del_iter != nullptr) {
-        *max_covering_tombstone_seq = std::max(
-            *max_covering_tombstone_seq,
-            range_del_iter->MaxCoveringTombstoneSeqnum(ExtractUserKey(k)));
-      }
-    }
+  if (t == nullptr) {
+    s = FindTable(
+        env_options_, internal_comparator, fd, &handle, prefix_extractor,
+        options.read_tier == kBlockCacheTier /* no_io */,
+        true /* record_read_stats */, file_read_hist, skip_filters, level);
     if (s.ok()) {
-      get_context->SetReplayLog(row_cache_entry);  // nullptr if no cache.
-      if (file_meta.sst_purpose != kMapSst) {
-        s = t->Get(options, k, get_context, prefix_extractor, skip_filters);
-      } else if (depend_files.empty()) {
-        s = Status::Corruption("Composite sst depend files missing");
-      } else {
-        // Forward query to target sst
-        std::vector<char> key_storage;
-        char key_buffer[200];
-        auto dup_key = [&](Slice ikey) {
-          if (ikey.size() <= sizeof key_buffer) {
-            memcpy(key_buffer, ikey.data(), ikey.size());
-            return Slice(key_buffer, ikey.size());
-          } else {
-            key_storage.assign(ikey.data(), ikey.data() + ikey.size());
-            return Slice(key_storage.data(), ikey.size());
-          }
-        };
-        auto get_from_map = [&](const Slice& largest_key,
-                                const Slice& map_value) {
-          // Manual inline MapSstElement::Decode
-          const char* err_msg = "Invalid MapSstElement";
-          Slice map_input = map_value;
-          Slice smallest_key;
-          uint64_t link_count;
-          uint64_t flags;
-          Slice find_k = k;
-          auto& icomp = internal_comparator;
+      t = GetTableReaderFromHandle(handle);
+    }
+  }
+  if (s.ok()) {
+    if (file_meta.prop.purpose != kMapSst) {
+      t->UpdateMaxCoveringTombstoneSeq(
+          options, ExtractUserKey(k),
+          get_context->max_covering_tombstone_seq());
+      s = t->Get(options, k, get_context, prefix_extractor, skip_filters);
+    } else if (dependence_map.empty()) {
+      s = Status::Corruption("Composite sst depend files missing");
+    } else {
+      // Forward query to target sst
+      auto get_from_map = [&](const Slice& largest_key,
+                              LazySlice&& map_value) {
+        s = map_value.inplace_decode();
+        if (!s.ok()) {
+          return false;
+        }
+        // Manual inline MapSstElement::Decode
+        const char* err_msg = "Map sst invalid link_value";
+        Slice map_input = map_value;
+        Slice smallest_key;
+        uint64_t link_count;
+        uint64_t flags;
+        Slice find_k = k;
+        auto& icomp = internal_comparator;
 
-          if (!GetVarint64(&map_input, &flags) ||
-              !GetVarint64(&map_input, &link_count) ||
-              // TODO support kNoSmallest
-              ((flags >> MapSstElement::kNoSmallest) & 1) ||
-              !GetLengthPrefixedSlice(&map_input, &smallest_key)) {
-            s = Status::Corruption(err_msg);
+        if (!GetVarint64(&map_input, &flags) ||
+            !GetVarint64(&map_input, &link_count) ||
+            // TODO support kNoSmallest
+            ((flags >> MapSstElement::kNoSmallest) & 1) ||
+            !GetLengthPrefixedSlice(&map_input, &smallest_key)) {
+          s = Status::Corruption(err_msg);
+          return false;
+        }
+        // don't care kNoRecords, Get call need load
+        // max_covering_tombstone_seq
+        int include_smallest = (flags >> MapSstElement::kIncludeSmallest) & 1;
+        int include_largest = (flags >> MapSstElement::kIncludeLargest) & 1;
+
+        // include_smallest ? cmp_result > 0 : cmp_result >= 0
+        if (icomp.Compare(smallest_key, k) >= include_smallest) {
+          if (icomp.user_comparator()->Compare(ExtractUserKey(smallest_key),
+                                               ExtractUserKey(k)) != 0) {
+            // k is out of smallest bound
             return false;
           }
-          // don't care kNoRecords, Get call need load
-          // max_covering_tombstone_seq
-          int include_smallest = (flags >> MapSstElement::kIncludeSmallest) & 1;
-          int include_largest = (flags >> MapSstElement::kIncludeLargest) & 1;
-
-          // include_smallest ? cmp_result > 0 : cmp_result >= 0
-          if (icomp.Compare(smallest_key, k) >= include_smallest) {
-            if (icomp.user_comparator()->Compare(ExtractUserKey(smallest_key),
-                                                 ExtractUserKey(k)) != 0) {
+          assert(ExtractInternalKeyFooter(k) >
+                 ExtractInternalKeyFooter(smallest_key));
+          if (include_smallest) {
+            // shrink to smallest_key
+            find_k = smallest_key;
+          } else {
+            uint64_t seq_type = ExtractInternalKeyFooter(smallest_key);
+            if (seq_type == 0) {
+              // 'smallest_key' has the largest seq_type of current user_key
               // k is out of smallest bound
               return false;
             }
-            assert(ExtractInternalKeyFooter(k) >
-                   ExtractInternalKeyFooter(smallest_key));
-            // same user_key, shrink to smallest_key
-            if (include_smallest) {
-              find_k = smallest_key;
-            } else {
-              uint64_t seq_type = ExtractInternalKeyFooter(smallest_key);
-              if (seq_type == 0) {
-                // 'smallest_key' has the largest seq_type of current user_key
-                // k is out of smallest bound
-                return false;
-              }
-              // make find_k a bit greater than k
-              find_k = dup_key(smallest_key);
-              EncodeFixed64(
-                  const_cast<char*>(find_k.data() + find_k.size() - 8),
-                  seq_type - 1);
-            }
+            // make find_k a bit greater than smallest_key
+            key_buffer.SetInternalKey(smallest_key, true);
+            find_k = key_buffer.GetInternalKey();
+            EncodeFixed64(
+                const_cast<char*>(find_k.data() + find_k.size() - 8),
+                seq_type - 1);
           }
+        }
 
-          bool is_largest_user_key =
-              icomp.user_comparator()->Compare(ExtractUserKey(largest_key),
-                                               ExtractUserKey(k)) == 0;
-          uint64_t min_seq_type_backup = get_context->GetMinSequenceAndType();
-          if (is_largest_user_key) {
-            // shrink seqno to largest_key, make sure can't read greater keys
-            uint64_t seq_type = ExtractInternalKeyFooter(largest_key);
-            assert(seq_type <=
-                   PackSequenceAndType(kMaxSequenceNumber, kValueTypeForSeek));
-            // For safety. may kValueTypeForSeek can be 255 in the future ?
-            if (seq_type == port::kMaxUint64 && !include_largest) {
-              // 'largest_key' has the smallest seq_type of current user_key
-              // k is out of largest bound. go next map element
-              return true;
-            }
-            get_context->SetMinSequenceAndType(
-                std::max(min_seq_type_backup, seq_type + !include_largest));
+        bool is_largest_user_key =
+            icomp.user_comparator()->Compare(ExtractUserKey(largest_key),
+                                             ExtractUserKey(k)) == 0;
+        uint64_t min_seq_type_backup = get_context->GetMinSequenceAndType();
+        if (is_largest_user_key) {
+          // shrink seqno to largest_key, make sure can't read greater keys
+          uint64_t seq_type = ExtractInternalKeyFooter(largest_key);
+          assert(seq_type <=
+                 PackSequenceAndType(kMaxSequenceNumber, kValueTypeForSeek));
+          // For safety. may kValueTypeForSeek can be 255 in the future ?
+          if (seq_type == port::kMaxUint64 && !include_largest) {
+            // 'largest_key' has the smallest seq_type of current user_key
+            // k is out of largest bound. go next map element
+            return true;
           }
+          get_context->SetMinSequenceAndType(
+              std::max(min_seq_type_backup, seq_type + !include_largest));
+        }
 
-          uint64_t file_number;
-          for (uint64_t i = 0; i < link_count; ++i) {
-            if (!GetVarint64(&map_input, &file_number)) {
-              s = Status::Corruption(err_msg);
-              return false;
-            }
-            auto find = depend_files.find(file_number);
-            if (find == depend_files.end()) {
-              s = Status::Corruption("Map sst depend files missing");
-              return false;
-            }
-            s = Get(options, internal_comparator, *find->second, depend_files,
-                    find_k, get_context, prefix_extractor, file_read_hist,
-                    skip_filters, level);
-
-            if (!s.ok() || get_context->is_finished()) {
-              // error or found, recovery min_seq_type_backup is unnecessary
-              return false;
-            }
+        uint64_t file_number;
+        for (uint64_t i = 0; i < link_count; ++i) {
+          if (!GetVarint64(&map_input, &file_number)) {
+            s = Status::Corruption(err_msg);
+            return false;
           }
-          // recovery min_seq_backup
-          get_context->SetMinSequenceAndType(min_seq_type_backup);
-          return is_largest_user_key;
-        };
-        t->RangeScan(&k, prefix_extractor, &get_from_map,
-                     c_style_callback(get_from_map));
-      }
-      get_context->SetReplayLog(nullptr);
-    } else if (options.read_tier == kBlockCacheTier && s.IsIncomplete()) {
-      // Couldn't find Table in cache but treat as kFound if no_io set
-      get_context->MarkKeyMayExist();
-      s = Status::OK();
-      done = true;
+          auto find = dependence_map.find(file_number);
+          if (find == dependence_map.end()) {
+            s = Status::Corruption("Map sst dependence missing");
+            return false;
+          }
+          assert(find->second->fd.GetNumber() == file_number);
+          s = Get(options, internal_comparator,
+                  *find->second, dependence_map, find_k, get_context,
+                  prefix_extractor, file_read_hist, skip_filters, level);
+
+          if (!s.ok() || get_context->is_finished()) {
+            // error or found, recovery min_seq_type_backup is unnecessary
+            return false;
+          }
+        }
+        // recovery min_seq_backup
+        get_context->SetMinSequenceAndType(min_seq_type_backup);
+        return is_largest_user_key;
+      };
+      t->RangeScan(&k, prefix_extractor, &get_from_map,
+                   c_style_callback(get_from_map));
     }
+  } else if (options.read_tier == kBlockCacheTier && s.IsIncomplete()) {
+    // Couldn't find Table in cache but treat as kFound if no_io set
+    get_context->MarkKeyMayExist();
+    s = Status::OK();
   }
-
-#ifndef ROCKSDB_LITE
-  // Put the replay log in row cache only if something was found.
-  if (!done && s.ok() && row_cache_entry && !row_cache_entry->empty()) {
-    size_t charge =
-        row_cache_key.Size() + row_cache_entry->size() + sizeof(std::string);
-    void* row_ptr = new std::string(std::move(*row_cache_entry));
-    ioptions_.row_cache->Insert(row_cache_key.GetUserKey(), row_ptr, charge,
-                                &DeleteEntry<std::string>);
-  }
-#endif  // ROCKSDB_LITE
-
   if (handle != nullptr) {
     ReleaseHandle(handle);
   }

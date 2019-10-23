@@ -62,24 +62,23 @@ Status WriteUnpreparedTxnDB::RollbackRecoveredTransaction(
       Status Rollback(uint32_t cf, const Slice& key) {
         Status s;
         CFKeys& cf_keys = keys_[cf];
-        if (cf_keys.size() == 0) {  // just inserted
+        if (cf_keys.empty()) {  // just inserted
           auto cmp = comparators_[cf];
           keys_[cf] = CFKeys(SetComparator(cmp));
         }
         auto res = cf_keys.insert(key);
-        if (res.second ==
-            false) {  // second is false if a element already existed.
+        if (!res.second) {  // second is false if a element already existed.
           return s;
         }
 
-        PinnableSlice pinnable_val;
+        LazySlice lazy_val;
         bool not_used;
         auto cf_handle = handles_[cf];
-        s = db_->GetImpl(roptions, cf_handle, key, &pinnable_val, &not_used,
+        s = db_->GetImpl(roptions, cf_handle, key, &lazy_val, &not_used,
                          &callback);
-        assert(s.ok() || s.IsNotFound());
+        assert(s.ok() ? lazy_val.valid() : s.IsNotFound());
         if (s.ok()) {
-          s = rollback_batch_->Put(cf_handle, key, pinnable_val);
+          s = rollback_batch_->Put(cf_handle, key, lazy_val);
           assert(s.ok());
         } else if (s.IsNotFound()) {
           // There has been no readable value before txn. By adding a delete we
@@ -340,7 +339,6 @@ Iterator* WriteUnpreparedTxnDB::NewIterator(const ReadOptions& options,
                                             ColumnFamilyHandle* column_family,
                                             WriteUnpreparedTxn* txn) {
   // TODO(lth): Refactor so that this logic is shared with WritePrepared.
-  constexpr bool ALLOW_BLOB = true;
   constexpr bool ALLOW_REFRESH = true;
   std::shared_ptr<ManagedSnapshot> own_snapshot = nullptr;
   SequenceNumber snapshot_seq;
@@ -367,7 +365,7 @@ Iterator* WriteUnpreparedTxnDB::NewIterator(const ReadOptions& options,
       new IteratorState(this, snapshot_seq, own_snapshot, min_uncommitted, txn);
   auto* db_iter =
       db_impl_->NewIteratorImpl(options, cfd, snapshot_seq, &state->callback,
-                                !ALLOW_BLOB, !ALLOW_REFRESH);
+                                !ALLOW_REFRESH);
   db_iter->RegisterCleanup(CleanupWriteUnpreparedTxnDBIterator, state, nullptr);
   return db_iter;
 }

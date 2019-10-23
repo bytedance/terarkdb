@@ -385,14 +385,26 @@ Iterator* DateTieredDBImpl::NewIterator(const ReadOptions& opts) {
       nullptr /*read_callback*/);
 
   auto arena = db_iter->GetArena();
-  MergeIteratorBuilder builder(&icomp_, arena);
-  for (auto& item : handle_map_) {
-    auto handle = item.second;
-    builder.AddIterator(db_impl->NewInternalIterator(
-        arena, db_iter->GetRangeDelAggregator(), kMaxSequenceNumber, handle));
+  if (handle_map_.size() == 1) {
+    auto handle = handle_map_.begin()->second;
+    const SeparateHelper* separate_helper;
+    auto internal_iter = db_impl->NewInternalIterator(
+        arena, db_iter->GetRangeDelAggregator(), kMaxSequenceNumber, handle,
+        &separate_helper);
+    db_iter->SetIterUnderDBIter(internal_iter, separate_helper);
+  } else {
+    MergeIteratorBuilder builder(&icomp_, arena);
+    for (auto& item : handle_map_) {
+      auto handle = item.second;
+      const SeparateHelper* separate_helper;
+      auto internal_iter = db_impl->NewInternalIterator(
+          arena, db_iter->GetRangeDelAggregator(), kMaxSequenceNumber, handle,
+          &separate_helper);
+      builder.AddIterator(internal_iter, separate_helper);
+    }
+    auto internal_iter = builder.Finish();
+    db_iter->SetIterUnderDBIter(internal_iter, nullptr);
   }
-  auto internal_iter = builder.Finish();
-  db_iter->SetIterUnderDBIter(internal_iter);
   return db_iter;
 }
 }  // namespace rocksdb

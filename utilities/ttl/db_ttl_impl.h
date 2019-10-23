@@ -51,7 +51,7 @@ class DBWithTTLImpl : public DBWithTTL {
   using StackableDB::Get;
   virtual Status Get(const ReadOptions& options,
                      ColumnFamilyHandle* column_family, const Slice& key,
-                     PinnableSlice* value) override;
+                     LazySlice* value) override;
 
   using StackableDB::MultiGet;
   virtual std::vector<Status> MultiGet(
@@ -87,7 +87,7 @@ class DBWithTTLImpl : public DBWithTTL {
 
   static Status StripTS(std::string* str);
 
-  static Status StripTS(PinnableSlice* str);
+  static Status StripTS(LazySlice* str);
 
   static const uint32_t kTSLength = sizeof(int32_t);  // size of timestamp
 
@@ -240,23 +240,11 @@ class TtlMergeOperator : public MergeOperator {
   virtual bool FullMergeV2(const MergeOperationInput& merge_in,
                            MergeOperationOutput* merge_out) const override {
     const uint32_t ts_len = DBWithTTLImpl::kTSLength;
-    if (merge_in.existing_value && merge_in.existing_value->size() < ts_len) {
-      ROCKS_LOG_ERROR(merge_in.logger,
-                      "Error: Could not remove timestamp from existing value.");
-      return false;
-    }
 
     // Extract time-stamp from each operand to be passed to user_merge_op_
-    std::vector<Slice> operands_without_ts;
+    std::vector<LazySlice> operands_without_ts;
     for (const auto& operand : merge_in.operand_list) {
-      if (operand.size() < ts_len) {
-        ROCKS_LOG_ERROR(
-            merge_in.logger,
-            "Error: Could not remove timestamp from operand value.");
-        return false;
-      }
-      operands_without_ts.push_back(operand);
-      operands_without_ts.back().remove_suffix(ts_len);
+      operands_without_ts.push_back(LazySliceRemoveSuffix(&operand, ts_len));
     }
 
     // Apply the user merge operator (store result in *new_value)
@@ -264,8 +252,8 @@ class TtlMergeOperator : public MergeOperator {
     MergeOperationOutput user_merge_out(merge_out->new_value,
                                         merge_out->existing_operand);
     if (merge_in.existing_value) {
-      Slice existing_value_without_ts(merge_in.existing_value->data(),
-                                      merge_in.existing_value->size() - ts_len);
+      LazySlice existing_value_without_ts =
+          LazySliceRemoveSuffix(merge_in.existing_value, ts_len);
       good = user_merge_op_->FullMergeV2(
           MergeOperationInput(merge_in.key, &existing_value_without_ts,
                               operands_without_ts, merge_in.logger),
@@ -282,10 +270,14 @@ class TtlMergeOperator : public MergeOperator {
       return false;
     }
 
-    if (merge_out->existing_operand.data()) {
-      merge_out->new_value.assign(merge_out->existing_operand.data(),
-                                  merge_out->existing_operand.size());
-      merge_out->existing_operand = Slice(nullptr, 0);
+    if (merge_out->existing_operand != nullptr) {
+      if (!merge_out->existing_operand->inplace_decode().ok()) {
+        return false;
+      }
+      merge_out->new_value.trans_to_buffer()->assign(
+          merge_out->existing_operand->data(),
+          merge_out->existing_operand->size());
+      merge_out->existing_operand = nullptr;
     }
 
     // Augment the *new_value with the ttl time-stamp
@@ -299,27 +291,20 @@ class TtlMergeOperator : public MergeOperator {
     } else {
       char ts_string[ts_len];
       EncodeFixed32(ts_string, (int32_t)curtime);
-      merge_out->new_value.append(ts_string, ts_len);
+      merge_out->new_value.trans_to_buffer()->append(ts_string, ts_len);
       return true;
     }
   }
 
   virtual bool PartialMergeMulti(const Slice& key,
-                                 const std::deque<Slice>& operand_list,
-                                 std::string* new_value, Logger* logger) const
+                                 const std::vector<LazySlice>& operand_list,
+                                 LazySlice* new_value, Logger* logger) const
       override {
     const uint32_t ts_len = DBWithTTLImpl::kTSLength;
-    std::deque<Slice> operands_without_ts;
+    std::vector<LazySlice> operands_without_ts;
 
     for (const auto& operand : operand_list) {
-      if (operand.size() < ts_len) {
-        ROCKS_LOG_ERROR(logger,
-                        "Error: Could not remove timestamp from value.");
-        return false;
-      }
-
-      operands_without_ts.push_back(
-          Slice(operand.data(), operand.size() - ts_len));
+      operands_without_ts.push_back(LazySliceRemoveSuffix(&operand, ts_len));
     }
 
     // Apply the user partial-merge operator (store result in *new_value)
@@ -340,7 +325,7 @@ class TtlMergeOperator : public MergeOperator {
     } else {
       char ts_string[ts_len];
       EncodeFixed32(ts_string, (int32_t)curtime);
-      new_value->append(ts_string, ts_len);
+      new_value->trans_to_buffer()->append(ts_string, ts_len);
       return true;
     }
   }

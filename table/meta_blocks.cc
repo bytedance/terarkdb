@@ -60,6 +60,18 @@ void PropertyBlockBuilder::Add(const std::string& name, uint64_t val) {
 }
 
 void PropertyBlockBuilder::Add(
+    const std::string& name, const std::vector<uint64_t>& val) {
+
+  std::string dst;
+  PutVarint64(&dst, val.size());
+  for (const auto& v : val) {
+    PutVarint64(&dst, v);
+  }
+
+  Add(name, dst);
+}
+
+void PropertyBlockBuilder::Add(
     const UserCollectedProperties& user_collected_properties) {
   for (const auto& prop : user_collected_properties) {
     Add(prop.first, prop.second);
@@ -89,6 +101,20 @@ void PropertyBlockBuilder::AddTableProperty(const TableProperties& props) {
   Add(TablePropertiesNames::kColumnFamilyId, props.column_family_id);
   Add(TablePropertiesNames::kCreationTime, props.creation_time);
   Add(TablePropertiesNames::kOldestKeyTime, props.oldest_key_time);
+  if (props.purpose != 0) {
+    Add(TablePropertiesNames::kPurpose, props.purpose);
+  }
+  if (props.max_read_amp > 1) {
+    std::string val;
+    PutVarint32Varint64(&val, props.max_read_amp, DoubleToU64(props.read_amp));
+    Add(TablePropertiesNames::kReadAmp, val);
+  }
+  if (!props.dependence.empty()) {
+    Add(TablePropertiesNames::kDependence, props.dependence);
+  }
+  if (!props.inheritance_chain.empty()) {
+    Add(TablePropertiesNames::kInheritanceChain, props.inheritance_chain);
+  }
 
   if (!props.filter_policy_name.empty()) {
     Add(TablePropertiesNames::kFilterPolicy, props.filter_policy_name);
@@ -248,6 +274,29 @@ Status ReadProperties(const Slice& handle_value, RandomAccessFileReader* file,
        &new_table_properties->oldest_key_time},
   };
 
+  auto GetUint64Vector = [&](const std::string& key, Slice* raw_val,
+                             std::vector<uint64_t>& val) {
+    bool ok = true;
+    uint64_t size;
+    if (GetVarint64(raw_val, &size)) {
+      val.resize(size);
+      for (auto& v : val) {
+        if (!GetVarint64(raw_val, &v)) {
+          ok = false;
+          break;
+        }
+      }
+      if (ok) {
+        return;
+      }
+    }
+    val.clear();
+    auto error_msg =
+        "Detect malformed value in properties meta-block:"
+        "\tkey: " + key + "\tval: " + raw_val->ToString();
+    ROCKS_LOG_ERROR(ioptions.info_log, "%s", error_msg.c_str());
+  };
+
   std::string last_key;
   for (iter.SeekToFirst(); iter.Valid(); iter.Next()) {
     s = iter.status();
@@ -264,8 +313,12 @@ Status ReadProperties(const Slice& handle_value, RandomAccessFileReader* file,
     auto raw_val = iter.value();
     auto pos = predefined_uint64_properties.find(key);
 
-    new_table_properties->properties_offsets.insert(
-        {key, handle.offset() + iter.ValueOffset()});
+    auto log_error = [&] {
+      auto error_msg =
+          "Detect malformed value in properties meta-block:"
+          "\tkey: " + key + "\tval: " + raw_val.ToString();
+      ROCKS_LOG_ERROR(ioptions.info_log, "%s", error_msg.c_str());
+    };
 
     if (pos != predefined_uint64_properties.end()) {
       if (key == TablePropertiesNames::kDeletedKeys ||
@@ -278,13 +331,10 @@ Status ReadProperties(const Slice& handle_value, RandomAccessFileReader* file,
       uint64_t val;
       if (!GetVarint64(&raw_val, &val)) {
         // skip malformed value
-        auto error_msg =
-          "Detect malformed value in properties meta-block:"
-          "\tkey: " + key + "\tval: " + raw_val.ToString();
-        ROCKS_LOG_ERROR(ioptions.info_log, "%s", error_msg.c_str());
+        log_error();
         continue;
       }
-      *(pos->second) = val;
+      *pos->second = val;
     } else if (key == TablePropertiesNames::kFilterPolicy) {
       new_table_properties->filter_policy_name = raw_val.ToString();
     } else if (key == TablePropertiesNames::kColumnFamilyName) {
@@ -299,6 +349,28 @@ Status ReadProperties(const Slice& handle_value, RandomAccessFileReader* file,
       new_table_properties->property_collectors_names = raw_val.ToString();
     } else if (key == TablePropertiesNames::kCompression) {
       new_table_properties->compression_name = raw_val.ToString();
+    } else if (key == TablePropertiesNames::kPurpose) {
+      uint64_t val;
+      if (!GetVarint64(&raw_val, &val)) {
+        // skip malformed value
+        log_error();
+        continue;
+      }
+      new_table_properties->purpose = val;
+    } else if (key == TablePropertiesNames::kReadAmp) {
+      uint32_t u32_val;
+      uint64_t u64_val;
+      if (!GetVarint32(&raw_val, &u32_val) || GetVarint64(&raw_val, &u64_val)) {
+        // skip malformed value
+        log_error();
+        continue;
+      }
+      new_table_properties->max_read_amp = uint16_t(u32_val);
+      new_table_properties->read_amp = U64ToDouble(u64_val);
+    } else if (key == TablePropertiesNames::kDependence) {
+      GetUint64Vector(key, &raw_val, new_table_properties->dependence);
+    } else if (key == TablePropertiesNames::kInheritanceChain) {
+      GetUint64Vector(key, &raw_val, new_table_properties->inheritance_chain);
     } else {
       // handle user-collected properties
       new_table_properties->user_collected_properties.insert(
@@ -348,7 +420,7 @@ Status ReadTableProperties(RandomAccessFileReader* file, uint64_t file_size,
   // are to compress it.
   Block metaindex_block(std::move(metaindex_contents),
                         kDisableGlobalSequenceNumber);
-  std::unique_ptr<InternalIterator> meta_iter(
+  std::unique_ptr<InternalIteratorBase<Slice>> meta_iter(
       metaindex_block.NewIterator<DataBlockIter>(BytewiseComparator(),
                                                  BytewiseComparator()));
 
@@ -371,7 +443,7 @@ Status ReadTableProperties(RandomAccessFileReader* file, uint64_t file_size,
   return s;
 }
 
-Status FindMetaBlock(InternalIterator* meta_index_iter,
+Status FindMetaBlock(InternalIteratorBase<Slice>* meta_index_iter,
                      const std::string& meta_block_name,
                      BlockHandle* block_handle) {
   meta_index_iter->Seek(meta_block_name);
@@ -418,7 +490,7 @@ Status FindMetaBlock(RandomAccessFileReader* file, uint64_t file_size,
   Block metaindex_block(std::move(metaindex_contents),
                         kDisableGlobalSequenceNumber);
 
-  std::unique_ptr<InternalIterator> meta_iter;
+  std::unique_ptr<InternalIteratorBase<Slice>> meta_iter;
   meta_iter.reset(metaindex_block.NewIterator<DataBlockIter>(
       BytewiseComparator(), BytewiseComparator()));
 
@@ -463,7 +535,7 @@ Status ReadMetaBlock(RandomAccessFileReader* file,
   Block metaindex_block(std::move(metaindex_contents),
                         kDisableGlobalSequenceNumber);
 
-  std::unique_ptr<InternalIterator> meta_iter;
+  std::unique_ptr<InternalIteratorBase<Slice>> meta_iter;
   meta_iter.reset(metaindex_block.NewIterator<DataBlockIter>(
       BytewiseComparator(), BytewiseComparator()));
 

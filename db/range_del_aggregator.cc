@@ -7,7 +7,6 @@
 
 #include "db/compaction_iteration_stats.h"
 #include "db/dbformat.h"
-#include "db/pinned_iterators_manager.h"
 #include "db/range_del_aggregator.h"
 #include "db/range_tombstone_fragmenter.h"
 #include "db/version_edit.h"
@@ -371,7 +370,7 @@ bool CompactionRangeDelAggregator::ShouldDelete(const ParsedInternalKey& parsed,
 
 namespace {
 
-class TruncatedRangeDelMergingIter : public InternalIterator {
+class TruncatedRangeDelMergingIter : public InternalIteratorBase<Slice> {
  public:
   TruncatedRangeDelMergingIter(
       const InternalKeyComparator* icmp, const Slice* lower_bound,

@@ -18,16 +18,16 @@ class VersionStorageInfo;
 class VersionEdit;
 struct FileMetaData;
 class InternalStats;
+struct VersionBuilderDebugger;
 
 // A helper class so we can efficiently apply a whole sequence
 // of edits to a particular state without creating intermediate
 // Versions that contain full copies of the intermediate state.
 class VersionBuilder {
+  friend VersionBuilderDebugger;
  public:
   VersionBuilder(const EnvOptions& env_options, TableCache* table_cache,
-                 VersionStorageInfo* base_vstorage,
-                 const SliceTransform* prefix_extractor = nullptr,
-                 Logger* info_log = nullptr);
+                 VersionStorageInfo* base_vstorage, Logger* info_log = nullptr);
   ~VersionBuilder();
   void CheckConsistency(VersionStorageInfo* vstorage);
   void CheckConsistencyForDeletes(VersionEdit* edit, uint64_t number,

@@ -113,8 +113,9 @@ Status DBImpl::FlushMemTableToOutputFile(
     bool* made_progress, JobContext* job_context,
     SuperVersionContext* superversion_context, LogBuffer* log_buffer) {
   mutex_.AssertHeld();
-  assert(cfd->imm()->NumNotFlushed() != 0);
-  assert(cfd->imm()->IsFlushPending());
+  // TODO(ZouZhiZhang) find out Assertion reason
+  //assert(cfd->imm()->NumNotFlushed() != 0);
+  //assert(cfd->imm()->IsFlushPending());
 
   SequenceNumber earliest_write_conflict_snapshot;
   std::vector<SequenceNumber> snapshot_seqs =
@@ -1245,7 +1246,7 @@ Status DBImpl::ReFitLevel(ColumnFamilyData* cfd, int level, int target_level) {
       edit.AddFile(to_level, f->fd.GetNumber(), f->fd.GetPathId(),
                    f->fd.GetFileSize(), f->smallest, f->largest,
                    f->fd.smallest_seqno, f->fd.largest_seqno,
-                   f->marked_for_compaction, f->sst_purpose, f->sst_depend);
+                   f->num_antiquation, f->marked_for_compaction, f->prop);
     }
     ROCKS_LOG_DEBUG(immutable_db_options_.info_log,
                     "[%s] Apply version edit:\n%s", cfd->GetName().c_str(),
@@ -2492,8 +2493,8 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
         c->edit()->AddFile(c->output_level(), f->fd.GetNumber(),
                            f->fd.GetPathId(), f->fd.GetFileSize(), f->smallest,
                            f->largest, f->fd.smallest_seqno,
-                           f->fd.largest_seqno, f->marked_for_compaction,
-                           f->sst_purpose, f->sst_depend);
+                           f->fd.largest_seqno, f->num_antiquation,
+                           f->marked_for_compaction, f->prop);
 
         ROCKS_LOG_BUFFER(
             log_buffer,

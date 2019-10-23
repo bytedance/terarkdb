@@ -13,6 +13,7 @@ LIB_SOURCES =                                                   \
   db/compaction_picker.cc                                       \
   db/compaction_picker_fifo.cc                                  \
   db/compaction_picker_universal.cc                             \
+  db/compaction_dispatcher.cc                                   \
   db/convenience.cc                                             \
   db/db_filesnapshot.cc                                         \
   db/db_impl.cc                                                 \
@@ -127,6 +128,7 @@ LIB_SOURCES =                                                   \
   table/sst_file_reader.cc                                      \
   table/sst_file_writer.cc                                      \
   table/table_properties.cc                                     \
+  table/table_reader.cc                                         \
   table/two_level_iterator.cc                                   \
   tools/dump/db_dump_tool.cc                                    \
   util/arena.cc                                                 \
@@ -165,14 +167,6 @@ LIB_SOURCES =                                                   \
   util/transaction_test_util.cc                                 \
   util/xxhash.cc                                                \
   utilities/backupable/backupable_db.cc                         \
-  utilities/blob_db/blob_compaction_filter.cc                   \
-  utilities/blob_db/blob_db.cc                                  \
-  utilities/blob_db/blob_db_impl.cc                             \
-  utilities/blob_db/blob_db_impl_filesnapshot.cc                \
-  utilities/blob_db/blob_file.cc                                \
-  utilities/blob_db/blob_log_format.cc                          \
-  utilities/blob_db/blob_log_reader.cc                          \
-  utilities/blob_db/blob_log_writer.cc                          \
   utilities/cassandra/cassandra_compaction_filter.cc            \
   utilities/cassandra/format.cc                                 \
   utilities/cassandra/merge_operator.cc                         \
@@ -239,7 +233,6 @@ TOOL_LIB_SOURCES = \
   tools/ldb_cmd.cc                                              \
   tools/ldb_tool.cc                                             \
   tools/sst_dump_tool.cc                                        \
-  utilities/blob_db/blob_dump_tool.cc                           \
 
 ANALYZER_LIB_SOURCES = \
   tools/trace_analyzer_tool.cc                                  \
@@ -275,7 +268,6 @@ MAIN_SOURCES =                                                          \
   db/corruption_test.cc                                                 \
   db/cuckoo_table_db_test.cc                                            \
   db/db_basic_test.cc                                                   \
-  db/db_blob_index_test.cc                                              \
   db/db_block_cache_test.cc                                             \
   db/db_bloom_filter_test.cc                                            \
   db/db_compaction_filter_test.cc                                       \
@@ -393,7 +385,6 @@ MAIN_SOURCES =                                                          \
   util/thread_list_test.cc                                              \
   util/thread_local_test.cc                                             \
   utilities/backupable/backupable_db_test.cc                            \
-  utilities/blob_db/blob_db_test.cc                                     \
   utilities/cassandra/cassandra_format_test.cc                          \
   utilities/cassandra/cassandra_functional_test.cc                      \
   utilities/cassandra/cassandra_row_merge_test.cc                       \

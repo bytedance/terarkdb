@@ -39,15 +39,17 @@ size_t CompactedDBImpl::FindFile(const Slice& key) {
 }
 
 Status CompactedDBImpl::Get(const ReadOptions& options, ColumnFamilyHandle*,
-                            const Slice& key, PinnableSlice* value) {
+                            const Slice& key, LazySlice* value) {
   GetContext get_context(user_comparator_, nullptr, nullptr, nullptr,
                          GetContext::kNotFound, key, value, nullptr, nullptr,
-                         nullptr, nullptr);
+                         version_, nullptr, nullptr);
   LookupKey lkey(key, kMaxSequenceNumber);
   files_.files[FindFile(key)].fd.table_reader->Get(options, lkey.internal_key(),
                                                    &get_context, nullptr);
   if (get_context.State() == GetContext::kFound) {
-    return Status::OK();
+    return value->inplace_decode();
+  } else if (get_context.State() == GetContext::kCorrupt) {
+    return std::move(get_context).CorruptReason();
   }
   return Status::NotFound();
 }
@@ -71,16 +73,17 @@ std::vector<Status> CompactedDBImpl::MultiGet(const ReadOptions& options,
   int idx = 0;
   for (auto* r : reader_list) {
     if (r != nullptr) {
-      PinnableSlice pinnable_val;
       std::string& value = (*values)[idx];
+      LazySlice lazy_val(&value);
       GetContext get_context(user_comparator_, nullptr, nullptr, nullptr,
-                             GetContext::kNotFound, keys[idx], &pinnable_val,
-                             nullptr, nullptr, nullptr, nullptr);
+                             GetContext::kNotFound, keys[idx], &lazy_val,
+                             nullptr, nullptr, version_, nullptr, nullptr);
       LookupKey lkey(keys[idx], kMaxSequenceNumber);
       r->Get(options, lkey.internal_key(), &get_context, nullptr);
-      value.assign(pinnable_val.data(), pinnable_val.size());
       if (get_context.State() == GetContext::kFound) {
-        statuses[idx] = Status::OK();
+        statuses[idx] = lazy_val.save_to_buffer(&value);
+      } else if (get_context.State() == GetContext::kCorrupt) {
+        statuses[idx] = std::move(get_context).CorruptReason();
       }
     }
     ++idx;
@@ -120,7 +123,7 @@ Status CompactedDBImpl::Init(const Options& options) {
     if (vstorage->num_non_empty_levels() > 1) {
       return Status::NotSupported("Both L0 and other level contain files");
     }
-    if (l0.files[0].file_metadata->sst_purpose != kEssenceSst) {
+    if (l0.files[0].file_metadata->prop.purpose != kEssenceSst) {
       return Status::NotSupported("L0 has read amp");
     }
     files_ = l0;
@@ -135,7 +138,7 @@ Status CompactedDBImpl::Init(const Options& options) {
 
   int level = vstorage->num_non_empty_levels() - 1;
   for (auto f : vstorage->LevelFiles(level)) {
-    if (f->sst_purpose != kEssenceSst) {
+    if (f->prop.purpose != kEssenceSst) {
       return Status::NotSupported("Level has read amp");
     }
   }
@@ -154,7 +157,8 @@ Status CompactedDBImpl::Open(const Options& options,
   const char* terarkConfigString = getenv("TerarkConfigString");
   if (terarkdb_localTempDir || terarkConfigString) {
     if (TerarkZipIsBlackListCF) {
-      if (terarkdb_localTempDir && ::access(terarkdb_localTempDir, R_OK | W_OK) != 0) {
+      if (terarkdb_localTempDir &&
+          ::access(terarkdb_localTempDir, R_OK | W_OK) != 0) {
         return Status::InvalidArgument(
             "Must exists, and Permission ReadWrite is required on "
             "env TerarkZipTable_localTempDir",
@@ -164,7 +168,8 @@ Status CompactedDBImpl::Open(const Options& options,
         const ColumnFamilyOptions& cf_options = options;
         const DBOptions& db_options = options;
         TerarkZipDBOptionsFromEnv(const_cast<DBOptions&>(db_options));
-        TerarkZipCFOptionsFromEnv(const_cast<ColumnFamilyOptions&>(cf_options), dbname);
+        TerarkZipCFOptionsFromEnv(const_cast<ColumnFamilyOptions&>(cf_options),
+                                  dbname);
         auto& factory = cf_options.table_factory;
         Status s = factory->SanitizeOptions(db_options, cf_options);
         if (!s.ok()) return s;

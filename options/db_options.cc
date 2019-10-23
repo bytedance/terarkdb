@@ -45,6 +45,7 @@ ImmutableDBOptions::ImmutableDBOptions(const DBOptions& options)
       keep_log_file_num(options.keep_log_file_num),
       recycle_log_file_num(options.recycle_log_file_num),
       max_manifest_file_size(options.max_manifest_file_size),
+      max_manifest_edit_count(options.max_manifest_edit_count),
       table_cache_numshardbits(options.table_cache_numshardbits),
       wal_ttl_seconds(options.WAL_ttl_seconds),
       wal_size_limit_mb(options.WAL_size_limit_MB),
@@ -113,6 +114,9 @@ void ImmutableDBOptions::Dump(Logger* log) const {
   ROCKS_LOG_HEADER(log,
                    "                 Options.max_manifest_file_size: %" PRIu64,
                    max_manifest_file_size);
+  ROCKS_LOG_HEADER(log,
+                   "                Options.max_manifest_edit_count: %" PRIu64,
+                   max_manifest_edit_count);
   ROCKS_LOG_HEADER(
       log, "                  Options.log_file_time_to_roll: %" ROCKSDB_PRIszt,
       log_file_time_to_roll);

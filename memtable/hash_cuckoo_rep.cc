@@ -114,8 +114,8 @@ class HashCuckooRep : public MemTableRep {
   }
 
   virtual void Get(const LookupKey& k, void* callback_args,
-                   bool (*callback_func)(void* arg,
-                                         const KeyValuePair*)) override;
+                   bool (*callback_func)(void* arg, const Slice& key,
+                                         LazySlice&& value)) override;
 
   class Iterator : public MemTableRep::Iterator {
     std::shared_ptr<std::vector<const char*>> bucket_;
@@ -139,7 +139,7 @@ class HashCuckooRep : public MemTableRep {
 
     // Returns the key at the current position.
     // REQUIRES: Valid()
-    virtual const char* key() const override;
+    virtual const char* EncodedKey() const override;
 
     // Advances to the next position.
     // REQUIRES: Valid()
@@ -163,6 +163,8 @@ class HashCuckooRep : public MemTableRep {
     // Position at the last entry in collection.
     // Final state of iterator is Valid() iff collection is not empty.
     virtual void SeekToLast() override;
+
+    virtual bool IsSeekForPrevSupported() const override { return true; }
   };
 
   struct CuckooStepBuffer {
@@ -277,7 +279,7 @@ class HashCuckooRep : public MemTableRep {
     if (backup_table != nullptr) {
       std::unique_ptr<MemTableRep::Iterator> iter(backup_table->GetIterator());
       for (iter->SeekToFirst(); iter->Valid(); iter->Next()) {
-        compact_buckets.push_back(iter->key());
+        compact_buckets.push_back(iter->EncodedKey());
       }
     }
     if (arena == nullptr) {
@@ -296,16 +298,16 @@ class HashCuckooRep : public MemTableRep {
 };
 
 void HashCuckooRep::Get(const LookupKey& key, void* callback_args,
-                        bool (*callback_func)(void* arg, const KeyValuePair*)) {
+                        bool (*callback_func)(void* arg, const Slice& key,
+                                              LazySlice&& value)) {
   Slice user_key = key.user_key();
-  EncodedKeyValuePair pair;
   for (unsigned int hid = 0; hid < hash_function_count_; ++hid) {
     const char* bucket =
         cuckoo_array_[GetHash(user_key, hid)].load(std::memory_order_acquire);
     if (bucket != nullptr) {
-      Slice bucket_user_key = UserKey(bucket);
-      if (user_key == bucket_user_key) {
-        callback_func(callback_args, pair.SetKey(bucket));
+      Slice bucket_key = GetLengthPrefixedSlice(bucket);
+      if (user_key == ExtractUserKey(bucket_key)) {
+        callback_func(callback_args, bucket_key, DecodeToLazyValue(bucket));
         break;
       }
     } else {
@@ -561,8 +563,7 @@ bool HashCuckooRep::Iterator::Valid() const {
 
 // Returns the key at the current position.
 // REQUIRES: Valid()
-const char* HashCuckooRep::Iterator::key() const {
-  assert(Valid());
+const char* HashCuckooRep::Iterator::EncodedKey() const {
   return *cit_;
 }
 
@@ -597,16 +598,24 @@ void HashCuckooRep::Iterator::Seek(const Slice& user_key,
   // Do binary search to find first value not less than the target
   const char* encoded_key =
       (memtable_key != nullptr) ? memtable_key : EncodeKey(&tmp_, user_key);
-  cit_ = std::equal_range(bucket_->begin(), bucket_->end(), encoded_key,
+  cit_ = std::lower_bound(bucket_->begin(), bucket_->end(), encoded_key,
                           [this](const char* a, const char* b) {
                             return compare_(a, b) < 0;
-                          }).first;
+                          });
 }
 
 // Retreat to the last entry with a key <= target
-void HashCuckooRep::Iterator::SeekForPrev(const Slice& /*user_key*/,
-                                          const char* /*memtable_key*/) {
-  assert(false);
+void HashCuckooRep::Iterator::SeekForPrev(const Slice& user_key,
+                                          const char* memtable_key) {
+  DoSort();
+  // Do binary search to find first value not less than the target
+  const char* encoded_key =
+      (memtable_key != nullptr) ? memtable_key : EncodeKey(&tmp_, user_key);
+  cit_ = std::upper_bound(bucket_->begin(), bucket_->end(), encoded_key,
+                          [this](const char* a, const char* b) {
+                            return compare_(a, b) < 0;
+                          });
+  Prev();
 }
 
 // Position at the first entry in collection.

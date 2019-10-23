@@ -12,14 +12,14 @@
 #include "db/range_tombstone_fragmenter.h"
 #include "rocksdb/slice_transform.h"
 #include "table/internal_iterator.h"
-#include "table/scoped_arena_iterator.h"
-#include "util/arena.h"
 
 namespace rocksdb {
 
+class Cache;
 class Iterator;
 struct ParsedInternalKey;
 class Slice;
+class Statistics;
 struct ReadOptions;
 struct TableProperties;
 class GetContext;
@@ -71,6 +71,8 @@ class TableReader {
   // Report an approximation of how much memory has been used.
   virtual size_t ApproximateMemoryUsage() const = 0;
 
+  virtual uint64_t FileNumber() const = 0;
+
   // Calls get_context->SaveValue() repeatedly, starting with
   // the entry found after a call to Seek(key), until it returns false.
   // May not make such a call if filter policy says that key is not present.
@@ -91,16 +93,8 @@ class TableReader {
   // Specialization for performance
   virtual void RangeScan(const Slice* begin,
                          const SliceTransform* prefix_extractor, void* arg,
-                         bool (*callback_func)(void* arg, const Slice& ikey,
-                                               const Slice& value)) {
-    Arena arena;
-    ScopedArenaIterator iter(
-        NewIterator(ReadOptions(), prefix_extractor, &arena));
-    for (begin == nullptr ? iter->SeekToFirst() : iter->Seek(*begin);
-         iter->Valid() && callback_func(arg, iter->key(), iter->value());
-         iter->Next()) {
-    }
-  }
+                         bool (*callback_func)(void* arg, const Slice& key,
+                                               LazySlice&& value));
 
   // Prefetch data corresponding to a give range of keys
   // Typically this functionality is required for table implementations that
@@ -124,6 +118,10 @@ class TableReader {
   virtual Status VerifyChecksum() {
     return Status::NotSupported("VerifyChecksum() not supported");
   }
+
+  void UpdateMaxCoveringTombstoneSeq(
+      const ReadOptions& readOptions, const Slice& user_key,
+      SequenceNumber* max_covering_tombstone_seq);
 
   virtual void Close() {}
 };

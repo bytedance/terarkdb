@@ -29,38 +29,34 @@ bool StringAppendTESTOperator::FullMergeV2(
 
   if (merge_in.existing_value == nullptr && merge_in.operand_list.size() == 1) {
     // Only one operand
-    merge_out->existing_operand = merge_in.operand_list.back();
+    merge_out->existing_operand = &merge_in.operand_list.back();
     return true;
-  }
-
-  // Compute the space needed for the final result.
-  size_t numBytes = 0;
-  for (auto it = merge_in.operand_list.begin();
-       it != merge_in.operand_list.end(); ++it) {
-    numBytes += it->size() + 1;   // Plus 1 for the delimiter
   }
 
   // Only print the delimiter after the first entry has been printed
   bool printDelim = false;
+  std::string* buffer = merge_out->new_value.trans_to_buffer();
 
   // Prepend the *existing_value if one exists.
   if (merge_in.existing_value) {
-    merge_out->new_value.reserve(numBytes + merge_in.existing_value->size());
-    merge_out->new_value.append(merge_in.existing_value->data(),
-                                merge_in.existing_value->size());
+    if (!merge_in.existing_value->inplace_decode().ok()) {
+      return false;
+    }
+    buffer->append(merge_in.existing_value->data(),
+                   merge_in.existing_value->size());
     printDelim = true;
-  } else if (numBytes) {
-    merge_out->new_value.reserve(
-        numBytes - 1);  // Minus 1 since we have one less delimiter
   }
 
   // Concatenate the sequence of strings (and add a delimiter between each)
   for (auto it = merge_in.operand_list.begin();
        it != merge_in.operand_list.end(); ++it) {
     if (printDelim) {
-      merge_out->new_value.append(1, delim_);
+      buffer->append(1, delim_);
     }
-    merge_out->new_value.append(it->data(), it->size());
+    if (!it->inplace_decode().ok()) {
+      return false;
+    }
+    buffer->append(it->data(), it->size());
     printDelim = true;
   }
 
@@ -68,8 +64,8 @@ bool StringAppendTESTOperator::FullMergeV2(
 }
 
 bool StringAppendTESTOperator::PartialMergeMulti(
-    const Slice& /*key*/, const std::deque<Slice>& /*operand_list*/,
-    std::string* /*new_value*/, Logger* /*logger*/) const {
+    const Slice& /*key*/, const std::vector<LazySlice>& /*operand_list*/,
+    LazySlice* /*new_value*/, Logger* /*logger*/) const {
   return false;
 }
 

@@ -18,6 +18,7 @@
 #include <string>
 #include <unordered_map>
 #include <utility>
+#include <db/version_edit.h>
 
 #include "db/dbformat.h"
 
@@ -414,10 +415,16 @@ BlockBasedTableBuilder::~BlockBasedTableBuilder() {
   delete rep_;
 }
 
-void BlockBasedTableBuilder::Add(const Slice& key, const Slice& value) {
+void BlockBasedTableBuilder::Add(const Slice& key, const LazySlice& lazy_value) {
   Rep* r = rep_;
   assert(!r->closed);
   if (!ok()) return;
+  auto s = lazy_value.inplace_decode();
+  if (!s.ok()) {
+    r->status = s;
+    return;
+  }
+  const Slice& value = lazy_value;
   ValueType value_type = ExtractValueType(key);
   if (r->ignore_key_type || IsValueType(value_type)) {
     if (r->props.num_entries > 0) {
@@ -878,12 +885,20 @@ void BlockBasedTableBuilder::WriteRangeDelBlock(
   }
 }
 
-Status BlockBasedTableBuilder::Finish() {
+Status BlockBasedTableBuilder::Finish(const TablePropertyCache* prop) {
   Rep* r = rep_;
   bool empty_data_block = r->data_block.empty();
   Flush();
   assert(!r->closed);
   r->closed = true;
+
+  if (prop != nullptr) {
+    r->props.purpose = prop->purpose;
+    r->props.max_read_amp = prop->max_read_amp;
+    r->props.read_amp = prop->read_amp;
+    r->props.dependence = prop->dependence;
+    r->props.inheritance_chain = prop->inheritance_chain;
+  }
 
   // To make sure properties block is able to keep the accurate size of index
   // block, we will finish writing all index entries first.

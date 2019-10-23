@@ -32,8 +32,8 @@ DBImplReadOnly::~DBImplReadOnly() {}
 // Implementations of the DB interface
 Status DBImplReadOnly::Get(const ReadOptions& read_options,
                            ColumnFamilyHandle* column_family, const Slice& key,
-                           PinnableSlice* pinnable_val) {
-  assert(pinnable_val != nullptr);
+                           LazySlice* lazy_val) {
+  assert(lazy_val != nullptr);
   // TODO: stopwatch DB_GET needed?, perf timer needed?
   PERF_TIMER_GUARD(get_snapshot_time);
   Status s;
@@ -51,18 +51,23 @@ Status DBImplReadOnly::Get(const ReadOptions& read_options,
   SequenceNumber max_covering_tombstone_seq = 0;
   LookupKey lkey(key, snapshot);
   PERF_TIMER_STOP(get_snapshot_time);
-  if (super_version->mem->Get(lkey, pinnable_val->GetSelf(), &s, &merge_context,
+  if (super_version->mem->Get(lkey, lazy_val, &s, &merge_context,
                               &max_covering_tombstone_seq, read_options)) {
-    pinnable_val->PinSelf();
     RecordTick(stats_, MEMTABLE_HIT);
   } else {
     PERF_TIMER_GUARD(get_from_output_files_time);
-    super_version->current->Get(read_options, lkey, pinnable_val, &s,
+    super_version->current->Get(read_options, key, lkey, lazy_val, &s,
                                 &merge_context, &max_covering_tombstone_seq);
     RecordTick(stats_, MEMTABLE_MISS);
   }
   RecordTick(stats_, NUMBER_KEYS_READ);
-  size_t size = pinnable_val->size();
+  if (s.ok()) {
+    s = lazy_val->inplace_decode();
+  }
+  if (!s.ok()) {
+    return s;
+  }
+  size_t size = lazy_val->size();
   RecordTick(stats_, BYTES_READ, size);
   MeasureTime(stats_, BYTES_PER_READ, size);
   PERF_COUNTER_ADD(get_read_bytes, size);
@@ -89,7 +94,7 @@ Iterator* DBImplReadOnly::NewIterator(const ReadOptions& read_options,
   auto internal_iter =
       NewInternalIterator(read_options, cfd, super_version, db_iter->GetArena(),
                           db_iter->GetRangeDelAggregator(), read_seq);
-  db_iter->SetIterUnderDBIter(internal_iter);
+  db_iter->SetIterUnderDBIter(internal_iter, super_version->current);
   return db_iter;
 }
 
@@ -120,7 +125,7 @@ Status DBImplReadOnly::NewIterators(
     auto* internal_iter =
         NewInternalIterator(read_options, cfd, sv, db_iter->GetArena(),
                             db_iter->GetRangeDelAggregator(), read_seq);
-    db_iter->SetIterUnderDBIter(internal_iter);
+    db_iter->SetIterUnderDBIter(internal_iter, sv->current);
     iterators->push_back(db_iter);
   }
 
@@ -168,7 +173,8 @@ Status DB::OpenForReadOnly(
   const char* terarkdb_localTempDir = getenv("TerarkZipTable_localTempDir");
   const char* terarkConfigString = getenv("TerarkConfigString");
   if (terarkdb_localTempDir || terarkConfigString) {
-    if (terarkdb_localTempDir && ::access(terarkdb_localTempDir, R_OK | W_OK) != 0) {
+    if (terarkdb_localTempDir &&
+        ::access(terarkdb_localTempDir, R_OK | W_OK) != 0) {
       return Status::InvalidArgument(
           "Must exists, and Permission ReadWrite is required on "
           "env TerarkZipTable_localTempDir",

@@ -84,6 +84,9 @@ class CompactionJob {
   void Prepare();
   // REQUIRED mutex not held
   Status Run();
+  Status RunSelf();
+
+  Status VerifyFiles();
 
   // REQUIRED: mutex held
   Status Install(const MutableCFOptions& mutable_cf_options);
@@ -99,14 +102,17 @@ class CompactionJob {
   void AllocateCompactionOutputFileNumbers();
   // Call compaction filter. Then iterate through input and compact the
   // kv-pairs
+  void ProcessCompaction(SubcompactionState* sub_compact);
   void ProcessKeyValueCompaction(SubcompactionState* sub_compact);
-  void ProcessEssenceCompaction(SubcompactionState* sub_compact);
+  void ProcessGarbageCollection(SubcompactionState* sub_compact);
   void ProcessLinkCompaction(SubcompactionState* sub_compact);
 
   Status FinishCompactionOutputFile(
       const Status& input_status, SubcompactionState* sub_compact,
       CompactionRangeDelAggregator* range_del_agg,
       CompactionIterationStats* range_del_out_stats,
+      const std::unordered_set<uint64_t>& dependence,
+      const std::vector<uint64_t>& inheritance_chain,
       const Slice* next_table_min_key = nullptr);
   Status InstallCompactionResults(const MutableCFOptions& mutable_cf_options);
   void RecordCompactionIOStats();

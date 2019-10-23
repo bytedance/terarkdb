@@ -59,7 +59,7 @@ bool IsPrefaceRange(const Range& range, const FileMetaData* f,
                     const InternalKeyComparator& icomp) {
   auto uc = icomp.user_comparator();
   return
-      f->sst_purpose == kEssenceSst && range.include_start &&
+      f->prop.purpose == kEssenceSst && range.include_start &&
       icomp.Compare(range.start, f->smallest.Encode()) == 0 &&
       uc->Compare(ExtractUserKey(range.limit), f->largest.user_key()) == 0 &&
       (ExtractInternalKeyFooter(f->largest.Encode()) == kMaxSequenceNumber
@@ -76,7 +76,7 @@ struct RangeWithDepend {
   bool include[2];
   bool no_records;
   bool stable;
-  std::vector<MapSstElement::LinkTarget> depend;
+  std::vector<MapSstElement::LinkTarget> dependence;
 
   RangeWithDepend() = default;
 
@@ -92,7 +92,7 @@ struct RangeWithDepend {
     include[1] = true;
     no_records = false;
     stable = false;
-    depend.emplace_back(MapSstElement::LinkTarget{f->fd.GetNumber(), 0});
+    dependence.emplace_back(MapSstElement::LinkTarget{f->fd.GetNumber(), 0});
   }
 
   RangeWithDepend(const MapSstElement& map_element) {
@@ -102,7 +102,7 @@ struct RangeWithDepend {
     include[1] = map_element.include_largest_;
     no_records = map_element.no_records_;
     stable = true;
-    depend = map_element.link_;
+    dependence = map_element.link_;
   }
   RangeWithDepend(const Range& range) {
     if (GetInternalKeySeqno(range.start) == kMaxSequenceNumber) {
@@ -128,7 +128,7 @@ struct RangeWithDepend {
 
 bool IsEmptyMapSstElement(const RangeWithDepend& range,
                           const InternalKeyComparator& icomp) {
-  if (range.depend.size() != 1) {
+  if (range.dependence.size() != 1) {
     return false;
   }
   if (icomp.user_comparator()->Compare(range.point[0].user_key(),
@@ -193,8 +193,8 @@ class MapSstElementIterator {
   Slice value() const { return buffer_; }
   Status status() const { return status_; }
 
-  const std::unordered_set<uint64_t>& GetSstDepend() const {
-    return sst_depend_build_;
+  const std::unordered_set<uint64_t>& GetDependence() const {
+    return dependence_build_;
   }
 
   std::pair<size_t, double> GetSstReadAmp() const {
@@ -221,7 +221,7 @@ class MapSstElementIterator {
     bool& include_end = map_elements_.include_largest_ = where_->include[1];
     bool& no_records = map_elements_.no_records_ = where_->no_records;
     bool stable = where_->stable;
-    map_elements_.link_ = where_->depend;
+    map_elements_.link_ = where_->dependence;
 
     auto merge_depend = [](MapSstElement& e,
                            const std::vector<MapSstElement::LinkTarget>& d) {
@@ -248,7 +248,7 @@ class MapSstElementIterator {
       assert(icomp_.Compare(start, end) == 0);
       end = where_->point[1].Encode();
       include_end = where_->include[1];
-      merge_depend(map_elements_, where_->depend);
+      merge_depend(map_elements_, where_->dependence);
       stable = false;
       ++where_;
     }
@@ -257,7 +257,7 @@ class MapSstElementIterator {
       assert(!include_end && where_->include[0] && where_->include[1]);
       assert(icomp_.Compare(where_->point[0], where_->point[1]) == 0);
       include_end = true;
-      merge_depend(map_elements_, where_->depend);
+      merge_depend(map_elements_, where_->dependence);
       stable = false;
       ++where_;
     }
@@ -265,13 +265,13 @@ class MapSstElementIterator {
     size_t range_size = 0;
     if (stable) {
       for (auto& link : map_elements_.link_) {
-        sst_depend_build_.emplace(link.file_number);
+        dependence_build_.emplace(link.file_number);
         range_size += link.size;
       }
     } else {
       no_records = true;
       for (auto& link : map_elements_.link_) {
-        sst_depend_build_.emplace(link.file_number);
+        dependence_build_.emplace(link.file_number);
         TableReader* reader;
         auto iter = iterator_cache_.GetIterator(link.file_number, &reader);
         if (!iter->status().ok()) {
@@ -326,7 +326,7 @@ class MapSstElementIterator {
   std::string buffer_;
   std::vector<RangeWithDepend>::const_iterator where_;
   const std::vector<RangeWithDepend>& ranges_;
-  std::unordered_set<uint64_t> sst_depend_build_;
+  std::unordered_set<uint64_t> dependence_build_;
   size_t sst_read_amp_ = 0;
   double sst_read_amp_ratio_ = 0;
   size_t sst_read_amp_size_ = 0;
@@ -344,14 +344,19 @@ Status LoadRangeWithDepend(std::vector<RangeWithDepend>& ranges,
   for (size_t i = 0; i < n; ++i) {
     auto f = file_meta[i];
     TableReader* reader;
-    if (f->sst_purpose == kMapSst) {
+    if (f->prop.purpose == kMapSst) {
       auto iter = iterator_cache.GetIterator(f, &reader);
       assert(iter != nullptr);
       if (!iter->status().ok()) {
         return iter->status();
       }
       for (iter->SeekToFirst(); iter->Valid(); iter->Next()) {
-        if (!map_element.Decode(iter->key(), iter->value())) {
+        auto value = iter->value();
+        auto s = value.inplace_decode();
+        if (!s.ok()) {
+          return s;
+        }
+        if (!map_element.Decode(iter->key(), value)) {
           return Status::Corruption("Map sst invalid key or value");
         }
         ranges.emplace_back(map_element);
@@ -403,7 +408,7 @@ std::vector<RangeWithDepend> PartitionRangeWithDepend(
   auto put_right = [&](const InternalKey& key, bool include,
                        const RangeWithDepend* r) {
     auto& back = output.back();
-    if (back.depend.empty() || (icomp.Compare(key, back.point[0]) == 0 &&
+    if (back.dependence.empty() || (icomp.Compare(key, back.point[0]) == 0 &&
                                 (!back.include[0] || !include))) {
       output.pop_back();
       return;
@@ -419,17 +424,18 @@ std::vector<RangeWithDepend> PartitionRangeWithDepend(
     }
   };
   auto put_depend = [&](const RangeWithDepend* a, const RangeWithDepend* b) {
-    auto& depend = output.back().depend;
+    auto& dependence = output.back().dependence;
     auto& no_records = output.back().no_records;
     auto& stable = output.back().stable;
     assert(a != nullptr || b != nullptr);
     switch (type) {
       case PartitionType::kMerge:
         if (a != nullptr) {
-          depend = a->depend;
+          dependence = a->dependence;
           if (b != nullptr) {
             stable = false;
-            depend.insert(depend.end(), b->depend.begin(), b->depend.end());
+            dependence.insert(dependence.end(), b->dependence.begin(),
+                              b->dependence.end());
           } else {
             no_records = a->no_records;
             stable = a->stable;
@@ -437,17 +443,17 @@ std::vector<RangeWithDepend> PartitionRangeWithDepend(
         } else {
           no_records = b->no_records;
           stable = b->stable;
-          depend = b->depend;
+          dependence = b->dependence;
         }
-        assert(!depend.empty());
+        assert(!dependence.empty());
         break;
       case PartitionType::kDelete:
         if (b == nullptr) {
           no_records = a->no_records;
           stable = a->stable;
-          depend = a->depend;
+          dependence = a->dependence;
         } else {
-          assert(b->depend.empty());
+          assert(b->dependence.empty());
         }
         break;
     }
@@ -571,10 +577,10 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
                          std::unique_ptr<TableProperties>* prop_ptr,
                          std::set<FileMetaData*>* deleted_files) {
   auto& icomp = cfd->internal_comparator();
-  DependFileMap empty_depend_files;
+  DependenceMap empty_dependence_map;
 
   auto create_iterator = [&](const FileMetaData* f,
-                             const DependFileMap& depend_files, Arena* arena,
+                             const DependenceMap& dependence_map, Arena* arena,
                              TableReader** reader_ptr) -> InternalIterator* {
     ReadOptions read_options;
     read_options.verify_checksums = true;
@@ -583,13 +589,13 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
 
     return cfd->table_cache()->NewIterator(
         read_options, env_options_for_read_, cfd->internal_comparator(), *f,
-        f->sst_purpose == kMapSst ? empty_depend_files : depend_files, nullptr,
-        cfd->GetCurrentMutableCFOptions()->prefix_extractor.get(), reader_ptr,
-        nullptr /* no per level latency histogram */, true /* for_compaction */,
-        arena, false /* skip_filters */, -1);
+        f->prop.purpose == kMapSst ? empty_dependence_map : dependence_map,
+        nullptr, cfd->GetCurrentMutableCFOptions()->prefix_extractor.get(),
+        reader_ptr, nullptr /* no per level latency histogram */,
+        true /* for_compaction */, arena, false /* skip_filters */, -1);
   };
 
-  IteratorCache iterator_cache(vstorage->depend_files(), &create_iterator,
+  IteratorCache iterator_cache(vstorage->dependence_map(), &create_iterator,
                                c_style_callback(create_iterator));
 
   std::list<std::vector<RangeWithDepend>> level_ranges;
@@ -709,7 +715,7 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
     edit->AddFile(level, f->fd.GetNumber(), f->fd.GetPathId(),
                   f->fd.file_size, f->smallest, f->largest,
                   f->fd.smallest_seqno, f->fd.largest_seqno,
-                  f->marked_for_compaction, f->sst_purpose, f->sst_depend);
+                  f->num_antiquation, f->marked_for_compaction, f->prop);
   };
   auto edit_del_file = [edit, deleted_files](int level, FileMetaData* f) {
     edit->DeleteFile(level, f->fd.GetNumber());
@@ -734,11 +740,12 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
     bool build_map_sst = false;
     // check is need build map
     for (auto it = ranges.begin(); it != ranges.end(); ++it) {
-      if (it->depend.size() > 1) {
+      if (it->dependence.size() > 1) {
         build_map_sst = true;
         break;
       }
-      auto f = iterator_cache.GetFileMetaData(it->depend.front().file_number);
+      auto f =
+          iterator_cache.GetFileMetaData(it->dependence.front().file_number);
       assert(f != nullptr);
       Range r(it->point[0].Encode(), it->point[1].Encode(), it->include[0],
               it->include[1]);
@@ -746,7 +753,7 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
         build_map_sst = true;
         break;
       }
-      sst_live.emplace(it->depend.front().file_number, f);
+      sst_live.emplace(it->dependence.front().file_number, f);
     }
     if (!build_map_sst) {
       // unnecessary build map sst
@@ -771,7 +778,7 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
     }
   }
   if (inputs.size() == 1 && inputs.front().files.size() == 1 &&
-      inputs.front().files.front()->sst_purpose == kMapSst &&
+      inputs.front().files.front()->prop.purpose == kMapSst &&
       ranges.size() == input_range_count &&
       !std::any_of(ranges.begin(), ranges.end(),
                    [](const RangeWithDepend& e) { return !e.stable; })) {
@@ -824,13 +831,8 @@ Status MapBuilder::WriteOutputFile(
     MapSstElementIterator* range_iter, uint32_t output_path_id,
     ColumnFamilyData* cfd, const MutableCFOptions& mutable_cf_options,
     FileMetaData* file_meta, std::unique_ptr<TableProperties>* prop) {
-  // Used for write properties
-  std::vector<uint64_t> sst_depend;
-  size_t sst_read_amp = 1;
-  double sst_read_amp_ratio = 1;
+
   std::vector<std::unique_ptr<IntTblPropCollectorFactory>> collectors;
-  collectors.emplace_back(new SstPurposePropertiesCollectorFactory(
-      (uint8_t)kMapSst, &sst_depend, &sst_read_amp, &sst_read_amp_ratio));
 
   // no need to lock because VersionSet::next_file_number_ is atomic
   uint64_t file_number = versions_->NewFileNumber();
@@ -900,28 +902,32 @@ Status MapBuilder::WriteOutputFile(
   file_meta->fd.largest_seqno = bound_builder.largest_seqno;
 
   for (range_iter->SeekToFirst(); range_iter->Valid(); range_iter->Next()) {
-    builder->Add(range_iter->key(), range_iter->value());
+    builder->Add(range_iter->key(), LazySlice(range_iter->value()));
   }
   if (!range_iter->status().ok()) {
     s = range_iter->status();
   }
 
-  // Prepare sst_depend, IntTblPropCollector::Finish will read it
-  auto& sst_depend_build = range_iter->GetSstDepend();
-  sst_depend.reserve(sst_depend_build.size());
-  sst_depend.insert(sst_depend.end(), sst_depend_build.begin(),
-                    sst_depend_build.end());
-  std::sort(sst_depend.begin(), sst_depend.end());
-  std::tie(sst_read_amp, sst_read_amp_ratio) = range_iter->GetSstReadAmp();
+  // Prepare prop
+  file_meta->prop.num_entries = builder->NumEntries();
+  file_meta->prop.purpose = kMapSst;
+  std::tie(file_meta->prop.max_read_amp, file_meta->prop.read_amp) =
+      range_iter->GetSstReadAmp();
+  auto& dependence_build = range_iter->GetDependence();
+  auto& dependence = file_meta->prop.dependence;
+  dependence.reserve(dependence_build.size());
+  dependence.insert(dependence.end(), dependence_build.begin(),
+                    dependence_build.end());
+  std::sort(dependence.begin(), dependence.end());
 
   // Map sst don't write tombstones
-  file_meta->marked_for_compaction = builder->NeedCompact();
-  const uint64_t current_entries = builder->NumEntries();
   if (s.ok()) {
-    s = builder->Finish();
+    s = builder->Finish(&file_meta->prop);
   } else {
     builder->Abandon();
   }
+  file_meta->marked_for_compaction = builder->NeedCompact();
+  const uint64_t current_entries = builder->NumEntries();
   const uint64_t current_bytes = builder->FileSize();
   if (s.ok()) {
     file_meta->fd.file_size = current_bytes;
@@ -967,28 +973,19 @@ Status MapBuilder::WriteOutputFile(
 #endif
 
   builder.reset();
-
-  // Update metadata
-  file_meta->sst_purpose = kMapSst;
-  file_meta->sst_depend = std::move(sst_depend);
-
   return s;
 }
 
 struct MapElementIterator : public InternalIterator {
-  explicit MapElementIterator(FileMetaData* const* meta_array, size_t meta_size,
-                              TableCache* table_cache,
-                              const ReadOptions& read_options,
-                              const EnvOptions& env_options,
-                              const InternalKeyComparator* icmp,
-                              const SliceTransform* slice_transform)
+  explicit MapElementIterator(
+      const FileMetaData* const* meta_array, size_t meta_size,
+      const InternalKeyComparator* icmp, void* callback_arg,
+      const IteratorCache::CreateIterCallback& create_iter)
       : meta_array_(meta_array),
         meta_size_(meta_size),
-        table_cache_(table_cache),
-        read_options_(read_options),
-        env_options_(env_options),
         icmp_(icmp),
-        slice_transform_(slice_transform),
+        callback_arg_(callback_arg),
+        create_iter_(create_iter),
         where_(meta_size) {
     assert(meta_size > 0);
   }
@@ -996,7 +993,7 @@ struct MapElementIterator : public InternalIterator {
   virtual void Seek(const Slice& target) override {
     where_ =
         std::lower_bound(meta_array_, meta_array_ + meta_size_, target,
-                         [this](FileMetaData* f, const Slice& t) {
+                         [this](const FileMetaData* f, const Slice& t) {
                            return icmp_->Compare(f->largest.Encode(), t) < 0;
                          }) -
         meta_array_;
@@ -1004,7 +1001,7 @@ struct MapElementIterator : public InternalIterator {
       iter_.reset();
       return;
     }
-    if (meta_array_[where_]->sst_purpose == kMapSst) {
+    if (meta_array_[where_]->prop.purpose == kMapSst) {
       if (!InitMapSstIterator()) {
         return;
       }
@@ -1014,7 +1011,7 @@ struct MapElementIterator : public InternalIterator {
         if (++where_ == meta_size_) {
           return;
         }
-        if (meta_array_[where_]->sst_purpose == kMapSst) {
+        if (meta_array_[where_]->prop.purpose == kMapSst) {
           if (!InitMapSstIterator()) {
             return;
           }
@@ -1029,7 +1026,7 @@ struct MapElementIterator : public InternalIterator {
   virtual void SeekForPrev(const Slice& target) override {
     where_ =
         std::upper_bound(meta_array_, meta_array_ + meta_size_, target,
-                         [this](const Slice& t, FileMetaData* f) {
+                         [this](const Slice& t, const FileMetaData* f) {
                            return icmp_->Compare(t, f->largest.Encode()) < 0;
                          }) -
         meta_array_;
@@ -1038,7 +1035,7 @@ struct MapElementIterator : public InternalIterator {
       iter_.reset();
       return;
     }
-    if (meta_array_[where_]->sst_purpose == kMapSst) {
+    if (meta_array_[where_]->prop.purpose == kMapSst) {
       if (!InitMapSstIterator()) {
         return;
       }
@@ -1049,7 +1046,7 @@ struct MapElementIterator : public InternalIterator {
           where_ = meta_size_;
           return;
         }
-        if (meta_array_[where_]->sst_purpose == kMapSst) {
+        if (meta_array_[where_]->prop.purpose == kMapSst) {
           if (!InitMapSstIterator()) {
             return;
           }
@@ -1063,7 +1060,7 @@ struct MapElementIterator : public InternalIterator {
   }
   virtual void SeekToFirst() override {
     where_ = 0;
-    if (meta_array_[where_]->sst_purpose == kMapSst) {
+    if (meta_array_[where_]->prop.purpose == kMapSst) {
       if (!InitMapSstIterator()) {
         return;
       }
@@ -1075,7 +1072,7 @@ struct MapElementIterator : public InternalIterator {
   }
   virtual void SeekToLast() override {
     where_ = meta_size_ - 1;
-    if (meta_array_[where_]->sst_purpose == kMapSst) {
+    if (meta_array_[where_]->prop.purpose == kMapSst) {
       if (!InitMapSstIterator()) {
         return;
       }
@@ -1098,7 +1095,7 @@ struct MapElementIterator : public InternalIterator {
       iter_.reset();
       return;
     }
-    if (meta_array_[where_]->sst_purpose == kMapSst) {
+    if (meta_array_[where_]->prop.purpose == kMapSst) {
       if (!InitMapSstIterator()) {
         return;
       }
@@ -1122,7 +1119,7 @@ struct MapElementIterator : public InternalIterator {
       iter_.reset();
       return;
     }
-    if (meta_array_[where_]->sst_purpose == kMapSst) {
+    if (meta_array_[where_]->prop.purpose == kMapSst) {
       if (!InitMapSstIterator()) {
         return;
       }
@@ -1132,18 +1129,22 @@ struct MapElementIterator : public InternalIterator {
     }
     Update();
   }
-  Slice key() const override { return key_slice; }
-  Slice value() const override { return value_slice; }
+  Slice key() const override {
+    assert(where_ < meta_size_);
+    return key_slice;
+  }
+  LazySlice value() const override {
+    assert(where_ < meta_size_);
+    return LazySliceReference(value_slice);
+  }
   virtual Status status() const override {
     return iter_ ? iter_->status() : Status::OK();
   }
 
   bool InitMapSstIterator() {
-    DependFileMap empty_depend_files;
-    iter_.reset(table_cache_->NewIterator(
-        read_options_, env_options_, *icmp_, *meta_array_[where_],
-        empty_depend_files, nullptr, slice_transform_, nullptr, nullptr, false,
-        nullptr, true, -1));
+    DependenceMap empty_dependence_map;
+    iter_.reset(create_iter_(callback_arg_, meta_array_[where_],
+                             empty_dependence_map, nullptr, nullptr));
     if (iter_->status().ok()) {
       return true;
     }
@@ -1155,7 +1156,7 @@ struct MapElementIterator : public InternalIterator {
       key_slice = iter_->key();
       value_slice = iter_->value();
     } else {
-      FileMetaData* f = meta_array_[where_];
+      const FileMetaData* f = meta_array_[where_];
       element_.smallest_key_ = f->smallest.Encode();
       element_.largest_key_ = f->largest.Encode();
       element_.include_smallest_ = true;
@@ -1165,44 +1166,40 @@ struct MapElementIterator : public InternalIterator {
       element_.link_.emplace_back(
           MapSstElement::LinkTarget{f->fd.GetNumber(), f->fd.GetFileSize()});
       key_slice = element_.Key();
-      value_slice = element_.Value(&buffer_);
+      value_slice = LazySlice(element_.Value(&buffer_));
     }
   }
 
-  FileMetaData* const* meta_array_;
+  const FileMetaData* const* meta_array_;
   size_t meta_size_;
-  TableCache* table_cache_;
-  const ReadOptions& read_options_;
-  const EnvOptions& env_options_;
   const InternalKeyComparator* icmp_;
-  const SliceTransform* slice_transform_;
+  void* callback_arg_;
+  const IteratorCache::CreateIterCallback& create_iter_;
   size_t where_;
   MapSstElement element_;
   std::string buffer_;
   std::unique_ptr<InternalIterator> iter_;
-  Slice key_slice, value_slice;
+  Slice key_slice;
+  LazySlice value_slice;
 };
 
 InternalIterator* NewMapElementIterator(
-    FileMetaData* const* meta_array, size_t meta_size, TableCache* table_cache,
-    const ReadOptions& read_options, const EnvOptions& env_options,
-    const InternalKeyComparator* icmp, const SliceTransform* slice_transform,
-    Arena* arena) {
+    const FileMetaData* const* meta_array, size_t meta_size,
+    const InternalKeyComparator* icmp, void* callback_arg,
+    const IteratorCache::CreateIterCallback& create_iter, Arena* arena) {
   if (meta_size == 0) {
     return NewEmptyInternalIterator(arena);
-  } else if (meta_size == 1 && meta_array[0]->sst_purpose == kMapSst) {
-    DependFileMap empty_depend_files;
-    return table_cache->NewIterator(
-        read_options, env_options, *icmp, *meta_array[0], empty_depend_files,
-        nullptr, slice_transform, nullptr, nullptr, false, arena, true, -1);
+  } else if (meta_size == 1 && meta_array[0]->prop.purpose == kMapSst) {
+    DependenceMap empty_dependence_map;
+    return create_iter(callback_arg, meta_array[0], empty_dependence_map, arena,
+                       nullptr);
   } else if (arena == nullptr) {
-    return new MapElementIterator(meta_array, meta_size, table_cache,
-                                  read_options, env_options, icmp,
-                                  slice_transform);
+    return new MapElementIterator(meta_array, meta_size, icmp, callback_arg,
+                                  create_iter);
   } else {
     return new (arena->AllocateAligned(sizeof(MapElementIterator)))
-        MapElementIterator(meta_array, meta_size, table_cache, read_options,
-                           env_options, icmp, slice_transform);
+        MapElementIterator(meta_array, meta_size, icmp, callback_arg,
+                           create_iter);
   }
 }
 

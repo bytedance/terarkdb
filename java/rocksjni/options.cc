@@ -6396,7 +6396,8 @@ void Java_org_rocksdb_ReadOptions_setPrefixSameAsStart(
  */
 jboolean Java_org_rocksdb_ReadOptions_pinData(JNIEnv* /*env*/, jobject /*jobj*/,
                                               jlong jhandle) {
-  return reinterpret_cast<rocksdb::ReadOptions*>(jhandle)->pin_data;
+  //return reinterpret_cast<rocksdb::ReadOptions*>(jhandle)->pin_data;
+  return false;
 }
 
 /*
@@ -6407,8 +6408,8 @@ jboolean Java_org_rocksdb_ReadOptions_pinData(JNIEnv* /*env*/, jobject /*jobj*/,
 void Java_org_rocksdb_ReadOptions_setPinData(JNIEnv* /*env*/, jobject /*jobj*/,
                                              jlong jhandle,
                                              jboolean jpin_data) {
-  reinterpret_cast<rocksdb::ReadOptions*>(jhandle)->pin_data =
-      static_cast<bool>(jpin_data);
+  //reinterpret_cast<rocksdb::ReadOptions*>(jhandle)->pin_data =
+  //    static_cast<bool>(jpin_data);
 }
 
 /*

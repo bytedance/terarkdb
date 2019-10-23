@@ -25,6 +25,7 @@ namespace rocksdb {
 
 class Slice;
 class Status;
+struct TablePropertyCache;
 
 struct TableReaderOptions {
   // @param skip_filters Disables loading/accessing the filter block
@@ -135,14 +136,14 @@ class TableBuilder {
   // Add key,value to the table being constructed.
   // REQUIRES: key is after any previously added key according to comparator.
   // REQUIRES: Finish(), Abandon() have not been called
-  virtual void Add(const Slice& key, const Slice& value) = 0;
+  virtual void Add(const Slice& key, const LazySlice& value) = 0;
 
   // Return non-ok iff some error has been detected.
   virtual Status status() const = 0;
 
   // Finish building the table.
   // REQUIRES: Finish(), Abandon() have not been called
-  virtual Status Finish() = 0;
+  virtual Status Finish(const TablePropertyCache*) = 0;
 
   // Indicate that the contents of this builder should be abandoned.
   // If the caller is not going to call Finish(), it must call Abandon()

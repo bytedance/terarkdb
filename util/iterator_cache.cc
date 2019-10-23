@@ -9,13 +9,12 @@
 
 namespace rocksdb {
 
-IteratorCache::IteratorCache(const DependFileMap& depend_files,
+IteratorCache::IteratorCache(const DependenceMap& dependence_map,
                              void* callback_arg,
                              const CreateIterCallback& create_iter)
-    : depend_files_(depend_files),
+    : dependence_map_(dependence_map),
       callback_arg_(callback_arg),
-      create_iter_(create_iter),
-      pinned_iters_mgr_(nullptr) {}
+      create_iter_(create_iter) {}
 
 IteratorCache::~IteratorCache() {
   for (auto pair : iterator_map_) {
@@ -34,10 +33,9 @@ InternalIterator* IteratorCache::GetIterator(const FileMetaData* f,
   }
   CacheItem item;
   item.iter =
-      create_iter_(callback_arg_, f, depend_files_, &arena_, &item.reader);
+      create_iter_(callback_arg_, f, dependence_map_, &arena_, &item.reader);
   item.meta = f;
   assert(item.iter != nullptr);
-  item.iter->SetPinnedItersMgr(pinned_iters_mgr_);
   iterator_map_.emplace(f->fd.GetNumber(), item);
   if (reader_ptr != nullptr) {
     *reader_ptr = item.reader;
@@ -55,20 +53,19 @@ InternalIterator* IteratorCache::GetIterator(uint64_t file_number,
     return find->second.iter;
   }
   CacheItem item;
-  auto find_f = depend_files_.find(file_number);
-  if (find_f == depend_files_.end()) {
+  auto find_f = dependence_map_.find(file_number);
+  if (find_f == dependence_map_.end()) {
     auto s = Status::Corruption("Composite sst depend files missing");
-    item.iter = NewErrorInternalIterator<Slice>(s, &arena_);
+    item.iter = NewErrorInternalIterator<LazySlice>(s, &arena_);
     item.reader = nullptr;
     item.meta = nullptr;
   } else {
     auto f = find_f->second;
     item.iter =
-        create_iter_(callback_arg_, f, depend_files_, &arena_, &item.reader);
+        create_iter_(callback_arg_, f, dependence_map_, &arena_, &item.reader);
     item.meta = f;
     assert(item.iter != nullptr);
   }
-  item.iter->SetPinnedItersMgr(pinned_iters_mgr_);
   iterator_map_.emplace(file_number, item);
   if (reader_ptr != nullptr) {
     *reader_ptr = item.reader;
@@ -81,19 +78,11 @@ const FileMetaData* IteratorCache::GetFileMetaData(uint64_t file_number) {
   if (find != iterator_map_.end()) {
     return find->second.meta;
   }
-  auto find_depend = depend_files_.find(file_number);
-  if (find_depend != depend_files_.end()) {
+  auto find_depend = dependence_map_.find(file_number);
+  if (find_depend != dependence_map_.end()) {
     return find_depend->second;
   }
   return nullptr;
-}
-
-void IteratorCache::SetPinnedItersMgr(
-    PinnedIteratorsManager* pinned_iters_mgr) {
-  pinned_iters_mgr_ = pinned_iters_mgr;
-  for (auto pair : iterator_map_) {
-    pair.second.iter->SetPinnedItersMgr(pinned_iters_mgr);
-  }
 }
 
 }  // namespace rocksdb

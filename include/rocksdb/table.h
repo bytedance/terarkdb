@@ -526,6 +526,9 @@ class TableFactory {
 
   // Return is delete range supported
   virtual bool IsDeleteRangeSupported() const { return false; }
+
+  // Return is row cache supported
+  virtual bool IsRowCacheSupported() const { return false; }
 };
 
 #ifndef ROCKSDB_LITE

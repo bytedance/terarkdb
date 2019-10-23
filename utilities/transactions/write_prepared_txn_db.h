@@ -93,7 +93,7 @@ class WritePreparedTxnDB : public PessimisticTransactionDB {
   using DB::Get;
   virtual Status Get(const ReadOptions& options,
                      ColumnFamilyHandle* column_family, const Slice& key,
-                     PinnableSlice* value) override;
+                     LazySlice* value) override;
 
   using DB::MultiGet;
   virtual std::vector<Status> MultiGet(

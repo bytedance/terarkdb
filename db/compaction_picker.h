@@ -47,6 +47,12 @@ class CompactionPicker {
                                      VersionStorageInfo* vstorage,
                                      LogBuffer* log_buffer) = 0;
 
+  // Pick compaction which level has map or link sst
+  Compaction* PickGarbageCollection(const std::string& cf_name,
+                                    const MutableCFOptions& mutable_cf_options,
+                                    VersionStorageInfo* vstorage,
+                                    LogBuffer* log_buffer);
+
   virtual void InitFilesBeingCompact(
       const MutableCFOptions& mutable_cf_options, VersionStorageInfo* vstorage,
       const InternalKey* begin, const InternalKey* end,
@@ -197,7 +203,7 @@ class CompactionPicker {
                              int output_level, int* parent_index);
 
   // Register this compaction in the set of running compactions
-  void RegisterCompaction(Compaction* c);
+  Compaction* RegisterCompaction(Compaction* c);
 
   // Remove this compaction from the set of running compactions
   void UnregisterCompaction(Compaction* c);

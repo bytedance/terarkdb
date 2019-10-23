@@ -176,11 +176,7 @@ else()
   if(MINGW)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-format")
   endif()
-  if (CLANG)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=gnu++17")
-  else()
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=gnu++1y")
-  endif()
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
   if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-omit-frame-pointer")
     include(CheckCXXCompilerFlag)
@@ -485,6 +481,7 @@ set(SOURCES
         db/compaction_picker.cc
         db/compaction_picker_fifo.cc
         db/compaction_picker_universal.cc
+        db/compaction_dispatcher.cc
         db/convenience.cc
         db/db_filesnapshot.cc
         db/db_impl.cc
@@ -542,6 +539,8 @@ set(SOURCES
         memtable/hash_linklist_rep.cc
         memtable/hash_skiplist_rep.cc
         memtable/skiplistrep.cc
+        memtable/terark_zip_entry_index.cc
+        memtable/terark_zip_memtable.cc
         memtable/vectorrep.cc
         memtable/write_buffer_manager.cc
         monitoring/histogram.cc
@@ -595,6 +594,11 @@ set(SOURCES
         table/sst_file_reader.cc
         table/sst_file_writer.cc
         table/table_properties.cc
+        table/table_reader.cc
+        table/terark_zip_config.cc
+        table/terark_zip_table_builder.cc
+        table/terark_zip_table_reader.cc
+        table/terark_zip_table.cc
         table/two_level_iterator.cc
         tools/db_bench_tool.cc
         tools/dump/db_dump_tool.cc
@@ -602,6 +606,7 @@ set(SOURCES
         tools/ldb_tool.cc
         tools/sst_dump_tool.cc
         tools/trace_analyzer_tool.cc
+        tools/remote_compaction_worker_101.cc
         util/arena.cc
         util/auto_roll_logger.cc
         util/bloom.cc
@@ -638,15 +643,6 @@ set(SOURCES
         util/transaction_test_util.cc
         util/xxhash.cc
         utilities/backupable/backupable_db.cc
-        utilities/blob_db/blob_compaction_filter.cc
-        utilities/blob_db/blob_db.cc
-        utilities/blob_db/blob_db_impl.cc
-        utilities/blob_db/blob_db_impl_filesnapshot.cc
-        utilities/blob_db/blob_dump_tool.cc
-        utilities/blob_db/blob_file.cc
-        utilities/blob_db/blob_log_reader.cc
-        utilities/blob_db/blob_log_writer.cc
-        utilities/blob_db/blob_log_format.cc
         utilities/cassandra/cassandra_compaction_filter.cc
         utilities/cassandra/format.cc
         utilities/cassandra/merge_operator.cc
@@ -873,7 +869,6 @@ if(WITH_TESTS)
         db/corruption_test.cc
         db/cuckoo_table_db_test.cc
         db/db_basic_test.cc
-        db/db_blob_index_test.cc
         db/db_block_cache_test.cc
         db/db_bloom_filter_test.cc
         db/db_compaction_filter_test.cc
@@ -976,7 +971,6 @@ if(WITH_TESTS)
         util/thread_list_test.cc
         util/thread_local_test.cc
         utilities/backupable/backupable_db_test.cc
-        utilities/blob_db/blob_db_test.cc
         utilities/cassandra/cassandra_functional_test.cc
         utilities/cassandra/cassandra_format_test.cc
         utilities/cassandra/cassandra_row_merge_test.cc

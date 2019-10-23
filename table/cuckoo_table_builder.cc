@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "db/dbformat.h"
+#include "db/version_edit.h"
 #include "rocksdb/env.h"
 #include "rocksdb/table.h"
 #include "table/block_builder.h"
@@ -81,7 +82,13 @@ CuckooTableBuilder::CuckooTableBuilder(
   properties_.column_family_name = column_family_name;
 }
 
-void CuckooTableBuilder::Add(const Slice& key, const Slice& value) {
+void CuckooTableBuilder::Add(const Slice& key, const LazySlice& lazy_value) {
+  auto s = lazy_value.inplace_decode();
+  if (!s.ok()) {
+    status_ = s;
+    return;
+  }
+  const Slice& value = lazy_value;
   if (num_entries_ >= kMaxVectorIdx - 1) {
     status_ = Status::NotSupported("Number of keys in a file must be < 2^32-1");
     return;
@@ -240,9 +247,16 @@ Status CuckooTableBuilder::MakeHashTable(std::vector<CuckooBucket>* buckets) {
   return Status::OK();
 }
 
-Status CuckooTableBuilder::Finish() {
+Status CuckooTableBuilder::Finish(const TablePropertyCache* prop) {
   assert(!closed_);
   closed_ = true;
+  if (prop != nullptr) {
+    properties_.purpose = prop->purpose;
+    properties_.max_read_amp = prop->max_read_amp;
+    properties_.read_amp = prop->read_amp;
+    properties_.dependence = prop->dependence;
+    properties_.inheritance_chain = prop->inheritance_chain;
+  }
   std::vector<CuckooBucket> buckets;
   Status s;
   std::string unused_bucket;

@@ -6,10 +6,12 @@
 #include <memory>
 
 #include "rocksdb/merge_operator.h"
-#include "rocksdb/slice.h"
+#include "rocksdb/lazy_slice.h"
 #include "utilities/merge_operators.h"
 
 using rocksdb::Slice;
+using rocksdb::LazySlice;
+using rocksdb::LazySliceReference;
 using rocksdb::Logger;
 using rocksdb::MergeOperator;
 
@@ -21,46 +23,58 @@ class MaxOperator : public MergeOperator {
  public:
   virtual bool FullMergeV2(const MergeOperationInput& merge_in,
                            MergeOperationOutput* merge_out) const override {
-    Slice& max = merge_out->existing_operand;
+    LazySlice max_slice;
+    const LazySlice*& max = merge_out->existing_operand;
     if (merge_in.existing_value) {
-      max = Slice(merge_in.existing_value->data(),
-                  merge_in.existing_value->size());
-    } else if (max.data() == nullptr) {
-      max = Slice();
+      max_slice = LazySliceReference(*merge_in.existing_value);
+    } else {
+      max_slice.clear();
     }
 
     for (const auto& op : merge_in.operand_list) {
-      if (max.compare(op) < 0) {
-        max = op;
+      if (!max_slice.inplace_decode().ok() || !op.inplace_decode().ok()) {
+        return false;
+      }
+      if (max_slice.compare(op) < 0) {
+        max = &op;
+        max_slice = LazySliceReference(op);
       }
     }
 
     return true;
   }
 
-  virtual bool PartialMerge(const Slice& /*key*/, const Slice& left_operand,
-                            const Slice& right_operand, std::string* new_value,
+  virtual bool PartialMerge(const Slice& /*key*/,
+                            const LazySlice& left_operand,
+                            const LazySlice& right_operand,
+                            LazySlice* new_value,
                             Logger* /*logger*/) const override {
+    if (!left_operand.inplace_decode().ok() || !right_operand.inplace_decode().ok()) {
+      return false;
+    }
     if (left_operand.compare(right_operand) >= 0) {
-      new_value->assign(left_operand.data(), left_operand.size());
+      new_value->assign(left_operand);
     } else {
-      new_value->assign(right_operand.data(), right_operand.size());
+      new_value->assign(right_operand);
     }
     return true;
   }
 
   virtual bool PartialMergeMulti(const Slice& /*key*/,
-                                 const std::deque<Slice>& operand_list,
-                                 std::string* new_value,
+                                 const std::vector<LazySlice>& operand_list,
+                                 LazySlice* new_value,
                                  Logger* /*logger*/) const override {
-    Slice max;
+    LazySlice max;
     for (const auto& operand : operand_list) {
+      if (!max.inplace_decode().ok() || !operand.inplace_decode().ok()) {
+        return false;
+      }
       if (max.compare(operand) < 0) {
-        max = operand;
+        max = LazySliceReference(operand);
       }
     }
 
-    new_value->assign(max.data(), max.size());
+    new_value->assign(max);
     return true;
   }
 

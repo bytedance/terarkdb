@@ -36,8 +36,8 @@ class HashSkipListRep : public MemTableRep {
   virtual size_t ApproximateMemoryUsage() override;
 
   virtual void Get(const LookupKey& k, void* callback_args,
-                   bool (*callback_func)(void* arg,
-                                         const KeyValuePair*)) override;
+                   bool (*callback_func)(void* arg, const Slice& key,
+                                         LazySlice&& value)) override;
 
   virtual ~HashSkipListRep();
 
@@ -101,7 +101,7 @@ class HashSkipListRep : public MemTableRep {
 
     // Returns the key at the current position.
     // REQUIRES: Valid()
-    virtual const char* key() const override {
+    virtual const char* EncodedKey() const override {
       assert(Valid());
       return iter_.key();
     }
@@ -214,9 +214,17 @@ class HashSkipListRep : public MemTableRep {
    public:
     EmptyIterator() { }
     virtual bool Valid() const override { return false; }
-    virtual const char* key() const override {
+    virtual const char* EncodedKey() const override {
       assert(false);
       return nullptr;
+    }
+    virtual Slice key() const override {
+      assert(false);
+      return Slice();
+    }
+    virtual LazySlice value() const override {
+      assert(false);
+      return LazySlice();
     }
     virtual void Next() override {}
     virtual void Prev() override {}
@@ -292,15 +300,16 @@ size_t HashSkipListRep::ApproximateMemoryUsage() {
 }
 
 void HashSkipListRep::Get(const LookupKey& k, void* callback_args,
-                          bool (*callback_func)(void* arg,
-                                                const KeyValuePair*)) {
+                          bool (*callback_func)(void* arg, const Slice& key,
+                                                LazySlice&& value)) {
   auto transformed = transform_->Transform(k.user_key());
   auto bucket = GetBucket(transformed);
   if (bucket != nullptr) {
-    EncodedKeyValuePair pair;
     Bucket::Iterator iter(bucket);
     for (iter.Seek(k.memtable_key().data());
-         iter.Valid() && callback_func(callback_args, pair.SetKey(iter.key()));
+         iter.Valid() && callback_func(callback_args,
+                                       GetLengthPrefixedSlice(iter.key()),
+                                       DecodeToLazyValue(iter.key()));
          iter.Next()) {
     }
   }

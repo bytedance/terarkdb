@@ -29,7 +29,6 @@
 #include "db/memtable.h"
 #include "db/merge_context.h"
 #include "db/merge_helper.h"
-#include "db/pinned_iterators_manager.h"
 #include "db/table_cache.h"
 #include "db/version_builder.h"
 #include "monitoring/file_read_sample.h"
@@ -470,7 +469,7 @@ class LevelIterator final : public InternalIterator {
                 const EnvOptions& env_options,
                 const InternalKeyComparator& icomparator,
                 const LevelFilesBrief* flevel,
-                const DependFileMap& depend_files,
+                const DependenceMap& dependence_map,
                 const SliceTransform* prefix_extractor, bool should_sample,
                 HistogramImpl* file_read_hist, bool for_compaction,
                 bool skip_filters, int level, RangeDelAggregator* range_del_agg,
@@ -481,7 +480,7 @@ class LevelIterator final : public InternalIterator {
         env_options_(env_options),
         icomparator_(icomparator),
         flevel_(flevel),
-        depend_files_(depend_files),
+        dependence_map_(dependence_map),
         prefix_extractor_(prefix_extractor),
         file_read_hist_(file_read_hist),
         should_sample_(should_sample),
@@ -490,7 +489,6 @@ class LevelIterator final : public InternalIterator {
         file_index_(flevel_->num_files),
         level_(level),
         range_del_agg_(range_del_agg),
-        pinned_iters_mgr_(nullptr),
         compaction_boundaries_(compaction_boundaries) {
     // Empty level is not supported.
     assert(flevel_ != nullptr && flevel_->num_files > 0);
@@ -507,34 +505,15 @@ class LevelIterator final : public InternalIterator {
 
   virtual bool Valid() const override { return file_iter_.Valid(); }
   virtual Slice key() const override {
-    assert(Valid());
+    assert(file_iter_.Valid());
     return file_iter_.key();
   }
-  virtual Slice value() const override {
-    assert(Valid());
+  virtual LazySlice value() const override {
+    assert(file_iter_.Valid());
     return file_iter_.value();
   }
   virtual Status status() const override {
     return file_iter_.iter() ? file_iter_.status() : Status::OK();
-  }
-  virtual uint64_t FileNumber() const override {
-    assert(Valid());
-    return file_iter_.iter()->FileNumber();
-  }
-  virtual void SetPinnedItersMgr(
-      PinnedIteratorsManager* pinned_iters_mgr) override {
-    pinned_iters_mgr_ = pinned_iters_mgr;
-    if (file_iter_.iter()) {
-      file_iter_.SetPinnedItersMgr(pinned_iters_mgr);
-    }
-  }
-  virtual bool IsKeyPinned() const override {
-    return pinned_iters_mgr_ && pinned_iters_mgr_->PinningEnabled() &&
-           file_iter_.iter() && file_iter_.IsKeyPinned();
-  }
-  virtual bool IsValuePinned() const override {
-    return pinned_iters_mgr_ && pinned_iters_mgr_->PinningEnabled() &&
-           file_iter_.iter() && file_iter_.IsValuePinned();
   }
 
  private:
@@ -570,7 +549,7 @@ class LevelIterator final : public InternalIterator {
     }
     return table_cache_->NewIterator(
         read_options_, env_options_, icomparator_, *file_meta.file_metadata,
-        depend_files_, range_del_agg_, prefix_extractor_,
+        dependence_map_, range_del_agg_, prefix_extractor_,
         nullptr /* don't need reference to table */, file_read_hist_,
         for_compaction_, nullptr /* arena */, skip_filters_, level_,
         smallest_compaction_key, largest_compaction_key);
@@ -581,7 +560,7 @@ class LevelIterator final : public InternalIterator {
   const EnvOptions& env_options_;
   const InternalKeyComparator& icomparator_;
   const LevelFilesBrief* flevel_;
-  const DependFileMap& depend_files_;
+  const DependenceMap& dependence_map_;
   mutable FileDescriptor current_value_;
   const SliceTransform* prefix_extractor_;
 
@@ -593,7 +572,6 @@ class LevelIterator final : public InternalIterator {
   int level_;
   RangeDelAggregator* range_del_agg_;
   IteratorWrapper file_iter_;  // May be nullptr
-  PinnedIteratorsManager* pinned_iters_mgr_;
 
   // To be propagated to RangeDelAggregator in order to safely truncate range
   // tombstones.
@@ -689,16 +667,7 @@ void LevelIterator::SkipEmptyFileBackward() {
 }
 
 void LevelIterator::SetFileIterator(InternalIterator* iter) {
-  if (pinned_iters_mgr_ && iter) {
-    iter->SetPinnedItersMgr(pinned_iters_mgr_);
-  }
-
-  InternalIterator* old_iter = file_iter_.Set(iter);
-  if (pinned_iters_mgr_ && pinned_iters_mgr_->PinningEnabled()) {
-    pinned_iters_mgr_->PinIterator(old_iter);
-  } else {
-    delete old_iter;
-  }
+  delete file_iter_.Set(iter);
 }
 
 void LevelIterator::InitFileIterator(size_t new_file_index) {
@@ -731,9 +700,7 @@ class BaseReferencedVersionBuilder {
   explicit BaseReferencedVersionBuilder(ColumnFamilyData* cfd)
       : version_builder_(new VersionBuilder(
             cfd->current()->version_set()->env_options(), cfd->table_cache(),
-            cfd->current()->storage_info(),
-            cfd->current()->GetMutableCFOptions().prefix_extractor.get(),
-            cfd->ioptions()->info_log)),
+            cfd->current()->storage_info(), cfd->ioptions()->info_log)),
         version_(cfd->current()) {
     version_->Ref();
   }
@@ -849,11 +816,11 @@ Status Version::GetPropertiesOfTablesInRange(
                                          false);
       for (size_t j = 0; j < files.size(); ++j) {
         const auto file_meta = files[j];
-        if (file_meta->sst_purpose != SstPurpose::kEssenceSst) {
-          for (auto file_number : file_meta->sst_depend) {
-            auto find = storage_info_.depend_files_.find(file_number);
-            if (find == storage_info_.depend_files_.end()) {
-              // TODO: log err
+        if (file_meta->prop.purpose != SstPurpose::kEssenceSst) {
+          for (auto file_number : file_meta->prop.dependence) {
+            auto find = storage_info_.dependence_map_.find(file_number);
+            if (find == storage_info_.dependence_map_.end()) {
+              // TODO: log error
               continue;
             }
             // use const_cast to append into files, we will not nodify it
@@ -967,7 +934,7 @@ void Version::GetColumnFamilyMetaData(ColumnFamilyMetaData* cf_meta) {
           file->largest.user_key().ToString(),
           file->stats.num_reads_sampled.load(std::memory_order_relaxed),
           file->being_compacted});
-      files.back().num_entries = file->num_entries;
+      files.back().num_entries = file->prop.num_entries;
       files.back().num_deletions = file->num_deletions;
       level_size += file->fd.GetFileSize();
     }
@@ -1061,7 +1028,7 @@ void Version::AddIteratorsForLevel(const ReadOptions& read_options,
   bool should_sample = should_sample_file_read();
 
   auto* arena = merge_iter_builder->GetArena();
-  if (level == 0 || storage_info_.LevelFilesBrief(level).num_files == 1) {
+  if (level <= 0 || storage_info_.LevelFilesBrief(level).num_files == 1) {
     // Merge all level zero files together since they may overlap.
     // Or there is only one file ...
     for (size_t i = 0; i < storage_info_.LevelFilesBrief(level).num_files;
@@ -1069,7 +1036,7 @@ void Version::AddIteratorsForLevel(const ReadOptions& read_options,
       const auto& file = storage_info_.LevelFilesBrief(level).files[i];
       merge_iter_builder->AddIterator(cfd_->table_cache()->NewIterator(
           read_options, soptions, cfd_->internal_comparator(),
-          *file.file_metadata, storage_info_.depend_files(), range_del_agg,
+          *file.file_metadata, storage_info_.dependence_map(), range_del_agg,
           mutable_cf_options_.prefix_extractor.get(), nullptr,
           cfd_->internal_stats()->GetFileReadHist(level), false, arena,
           false /* skip_filters */, 0 /* level */));
@@ -1091,7 +1058,7 @@ void Version::AddIteratorsForLevel(const ReadOptions& read_options,
     merge_iter_builder->AddIterator(new (mem) LevelIterator(
         cfd_->table_cache(), read_options, soptions,
         cfd_->internal_comparator(), &storage_info_.LevelFilesBrief(level),
-        storage_info_.depend_files(),
+        storage_info_.dependence_map(),
         mutable_cf_options_.prefix_extractor.get(), should_sample_file_read(),
         cfd_->internal_stats()->GetFileReadHist(level),
         false /* for_compaction */, IsFilterSkipped(level), level,
@@ -1126,7 +1093,7 @@ Status Version::OverlapWithLevelIterator(const ReadOptions& read_options,
       }
       ScopedArenaIterator iter(cfd_->table_cache()->NewIterator(
           read_options, env_options, cfd_->internal_comparator(),
-          *file->file_metadata, storage_info_.depend_files(), &range_del_agg,
+          *file->file_metadata, storage_info_.dependence_map(), &range_del_agg,
           mutable_cf_options_.prefix_extractor.get(), nullptr,
           cfd_->internal_stats()->GetFileReadHist(level), false, &arena,
           false /* skip_filters */, 0 /* level */));
@@ -1141,7 +1108,7 @@ Status Version::OverlapWithLevelIterator(const ReadOptions& read_options,
     ScopedArenaIterator iter(new (mem) LevelIterator(
         cfd_->table_cache(), read_options, env_options,
         cfd_->internal_comparator(), &storage_info_.LevelFilesBrief(level),
-        storage_info_.depend_files(),
+        storage_info_.dependence_map(),
         mutable_cf_options_.prefix_extractor.get(), should_sample_file_read(),
         cfd_->internal_stats()->GetFileReadHist(level),
         false /* for_compaction */, IsFilterSkipped(level), level,
@@ -1190,7 +1157,7 @@ VersionStorageInfo::VersionStorageInfo(
       finalized_(false),
       is_pick_fail_(false),
       force_consistency_checks_(_force_consistency_checks) {
-  ++files_; // level -1 used for depend files
+  ++files_; // level -1 used for dependence files
   if (ref_vstorage != nullptr) {
     accumulated_file_size_ = ref_vstorage->accumulated_file_size_;
     accumulated_raw_key_size_ = ref_vstorage->accumulated_raw_key_size_;
@@ -1235,14 +1202,68 @@ Version::Version(ColumnFamilyData* column_family_data, VersionSet* vset,
       mutable_cf_options_(mutable_cf_options),
       version_number_(version_number) {}
 
-void Version::Get(const ReadOptions& read_options, const LookupKey& k,
-                  PinnableSlice* value, Status* status,
+Status Version::inplace_decode(LazySlice* slice, LazySliceRep* rep) const {
+  Slice user_key(reinterpret_cast<const char*>(rep->data[0]), rep->data[1]);
+  uint64_t sequence = rep->data[2];
+  const FileMetaData* file_metadata =
+      reinterpret_cast<FileMetaData*>(rep->data[3]);
+  bool value_found = false;
+  SequenceNumber context_seq;
+  GetContext get_context(cfd_->internal_comparator().user_comparator(), nullptr,
+                         cfd_->ioptions()->info_log, db_statistics_,
+                         GetContext::kNotFound, user_key, slice, &value_found,
+                         nullptr, nullptr, nullptr, env_, &context_seq);
+  IterKey iter_key;
+  iter_key.SetInternalKey(user_key, sequence, kValueTypeForSeek);
+  auto s = table_cache_->Get(ReadOptions(), cfd_->internal_comparator(),
+                             *file_metadata, storage_info_.dependence_map(),
+                             iter_key.GetInternalKey(), &get_context,
+                             mutable_cf_options_.prefix_extractor.get(),
+                             nullptr, true);
+  if (!s.ok()) {
+    return s;
+  }
+  if (context_seq != sequence || (get_context.State() != GetContext::kFound &&
+                                  get_context.State() != GetContext::kMerge)) {
+    if (get_context.State() == GetContext::kCorrupt) {
+      return std::move(get_context).CorruptReason();
+    } else {
+      char buffer[128];
+      snprintf(buffer, sizeof buffer,
+               "file number = %" PRIu64 "(%" PRIu64 "), sequence = %" PRIu64,
+               file_metadata->fd.GetNumber(), slice->file_number(), sequence);
+      return Status::Corruption("Separate value missing", buffer);
+    }
+  }
+  return Status::OK();
+}
+
+void Version::TransToCombined(const Slice& user_key, uint64_t sequence,
+                              LazySlice& value) const {
+  auto s = value.inplace_decode();
+  if (!s.ok()) {
+    value.reset(s);
+    return;
+  }
+  uint64_t file_number = SeparateHelper::DecodeFileNumber(value);
+  auto& dependence_map = storage_info_.dependence_map();
+  auto find = dependence_map.find(file_number);
+  if (find == dependence_map.end()) {
+    value.reset(Status::Corruption("Separate value dependence missing"));
+  } else {
+    value.reset(this, {reinterpret_cast<uint64_t>(user_key.data()),
+                       user_key.size(), sequence,
+                       reinterpret_cast<uint64_t>(find->second)}, file_number);
+  }
+}
+
+void Version::Get(const ReadOptions& read_options, const Slice& user_key,
+                  const LookupKey& k, LazySlice* value, Status* status,
                   MergeContext* merge_context,
                   SequenceNumber* max_covering_tombstone_seq, bool* value_found,
-                  bool* key_exists, SequenceNumber* seq, ReadCallback* callback,
-                  bool* is_blob) {
+                  bool* key_exists, SequenceNumber* seq,
+                  ReadCallback* callback) {
   Slice ikey = k.internal_key();
-  Slice user_key = k.user_key();
 
   assert(status->ok() || status->IsMergeInProgress());
 
@@ -1251,17 +1272,11 @@ void Version::Get(const ReadOptions& read_options, const LookupKey& k,
     *key_exists = true;
   }
 
-  PinnedIteratorsManager pinned_iters_mgr;
   GetContext get_context(
       user_comparator(), merge_operator_, info_log_, db_statistics_,
       status->ok() ? GetContext::kNotFound : GetContext::kMerge, user_key,
-      value, value_found, merge_context, max_covering_tombstone_seq, this->env_,
-      seq, merge_operator_ ? &pinned_iters_mgr : nullptr, callback, is_blob);
-
-  // Pin blocks that we read to hold merge operands
-  if (merge_operator_) {
-    pinned_iters_mgr.StartPinning();
-  }
+      value, value_found, merge_context, this, max_covering_tombstone_seq,
+      this->env_, seq, callback);
 
   FilePicker fp(
       storage_info_.files_, user_key, ikey, &storage_info_.level_files_brief_,
@@ -1285,7 +1300,7 @@ void Version::Get(const ReadOptions& read_options, const LookupKey& k,
     StopWatchNano timer(env_, timer_enabled /* auto_start */);
     *status = table_cache_->Get(
         read_options, *internal_comparator(), *f->file_metadata,
-        storage_info_.depend_files(), ikey, &get_context,
+        storage_info_.dependence_map(), ikey, &get_context,
         mutable_cf_options_.prefix_extractor.get(),
         cfd_->internal_stats()->GetFileReadHist(fp.GetHitFileLevel()),
         IsFilterSkipped(static_cast<int>(fp.GetHitFileLevel()),
@@ -1328,13 +1343,7 @@ void Version::Get(const ReadOptions& read_options, const LookupKey& k,
         *status = Status::NotFound();
         return;
       case GetContext::kCorrupt:
-        *status = Status::Corruption("corrupted key for ", user_key);
-        return;
-      case GetContext::kBlobIndex:
-        ROCKS_LOG_ERROR(info_log_, "Encounter unexpected blob index.");
-        *status = Status::NotSupported(
-            "Encounter unexpected blob index. Please open DB with "
-            "rocksdb::blob_db::BlobDB instead.");
+        *status = std::move(get_context).CorruptReason();
         return;
     }
     f = fp.GetNextFile();
@@ -1351,13 +1360,11 @@ void Version::Get(const ReadOptions& read_options, const LookupKey& k,
     }
     // merge_operands are in saver and we hit the beginning of the key history
     // do a final merge of nullptr and operands;
-    std::string* str_value = value != nullptr ? value->GetSelf() : nullptr;
     *status = MergeHelper::TimedFullMerge(
         merge_operator_, user_key, nullptr, merge_context->GetOperands(),
-        str_value, info_log_, db_statistics_, env_,
-        nullptr /* result_operand */, true);
-    if (LIKELY(value != nullptr)) {
-      value->PinSelf();
+        value, info_log_, db_statistics_, env_, true);
+    if (status->ok()) {
+      value->pin_resource();
     }
   } else {
     if (key_exists != nullptr) {
@@ -1365,6 +1372,51 @@ void Version::Get(const ReadOptions& read_options, const LookupKey& k,
     }
     *status = Status::NotFound(); // Use an empty error message for speed
   }
+}
+
+void Version::GetKey(const Slice& user_key, const Slice& ikey, Status* status,
+                     ValueType* type, SequenceNumber* seq, LazySlice* value) {
+  bool value_found;
+  GetContext get_context(cfd_->internal_comparator().user_comparator(), nullptr,
+                         cfd_->ioptions()->info_log, db_statistics_,
+                         GetContext::kNotFound, user_key, value, &value_found,
+                         nullptr, nullptr, nullptr, env_, seq);
+  ReadOptions options;
+
+  FilePicker fp(
+      storage_info_.files_, user_key, ikey, &storage_info_.level_files_brief_,
+      storage_info_.num_non_empty_levels_, &storage_info_.file_indexer_,
+      user_comparator(), internal_comparator());
+  FdWithKeyRange* f = fp.GetNextFile();
+
+  while (f != nullptr) {
+    *status = table_cache_->Get(
+        options, *internal_comparator(), *f->file_metadata,
+        storage_info_.dependence_map(), ikey, &get_context,
+        mutable_cf_options_.prefix_extractor.get(),
+        nullptr, true, fp.GetCurrentLevel());
+    if (!status->ok()) {
+      return;
+    }
+    switch (get_context.State()) {
+      case GetContext::kNotFound:
+        break;
+      case GetContext::kMerge:
+        *type = get_context.is_index() ? kTypeMergeIndex : kTypeMerge;
+        return;
+      case GetContext::kFound:
+        *type = get_context.is_index() ? kTypeValueIndex : kTypeValue;
+        return;
+      case GetContext::kDeleted:
+        *status = Status::NotFound();
+        return;
+      case GetContext::kCorrupt:
+        *status = std::move(get_context).CorruptReason();
+        return;
+    }
+    f = fp.GetNextFile();
+  }
+  *status = Status::NotFound();
 }
 
 bool Version::IsFilterSkipped(int level, bool is_file_last_in_level) {
@@ -1412,7 +1464,11 @@ bool Version::MaybeInitializeFileMetaData(FileMetaData* file_meta) {
     return false;
   }
   if (tp.get() == nullptr) return false;
-  file_meta->num_entries = tp->num_entries;
+  if (file_meta->prop.num_entries == 0) {
+    file_meta->prop.num_entries = tp->num_entries;
+  } else {
+    assert(file_meta->prop.num_entries == tp->num_entries);
+  }
   file_meta->num_deletions = tp->num_deletions;
   file_meta->raw_value_size = tp->raw_value_size;
   file_meta->raw_key_size = tp->raw_key_size;
@@ -1426,11 +1482,11 @@ void VersionStorageInfo::UpdateAccumulatedStats(FileMetaData* file_meta) {
   accumulated_raw_key_size_ += file_meta->raw_key_size;
   accumulated_raw_value_size_ += file_meta->raw_value_size;
   accumulated_num_non_deletions_ +=
-      file_meta->num_entries - file_meta->num_deletions;
+      file_meta->prop.num_entries - file_meta->num_deletions;
   accumulated_num_deletions_ += file_meta->num_deletions;
 
   current_num_non_deletions_ +=
-      file_meta->num_entries - file_meta->num_deletions;
+      file_meta->prop.num_entries - file_meta->num_deletions;
   current_num_deletions_ += file_meta->num_deletions;
   current_num_samples_++;
 }
@@ -1438,7 +1494,7 @@ void VersionStorageInfo::UpdateAccumulatedStats(FileMetaData* file_meta) {
 void VersionStorageInfo::RemoveCurrentStats(FileMetaData* file_meta) {
   if (file_meta->init_stats_from_file) {
     current_num_non_deletions_ -=
-        file_meta->num_entries - file_meta->num_deletions;
+        file_meta->prop.num_entries - file_meta->num_deletions;
     current_num_deletions_ -= file_meta->num_deletions;
     current_num_samples_--;
   }
@@ -1517,16 +1573,16 @@ void VersionStorageInfo::ComputeCompensatedSizes() {
         // size of deletion entries in a stable workload, the deletion
         // compensation logic might introduce unwanted effet which changes the
         // shape of LSM tree.
-        if (f->sst_purpose == 0) {
-          if (f->num_deletions * 2 >= f->num_entries) {
-            compensated_file_size += (f->num_deletions * 2 - f->num_entries) *
-                                     average_value_size *
-                                     kDeletionWeightOnCompaction;
+        if (f->prop.purpose == 0) {
+          if (f->num_deletions * 2 >= f->prop.num_entries) {
+            compensated_file_size +=
+                (f->num_deletions * 2 - f->prop.num_entries) *
+                average_value_size * kDeletionWeightOnCompaction;
           }
         } else {
-          for (auto depend : f->sst_depend) {
-            auto find = depend_files_.find(depend);
-            if (find == depend_files_.end()) {
+          for (auto file_number : f->prop.dependence) {
+            auto find = dependence_map_.find(file_number);
+            if (find == dependence_map_.end()) {
               // TODO log error
               continue;
             }
@@ -1873,9 +1929,26 @@ void VersionStorageInfo::AddFile(int level, FileMetaData* f, Logger* info_log) {
   f->refs++;
   level_files->push_back(f);
   if (level == -1) {
-    depend_files_.emplace(f->fd.GetNumber(), f);
-  } else if (f->sst_purpose != 0) {
-    has_space_amplification_.emplace(level);
+    dependence_map_.emplace(f->fd.GetNumber(), f);
+    for (auto file_number : f->prop.inheritance_chain) {
+      assert(dependence_map_.count(file_number) == 0);
+      dependence_map_.emplace(file_number, f);
+    }
+  } else {
+    if (f->prop.purpose != 0) {
+      has_space_amplification_.emplace(level);
+    }
+  }
+}
+
+void VersionStorageInfo::ShrinkDependenceMap(
+    void* arg, bool (*exists)(void*, FileMetaData*)) {
+  for (auto it = dependence_map_.begin(); it != dependence_map_.end(); ) {
+    if (exists(arg, it->second)) {
+      ++it;
+    } else {
+      it = dependence_map_.erase(it);
+    }
   }
 }
 
@@ -2867,6 +2940,7 @@ VersionSet::VersionSet(const std::string& dbname,
       prev_log_number_(0),
       current_version_number_(0),
       manifest_file_size_(0),
+      manifest_edit_count_(0),
       seq_per_batch_(seq_per_batch),
       env_options_(storage_options) {}
 
@@ -3072,7 +3146,8 @@ Status VersionSet::ProcessManifestWrites(
 
   assert(pending_manifest_file_number_ == 0);
   if (!descriptor_log_ ||
-      manifest_file_size_ > db_options_->max_manifest_file_size) {
+      manifest_file_size_ > db_options_->max_manifest_file_size ||
+      manifest_edit_count_ > db_options_->max_manifest_edit_count) {
     pending_manifest_file_number_ = NewFileNumber();
     batch_edits.back()->SetNextFile(next_file_number_.load());
     new_descriptor_log = true;
@@ -3245,6 +3320,11 @@ Status VersionSet::ProcessManifestWrites(
     }
     manifest_file_number_ = pending_manifest_file_number_;
     manifest_file_size_ = new_manifest_file_size;
+    if (new_descriptor_log) {
+      manifest_edit_count_ = 0;
+    } else {
+      manifest_edit_count_ += batch_edits.size();
+    }
     prev_log_number_ = first_writer.edit_list.front()->prev_log_number_;
   } else {
     std::string version_edits;
@@ -3599,6 +3679,7 @@ Status VersionSet::Recover(
         new SequentialFileReader(std::move(manifest_file), manifest_filename));
   }
   uint64_t current_manifest_file_size;
+  uint64_t current_manifest_edit_count = 0;
   s = env_->GetFileSize(manifest_filename, &current_manifest_file_size);
   if (!s.ok()) {
     return s;
@@ -3647,6 +3728,7 @@ Status VersionSet::Recover(
       if (!s.ok()) {
         break;
       }
+      ++current_manifest_edit_count;
 
       if (edit.is_in_atomic_group_) {
         if (replay_buffer.empty()) {
@@ -3784,6 +3866,7 @@ Status VersionSet::Recover(
     }
 
     manifest_file_size_ = current_manifest_file_size;
+    manifest_edit_count_ = current_manifest_edit_count;
     next_file_number_.store(next_file + 1);
     last_allocated_sequence_ = last_sequence;
     last_published_sequence_ = last_sequence;
@@ -4249,8 +4332,7 @@ Status VersionSet::WriteSnapshot(log::Writer* log) {
           edit.AddFile(level, f->fd.GetNumber(), f->fd.GetPathId(),
                        f->fd.GetFileSize(), f->smallest, f->largest,
                        f->fd.smallest_seqno, f->fd.largest_seqno,
-                       f->marked_for_compaction, f->sst_purpose,
-                       f->sst_depend);
+                       f->num_antiquation, f->marked_for_compaction, f->prop);
         }
       }
       edit.SetLogNumber(cfd->GetLogNumber());
@@ -4363,7 +4445,7 @@ uint64_t VersionSet::ApproximateSize(Version* v, const FdWithKeyRange& f,
                                      const FileMetaData* file_meta,
                                      const FileDescriptor& fd) {
     uint64_t result = 0;
-    if (file_meta->sst_purpose == 0) {
+    if (file_meta->prop.purpose == 0) {
       auto& icomp = v->cfd_->internal_comparator();
       if (icomp.Compare(file_meta->largest.Encode(), key) <= 0) {
         // Entire file is before "key", so just add the file size
@@ -4391,10 +4473,10 @@ uint64_t VersionSet::ApproximateSize(Version* v, const FdWithKeyRange& f,
         }
       }
     } else {
-      auto& depend_files = v->storage_info()->depend_files();
-      for (auto depend : file_meta->sst_depend) {
-        auto find = depend_files.find(depend);
-        if (find == depend_files.end()) {
+      auto& dependence_map = v->storage_info()->dependence_map();
+      for (auto file_number : file_meta->prop.dependence) {
+        auto find = dependence_map.find(file_number);
+        if (find == dependence_map.end()) {
           // TODO log error
           continue;
         }
@@ -4465,20 +4547,20 @@ InternalIterator* VersionSet::MakeInputIterator(
   // Level-0 files have to be merged together.  For other levels,
   // we will make a concatenating iterator per level.
   // TODO(opt): use concatenating iterator for level-0 if there is no overlap
-  const size_t space = (c->level() == 0 ? c->input_levels(0)->num_files +
+  const size_t space = (c->level() <= 0 ? c->input_levels(0)->num_files +
                                               c->num_input_levels() - 1
                                         : c->num_input_levels());
   InternalIterator** list = new InternalIterator* [space];
-  auto& depend_files = c->input_version()->storage_info()->depend_files();
+  auto& dependence_map = c->input_version()->storage_info()->dependence_map();
   size_t num = 0;
   for (size_t which = 0; which < c->num_input_levels(); which++) {
     if (c->input_levels(which)->num_files != 0) {
-      if (c->level(which) == 0 || c->input_levels(which)->num_files == 1) {
+      if (c->level(which) <= 0 || c->input_levels(which)->num_files == 1) {
         const LevelFilesBrief* flevel = c->input_levels(which);
         for (size_t i = 0; i < flevel->num_files; i++) {
           list[num++] = cfd->table_cache()->NewIterator(
               read_options, env_options_compactions, cfd->internal_comparator(),
-              *flevel->files[i].file_metadata, depend_files, range_del_agg,
+              *flevel->files[i].file_metadata, dependence_map, range_del_agg,
               c->mutable_cf_options()->prefix_extractor.get(),
               nullptr /* table_reader_ptr */,
               nullptr /* no per level latency histogram */,
@@ -4489,7 +4571,7 @@ InternalIterator* VersionSet::MakeInputIterator(
         // Create concatenating iterator for the files from this level
         list[num++] = new LevelIterator(
             cfd->table_cache(), read_options, env_options_compactions,
-            cfd->internal_comparator(), c->input_levels(which), depend_files,
+            cfd->internal_comparator(), c->input_levels(which), dependence_map,
             c->mutable_cf_options()->prefix_extractor.get(),
             false /* should_sample */,
             nullptr /* no per level latency histogram */,
@@ -4511,6 +4593,9 @@ InternalIterator* VersionSet::MakeInputIterator(
 // in the current version
 bool VersionSet::VerifyCompactionFileConsistency(Compaction* c) {
 #ifndef NDEBUG
+  if (c->compaction_type() == kGarbageCollection) {
+    return true;
+  }
   Version* version = c->column_family_data()->current();
   const VersionStorageInfo* vstorage = version->storage_info();
   if (c->input_version() != version) {
@@ -4608,7 +4693,7 @@ void VersionSet::GetLiveFilesMetaData(std::vector<LiveFileMetaData>* metadata) {
         filemetadata.num_reads_sampled = file->stats.num_reads_sampled.load(
             std::memory_order_relaxed);
         filemetadata.being_compacted = file->being_compacted;
-        filemetadata.num_entries = file->num_entries;
+        filemetadata.num_entries = file->prop.num_entries;
         filemetadata.num_deletions = file->num_deletions;
         metadata->push_back(filemetadata);
       }

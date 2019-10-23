@@ -8,7 +8,6 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #include "table/two_level_iterator.h"
-#include "db/pinned_iterators_manager.h"
 #include "db/version_edit.h"
 #include "rocksdb/options.h"
 #include "rocksdb/table.h"
@@ -60,13 +59,6 @@ class TwoLevelIndexIterator : public InternalIteratorBase<BlockHandle> {
       return status_;
     }
   }
-  virtual uint64_t FileNumber() const override {
-    return second_level_iter_.FileNumber();
-  }
-  virtual void SetPinnedItersMgr(
-      PinnedIteratorsManager* /*pinned_iters_mgr*/) override {}
-  virtual bool IsKeyPinned() const override { return false; }
-  virtual bool IsValuePinned() const override { return false; }
 
  private:
   void SaveError(const Status& s) {
@@ -208,8 +200,9 @@ void TwoLevelIndexIterator::InitDataBlock() {
 
 class MapSstIterator final : public InternalIterator {
  private:
-  const FileMetaData& file_meta_;
+  const FileMetaData* file_meta_;
   InternalIterator* first_level_iter_;
+  LazySlice first_level_value_;
   bool is_backword_;
   Status status_;
   IteratorCache iterator_cache_;
@@ -257,7 +250,12 @@ class MapSstIterator final : public InternalIterator {
     }
     // Manual inline MapSstElement::Decode
     const char* err_msg = "Invalid MapSstElement";
-    Slice map_input = first_level_iter_->value();
+    first_level_value_ = first_level_iter_->value();
+    status_ = first_level_value_.inplace_decode();
+    if (!status_.ok()) {
+      return kInitFirstIterInvalid;
+    }
+    Slice map_input = first_level_value_;
     link_.clear();
     largest_key_ = first_level_iter_->key();
     uint64_t flags;
@@ -281,8 +279,9 @@ class MapSstIterator final : public InternalIterator {
         status_ = Status::Corruption(err_msg);
         return kInitFirstIterInvalid;
       }
-      assert(std::binary_search(file_meta_.sst_depend.begin(),
-                                file_meta_.sst_depend.end(), link_[i]));
+      assert(file_meta_ == nullptr ||
+             std::binary_search(file_meta_->prop.dependence.begin(),
+                                file_meta_->prop.dependence.end(), link_[i]));
     }
     return kInitFirstIterOK;
   }
@@ -290,6 +289,7 @@ class MapSstIterator final : public InternalIterator {
   bool InitFirstLevelIter() {
     auto result = TryInitFirstLevelIter();
     while (result == kInitFirstIterEmpty) {
+      first_level_value_.clear();
       if (is_backword_) {
         first_level_iter_->Prev();
       } else {
@@ -362,27 +362,31 @@ class MapSstIterator final : public InternalIterator {
   }
 
  public:
-  MapSstIterator(const FileMetaData& file_meta, InternalIterator* iter,
-                 const DependFileMap& depend_files,
+  MapSstIterator(const FileMetaData* file_meta, InternalIterator* iter,
+                 const DependenceMap& dependence_map,
                  const InternalKeyComparator& icomp, void* create_arg,
                  const IteratorCache::CreateIterCallback& create)
       : file_meta_(file_meta),
         first_level_iter_(iter),
         is_backword_(false),
-        iterator_cache_(depend_files, create_arg, create),
+        iterator_cache_(dependence_map, create_arg, create),
         include_smallest_(false),
         include_largest_(false),
         min_heap_(icomp) {
-    if (file_meta_.sst_purpose != kMapSst) {
+    if (file_meta != nullptr && file_meta_->prop.purpose != kMapSst) {
       abort();
     }
   }
 
-  ~MapSstIterator() { min_heap_.~BinaryHeap(); }
+  ~MapSstIterator() {
+    first_level_value_.clear();
+    min_heap_.~BinaryHeap();
+  }
 
   virtual bool Valid() const override { return !min_heap_.empty(); }
   virtual void SeekToFirst() override {
     is_backword_ = false;
+    first_level_value_.clear();
     first_level_iter_->SeekToFirst();
     if (InitFirstLevelIter()) {
       InitSecondLevelMinHeap(smallest_key_, include_smallest_);
@@ -392,6 +396,7 @@ class MapSstIterator final : public InternalIterator {
   }
   virtual void SeekToLast() override {
     is_backword_ = true;
+    first_level_value_.clear();
     first_level_iter_->SeekToLast();
     if (InitFirstLevelIter()) {
       InitSecondLevelMaxHeap(largest_key_, include_largest_);
@@ -401,6 +406,7 @@ class MapSstIterator final : public InternalIterator {
   }
   virtual void Seek(const Slice& target) override {
     is_backword_ = false;
+    first_level_value_.clear();
     first_level_iter_->Seek(target);
     if (!InitFirstLevelIter()) {
       assert(min_heap_.empty());
@@ -414,6 +420,7 @@ class MapSstIterator final : public InternalIterator {
       seek_target = smallest_key_;
       include = include_smallest_;
     } else if (icomp.Compare(target, largest_key_) == 0 && !include_largest_) {
+      first_level_value_.clear();
       first_level_iter_->Next();
       if (!InitFirstLevelIter()) {
         assert(min_heap_.empty());
@@ -424,6 +431,7 @@ class MapSstIterator final : public InternalIterator {
     }
     InitSecondLevelMinHeap(seek_target, include);
     if (min_heap_.empty()) {
+      first_level_value_.clear();
       first_level_iter_->Next();
       if (InitFirstLevelIter()) {
         InitSecondLevelMinHeap(smallest_key_, include_smallest_);
@@ -436,6 +444,7 @@ class MapSstIterator final : public InternalIterator {
   }
   virtual void SeekForPrev(const Slice& target) override {
     is_backword_ = true;
+    first_level_value_.clear();
     first_level_iter_->Seek(target);
     if (!InitFirstLevelIter()) {
       MapSstIterator::SeekToLast();
@@ -446,6 +455,7 @@ class MapSstIterator final : public InternalIterator {
     bool include = true;
     // include_smallest ? cmp_result > 0 : cmp_result >= 0
     if (icomp.Compare(smallest_key_, target) >= include_smallest_) {
+      first_level_value_.clear();
       first_level_iter_->Prev();
       if (!InitFirstLevelIter()) {
         assert(max_heap_.empty());
@@ -458,6 +468,7 @@ class MapSstIterator final : public InternalIterator {
     }
     InitSecondLevelMaxHeap(seek_target, include);
     if (max_heap_.empty()) {
+      first_level_value_.clear();
       first_level_iter_->Prev();
       if (InitFirstLevelIter()) {
         InitSecondLevelMaxHeap(largest_key_, include_largest_);
@@ -489,6 +500,7 @@ class MapSstIterator final : public InternalIterator {
     if (min_heap_.empty() ||
         icomp.Compare(min_heap_.top().key, largest_key_) >= include_largest_) {
       // out of largest bound
+      first_level_value_.clear();
       first_level_iter_->Next();
       if (InitFirstLevelIter()) {
         InitSecondLevelMinHeap(smallest_key_, include_smallest_);
@@ -521,6 +533,7 @@ class MapSstIterator final : public InternalIterator {
         icomp.Compare(smallest_key_, max_heap_.top().key) >=
             include_smallest_) {
       // out of smallest bound
+      first_level_value_.clear();
       first_level_iter_->Prev();
       if (InitFirstLevelIter()) {
         InitSecondLevelMaxHeap(largest_key_, include_largest_);
@@ -531,25 +544,15 @@ class MapSstIterator final : public InternalIterator {
       assert(IsInRange());
     }
   }
-  virtual Slice key() const override { return min_heap_.top().key; }
-  virtual Slice value() const override {
+  virtual Slice key() const override {
+    assert(Valid());
+    return min_heap_.top().key;
+  }
+  virtual LazySlice value() const override {
+    assert(Valid());
     return min_heap_.top().iter->value();
   }
   virtual Status status() const override { return status_; }
-  virtual uint64_t FileNumber() const override {
-    return !min_heap_.empty() ? min_heap_.top().iter->FileNumber()
-                              : uint64_t(-1);
-  }
-  virtual void SetPinnedItersMgr(
-      PinnedIteratorsManager* pinned_iters_mgr) override {
-    iterator_cache_.SetPinnedItersMgr(pinned_iters_mgr);
-  }
-  virtual bool IsKeyPinned() const override {
-    return !min_heap_.empty() && min_heap_.top().iter->IsKeyPinned();
-  }
-  virtual bool IsValuePinned() const override {
-    return !min_heap_.empty() && min_heap_.top().iter->IsValuePinned();
-  }
 };
 
 }  // namespace
@@ -561,18 +564,18 @@ InternalIteratorBase<BlockHandle>* NewTwoLevelIterator(
 }
 
 InternalIterator* NewMapSstIterator(
-    const FileMetaData& file_meta, InternalIterator* mediate_sst_iter,
-    const DependFileMap& depend_files, const InternalKeyComparator& icomp,
+    const FileMetaData* file_meta, InternalIterator* mediate_sst_iter,
+    const DependenceMap& dependence_map, const InternalKeyComparator& icomp,
     void* callback_arg, const IteratorCache::CreateIterCallback& create_iter,
     Arena* arena) {
-  assert(file_meta.sst_purpose == kMapSst);
+  assert(file_meta == nullptr || file_meta->prop.purpose == kMapSst);
   if (arena == nullptr) {
-    return new MapSstIterator(file_meta, mediate_sst_iter, depend_files, icomp,
-                              callback_arg, create_iter);
+    return new MapSstIterator(file_meta, mediate_sst_iter, dependence_map,
+                              icomp, callback_arg, create_iter);
   } else {
     void* buffer = arena->AllocateAligned(sizeof(MapSstIterator));
     return new (buffer)
-        MapSstIterator(file_meta, mediate_sst_iter, depend_files, icomp,
+        MapSstIterator(file_meta, mediate_sst_iter, dependence_map, icomp,
                        callback_arg, create_iter);
   }
 }

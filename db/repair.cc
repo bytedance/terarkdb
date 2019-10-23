@@ -81,6 +81,7 @@
 #include "rocksdb/options.h"
 #include "rocksdb/write_buffer_manager.h"
 #include "table/scoped_arena_iterator.h"
+#include "util/c_style_callback.h"
 #include "util/file_reader_writer.h"
 #include "util/filename.h"
 #include "util/string_util.h"
@@ -410,24 +411,30 @@ class Repairer {
       meta.fd = FileDescriptor(next_file_number_++, 0, 0);
       ReadOptions ro;
       ro.total_order_seek = true;
-      Arena arena;
-      ScopedArenaIterator iter(mem->NewIterator(ro, &arena));
       int64_t _current_time = 0;
       status = env_->GetCurrentTime(&_current_time);  // ignore error
       const uint64_t current_time = static_cast<uint64_t>(_current_time);
       SnapshotChecker* snapshot_checker = DisableGCSnapshotChecker::Instance();
 
       auto write_hint = cfd->CalculateSSTWriteHint(0);
-      std::vector<std::unique_ptr<FragmentedRangeTombstoneIterator>>
-          range_del_iters;
-      auto range_del_iter =
-          mem->NewRangeTombstoneIterator(ro, kMaxSequenceNumber);
-      if (range_del_iter != nullptr) {
-        range_del_iters.emplace_back(range_del_iter);
-      }
+      auto get_arena_input_iter = [&](Arena& arena) {
+        return mem->NewIterator(ro, &arena);
+      };
+      auto get_range_del_iters = [&] {
+        std::vector<std::unique_ptr<FragmentedRangeTombstoneIterator>>
+            range_del_iters;
+        auto range_del_iter =
+            mem->NewRangeTombstoneIterator(ro, kMaxSequenceNumber);
+        if (range_del_iter != nullptr) {
+          range_del_iters.emplace_back(range_del_iter);
+        }
+        return range_del_iters;
+      };
       status = BuildTable(
           dbname_, env_, *cfd->ioptions(), *cfd->GetLatestMutableCFOptions(),
-          env_options_, table_cache_, iter.get(), std::move(range_del_iters),
+          env_options_, table_cache_,
+          c_style_callback(get_arena_input_iter), &get_arena_input_iter,
+          c_style_callback(get_range_del_iters), &get_range_del_iters,
           &meta, cfd->internal_comparator(),
           cfd->int_tbl_prop_collector_factories(), cfd->GetID(), cfd->GetName(),
           {}, kMaxSequenceNumber, snapshot_checker, kNoCompression,
@@ -452,7 +459,7 @@ class Repairer {
   }
 
   void ExtractMetaData() {
-    DependFileMap depend_files;
+    DependenceMap dependence_map;
     std::map<uint64_t, TableInfo*> mediate_sst; // map or link sst
     // make sure tables_ enouth, so we can hold ptr of elements
     tables_.reserve(table_fds_.size());
@@ -471,8 +478,8 @@ class Repairer {
         ArchiveFile(fname);
       } else {
         tables_.push_back(t);
-        depend_files.emplace(t.meta.fd.GetNumber(), &tables_.back().meta);
-        if (t.meta.sst_purpose != 0) {
+        dependence_map.emplace(t.meta.fd.GetNumber(), &tables_.back().meta);
+        if (t.meta.prop.purpose != 0) {
           mediate_sst.emplace(t.meta.fd.GetNumber(), &tables_.back());
         }
       }
@@ -489,9 +496,9 @@ class Repairer {
         enum {
           kOK, kError, kRetry,
         } result = kOK;
-        for (auto file_number : t.meta.sst_depend) {
-          auto find = depend_files.find(file_number);
-          if (find == depend_files.end()) {
+        for (auto file_number : t.meta.prop.dependence) {
+          auto find = dependence_map.find(file_number);
+          if (find == dependence_map.end()) {
             result = kError;
             break;
           }
@@ -603,10 +610,10 @@ class Repairer {
     if (status.ok()) {
       // Use empty depend files to disable map or link sst forward calls.
       // P.S. depend files in VersionStorage has not build yet ...
-      DependFileMap empty_depend_files;
+      DependenceMap empty_dependence_map;
       InternalIterator* iter = table_cache_->NewIterator(
           ReadOptions(), env_options_, cfd->internal_comparator(), t->meta,
-          empty_depend_files, nullptr /* range_del_agg */,
+          empty_dependence_map, nullptr /* range_del_agg */,
           cfd->GetLatestMutableCFOptions()->prefix_extractor.get());
       bool empty = true;
       ParsedInternalKey parsed;
@@ -644,8 +651,12 @@ class Repairer {
                      t->meta.fd.GetNumber(), counter,
                      status.ToString().c_str());
 
-      t->meta.sst_purpose = GetSstPurpose(props->user_collected_properties);
-      t->meta.sst_depend = GetSstDepend(props->user_collected_properties);
+      t->meta.prop.num_entries = props->num_entries;
+      t->meta.prop.purpose = props->purpose;
+      t->meta.prop.max_read_amp = props->max_read_amp;
+      t->meta.prop.read_amp = props->read_amp;
+      t->meta.prop.dependence = props->dependence;
+      t->meta.prop.inheritance_chain = props->inheritance_chain;
     }
     return status;
   }
@@ -672,25 +683,26 @@ class Repairer {
       edit.SetNextFile(next_file_number_);
       edit.SetColumnFamily(cfd->GetID());
 
-      std::set<uint64_t> depend_set;
+      std::set<uint64_t> dependence_set;
       for (const auto* table : cf_id_and_tables.second) {
-        if (table->meta.sst_purpose != 0) {
-          auto& sst_depend = table->meta.sst_depend;
-          depend_set.insert(sst_depend.begin(), sst_depend.end());
+        if (table->meta.prop.purpose != 0) {
+          auto& dependence = table->meta.prop.dependence;
+          dependence_set.insert(dependence.begin(), dependence.end());
         }
       }
       // TODO(opt): separate out into multiple levels
       for (const auto* table : cf_id_and_tables.second) {
         int level = 0;
-        if (depend_set.count(table->meta.fd.GetNumber()) > 0) {
+        if (dependence_set.count(table->meta.fd.GetNumber()) > 0) {
           // This sst should insert into depend level
           level = -1;
         }
-        edit.AddFile(level, table->meta.fd.GetNumber(), table->meta.fd.GetPathId(),
-                     table->meta.fd.GetFileSize(), table->meta.smallest,
-                     table->meta.largest, table->min_sequence,
-                     table->max_sequence, table->meta.marked_for_compaction,
-                     table->meta.sst_purpose, table->meta.sst_depend);
+        edit.AddFile(level, table->meta.fd.GetNumber(),
+                     table->meta.fd.GetPathId(), table->meta.fd.GetFileSize(),
+                     table->meta.smallest, table->meta.largest,
+                     table->min_sequence, table->max_sequence,
+                     0 /* num_antiquation */, table->meta.marked_for_compaction,
+                     table->meta.prop);
       }
       assert(next_file_number_ > 0);
       vset_.MarkFileNumberUsed(next_file_number_ - 1);

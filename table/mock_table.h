@@ -11,6 +11,7 @@
 #include <set>
 #include <string>
 #include <utility>
+#include <db/version_edit.h>
 
 #include "util/kv_map.h"
 #include "port/port.h"
@@ -100,7 +101,7 @@ class MockTableIterator : public InternalIterator {
 
   Slice key() const override { return Slice(itr_->first); }
 
-  Slice value() const override { return Slice(itr_->second); }
+  LazySlice value() const override { return LazySlice(itr_->second); }
 
   Status status() const override { return Status::OK(); }
 
@@ -129,9 +130,16 @@ class MockTableBuilder : public TableBuilder {
   // Return non-ok iff some error has been detected.
   Status status() const override { return Status::OK(); }
 
-  Status Finish() override {
+  Status Finish(const TablePropertyCache* prop) override {
     MutexLock lock_guard(&file_system_->mutex);
     file_system_->files.insert({id_, table_});
+    if (prop != nullptr) {
+      prop_.purpose = prop->purpose;
+      prop_.max_read_amp = prop->max_read_amp;
+      prop_.read_amp = prop->read_amp;
+      prop_.dependence = prop->dependence;
+      prop_.inheritance_chain = prop->inheritance_chain;
+    }
     return Status::OK();
   }
 
@@ -149,6 +157,7 @@ class MockTableBuilder : public TableBuilder {
   uint32_t id_;
   MockTableFileSystem* file_system_;
   stl_wrappers::KVMap table_;
+  TablePropertyCache prop_;
 };
 
 class MockTableFactory : public TableFactory {

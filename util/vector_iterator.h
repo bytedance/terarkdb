@@ -12,7 +12,7 @@
 namespace rocksdb {
 
 // Iterator over a vector of keys/values
-class VectorIterator : public InternalIterator {
+class VectorIterator : public InternalIteratorBase<Slice> {
  public:
   VectorIterator(std::vector<std::string> keys, std::vector<std::string> values,
                  const InternalKeyComparator* icmp)
@@ -64,9 +64,6 @@ class VectorIterator : public InternalIterator {
   }
 
   virtual Status status() const override { return Status::OK(); }
-
-  virtual bool IsKeyPinned() const override { return true; }
-  virtual bool IsValuePinned() const override { return true; }
 
  private:
   struct IndexedKeyComparator {

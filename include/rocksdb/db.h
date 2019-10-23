@@ -40,9 +40,9 @@
 #endif
 
 namespace boost {
-    namespace fibers {
-        template<typename> class future; // forward declaration
-    }
+namespace fibers {
+template<typename> class future; // forward declaration
+}
 }
 
 namespace rocksdb {
@@ -359,17 +359,16 @@ class DB {
                             ColumnFamilyHandle* column_family, const Slice& key,
                             std::string* value) {
     assert(value != nullptr);
-    PinnableSlice pinnable_val(value);
-    assert(!pinnable_val.IsPinned());
-    auto s = Get(options, column_family, key, &pinnable_val);
-    if (s.ok() && pinnable_val.IsPinned()) {
-      value->assign(pinnable_val.data(), pinnable_val.size());
-    }  // else value is already assigned
+    LazySlice lazy_val(value);
+    auto s = Get(options, column_family, key, &lazy_val);
+    if (s.ok()) {
+      s = lazy_val.save_to_buffer(value);
+    }
     return s;
   }
   virtual Status Get(const ReadOptions& options,
                      ColumnFamilyHandle* column_family, const Slice& key,
-                     PinnableSlice* value) = 0;
+                     LazySlice* value) = 0;
   virtual Status Get(const ReadOptions& options, const Slice& key, std::string* value) {
     return Get(options, DefaultColumnFamily(), key, value);
   }
@@ -377,19 +376,35 @@ class DB {
   static void SubmitAsyncTask(std::function<void()>);
   static void SubmitAsyncTask(std::function<void()>, size_t concurrency);
   static bool TrySubmitAsyncTask(const std::function<void()>&);
-  static bool TrySubmitAsyncTask(const std::function<void()>&, size_t concurrency);
+  static bool TrySubmitAsyncTask(const std::function<void()>&,
+                                 size_t concurrency);
 
-  typedef std::function<void(Status&&, std::string&& key, std::string* value)> GetAsyncCallback;
-  void GetAsync(const ReadOptions&, ColumnFamilyHandle*, std::string key, std::string* value, GetAsyncCallback);
-  void GetAsync(const ReadOptions&, std::string key, std::string* value, GetAsyncCallback);
-  void GetAsync(const ReadOptions&, ColumnFamilyHandle*, std::string key, GetAsyncCallback);
+  typedef std::function<void(Status&&, std::string&& key,
+                             std::string* value)> GetAsyncCallback;
+
+  void GetAsync(const ReadOptions&, ColumnFamilyHandle*, std::string key,
+                std::string* value, GetAsyncCallback);
+  void GetAsync(const ReadOptions&, std::string key, std::string* value,
+                GetAsyncCallback);
+  void GetAsync(const ReadOptions&, ColumnFamilyHandle*, std::string key,
+                GetAsyncCallback);
   void GetAsync(const ReadOptions&, std::string key, GetAsyncCallback);
+
   static int WaitAsync(int timeout_us);
   static int WaitAsync();
-  future<std::tuple<Status, std::string, std::string*> > GetFuture(const ReadOptions&, ColumnFamilyHandle*, std::string key, std::string* value);
-  future<std::tuple<Status, std::string, std::string*> > GetFuture(const ReadOptions&, std::string key, std::string* value);
-  future<std::tuple<Status, std::string, std::string > > GetFuture(const ReadOptions&, ColumnFamilyHandle*, std::string key);
-  future<std::tuple<Status, std::string, std::string > > GetFuture(const ReadOptions&, std::string key);
+
+  future<std::tuple<Status, std::string, std::string*>>
+  GetFuture(const ReadOptions&, ColumnFamilyHandle*, std::string key,
+            std::string* value);
+
+  future<std::tuple<Status, std::string, std::string*>>
+  GetFuture(const ReadOptions&, std::string key, std::string* value);
+
+  future<std::tuple<Status, std::string, std::string>>
+  GetFuture(const ReadOptions&, ColumnFamilyHandle*, std::string key);
+
+  future<std::tuple<Status, std::string, std::string>>
+  GetFuture(const ReadOptions&, std::string key);
 
   // If keys[i] does not exist in the database, then the i'th returned
   // status will be one for which Status::IsNotFound() is true, and

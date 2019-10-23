@@ -66,9 +66,11 @@ TableBuilder* NewTableBuilder(
 extern Status BuildTable(
     const std::string& dbname, Env* env, const ImmutableCFOptions& options,
     const MutableCFOptions& mutable_cf_options, const EnvOptions& env_options,
-    TableCache* table_cache, InternalIterator* iter,
+    TableCache* table_cache,
+    InternalIterator* (*get_input_iter_callback)(void*, Arena&),
+    void* get_input_iter_arg,
     std::vector<std::unique_ptr<FragmentedRangeTombstoneIterator>>
-        range_del_iters,
+        (*get_range_del_iters_callback)(void*), void* get_range_del_iters_arg,
     FileMetaData* meta, const InternalKeyComparator& internal_comparator,
     const std::vector<std::unique_ptr<IntTblPropCollectorFactory>>*
         int_tbl_prop_collector_factories,

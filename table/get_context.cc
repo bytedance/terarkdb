@@ -5,7 +5,6 @@
 
 #include "table/get_context.h"
 #include "db/merge_helper.h"
-#include "db/pinned_iterators_manager.h"
 #include "db/read_callback.h"
 #include "monitoring/file_read_sample.h"
 #include "monitoring/perf_context_imp.h"
@@ -13,57 +12,49 @@
 #include "rocksdb/env.h"
 #include "rocksdb/merge_operator.h"
 #include "rocksdb/statistics.h"
+#include "util/util.h"
 
 namespace rocksdb {
 
+#ifndef ROCKSDB_LITE
+
 namespace {
 
-void appendToReplayLog(std::string* replay_log, ValueType type, Slice value) {
-#ifndef ROCKSDB_LITE
-  if (replay_log) {
-    if (replay_log->empty()) {
-      // Optimization: in the common case of only one operation in the
-      // log, we allocate the exact amount of space needed.
-      replay_log->reserve(1 + VarintLength(value.size()) + value.size());
-    }
-    replay_log->push_back(type);
-    PutLengthPrefixedSlice(replay_log, value);
-  }
-#else
-  (void)replay_log;
-  (void)type;
-  (void)value;
-#endif  // ROCKSDB_LITE
+template <class T>
+static void DeleteEntry(const Slice& /*key*/, void* value) {
+  T* typed_value = reinterpret_cast<T*>(value);
+  delete typed_value;
 }
 
-}  // namespace
+}
+
+#endif  // ROCKSDB_LITE
 
 GetContext::GetContext(const Comparator* ucmp,
                        const MergeOperator* merge_operator, Logger* logger,
                        Statistics* statistics, GetState init_state,
-                       const Slice& user_key, PinnableSlice* pinnable_val,
+                       const Slice& user_key, LazySlice* lazy_val,
                        bool* value_found, MergeContext* merge_context,
+                       const SeparateHelper* separate_helper,
                        SequenceNumber* _max_covering_tombstone_seq, Env* env,
-                       SequenceNumber* seq,
-                       PinnedIteratorsManager* _pinned_iters_mgr,
-                       ReadCallback* callback, bool* is_blob_index)
+                       SequenceNumber* seq, ReadCallback* callback)
     : ucmp_(ucmp),
       merge_operator_(merge_operator),
       logger_(logger),
       statistics_(statistics),
       state_(init_state),
       user_key_(user_key),
-      pinnable_val_(pinnable_val),
+      lazy_val_(lazy_val),
       value_found_(value_found),
+      corrupt_(Status::Corruption()),
       merge_context_(merge_context),
+      separate_helper_(separate_helper),
       max_covering_tombstone_seq_(_max_covering_tombstone_seq),
       env_(env),
       seq_(seq),
       min_seq_type_(0),
-      replay_log_(nullptr),
-      pinned_iters_mgr_(_pinned_iters_mgr),
       callback_(callback),
-      is_blob_index_(is_blob_index) {
+      is_index_(false) {
   if (seq_) {
     *seq_ = kMaxSequenceNumber;
   }
@@ -80,29 +71,6 @@ void GetContext::MarkKeyMayExist() {
   if (value_found_ != nullptr) {
     *value_found_ = false;
   }
-}
-
-void GetContext::SaveValue(const Slice& value, SequenceNumber /*seq*/) {
-  assert(state_ == kNotFound);
-  appendToReplayLog(replay_log_, kTypeValue, value);
-
-  state_ = kFound;
-  if (LIKELY(pinnable_val_ != nullptr)) {
-    pinnable_val_->PinSelf(value);
-  }
-}
-
-void GetContext::SetReplayLog(std::string* replay_log) {
-  if (replay_log_ != nullptr && replay_log == nullptr &&
-      (state_ == kNotFound || state_ == kMerge) &&
-      max_covering_tombstone_seq_ != nullptr &&
-      *max_covering_tombstone_seq_ != 0) {
-    // Replay log ended, we found a range deletion that won't delete current
-    // key. The remaining files we look at will only contain covered keys, so we
-    // append an range deletion to stop.
-    appendToReplayLog(replay_log_, kTypeRangeDeletion, Slice());
-  }
-  replay_log_ = replay_log;
 }
 
 void GetContext::ReportCounters() {
@@ -175,11 +143,11 @@ void GetContext::ReportCounters() {
 }
 
 bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
-                           const Slice& value, bool* matched,
-                           Cleanable* value_pinner) {
+                           LazySlice&& value, bool* matched) {
   assert(matched);
-  assert((state_ != kMerge && parsed_key.type != kTypeMerge) ||
-         merge_context_ != nullptr);
+  assert((state_ != kMerge && parsed_key.type != kTypeMerge &&
+         parsed_key.type != kTypeMergeIndex) ||
+         merge_context_ != nullptr || separate_helper_ == nullptr);
   if (ucmp_->Equal(parsed_key.user_key, user_key_)) {
     if (PackSequenceAndType(parsed_key.sequence, parsed_key.type) <
         min_seq_type_) {
@@ -200,52 +168,61 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
     }
 
     auto type = parsed_key.type;
-    // No matter whether Key matched or not, append replay log fn should to be
-    // called after range deletion were handled
-    if ((type == kTypeValue || type == kTypeMerge || type == kTypeBlobIndex) &&
-        max_covering_tombstone_seq_ != nullptr &&
+    // Key matches. Process it
+    if ((type == kTypeValue || type == kTypeMerge || type == kTypeValueIndex ||
+         type == kTypeMergeIndex) && max_covering_tombstone_seq_ != nullptr &&
         *max_covering_tombstone_seq_ > parsed_key.sequence) {
       type = kTypeRangeDeletion;
-      appendToReplayLog(replay_log_, type, Slice());
-    } else {
-      appendToReplayLog(replay_log_, type, value);
+      value.clear();
     }
+    auto OK = [this](Status&& s) {
+      if (LIKELY(s.ok())) {
+        return true;
+      }
+      corrupt_ = std::move(s);
+      state_ = kCorrupt;
+      return false;
+    };
     switch (type) {
+      case kTypeValueIndex:
+        if (separate_helper_ == nullptr) {
+          state_ = kFound;
+          is_index_ = true;
+          if (LIKELY(lazy_val_ != nullptr)) {
+            OK(value.decode_destructive(*lazy_val_));
+          }
+          return false;
+        }
+        separate_helper_->TransToCombined(user_key_, parsed_key.sequence,
+                                          value);
+        FALLTHROUGH_INTENDED;
       case kTypeValue:
-      case kTypeBlobIndex:
         assert(state_ == kNotFound || state_ == kMerge);
-        if (type == kTypeBlobIndex && is_blob_index_ == nullptr) {
-          // Blob value not supported. Stop.
-          state_ = kBlobIndex;
+        if (separate_helper_ == nullptr) {
+          assert(kNotFound == state_);
+          state_ = kFound;
+          if (LIKELY(lazy_val_ != nullptr)) {
+            *lazy_val_ = std::move(value);
+            lazy_val_->pin_resource();
+          }
           return false;
         }
         if (kNotFound == state_) {
           state_ = kFound;
-          if (LIKELY(pinnable_val_ != nullptr)) {
-            if (LIKELY(value_pinner != nullptr)) {
-              // If the backing resources for the value are provided, pin them
-              pinnable_val_->PinSlice(value, value_pinner);
-            } else {
-              // Otherwise copy the value
-              pinnable_val_->PinSelf(value);
-            }
+          if (LIKELY(lazy_val_ != nullptr)) {
+            OK(value.decode_destructive(*lazy_val_));
           }
         } else if (kMerge == state_) {
           assert(merge_operator_ != nullptr);
           state_ = kFound;
-          if (LIKELY(pinnable_val_ != nullptr)) {
-            Status merge_status = MergeHelper::TimedFullMerge(
+          if (LIKELY(lazy_val_ != nullptr)) {
+            if (OK(MergeHelper::TimedFullMerge(
                 merge_operator_, user_key_, &value,
-                merge_context_->GetOperands(), pinnable_val_->GetSelf(),
-                logger_, statistics_, env_);
-            pinnable_val_->PinSelf();
-            if (!merge_status.ok()) {
-              state_ = kCorrupt;
+                merge_context_->GetOperands(), lazy_val_, logger_, statistics_,
+                env_))) {
+              lazy_val_->pin_resource();
             }
           }
-        }
-        if (is_blob_index_ != nullptr) {
-          *is_blob_index_ = (type == kTypeBlobIndex);
         }
         return false;
 
@@ -259,42 +236,52 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
           state_ = kDeleted;
         } else if (kMerge == state_) {
           state_ = kFound;
-          if (LIKELY(pinnable_val_ != nullptr)) {
-            Status merge_status = MergeHelper::TimedFullMerge(
+          if (LIKELY(lazy_val_ != nullptr)) {
+            if (OK(MergeHelper::TimedFullMerge(
                 merge_operator_, user_key_, nullptr,
-                merge_context_->GetOperands(), pinnable_val_->GetSelf(),
-                logger_, statistics_, env_);
-            pinnable_val_->PinSelf();
-            if (!merge_status.ok()) {
-              state_ = kCorrupt;
+                merge_context_->GetOperands(), lazy_val_, logger_, statistics_,
+                env_))) {
+              lazy_val_->pin_resource();
             }
           }
         }
         return false;
 
+      case kTypeMergeIndex:
+        if (separate_helper_ == nullptr) {
+          state_ = kMerge;
+          is_index_ = true;
+          if (LIKELY(lazy_val_ != nullptr)) {
+            OK(value.decode_destructive(*lazy_val_));
+          }
+          return false;
+        }
+        separate_helper_->TransToCombined(user_key_, parsed_key.sequence,
+                                          value);
+        FALLTHROUGH_INTENDED;
       case kTypeMerge:
         assert(state_ == kNotFound || state_ == kMerge);
-        state_ = kMerge;
-        // value_pinner is not set from plain_table_reader.cc for example.
-        if (pinned_iters_mgr() && pinned_iters_mgr()->PinningEnabled() &&
-            value_pinner != nullptr) {
-          value_pinner->DelegateCleanupsTo(pinned_iters_mgr());
-          merge_context_->PushOperand(value, true /*value_pinned*/);
-        } else {
-          merge_context_->PushOperand(value, false);
+        if (separate_helper_ == nullptr) {
+          assert(kNotFound == state_);
+          state_ = kMerge;
+          if (LIKELY(lazy_val_ != nullptr)) {
+            *lazy_val_ = std::move(value);
+            lazy_val_->pin_resource();
+          }
+          return false;
         }
+        state_ = kMerge;
+        merge_context_->PushOperand(std::move(value));
         if (merge_operator_ != nullptr &&
             merge_operator_->ShouldMerge(
                 merge_context_->GetOperandsDirectionBackward())) {
           state_ = kFound;
-          if (LIKELY(pinnable_val_ != nullptr)) {
-            Status merge_status = MergeHelper::TimedFullMerge(
+          if (LIKELY(lazy_val_ != nullptr)) {
+            if (OK(MergeHelper::TimedFullMerge(
                 merge_operator_, user_key_, nullptr,
-                merge_context_->GetOperands(), pinnable_val_->GetSelf(),
-                logger_, statistics_, env_);
-            pinnable_val_->PinSelf();
-            if (!merge_status.ok()) {
-              state_ = kCorrupt;
+                merge_context_->GetOperands(), lazy_val_, logger_, statistics_,
+                env_))) {
+              lazy_val_->pin_resource();
             }
           }
           return false;
@@ -309,34 +296,6 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
 
   // state_ could be Corrupt, merge or notfound
   return false;
-}
-
-void replayGetContextLog(const Slice& replay_log, const Slice& user_key,
-                         GetContext* get_context, Cleanable* value_pinner) {
-#ifndef ROCKSDB_LITE
-  Slice s = replay_log;
-  while (s.size()) {
-    auto type = static_cast<ValueType>(*s.data());
-    s.remove_prefix(1);
-    Slice value;
-    bool ret = GetLengthPrefixedSlice(&s, &value);
-    assert(ret);
-    (void)ret;
-
-    bool dont_care __attribute__((__unused__));
-    // Since SequenceNumber is not stored and unknown, we will use
-    // kMaxSequenceNumber.
-    get_context->SaveValue(
-        ParsedInternalKey(user_key, kMaxSequenceNumber, type), value,
-        &dont_care, value_pinner);
-  }
-#else   // ROCKSDB_LITE
-  (void)replay_log;
-  (void)user_key;
-  (void)get_context;
-  (void)value_pinner;
-  assert(false);
-#endif  // ROCKSDB_LITE
 }
 
 }  // namespace rocksdb

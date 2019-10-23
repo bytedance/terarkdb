@@ -12,6 +12,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include "rocksdb/lazy_slice.h"
 
 #include "rocksdb/status.h"
 
@@ -37,7 +38,6 @@ class CompactionFilter {
   enum ValueType {
     kValue,
     kMergeOperand,
-    kBlobIndex,  // used internally by BlobDB.
   };
 
   enum class Decision {
@@ -156,12 +156,18 @@ class CompactionFilter {
   // failed. Instead, it is better to implement any Merge filtering inside the
   // MergeOperator.
   virtual Decision FilterV2(int level, const Slice& key, ValueType value_type,
-                            const Slice& existing_value, std::string* new_value,
+                            const LazySlice& existing_value,
+                            LazySlice* new_value,
                             std::string* /*skip_until*/) const {
+    if (!existing_value.inplace_decode().ok()) {
+      assert(false);
+      return Decision::kKeep;
+    }
     switch (value_type) {
       case ValueType::kValue: {
         bool value_changed = false;
-        bool rv = Filter(level, key, existing_value, new_value, &value_changed);
+        bool rv = Filter(level, key, existing_value,
+                         new_value->trans_to_buffer(), &value_changed);
         if (rv) {
           return Decision::kRemove;
         }
@@ -171,8 +177,6 @@ class CompactionFilter {
         bool rv = FilterMergeOperand(level, key, existing_value);
         return rv ? Decision::kRemove : Decision::kKeep;
       }
-      case ValueType::kBlobIndex:
-        return Decision::kKeep;
     }
     assert(false);
     return Decision::kKeep;
@@ -192,7 +196,6 @@ class CompactionFilter {
   // The name will be printed to LOG file on start up for diagnosis.
   virtual const char* Name() const = 0;
 
-  virtual bool SupportSerialization() const { return false; }
   virtual Status Serialize(std::string* /*bytes*/) const {
     return Status::NotSupported();
   }

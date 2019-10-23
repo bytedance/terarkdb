@@ -110,7 +110,8 @@ Status SstFileDumper::GetTableReader(const std::string& file_path) {
                           magic_number == kLegacyPlainTableMagicNumber;
 
 #if !defined(_MSC_VER) && !defined(__APPLE__)
-    use_mmap_reads = use_mmap_reads || getenv("TerarkZipTable_localTempDir") || getenv("TerarkConfigString");
+    use_mmap_reads = use_mmap_reads || getenv("TerarkZipTable_localTempDir") ||
+                     getenv("TerarkConfigString");
 #endif
     if (use_mmap_reads) {
       soptions_.use_mmap_reads = true;
@@ -192,7 +193,7 @@ uint64_t SstFileDumper::CalculateCompressedTableSize(
     }
     table_builder->Add(iter->key(), iter->value());
   }
-  Status s = table_builder->Finish();
+  Status s = table_builder->Finish(nullptr);
   if (!s.ok()) {
     fputs(s.ToString().c_str(), stderr);
     exit(1);
@@ -291,7 +292,8 @@ Status SstFileDumper::SetTableOptionsByMagicNumber(
   } else if ((terarkdb_localTempDir = getenv("TerarkZipTable_localTempDir")) ||
              (terarkConfigString = getenv("TerarkConfigString"))) {
     if (TerarkZipConfigFromEnv) {
-      if (terarkdb_localTempDir && ::access(terarkdb_localTempDir, R_OK | W_OK) != 0) {
+      if (terarkdb_localTempDir &&
+          ::access(terarkdb_localTempDir, R_OK | W_OK) != 0) {
         return Status::InvalidArgument(
             "Must exists, and Permission ReadWrite is required on "
             "env TerarkZipTable_localTempDir",
@@ -342,16 +344,14 @@ Status SstFileDumper::ReadSequential(bool print_kv, uint64_t read_num,
     iter->SeekToFirst();
   }
   for (; iter->Valid(); iter->Next()) {
-    Slice key = iter->key();
-    Slice value = iter->value();
     ++i;
     if (read_num > 0 && i > read_num)
       break;
 
     ParsedInternalKey ikey;
-    if (!ParseInternalKey(key, &ikey)) {
+    if (!ParseInternalKey(iter->key(), &ikey)) {
       std::cerr << "Internal Key ["
-                << key.ToString(true /* in hex*/)
+                << iter->key().ToString(true /* in hex*/)
                 << "] parse error!\n";
       continue;
     }
@@ -367,6 +367,11 @@ Status SstFileDumper::ReadSequential(bool print_kv, uint64_t read_num,
     }
 
     if (print_kv) {
+      LazySlice value = iter->value();
+      auto s = value.inplace_decode();
+      if (!s.ok()) {
+        return s;
+      }
       fprintf(stdout, "%s => %s\n",
           ikey.DebugString(output_hex_).c_str(),
           value.ToString(output_hex_).c_str());

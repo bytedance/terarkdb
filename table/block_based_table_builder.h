@@ -62,7 +62,7 @@ class BlockBasedTableBuilder : public TableBuilder {
   // Add key,value to the table being constructed.
   // REQUIRES: key is after any previously added key according to comparator.
   // REQUIRES: Finish(), Abandon() have not been called
-  void Add(const Slice& key, const Slice& value) override;
+  void Add(const Slice& key, const LazySlice& value) override;
 
   // Return non-ok iff some error has been detected.
   Status status() const override;
@@ -70,7 +70,7 @@ class BlockBasedTableBuilder : public TableBuilder {
   // Finish building the table.  Stops using the file passed to the
   // constructor after this function returns.
   // REQUIRES: Finish(), Abandon() have not been called
-  Status Finish() override;
+  Status Finish(const TablePropertyCache* prop) override;
 
   // Indicate that the contents of this builder should be abandoned.  Stops
   // using the file passed to the constructor after this function returns.

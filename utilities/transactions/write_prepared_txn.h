@@ -51,7 +51,7 @@ class WritePreparedTxn : public PessimisticTransaction {
   using Transaction::Get;
   virtual Status Get(const ReadOptions& options,
                      ColumnFamilyHandle* column_family, const Slice& key,
-                     PinnableSlice* value) override;
+                     LazySlice* value) override;
 
   // To make WAL commit markers visible, the snapshot will be based on the last
   // seq in the WAL that is also published, LastPublishedSequence, as opposed to

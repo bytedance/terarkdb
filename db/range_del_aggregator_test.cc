@@ -22,7 +22,7 @@ namespace {
 
 static auto bytewise_icmp = InternalKeyComparator(BytewiseComparator());
 
-std::unique_ptr<InternalIterator> MakeRangeDelIter(
+std::unique_ptr<InternalIteratorBase<Slice>> MakeRangeDelIter(
     const std::vector<RangeTombstone>& range_dels) {
   std::vector<std::string> keys, values;
   for (const auto& range_del : range_dels) {

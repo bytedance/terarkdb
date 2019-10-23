@@ -57,6 +57,7 @@ class PropertyBlockBuilder {
   void AddTableProperty(const TableProperties& props);
   void Add(const std::string& key, uint64_t value);
   void Add(const std::string& key, const std::string& value);
+  void Add(const std::string& key, const std::vector<uint64_t>& value);
   void Add(const UserCollectedProperties& user_collected_properties);
 
   // Write all the added entries to the block and return the block contents
@@ -116,7 +117,7 @@ Status ReadTableProperties(RandomAccessFileReader* file, uint64_t file_size,
                            MemoryAllocator* memory_allocator = nullptr);
 
 // Find the meta block from the meta index block.
-Status FindMetaBlock(InternalIterator* meta_index_iter,
+Status FindMetaBlock(InternalIteratorBase<Slice>* meta_index_iter,
                      const std::string& meta_block_name,
                      BlockHandle* block_handle);
 

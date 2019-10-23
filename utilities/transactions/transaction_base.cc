@@ -195,22 +195,9 @@ Status TransactionBaseImpl::PopSavePoint() {
 
 Status TransactionBaseImpl::Get(const ReadOptions& read_options,
                                 ColumnFamilyHandle* column_family,
-                                const Slice& key, std::string* value) {
-  assert(value != nullptr);
-  PinnableSlice pinnable_val(value);
-  assert(!pinnable_val.IsPinned());
-  auto s = Get(read_options, column_family, key, &pinnable_val);
-  if (s.ok() && pinnable_val.IsPinned()) {
-    value->assign(pinnable_val.data(), pinnable_val.size());
-  }  // else value is already assigned
-  return s;
-}
-
-Status TransactionBaseImpl::Get(const ReadOptions& read_options,
-                                ColumnFamilyHandle* column_family,
-                                const Slice& key, PinnableSlice* pinnable_val) {
+                                const Slice& key, LazySlice* lazy_val) {
   return write_batch_.GetFromBatchAndDB(db_, read_options, column_family, key,
-                                        pinnable_val);
+                                        lazy_val);
 }
 
 Status TransactionBaseImpl::GetForUpdate(const ReadOptions& read_options,
@@ -221,12 +208,11 @@ Status TransactionBaseImpl::GetForUpdate(const ReadOptions& read_options,
 
   if (s.ok() && value != nullptr) {
     assert(value != nullptr);
-    PinnableSlice pinnable_val(value);
-    assert(!pinnable_val.IsPinned());
-    s = Get(read_options, column_family, key, &pinnable_val);
-    if (s.ok() && pinnable_val.IsPinned()) {
-      value->assign(pinnable_val.data(), pinnable_val.size());
-    }  // else value is already assigned
+    LazySlice lazy_val(value);
+    s = Get(read_options, column_family, key, &lazy_val);
+    if (s.ok()) {
+      lazy_val.save_to_buffer(value);
+    }
   }
   return s;
 }
@@ -234,12 +220,12 @@ Status TransactionBaseImpl::GetForUpdate(const ReadOptions& read_options,
 Status TransactionBaseImpl::GetForUpdate(const ReadOptions& read_options,
                                          ColumnFamilyHandle* column_family,
                                          const Slice& key,
-                                         PinnableSlice* pinnable_val,
+                                         LazySlice* lazy_val,
                                          bool exclusive) {
   Status s = TryLock(column_family, key, true /* read_only */, exclusive);
 
-  if (s.ok() && pinnable_val != nullptr) {
-    s = Get(read_options, column_family, key, pinnable_val);
+  if (s.ok() && lazy_val != nullptr) {
+    s = Get(read_options, column_family, key, lazy_val);
   }
   return s;
 }

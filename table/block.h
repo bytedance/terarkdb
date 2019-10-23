@@ -21,7 +21,6 @@
 #endif
 
 #include "db/dbformat.h"
-#include "db/pinned_iterators_manager.h"
 #include "format.h"
 #include "rocksdb/iterator.h"
 #include "rocksdb/options.h"
@@ -243,9 +242,6 @@ class BlockIter : public InternalIteratorBase<TValue> {
   // nothing. Calls cleanup functions.
   void InvalidateBase(Status s) {
     // Assert that the BlockIter is never deleted while Pinning is Enabled.
-    assert(!pinned_iters_mgr_ ||
-           (pinned_iters_mgr_ && !pinned_iters_mgr_->PinningEnabled()));
-
     data_ = nullptr;
     current_ = restarts_;
     status_ = s;
@@ -263,22 +259,8 @@ class BlockIter : public InternalIteratorBase<TValue> {
 
 #ifndef NDEBUG
   virtual ~BlockIter() {
-    // Assert that the BlockIter is never deleted while Pinning is Enabled.
-    assert(!pinned_iters_mgr_ ||
-           (pinned_iters_mgr_ && !pinned_iters_mgr_->PinningEnabled()));
   }
-  virtual void SetPinnedItersMgr(
-      PinnedIteratorsManager* pinned_iters_mgr) override {
-    pinned_iters_mgr_ = pinned_iters_mgr;
-  }
-  PinnedIteratorsManager* pinned_iters_mgr_ = nullptr;
 #endif
-
-  virtual bool IsKeyPinned() const override {
-    return block_contents_pinned_ && key_pinned_;
-  }
-
-  virtual bool IsValuePinned() const override { return block_contents_pinned_; }
 
   size_t TEST_CurrentEntrySize() { return NextEntryOffset() - current_; }
 

@@ -30,6 +30,14 @@ namespace rocksdb {
 
 // The maximum length of a varint in bytes for 64-bit.
 const unsigned int kMaxVarint64Length = 10;
+const uint64_t kFloatingPrecision = 1ull << 20;
+
+constexpr inline uint64_t DoubleToU64(double value) {
+  return uint64_t(value * kFloatingPrecision);
+}
+constexpr inline double U64ToDouble(uint64_t value) {
+  return double(value) / kFloatingPrecision;
+}
 
 // Standard Put... routines append to a string
 extern void PutFixed16(std::string* dst, uint16_t value);

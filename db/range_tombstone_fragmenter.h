@@ -12,7 +12,6 @@
 #include <vector>
 
 #include "db/dbformat.h"
-#include "db/pinned_iterators_manager.h"
 #include "rocksdb/status.h"
 #include "table/internal_iterator.h"
 
@@ -38,7 +37,7 @@ struct FragmentedRangeTombstoneList {
     size_t seq_end_idx;
   };
   FragmentedRangeTombstoneList(
-      std::unique_ptr<InternalIterator> unfragmented_tombstones,
+      std::unique_ptr<InternalIteratorBase<Slice>> unfragmented_tombstones,
       const InternalKeyComparator& icmp, bool for_compaction = false,
       const std::vector<SequenceNumber>& snapshots = {},
       uint64_t _user_tag = uint64_t(-1));
@@ -76,7 +75,7 @@ struct FragmentedRangeTombstoneList {
   // "fragment" the tombstones into non-overlapping pieces, and store them in
   // tombstones_ and tombstone_seqs_.
   void FragmentTombstones(
-      std::unique_ptr<InternalIterator> unfragmented_tombstones,
+      std::unique_ptr<InternalIteratorBase<Slice>> unfragmented_tombstones,
       const InternalKeyComparator& icmp, bool for_compaction,
       const std::vector<SequenceNumber>& snapshots);
 
@@ -85,7 +84,6 @@ struct FragmentedRangeTombstoneList {
   std::vector<SequenceNumber> tombstone_seqs_;
   std::set<SequenceNumber> seq_set_;
   std::list<std::string> pinned_slices_;
-  PinnedIteratorsManager pinned_iters_mgr_;
 };
 
 // FragmentedRangeTombstoneIterator converts an InternalIterator of a range-del
@@ -97,7 +95,7 @@ struct FragmentedRangeTombstoneList {
 // before proceeding). If there are few overlaps, creating a
 // FragmentedRangeTombstoneIterator should be O(n), while the RangeDelAggregator
 // tombstone collapsing is always O(n log n).
-class FragmentedRangeTombstoneIterator : public InternalIterator {
+class FragmentedRangeTombstoneIterator {
  public:
   FragmentedRangeTombstoneIterator(
       const FragmentedRangeTombstoneList* tombstones,
@@ -108,8 +106,8 @@ class FragmentedRangeTombstoneIterator : public InternalIterator {
       const InternalKeyComparator& icmp, SequenceNumber upper_bound,
       SequenceNumber lower_bound = 0);
 
-  void SeekToFirst() override;
-  void SeekToLast() override;
+  void SeekToFirst();
+  void SeekToLast();
 
   void SeekToTopFirst();
   void SeekToTopLast();
@@ -122,27 +120,25 @@ class FragmentedRangeTombstoneIterator : public InternalIterator {
   // Seeks to the range tombstone that covers target at a seqnum in the
   // snapshot. If no such tombstone exists, seek to the earliest tombstone in
   // the snapshot that ends after target.
-  void Seek(const Slice& target) override;
+  void Seek(const Slice& target);
   // Seeks to the range tombstone that covers target at a seqnum in the
   // snapshot. If no such tombstone exists, seek to the latest tombstone in the
   // snapshot that starts before target.
-  void SeekForPrev(const Slice& target) override;
+  void SeekForPrev(const Slice& target);
 
-  void Next() override;
-  void Prev() override;
+  void Next();
+  void Prev();
 
   void TopNext();
   void TopPrev();
 
-  bool Valid() const override;
-  Slice key() const override {
+  bool Valid() const;
+  Slice key() const {
     MaybePinKey();
     return current_start_key_.Encode();
   }
-  Slice value() const override { return pos_->end_key; }
-  bool IsKeyPinned() const override { return false; }
-  bool IsValuePinned() const override { return true; }
-  Status status() const override { return Status::OK(); }
+  Slice value() const { return pos_->end_key; }
+  Status status() const { return Status::OK(); }
 
   bool empty() const { return tombstones_->empty(); }
   void Invalidate() {

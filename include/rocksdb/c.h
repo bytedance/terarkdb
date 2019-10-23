@@ -863,6 +863,8 @@ rocksdb_options_set_rate_limit_delay_max_milliseconds(rocksdb_options_t*,
                                                       unsigned int);
 extern ROCKSDB_LIBRARY_API void rocksdb_options_set_max_manifest_file_size(
     rocksdb_options_t*, size_t);
+extern ROCKSDB_LIBRARY_API void rocksdb_options_set_max_manifest_edit_count(
+    rocksdb_options_t*, size_t);
 extern ROCKSDB_LIBRARY_API void rocksdb_options_set_table_cache_numshardbits(
     rocksdb_options_t*, int);
 extern ROCKSDB_LIBRARY_API void

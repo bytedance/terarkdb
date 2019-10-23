@@ -109,7 +109,7 @@ class SkipEvenFilter : public CompactionFilter {
  public:
   virtual Decision FilterV2(int /*level*/, const Slice& key,
                             ValueType /*value_type*/,
-                            const Slice& /*existing_value*/,
+                            const LazySlice& /*existing_value*/,
                             std::string* /*new_value*/,
                             std::string* skip_until) const override {
     cfilter_count++;

@@ -1361,15 +1361,16 @@ class WriteBatchHandlerJni : public RocksDBNativeClass<
    *     be retieved
    */
   static jmethodID getPutBlobIndexCfMethodId(JNIEnv* env) {
-    jclass jclazz = getJClass(env);
-    if(jclazz == nullptr) {
-      // exception occurred accessing class
-      return nullptr;
-    }
+    //jclass jclazz = getJClass(env);
+    //if(jclazz == nullptr) {
+    //  // exception occurred accessing class
+    //  return nullptr;
+    //}
 
-    static jmethodID mid = env->GetMethodID(jclazz, "putBlobIndex", "(I[B[B)V");
-    assert(mid != nullptr);
-    return mid;
+    //static jmethodID mid = env->GetMethodID(jclazz, "putBlobIndex", "(I[B[B)V");
+    //assert(mid != nullptr);
+    //return mid;
+    return nullptr;
   }
 
   /**

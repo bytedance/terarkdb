@@ -23,6 +23,7 @@
 #include "rocksdb/universal_compaction.h"
 #include "rocksdb/version.h"
 #include "rocksdb/write_buffer_manager.h"
+#include "rocksdb/compaction_dispatcher.h"
 
 #ifdef max
 #undef max
@@ -78,7 +79,7 @@ enum CompressionType : unsigned char {
 // Sst purpose
 enum SstPurpose {
   kEssenceSst,  // Actual data storage sst
-  kBlobSst,     // Blob data storage sst
+  kLogSst,      // Log as sst
   kMapSst,      // Dummy sst
 };
 
@@ -173,6 +174,8 @@ struct ColumnFamilyOptions : public AdvancedColumnFamilyOptions {
   //
   // Default: nullptr
   std::shared_ptr<CompactionFilterFactory> compaction_filter_factory = nullptr;
+
+  std::shared_ptr<CompactionDispatcher> compaction_dispatcher = nullptr;
 
   // -------------------
   // Parameters that affect performance
@@ -282,6 +285,12 @@ struct ColumnFamilyOptions : public AdvancedColumnFamilyOptions {
 
   // Enable map or link compaction
   bool enable_lazy_compaction = false;
+
+  //
+  size_t blob_size = 1024;
+
+  //
+  double blob_gc_ratio = 0.05;
 
   // This is a factory that provides TableFactory objects.
   // Default: a block-based table factory that provides a default
@@ -607,6 +616,7 @@ struct DBOptions {
   // The default value is 1GB so that the manifest file can grow, but not
   // reach the limit of storage capacity.
   uint64_t max_manifest_file_size = 1024 * 1024 * 1024;
+  uint64_t max_manifest_edit_count = 4096;
 
   // Number of shards used for table cache.
   int table_cache_numshardbits = 6;
@@ -1150,14 +1160,6 @@ struct ReadOptions {
   // Default: false
   bool prefix_same_as_start;
 
-  // Keep the blocks loaded by the iterator pinned in memory as long as the
-  // iterator is not deleted, If used when reading from tables created with
-  // BlockBasedTableOptions::use_delta_encoding = false,
-  // Iterator's property "rocksdb.iterator.is-key-pinned" is guaranteed to
-  // return 1.
-  // Default: false
-  bool pin_data;
-
   // If true, when PurgeObsoleteFile is called in CleanupIteratorState, we
   // schedule a background job in the flush job queue and delete obsolete files
   // in background.
@@ -1277,14 +1279,11 @@ struct CompactionOptions {
   uint64_t output_file_size_limit;
   // If > 0, it will replace the option in the DBOptions for this compaction.
   uint32_t max_subcompactions;
-  // Compaction target output sst variety
-  bool map_compaction;
 
   CompactionOptions()
       : compression(kSnappyCompression),
         output_file_size_limit(std::numeric_limits<uint64_t>::max()),
-        max_subcompactions(0),
-        map_compaction(false) {}
+        max_subcompactions(0) {}
 };
 
 // For level based compaction, we can configure if we want to skip/force

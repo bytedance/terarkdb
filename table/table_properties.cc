@@ -44,7 +44,7 @@ namespace {
 
   // Seek to the specified meta block.
   // Return true if it successfully seeks to that block.
-  Status SeekToMetaBlock(InternalIterator* meta_iter,
+  Status SeekToMetaBlock(InternalIteratorBase<Slice>* meta_iter,
                          const std::string& block_name, bool* is_found,
                          BlockHandle* block_handle = nullptr) {
     if (block_handle != nullptr) {
@@ -226,12 +226,11 @@ const std::string TablePropertiesNames::kCompression = "rocksdb.compression";
 const std::string TablePropertiesNames::kCreationTime = "rocksdb.creation.time";
 const std::string TablePropertiesNames::kOldestKeyTime =
     "rocksdb.oldest.key.time";
-const std::string TablePropertiesNames::kSstPurpose =
-    "rocksdb.sst.purpose";
-const std::string TablePropertiesNames::kSstDepend =
-    "rocksdb.sst.depend";
-const std::string TablePropertiesNames::kSstReadAmp =
-    "rocksdb.sst.read_amp";
+const std::string TablePropertiesNames::kPurpose = "rocksdb.sst.purpose";
+const std::string TablePropertiesNames::kReadAmp = "rocksdb.sst.read-amp";
+const std::string TablePropertiesNames::kDependence = "rocksdb.sst.dependence";
+const std::string TablePropertiesNames::kInheritanceChain =
+    "rocksdb.sst.inheritance-chain";
 
 extern const std::string kPropertiesBlock = "rocksdb.properties";
 // Old property block name for backward compatibility
@@ -241,7 +240,8 @@ extern const std::string kRangeDelBlock = "rocksdb.range_del";
 
 // Seek to the properties block.
 // Return true if it successfully seeks to the properties block.
-Status SeekToPropertiesBlock(InternalIterator* meta_iter, bool* is_found) {
+Status SeekToPropertiesBlock(InternalIteratorBase<Slice>* meta_iter,
+                             bool* is_found) {
   Status status = SeekToMetaBlock(meta_iter, kPropertiesBlock, is_found);
   if (!*is_found && status.ok()) {
     status = SeekToMetaBlock(meta_iter, kPropertiesBlockOldName, is_found);
@@ -251,12 +251,14 @@ Status SeekToPropertiesBlock(InternalIterator* meta_iter, bool* is_found) {
 
 // Seek to the compression dictionary block.
 // Return true if it successfully seeks to that block.
-Status SeekToCompressionDictBlock(InternalIterator* meta_iter, bool* is_found,
-                                  BlockHandle* block_handle) {
-  return SeekToMetaBlock(meta_iter, kCompressionDictBlock, is_found, block_handle);
+Status SeekToCompressionDictBlock(InternalIteratorBase<Slice>* meta_iter,
+                                  bool* is_found, BlockHandle* block_handle) {
+  return SeekToMetaBlock(meta_iter, kCompressionDictBlock, is_found,
+                         block_handle);
 }
 
-Status SeekToRangeDelBlock(InternalIterator* meta_iter, bool* is_found,
+Status SeekToRangeDelBlock(InternalIteratorBase<Slice>* meta_iter,
+                           bool* is_found,
                            BlockHandle* block_handle = nullptr) {
   return SeekToMetaBlock(meta_iter, kRangeDelBlock, is_found, block_handle);
 }

@@ -72,11 +72,9 @@ class PlainTableIterator : public InternalIterator {
 
   Slice key() const override;
 
-  Slice value() const override;
+  LazySlice value() const override;
 
   Status status() const override;
-
-  uint64_t FileNumber() const override;
 
  private:
   PlainTableReader* table_;
@@ -603,7 +601,8 @@ Status PlainTableReader::Get(const ReadOptions& /*ro*/, const Slice& target,
     // can we enable the fast path?
     if (internal_comparator_.Compare(found_key, parsed_target) >= 0) {
       bool dont_care __attribute__((__unused__));
-      if (!get_context->SaveValue(found_key, found_value, &dont_care)) {
+      if (!get_context->SaveValue(found_key, LazySlice(found_value),
+                                  &dont_care)) {
         break;
       }
     }
@@ -747,18 +746,13 @@ Slice PlainTableIterator::key() const {
   return key_;
 }
 
-Slice PlainTableIterator::value() const {
+LazySlice PlainTableIterator::value() const {
   assert(Valid());
-  return value_;
+  return LazySlice(value_, false, table_->file_number_);
 }
 
 Status PlainTableIterator::status() const {
   return status_;
-}
-
-
-uint64_t PlainTableIterator::FileNumber() const {
-  return table_->file_number_;
 }
 
 }  // namespace rocksdb

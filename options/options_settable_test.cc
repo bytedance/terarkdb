@@ -346,6 +346,8 @@ TEST_F(OptionsSettableTest, ColumnFamilyOptionsAllFieldsSettable) {
        sizeof(const CompactionFilter*)},
       {offset_of(&ColumnFamilyOptions::compaction_filter_factory),
        sizeof(std::shared_ptr<CompactionFilterFactory>)},
+      {offset_of(&ColumnFamilyOptions::compaction_dispatcher),
+       sizeof(std::shared_ptr<CompactionDispatcher>)},
       {offset_of(&ColumnFamilyOptions::prefix_extractor),
        sizeof(std::shared_ptr<const SliceTransform>)},
       {offset_of(&ColumnFamilyOptions::table_factory),
@@ -445,6 +447,8 @@ TEST_F(OptionsSettableTest, ColumnFamilyOptionsAllFieldsSettable) {
       "hard_pending_compaction_bytes_limit=0;"
       "disable_auto_compactions=false;"
       "enable_lazy_compaction=false;"
+      "blob_size=1024;"
+      "blob_gc_ratio=0.05;"
       "report_bg_io_stats=true;"
       "ttl=60;"
       "compaction_options_fifo={max_table_files_size=3;ttl=100;allow_"

@@ -10,60 +10,6 @@
 #include "util/string_util.h"
 
 namespace rocksdb {
-
-Status CompositeSstPropertiesCollector::Finish(
-    UserCollectedProperties* properties) {
-  assert(properties);
-  assert(properties->find(TablePropertiesNames::kSstPurpose) ==
-         properties->end());
-  assert(properties->find(TablePropertiesNames::kSstDepend) ==
-         properties->end());
-
-  auto sst_purpose_value = std::string((const char*)&sst_purpose_, 1);
-  properties->insert(
-      {TablePropertiesNames::kSstPurpose, sst_purpose_value});
-
-  std::string sst_depend;
-  PutVarint64(&sst_depend, sst_depend_->size());
-  for (auto depend : *sst_depend_) {
-    PutVarint64(&sst_depend, depend);
-  }
-  properties->insert(
-      {TablePropertiesNames::kSstDepend, sst_depend});
-
-  std::string sst_read_amp;
-  PutVarint64(&sst_read_amp, *sst_read_amp_);
-  if (*sst_read_amp_ != *sst_read_amp_ratio_) {
-    PutVarint64(&sst_read_amp, int64_t(*sst_read_amp_ratio_ * 65536));
-  }
-
-  properties->insert(
-      {TablePropertiesNames::kSstReadAmp, sst_read_amp});
-
-  return Status::OK();
-}
-
-UserCollectedProperties CompositeSstPropertiesCollector::GetReadableProperties()
-    const {
-  std::string sst_depend;
-  if (sst_depend_->empty()) {
-    sst_depend += "[]";
-  } else {
-    sst_depend += '[';
-    for (auto depend : *sst_depend_) {
-      sst_depend += ToString(depend);
-      sst_depend += ',';
-    }
-    sst_depend.back() = ']';
-  }
-  std::string sst_read_amp =
-      "[" + ToString(*sst_read_amp_) + "," + ToString(*sst_read_amp_ratio_) +
-      "]";
-  return {{"kSstPurpose", ToString((int)sst_purpose_)},
-          {"kSstDepend", sst_depend},
-          {"kSstReadAmp", sst_read_amp}};
-}
-
 namespace {
 
 uint64_t GetUint64Property(const UserCollectedProperties& props,
@@ -115,57 +61,6 @@ uint64_t GetMergeOperands(const UserCollectedProperties& props,
                           bool* property_present) {
   return GetUint64Property(
       props, TablePropertiesNames::kMergeOperands, property_present);
-}
-
-uint8_t GetSstPurpose(const UserCollectedProperties& props) {
-  auto pos = props.find(TablePropertiesNames::kSstPurpose);
-  if (pos == props.end()) {
-    return 0;
-  }
-  Slice raw = pos->second;
-  return raw[0];
-}
-
-std::vector<uint64_t> GetSstDepend(const UserCollectedProperties& props) {
-  std::vector<uint64_t> result;
-  auto pos = props.find(TablePropertiesNames::kSstDepend);
-  if (pos == props.end()) {
-    return result;
-  }
-  Slice raw = pos->second;
-  uint64_t size;
-  if (!GetVarint64(&raw, &size)) {
-    return result;
-  }
-  result.reserve(size);
-  for (size_t i = 0; i < size; ++i) {
-    uint64_t file_number;
-    if (!GetVarint64(&raw, &file_number)) {
-      return result;
-    }
-    result.emplace_back(file_number);
-  }
-  return result;
-}
-
-std::pair<size_t, double> GetSstReadAmp(const UserCollectedProperties& props) {
-  auto pos = props.find(TablePropertiesNames::kSstReadAmp);
-  std::pair<size_t, double> amp = {1, 1};
-  if (pos == props.end()) {
-    return amp;
-  }
-  Slice raw = pos->second;
-  uint64_t val = 1;
-  if (!GetVarint64(&raw, &val)) {
-    return amp;
-  }
-  amp.first = val;
-  if (GetVarint64(&raw, &val)) {
-    amp.second = 1. * val / 65536;
-  } else {
-    amp.second = amp.first;
-  }
-  return amp;
 }
 
 }  // namespace rocksdb

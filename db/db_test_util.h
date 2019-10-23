@@ -152,8 +152,8 @@ class SpecialMemTableRep : public MemTableRep {
   }
 
   virtual void Get(const LookupKey& k, void* callback_args,
-                   bool (*callback_func)(void* arg,
-                                         const KeyValuePair*)) override {
+                   bool (*callback_func)(void* arg, const Slice& key,
+                                         LazySlice&& value)) override {
     memtable_->Get(k, callback_args, callback_func);
   }
 
@@ -837,7 +837,7 @@ class DBTestBase : public testing::Test {
   std::string Get(int cf, const std::string& k,
                   const Snapshot* snapshot = nullptr);
 
-  Status Get(const std::string& k, PinnableSlice* v);
+  Status Get(const std::string& k, LazySlice* v);
 
   uint64_t GetNumSnapshots();
 

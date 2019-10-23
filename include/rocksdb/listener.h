@@ -93,6 +93,8 @@ enum class CompactionReason : int {
   kCompositeAmplification,
   // Trivial move level
   kTrivialMoveLevel,
+  // kv separate GC.
+  kGarbageCollection,
   // total number of compaction reasons, new reasons must be added above this.
   kNumOfReasons,
 };

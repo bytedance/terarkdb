@@ -13,9 +13,10 @@
 #include "db/merge_context.h"
 #include "db/range_del_aggregator.h"
 #include "db/snapshot_checker.h"
+#include "db/version_edit.h"
 #include "rocksdb/compaction_filter.h"
 #include "rocksdb/env.h"
-#include "rocksdb/slice.h"
+#include "rocksdb/lazy_slice.h"
 #include "util/stop_watch.h"
 
 namespace rocksdb {
@@ -24,6 +25,7 @@ class Comparator;
 class Iterator;
 class Logger;
 class MergeOperator;
+class SeparateValueCollector;
 class Statistics;
 
 class MergeHelper {
@@ -45,11 +47,10 @@ class MergeHelper {
   // - OK: Entries were successfully merged.
   // - Corruption: Merge operator reported unsuccessful merge.
   static Status TimedFullMerge(const MergeOperator* merge_operator,
-                               const Slice& key, const Slice* value,
-                               const std::vector<Slice>& operands,
-                               std::string* result, Logger* logger,
+                               const Slice& key, LazySlice* value,
+                               std::vector<LazySlice>& operands,
+                               LazySlice* result, Logger* logger,
                                Statistics* statistics, Env* env,
-                               Slice* result_operand = nullptr,
                                bool update_num_ops_stats = false);
 
   // Merge entries until we hit
@@ -77,17 +78,18 @@ class MergeHelper {
   // - ShutdownInProgress: interrupted by shutdown (*shutting_down == true).
   //
   // REQUIRED: The first key in the input is not corrupted.
-  Status MergeUntil(InternalIterator* iter,
-                    CompactionRangeDelAggregator* range_del_agg = nullptr,
-                    const SequenceNumber stop_before = 0,
-                    const bool at_bottom = false);
+  Status MergeUntil(
+      const Slice& user_key, InternalIterator* iter,
+      SeparateValueCollector& separate_value_collector,
+      CompactionRangeDelAggregator* range_del_agg = nullptr,
+      const SequenceNumber stop_before = 0, const bool at_bottom = false);
 
   // Filters a merge operand using the compaction filter specified
   // in the constructor. Returns the decision that the filter made.
   // Uses compaction_filter_value_ and compaction_filter_skip_until_ for the
   // optional outputs of compaction filter.
-  CompactionFilter::Decision FilterMerge(const Slice& user_key,
-                                         const Slice& value_slice);
+  CompactionFilter::Decision FilterMerge(
+      const Slice& user_key, const LazySlice& value);
 
   // Query the merge result
   // These are valid until the next MergeUntil call
@@ -115,7 +117,7 @@ class MergeHelper {
   //                So keys().back() was the first key seen by iterator.
   // TODO: Re-style this comment to be like the first one
   const std::deque<std::string>& keys() const { return keys_; }
-  const std::vector<Slice>& values() const {
+  const std::vector<LazySlice>& values() const {
     return merge_context_.GetOperands();
   }
   uint64_t TotalFilterTime() const { return total_filter_time_; }
@@ -133,6 +135,13 @@ class MergeHelper {
     assert(compaction_filter_skip_until_.Valid());
     *skip_until = compaction_filter_skip_until_.Encode();
     return true;
+  }
+
+  void Clear() {
+    keys_.clear();
+    merge_context_.Clear();
+    compaction_filter_value_.clear();
+    compaction_filter_skip_until_.Clear();
   }
 
  private:
@@ -161,7 +170,7 @@ class MergeHelper {
   Statistics* stats_;
 
   bool has_compaction_filter_skip_until_ = false;
-  std::string compaction_filter_value_;
+  LazySlice compaction_filter_value_;
   InternalKey compaction_filter_skip_until_;
 
   bool IsShuttingDown() {
@@ -181,14 +190,14 @@ class MergeOutputIterator {
   // Advances to the next record in the output.
   void Next();
 
-  Slice key() { return Slice(*it_keys_); }
-  Slice value() { return Slice(*it_values_); }
+  Slice key() { return *it_keys_; }
+  const LazySlice& value() { return *it_values_; }
   bool Valid() { return it_keys_ != merge_helper_->keys().rend(); }
 
  private:
   const MergeHelper* merge_helper_;
   std::deque<std::string>::const_reverse_iterator it_keys_;
-  std::vector<Slice>::const_reverse_iterator it_values_;
+  std::vector<LazySlice>::const_reverse_iterator it_values_;
 };
 
 } // namespace rocksdb

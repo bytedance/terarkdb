@@ -98,7 +98,7 @@ WriteBatchWithIndexInternal::Result WriteBatchWithIndexInternal::GetFromBatch(
     const ImmutableDBOptions& immuable_db_options, WriteBatchWithIndex* batch,
     ColumnFamilyHandle* column_family, const Slice& key,
     MergeContext* merge_context, const Comparator* cmp,
-    std::string* value, bool overwrite_key, Status* s) {
+    LazySlice* value, bool overwrite_key, Status* s) {
   *s = Status::OK();
   WriteBatchWithIndexInternal::Result result =
       WriteBatchWithIndexInternal::Result::kNotFound;
@@ -150,7 +150,8 @@ WriteBatchWithIndexInternal::Result WriteBatchWithIndexInternal::GetFromBatch(
       }
       case kMergeRecord: {
         result = WriteBatchWithIndexInternal::Result::kMergeInProgress;
-        merge_context->PushOperand(entry.value);
+        merge_context->PushOperand(LazySlice(entry.value),
+                                   false/* operand_pinned */);
         break;
       }
       case kDeleteRecord:
@@ -177,7 +178,7 @@ WriteBatchWithIndexInternal::Result WriteBatchWithIndexInternal::GetFromBatch(
       break;
     }
     if (result == WriteBatchWithIndexInternal::Result::kMergeInProgress &&
-        overwrite_key == true) {
+        overwrite_key) {
       // Since we've overwritten keys, we do not know what other operations are
       // in this batch for this key, so we cannot do a Merge to compute the
       // result.  Instead, we will simply return MergeInProgress.
@@ -207,7 +208,8 @@ WriteBatchWithIndexInternal::Result WriteBatchWithIndexInternal::GetFromBatch(
         Logger* logger = immuable_db_options.info_log.get();
 
         if (merge_operator) {
-          *s = MergeHelper::TimedFullMerge(merge_operator, key, &entry_value,
+          LazySlice lazy_slice(entry_value);
+          *s = MergeHelper::TimedFullMerge(merge_operator, key, &lazy_slice,
                                            merge_context->GetOperands(), value,
                                            logger, statistics, env);
         } else {
@@ -215,12 +217,13 @@ WriteBatchWithIndexInternal::Result WriteBatchWithIndexInternal::GetFromBatch(
         }
         if (s->ok()) {
           result = WriteBatchWithIndexInternal::Result::kFound;
+          value->pin_resource();
         } else {
           result = WriteBatchWithIndexInternal::Result::kError;
         }
       } else {  // nothing to merge
         if (result == WriteBatchWithIndexInternal::Result::kFound) {  // PUT
-          value->assign(entry_value.data(), entry_value.size());
+          value->reset(entry_value, true); // data in batch maybe changed
         }
       }
     }

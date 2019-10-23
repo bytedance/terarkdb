@@ -14,7 +14,6 @@
 
 namespace rocksdb {
 class MergeContext;
-class PinnedIteratorsManager;
 
 struct GetContextStats {
   uint64_t num_cache_hit = 0;
@@ -44,18 +43,15 @@ class GetContext {
     kDeleted,
     kCorrupt,
     kMerge,  // saver contains the current merge result (the operands)
-    kBlobIndex,
   };
   GetContextStats get_context_stats_;
 
   GetContext(const Comparator* ucmp, const MergeOperator* merge_operator,
              Logger* logger, Statistics* statistics, GetState init_state,
-             const Slice& user_key, PinnableSlice* value, bool* value_found,
-             MergeContext* merge_context,
+             const Slice& user_key, LazySlice* value, bool* value_found,
+             MergeContext* merge_context, const SeparateHelper* separate_helper,
              SequenceNumber* max_covering_tombstone_seq, Env* env,
-             SequenceNumber* seq = nullptr,
-             PinnedIteratorsManager* _pinned_iters_mgr = nullptr,
-             ReadCallback* callback = nullptr, bool* is_blob_index = nullptr);
+             SequenceNumber* seq = nullptr, ReadCallback* callback = nullptr);
 
   void MarkKeyMayExist();
 
@@ -67,25 +63,15 @@ class GetContext {
   //
   // Returns True if more keys need to be read (due to merges) or
   //         False if the complete value has been found.
-  bool SaveValue(const ParsedInternalKey& parsed_key, const Slice& value,
-                 bool* matched, Cleanable* value_pinner = nullptr);
-
-  // Simplified version of the previous function. Should only be used when we
-  // know that the operation is a Put.
-  void SaveValue(const Slice& value, SequenceNumber seq);
+  bool SaveValue(const ParsedInternalKey& parsed_key, LazySlice&& value,
+                 bool* matched);
 
   GetState State() const { return state_; }
+  Status&& CorruptReason()&& { return std::move(corrupt_); }
 
   SequenceNumber* max_covering_tombstone_seq() {
     return max_covering_tombstone_seq_;
   }
-
-  PinnedIteratorsManager* pinned_iters_mgr() { return pinned_iters_mgr_; }
-
-  // If a non-null string is passed, all the SaveValue calls will be
-  // logged into the string. The operations can then be replayed on
-  // another GetContext with replayGetContextLog.
-  void SetReplayLog(std::string* replay_log);
 
   // Do we need to fetch the SequenceNumber for this key?
   bool NeedToReadSequence() const {
@@ -93,8 +79,14 @@ class GetContext {
   }
 
   bool sample() const { return sample_; }
+  bool is_index() const { return is_index_; }
 
-  bool is_finished() const { return state_ != kNotFound && state_ != kMerge; }
+  bool is_finished() const {
+    return (state_ != kNotFound &&
+            (separate_helper_ == nullptr || state_ != kMerge)) ||
+           (max_covering_tombstone_seq_ != nullptr &&
+            *max_covering_tombstone_seq_ != 0);
+  }
 
   void SetMinSequenceAndType(uint64_t min_seq_type) {
     min_seq_type_ = min_seq_type;
@@ -119,9 +111,11 @@ class GetContext {
 
   GetState state_;
   Slice user_key_;
-  PinnableSlice* pinnable_val_;
+  LazySlice* lazy_val_;
   bool* value_found_;  // Is value set correctly? Used by KeyMayExist
+  Status corrupt_;
   MergeContext* merge_context_;
+  const SeparateHelper* separate_helper_;
   SequenceNumber* max_covering_tombstone_seq_;
   Env* env_;
   // If a key is found, seq_ will be set to the SequenceNumber of most recent
@@ -129,16 +123,9 @@ class GetContext {
   SequenceNumber* seq_;
   // For Merge, don't accept key while seq type less than min_seq_type
   uint64_t min_seq_type_;
-  std::string* replay_log_;
-  // Used to temporarily pin blocks when state_ == GetContext::kMerge
-  PinnedIteratorsManager* pinned_iters_mgr_;
   ReadCallback* callback_;
   bool sample_;
-  bool* is_blob_index_;
+  bool is_index_;
 };
-
-void replayGetContextLog(const Slice& replay_log, const Slice& user_key,
-                         GetContext* get_context,
-                         Cleanable* value_pinner = nullptr);
 
 }  // namespace rocksdb

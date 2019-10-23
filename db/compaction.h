@@ -64,6 +64,13 @@ class LevelFileContainer;
 class Version;
 class VersionStorageInfo;
 
+enum CompactionType {
+  kKeyValueCompaction = 0,
+  kMapCompaction = 1,
+  kLinkCompaction = 2,
+  kGarbageCollection = 3,
+};
+
 struct CompactionParams {
   VersionStorageInfo* input_version;
   const ImmutableCFOptions& immutable_cf_options;
@@ -78,19 +85,81 @@ struct CompactionParams {
   uint32_t max_subcompactions = 0;
   std::vector<FileMetaData*> grandparents;
   bool manual_compaction = false;
+  double score = -1;
   bool deletion_compaction = false;
   bool partial_compaction = false;
-  bool map_compaction = false;
-  double score = -1;
+  CompactionType compaction_type = kKeyValueCompaction;
   std::vector<RangeStorage> input_range = {};
   CompactionReason compaction_reason = CompactionReason::kUnknown;
 
   CompactionParams(VersionStorageInfo* _input_version,
-      const ImmutableCFOptions& _immutable_cf_options,
+                   const ImmutableCFOptions& _immutable_cf_options,
                    const MutableCFOptions& _mutable_cf_options)
       : input_version(_input_version),
         immutable_cf_options(_immutable_cf_options),
         mutable_cf_options(_mutable_cf_options) {}
+};
+
+struct CompactionWorkerContext {
+  struct EncodedString {
+    std::string data;
+
+    EncodedString& operator = (const std::string& v) {
+      data = v;
+      return *this;
+    }
+    EncodedString& operator = (const Slice& v) {
+      data.assign(v.data(), v.size());
+      return *this;
+    }
+    operator const std::string&() const { return data; }
+    operator Slice() const { return data; }
+    bool empty() const { return data.empty(); }
+    void clear() { data.clear(); }
+  };
+  // options
+  std::string user_comparator;
+  std::string merge_operator;
+  EncodedString merge_operator_data;
+  std::string compaction_filter;
+  std::string compaction_filter_factory;
+  rocksdb::CompactionFilter::Context compaction_filter_context;
+  EncodedString compaction_filter_data;
+  uint64_t blob_size;
+  std::string table_factory;
+  std::string table_factory_options;
+  uint32_t bloom_locality;
+  std::vector<std::string> cf_paths;
+  std::string prefix_extractor;
+  // compaction
+  bool has_start, has_end;
+  EncodedString start, end;
+  rocksdb::SequenceNumber last_sequence;
+  rocksdb::SequenceNumber earliest_write_conflict_snapshot;
+  rocksdb::SequenceNumber preserve_deletes_seqnum;
+  std::vector<std::pair<uint64_t, rocksdb::FileMetaData>> file_metadata;
+  std::vector<std::pair<int, uint64_t>> inputs;
+  std::string cf_name;
+  uint64_t target_file_size;
+  rocksdb::CompressionType compression;
+  rocksdb::CompressionOptions compression_opts;
+  std::vector<rocksdb::SequenceNumber> existing_snapshots;
+  bool bottommost_level;
+  std::vector<std::string> int_tbl_prop_collector_factories;
+};
+
+struct CompactionWorkerResult {
+  Status status;
+  InternalKey actual_start, actual_end;
+  struct FileInfo {
+    InternalKey smallest, largest;
+    std::string file_name;
+    SequenceNumber smallest_seqno, largest_seqno;
+    size_t file_size;
+    bool marked_for_compaction;
+  };
+  std::vector<FileInfo> files;
+  std::unordered_map<uint64_t, uint64_t> delta_antiquation;
 };
 
 // A Compaction encapsulates information about a compaction.
@@ -195,8 +264,8 @@ class Compaction {
   // If true, then enable partial compaction
   bool partial_compaction() const { return partial_compaction_; }
 
-  // Compaction purpose
-  bool map_compaction() const { return map_compaction_; }
+  // CompactionType
+  CompactionType compaction_type() const { return compaction_type_; }
 
   // Range limit for inputs
   const std::vector<RangeStorage>& input_range() const {
@@ -225,7 +294,9 @@ class Compaction {
   // Return the score that was used to pick this compaction run.
   double score() const { return score_; }
 
+  //
   void set_compaction_load(double load) { compaction_load_ = load; }
+
   //
   double compaction_load() const { return compaction_load_; }
 
@@ -383,7 +454,7 @@ class Compaction {
   const bool partial_compaction_;
 
   // If true, then output map sst
-  const bool map_compaction_;
+  const CompactionType compaction_type_;
 
   // Range limit for inputs
   const std::vector<RangeStorage> input_range_;
@@ -397,7 +468,11 @@ class Compaction {
   // State used to check for number of overlapping grandparent files
   // (grandparent == "output_level_ + 1")
   std::vector<FileMetaData*> grandparents_;
-  const double score_;         // score that was used to pick this compaction.
+
+  // score that was used to pick this compaction.
+  const double score_;
+
+  //
   double compaction_load_;
 
   // Is this compaction creating a file in the bottom most level?
@@ -433,5 +508,7 @@ class Compaction {
 
 // Utility function
 extern uint64_t TotalFileSize(const std::vector<FileMetaData*>& files);
+
+extern const char* CompactionTypeName(CompactionType type);
 
 }  // namespace rocksdb
