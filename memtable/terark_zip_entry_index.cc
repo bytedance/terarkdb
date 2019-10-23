@@ -3,7 +3,7 @@
 //  LICENSE file in the root directory of this source tree. An additional grant
 //  of patent rights can be found in the PATENTS file in the same directory.
 
-#include "terark_zip_internal.h"
+#include "table/terark_zip_internal.h"
 #include "util/arena.h"
 #include "util/coding.h"
 #include "utilities/write_batch_with_index/write_batch_with_index_internal.h"

@@ -176,11 +176,7 @@ else()
   if(MINGW)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-format")
   endif()
-  if (CLANG)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=gnu++17")
-  else()
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=gnu++1y")
-  endif()
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
   if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-omit-frame-pointer")
     include(CheckCXXCompilerFlag)
@@ -543,6 +539,8 @@ set(SOURCES
         memtable/hash_linklist_rep.cc
         memtable/hash_skiplist_rep.cc
         memtable/skiplistrep.cc
+        memtable/terark_zip_entry_index.cc
+        memtable/terark_zip_memtable.cc
         memtable/vectorrep.cc
         memtable/write_buffer_manager.cc
         monitoring/histogram.cc
@@ -597,6 +595,10 @@ set(SOURCES
         table/sst_file_writer.cc
         table/table_properties.cc
         table/table_reader.cc
+        table/terark_zip_config.cc
+        table/terark_zip_table_builder.cc
+        table/terark_zip_table_reader.cc
+        table/terark_zip_table.cc
         table/two_level_iterator.cc
         tools/db_bench_tool.cc
         tools/dump/db_dump_tool.cc
