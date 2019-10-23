@@ -1,5 +1,6 @@
 // project headers
 #include "terark_zip_table_reader.h"
+#include "terark_zip_common.h"
 // rocksdb headers
 #include <table/internal_iterator.h>
 #include <table/sst_file_writer_collectors.h>

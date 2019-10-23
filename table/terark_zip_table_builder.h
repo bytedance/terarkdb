@@ -54,6 +54,9 @@ using terark::DictZipBlobStore;
 using terark::PipelineProcessor;
 using terark::freq_hist_o1;
 using terark::TerarkIndex;
+using terark::FilePair;
+using terark::AutoDeleteFile;
+using terark::TempFileDeleteOnClose;
 
 class TerarkZipTableBuilder : public TableBuilder, boost::noncopyable {
 public:

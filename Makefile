@@ -124,39 +124,7 @@ endif
 TERARK_CORE_PKG_DIR := ${TERARK_CORE_HOME}/pkg/terark-fsa_all-${BUILD_NAME}
 
 CXXFLAGS += -march=haswell
-CXXFLAGS += -I${TERARK_CORE_HOME}/src -I${TERARK_CORE_HOME}/boost-include -I${TERARK_CORE_HOME}/output/include
-
-# BUNDLE_TERARK_ZIP_ROCKSDB can use precompiled terark-core
-# ifdef BUNDLE_TERARK_ZIP_ROCKSDB
-#   CXXFLAGS += -Iterark-zip-rocksdb/src
-
-# # do not use wildcard, to kill dependency to terark-zip-rocksdb.got
-   TERARK_ZIP_SRC := \
-       memtable/terark_zip_entry_index.cc \
-       memtable/terark_zip_memtable.cc    \
-       table/terark_zip_common.cc         \
-       table/terark_zip_config.cc         \
-       table/terark_zip_table.cc          \
-       table/terark_zip_table_builder.cc  \
-       table/terark_zip_table_reader.cc   \
-
-   TERARK_ZIP_OBJ := $(addprefix ${xdir}/,${TERARK_ZIP_SRC:.cc=.o}) \
-      $(addprefix shared-objects/${xdir}/,${TERARK_ZIP_SRC:.cc=.o})
-
-   SRC_NEEDS_TERARK_ZIP := ${TERARK_ZIP_SRC}               \
-                           db/compacted_db_impl.cc         \
-                           db/db_impl.cc                   \
-                           db/db_impl_compaction_flush.cc  \
-                           db/db_impl_debug.cc             \
-                           db/db_impl_experimental.cc      \
-                           db/db_impl_files.cc             \
-                           db/db_impl_open.cc              \
-                           db/db_impl_readonly.cc          \
-                           db/db_impl_write.cc             \
-                           tools/sst_dump_tool.cc
-
-   SRC_NEEDS_BOOST := util/thread_local.cc \
-                      ${TERARK_ZIP_SRC}
+CXXFLAGS += -I${TERARK_CORE_HOME}/src -I${TERARK_CORE_HOME}/boost-include -I${TERARK_CORE_HOME}/3rdparty/zstd
 
 #------------------------------------------------------------------------------
 ifeq (${TERARK_CORE_HOME},terark-core)
@@ -169,11 +137,7 @@ endif
 	cd terark-core && git submodule update --init
 	+$(MAKE) -C terark-core pkg PKG_WITH_DBG=1 PKG_WITH_STATIC=1 WITH_BMI2=${BMI2}
 	touch $@
-${SRC_NEEDS_BOOST} ${SRC_NEEDS_BOOST:.o=.cc.d}: terark-core.got
-${TERARK_ZIP_OBJ} ${TERARK_ZIP_OBJ:.o=.cc.d}: terark-core.got
 endif
-${TERARK_ZIP_OBJ} ${TERARK_ZIP_OBJ:.o=.cc.d}: CXXFLAGS += -Wno-unused-parameter -I${TERARK_CORE_HOME}/3rdparty/zstd{,/zstd}
-
 LINK_TERARK ?= static
 
 ifeq ($(shell uname),Darwin)
@@ -499,6 +463,8 @@ endif
 
 LIBOBJECTS = $(addprefix ${xdir}/, $(LIB_SOURCES:.cc=.o))
 LIB_CC_OBJECTS = $(LIBOBJECTS)
+
+${LIB_SOURCES} ${LIB_SOURCES:.cc=.o} : terark-core.got
 
 ifeq ($(HAVE_POWER8),1)
 LIBOBJECTS += $(addprefix ${xdir}/, $(LIB_SOURCES_C:.c=.o))

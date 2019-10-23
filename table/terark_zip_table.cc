@@ -467,7 +467,7 @@ const {
   assert(table_factory);
   auto& tzto = *reinterpret_cast<const TerarkZipTableOptions*>(table_factory->GetOptions());
   try {
-    TempFileDeleteOnClose test;
+    terark::TempFileDeleteOnClose test;
     test.path = tzto.localTempDir + "/Terark-XXXXXX";
     test.open_temp();
     test.writer << "Terark";
