@@ -7,10 +7,10 @@
 
 // project headers
 #include "terark_zip_table.h"
-#include "terark_zip_index.h"
 #include "terark_zip_common.h"
 #include "terark_zip_internal.h"
 #include "terark_zip_table_reader.h"
+#include <terark/idx/terark_zip_index.hpp>
 
 // std headers
 #include <future>
@@ -44,7 +44,7 @@ static std::once_flag PrintVersionHashInfoFlag;
 const char* git_version_hash_info_core();
 const char* git_version_hash_info_fsa();
 const char* git_version_hash_info_zbs();
-const char* git_version_hash_info_terark_zip_rocksdb();
+const char* git_version_hash_info_idx();
 #endif
 
 void PrintVersionHashInfo(rocksdb::Logger* info_log) {
@@ -53,7 +53,7 @@ void PrintVersionHashInfo(rocksdb::Logger* info_log) {
     INFO(info_log, "core %s", git_version_hash_info_core());
     INFO(info_log, "fsa %s", git_version_hash_info_fsa());
     INFO(info_log, "zbs %s", git_version_hash_info_zbs());
-    INFO(info_log, "terark_zip_rocksdb %s", git_version_hash_info_terark_zip_rocksdb());
+    INFO(info_log, "idx %s", git_version_hash_info_idx());
 # endif
   });
 }

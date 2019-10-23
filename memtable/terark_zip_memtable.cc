@@ -111,7 +111,7 @@ void PatriciaTrieRep::Get(
     const LookupKey &k,
     void *callback_args,
     bool (*callback_func)(void *arg, const Slice& key, LazySlice&& value)){
-  // assistant structure define start
+  // assistant structures
   struct HeapItem {
     uint32_t idx;
     uint32_t loc;
@@ -145,9 +145,7 @@ void PatriciaTrieRep::Get(
     HeapItem* heap;
   } controller;
 
-  // assistant structure define end
-
-  // varible define
+  // variable definition
   static thread_local TlsItem tls_ctx;
   auto buffer = &tls_ctx.buffer;
 
@@ -182,10 +180,9 @@ void PatriciaTrieRep::Get(
     }
   }
 
-  // comparator define
+  // make heap for multi-merge
   auto heap_comp = [](const HeapItem &l, const HeapItem &r) { return l.tag < r.tag; };
 
-  // elements heap functioning
   std::make_heap(heap.begin(), heap.end(), heap_comp);
   auto item = heap.front();
   while (heap.size() > 0 && do_callback(&item)) {
@@ -224,7 +221,7 @@ bool PatriciaTrieRep::InsertKeyValue(
   // prepare key
   terark::fstring key(internal_key.data(),
                       internal_key.data() + internal_key.size() - 8); 
-  // tool lambda fn start
+  // lambda impl fn for insert
   auto fn_insert_impl = [&](MemPatricia *trie) {
     if (trie->tls_writer_token() == nullptr)
       trie->tls_writer_token().reset(new MemWriterToken(trie, DecodeFixed64(key.end()), value));
@@ -300,9 +297,7 @@ bool PatriciaTrieRep::InsertKeyValue(
           break;
     } else insert_result = fn_insert_impl(trie_vec_.back());
     if (insert_result == detail::InsertResult::Fail) {
-      //mutex_.WriteLock();
       trie_vec_.emplace_back(fn_create_new_trie());
-      //mutex_.WriteUnlock();
     }
   }
   assert(insert_result != detail::InsertResult::Fail);

@@ -15,7 +15,6 @@
 #include "terark_zip_table.h"
 #include "terark_zip_internal.h"
 #include "terark_zip_common.h"
-#include "terark_zip_index.h"
 // std headers
 #include <random>
 #include <future>
@@ -35,6 +34,7 @@
 #include <terark/zbs/abstract_blob_store.hpp>
 #include <terark/zbs/dict_zip_blob_store.hpp>
 #include <terark/zbs/zip_reorder_map.hpp>
+#include <terark/idx/terark_zip_index.hpp>
 #include <terark/bitfield_array.hpp>
 #include <terark/util/fstrvec.hpp>
 #include <terark/thread/pipeline.hpp>
@@ -53,6 +53,7 @@ using terark::Uint64Histogram;
 using terark::DictZipBlobStore;
 using terark::PipelineProcessor;
 using terark::freq_hist_o1;
+using terark::TerarkIndex;
 
 class TerarkZipTableBuilder : public TableBuilder, boost::noncopyable {
 public:

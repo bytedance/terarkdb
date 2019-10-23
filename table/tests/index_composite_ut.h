@@ -11,9 +11,9 @@
 
 #include <terark/io/FileStream.hpp>
 #include <terark/rank_select.hpp>
+#include <terark/idx/terark_zip_index.hpp>
 
 #include "../terark_zip_common.h"
-#include "../terark_zip_index.h"
 
 using std::string;
 using std::unique_ptr;

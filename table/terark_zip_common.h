@@ -3,6 +3,7 @@
 #include <terark/io/DataIO.hpp>
 #include <terark/io/FileStream.hpp>
 #include <terark/io/StreamBuffer.hpp>
+#include <terark/idx/terark_zip_index.hpp>
 
 namespace rocksdb {
 
@@ -40,7 +41,6 @@ namespace rocksdb {
 # define WARN_EXCEPT WARN
 #endif
 
-
 using std::string;
 using std::unique_ptr;
 
@@ -58,54 +58,6 @@ using terark::LittleEndianDataOutput;
 
 template<class T>
 inline unique_ptr<T> UniquePtrOf(T* p) { return unique_ptr<T>(p); }
-
-inline uint64_t ReadBigEndianUint64(const byte_t* beg, size_t len) {
-  union {
-    byte_t bytes[8];
-    uint64_t value;
-  } c;
-  c.value = 0;  // this is fix for gcc-4.8 union init bug
-  memcpy(c.bytes + (8 - len), beg, len);
-  return VALUE_OF_BYTE_SWAP_IF_LITTLE_ENDIAN(c.value);
-}
-inline uint64_t ReadBigEndianUint64(const byte_t* beg, const byte_t* end) {
-  assert(end - beg <= 8);
-  return ReadBigEndianUint64(beg, end - beg);
-}
-inline uint64_t ReadBigEndianUint64(fstring data) {
-  assert(data.size() <= 8);
-  return ReadBigEndianUint64((const byte_t*)data.data(), data.size());
-}
-
-inline
-uint64_t ReadBigEndianUint64Aligned(const byte_t* beg, size_t len) {
-  assert(8 == len); TERARK_UNUSED_VAR(len);
-  return VALUE_OF_BYTE_SWAP_IF_LITTLE_ENDIAN(*(const uint64_t*)beg);
-}
-inline
-uint64_t ReadBigEndianUint64Aligned(const byte_t* beg, const byte_t* end) {
-  assert(end - beg == 8); TERARK_UNUSED_VAR(end);
-  return VALUE_OF_BYTE_SWAP_IF_LITTLE_ENDIAN(*(const uint64_t*)beg);
-}
-inline uint64_t ReadBigEndianUint64Aligned(fstring data) {
-  assert(data.size() == 8);
-  return VALUE_OF_BYTE_SWAP_IF_LITTLE_ENDIAN(*(const uint64_t*)data.p);
-}
-
-inline void SaveAsBigEndianUint64(byte_t* beg, size_t len, uint64_t value) {
-  assert(len <= 8);
-  union {
-    byte_t bytes[8];
-    uint64_t value;
-  } c;
-  c.value = VALUE_OF_BYTE_SWAP_IF_LITTLE_ENDIAN(value);
-  memcpy(beg, c.bytes + (8 - len), len);
-}
-
-inline void SaveAsBigEndianUint64(byte_t* beg, byte_t* end, uint64_t value) {
-  assert(end - beg <= 8);
-  SaveAsBigEndianUint64(beg, end - beg, value);
-}
 
 template<class T>
 inline void correct_minmax(T& minVal, T& maxVal) {
@@ -135,55 +87,5 @@ inline std::string ClassName(const T& x) {
   return demangle(typeid(x).name());
 }
 
-class AutoDeleteFile {
-public:
-  std::string fpath;
-  operator fstring() const { return fpath; }
-  void Delete();
-  ~AutoDeleteFile();
-};
-
-class TempFileDeleteOnClose {
-public:
-  std::string path;
-  FileStream fp;
-  NativeDataOutput<OutputBuffer> writer;
-  ~TempFileDeleteOnClose();
-  void open_temp();
-  void open();
-  void dopen(int fd);
-  void close();
-  void complete_write();
-};
-
-
-struct FilePair {
-  TempFileDeleteOnClose key;
-  TempFileDeleteOnClose value;
-  bool isFullValue = true;
-};
-
-class TerarkKeyReader {
-public:
-  virtual ~TerarkKeyReader(){}
-  static TerarkKeyReader* MakeReader(fstring fileName, size_t fileBegin, size_t fileEnd, bool reverse);
-  static TerarkKeyReader* MakeReader(const valvec<std::shared_ptr<FilePair>>& files, bool attach);
-  virtual fstring next() = 0;
-  virtual void rewind() = 0;
-};
-
-class TerarkValueReader {
-  const valvec<std::shared_ptr<FilePair>>& files;
-  size_t index;
-  NativeDataInput<InputBuffer> reader;
-  valvec<byte_t> buffer;
-
-  void checkEOF();
-public:
-  TerarkValueReader(const valvec<std::shared_ptr<FilePair>>& files);
-  uint64_t readUInt64();
-  void appendBuffer(valvec<byte_t>* buffer);
-  void rewind();
-};
 
 } // namespace rocksdb

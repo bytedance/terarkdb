@@ -1,5 +1,6 @@
 // project headers
 #include "terark_zip_table_builder.h"
+#include "terark_zip_common.h"
 // std headers
 #include <future>
 #include <cfloat>
@@ -750,7 +751,16 @@ void TerarkZipTableBuilder::BuildIndex(KeyValueStatus& kvs, size_t entropyLen) {
     long long t1 = g_pf.now();
     std::unique_ptr<TerarkIndex> indexPtr;
     try {
-      indexPtr.reset(TerarkIndex::Factory::Build(tempKeyFileReader.get(), table_options_, keyStat, nullptr));
+      terark::TerarkIndexOptions tiopt;
+      tiopt.debugLevel = table_options_.debugLevel;
+      tiopt.indexNestLevel = table_options_.indexNestLevel;
+      tiopt.indexNestScale = table_options_.indexNestScale;
+      tiopt.indexTempLevel = table_options_.indexTempLevel;
+      tiopt.indexType = table_options_.indexType;
+      tiopt.localTempDir = table_options_.localTempDir;
+      tiopt.smallTaskMemory = table_options_.smallTaskMemory;
+      auto& ref = tiopt;
+      indexPtr.reset(TerarkIndex::Factory::Build(tempKeyFileReader.get(), ref, keyStat, nullptr));
     }
     catch (const std::exception& ex) {
       WARN_EXCEPT(ioptions_.info_log, "TerarkZipTableBuilder::Finish():this=%12p:\n  index build fail , error = %s\n",

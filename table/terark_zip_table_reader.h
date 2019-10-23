@@ -5,7 +5,6 @@
  *      Author: zhaoming
  */
 
-
 #pragma once
 
 #ifndef TERARK_ZIP_TABLE_READER_H_
@@ -14,7 +13,6 @@
 // project headers
 #include "terark_zip_table.h"
 #include "terark_zip_internal.h"
-#include "terark_zip_index.h"
 // boost headers
 #include <boost/noncopyable.hpp>
 // rocksdb headers
@@ -27,8 +25,13 @@
 #include <terark/util/throw.hpp>
 #include <terark/bitfield_array.hpp>
 #include <terark/zbs/abstract_blob_store.hpp>
+#include <terark/idx/terark_zip_index.hpp>
 
 namespace rocksdb {
+
+using terark::TerarkIndex;
+using terark::TerarkContext;
+using terark::ContextBuffer;
 
 Status ReadMetaBlockAdapte(class RandomAccessFileReader* file,
                            uint64_t file_size,
@@ -246,7 +249,7 @@ public:
     intptr_t cache_fi_ = -1;
     size_t partCount_;
     size_t iteratorSize_ = 0;
-    fstrvec bounds_;
+    terark::fstrvec bounds_;
     valvec<TerarkZipSubReader> subReader_;
     bool hasAnyZipOffset_;
 
