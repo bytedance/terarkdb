@@ -120,11 +120,36 @@ class CombinedInternalIterator : public InternalIterator {
 class LazyInternalIteratorWrapper : public InternalIterator {
  public:
   LazyInternalIteratorWrapper(
-      InternalIterator*(*new_iter_callback)(void*), void* arg,
+      InternalIterator*(*new_iter_callback)(void*), void* new_iter_callback_arg,
+      bool (*filter_callback)(void*, const Slice&, const LazySlice&),
+      void* filter_callback_arg,
       const std::atomic<bool>* shutting_down = nullptr)
   : new_iter_callback_(new_iter_callback),
-    arg_(arg),
+    new_iter_callback_arg_(new_iter_callback_arg),
+    filter_callback_(filter_callback),
+    filter_callback_arg_(filter_callback_arg),
     shutting_down_(shutting_down) {}
+
+ private:
+  void FilterNext() {
+    if (filter_callback_ != nullptr) {
+      while (iter_->Valid() &&
+             filter_callback_(filter_callback_arg_, iter_->key(),
+                              iter_->value())) {
+        iter_->Next();
+      }
+    }
+  }
+  void FilterPrev() {
+    if (filter_callback_ != nullptr) {
+      while (iter_->Valid() &&
+             filter_callback_(filter_callback_arg_, iter_->key(),
+                              iter_->value())) {
+        iter_->Prev();
+      }
+    }
+  }
+ public:
 
   bool Valid() const override { return iter_ && iter_->Valid(); }
   Slice key() const override { assert(iter_); return iter_->key(); }
@@ -138,12 +163,16 @@ class LazyInternalIteratorWrapper : public InternalIterator {
     }
     return iter_->status();
   }
-  void Next() override { assert(iter_); iter_->Next(); }
-  void Prev() override { assert(iter_); iter_->Prev(); }
-  void Seek(const Slice& k) override { Init(); iter_->Seek(k); }
-  void SeekForPrev(const Slice& k) override { Init(); iter_->SeekForPrev(k); }
-  void SeekToFirst() override { Init(); iter_->SeekToFirst(); }
-  void SeekToLast() override { Init(); iter_->SeekToLast(); }
+  void Next() override { assert(iter_); iter_->Next(); FilterNext(); }
+  void Prev() override { assert(iter_); iter_->Prev(); FilterPrev(); }
+  void Seek(const Slice& k) override { Init(); iter_->Seek(k); FilterNext(); }
+  void SeekForPrev(const Slice& k) override {
+    Init();
+    iter_->SeekForPrev(k);
+    FilterPrev();
+  }
+  void SeekToFirst() override { Init(); iter_->SeekToFirst(); FilterNext(); }
+  void SeekToLast() override { Init(); iter_->SeekToLast(); FilterPrev(); }
 
   void Reset() {
     iter_.reset();
@@ -152,11 +181,13 @@ class LazyInternalIteratorWrapper : public InternalIterator {
  private:
   void Init() {
     if (!iter_) {
-      iter_.reset(new_iter_callback_(arg_));
+      iter_.reset(new_iter_callback_(new_iter_callback_arg_));
     }
   }
   InternalIterator*(*new_iter_callback_)(void*);
-  void* arg_;
+  void* new_iter_callback_arg_;
+  bool (*filter_callback_)(void*, const Slice&, const LazySlice&);
+  void* filter_callback_arg_;
   const std::atomic<bool>* shutting_down_;
   std::unique_ptr<InternalIterator> iter_;
 };

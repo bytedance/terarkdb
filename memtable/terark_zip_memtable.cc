@@ -696,7 +696,7 @@ MemTableRep* PatriciaTrieRepFactory::CreateMemTableRep(
     Allocator *allocator,
     const SliceTransform *transform,
     Logger *logger) {
-  if (IsForwardBytewiseComparator(key_cmp.icomparator())) {
+  if (IsForwardBytewiseComparator(key_cmp.icomparator()->user_comparator())) {
     return new PatriciaTrieRep(concurrent_type_, patricia_key_type_,
                                    needs_dup_key_check, write_buffer_size_,
                                    allocator, key_cmp);
@@ -713,7 +713,7 @@ MemTableRep* PatriciaTrieRepFactory::CreateMemTableRep(
     const ImmutableCFOptions &ioptions,
     const MutableCFOptions &mutable_cf_options,
     uint32_t column_family_id) {
-  if (IsForwardBytewiseComparator(key_cmp.icomparator())) {
+  if (IsForwardBytewiseComparator(key_cmp.icomparator()->user_comparator())) {
     return new PatriciaTrieRep(concurrent_type_, patricia_key_type_,
                                needs_dup_key_check, write_buffer_size_,
                                allocator, key_cmp);

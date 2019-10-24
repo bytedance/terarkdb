@@ -16,6 +16,7 @@
 
 #include <inttypes.h>
 #include <algorithm>
+#include <deque>
 #include <functional>
 #include <list>
 #include <memory>
@@ -1572,12 +1573,23 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
 
   input->SeekToFirst();
 
+  std::deque<std::string> conflict_map_storage;
+  std::unordered_map<Slice, uint64_t, SliceHasher> conflict_map;
+  std::mutex conflict_map_mutex;
+
   auto create_iter = [&] {
     return versions_->MakeInputIterator(sub_compact->compaction, nullptr,
                                         env_options_for_read_);
   };
-  LazyInternalIteratorWrapper second_pass_iter(c_style_callback(create_iter),
-                                               &create_iter, shutting_down_);
+  auto filter_conflict = [&](const Slice& ikey, const LazySlice& value) {
+    std::lock_guard<std::mutex> lock(conflict_map_mutex);
+    auto find = conflict_map.find(ikey);
+    return find != conflict_map.end() && find->second != value.file_number();
+  };
+
+  LazyInternalIteratorWrapper second_pass_iter(
+      c_style_callback(create_iter), &create_iter,
+      c_style_callback(filter_conflict), &filter_conflict, shutting_down_);
 
   Status status = OpenCompactionOutputFile(sub_compact);
   if (!status.ok()) {
@@ -1587,6 +1599,9 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
 
   Version* input_version = sub_compact->compaction->input_version();
   auto& dependence_map = input_version->storage_info()->dependence_map();
+  auto& comp = cfd->internal_comparator();
+  std::string last_key;
+  uint64_t last_file_number = uint64_t(-1);
   IterKey iter_key;
   ParsedInternalKey ikey;
   struct {
@@ -1598,6 +1613,7 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
   while (status.ok() && !cfd->IsDropped() && input->Valid()) {
     ++counter.input;
     Slice key = input->key();
+    uint64_t curr_file_number = uint64_t(-1);
     if (!ParseInternalKey(key, &ikey)) {
       status = Status::Corruption("Invalid InternalKey");
       break;
@@ -1629,8 +1645,7 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
       if (!status.ok()) {
         break;
       }
-      uint64_t file_number = SeparateHelper::DecodeFileNumber(value);
-      auto find = dependence_map.find(file_number);
+      auto find = dependence_map.find(SeparateHelper::DecodeFileNumber(value));
       if (find == dependence_map.end()) {
         status = Status::Corruption("Separate value dependence missing");
         break;
@@ -1640,6 +1655,7 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
         ++counter.file_number_mismatch;
         break;
       }
+      curr_file_number = value.file_number();
 
       assert(sub_compact->builder != nullptr);
       assert(sub_compact->current_output() != nullptr);
@@ -1648,6 +1664,21 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
       sub_compact->current_output()->meta.UpdateBoundaries(key, ikey.sequence);
       sub_compact->num_output_records++;
     } while (false);
+    
+    std::string curr_key = key.ToString();
+    if (counter.input > 1 && comp.Compare(curr_key, last_key) == 0) {
+      assert(last_file_number == uint64_t(-1) ||
+             curr_file_number == uint64_t(-1));
+      uint64_t valid_file_number = std::min(last_file_number, curr_file_number);
+      if (valid_file_number != uint64_t(-1)) {
+        conflict_map_storage.emplace_back(curr_key);
+        std::lock_guard<std::mutex> lock(conflict_map_mutex);
+        conflict_map.emplace(conflict_map_storage.back(), valid_file_number);
+      }
+    }
+    last_key = std::move(curr_key);
+    last_file_number = curr_file_number;
+    
     input->Next();
   }
 
