@@ -622,16 +622,18 @@ class TestPutOperator : public MergeOperator {
  public:
   virtual bool FullMergeV2(const MergeOperationInput& merge_in,
                            MergeOperationOutput* merge_out) const override {
-    if (merge_in.existing_value != nullptr &&
-        *(merge_in.existing_value) == "corrupted") {
-      return false;
-    }
-    for (auto& value : merge_in.operand_list) {
-      if (value == "corrupted") {
+    if (merge_in.existing_value != nullptr) {
+      if (!merge_in.existing_value->inplace_decode().ok() ||
+          merge_in.existing_value->slice_ref() == "corrupted") {
         return false;
       }
     }
-    merge_out->existing_operand = merge_in.operand_list.back();
+    for (auto& value : merge_in.operand_list) {
+      if (!value.inplace_decode().ok() || value == "corrupted") {
+        return false;
+      }
+    }
+    merge_out->existing_operand = &merge_in.operand_list.back();
     return true;
   }
 

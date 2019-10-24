@@ -356,7 +356,7 @@ class DBImpl : public DB {
 
   // checks if all live files exist on file system and that their file sizes
   // match to our in-memory records
-  virtual Status CheckConsistency();
+  virtual Status CheckConsistency(bool read_only);
 
   virtual Status GetDbIdentity(std::string& identity) const override;
 

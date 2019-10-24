@@ -387,7 +387,7 @@ Status DBImpl::Recover(
 
   Status s = versions_->Recover(column_families, read_only);
   if (immutable_db_options_.paranoid_checks && s.ok()) {
-    s = CheckConsistency();
+    s = CheckConsistency(read_only);
   }
   if (s.ok() && !read_only) {
     for (auto cfd : *versions_->GetColumnFamilySet()) {

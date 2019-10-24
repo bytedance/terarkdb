@@ -2834,7 +2834,7 @@ void DBImpl::GetColumnFamilyMetaData(ColumnFamilyHandle* column_family,
 
 #endif  // ROCKSDB_LITE
 
-Status DBImpl::CheckConsistency() {
+Status DBImpl::CheckConsistency(bool read_only) {
   mutex_.AssertHeld();
   std::vector<LiveFileMetaData> metadata;
   versions_->GetLiveFilesMetaData(&metadata);
@@ -2851,8 +2851,10 @@ Status DBImpl::CheckConsistency() {
       s = Status::OK();
     }
     if (!s.ok()) {
-      corruption_messages +=
-          "Can't access " + md.name + ": " + s.ToString() + "\n";
+      if (!read_only) {
+        corruption_messages +=
+            "Can't access " + md.name + ": " + s.ToString() + "\n";
+      }
     } else if (fsize != md.size) {
       corruption_messages += "Sst file size mismatch: " + file_path +
                              ". Size recorded in manifest " +
@@ -2860,7 +2862,7 @@ Status DBImpl::CheckConsistency() {
                              ToString(fsize) + "\n";
     }
   }
-  if (corruption_messages.size() == 0) {
+  if (corruption_messages.empty()) {
     return Status::OK();
   } else {
     return Status::Corruption(corruption_messages);
