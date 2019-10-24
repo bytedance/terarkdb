@@ -265,7 +265,7 @@ endif
 
 LIB_SOURCES += ${TERARK_ZIP_SRC}
 
-AM_LINK = $(AM_V_CCLD)$(CXX) $^ $(EXEC_LDFLAGS) -o $@ ${TerarkLDFLAGS} $(LDFLAGS) $(COVERAGEFLAGS)
+AM_LINK = $(AM_V_CCLD)$(CXX) $^ $(EXEC_LDFLAGS) -o $@ ${TerarkLDFLAGS} $(LINK_STATIC_TERARK) $(LDFLAGS) $(COVERAGEFLAGS)
 # detect what platform we're building on
 dummy := $(shell (export ROCKSDB_ROOT="$(CURDIR)"; export PORTABLE="$(PORTABLE)"; "$(CURDIR)/build_tools/build_detect_platform" "$(CURDIR)/make_config.mk"; echo $$?))
 ifneq ("${dummy}","0")
