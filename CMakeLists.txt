@@ -56,6 +56,7 @@ endif()
 
 include_directories(${CMAKE_CURRENT_LIST_DIR}/../terark-core/boost-include)
 include_directories(${CMAKE_CURRENT_LIST_DIR}/../terark-core/src)
+include_directories(${CMAKE_CURRENT_LIST_DIR}/../terark-core/3rdparty/zstd)
 
 if(MSVC)
   # Defaults currently different for GFLAGS.
@@ -253,7 +254,7 @@ if(HAVE_THREAD_LOCAL)
   add_definitions(-DROCKSDB_SUPPORT_THREAD_LOCAL)
 endif()
 
-option(FAIL_ON_WARNINGS "Treat compile warnings as errors" ON)
+option(FAIL_ON_WARNINGS "Treat compile warnings as errors" OFF)
 if(FAIL_ON_WARNINGS)
   if(MSVC)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /WX")

@@ -673,8 +673,8 @@ class ChanglingMergeOperator : public MergeOperator {
     return false;
   }
   virtual bool PartialMergeMulti(const Slice& /*key*/,
-                                 const std::deque<Slice>& /*operand_list*/,
-                                 std::string* /*new_value*/,
+                                 const std::vector<LazySlice>& /*operand_list*/,
+                                 LazySlice* /*new_value*/,
                                  Logger* /*logger*/) const override {
     return false;
   }

@@ -626,7 +626,7 @@ class TestPutOperator : public MergeOperator {
         *(merge_in.existing_value) == "corrupted") {
       return false;
     }
-    for (auto value : merge_in.operand_list) {
+    for (auto& value : merge_in.operand_list) {
       if (value == "corrupted") {
         return false;
       }
