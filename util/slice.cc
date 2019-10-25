@@ -158,8 +158,8 @@ std::string Slice::ToString(bool hex) const {
     auto beg = &result[0];
     for (size_t i = 0; i < size_; ++i) {
       unsigned char c = data_[i];
-      beg[i*2+0] = hextab[c >> 4];
-      beg[i*2+1] = hextab[c & 0xf];
+      beg[i * 2 + 0] = hextab[c >> 4];
+      beg[i * 2 + 1] = hextab[c & 0xf];
     }
   } else {
     result.assign(data_, size_);

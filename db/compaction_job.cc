@@ -1612,9 +1612,9 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
   } counter;
   while (status.ok() && !cfd->IsDropped() && input->Valid()) {
     ++counter.input;
-    Slice key = input->key();
+    Slice curr_key = input->key();
     uint64_t curr_file_number = uint64_t(-1);
-    if (!ParseInternalKey(key, &ikey)) {
+    if (!ParseInternalKey(curr_key, &ikey)) {
       status = Status::Corruption("Invalid InternalKey");
       break;
     }
@@ -1659,24 +1659,23 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
 
       assert(sub_compact->builder != nullptr);
       assert(sub_compact->current_output() != nullptr);
-      sub_compact->builder->Add(key, value);
+      sub_compact->builder->Add(curr_key, value);
       sub_compact->current_output_file_size = sub_compact->builder->FileSize();
-      sub_compact->current_output()->meta.UpdateBoundaries(key, ikey.sequence);
+      sub_compact->current_output()->meta.UpdateBoundaries(curr_key,
+                                                           ikey.sequence);
       sub_compact->num_output_records++;
     } while (false);
-    
-    std::string curr_key = key.ToString();
-    if (counter.input > 1 && comp.Compare(curr_key, last_key) == 0) {
+
+    if (counter.input > 1 && comp.Compare(curr_key, last_key) == 0 &&
+        (last_file_number & curr_file_number) != uint64_t(-1)) {
       assert(last_file_number == uint64_t(-1) ||
              curr_file_number == uint64_t(-1));
-      uint64_t valid_file_number = std::min(last_file_number, curr_file_number);
-      if (valid_file_number != uint64_t(-1)) {
-        conflict_map_storage.emplace_back(curr_key);
-        std::lock_guard<std::mutex> lock(conflict_map_mutex);
-        conflict_map.emplace(conflict_map_storage.back(), valid_file_number);
-      }
+      uint64_t valid_file_number = last_file_number & curr_file_number;
+      conflict_map_storage.emplace_back(curr_key.data(), curr_key.size());
+      std::lock_guard<std::mutex> lock(conflict_map_mutex);
+      conflict_map.emplace(conflict_map_storage.back(), valid_file_number);
     }
-    last_key = std::move(curr_key);
+    last_key.assign(curr_key.data(), curr_key.size());
     last_file_number = curr_file_number;
     
     input->Next();
