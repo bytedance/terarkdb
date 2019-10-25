@@ -18,10 +18,10 @@ const char* CassandraCompactionFilter::Name() const {
 
 CompactionFilter::Decision CassandraCompactionFilter::FilterV2(
     int /*level*/, const Slice& /*key*/, ValueType value_type,
-    const LazySlice& existing_value, LazySlice* new_value,
+    const LazyBuffer& existing_value, LazyBuffer* new_value,
     std::string* /*skip_until*/) const {
   bool value_changed = false;
-  if (!existing_value.inplace_decode().ok()) {
+  if (!existing_value.fetch().ok()) {
     return Decision::kKeep;
   }
   RowValue row_value = RowValue::Deserialize(
@@ -40,7 +40,7 @@ CompactionFilter::Decision CassandraCompactionFilter::FilterV2(
   }
 
   if (value_changed) {
-    compacted.Serialize(new_value->trans_to_buffer());
+    compacted.Serialize(new_value->trans_to_string());
     return Decision::kChangeValue;
   }
 

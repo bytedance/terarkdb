@@ -158,6 +158,7 @@ LIB_SOURCES =                                                   \
   util/hash.cc                                                  \
   util/iterator_cache.cc                                        \
   util/jemalloc_nodump_allocator.cc                             \
+  util/lazy_buffer.cc                                           \
   util/log_buffer.cc                                            \
   util/murmurhash.cc                                            \
   util/random.cc                                                \

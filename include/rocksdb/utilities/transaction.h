@@ -175,32 +175,32 @@ class Transaction {
                      ColumnFamilyHandle* column_family, const Slice& key,
                      std::string* value) {
     assert(value != nullptr);
-    LazySlice lazy_val(value);
+    LazyBuffer lazy_val(value);
     auto s = Get(options, column_family, key, &lazy_val);
     if (s.ok()) {
-      lazy_val.save_to_buffer(value);
+      s = std::move(lazy_val).dump(value);
     }
     return s;
   }
 
-  // An overload of the above method that receives a LazySlice
+  // An overload of the above method that receives a LazyBuffer
   // For backward compatibility a default implementation is provided
   virtual Status Get(const ReadOptions& options,
                      ColumnFamilyHandle* column_family, const Slice& key,
-                     LazySlice* lazy_val) = 0;
+                     LazyBuffer* lazy_val) = 0;
 
   virtual Status Get(const ReadOptions& options, const Slice& key,
                      std::string* value) {
     assert(value != nullptr);
-    LazySlice lazy_val(value);
+    LazyBuffer lazy_val(value);
     auto s = Get(options, key, &lazy_val);
     if (s.ok()) {
-      lazy_val.save_to_buffer(value);
+      s = std::move(lazy_val).dump(value);
     }
     return s;
   }
   virtual Status Get(const ReadOptions& options, const Slice& key,
-                     LazySlice* lazy_val) = 0;
+                     LazyBuffer* lazy_val) = 0;
 
   virtual std::vector<Status> MultiGet(
       const ReadOptions& options,
@@ -242,11 +242,11 @@ class Transaction {
                               const Slice& key, std::string* value,
                               bool exclusive = true) = 0;
 
-  // An overload of the above method that receives a LazySlice
+  // An overload of the above method that receives a LazyBuffer
   // For backward compatibility a default implementation is provided
   virtual Status GetForUpdate(const ReadOptions& options,
                               ColumnFamilyHandle* column_family,
-                              const Slice& key, LazySlice* lazy_val,
+                              const Slice& key, LazyBuffer* lazy_val,
                               bool exclusive = true) {
     if (lazy_val == nullptr) {
       std::string* null_str = nullptr;

@@ -12,7 +12,7 @@
 #include <memory>
 #include <string>
 #include <vector>
-#include "rocksdb/lazy_slice.h"
+#include "rocksdb/lazy_buffer.h"
 
 #include "rocksdb/status.h"
 
@@ -156,25 +156,25 @@ class CompactionFilter {
   // failed. Instead, it is better to implement any Merge filtering inside the
   // MergeOperator.
   virtual Decision FilterV2(int level, const Slice& key, ValueType value_type,
-                            const LazySlice& existing_value,
-                            LazySlice* new_value,
+                            const LazyBuffer& existing_value,
+                            LazyBuffer* new_value,
                             std::string* /*skip_until*/) const {
-    if (!existing_value.inplace_decode().ok()) {
+    if (!existing_value.fetch().ok()) {
       assert(false);
       return Decision::kKeep;
     }
     switch (value_type) {
       case ValueType::kValue: {
         bool value_changed = false;
-        bool rv = Filter(level, key, existing_value,
-                         new_value->trans_to_buffer(), &value_changed);
+        bool rv = Filter(level, key, existing_value.get_slice(),
+                         new_value->trans_to_string(), &value_changed);
         if (rv) {
           return Decision::kRemove;
         }
         return value_changed ? Decision::kChangeValue : Decision::kKeep;
       }
       case ValueType::kMergeOperand: {
-        bool rv = FilterMergeOperand(level, key, existing_value);
+        bool rv = FilterMergeOperand(level, key, existing_value.get_slice());
         return rv ? Decision::kRemove : Decision::kKeep;
       }
     }

@@ -94,7 +94,7 @@ class TableReader {
   virtual void RangeScan(const Slice* begin,
                          const SliceTransform* prefix_extractor, void* arg,
                          bool (*callback_func)(void* arg, const Slice& key,
-                                               LazySlice&& value));
+                                               LazyBuffer&& value));
 
   // Prefetch data corresponding to a give range of keys
   // Typically this functionality is required for table implementations that

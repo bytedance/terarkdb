@@ -22,7 +22,7 @@ class DBImplReadOnly : public DBImpl {
   using DB::Get;
   virtual Status Get(const ReadOptions& options,
                      ColumnFamilyHandle* column_family, const Slice& key,
-                     LazySlice* value) override;
+                     LazyBuffer* value) override;
 
   // TODO: Implement ReadOnly MultiGet?
 

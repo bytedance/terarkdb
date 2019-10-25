@@ -119,16 +119,16 @@ void GetSmallestLargestSeqno(const std::vector<FileMetaData*>& files,
 
 bool ReadMapElement(MapSstElement& map_element, InternalIterator* iter,
                       LogBuffer* log_buffer, const std::string& cf_name) {
-  LazySlice value = iter->value();
-  auto s = value.inplace_decode();
+  LazyBuffer value = iter->value();
+  auto s = value.fetch();
   if (!s.ok()) {
     ROCKS_LOG_BUFFER(
         log_buffer,
-        "[%s] UniversalCompactionPicker LazySlice decode fail: %s\n",
+        "[%s] UniversalCompactionPicker LazyBuffer decode fail: %s\n",
         cf_name.c_str(), s.ToString().c_str());
     return false;
   }
-  if (!map_element.Decode(iter->key(), value)) {
+  if (!map_element.Decode(iter->key(), value.get_slice())) {
     ROCKS_LOG_BUFFER(
         log_buffer,
         "[%s] UniversalCompactionPicker MapSstElement Decode fail\n",

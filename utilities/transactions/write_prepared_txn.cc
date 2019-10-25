@@ -41,7 +41,7 @@ void WritePreparedTxn::Initialize(const TransactionOptions& txn_options) {
 
 Status WritePreparedTxn::Get(const ReadOptions& read_options,
                              ColumnFamilyHandle* column_family,
-                             const Slice& key, LazySlice* lazy_val) {
+                             const Slice& key, LazyBuffer* lazy_val) {
   auto snapshot = read_options.snapshot;
   auto snap_seq =
       snapshot != nullptr ? snapshot->GetSequenceNumber() : kMaxSequenceNumber;
@@ -256,14 +256,14 @@ Status WritePreparedTxn::RollbackInternal() {
         return s;
       }
 
-      LazySlice lazy_val;
+      LazyBuffer lazy_val;
       bool not_used;
       auto cf_handle = handles_[cf];
       s = db_->GetImpl(roptions, cf_handle, key, &lazy_val, &not_used,
                        &callback);
       assert(s.ok() ? lazy_val.valid() : s.IsNotFound());
       if (s.ok()) {
-        s = rollback_batch_->Put(cf_handle, key, lazy_val);
+        s = rollback_batch_->Put(cf_handle, key, lazy_val.get_slice());
         assert(s.ok());
       } else if (s.IsNotFound()) {
         // There has been no readable value before txn. By adding a delete we

@@ -29,16 +29,20 @@ class Cleanable {
   Cleanable(Cleanable&) = delete;
   Cleanable& operator=(Cleanable&) = delete;
 
+  typedef void (*CleanupFunction)(void* arg1, void* arg2);
+
+  Cleanable(CleanupFunction function, void* arg1, void* arg2)
+      : cleanup_{function, arg1, arg2, nullptr} {}
+
   // Move constructor and move assignment is allowed.
-  Cleanable(Cleanable&&);
-  Cleanable& operator=(Cleanable&&);
+  Cleanable(Cleanable&&) noexcept;
+  Cleanable& operator=(Cleanable&&) noexcept;
 
   // Clients are allowed to register function/arg1/arg2 triples that
-  // will be invoked when this iterator is destroyed.
+  // will be invoked when this object is destroyed.
   //
   // Note that unlike all of the preceding methods, this method is
   // not abstract and therefore clients should not override it.
-  typedef void (*CleanupFunction)(void* arg1, void* arg2);
   void RegisterCleanup(CleanupFunction function, void* arg1, void* arg2);
   void DelegateCleanupsTo(Cleanable* other);
   // DoCleanup and also resets the pointers for reuse

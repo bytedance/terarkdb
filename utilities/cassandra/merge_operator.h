@@ -24,8 +24,8 @@ public:
                           MergeOperationOutput* merge_out) const override;
 
  virtual bool PartialMergeMulti(const Slice& key,
-                                const std::vector<LazySlice>& operand_list,
-                                LazySlice* new_value,
+                                const std::vector<LazyBuffer>& operand_list,
+                                LazyBuffer* new_value,
                                 Logger* logger) const override;
 
  virtual const char* Name() const override;
@@ -33,7 +33,7 @@ public:
  virtual bool AllowSingleOperand() const override { return true; }
 
  virtual bool ShouldMerge(
-     const std::vector<LazySlice>& operands) const override {
+     const std::vector<LazyBuffer>& operands) const override {
    return operands_limit_ > 0 && operands.size() >= operands_limit_;
  }
 

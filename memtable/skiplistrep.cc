@@ -88,7 +88,7 @@ bool InsertKeyValueConcurrently(const Slice& internal_key,
 
   virtual void Get(const LookupKey& k, void* callback_args,
                    bool (*callback_func)(void* arg, const Slice& key,
-                                         LazySlice&& value)) override {
+                                         LazyBuffer&& value)) override {
     SkipListRep::Iterator iter(&skip_list_);
     Slice dummy_slice;
     for (iter.Seek(dummy_slice, k.memtable_key().data());

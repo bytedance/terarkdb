@@ -116,13 +116,13 @@ PlainTableBuilder::PlainTableBuilder(
 PlainTableBuilder::~PlainTableBuilder() {
 }
 
-void PlainTableBuilder::Add(const Slice& key, const LazySlice& lazy_value) {
-  auto s = lazy_value.inplace_decode();
+void PlainTableBuilder::Add(const Slice& key, const LazyBuffer& lazy_value) {
+  auto s = lazy_value.fetch();
   if (!s.ok()) {
     status_ = s;
     return;
   }
-  const Slice& value = lazy_value;
+  const Slice& value = lazy_value.get_slice();
   // temp buffer for metadata bytes between key and value.
   char meta_bytes_buf[6];
   size_t meta_bytes_buf_size = 0;

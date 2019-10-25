@@ -70,7 +70,7 @@ public:
 
   ~TerarkZipTableBuilder();
 
-  void Add(const Slice& key, const LazySlice& value) override;
+  void Add(const Slice& key, const LazyBuffer& value) override;
   Status status() const override { return status_; }
   Status Finish(const TablePropertyCache* prop) override;
   Status AbortFinish(const std::exception& ex);

@@ -115,7 +115,7 @@ class HashCuckooRep : public MemTableRep {
 
   virtual void Get(const LookupKey& k, void* callback_args,
                    bool (*callback_func)(void* arg, const Slice& key,
-                                         LazySlice&& value)) override;
+                                         LazyBuffer&& value)) override;
 
   class Iterator : public MemTableRep::Iterator {
     std::shared_ptr<std::vector<const char*>> bucket_;
@@ -299,7 +299,7 @@ class HashCuckooRep : public MemTableRep {
 
 void HashCuckooRep::Get(const LookupKey& key, void* callback_args,
                         bool (*callback_func)(void* arg, const Slice& key,
-                                              LazySlice&& value)) {
+                                              LazyBuffer&& value)) {
   Slice user_key = key.user_key();
   for (unsigned int hid = 0; hid < hash_function_count_; ++hid) {
     const char* bucket =

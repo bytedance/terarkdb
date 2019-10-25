@@ -106,12 +106,12 @@ class DBImpl : public DB {
   using DB::Get;
   virtual Status Get(const ReadOptions& options,
                      ColumnFamilyHandle* column_family, const Slice& key,
-                     LazySlice* value) override;
+                     LazyBuffer* value) override;
 
   // Function that Get and KeyMayExist call with no_io true or false
   // Note: 'value_found' from KeyMayExist propagates here
   Status GetImpl(const ReadOptions& options, ColumnFamilyHandle* column_family,
-                 const Slice& key, LazySlice* value,
+                 const Slice& key, LazyBuffer* value,
                  bool* value_found = nullptr,
                  ReadCallback* callback = nullptr);
 

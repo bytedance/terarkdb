@@ -160,7 +160,7 @@ Status CuckooTableReader::Get(const ReadOptions& /*readOptions*/,
       // Here, we compare only the user key part as we support only one entry
       // per user key and we don't support snapshot.
       if (ucomp_->Equal(user_key, Slice(bucket, user_key.size()))) {
-        LazySlice value(bucket + key_length_, value_length_);
+        LazyBuffer value(Slice(bucket + key_length_, value_length_));
         bool dont_care __attribute__((__unused__));
         if (is_last_level_) {
           // Sequence number is not stored at the last level, so we will use
@@ -209,7 +209,7 @@ class CuckooTableIterator : public InternalIterator {
   void Next() override;
   void Prev() override;
   Slice key() const override;
-  LazySlice value() const override;
+  LazyBuffer value() const override;
   Status status() const override { return Status::OK(); }
   void InitIfNeeded();
 
@@ -372,9 +372,9 @@ Slice CuckooTableIterator::key() const {
   return curr_key_.GetInternalKey();
 }
 
-LazySlice CuckooTableIterator::value() const {
+LazyBuffer CuckooTableIterator::value() const {
   assert(Valid());
-  return LazySlice(curr_value_, false, reader_->file_number_);
+  return LazyBuffer(curr_value_, false, reader_->file_number_);
 }
 
 InternalIterator* CuckooTableReader::NewIterator(
@@ -382,7 +382,7 @@ InternalIterator* CuckooTableReader::NewIterator(
     const SliceTransform* /* prefix_extractor */, Arena* arena,
     bool /*skip_filters*/, bool /*for_compaction*/) {
   if (!status().ok()) {
-    return NewErrorInternalIterator<LazySlice>(
+    return NewErrorInternalIterator<LazyBuffer>(
         Status::Corruption("CuckooTableReader status is not okay."), arena);
   }
   CuckooTableIterator* iter;

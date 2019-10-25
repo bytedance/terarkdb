@@ -217,7 +217,7 @@ Status BuildTable(
          range_del_it->Next()) {
       auto tombstone = range_del_it->Tombstone();
       auto kv = tombstone.Serialize();
-      builder->Add(kv.first.Encode(), LazySlice(kv.second));
+      builder->Add(kv.first.Encode(), LazyBuffer(kv.second));
       meta->UpdateBoundariesForRange(kv.first, tombstone.SerializeEndKey(),
                                      tombstone.seq_, internal_comparator);
     }

@@ -33,7 +33,7 @@ static void DeleteEntry(const Slice& /*key*/, void* value) {
 GetContext::GetContext(const Comparator* ucmp,
                        const MergeOperator* merge_operator, Logger* logger,
                        Statistics* statistics, GetState init_state,
-                       const Slice& user_key, LazySlice* lazy_val,
+                       const Slice& user_key, LazyBuffer* lazy_val,
                        bool* value_found, MergeContext* merge_context,
                        const SeparateHelper* separate_helper,
                        SequenceNumber* _max_covering_tombstone_seq, Env* env,
@@ -143,7 +143,7 @@ void GetContext::ReportCounters() {
 }
 
 bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
-                           LazySlice&& value, bool* matched) {
+                           LazyBuffer&& value, bool* matched) {
   assert(matched);
   assert((state_ != kMerge && parsed_key.type != kTypeMerge &&
          parsed_key.type != kTypeMergeIndex) ||
@@ -189,7 +189,7 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
           state_ = kFound;
           is_index_ = true;
           if (LIKELY(lazy_val_ != nullptr)) {
-            OK(value.decode_destructive(*lazy_val_));
+            OK(std::move(value).dump(*lazy_val_));
           }
           return false;
         }
@@ -203,14 +203,14 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
           state_ = kFound;
           if (LIKELY(lazy_val_ != nullptr)) {
             *lazy_val_ = std::move(value);
-            lazy_val_->pin_resource();
+            lazy_val_->pin();
           }
           return false;
         }
         if (kNotFound == state_) {
           state_ = kFound;
           if (LIKELY(lazy_val_ != nullptr)) {
-            OK(value.decode_destructive(*lazy_val_));
+            OK(std::move(value).dump(*lazy_val_));
           }
         } else if (kMerge == state_) {
           assert(merge_operator_ != nullptr);
@@ -220,7 +220,7 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
                 merge_operator_, user_key_, &value,
                 merge_context_->GetOperands(), lazy_val_, logger_, statistics_,
                 env_))) {
-              lazy_val_->pin_resource();
+              lazy_val_->pin();
             }
           }
         }
@@ -241,7 +241,7 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
                 merge_operator_, user_key_, nullptr,
                 merge_context_->GetOperands(), lazy_val_, logger_, statistics_,
                 env_))) {
-              lazy_val_->pin_resource();
+              lazy_val_->pin();
             }
           }
         }
@@ -252,7 +252,7 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
           state_ = kMerge;
           is_index_ = true;
           if (LIKELY(lazy_val_ != nullptr)) {
-            OK(value.decode_destructive(*lazy_val_));
+            OK(std::move(value).dump(*lazy_val_));
           }
           return false;
         }
@@ -266,7 +266,7 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
           state_ = kMerge;
           if (LIKELY(lazy_val_ != nullptr)) {
             *lazy_val_ = std::move(value);
-            lazy_val_->pin_resource();
+            lazy_val_->pin();
           }
           return false;
         }
@@ -281,7 +281,7 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
                 merge_operator_, user_key_, nullptr,
                 merge_context_->GetOperands(), lazy_val_, logger_, statistics_,
                 env_))) {
-              lazy_val_->pin_resource();
+              lazy_val_->pin();
             }
           }
           return false;

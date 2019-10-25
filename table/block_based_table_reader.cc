@@ -2320,7 +2320,7 @@ InternalIterator* BlockBasedTable::NewIterator(
       PrefixExtractorChanged(rep_->table_properties.get(), prefix_extractor);
   const bool kIsNotIndex = false;
   if (arena == nullptr) {
-    return new BlockBasedTableIterator<DataBlockIter, LazySlice>(
+    return new BlockBasedTableIterator<DataBlockIter, LazyBuffer>(
         this, read_options, rep_->internal_comparator,
         NewIndexIterator(
             read_options,
@@ -2333,8 +2333,8 @@ InternalIterator* BlockBasedTable::NewIterator(
   } else {
     auto* mem =
         arena->AllocateAligned(
-            sizeof(BlockBasedTableIterator<DataBlockIter, LazySlice>));
-    return new (mem) BlockBasedTableIterator<DataBlockIter, LazySlice>(
+            sizeof(BlockBasedTableIterator<DataBlockIter, LazyBuffer>));
+    return new (mem) BlockBasedTableIterator<DataBlockIter, LazyBuffer>(
         this, read_options, rep_->internal_comparator,
         NewIndexIterator(read_options, need_upper_bound_check),
         !skip_filters && !read_options.total_order_seek &&
@@ -2506,7 +2506,7 @@ Status BlockBasedTable::Get(const ReadOptions& read_options, const Slice& key,
             s = Status::Corruption(Slice());
           }
 
-          if (!get_context->SaveValue(parsed_key, LazySlice(biter.value()),
+          if (!get_context->SaveValue(parsed_key, LazyBuffer(biter.value()),
                                       &matched)) {
             done = true;
             break;
@@ -3250,13 +3250,13 @@ void DeleteCachedIndexEntry(const Slice& /*key*/, void* value) {
 
 }  // anonymous namespace
 
-void BlockBasedTableIterator<DataBlockIter, LazySlice>::pin_resource(
-    rocksdb::LazySlice* slice, rocksdb::LazySliceRep* /*rep*/) const {
+void BlockBasedTableIterator<DataBlockIter, LazyBuffer>::pin_buffer(
+    LazyBuffer* buffer) const {
   //TODO ref block
   //[block handle]->ref()
   //Cleanable cleanup = [](args...){ [block handle]->deref() };
-  //slice->reset(*slice, &cleanup, slice->file_number());
-  slice->reset(block_iter_.value(), true, slice->file_number());
+  //buffer->reset(*slice, &cleanup, buffer->file_number());
+  buffer->reset(block_iter_.value(), true, buffer->file_number());
 }
 
 }  // namespace rocksdb

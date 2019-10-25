@@ -572,7 +572,7 @@ class VersionStorageInfo {
   void operator=(const VersionStorageInfo&) = delete;
 };
 
-class Version : public SeparateHelper, private LazySliceController {
+class Version : public SeparateHelper, private LazyBufferController {
  public:
   // Append to *iters a sequence of iterators that will
   // yield the contents of this Version when merged together.
@@ -607,13 +607,13 @@ class Version : public SeparateHelper, private LazySliceController {
   //
   // REQUIRES: lock is not held
   void Get(const ReadOptions&, const Slice& user_key, const LookupKey& key,
-           LazySlice* value, Status* status, MergeContext* merge_context,
+           LazyBuffer* value, Status* status, MergeContext* merge_context,
            SequenceNumber* max_covering_tombstone_seq,
            bool* value_found = nullptr, bool* key_exists = nullptr,
            SequenceNumber* seq = nullptr, ReadCallback* callback = nullptr);
 
   void GetKey(const Slice& user_key, const Slice& ikey, Status* status,
-              ValueType* type, SequenceNumber* seq, LazySlice* value);
+              ValueType* type, SequenceNumber* seq, LazyBuffer* value);
 
   // Loads some stats information from files. Call without mutex held. It needs
   // to be called before applying the version to the version set.
@@ -747,15 +747,14 @@ class Version : public SeparateHelper, private LazySliceController {
   ~Version();
 
 
-  void destroy(LazySliceRep* /*rep*/) const override {}
+  void destroy(LazyBuffer* /*buffer*/) const override {}
 
-  void pin_resource(LazySlice* /*slice*/,
-                    LazySliceRep* /*rep*/) const override {}
+  void pin_buffer(LazyBuffer* /*buffer*/) const override {}
 
-  Status inplace_decode(LazySlice* slice, LazySliceRep* rep) const override;
+  Status fetch_buffer(LazyBuffer* buffer) const override;
 
   void TransToCombined(const Slice& user_key, uint64_t sequence,
-                       LazySlice& value) const override;
+                       LazyBuffer& value) const override;
 
   // No copying allowed
   Version(const Version&);

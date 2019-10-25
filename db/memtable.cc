@@ -391,15 +391,15 @@ class MemTableTombstoneIterator : public MemTableIteratorBase<Slice> {
 
   virtual Slice value() const override {
     assert(valid_);
-    LazySlice v = iter_->value();
-    assert(v.inplace_decode().ok());
-    return v.inplace_decode().ok() ? v : Slice::Invalid();
+    LazyBuffer v = iter_->value();
+    assert(v.fetch().ok());
+    return v.fetch().ok() ? v.get_slice() : Slice::Invalid();
   }
 };
 
 class MemTableIterator
-    : public MemTableIteratorBase<LazySlice>, public LazySliceController {
-  using Base = MemTableIteratorBase<LazySlice>;
+    : public MemTableIteratorBase<LazyBuffer>, public LazyBufferController {
+  using Base = MemTableIteratorBase<LazyBuffer>;
   using Base::iter_;
   using Base::valid_;
   using Base::value_pinned_;
@@ -407,26 +407,30 @@ class MemTableIterator
  public:
   using Base::Base;
 
-  virtual void destroy(LazySliceRep* /*rep*/) const override {}
-  virtual void pin_resource(LazySlice* slice,
-                            LazySliceRep* rep) const override {
+  void destroy(LazyBuffer* /*buffer*/) const override {}
+
+  void pin_buffer(LazyBuffer* buffer) const override {
     if (!value_pinned_ || !iter_->IsValuePinned()) {
-      LazySliceController::pin_resource(slice, rep);
+      LazyBufferController::pin_buffer(buffer);
     } else {
-      *slice = iter_->value();
-      slice->pin_resource();
+      *buffer = iter_->value();
+      buffer->pin();
     }
   }
-  virtual Status inplace_decode(LazySlice* slice,
-                                LazySliceRep* /*rep*/) const override {
-    assert(!slice->valid());
-    *slice = iter_->value();
-    return slice->inplace_decode();
+
+  Status dump_buffer(LazyBuffer* buffer, LazyBuffer* target) const override {
+    *buffer = iter_->value();
+    return std::move(*buffer).dump(*target);
   }
 
-  virtual LazySlice value() const override {
+  Status fetch_buffer(LazyBuffer* buffer) const override {
+    *buffer = iter_->value();
+    return buffer->fetch();
+  }
+
+  virtual LazyBuffer value() const override {
     assert(valid_);
-    return LazySlice(this, {});
+    return LazyBuffer(this, {});
   }
 };
 
@@ -602,7 +606,7 @@ struct Saver {
   const LookupKey* key;
   bool* found_final_value;  // Is value set correctly? Used by KeyMayExist
   bool* merge_in_progress;
-  LazySlice* value;
+  LazyBuffer* value;
   SequenceNumber seq;
   const MergeOperator* merge_operator;
   // the merge operations encountered;
@@ -625,7 +629,7 @@ struct Saver {
 }  // namespace
 
 static bool SaveValue(void* arg, const Slice& internal_key,
-                      LazySlice&& value) {
+                      LazyBuffer&& value) {
   Saver* s = reinterpret_cast<Saver*>(arg);
   MergeContext* merge_context = s->merge_context;
   SequenceNumber max_covering_tombstone_seq = s->max_covering_tombstone_seq;
@@ -671,11 +675,11 @@ static bool SaveValue(void* arg, const Slice& internal_key,
                 merge_context->GetOperands(), s->value, s->logger,
                 s->statistics, s->env_, true);
             if (s->status->ok()) {
-              s->value->pin_resource();
+              s->value->pin();
             }
           }
         } else if (s->value != nullptr) {
-          *s->status = value.decode_destructive(*s->value);
+          *s->status = std::move(value).dump(*s->value);
           if (!s->status->ok()) {
             return false;
           }
@@ -696,7 +700,7 @@ static bool SaveValue(void* arg, const Slice& internal_key,
                 merge_context->GetOperands(), s->value, s->logger,
                 s->statistics, s->env_, true);
             if (s->status->ok()) {
-              s->value->pin_resource();
+              s->value->pin();
             }
           }
         } else {
@@ -727,7 +731,7 @@ static bool SaveValue(void* arg, const Slice& internal_key,
               merge_context->GetOperands(), s->value, s->logger, s->statistics,
               s->env_, true);
           if (s->status->ok()) {
-            s->value->pin_resource();
+            s->value->pin();
           }
           *s->found_final_value = true;
           return false;
@@ -744,7 +748,7 @@ static bool SaveValue(void* arg, const Slice& internal_key,
   return false;
 }
 
-bool MemTable::Get(const LookupKey& key, LazySlice* value, Status* s,
+bool MemTable::Get(const LookupKey& key, LazyBuffer* value, Status* s,
                    MergeContext* merge_context,
                    SequenceNumber* max_covering_tombstone_seq,
                    SequenceNumber* seq, const ReadOptions& read_opts,
@@ -829,7 +833,7 @@ void MemTable::Update(SequenceNumber seq,
       ValueType type;
       SequenceNumber unused;
       UnPackSequenceAndType(tag, &unused, &type);
-      LazySlice old_value = iter->value();
+      LazyBuffer old_value = iter->value();
       if (type == kTypeValue && old_value.valid()) {
         uint32_t old_size = static_cast<uint32_t>(old_value.size());
         uint32_t new_size = static_cast<uint32_t>(value.size());
@@ -876,7 +880,7 @@ bool MemTable::UpdateCallback(SequenceNumber seq,
       ValueType type;
       uint64_t unused;
       UnPackSequenceAndType(tag, &unused, &type);
-      LazySlice old_value = iter->value();
+      LazyBuffer old_value = iter->value();
       if(type == kTypeValue && old_value.valid()) {
         uint32_t old_size = static_cast<uint32_t>(old_value.size());
 

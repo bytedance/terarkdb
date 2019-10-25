@@ -636,6 +636,7 @@ TESTS = \
 	range_tombstone_fragmenter_test \
 	range_del_aggregator_test \
 	sst_file_reader_test \
+	lazy_buffer_test \
 
 PARALLEL_TEST = \
 	backupable_db_test \
@@ -1713,6 +1714,10 @@ range_tombstone_fragmenter_test: db/range_tombstone_fragmenter_test.o db/db_test
 	$(AM_LINK)
 
 sst_file_reader_test: table/sst_file_reader_test.o $(LIBOBJECTS) $(TESTHARNESS)
+	$(AM_LINK)
+
+
+lazy_buffer_test: util/lazy_buffer_test.o $(LIBOBJECTS) $(TESTHARNESS)
 	$(AM_LINK)
 
 #-------------------------------------------------

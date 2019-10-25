@@ -1488,7 +1488,7 @@ class MemTableInserter : public WriteBatch::Handler {
 
     if (perform_merge) {
       // 1) Get the existing value
-      LazySlice get_value;
+      LazyBuffer get_value;
 
       // Pass in the sequence number so that we also include previous merge
       // operations in the same batch.
@@ -1507,8 +1507,8 @@ class MemTableInserter : public WriteBatch::Handler {
       auto merge_operator = moptions->merge_operator;
       assert(merge_operator);
 
-      LazySlice new_value;
-      std::vector<LazySlice> operands;
+      LazyBuffer new_value;
+      std::vector<LazyBuffer> operands;
       operands.emplace_back(value);
 
       Status merge_status = MergeHelper::TimedFullMerge(
@@ -1521,9 +1521,10 @@ class MemTableInserter : public WriteBatch::Handler {
         perform_merge = false;
       } else {
         // 3) Add value to memtable
-        auto s = new_value.inplace_decode();
+        auto s = new_value.fetch();
         if (s.ok()) {
-          bool mem_res = mem->Add(sequence_, kTypeValue, key, new_value);
+          bool mem_res =
+              mem->Add(sequence_, kTypeValue, key, new_value.get_slice());
           if (UNLIKELY(!mem_res)) {
             assert(seq_per_batch_);
             ret_status = Status::TryAgain("key+seq exists");

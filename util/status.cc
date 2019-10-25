@@ -42,6 +42,7 @@ static const char* msgs[static_cast<int>(Status::kMaxSubCode)] = {
     "Stale file handle",                                  // kStaleFile
     "Memory limit reached",                               // kMemoryLimit
     "Space limit reached"                                 // kSpaceLimit
+    "Bad allocation"                                      // kBadAlloc
 };
 
 Status::Status(Code _code, SubCode _subcode, const Slice& msg,

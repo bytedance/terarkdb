@@ -43,8 +43,8 @@ class CompactionIteratorToInternalIterator : public InternalIterator {
   virtual void Next() override { c_iter_->Next(); }
   virtual void Prev() override { abort(); }  // do not support
   virtual Slice key() const override { return c_iter_->key(); }
-  virtual LazySlice value() const override {
-    return LazySliceReference(c_iter_->value());
+  virtual LazyBuffer value() const override {
+    return LazyBufferReference(c_iter_->value());
   }
   virtual Status status() const override {
     if (!c_iter_) {
@@ -221,7 +221,7 @@ void CompactionIterator::Next() {
     // Check if we returned all records of the merge output.
     if (merge_out_iter_.Valid()) {
       key_ = merge_out_iter_.key();
-      value_ = LazySliceReference(merge_out_iter_.value());
+      value_ = LazyBufferReference(merge_out_iter_.value());
       bool valid_key __attribute__((__unused__));
       valid_key =  ParseInternalKey(key_, &ikey_);
       // MergeUntil stops when it encounters a corrupt key and does not
@@ -483,7 +483,7 @@ void CompactionIterator::NextFromInput() {
       // The easiest way to process a SingleDelete during iteration is to peek
       // ahead at the next key.
       ParsedInternalKey next_ikey;
-      value_.pin_resource();
+      value_.pin();
       input_->Next();
 
       // Check whether the next key exists, is not corrupt, and is the same key
@@ -633,7 +633,7 @@ void CompactionIterator::NextFromInput() {
       // We can skip outputting the key iff there are no subsequent puts for this
       // key
       ParsedInternalKey next_ikey;
-      value_.pin_resource();
+      value_.pin();
       input_->Next();
       // Skip over all versions of this key that happen to occur in the same snapshot
       // range as the delete
@@ -677,7 +677,7 @@ void CompactionIterator::NextFromInput() {
         // NOTE: key, value, and ikey_ refer to old entries.
         //       These will be correctly set below.
         key_ = merge_out_iter_.key();
-        value_ = LazySliceReference(merge_out_iter_.value());
+        value_ = LazyBufferReference(merge_out_iter_.value());
         bool valid_key __attribute__((__unused__));
         valid_key = ParseInternalKey(key_, &ikey_);
         // MergeUntil stops when it encounters a corrupt key and does not
@@ -737,7 +737,7 @@ void CompactionIterator::PrepareOutput() {
   // KeyNotExistsBeyondOutputLevel() return true?
   if (blob_size_ > 0 && value_.file_number() != uint64_t(-1) &&
       (ikey_.type == kTypeValue || ikey_.type == kTypeMerge)) {
-    auto s = value_.inplace_decode();
+    auto s = value_.fetch();
     if (s.ok()) {
       if (value_.size() >= blob_size_) {
         ikey_.type =

@@ -52,10 +52,10 @@ class TransactionBaseImpl : public Transaction {
 
   using Transaction::Get;
   Status Get(const ReadOptions& options, ColumnFamilyHandle* column_family,
-             const Slice& key, LazySlice* value) override;
+             const Slice& key, LazyBuffer* value) override;
 
   Status Get(const ReadOptions& options, const Slice& key,
-             LazySlice* value) override {
+             LazyBuffer* value) override {
     return Get(options, db_->DefaultColumnFamily(), key, value);
   }
 
@@ -66,7 +66,7 @@ class TransactionBaseImpl : public Transaction {
 
   Status GetForUpdate(const ReadOptions& options,
                       ColumnFamilyHandle* column_family, const Slice& key,
-                      LazySlice* lazy_val, bool exclusive) override;
+                      LazyBuffer* lazy_val, bool exclusive) override;
 
   Status GetForUpdate(const ReadOptions& options, const Slice& key,
                       std::string* value, bool exclusive) override {

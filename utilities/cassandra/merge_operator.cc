@@ -24,7 +24,7 @@ bool CassandraValueMergeOperator::FullMergeV2(
   merge_out->new_value.clear();
   std::vector<RowValue> row_values;
   if (merge_in.existing_value) {
-    if (!merge_in.existing_value->inplace_decode().ok()) {
+    if (!merge_in.existing_value->fetch().ok()) {
       return false;
     }
     row_values.push_back(
@@ -33,7 +33,7 @@ bool CassandraValueMergeOperator::FullMergeV2(
   }
 
   for (auto& operand : merge_in.operand_list) {
-    if (!operand.inplace_decode().ok()) {
+    if (!operand.fetch().ok()) {
       return false;
     }
     row_values.push_back(RowValue::Deserialize(operand.data(),
@@ -43,7 +43,7 @@ bool CassandraValueMergeOperator::FullMergeV2(
   RowValue merged = RowValue::Merge(std::move(row_values));
   merged = merged.RemoveTombstones(gc_grace_period_in_seconds_);
 
-  std::string* buffer = merge_out->new_value.trans_to_buffer();
+  std::string* buffer = merge_out->new_value.trans_to_string();
   buffer->reserve(merged.Size());
   merged.Serialize(buffer);
 
@@ -51,15 +51,15 @@ bool CassandraValueMergeOperator::FullMergeV2(
 }
 
 bool CassandraValueMergeOperator::PartialMergeMulti(
-    const Slice& /*key*/, const std::vector<LazySlice>& operand_list,
-    LazySlice* new_value, Logger* /*logger*/) const {
+    const Slice& /*key*/, const std::vector<LazyBuffer>& operand_list,
+    LazyBuffer* new_value, Logger* /*logger*/) const {
   // Clear the *new_value for writing.
   assert(new_value);
   new_value->clear();
 
   std::vector<RowValue> row_values;
   for (auto& operand : operand_list) {
-    if (!operand.inplace_decode().ok()) {
+    if (!operand.fetch().ok()) {
       return false;
     }
     row_values.push_back(RowValue::Deserialize(operand.data(),
@@ -67,7 +67,7 @@ bool CassandraValueMergeOperator::PartialMergeMulti(
   }
   RowValue merged = RowValue::Merge(std::move(row_values));
 
-  std::string* buffer = new_value->trans_to_buffer();
+  std::string* buffer = new_value->trans_to_string();
   buffer->reserve(merged.Size());
   merged.Serialize(buffer);
   return true;

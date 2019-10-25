@@ -171,16 +171,17 @@ bool DBWithTTLImpl::IsStale(const Slice& value, int32_t ttl, Env* env) {
 }
 
 // Strips the TS from the end of the slice
-Status DBWithTTLImpl::StripTS(LazySlice* lazy_val) {
-  Status st = lazy_val->inplace_decode();
+Status DBWithTTLImpl::StripTS(LazyBuffer* lazy_val) {
+  Status st = lazy_val->fetch();
   if (!st.ok()) {
     return st;
   }
-  if (lazy_val->size() < kTSLength) {
+  size_t size = lazy_val->size();
+  if (size < kTSLength) {
     return Status::Corruption("Bad timestamp in key-value");
   }
   // Erasing characters which hold the TS
-  lazy_val->remove_suffix(kTSLength);
+  lazy_val->get_editor()->resize(size - kTSLength);
   return st;
 }
 
@@ -205,12 +206,12 @@ Status DBWithTTLImpl::Put(const WriteOptions& options,
 
 Status DBWithTTLImpl::Get(const ReadOptions& options,
                           ColumnFamilyHandle* column_family, const Slice& key,
-                          LazySlice* value) {
+                          LazyBuffer* value) {
   Status st = db_->Get(options, column_family, key, value);
   if (!st.ok()) {
     return st;
   }
-  st = SanityCheckTimestamp(*value);
+  st = SanityCheckTimestamp(value->get_slice());
   if (!st.ok()) {
     return st;
   }

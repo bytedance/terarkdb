@@ -352,11 +352,11 @@ Status LoadRangeWithDepend(std::vector<RangeWithDepend>& ranges,
       }
       for (iter->SeekToFirst(); iter->Valid(); iter->Next()) {
         auto value = iter->value();
-        auto s = value.inplace_decode();
+        auto s = value.fetch();
         if (!s.ok()) {
           return s;
         }
-        if (!map_element.Decode(iter->key(), value)) {
+        if (!map_element.Decode(iter->key(), value.get_slice())) {
           return Status::Corruption("Map sst invalid key or value");
         }
         ranges.emplace_back(map_element);
@@ -902,7 +902,7 @@ Status MapBuilder::WriteOutputFile(
   file_meta->fd.largest_seqno = bound_builder.largest_seqno;
 
   for (range_iter->SeekToFirst(); range_iter->Valid(); range_iter->Next()) {
-    builder->Add(range_iter->key(), LazySlice(range_iter->value()));
+    builder->Add(range_iter->key(), LazyBuffer(range_iter->value()));
   }
   if (!range_iter->status().ok()) {
     s = range_iter->status();
@@ -1133,9 +1133,9 @@ struct MapElementIterator : public InternalIterator {
     assert(where_ < meta_size_);
     return key_slice;
   }
-  LazySlice value() const override {
+  LazyBuffer value() const override {
     assert(where_ < meta_size_);
-    return LazySliceReference(value_slice);
+    return LazyBufferReference(value_slice);
   }
   virtual Status status() const override {
     return iter_ ? iter_->status() : Status::OK();
@@ -1166,7 +1166,7 @@ struct MapElementIterator : public InternalIterator {
       element_.link_.emplace_back(
           MapSstElement::LinkTarget{f->fd.GetNumber(), f->fd.GetFileSize()});
       key_slice = element_.Key();
-      value_slice = LazySlice(element_.Value(&buffer_));
+      value_slice = LazyBuffer(element_.Value(&buffer_));
     }
   }
 
@@ -1180,7 +1180,7 @@ struct MapElementIterator : public InternalIterator {
   std::string buffer_;
   std::unique_ptr<InternalIterator> iter_;
   Slice key_slice;
-  LazySlice value_slice;
+  LazyBuffer value_slice;
 };
 
 InternalIterator* NewMapElementIterator(

@@ -98,7 +98,7 @@ WriteBatchWithIndexInternal::Result WriteBatchWithIndexInternal::GetFromBatch(
     const ImmutableDBOptions& immuable_db_options, WriteBatchWithIndex* batch,
     ColumnFamilyHandle* column_family, const Slice& key,
     MergeContext* merge_context, const Comparator* cmp,
-    LazySlice* value, bool overwrite_key, Status* s) {
+    LazyBuffer* value, bool overwrite_key, Status* s) {
   *s = Status::OK();
   WriteBatchWithIndexInternal::Result result =
       WriteBatchWithIndexInternal::Result::kNotFound;
@@ -150,7 +150,7 @@ WriteBatchWithIndexInternal::Result WriteBatchWithIndexInternal::GetFromBatch(
       }
       case kMergeRecord: {
         result = WriteBatchWithIndexInternal::Result::kMergeInProgress;
-        merge_context->PushOperand(LazySlice(entry.value),
+        merge_context->PushOperand(LazyBuffer(entry.value),
                                    false/* operand_pinned */);
         break;
       }
@@ -208,8 +208,8 @@ WriteBatchWithIndexInternal::Result WriteBatchWithIndexInternal::GetFromBatch(
         Logger* logger = immuable_db_options.info_log.get();
 
         if (merge_operator) {
-          LazySlice lazy_slice(entry_value);
-          *s = MergeHelper::TimedFullMerge(merge_operator, key, &lazy_slice,
+          LazyBuffer lazy_val(entry_value);
+          *s = MergeHelper::TimedFullMerge(merge_operator, key, &lazy_val,
                                            merge_context->GetOperands(), value,
                                            logger, statistics, env);
         } else {
@@ -217,7 +217,7 @@ WriteBatchWithIndexInternal::Result WriteBatchWithIndexInternal::GetFromBatch(
         }
         if (s->ok()) {
           result = WriteBatchWithIndexInternal::Result::kFound;
-          value->pin_resource();
+          value->pin();
         } else {
           result = WriteBatchWithIndexInternal::Result::kError;
         }

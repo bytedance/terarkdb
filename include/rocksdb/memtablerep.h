@@ -35,7 +35,7 @@
 
 #pragma once
 
-#include <rocksdb/lazy_slice.h>
+#include <rocksdb/lazy_buffer.h>
 #include <rocksdb/status.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -89,7 +89,7 @@ class MemTableRep {
 
   static size_t EncodeKeyValueSize(const Slice& key, const Slice& value);
   static void EncodeKeyValue(const Slice& key, const Slice& value, char* buf);
-  static LazySlice DecodeToLazyValue(const char* key);
+  static LazyBuffer DecodeToLazyValue(const char* key);
 
   explicit MemTableRep(Allocator* allocator) : allocator_(allocator) {}
 
@@ -172,7 +172,7 @@ class MemTableRep {
   // seek and call the call back function.
   virtual void Get(const LookupKey& k, void* callback_args,
                    bool (*callback_func)(void* arg, const Slice& key,
-                                         LazySlice&& value));
+                                         LazyBuffer&& value));
 
   virtual uint64_t ApproximateNumEntries(const Slice& /*start_ikey*/,
                                          const Slice& /*end_key*/) {
@@ -206,9 +206,9 @@ class MemTableRep {
       return GetLengthPrefixedSlice(EncodedKey());
     }
 
-    // Returns LazySlice at the current position.
+    // Returns LazyBuffer at the current position.
     // REQUIRES: Valid()
-    virtual LazySlice value() const {
+    virtual LazyBuffer value() const {
       return DecodeToLazyValue(EncodedKey());
     }
 

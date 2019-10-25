@@ -55,12 +55,12 @@ class MemTableListVersion {
   // If any operation was found for this key, its most recent sequence number
   // will be stored in *seq on success (regardless of whether true/false is
   // returned).  Otherwise, *seq will be set to kMaxSequenceNumber.
-  bool Get(const LookupKey& key, LazySlice* value, Status* s,
+  bool Get(const LookupKey& key, LazyBuffer* value, Status* s,
            MergeContext* merge_context,
            SequenceNumber* max_covering_tombstone_seq, SequenceNumber* seq,
            const ReadOptions& read_opts, ReadCallback* callback = nullptr);
 
-  bool Get(const LookupKey& key, LazySlice* value, Status* s,
+  bool Get(const LookupKey& key, LazyBuffer* value, Status* s,
            MergeContext* merge_context,
            SequenceNumber* max_covering_tombstone_seq,
            const ReadOptions& read_opts, ReadCallback* callback = nullptr) {
@@ -73,11 +73,11 @@ class MemTableListVersion {
   // have already been flushed.  Should only be used from in-memory only
   // queries (such as Transaction validation) as the history may contain
   // writes that are also present in the SST files.
-  bool GetFromHistory(const LookupKey& key, LazySlice* value, Status* s,
+  bool GetFromHistory(const LookupKey& key, LazyBuffer* value, Status* s,
                       MergeContext* merge_context,
                       SequenceNumber* max_covering_tombstone_seq,
                       SequenceNumber* seq, const ReadOptions& read_opts);
-  bool GetFromHistory(const LookupKey& key, LazySlice* value, Status* s,
+  bool GetFromHistory(const LookupKey& key, LazyBuffer* value, Status* s,
                       MergeContext* merge_context,
                       SequenceNumber* max_covering_tombstone_seq,
                       const ReadOptions& read_opts) {
@@ -130,7 +130,7 @@ class MemTableListVersion {
   void TrimHistory(autovector<MemTable*>* to_delete);
 
   bool GetFromList(std::list<MemTable*>* list, const LookupKey& key,
-                   LazySlice* value, Status* s, MergeContext* merge_context,
+                   LazyBuffer* value, Status* s, MergeContext* merge_context,
                    SequenceNumber* max_covering_tombstone_seq,
                    SequenceNumber* seq, const ReadOptions& read_opts,
                    ReadCallback* callback = nullptr);

@@ -37,22 +37,27 @@ void MemTableRep::EncodeKeyValue(const Slice& key, const Slice& value,
   memcpy(p, value.data(), value.size());
 }
 
-LazySlice MemTableRep::DecodeToLazyValue(const char* key) {
-  struct SliceControllerImpl : public LazySliceController {
-    void destroy(LazySliceRep* /*rep*/) const override {}
-    void pin_resource(LazySlice* /*slice*/,
-                      LazySliceRep* /*rep*/) const override {}
-    Status inplace_decode(LazySlice* slice, LazySliceRep* rep) const override {
-      assert(!slice->valid());
+LazyBuffer MemTableRep::DecodeToLazyValue(const char* key) {
+
+  struct SliceControllerImpl : public LazyBufferController {
+
+    void destroy(LazyBuffer* /*buffer*/) const override {}
+
+    void pin_buffer(LazyBuffer* /*buffer*/) const override {}
+
+    Status fetch_buffer(LazyBuffer* buffer) const override {
+      auto rep = get_rep(buffer);
       const char* k = reinterpret_cast<const char*>(rep->data[0]);
       Slice key_slice = GetLengthPrefixedSlice(k);
-      assign_slice(*slice,
-                   GetLengthPrefixedSlice(key_slice.data() + key_slice.size()));
+      set_slice(buffer,
+                GetLengthPrefixedSlice(key_slice.data() + key_slice.size()));
       return Status::OK();
     }
   };
+
   static SliceControllerImpl controller_impl;
-  return LazySlice(&controller_impl, {reinterpret_cast<uint64_t>(key)});
+
+  return LazyBuffer(&controller_impl, {reinterpret_cast<uint64_t>(key)});
 }
 
 bool MemTableRep::InsertKeyValue(const Slice& internal_key,
@@ -93,7 +98,7 @@ KeyHandle MemTableRep::Allocate(const size_t len, char** buf) {
 
 void MemTableRep::Get(const LookupKey& k, void* callback_args,
                       bool (*callback_func)(void* arg, const Slice& key,
-                                            LazySlice&& value)) {
+                                            LazyBuffer&& value)) {
   auto iter = GetDynamicPrefixIterator();
   for (iter->Seek(k.internal_key(), k.memtable_key().data());
        iter->Valid() && callback_func(callback_args, iter->key(),

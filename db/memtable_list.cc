@@ -103,7 +103,7 @@ int MemTableList::NumFlushed() const {
 // Search all the memtables starting from the most recent one.
 // Return the most recent value found, if any.
 // Operands stores the list of merge operations to apply, so far.
-bool MemTableListVersion::Get(const LookupKey& key, LazySlice* value,
+bool MemTableListVersion::Get(const LookupKey& key, LazyBuffer* value,
                               Status* s, MergeContext* merge_context,
                               SequenceNumber* max_covering_tombstone_seq,
                               SequenceNumber* seq, const ReadOptions& read_opts,
@@ -113,7 +113,7 @@ bool MemTableListVersion::Get(const LookupKey& key, LazySlice* value,
 }
 
 bool MemTableListVersion::GetFromHistory(
-    const LookupKey& key, LazySlice* value, Status* s,
+    const LookupKey& key, LazyBuffer* value, Status* s,
     MergeContext* merge_context, SequenceNumber* max_covering_tombstone_seq,
     SequenceNumber* seq, const ReadOptions& read_opts) {
   return GetFromList(&memlist_history_, key, value, s, merge_context,
@@ -122,7 +122,7 @@ bool MemTableListVersion::GetFromHistory(
 }
 
 bool MemTableListVersion::GetFromList(
-    std::list<MemTable*>* list, const LookupKey& key, LazySlice* value,
+    std::list<MemTable*>* list, const LookupKey& key, LazyBuffer* value,
     Status* s, MergeContext* merge_context,
     SequenceNumber* max_covering_tombstone_seq, SequenceNumber* seq,
     const ReadOptions& read_opts, ReadCallback* callback) {

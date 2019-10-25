@@ -32,7 +32,7 @@ DBImplReadOnly::~DBImplReadOnly() {}
 // Implementations of the DB interface
 Status DBImplReadOnly::Get(const ReadOptions& read_options,
                            ColumnFamilyHandle* column_family, const Slice& key,
-                           LazySlice* lazy_val) {
+                           LazyBuffer* lazy_val) {
   assert(lazy_val != nullptr);
   // TODO: stopwatch DB_GET needed?, perf timer needed?
   PERF_TIMER_GUARD(get_snapshot_time);
@@ -62,7 +62,7 @@ Status DBImplReadOnly::Get(const ReadOptions& read_options,
   }
   RecordTick(stats_, NUMBER_KEYS_READ);
   if (s.ok()) {
-    s = lazy_val->inplace_decode();
+    s = lazy_val->fetch();
   }
   if (!s.ok()) {
     return s;

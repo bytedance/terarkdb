@@ -50,9 +50,9 @@ MergeHelper::MergeHelper(Env* env, const Comparator* user_comparator,
 }
 
 Status MergeHelper::TimedFullMerge(const MergeOperator* merge_operator,
-                                   const Slice& key, LazySlice* value,
-                                   std::vector<LazySlice>& operands,
-                                   LazySlice* result, Logger* logger,
+                                   const Slice& key, LazyBuffer* value,
+                                   std::vector<LazyBuffer>& operands,
+                                   LazyBuffer* result, Logger* logger,
                                    Statistics* statistics, Env* env,
                                    bool update_num_ops_stats) {
   assert(merge_operator != nullptr);
@@ -69,7 +69,7 @@ Status MergeHelper::TimedFullMerge(const MergeOperator* merge_operator,
   }
 
   bool success;
-  const LazySlice* tmp_result_operand = nullptr;
+  const LazyBuffer* tmp_result_operand = nullptr;
   const MergeOperator::MergeOperationInput merge_in(key, value, operands,
                                                     logger);
   MergeOperator::MergeOperationOutput merge_out(*result, tmp_result_operand);
@@ -175,7 +175,7 @@ Status MergeHelper::MergeUntil(
       // hit an entry that's visible by the previous snapshot, can't touch that
       break;
     }
-    LazySlice val;
+    LazyBuffer val;
     if (original_key_is_iter) {
       val = separate_value_collector.value(iter, user_key);
     } else {
@@ -204,7 +204,7 @@ Status MergeHelper::MergeUntil(
       // (almost) silently dropping the put/delete. That's probably not what we
       // want. Also if we're in compaction and it's a put, it would be nice to
       // run compaction filter on it.
-      LazySlice* val_ptr;
+      LazyBuffer* val_ptr;
       if ((kTypeValue == ikey.type || kTypeValueIndex == ikey.type) &&
           (range_del_agg == nullptr ||
            !range_del_agg->ShouldDelete(
@@ -213,7 +213,7 @@ Status MergeHelper::MergeUntil(
       } else {
         val_ptr = nullptr;
       }
-      LazySlice merge_result;
+      LazyBuffer merge_result;
       s = TimedFullMerge(user_merge_operator_, ikey.user_key, val_ptr,
                          merge_context_.GetOperands(), &merge_result,
                          logger_, stats_, env_);
@@ -321,7 +321,7 @@ Status MergeHelper::MergeUntil(
     assert(kTypeMerge == orig_ikey.type || kTypeMergeIndex == orig_ikey.type);
     assert(merge_context_.GetNumOperands() >= 1);
     assert(merge_context_.GetNumOperands() == keys_.size());
-    LazySlice merge_result;
+    LazyBuffer merge_result;
     s = TimedFullMerge(user_merge_operator_, orig_ikey.user_key, nullptr,
                        merge_context_.GetOperands(), &merge_result, logger_,
                        stats_, env_);
@@ -345,7 +345,7 @@ Status MergeHelper::MergeUntil(
     if (merge_context_.GetNumOperands() >= 2 ||
         (allow_single_operand_ && merge_context_.GetNumOperands() == 1)) {
       bool merge_success = false;
-      LazySlice merge_result;
+      LazyBuffer merge_result;
       {
         // too heavy
         //StopWatchNano timer(env_, stats_ != nullptr);
@@ -393,7 +393,7 @@ void MergeOutputIterator::Next() {
 }
 
 CompactionFilter::Decision MergeHelper::FilterMerge(
-    const Slice& user_key, const LazySlice& value_slice) {
+    const Slice& user_key, const LazyBuffer& value_slice) {
   if (compaction_filter_ == nullptr) {
     return CompactionFilter::Decision::kKeep;
   }

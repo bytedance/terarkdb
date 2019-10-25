@@ -43,7 +43,7 @@ class VectorRep : public MemTableRep {
 
   virtual void Get(const LookupKey& k, void* callback_args,
                    bool (*callback_func)(void* arg, const Slice& key,
-                                         LazySlice&& value)) override;
+                                         LazyBuffer&& value)) override;
 
   virtual ~VectorRep() override { }
 
@@ -263,7 +263,7 @@ void VectorRep::Iterator::SeekToLast() {
 
 void VectorRep::Get(const LookupKey& k, void* callback_args,
                     bool (*callback_func)(void* arg, const Slice& key,
-                                          LazySlice&& value)) {
+                                          LazyBuffer&& value)) {
   rwlock_.ReadLock();
   VectorRep* vector_rep;
   std::shared_ptr<Bucket> bucket;

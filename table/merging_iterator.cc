@@ -273,7 +273,7 @@ class MergingIterator : public InternalIterator {
     return current_->key();
   }
 
-  virtual LazySlice value() const override {
+  virtual LazyBuffer value() const override {
     assert(Valid());
     return current_->value();
   }
@@ -361,7 +361,7 @@ InternalIterator* NewMergingIterator(const InternalKeyComparator* cmp,
                                      Arena* arena, bool prefix_seek_mode) {
   assert(n >= 0);
   if (n == 0) {
-    return NewEmptyInternalIterator<LazySlice>(arena);
+    return NewEmptyInternalIterator<LazyBuffer>(arena);
   } else if (n == 1) {
     return list[0];
   } else {

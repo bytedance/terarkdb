@@ -34,9 +34,9 @@ class PutOperator : public MergeOperator {
   }
 
   virtual bool PartialMerge(const Slice& /*key*/,
-                            const LazySlice& /*left_operand*/,
-                            const LazySlice& right_operand,
-                            LazySlice* new_value,
+                            const LazyBuffer& /*left_operand*/,
+                            const LazyBuffer& right_operand,
+                            LazyBuffer* new_value,
                             Logger* /*logger*/) const override {
     new_value->assign(right_operand);
     return true;
@@ -44,8 +44,8 @@ class PutOperator : public MergeOperator {
 
   using MergeOperator::PartialMergeMulti;
   virtual bool PartialMergeMulti(const Slice& /*key*/,
-                                 const std::vector<LazySlice>& operand_list,
-                                 LazySlice* new_value,
+                                 const std::vector<LazyBuffer>& operand_list,
+                                 LazyBuffer* new_value,
                                  Logger* /*logger*/) const override {
     new_value->assign(operand_list.back());
     return true;

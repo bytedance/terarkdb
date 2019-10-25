@@ -195,7 +195,7 @@ Status TransactionBaseImpl::PopSavePoint() {
 
 Status TransactionBaseImpl::Get(const ReadOptions& read_options,
                                 ColumnFamilyHandle* column_family,
-                                const Slice& key, LazySlice* lazy_val) {
+                                const Slice& key, LazyBuffer* lazy_val) {
   return write_batch_.GetFromBatchAndDB(db_, read_options, column_family, key,
                                         lazy_val);
 }
@@ -208,10 +208,10 @@ Status TransactionBaseImpl::GetForUpdate(const ReadOptions& read_options,
 
   if (s.ok() && value != nullptr) {
     assert(value != nullptr);
-    LazySlice lazy_val(value);
+    LazyBuffer lazy_val(value);
     s = Get(read_options, column_family, key, &lazy_val);
     if (s.ok()) {
-      lazy_val.save_to_buffer(value);
+      s = std::move(lazy_val).dump(value);
     }
   }
   return s;
@@ -219,8 +219,7 @@ Status TransactionBaseImpl::GetForUpdate(const ReadOptions& read_options,
 
 Status TransactionBaseImpl::GetForUpdate(const ReadOptions& read_options,
                                          ColumnFamilyHandle* column_family,
-                                         const Slice& key,
-                                         LazySlice* lazy_val,
+                                         const Slice& key, LazyBuffer* lazy_val,
                                          bool exclusive) {
   Status s = TryLock(column_family, key, true /* read_only */, exclusive);
 

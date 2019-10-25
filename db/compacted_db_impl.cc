@@ -39,7 +39,7 @@ size_t CompactedDBImpl::FindFile(const Slice& key) {
 }
 
 Status CompactedDBImpl::Get(const ReadOptions& options, ColumnFamilyHandle*,
-                            const Slice& key, LazySlice* value) {
+                            const Slice& key, LazyBuffer* value) {
   GetContext get_context(user_comparator_, nullptr, nullptr, nullptr,
                          GetContext::kNotFound, key, value, nullptr, nullptr,
                          version_, nullptr, nullptr);
@@ -47,7 +47,7 @@ Status CompactedDBImpl::Get(const ReadOptions& options, ColumnFamilyHandle*,
   files_.files[FindFile(key)].fd.table_reader->Get(options, lkey.internal_key(),
                                                    &get_context, nullptr);
   if (get_context.State() == GetContext::kFound) {
-    return value->inplace_decode();
+    return value->fetch();
   } else if (get_context.State() == GetContext::kCorrupt) {
     return std::move(get_context).CorruptReason();
   }
@@ -74,14 +74,14 @@ std::vector<Status> CompactedDBImpl::MultiGet(const ReadOptions& options,
   for (auto* r : reader_list) {
     if (r != nullptr) {
       std::string& value = (*values)[idx];
-      LazySlice lazy_val(&value);
+      LazyBuffer lazy_val(&value);
       GetContext get_context(user_comparator_, nullptr, nullptr, nullptr,
                              GetContext::kNotFound, keys[idx], &lazy_val,
                              nullptr, nullptr, version_, nullptr, nullptr);
       LookupKey lkey(keys[idx], kMaxSequenceNumber);
       r->Get(options, lkey.internal_key(), &get_context, nullptr);
       if (get_context.State() == GetContext::kFound) {
-        statuses[idx] = lazy_val.save_to_buffer(&value);
+        statuses[idx] = std::move(lazy_val).dump(&value);
       } else if (get_context.State() == GetContext::kCorrupt) {
         statuses[idx] = std::move(get_context).CorruptReason();
       }

@@ -1309,7 +1309,7 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
     // Invariant: c_iter.status() is guaranteed to be OK if c_iter->Valid()
     // returns true.
     const Slice& key = c_iter->key();
-    const LazySlice& value = c_iter->value();
+    const LazyBuffer& value = c_iter->value();
     if (c_iter->ikey().type == kTypeValueIndex ||
         c_iter->ikey().type == kTypeMergeIndex) {
       assert(value.file_number() != uint64_t(-1));
@@ -1346,11 +1346,11 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
         sub_compact->outputs.size() == 1) { // first output file
       // Check if this key/value overlaps any sample intervals; if so, appends
       // overlapping portions to the dictionary.
-      status = value.inplace_decode();
+      status = value.fetch();
       if (!status.ok()) {
         break;
       }
-      for (const auto& data_elmt : {key, static_cast<const Slice&>(value)}) {
+      for (const auto& data_elmt : {key, value.get_slice()}) {
         size_t data_end_offset = data_begin_offset + data_elmt.size();
         while (sample_begin_offset_iter != sample_begin_offsets.cend() &&
                *sample_begin_offset_iter < data_end_offset) {
@@ -1581,7 +1581,7 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
     return versions_->MakeInputIterator(sub_compact->compaction, nullptr,
                                         env_options_for_read_);
   };
-  auto filter_conflict = [&](const Slice& ikey, const LazySlice& value) {
+  auto filter_conflict = [&](const Slice& ikey, const LazyBuffer& value) {
     std::lock_guard<std::mutex> lock(conflict_map_mutex);
     auto find = conflict_map.find(ikey);
     return find != conflict_map.end() && find->second != value.file_number();
@@ -1627,7 +1627,7 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
       Status s;
       ValueType type = kTypeDeletion;
       SequenceNumber seq = kMaxSequenceNumber;
-      LazySlice value;
+      LazyBuffer value;
       input_version->GetKey(ikey.user_key, iter_key.GetInternalKey(), &s, &type,
                             &seq, &value);
       if (s.IsNotFound()) {
@@ -1641,11 +1641,13 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
         ++counter.get_not_found;
         break;
       }
-      status = value.inplace_decode();
+      status = value.fetch();
       if (!status.ok()) {
         break;
       }
-      auto find = dependence_map.find(SeparateHelper::DecodeFileNumber(value));
+      uint64_t file_number =
+          SeparateHelper::DecodeFileNumber(value.get_slice());
+      auto find = dependence_map.find(file_number);
       if (find == dependence_map.end()) {
         status = Status::Corruption("Separate value dependence missing");
         break;
@@ -1892,7 +1894,7 @@ Status CompactionJob::FinishCompactionOutputFile(
       auto kv = tombstone.Serialize();
       assert(lower_bound == nullptr ||
              ucmp->Compare(*lower_bound, kv.second) < 0);
-      sub_compact->builder->Add(kv.first.Encode(), LazySlice(kv.second));
+      sub_compact->builder->Add(kv.first.Encode(), LazyBuffer(kv.second));
       InternalKey smallest_candidate = std::move(kv.first);
       if (lower_bound != nullptr &&
           ucmp->Compare(smallest_candidate.user_key(), *lower_bound) <= 0) {

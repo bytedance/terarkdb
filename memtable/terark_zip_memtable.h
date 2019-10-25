@@ -110,7 +110,8 @@ public:
   virtual void Get(
     const LookupKey &k,
     void *callback_args,
-    bool (*callback_func)(void *arg, const Slice& key, LazySlice&& value)) override;
+    bool (*callback_func)(void *arg, const Slice& key,
+                          LazyBuffer&& value)) override;
 
   // Return iterator of this rep
   virtual MemTableRep::Iterator *GetIterator(Arena *arena) override;
@@ -137,7 +138,10 @@ public:
 // Heap iterator for traversing multi tries simultaneously. 
 // Create a heap to merge iterators from all tries. 
 template <bool heap_mode>
-class PatriciaRepIterator : public MemTableRep::Iterator, public LazySliceController, boost::noncopyable {
+class PatriciaRepIterator :
+    public MemTableRep::Iterator,
+    public LazyBufferController,
+    boost::noncopyable {
   typedef terark::Patricia::ReaderToken token_t;
 
   // Inner iterator abstructiong for polymorphism
@@ -224,17 +228,19 @@ public:
 
   virtual ~PatriciaRepIterator();
 
-  // LazySliceController override
-  virtual void destroy(LazySliceRep* /*rep*/) const override {}
+  // LazyBufferController override
+  virtual void destroy(LazyBuffer* /*buffer*/) const override {}
 
-  // LazySliceController override
-  virtual void pin_resource(LazySlice* slice, LazySliceRep* /*rep*/) const override {
-    *slice = LazySlice(slice->valid() ? slice->slice_ref() : GetValue());
+  // LazyBufferController override
+  virtual void pin_buffer(LazyBuffer* buffer) const override {
+    if (!buffer->valid()) {
+      buffer->reset(GetValue());
+    }
   }
 
-  // LazySliceController override
-  Status inplace_decode(LazySlice* slice, LazySliceRep* /*rep*/) const override {
-    assign_slice(*slice, GetValue());
+  // LazyBufferController override
+  Status fetch_buffer(LazyBuffer* buffer) const override {
+    set_slice(buffer, GetValue());
     return Status::OK();
   }
 
@@ -253,7 +259,10 @@ public:
   virtual Slice GetValue() const;
 
   // Return the value of current position, parsing when truly needed.
-  virtual LazySlice value() const override { assert(direction_ != 0); return LazySlice(this, {}); }
+  virtual LazyBuffer value() const override {
+    assert(direction_ != 0);
+    return LazyBuffer(this, {});
+  }
 
   // Advances to the next position.
   // REQUIRES: Valid()

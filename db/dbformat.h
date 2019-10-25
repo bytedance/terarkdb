@@ -799,14 +799,14 @@ class SeparateHelper {
     return file_number;
   }
 
-  virtual void TransToSeparate(LazySlice& value) const {
+  virtual void TransToSeparate(LazyBuffer& value) const {
     assert(value.file_number() != uint64_t(-1));
     uint64_t file_number = value.file_number();
     value.reset(EncodeFileNumber(file_number), true, file_number);
   }
 
   virtual void TransToCombined(const Slice& user_key, uint64_t sequence,
-                               LazySlice& value) const = 0;
+                               LazyBuffer& value) const = 0;
 };
 
 

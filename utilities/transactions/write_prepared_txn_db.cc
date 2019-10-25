@@ -210,7 +210,7 @@ Status WritePreparedTxnDB::WriteInternal(const WriteOptions& write_options_orig,
 
 Status WritePreparedTxnDB::Get(const ReadOptions& options,
                                ColumnFamilyHandle* column_family,
-                               const Slice& key, LazySlice* value) {
+                               const Slice& key, LazyBuffer* value) {
   // We are fine with the latest committed value. This could be done by
   // specifying the snapshot as kMaxSequenceNumber.
   SequenceNumber seq = kMaxSequenceNumber;

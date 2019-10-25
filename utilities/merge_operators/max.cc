@@ -6,12 +6,12 @@
 #include <memory>
 
 #include "rocksdb/merge_operator.h"
-#include "rocksdb/lazy_slice.h"
+#include "rocksdb/lazy_buffer.h"
 #include "utilities/merge_operators.h"
 
 using rocksdb::Slice;
-using rocksdb::LazySlice;
-using rocksdb::LazySliceReference;
+using rocksdb::LazyBuffer;
+using rocksdb::LazyBufferReference;
 using rocksdb::Logger;
 using rocksdb::MergeOperator;
 
@@ -23,21 +23,21 @@ class MaxOperator : public MergeOperator {
  public:
   virtual bool FullMergeV2(const MergeOperationInput& merge_in,
                            MergeOperationOutput* merge_out) const override {
-    LazySlice max_slice;
-    const LazySlice*& max = merge_out->existing_operand;
+    LazyBuffer max_slice;
+    const LazyBuffer*& max = merge_out->existing_operand;
     if (merge_in.existing_value) {
-      max_slice = LazySliceReference(*merge_in.existing_value);
+      max_slice = LazyBufferReference(*merge_in.existing_value);
     } else {
       max_slice.clear();
     }
 
     for (const auto& op : merge_in.operand_list) {
-      if (!max_slice.inplace_decode().ok() || !op.inplace_decode().ok()) {
+      if (!max_slice.fetch().ok() || !op.fetch().ok()) {
         return false;
       }
       if (max_slice.compare(op) < 0) {
         max = &op;
-        max_slice = LazySliceReference(op);
+        max_slice = LazyBufferReference(op);
       }
     }
 
@@ -45,11 +45,11 @@ class MaxOperator : public MergeOperator {
   }
 
   virtual bool PartialMerge(const Slice& /*key*/,
-                            const LazySlice& left_operand,
-                            const LazySlice& right_operand,
-                            LazySlice* new_value,
+                            const LazyBuffer& left_operand,
+                            const LazyBuffer& right_operand,
+                            LazyBuffer* new_value,
                             Logger* /*logger*/) const override {
-    if (!left_operand.inplace_decode().ok() || !right_operand.inplace_decode().ok()) {
+    if (!left_operand.fetch().ok() || !right_operand.fetch().ok()) {
       return false;
     }
     if (left_operand.compare(right_operand) >= 0) {
@@ -61,16 +61,16 @@ class MaxOperator : public MergeOperator {
   }
 
   virtual bool PartialMergeMulti(const Slice& /*key*/,
-                                 const std::vector<LazySlice>& operand_list,
-                                 LazySlice* new_value,
+                                 const std::vector<LazyBuffer>& operand_list,
+                                 LazyBuffer* new_value,
                                  Logger* /*logger*/) const override {
-    LazySlice max;
+    LazyBuffer max;
     for (const auto& operand : operand_list) {
-      if (!max.inplace_decode().ok() || !operand.inplace_decode().ok()) {
+      if (!max.fetch().ok() || !operand.fetch().ok()) {
         return false;
       }
       if (max.compare(operand) < 0) {
-        max = LazySliceReference(operand);
+        max = LazyBufferReference(operand);
       }
     }
 

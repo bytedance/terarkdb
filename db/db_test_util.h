@@ -153,7 +153,7 @@ class SpecialMemTableRep : public MemTableRep {
 
   virtual void Get(const LookupKey& k, void* callback_args,
                    bool (*callback_func)(void* arg, const Slice& key,
-                                         LazySlice&& value)) override {
+                                         LazyBuffer&& value)) override {
     memtable_->Get(k, callback_args, callback_func);
   }
 
@@ -623,13 +623,13 @@ class TestPutOperator : public MergeOperator {
   virtual bool FullMergeV2(const MergeOperationInput& merge_in,
                            MergeOperationOutput* merge_out) const override {
     if (merge_in.existing_value != nullptr) {
-      if (!merge_in.existing_value->inplace_decode().ok() ||
-          merge_in.existing_value->slice_ref() == "corrupted") {
+      if (!merge_in.existing_value->fetch().ok() ||
+          merge_in.existing_value->get_slice() == "corrupted") {
         return false;
       }
     }
     for (auto& value : merge_in.operand_list) {
-      if (!value.inplace_decode().ok() || value == "corrupted") {
+      if (!value.fetch().ok() || value.get_slice() == "corrupted") {
         return false;
       }
     }
@@ -839,7 +839,7 @@ class DBTestBase : public testing::Test {
   std::string Get(int cf, const std::string& k,
                   const Snapshot* snapshot = nullptr);
 
-  Status Get(const std::string& k, LazySlice* v);
+  Status Get(const std::string& k, LazyBuffer* v);
 
   uint64_t GetNumSnapshots();
 

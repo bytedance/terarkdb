@@ -73,6 +73,7 @@ class Status {
     kStaleFile = 6,
     kMemoryLimit = 7,
     kSpaceLimit = 8,
+    kBadAlloc = 9,
     kMaxSubCode
   };
 
@@ -200,6 +201,8 @@ class Status {
   static Status SpaceLimit(const Slice& msg, const Slice& msg2 = Slice()) {
     return Status(kIOError, kSpaceLimit, msg, msg2);
   }
+
+  static Status BadAlloc() { return Status(kAborted, kBadAlloc); }
 
   // Returns true iff the status indicates success.
   bool ok() const { return code() == kOk; }

@@ -628,6 +628,7 @@ set(SOURCES
         util/hash.cc
         util/iterator_cache.cc
         util/jemalloc_nodump_allocator.cc
+        util/lazy_buffer.cc
         util/log_buffer.cc
         util/murmurhash.cc
         util/random.cc
@@ -966,6 +967,7 @@ if(WITH_TESTS)
         util/filelock_test.cc
         util/hash_test.cc
         util/heap_test.cc
+        util/lazy_buffer_test.cc
         util/rate_limiter_test.cc
         util/repeatable_thread_test.cc
         util/slice_transform_test.cc

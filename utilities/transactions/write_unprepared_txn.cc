@@ -380,13 +380,13 @@ Status WriteUnpreparedTxn::RollbackInternal() {
     const auto& keys = cfkey.second;
     for (const auto& key : keys) {
       const auto& cf_handle = cf_map.at(cfid);
-      LazySlice lazy_val;
+      LazyBuffer lazy_val;
       bool not_used;
       s = db_impl_->GetImpl(roptions, cf_handle, key, &lazy_val, &not_used,
                             &callback);
       if (s.ok()) {
         assert(lazy_val.valid());
-        s = rollback_batch.Put(cf_handle, key, lazy_val);
+        s = rollback_batch.Put(cf_handle, key, lazy_val.get_slice());
         assert(s.ok());
       } else if (s.IsNotFound()) {
         s = rollback_batch.Delete(cf_handle, key);
@@ -479,7 +479,7 @@ Status WriteUnpreparedTxn::RollbackInternal() {
 
 Status WriteUnpreparedTxn::Get(const ReadOptions& options,
                                ColumnFamilyHandle* column_family,
-                               const Slice& key, LazySlice* value) {
+                               const Slice& key, LazyBuffer* value) {
   auto snapshot = options.snapshot;
   auto snap_seq =
       snapshot != nullptr ? snapshot->GetSequenceNumber() : kMaxSequenceNumber;

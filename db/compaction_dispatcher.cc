@@ -14,6 +14,7 @@
 #define __STDC_FORMAT_MACROS
 #endif
 
+#include <inttypes.h>
 #include "rocksdb/convenience.h"
 #include "rocksdb/table.h"
 #include "rocksdb/filter_policy.h"
@@ -139,42 +140,43 @@ using TMap = std::unordered_map<std::string, T>;
 template<class T>
 using STMap = std::unordered_map<std::string, std::shared_ptr<T>>;
 
-class WorkerSeparateHelper : public SeparateHelper, public LazySliceController {
+class WorkerSeparateHelper : public SeparateHelper, public LazyBufferController {
  public:
-  void destroy(LazySliceRep* /*rep*/) const override {}
+  void destroy(LazyBuffer* /*buffer*/) const override {}
 
-  void pin_resource(LazySlice* /*slice*/,
-                    LazySliceRep* /*rep*/) const override {}
+  void pin_buffer(LazyBuffer* /*buffer*/) const override {}
 
-  Status inplace_decode(LazySlice* slice, LazySliceRep* rep) const override {
-    assert(!slice->valid());
-    return inplace_decode_callback_(inplace_decode_arg_, slice, rep);
+  Status fetch_buffer(LazyBuffer* buffer) const override {
+    return inplace_decode_callback_(inplace_decode_arg_, buffer,
+                                    get_rep(buffer));
   }
 
   void TransToCombined(const Slice& user_key, uint64_t sequence,
-                       LazySlice& value) const override {
-    auto s = value.inplace_decode();
+                       LazyBuffer& value) const override {
+    auto s = value.fetch();
     if (s.ok()) {
-      uint64_t file_number = SeparateHelper::DecodeFileNumber(value);
+      uint64_t file_number =
+          SeparateHelper::DecodeFileNumber(value.get_slice());
       value.reset(this, {reinterpret_cast<uint64_t>(user_key.data()),
-                         user_key.size(), sequence, 0}, file_number);
+                         user_key.size(), sequence, 0},
+                  Slice::Invalid(), file_number);
     } else {
-      value.reset(s);
+      value.reset(std::move(s));
     }
   }
 
   WorkerSeparateHelper(DependenceMap* dependence_map, void* inplace_decode_arg,
                        Status (*inplace_decode_callback)(void* arg,
-                                                         LazySlice* slice,
-                                                         LazySliceRep* rep))
+                                                         LazyBuffer* buffer,
+                                                         LazyBufferRep* rep))
     : dependence_map_(dependence_map),
       inplace_decode_arg_(inplace_decode_arg),
       inplace_decode_callback_(inplace_decode_callback) {}
 
   DependenceMap* dependence_map_;
   void* inplace_decode_arg_;
-  Status (*inplace_decode_callback_)(void* arg, LazySlice* slice,
-                                     LazySliceRep* rep);
+  Status (*inplace_decode_callback_)(void* arg, LazyBuffer* buffer,
+                                     LazyBufferRep* rep);
 };
 
 std::function<CompactionWorkerResult()>
@@ -524,10 +526,10 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
   c_style_new_iterator.arg = &new_iterator;
   c_style_new_iterator.callback = c_style_callback(new_iterator);
 
-  auto separate_inplace_decode = [&](LazySlice* slice, LazySliceRep* rep) {
+  auto separate_inplace_decode = [&](LazyBuffer* buffer, LazyBufferRep* rep) {
     Slice user_key(reinterpret_cast<const char*>(rep->data[0]), rep->data[1]);
     uint64_t sequence = rep->data[2];
-    uint64_t file_number = slice->file_number();
+    uint64_t file_number = buffer->file_number();
     auto find = contxt_dependence_map.find(file_number);
     if (find == contxt_dependence_map.end()) {
       return Status::Corruption("Separate value dependence missing");
@@ -536,7 +538,7 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
     bool value_found = false;
     SequenceNumber context_seq;
     GetContext get_context(ucmp, nullptr, immutable_cf_options.info_log,
-                           nullptr, GetContext::kNotFound, user_key, slice,
+                           nullptr, GetContext::kNotFound, user_key, buffer,
                            &value_found, nullptr, nullptr, nullptr, rep_->env,
                            &context_seq);
     IterKey iter_key;
@@ -558,7 +560,11 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
       if (get_context.State() == GetContext::kCorrupt) {
         return std::move(get_context).CorruptReason();
       } else {
-        return Status::Corruption("Separate value missing");
+        char buf[128];
+        snprintf(buf, sizeof buf,
+                 "file number = %" PRIu64 "(%" PRIu64 "), sequence = %" PRIu64,
+                 file_number, buffer->file_number(), sequence);
+        return Status::Corruption("Separate value missing", buf);
       }
     }
     return Status::OK();
@@ -803,7 +809,7 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
         auto kv = tombstone.Serialize();
         assert(lower_bound == nullptr ||
                ucmp->Compare(*lower_bound, kv.second) < 0);
-        builder->Add(kv.first.Encode(), LazySlice(kv.second));
+        builder->Add(kv.first.Encode(), LazyBuffer(kv.second));
         InternalKey smallest_candidate = std::move(kv.first);
         if (lower_bound != nullptr &&
             ucmp->Compare(smallest_candidate.user_key(), *lower_bound) <= 0) {
@@ -890,7 +896,7 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
     // Invariant: c_iter.status() is guaranteed to be OK if c_iter->Valid()
     // returns true.
     const Slice& key = c_iter->key();
-    const LazySlice& value = c_iter->value();
+    const LazyBuffer& value = c_iter->value();
     if (c_iter->ikey().type == kTypeValueIndex ||
         c_iter->ikey().type == kTypeMergeIndex) {
       assert(value.file_number() != uint64_t(-1));

@@ -177,13 +177,13 @@ class DBIter final: public Iterator {
   }
   virtual Slice value() const override {
     assert(valid_);
-    auto s = value_.inplace_decode();
+    auto s = value_.fetch();
     if (!s.ok()) {
       valid_ = false;
       status_ = s;
       return Slice::Invalid();
     }
-    return value_;
+    return value_.get_slice();
   }
   virtual Status status() const override {
     if (status_.ok()) {
@@ -233,8 +233,8 @@ class DBIter final: public Iterator {
   bool FindNextUserEntryInternal(bool skipping, bool prefix_check);
   bool ParseKey(ParsedInternalKey* key);
   bool MergeValuesNewToOld();
-  LazySlice GetValue(const ParsedInternalKey& ikey, ValueType index_type) {
-    LazySlice v = iter_->value();
+  LazyBuffer GetValue(const ParsedInternalKey& ikey, ValueType index_type) {
+    LazyBuffer v = iter_->value();
     if (separate_helper_ != nullptr && ikey.type == index_type) {
       separate_helper_->TransToCombined(
           saved_key_.GetUserKey(), ikey.sequence, v);
@@ -286,7 +286,7 @@ class DBIter final: public Iterator {
   // and should not be used across functions. Reusing this object can reduce
   // overhead of calling construction of the function if creating it each time.
   ParsedInternalKey ikey_;
-  LazySlice value_;
+  LazyBuffer value_;
   std::string value_buffer_;
   Direction direction_;
   mutable bool valid_;
@@ -596,7 +596,7 @@ bool DBIter::MergeValuesNewToOld() {
     } else if (kTypeValue == ikey.type || kTypeValueIndex == ikey.type) {
       // hit a put, merge the put value with operands and store the
       // final result in value_. We are done!
-      LazySlice val = GetValue(ikey, kTypeValueIndex);
+      LazyBuffer val = GetValue(ikey, kTypeValueIndex);
       value_.reset(&value_buffer_);
       s = MergeHelper::TimedFullMerge(
           merge_operator_, ikey.user_key, &val, merge_context_.GetOperands(),
@@ -607,7 +607,7 @@ bool DBIter::MergeValuesNewToOld() {
         return false;
       }
       val.clear();
-      value_.pin_resource();
+      value_.pin();
       // iter_ is positioned after put
       iter_->Next();
       if (!iter_->status().ok()) {
@@ -836,7 +836,7 @@ bool DBIter::FindValueForCurrentKey() {
           PERF_COUNTER_ADD(internal_delete_skipped_count, 1);
         } else {
           value_ = GetValue(ikey, kTypeValueIndex);
-          value_.pin_resource();
+          value_.pin();
         }
         merge_context_.Clear();
         last_not_merge_type = last_key_entry_type;
@@ -896,7 +896,7 @@ bool DBIter::FindValueForCurrentKey() {
       } else {
         assert(last_not_merge_type == kTypeValue ||
                last_not_merge_type == kTypeValueIndex);
-        LazySlice merge_result(&value_buffer_);
+        LazyBuffer merge_result(&value_buffer_);
         s = MergeHelper::TimedFullMerge(
             merge_operator_, saved_key_.GetUserKey(), &value_,
             merge_context_.GetOperands(), &merge_result, logger_, statistics_,
@@ -968,7 +968,7 @@ bool DBIter::FindValueForCurrentKeyUsingSeek() {
   }
   if (ikey.type == kTypeValue || ikey.type == kTypeValueIndex) {
     value_ = GetValue(ikey, kTypeValueIndex);
-    value_.pin_resource();
+    value_.pin();
     valid_ = true;
     return true;
   }
@@ -1001,7 +1001,7 @@ bool DBIter::FindValueForCurrentKeyUsingSeek() {
             ikey, RangeDelPositioningMode::kForwardTraversal)) {
       break;
     } else if (ikey.type == kTypeValue || ikey.type == kTypeValueIndex) {
-      LazySlice val = GetValue(ikey, kTypeValueIndex);
+      LazyBuffer val = GetValue(ikey, kTypeValueIndex);
       value_.reset(&value_buffer_);
       Status s = MergeHelper::TimedFullMerge(
           merge_operator_, saved_key_.GetUserKey(), &val,
@@ -1012,7 +1012,7 @@ bool DBIter::FindValueForCurrentKeyUsingSeek() {
         status_ = s;
         return false;
       }
-      value_.pin_resource();
+      value_.pin();
       valid_ = true;
       return true;
     } else if (ikey.type == kTypeMerge || ikey.type == kTypeMergeIndex) {
@@ -1032,7 +1032,7 @@ bool DBIter::FindValueForCurrentKeyUsingSeek() {
     status_ = s;
     return false;
   }
-  value_.pin_resource();
+  value_.pin();
 
   // Make sure we leave iter_ in a good state. If it's valid and we don't care
   // about prefixes, that's already good enough. Otherwise it needs to be

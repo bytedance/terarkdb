@@ -202,7 +202,7 @@ class MapSstIterator final : public InternalIterator {
  private:
   const FileMetaData* file_meta_;
   InternalIterator* first_level_iter_;
-  LazySlice first_level_value_;
+  LazyBuffer first_level_value_;
   bool is_backword_;
   Status status_;
   IteratorCache iterator_cache_;
@@ -251,11 +251,11 @@ class MapSstIterator final : public InternalIterator {
     // Manual inline MapSstElement::Decode
     const char* err_msg = "Invalid MapSstElement";
     first_level_value_ = first_level_iter_->value();
-    status_ = first_level_value_.inplace_decode();
+    status_ = first_level_value_.fetch();
     if (!status_.ok()) {
       return kInitFirstIterInvalid;
     }
-    Slice map_input = first_level_value_;
+    Slice map_input = first_level_value_.get_slice();
     link_.clear();
     largest_key_ = first_level_iter_->key();
     uint64_t flags;
@@ -548,7 +548,7 @@ class MapSstIterator final : public InternalIterator {
     assert(Valid());
     return min_heap_.top().key;
   }
-  virtual LazySlice value() const override {
+  virtual LazyBuffer value() const override {
     assert(Valid());
     return min_heap_.top().iter->value();
   }

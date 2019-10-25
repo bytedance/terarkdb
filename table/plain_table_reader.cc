@@ -72,7 +72,7 @@ class PlainTableIterator : public InternalIterator {
 
   Slice key() const override;
 
-  LazySlice value() const override;
+  LazyBuffer value() const override;
 
   Status status() const override;
 
@@ -601,7 +601,7 @@ Status PlainTableReader::Get(const ReadOptions& /*ro*/, const Slice& target,
     // can we enable the fast path?
     if (internal_comparator_.Compare(found_key, parsed_target) >= 0) {
       bool dont_care __attribute__((__unused__));
-      if (!get_context->SaveValue(found_key, LazySlice(found_value),
+      if (!get_context->SaveValue(found_key, LazyBuffer(found_value),
                                   &dont_care)) {
         break;
       }
@@ -746,9 +746,9 @@ Slice PlainTableIterator::key() const {
   return key_;
 }
 
-LazySlice PlainTableIterator::value() const {
+LazyBuffer PlainTableIterator::value() const {
   assert(Valid());
-  return LazySlice(value_, false, table_->file_number_);
+  return LazyBuffer(value_, false, table_->file_number_);
 }
 
 Status PlainTableIterator::status() const {

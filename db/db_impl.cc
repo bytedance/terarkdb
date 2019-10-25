@@ -1227,7 +1227,7 @@ InternalIterator* DBImpl::NewInternalIterator(
   } else {
     CleanupSuperVersion(super_version);
   }
-  return NewErrorInternalIterator<LazySlice>(s, arena);
+  return NewErrorInternalIterator<LazyBuffer>(s, arena);
 }
 
 ColumnFamilyHandle* DBImpl::DefaultColumnFamily() const {
@@ -1236,7 +1236,7 @@ ColumnFamilyHandle* DBImpl::DefaultColumnFamily() const {
 
 Status DBImpl::Get(const ReadOptions& read_options,
                    ColumnFamilyHandle* column_family, const Slice& key,
-                   LazySlice* value) {
+                   LazyBuffer* value) {
   auto s = GetImpl(read_options, column_family, key, value);
   assert(!s.ok() || value->valid());
   return s;
@@ -1244,7 +1244,7 @@ Status DBImpl::Get(const ReadOptions& read_options,
 
 Status DBImpl::GetImpl(const ReadOptions& read_options,
                        ColumnFamilyHandle* column_family, const Slice& key,
-                       LazySlice* lazy_val, bool* value_found,
+                       LazyBuffer* lazy_val, bool* value_found,
                        ReadCallback* callback) {
   assert(lazy_val != nullptr);
   StopWatch sw(env_, stats_, DB_GET);
@@ -1341,7 +1341,7 @@ Status DBImpl::GetImpl(const ReadOptions& read_options,
   }
 
   if (s.ok()) {
-    s = lazy_val->inplace_decode();
+    s = lazy_val->fetch();
   }
 
   {
@@ -1505,7 +1505,7 @@ std::vector<Status> DBImpl::MultiGet(
     MergeContext merge_context;
     Status& s = stat_list[i];
     std::string* value = &(*values)[i];
-    LazySlice lazy_val(value);
+    LazyBuffer lazy_val(value);
 
     LookupKey lkey(keys[i], snapshot);
     auto cfh = reinterpret_cast<ColumnFamilyHandleImpl*>(column_family[i]);
@@ -1537,7 +1537,7 @@ std::vector<Status> DBImpl::MultiGet(
       RecordTick(stats_, MEMTABLE_MISS);
     }
     if (s.ok()) {
-      s = lazy_val.save_to_buffer(value);
+      s = std::move(lazy_val).dump(value);
     }
     if (s.ok()) {
       bytes_read += value->size();
@@ -1896,10 +1896,10 @@ bool DBImpl::KeyMayExist(const ReadOptions& read_options,
   }
   ReadOptions roptions = read_options;
   roptions.read_tier = kBlockCacheTier;  // read from block cache only
-  LazySlice lazy_val(value);
+  LazyBuffer lazy_val(value);
   auto s = GetImpl(roptions, column_family, key, &lazy_val, value_found);
   if (s.ok()) {
-    s = lazy_val.save_to_buffer(value);
+    s = std::move(lazy_val).dump(value);
   }
 
   // If block_cache is enabled and the index block of the table didn't

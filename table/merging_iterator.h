@@ -19,7 +19,7 @@ class Env;
 class Arena;
 template <class TValue>
 class InternalIteratorBase;
-using InternalIterator = InternalIteratorBase<LazySlice>;
+using InternalIterator = InternalIteratorBase<LazyBuffer>;
 
 // Return an iterator that provided the union of the data in
 // children[0,n-1].  Takes ownership of the child iterators and

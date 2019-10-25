@@ -22,11 +22,11 @@ Cleanable::Cleanable() {
 
 Cleanable::~Cleanable() { DoCleanup(); }
 
-Cleanable::Cleanable(Cleanable&& other) {
+Cleanable::Cleanable(Cleanable&& other) noexcept {
   *this = std::move(other);
 }
 
-Cleanable& Cleanable::operator=(Cleanable&& other) {
+Cleanable& Cleanable::operator=(Cleanable&& other) noexcept {
   if (this != &other) {
     cleanup_ = other.cleanup_;
     other.cleanup_.function = nullptr;
@@ -103,38 +103,38 @@ Status Iterator::GetProperty(std::string /*prop_name*/, std::string* prop) {
   return Status::InvalidArgument("Unidentified property.");
 }
 
-LazySlice CombinedInternalIterator::value() const {
+LazyBuffer CombinedInternalIterator::value() const {
   ParsedInternalKey pikey;
   ParseInternalKey(iter_->key(), &pikey);
   if (pikey.type != kTypeValueIndex && pikey.type != kTypeMergeIndex) {
     return iter_->value();
   }
-  LazySlice v = iter_->value();
+  LazyBuffer v = iter_->value();
   separate_helper_->TransToCombined(pikey.user_key, pikey.sequence, v);
-  auto s = v.inplace_decode();
+  auto s = v.fetch();
   if (!s.ok()) {
-    v.reset(s);
+    v.reset(std::move(s));
   }
   return v;
 }
 
-LazySlice SeparateValueCollector::value(InternalIterator* iter,
+LazyBuffer SeparateValueCollector::value(InternalIterator* iter,
                                         const Slice& user_key) const {
   ParsedInternalKey pikey;
   ParseInternalKey(iter->key(), &pikey);
   if (pikey.type != kTypeValueIndex && pikey.type != kTypeMergeIndex) {
     return iter->value();
   }
-  LazySlice v = iter->value();
+  LazyBuffer v = iter->value();
   separate_helper_->TransToCombined(user_key, pikey.sequence, v);
   return v;
 }
 
-LazySlice SeparateValueCollector::add(InternalIterator* iter,
+LazyBuffer SeparateValueCollector::add(InternalIterator* iter,
                                       const Slice& user_key) {
   ParsedInternalKey pikey;
   ParseInternalKey(iter->key(), &pikey);
-  LazySlice v = iter->value();
+  LazyBuffer v = iter->value();
   if (delta_antiquation_ != nullptr) {
     assert(v.file_number() != uint64_t(-1));
     ++(*delta_antiquation_)[v.file_number()];
@@ -230,7 +230,7 @@ InternalIteratorBase<TValue>* NewEmptyInternalIterator(Arena* arena) {
 template InternalIteratorBase<BlockHandle>* NewEmptyInternalIterator(
     Arena* arena);
 template InternalIteratorBase<Slice>* NewEmptyInternalIterator(Arena* arena);
-template InternalIteratorBase<LazySlice>* NewEmptyInternalIterator(
+template InternalIteratorBase<LazyBuffer>* NewEmptyInternalIterator(
     Arena* arena);
 
 template <class TValue>
@@ -248,7 +248,7 @@ template InternalIteratorBase<BlockHandle>* NewErrorInternalIterator(
     const Status& status, Arena* arena);
 template InternalIteratorBase<Slice>* NewErrorInternalIterator(
     const Status& status, Arena* arena);
-template InternalIteratorBase<LazySlice>* NewErrorInternalIterator(
+template InternalIteratorBase<LazyBuffer>* NewErrorInternalIterator(
     const Status& status, Arena* arena);
 
 }  // namespace rocksdb

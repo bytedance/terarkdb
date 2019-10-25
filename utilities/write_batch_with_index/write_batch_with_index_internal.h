@@ -79,7 +79,7 @@ class WriteBatchWithIndexInternal {
   static WriteBatchWithIndexInternal::Result GetFromBatch(
       const ImmutableDBOptions& ioptions, WriteBatchWithIndex* batch,
       ColumnFamilyHandle* column_family, const Slice& key,
-      MergeContext* merge_context, const Comparator* cmp, LazySlice* value,
+      MergeContext* merge_context, const Comparator* cmp, LazyBuffer* value,
       bool overwrite_key, Status* s);
 };
 

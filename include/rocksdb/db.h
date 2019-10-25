@@ -359,16 +359,16 @@ class DB {
                             ColumnFamilyHandle* column_family, const Slice& key,
                             std::string* value) {
     assert(value != nullptr);
-    LazySlice lazy_val(value);
+    LazyBuffer lazy_val(value);
     auto s = Get(options, column_family, key, &lazy_val);
     if (s.ok()) {
-      s = lazy_val.save_to_buffer(value);
+      s = std::move(lazy_val).dump(value);
     }
     return s;
   }
   virtual Status Get(const ReadOptions& options,
                      ColumnFamilyHandle* column_family, const Slice& key,
-                     LazySlice* value) = 0;
+                     LazyBuffer* value) = 0;
   virtual Status Get(const ReadOptions& options, const Slice& key, std::string* value) {
     return Get(options, DefaultColumnFamily(), key, value);
   }

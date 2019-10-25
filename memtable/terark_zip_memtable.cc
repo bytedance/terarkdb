@@ -110,7 +110,7 @@ bool PatriciaTrieRep::Contains(
 void PatriciaTrieRep::Get(
     const LookupKey &k,
     void *callback_args,
-    bool (*callback_func)(void *arg, const Slice& key, LazySlice&& value)){
+    bool (*callback_func)(void *arg, const Slice& key, LazyBuffer&& value)){
   // assistant structures
   struct HeapItem {
     uint32_t idx;
@@ -124,23 +124,22 @@ void PatriciaTrieRep::Get(
     valvec<char> buffer;
   };
 
-  class Controller : public LazySliceController {
+  class Controller : public LazyBufferController {
   public:
-    virtual void destroy(LazySliceRep* /*rep*/) const override {}
+    virtual void destroy(LazyBuffer* /*buffer*/) const override {}
 
-    virtual void pin_resource(LazySlice* slice, LazySliceRep* /*rep*/) const override {
-      *slice = LazySlice(slice->valid() ? slice->slice_ref() : GetValue());
-    }
+    virtual void pin_buffer(LazyBuffer* /*buffer*/) const override {}
 
-    Status inplace_decode(LazySlice* slice, LazySliceRep* /*rep*/) const override {
-      assign_slice(*slice, GetValue());
+    Status fetch_buffer(LazyBuffer* buffer) const override {
       return Status::OK();
     }
 
     Slice GetValue() const {
       auto vector = (detail::tag_vector_t*)heap->trie->mem_get(heap->loc);
-      auto data = (detail::tag_vector_t::data_t*)heap->trie->mem_get(vector->loc);
-      return GetLengthPrefixedSlice((const char*)heap->trie->mem_get(data[heap->idx].loc));
+      auto data =
+          (detail::tag_vector_t::data_t*)heap->trie->mem_get(vector->loc);
+      return GetLengthPrefixedSlice(
+          (const char*)heap->trie->mem_get(data[heap->idx].loc));
     }
     HeapItem* heap;
   } controller;
@@ -156,7 +155,8 @@ void PatriciaTrieRep::Get(
   auto do_callback = [&](HeapItem* heap) {
     build_key(find_key, heap->tag, buffer);
     controller.heap = heap;
-    return callback_func(callback_args, Slice(buffer->data(), buffer->size()), LazySlice(&controller, {}));
+    return callback_func(callback_args, Slice(buffer->data(), buffer->size()),
+                         LazyBuffer(&controller, {}, controller.GetValue()));
   };
 
   valvec<HeapItem> &heap = tls_ctx.heap;
@@ -181,7 +181,8 @@ void PatriciaTrieRep::Get(
   }
 
   // make heap for multi-merge
-  auto heap_comp = [](const HeapItem &l, const HeapItem &r) { return l.tag < r.tag; };
+  auto heap_comp =
+      [](const HeapItem &l, const HeapItem &r) { return l.tag < r.tag; };
 
   std::make_heap(heap.begin(), heap.end(), heap_comp);
   auto item = heap.front();

@@ -35,11 +35,11 @@ bool StringAppendTESTOperator::FullMergeV2(
 
   // Only print the delimiter after the first entry has been printed
   bool printDelim = false;
-  std::string* buffer = merge_out->new_value.trans_to_buffer();
+  std::string* buffer = merge_out->new_value.trans_to_string();
 
   // Prepend the *existing_value if one exists.
   if (merge_in.existing_value) {
-    if (!merge_in.existing_value->inplace_decode().ok()) {
+    if (!merge_in.existing_value->fetch().ok()) {
       return false;
     }
     buffer->append(merge_in.existing_value->data(),
@@ -53,7 +53,7 @@ bool StringAppendTESTOperator::FullMergeV2(
     if (printDelim) {
       buffer->append(1, delim_);
     }
-    if (!it->inplace_decode().ok()) {
+    if (!it->fetch().ok()) {
       return false;
     }
     buffer->append(it->data(), it->size());
@@ -64,8 +64,8 @@ bool StringAppendTESTOperator::FullMergeV2(
 }
 
 bool StringAppendTESTOperator::PartialMergeMulti(
-    const Slice& /*key*/, const std::vector<LazySlice>& /*operand_list*/,
-    LazySlice* /*new_value*/, Logger* /*logger*/) const {
+    const Slice& /*key*/, const std::vector<LazyBuffer>& /*operand_list*/,
+    LazyBuffer* /*new_value*/, Logger* /*logger*/) const {
   return false;
 }
 

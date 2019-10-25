@@ -73,7 +73,9 @@ class TerarkEmptyTableReader : public TerarkZipTableReaderBase {
     void Next() override {}
     void Prev() override {}
     Slice key() const override { THROW_STD(invalid_argument, "Invalid call"); }
-    LazySlice value() const override { THROW_STD(invalid_argument, "Invalid call"); }
+    LazyBuffer value() const override {
+      THROW_STD(invalid_argument, "Invalid call");
+    }
     Status status() const override { return Status::OK(); }
   };
   const TableReaderOptions table_reader_options_;
@@ -92,8 +94,10 @@ public:
              const SliceTransform* prefix_extractor, bool skip_filters) override {
     return Status::OK();
   }
-  void RangeScan(const Slice* begin, const SliceTransform* prefix_extractor, void* arg,
-                 bool(* callback_func)(void* arg, const Slice& key, LazySlice&& value)) override {
+  void RangeScan(const Slice* begin, const SliceTransform* prefix_extractor,
+                 void* arg,
+                 bool(* callback_func)(void* arg, const Slice& key,
+                                       LazyBuffer&& value)) override {
     // do nothing
   }
   size_t ApproximateMemoryUsage() const override { return 100; }
@@ -164,11 +168,14 @@ public:
 
   void Prepare(const Slice& target) override {}
 
-  Status Get(const ReadOptions& readOptions, const Slice& key, GetContext* get_context,
-             const SliceTransform* prefix_extractor, bool skip_filters) override;
+  Status Get(const ReadOptions& readOptions, const Slice& key,
+             GetContext* get_context, const SliceTransform* prefix_extractor,
+             bool skip_filters) override;
 
-  void RangeScan(const Slice* begin, const SliceTransform* prefix_extractor, void* arg,
-                 bool(* callback_func)(void* arg, const Slice& key, LazySlice&& value)) override;
+  void RangeScan(const Slice* begin, const SliceTransform* prefix_extractor,
+                 void* arg,
+                 bool(* callback_func)(void* arg, const Slice& key,
+                                       LazyBuffer&& value)) override;
 
   uint64_t ApproximateOffsetOf(const Slice& key) override;
   void SetupForCompaction() override {}
@@ -226,8 +233,10 @@ public:
   Status Get(const ReadOptions& readOptions, const Slice& key, GetContext* get_context,
              const SliceTransform* prefix_extractor, bool skip_filters) override;
 
-  void RangeScan(const Slice* begin, const SliceTransform* prefix_extractor, void* arg,
-                 bool(* callback_func)(void* arg, const Slice& key, LazySlice&& value)) override;
+  void RangeScan(const Slice* begin, const SliceTransform* prefix_extractor,
+                 void* arg,
+                 bool(* callback_func)(void* arg, const Slice& key,
+                                       LazyBuffer&& value)) override;
 
   uint64_t ApproximateOffsetOf(const Slice& key) override;
   void SetupForCompaction() override {}

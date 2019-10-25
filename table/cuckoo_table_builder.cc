@@ -82,13 +82,13 @@ CuckooTableBuilder::CuckooTableBuilder(
   properties_.column_family_name = column_family_name;
 }
 
-void CuckooTableBuilder::Add(const Slice& key, const LazySlice& lazy_value) {
-  auto s = lazy_value.inplace_decode();
+void CuckooTableBuilder::Add(const Slice& key, const LazyBuffer& lazy_value) {
+  auto s = lazy_value.fetch();
   if (!s.ok()) {
     status_ = s;
     return;
   }
-  const Slice& value = lazy_value;
+  const Slice& value = lazy_value.get_slice();
   if (num_entries_ >= kMaxVectorIdx - 1) {
     status_ = Status::NotSupported("Number of keys in a file must be < 2^32-1");
     return;

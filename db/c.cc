@@ -21,7 +21,7 @@
 #include "rocksdb/env.h"
 #include "rocksdb/filter_policy.h"
 #include "rocksdb/iterator.h"
-#include "rocksdb/lazy_slice.h"
+#include "rocksdb/lazy_buffer.h"
 #include "rocksdb/memtablerep.h"
 #include "rocksdb/merge_operator.h"
 #include "rocksdb/options.h"
@@ -70,7 +70,7 @@ using rocksdb::FilterPolicy;
 using rocksdb::FlushOptions;
 using rocksdb::IngestExternalFileOptions;
 using rocksdb::Iterator;
-using rocksdb::LazySlice;
+using rocksdb::LazyBuffer;
 using rocksdb::Logger;
 using rocksdb::MergeOperator;
 using rocksdb::MergeOperators;
@@ -168,7 +168,7 @@ struct rocksdb_ratelimiter_t {
 };
 struct rocksdb_perfcontext_t     { PerfContext*      rep; };
 struct rocksdb_pinnableslice_t {
-  LazySlice rep;
+  LazyBuffer rep;
 };
 struct rocksdb_transactiondb_options_t {
   TransactionDBOptions rep;
@@ -362,8 +362,8 @@ struct rocksdb_mergeoperator_t : public MergeOperator {
     std::vector<const char*> operand_pointers(n);
     std::vector<size_t> operand_sizes(n);
     for (size_t i = 0; i < n; i++) {
-      const LazySlice& operand = merge_in.operand_list[i];
-      if (!operand.inplace_decode().ok()) {
+      const LazyBuffer& operand = merge_in.operand_list[i];
+      if (!operand.fetch().ok()) {
         return false;
       }
       operand_pointers[i] = operand.data();
@@ -373,7 +373,7 @@ struct rocksdb_mergeoperator_t : public MergeOperator {
     const char* existing_value_data = nullptr;
     size_t existing_value_len = 0;
     if (merge_in.existing_value != nullptr) {
-      if (!merge_in.existing_value->inplace_decode().ok()) {
+      if (!merge_in.existing_value->fetch().ok()) {
         return false;
       }
       existing_value_data = merge_in.existing_value->data();
@@ -398,15 +398,15 @@ struct rocksdb_mergeoperator_t : public MergeOperator {
   }
 
   virtual bool PartialMergeMulti(const Slice& key,
-                                 const std::vector<LazySlice>& operand_list,
-                                 LazySlice* new_value,
+                                 const std::vector<LazyBuffer>& operand_list,
+                                 LazyBuffer* new_value,
                                  Logger* /*logger*/) const override {
     size_t operand_count = operand_list.size();
     std::vector<const char*> operand_pointers(operand_count);
     std::vector<size_t> operand_sizes(operand_count);
     for (size_t i = 0; i < operand_count; ++i) {
-      const LazySlice& operand = operand_list[i];
-      if (!operand.inplace_decode().ok()) {
+      const LazyBuffer& operand = operand_list[i];
+      if (!operand.fetch().ok()) {
         return false;
       }
       operand_pointers[i] = operand.data();

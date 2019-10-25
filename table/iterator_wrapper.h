@@ -21,7 +21,7 @@ class SeparateHelper;
 // the valid() and key() results for an underlying iterator.
 // This can help avoid virtual function calls and also gives better
 // cache locality.
-template <class TValue = LazySlice>
+template <class TValue = LazyBuffer>
 class IteratorWrapperBase {
  public:
   IteratorWrapperBase() : iter_(nullptr), valid_(false) {}
@@ -92,7 +92,7 @@ class IteratorWrapperBase {
   Slice key_;
 };
 
-using IteratorWrapper = IteratorWrapperBase<LazySlice>;
+using IteratorWrapper = IteratorWrapperBase<LazyBuffer>;
 
 class CombinedInternalIterator : public InternalIterator {
  public:
@@ -102,7 +102,7 @@ class CombinedInternalIterator : public InternalIterator {
 
   bool Valid() const override { return iter_->Valid(); }
   Slice key() const override { return iter_->key(); }
-  LazySlice value() const override;
+  LazyBuffer value() const override;
   Status status() const override { return iter_->status(); }
   void Next() override { iter_->Next(); }
   void Prev() override { iter_->Prev(); }
@@ -121,7 +121,7 @@ class LazyInternalIteratorWrapper : public InternalIterator {
  public:
   LazyInternalIteratorWrapper(
       InternalIterator*(*new_iter_callback)(void*), void* new_iter_callback_arg,
-      bool (*filter_callback)(void*, const Slice&, const LazySlice&),
+      bool (*filter_callback)(void*, const Slice&, const LazyBuffer&),
       void* filter_callback_arg,
       const std::atomic<bool>* shutting_down = nullptr)
   : new_iter_callback_(new_iter_callback),
@@ -153,7 +153,7 @@ class LazyInternalIteratorWrapper : public InternalIterator {
 
   bool Valid() const override { return iter_ && iter_->Valid(); }
   Slice key() const override { assert(iter_); return iter_->key(); }
-  LazySlice value() const override { assert(iter_); return iter_->value(); }
+  LazyBuffer value() const override { assert(iter_); return iter_->value(); }
   Status status() const override {
     if (!iter_) {
       return Status::OK();
@@ -186,7 +186,7 @@ class LazyInternalIteratorWrapper : public InternalIterator {
   }
   InternalIterator*(*new_iter_callback_)(void*);
   void* new_iter_callback_arg_;
-  bool (*filter_callback_)(void*, const Slice&, const LazySlice&);
+  bool (*filter_callback_)(void*, const Slice&, const LazyBuffer&);
   void* filter_callback_arg_;
   const std::atomic<bool>* shutting_down_;
   std::unique_ptr<InternalIterator> iter_;
@@ -207,9 +207,9 @@ public:
       : separate_helper_(_separate_helper),
         delta_antiquation_(_delta_antiquation) {}
 
-  LazySlice value(InternalIterator* iter, const Slice& user_key) const;
+  LazyBuffer value(InternalIterator* iter, const Slice& user_key) const;
 
-  LazySlice add(InternalIterator* iter, const Slice& user_key);
+  LazyBuffer add(InternalIterator* iter, const Slice& user_key);
   void sub(uint64_t file_number);
 
   const SeparateHelper* separate_helper() const { return separate_helper_; }

@@ -153,12 +153,12 @@ TEST_F(GeoDBTest, DifferentPosInSameQuadkey) {
 
   // get obj1's quadkey
   ReadOptions opt;
-LazySlice quadkey1;
+  LazyBuffer quadkey1;
   status = getdb()->Get(opt, getdb()->DefaultColumnFamily(), "k:" + id1, &quadkey1);
   ASSERT_TRUE(status.ok());
 
   // get obj2's quadkey
-  LazySlice quadkey2;
+  LazyBuffer quadkey2;
   status = getdb()->Get(opt, getdb()->DefaultColumnFamily(), "k:" + id2, &quadkey2);
   ASSERT_TRUE(status.ok());
 

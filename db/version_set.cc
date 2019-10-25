@@ -508,7 +508,7 @@ class LevelIterator final : public InternalIterator {
     assert(file_iter_.Valid());
     return file_iter_.key();
   }
-  virtual LazySlice value() const override {
+  virtual LazyBuffer value() const override {
     assert(file_iter_.Valid());
     return file_iter_.value();
   }
@@ -1202,7 +1202,8 @@ Version::Version(ColumnFamilyData* column_family_data, VersionSet* vset,
       mutable_cf_options_(mutable_cf_options),
       version_number_(version_number) {}
 
-Status Version::inplace_decode(LazySlice* slice, LazySliceRep* rep) const {
+Status Version::fetch_buffer(LazyBuffer* buffer) const {
+  auto rep = get_rep(buffer);
   Slice user_key(reinterpret_cast<const char*>(rep->data[0]), rep->data[1]);
   uint64_t sequence = rep->data[2];
   const FileMetaData* file_metadata =
@@ -1211,7 +1212,7 @@ Status Version::inplace_decode(LazySlice* slice, LazySliceRep* rep) const {
   SequenceNumber context_seq;
   GetContext get_context(cfd_->internal_comparator().user_comparator(), nullptr,
                          cfd_->ioptions()->info_log, db_statistics_,
-                         GetContext::kNotFound, user_key, slice, &value_found,
+                         GetContext::kNotFound, user_key, buffer, &value_found,
                          nullptr, nullptr, nullptr, env_, &context_seq);
   IterKey iter_key;
   iter_key.SetInternalKey(user_key, sequence, kValueTypeForSeek);
@@ -1228,24 +1229,24 @@ Status Version::inplace_decode(LazySlice* slice, LazySliceRep* rep) const {
     if (get_context.State() == GetContext::kCorrupt) {
       return std::move(get_context).CorruptReason();
     } else {
-      char buffer[128];
-      snprintf(buffer, sizeof buffer,
+      char buf[128];
+      snprintf(buf, sizeof buf,
                "file number = %" PRIu64 "(%" PRIu64 "), sequence = %" PRIu64,
-               file_metadata->fd.GetNumber(), slice->file_number(), sequence);
-      return Status::Corruption("Separate value missing", buffer);
+               file_metadata->fd.GetNumber(), buffer->file_number(), sequence);
+      return Status::Corruption("Separate value missing", buf);
     }
   }
   return Status::OK();
 }
 
 void Version::TransToCombined(const Slice& user_key, uint64_t sequence,
-                              LazySlice& value) const {
-  auto s = value.inplace_decode();
+                              LazyBuffer& value) const {
+  auto s = value.fetch();
   if (!s.ok()) {
-    value.reset(s);
+    value.reset(std::move(s));
     return;
   }
-  uint64_t file_number = SeparateHelper::DecodeFileNumber(value);
+  uint64_t file_number = SeparateHelper::DecodeFileNumber(value.get_slice());
   auto& dependence_map = storage_info_.dependence_map();
   auto find = dependence_map.find(file_number);
   if (find == dependence_map.end()) {
@@ -1253,12 +1254,13 @@ void Version::TransToCombined(const Slice& user_key, uint64_t sequence,
   } else {
     value.reset(this, {reinterpret_cast<uint64_t>(user_key.data()),
                        user_key.size(), sequence,
-                       reinterpret_cast<uint64_t>(find->second)}, file_number);
+                       reinterpret_cast<uint64_t>(find->second)},
+                Slice::Invalid(), file_number);
   }
 }
 
 void Version::Get(const ReadOptions& read_options, const Slice& user_key,
-                  const LookupKey& k, LazySlice* value, Status* status,
+                  const LookupKey& k, LazyBuffer* value, Status* status,
                   MergeContext* merge_context,
                   SequenceNumber* max_covering_tombstone_seq, bool* value_found,
                   bool* key_exists, SequenceNumber* seq,
@@ -1364,7 +1366,7 @@ void Version::Get(const ReadOptions& read_options, const Slice& user_key,
         merge_operator_, user_key, nullptr, merge_context->GetOperands(),
         value, info_log_, db_statistics_, env_, true);
     if (status->ok()) {
-      value->pin_resource();
+      value->pin();
     }
   } else {
     if (key_exists != nullptr) {
@@ -1375,7 +1377,7 @@ void Version::Get(const ReadOptions& read_options, const Slice& user_key,
 }
 
 void Version::GetKey(const Slice& user_key, const Slice& ikey, Status* status,
-                     ValueType* type, SequenceNumber* seq, LazySlice* value) {
+                     ValueType* type, SequenceNumber* seq, LazyBuffer* value) {
   bool value_found;
   GetContext get_context(cfd_->internal_comparator().user_comparator(), nullptr,
                          cfd_->ioptions()->info_log, db_statistics_,

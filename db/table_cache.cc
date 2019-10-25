@@ -236,7 +236,7 @@ InternalIterator* TableCache::NewIterator(
   if (s.ok()) {
     if (options.table_filter &&
         !options.table_filter(*table_reader->GetTableProperties())) {
-      result = NewEmptyInternalIterator<LazySlice>(arena);
+      result = NewEmptyInternalIterator<LazyBuffer>(arena);
     } else {
       result = table_reader->NewIterator(options, prefix_extractor, arena,
                                          skip_filters, for_compaction);
@@ -346,7 +346,7 @@ InternalIterator* TableCache::NewIterator(
   }
   if (!s.ok()) {
     assert(result == nullptr);
-    result = NewErrorInternalIterator<LazySlice>(s, arena);
+    result = NewErrorInternalIterator<LazyBuffer>(s, arena);
   }
   return result;
 }
@@ -384,14 +384,14 @@ Status TableCache::Get(const ReadOptions& options,
     } else {
       // Forward query to target sst
       auto get_from_map = [&](const Slice& largest_key,
-                              LazySlice&& map_value) {
-        s = map_value.inplace_decode();
+                              LazyBuffer&& map_value) {
+        s = map_value.fetch();
         if (!s.ok()) {
           return false;
         }
         // Manual inline MapSstElement::Decode
         const char* err_msg = "Map sst invalid link_value";
-        Slice map_input = map_value;
+        Slice map_input = map_value.get_slice();
         Slice smallest_key;
         uint64_t link_count;
         uint64_t flags;

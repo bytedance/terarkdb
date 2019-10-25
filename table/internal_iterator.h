@@ -9,7 +9,7 @@
 #include <string>
 #include "rocksdb/comparator.h"
 #include "rocksdb/iterator.h"
-#include "rocksdb/lazy_slice.h"
+#include "rocksdb/lazy_buffer.h"
 #include "rocksdb/status.h"
 #include "table/format.h"
 
@@ -102,17 +102,17 @@ class InternalIteratorBase : public InternalIteratorCommon {
   virtual TValue value() const = 0;
 };
 
-using InternalIterator = InternalIteratorBase<LazySlice>;
+using InternalIterator = InternalIteratorBase<LazyBuffer>;
 
 // Return an empty iterator (yields nothing).
 // allocated arena if not nullptr.
-template <class TValue = LazySlice>
+template <class TValue = LazyBuffer>
 extern InternalIteratorBase<TValue>* NewEmptyInternalIterator(
     Arena* arena = nullptr);
 
 // Return an empty iterator with the specified status.
 // allocated arena if not nullptr.
-template <class TValue = LazySlice>
+template <class TValue = LazyBuffer>
 extern InternalIteratorBase<TValue>* NewErrorInternalIterator(
     const Status& status, Arena* arena = nullptr);
 

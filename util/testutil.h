@@ -181,7 +181,7 @@ class VectorIteratorBase : public InternalIteratorBase<TValue> {
   std::vector<std::string> values_;
   size_t current_;
 };
-using VectorIterator = VectorIteratorBase<LazySlice>;
+using VectorIterator = VectorIteratorBase<LazyBuffer>;
 
 extern WritableFileWriter* GetWritableFileWriter(WritableFile* wf,
                                                  const std::string& fname);
@@ -672,10 +672,9 @@ class ChanglingMergeOperator : public MergeOperator {
                            MergeOperationOutput* /*merge_out*/) const override {
     return false;
   }
-  virtual bool PartialMergeMulti(const Slice& /*key*/,
-                                 const std::vector<LazySlice>& /*operand_list*/,
-                                 LazySlice* /*new_value*/,
-                                 Logger* /*logger*/) const override {
+  virtual bool PartialMergeMulti(
+      const Slice& /*key*/, const std::vector<LazyBuffer>& /*operand_list*/,
+      LazyBuffer* /*new_value*/, Logger* /*logger*/) const override {
     return false;
   }
   virtual const char* Name() const override { return name_.c_str(); }

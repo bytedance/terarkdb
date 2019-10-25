@@ -31,7 +31,8 @@ public:
 
  const char* Name() const override;
  virtual Decision FilterV2(int level, const Slice& key, ValueType value_type,
-                           const LazySlice& existing_value, LazySlice* new_value,
+                           const LazyBuffer& existing_value,
+                           LazyBuffer* new_value,
                            std::string* skip_until) const override;
 
 private:

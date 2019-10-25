@@ -24,22 +24,22 @@ class MergeContext {
   }
 
   // Push a merge operand
-  void PushOperand(LazySlice&& operand_slice, bool operand_pinned = true) {
+  void PushOperand(LazyBuffer&& operand_slice, bool operand_pinned = true) {
     SetDirectionBackward();
 
     operand_list_.emplace_back(std::move(operand_slice));
     if (operand_pinned) {
-      operand_list_.back().pin_resource();
+      operand_list_.back().pin();
     }
   }
 
   // Push back a merge operand
-  void PushOperandBack(LazySlice&& operand_slice, bool operand_pinned = true) {
+  void PushOperandBack(LazyBuffer&& operand_slice, bool operand_pinned = true) {
     SetDirectionForward();
 
     operand_list_.emplace_back(std::move(operand_slice));
     if (operand_pinned) {
-      operand_list_.back().pin_resource();
+      operand_list_.back().pin();
     }
   }
 
@@ -49,26 +49,26 @@ class MergeContext {
   }
 
   // Get the operand at the index.
-  const LazySlice& GetOperand(int index) {
+  const LazyBuffer& GetOperand(int index) {
     SetDirectionForward();
     return operand_list_[index];
   }
 
   // Same as GetOperandsDirectionForward
-  std::vector<LazySlice>& GetOperands() {
+  std::vector<LazyBuffer>& GetOperands() {
     return GetOperandsDirectionForward();
   }
 
   // Return all the operands in the order as they were merged (passed to
   // FullMerge or FullMergeV2)
-  std::vector<LazySlice>& GetOperandsDirectionForward() {
+  std::vector<LazyBuffer>& GetOperandsDirectionForward() {
     SetDirectionForward();
     return operand_list_;
   }
 
   // Return all the operands in the reversed order relative to how they were
   // merged (passed to FullMerge or FullMergeV2)
-  std::vector<LazySlice>& GetOperandsDirectionBackward() {
+  std::vector<LazyBuffer>& GetOperandsDirectionBackward() {
     SetDirectionBackward();
     return operand_list_;
   }
@@ -89,7 +89,7 @@ class MergeContext {
   }
 
   // List of operands
-  std::vector<LazySlice> operand_list_;
+  std::vector<LazyBuffer> operand_list_;
   bool operands_reversed_ = true;
 };
 

@@ -46,8 +46,8 @@ Status GetAllKeyVersions(DB* db, Slice begin_key, Slice end_key,
       break;
     }
 
-    LazySlice value = iter->value();
-    auto s = value.inplace_decode();
+    LazyBuffer value = iter->value();
+    auto s = value.fetch();
     if (!s.ok()) {
       return s;
     }

@@ -48,7 +48,7 @@ class PlainTableBuilder: public TableBuilder {
   // Add key,value to the table being constructed.
   // REQUIRES: key is after any previously added key according to comparator.
   // REQUIRES: Finish(), Abandon() have not been called
-  void Add(const Slice& key, const LazySlice& value) override;
+  void Add(const Slice& key, const LazyBuffer& value) override;
 
   // Return non-ok iff some error has been detected.
   Status status() const override;

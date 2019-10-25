@@ -544,7 +544,7 @@ struct BlockBasedTable::Rep {
   }
 };
 
-template <class TBlockIter, typename TValue = LazySlice>
+template <class TBlockIter, typename TValue = LazyBuffer>
 class BlockBasedTableIteratorBase : public InternalIteratorBase<TValue> {
  public:
   BlockBasedTableIteratorBase(BlockBasedTable* table,
@@ -678,10 +678,10 @@ class BlockBasedTableIterator
 };
 
 template <>
-class BlockBasedTableIterator<DataBlockIter, LazySlice>
-    : public BlockBasedTableIteratorBase<DataBlockIter, LazySlice>,
-      public LazySliceController {
-  using Base = BlockBasedTableIteratorBase<DataBlockIter, LazySlice>;
+class BlockBasedTableIterator<DataBlockIter, LazyBuffer>
+    : public BlockBasedTableIteratorBase<DataBlockIter, LazyBuffer>,
+      public LazyBufferController {
+  using Base = BlockBasedTableIteratorBase<DataBlockIter, LazyBuffer>;
   using Base::block_iter_;
   using Base::icomp_;
   using Base::table_;
@@ -690,17 +690,17 @@ class BlockBasedTableIterator<DataBlockIter, LazySlice>
  public:
   using Base::Base;
 
-  virtual void destroy(LazySliceRep* /*rep*/) const override {}
-  virtual void pin_resource(LazySlice* slice, LazySliceRep* rep) const override;
-  virtual Status inplace_decode(LazySlice* slice,
-                                LazySliceRep* /*rep*/) const override {
-    assign_slice(*slice, block_iter_.value());
+  virtual void destroy(LazyBuffer* /*buffer*/) const override {}
+
+  virtual void pin_buffer(LazyBuffer* buffer) const override;
+
+  virtual Status fetch_buffer(LazyBuffer* /*buffer*/) const override {
     return Status::OK();
   }
 
-  LazySlice value() const override {
+  LazyBuffer value() const override {
     assert(Valid());
-    return LazySlice(this, {}, table_->FileNumber());
+    return LazyBuffer(this, {}, block_iter_.value(), table_->FileNumber());
   }
 };
 

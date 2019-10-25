@@ -103,7 +103,7 @@ class MockTableIterator : public InternalIterator {
 
   Slice key() const override { return Slice(itr_->first); }
 
-  LazySlice value() const override { return LazySlice(itr_->second); }
+  LazyBuffer value() const override { return LazyBuffer(itr_->second); }
 
   Status status() const override { return Status::OK(); }
 
@@ -125,8 +125,8 @@ class MockTableBuilder : public TableBuilder {
   // Add key,value to the table being constructed.
   // REQUIRES: key is after any previously added key according to comparator.
   // REQUIRES: Finish(), Abandon() have not been called
-  void Add(const Slice& key, const LazySlice& value) override {
-    auto s = value.inplace_decode();
+  void Add(const Slice& key, const LazyBuffer& value) override {
+    auto s = value.fetch();
     if (s.ok()) {
       table_.insert({key.ToString(), value.ToString()});
     } else if (status_.ok()) {

@@ -818,7 +818,7 @@ Status WriteBatchWithIndex::GetFromBatch(ColumnFamilyHandle* column_family,
   MergeContext merge_context;
   const ImmutableDBOptions immuable_db_options(options);
 
-  LazySlice lazy_value(value);
+  LazyBuffer lazy_value(value);
   WriteBatchWithIndexInternal::Result result =
       WriteBatchWithIndexInternal::GetFromBatch(
           immuable_db_options, this, column_family, key, &merge_context,
@@ -828,7 +828,7 @@ Status WriteBatchWithIndex::GetFromBatch(ColumnFamilyHandle* column_family,
   switch (result) {
     case WriteBatchWithIndexInternal::Result::kFound:
       assert(s.ok());
-      s = lazy_value.save_to_buffer(value);
+      s = std::move(lazy_value).dump(value);
       break;
     case WriteBatchWithIndexInternal::Result::kError:
       // use returned status
@@ -852,11 +852,11 @@ Status WriteBatchWithIndex::GetFromBatchAndDB(DB* db,
                                               const Slice& key,
                                               std::string* value) {
   assert(value != nullptr);
-  LazySlice lazy_val(value);
+  LazyBuffer lazy_val(value);
   auto s = GetFromBatchAndDB(db, read_options, db->DefaultColumnFamily(), key,
                              &lazy_val);
   if (s.ok()) {
-    s = lazy_val.save_to_buffer(value);
+    s = std::move(lazy_val).dump(value);
   }
   return s;
 }
@@ -864,7 +864,7 @@ Status WriteBatchWithIndex::GetFromBatchAndDB(DB* db,
 Status WriteBatchWithIndex::GetFromBatchAndDB(DB* db,
                                               const ReadOptions& read_options,
                                               const Slice& key,
-                                              LazySlice* lazy_val) {
+                                              LazyBuffer* lazy_val) {
   return GetFromBatchAndDB(db, read_options, db->DefaultColumnFamily(), key,
                            lazy_val);
 }
@@ -875,11 +875,11 @@ Status WriteBatchWithIndex::GetFromBatchAndDB(DB* db,
                                               const Slice& key,
                                               std::string* value) {
   assert(value != nullptr);
-  LazySlice lazy_val(value);
+  LazyBuffer lazy_val(value);
   auto s =
       GetFromBatchAndDB(db, read_options, column_family, key, &lazy_val);
   if (s.ok()) {
-    s = lazy_val.save_to_buffer(value);
+    s = std::move(lazy_val).dump(value);
   }
   return s;
 }
@@ -888,14 +888,14 @@ Status WriteBatchWithIndex::GetFromBatchAndDB(DB* db,
                                               const ReadOptions& read_options,
                                               ColumnFamilyHandle* column_family,
                                               const Slice& key,
-                                              LazySlice* lazy_val) {
+                                              LazyBuffer* lazy_val) {
   return GetFromBatchAndDB(db, read_options, column_family, key, lazy_val,
                            nullptr);
 }
 
 Status WriteBatchWithIndex::GetFromBatchAndDB(
     DB* db, const ReadOptions& read_options, ColumnFamilyHandle* column_family,
-    const Slice& key, LazySlice* lazy_val, ReadCallback* callback) {
+    const Slice& key, LazyBuffer* lazy_val, ReadCallback* callback) {
   Status s;
   MergeContext merge_context;
   const ImmutableDBOptions& immuable_db_options =
@@ -911,8 +911,8 @@ Status WriteBatchWithIndex::GetFromBatchAndDB(
           rep->GetComparator(column_family), lazy_val, rep->overwrite_key, &s);
 
   if (result == WriteBatchWithIndexInternal::Result::kFound) {
-    lazy_val->pin_resource();
-    s = lazy_val->inplace_decode();
+    lazy_val->pin();
+    s = lazy_val->fetch();
     return s;
   }
   if (result == WriteBatchWithIndexInternal::Result::kDeleted) {
@@ -947,7 +947,7 @@ Status WriteBatchWithIndex::GetFromBatchAndDB(
       Env* env = immuable_db_options.env;
       Logger* logger = immuable_db_options.info_log.get();
 
-      LazySlice* merge_data;
+      LazyBuffer* merge_data;
       if (s.ok()) {
         merge_data = lazy_val;
       } else {  // Key not present in db (s.IsNotFound())
@@ -955,15 +955,15 @@ Status WriteBatchWithIndex::GetFromBatchAndDB(
       }
 
       if (merge_operator) {
-        LazySlice merge_result;
+        LazyBuffer merge_result;
         s = MergeHelper::TimedFullMerge(
             merge_operator, key, merge_data, merge_context.GetOperands(),
             &merge_result, logger, statistics, env);
         if (s.ok()) {
-          s = merge_result.decode_destructive(*lazy_val);
+          s = std::move(merge_result).dump(*lazy_val);
         }
         if (s.ok()) {
-          lazy_val->pin_resource();
+          lazy_val->pin();
         }
       } else {
         s = Status::InvalidArgument("Options::merge_operator must be set");
