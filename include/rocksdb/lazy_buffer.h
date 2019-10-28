@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <assert.h>
 #include <string>
 #include <utility>
 #include "rocksdb/cleanable.h"
@@ -31,50 +32,57 @@ struct LazyBufferCustomizeBuffer {
 
 class LazyBufferController {
 public:
-  // release resource
+  // Release resource
   virtual void destroy(LazyBuffer* buffer) const = 0;
 
-  // resize buffer
+  // Resize buffer
   virtual void uninitialized_resize(LazyBuffer* _buffer, size_t size) const;
 
-  // save value into buffer
+  // Save slice into buffer
   virtual void assign_slice(LazyBuffer* buffer, const Slice& slice) const;
 
-  // save error into buffer
+  // Save error into buffer
   virtual void assign_error(LazyBuffer* buffer, Status&& status) const;
 
-  // pin the buffer, turn the controller into editable
+  // Pin the buffer, turn the controller into editable
   virtual void pin_buffer(LazyBuffer* buffer) const;
 
-  // fetch and dump to target, the buffer may be destroyed
+  // Fetch buffer and dump to target, the buffer may be destroyed
   virtual Status dump_buffer(LazyBuffer* buffer, LazyBuffer* target) const;
 
-  // inplace decode buffer
+  // Fetch buffer
   virtual Status fetch_buffer(LazyBuffer* buffer) const = 0;
 
   virtual ~LazyBufferController() = default;
 
-  // data -> 32 bytes local storage
+  // Use LazyBufferRep as local storage
+  // data -> 32 bytes
   static const LazyBufferController* default_controller();
 
+  // Use LazyBufferRep as buffer
   // data[0]     -> handle
   // data[1]     -> uninitialized_resize call
   // data[2 - 3] -> Status
   static const LazyBufferController* buffer_controller();
 
+  // Use LazyBufferRep as string holder
   // data[0] -> string ptr
   // data[1] -> is owner
   // data[2 - 3] -> Status
   static const LazyBufferController* string_controller();
 
+  // Use LazyBufferRep as LazuBuffer reference
   // data[0] -> ptr to LazyBuffer
   static const LazyBufferController* reference_controller();
 
+  // Use LazyBufferRep as Cleanable
   // rep -> Cleanable
   static const LazyBufferController* cleanable_controller();
 
+  // Set buffer->slice_ = slice
   static void set_slice(LazyBuffer* buffer, const Slice& slice);
 
+  // Get &buffer->rep_
   static LazyBufferRep* get_rep(LazyBuffer* buffer);
 };
 
@@ -92,43 +100,49 @@ protected:
   LazyBufferRep rep_;
   uint64_t file_number_;
 
+  // Call LazyBufferController::destroy if controller_ not nullptr
   void destroy();
 
+  // Call LazyBufferController::assign_error if _status not ok
   void assign_error(Status&& _status);
 
+  // Fix default_controller local storage
   void fix_default_controller(const LazyBuffer& other);
 
 public:
 
+  // Empty buffer
   LazyBuffer() noexcept;
 
-  explicit LazyBuffer(size_t _capacity) noexcept;
+  // Init a buffer & uninitialized resize.
+  explicit LazyBuffer(size_t _size) noexcept;
 
+  // Move constructor
   LazyBuffer(LazyBuffer&& _buffer) noexcept;
 
-  // non copyable
+  // Non copyable
   LazyBuffer(const LazyBuffer& _buffer) = delete;
 
-  // init with deep copy a slice
-  explicit LazyBuffer(const Slice& _value, bool _copy = false,
+  // Init with slice from copying or referring
+  explicit LazyBuffer(const Slice& _slice, bool _copy = false,
                       uint64_t _file_number = uint64_t(-1));
 
-  // init with Status
+  // Init with Status
   explicit LazyBuffer(Status&& _status) : LazyBuffer() {
-    if (!_status.ok()) { assign_error(std::move(_status)); };
+    assign_error(std::move(_status));
   }
 
-  // init with customize buffer
+  // Init a buffer with customize buffer
   LazyBuffer(LazyBufferCustomizeBuffer _buffer) noexcept;
 
-  // init with outer string, DO NOT take life cycle of buffer
+  // Init a buffer with outer string, DO NOT take life cycle of string
   explicit LazyBuffer(std::string* _string) noexcept;
 
-  // init from cleanup function for slice
+  // Init from cleanup function for slice
   LazyBuffer(const Slice& _slice, Cleanable&& _cleanable,
              uint64_t _file_number = uint64_t(-1)) noexcept;
 
-  // init from customize controller
+  // Init from customize controller
   LazyBuffer(const LazyBufferController* _controller,
              const LazyBufferRep& _rep, const Slice& _slice = Slice::Invalid(),
              uint64_t _file_number = uint64_t(-1)) noexcept;
@@ -137,23 +151,29 @@ public:
     destroy();
   }
 
+  // Move assign
   LazyBuffer& operator = (LazyBuffer&& _buffer) noexcept {
     reset(std::move(_buffer));
     return *this;
   }
 
-  // non copyable
+  // Non copyable
   LazyBuffer& operator = (const LazyBuffer& _buffer) = delete;
 
+  // Get inner slice
+  // REQUIRES: valid()
   const Slice& get_slice() const { assert(valid()); return slice_; }
 
   // Return a pointer to the beginning of the referenced data
+  // REQUIRES: valid()
   const char* data() const { assert(valid()); return data_; }
 
   // Return the length (in bytes) of the referenced data
+  // REQUIRES: valid()
   size_t size() const { assert(valid()); return size_; }
 
   // Return true iff the length of the referenced data is zero
+  // REQUIRES: valid()
   bool empty() const { assert(valid()); return slice_.empty(); }
 
   // Return true if Slice valid
@@ -161,10 +181,12 @@ public:
 
   // Return the ith byte in the referenced data.
   // REQUIRES: n < size()
+  // REQUIRES: valid()
   char operator[](size_t n) const { assert(valid()); return slice_[n]; }
 
   // Return a string that contains the copy of the referenced data.
   // when hex is true, returns a string of twice the length hex encoded (0-9A-F)
+  // REQUIRES: valid()
   std::string ToString(bool hex = false) const {
     assert(valid());
     return slice_.ToString(hex);
@@ -172,6 +194,7 @@ public:
 
 #ifdef __cpp_lib_string_view
   // Return a string_view that references the same data as this slice.
+  // REQUIRES: valid()
   std::string_view ToStringView() const {
     assert(valid());
     return slice_.ToStringView();
@@ -183,119 +206,100 @@ public:
   // (e.g not coming from Slice::ToString(true)) DecodeHex returns false.
   // This slice is expected to have an even number of 0-9A-F characters
   // also accepts lowercase (a-f)
+  // REQUIRES: valid()
   bool DecodeHex(std::string* result) const {
     assert(valid());
     return slice_.DecodeHex(result);
   }
 
-  // Three-way comparison.  Returns value:
-  //   <  0 iff "*this" <  "b",
-  //   == 0 iff "*this" == "b",
-  //   >  0 iff "*this" >  "b"
-  int compare(const Slice& b) const {
-    assert(valid());
-    return slice_.compare(b);
-  }
-
-  int compare(const LazyBuffer& b) const {
-    assert(valid());
-    return slice_.compare(b.get_slice());
-  }
-
   // Return true iff "x" is a prefix of "*this"
+  // REQUIRES: valid()
   bool starts_with(const Slice& x) const {
     assert(valid());
     return slice_.starts_with(x);
   }
 
+  // Return true iff "x" is a prefix of "*this"
+  // REQUIRES: valid()
   bool ends_with(const Slice& x) const {
     assert(valid());
     return slice_.ends_with(x);
   }
 
-  // Compare two slices and returns the first byte where they differ
-  size_t difference_offset(const Slice& b) const {
-    assert(valid());
-    return slice_.difference_offset(b);
-  }
-
-  size_t difference_offset(const LazyBuffer& b) const {
-    assert(valid());
-    return slice_.difference_offset(b.get_slice());
-  }
-
   // Change this slice to refer to an empty array
   void clear();
 
-  // move assign buffer with file number
+  // Move assign other buffer
   void reset(LazyBuffer&& _buffer);
 
-  // reset buffer from copying or referring
+  // Reset buffer from copying or referring
   void reset(const Slice& _slice, bool _copy = false,
              uint64_t _file_number = uint64_t(-1));
 
-  // reset with Status
-  void reset(Status&& _status) {
-    _status.ok() ? clear() : assign_error(std::move(_status));
-  }
+  // Reset with Status
+  void reset(Status&& _status) { assign_error(std::move(_status)); }
 
-  // reset customize buffer
+  // Reset with customize buffer
   void reset(LazyBufferCustomizeBuffer _buffer);
 
-  // reset outer string, DO NOT take life cycle of string
+  // Reset outer string, DO NOT take life cycle of string
   void reset(std::string* _string);
 
-  // reset cleanup function for slice
+  // Reset cleanup function for slice
   void reset(const Slice& _slice, Cleanable&& _cleanable,
              uint64_t _file_number = uint64_t(-1));
 
-  // reset to customize controller
+  // Reset to customize controller
   void reset(const LazyBufferController* _controller, const LazyBufferRep& _rep,
              const Slice& _slice = Slice::Invalid(),
              uint64_t _file_number = uint64_t(-1));
 
-  // decode source and copy it
+  // Fetch source and copy it
   void assign(const LazyBuffer& _source);
 
-  // trans this to buffer for modification
+  // Trans to editable buffer and get editor
   LazyBufferEditor* get_editor();
 
-  // trans this to string for modification
+  // Trans buffer to string for modification
   std::string* trans_to_string();
 
-  // return the certain file number of SST, -1 for unknown
+  // Return the certain file number of SST, -1 for unknown
   uint64_t file_number() const { return file_number_; }
 
-  // pin this buffer, turn the controller into editable
+  // Pin this buffer, turn the controller into editable
   void pin();
 
-  // save data to buffer
+  // Dump buffer to customize buffer
   Status dump(LazyBufferCustomizeBuffer _buffer) &&;
 
-  // save data to buffer
+  // Dump buffer to string
   Status dump(std::string* _string) &&;
 
-  // decode this buffer and save to target, this buffer will be destroyed
+  // Dump buffer to other buffer
   Status dump(LazyBuffer& _buffer) &&;
 
-  // decode this buffer inplace
+  // Fetch buffer
   Status fetch() const;
 
-  // for test
+  // For test
   const LazyBufferController* TEST_controller() const { return controller_; }
 
-  // for test
+  // For test
   const LazyBufferRep* TEST_rep() const { return &rep_; }
 };
 
-class LazyBufferEditor : protected LazyBuffer {
+class LazyBufferEditor : private LazyBuffer {
 public:
   char* data() const { return data_; }
   using LazyBuffer::size;
   using LazyBuffer::fetch;
 
-  // if returns false, some error happens, call fetch to get details
+  // If returns false, some error happens, call fetch to get details
+  // grow bytes set 0
   bool resize(size_t _size);
+
+  // If returns false, some error happens, call fetch to get details
+  // grow byte uninitialized
   bool uninitialized_resize(size_t _size);
 };
 
@@ -367,8 +371,13 @@ inline void LazyBuffer::destroy() {
 }
 
 inline void LazyBuffer::assign_error(Status&& _status) {
-  controller_->assign_error(this, std::move(_status));
-  assert(!slice_.valid());
+  if (_status.ok()) {
+    controller_->assign_slice(this, Slice());
+  } else {
+    controller_->assign_error(this, std::move(_status));
+    assert(!slice_.valid());
+  }
+  file_number_ = uint64_t(-1);
 }
 
 inline void LazyBuffer::clear() {
@@ -397,8 +406,8 @@ inline void LazyBuffer::reset(const Slice& _slice, bool _copy,
                               uint64_t _file_number) {
   assert(_slice.valid());
   if (_copy) {
-    slice_ = _slice;
     controller_->assign_slice(this, _slice);
+    assert(slice_ == _slice);
   } else {
     destroy();
     slice_ = _slice;
@@ -471,10 +480,10 @@ inline Status LazyBuffer::fetch() const {
 }
 
 // make a slice reference
-extern LazyBuffer LazyBufferReference(const LazyBuffer& slice);
+extern LazyBuffer LazyBufferReference(const LazyBuffer& buffer);
 
 // make a slice reference, drop the last "fixed_len" bytes from the slice.
-extern LazyBuffer LazyBufferRemoveSuffix(const LazyBuffer* slice,
+extern LazyBuffer LazyBufferRemoveSuffix(const LazyBuffer* buffer,
                                          size_t fixed_len);
 
 }  // namespace rocksdb

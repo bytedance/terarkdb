@@ -23,21 +23,21 @@ class MaxOperator : public MergeOperator {
  public:
   virtual bool FullMergeV2(const MergeOperationInput& merge_in,
                            MergeOperationOutput* merge_out) const override {
-    LazyBuffer max_slice;
+    LazyBuffer max_buffer;
     const LazyBuffer*& max = merge_out->existing_operand;
     if (merge_in.existing_value) {
-      max_slice = LazyBufferReference(*merge_in.existing_value);
+      max_buffer = LazyBufferReference(*merge_in.existing_value);
     } else {
-      max_slice.clear();
+      max_buffer.clear();
     }
 
     for (const auto& op : merge_in.operand_list) {
-      if (!max_slice.fetch().ok() || !op.fetch().ok()) {
+      if (!max_buffer.fetch().ok() || !op.fetch().ok()) {
         return false;
       }
-      if (max_slice.compare(op) < 0) {
+      if (max_buffer.get_slice().compare(op.get_slice()) < 0) {
         max = &op;
-        max_slice = LazyBufferReference(op);
+        max_buffer = LazyBufferReference(op);
       }
     }
 
@@ -52,7 +52,7 @@ class MaxOperator : public MergeOperator {
     if (!left_operand.fetch().ok() || !right_operand.fetch().ok()) {
       return false;
     }
-    if (left_operand.compare(right_operand) >= 0) {
+    if (left_operand.get_slice().compare(right_operand.get_slice()) >= 0) {
       new_value->assign(left_operand);
     } else {
       new_value->assign(right_operand);
@@ -69,7 +69,7 @@ class MaxOperator : public MergeOperator {
       if (!max.fetch().ok() || !operand.fetch().ok()) {
         return false;
       }
-      if (max.compare(operand) < 0) {
+      if (max.get_slice().compare(operand.get_slice()) < 0) {
         max = LazyBufferReference(operand);
       }
     }

@@ -8,6 +8,8 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #include <algorithm>
+#include <string.h>
+#include <stdlib.h>
 #include "rocksdb/slice_transform.h"
 #include "rocksdb/slice.h"
 #include "table/format.h"
@@ -40,7 +42,7 @@ public:
     auto rep = union_cast<Rep>(get_rep(buffer));
     if (size <= sizeof(Rep)) {
       if (buffer->data() != rep->data) {
-        memcpy(rep->data, buffer->data(), std::min(buffer->size(), size));
+        ::memmove(rep->data, buffer->data(), std::min(buffer->size(), size));
       }
       set_slice(buffer, Slice(rep->data, size));
     } else {
@@ -51,7 +53,7 @@ public:
   void assign_slice(LazyBuffer* buffer, const Slice& slice) const override {
     auto rep = union_cast<Rep>(get_rep(buffer));
     if (slice.size() <= sizeof(Rep)) {
-      memmove(rep->data, slice.data(), slice.size());
+      ::memmove(rep->data, slice.data(), slice.size());
       set_slice(buffer, Slice(rep->data, slice.size()));
     } else {
       LazyBufferController::assign_slice(buffer, slice);
@@ -63,7 +65,7 @@ public:
     if (buffer->size() > sizeof(Rep)) {
       LazyBufferController::assign_slice(buffer, buffer->get_slice());
     } else if (buffer->data() != rep->data) {
-      memmove(rep->data, buffer->data(), buffer->size());
+      ::memmove(rep->data, buffer->data(), buffer->size());
       set_slice(buffer, Slice(rep->data, buffer->size()));
     }
   }
@@ -98,7 +100,7 @@ class BufferLazyBufferControllerImpl : public LazyBufferController {
   void uninitialized_resize(LazyBuffer* buffer, size_t size) const override {
     auto rep = union_cast<Rep>(get_rep(buffer));
     if (rep->buffer.uninitialized_resize == nullptr) {
-      char* ptr = (char*)realloc(rep->buffer.handle, size);
+      char* ptr = (char*)::realloc(rep->buffer.handle, size);
       if (ptr != nullptr || size == 0) {
         rep->buffer.handle = ptr;
         rep->status = Status::OK();
@@ -121,25 +123,36 @@ class BufferLazyBufferControllerImpl : public LazyBufferController {
   }
 
   void assign_slice(LazyBuffer* buffer, const Slice& slice) const override {
-    BufferLazyBufferControllerImpl::uninitialized_resize(buffer, slice.size());
-    auto rep = union_cast<Rep>(get_rep(buffer));
-    if (rep->status.ok() && slice.size() > 0) {
-      assert(buffer->data() != nullptr);
-      assert(buffer->size() == slice.size());
+    if (slice.data() >= buffer->data() &&
+        slice.data() < buffer->data() + buffer->size()) {
+      // Self assign
+      assert(slice.data() + slice.size() <= buffer->data() + buffer->size());
       char* ptr = (char*)buffer->data();
-      memcpy(ptr, slice.data(), slice.size());
+      ::memmove(ptr, slice.data(), slice.size());
+      set_slice(buffer, Slice(ptr, slice.size()));
+    } else {
+      BufferLazyBufferControllerImpl::uninitialized_resize(buffer,
+                                                           slice.size());
+      auto rep = union_cast<Rep>(get_rep(buffer));
+      if (rep->status.ok() && slice.empty()) {
+        assert(buffer->data() != nullptr);
+        assert(buffer->size() == slice.size());
+        char* ptr = (char*)buffer->data();
+        ::memcpy(ptr, slice.data(), slice.size());
+      }
     }
   }
 
   void assign_error(LazyBuffer* buffer, Status&& status) const override {
     auto rep = union_cast<Rep>(get_rep(buffer));
     rep->status = std::move(status);
+    set_slice(buffer, Slice::Invalid());
   }
 
   void pin_buffer(LazyBuffer* /*buffer*/) const override {}
 
   Status dump_buffer(LazyBuffer* buffer, LazyBuffer* target) const override {
-    auto rep = union_cast<const Rep>(get_rep(buffer));
+    auto rep = union_cast<Rep>(get_rep(buffer));
     if (rep->status.ok()) {
       assert(buffer->valid());
       target->reset(buffer->get_slice(), true, buffer->file_number());
@@ -198,12 +211,13 @@ struct StringLazyBufferControllerImpl : public LazyBufferController {
   void assign_error(LazyBuffer* buffer, Status&& status) const override {
     auto rep = union_cast<Rep>(get_rep(buffer));
     rep->status = std::move(status);
+    set_slice(buffer, Slice::Invalid());
   }
 
   void pin_buffer(LazyBuffer* /*buffer*/) const override {}
 
   Status dump_buffer(LazyBuffer* buffer, LazyBuffer* target) const override {
-    auto rep = union_cast<const Rep>(get_rep(buffer));
+    auto rep = union_cast<Rep>(get_rep(buffer));
     if (rep->status.ok()) {
       target->reset(*rep->string, true, buffer->file_number());
       return Status::OK();
@@ -263,8 +277,8 @@ struct CleanableLazyBufferControllerImpl : public LazyBufferController {
 void LazyBufferController::uninitialized_resize(LazyBuffer* buffer,
                                                 size_t size) const {
   if (buffer->valid() && size <= sizeof(LazyBufferRep)) {
-    DefaultLazyBufferControllerImpl::Rep tmp_rep;
-    memcpy(tmp_rep.data, buffer->data(), std::min(buffer->size(), size));
+    DefaultLazyBufferControllerImpl::Rep tmp_rep{};
+    ::memcpy(tmp_rep.data, buffer->data_, std::min(buffer->size_, size));
     destroy(buffer);
     buffer->controller_ = default_controller();
     auto rep =
@@ -299,19 +313,19 @@ void LazyBufferController::assign_slice(LazyBuffer* buffer,
     buffer->controller_ = default_controller();
     auto rep =
         union_cast<DefaultLazyBufferControllerImpl::Rep>(&buffer->rep_);
-    memcpy(rep->data, slice.data(), slice.size());
+    ::memcpy(rep->data, slice.data(), slice.size());
     buffer->data_ = rep->data;
     buffer->size_ = slice.size();
   } else {
     buffer->controller_ = buffer_controller();
     auto rep = union_cast<BufferLazyBufferControllerImpl::Rep>(&buffer->rep_);
-    rep->buffer.handle = malloc(slice.size());
+    rep->buffer.handle = ::malloc(slice.size());
     rep->buffer.uninitialized_resize = nullptr;
     if (rep->buffer.handle == nullptr) {
       ::new(&rep->status) Status(Status::BadAlloc());
     } else {
       ::new(&rep->status) Status;
-      memcpy(rep->buffer.handle, slice.data(), slice.size());
+      ::memcpy(rep->buffer.handle, slice.data(), slice.size());
       buffer->data_ = (char*)rep->buffer.handle;
       buffer->size_ = slice.size();
     }
@@ -348,7 +362,8 @@ Status LazyBufferController::dump_buffer(LazyBuffer* buffer,
       return s;
     }
   }
-  target->controller_->assign_slice(target, buffer->get_slice());
+  target->controller_->assign_slice(target, buffer->slice_);
+  assert(target->slice_ == buffer->slice_);
   target->file_number_ = buffer->file_number_;
   destroy(buffer);
   return Status::OK();
@@ -379,24 +394,24 @@ const LazyBufferController* LazyBufferController::cleanable_controller() {
   return &controller_impl;
 }
 
-LazyBuffer::LazyBuffer(size_t _capacity) noexcept
+LazyBuffer::LazyBuffer(size_t _size) noexcept
     : rep_{},
       file_number_(uint64_t(-1)) {
-  if (_capacity <= sizeof(LazyBufferRep)) {
+  if (_size <= sizeof(LazyBufferRep)) {
     controller_ = LazyBufferController::default_controller();
     data_ = union_cast<DefaultLazyBufferControllerImpl::Rep>(&rep_)->data;
-    size_ = _capacity;
+    size_ = _size;
   } else {
     controller_ = LazyBufferController::buffer_controller();
     auto rep = union_cast<BufferLazyBufferControllerImpl::Rep>(&rep_);
-    rep->buffer.handle = malloc(_capacity);
+    rep->buffer.handle = ::malloc(_size);
     if (rep->buffer.handle == nullptr) {
       ::new(&rep->status) Status(Status::BadAlloc());
       slice_ = Slice::Invalid();
     } else {
       ::new(&rep->status) Status;
       data_ = (char*)rep->buffer.handle;
-      size_ = _capacity;
+      size_ = _size;
     }
   }
 }
@@ -406,7 +421,7 @@ void LazyBuffer::fix_default_controller(const LazyBuffer& _buffer) {
   assert(_buffer.size_ <= sizeof(LazyBufferRep));
   data_ = union_cast<DefaultLazyBufferControllerImpl::Rep>(&rep_)->data;
   size_ = _buffer.size_;
-  memcpy(data_, _buffer.data_, size_);
+  ::memmove(data_, _buffer.data_, size_);
 }
 
 LazyBuffer::LazyBuffer(LazyBufferCustomizeBuffer _buffer) noexcept
@@ -466,7 +481,8 @@ void LazyBuffer::assign(const LazyBuffer& source) {
   if (source.valid() || (s = source.fetch()).ok()) {
     reset(source.get_slice(), true, source.file_number());
   } else {
-    assign_error(std::move(s));
+    controller_->assign_error(this, std::move(std::move(s)));
+    assert(!slice_.valid());
   }
 }
 
@@ -512,7 +528,7 @@ Status LazyBuffer::dump(LazyBufferCustomizeBuffer _buffer) && {
       if (ptr == nullptr) {
         return Status::BadAlloc();
       }
-      memcpy(ptr, slice_.data(), slice_.size());
+      ::memcpy(ptr, slice_.data(), slice_.size());
     } else {
       assert(rep_.data[1] ==
              reinterpret_cast<uint64_t>(_buffer.uninitialized_resize));
@@ -538,7 +554,7 @@ bool LazyBufferEditor::resize(size_t _size) {
     return false;
   }
   if (_size > old_size) {
-    memset(data_ + old_size, 0, _size - old_size);
+    ::memset(data_ + old_size, 0, _size - old_size);
   }
   return true;
 }
