@@ -159,9 +159,10 @@ class CompactionFilter {
                             const LazyBuffer& existing_value,
                             LazyBuffer* new_value,
                             std::string* /*skip_until*/) const {
-    if (!existing_value.fetch().ok()) {
-      assert(false);
-      return Decision::kKeep;
+    auto s = existing_value.fetch();
+    if (!s.ok()) {
+      new_value->reset(std::move(s));
+      return Decision::kChangeValue;
     }
     switch (value_type) {
       case ValueType::kValue: {

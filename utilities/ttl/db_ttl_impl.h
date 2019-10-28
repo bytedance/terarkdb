@@ -272,7 +272,7 @@ class TtlMergeOperator : public MergeOperator {
 
     if (merge_out->existing_operand != nullptr) {
       if (!merge_out->existing_operand->fetch().ok()) {
-        return false;
+        return true;
       }
       merge_out->new_value.trans_to_string()->assign(
           merge_out->existing_operand->data(),

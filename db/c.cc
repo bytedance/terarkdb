@@ -363,8 +363,8 @@ struct rocksdb_mergeoperator_t : public MergeOperator {
     std::vector<size_t> operand_sizes(n);
     for (size_t i = 0; i < n; i++) {
       const LazyBuffer& operand = merge_in.operand_list[i];
-      if (!operand.fetch().ok()) {
-        return false;
+      if (!Fetch(operand, &merge_out->new_value)) {
+        return true;
       }
       operand_pointers[i] = operand.data();
       operand_sizes[i] = operand.size();
@@ -373,8 +373,8 @@ struct rocksdb_mergeoperator_t : public MergeOperator {
     const char* existing_value_data = nullptr;
     size_t existing_value_len = 0;
     if (merge_in.existing_value != nullptr) {
-      if (!merge_in.existing_value->fetch().ok()) {
-        return false;
+      if (!Fetch(*merge_in.existing_value, &merge_out->new_value)) {
+        return true;
       }
       existing_value_data = merge_in.existing_value->data();
       existing_value_len = merge_in.existing_value->size();

@@ -36,16 +36,16 @@ TEST_F(LazyBufferTest, Basic) {
 
 }
 
-TEST_F(LazyBufferTest, DefaultColtroller) {
+TEST_F(LazyBufferTest, LightColtroller) {
 
   LazyBuffer buffer;
   ASSERT_EQ(buffer.TEST_controller(),
-            LazyBufferController::default_controller());
+            LazyBufferController::light_controller());
 
   std::string string('a', 33);
   buffer.reset(string, false);
   ASSERT_EQ(buffer.TEST_controller(),
-            LazyBufferController::default_controller());
+            LazyBufferController::light_controller());
 
   for (auto &c : string) { c = 'b'; };
   ASSERT_OK(buffer.fetch());
@@ -53,7 +53,7 @@ TEST_F(LazyBufferTest, DefaultColtroller) {
 
   buffer.reset(Slice(string.data(), 32), true);
   ASSERT_EQ(buffer.TEST_controller(),
-            LazyBufferController::default_controller());
+            LazyBufferController::light_controller());
 
   buffer.reset(string, true);
   ASSERT_EQ(buffer.TEST_controller(),
@@ -75,14 +75,45 @@ TEST_F(LazyBufferTest, DefaultColtroller) {
 
 TEST_F(LazyBufferTest, BufferColtroller) {
 
+  auto test = [](LazyBuffer& b) {
+    auto editor = b.get_editor();
+    ASSERT_FALSE(editor->resize(size_t(-1)));
+    ASSERT_NOK(editor->fetch());
+    ASSERT_TRUE(editor->resize(4));
+    ASSERT_EQ(b.get_slice(), Slice("\0\0\0\0", 4));
+    ::memcpy(editor->data(), "abcd", 4);
+    ASSERT_TRUE(editor->resize(3));
+    ASSERT_EQ(b.get_slice(), "abc");
+  };
   LazyBuffer buffer(size_t(-1));
   ASSERT_EQ(buffer.TEST_controller(),
             LazyBufferController::buffer_controller());
   ASSERT_NOK(buffer.fetch());
+  test(buffer);
 
   buffer.clear();
   ASSERT_EQ(buffer.TEST_controller(),
-            LazyBufferController::buffer_controller());
+      LazyBufferController::buffer_controller());
+  test(buffer);
+
+  buffer = LazyBuffer("123");
+  test(buffer);
+
+  std::string string;
+  LazyBufferCustomizeBuffer cb = {
+      &string,
+      [](void* ptr, size_t size)->void* {
+        auto string_ptr = (std::string*)ptr;
+        try {
+          string_ptr->resize(size);
+        } catch (...) {
+          return nullptr;
+        }
+        return (void*)string_ptr->data();
+      }
+  };
+  buffer.reset(cb);
+  test(buffer);
 
 }
 

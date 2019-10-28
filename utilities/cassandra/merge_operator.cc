@@ -24,8 +24,8 @@ bool CassandraValueMergeOperator::FullMergeV2(
   merge_out->new_value.clear();
   std::vector<RowValue> row_values;
   if (merge_in.existing_value) {
-    if (!merge_in.existing_value->fetch().ok()) {
-      return false;
+    if (!Fetch(*merge_in.existing_value, &merge_out->new_value)) {
+      return true;
     }
     row_values.push_back(
         RowValue::Deserialize(merge_in.existing_value->data(),
@@ -33,8 +33,8 @@ bool CassandraValueMergeOperator::FullMergeV2(
   }
 
   for (auto& operand : merge_in.operand_list) {
-    if (!operand.fetch().ok()) {
-      return false;
+    if (!Fetch(operand, &merge_out->new_value)) {
+      return true;
     }
     row_values.push_back(RowValue::Deserialize(operand.data(),
                                                operand.size()));
@@ -59,8 +59,8 @@ bool CassandraValueMergeOperator::PartialMergeMulti(
 
   std::vector<RowValue> row_values;
   for (auto& operand : operand_list) {
-    if (!operand.fetch().ok()) {
-      return false;
+    if (!Fetch(operand, new_value)) {
+      return true;
     }
     row_values.push_back(RowValue::Deserialize(operand.data(),
                                                operand.size()));

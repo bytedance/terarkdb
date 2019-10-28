@@ -45,6 +45,15 @@ class Logger;
 // Refer to rocksdb-merge wiki for more details and example implementations.
 //
 class MergeOperator {
+ protected:
+  static bool Fetch(const LazyBuffer& buffer, LazyBuffer* new_value) {
+    auto s = buffer.fetch();
+    if (!s.ok()) {
+      new_value->reset(std::move(s));
+      return false;
+    }
+    return true;
+  }
  public:
   virtual ~MergeOperator() {}
 

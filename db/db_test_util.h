@@ -623,13 +623,18 @@ class TestPutOperator : public MergeOperator {
   virtual bool FullMergeV2(const MergeOperationInput& merge_in,
                            MergeOperationOutput* merge_out) const override {
     if (merge_in.existing_value != nullptr) {
-      if (!merge_in.existing_value->fetch().ok() ||
-          merge_in.existing_value->get_slice() == "corrupted") {
+      if (!Fetch(*merge_in.existing_value, &merge_out->new_value)) {
+        return true;
+      }
+      if (merge_in.existing_value->get_slice() == "corrupted") {
         return false;
       }
     }
     for (auto& value : merge_in.operand_list) {
-      if (!value.fetch().ok() || value.get_slice() == "corrupted") {
+      if (!Fetch(value, &merge_out->new_value)) {
+        return true;
+      }
+      if (value.get_slice() == "corrupted") {
         return false;
       }
     }

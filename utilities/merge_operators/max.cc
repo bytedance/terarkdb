@@ -23,21 +23,21 @@ class MaxOperator : public MergeOperator {
  public:
   virtual bool FullMergeV2(const MergeOperationInput& merge_in,
                            MergeOperationOutput* merge_out) const override {
-    LazyBuffer max_buffer;
     const LazyBuffer*& max = merge_out->existing_operand;
     if (merge_in.existing_value) {
-      max_buffer = LazyBufferReference(*merge_in.existing_value);
-    } else {
-      max_buffer.clear();
+      if (!Fetch(*merge_in.existing_value, &merge_out->new_value)) {
+        return true;
+      }
+      max = merge_in.existing_value;
     }
 
     for (const auto& op : merge_in.operand_list) {
-      if (!max_buffer.fetch().ok() || !op.fetch().ok()) {
-        return false;
+      if (!Fetch(op, &merge_out->new_value)) {
+        max = nullptr;
+        return true;
       }
-      if (max_buffer.get_slice().compare(op.get_slice()) < 0) {
+      if (max == nullptr || max->get_slice().compare(op.get_slice()) < 0) {
         max = &op;
-        max_buffer = LazyBufferReference(op);
       }
     }
 
@@ -49,8 +49,8 @@ class MaxOperator : public MergeOperator {
                             const LazyBuffer& right_operand,
                             LazyBuffer* new_value,
                             Logger* /*logger*/) const override {
-    if (!left_operand.fetch().ok() || !right_operand.fetch().ok()) {
-      return false;
+    if (!Fetch(left_operand, new_value) || !Fetch(right_operand, new_value)) {
+      return true;
     }
     if (left_operand.get_slice().compare(right_operand.get_slice()) >= 0) {
       new_value->assign(left_operand);
@@ -66,11 +66,12 @@ class MaxOperator : public MergeOperator {
                                  Logger* /*logger*/) const override {
     LazyBuffer max;
     for (const auto& operand : operand_list) {
-      if (!max.fetch().ok() || !operand.fetch().ok()) {
-        return false;
+      assert(max.valid());
+      if (!Fetch(operand, new_value)) {
+        return true;
       }
       if (max.get_slice().compare(operand.get_slice()) < 0) {
-        max = LazyBufferReference(operand);
+        max.reset(operand.get_slice());
       }
     }
 

@@ -21,8 +21,10 @@ CompactionFilter::Decision CassandraCompactionFilter::FilterV2(
     const LazyBuffer& existing_value, LazyBuffer* new_value,
     std::string* /*skip_until*/) const {
   bool value_changed = false;
-  if (!existing_value.fetch().ok()) {
-    return Decision::kKeep;
+  auto s = existing_value.fetch();
+  if (!s.ok()) {
+    new_value->reset(std::move(s));
+    return Decision::kChangeValue;
   }
   RowValue row_value = RowValue::Deserialize(
       existing_value.data(), existing_value.size());

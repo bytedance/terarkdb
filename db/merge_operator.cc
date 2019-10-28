@@ -18,15 +18,15 @@ bool MergeOperator::FullMergeV2(const MergeOperationInput& merge_in,
   // std::deque<std::string> and pass it to FullMerge
   std::deque<std::string> operand_list_str;
   for (auto& op : merge_in.operand_list) {
-    if (!op.fetch().ok()) {
-      return false;
+    if (!Fetch(op, &merge_out->new_value)) {
+      return true;
     }
     operand_list_str.emplace_back(op.data(), op.size());
   }
   const Slice* existing_value = nullptr;
   if (merge_in.existing_value != nullptr) {
-    if (!merge_in.existing_value->fetch().ok()) {
-      return false;
+    if (!Fetch(*merge_in.existing_value, &merge_out->new_value)) {
+      return true;
     }
     existing_value = &merge_in.existing_value->get_slice();
   }
@@ -42,16 +42,16 @@ bool MergeOperator::PartialMergeMulti(
     LazyBuffer* new_value, Logger* logger) const {
   assert(operand_list.size() >= 2);
   // Simply loop through the operands
-  LazyBuffer temp_slice = LazyBufferReference(operand_list[0]);
+  LazyBuffer temp_buffer = LazyBufferReference(operand_list[0]);
 
   LazyBuffer temp_value;
   for (size_t i = 1; i < operand_list.size(); ++i) {
     auto& operand = operand_list[i];
-    if (!PartialMerge(key, temp_slice, operand, &temp_value, logger)) {
+    if (!PartialMerge(key, temp_buffer, operand, &temp_value, logger)) {
       return false;
     }
     std::swap(temp_value, *new_value);
-    temp_slice = LazyBufferReference(*new_value);
+    temp_buffer = LazyBufferReference(*new_value);
   }
 
   // The result will be in *new_value. All merges succeeded.
@@ -69,9 +69,9 @@ bool AssociativeMergeOperator::FullMergeV2(
   const LazyBuffer* existing_value = merge_in.existing_value;
   for (const auto& operand : merge_in.operand_list) {
     if ((existing_value != nullptr &&
-         !existing_value->fetch().ok()) ||
-        !operand.fetch().ok()) {
-      return false;
+         !Fetch(*existing_value, &merge_out->new_value)) ||
+        !Fetch(operand, &merge_out->new_value)) {
+      return true;
     }
     temp_value.clear();
     const Slice* existing_value_slice =
@@ -95,8 +95,8 @@ bool AssociativeMergeOperator::PartialMerge(const Slice& key,
                                             const LazyBuffer& right_operand,
                                             LazyBuffer* new_value,
                                             Logger* logger) const {
-  if (!left_operand.fetch().ok() || !right_operand.fetch().ok()) {
-    return false;
+  if (!Fetch(left_operand, new_value) || !Fetch(right_operand, new_value)) {
+    return true;
   }
   return Merge(key, &left_operand.get_slice(), right_operand.get_slice(),
                new_value->trans_to_string(), logger);

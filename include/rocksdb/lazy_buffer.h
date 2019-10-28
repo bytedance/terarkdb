@@ -31,7 +31,9 @@ struct LazyBufferCustomizeBuffer {
 };
 
 class LazyBufferController {
-public:
+ public:
+  virtual ~LazyBufferController() = default;
+
   // Release resource
   virtual void destroy(LazyBuffer* buffer) const = 0;
 
@@ -53,11 +55,9 @@ public:
   // Fetch buffer
   virtual Status fetch_buffer(LazyBuffer* buffer) const = 0;
 
-  virtual ~LazyBufferController() = default;
-
   // Use LazyBufferRep as local storage
   // data -> 32 bytes
-  static const LazyBufferController* default_controller();
+  static const LazyBufferController* light_controller();
 
   // Use LazyBufferRep as buffer
   // data[0]     -> handle
@@ -88,7 +88,7 @@ public:
 
 class LazyBuffer {
   friend LazyBufferController;
-protected:
+ protected:
   union {
     struct {
       char* data_;
@@ -106,8 +106,8 @@ protected:
   // Call LazyBufferController::assign_error if _status not ok
   void assign_error(Status&& _status);
 
-  // Fix default_controller local storage
-  void fix_default_controller(const LazyBuffer& other);
+  // Fix light_controller local storage
+  void fix_light_controller(const LazyBuffer& other);
 
 public:
 
@@ -289,7 +289,7 @@ public:
 };
 
 class LazyBufferEditor : private LazyBuffer {
-public:
+ public:
   char* data() const { return data_; }
   using LazyBuffer::size;
   using LazyBuffer::fetch;
@@ -313,7 +313,7 @@ inline LazyBufferRep* LazyBufferController::get_rep(LazyBuffer* buffer) {
 }
 
 inline LazyBuffer::LazyBuffer() noexcept
-    : controller_(LazyBufferController::default_controller()),
+    : controller_(LazyBufferController::light_controller()),
       rep_{},
       file_number_(uint64_t(-1)) {}
 
@@ -322,9 +322,9 @@ inline LazyBuffer::LazyBuffer(LazyBuffer&& _buffer) noexcept
       controller_(_buffer.controller_),
       rep_(_buffer.rep_),
       file_number_(_buffer.file_number_) {
-  if (controller_ == LazyBufferController::default_controller() &&
+  if (controller_ == LazyBufferController::light_controller() &&
       _buffer.size_ <= sizeof(LazyBufferRep)) {
-    fix_default_controller(_buffer);
+    fix_light_controller(_buffer);
   }
   _buffer.slice_ = Slice::Invalid();
   _buffer.controller_ = nullptr;
@@ -333,7 +333,7 @@ inline LazyBuffer::LazyBuffer(LazyBuffer&& _buffer) noexcept
 inline LazyBuffer::LazyBuffer(const Slice& _slice, bool _copy,
                               uint64_t _file_number)
     : slice_(_slice),
-      controller_(LazyBufferController::default_controller()),
+      controller_(LazyBufferController::light_controller()),
       rep_{},
       file_number_(_file_number) {
   assert(_slice.valid());
@@ -393,9 +393,9 @@ inline void LazyBuffer::reset(LazyBuffer&& _buffer) {
     controller_ = _buffer.controller_;
     rep_ = _buffer.rep_;
     file_number_ = _buffer.file_number_;
-    if (controller_ == LazyBufferController::default_controller() &&
+    if (controller_ == LazyBufferController::light_controller() &&
         _buffer.size_ <= sizeof(LazyBufferRep)) {
-      fix_default_controller(_buffer);
+      fix_light_controller(_buffer);
     }
     _buffer.slice_ = Slice::Invalid();
     _buffer.controller_ = nullptr;
@@ -411,7 +411,7 @@ inline void LazyBuffer::reset(const Slice& _slice, bool _copy,
   } else {
     destroy();
     slice_ = _slice;
-    controller_ = LazyBufferController::default_controller();
+    controller_ = LazyBufferController::light_controller();
     rep_ = {};
   }
   file_number_ = _file_number;
@@ -441,28 +441,6 @@ inline void LazyBuffer::reset(const LazyBufferController* _controller,
 inline void LazyBuffer::pin() {
   assert(controller_ != nullptr);
   return controller_->pin_buffer(this);
-}
-
-inline Status LazyBuffer::dump(std::string* _string) && {
-  assert(controller_ != nullptr);
-  if (slice_.valid()) {
-    if (controller_ != LazyBufferController::string_controller() ||
-        reinterpret_cast<std::string*>(rep_.data[0]) != _string) {
-      _string->assign(slice_.data(), slice_.size());
-    } else {
-      assert(slice_.data() == _string->data());
-      assert(slice_.size() == _string->size());
-    }
-  } else {
-    LazyBuffer buffer(_string);
-    auto s = controller_->dump_buffer(this, &buffer);
-    if (!s.ok()) {
-      return s;
-    }
-    assert(buffer.controller_ == LazyBufferController::string_controller());
-    assert(reinterpret_cast<std::string*>(buffer.rep_.data[0]) == _string);
-  }
-  return Status::OK();
 }
 
 inline Status LazyBuffer::dump(LazyBuffer& _target) && {
