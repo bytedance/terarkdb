@@ -89,7 +89,7 @@ class MemTableRep {
 
   static size_t EncodeKeyValueSize(const Slice& key, const Slice& value);
   static void EncodeKeyValue(const Slice& key, const Slice& value, char* buf);
-  static LazyBuffer DecodeToLazyValue(const char* key);
+  static LazyBuffer DecodeToLazyBuffer(const char* key);
 
   explicit MemTableRep(Allocator* allocator) : allocator_(allocator) {}
 
@@ -209,7 +209,7 @@ class MemTableRep {
     // Returns LazyBuffer at the current position.
     // REQUIRES: Valid()
     virtual LazyBuffer value() const {
-      return DecodeToLazyValue(EncodedKey());
+      return DecodeToLazyBuffer(EncodedKey());
     }
 
     // Advances to the next position.

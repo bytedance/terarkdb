@@ -37,9 +37,9 @@ class LightLazyBufferState : public LazyBufferState {
   void uninitialized_resize(LazyBuffer* buffer, size_t size) const override {
     auto context = union_cast<Context>(get_context(buffer));
     if (size <= sizeof(Context)) {
-      if (buffer->data() != context->data) {
-        ::memmove(context->data, buffer->data(),
-                  std::min(buffer->size(), size));
+      size_t copy_size = std::min(buffer->size(), size);
+      if (buffer->data() != context->data && copy_size > 0) {
+        ::memmove(context->data, buffer->data(), copy_size);
       }
       set_slice(buffer, Slice(context->data, size));
     } else {
@@ -50,7 +50,9 @@ class LightLazyBufferState : public LazyBufferState {
   void assign_slice(LazyBuffer* buffer, const Slice& slice) const override {
     auto context = union_cast<Context>(get_context(buffer));
     if (slice.size() <= sizeof(Context)) {
-      ::memmove(context->data, slice.data(), slice.size());
+      if (!slice.empty()) {
+        ::memmove(context->data, slice.data(), slice.size());
+      }
       set_slice(buffer, Slice(context->data, slice.size()));
     } else {
       LazyBufferState::assign_slice(buffer, slice);
@@ -61,7 +63,7 @@ class LightLazyBufferState : public LazyBufferState {
     auto context = union_cast<Context>(get_context(buffer));
     if (buffer->size() > sizeof(Context)) {
       LazyBufferState::assign_slice(buffer, buffer->slice());
-    } else if (buffer->data() != context->data) {
+    } else if (buffer->data() != context->data && !buffer->empty()) {
       ::memmove(context->data, buffer->data(), buffer->size());
       set_slice(buffer, Slice(context->data, buffer->size()));
     }
@@ -87,31 +89,38 @@ class BufferLazyBufferState : public LazyBufferState {
 
   void destroy(LazyBuffer* buffer) const override {
     auto context = union_cast<Context>(get_context(buffer));
-    if (context->buffer.uninitialized_resize == nullptr &&
-        context->buffer.handle != nullptr) {
+    if (context->buffer.uninitialized_resize == nullptr) {
       ::free(context->buffer.handle);
+    } else {
+      context->buffer.uninitialized_resize(context->buffer.handle, 0);
     }
     context->status.~Status();
   }
 
   void uninitialized_resize(LazyBuffer* buffer, size_t size) const override {
     auto context = union_cast<Context>(get_context(buffer));
-    if (context->buffer.uninitialized_resize == nullptr) {
-      char* ptr = (char*)::realloc(context->buffer.handle, size);
-      if (ptr != nullptr || size == 0) {
-        context->buffer.handle = ptr;
-        context->status = Status::OK();
-        set_slice(buffer, Slice(ptr, size));
-      } else {
-        context->status = Status::BadAlloc();
-        set_slice(buffer, Slice::Invalid());
+    if (size == 0) {
+      if (context->buffer.uninitialized_resize != nullptr) {
+        context->buffer.uninitialized_resize(context->buffer.handle, 0);
       }
-    } else {
-      char* ptr = (char*)context->buffer.uninitialized_resize(
-          context->buffer.handle, size);
-      if (ptr != nullptr || size == 0) {
+      context->status = Status::OK();
+      set_slice(buffer, Slice());
+      assert(buffer->data() != nullptr);
+    }
+    else {
+      void* ptr;
+      if (context->buffer.uninitialized_resize == nullptr) {
+        ptr = ::realloc(context->buffer.handle, size);
+        if (ptr != nullptr) {
+          context->buffer.handle = ptr;
+        }
+      } else {
+        ptr =
+            context->buffer.uninitialized_resize(context->buffer.handle, size);
+      }
+      if (ptr != nullptr) {
         context->status = Status::OK();
-        set_slice(buffer, Slice(ptr, size));
+        set_slice(buffer, Slice(reinterpret_cast<char*>(ptr), size));
       } else {
         context->status = Status::BadAlloc();
         set_slice(buffer, Slice::Invalid());
@@ -130,7 +139,7 @@ class BufferLazyBufferState : public LazyBufferState {
     } else {
       BufferLazyBufferState::uninitialized_resize(buffer, slice.size());
       auto context = union_cast<Context>(get_context(buffer));
-      if (context->status.ok() && slice.empty()) {
+      if (context->status.ok() && !slice.empty()) {
         assert(buffer->data() != nullptr);
         assert(buffer->size() == slice.size());
         char* ptr = (char*)buffer->data();
@@ -199,9 +208,17 @@ struct StringLazyBufferState : public LazyBufferState {
 
   void assign_slice(LazyBuffer* buffer, const Slice& slice) const override {
     auto context = union_cast<Context>(get_context(buffer));
-    context->string->assign(slice.data(), slice.size());
-    context->status = Status::OK();
-    set_slice(buffer, *context->string);
+    try {
+      context->string->assign(slice.data(), slice.size());
+      set_slice(buffer, *context->string);
+      context->status = Status::OK();
+      return;
+    } catch (const std::bad_alloc&) {
+      context->status = Status::BadAlloc();
+    } catch (const std::exception& ex) {
+      context->status = Status::Aborted(ex.what());
+    }
+    set_slice(buffer, Slice::Invalid());
   }
 
   void assign_error(LazyBuffer* buffer, Status&& status) const override {
@@ -416,7 +433,9 @@ void LazyBuffer::fix_light_state(const LazyBuffer& other) {
   assert(other.size_ <= sizeof(LazyBufferContext));
   data_ = union_cast<LightLazyBufferState::Context>(&context_)->data;
   size_ = other.size_;
-  ::memmove(data_, other.data_, size_);
+  if (!other.empty()) {
+    ::memmove(data_, other.data_, size_);
+  }
 }
 
 LazyBuffer::LazyBuffer(LazyBufferCustomizeBuffer _buffer) noexcept
@@ -516,16 +535,18 @@ std::string* LazyBuffer::trans_to_string() {
   }
 }
 
-Status LazyBuffer::dump(LazyBufferCustomizeBuffer _buffer)&& {
+Status LazyBuffer::dump(LazyBufferCustomizeBuffer _buffer) && {
   assert(state_ != nullptr);
   if (slice_.valid()) {
     if (state_ != LazyBufferState::buffer_state() ||
         reinterpret_cast<std::string*>(context_.data[0]) != _buffer.handle) {
       void* ptr = _buffer.uninitialized_resize(_buffer.handle, slice_.size());
-      if (ptr == nullptr) {
-        return Status::BadAlloc();
+      if (!slice_.empty()) {
+        if (ptr == nullptr) {
+          return Status::BadAlloc();
+        }
+        ::memcpy(ptr, slice_.data(), slice_.size());
       }
-      ::memcpy(ptr, slice_.data(), slice_.size());
     } else {
       assert(context_.data[1] ==
              reinterpret_cast<uint64_t>(_buffer.uninitialized_resize));
@@ -545,7 +566,7 @@ Status LazyBuffer::dump(LazyBufferCustomizeBuffer _buffer)&& {
   return Status::OK();
 }
 
-Status LazyBuffer::dump(std::string* _string)&& {
+Status LazyBuffer::dump(std::string* _string) && {
   assert(state_ != nullptr);
   if (slice_.valid()) {
     if (state_ != LazyBufferState::string_state() ||
@@ -570,7 +591,8 @@ Status LazyBuffer::dump(std::string* _string)&& {
 bool LazyBufferBuilder::resize(size_t _size) {
   size_t old_size = slice_.valid() ? size_ : 0;
   state_->uninitialized_resize(this, _size);
-  if (data_ == nullptr && _size > 0) {
+  assert(size_ != 0 || data_ != nullptr);
+  if (data_ == nullptr) {
     return false;
   }
   if (_size > old_size) {
@@ -581,7 +603,8 @@ bool LazyBufferBuilder::resize(size_t _size) {
 
 bool LazyBufferBuilder::uninitialized_resize(size_t _size) {
   state_->uninitialized_resize(this, _size);
-  return data_ != nullptr && _size > 0;
+  assert(size_ != 0 || data_ != nullptr);
+  return data_ != nullptr;
 }
 
 LazyBuffer LazyBufferReference(const LazyBuffer& buffer) {

@@ -37,7 +37,7 @@ void MemTableRep::EncodeKeyValue(const Slice& key, const Slice& value,
   memcpy(p, value.data(), value.size());
 }
 
-LazyBuffer MemTableRep::DecodeToLazyValue(const char* key) {
+LazyBuffer MemTableRep::DecodeToLazyBuffer(const char* key) {
 
   struct SliceControllerImpl : public LazyBufferState {
 

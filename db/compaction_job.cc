@@ -1645,8 +1645,7 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
       if (!status.ok()) {
         break;
       }
-      uint64_t file_number =
-          SeparateHelper::DecodeFileNumber(value.slice());
+      uint64_t file_number = SeparateHelper::DecodeFileNumber(value.slice());
       auto find = dependence_map.find(file_number);
       if (find == dependence_map.end()) {
         status = Status::Corruption("Separate value dependence missing");

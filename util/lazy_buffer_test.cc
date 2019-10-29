@@ -36,7 +36,7 @@ TEST_F(LazyBufferTest, Basic) {
 
 }
 
-TEST_F(LazyBufferTest, LightColtroller) {
+TEST_F(LazyBufferTest, LightState) {
 
   LazyBuffer buffer;
   ASSERT_EQ(buffer.TEST_state(), LazyBufferState::light_state());
@@ -69,26 +69,34 @@ TEST_F(LazyBufferTest, LightColtroller) {
 }
 
 
-TEST_F(LazyBufferTest, BufferColtroller) {
+TEST_F(LazyBufferTest, BufferState) {
 
   auto test = [](LazyBuffer& b) {
+
     auto builder = b.get_builder();
+    ASSERT_TRUE(b.valid());
     ASSERT_FALSE(builder->resize(size_t(-1)));
     ASSERT_NOK(builder->fetch());
-    ASSERT_TRUE(builder->resize(4));
-    ASSERT_EQ(b.slice(), Slice("\0\0\0\0", 4));
-    ::memcpy(builder->data(), "abcd", 4);
+
     ASSERT_TRUE(builder->resize(3));
-    ASSERT_EQ(b.slice(), "abc");
+    ::memcpy(builder->data(), "LOL", 3);
+    ASSERT_EQ(b.slice(), "LOL");
+
+    ASSERT_TRUE(builder->resize(4));
+    ASSERT_EQ(b.slice(), Slice("LOL\0", 4));
+
+    ASSERT_TRUE(builder->resize(0));
+    ASSERT_TRUE(b.empty());
+
   };
   LazyBuffer buffer(size_t(-1));
   ASSERT_EQ(buffer.TEST_state(), LazyBufferState::buffer_state());
   ASSERT_NOK(buffer.fetch());
+  ASSERT_NOK(buffer.fetch()); // test fetch twice
   test(buffer);
 
   buffer.clear();
-  ASSERT_EQ(buffer.TEST_state(),
-      LazyBufferState::buffer_state());
+  ASSERT_EQ(buffer.TEST_state(), LazyBufferState::buffer_state());
   test(buffer);
 
   buffer = LazyBuffer("123");
@@ -109,10 +117,17 @@ TEST_F(LazyBufferTest, BufferColtroller) {
   };
   buffer.reset(cb);
   test(buffer);
+  ASSERT_TRUE(string.empty());
+
+  buffer.reset("abc", true);
+  ASSERT_EQ(string, "abc");
+
+  buffer = LazyBuffer();
+  ASSERT_TRUE(string.empty());
 
 }
 
-TEST_F(LazyBufferTest, StringColtroller) {
+TEST_F(LazyBufferTest, StringState) {
 
   std::string string = "abc";
   LazyBuffer buffer(&string);
@@ -140,6 +155,48 @@ TEST_F(LazyBufferTest, StringColtroller) {
   buffer.get_builder()->resize(string.size() - 1);
   ASSERT_OK(std::move(buffer).dump(&string));
   ASSERT_EQ(string, "aaa");
+
+}
+
+TEST_F(LazyBufferTest, ReferenceState) {
+
+  std::string string = "abc";
+  LazyBuffer buffer(&string);
+  ASSERT_EQ(buffer.slice(), "abc");
+
+  LazyBuffer reference = LazyBufferReference(buffer);
+  ASSERT_EQ(reference.TEST_state(), LazyBufferState::light_state());
+  ASSERT_TRUE(reference.valid());
+  ASSERT_EQ(reference.slice(), "abc");
+
+  buffer.trans_to_string()->assign("LOL");
+  reference = LazyBufferReference(buffer);
+  ASSERT_EQ(reference.TEST_state(), LazyBufferState::reference_state());
+  ASSERT_FALSE(reference.valid());
+  ASSERT_OK(reference.fetch());
+  ASSERT_EQ(reference.slice(), "LOL");
+
+  buffer.trans_to_string()->assign("LOLLLL");
+  reference = LazyBufferReference(buffer);
+  LazyBuffer remote_suffix = LazyBufferRemoveSuffix(&reference, 3);
+  ASSERT_OK(remote_suffix.fetch());
+  ASSERT_TRUE(buffer.valid());
+  ASSERT_EQ(remote_suffix.slice(), "LOL");
+
+}
+
+TEST_F(LazyBufferTest, CleanableState) {
+
+  std::string string = "abc";
+  Cleanable clean([](void* arg1, void* /*arg2*/) {
+    reinterpret_cast<std::string*>(arg1)->assign("empty");
+  }, &string, nullptr);
+
+  LazyBuffer buffer(string, std::move(clean));
+  ASSERT_EQ(buffer.slice(), "abc");
+
+  buffer.clear();
+  ASSERT_EQ(string, "empty");
 
 }
 

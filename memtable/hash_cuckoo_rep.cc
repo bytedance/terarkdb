@@ -307,7 +307,7 @@ void HashCuckooRep::Get(const LookupKey& key, void* callback_args,
     if (bucket != nullptr) {
       Slice bucket_key = GetLengthPrefixedSlice(bucket);
       if (user_key == ExtractUserKey(bucket_key)) {
-        callback_func(callback_args, bucket_key, DecodeToLazyValue(bucket));
+        callback_func(callback_args, bucket_key, DecodeToLazyBuffer(bucket));
         break;
       }
     } else {

@@ -445,7 +445,7 @@ inline void LazyBuffer::pin() {
   return state_->pin_buffer(this);
 }
 
-inline Status LazyBuffer::dump(LazyBuffer& _target)&& {
+inline Status LazyBuffer::dump(LazyBuffer& _target) && {
   assert(state_ != nullptr);
   assert(this != &_target);
   return state_->dump_buffer(this, &_target);

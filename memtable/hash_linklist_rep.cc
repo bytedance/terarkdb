@@ -740,7 +740,7 @@ void HashLinkListRep::Get(const LookupKey& k, void* callback_args,
     for (iter.Seek(k.memtable_key().data());
          iter.Valid() && callback_func(callback_args,
                                        GetLengthPrefixedSlice(iter.key()),
-                                       DecodeToLazyValue(iter.key()));
+                                       DecodeToLazyBuffer(iter.key()));
          iter.Next()) {
     }
   } else {
