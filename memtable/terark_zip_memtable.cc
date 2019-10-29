@@ -124,7 +124,7 @@ void PatriciaTrieRep::Get(
     valvec<char> buffer;
   };
 
-  class Controller : public LazyBufferController {
+  class Controller : public LazyBufferState {
   public:
     virtual void destroy(LazyBuffer* /*buffer*/) const override {}
 

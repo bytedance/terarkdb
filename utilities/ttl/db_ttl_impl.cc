@@ -181,9 +181,9 @@ Status DBWithTTLImpl::StripTS(LazyBuffer* lazy_val) {
     return Status::Corruption("Bad timestamp in key-value");
   }
   // Erasing characters which hold the TS
-  auto editor = lazy_val->get_editor();
-  if (!editor->resize(size - kTSLength)) {
-    return editor->fetch();
+  auto builder = lazy_val->get_builder();
+  if (!builder->resize(size - kTSLength)) {
+    return builder->fetch();
   }
   return st;
 }
@@ -214,7 +214,7 @@ Status DBWithTTLImpl::Get(const ReadOptions& options,
   if (!st.ok()) {
     return st;
   }
-  st = SanityCheckTimestamp(value->get_slice());
+  st = SanityCheckTimestamp(value->slice());
   if (!st.ok()) {
     return st;
   }

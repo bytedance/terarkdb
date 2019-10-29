@@ -183,7 +183,7 @@ class DBIter final: public Iterator {
       status_ = s;
       return Slice::Invalid();
     }
-    return value_.get_slice();
+    return value_.slice();
   }
   virtual Status status() const override {
     if (status_.ok()) {

@@ -572,7 +572,7 @@ class VersionStorageInfo {
   void operator=(const VersionStorageInfo&) = delete;
 };
 
-class Version : public SeparateHelper, private LazyBufferController {
+class Version : public SeparateHelper, private LazyBufferState {
  public:
   // Append to *iters a sequence of iterators that will
   // yield the contents of this Version when merged together.

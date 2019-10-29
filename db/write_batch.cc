@@ -1524,7 +1524,7 @@ class MemTableInserter : public WriteBatch::Handler {
         auto s = new_value.fetch();
         if (s.ok()) {
           bool mem_res =
-              mem->Add(sequence_, kTypeValue, key, new_value.get_slice());
+              mem->Add(sequence_, kTypeValue, key, new_value.slice());
           if (UNLIKELY(!mem_res)) {
             assert(seq_per_batch_);
             ret_status = Status::TryAgain("key+seq exists");

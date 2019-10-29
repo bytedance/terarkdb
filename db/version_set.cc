@@ -1203,11 +1203,12 @@ Version::Version(ColumnFamilyData* column_family_data, VersionSet* vset,
       version_number_(version_number) {}
 
 Status Version::fetch_buffer(LazyBuffer* buffer) const {
-  auto rep = get_rep(buffer);
-  Slice user_key(reinterpret_cast<const char*>(rep->data[0]), rep->data[1]);
-  uint64_t sequence = rep->data[2];
+  auto context = get_context(buffer);
+  Slice user_key(reinterpret_cast<const char*>(context->data[0]),
+                 context->data[1]);
+  uint64_t sequence = context->data[2];
   const FileMetaData* file_metadata =
-      reinterpret_cast<FileMetaData*>(rep->data[3]);
+      reinterpret_cast<FileMetaData*>(context->data[3]);
   bool value_found = false;
   SequenceNumber context_seq;
   GetContext get_context(cfd_->internal_comparator().user_comparator(), nullptr,
@@ -1246,7 +1247,7 @@ void Version::TransToCombined(const Slice& user_key, uint64_t sequence,
     value.reset(std::move(s));
     return;
   }
-  uint64_t file_number = SeparateHelper::DecodeFileNumber(value.get_slice());
+  uint64_t file_number = SeparateHelper::DecodeFileNumber(value.slice());
   auto& dependence_map = storage_info_.dependence_map();
   auto find = dependence_map.find(file_number);
   if (find == dependence_map.end()) {

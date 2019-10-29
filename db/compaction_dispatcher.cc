@@ -140,7 +140,7 @@ using TMap = std::unordered_map<std::string, T>;
 template<class T>
 using STMap = std::unordered_map<std::string, std::shared_ptr<T>>;
 
-class WorkerSeparateHelper : public SeparateHelper, public LazyBufferController {
+class WorkerSeparateHelper : public SeparateHelper, public LazyBufferState {
  public:
   void destroy(LazyBuffer* /*buffer*/) const override {}
 
@@ -148,7 +148,7 @@ class WorkerSeparateHelper : public SeparateHelper, public LazyBufferController 
 
   Status fetch_buffer(LazyBuffer* buffer) const override {
     return inplace_decode_callback_(inplace_decode_arg_, buffer,
-                                    get_rep(buffer));
+                                    get_context(buffer));
   }
 
   void TransToCombined(const Slice& user_key, uint64_t sequence,
@@ -156,7 +156,7 @@ class WorkerSeparateHelper : public SeparateHelper, public LazyBufferController 
     auto s = value.fetch();
     if (s.ok()) {
       uint64_t file_number =
-          SeparateHelper::DecodeFileNumber(value.get_slice());
+          SeparateHelper::DecodeFileNumber(value.slice());
       value.reset(this, {reinterpret_cast<uint64_t>(user_key.data()),
                          user_key.size(), sequence, 0},
                   Slice::Invalid(), file_number);
@@ -165,10 +165,10 @@ class WorkerSeparateHelper : public SeparateHelper, public LazyBufferController 
     }
   }
 
-  WorkerSeparateHelper(DependenceMap* dependence_map, void* inplace_decode_arg,
-                       Status (*inplace_decode_callback)(void* arg,
-                                                         LazyBuffer* buffer,
-                                                         LazyBufferRep* rep))
+  WorkerSeparateHelper(
+      DependenceMap* dependence_map, void* inplace_decode_arg,
+      Status (*inplace_decode_callback)(void* arg, LazyBuffer* buffer,
+                                        LazyBufferContext* rep))
     : dependence_map_(dependence_map),
       inplace_decode_arg_(inplace_decode_arg),
       inplace_decode_callback_(inplace_decode_callback) {}
@@ -176,7 +176,7 @@ class WorkerSeparateHelper : public SeparateHelper, public LazyBufferController 
   DependenceMap* dependence_map_;
   void* inplace_decode_arg_;
   Status (*inplace_decode_callback_)(void* arg, LazyBuffer* buffer,
-                                     LazyBufferRep* rep);
+                                     LazyBufferContext* rep);
 };
 
 std::function<CompactionWorkerResult()>
@@ -526,7 +526,7 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
   c_style_new_iterator.arg = &new_iterator;
   c_style_new_iterator.callback = c_style_callback(new_iterator);
 
-  auto separate_inplace_decode = [&](LazyBuffer* buffer, LazyBufferRep* rep) {
+  auto separate_inplace_decode = [&](LazyBuffer* buffer, LazyBufferContext* rep) {
     Slice user_key(reinterpret_cast<const char*>(rep->data[0]), rep->data[1]);
     uint64_t sequence = rep->data[2];
     uint64_t file_number = buffer->file_number();

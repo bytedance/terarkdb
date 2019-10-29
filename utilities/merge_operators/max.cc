@@ -36,7 +36,7 @@ class MaxOperator : public MergeOperator {
         max = nullptr;
         return true;
       }
-      if (max == nullptr || max->get_slice().compare(op.get_slice()) < 0) {
+      if (max == nullptr || max->slice().compare(op.slice()) < 0) {
         max = &op;
       }
     }
@@ -52,7 +52,7 @@ class MaxOperator : public MergeOperator {
     if (!Fetch(left_operand, new_value) || !Fetch(right_operand, new_value)) {
       return true;
     }
-    if (left_operand.get_slice().compare(right_operand.get_slice()) >= 0) {
+    if (left_operand.slice().compare(right_operand.slice()) >= 0) {
       new_value->assign(left_operand);
     } else {
       new_value->assign(right_operand);
@@ -70,8 +70,8 @@ class MaxOperator : public MergeOperator {
       if (!Fetch(operand, new_value)) {
         return true;
       }
-      if (max.get_slice().compare(operand.get_slice()) < 0) {
-        max.reset(operand.get_slice());
+      if (max.slice().compare(operand.slice()) < 0) {
+        max.reset(operand.slice());
       }
     }
 

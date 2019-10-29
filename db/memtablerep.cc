@@ -39,15 +39,15 @@ void MemTableRep::EncodeKeyValue(const Slice& key, const Slice& value,
 
 LazyBuffer MemTableRep::DecodeToLazyValue(const char* key) {
 
-  struct SliceControllerImpl : public LazyBufferController {
+  struct SliceControllerImpl : public LazyBufferState {
 
     void destroy(LazyBuffer* /*buffer*/) const override {}
 
     void pin_buffer(LazyBuffer* /*buffer*/) const override {}
 
     Status fetch_buffer(LazyBuffer* buffer) const override {
-      auto rep = get_rep(buffer);
-      const char* k = reinterpret_cast<const char*>(rep->data[0]);
+      auto context = get_context(buffer);
+      const char* k = reinterpret_cast<const char*>(context->data[0]);
       Slice key_slice = GetLengthPrefixedSlice(k);
       set_slice(buffer,
                 GetLengthPrefixedSlice(key_slice.data() + key_slice.size()));

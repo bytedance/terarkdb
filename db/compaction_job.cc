@@ -1350,7 +1350,7 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
       if (!status.ok()) {
         break;
       }
-      for (const auto& data_elmt : {key, value.get_slice()}) {
+      for (const auto& data_elmt : {key, value.slice()}) {
         size_t data_end_offset = data_begin_offset + data_elmt.size();
         while (sample_begin_offset_iter != sample_begin_offsets.cend() &&
                *sample_begin_offset_iter < data_end_offset) {
@@ -1646,7 +1646,7 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
         break;
       }
       uint64_t file_number =
-          SeparateHelper::DecodeFileNumber(value.get_slice());
+          SeparateHelper::DecodeFileNumber(value.slice());
       auto find = dependence_map.find(file_number);
       if (find == dependence_map.end()) {
         status = Status::Corruption("Separate value dependence missing");

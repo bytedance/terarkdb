@@ -680,7 +680,7 @@ class BlockBasedTableIterator
 template <>
 class BlockBasedTableIterator<DataBlockIter, LazyBuffer>
     : public BlockBasedTableIteratorBase<DataBlockIter, LazyBuffer>,
-      public LazyBufferController {
+      public LazyBufferState {
   using Base = BlockBasedTableIteratorBase<DataBlockIter, LazyBuffer>;
   using Base::block_iter_;
   using Base::icomp_;

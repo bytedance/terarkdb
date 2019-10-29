@@ -425,7 +425,7 @@ void BlockBasedTableBuilder::Add(const Slice& key,
     r->status = s;
     return;
   }
-  const Slice& value = lazy_value.get_slice();
+  const Slice& value = lazy_value.slice();
   ValueType value_type = ExtractValueType(key);
   if (r->ignore_key_type || IsValueType(value_type)) {
     if (r->props.num_entries > 0) {

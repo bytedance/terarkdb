@@ -238,7 +238,7 @@ public:
 template<bool reverse>
 class TerarkZipTableIterator :
     public TerarkZipTableIndexIterator,
-    public LazyBufferController {
+    public LazyBufferState {
 protected:
   const TableReaderOptions* table_reader_options_;
   SequenceNumber          global_seqno_;

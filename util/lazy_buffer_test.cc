@@ -20,55 +20,51 @@ TEST_F(LazyBufferTest, Basic) {
 
   LazyBuffer empty;
   ASSERT_OK(empty.fetch());
-  ASSERT_EQ(empty.get_slice(), "");
+  ASSERT_EQ(empty.slice(), "");
 
   LazyBuffer abc("abc");
   ASSERT_OK(abc.fetch());
-  ASSERT_EQ(abc.get_slice(), "abc");
+  ASSERT_EQ(abc.slice(), "abc");
 
   LazyBuffer abc2(std::move(abc));
   ASSERT_OK(abc2.fetch());
-  ASSERT_EQ(abc2.get_slice(), "abc");
+  ASSERT_EQ(abc2.slice(), "abc");
 
   LazyBuffer abc3 = std::move(abc2);
   ASSERT_OK(abc3.fetch());
-  ASSERT_EQ(abc3.get_slice(), "abc");
+  ASSERT_EQ(abc3.slice(), "abc");
 
 }
 
 TEST_F(LazyBufferTest, LightColtroller) {
 
   LazyBuffer buffer;
-  ASSERT_EQ(buffer.TEST_controller(),
-            LazyBufferController::light_controller());
+  ASSERT_EQ(buffer.TEST_state(), LazyBufferState::light_state());
 
   std::string string('a', 33);
   buffer.reset(string, false);
-  ASSERT_EQ(buffer.TEST_controller(),
-            LazyBufferController::light_controller());
+  ASSERT_EQ(buffer.TEST_state(), LazyBufferState::light_state());
 
   for (auto &c : string) { c = 'b'; };
   ASSERT_OK(buffer.fetch());
-  ASSERT_EQ(buffer.get_slice(), string);
+  ASSERT_EQ(buffer.slice(), string);
 
   buffer.reset(Slice(string.data(), 32), true);
-  ASSERT_EQ(buffer.TEST_controller(),
-            LazyBufferController::light_controller());
+  ASSERT_EQ(buffer.TEST_state(), LazyBufferState::light_state());
 
   buffer.reset(string, true);
-  ASSERT_EQ(buffer.TEST_controller(),
-            LazyBufferController::buffer_controller());
+  ASSERT_EQ(buffer.TEST_state(), LazyBufferState::buffer_state());
 
   string = "abc";
   buffer.reset(string);
   for (auto &c : string) { c = 'a'; };
   ASSERT_OK(buffer.fetch());
-  ASSERT_EQ(buffer.get_slice(), "aaa");
+  ASSERT_EQ(buffer.slice(), "aaa");
 
   buffer.reset(string, true);
   for (auto &c : string) { c = 'b'; };
   ASSERT_OK(buffer.fetch());
-  ASSERT_EQ(buffer.get_slice(), "aaa");
+  ASSERT_EQ(buffer.slice(), "aaa");
 
 }
 
@@ -76,24 +72,23 @@ TEST_F(LazyBufferTest, LightColtroller) {
 TEST_F(LazyBufferTest, BufferColtroller) {
 
   auto test = [](LazyBuffer& b) {
-    auto editor = b.get_editor();
-    ASSERT_FALSE(editor->resize(size_t(-1)));
-    ASSERT_NOK(editor->fetch());
-    ASSERT_TRUE(editor->resize(4));
-    ASSERT_EQ(b.get_slice(), Slice("\0\0\0\0", 4));
-    ::memcpy(editor->data(), "abcd", 4);
-    ASSERT_TRUE(editor->resize(3));
-    ASSERT_EQ(b.get_slice(), "abc");
+    auto builder = b.get_builder();
+    ASSERT_FALSE(builder->resize(size_t(-1)));
+    ASSERT_NOK(builder->fetch());
+    ASSERT_TRUE(builder->resize(4));
+    ASSERT_EQ(b.slice(), Slice("\0\0\0\0", 4));
+    ::memcpy(builder->data(), "abcd", 4);
+    ASSERT_TRUE(builder->resize(3));
+    ASSERT_EQ(b.slice(), "abc");
   };
   LazyBuffer buffer(size_t(-1));
-  ASSERT_EQ(buffer.TEST_controller(),
-            LazyBufferController::buffer_controller());
+  ASSERT_EQ(buffer.TEST_state(), LazyBufferState::buffer_state());
   ASSERT_NOK(buffer.fetch());
   test(buffer);
 
   buffer.clear();
-  ASSERT_EQ(buffer.TEST_controller(),
-      LazyBufferController::buffer_controller());
+  ASSERT_EQ(buffer.TEST_state(),
+      LazyBufferState::buffer_state());
   test(buffer);
 
   buffer = LazyBuffer("123");
@@ -121,30 +116,28 @@ TEST_F(LazyBufferTest, StringColtroller) {
 
   std::string string = "abc";
   LazyBuffer buffer(&string);
-  ASSERT_EQ(buffer.TEST_controller(),
-      LazyBufferController::string_controller());
-  ASSERT_EQ(buffer.get_slice(), "abc");
+  ASSERT_EQ(buffer.TEST_state(), LazyBufferState::string_state());
+  ASSERT_EQ(buffer.slice(), "abc");
 
   buffer.reset("aaa", true);
   buffer.trans_to_string()->append("bbb");
   ASSERT_OK(buffer.fetch());
-  ASSERT_EQ(buffer.get_slice(), "aaabbb");
-  ASSERT_EQ(buffer.TEST_rep()->data[1], 0);
+  ASSERT_EQ(buffer.slice(), "aaabbb");
+  ASSERT_EQ(buffer.TEST_context()->data[1], 0);
 
-  buffer.get_editor()->resize(buffer.size() - 1);
-  ASSERT_EQ(buffer.TEST_controller(),
-      LazyBufferController::string_controller());
+  buffer.get_builder()->resize(buffer.size() - 1);
+  ASSERT_EQ(buffer.TEST_state(), LazyBufferState::string_state());
   ASSERT_OK(std::move(buffer).dump(&string));
   ASSERT_EQ(string, "aaabb");
 
   buffer.reset(string);
   buffer.trans_to_string()->resize(string.size() - 1);
   ASSERT_OK(std::move(buffer).dump(&string));
-  ASSERT_EQ(buffer.TEST_rep()->data[1], 1);
+  ASSERT_EQ(buffer.TEST_context()->data[1], 1);
   ASSERT_EQ(string, "aaab");
 
   buffer.reset(string);
-  buffer.get_editor()->resize(string.size() - 1);
+  buffer.get_builder()->resize(string.size() - 1);
   ASSERT_OK(std::move(buffer).dump(&string));
   ASSERT_EQ(string, "aaa");
 

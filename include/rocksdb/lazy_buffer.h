@@ -18,10 +18,12 @@
 
 namespace rocksdb {
 
-class LazyBuffer;
-class LazyBufferEditor;
+// State pattern
 
-struct LazyBufferRep {
+class LazyBuffer;
+class LazyBufferBuilder;
+
+struct LazyBufferContext {
   uint64_t data[4];
 };
 
@@ -30,9 +32,9 @@ struct LazyBufferCustomizeBuffer {
   void* (*uninitialized_resize)(void* handle, size_t size);
 };
 
-class LazyBufferController {
+class LazyBufferState {
  public:
-  virtual ~LazyBufferController() = default;
+  virtual ~LazyBufferState() = default;
 
   // Release resource
   virtual void destroy(LazyBuffer* buffer) const = 0;
@@ -46,7 +48,7 @@ class LazyBufferController {
   // Save error into buffer
   virtual void assign_error(LazyBuffer* buffer, Status&& status) const;
 
-  // Pin the buffer, turn the controller into editable
+  // Pin the buffer, turn the state into editable
   virtual void pin_buffer(LazyBuffer* buffer) const;
 
   // Fetch buffer and dump to target, the buffer may be destroyed
@@ -55,39 +57,39 @@ class LazyBufferController {
   // Fetch buffer
   virtual Status fetch_buffer(LazyBuffer* buffer) const = 0;
 
-  // Use LazyBufferRep as local storage
+  // Use LazyBufferContext as local storage
   // data -> 32 bytes
-  static const LazyBufferController* light_controller();
+  static const LazyBufferState* light_state();
 
-  // Use LazyBufferRep as buffer
+  // Use LazyBufferContext as buffer
   // data[0]     -> handle
   // data[1]     -> uninitialized_resize call
   // data[2 - 3] -> Status
-  static const LazyBufferController* buffer_controller();
+  static const LazyBufferState* buffer_state();
 
-  // Use LazyBufferRep as string holder
+  // Use LazyBufferContext as string holder
   // data[0] -> string ptr
   // data[1] -> is owner
   // data[2 - 3] -> Status
-  static const LazyBufferController* string_controller();
+  static const LazyBufferState* string_state();
 
-  // Use LazyBufferRep as LazuBuffer reference
+  // Use LazyBufferContext as LazuBuffer reference
   // data[0] -> ptr to LazyBuffer
-  static const LazyBufferController* reference_controller();
+  static const LazyBufferState* reference_state();
 
-  // Use LazyBufferRep as Cleanable
-  // rep -> Cleanable
-  static const LazyBufferController* cleanable_controller();
+  // Use LazyBufferContext as Cleanable
+  // context -> Cleanable
+  static const LazyBufferState* cleanable_state();
 
   // Set buffer->slice_ = slice
   static void set_slice(LazyBuffer* buffer, const Slice& slice);
 
-  // Get &buffer->rep_
-  static LazyBufferRep* get_rep(LazyBuffer* buffer);
+  // Get &buffer->context_
+  static LazyBufferContext* get_context(LazyBuffer* buffer);
 };
 
 class LazyBuffer {
-  friend LazyBufferController;
+  friend LazyBufferState;
  protected:
   union {
     struct {
@@ -96,18 +98,18 @@ class LazyBuffer {
     };
     Slice slice_ = Slice();
   };
-  const LazyBufferController* controller_;
-  LazyBufferRep rep_;
+  const LazyBufferState* state_;
+  LazyBufferContext context_;
   uint64_t file_number_;
 
-  // Call LazyBufferController::destroy if controller_ not nullptr
+  // Call LazyBufferState::destroy if state_ not nullptr
   void destroy();
 
-  // Call LazyBufferController::assign_error if _status not ok
+  // Call LazyBufferState::assign_error if _status not ok
   void assign_error(Status&& _status);
 
-  // Fix light_controller local storage
-  void fix_light_controller(const LazyBuffer& other);
+  // Fix light_state local storage
+  void fix_light_state(const LazyBuffer& other);
 
 public:
 
@@ -142,9 +144,9 @@ public:
   LazyBuffer(const Slice& _slice, Cleanable&& _cleanable,
              uint64_t _file_number = uint64_t(-1)) noexcept;
 
-  // Init from customize controller
-  LazyBuffer(const LazyBufferController* _controller,
-             const LazyBufferRep& _rep, const Slice& _slice = Slice::Invalid(),
+  // Init from customize state
+  LazyBuffer(const LazyBufferState* _state, const LazyBufferContext& _context,
+             const Slice& _slice = Slice::Invalid(),
              uint64_t _file_number = uint64_t(-1)) noexcept;
 
   ~LazyBuffer() {
@@ -162,7 +164,7 @@ public:
 
   // Get inner slice
   // REQUIRES: valid()
-  const Slice& get_slice() const { assert(valid()); return slice_; }
+  const Slice& slice() const { assert(valid()); return slice_; }
 
   // Return a pointer to the beginning of the referenced data
   // REQUIRES: valid()
@@ -249,16 +251,16 @@ public:
   void reset(const Slice& _slice, Cleanable&& _cleanable,
              uint64_t _file_number = uint64_t(-1));
 
-  // Reset to customize controller
-  void reset(const LazyBufferController* _controller, const LazyBufferRep& _rep,
+  // Reset to customize state
+  void reset(const LazyBufferState* _state, const LazyBufferContext& _context,
              const Slice& _slice = Slice::Invalid(),
              uint64_t _file_number = uint64_t(-1));
 
   // Fetch source and copy it
   void assign(const LazyBuffer& _source);
 
-  // Trans to editable buffer and get editor
-  LazyBufferEditor* get_editor();
+  // Trans to editable buffer and get builder
+  LazyBufferBuilder* get_builder();
 
   // Trans buffer to string for modification
   std::string* trans_to_string();
@@ -266,7 +268,7 @@ public:
   // Return the certain file number of SST, -1 for unknown
   uint64_t file_number() const { return file_number_; }
 
-  // Pin this buffer, turn the controller into editable
+  // Pin this buffer, turn the state into editable
   void pin();
 
   // Dump buffer to customize buffer
@@ -282,13 +284,13 @@ public:
   Status fetch() const;
 
   // For test
-  const LazyBufferController* TEST_controller() const { return controller_; }
+  const LazyBufferState* TEST_state() const { return state_; }
 
   // For test
-  const LazyBufferRep* TEST_rep() const { return &rep_; }
+  const LazyBufferContext* TEST_context() const { return &context_; }
 };
 
-class LazyBufferEditor : private LazyBuffer {
+class LazyBufferBuilder : private LazyBuffer {
  public:
   char* data() const { return data_; }
   using LazyBuffer::size;
@@ -303,85 +305,85 @@ class LazyBufferEditor : private LazyBuffer {
   bool uninitialized_resize(size_t _size);
 };
 
-inline void LazyBufferController::set_slice(LazyBuffer* buffer,
-                                            const Slice& slice) {
+inline void LazyBufferState::set_slice(LazyBuffer* buffer, const Slice& slice) {
   buffer->slice_ = slice;
 }
 
-inline LazyBufferRep* LazyBufferController::get_rep(LazyBuffer* buffer) {
-  return &buffer->rep_;
+inline LazyBufferContext* LazyBufferState::get_context(LazyBuffer* buffer) {
+  return &buffer->context_;
 }
 
 inline LazyBuffer::LazyBuffer() noexcept
-    : controller_(LazyBufferController::light_controller()),
-      rep_{},
+    : state_(LazyBufferState::light_state()),
+      context_{},
       file_number_(uint64_t(-1)) {}
 
 inline LazyBuffer::LazyBuffer(LazyBuffer&& _buffer) noexcept
     : slice_(_buffer.slice_),
-      controller_(_buffer.controller_),
-      rep_(_buffer.rep_),
+      state_(_buffer.state_),
+      context_(_buffer.context_),
       file_number_(_buffer.file_number_) {
-  if (controller_ == LazyBufferController::light_controller() &&
-      _buffer.size_ <= sizeof(LazyBufferRep)) {
-    fix_light_controller(_buffer);
+  if (state_ == LazyBufferState::light_state() &&
+      _buffer.size_ <= sizeof(LazyBufferContext)) {
+    fix_light_state(_buffer);
   }
   _buffer.slice_ = Slice::Invalid();
-  _buffer.controller_ = nullptr;
+  _buffer.state_ = nullptr;
 }
 
 inline LazyBuffer::LazyBuffer(const Slice& _slice, bool _copy,
                               uint64_t _file_number)
     : slice_(_slice),
-      controller_(LazyBufferController::light_controller()),
-      rep_{},
+      state_(LazyBufferState::light_state()),
+      context_{},
       file_number_(_file_number) {
   assert(_slice.valid());
   if (_copy) {
-    controller_->assign_slice(this, _slice);
+    state_->assign_slice(this, _slice);
   }
 }
 
 inline LazyBuffer::LazyBuffer(const Slice& _slice, Cleanable&& _cleanable,
                               uint64_t _file_number) noexcept
     : slice_(_slice),
-      controller_(LazyBufferController::cleanable_controller()),
-      rep_{},
+      state_(LazyBufferState::cleanable_state()),
+      context_{},
       file_number_(_file_number) {
   assert(_slice.valid());
-  static_assert(sizeof _cleanable == sizeof rep_, "");
-  static_assert(alignof(Cleanable) == alignof(LazyBufferRep), "");
-  ::new(&rep_) Cleanable(std::move(_cleanable));
+  static_assert(sizeof _cleanable == sizeof context_, "");
+  static_assert(alignof(Cleanable) == alignof(LazyBufferContext), "");
+  ::new(&context_) Cleanable(std::move(_cleanable));
 }
 
-inline LazyBuffer::LazyBuffer(const LazyBufferController* _controller,
-                              const LazyBufferRep& _rep, const Slice& _slice,
+inline LazyBuffer::LazyBuffer(const LazyBufferState* _state,
+                              const LazyBufferContext& _context,
+                              const Slice& _slice,
                               uint64_t _file_number) noexcept
     : slice_(_slice),
-      controller_(_controller),
-      rep_(_rep),
+      state_(_state),
+      context_(_context),
       file_number_(_file_number) {
-  assert(_controller != nullptr);
+  assert(_state != nullptr);
 }
 
 inline void LazyBuffer::destroy() {
-  if (controller_ != nullptr) {
-    controller_->destroy(this);
+  if (state_ != nullptr) {
+    state_->destroy(this);
   }
 }
 
 inline void LazyBuffer::assign_error(Status&& _status) {
   if (_status.ok()) {
-    controller_->assign_slice(this, Slice());
+    state_->assign_slice(this, Slice());
   } else {
-    controller_->assign_error(this, std::move(_status));
+    state_->assign_error(this, std::move(_status));
     assert(!slice_.valid());
   }
   file_number_ = uint64_t(-1);
 }
 
 inline void LazyBuffer::clear() {
-  controller_->assign_slice(this, Slice());
+  state_->assign_slice(this, Slice());
   assert(size_ == 0);
   file_number_ = uint64_t(-1);
 }
@@ -390,15 +392,15 @@ inline void LazyBuffer::reset(LazyBuffer&& _buffer) {
   if (this != &_buffer) {
     destroy();
     slice_ = _buffer.slice_;
-    controller_ = _buffer.controller_;
-    rep_ = _buffer.rep_;
+    state_ = _buffer.state_;
+    context_ = _buffer.context_;
     file_number_ = _buffer.file_number_;
-    if (controller_ == LazyBufferController::light_controller() &&
-        _buffer.size_ <= sizeof(LazyBufferRep)) {
-      fix_light_controller(_buffer);
+    if (state_ == LazyBufferState::light_state() &&
+        _buffer.size_ <= sizeof(LazyBufferContext)) {
+      fix_light_state(_buffer);
     }
     _buffer.slice_ = Slice::Invalid();
-    _buffer.controller_ = nullptr;
+    _buffer.state_ = nullptr;
   }
 }
 
@@ -406,13 +408,13 @@ inline void LazyBuffer::reset(const Slice& _slice, bool _copy,
                               uint64_t _file_number) {
   assert(_slice.valid());
   if (_copy) {
-    controller_->assign_slice(this, _slice);
+    state_->assign_slice(this, _slice);
     assert(slice_ == _slice);
   } else {
     destroy();
     slice_ = _slice;
-    controller_ = LazyBufferController::light_controller();
-    rep_ = {};
+    state_ = LazyBufferState::light_state();
+    context_ = {};
   }
   file_number_ = _file_number;
 }
@@ -421,40 +423,40 @@ inline void LazyBuffer::reset(const Slice& _slice, Cleanable&& _cleanable,
                               uint64_t _file_number) {
   assert(_slice.valid());
   destroy();
-  controller_ = LazyBufferController::cleanable_controller();
+  state_ = LazyBufferState::cleanable_state();
   slice_ = _slice;
-  new(&rep_) Cleanable(std::move(_cleanable));
+  new(&context_) Cleanable(std::move(_cleanable));
   file_number_ = _file_number;
 }
 
-inline void LazyBuffer::reset(const LazyBufferController* _controller,
-                              const LazyBufferRep& _rep, const Slice& _slice,
-                              uint64_t _file_number) {
-  assert(_controller != nullptr);
+inline void LazyBuffer::reset(const LazyBufferState* _state,
+                              const LazyBufferContext& _context,
+                              const Slice& _slice, uint64_t _file_number) {
+  assert(_state != nullptr);
   destroy();
   slice_ = _slice;
-  controller_ = _controller;
-  rep_ = _rep;
+  state_ = _state;
+  context_ = _context;
   file_number_ = _file_number;
 }
 
 inline void LazyBuffer::pin() {
-  assert(controller_ != nullptr);
-  return controller_->pin_buffer(this);
+  assert(state_ != nullptr);
+  return state_->pin_buffer(this);
 }
 
-inline Status LazyBuffer::dump(LazyBuffer& _target) && {
-  assert(controller_ != nullptr);
+inline Status LazyBuffer::dump(LazyBuffer& _target)&& {
+  assert(state_ != nullptr);
   assert(this != &_target);
-  return controller_->dump_buffer(this, &_target);
+  return state_->dump_buffer(this, &_target);
 }
 
 inline Status LazyBuffer::fetch() const {
-  assert(controller_ != nullptr);
+  assert(state_ != nullptr);
   if (slice_.valid()) {
     return Status::OK();
   }
-  return controller_->fetch_buffer(const_cast<LazyBuffer*>(this));
+  return state_->fetch_buffer(const_cast<LazyBuffer*>(this));
 }
 
 // make a slice reference

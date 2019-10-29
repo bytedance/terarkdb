@@ -28,7 +28,7 @@ bool MergeOperator::FullMergeV2(const MergeOperationInput& merge_in,
     if (!Fetch(*merge_in.existing_value, &merge_out->new_value)) {
       return true;
     }
-    existing_value = &merge_in.existing_value->get_slice();
+    existing_value = &merge_in.existing_value->slice();
   }
   return FullMerge(merge_in.key, existing_value, operand_list_str,
                    merge_out->new_value.trans_to_string(), merge_in.logger);
@@ -75,8 +75,8 @@ bool AssociativeMergeOperator::FullMergeV2(
     }
     temp_value.clear();
     const Slice* existing_value_slice =
-        existing_value == nullptr ? nullptr : &existing_value->get_slice();
-    if (!Merge(merge_in.key, existing_value_slice, operand.get_slice(),
+        existing_value == nullptr ? nullptr : &existing_value->slice();
+    if (!Merge(merge_in.key, existing_value_slice, operand.slice(),
                temp_value.trans_to_string(), merge_in.logger)) {
       return false;
     }
@@ -98,7 +98,7 @@ bool AssociativeMergeOperator::PartialMerge(const Slice& key,
   if (!Fetch(left_operand, new_value) || !Fetch(right_operand, new_value)) {
     return true;
   }
-  return Merge(key, &left_operand.get_slice(), right_operand.get_slice(),
+  return Merge(key, &left_operand.slice(), right_operand.slice(),
                new_value->trans_to_string(), logger);
 }
 

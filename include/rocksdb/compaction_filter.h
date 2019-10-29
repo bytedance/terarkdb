@@ -167,7 +167,7 @@ class CompactionFilter {
     switch (value_type) {
       case ValueType::kValue: {
         bool value_changed = false;
-        bool rv = Filter(level, key, existing_value.get_slice(),
+        bool rv = Filter(level, key, existing_value.slice(),
                          new_value->trans_to_string(), &value_changed);
         if (rv) {
           return Decision::kRemove;
@@ -175,7 +175,7 @@ class CompactionFilter {
         return value_changed ? Decision::kChangeValue : Decision::kKeep;
       }
       case ValueType::kMergeOperand: {
-        bool rv = FilterMergeOperand(level, key, existing_value.get_slice());
+        bool rv = FilterMergeOperand(level, key, existing_value.slice());
         return rv ? Decision::kRemove : Decision::kKeep;
       }
     }

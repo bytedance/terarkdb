@@ -749,7 +749,7 @@ void CompactionPicker::InitFilesBeingCompact(
          iter->Valid(); iter->Next()) {
       LazyBuffer value = iter->value();
       if (!value.fetch().ok() ||
-          !element.Decode(iter->key(), value.get_slice())) {
+          !element.Decode(iter->key(), value.slice())) {
         // TODO: log error ?
         break;
       }

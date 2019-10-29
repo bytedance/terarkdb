@@ -393,12 +393,12 @@ class MemTableTombstoneIterator : public MemTableIteratorBase<Slice> {
     assert(valid_);
     LazyBuffer v = iter_->value();
     assert(v.fetch().ok());
-    return v.fetch().ok() ? v.get_slice() : Slice::Invalid();
+    return v.fetch().ok() ? v.slice() : Slice::Invalid();
   }
 };
 
 class MemTableIterator
-    : public MemTableIteratorBase<LazyBuffer>, public LazyBufferController {
+    : public MemTableIteratorBase<LazyBuffer>, public LazyBufferState {
   using Base = MemTableIteratorBase<LazyBuffer>;
   using Base::iter_;
   using Base::valid_;
@@ -411,7 +411,7 @@ class MemTableIterator
 
   void pin_buffer(LazyBuffer* buffer) const override {
     if (!value_pinned_ || !iter_->IsValuePinned()) {
-      LazyBufferController::pin_buffer(buffer);
+      LazyBufferState::pin_buffer(buffer);
     } else {
       *buffer = iter_->value();
       buffer->pin();

@@ -626,7 +626,7 @@ class TestPutOperator : public MergeOperator {
       if (!Fetch(*merge_in.existing_value, &merge_out->new_value)) {
         return true;
       }
-      if (merge_in.existing_value->get_slice() == "corrupted") {
+      if (merge_in.existing_value->slice() == "corrupted") {
         return false;
       }
     }
@@ -634,7 +634,7 @@ class TestPutOperator : public MergeOperator {
       if (!Fetch(value, &merge_out->new_value)) {
         return true;
       }
-      if (value.get_slice() == "corrupted") {
+      if (value.slice() == "corrupted") {
         return false;
       }
     }

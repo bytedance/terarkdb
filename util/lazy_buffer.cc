@@ -26,48 +26,49 @@ T* union_cast(S* src) {
 }
 }
 
-class DefaultLazyBufferControllerImpl : public LazyBufferController {
-public:
-  struct alignas(LazyBufferRep) Rep {
-    char data[sizeof(LazyBufferRep)];
+class LightLazyBufferState : public LazyBufferState {
+ public:
+  struct alignas(LazyBufferContext) Context {
+    char data[sizeof(LazyBufferContext)];
   };
 
   void destroy(LazyBuffer* /*buffer*/) const override {}
 
   void uninitialized_resize(LazyBuffer* buffer, size_t size) const override {
-    auto rep = union_cast<Rep>(get_rep(buffer));
-    if (size <= sizeof(Rep)) {
-      if (buffer->data() != rep->data) {
-        ::memmove(rep->data, buffer->data(), std::min(buffer->size(), size));
+    auto context = union_cast<Context>(get_context(buffer));
+    if (size <= sizeof(Context)) {
+      if (buffer->data() != context->data) {
+        ::memmove(context->data, buffer->data(),
+                  std::min(buffer->size(), size));
       }
-      set_slice(buffer, Slice(rep->data, size));
+      set_slice(buffer, Slice(context->data, size));
     } else {
-      LazyBufferController::uninitialized_resize(buffer, size);
+      LazyBufferState::uninitialized_resize(buffer, size);
     }
   }
 
   void assign_slice(LazyBuffer* buffer, const Slice& slice) const override {
-    auto rep = union_cast<Rep>(get_rep(buffer));
-    if (slice.size() <= sizeof(Rep)) {
-      ::memmove(rep->data, slice.data(), slice.size());
-      set_slice(buffer, Slice(rep->data, slice.size()));
+    auto context = union_cast<Context>(get_context(buffer));
+    if (slice.size() <= sizeof(Context)) {
+      ::memmove(context->data, slice.data(), slice.size());
+      set_slice(buffer, Slice(context->data, slice.size()));
     } else {
-      LazyBufferController::assign_slice(buffer, slice);
+      LazyBufferState::assign_slice(buffer, slice);
     }
   }
 
   void pin_buffer(LazyBuffer* buffer) const override {
-    auto rep = union_cast<Rep>(get_rep(buffer));
-    if (buffer->size() > sizeof(Rep)) {
-      LazyBufferController::assign_slice(buffer, buffer->get_slice());
-    } else if (buffer->data() != rep->data) {
-      ::memmove(rep->data, buffer->data(), buffer->size());
-      set_slice(buffer, Slice(rep->data, buffer->size()));
+    auto context = union_cast<Context>(get_context(buffer));
+    if (buffer->size() > sizeof(Context)) {
+      LazyBufferState::assign_slice(buffer, buffer->slice());
+    } else if (buffer->data() != context->data) {
+      ::memmove(context->data, buffer->data(), buffer->size());
+      set_slice(buffer, Slice(context->data, buffer->size()));
     }
   }
 
   Status dump_buffer(LazyBuffer* buffer, LazyBuffer* target) const override {
-    target->reset(buffer->get_slice(), true, buffer->file_number());
+    target->reset(buffer->slice(), true, buffer->file_number());
     return Status::OK();
   }
 
@@ -77,42 +78,42 @@ public:
   }
 };
 
-class BufferLazyBufferControllerImpl : public LazyBufferController {
+class BufferLazyBufferState : public LazyBufferState {
  public:
-  struct alignas(LazyBufferRep) Rep {
+  struct alignas(LazyBufferContext) Context {
     LazyBufferCustomizeBuffer buffer;
     Status status;
   };
 
   void destroy(LazyBuffer* buffer) const override {
-    auto rep = union_cast<Rep>(get_rep(buffer));
-    if (rep->buffer.uninitialized_resize == nullptr &&
-        rep->buffer.handle != nullptr) {
-      ::free(rep->buffer.handle);
+    auto context = union_cast<Context>(get_context(buffer));
+    if (context->buffer.uninitialized_resize == nullptr &&
+        context->buffer.handle != nullptr) {
+      ::free(context->buffer.handle);
     }
-    rep->status.~Status();
+    context->status.~Status();
   }
 
   void uninitialized_resize(LazyBuffer* buffer, size_t size) const override {
-    auto rep = union_cast<Rep>(get_rep(buffer));
-    if (rep->buffer.uninitialized_resize == nullptr) {
-      char* ptr = (char*)::realloc(rep->buffer.handle, size);
+    auto context = union_cast<Context>(get_context(buffer));
+    if (context->buffer.uninitialized_resize == nullptr) {
+      char* ptr = (char*)::realloc(context->buffer.handle, size);
       if (ptr != nullptr || size == 0) {
-        rep->buffer.handle = ptr;
-        rep->status = Status::OK();
+        context->buffer.handle = ptr;
+        context->status = Status::OK();
         set_slice(buffer, Slice(ptr, size));
       } else {
-        rep->status = Status::BadAlloc();
+        context->status = Status::BadAlloc();
         set_slice(buffer, Slice::Invalid());
       }
     } else {
-      char* ptr =
-          (char*)rep->buffer.uninitialized_resize(rep->buffer.handle, size);
+      char* ptr = (char*)context->buffer.uninitialized_resize(
+          context->buffer.handle, size);
       if (ptr != nullptr || size == 0) {
-        rep->status = Status::OK();
+        context->status = Status::OK();
         set_slice(buffer, Slice(ptr, size));
       } else {
-        rep->status = Status::BadAlloc();
+        context->status = Status::BadAlloc();
         set_slice(buffer, Slice::Invalid());
       }
     }
@@ -127,10 +128,9 @@ class BufferLazyBufferControllerImpl : public LazyBufferController {
       ::memmove(ptr, slice.data(), slice.size());
       set_slice(buffer, Slice(ptr, slice.size()));
     } else {
-      BufferLazyBufferControllerImpl::uninitialized_resize(buffer,
-                                                           slice.size());
-      auto rep = union_cast<Rep>(get_rep(buffer));
-      if (rep->status.ok() && slice.empty()) {
+      BufferLazyBufferState::uninitialized_resize(buffer, slice.size());
+      auto context = union_cast<Context>(get_context(buffer));
+      if (context->status.ok() && slice.empty()) {
         assert(buffer->data() != nullptr);
         assert(buffer->size() == slice.size());
         char* ptr = (char*)buffer->data();
@@ -140,127 +140,127 @@ class BufferLazyBufferControllerImpl : public LazyBufferController {
   }
 
   void assign_error(LazyBuffer* buffer, Status&& status) const override {
-    auto rep = union_cast<Rep>(get_rep(buffer));
-    rep->status = std::move(status);
+    auto context = union_cast<Context>(get_context(buffer));
+    context->status = std::move(status);
     set_slice(buffer, Slice::Invalid());
   }
 
   void pin_buffer(LazyBuffer* /*buffer*/) const override {}
 
   Status dump_buffer(LazyBuffer* buffer, LazyBuffer* target) const override {
-    auto rep = union_cast<Rep>(get_rep(buffer));
-    if (rep->status.ok()) {
+    auto context = union_cast<Context>(get_context(buffer));
+    if (context->status.ok()) {
       assert(buffer->valid());
-      target->reset(buffer->get_slice(), true, buffer->file_number());
+      target->reset(buffer->slice(), true, buffer->file_number());
       return Status::OK();
     } else {
       assert(!buffer->valid());
-      return std::move(rep->status);
+      return std::move(context->status);
     }
   }
 
   Status fetch_buffer(LazyBuffer* buffer) const override {
-    auto rep = union_cast<const Rep>(get_rep(buffer));
-    assert(!rep->status.ok());
-    return rep->status;
+    auto context = union_cast<const Context>(get_context(buffer));
+    assert(!context->status.ok());
+    return context->status;
   }
 };
 
-struct StringLazyBufferControllerImpl : public LazyBufferController {
+struct StringLazyBufferState : public LazyBufferState {
  public:
-  struct alignas(LazyBufferRep) Rep {
+  struct alignas(LazyBufferContext) Context {
     std::string* string;
     uint64_t is_owner;
     Status status;
   };
 
   void destroy(LazyBuffer* buffer) const override {
-    auto rep = union_cast<Rep>(get_rep(buffer));
-    if (rep->is_owner) {
-      delete rep->string;
+    auto context = union_cast<Context>(get_context(buffer));
+    if (context->is_owner) {
+      delete context->string;
     }
-    rep->status.~Status();
+    context->status.~Status();
   }
 
   void uninitialized_resize(LazyBuffer* buffer, size_t size) const override {
-    auto rep = union_cast<Rep>(get_rep(buffer));
+    auto context = union_cast<Context>(get_context(buffer));
     try {
-      rep->string->resize(size);
-      set_slice(buffer, *rep->string);
-      rep->status = Status::OK();
+      context->string->resize(size);
+      set_slice(buffer, *context->string);
+      context->status = Status::OK();
       return;
     } catch (const std::bad_alloc&) {
-      rep->status = Status::BadAlloc();
+      context->status = Status::BadAlloc();
     } catch (const std::exception& ex) {
-      rep->status = Status::Aborted(ex.what());
+      context->status = Status::Aborted(ex.what());
     }
     set_slice(buffer, Slice::Invalid());
   }
 
   void assign_slice(LazyBuffer* buffer, const Slice& slice) const override {
-    auto rep = union_cast<Rep>(get_rep(buffer));
-    rep->string->assign(slice.data(), slice.size());
-    rep->status = Status::OK();
-    set_slice(buffer, *rep->string);
+    auto context = union_cast<Context>(get_context(buffer));
+    context->string->assign(slice.data(), slice.size());
+    context->status = Status::OK();
+    set_slice(buffer, *context->string);
   }
 
   void assign_error(LazyBuffer* buffer, Status&& status) const override {
-    auto rep = union_cast<Rep>(get_rep(buffer));
-    rep->status = std::move(status);
+    auto context = union_cast<Context>(get_context(buffer));
+    context->status = std::move(status);
     set_slice(buffer, Slice::Invalid());
   }
 
   void pin_buffer(LazyBuffer* /*buffer*/) const override {}
 
   Status dump_buffer(LazyBuffer* buffer, LazyBuffer* target) const override {
-    auto rep = union_cast<Rep>(get_rep(buffer));
-    if (rep->status.ok()) {
-      target->reset(*rep->string, true, buffer->file_number());
+    auto context = union_cast<Context>(get_context(buffer));
+    if (context->status.ok()) {
+      target->reset(*context->string, true, buffer->file_number());
       return Status::OK();
     } else {
       assert(!buffer->valid());
-      return std::move(rep->status);
+      return std::move(context->status);
     }
   }
 
   Status fetch_buffer(LazyBuffer* buffer) const override {
-    auto rep = union_cast<const Rep>(get_rep(buffer));
-    if (rep->status.ok()) {
-      set_slice(buffer, *rep->string);
+    auto context = union_cast<const Context>(get_context(buffer));
+    if (context->status.ok()) {
+      set_slice(buffer, *context->string);
       return Status::OK();
     } else {
-      return rep->status;
+      return context->status;
     }
   }
 };
 
 // 0 -> pointer to slice
-struct ReferenceLazyBufferControllerImpl : public LazyBufferController {
-
+struct ReferenceLazyBufferState : public LazyBufferState {
+ public:
   void destroy(LazyBuffer* /*buffer*/) const override {}
 
   Status fetch_buffer(LazyBuffer* buffer) const override {
     const LazyBuffer& buffer_ref =
-        *reinterpret_cast<const LazyBuffer*>(get_rep(buffer)->data[0]);
+        *reinterpret_cast<const LazyBuffer*>(get_context(buffer)->data[0]);
     auto s = buffer_ref.fetch();
     if (s.ok()) {
-      set_slice(buffer, buffer_ref.get_slice());
+      set_slice(buffer, buffer_ref.slice());
     }
     return s;
   }
 };
 
-struct CleanableLazyBufferControllerImpl : public LazyBufferController {
-
+struct CleanableLazyBufferState : public LazyBufferState {
+ public:
   void destroy(LazyBuffer* buffer) const override {
-    union_cast<Cleanable>(get_rep(buffer))->Reset();
+    union_cast<Cleanable>(get_context(buffer))->Reset();
   }
 
   void pin_buffer(LazyBuffer* /*buffer*/) const override {}
 
   Status dump_buffer(LazyBuffer* buffer, LazyBuffer* target) const override {
-    target->reset(buffer->get_slice(), true, buffer->file_number());
-    union_cast<Cleanable>(get_rep(buffer))->Reset();
+    target->reset(buffer->slice(), true, buffer->file_number());
+    union_cast<Cleanable>(get_context(buffer))->Reset();
     return Status::OK();
   }
 
@@ -270,76 +270,75 @@ struct CleanableLazyBufferControllerImpl : public LazyBufferController {
   }
 };
 
-void LazyBufferController::uninitialized_resize(LazyBuffer* buffer,
-                                                size_t size) const {
-  if (buffer->valid() && size <= sizeof(LazyBufferRep)) {
-    DefaultLazyBufferControllerImpl::Rep tmp_rep{};
-    ::memcpy(tmp_rep.data, buffer->data_, std::min(buffer->size_, size));
+void LazyBufferState::uninitialized_resize(LazyBuffer* buffer,
+                                           size_t size) const {
+  if (buffer->valid() && size <= sizeof(LazyBufferContext)) {
+    LightLazyBufferState::Context tmp_context{};
+    ::memcpy(tmp_context.data, buffer->data_, std::min(buffer->size_, size));
     destroy(buffer);
-    buffer->controller_ = light_controller();
-    auto rep =
-        union_cast<DefaultLazyBufferControllerImpl::Rep>(&buffer->rep_);
-    *rep = tmp_rep;
-    buffer->data_ = rep->data;
+    buffer->state_ = light_state();
+    auto context = union_cast<LightLazyBufferState::Context>(&buffer->context_);
+    *context = tmp_context;
+    buffer->data_ = context->data;
     buffer->size_ = size;
   } else {
     LazyBuffer tmp(size);
-    assert(tmp.controller_ == buffer_controller());
-    auto rep = union_cast<BufferLazyBufferControllerImpl::Rep>(&tmp.rep_);
-    if (rep->status.ok()) {
+    assert(tmp.state_ == buffer_state());
+    auto context = union_cast<BufferLazyBufferState::Context>(&tmp.context_);
+    if (context->status.ok()) {
       auto s = dump_buffer(buffer, &tmp);
-      assert(tmp.controller_ == buffer_controller());
+      assert(tmp.state_ == buffer_state());
       if (!s.ok()) {
-        rep->status = std::move(s);
+        context->status = std::move(s);
         set_slice(&tmp, Slice::Invalid());
       }
     }
     destroy(buffer);
     buffer->slice_ = tmp.slice_;
-    buffer->controller_ = tmp.controller_;
-    tmp.controller_ = nullptr;
-    buffer->rep_ = tmp.rep_;
+    buffer->state_ = tmp.state_;
+    tmp.state_ = nullptr;
+    buffer->context_ = tmp.context_;
   }
 }
 
-void LazyBufferController::assign_slice(LazyBuffer* buffer,
-                                        const Slice& slice) const {
-  buffer->controller_->destroy(buffer);
-  if (slice.size() <= sizeof(LazyBufferRep)) {
-    buffer->controller_ = light_controller();
-    auto rep =
-        union_cast<DefaultLazyBufferControllerImpl::Rep>(&buffer->rep_);
-    ::memcpy(rep->data, slice.data(), slice.size());
-    buffer->data_ = rep->data;
+void LazyBufferState::assign_slice(LazyBuffer* buffer,
+                                   const Slice& slice) const {
+  buffer->state_->destroy(buffer);
+  if (slice.size() <= sizeof(LazyBufferContext)) {
+    buffer->state_ = light_state();
+    auto context = union_cast<LightLazyBufferState::Context>(&buffer->context_);
+    ::memcpy(context->data, slice.data(), slice.size());
+    buffer->data_ = context->data;
     buffer->size_ = slice.size();
   } else {
-    buffer->controller_ = buffer_controller();
-    auto rep = union_cast<BufferLazyBufferControllerImpl::Rep>(&buffer->rep_);
-    rep->buffer.handle = ::malloc(slice.size());
-    rep->buffer.uninitialized_resize = nullptr;
-    if (rep->buffer.handle == nullptr) {
-      ::new(&rep->status) Status(Status::BadAlloc());
+    buffer->state_ = buffer_state();
+    auto context =
+        union_cast<BufferLazyBufferState::Context>(&buffer->context_);
+    context->buffer.handle = ::malloc(slice.size());
+    context->buffer.uninitialized_resize = nullptr;
+    if (context->buffer.handle == nullptr) {
+      ::new(&context->status) Status(Status::BadAlloc());
     } else {
-      ::new(&rep->status) Status;
-      ::memcpy(rep->buffer.handle, slice.data(), slice.size());
-      buffer->data_ = (char*)rep->buffer.handle;
+      ::new(&context->status) Status;
+      ::memcpy(context->buffer.handle, slice.data(), slice.size());
+      buffer->data_ = (char*)context->buffer.handle;
       buffer->size_ = slice.size();
     }
   }
 }
 
-void LazyBufferController::assign_error(LazyBuffer* buffer,
-                                        Status&& status) const {
+void LazyBufferState::assign_error(LazyBuffer* buffer,
+                                   Status&& status) const {
   destroy(buffer);
-  buffer->controller_ = buffer_controller();
-  auto rep = union_cast<BufferLazyBufferControllerImpl::Rep>(&buffer->rep_);
-  rep->buffer.handle = nullptr;
-  rep->buffer.uninitialized_resize = nullptr;
-  ::new(&rep->status) Status(std::move(status));
+  buffer->state_ = buffer_state();
+  auto context = union_cast<BufferLazyBufferState::Context>(&buffer->context_);
+  context->buffer.handle = nullptr;
+  context->buffer.uninitialized_resize = nullptr;
+  ::new(&context->status) Status(std::move(status));
   buffer->slice_ = Slice::Invalid();
 }
 
-void LazyBufferController::pin_buffer(LazyBuffer* buffer) const {
+void LazyBufferState::pin_buffer(LazyBuffer* buffer) const {
   LazyBuffer tmp;
   auto s = dump_buffer(buffer, &tmp);
   if (s.ok()) {
@@ -350,103 +349,103 @@ void LazyBufferController::pin_buffer(LazyBuffer* buffer) const {
   }
 }
 
-Status LazyBufferController::dump_buffer(LazyBuffer* buffer,
-                                         LazyBuffer* target) const {
+Status LazyBufferState::dump_buffer(LazyBuffer* buffer,
+                                    LazyBuffer* target) const {
   if (!buffer->valid()) {
     auto s = fetch_buffer(buffer);
     if (!s.ok()) {
       return s;
     }
   }
-  target->controller_->assign_slice(target, buffer->slice_);
+  target->state_->assign_slice(target, buffer->slice_);
   assert(target->slice_ == buffer->slice_);
   target->file_number_ = buffer->file_number_;
   destroy(buffer);
   return Status::OK();
 }
 
-const LazyBufferController* LazyBufferController::light_controller() {
-  static DefaultLazyBufferControllerImpl controller_impl;
-  return &controller_impl;
+const LazyBufferState* LazyBufferState::light_state() {
+  static LightLazyBufferState static_state;
+  return &static_state;
 }
 
-const LazyBufferController* LazyBufferController::buffer_controller() {
-  static BufferLazyBufferControllerImpl controller_impl;
-  return &controller_impl;
+const LazyBufferState* LazyBufferState::buffer_state() {
+  static BufferLazyBufferState static_state;
+  return &static_state;
 }
 
-const LazyBufferController* LazyBufferController::string_controller() {
-  static StringLazyBufferControllerImpl controller_impl;
-  return &controller_impl;
+const LazyBufferState* LazyBufferState::string_state() {
+  static StringLazyBufferState static_state;
+  return &static_state;
 }
 
-const LazyBufferController* LazyBufferController::reference_controller() {
-  static ReferenceLazyBufferControllerImpl controller_impl;
-  return &controller_impl;
+const LazyBufferState* LazyBufferState::reference_state() {
+  static ReferenceLazyBufferState static_state;
+  return &static_state;
 }
 
-const LazyBufferController* LazyBufferController::cleanable_controller() {
-  static CleanableLazyBufferControllerImpl controller_impl;
-  return &controller_impl;
+const LazyBufferState* LazyBufferState::cleanable_state() {
+  static CleanableLazyBufferState static_state;
+  return &static_state;
 }
 
 LazyBuffer::LazyBuffer(size_t _size) noexcept
-    : rep_{},
+    : context_{},
       file_number_(uint64_t(-1)) {
-  if (_size <= sizeof(LazyBufferRep)) {
-    controller_ = LazyBufferController::light_controller();
-    data_ = union_cast<DefaultLazyBufferControllerImpl::Rep>(&rep_)->data;
+  if (_size <= sizeof(LazyBufferContext)) {
+    state_ = LazyBufferState::light_state();
+    data_ = union_cast<LightLazyBufferState::Context>(&context_)->data;
     size_ = _size;
   } else {
-    controller_ = LazyBufferController::buffer_controller();
-    auto rep = union_cast<BufferLazyBufferControllerImpl::Rep>(&rep_);
-    rep->buffer.handle = ::malloc(_size);
-    if (rep->buffer.handle == nullptr) {
-      ::new(&rep->status) Status(Status::BadAlloc());
+    state_ = LazyBufferState::buffer_state();
+    auto context = union_cast<BufferLazyBufferState::Context>(&context_);
+    context->buffer.handle = ::malloc(_size);
+    if (context->buffer.handle == nullptr) {
+      ::new(&context->status) Status(Status::BadAlloc());
       slice_ = Slice::Invalid();
     } else {
-      ::new(&rep->status) Status;
-      data_ = (char*)rep->buffer.handle;
+      ::new(&context->status) Status;
+      data_ = (char*)context->buffer.handle;
       size_ = _size;
     }
   }
 }
 
-void LazyBuffer::fix_light_controller(const LazyBuffer& other) {
-  assert(controller_ == LazyBufferController::light_controller());
-  assert(other.size_ <= sizeof(LazyBufferRep));
-  data_ = union_cast<DefaultLazyBufferControllerImpl::Rep>(&rep_)->data;
+void LazyBuffer::fix_light_state(const LazyBuffer& other) {
+  assert(state_ == LazyBufferState::light_state());
+  assert(other.size_ <= sizeof(LazyBufferContext));
+  data_ = union_cast<LightLazyBufferState::Context>(&context_)->data;
   size_ = other.size_;
   ::memmove(data_, other.data_, size_);
 }
 
 LazyBuffer::LazyBuffer(LazyBufferCustomizeBuffer _buffer) noexcept
-    : controller_(LazyBufferController::buffer_controller()),
-      rep_{reinterpret_cast<uint64_t>(_buffer.handle),
-           reinterpret_cast<uint64_t>(_buffer.uninitialized_resize)},
+    : state_(LazyBufferState::buffer_state()),
+      context_{reinterpret_cast<uint64_t>(_buffer.handle),
+               reinterpret_cast<uint64_t>(_buffer.uninitialized_resize)},
       file_number_(uint64_t(-1)) {
   assert(_buffer.handle != nullptr);
   assert(_buffer.uninitialized_resize != nullptr);
-  ::new(&union_cast<BufferLazyBufferControllerImpl::Rep>(&rep_)->status) Status;
+  ::new(&union_cast<BufferLazyBufferState::Context>(&context_)->status) Status;
 }
 
 LazyBuffer::LazyBuffer(std::string* _string) noexcept
     : slice_(*_string),
-      controller_(LazyBufferController::string_controller()),
-      rep_{reinterpret_cast<uint64_t>(_string)},
+      state_(LazyBufferState::string_state()),
+      context_{reinterpret_cast<uint64_t>(_string)},
       file_number_(uint64_t(-1)) {
   assert(_string != nullptr);
-  ::new(&union_cast<StringLazyBufferControllerImpl::Rep>(&rep_)->status) Status;
+  ::new(&union_cast<StringLazyBufferState::Context>(&context_)->status) Status;
 }
 
 void LazyBuffer::reset(LazyBufferCustomizeBuffer _buffer) {
   assert(_buffer.handle != nullptr);
   assert(_buffer.uninitialized_resize != nullptr);
   destroy();
-  controller_ = LazyBufferController::buffer_controller();
-  auto rep = union_cast<BufferLazyBufferControllerImpl::Rep>(&rep_);
-  rep->buffer = _buffer;
-  ::new(&rep->status) Status;
+  state_ = LazyBufferState::buffer_state();
+  auto context = union_cast<BufferLazyBufferState::Context>(&context_);
+  context->buffer = _buffer;
+  ::new(&context->status) Status;
   slice_ = Slice();
   file_number_ = uint64_t(-1);
 }
@@ -454,102 +453,103 @@ void LazyBuffer::reset(LazyBufferCustomizeBuffer _buffer) {
 void LazyBuffer::reset(std::string* _string) {
   assert(_string != nullptr);
   slice_ = *_string;
-  auto rep = union_cast<StringLazyBufferControllerImpl::Rep>(&rep_);
-  if (controller_ == LazyBufferController::string_controller()) {
-    if (rep->string != _string) {
-      if (rep->is_owner) {
-        delete rep->string;
-        rep->is_owner = 0;
+  auto context = union_cast<StringLazyBufferState::Context>(&context_);
+  if (state_ == LazyBufferState::string_state()) {
+    if (context->string != _string) {
+      if (context->is_owner) {
+        delete context->string;
+        context->is_owner = 0;
       }
-      rep->string = _string;
+      context->string = _string;
     }
-    rep->status = Status::OK();
+    context->status = Status::OK();
   } else {
     destroy();
-    controller_ = LazyBufferController::string_controller();
-    rep->string = _string;
-    rep->is_owner = 0;
-    ::new(&rep->status) Status;
+    state_ = LazyBufferState::string_state();
+    context->string = _string;
+    context->is_owner = 0;
+    ::new(&context->status) Status;
   }
-  slice_ = *rep->string;
+  slice_ = *context->string;
 }
 
 void LazyBuffer::assign(const LazyBuffer& source) {
   Status s;
   if (source.valid() || (s = source.fetch()).ok()) {
-    reset(source.get_slice(), true, source.file_number());
+    reset(source.slice(), true, source.file_number());
   } else {
-    controller_->assign_error(this, std::move(std::move(s)));
+    state_->assign_error(this, std::move(std::move(s)));
     assert(!slice_.valid());
   }
 }
 
-LazyBufferEditor* LazyBuffer::get_editor() {
-  assert(controller_ != nullptr);
+LazyBufferBuilder* LazyBuffer::get_builder() {
+  assert(state_ != nullptr);
   file_number_ = uint64_t(-1);
-  controller_->uninitialized_resize(this, size_);
-  return reinterpret_cast<LazyBufferEditor*>(this);
+  state_->uninitialized_resize(this, valid() ? size_ : 0);
+  return reinterpret_cast<LazyBufferBuilder*>(this);
 }
 
 std::string* LazyBuffer::trans_to_string() {
-  assert(controller_ != nullptr);
+  assert(state_ != nullptr);
   file_number_ = uint64_t(-1);
-  if (controller_ == LazyBufferController::string_controller()) {
-    auto rep = union_cast<StringLazyBufferControllerImpl::Rep>(&rep_);
-    assert(!slice_.valid() || (data_ == rep->string->data() &&
-                               size_ == rep->string->size()));
+  if (state_ == LazyBufferState::string_state()) {
+    auto context = union_cast<StringLazyBufferState::Context>(&context_);
+    assert(!slice_.valid() || (data_ == context->string->data() &&
+                               size_ == context->string->size()));
     slice_ = Slice::Invalid();
-    return rep->string;
+    return context->string;
   } else {
-    LazyBuffer tmp(LazyBufferController::string_controller(),
+    LazyBuffer tmp(LazyBufferState::string_state(),
                    {reinterpret_cast<uint64_t>(new std::string), 1});
-    auto s = controller_->dump_buffer(this, &tmp);
+    auto s = state_->dump_buffer(this, &tmp);
     destroy();
     slice_ = Slice::Invalid();
-    controller_ = tmp.controller_;
-    tmp.controller_ = nullptr;
-    rep_ = tmp.rep_;
-    auto rep = union_cast<StringLazyBufferControllerImpl::Rep>(&rep_);
+    state_ = tmp.state_;
+    tmp.state_ = nullptr;
+    context_ = tmp.context_;
+    auto context = union_cast<StringLazyBufferState::Context>(&context_);
     if (!s.ok()) {
-      rep->status = std::move(s);
+      context->status = std::move(s);
     }
-    return rep->string;
+    return context->string;
   }
 }
 
-Status LazyBuffer::dump(LazyBufferCustomizeBuffer _buffer) && {
-  assert(controller_ != nullptr);
+Status LazyBuffer::dump(LazyBufferCustomizeBuffer _buffer)&& {
+  assert(state_ != nullptr);
   if (slice_.valid()) {
-    if (controller_ != LazyBufferController::buffer_controller() ||
-        reinterpret_cast<std::string*>(rep_.data[0]) != _buffer.handle) {
+    if (state_ != LazyBufferState::buffer_state() ||
+        reinterpret_cast<std::string*>(context_.data[0]) != _buffer.handle) {
       void* ptr = _buffer.uninitialized_resize(_buffer.handle, slice_.size());
       if (ptr == nullptr) {
         return Status::BadAlloc();
       }
       ::memcpy(ptr, slice_.data(), slice_.size());
     } else {
-      assert(rep_.data[1] ==
+      assert(context_.data[1] ==
              reinterpret_cast<uint64_t>(_buffer.uninitialized_resize));
     }
   } else {
     LazyBuffer buffer(_buffer);
-    auto s = controller_->dump_buffer(this, &buffer);
+    auto s = state_->dump_buffer(this, &buffer);
     if (!s.ok()) {
       return s;
     }
-    assert(buffer.controller_ == LazyBufferController::buffer_controller());
-    assert(buffer.rep_.data[0] == reinterpret_cast<uint64_t>(_buffer.handle));
-    assert(buffer.rep_.data[1] ==
+    assert(buffer.state_ == LazyBufferState::buffer_state());
+    assert(buffer.context_.data[0] ==
+           reinterpret_cast<uint64_t>(_buffer.handle));
+    assert(buffer.context_.data[1] ==
            reinterpret_cast<uint64_t>(_buffer.uninitialized_resize));
   }
   return Status::OK();
 }
 
-Status LazyBuffer::dump(std::string* _string) && {
-  assert(controller_ != nullptr);
+Status LazyBuffer::dump(std::string* _string)&& {
+  assert(state_ != nullptr);
   if (slice_.valid()) {
-    if (controller_ != LazyBufferController::string_controller() ||
-        reinterpret_cast<std::string*>(rep_.data[0]) != _string) {
+    if (state_ != LazyBufferState::string_state() ||
+        reinterpret_cast<std::string*>(context_.data[0]) != _string) {
       _string->assign(slice_.data(), slice_.size());
     } else {
       assert(slice_.data() == _string->data());
@@ -557,20 +557,20 @@ Status LazyBuffer::dump(std::string* _string) && {
     }
   } else {
     LazyBuffer buffer(_string);
-    auto s = controller_->dump_buffer(this, &buffer);
+    auto s = state_->dump_buffer(this, &buffer);
     if (!s.ok()) {
       return s;
     }
-    assert(buffer.controller_ == LazyBufferController::string_controller());
-    assert(reinterpret_cast<std::string*>(buffer.rep_.data[0]) == _string);
+    assert(buffer.state_ == LazyBufferState::string_state());
+    assert(reinterpret_cast<std::string*>(buffer.context_.data[0]) == _string);
   }
   return Status::OK();
 }
 
-bool LazyBufferEditor::resize(size_t _size) {
+bool LazyBufferBuilder::resize(size_t _size) {
   size_t old_size = slice_.valid() ? size_ : 0;
-  controller_->uninitialized_resize(this, _size);
-  if (data_ == nullptr) {
+  state_->uninitialized_resize(this, _size);
+  if (data_ == nullptr && _size > 0) {
     return false;
   }
   if (_size > old_size) {
@@ -579,30 +579,30 @@ bool LazyBufferEditor::resize(size_t _size) {
   return true;
 }
 
-bool LazyBufferEditor::uninitialized_resize(size_t _size) {
-  controller_->uninitialized_resize(this, _size);
-  return data_ != nullptr;
+bool LazyBufferBuilder::uninitialized_resize(size_t _size) {
+  state_->uninitialized_resize(this, _size);
+  return data_ != nullptr && _size > 0;
 }
 
 LazyBuffer LazyBufferReference(const LazyBuffer& buffer) {
   if (buffer.valid()) {
-    return LazyBuffer(buffer.get_slice(), false, buffer.file_number());
+    return LazyBuffer(buffer.slice(), false, buffer.file_number());
   } else {
-    return LazyBuffer(LazyBufferController::reference_controller(),
+    return LazyBuffer(LazyBufferState::reference_state(),
                       {reinterpret_cast<uint64_t>(&buffer)}, Slice::Invalid(),
                       buffer.file_number());
   }
 }
 
 LazyBuffer LazyBufferRemoveSuffix(const LazyBuffer* buffer, size_t fixed_len) {
-  struct LazyBufferControllerImpl : public LazyBufferController {
+  struct RemoveSuffixLazyBufferState : public LazyBufferState {
     void destroy(LazyBuffer* /*buffer*/) const override {}
 
     Status fetch_buffer(LazyBuffer* buffer) const override {
-      auto rep = get_rep(buffer);
+      auto context = get_context(buffer);
       const LazyBuffer& buffer_ref =
-          *reinterpret_cast<const LazyBuffer*>(rep->data[0]);
-      uint64_t len = rep->data[1];
+          *reinterpret_cast<const LazyBuffer*>(context->data[0]);
+      uint64_t len = context->data[1];
       auto s = buffer_ref.fetch();
       if (!s.ok()) {
         return s;
@@ -614,13 +614,13 @@ LazyBuffer LazyBufferRemoveSuffix(const LazyBuffer* buffer, size_t fixed_len) {
       return s;
     }
   };
-  static LazyBufferControllerImpl controller_impl;
+  static RemoveSuffixLazyBufferState static_state;
   assert(buffer != nullptr);
   if (buffer->valid()) {
     return LazyBuffer(Slice(buffer->data(), buffer->size() - fixed_len));
   } else {
-    return LazyBuffer(&controller_impl, {reinterpret_cast<uint64_t>(buffer),
-                                         fixed_len},
+    return LazyBuffer(&static_state, {reinterpret_cast<uint64_t>(buffer),
+                                      fixed_len},
                       Slice::Invalid(), uint64_t(-1));
   }
 }

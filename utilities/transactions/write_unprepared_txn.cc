@@ -386,7 +386,7 @@ Status WriteUnpreparedTxn::RollbackInternal() {
                             &callback);
       if (s.ok()) {
         assert(lazy_val.valid());
-        s = rollback_batch.Put(cf_handle, key, lazy_val.get_slice());
+        s = rollback_batch.Put(cf_handle, key, lazy_val.slice());
         assert(s.ok());
       } else if (s.IsNotFound()) {
         s = rollback_batch.Delete(cf_handle, key);

@@ -140,7 +140,7 @@ public:
 template <bool heap_mode>
 class PatriciaRepIterator :
     public MemTableRep::Iterator,
-    public LazyBufferController,
+    public LazyBufferState,
     boost::noncopyable {
   typedef terark::Patricia::ReaderToken token_t;
 
@@ -228,17 +228,17 @@ public:
 
   virtual ~PatriciaRepIterator();
 
-  // LazyBufferController override
+  // LazyBufferState override
   virtual void destroy(LazyBuffer* /*buffer*/) const override {}
 
-  // LazyBufferController override
+  // LazyBufferState override
   virtual void pin_buffer(LazyBuffer* buffer) const override {
     if (!buffer->valid()) {
       buffer->reset(GetValue());
     }
   }
 
-  // LazyBufferController override
+  // LazyBufferState override
   Status fetch_buffer(LazyBuffer* buffer) const override {
     set_slice(buffer, GetValue());
     return Status::OK();

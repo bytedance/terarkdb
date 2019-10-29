@@ -263,7 +263,7 @@ Status WritePreparedTxn::RollbackInternal() {
                        &callback);
       assert(s.ok() ? lazy_val.valid() : s.IsNotFound());
       if (s.ok()) {
-        s = rollback_batch_->Put(cf_handle, key, lazy_val.get_slice());
+        s = rollback_batch_->Put(cf_handle, key, lazy_val.slice());
         assert(s.ok());
       } else if (s.IsNotFound()) {
         // There has been no readable value before txn. By adding a delete we

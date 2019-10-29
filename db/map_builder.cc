@@ -356,7 +356,7 @@ Status LoadRangeWithDepend(std::vector<RangeWithDepend>& ranges,
         if (!s.ok()) {
           return s;
         }
-        if (!map_element.Decode(iter->key(), value.get_slice())) {
+        if (!map_element.Decode(iter->key(), value.slice())) {
           return Status::Corruption("Map sst invalid key or value");
         }
         ranges.emplace_back(map_element);
