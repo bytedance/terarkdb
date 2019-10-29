@@ -253,6 +253,7 @@ private:
   long long t0 = 0;
   size_t prefixLen_;
   double compaction_load_;
+  double gc_load_;
 };
 
 

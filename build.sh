@@ -12,7 +12,8 @@ if test -n "$BUILD_BRANCH"; then
     git checkout "$BUILD_BRANCH"
 fi
 
-BRANCH_NAME=`git rev-parse --abbrev-ref HEAD`
+BRANCH_NAME="dev"
+#`git rev-parse --abbrev-ref HEAD`
 # clone terark-zip-rocksdb: terark-rocksdb depends on some header files from zip-rocksdb
 
 if test -n "$BUILD_BRANCH"; then
@@ -31,13 +32,13 @@ make LINK_TERARK=static \
      DEBUG_LEVEL=0 shared_lib -j $cpuNum
 
 make LINK_TERARK=static \
-     TERARK_CORE_BRANCH=$BRANCH_NAME\
+     TERARK_CORE_BRANCH=$BRANCH_NAME \
      BMI2=$WITH_BMI2 \
      DISABLE_WARNING_AS_ERROR=1 \
      DEBUG_LEVEL=1 shared_lib -j $cpuNum
 
 make LINK_TERARK=static \
-     TERARK_CORE_BRANCH=$BRANCH_NAME\
+     TERARK_CORE_BRANCH=$BRANCH_NAME \
      BMI2=$WITH_BMI2 \
      DISABLE_WARNING_AS_ERROR=1 \
      DEBUG_LEVEL=2 shared_lib -j $cpuNum

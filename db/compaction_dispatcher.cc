@@ -724,7 +724,7 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
             immutable_cf_options, mutable_cf_options, *icmp,
             &int_tbl_prop_collector_factories.data, context.compression,
             context.compression_opts, nullptr, true, false, context.cf_name,
-            -1, 0);
+            -1, 0, 0);
         std::unique_ptr<WritableFile> sst_file;
         s = rep_->env->NewWritableFile(file_name, &sst_file, rep_->env_options);
         if (!s.ok()) {
