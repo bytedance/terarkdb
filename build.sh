@@ -8,12 +8,13 @@ else
 fi
 WITH_BMI2=1
 
-if test -n "$BUILD_BRANCH"; then
-    git checkout "$BUILD_BRANCH"
+if test -z "$BRANCH_NAME"; then
+    if test -n "$BUILD_BRANCH"; then
+        git checkout "$BUILD_BRANCH"
+    fi
+    BRANCH_NAME=`git rev-parse --abbrev-ref HEAD`
 fi
 
-BRANCH_NAME="dev"
-#`git rev-parse --abbrev-ref HEAD`
 # clone terark-zip-rocksdb: terark-rocksdb depends on some header files from zip-rocksdb
 
 if test -n "$BUILD_BRANCH"; then
