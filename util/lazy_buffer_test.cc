@@ -77,7 +77,9 @@ TEST_F(LazyBufferTest, BufferState) {
     ASSERT_TRUE(b.valid());
     ASSERT_FALSE(builder->resize(size_t(-1)));
     ASSERT_NOK(builder->fetch());
+    ASSERT_FALSE(builder->resize(3));
 
+    ASSERT_TRUE(builder->resize(0));
     ASSERT_TRUE(builder->resize(3));
     ::memcpy(builder->data(), "LOL", 3);
     ASSERT_EQ(b.slice(), "LOL");
@@ -85,7 +87,14 @@ TEST_F(LazyBufferTest, BufferState) {
     ASSERT_TRUE(builder->resize(4));
     ASSERT_EQ(b.slice(), Slice("LOL\0", 4));
 
+    b.reset(Status::BadAlloc());
+    builder = b.get_builder();
+    ASSERT_FALSE(builder->resize(1));
     ASSERT_TRUE(builder->resize(0));
+    ASSERT_TRUE(b.empty());
+
+    b.reset(Status::BadAlloc());
+    b.reset("", true);
     ASSERT_TRUE(b.empty());
 
   };
@@ -93,6 +102,7 @@ TEST_F(LazyBufferTest, BufferState) {
   ASSERT_EQ(buffer.TEST_state(), LazyBufferState::buffer_state());
   ASSERT_NOK(buffer.fetch());
   ASSERT_NOK(buffer.fetch()); // test fetch twice
+  buffer.clear();
   test(buffer);
 
   buffer.clear();
@@ -197,6 +207,51 @@ TEST_F(LazyBufferTest, CleanableState) {
 
   buffer.clear();
   ASSERT_EQ(string, "empty");
+
+}
+
+
+TEST_F(LazyBufferTest, Constructor) {
+
+  {   // empty
+    LazyBuffer buffer;
+    ASSERT_EQ(buffer.TEST_state(), LazyBufferState::light_state());
+    ASSERT_TRUE(buffer.valid());
+    ASSERT_EQ(buffer.slice(), "");
+  }{  // uninitialized resize
+    LazyBuffer buffer(size_t(0));
+    ASSERT_EQ(buffer.TEST_state(), LazyBufferState::light_state());
+    ASSERT_TRUE(buffer.valid());
+    ASSERT_TRUE(buffer.empty());
+  }{  // uninitialized resize
+    LazyBuffer buffer(10);
+    ASSERT_EQ(buffer.TEST_state(), LazyBufferState::light_state());
+    ASSERT_TRUE(buffer.valid());
+    ASSERT_EQ(buffer.size(), 10);
+  }{  // uninitialized resize
+    LazyBuffer buffer(100);
+    ASSERT_EQ(buffer.TEST_state(), LazyBufferState::buffer_state());
+    ASSERT_TRUE(buffer.valid());
+    ASSERT_EQ(buffer.size(), 100);
+  }{  // move
+    LazyBuffer buffer(LazyBuffer("abc", true));
+    ASSERT_EQ(buffer.TEST_state(), LazyBufferState::light_state());
+    ASSERT_TRUE(buffer.valid());
+    ASSERT_EQ(buffer.slice(), "abc");
+  }{  // move
+    std::string string = "abc";
+    LazyBuffer buffer(LazyBuffer(((void)0, &string)));
+    ASSERT_EQ(buffer.TEST_state(), LazyBufferState::string_state());
+    ASSERT_TRUE(buffer.valid());
+    ASSERT_EQ(buffer.slice(), string);
+  }{  // move
+    LazyBuffer buffer_move;
+    buffer_move.get_builder()->resize(100);
+    LazyBuffer buffer(std::move(buffer_move));
+    ASSERT_EQ(buffer.TEST_state(), LazyBufferState::buffer_state());
+    ASSERT_TRUE(buffer.valid());
+    ASSERT_EQ(buffer.size(), 100);
+  }
 
 }
 
