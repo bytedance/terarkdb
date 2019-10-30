@@ -35,15 +35,37 @@ bool StringAppendTESTOperator::FullMergeV2(
 
   // Only print the delimiter after the first entry has been printed
   bool printDelim = false;
-  std::string* buffer = merge_out->new_value.trans_to_string();
+  auto builder = merge_out->new_value.get_builder();
+  size_t pos = 0;
+  size_t cap = 0;
+  if (!builder->valid()) {
+    return true;
+  }
+  auto append = [builder, &pos, &cap](const void* data, size_t size) {
+    if (size == 0) {
+      return true;
+    }
+    size_t new_pos = pos + size;
+    if (new_pos > cap) {
+      cap = std::max(new_pos, size_t(cap * 1.5));
+      if (!builder->uninitialized_resize(cap)) {
+        return false;
+      }
+    }
+    ::memcpy(builder->data() + pos, data, size);
+    pos = new_pos;
+    return true;
+  };
 
   // Prepend the *existing_value if one exists.
   if (merge_in.existing_value) {
     if (!Fetch(*merge_in.existing_value, &merge_out->new_value)) {
       return true;
     }
-    buffer->append(merge_in.existing_value->data(),
-                   merge_in.existing_value->size());
+    if (!append(merge_in.existing_value->data(),
+                merge_in.existing_value->size())) {
+      return true;
+    }
     printDelim = true;
   }
 
@@ -51,14 +73,19 @@ bool StringAppendTESTOperator::FullMergeV2(
   for (auto it = merge_in.operand_list.begin();
        it != merge_in.operand_list.end(); ++it) {
     if (printDelim) {
-      buffer->append(1, delim_);
+      if (!append(&delim_, 1)) {
+        return true;
+      }
     }
     if (!Fetch(*it, &merge_out->new_value)) {
       return true;
     }
-    buffer->append(it->data(), it->size());
+    if (!append(it->data(), it->size())) {
+      return true;
+    }
     printDelim = true;
   }
+  builder->uninitialized_resize(pos);
 
   return true;
 }

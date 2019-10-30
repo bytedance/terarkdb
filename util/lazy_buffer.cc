@@ -90,8 +90,6 @@ class BufferLazyBufferState : public LazyBufferState {
     auto context = union_cast<Context>(get_context(buffer));
     if (context->buffer.uninitialized_resize == nullptr) {
       ::free(context->buffer.handle);
-    } else {
-      context->buffer.uninitialized_resize(context->buffer.handle, 0);
     }
     context->status.~Status();
   }
@@ -305,7 +303,7 @@ void LazyBufferState::uninitialized_resize(LazyBuffer* buffer,
   } else {
     LazyBuffer tmp(size);
     auto context = union_cast<BufferLazyBufferState::Context>(&tmp.context_);
-    if (context->status.ok()) {
+    if (context->status.ok() && copy_size > 0) {
       ::memcpy(tmp.data_, buffer->data_, copy_size);
     }
     destroy(buffer);
@@ -555,6 +553,7 @@ Status LazyBuffer::dump(LazyBufferCustomizeBuffer _buffer) && {
              reinterpret_cast<uint64_t>(_buffer.uninitialized_resize));
     }
   } else {
+    assert(state_ != LazyBufferState::buffer_state());
     LazyBuffer buffer(_buffer);
     auto s = state_->dump_buffer(this, &buffer);
     if (!s.ok()) {
@@ -571,13 +570,23 @@ Status LazyBuffer::dump(LazyBufferCustomizeBuffer _buffer) && {
 
 Status LazyBuffer::dump(std::string* _string) && {
   assert(state_ != nullptr);
-  if (slice_.valid()) {
-    if (state_ != LazyBufferState::string_state() ||
-        reinterpret_cast<std::string*>(context_.data[0]) != _string) {
+  if (state_ == LazyBufferState::string_state()) {
+    auto context = union_cast<StringLazyBufferState::Context>(&context_);
+    if (!context->status.ok()) {
+      return std::move(context->status);
+    }
+    assert(!valid() || (data_ == context->string->data() &&
+                        size_ == context->string->size()));
+    if (context->string != _string) {
+      *_string = std::move(*context->string);
+    }
+  } else if (slice_.valid()) {
+    try {
       _string->assign(slice_.data(), slice_.size());
-    } else {
-      assert(slice_.data() == _string->data());
-      assert(slice_.size() == _string->size());
+    } catch (const std::bad_alloc&) {
+      return Status::BadAlloc();
+    } catch (const std::exception& ex) {
+      return Status::Aborted(ex.what());
     }
   } else {
     LazyBuffer buffer(_string);
@@ -596,6 +605,7 @@ bool LazyBufferBuilder::resize(size_t _size) {
   state_->uninitialized_resize(this, _size);
   assert(size_ != 0 || data_ != nullptr);
   if (data_ == nullptr) {
+    assert(size_ == size_t(-1));
     return false;
   }
   if (_size > old_size) {
@@ -607,7 +617,11 @@ bool LazyBufferBuilder::resize(size_t _size) {
 bool LazyBufferBuilder::uninitialized_resize(size_t _size) {
   state_->uninitialized_resize(this, _size);
   assert(size_ != 0 || data_ != nullptr);
-  return data_ != nullptr;
+  if (data_ == nullptr) {
+    assert(size_ == size_t(-1));
+    return false;
+  }
+  return true;
 }
 
 LazyBuffer LazyBufferReference(const LazyBuffer& buffer) {
