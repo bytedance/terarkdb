@@ -79,6 +79,7 @@ public:
   uint64_t FileSize() const override;
   TableProperties GetTableProperties() const override;
   bool NeedCompact() const override { return compaction_load_ > 0.1; }
+  bool NeedGC() const { return gc_load_ > 0.1; }
   void SetSecondPassIterator(InternalIterator* reader) override {
     if (!table_options_.disableSecondPassIter) {
       second_pass_iter_ = reader;
