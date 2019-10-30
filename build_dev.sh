@@ -8,28 +8,33 @@ else
 fi
 WITH_BMI2=1
 
-
-if test -n "$BUILD_BRANCH"; then
-    # this script is run in SCM auto build
-    git checkout "$BUILD_BRANCH"
+if test -n "$TERARKDB_BRANCH"; then
+    git checkout "$TERARKDB_BRANCH"
     sudo apt-get update
     sudo apt-get install libaio-dev
 else
     echo you must ensure libaio-dev have been installed
 fi
 
+if test -z "$CORE_BRANCH"; then
+     CORE_BRANCH=`git rev-parse --abbrev-ref HEAD`
+fi
 # build targets
+while 
 make LINK_TERARK=static \
+     TERARK_CORE_BRANCH=$CORE_BRANCH \
      BMI2=$WITH_BMI2 \
      DISABLE_WARNING_AS_ERROR=1 \
      DEBUG_LEVEL=0 shared_lib -j $cpuNum
 
 make LINK_TERARK=static \
+     TERARK_CORE_BRANCH=$CORE_BRANCH\
      BMI2=$WITH_BMI2 \
      DISABLE_WARNING_AS_ERROR=1 \
      DEBUG_LEVEL=1 shared_lib -j $cpuNum
 
 make LINK_TERARK=static \
+     TERARK_CORE_BRANCH=$CORE_BRANCH\
      BMI2=$WITH_BMI2 \
      DISABLE_WARNING_AS_ERROR=1 \
      DEBUG_LEVEL=2 shared_lib -j $cpuNum

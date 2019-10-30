@@ -1,0 +1,4 @@
+[submodule "terark-core"]
+	path = terark-core
+	url = git@code.byted.org:storage/terark-core.git
+	branch = dev
