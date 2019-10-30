@@ -35,12 +35,19 @@ make LINK_TERARK=static \
      DISABLE_WARNING_AS_ERROR=1 \
      DEBUG_LEVEL=2 shared_lib -j $cpuNum
 
+# static library
+make LINK_TERARK=static \
+     BMI2=$WITH_BMI2 \
+     DISABLE_WARNING_AS_ERROR=1 \
+     DEBUG_LEVEL=0 static_lib -j $cpuNum
+
 pkgdir=output
 rm -rf $pkgdir
 
 # copy all header files
 mkdir -p $pkgdir
 mkdir -p $pkgdir/lib
+mkdir -p $pkgdir/lib_static
 
 cp -r include      $pkgdir
 cp -r db           $pkgdir/include
@@ -67,5 +74,6 @@ PLATFORM_DIR=$SYSTEM-$COMPILER-bmi2-$WITH_BMI2
 cp -a shared-objects/build/$PLATFORM_DIR/dbg-0/librocksdb* $pkgdir/lib
 cp -a shared-objects/build/$PLATFORM_DIR/dbg-1/librocksdb* $pkgdir/lib
 cp -a shared-objects/build/$PLATFORM_DIR/dbg-2/librocksdb* $pkgdir/lib
+cp -a librocksdb*.a $pkgdir/lib_static
 
 echo "build and package successful!"
