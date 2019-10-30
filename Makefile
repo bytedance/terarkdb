@@ -116,11 +116,7 @@ BUILD_NAME := $(shell bash get_terark_build_name.sh ${CXX} ${BMI2})
 BUILD_ROOT := build/${BUILD_NAME}
 xdir:=${BUILD_ROOT}/dbg-${DEBUG_LEVEL}
 
-ifdef TERARK_CORE_BRANCH
-  TERARK_CORE_HOME := terark-core
-else
-  TERARK_CORE_HOME ?= ../terark-core
-endif
+TERARK_CORE_HOME ?= terark-core
 TERARK_CORE_PKG_DIR := ${TERARK_CORE_HOME}/pkg/terark-fsa_all-${BUILD_NAME}
 
 CXXFLAGS += -march=haswell
@@ -129,12 +125,11 @@ CXXFLAGS += -I${TERARK_CORE_HOME}/src -I${TERARK_CORE_HOME}/boost-include -I${TE
 #------------------------------------------------------------------------------
 ifeq (${TERARK_CORE_HOME},terark-core)
 terark-core.got:
+ifdef TERARK_CORE_BRANCH
 	rm -rf terark-core
 	git clone git@code.byted.org:storage/terark-core.git
-ifdef TERARK_CORE_BRANCH
-	cd terark-core && git checkout ${TERARK_CORE_BRANCH}
+	cd terark-core && git checkout ${TERARK_CORE_BRANCH} && git submodule update --init
 endif
-	cd terark-core && git submodule update --init
 	+$(MAKE) -C terark-core pkg PKG_WITH_DBG=1 PKG_WITH_STATIC=1 WITH_BMI2=${BMI2}
 	touch $@
 endif

@@ -6,7 +6,6 @@ if [ `uname` == Darwin ]; then
 else
 	cpuNum=`nproc`
 fi
-WITH_BMI2=1
 
 if test -n "$TERARKDB_BRANCH"; then
     git checkout "$TERARKDB_BRANCH"
@@ -19,26 +18,34 @@ fi
 if test -z "$CORE_BRANCH"; then
      CORE_BRANCH=`git rev-parse --abbrev-ref HEAD`
 fi
-# build targets
-while 
-make LINK_TERARK=static \
-     TERARK_CORE_BRANCH=$CORE_BRANCH \
-     BMI2=$WITH_BMI2 \
-     DISABLE_WARNING_AS_ERROR=1 \
-     DEBUG_LEVEL=0 shared_lib -j $cpuNum
 
-make LINK_TERARK=static \
-     TERARK_CORE_BRANCH=$CORE_BRANCH\
-     BMI2=$WITH_BMI2 \
-     DISABLE_WARNING_AS_ERROR=1 \
-     DEBUG_LEVEL=1 shared_lib -j $cpuNum
+WITH_BMI2=1
+LINK_TERARK='shared_lib'
 
-make LINK_TERARK=static \
-     TERARK_CORE_BRANCH=$CORE_BRANCH\
-     BMI2=$WITH_BMI2 \
-     DISABLE_WARNING_AS_ERROR=1 \
-     DEBUG_LEVEL=2 shared_lib -j $cpuNum
-
+while getopts 'sadr' OPT; do
+    case $OPT in
+        s)
+            LINK_TERARK='static_lib';;
+        r)
+            make LINK_TERARK=static \
+                 TERARK_CORE_BRANCH=$CORE_BRANCH \
+                 BMI2=$WITH_BMI2 \
+                 DISABLE_WARNING_AS_ERROR=1 \
+                 DEBUG_LEVEL=0 $LINK_TERARK -j $cpuNum;;
+        a)    
+            make LINK_TERARK=static \
+                 TERARK_CORE_BRANCH=$CORE_BRANCH\
+                 BMI2=$WITH_BMI2 \
+                 DISABLE_WARNING_AS_ERROR=1 \
+                 DEBUG_LEVEL=1 $LINK_TERARK -j $cpuNum;;
+        d)
+            make LINK_TERARK=static \
+                 TERARK_CORE_BRANCH=$CORE_BRANCH\
+                 BMI2=$WITH_BMI2 \
+                 DISABLE_WARNING_AS_ERROR=1 \
+                 DEBUG_LEVEL=2 $LINK_TERARK -j $cpuNum;;
+    esac
+done
 pkgdir=output
 rm -rf $pkgdir
 
@@ -68,8 +75,10 @@ PLATFORM_DIR=$SYSTEM-$COMPILER-bmi2-$WITH_BMI2
 #echo build/$PLATFORM_DIR/shared_lib/dbg-0/
 
 # copy terark-rocksdb dynamic lib
-cp -a shared-objects/build/$PLATFORM_DIR/dbg-0/librocksdb* $pkgdir/lib
-cp -a shared-objects/build/$PLATFORM_DIR/dbg-1/librocksdb* $pkgdir/lib
-cp -a shared-objects/build/$PLATFORM_DIR/dbg-2/librocksdb* $pkgdir/lib
+if [ "$LINK_TERARK" == 'shared_lib' ]; then
+    cp -a shared-objects/build/$PLATFORM_DIR/dbg-0/librocksdb* $pkgdir/lib
+    cp -a shared-objects/build/$PLATFORM_DIR/dbg-1/librocksdb* $pkgdir/lib
+    cp -a shared-objects/build/$PLATFORM_DIR/dbg-2/librocksdb* $pkgdir/lib
+fi
 
 echo "build and package successful!"

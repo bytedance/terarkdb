@@ -8,6 +8,7 @@ else
 fi
 WITH_BMI2=1
 
+git submodule update --init
 
 if test -n "$BUILD_BRANCH"; then
     # this script is run in SCM auto build
