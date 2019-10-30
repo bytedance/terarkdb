@@ -1,0 +1,6 @@
+CMakeCache.txt
+CMakeFiles/
+Makefile
+basic_test_shared
+basic_test_static
+cmake_install.cmake

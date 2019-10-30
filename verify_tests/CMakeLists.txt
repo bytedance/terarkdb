@@ -1,0 +1,16 @@
+CMAKE_MINIMUM_REQUIRED(VERSION 3.0.2)
+PROJECT(basic_test)
+
+SET(CMAKE_CXX_STANDARD 11)
+SET(CMAKE_CXX_STANDARD_REQUIRED ON)
+SET(CMAKE_CXX_EXTENSIONS OFF)
+
+SET(CMAKE_RULE_MESSAGES OFF)
+SET(CMAKE_VERBOSE_MAKEFILE ON)
+
+
+INCLUDE_DIRECTORIES(../output/include/ /usr/include)
+
+LINK_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/../output/lib_static ${CMAKE_CURRENT_SOURCE_DIR}/../ /usr/local/lib)
+ADD_EXECUTABLE(basic_test_static basic_test.cc)
+TARGET_LINK_LIBRARIES(basic_test_static rocksdb lz4 z snappy pthread gomp aio rt)
