@@ -459,6 +459,7 @@ LIB_CC_OBJECTS = $(LIBOBJECTS)
 
 ifeq (${TERARK_CORE_HOME},terark-core)
 ${LIB_SOURCES} ${LIB_SOURCES:.cc=.o} : terark-core.got
+${LIB_SOURCES} ${LIB_SOURCES:.cc=.o} : CXXFLAGS += -Wno-unused-parameter
 endif
 
 ifeq ($(HAVE_POWER8),1)

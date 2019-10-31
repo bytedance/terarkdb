@@ -11,11 +11,16 @@ WITH_BMI2=1
 if test -n "$BUILD_BRANCH"; then
     # this script is run in SCM auto build
     git checkout "$BUILD_BRANCH"
-    git submodule update --init --recursive
     sudo apt-get update
     sudo apt-get install libaio-dev
 else
     echo you must ensure libaio-dev have been installed
+fi
+
+if test -z "$NO_INIT"; then
+  if [ ! -f "terark-core.got" ]; then
+    git submodule update --init --recursive
+  fi
 fi
 
 export BUNDLE_ALL_TERARK_STATIC=${BUNDLE_ALL_TERARK_STATIC:-1}
