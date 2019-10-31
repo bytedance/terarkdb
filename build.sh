@@ -19,26 +19,30 @@ else
     echo you must ensure libaio-dev have been installed
 fi
 
-# build targets
+# # build targets
 make LINK_TERARK=static \
-     BMI2=$WITH_BMI2 \
-     DISABLE_WARNING_AS_ERROR=1 \
-     DEBUG_LEVEL=0 shared_lib -j $cpuNum
+    BMI2=$WITH_BMI2 \
+    DISABLE_WARNING_AS_ERROR=1 \
+    BUNDLE_ALL_TERARK_STATIC=1 \
+    DEBUG_LEVEL=0 shared_lib -j $cpuNum
 
 make LINK_TERARK=static \
-     BMI2=$WITH_BMI2 \
-     DISABLE_WARNING_AS_ERROR=1 \
-     DEBUG_LEVEL=1 shared_lib -j $cpuNum
+    BMI2=$WITH_BMI2 \
+    DISABLE_WARNING_AS_ERROR=1 \
+    BUNDLE_ALL_TERARK_STATIC=1 \
+    DEBUG_LEVEL=1 shared_lib -j $cpuNum
 
 make LINK_TERARK=static \
-     BMI2=$WITH_BMI2 \
-     DISABLE_WARNING_AS_ERROR=1 \
-     DEBUG_LEVEL=2 shared_lib -j $cpuNum
+    BMI2=$WITH_BMI2 \
+    DISABLE_WARNING_AS_ERROR=1 \
+    BUNDLE_ALL_TERARK_STATIC=1 \
+    DEBUG_LEVEL=2 shared_lib -j $cpuNum
 
 # static library
 make LINK_TERARK=static \
      BMI2=$WITH_BMI2 \
      DISABLE_WARNING_AS_ERROR=1 \
+     BUNDLE_ALL_TERARK_STATIC=1 \
      DEBUG_LEVEL=0 static_lib -j $cpuNum
 
 pkgdir=output
