@@ -43,7 +43,13 @@ Status CompactedDBImpl::Get(const ReadOptions& options, ColumnFamilyHandle*,
   GetContext get_context(user_comparator_, nullptr, nullptr, nullptr,
                          GetContext::kNotFound, key, value, nullptr, nullptr,
                          version_, nullptr, nullptr);
-  LookupKey lkey(key, kMaxSequenceNumber);
+  SequenceNumber snapshot;
+  if (options.snapshot != nullptr) {
+    snapshot = reinterpret_cast<const SnapshotImpl*>(options.snapshot)->number_;
+  } else {
+    snapshot = kMaxSequenceNumber;
+  }
+  LookupKey lkey(key, snapshot);
   files_.files[FindFile(key)].fd.table_reader->Get(options, lkey.internal_key(),
                                                    &get_context, nullptr);
   if (get_context.State() == GetContext::kFound) {
@@ -58,12 +64,18 @@ std::vector<Status> CompactedDBImpl::MultiGet(const ReadOptions& options,
     const std::vector<ColumnFamilyHandle*>&,
     const std::vector<Slice>& keys, std::vector<std::string>* values) {
   autovector<TableReader*, 16> reader_list;
+  SequenceNumber snapshot;
+  if (options.snapshot != nullptr) {
+    snapshot = reinterpret_cast<const SnapshotImpl*>(options.snapshot)->number_;
+  } else {
+    snapshot = kMaxSequenceNumber;
+  }
   for (const auto& key : keys) {
     const FdWithKeyRange& f = files_.files[FindFile(key)];
     if (user_comparator_->Compare(key, ExtractUserKey(f.smallest_key)) < 0) {
       reader_list.push_back(nullptr);
     } else {
-      LookupKey lkey(key, kMaxSequenceNumber);
+      LookupKey lkey(key, snapshot);
       f.fd.table_reader->Prepare(lkey.internal_key());
       reader_list.push_back(f.fd.table_reader);
     }
