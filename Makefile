@@ -126,8 +126,6 @@ CXXFLAGS += -I${TERARK_CORE_HOME}/src -I${TERARK_CORE_HOME}/boost-include -I${TE
 ifeq (${TERARK_CORE_HOME},terark-core)
 terark-core.got:
 ifdef TERARK_CORE_BRANCH
-	rm -rf terark-core
-	git clone git@code.byted.org:storage/terark-core.git
 	cd terark-core && git checkout ${TERARK_CORE_BRANCH} && git submodule update --init
 endif
 	+$(MAKE) -C terark-core pkg PKG_WITH_DBG=1 PKG_WITH_STATIC=1 WITH_BMI2=${BMI2}
