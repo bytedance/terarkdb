@@ -459,7 +459,9 @@ endif
 LIBOBJECTS = $(addprefix ${xdir}/, $(LIB_SOURCES:.cc=.o))
 LIB_CC_OBJECTS = $(LIBOBJECTS)
 
+ifeq (${TERARK_CORE_HOME},terark-core)
 ${LIB_SOURCES} ${LIB_SOURCES:.cc=.o} : terark-core.got
+endif
 
 ifeq ($(HAVE_POWER8),1)
 LIBOBJECTS += $(addprefix ${xdir}/, $(LIB_SOURCES_C:.c=.o))
