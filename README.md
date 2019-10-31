@@ -1,31 +1,60 @@
-## RocksDB: A Persistent Key-Value Store for Flash and RAM Storage
+# TerarkDB
 
-[![Linux/Mac Build Status](https://travis-ci.org/facebook/rocksdb.svg?branch=master)](https://travis-ci.org/facebook/rocksdb)
-[![Windows Build status](https://ci.appveyor.com/api/projects/status/fbgfu0so3afcno78/branch/master?svg=true)](https://ci.appveyor.com/project/Facebook/rocksdb/branch/master)
-[![PPC64le Build Status](http://140.211.168.68:8080/buildStatus/icon?job=Rocksdb)](http://140.211.168.68:8080/job/Rocksdb)
+## Dependencies
+- terark-core
+  - Terark's core algorithms, including CO-Index and PA-Zip etc.
 
-RocksDB is developed and maintained by Facebook Database Engineering Team.
-It is built on earlier work on LevelDB by Sanjay Ghemawat (sanjay@google.com)
-and Jeff Dean (jeff@google.com)
+## Documentation
+[Documentation](https://bytedance.feishu.cn/space/doc/doccnPkcQEZ10MmaIKZTow#)
 
-This code is a library that forms the core building block for a fast
-key value server, especially suited for storing data on flash drives.
-It has a Log-Structured-Merge-Database (LSM) design with flexible tradeoffs
-between Write-Amplification-Factor (WAF), Read-Amplification-Factor (RAF)
-and Space-Amplification-Factor (SAF). It has multi-threaded compactions,
-making it specially suitable for storing multiple terabytes of data in a
-single database.
 
-Start with example usage here: https://github.com/facebook/rocksdb/tree/master/examples
+## Build
 
-See the [github wiki](https://github.com/facebook/rocksdb/wiki) for more explanation.
+1. checkout the latest tag version
+2. `./build.sh` or `env DEBUG_ENV=1 ./build.sh` for debug version
+3. find static / dynamic libraries inside output directory
 
-The public interface is in `include/`.  Callers should not include or
-rely on the details of any other header files in this package.  Those
-internal APIs may be changed without warning.
+the output directory looks like this:
 
-Design discussions are conducted in https://www.facebook.com/groups/rocksdb.dev/
+```
+output
+    \__ include
+    \__ lib_static
+        \__ librocksdb.a
+        \__ ...
+```
 
-## License
+** NOTICE:
 
-RocksDB is dual-licensed under both the GPLv2 (found in the COPYING file in the root directory) and Apache 2.0 License (found in the LICENSE.Apache file in the root directory).  You may select, at your option, one of the above-listed licenses.
+- The static library `librocksdb.a` already includes zstd, boost-filesystem and boost-fiber
+- additional requrements shoud be linked manually:
+ - `-lsnappy`
+ - `-llz4`
+ - `-lz`
+ - `-lgomp`
+ - `-laio`
+ - `-lrt`
+
+## Usage
+If you want to use it as original rocksdb, you can just include librocksdb and the headers.
+
+If you want to enable TerarkDB, then you have to pass these environment variables before you start you application, e.g.
+
+
+```
+env TerarkZipTable_localTempDir=$PWD/terark-tempdir ./app_executable
+```
+
+
+## Valgrind
+If you want to use `Valgrind`, please build terarkdb this way:
+
+```
+USE_VALGRIND=1 ./build.sh
+```
+
+And add a new env when you start your application:
+
+```
+env Terark_hasValgrind=1 ./application
+```
