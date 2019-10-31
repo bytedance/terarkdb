@@ -8,41 +8,38 @@ else
 fi
 WITH_BMI2=1
 
-git submodule update --init --recursive
-
 if test -n "$BUILD_BRANCH"; then
     # this script is run in SCM auto build
     git checkout "$BUILD_BRANCH"
+    git submodule update --init --recursive
     sudo apt-get update
     sudo apt-get install libaio-dev
 else
     echo you must ensure libaio-dev have been installed
 fi
 
+export BUNDLE_ALL_TERARK_STATIC=${BUNDLE_ALL_TERARK_STATIC:-1}
+
 # # build targets
 make LINK_TERARK=static \
     BMI2=$WITH_BMI2 \
     DISABLE_WARNING_AS_ERROR=1 \
-    BUNDLE_ALL_TERARK_STATIC=1 \
     DEBUG_LEVEL=0 shared_lib -j $cpuNum
 
 make LINK_TERARK=static \
     BMI2=$WITH_BMI2 \
     DISABLE_WARNING_AS_ERROR=1 \
-    BUNDLE_ALL_TERARK_STATIC=1 \
     DEBUG_LEVEL=1 shared_lib -j $cpuNum
 
 make LINK_TERARK=static \
     BMI2=$WITH_BMI2 \
     DISABLE_WARNING_AS_ERROR=1 \
-    BUNDLE_ALL_TERARK_STATIC=1 \
     DEBUG_LEVEL=2 shared_lib -j $cpuNum
 
 # static library
 make LINK_TERARK=static \
      BMI2=$WITH_BMI2 \
      DISABLE_WARNING_AS_ERROR=1 \
-     BUNDLE_ALL_TERARK_STATIC=1 \
      DEBUG_LEVEL=0 static_lib -j $cpuNum
 
 pkgdir=output
