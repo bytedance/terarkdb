@@ -37,7 +37,13 @@ Status DBImplReadOnly::Get(const ReadOptions& read_options,
   // TODO: stopwatch DB_GET needed?, perf timer needed?
   PERF_TIMER_GUARD(get_snapshot_time);
   Status s;
-  SequenceNumber snapshot = versions_->LastSequence();
+  SequenceNumber snapshot;
+  if (read_options.snapshot != nullptr) {
+    snapshot =
+        reinterpret_cast<const SnapshotImpl*>(read_options.snapshot)->number_;
+  } else {
+    snapshot = versions_->LastSequence();
+  }
   auto cfh = reinterpret_cast<ColumnFamilyHandleImpl*>(column_family);
   auto cfd = cfh->cfd();
   if (tracer_) {
