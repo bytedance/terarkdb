@@ -5,8 +5,10 @@
 #   USE_VALGRIND=1 ./build.sh
 #
 
+set -e
+
 VALGRIND=0
-if [ $USE_VALGRIND == 1 ];then
+if [ "$USE_VALGRIND" == "1" ]; then
   VALGRIND=1
 fi
 
