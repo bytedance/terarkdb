@@ -1,5 +1,14 @@
 #!/usr/bin/env bash
-# author : guokuankuan@bytedance.com
+#
+# usage:
+#
+#   USE_VALGRIND=1 ./build.sh
+#
+
+VALGRIND=0
+if [ $USE_VALGRIND == 1 ];then
+  VALGRIND=1
+fi
 
 if [ `uname` == Darwin ]; then
 	cpuNum=`sysctl -n machdep.cpu.thread_count`
@@ -23,26 +32,31 @@ if test -z "$NO_INIT"; then
   fi
 fi
 
+
 export BUNDLE_ALL_TERARK_STATIC=${BUNDLE_ALL_TERARK_STATIC:-1}
 
 # # build targets
 make LINK_TERARK=static \
-    BMI2=$WITH_BMI2 \
-    DISABLE_WARNING_AS_ERROR=1 \
-    DEBUG_LEVEL=0 shared_lib -j $cpuNum
+     EXTRA_CXXFLAGS="-DROCKSDB_VALGRIND_RUN=$VALGRIND" \
+     BMI2=$WITH_BMI2 \
+     DISABLE_WARNING_AS_ERROR=1 \
+     DEBUG_LEVEL=0 shared_lib -j $cpuNum
 
 make LINK_TERARK=static \
-    BMI2=$WITH_BMI2 \
-    DISABLE_WARNING_AS_ERROR=1 \
-    DEBUG_LEVEL=1 shared_lib -j $cpuNum
+     EXTRA_CXXFLAGS="-DROCKSDB_VALGRIND_RUN=$VALGRIND" \
+     BMI2=$WITH_BMI2 \
+     DISABLE_WARNING_AS_ERROR=1 \
+     DEBUG_LEVEL=1 shared_lib -j $cpuNum
 
 make LINK_TERARK=static \
-    BMI2=$WITH_BMI2 \
-    DISABLE_WARNING_AS_ERROR=1 \
-    DEBUG_LEVEL=2 shared_lib -j $cpuNum
+     EXTRA_CXXFLAGS="-DROCKSDB_VALGRIND_RUN=$VALGRIND" \
+     BMI2=$WITH_BMI2 \
+     DISABLE_WARNING_AS_ERROR=1 \
+     DEBUG_LEVEL=2 shared_lib -j $cpuNum
 
 # static library
 make LINK_TERARK=static \
+     EXTRA_CXXFLAGS="-DROCKSDB_VALGRIND_RUN=$VALGRIND" \
      BMI2=$WITH_BMI2 \
      DISABLE_WARNING_AS_ERROR=1 \
      DEBUG_LEVEL=0 static_lib -j $cpuNum
