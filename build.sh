@@ -8,41 +8,44 @@ else
 fi
 WITH_BMI2=1
 
-if test -z "$BRANCH_NAME"; then
-    if test -n "$BUILD_BRANCH"; then
-        git checkout "$BUILD_BRANCH"
-    fi
-    BRANCH_NAME=`git rev-parse --abbrev-ref HEAD`
-fi
-
-# clone terark-zip-rocksdb: terark-rocksdb depends on some header files from zip-rocksdb
-
 if test -n "$BUILD_BRANCH"; then
     # this script is run in SCM auto build
+    git checkout "$BUILD_BRANCH"
     sudo apt-get update
     sudo apt-get install libaio-dev
 else
     echo you must ensure libaio-dev have been installed
 fi
 
-# build targets
+if test -z "$NO_INIT"; then
+  if [ ! -f "terark-core.got" ]; then
+    git submodule update --init --recursive
+  fi
+fi
+
+export BUNDLE_ALL_TERARK_STATIC=${BUNDLE_ALL_TERARK_STATIC:-1}
+
+# # build targets
 make LINK_TERARK=static \
-     TERARK_CORE_BRANCH=$BRANCH_NAME \
-     BMI2=$WITH_BMI2 \
-     DISABLE_WARNING_AS_ERROR=1 \
-     DEBUG_LEVEL=0 shared_lib -j $cpuNum
+    BMI2=$WITH_BMI2 \
+    DISABLE_WARNING_AS_ERROR=1 \
+    DEBUG_LEVEL=0 shared_lib -j $cpuNum
 
 make LINK_TERARK=static \
-     TERARK_CORE_BRANCH=$BRANCH_NAME \
-     BMI2=$WITH_BMI2 \
-     DISABLE_WARNING_AS_ERROR=1 \
-     DEBUG_LEVEL=1 shared_lib -j $cpuNum
+    BMI2=$WITH_BMI2 \
+    DISABLE_WARNING_AS_ERROR=1 \
+    DEBUG_LEVEL=1 shared_lib -j $cpuNum
 
 make LINK_TERARK=static \
-     TERARK_CORE_BRANCH=$BRANCH_NAME \
+    BMI2=$WITH_BMI2 \
+    DISABLE_WARNING_AS_ERROR=1 \
+    DEBUG_LEVEL=2 shared_lib -j $cpuNum
+
+# static library
+make LINK_TERARK=static \
      BMI2=$WITH_BMI2 \
      DISABLE_WARNING_AS_ERROR=1 \
-     DEBUG_LEVEL=2 shared_lib -j $cpuNum
+     DEBUG_LEVEL=0 static_lib -j $cpuNum
 
 pkgdir=output
 rm -rf $pkgdir
@@ -50,6 +53,7 @@ rm -rf $pkgdir
 # copy all header files
 mkdir -p $pkgdir
 mkdir -p $pkgdir/lib
+mkdir -p $pkgdir/lib_static
 
 cp -r include      $pkgdir
 cp -r db           $pkgdir/include
@@ -76,5 +80,6 @@ PLATFORM_DIR=$SYSTEM-$COMPILER-bmi2-$WITH_BMI2
 cp -a shared-objects/build/$PLATFORM_DIR/dbg-0/librocksdb* $pkgdir/lib
 cp -a shared-objects/build/$PLATFORM_DIR/dbg-1/librocksdb* $pkgdir/lib
 cp -a shared-objects/build/$PLATFORM_DIR/dbg-2/librocksdb* $pkgdir/lib
+cp -a librocksdb*.a $pkgdir/lib_static
 
 echo "build and package successful!"

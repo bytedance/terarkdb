@@ -294,12 +294,16 @@ class LazyBufferBuilder : private LazyBuffer {
  public:
   char* data() const { return data_; }
   using LazyBuffer::size;
-  using LazyBuffer::fetch;
 
+  using LazyBuffer::fetch;
+  using LazyBuffer::valid;
+
+  // return valid()
   // If returns false, some error happens, call fetch to get details
   // grow bytes set 0
   bool resize(size_t _size);
 
+  // return valid()
   // If returns false, some error happens, call fetch to get details
   // grow byte uninitialized
   bool uninitialized_resize(size_t _size);

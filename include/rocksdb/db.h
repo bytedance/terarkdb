@@ -373,6 +373,7 @@ class DB {
     return Get(options, DefaultColumnFamily(), key, value);
   }
 
+  static void CallOnMainStack(const std::function<void()>&);
   static void SubmitAsyncTask(std::function<void()>);
   static void SubmitAsyncTask(std::function<void()>, size_t concurrency);
   static bool TrySubmitAsyncTask(const std::function<void()>&);

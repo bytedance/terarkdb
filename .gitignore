@@ -78,7 +78,7 @@ buckifier/*.pyc
 vs2017
 /msvc14/build_version.dir
 /msvc14
-terark-core/
+/terark-core
 terark-core.got
 
 cmake-build-debug

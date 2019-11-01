@@ -2940,6 +2940,10 @@ Status DB::DestroyColumnFamilyHandle(ColumnFamilyHandle* column_family) {
 
 DB::~DB() {}
 
+void DB::CallOnMainStack(const std::function<void()>& fn) {
+  gt_fibers.m_fy.sched()->call_on_main_stack(fn);
+}
+
 void DB::SubmitAsyncTask(std::function<void()> fn) {
   gt_fibers.push(std::move(fn));
 }

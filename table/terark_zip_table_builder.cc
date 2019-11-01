@@ -185,7 +185,7 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(const TerarkZipTableFactory* table_
           tbo.compaction_load * tbo.ioptions.num_levels -
           (tbo.level + tbo.ioptions.num_levels) % tbo.ioptions.num_levels;
       if (load > 0) {
-        compaction_load_ = std::min(1., load);
+        compaction_load_ = load;
       }
     } else if (tbo.compaction_load < 0) {
       compaction_load_ = -tbo.compaction_load;
