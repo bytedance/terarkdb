@@ -1704,7 +1704,7 @@ std::unordered_map<std::string, OptionTypeInfo>
          {offset_of(&ColumnFamilyOptions::blob_size),
           OptionType::kSizeT, OptionVerificationType::kNormal, true,
           offsetof(struct MutableCFOptions, blob_size)}},
-        {"enable_lazy_compaction",
+        {"blob_gc_ratio",
          {offset_of(&ColumnFamilyOptions::blob_gc_ratio),
           OptionType::kDouble, OptionVerificationType::kNormal, true,
           offsetof(struct MutableCFOptions, blob_gc_ratio)}},

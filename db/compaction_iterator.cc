@@ -350,8 +350,6 @@ void CompactionIterator::NextFromInput() {
     if (end_ != nullptr && cmp_->Compare(ikey_.user_key, *end_) >= 0) {
       break;
     }
-    value_ =
-        separate_value_collector_.add(input_, current_key_.GetUserKey());
     iter_stats_.num_input_records++;
 
     // Update input statistics
@@ -377,6 +375,8 @@ void CompactionIterator::NextFromInput() {
       // First occurrence of this user key
       // Copy key for output
       key_ = current_key_.SetInternalKey(key_, &ikey_);
+      value_ =
+          separate_value_collector_.add(input_, current_key_.GetUserKey());
       current_user_key_ = ikey_.user_key;
       has_current_user_key_ = true;
       has_outputted_key_ = false;
@@ -399,6 +399,8 @@ void CompactionIterator::NextFromInput() {
       // if we have versions on both sides of a snapshot
       current_key_.UpdateInternalKey(ikey_.sequence, ikey_.type);
       key_ = current_key_.GetInternalKey();
+      value_ =
+          separate_value_collector_.add(input_, current_key_.GetUserKey());
       ikey_.user_key = current_key_.GetUserKey();
 
       // Note that newer version of a key is ordered before older versions. If a
