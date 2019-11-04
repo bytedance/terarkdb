@@ -1,3 +1,5 @@
+# This repo is deprecated, please use terarkdb repo directly.
+
 # TerarkDB
 
 ## Dependencies
