@@ -24,10 +24,10 @@ output
         \__ ...
 ```
 
-** NOTICE:
+**IMPORTANT NOTICE**
 
-- The static library `librocksdb.a` already includes zstd, boost-filesystem and boost-fiber
-- additional requrements shoud be linked manually:
+- The static library `librocksdb.a` already includes `zstd`, `boost-filesystem` and `boost-fiber`
+- Additional requrements shoud be linked manually:
  - `-lsnappy`
  - `-llz4`
  - `-lz`
