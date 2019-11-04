@@ -18,18 +18,13 @@
 namespace rocksdb {
 
 const char* Status::CopyState(const char* state) {
-#ifdef OS_WIN
+  assert(nullptr != state);
+  // should use strdup?
+  //   does delete[]state is equivalent to free(state) on all platforms?
   const size_t cch = std::strlen(state) + 1;  // +1 for the null terminator
-  char* result = new char[cch];
-  errno_t ret;
-  ret = strncpy_s(result, cch, state, cch - 1);
-  result[cch - 1] = '\0';
-  assert(ret == 0);
-  return result;
-#else
-  const size_t cch = std::strlen(state) + 1;  // +1 for the null terminator
-  return std::strncpy(new char[cch], state, cch);
-#endif
+  char* const  pch = new char[cch];
+  memcpy(pch, state, cch);
+  return pch;
 }
 
 static const char* msgs[static_cast<int>(Status::kMaxSubCode)] = {
@@ -119,7 +114,12 @@ std::string Status::ToString() const {
   if (subcode_ != kNone) {
     uint32_t index = static_cast<int32_t>(subcode_);
     assert(sizeof(msgs) > index);
-    result.append(msgs[index]);
+    if (index < sizeof(msgs)) {
+      result.append(msgs[index]);
+    } else {
+      result.append("Bad subcode = ");
+      result.append(tmp, snprintf(tmp, sizeof(tmp), "%d", index));
+    }
   }
 
   if (state_ != nullptr) {
