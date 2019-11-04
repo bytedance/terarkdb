@@ -1237,6 +1237,7 @@ Status Version::fetch_buffer(LazyBuffer* buffer) const {
       return Status::Corruption("Separate value missing", buf);
     }
   }
+  assert(buffer->file_number() == file_metadata->fd.GetNumber());
   return Status::OK();
 }
 
