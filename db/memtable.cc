@@ -658,6 +658,7 @@ static bool SaveValue(void* arg, const Slice& internal_key,
     if ((type == kTypeValue || type == kTypeMerge || type == kTypeValueIndex ||
          type == kTypeMergeIndex) && max_covering_tombstone_seq > seq) {
       type = kTypeRangeDeletion;
+      value.clear();
     }
     switch (type) {
       case kTypeValueIndex:
@@ -680,9 +681,6 @@ static bool SaveValue(void* arg, const Slice& internal_key,
           }
         } else if (s->value != nullptr) {
           *s->status = std::move(value).dump(*s->value);
-          if (!s->status->ok()) {
-            return false;
-          }
         }
         if (s->inplace_update_support) {
           s->mem->GetLock(s->key->user_key())->ReadUnlock();
@@ -725,7 +723,8 @@ static bool SaveValue(void* arg, const Slice& internal_key,
         }
         *s->merge_in_progress = true;
         merge_context->PushOperand(std::move(value));
-        if (merge_operator->ShouldMerge(merge_context->GetOperandsDirectionBackward())) {
+        if (merge_operator->ShouldMerge(
+                merge_context->GetOperandsDirectionBackward())) {
           *s->status = MergeHelper::TimedFullMerge(
               merge_operator, s->key->user_key(), nullptr,
               merge_context->GetOperands(), s->value, s->logger, s->statistics,
