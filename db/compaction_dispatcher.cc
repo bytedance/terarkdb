@@ -164,7 +164,6 @@ class WorkerSeparateHelper : public SeparateHelper, public LazyBufferState {
       value.reset(Status::Corruption("Separate value dependence missing"));
     } else {
       value.reset(this, {reinterpret_cast<uint64_t>(user_key.data()),
-      value.reset(this, {reinterpret_cast<uint64_t>(user_key.data()),
                          user_key.size(), sequence,
                          reinterpret_cast<uint64_t>(&*find)},
                   Slice::Invalid(), find->second->fd.GetNumber());
