@@ -654,12 +654,12 @@ Compaction* CompactionPicker::PickGarbageCollection(
     if (f->is_skip_gc || f->being_compacted) continue;
     FileInfo info = {f};
     info.num_entries = fn_num_entries(f);
-    info.score = std::min(1, (double)f->num_antiquation / info.num_entries);
-    info.estimated_size = static_cast<uint64_t>(f->fd.file_size * (1 - ratio));
-    if (info.score >= mutable_cf_options.blob_ratio || info.estimated_size <= fragment_size) {
+    info.score = std::min(1.0, (double)f->num_antiquation / info.num_entries);
+    info.estimated_size = static_cast<uint64_t>(f->fd.file_size * (1 - info.score));
+    if (info.score >= mutable_cf_options.blob_gc_ratio || info.estimated_size <= fragment_size) {
       gc_files.push_back(info);
-    } else if (f->marked_for_compaction && info.score < mutable_cf_options.blob_ratio) {
-      info.score = mutable_cf_options.blob_ratio;
+    } else if (f->marked_for_compaction && info.score < mutable_cf_options.blob_gc_ratio) {
+      info.score = mutable_cf_options.blob_gc_ratio;
       gc_files.push_back(info);
     }
   }
@@ -670,7 +670,7 @@ Compaction* CompactionPicker::PickGarbageCollection(
             [](const FileInfo& l, const FileInfo& r){ return l.score > r.score; });
 
   // Return nullptr if nothing to do.
-  if (gc_files.empty() || gc_files.front().score < mutable_cf_options.blob_ratio) {
+  if (gc_files.empty() || gc_files.front().score < mutable_cf_options.blob_gc_ratio) {
     return nullptr;
   }
   

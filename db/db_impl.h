@@ -475,6 +475,7 @@ class DBImpl : public DB {
   struct BGJobLimits {
     int max_flushes;
     int max_compactions;
+    int max_garbage_collection;
   };
   // Returns maximum background flushes and compactions allowed to be scheduled
   BGJobLimits GetBGJobLimits() const;
@@ -1122,6 +1123,10 @@ class DBImpl : public DB {
   // helper functions for adding and removing from flush & compaction queues
   void AddToCompactionQueue(ColumnFamilyData* cfd);
   ColumnFamilyData* PopFirstFromCompactionQueue();
+
+  void AddToGarbageCollectionQueue(ColumnFamilyData* cfd);
+  ColumnFamilyData* PopFirstFromGarbageCollectionQueue();
+
   FlushRequest PopFirstFromFlushQueue();
 
   // helper function to call after some of the logs_ were synced

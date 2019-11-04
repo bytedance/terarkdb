@@ -669,6 +669,8 @@ class Version : public SeparateHelper, private LazyBufferState {
   // REQUIRES: lock is held
   double GetCompactionLoad() const;
 
+  double GetGarbageCollectionLoad() const;
+
   ColumnFamilyData* cfd() const { return cfd_; }
 
   // Return the next Version in the linked list. Used for debug only

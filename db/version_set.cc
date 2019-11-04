@@ -47,6 +47,7 @@
 #include "util/coding.h"
 #include "util/file_reader_writer.h"
 #include "util/filename.h"
+#include "util/logging.h"
 #include "util/stop_watch.h"
 #include "util/string_util.h"
 #include "util/sync_point.h"
@@ -897,6 +898,25 @@ double Version::GetCompactionLoad() const {
     return 1;
   }
   return (read_amp - slowdown) / std::max(1, stop - slowdown);
+}
+
+double Version::GetGarbageCollectionLoad() const {
+  double sum = 0, antiquated = 0;
+  auto icmp = storage_info_.internal_comparator_;
+  std::shared_ptr<const TableProperties> tp;
+  for(auto f : storage_info_.LevelFiles(-1)){
+    if (f->prop.num_entries != 0){
+      sum += f->prop.num_entries;
+    } else {
+      auto s = table_cache_->GetTableProperties(
+          env_options_, *icmp, f->fd, &tp,
+          mutable_cf_options_.prefix_extractor.get(), false);     
+      if(!s.ok()) continue;
+      sum += tp->num_entries;
+    }
+    antiquated += f->num_antiquation;
+  }
+  return sum == 0 ? antiquated / sum : sum;
 }
 
 void Version::GetColumnFamilyMetaData(ColumnFamilyMetaData* cf_meta) {

@@ -1902,11 +1902,43 @@ void DBImpl::AddToCompactionQueue(ColumnFamilyData* cfd) {
 
 ColumnFamilyData* DBImpl::PopFirstFromCompactionQueue() {
   assert(!compaction_queue_.empty());
-  auto cfd = *compaction_queue_.begin();
-  compaction_queue_.pop_front();
-  assert(cfd->queued_for_compaction());
-  cfd->set_queued_for_compaction(false);
-  return cfd;
+  auto max_iter = compaction_queue_.begin();
+  double max_load = (*max_iter)->current()->GetCompactionLoad();
+  for (auto it = std::next(max_iter); it != compaction_queue_.end(); ++it){
+    double tmp_load = (*it)->current()->GetCompactionLoad();
+    if (max_load < tmp_load){
+      max_load = tmp_load;
+      max_iter = it;
+    }
+  }
+  compaction_queue_.erase(max_iter);
+  assert((*max_iter)->queued_for_compaction());
+  (*max_iter)->set_queued_for_compaction(false);
+  return *max_iter;
+}
+
+void DBImpl::AddToGarbageCollectionQueue(ColumnFamilyData* cfd) {
+  assert(!cfd->queued_for_garbage_collection());
+  cfd->Ref();
+  garbage_collection_queue_.push_back(cfd);
+  cfd->set_queued_for_garbage_collection(true);
+}
+
+ColumnFamilyData* DBImpl::PopFirstFromGarbageCollectionQueue() {
+  assert(!garbage_collection_queue_.empty());
+  auto max_iter = garbage_collection_queue_.begin();
+  double max_load = (*max_iter)->current()->GetGarbageCollectionLoad();
+  for (auto it = std::next(max_iter); it != garbage_collection_queue_.end(); ++it){
+    double tmp_load = (*it)->current()->GetGarbageCollectionLoad();
+    if (max_load < tmp_load){
+      max_load = tmp_load;
+      max_iter = it;
+    }
+  }
+  garbage_collection_queue_.erase(max_iter);
+  assert((*max_iter)->queued_for_garbage_collection());
+  (*max_iter)->set_queued_for_garbage_collection(false);
+  return *max_iter;
 }
 
 DBImpl::FlushRequest DBImpl::PopFirstFromFlushQueue() {
