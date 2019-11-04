@@ -350,7 +350,7 @@ inline bool Status::operator!=(const Status& rhs) const {
   return !(*this == rhs);
 }
 
-void Status::swap(Status& y) noexcept {
+inline void Status::swap(Status& y) noexcept {
     std::swap(code_,    y.code_);
     std::swap(subcode_, y.subcode_);
     std::swap(sev_,     y.sev_);
