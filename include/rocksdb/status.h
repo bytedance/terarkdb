@@ -276,6 +276,8 @@ class Status {
   // Returns the string "OK" for success.
   std::string ToString() const;
 
+  void swap(Status& y) noexcept;
+
  private:
   // A nullptr state_ (which is always the case for OK) means the message
   // is empty.
@@ -335,17 +337,8 @@ inline Status& Status::operator=(Status&& s)
     noexcept
 #endif
 {
-  if (this != &s) {
-    code_ = std::move(s.code_);
-    s.code_ = kOk;
-    subcode_ = std::move(s.subcode_);
-    s.subcode_ = kNone;
-    sev_ = std::move(s.sev_);
-    s.sev_ = kNoError;
-    delete[] state_;
-    state_ = nullptr;
-    std::swap(state_, s.state_);
-  }
+  this->swap(s);
+  //Status().swap(s); // s is being dead, don't care it's content
   return *this;
 }
 
@@ -355,6 +348,13 @@ inline bool Status::operator==(const Status& rhs) const {
 
 inline bool Status::operator!=(const Status& rhs) const {
   return !(*this == rhs);
+}
+
+void Status::swap(Status& y) noexcept {
+    std::swap(code_,    y.code_);
+    std::swap(subcode_, y.subcode_);
+    std::swap(sev_,     y.sev_);
+    std::swap(state_,   y.state_);
 }
 
 }  // namespace rocksdb
