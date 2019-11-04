@@ -868,10 +868,10 @@ const {
       value_cleanup.RegisterCleanup([](void* arg1, void*){ free(arg1); },
                                     buf.data(), nullptr);
       buf.risk_release_ownership();
-      get_context->SaveValue(k, LazyBuffer(v, std::move(value_cleanup)),
-                             &matched);
+      get_context->SaveValue(k, LazyBuffer(v, std::move(value_cleanup),
+                                           file_number_), &matched);
     } else {
-      get_context->SaveValue(k, LazyBuffer(v), &matched);
+      get_context->SaveValue(k, LazyBuffer(v, false, file_number_), &matched);
     }
   };
   switch (zvType) {
@@ -940,7 +940,8 @@ const {
         UnPackSequenceAndType(tag, &seq, &val_type);
         val.remove_prefix(sizeof(SequenceNumber));
         if (!get_context->SaveValue(ParsedInternalKey(user_key, seq, val_type),
-                                    LazyBuffer(val), &matched)) {
+                                    LazyBuffer(val, false, file_number_),
+                                    &matched)) {
           break;
         }
       }
@@ -1169,6 +1170,7 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
       }
     }
   }
+  subReader_.file_number_ = table_reader_options_.file_number;
   long long t1 = g_pf.now();
   subReader_.index_->BuildCache(tzto_.indexCacheRatio);
   long long t2 = g_pf.now();
@@ -1334,6 +1336,7 @@ Status TerarkZipTableMultiReader::SubIndex::Init(
     int minPreadLen,
     RandomAccessFile* fileObj,
     LruReadonlyCache* cache,
+    uint64_t file_number,
     bool warmUpIndexOnOpen,
     bool reverse) {
   TerarkZipMultiOffsetInfo offsetInfo;
@@ -1380,6 +1383,7 @@ Status TerarkZipTableMultiReader::SubIndex::Init(
         part.type_.risk_set_data((byte_t*)(baseAddress + offset), part.index_->NumKeys());
         offset += curr.type;
       }
+      part.file_number_ = file_number;
       if (part.storeUsePread_ && cache) {
         if (cache_fi_ < 0) {
           cache_fi_ = cache->open(fileFD);
@@ -1592,10 +1596,14 @@ TerarkZipTableMultiReader::Open(RandomAccessFileReader* file, uint64_t file_size
   if (global_seqno_ == kDisableGlobalSequenceNumber) {
     global_seqno_ = 0;
   }
-  s = subIndex_.Init(fstringOf(offsetBlock.data), (const byte_t*)file_data.data(),
-                     tzto_.forceMetaInMemory ? AbstractBlobStore::Dictionary(fstringOf(dict), 0, false)
-                                             : getVerifyDict(dict),
-                     tzto_.minPreadLen, file_->file(), table_factory_->cache(), tzto_.warmUpIndexOnOpen,
+  s = subIndex_.Init(fstringOf(offsetBlock.data),
+                     (const byte_t*)file_data.data(),
+                     tzto_.forceMetaInMemory
+                         ? AbstractBlobStore::Dictionary(fstringOf(dict), 0,
+                                                         false)
+                         : getVerifyDict(dict),
+                     tzto_.minPreadLen, file_->file(), table_factory_->cache(),
+                     table_reader_options_.file_number, tzto_.warmUpIndexOnOpen,
                      isReverseBytewiseOrder_);
   if (!s.ok()) {
     return s;

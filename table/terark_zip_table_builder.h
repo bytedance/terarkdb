@@ -70,8 +70,7 @@ public:
 
   ~TerarkZipTableBuilder();
 
-  void Add(const Slice& key, const LazyBuffer& value) override;
-  Status status() const override { return status_; }
+  Status Add(const Slice& key, const LazyBuffer& value) override;
   Status Finish(const TablePropertyCache* prop) override;
   Status AbortFinish(const std::exception& ex);
   void Abandon() override;
@@ -237,7 +236,6 @@ private:
   float estimateRatio_ = 0;
   size_t seqExpandSize_ = 0;
   size_t multiValueExpandSize_ = 0;
-  Status status_;
   TableProperties properties_;
   BlockBuilder range_del_block_;
   fstrvec valueBuf_; // collect multiple values for one key

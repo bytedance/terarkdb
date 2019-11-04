@@ -82,26 +82,22 @@ CuckooTableBuilder::CuckooTableBuilder(
   properties_.column_family_name = column_family_name;
 }
 
-void CuckooTableBuilder::Add(const Slice& key, const LazyBuffer& lazy_value) {
+Status CuckooTableBuilder::Add(const Slice& key, const LazyBuffer& lazy_value) {
   auto s = lazy_value.fetch();
   if (!s.ok()) {
-    status_ = s;
-    return;
+    return s;
   }
   const Slice& value = lazy_value.slice();
   if (num_entries_ >= kMaxVectorIdx - 1) {
-    status_ = Status::NotSupported("Number of keys in a file must be < 2^32-1");
-    return;
+    return Status::NotSupported("Number of keys in a file must be < 2^32-1");
   }
   ParsedInternalKey ikey;
   if (!ParseInternalKey(key, &ikey)) {
-    status_ = Status::Corruption("Unable to parse key into inernal key.");
-    return;
+    return Status::Corruption("Unable to parse key into inernal key.");
   }
   if (ikey.type != kTypeDeletion && ikey.type != kTypeValue) {
-    status_ = Status::NotSupported("Unsupported key type " +
-                                   ToString(ikey.type));
-    return;
+    return Status::NotSupported("Unsupported key type " +
+                                ToString(ikey.type));
   }
 
   // Determine if we can ignore the sequence number and value type from
@@ -116,8 +112,7 @@ void CuckooTableBuilder::Add(const Slice& key, const LazyBuffer& lazy_value) {
     key_size_ = is_last_level_file_ ? ikey.user_key.size() : key.size();
   }
   if (key_size_ != (is_last_level_file_ ? ikey.user_key.size() : key.size())) {
-    status_ = Status::NotSupported("all keys have to be the same size");
-    return;
+    return Status::NotSupported("all keys have to be the same size");
   }
 
   if (ikey.type == kTypeValue) {
@@ -126,8 +121,7 @@ void CuckooTableBuilder::Add(const Slice& key, const LazyBuffer& lazy_value) {
       value_size_ = value.size();
     }
     if (value_size_ != value.size()) {
-      status_ = Status::NotSupported("all values have to be the same size");
-      return;
+      return Status::NotSupported("all values have to be the same size");
     }
 
     if (is_last_level_file_) {
@@ -161,6 +155,7 @@ void CuckooTableBuilder::Add(const Slice& key, const LazyBuffer& lazy_value) {
       hash_table_size_ *= 2;
     }
   }
+  return Status::OK();
 }
 
 bool CuckooTableBuilder::IsDeletedKey(uint64_t idx) const {

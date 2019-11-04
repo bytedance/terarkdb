@@ -809,7 +809,10 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
         auto kv = tombstone.Serialize();
         assert(lower_bound == nullptr ||
                ucmp->Compare(*lower_bound, kv.second) < 0);
-        builder->Add(kv.first.Encode(), LazyBuffer(kv.second));
+        s = builder->Add(kv.first.Encode(), LazyBuffer(kv.second));
+        if (!s.ok()) {
+          break;
+        }
         InternalKey smallest_candidate = std::move(kv.first);
         if (lower_bound != nullptr &&
             ucmp->Compare(smallest_candidate.user_key(), *lower_bound) <= 0) {
@@ -837,10 +840,10 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
       }
       meta->marked_for_compaction = builder->NeedCompact();
     }
-    meta->prop.num_entries = builder->NumEntries();
-    meta->prop.dependence.assign(dependence.begin(), dependence.end());
-    std::sort(meta->prop.dependence.begin(), meta->prop.dependence.end());
     if (s.ok()) {
+      meta->prop.num_entries = builder->NumEntries();
+      meta->prop.dependence.assign(dependence.begin(), dependence.end());
+      std::sort(meta->prop.dependence.begin(), meta->prop.dependence.end());
       s = builder->Finish(&meta->prop);
     } else {
       builder->Abandon();
@@ -913,7 +916,10 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
       }
     }
     assert(builder);
-    builder->Add(key, value);
+    status = builder->Add(key, value);
+    if (!status.ok()) {
+      break;
+    }
     size_t current_output_file_size = builder->FileSize();
     meta.UpdateBoundaries(key, c_iter->ikey().sequence);
 

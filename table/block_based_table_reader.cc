@@ -2506,7 +2506,9 @@ Status BlockBasedTable::Get(const ReadOptions& read_options, const Slice& key,
             s = Status::Corruption(Slice());
           }
 
-          if (!get_context->SaveValue(parsed_key, LazyBuffer(biter.value()),
+          if (!get_context->SaveValue(parsed_key,
+                                      LazyBuffer(biter.value(), false,
+                                                 rep_->file_number),
                                       &matched)) {
             done = true;
             break;
