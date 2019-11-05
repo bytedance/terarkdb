@@ -404,7 +404,7 @@ Options::PrepareForBulkLoad()
   // input to the manual compaction are all at L0.
   max_background_compactions = 2;
   max_background_garbage_collections = 2;
-  
+
   // The compaction would create large files in L1.
   target_file_size_base = 256 * 1024 * 1024;
   return this;

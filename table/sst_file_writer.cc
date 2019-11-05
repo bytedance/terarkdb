@@ -237,7 +237,7 @@ Status SstFileWriter::Open(const std::string& file_path) {
       r->ioptions, r->mutable_cf_options, r->internal_comparator,
       &int_tbl_prop_collector_factories, compression_type, compression_opts,
       nullptr /* compression_dict */, r->skip_filters,
-      false /* ignore_key_type */, r->column_family_name, unknown_level, 0, 0);
+      false /* ignore_key_type */, r->column_family_name, unknown_level, 0);
   r->file_writer.reset(
       new WritableFileWriter(std::move(sst_file), file_path, r->env_options,
                              nullptr /* stats */, r->ioptions.listeners));

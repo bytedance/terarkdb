@@ -978,10 +978,10 @@ Compaction* ColumnFamilyData::PickCompaction(
 Compaction* ColumnFamilyData::PickGarbageCollection(
     const MutableCFOptions& mutable_options, LogBuffer* log_buffer) {
   auto* result = compaction_picker_->PickGarbageCollection(
-    GetName(), mutable_options, current_->storage_info(), log_buffer);
+      GetName(), mutable_options, current_->storage_info(), log_buffer);
   if (result != nullptr) {
     result->SetInputVersion(current_);
-    result->set_gc_load(current_->GetGarbageCollectionLoad());
+    result->set_compaction_load(0);
   } else {
     current_->storage_info()->SetPickGarbageCollectionFail();
   }

@@ -2309,7 +2309,7 @@ Status CompactionJob::OpenCompactionOutputFile(
       collectors, cfd->GetID(), cfd->GetName(), sub_compact->outfile.get(),
       sub_compact->compaction->output_compression(),
       sub_compact->compaction->output_compression_opts(),
-      sub_compact->compaction->output_level(), c->compaction_load(), c->gc_load(),
+      sub_compact->compaction->output_level(), c->compaction_load(),
       &sub_compact->compression_dict, skip_filters, false /* ignore_key_type */,
       output_file_creation_time, 0 /* oldest_key_time */,
       sub_compact->compaction->compaction_type() == kMapCompaction

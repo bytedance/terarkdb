@@ -300,12 +300,6 @@ class Compaction {
   //
   double compaction_load() const { return compaction_load_; }
 
-  //
-  void set_gc_load(double load) { gc_load_ = load; }
-
-  //
-  double gc_load() const { return gc_load_; }
-
   // Is this compaction creating a file in the bottom most level?
   bool bottommost_level() const { return bottommost_level_; }
 
@@ -478,9 +472,8 @@ class Compaction {
   // score that was used to pick this compaction.
   const double score_;
 
-  //
+  // for TableBuilderOptions
   double compaction_load_;
-  double gc_load_;
 
   // Is this compaction creating a file in the bottom most level?
   const bool bottommost_level_;

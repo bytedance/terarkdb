@@ -432,11 +432,6 @@ Compaction* UniversalCompactionPicker::PickCompaction(
     c = PickCompositeCompaction(cf_name, mutable_cf_options, vstorage,
                                 sorted_runs, log_buffer);
   }
-  if (c == nullptr && table_cache_ != nullptr) {
-    c = PickGarbageCollection(cf_name, mutable_cf_options, vstorage,
-                              log_buffer);
-  }
-
   if (c == nullptr && !mutable_cf_options.enable_lazy_compaction) {
     if ((c = PickDeleteTriggeredCompaction(cf_name, mutable_cf_options,
                                            vstorage, score, sorted_runs,
@@ -454,7 +449,6 @@ Compaction* UniversalCompactionPicker::PickCompaction(
   }
 
   bool allow_trivial_move =
-      c->compaction_type() != kGarbageCollection &&
       mutable_cf_options.compaction_options_universal.allow_trivial_move;
   if (c->compaction_reason() != CompactionReason::kTrivialMoveLevel &&
       allow_trivial_move) {
@@ -474,8 +468,7 @@ Compaction* UniversalCompactionPicker::PickCompaction(
 
 // validate that all the chosen files of L0 are non overlapping in time
 #ifndef NDEBUG
-  if (c->compaction_type() != kGarbageCollection &&
-      c->compaction_reason() != CompactionReason::kCompositeAmplification) {
+  if (c->compaction_reason() != CompactionReason::kCompositeAmplification) {
     struct SortedRunDebug {
       bool is_vstorage;
       int level;
@@ -1539,7 +1532,7 @@ Compaction* UniversalCompactionPicker::PickCompositeCompaction(
       return false;
     }
     auto f = find->second;
-    if (f->prop.purpose != 0) {
+    if (f->prop.purpose != 0 || f->marked_for_compaction) {
       return false;
     }
     Range r(e.smallest_key_, e.largest_key_, e.include_smallest_,

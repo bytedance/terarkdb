@@ -362,10 +362,14 @@ class ColumnFamilyData {
   // Protected by DB mutex
   void set_queued_for_flush(bool value) { queued_for_flush_ = value; }
   void set_queued_for_compaction(bool value) { queued_for_compaction_ = value; }
-  void set_queued_for_garbage_collection(bool value) { queued_for_garbage_collection_ = value; }
+  void set_queued_for_garbage_collection(bool value) {
+    queued_for_garbage_collection_ = value;
+  }
   bool queued_for_flush() { return queued_for_flush_; }
   bool queued_for_compaction() { return queued_for_compaction_; }
-  bool queued_for_garbage_collection() { return queued_for_garbage_collection_; }
+  bool queued_for_garbage_collection() {
+    return queued_for_garbage_collection_;
+  }
 
   enum class WriteStallCause {
     kNone,

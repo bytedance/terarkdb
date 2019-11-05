@@ -49,7 +49,7 @@ TableBuilder* NewTableBuilder(
     uint32_t column_family_id, const std::string& column_family_name,
     WritableFileWriter* file, const CompressionType compression_type,
     const CompressionOptions& compression_opts, int level,
-    double compaction_load, double gc_load, const std::string* compression_dict,
+    double compaction_load, const std::string* compression_dict,
     bool skip_filters, bool ignore_key_type, uint64_t creation_time,
     uint64_t oldest_key_time, SstPurpose sst_purpose) {
   assert((column_family_id ==
@@ -60,7 +60,7 @@ TableBuilder* NewTableBuilder(
                           int_tbl_prop_collector_factories, compression_type,
                           compression_opts, compression_dict, skip_filters,
                           ignore_key_type, column_family_name, level,
-                          compaction_load, gc_load, creation_time, oldest_key_time,
+                          compaction_load, creation_time, oldest_key_time,
                           sst_purpose),
       column_family_id, file);
 }
@@ -84,7 +84,7 @@ Status BuildTable(
     InternalStats* internal_stats, TableFileCreationReason reason,
     EventLogger* event_logger, int job_id, const Env::IOPriority io_priority,
     TableProperties* table_properties, int level, double compaction_load,
-    double gc_load, const uint64_t creation_time, const uint64_t oldest_key_time,
+    const uint64_t creation_time, const uint64_t oldest_key_time,
     Env::WriteLifeTimeHint write_hint) {
   assert((column_family_id ==
           TablePropertiesCollectorFactory::Context::kUnknownColumnFamily) ==
@@ -137,7 +137,7 @@ Status BuildTable(
           ioptions, mutable_cf_options, internal_comparator,
           int_tbl_prop_collector_factories, column_family_id,
           column_family_name, file_writer.get(), compression, compression_opts,
-          level, compaction_load, gc_load, nullptr /* compression_dict */,
+          level, compaction_load, nullptr /* compression_dict */,
           false /* skip_filters */, false /* ignore_key_type */, creation_time,
           oldest_key_time);
     }

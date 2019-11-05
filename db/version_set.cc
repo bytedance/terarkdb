@@ -904,19 +904,19 @@ double Version::GetGarbageCollectionLoad() const {
   double sum = 0, antiquated = 0;
   auto icmp = storage_info_.internal_comparator_;
   std::shared_ptr<const TableProperties> tp;
-  for(auto f : storage_info_.LevelFiles(-1)){
-    if (f->prop.num_entries != 0){
+  for (auto f : storage_info_.LevelFiles(-1)) {
+    if (f->prop.num_entries != 0) {
       sum += f->prop.num_entries;
     } else {
       auto s = table_cache_->GetTableProperties(
           env_options_, *icmp, f->fd, &tp,
-          mutable_cf_options_.prefix_extractor.get(), false);     
-      if(!s.ok()) continue;
+          mutable_cf_options_.prefix_extractor.get(), false);
+      if (!s.ok()) continue;
       sum += tp->num_entries;
     }
     antiquated += f->num_antiquation;
   }
-  return sum == 0 ? antiquated / sum : sum;
+  return sum > 0 ? antiquated / sum : sum;
 }
 
 void Version::GetColumnFamilyMetaData(ColumnFamilyMetaData* cf_meta) {

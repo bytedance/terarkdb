@@ -175,7 +175,7 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(const TerarkZipTableFactory* table_
                                              WritableFileWriter* file,
                                              size_t key_prefixLen)
   : table_options_(tzto), table_factory_(table_factory), ioptions_(tbo.ioptions), range_del_block_(1),
-    ignore_key_type_(tbo.ignore_key_type), prefixLen_(key_prefixLen), compaction_load_(0), gc_load_(0) {
+    ignore_key_type_(tbo.ignore_key_type), prefixLen_(key_prefixLen), compaction_load_(0) {
   try {
     singleIndexMaxSize_ = std::min(table_options_.softZipWorkingMemLimit,
                                    table_options_.singleIndexMaxSize);
@@ -185,7 +185,7 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(const TerarkZipTableFactory* table_
           tbo.compaction_load * tbo.ioptions.num_levels -
           (tbo.level + tbo.ioptions.num_levels) % tbo.ioptions.num_levels;
       if (load > 0) {
-        compaction_load_ = load;
+        compaction_load_ = std::min(1., load);
       }
     } else if (tbo.compaction_load < 0) {
       compaction_load_ = -tbo.compaction_load;

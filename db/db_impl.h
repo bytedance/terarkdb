@@ -1093,11 +1093,15 @@ class DBImpl : public DB {
   static void UnscheduleCallback(void* arg);
   void BackgroundCallCompaction(PrepickedCompaction* prepicked_compaction,
                                 Env::Priority bg_thread_pri);
+  void BackgroundCallGarbageCollection(Env::Priority bg_thread_pri);
   void BackgroundCallFlush();
   void BackgroundCallPurge();
   Status BackgroundCompaction(bool* madeProgress, JobContext* job_context,
                               LogBuffer* log_buffer,
                               PrepickedCompaction* prepicked_compaction);
+  Status BackgroundGarbageCollection(bool* madeProgress,
+                                     JobContext* job_context,
+                                     LogBuffer* log_buffer);
   Status BackgroundFlush(bool* madeProgress, JobContext* job_context,
                          LogBuffer* log_buffer, FlushReason* reason);
 

@@ -241,7 +241,6 @@ Compaction::Compaction(CompactionParams&& params)
       grandparents_(std::move(params.grandparents)),
       score_(params.score),
       compaction_load_(0),
-      gc_load_(0),
       bottommost_level_(
           IsBottommostLevel(output_level_, params.input_version, inputs_)),
       is_full_compaction_(IsFullCompaction(params.input_version, inputs_)),

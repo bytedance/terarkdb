@@ -183,14 +183,15 @@ TerarkZipAutoConfigForOnlineDB_DBOptions(struct DBOptions& dbo, size_t cpuNum) {
   dbo.max_background_compactions = 8;
   dbo.max_background_garbage_collections = 4;
   dbo.allow_concurrent_memtable_write = false;
-  dbo.max_background_jobs = 
-    dbo.max_background_compactions + 
-    dbo.max_background_flushes + 
-    dbo.max_background_garbage_collections;
+  dbo.max_background_jobs =
+      dbo.max_background_compactions +
+      dbo.max_background_flushes +
+      dbo.max_background_garbage_collections;
 
-  dbo.env->SetBackgroundThreads(dbo.max_background_compactions, rocksdb::Env::LOW);
-  dbo.env->SetBackgroundThreads(dbo.max_background_garbage_collections, rocksdb::Env::LOW);
-  dbo.env->SetBackgroundThreads(dbo.max_background_flushes    , rocksdb::Env::HIGH);
+  dbo.env->SetBackgroundThreads(
+      dbo.max_background_compactions +
+      dbo.max_background_garbage_collections, rocksdb::Env::LOW);
+  dbo.env->SetBackgroundThreads(dbo.max_background_flushes, rocksdb::Env::HIGH);
 }
 
 void TerarkZipAutoConfigForOnlineDB_CFOptions(struct TerarkZipTableOptions& tzo,
@@ -429,14 +430,15 @@ void TerarkZipDBOptionsFromEnv(DBOptions& dbo) {
   MyGetInt(dbo,  max_background_flushes    , 4);
   MyGetInt(dbo,  max_subcompactions        , 4);
   MyGetBool(dbo, allow_mmap_populate       , false);
-  dbo.max_background_jobs = 
-    dbo.max_background_flushes + 
-    dbo.max_background_compactions +
-    dbo.max_background_garbage_collections;
+  dbo.max_background_jobs =
+      dbo.max_background_flushes +
+      dbo.max_background_compactions +
+      dbo.max_background_garbage_collections;
 
-  dbo.env->SetBackgroundThreads(dbo.max_background_compactions, rocksdb::Env::LOW);
-  dbo.env->SetBackgroundThreads(dbo.max_background_garbage_collections, rocksdb::Env::LOW);
-  dbo.env->SetBackgroundThreads(dbo.max_background_flushes    , rocksdb::Env::HIGH);
+  dbo.env->SetBackgroundThreads(
+      dbo.max_background_compactions +
+      dbo.max_background_garbage_collections, rocksdb::Env::LOW);
+  dbo.env->SetBackgroundThreads(dbo.max_background_flushes, rocksdb::Env::HIGH);
   dbo.allow_mmap_reads = true;
   dbo.new_table_reader_for_compaction_inputs = false;
   dbo.max_open_files = -1;

@@ -1154,7 +1154,8 @@ namespace {
 Options GetRocksDBOptionsFromOptions(const DocumentDBOptions& options) {
   Options rocksdb_options;
   rocksdb_options.max_background_compactions = options.background_threads - 1;
-  rocksdb_options.max_background_garbage_collections = options.background_threads - 1;
+  rocksdb_options.max_background_garbage_collections =
+      options.background_threads - 1;
   rocksdb_options.max_background_flushes = 1;
   rocksdb_options.write_buffer_size = static_cast<size_t>(options.memtable_size);
   rocksdb_options.max_write_buffer_number = 6;

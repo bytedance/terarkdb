@@ -619,7 +619,7 @@ Compaction* CompactionPicker::PickGarbageCollection(
     uint64_t estimated_size;
   };
   std::vector<FileInfo> gc_files;
-  
+
   // Setting fragment_size as one eighth max_file_size prevents selecting massive
   // files to single compaction which would pin down the maximum deletable file 
   // number for a long time resulting possible storage leakage.
@@ -627,7 +627,7 @@ Compaction* CompactionPicker::PickGarbageCollection(
       MaxFileSizeForLevel(mutable_cf_options, 1, ioptions_.compaction_style);
   size_t fragment_size = max_file_size / 8;
 
-  auto fn_num_entries = [&](FileMetaData* f)->uint64_t {
+  auto fn_num_entries = [&](FileMetaData* f) -> uint64_t {
     if (f->prop.num_entries == 0) {
       std::shared_ptr<const TableProperties> tp;
       auto s = table_cache_->GetTableProperties(
@@ -649,31 +649,35 @@ Compaction* CompactionPicker::PickGarbageCollection(
   // Traverse level -1 to filter out all blob sstables needs GC.
   // 1. score more than garbage collection baseline.
   // 2. fragile files that can be reorganized
-  // 3. marked for compaction by system.
+  // 3. marked for compaction for other reasons
   for (auto f : vstorage->LevelFiles(-1)) {
     if (f->is_skip_gc || f->being_compacted) continue;
     FileInfo info = {f};
     info.num_entries = fn_num_entries(f);
     info.score = std::min(1.0, (double)f->num_antiquation / info.num_entries);
-    info.estimated_size = static_cast<uint64_t>(f->fd.file_size * (1 - info.score));
-    if (info.score >= mutable_cf_options.blob_gc_ratio || info.estimated_size <= fragment_size) {
+    info.estimated_size =
+        static_cast<uint64_t>(f->fd.file_size * (1 - info.score));
+    if (info.score >= mutable_cf_options.blob_gc_ratio ||
+        info.estimated_size <= fragment_size) {
       gc_files.push_back(info);
-    } else if (f->marked_for_compaction && info.score < mutable_cf_options.blob_gc_ratio) {
+    } else if (f->marked_for_compaction) {
       info.score = mutable_cf_options.blob_gc_ratio;
       gc_files.push_back(info);
     }
   }
-  
+
   // Sorting by ratio decreasing.
-  std::sort(gc_files.begin(),
-            gc_files.end(), 
-            [](const FileInfo& l, const FileInfo& r){ return l.score > r.score; });
+  std::sort(gc_files.begin(), gc_files.end(),
+            [](const FileInfo& l, const FileInfo& r) {
+              return l.score > r.score;
+            });
 
   // Return nullptr if nothing to do.
-  if (gc_files.empty() || gc_files.front().score < mutable_cf_options.blob_gc_ratio) {
+  if (gc_files.empty() ||
+      gc_files.front().score < mutable_cf_options.blob_gc_ratio) {
     return nullptr;
   }
-  
+
   // Set up inputs for garbage collection.
   CompactionInputFiles inputs;
   inputs.level = -1;
@@ -685,12 +689,15 @@ Compaction* CompactionPicker::PickGarbageCollection(
     if (total_estimated_size + info.estimated_size > max_file_size) continue;
     total_estimated_size += info.estimated_size;
     inputs.files.push_back(info.f);
-    if (inputs.size() >= 8) break;
+    if (inputs.size() >= 8) {
+      break;
+    }
   }
-  
+
+  int bottommost_level = vstorage->num_levels() - 1;
+
   // Set compaction params.
   CompactionParams params(vstorage, ioptions_, mutable_cf_options);
-  int bottommost_level = vstorage->num_levels() - 1;
   params.inputs = {std::move(inputs)};
   params.output_level = -1;
   params.max_compaction_bytes = LLONG_MAX;
@@ -704,7 +711,7 @@ Compaction* CompactionPicker::PickGarbageCollection(
   params.compaction_type = kGarbageCollection;
   params.compaction_reason = CompactionReason::kGarbageCollection;
 
-  return new Compaction(std::move(params));
+  return RegisterCompaction(new Compaction(std::move(params)));
 }
 
 void CompactionPicker::InitFilesBeingCompact(
@@ -1261,23 +1268,16 @@ bool LevelCompactionPicker::NeedsCompaction(
       return true;
     }
   }
-  if (!vstorage->LevelFiles(-1).empty()) {
-    return true;
-  }
   return false;
 }
 
 bool CompactionPicker::NeedsGarbageCollection(
     const VersionStorageInfo* vstorage) const {
-  if (!vstorage->ExpiredTtlFiles().empty()) {
-    return true;
-  }
   if (!vstorage->LevelFiles(-1).empty()) {
     return true;
   }
   return false;
 }
-
 
 namespace {
 // A class to build a leveled compaction step-by-step.
@@ -1687,12 +1687,7 @@ Compaction* LevelCompactionPicker::PickCompaction(
     VersionStorageInfo* vstorage, LogBuffer* log_buffer) {
   LevelCompactionBuilder builder(cf_name, vstorage, this, log_buffer,
                                  mutable_cf_options, ioptions_);
-  auto c = builder.PickCompaction();
-  if (c == nullptr) {
-    c = RegisterCompaction(PickGarbageCollection(cf_name, mutable_cf_options,
-                                                 vstorage, log_buffer));
-  }
-  return c;
+  return builder.PickCompaction();
 }
 
 }  // namespace rocksdb
