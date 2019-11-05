@@ -1207,8 +1207,8 @@ Status Version::fetch_buffer(LazyBuffer* buffer) const {
   Slice user_key(reinterpret_cast<const char*>(context->data[0]),
                  context->data[1]);
   uint64_t sequence = context->data[2];
-  const FileMetaData* file_metadata =
-      reinterpret_cast<FileMetaData*>(context->data[3]);
+  auto pair =
+      *reinterpret_cast<DependenceMap::value_type*>(context->data[3]);
   bool value_found = false;
   SequenceNumber context_seq;
   GetContext get_context(cfd_->internal_comparator().user_comparator(), nullptr,
@@ -1218,7 +1218,7 @@ Status Version::fetch_buffer(LazyBuffer* buffer) const {
   IterKey iter_key;
   iter_key.SetInternalKey(user_key, sequence, kValueTypeForSeek);
   auto s = table_cache_->Get(ReadOptions(), cfd_->internal_comparator(),
-                             *file_metadata, storage_info_.dependence_map(),
+                             *pair.second, storage_info_.dependence_map(),
                              iter_key.GetInternalKey(), &get_context,
                              mutable_cf_options_.prefix_extractor.get(),
                              nullptr, true);
@@ -1233,10 +1233,11 @@ Status Version::fetch_buffer(LazyBuffer* buffer) const {
       char buf[128];
       snprintf(buf, sizeof buf,
                "file number = %" PRIu64 "(%" PRIu64 "), sequence = %" PRIu64,
-               file_metadata->fd.GetNumber(), buffer->file_number(), sequence);
+               pair.second->fd.GetNumber(), pair.first, sequence);
       return Status::Corruption("Separate value missing", buf);
     }
   }
+  assert(buffer->file_number() == pair.second->fd.GetNumber());
   return Status::OK();
 }
 
@@ -1255,8 +1256,8 @@ void Version::TransToCombined(const Slice& user_key, uint64_t sequence,
   } else {
     value.reset(this, {reinterpret_cast<uint64_t>(user_key.data()),
                        user_key.size(), sequence,
-                       reinterpret_cast<uint64_t>(find->second)},
-                Slice::Invalid(), file_number);
+                       reinterpret_cast<uint64_t>(&*find)},
+                Slice::Invalid(), find->second->fd.GetNumber());
   }
 }
 
@@ -3349,6 +3350,9 @@ Status VersionSet::ProcessManifestWrites(
       env_->DeleteFile(
           DescriptorFileName(dbname_, pending_manifest_file_number_));
     }
+  }
+  for (auto e : batch_edits) {
+    e->DoApplyCallback(s);
   }
 
   pending_manifest_file_number_ = 0;

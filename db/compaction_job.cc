@@ -55,8 +55,8 @@
 #include "table/get_context.h"
 #include "table/merging_iterator.h"
 #include "table/table_builder.h"
-#include "util/coding.h"
 #include "util/c_style_callback.h"
+#include "util/coding.h"
 #include "util/file_reader_writer.h"
 #include "util/filename.h"
 #include "util/log_buffer.h"
@@ -1335,7 +1335,10 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
     }
     assert(sub_compact->builder != nullptr);
     assert(sub_compact->current_output() != nullptr);
-    sub_compact->builder->Add(key, value);
+    status = sub_compact->builder->Add(key, value);
+    if (!status.ok()) {
+      break;
+    }
     sub_compact->current_output_file_size = sub_compact->builder->FileSize();
     sub_compact->current_output()->meta.UpdateBoundaries(
         key, c_iter->ikey().sequence);
@@ -1660,7 +1663,10 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
 
       assert(sub_compact->builder != nullptr);
       assert(sub_compact->current_output() != nullptr);
-      sub_compact->builder->Add(curr_key, value);
+      status = sub_compact->builder->Add(curr_key, value);
+      if (!status.ok()) {
+        break;
+      }
       sub_compact->current_output_file_size = sub_compact->builder->FileSize();
       sub_compact->current_output()->meta.UpdateBoundaries(curr_key,
                                                            ikey.sequence);
@@ -1893,7 +1899,10 @@ Status CompactionJob::FinishCompactionOutputFile(
       auto kv = tombstone.Serialize();
       assert(lower_bound == nullptr ||
              ucmp->Compare(*lower_bound, kv.second) < 0);
-      sub_compact->builder->Add(kv.first.Encode(), LazyBuffer(kv.second));
+      s = sub_compact->builder->Add(kv.first.Encode(), LazyBuffer(kv.second));
+      if (!s.ok()) {
+        break;
+      }
       InternalKey smallest_candidate = std::move(kv.first);
       if (lower_bound != nullptr &&
           ucmp->Compare(smallest_candidate.user_key(), *lower_bound) <= 0) {
@@ -1959,14 +1968,15 @@ Status CompactionJob::FinishCompactionOutputFile(
                  PackSequenceAndType(0, kTypeRangeDeletion));
     }
   }
-  meta->marked_for_compaction = sub_compact->builder->NeedCompact();
-  meta->prop.num_entries = sub_compact->builder->NumEntries();
-  meta->prop.dependence.assign(dependence.begin(), dependence.end());
-  std::sort(meta->prop.dependence.begin(), meta->prop.dependence.end());
-  assert(std::is_sorted(inheritance_chain.begin(), inheritance_chain.end()));
-  meta->prop.inheritance_chain.assign(inheritance_chain.begin(),
-                                      inheritance_chain.end());
   if (s.ok()) {
+    meta->marked_for_compaction = sub_compact->builder->NeedCompact();
+    meta->prop.num_entries = sub_compact->builder->NumEntries();
+    meta->prop.dependence.assign(dependence.begin(), dependence.end());
+    std::sort(meta->prop.dependence.begin(), meta->prop.dependence.end());
+    assert(std::is_sorted(inheritance_chain.begin(), inheritance_chain.end()));
+    meta->prop.inheritance_chain.assign(inheritance_chain.begin(),
+                                        inheritance_chain.end());
+
     s = sub_compact->builder->Finish(&meta->prop);
   } else {
     sub_compact->builder->Abandon();

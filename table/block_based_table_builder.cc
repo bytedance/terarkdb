@@ -415,15 +415,14 @@ BlockBasedTableBuilder::~BlockBasedTableBuilder() {
   delete rep_;
 }
 
-void BlockBasedTableBuilder::Add(const Slice& key,
-                                 const LazyBuffer& lazy_value) {
+Status BlockBasedTableBuilder::Add(const Slice& key,
+                                   const LazyBuffer& lazy_value) {
   Rep* r = rep_;
   assert(!r->closed);
-  if (!ok()) return;
+  assert(ok());
   auto s = lazy_value.fetch();
   if (!s.ok()) {
-    r->status = s;
-    return;
+    return s;
   }
   const Slice& value = lazy_value.slice();
   ValueType value_type = ExtractValueType(key);
@@ -483,6 +482,7 @@ void BlockBasedTableBuilder::Add(const Slice& key,
   } else {
     assert(false);
   }
+  return Status::OK();
 }
 
 void BlockBasedTableBuilder::Flush() {
@@ -888,6 +888,7 @@ void BlockBasedTableBuilder::WriteRangeDelBlock(
 
 Status BlockBasedTableBuilder::Finish(const TablePropertyCache* prop) {
   Rep* r = rep_;
+  assert(r->status.ok());
   bool empty_data_block = r->data_block.empty();
   Flush();
   assert(!r->closed);

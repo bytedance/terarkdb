@@ -48,10 +48,7 @@ class PlainTableBuilder: public TableBuilder {
   // Add key,value to the table being constructed.
   // REQUIRES: key is after any previously added key according to comparator.
   // REQUIRES: Finish(), Abandon() have not been called
-  void Add(const Slice& key, const LazyBuffer& value) override;
-
-  // Return non-ok iff some error has been detected.
-  Status status() const override;
+  Status Add(const Slice& key, const LazyBuffer& value) override;
 
   // Finish building the table.  Stops using the file passed to the
   // constructor after this function returns.
@@ -90,7 +87,6 @@ class PlainTableBuilder: public TableBuilder {
   uint64_t offset_ = 0;
   uint32_t bloom_bits_per_key_;
   size_t huge_page_tlb_size_;
-  Status status_;
   TableProperties properties_;
   PlainTableKeyEncoder encoder_;
 

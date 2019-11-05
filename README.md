@@ -1,3 +1,5 @@
+# This repo is deprecated, please use terarkdb repo directly.
+
 # TerarkDB
 
 ## Dependencies
@@ -24,10 +26,10 @@ output
         \__ ...
 ```
 
-** NOTICE:
+**IMPORTANT NOTICE**
 
-- The static library `librocksdb.a` already includes zstd, boost-filesystem and boost-fiber
-- additional requrements shoud be linked manually:
+- The static library `librocksdb.a` already includes `zstd`, `boost-filesystem` and `boost-fiber`
+- Additional requrements shoud be linked manually:
  - `-lsnappy`
  - `-llz4`
  - `-lz`
@@ -58,3 +60,10 @@ And add a new env when you start your application:
 ```
 env Terark_hasValgrind=1 ./application
 ```
+
+
+## CHANGELOG
+### 2019-11-05
+- Fix rocksdb's super version bug, which may cause merge operator gets wrong value.
+- Fix terarkdb's kv seperation bug
+- Add more test cases in terark-core

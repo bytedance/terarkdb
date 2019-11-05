@@ -116,11 +116,10 @@ PlainTableBuilder::PlainTableBuilder(
 PlainTableBuilder::~PlainTableBuilder() {
 }
 
-void PlainTableBuilder::Add(const Slice& key, const LazyBuffer& lazy_value) {
+Status PlainTableBuilder::Add(const Slice& key, const LazyBuffer& lazy_value) {
   auto s = lazy_value.fetch();
   if (!s.ok()) {
-    status_ = s;
-    return;
+    return s;
   }
   const Slice& value = lazy_value.slice();
   // temp buffer for metadata bytes between key and value.
@@ -130,11 +129,10 @@ void PlainTableBuilder::Add(const Slice& key, const LazyBuffer& lazy_value) {
   ParsedInternalKey internal_key;
   if (!ParseInternalKey(key, &internal_key)) {
     assert(false);
-    return;
+    return Status::Corruption("ParseInternalKey fail");
   }
   if (internal_key.type == kTypeRangeDeletion) {
-    status_ = Status::NotSupported("Range deletion unsupported");
-    return;
+    return Status::NotSupported("Range deletion unsupported");
   }
 
   // Store key hash
@@ -183,9 +181,8 @@ void PlainTableBuilder::Add(const Slice& key, const LazyBuffer& lazy_value) {
   // notify property collectors
   NotifyCollectTableCollectorsOnAdd(
       key, value, offset_, table_properties_collectors_, ioptions_.info_log);
+  return Status::OK();
 }
-
-Status PlainTableBuilder::status() const { return status_; }
 
 Status PlainTableBuilder::Finish(const TablePropertyCache* prop) {
   assert(!closed_);

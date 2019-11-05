@@ -160,7 +160,8 @@ Status CuckooTableReader::Get(const ReadOptions& /*readOptions*/,
       // Here, we compare only the user key part as we support only one entry
       // per user key and we don't support snapshot.
       if (ucomp_->Equal(user_key, Slice(bucket, user_key.size()))) {
-        LazyBuffer value(Slice(bucket + key_length_, value_length_));
+        LazyBuffer value(Slice(bucket + key_length_, value_length_), false,
+                         file_number_);
         bool dont_care __attribute__((__unused__));
         if (is_last_level_) {
           // Sequence number is not stored at the last level, so we will use

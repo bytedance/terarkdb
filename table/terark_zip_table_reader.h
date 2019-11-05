@@ -133,6 +133,7 @@ struct TerarkZipSubReader {
   unique_ptr<TerarkIndex> index_;
   unique_ptr<terark::AbstractBlobStore> store_;
   bitfield_array<2> type_;
+  uint64_t file_number_;
 
   enum {
     FlagNone = 0,
@@ -277,6 +278,7 @@ public:
       int minPreadLen,
       RandomAccessFile* fileObj,
       LruReadonlyCache* cache,
+      uint64_t file_number,
       bool warmUpIndexOnOpen,
       bool reverse);
 

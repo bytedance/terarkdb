@@ -84,6 +84,9 @@ void VersionEdit::Clear() {
   has_min_log_number_to_keep_ = false;
   deleted_files_.clear();
   new_files_.clear();
+  delta_antiquation_.clear();
+  apply_callback_ = nullptr;
+  apply_callback_arg_ = nullptr;
   column_family_ = 0;
   is_column_family_add_ = 0;
   is_column_family_drop_ = 0;

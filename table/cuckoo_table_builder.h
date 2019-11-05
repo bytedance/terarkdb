@@ -37,10 +37,7 @@ class CuckooTableBuilder: public TableBuilder {
   // Add key,value to the table being constructed.
   // REQUIRES: key is after any previously added key according to comparator.
   // REQUIRES: Finish(), Abandon() have not been called
-  void Add(const Slice& key, const LazyBuffer& value) override;
-
-  // Return non-ok iff some error has been detected.
-  Status status() const override { return status_; }
+  Status Add(const Slice& key, const LazyBuffer& value) override;
 
   // Finish building the table.  Stops using the file passed to the
   // constructor after this function returns.
@@ -105,7 +102,6 @@ class CuckooTableBuilder: public TableBuilder {
   uint64_t num_entries_;
   // Number of keys that contain value (non-deletion op)
   uint64_t num_values_;
-  Status status_;
   TableProperties properties_;
   const Comparator* ucomp_;
   bool use_module_hash_;
