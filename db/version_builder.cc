@@ -336,6 +336,7 @@ class VersionBuilder::Rep {
               auto f = new FileMetaData(*item.f);
               f->table_reader_handle = nullptr;
               f->refs = 1;
+              f->being_compacted = false;
               UnrefFile(item.f);
               item.f = f;
             }
