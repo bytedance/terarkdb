@@ -651,7 +651,9 @@ Compaction* CompactionPicker::PickGarbageCollection(
   // 2. fragile files that can be reorganized
   // 3. marked for compaction for other reasons
   for (auto f : vstorage->LevelFiles(-1)) {
-    if (f->is_skip_gc || f->being_compacted) continue;
+    if (f->is_skip_gc || f->being_compacted) {
+      continue;
+    }
     FileInfo info = {f};
     info.num_entries = fn_num_entries(f);
     info.score = std::min(1.0, (double)f->num_antiquation / info.num_entries);

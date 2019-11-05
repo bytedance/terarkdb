@@ -905,6 +905,9 @@ double Version::GetGarbageCollectionLoad() const {
   auto icmp = storage_info_.internal_comparator_;
   std::shared_ptr<const TableProperties> tp;
   for (auto f : storage_info_.LevelFiles(-1)) {
+    if (f->is_skip_gc || f->being_compacted) {
+      continue;
+    }
     if (f->prop.num_entries != 0) {
       sum += f->prop.num_entries;
     } else {
