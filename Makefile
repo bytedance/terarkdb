@@ -1145,6 +1145,7 @@ clean:
 	$(FIND) . -type f -regex ".*\.\(\(gcda\)\|\(gcno\)\)" -exec rm {} \;
 	rm -rf bzip2* snappy* zlib* lz4* zstd*
 	rm -rf librocksdb*
+	rm -f terark-core.got
 	cd java; $(MAKE) clean
 
 tags:
