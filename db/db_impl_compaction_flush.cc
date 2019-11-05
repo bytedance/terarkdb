@@ -2991,7 +2991,8 @@ Status DBImpl::BackgroundGarbageCollection(bool* made_progress,
 #endif  // ROCKSDB_LITE
 
     NotifyOnCompactionCompleted(c->column_family_data(), c.get(), status,
-                                garbage_collection_job_stats, job_context->job_id);
+                                garbage_collection_job_stats,
+                                job_context->job_id);
   }
 
   if (status.ok() || status.IsCompactionTooLarge()) {
