@@ -428,6 +428,7 @@ ColumnFamilyData::ColumnFamilyData(
       column_family_set_(column_family_set),
       queued_for_flush_(false),
       queued_for_compaction_(false),
+      queued_for_garbage_collection_(false),
       prev_compaction_needed_bytes_(0),
       allow_2pc_(db_options.allow_2pc),
       last_memtable_id_(0) {
@@ -505,6 +506,7 @@ ColumnFamilyData::~ColumnFamilyData() {
   // compaction_queue_ and we destroyed it
   assert(!queued_for_flush_);
   assert(!queued_for_compaction_);
+  assert(!queued_for_garbage_collection_);
 
   if (super_version_ != nullptr) {
     // Release SuperVersion reference kept in ThreadLocalPtr.
