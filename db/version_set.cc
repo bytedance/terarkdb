@@ -1175,7 +1175,8 @@ VersionStorageInfo::VersionStorageInfo(
       current_num_samples_(0),
       estimated_compaction_needed_bytes_(0),
       finalized_(false),
-      is_pick_fail_(false),
+      is_pick_compaction_fail(false),
+      is_pick_garbage_collection_fail(false),
       force_consistency_checks_(_force_consistency_checks) {
   ++files_; // level -1 used for dependence files
   if (ref_vstorage != nullptr) {
@@ -1852,7 +1853,7 @@ void VersionStorageInfo::ComputeCompactionScore(
       }
     }
   }
-  is_pick_fail_ = false;
+  is_pick_compaction_fail = false;
   ComputeFilesMarkedForCompaction();
   ComputeBottommostFilesMarkedForCompaction();
   if (mutable_cf_options.ttl > 0) {

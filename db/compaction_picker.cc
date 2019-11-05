@@ -1267,6 +1267,18 @@ bool LevelCompactionPicker::NeedsCompaction(
   return false;
 }
 
+bool CompactionPicker::NeedsGarbageCollection(
+    const VersionStorageInfo* vstorage) const {
+  if (!vstorage->ExpiredTtlFiles().empty()) {
+    return true;
+  }
+  if (!vstorage->LevelFiles(-1).empty()) {
+    return true;
+  }
+  return false;
+}
+
+
 namespace {
 // A class to build a leveled compaction step-by-step.
 class LevelCompactionBuilder {

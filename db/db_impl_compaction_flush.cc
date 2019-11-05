@@ -1845,6 +1845,17 @@ void DBImpl::MaybeScheduleFlushOrCompaction() {
     return;
   }
 
+  while (bg_garbage_collection_scheduled_ < bg_job_limits.max_garbage_collections
+         && unscheduled_garbage_collections_ > 0){
+    CompactionArg* ca = new CompactionArg;
+    ca->db = this;
+    ca->prepicked_compaction = nullptr;
+    bg_garbage_collection_scheduled_++;
+    unscheduled_garbage_collections_--;
+    env_->Schedule(&DBImpl::BGWorkGarbageCollection, ca, Env::Priority::LOW,
+                   this, &DBImpl::UnscheduleCallback);
+  }
+
   while (bg_compaction_scheduled_ < bg_job_limits.max_compactions &&
          unscheduled_compactions_ > 0) {
     CompactionArg* ca = new CompactionArg;
@@ -1975,6 +1986,13 @@ void DBImpl::SchedulePendingCompaction(ColumnFamilyData* cfd) {
   if (!cfd->queued_for_compaction() && cfd->NeedsCompaction()) {
     AddToCompactionQueue(cfd);
     ++unscheduled_compactions_;
+  }
+}
+
+void DBImpl::SchedulePendingGarbageCollection(ColumnFamilyData* cfd) {
+  if (!cfd->queued_for_garbage_collection() && cfd->NeedsGarbageCollection()) {
+    AddToGarbageCollectionQueue(cfd);
+    ++unscheduled_garbage_collections_;
   }
 }
 
@@ -2855,6 +2873,7 @@ void DBImpl::InstallSuperVersionAndScheduleWork(
   // Whenever we install new SuperVersion, we might need to issue new flushes or
   // compactions.
   SchedulePendingCompaction(cfd);
+  SchedulePendingGarbageCollection(cfd);
   MaybeScheduleFlushOrCompaction();
 
   // Update max_total_in_memory_state_

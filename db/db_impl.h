@@ -1080,9 +1080,11 @@ class DBImpl : public DB {
   void SchedulePendingFlush(const FlushRequest& req, FlushReason flush_reason);
 
   void SchedulePendingCompaction(ColumnFamilyData* cfd);
+  void SchedulePendingGarbageCollection(ColumnFamilyData* cfd);
   void SchedulePendingPurge(std::string fname, std::string dir_to_sync,
                             FileType type, uint64_t number, int job_id);
   static void BGWorkCompaction(void* arg);
+  static void BGWorkGarbageCollection(void* arg);
   // Runs a pre-chosen universal compaction involving bottom level in a
   // separate, bottom-pri thread pool.
   static void BGWorkBottomCompaction(void* arg);
@@ -1380,6 +1382,7 @@ class DBImpl : public DB {
   std::deque<log::Writer*> logs_to_free_queue_;
   int unscheduled_flushes_;
   int unscheduled_compactions_;
+  int unscheduled_garbage_collections_;
 
   // count how many background compactions are running or have been scheduled in
   // the BOTTOM pool

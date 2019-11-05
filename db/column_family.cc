@@ -953,8 +953,13 @@ void ColumnFamilyData::CreateNewMemtable(
 }
 
 bool ColumnFamilyData::NeedsCompaction() const {
-  return !current_->storage_info()->IsPickFail() &&
+  return !current_->storage_info()->IsPickCompactionFail() &&
          compaction_picker_->NeedsCompaction(current_->storage_info());
+}
+
+bool ColumnFamilyData::NeedsGarbageCollection() const {
+  return !current_->storage_info()->IsPickGarbageCollectionFail() &&
+         compaction_picker_->NeedsGarbageCollection(current_->storage_info());
 }
 
 Compaction* ColumnFamilyData::PickCompaction(
@@ -963,11 +968,22 @@ Compaction* ColumnFamilyData::PickCompaction(
       GetName(), mutable_options, current_->storage_info(), log_buffer);
   if (result != nullptr) {
     result->SetInputVersion(current_);
-    if (result->compaction_type() != kGarbageCollection) {
-      result->set_compaction_load(current_->GetCompactionLoad());
-    }
+    result->set_compaction_load(current_->GetCompactionLoad());
   } else {
-    current_->storage_info()->SetPickFail();
+    current_->storage_info()->SetPickCompactionFail();
+  }
+  return result;
+}
+
+Compaction* ColumnFamilyData::PickGarbageCollection(
+    const MutableCFOptions& mutable_options, LogBuffer* log_buffer) {
+  auto* result = compaction_picker_->PickGarbageCollection(
+    GetName(), mutable_options, current_->storage_info(), log_buffer);
+  if (result != nullptr) {
+    result->SetInputVersion(current_);
+    result->set_gc_load(current_->GetGarbageCollectionLoad());
+  } else {
+    current_->storage_info()->SetPickGarbageCollectionFail();
   }
   return result;
 }

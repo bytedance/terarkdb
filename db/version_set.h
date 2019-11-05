@@ -248,10 +248,16 @@ class VersionStorageInfo {
                              int level);
 
   // Set picker compaction fail
-  void SetPickFail() { is_pick_fail_ = true; }
+  void SetPickCompactionFail() { is_pick_compaction_fail = true; }
 
   // Is picker compaction fail
-  bool IsPickFail() const { return is_pick_fail_; }
+  bool IsPickCompactionFail() const { return is_pick_compaction_fail; }
+
+  // Set picker garbage collection fail
+  void SetPickGarbageCollectionFail() { is_pick_garbage_collection_fail = true; }
+
+  // Is picker garbage collection fail
+  bool IsPickGarbageCollectionFail() const { return is_pick_garbage_collection_fail; }
 
   int num_levels() const { return num_levels_; }
 
@@ -559,7 +565,8 @@ class VersionStorageInfo {
 
   bool finalized_;
 
-  bool is_pick_fail_;
+  bool is_pick_compaction_fail;
+  bool is_pick_garbage_collection_fail;
 
   // If set to true, we will run consistency checks even if RocksDB
   // is compiled in release mode

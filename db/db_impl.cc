@@ -190,6 +190,7 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
       last_batch_group_size_(0),
       unscheduled_flushes_(0),
       unscheduled_compactions_(0),
+      unscheduled_garbage_collections_(0),
       bg_bottom_compaction_scheduled_(0),
       bg_compaction_scheduled_(0),
       num_running_compactions_(0),
@@ -381,6 +382,7 @@ Status DBImpl::ResumeImpl() {
   if (s.ok()) {
     for (auto cfd : *versions_->GetColumnFamilySet()) {
       SchedulePendingCompaction(cfd);
+      SchedulePendingGarbageCollection(cfd);
     }
     MaybeScheduleFlushOrCompaction();
   }
@@ -2113,6 +2115,7 @@ void DBImpl::ReleaseSnapshot(const Snapshot* s) {
                ->BottommostFilesMarkedForCompaction()
                .empty()) {
         SchedulePendingCompaction(cfd);
+        SchedulePendingGarbageCollection(cfd);
         MaybeScheduleFlushOrCompaction();
       }
     }
