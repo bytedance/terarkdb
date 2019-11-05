@@ -3322,9 +3322,6 @@ Status VersionSet::ProcessManifestWrites(
         AppendVersion(cfd, versions[i]);
       }
     }
-    for (auto e : batch_edits) {
-      e->DoApplyCallback();
-    }
     manifest_file_number_ = pending_manifest_file_number_;
     manifest_file_size_ = new_manifest_file_size;
     if (new_descriptor_log) {
@@ -3353,6 +3350,9 @@ Status VersionSet::ProcessManifestWrites(
       env_->DeleteFile(
           DescriptorFileName(dbname_, pending_manifest_file_number_));
     }
+  }
+  for (auto e : batch_edits) {
+    e->DoApplyCallback(s);
   }
 
   pending_manifest_file_number_ = 0;

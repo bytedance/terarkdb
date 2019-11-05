@@ -393,12 +393,15 @@ Status MemTableList::TryInstallMemtableFlushResults(
         edit_list.back()->SetMinLogNumberToKeep(PrecomputeMinLogNumberToKeep(
             vset, *cfd, edit_list, memtables_to_flush, prep_tracker));
       }
-
+#ifndef NDEBUG
       bool apply_callback_called = false;
+#endif
 
-      auto apply_callback = [&] {
+      auto apply_callback = [&] (const Status& apply_s) {
+#ifndef NDEBUG
         assert(!apply_callback_called);
         apply_callback_called = true;
+#endif
 
         // we will be changing the version in the next code path,
         // so we better create a new one, since versions are immutable
@@ -422,7 +425,7 @@ Status MemTableList::TryInstallMemtableFlushResults(
         // on a dropped column family, and we must be able to
         // read full data as long as column family handle is not deleted, even
         // if the column family is dropped.
-        if (s.ok() && !cfd->IsDropped()) {  // commit new state
+        if (apply_s.ok() && !cfd->IsDropped()) {  // commit new state
           while (batch_count-- > 0) {
             MemTable* m = current_->memlist_.back();
             ROCKS_LOG_BUFFER(log_buffer, "[%s] Level-0 commit table #%" PRIu64
@@ -457,11 +460,7 @@ Status MemTableList::TryInstallMemtableFlushResults(
       s = vset->LogAndApply(cfd, mutable_cf_options, edit_list, mu,
                             db_directory);
 
-      if (!apply_callback_called) {
-        apply_callback();
-      } else {
-        assert(s.ok());
-      }
+      assert(apply_callback_called);
     }
   }
   commit_in_progress_ = false;

@@ -285,7 +285,7 @@ class VersionEdit {
     delta_antiquation_.assign(antiquation.begin(), antiquation.end());
   }
 
-  void SetApplyCallback(void(*apply_callback)(void*),
+  void SetApplyCallback(void(*apply_callback)(void*, const Status&),
                         void* apply_callback_arg) {
     apply_callback_ = apply_callback;
     apply_callback_arg_ = apply_callback_arg;
@@ -334,9 +334,9 @@ class VersionEdit {
   const std::vector<std::pair<uint64_t, uint64_t>>& GetAntiquation() {
     return delta_antiquation_;
   }
-  void DoApplyCallback() {
+  void DoApplyCallback(const Status& s) {
     if (apply_callback_ != nullptr) {
-      apply_callback_(apply_callback_arg_);
+      apply_callback_(apply_callback_arg_, s);
     }
   }
 
@@ -374,7 +374,7 @@ class VersionEdit {
   DeletedFileSet deleted_files_;
   std::vector<std::pair<int, FileMetaData>> new_files_;
   std::vector<std::pair<uint64_t, uint64_t>> delta_antiquation_;
-  void (*apply_callback_)(void*);
+  void (*apply_callback_)(void*, const Status&);
   void* apply_callback_arg_;
 
   // Each version edit record should have column_family_ set
