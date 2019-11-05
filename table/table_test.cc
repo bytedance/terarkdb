@@ -343,11 +343,10 @@ class TableConstructor: public Constructor {
         ParsedInternalKey ikey(kv.first, kMaxSequenceNumber, kTypeValue);
         std::string encoded;
         AppendInternalKey(&encoded, ikey);
-        builder->Add(encoded, kv.second);
+        EXPECT_TRUE(builder->Add(encoded, kv.second).ok());
       } else {
-        builder->Add(kv.first, kv.second);
+        EXPECT_TRUE(builder->Add(kv.first, kv.second).ok());
       }
-      EXPECT_TRUE(builder->status().ok());
     }
     Status s = builder->Finish();
     file_writer_->Flush();

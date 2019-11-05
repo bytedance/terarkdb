@@ -22,6 +22,7 @@
 #include "rocksdb/env.h"
 #include "rocksdb/iterator.h"
 #include "table/merging_iterator.h"
+#include "util/c_style_callback.h"
 #include "util/coding.h"
 #include "util/log_buffer.h"
 #include "util/sync_point.h"
@@ -392,59 +393,74 @@ Status MemTableList::TryInstallMemtableFlushResults(
         edit_list.back()->SetMinLogNumberToKeep(PrecomputeMinLogNumberToKeep(
             vset, *cfd, edit_list, memtables_to_flush, prep_tracker));
       }
+#ifndef NDEBUG
+      bool apply_callback_called = false;
+#endif
 
+      auto apply_callback = [&] (const Status& apply_s) {
+#ifndef NDEBUG
+        assert(!apply_callback_called);
+        apply_callback_called = true;
+#endif
+
+        // we will be changing the version in the next code path,
+        // so we better create a new one, since versions are immutable
+        InstallNewVersion();
+
+        // All the later memtables that have the same filenum
+        // are part of the same batch. They can be committed now.
+        uint64_t mem_id = 1;  // how many memtables have been flushed.
+
+        // commit new state only if the column family is NOT dropped.
+        // The reason is as follows (refer to
+        // ColumnFamilyTest.FlushAndDropRaceCondition).
+        // If the column family is dropped, then according to LogAndApply, its
+        // corresponding flush operation is NOT written to the MANIFEST. This
+        // means the DB is not aware of the L0 files generated from the flush.
+        // By committing the new state, we remove the memtable from the memtable
+        // list. Creating an iterator on this column family will not be able to
+        // read full data since the memtable is removed, and the DB is not aware
+        // of the L0 files, causing MergingIterator unable to build child
+        // iterators. RocksDB contract requires that the iterator can be created
+        // on a dropped column family, and we must be able to
+        // read full data as long as column family handle is not deleted, even
+        // if the column family is dropped.
+        if (apply_s.ok() && !cfd->IsDropped()) {  // commit new state
+          while (batch_count-- > 0) {
+            MemTable* m = current_->memlist_.back();
+            ROCKS_LOG_BUFFER(log_buffer, "[%s] Level-0 commit table #%" PRIu64
+                                         ": memtable #%" PRIu64 " done",
+                             cfd->GetName().c_str(), m->file_number_, mem_id);
+            assert(m->file_number_ > 0);
+            current_->Remove(m, to_delete);
+            ++mem_id;
+          }
+        } else {
+          for (auto it = current_->memlist_.rbegin(); batch_count-- > 0; it++) {
+            MemTable* m = *it;
+            // commit failed. setup state so that we can flush again.
+            ROCKS_LOG_BUFFER(log_buffer, "Level-0 commit table #%" PRIu64
+                                         ": memtable #%" PRIu64 " failed",
+                             m->file_number_, mem_id);
+            m->flush_completed_ = false;
+            m->flush_in_progress_ = false;
+            m->edit_.Clear();
+            num_flush_not_started_++;
+            m->file_number_ = 0;
+            imm_flush_needed.store(true, std::memory_order_release);
+            ++mem_id;
+          }
+        }
+
+      };
+
+      edit_list.back()->SetApplyCallback(c_style_callback(apply_callback),
+                                         &apply_callback);
       // this can release and reacquire the mutex.
       s = vset->LogAndApply(cfd, mutable_cf_options, edit_list, mu,
                             db_directory);
 
-      // we will be changing the version in the next code path,
-      // so we better create a new one, since versions are immutable
-      InstallNewVersion();
-
-      // All the later memtables that have the same filenum
-      // are part of the same batch. They can be committed now.
-      uint64_t mem_id = 1;  // how many memtables have been flushed.
-
-      // commit new state only if the column family is NOT dropped.
-      // The reason is as follows (refer to
-      // ColumnFamilyTest.FlushAndDropRaceCondition).
-      // If the column family is dropped, then according to LogAndApply, its
-      // corresponding flush operation is NOT written to the MANIFEST. This
-      // means the DB is not aware of the L0 files generated from the flush.
-      // By committing the new state, we remove the memtable from the memtable
-      // list. Creating an iterator on this column family will not be able to
-      // read full data since the memtable is removed, and the DB is not aware
-      // of the L0 files, causing MergingIterator unable to build child
-      // iterators. RocksDB contract requires that the iterator can be created
-      // on a dropped column family, and we must be able to
-      // read full data as long as column family handle is not deleted, even if
-      // the column family is dropped.
-      if (s.ok() && !cfd->IsDropped()) {  // commit new state
-        while (batch_count-- > 0) {
-          MemTable* m = current_->memlist_.back();
-          ROCKS_LOG_BUFFER(log_buffer, "[%s] Level-0 commit table #%" PRIu64
-                                       ": memtable #%" PRIu64 " done",
-                           cfd->GetName().c_str(), m->file_number_, mem_id);
-          assert(m->file_number_ > 0);
-          current_->Remove(m, to_delete);
-          ++mem_id;
-        }
-      } else {
-        for (auto it = current_->memlist_.rbegin(); batch_count-- > 0; it++) {
-          MemTable* m = *it;
-          // commit failed. setup state so that we can flush again.
-          ROCKS_LOG_BUFFER(log_buffer, "Level-0 commit table #%" PRIu64
-                                       ": memtable #%" PRIu64 " failed",
-                           m->file_number_, mem_id);
-          m->flush_completed_ = false;
-          m->flush_in_progress_ = false;
-          m->edit_.Clear();
-          num_flush_not_started_++;
-          m->file_number_ = 0;
-          imm_flush_needed.store(true, std::memory_order_release);
-          ++mem_id;
-        }
-      }
+      assert(apply_callback_called);
     }
   }
   commit_in_progress_ = false;

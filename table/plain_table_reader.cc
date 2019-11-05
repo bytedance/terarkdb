@@ -601,7 +601,8 @@ Status PlainTableReader::Get(const ReadOptions& /*ro*/, const Slice& target,
     // can we enable the fast path?
     if (internal_comparator_.Compare(found_key, parsed_target) >= 0) {
       bool dont_care __attribute__((__unused__));
-      if (!get_context->SaveValue(found_key, LazyBuffer(found_value),
+      if (!get_context->SaveValue(found_key,
+                                  LazyBuffer(found_value, false, file_number_),
                                   &dont_care)) {
         break;
       }

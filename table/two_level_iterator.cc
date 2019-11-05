@@ -431,6 +431,9 @@ class MapSstIterator final : public InternalIterator {
     }
     InitSecondLevelMinHeap(seek_target, include);
     if (min_heap_.empty()) {
+      if (!status_.ok()) {
+        return;
+      }
       first_level_value_.clear();
       first_level_iter_->Next();
       if (InitFirstLevelIter()) {
@@ -468,6 +471,9 @@ class MapSstIterator final : public InternalIterator {
     }
     InitSecondLevelMaxHeap(seek_target, include);
     if (max_heap_.empty()) {
+      if (!status_.ok()) {
+        return;
+      }
       first_level_value_.clear();
       first_level_iter_->Prev();
       if (InitFirstLevelIter()) {

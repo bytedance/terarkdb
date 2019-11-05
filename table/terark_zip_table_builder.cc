@@ -375,12 +375,11 @@ std::shared_ptr<FilePair> TerarkZipTableBuilder::NewFilePair() {
   return pair;
 };
 
-void TerarkZipTableBuilder::Add(const Slice& key,
-                                const LazyBuffer& lazy_value) try {
+Status TerarkZipTableBuilder::Add(const Slice& key,
+                                  const LazyBuffer& lazy_value) try {
   auto s = lazy_value.fetch();
   if (!s.ok()) {
-    status_ = s;
-    return;
+    return s;
   }
   const Slice& value = lazy_value.slice();
   if (table_options_.debugLevel == 3) {
@@ -513,16 +512,19 @@ void TerarkZipTableBuilder::Add(const Slice& key,
       filePair_->isFullValue = false;
     }
     assert(filePair_->value.fp);
-    filePair_->value.writer << seqType << fstringOf(filePair_->isFullValue ? value : Slice());
+    filePair_->value.writer
+        << seqType << fstringOf(filePair_->isFullValue ? value : Slice());
   } else if (value_type == kTypeRangeDeletion) {
     range_del_block_.Add(key, value);
   } else {
     assert(false);
   }
+  return Status::OK();
 }
 catch (const std::exception& ex) {
-  WARN_EXCEPT(ioptions_.info_log, "%s: Exception: %s", BOOST_CURRENT_FUNCTION, ex.what());
-  throw;
+  WARN_EXCEPT(ioptions_.info_log, "%s: Exception: %s",
+              BOOST_CURRENT_FUNCTION, ex.what());
+  return Status::Corruption(ex.what());
 }
 
 TerarkZipTableBuilder::WaitHandle::WaitHandle() : myWorkMem(0) {

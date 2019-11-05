@@ -138,10 +138,7 @@ class TableBuilder {
   // Add key,value to the table being constructed.
   // REQUIRES: key is after any previously added key according to comparator.
   // REQUIRES: Finish(), Abandon() have not been called
-  virtual void Add(const Slice& key, const LazyBuffer& value) = 0;
-
-  // Return non-ok iff some error has been detected.
-  virtual Status status() const = 0;
+  virtual Status Add(const Slice& key, const LazyBuffer& value) = 0;
 
   // Finish building the table.
   // REQUIRES: Finish(), Abandon() have not been called

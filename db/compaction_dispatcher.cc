@@ -154,14 +154,19 @@ class WorkerSeparateHelper : public SeparateHelper, public LazyBufferState {
   void TransToCombined(const Slice& user_key, uint64_t sequence,
                        LazyBuffer& value) const override {
     auto s = value.fetch();
-    if (s.ok()) {
-      uint64_t file_number =
-          SeparateHelper::DecodeFileNumber(value.slice());
-      value.reset(this, {reinterpret_cast<uint64_t>(user_key.data()),
-                         user_key.size(), sequence, 0},
-                  Slice::Invalid(), file_number);
-    } else {
+    if (!s.ok()) {
       value.reset(std::move(s));
+      return;
+    }
+    uint64_t file_number = SeparateHelper::DecodeFileNumber(value.slice());
+    auto find = dependence_map_->find(file_number);
+    if (find == dependence_map_->end()) {
+      value.reset(Status::Corruption("Separate value dependence missing"));
+    } else {
+      value.reset(this, {reinterpret_cast<uint64_t>(user_key.data()),
+                         user_key.size(), sequence,
+                         reinterpret_cast<uint64_t>(&*find)},
+                  Slice::Invalid(), find->second->fd.GetNumber());
     }
   }
 
@@ -526,15 +531,13 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
   c_style_new_iterator.arg = &new_iterator;
   c_style_new_iterator.callback = c_style_callback(new_iterator);
 
-  auto separate_inplace_decode = [&](LazyBuffer* buffer, LazyBufferContext* rep) {
-    Slice user_key(reinterpret_cast<const char*>(rep->data[0]), rep->data[1]);
-    uint64_t sequence = rep->data[2];
-    uint64_t file_number = buffer->file_number();
-    auto find = contxt_dependence_map.find(file_number);
-    if (find == contxt_dependence_map.end()) {
-      return Status::Corruption("Separate value dependence missing");
-    }
-    file_number = find->second->fd.GetNumber();
+  auto separate_inplace_decode = [&](LazyBuffer* buffer,
+                                     LazyBufferContext* context) {
+    Slice user_key(reinterpret_cast<const char*>(context->data[0]),
+                   context->data[1]);
+    uint64_t sequence = context->data[2];
+    auto pair =
+        *reinterpret_cast<DependenceMap::value_type*>(context->data[3]);
     bool value_found = false;
     SequenceNumber context_seq;
     GetContext get_context(ucmp, nullptr, immutable_cf_options.info_log,
@@ -544,7 +547,7 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
     IterKey iter_key;
     iter_key.SetInternalKey(user_key, sequence, kValueTypeForSeek);
     TableReader* reader;
-    auto s = get_table_reader(file_number, &reader);
+    auto s = get_table_reader(pair.second->fd.GetNumber(), &reader);
     if (!s.ok()) {
       return s;
     }
@@ -563,10 +566,11 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
         char buf[128];
         snprintf(buf, sizeof buf,
                  "file number = %" PRIu64 "(%" PRIu64 "), sequence = %" PRIu64,
-                 file_number, buffer->file_number(), sequence);
+                 pair.second->fd.GetNumber(), pair.first, sequence);
         return Status::Corruption("Separate value missing", buf);
       }
     }
+    assert(buffer->file_number() == pair.second->fd.GetNumber());
     return Status::OK();
   };
 
@@ -809,7 +813,10 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
         auto kv = tombstone.Serialize();
         assert(lower_bound == nullptr ||
                ucmp->Compare(*lower_bound, kv.second) < 0);
-        builder->Add(kv.first.Encode(), LazyBuffer(kv.second));
+        s = builder->Add(kv.first.Encode(), LazyBuffer(kv.second));
+        if (!s.ok()) {
+          break;
+        }
         InternalKey smallest_candidate = std::move(kv.first);
         if (lower_bound != nullptr &&
             ucmp->Compare(smallest_candidate.user_key(), *lower_bound) <= 0) {
@@ -837,10 +844,10 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
       }
       meta->marked_for_compaction = builder->NeedCompact();
     }
-    meta->prop.num_entries = builder->NumEntries();
-    meta->prop.dependence.assign(dependence.begin(), dependence.end());
-    std::sort(meta->prop.dependence.begin(), meta->prop.dependence.end());
     if (s.ok()) {
+      meta->prop.num_entries = builder->NumEntries();
+      meta->prop.dependence.assign(dependence.begin(), dependence.end());
+      std::sort(meta->prop.dependence.begin(), meta->prop.dependence.end());
       s = builder->Finish(&meta->prop);
     } else {
       builder->Abandon();
@@ -913,7 +920,10 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
       }
     }
     assert(builder);
-    builder->Add(key, value);
+    status = builder->Add(key, value);
+    if (!status.ok()) {
+      break;
+    }
     size_t current_output_file_size = builder->FileSize();
     meta.UpdateBoundaries(key, c_iter->ikey().sequence);
 
