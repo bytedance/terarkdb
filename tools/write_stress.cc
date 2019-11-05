@@ -141,6 +141,7 @@ class WriteStress {
     options.target_file_size_base = 100 * 1024;          // 100k
     options.max_write_buffer_number = 16;
     options.max_background_compactions = 16;
+    options.max_background_garbage_collections = 4;
     options.max_background_flushes = 16;
     options.max_open_files = FLAGS_low_open_files_mode ? 20 : -1;
     if (FLAGS_delete_obsolete_files_with_fullscan) {

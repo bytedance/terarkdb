@@ -56,6 +56,8 @@ DBOptions BuildDBOptions(const ImmutableDBOptions& immutable_db_options,
       mutable_db_options.base_background_compactions;
   options.max_background_compactions =
       mutable_db_options.max_background_compactions;
+  options.max_background_garbage_collections =
+      mutable_db_options.max_background_garbage_collections;
   options.bytes_per_sync = mutable_db_options.bytes_per_sync;
   options.wal_bytes_per_sync = mutable_db_options.wal_bytes_per_sync;
   options.max_subcompactions = immutable_db_options.max_subcompactions;
@@ -1429,6 +1431,10 @@ std::unordered_map<std::string, OptionTypeInfo>
          {offsetof(struct DBOptions, base_background_compactions),
           OptionType::kInt, OptionVerificationType::kNormal, true,
           offsetof(struct MutableDBOptions, base_background_compactions)}},
+        {"max_background_garbage_collections",
+         {offsetof(struct DBOptions, max_background_garbage_collections),
+          OptionType::kInt, OptionVerificationType::kNormal, true,
+          offsetof(struct MutableDBOptions, max_background_garbage_collections)}},
         {"max_background_flushes",
          {offsetof(struct DBOptions, max_background_flushes), OptionType::kInt,
           OptionVerificationType::kNormal, false, 0}},

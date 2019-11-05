@@ -1866,15 +1866,20 @@ DBImpl::BGJobLimits DBImpl::GetBGJobLimits() const {
   }
   return GetBGJobLimits(immutable_db_options_.max_background_flushes,
                         mutable_db_options_.max_background_compactions,
+                        mutable_db_options_.max_background_garbage_collections,
                         mutable_db_options_.max_background_jobs,
                         need_speedup_compaction);
 }
 
 DBImpl::BGJobLimits DBImpl::GetBGJobLimits(int max_background_flushes,
                                            int max_background_compactions,
+                                           int max_background_garbage_collections,
                                            int max_background_jobs,
                                            bool parallelize_compactions) {
   BGJobLimits res;
+  if (max_background_garbage_collections == -1) {
+    res.max_garbage_collections = 1;
+  }
   if (max_background_flushes == -1 && max_background_compactions == -1) {
     // for our first stab implementing max_background_jobs, simply allocate a
     // quarter of the threads to flushes.
@@ -1890,6 +1895,7 @@ DBImpl::BGJobLimits DBImpl::GetBGJobLimits(int max_background_flushes,
     // throttle background compactions until we deem necessary
     res.max_compactions = 1;
   }
+  
   return res;
 }
 

@@ -475,13 +475,14 @@ class DBImpl : public DB {
   struct BGJobLimits {
     int max_flushes;
     int max_compactions;
-    int max_garbage_collection;
+    int max_garbage_collections;
   };
   // Returns maximum background flushes and compactions allowed to be scheduled
   BGJobLimits GetBGJobLimits() const;
   // Need a static version that can be called during SanitizeOptions().
   static BGJobLimits GetBGJobLimits(int max_background_flushes,
                                     int max_background_compactions,
+                                    int max_background_garbage_collections,
                                     int max_background_jobs,
                                     bool parallelize_compactions);
 
@@ -1387,8 +1388,14 @@ class DBImpl : public DB {
   // count how many background compactions are running or have been scheduled
   int bg_compaction_scheduled_;
 
+  // count how many background garbage collections are running or have been scheduled
+  int bg_garbage_collection_scheduled_;
+
   // stores the number of compactions are currently running
   int num_running_compactions_;
+
+  // stores the number of garbage collections are currently running
+  int num_running_garbage_collections_;
 
   // number of background memtable flush jobs, submitted to the HIGH pool
   int bg_flush_scheduled_;
