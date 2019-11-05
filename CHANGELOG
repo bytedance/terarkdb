@@ -1,4 +1,0 @@
-## 2019-10-31
-- refine third-party denpendency.
-- key value seperation for lower compaction overhead and better performance.
-- more unit tests

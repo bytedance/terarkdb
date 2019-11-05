@@ -60,3 +60,10 @@ And add a new env when you start your application:
 ```
 env Terark_hasValgrind=1 ./application
 ```
+
+
+## CHANGELOG
+### 2019-11-05
+- Fix rocksdb's super version bug, which may cause merge operator gets wrong value.
+- Fix terarkdb's kv seperation bug
+- Add more test cases in terark-core
