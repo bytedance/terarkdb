@@ -657,8 +657,14 @@ Compaction* CompactionPicker::PickGarbageCollection(
     FileInfo info = {f};
     info.num_entries = fn_num_entries(f);
     info.score = std::min(1.0, (double)f->num_antiquation / info.num_entries);
-    info.estimated_size =
-        static_cast<uint64_t>(f->fd.file_size * (1 - info.score));
+    if (f->prop.inheritance_chain.empty()) {
+      // sst from flush or compaction
+      info.estimated_size = f->fd.file_size;
+    } else {
+      // sst from gc
+      info.estimated_size =
+          static_cast<uint64_t>(f->fd.file_size * (1 - info.score));
+    }
     if (info.score >= mutable_cf_options.blob_gc_ratio ||
         info.estimated_size <= fragment_size) {
       gc_files.push_back(info);
