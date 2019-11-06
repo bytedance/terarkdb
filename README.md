@@ -27,13 +27,19 @@ output
 **IMPORTANT NOTICE**
 
 - The static library `librocksdb.a` already includes `zstd`, `boost-filesystem` and `boost-fiber`
-- Additional requrements shoud be linked manually:
- - `-lsnappy`
- - `-llz4`
- - `-lz`
- - `-lgomp`
- - `-laio`
- - `-lrt`
+- Link library requrements (please link all required libraries manually):
+ - `-lzstd` (embedded, no need to link again)
+ - `-llz4` (optional)
+ - `-lz` (optional)
+ - `-lsnappy` (required)
+ - `-lgomp` (required)
+ - `-laio` (required)
+ - `-lrt` (required)
+
+If you are using boost outside terarkdb, you may want to link terarkdb's dynamic library since terarkdb itself is also using boost 1.70 and we've changed some of its code for better performance.
+
+TerarkDB's dynamic library do not export its boost's symbol, so you are safe to use boost outside.
+
 
 ## Usage
 If you want to use it as original rocksdb, you can just include librocksdb and the headers.
