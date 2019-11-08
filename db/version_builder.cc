@@ -24,6 +24,7 @@
 #include <unordered_set>
 #include <utility>
 #include <vector>
+#include <queue>
 
 #include "db/dbformat.h"
 #include "db/internal_stats.h"
@@ -321,6 +322,13 @@ class VersionBuilder::Rep {
         }
       }
     }
+    struct priority_queue_cmp {
+      bool operator()(FileMetaData* l, FileMetaData* r) const {
+        return l->fd.GetNumber() < r->fd.GetNumber();
+      }
+    };
+    std::priority_queue<FileMetaData*, std::vector<FileMetaData*>,
+                        priority_queue_cmp> old_file_queue;
     for (auto it = dependence_map_.begin(); it != dependence_map_.end(); ) {
       auto& item = it->second;
       if (item.dependence_version == dependence_version_) {
@@ -342,6 +350,12 @@ class VersionBuilder::Rep {
             }
             item.f->is_skip_gc = is_skip_gc;
           }
+          if (item.f->prop.purpose != kMapSst) {
+            old_file_queue.push(item.f);
+            if (old_file_queue.size() > 8) {
+              old_file_queue.pop();
+            }
+          }
         }
         ++it;
       } else {
@@ -351,6 +365,15 @@ class VersionBuilder::Rep {
       }
     }
     if (finish) {
+      size_t old_file_count =
+          std::min(dependence_map_.size() / 128, old_file_queue.size());
+      while (old_file_queue.size() > old_file_count) {
+        old_file_queue.pop();
+      }
+      while (!old_file_queue.empty()) {
+        old_file_queue.top()->marked_for_compaction = true;
+        old_file_queue.pop();
+      }
       inheritance_counter_.clear();
     }
     new_deleted_files_ = 0;

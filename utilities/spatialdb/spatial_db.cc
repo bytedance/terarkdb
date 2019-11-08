@@ -688,11 +688,14 @@ namespace {
 DBOptions GetDBOptionsFromSpatialDBOptions(const SpatialDBOptions& options) {
   DBOptions db_options;
   db_options.max_open_files = 50000;
-  db_options.max_background_compactions = 3 * options.num_threads / 4;
+  db_options.max_background_compactions = 3 * options.num_threads / 8;
+  db_options.max_background_garbage_collections = 3 * options.num_threads / 8;
   db_options.max_background_flushes =
-      options.num_threads - db_options.max_background_compactions;
-  db_options.env->SetBackgroundThreads(db_options.max_background_compactions,
-                                       Env::LOW);
+      options.num_threads - db_options.max_background_compactions -
+      db_options.max_background_garbage_collections;
+  db_options.env->SetBackgroundThreads(
+      db_options.max_background_compactions +
+      db_options.max_background_garbage_collections, Env::LOW);
   db_options.env->SetBackgroundThreads(db_options.max_background_flushes,
                                        Env::HIGH);
   db_options.statistics = CreateDBStatistics();

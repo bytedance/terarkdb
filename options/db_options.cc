@@ -230,6 +230,7 @@ MutableDBOptions::MutableDBOptions()
     : max_background_jobs(2),
       base_background_compactions(-1),
       max_background_compactions(-1),
+      max_background_garbage_collections(-1),
       avoid_flush_during_shutdown(false),
       writable_file_max_buffer_size(1024 * 1024),
       delayed_write_rate(2 * 1024U * 1024U),
@@ -245,6 +246,8 @@ MutableDBOptions::MutableDBOptions(const DBOptions& options)
     : max_background_jobs(options.max_background_jobs),
       base_background_compactions(options.base_background_compactions),
       max_background_compactions(options.max_background_compactions),
+      max_background_garbage_collections(
+          options.max_background_garbage_collections),
       avoid_flush_during_shutdown(options.avoid_flush_during_shutdown),
       writable_file_max_buffer_size(options.writable_file_max_buffer_size),
       delayed_write_rate(options.delayed_write_rate),
@@ -262,6 +265,9 @@ void MutableDBOptions::Dump(Logger* log) const {
                    max_background_jobs);
   ROCKS_LOG_HEADER(log, "            Options.max_background_compactions: %d",
                    max_background_compactions);
+  ROCKS_LOG_HEADER(
+      log, "     Options.max_background_garbage_collections: %d",
+                   max_background_garbage_collections);
   ROCKS_LOG_HEADER(log, "            Options.avoid_flush_during_shutdown: %d",
                    avoid_flush_during_shutdown);
   ROCKS_LOG_HEADER(

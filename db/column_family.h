@@ -271,10 +271,13 @@ class ColumnFamilyData {
   // See documentation in compaction_picker.h
   // REQUIRES: DB mutex held
   bool NeedsCompaction() const;
+  bool NeedsGarbageCollection() const;
   // REQUIRES: DB mutex held
   Compaction* PickCompaction(const MutableCFOptions& mutable_options,
                              LogBuffer* log_buffer);
 
+  Compaction* PickGarbageCollection(const MutableCFOptions& mutable_options,
+                                    LogBuffer* log_buffer);
   // Check if the passed range overlap with any running compactions.
   // REQUIRES: DB mutex held
   bool RangeOverlapWithCompaction(const Slice& smallest_user_key,
@@ -359,8 +362,14 @@ class ColumnFamilyData {
   // Protected by DB mutex
   void set_queued_for_flush(bool value) { queued_for_flush_ = value; }
   void set_queued_for_compaction(bool value) { queued_for_compaction_ = value; }
+  void set_queued_for_garbage_collection(bool value) {
+    queued_for_garbage_collection_ = value;
+  }
   bool queued_for_flush() { return queued_for_flush_; }
   bool queued_for_compaction() { return queued_for_compaction_; }
+  bool queued_for_garbage_collection() {
+    return queued_for_garbage_collection_;
+  }
 
   enum class WriteStallCause {
     kNone,
@@ -473,6 +482,8 @@ class ColumnFamilyData {
   // If true --> this ColumnFamily is currently present in
   // DBImpl::compaction_queue_
   bool queued_for_compaction_;
+
+  bool queued_for_garbage_collection_;
 
   uint64_t prev_compaction_needed_bytes_;
 

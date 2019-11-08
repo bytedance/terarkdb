@@ -52,6 +52,7 @@ Status DBImpl::SuggestCompactRange(ColumnFamilyHandle* column_family,
     vstorage->ComputeCompactionScore(*cfd->ioptions(),
                                      *cfd->GetLatestMutableCFOptions());
     SchedulePendingCompaction(cfd);
+    SchedulePendingGarbageCollection(cfd);
     MaybeScheduleFlushOrCompaction();
   }
   return Status::OK();

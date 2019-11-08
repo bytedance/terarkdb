@@ -472,7 +472,7 @@ class Compaction {
   // score that was used to pick this compaction.
   const double score_;
 
-  //
+  // for TableBuilderOptions
   double compaction_load_;
 
   // Is this compaction creating a file in the bottom most level?
