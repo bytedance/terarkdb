@@ -50,19 +50,25 @@ class CountMergeOperator : public AssociativeMergeOperator {
       return true;
     }
 
-    return mergeOperator_->PartialMerge(
+    LazyBuffer new_buffer(new_value);
+    bool merge_result = mergeOperator_->PartialMerge(
         key,
-        *existing_value,
-        value,
-        new_value,
+        LazyBuffer(*existing_value),
+        LazyBuffer(value),
+        &new_buffer,
         logger);
+    if (merge_result) {
+      auto s = std::move(new_buffer).dump(new_value);
+      merge_result = s.ok();
+    }
+    return merge_result;
   }
 
   virtual bool PartialMergeMulti(const Slice& key,
-                                 const std::deque<Slice>& operand_list,
-                                 std::string* new_value,
+                                 const std::vector<LazyBuffer>& operand_list,
+                                 LazyBuffer* new_value,
                                  Logger* logger) const override {
-    assert(new_value->empty());
+    assert(!new_value->valid() || new_value->empty());
     ++num_partial_merge_calls;
     return mergeOperator_->PartialMergeMulti(key, operand_list, new_value,
                                              logger);

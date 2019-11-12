@@ -762,7 +762,7 @@ std::string DBTestBase::Get(int cf, const std::string& k,
   return result;
 }
 
-Status DBTestBase::Get(const std::string& k, PinnableSlice* v) {
+Status DBTestBase::Get(const std::string& k, LazyBuffer* v) {
   ReadOptions options;
   options.verify_checksums = true;
   Status s = dbfull()->Get(options, dbfull()->DefaultColumnFamily(), k, v);
@@ -846,12 +846,14 @@ std::string DBTestBase::AllEntriesFor(const Slice& user_key, int cf) {
         first = false;
         switch (ikey.type) {
           case kTypeValue:
-            result += iter->value().ToString();
-            break;
-          case kTypeMerge:
-            // keep it the same as kTypeValue for testing kMergePut
-            result += iter->value().ToString();
-            break;
+          case kTypeMerge: {
+            auto v = iter->value();
+            auto s = v.fetch();
+            if (!s.ok()) {
+              return s.ToString();
+            }
+            result += v.ToString();
+          } break;
           case kTypeDeletion:
             result += "DEL";
             break;
@@ -1447,7 +1449,9 @@ void DBTestBase::VerifyDBInternal(
     ParsedInternalKey ikey;
     ASSERT_TRUE(ParseInternalKey(iter->key(), &ikey));
     ASSERT_EQ(p.first, ikey.user_key);
-    ASSERT_EQ(p.second, iter->value());
+    auto v = iter->value();
+    ASSERT_OK(v.fetch());
+    ASSERT_EQ(p.second, v.slice());
     iter->Next();
   };
   ASSERT_FALSE(iter->Valid());

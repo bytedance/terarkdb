@@ -2462,16 +2462,16 @@ TEST_F(DBTest2, ReadCallbackTest) {
   };
 
   for (int seq = 1; seq < i; seq++) {
-    PinnableSlice pinnable_val;
+    LazyBuffer lazy_val;
     ReadOptions roptions;
     TestReadCallback callback(seq);
     bool dont_care = true;
     Status s = dbfull()->GetImpl(roptions, dbfull()->DefaultColumnFamily(), key,
-                                 &pinnable_val, &dont_care, &callback);
+                                 &lazy_val, &dont_care, &callback);
     ASSERT_TRUE(s.ok());
     // Assuming that after each Put the DB increased seq by one, the value and
     // seq number must be equal since we also inc value by 1 after each Put.
-    ASSERT_EQ(value + std::to_string(seq), pinnable_val.ToString());
+    ASSERT_EQ(value + std::to_string(seq), lazy_val.ToString());
   }
 
   for (auto snapshot : snapshots) {
@@ -2758,7 +2758,7 @@ TEST_F(DBTest2, TraceWithLimit) {
 
 #endif  // ROCKSDB_LITE
 
-TEST_F(DBTest2, PinnableSliceAndMmapReads) {
+TEST_F(DBTest2, LazyBufferAndMmapReads) {
   Options options = CurrentOptions();
   options.allow_mmap_reads = true;
   options.max_open_files = 100;
@@ -2768,38 +2768,35 @@ TEST_F(DBTest2, PinnableSliceAndMmapReads) {
   ASSERT_OK(Put("foo", "bar"));
   ASSERT_OK(Flush());
 
-  PinnableSlice pinned_value;
-  ASSERT_EQ(Get("foo", &pinned_value), Status::OK());
+  LazyBuffer lazy_value;
+  ASSERT_EQ(Get("foo", &lazy_value), Status::OK());
   // It is not safe to pin mmap files as they might disappear by compaction
-  ASSERT_FALSE(pinned_value.IsPinned());
-  ASSERT_EQ(pinned_value.ToString(), "bar");
+  ASSERT_EQ(lazy_value.ToString(), "bar");
 
   dbfull()->TEST_CompactRange(0 /* level */, nullptr /* begin */,
                               nullptr /* end */, nullptr /* column_family */,
                               true /* disallow_trivial_move */);
 
-  // Ensure pinned_value doesn't rely on memory munmap'd by the above
+  // Ensure lazy_value doesn't rely on memory munmap'd by the above
   // compaction. It crashes if it does.
-  ASSERT_EQ(pinned_value.ToString(), "bar");
+  ASSERT_EQ(lazy_value.ToString(), "bar");
 
 #ifndef ROCKSDB_LITE
-  pinned_value.Reset();
+  lazy_value.clear();
   // Unsafe to pin mmap files when they could be kicked out of table cache
   Close();
   ASSERT_OK(ReadOnlyReopen(options));
-  ASSERT_EQ(Get("foo", &pinned_value), Status::OK());
-  ASSERT_FALSE(pinned_value.IsPinned());
-  ASSERT_EQ(pinned_value.ToString(), "bar");
+  ASSERT_EQ(Get("foo", &lazy_value), Status::OK());
+  ASSERT_EQ(lazy_value.ToString(), "bar");
 
-  pinned_value.Reset();
+  lazy_value.clear();
   // In read-only mode with infinite capacity on table cache it should pin the
   // value and avoid the memcpy
   Close();
   options.max_open_files = -1;
   ASSERT_OK(ReadOnlyReopen(options));
-  ASSERT_EQ(Get("foo", &pinned_value), Status::OK());
-  ASSERT_TRUE(pinned_value.IsPinned());
-  ASSERT_EQ(pinned_value.ToString(), "bar");
+  ASSERT_EQ(Get("foo", &lazy_value), Status::OK());
+  ASSERT_EQ(lazy_value.ToString(), "bar");
 #endif
 }
 

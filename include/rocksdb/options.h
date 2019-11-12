@@ -287,7 +287,7 @@ struct ColumnFamilyOptions : public AdvancedColumnFamilyOptions {
   bool enable_lazy_compaction = false;
 
   //
-  size_t blob_size = 1024;
+  size_t blob_size = size_t(-1);
 
   //
   double blob_gc_ratio = 0.05;

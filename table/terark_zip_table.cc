@@ -359,7 +359,7 @@ const {
   if (minlevel < 0) {
     minlevel = numlevel - 1;
   }
-  uint32_t keyPrefixLen = GetFixedPrefixLen(table_builder_options.moptions.prefix_extractor.get());
+  uint32_t keyPrefixLen = (uint32_t)GetFixedPrefixLen(table_builder_options.moptions.prefix_extractor.get());
   if (keyPrefixLen != 0) {
     if (table_options_.keyPrefixLen != 0) {
       if (keyPrefixLen != table_options_.keyPrefixLen) {
@@ -397,13 +397,9 @@ const {
   }
   nth_new_terark_table_++;
 
-  return createTerarkZipTableBuilder(
-    this,
-    table_options_,
-    table_builder_options,
-    column_family_id,
-    file,
-    keyPrefixLen);
+  return createTerarkZipTableBuilder(this, table_options_,
+                                     table_builder_options, column_family_id,
+                                     file, keyPrefixLen);
 }
 
 #define PrintBuf(...) ret.append(buffer, snprintf(buffer, kBufferSize, __VA_ARGS__))
@@ -460,7 +456,7 @@ const {
 }
 
 Status
-TerarkZipTableFactory::SanitizeOptions(const DBOptions& db_opts,
+TerarkZipTableFactory::SanitizeOptions(const DBOptions& /*db_opts*/,
                                        const ColumnFamilyOptions& cf_opts)
 const {
   auto table_factory = dynamic_cast<TerarkZipTableFactory*>(cf_opts.table_factory.get());

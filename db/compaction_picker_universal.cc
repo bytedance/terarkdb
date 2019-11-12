@@ -546,7 +546,11 @@ Compaction* UniversalCompactionPicker::PickCompaction(
     sr_debug.emplace_back(o);
     std::sort(sr_debug.begin(), sr_debug.end(),
               [](SortedRunDebug& l, SortedRunDebug& r) {
-                return l.smallest > r.smallest;
+                if (l.smallest != r.smallest) {
+                  return l.smallest > r.smallest;
+                } else {
+                  return l.level < r.level;
+                }
               });
     assert(std::is_sorted(sr_debug.begin(), sr_debug.end(),
                           [](SortedRunDebug& l, SortedRunDebug& r) {
