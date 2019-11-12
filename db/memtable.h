@@ -453,6 +453,9 @@ class MemTable {
   // rw locks for inplace updates
   std::vector<port::RWMutex> locks_;
 
+  // FragmentedRangeTombstoneList lock
+  port::Mutex tombstone_locks_;
+
   const SliceTransform* const prefix_extractor_;
   std::unique_ptr<DynamicBloom> prefix_bloom_;
 

@@ -447,10 +447,15 @@ FragmentedRangeTombstoneIterator* MemTable::NewRangeTombstoneIterator(
   if (read_options.ignore_range_deletions || num_range_del == 0) {
     return nullptr;
   }
-  auto fragmented_tombstone_list = fragmented_range_dels_;
 
-  if (!fragmented_range_dels_ ||
-      fragmented_range_dels_->user_tag() != num_range_del) {
+  std::shared_ptr<FragmentedRangeTombstoneList> fragmented_tombstone_list;
+  {
+    MutexLock lock(&tombstone_locks_);
+    fragmented_tombstone_list = fragmented_range_dels_;
+  }
+
+  if (!fragmented_tombstone_list ||
+      fragmented_tombstone_list->user_tag() != num_range_del) {
 
     auto* unfragmented_iter = new MemTableTombstoneIterator(
         *this, read_options, nullptr /* arena */,
@@ -468,6 +473,7 @@ FragmentedRangeTombstoneIterator* MemTable::NewRangeTombstoneIterator(
       is_range_del_slow_ = true;
     }
     if (num_range_del == num_range_del_.load(std::memory_order_relaxed)) {
+      MutexLock lock(&tombstone_locks_);
       fragmented_range_dels_ = fragmented_tombstone_list;
     }
   }
