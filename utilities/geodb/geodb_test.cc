@@ -163,7 +163,7 @@ TEST_F(GeoDBTest, DifferentPosInSameQuadkey) {
   ASSERT_TRUE(status.ok());
 
   // obj1 and obj2 have the same quadkey
-  ASSERT_EQ(quadkey1, quadkey2);
+  ASSERT_EQ(quadkey1.slice(), quadkey2.slice());
 
   // get obj1 by id, and check value
   GeoObject obj;

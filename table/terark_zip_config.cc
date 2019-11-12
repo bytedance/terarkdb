@@ -103,7 +103,7 @@ void TerarkZipAutoConfigForBulkLoad(struct TerarkZipTableOptions& tzo,
                                     struct ColumnFamilyOptions& cfo,
                                     size_t cpuNum,
                                     size_t memBytesLimit,
-                                    size_t diskBytesLimit) {
+                                    size_t /*diskBytesLimit*/) {
   using namespace std; // max, min
   int iCpuNum = int(cpuNum);
   if (cpuNum > 0) {
@@ -197,7 +197,7 @@ TerarkZipAutoConfigForOnlineDB_DBOptions(struct DBOptions& dbo, size_t cpuNum) {
 void TerarkZipAutoConfigForOnlineDB_CFOptions(struct TerarkZipTableOptions& tzo,
                                               struct ColumnFamilyOptions& cfo,
                                               size_t memBytesLimit,
-                                              size_t diskBytesLimit) {
+                                              size_t /*diskBytesLimit*/) {
   using namespace std; // max, min
   if (0 == memBytesLimit) {
 #ifdef _MSC_VER
@@ -375,7 +375,7 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo, const std::string& tera
     cfo.compaction_options_universal.allow_trivial_move = true;
 #define MyGetUniversal_uint(name, Default)  \
     cfo.compaction_options_universal.name = \
-        terark::getEnvLong("TerarkZipTable_" #name, Default)
+        (uint32_t)terark::getEnvLong("TerarkZipTable_" #name, Default)
     MyGetUniversal_uint(min_merge_width, 3);
     MyGetUniversal_uint(max_merge_width, 7);
     cfo.compaction_options_universal.size_ratio = (unsigned)

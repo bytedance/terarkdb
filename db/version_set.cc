@@ -4702,7 +4702,7 @@ void VersionSet::GetLiveFilesMetaData(std::vector<LiveFileMetaData>* metadata) {
     if (cfd->IsDropped() || !cfd->initialized()) {
       continue;
     }
-    for (int level = 0; level < cfd->NumberLevels(); level++) {
+    for (int level = -1; level < cfd->NumberLevels(); level++) {
       for (const auto& file :
            cfd->current()->storage_info()->LevelFiles(level)) {
         LiveFileMetaData filemetadata;

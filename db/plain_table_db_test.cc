@@ -258,8 +258,8 @@ class TestPlainTableReader : public PlainTableReader {
   TestPlainTableReader(const EnvOptions& env_options,
                        const InternalKeyComparator& icomparator,
                        EncodingType encoding_type, uint64_t file_size,
-                       int bloom_bits_per_key, double hash_table_ratio,
-                       size_t index_sparseness,
+                       uint64_t file_number, int bloom_bits_per_key,
+                       double hash_table_ratio, size_t index_sparseness,
                        const TableProperties* table_properties,
                        std::unique_ptr<RandomAccessFileReader>&& file,
                        const ImmutableCFOptions& ioptions,
@@ -268,8 +268,8 @@ class TestPlainTableReader : public PlainTableReader {
                        uint32_t column_family_id,
                        const std::string& column_family_name)
       : PlainTableReader(ioptions, std::move(file), env_options, icomparator,
-                         encoding_type, uint64_t(-1), file_size, table_properties,
-                         prefix_extractor),
+                         encoding_type, file_number, file_size,
+                         table_properties, prefix_extractor),
         expect_bloom_not_match_(expect_bloom_not_match) {
     Status s = MmapDataIfNeeded();
     EXPECT_TRUE(s.ok());
@@ -364,10 +364,11 @@ class TestPlainTableFactory : public PlainTableFactory {
     std::unique_ptr<PlainTableReader> new_reader(new TestPlainTableReader(
         table_reader_options.env_options,
         table_reader_options.internal_comparator, encoding_type, file_size,
-        bloom_bits_per_key_, hash_table_ratio_, index_sparseness_, props,
-        std::move(file), table_reader_options.ioptions,
-        table_reader_options.prefix_extractor, expect_bloom_not_match_,
-        store_index_in_file_, column_family_id_, column_family_name_));
+        table_reader_options.file_number, bloom_bits_per_key_,
+        hash_table_ratio_, index_sparseness_, props, std::move(file),
+        table_reader_options.ioptions, table_reader_options.prefix_extractor,
+        expect_bloom_not_match_, store_index_in_file_, column_family_id_,
+        column_family_name_));
 
     *table = std::move(new_reader);
     return s;

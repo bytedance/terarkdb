@@ -28,7 +28,7 @@ using namespace rocksdb;
 
 // copy & modify from block_based_table_reader.cc
 SequenceNumber GetGlobalSequenceNumber(const TableProperties& table_properties,
-                                       Logger* info_log) {
+                                       Logger* /*info_log*/) {
   auto& props = table_properties.user_collected_properties;
 
   auto version_pos = props.find(ExternalSstFilePropertyNames::kVersion);
@@ -180,7 +180,7 @@ static void MmapAdviseRandom(fstring mem) {
 }
 
 void UpdateCollectInfo(const TerarkZipTableFactory* table_factory,
-                       const TerarkZipTableOptions* tzopt,
+                       const TerarkZipTableOptions* /*tzopt*/,
                        TableProperties* props,
                        size_t file_size) {
   auto find_time = props->user_collected_properties.find(kTerarkZipTableBuildTimestamp);
@@ -262,8 +262,10 @@ protected:
   valvec<byte_t>& ValueBuf() const { return cache_offsets_->recData; }
 
 public:
-  TerarkZipTableIterator(const TableReaderOptions& tro, const TerarkZipSubReader* subReader, const ReadOptions& ro,
-                         SequenceNumber global_seqno, TerarkContext* ctx)
+  TerarkZipTableIterator(
+      const TableReaderOptions& tro,
+      const TerarkZipSubReader* subReader, const ReadOptions& /*ro*/,
+      SequenceNumber global_seqno, TerarkContext* ctx)
     : table_reader_options_(&tro), global_seqno_(global_seqno), ctx_ptr_(ctx == nullptr ? &ctx_ : ctx) {
     subReader_ = subReader;
     if (subReader_ != nullptr) {
@@ -388,7 +390,7 @@ public:
     return Status::OK();
   }
 
-  Status fetch_buffer(LazyBuffer* buffer) const override {
+  Status fetch_buffer(LazyBuffer* /*buffer*/) const override {
     return Status::OK();
   }
 
@@ -516,7 +518,7 @@ protected:
       if (ZipValueType::kMulti == zip_value_type_ && value_buf.size() != sizeof(uint32_t)) {
         ZipValueMultiValue::decode(value_buf, &value_count_);
         uint32_t* offsets = (uint32_t*)value_buf.data();
-        size_t pos = 0;
+        uint32_t pos = 0;
         char* base = (char*)(offsets + value_count_ + 1);
         for (size_t i = 0; i < value_count_; ++i) {
           size_t q = offsets[i + 0];
@@ -765,7 +767,9 @@ LoadTombstone(RandomAccessFileReader* file, uint64_t file_size) {
     auto icomp = &GetTableReaderOptions().internal_comparator;
     auto iter = std::unique_ptr<InternalIteratorBase<Slice>>(block->NewIterator<DataBlockIter>(
         icomp, icomp->user_comparator(), nullptr, GetTableReaderOptions().ioptions.statistics));
-    iter->RegisterCleanup([](void* arg0, void* arg1){ delete static_cast<Block*>(arg0); }, block, nullptr);
+    iter->RegisterCleanup([](void* arg0, void* /*arg1*/){
+      delete static_cast<Block*>(arg0);
+      }, block, nullptr);
     fragmented_range_dels_ = std::make_shared<FragmentedRangeTombstoneList>(
         std::move(iter), *icomp);
   }
@@ -840,7 +844,7 @@ const {
 }
 
 Status TerarkZipSubReader::Get(SequenceNumber global_seqno,
-                               const ReadOptions& ro, const Slice& ikey,
+                               const ReadOptions& /*ro*/, const Slice& ikey,
                                GetContext* get_context, int flag)
 const {
   TERARK_UNUSED_VAR(flag);
@@ -1108,7 +1112,7 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
     subReader_.cache_ = table_factory_->cache();
     if (subReader_.cache_) {
 #ifndef _MSC_VER
-      int fileFD = subReader_.storeFD_;
+      int fileFD = (int)subReader_.storeFD_;
   #ifdef OS_MACOSX
       if (fcntl(fileFD, F_NOCACHE, 1) == -1) {
         return Status::IOError("While fcntl NoCache"
@@ -1253,14 +1257,15 @@ NewIteratorImpl(const ReadOptions& ro, Arena* arena, ContextBuffer* buffer, Tera
 
 Status
 TerarkZipTableReader::Get(const ReadOptions& ro, const Slice& ikey,
-                          GetContext* get_context, const SliceTransform* prefix_extractor,
+                          GetContext* get_context,
+                          const SliceTransform* /*prefix_extractor*/,
                           bool skip_filters) {
   int flag = skip_filters ? TerarkZipSubReader::FlagSkipFilter : TerarkZipSubReader::FlagNone;
   return subReader_.Get(global_seqno_, ro, ikey, get_context, flag);
 }
 
 void TerarkZipTableReader::RangeScan(
-    const Slice* begin, const SliceTransform* prefix_extractor, void* arg,
+    const Slice* begin, const SliceTransform* /*prefix_extractor*/, void* arg,
     bool(* callback_func)(void* arg, const Slice& key, LazyBuffer&& value)) {
   auto g_tctx = terark::GetTlsTerarkContext();
   ContextBuffer buffer;
@@ -1409,7 +1414,7 @@ Status TerarkZipTableMultiReader::SubIndex::Init(
     if (cache_fi_ >= 0) {
       assert(nullptr != cache_);
 #ifdef OS_MACOSX
-      if (fcntl(fileFD, F_NOCACHE, 1) == -1) {
+      if (fcntl((int)fileFD, F_NOCACHE, 1) == -1) {
         return Status::IOError("While fcntl NoCache"
             , "O_DIRECT is required for terark user space cache");
       }
@@ -1467,9 +1472,12 @@ NewIteratorImpl(const ReadOptions& ro, Arena* arena, ContextBuffer* buffer,
 }
 
 Status
-TerarkZipTableMultiReader::Get(const ReadOptions& ro, const Slice& ikey, GetContext* get_context,
-                               const SliceTransform* prefix_extractor, bool skip_filters) {
-  int flag = skip_filters ? TerarkZipSubReader::FlagSkipFilter : TerarkZipSubReader::FlagNone;
+TerarkZipTableMultiReader::Get(const ReadOptions& ro, const Slice& ikey,
+                               GetContext* get_context,
+                               const SliceTransform* /*prefix_extractor*/,
+                               bool skip_filters) {
+  int flag = skip_filters ? TerarkZipSubReader::FlagSkipFilter
+                          : TerarkZipSubReader::FlagNone;
   if (ikey.size() < 8) {
     return Status::InvalidArgument("TerarkZipTableMultiReader::Get()",
                                    "param target.size() < 8 + PrefixLen");
@@ -1487,7 +1495,7 @@ TerarkZipTableMultiReader::Get(const ReadOptions& ro, const Slice& ikey, GetCont
 }
 
 void TerarkZipTableMultiReader::RangeScan(
-    const Slice* begin, const SliceTransform* prefix_extractor, void* arg,
+    const Slice* begin, const SliceTransform* /*prefix_extractor*/, void* arg,
     bool(* callback_func)(void* arg, const Slice& key, LazyBuffer&& value)) {
   auto g_tctx = terark::GetTlsTerarkContext();
   ContextBuffer buffer;

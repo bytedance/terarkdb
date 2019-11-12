@@ -387,6 +387,9 @@ inline void LazyBuffer::assign_error(Status&& _status) {
 }
 
 inline void LazyBuffer::clear() {
+  if (state_ == nullptr) {
+    state_ = LazyBufferState::light_state();
+  }
   state_->assign_slice(this, Slice());
   assert(size_ == 0);
   file_number_ = uint64_t(-1);

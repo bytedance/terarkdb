@@ -512,6 +512,12 @@ Status DBImpl::CloseHelper() {
       delete cfd;
     }
   }
+  while (!garbage_collection_queue_.empty()) {
+    auto cfd = PopFirstFromGarbageCollectionQueue();
+    if (cfd->Unref()) {
+      delete cfd;
+    }
+  }
 
   if (default_cf_handle_ != nullptr) {
     // we need to delete handle outside of lock because it does its own locking
