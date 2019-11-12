@@ -99,25 +99,24 @@ public:
   virtual size_t ApproximateMemoryUsage() override;
 
   // This approximition is not supported, return 0 instead.  
-  virtual uint64_t ApproximateNumEntries(
-    const Slice &start_ikey,
-    const Slice &end_ikey) override { return 0; }
+  virtual uint64_t ApproximateNumEntries(const Slice &/*start_ikey*/,
+                                         const Slice &/*end_ikey*/) override {
+    return 0;
+  }
 
   // Return true if this rep contains querying key.
   virtual bool Contains(const Slice &internal_key) const override;
 
   // Get with lazyslice feedback, parsing the value when truly needed.
-  virtual void Get(
-    const LookupKey &k,
-    void *callback_args,
-    bool (*callback_func)(void *arg, const Slice& key,
-                          LazyBuffer&& value)) override;
+  virtual void Get(const LookupKey &k, void *callback_args,
+                   bool (*callback_func)(void *arg, const Slice& key,
+                                         LazyBuffer&& value)) override;
 
   // Return iterator of this rep
   virtual MemTableRep::Iterator *GetIterator(Arena *arena) override;
 
   // Insert with keyhandle is not supported. 
-  virtual void Insert(KeyHandle handle) override { assert(false); }
+  virtual void Insert(KeyHandle /*handle*/) override { assert(false); }
 
   // Return true if insertion successed.
   virtual bool InsertKeyValue(

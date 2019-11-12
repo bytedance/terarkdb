@@ -11,6 +11,7 @@
 #include "db/range_del_aggregator.h"
 #include "port/stack_trace.h"
 #include "rocksdb/memtablerep.h"
+#include "memtable/terark_zip_memtable.h"
 #include "rocksdb/slice_transform.h"
 
 namespace rocksdb {
@@ -145,7 +146,7 @@ TEST_F(DBMemTableTest, DuplicateSeq) {
 
   // Create a MemTable
   InternalKeyComparator cmp(BytewiseComparator());
-  auto factory = std::make_shared<SkipListRepFactory>();
+  auto factory = std::make_shared<SkipListFactory>();
   options.memtable_factory = factory;
   ImmutableCFOptions ioptions(options);
   WriteBufferManager wb(options.db_write_buffer_size);
@@ -271,7 +272,7 @@ TEST_F(DBMemTableTest, ColumnFamilyId) {
   }
 }
 
-TEST_F(PatriciaMemTableTest, Normal){
+TEST(PatriciaMemTableTest, Normal){
   SequenceNumber seq = 123;
   std::string value;
   Status s;
@@ -280,9 +281,11 @@ TEST_F(PatriciaMemTableTest, Normal){
   InternalKeyComparator ikey_cmp(options.comparator);
   std::unordered_map<std::string, std::string> memtable_options;
   InternalKeyComparator cmp(BytewiseComparator());
-  auto factory = std::make_shared<PatriciaMemtableRepFactory>();
+  auto factory =
+      std::make_shared<PatriciaTrieRepFactory>(options.memtable_factory);
   options.memtable_factory = factory;
   ImmutableCFOptions ioptions(options);
+  WriteBufferManager wb(options.db_write_buffer_size);
   MemTable* mem = new MemTable(cmp, ioptions, MutableCFOptions(options),
                                false, &wb,
                                kMaxSequenceNumber, 0);

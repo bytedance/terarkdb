@@ -2442,7 +2442,7 @@ class ModelDB : public DB {
   }
   using DB::Get;
   virtual Status Get(const ReadOptions& /*options*/, ColumnFamilyHandle* /*cf*/,
-                     const Slice& key, PinnableSlice* /*value*/) override {
+                     const Slice& key, LazyBuffer* /*value*/) override {
     return Status::NotSupported(key);
   }
 
@@ -3596,11 +3596,11 @@ TEST_F(DBTest, ConcurrentFlushWAL) {
       // Recover from the wal and make sure that it is not corrupted
       Reopen(options);
       for (size_t i = 0; i < cnt; i++) {
-        PinnableSlice pval;
+        LazyBuffer pval;
         auto istr = ToString(i);
         ASSERT_OK(
             db_->Get(ropt, db_->DefaultColumnFamily(), "a" + istr, &pval));
-        ASSERT_TRUE(pval == ("b" + istr));
+        ASSERT_TRUE(pval.slice() == ("b" + istr));
       }
     }
   }
@@ -5050,7 +5050,7 @@ class DelayedMergeOperator : public MergeOperator {
   virtual bool FullMergeV2(const MergeOperationInput& /*merge_in*/,
                            MergeOperationOutput* merge_out) const override {
     db_test_->env_->addon_time_.fetch_add(1000);
-    merge_out->new_value = "";
+    merge_out->new_value.clear();
     return true;
   }
 
@@ -6026,7 +6026,7 @@ TEST_F(DBTest, PinnableSliceAndRowCache) {
       1);
 
   {
-    PinnableSlice pin_slice;
+    LazyBuffer pin_slice;
     ASSERT_EQ(Get("foo", &pin_slice), Status::OK());
     ASSERT_EQ(pin_slice.ToString(), "bar");
     // Entry is already in cache, lookup will remove the element from lru
@@ -6034,7 +6034,7 @@ TEST_F(DBTest, PinnableSliceAndRowCache) {
         reinterpret_cast<LRUCache*>(options.row_cache.get())->TEST_GetLRUSize(),
         0);
   }
-  // After PinnableSlice destruction element is added back in LRU
+  // After LazyBuffer destruction element is added back in LRU
   ASSERT_EQ(
       reinterpret_cast<LRUCache*>(options.row_cache.get())->TEST_GetLRUSize(),
       1);

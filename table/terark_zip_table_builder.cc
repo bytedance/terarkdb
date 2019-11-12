@@ -71,13 +71,16 @@ static std::string GetTimestamp() {
 
 ///////////////////////////////////////////////////////////////////
 // hack MyRocks Rdb_tbl_prop_coll
-rocksdb::Status MyRocksTablePropertiesCollectorHack(IntTblPropCollector* collector,
-                                                    const TerarkZipMultiOffsetInfo& offset_info,
-                                                    UserCollectedProperties& user_collected_properties,
-                                                    bool is_reverse_bytewise_order) {
+rocksdb::Status MyRocksTablePropertiesCollectorHack(
+    IntTblPropCollector* collector, const TerarkZipMultiOffsetInfo& offset_info,
+    UserCollectedProperties& user_collected_properties,
+    bool is_reverse_bytewise_order) {
   if (fstring(collector->Name()) != "Rdb_tbl_prop_coll") {
     return Status::OK();
   }
+  TERARK_UNUSED_VAR(offset_info);
+  TERARK_UNUSED_VAR(user_collected_properties);
+  TERARK_UNUSED_VAR(is_reverse_bytewise_order);
 #if 0
   // TODO
   if (offset_info.prefixLen_ != 4) { // prefix mismatch, can't hack ...
@@ -149,7 +152,7 @@ public:
 
 class TerarkZipTableBuilderStage : public PipelineStage {
 protected:
-  void process(int threadno, PipelineQueueItem* item) final {
+  void process(int /*threadno*/, PipelineQueueItem* item) final {
     auto task = static_cast<TerarkZipTableBuilderTask*>(item->task);
     Status s;
     try {
@@ -1639,9 +1642,10 @@ TerarkZipTableBuilder::BuilderWriteValues(KeyValueStatus& kvs, std::function<voi
   return Status::OK();
 }
 
-Status TerarkZipTableBuilder::WriteIndexStore(fstring indexMmap, AbstractBlobStore* store, KeyValueStatus& kvs,
-                                              BlockHandle& dataBlock, size_t kvs_index, long long& t5, long long& t6,
-                                              long long& t7) {
+Status TerarkZipTableBuilder::WriteIndexStore(
+    fstring indexMmap, AbstractBlobStore* store, KeyValueStatus& kvs,
+    BlockHandle& /*dataBlock*/, size_t kvs_index, long long& /*t5*/,
+    long long& t6, long long& t7) {
   using namespace std::placeholders;
   auto writeAppend = std::bind(&TerarkZipTableBuilder::DoWriteAppend, this, _1, _2);
   BuildReorderParams params;
@@ -2286,8 +2290,8 @@ createTerarkZipTableBuilder(const TerarkZipTableFactory* table_factory,
                             uint32_t column_family_id,
                             WritableFileWriter* file,
                             uint32_t key_prefixLen) {
-  return new TerarkZipTableBuilder(
-    table_factory, tzo, tbo, column_family_id, file, key_prefixLen);
+  return new TerarkZipTableBuilder(table_factory, tzo, tbo, column_family_id,
+                                   file, key_prefixLen);
 }
 
 } // namespace

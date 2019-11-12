@@ -42,7 +42,7 @@ class DBMergeOperatorTest : public DBTestBase {
     TestReadCallback read_callback(snapshot_checker, seq);
     ReadOptions read_opt;
     read_opt.snapshot = snapshot;
-    PinnableSlice value;
+    LazyBuffer value;
     Status s =
         dbfull()->GetImpl(read_opt, db_->DefaultColumnFamily(), key, &value,
                           nullptr /*value_found*/, &read_callback);
@@ -63,11 +63,8 @@ TEST_F(DBMergeOperatorTest, LimitMergeOperands) {
       return "DBMergeOperatorTest::LimitedStringAppendMergeOp";
     }
 
-    bool ShouldMerge(const std::vector<Slice>& operands) const override {
-      if (operands.size() > 0 && limit_ > 0 && operands.size() >= limit_) {
-        return true;
-      }
-      return false;
+    bool ShouldMerge(const std::vector<LazyBuffer>& operands) const override {
+      return limit_ > 0 && operands.size() >= limit_;
     }
 
    private:

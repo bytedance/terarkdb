@@ -1140,7 +1140,7 @@ class MockMergeOperator : public MergeOperator {
   virtual bool FullMergeV2(const MergeOperationInput& merge_in,
                            MergeOperationOutput* merge_out) const override {
     assert(merge_out != nullptr);
-    merge_out->new_value = merge_in.operand_list.back().ToString();
+    merge_out->existing_operand = &merge_in.operand_list.back();
     return true;
   }
 

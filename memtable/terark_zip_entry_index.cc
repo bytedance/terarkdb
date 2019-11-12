@@ -109,7 +109,8 @@ struct IteratorImplWithOffset : public IteratorImplBase {
     }
     auto vec = GetVector();
     if (handle.iter()->word() == find_key) {
-      index = terark::lower_bound_0(vec.data, vec.size, entry->offset);
+      index =
+          (uint32_t)terark::lower_bound_0(vec.data, vec.size, entry->offset);
       if (index != vec.size) {
         return vec.data[index].value;
       }
@@ -130,7 +131,8 @@ struct IteratorImplWithOffset : public IteratorImplBase {
     }
     auto vec = GetVector();
     if (handle.iter()->word() == find_key) {
-      index = terark::upper_bound_0(vec.data, vec.size, entry->offset) - 1;
+      index =
+          (uint32_t)terark::upper_bound_0(vec.data, vec.size, entry->offset) - 1;
       if (index != vec.size) {
         return vec.data[index].value;
       }
@@ -140,7 +142,7 @@ struct IteratorImplWithOffset : public IteratorImplBase {
       vec = GetVector();
     }
     assert(handle.iter()->word() < find_key);
-    index = vec.size - 1;
+    index = (uint32_t)vec.size - 1;
     return vec.data[index].value;
   }
   WriteBatchIndexEntry* SeekToFirst() {
@@ -156,7 +158,7 @@ struct IteratorImplWithOffset : public IteratorImplBase {
       return nullptr;
     }
     auto vec = GetVector();
-    index = vec.size - 1;
+    index = (uint32_t)vec.size - 1;
     return vec.data[index].value;
   }
   WriteBatchIndexEntry* Next() {
@@ -178,7 +180,7 @@ struct IteratorImplWithOffset : public IteratorImplBase {
         return nullptr;
       }
       auto vec = GetVector();
-      index = vec.size - 1;
+      index = (uint32_t)vec.size - 1;
       return vec.data[index].value;
     } else {
       auto vec = GetVector();
@@ -264,7 +266,7 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
 
  public:
   WriteBatchEntryPTrieIndex(WriteBatchKeyExtractor e,
-                            const Comparator* c, Arena* a)
+                            const Comparator* /*c*/, Arena* /*a*/)
       : index_(trie_value_size, 512ull << 10,
                terark::MainPatricia::SingleThreadShared),
         extractor_(e) {
@@ -315,7 +317,7 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
           vector->loc = (uint32_t)data_loc;
           vector->size = 1;
 
-          uint32_t u32_vector_loc = vector_loc;
+          uint32_t u32_vector_loc = (uint32_t)vector_loc;
           memcpy(valptr, &u32_vector_loc, valsize);
           return true;
         }
@@ -331,7 +333,7 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
         auto* vector = (value_vector_t*)index_.mem_get(vector_loc);
         size_t data_loc = vector->loc;
         auto* data = (value_wrap_t*)index_.mem_get(data_loc);
-        size_t size = vector->size;
+        uint32_t size = vector->size;
         assert(size > 0);
         assert(key->offset > data[size - 1].value->offset);
         if (!vector->full()) {

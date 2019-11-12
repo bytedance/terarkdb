@@ -57,8 +57,14 @@
 #include "util/sync_point.h"
 #include "util/thread_local.h"
 #include "util/threadpool_imp.h"
-
+#if __clang__
+# pragma clang diagnostic push
+# pragma clang diagnostic ignored "-Wunused-parameter"
+#endif
 #include <boost/fiber/operations.hpp>
+#if __clang__
+# pragma clang diagnostic pop
+#endif
 
 #if !defined(TMPFS_MAGIC)
 #define TMPFS_MAGIC 0x01021994

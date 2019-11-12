@@ -52,7 +52,7 @@ bool MemWriterToken::init_value(void *valptr, size_t valsize) noexcept {
     auto *vector = (detail::tag_vector_t *)trie->mem_get(vector_loc);
     vector->loc = (uint32_t)data_loc;
     vector->size = 1;
-    uint32_t u32_vector_loc = vector_loc;
+    uint32_t u32_vector_loc = (uint32_t)vector_loc;
     memcpy(valptr, &u32_vector_loc, valsize);
     return true;
   } while (false);
@@ -70,7 +70,7 @@ PatriciaTrieRep::PatriciaTrieRep(detail::ConcurrentType concurrent_type,
                                  bool handle_duplicate,
                                  intptr_t write_buffer_size,
                                  Allocator *allocator,
-                                 const MemTableRep::KeyComparator &compare)
+                                 const MemTableRep::KeyComparator &/*compare*/)
                                : MemTableRep(allocator){
   immutable_ = false;
   patricia_key_type_ = patricia_key_type;
@@ -130,7 +130,7 @@ void PatriciaTrieRep::Get(
 
     virtual void pin_buffer(LazyBuffer* /*buffer*/) const override {}
 
-    Status fetch_buffer(LazyBuffer* buffer) const override {
+    Status fetch_buffer(LazyBuffer* /*buffer*/) const override {
       return Status::OK();
     }
 
@@ -233,7 +233,7 @@ bool PatriciaTrieRep::InsertKeyValue(
       auto *vector = (detail::tag_vector_t *)trie->mem_get(vector_loc);
       size_t data_loc = vector->loc;
       auto *data = (detail::tag_vector_t::data_t *)trie->mem_get(data_loc);
-      size_t size = vector->size;
+      uint32_t size = vector->size;
       assert(size > 0);
       assert(token->get_tag() > data[size - 1].tag);
       if ((token->get_tag() >> 8) == (data[size - 1].tag >> 8)) {

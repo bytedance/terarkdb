@@ -125,22 +125,16 @@ class MockTableBuilder : public TableBuilder {
   // Add key,value to the table being constructed.
   // REQUIRES: key is after any previously added key according to comparator.
   // REQUIRES: Finish(), Abandon() have not been called
-  void Add(const Slice& key, const LazyBuffer& value) override {
+  Status Add(const Slice& key, const LazyBuffer& value) override {
     auto s = value.fetch();
-    if (s.ok()) {
-      table_.insert({key.ToString(), value.ToString()});
-    } else if (status_.ok()) {
-      status_ = std::move(s);
+    if (!s.ok()) {
+      return s;
     }
+    table_.insert({key.ToString(), value.ToString()});
+    return Status::OK();
   }
 
-  // Return non-ok iff some error has been detected.
-  Status status() const override { return status_; }
-
   Status Finish(const TablePropertyCache* prop) override {
-    if (!status_.ok()) {
-      return status_;
-    }
     MutexLock lock_guard(&file_system_->mutex);
     file_system_->files.insert({id_, table_});
     if (prop != nullptr) {
@@ -168,7 +162,6 @@ class MockTableBuilder : public TableBuilder {
   MockTableFileSystem* file_system_;
   stl_wrappers::KVMap table_;
   TablePropertyCache prop_;
-  Status status_;
 };
 
 class MockTableFactory : public TableFactory {
