@@ -56,6 +56,59 @@ static Slice GetSliceForFileNumber(const uint64_t* file_number) {
                sizeof(*file_number));
 }
 
+// Store params for create depend table iterator in future
+class LazyCreateIterator : public Snapshot {
+  TableCache* table_cache_;
+  ReadOptions options_;  // deep copy
+  SequenceNumber snapshot_;
+  const EnvOptions& env_options_;
+  const InternalKeyComparator& icomparator_;
+  RangeDelAggregator* range_del_agg_;
+  const SliceTransform* prefix_extractor_;
+  bool for_compaction_;
+  bool skip_filters_;
+  int level_;
+
+ public:
+  LazyCreateIterator(TableCache* table_cache, const ReadOptions& options,
+                     const EnvOptions& env_options,
+                     const InternalKeyComparator& icomparator,
+                     RangeDelAggregator* range_del_agg,
+                     const SliceTransform* prefix_extractor,
+                     bool for_compaction, bool skip_filters, int level)
+      : table_cache_(table_cache),
+        options_(options),
+        snapshot_(0),
+        env_options_(env_options),
+        icomparator_(icomparator),
+        range_del_agg_(range_del_agg),
+        prefix_extractor_(prefix_extractor),
+        for_compaction_(for_compaction),
+        skip_filters_(skip_filters),
+        level_(level) {
+    if (options.snapshot != nullptr) {
+      snapshot_ = options.snapshot->GetSequenceNumber();
+      options_.snapshot = this;
+    }
+    options_.iterate_lower_bound = nullptr;
+    options_.iterate_upper_bound = nullptr;
+  }
+  ~LazyCreateIterator() = default;
+
+  SequenceNumber GetSequenceNumber() const override {
+    return snapshot_;
+  }
+
+  InternalIterator* operator()(const FileMetaData* _f,
+                               const DependenceMap& _dependence_map,
+                               Arena* _arena, TableReader** _reader_ptr) {
+    return table_cache_->NewIterator(
+        options_, env_options_, icomparator_, *_f, _dependence_map,
+        range_del_agg_, prefix_extractor_, _reader_ptr, nullptr,
+        for_compaction_, _arena, skip_filters_, level_);
+  }
+};
+
 }  // namespace
 
 TableCache::TableCache(const ImmutableCFOptions& ioptions,
@@ -241,62 +294,39 @@ InternalIterator* TableCache::NewIterator(
       result = table_reader->NewIterator(options, prefix_extractor, arena,
                                          skip_filters, for_compaction);
       if (file_meta.prop.purpose == kMapSst && !dependence_map.empty()) {
-        // Store params for create depend table iterator in future
-        // DON'T REF THIS OBJECT, DEEP COPY IT !
-        struct CreateIteratorFuncion {
-          TableCache* table_cache;
-          ReadOptions options;  // deep copy
-          const EnvOptions& env_options;
-          const InternalKeyComparator& icomparator;
-          RangeDelAggregator* range_del_agg;
-          const SliceTransform* prefix_extractor;
-          bool for_compaction;
-          bool skip_filters;
-          int level;
-
-          InternalIterator* operator()(const FileMetaData* _f,
-                                       const DependenceMap& _dependence_map,
-                                       Arena* _arena,
-                                       TableReader** _reader_ptr) {
-            return table_cache->NewIterator(
-                options, env_options, icomparator, *_f, _dependence_map,
-                range_del_agg, prefix_extractor, _reader_ptr, nullptr,
-                for_compaction, _arena, skip_filters, level);
-          }
-        };
-        using CreateIteratorFuncionStorage =
-            std::aligned_storage<sizeof(CreateIteratorFuncion)>::type;
-        void* buffer;
+        LazyCreateIterator* lazy_create_iter;
         if (arena != nullptr) {
-          buffer = arena->AllocateAligned(sizeof(CreateIteratorFuncion));
+          void* buffer = arena->AllocateAligned(sizeof(LazyCreateIterator));
+          lazy_create_iter =
+              new (buffer) LazyCreateIterator(this, options, env_options,
+                                              icomparator, range_del_agg,
+                                              prefix_extractor, for_compaction,
+                                              skip_filters, level);
+
         } else {
-          buffer = new CreateIteratorFuncionStorage();
+          lazy_create_iter =
+              new LazyCreateIterator(this, options, env_options, icomparator,
+                                     range_del_agg, prefix_extractor,
+                                     for_compaction, skip_filters, level);
         }
-        auto create_iter_fn = new (buffer)
-            CreateIteratorFuncion{this, options, env_options, icomparator,
-                                  range_del_agg, prefix_extractor,
-                                  for_compaction, skip_filters, level};
         auto map_sst_iter =
             NewMapSstIterator(&file_meta, result, dependence_map, icomparator,
-                              create_iter_fn,
-                              c_style_callback(*create_iter_fn), arena);
+                              lazy_create_iter,
+                              c_style_callback(*lazy_create_iter), arena);
         if (arena != nullptr) {
           map_sst_iter->RegisterCleanup(
               [](void* arg1, void* arg2) {
                 static_cast<InternalIterator*>(arg1)->~InternalIterator();
-                auto arg2_type_ptr = static_cast<CreateIteratorFuncion*>(arg2);
-                arg2_type_ptr->~CreateIteratorFuncion();
+                static_cast<LazyCreateIterator*>(arg2)->~LazyCreateIterator();
               },
-              result, create_iter_fn);
+              result, lazy_create_iter);
         } else {
           map_sst_iter->RegisterCleanup(
               [](void* arg1, void* arg2) {
                 delete static_cast<InternalIterator*>(arg1);
-                auto arg2_type_ptr = static_cast<CreateIteratorFuncion*>(arg2);
-                arg2_type_ptr->~CreateIteratorFuncion();
-                delete static_cast<CreateIteratorFuncionStorage*>(arg2);
+                delete static_cast<LazyCreateIterator*>(arg2);
               },
-              result, create_iter_fn);
+              result, lazy_create_iter);
         }
         result = map_sst_iter;
       }

@@ -17,7 +17,7 @@ namespace {
 
 static auto bytewise_icmp = InternalKeyComparator(BytewiseComparator());
 
-std::unique_ptr<InternalIterator> MakeRangeDelIter(
+std::unique_ptr<InternalIteratorBase<Slice>> MakeRangeDelIter(
     const std::vector<RangeTombstone>& range_dels) {
   std::vector<std::string> keys, values;
   for (const auto& range_del : range_dels) {
@@ -25,8 +25,8 @@ std::unique_ptr<InternalIterator> MakeRangeDelIter(
     keys.push_back(key_and_value.first.Encode().ToString());
     values.push_back(key_and_value.second.ToString());
   }
-  return std::unique_ptr<test::VectorIterator>(
-      new test::VectorIterator(keys, values));
+  return std::unique_ptr<test::VectorIteratorBase<Slice>>(
+      new test::VectorIteratorBase<Slice>(keys, values));
 }
 
 void CheckIterPosition(const RangeTombstone& tombstone,
