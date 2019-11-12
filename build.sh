@@ -63,6 +63,12 @@ make LINK_TERARK=static \
      DISABLE_WARNING_AS_ERROR=1 \
      DEBUG_LEVEL=0 static_lib -j $cpuNum
 
+make LINK_TERARK=static \
+     EXTRA_CXXFLAGS="-DROCKSDB_VALGRIND_RUN=$VALGRIND" \
+     BMI2=$WITH_BMI2 \
+     DISABLE_WARNING_AS_ERROR=1 \
+     DEBUG_LEVEL=2 static_lib -j $cpuNum
+
 pkgdir=output
 rm -rf $pkgdir
 

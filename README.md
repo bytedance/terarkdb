@@ -11,7 +11,7 @@
 ## Build
 
 1. checkout the latest tag version
-2. `./build.sh` or `env DEBUG_ENV=1 ./build.sh` for debug version
+2. `./build.sh` will produces release and debug version in the same time
 3. find static / dynamic libraries inside output directory
 
 the output directory looks like this:
