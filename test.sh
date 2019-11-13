@@ -1,1 +1,1 @@
-#!/usr/bin/env bash
+make LINK_TERARK=static BMI2=1 DISABLE_WARNING_AS_ERROR=1 DEBUG_LEVEL=2 $1 -j && ./$@

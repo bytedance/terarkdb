@@ -278,6 +278,7 @@ TEST(PatriciaMemTableTest, Normal){
   Status s;
   MergeContext merge_context;
   Options options;
+  ReadOptions read_options;
   InternalKeyComparator ikey_cmp(options.comparator);
   std::unordered_map<std::string, std::string> memtable_options;
   InternalKeyComparator cmp(BytewiseComparator());
@@ -292,35 +293,21 @@ TEST(PatriciaMemTableTest, Normal){
 
   // Write some keys and make sure it returns false on duplicates
   bool res;
-  res = mem->Add(seq, kTypeValue, "key", "value2");
+  LazyBuffer buf;
+  res = mem->Add(seq, kTypeValue, "key", "value");
   ASSERT_TRUE(res);
-  res = mem->Add(seq, kTypeValue, "key", "value2");
+  res = mem->Add(seq, kTypeValue, "key", "value");
   ASSERT_FALSE(res);
   // Changing the type should still cause the duplicatae key
-  res = mem->Add(seq, kTypeMerge, "key", "value2");
+  res = mem->Add(seq, kTypeMerge, "key", "value");
   ASSERT_FALSE(res);
-  // Changing the seq number will make the key fresh
-  res = mem->Add(seq + 1, kTypeMerge, "key", "value2");
-  ASSERT_TRUE(res);
   // Test with different types for duplicate keys
-  res = mem->Add(seq, kTypeDeletion, "key", "");
-  ASSERT_FALSE(res);
   res = mem->Add(seq, kTypeSingleDeletion, "key", "");
   ASSERT_FALSE(res);
+  // Changing the seq number will make the key fresh
+  res = mem->Add(seq + 1, kTypeMerge, "key", "value");
+  ASSERT_TRUE(res);
 
-  // Test the duplicate keys under stress
-  for (int i = 0; i < 10000; i++) {
-    bool insert_dup = i % 10 == 1;
-    if (!insert_dup) {
-      seq++;
-    }
-    res = mem->Add(seq, kTypeValue, "foo", "value" + ToString(seq));
-    if (insert_dup) {
-      ASSERT_FALSE(res);
-    } else {
-      ASSERT_TRUE(res);
-    }
-  }
   delete mem;
 }
 
