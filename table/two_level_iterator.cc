@@ -281,7 +281,11 @@ class MapSstIterator final : public InternalIterator {
       }
       assert(file_meta_ == nullptr ||
              std::binary_search(file_meta_->prop.dependence.begin(),
-                                file_meta_->prop.dependence.end(), link_[i]));
+                                file_meta_->prop.dependence.end(),
+                                Dependence{link_[i], 0},
+                                [](const Dependence& l, const Dependence& r) {
+                                  return l.file_number < r.file_number;
+                                }));
     }
     return kInitFirstIterOK;
   }

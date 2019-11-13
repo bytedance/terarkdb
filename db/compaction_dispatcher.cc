@@ -94,13 +94,14 @@ struct json_impl<rocksdb::InternalKey, void> {
 };
 }
 
+AJSON(rocksdb::Dependence, file_number, entry_count);
+
 AJSON(rocksdb::CompactionWorkerResult::FileInfo, smallest, largest, file_name,
                                                  smallest_seqno, largest_seqno,
                                                  file_size,
                                                  marked_for_compaction);
 
-AJSON(rocksdb::CompactionWorkerResult, status, actual_start, actual_end, files,
-                                       delta_antiquation);
+AJSON(rocksdb::CompactionWorkerResult, status, actual_start, actual_end, files);
 
 AJSON(rocksdb::FileDescriptor, packed_number_and_path_id, file_size,
                                smallest_seqno, largest_seqno);
@@ -642,7 +643,7 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
       &context.existing_snapshots, context.earliest_write_conflict_snapshot,
       nullptr, rep_->env, false, false, &range_del_agg, nullptr,
       mutable_cf_options.blob_size, compaction_filter, nullptr,
-      context.preserve_deletes_seqnum, &result.delta_antiquation));
+      context.preserve_deletes_seqnum));
 
   if (start != nullptr) {
     actual_start.SetMinPossibleForUserKey(*start);
@@ -713,7 +714,7 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
         context.earliest_write_conflict_snapshot, nullptr, rep_->env, false,
         false, range_del_agg_ptr, nullptr, mutable_cf_options.blob_size,
         second_pass_iter_storage.compaction_filter, nullptr,
-        context.preserve_deletes_seqnum, nullptr);
+        context.preserve_deletes_seqnum);
   };
   std::unique_ptr<InternalIterator> second_pass_iter(
       NewCompactionIterator(c_style_callback(make_compaction_iterator),
@@ -743,11 +744,12 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
         (*builder_ptr)->SetSecondPassIterator(second_pass_iter.get());
         return s;
       };
-  auto finish_output_file = [&](Status s, FileMetaData* meta,
-                                std::unique_ptr<WritableFileWriter>* writer_ptr,
-                                std::unique_ptr<TableBuilder>* builder_ptr,
-                                const std::unordered_set<uint64_t>& dependence,
-                                const Slice* next_key) {
+  auto finish_output_file =
+      [&](Status s, FileMetaData* meta,
+          std::unique_ptr<WritableFileWriter>* writer_ptr,
+          std::unique_ptr<TableBuilder>* builder_ptr,
+          const std::unordered_map<uint64_t, uint64_t>& dependence,
+          const Slice* next_key) {
     auto writer = writer_ptr->get();
     auto builder = builder_ptr->get();
     if (s.ok()) {
@@ -846,8 +848,13 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
     }
     if (s.ok()) {
       meta->prop.num_entries = builder->NumEntries();
-      meta->prop.dependence.assign(dependence.begin(), dependence.end());
-      std::sort(meta->prop.dependence.begin(), meta->prop.dependence.end());
+      for (auto& pair : dependence) {
+        meta->prop.dependence.emplace_back(Dependence{pair.first, pair.second});
+      }
+      std::sort(meta->prop.dependence.begin(), meta->prop.dependence.end(),
+                [](const Dependence& l, const Dependence& r) {
+                  return l.file_number < r.file_number;
+                });
       s = builder->Finish(&meta->prop);
     } else {
       builder->Abandon();
@@ -895,7 +902,7 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
   std::unique_ptr<WritableFileWriter> writer;
   std::unique_ptr<TableBuilder> builder;
   FileMetaData meta;
-  std::unordered_set<uint64_t> dependence;
+  std::unordered_map<uint64_t, uint64_t> dependence;
 
   Status& status = result.status;
   const Slice* next_key = nullptr;
@@ -907,7 +914,10 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
     if (c_iter->ikey().type == kTypeValueIndex ||
         c_iter->ikey().type == kTypeMergeIndex) {
       assert(value.file_number() != uint64_t(-1));
-      dependence.emplace(value.file_number());
+      auto ib = dependence.emplace(value.file_number(), 1);
+      if (!ib.second) {
+        ++ib.first->second;
+      }
     }
 
     assert(end == nullptr || ucmp->Compare(c_iter->user_key(), *end) < 0);

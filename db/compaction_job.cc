@@ -197,7 +197,6 @@ struct CompactionJob::SubcompactionState {
   uint64_t total_bytes;
   uint64_t num_input_records;
   uint64_t num_output_records;
-  std::unordered_map<uint64_t, uint64_t> delta_antiquation;
   CompactionJobStats compaction_job_stats;
   uint64_t approx_size;
   // An index that used to speed up ShouldStopBefore().
@@ -568,9 +567,9 @@ void CompactionJob::GenSubcompactionBoundaries() {
           if (flevel->files[i].file_metadata->prop.purpose == kMapSst) {
             auto& dependence_map =
                 c->input_version()->storage_info()->dependence_map();
-            for (auto file_number :
+            for (auto& dependence :
                  flevel->files[i].file_metadata->prop.dependence) {
-              auto find = dependence_map.find(file_number);
+              auto find = dependence_map.find(dependence.file_number);
               if (find == dependence_map.end()) {
                 assert(false);
                 continue;
@@ -834,7 +833,6 @@ Status CompactionJob::Run() {
       if (s.ok()) {
         sub_compact.actual_start = std::move(result.actual_start);
         sub_compact.actual_end = std::move(result.actual_end);
-        sub_compact.delta_antiquation = std::move(result.delta_antiquation);
       }
     }
     if (s.ok()) {
@@ -1221,8 +1219,7 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
       &existing_snapshots_, earliest_write_conflict_snapshot_,
       snapshot_checker_, env_, ShouldReportDetailedTime(env_, stats_), false,
       &range_del_agg, sub_compact->compaction, mutable_cf_options->blob_size,
-      compaction_filter, shutting_down_, preserve_deletes_seqnum_,
-      &sub_compact->delta_antiquation));
+      compaction_filter, shutting_down_, preserve_deletes_seqnum_));
   auto c_iter = sub_compact->c_iter.get();
   c_iter->SeekToFirst();
 
@@ -1281,7 +1278,7 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
         false, false, range_del_agg_ptr, sub_compact->compaction,
         mutable_cf_options->blob_size,
         second_pass_iter_storage.compaction_filter, shutting_down_,
-        preserve_deletes_seqnum_, nullptr);
+        preserve_deletes_seqnum_);
   };
   std::unique_ptr<InternalIterator> second_pass_iter(
       NewCompactionIterator(c_style_callback(make_compaction_iterator),
@@ -1303,7 +1300,7 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
   if (!sub_compact->compaction->partial_compaction()) {
     dict_sample_data.reserve(kSampleBytes);
   }
-  std::unordered_set<uint64_t> dependence;
+  std::unordered_map<uint64_t, uint64_t> dependence;
 
   while (status.ok() && !cfd->IsDropped() && c_iter->Valid()) {
     // Invariant: c_iter.status() is guaranteed to be OK if c_iter->Valid()
@@ -1313,7 +1310,10 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
     if (c_iter->ikey().type == kTypeValueIndex ||
         c_iter->ikey().type == kTypeMergeIndex) {
       assert(value.file_number() != uint64_t(-1));
-      dependence.emplace(value.file_number());
+      auto ib = dependence.emplace(value.file_number(), 1);
+      if (!ib.second) {
+        ++ib.first->second;
+      }
     }
 
     assert(end == nullptr ||
@@ -1713,9 +1713,10 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
   std::sort(inheritance_chain.begin(), inheritance_chain.end());
   assert(std::unique(inheritance_chain.begin(),
                      inheritance_chain.end()) == inheritance_chain.end());
-  Status s = FinishCompactionOutputFile(status, sub_compact, nullptr,
-                                        nullptr, std::unordered_set<uint64_t>(),
-                                        inheritance_chain);
+  Status s =
+      FinishCompactionOutputFile(status, sub_compact, nullptr, nullptr,
+                                 std::unordered_map<uint64_t, uint64_t>(),
+                                 inheritance_chain);
   if (status.ok()) {
     status = s;
   }
@@ -1723,20 +1724,17 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
     auto& meta = sub_compact->outputs.front().meta;
     auto& inputs = *sub_compact->compaction->inputs();
     assert(inputs.size() == 1 && inputs.front().level == -1);
-    uint64_t expectation = 0;
-    for (auto f : sub_compact->compaction->inputs()->front().files) {
-      expectation += f->num_antiquation;
-    }
     ROCKS_LOG_INFO(db_options_.info_log,
                    "[%s] [JOB %d] Table #%" PRIu64 " GC: %" PRIu64
-                   " input(s) from %zd file(s). %" PRIu64 " clear: [ %"
-                   PRIu64 " garbage type, %" PRIu64 " get not found, %" PRIu64
-                   " file number mismatch ], %" PRIu64 " expectation",
+                   " inputs from %zd files. %" PRIu64 " clear, %" PRIu64
+                   " expectation: [ %" PRIu64 " garbage type, %" PRIu64
+                   " get not found, %" PRIu64 " file number mismatch ]",
                    cfd->GetName().c_str(), job_id_, meta.fd.GetNumber(),
                    counter.input, inputs.front().size(),
-                   counter.input - meta.prop.num_entries, counter.garbage_type,
-                   counter.get_not_found, counter.file_number_mismatch,
-                   expectation);
+                   counter.input - meta.prop.num_entries,
+                   sub_compact->compaction->num_antiquation(),
+                   counter.garbage_type, counter.get_not_found,
+                   counter.file_number_mismatch);
   }
 
   input.reset();
@@ -1784,7 +1782,7 @@ Status CompactionJob::FinishCompactionOutputFile(
     const Status& input_status, SubcompactionState* sub_compact,
     CompactionRangeDelAggregator* range_del_agg,
     CompactionIterationStats* range_del_out_stats,
-    const std::unordered_set<uint64_t>& dependence,
+    const std::unordered_map<uint64_t, uint64_t>& dependence,
     const std::vector<uint64_t>& inheritance_chain,
     const Slice* next_table_min_key /* = nullptr */) {
   AutoThreadOperationStageUpdater stage_updater(
@@ -1971,8 +1969,13 @@ Status CompactionJob::FinishCompactionOutputFile(
   if (s.ok()) {
     meta->marked_for_compaction = sub_compact->builder->NeedCompact();
     meta->prop.num_entries = sub_compact->builder->NumEntries();
-    meta->prop.dependence.assign(dependence.begin(), dependence.end());
-    std::sort(meta->prop.dependence.begin(), meta->prop.dependence.end());
+    for (auto& pair : dependence) {
+      meta->prop.dependence.emplace_back(Dependence{pair.first, pair.second});
+    }
+    std::sort(meta->prop.dependence.begin(), meta->prop.dependence.end(),
+              [](const Dependence& l, const Dependence& r) {
+                return l.file_number < r.file_number;
+              });
     assert(std::is_sorted(inheritance_chain.begin(), inheritance_chain.end()));
     meta->prop.inheritance_chain.assign(inheritance_chain.begin(),
                                         inheritance_chain.end());
@@ -2186,7 +2189,6 @@ Status CompactionJob::InstallCompactionResults(
     }
   }
 
-  std::unordered_map<uint64_t, uint64_t> delta_antiquation;
   TablePropertiesCollection tp;
   for (const auto& state : compact_->sub_compact_states) {
     for (const auto& output : state.outputs) {
@@ -2195,13 +2197,7 @@ Status CompactionJob::InstallCompactionResults(
                         output.meta.fd.GetNumber(), output.meta.fd.GetPathId());
       tp[fn] = output.table_properties;
     }
-    for (auto& pair : state.delta_antiquation) {
-      if (pair.second > 0) {
-        delta_antiquation[pair.first] += pair.second;
-      }
-    }
   }
-  compaction->edit()->SetAntiquation(delta_antiquation);
   compact_->compaction->SetOutputTableProperties(std::move(tp));
 
   return versions_->LogAndApply(compaction->column_family_data(),

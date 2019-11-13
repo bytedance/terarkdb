@@ -115,16 +115,15 @@ CompactionIterator::CompactionIterator(
     CompactionRangeDelAggregator* range_del_agg, const Compaction* compaction,
     size_t blob_size, const CompactionFilter* compaction_filter,
     const std::atomic<bool>* shutting_down,
-    const SequenceNumber preserve_deletes_seqnum,
-    std::unordered_map<uint64_t, uint64_t>* delta_antiquation)
+    const SequenceNumber preserve_deletes_seqnum)
     : CompactionIterator(
           input, separate_helper, end, cmp, merge_helper, last_sequence,
           snapshots, earliest_write_conflict_snapshot, snapshot_checker, env,
           report_detailed_time, expect_valid_internal_key, range_del_agg,
           std::unique_ptr<CompactionProxy>(
               compaction ? new CompactionProxy(compaction) : nullptr),
-          blob_size, compaction_filter, shutting_down, preserve_deletes_seqnum,
-          delta_antiquation) {}
+          blob_size, compaction_filter, shutting_down,
+          preserve_deletes_seqnum) {}
 
 CompactionIterator::CompactionIterator(
     InternalIterator* input, const SeparateHelper* separate_helper,
@@ -137,9 +136,8 @@ CompactionIterator::CompactionIterator(
     std::unique_ptr<CompactionProxy> compaction, size_t blob_size,
     const CompactionFilter* compaction_filter,
     const std::atomic<bool>* shutting_down,
-    const SequenceNumber preserve_deletes_seqnum,
-    std::unordered_map<uint64_t, uint64_t>* delta_antiquation)
-    : input_(input),
+    const SequenceNumber preserve_deletes_seqnum)
+    : input_(input, separate_helper),
       end_(end),
       cmp_(cmp),
       merge_helper_(merge_helper),
@@ -159,7 +157,6 @@ CompactionIterator::CompactionIterator(
       current_user_key_sequence_(0),
       current_user_key_snapshot_(0),
       merge_out_iter_(merge_helper_),
-      separate_value_collector_(separate_helper, delta_antiquation),
       current_key_committed_(false) {
   assert(compaction_filter_ == nullptr || compaction_ != nullptr);
   bottommost_level_ =
@@ -375,8 +372,7 @@ void CompactionIterator::NextFromInput() {
       // First occurrence of this user key
       // Copy key for output
       key_ = current_key_.SetInternalKey(key_, &ikey_);
-      value_ =
-          separate_value_collector_.add(input_, current_key_.GetUserKey());
+      value_ = input_.value(current_key_.GetUserKey());
       current_user_key_ = ikey_.user_key;
       has_current_user_key_ = true;
       has_outputted_key_ = false;
@@ -399,8 +395,7 @@ void CompactionIterator::NextFromInput() {
       // if we have versions on both sides of a snapshot
       current_key_.UpdateInternalKey(ikey_.sequence, ikey_.type);
       key_ = current_key_.GetInternalKey();
-      value_ =
-          separate_value_collector_.add(input_, current_key_.GetUserKey());
+      value_ = input_.value(current_key_.GetUserKey());
       ikey_.user_key = current_key_.GetUserKey();
 
       // Note that newer version of a key is ordered before older versions. If a
@@ -666,8 +661,7 @@ void CompactionIterator::NextFromInput() {
       // We encapsulate the merge related state machine in a different
       // object to minimize change to the existing flow.
       value_.clear(); // MergeUntil will get iter value and move iter
-      Status s = merge_helper_->MergeUntil(current_key_.GetUserKey(), input_,
-                                           separate_value_collector_,
+      Status s = merge_helper_->MergeUntil(current_key_.GetUserKey(), &input_,
                                            range_del_agg_, prev_snapshot,
                                            bottommost_level_);
       merge_out_iter_.SeekToFirst();
@@ -753,8 +747,7 @@ void CompactionIterator::PrepareOutput() {
   }
   if (ikey_.type == kTypeValueIndex || ikey_.type == kTypeMergeIndex) {
     assert(value_.file_number() != uint64_t(-1));
-    separate_value_collector_.separate_helper()->TransToSeparate(value_);
-    separate_value_collector_.sub(value_.file_number());
+    input_.separate_helper()->TransToSeparate(value_);
   } else if ((compaction_ != nullptr && !compaction_->allow_ingest_behind()) &&
              ikeyNotNeededForIncrementalSnapshot() && bottommost_level_ &&
              valid_ && ikey_.sequence <= earliest_snapshot_ &&

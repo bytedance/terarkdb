@@ -818,8 +818,9 @@ Status Version::GetPropertiesOfTablesInRange(
       for (size_t j = 0; j < files.size(); ++j) {
         const auto file_meta = files[j];
         if (file_meta->prop.purpose != SstPurpose::kEssenceSst) {
-          for (auto file_number : file_meta->prop.dependence) {
-            auto find = storage_info_.dependence_map_.find(file_number);
+          for (auto& dependence : file_meta->prop.dependence) {
+            auto find =
+                storage_info_.dependence_map_.find(dependence.file_number);
             if (find == storage_info_.dependence_map_.end()) {
               // TODO: log error
               continue;
@@ -1608,8 +1609,8 @@ void VersionStorageInfo::ComputeCompensatedSizes() {
                 average_value_size * kDeletionWeightOnCompaction;
           }
         } else {
-          for (auto file_number : f->prop.dependence) {
-            auto find = dependence_map_.find(file_number);
+          for (auto& dependence : f->prop.dependence) {
+            auto find = dependence_map_.find(dependence.file_number);
             if (find == dependence_map_.end()) {
               // TODO log error
               continue;
@@ -4363,7 +4364,7 @@ Status VersionSet::WriteSnapshot(log::Writer* log) {
           edit.AddFile(level, f->fd.GetNumber(), f->fd.GetPathId(),
                        f->fd.GetFileSize(), f->smallest, f->largest,
                        f->fd.smallest_seqno, f->fd.largest_seqno,
-                       f->num_antiquation, f->marked_for_compaction, f->prop);
+                       f->marked_for_compaction, f->prop);
         }
       }
       edit.SetLogNumber(cfd->GetLogNumber());
@@ -4505,8 +4506,8 @@ uint64_t VersionSet::ApproximateSize(Version* v, const FdWithKeyRange& f,
       }
     } else {
       auto& dependence_map = v->storage_info()->dependence_map();
-      for (auto file_number : file_meta->prop.dependence) {
-        auto find = dependence_map.find(file_number);
+      for (auto& dependence : file_meta->prop.dependence) {
+        auto find = dependence_map.find(dependence.file_number);
         if (find == dependence_map.end()) {
           // TODO log error
           continue;

@@ -809,5 +809,4 @@ class SeparateHelper {
                                LazyBuffer& value) const = 0;
 };
 
-
 }  // namespace rocksdb

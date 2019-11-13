@@ -31,8 +31,8 @@ class MergeHelperTest : public testing::Test {
                                         merge_op_.get(), filter_.get(), nullptr,
                                         false, latest_snapshot));
     user_key_ = ExtractUserKey(iter_->key()).ToString();
-    auto merge_result = merge_helper_->MergeUntil(user_key_, iter_.get(),
-                                                  separate_value_collector_,
+    CombinedInternalIterator iter(&iter_, nullptr);
+    auto merge_result = merge_helper_->MergeUntil(user_key_, &iter,
                                                   nullptr /* range_del_agg */,
                                                   stop_before, at_bottom);
     if (merge_result.ok() || merge_result.IsMergeInProgress()) {
@@ -63,7 +63,6 @@ class MergeHelperTest : public testing::Test {
   std::unique_ptr<MergeHelper> merge_helper_;
   std::vector<std::string> ks_;
   std::vector<std::string> vs_;
-  SeparateValueCollector separate_value_collector_;
   std::string user_key_;
   std::unique_ptr<test::FilterNumber> filter_;
 };

@@ -715,7 +715,7 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
     edit->AddFile(level, f->fd.GetNumber(), f->fd.GetPathId(),
                   f->fd.file_size, f->smallest, f->largest,
                   f->fd.smallest_seqno, f->fd.largest_seqno,
-                  f->num_antiquation, f->marked_for_compaction, f->prop);
+                  f->marked_for_compaction, f->prop);
   };
   auto edit_del_file = [edit, deleted_files](int level, FileMetaData* f) {
     edit->DeleteFile(level, f->fd.GetNumber());
@@ -917,9 +917,13 @@ Status MapBuilder::WriteOutputFile(
   auto& dependence_build = range_iter->GetDependence();
   auto& dependence = file_meta->prop.dependence;
   dependence.reserve(dependence_build.size());
-  dependence.insert(dependence.end(), dependence_build.begin(),
-                    dependence_build.end());
-  std::sort(dependence.begin(), dependence.end());
+  for (auto file_number : dependence_build) {
+    dependence.emplace_back(Dependence{file_number, 0});
+  }
+  std::sort(dependence.begin(), dependence.end(),
+            [](const Dependence& l, const Dependence& r) {
+              return l.file_number < r.file_number;
+            });
 
   // Map sst don't write tombstones
   if (s.ok()) {

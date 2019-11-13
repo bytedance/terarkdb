@@ -692,10 +692,14 @@ Compaction* CompactionPicker::PickGarbageCollection(
   inputs.files.push_back(gc_files.front().f);
 
   uint64_t total_estimated_size = gc_files.front().estimated_size;
+  uint64_t num_antiquation = gc_files.front().f->num_antiquation;
   for (auto it = std::next(gc_files.begin()); it != gc_files.end(); ++it) {
     auto& info = *it;
-    if (total_estimated_size + info.estimated_size > max_file_size) continue;
+    if (total_estimated_size + info.estimated_size > max_file_size) {
+      continue;
+    }
     total_estimated_size += info.estimated_size;
+    num_antiquation += info.f->num_antiquation;
     inputs.files.push_back(info.f);
     if (inputs.size() >= 8) {
       break;
@@ -708,6 +712,7 @@ Compaction* CompactionPicker::PickGarbageCollection(
   CompactionParams params(vstorage, ioptions_, mutable_cf_options);
   params.inputs = {std::move(inputs)};
   params.output_level = -1;
+  params.num_antiquation = num_antiquation;
   params.max_compaction_bytes = LLONG_MAX;
   params.output_path_id = GetPathId(ioptions_, mutable_cf_options, 1);
   params.compression = GetCompressionType(
@@ -784,8 +789,8 @@ void CompactionPicker::InitFilesBeingCompact(
           continue;
         }
         auto f = find->second;
-        for (auto file_number : f->prop.dependence) {
-          files_being_compact->emplace(file_number);
+        for (auto& dependence : f->prop.dependence) {
+          files_being_compact->emplace(dependence.file_number);
         };
       }
     }

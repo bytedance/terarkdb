@@ -1060,7 +1060,7 @@ Status DBImpl::WriteLevel0TableForRecovery(int job_id, ColumnFamilyData* cfd,
     edit->AddFile(level, meta.fd.GetNumber(), meta.fd.GetPathId(),
                   meta.fd.GetFileSize(), meta.smallest, meta.largest,
                   meta.fd.smallest_seqno, meta.fd.largest_seqno,
-                  meta.num_antiquation, meta.marked_for_compaction, meta.prop);
+                  meta.marked_for_compaction, meta.prop);
   }
 
   InternalStats::CompactionStats stats(CompactionReason::kFlush, 1);

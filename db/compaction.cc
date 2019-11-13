@@ -221,6 +221,7 @@ Compaction::Compaction(CompactionParams&& params)
     : input_vstorage_(params.input_version),
       start_level_(params.inputs[0].level),
       output_level_(params.output_level),
+      num_antiquation_(params.num_antiquation),
       max_output_file_size_(params.target_file_size),
       max_compaction_bytes_(params.max_compaction_bytes),
       max_subcompactions_(params.max_subcompactions),
