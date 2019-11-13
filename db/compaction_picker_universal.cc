@@ -257,8 +257,8 @@ static size_t GetFilesSize(const FileMetaData* f, uint64_t file_number,
   }
   uint64_t file_size = f->fd.GetFileSize();
   if (f->prop.purpose != 0) {
-    for (auto dependence_file_number : f->prop.dependence) {
-      file_size += GetFilesSize(nullptr, dependence_file_number, vstorage);
+    for (auto& dependence : f->prop.dependence) {
+      file_size += GetFilesSize(nullptr, dependence.file_number, vstorage);
     }
   }
   return file_size;
@@ -589,17 +589,17 @@ Compaction* UniversalCompactionPicker::CompactRange(
         return true;
       }
       auto& dependence_map = vstorage->dependence_map();
-      for (auto file_number : f->prop.dependence) {
-        if (files_being_compact->count(file_number) > 0) {
+      for (auto& dependence : f->prop.dependence) {
+        if (files_being_compact->count(dependence.file_number) > 0) {
           return true;
         }
-        auto find = dependence_map.find(file_number);
+        auto find = dependence_map.find(dependence.file_number);
         if (find == dependence_map.end()) {
           // TODO: log error
           continue;
         }
-        for (auto dependence_file_number : find->second->prop.dependence) {
-          if (files_being_compact->count(dependence_file_number) > 0) {
+        for (auto& f_dependence : find->second->prop.dependence) {
+          if (files_being_compact->count(f_dependence.file_number) > 0) {
             return true;
           }
         };
@@ -1854,8 +1854,8 @@ Compaction* UniversalCompactionPicker::PickRangeCompaction(
         continue;
       }
       auto f = find->second;
-      for (auto file_number : f->prop.dependence) {
-        if (files_being_compact->count(file_number) > 0) {
+      for (auto& dependence : f->prop.dependence) {
+        if (files_being_compact->count(dependence.file_number) > 0) {
           return true;
         }
       };

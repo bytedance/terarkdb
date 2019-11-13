@@ -110,7 +110,21 @@ void PropertyBlockBuilder::AddTableProperty(const TableProperties& props) {
     Add(TablePropertiesNames::kReadAmp, val);
   }
   if (!props.dependence.empty()) {
-    Add(TablePropertiesNames::kDependence, props.dependence);
+    std::vector<uint64_t> val;
+    val.reserve(props.dependence.size());
+    bool has_entry_count = false;
+    for (auto& dependence : props.dependence) {
+      val.emplace_back(dependence.file_number);
+      has_entry_count |= dependence.entry_count > 0;
+    }
+    Add(TablePropertiesNames::kDependence, val);
+    if (has_entry_count) {
+      val.clear();
+      for (auto& dependence : props.dependence) {
+        val.emplace_back(dependence.entry_count);
+      }
+      Add(TablePropertiesNames::kDependenceEntryCount, val);
+    }
   }
   if (!props.inheritance_chain.empty()) {
     Add(TablePropertiesNames::kInheritanceChain, props.inheritance_chain);
@@ -368,7 +382,29 @@ Status ReadProperties(const Slice& handle_value, RandomAccessFileReader* file,
       new_table_properties->max_read_amp = uint16_t(u32_val);
       new_table_properties->read_amp = U64ToDouble(u64_val);
     } else if (key == TablePropertiesNames::kDependence) {
-      GetUint64Vector(key, &raw_val, new_table_properties->dependence);
+      std::vector<uint64_t> val;
+      GetUint64Vector(key, &raw_val, val);
+      if (new_table_properties->dependence.empty()) {
+        new_table_properties->dependence.resize(val.size());
+      } else if (new_table_properties->dependence.size() != val.size()) {
+        log_error();
+        continue;
+      }
+      for (size_t i = 0; i < val.size(); ++i) {
+        new_table_properties->dependence[i].file_number = val[i];
+      }
+    } else if (key == TablePropertiesNames::kDependenceEntryCount) {
+      std::vector<uint64_t> val;
+      GetUint64Vector(key, &raw_val, val);
+      if (new_table_properties->dependence.empty()) {
+        new_table_properties->dependence.resize(val.size());
+      } else if (new_table_properties->dependence.size() != val.size()) {
+        log_error();
+        continue;
+      }
+      for (size_t i = 0; i < val.size(); ++i) {
+        new_table_properties->dependence[i].entry_count = val[i];
+      }
     } else if (key == TablePropertiesNames::kInheritanceChain) {
       GetUint64Vector(key, &raw_val, new_table_properties->inheritance_chain);
     } else {
