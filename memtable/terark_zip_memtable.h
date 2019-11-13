@@ -31,7 +31,7 @@ enum class ConcurrentType { Native, None };
 
 enum class PatriciaKeyType { UserKey, FullKey };
 
-enum class InsertResult { Success, Duplicated, Fail };
+enum class InsertResult { Success, Duplicated, Fail, InsufficientMemory };
 
 struct tag_vector_t {
   uint32_t size;

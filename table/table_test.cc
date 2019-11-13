@@ -60,6 +60,8 @@ extern const uint64_t kLegacyPlainTableMagicNumber;
 extern const uint64_t kBlockBasedTableMagicNumber;
 extern const uint64_t kPlainTableMagicNumber;
 
+using test::ConvertingIterator;
+
 namespace {
 
 // DummyPropertiesCollector used to test BlockBasedTableProperties
@@ -145,77 +147,6 @@ void Increment(const Comparator* cmp, std::string* key) {
     *key = Reverse(rev);
   }
 }
-
-// A helper class that converts internal format keys into user keys
-template<bool ConvertKey, class InnerIter>
-class ConvertingIterator : public InternalIterator {
- public:
-  explicit ConvertingIterator(InnerIter* iter,
-                              bool arena_mode = false)
-      : iter_(iter), arena_mode_(arena_mode) {}
-  virtual ~ConvertingIterator() {
-    if (arena_mode_) {
-      iter_->~InnerIter();
-    } else {
-      delete iter_;
-    }
-  }
-  virtual bool Valid() const override { return iter_->Valid() && status_.ok(); }
-  virtual void Seek(const Slice& target) override {
-    if (ConvertKey) {
-      ParsedInternalKey ikey(target, kMaxSequenceNumber, kTypeValue);
-      std::string encoded;
-      AppendInternalKey(&encoded, ikey);
-      iter_->Seek(encoded);
-    } else {
-      iter_->Seek(target);
-    }
-  }
-  virtual void SeekForPrev(const Slice& target) override {
-    if (ConvertKey) {
-      ParsedInternalKey ikey(target, kMaxSequenceNumber, kTypeValue);
-      std::string encoded;
-      AppendInternalKey(&encoded, ikey);
-      iter_->SeekForPrev(encoded);
-    } else {
-      iter_->SeekForPrev(target);
-    }
-  }
-  virtual void SeekToFirst() override { iter_->SeekToFirst(); }
-  virtual void SeekToLast() override { iter_->SeekToLast(); }
-  virtual void Next() override { iter_->Next(); }
-  virtual void Prev() override { iter_->Prev(); }
-
-  virtual Slice key() const override {
-    assert(Valid());
-    if (ConvertKey) {
-      ParsedInternalKey parsed_key;
-      if (!ParseInternalKey(iter_->key(), &parsed_key)) {
-        status_ = Status::Corruption("malformed internal key");
-        return Slice("corrupted key");
-      }
-      return parsed_key.user_key;
-    } else {
-      return iter_->key();
-    }
-  }
-
-  virtual LazyBuffer value() const override {
-    return LazyBuffer(iter_->value());
-  }
-  virtual Status status() const override {
-    return status_.ok() ? iter_->status() : status_;
-  }
-
- private:
-  mutable Status status_;
-  InnerIter* iter_;
-  bool arena_mode_;
-
-  // No copying allowed
-  ConvertingIterator(const ConvertingIterator&);
-  void operator=(const ConvertingIterator&);
-};
 
 }  // namespace
 
@@ -2886,33 +2817,6 @@ TEST_F(HarnessTest, RandomizedLongDB) {
 
 class MemTableTest : public testing::Test {};
 
-namespace {
-
-template<class CreateUniqueIter>
-void print_iter(CreateUniqueIter&& create_unique_iter) {
-  Arena arena;
-  auto iter = create_unique_iter(&arena);
-  if (iter.get() == nullptr) {
-    return;
-  }
-  iter->SeekToFirst();
-  while (iter->Valid()) {
-    auto v = LazyBuffer(iter->value());
-    auto s = v.fetch();
-    if (s.ok()) {
-      fprintf(stderr, "key: '%s' -> '%s'\n", iter->key().ToString().c_str(),
-              v.ToString().c_str());
-    } else {
-      fprintf(stderr, "key: '%s' -> '%s'\n", iter->key().ToString().c_str(),
-              s.ToString().c_str());
-
-    }
-    iter->Next();
-  }
-}
-
-}
-
 TEST_F(MemTableTest, Simple) {
   InternalKeyComparator cmp(BytewiseComparator());
   auto table_factory = std::make_shared<SkipListFactory>();
@@ -2937,14 +2841,43 @@ TEST_F(MemTableTest, Simple) {
   ASSERT_TRUE(
       WriteBatchInternal::InsertInto(&batch, &cf_mems_default, nullptr).ok());
 
-  print_iter([&](Arena* arena) {
-    return ScopedArenaIterator(memtable->NewIterator(ReadOptions(), arena));
-  });
-  print_iter([&](Arena* /*arena*/) {
-    return std::unique_ptr<FragmentedRangeTombstoneIterator>(
-        memtable->NewRangeTombstoneIterator(ReadOptions(),
-                                            kMaxSequenceNumber /* read_seq */));
-  });
+  for (int i = 0; i < 2; ++i) {
+    Arena arena;
+    ScopedArenaIterator arena_iter_guard;
+    std::unique_ptr<InternalIterator> iter_guard;
+    InternalIterator* iter;
+    if (i == 0) {
+      iter = memtable->NewIterator(ReadOptions(), &arena);
+      if (iter == nullptr) {
+        continue;
+      }
+      arena_iter_guard.set(iter);
+    } else {
+      typedef ConvertingIterator<false, FragmentedRangeTombstoneIterator>
+          IterWrapperType;
+      auto range_tombstone_iterator =
+          memtable->NewRangeTombstoneIterator(
+              ReadOptions(), kMaxSequenceNumber /* read_seq */);
+      if (range_tombstone_iterator == nullptr) {
+        continue;
+      }
+      iter = new IterWrapperType(range_tombstone_iterator);
+      iter_guard.reset(iter);
+    }
+    iter->SeekToFirst();
+    while (iter->Valid()) {
+      auto v = LazyBuffer(iter->value());
+      auto s = v.fetch();
+      if (s.ok()) {
+        fprintf(stderr, "key: '%s' -> '%s'\n", iter->key().ToString().c_str(),
+            v.ToString().c_str());
+      } else {
+        fprintf(stderr, "key: '%s' -> '%s'\n", iter->key().ToString().c_str(),
+            s.ToString().c_str());
+      }
+      iter->Next();
+    }
+  }
 
   delete memtable->Unref();
 }

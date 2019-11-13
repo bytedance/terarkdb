@@ -20,6 +20,7 @@
 #include "table/scoped_arena_iterator.h"
 #include "util/string_util.h"
 #include "util/testharness.h"
+#include "util/testutil.h"
 
 namespace rocksdb {
 
@@ -50,25 +51,35 @@ static std::string PrintContents(WriteBatch* b) {
     InternalIterator* iter;
     if (i == 0) {
       iter = mem->NewIterator(ReadOptions(), &arena);
+      if (iter == nullptr) {
+        continue;
+      }
       arena_iter_guard.set(iter);
     } else {
-      iter = mem->NewRangeTombstoneIterator(ReadOptions(),
-                                            kMaxSequenceNumber /* read_seq */);
+      typedef test::ConvertingIterator<false, FragmentedRangeTombstoneIterator>
+          IterWrapperType;
+      auto range_tombstone_iterator =
+          mem->NewRangeTombstoneIterator(ReadOptions(),
+                                         kMaxSequenceNumber /* read_seq */);
+      if (range_tombstone_iterator == nullptr) {
+        continue;
+      }
+      iter = new IterWrapperType(range_tombstone_iterator);
       iter_guard.reset(iter);
-    }
-    if (iter == nullptr) {
-      continue;
     }
     for (iter->SeekToFirst(); iter->Valid(); iter->Next()) {
       ParsedInternalKey ikey;
       ikey.clear();
       EXPECT_TRUE(ParseInternalKey(iter->key(), &ikey));
+      auto v = iter->value();
+      s = v.fetch();
+      std::string str = s.ok() ? v.ToString() : s.ToString();
       switch (ikey.type) {
         case kTypeValue:
           state.append("Put(");
           state.append(ikey.user_key.ToString());
           state.append(", ");
-          state.append(iter->value().ToString());
+          state.append(str);
           state.append(")");
           count++;
           put_count++;
@@ -91,7 +102,7 @@ static std::string PrintContents(WriteBatch* b) {
           state.append("DeleteRange(");
           state.append(ikey.user_key.ToString());
           state.append(", ");
-          state.append(iter->value().ToString());
+          state.append(str);
           state.append(")");
           count++;
           delete_range_count++;
@@ -100,7 +111,7 @@ static std::string PrintContents(WriteBatch* b) {
           state.append("Merge(");
           state.append(ikey.user_key.ToString());
           state.append(", ");
-          state.append(iter->value().ToString());
+          state.append(str);
           state.append(")");
           count++;
           merge_count++;
@@ -163,7 +174,7 @@ TEST_F(WriteBatchTest, Corruption) {
   WriteBatchInternal::SetContents(&batch,
                                   Slice(contents.data(),contents.size()-1));
   ASSERT_EQ("Put(foo, bar)@200"
-            "Corruption: bad WriteBatch Delete",
+            "CountMismatch()",
             PrintContents(&batch));
 }
 

@@ -94,7 +94,7 @@ size_t PatriciaTrieRep::ApproximateMemoryUsage() {
 bool PatriciaTrieRep::Contains(
     const Slice &internal_key) const {
   terark::fstring find_key(internal_key.data(), internal_key.size() - 8);
-  uint64_t tag = DecodeFixed64(find_key.end());
+  uint64_t tag = ExtractInternalKeyFooter(internal_key);
   for (auto trie : trie_vec_) {
     auto token = trie->acquire_tls_reader_token();
     if (trie->lookup(find_key, token)) {
@@ -222,24 +222,26 @@ bool PatriciaTrieRep::InsertKeyValue(
   // prepare key
   terark::fstring key(internal_key.data(),
                       internal_key.data() + internal_key.size() - 8); 
+  auto tag = ExtractInternalKeyFooter(internal_key);
   // lambda impl fn for insert
   auto fn_insert_impl = [&](MemPatricia *trie) {
     if (trie->tls_writer_token() == nullptr)
       trie->tls_writer_token().reset(new MemWriterToken(trie, DecodeFixed64(key.end()), value));
     auto token = static_cast<MemWriterToken*>(trie->tls_writer_token().get());
-    uint32_t value_storage;
-    if (!trie->insert(key, &value_storage, token)) {
+    if (!token->insert(key, const_cast<Slice *>(&value))) {
+      if (token->value() == nullptr)
+        return detail::InsertResult::InsufficientMemory;
       size_t vector_loc = *(uint32_t *)token->value();
       auto *vector = (detail::tag_vector_t *)trie->mem_get(vector_loc);
       size_t data_loc = vector->loc;
       auto *data = (detail::tag_vector_t::data_t *)trie->mem_get(data_loc);
       uint32_t size = vector->size;
       assert(size > 0);
-      assert(token->get_tag() > data[size - 1].tag);
-      if ((token->get_tag() >> 8) == (data[size - 1].tag >> 8)) {
+      if ((tag >> 8) == (data[size - 1].tag >> 8)) {
         vector->size = size;
         return detail::InsertResult::Duplicated;
       }
+      assert(tag > data[size - 1].tag);
       size_t value_size = VarintLength(value.size()) + value.size();
       size_t value_loc = trie->mem_alloc(value_size);
       if (value_loc == MemPatricia::mem_alloc_fail) {
@@ -251,7 +253,7 @@ bool PatriciaTrieRep::InsertKeyValue(
               value.data(), value.size());
       if (!vector->full()) {
         data[size].loc = (uint32_t)value_loc;
-        data[size].tag = token->get_tag();
+        data[size].tag = tag;
         vector->size = size + 1;
         return detail::InsertResult::Success;
       }
@@ -265,7 +267,7 @@ bool PatriciaTrieRep::InsertKeyValue(
       auto *cow_data = (detail::tag_vector_t::data_t *)trie->mem_get(cow_data_loc);
       memcpy(cow_data, data, sizeof(detail::tag_vector_t::data_t) * size);
       cow_data[size].loc = (uint32_t)value_loc;
-      cow_data[size].tag = token->get_tag();
+      cow_data[size].tag = tag;
       vector->loc = (uint32_t)cow_data_loc;
       vector->size = size + 1;
       trie->mem_lazy_free(data_loc, sizeof(detail::tag_vector_t::data_t) * size);
@@ -289,17 +291,26 @@ bool PatriciaTrieRep::InsertKeyValue(
     return new MemPatricia(4, write_buffer_size_, concurrent_level_);
   };
   // tool lambda fn end
-  // function start                     
-  detail::InsertResult insert_result = fn_insert_impl(trie_vec_.back());
-  while (insert_result == detail::InsertResult::Fail) {
-    if (handle_duplicate_) {
-      for (auto iter = trie_vec_.rbegin(); iter != trie_vec_.rend(); iter++)
-        if (detail::InsertResult::Fail != (insert_result = fn_insert_impl(*iter)))
-          break;
-    } else insert_result = fn_insert_impl(trie_vec_.back());
-    if (insert_result == detail::InsertResult::Fail) {
-      trie_vec_.emplace_back(fn_create_new_trie());
+  // function start
+  detail::InsertResult insert_result = detail::InsertResult::Fail;
+  if (handle_duplicate_) {
+    uint64_t tag = DecodeFixed64(key.end());
+    for (auto trie : trie_vec_) {
+      auto token = trie->acquire_tls_reader_token();
+      if (trie->lookup(key, token)) {
+        auto vector = (detail::tag_vector_t *)trie->mem_get(*(uint32_t *)token->value());
+        size_t size = vector->size;
+        auto data = (detail::tag_vector_t::data_t *)trie->mem_get(vector->loc);
+        if (terark::binary_search_0(data, size, tag)){
+          return false;
+        }
+      }
     }
+  }     
+  insert_result = fn_insert_impl(trie_vec_.back());
+  if (insert_result == detail::InsertResult::InsufficientMemory) {
+    trie_vec_.emplace_back(fn_create_new_trie());
+    insert_result = fn_insert_impl(trie_vec_.back());
   }
   assert(insert_result != detail::InsertResult::Fail);
   return insert_result == detail::InsertResult::Success;
