@@ -630,6 +630,7 @@ void DBTestBase::Close() {
 void DBTestBase::DestroyAndReopen(const Options& options) {
   // Destroy using last options
   Destroy(last_options_);
+  env_->CreateDirIfMissing(dbname_);
   ASSERT_OK(TryReopen(options));
 }
 

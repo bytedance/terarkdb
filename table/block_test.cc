@@ -121,7 +121,7 @@ TEST_F(BlockTest, SimpleTest) {
 
   // read contents of block sequentially
   int count = 0;
-  InternalIterator *iter =
+  InternalIteratorBase<Slice> *iter =
       reader.NewIterator<DataBlockIter>(options.comparator, options.comparator);
   for (iter->SeekToFirst();iter->Valid(); count++, iter->Next()) {
 
@@ -261,7 +261,7 @@ void CheckBlockContents(BlockContents contents, const int max_key,
   std::unique_ptr<const SliceTransform> prefix_extractor(
       NewFixedPrefixTransform(prefix_size));
 
-  std::unique_ptr<InternalIterator> regular_iter(
+  std::unique_ptr<InternalIteratorBase<Slice>> regular_iter(
       reader2.NewIterator<DataBlockIter>(BytewiseComparator(),
                                          BytewiseComparator()));
 
@@ -272,7 +272,7 @@ void CheckBlockContents(BlockContents contents, const int max_key,
     ASSERT_TRUE(regular_iter->Valid());
 
     Slice v = regular_iter->value();
-    ASSERT_EQ(v.ToString().compare(values[i]), 0);
+    ASSERT_EQ(v.compare(values[i]), 0);
   }
 
   // Seek non-existent keys.

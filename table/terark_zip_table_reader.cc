@@ -1045,7 +1045,7 @@ TerarkZipTableReader::Open(RandomAccessFileReader* file, uint64_t file_size) {
   file_data_ = file_data;
   global_seqno_ = GetGlobalSequenceNumber(*props, ioptions.info_log);
   isReverseBytewiseOrder_ =
-    fstring(ioptions.user_comparator->Name()).startsWith("rev:");
+      IsBackwardBytewiseComparator(ioptions.user_comparator);
 
   BlockContents valueDictBlock, offsetBlock;
   UpdateCollectInfo(table_factory_, &tzto_, props, file_size);
@@ -1580,7 +1580,7 @@ TerarkZipTableMultiReader::Open(RandomAccessFileReader* file, uint64_t file_size
   file_data_ = file_data;
   global_seqno_ = GetGlobalSequenceNumber(*props, ioptions.info_log);
   isReverseBytewiseOrder_ =
-    fstring(ioptions.user_comparator->Name()).startsWith("rev:");
+      IsBackwardBytewiseComparator(ioptions.user_comparator);
 
   BlockContents valueDictBlock, offsetBlock;
   UpdateCollectInfo(table_factory_, &tzto_, props, file_size);

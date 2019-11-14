@@ -78,7 +78,14 @@ inline ByteArrayView SubStr(const ByteArrayView& x, size_t pos) {
   return ByteArrayView(x.data() + pos, x.size() - pos);
 }
 
-bool IsForwardBytewiseComparator(const Comparator* cmp);
+bool IsForwardBytewiseComparator(const fstring name);
+inline bool IsForwardBytewiseComparator(const Comparator* cmp) {
+  return IsForwardBytewiseComparator(cmp->Name());
+}
+bool IsBackwardBytewiseComparator(const fstring name);
+inline bool IsBackwardBytewiseComparator(const Comparator* cmp) {
+  return IsBackwardBytewiseComparator(cmp->Name());
+}
 
 bool IsBytewiseComparator(const Comparator* cmp);
 

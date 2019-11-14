@@ -209,7 +209,7 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(const TerarkZipTableFactory* table_
                                         tbo.moptions.prefix_extractor->Name() : "nullptr";
 
     isReverseBytewiseOrder_ =
-      fstring(properties_.comparator_name).startsWith("rev:");
+        IsBackwardBytewiseComparator(properties_.comparator_name);
 
     if (tbo.int_tbl_prop_collector_factories) {
       const auto& factories = *tbo.int_tbl_prop_collector_factories;

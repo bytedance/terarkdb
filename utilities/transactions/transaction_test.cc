@@ -5183,9 +5183,9 @@ TEST_P(TransactionTest, Optimizations) {
     ASSERT_OK(db->Write(write_options, &batch));
 
     ReadOptions ropt;
-    PinnableSlice pinnable_val;
-    ASSERT_OK(db->Get(ropt, db->DefaultColumnFamily(), "k", &pinnable_val));
-    ASSERT_TRUE(pinnable_val == ("v1"));
+    LazyBuffer lazy_val;
+    ASSERT_OK(db->Get(ropt, db->DefaultColumnFamily(), "k", &lazy_val));
+    ASSERT_TRUE(lazy_val.slice() == ("v1"));
   }
 }
 
@@ -5242,16 +5242,16 @@ TEST_P(TransactionTest, DuplicateKeys) {
     ASSERT_OK(db->Write(write_options, &batch));
 
     ReadOptions ropt;
-    PinnableSlice pinnable_val;
-    auto s = db->Get(ropt, db->DefaultColumnFamily(), "key", &pinnable_val);
+    LazyBuffer lazy_val;
+    auto s = db->Get(ropt, db->DefaultColumnFamily(), "key", &lazy_val);
     ASSERT_OK(s);
-    ASSERT_TRUE(pinnable_val == ("value3"));
-    s = db->Get(ropt, db->DefaultColumnFamily(), "key2", &pinnable_val);
+    ASSERT_TRUE(lazy_val.slice() == ("value3"));
+    s = db->Get(ropt, db->DefaultColumnFamily(), "key2", &lazy_val);
     ASSERT_OK(s);
-    ASSERT_TRUE(pinnable_val == ("value4"));
-    s = db->Get(ropt, cf_handle, "key", &pinnable_val);
+    ASSERT_TRUE(lazy_val.slice() == ("value4"));
+    s = db->Get(ropt, cf_handle, "key", &lazy_val);
     ASSERT_OK(s);
-    ASSERT_TRUE(pinnable_val == ("value5"));
+    ASSERT_TRUE(lazy_val.slice() == ("value5"));
 
     delete cf_handle;
   }
@@ -5274,9 +5274,9 @@ TEST_P(TransactionTest, DuplicateKeys) {
     // The value must be the most recent value for all the keys equal to "key",
     // including "key2"
     ReadOptions ropt;
-    PinnableSlice pinnable_val;
-    ASSERT_OK(db->Get(ropt, cf_handle, "key", &pinnable_val));
-    ASSERT_TRUE(pinnable_val == ("value2b"));
+    LazyBuffer lazy_val;
+    ASSERT_OK(db->Get(ropt, cf_handle, "key", &lazy_val));
+    ASSERT_TRUE(lazy_val.slice() == ("value2b"));
 
     // Test duplicate keys with rollback
     TransactionOptions txn_options;
@@ -5285,8 +5285,8 @@ TEST_P(TransactionTest, DuplicateKeys) {
     ASSERT_OK(txn0->Put(cf_handle, Slice("key3"), Slice("value3")));
     ASSERT_OK(txn0->Merge(cf_handle, Slice("key4"), Slice("value4")));
     ASSERT_OK(txn0->Rollback());
-    ASSERT_OK(db->Get(ropt, cf_handle, "key5", &pinnable_val));
-    ASSERT_TRUE(pinnable_val == ("value2b"));
+    ASSERT_OK(db->Get(ropt, cf_handle, "key5", &lazy_val));
+    ASSERT_TRUE(lazy_val.slice() == ("value2b"));
     delete txn0;
 
     delete cf_handle;
@@ -5374,44 +5374,44 @@ TEST_P(TransactionTest, DuplicateKeys) {
         }
         delete txn0;
         ReadOptions ropt;
-        PinnableSlice pinnable_val;
+        LazyBuffer lazy_val;
 
         if (do_rollback) {
-          s = db->Get(ropt, db->DefaultColumnFamily(), "foo0", &pinnable_val);
+          s = db->Get(ropt, db->DefaultColumnFamily(), "foo0", &lazy_val);
           ASSERT_TRUE(s.IsNotFound());
-          s = db->Get(ropt, cf_handle, "foo0", &pinnable_val);
+          s = db->Get(ropt, cf_handle, "foo0", &lazy_val);
           ASSERT_TRUE(s.IsNotFound());
-          s = db->Get(ropt, db->DefaultColumnFamily(), "foo1", &pinnable_val);
+          s = db->Get(ropt, db->DefaultColumnFamily(), "foo1", &lazy_val);
           ASSERT_TRUE(s.IsNotFound());
-          s = db->Get(ropt, db->DefaultColumnFamily(), "foo2", &pinnable_val);
+          s = db->Get(ropt, db->DefaultColumnFamily(), "foo2", &lazy_val);
           ASSERT_TRUE(s.IsNotFound());
-          s = db->Get(ropt, db->DefaultColumnFamily(), "foo3", &pinnable_val);
+          s = db->Get(ropt, db->DefaultColumnFamily(), "foo3", &lazy_val);
           ASSERT_TRUE(s.IsNotFound());
-          s = db->Get(ropt, db->DefaultColumnFamily(), "foo4", &pinnable_val);
+          s = db->Get(ropt, db->DefaultColumnFamily(), "foo4", &lazy_val);
           ASSERT_TRUE(s.IsNotFound());
         } else {
-          s = db->Get(ropt, db->DefaultColumnFamily(), "foo0", &pinnable_val);
+          s = db->Get(ropt, db->DefaultColumnFamily(), "foo0", &lazy_val);
           ASSERT_OK(s);
-          ASSERT_TRUE(pinnable_val == ("bar0c"));
-          s = db->Get(ropt, cf_handle, "foo0", &pinnable_val);
+          ASSERT_TRUE(lazy_val.slice() == ("bar0c"));
+          s = db->Get(ropt, cf_handle, "foo0", &lazy_val);
           ASSERT_OK(s);
-          ASSERT_TRUE(pinnable_val == ("bar0-cf1"));
-          s = db->Get(ropt, db->DefaultColumnFamily(), "foo1", &pinnable_val);
+          ASSERT_TRUE(lazy_val.slice() == ("bar0-cf1"));
+          s = db->Get(ropt, db->DefaultColumnFamily(), "foo1", &lazy_val);
           ASSERT_OK(s);
-          ASSERT_TRUE(pinnable_val == ("bar1"));
-          s = db->Get(ropt, db->DefaultColumnFamily(), "foo2", &pinnable_val);
+          ASSERT_TRUE(lazy_val.slice() == ("bar1"));
+          s = db->Get(ropt, db->DefaultColumnFamily(), "foo2", &lazy_val);
           ASSERT_OK(s);
-          ASSERT_TRUE(pinnable_val == ("bar2a,bar2b"));
-          s = db->Get(ropt, db->DefaultColumnFamily(), "foo3", &pinnable_val);
+          ASSERT_TRUE(lazy_val.slice() == ("bar2a,bar2b"));
+          s = db->Get(ropt, db->DefaultColumnFamily(), "foo3", &lazy_val);
           ASSERT_OK(s);
-          ASSERT_TRUE(pinnable_val == ("bar3,bar3"));
-          s = db->Get(ropt, db->DefaultColumnFamily(), "foo4", &pinnable_val);
+          ASSERT_TRUE(lazy_val.slice() == ("bar3,bar3"));
+          s = db->Get(ropt, db->DefaultColumnFamily(), "foo4", &lazy_val);
           ASSERT_TRUE(s.IsNotFound());
           if (with_commit_batch) {
-            s = db->Get(ropt, db->DefaultColumnFamily(), "foo6", &pinnable_val);
+            s = db->Get(ropt, db->DefaultColumnFamily(), "foo6", &lazy_val);
             ASSERT_OK(s);
-            ASSERT_TRUE(pinnable_val == ("bar6b"));
-            s = db->Get(ropt, db->DefaultColumnFamily(), "foo7", &pinnable_val);
+            ASSERT_TRUE(lazy_val.slice() == ("bar6b"));
+            s = db->Get(ropt, db->DefaultColumnFamily(), "foo7", &lazy_val);
             ASSERT_TRUE(s.IsNotFound());
           }
         }
@@ -5466,7 +5466,7 @@ TEST_P(TransactionTest, DuplicateKeys) {
     WriteOptions write_options;
     ReadOptions ropt;
     Transaction* txn0;
-    PinnableSlice pinnable_val;
+    LazyBuffer lazy_val;
     Status s;
 
     std::unique_ptr<const Comparator> comp_gc(new ThreeBytewiseComparator());
@@ -5500,9 +5500,9 @@ TEST_P(TransactionTest, DuplicateKeys) {
     ASSERT_TRUE(txn0 != nullptr);
     ASSERT_OK(txn0->Commit());
     delete txn0;
-    s = db->Get(ropt, db->DefaultColumnFamily(), "foo0", &pinnable_val);
+    s = db->Get(ropt, db->DefaultColumnFamily(), "foo0", &lazy_val);
     ASSERT_OK(s);
-    ASSERT_TRUE(pinnable_val == ("bar0a"));
+    ASSERT_TRUE(lazy_val.slice() == ("bar0a"));
 
     // two entries, no duplicate
     txn0 = db->BeginTransaction(write_options, txn_options);
@@ -5524,22 +5524,22 @@ TEST_P(TransactionTest, DuplicateKeys) {
     ASSERT_TRUE(txn0 != nullptr);
     ASSERT_OK(txn0->Commit());
     delete txn0;
-    pinnable_val.Reset();
-    s = db->Get(ropt, db->DefaultColumnFamily(), "foo0", &pinnable_val);
+    lazy_val.clear();
+    s = db->Get(ropt, db->DefaultColumnFamily(), "foo0", &lazy_val);
     ASSERT_OK(s);
-    ASSERT_TRUE(pinnable_val == ("bar0b"));
-    pinnable_val.Reset();
-    s = db->Get(ropt, db->DefaultColumnFamily(), "foo1", &pinnable_val);
+    ASSERT_TRUE(lazy_val.slice() == ("bar0b"));
+    lazy_val.clear();
+    s = db->Get(ropt, db->DefaultColumnFamily(), "foo1", &lazy_val);
     ASSERT_OK(s);
-    ASSERT_TRUE(pinnable_val == ("bar1b"));
-    pinnable_val.Reset();
-    s = db->Get(ropt, handles[1], "foo0", &pinnable_val);
+    ASSERT_TRUE(lazy_val.slice() == ("bar1b"));
+    lazy_val.clear();
+    s = db->Get(ropt, handles[1], "foo0", &lazy_val);
     ASSERT_OK(s);
-    ASSERT_TRUE(pinnable_val == ("bar0b"));
-    pinnable_val.Reset();
-    s = db->Get(ropt, handles[1], "fol1", &pinnable_val);
+    ASSERT_TRUE(lazy_val.slice() == ("bar0b"));
+    lazy_val.clear();
+    s = db->Get(ropt, handles[1], "fol1", &lazy_val);
     ASSERT_OK(s);
-    ASSERT_TRUE(pinnable_val == ("bar1b"));
+    ASSERT_TRUE(lazy_val.slice() == ("bar1b"));
 
     // one duplicate with ::Put
     txn0 = db->BeginTransaction(write_options, txn_options);
@@ -5562,18 +5562,18 @@ TEST_P(TransactionTest, DuplicateKeys) {
     ASSERT_TRUE(txn0 != nullptr);
     ASSERT_OK(txn0->Commit());
     delete txn0;
-    pinnable_val.Reset();
-    s = db->Get(ropt, db->DefaultColumnFamily(), "foo0", &pinnable_val);
+    lazy_val.clear();
+    s = db->Get(ropt, db->DefaultColumnFamily(), "foo0", &lazy_val);
     ASSERT_OK(s);
-    ASSERT_TRUE(pinnable_val == ("bar0d"));
-    pinnable_val.Reset();
-    s = db->Get(ropt, db->DefaultColumnFamily(), "foo1", &pinnable_val);
+    ASSERT_TRUE(lazy_val.slice() == ("bar0d"));
+    lazy_val.clear();
+    s = db->Get(ropt, db->DefaultColumnFamily(), "foo1", &lazy_val);
     ASSERT_OK(s);
-    ASSERT_TRUE(pinnable_val == ("bar1c"));
-    pinnable_val.Reset();
-    s = db->Get(ropt, handles[1], "key-nonkey2", &pinnable_val);
+    ASSERT_TRUE(lazy_val.slice() == ("bar1c"));
+    lazy_val.clear();
+    s = db->Get(ropt, handles[1], "key-nonkey2", &lazy_val);
     ASSERT_OK(s);
-    ASSERT_TRUE(pinnable_val == ("bar1d"));
+    ASSERT_TRUE(lazy_val.slice() == ("bar1d"));
 
     // Duplicate with ::Put, ::Delete
     txn0 = db->BeginTransaction(write_options, txn_options);
@@ -5595,11 +5595,11 @@ TEST_P(TransactionTest, DuplicateKeys) {
     ASSERT_TRUE(txn0 != nullptr);
     ASSERT_OK(txn0->Commit());
     delete txn0;
-    pinnable_val.Reset();
-    s = db->Get(ropt, db->DefaultColumnFamily(), "foo0", &pinnable_val);
+    lazy_val.clear();
+    s = db->Get(ropt, db->DefaultColumnFamily(), "foo0", &lazy_val);
     ASSERT_TRUE(s.IsNotFound());
-    pinnable_val.Reset();
-    s = db->Get(ropt, handles[1], "key-nonkey2", &pinnable_val);
+    lazy_val.clear();
+    s = db->Get(ropt, handles[1], "key-nonkey2", &lazy_val);
     ASSERT_TRUE(s.IsNotFound());
 
     // Duplicate with ::Put, ::SingleDelete
@@ -5622,11 +5622,11 @@ TEST_P(TransactionTest, DuplicateKeys) {
     ASSERT_TRUE(txn0 != nullptr);
     ASSERT_OK(txn0->Commit());
     delete txn0;
-    pinnable_val.Reset();
-    s = db->Get(ropt, db->DefaultColumnFamily(), "foo0", &pinnable_val);
+    lazy_val.clear();
+    s = db->Get(ropt, db->DefaultColumnFamily(), "foo0", &lazy_val);
     ASSERT_TRUE(s.IsNotFound());
-    pinnable_val.Reset();
-    s = db->Get(ropt, handles[1], "key-nonkey2", &pinnable_val);
+    lazy_val.clear();
+    s = db->Get(ropt, handles[1], "key-nonkey2", &lazy_val);
     ASSERT_TRUE(s.IsNotFound());
 
     // Duplicate with ::Put, ::Merge
@@ -5649,14 +5649,14 @@ TEST_P(TransactionTest, DuplicateKeys) {
     ASSERT_TRUE(txn0 != nullptr);
     ASSERT_OK(txn0->Commit());
     delete txn0;
-    pinnable_val.Reset();
-    s = db->Get(ropt, db->DefaultColumnFamily(), "foo0", &pinnable_val);
+    lazy_val.clear();
+    s = db->Get(ropt, db->DefaultColumnFamily(), "foo0", &lazy_val);
     ASSERT_OK(s);
-    ASSERT_TRUE(pinnable_val == ("bar0f,bar0g"));
-    pinnable_val.Reset();
-    s = db->Get(ropt, handles[1], "key-nonkey2", &pinnable_val);
+    ASSERT_TRUE(lazy_val.slice() == ("bar0f,bar0g"));
+    lazy_val.clear();
+    s = db->Get(ropt, handles[1], "key-nonkey2", &lazy_val);
     ASSERT_OK(s);
-    ASSERT_TRUE(pinnable_val == ("bar1i,bar1j"));
+    ASSERT_TRUE(lazy_val.slice() == ("bar1i,bar1j"));
 
     for (auto h : handles) {
       delete h;
