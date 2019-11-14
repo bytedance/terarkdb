@@ -467,7 +467,7 @@ Compaction* UniversalCompactionPicker::PickCompaction(
   }
 
 // validate that all the chosen files of L0 are non overlapping in time
-#ifndef NDEBUG
+#if !defined(NDEBUG) && 0
   if (c->compaction_reason() != CompactionReason::kCompositeAmplification) {
     struct SortedRunDebug {
       bool is_vstorage;

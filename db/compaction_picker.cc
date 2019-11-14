@@ -785,13 +785,12 @@ void CompactionPicker::InitFilesBeingCompact(
         files_being_compact->emplace(link.file_number);
         auto find = dependence_map.find(link.file_number);
         if (find == dependence_map.end()) {
-          // TODO: log error
-          continue;
+          files_being_compact->emplace(link.file_number);
+        } else {
+          for (auto& dependence : find->second->prop.dependence) {
+            files_being_compact->emplace(dependence.file_number);
+          };
         }
-        auto f = find->second;
-        for (auto& dependence : f->prop.dependence) {
-          files_being_compact->emplace(dependence.file_number);
-        };
       }
     }
   }

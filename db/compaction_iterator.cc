@@ -60,7 +60,7 @@ class CompactionIteratorToInternalIterator : public InternalIterator {
 
 void CompactionIteratorToInternalIterator::Seek(const Slice& target) {
   if (c_iter_) {
-    c_iter_->value_.clear();
+    c_iter_->value_.reset();
     if (c_iter_->merge_helper_ != nullptr) {
       c_iter_->merge_helper_->Clear();
     }
@@ -239,7 +239,7 @@ void CompactionIterator::Next() {
     // Only advance the input iterator if there is no merge output and the
     // iterator is not already at the next record.
     if (!at_next_) {
-      value_.clear();
+      value_.reset();
       input_->Next();
     }
     NextFromInput();
@@ -442,6 +442,7 @@ void CompactionIterator::NextFromInput() {
       assert(current_user_key_snapshot_ == last_snapshot);
 
       value_.clear();
+      value_.pin();
       valid_ = true;
       clear_and_output_next_key_ = false;
     } else if (ikey_.type == kTypeSingleDeletion) {
@@ -589,7 +590,7 @@ void CompactionIterator::NextFromInput() {
       // in this snapshot.
       assert(last_sequence >= current_user_key_sequence_);
       ++iter_stats_.num_record_drop_hidden;  // (A)
-      value_.clear();
+      value_.reset();
       input_->Next();
     } else if (compaction_ != nullptr && ikey_.type == kTypeDeletion &&
                ikey_.sequence <= earliest_snapshot_ &&
@@ -622,7 +623,7 @@ void CompactionIterator::NextFromInput() {
       if (!bottommost_level_) {
         ++iter_stats_.num_optimized_del_drop_obsolete;
       }
-      value_.clear();
+      value_.reset();
       input_->Next();
     } else if ((ikey_.type == kTypeDeletion) && bottommost_level_ &&
                ikeyNotNeededForIncrementalSnapshot()) {
@@ -660,7 +661,7 @@ void CompactionIterator::NextFromInput() {
       // have hit (A)
       // We encapsulate the merge related state machine in a different
       // object to minimize change to the existing flow.
-      value_.clear(); // MergeUntil will get iter value and move iter
+      value_.reset(); // MergeUntil will get iter value and move iter
       Status s = merge_helper_->MergeUntil(current_key_.GetUserKey(), &input_,
                                            range_del_agg_, prev_snapshot,
                                            bottommost_level_);
@@ -702,7 +703,7 @@ void CompactionIterator::NextFromInput() {
       if (should_delete) {
         ++iter_stats_.num_record_drop_hidden;
         ++iter_stats_.num_record_drop_range_del;
-        value_.clear();
+        value_.reset();
         input_->Next();
       } else {
         valid_ = true;

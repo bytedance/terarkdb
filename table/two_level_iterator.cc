@@ -293,7 +293,7 @@ class MapSstIterator final : public InternalIterator {
   bool InitFirstLevelIter() {
     auto result = TryInitFirstLevelIter();
     while (result == kInitFirstIterEmpty) {
-      first_level_value_.clear();
+      first_level_value_.reset();
       if (is_backword_) {
         first_level_iter_->Prev();
       } else {
@@ -383,14 +383,14 @@ class MapSstIterator final : public InternalIterator {
   }
 
   ~MapSstIterator() {
-    first_level_value_.clear();
+    first_level_value_.reset();
     min_heap_.~BinaryHeap();
   }
 
   virtual bool Valid() const override { return !min_heap_.empty(); }
   virtual void SeekToFirst() override {
     is_backword_ = false;
-    first_level_value_.clear();
+    first_level_value_.reset();
     first_level_iter_->SeekToFirst();
     if (InitFirstLevelIter()) {
       InitSecondLevelMinHeap(smallest_key_, include_smallest_);
@@ -400,7 +400,7 @@ class MapSstIterator final : public InternalIterator {
   }
   virtual void SeekToLast() override {
     is_backword_ = true;
-    first_level_value_.clear();
+    first_level_value_.reset();
     first_level_iter_->SeekToLast();
     if (InitFirstLevelIter()) {
       InitSecondLevelMaxHeap(largest_key_, include_largest_);
@@ -410,7 +410,7 @@ class MapSstIterator final : public InternalIterator {
   }
   virtual void Seek(const Slice& target) override {
     is_backword_ = false;
-    first_level_value_.clear();
+    first_level_value_.reset();
     first_level_iter_->Seek(target);
     if (!InitFirstLevelIter()) {
       assert(min_heap_.empty());
@@ -424,7 +424,7 @@ class MapSstIterator final : public InternalIterator {
       seek_target = smallest_key_;
       include = include_smallest_;
     } else if (icomp.Compare(target, largest_key_) == 0 && !include_largest_) {
-      first_level_value_.clear();
+      first_level_value_.reset();
       first_level_iter_->Next();
       if (!InitFirstLevelIter()) {
         assert(min_heap_.empty());
@@ -438,7 +438,7 @@ class MapSstIterator final : public InternalIterator {
       if (!status_.ok()) {
         return;
       }
-      first_level_value_.clear();
+      first_level_value_.reset();
       first_level_iter_->Next();
       if (InitFirstLevelIter()) {
         InitSecondLevelMinHeap(smallest_key_, include_smallest_);
@@ -451,7 +451,7 @@ class MapSstIterator final : public InternalIterator {
   }
   virtual void SeekForPrev(const Slice& target) override {
     is_backword_ = true;
-    first_level_value_.clear();
+    first_level_value_.reset();
     first_level_iter_->Seek(target);
     if (!InitFirstLevelIter()) {
       MapSstIterator::SeekToLast();
@@ -462,7 +462,7 @@ class MapSstIterator final : public InternalIterator {
     bool include = true;
     // include_smallest ? cmp_result > 0 : cmp_result >= 0
     if (icomp.Compare(smallest_key_, target) >= include_smallest_) {
-      first_level_value_.clear();
+      first_level_value_.reset();
       first_level_iter_->Prev();
       if (!InitFirstLevelIter()) {
         assert(max_heap_.empty());
@@ -478,7 +478,7 @@ class MapSstIterator final : public InternalIterator {
       if (!status_.ok()) {
         return;
       }
-      first_level_value_.clear();
+      first_level_value_.reset();
       first_level_iter_->Prev();
       if (InitFirstLevelIter()) {
         InitSecondLevelMaxHeap(largest_key_, include_largest_);
@@ -510,7 +510,7 @@ class MapSstIterator final : public InternalIterator {
     if (min_heap_.empty() ||
         icomp.Compare(min_heap_.top().key, largest_key_) >= include_largest_) {
       // out of largest bound
-      first_level_value_.clear();
+      first_level_value_.reset();
       first_level_iter_->Next();
       if (InitFirstLevelIter()) {
         InitSecondLevelMinHeap(smallest_key_, include_smallest_);
@@ -543,7 +543,7 @@ class MapSstIterator final : public InternalIterator {
         icomp.Compare(smallest_key_, max_heap_.top().key) >=
             include_smallest_) {
       // out of smallest bound
-      first_level_value_.clear();
+      first_level_value_.reset();
       first_level_iter_->Prev();
       if (InitFirstLevelIter()) {
         InitSecondLevelMaxHeap(largest_key_, include_largest_);
