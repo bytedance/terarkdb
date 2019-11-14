@@ -219,6 +219,7 @@ Status TableCache::FindTable(const EnvOptions& env_options,
       s = cache_->Insert(key, table_reader.get(), 1, &DeleteEntry<TableReader>,
                          handle);
       if (s.ok()) {
+        table_reader->SetTableCacheHandle(cache_, *handle);
         // Release ownership of table reader.
         table_reader.release();
       }

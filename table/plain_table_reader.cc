@@ -91,14 +91,24 @@ class PlainTableIterator : public InternalIterator {
 };
 
 extern const uint64_t kPlainTableMagicNumber;
-PlainTableReader::PlainTableReader(const ImmutableCFOptions& ioptions,
-                                   std::unique_ptr<RandomAccessFileReader>&& file,
-                                   const EnvOptions& storage_options,
-                                   const InternalKeyComparator& icomparator,
-                                   EncodingType encoding_type,
-                                   uint64_t file_number, uint64_t file_size,
-                                   const TableProperties* table_properties,
-                                   const SliceTransform* prefix_extractor)
+
+void PlainTableReader::SetTableCacheHandle(Cache* table_cache,
+                                           Cache::Handle *handle) {
+  MutexLock lock(&table_cache_mutex_);
+  assert(table_cache != nullptr);
+  assert(handle != nullptr);
+  table_cache_ = table_cache;
+  table_cache_handle_ = handle;
+}
+
+PlainTableReader::PlainTableReader(
+    const ImmutableCFOptions& ioptions,
+    std::unique_ptr<RandomAccessFileReader>&& file,
+    const EnvOptions& storage_options,
+    const InternalKeyComparator& icomparator, EncodingType encoding_type,
+    uint64_t file_number, uint64_t file_size,
+    const TableProperties* table_properties,
+    const SliceTransform* prefix_extractor)
     : internal_comparator_(icomparator),
       encoding_type_(encoding_type),
       full_scan_mode_(false),
@@ -111,7 +121,9 @@ PlainTableReader::PlainTableReader(const ImmutableCFOptions& ioptions,
       ioptions_(ioptions),
       file_number_(file_number),
       file_size_(file_size),
-      table_properties_(nullptr) {}
+      table_properties_(nullptr),
+      table_cache_(nullptr),
+      table_cache_handle_(nullptr) {}
 
 PlainTableReader::~PlainTableReader() {
 }
@@ -601,10 +613,26 @@ Status PlainTableReader::Get(const ReadOptions& /*ro*/, const Slice& target,
     // can we enable the fast path?
     if (internal_comparator_.Compare(found_key, parsed_target) >= 0) {
       bool dont_care __attribute__((__unused__));
-      if (!get_context->SaveValue(found_key,
-                                  LazyBuffer(found_value, false, file_number_),
-                                  &dont_care)) {
-        break;
+      if (found_value.size() <= sizeof(LazyBufferContext) ||
+          table_cache_handle_ == nullptr ||
+          !table_cache_->Ref(table_cache_handle_)) {
+        if (!get_context->SaveValue(found_key,
+                                    LazyBuffer(found_value, false,
+                                               file_number_),
+                                    &dont_care)) {
+          break;
+        }
+      } else {
+        if (!get_context->SaveValue(
+            found_key, LazyBuffer(
+                found_value, Cleanable([](void* arg1, void* arg2) {
+                  auto c = static_cast<Cache*>(arg1);
+                  auto h = static_cast<Cache::Handle*>(arg2);
+                  c->Release(h);
+                }, table_cache_, table_cache_handle_), file_number_),
+            &dont_care)) {
+          break;
+        }
       }
     }
   }

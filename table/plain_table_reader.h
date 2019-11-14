@@ -108,6 +108,8 @@ class PlainTableReader: public TableReader {
     return file_number_;
   }
 
+  void SetTableCacheHandle(Cache* table_cache, Cache::Handle *handle) override;
+
   PlainTableReader(const ImmutableCFOptions& ioptions,
                    std::unique_ptr<RandomAccessFileReader>&& file,
                    const EnvOptions& env_options,
@@ -165,6 +167,9 @@ class PlainTableReader: public TableReader {
   uint64_t file_number_;
   uint64_t file_size_;
   std::shared_ptr<const TableProperties> table_properties_;
+  Cache* table_cache_;
+  Cache::Handle *table_cache_handle_;
+  port::Mutex table_cache_mutex_;
 
   bool IsFixedLength() const {
     return user_key_len_ != kPlainTableVariableLength;

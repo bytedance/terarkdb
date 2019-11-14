@@ -317,6 +317,11 @@ inline LazyBufferContext* LazyBufferState::get_context(LazyBuffer* buffer) {
   return &buffer->context_;
 }
 
+#ifdef __GNUC__
+# pragma GCC diagnostic push
+# pragma GCC diagnostic ignored "-Wmissing-field-initializers"
+#endif
+
 inline LazyBuffer::LazyBuffer() noexcept
     : state_(LazyBufferState::light_state()),
       context_{},
@@ -369,6 +374,10 @@ inline LazyBuffer::LazyBuffer(const LazyBufferState* _state,
       file_number_(_file_number) {
   assert(_state != nullptr);
 }
+
+#ifdef __GNUC__
+# pragma GCC diagnostic pop
+#endif
 
 inline void LazyBuffer::destroy() {
   if (state_ != nullptr) {
