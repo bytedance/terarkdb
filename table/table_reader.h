@@ -10,6 +10,7 @@
 #pragma once
 #include <memory>
 #include "db/range_tombstone_fragmenter.h"
+#include "rocksdb/cache.h"
 #include "rocksdb/slice_transform.h"
 #include "table/internal_iterator.h"
 
@@ -118,6 +119,9 @@ class TableReader {
   virtual Status VerifyChecksum() {
     return Status::NotSupported("VerifyChecksum() not supported");
   }
+
+  virtual void SetTableCacheHandle(Cache* /*table_cache*/,
+                                   Cache::Handle */*handle*/) {}
 
   void UpdateMaxCoveringTombstoneSeq(
       const ReadOptions& readOptions, const Slice& user_key,

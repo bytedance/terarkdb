@@ -139,7 +139,7 @@ class MergeHelper {
   void Clear() {
     keys_.clear();
     merge_context_.Clear();
-    compaction_filter_value_.clear();
+    compaction_filter_value_.reset();
     compaction_filter_skip_until_.Clear();
   }
 
