@@ -52,7 +52,7 @@ void MakeBuilder(const Options& options, const ImmutableCFOptions& ioptions,
   builder->reset(NewTableBuilder(
       ioptions, moptions, internal_comparator, int_tbl_prop_collector_factories,
       kTestColumnFamilyId, kTestColumnFamilyName, writable->get(),
-      options.compression, options.compression_opts, unknown_level));
+      options.compression, options.compression_opts, unknown_level, 0));
 }
 }  // namespace
 
@@ -267,9 +267,9 @@ void TestCustomizedTablePropertiesCollector(
   SequenceNumber seqNum = 0U;
   for (const auto& kv : kvs) {
     InternalKey ikey(kv.first.first, seqNum++, kv.first.second);
-    builder->Add(ikey.Encode(), kv.second);
+    ASSERT_OK(builder->Add(ikey.Encode(), LazyBuffer(kv.second)));
   }
-  ASSERT_OK(builder->Finish());
+  ASSERT_OK(builder->Finish(nullptr));
   writer->Flush();
 
   // -- Step 2: Read properties
@@ -407,10 +407,10 @@ void TestInternalKeyPropertiesCollector(
     MakeBuilder(options, ioptions, moptions, pikc,
                 &int_tbl_prop_collector_factories, &writable, &builder);
     for (const auto& k : keys) {
-      builder->Add(k.Encode(), "val");
+      ASSERT_OK(builder->Add(k.Encode(), LazyBuffer("val")));
     }
 
-    ASSERT_OK(builder->Finish());
+    ASSERT_OK(builder->Finish(nullptr));
     writable->Flush();
 
     test::StringSink* fwf =

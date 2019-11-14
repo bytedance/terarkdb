@@ -505,7 +505,7 @@ TEST_F(DBIteratorStressTest, StressTest) {
                   db_iter.reset(NewDBIterator(
                       env_, ropt, ImmutableCFOptions(options),
                       MutableCFOptions(options), BytewiseComparator(),
-                      internal_iter, sequence,
+                      internal_iter, sequence, nullptr,
                       options.max_sequential_skip_in_iterations,
                       nullptr /*read_callback*/));
                 }

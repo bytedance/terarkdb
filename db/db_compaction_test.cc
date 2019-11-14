@@ -326,7 +326,7 @@ TEST_F(DBCompactionTest, LazyCompactionTest) {
   ReadOptions ro;
   FlushOptions fo;
   CompactionOptions co;
-  co.compaction_type = kMapCompaction;
+  //co.compaction_type_ = kMapCompaction;
 
   std::vector<const Snapshot*> snapshots;
 
@@ -384,10 +384,12 @@ TEST_F(DBCompactionTest, LazyCompactionTest) {
   Arena arena;
   InternalKeyComparator ic(BytewiseComparator());
   std::vector<SequenceNumber> sv;
-  RangeDelAggregator range_del_agg(ic, sv);
+  for(auto& ss : snapshots) sv.emplace_back(ss->GetSequenceNumber());
+  CompactionRangeDelAggregator range_del_agg(&ic, sv);
   std::unique_ptr<InternalIterator, void (*)(InternalIterator*)> iter(
-      dbfull()->NewInternalIterator(&arena, &range_del_agg),
+      dbfull()->NewInternalIterator(&arena, &range_del_agg, 0),
       [](InternalIterator* arena_iter) { arena_iter->~InternalIterator(); });
+  
   iter->SeekToFirst();
   for (auto it = verify.begin(); it != verify.end(); ++it) {
     ASSERT_TRUE(iter->Valid());
@@ -4163,8 +4165,7 @@ class NoopMergeOperator : public MergeOperator {
 
   virtual bool FullMergeV2(const MergeOperationInput& /*merge_in*/,
                            MergeOperationOutput* merge_out) const override {
-    std::string val("bar");
-    merge_out->new_value = val;
+    merge_out->new_value.reset("bar");
     return true;
   }
 
