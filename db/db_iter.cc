@@ -444,6 +444,7 @@ bool DBIter::FindNextUserEntryInternal(bool skipping, bool prefix_check) {
             // just skip it like in normal iterator.
             if (start_seqnum_ > 0 && ikey_.sequence >= start_seqnum_)  {
               saved_key_.SetInternalKey(ikey_);
+              value_.clear();
               valid_ = true;
               return true;
             } else {
