@@ -198,31 +198,17 @@ TEST_F(CleanableTest, Delegation) {
   ASSERT_EQ(5, res);
 }
 
-static void ReleaseStringHeap(void* s, void*) {
-  delete reinterpret_cast<const std::string*>(s);
-}
-
-class PinnableSlice4Test : public PinnableSlice {
- public:
-  void TestStringIsRegistered(std::string* s) {
-    ASSERT_TRUE(cleanup_.function == ReleaseStringHeap);
-    ASSERT_EQ(cleanup_.arg1, s);
-    ASSERT_EQ(cleanup_.arg2, nullptr);
-    ASSERT_EQ(cleanup_.next, nullptr);
-  }
-};
-
-// Putting the PinnableSlice tests here due to similarity to Cleanable tests
-TEST_F(CleanableTest, PinnableSlice) {
+// Putting the LazyBuffer tests here due to similarity to Cleanable tests
+TEST_F(CleanableTest, LazyBuffer) {
   int n2 = 2;
   int res = 1;
   const std::string const_str = "123";
 
   {
     res = 1;
-    PinnableSlice4Test value;
+    LazyBuffer value;
     Slice slice(const_str);
-    value.PinSlice(slice, Multiplier, &res, &n2);
+    value.reset(slice, Cleanable(Multiplier, &res, &n2));
     std::string str;
     str.assign(value.data(), value.size());
     ASSERT_EQ(const_str, str);
@@ -232,12 +218,12 @@ TEST_F(CleanableTest, PinnableSlice) {
 
   {
     res = 1;
-    PinnableSlice4Test value;
+    LazyBuffer value;
     Slice slice(const_str);
     {
       Cleanable c1;
       c1.RegisterCleanup(Multiplier, &res, &n2);  // res = 2;
-      value.PinSlice(slice, &c1);
+      value.reset(slice, std::move(c1));
     }
     // ~Cleanable
     ASSERT_EQ(1, res);  // cleanups must have be delegated to value
@@ -249,19 +235,19 @@ TEST_F(CleanableTest, PinnableSlice) {
   ASSERT_EQ(2, res);
 
   {
-    PinnableSlice4Test value;
+    LazyBuffer value;
     Slice slice(const_str);
-    value.PinSelf(slice);
+    value.reset(slice, true);
     std::string str;
     str.assign(value.data(), value.size());
     ASSERT_EQ(const_str, str);
   }
 
   {
-    PinnableSlice4Test value;
-    std::string* self_str_ptr = value.GetSelf();
+    LazyBuffer value;
+    std::string* self_str_ptr = value.trans_to_string();
     self_str_ptr->assign(const_str);
-    value.PinSelf();
+    ASSERT_OK(value.fetch());
     std::string str;
     str.assign(value.data(), value.size());
     ASSERT_EQ(const_str, str);

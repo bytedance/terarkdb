@@ -136,7 +136,6 @@ class VersionStorageInfoTest : public testing::Test {
     f->largest = GetInternalKey(largest, 0);
     f->compensated_file_size = file_size;
     f->refs = 0;
-    f->num_entries = 0;
     f->num_deletions = 0;
     vstorage_.AddFile(level, f);
   }
@@ -150,7 +149,6 @@ class VersionStorageInfoTest : public testing::Test {
     f->largest = largest;
     f->compensated_file_size = file_size;
     f->refs = 0;
-    f->num_entries = 0;
     f->num_deletions = 0;
     vstorage_.AddFile(level, f);
   }

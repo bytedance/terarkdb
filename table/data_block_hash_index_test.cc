@@ -561,15 +561,14 @@ void TestBoundary(InternalKey& ik1, std::string& v1, InternalKey& ik2,
                           options.compression, CompressionOptions(),
                           nullptr /* compression_dict */,
                           false /* skip_filters */, false /* ignore_key_type */,
-                          column_family_name, level_),
+                          column_family_name, level_, 0 /* compaction_load */),
       TablePropertiesCollectorFactory::Context::kUnknownColumnFamily,
       file_writer.get()));
 
-  builder->Add(ik1.Encode().ToString(), v1);
-  builder->Add(ik2.Encode().ToString(), v2);
-  EXPECT_TRUE(builder->status().ok());
+  EXPECT_TRUE(builder->Add(ik1.Encode().ToString(), LazyBuffer(v1)).ok());
+  EXPECT_TRUE(builder->Add(ik2.Encode().ToString(), LazyBuffer(v2)).ok());
 
-  Status s = builder->Finish();
+  Status s = builder->Finish(nullptr);
   file_writer->Flush();
   EXPECT_TRUE(s.ok()) << s.ToString();
 
@@ -629,17 +628,18 @@ TEST(DataBlockHashIndex, BlockBoundary) {
     InternalKey ik2(uk2, 10, kTypeValue);
     std::string v2(4100, '2');  // large value
 
-    PinnableSlice value;
+    LazyBuffer value;
     std::string seek_ukey("axy");
     InternalKey seek_ikey(seek_ukey, 60, kTypeValue);
     GetContext get_context(options.comparator, nullptr, nullptr, nullptr,
                            GetContext::kNotFound, seek_ukey, &value, nullptr,
-                           nullptr, nullptr, nullptr);
+                           nullptr, nullptr, nullptr, nullptr);
 
     TestBoundary(ik1, v1, ik2, v2, seek_ikey, get_context, options);
     ASSERT_EQ(get_context.State(), GetContext::kFound);
-    ASSERT_EQ(value, v2);
-    value.Reset();
+    ASSERT_OK(value.fetch());
+    ASSERT_EQ(value.slice(), v2);
+    value.reset();
   }
 
   {
@@ -654,17 +654,18 @@ TEST(DataBlockHashIndex, BlockBoundary) {
     InternalKey ik2(uk2, 10, kTypeValue);
     std::string v2(4100, '2');  // large value
 
-    PinnableSlice value;
+    LazyBuffer value;
     std::string seek_ukey("axy");
     InternalKey seek_ikey(seek_ukey, 60, kTypeValue);
     GetContext get_context(options.comparator, nullptr, nullptr, nullptr,
                            GetContext::kNotFound, seek_ukey, &value, nullptr,
-                           nullptr, nullptr, nullptr);
+                           nullptr, nullptr, nullptr, nullptr);
 
     TestBoundary(ik1, v1, ik2, v2, seek_ikey, get_context, options);
     ASSERT_EQ(get_context.State(), GetContext::kFound);
-    ASSERT_EQ(value, v2);
-    value.Reset();
+    ASSERT_OK(value.fetch());
+    ASSERT_EQ(value.slice(), v2);
+    value.reset();
   }
 
   {
@@ -679,17 +680,18 @@ TEST(DataBlockHashIndex, BlockBoundary) {
     InternalKey ik2(uk2, 10, kTypeValue);
     std::string v2(4100, '2');  // large value
 
-    PinnableSlice value;
+    LazyBuffer value;
     std::string seek_ukey("axy");
     InternalKey seek_ikey(seek_ukey, 120, kTypeValue);
     GetContext get_context(options.comparator, nullptr, nullptr, nullptr,
                            GetContext::kNotFound, seek_ukey, &value, nullptr,
-                           nullptr, nullptr, nullptr);
+                           nullptr, nullptr, nullptr, nullptr);
 
     TestBoundary(ik1, v1, ik2, v2, seek_ikey, get_context, options);
     ASSERT_EQ(get_context.State(), GetContext::kFound);
-    ASSERT_EQ(value, v1);
-    value.Reset();
+    ASSERT_OK(value.fetch());
+    ASSERT_EQ(value.slice(), v1);
+    value.reset();
   }
 
   {
@@ -704,16 +706,16 @@ TEST(DataBlockHashIndex, BlockBoundary) {
     InternalKey ik2(uk2, 10, kTypeValue);
     std::string v2(4100, '2');  // large value
 
-    PinnableSlice value;
+    LazyBuffer value;
     std::string seek_ukey("axy");
     InternalKey seek_ikey(seek_ukey, 5, kTypeValue);
     GetContext get_context(options.comparator, nullptr, nullptr, nullptr,
                            GetContext::kNotFound, seek_ukey, &value, nullptr,
-                           nullptr, nullptr, nullptr);
+                           nullptr, nullptr, nullptr, nullptr);
 
     TestBoundary(ik1, v1, ik2, v2, seek_ikey, get_context, options);
     ASSERT_EQ(get_context.State(), GetContext::kNotFound);
-    value.Reset();
+    value.reset();
   }
 }
 

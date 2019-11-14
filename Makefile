@@ -1705,7 +1705,8 @@ repeatable_thread_test: util/repeatable_thread_test.o $(LIBOBJECTS) $(TESTHARNES
 terark_zip_table_db_test: db/terark_zip_table_db_test.o $(LIBOBJECTS) $(TESTHARNESS)
 	$(AM_LINK)
 
-terark_zip_table_reader_test: table/terark_zip_table_reader_test.o db/db_test_util.o $(LIBOBJECTS) $(TESTHARNESS) ${LIBNAME}.so
+terark_zip_table_reader_test: table/terark_zip_table_reader_test.o db/db_test_util.o $(LIBOBJECTS) $(TESTHARNESS)
+	$(AM_LINK)
 
 range_tombstone_fragmenter_test: db/range_tombstone_fragmenter_test.o db/db_test_util.o $(LIBOBJECTS) $(TESTHARNESS)
 	$(AM_LINK)
