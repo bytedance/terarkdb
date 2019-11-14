@@ -264,7 +264,7 @@ class DBIter final: public Iterator {
       local_stats_.skip_count_--;
     }
     num_internal_keys_skipped_ = 0;
-    value_.clear();
+    value_.reset();
     if (value_buffer_.capacity() > 1048576) {
       std::string().swap(value_buffer_);
     }
@@ -606,7 +606,7 @@ bool DBIter::MergeValuesNewToOld() {
         status_ = s;
         return false;
       }
-      val.clear();
+      val.reset();
       value_.pin();
       // iter_ is positioned after put
       iter_->Next();

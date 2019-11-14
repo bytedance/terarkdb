@@ -103,6 +103,7 @@ class CombinedInternalIterator : public InternalIterator {
   bool Valid() const override { return iter_->Valid(); }
   Slice key() const override { return iter_->key(); }
   LazyBuffer value() const override;
+  LazyBuffer value(const Slice &user_key) const;
   Status status() const override { return iter_->status(); }
   void Next() override { iter_->Next(); }
   void Prev() override { iter_->Prev(); }
@@ -112,6 +113,8 @@ class CombinedInternalIterator : public InternalIterator {
   void SeekToLast() override { iter_->SeekToLast(); }
 
   const SeparateHelper* separate_helper() const { return separate_helper_; }
+
+  InternalIterator* operator->() { return iter_; }
 
   InternalIterator* iter_;
   const SeparateHelper* separate_helper_;
@@ -190,29 +193,6 @@ class LazyInternalIteratorWrapper : public InternalIterator {
   void* filter_callback_arg_;
   const std::atomic<bool>* shutting_down_;
   std::unique_ptr<InternalIterator> iter_;
-};
-
-class SeparateValueCollector {
-  const SeparateHelper* separate_helper_;
-  std::unordered_map<uint64_t, uint64_t>* delta_antiquation_;
-
-public:
-  SeparateValueCollector()
-      : separate_helper_(nullptr),
-        delta_antiquation_(nullptr) {}
-
-  SeparateValueCollector(
-      const SeparateHelper* _separate_helper,
-      std::unordered_map<uint64_t, uint64_t>* _delta_antiquation)
-      : separate_helper_(_separate_helper),
-        delta_antiquation_(_delta_antiquation) {}
-
-  LazyBuffer value(InternalIterator* iter, const Slice& user_key) const;
-
-  LazyBuffer add(InternalIterator* iter, const Slice& user_key);
-  void sub(uint64_t file_number);
-
-  const SeparateHelper* separate_helper() const { return separate_helper_; }
 };
 
 }  // namespace rocksdb

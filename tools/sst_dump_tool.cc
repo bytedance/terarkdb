@@ -227,7 +227,7 @@ int SstFileDumper::ShowAllCompressionSizes(
           imoptions, moptions, ikc, &block_based_table_factories, i.first,
           compress_opt, nullptr /* compression_dict */,
           false /* skip_filters */, false, column_family_name, unknown_level,
-          0);
+          0 /* compaction_load */);
       uint64_t file_size = CalculateCompressedTableSize(tb_opts, block_size);
       fprintf(stdout, "Compression: %s", i.second);
       fprintf(stdout, " Size: %" PRIu64 "\n", file_size);

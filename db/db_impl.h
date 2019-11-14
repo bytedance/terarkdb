@@ -466,6 +466,7 @@ class DBImpl : public DB {
   size_t TEST_LogsWithPrepSize();
 
   int TEST_BGCompactionsAllowed() const;
+  int TEST_BGGarbageCollectionAllowed() const;
   int TEST_BGFlushesAllowed() const;
   size_t TEST_GetWalPreallocateBlockSize(uint64_t write_buffer_size) const;
   void TEST_WaitForTimedTaskRun(std::function<void()> callback) const;
@@ -475,12 +476,14 @@ class DBImpl : public DB {
   struct BGJobLimits {
     int max_flushes;
     int max_compactions;
+    int max_garbage_collections;
   };
   // Returns maximum background flushes and compactions allowed to be scheduled
   BGJobLimits GetBGJobLimits() const;
   // Need a static version that can be called during SanitizeOptions().
   static BGJobLimits GetBGJobLimits(int max_background_flushes,
                                     int max_background_compactions,
+                                    int max_background_garbage_collections,
                                     int max_background_jobs,
                                     bool parallelize_compactions);
 
@@ -1078,9 +1081,11 @@ class DBImpl : public DB {
   void SchedulePendingFlush(const FlushRequest& req, FlushReason flush_reason);
 
   void SchedulePendingCompaction(ColumnFamilyData* cfd);
+  void SchedulePendingGarbageCollection(ColumnFamilyData* cfd);
   void SchedulePendingPurge(std::string fname, std::string dir_to_sync,
                             FileType type, uint64_t number, int job_id);
   static void BGWorkCompaction(void* arg);
+  static void BGWorkGarbageCollection(void* arg);
   // Runs a pre-chosen universal compaction involving bottom level in a
   // separate, bottom-pri thread pool.
   static void BGWorkBottomCompaction(void* arg);
@@ -1089,11 +1094,15 @@ class DBImpl : public DB {
   static void UnscheduleCallback(void* arg);
   void BackgroundCallCompaction(PrepickedCompaction* prepicked_compaction,
                                 Env::Priority bg_thread_pri);
+  void BackgroundCallGarbageCollection(Env::Priority bg_thread_pri);
   void BackgroundCallFlush();
   void BackgroundCallPurge();
   Status BackgroundCompaction(bool* madeProgress, JobContext* job_context,
                               LogBuffer* log_buffer,
                               PrepickedCompaction* prepicked_compaction);
+  Status BackgroundGarbageCollection(bool* madeProgress,
+                                     JobContext* job_context,
+                                     LogBuffer* log_buffer);
   Status BackgroundFlush(bool* madeProgress, JobContext* job_context,
                          LogBuffer* log_buffer, FlushReason* reason);
 
@@ -1122,6 +1131,10 @@ class DBImpl : public DB {
   // helper functions for adding and removing from flush & compaction queues
   void AddToCompactionQueue(ColumnFamilyData* cfd);
   ColumnFamilyData* PopFirstFromCompactionQueue();
+
+  void AddToGarbageCollectionQueue(ColumnFamilyData* cfd);
+  ColumnFamilyData* PopFirstFromGarbageCollectionQueue();
+
   FlushRequest PopFirstFromFlushQueue();
 
   // helper function to call after some of the logs_ were synced
@@ -1361,6 +1374,7 @@ class DBImpl : public DB {
   // invariant(column family present in compaction_queue_ <==>
   // ColumnFamilyData::pending_compaction_ == true)
   std::deque<ColumnFamilyData*> compaction_queue_;
+  std::deque<ColumnFamilyData*> garbage_collection_queue_;
 
   // A queue to store filenames of the files to be purged
   std::deque<PurgeFileInfo> purge_queue_;
@@ -1373,6 +1387,7 @@ class DBImpl : public DB {
   std::deque<log::Writer*> logs_to_free_queue_;
   int unscheduled_flushes_;
   int unscheduled_compactions_;
+  int unscheduled_garbage_collections_;
 
   // count how many background compactions are running or have been scheduled in
   // the BOTTOM pool
@@ -1381,8 +1396,14 @@ class DBImpl : public DB {
   // count how many background compactions are running or have been scheduled
   int bg_compaction_scheduled_;
 
+  // count how many background garbage collections are running or have been scheduled
+  int bg_garbage_collection_scheduled_;
+
   // stores the number of compactions are currently running
   int num_running_compactions_;
+
+  // stores the number of garbage collections are currently running
+  int num_running_garbage_collections_;
 
   // number of background memtable flush jobs, submitted to the HIGH pool
   int bg_flush_scheduled_;

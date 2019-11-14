@@ -52,6 +52,7 @@ Status DBImpl::SuggestCompactRange(ColumnFamilyHandle* column_family,
     vstorage->ComputeCompactionScore(*cfd->ioptions(),
                                      *cfd->GetLatestMutableCFOptions());
     SchedulePendingCompaction(cfd);
+    SchedulePendingGarbageCollection(cfd);
     MaybeScheduleFlushOrCompaction();
   }
   return Status::OK();
@@ -132,7 +133,7 @@ Status DBImpl::PromoteL0(ColumnFamilyHandle* column_family, int target_level) {
       edit.AddFile(target_level, f->fd.GetNumber(), f->fd.GetPathId(),
                    f->fd.GetFileSize(), f->smallest, f->largest,
                    f->fd.smallest_seqno, f->fd.largest_seqno,
-                   f->num_antiquation, f->marked_for_compaction, f->prop);
+                   f->marked_for_compaction, f->prop);
     }
 
     status = versions_->LogAndApply(cfd, *cfd->GetLatestMutableCFOptions(),

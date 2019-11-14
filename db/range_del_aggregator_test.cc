@@ -30,8 +30,8 @@ std::unique_ptr<InternalIteratorBase<Slice>> MakeRangeDelIter(
     keys.push_back(key_and_value.first.Encode().ToString());
     values.push_back(key_and_value.second.ToString());
   }
-  return std::unique_ptr<test::VectorIterator>(
-      new test::VectorIterator(keys, values));
+  return std::unique_ptr<test::VectorIteratorBase<Slice>>(
+      new test::VectorIteratorBase<Slice>(keys, values));
 }
 
 std::vector<std::unique_ptr<FragmentedRangeTombstoneList>>

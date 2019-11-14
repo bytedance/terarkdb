@@ -15,6 +15,12 @@ namespace rocksdb {
 // Represents a sequence number in a WAL file.
 typedef uint64_t SequenceNumber;
 
+// Dependence pair
+struct Dependence {
+  uint64_t file_number;
+  uint64_t entry_count;
+};
+
 // User-oriented representation of internal key types.
 enum EntryType {
   kEntryPut,

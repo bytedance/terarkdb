@@ -231,6 +231,9 @@ public:
   // Change this slice to refer to an empty array
   void clear();
 
+  // Change this to invalid
+  void reset();
+
   // Move assign other buffer
   void reset(LazyBuffer&& _buffer);
 
@@ -317,6 +320,11 @@ inline LazyBufferContext* LazyBufferState::get_context(LazyBuffer* buffer) {
   return &buffer->context_;
 }
 
+#ifdef __GNUC__
+# pragma GCC diagnostic push
+# pragma GCC diagnostic ignored "-Wmissing-field-initializers"
+#endif
+
 inline LazyBuffer::LazyBuffer() noexcept
     : state_(LazyBufferState::light_state()),
       context_{},
@@ -370,6 +378,10 @@ inline LazyBuffer::LazyBuffer(const LazyBufferState* _state,
   assert(_state != nullptr);
 }
 
+#ifdef __GNUC__
+# pragma GCC diagnostic pop
+#endif
+
 inline void LazyBuffer::destroy() {
   if (state_ != nullptr) {
     state_->destroy(this);
@@ -387,8 +399,20 @@ inline void LazyBuffer::assign_error(Status&& _status) {
 }
 
 inline void LazyBuffer::clear() {
+  if (state_ == nullptr) {
+    state_ = LazyBufferState::light_state();
+  }
   state_->assign_slice(this, Slice());
   assert(size_ == 0);
+  file_number_ = uint64_t(-1);
+}
+
+inline void LazyBuffer::reset() {
+  if (state_ != nullptr) {
+    state_->destroy(this);
+    state_ = nullptr;
+  }
+  slice_ = Slice::Invalid();
   file_number_ = uint64_t(-1);
 }
 

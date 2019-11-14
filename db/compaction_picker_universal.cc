@@ -257,8 +257,8 @@ static size_t GetFilesSize(const FileMetaData* f, uint64_t file_number,
   }
   uint64_t file_size = f->fd.GetFileSize();
   if (f->prop.purpose != 0) {
-    for (auto dependence_file_number : f->prop.dependence) {
-      file_size += GetFilesSize(nullptr, dependence_file_number, vstorage);
+    for (auto& dependence : f->prop.dependence) {
+      file_size += GetFilesSize(nullptr, dependence.file_number, vstorage);
     }
   }
   return file_size;
@@ -432,11 +432,6 @@ Compaction* UniversalCompactionPicker::PickCompaction(
     c = PickCompositeCompaction(cf_name, mutable_cf_options, vstorage,
                                 sorted_runs, log_buffer);
   }
-  if (c == nullptr && table_cache_ != nullptr) {
-    c = PickGarbageCollection(cf_name, mutable_cf_options, vstorage,
-                              log_buffer);
-  }
-
   if (c == nullptr && !mutable_cf_options.enable_lazy_compaction) {
     if ((c = PickDeleteTriggeredCompaction(cf_name, mutable_cf_options,
                                            vstorage, score, sorted_runs,
@@ -454,7 +449,6 @@ Compaction* UniversalCompactionPicker::PickCompaction(
   }
 
   bool allow_trivial_move =
-      c->compaction_type() != kGarbageCollection &&
       mutable_cf_options.compaction_options_universal.allow_trivial_move;
   if (c->compaction_reason() != CompactionReason::kTrivialMoveLevel &&
       allow_trivial_move) {
@@ -473,9 +467,8 @@ Compaction* UniversalCompactionPicker::PickCompaction(
   }
 
 // validate that all the chosen files of L0 are non overlapping in time
-#ifndef NDEBUG
-  if (c->compaction_type() != kGarbageCollection &&
-      c->compaction_reason() != CompactionReason::kCompositeAmplification) {
+#if !defined(NDEBUG) && 0
+  if (c->compaction_reason() != CompactionReason::kCompositeAmplification) {
     struct SortedRunDebug {
       bool is_vstorage;
       int level;
@@ -553,7 +546,11 @@ Compaction* UniversalCompactionPicker::PickCompaction(
     sr_debug.emplace_back(o);
     std::sort(sr_debug.begin(), sr_debug.end(),
               [](SortedRunDebug& l, SortedRunDebug& r) {
-                return l.smallest > r.smallest;
+                if (l.smallest != r.smallest) {
+                  return l.smallest > r.smallest;
+                } else {
+                  return l.level < r.level;
+                }
               });
     assert(std::is_sorted(sr_debug.begin(), sr_debug.end(),
                           [](SortedRunDebug& l, SortedRunDebug& r) {
@@ -592,17 +589,17 @@ Compaction* UniversalCompactionPicker::CompactRange(
         return true;
       }
       auto& dependence_map = vstorage->dependence_map();
-      for (auto file_number : f->prop.dependence) {
-        if (files_being_compact->count(file_number) > 0) {
+      for (auto& dependence : f->prop.dependence) {
+        if (files_being_compact->count(dependence.file_number) > 0) {
           return true;
         }
-        auto find = dependence_map.find(file_number);
+        auto find = dependence_map.find(dependence.file_number);
         if (find == dependence_map.end()) {
           // TODO: log error
           continue;
         }
-        for (auto dependence_file_number : find->second->prop.dependence) {
-          if (files_being_compact->count(dependence_file_number) > 0) {
+        for (auto& f_dependence : find->second->prop.dependence) {
+          if (files_being_compact->count(f_dependence.file_number) > 0) {
             return true;
           }
         };
@@ -1539,7 +1536,7 @@ Compaction* UniversalCompactionPicker::PickCompositeCompaction(
       return false;
     }
     auto f = find->second;
-    if (f->prop.purpose != 0) {
+    if (f->prop.purpose != 0 || f->marked_for_compaction) {
       return false;
     }
     Range r(e.smallest_key_, e.largest_key_, e.include_smallest_,
@@ -1857,8 +1854,8 @@ Compaction* UniversalCompactionPicker::PickRangeCompaction(
         continue;
       }
       auto f = find->second;
-      for (auto file_number : f->prop.dependence) {
-        if (files_being_compact->count(file_number) > 0) {
+      for (auto& dependence : f->prop.dependence) {
+        if (files_being_compact->count(dependence.file_number) > 0) {
           return true;
         }
       };

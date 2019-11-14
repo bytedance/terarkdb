@@ -71,8 +71,7 @@ class CompactionIterator {
       const Compaction* compaction = nullptr, size_t blob_size = uint64_t(-1),
       const CompactionFilter* compaction_filter = nullptr,
       const std::atomic<bool>* shutting_down = nullptr,
-      const SequenceNumber preserve_deletes_seqnum = 0,
-      std::unordered_map<uint64_t, uint64_t>* delta_antiquation = nullptr);
+      const SequenceNumber preserve_deletes_seqnum = 0);
 
   // Constructor with custom CompactionProxy, used for tests.
   CompactionIterator(
@@ -86,8 +85,7 @@ class CompactionIterator {
       std::unique_ptr<CompactionProxy> compaction, size_t blob_size,
       const CompactionFilter* compaction_filter = nullptr,
       const std::atomic<bool>* shutting_down = nullptr,
-      const SequenceNumber preserve_deletes_seqnum = 0,
-      std::unordered_map<uint64_t, uint64_t>* delta_antiquation = nullptr);
+      const SequenceNumber preserve_deletes_seqnum = 0);
 
   ~CompactionIterator();
 
@@ -139,7 +137,7 @@ class CompactionIterator {
   // or seqnum be zero-ed out even if all other conditions for it are met.
   inline bool ikeyNotNeededForIncrementalSnapshot();
 
-  InternalIterator* input_;
+  CombinedInternalIterator input_;
   const Slice* end_;
   const Comparator* cmp_;
   MergeHelper* merge_helper_;
@@ -147,7 +145,7 @@ class CompactionIterator {
   const SequenceNumber earliest_write_conflict_snapshot_;
   const SnapshotChecker* const snapshot_checker_;
   Env* env_;
-  bool report_detailed_time_;
+  //bool report_detailed_time_;
   bool expect_valid_internal_key_;
   CompactionRangeDelAggregator* range_del_agg_;
   std::unique_ptr<CompactionProxy> compaction_;
@@ -206,8 +204,6 @@ class CompactionIterator {
   // is in or beyond the last file checked during the previous call
   std::vector<size_t> level_ptrs_;
   CompactionIterationStats iter_stats_;
-
-  SeparateValueCollector separate_value_collector_;
 
   // Used to avoid purging uncommitted values. The application can specify
   // uncommitted values by providing a SnapshotChecker object.

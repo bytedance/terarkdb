@@ -62,6 +62,7 @@ DBOptions SanitizeOptions(const std::string& dbname, const DBOptions& src) {
   }
   auto bg_job_limits = DBImpl::GetBGJobLimits(
       result.max_background_flushes, result.max_background_compactions,
+      result.max_background_garbage_collections,
       result.max_background_jobs, true /* parallelize_compactions */);
   result.env->IncBackgroundThreadsIfNeeded(bg_job_limits.max_compactions,
                                            Env::Priority::LOW);
@@ -1059,7 +1060,7 @@ Status DBImpl::WriteLevel0TableForRecovery(int job_id, ColumnFamilyData* cfd,
     edit->AddFile(level, meta.fd.GetNumber(), meta.fd.GetPathId(),
                   meta.fd.GetFileSize(), meta.smallest, meta.largest,
                   meta.fd.smallest_seqno, meta.fd.largest_seqno,
-                  meta.num_antiquation, meta.marked_for_compaction, meta.prop);
+                  meta.marked_for_compaction, meta.prop);
   }
 
   InternalStats::CompactionStats stats(CompactionReason::kFlush, 1);

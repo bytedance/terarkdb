@@ -402,6 +402,21 @@ const LazyBufferState* LazyBufferState::cleanable_state() {
   return &static_state;
 }
 
+void LazyBuffer::fix_light_state(const LazyBuffer& other) {
+  assert(state_ == LazyBufferState::light_state());
+  assert(other.size_ <= sizeof(LazyBufferContext));
+  data_ = union_cast<LightLazyBufferState::Context>(&context_)->data;
+  size_ = other.size_;
+  if (!other.empty()) {
+    ::memmove(data_, other.data_, size_);
+  }
+}
+
+#ifdef __GNUC__
+# pragma GCC diagnostic push
+# pragma GCC diagnostic ignored "-Wmissing-field-initializers"
+#endif
+
 LazyBuffer::LazyBuffer(size_t _size) noexcept
     : context_{},
       file_number_(uint64_t(-1)) {
@@ -424,16 +439,6 @@ LazyBuffer::LazyBuffer(size_t _size) noexcept
   }
 }
 
-void LazyBuffer::fix_light_state(const LazyBuffer& other) {
-  assert(state_ == LazyBufferState::light_state());
-  assert(other.size_ <= sizeof(LazyBufferContext));
-  data_ = union_cast<LightLazyBufferState::Context>(&context_)->data;
-  size_ = other.size_;
-  if (!other.empty()) {
-    ::memmove(data_, other.data_, size_);
-  }
-}
-
 LazyBuffer::LazyBuffer(LazyBufferCustomizeBuffer _buffer) noexcept
     : state_(LazyBufferState::buffer_state()),
       context_{reinterpret_cast<uint64_t>(_buffer.handle),
@@ -452,6 +457,10 @@ LazyBuffer::LazyBuffer(std::string* _string) noexcept
   assert(_string != nullptr);
   ::new(&union_cast<StringLazyBufferState::Context>(&context_)->status) Status;
 }
+
+#ifdef __GNUC__
+# pragma GCC diagnostic pop
+#endif
 
 void LazyBuffer::reset(LazyBufferCustomizeBuffer _buffer) {
   assert(_buffer.handle != nullptr);

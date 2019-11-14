@@ -78,6 +78,7 @@ struct CompactionParams {
   std::vector<CompactionInputFiles> inputs;
   int output_level = 0;
   uint64_t target_file_size = 0;
+  uint64_t num_antiquation = 0;
   uint64_t max_compaction_bytes = 0;
   uint32_t output_path_id = 0;
   CompressionType compression = kNoCompression;
@@ -159,7 +160,6 @@ struct CompactionWorkerResult {
     bool marked_for_compaction;
   };
   std::vector<FileInfo> files;
-  std::unordered_map<uint64_t, uint64_t> delta_antiquation;
 };
 
 // A Compaction encapsulates information about a compaction.
@@ -239,6 +239,9 @@ class Compaction {
   const LevelFilesBrief* input_levels(size_t compaction_input_level) const {
     return &input_levels_[compaction_input_level];
   }
+
+  // GC expectation clears
+  uint64_t num_antiquation() const { return num_antiquation_; }
 
   // Maximum size of files to build during this compaction.
   uint64_t max_output_file_size() const { return max_output_file_size_; }
@@ -434,6 +437,7 @@ class Compaction {
 
   const int start_level_;    // the lowest level to be compacted
   const int output_level_;  // levels to which output files are stored
+  uint64_t num_antiquation_;
   uint64_t max_output_file_size_;
   uint64_t max_compaction_bytes_;
   uint32_t max_subcompactions_;
@@ -472,7 +476,7 @@ class Compaction {
   // score that was used to pick this compaction.
   const double score_;
 
-  //
+  // for TableBuilderOptions
   double compaction_load_;
 
   // Is this compaction creating a file in the bottom most level?

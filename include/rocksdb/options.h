@@ -287,7 +287,7 @@ struct ColumnFamilyOptions : public AdvancedColumnFamilyOptions {
   bool enable_lazy_compaction = false;
 
   //
-  size_t blob_size = 1024;
+  size_t blob_size = size_t(-1);
 
   //
   double blob_gc_ratio = 0.05;
@@ -554,6 +554,7 @@ struct DBOptions {
   //
   // Dynamically changeable through SetDBOptions() API.
   int max_background_compactions = -1;
+  int max_background_garbage_collections = -1;
 
   // This value represents the maximum number of threads that will
   // concurrently perform a compaction job by breaking it into multiple,

@@ -715,7 +715,7 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
     edit->AddFile(level, f->fd.GetNumber(), f->fd.GetPathId(),
                   f->fd.file_size, f->smallest, f->largest,
                   f->fd.smallest_seqno, f->fd.largest_seqno,
-                  f->num_antiquation, f->marked_for_compaction, f->prop);
+                  f->marked_for_compaction, f->prop);
   };
   auto edit_del_file = [edit, deleted_files](int level, FileMetaData* f) {
     edit->DeleteFile(level, f->fd.GetNumber());
@@ -890,9 +890,10 @@ Status MapBuilder::WriteOutputFile(
   std::unique_ptr<TableBuilder> builder(NewTableBuilder(
       *cfd->ioptions(), mutable_cf_options, cfd->internal_comparator(),
       &collectors, cfd->GetID(), cfd->GetName(), outfile.get(), kNoCompression,
-      CompressionOptions(), -1 /*level*/, 0, nullptr /*compression_dict*/,
-      true /*skip_filters*/, true /*ignore_key_type*/,
-      output_file_creation_time, 0 /* oldest_key_time */, kMapSst));
+      CompressionOptions(), -1 /* level */, 0 /* compaction_load */,
+      nullptr /* compression_dict */, true /* skip_filters */,
+      true /* ignore_key_type */, output_file_creation_time,
+      0 /* oldest_key_time */, kMapSst));
   LogFlush(db_options_.info_log);
 
   // Update boundaries
@@ -916,9 +917,13 @@ Status MapBuilder::WriteOutputFile(
   auto& dependence_build = range_iter->GetDependence();
   auto& dependence = file_meta->prop.dependence;
   dependence.reserve(dependence_build.size());
-  dependence.insert(dependence.end(), dependence_build.begin(),
-                    dependence_build.end());
-  std::sort(dependence.begin(), dependence.end());
+  for (auto file_number : dependence_build) {
+    dependence.emplace_back(Dependence{file_number, 0});
+  }
+  std::sort(dependence.begin(), dependence.end(),
+            [](const Dependence& l, const Dependence& r) {
+              return l.file_number < r.file_number;
+            });
 
   // Map sst don't write tombstones
   if (s.ok()) {
@@ -989,6 +994,9 @@ struct MapElementIterator : public InternalIterator {
         where_(meta_size) {
     assert(meta_size > 0);
   }
+  ~MapElementIterator() {
+    ResetIter();
+  }
   virtual bool Valid() const override { return where_ < meta_size_; }
   virtual void Seek(const Slice& target) override {
     where_ =
@@ -998,28 +1006,28 @@ struct MapElementIterator : public InternalIterator {
                          }) -
         meta_array_;
     if (where_ == meta_size_) {
-      iter_.reset();
+      ResetIter();
       return;
     }
     if (meta_array_[where_]->prop.purpose == kMapSst) {
-      if (!InitMapSstIterator()) {
+      if (!InitIter()) {
         return;
       }
       iter_->Seek(target);
       if (!iter_->Valid()) {
-        iter_.reset();
+        ResetIter();
         if (++where_ == meta_size_) {
           return;
         }
         if (meta_array_[where_]->prop.purpose == kMapSst) {
-          if (!InitMapSstIterator()) {
+          if (!InitIter()) {
             return;
           }
           iter_->SeekToFirst();
         }
       }
     } else {
-      iter_.reset();
+      ResetIter();
     }
     Update();
   }
@@ -1032,53 +1040,53 @@ struct MapElementIterator : public InternalIterator {
         meta_array_;
     if (where_-- == 0) {
       where_ = meta_size_;
-      iter_.reset();
+      ResetIter();
       return;
     }
     if (meta_array_[where_]->prop.purpose == kMapSst) {
-      if (!InitMapSstIterator()) {
+      if (!InitIter()) {
         return;
       }
       iter_->SeekForPrev(target);
       if (!iter_->Valid()) {
-        iter_.reset();
+        ResetIter();
         if (where_-- == 0) {
           where_ = meta_size_;
           return;
         }
         if (meta_array_[where_]->prop.purpose == kMapSst) {
-          if (!InitMapSstIterator()) {
+          if (!InitIter()) {
             return;
           }
           iter_->SeekToLast();
         }
       }
     } else {
-      iter_.reset();
+      ResetIter();
     }
     Update();
   }
   virtual void SeekToFirst() override {
     where_ = 0;
     if (meta_array_[where_]->prop.purpose == kMapSst) {
-      if (!InitMapSstIterator()) {
+      if (!InitIter()) {
         return;
       }
       iter_->SeekToFirst();
     } else {
-      iter_.reset();
+      ResetIter();
     }
     Update();
   }
   virtual void SeekToLast() override {
     where_ = meta_size_ - 1;
     if (meta_array_[where_]->prop.purpose == kMapSst) {
-      if (!InitMapSstIterator()) {
+      if (!InitIter()) {
         return;
       }
       iter_->SeekToLast();
     } else {
-      iter_.reset();
+      ResetIter();
     }
     Update();
   }
@@ -1092,16 +1100,16 @@ struct MapElementIterator : public InternalIterator {
       }
     }
     if (++where_ == meta_size_) {
-      iter_.reset();
+      ResetIter();
       return;
     }
     if (meta_array_[where_]->prop.purpose == kMapSst) {
-      if (!InitMapSstIterator()) {
+      if (!InitIter()) {
         return;
       }
       iter_->SeekToFirst();
     } else {
-      iter_.reset();
+      ResetIter();
     }
     Update();
   }
@@ -1116,45 +1124,49 @@ struct MapElementIterator : public InternalIterator {
     }
     if (where_-- == 0) {
       where_ = meta_size_;
-      iter_.reset();
+      ResetIter();
       return;
     }
     if (meta_array_[where_]->prop.purpose == kMapSst) {
-      if (!InitMapSstIterator()) {
+      if (!InitIter()) {
         return;
       }
       iter_->SeekToLast();
     } else {
-      iter_.reset();
+      ResetIter();
     }
     Update();
   }
   Slice key() const override {
     assert(where_ < meta_size_);
-    return key_slice;
+    return key_slice_;
   }
   LazyBuffer value() const override {
     assert(where_ < meta_size_);
-    return LazyBufferReference(value_slice);
+    return LazyBufferReference(value_slice_);
   }
   virtual Status status() const override {
     return iter_ ? iter_->status() : Status::OK();
   }
 
-  bool InitMapSstIterator() {
+  bool InitIter() {
     DependenceMap empty_dependence_map;
-    iter_.reset(create_iter_(callback_arg_, meta_array_[where_],
-                             empty_dependence_map, nullptr, nullptr));
+    ResetIter(create_iter_(callback_arg_, meta_array_[where_],
+                           empty_dependence_map, nullptr, nullptr));
     if (iter_->status().ok()) {
       return true;
     }
     where_ = meta_size_;
     return false;
   }
+  void ResetIter(InternalIterator* iter = nullptr) {
+    value_slice_.reset();
+    iter_.reset(iter);
+  }
   void Update() {
     if (iter_) {
-      key_slice = iter_->key();
-      value_slice = iter_->value();
+      key_slice_ = iter_->key();
+      value_slice_ = iter_->value();
     } else {
       const FileMetaData* f = meta_array_[where_];
       element_.smallest_key_ = f->smallest.Encode();
@@ -1165,8 +1177,8 @@ struct MapElementIterator : public InternalIterator {
       element_.link_.clear();
       element_.link_.emplace_back(
           MapSstElement::LinkTarget{f->fd.GetNumber(), f->fd.GetFileSize()});
-      key_slice = element_.Key();
-      value_slice = LazyBuffer(element_.Value(&buffer_));
+      key_slice_ = element_.Key();
+      value_slice_ = LazyBuffer(element_.Value(&buffer_));
     }
   }
 
@@ -1179,8 +1191,8 @@ struct MapElementIterator : public InternalIterator {
   MapSstElement element_;
   std::string buffer_;
   std::unique_ptr<InternalIterator> iter_;
-  Slice key_slice;
-  LazyBuffer value_slice;
+  Slice key_slice_;
+  LazyBuffer value_slice_;
 };
 
 InternalIterator* NewMapElementIterator(

@@ -88,7 +88,7 @@ struct TablePropertyCache {
   uint8_t purpose = 0;                      // zero for essence sst
   uint16_t max_read_amp = 1;                // max read amp from sst
   float read_amp = 1;                       // expt read amp from sst
-  std::vector<uint64_t> dependence;         // make these sst hidden
+  std::vector<Dependence> dependence;       // make these sst hidden
   std::vector<uint64_t> inheritance_chain;  // inheritance chain
 };
 
@@ -248,8 +248,8 @@ class VersionEdit {
   void AddFile(int level, uint64_t file, uint32_t file_path_id,
                uint64_t file_size, const InternalKey& smallest,
                const InternalKey& largest, const SequenceNumber& smallest_seqno,
-               const SequenceNumber& largest_seqno, uint64_t num_antiquation,
-               bool marked_for_compaction, const TablePropertyCache& prop) {
+               const SequenceNumber& largest_seqno, bool marked_for_compaction,
+               const TablePropertyCache& prop) {
     assert(smallest_seqno <= largest_seqno);
     FileMetaData f;
     f.fd = FileDescriptor(file, file_path_id, file_size, smallest_seqno,
@@ -258,7 +258,7 @@ class VersionEdit {
     f.largest = largest;
     f.fd.smallest_seqno = smallest_seqno;
     f.fd.largest_seqno = largest_seqno;
-    f.num_antiquation = num_antiquation;
+    f.num_antiquation = 0;
     f.marked_for_compaction = marked_for_compaction;
     f.prop.num_entries = prop.num_entries;
     f.prop.purpose = prop.purpose;
@@ -277,12 +277,6 @@ class VersionEdit {
   // Delete the specified "file" from the specified "level".
   void DeleteFile(int level, uint64_t file) {
     deleted_files_.insert({level, file});
-  }
-
-  void SetAntiquation(
-      const std::unordered_map<uint64_t, uint64_t>& antiquation) {
-    delta_antiquation_.reserve(antiquation.size());
-    delta_antiquation_.assign(antiquation.begin(), antiquation.end());
   }
 
   void SetApplyCallback(void(*apply_callback)(void*, const Status&),
@@ -331,9 +325,6 @@ class VersionEdit {
   const std::vector<std::pair<int, FileMetaData>>& GetNewFiles() {
     return new_files_;
   }
-  const std::vector<std::pair<uint64_t, uint64_t>>& GetAntiquation() {
-    return delta_antiquation_;
-  }
   void DoApplyCallback(const Status& s) {
     if (apply_callback_ != nullptr) {
       apply_callback_(apply_callback_arg_, s);
@@ -373,7 +364,6 @@ class VersionEdit {
 
   DeletedFileSet deleted_files_;
   std::vector<std::pair<int, FileMetaData>> new_files_;
-  std::vector<std::pair<uint64_t, uint64_t>> delta_antiquation_;
   void (*apply_callback_)(void*, const Status&);
   void* apply_callback_arg_;
 

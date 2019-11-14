@@ -47,6 +47,7 @@
 #include "util/coding.h"
 #include "util/file_reader_writer.h"
 #include "util/filename.h"
+#include "util/logging.h"
 #include "util/stop_watch.h"
 #include "util/string_util.h"
 #include "util/sync_point.h"
@@ -817,8 +818,9 @@ Status Version::GetPropertiesOfTablesInRange(
       for (size_t j = 0; j < files.size(); ++j) {
         const auto file_meta = files[j];
         if (file_meta->prop.purpose != SstPurpose::kEssenceSst) {
-          for (auto file_number : file_meta->prop.dependence) {
-            auto find = storage_info_.dependence_map_.find(file_number);
+          for (auto& dependence : file_meta->prop.dependence) {
+            auto find =
+                storage_info_.dependence_map_.find(dependence.file_number);
             if (find == storage_info_.dependence_map_.end()) {
               // TODO: log error
               continue;
@@ -897,6 +899,28 @@ double Version::GetCompactionLoad() const {
     return 1;
   }
   return (read_amp - slowdown) / std::max(1, stop - slowdown);
+}
+
+double Version::GetGarbageCollectionLoad() const {
+  double sum = 0, antiquated = 0;
+  auto icmp = storage_info_.internal_comparator_;
+  std::shared_ptr<const TableProperties> tp;
+  for (auto f : storage_info_.LevelFiles(-1)) {
+    if (f->is_skip_gc || f->being_compacted) {
+      continue;
+    }
+    if (f->prop.num_entries != 0) {
+      sum += f->prop.num_entries;
+    } else {
+      auto s = table_cache_->GetTableProperties(
+          env_options_, *icmp, f->fd, &tp,
+          mutable_cf_options_.prefix_extractor.get(), false);
+      if (!s.ok()) continue;
+      sum += tp->num_entries;
+    }
+    antiquated += f->num_antiquation;
+  }
+  return sum > 0 ? antiquated / sum : sum;
 }
 
 void Version::GetColumnFamilyMetaData(ColumnFamilyMetaData* cf_meta) {
@@ -1155,7 +1179,8 @@ VersionStorageInfo::VersionStorageInfo(
       current_num_samples_(0),
       estimated_compaction_needed_bytes_(0),
       finalized_(false),
-      is_pick_fail_(false),
+      is_pick_compaction_fail(false),
+      is_pick_garbage_collection_fail(false),
       force_consistency_checks_(_force_consistency_checks) {
   ++files_; // level -1 used for dependence files
   if (ref_vstorage != nullptr) {
@@ -1584,8 +1609,8 @@ void VersionStorageInfo::ComputeCompensatedSizes() {
                 average_value_size * kDeletionWeightOnCompaction;
           }
         } else {
-          for (auto file_number : f->prop.dependence) {
-            auto find = dependence_map_.find(file_number);
+          for (auto& dependence : f->prop.dependence) {
+            auto find = dependence_map_.find(dependence.file_number);
             if (find == dependence_map_.end()) {
               // TODO log error
               continue;
@@ -1832,7 +1857,7 @@ void VersionStorageInfo::ComputeCompactionScore(
       }
     }
   }
-  is_pick_fail_ = false;
+  is_pick_compaction_fail = false;
   ComputeFilesMarkedForCompaction();
   ComputeBottommostFilesMarkedForCompaction();
   if (mutable_cf_options.ttl > 0) {
@@ -4339,7 +4364,7 @@ Status VersionSet::WriteSnapshot(log::Writer* log) {
           edit.AddFile(level, f->fd.GetNumber(), f->fd.GetPathId(),
                        f->fd.GetFileSize(), f->smallest, f->largest,
                        f->fd.smallest_seqno, f->fd.largest_seqno,
-                       f->num_antiquation, f->marked_for_compaction, f->prop);
+                       f->marked_for_compaction, f->prop);
         }
       }
       edit.SetLogNumber(cfd->GetLogNumber());
@@ -4481,8 +4506,8 @@ uint64_t VersionSet::ApproximateSize(Version* v, const FdWithKeyRange& f,
       }
     } else {
       auto& dependence_map = v->storage_info()->dependence_map();
-      for (auto file_number : file_meta->prop.dependence) {
-        auto find = dependence_map.find(file_number);
+      for (auto& dependence : file_meta->prop.dependence) {
+        auto find = dependence_map.find(dependence.file_number);
         if (find == dependence_map.end()) {
           // TODO log error
           continue;
@@ -4678,7 +4703,7 @@ void VersionSet::GetLiveFilesMetaData(std::vector<LiveFileMetaData>* metadata) {
     if (cfd->IsDropped() || !cfd->initialized()) {
       continue;
     }
-    for (int level = 0; level < cfd->NumberLevels(); level++) {
+    for (int level = -1; level < cfd->NumberLevels(); level++) {
       for (const auto& file :
            cfd->current()->storage_info()->LevelFiles(level)) {
         LiveFileMetaData filemetadata;

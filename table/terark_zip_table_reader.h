@@ -85,19 +85,24 @@ class TerarkEmptyTableReader : public TerarkZipTableReaderBase {
   unique_ptr<RandomAccessFileReader> file_;
 public:
   InternalIterator*
-  NewIterator(const ReadOptions&, const SliceTransform* prefix_extractor,
-              Arena* a, bool skip_filters, bool for_compaction) override {
+  NewIterator(const ReadOptions& /*ro*/,
+              const SliceTransform* /*prefix_extractor*/,
+              Arena* a, bool /*skip_filters*/,
+              bool /*for_compaction*/) override {
     return a ? new(a->AllocateAligned(sizeof(Iter)))Iter() : new Iter();
   }
   void Prepare(const Slice&) override {}
-  Status Get(const ReadOptions& readOptions, const Slice& key, GetContext* get_context,
-             const SliceTransform* prefix_extractor, bool skip_filters) override {
+  Status Get(const ReadOptions& /*readOptions*/, const Slice& /*key*/,
+             GetContext* /*get_context*/,
+             const SliceTransform* /*prefix_extractor*/,
+             bool /*skip_filters*/) override {
     return Status::OK();
   }
-  void RangeScan(const Slice* begin, const SliceTransform* prefix_extractor,
-                 void* arg,
-                 bool(* callback_func)(void* arg, const Slice& key,
-                                       LazyBuffer&& value)) override {
+  void RangeScan(const Slice* /*begin*/,
+                 const SliceTransform* /*prefix_extractor*/,
+                 void* /*arg*/,
+                 bool(* /*callback_func*/)(void* arg, const Slice& key,
+                                          LazyBuffer&& value)) override {
     // do nothing
   }
   size_t ApproximateMemoryUsage() const override { return 100; }
@@ -164,10 +169,10 @@ public:
               Arena* a, bool skip_filters, bool for_compaction) override;
 
   template<bool reverse, bool ZipOffset>
-  InternalIterator* NewIteratorImpl(const ReadOptions&, Arena* a, ContextBuffer* buffer,
-                                    TerarkContext* ctx);
+  InternalIterator* NewIteratorImpl(const ReadOptions&, Arena* a,
+                                    ContextBuffer* buffer, TerarkContext* ctx);
 
-  void Prepare(const Slice& target) override {}
+  void Prepare(const Slice& /*target*/) override {}
 
   Status Get(const ReadOptions& readOptions, const Slice& key,
              GetContext* get_context, const SliceTransform* prefix_extractor,
@@ -224,15 +229,16 @@ public:
               Arena* a, bool skip_filters, bool for_compaction) override;
 
   template<bool reverse, bool ZipOffset>
-  InternalIterator* NewIteratorImpl(const ReadOptions&, Arena* a, ContextBuffer* buffer,
-                                    TerarkContext* ctx);
+  InternalIterator* NewIteratorImpl(const ReadOptions&, Arena* a,
+                                    ContextBuffer* buffer, TerarkContext* ctx);
 
   using TerarkZipTableReaderBase::NewRangeTombstoneIterator;
 
-  void Prepare(const Slice& target) override {}
+  void Prepare(const Slice& /*target*/) override {}
 
-  Status Get(const ReadOptions& readOptions, const Slice& key, GetContext* get_context,
-             const SliceTransform* prefix_extractor, bool skip_filters) override;
+  Status Get(const ReadOptions& readOptions, const Slice& key,
+             GetContext* get_context, const SliceTransform* prefix_extractor,
+             bool skip_filters) override;
 
   void RangeScan(const Slice* begin, const SliceTransform* prefix_extractor,
                  void* arg,

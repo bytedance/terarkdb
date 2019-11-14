@@ -21,11 +21,11 @@
 
 namespace rocksdb {
 
+class CombinedInternalIterator;
 class Comparator;
 class Iterator;
 class Logger;
 class MergeOperator;
-class SeparateValueCollector;
 class Statistics;
 
 class MergeHelper {
@@ -79,8 +79,7 @@ class MergeHelper {
   //
   // REQUIRED: The first key in the input is not corrupted.
   Status MergeUntil(
-      const Slice& user_key, InternalIterator* iter,
-      SeparateValueCollector& separate_value_collector,
+      const Slice& user_key, CombinedInternalIterator* iter,
       CompactionRangeDelAggregator* range_del_agg = nullptr,
       const SequenceNumber stop_before = 0, const bool at_bottom = false);
 
@@ -140,7 +139,7 @@ class MergeHelper {
   void Clear() {
     keys_.clear();
     merge_context_.Clear();
-    compaction_filter_value_.clear();
+    compaction_filter_value_.reset();
     compaction_filter_skip_until_.Clear();
   }
 

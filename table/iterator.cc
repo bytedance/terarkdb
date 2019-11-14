@@ -104,6 +104,9 @@ Status Iterator::GetProperty(std::string /*prop_name*/, std::string* prop) {
 }
 
 LazyBuffer CombinedInternalIterator::value() const {
+  if (separate_helper_ == nullptr) {
+    return iter_->value();
+  }
   ParsedInternalKey pikey;
   ParseInternalKey(iter_->key(), &pikey);
   if (pikey.type != kTypeValueIndex && pikey.type != kTypeMergeIndex) {
@@ -118,46 +121,20 @@ LazyBuffer CombinedInternalIterator::value() const {
   return v;
 }
 
-LazyBuffer SeparateValueCollector::value(InternalIterator* iter,
-                                        const Slice& user_key) const {
-  ParsedInternalKey pikey;
-  ParseInternalKey(iter->key(), &pikey);
-  if (pikey.type != kTypeValueIndex && pikey.type != kTypeMergeIndex) {
-    return iter->value();
+LazyBuffer CombinedInternalIterator::value(const Slice& user_key) const {
+  if (separate_helper_ == nullptr) {
+    return iter_->value();
   }
-  LazyBuffer v = iter->value();
+  ParsedInternalKey pikey;
+  ParseInternalKey(iter_->key(), &pikey);
+  if (pikey.type != kTypeValueIndex && pikey.type != kTypeMergeIndex) {
+    return iter_->value();
+  }
+  LazyBuffer v = iter_->value();
   separate_helper_->TransToCombined(user_key, pikey.sequence, v);
   return v;
 }
 
-LazyBuffer SeparateValueCollector::add(InternalIterator* iter,
-                                      const Slice& user_key) {
-  ParsedInternalKey pikey;
-  ParseInternalKey(iter->key(), &pikey);
-  LazyBuffer v = iter->value();
-  if (delta_antiquation_ != nullptr) {
-    assert(v.file_number() != uint64_t(-1));
-    ++(*delta_antiquation_)[v.file_number()];
-  }
-  if (pikey.type != kTypeValueIndex && pikey.type != kTypeMergeIndex) {
-    return v;
-  }
-  separate_helper_->TransToCombined(user_key, pikey.sequence, v);
-  if (delta_antiquation_ != nullptr) {
-    assert(v.file_number() != uint64_t(-1));
-    ++(*delta_antiquation_)[v.file_number()];
-  }
-  return v;
-}
-
-void SeparateValueCollector::sub(uint64_t file_number) {
-  if (delta_antiquation_ != nullptr) {
-    assert(file_number != uint64_t(-1));
-    assert(delta_antiquation_->count(file_number) > 0 &&
-           delta_antiquation_->find(file_number)->second > 0);
-    --(*delta_antiquation_)[file_number];
-  }
-}
 
 namespace {
 class EmptyIterator : public Iterator {

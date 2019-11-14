@@ -248,6 +248,10 @@ void ColumnFamilyOptions::Dump(Logger* log) const {
                      disable_auto_compactions);
     ROCKS_LOG_HEADER(log, "                 Options.enable_lazy_compaction: %d",
                      enable_lazy_compaction);
+    ROCKS_LOG_HEADER(log, "                              Options.blob_size: %d",
+                     blob_size);                 
+    ROCKS_LOG_HEADER(log, "                          Options.blob_gc_ratio: %f",
+                     blob_gc_ratio);
 
     const auto& it_compaction_style =
         compaction_style_to_string.find(compaction_style);
@@ -403,6 +407,7 @@ Options::PrepareForBulkLoad()
   // to L1. This is helpful so that all files that are
   // input to the manual compaction are all at L0.
   max_background_compactions = 2;
+  max_background_garbage_collections = 2;
 
   // The compaction would create large files in L1.
   target_file_size_base = 256 * 1024 * 1024;

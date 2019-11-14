@@ -262,7 +262,7 @@ class ThreadedWriter : public Writer {
         : file_(file), buf_(buf), file_off_(file_off), callback_(callback) {}
 
     IO(const IO&) = default;
-    IO& operator=(const IO&) = default;
+    IO& operator=(const IO&) = delete;
     size_t Size() const { return sizeof(IO); }
 
     WritableFile* file_ = nullptr;           // File to write to

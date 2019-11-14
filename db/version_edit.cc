@@ -42,7 +42,6 @@ enum Tag : uint32_t {
   kMaxColumnFamily = 203,
 
   kInAtomicGroup = 300,
-  kDeltaAntiquation = 399,
 };
 
 enum CustomTag : uint32_t {
@@ -53,7 +52,6 @@ enum CustomTag : uint32_t {
   // kMinLogNumberToKeep as part of a CustomTag as a hack. This should be
   // removed when manifest becomes forward-comptabile.
   kMinLogNumberToKeepHack = 3,
-  kNumAntiquation = 63,
   kPropertyCache = 64,
   kPathId = 65,
 };
@@ -84,7 +82,6 @@ void VersionEdit::Clear() {
   has_min_log_number_to_keep_ = false;
   deleted_files_.clear();
   new_files_.clear();
-  delta_antiquation_.clear();
   apply_callback_ = nullptr;
   apply_callback_arg_ = nullptr;
   column_family_ = 0;
@@ -163,12 +160,6 @@ bool VersionEdit::EncodeTo(std::string* dst) const {
       char p = static_cast<char>(f.fd.GetPathId());
       PutLengthPrefixedSlice(dst, Slice(&p, 1));
     }
-    if (f.num_antiquation > 0) {
-      PutVarint32(dst, CustomTag::kNumAntiquation);
-      std::string varint_num_antiquation;
-      PutVarint64(&varint_num_antiquation, f.num_antiquation);
-      PutLengthPrefixedSlice(dst, varint_num_antiquation);
-    }
     if (f.marked_for_compaction) {
       PutVarint32(dst, CustomTag::kNeedCompaction);
       char p = static_cast<char>(1);
@@ -186,16 +177,24 @@ bool VersionEdit::EncodeTo(std::string* dst) const {
       std::string encode_property_cache;
       encode_property_cache.push_back((char)f.prop.purpose);
       PutVarint64(&encode_property_cache, f.prop.dependence.size());
-      for (auto file_number : f.prop.dependence) {
-        PutVarint64(&encode_property_cache, file_number);
+      bool has_entry_count = false;
+      for (auto& dependence : f.prop.dependence) {
+        PutVarint64(&encode_property_cache, dependence.file_number);
+        has_entry_count |= dependence.entry_count > 0;
       }
       PutVarint64(&encode_property_cache, f.prop.num_entries);
-      if (f.prop.max_read_amp > 1 || !f.prop.inheritance_chain.empty()) {
+      if (f.prop.max_read_amp > 1 || !f.prop.inheritance_chain.empty() ||
+          has_entry_count) {
         PutVarint32Varint64(&encode_property_cache, f.prop.max_read_amp,
                             DoubleToU64(f.prop.read_amp));
         PutVarint64(&encode_property_cache, f.prop.inheritance_chain.size());
         for (auto file_number : f.prop.inheritance_chain) {
           PutVarint64(&encode_property_cache, file_number);
+        }
+        if (has_entry_count) {
+          for (auto& dependence : f.prop.dependence) {
+            PutVarint64(&encode_property_cache, dependence.entry_count);
+          }
         }
       }
       PutLengthPrefixedSlice(dst, encode_property_cache);
@@ -204,13 +203,6 @@ bool VersionEdit::EncodeTo(std::string* dst) const {
                              dst);
 
     PutVarint32(dst, CustomTag::kTerminate);
-  }
-
-  if (!delta_antiquation_.empty()) {
-    PutVarint32Varint64(dst, kDeltaAntiquation, delta_antiquation_.size());
-    for (auto pair : delta_antiquation_) {
-      PutVarint64Varint64(dst, pair.first, pair.second);
-    }
   }
 
   // 0 is default and does not need to be explicitly written
@@ -297,11 +289,6 @@ const char* VersionEdit::DecodeNewFile4From(Slice* input) {
             return "path_id wrong value";
           }
           break;
-        case kNumAntiquation:
-          if (!GetVarint64(&field, &f.num_antiquation)) {
-            return "num_antiquation field";
-          }
-          break;
         case kNeedCompaction:
           if (field.size() != 1) {
             return "need_compaction field wrong size";
@@ -333,7 +320,7 @@ const char* VersionEdit::DecodeNewFile4From(Slice* input) {
               if (!GetVarint64(&field, &file_number)) {
                 return error_msg;
               }
-              f.prop.dependence.emplace_back(file_number);
+              f.prop.dependence.emplace_back(Dependence{file_number, 0});
             }
             if (!field.empty()) {
               if (!GetVarint64(&field, &f.prop.num_entries)) {
@@ -357,6 +344,13 @@ const char* VersionEdit::DecodeNewFile4From(Slice* input) {
                   return error_msg;
                 }
                 f.prop.inheritance_chain.emplace_back(file_number);
+              }
+            }
+            if (!field.empty()) {
+              for (auto& dependence : f.prop.dependence) {
+                if (!GetVarint64(&field, &dependence.entry_count)) {
+                  return error_msg;
+                }
               }
             }
           }
@@ -537,28 +531,6 @@ Status VersionEdit::DecodeFrom(const Slice& src) {
 
       case kNewFile4: {
         msg = DecodeNewFile4From(&input);
-        break;
-      }
-
-      case kDeltaAntiquation: {
-        uint64_t delta_antiquation_size;
-        const char* delta_antiquation_msg = "update antiquation";
-        if (!GetVarint64(&input, &delta_antiquation_size)) {
-          if (!msg) {
-            msg = delta_antiquation_msg;
-          }
-          break;
-        }
-        delta_antiquation_.resize(delta_antiquation_size);
-        for (auto& pair : delta_antiquation_) {
-          if (!GetVarint64(&input, &pair.first) ||
-              !GetVarint64(&input, &pair.second)) {
-            if (!msg) {
-              msg = delta_antiquation_msg;
-            }
-            break;
-          }
-        }
         break;
       }
 

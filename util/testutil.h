@@ -281,6 +281,82 @@ class RandomRWStringSink : public RandomRWFile {
   StringSink* ss_;
 };
 
+
+// A helper class that converts internal format keys into user keys
+template<bool ConvertKey, class InnerIter>
+class ConvertingIterator : public InternalIterator {
+ public:
+  explicit ConvertingIterator(InnerIter* iter,
+                              bool arena_mode = false)
+      : iter_(iter), arena_mode_(arena_mode) {}
+  virtual ~ConvertingIterator() {
+    if (arena_mode_) {
+      iter_->~InnerIter();
+    } else {
+      delete iter_;
+    }
+  }
+  virtual bool Valid() const override { return iter_->Valid() && status_.ok(); }
+  virtual void Seek(const Slice& target) override {
+    if (ConvertKey) {
+      ParsedInternalKey ikey(target, kMaxSequenceNumber, kTypeValue);
+      std::string encoded;
+      AppendInternalKey(&encoded, ikey);
+      iter_->Seek(encoded);
+    } else {
+      iter_->Seek(target);
+    }
+  }
+  virtual void SeekForPrev(const Slice& target) override {
+    if (ConvertKey) {
+      ParsedInternalKey ikey(target, kMaxSequenceNumber, kTypeValue);
+      std::string encoded;
+      AppendInternalKey(&encoded, ikey);
+      iter_->SeekForPrev(encoded);
+    } else {
+      iter_->SeekForPrev(target);
+    }
+  }
+  virtual void SeekToFirst() override { iter_->SeekToFirst(); }
+  virtual void SeekToLast() override { iter_->SeekToLast(); }
+  virtual void Next() override { iter_->Next(); }
+  virtual void Prev() override { iter_->Prev(); }
+
+  virtual Slice key() const override {
+    assert(Valid());
+    if (ConvertKey) {
+      ParsedInternalKey parsed_key;
+      if (!ParseInternalKey(iter_->key(), &parsed_key)) {
+        status_ = Status::Corruption("malformed internal key");
+        return Slice("corrupted key");
+      }
+      return parsed_key.user_key;
+    } else {
+      return iter_->key();
+    }
+  }
+
+  virtual LazyBuffer value() const override {
+    return LazyBuffer(iter_->value());
+  }
+  virtual Status status() const override {
+    return status_.ok() ? iter_->status() : status_;
+  }
+
+  operator bool() const { return !!iter_; }
+  bool operator!() const { return !iter_; }
+
+
+ private:
+  mutable Status status_;
+  InnerIter* iter_;
+  bool arena_mode_;
+
+  // No copying allowed
+  ConvertingIterator(const ConvertingIterator&);
+  void operator=(const ConvertingIterator&);
+};
+
 // Like StringSink, this writes into a string.  Unlink StringSink, it
 // has some initial content and overwrites it, just like a recycled
 // log file.

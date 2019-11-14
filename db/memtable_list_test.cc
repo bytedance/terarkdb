@@ -98,7 +98,7 @@ class MemTableListTest : public testing::Test {
     WriteBufferManager write_buffer_manager(db_options.db_write_buffer_size);
     WriteController write_controller(10000000u);
 
-    VersionSet versions(dbname, &immutable_db_options, env_options,
+    VersionSet versions(dbname, &immutable_db_options, env_options, false,
                         table_cache.get(), &write_buffer_manager,
                         &write_controller);
     std::vector<ColumnFamilyDescriptor> cf_descs;
@@ -206,7 +206,7 @@ TEST_F(MemTableListTest, GetTest) {
                     max_write_buffer_number_to_maintain);
 
   SequenceNumber seq = 1;
-  std::string value;
+  LazyBuffer value;
   Status s;
   MergeContext merge_context;
   InternalKeyComparator ikey_cmp(options.comparator);
@@ -241,7 +241,7 @@ TEST_F(MemTableListTest, GetTest) {
   found = mem->Get(LookupKey("key1", seq), &value, &s, &merge_context,
                    &max_covering_tombstone_seq, ReadOptions());
   ASSERT_TRUE(s.ok() && found);
-  ASSERT_EQ(value, "value1");
+  ASSERT_EQ(value.slice(), "value1");
 
   merge_context.Clear();
   found = mem->Get(LookupKey("key1", 2), &value, &s, &merge_context,
@@ -253,7 +253,7 @@ TEST_F(MemTableListTest, GetTest) {
   found = mem->Get(LookupKey("key2", seq), &value, &s, &merge_context,
                    &max_covering_tombstone_seq, ReadOptions());
   ASSERT_TRUE(s.ok() && found);
-  ASSERT_EQ(value, "value2.2");
+  ASSERT_EQ(value.slice(), "value2.2");
 
   ASSERT_EQ(4, mem->num_entries());
   ASSERT_EQ(1, mem->num_deletes());
@@ -288,14 +288,14 @@ TEST_F(MemTableListTest, GetTest) {
                               &merge_context, &max_covering_tombstone_seq,
                               ReadOptions());
   ASSERT_TRUE(s.ok() && found);
-  ASSERT_EQ("value1", value);
+  ASSERT_EQ("value1", value.slice());
 
   merge_context.Clear();
   found =
       list.current()->Get(LookupKey("key2", seq), &value, &s, &merge_context,
                           &max_covering_tombstone_seq, ReadOptions());
   ASSERT_TRUE(s.ok() && found);
-  ASSERT_EQ(value, "value2.3");
+  ASSERT_EQ(value.slice(), "value2.3");
 
   merge_context.Clear();
   found = list.current()->Get(LookupKey("key2", 1), &value, &s, &merge_context,
@@ -318,7 +318,7 @@ TEST_F(MemTableListTest, GetFromHistoryTest) {
                     max_write_buffer_number_to_maintain);
 
   SequenceNumber seq = 1;
-  std::string value;
+  LazyBuffer value;
   Status s;
   MergeContext merge_context;
   InternalKeyComparator ikey_cmp(options.comparator);
@@ -358,7 +358,7 @@ TEST_F(MemTableListTest, GetFromHistoryTest) {
   found = mem->Get(LookupKey("key2", seq), &value, &s, &merge_context,
                    &max_covering_tombstone_seq, ReadOptions());
   ASSERT_TRUE(s.ok() && found);
-  ASSERT_EQ(value, "value2.2");
+  ASSERT_EQ(value.slice(), "value2.2");
 
   // Add memtable to list
   list.Add(mem, &to_delete);
@@ -376,7 +376,7 @@ TEST_F(MemTableListTest, GetFromHistoryTest) {
       list.current()->Get(LookupKey("key2", seq), &value, &s, &merge_context,
                           &max_covering_tombstone_seq, ReadOptions());
   ASSERT_TRUE(s.ok() && found);
-  ASSERT_EQ("value2.2", value);
+  ASSERT_EQ("value2.2", value.slice());
 
   // Flush this memtable from the list.
   // (It will then be a part of the memtable history).
@@ -417,7 +417,7 @@ TEST_F(MemTableListTest, GetFromHistoryTest) {
       LookupKey("key2", seq), &value, &s, &merge_context,
       &max_covering_tombstone_seq, ReadOptions());
   ASSERT_TRUE(found);
-  ASSERT_EQ("value2.2", value);
+  ASSERT_EQ("value2.2", value.slice());
 
   // Create another memtable and write some keys to it
   WriteBufferManager wb2(options.db_write_buffer_size);
@@ -487,7 +487,7 @@ TEST_F(MemTableListTest, GetFromHistoryTest) {
       LookupKey("key3", seq), &value, &s, &merge_context,
       &max_covering_tombstone_seq, ReadOptions());
   ASSERT_TRUE(found);
-  ASSERT_EQ("value3", value);
+  ASSERT_EQ("value3", value.slice());
 
   // Verify that key2 from the first memtable is no longer in the history
   merge_context.Clear();
@@ -533,7 +533,7 @@ TEST_F(MemTableListTest, FlushPendingTest) {
     mem->SetID(memtable_id++);
     mem->Ref();
 
-    std::string value;
+    LazyBuffer value;
     MergeContext merge_context;
 
     mem->Add(++seq, kTypeValue, "key1", ToString(i));
@@ -795,8 +795,6 @@ TEST_F(MemTableListTest, AtomicFlusTest) {
                        kMaxSequenceNumber, cf_id);
       mem->SetID(memtable_id++);
       mem->Ref();
-
-      std::string value;
 
       mem->Add(++seq, kTypeValue, "key1", ToString(i));
       mem->Add(++seq, kTypeValue, "keyN" + ToString(i), "valueN");

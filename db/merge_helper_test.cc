@@ -9,6 +9,7 @@
 
 #include "db/merge_helper.h"
 #include "rocksdb/comparator.h"
+#include "table/iterator_wrapper.h"
 #include "util/coding.h"
 #include "util/testharness.h"
 #include "util/testutil.h"
@@ -29,8 +30,20 @@ class MergeHelperTest : public testing::Test {
     merge_helper_.reset(new MergeHelper(env_, BytewiseComparator(),
                                         merge_op_.get(), filter_.get(), nullptr,
                                         false, latest_snapshot));
-    return merge_helper_->MergeUntil(iter_.get(), nullptr /* range_del_agg */,
-                                     stop_before, at_bottom);
+    user_key_ = ExtractUserKey(iter_->key()).ToString();
+    CombinedInternalIterator iter(&iter_, nullptr);
+    auto merge_result = merge_helper_->MergeUntil(user_key_, &iter,
+                                                  nullptr /* range_del_agg */,
+                                                  stop_before, at_bottom);
+    if (merge_result.ok() || merge_result.IsMergeInProgress()) {
+      for (auto& v : merge_helper_->values()) {
+        auto s = v.fetch();
+        if (!s.ok()) {
+          return s;
+        }
+      }
+    }
+    return merge_result;
   }
 
   void AddKeyVal(const std::string& user_key, const SequenceNumber& seq,
@@ -50,6 +63,7 @@ class MergeHelperTest : public testing::Test {
   std::unique_ptr<MergeHelper> merge_helper_;
   std::vector<std::string> ks_;
   std::vector<std::string> vs_;
+  std::string user_key_;
   std::unique_ptr<test::FilterNumber> filter_;
 };
 
@@ -65,7 +79,7 @@ TEST_F(MergeHelperTest, MergeAtBottomSuccess) {
   ASSERT_TRUE(Run(0, true).ok());
   ASSERT_EQ(ks_[2], iter_->key());
   ASSERT_EQ(test::KeyStr("a", 20, kTypeValue), merge_helper_->keys()[0]);
-  ASSERT_EQ(test::EncodeInt(4U), merge_helper_->values()[0]);
+  ASSERT_EQ(test::EncodeInt(4U), merge_helper_->values()[0].slice());
   ASSERT_EQ(1U, merge_helper_->keys().size());
   ASSERT_EQ(1U, merge_helper_->values().size());
 }
@@ -82,7 +96,7 @@ TEST_F(MergeHelperTest, MergeValue) {
   ASSERT_TRUE(Run(0, false).ok());
   ASSERT_EQ(ks_[3], iter_->key());
   ASSERT_EQ(test::KeyStr("a", 40, kTypeValue), merge_helper_->keys()[0]);
-  ASSERT_EQ(test::EncodeInt(8U), merge_helper_->values()[0]);
+  ASSERT_EQ(test::EncodeInt(8U), merge_helper_->values()[0].slice());
   ASSERT_EQ(1U, merge_helper_->keys().size());
   ASSERT_EQ(1U, merge_helper_->values().size());
 }
@@ -100,7 +114,7 @@ TEST_F(MergeHelperTest, SnapshotBeforeValue) {
   ASSERT_TRUE(Run(31, true).IsMergeInProgress());
   ASSERT_EQ(ks_[2], iter_->key());
   ASSERT_EQ(test::KeyStr("a", 50, kTypeMerge), merge_helper_->keys()[0]);
-  ASSERT_EQ(test::EncodeInt(4U), merge_helper_->values()[0]);
+  ASSERT_EQ(test::EncodeInt(4U), merge_helper_->values()[0].slice());
   ASSERT_EQ(1U, merge_helper_->keys().size());
   ASSERT_EQ(1U, merge_helper_->values().size());
 }
@@ -117,9 +131,9 @@ TEST_F(MergeHelperTest, NoPartialMerge) {
   ASSERT_TRUE(Run(31, true).IsMergeInProgress());
   ASSERT_EQ(ks_[2], iter_->key());
   ASSERT_EQ(test::KeyStr("a", 40, kTypeMerge), merge_helper_->keys()[0]);
-  ASSERT_EQ("v", merge_helper_->values()[0]);
+  ASSERT_EQ("v", merge_helper_->values()[0].slice());
   ASSERT_EQ(test::KeyStr("a", 50, kTypeMerge), merge_helper_->keys()[1]);
-  ASSERT_EQ("v2", merge_helper_->values()[1]);
+  ASSERT_EQ("v2", merge_helper_->values()[1].slice());
   ASSERT_EQ(2U, merge_helper_->keys().size());
   ASSERT_EQ(2U, merge_helper_->values().size());
 }
@@ -133,7 +147,7 @@ TEST_F(MergeHelperTest, SingleOperand) {
   ASSERT_TRUE(Run(31, true).IsMergeInProgress());
   ASSERT_FALSE(iter_->Valid());
   ASSERT_EQ(test::KeyStr("a", 50, kTypeMerge), merge_helper_->keys()[0]);
-  ASSERT_EQ(test::EncodeInt(1U), merge_helper_->values()[0]);
+  ASSERT_EQ(test::EncodeInt(1U), merge_helper_->values()[0].slice());
   ASSERT_EQ(1U, merge_helper_->keys().size());
   ASSERT_EQ(1U, merge_helper_->values().size());
 }
@@ -148,7 +162,7 @@ TEST_F(MergeHelperTest, MergeDeletion) {
   ASSERT_TRUE(Run(15, false).ok());
   ASSERT_FALSE(iter_->Valid());
   ASSERT_EQ(test::KeyStr("a", 30, kTypeValue), merge_helper_->keys()[0]);
-  ASSERT_EQ(test::EncodeInt(3U), merge_helper_->values()[0]);
+  ASSERT_EQ(test::EncodeInt(3U), merge_helper_->values()[0].slice());
   ASSERT_EQ(1U, merge_helper_->keys().size());
   ASSERT_EQ(1U, merge_helper_->values().size());
 }
@@ -165,7 +179,7 @@ TEST_F(MergeHelperTest, CorruptKey) {
   ASSERT_TRUE(Run(15, false).IsMergeInProgress());
   ASSERT_EQ(ks_[2], iter_->key());
   ASSERT_EQ(test::KeyStr("a", 30, kTypeMerge), merge_helper_->keys()[0]);
-  ASSERT_EQ(test::EncodeInt(4U), merge_helper_->values()[0]);
+  ASSERT_EQ(test::EncodeInt(4U), merge_helper_->values()[0].slice());
   ASSERT_EQ(1U, merge_helper_->keys().size());
   ASSERT_EQ(1U, merge_helper_->values().size());
 }

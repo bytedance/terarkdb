@@ -59,6 +59,7 @@ struct TablePropertiesNames {
   static const std::string kPurpose;
   static const std::string kReadAmp;
   static const std::string kDependence;
+  static const std::string kDependenceEntryCount;
   static const std::string kInheritanceChain;
 };
 
@@ -216,7 +217,7 @@ struct TableProperties {
   float read_amp = 1;
 
   // Make these sst hidden
-  std::vector<uint64_t> dependence;
+  std::vector<Dependence> dependence;
 
   // Inheritance chain
   std::vector<uint64_t> inheritance_chain;

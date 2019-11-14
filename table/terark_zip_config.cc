@@ -103,7 +103,7 @@ void TerarkZipAutoConfigForBulkLoad(struct TerarkZipTableOptions& tzo,
                                     struct ColumnFamilyOptions& cfo,
                                     size_t cpuNum,
                                     size_t memBytesLimit,
-                                    size_t diskBytesLimit) {
+                                    size_t /*diskBytesLimit*/) {
   using namespace std; // max, min
   int iCpuNum = int(cpuNum);
   if (cpuNum > 0) {
@@ -181,17 +181,23 @@ TerarkZipAutoConfigForOnlineDB_DBOptions(struct DBOptions& dbo, size_t cpuNum) {
   dbo.max_subcompactions = 4;
   dbo.base_background_compactions = 4;
   dbo.max_background_compactions = 8;
+  dbo.max_background_garbage_collections = 4;
   dbo.allow_concurrent_memtable_write = false;
-  dbo.max_background_jobs = dbo.max_background_compactions + dbo.max_background_flushes;
+  dbo.max_background_jobs =
+      dbo.max_background_compactions +
+      dbo.max_background_flushes +
+      dbo.max_background_garbage_collections;
 
-  dbo.env->SetBackgroundThreads(dbo.max_background_compactions, rocksdb::Env::LOW);
-  dbo.env->SetBackgroundThreads(dbo.max_background_flushes    , rocksdb::Env::HIGH);
+  dbo.env->SetBackgroundThreads(
+      dbo.max_background_compactions +
+      dbo.max_background_garbage_collections, rocksdb::Env::LOW);
+  dbo.env->SetBackgroundThreads(dbo.max_background_flushes, rocksdb::Env::HIGH);
 }
 
 void TerarkZipAutoConfigForOnlineDB_CFOptions(struct TerarkZipTableOptions& tzo,
                                               struct ColumnFamilyOptions& cfo,
                                               size_t memBytesLimit,
-                                              size_t diskBytesLimit) {
+                                              size_t /*diskBytesLimit*/) {
   using namespace std; // max, min
   if (0 == memBytesLimit) {
 #ifdef _MSC_VER
@@ -369,7 +375,7 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo, const std::string& tera
     cfo.compaction_options_universal.allow_trivial_move = true;
 #define MyGetUniversal_uint(name, Default)  \
     cfo.compaction_options_universal.name = \
-        terark::getEnvLong("TerarkZipTable_" #name, Default)
+        (uint32_t)terark::getEnvLong("TerarkZipTable_" #name, Default)
     MyGetUniversal_uint(min_merge_width, 3);
     MyGetUniversal_uint(max_merge_width, 7);
     cfo.compaction_options_universal.size_ratio = (unsigned)
@@ -420,13 +426,19 @@ void TerarkZipDBOptionsFromEnv(DBOptions& dbo) {
 
   MyGetInt(dbo, base_background_compactions, 4);
   MyGetInt(dbo,  max_background_compactions, 8);
+  MyGetInt(dbo,  max_background_garbage_collections, 4);
   MyGetInt(dbo,  max_background_flushes    , 4);
   MyGetInt(dbo,  max_subcompactions        , 4);
   MyGetBool(dbo, allow_mmap_populate       , false);
-  dbo.max_background_jobs = dbo.max_background_flushes + dbo.max_background_compactions;
+  dbo.max_background_jobs =
+      dbo.max_background_flushes +
+      dbo.max_background_compactions +
+      dbo.max_background_garbage_collections;
 
-  dbo.env->SetBackgroundThreads(dbo.max_background_compactions, rocksdb::Env::LOW);
-  dbo.env->SetBackgroundThreads(dbo.max_background_flushes    , rocksdb::Env::HIGH);
+  dbo.env->SetBackgroundThreads(
+      dbo.max_background_compactions +
+      dbo.max_background_garbage_collections, rocksdb::Env::LOW);
+  dbo.env->SetBackgroundThreads(dbo.max_background_flushes, rocksdb::Env::HIGH);
   dbo.allow_mmap_reads = true;
   dbo.new_table_reader_for_compaction_inputs = false;
   dbo.max_open_files = -1;

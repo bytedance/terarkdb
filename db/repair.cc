@@ -496,15 +496,15 @@ class Repairer {
         enum {
           kOK, kError, kRetry,
         } result = kOK;
-        for (auto file_number : t.meta.prop.dependence) {
-          auto find = dependence_map.find(file_number);
+        for (auto& dependence : t.meta.prop.dependence) {
+          auto find = dependence_map.find(dependence.file_number);
           if (find == dependence_map.end()) {
             result = kError;
             break;
           }
-          if (mediate_sst.count(file_number) > 0) {
+          if (mediate_sst.count(dependence.file_number) > 0) {
             // depend file is mediate sst, retry next loop
-            assert(file_number != t.meta.fd.GetNumber());
+            assert(dependence.file_number != t.meta.fd.GetNumber());
             result = kRetry;
             break;
           }
@@ -683,11 +683,12 @@ class Repairer {
       edit.SetNextFile(next_file_number_);
       edit.SetColumnFamily(cfd->GetID());
 
-      std::set<uint64_t> dependence_set;
+      std::unordered_set<uint64_t> dependence_set;
       for (const auto* table : cf_id_and_tables.second) {
         if (table->meta.prop.purpose != 0) {
-          auto& dependence = table->meta.prop.dependence;
-          dependence_set.insert(dependence.begin(), dependence.end());
+          for (auto& dependence : table->meta.prop.dependence) {
+            dependence_set.emplace(dependence.file_number);
+          }
         }
       }
       // TODO(opt): separate out into multiple levels
@@ -701,8 +702,7 @@ class Repairer {
                      table->meta.fd.GetPathId(), table->meta.fd.GetFileSize(),
                      table->meta.smallest, table->meta.largest,
                      table->min_sequence, table->max_sequence,
-                     0 /* num_antiquation */, table->meta.marked_for_compaction,
-                     table->meta.prop);
+                     table->meta.marked_for_compaction, table->meta.prop);
       }
       assert(next_file_number_ > 0);
       vset_.MarkFileNumberUsed(next_file_number_ - 1);

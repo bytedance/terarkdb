@@ -428,6 +428,7 @@ ColumnFamilyData::ColumnFamilyData(
       column_family_set_(column_family_set),
       queued_for_flush_(false),
       queued_for_compaction_(false),
+      queued_for_garbage_collection_(false),
       prev_compaction_needed_bytes_(0),
       allow_2pc_(db_options.allow_2pc),
       last_memtable_id_(0) {
@@ -505,6 +506,7 @@ ColumnFamilyData::~ColumnFamilyData() {
   // compaction_queue_ and we destroyed it
   assert(!queued_for_flush_);
   assert(!queued_for_compaction_);
+  assert(!queued_for_garbage_collection_);
 
   if (super_version_ != nullptr) {
     // Release SuperVersion reference kept in ThreadLocalPtr.
@@ -953,8 +955,13 @@ void ColumnFamilyData::CreateNewMemtable(
 }
 
 bool ColumnFamilyData::NeedsCompaction() const {
-  return !current_->storage_info()->IsPickFail() &&
+  return !current_->storage_info()->IsPickCompactionFail() &&
          compaction_picker_->NeedsCompaction(current_->storage_info());
+}
+
+bool ColumnFamilyData::NeedsGarbageCollection() const {
+  return !current_->storage_info()->IsPickGarbageCollectionFail() &&
+         compaction_picker_->NeedsGarbageCollection(current_->storage_info());
 }
 
 Compaction* ColumnFamilyData::PickCompaction(
@@ -963,11 +970,22 @@ Compaction* ColumnFamilyData::PickCompaction(
       GetName(), mutable_options, current_->storage_info(), log_buffer);
   if (result != nullptr) {
     result->SetInputVersion(current_);
-    if (result->compaction_type() != kGarbageCollection) {
-      result->set_compaction_load(current_->GetCompactionLoad());
-    }
+    result->set_compaction_load(current_->GetCompactionLoad());
   } else {
-    current_->storage_info()->SetPickFail();
+    current_->storage_info()->SetPickCompactionFail();
+  }
+  return result;
+}
+
+Compaction* ColumnFamilyData::PickGarbageCollection(
+    const MutableCFOptions& mutable_options, LogBuffer* log_buffer) {
+  auto* result = compaction_picker_->PickGarbageCollection(
+      GetName(), mutable_options, current_->storage_info(), log_buffer);
+  if (result != nullptr) {
+    result->SetInputVersion(current_);
+    result->set_compaction_load(0);
+  } else {
+    current_->storage_info()->SetPickGarbageCollectionFail();
   }
   return result;
 }

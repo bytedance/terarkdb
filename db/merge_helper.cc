@@ -53,7 +53,7 @@ Status MergeHelper::TimedFullMerge(const MergeOperator* merge_operator,
                                    const Slice& key, LazyBuffer* value,
                                    std::vector<LazyBuffer>& operands,
                                    LazyBuffer* result, Logger* logger,
-                                   Statistics* statistics, Env* env,
+                                   Statistics* statistics, Env* /*env*/,
                                    bool update_num_ops_stats) {
   assert(merge_operator != nullptr);
 
@@ -84,11 +84,15 @@ Status MergeHelper::TimedFullMerge(const MergeOperator* merge_operator,
 
     if (tmp_result_operand != nullptr) {
       // FullMergeV2 result is an existing operand
-      ptrdiff_t tmp_result_operand_index =
-          tmp_result_operand - operands.data();
-      assert(tmp_result_operand_index >= 0 &&
-             size_t(tmp_result_operand_index) < operands.size());
-      *result = std::move(operands[tmp_result_operand_index]);
+      if (tmp_result_operand == value) {
+        *result = std::move(*value);
+      } else {
+        ptrdiff_t tmp_result_operand_index =
+            tmp_result_operand - operands.data();
+        assert(tmp_result_operand_index >= 0 &&
+               size_t(tmp_result_operand_index) < operands.size());
+        *result = std::move(operands[tmp_result_operand_index]);
+      }
     }
 
     //RecordTick(statistics, MERGE_OPERATION_TOTAL_TIME,
@@ -113,8 +117,7 @@ Status MergeHelper::TimedFullMerge(const MergeOperator* merge_operator,
 // TODO: Avoid the snapshot stripe map lookup in CompactionRangeDelAggregator
 // and just pass the StripeRep corresponding to the stripe being merged.
 Status MergeHelper::MergeUntil(
-    const Slice& user_key, InternalIterator* iter,
-    SeparateValueCollector& separate_value_collector,
+    const Slice& user_key, CombinedInternalIterator* iter,
     CompactionRangeDelAggregator* range_del_agg,
     const SequenceNumber stop_before, const bool at_bottom) {
   // Get a copy of the internal key, before it's invalidated by iter->Next()
@@ -175,12 +178,7 @@ Status MergeHelper::MergeUntil(
       // hit an entry that's visible by the previous snapshot, can't touch that
       break;
     }
-    LazyBuffer val;
-    if (original_key_is_iter) {
-      val = separate_value_collector.value(iter, user_key);
-    } else {
-      val = separate_value_collector.add(iter, user_key);
-    }
+    LazyBuffer val = iter->value(user_key);
 
     // At this point we are guaranteed that we need to process this key.
 
@@ -230,7 +228,7 @@ Status MergeHelper::MergeUntil(
         keys_.emplace_front(std::move(original_key));
         merge_context_.PushOperand(std::move(merge_result));
       }
-      val.clear();
+      val.reset();
 
       // move iter to the next entry
       iter->Next();
@@ -397,9 +395,9 @@ CompactionFilter::Decision MergeHelper::FilterMerge(
   if (compaction_filter_ == nullptr) {
     return CompactionFilter::Decision::kKeep;
   }
-  if (stats_ != nullptr && ShouldReportDetailedTime(env_, stats_)) {
-    filter_timer_.Start();
-  }
+//  if (stats_ != nullptr && ShouldReportDetailedTime(env_, stats_)) {
+//    filter_timer_.Start();
+//  }
   compaction_filter_value_.clear();
   compaction_filter_skip_until_.Clear();
   auto ret = compaction_filter_->FilterV2(
@@ -417,7 +415,7 @@ CompactionFilter::Decision MergeHelper::FilterMerge(
                                                        kValueTypeForSeek);
     }
   }
-  total_filter_time_ += filter_timer_.ElapsedNanosSafe();
+//  total_filter_time_ += filter_timer_.ElapsedNanosSafe();
   return ret;
 }
 

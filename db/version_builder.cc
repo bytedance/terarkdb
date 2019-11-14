@@ -24,6 +24,7 @@
 #include <unordered_set>
 #include <utility>
 #include <vector>
+#include <queue>
 
 #include "db/dbformat.h"
 #include "db/internal_stats.h"
@@ -63,11 +64,10 @@ bool BySmallestKey(FileMetaData* a, FileMetaData* b,
 #if ROCKS_VERSION_BUILDER_DEBUG
 struct VersionBuilderDebugger {
   struct Item {
-    size_t deletion, addition, antiquation;
+    size_t deletion, addition;
   };
   std::vector<std::pair<int, uint64_t>> deletion;
   std::vector<std::pair<int, FileMetaData>> addition;
-  std::vector<std::pair<uint64_t, uint64_t>> antiquation;
   std::vector<Item> pos;
   std::vector<std::pair<int, FileMetaData>> storage;
 
@@ -82,12 +82,7 @@ struct VersionBuilderDebugger {
     auto& edit_addition = edit->GetNewFiles();
     addition.insert(addition.end(), edit_addition.begin(), edit_addition.end());
 
-    auto& edit_antiquation = edit->GetAntiquation();
-    antiquation.insert(antiquation.end(), edit_antiquation.begin(),
-                       edit_antiquation.end());
-
-    pos.emplace_back(Item{deletion.size(), addition.size(),
-                          antiquation.size()});
+    pos.emplace_back(Item{deletion.size(), addition.size()});
   }
 
   void PushVersion(VersionStorageInfo* vstorage) {
@@ -140,7 +135,7 @@ class VersionBuilder::Rep {
     size_t skip_gc_version;
     int level;
     FileMetaData* f;
-    uint64_t delta_antiquation;
+    uint64_t entry_depended;
   };
   struct InheritanceItem {
     size_t count;
@@ -284,8 +279,12 @@ class VersionBuilder::Rep {
   }
 
   void SetDependence(FileMetaData* f, bool recursive, bool finish) {
-    for (auto file_number : f->prop.dependence) {
-      auto item = TransFileNumber(file_number);
+    for (auto& dependence : f->prop.dependence) {
+      auto item = TransFileNumber(dependence.file_number);
+      if (finish) {
+        assert(recursive || dependence.entry_count > 0);
+        item->entry_depended += dependence.entry_count;
+      }
       if (item == nullptr) {
         if (finish) {
           status_ = Status::Aborted("Missing dependence files");
@@ -321,6 +320,13 @@ class VersionBuilder::Rep {
         }
       }
     }
+    struct priority_queue_cmp {
+      bool operator()(FileMetaData* l, FileMetaData* r) const {
+        return l->fd.GetNumber() < r->fd.GetNumber();
+      }
+    };
+    std::priority_queue<FileMetaData*, std::vector<FileMetaData*>,
+                        priority_queue_cmp> old_file_queue;
     for (auto it = dependence_map_.begin(); it != dependence_map_.end(); ) {
       auto& item = it->second;
       if (item.dependence_version == dependence_version_) {
@@ -336,10 +342,26 @@ class VersionBuilder::Rep {
               auto f = new FileMetaData(*item.f);
               f->table_reader_handle = nullptr;
               f->refs = 1;
+              f->being_compacted = false;
               UnrefFile(item.f);
               item.f = f;
             }
             item.f->is_skip_gc = is_skip_gc;
+          }
+          if (item.f->prop.purpose != kMapSst &&
+              !item.f->prop.dependence.empty()) {
+            for (auto& dependence : item.f->prop.dependence) {
+              auto find = inheritance_counter_.find(dependence.file_number);
+              if (find != inheritance_counter_.end() &&
+                  find->second.item->f->fd.GetNumber() !=
+                  dependence.file_number) {
+                old_file_queue.push(item.f);
+                if (old_file_queue.size() > 8) {
+                  old_file_queue.pop();
+                }
+                break;
+              }
+            }
           }
         }
         ++it;
@@ -350,23 +372,26 @@ class VersionBuilder::Rep {
       }
     }
     if (finish) {
+      size_t old_file_count =
+          std::max<size_t>(1, std::min(dependence_map_.size() / 128,
+                                       old_file_queue.size()));
+      while (old_file_queue.size() > old_file_count) {
+        old_file_queue.pop();
+      }
+      while (!old_file_queue.empty()) {
+        old_file_queue.top()->marked_for_compaction = true;
+        old_file_queue.pop();
+      }
       inheritance_counter_.clear();
     }
     new_deleted_files_ = 0;
   }
 
-  void ApplyAntiquation(FileMetaData* f) {
-    auto find = dependence_map_.find(f->fd.GetNumber());
-    if (find != dependence_map_.end()) {
-      f->num_antiquation += find->second.delta_antiquation;
-    }
-  }
-
   void CheckDependence(VersionStorageInfo* vstorage, FileMetaData* f,
                        bool recursive) {
     auto& dependence_map = vstorage->dependence_map();
-    for (auto file_number : f->prop.dependence) {
-      auto find = dependence_map.find(file_number);
+    for (auto& dependence: f->prop.dependence) {
+      auto find = dependence_map.find(dependence.file_number);
       if (find == dependence_map.end()) {
         fprintf(stderr, "Missing dependence files");
         abort();
@@ -550,15 +575,6 @@ class VersionBuilder::Rep {
       }
     }
 
-    for (auto& pair : edit->GetAntiquation()) {
-      auto item = TransFileNumber(pair.first);
-      if (item == nullptr) {
-        status_ = Status::Aborted("Bad antiquation file number");
-      } else {
-        item->delta_antiquation += pair.second;
-      }
-    }
-
     // shrink files
     CalculateDependence(false);
   }
@@ -588,7 +604,6 @@ class VersionBuilder::Rep {
       std::sort(ordered_added_files.begin(), ordered_added_files.end(), cmp);
 
       for (auto f : ordered_added_files) {
-        ApplyAntiquation(f);
         vstorage->AddFile(level, f, info_log_);
         if (level == 0) {
           read_amp[level] += f->prop.read_amp;
@@ -608,7 +623,14 @@ class VersionBuilder::Rep {
     for (auto& pair : dependence_map_) {
       auto& item = pair.second;
       if (item.dependence_version == dependence_version_ && item.level == -1) {
-        ApplyAntiquation(item.f);
+        if (!item.f->is_skip_gc) {
+          assert(item.entry_depended > 0);
+          item.entry_depended =
+              std::min(item.entry_depended,
+                       item.f->prop.num_entries - item.f->num_antiquation);
+          item.f->num_antiquation =
+              item.f->prop.num_entries - item.entry_depended;
+        }
         vstorage->AddFile(-1, item.f, info_log_);
       }
     }
@@ -743,11 +765,6 @@ void VersionBuilderDebugger::Verify(VersionBuilder::Rep* rep,
         auto& pair = addition[j];
         edit->AddFile(pair.first, pair.second);
       }
-      std::unordered_map<uint64_t, uint64_t> antiquation_map;
-      for (size_t j = begin.antiquation; j < end.antiquation; ++j) {
-        antiquation_map.emplace(antiquation[j]);
-      }
-      edit->SetAntiquation(antiquation_map);
     }
   };
   auto verify = [rep](VersionStorageInfo* l,

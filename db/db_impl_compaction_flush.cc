@@ -1246,7 +1246,7 @@ Status DBImpl::ReFitLevel(ColumnFamilyData* cfd, int level, int target_level) {
       edit.AddFile(to_level, f->fd.GetNumber(), f->fd.GetPathId(),
                    f->fd.GetFileSize(), f->smallest, f->largest,
                    f->fd.smallest_seqno, f->fd.largest_seqno,
-                   f->num_antiquation, f->marked_for_compaction, f->prop);
+                   f->marked_for_compaction, f->prop);
     }
     ROCKS_LOG_DEBUG(immutable_db_options_.info_log,
                     "[%s] Apply version edit:\n%s", cfd->GetName().c_str(),
@@ -1845,6 +1845,18 @@ void DBImpl::MaybeScheduleFlushOrCompaction() {
     return;
   }
 
+  while (
+      bg_garbage_collection_scheduled_ < bg_job_limits.max_garbage_collections
+      && unscheduled_garbage_collections_ > 0) {
+    CompactionArg* ca = new CompactionArg;
+    ca->db = this;
+    ca->prepicked_compaction = nullptr;
+    bg_garbage_collection_scheduled_++;
+    unscheduled_garbage_collections_--;
+    env_->Schedule(&DBImpl::BGWorkGarbageCollection, ca, Env::Priority::LOW,
+                   this, &DBImpl::UnscheduleCallback);
+  }
+
   while (bg_compaction_scheduled_ < bg_job_limits.max_compactions &&
          unscheduled_compactions_ > 0) {
     CompactionArg* ca = new CompactionArg;
@@ -1866,25 +1878,31 @@ DBImpl::BGJobLimits DBImpl::GetBGJobLimits() const {
   }
   return GetBGJobLimits(immutable_db_options_.max_background_flushes,
                         mutable_db_options_.max_background_compactions,
+                        mutable_db_options_.max_background_garbage_collections,
                         mutable_db_options_.max_background_jobs,
                         need_speedup_compaction);
 }
 
-DBImpl::BGJobLimits DBImpl::GetBGJobLimits(int max_background_flushes,
-                                           int max_background_compactions,
-                                           int max_background_jobs,
-                                           bool parallelize_compactions) {
+DBImpl::BGJobLimits DBImpl::GetBGJobLimits(
+    int max_background_flushes, int max_background_compactions,
+    int max_background_garbage_collections, int max_background_jobs,
+    bool parallelize_compactions) {
   BGJobLimits res;
-  if (max_background_flushes == -1 && max_background_compactions == -1) {
+  if (max_background_flushes == -1 && max_background_compactions == -1 &&
+      max_background_garbage_collections == -1) {
     // for our first stab implementing max_background_jobs, simply allocate a
     // quarter of the threads to flushes.
     res.max_flushes = std::max(1, max_background_jobs / 4);
-    res.max_compactions = std::max(1, max_background_jobs - res.max_flushes);
+    res.max_compactions =
+        std::max(1, (max_background_jobs - res.max_flushes) / 2);
+    res.max_garbage_collections = res.max_compactions;
   } else {
     // compatibility code in case users haven't migrated to max_background_jobs,
     // which automatically computes flush/compaction limits
     res.max_flushes = std::max(1, max_background_flushes);
     res.max_compactions = std::max(1, max_background_compactions);
+    res.max_garbage_collections =
+        std::max(1, max_background_garbage_collections);
   }
   if (!parallelize_compactions) {
     // throttle background compactions until we deem necessary
@@ -1902,10 +1920,45 @@ void DBImpl::AddToCompactionQueue(ColumnFamilyData* cfd) {
 
 ColumnFamilyData* DBImpl::PopFirstFromCompactionQueue() {
   assert(!compaction_queue_.empty());
-  auto cfd = *compaction_queue_.begin();
-  compaction_queue_.pop_front();
+  auto max_iter = compaction_queue_.begin();
+  double max_load = (*max_iter)->current()->GetCompactionLoad();
+  for (auto it = std::next(max_iter); it != compaction_queue_.end(); ++it) {
+    double tmp_load = (*it)->current()->GetCompactionLoad();
+    if (max_load < tmp_load) {
+      max_load = tmp_load;
+      max_iter = it;
+    }
+  }
+  auto cfd = *max_iter;
+  compaction_queue_.erase(max_iter);
   assert(cfd->queued_for_compaction());
   cfd->set_queued_for_compaction(false);
+  return cfd;
+}
+
+void DBImpl::AddToGarbageCollectionQueue(ColumnFamilyData* cfd) {
+  assert(!cfd->queued_for_garbage_collection());
+  cfd->Ref();
+  garbage_collection_queue_.push_back(cfd);
+  cfd->set_queued_for_garbage_collection(true);
+}
+
+ColumnFamilyData* DBImpl::PopFirstFromGarbageCollectionQueue() {
+  assert(!garbage_collection_queue_.empty());
+  auto max_iter = garbage_collection_queue_.begin();
+  double max_load = (*max_iter)->current()->GetGarbageCollectionLoad();
+  for (auto it = std::next(max_iter);
+       it != garbage_collection_queue_.end(); ++it) {
+    double tmp_load = (*it)->current()->GetGarbageCollectionLoad();
+    if (max_load < tmp_load) {
+      max_load = tmp_load;
+      max_iter = it;
+    }
+  }
+  auto cfd = *max_iter;
+  garbage_collection_queue_.erase(max_iter);
+  assert(cfd->queued_for_garbage_collection());
+  cfd->set_queued_for_garbage_collection(false);
   return cfd;
 }
 
@@ -1940,6 +1993,13 @@ void DBImpl::SchedulePendingCompaction(ColumnFamilyData* cfd) {
   }
 }
 
+void DBImpl::SchedulePendingGarbageCollection(ColumnFamilyData* cfd) {
+  if (!cfd->queued_for_garbage_collection() && cfd->NeedsGarbageCollection()) {
+    AddToGarbageCollectionQueue(cfd);
+    ++unscheduled_garbage_collections_;
+  }
+}
+
 void DBImpl::SchedulePendingPurge(std::string fname, std::string dir_to_sync,
                                   FileType type, uint64_t number, int job_id) {
   mutex_.AssertHeld();
@@ -1964,6 +2024,15 @@ void DBImpl::BGWorkCompaction(void* arg) {
   reinterpret_cast<DBImpl*>(ca.db)->BackgroundCallCompaction(
       prepicked_compaction, Env::Priority::LOW);
   delete prepicked_compaction;
+}
+
+void DBImpl::BGWorkGarbageCollection(void* arg) {
+  CompactionArg ca = *(reinterpret_cast<CompactionArg*>(arg));
+  delete reinterpret_cast<CompactionArg*>(arg);
+  IOSTATS_SET_THREAD_POOL_ID(Env::Priority::LOW);
+  TEST_SYNC_POINT("DBImpl::BGWorkGarbageCollection");
+  reinterpret_cast<DBImpl*>(ca.db)->BackgroundCallGarbageCollection(
+      Env::Priority::LOW);
 }
 
 void DBImpl::BGWorkBottomCompaction(void* arg) {
@@ -2254,6 +2323,101 @@ void DBImpl::BackgroundCallCompaction(PrepickedCompaction* prepicked_compaction,
   }
 }
 
+
+void DBImpl::BackgroundCallGarbageCollection(
+    rocksdb::Env::Priority bg_thread_pri) {
+  bool made_progress = false;
+  JobContext job_context(next_job_id_.fetch_add(1), true);
+  TEST_SYNC_POINT("BackgroundCallGarbageCollection:0");
+  LogBuffer log_buffer(InfoLogLevel::INFO_LEVEL,
+                       immutable_db_options_.info_log.get());
+  {
+    InstrumentedMutexLock l(&mutex_);
+
+    // This call will unlock/lock the mutex to wait for current running
+    // IngestExternalFile() calls to finish.
+    WaitForIngestFile();
+
+    num_running_garbage_collections_++;
+
+    auto pending_outputs_inserted_elem =
+        CaptureCurrentFileNumberInPendingOutputs();
+
+    assert((bg_thread_pri == Env::Priority::LOW &&
+            bg_garbage_collection_scheduled_));
+    Status s = BackgroundGarbageCollection(&made_progress, &job_context,
+                                           &log_buffer);
+    TEST_SYNC_POINT("BackgroundCallGarbageCollection:1");
+    if (!s.ok() && !s.IsShutdownInProgress()) {
+      // Wait a little bit before retrying background garbage collection in
+      // case this is an environmental problem and we do not want to
+      // chew up resources for failed garbage collections for the duration of
+      // the problem.
+      uint64_t error_cnt =
+          default_cf_internal_stats_->BumpAndGetBackgroundErrorCount();
+      bg_cv_.SignalAll();  // In case a waiter can proceed despite the error
+      mutex_.Unlock();
+      log_buffer.FlushBufferToLog();
+      ROCKS_LOG_ERROR(immutable_db_options_.info_log,
+                      "Waiting after background garbage collection error: %s, "
+                      "Accumulated background error counts: %" PRIu64,
+                      s.ToString().c_str(), error_cnt);
+      LogFlush(immutable_db_options_.info_log);
+      env_->SleepForMicroseconds(1000000);
+      mutex_.Lock();
+    }
+
+    ReleaseFileNumberFromPendingOutputs(pending_outputs_inserted_elem);
+
+    // If garbage collection failed, we want to delete all temporary files that
+    // we might have created (they might not be all recorded in job_context in
+    // case of a failure). Thus, we force full scan in FindObsoleteFiles()
+    FindObsoleteFiles(&job_context, !s.ok() && !s.IsShutdownInProgress());
+    TEST_SYNC_POINT("DBImpl::BackgroundCallGarbageCollection:FoundObsoleteFiles");
+
+    // delete unnecessary files if any, this is done outside the mutex
+    if (job_context.HaveSomethingToClean() ||
+        job_context.HaveSomethingToDelete() || !log_buffer.IsEmpty()) {
+      mutex_.Unlock();
+      // Have to flush the info logs before bg_garbage_collection_scheduled_--
+      // because if bg_flush_scheduled_ becomes 0 and the lock is
+      // released, the deconstructor of DB can kick in and destroy all the
+      // states of DB so info_log might not be available after that point.
+      // It also applies to access other states that DB owns.
+      log_buffer.FlushBufferToLog();
+      if (job_context.HaveSomethingToDelete()) {
+        PurgeObsoleteFiles(job_context);
+        TEST_SYNC_POINT(
+            "DBImpl::BackgroundCallGarbageCollection:PurgedObsoleteFiles");
+      }
+      job_context.Clean();
+      mutex_.Lock();
+    }
+
+    assert(num_running_garbage_collections_ > 0);
+    num_running_garbage_collections_--;
+    bg_garbage_collection_scheduled_--;
+
+    versions_->GetColumnFamilySet()->FreeDeadColumnFamilies();
+
+    // See if there's more work to be done
+    MaybeScheduleFlushOrCompaction();
+    if (made_progress || bg_garbage_collection_scheduled_ == 0 ||
+        unscheduled_garbage_collections_ == 0) {
+      // signal if
+      // * made_progress -- need to wakeup DelayWrite
+      // * bg_garbage_collection_scheduled_ == 0 -- need to wakeup ~DBImpl
+      // If none of this is true, there is no need to signal since nobody is
+      // waiting for it
+      bg_cv_.SignalAll();
+    }
+    // IMPORTANT: there should be no code after calling SignalAll. This call may
+    // signal the DB destructor that it's OK to proceed with destruction. In
+    // that case, all DB variables will be dealloacated and referencing them
+    // will cause trouble.
+  }
+}
+
 Status DBImpl::BackgroundCompaction(bool* made_progress,
                                     JobContext* job_context,
                                     LogBuffer* log_buffer,
@@ -2493,8 +2657,8 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
         c->edit()->AddFile(c->output_level(), f->fd.GetNumber(),
                            f->fd.GetPathId(), f->fd.GetFileSize(), f->smallest,
                            f->largest, f->fd.smallest_seqno,
-                           f->fd.largest_seqno, f->num_antiquation,
-                           f->marked_for_compaction, f->prop);
+                           f->fd.largest_seqno, f->marked_for_compaction,
+                           f->prop);
 
         ROCKS_LOG_BUFFER(
             log_buffer,
@@ -2687,6 +2851,179 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
   return status;
 }
 
+Status DBImpl::BackgroundGarbageCollection(bool* made_progress,
+                                           JobContext* job_context,
+                                           LogBuffer* log_buffer) {
+  *made_progress = false;
+  mutex_.AssertHeld();
+  TEST_SYNC_POINT("DBImpl::BackgroundGarbageCollection:Start");
+
+  std::unique_ptr<Compaction> c;
+  CompactionJobStats garbage_collection_job_stats;
+  Status status;
+  if (!error_handler_.IsBGWorkStopped()) {
+    if (shutting_down_.load(std::memory_order_acquire)) {
+      status = Status::ShutdownInProgress();
+    }
+  } else {
+    status = error_handler_.GetBGError();
+    // If we get here, it means a hard error happened after this garbage
+    // collections was scheduled by MaybeScheduleFlushOrCompaction(), but before
+    // it got a chance to execute. Since we didn't pop a cfd from the garbage
+    // collections queue, increment unscheduled_garbage_collections_
+    unscheduled_garbage_collections_++;
+  }
+
+  if (!status.ok()) {
+    return status;
+  }
+
+  bool sfm_reserved_compact_space = false;
+  if (!garbage_collection_queue_.empty()) {
+    // cfd is referenced here
+    auto cfd = PopFirstFromGarbageCollectionQueue();
+    // We unreference here because the following code will take a Ref() on
+    // this cfd if it is going to use it (GarbageCollection class holds a
+    // reference).
+    // This will all happen under a mutex so we don't have to be afraid of
+    // somebody else deleting it.
+    if (cfd->Unref()) {
+      delete cfd;
+      // This was the last reference of the column family, so no need to
+      // compact.
+      return Status::OK();
+    }
+
+    // Pick up latest mutable CF Options and use it throughout the
+    // garbage collection job
+    // GarbageCollection makes a copy of the latest MutableCFOptions. It should
+    // be used throughout the garbage collection procedure to make sure
+    // consistency. It will eventually be installed into SuperVersion
+    auto* mutable_cf_options = cfd->GetLatestMutableCFOptions();
+    if (!mutable_cf_options->disable_auto_compactions && !cfd->IsDropped()) {
+      // NOTE: try to avoid unnecessary copy of MutableCFOptions if
+      // garbage collection is not necessary. Need to make sure mutex is held
+      // until we make a copy in the following code
+      TEST_SYNC_POINT(
+          "DBImpl::BackgroundGarbageCollection():BeforePickGarbageCollection");
+      c.reset(cfd->PickGarbageCollection(*mutable_cf_options, log_buffer));
+      TEST_SYNC_POINT(
+          "DBImpl::BackgroundGarbageCollection():AfterPickGarbageCollection");
+
+      if (c != nullptr) {
+        bool enough_room = EnoughRoomForCompaction(
+            cfd, *(c->inputs()), &sfm_reserved_compact_space, log_buffer);
+
+        if (!enough_room) {
+          // Then don't do the garbage collection
+          c->ReleaseCompactionFiles(status);
+          AddToGarbageCollectionQueue(cfd);
+          ++unscheduled_garbage_collections_;
+
+          c.reset();
+          // Don't need to sleep here, because BackgroundCallGarbageCollection
+          // will sleep if !s.ok()
+          status = Status::CompactionTooLarge();
+        } else {
+          // update statistics
+          MeasureTime(stats_, NUM_FILES_IN_SINGLE_COMPACTION,
+                      c->inputs(0)->size());
+          if (cfd->NeedsGarbageCollection()) {
+            // Yes, we need more garbage collections!
+            AddToGarbageCollectionQueue(cfd);
+            ++unscheduled_garbage_collections_;
+            MaybeScheduleFlushOrCompaction();
+          }
+        }
+      }
+    }
+  }
+
+  if (!c) {
+    // Nothing to do
+    ROCKS_LOG_BUFFER(log_buffer, "GarbageCollection nothing to do");
+  } else {
+    int output_level __attribute__((__unused__));
+    output_level = c->output_level();
+    TEST_SYNC_POINT_CALLBACK("DBImpl::BackgroundGarbageCollection:NonTrivial",
+                             &output_level);
+    SequenceNumber earliest_write_conflict_snapshot = kMaxSequenceNumber;
+    std::vector<SequenceNumber> snapshot_seqs;
+    auto snapshot_checker = DisableGCSnapshotChecker::Instance();
+
+    CompactionJob garbage_collection_job(
+        job_context->job_id, c.get(), immutable_db_options_,
+        env_options_for_compaction_, versions_.get(), &shutting_down_,
+        preserve_deletes_seqnum_.load(), log_buffer, directories_.GetDbDir(),
+        GetDataDir(c->column_family_data(), c->output_path_id()), stats_,
+        &mutex_, &error_handler_, snapshot_seqs, earliest_write_conflict_snapshot,
+        snapshot_checker, table_cache_, &event_logger_,
+        c->mutable_cf_options()->paranoid_file_checks,
+        c->mutable_cf_options()->report_bg_io_stats, dbname_,
+        &garbage_collection_job_stats);
+    garbage_collection_job.Prepare();
+
+    NotifyOnCompactionBegin(c->column_family_data(), c.get(), status,
+                            garbage_collection_job_stats, job_context->job_id);
+
+    mutex_.Unlock();
+    garbage_collection_job.Run();
+    TEST_SYNC_POINT("DBImpl::BackgroundGarbageCollection:NonTrivial:AfterRun");
+    mutex_.Lock();
+
+    status = garbage_collection_job.Install(*c->mutable_cf_options());
+    if (status.ok()) {
+      InstallSuperVersionAndScheduleWork(
+          c->column_family_data(), &job_context->superversion_contexts[0],
+          *c->mutable_cf_options(), FlushReason::kAutoCompaction);
+    }
+    *made_progress = true;
+  }
+  if (c != nullptr) {
+    c->ReleaseCompactionFiles(status);
+    *made_progress = true;
+
+#ifndef ROCKSDB_LITE
+    // Need to make sure SstFileManager does its bookkeeping
+    auto sfm = static_cast<SstFileManagerImpl*>(
+        immutable_db_options_.sst_file_manager.get());
+    if (sfm && sfm_reserved_compact_space) {
+      sfm->OnCompactionCompletion(c.get());
+    }
+#endif  // ROCKSDB_LITE
+
+    NotifyOnCompactionCompleted(c->column_family_data(), c.get(), status,
+                                garbage_collection_job_stats,
+                                job_context->job_id);
+  }
+
+  if (status.ok() || status.IsCompactionTooLarge()) {
+    // Done
+  } else if (status.IsShutdownInProgress()) {
+    // Ignore garbage collection errors found during shutting down
+  } else {
+    ROCKS_LOG_WARN(immutable_db_options_.info_log,
+                   "GarbageCollection error: %s", status.ToString().c_str());
+    error_handler_.SetBGError(status, BackgroundErrorReason::kCompaction);
+    if (c != nullptr && !error_handler_.IsBGWorkStopped()) {
+      // Put this cfd back in the garbage collection queue so we can retry after
+      // some time
+      auto cfd = c->column_family_data();
+      assert(cfd != nullptr);
+
+      if (!cfd->queued_for_garbage_collection()) {
+        AddToGarbageCollectionQueue(cfd);
+        ++unscheduled_garbage_collections_;
+      }
+    }
+  }
+  // this will unref its input_version and column_family_data
+  c.reset();
+
+  TEST_SYNC_POINT("DBImpl::BackgroundGarbageCollection:Finish");
+  return status;
+}
+
 bool DBImpl::HasPendingManualCompaction() {
   return (!manual_compaction_dequeue_.empty());
 }
@@ -2709,6 +3046,7 @@ void DBImpl::RemoveManualCompaction(DBImpl::ManualCompactionState* m) {
   assert(false);
   return;
 }
+
 
 bool DBImpl::ShouldntRunManualCompaction(ManualCompactionState* m) {
   if (num_running_ingest_file_ > 0) {
@@ -2817,6 +3155,7 @@ void DBImpl::InstallSuperVersionAndScheduleWork(
   // Whenever we install new SuperVersion, we might need to issue new flushes or
   // compactions.
   SchedulePendingCompaction(cfd);
+  SchedulePendingGarbageCollection(cfd);
   MaybeScheduleFlushOrCompaction();
 
   // Update max_total_in_memory_state_
