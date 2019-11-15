@@ -141,9 +141,10 @@ class DummyMergeOperator : public MergeOperator {
     return false;
   }
 
-  virtual bool PartialMergeMulti(const Slice& key,
-                                 const std::vector<LazyBuffer>& operand_list,
-                                 LazyBuffer* new_value, Logger* logger) const override {
+  virtual bool PartialMergeMulti(const Slice& /*key*/,
+                                 const std::vector<LazyBuffer>& /*operand_list*/,
+                                 LazyBuffer* /*new_value*/,
+                                 Logger* /*logger*/) const override {
     return false;
   }
 
