@@ -1093,6 +1093,7 @@ struct MapElementIterator : public InternalIterator {
   virtual void Next() override {
     if (iter_) {
       assert(iter_->Valid());
+      value_.reset();
       iter_->Next();
       if (iter_->Valid()) {
         Update();
@@ -1116,6 +1117,7 @@ struct MapElementIterator : public InternalIterator {
   virtual void Prev() override {
     if (iter_) {
       assert(iter_->Valid());
+      value_.reset();
       iter_->Prev();
       if (iter_->Valid()) {
         Update();
@@ -1139,11 +1141,11 @@ struct MapElementIterator : public InternalIterator {
   }
   Slice key() const override {
     assert(where_ < meta_size_);
-    return key_slice_;
+    return key_;
   }
   LazyBuffer value() const override {
     assert(where_ < meta_size_);
-    return LazyBufferReference(value_slice_);
+    return LazyBufferReference(value_);
   }
   virtual Status status() const override {
     return iter_ ? iter_->status() : Status::OK();
@@ -1160,13 +1162,13 @@ struct MapElementIterator : public InternalIterator {
     return false;
   }
   void ResetIter(InternalIterator* iter = nullptr) {
-    value_slice_.reset();
+    value_.reset();
     iter_.reset(iter);
   }
   void Update() {
     if (iter_) {
-      key_slice_ = iter_->key();
-      value_slice_ = iter_->value();
+      key_ = iter_->key();
+      value_ = iter_->value();
     } else {
       const FileMetaData* f = meta_array_[where_];
       element_.smallest_key_ = f->smallest.Encode();
@@ -1177,8 +1179,8 @@ struct MapElementIterator : public InternalIterator {
       element_.link_.clear();
       element_.link_.emplace_back(
           MapSstElement::LinkTarget{f->fd.GetNumber(), f->fd.GetFileSize()});
-      key_slice_ = element_.Key();
-      value_slice_ = LazyBuffer(element_.Value(&buffer_));
+      key_ = element_.Key();
+      value_.reset(element_.Value(&buffer_));
     }
   }
 
@@ -1191,8 +1193,8 @@ struct MapElementIterator : public InternalIterator {
   MapSstElement element_;
   std::string buffer_;
   std::unique_ptr<InternalIterator> iter_;
-  Slice key_slice_;
-  LazyBuffer value_slice_;
+  Slice key_;
+  LazyBuffer value_;
 };
 
 InternalIterator* NewMapElementIterator(

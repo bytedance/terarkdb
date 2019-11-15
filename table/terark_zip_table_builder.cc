@@ -209,7 +209,7 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(const TerarkZipTableFactory* table_
                                         tbo.moptions.prefix_extractor->Name() : "nullptr";
 
     isReverseBytewiseOrder_ =
-      fstring(properties_.comparator_name).startsWith("rev:");
+        IsBackwardBytewiseComparator(properties_.comparator_name);
 
     if (tbo.int_tbl_prop_collector_factories) {
       const auto& factories = *tbo.int_tbl_prop_collector_factories;
@@ -1177,7 +1177,9 @@ Status TerarkZipTableBuilder::buildEntropyZipBlobStore(BuildStoreParams& params)
 Status TerarkZipTableBuilder::buildZeroLengthBlobStore(BuildStoreParams& params) {
   auto& kvs = params.kvs;
   auto store = UniquePtrOf(new terark::ZeroLengthBlobStore());
-  auto s = BuilderWriteValues(kvs, [&](fstring value) { assert(value.empty()); });
+  auto s = BuilderWriteValues(kvs, [&](fstring value) {
+    assert(value.empty()); (void)value;
+  });
   if (s.ok()) {
     store->finish(kvs.status.stat.keyCount);
     FileStream file(params.fpath, "ab+");

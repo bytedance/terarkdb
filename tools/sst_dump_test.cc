@@ -67,16 +67,17 @@ void createSST(const std::string& file_name,
           imoptions, moptions, ikc, &int_tbl_prop_collector_factories,
           CompressionType::kNoCompression, CompressionOptions(),
           nullptr /* compression_dict */, false /* skip_filters */,
-          false /* ignore_key_type */, column_family_name, unknown_level),
+          false /* ignore_key_type */, column_family_name, unknown_level,
+          0 /* compaction_load */),
       TablePropertiesCollectorFactory::Context::kUnknownColumnFamily,
       file_writer.get()));
 
   // Populate slightly more than 1K keys
   uint32_t num_keys = 1024;
   for (uint32_t i = 0; i < num_keys; i++) {
-    tb->Add(MakeKey(i), MakeValue(i));
+    ASSERT_OK(tb->Add(MakeKey(i), LazyBuffer(MakeValue(i))));
   }
-  tb->Finish();
+  tb->Finish(nullptr);
   file_writer->Close();
 }
 

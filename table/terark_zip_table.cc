@@ -170,20 +170,21 @@ SingleTerarkZipTableFactory(const TerarkZipTableOptions& tzto,
   return factory;
 }
 
-bool IsForwardBytewiseComparator(const Comparator* cmp) {
-#if 1
-  const fstring name = cmp->Name();
+bool IsForwardBytewiseComparator(const fstring name) {
   if (name.startsWith("RocksDB_SE_")) {
     return true;
   }
   return name == "leveldb.BytewiseComparator";
-#else
-  return BytewiseComparator() == cmp;
-#endif
+}
+
+bool IsBackwardBytewiseComparator(const fstring name) {
+  if (name.startsWith("rev:RocksDB_SE_")) {
+    return true;
+  }
+  return name == "rocksdb.ReverseBytewiseComparator";
 }
 
 bool IsBytewiseComparator(const Comparator* cmp) {
-#if 1
   const fstring name = cmp->Name();
   if (name.startsWith("RocksDB_SE_")) {
     return true;
@@ -192,10 +193,8 @@ bool IsBytewiseComparator(const Comparator* cmp) {
     // reverse bytewise compare, needs reverse in iterator
     return true;
   }
-  return name == "leveldb.BytewiseComparator";
-#else
-  return BytewiseComparator() == cmp;
-#endif
+  return name == "leveldb.BytewiseComparator" ||
+         name == "rocksdb.ReverseBytewiseComparator";
 }
 
 inline static
