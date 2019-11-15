@@ -1855,11 +1855,14 @@ Compaction* UniversalCompactionPicker::PickRangeCompaction(
         continue;
       }
       auto f = find->second;
+      if (f->prop.purpose != kMapSst) {
+        continue;
+      }
       for (auto& dependence : f->prop.dependence) {
         if (files_being_compact->count(dependence.file_number) > 0) {
           return true;
         }
-      };
+      }
     }
     return false;
   };
