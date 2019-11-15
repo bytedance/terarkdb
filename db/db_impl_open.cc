@@ -1122,20 +1122,14 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
   const char* terarkdb_localTempDir = getenv("TerarkZipTable_localTempDir");
   const char* terarkConfigString = getenv("TerarkConfigString");
   if (terarkdb_localTempDir || terarkConfigString) {
-    if (TerarkZipMultiCFOptionsFromEnv) {
-      if (terarkdb_localTempDir &&
-          ::access(terarkdb_localTempDir, R_OK | W_OK) != 0) {
-        return Status::InvalidArgument(
-            "Must exists, and Permission ReadWrite is required on "
-            "env TerarkZipTable_localTempDir",
-            terarkdb_localTempDir);
-      }
-      TerarkZipMultiCFOptionsFromEnv(db_options, column_families, dbname);
-    } else {
+    if (terarkdb_localTempDir &&
+        ::access(terarkdb_localTempDir, R_OK | W_OK) != 0) {
       return Status::InvalidArgument(
-          "env TerarkZipTable_localTempDir is defined, "
-          "but dynamic libterark-zip-rocksdb is not loaded");
+          "Must exists, and Permission ReadWrite is required on "
+          "env TerarkZipTable_localTempDir",
+          terarkdb_localTempDir);
     }
+    TerarkZipMultiCFOptionsFromEnv(db_options, column_families, dbname);
   }
 #endif
   for (auto& cf : column_families) {

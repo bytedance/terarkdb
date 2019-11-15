@@ -5,7 +5,7 @@
 
 #ifndef ROCKSDB_LITE
 
-#include <table/terark_zip_weak_function.h>
+#include <table/terark_zip_table.h>
 
 #include "db/db_impl.h"
 #include "rocksdb/db.h"
@@ -36,14 +36,22 @@ class TerarkZipTableDBTest : public testing::Test {
     EXPECT_OK(DestroyDB(dbname_, Options()));
   }
 
-  Options CurrentOptions() {
+  void UseTerarkZipTable(Options& o) {
     TerarkZipTableOptions opt;
+    opt.localTempDir = dbname_;
+    std::shared_ptr<TableFactory> block_based_factory(
+        NewBlockBasedTableFactory());
+    std::shared_ptr<TableFactory> adaptive_table_factory(
+        NewAdaptiveTableFactory(block_based_factory));
+    o.table_factory.reset(NewTerarkZipTableFactory(
+        opt, adaptive_table_factory));
+    o.allow_mmap_reads = true;
+    o.create_if_missing = true;
+  }
+
+  Options CurrentOptions() {
     Options options;
-    std::shared_ptr<TableFactory> block_based_factory(NewBlockBasedTableFactory());
-    options.table_factory.reset(NewTerarkZipTableFactory(opt, NewAdaptiveTableFactory(block_based_factory)));
-    // options.table_factory.reset(NewTerarkZipTableFactory(opt, nullptr));
-    options.allow_mmap_reads = true;
-    options.create_if_missing = true;
+    UseTerarkZipTable(options);
     return options;
   }
 
@@ -469,10 +477,7 @@ TEST_F(TerarkZipTableDBTest, AdaptiveTable) { // there is some wrong with adapti
   Options options = CurrentOptions();
   
   // Write some keys using terarkzip table.
-  TerarkZipTableOptions opt;
-  std::shared_ptr<TableFactory> block_based_factory(NewBlockBasedTableFactory());
-  options.table_factory.reset(NewTerarkZipTableFactory(opt, NewAdaptiveTableFactory(block_based_factory)));
-  // options.table_factory.reset(NewTerarkZipTableFactory(opt, nullptr));
+  UseTerarkZipTable(options);
 
   Reopen(&options);
 
@@ -512,9 +517,7 @@ TEST_F(TerarkZipTableDBTest, AdaptiveTable) { // there is some wrong with adapti
   ASSERT_EQ("v11", Get("key1"));
 
   // Write some keys using block based table.
-  // std::shared_ptr<TableFactory> block_based_factory(
-  //    NewBlockBasedTableFactory());
-  options.table_factory.reset(NewTerarkZipTableFactory(opt, NewAdaptiveTableFactory(block_based_factory)));
+  UseTerarkZipTable(options);
   Reopen(&options);
   ASSERT_OK(Put("key6", "v6"));
   ASSERT_OK(Put("key7", "v7"));
@@ -539,19 +542,16 @@ TEST_F(TerarkZipTableDBTest, Correctness) {
   Options options = CurrentOptions();
 
   // Write some keys using terarkzip table.
-  TerarkZipTableOptions opt;
-  std::shared_ptr<TableFactory> block_based_factory(NewBlockBasedTableFactory());
-  options.table_factory.reset(NewTerarkZipTableFactory(opt, NewAdaptiveTableFactory(block_based_factory)));
-  // options.table_factory.reset(NewTerarkZipTableFactory(opt, nullptr));
+  UseTerarkZipTable(options);
 
   Destroy(&options);
   Reopen(&options);
 
-  size_t count = 10;
-  size_t len = 32;
+  int count = 10;
+  int len = 32;
 
   Random rnd(301);
-  for (size_t i = 0; i < count; ++i) {
+  for (int i = 0; i < count; ++i) {
     ASSERT_OK(Put("0000" + RandomString(&rnd, len), Key(i)));
     ASSERT_OK(Put("1111" + RandomString(&rnd, len), Key(i)));
     ASSERT_OK(Put("2222" + RandomString(&rnd, len), Key(i)));
@@ -579,7 +579,7 @@ TEST_F(TerarkZipTableDBTest, Correctness) {
   Reopen(&options);
 
   rnd.Reset(301);
-  for (size_t i = 0; i < count; ++i) {
+  for (int i = 0; i < count; ++i) {
     ASSERT_EQ(Get("0000" + RandomString(&rnd, len)), Key(i));
     ASSERT_EQ(Get("1111" + RandomString(&rnd, len)), Key(i));
     ASSERT_EQ(Get("2222" + RandomString(&rnd, len)), Key(i));
@@ -590,16 +590,13 @@ TEST_F(TerarkZipTableDBTest, EmptyTable) {
   Options options = CurrentOptions();
 
   // Write some keys using terarkzip table.
-  TerarkZipTableOptions opt;
-  std::shared_ptr<TableFactory> block_based_factory(NewBlockBasedTableFactory());
-  options.table_factory.reset(NewTerarkZipTableFactory(opt, NewAdaptiveTableFactory(block_based_factory)));
-  // options.table_factory.reset(NewTerarkZipTableFactory(opt, nullptr));
+  UseTerarkZipTable(options);
 
   Destroy(&options);
   Reopen(&options);
 
   Random rnd(301);
-  size_t len = 32;
+  int len = 32;
 
   dbfull()->CompactRange(rocksdb::CompactRangeOptions(), nullptr, nullptr);
   dbfull()->Flush(rocksdb::FlushOptions());

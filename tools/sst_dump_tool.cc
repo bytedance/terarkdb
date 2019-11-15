@@ -291,20 +291,14 @@ Status SstFileDumper::SetTableOptionsByMagicNumber(
 #if !defined(_MSC_VER) && !defined(__APPLE__)
   } else if ((terarkdb_localTempDir = getenv("TerarkZipTable_localTempDir")) ||
              (terarkConfigString = getenv("TerarkConfigString"))) {
-    if (TerarkZipConfigFromEnv) {
-      if (terarkdb_localTempDir &&
-          ::access(terarkdb_localTempDir, R_OK | W_OK) != 0) {
-        return Status::InvalidArgument(
-            "Must exists, and Permission ReadWrite is required on "
-            "env TerarkZipTable_localTempDir",
-            terarkdb_localTempDir);
-      }
-      TerarkZipConfigFromEnv(options_, options_);
-    } else {
+    if (terarkdb_localTempDir &&
+        ::access(terarkdb_localTempDir, R_OK | W_OK) != 0) {
       return Status::InvalidArgument(
-          "env TerarkZipTable_localTempDir is defined, "
-          "but dynamic libterark-zip-rocksdb is not loaded");
+          "Must exists, and Permission ReadWrite is required on "
+          "env TerarkZipTable_localTempDir",
+          terarkdb_localTempDir);
     }
+    TerarkZipConfigFromEnv(options_, options_);
 #endif
   } else {
     char error_msg_buffer[80];

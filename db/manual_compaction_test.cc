@@ -71,6 +71,7 @@ TEST_F(ManualCompactionTest, CompactTouchesAllKeys) {
       options.compaction_style = kCompactionStyleLevel;
     } else { // universal compaction
       options.compaction_style = kCompactionStyleUniversal;
+      options.enable_lazy_compaction = true;
     }
     options.create_if_missing = true;
     options.compression = rocksdb::kNoCompression;

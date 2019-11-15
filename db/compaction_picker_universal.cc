@@ -93,7 +93,7 @@ SmallestKeyHeap create_level_heap(Compaction* c, const Comparator* icmp) {
   return smallest_key_priority_q;
 }
 
-#ifndef NDEBUG
+#if !defined(NDEBUG) && 0
 // smallest_seqno and largest_seqno are set iff. `files` is not empty.
 void GetSmallestLargestSeqno(const std::vector<FileMetaData*>& files,
                              SequenceNumber* smallest_seqno,
@@ -1802,6 +1802,7 @@ Compaction* UniversalCompactionPicker::PickRangeCompaction(
                                                   kCompactionStyleUniversal);
     params.output_path_id = path_id;
     params.compression_opts = ioptions_.compression_opts;
+    params.manual_compaction = true;
     params.score = 0;
     params.compaction_type = kMapCompaction;
     return new Compaction(std::move(params));
@@ -1946,6 +1947,7 @@ Compaction* UniversalCompactionPicker::PickRangeCompaction(
   params.compression =
       GetCompressionType(ioptions_, vstorage, mutable_cf_options, level, 1);
   params.compression_opts = GetCompressionOptions(ioptions_, vstorage, level);
+  params.manual_compaction = true;
   params.score = 0;
   params.partial_compaction = true;
   params.compaction_type = kKeyValueCompaction;
