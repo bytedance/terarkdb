@@ -1705,7 +1705,7 @@ range_del_aggregator_bench: db/range_del_aggregator_bench.o $(LIBOBJECTS) $(TEST
 repeatable_thread_test: util/repeatable_thread_test.o $(LIBOBJECTS) $(TESTHARNESS)
 	$(AM_LINK)
 
-terark_zip_table_db_test: db/terark_zip_table_db_test.o $(LIBOBJECTS) $(TESTHARNESS)
+terark_zip_table_db_test: db/terark_zip_table_db_test.o $(LIBOBJECTS) $(TESTHARNESS) ${LIBNAME}.so
 	$(AM_LINK)
 
 terark_zip_table_reader_test: table/terark_zip_table_reader_test.o db/db_test_util.o $(LIBOBJECTS) $(TESTHARNESS)
@@ -1714,11 +1714,13 @@ terark_zip_table_reader_test: table/terark_zip_table_reader_test.o db/db_test_ut
 range_tombstone_fragmenter_test: db/range_tombstone_fragmenter_test.o db/db_test_util.o $(LIBOBJECTS) $(TESTHARNESS)
 	$(AM_LINK)
 
-sst_file_reader_test: table/sst_file_reader_test.o $(LIBOBJECTS) $(TESTHARNESS)
+range_tombstone_fragmenter_test: db/range_tombstone_fragmenter_test.o db/db_test_util.o $(LIBOBJECTS) $(TESTHARNESS) ${LIBNAME}.so
 	$(AM_LINK)
 
+sst_file_reader_test: table/sst_file_reader_test.o $(LIBOBJECTS) $(TESTHARNESS) ${LIBNAME}.so
+	$(AM_LINK)
 
-lazy_buffer_test: util/lazy_buffer_test.o $(LIBOBJECTS) $(TESTHARNESS)
+lazy_buffer_test: util/lazy_buffer_test.o $(LIBOBJECTS) $(TESTHARNESS) ${LIBNAME}.so
 	$(AM_LINK)
 
 #-------------------------------------------------
