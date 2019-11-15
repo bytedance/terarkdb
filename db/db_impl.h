@@ -1094,7 +1094,7 @@ class DBImpl : public DB {
   static void UnscheduleCallback(void* arg);
   void BackgroundCallCompaction(PrepickedCompaction* prepicked_compaction,
                                 Env::Priority bg_thread_pri);
-  void BackgroundCallGarbageCollection(Env::Priority bg_thread_pri);
+  void BackgroundCallGarbageCollection();
   void BackgroundCallFlush();
   void BackgroundCallPurge();
   Status BackgroundCompaction(bool* madeProgress, JobContext* job_context,

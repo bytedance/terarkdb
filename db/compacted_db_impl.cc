@@ -168,28 +168,22 @@ Status CompactedDBImpl::Open(const Options& options,
   const char* terarkdb_localTempDir = getenv("TerarkZipTable_localTempDir");
   const char* terarkConfigString = getenv("TerarkConfigString");
   if (terarkdb_localTempDir || terarkConfigString) {
-    if (TerarkZipIsBlackListCF) {
-      if (terarkdb_localTempDir &&
-          ::access(terarkdb_localTempDir, R_OK | W_OK) != 0) {
-        return Status::InvalidArgument(
-            "Must exists, and Permission ReadWrite is required on "
-            "env TerarkZipTable_localTempDir",
-            terarkdb_localTempDir);
-      }
-      if (!TerarkZipIsBlackListCF(kDefaultColumnFamilyName)) {
-        const ColumnFamilyOptions& cf_options = options;
-        const DBOptions& db_options = options;
-        TerarkZipDBOptionsFromEnv(const_cast<DBOptions&>(db_options));
-        TerarkZipCFOptionsFromEnv(const_cast<ColumnFamilyOptions&>(cf_options),
-                                  dbname);
-        auto& factory = cf_options.table_factory;
-        Status s = factory->SanitizeOptions(db_options, cf_options);
-        if (!s.ok()) return s;
-      }
-    } else {
+    if (terarkdb_localTempDir &&
+        ::access(terarkdb_localTempDir, R_OK | W_OK) != 0) {
       return Status::InvalidArgument(
-          "env TerarkZipTable_localTempDir is defined, "
-          "but dynamic libterark-zip-rocksdb is not loaded");
+          "Must exists, and Permission ReadWrite is required on "
+          "env TerarkZipTable_localTempDir",
+          terarkdb_localTempDir);
+    }
+    if (!TerarkZipIsBlackListCF(kDefaultColumnFamilyName)) {
+      const ColumnFamilyOptions& cf_options = options;
+      const DBOptions& db_options = options;
+      TerarkZipDBOptionsFromEnv(const_cast<DBOptions&>(db_options));
+      TerarkZipCFOptionsFromEnv(const_cast<ColumnFamilyOptions&>(cf_options),
+                                dbname);
+      auto& factory = cf_options.table_factory;
+      Status s = factory->SanitizeOptions(db_options, cf_options);
+      if (!s.ok()) return s;
     }
   }
 #endif

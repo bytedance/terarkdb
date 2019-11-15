@@ -2031,8 +2031,7 @@ void DBImpl::BGWorkGarbageCollection(void* arg) {
   delete reinterpret_cast<CompactionArg*>(arg);
   IOSTATS_SET_THREAD_POOL_ID(Env::Priority::LOW);
   TEST_SYNC_POINT("DBImpl::BGWorkGarbageCollection");
-  reinterpret_cast<DBImpl*>(ca.db)->BackgroundCallGarbageCollection(
-      Env::Priority::LOW);
+  reinterpret_cast<DBImpl*>(ca.db)->BackgroundCallGarbageCollection();
 }
 
 void DBImpl::BGWorkBottomCompaction(void* arg) {
@@ -2324,8 +2323,7 @@ void DBImpl::BackgroundCallCompaction(PrepickedCompaction* prepicked_compaction,
 }
 
 
-void DBImpl::BackgroundCallGarbageCollection(
-    rocksdb::Env::Priority bg_thread_pri) {
+void DBImpl::BackgroundCallGarbageCollection() {
   bool made_progress = false;
   JobContext job_context(next_job_id_.fetch_add(1), true);
   TEST_SYNC_POINT("BackgroundCallGarbageCollection:0");
@@ -2343,8 +2341,7 @@ void DBImpl::BackgroundCallGarbageCollection(
     auto pending_outputs_inserted_elem =
         CaptureCurrentFileNumberInPendingOutputs();
 
-    assert((bg_thread_pri == Env::Priority::LOW &&
-            bg_garbage_collection_scheduled_));
+    assert(bg_garbage_collection_scheduled_);
     Status s = BackgroundGarbageCollection(&made_progress, &job_context,
                                            &log_buffer);
     TEST_SYNC_POINT("BackgroundCallGarbageCollection:1");

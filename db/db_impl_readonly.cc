@@ -186,13 +186,7 @@ Status DB::OpenForReadOnly(
           "env TerarkZipTable_localTempDir",
           terarkdb_localTempDir);
     }
-    if (TerarkZipMultiCFOptionsFromEnv) {
-      TerarkZipMultiCFOptionsFromEnv(db_options, column_families, dbname);
-    } else {
-      return Status::InvalidArgument(
-          "env TerarkZipTable_localTempDir is defined, "
-          "but dynamic libterark-zip-rocksdb is not loaded");
-    }
+    TerarkZipMultiCFOptionsFromEnv(db_options, column_families, dbname);
   }
 #endif
   DBImplReadOnly* impl = new DBImplReadOnly(db_options, dbname);

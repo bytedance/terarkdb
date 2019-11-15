@@ -1177,7 +1177,9 @@ Status TerarkZipTableBuilder::buildEntropyZipBlobStore(BuildStoreParams& params)
 Status TerarkZipTableBuilder::buildZeroLengthBlobStore(BuildStoreParams& params) {
   auto& kvs = params.kvs;
   auto store = UniquePtrOf(new terark::ZeroLengthBlobStore());
-  auto s = BuilderWriteValues(kvs, [&](fstring value) { assert(value.empty()); });
+  auto s = BuilderWriteValues(kvs, [&](fstring value) {
+    assert(value.empty()); (void)value;
+  });
   if (s.ok()) {
     store->finish(kvs.status.stat.keyCount);
     FileStream file(params.fpath, "ab+");

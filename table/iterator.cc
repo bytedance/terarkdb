@@ -108,7 +108,9 @@ LazyBuffer CombinedInternalIterator::value() const {
     return iter_->value();
   }
   ParsedInternalKey pikey;
-  ParseInternalKey(iter_->key(), &pikey);
+  if (!ParseInternalKey(iter_->key(), &pikey)) {
+    return LazyBuffer(Status::Corruption("Invalid InternalKey"));
+  }
   if (pikey.type != kTypeValueIndex && pikey.type != kTypeMergeIndex) {
     return iter_->value();
   }
@@ -126,7 +128,9 @@ LazyBuffer CombinedInternalIterator::value(const Slice& user_key) const {
     return iter_->value();
   }
   ParsedInternalKey pikey;
-  ParseInternalKey(iter_->key(), &pikey);
+  if (!ParseInternalKey(iter_->key(), &pikey)) {
+    return LazyBuffer(Status::Corruption("Invalid InternalKey"));
+  }
   if (pikey.type != kTypeValueIndex && pikey.type != kTypeMergeIndex) {
     return iter_->value();
   }
