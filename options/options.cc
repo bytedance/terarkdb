@@ -248,6 +248,10 @@ void ColumnFamilyOptions::Dump(Logger* log) const {
                      disable_auto_compactions);
     ROCKS_LOG_HEADER(log, "                 Options.enable_lazy_compaction: %d",
                      enable_lazy_compaction);
+    ROCKS_LOG_HEADER(log, "                              Options.blob_size: %d",
+                     blob_size);                 
+    ROCKS_LOG_HEADER(log, "                          Options.blob_gc_ratio: %f",
+                     blob_gc_ratio);
 
     const auto& it_compaction_style =
         compaction_style_to_string.find(compaction_style);
