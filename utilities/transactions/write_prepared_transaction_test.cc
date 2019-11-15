@@ -766,19 +766,19 @@ TEST_P(WritePreparedTransactionTest, DoubleSnapshot) {
   ReadOptions ropt;
   // It should see the value before commit
   ropt.snapshot = snapshot2;
-  PinnableSlice pinnable_val;
-  s = wp_db->Get(ropt, wp_db->DefaultColumnFamily(), "key", &pinnable_val);
+  LazyBuffer lazy_val;
+  s = wp_db->Get(ropt, wp_db->DefaultColumnFamily(), "key", &lazy_val);
   ASSERT_OK(s);
-  ASSERT_TRUE(pinnable_val == "value1");
-  pinnable_val.Reset();
+  ASSERT_TRUE(lazy_val.slice() == "value1");
+  lazy_val.clear();
 
   wp_db->ReleaseSnapshot(snapshot1);
 
   // It should still see the value before commit
-  s = wp_db->Get(ropt, wp_db->DefaultColumnFamily(), "key", &pinnable_val);
+  s = wp_db->Get(ropt, wp_db->DefaultColumnFamily(), "key", &lazy_val);
   ASSERT_OK(s);
-  ASSERT_TRUE(pinnable_val == "value1");
-  pinnable_val.Reset();
+  ASSERT_TRUE(lazy_val.slice() == "value1");
+  lazy_val.clear();
 
   // Cause an eviction to advance max evicted seq number and trigger updating
   // the snapshot list
@@ -786,10 +786,10 @@ TEST_P(WritePreparedTransactionTest, DoubleSnapshot) {
   wp_db->AddCommitted(overlap_seq, overlap_seq);
 
   // It should still see the value before commit
-  s = wp_db->Get(ropt, wp_db->DefaultColumnFamily(), "key", &pinnable_val);
+  s = wp_db->Get(ropt, wp_db->DefaultColumnFamily(), "key", &lazy_val);
   ASSERT_OK(s);
-  ASSERT_TRUE(pinnable_val == "value1");
-  pinnable_val.Reset();
+  ASSERT_TRUE(lazy_val.slice() == "value1");
+  lazy_val.clear();
 
   wp_db->ReleaseSnapshot(snapshot0);
   wp_db->ReleaseSnapshot(snapshot2);
@@ -1124,8 +1124,8 @@ TEST_P(WritePreparedTransactionTest, AdvanceMaxEvictedSeqWithDuplicatesTest) {
   wp_db->AdvanceMaxEvictedSeq(0, new_max);
 
   ReadOptions ropt;
-  PinnableSlice pinnable_val;
-  auto s = db->Get(ropt, db->DefaultColumnFamily(), "key", &pinnable_val);
+  LazyBuffer lazy_val;
+  auto s = db->Get(ropt, db->DefaultColumnFamily(), "key", &lazy_val);
   ASSERT_TRUE(s.IsNotFound());
   delete txn0;
 
@@ -1135,7 +1135,7 @@ TEST_P(WritePreparedTransactionTest, AdvanceMaxEvictedSeqWithDuplicatesTest) {
   assert(db != nullptr);
   wp_db = dynamic_cast<WritePreparedTxnDB*>(db);
   wp_db->AdvanceMaxEvictedSeq(0, new_max);
-  s = db->Get(ropt, db->DefaultColumnFamily(), "key", &pinnable_val);
+  s = db->Get(ropt, db->DefaultColumnFamily(), "key", &lazy_val);
   ASSERT_TRUE(s.IsNotFound());
 
   txn0 = db->GetTransactionByName("xid");
@@ -1321,11 +1321,11 @@ TEST_P(WritePreparedTransactionTest, BasicRecoveryTest) {
   txn_t2(0);
 
   ReadOptions ropt;
-  PinnableSlice pinnable_val;
+  LazyBuffer lazy_val;
   // Check the value is not committed before restart
-  s = db->Get(ropt, db->DefaultColumnFamily(), "foo0" + istr0, &pinnable_val);
+  s = db->Get(ropt, db->DefaultColumnFamily(), "foo0" + istr0, &lazy_val);
   ASSERT_TRUE(s.IsNotFound());
-  pinnable_val.Reset();
+  lazy_val.clear();
 
   delete txn0;
   delete txn1;
@@ -1350,9 +1350,9 @@ TEST_P(WritePreparedTransactionTest, BasicRecoveryTest) {
   }
 
   // Check the value is still not committed after restart
-  s = db->Get(ropt, db->DefaultColumnFamily(), "foo0" + istr0, &pinnable_val);
+  s = db->Get(ropt, db->DefaultColumnFamily(), "foo0" + istr0, &lazy_val);
   ASSERT_TRUE(s.IsNotFound());
-  pinnable_val.Reset();
+  lazy_val.clear();
 
   txn_t3(0);
 
@@ -1403,10 +1403,10 @@ TEST_P(WritePreparedTransactionTest, BasicRecoveryTest) {
   txn2->Commit();
 
   // Check the value is committed after commit
-  s = db->Get(ropt, db->DefaultColumnFamily(), "foo0" + istr0, &pinnable_val);
+  s = db->Get(ropt, db->DefaultColumnFamily(), "foo0" + istr0, &lazy_val);
   ASSERT_TRUE(s.ok());
-  ASSERT_TRUE(pinnable_val == ("bar0" + istr0));
-  pinnable_val.Reset();
+  ASSERT_TRUE(lazy_val.slice() == ("bar0" + istr0));
+  lazy_val.clear();
 
   delete txn0;
   delete txn2;
@@ -1418,10 +1418,10 @@ TEST_P(WritePreparedTransactionTest, BasicRecoveryTest) {
   ASSERT_TRUE(wp_db->delayed_prepared_empty_);
 
   // Check the value is still committed after recovery
-  s = db->Get(ropt, db->DefaultColumnFamily(), "foo0" + istr0, &pinnable_val);
+  s = db->Get(ropt, db->DefaultColumnFamily(), "foo0" + istr0, &lazy_val);
   ASSERT_TRUE(s.ok());
-  ASSERT_TRUE(pinnable_val == ("bar0" + istr0));
-  pinnable_val.Reset();
+  ASSERT_TRUE(lazy_val.slice() == ("bar0" + istr0));
+  lazy_val.clear();
 }
 
 // After recovery the commit map is empty while the max is set. The code would
@@ -1561,14 +1561,14 @@ TEST_P(WritePreparedTransactionTest, IsInSnapshotTest) {
 }
 
 void ASSERT_SAME(ReadOptions roptions, TransactionDB* db, Status exp_s,
-                 PinnableSlice& exp_v, Slice key) {
+                 LazyBuffer& exp_v, Slice key) {
   Status s;
-  PinnableSlice v;
+  LazyBuffer v;
   s = db->Get(roptions, db->DefaultColumnFamily(), key, &v);
   ASSERT_TRUE(exp_s == s);
   ASSERT_TRUE(s.ok() || s.IsNotFound());
   if (s.ok()) {
-    ASSERT_TRUE(exp_v == v);
+    ASSERT_TRUE(exp_v.slice() == v.slice());
   }
 
   // Try with MultiGet API too
@@ -1581,11 +1581,11 @@ void ASSERT_SAME(ReadOptions roptions, TransactionDB* db, Status exp_s,
   ASSERT_TRUE(exp_s == s);
   ASSERT_TRUE(s.ok() || s.IsNotFound());
   if (s.ok()) {
-    ASSERT_TRUE(exp_v == values[0]);
+    ASSERT_TRUE(exp_v.slice() == values[0]);
   }
 }
 
-void ASSERT_SAME(TransactionDB* db, Status exp_s, PinnableSlice& exp_v,
+void ASSERT_SAME(TransactionDB* db, Status exp_s, LazyBuffer& exp_v,
                  Slice key) {
   ASSERT_SAME(ReadOptions(), db, exp_s, exp_v, key);
 }
@@ -1621,16 +1621,16 @@ TEST_P(WritePreparedTransactionTest, RollbackTest) {
             assert(0);
         }
 
-        PinnableSlice v1;
+        LazyBuffer v1;
         auto s1 =
             db->Get(roptions, db->DefaultColumnFamily(), Slice("key1"), &v1);
-        PinnableSlice v2;
+        LazyBuffer v2;
         auto s2 =
             db->Get(roptions, db->DefaultColumnFamily(), Slice("key2"), &v2);
-        PinnableSlice v3;
+        LazyBuffer v3;
         auto s3 =
             db->Get(roptions, db->DefaultColumnFamily(), Slice("key3"), &v3);
-        PinnableSlice v4;
+        LazyBuffer v4;
         auto s4 =
             db->Get(roptions, db->DefaultColumnFamily(), Slice("key4"), &v4);
         Transaction* txn = db->BeginTransaction(woptions, txn_options);
@@ -2124,7 +2124,7 @@ TEST_P(WritePreparedTransactionTest, AtomicCommit) {
       ReadOptions roptions;
       TEST_SYNC_POINT("AtomicCommit::GetSnapshot:start");
       roptions.snapshot = db->GetSnapshot();
-      PinnableSlice val;
+      LazyBuffer val;
       auto s = db->Get(roptions, db->DefaultColumnFamily(), "key", &val);
       TEST_SYNC_POINT("AtomicCommit::Get:end");
       TEST_SYNC_POINT("AtomicCommit::Get2:start");

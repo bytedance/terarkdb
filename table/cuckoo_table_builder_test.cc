@@ -170,9 +170,8 @@ TEST_F(CuckooBuilderTest, SuccessWithEmptyFile) {
                              BytewiseComparator(), 1, false, false,
                              GetSliceHash, 0 /* column_family_id */,
                              kDefaultColumnFamilyName);
-  ASSERT_OK(builder.status());
   ASSERT_EQ(0UL, builder.FileSize());
-  ASSERT_OK(builder.Finish());
+  ASSERT_OK(builder.Finish(nullptr));
   ASSERT_OK(file_writer->Close());
   CheckFileContents({}, {}, {}, "", 2, 2, false);
 }
@@ -212,15 +211,13 @@ TEST_F(CuckooBuilderTest, WriteSuccessNoCollisionFullKey) {
                                100, BytewiseComparator(), 1, false, false,
                                GetSliceHash, 0 /* column_family_id */,
                                kDefaultColumnFamilyName);
-    ASSERT_OK(builder.status());
     for (uint32_t i = 0; i < user_keys.size(); i++) {
-      builder.Add(Slice(keys[i]), Slice(values[i]));
+      ASSERT_OK(builder.Add(Slice(keys[i]), LazyBuffer(values[i])));
       ASSERT_EQ(builder.NumEntries(), i + 1);
-      ASSERT_OK(builder.status());
     }
     size_t bucket_size = keys[0].size() + values[0].size();
     ASSERT_EQ(expected_table_size * bucket_size - 1, builder.FileSize());
-    ASSERT_OK(builder.Finish());
+    ASSERT_OK(builder.Finish(nullptr));
     ASSERT_OK(file_writer->Close());
     ASSERT_LE(expected_table_size * bucket_size, builder.FileSize());
 
@@ -261,15 +258,13 @@ TEST_F(CuckooBuilderTest, WriteSuccessWithCollisionFullKey) {
                              100, BytewiseComparator(), 1, false, false,
                              GetSliceHash, 0 /* column_family_id */,
                              kDefaultColumnFamilyName);
-  ASSERT_OK(builder.status());
   for (uint32_t i = 0; i < user_keys.size(); i++) {
-    builder.Add(Slice(keys[i]), Slice(values[i]));
+    ASSERT_OK(builder.Add(Slice(keys[i]), LazyBuffer(values[i])));
     ASSERT_EQ(builder.NumEntries(), i + 1);
-    ASSERT_OK(builder.status());
   }
   size_t bucket_size = keys[0].size() + values[0].size();
   ASSERT_EQ(expected_table_size * bucket_size - 1, builder.FileSize());
-  ASSERT_OK(builder.Finish());
+  ASSERT_OK(builder.Finish(nullptr));
   ASSERT_OK(file_writer->Close());
   ASSERT_LE(expected_table_size * bucket_size, builder.FileSize());
 
@@ -310,15 +305,13 @@ TEST_F(CuckooBuilderTest, WriteSuccessWithCollisionAndCuckooBlock) {
       file_writer.get(), kHashTableRatio, num_hash_fun, 100,
       BytewiseComparator(), cuckoo_block_size, false, false, GetSliceHash,
       0 /* column_family_id */, kDefaultColumnFamilyName);
-  ASSERT_OK(builder.status());
   for (uint32_t i = 0; i < user_keys.size(); i++) {
-    builder.Add(Slice(keys[i]), Slice(values[i]));
+    ASSERT_OK(builder.Add(Slice(keys[i]), LazyBuffer(values[i])));
     ASSERT_EQ(builder.NumEntries(), i + 1);
-    ASSERT_OK(builder.status());
   }
   size_t bucket_size = keys[0].size() + values[0].size();
   ASSERT_EQ(expected_table_size * bucket_size - 1, builder.FileSize());
-  ASSERT_OK(builder.Finish());
+  ASSERT_OK(builder.Finish(nullptr));
   ASSERT_OK(file_writer->Close());
   ASSERT_LE(expected_table_size * bucket_size, builder.FileSize());
 
@@ -363,15 +356,13 @@ TEST_F(CuckooBuilderTest, WithCollisionPathFullKey) {
                              100, BytewiseComparator(), 1, false, false,
                              GetSliceHash, 0 /* column_family_id */,
                              kDefaultColumnFamilyName);
-  ASSERT_OK(builder.status());
   for (uint32_t i = 0; i < user_keys.size(); i++) {
-    builder.Add(Slice(keys[i]), Slice(values[i]));
+    ASSERT_OK(builder.Add(Slice(keys[i]), LazyBuffer(values[i])));
     ASSERT_EQ(builder.NumEntries(), i + 1);
-    ASSERT_OK(builder.status());
   }
   size_t bucket_size = keys[0].size() + values[0].size();
   ASSERT_EQ(expected_table_size * bucket_size - 1, builder.FileSize());
-  ASSERT_OK(builder.Finish());
+  ASSERT_OK(builder.Finish(nullptr));
   ASSERT_OK(file_writer->Close());
   ASSERT_LE(expected_table_size * bucket_size, builder.FileSize());
 
@@ -413,15 +404,13 @@ TEST_F(CuckooBuilderTest, WithCollisionPathFullKeyAndCuckooBlock) {
                              100, BytewiseComparator(), 2, false, false,
                              GetSliceHash, 0 /* column_family_id */,
                              kDefaultColumnFamilyName);
-  ASSERT_OK(builder.status());
   for (uint32_t i = 0; i < user_keys.size(); i++) {
-    builder.Add(Slice(keys[i]), Slice(values[i]));
+    ASSERT_OK(builder.Add(Slice(keys[i]), LazyBuffer(values[i])));
     ASSERT_EQ(builder.NumEntries(), i + 1);
-    ASSERT_OK(builder.status());
   }
   size_t bucket_size = keys[0].size() + values[0].size();
   ASSERT_EQ(expected_table_size * bucket_size - 1, builder.FileSize());
-  ASSERT_OK(builder.Finish());
+  ASSERT_OK(builder.Finish(nullptr));
   ASSERT_OK(file_writer->Close());
   ASSERT_LE(expected_table_size * bucket_size, builder.FileSize());
 
@@ -456,15 +445,14 @@ TEST_F(CuckooBuilderTest, WriteSuccessNoCollisionUserKey) {
                              100, BytewiseComparator(), 1, false, false,
                              GetSliceHash, 0 /* column_family_id */,
                              kDefaultColumnFamilyName);
-  ASSERT_OK(builder.status());
   for (uint32_t i = 0; i < user_keys.size(); i++) {
-    builder.Add(Slice(GetInternalKey(user_keys[i], true)), Slice(values[i]));
+    ASSERT_OK(builder.Add(Slice(GetInternalKey(user_keys[i], true)),
+                          LazyBuffer(values[i])));
     ASSERT_EQ(builder.NumEntries(), i + 1);
-    ASSERT_OK(builder.status());
   }
   size_t bucket_size = user_keys[0].size() + values[0].size();
   ASSERT_EQ(expected_table_size * bucket_size - 1, builder.FileSize());
-  ASSERT_OK(builder.Finish());
+  ASSERT_OK(builder.Finish(nullptr));
   ASSERT_OK(file_writer->Close());
   ASSERT_LE(expected_table_size * bucket_size, builder.FileSize());
 
@@ -500,15 +488,14 @@ TEST_F(CuckooBuilderTest, WriteSuccessWithCollisionUserKey) {
                              100, BytewiseComparator(), 1, false, false,
                              GetSliceHash, 0 /* column_family_id */,
                              kDefaultColumnFamilyName);
-  ASSERT_OK(builder.status());
   for (uint32_t i = 0; i < user_keys.size(); i++) {
-    builder.Add(Slice(GetInternalKey(user_keys[i], true)), Slice(values[i]));
+    ASSERT_OK(builder.Add(Slice(GetInternalKey(user_keys[i], true)),
+                          LazyBuffer(values[i])));
     ASSERT_EQ(builder.NumEntries(), i + 1);
-    ASSERT_OK(builder.status());
   }
   size_t bucket_size = user_keys[0].size() + values[0].size();
   ASSERT_EQ(expected_table_size * bucket_size - 1, builder.FileSize());
-  ASSERT_OK(builder.Finish());
+  ASSERT_OK(builder.Finish(nullptr));
   ASSERT_OK(file_writer->Close());
   ASSERT_LE(expected_table_size * bucket_size, builder.FileSize());
 
@@ -546,15 +533,14 @@ TEST_F(CuckooBuilderTest, WithCollisionPathUserKey) {
                              2, BytewiseComparator(), 1, false, false,
                              GetSliceHash, 0 /* column_family_id */,
                              kDefaultColumnFamilyName);
-  ASSERT_OK(builder.status());
   for (uint32_t i = 0; i < user_keys.size(); i++) {
-    builder.Add(Slice(GetInternalKey(user_keys[i], true)), Slice(values[i]));
+    ASSERT_OK(builder.Add(Slice(GetInternalKey(user_keys[i], true)),
+                          LazyBuffer(values[i])));
     ASSERT_EQ(builder.NumEntries(), i + 1);
-    ASSERT_OK(builder.status());
   }
   size_t bucket_size = user_keys[0].size() + values[0].size();
   ASSERT_EQ(expected_table_size * bucket_size - 1, builder.FileSize());
-  ASSERT_OK(builder.Finish());
+  ASSERT_OK(builder.Finish(nullptr));
   ASSERT_OK(file_writer->Close());
   ASSERT_LE(expected_table_size * bucket_size, builder.FileSize());
 
@@ -591,13 +577,12 @@ TEST_F(CuckooBuilderTest, FailWhenCollisionPathTooLong) {
                              2, BytewiseComparator(), 1, false, false,
                              GetSliceHash, 0 /* column_family_id */,
                              kDefaultColumnFamilyName);
-  ASSERT_OK(builder.status());
   for (uint32_t i = 0; i < user_keys.size(); i++) {
-    builder.Add(Slice(GetInternalKey(user_keys[i], false)), Slice("value"));
+    ASSERT_OK(builder.Add(Slice(GetInternalKey(user_keys[i], false)),
+                          LazyBuffer("value")));
     ASSERT_EQ(builder.NumEntries(), i + 1);
-    ASSERT_OK(builder.status());
   }
-  ASSERT_TRUE(builder.Finish().IsNotSupported());
+  ASSERT_TRUE(builder.Finish(nullptr).IsNotSupported());
   ASSERT_OK(file_writer->Close());
 }
 
@@ -619,16 +604,15 @@ TEST_F(CuckooBuilderTest, FailWhenSameKeyInserted) {
                              100, BytewiseComparator(), 1, false, false,
                              GetSliceHash, 0 /* column_family_id */,
                              kDefaultColumnFamilyName);
-  ASSERT_OK(builder.status());
 
-  builder.Add(Slice(GetInternalKey(user_key, false)), Slice("value1"));
+  ASSERT_OK(builder.Add(Slice(GetInternalKey(user_key, false)),
+                        LazyBuffer("value1")));
   ASSERT_EQ(builder.NumEntries(), 1u);
-  ASSERT_OK(builder.status());
-  builder.Add(Slice(GetInternalKey(user_key, true)), Slice("value2"));
+  ASSERT_OK(builder.Add(Slice(GetInternalKey(user_key, true)),
+                        LazyBuffer("value2")));
   ASSERT_EQ(builder.NumEntries(), 2u);
-  ASSERT_OK(builder.status());
 
-  ASSERT_TRUE(builder.Finish().IsNotSupported());
+  ASSERT_TRUE(builder.Finish(nullptr).IsNotSupported());
   ASSERT_OK(file_writer->Close());
 }
 }  // namespace rocksdb
