@@ -116,8 +116,10 @@ bool VerifyDependFiles(VersionStorageInfo* new_vstorage,
 TablePropertyCache GetPropCache(
     uint8_t purpose, std::initializer_list<uint64_t> dependence = {},
     std::initializer_list<uint64_t> inheritance_chain = {}) {
+  std::vector<Dependence> dep;
+  for(auto& d : dependence) dep.emplace_back(Dependence{d, 1});
   return TablePropertyCache{
-      0, purpose, 1, 1, dependence, inheritance_chain
+      0, purpose, 1, 1, dep, inheritance_chain
   };
 }
 
@@ -139,7 +141,7 @@ TEST_F(VersionBuilderTest, ApplyAndSaveTo) {
 
   VersionEdit version_edit;
   version_edit.AddFile(2, 666, 0, 100U, GetInternalKey("301"),
-                       GetInternalKey("350"), 200, 200, false, 1, {27U});
+                       GetInternalKey("350"), 200, 200, false, GetPropCache(1, {27U}));
   version_edit.DeleteFile(3, 27U);
 
   EnvOptions env_options;
@@ -174,7 +176,7 @@ TEST_F(VersionBuilderTest, ApplyAndSaveToDynamic) {
 
   VersionEdit version_edit;
   version_edit.AddFile(3, 666, 0, 100U, GetInternalKey("301"),
-                       GetInternalKey("350"), 200, 200, false, 1, {1U});
+                       GetInternalKey("350"), 200, 200, false, GetPropCache(1, {1U}));
   version_edit.DeleteFile(0, 1U);
   version_edit.DeleteFile(0, 88U);
 
@@ -217,10 +219,11 @@ Add(0, 88U, "201", "300", 100U, 0, 100U, 100U, 0, 0, false, 100U, 100U,
 
   VersionEdit version_edit;
   version_edit.AddFile(4, 666, 0, 100U, GetInternalKey("301"),
-                       GetInternalKey("350"), 200, 200, 0, false,
+                       GetInternalKey("350"), 200, 200, false,
                        GetPropCache(1, {1U, 4U}));
   version_edit.AddFile(4, 5, 0, 100U, GetInternalKey("120"),
-                       GetInternalKey("149"), 200, 200, 0, false, {});
+                       GetInternalKey("149"), 200, 200, false,
+                       GetPropCache(0, {}));
   version_edit.DeleteFile(0, 1U);
   version_edit.DeleteFile(0, 88U);
   version_edit.DeleteFile(4, 6U);
@@ -254,30 +257,30 @@ TEST_F(VersionBuilderTest, ApplyAndSaveToDynamic3) {
 
   VersionEdit version_edit;
   version_edit.AddFile(1, 11U, 0, 100U, GetInternalKey("100"),
-                       GetInternalKey("119"), 2, 2, 0, false,
+                       GetInternalKey("119"), 2, 2, false,
                        GetPropCache(1, {4U, 5U}));
   version_edit.AddFile(1, 12U, 0, 100U, GetInternalKey("120"),
-                       GetInternalKey("129"), 2, 2, 0, false, {});
+                       GetInternalKey("129"), 2, 2, false, {});
   version_edit.AddFile(1, 13U, 0, 100U, GetInternalKey("130"),
-                       GetInternalKey("139"), 2, 2, 0, false, {});
+                       GetInternalKey("139"), 2, 2, false, {});
   version_edit.AddFile(1, 14U, 0, 100U, GetInternalKey("140"),
-                       GetInternalKey("149"), 2, 2, 0, false, {});
+                       GetInternalKey("149"), 2, 2, false, {});
   version_edit.AddFile(1, 15U, 0, 100U, GetInternalKey("150"),
-                       GetInternalKey("149"), 2, 2, 0, false, {});
+                       GetInternalKey("149"), 2, 2, false, {});
 
   
   version_edit.AddFile(-1, 2U, 0, 100U, GetInternalKey("100"),
-                       GetInternalKey("109"), 2, 2, 0, false, {});
+                       GetInternalKey("109"), 2, 2, false, {});
   version_edit.AddFile(-1, 4U, 0, 50U, GetInternalKey("100"),
-                       GetInternalKey("114"), 2, 2, 0, false,
+                       GetInternalKey("114"), 2, 2, false,
                        GetPropCache(1, {2U}));
   version_edit.AddFile(-1, 5U, 0, 50U, GetInternalKey("115"),
-                       GetInternalKey("119"), 2, 2, 0, false, {});
+                       GetInternalKey("119"), 2, 2, false, {});
   version_builder.Apply(&version_edit);
 
   VersionEdit version_edit2;
   version_edit2.AddFile(2, 21U, 0, 100U, GetInternalKey("110"),
-                        GetInternalKey("159"), 2, 2, 0, false,
+                        GetInternalKey("159"), 2, 2, false,
                         GetPropCache(1, {11U, 12U, 13U, 14U, 15U}));
   Add(-1, 31U, "115", "119", 50U);
   version_edit2.DeleteFile(1, 11U);
@@ -289,23 +292,23 @@ TEST_F(VersionBuilderTest, ApplyAndSaveToDynamic3) {
 
   VersionEdit version_edit3;
   version_edit3.AddFile(2, 22U, 0, 100U, GetInternalKey("100"),
-                        GetInternalKey("159"), 2, 2, 0, false,
+                        GetInternalKey("159"), 2, 2, false,
                         GetPropCache(1, {4U, 5U, 12U, 13U, 14U, 15U}));
   version_edit3.DeleteFile(2, 21U);
   version_builder.Apply(&version_edit3);
 
   VersionEdit version_edit4;
   version_edit4.AddFile(2, 23U, 0, 100U, GetInternalKey("140"),
-                        GetInternalKey("159"), 2, 2, 0, false,
+                        GetInternalKey("159"), 2, 2, false,
                         GetPropCache(1, {4U, 12U, 13U, 14U, 15U}));
   version_edit4.AddFile(2, 5U, 0, 50U, GetInternalKey("115"),
-                        GetInternalKey("119"), 2, 2, 0, false, {});
+                        GetInternalKey("119"), 2, 2, false, {});
   version_edit4.DeleteFile(2, 22U);
   version_builder.Apply(&version_edit4);
 
   VersionEdit version_edit5;
   version_edit5.AddFile(2, 24U, 0, 100U, GetInternalKey("140"),
-                        GetInternalKey("159"), 2, 2, 0, false,
+                        GetInternalKey("159"), 2, 2, false,
                         GetPropCache(1, {14U, 15U}));
   version_edit5.DeleteFile(2, 23U);
   version_builder.Apply(&version_edit5);
@@ -327,15 +330,15 @@ TEST_F(VersionBuilderTest, ApplyMultipleAndSaveTo) {
 
   VersionEdit version_edit;
   version_edit.AddFile(2, 666, 0, 100U, GetInternalKey("301"),
-                       GetInternalKey("350"), 200, 200, 0, false, {});
+                       GetInternalKey("350"), 200, 200, false, {});
   version_edit.AddFile(2, 676, 0, 100U, GetInternalKey("401"),
-                       GetInternalKey("450"), 200, 200, 0, false, {});
+                       GetInternalKey("450"), 200, 200, false, {});
   version_edit.AddFile(2, 636, 0, 100U, GetInternalKey("601"),
-                       GetInternalKey("650"), 200, 200, 0, false, {});
+                       GetInternalKey("650"), 200, 200, false, {});
   version_edit.AddFile(2, 616, 0, 100U, GetInternalKey("501"),
-                       GetInternalKey("550"), 200, 200, 0, false, {});
+                       GetInternalKey("550"), 200, 200, false, {});
   version_edit.AddFile(2, 606, 0, 100U, GetInternalKey("701"),
-                       GetInternalKey("750"), 200, 200, 0, false, {});
+                       GetInternalKey("750"), 200, 200, false, {});
 
   EnvOptions env_options;
 
@@ -362,24 +365,24 @@ TEST_F(VersionBuilderTest, ApplyDeleteAndSaveTo) {
 
   VersionEdit version_edit;
   version_edit.AddFile(2, 666, 0, 100U, GetInternalKey("301"),
-                       GetInternalKey("350"), 200, 200, 0, false, {});
+                       GetInternalKey("350"), 200, 200, false, {});
   version_edit.AddFile(2, 676, 0, 100U, GetInternalKey("401"),
-                       GetInternalKey("450"), 200, 200, 0, false, {});
+                       GetInternalKey("450"), 200, 200, false, {});
   version_edit.AddFile(2, 636, 0, 100U, GetInternalKey("601"),
-                       GetInternalKey("650"), 200, 200, 0, false, {});
+                       GetInternalKey("650"), 200, 200, false, {});
   version_edit.AddFile(2, 616, 0, 100U, GetInternalKey("501"),
-                       GetInternalKey("550"), 200, 200, 0, false, {});
+                       GetInternalKey("550"), 200, 200, false, {});
   version_edit.AddFile(2, 606, 0, 100U, GetInternalKey("701"),
-                       GetInternalKey("750"), 200, 200, 0, false, {});
+                       GetInternalKey("750"), 200, 200, false, {});
   version_builder.Apply(&version_edit);
 
   VersionEdit version_edit2;
   version_edit.AddFile(2, 808, 0, 100U, GetInternalKey("901"),
-                       GetInternalKey("950"), 200, 200, 0, false, {});
+                       GetInternalKey("950"), 200, 200, false, {});
   version_edit2.DeleteFile(2, 616);
   version_edit2.DeleteFile(2, 636);
   version_edit.AddFile(2, 806, 0, 100U, GetInternalKey("801"),
-                       GetInternalKey("850"), 200, 200, 0, false, {});
+                       GetInternalKey("850"), 200, 200, false, {});
   version_builder.Apply(&version_edit2);
 
   version_builder.SaveTo(&new_vstorage);

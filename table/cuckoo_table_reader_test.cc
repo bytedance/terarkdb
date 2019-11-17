@@ -101,13 +101,11 @@ class CuckooReaderTest : public testing::Test {
     CuckooTableBuilder builder(
         file_writer.get(), 0.9, kNumHashFunc, 100, ucomp, 2, false, false,
         GetSliceHash, 0 /* column_family_id */, kDefaultColumnFamilyName);
-    ASSERT_OK(builder.status());
     for (uint32_t key_idx = 0; key_idx < num_items; ++key_idx) {
-      builder.Add(Slice(keys[key_idx]), Slice(values[key_idx]));
-      ASSERT_OK(builder.status());
+      ASSERT_OK(builder.Add(Slice(keys[key_idx]), LazyBuffer(values[key_idx])));
       ASSERT_EQ(builder.NumEntries(), key_idx + 1);
     }
-    ASSERT_OK(builder.Finish());
+    ASSERT_OK(builder.Finish(nullptr));
     ASSERT_EQ(num_items, builder.NumEntries());
     file_size = builder.FileSize();
     ASSERT_OK(file_writer->Close());
@@ -123,10 +121,10 @@ class CuckooReaderTest : public testing::Test {
     ASSERT_OK(reader.status());
     // Assume no merge/deletion
     for (uint32_t i = 0; i < num_items; ++i) {
-      PinnableSlice value;
+      LazyBuffer value;
       GetContext get_context(ucomp, nullptr, nullptr, nullptr,
                              GetContext::kNotFound, Slice(user_keys[i]), &value,
-                             nullptr, nullptr, nullptr, nullptr);
+                             nullptr, nullptr, nullptr, nullptr, nullptr);
       ASSERT_OK(
           reader.Get(ReadOptions(), Slice(keys[i]), &get_context, nullptr));
       ASSERT_STREQ(values[i].c_str(), value.data());
@@ -159,7 +157,9 @@ class CuckooReaderTest : public testing::Test {
     while (it->Valid()) {
       ASSERT_OK(it->status());
       ASSERT_TRUE(Slice(keys[cnt]) == it->key());
-      ASSERT_TRUE(Slice(values[cnt]) == it->value());
+      auto v = it->value();
+      ASSERT_OK(v.fetch());
+      ASSERT_TRUE(Slice(values[cnt]) == v.slice());
       ++cnt;
       it->Next();
     }
@@ -171,7 +171,9 @@ class CuckooReaderTest : public testing::Test {
     while (it->Valid()) {
       ASSERT_OK(it->status());
       ASSERT_TRUE(Slice(keys[cnt]) == it->key());
-      ASSERT_TRUE(Slice(values[cnt]) == it->value());
+      auto v = it->value();
+      ASSERT_OK(v.fetch());
+      ASSERT_TRUE(Slice(values[cnt]) == v.slice());
       --cnt;
       it->Prev();
     }
@@ -182,7 +184,9 @@ class CuckooReaderTest : public testing::Test {
     while (it->Valid()) {
       ASSERT_OK(it->status());
       ASSERT_TRUE(Slice(keys[cnt]) == it->key());
-      ASSERT_TRUE(Slice(values[cnt]) == it->value());
+      auto v = it->value();
+      ASSERT_OK(v.fetch());
+      ASSERT_TRUE(Slice(values[cnt]) == v.slice());
       ++cnt;
       it->Next();
     }
@@ -197,7 +201,10 @@ class CuckooReaderTest : public testing::Test {
     ASSERT_TRUE(it->Valid());
     ASSERT_OK(it->status());
     ASSERT_TRUE(keys[num_items/2] == it->key());
-    ASSERT_TRUE(values[num_items/2] == it->value());
+    auto v = it->value();
+    ASSERT_OK(v.fetch());
+    ASSERT_TRUE(values[num_items/2] == v.slice());
+    v.reset();
     ASSERT_OK(it->status());
     it->~InternalIterator();
   }
@@ -335,10 +342,10 @@ TEST_F(CuckooReaderTest, WhenKeyNotFound) {
   AddHashLookups(not_found_user_key, 0, kNumHashFunc);
   ParsedInternalKey ikey(not_found_user_key, 1000, kTypeValue);
   AppendInternalKey(&not_found_key, ikey);
-  PinnableSlice value;
+  LazyBuffer value;
   GetContext get_context(ucmp, nullptr, nullptr, nullptr, GetContext::kNotFound,
                          Slice(not_found_key), &value, nullptr, nullptr,
-                         nullptr, nullptr);
+                         nullptr, nullptr, nullptr);
   ASSERT_OK(
       reader.Get(ReadOptions(), Slice(not_found_key), &get_context, nullptr));
   ASSERT_TRUE(value.empty());
@@ -349,10 +356,10 @@ TEST_F(CuckooReaderTest, WhenKeyNotFound) {
   ParsedInternalKey ikey2(not_found_user_key2, 1000, kTypeValue);
   std::string not_found_key2;
   AppendInternalKey(&not_found_key2, ikey2);
-  value.Reset();
+  value.clear();
   GetContext get_context2(ucmp, nullptr, nullptr, nullptr,
                           GetContext::kNotFound, Slice(not_found_key2), &value,
-                          nullptr, nullptr, nullptr, nullptr);
+                          nullptr, nullptr, nullptr, nullptr, nullptr);
   ASSERT_OK(
       reader.Get(ReadOptions(), Slice(not_found_key2), &get_context2, nullptr));
   ASSERT_TRUE(value.empty());
@@ -365,10 +372,10 @@ TEST_F(CuckooReaderTest, WhenKeyNotFound) {
   // Add hash values that map to empty buckets.
   AddHashLookups(ExtractUserKey(unused_key).ToString(),
       kNumHashFunc, kNumHashFunc);
-  value.Reset();
+  value.clear();
   GetContext get_context3(ucmp, nullptr, nullptr, nullptr,
                           GetContext::kNotFound, Slice(unused_key), &value,
-                          nullptr, nullptr, nullptr, nullptr);
+                          nullptr, nullptr, nullptr, nullptr, nullptr);
   ASSERT_OK(
       reader.Get(ReadOptions(), Slice(unused_key), &get_context3, nullptr));
   ASSERT_TRUE(value.empty());
@@ -417,14 +424,13 @@ void WriteFile(const std::vector<std::string>& keys,
       file_writer.get(), hash_ratio, 64, 1000, test::Uint64Comparator(), 5,
       false, FLAGS_identity_as_first_hash, nullptr, 0 /* column_family_id */,
       kDefaultColumnFamilyName);
-  ASSERT_OK(builder.status());
   for (uint64_t key_idx = 0; key_idx < num; ++key_idx) {
     // Value is just a part of key.
-    builder.Add(Slice(keys[key_idx]), Slice(&keys[key_idx][0], 4));
+    ASSERT_OK(builder.Add(Slice(keys[key_idx]),
+              LazyBuffer(&keys[key_idx][0], 4)));
     ASSERT_EQ(builder.NumEntries(), key_idx + 1);
-    ASSERT_OK(builder.status());
   }
-  ASSERT_OK(builder.Finish());
+  ASSERT_OK(builder.Finish(nullptr));
   ASSERT_EQ(num, builder.NumEntries());
   ASSERT_OK(file_writer->Close());
 
@@ -440,13 +446,12 @@ void WriteFile(const std::vector<std::string>& keys,
                            file_size, test::Uint64Comparator(), nullptr);
   ASSERT_OK(reader.status());
   ReadOptions r_options;
-  PinnableSlice value;
+  LazyBuffer value;
   // Assume only the fast path is triggered
   GetContext get_context(nullptr, nullptr, nullptr, nullptr,
                          GetContext::kNotFound, Slice(), &value, nullptr,
-                         nullptr, nullptr, nullptr);
+                         nullptr, nullptr, nullptr, nullptr);
   for (uint64_t i = 0; i < num; ++i) {
-    value.Reset();
     value.clear();
     ASSERT_OK(reader.Get(r_options, Slice(keys[i]), &get_context, nullptr));
     ASSERT_TRUE(Slice(keys[i]) == Slice(&keys[i][0], 4));
@@ -486,13 +491,13 @@ void ReadKeys(uint64_t num, uint32_t batch_size) {
   for (uint64_t i = 0; i < num; ++i) {
     keys.push_back(2 * i);
   }
-  std::random_shuffle(keys.begin(), keys.end());
+  std::shuffle(keys.begin(), keys.end(), std::mt19937_64());
 
-  PinnableSlice value;
+  LazyBuffer value;
   // Assume only the fast path is triggered
   GetContext get_context(nullptr, nullptr, nullptr, nullptr,
                          GetContext::kNotFound, Slice(), &value, nullptr,
-                         nullptr, nullptr, nullptr);
+                         nullptr, nullptr, nullptr, nullptr);
   uint64_t start_time = env->NowMicros();
   if (batch_size > 0) {
     for (uint64_t i = 0; i < num; i += batch_size) {

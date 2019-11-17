@@ -1838,13 +1838,6 @@ void DBImpl::MaybeScheduleFlushOrCompaction() {
     return;
   }
 
-  if (HasExclusiveManualCompaction()) {
-    // only manual compactions are allowed to run. don't schedule automatic
-    // compactions
-    TEST_SYNC_POINT("DBImpl::MaybeScheduleFlushOrCompaction:Conflict");
-    return;
-  }
-
   while (
       bg_garbage_collection_scheduled_ < bg_job_limits.max_garbage_collections
       && unscheduled_garbage_collections_ > 0) {
@@ -1855,6 +1848,13 @@ void DBImpl::MaybeScheduleFlushOrCompaction() {
     unscheduled_garbage_collections_--;
     env_->Schedule(&DBImpl::BGWorkGarbageCollection, ca, Env::Priority::LOW,
                    this, &DBImpl::UnscheduleCallback);
+  }
+
+  if (HasExclusiveManualCompaction()) {
+    // only manual compactions are allowed to run. don't schedule automatic
+    // compactions
+    TEST_SYNC_POINT("DBImpl::MaybeScheduleFlushOrCompaction:Conflict");
+    return;
   }
 
   while (bg_compaction_scheduled_ < bg_job_limits.max_compactions &&

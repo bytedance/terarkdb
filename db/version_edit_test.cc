@@ -15,12 +15,12 @@ namespace rocksdb {
 
 namespace {
   TablePropertyCache GetPropCache(
-    uint8_t purpose, std::initializer_list<uint64_t> depnum = {},
+    uint8_t purpose, std::initializer_list<uint64_t> dependence = {},
     std::initializer_list<uint64_t> inheritance_chain = {}) {
-    std::vector<Dependence> dependence;
-    for (auto& dep : depnum) dependence.emplace_back(Dependence{dep, 0});
+    std::vector<Dependence> dep;
+    for (auto& d : dependence) dep.emplace_back(Dependence{d, 1});
     return TablePropertyCache{
-        0, purpose, 1, 1, dependence, inheritance_chain
+        0, purpose, 1, 1, dep, inheritance_chain
     };
   }
 }
