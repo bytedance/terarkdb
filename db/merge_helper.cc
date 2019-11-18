@@ -53,7 +53,7 @@ Status MergeHelper::TimedFullMerge(const MergeOperator* merge_operator,
                                    const Slice& key, LazyBuffer* value,
                                    std::vector<LazyBuffer>& operands,
                                    LazyBuffer* result, Logger* logger,
-                                   Statistics* statistics, Env* /*env*/,
+                                   Statistics* statistics, Env* env,
                                    bool update_num_ops_stats) {
   assert(merge_operator != nullptr);
 
@@ -74,9 +74,8 @@ Status MergeHelper::TimedFullMerge(const MergeOperator* merge_operator,
                                                     logger);
   MergeOperator::MergeOperationOutput merge_out(*result, tmp_result_operand);
   {
-    // too heavy
     // Setup to time the merge
-    //StopWatchNano timer(env, statistics != nullptr);
+    StopWatchNano timer(env, statistics != nullptr);
     PERF_TIMER_GUARD(merge_operator_time_nanos);
 
     // Do the merge
@@ -95,8 +94,8 @@ Status MergeHelper::TimedFullMerge(const MergeOperator* merge_operator,
       }
     }
 
-    //RecordTick(statistics, MERGE_OPERATION_TOTAL_TIME,
-    //           statistics ? timer.ElapsedNanos() : 0);
+    RecordTick(statistics, MERGE_OPERATION_TOTAL_TIME,
+               statistics ? timer.ElapsedNanos() : 0);
   }
 
   if (!success) {
@@ -346,14 +345,13 @@ Status MergeHelper::MergeUntil(
       bool merge_success = false;
       LazyBuffer merge_result;
       {
-        // too heavy
-        //StopWatchNano timer(env_, stats_ != nullptr);
+        StopWatchNano timer(env_, stats_ != nullptr);
         PERF_TIMER_GUARD(merge_operator_time_nanos);
         merge_success = user_merge_operator_->PartialMergeMulti(
             orig_ikey.user_key, merge_context_.GetOperands(), &merge_result,
             logger_);
-        //RecordTick(stats_, MERGE_OPERATION_TOTAL_TIME,
-        //           stats_ ? timer.ElapsedNanosSafe() : 0);
+        RecordTick(stats_, MERGE_OPERATION_TOTAL_TIME,
+                   stats_ ? timer.ElapsedNanosSafe() : 0);
       }
       if (merge_success) {
         // Merging of operands (associative merge) was successful.
@@ -396,9 +394,9 @@ CompactionFilter::Decision MergeHelper::FilterMerge(
   if (compaction_filter_ == nullptr) {
     return CompactionFilter::Decision::kKeep;
   }
-//  if (stats_ != nullptr && ShouldReportDetailedTime(env_, stats_)) {
-//    filter_timer_.Start();
-//  }
+  if (stats_ != nullptr && ShouldReportDetailedTime(env_, stats_)) {
+    filter_timer_.Start();
+  }
   compaction_filter_value_.clear();
   compaction_filter_skip_until_.Clear();
   auto ret = compaction_filter_->FilterV2(
@@ -416,7 +414,7 @@ CompactionFilter::Decision MergeHelper::FilterMerge(
                                                        kValueTypeForSeek);
     }
   }
-//  total_filter_time_ += filter_timer_.ElapsedNanosSafe();
+  total_filter_time_ += filter_timer_.ElapsedNanosSafe();
   return ret;
 }
 

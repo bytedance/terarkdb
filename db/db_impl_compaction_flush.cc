@@ -2656,6 +2656,8 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
                            f->largest, f->fd.smallest_seqno,
                            f->fd.largest_seqno, f->marked_for_compaction,
                            f->prop);
+        // Make EventListenerTest.OnSingleDBCompactionTest happy
+        c->AddOutputTableFileNumber(f->fd.GetNumber());
 
         ROCKS_LOG_BUFFER(
             log_buffer,
