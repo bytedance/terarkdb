@@ -460,7 +460,7 @@ Status MemTableList::TryInstallMemtableFlushResults(
       s = vset->LogAndApply(cfd, mutable_cf_options, edit_list, mu,
                             db_directory);
 
-      assert(apply_callback_called);
+      assert(apply_callback_called || cfd->IsDropped());
     }
   }
   commit_in_progress_ = false;

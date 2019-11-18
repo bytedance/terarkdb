@@ -85,6 +85,7 @@ DBOptions BuildDBOptions(const ImmutableDBOptions& immutable_db_options,
   options.is_fd_close_on_exec = immutable_db_options.is_fd_close_on_exec;
   options.stats_dump_period_sec = mutable_db_options.stats_dump_period_sec;
   options.advise_random_on_open = immutable_db_options.advise_random_on_open;
+  options.allow_mmap_populate = immutable_db_options.allow_mmap_populate;
   options.db_write_buffer_size = immutable_db_options.db_write_buffer_size;
   options.write_buffer_manager = immutable_db_options.write_buffer_manager;
   options.access_hint_on_compaction_start =
@@ -1345,6 +1346,9 @@ std::unordered_map<std::string, OptionTypeInfo>
          */
         {"advise_random_on_open",
          {offsetof(struct DBOptions, advise_random_on_open),
+          OptionType::kBoolean, OptionVerificationType::kNormal, false, 0}},
+        {"allow_mmap_populate",
+         {offsetof(struct DBOptions, allow_mmap_populate),
           OptionType::kBoolean, OptionVerificationType::kNormal, false, 0}},
         {"allow_mmap_reads",
          {offsetof(struct DBOptions, allow_mmap_reads), OptionType::kBoolean,
