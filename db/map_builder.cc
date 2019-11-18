@@ -1188,7 +1188,7 @@ struct MapElementIterator : public InternalIterator {
   size_t meta_size_;
   const InternalKeyComparator* icmp_;
   void* callback_arg_;
-  const IteratorCache::CreateIterCallback& create_iter_;
+  IteratorCache::CreateIterCallback create_iter_;
   size_t where_;
   MapSstElement element_;
   std::string buffer_;
