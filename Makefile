@@ -60,21 +60,21 @@ ifeq ($(MAKECMDGOALS),release)
 	DEBUG_LEVEL=0
 endif
 
-# ifeq ($(MAKECMDGOALS),shared_lib)
-# 	DEBUG_LEVEL=0
-# endif
+ifeq ($(MAKECMDGOALS),shared_lib)
+	DEBUG_LEVEL=0
+endif
 
-# ifeq ($(MAKECMDGOALS),install-shared)
-# 	DEBUG_LEVEL=0
-# endif
+ifeq ($(MAKECMDGOALS),install-shared)
+	DEBUG_LEVEL=0
+endif
 
-# ifeq ($(MAKECMDGOALS),static_lib)
-# 	DEBUG_LEVEL=0
-# endif
+ifeq ($(MAKECMDGOALS),static_lib)
+	DEBUG_LEVEL=0
+endif
 
-# ifeq ($(MAKECMDGOALS),install-static)
-# 	DEBUG_LEVEL=0
-# endif
+ifeq ($(MAKECMDGOALS),install-static)
+	DEBUG_LEVEL=0
+endif
 
 ifeq ($(MAKECMDGOALS),install)
 	DEBUG_LEVEL=0
@@ -118,6 +118,13 @@ xdir:=${BUILD_ROOT}/dbg-${DEBUG_LEVEL}
 
 TERARK_CORE_HOME ?= terark-core
 TERARK_CORE_PKG_DIR := ${TERARK_CORE_HOME}/pkg/terark-fsa_all-${BUILD_NAME}
+BOOST_LIB_DIR := ${TERARK_CORE_HOME}/boost-include/stage/lib
+LINK_SHARED_BOOST := -L${BOOST_LIB_DIR} \
+					 -lboost_context \
+					 -lboost_fiber \
+					 -lboost_filesystem \
+					 -lboost_system \
+					 -ldl
 
 CXXFLAGS += -march=haswell
 CXXFLAGS += -I${TERARK_CORE_HOME}/src -I${TERARK_CORE_HOME}/boost-include -I${TERARK_CORE_HOME}/3rdparty/zstd
@@ -138,6 +145,11 @@ ifeq ($(shell uname),Darwin)
 else
   LIB_GOMP := -lgomp
 endif
+
+LINK_SHARED_TERARK := -lterark-idx-${DBG_OR_RLS} \
+					  -lterark-zbs-${DBG_OR_RLS} \
+					  -lterark-fsa-${DBG_OR_RLS} \
+					  -lterark-core-${DBG_OR_RLS} -ldl ${LIB_GOMP}
 
 ifeq ($(LINK_TERARK),shared)
   export LD_LIBRARY_PATH:=${TERARK_CORE_PKG_DIR}/lib:${LD_LIBRARY_PATH}
@@ -275,7 +287,7 @@ ifeq ($(shell uname),Darwin)
 else
   AM_LINK_SHR_LDFLAGS=-Wl,-Bdynamic -lrocksdb${LIBNAME_SUFFIX}
 endif
-AM_LINK_SHR = $(AM_V_CCLD)$(CXX) $^ $(EXEC_LDFLAGS) -o $@ $(LINK_STATIC_TERARK) $(LDFLAGS) $(COVERAGEFLAGS) $(AM_LINK_SHR_LDFLAGS)
+AM_LINK_SHR = $(AM_V_CCLD)$(CXX) $^ $(EXEC_LDFLAGS) -o $@ $(LDFLAGS) $(COVERAGEFLAGS) $(AM_LINK_SHR_LDFLAGS) $(LINK_SHARED_BOOST)
 # detect what platform we're building on
 dummy := $(shell (export ROCKSDB_ROOT="$(CURDIR)"; export PORTABLE="$(PORTABLE)"; "$(CURDIR)/build_tools/build_detect_platform" "$(CURDIR)/make_config.mk"; echo $$?))
 ifneq ("${dummy}","0")
@@ -810,7 +822,7 @@ endif  # PLATFORM_SHARED_EXT
 	dbg rocksdbjavastatic rocksdbjava install install-static install-shared uninstall \
 	analyze tools tools_lib
 
-all: $(LIBRARY) $(BENCHMARKS) tools tools_lib test_libs $(TESTS)
+all: $(LIBRARY) $(SHARED) $(BENCHMARKS) tools tools_lib test_libs $(TESTS)
 
 all_but_some_tests: $(LIBRARY) $(BENCHMARKS) tools tools_lib test_libs $(SUBSET)
 
@@ -987,10 +999,10 @@ watch-log:
 
 # If J != 1 and GNU parallel is installed, run the tests in parallel,
 # via the check_0 rule above.  Otherwise, run them sequentially.
-check: shared_lib all
+check: all
 	$(MAKE) gen_parallel_tests
 	$(AM_V_GEN)if test "$(J)" != 1                                  \
-	    && (build_tools/gnu_parallel --gnu --help 2>/dev/null) |                    \
+	    && (build_tools/gnu_parallel --gnu --help 2>/dev/null) |    \
 	        grep -q 'GNU Parallel';                                 \
 	then                                                            \
 	    $(MAKE) T="$$t" TMPD=$(TMPD) check_0;                       \
@@ -1005,6 +1017,9 @@ ifeq ($(filter -DROCKSDB_LITE,$(OPT)),)
 	sh tools/rocksdb_dump_test.sh
 endif
 endif
+
+testing:
+	echo $(CURDIR)
 
 # TODO add ldb_tests
 check_some: $(SUBSET)
