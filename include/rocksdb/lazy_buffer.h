@@ -476,6 +476,9 @@ inline void LazyBuffer::pin() {
 inline Status LazyBuffer::dump(LazyBuffer& _target) && {
   assert(state_ != nullptr);
   assert(this != &_target);
+  if (_target.state_ == nullptr) {
+    _target.state_ = LazyBufferState::light_state();
+  }
   return state_->dump_buffer(this, &_target);
 }
 

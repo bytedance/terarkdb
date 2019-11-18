@@ -143,7 +143,7 @@ class LoggingForwardVectorIterator : public InternalIterator {
   }
   virtual LazyBuffer value() const override {
     assert(Valid());
-    return LazyBuffer(values_[current_]);
+    return LazyBuffer(values_[current_], false, 1);
   }
 
   virtual Status status() const override { return Status::OK(); }
@@ -255,7 +255,7 @@ class CompactionIteratorTest : public testing::TestWithParam<bool> {
         iter_.get(), nullptr, nullptr, cmp_, merge_helper_.get(), last_sequence,
         &snapshots_, earliest_write_conflict_snapshot, snapshot_checker_.get(),
         Env::Default(), false /* report_detailed_time */, false,
-        range_del_agg_.get(), std::move(compaction), size_t(-1), nullptr,
+        range_del_agg_.get(), std::move(compaction), size_t(-1), filter,
         &shutting_down_));
   }
 

@@ -482,7 +482,7 @@ Status BlockBasedTableBuilder::Add(const Slice& key,
   } else {
     assert(false);
   }
-  return Status::OK();
+  return r->status;
 }
 
 void BlockBasedTableBuilder::Flush() {

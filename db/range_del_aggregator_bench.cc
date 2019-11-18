@@ -138,7 +138,7 @@ struct TombstoneStartKeyComparator {
   const Comparator* cmp;
 };
 
-std::unique_ptr<InternalIterator> MakeRangeDelIterator(
+std::unique_ptr<InternalIteratorBase<Slice>> MakeRangeDelIterator(
     const std::vector<PersistentRangeTombstone>& range_dels) {
   std::vector<std::string> keys, values;
   for (const auto& range_del : range_dels) {
@@ -146,8 +146,8 @@ std::unique_ptr<InternalIterator> MakeRangeDelIterator(
     keys.push_back(key_and_value.first.Encode().ToString());
     values.push_back(key_and_value.second.ToString());
   }
-  return std::unique_ptr<test::VectorIterator>(
-      new test::VectorIterator(keys, values));
+  return std::unique_ptr<test::VectorIteratorBase<Slice>>(
+      new test::VectorIteratorBase<Slice>(keys, values));
 }
 
 // convert long to a big-endian slice key

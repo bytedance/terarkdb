@@ -200,8 +200,8 @@ Status BuildTable(
                               &make_compaction_iterator));
     builder->SetSecondPassIterator(second_pass_iter.get());
     c_iter.SeekToFirst();
-    for (; c_iter.Valid(); c_iter.Next()) {
-      builder->Add(c_iter.key(), c_iter.value());
+    for (; s.ok() && c_iter.Valid(); c_iter.Next()) {
+      s = builder->Add(c_iter.key(), c_iter.value());
       meta->UpdateBoundaries(c_iter.key(), c_iter.ikey().sequence);
 
       // TODO(noetzli): Update stats after flush, too.
@@ -213,11 +213,11 @@ Status BuildTable(
     }
 
     auto range_del_it = range_del_agg->NewIterator();
-    for (range_del_it->SeekToFirst(); range_del_it->Valid();
+    for (range_del_it->SeekToFirst(); s.ok() && range_del_it->Valid();
          range_del_it->Next()) {
       auto tombstone = range_del_it->Tombstone();
       auto kv = tombstone.Serialize();
-      builder->Add(kv.first.Encode(), LazyBuffer(kv.second));
+      s = builder->Add(kv.first.Encode(), LazyBuffer(kv.second));
       meta->UpdateBoundariesForRange(kv.first, tombstone.SerializeEndKey(),
                                      tombstone.seq_, internal_comparator);
     }
@@ -225,7 +225,9 @@ Status BuildTable(
     // Finish and check for builder errors
     tp = builder->GetTableProperties();
     bool empty = builder->NumEntries() == 0 && tp.num_range_deletions == 0;
-    s = c_iter.status();
+    if (s.ok()) {
+      s = c_iter.status();
+    }
     if (!s.ok() || empty) {
       builder->Abandon();
     } else {
