@@ -312,7 +312,8 @@ Status MergeHelper::MergeUntil(
   //
   // So, we only perform the following logic (to merge all operands together
   // without a Put/Delete) if we are certain that we have seen the end of key.
-  bool surely_seen_the_beginning = hit_the_next_user_key && at_bottom;
+  bool surely_seen_the_beginning =
+      (hit_the_next_user_key || !iter->Valid()) && at_bottom;
   if (surely_seen_the_beginning) {
     // do a final merge with nullptr as the existing value and say
     // bye to the merge type (it's now converted to a Put)

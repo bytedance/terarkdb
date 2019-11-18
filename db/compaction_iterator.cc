@@ -340,6 +340,7 @@ void CompactionIterator::NextFromInput() {
       current_user_key_snapshot_ = 0;
       iter_stats_.num_input_corrupt_records++;
       valid_ = true;
+      value_.clear();
       break;
     }
     // If an end key (exclusive) is specified, check if the current key is

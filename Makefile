@@ -283,7 +283,7 @@ endif
 
 AM_LINK = $(AM_V_CCLD)$(CXX) $^ $(EXEC_LDFLAGS) -o $@ $(LINK_STATIC_TERARK) $(LDFLAGS) $(COVERAGEFLAGS)
 ifeq ($(shell uname),Darwin)
-  AM_LINK_SHR_LDFLAGS=-dynamiclib -lrocksdb${LIBNAME_SUFFIX}
+  AM_LINK_SHR_LDFLAGS=-lrocksdb${LIBNAME_SUFFIX}
 else
   AM_LINK_SHR_LDFLAGS=-Wl,-Bdynamic -lrocksdb${LIBNAME_SUFFIX}
 endif
