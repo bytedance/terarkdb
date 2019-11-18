@@ -770,7 +770,7 @@ TEST_P(WritePreparedTransactionTest, DoubleSnapshot) {
   s = wp_db->Get(ropt, wp_db->DefaultColumnFamily(), "key", &lazy_val);
   ASSERT_OK(s);
   ASSERT_TRUE(lazy_val.slice() == "value1");
-  lazy_val.clear();
+  lazy_val.reset();
 
   wp_db->ReleaseSnapshot(snapshot1);
 
@@ -778,7 +778,7 @@ TEST_P(WritePreparedTransactionTest, DoubleSnapshot) {
   s = wp_db->Get(ropt, wp_db->DefaultColumnFamily(), "key", &lazy_val);
   ASSERT_OK(s);
   ASSERT_TRUE(lazy_val.slice() == "value1");
-  lazy_val.clear();
+  lazy_val.reset();
 
   // Cause an eviction to advance max evicted seq number and trigger updating
   // the snapshot list
@@ -789,7 +789,7 @@ TEST_P(WritePreparedTransactionTest, DoubleSnapshot) {
   s = wp_db->Get(ropt, wp_db->DefaultColumnFamily(), "key", &lazy_val);
   ASSERT_OK(s);
   ASSERT_TRUE(lazy_val.slice() == "value1");
-  lazy_val.clear();
+  lazy_val.reset();
 
   wp_db->ReleaseSnapshot(snapshot0);
   wp_db->ReleaseSnapshot(snapshot2);
@@ -1325,7 +1325,7 @@ TEST_P(WritePreparedTransactionTest, BasicRecoveryTest) {
   // Check the value is not committed before restart
   s = db->Get(ropt, db->DefaultColumnFamily(), "foo0" + istr0, &lazy_val);
   ASSERT_TRUE(s.IsNotFound());
-  lazy_val.clear();
+  lazy_val.reset();
 
   delete txn0;
   delete txn1;
@@ -1352,7 +1352,7 @@ TEST_P(WritePreparedTransactionTest, BasicRecoveryTest) {
   // Check the value is still not committed after restart
   s = db->Get(ropt, db->DefaultColumnFamily(), "foo0" + istr0, &lazy_val);
   ASSERT_TRUE(s.IsNotFound());
-  lazy_val.clear();
+  lazy_val.reset();
 
   txn_t3(0);
 
@@ -1406,7 +1406,7 @@ TEST_P(WritePreparedTransactionTest, BasicRecoveryTest) {
   s = db->Get(ropt, db->DefaultColumnFamily(), "foo0" + istr0, &lazy_val);
   ASSERT_TRUE(s.ok());
   ASSERT_TRUE(lazy_val.slice() == ("bar0" + istr0));
-  lazy_val.clear();
+  lazy_val.reset();
 
   delete txn0;
   delete txn2;
@@ -1421,7 +1421,7 @@ TEST_P(WritePreparedTransactionTest, BasicRecoveryTest) {
   s = db->Get(ropt, db->DefaultColumnFamily(), "foo0" + istr0, &lazy_val);
   ASSERT_TRUE(s.ok());
   ASSERT_TRUE(lazy_val.slice() == ("bar0" + istr0));
-  lazy_val.clear();
+  lazy_val.reset();
 }
 
 // After recovery the commit map is empty while the max is set. The code would

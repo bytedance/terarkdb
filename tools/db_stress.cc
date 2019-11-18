@@ -1716,9 +1716,8 @@ class StressTest {
     }
     ReadOptions ropt;
     ropt.snapshot = snap_state.snapshot;
-    PinnableSlice exp_v(&snap_state.value);
-    exp_v.PinSelf();
-    PinnableSlice v;
+    LazyBuffer exp_v(&snap_state.value);
+    LazyBuffer v;
     s = db->Get(ropt, cf, snap_state.key, &v);
     if (!s.ok() && !s.IsNotFound()) {
       return s;
@@ -1731,7 +1730,7 @@ class StressTest {
           ") vs. (" + s.ToString() + ")");
     }
     if (s.ok()) {
-      if (exp_v != v) {
+      if (exp_v.slice() != v.slice()) {
         return Status::Corruption("The snapshot gave inconsistent values: (" +
                                   exp_v.ToString() + ") vs. (" + v.ToString() +
                                   ")");

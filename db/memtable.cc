@@ -839,7 +839,8 @@ void MemTable::Update(SequenceNumber seq,
       SequenceNumber unused;
       UnPackSequenceAndType(tag, &unused, &type);
       LazyBuffer old_value = iter->value();
-      if (type == kTypeValue && old_value.valid()) {
+      if (type == kTypeValue && old_value.fetch().ok()) {
+        assert(old_value.valid());
         uint32_t old_size = static_cast<uint32_t>(old_value.size());
         uint32_t new_size = static_cast<uint32_t>(value.size());
 
@@ -886,7 +887,8 @@ bool MemTable::UpdateCallback(SequenceNumber seq,
       uint64_t unused;
       UnPackSequenceAndType(tag, &unused, &type);
       LazyBuffer old_value = iter->value();
-      if(type == kTypeValue && old_value.valid()) {
+      if(type == kTypeValue && old_value.fetch().ok()) {
+        assert(old_value.valid());
         uint32_t old_size = static_cast<uint32_t>(old_value.size());
 
         char* old_buffer = const_cast<char*>(old_value.data());

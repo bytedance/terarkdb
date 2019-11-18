@@ -755,7 +755,7 @@ void CompactionIterator::PrepareOutput() {
              (snapshot_checker_ == nullptr ||
               LIKELY(snapshot_checker_->IsInSnapshot(ikey_.sequence,
                                                      earliest_snapshot_))) &&
-             ikey_.type != kTypeMerge && value_.file_number() != uint64_t(-1)) {
+             ikey_.type != kTypeMerge) {
     assert(ikey_.type != kTypeDeletion && ikey_.type != kTypeSingleDeletion);
     ikey_.sequence = 0;
     current_key_.UpdateInternalKey(0, ikey_.type);

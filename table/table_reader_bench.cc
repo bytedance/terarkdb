@@ -103,7 +103,7 @@ void TableReaderBenchmark(Options& opts, EnvOptions& env_options,
             CompressionType::kNoCompression, CompressionOptions(),
             nullptr /* compression_dict */, false /* skip_filters */,
             false /* ignore_key_tyoe */, kDefaultColumnFamilyName,
-            unknown_level),
+            unknown_level, 0 /* compaction_load */),
         0 /* column_family_id */, file_writer.get());
   } else {
     s = DB::Open(opts, dbname, &db);
@@ -115,14 +115,14 @@ void TableReaderBenchmark(Options& opts, EnvOptions& env_options,
     for (int j = 0; j < num_keys2; j++) {
       std::string key = MakeKey(i * 2, j, through_db);
       if (!through_db) {
-        tb->Add(key, key);
+        tb->Add(key, LazyBuffer(key));
       } else {
         db->Put(wo, key, key);
       }
     }
   }
   if (!through_db) {
-    tb->Finish();
+    tb->Finish(nullptr);
     file_writer->Close();
   } else {
     db->Flush(FlushOptions());
@@ -169,14 +169,14 @@ void TableReaderBenchmark(Options& opts, EnvOptions& env_options,
           std::string key = MakeKey(r1, r2, through_db);
           uint64_t start_time = Now(env, measured_by_nanosecond);
           if (!through_db) {
-            PinnableSlice value;
+            LazyBuffer value;
             MergeContext merge_context;
             SequenceNumber max_covering_tombstone_seq = 0;
             GetContext get_context(ioptions.user_comparator,
                                    ioptions.merge_operator, ioptions.info_log,
                                    ioptions.statistics, GetContext::kNotFound,
                                    Slice(key), &value, nullptr, &merge_context,
-                                   &max_covering_tombstone_seq, env);
+                                   nullptr, &max_covering_tombstone_seq, env);
             s = table_reader->Get(read_options, key, &get_context, nullptr);
           } else {
             s = db->Get(read_options, key, &result);

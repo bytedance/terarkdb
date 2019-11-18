@@ -249,7 +249,7 @@ void ProfileQueries(bool enabled_time = false) {
   }
 
   if (FLAGS_random_key) {
-    std::random_shuffle(keys.begin(), keys.end());
+    std::shuffle(keys.begin(), keys.end(), std::mt19937_64());
   }
 #ifndef NDEBUG
   ThreadStatusUtil::TEST_SetStateDelay(ThreadStatus::STATE_MUTEX_WAIT, 1U);
@@ -522,7 +522,7 @@ TEST_F(PerfContextTest, SeekKeyComparison) {
   }
 
   if (FLAGS_random_key) {
-    std::random_shuffle(keys.begin(), keys.end());
+    std::shuffle(keys.begin(), keys.end(), std::mt19937_64());
   }
 
   HistogramImpl hist_put_time;

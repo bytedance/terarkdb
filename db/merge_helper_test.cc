@@ -31,7 +31,7 @@ class MergeHelperTest : public testing::Test {
                                         merge_op_.get(), filter_.get(), nullptr,
                                         false, latest_snapshot));
     user_key_ = ExtractUserKey(iter_->key()).ToString();
-    CombinedInternalIterator iter(&iter_, nullptr);
+    CombinedInternalIterator iter(iter_.get(), nullptr);
     auto merge_result = merge_helper_->MergeUntil(user_key_, &iter,
                                                   nullptr /* range_del_agg */,
                                                   stop_before, at_bottom);
