@@ -161,11 +161,14 @@ Status MemTableListVersion::AddRangeTombstoneIterators(
     const ReadOptions& read_opts, Arena* /*arena*/,
     RangeDelAggregator* range_del_agg) {
   assert(range_del_agg != nullptr);
+  SequenceNumber snapshot = kMaxSequenceNumber;
+  if (read_opts.snapshot != nullptr) {
+    snapshot = read_opts.snapshot->GetSequenceNumber();
+  }
   for (auto& m : memlist_) {
     // Using kMaxSequenceNumber is OK because these are immutable memtables.
     std::unique_ptr<FragmentedRangeTombstoneIterator> range_del_iter(
-        m->NewRangeTombstoneIterator(read_opts,
-                                     kMaxSequenceNumber /* read_seq */));
+        m->NewRangeTombstoneIterator(read_opts, snapshot /* read_seq */));
     range_del_agg->AddTombstones(std::move(range_del_iter));
   }
   return Status::OK();
@@ -460,7 +463,7 @@ Status MemTableList::TryInstallMemtableFlushResults(
       s = vset->LogAndApply(cfd, mutable_cf_options, edit_list, mu,
                             db_directory);
 
-      assert(apply_callback_called);
+      assert(apply_callback_called || cfd->IsDropped());
     }
   }
   commit_in_progress_ = false;

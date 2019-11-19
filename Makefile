@@ -283,7 +283,7 @@ endif
 
 AM_LINK = $(AM_V_CCLD)$(CXX) $^ $(EXEC_LDFLAGS) -o $@ $(LINK_STATIC_TERARK) $(LDFLAGS) $(COVERAGEFLAGS)
 ifeq ($(shell uname),Darwin)
-  AM_LINK_SHR_LDFLAGS=-dynamiclib -lrocksdb${LIBNAME_SUFFIX}
+  AM_LINK_SHR_LDFLAGS=-lrocksdb${LIBNAME_SUFFIX}
 else
   AM_LINK_SHR_LDFLAGS=-Wl,-Bdynamic -lrocksdb${LIBNAME_SUFFIX}
 endif
@@ -1597,10 +1597,10 @@ obsolete_files_test: db/obsolete_files_test.o $(TESTHARNESS)
 geodb_test: utilities/geodb/geodb_test.o $(TESTHARNESS)
 	$(AM_LINK_SHR)
 
-rocksdb_dump: tools/dump/rocksdb_dump.o $(LIBOBJECTS)
+rocksdb_dump: tools/dump/rocksdb_dump.o
 	$(AM_LINK_SHR)
 
-rocksdb_undump: tools/dump/rocksdb_undump.o $(LIBOBJECTS)
+rocksdb_undump: tools/dump/rocksdb_undump.o
 	$(AM_LINK_SHR)
 
 cuckoo_table_builder_test: table/cuckoo_table_builder_test.o $(TESTHARNESS)
@@ -1669,7 +1669,7 @@ memtable_list_test: db/memtable_list_test.o $(TESTHARNESS)
 write_callback_test: db/write_callback_test.o $(TESTHARNESS)
 	$(AM_LINK_SHR)
 
-heap_test: util/heap_test.o ${LIBOBJECTS} $(TESTHARNESS)
+heap_test: util/heap_test.o $(TESTHARNESS)
 	$(AM_LINK_SHR)
 
 transaction_test: utilities/transactions/transaction_test.o $(TESTHARNESS)
@@ -1684,7 +1684,7 @@ write_unprepared_transaction_test: utilities/transactions/write_unprepared_trans
 sst_dump: ${xdir}/tools/sst_dump.o
 	$(AM_LINK_SHR)
 
-blob_dump: ${xdir}/tools/blob_dump.o $(LIBOBJECTS)
+blob_dump: ${xdir}/tools/blob_dump.o
 	$(AM_LINK_SHR)
 
 column_aware_encoding_exp: utilities/column_aware_encoding_exp.o $(EXPOBJECTS)

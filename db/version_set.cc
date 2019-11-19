@@ -463,7 +463,7 @@ bool SomeFileOverlapsRange(
 
 namespace {
 
-class LevelIterator final : public InternalIterator {
+class LevelIterator final : public InternalIterator, public Snapshot {
  public:
 
   LevelIterator(TableCache* table_cache, const ReadOptions& read_options,
@@ -478,6 +478,7 @@ class LevelIterator final : public InternalIterator {
                     compaction_boundaries = nullptr)
       : table_cache_(table_cache),
         read_options_(read_options),
+        snapshot_(0),
         env_options_(env_options),
         icomparator_(icomparator),
         flevel_(flevel),
@@ -493,9 +494,19 @@ class LevelIterator final : public InternalIterator {
         compaction_boundaries_(compaction_boundaries) {
     // Empty level is not supported.
     assert(flevel_ != nullptr && flevel_->num_files > 0);
+    if (read_options_.snapshot != nullptr) {
+      snapshot_ = read_options_.snapshot->GetSequenceNumber();
+      read_options_.snapshot = this;
+    }
+    read_options_.iterate_lower_bound = nullptr;
+    read_options_.iterate_upper_bound = nullptr;
   }
 
   virtual ~LevelIterator() { delete file_iter_.Set(nullptr); }
+
+  SequenceNumber GetSequenceNumber() const override {
+    return snapshot_;
+  }
 
   virtual void Seek(const Slice& target) override;
   virtual void SeekForPrev(const Slice& target) override;
@@ -557,7 +568,8 @@ class LevelIterator final : public InternalIterator {
   }
 
   TableCache* table_cache_;
-  const ReadOptions read_options_;
+  ReadOptions read_options_;
+  SequenceNumber snapshot_;
   const EnvOptions& env_options_;
   const InternalKeyComparator& icomparator_;
   const LevelFilesBrief* flevel_;

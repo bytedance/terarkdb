@@ -52,6 +52,7 @@ ImmutableCFOptions::ImmutableCFOptions(const ImmutableDBOptions& db_options,
       table_properties_collector_factories(
           cf_options.table_properties_collector_factories),
       advise_random_on_open(db_options.advise_random_on_open),
+      allow_mmap_populate(db_options.allow_mmap_populate),
       bloom_locality(cf_options.bloom_locality),
       purge_redundant_kvs_while_flush(
           cf_options.purge_redundant_kvs_while_flush),
