@@ -193,7 +193,7 @@ class MapSstElementIterator {
   Slice value() const { return buffer_; }
   Status status() const { return status_; }
 
-  const std::unordered_set<uint64_t>& GetDependence() const {
+  const std::unordered_map<uint64_t, uint64_t>& GetDependence() const {
     return dependence_build_;
   }
 
@@ -212,6 +212,13 @@ class MapSstElementIterator {
       }
       assert(sst_read_amp_ratio_ >= 1);
       assert(sst_read_amp_ratio_ <= sst_read_amp_);
+      for (auto& pair : dependence_build_) {
+        auto f = iterator_cache_.GetFileMetaData(pair.first);
+        assert(f != nullptr);
+        pair.second = f->prop.num_entries * pair.second / f->fd.file_size;
+        pair.second = std::min<uint64_t>(pair.second, f->prop.num_entries);
+        pair.second = std::max<uint64_t>(pair.second, 1);
+      }
       return;
     }
     auto& start = map_elements_.smallest_key_ = where_->point[0].Encode();
@@ -263,15 +270,20 @@ class MapSstElementIterator {
     }
 
     size_t range_size = 0;
+    auto put_dependence = [&](uint64_t file_number, uint64_t size) {
+      auto ib = dependence_build_.emplace(file_number, size);
+      if (!ib.second) {
+        ib.first->second += size;
+      }
+    };
     if (stable) {
       for (auto& link : map_elements_.link_) {
-        dependence_build_.emplace(link.file_number);
+        put_dependence(link.file_number, link.size);
         range_size += link.size;
       }
     } else {
       no_records = true;
       for (auto& link : map_elements_.link_) {
-        dependence_build_.emplace(link.file_number);
         TableReader* reader;
         auto iter = iterator_cache_.GetIterator(link.file_number, &reader);
         if (!iter->status().ok()) {
@@ -311,6 +323,7 @@ class MapSstElementIterator {
         } else {
           link.size = 0;
         }
+        put_dependence(link.file_number, link.size);
       }
     }
     sst_read_amp_ = std::max(sst_read_amp_, map_elements_.link_.size());
@@ -326,7 +339,7 @@ class MapSstElementIterator {
   std::string buffer_;
   std::vector<RangeWithDepend>::const_iterator where_;
   const std::vector<RangeWithDepend>& ranges_;
-  std::unordered_set<uint64_t> dependence_build_;
+  std::unordered_map<uint64_t, uint64_t> dependence_build_;
   size_t sst_read_amp_ = 0;
   double sst_read_amp_ratio_ = 0;
   size_t sst_read_amp_size_ = 0;
@@ -917,8 +930,8 @@ Status MapBuilder::WriteOutputFile(
   auto& dependence_build = range_iter->GetDependence();
   auto& dependence = file_meta->prop.dependence;
   dependence.reserve(dependence_build.size());
-  for (auto file_number : dependence_build) {
-    dependence.emplace_back(Dependence{file_number, 0});
+  for (auto& pair : dependence_build) {
+    dependence.emplace_back(Dependence{pair.first, pair.second});
   }
   std::sort(dependence.begin(), dependence.end(),
             [](const Dependence& l, const Dependence& r) {

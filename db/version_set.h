@@ -101,9 +101,10 @@ class VersionStorageInfo {
 
   void Reserve(int level, size_t size) { files_[level].reserve(size); }
 
-  void AddFile(int level, FileMetaData* f, Logger* info_log = nullptr);
-
-  void ShrinkDependenceMap(void* arg, bool (*exists)(void*, FileMetaData*));
+  void AddFile(int level, FileMetaData* f,
+               bool (*exists)(void*, uint64_t) = nullptr,
+               void* exists_args = nullptr,
+               Logger* info_log = nullptr);
 
   void SetFinalized();
 

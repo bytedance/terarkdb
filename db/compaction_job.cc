@@ -322,7 +322,8 @@ struct CompactionJob::CompactionState {
 
   Slice SmallestUserKey() {
     for (const auto& sub_compact_state : sub_compact_states) {
-      if (!sub_compact_state.outputs.empty() &&
+      if (sub_compact_state.status.ok() &&
+          !sub_compact_state.outputs.empty() &&
           sub_compact_state.outputs[0].finished) {
         return sub_compact_state.outputs[0].meta.smallest.user_key();
       }
@@ -334,7 +335,8 @@ struct CompactionJob::CompactionState {
   Slice LargestUserKey() {
     for (auto it = sub_compact_states.rbegin(); it < sub_compact_states.rend();
          ++it) {
-      if (!it->outputs.empty() && it->current_output()->finished) {
+      if (it->status.ok() && !it->outputs.empty() &&
+          it->current_output()->finished) {
         assert(it->current_output() != nullptr);
         return it->current_output()->meta.largest.user_key();
       }

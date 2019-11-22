@@ -1944,7 +1944,9 @@ bool CompareCompensatedSizeDescending(const Fsize& first, const Fsize& second) {
 }
 } // anonymous namespace
 
-void VersionStorageInfo::AddFile(int level, FileMetaData* f, Logger* info_log) {
+void VersionStorageInfo::AddFile(int level, FileMetaData* f,
+                                 bool (*exists)(void*, uint64_t),
+                                 void* exists_args, Logger* info_log) {
   auto* level_files = &files_[level];
   // Must not overlap
 #ifndef NDEBUG
@@ -1970,25 +1972,26 @@ void VersionStorageInfo::AddFile(int level, FileMetaData* f, Logger* info_log) {
   f->refs++;
   level_files->push_back(f);
   if (level == -1) {
-    dependence_map_.emplace(f->fd.GetNumber(), f);
-    for (auto file_number : f->prop.inheritance_chain) {
-      assert(dependence_map_.count(file_number) == 0);
-      dependence_map_.emplace(file_number, f);
+    if (exists == nullptr) {
+      dependence_map_.emplace(f->fd.GetNumber(), f);
+      for (auto file_number : f->prop.inheritance_chain) {
+        assert(dependence_map_.count(file_number) == 0);
+        dependence_map_.emplace(file_number, f);
+      }
+    } else {
+      if (exists(exists_args, f->fd.GetNumber())) {
+        dependence_map_.emplace(f->fd.GetNumber(), f);
+      }
+      for (auto file_number : f->prop.inheritance_chain) {
+        assert(dependence_map_.count(file_number) == 0);
+        if (exists(exists_args, file_number)) {
+          dependence_map_.emplace(file_number, f);
+        }
+      }
     }
   } else {
     if (f->prop.purpose != 0) {
       has_space_amplification_.emplace(level);
-    }
-  }
-}
-
-void VersionStorageInfo::ShrinkDependenceMap(
-    void* arg, bool (*exists)(void*, FileMetaData*)) {
-  for (auto it = dependence_map_.begin(); it != dependence_map_.end(); ) {
-    if (exists(arg, it->second)) {
-      ++it;
-    } else {
-      it = dependence_map_.erase(it);
     }
   }
 }

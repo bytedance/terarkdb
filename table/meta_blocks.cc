@@ -112,19 +112,15 @@ void PropertyBlockBuilder::AddTableProperty(const TableProperties& props) {
   if (!props.dependence.empty()) {
     std::vector<uint64_t> val;
     val.reserve(props.dependence.size());
-    bool has_entry_count = false;
     for (auto& dependence : props.dependence) {
       val.emplace_back(dependence.file_number);
-      has_entry_count |= dependence.entry_count > 0;
     }
     Add(TablePropertiesNames::kDependence, val);
-    if (has_entry_count) {
-      val.clear();
-      for (auto& dependence : props.dependence) {
-        val.emplace_back(dependence.entry_count);
-      }
-      Add(TablePropertiesNames::kDependenceEntryCount, val);
+    val.clear();
+    for (auto& dependence : props.dependence) {
+      val.emplace_back(dependence.entry_count);
     }
+    Add(TablePropertiesNames::kDependenceEntryCount, val);
   }
   if (!props.inheritance_chain.empty()) {
     Add(TablePropertiesNames::kInheritanceChain, props.inheritance_chain);

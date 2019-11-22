@@ -256,7 +256,7 @@ static size_t GetFilesSize(const FileMetaData* f, uint64_t file_number,
     assert(file_number == uint64_t(-1));
   }
   uint64_t file_size = f->fd.GetFileSize();
-  if (f->prop.purpose != 0) {
+  if (f->prop.purpose == kMapSst) {
     for (auto& dependence : f->prop.dependence) {
       file_size += GetFilesSize(nullptr, dependence.file_number, vstorage);
     }
@@ -1563,26 +1563,19 @@ Compaction* UniversalCompactionPicker::PickCompositeCompaction(
     range.limit.assign(uend.data(), uend.size());
   };
   bool has_start = false;
-  size_t counter = 0;
-  for (iter->SeekToFirst(); iter->Valid(); iter->Next()) {
-    ++counter;
-    if (!ReadMapElement(map_element, iter.get(), log_buffer, cf_name)) {
-      return nullptr;
-    }
-    if (is_perfect(map_element)) {
+  size_t counter = inputs.files.front()->prop.num_entries;
+  for (auto& dependence : inputs.files.front()->prop.dependence) {
+    auto& dependence_map = vstorage->dependence_map();
+    FileUseInfo info;
+    auto find = dependence_map.find(dependence.file_number);
+    if (find == dependence_map.end()) {
+      // TODO log error
       continue;
     }
-    for (auto& l : map_element.link_) {
-      auto find = file_used.find(l.file_number);
-      if (find == file_used.end()) {
-        FileUseInfo info = {
-            GetFilesSize(nullptr, l.file_number, *vstorage), l.size
-        };
-        file_used.emplace(l.file_number, info);
-      } else {
-        find->second.used += l.size;
-      }
-    }
+    auto f = find->second;
+    info.size = f->fd.GetFileSize();
+    info.used = info.size * dependence.entry_count / f->prop.num_entries;
+    file_used.emplace(dependence.file_number, info);
   }
   std::vector<InternalKey> internal_key_storage;
   internal_key_storage.resize(counter *= 2);
