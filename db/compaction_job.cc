@@ -97,7 +97,7 @@ void SetSelfThreadLowPriority() {
     // Tunables to consider:
     //  /sys/block/<device_name>/queue/slice_idle
     //  /sys/block/<device_name>/queue/slice_sync
-    syscall(SYS_ioprio_set, 1,  // IOPRIO_WHO_PROCESS
+  syscall(SYS_ioprio_set, 1,  // IOPRIO_WHO_PROCESS
             // Current thread.
             0,
             IOPRIO_PRIO_VALUE(3, 0));
@@ -204,8 +204,6 @@ struct CompactionJob::SubcompactionState {
   // The number of bytes overlapping between the current output and
   // grandparent files used in ShouldStopBefore().
   uint64_t overlapped_bytes = 0;
-  //
-  bool set_low_riority = false;
   // A flag determine whether the key has been seen in ShouldStopBefore()
   bool seen_key = false;
   std::string compression_dict;
@@ -866,7 +864,6 @@ Status CompactionJob::RunSelf() {
     // map compact don't need multithreads
     thread_pool.reserve(num_threads - 1);
     for (size_t i = 1; i < compact_->sub_compact_states.size(); i++) {
-      compact_->sub_compact_states[i].set_low_riority = true;
       thread_pool.emplace_back(&CompactionJob::ProcessCompaction, this,
                                &compact_->sub_compact_states[i]);
     }
@@ -932,10 +929,8 @@ Status CompactionJob::VerifyFiles() {
   auto prefix_extractor =
       compact_->compaction->mutable_cf_options()->prefix_extractor.get();
   std::atomic<size_t> next_file_meta_idx(0);
-  auto verify_table = [&](Status& output_status, bool set_low_riority) {
-    if (set_low_riority) {
-      SetSelfThreadLowPriority();
-    }
+  auto verify_table = [&](Status& output_status) {
+    SetSelfThreadLowPriority();
     while (true) {
       size_t file_idx = next_file_meta_idx.fetch_add(1);
       if (file_idx >= files_meta.size()) {
@@ -977,10 +972,9 @@ Status CompactionJob::VerifyFiles() {
       std::min(files_meta.size(), compact_->sub_compact_states.size());
   for (size_t i = 1; i < thread_count; i++) {
     thread_pool.emplace_back(verify_table,
-                             std::ref(compact_->sub_compact_states[i].status),
-                             true);
+                             std::ref(compact_->sub_compact_states[i].status));
   }
-  verify_table(compact_->sub_compact_states[0].status, false);
+  verify_table(compact_->sub_compact_states[0].status);
   for (auto& thread : thread_pool) {
     thread.join();
   }
@@ -1097,9 +1091,8 @@ Status CompactionJob::Install(const MutableCFOptions& mutable_cf_options) {
 }
 
 void CompactionJob::ProcessCompaction(SubcompactionState* sub_compact) {
-  if (sub_compact->set_low_riority) {
-    SetSelfThreadLowPriority();
-  }
+  SetSelfThreadLowPriority();
+  fprintf(stderr, "pri : %d\n", getpriority(PRIO_PROCESS, 0));
   switch (sub_compact->compaction->compaction_type()) {
     case kKeyValueCompaction:
       ProcessKeyValueCompaction(sub_compact);
