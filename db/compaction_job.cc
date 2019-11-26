@@ -69,12 +69,6 @@
 #include "util/string_util.h"
 #include "util/sync_point.h"
 
-#ifdef OS_LINUX
-#include <unistd.h>
-#include <sys/syscall.h>
-#include <sys/resource.h>
-#endif
-
 namespace rocksdb {
 
 const char* GetCompactionReasonString(CompactionReason compaction_reason) {
