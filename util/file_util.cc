@@ -8,6 +8,11 @@
 #include <string>
 #include <algorithm>
 
+#include <unistd.h>
+#include <sys/resource.h>
+#include <sys/syscall.h>
+#include <sys/time.h>
+
 #include "rocksdb/env.h"
 #include "util/sst_file_manager_impl.h"
 #include "util/file_reader_writer.h"
@@ -108,6 +113,33 @@ Status DeleteDBFile(const ImmutableDBOptions* db_options,
   (void)force_bg;
   // SstFileManager is not supported in ROCKSDB_LITE
   return db_options->env->DeleteFile(fname);
+#endif
+}
+
+void SetSelfThreadLowPriority() {
+#ifdef OS_LINUX
+  setpriority(
+        PRIO_PROCESS,
+        // Current thread.
+        0,
+        // Lowest priority possible.
+        19);
+#define IOPRIO_CLASS_SHIFT (13)
+#define IOPRIO_PRIO_VALUE(class, data) (((class) << IOPRIO_CLASS_SHIFT) | data)
+    // Put schedule into IOPRIO_CLASS_IDLE class (lowest)
+    // These system calls only have an effect when used in conjunction
+    // with an I/O scheduler that supports I/O priorities. As at
+    // kernel 2.6.17 the only such scheduler is the Completely
+    // Fair Queuing (CFQ) I/O scheduler.
+    // To change scheduler:
+    //  echo cfq > /sys/block/<device_name>/queue/schedule
+    // Tunables to consider:
+    //  /sys/block/<device_name>/queue/slice_idle
+    //  /sys/block/<device_name>/queue/slice_sync
+  syscall(SYS_ioprio_set, 1,  // IOPRIO_WHO_PROCESS
+            // Current thread.
+            0,
+            IOPRIO_PRIO_VALUE(3, 0));
 #endif
 }
 

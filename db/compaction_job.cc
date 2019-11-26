@@ -59,6 +59,7 @@
 #include "util/coding.h"
 #include "util/file_reader_writer.h"
 #include "util/filename.h"
+#include "util/file_util.h"
 #include "util/log_buffer.h"
 #include "util/logging.h"
 #include "util/mutexlock.h"
@@ -75,35 +76,6 @@
 #endif
 
 namespace rocksdb {
-
-namespace {
-void SetSelfThreadLowPriority() {
-#ifdef OS_LINUX
-  setpriority(
-        PRIO_PROCESS,
-        // Current thread.
-        0,
-        // Lowest priority possible.
-        19);
-#define IOPRIO_CLASS_SHIFT (13)
-#define IOPRIO_PRIO_VALUE(class, data) (((class) << IOPRIO_CLASS_SHIFT) | data)
-    // Put schedule into IOPRIO_CLASS_IDLE class (lowest)
-    // These system calls only have an effect when used in conjunction
-    // with an I/O scheduler that supports I/O priorities. As at
-    // kernel 2.6.17 the only such scheduler is the Completely
-    // Fair Queuing (CFQ) I/O scheduler.
-    // To change scheduler:
-    //  echo cfq > /sys/block/<device_name>/queue/schedule
-    // Tunables to consider:
-    //  /sys/block/<device_name>/queue/slice_idle
-    //  /sys/block/<device_name>/queue/slice_sync
-  syscall(SYS_ioprio_set, 1,  // IOPRIO_WHO_PROCESS
-            // Current thread.
-            0,
-            IOPRIO_PRIO_VALUE(3, 0));
-#endif
-};
-}
 
 const char* GetCompactionReasonString(CompactionReason compaction_reason) {
   switch (compaction_reason) {

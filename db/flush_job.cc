@@ -290,6 +290,7 @@ void FlushJob::Cancel() {
 }
 
 Status FlushJob::WriteLevel0Table() {
+  SetSelfThreadLowPriority();
   AutoThreadOperationStageUpdater stage_updater(
       ThreadStatus::STAGE_FLUSH_WRITE_L0);
   db_mutex_->AssertHeld();
