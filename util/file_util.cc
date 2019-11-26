@@ -118,12 +118,7 @@ Status DeleteDBFile(const ImmutableDBOptions* db_options,
 
 void SetSelfThreadLowPriority() {
 #ifdef OS_LINUX
-  setpriority(
-        PRIO_PROCESS,
-        // Current thread.
-        0,
-        // Lowest priority possible.
-        19);
+  setpriority(PRIO_PROCESS, 0 /* Current thread */, 19 /* Lowest priority */);
 #define IOPRIO_CLASS_SHIFT (13)
 #define IOPRIO_PRIO_VALUE(class, data) (((class) << IOPRIO_CLASS_SHIFT) | data)
     // Put schedule into IOPRIO_CLASS_IDLE class (lowest)
@@ -136,10 +131,8 @@ void SetSelfThreadLowPriority() {
     // Tunables to consider:
     //  /sys/block/<device_name>/queue/slice_idle
     //  /sys/block/<device_name>/queue/slice_sync
-  syscall(SYS_ioprio_set, 1,  // IOPRIO_WHO_PROCESS
-            // Current thread.
-            0,
-            IOPRIO_PRIO_VALUE(3, 0));
+  syscall(SYS_ioprio_set, 1 /* IOPRIO_WHO_PROCESS */, 0 /* Current thread */,
+          IOPRIO_PRIO_VALUE(3, 0));
 #endif
 }
 

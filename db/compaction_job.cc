@@ -1064,7 +1064,6 @@ Status CompactionJob::Install(const MutableCFOptions& mutable_cf_options) {
 
 void CompactionJob::ProcessCompaction(SubcompactionState* sub_compact) {
   SetSelfThreadLowPriority();
-  fprintf(stderr, "pri : %d\n", getpriority(PRIO_PROCESS, 0));
   switch (sub_compact->compaction->compaction_type()) {
     case kKeyValueCompaction:
       ProcessKeyValueCompaction(sub_compact);
