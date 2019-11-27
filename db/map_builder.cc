@@ -284,6 +284,7 @@ class MapSstElementIterator {
     } else {
       no_records = true;
       for (auto& link : map_elements_.link_) {
+        link.size = 0;
         TableReader* reader;
         auto iter = iterator_cache_.GetIterator(link.file_number, &reader);
         if (!iter->status().ok()) {
@@ -291,38 +292,39 @@ class MapSstElementIterator {
           status_ = iter->status();
           return;
         }
-        iter->Seek(start);
-        if (!iter->Valid()) {
-          continue;
-        }
-        if (!include_start && icomp_.Compare(iter->key(), start) == 0) {
-          iter->Next();
+        do {
+          iter->Seek(start);
           if (!iter->Valid()) {
-            continue;
+            break;
           }
-        }
-        temp_start_.DecodeFrom(iter->key());
-        iter->SeekForPrev(end);
-        if (!iter->Valid()) {
-          continue;
-        }
-        if (!include_end && icomp_.Compare(iter->key(), end) == 0) {
-          iter->Prev();
+          if (!include_start && icomp_.Compare(iter->key(), start) == 0) {
+            iter->Next();
+            if (!iter->Valid()) {
+              break;
+            }
+          }
+          temp_start_.DecodeFrom(iter->key());
+          iter->SeekForPrev(end);
           if (!iter->Valid()) {
-            continue;
+            break;
           }
-        }
-        temp_end_.DecodeFrom(iter->key());
-        if (icomp_.Compare(temp_start_, temp_end_) <= 0) {
-          uint64_t start_offset =
-              reader->ApproximateOffsetOf(temp_start_.Encode());
-          uint64_t end_offset = reader->ApproximateOffsetOf(temp_end_.Encode());
-          link.size = end_offset - start_offset;
-          range_size += link.size;
-          no_records = false;
-        } else {
-          link.size = 0;
-        }
+          if (!include_end && icomp_.Compare(iter->key(), end) == 0) {
+            iter->Prev();
+            if (!iter->Valid()) {
+              break;
+            }
+          }
+          temp_end_.DecodeFrom(iter->key());
+          if (icomp_.Compare(temp_start_, temp_end_) <= 0) {
+            uint64_t start_offset =
+                reader->ApproximateOffsetOf(temp_start_.Encode());
+            uint64_t end_offset =
+                reader->ApproximateOffsetOf(temp_end_.Encode());
+            link.size = end_offset - start_offset;
+            range_size += link.size;
+            no_records = false;
+          }
+        } while(false);
         put_dependence(link.file_number, link.size);
       }
     }
