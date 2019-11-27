@@ -244,13 +244,10 @@ Status WritableFileWriter::Append(const Slice& data) {
   } else {
     // Writing directly to file bypassing the buffer
     assert(buf_.CurrentSize() == 0);
-    s = WriteBuffered(src, left);
+    s = WriteBuffered(src, left, true);
   }
 
   TEST_KILL_RANDOM("WritableFileWriter::Append:1", rocksdb_kill_odds);
-  if (s.ok()) {
-    filesize_ += data.size();
-  }
   return s;
 }
 
@@ -275,7 +272,6 @@ Status WritableFileWriter::Pad(const size_t pad_bytes) {
     cap = buf_.Capacity() - buf_.CurrentSize();
   }
   pending_sync_ = true;
-  filesize_ += pad_bytes;
   return Status::OK();
 }
 
@@ -332,7 +328,7 @@ Status WritableFileWriter::Flush() {
       s = WriteDirect();
 #endif  // !ROCKSDB_LITE
     } else {
-      s = WriteBuffered(buf_.BufferStart(), buf_.CurrentSize());
+      s = WriteBuffered(buf_.BufferStart(), buf_.CurrentSize(), false);
     }
     if (!s.ok()) {
       return s;
@@ -345,33 +341,7 @@ Status WritableFileWriter::Flush() {
     return s;
   }
 
-  // sync OS cache to disk for every bytes_per_sync_
-  // TODO: give log file and sst file different options (log
-  // files could be potentially cached in OS for their whole
-  // life time, thus we might not want to flush at all).
-
-  // We try to avoid sync to the last 1MB of data. For two reasons:
-  // (1) avoid rewrite the same page that is modified later.
-  // (2) for older version of OS, write can block while writing out
-  //     the page.
-  // Xfs does neighbor page flushing outside of the specified ranges. We
-  // need to make sure sync range is far from the write offset.
-  if (!use_direct_io() && bytes_per_sync_) {
-    const uint64_t kBytesNotSyncRange = 1024 * 1024;  // recent 1MB is not synced.
-    const uint64_t kBytesAlignWhenSync = 4 * 1024;    // Align 4KB.
-    if (filesize_ > kBytesNotSyncRange) {
-      uint64_t offset_sync_to = filesize_ - kBytesNotSyncRange;
-      offset_sync_to -= offset_sync_to % kBytesAlignWhenSync;
-      assert(offset_sync_to >= last_sync_size_);
-      if (offset_sync_to > 0 &&
-          offset_sync_to - last_sync_size_ >= bytes_per_sync_) {
-        s = RangeSync(last_sync_size_, offset_sync_to - last_sync_size_);
-        last_sync_size_ = offset_sync_to;
-      }
-    }
-  }
-
-  return s;
+  return AutoRangeSync();
 }
 
 Status WritableFileWriter::Sync(bool use_fsync) {
@@ -415,6 +385,36 @@ Status WritableFileWriter::SyncInternal(bool use_fsync) {
   return s;
 }
 
+Status WritableFileWriter::AutoRangeSync() {
+  // sync OS cache to disk for every bytes_per_sync_
+  // TODO: give log file and sst file different options (log
+  // files could be potentially cached in OS for their whole
+  // life time, thus we might not want to flush at all).
+
+  // We try to avoid sync to the last 1MB of data. For two reasons:
+  // (1) avoid rewrite the same page that is modified later.
+  // (2) for older version of OS, write can block while writing out
+  //     the page.
+  // Xfs does neighbor page flushing outside of the specified ranges. We
+  // need to make sure sync range is far from the write offset.
+  Status s;
+  if (!use_direct_io() && bytes_per_sync_) {
+    const uint64_t kBytesNotSyncRange = 1024 * 1024;  // recent 1MB is not synced.
+    const uint64_t kBytesAlignWhenSync = 4 * 1024;    // Align 4KB.
+    if (filesize_ > kBytesNotSyncRange) {
+      uint64_t offset_sync_to = filesize_ - kBytesNotSyncRange;
+      offset_sync_to -= offset_sync_to % kBytesAlignWhenSync;
+      assert(offset_sync_to >= last_sync_size_);
+      if (offset_sync_to > 0 &&
+          offset_sync_to - last_sync_size_ >= bytes_per_sync_) {
+        s = RangeSync(last_sync_size_, offset_sync_to - last_sync_size_);
+        last_sync_size_ = offset_sync_to;
+      }
+    }
+  }
+  return s;
+}
+
 Status WritableFileWriter::RangeSync(uint64_t offset, uint64_t nbytes) {
   IOSTATS_TIMER_GUARD(range_sync_nanos);
   TEST_SYNC_POINT("WritableFileWriter::RangeSync:0");
@@ -423,7 +423,8 @@ Status WritableFileWriter::RangeSync(uint64_t offset, uint64_t nbytes) {
 
 // This method writes to disk the specified data and makes use of the rate
 // limiter if available
-Status WritableFileWriter::WriteBuffered(const char* data, size_t size) {
+Status WritableFileWriter::WriteBuffered(const char* data, size_t size,
+                                         bool auto_sync) {
   Status s;
   assert(!use_direct_io());
   const char* src = data;
@@ -460,6 +461,13 @@ Status WritableFileWriter::WriteBuffered(const char* data, size_t size) {
 #endif
       if (!s.ok()) {
         return s;
+      }
+      filesize_ += allowed;
+      if (auto_sync) {
+        s = AutoRangeSync();
+        if (!s.ok()) {
+          return s;
+        }
       }
     }
 
