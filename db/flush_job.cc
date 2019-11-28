@@ -290,7 +290,7 @@ void FlushJob::Cancel() {
 }
 
 Status FlushJob::WriteLevel0Table() {
-  SetSelfThreadLowPriority();
+  SetSelfThreadPriority(kSetThreadPriorityLow);
   AutoThreadOperationStageUpdater stage_updater(
       ThreadStatus::STAGE_FLUSH_WRITE_L0);
   db_mutex_->AssertHeld();
@@ -435,6 +435,7 @@ Status FlushJob::WriteLevel0Table() {
   cfd_->internal_stats()->AddCFStats(InternalStats::BYTES_FLUSHED,
                                      meta_.fd.GetFileSize());
   RecordFlushIOStats();
+  SetSelfThreadPriority(kSetThreadPriorityNormal);
   return s;
 }
 
