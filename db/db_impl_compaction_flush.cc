@@ -1844,6 +1844,7 @@ void DBImpl::MaybeScheduleFlushOrCompaction() {
     CompactionArg* ca = new CompactionArg;
     ca->db = this;
     ca->prepicked_compaction = nullptr;
+    bg_compaction_scheduled_++;
     bg_garbage_collection_scheduled_++;
     unscheduled_garbage_collections_--;
     env_->Schedule(&DBImpl::BGWorkGarbageCollection, ca, Env::Priority::LOW,
@@ -1893,16 +1894,17 @@ DBImpl::BGJobLimits DBImpl::GetBGJobLimits(
     // for our first stab implementing max_background_jobs, simply allocate a
     // quarter of the threads to flushes.
     res.max_flushes = std::max(1, max_background_jobs / 4);
-    res.max_compactions =
-        std::max(1, (max_background_jobs - res.max_flushes) / 2);
-    res.max_garbage_collections = res.max_compactions;
+    res.max_compactions = std::max(2, max_background_jobs - res.max_flushes);
+    res.max_garbage_collections = std::max(1, res.max_compactions / 2);
   } else {
     // compatibility code in case users haven't migrated to max_background_jobs,
     // which automatically computes flush/compaction limits
     res.max_flushes = std::max(1, max_background_flushes);
-    res.max_compactions = std::max(1, max_background_compactions);
+    res.max_compactions = std::max(2, max_background_compactions);
     res.max_garbage_collections =
         std::max(1, max_background_garbage_collections);
+    res.max_garbage_collections =
+        std::min(res.max_garbage_collections, res.max_compactions - 1);
   }
   if (!parallelize_compactions) {
     // throttle background compactions until we deem necessary
@@ -2393,6 +2395,7 @@ void DBImpl::BackgroundCallGarbageCollection() {
 
     assert(num_running_garbage_collections_ > 0);
     num_running_garbage_collections_--;
+    bg_compaction_scheduled_--;
     bg_garbage_collection_scheduled_--;
 
     versions_->GetColumnFamilySet()->FreeDeadColumnFamilies();
