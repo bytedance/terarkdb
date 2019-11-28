@@ -357,8 +357,9 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo, const std::string& tera
   tzo.singleIndexMinSize = std::max<size_t>(tzo.singleIndexMinSize, 1ull << 20);
   tzo.singleIndexMaxSize = std::min<size_t>(tzo.singleIndexMaxSize, 0x1E0000000);
 
-  cfo.table_factory = SingleTerarkZipTableFactory(
-    tzo, std::shared_ptr<TableFactory>(NewAdaptiveTableFactory()));
+  cfo.table_factory.reset(NewTerarkZipTableFactory(
+      tzo, std::shared_ptr<TableFactory>(NewAdaptiveTableFactory(
+          cfo.table_factory))));
   const char* compaction_style = "Universal";
   if (const char* env = getenv("TerarkZipTable_compaction_style")) {
     compaction_style = env;
