@@ -1525,7 +1525,7 @@ Compaction* UniversalCompactionPicker::PickCompositeCompaction(
                      cf_name.c_str(), iter->status().getState());
     return nullptr;
   }
-  auto is_perfect = [=](const MapSstElement& e) {
+  auto is_perfect = [=](const MapSstElement& e, bool marked_for_compaction) {
     if (e.link_.size() != 1) {
       return false;
     }
@@ -1536,7 +1536,10 @@ Compaction* UniversalCompactionPicker::PickCompositeCompaction(
       return false;
     }
     auto f = find->second;
-    if (f->prop.purpose != 0 || f->marked_for_compaction) {
+    if (f->prop.purpose != 0) {
+      return false;
+    }
+    if (marked_for_compaction && f->marked_for_compaction) {
       return false;
     }
     Range r(e.smallest_key_, e.largest_key_, e.include_smallest_,
@@ -1665,7 +1668,7 @@ Compaction* UniversalCompactionPicker::PickCompositeCompaction(
         return nullptr;
       }
       if (unique_check.count(iter->key()) > 0 ||
-          (is_perfect(map_element) &&
+          (is_perfect(map_element, false) &&
            uc->Compare(ExtractUserKey(map_element.smallest_key_),
                        range.limit) != 0)) {
         assign_user_key(range.limit, map_element.smallest_key_);
@@ -1686,7 +1689,7 @@ Compaction* UniversalCompactionPicker::PickCompositeCompaction(
         if (!ReadMapElement(map_element, iter.get(), log_buffer, cf_name)) {
           return nullptr;
         }
-        if (is_perfect(map_element)) {
+        if (is_perfect(map_element, false)) {
           break;
         }
         assign_user_key(range.start, map_element.smallest_key_);
@@ -1725,7 +1728,7 @@ Compaction* UniversalCompactionPicker::PickCompositeCompaction(
     assert(map_element.link_.size() == 1);
 
     if (has_start) {
-      if (is_perfect(map_element) &&
+      if (is_perfect(map_element, true) &&
           uc->Compare(ExtractUserKey(map_element.smallest_key_), range.limit) !=
           0) {
         has_start = false;
@@ -1740,7 +1743,7 @@ Compaction* UniversalCompactionPicker::PickCompositeCompaction(
         assign_user_key(range.limit, map_element.largest_key_);
       }
     } else {
-      if (is_perfect(map_element)) {
+      if (is_perfect(map_element, true)) {
         continue;
       }
       has_start = true;
