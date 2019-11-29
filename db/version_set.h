@@ -258,9 +258,13 @@ class VersionStorageInfo {
   void SetPickGarbageCollectionFail() { is_pick_garbage_collection_fail = true; }
 
   // Is picker garbage collection fail
-  bool IsPickGarbageCollectionFail() const { return is_pick_garbage_collection_fail; }
+  bool IsPickGarbageCollectionFail() const {
+    return is_pick_garbage_collection_fail;
+  }
 
   int num_levels() const { return num_levels_; }
+
+  double total_garbage_ratio() const { return total_garbage_ratio_; }
 
   bool has_space_amplification() const {
     return !has_space_amplification_.empty();
@@ -274,6 +278,7 @@ class VersionStorageInfo {
   void set_read_amplification(const std::vector<double>& read_amp) {
     read_amplification_ = read_amp;
   }
+
   double read_amplification(int level) const {
     return read_amplification_[level];
   }
@@ -563,6 +568,8 @@ class VersionStorageInfo {
   // Estimated bytes needed to be compacted until all levels' size is down to
   // target sizes.
   uint64_t estimated_compaction_needed_bytes_;
+  // Store quantity of files that needs gc.
+  double total_garbage_ratio_;
 
   bool finalized_;
 

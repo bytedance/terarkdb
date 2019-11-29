@@ -1190,6 +1190,7 @@ VersionStorageInfo::VersionStorageInfo(
       current_num_deletions_(0),
       current_num_samples_(0),
       estimated_compaction_needed_bytes_(0),
+      total_garbage_ratio_(0),
       finalized_(false),
       is_pick_compaction_fail(false),
       is_pick_garbage_collection_fail(false),
@@ -1869,6 +1870,15 @@ void VersionStorageInfo::ComputeCompactionScore(
       }
     }
   }
+
+  // Calculate total_garbage_ratio_ as criterion for NeedsGarbageCollection().
+  double num_entries = 0;
+  for (auto& f : LevelFiles(-1)) {
+    total_garbage_ratio_ += f->num_antiquation;
+    num_entries += f->prop.num_entries;
+  }
+  total_garbage_ratio_ /= num_entries;
+
   is_pick_compaction_fail = false;
   ComputeFilesMarkedForCompaction();
   ComputeBottommostFilesMarkedForCompaction();
@@ -1972,6 +1982,9 @@ void VersionStorageInfo::AddFile(int level, FileMetaData* f,
   f->refs++;
   level_files->push_back(f);
   if (level == -1) {
+    // Function exists indicates if subject file were relying by other files.
+    // When this function is not set, dependence_map_ will update with subject
+    // file's property.
     if (exists == nullptr) {
       dependence_map_.emplace(f->fd.GetNumber(), f);
       for (auto file_number : f->prop.inheritance_chain) {
