@@ -961,7 +961,8 @@ bool ColumnFamilyData::NeedsCompaction() const {
 
 bool ColumnFamilyData::NeedsGarbageCollection() const {
   return !current_->storage_info()->IsPickGarbageCollectionFail() &&
-         compaction_picker_->NeedsGarbageCollection(current_->storage_info());
+         compaction_picker_->NeedsGarbageCollection(current_->storage_info(),
+         this->GetCurrentMutableCFOptions()->blob_gc_ratio);
 }
 
 Compaction* ColumnFamilyData::PickCompaction(

@@ -1284,11 +1284,8 @@ bool LevelCompactionPicker::NeedsCompaction(
 }
 
 bool CompactionPicker::NeedsGarbageCollection(
-    const VersionStorageInfo* vstorage) const {
-  if (!vstorage->LevelFiles(-1).empty()) {
-    return true;
-  }
-  return false;
+    const VersionStorageInfo* vstorage, double ratio) const {
+  return vstorage->total_garbage_ratio() >= ratio;
 }
 
 namespace {
