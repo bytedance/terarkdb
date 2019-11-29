@@ -123,25 +123,6 @@ void SetSelfThreadPriority(SetThreadPriority priority) {
   } else {
     setpriority(PRIO_PROCESS, 0 /* Current thread */, 0);
   }
-#define IOPRIO_CLASS_SHIFT (13)
-#define IOPRIO_PRIO_VALUE(class, data) (((class) << IOPRIO_CLASS_SHIFT) | data)
-    // Put schedule into IOPRIO_CLASS_IDLE class (lowest)
-    // These system calls only have an effect when used in conjunction
-    // with an I/O scheduler that supports I/O priorities. As at
-    // kernel 2.6.17 the only such scheduler is the Completely
-    // Fair Queuing (CFQ) I/O scheduler.
-    // To change scheduler:
-    //  echo cfq > /sys/block/<device_name>/queue/schedule
-    // Tunables to consider:
-    //  /sys/block/<device_name>/queue/slice_idle
-    //  /sys/block/<device_name>/queue/slice_sync
-  if (priority == kSetThreadPriorityLow) {
-    syscall(SYS_ioprio_set, 1 /* IOPRIO_WHO_PROCESS */, 0 /* Current thread */,
-            IOPRIO_PRIO_VALUE(3, 0));
-  } else {
-    syscall(SYS_ioprio_set, 1 /* IOPRIO_WHO_PROCESS */, 0 /* Current thread */,
-            IOPRIO_PRIO_VALUE(2, 4));
-  }
 #else
   (void)priority;
 #endif
