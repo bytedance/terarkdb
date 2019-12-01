@@ -425,8 +425,10 @@ Status ExternalSstFileIngestionJob::AssignLevelAndSeqnoForIngestedFile(
     IngestedFileInfo* file_to_ingest, SequenceNumber* assigned_seqno) {
   Status status;
   *assigned_seqno = 0;
+  bool enableTerarkDB = cfd_->GetCurrentMutableCFOptions()->enable_lazy_compaction;
   const SequenceNumber last_seqno = versions_->LastSequence();
-  if (force_global_seqno) {
+  // Temporary fix: Always ingest to L0 when using TerarkDB.
+  if (force_global_seqno || enableTerarkDB) {
     *assigned_seqno = last_seqno + 1;
     if (compaction_style == kCompactionStyleUniversal) {
       file_to_ingest->picked_level = 0;
