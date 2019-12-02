@@ -463,7 +463,7 @@ bool SomeFileOverlapsRange(
 
 namespace {
 
-class LevelIterator final : public InternalIterator {
+class LevelIterator final : public InternalIterator, public Snapshot {
  public:
 
   LevelIterator(TableCache* table_cache, const ReadOptions& read_options,
@@ -478,6 +478,7 @@ class LevelIterator final : public InternalIterator {
                     compaction_boundaries = nullptr)
       : table_cache_(table_cache),
         read_options_(read_options),
+        snapshot_(0),
         env_options_(env_options),
         icomparator_(icomparator),
         flevel_(flevel),
@@ -493,9 +494,19 @@ class LevelIterator final : public InternalIterator {
         compaction_boundaries_(compaction_boundaries) {
     // Empty level is not supported.
     assert(flevel_ != nullptr && flevel_->num_files > 0);
+    if (read_options_.snapshot != nullptr) {
+      snapshot_ = read_options_.snapshot->GetSequenceNumber();
+      read_options_.snapshot = this;
+    }
+    read_options_.iterate_lower_bound = nullptr;
+    read_options_.iterate_upper_bound = nullptr;
   }
 
   virtual ~LevelIterator() { delete file_iter_.Set(nullptr); }
+
+  SequenceNumber GetSequenceNumber() const override {
+    return snapshot_;
+  }
 
   virtual void Seek(const Slice& target) override;
   virtual void SeekForPrev(const Slice& target) override;
@@ -557,7 +568,8 @@ class LevelIterator final : public InternalIterator {
   }
 
   TableCache* table_cache_;
-  const ReadOptions read_options_;
+  ReadOptions read_options_;
+  SequenceNumber snapshot_;
   const EnvOptions& env_options_;
   const InternalKeyComparator& icomparator_;
   const LevelFilesBrief* flevel_;
@@ -1178,6 +1190,7 @@ VersionStorageInfo::VersionStorageInfo(
       current_num_deletions_(0),
       current_num_samples_(0),
       estimated_compaction_needed_bytes_(0),
+      total_garbage_ratio_(0),
       finalized_(false),
       is_pick_compaction_fail(false),
       is_pick_garbage_collection_fail(false),
@@ -1857,6 +1870,15 @@ void VersionStorageInfo::ComputeCompactionScore(
       }
     }
   }
+
+  // Calculate total_garbage_ratio_ as criterion for NeedsGarbageCollection().
+  double num_entries = 0;
+  for (auto& f : LevelFiles(-1)) {
+    total_garbage_ratio_ += f->num_antiquation;
+    num_entries += f->prop.num_entries;
+  }
+  total_garbage_ratio_ /= num_entries;
+
   is_pick_compaction_fail = false;
   ComputeFilesMarkedForCompaction();
   ComputeBottommostFilesMarkedForCompaction();
@@ -1932,7 +1954,9 @@ bool CompareCompensatedSizeDescending(const Fsize& first, const Fsize& second) {
 }
 } // anonymous namespace
 
-void VersionStorageInfo::AddFile(int level, FileMetaData* f, Logger* info_log) {
+void VersionStorageInfo::AddFile(int level, FileMetaData* f,
+                                 bool (*exists)(void*, uint64_t),
+                                 void* exists_args, Logger* info_log) {
   auto* level_files = &files_[level];
   // Must not overlap
 #ifndef NDEBUG
@@ -1958,25 +1982,29 @@ void VersionStorageInfo::AddFile(int level, FileMetaData* f, Logger* info_log) {
   f->refs++;
   level_files->push_back(f);
   if (level == -1) {
-    dependence_map_.emplace(f->fd.GetNumber(), f);
-    for (auto file_number : f->prop.inheritance_chain) {
-      assert(dependence_map_.count(file_number) == 0);
-      dependence_map_.emplace(file_number, f);
+    // Function exists indicates if subject file were relying by other files.
+    // When this function is not set, dependence_map_ will update with subject
+    // file's property.
+    if (exists == nullptr) {
+      dependence_map_.emplace(f->fd.GetNumber(), f);
+      for (auto file_number : f->prop.inheritance_chain) {
+        assert(dependence_map_.count(file_number) == 0);
+        dependence_map_.emplace(file_number, f);
+      }
+    } else {
+      if (exists(exists_args, f->fd.GetNumber())) {
+        dependence_map_.emplace(f->fd.GetNumber(), f);
+      }
+      for (auto file_number : f->prop.inheritance_chain) {
+        assert(dependence_map_.count(file_number) == 0);
+        if (exists(exists_args, file_number)) {
+          dependence_map_.emplace(file_number, f);
+        }
+      }
     }
   } else {
     if (f->prop.purpose != 0) {
       has_space_amplification_.emplace(level);
-    }
-  }
-}
-
-void VersionStorageInfo::ShrinkDependenceMap(
-    void* arg, bool (*exists)(void*, FileMetaData*)) {
-  for (auto it = dependence_map_.begin(); it != dependence_map_.end(); ) {
-    if (exists(arg, it->second)) {
-      ++it;
-    } else {
-      it = dependence_map_.erase(it);
     }
   }
 }

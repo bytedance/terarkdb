@@ -25,8 +25,8 @@ class NoMergingMergeOp : public MergeOperator {
     return false;
   }
   bool PartialMergeMulti(const Slice& /*key*/,
-                         const std::deque<Slice>& /*operand_list*/,
-                         std::string* /*new_value*/,
+                         const std::vector<LazyBuffer>& /*operand_list*/,
+                         LazyBuffer* /*new_value*/,
                          Logger* /*logger*/) const override {
     ADD_FAILURE();
     return false;
@@ -141,9 +141,9 @@ class LoggingForwardVectorIterator : public InternalIterator {
     assert(Valid());
     return Slice(keys_[current_]);
   }
-  virtual Slice value() const override {
+  virtual LazyBuffer value() const override {
     assert(Valid());
-    return Slice(values_[current_]);
+    return LazyBuffer(values_[current_], false, 1);
   }
 
   virtual Status status() const override { return Status::OK(); }
@@ -223,8 +223,8 @@ class CompactionIteratorTest : public testing::TestWithParam<bool> {
       MergeOperator* merge_op = nullptr, CompactionFilter* filter = nullptr,
       bool bottommost_level = false,
       SequenceNumber earliest_write_conflict_snapshot = kMaxSequenceNumber) {
-    std::unique_ptr<InternalIterator> unfragmented_range_del_iter(
-        new test::VectorIterator(range_del_ks, range_del_vs));
+    std::unique_ptr<InternalIteratorBase<Slice>> unfragmented_range_del_iter(
+        new test::VectorIteratorBase<Slice>(range_del_ks, range_del_vs));
     auto tombstone_list = std::make_shared<FragmentedRangeTombstoneList>(
         std::move(unfragmented_range_del_iter), icmp_);
     std::unique_ptr<FragmentedRangeTombstoneIterator> range_del_iter(
@@ -252,10 +252,11 @@ class CompactionIteratorTest : public testing::TestWithParam<bool> {
     iter_.reset(new LoggingForwardVectorIterator(ks, vs));
     iter_->SeekToFirst();
     c_iter_.reset(new CompactionIterator(
-        iter_.get(), nullptr, cmp_, merge_helper_.get(), last_sequence, &snapshots_,
-        earliest_write_conflict_snapshot, snapshot_checker_.get(),
+        iter_.get(), nullptr, nullptr, cmp_, merge_helper_.get(), last_sequence,
+        &snapshots_, earliest_write_conflict_snapshot, snapshot_checker_.get(),
         Env::Default(), false /* report_detailed_time */, false,
-        range_del_agg_.get(), std::move(compaction), filter, &shutting_down_));
+        range_del_agg_.get(), std::move(compaction), size_t(-1), filter,
+        &shutting_down_));
   }
 
   void AddSnapshot(SequenceNumber snapshot,
@@ -285,6 +286,7 @@ class CompactionIteratorTest : public testing::TestWithParam<bool> {
       ASSERT_TRUE(c_iter_->Valid()) << info;
       ASSERT_OK(c_iter_->status()) << info;
       ASSERT_EQ(expected_keys[i], c_iter_->key().ToString()) << info;
+      ASSERT_OK(c_iter_->value().fetch());
       ASSERT_EQ(expected_values[i], c_iter_->value().ToString()) << info;
       c_iter_->Next();
     }
@@ -457,14 +459,17 @@ TEST_P(CompactionIteratorTest, CompactionFilterSkipUntil) {
   c_iter_->SeekToFirst();
   ASSERT_TRUE(c_iter_->Valid());
   ASSERT_EQ(test::KeyStr("a", 50, kTypeValue), c_iter_->key().ToString());
+  ASSERT_OK(c_iter_->value().fetch());
   ASSERT_EQ("av50", c_iter_->value().ToString());
   c_iter_->Next();
   ASSERT_TRUE(c_iter_->Valid());
   ASSERT_EQ(test::KeyStr("e", 71, kTypeMerge), c_iter_->key().ToString());
+  ASSERT_OK(c_iter_->value().fetch());
   ASSERT_EQ("em71", c_iter_->value().ToString());
   c_iter_->Next();
   ASSERT_TRUE(c_iter_->Valid());
   ASSERT_EQ(test::KeyStr("h", 91, kTypeValue), c_iter_->key().ToString());
+  ASSERT_OK(c_iter_->value().fetch());
   ASSERT_EQ("hv91", c_iter_->value().ToString());
   c_iter_->Next();
   ASSERT_FALSE(c_iter_->Valid());
@@ -604,20 +609,26 @@ TEST_P(CompactionIteratorTest, SingleMergeOperand) {
 
       std::string temp_value;
       if (merge_in.existing_value != nullptr) {
+        if (!Fetch(*merge_in.existing_value, &merge_out->new_value)) {
+          return true;
+        }
         temp_value = merge_in.existing_value->ToString();
       }
 
       for (auto& operand : merge_in.operand_list) {
+        if (!Fetch(operand, &merge_out->new_value)) {
+          return true;
+        }
         temp_value.append(operand.ToString());
       }
-      merge_out->new_value = temp_value;
+      merge_out->new_value.reset(temp_value, true);
 
       return true;
     }
 
     bool PartialMergeMulti(const Slice& key,
-                           const std::deque<Slice>& operand_list,
-                           std::string* new_value,
+                           const std::vector<LazyBuffer>& operand_list,
+                           LazyBuffer* new_value,
                            Logger* /*logger*/) const override {
       std::string string_key = key.ToString();
       EXPECT_TRUE(string_key == "a" || string_key == "b");
@@ -630,9 +641,12 @@ TEST_P(CompactionIteratorTest, SingleMergeOperand) {
 
       std::string temp_value;
       for (auto& operand : operand_list) {
-        temp_value.append(operand.ToString());
+        if (!Fetch(operand, new_value)) {
+          return true;
+        }
+        temp_value.append(operand.data(), operand.size());
       }
-      swap(temp_value, *new_value);
+      swap(temp_value, *new_value->trans_to_string());
 
       return true;
     }
@@ -659,11 +673,14 @@ TEST_P(CompactionIteratorTest, SingleMergeOperand) {
   c_iter_->SeekToFirst();
   ASSERT_TRUE(c_iter_->Valid());
   ASSERT_EQ(test::KeyStr("a", 50, kTypeMerge), c_iter_->key().ToString());
+  ASSERT_OK(c_iter_->value().fetch());
   ASSERT_EQ("av1", c_iter_->value().ToString());
   c_iter_->Next();
   ASSERT_TRUE(c_iter_->Valid());
+  ASSERT_OK(c_iter_->value().fetch());
   ASSERT_EQ("bv1bv2", c_iter_->value().ToString());
   c_iter_->Next();
+  ASSERT_OK(c_iter_->value().fetch());
   ASSERT_EQ("cv1cv2", c_iter_->value().ToString());
 }
 

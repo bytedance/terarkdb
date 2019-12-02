@@ -59,6 +59,7 @@
 #include "util/coding.h"
 #include "util/file_reader_writer.h"
 #include "util/filename.h"
+#include "util/file_util.h"
 #include "util/log_buffer.h"
 #include "util/logging.h"
 #include "util/mutexlock.h"
@@ -68,42 +69,7 @@
 #include "util/string_util.h"
 #include "util/sync_point.h"
 
-#ifdef OS_LINUX
-#include <unistd.h>
-#include <sys/syscall.h>
-#include <sys/resource.h>
-#endif
-
 namespace rocksdb {
-
-namespace {
-void SetSelfThreadLowPriority() {
-#ifdef OS_LINUX
-  setpriority(
-        PRIO_PROCESS,
-        // Current thread.
-        0,
-        // Lowest priority possible.
-        19);
-#define IOPRIO_CLASS_SHIFT (13)
-#define IOPRIO_PRIO_VALUE(class, data) (((class) << IOPRIO_CLASS_SHIFT) | data)
-    // Put schedule into IOPRIO_CLASS_IDLE class (lowest)
-    // These system calls only have an effect when used in conjunction
-    // with an I/O scheduler that supports I/O priorities. As at
-    // kernel 2.6.17 the only such scheduler is the Completely
-    // Fair Queuing (CFQ) I/O scheduler.
-    // To change scheduler:
-    //  echo cfq > /sys/block/<device_name>/queue/schedule
-    // Tunables to consider:
-    //  /sys/block/<device_name>/queue/slice_idle
-    //  /sys/block/<device_name>/queue/slice_sync
-    syscall(SYS_ioprio_set, 1,  // IOPRIO_WHO_PROCESS
-            // Current thread.
-            0,
-            IOPRIO_PRIO_VALUE(3, 0));
-#endif
-};
-}
 
 const char* GetCompactionReasonString(CompactionReason compaction_reason) {
   switch (compaction_reason) {
@@ -204,8 +170,6 @@ struct CompactionJob::SubcompactionState {
   // The number of bytes overlapping between the current output and
   // grandparent files used in ShouldStopBefore().
   uint64_t overlapped_bytes = 0;
-  //
-  bool set_low_riority = false;
   // A flag determine whether the key has been seen in ShouldStopBefore()
   bool seen_key = false;
   std::string compression_dict;
@@ -322,7 +286,8 @@ struct CompactionJob::CompactionState {
 
   Slice SmallestUserKey() {
     for (const auto& sub_compact_state : sub_compact_states) {
-      if (!sub_compact_state.outputs.empty() &&
+      if (sub_compact_state.status.ok() &&
+          !sub_compact_state.outputs.empty() &&
           sub_compact_state.outputs[0].finished) {
         return sub_compact_state.outputs[0].meta.smallest.user_key();
       }
@@ -334,7 +299,8 @@ struct CompactionJob::CompactionState {
   Slice LargestUserKey() {
     for (auto it = sub_compact_states.rbegin(); it < sub_compact_states.rend();
          ++it) {
-      if (!it->outputs.empty() && it->current_output()->finished) {
+      if (it->status.ok() && !it->outputs.empty() &&
+          it->current_output()->finished) {
         assert(it->current_output() != nullptr);
         return it->current_output()->meta.largest.user_key();
       }
@@ -864,7 +830,6 @@ Status CompactionJob::RunSelf() {
     // map compact don't need multithreads
     thread_pool.reserve(num_threads - 1);
     for (size_t i = 1; i < compact_->sub_compact_states.size(); i++) {
-      compact_->sub_compact_states[i].set_low_riority = true;
       thread_pool.emplace_back(&CompactionJob::ProcessCompaction, this,
                                &compact_->sub_compact_states[i]);
     }
@@ -930,10 +895,8 @@ Status CompactionJob::VerifyFiles() {
   auto prefix_extractor =
       compact_->compaction->mutable_cf_options()->prefix_extractor.get();
   std::atomic<size_t> next_file_meta_idx(0);
-  auto verify_table = [&](Status& output_status, bool set_low_riority) {
-    if (set_low_riority) {
-      SetSelfThreadLowPriority();
-    }
+  auto verify_table = [&](Status& output_status) {
+    SetSelfThreadPriority(kSetThreadPriorityLow);
     while (true) {
       size_t file_idx = next_file_meta_idx.fetch_add(1);
       if (file_idx >= files_meta.size()) {
@@ -970,15 +933,15 @@ Status CompactionJob::VerifyFiles() {
         break;
       }
     }
+    SetSelfThreadPriority(kSetThreadPriorityNormal);
   };
   size_t thread_count =
       std::min(files_meta.size(), compact_->sub_compact_states.size());
   for (size_t i = 1; i < thread_count; i++) {
     thread_pool.emplace_back(verify_table,
-                             std::ref(compact_->sub_compact_states[i].status),
-                             true);
+                             std::ref(compact_->sub_compact_states[i].status));
   }
-  verify_table(compact_->sub_compact_states[0].status, false);
+  verify_table(compact_->sub_compact_states[0].status);
   for (auto& thread : thread_pool) {
     thread.join();
   }
@@ -1095,9 +1058,7 @@ Status CompactionJob::Install(const MutableCFOptions& mutable_cf_options) {
 }
 
 void CompactionJob::ProcessCompaction(SubcompactionState* sub_compact) {
-  if (sub_compact->set_low_riority) {
-    SetSelfThreadLowPriority();
-  }
+  SetSelfThreadPriority(kSetThreadPriorityLow);
   switch (sub_compact->compaction->compaction_type()) {
     case kKeyValueCompaction:
       ProcessKeyValueCompaction(sub_compact);
@@ -1116,6 +1077,7 @@ void CompactionJob::ProcessCompaction(SubcompactionState* sub_compact) {
       assert(false);
       break;
   }
+  SetSelfThreadPriority(kSetThreadPriorityNormal);
 }
 
 void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
@@ -1735,6 +1697,20 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
                    sub_compact->compaction->num_antiquation(),
                    counter.garbage_type, counter.get_not_found,
                    counter.file_number_mismatch);
+  }
+
+  if (measure_io_stats_) {
+    sub_compact->compaction_job_stats.file_write_nanos +=
+        IOSTATS(write_nanos) - prev_write_nanos;
+    sub_compact->compaction_job_stats.file_fsync_nanos +=
+        IOSTATS(fsync_nanos) - prev_fsync_nanos;
+    sub_compact->compaction_job_stats.file_range_sync_nanos +=
+        IOSTATS(range_sync_nanos) - prev_range_sync_nanos;
+    sub_compact->compaction_job_stats.file_prepare_write_nanos +=
+        IOSTATS(prepare_write_nanos) - prev_prepare_write_nanos;
+    if (prev_perf_level != PerfLevel::kEnableTime) {
+      SetPerfLevel(prev_perf_level);
+    }
   }
 
   input.reset();

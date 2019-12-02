@@ -309,9 +309,10 @@ std::string StatisticsImpl::ToString() const {
     // should be provided correctly
     int ret = snprintf(
         buffer, kTmpStrBufferSize,
-        "%s P50 : %f P95 : %f P99 : %f P100 : %f COUNT : %" PRIu64 " SUM : %"
-        PRIu64 "\n", h.second.c_str(), hData.median, hData.percentile95,
-        hData.percentile99, hData.max, hData.count, hData.sum);
+        "%s P50 : %f P95 : %f P99 : %f P99.9 : %f P100 : %f COUNT : %" PRIu64 
+        " SUM : %" PRIu64 "\n", h.second.c_str(), hData.median,
+        hData.percentile95, hData.percentile99, hData.percentile999, hData.max,
+        hData.count, hData.sum);
     if (ret < 0 || ret >= kTmpStrBufferSize) {
       assert(false);
       continue;

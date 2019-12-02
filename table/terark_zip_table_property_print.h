@@ -1,7 +1,9 @@
   const double GiB = 1ull << 30;
 
+  M_String(localTempDir);
   M_String(indexType);
   M_NumFmt(checksumLevel            , "%d");
+  M_NumFmt(checksumSmallValSize     , "%d");
   M_NumFmt(entropyAlgo              , "%d");
   M_NumFmt(indexNestLevel           , "%d");
   M_NumFmt(indexNestScale           , "%d");

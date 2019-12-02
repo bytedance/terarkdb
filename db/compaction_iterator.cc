@@ -340,6 +340,7 @@ void CompactionIterator::NextFromInput() {
       current_user_key_snapshot_ = 0;
       iter_stats_.num_input_corrupt_records++;
       valid_ = true;
+      value_.clear();
       break;
     }
     // If an end key (exclusive) is specified, check if the current key is
@@ -755,7 +756,7 @@ void CompactionIterator::PrepareOutput() {
              (snapshot_checker_ == nullptr ||
               LIKELY(snapshot_checker_->IsInSnapshot(ikey_.sequence,
                                                      earliest_snapshot_))) &&
-             ikey_.type != kTypeMerge && value_.file_number() != uint64_t(-1)) {
+             ikey_.type != kTypeMerge) {
     assert(ikey_.type != kTypeDeletion && ikey_.type != kTypeSingleDeletion);
     ikey_.sequence = 0;
     current_key_.UpdateInternalKey(0, ikey_.type);

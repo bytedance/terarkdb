@@ -3417,7 +3417,7 @@ void VerifyDBFromDB(std::string& truth_db_name) {
     options.disable_auto_compactions = FLAGS_disable_auto_compactions;
     options.enable_lazy_compaction = FLAGS_enable_lazy_compaction;
     options.blob_size = FLAGS_blob_size;
-    options.blob_gc_tario = FLOAGS_blob_gc_ratio;
+    options.blob_gc_ratio = FLAGS_blob_gc_ratio;
     options.optimize_filters_for_hits = FLAGS_optimize_filters_for_hits;
 
     // fill storage options
@@ -4369,7 +4369,7 @@ void VerifyDBFromDB(std::string& truth_db_name) {
     ReadOptions options(FLAGS_verify_checksum, true);
     std::unique_ptr<const char[]> key_guard;
     Slice key = AllocateKey(&key_guard);
-    PinnableSlice pinnable_val;
+    LazyBuffer lazy_val;
 
     Duration duration(FLAGS_duration, reads_);
     while (!duration.Done(1)) {
@@ -4383,16 +4383,16 @@ void VerifyDBFromDB(std::string& truth_db_name) {
       Status s;
       if (FLAGS_num_column_families > 1) {
         s = db_with_cfh->db->Get(options, db_with_cfh->GetCfh(key_rand), key,
-                                 &pinnable_val);
+                                 &lazy_val);
       } else {
-        pinnable_val.Reset();
+        lazy_val.clear();
         s = db_with_cfh->db->Get(options,
                                  db_with_cfh->db->DefaultColumnFamily(), key,
-                                 &pinnable_val);
+                                 &lazy_val);
       }
       if (s.ok()) {
         found++;
-        bytes += key.size() + pinnable_val.size();
+        bytes += key.size() + lazy_val.size();
       } else if (!s.IsNotFound()) {
         fprintf(stderr, "Get returned an error: %s\n", s.ToString().c_str());
         abort();

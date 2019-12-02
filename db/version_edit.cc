@@ -177,25 +177,18 @@ bool VersionEdit::EncodeTo(std::string* dst) const {
       std::string encode_property_cache;
       encode_property_cache.push_back((char)f.prop.purpose);
       PutVarint64(&encode_property_cache, f.prop.dependence.size());
-      bool has_entry_count = false;
       for (auto& dependence : f.prop.dependence) {
         PutVarint64(&encode_property_cache, dependence.file_number);
-        has_entry_count |= dependence.entry_count > 0;
       }
       PutVarint64(&encode_property_cache, f.prop.num_entries);
-      if (f.prop.max_read_amp > 1 || !f.prop.inheritance_chain.empty() ||
-          has_entry_count) {
-        PutVarint32Varint64(&encode_property_cache, f.prop.max_read_amp,
-                            DoubleToU64(f.prop.read_amp));
-        PutVarint64(&encode_property_cache, f.prop.inheritance_chain.size());
-        for (auto file_number : f.prop.inheritance_chain) {
-          PutVarint64(&encode_property_cache, file_number);
-        }
-        if (has_entry_count) {
-          for (auto& dependence : f.prop.dependence) {
-            PutVarint64(&encode_property_cache, dependence.entry_count);
-          }
-        }
+      PutVarint32Varint64(&encode_property_cache, f.prop.max_read_amp,
+                          DoubleToU64(f.prop.read_amp));
+      PutVarint64(&encode_property_cache, f.prop.inheritance_chain.size());
+      for (auto file_number : f.prop.inheritance_chain) {
+        PutVarint64(&encode_property_cache, file_number);
+      }
+      for (auto& dependence : f.prop.dependence) {
+        PutVarint64(&encode_property_cache, dependence.entry_count);
       }
       PutLengthPrefixedSlice(dst, encode_property_cache);
     }

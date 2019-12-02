@@ -8,6 +8,11 @@
 #include <string>
 #include <algorithm>
 
+#include <unistd.h>
+#include <sys/resource.h>
+#include <sys/syscall.h>
+#include <sys/time.h>
+
 #include "rocksdb/env.h"
 #include "util/sst_file_manager_impl.h"
 #include "util/file_reader_writer.h"
@@ -108,6 +113,18 @@ Status DeleteDBFile(const ImmutableDBOptions* db_options,
   (void)force_bg;
   // SstFileManager is not supported in ROCKSDB_LITE
   return db_options->env->DeleteFile(fname);
+#endif
+}
+
+void SetSelfThreadPriority(SetThreadPriority priority) {
+#ifdef OS_LINUX
+  if (priority == kSetThreadPriorityLow) {
+    setpriority(PRIO_PROCESS, 0 /* Current thread */, 19 /* Lowest priority */);
+  } else {
+    setpriority(PRIO_PROCESS, 0 /* Current thread */, 0);
+  }
+#else
+  (void)priority;
 #endif
 }
 

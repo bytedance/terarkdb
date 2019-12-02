@@ -79,6 +79,8 @@ struct ImmutableCFOptions {
 
   bool advise_random_on_open;
 
+  bool allow_mmap_populate;
+
   // This options is required by PlainTableReader. May need to move it
   // to PlainTableOptions just like bloom_bits_per_key
   uint32_t bloom_locality;

@@ -163,7 +163,6 @@ void FragmentedRangeTombstoneList::FragmentTombstones(
     cur_start_key = next_start_key;
   };
 
-  bool no_tombstones = true;
   for (unfragmented_tombstones->SeekToFirst(); unfragmented_tombstones->Valid();
        unfragmented_tombstones->Next()) {
     const Slice& ikey = unfragmented_tombstones->key();
@@ -172,7 +171,6 @@ void FragmentedRangeTombstoneList::FragmentTombstones(
     pinned_slices_.emplace_back(tombstone_start_key.data(),
                                 tombstone_start_key.size());
     tombstone_start_key = pinned_slices_.back();
-    no_tombstones = false;
 
     Slice tombstone_end_key = unfragmented_tombstones->value();
     pinned_slices_.emplace_back(tombstone_end_key.data(),

@@ -4140,7 +4140,7 @@ TEST_P(CompactionPriTest, Test) {
   for (int i = 0; i < kNKeys; i++) {
     keys[i] = i;
   }
-  std::random_shuffle(std::begin(keys), std::end(keys));
+  std::shuffle(std::begin(keys), std::end(keys), std::mt19937_64());
 
   for (int i = 0; i < kNKeys; i++) {
     ASSERT_OK(Put(Key(keys[i]), RandomString(&rnd, 102)));

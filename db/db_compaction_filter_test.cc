@@ -41,6 +41,9 @@ class DBTestCompactionFilterWithCompactParam
         option_config_ == kUniversalSubcompactions) {
       assert(options.max_subcompactions > 1);
     }
+    if (option_config_ == kUniversalSubcompactions) {
+      options.enable_lazy_compaction = true;
+    }
     TryReopen(options);
   }
 };
@@ -110,7 +113,7 @@ class SkipEvenFilter : public CompactionFilter {
   virtual Decision FilterV2(int /*level*/, const Slice& key,
                             ValueType /*value_type*/,
                             const LazyBuffer& /*existing_value*/,
-                            std::string* /*new_value*/,
+                            LazyBuffer* /*new_value*/,
                             std::string* skip_until) const override {
     cfilter_count++;
     int i = std::stoi(key.ToString());
@@ -357,7 +360,7 @@ TEST_F(DBTestCompactionFilter, CompactionFilter) {
     }
   }
   ASSERT_EQ(total, 100000);
-  ASSERT_EQ(count, 1);
+  ASSERT_EQ(count, 0);
 
   // overwrite all the 100K keys once again.
   for (int i = 0; i < 100000; i++) {
@@ -615,6 +618,7 @@ TEST_F(DBTestCompactionFilter, CompactionFilterContextManual) {
   options.compaction_filter_factory.reset(filter);
   options.compression = kNoCompression;
   options.level0_file_num_compaction_trigger = 8;
+  options.enable_lazy_compaction = true;
   Reopen(options);
   int num_keys_per_file = 400;
   for (int j = 0; j < 3; j++) {
@@ -664,7 +668,7 @@ TEST_F(DBTestCompactionFilter, CompactionFilterContextManual) {
       iter->Next();
     }
     ASSERT_EQ(total, 700);
-    ASSERT_EQ(count, 1);
+    ASSERT_EQ(count, 0);
   }
 }
 #endif  // ROCKSDB_LITE

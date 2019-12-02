@@ -93,7 +93,7 @@ SmallestKeyHeap create_level_heap(Compaction* c, const Comparator* icmp) {
   return smallest_key_priority_q;
 }
 
-#ifndef NDEBUG
+#if !defined(NDEBUG) && 0
 // smallest_seqno and largest_seqno are set iff. `files` is not empty.
 void GetSmallestLargestSeqno(const std::vector<FileMetaData*>& files,
                              SequenceNumber* smallest_seqno,
@@ -256,7 +256,7 @@ static size_t GetFilesSize(const FileMetaData* f, uint64_t file_number,
     assert(file_number == uint64_t(-1));
   }
   uint64_t file_size = f->fd.GetFileSize();
-  if (f->prop.purpose != 0) {
+  if (f->prop.purpose == kMapSst) {
     for (auto& dependence : f->prop.dependence) {
       file_size += GetFilesSize(nullptr, dependence.file_number, vstorage);
     }
@@ -1525,7 +1525,7 @@ Compaction* UniversalCompactionPicker::PickCompositeCompaction(
                      cf_name.c_str(), iter->status().getState());
     return nullptr;
   }
-  auto is_perfect = [=](const MapSstElement& e) {
+  auto is_perfect = [=](const MapSstElement& e, bool marked_for_compaction) {
     if (e.link_.size() != 1) {
       return false;
     }
@@ -1536,7 +1536,10 @@ Compaction* UniversalCompactionPicker::PickCompositeCompaction(
       return false;
     }
     auto f = find->second;
-    if (f->prop.purpose != 0 || f->marked_for_compaction) {
+    if (f->prop.purpose != 0) {
+      return false;
+    }
+    if (marked_for_compaction && f->marked_for_compaction) {
       return false;
     }
     Range r(e.smallest_key_, e.largest_key_, e.include_smallest_,
@@ -1563,26 +1566,19 @@ Compaction* UniversalCompactionPicker::PickCompositeCompaction(
     range.limit.assign(uend.data(), uend.size());
   };
   bool has_start = false;
-  size_t counter = 0;
-  for (iter->SeekToFirst(); iter->Valid(); iter->Next()) {
-    ++counter;
-    if (!ReadMapElement(map_element, iter.get(), log_buffer, cf_name)) {
-      return nullptr;
-    }
-    if (is_perfect(map_element)) {
+  size_t counter = inputs.files.front()->prop.num_entries;
+  for (auto& dependence : inputs.files.front()->prop.dependence) {
+    auto& dependence_map = vstorage->dependence_map();
+    FileUseInfo info;
+    auto find = dependence_map.find(dependence.file_number);
+    if (find == dependence_map.end()) {
+      // TODO log error
       continue;
     }
-    for (auto& l : map_element.link_) {
-      auto find = file_used.find(l.file_number);
-      if (find == file_used.end()) {
-        FileUseInfo info = {
-            GetFilesSize(nullptr, l.file_number, *vstorage), l.size
-        };
-        file_used.emplace(l.file_number, info);
-      } else {
-        find->second.used += l.size;
-      }
-    }
+    auto f = find->second;
+    info.size = f->fd.GetFileSize();
+    info.used = info.size * dependence.entry_count / f->prop.num_entries;
+    file_used.emplace(dependence.file_number, info);
   }
   std::vector<InternalKey> internal_key_storage;
   internal_key_storage.resize(counter *= 2);
@@ -1672,7 +1668,7 @@ Compaction* UniversalCompactionPicker::PickCompositeCompaction(
         return nullptr;
       }
       if (unique_check.count(iter->key()) > 0 ||
-          (is_perfect(map_element) &&
+          (is_perfect(map_element, false) &&
            uc->Compare(ExtractUserKey(map_element.smallest_key_),
                        range.limit) != 0)) {
         assign_user_key(range.limit, map_element.smallest_key_);
@@ -1693,7 +1689,7 @@ Compaction* UniversalCompactionPicker::PickCompositeCompaction(
         if (!ReadMapElement(map_element, iter.get(), log_buffer, cf_name)) {
           return nullptr;
         }
-        if (is_perfect(map_element)) {
+        if (is_perfect(map_element, false)) {
           break;
         }
         assign_user_key(range.start, map_element.smallest_key_);
@@ -1732,7 +1728,7 @@ Compaction* UniversalCompactionPicker::PickCompositeCompaction(
     assert(map_element.link_.size() == 1);
 
     if (has_start) {
-      if (is_perfect(map_element) &&
+      if (is_perfect(map_element, true) &&
           uc->Compare(ExtractUserKey(map_element.smallest_key_), range.limit) !=
           0) {
         has_start = false;
@@ -1747,7 +1743,7 @@ Compaction* UniversalCompactionPicker::PickCompositeCompaction(
         assign_user_key(range.limit, map_element.largest_key_);
       }
     } else {
-      if (is_perfect(map_element)) {
+      if (is_perfect(map_element, true)) {
         continue;
       }
       has_start = true;
@@ -1802,6 +1798,7 @@ Compaction* UniversalCompactionPicker::PickRangeCompaction(
                                                   kCompactionStyleUniversal);
     params.output_path_id = path_id;
     params.compression_opts = ioptions_.compression_opts;
+    params.manual_compaction = true;
     params.score = 0;
     params.compaction_type = kMapCompaction;
     return new Compaction(std::move(params));
@@ -1854,11 +1851,14 @@ Compaction* UniversalCompactionPicker::PickRangeCompaction(
         continue;
       }
       auto f = find->second;
+      if (f->prop.purpose != kMapSst) {
+        continue;
+      }
       for (auto& dependence : f->prop.dependence) {
         if (files_being_compact->count(dependence.file_number) > 0) {
           return true;
         }
-      };
+      }
     }
     return false;
   };
@@ -1946,6 +1946,7 @@ Compaction* UniversalCompactionPicker::PickRangeCompaction(
   params.compression =
       GetCompressionType(ioptions_, vstorage, mutable_cf_options, level, 1);
   params.compression_opts = GetCompressionOptions(ioptions_, vstorage, level);
+  params.manual_compaction = true;
   params.score = 0;
   params.partial_compaction = true;
   params.compaction_type = kKeyValueCompaction;

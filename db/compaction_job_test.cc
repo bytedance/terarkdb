@@ -93,8 +93,8 @@ class CompactionJobTest : public testing::Test {
     return TableFileName(db_paths, meta.fd.GetNumber(), meta.fd.GetPathId());
   }
 
-  std::string KeyStr(const std::string& user_key, const SequenceNumber seq_num,
-      const ValueType t) {
+  static std::string KeyStr(const std::string& user_key,
+                            const SequenceNumber seq_num, const ValueType t) {
     return InternalKey(user_key, seq_num, t).Encode().ToString();
   }
 
@@ -136,7 +136,7 @@ class CompactionJobTest : public testing::Test {
 
     VersionEdit edit;
     edit.AddFile(level, file_number, 0, 10, smallest_key, largest_key,
-        smallest_seqno, largest_seqno, false, 0, {});
+        smallest_seqno, largest_seqno, false, TablePropertyCache{});
 
     mutex_.Lock();
     versions_->LogAndApply(versions_->GetColumnFamilySet()->GetDefault(),
@@ -171,17 +171,18 @@ class CompactionJobTest : public testing::Test {
 
         // This is how the key will look like once it's written in bottommost
         // file
-        InternalKey bottommost_internal_key(
-            key, (key == "9999") ? sequence_number : 0, kTypeValue);
+        InternalKey bottommost_internal_key(key, 0, kTypeValue);
 
-        if (corrupt_id(k)) {
+        bool is_corrupt = false;
+        if ((is_corrupt = corrupt_id(k))) {
           test::CorruptKeyType(&internal_key);
           test::CorruptKeyType(&bottommost_internal_key);
         }
         contents.insert({ internal_key.Encode().ToString(), value });
         if (i == 1 || k < kMatchingKeys || corrupt_id(k - kMatchingKeys)) {
           expected_results.insert(
-              { bottommost_internal_key.Encode().ToString(), value });
+              { bottommost_internal_key.Encode().ToString(),
+                is_corrupt ? "" : value });
         }
       }
 
@@ -279,13 +280,12 @@ class CompactionJobTest : public testing::Test {
     ASSERT_OK(compaction_job.Install(*cfd->GetLatestMutableCFOptions()));
     mutex_.Unlock();
 
-    if (expected_results.size() == 0) {
-      ASSERT_GE(compaction_job_stats_.elapsed_micros, 0U);
-      ASSERT_EQ(compaction_job_stats_.num_input_files, num_input_files);
+    ASSERT_GE(compaction_job_stats_.elapsed_micros, 0U);
+    ASSERT_EQ(compaction_job_stats_.num_input_files, num_input_files);
+
+    if (expected_results.empty()) {
       ASSERT_EQ(compaction_job_stats_.num_output_files, 0U);
     } else {
-      ASSERT_GE(compaction_job_stats_.elapsed_micros, 0U);
-      ASSERT_EQ(compaction_job_stats_.num_input_files, num_input_files);
       ASSERT_EQ(compaction_job_stats_.num_output_files, 1U);
       mock_table_factory_->AssertLatestFile(expected_results);
     }
@@ -384,7 +384,7 @@ TEST_F(CompactionJobTest, SimpleOverwrite) {
 
   auto expected_results =
       mock::MakeMockFile({{KeyStr("a", 0U, kTypeValue), "val2"},
-                          {KeyStr("b", 4U, kTypeValue), "val3"}});
+                          {KeyStr("b", 0U, kTypeValue), "val3"}});
 
   SetLastSequence(4U);
   auto files = cfd_->current()->storage_info()->LevelFiles(0);
@@ -437,7 +437,7 @@ TEST_F(CompactionJobTest, SimpleMerge) {
 
   auto expected_results =
       mock::MakeMockFile({{KeyStr("a", 0U, kTypeValue), "3,4,5"},
-                          {KeyStr("b", 2U, kTypeValue), "1,2"}});
+                          {KeyStr("b", 0U, kTypeValue), "1,2"}});
 
   SetLastSequence(5U);
   auto files = cfd_->current()->storage_info()->LevelFiles(0);
@@ -461,8 +461,7 @@ TEST_F(CompactionJobTest, NonAssocMerge) {
 
   auto expected_results =
       mock::MakeMockFile({{KeyStr("a", 0U, kTypeValue), "3,4,5"},
-                          {KeyStr("b", 2U, kTypeMerge), "2"},
-                          {KeyStr("b", 1U, kTypeMerge), "1"}});
+                          {KeyStr("b", 0U, kTypeValue), "1,2"}});
 
   SetLastSequence(5U);
   auto files = cfd_->current()->storage_info()->LevelFiles(0);
@@ -489,7 +488,7 @@ TEST_F(CompactionJobTest, MergeOperandFilter) {
 
   auto expected_results =
       mock::MakeMockFile({{KeyStr("a", 0U, kTypeValue), test::EncodeInt(8U)},
-                          {KeyStr("b", 2U, kTypeMerge), test::EncodeInt(2U)}});
+                          {KeyStr("b", 0U, kTypeValue), test::EncodeInt(2U)}});
 
   SetLastSequence(5U);
   auto files = cfd_->current()->storage_info()->LevelFiles(0);
@@ -752,7 +751,7 @@ TEST_F(CompactionJobTest, SingleDeleteZeroSeq) {
   AddMockFile(file2);
 
   auto expected_results = mock::MakeMockFile({
-      {KeyStr("dummy", 5U, kTypeValue), "val2"},
+      {KeyStr("dummy", 0U, kTypeValue), "val2"},
   });
 
   SetLastSequence(22U);
@@ -934,9 +933,9 @@ TEST_F(CompactionJobTest, CorruptionAfterDeletion) {
 
   auto expected_results =
       mock::MakeMockFile({{test::KeyStr("A", 0U, kTypeValue), "val3"},
-                          {test::KeyStr("a", 0U, kTypeValue, true), "val"},
-                          {test::KeyStr("b", 0U, kTypeValue, true), "val"},
-                          {test::KeyStr("c", 1U, kTypeValue), "val2"}});
+                          {test::KeyStr("a", 0U, kTypeValue, true), ""},
+                          {test::KeyStr("b", 0U, kTypeValue, true), ""},
+                          {test::KeyStr("c", 0U, kTypeValue), "val2"}});
 
   SetLastSequence(6U);
   auto files = cfd_->current()->storage_info()->LevelFiles(0);

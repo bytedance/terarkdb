@@ -1310,7 +1310,7 @@ TEST_F(DBTest, ApproximateSizesMemTable) {
     keys[i * 3 + 1] = i * 5 + 1;
     keys[i * 3 + 2] = i * 5 + 2;
   }
-  std::random_shuffle(std::begin(keys), std::end(keys));
+  std::shuffle(std::begin(keys), std::end(keys), std::mt19937_64());
 
   for (int i = 0; i < N * 3; i++) {
     ASSERT_OK(Put(Key(keys[i] + 1000), RandomString(&rnd, 1024)));
@@ -4223,7 +4223,7 @@ TEST_F(DBTest, DynamicLevelCompressionPerLevel) {
   for (int i = 0; i < kNKeys; i++) {
     keys[i] = i;
   }
-  std::random_shuffle(std::begin(keys), std::end(keys));
+  std::shuffle(std::begin(keys), std::end(keys), std::mt19937_64());
 
   Random rnd(301);
   Options options;
@@ -4306,7 +4306,7 @@ TEST_F(DBTest, DynamicLevelCompressionPerLevel2) {
   for (int i = 0; i < kNKeys; i++) {
     keys[i] = i;
   }
-  std::random_shuffle(std::begin(keys), std::end(keys));
+  std::shuffle(std::begin(keys), std::end(keys), std::mt19937_64());
 
   Random rnd(301);
   Options options;
@@ -5972,75 +5972,6 @@ TEST_F(DBTest, FailWhenCompressionNotSupportedTest) {
     }
   }
 }
-
-#ifndef ROCKSDB_LITE
-TEST_F(DBTest, RowCache) {
-  Options options = CurrentOptions();
-  options.statistics = rocksdb::CreateDBStatistics();
-  options.row_cache = NewLRUCache(8192);
-  DestroyAndReopen(options);
-
-  ASSERT_OK(Put("foo", "bar"));
-  ASSERT_OK(Flush());
-
-  ASSERT_EQ(TestGetTickerCount(options, ROW_CACHE_HIT), 0);
-  ASSERT_EQ(TestGetTickerCount(options, ROW_CACHE_MISS), 0);
-  ASSERT_EQ(Get("foo"), "bar");
-  ASSERT_EQ(TestGetTickerCount(options, ROW_CACHE_HIT), 0);
-  ASSERT_EQ(TestGetTickerCount(options, ROW_CACHE_MISS), 1);
-  ASSERT_EQ(Get("foo"), "bar");
-  ASSERT_EQ(TestGetTickerCount(options, ROW_CACHE_HIT), 1);
-  ASSERT_EQ(TestGetTickerCount(options, ROW_CACHE_MISS), 1);
-}
-
-TEST_F(DBTest, RowCacheWithMergeOperatorAndRangeDeletion) {
-  Options options = CurrentOptions();
-  options.row_cache = NewLRUCache(8192);
-  options.merge_operator = MergeOperators::CreateFromStringId("stringappend");
-  DestroyAndReopen(options);
-
-  ASSERT_OK(Put("foo", "foo"));
-  ASSERT_OK(Flush());
-
-  ASSERT_OK(db_->DeleteRange(WriteOptions(), db_->DefaultColumnFamily(),
-            "foo", "foo_"));
-  ASSERT_OK(Merge("foo", "bar"));
-  ASSERT_OK(Flush());
-
-  ASSERT_EQ(Get("foo"), "bar");
-  ASSERT_EQ(Get("foo"), "bar");
-}
-
-TEST_F(DBTest, PinnableSliceAndRowCache) {
-  Options options = CurrentOptions();
-  options.statistics = rocksdb::CreateDBStatistics();
-  options.row_cache = NewLRUCache(8192);
-  DestroyAndReopen(options);
-
-  ASSERT_OK(Put("foo", "bar"));
-  ASSERT_OK(Flush());
-
-  ASSERT_EQ(Get("foo"), "bar");
-  ASSERT_EQ(
-      reinterpret_cast<LRUCache*>(options.row_cache.get())->TEST_GetLRUSize(),
-      1);
-
-  {
-    LazyBuffer pin_slice;
-    ASSERT_EQ(Get("foo", &pin_slice), Status::OK());
-    ASSERT_EQ(pin_slice.ToString(), "bar");
-    // Entry is already in cache, lookup will remove the element from lru
-    ASSERT_EQ(
-        reinterpret_cast<LRUCache*>(options.row_cache.get())->TEST_GetLRUSize(),
-        0);
-  }
-  // After LazyBuffer destruction element is added back in LRU
-  ASSERT_EQ(
-      reinterpret_cast<LRUCache*>(options.row_cache.get())->TEST_GetLRUSize(),
-      1);
-}
-
-#endif  // ROCKSDB_LITE
 
 TEST_F(DBTest, DeletingOldWalAfterDrop) {
   rocksdb::SyncPoint::GetInstance()->LoadDependency(

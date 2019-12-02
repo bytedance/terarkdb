@@ -69,10 +69,9 @@ struct VersionBuilderDebugger {
   std::vector<std::pair<int, uint64_t>> deletion;
   std::vector<std::pair<int, FileMetaData>> addition;
   std::vector<Item> pos;
-  std::vector<std::pair<int, FileMetaData>> storage;
 
   VersionBuilderDebugger() {
-    pos.emplace_back(Item{0, 0, 0});
+    pos.emplace_back(Item{0, 0});
   }
 
   void PushEdit(VersionEdit* edit) {
@@ -88,12 +87,13 @@ struct VersionBuilderDebugger {
   void PushVersion(VersionStorageInfo* vstorage) {
     for (int i = -1; i < vstorage->num_levels(); ++i) {
       for (auto f : vstorage->LevelFiles(i)) {
-        storage.emplace_back(i, *f);
-        auto& back = storage.back().second;
+        addition.emplace_back(i, *f);
+        auto& back = addition.back().second;
         back.table_reader_handle = nullptr;
         back.refs = 0;
       }
     }
+    pos.emplace_back(Item{deletion.size(), addition.size()});
   }
 
   void Verify(VersionBuilder::Rep* rep, VersionStorageInfo* vstorage);
@@ -135,10 +135,11 @@ class VersionBuilder::Rep {
     size_t skip_gc_version;
     int level;
     FileMetaData* f;
-    uint64_t entry_depended;
+    double entry_depended;
   };
   struct InheritanceItem {
-    size_t count;
+    size_t depended : 1;
+    size_t count : sizeof(size_t) * 8 - 1;
     DependenceItem* item;
   };
 
@@ -191,6 +192,10 @@ class VersionBuilder::Rep {
         PutSst(f, level);
       }
     }
+    CheckConsistency(base_vstorage_, true);
+    if (debugger_) {
+      debugger_->PushVersion(base_vstorage_);
+    }
   }
 
   ~Rep() {
@@ -218,7 +223,8 @@ class VersionBuilder::Rep {
     bool replace = inheritance_counter_.count(item->f->fd.GetNumber()) == 0;
     auto emplace = [&](uint64_t file_number) {
       auto ib =
-          inheritance_counter_.emplace(file_number, InheritanceItem{1, item});
+          inheritance_counter_.emplace(file_number,
+                                       InheritanceItem{0, 1, item});
       if (!ib.second) {
         ++ib.first->second.count;
         if (replace) {
@@ -278,24 +284,29 @@ class VersionBuilder::Rep {
     return nullptr;
   }
 
-  void SetDependence(FileMetaData* f, bool recursive, bool finish) {
+  void SetDependence(FileMetaData* f, bool is_map, double ratio, bool finish) {
     for (auto& dependence : f->prop.dependence) {
-      auto item = TransFileNumber(dependence.file_number);
-      if (finish) {
-        assert(recursive || dependence.entry_count > 0);
-        item->entry_depended += dependence.entry_count;
-      }
-      if (item == nullptr) {
+      auto find = inheritance_counter_.find(dependence.file_number);
+      if (find == inheritance_counter_.end()) {
         if (finish) {
           status_ = Status::Aborted("Missing dependence files");
         }
         continue;
       }
+      auto item = find->second.item;
+      if (finish) {
+        find->second.depended = true;
+        assert(is_map || dependence.entry_count > 0);
+        item->entry_depended += dependence.entry_count * ratio;
+      }
       item->dependence_version = dependence_version_;
-      if (recursive) {
+      if (is_map) {
         item->skip_gc_version = dependence_version_;
-        if (item->f != nullptr && !item->f->prop.dependence.empty()) {
-          SetDependence(item->f, item->f->prop.purpose == kMapSst, finish);
+        if (!item->f->prop.dependence.empty()) {
+          SetDependence(
+              item->f, item->f->prop.purpose == kMapSst,
+              ratio * dependence.entry_count / item->f->prop.num_entries,
+              finish);
         }
       }
     }
@@ -316,17 +327,10 @@ class VersionBuilder::Rep {
         item.dependence_version = dependence_version_;
         item.skip_gc_version = dependence_version_;
         if (!item.f->prop.dependence.empty()) {
-          SetDependence(item.f, item.f->prop.purpose == kMapSst, finish);
+          SetDependence(item.f, item.f->prop.purpose == kMapSst, 1, finish);
         }
       }
     }
-    struct priority_queue_cmp {
-      bool operator()(FileMetaData* l, FileMetaData* r) const {
-        return l->fd.GetNumber() < r->fd.GetNumber();
-      }
-    };
-    std::priority_queue<FileMetaData*, std::vector<FileMetaData*>,
-                        priority_queue_cmp> old_file_queue;
     for (auto it = dependence_map_.begin(); it != dependence_map_.end(); ) {
       auto& item = it->second;
       if (item.dependence_version == dependence_version_) {
@@ -348,21 +352,6 @@ class VersionBuilder::Rep {
             }
             item.f->is_skip_gc = is_skip_gc;
           }
-          if (item.f->prop.purpose != kMapSst &&
-              !item.f->prop.dependence.empty()) {
-            for (auto& dependence : item.f->prop.dependence) {
-              auto find = inheritance_counter_.find(dependence.file_number);
-              if (find != inheritance_counter_.end() &&
-                  find->second.item->f->fd.GetNumber() !=
-                  dependence.file_number) {
-                old_file_queue.push(item.f);
-                if (old_file_queue.size() > 8) {
-                  old_file_queue.pop();
-                }
-                break;
-              }
-            }
-          }
         }
         ++it;
       } else {
@@ -371,39 +360,25 @@ class VersionBuilder::Rep {
         it = dependence_map_.erase(it);
       }
     }
-    if (finish) {
-      size_t old_file_count =
-          std::max<size_t>(1, std::min(dependence_map_.size() / 128,
-                                       old_file_queue.size()));
-      while (old_file_queue.size() > old_file_count) {
-        old_file_queue.pop();
-      }
-      while (!old_file_queue.empty()) {
-        old_file_queue.top()->marked_for_compaction = true;
-        old_file_queue.pop();
-      }
-      inheritance_counter_.clear();
-    }
     new_deleted_files_ = 0;
   }
 
   void CheckDependence(VersionStorageInfo* vstorage, FileMetaData* f,
-                       bool recursive) {
-    auto& dependence_map = vstorage->dependence_map();
+                       bool is_map) {
     for (auto& dependence: f->prop.dependence) {
-      auto find = dependence_map.find(dependence.file_number);
-      if (find == dependence_map.end()) {
+      auto item = TransFileNumber(dependence.file_number);
+      if (item == nullptr) {
         fprintf(stderr, "Missing dependence files");
         abort();
       }
-      if (recursive && !find->second->prop.dependence.empty()) {
-        CheckDependence(vstorage, find->second,
-                        find->second->prop.purpose == kMapSst);
+      if (is_map && !item->f->prop.dependence.empty()) {
+        CheckDependence(vstorage, item->f,
+                        item->f->prop.purpose == kMapSst);
       }
     }
   }
 
-  void CheckConsistency(VersionStorageInfo* vstorage) {
+  void CheckConsistency(VersionStorageInfo* vstorage, bool check_dependence) {
 #ifdef NDEBUG
     if (!vstorage->force_consistency_checks()) {
       // Dont run consistency checks in release mode except if
@@ -414,9 +389,11 @@ class VersionBuilder::Rep {
     // make sure the files are sorted correctly
     for (int level = 0; level < num_levels_; level++) {
       auto& level_files = vstorage->LevelFiles(level);
-      for (auto f : level_files) {
-        if (!f->prop.dependence.empty()) {
-          CheckDependence(vstorage, f, f->prop.purpose == kMapSst);
+      if (check_dependence) {
+        for (auto f : level_files) {
+          if (!f->prop.dependence.empty()) {
+            CheckDependence(vstorage, f, f->prop.purpose == kMapSst);
+          }
         }
       }
       for (size_t i = 1; i < level_files.size(); i++) {
@@ -530,7 +507,7 @@ class VersionBuilder::Rep {
 
   // Apply all of the edits in *edit to the current state.
   void Apply(VersionEdit* edit) {
-    CheckConsistency(base_vstorage_);
+    CheckConsistency(base_vstorage_, false);
     if (debugger_) {
       debugger_->PushEdit(edit);
     }
@@ -581,13 +558,38 @@ class VersionBuilder::Rep {
 
   // Save the current state in *v.
   void SaveTo(VersionStorageInfo* vstorage) {
-    CheckConsistency(base_vstorage_);
-    CheckConsistency(vstorage);
-    if (debugger_) {
-      debugger_->PushVersion(base_vstorage_);
-    }
+    CheckConsistency(vstorage, true);
+    CalculateDependence(true);
+    auto exists = [&](uint64_t file_number) {
+      auto find = inheritance_counter_.find(file_number);
+      assert(find != inheritance_counter_.end());
+      return bool(find->second.depended);
+    };
 
     std::vector<double> read_amp(num_levels_);
+    struct priority_queue_cmp {
+      bool operator()(FileMetaData* l, FileMetaData* r) const {
+        return l->fd.GetNumber() < r->fd.GetNumber();
+      }
+    };
+    std::priority_queue<FileMetaData*, std::vector<FileMetaData*>,
+        priority_queue_cmp> old_file_queue;
+    constexpr size_t max_queue_size = 8;
+    auto push_old_file = [&](FileMetaData* f) {
+      if (f->prop.purpose != kMapSst && !f->prop.dependence.empty()) {
+        for (auto& dependence : f->prop.dependence) {
+          auto item = TransFileNumber(dependence.file_number);
+          if (item->f->fd.GetNumber() != dependence.file_number) {
+            // item maybe invalid pointer, don't access it
+            old_file_queue.push(f);
+            if (old_file_queue.size() > max_queue_size) {
+              old_file_queue.pop();
+            }
+            break;
+          }
+        }
+      }
+    };
 
     for (int level = 0; level < num_levels_; level++) {
       auto& cmp = (level == 0) ? level_zero_cmp_ : level_nonzero_cmp_;
@@ -604,7 +606,9 @@ class VersionBuilder::Rep {
       std::sort(ordered_added_files.begin(), ordered_added_files.end(), cmp);
 
       for (auto f : ordered_added_files) {
-        vstorage->AddFile(level, f, info_log_);
+        push_old_file(f);
+        vstorage->AddFile(level, f, c_style_callback(exists), &exists,
+                          info_log_);
         if (level == 0) {
           read_amp[level] += f->prop.read_amp;
         } else {
@@ -612,7 +616,6 @@ class VersionBuilder::Rep {
         }
       }
     }
-    CalculateDependence(true);
     // Handle actual deleted files
     for (auto f : base_vstorage_->LevelFiles(-1)) {
       if (dependence_map_.count(f->fd.GetNumber()) == 0) {
@@ -622,29 +625,31 @@ class VersionBuilder::Rep {
     }
     for (auto& pair : dependence_map_) {
       auto& item = pair.second;
-      if (item.dependence_version == dependence_version_ && item.level == -1) {
-        if (!item.f->is_skip_gc) {
-          assert(item.entry_depended > 0);
-          item.entry_depended =
-              std::min(item.entry_depended,
-                       item.f->prop.num_entries - item.f->num_antiquation);
-          item.f->num_antiquation =
-              item.f->prop.num_entries - item.entry_depended;
+      if (item.level == -1) {
+        if (item.f->is_skip_gc) {
+          push_old_file(item.f);
+        } else {
+          uint64_t entry_depended = std::max<uint64_t>(1, item.entry_depended);
+          entry_depended = std::min(item.f->prop.num_entries, entry_depended);
+          item.f->num_antiquation = item.f->prop.num_entries - entry_depended;
         }
-        vstorage->AddFile(-1, item.f, info_log_);
+        vstorage->AddFile(-1, item.f, c_style_callback(exists), &exists,
+                          info_log_);
       }
     }
-    auto exists = [&](FileMetaData* file_metadata) {
-      auto find = dependence_map_.find(file_metadata->fd.GetNumber());
-      if (find == dependence_map_.end()) {
-        return false;
-      }
-      return find->second.dependence_version == dependence_version_;
-    };
-    vstorage->ShrinkDependenceMap(&exists, c_style_callback(exists));
+    size_t old_file_count =
+        std::max<size_t>(1, std::min(dependence_map_.size() / 128,
+                                     old_file_queue.size()));
+    while (old_file_queue.size() > old_file_count) {
+      old_file_queue.pop();
+    }
+    while (!old_file_queue.empty()) {
+      old_file_queue.top()->marked_for_compaction = true;
+      old_file_queue.pop();
+    }
     vstorage->set_read_amplification(read_amp);
 
-    CheckConsistency(vstorage);
+    CheckConsistency(vstorage, true);
     if (debugger_) {
       debugger_->Verify(this, vstorage);
     }
@@ -719,7 +724,7 @@ VersionBuilder::VersionBuilder(const EnvOptions& env_options,
 VersionBuilder::~VersionBuilder() { delete rep_; }
 
 void VersionBuilder::CheckConsistency(VersionStorageInfo* vstorage) {
-  rep_->CheckConsistency(vstorage);
+  rep_->CheckConsistency(vstorage, true);
 }
 
 void VersionBuilder::CheckConsistencyForDeletes(VersionEdit* edit,
@@ -751,27 +756,22 @@ void VersionBuilder::LoadTableHandlers(InternalStats* internal_stats,
 void VersionBuilderDebugger::Verify(VersionBuilder::Rep* rep,
                                     VersionStorageInfo* vstorage) {
   auto get_edit = [this](size_t i, VersionEdit* edit) {
-    if (i == 0) {
-      for (auto& pair : storage) {
-        edit->AddFile(pair.first, pair.second);
-      }
-    } else {
-      auto begin = pos[i - 1], end = pos[i];
-      for (size_t j = begin.deletion; j < end.deletion; ++j) {
-        auto& pair = deletion[j];
-        edit->DeleteFile(pair.first, pair.second);
-      }
-      for (size_t j = begin.addition; j < end.addition; ++j) {
-        auto& pair = addition[j];
-        edit->AddFile(pair.first, pair.second);
-      }
+    auto begin = pos[i], end = pos[i + 1];
+    for (size_t j = begin.deletion; j < end.deletion; ++j) {
+      auto& pair = deletion[j];
+      edit->DeleteFile(pair.first, pair.second);
+    }
+    for (size_t j = begin.addition; j < end.addition; ++j) {
+      auto& pair = addition[j];
+      edit->AddFile(pair.first, pair.second);
     }
   };
   auto verify = [rep](VersionStorageInfo* l,
                    VersionStorageInfo* r) -> std::string {
     auto eq = [](FileMetaData* fl, FileMetaData* fr) {
       return fl->fd.GetNumber() == fr->fd.GetNumber() &&
-             fl->num_antiquation == fr->num_antiquation;
+             fl->num_antiquation == fr->num_antiquation &&
+             fl->is_skip_gc == fr->is_skip_gc;
     };
     auto lt = [](FileMetaData* fl, FileMetaData* fr) {
       return fl->fd.GetNumber() != fr->fd.GetNumber() ?
@@ -826,36 +826,36 @@ void VersionBuilderDebugger::Verify(VersionBuilder::Rep* rep,
   };
 
   bool has_err = false;
-  for (size_t i = 1; i < pos.size(); ++i) {
-    VersionStorageInfo vstorage_0(vstorage->InternalComparator(),
-                              vstorage->InternalComparator()->user_comparator(),
-                              vstorage->num_levels(),
-                              kCompactionStyleNone, nullptr, true);
-    VersionStorageInfo vstorage_1(vstorage->InternalComparator(),
-                              vstorage->InternalComparator()->user_comparator(),
-                              vstorage->num_levels(),
-                              kCompactionStyleNone, nullptr, true);
+  for (size_t i = 1; i < pos.size() - 1; ++i) {
+    VersionStorageInfo vstorage_0(
+        vstorage->InternalComparator(),
+        vstorage->InternalComparator()->user_comparator(),
+        vstorage->num_levels(), kCompactionStyleNone, nullptr, true);
     VersionBuilder::Rep rep_0(rep->env_options_, rep->info_log_,
-                              rep->table_cache_, &vstorage_1);
-    VersionBuilder::Rep rep_1(rep->env_options_, rep->info_log_,
                               rep->table_cache_, &vstorage_0);
     for (size_t j = 0; j < i; ++j) {
       VersionEdit edit;
       get_edit(j, &edit);
       rep_0.Apply(&edit);
     }
-    rep_0.SaveTo(&vstorage_0);
-    for (size_t j = i; j < pos.size(); ++j) {
+    VersionStorageInfo vstorage_1(
+        vstorage->InternalComparator(),
+        vstorage->InternalComparator()->user_comparator(),
+        vstorage->num_levels(), kCompactionStyleNone, nullptr, true);
+    rep_0.SaveTo(&vstorage_1);
+    VersionBuilder::Rep rep_1(rep->env_options_, rep->info_log_,
+                              rep->table_cache_, &vstorage_1);
+    for (size_t j = i; j < pos.size() - 1; ++j) {
       VersionEdit edit;
       get_edit(j, &edit);
       rep_1.Apply(&edit);
     }
-    rep_1.SaveTo(&vstorage_1);
-    auto err = verify(vstorage, &vstorage_1);
+    rep_1.SaveTo(&vstorage_0);
+    auto err = verify(vstorage, &vstorage_0);
     if (!err.empty()) {
       has_err = true;
       fprintf(stderr, "VersionBuilder debug verify fail : edit count = %zd, "
-                      "break = %zd, error = %s\n", pos.size() - 1, i,
+                      "break = %zd, error = %s\n", pos.size() - 2, i,
                       err.c_str());
     }
     for (int j = -1; j < vstorage->num_levels(); ++j) {

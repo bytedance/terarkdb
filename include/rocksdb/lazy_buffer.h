@@ -442,7 +442,6 @@ inline void LazyBuffer::reset(const Slice& _slice, bool _copy,
     destroy();
     slice_ = _slice;
     state_ = LazyBufferState::light_state();
-    context_ = {};
   }
   file_number_ = _file_number;
 }
@@ -476,6 +475,9 @@ inline void LazyBuffer::pin() {
 inline Status LazyBuffer::dump(LazyBuffer& _target) && {
   assert(state_ != nullptr);
   assert(this != &_target);
+  if (_target.state_ == nullptr) {
+    _target.state_ = LazyBufferState::light_state();
+  }
   return state_->dump_buffer(this, &_target);
 }
 

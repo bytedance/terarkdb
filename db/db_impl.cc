@@ -1695,21 +1695,15 @@ Status DBImpl::CreateColumnFamilyImpl(const ColumnFamilyOptions& cf_options,
   const char* terarkdb_localTempDir = getenv("TerarkZipTable_localTempDir");
   const char* terarkConfigString = getenv("TerarkConfigString");
   if (terarkdb_localTempDir || terarkConfigString) {
-    if (TerarkZipCFOptionsFromEnv && TerarkZipIsBlackListCF) {
-      if (terarkdb_localTempDir &&
-          ::access(terarkdb_localTempDir, R_OK | W_OK) != 0) {
-        return Status::InvalidArgument(
-            "Must exists, and Permission ReadWrite is required on "
-            "env TerarkZipTable_localTempDir", terarkdb_localTempDir);
-      }
-      if (!TerarkZipIsBlackListCF(column_family_name)) {
-        TerarkZipCFOptionsFromEnv(const_cast<ColumnFamilyOptions&>(cf_options),
-                                  dbname_);
-      }
-    } else {
+    if (terarkdb_localTempDir &&
+        ::access(terarkdb_localTempDir, R_OK | W_OK) != 0) {
       return Status::InvalidArgument(
-          "env TerarkZipTable_localTempDir is defined, "
-          "but dynamic libterark-zip-rocksdb is not loaded");
+          "Must exists, and Permission ReadWrite is required on "
+          "env TerarkZipTable_localTempDir", terarkdb_localTempDir);
+    }
+    if (!TerarkZipIsBlackListCF(column_family_name)) {
+      TerarkZipCFOptionsFromEnv(const_cast<ColumnFamilyOptions&>(cf_options),
+                                dbname_);
     }
   }
 #endif

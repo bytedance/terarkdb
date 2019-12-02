@@ -193,7 +193,7 @@ class MapSstElementIterator {
   Slice value() const { return buffer_; }
   Status status() const { return status_; }
 
-  const std::unordered_set<uint64_t>& GetDependence() const {
+  const std::unordered_map<uint64_t, uint64_t>& GetDependence() const {
     return dependence_build_;
   }
 
@@ -212,6 +212,13 @@ class MapSstElementIterator {
       }
       assert(sst_read_amp_ratio_ >= 1);
       assert(sst_read_amp_ratio_ <= sst_read_amp_);
+      for (auto& pair : dependence_build_) {
+        auto f = iterator_cache_.GetFileMetaData(pair.first);
+        assert(f != nullptr);
+        pair.second = f->prop.num_entries * pair.second / f->fd.file_size;
+        pair.second = std::min<uint64_t>(pair.second, f->prop.num_entries);
+        pair.second = std::max<uint64_t>(pair.second, 1);
+      }
       return;
     }
     auto& start = map_elements_.smallest_key_ = where_->point[0].Encode();
@@ -263,15 +270,21 @@ class MapSstElementIterator {
     }
 
     size_t range_size = 0;
+    auto put_dependence = [&](uint64_t file_number, uint64_t size) {
+      auto ib = dependence_build_.emplace(file_number, size);
+      if (!ib.second) {
+        ib.first->second += size;
+      }
+    };
     if (stable) {
       for (auto& link : map_elements_.link_) {
-        dependence_build_.emplace(link.file_number);
+        put_dependence(link.file_number, link.size);
         range_size += link.size;
       }
     } else {
       no_records = true;
       for (auto& link : map_elements_.link_) {
-        dependence_build_.emplace(link.file_number);
+        link.size = 0;
         TableReader* reader;
         auto iter = iterator_cache_.GetIterator(link.file_number, &reader);
         if (!iter->status().ok()) {
@@ -279,38 +292,40 @@ class MapSstElementIterator {
           status_ = iter->status();
           return;
         }
-        iter->Seek(start);
-        if (!iter->Valid()) {
-          continue;
-        }
-        if (!include_start && icomp_.Compare(iter->key(), start) == 0) {
-          iter->Next();
+        do {
+          iter->Seek(start);
           if (!iter->Valid()) {
-            continue;
+            break;
           }
-        }
-        temp_start_.DecodeFrom(iter->key());
-        iter->SeekForPrev(end);
-        if (!iter->Valid()) {
-          continue;
-        }
-        if (!include_end && icomp_.Compare(iter->key(), end) == 0) {
-          iter->Prev();
+          if (!include_start && icomp_.Compare(iter->key(), start) == 0) {
+            iter->Next();
+            if (!iter->Valid()) {
+              break;
+            }
+          }
+          temp_start_.DecodeFrom(iter->key());
+          iter->SeekForPrev(end);
           if (!iter->Valid()) {
-            continue;
+            break;
           }
-        }
-        temp_end_.DecodeFrom(iter->key());
-        if (icomp_.Compare(temp_start_, temp_end_) <= 0) {
-          uint64_t start_offset =
-              reader->ApproximateOffsetOf(temp_start_.Encode());
-          uint64_t end_offset = reader->ApproximateOffsetOf(temp_end_.Encode());
-          link.size = end_offset - start_offset;
-          range_size += link.size;
-          no_records = false;
-        } else {
-          link.size = 0;
-        }
+          if (!include_end && icomp_.Compare(iter->key(), end) == 0) {
+            iter->Prev();
+            if (!iter->Valid()) {
+              break;
+            }
+          }
+          temp_end_.DecodeFrom(iter->key());
+          if (icomp_.Compare(temp_start_, temp_end_) <= 0) {
+            uint64_t start_offset =
+                reader->ApproximateOffsetOf(temp_start_.Encode());
+            uint64_t end_offset =
+                reader->ApproximateOffsetOf(temp_end_.Encode());
+            link.size = end_offset - start_offset;
+            range_size += link.size;
+            no_records = false;
+          }
+        } while(false);
+        put_dependence(link.file_number, link.size);
       }
     }
     sst_read_amp_ = std::max(sst_read_amp_, map_elements_.link_.size());
@@ -326,7 +341,7 @@ class MapSstElementIterator {
   std::string buffer_;
   std::vector<RangeWithDepend>::const_iterator where_;
   const std::vector<RangeWithDepend>& ranges_;
-  std::unordered_set<uint64_t> dependence_build_;
+  std::unordered_map<uint64_t, uint64_t> dependence_build_;
   size_t sst_read_amp_ = 0;
   double sst_read_amp_ratio_ = 0;
   size_t sst_read_amp_size_ = 0;
@@ -917,8 +932,8 @@ Status MapBuilder::WriteOutputFile(
   auto& dependence_build = range_iter->GetDependence();
   auto& dependence = file_meta->prop.dependence;
   dependence.reserve(dependence_build.size());
-  for (auto file_number : dependence_build) {
-    dependence.emplace_back(Dependence{file_number, 0});
+  for (auto& pair : dependence_build) {
+    dependence.emplace_back(Dependence{pair.first, pair.second});
   }
   std::sort(dependence.begin(), dependence.end(),
             [](const Dependence& l, const Dependence& r) {
@@ -1093,6 +1108,7 @@ struct MapElementIterator : public InternalIterator {
   virtual void Next() override {
     if (iter_) {
       assert(iter_->Valid());
+      value_.reset();
       iter_->Next();
       if (iter_->Valid()) {
         Update();
@@ -1116,6 +1132,7 @@ struct MapElementIterator : public InternalIterator {
   virtual void Prev() override {
     if (iter_) {
       assert(iter_->Valid());
+      value_.reset();
       iter_->Prev();
       if (iter_->Valid()) {
         Update();
@@ -1139,11 +1156,11 @@ struct MapElementIterator : public InternalIterator {
   }
   Slice key() const override {
     assert(where_ < meta_size_);
-    return key_slice_;
+    return key_;
   }
   LazyBuffer value() const override {
     assert(where_ < meta_size_);
-    return LazyBufferReference(value_slice_);
+    return LazyBufferReference(value_);
   }
   virtual Status status() const override {
     return iter_ ? iter_->status() : Status::OK();
@@ -1160,13 +1177,13 @@ struct MapElementIterator : public InternalIterator {
     return false;
   }
   void ResetIter(InternalIterator* iter = nullptr) {
-    value_slice_.reset();
+    value_.reset();
     iter_.reset(iter);
   }
   void Update() {
     if (iter_) {
-      key_slice_ = iter_->key();
-      value_slice_ = iter_->value();
+      key_ = iter_->key();
+      value_ = iter_->value();
     } else {
       const FileMetaData* f = meta_array_[where_];
       element_.smallest_key_ = f->smallest.Encode();
@@ -1177,8 +1194,8 @@ struct MapElementIterator : public InternalIterator {
       element_.link_.clear();
       element_.link_.emplace_back(
           MapSstElement::LinkTarget{f->fd.GetNumber(), f->fd.GetFileSize()});
-      key_slice_ = element_.Key();
-      value_slice_ = LazyBuffer(element_.Value(&buffer_));
+      key_ = element_.Key();
+      value_.reset(element_.Value(&buffer_));
     }
   }
 
@@ -1186,13 +1203,13 @@ struct MapElementIterator : public InternalIterator {
   size_t meta_size_;
   const InternalKeyComparator* icmp_;
   void* callback_arg_;
-  const IteratorCache::CreateIterCallback& create_iter_;
+  IteratorCache::CreateIterCallback create_iter_;
   size_t where_;
   MapSstElement element_;
   std::string buffer_;
   std::unique_ptr<InternalIterator> iter_;
-  Slice key_slice_;
-  LazyBuffer value_slice_;
+  Slice key_;
+  LazyBuffer value_;
 };
 
 InternalIterator* NewMapElementIterator(
