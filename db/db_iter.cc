@@ -12,6 +12,7 @@
 #include <iostream>
 #include <limits>
 
+#include "db/db_impl.h"
 #include "db/dbformat.h"
 #include "db/merge_context.h"
 #include "db/merge_helper.h"
@@ -28,6 +29,7 @@
 #include "util/string_util.h"
 #include "util/trace_replay.h"
 #include "util/util.h"
+#include "utilities/trace/bytedance_metrics.h"
 
 namespace rocksdb {
 
@@ -330,7 +332,16 @@ inline bool DBIter::ParseKey(ParsedInternalKey* ikey) {
   }
 }
 
+// in some tests, db_impl_ == nullptr, so use `metrics_test_dbname` instead of
+// db_impl_->bytedance_tags()
+static std::string metrics_test_dbname = "metrics_test_dbname";
+
 void DBIter::Next() {
+  static const std::string metric_name = "dbiter_next";
+  OperationTimerReporter reporter(
+      metric_name,
+      db_impl_ == nullptr ? metrics_test_dbname : db_impl_->bytedance_tags());
+
   assert(valid_);
   assert(status_.ok());
 
@@ -650,6 +661,11 @@ bool DBIter::MergeValuesNewToOld() {
 }
 
 void DBIter::Prev() {
+  static const std::string metric_name = "dbiter_prev";
+  OperationTimerReporter reporter(
+      metric_name,
+      db_impl_ == nullptr ? metrics_test_dbname : db_impl_->bytedance_tags());
+
   assert(valid_);
   assert(status_.ok());
   ResetValueAndCounter();
@@ -1138,6 +1154,11 @@ SequenceNumber DBIter::MaxVisibleSequenceNumber() {
 }
 
 void DBIter::Seek(const Slice& target) {
+  static const std::string metric_name = "dbiter_seek";
+  OperationTimerReporter reporter(
+      metric_name,
+      db_impl_ == nullptr ? metrics_test_dbname : db_impl_->bytedance_tags());
+
   StopWatch sw(env_, statistics_, DB_SEEK);
   status_ = Status::OK();
   ResetValueAndCounter();
@@ -1195,6 +1216,11 @@ void DBIter::Seek(const Slice& target) {
 }
 
 void DBIter::SeekForPrev(const Slice& target) {
+  static const std::string metric_name = "dbiter_seekforprev";
+  OperationTimerReporter reporter(
+      metric_name,
+      db_impl_ == nullptr ? metrics_test_dbname : db_impl_->bytedance_tags());
+
   StopWatch sw(env_, statistics_, DB_SEEK);
   status_ = Status::OK();
   ResetValueAndCounter();
@@ -1367,13 +1393,33 @@ inline bool ArenaWrappedDBIter::Valid() const { return db_iter_->Valid(); }
 inline void ArenaWrappedDBIter::SeekToFirst() { db_iter_->SeekToFirst(); }
 inline void ArenaWrappedDBIter::SeekToLast() { db_iter_->SeekToLast(); }
 inline void ArenaWrappedDBIter::Seek(const Slice& target) {
+  static const std::string metric_name = "arenawrapperdbiter_seek";
+  OperationTimerReporter reporter(
+      metric_name,
+      db_impl_ == nullptr ? metrics_test_dbname : db_impl_->bytedance_tags());
   db_iter_->Seek(target);
 }
 inline void ArenaWrappedDBIter::SeekForPrev(const Slice& target) {
+  static const std::string metric_name = "arenawrapperdbiter_seekforprev";
+  OperationTimerReporter reporter(
+      metric_name,
+      db_impl_ == nullptr ? metrics_test_dbname : db_impl_->bytedance_tags());
   db_iter_->SeekForPrev(target);
 }
-inline void ArenaWrappedDBIter::Next() { db_iter_->Next(); }
-inline void ArenaWrappedDBIter::Prev() { db_iter_->Prev(); }
+inline void ArenaWrappedDBIter::Next() {
+  static const std::string metric_name = "arenawrapperdbiter_next";
+  OperationTimerReporter reporter(
+      metric_name,
+      db_impl_ == nullptr ? metrics_test_dbname : db_impl_->bytedance_tags());
+  db_iter_->Next();
+}
+inline void ArenaWrappedDBIter::Prev() {
+  static const std::string metric_name = "arenawrapperdbiter_prev";
+  OperationTimerReporter reporter(
+      metric_name,
+      db_impl_ == nullptr ? metrics_test_dbname : db_impl_->bytedance_tags());
+  db_iter_->Prev();
+}
 inline Slice ArenaWrappedDBIter::key() const { return db_iter_->key(); }
 inline Slice ArenaWrappedDBIter::value() const { return db_iter_->value(); }
 inline Status ArenaWrappedDBIter::status() const { return db_iter_->status(); }
