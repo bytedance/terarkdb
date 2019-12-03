@@ -95,6 +95,7 @@
 #include "util/stop_watch.h"
 #include "util/string_util.h"
 #include "util/sync_point.h"
+#include "utilities/trace/bytedance_metrics.h"
 #if !defined(_MSC_VER) && !defined(__APPLE__)
 # include <sys/unistd.h>
 # include <table/terark_zip_weak_function.h>
@@ -242,7 +243,8 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
       preserve_deletes_(options.preserve_deletes),
       closed_(false),
       error_handler_(this, immutable_db_options_, &mutex_),
-      atomic_flush_install_cv_(&mutex_) {
+      atomic_flush_install_cv_(&mutex_),
+      bytedance_tags_("dbname=" + dbname) {
   // !batch_per_trx_ implies seq_per_batch_ because it is only unset for
   // WriteUnprepared, which should use seq_per_batch_.
   assert(batch_per_txn_ || seq_per_batch_);
@@ -1256,6 +1258,9 @@ Status DBImpl::GetImpl(const ReadOptions& read_options,
                        ColumnFamilyHandle* column_family, const Slice& key,
                        LazyBuffer* lazy_val, bool* value_found,
                        ReadCallback* callback) {
+  static const std::string metric_name = "dbimpl_getimpl";
+  OperationTimerReporter reporter(metric_name, bytedance_tags_);
+
   assert(lazy_val != nullptr);
   StopWatch sw(env_, stats_, DB_GET);
   PERF_TIMER_GUARD(get_snapshot_time);
@@ -1914,6 +1919,9 @@ bool DBImpl::KeyMayExist(const ReadOptions& read_options,
 
 Iterator* DBImpl::NewIterator(const ReadOptions& read_options,
                               ColumnFamilyHandle* column_family) {
+  static const std::string metric_name = "dbimpl_newiterator";
+  OperationTimerReporter reporter(metric_name, bytedance_tags_);
+
   if (read_options.managed) {
     return NewErrorIterator(
         Status::NotSupported("Managed iterator is not supported anymore."));
