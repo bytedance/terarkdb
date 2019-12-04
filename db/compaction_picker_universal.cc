@@ -1594,6 +1594,10 @@ Compaction* UniversalCompactionPicker::PickCompositeCompaction(
     if (!ReadMapElement(map_element, iter.get(), log_buffer, cf_name)) {
       return nullptr;
     }
+    if (map_element.link_.size() <= 1) {
+      assert(map_element.link_.size() == 1);
+      continue;
+    }
     double p = map_element.link_.size();
     size_t size = 0, used = 0;
     for (auto& l : map_element.link_) {
