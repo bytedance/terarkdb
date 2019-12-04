@@ -62,8 +62,8 @@ bool IsPrefaceRange(const Range& range, const FileMetaData* f,
       f->prop.purpose == kEssenceSst && range.include_start &&
       icomp.Compare(range.start, f->smallest.Encode()) == 0 &&
       uc->Compare(ExtractUserKey(range.limit), f->largest.user_key()) == 0 &&
-      (ExtractInternalKeyFooter(f->largest.Encode()) == kMaxSequenceNumber
-           ? ExtractInternalKeyFooter(range.limit) == kMaxSequenceNumber
+      (GetInternalKeySeqno(f->largest.Encode()) == kMaxSequenceNumber
+           ? GetInternalKeySeqno(range.limit) == kMaxSequenceNumber
            : range.include_limit &&
              ExtractInternalKeyFooter(range.limit) ==
              ExtractInternalKeyFooter(f->largest.Encode()));
