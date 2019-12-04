@@ -470,8 +470,9 @@ class MapSstIterator final : public InternalIterator {
       }
       seek_target = largest_key_;
       include = include_largest_;
-    } else if (icomp.Compare(target, largest_key_) == 0 && !include_largest_) {
-      include = false;
+    } else if (icomp.Compare(target, largest_key_) >= include_largest_) {
+      seek_target = largest_key_;
+      include = include_largest_;
     }
     InitSecondLevelMaxHeap(seek_target, include);
     if (max_heap_.empty()) {

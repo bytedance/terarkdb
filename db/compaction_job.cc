@@ -2100,10 +2100,10 @@ Status CompactionJob::InstallCompactionResults(
         if (sub_compact.actual_end.size() == 0) {
           if (sub_compact.end != nullptr) {
             sub_compact.actual_end.SetMinPossibleForUserKey(*sub_compact.end);
-            include_end = true;
           } else {
             sub_compact.actual_end.SetMaxPossibleForUserKey(
                 compaction->GetLargestUserKey());
+            include_end = true;
           }
         }
         deleted_range.emplace_back(sub_compact.actual_start.Encode(),
