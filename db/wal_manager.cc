@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <vector>
 #include <memory>
+#include <set>
 
 #include "db/log_reader.h"
 #include "db/log_writer.h"
@@ -191,11 +192,27 @@ void WalManager::PurgeObsoleteWALFiles() {
 
   uint64_t total_log_file_size = 0;
 
+  std::set<std::string> guard_logs;
+  if (guard_seqno_ <= kMaxSequenceNumber) {
+    VectorLogPtr logs;
+    GetSortedWalsOfType(archival_dir, logs, kArchivedLogFile);
+    RetainProbableWalFiles(logs, guard_seqno_);
+    for (auto& log : logs) {
+      guard_logs.emplace(log->PathName());
+    }
+  }
+
   for (auto& f : files) {
     uint64_t number;
     FileType type;
     if (ParseFileName(f, &number, &type) && type == kLogFile) {
       std::string const file_path = archival_dir + "/" + f;
+
+      bool keep_flag = false;
+      if (guard_logs.find("/" + ARCHIVAL_DIR + "/" + f) != guard_logs.end()) {
+        keep_flag = true;
+      }
+
       if (ttl_enabled) {
         uint64_t file_m_time;
         s = env_->GetFileModificationTime(file_path, &file_m_time);
@@ -205,7 +222,7 @@ void WalManager::PurgeObsoleteWALFiles() {
                          s.ToString().c_str());
           continue;
         }
-        if (now_seconds - file_m_time > db_options_.wal_ttl_seconds) {
+        if (now_seconds - file_m_time > db_options_.wal_ttl_seconds && !keep_flag) {
           s = env_->DeleteFile(file_path);
           if (!s.ok()) {
             ROCKS_LOG_WARN(db_options_.info_log, "Can't delete file: %s: %s",
@@ -232,16 +249,18 @@ void WalManager::PurgeObsoleteWALFiles() {
           if (file_size > 0) {
             total_log_file_size += file_size;
           } else {
-            s = env_->DeleteFile(file_path);
-            if (!s.ok()) {
-              ROCKS_LOG_WARN(db_options_.info_log,
-                             "Unable to delete file: %s: %s", file_path.c_str(),
-                             s.ToString().c_str());
-              continue;
-            } else {
-              MutexLock l(&read_first_record_cache_mutex_);
-              read_first_record_cache_.erase(number);
-              log_numbers_.erase(number);
+            if(!keep_flag){
+              s = env_->DeleteFile(file_path);
+              if (!s.ok()) {
+                ROCKS_LOG_WARN(db_options_.info_log,
+                              "Unable to delete file: %s: %s", file_path.c_str(),
+                              s.ToString().c_str());
+                continue;
+              } else {
+                MutexLock l(&read_first_record_cache_mutex_);
+                read_first_record_cache_.erase(number);
+                log_numbers_.erase(number);
+              }
             }
           }
         }
@@ -263,6 +282,10 @@ void WalManager::PurgeObsoleteWALFiles() {
   GetSortedWalsOfType(archival_dir, archived_logs, kArchivedLogFile);
 
   for (const auto& log: archived_logs) {
+    if (guard_logs.find(log->PathName()) != guard_logs.end()) {
+      continue;
+    }
+
     std::string const file_path =
         db_options_.wal_dir + "/" + log->PathName();
     uint64_t file_size;
