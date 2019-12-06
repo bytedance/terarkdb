@@ -116,15 +116,26 @@ Status DeleteDBFile(const ImmutableDBOptions* db_options,
 #endif
 }
 
-void SetSelfThreadPriority(SetThreadPriority priority) {
+int SetThreadSched(SchedClass sched_class, int nice){
 #ifdef OS_LINUX
-  if (priority == kSetThreadPriorityLow) {
-    setpriority(PRIO_PROCESS, 0 /* Current thread */, 19 /* Lowest priority */);
-  } else {
-    setpriority(PRIO_PROCESS, 0 /* Current thread */, 0);
+  sched_param s;
+  s.sched_priority = 0;
+  if (sched_class == kSchedOther){
+    int ret = sched_setscheduler(0, SCHED_OTHER, &s);
+    if(ret != 0) {
+      return ret;
+    }
+    return setpriority(PRIO_PROCESS, 0, (nice < -20 || nice > 19) ? 0 : nice);
   }
+  if (sched_class == kSchedBatch){
+    return sched_setscheduler(0, SCHED_BATCH, &s);
+  }
+  if (sched_class == kSchedIdle){
+    return sched_setscheduler(0, SCHED_IDLE, &s);
+  }
+  return -1;
 #else
-  (void)priority;
+  return 0;
 #endif
 }
 
