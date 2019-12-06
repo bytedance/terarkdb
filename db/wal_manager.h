@@ -36,7 +36,8 @@ class WalManager {
         env_options_(env_options),
         env_(db_options.env),
         purge_wal_files_last_run_(0),
-        seq_per_batch_(seq_per_batch) {}
+        seq_per_batch_(seq_per_batch),
+        guard_seqno_(kMaxSequenceNumber + 1) {}
 
   void AddLogNumber(const uint64_t number);
 
@@ -64,6 +65,8 @@ class WalManager {
                             SequenceNumber* sequence) {
     return ReadFirstLine(fname, number, sequence);
   }
+
+  void SetGuardSeqno(SequenceNumber guard_seqno) { guard_seqno_ = guard_seqno; }
 
  private:
   Status GetSortedWalsOfType(const std::string& path, VectorLogPtr& log_files,
@@ -99,6 +102,8 @@ class WalManager {
   // obsolete files will be deleted every this seconds if ttl deletion is
   // enabled and archive size_limit is disabled.
   static const uint64_t kDefaultIntervalToDeleteObsoleteWAL = 600;
+
+  SequenceNumber guard_seqno_;
 };
 
 #endif  // ROCKSDB_LITE

@@ -2572,6 +2572,10 @@ Status DBImpl::GetUpdatesSince(
   return wal_manager_.GetUpdatesSince(seq, iter, read_options, versions_.get());
 }
 
+void DBImpl::SetGuardSeqno(SequenceNumber guard_seqno) {
+  wal_manager_.SetGuardSeqno(guard_seqno);
+}
+
 Status DBImpl::DeleteFile(std::string name) {
   uint64_t number;
   FileType type;
