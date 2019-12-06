@@ -896,7 +896,7 @@ Status CompactionJob::VerifyFiles() {
       compact_->compaction->mutable_cf_options()->prefix_extractor.get();
   std::atomic<size_t> next_file_meta_idx(0);
   auto verify_table = [&](Status& output_status) {
-    SetSelfThreadPriority(kSetThreadPriorityLow);
+    SetThreadSched(kSchedIdle);
     while (true) {
       size_t file_idx = next_file_meta_idx.fetch_add(1);
       if (file_idx >= files_meta.size()) {
@@ -933,7 +933,7 @@ Status CompactionJob::VerifyFiles() {
         break;
       }
     }
-    SetSelfThreadPriority(kSetThreadPriorityNormal);
+    SetThreadSched(kSchedOther);
   };
   size_t thread_count =
       std::min(files_meta.size(), compact_->sub_compact_states.size());
@@ -1058,7 +1058,7 @@ Status CompactionJob::Install(const MutableCFOptions& mutable_cf_options) {
 }
 
 void CompactionJob::ProcessCompaction(SubcompactionState* sub_compact) {
-  SetSelfThreadPriority(kSetThreadPriorityLow);
+  SetThreadSched(kSchedIdle);
   switch (sub_compact->compaction->compaction_type()) {
     case kKeyValueCompaction:
       ProcessKeyValueCompaction(sub_compact);
@@ -1077,7 +1077,7 @@ void CompactionJob::ProcessCompaction(SubcompactionState* sub_compact) {
       assert(false);
       break;
   }
-  SetSelfThreadPriority(kSetThreadPriorityNormal);
+  SetThreadSched(kSchedOther);
 }
 
 void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
