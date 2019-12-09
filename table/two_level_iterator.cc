@@ -454,7 +454,7 @@ class MapSstIterator final : public InternalIterator {
     first_level_value_.reset();
     first_level_iter_->Seek(target);
     if (!InitFirstLevelIter()) {
-      MapSstIterator::SeekToLast();
+      assert(max_heap_.empty());
       return;
     }
     auto& icomp = min_heap_.comparator().internal_comparator();
