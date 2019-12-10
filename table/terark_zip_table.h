@@ -106,6 +106,8 @@ struct TerarkZipTableOptions {
   int32_t     cacheShards              = 17; // to reduce lock competition
   uint64_t    cacheCapacityBytes       = 0;  // non-zero implies direct io read
   uint8_t     reserveBytes1[24]        = {};
+
+  class Status Parse(const std::string&);
 };
 
 void TerarkZipDeleteTempFiles(const std::string& tmpPath);
@@ -163,6 +165,9 @@ NewPatriciaTrieRepFactory(const std::unordered_map<std::string, std::string>& op
 class TableFactory*
 NewTerarkZipTableFactory(const TerarkZipTableOptions&,
                          std::shared_ptr<class TableFactory> fallback);
+class TableFactory*
+NewTerarkZipTableFactory(const std::string& options,
+                         std::shared_ptr<class TableFactory> fallback, class Status*);
 
 std::shared_ptr<class TableFactory>
 SingleTerarkZipTableFactory(const TerarkZipTableOptions&,

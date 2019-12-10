@@ -162,6 +162,17 @@ NewTerarkZipTableFactory(const TerarkZipTableOptions& tzto,
   return factory;
 }
 
+TableFactory*
+NewTerarkZipTableFactory(const std::string& options,
+                         std::shared_ptr<TableFactory> fallback, Status* s) {
+  TerarkZipTableOptions opt;
+  *s = opt.Parse(options);
+  if (s->ok()) {
+    return NewTerarkZipTableFactory(opt, fallback);
+  }
+  return nullptr;
+}
+
 std::shared_ptr<TableFactory>
 SingleTerarkZipTableFactory(const TerarkZipTableOptions& tzto,
                             std::shared_ptr<TableFactory> fallback) {
@@ -477,6 +488,58 @@ const {
     return Status::InvalidArgument("TerarkZipTableFactory::SanitizeOptions()",
                                    "user comparator must be 'leveldb.BytewiseComparator'");
   }
+  return Status::OK();
+}
+
+// delimiter must be "\n"
+Status TerarkZipTableOptions::Parse(const std::string& opt) {
+  const char* beg = opt.c_str();
+  const char* end = opt.size() + beg;
+  std::unordered_map<std::string, std::string> map;
+  while (beg < end) {
+    int namelen = -1, val_beg = -1, val_end, eol = -1;
+    sscanf(beg, "%.*s%n=%n%.*s%n\n%n", &namelen, &val_beg, &val_end, &eol);
+    if (-1 == eol) {
+      return Status::InvalidArgument("TerarkZipTableOptions::Parse", "Missing linefeed char");
+    }
+    map[std::string(beg, namelen)] = std::string(beg + val_beg, val_end - val_beg);
+    beg += eol;
+  }
+#define M_String(name) { \
+    auto iter = map.find(#name); \
+    if (map.end() != iter) name = iter->second; \
+  }
+#define M_NumFmt(name, fmt) { \
+    auto iter = map.find(#name); \
+    if (map.end() != iter) { \
+      if (sscanf(iter->second.c_str(), fmt, &name) != 1) { \
+        return Stauts::InvalidArgument("TerarkZipTableOptions::Parse():", \
+                                       "bad " #name); \
+      } \
+    } \
+  }
+#define M_NumGiB(name) { \
+    auto iter = map.find(#name); \
+    if (map.end() != iter) { \
+      double dval = strtof(iter->second.c_str()); \
+      name = size_t(dval * GiB); \
+    } \
+  }
+#define M_Boolea(name) { \
+    auto iter = map.find(#name); \
+    if (map.end() != iter) { \
+      if (stricmp(iter->second.c_str(), "true") == 0) \
+        name = true; \
+      else if (stricmp(iter->second.c_str(), "false") == 0) \
+        name = false; \
+      else \
+        return Stauts::InvalidArgument("TerarkZipTableOptions::Parse():", \
+                                       "bad " #name); \
+    } \
+  }
+
+#include "terark_zip_table_property_print.h"
+
   return Status::OK();
 }
 
