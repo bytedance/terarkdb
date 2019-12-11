@@ -972,6 +972,12 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
     status = c_iter->status();
   }
 
+  if (compaction_filter) {
+    ReapMatureAction(compaction_filter, &result.stat_all);
+  }
+  if (second_pass_iter_storage.compaction_filter) {
+    EraseFutureAction(second_pass_iter_storage.compaction_filter);
+  }
   if (status.ok() && !builder && result.files.empty() &&
       !range_del_agg.IsEmpty()) {
     status = create_builder(&writer, &builder);
