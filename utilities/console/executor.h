@@ -5,6 +5,7 @@
 #include <memory>
 #include <string>
 
+#include "db/db_impl.h"
 #include "server.h"
 #include "string_view.hpp"
 #include "util/autovector.h"
@@ -25,7 +26,7 @@ class Executor {
   virtual size_t GetTaskCount() const = 0;
 };
 
-std::unique_ptr<Executor> OpenExecutorMem();
+std::unique_ptr<Executor> OpenExecutorMem(rocksdb::DBImpl* db);
 }  // namespace cheapis
 
 #endif  // CHEAPIS_EXECUTOR_H

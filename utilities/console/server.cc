@@ -136,8 +136,8 @@ static void ServerCron(long *last_cron_time, long curr_time,
   }
 }
 
-int ServerMain(ServerRunner *runner, const std::string &path, Env *env,
-               Logger *log) {
+int ServerMain(ServerRunner *runner, rocksdb::DBImpl *db,
+               const std::string &path, Env *env, Logger *log) {
   const int el_fd = EventLoop<Client>::Open();
   if (el_fd < 0) {
     ROCKS_LOG_ERROR(log, "Failed creating the event loop. Error message: '%s'",
@@ -146,7 +146,7 @@ int ServerMain(ServerRunner *runner, const std::string &path, Env *env,
   }
   EventLoop<Client> el(el_fd);
 
-  auto executor = OpenExecutorMem();
+  auto executor = OpenExecutorMem(db);
   if (executor == nullptr) {
     ROCKS_LOG_ERROR(log, "Failed creating the executor");
     return 1;

@@ -245,7 +245,8 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
       error_handler_(this, immutable_db_options_, &mutex_),
       atomic_flush_install_cv_(&mutex_),
       bytedance_tags_("dbname=" + dbname),
-      console_runner_(dbname, env_, immutable_db_options_.info_log.get()) {
+      console_runner_(this, dbname, env_,
+                      immutable_db_options_.info_log.get()) {
   // !batch_per_trx_ implies seq_per_batch_ because it is only unset for
   // WriteUnprepared, which should use seq_per_batch_.
   assert(batch_per_txn_ || seq_per_batch_);

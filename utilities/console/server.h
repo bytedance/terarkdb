@@ -6,6 +6,7 @@
 #include <string>
 #include <thread>
 
+#include "db/db_impl.h"
 #include "gujia.h"
 #include "gujia_impl.h"
 #include "resp_machine.h"
@@ -16,7 +17,8 @@ using namespace gujia;
 
 struct ServerRunner;
 
-int ServerMain(ServerRunner* runner, const std::string& path, rocksdb::Env* env,
+int ServerMain(ServerRunner* runner, rocksdb::DBImpl* db,
+               const std::string& path, rocksdb::Env* env,
                rocksdb::Logger* log);
 
 struct Client {
@@ -32,10 +34,11 @@ struct Client {
 };
 
 struct ServerRunner {
-  ServerRunner(const std::string& path, rocksdb::Env* env,
+  ServerRunner(rocksdb::DBImpl* db, const std::string& path, rocksdb::Env* env,
                rocksdb::Logger* log) {
     auto p = &path;
-    std::thread job([this, p, env, log]() { ServerMain(this, *p, env, log); });
+    std::thread job(
+        [this, db, p, env, log]() { ServerMain(this, db, *p, env, log); });
     job.detach();
   }
 

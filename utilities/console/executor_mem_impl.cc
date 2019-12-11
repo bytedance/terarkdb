@@ -15,6 +15,8 @@ class ExecutorMemImpl final : public Executor {
   };
 
  public:
+  explicit ExecutorMemImpl(rocksdb::DBImpl* db) : db_(db) {}
+
   ~ExecutorMemImpl() override = default;
 
   void Submit(const rocksdb::autovector<nonstd::string_view>& argv, Client* c,
@@ -57,6 +59,19 @@ class ExecutorMemImpl final : public Executor {
       } else if (argv[0] == "DEL" && argv.size() == 2) {
         map_.erase(argv[1]);
         RespMachine::AppendSimpleString(&c->output, "OK");
+      } else if (argv[0] == "TERARKDB_OPS_FULL_COMPACT" && argv.size() == 1) {
+        rocksdb::CompactRangeOptions cro{};
+        cro.exclusive_manual_compaction = false;
+        auto s = db_->CompactRange(cro, nullptr, nullptr);
+        if (s.ok()) {
+          RespMachine::AppendSimpleString(&c->output, "OK");
+        } else {
+          RespMachine::AppendError(
+              &c->output,
+              "Cannot do full compaction. Error message: " + s.ToString());
+        }
+      } else if (argv[0] == "PING" && argv.size() == 1) {
+        RespMachine::AppendSimpleString(&c->output, "PONG");
       } else {
         RespMachine::AppendError(&c->output, "Unsupported Command");
       }
@@ -79,9 +94,10 @@ class ExecutorMemImpl final : public Executor {
  private:
   std::deque<Task> tasks_;
   std::map<std::string, std::string> map_;
+  rocksdb::DBImpl* db_;
 };
 
-std::unique_ptr<Executor> OpenExecutorMem() {
-  return std::make_unique<ExecutorMemImpl>();
+std::unique_ptr<Executor> OpenExecutorMem(rocksdb::DBImpl* db) {
+  return std::make_unique<ExecutorMemImpl>(db);
 }
 }  // namespace cheapis
