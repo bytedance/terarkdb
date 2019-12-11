@@ -203,10 +203,10 @@ struct TableTransientStat {
   std::string                        aggregate;
 };
 
-void PlantFutureAction(void* obj, void (*action)(void* p_obj, std::string* result));
-void EraseFutureAction(void* obj);
-bool ExistFutureAction(void* obj);
-bool ReapMatureAction(void* obj, std::string* result);
+void PlantFutureAction(const void* obj, void (*action)(const void* p_obj, std::string* result));
+void EraseFutureAction(const void* obj);
+bool ExistFutureAction(const void* obj);
+bool ReapMatureAction(const void* obj, std::string* result);
 
 struct CompactionJobInfo {
   CompactionJobInfo() = default;

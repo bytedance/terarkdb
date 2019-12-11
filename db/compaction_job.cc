@@ -1511,10 +1511,10 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
       SetPerfLevel(prev_perf_level);
     }
   }
-  if (auto filt = compaction_filter.get()) {
+  if (auto filt = compaction_filter) {
     ReapMatureAction(filt, &sub_compact->stat_all);
   }
-  if (auto filt = second_pass_iter_storage.compaction_filter.get()) {
+  if (auto filt = second_pass_iter_storage.compaction_filter) {
     EraseFutureAction(filt);
   }
 
@@ -2474,10 +2474,10 @@ void CompactionJob::LogCompaction() {
   }
 }
 
-static std::map<void*, void (*)(void* p_obj, std::string* result)> g_fa_map;
+static std::map<const void*, void (*)(const void* p_obj, std::string* result)> g_fa_map;
 std::mutex g_fa_map_mutex;
 
-void PlantFutureAction(void* obj, void (*action)(void* p_obj, std::string* result)) {
+void PlantFutureAction(const void* obj, void (*action)(const void* p_obj, std::string* result)) {
   assert(nullptr != obj);
   assert(nullptr != action);
   g_fa_map_mutex.lock();
@@ -2489,14 +2489,14 @@ void PlantFutureAction(void* obj, void (*action)(void* p_obj, std::string* resul
   }
 }
 
-void EraseFutureAction(void* obj) {
+void EraseFutureAction(const void* obj) {
   assert(nullptr != obj);
   g_fa_map_mutex.lock();
   g_fa_map.erase(obj);
   g_fa_map_mutex.unlock();
 }
 
-bool ExistFutureAction(void* obj) {
+bool ExistFutureAction(const void* obj) {
   assert(nullptr != obj);
   g_fa_map_mutex.lock();
   auto end = g_fa_map.end();
@@ -2505,7 +2505,7 @@ bool ExistFutureAction(void* obj) {
   return end != iter;
 }
 
-bool ReapMatureAction(void* obj, std::string* result) {
+bool ReapMatureAction(const void* obj, std::string* result) {
   assert(nullptr != obj);
   assert(nullptr != result);
   g_fa_map_mutex.lock();
@@ -2513,12 +2513,12 @@ bool ReapMatureAction(void* obj, std::string* result) {
   if (g_fa_map.end() != iter) {
      auto action = iter->second;
      g_fa_map.erase(iter);
-     g_fa_map_mutex.unlock;
+     g_fa_map_mutex.unlock();
      action(obj, result);
      return true;
   }
   else {
-     g_fa_map_mutex.unlock;
+     g_fa_map_mutex.unlock();
      return false;
   }
 }
