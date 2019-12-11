@@ -498,7 +498,7 @@ Status TerarkZipTableOptions::Parse(const std::string& opt) {
   std::unordered_map<std::string, std::string> map;
   while (beg < end) {
     int namelen = -1, val_beg = -1, val_end, eol = -1;
-    sscanf(beg, "%.*s%n=%n%.*s%n\n%n", &namelen, &val_beg, &val_end, &eol);
+    sscanf(beg, "%*s%n=%n%*s%n\n%n", &namelen, &val_beg, &val_end, &eol);
     if (-1 == eol) {
       return Status::InvalidArgument("TerarkZipTableOptions::Parse", "Missing linefeed char");
     }
@@ -513,7 +513,7 @@ Status TerarkZipTableOptions::Parse(const std::string& opt) {
     auto iter = map.find(#name); \
     if (map.end() != iter) { \
       if (sscanf(iter->second.c_str(), fmt, &name) != 1) { \
-        return Stauts::InvalidArgument("TerarkZipTableOptions::Parse():", \
+        return Status::InvalidArgument("TerarkZipTableOptions::Parse():", \
                                        "bad " #name); \
       } \
     } \
@@ -521,24 +521,31 @@ Status TerarkZipTableOptions::Parse(const std::string& opt) {
 #define M_NumGiB(name) { \
     auto iter = map.find(#name); \
     if (map.end() != iter) { \
-      double dval = strtof(iter->second.c_str()); \
+      double dval = strtof(iter->second.c_str(), NULL); \
       name = size_t(dval * GiB); \
     } \
   }
 #define M_Boolea(name) { \
     auto iter = map.find(#name); \
     if (map.end() != iter) { \
-      if (stricmp(iter->second.c_str(), "true") == 0) \
+      if (strcasecmp(iter->second.c_str(), "true") == 0) \
         name = true; \
-      else if (stricmp(iter->second.c_str(), "false") == 0) \
+      else if (strcasecmp(iter->second.c_str(), "false") == 0) \
         name = false; \
       else \
-        return Stauts::InvalidArgument("TerarkZipTableOptions::Parse():", \
+        return Status::InvalidArgument("TerarkZipTableOptions::Parse():", \
                                        "bad " #name); \
     } \
   }
-
+  int entropyAlgo;
+  int debugLevel, indexNestScale, indexTempLevel, offsetArrayBlockUnits;
 #include "terark_zip_table_property_print.h"
+
+  this->debugLevel = (byte_t)debugLevel;
+  this->indexNestScale = (byte_t)indexNestScale;
+  this->indexTempLevel = (byte_t)indexTempLevel;
+  this->offsetArrayBlockUnits = (uint16_t)offsetArrayBlockUnits;
+  this->entropyAlgo = (EntropyAlgo)entropyAlgo;
 
   return Status::OK();
 }
