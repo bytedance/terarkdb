@@ -126,8 +126,16 @@ class TablePropertiesCollectorFactory {
 
   virtual ~TablePropertiesCollectorFactory() {}
   // has to be thread-safe
-  virtual TablePropertiesCollector* CreateTablePropertiesCollector(
-      TablePropertiesCollectorFactory::Context context) = 0;
+  virtual TablePropertiesCollector* CreateTablePropertiesCollector(Context) = 0;
+
+  virtual bool NeedSerialize() const { return false; }
+
+  virtual Status Serialize(std::string*) const {
+     return Status::NotSupported("Serialize()", this->Name());
+  }
+  virtual Status Deserialize(Slice) {
+     return Status::NotSupported("Deserialize()", this->Name());
+  }
 
   // The name of the properties collector can be used for debugging purpose.
   virtual const char* Name() const = 0;

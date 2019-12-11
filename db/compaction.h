@@ -12,6 +12,7 @@
 #include "options/cf_options.h"
 #include "util/arena.h"
 #include "util/autovector.h"
+#include "rocksdb/listener.h"
 
 namespace rocksdb {
 
@@ -157,9 +158,14 @@ struct CompactionWorkerResult {
     std::string file_name;
     SequenceNumber smallest_seqno, largest_seqno;
     size_t file_size;
+
+    // use UserProperties["User.Collected.Transient.Stat"] to reduce complexity
+    // std::string stat_one;
+
     bool marked_for_compaction;
   };
   std::vector<FileInfo> files;
+  std::string stat_all;
 };
 
 // A Compaction encapsulates information about a compaction.
@@ -408,6 +414,9 @@ class Compaction {
 
   uint64_t MaxInputFileCreationTime() const;
 
+  const std::vector<TableTransientStat>& transient_stat() const { return transient_stat_; }
+  std::vector<TableTransientStat>& transient_stat() { return transient_stat_; }
+
  private:
   // mark (or clear) all files that are being compacted
   void MarkFilesBeingCompacted(bool mark_as_compacted);
@@ -508,6 +517,9 @@ class Compaction {
 
   // Reason for compaction
   CompactionReason compaction_reason_;
+
+  // per sub compact
+  std::vector<TableTransientStat> transient_stat_;
 };
 
 // Utility function

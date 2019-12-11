@@ -136,9 +136,16 @@ struct CompactionJob::SubcompactionState {
   // Files produced by this subcompaction
   struct Output {
     FileMetaData meta;
+
+    // Same as user_collected_properties["User.Collected.Transient.Stat"].
+    // Should be transient and do not save to SST, but the code is too
+    // complex, so we DO SAVE it to SST, to avoid errors
+    // std::string  stat_one;
+
     bool finished;
     std::shared_ptr<const TableProperties> table_properties;
   };
+  std::string stat_all;
 
   // State kept for output being generated
   std::vector<Output> outputs;
@@ -749,6 +756,7 @@ Status CompactionJob::Run() {
     sub_compact.status = std::move(result.status);
     s = sub_compact.status;
     if (s.ok()) {
+      sub_compact.stat_all = std::move(result.stat_all);
       for (auto& file_info : result.files) {
         uint64_t file_number = versions_->NewFileNumber();
         std::string fname =
@@ -764,6 +772,7 @@ Status CompactionJob::Run() {
         output.meta.smallest = std::move(file_info.smallest);
         output.meta.largest = std::move(file_info.largest);
         output.meta.marked_for_compaction = file_info.marked_for_compaction;
+        // output.stat_one = std::move(file_info.stat_one);
         std::unique_ptr<rocksdb::RandomAccessFile> file;
         s = env_->NewRandomAccessFile(fname, &file, env_options_);
         if (!s.ok()) {
@@ -1502,6 +1511,12 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
       SetPerfLevel(prev_perf_level);
     }
   }
+  if (auto filt = compaction_filter.get()) {
+    ReapMatureAction(filt, &sub_compact->stat_all);
+  }
+  if (auto filt = second_pass_iter_storage.compaction_filter.get()) {
+    EraseFutureAction(filt);
+  }
 
   sub_compact->c_iter.reset();
   input.reset();
@@ -1646,7 +1661,7 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
     }
     last_key.assign(curr_key.data(), curr_key.size());
     last_file_number = curr_file_number;
-    
+
     input->Next();
   }
 
@@ -2055,7 +2070,7 @@ Status CompactionJob::InstallCompactionResults(
     const MutableCFOptions& mutable_cf_options) {
   db_mutex_->AssertHeld();
 
-  auto* compaction = compact_->compaction;
+  Compaction* compaction = compact_->compaction;
   // paranoia: verify that the files that we started with
   // still exist in the current version and in the same original level.
   // This ensures that a concurrent compaction did not erroneously
@@ -2119,7 +2134,7 @@ Status CompactionJob::InstallCompactionResults(
     auto s = map_builder.Build(*compaction->inputs(), deleted_range,
                                added_files, compaction->output_level(),
                                compaction->output_path_id(), vstorage, cfd,
-                               mutable_cf_options, compact_->compaction->edit(),
+                               mutable_cf_options, compaction->edit(),
                                &file_meta, &prop);
     if (file_meta.fd.file_size > 0) {
       // test map sst
@@ -2154,7 +2169,7 @@ Status CompactionJob::InstallCompactionResults(
   } else {
     // Add compaction inputs
     if (compaction->compaction_type() != kGarbageCollection) {
-      compaction->AddInputDeletions(compact_->compaction->edit());
+      compaction->AddInputDeletions(compaction->edit());
     }
 
     for (const auto& sub_compact : compact_->sub_compact_states) {
@@ -2167,14 +2182,24 @@ Status CompactionJob::InstallCompactionResults(
 
   TablePropertiesCollection tp;
   for (const auto& state : compact_->sub_compact_states) {
+    auto& tts = compaction->transient_stat().back();
+    compaction->transient_stat().push_back(TableTransientStat());
+    tts.aggregate = state.stat_all;
     for (const auto& output : state.outputs) {
+      /*
+      auto iter = output.table_properties->user_collected_properties.find("User.Collected.Transient.Stat");
+      if (output.table_properties->user_collected_properties.end() != iter) {
+        tts.per_table[fn] = iter->second;
+        output.stat_one = iter->second;
+      }
+      */
       auto fn =
           TableFileName(state.compaction->immutable_cf_options()->cf_paths,
                         output.meta.fd.GetNumber(), output.meta.fd.GetPathId());
       tp[fn] = output.table_properties;
     }
   }
-  compact_->compaction->SetOutputTableProperties(std::move(tp));
+  compaction->SetOutputTableProperties(std::move(tp));
 
   return versions_->LogAndApply(compaction->column_family_data(),
                                 mutable_cf_options, compaction->edit(),
@@ -2446,6 +2471,55 @@ void CompactionJob::LogCompaction() {
     }
     stream << "score" << compaction->score() << "input_data_size"
            << compaction->CalculateTotalInputSize();
+  }
+}
+
+static std::map<void*, void (*)(void* p_obj, std::string* result)> g_fa_map;
+std::mutex g_fa_map_mutex;
+
+void PlantFutureAction(void* obj, void (*action)(void* p_obj, std::string* result)) {
+  assert(nullptr != obj);
+  assert(nullptr != action);
+  g_fa_map_mutex.lock();
+  auto ib = g_fa_map.insert({obj, action});
+  g_fa_map_mutex.unlock();
+  assert(ib.second);
+  if (!ib.second) {
+    abort();
+  }
+}
+
+void EraseFutureAction(void* obj) {
+  assert(nullptr != obj);
+  g_fa_map_mutex.lock();
+  g_fa_map.erase(obj);
+  g_fa_map_mutex.unlock();
+}
+
+bool ExistFutureAction(void* obj) {
+  assert(nullptr != obj);
+  g_fa_map_mutex.lock();
+  auto end = g_fa_map.end();
+  auto iter = g_fa_map.find(obj);
+  g_fa_map_mutex.unlock();
+  return end != iter;
+}
+
+bool ReapMatureAction(void* obj, std::string* result) {
+  assert(nullptr != obj);
+  assert(nullptr != result);
+  g_fa_map_mutex.lock();
+  auto iter = g_fa_map.find(obj);
+  if (g_fa_map.end() != iter) {
+     auto action = iter->second;
+     g_fa_map.erase(iter);
+     g_fa_map_mutex.unlock;
+     action(obj, result);
+     return true;
+  }
+  else {
+     g_fa_map_mutex.unlock;
+     return false;
   }
 }
 
