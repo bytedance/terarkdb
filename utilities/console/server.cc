@@ -135,7 +135,7 @@ static void ServerCron(long *last_cron_time, long curr_time,
   }
 }
 
-int ServerMain(Env *env, Logger *log) {
+int ServerMain(ServerRunner *runner, Env *env, Logger *log) {
   const int el_fd = EventLoop<Client>::Open();
   if (el_fd < 0) {
     ROCKS_LOG_ERROR(log, "Failed creating the event loop. Error message: '%s'",
@@ -183,7 +183,13 @@ int ServerMain(Env *env, Logger *log) {
 
   struct timeval tv = {0};
   while (true) {
-    tv.tv_sec = executor->GetTaskCount() ? 0 : kCronInterval;
+    if (runner->closing_) {
+      runner->closed_ = true;
+      return 0;
+    }
+
+    tv.tv_sec = 0;
+    tv.tv_usec = 1000;
     r = el.Poll(&tv);
     if (r < 0) {
       ROCKS_LOG_ERROR(log, "Failed polling. Error message: '%s'",

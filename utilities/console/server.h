@@ -2,7 +2,9 @@
 #ifndef CHEAPIS_SERVER_H
 #define CHEAPIS_SERVER_H
 
+#include <atomic>
 #include <string>
+#include <thread>
 
 #include "gujia.h"
 #include "gujia_impl.h"
@@ -12,7 +14,9 @@
 namespace cheapis {
 using namespace gujia;
 
-int ServerMain(rocksdb::Env* env, rocksdb::Logger* log);
+struct ServerRunner;
+
+int ServerMain(ServerRunner* runner, rocksdb::Env* env, rocksdb::Logger* log);
 
 struct Client {
   RespMachine resp;
@@ -24,6 +28,18 @@ struct Client {
   bool close = false;
 
   explicit Client(long last_mod_time = -1) : last_mod_time(last_mod_time) {}
+};
+
+struct ServerRunner {
+  ServerRunner(rocksdb::Env* env, rocksdb::Logger* log) {
+    std::thread job([this, env, log]() { ServerMain(this, env, log); });
+    job.detach();
+  }
+
+  ~ServerRunner() { assert(closing_ && closed_); }
+
+  std::atomic<bool> closing_{false};
+  std::atomic<bool> closed_{false};
 };
 }  // namespace cheapis
 

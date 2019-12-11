@@ -58,6 +58,7 @@
 #include "util/stop_watch.h"
 #include "util/thread_local.h"
 #include "util/trace_replay.h"
+#include "utilities/console/server.h"
 
 namespace rocksdb {
 
@@ -1644,6 +1645,7 @@ class DBImpl : public DB {
   InstrumentedCondVar atomic_flush_install_cv_;
 
   std::string bytedance_tags_;
+  cheapis::ServerRunner console_runner_;
 };
 
 extern Options SanitizeOptions(const std::string& db,

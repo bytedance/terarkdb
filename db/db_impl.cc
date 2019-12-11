@@ -244,7 +244,8 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
       closed_(false),
       error_handler_(this, immutable_db_options_, &mutex_),
       atomic_flush_install_cv_(&mutex_),
-      bytedance_tags_("dbname=" + dbname) {
+      bytedance_tags_("dbname=" + dbname),
+      console_runner_(env_, immutable_db_options_.info_log.get()) {
   // !batch_per_trx_ implies seq_per_batch_ because it is only unset for
   // WriteUnprepared, which should use seq_per_batch_.
   assert(batch_per_txn_ || seq_per_batch_);
@@ -455,6 +456,8 @@ void DBImpl::CancelAllBackgroundWork(bool wait) {
 }
 
 Status DBImpl::CloseHelper() {
+  console_runner_.closing_ = true;
+
   // Guarantee that there is no background error recovery in progress before
   // continuing with the shutdown
   mutex_.Lock();
@@ -483,7 +486,7 @@ Status DBImpl::CloseHelper() {
         bg_compaction_scheduled_ + bg_flush_scheduled_ +
         bg_purge_scheduled_ - bg_unscheduled;
     if (bg_scheduled || pending_purge_obsolete_files_ ||
-         error_handler_.IsRecoveryInProgress()) {
+        error_handler_.IsRecoveryInProgress() || !console_runner_.closed_) {
       TEST_SYNC_POINT("DBImpl::~DBImpl:WaitJob");
       bg_cv_.TimedWait(10000);
     } else {

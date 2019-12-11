@@ -26,8 +26,6 @@ class Executor {
 };
 
 std::unique_ptr<Executor> OpenExecutorMem();
-
-std::unique_ptr<Executor> OpenExecutorDisk(const std::string& name);
 }  // namespace cheapis
 
 #endif  // CHEAPIS_EXECUTOR_H
