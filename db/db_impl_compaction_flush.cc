@@ -1152,6 +1152,7 @@ void DBImpl::NotifyOnCompactionCompleted(
     info.table_properties = c->GetOutputTableProperties();
     info.compaction_reason = c->compaction_reason();
     info.compression = c->output_compression();
+    info.transient_stat = std::move(c->transient_stat());
     for (size_t i = 0; i < c->num_input_levels(); ++i) {
       for (const auto fmd : *c->inputs(i)) {
         auto fn = TableFileName(c->immutable_cf_options()->cf_paths,
