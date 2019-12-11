@@ -1237,10 +1237,10 @@ librocksdb_env_basic_test.a: env/env_basic_test.o $(TESTHARNESS)
 	$(AM_V_at)$(AR) $(ARFLAGS) $@ $^
 
 db_bench: tools/db_bench.o $(BENCHTOOLOBJECTS) 
-	$(AM_LINK_SHR) -lgflags
+	$(AM_LINK) librocksdb.a -lgflags -fopenmp
 
 trace_analyzer: tools/trace_analyzer.o $(ANALYZETOOLOBJECTS) $(LIBOBJECTS)
-	$(AM_LINK_SHR)
+	$(AM_LINK) librocksdb.a -fopenmp
 
 cache_bench: cache/cache_bench.o $(TESTUTIL)
 	$(AM_LINK_SHR)
