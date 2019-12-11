@@ -16,7 +16,8 @@ using namespace gujia;
 
 struct ServerRunner;
 
-int ServerMain(ServerRunner* runner, rocksdb::Env* env, rocksdb::Logger* log);
+int ServerMain(ServerRunner* runner, const std::string& path, rocksdb::Env* env,
+               rocksdb::Logger* log);
 
 struct Client {
   RespMachine resp;
@@ -31,8 +32,10 @@ struct Client {
 };
 
 struct ServerRunner {
-  ServerRunner(rocksdb::Env* env, rocksdb::Logger* log) {
-    std::thread job([this, env, log]() { ServerMain(this, env, log); });
+  ServerRunner(const std::string& path, rocksdb::Env* env,
+               rocksdb::Logger* log) {
+    auto p = &path;
+    std::thread job([this, p, env, log]() { ServerMain(this, *p, env, log); });
     job.detach();
   }
 

@@ -20,6 +20,7 @@ constexpr unsigned int kTCPKeepAlive = 300;
 constexpr unsigned int kTimeout = 360;
 constexpr unsigned int kReadLength = 4096;
 constexpr unsigned int kMaxInputBuffer = 10485760;
+constexpr unsigned int kUnixSocketPerm = 700;
 
 static void ReleaseOrMarkClient(int fd, Client *c, EventLoop<Client> *el) {
   if (c->ref_count == 0) {
@@ -135,7 +136,8 @@ static void ServerCron(long *last_cron_time, long curr_time,
   }
 }
 
-int ServerMain(ServerRunner *runner, Env *env, Logger *log) {
+int ServerMain(ServerRunner *runner, const std::string &path, Env *env,
+               Logger *log) {
   const int el_fd = EventLoop<Client>::Open();
   if (el_fd < 0) {
     ROCKS_LOG_ERROR(log, "Failed creating the event loop. Error message: '%s'",
@@ -151,12 +153,25 @@ int ServerMain(ServerRunner *runner, Env *env, Logger *log) {
   }
 
   char err[ANET_ERR_LEN];
-  const int ac_fd =
-      anetTcpServer(err, kPort, const_cast<char *>(kBindAddr), kBacklog);
-  if (ac_fd < 0) {
-    ROCKS_LOG_ERROR(log, "Failed creating the TCP server. Error message: '%s'",
-                    err);
-    return 1;
+  int ac_fd;
+  if (path.empty()) {  // currently, it's just for debug
+    ac_fd = anetTcpServer(err, kPort, const_cast<char *>(kBindAddr), kBacklog);
+    if (ac_fd < 0) {
+      ROCKS_LOG_ERROR(
+          log, "Failed creating the TCP server. Error message: '%s'", err);
+      return 1;
+    }
+  } else {
+    std::string sock_path = path + "/console.sock";
+    unlink(sock_path.c_str()); /* don't care if this fails */
+    ac_fd = anetUnixServer(err, (char *)sock_path.c_str(), kUnixSocketPerm,
+                           kBacklog);
+    if (ac_fd < 0) {
+      ROCKS_LOG_ERROR(
+          log, "Failed creating the Unix socket server. Error message: '%s'",
+          err);
+      return 1;
+    }
   }
   anetNonBlock(nullptr, ac_fd);
 
