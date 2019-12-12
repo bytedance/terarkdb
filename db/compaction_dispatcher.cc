@@ -118,6 +118,7 @@ AJSON(rocksdb::CompactionFilter::Context, is_full_compaction,
                                           is_manual_compaction,
                                           column_family_id);
 
+AJSON(rocksdb::CompactionWorkerContext::NameParam, name, param);
 AJSON(rocksdb::CompactionWorkerContext, user_comparator, merge_operator,
                                         merge_operator_data, compaction_filter,
                                         compaction_filter_factory,
@@ -423,12 +424,18 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
     }
   } int_tbl_prop_collector_factories;
   for (auto& collector : context.int_tbl_prop_collector_factories) {
-    auto find = rep_->int_tbl_prop_collector_factory_map.find(collector);
+    auto find = rep_->int_tbl_prop_collector_factory_map.find(collector.name);
     if (find == rep_->int_tbl_prop_collector_factory_map.end()) {
       return make_error(
           Status::Corruption("Missing int_tbl_prop_collector_factories !"));
     }
     int_tbl_prop_collector_factories.data.emplace_back(find->second.get());
+    if (find->second->NeedSerialize()) {
+      Status s = find->second->Deserialize(collector.param);
+      if (!s.ok()) {
+        return make_error(std::move(s));
+      }
+    }
   }
   const Slice* start = nullptr;
   const Slice* end = nullptr;

@@ -119,13 +119,17 @@ struct CompactionWorkerContext {
     bool empty() const { return data.empty(); }
     void clear() { data.clear(); }
   };
+  struct NameParam {
+    std::string name;
+    EncodedString param;
+  };
   // options
   std::string user_comparator;
   std::string merge_operator;
   EncodedString merge_operator_data;
   std::string compaction_filter;
   std::string compaction_filter_factory;
-  rocksdb::CompactionFilter::Context compaction_filter_context;
+  CompactionFilter::Context compaction_filter_context;
   EncodedString compaction_filter_data;
   uint64_t blob_size;
   std::string table_factory;
@@ -136,18 +140,18 @@ struct CompactionWorkerContext {
   // compaction
   bool has_start, has_end;
   EncodedString start, end;
-  rocksdb::SequenceNumber last_sequence;
-  rocksdb::SequenceNumber earliest_write_conflict_snapshot;
-  rocksdb::SequenceNumber preserve_deletes_seqnum;
-  std::vector<std::pair<uint64_t, rocksdb::FileMetaData>> file_metadata;
+  SequenceNumber last_sequence;
+  SequenceNumber earliest_write_conflict_snapshot;
+  SequenceNumber preserve_deletes_seqnum;
+  std::vector<std::pair<uint64_t, FileMetaData>> file_metadata;
   std::vector<std::pair<int, uint64_t>> inputs;
   std::string cf_name;
   uint64_t target_file_size;
-  rocksdb::CompressionType compression;
-  rocksdb::CompressionOptions compression_opts;
-  std::vector<rocksdb::SequenceNumber> existing_snapshots;
+  CompressionType compression;
+  CompressionOptions compression_opts;
+  std::vector<SequenceNumber> existing_snapshots;
   bool bottommost_level;
-  std::vector<std::string> int_tbl_prop_collector_factories;
+  std::vector<NameParam> int_tbl_prop_collector_factories;
 };
 
 struct CompactionWorkerResult {

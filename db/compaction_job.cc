@@ -729,7 +729,12 @@ Status CompactionJob::Run() {
   context.existing_snapshots = existing_snapshots_;
   context.bottommost_level = bottommost_level_;
   for (auto& collector : *cfd->int_tbl_prop_collector_factories()) {
-    context.int_tbl_prop_collector_factories.emplace_back(collector->Name());
+    std::string param;
+    if (collector->NeedSerialize()) {
+      collector->Serialize(&param);
+    }
+    context.int_tbl_prop_collector_factories.emplace_back(
+      {collector->Name(), std::move(param)});
   }
   std::vector<std::function<CompactionWorkerResult()>> results;
   for (const auto& state : compact_->sub_compact_states) {
