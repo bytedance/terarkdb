@@ -12,6 +12,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <terark/util/factory.hpp>
 #include "rocksdb/lazy_buffer.h"
 
 #include "rocksdb/status.h"
@@ -207,7 +208,8 @@ class CompactionFilter {
 
 // Each compaction will create a new CompactionFilter allowing the
 // application to know about different compactions
-class CompactionFilterFactory {
+class CompactionFilterFactory
+ : public terark::Factoryable<CompactionFilterFactory> {
  public:
   virtual ~CompactionFilterFactory() { }
 

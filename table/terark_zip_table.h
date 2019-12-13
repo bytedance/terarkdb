@@ -166,7 +166,7 @@ class TableFactory*
 NewTerarkZipTableFactory(const TerarkZipTableOptions&,
                          std::shared_ptr<class TableFactory> fallback);
 class TableFactory*
-NewTerarkZipTableFactory(const std::string& options,
+NewTerarkZipTableFactory(class Slice options,
                          std::shared_ptr<class TableFactory> fallback, class Status*);
 
 std::shared_ptr<class TableFactory>

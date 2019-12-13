@@ -3,6 +3,7 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #ifndef ROCKSDB_LITE
+#include <terark/util/factory.ipp>
 #include "table/adaptive_table_factory.h"
 
 #include "table/table_builder.h"
@@ -125,6 +126,8 @@ extern TableFactory* NewAdaptiveTableFactory(
   return new AdaptiveTableFactory(table_factory_to_write,
       block_based_table_factory, plain_table_factory, cuckoo_table_factory);
 }
+
+TERARK_FACTORY_INSTANTIATE(TableFactory);
 
 }  // namespace rocksdb
 #endif  // ROCKSDB_LITE

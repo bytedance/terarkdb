@@ -163,7 +163,7 @@ NewTerarkZipTableFactory(const TerarkZipTableOptions& tzto,
 }
 
 TableFactory*
-NewTerarkZipTableFactory(const std::string& options,
+NewTerarkZipTableFactory(Slice options,
                          std::shared_ptr<TableFactory> fallback, Status* s) {
   TerarkZipTableOptions opt;
   *s = opt.Parse(options);
@@ -171,6 +171,15 @@ NewTerarkZipTableFactory(const std::string& options,
     return NewTerarkZipTableFactory(opt, fallback);
   }
   return nullptr;
+}
+
+TableFactory* TerarkZipTableFactoryCreator(Slice options) {
+  Status s;
+  TableFactory* p = NewTerarkZipTableFactory(options, nullptr, &s);
+  if (!s.ok()) {
+    throw std::exception(s.ToString());
+  }
+  return p;
 }
 
 std::shared_ptr<TableFactory>
@@ -492,8 +501,8 @@ const {
 }
 
 // delimiter must be "\n"
-Status TerarkZipTableOptions::Parse(const std::string& opt) {
-  const char* beg = opt.c_str();
+Status TerarkZipTableOptions::Parse(Slice opt) {
+  const char* beg = opt.data();
   const char* end = opt.size() + beg;
   std::unordered_map<std::string, std::string> map;
   while (beg < end) {
@@ -564,5 +573,8 @@ bool TerarkZipTablePrintCacheStat(TableFactory* factory, FILE* fp) {
   }
   return false;
 }
+
+TERARK_FACTORY_REGISTER(TerarkZipTableFactory,
+                       &TerarkZipTableFactoryCreator);
 
 } /* namespace rocksdb */

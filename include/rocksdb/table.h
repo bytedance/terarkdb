@@ -20,6 +20,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <terark/util/factory.hpp>
 
 #include "rocksdb/cache.h"
 #include "rocksdb/env.h"
@@ -432,7 +433,7 @@ extern TableFactory* NewCuckooTableFactory(
 class RandomAccessFileReader;
 
 // A base class for table factories.
-class TableFactory {
+class TableFactory : terark::Factoryable<TableFactory, Slice> {
  public:
   virtual ~TableFactory() {}
 

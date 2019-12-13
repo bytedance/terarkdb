@@ -4,6 +4,7 @@
 //  (found in the LICENSE.Apache file in the root directory).
 
 #include "db/table_properties_collector.h"
+#include <terark/util/factory.ipp>
 
 #include "db/dbformat.h"
 #include "util/coding.h"
@@ -62,5 +63,7 @@ uint64_t GetMergeOperands(const UserCollectedProperties& props,
   return GetUint64Property(
       props, TablePropertiesNames::kMergeOperands, property_present);
 }
+
+TERARK_FACTORY_INSTANTIATE(TablePropertiesCollectorFactory);
 
 }  // namespace rocksdb
