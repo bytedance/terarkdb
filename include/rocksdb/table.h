@@ -433,7 +433,7 @@ extern TableFactory* NewCuckooTableFactory(
 class RandomAccessFileReader;
 
 // A base class for table factories.
-class TableFactory : terark::Factoryable<TableFactory, Slice> {
+class TableFactory : public terark::Factoryable<TableFactory, Slice> {
  public:
   virtual ~TableFactory() {}
 

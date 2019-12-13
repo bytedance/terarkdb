@@ -127,7 +127,8 @@ extern TableFactory* NewAdaptiveTableFactory(
       block_based_table_factory, plain_table_factory, cuckoo_table_factory);
 }
 
-TERARK_FACTORY_INSTANTIATE(TableFactory);
-
 }  // namespace rocksdb
+
+TERARK_FACTORY_INSTANTIATE_GNS(rocksdb::TableFactory);
+
 #endif  // ROCKSDB_LITE

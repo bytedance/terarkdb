@@ -107,7 +107,7 @@ struct TerarkZipTableOptions {
   uint64_t    cacheCapacityBytes       = 0;  // non-zero implies direct io read
   uint8_t     reserveBytes1[24]        = {};
 
-  class Status Parse(const std::string&);
+  class Status Parse(class Slice);
 };
 
 void TerarkZipDeleteTempFiles(const std::string& tmpPath);

@@ -733,7 +733,7 @@ Status CompactionJob::Run() {
     if (collector->NeedSerialize()) {
       collector->Serialize(&param);
     }
-    context.int_tbl_prop_collector_factories.emplace_back(
+    context.int_tbl_prop_collector_factories.push_back(
       {collector->Name(), std::move(param)});
   }
   std::vector<std::function<CompactionWorkerResult()>> results;

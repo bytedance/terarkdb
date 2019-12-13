@@ -177,7 +177,7 @@ TableFactory* TerarkZipTableFactoryCreator(Slice options) {
   Status s;
   TableFactory* p = NewTerarkZipTableFactory(options, nullptr, &s);
   if (!s.ok()) {
-    throw std::exception(s.ToString());
+    throw std::logic_error(s.ToString());
   }
   return p;
 }

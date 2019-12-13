@@ -7,6 +7,7 @@
 #include <map>
 #include <string>
 #include <vector>
+#include <terark/util/factory.hpp>
 #include "rocksdb/status.h"
 #include "rocksdb/types.h"
 

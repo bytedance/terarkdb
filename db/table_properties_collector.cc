@@ -64,6 +64,7 @@ uint64_t GetMergeOperands(const UserCollectedProperties& props,
       props, TablePropertiesNames::kMergeOperands, property_present);
 }
 
-TERARK_FACTORY_INSTANTIATE(TablePropertiesCollectorFactory);
-
 }  // namespace rocksdb
+
+TERARK_FACTORY_INSTANTIATE_GNS(rocksdb::TablePropertiesCollectorFactory);
+
