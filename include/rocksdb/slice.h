@@ -34,6 +34,12 @@ namespace rocksdb {
 
 class Slice {
  public:
+  typedef const char* const_iterator;
+  typedef const char* iterator;
+
+  const_iterator begin() const { return data_; }
+  const_iterator end()   const { return data_ + size_; }
+
   // Create an empty slice.
   Slice() : data_(""), size_(0) { }
 
