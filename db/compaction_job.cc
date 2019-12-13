@@ -291,7 +291,7 @@ struct CompactionJob::SubcompactionState {
 
   struct RebuildBlobsInfo {
     chash_set<uint64_t> blobs;
-    uint64_t pop_count;
+    size_t pop_count;
   };
   struct BlobRefInfo {
     uint64_t file_number;
@@ -2001,7 +2001,8 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
   if (!rebuild_blobs_info.blobs.empty()) {
     ROCKS_LOG_INFO(
         db_options_.info_log,
-        "[%s] [JOB %d] Compaction auto rebuild %d(%d) blobs into %d new blobs",
+        "[%s] [JOB %d] Compaction auto rebuild %zd(%zd) blobs into %zd new "
+        "blobs",
         compact_->compaction->column_family_data()->GetName().c_str(), job_id_,
         rebuild_blobs_info.blobs.size(),
         rebuild_blobs_info.blobs.size() + rebuild_blobs_info.pop_count,
@@ -2229,7 +2230,7 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
         " inputs from %zd files. %" PRIu64
         " clear, %.2f%% estimation: [ %" PRIu64 " garbage type, %" PRIu64
         " get not found, %" PRIu64
-        " file number mismatch ], inheritance tree: %" PRIu64 " -> %" PRIu64,
+        " file number mismatch ], inheritance tree: %zd -> %zd",
         cfd->GetName().c_str(), job_id_, meta.fd.GetNumber(), counter.input,
         files.size(), counter.input - meta.prop.num_entries,
         sub_compact->compaction->num_antiquation() * 100. / counter.input,

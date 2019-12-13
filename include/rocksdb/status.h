@@ -45,6 +45,14 @@ class Status {
   bool operator==(const Status& rhs) const;
   bool operator!=(const Status& rhs) const;
 
+  inline void PermitUncheckedError() const { MarkChecked(); }
+
+  inline void MustCheck() const {
+#ifdef ROCKSDB_ASSERT_STATUS_CHECKED
+
+    checked_ = false;
+#endif  // ROCKSDB_ASSERT_STATUS_CHECKED
+  }
   enum Code : unsigned char {
     kOk = 0,
     kNotFound = 1,
@@ -60,7 +68,9 @@ class Status {
     kBusy = 11,
     kExpired = 12,
     kTryAgain = 13,
-    kCompactionTooLarge = 14
+    kCompactionTooLarge = 14,
+    kColumnFamilyDropped = 15,
+    kMaxCode
   };
 
   Code code() const { return code_; }
@@ -75,9 +85,15 @@ class Status {
     kStaleFile = 6,
     kMemoryLimit = 7,
     kSpaceLimit = 8,
-    kBadAlloc = 9,
-    kRequireMmap = 10,
-    kInstallTimeout = 11,
+    kPathNotFound = 9,
+    KMergeOperandsInsufficientCapacity = 10,
+    kManualCompactionPaused = 11,
+    kOverwritten = 12,
+    kTxnNotPrepared = 13,
+    kIOFenced = 14,
+    kBadAlloc = 15,
+    kRequireMmap = 16,
+    kInstallTimeout = 17,
     kMaxSubCode
   };
 
@@ -191,6 +207,15 @@ class Status {
     return Status(kCompactionTooLarge, msg, msg2);
   }
 
+  static Status ColumnFamilyDropped(SubCode msg = kNone) {
+    return Status(kColumnFamilyDropped, msg);
+  }
+
+  static Status ColumnFamilyDropped(const Slice& msg,
+                                    const Slice& msg2 = Slice()) {
+    return Status(kColumnFamilyDropped, msg, msg2);
+  }
+
   static Status NoSpace() { return Status(kIOError, kNoSpace); }
   static Status NoSpace(const Slice& msg, const Slice& msg2 = Slice()) {
     return Status(kIOError, kNoSpace, msg, msg2);
@@ -206,10 +231,28 @@ class Status {
     return Status(kIOError, kSpaceLimit, msg, msg2);
   }
 
+  static Status PathNotFound() { return Status(kIOError, kPathNotFound); }
+  static Status PathNotFound(const Slice& msg, const Slice& msg2 = Slice()) {
+    return Status(kIOError, kPathNotFound, msg, msg2);
+  }
+
+  static Status TxnNotPrepared() {
+    return Status(kInvalidArgument, kTxnNotPrepared);
+  }
+  static Status TxnNotPrepared(const Slice& msg, const Slice& msg2 = Slice()) {
+    return Status(kInvalidArgument, kTxnNotPrepared, msg, msg2);
+  }
+
   static Status BadAlloc() { return Status(kAborted, kBadAlloc); }
 
   // Returns true iff the status indicates success.
   bool ok() const { return code() == kOk; }
+
+  // Returns true iff the status indicates success *with* something
+  // overwritten
+  bool IsOkOverwritten() const {
+    return code() == kOk && subcode() == kOverwritten;
+  }
 
   // Returns true iff the status indicates a NotFound error.
   bool IsNotFound() const { return code() == kNotFound; }
@@ -260,6 +303,9 @@ class Status {
   // Returns true iff the status indicates the proposed compaction is too large
   bool IsCompactionTooLarge() const { return code() == kCompactionTooLarge; }
 
+  // Returns true iff the status indicates Column Family Dropped
+  bool IsColumnFamilyDropped() const { return code() == kColumnFamilyDropped; }
+
   // Returns true iff the status indicates a NoSpace error
   // This is caused by an I/O error returning the specific "out of space"
   // error condition. Stricto sensu, an NoSpace error is an I/O error
@@ -276,13 +322,38 @@ class Status {
     return (code() == kAborted) && (subcode() == kMemoryLimit);
   }
 
+  // Returns true iff the status indicates a PathNotFound error
+  // This is caused by an I/O error returning the specific "no such file or
+  // directory" error condition. A PathNotFound error is an I/O error with
+  // a specific subcode, enabling users to take appropriate action if necessary
+  bool IsPathNotFound() const {
+    return (code() == kIOError || code() == kNotFound) &&
+           (subcode() == kPathNotFound);
+  }
+
+  // Returns true iff the status indicates manual compaction paused. This
+  // is caused by a call to PauseManualCompaction
+  bool IsManualCompactionPaused() const {
+    return (code() == kIncomplete) && (subcode() == kManualCompactionPaused);
+  }
+
+  // Returns true iff the status indicates a TxnNotPrepared error.
+  bool IsTxnNotPrepared() const {
+    return (code() == kInvalidArgument) && (subcode() == kTxnNotPrepared);
+  }
+
+  // Returns true iff the status indicates a IOFenced error.
+  bool IsIOFenced() const {
+    return (code() == kIOError) && (subcode() == kIOFenced);
+  }
+
   // Return a string representation of this status suitable for printing.
   // Returns the string "OK" for success.
   std::string ToString() const;
 
   void swap(Status& y) noexcept;
 
- private:
+ protected:
   // A nullptr state_ (which is always the case for OK) means the message
   // is empty.
   // of the following form:
@@ -301,6 +372,12 @@ class Status {
       : Status(_code, kNone, msg, msg2) {}
 
   static const char* CopyState(const char* s);
+
+  inline void MarkChecked() const {
+#ifdef ROCKSDB_ASSERT_STATUS_CHECKED
+    checked_ = true;
+#endif  // ROCKSDB_ASSERT_STATUS_CHECKED
+  }
 };
 
 inline Status::Status(const Status& s)
