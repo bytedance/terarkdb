@@ -17,10 +17,12 @@ void ScanRangeDeletions(const char* db_path) {
   std::cout << "sst files from: " << db_path << std::endl;
   boost::filesystem::path p(db_path);
   int deletions = 0;
+  int cnt = 0;
   for (auto& entry : boost::make_iterator_range(directory_iterator(p), {})) {
     auto ext = boost::filesystem::extension(entry);
     if (ext == ".sst") {
-      std::cout << entry << std::endl;
+      std::cout << "file cnt: " << ++cnt << ", deletion count: " << deletions
+                << ", file" << entry << std::endl;
       CountRangeDeletions(entry.path().string().data(), deletions);
     }
   }
