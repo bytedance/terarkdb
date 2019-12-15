@@ -15,6 +15,7 @@
 
 #include <inttypes.h>
 #include <vector>
+#include <terark/util/factory.ipp>
 
 #include "db/column_family.h"
 #include "rocksdb/compaction_filter.h"
@@ -574,3 +575,5 @@ int Compaction::GetInputBaseLevel() const {
 }
 
 }  // namespace rocksdb
+
+TERARK_FACTORY_INSTANTIATE_GNS(CompactionFilterFactory);
