@@ -129,6 +129,6 @@ extern TableFactory* NewAdaptiveTableFactory(
 
 }  // namespace rocksdb
 
-TERARK_FACTORY_INSTANTIATE_GNS(rocksdb::TableFactory, Slice);
+TERARK_FACTORY_INSTANTIATE_GNS(rocksdb::TableFactory, rocksdb::Slice);
 
 #endif  // ROCKSDB_LITE
