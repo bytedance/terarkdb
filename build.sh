@@ -103,5 +103,7 @@ cp -a shared-objects/build/$PLATFORM_DIR/dbg-0/librocksdb* $pkgdir/lib
 cp -a shared-objects/build/$PLATFORM_DIR/dbg-1/librocksdb* $pkgdir/lib
 cp -a shared-objects/build/$PLATFORM_DIR/dbg-2/librocksdb* $pkgdir/lib
 cp -a librocksdb*.a $pkgdir/lib_static
+cp -a liblz4.a $pkgdir/lib_static
+cp -a libsnappy.a $pkgdir/lib_static
 
 echo "build and package successful!"
