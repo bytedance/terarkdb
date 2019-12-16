@@ -268,63 +268,6 @@ RemoteCompactionDispatcher::Worker::Worker(EnvOptions env_options, Env* env) {
   rep_ = new Rep();
   rep_->env_options = env_options;
   rep_->env = env;
-  RegistComparator(BytewiseComparator());
-  RegistComparator(ReverseBytewiseComparator());
-  RegistTableFactory(
-      NewBlockBasedTableFactory(BlockBasedTableOptions())->Name(),
-      [](std::shared_ptr<TableFactory>* ptr, const std::string& options) {
-        ptr->reset();
-        BlockBasedTableOptions base, bbto;
-        auto s = GetBlockBasedTableOptionsFromString(base, options, &bbto);
-        if (s.ok()) {
-          ptr->reset(NewBlockBasedTableFactory(bbto));
-        }
-        return s;
-      });
-  RegistTableFactory(
-      NewCuckooTableFactory(CuckooTableOptions())->Name(),
-      [](std::shared_ptr<TableFactory>* ptr, const std::string& options) {
-        ptr->reset();
-        CuckooTableOptions cto;
-        std::unordered_map<std::string, std::string> opts_map;
-        Status s = StringToMap(options, &opts_map);
-        if (!s.ok()) {
-          return s;
-        }
-        auto get_option = [&](const char* opt) {
-          auto find = opts_map.find(opt);
-          if (find == opts_map.end()) {
-            return std::string();
-          }
-          return find->second;
-        };
-        std::string opt;
-        if (!(opt = get_option("hash_table_ratio")).empty()) {
-          cto.hash_table_ratio = std::atof(opt.c_str());
-        }
-        if (!(opt = get_option("max_search_depth")).empty()) {
-          cto.max_search_depth = std::atoi(opt.c_str());
-        }
-        if (!(opt = get_option("cuckoo_block_size")).empty()) {
-          cto.cuckoo_block_size = std::atoi(opt.c_str());
-        }
-        if (!(opt = get_option("identity_as_first_hash")).empty()) {
-          cto.identity_as_first_hash = std::atoi(opt.c_str());
-        }
-        ptr->reset(NewCuckooTableFactory(cto));
-        return Status::OK();
-      });
-  RegistTableFactory(
-      NewPlainTableFactory(PlainTableOptions())->Name(),
-      [](std::shared_ptr<TableFactory>* ptr, const std::string& options) {
-        ptr->reset();
-        PlainTableOptions base, pto;
-        auto s = GetPlainTableOptionsFromString(base, options, &pto);
-        if (s.ok()) {
-          ptr->reset(NewPlainTableFactory(pto));
-        }
-        return s;
-      });
 }
 
 RemoteCompactionDispatcher::Worker::~Worker() {
@@ -349,53 +292,34 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
   if (context.user_comparator.empty()) {
     return make_error(Status::Corruption("Bad comparator name !"));
   } else {
-    auto find = rep_->comparator_map.find(context.user_comparator);
-    if (find == rep_->comparator_map.end()) {
-      return make_error(Status::Corruption("Missing comparator !"));
+    cf_options.comparator = Comparator::create(context.user_comparator);
+    if (!cf_options.comparator) {
+      return make_error(Status::Corruption("Can not find comparator",
+        context.user_comparator));
     }
-    cf_options.comparator = find->second;
   }
   if (!context.merge_operator.empty()) {
-    auto find = rep_->merge_operator_map.find(context.merge_operator);
-    if (find == rep_->merge_operator_map.end()) {
+    cf_options.merge_operator.reset(MergeOperator::create(
+      context.merge_operator, context.merge_operator_data));
+    if (!cf_options.merge_operator) {
       return make_error(Status::Corruption("Missing merge_operator !"));
     }
-    auto s = find->second(&cf_options.merge_operator);
-    if (s.ok() && cf_options.merge_operator &&
-        !context.merge_operator_data.empty()) {
-      s = cf_options.merge_operator->Deserialize(context.merge_operator_data);
-    }
-    if (!s.ok()) {
-      return make_error(std::move(s));
-    }
-  }
-  if (!context.compaction_filter.empty()) {
-    auto find = rep_->compaction_filter_map.find(context.compaction_filter);
-    if (find == rep_->compaction_filter_map.end()) {
-      return make_error(Status::Corruption("Missing compaction_filter !"));
-    }
-    cf_options.compaction_filter = find->second;
   }
   if (!context.compaction_filter_factory.empty()) {
-    auto find = rep_->compaction_filter_factory_map.find(
-        context.compaction_filter_factory);
-    if (find == rep_->compaction_filter_factory_map.end()) {
-      return
-          make_error(Status::Corruption("Missing compaction_filter_factory !"));
+    cf_options.compaction_filter_factory.reset(
+      CompactionFilterFactory::create(context.compaction_filter_factory));
+    if (!cf_options.compaction_filter_factory) {
+      return make_error(Status::Corruption("Missing CompactionFilterFactory!"));
     }
-    cf_options.compaction_filter_factory = find->second;
   }
   cf_options.blob_size = context.blob_size;
   if (context.table_factory.empty()) {
     return make_error(Status::Corruption("Bad table_factory name !"));
   } else {
-    auto find = rep_->table_factory_map.find(context.table_factory);
-    if (find == rep_->table_factory_map.end()) {
-      return make_error(Status::Corruption("Missing table_factory !"));
-    }
-    auto s =
-        find->second(&cf_options.table_factory, context.table_factory_options);
-    if (!s.ok()) {
+    Status s;
+    cf_options.table_factory.reset(TableFactory::create(
+       context.table_factory, context.table_factory_options, &s));
+    if (!cf_options.table_factory) {
       return make_error(std::move(s));
     }
   }
