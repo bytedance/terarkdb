@@ -66,5 +66,5 @@ uint64_t GetMergeOperands(const UserCollectedProperties& props,
 
 }  // namespace rocksdb
 
-TERARK_FACTORY_INSTANTIATE_GNS(rocksdb::TablePropertiesCollectorFactory);
+TERARK_FACTORY_INSTANTIATE_GNS(rocksdb::TablePropertiesCollectorFactory*);
 
