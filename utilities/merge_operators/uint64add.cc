@@ -68,4 +68,13 @@ std::shared_ptr<MergeOperator> MergeOperators::CreateUInt64AddOperator() {
   return std::make_shared<UInt64AddOperator>();
 }
 
+static MergeOperator* NewUInt64AddOperator(const std::string&) {
+  return new UInt64AddOperator;
+}
+
+TERARK_FACTORY_REGISTER   (UInt64AddOperator, &NewUInt64AddOperator);
+TERARK_FACTORY_REGISTER_EX(UInt64AddOperator, "uint64add",
+                       &NewUInt64AddOperator);
+
+
 }

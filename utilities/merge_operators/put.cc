@@ -85,4 +85,14 @@ std::shared_ptr<MergeOperator> MergeOperators::CreateDeprecatedPutOperator() {
 std::shared_ptr<MergeOperator> MergeOperators::CreatePutOperator() {
   return std::make_shared<PutOperatorV2>();
 }
+
+static MergeOperator* NewV1(const std::string&) { return new PutOperator; }
+static MergeOperator* NewV2(const std::string&) { return new PutOperatorV2; }
+
+TERARK_FACTORY_REGISTER(PutOperator  , &NewV2);
+TERARK_FACTORY_REGISTER(PutOperatorV2, &NewV2);
+
+TERARK_FACTORY_REGISTER_EX(PutOperator  , "put_v1", &NewV1);
+TERARK_FACTORY_REGISTER_EX(PutOperatorV2, "put"   , &NewV2);
+
 }

@@ -89,4 +89,13 @@ namespace rocksdb {
 std::shared_ptr<MergeOperator> MergeOperators::CreateMaxOperator() {
   return std::make_shared<MaxOperator>();
 }
+
+static MergeOperator* NewMaxOperator(const std::string& options) {
+  assert(options.size() <= 1);
+  return new MaxOperator;
+}
+
+TERARK_FACTORY_REGISTER   (MaxOperator, &NewMaxOperator);
+TERARK_FACTORY_REGISTER_EX(MaxOperator, "max", &NewMaxOperator);
+
 }

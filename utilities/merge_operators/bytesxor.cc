@@ -56,4 +56,12 @@ void BytesXOROperator::XOR(const Slice* existing_value,
   }
 }
 
+static MergeOperator* NewBytesXOROperator(const std::string& options) {
+  assert(options.size() <= 1);
+  return new BytesXOROperator;
+}
+
+TERARK_FACTORY_REGISTER   (BytesXOROperator, &NewBytesXOROperator);
+TERARK_FACTORY_REGISTER_EX(BytesXOROperator, "bytesxor", &NewBytesXOROperator);
+
 }  // namespace rocksdb

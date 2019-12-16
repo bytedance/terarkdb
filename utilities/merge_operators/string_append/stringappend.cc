@@ -56,4 +56,14 @@ std::shared_ptr<MergeOperator> MergeOperators::CreateStringAppendOperator(char d
   return std::make_shared<StringAppendOperator>(delim_char);
 }
 
+static MergeOperator* NewStringAppendOperator(const std::string& options) {
+  assert(options.size() <= 1);
+  char delim = options.size() ? options[0] : ',';
+  return new StringAppendOperator(delim);
+}
+
+TERARK_FACTORY_REGISTER   (StringAppendOperator, &NewStringAppendOperator);
+TERARK_FACTORY_REGISTER_EX(StringAppendOperator, "stringappendtest",
+                       &NewStringAppendOperator);
+
 } // namespace rocksdb

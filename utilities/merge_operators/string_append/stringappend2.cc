@@ -97,7 +97,7 @@ bool StringAppendTESTOperator::PartialMergeMulti(
 }
 
 // A version of PartialMerge that actually performs "partial merging".
-// Use this to simulate the exact behaviour of the StringAppendOperator.
+// Use this to simulate the exact behaviour of the StringAppendTESTOperator.
 bool StringAppendTESTOperator::_AssocPartialMergeMulti(
     const Slice& /*key*/, const std::deque<Slice>& operand_list,
     std::string* new_value, Logger* /*logger*/) const {
@@ -136,5 +136,15 @@ std::shared_ptr<MergeOperator>
 MergeOperators::CreateStringAppendTESTOperator() {
   return std::make_shared<StringAppendTESTOperator>(',');
 }
+
+static MergeOperator* NewStringAppendTESTOperator(const std::string& options) {
+  assert(options.size() <= 1);
+  char delim = options.size() ? options[0] : ',';
+  return new StringAppendTESTOperator(delim);
+}
+
+TERARK_FACTORY_REGISTER   (StringAppendTESTOperator, &NewStringAppendTESTOperator);
+TERARK_FACTORY_REGISTER_EX(StringAppendTESTOperator, "stringappend",
+                       &NewStringAppendTESTOperator);
 
 } // namespace rocksdb
