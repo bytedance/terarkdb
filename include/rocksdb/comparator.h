@@ -9,6 +9,7 @@
 #pragma once
 
 #include <string>
+#include <terark/util/factory.hpp>
 
 namespace rocksdb {
 
@@ -18,7 +19,7 @@ class Slice;
 // used as keys in an sstable or a database.  A Comparator implementation
 // must be thread-safe since rocksdb may invoke its methods concurrently
 // from multiple threads.
-class Comparator {
+class Comparator : public terark::Factoryable<const Comparator*> {
  public:
   virtual ~Comparator() {}
 

@@ -14,6 +14,7 @@
 #include "rocksdb/slice.h"
 #include "port/port.h"
 #include "util/logging.h"
+#include <terark/util/factory.ipp>
 
 namespace rocksdb {
 
@@ -209,4 +210,14 @@ const Comparator* ReverseBytewiseComparator() {
   return &rbytewise;
 }
 
+TERARK_FACTORY_REGISTER_EX(Comparator,
+          "leveldb.BytewiseComparator",
+                  &BytewiseComparator);
+
+TERARK_FACTORY_REGISTER_EX(Comparator,
+   "rocksdb.ReverseBytewiseComparator",
+           &ReverseBytewiseComparator);
+
 }  // namespace rocksdb
+
+TERARK_FACTORY_INSTANTIATE_GNS(const rocksdb::Comparator*);
