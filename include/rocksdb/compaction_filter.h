@@ -209,7 +209,7 @@ class CompactionFilter {
 // Each compaction will create a new CompactionFilter allowing the
 // application to know about different compactions
 class CompactionFilterFactory
- : public terark::Factoryable<CompactionFilterFactory> {
+ : public terark::Factoryable<CompactionFilterFactory*> {
  public:
   virtual ~CompactionFilterFactory() { }
 
