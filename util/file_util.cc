@@ -135,6 +135,8 @@ int SetThreadSched(SchedClass sched_class, int nice){
   }
   return -1;
 #else
+  (void)sched_class;
+  (void)nice;
   return 0;
 #endif
 }

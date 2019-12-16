@@ -620,6 +620,24 @@ TEST_F(TerarkZipTableDBTest, EmptyTable) {
   dbfull()->CompactRange(rocksdb::CompactRangeOptions(), nullptr, nullptr);
 }
 
+TEST_F(TerarkZipTableDBTest, FirstKVHuge) {
+  Options options = CurrentOptions();
+
+  // Write some keys using terarkzip table.
+  UseTerarkZipTable(options);
+
+  Destroy(&options);
+  Reopen(&options);
+
+  Random rnd(301);
+  int len = 2ull << 10;
+  int huge = 2ull << 20;
+
+  ASSERT_OK(Put(RandomString(&rnd, huge), RandomString(&rnd, huge)));
+  ASSERT_OK(Put(RandomString(&rnd, len), RandomString(&rnd, len)));
+  dbfull()->Flush(rocksdb::FlushOptions());
+}
+
 }  // namespace rocksdb
 
 int main(int argc, char** argv) {

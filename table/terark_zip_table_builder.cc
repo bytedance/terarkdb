@@ -394,17 +394,6 @@ Status TerarkZipTableBuilder::Add(const Slice& key,
   ++properties_.num_entries;
   properties_.raw_key_size += key.size();
   properties_.raw_value_size += value.size();
-  size_t freq_size = properties_.raw_key_size + properties_.raw_value_size;
-  if (freq_size >= next_freq_size_) {
-    auto kv_freq_copy = std::unique_ptr<freq_hist_o1>(new freq_hist_o1(kv_freq_));
-    kv_freq_copy->add_hist(freq_[0]->k);
-    kv_freq_copy->add_hist(freq_[0]->v);
-    estimateOffset_ =
-        uint64_t(freq_hist_o1::estimate_size_unfinish(*kv_freq_copy) * estimateRatio_);
-    next_freq_size_ = freq_size + (1ULL << 20);
-  }
-  NotifyCollectTableCollectorsOnAdd(key, value, estimateOffset_,
-                                    collectors_, ioptions_.info_log);
 
   uint64_t seqType = DecodeFixed64(key.data() + key.size() - 8);
   ValueType value_type = ValueType(seqType & 255);
@@ -522,6 +511,17 @@ Status TerarkZipTableBuilder::Add(const Slice& key,
   } else {
     assert(false);
   }
+  size_t freq_size = properties_.raw_key_size + properties_.raw_value_size;
+  if (freq_size >= next_freq_size_) {
+    auto kv_freq_copy = std::unique_ptr<freq_hist_o1>(new freq_hist_o1(kv_freq_));
+    kv_freq_copy->add_hist(freq_[0]->k);
+    kv_freq_copy->add_hist(freq_[0]->v);
+    estimateOffset_ =
+        uint64_t(freq_hist_o1::estimate_size_unfinish(*kv_freq_copy) * estimateRatio_);
+    next_freq_size_ = freq_size + (1ULL << 20);
+  }
+  NotifyCollectTableCollectorsOnAdd(key, value, estimateOffset_,
+                                    collectors_, ioptions_.info_log);
   return Status::OK();
 }
 catch (const std::exception& ex) {
