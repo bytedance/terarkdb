@@ -173,15 +173,6 @@ NewTerarkZipTableFactory(Slice options,
   return nullptr;
 }
 
-TableFactory* TerarkZipTableFactoryCreator(Slice options) {
-  Status s;
-  TableFactory* p = NewTerarkZipTableFactory(options, nullptr, &s);
-  if (!s.ok()) {
-    throw std::logic_error(s.ToString());
-  }
-  return p;
-}
-
 std::shared_ptr<TableFactory>
 SingleTerarkZipTableFactory(const TerarkZipTableOptions& tzto,
                             std::shared_ptr<TableFactory> fallback) {
@@ -574,7 +565,9 @@ bool TerarkZipTablePrintCacheStat(TableFactory* factory, FILE* fp) {
   return false;
 }
 
-TERARK_FACTORY_REGISTER(TerarkZipTableFactory,
-                       &TerarkZipTableFactoryCreator);
+TERARK_FACTORY_REGISTER_EX(TerarkZipTableFactory, "TerarkZipTable",
+([](const std::string& options, Status* s) {
+  return NewTerarkZipTableFactory(options, nullptr, s);
+}));
 
 } /* namespace rocksdb */

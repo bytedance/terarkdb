@@ -243,5 +243,17 @@ const std::string PlainTablePropertyNames::kBloomVersion =
 const std::string PlainTablePropertyNames::kNumBloomBlocks =
     "rocksdb.plain.table.bloom.numblocks";
 
+static TableFactory* PlainCreator(const std::string& options, Status* s) {
+  PlainTableOptions base, pto;
+  *s = GetPlainTableOptionsFromString(base, options, &pto);
+  if (s->ok()) {
+    return NewPlainTableFactory(pto);
+  }
+  return nullptr;
+}
+
+TERARK_FACTORY_REGISTER_EX(PlainTableFactory,
+                          "PlainTable", &PlainCreator);
+
 }  // namespace rocksdb
 #endif  // ROCKSDB_LITE

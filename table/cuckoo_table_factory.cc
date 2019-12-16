@@ -9,6 +9,7 @@
 #include "db/dbformat.h"
 #include "table/cuckoo_table_builder.h"
 #include "table/cuckoo_table_reader.h"
+#include "rocksdb/convenience.h"
 
 namespace rocksdb {
 
@@ -68,6 +69,39 @@ std::string CuckooTableFactory::GetPrintableTableOptions() const {
 TableFactory* NewCuckooTableFactory(const CuckooTableOptions& table_options) {
   return new CuckooTableFactory(table_options);
 }
+
+static TableFactory* CuckooCreator(const std::string& options, Status* s) {
+  CuckooTableOptions cto;
+  std::unordered_map<std::string, std::string> opts_map;
+  *s = StringToMap(options, &opts_map);
+  if (!s->ok()) {
+    return nullptr;
+  }
+  auto get_option = [&](const char* opt) {
+    auto find = opts_map.find(opt);
+    if (find == opts_map.end()) {
+      return std::string();
+    }
+    return find->second;
+  };
+  std::string opt;
+  if (!(opt = get_option("hash_table_ratio")).empty()) {
+    cto.hash_table_ratio = std::atof(opt.c_str());
+  }
+  if (!(opt = get_option("max_search_depth")).empty()) {
+    cto.max_search_depth = std::atoi(opt.c_str());
+  }
+  if (!(opt = get_option("cuckoo_block_size")).empty()) {
+    cto.cuckoo_block_size = std::atoi(opt.c_str());
+  }
+  if (!(opt = get_option("identity_as_first_hash")).empty()) {
+    cto.identity_as_first_hash = std::atoi(opt.c_str());
+  }
+  return NewCuckooTableFactory(cto);
+}
+
+TERARK_FACTORY_REGISTER_EX(CuckooTableFactory,
+                          "CuckooTable", &CuckooCreator);
 
 }  // namespace rocksdb
 #endif  // ROCKSDB_LITE
