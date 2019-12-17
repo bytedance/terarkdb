@@ -215,7 +215,15 @@ TERARK_FACTORY_REGISTER_EX(Comparator,
                   &BytewiseComparator);
 
 TERARK_FACTORY_REGISTER_EX(Comparator,
+                  "RocksDB_SE_v3.10",
+                  &BytewiseComparator);
+
+TERARK_FACTORY_REGISTER_EX(Comparator,
    "rocksdb.ReverseBytewiseComparator",
+           &ReverseBytewiseComparator);
+
+TERARK_FACTORY_REGISTER_EX(Comparator,
+           "rev:RocksDB_SE_v3.10",
            &ReverseBytewiseComparator);
 
 }  // namespace rocksdb
