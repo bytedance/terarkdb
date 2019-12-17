@@ -12,6 +12,7 @@
 #endif
 
 #include <inttypes.h>
+
 #include <iostream>
 #include <map>
 #include <memory>
@@ -21,6 +22,7 @@
 #include "db/memtable.h"
 #include "db/write_batch_internal.h"
 #include "options/cf_options.h"
+#include "port/port.h"
 #include "rocksdb/db.h"
 #include "rocksdb/env.h"
 #include "rocksdb/iterator.h"
@@ -39,11 +41,9 @@
 #include "util/compression.h"
 #include "util/random.h"
 
-#include "port/port.h"
-
 #if !defined(_MSC_VER) && !defined(__APPLE__)
-# include <sys/unistd.h>
-# include <table/terark_zip_weak_function.h>
+#include <sys/unistd.h>
+#include <table/terark_zip_table.h>
 #endif
 
 namespace rocksdb {
@@ -193,7 +193,7 @@ uint64_t SstFileDumper::CalculateCompressedTableSize(
     }
     table_builder->Add(iter->key(), iter->value());
   }
-  Status s = table_builder->Finish(nullptr);
+  Status s = table_builder->Finish(nullptr, nullptr);
   if (!s.ok()) {
     fputs(s.ToString().c_str(), stderr);
     exit(1);
@@ -213,7 +213,7 @@ int SstFileDumper::ShowAllCompressionSizes(
   const ColumnFamilyOptions cfo(opts);
   const MutableCFOptions moptions(cfo);
   rocksdb::InternalKeyComparator ikc(opts.comparator);
-  std::vector<std::unique_ptr<IntTblPropCollectorFactory> >
+  std::vector<std::unique_ptr<IntTblPropCollectorFactory>>
       block_based_table_factories;
 
   fprintf(stdout, "Block Size: %" ROCKSDB_PRIszt "\n", block_size);
@@ -257,8 +257,8 @@ Status SstFileDumper::SetTableOptionsByMagicNumber(
   assert(table_properties_);
   const char* terarkdb_localTempDir;
   const char* terarkConfigString;
-  (void) terarkdb_localTempDir; // suppress unused variable warning
-  (void) terarkConfigString;    //
+  (void)terarkdb_localTempDir;  // suppress unused variable warning
+  (void)terarkConfigString;     //
   if (table_magic_number == kBlockBasedTableMagicNumber ||
       table_magic_number == kLegacyBlockBasedTableMagicNumber) {
     options_.table_factory = std::make_shared<BlockBasedTableFactory>();
@@ -339,13 +339,11 @@ Status SstFileDumper::ReadSequential(bool print_kv, uint64_t read_num,
   }
   for (; iter->Valid(); iter->Next()) {
     ++i;
-    if (read_num > 0 && i > read_num)
-      break;
+    if (read_num > 0 && i > read_num) break;
 
     ParsedInternalKey ikey;
     if (!ParseInternalKey(iter->key(), &ikey)) {
-      std::cerr << "Internal Key ["
-                << iter->key().ToString(true /* in hex*/)
+      std::cerr << "Internal Key [" << iter->key().ToString(true /* in hex*/)
                 << "] parse error!\n";
       continue;
     }
@@ -366,9 +364,8 @@ Status SstFileDumper::ReadSequential(bool print_kv, uint64_t read_num,
       if (!s.ok()) {
         return s;
       }
-      fprintf(stdout, "%s => %s\n",
-          ikey.DebugString(output_hex_).c_str(),
-          value.ToString(output_hex_).c_str());
+      fprintf(stdout, "%s => %s\n", ikey.DebugString(output_hex_).c_str(),
+              value.ToString(output_hex_).c_str());
     }
   }
 
@@ -481,9 +478,8 @@ int SSTDumpTool::Run(int argc, char** argv) {
       output_hex = true;
     } else if (strcmp(argv[i], "--input_key_hex") == 0) {
       input_key_hex = true;
-    } else if (sscanf(argv[i],
-               "--read_num=%lu%c",
-               (unsigned long*)&n, &junk) == 1) {
+    } else if (sscanf(argv[i], "--read_num=%lu%c", (unsigned long*)&n, &junk) ==
+               1) {
       read_num = n;
     } else if (strcmp(argv[i], "--verify_checksum") == 0) {
       verify_checksum = true;
@@ -533,9 +529,9 @@ int SSTDumpTool::Run(int argc, char** argv) {
       try {
         in_key = rocksdb::LDBCommand::HexToString(in_key);
       } catch (...) {
-        std::cerr << "ERROR: Invalid key input '"
-          << in_key
-          << "' Use 0x{hex representation of internal rocksdb key}" << std::endl;
+        std::cerr << "ERROR: Invalid key input '" << in_key
+                  << "' Use 0x{hex representation of internal rocksdb key}"
+                  << std::endl;
         return -1;
       }
       Slice sl_key = rocksdb::Slice(in_key);
@@ -586,8 +582,8 @@ int SSTDumpTool::Run(int argc, char** argv) {
   }
 
   fprintf(stdout, "from [%s] to [%s]\n",
-      rocksdb::Slice(from_key).ToString(true).c_str(),
-      rocksdb::Slice(to_key).ToString(true).c_str());
+          rocksdb::Slice(from_key).ToString(true).c_str(),
+          rocksdb::Slice(to_key).ToString(true).c_str());
 
   uint64_t total_read = 0;
   for (size_t i = 0; i < filenames.size(); i++) {
@@ -601,8 +597,7 @@ int SSTDumpTool::Run(int argc, char** argv) {
       filename = std::string(dir_or_file) + "/" + filename;
     }
 
-    rocksdb::SstFileDumper dumper(filename, verify_checksum,
-                                  output_hex);
+    rocksdb::SstFileDumper dumper(filename, verify_checksum, output_hex);
     if (!dumper.getStatus().ok()) {
       fprintf(stderr, "%s: %s\n", filename.c_str(),
               dumper.getStatus().ToString().c_str());
@@ -637,8 +632,7 @@ int SSTDumpTool::Run(int argc, char** argv) {
           has_from || use_from_as_prefix, from_key, has_to, to_key,
           use_from_as_prefix);
       if (!st.ok()) {
-        fprintf(stderr, "%s: %s\n", filename.c_str(),
-            st.ToString().c_str());
+        fprintf(stderr, "%s: %s\n", filename.c_str(), st.ToString().c_str());
       }
       total_read += dumper.GetReadNumber();
       if (read_num > 0 && total_read > read_num) {

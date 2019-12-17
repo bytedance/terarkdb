@@ -43,8 +43,8 @@ class TerarkZipTableDBTest : public testing::Test {
         NewBlockBasedTableFactory());
     std::shared_ptr<TableFactory> adaptive_table_factory(
         NewAdaptiveTableFactory(block_based_factory));
-    o.table_factory.reset(NewTerarkZipTableFactory(
-        opt, adaptive_table_factory));
+    o.table_factory.reset(
+        NewTerarkZipTableFactory(opt, adaptive_table_factory));
     o.allow_mmap_reads = true;
     o.create_if_missing = true;
   }
@@ -55,9 +55,7 @@ class TerarkZipTableDBTest : public testing::Test {
     return options;
   }
 
-  DBImpl* dbfull() {
-    return reinterpret_cast<DBImpl*>(db_);
-  }
+  DBImpl* dbfull() { return reinterpret_cast<DBImpl*>(db_); }
 
   // The following util methods are copied from plain_table_db_test.
   void Reopen(Options* options = nullptr) {
@@ -84,9 +82,7 @@ class TerarkZipTableDBTest : public testing::Test {
     return db_->Put(WriteOptions(), k, v);
   }
 
-  Status Delete(const std::string& k) {
-    return db_->Delete(WriteOptions(), k);
-  }
+  Status Delete(const std::string& k) { return db_->Delete(WriteOptions(), k); }
 
   std::string Get(const std::string& k) {
     ReadOptions options;
@@ -145,7 +141,7 @@ TEST_F(TerarkZipTableDBTest, Flush) {
   ASSERT_EQ(1U, ptc.size());
   ASSERT_EQ(3U, ptc.begin()->second->num_entries);
   ASSERT_EQ("1", FilesPerLevel());
- 
+
   ASSERT_EQ("v1", Get("key1"));
   ASSERT_EQ("v2", Get("key2"));
   ASSERT_EQ("v3", Get("key3"));
@@ -211,7 +207,7 @@ TEST_F(TerarkZipTableDBTest, Iteratorseekfirstandlast) {
   ASSERT_TRUE(iter->Valid());
   ASSERT_EQ("0000000000000bar", iter->key().ToString());
   ASSERT_EQ("random", iter->value().ToString());
-  
+
   iter->SeekToLast();
   ASSERT_TRUE(iter->Valid());
   ASSERT_EQ("3000000000000bar", iter->key().ToString());
@@ -350,7 +346,6 @@ TEST_F(TerarkZipTableDBTest, Iteratorprev) {
   ASSERT_EQ("v__8", iter->value().ToString());
 }
 
-
 TEST_F(TerarkZipTableDBTest, FlushWithDuplicateKeys) {
   Options options = CurrentOptions();
   Destroy(&options);
@@ -394,7 +389,7 @@ TEST_F(TerarkZipTableDBTest, CompactionTrigger) {
   Random rnd(301);
 
   for (int num = 0; num < options.level0_file_num_compaction_trigger - 1;
-      num++) {
+       num++) {
     std::vector<std::string> values;
     // Write 120KB (10 values, each 12K)
     for (int i = 0; i < 10; i++) {
@@ -406,7 +401,7 @@ TEST_F(TerarkZipTableDBTest, CompactionTrigger) {
     ASSERT_EQ(NumTableFilesAtLevel(0), num + 1);
   }
 
-  //generate one more file in level-0, and should trigger level-0 compaction
+  // generate one more file in level-0, and should trigger level-0 compaction
   std::vector<std::string> values;
   for (int i = 0; i < 12; i++) {
     values.push_back(RandomString(&rnd, 10000));
@@ -417,7 +412,6 @@ TEST_F(TerarkZipTableDBTest, CompactionTrigger) {
 
   ASSERT_EQ(NumTableFilesAtLevel(0), 0);
   ASSERT_EQ(NumTableFilesAtLevel(1), 1);
-
 }
 
 TEST_F(TerarkZipTableDBTest, CompactRange) {
@@ -480,9 +474,10 @@ TEST_F(TerarkZipTableDBTest, SameKeyInsertedInTwoDifferentFilesAndCompacted) {
   }
 }
 
-TEST_F(TerarkZipTableDBTest, AdaptiveTable) { // there is some wrong with adaptive table factory
+TEST_F(TerarkZipTableDBTest,
+       AdaptiveTable) {  // there is some wrong with adaptive table factory
   Options options = CurrentOptions();
-  
+
   // Write some keys using terarkzip table.
   UseTerarkZipTable(options);
   Destroy(&options);
@@ -496,7 +491,7 @@ TEST_F(TerarkZipTableDBTest, AdaptiveTable) { // there is some wrong with adapti
   ASSERT_EQ("l1", Get("ley1"));
   ASSERT_EQ("l2", Get("ley2"));
   ASSERT_EQ("l3", Get("ley3"));
-  
+
   // Write some keys using cuckoo table.
   options.table_factory.reset(NewCuckooTableFactory());
   Reopen(&options);
@@ -528,14 +523,14 @@ TEST_F(TerarkZipTableDBTest, AdaptiveTable) { // there is some wrong with adapti
   Reopen(&options);
   ASSERT_OK(Put("key6", "v6"));
   ASSERT_OK(Put("key7", "v7"));
-  ASSERT_OK(Put("key4", "v44")); // update plain's kv item
+  ASSERT_OK(Put("key4", "v44"));  // update plain's kv item
   // sstable key range <key4, key7>
   dbfull()->TEST_FlushMemTable();
   ASSERT_EQ("v6", Get("key6"));
   ASSERT_EQ("v7", Get("key7"));
   ASSERT_EQ("v44", Get("key4"));
 
-  // Total Test 
+  // Total Test
   ASSERT_EQ("l1", Get("ley1"));
   ASSERT_EQ("l2", Get("ley2"));
   ASSERT_EQ("m3", Get("ley3"));

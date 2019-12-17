@@ -428,7 +428,6 @@ class TruncatedRangeDelMergingIter : public InternalIteratorBase<Slice> {
 
   Slice value() const override {
     auto* top = heap_.top();
-    assert(top->end_key().sequence == kMaxSequenceNumber);
     return top->end_key().user_key;
   }
 

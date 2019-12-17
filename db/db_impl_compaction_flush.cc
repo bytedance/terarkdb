@@ -2552,7 +2552,8 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
       // compaction is not necessary. Need to make sure mutex is held
       // until we make a copy in the following code
       TEST_SYNC_POINT("DBImpl::BackgroundCompaction():BeforePickCompaction");
-      c.reset(cfd->PickCompaction(*mutable_cf_options, log_buffer));
+      c.reset(cfd->PickCompaction(*mutable_cf_options, snapshots_.GetAll(),
+                                  log_buffer));
       TEST_SYNC_POINT("DBImpl::BackgroundCompaction():AfterPickCompaction");
 
       if (c != nullptr) {
@@ -2827,14 +2828,14 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
     // Stop the compaction if manual_end points to nullptr -- this means
     // that we compacted the whole range. manual_end should always point
     // to nullptr in case of universal compaction
-    if (m->manual_end == nullptr) {
+    if (m->manual_end == nullptr && !m->enable_lazy_compaction) {
       m->done = true;
     }
     if (!m->done) {
       // We only compacted part of the requested range.  Update *m
       // to the range that is left to be compacted.
       // Universal and FIFO compactions should always compact the whole range
-      if (m->cfd->ioptions()->compaction_style == kCompactionStyleUniversal &&
+      if (m->cfd->ioptions()->compaction_style == kCompactionStyleUniversal ||
           m->enable_lazy_compaction) {
         // do nothing
       } else {

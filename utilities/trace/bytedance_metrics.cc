@@ -1,9 +1,12 @@
+#include "bytedance_metrics.h"
+
 #include <atomic>
 #include <iostream>
 #include <mutex>
 
-#include "bytedance_metrics.h"
+#ifdef TERARKDB_ENABLE_METRICS
 #include "metrics.h"
+#endif
 
 namespace rocksdb {
 #ifdef TERARKDB_ENABLE_METRICS

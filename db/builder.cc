@@ -56,12 +56,11 @@ TableBuilder* NewTableBuilder(
           TablePropertiesCollectorFactory::Context::kUnknownColumnFamily) ==
          column_family_name.empty());
   return ioptions.table_factory->NewTableBuilder(
-      TableBuilderOptions(ioptions, moptions, internal_comparator,
-                          int_tbl_prop_collector_factories, compression_type,
-                          compression_opts, compression_dict, skip_filters,
-                          ignore_key_type, column_family_name, level,
-                          compaction_load, creation_time, oldest_key_time,
-                          sst_purpose),
+      TableBuilderOptions(
+          ioptions, moptions, internal_comparator,
+          int_tbl_prop_collector_factories, compression_type, compression_opts,
+          compression_dict, skip_filters, ignore_key_type, column_family_name,
+          level, compaction_load, creation_time, oldest_key_time, sst_purpose),
       column_family_id, file);
 }
 
@@ -71,9 +70,10 @@ Status BuildTable(
     TableCache* table_cache,
     InternalIterator* (*get_input_iter_callback)(void*, Arena&),
     void* get_input_iter_arg,
-    std::vector<std::unique_ptr<FragmentedRangeTombstoneIterator>>
-        (*get_range_del_iters_callback)(void*), void* get_range_del_iters_arg,
-    FileMetaData* meta, const InternalKeyComparator& internal_comparator,
+    std::vector<std::unique_ptr<FragmentedRangeTombstoneIterator>> (
+        *get_range_del_iters_callback)(void*),
+    void* get_range_del_iters_arg, FileMetaData* meta,
+    const InternalKeyComparator& internal_comparator,
     const std::vector<std::unique_ptr<IntTblPropCollectorFactory>>*
         int_tbl_prop_collector_factories,
     uint32_t column_family_id, const std::string& column_family_name,
@@ -175,19 +175,17 @@ Status BuildTable(
       second_pass_iter_storage.range_del_agg.reset(
           new CompactionRangeDelAggregator(&internal_comparator, snapshots));
       for (auto& range_del_iter :
-          get_range_del_iters_callback(get_range_del_iters_arg)) {
+           get_range_del_iters_callback(get_range_del_iters_arg)) {
         second_pass_iter_storage.range_del_agg->AddTombstones(
             std::move(range_del_iter));
       }
       second_pass_iter_storage.iter = ScopedArenaIterator(
           get_input_iter_callback(get_input_iter_arg, arena));
-      auto merge_ptr =
-          new(&second_pass_iter_storage.merge) MergeHelper(
-              env, internal_comparator.user_comparator(),
-              ioptions.merge_operator, nullptr, ioptions.info_log,
-              true /* internal key corruption is not ok */,
-              snapshots.empty() ? 0 : snapshots.back(),
-              snapshot_checker);
+      auto merge_ptr = new (&second_pass_iter_storage.merge) MergeHelper(
+          env, internal_comparator.user_comparator(), ioptions.merge_operator,
+          nullptr, ioptions.info_log,
+          true /* internal key corruption is not ok */,
+          snapshots.empty() ? 0 : snapshots.back(), snapshot_checker);
       return new CompactionIterator(
           second_pass_iter_storage.iter.get(), nullptr, nullptr,
           internal_comparator.user_comparator(), merge_ptr, kMaxSequenceNumber,
@@ -195,9 +193,8 @@ Status BuildTable(
           false /* report_detailed_time */,
           true /* internal key corruption is not ok */, range_del_agg.get());
     };
-    std::unique_ptr<InternalIterator> second_pass_iter(
-        NewCompactionIterator(c_style_callback(make_compaction_iterator),
-                              &make_compaction_iterator));
+    std::unique_ptr<InternalIterator> second_pass_iter(NewCompactionIterator(
+        c_style_callback(make_compaction_iterator), &make_compaction_iterator));
     builder->SetSecondPassIterator(second_pass_iter.get());
     c_iter.SeekToFirst();
     for (; s.ok() && c_iter.Valid(); c_iter.Next()) {
@@ -231,7 +228,14 @@ Status BuildTable(
     if (!s.ok() || empty) {
       builder->Abandon();
     } else {
-      s = builder->Finish(&meta->prop);
+      auto shrinked_snapshots = meta->ShrinkSnapshot(snapshots);
+      s = builder->Finish(&meta->prop, &shrinked_snapshots);
+      meta->prop.num_deletions = tp.num_deletions;
+      meta->prop.flags |= tp.num_range_deletions == 0
+                              ? 0
+                              : TablePropertyCache::kHasRangeDeletions;
+      meta->prop.flags |=
+          tp.snapshots.empty() ? 0 : TablePropertyCache::kHasSnapshots;
     }
 
     if (s.ok() && !empty) {
@@ -240,7 +244,8 @@ Status BuildTable(
       meta->marked_for_compaction = builder->NeedCompact();
       meta->prop.num_entries = builder->NumEntries();
       assert(meta->fd.GetFileSize() > 0);
-      tp = builder->GetTableProperties(); // refresh now that builder is finished
+      // refresh now that builder is finished
+      tp = builder->GetTableProperties();
       if (table_properties) {
         *table_properties = tp;
       }

@@ -103,8 +103,14 @@ class VersionStorageInfo {
 
   void AddFile(int level, FileMetaData* f,
                bool (*exists)(void*, uint64_t) = nullptr,
-               void* exists_args = nullptr,
-               Logger* info_log = nullptr);
+               void* exists_args = nullptr, Logger* info_log = nullptr);
+
+  uint64_t FileSize(const FileMetaData* f, uint64_t file_number,
+                    uint64_t entry_count = 0) const;
+
+  uint64_t FileSizeWithBlob(const FileMetaData* f, uint64_t file_number,
+                            bool recursive = true,
+                            uint64_t entry_count = 0) const;
 
   void SetFinalized();
 
@@ -163,9 +169,7 @@ class VersionStorageInfo {
   void UpdateFilesByCompactionPri(CompactionPri compaction_pri);
 
   void GenerateLevel0NonOverlapping();
-  bool level0_non_overlapping() const {
-    return level0_non_overlapping_;
-  }
+  bool level0_non_overlapping() const { return level0_non_overlapping_; }
 
   // Check whether each file in this version is bottommost (i.e., nothing in its
   // key-range could possibly exist in an older file/level).
@@ -255,7 +259,9 @@ class VersionStorageInfo {
   bool IsPickCompactionFail() const { return is_pick_compaction_fail; }
 
   // Set picker garbage collection fail
-  void SetPickGarbageCollectionFail() { is_pick_garbage_collection_fail = true; }
+  void SetPickGarbageCollectionFail() {
+    is_pick_garbage_collection_fail = true;
+  }
 
   // Is picker garbage collection fail
   bool IsPickGarbageCollectionFail() const {
@@ -266,13 +272,22 @@ class VersionStorageInfo {
 
   double total_garbage_ratio() const { return total_garbage_ratio_; }
 
-  bool has_space_amplification() const {
-    return !has_space_amplification_.empty();
-  }
+  bool has_space_amplification() const { return !space_amplification_.empty(); }
 
   bool has_space_amplification(int level) const {
-    return has_space_amplification_.find(level) !=
-           has_space_amplification_.end();
+    return space_amplification_.find(level) != space_amplification_.end();
+  }
+
+  bool has_map_sst(int level) const {
+    auto find = space_amplification_.find(level);
+    return find != space_amplification_.end() &&
+           (find->second & kHasMapSst) != 0;
+  }
+
+  bool has_range_deletion(int level) const {
+    auto find = space_amplification_.find(level);
+    return find != space_amplification_.end() &&
+           (find->second & kHasRangeDeletion) != 0;
   }
 
   void set_read_amplification(const std::vector<double>& read_amp) {
@@ -542,7 +557,11 @@ class VersionStorageInfo {
   std::vector<double> compaction_score_;
   std::vector<int> compaction_level_;
 
-  std::unordered_set<int> has_space_amplification_;
+  enum {
+    kHasMapSst        = 1ULL << 0,
+    kHasRangeDeletion = 1ULL << 1,
+  };
+  std::unordered_map<int, int> space_amplification_;
   std::vector<double> read_amplification_;
 
   int l0_delay_trigger_count_ = 0;  // Count used to trigger slow down and stop
@@ -689,9 +708,7 @@ class Version : public SeparateHelper, private LazyBufferState {
   ColumnFamilyData* cfd() const { return cfd_; }
 
   // Return the next Version in the linked list. Used for debug only
-  Version* TEST_Next() const {
-    return next_;
-  }
+  Version* TEST_Next() const { return next_; }
 
   int TEST_refs() const { return refs_; }
 
@@ -703,7 +720,7 @@ class Version : public SeparateHelper, private LazyBufferState {
 
   uint64_t GetSstFilesSize();
 
-  MutableCFOptions GetMutableCFOptions() { return mutable_cf_options_; }
+  const MutableCFOptions& GetMutableCFOptions() { return mutable_cf_options_; }
 
  private:
   Env* env_;
@@ -747,10 +764,10 @@ class Version : public SeparateHelper, private LazyBufferState {
   const MergeOperator* merge_operator_;
 
   VersionStorageInfo storage_info_;
-  VersionSet* vset_;            // VersionSet to which this Version belongs
-  Version* next_;               // Next version in linked list
-  Version* prev_;               // Previous version in linked list
-  int refs_;                    // Number of live refs to this version
+  VersionSet* vset_;  // VersionSet to which this Version belongs
+  Version* next_;     // Next version in linked list
+  Version* prev_;     // Previous version in linked list
+  int refs_;          // Number of live refs to this version
   const EnvOptions env_options_;
   const MutableCFOptions mutable_cf_options_;
 
@@ -762,7 +779,6 @@ class Version : public SeparateHelper, private LazyBufferState {
           MutableCFOptions mutable_cf_options, uint64_t version_number = 0);
 
   ~Version();
-
 
   void destroy(LazyBuffer* /*buffer*/) const override {}
 
@@ -780,7 +796,7 @@ class Version : public SeparateHelper, private LazyBufferState {
 
 struct ObsoleteFileInfo {
   FileMetaData* metadata;
-  std::string   path;
+  std::string path;
 
   ObsoleteFileInfo() noexcept : metadata(nullptr) {}
   ObsoleteFileInfo(FileMetaData* f, const std::string& file_path)

@@ -20,9 +20,10 @@ typedef std::unordered_map<uint64_t, FileMetaData*> DependenceMap;
 
 class IteratorCache {
  public:
-  using CreateIterCallback =
-      InternalIterator* (*)(void* arg, const FileMetaData*,
-                            const DependenceMap&, Arena*, TableReader**);
+  using CreateIterCallback = InternalIterator* (*)(void* arg,
+                                                   const FileMetaData*,
+                                                   const DependenceMap&, Arena*,
+                                                   TableReader**);
 
   IteratorCache(const DependenceMap& dependence_map, void* create_iter_arg,
                 const CreateIterCallback& create_iter);
@@ -33,6 +34,9 @@ class IteratorCache {
 
   InternalIterator* GetIterator(uint64_t file_number,
                                 TableReader** reader_ptr = nullptr);
+
+  Status GetReader(uint64_t file_number, TableReader** reader_ptr = nullptr,
+                   const FileMetaData** file_metadata_ptr = nullptr);
 
   const FileMetaData* GetFileMetaData(uint64_t file_number);
 

@@ -8,23 +8,28 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #include "rocksdb/lazy_buffer.h"
-#include <algorithm>
-#include <string.h>
+
 #include <stdlib.h>
+#include <string.h>
+
+#include <algorithm>
 
 namespace rocksdb {
 
 namespace {
-template<class T, class S>
+template <class T, class S>
 T* union_cast(S* src) {
   static_assert(sizeof(T) == sizeof(S), "");
   static_assert(alignof(T) == alignof(S), "");
 
-  union { S* s; T* t; } u;
+  union {
+    S* s;
+    T* t;
+  } u;
   u.s = src;
   return u.t;
 }
-}
+}  // namespace
 
 class LightLazyBufferState : public LazyBufferState {
  public:
@@ -330,9 +335,9 @@ void LazyBufferState::assign_slice(LazyBuffer* buffer,
     context->buffer.handle = ::malloc(slice.size());
     context->buffer.uninitialized_resize = nullptr;
     if (context->buffer.handle == nullptr) {
-      ::new(&context->status) Status(Status::BadAlloc());
+      ::new (&context->status) Status(Status::BadAlloc());
     } else {
-      ::new(&context->status) Status;
+      ::new (&context->status) Status;
       ::memcpy(context->buffer.handle, slice.data(), slice.size());
       buffer->data_ = (char*)context->buffer.handle;
       buffer->size_ = slice.size();
@@ -340,14 +345,13 @@ void LazyBufferState::assign_slice(LazyBuffer* buffer,
   }
 }
 
-void LazyBufferState::assign_error(LazyBuffer* buffer,
-                                   Status&& status) const {
+void LazyBufferState::assign_error(LazyBuffer* buffer, Status&& status) const {
   destroy(buffer);
   buffer->state_ = buffer_state();
   auto context = union_cast<BufferLazyBufferState::Context>(&buffer->context_);
   context->buffer.handle = nullptr;
   context->buffer.uninitialized_resize = nullptr;
-  ::new(&context->status) Status(std::move(status));
+  ::new (&context->status) Status(std::move(status));
   buffer->slice_ = Slice::Invalid();
 }
 
@@ -413,13 +417,12 @@ void LazyBuffer::fix_light_state(const LazyBuffer& other) {
 }
 
 #ifdef __GNUC__
-# pragma GCC diagnostic push
-# pragma GCC diagnostic ignored "-Wmissing-field-initializers"
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmissing-field-initializers"
 #endif
 
 LazyBuffer::LazyBuffer(size_t _size) noexcept
-    : context_{},
-      file_number_(uint64_t(-1)) {
+    : context_{}, file_number_(uint64_t(-1)) {
   if (_size <= sizeof(LazyBufferContext)) {
     state_ = LazyBufferState::light_state();
     data_ = union_cast<LightLazyBufferState::Context>(&context_)->data;
@@ -429,10 +432,10 @@ LazyBuffer::LazyBuffer(size_t _size) noexcept
     auto context = union_cast<BufferLazyBufferState::Context>(&context_);
     context->buffer.handle = ::malloc(_size);
     if (context->buffer.handle == nullptr) {
-      ::new(&context->status) Status(Status::BadAlloc());
+      ::new (&context->status) Status(Status::BadAlloc());
       slice_ = Slice::Invalid();
     } else {
-      ::new(&context->status) Status;
+      ::new (&context->status) Status;
       data_ = (char*)context->buffer.handle;
       size_ = _size;
     }
@@ -446,7 +449,7 @@ LazyBuffer::LazyBuffer(LazyBufferCustomizeBuffer _buffer) noexcept
       file_number_(uint64_t(-1)) {
   assert(_buffer.handle != nullptr);
   assert(_buffer.uninitialized_resize != nullptr);
-  ::new(&union_cast<BufferLazyBufferState::Context>(&context_)->status) Status;
+  ::new (&union_cast<BufferLazyBufferState::Context>(&context_)->status) Status;
 }
 
 LazyBuffer::LazyBuffer(std::string* _string) noexcept
@@ -455,11 +458,11 @@ LazyBuffer::LazyBuffer(std::string* _string) noexcept
       context_{reinterpret_cast<uint64_t>(_string)},
       file_number_(uint64_t(-1)) {
   assert(_string != nullptr);
-  ::new(&union_cast<StringLazyBufferState::Context>(&context_)->status) Status;
+  ::new (&union_cast<StringLazyBufferState::Context>(&context_)->status) Status;
 }
 
 #ifdef __GNUC__
-# pragma GCC diagnostic pop
+#pragma GCC diagnostic pop
 #endif
 
 void LazyBuffer::reset(LazyBufferCustomizeBuffer _buffer) {
@@ -469,7 +472,7 @@ void LazyBuffer::reset(LazyBufferCustomizeBuffer _buffer) {
   state_ = LazyBufferState::buffer_state();
   auto context = union_cast<BufferLazyBufferState::Context>(&context_);
   context->buffer = _buffer;
-  ::new(&context->status) Status;
+  ::new (&context->status) Status;
   slice_ = Slice();
   file_number_ = uint64_t(-1);
 }
@@ -492,7 +495,7 @@ void LazyBuffer::reset(std::string* _string) {
     state_ = LazyBufferState::string_state();
     context->string = _string;
     context->is_owner = 0;
-    ::new(&context->status) Status;
+    ::new (&context->status) Status;
   }
   slice_ = *context->string;
 }
@@ -668,8 +671,8 @@ LazyBuffer LazyBufferRemoveSuffix(const LazyBuffer* buffer, size_t fixed_len) {
   if (buffer->valid()) {
     return LazyBuffer(Slice(buffer->data(), buffer->size() - fixed_len));
   } else {
-    return LazyBuffer(&static_state, {reinterpret_cast<uint64_t>(buffer),
-                                      fixed_len},
+    return LazyBuffer(&static_state,
+                      {reinterpret_cast<uint64_t>(buffer), fixed_len},
                       Slice::Invalid(), uint64_t(-1));
   }
 }

@@ -14,6 +14,7 @@
 #endif
 
 #include <inttypes.h>
+
 #include <vector>
 
 #include "db/column_family.h"
@@ -70,11 +71,14 @@ uint64_t TotalFileSize(const std::vector<FileMetaData*>& files) {
 
 const char* CompactionTypeName(CompactionType type) {
   switch (type) {
-    case kKeyValueCompaction: return "Compaction";
-    case kMapCompaction: return "Map Compaction";
-    case kLinkCompaction: return "Link Compaction";
-    case kGarbageCollection: return "Garbage Collection";
-    default: return "Unknow Compaction";
+    case kKeyValueCompaction:
+      return "Compaction";
+    case kMapCompaction:
+      return "Map Compaction";
+    case kGarbageCollection:
+      return "Garbage Collection";
+    default:
+      return "Unknow Compaction";
   }
 }
 
@@ -126,49 +130,6 @@ void Compaction::GetBoundaryKeys(
       initialized = true;
     }
   }
-}
-
-std::vector<CompactionInputFiles> Compaction::PopulateWithAtomicBoundaries(
-    VersionStorageInfo* vstorage, std::vector<CompactionInputFiles> inputs) {
-  const Comparator* ucmp = vstorage->InternalComparator()->user_comparator();
-  for (size_t i = 0; i < inputs.size(); i++) {
-    if (inputs[i].level == 0 || inputs[i].files.empty()) {
-      continue;
-    }
-    inputs[i].atomic_compaction_unit_boundaries.reserve(inputs[i].files.size());
-    AtomicCompactionUnitBoundary cur_boundary;
-    size_t first_atomic_idx = 0;
-    auto add_unit_boundary = [&](size_t to) {
-      if (first_atomic_idx == to) return;
-      for (size_t k = first_atomic_idx; k < to; k++) {
-        inputs[i].atomic_compaction_unit_boundaries.push_back(cur_boundary);
-      }
-      first_atomic_idx = to;
-    };
-    for (size_t j = 0; j < inputs[i].files.size(); j++) {
-      const auto* f = inputs[i].files[j];
-      if (j == 0) {
-        // First file in a level.
-        cur_boundary.smallest = &f->smallest;
-        cur_boundary.largest = &f->largest;
-      } else if (sstableKeyCompare(ucmp, *cur_boundary.largest, f->smallest) ==
-                 0) {
-        // SSTs overlap but the end key of the previous file was not
-        // artificially extended by a range tombstone. Extend the current
-        // boundary.
-        cur_boundary.largest = &f->largest;
-      } else {
-        // Atomic compaction unit has ended.
-        add_unit_boundary(j);
-        cur_boundary.smallest = &f->smallest;
-        cur_boundary.largest = &f->largest;
-      }
-    }
-    add_unit_boundary(inputs[i].files.size());
-    assert(inputs[i].files.size() ==
-           inputs[i].atomic_compaction_unit_boundaries.size());
-  }
-  return inputs;
 }
 
 // helper function to determine if compaction is creating files at the
@@ -237,8 +198,7 @@ Compaction::Compaction(CompactionParams&& params)
       partial_compaction_(params.partial_compaction),
       compaction_type_(params.compaction_type),
       input_range_(std::move(params.input_range)),
-      inputs_(PopulateWithAtomicBoundaries(params.input_version,
-                                           std::move(params.inputs))),
+      inputs_(std::move(params.inputs)),
       grandparents_(std::move(params.grandparents)),
       score_(params.score),
       compaction_load_(0),
@@ -543,7 +503,8 @@ bool Compaction::IsOutputLevelEmpty() const {
 }
 
 bool Compaction::ShouldFormSubcompactions() const {
-  if (max_subcompactions_ <= 1 || cfd_ == nullptr) {
+  if (compaction_type_ == kMapCompaction || max_subcompactions_ <= 1 ||
+      cfd_ == nullptr) {
     return false;
   }
   if (cfd_->ioptions()->compaction_style == kCompactionStyleLevel) {

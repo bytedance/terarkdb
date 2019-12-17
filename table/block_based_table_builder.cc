@@ -886,7 +886,9 @@ void BlockBasedTableBuilder::WriteRangeDelBlock(
   }
 }
 
-Status BlockBasedTableBuilder::Finish(const TablePropertyCache* prop) {
+Status BlockBasedTableBuilder::Finish(
+    const TablePropertyCache* prop,
+    const std::vector<SequenceNumber>* snapshots) {
   Rep* r = rep_;
   assert(r->status.ok());
   bool empty_data_block = r->data_block.empty();
@@ -900,6 +902,9 @@ Status BlockBasedTableBuilder::Finish(const TablePropertyCache* prop) {
     r->props.read_amp = prop->read_amp;
     r->props.dependence = prop->dependence;
     r->props.inheritance_chain = prop->inheritance_chain;
+  }
+  if (snapshots != nullptr) {
+    r->props.snapshots = *snapshots;
   }
 
   // To make sure properties block is able to keep the accurate size of index

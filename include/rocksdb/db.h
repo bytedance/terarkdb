@@ -10,6 +10,7 @@
 
 #include <stdint.h>
 #include <stdio.h>
+
 #include <map>
 #include <memory>
 #include <string>
@@ -41,9 +42,10 @@
 
 namespace boost {
 namespace fibers {
-template<typename> class future; // forward declaration
+template <typename>
+class future;  // forward declaration
 }
-}
+}  // namespace boost
 
 namespace rocksdb {
 
@@ -101,7 +103,7 @@ static const int kMajorVersion = __ROCKSDB_MAJOR__;
 static const int kMinorVersion = __ROCKSDB_MINOR__;
 
 // A range of keys
-template<class TValue>
+template <class TValue>
 struct RangeBase {
   TValue start;
   TValue limit;
@@ -131,8 +133,8 @@ struct RangePtr {
         limit(nullptr),
         include_start(true),
         include_limit(true) {}
-  RangePtr(const Slice* _start, const Slice* _limit,
-           bool _include_start = true, bool _include_limit = true)
+  RangePtr(const Slice* _start, const Slice* _limit, bool _include_start = true,
+           bool _include_limit = true)
       : start(_start),
         limit(_limit),
         include_start(_include_start),
@@ -155,8 +157,7 @@ class DB {
   // OK on success.
   // Stores nullptr in *dbptr and returns a non-OK status on error.
   // Caller should delete *dbptr when it is no longer needed.
-  static Status Open(const Options& options,
-                     const std::string& name,
+  static Status Open(const Options& options, const std::string& name,
                      DB** dbptr);
 
   // Open the database for read only. All DB interfaces
@@ -166,9 +167,9 @@ class DB {
   //
   // Not supported in ROCKSDB_LITE, in which case the function will
   // return Status::NotSupported.
-  static Status OpenForReadOnly(const Options& options,
-      const std::string& name, DB** dbptr,
-      bool error_if_log_file_exist = false);
+  static Status OpenForReadOnly(const Options& options, const std::string& name,
+                                DB** dbptr,
+                                bool error_if_log_file_exist = false);
 
   // Open the database for read only with column families. When opening DB with
   // read only, you can specify only a subset of column families in the
@@ -222,7 +223,7 @@ class DB {
                                    const std::string& name,
                                    std::vector<std::string>* column_families);
 
-  DB() { }
+  DB() {}
   virtual ~DB();
 
   // Create a column_family and return the handle of column family
@@ -369,7 +370,8 @@ class DB {
   virtual Status Get(const ReadOptions& options,
                      ColumnFamilyHandle* column_family, const Slice& key,
                      LazyBuffer* value) = 0;
-  virtual Status Get(const ReadOptions& options, const Slice& key, std::string* value) {
+  virtual Status Get(const ReadOptions& options, const Slice& key,
+                     std::string* value) {
     return Get(options, DefaultColumnFamily(), key, value);
   }
 
@@ -380,8 +382,8 @@ class DB {
   static bool TrySubmitAsyncTask(const std::function<void()>&,
                                  size_t concurrency);
 
-  typedef std::function<void(Status&&, std::string&& key,
-                             std::string* value)> GetAsyncCallback;
+  typedef std::function<void(Status&&, std::string&& key, std::string* value)>
+      GetAsyncCallback;
 
   void GetAsync(const ReadOptions&, ColumnFamilyHandle*, std::string key,
                 std::string* value, GetAsyncCallback);
@@ -394,18 +396,18 @@ class DB {
   static int WaitAsync(int timeout_us);
   static int WaitAsync();
 
-  future<std::tuple<Status, std::string, std::string*>>
-  GetFuture(const ReadOptions&, ColumnFamilyHandle*, std::string key,
-            std::string* value);
+  future<std::tuple<Status, std::string, std::string*>> GetFuture(
+      const ReadOptions&, ColumnFamilyHandle*, std::string key,
+      std::string* value);
 
-  future<std::tuple<Status, std::string, std::string*>>
-  GetFuture(const ReadOptions&, std::string key, std::string* value);
+  future<std::tuple<Status, std::string, std::string*>> GetFuture(
+      const ReadOptions&, std::string key, std::string* value);
 
-  future<std::tuple<Status, std::string, std::string>>
-  GetFuture(const ReadOptions&, ColumnFamilyHandle*, std::string key);
+  future<std::tuple<Status, std::string, std::string>> GetFuture(
+      const ReadOptions&, ColumnFamilyHandle*, std::string key);
 
-  future<std::tuple<Status, std::string, std::string>>
-  GetFuture(const ReadOptions&, std::string key);
+  future<std::tuple<Status, std::string, std::string>> GetFuture(
+      const ReadOptions&, std::string key);
 
   // If keys[i] does not exist in the database, then the i'th returned
   // status will be one for which Status::IsNotFound() is true, and
@@ -424,9 +426,10 @@ class DB {
   virtual std::vector<Status> MultiGet(const ReadOptions& options,
                                        const std::vector<Slice>& keys,
                                        std::vector<std::string>* values) {
-    return MultiGet(options, std::vector<ColumnFamilyHandle*>(
-                                 keys.size(), DefaultColumnFamily()),
-                    keys, values);
+    return MultiGet(
+        options,
+        std::vector<ColumnFamilyHandle*>(keys.size(), DefaultColumnFamily()),
+        keys, values);
   }
 
   // If the key definitely does not exist in the database, then this method
@@ -788,13 +791,10 @@ class DB {
   // include_flags should be of type DB::SizeApproximationFlags
   virtual void GetApproximateSizes(ColumnFamilyHandle* column_family,
                                    const Range* range, int n, uint64_t* sizes,
-                                   uint8_t include_flags
-                                   = INCLUDE_FILES) = 0;
+                                   uint8_t include_flags = INCLUDE_FILES) = 0;
   virtual void GetApproximateSizes(const Range* range, int n, uint64_t* sizes,
-                                   uint8_t include_flags
-                                   = INCLUDE_FILES) {
-    GetApproximateSizes(DefaultColumnFamily(), range, n, sizes,
-                        include_flags);
+                                   uint8_t include_flags = INCLUDE_FILES) {
+    GetApproximateSizes(DefaultColumnFamily(), range, n, sizes, include_flags);
   }
 
   // The method is similar to GetApproximateSizes, except it
@@ -811,8 +811,7 @@ class DB {
 
   // Deprecated versions of GetApproximateSizes
   ROCKSDB_DEPRECATED_FUNC virtual void GetApproximateSizes(
-      const Range* range, int n, uint64_t* sizes,
-      bool include_memtable) {
+      const Range* range, int n, uint64_t* sizes, bool include_memtable) {
     uint8_t include_flags = SizeApproximationFlags::INCLUDE_FILES;
     if (include_memtable) {
       include_flags |= SizeApproximationFlags::INCLUDE_MEMTABLES;
@@ -820,9 +819,8 @@ class DB {
     GetApproximateSizes(DefaultColumnFamily(), range, n, sizes, include_flags);
   }
   ROCKSDB_DEPRECATED_FUNC virtual void GetApproximateSizes(
-      ColumnFamilyHandle* column_family,
-      const Range* range, int n, uint64_t* sizes,
-      bool include_memtable) {
+      ColumnFamilyHandle* column_family, const Range* range, int n,
+      uint64_t* sizes, bool include_memtable) {
     uint8_t include_flags = SizeApproximationFlags::INCLUDE_FILES;
     if (include_memtable) {
       include_flags |= SizeApproximationFlags::INCLUDE_MEMTABLES;
@@ -899,14 +897,14 @@ class DB {
   virtual Status CompactFiles(
       const CompactionOptions& compact_options,
       ColumnFamilyHandle* column_family,
-      const std::vector<std::string>& input_file_names,
-      const int output_level, const int output_path_id = -1,
+      const std::vector<std::string>& input_file_names, const int output_level,
+      const int output_path_id = -1,
       std::vector<std::string>* const output_file_names = nullptr) = 0;
 
   virtual Status CompactFiles(
       const CompactionOptions& compact_options,
-      const std::vector<std::string>& input_file_names,
-      const int output_level, const int output_path_id = -1,
+      const std::vector<std::string>& input_file_names, const int output_level,
+      const int output_path_id = -1,
       std::vector<std::string>* const output_file_names = nullptr) {
     return CompactFiles(compact_options, DefaultColumnFamily(),
                         input_file_names, output_level, output_path_id,
@@ -1078,8 +1076,7 @@ class DB {
                                        ColumnFamilyMetaData* /*metadata*/) {}
 
   // Get the metadata of the default column family.
-  void GetColumnFamilyMetaData(
-      ColumnFamilyMetaData* metadata) {
+  void GetColumnFamilyMetaData(ColumnFamilyMetaData* metadata) {
     GetColumnFamilyMetaData(DefaultColumnFamily(), metadata);
   }
 
@@ -1270,7 +1267,7 @@ class DB {
 // Be very careful using this method.
 Status DestroyDB(const std::string& name, const Options& options,
                  const std::vector<ColumnFamilyDescriptor>& column_families =
-                   std::vector<ColumnFamilyDescriptor>());
+                     std::vector<ColumnFamilyDescriptor>());
 
 #ifndef ROCKSDB_LITE
 // If a DB cannot be opened, you may attempt to call this method to

@@ -1,5 +1,18 @@
 #!/usr/bin/env bash
-# author : guokuankuan@bytedance.com
+#
+# usage:
+#
+#   USE_VALGRIND=1 ./build_dev.sh
+#
+
+set -e
+
+VALGRIND=0
+WITH_BMI2=1
+
+if [ "$USE_VALGRIND" == "1" ]; then
+  VALGRIND=1
+fi
 
 if [ `uname` == Darwin ]; then
 	cpuNum=`sysctl -n machdep.cpu.thread_count`
@@ -7,51 +20,56 @@ else
 	cpuNum=`nproc`
 fi
 
-if test -n "$TERARKDB_BRANCH"; then
-    git checkout "$TERARKDB_BRANCH"
+if test -n "$BUILD_BRANCH"; then
+    # this script is run in SCM auto build
+    git checkout "$BUILD_BRANCH"
     sudo apt-get update
     sudo apt-get install libaio-dev
 else
     echo you must ensure libaio-dev have been installed
 fi
 
-if test -z "$CORE_BRANCH"; then
-     CORE_BRANCH=`git rev-parse --abbrev-ref HEAD`
+if test -z "$NO_INIT"; then
+  if [ ! -f "terark-core.got" ]; then
+    git submodule update --init --recursive
+  fi
 fi
 
-WITH_BMI2=1
-LINK_TERARK='shared_lib'
+# export BUNDLE_ALL_TERARK_STATIC=${BUNDLE_ALL_TERARK_STATIC:-1}
 
-while getopts 'sadr' OPT; do
-    case $OPT in
-        s)
-            LINK_TERARK='static_lib';;
-        r)
-            make LINK_TERARK=static \
-                 TERARK_CORE_BRANCH=$CORE_BRANCH \
-                 BMI2=$WITH_BMI2 \
-                 DISABLE_WARNING_AS_ERROR=1 \
-                 DEBUG_LEVEL=0 $LINK_TERARK -j $cpuNum;;
-        a)    
-            make LINK_TERARK=static \
-                 TERARK_CORE_BRANCH=$CORE_BRANCH\
-                 BMI2=$WITH_BMI2 \
-                 DISABLE_WARNING_AS_ERROR=1 \
-                 DEBUG_LEVEL=1 $LINK_TERARK -j $cpuNum;;
-        d)
-            make LINK_TERARK=static \
-                 TERARK_CORE_BRANCH=$CORE_BRANCH\
-                 BMI2=$WITH_BMI2 \
-                 DISABLE_WARNING_AS_ERROR=1 \
-                 DEBUG_LEVEL=2 $LINK_TERARK -j $cpuNum;;
-    esac
-done
+# build targets
+# make LINK_TERARK=static \
+#      EXTRA_CXXFLAGS="-DROCKSDB_VALGRIND_RUN=$VALGRIND" \
+#      BMI2=$WITH_BMI2 \
+#      DISABLE_WARNING_AS_ERROR=1 \
+#      DEBUG_LEVEL=0 shared_lib -j $cpuNum
+
+make LINK_TERARK=static \
+     EXTRA_CXXFLAGS="-DROCKSDB_VALGRIND_RUN=$VALGRIND" \
+     BMI2=$WITH_BMI2 \
+     DISABLE_WARNING_AS_ERROR=1 \
+     DEBUG_LEVEL=2 shared_lib -j $cpuNum
+
+# static library
+# make LINK_TERARK=static \
+#      EXTRA_CXXFLAGS="-DROCKSDB_VALGRIND_RUN=$VALGRIND" \
+#      BMI2=$WITH_BMI2 \
+#      DISABLE_WARNING_AS_ERROR=1 \
+#      DEBUG_LEVEL=0 static_lib -j $cpuNum
+
+# make LINK_TERARK=static \
+#      EXTRA_CXXFLAGS="-DROCKSDB_VALGRIND_RUN=$VALGRIND" \
+#      BMI2=$WITH_BMI2 \
+#      DISABLE_WARNING_AS_ERROR=1 \
+#      DEBUG_LEVEL=2 static_lib -j $cpuNum
+
 pkgdir=output
 rm -rf $pkgdir
 
 # copy all header files
 mkdir -p $pkgdir
 mkdir -p $pkgdir/lib
+mkdir -p $pkgdir/lib_static
 
 cp -r include      $pkgdir
 cp -r db           $pkgdir/include
@@ -75,10 +93,7 @@ PLATFORM_DIR=$SYSTEM-$COMPILER-bmi2-$WITH_BMI2
 #echo build/$PLATFORM_DIR/shared_lib/dbg-0/
 
 # copy terark-rocksdb dynamic lib
-if [ "$LINK_TERARK" == 'shared_lib' ]; then
-    cp -a shared-objects/build/$PLATFORM_DIR/dbg-0/librocksdb* $pkgdir/lib
-    cp -a shared-objects/build/$PLATFORM_DIR/dbg-1/librocksdb* $pkgdir/lib
-    cp -a shared-objects/build/$PLATFORM_DIR/dbg-2/librocksdb* $pkgdir/lib
-fi
+# cp -a shared-objects/build/$PLATFORM_DIR/dbg-0/librocksdb* $pkgdir/lib
+cp -a shared-objects/build/$PLATFORM_DIR/dbg-2/librocksdb* $pkgdir/lib
 
 echo "build and package successful!"

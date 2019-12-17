@@ -6,12 +6,13 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
-
 #pragma once
 
 #include <assert.h>
+
 #include <string>
 #include <utility>
+
 #include "rocksdb/cleanable.h"
 #include "rocksdb/slice.h"
 #include "rocksdb/status.h"
@@ -90,6 +91,7 @@ class LazyBufferState {
 
 class LazyBuffer {
   friend LazyBufferState;
+
  protected:
   union {
     struct {
@@ -111,8 +113,7 @@ class LazyBuffer {
   // Fix light_state local storage
   void fix_light_state(const LazyBuffer& other);
 
-public:
-
+ public:
   // Empty buffer
   LazyBuffer() noexcept;
 
@@ -149,34 +150,44 @@ public:
              const Slice& _slice = Slice::Invalid(),
              uint64_t _file_number = uint64_t(-1)) noexcept;
 
-  ~LazyBuffer() {
-    destroy();
-  }
+  ~LazyBuffer() { destroy(); }
 
   // Move assign
-  LazyBuffer& operator = (LazyBuffer&& _buffer) noexcept {
+  LazyBuffer& operator=(LazyBuffer&& _buffer) noexcept {
     reset(std::move(_buffer));
     return *this;
   }
 
   // Non copyable
-  LazyBuffer& operator = (const LazyBuffer& _buffer) = delete;
+  LazyBuffer& operator=(const LazyBuffer& _buffer) = delete;
 
   // Get inner slice
   // REQUIRES: valid()
-  const Slice& slice() const { assert(valid()); return slice_; }
+  const Slice& slice() const {
+    assert(valid());
+    return slice_;
+  }
 
   // Return a pointer to the beginning of the referenced data
   // REQUIRES: valid()
-  const char* data() const { assert(valid()); return data_; }
+  const char* data() const {
+    assert(valid());
+    return data_;
+  }
 
   // Return the length (in bytes) of the referenced data
   // REQUIRES: valid()
-  size_t size() const { assert(valid()); return size_; }
+  size_t size() const {
+    assert(valid());
+    return size_;
+  }
 
   // Return true iff the length of the referenced data is zero
   // REQUIRES: valid()
-  bool empty() const { assert(valid()); return slice_.empty(); }
+  bool empty() const {
+    assert(valid());
+    return slice_.empty();
+  }
 
   // Return true if Slice valid
   bool valid() const { return slice_.valid(); }
@@ -184,7 +195,10 @@ public:
   // Return the ith byte in the referenced data.
   // REQUIRES: n < size()
   // REQUIRES: valid()
-  char operator[](size_t n) const { assert(valid()); return slice_[n]; }
+  char operator[](size_t n) const {
+    assert(valid());
+    return slice_[n];
+  }
 
   // Return a string that contains the copy of the referenced data.
   // when hex is true, returns a string of twice the length hex encoded (0-9A-F)
@@ -321,8 +335,8 @@ inline LazyBufferContext* LazyBufferState::get_context(LazyBuffer* buffer) {
 }
 
 #ifdef __GNUC__
-# pragma GCC diagnostic push
-# pragma GCC diagnostic ignored "-Wmissing-field-initializers"
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmissing-field-initializers"
 #endif
 
 inline LazyBuffer::LazyBuffer() noexcept
@@ -364,7 +378,7 @@ inline LazyBuffer::LazyBuffer(const Slice& _slice, Cleanable&& _cleanable,
   assert(_slice.valid());
   static_assert(sizeof _cleanable == sizeof context_, "");
   static_assert(alignof(Cleanable) == alignof(LazyBufferContext), "");
-  ::new(&context_) Cleanable(std::move(_cleanable));
+  ::new (&context_) Cleanable(std::move(_cleanable));
 }
 
 inline LazyBuffer::LazyBuffer(const LazyBufferState* _state,
@@ -379,7 +393,7 @@ inline LazyBuffer::LazyBuffer(const LazyBufferState* _state,
 }
 
 #ifdef __GNUC__
-# pragma GCC diagnostic pop
+#pragma GCC diagnostic pop
 #endif
 
 inline void LazyBuffer::destroy() {
@@ -452,7 +466,7 @@ inline void LazyBuffer::reset(const Slice& _slice, Cleanable&& _cleanable,
   destroy();
   state_ = LazyBufferState::cleanable_state();
   slice_ = _slice;
-  new(&context_) Cleanable(std::move(_cleanable));
+  new (&context_) Cleanable(std::move(_cleanable));
   file_number_ = _file_number;
 }
 
