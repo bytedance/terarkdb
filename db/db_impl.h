@@ -639,10 +639,10 @@ class DBImpl : public DB {
 
   const std::string& bytedance_tags() const { return bytedance_tags_; }
 
-  auto& seek_qps_reporter() { return seek_qps_reporter_; }
-  auto& seekforprev_qps_reporter() { return seekforprev_qps_reporter_; }
-  auto& next_qps_reporter() { return next_qps_reporter_; }
-  auto& prev_qps_reporter() { return prev_qps_reporter_; }
+  QPSReporter& seek_qps_reporter() { return seek_qps_reporter_; }
+  QPSReporter& seekforprev_qps_reporter() { return seekforprev_qps_reporter_; }
+  QPSReporter& next_qps_reporter() { return next_qps_reporter_; }
+  QPSReporter& prev_qps_reporter() { return prev_qps_reporter_; }
 
   std::unordered_map<std::string, RecoveredTransaction*>
   recovered_transactions() {
