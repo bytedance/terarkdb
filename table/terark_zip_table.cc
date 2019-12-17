@@ -565,7 +565,7 @@ bool TerarkZipTablePrintCacheStat(TableFactory* factory, FILE* fp) {
   return false;
 }
 
-TERARK_FACTORY_REGISTER_EX(TerarkZipTableFactory, "TerarkZipTable",
+TERARK_FACTORY_REGISTER_EX(TableFactory, "TerarkZipTable",
 ([](const std::string& options, Status* s) {
   return NewTerarkZipTableFactory(options, nullptr, s);
 }));

@@ -100,8 +100,7 @@ static TableFactory* CuckooCreator(const std::string& options, Status* s) {
   return NewCuckooTableFactory(cto);
 }
 
-TERARK_FACTORY_REGISTER_EX(CuckooTableFactory,
-                          "CuckooTable", &CuckooCreator);
+TERARK_FACTORY_REGISTER_EX(TableFactory, "CuckooTable", &CuckooCreator);
 
 }  // namespace rocksdb
 #endif  // ROCKSDB_LITE
