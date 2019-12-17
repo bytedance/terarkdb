@@ -130,7 +130,10 @@ struct CompactionWorkerContext {
   std::string compaction_filter;
   std::string compaction_filter_factory;
   CompactionFilter::Context compaction_filter_context;
+
+  /// For both filter and filter_factory according to which is not null
   EncodedString compaction_filter_data;
+
   uint64_t blob_size;
   std::string table_factory;
   std::string table_factory_options;

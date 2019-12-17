@@ -253,9 +253,25 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
       return make_error(Status::Corruption("Missing merge_operator !"));
     }
   }
-  if (!context.compaction_filter_factory.empty()) {
+  std::unique_ptr<CompactionFilter> filter_ptr;
+  if (!context.compaction_filter.empty()) {
+    if (!context.compaction_filter_factory.empty()) {
+      return make_error(Status::Corruption(
+        "CompactonFilter and CompactionFilterFactory are both specified"));
+    }
+    filter_ptr.reset(
+      CompactionFilter::create(context.compaction_filter,
+                               context.compaction_filter_data.data,
+                               context.compaction_filter_context));
+    if (!filter_ptr) {
+      return make_error(Status::Corruption("Missing CompactionFilterFactory!"));
+    }
+    cf_options.compaction_filter = filter_ptr.get();
+  }
+  else if (!context.compaction_filter_factory.empty()) {
     cf_options.compaction_filter_factory.reset(
-      CompactionFilterFactory::create(context.compaction_filter_factory));
+      CompactionFilterFactory::create(context.compaction_filter_factory,
+                                      context.compaction_filter_data.data));
     if (!cf_options.compaction_filter_factory) {
       return make_error(Status::Corruption("Missing CompactionFilterFactory!"));
     }
@@ -497,13 +513,6 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
     auto factory = immutable_cf_options.compaction_filter_factory;
     compaction_filter_from_factory =
         factory->CreateCompactionFilter(context.compaction_filter_context);
-    if (compaction_filter_from_factory) {
-      auto s = compaction_filter_from_factory->Deserialize(
-          context.compaction_filter_data);
-      if (!s.ok()) {
-        return make_error(std::move(s));
-      }
-    }
     compaction_filter = compaction_filter_from_factory.get();
   }
 
@@ -569,12 +578,6 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
       second_pass_iter_storage.compaction_filter_holder =
           immutable_cf_options.compaction_filter_factory->
               CreateCompactionFilter(context.compaction_filter_context);
-      auto compaction_filter_from_factory =
-          second_pass_iter_storage.compaction_filter_holder.get();
-      if (compaction_filter_from_factory != nullptr) {
-        s = compaction_filter_from_factory->Deserialize(
-            context.compaction_filter_data);
-      }
     }
     auto merge_ptr =
         new(&second_pass_iter_storage.merge) MergeHelper(

@@ -671,24 +671,28 @@ Status CompactionJob::Run() {
       return s;
     }
   }
-  if (iopt->compaction_filter != nullptr) {
-    context.compaction_filter = iopt->compaction_filter->Name();
-  }
-  if (iopt->compaction_filter_factory != nullptr) {
-    context.compaction_filter_factory = iopt->compaction_filter_factory->Name();
-    context.compaction_filter_context.is_full_compaction =
-        c->is_full_compaction();
-    context.compaction_filter_context.is_manual_compaction =
-        c->is_manual_compaction();
-    context.compaction_filter_context.column_family_id = cfd->GetID();
-    auto filter = iopt->compaction_filter_factory->CreateCompactionFilter(
-        context.compaction_filter_context);
-    s = filter->Serialize(&context.compaction_filter_data.data);
+  context.compaction_filter_context.is_full_compaction =
+      c->is_full_compaction();
+  context.compaction_filter_context.is_manual_compaction =
+      c->is_manual_compaction();
+  context.compaction_filter_context.column_family_id = cfd->GetID();
+  if (auto cf = iopt->compaction_filter) {
+    s = cf->Serialize(&context.compaction_filter_data.data);
     if (s.IsNotSupported()) {
       return RunSelf();
     } else if (!s.ok()) {
       return s;
     }
+    context.compaction_filter = cf->Name();
+  }
+  else if (auto factory = iopt->compaction_filter_factory) {
+    s = factory->Serialize(&context.compaction_filter_data.data);
+    if (s.IsNotSupported()) {
+      return RunSelf();
+    } else if (!s.ok()) {
+      return s;
+    }
+    context.compaction_filter_factory = factory->Name();
   }
   context.blob_size = c->mutable_cf_options()->blob_size;
   context.table_factory = iopt->table_factory->Name();
@@ -703,9 +707,9 @@ Status CompactionJob::Run() {
   for (auto& p : iopt->cf_paths) {
     context.cf_paths.push_back(p.path);
   }
-  if (c->mutable_cf_options()->prefix_extractor) {
-    context.prefix_extractor =
-        c->mutable_cf_options()->prefix_extractor->Name();
+  if (auto pe = c->mutable_cf_options()->prefix_extractor.get()) {
+    context.prefix_extractor = pe->Name();
+    context.prefix_extractor_options = pe->GetOptionString();
   }
   context.last_sequence = versions_->LastSequence();
   context.earliest_write_conflict_snapshot = earliest_write_conflict_snapshot_;
