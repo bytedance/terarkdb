@@ -65,7 +65,7 @@ void QPSReporter::AddCount(size_t n) {
                          curr_t - last_report_t_)
                          .count();
       if (diff_ms > 1000) {
-        size_t curr_count = count_.load(std::memory_order_release);
+        size_t curr_count = count_.load(std::memory_order_relaxed);
         size_t qps = (curr_count - last_report_count_) /
                      (static_cast<double>(diff_ms) / 1000);
 
