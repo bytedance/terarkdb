@@ -234,7 +234,7 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(const TerarkZipTableFactory* table_
 
     file_ = file;
     sampleUpperBound_ = uint64_t(randomGenerator_.max() * table_options_.sampleRatio);
-    tmpSentryFile_.path = tzto.localTempDir + "/Terark-XXXXXX";
+    tmpSentryFile_.path = tzto.getLocalTempDir() + "/Terark-XXXXXX";
     tmpSentryFile_.open_temp();
     tmpSampleFile_.path = tmpSentryFile_.path + ".sample";
     tmpSampleFile_.open();

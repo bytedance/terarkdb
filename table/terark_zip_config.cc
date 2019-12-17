@@ -270,6 +270,9 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo, const std::string& tera
   struct TerarkZipTableOptions tzo;
   TerarkZipAutoConfigForOnlineDB_CFOptions(tzo, cfo, 0, 0);
   tzo.localTempDir = localTempDir;
+  if (const char* env = getenv("TerarkZipTable_compactionWorkerTempDir")) {
+    tzo.compactionWorkerTempDir = env;
+  }
   if (const char* algo = getenv("TerarkZipTable_entropyAlgo")) {
     if (strcasecmp(algo, "NoEntropy") == 0) {
       tzo.entropyAlgo = tzo.kNoEntropy;

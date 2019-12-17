@@ -550,6 +550,13 @@ Status TerarkZipTableOptions::Parse(Slice opt) {
   return Status::OK();
 }
 
+const std::string& TerarkZipTableOptions::getLocalTempDir() const {
+  if (IsCompactionWorkerNode())
+    return localTempDir;
+  else
+    return compactionWorkerTempDir;
+}
+
 bool TerarkZipTablePrintCacheStat(TableFactory* factory, FILE* fp) {
   auto tztf = dynamic_cast<const TerarkZipTableFactory*>(factory);
   if (tztf) {

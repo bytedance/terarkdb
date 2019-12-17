@@ -646,6 +646,7 @@ static std::shared_ptr<CompactionDispatcher> GetCmdLineDispatcher() {
 }
 
 Status CompactionJob::Run() {
+  assert(!IsCompactionWorkerNode());
   ColumnFamilyData* cfd = compact_->compaction->column_family_data();
   CompactionDispatcher* dispatcher = cfd->ioptions()->compaction_dispatcher;
   if (!dispatcher) {

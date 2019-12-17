@@ -207,6 +207,11 @@ RemoteCompactionDispatcher::StartCompaction(
   return Result(DoCompaction(stream.str()));
 }
 
+static bool g_isCompactionWorkerNode = false;
+bool IsCompactionWorkerNode() {
+  return g_isCompactionWorkerNode;
+}
+
 struct RemoteCompactionDispatcher::Worker::Rep {
   EnvOptions env_options;
   Env* env;
@@ -216,6 +221,7 @@ RemoteCompactionDispatcher::Worker::Worker(EnvOptions env_options, Env* env) {
   rep_ = new Rep();
   rep_->env_options = env_options;
   rep_->env = env;
+  g_isCompactionWorkerNode = true;
 }
 
 RemoteCompactionDispatcher::Worker::~Worker() {

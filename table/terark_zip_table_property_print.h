@@ -1,6 +1,7 @@
   const double GiB = 1ull << 30;
 
   M_String(localTempDir);
+  M_String(compactionWorkerTempDir);
   M_String(indexType);
   M_NumFmt(checksumLevel            , "%d");
   M_NumFmt(checksumSmallValSize     , "%d");
