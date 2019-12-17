@@ -6,6 +6,8 @@
 #include "metrics.h"
 
 namespace rocksdb {
+#ifdef TERARKDB_ENABLE_METRICS
+
 static std::mutex metrics_mtx{};
 static std::atomic<bool> metrics_init{false};
 static const char default_namespace[] = "terarkdb.engine.stats";

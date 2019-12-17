@@ -17,9 +17,11 @@ class OperationTimerReporter {
   static void InitNamespace(const std::string& metrics_namespace);
 
  private:
+#ifdef TERARKDB_ENABLE_METRICS
   const std::string& name_;
   const std::string& tags_;
   decltype(std::chrono::high_resolution_clock::now()) begin_t_;
+#endif
 };
 
 class QPSReporter {
@@ -29,7 +31,7 @@ class QPSReporter {
   void AddCount(size_t n);
 
  private:
-#if TERARKDB_ENABLE_METRICS
+#ifdef TERARKDB_ENABLE_METRICS
   std::atomic<bool> reporter_lock_{false};
 
   const std::string& name_;
