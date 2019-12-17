@@ -134,6 +134,19 @@ class DeleteRange {
       return Status::Aborted();
     }
 
+    // auto ts_it =
+    //     table_reader_->NewRangeTombstoneIterator(rocksdb::ReadOptions());
+    // if (ts_it && ts_it->Valid()) {
+    //   ts_it->SeekToFirst();
+    //   while (ts_it) {
+    //     std::cout << "ts_it1=" << ts_it << std::endl;
+    //     deletion_cnt += 1;
+    //     ts_it->TopNext();
+    //     std::cout << "ts_it2=" << ts_it << std::endl;
+    //     break;
+    //   }
+    // }
+
     deletion_cnt += table_properties_->num_range_deletions;
     return s;
   }
