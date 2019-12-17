@@ -339,8 +339,10 @@ static std::string metrics_test_dbname = "metrics_test_dbname";
 void DBIter::Next() {
   static const std::string metric_name = "dbiter_next";
   OperationTimerReporter reporter(
-      metric_name,
-      db_impl_ == nullptr ? metrics_test_dbname : db_impl_->bytedance_tags());
+      metric_name, db_impl_ == nullptr
+                       ? metrics_test_dbname
+                       : (db_impl_->next_qps_reporter().AddCount(1),
+                          db_impl_->bytedance_tags()));
 
   assert(valid_);
   assert(status_.ok());
@@ -663,8 +665,10 @@ bool DBIter::MergeValuesNewToOld() {
 void DBIter::Prev() {
   static const std::string metric_name = "dbiter_prev";
   OperationTimerReporter reporter(
-      metric_name,
-      db_impl_ == nullptr ? metrics_test_dbname : db_impl_->bytedance_tags());
+      metric_name, db_impl_ == nullptr
+                       ? metrics_test_dbname
+                       : (db_impl_->prev_qps_reporter().AddCount(1),
+                          db_impl_->bytedance_tags()));
 
   assert(valid_);
   assert(status_.ok());
@@ -1156,8 +1160,10 @@ SequenceNumber DBIter::MaxVisibleSequenceNumber() {
 void DBIter::Seek(const Slice& target) {
   static const std::string metric_name = "dbiter_seek";
   OperationTimerReporter reporter(
-      metric_name,
-      db_impl_ == nullptr ? metrics_test_dbname : db_impl_->bytedance_tags());
+      metric_name, db_impl_ == nullptr
+                       ? metrics_test_dbname
+                       : (db_impl_->seek_qps_reporter().AddCount(1),
+                          db_impl_->bytedance_tags()));
 
   StopWatch sw(env_, statistics_, DB_SEEK);
   status_ = Status::OK();
@@ -1218,8 +1224,10 @@ void DBIter::Seek(const Slice& target) {
 void DBIter::SeekForPrev(const Slice& target) {
   static const std::string metric_name = "dbiter_seekforprev";
   OperationTimerReporter reporter(
-      metric_name,
-      db_impl_ == nullptr ? metrics_test_dbname : db_impl_->bytedance_tags());
+      metric_name, db_impl_ == nullptr
+                       ? metrics_test_dbname
+                       : (db_impl_->seekforprev_qps_reporter().AddCount(1),
+                          db_impl_->bytedance_tags()));
 
   StopWatch sw(env_, statistics_, DB_SEEK);
   status_ = Status::OK();

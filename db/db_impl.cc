@@ -157,6 +157,14 @@ void DumpSupportInfo(Logger* logger) {
 int64_t kDefaultLowPriThrottledRate = 2 * 1024 * 1024;
 }  // namespace
 
+static std::string write_qps_metric_name = "dbimpl_writeimpl_qps";
+static std::string read_qps_metric_name = "dbimpl_getimpl_qps";
+static std::string newiterator_qps_metric_name = "dbimpl_newiterator_qps";
+static std::string seek_qps_metric_name = "dbiter_seek_qps";
+static std::string next_qps_metric_name = "dbiter_next_qps";
+static std::string seekforprev_qps_metric_name = "dbiter_seekforprev_qps";
+static std::string prev_qps_metric_name = "dbiter_prev_qps";
+
 DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
                const bool seq_per_batch, const bool batch_per_txn)
     : env_(options.env),
@@ -244,7 +252,14 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
       closed_(false),
       error_handler_(this, immutable_db_options_, &mutex_),
       atomic_flush_install_cv_(&mutex_),
-      bytedance_tags_("dbname=" + dbname) {
+      bytedance_tags_("dbname=" + dbname),
+      write_qps_reporter_(write_qps_metric_name, bytedance_tags_),
+      read_qps_reporter_(read_qps_metric_name, bytedance_tags_),
+      newiterator_qps_reporter_(newiterator_qps_metric_name, bytedance_tags_),
+      seek_qps_reporter_(seek_qps_metric_name, bytedance_tags_),
+      next_qps_reporter_(next_qps_metric_name, bytedance_tags_),
+      seekforprev_qps_reporter_(seekforprev_qps_metric_name, bytedance_tags_),
+      prev_qps_reporter_(prev_qps_metric_name, bytedance_tags_) {
   // !batch_per_trx_ implies seq_per_batch_ because it is only unset for
   // WriteUnprepared, which should use seq_per_batch_.
   assert(batch_per_txn_ || seq_per_batch_);
@@ -1260,6 +1275,7 @@ Status DBImpl::GetImpl(const ReadOptions& read_options,
                        ReadCallback* callback) {
   static const std::string metric_name = "dbimpl_getimpl";
   OperationTimerReporter reporter(metric_name, bytedance_tags_);
+  read_qps_reporter_.AddCount(1);
 
   assert(lazy_val != nullptr);
   StopWatch sw(env_, stats_, DB_GET);
@@ -1921,6 +1937,7 @@ Iterator* DBImpl::NewIterator(const ReadOptions& read_options,
                               ColumnFamilyHandle* column_family) {
   static const std::string metric_name = "dbimpl_newiterator";
   OperationTimerReporter reporter(metric_name, bytedance_tags_);
+  newiterator_qps_reporter_.AddCount(1);
 
   if (read_options.managed) {
     return NewErrorIterator(

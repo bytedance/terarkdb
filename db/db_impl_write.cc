@@ -75,6 +75,7 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
                          PreReleaseCallback* pre_release_callback) {
   static const std::string metric_name = "dbimpl_writeimpl";
   OperationTimerReporter reporter(metric_name, bytedance_tags_);
+  write_qps_reporter_.AddCount(WriteBatchInternal::Count(my_batch));
 
   assert(!seq_per_batch_ || batch_cnt != 0);
   if (my_batch == nullptr) {

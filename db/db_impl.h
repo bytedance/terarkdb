@@ -58,6 +58,7 @@
 #include "util/stop_watch.h"
 #include "util/thread_local.h"
 #include "util/trace_replay.h"
+#include "utilities/trace/bytedance_metrics.h"
 
 namespace rocksdb {
 
@@ -637,6 +638,11 @@ class DBImpl : public DB {
   bool allow_2pc() const { return immutable_db_options_.allow_2pc; }
 
   const std::string& bytedance_tags() const { return bytedance_tags_; }
+
+  auto& seek_qps_reporter() { return seek_qps_reporter_; }
+  auto& seekforprev_qps_reporter() { return seekforprev_qps_reporter_; }
+  auto& next_qps_reporter() { return next_qps_reporter_; }
+  auto& prev_qps_reporter() { return prev_qps_reporter_; }
 
   std::unordered_map<std::string, RecoveredTransaction*>
   recovered_transactions() {
@@ -1644,6 +1650,13 @@ class DBImpl : public DB {
   InstrumentedCondVar atomic_flush_install_cv_;
 
   std::string bytedance_tags_;
+  QPSReporter write_qps_reporter_;
+  QPSReporter read_qps_reporter_;
+  QPSReporter newiterator_qps_reporter_;
+  QPSReporter seek_qps_reporter_;
+  QPSReporter next_qps_reporter_;
+  QPSReporter seekforprev_qps_reporter_;
+  QPSReporter prev_qps_reporter_;
 };
 
 extern Options SanitizeOptions(const std::string& db,
