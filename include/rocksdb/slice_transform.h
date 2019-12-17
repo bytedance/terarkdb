@@ -15,6 +15,7 @@
 #pragma once
 
 #include <string>
+#include <terark/util/factory.hpp>
 
 namespace rocksdb {
 
@@ -26,7 +27,8 @@ class Slice;
  * to store prefix blooms by setting prefix_extractor in
  * ColumnFamilyOptions.
  */
-class SliceTransform {
+class SliceTransform : public
+  terark::Factoryable<SliceTransform*, const std::string&> {
  public:
   virtual ~SliceTransform() {};
 
@@ -90,6 +92,8 @@ class SliceTransform {
   virtual bool SameResultWhenAppended(const Slice& /*prefix*/) const {
     return false;
   }
+
+  virtual std::string GetOptionString() const;
 };
 
 extern const SliceTransform* NewFixedPrefixTransform(size_t prefix_len);

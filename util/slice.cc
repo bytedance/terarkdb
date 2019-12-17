@@ -13,6 +13,7 @@
 #include "table/format.h"
 #include "util/string_util.h"
 #include <stdio.h>
+#include <terark/util/factory.ipp>
 
 namespace rocksdb {
 
@@ -56,6 +57,11 @@ class FixedPrefixTransform : public SliceTransform {
   virtual bool SameResultWhenAppended(const Slice& prefix) const override {
     return InDomain(prefix);
   }
+
+  std::string GetOptionString() const override {
+    char buf[32];
+    return std::string(buf, snprintf(buf, sizeof(buf)-1, "%zd", prefix_len_));
+  }
 };
 
 class CappedPrefixTransform : public SliceTransform {
@@ -93,6 +99,11 @@ class CappedPrefixTransform : public SliceTransform {
 
   virtual bool SameResultWhenAppended(const Slice& prefix) const override {
     return prefix.size() >= cap_len_;
+  }
+
+  std::string GetOptionString() const override {
+    char buf[32];
+    return std::string(buf, snprintf(buf, sizeof(buf)-1, "%zd", cap_len_));
   }
 };
 
@@ -206,4 +217,33 @@ const SliceTransform* NewNoopTransform() {
   return new NoopTransform;
 }
 
+SliceTransform* S_NewFixedPrefixTransform(const std::string& options) {
+  size_t prefix_len = std::stol(options);
+  return new FixedPrefixTransform(prefix_len);
+}
+
+SliceTransform* S_NewCappedPrefixTransform(const std::string& options) {
+  size_t cap_len = std::stol(options);
+  return new CappedPrefixTransform(cap_len);
+}
+
+SliceTransform* S_NewNoopTransform(const std::string&) {
+  return new NoopTransform;
+}
+
+std::string SliceTransform::GetOptionString() const {
+  return "";
+}
+
+TERARK_FACTORY_REGISTER_EX(SliceTransform, "rocksdb.FixedPrefix",
+  &S_NewFixedPrefixTransform);
+
+TERARK_FACTORY_REGISTER_EX(SliceTransform, "rocksdb.CappedPrefix",
+  &S_NewCappedPrefixTransform);
+
+TERARK_FACTORY_REGISTER_EX(SliceTransform, "rocksdb.Noop",
+  &S_NewNoopTransform);
+
 }  // namespace rocksdb
+
+TERARK_FACTORY_INSTANTIATE_GNS(rocksdb::SliceTransform*, const std::string&);
