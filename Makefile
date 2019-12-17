@@ -240,6 +240,10 @@ else
 $(warning Warning: Compiling in debug mode. Don't use the resulting binary in production)
 endif
 
+ifeq ($(TERARKDB_ENABLE_METRICS),1)
+OPT += -DTERARKDB_ENABLE_METRICS
+endif
+
 #-----------------------------------------------
 include src.mk
 

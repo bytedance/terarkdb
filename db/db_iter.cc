@@ -8,9 +8,10 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #include "db/db_iter.h"
-#include <string>
+
 #include <iostream>
 #include <limits>
+#include <string>
 
 #include "db/db_impl.h"
 #include "db/dbformat.h"
@@ -51,7 +52,7 @@ static void DumpInternalIter(Iterator* iter) {
 // combines multiple entries for the same userkey found in the DB
 // representation into a single entry while accounting for sequence
 // numbers, deletion markers, overwrites, etc.
-class DBIter final: public Iterator {
+class DBIter final : public Iterator {
  public:
   // The following is grossly complicated. TODO: clean it up
   // Which direction is the iterator currently moving?
@@ -64,10 +65,7 @@ class DBIter final: public Iterator {
   //        this->key().
   // (2) When moving backwards, the internal iterator is positioned
   //     just before all entries whose user key == this->key().
-  enum Direction {
-    kForward,
-    kReverse
-  };
+  enum Direction { kForward, kReverse };
 
   // LocalStatistics contain Statistics counters that will be aggregated per
   // each iterator instance and then will be sent to the global statistics when
@@ -170,12 +168,11 @@ class DBIter final: public Iterator {
   virtual bool Valid() const override { return valid_; }
   virtual Slice key() const override {
     assert(valid_);
-    if(start_seqnum_ > 0) {
+    if (start_seqnum_ > 0) {
       return saved_key_.GetInternalKey();
     } else {
       return saved_key_.GetUserKey();
     }
-
   }
   virtual Slice value() const override {
     assert(valid_);
@@ -238,8 +235,8 @@ class DBIter final: public Iterator {
   LazyBuffer GetValue(const ParsedInternalKey& ikey, ValueType index_type) {
     LazyBuffer v = iter_->value();
     if (separate_helper_ != nullptr && ikey.type == index_type) {
-      separate_helper_->TransToCombined(
-          saved_key_.GetUserKey(), ikey.sequence, v);
+      separate_helper_->TransToCombined(saved_key_.GetUserKey(), ikey.sequence,
+                                        v);
     }
     return v;
   }
@@ -374,7 +371,7 @@ void DBIter::Next() {
   }
   if (statistics_ != nullptr && valid_) {
     local_stats_.next_found_count_++;
-    //local_stats_.bytes_read_ += (key().size() + value().size());
+    // local_stats_.bytes_read_ += (key().size() + value().size());
     local_stats_.bytes_read_ += key().size();
   }
 }
@@ -455,7 +452,7 @@ bool DBIter::FindNextUserEntryInternal(bool skipping, bool prefix_check) {
             // 2) return ikey only if ikey.seqnum >= start_seqnum_
             // note that if deletion seqnum is < start_seqnum_ we
             // just skip it like in normal iterator.
-            if (start_seqnum_ > 0 && ikey_.sequence >= start_seqnum_)  {
+            if (start_seqnum_ > 0 && ikey_.sequence >= start_seqnum_) {
               saved_key_.SetInternalKey(ikey_);
               value_.clear();
               valid_ = true;
@@ -612,9 +609,9 @@ bool DBIter::MergeValuesNewToOld() {
       // final result in value_. We are done!
       LazyBuffer val = GetValue(ikey, kTypeValueIndex);
       value_.reset(&value_buffer_);
-      s = MergeHelper::TimedFullMerge(
-          merge_operator_, ikey.user_key, &val, merge_context_.GetOperands(),
-          &value_, logger_, statistics_, env_, true);
+      s = MergeHelper::TimedFullMerge(merge_operator_, ikey.user_key, &val,
+                                      merge_context_.GetOperands(), &value_,
+                                      logger_, statistics_, env_, true);
       if (!s.ok()) {
         valid_ = false;
         status_ = s;
@@ -686,7 +683,7 @@ void DBIter::Prev() {
     local_stats_.prev_count_++;
     if (valid_) {
       local_stats_.prev_found_count_++;
-      //local_stats_.bytes_read_ += (key().size() + value().size());
+      // local_stats_.bytes_read_ += (key().size() + value().size());
       local_stats_.bytes_read_ += key().size();
     }
   }
@@ -910,10 +907,10 @@ bool DBIter::FindValueForCurrentKey() {
           last_not_merge_type == kTypeSingleDeletion ||
           last_not_merge_type == kTypeRangeDeletion) {
         value_.reset(&value_buffer_);
-        s = MergeHelper::TimedFullMerge(
-            merge_operator_, saved_key_.GetUserKey(), nullptr,
-            merge_context_.GetOperands(), &value_, logger_, statistics_, env_,
-            true);
+        s = MergeHelper::TimedFullMerge(merge_operator_,
+                                        saved_key_.GetUserKey(), nullptr,
+                                        merge_context_.GetOperands(), &value_,
+                                        logger_, statistics_, env_, true);
       } else {
         assert(last_not_merge_type == kTypeValue ||
                last_not_merge_type == kTypeValueIndex);
@@ -1205,9 +1202,10 @@ void DBIter::Seek(const Slice& target) {
       if (valid_) {
         // Decrement since we don't want to count this key as skipped
         RecordTick(statistics_, NUMBER_DB_SEEK_FOUND);
-        //RecordTick(statistics_, ITER_BYTES_READ, key().size() + value().size());
+        // RecordTick(statistics_, ITER_BYTES_READ, key().size() +
+        //            value().size());
         RecordTick(statistics_, ITER_BYTES_READ, key().size());
-        //PERF_COUNTER_ADD(iter_read_bytes, key().size() + value().size());
+        // PERF_COUNTER_ADD(iter_read_bytes, key().size() + value().size());
         PERF_COUNTER_ADD(iter_read_bytes, key().size());
       }
     }
@@ -1269,9 +1267,10 @@ void DBIter::SeekForPrev(const Slice& target) {
     if (statistics_ != nullptr) {
       if (valid_) {
         RecordTick(statistics_, NUMBER_DB_SEEK_FOUND);
-        //RecordTick(statistics_, ITER_BYTES_READ, key().size() + value().size());
+        // RecordTick(statistics_, ITER_BYTES_READ, key().size() +
+        //            value().size());
         RecordTick(statistics_, ITER_BYTES_READ, key().size());
-        //PERF_COUNTER_ADD(iter_read_bytes, key().size() + value().size());
+        // PERF_COUNTER_ADD(iter_read_bytes, key().size() + value().size());
         PERF_COUNTER_ADD(iter_read_bytes, key().size());
       }
     }
@@ -1316,9 +1315,10 @@ void DBIter::SeekToFirst() {
     if (statistics_ != nullptr) {
       if (valid_) {
         RecordTick(statistics_, NUMBER_DB_SEEK_FOUND);
-        //RecordTick(statistics_, ITER_BYTES_READ, key().size() + value().size());
+        // RecordTick(statistics_, ITER_BYTES_READ, key().size() +
+        //            value().size());
         RecordTick(statistics_, ITER_BYTES_READ, key().size());
-        //PERF_COUNTER_ADD(iter_read_bytes, key().size() + value().size());
+        // PERF_COUNTER_ADD(iter_read_bytes, key().size() + value().size());
         PERF_COUNTER_ADD(iter_read_bytes, key().size());
       }
     }
@@ -1366,9 +1366,10 @@ void DBIter::SeekToLast() {
     RecordTick(statistics_, NUMBER_DB_SEEK);
     if (valid_) {
       RecordTick(statistics_, NUMBER_DB_SEEK_FOUND);
-      //RecordTick(statistics_, ITER_BYTES_READ, key().size() + value().size());
+      // RecordTick(statistics_, ITER_BYTES_READ, key().size() +
+      //            value().size());
       RecordTick(statistics_, ITER_BYTES_READ, key().size());
-      //PERF_COUNTER_ADD(iter_read_bytes, key().size() + value().size());
+      // PERF_COUNTER_ADD(iter_read_bytes, key().size() + value().size());
       PERF_COUNTER_ADD(iter_read_bytes, key().size());
     }
   }
@@ -1391,8 +1392,8 @@ Iterator* NewDBIterator(Env* env, const ReadOptions& read_options,
                         ColumnFamilyData* cfd) {
   DBIter* db_iter = new DBIter(
       env, read_options, cf_options, mutable_cf_options, user_key_comparator,
-      internal_iter, sequence, separate_helper, false, max_sequential_skip_in_iterations,
-      read_callback, db_impl, cfd);
+      internal_iter, sequence, separate_helper, false,
+      max_sequential_skip_in_iterations, read_callback, db_impl, cfd);
   return db_iter;
 }
 
@@ -1411,33 +1412,13 @@ inline bool ArenaWrappedDBIter::Valid() const { return db_iter_->Valid(); }
 inline void ArenaWrappedDBIter::SeekToFirst() { db_iter_->SeekToFirst(); }
 inline void ArenaWrappedDBIter::SeekToLast() { db_iter_->SeekToLast(); }
 inline void ArenaWrappedDBIter::Seek(const Slice& target) {
-  static const std::string metric_name = "arenawrapperdbiter_seek";
-  OperationTimerReporter reporter(
-      metric_name,
-      db_impl_ == nullptr ? metrics_test_dbname : db_impl_->bytedance_tags());
   db_iter_->Seek(target);
 }
 inline void ArenaWrappedDBIter::SeekForPrev(const Slice& target) {
-  static const std::string metric_name = "arenawrapperdbiter_seekforprev";
-  OperationTimerReporter reporter(
-      metric_name,
-      db_impl_ == nullptr ? metrics_test_dbname : db_impl_->bytedance_tags());
   db_iter_->SeekForPrev(target);
 }
-inline void ArenaWrappedDBIter::Next() {
-  static const std::string metric_name = "arenawrapperdbiter_next";
-  OperationTimerReporter reporter(
-      metric_name,
-      db_impl_ == nullptr ? metrics_test_dbname : db_impl_->bytedance_tags());
-  db_iter_->Next();
-}
-inline void ArenaWrappedDBIter::Prev() {
-  static const std::string metric_name = "arenawrapperdbiter_prev";
-  OperationTimerReporter reporter(
-      metric_name,
-      db_impl_ == nullptr ? metrics_test_dbname : db_impl_->bytedance_tags());
-  db_iter_->Prev();
-}
+inline void ArenaWrappedDBIter::Next() { db_iter_->Next(); }
+inline void ArenaWrappedDBIter::Prev() { db_iter_->Prev(); }
 inline Slice ArenaWrappedDBIter::key() const { return db_iter_->key(); }
 inline Slice ArenaWrappedDBIter::value() const { return db_iter_->value(); }
 inline Status ArenaWrappedDBIter::status() const { return db_iter_->status(); }
@@ -1462,10 +1443,10 @@ void ArenaWrappedDBIter::Init(Env* env, const ReadOptions& read_options,
                               ReadCallback* read_callback, DBImpl* db_impl,
                               ColumnFamilyData* cfd, bool allow_refresh) {
   auto mem = arena_.AllocateAligned(sizeof(DBIter));
-  db_iter_ = new (mem) DBIter(env, read_options, cf_options, mutable_cf_options,
-                              cf_options.user_comparator, nullptr, sequence,
-                              nullptr, true, max_sequential_skip_in_iteration,
-                              read_callback, db_impl, cfd);
+  db_iter_ = new (mem)
+      DBIter(env, read_options, cf_options, mutable_cf_options,
+             cf_options.user_comparator, nullptr, sequence, nullptr, true,
+             max_sequential_skip_in_iteration, read_callback, db_impl, cfd);
   sv_number_ = version_number;
   allow_refresh_ = allow_refresh;
 }

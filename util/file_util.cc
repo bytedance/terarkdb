@@ -5,17 +5,17 @@
 //
 #include "util/file_util.h"
 
-#include <string>
-#include <algorithm>
-
-#include <unistd.h>
 #include <sys/resource.h>
 #include <sys/syscall.h>
 #include <sys/time.h>
+#include <unistd.h>
+
+#include <algorithm>
+#include <string>
 
 #include "rocksdb/env.h"
-#include "util/sst_file_manager_impl.h"
 #include "util/file_reader_writer.h"
+#include "util/sst_file_manager_impl.h"
 
 namespace rocksdb {
 
@@ -98,8 +98,8 @@ Status DeleteSSTFile(const ImmutableDBOptions* db_options,
 }
 
 Status DeleteDBFile(const ImmutableDBOptions* db_options,
-                     const std::string& fname, const std::string& dir_to_sync,
-                     const bool force_bg) {
+                    const std::string& fname, const std::string& dir_to_sync,
+                    const bool force_bg) {
 #ifndef ROCKSDB_LITE
   auto sfm =
       static_cast<SstFileManagerImpl*>(db_options->sst_file_manager.get());
@@ -116,21 +116,21 @@ Status DeleteDBFile(const ImmutableDBOptions* db_options,
 #endif
 }
 
-int SetThreadSched(SchedClass sched_class, int nice){
+int SetThreadSched(SchedClass sched_class, int nice) {
 #ifdef OS_LINUX
   sched_param s;
   s.sched_priority = 0;
-  if (sched_class == kSchedOther){
+  if (sched_class == kSchedOther) {
     int ret = sched_setscheduler(0, SCHED_OTHER, &s);
-    if(ret != 0) {
+    if (ret != 0) {
       return ret;
     }
     return setpriority(PRIO_PROCESS, 0, (nice < -20 || nice > 19) ? 0 : nice);
   }
-  if (sched_class == kSchedBatch){
+  if (sched_class == kSchedBatch) {
     return sched_setscheduler(0, SCHED_BATCH, &s);
   }
-  if (sched_class == kSchedIdle){
+  if (sched_class == kSchedIdle) {
     return sched_setscheduler(0, SCHED_IDLE, &s);
   }
   return -1;

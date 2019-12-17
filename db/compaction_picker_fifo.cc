@@ -15,8 +15,10 @@
 #endif
 
 #include <inttypes.h>
+
 #include <string>
 #include <vector>
+
 #include "db/column_family.h"
 #include "util/log_buffer.h"
 #include "util/string_util.h"
@@ -138,7 +140,6 @@ Compaction* FIFOCompactionPicker::PickSizeCompaction(
                   .level0_file_num_compaction_trigger /* min_files_to_compact */
               ,
               max_compact_bytes_per_del_file, &comp_inputs)) {
-
         CompactionParams params(vstorage, ioptions_, mutable_cf_options);
         params.inputs = {comp_inputs};
         params.compression = mutable_cf_options.compression;
@@ -200,7 +201,8 @@ Compaction* FIFOCompactionPicker::PickSizeCompaction(
 
 Compaction* FIFOCompactionPicker::PickCompaction(
     const std::string& cf_name, const MutableCFOptions& mutable_cf_options,
-    VersionStorageInfo* vstorage, LogBuffer* log_buffer) {
+    VersionStorageInfo* vstorage,
+    const std::vector<SequenceNumber>& /*snapshots*/, LogBuffer* log_buffer) {
   assert(vstorage->num_levels() == 1);
 
   Compaction* c = nullptr;
@@ -230,7 +232,7 @@ Compaction* FIFOCompactionPicker::CompactRange(
   *compaction_end = nullptr;
   LogBuffer log_buffer(InfoLogLevel::INFO_LEVEL, ioptions_.info_log);
   Compaction* c =
-      PickCompaction(cf_name, mutable_cf_options, vstorage, &log_buffer);
+      PickCompaction(cf_name, mutable_cf_options, vstorage, {}, &log_buffer);
   log_buffer.FlushBufferToLog();
   return c;
 }

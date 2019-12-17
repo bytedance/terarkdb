@@ -68,9 +68,9 @@ class VersionBuilderTest : public testing::Test {
     f->fd.largest_seqno = largest_seqno;
     f->compensated_file_size = file_size;
     f->refs = 0;
-    f->num_deletions = num_deletions;
     f->prop = prop;
     f->prop.num_entries = num_entries;
+    f->prop.num_deletions = num_deletions;
     vstorage_.AddFile(level, f);
     if (sampled) {
       f->init_stats_from_file = true;

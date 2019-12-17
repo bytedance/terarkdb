@@ -24,8 +24,7 @@ namespace rocksdb {
 MetaIndexBuilder::MetaIndexBuilder()
     : meta_index_block_(new BlockBuilder(1 /* restart interval */)) {}
 
-void MetaIndexBuilder::Add(const std::string& key,
-                           const BlockHandle& handle) {
+void MetaIndexBuilder::Add(const std::string& key, const BlockHandle& handle) {
   std::string handle_encoding;
   handle.EncodeTo(&handle_encoding);
   meta_block_handles_.insert({key, handle_encoding});
@@ -59,9 +58,8 @@ void PropertyBlockBuilder::Add(const std::string& name, uint64_t val) {
   Add(name, dst);
 }
 
-void PropertyBlockBuilder::Add(
-    const std::string& name, const std::vector<uint64_t>& val) {
-
+void PropertyBlockBuilder::Add(const std::string& name,
+                               const std::vector<uint64_t>& val) {
   std::string dst;
   PutVarint64(&dst, val.size());
   for (const auto& v : val) {
@@ -101,6 +99,9 @@ void PropertyBlockBuilder::AddTableProperty(const TableProperties& props) {
   Add(TablePropertiesNames::kColumnFamilyId, props.column_family_id);
   Add(TablePropertiesNames::kCreationTime, props.creation_time);
   Add(TablePropertiesNames::kOldestKeyTime, props.oldest_key_time);
+  if (!props.snapshots.empty()) {
+    Add(TablePropertiesNames::kSnapshots, props.snapshots);
+  }
   if (props.purpose != 0) {
     Add(TablePropertiesNames::kPurpose, props.purpose);
   }
@@ -161,13 +162,13 @@ Slice PropertyBlockBuilder::Finish() {
   return properties_block_->Finish();
 }
 
-void LogPropertiesCollectionError(
-    Logger* info_log, const std::string& method, const std::string& name) {
+void LogPropertiesCollectionError(Logger* info_log, const std::string& method,
+                                  const std::string& name) {
   assert(method == "Add" || method == "Finish");
 
   std::string msg =
-    "Encountered error when calling TablePropertiesCollector::" +
-    method + "() with collector name: " + name;
+      "Encountered error when calling TablePropertiesCollector::" + method +
+      "() with collector name: " + name;
   ROCKS_LOG_ERROR(info_log, "%s", msg.c_str());
 }
 
@@ -303,7 +304,8 @@ Status ReadProperties(const Slice& handle_value, RandomAccessFileReader* file,
     val.clear();
     auto error_msg =
         "Detect malformed value in properties meta-block:"
-        "\tkey: " + key + "\tval: " + raw_val->ToString();
+        "\tkey: " +
+        key + "\tval: " + raw_val->ToString();
     ROCKS_LOG_ERROR(ioptions.info_log, "%s", error_msg.c_str());
   };
 
@@ -326,7 +328,8 @@ Status ReadProperties(const Slice& handle_value, RandomAccessFileReader* file,
     auto log_error = [&] {
       auto error_msg =
           "Detect malformed value in properties meta-block:"
-          "\tkey: " + key + "\tval: " + raw_val.ToString();
+          "\tkey: " +
+          key + "\tval: " + raw_val.ToString();
       ROCKS_LOG_ERROR(ioptions.info_log, "%s", error_msg.c_str());
     };
 
@@ -359,6 +362,8 @@ Status ReadProperties(const Slice& handle_value, RandomAccessFileReader* file,
       new_table_properties->property_collectors_names = raw_val.ToString();
     } else if (key == TablePropertiesNames::kCompression) {
       new_table_properties->compression_name = raw_val.ToString();
+    } else if (key == TablePropertiesNames::kSnapshots) {
+      GetUint64Vector(key, &raw_val, new_table_properties->snapshots);
     } else if (key == TablePropertiesNames::kPurpose) {
       uint64_t val;
       if (!GetVarint64(&raw_val, &val)) {
@@ -370,7 +375,8 @@ Status ReadProperties(const Slice& handle_value, RandomAccessFileReader* file,
     } else if (key == TablePropertiesNames::kReadAmp) {
       uint32_t u32_val;
       uint64_t u64_val;
-      if (!GetVarint32(&raw_val, &u32_val) || GetVarint64(&raw_val, &u64_val)) {
+      if (!GetVarint32(&raw_val, &u32_val) ||
+          !GetVarint64(&raw_val, &u64_val)) {
         // skip malformed value
         log_error();
         continue;

@@ -203,6 +203,7 @@ class InternalKey {
   // sets the internal key to be bigger or equal to all internal keys with this
   // user key
   void SetMaxPossibleForUserKey(const Slice& _user_key) {
+    assert(rep_.empty());
     AppendInternalKey(
         &rep_, ParsedInternalKey(_user_key, 0, static_cast<ValueType>(0)));
   }
@@ -210,6 +211,7 @@ class InternalKey {
   // sets the internal key to be smaller or equal to all internal keys with this
   // user key
   void SetMinPossibleForUserKey(const Slice& _user_key) {
+    assert(rep_.empty());
     AppendInternalKey(&rep_, ParsedInternalKey(_user_key, kMaxSequenceNumber,
                                                kValueTypeForSeek));
   }
@@ -643,77 +645,78 @@ struct RangeTombstone {
 };
 
 struct MapSstElement {
-  Slice smallest_key_;
-  Slice largest_key_;
-  bool include_smallest_;
-  bool include_largest_;
-  bool no_smallest_;
-  bool no_records_;
+  Slice smallest_key;
+  Slice largest_key;
+  union {
+    struct {
+      bool include_smallest;
+      bool include_largest;
+      bool has_delete_range;
+      bool no_records;
+    };
+    uint64_t union_flags;
+  };
   struct LinkTarget {
     uint64_t file_number;
     uint64_t size;
   };
-  std::vector<LinkTarget> link_;
+  std::vector<LinkTarget> link;
   enum Flags : uint64_t {
-    kIncludeSmallest,
-    kIncludeLargest,
-    kNoSmallest,
-    kNoRecords,
+    kEmpty = 0,
+    kIncludeSmallest = 1ULL << 0,
+    kIncludeLargest  = 1ULL << 1,
+    kHasDeleteRange  = 1ULL << 2,
+    kNoRecords       = 1ULL << 3,
   };
 
   MapSstElement()
-      : include_smallest_(false),
-        include_largest_(false),
-        no_smallest_(false),
-        no_records_(false) {}
+      : union_flags(0) {}
 
   bool Decode(Slice ikey, Slice value) {
-    link_.clear();
-    smallest_key_.clear();
-    largest_key_ = ikey;
+    link.clear();
+    smallest_key.clear();
+    largest_key = ikey;
     uint64_t flags;
     uint64_t link_count;
     if (!GetVarint64(&value, &flags) || !GetVarint64(&value, &link_count)) {
       return false;
     }
-    include_smallest_ = (flags >> kIncludeSmallest) & 1;
-    include_largest_  = (flags >> kIncludeLargest ) & 1;
-    no_smallest_      = (flags >> kNoSmallest     ) & 1;
-    no_records_       = (flags >> kNoRecords      ) & 1;
-    if (!no_smallest_ && !GetLengthPrefixedSlice(&value, &smallest_key_)) {
+    include_smallest = (flags & kIncludeSmallest) != 0;
+    include_largest  = (flags & kIncludeLargest ) != 0;
+    has_delete_range = (flags & kHasDeleteRange ) != 0;
+    no_records       = (flags & kNoRecords      ) != 0;
+    if (!GetLengthPrefixedSlice(&value, &smallest_key)) {
       return false;
     }
-    link_.resize(link_count);
+    link.resize(link_count);
 
     for (uint64_t i = 0; i < link_count; ++i) {
-      if (!GetVarint64(&value, &link_[i].file_number)) {
+      if (!GetVarint64(&value, &link[i].file_number)) {
         return false;
       }
     }
     for (uint64_t i = 0; i < link_count; ++i) {
-      if (!GetVarint64(&value, &link_[i].size)) {
+      if (!GetVarint64(&value, &link[i].size)) {
         return false;
       }
     }
     return value.empty();
   }
 
-  Slice Key() const { return largest_key_; }
+  Slice Key() const { return largest_key; }
 
   Slice Value(std::string* buffer) {
     buffer->clear();
-    uint64_t flags = ((include_smallest_ ? 1ULL : 0ULL) << kIncludeSmallest) |
-                     (( include_largest_ ? 1ULL : 0ULL) << kIncludeLargest ) |
-                     ((     no_smallest_ ? 1ULL : 0ULL) << kNoSmallest     ) |
-                     ((      no_records_ ? 1ULL : 0ULL) << kNoRecords      );
-    PutVarint64Varint64(buffer, flags, link_.size());
-    if (!no_smallest_) {
-      PutLengthPrefixedSlice(buffer, smallest_key_);
-    }
-    for (auto& l : link_) {
+    uint64_t flags = (include_smallest ? kIncludeSmallest : kEmpty) |
+                     (include_largest  ? kIncludeLargest  : kEmpty) |
+                     (has_delete_range ? kHasDeleteRange  : kEmpty) |
+                     (no_records       ? kNoRecords       : kEmpty);
+    PutVarint64Varint64(buffer, flags, link.size());
+    PutLengthPrefixedSlice(buffer, smallest_key);
+    for (auto& l : link) {
       PutVarint64(buffer, l.file_number);
     }
-    for (auto& l : link_) {
+    for (auto& l : link) {
       PutVarint64(buffer, l.size);
     }
     return Slice(*buffer);
@@ -721,7 +724,7 @@ struct MapSstElement {
 
   size_t EstimateSize() const {
     return std::accumulate(
-        link_.begin(), link_.end(), size_t(0),
+        link.begin(), link.end(), size_t(0),
         [](size_t val, const LinkTarget& l) { return val + l.size; });
   }
 };

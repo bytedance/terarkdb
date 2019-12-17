@@ -38,14 +38,68 @@ class CompactionPicker {
                    const InternalKeyComparator* icmp);
   virtual ~CompactionPicker();
 
+  struct SortedRun {
+    SortedRun()
+        : level(-1),
+          file(nullptr),
+          size(0),
+          compensated_file_size(0),
+          being_compacted(false),
+          skip_composite(false) {}
+    SortedRun(int _level, FileMetaData* _file, uint64_t _size,
+              uint64_t _compensated_file_size, bool _being_compacted)
+        : level(_level),
+          file(_file),
+          size(_size),
+          compensated_file_size(_compensated_file_size),
+          being_compacted(_being_compacted),
+          skip_composite(false) {
+      assert(compensated_file_size > 0);
+      assert(level != 0 || file != nullptr);
+    }
+
+    void Dump(char* out_buf, size_t out_buf_size,
+              bool print_path = false) const;
+
+    // sorted_run_count is added into the string to print
+    void DumpSizeInfo(char* out_buf, size_t out_buf_size,
+                      size_t sorted_run_count) const;
+
+    int level;
+    // `file` Will be null for level > 0. For level = 0, the sorted run is
+    // for this file.
+    FileMetaData* file;
+    // For level > 0, `size` and `compensated_file_size` are sum of sizes all
+    // files in the level. `being_compacted` should be the same for all files
+    // in a non-zero level. Use the value here.
+    uint64_t size;
+    uint64_t compensated_file_size;
+    bool being_compacted;
+    bool skip_composite;
+  };
+
+  static double GetQ(std::vector<double>::const_iterator b,
+                     std::vector<double>::const_iterator e, size_t g);
+
+  static bool ReadMapElement(MapSstElement& map_element, InternalIterator* iter,
+                             LogBuffer* log_buffer, const std::string& cf_name);
+
+  static bool FixInputRange(std::vector<RangeStorage>& input_range,
+                            const InternalKeyComparator& icmp, bool sort,
+                            bool merge);
+
+  const EnvOptions& env_options() { return env_options_; }
+
+  TableCache* table_cache() { return table_cache_; }
+
   // Pick level and inputs for a new compaction.
   // Returns nullptr if there is no compaction to be done.
   // Otherwise returns a pointer to a heap-allocated object that
   // describes the compaction.  Caller should delete the result.
-  virtual Compaction* PickCompaction(const std::string& cf_name,
-                                     const MutableCFOptions& mutable_cf_options,
-                                     VersionStorageInfo* vstorage,
-                                     LogBuffer* log_buffer) = 0;
+  virtual Compaction* PickCompaction(
+      const std::string& cf_name, const MutableCFOptions& mutable_cf_options,
+      VersionStorageInfo* vstorage,
+      const std::vector<SequenceNumber>& snapshots, LogBuffer* log_buffer) = 0;
 
   // Pick compaction which level has map or link sst
   Compaction* PickGarbageCollection(const std::string& cf_name,
@@ -78,6 +132,15 @@ class CompactionPicker {
       InternalKey** compaction_end, bool* manual_conflict,
       const std::unordered_set<uint64_t>* files_being_compact,
       bool enable_lazy_compaction);
+
+  // Pick compaction which pointed range files
+  // range use internal keys
+  Compaction* PickRangeCompaction(
+      const std::string& cf_name, const MutableCFOptions& mutable_cf_options,
+      VersionStorageInfo* vstorage, int level, const InternalKey* begin,
+      const InternalKey* end,
+      const std::unordered_set<uint64_t>* files_being_compact,
+      bool* manual_conflict, LogBuffer* log_buffer);
 
   // The maximum allowed output level.  Default value is NumberLevels() - 1.
   virtual int MaxOutputLevel() const { return NumberLevels() - 1; }
@@ -196,6 +259,19 @@ class CompactionPicker {
                        const CompactionInputFiles& output_level_inputs,
                        std::vector<FileMetaData*>* grandparents);
 
+  // Pick compaction which level has map or link sst
+  Compaction* PickCompositeCompaction(
+      const std::string& cf_name, const MutableCFOptions& mutable_cf_options,
+      VersionStorageInfo* vstorage,
+      const std::vector<SequenceNumber>& snapshots,
+      const std::vector<SortedRun>& sorted_runs, LogBuffer* log_buffer);
+
+  // Pick bottommost level for clean up snapshots
+  Compaction* PickBottommostLevelCompaction(
+      const std::string& cf_name, const MutableCFOptions& mutable_cf_options,
+      VersionStorageInfo* vstorage,
+      const std::vector<SequenceNumber>& snapshots, LogBuffer* log_buffer);
+
   void PickFilesMarkedForCompaction(const std::string& cf_name,
                                     VersionStorageInfo* vstorage,
                                     int* start_level, int* output_level,
@@ -248,13 +324,13 @@ class LevelCompactionPicker : public CompactionPicker {
                         const ImmutableCFOptions& ioptions,
                         const InternalKeyComparator* icmp)
       : CompactionPicker(table_cache, env_options, ioptions, icmp) {}
-  virtual Compaction* PickCompaction(const std::string& cf_name,
-                                     const MutableCFOptions& mutable_cf_options,
-                                     VersionStorageInfo* vstorage,
-                                     LogBuffer* log_buffer) override;
+  Compaction* PickCompaction(
+      const std::string& cf_name, const MutableCFOptions& mutable_cf_options,
+      VersionStorageInfo* vstorage,
+      const std::vector<SequenceNumber>& snapshots,
+      LogBuffer* log_buffer) override;
 
-  virtual bool NeedsCompaction(
-      const VersionStorageInfo* vstorage) const override;
+  bool NeedsCompaction(const VersionStorageInfo* vstorage) const override;
 };
 
 #ifndef ROCKSDB_LITE
@@ -271,6 +347,7 @@ class NullCompactionPicker : public CompactionPicker {
   Compaction* PickCompaction(const std::string& /*cf_name*/,
                              const MutableCFOptions& /*mutable_cf_options*/,
                              VersionStorageInfo* /*vstorage*/,
+                             const std::vector<SequenceNumber>& /*snapshots*/,
                              LogBuffer* /*log_buffer*/) override {
     return nullptr;
   }

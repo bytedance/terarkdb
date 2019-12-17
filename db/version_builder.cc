@@ -303,10 +303,10 @@ class VersionBuilder::Rep {
       if (is_map) {
         item->skip_gc_version = dependence_version_;
         if (!item->f->prop.dependence.empty()) {
-          SetDependence(
-              item->f, item->f->prop.purpose == kMapSst,
-              ratio * dependence.entry_count / item->f->prop.num_entries,
-              finish);
+          SetDependence(item->f, item->f->prop.purpose == kMapSst,
+                        ratio * dependence.entry_count /
+                            std::max<uint64_t>(1, item->f->prop.num_entries),
+                        finish);
         }
       }
     }
@@ -352,6 +352,9 @@ class VersionBuilder::Rep {
             }
             item.f->is_skip_gc = is_skip_gc;
           }
+          uint64_t entry_depended = std::max<uint64_t>(1, item.entry_depended);
+          entry_depended = std::min(item.f->prop.num_entries, entry_depended);
+          item.f->num_antiquation = item.f->prop.num_entries - entry_depended;
         }
         ++it;
       } else {
@@ -612,7 +615,7 @@ class VersionBuilder::Rep {
         if (level == 0) {
           read_amp[level] += f->prop.read_amp;
         } else {
-          read_amp[level] = std::max<int>(read_amp[level], f->prop.read_amp);
+          read_amp[level] = std::max<double>(read_amp[level], f->prop.read_amp);
         }
       }
     }
@@ -628,10 +631,6 @@ class VersionBuilder::Rep {
       if (item.level == -1) {
         if (item.f->is_skip_gc) {
           push_old_file(item.f);
-        } else {
-          uint64_t entry_depended = std::max<uint64_t>(1, item.entry_depended);
-          entry_depended = std::min(item.f->prop.num_entries, entry_depended);
-          item.f->num_antiquation = item.f->prop.num_entries - entry_depended;
         }
         vstorage->AddFile(-1, item.f, c_style_callback(exists), &exists,
                           info_log_);

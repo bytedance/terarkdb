@@ -23,11 +23,16 @@ struct FileMetaData;
 struct FileMetaDataBoundBuilder;
 class InstrumentedMutex;
 class InternalKeyComparator;
-class RangeDelAggregator;
 class MapSstElementIterator;
 class TableCache;
 class VersionEdit;
 class VersionSet;
+
+struct MapBuilderOutput {
+  int level;
+  FileMetaData file_meta;
+  std::unique_ptr<TableProperties> prop;
+};
 
 class MapBuilder {
  public:
@@ -49,12 +54,23 @@ class MapBuilder {
   Status Build(const std::vector<CompactionInputFiles>& inputs,
                const std::vector<Range>& deleted_range,
                const std::vector<const FileMetaData*>& added_files,
-               int output_level, uint32_t output_path_id,
-               VersionStorageInfo* vstorage, ColumnFamilyData* cfd,
-               const MutableCFOptions& mutable_cf_options,
+               bool unroll_delete_range, int output_level,
+               uint32_t output_path_id, ColumnFamilyData* cfd, Version* version,
                VersionEdit* edit, FileMetaData* file_meta = nullptr,
                std::unique_ptr<TableProperties>* porp = nullptr,
                std::set<FileMetaData*>* deleted_files = nullptr);
+
+  Status Build(const std::vector<CompactionInputFiles>& inputs,
+               const std::vector<Range>& push_range, int output_level,
+               uint32_t output_path_id, ColumnFamilyData* cfd, Version* version,
+               VersionEdit* edit,
+               std::vector<MapBuilderOutput>* output = nullptr);
+
+  Status GetInputCoverage(const std::vector<CompactionInputFiles>& inputs,
+                          const Slice* lower_bound, const Slice* upper_bound,
+                          VersionStorageInfo* vstorage, ColumnFamilyData* cfd,
+                          const MutableCFOptions& mutable_cf_options,
+                          std::vector<RangeStorage>* coverage);
 
  private:
   Status WriteOutputFile(const FileMetaDataBoundBuilder& bound_builder,
@@ -84,7 +100,7 @@ extern InternalIterator* NewMapElementIterator(
     const IteratorCache::CreateIterCallback& create_iter,
     Arena* arena = nullptr);
 
-extern bool IsPrefaceRange(const Range& range, const FileMetaData* f,
+extern bool IsPerfectRange(const Range& range, const FileMetaData* f,
                            const InternalKeyComparator& icomp);
 
 }  // namespace rocksdb
