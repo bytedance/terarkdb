@@ -119,7 +119,8 @@ class TablePropertiesCollector {
 // Constructs TablePropertiesCollector. Internals create a new
 // TablePropertiesCollector for each new table
 class TablePropertiesCollectorFactory
- : public terark::Factoryable<TablePropertiesCollectorFactory*> {
+ : public std::enable_shared_from_this<TablePropertiesCollectorFactory>
+ , public terark::Factoryable<TablePropertiesCollectorFactory*> {
  public:
   struct Context {
     uint32_t column_family_id;
