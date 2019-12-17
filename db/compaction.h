@@ -137,6 +137,7 @@ struct CompactionWorkerContext {
   uint32_t bloom_locality;
   std::vector<std::string> cf_paths;
   std::string prefix_extractor;
+  std::string prefix_extractor_options;
   // compaction
   bool has_start, has_end;
   EncodedString start, end;

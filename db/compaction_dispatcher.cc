@@ -126,7 +126,9 @@ AJSON(rocksdb::CompactionWorkerContext, user_comparator, merge_operator,
                                         compaction_filter_data, blob_size,
                                         table_factory, table_factory_options,
                                         bloom_locality, cf_paths,
-                                        prefix_extractor, has_start, has_end,
+                                        prefix_extractor,
+                                        prefix_extractor_options,
+                                        has_start, has_end,
                                         start, end, last_sequence,
                                         earliest_write_conflict_snapshot,
                                         preserve_deletes_seqnum, file_metadata,
@@ -137,8 +139,6 @@ AJSON(rocksdb::CompactionWorkerContext, user_comparator, merge_operator,
 
 namespace rocksdb {
 
-template<class T>
-using TMap = std::unordered_map<std::string, T>;
 template<class T>
 using STMap = std::unordered_map<std::string, std::shared_ptr<T>>;
 
@@ -210,59 +210,7 @@ RemoteCompactionDispatcher::StartCompaction(
 struct RemoteCompactionDispatcher::Worker::Rep {
   EnvOptions env_options;
   Env* env;
-  TMap<const Comparator*> comparator_map;
-  STMap<const SliceTransform> prefix_extractor_map;
-  TMap<CreateTableFactoryCallback> table_factory_map;
-  TMap<CreateMergeOperatorCallback> merge_operator_map;
-  TMap<const CompactionFilter*> compaction_filter_map;
-  STMap<CompactionFilterFactory> compaction_filter_factory_map;
-  STMap<IntTblPropCollectorFactory> int_tbl_prop_collector_factory_map;
 };
-
-void RemoteCompactionDispatcher::Worker::RegistComparator(
-    const Comparator* comparator) {
-  rep_->comparator_map[comparator->Name()] = comparator;
-}
-
-void RemoteCompactionDispatcher::Worker::RegistPrefixExtractor(
-    std::shared_ptr<const SliceTransform> prefix_extractor) {
-  rep_->prefix_extractor_map[prefix_extractor->Name()] = prefix_extractor;
-}
-
-void RemoteCompactionDispatcher::Worker::RegistTableFactory(
-    const char* name, CreateTableFactoryCallback callback) {
-  rep_->table_factory_map[name] = callback;
-}
-
-void RemoteCompactionDispatcher::Worker::RegistMergeOperator(
-    CreateMergeOperatorCallback merge_operator_callback) {
-  std::shared_ptr<MergeOperator> merge_operator;
-  auto s = merge_operator_callback(&merge_operator);
-  if (s.ok()) {
-    rep_->merge_operator_map[merge_operator->Name()] =
-        merge_operator_callback;
-  }
-}
-
-void RemoteCompactionDispatcher::Worker::RegistCompactionFilter(
-    const CompactionFilter* compaction_filter) {
-  rep_->compaction_filter_map[compaction_filter->Name()] = compaction_filter;
-}
-
-void RemoteCompactionDispatcher::Worker::RegistCompactionFilterFactory(
-    std::shared_ptr<CompactionFilterFactory> compaction_filter_factory) {
-  rep_->compaction_filter_factory_map[compaction_filter_factory->Name()] =
-      compaction_filter_factory;
-}
-
-void RemoteCompactionDispatcher::Worker::RegistTablePropertiesCollectorFactory(
-    std::shared_ptr<TablePropertiesCollectorFactory>
-        table_prop_collector_factory) {
-  rep_->int_tbl_prop_collector_factory_map[
-      table_prop_collector_factory->Name()] =
-      std::make_shared<UserKeyTablePropertiesCollectorFactory>(
-          table_prop_collector_factory);
-}
 
 RemoteCompactionDispatcher::Worker::Worker(EnvOptions env_options, Env* env) {
   rep_ = new Rep();
@@ -328,12 +276,12 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
     cf_options.cf_paths.emplace_back(DbPath(path, 0));
   }
   if (!context.prefix_extractor.empty()) {
-    auto find = rep_->prefix_extractor_map.find(
-        context.prefix_extractor);
-    if (find == rep_->prefix_extractor_map.end()) {
+    cf_options.prefix_extractor.reset(SliceTransform::create(
+       context.prefix_extractor,
+       context.prefix_extractor_options));
+    if (!cf_options.prefix_extractor) {
       return make_error(Status::Corruption("Missing prefix_extractor !"));
     }
-    cf_options.prefix_extractor = find->second;
   }
   ImmutableCFOptions immutable_cf_options(immutable_db_options, cf_options);
   MutableCFOptions mutable_cf_options(cf_options);
@@ -348,18 +296,19 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
     }
   } int_tbl_prop_collector_factories;
   for (auto& collector : context.int_tbl_prop_collector_factories) {
-    auto find = rep_->int_tbl_prop_collector_factory_map.find(collector.name);
-    if (find == rep_->int_tbl_prop_collector_factory_map.end()) {
+    auto user_fac = TablePropertiesCollectorFactory::create(collector.name);
+    if (!user_fac) {
       return make_error(
           Status::Corruption("Missing int_tbl_prop_collector_factories !"));
     }
-    int_tbl_prop_collector_factories.data.emplace_back(find->second.get());
-    if (find->second->NeedSerialize()) {
-      Status s = find->second->Deserialize(collector.param);
+    if (user_fac->NeedSerialize()) {
+      Status s = user_fac->Deserialize(collector.param);
       if (!s.ok()) {
         return make_error(std::move(s));
       }
     }
+    int_tbl_prop_collector_factories.data.emplace_back(
+      new UserKeyTablePropertiesCollectorFactory(user_fac->shared_from_this()));
   }
   const Slice* start = nullptr;
   const Slice* end = nullptr;
