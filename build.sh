@@ -12,6 +12,11 @@ if [ "$USE_VALGRIND" == "1" ]; then
   VALGRIND=1
 fi
 
+PORTABLE=1
+if [ "$PORTABLE_BUILD" == "0" ]; then
+  PORTABLE=
+fi
+
 if [ `uname` == Darwin ]; then
 	cpuNum=`sysctl -n machdep.cpu.thread_count`
 else
@@ -43,6 +48,7 @@ make LINK_TERARK=static \
      BMI2=$WITH_BMI2 \
      DISABLE_WARNING_AS_ERROR=1 \
      TERARKDB_ENABLE_METRICS=1 \
+     PORTABLE=$PORTABLE \
      DEBUG_LEVEL=0 shared_lib -j $cpuNum
 
 make LINK_TERARK=static \
@@ -50,6 +56,7 @@ make LINK_TERARK=static \
      BMI2=$WITH_BMI2 \
      DISABLE_WARNING_AS_ERROR=1 \
      TERARKDB_ENABLE_METRICS=1 \
+     PORTABLE=$PORTABLE \
      DEBUG_LEVEL=1 shared_lib -j $cpuNum
 
 make LINK_TERARK=static \
@@ -57,6 +64,7 @@ make LINK_TERARK=static \
      BMI2=$WITH_BMI2 \
      DISABLE_WARNING_AS_ERROR=1 \
      TERARKDB_ENABLE_METRICS=1 \
+     PORTABLE=$PORTABLE \
      DEBUG_LEVEL=2 shared_lib -j $cpuNum
 
 # static library
@@ -65,6 +73,7 @@ make LINK_TERARK=static \
      BMI2=$WITH_BMI2 \
      DISABLE_WARNING_AS_ERROR=1 \
      TERARKDB_ENABLE_METRICS=1 \
+     PORTABLE=$PORTABLE \
      DEBUG_LEVEL=0 static_lib -j $cpuNum
 
 make LINK_TERARK=static \
@@ -72,6 +81,7 @@ make LINK_TERARK=static \
      BMI2=$WITH_BMI2 \
      DISABLE_WARNING_AS_ERROR=1 \
      TERARKDB_ENABLE_METRICS=1 \
+     PORTABLE=$PORTABLE \
      DEBUG_LEVEL=2 static_lib -j $cpuNum
 
 pkgdir=output

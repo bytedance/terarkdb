@@ -65,6 +65,8 @@ And add a new env when you start your application:
 env Terark_hasValgrind=1 ./application
 ```
 
+## Non-Portable Build
+If your compiler enviornment is same as your prodution environment, you can use `PORTABLE_BUILD=0 ./build.sh`
 
 ## CHANGELOG
 2019-12-16
