@@ -86,7 +86,6 @@ struct TerarkZipTableOptions {
   // is about only 10% when set to 0.001
   double      indexCacheRatio          = 0;  //0.001;
   std::string localTempDir             = "/tmp";
-  std::string compactionWorkerTempDir  = "/tmp";
   std::string indexType                = "Mixed_XL_256_32_FL";
 
   uint64_t    softZipWorkingMemLimit   = 16ull << 30;
@@ -109,7 +108,6 @@ struct TerarkZipTableOptions {
   uint8_t     reserveBytes1[24]        = {};
 
   class Status Parse(class Slice);
-  const std::string& getLocalTempDir() const;
 };
 
 void TerarkZipDeleteTempFiles(const std::string& tmpPath);
@@ -138,6 +136,9 @@ TerarkZipAutoConfigForOnlineDB_CFOptions(struct TerarkZipTableOptions& tzo,
                                          struct ColumnFamilyOptions& cfo,
                                          size_t memBytesLimit = 0,
                                          size_t diskBytesLimit = 0);
+
+void TerarkZipConfigMemLimitFromSystem(TerarkZipTableOptions& tzo,
+                                        size_t memBytesLimit = 0);
 
 bool TerarkZipConfigFromEnv(struct DBOptions&, struct ColumnFamilyOptions&);
 

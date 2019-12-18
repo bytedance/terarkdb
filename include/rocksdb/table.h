@@ -548,6 +548,8 @@ extern TableFactory* NewAdaptiveTableFactory(
     std::shared_ptr<TableFactory> plain_table_factory = nullptr,
     std::shared_ptr<TableFactory> cuckoo_table_factory = nullptr);
 
+bool IsCompactionWorkerNode();
+
 #endif  // ROCKSDB_LITE
 
 }  // namespace rocksdb

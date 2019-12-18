@@ -171,6 +171,8 @@ public:
   }
 };
 
+extern void TerarkZipConfigCompactionWorkerFromEnv(TerarkZipTableOptions&);
+
 TerarkZipTableBuilder::TerarkZipTableBuilder(const TerarkZipTableFactory* table_factory,
                                              const TerarkZipTableOptions& tzto,
                                              const TableBuilderOptions& tbo,
@@ -180,6 +182,9 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(const TerarkZipTableFactory* table_
   : table_options_(tzto), table_factory_(table_factory), ioptions_(tbo.ioptions), range_del_block_(1),
     ignore_key_type_(tbo.ignore_key_type), prefixLen_(key_prefixLen), compaction_load_(0) {
   try {
+    if (IsCompactionWorkerNode()) {
+      TerarkZipConfigCompactionWorkerFromEnv(table_options_);
+    }
     singleIndexMaxSize_ = std::min(table_options_.softZipWorkingMemLimit,
                                    table_options_.singleIndexMaxSize);
     level_ = tbo.level;
@@ -234,7 +239,7 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(const TerarkZipTableFactory* table_
 
     file_ = file;
     sampleUpperBound_ = uint64_t(randomGenerator_.max() * table_options_.sampleRatio);
-    tmpSentryFile_.path = tzto.getLocalTempDir() + "/Terark-XXXXXX";
+    tmpSentryFile_.path = table_options_.localTempDir + "/Terark-XXXXXX";
     tmpSentryFile_.open_temp();
     tmpSampleFile_.path = tmpSentryFile_.path + ".sample";
     tmpSampleFile_.open();

@@ -194,28 +194,50 @@ TerarkZipAutoConfigForOnlineDB_DBOptions(struct DBOptions& dbo, size_t cpuNum) {
   dbo.env->SetBackgroundThreads(dbo.max_background_flushes, rocksdb::Env::HIGH);
 }
 
+void TerarkZipAutoConfigForOnlineDB_CFOptions_aux(
+                                    ColumnFamilyOptions& cfo,
+                                    size_t memBytesLimit);
+size_t TerarkGetSysMemSize() {
+#ifdef _MSC_VER
+  MEMORYSTATUSEX statex;
+  statex.dwLength = sizeof(statex);
+  GlobalMemoryStatusEx(&statex);
+  return statex.ullTotalPhys;
+#else
+  size_t page_num  = sysconf(_SC_PHYS_PAGES);
+  size_t page_size = sysconf(_SC_PAGE_SIZE);
+  return page_num * page_size;
+#endif
+}
+
 void TerarkZipAutoConfigForOnlineDB_CFOptions(struct TerarkZipTableOptions& tzo,
                                               struct ColumnFamilyOptions& cfo,
                                               size_t memBytesLimit,
                                               size_t /*diskBytesLimit*/) {
   using namespace std; // max, min
   if (0 == memBytesLimit) {
-#ifdef _MSC_VER
-    MEMORYSTATUSEX statex;
-    statex.dwLength = sizeof(statex);
-    GlobalMemoryStatusEx(&statex);
-    memBytesLimit = statex.ullTotalPhys;
-#else
-    size_t page_num  = sysconf(_SC_PHYS_PAGES);
-    size_t page_size = sysconf(_SC_PAGE_SIZE);
-    memBytesLimit = page_num * page_size;
-#endif
+    memBytesLimit = TerarkGetSysMemSize();
   }
+  else {
+    memBytesLimit = std::min(TerarkGetSysMemSize(), memBytesLimit);
+  }
+  TerarkZipConfigMemLimitFromSystem(tzo, memBytesLimit);
+  TerarkZipAutoConfigForOnlineDB_CFOptions_aux(cfo, memBytesLimit);
+}
+
+void TerarkZipConfigMemLimitFromSystem(TerarkZipTableOptions& tzo,
+                                        size_t memBytesLimit) {
   tzo.softZipWorkingMemLimit = memBytesLimit * 1 / 8;
   tzo.hardZipWorkingMemLimit = tzo.softZipWorkingMemLimit * 2;
   tzo.smallTaskMemory = memBytesLimit / 64;
+  tzo.singleIndexMaxSize = std::min(tzo.softZipWorkingMemLimit,
+                                    tzo.singleIndexMaxSize);
+}
 
-  cfo.write_buffer_size = 256ull << 20;
+void TerarkZipAutoConfigForOnlineDB_CFOptions_aux(
+        ColumnFamilyOptions& cfo, size_t memBytesLimit) {
+  using namespace std; // max, min
+  cfo.write_buffer_size = min<size_t>(256ull << 20, memBytesLimit / 32);
   cfo.num_levels = 7;
   cfo.max_write_buffer_number = 16;
   cfo.target_file_size_base = 128ull << 20;
@@ -270,9 +292,6 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo, const std::string& tera
   struct TerarkZipTableOptions tzo;
   TerarkZipAutoConfigForOnlineDB_CFOptions(tzo, cfo, 0, 0);
   tzo.localTempDir = localTempDir;
-  if (const char* env = getenv("TerarkZipTable_compactionWorkerTempDir")) {
-    tzo.compactionWorkerTempDir = env;
-  }
   if (const char* algo = getenv("TerarkZipTable_entropyAlgo")) {
     if (strcasecmp(algo, "NoEntropy") == 0) {
       tzo.entropyAlgo = tzo.kNoEntropy;
@@ -418,6 +437,27 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo, const std::string& tera
     STD_INFO("TerarkZipConfigFromEnv(dbo, cfo) successed\n");
   }
   return true;
+}
+
+void TerarkZipConfigCompactionWorkerFromEnv(TerarkZipTableOptions& tzo) {
+  assert(IsCompactionWorkerNode());
+  if (const char* env = getenv("TerarkZipTable_localTempDir")) {
+    tzo.localTempDir = env;
+  }
+  else if (const char* env = getenv("TMPDIR")) {
+    tzo.localTempDir = env;
+  }
+  else {
+    tzo.localTempDir = "/tmp";
+  }
+  size_t sys_mem = TerarkGetSysMemSize();
+  tzo.softZipWorkingMemLimit = sys_mem / 2;
+  tzo.hardZipWorkingMemLimit = sys_mem / 2;
+  tzo.smallTaskMemory = sys_mem / 4;
+
+  MyGetXiB(tzo, softZipWorkingMemLimit);
+  MyGetXiB(tzo, hardZipWorkingMemLimit);
+  MyGetXiB(tzo, smallTaskMemory);
 }
 
 void TerarkZipDBOptionsFromEnv(DBOptions& dbo) {

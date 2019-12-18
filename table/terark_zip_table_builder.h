@@ -191,7 +191,7 @@ private:
   DictZipBlobStore::ZipBuilder* createZipBuilder() const;
 
   Arena arena_;
-  const TerarkZipTableOptions& table_options_;
+  TerarkZipTableOptions  table_options_;
   const TerarkZipTableFactory* table_factory_;
   // fuck out TableBuilderOptions
   const ImmutableCFOptions& ioptions_;

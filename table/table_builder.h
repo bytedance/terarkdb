@@ -163,6 +163,4 @@ class TableBuilder {
   virtual TableProperties GetTableProperties() const = 0;
 };
 
-bool IsCompactionWorkerNode();
-
 }  // namespace rocksdb
