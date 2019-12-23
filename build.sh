@@ -37,6 +37,9 @@ fi
 
 export BUNDLE_ALL_TERARK_STATIC=${BUNDLE_ALL_TERARK_STATIC:-1}
 
+# for calling make
+export PORTABLE=1
+
 # # build targets
 make LINK_TERARK=static \
      EXTRA_CXXFLAGS="-DROCKSDB_VALGRIND_RUN=$VALGRIND" \
