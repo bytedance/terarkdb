@@ -90,7 +90,8 @@ class CompactionPicker {
 
   uint64_t GetTableNumberEntries(const FileMetaData* f,
                                  const MutableCFOptions& opt,
-                                 const std::string& cf_name);
+                                 const std::string& cf_name,
+                                 LogBuffer* log_buffer);
 
   const EnvOptions& env_options() { return env_options_; }
 

@@ -67,7 +67,7 @@ struct LevelMapRangeDst {
   uint64_t accumulate_estimate_size;
 };
 struct LevelMapSection {
-  size_t start_index, limit_index;
+  ptrdiff_t start_index, limit_index;
   double weight;
 };
 struct GarbageFileInfo {
@@ -375,7 +375,8 @@ bool CompactionPicker::FixInputRange(std::vector<RangeStorage>& input_range,
 
 uint64_t CompactionPicker::GetTableNumberEntries(const FileMetaData* f,
                                                  const MutableCFOptions& opt,
-                                                 const std::string& cf_name) {
+                                                 const std::string& cf_name,
+                                                 LogBuffer* log_buffer) {
   if (f->prop.num_entries == 0) {
     std::shared_ptr<const TableProperties> tp;
     auto s = table_cache_->GetTableProperties(
@@ -2579,21 +2580,21 @@ Compaction* LevelCompactionBuilder::PickLazyCompaction(
         for (const auto& link : elem.link) {
           // try to use depend_map first
           const FileMetaData* meta = nullptr;
-          auto dmap_it = depend_map.find(link->file_number);
+          auto dmap_it = depend_map.find(link.file_number);
           if (dmap_it != depend_map.end()) {
-            meta = it->second;
+            meta = dmap_it->second;
           } else {  // we must find it in src_map
-            auto smap_it = src_map.find(link->file_numer);
+            auto smap_it = src_map.find(link.file_number);
             assert(smap_it != src_map.end());
             meta = smap_it->second;
           }
-          double ratio = link->size / meta->fd.GetFileSize();
-          total_entry_num += picker->GetTableNumberEntries(
-                                 meta, mutable_cf_options_, cf_name_) *
-                             ratio;
+          double ratio = link.size / meta->fd.GetFileSize();
+          total_entry_num +=
+              picker->GetTableNumberEntries(meta, mutable_cf_options_, cf_name_,
+                                            log_buffer_) *
+              ratio;
           total_del_num += meta->prop.num_deletions * ratio;
         }
-        assert(total_size > 0);
         return std::make_pair(total_entry_num, total_del_num);
       };
 
@@ -2614,7 +2615,7 @@ Compaction* LevelCompactionBuilder::PickLazyCompaction(
         double estimate_entry_num;
         double estimate_del_num;
         std::tie(estimate_entry_num, estimate_del_num) =
-            calc_estimate_info(map_element, estimate_size);
+            calc_estimate_info(map_element);
         src.emplace_back(map_element, estimate_entry_num, estimate_del_num);
       }
     }
@@ -2644,10 +2645,10 @@ Compaction* LevelCompactionBuilder::PickLazyCompaction(
       }
     }
     if (dst.empty()) {
-      uint64_t ss = 0;
+      uint64_t src_size = 0;
       for (auto& r : src) {
-        ss += r.estimate_size;
-        if (ss > pick_size) {
+        src_size += r.estimate_size;
+        if (src_size > pick_size) {
           input_range_.emplace_back();
           auto& range = input_range_.back();
           AssignUserKey(range.start, src.front().start);
@@ -2657,7 +2658,6 @@ Compaction* LevelCompactionBuilder::PickLazyCompaction(
       }
     } else {
       std::vector<LevelMapSection> sections;
-      auto n = src.size();
       auto m = dst.size();
       auto& kMin = dst.front().start;
       auto& kMax = dst.back().limit;
@@ -2706,7 +2706,7 @@ Compaction* LevelCompactionBuilder::PickLazyCompaction(
         sections.emplace_back(LevelMapSection{
             queue_start - src.begin(), queue_limit - src.begin(),
             MixOverlapRatioAndDeletionRatio(overlap_ratio, deletion_ratio)});
-        while (src > base_size && queue_start <= queue_limit) {
+        while (src_size > base_size && queue_start <= queue_limit) {
           src_size -= queue_start->estimate_size;
           entry_num -= queue_start->estimate_entry_num;
           del_num -= queue_start->estimate_del_num;
@@ -2717,13 +2717,13 @@ Compaction* LevelCompactionBuilder::PickLazyCompaction(
                 [&](const LevelMapSection& lhs, const LevelMapSection& rhs) {
                   return lhs.weight > rhs.weight;
                 });
-      ss = 0;
+      src_size = 0;
       for (size_t i = 0; i < sections.size(); ++i) {
-        for (size_t j = sections[i].start_index; j <= sections[i].limit_index;
-             ++j) {
-          ss += src[j].estimate_size;
+        for (ptrdiff_t j = sections[i].start_index;
+             j <= sections[i].limit_index; ++j) {
+          src_size += src[j].estimate_size;
           src[j].estimate_size = 0;
-          if (ss > pick_size) {
+          if (src_size > pick_size) {
             sections.resize(i + 1);
             break;
           }
