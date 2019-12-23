@@ -35,14 +35,24 @@ namespace rocksdb {
 
 namespace {
 
+inline double MixOverlapRatioAndDeletionRatio(double overlap_ratio,
+                                              double deletion_ratio) {
+  return overlap_ratio + deletion_ratio * 4;
+}
+
 struct LevelMapRangeSrc {
-  LevelMapRangeSrc(const MapSstElement& e)
+  LevelMapRangeSrc(const MapSstElement& e, double _estimate_entry_num,
+                   double _estimate_del_num)
       : start(e.smallest_key.data(), e.smallest_key.size()),
         limit(e.largest_key.data(), e.largest_key.size()),
-        estimate_size(e.EstimateSize()) {}
+        estimate_size(e.EstimateSize()),
+        estimate_entry_num(_estimate_entry_num),
+        estimate_del_num(_estimate_del_num) {}
 
   std::string start, limit;
   uint64_t estimate_size;
+  double estimate_entry_num;
+  double estimate_del_num;
   size_t start_index, limit_index;
 };
 struct LevelMapRangeDst {
@@ -64,7 +74,7 @@ struct GarbageFileInfo {
   FileMetaData* f;
   uint64_t num_entries;
   double score;
-  uint64_t estimated_size;
+  uint64_t estimate_size;
 };
 struct FileUseInfo {
   uint64_t size;
@@ -361,6 +371,26 @@ bool CompactionPicker::FixInputRange(std::vector<RangeStorage>& input_range,
                         return uc->Compare(r.start, r.limit) > 0;
                       }) == input_range.end());
   return !input_range.empty();
+}
+
+uint64_t CompactionPicker::GetTableNumberEntries(const FileMetaData* f,
+                                                 const MutableCFOptions& opt,
+                                                 const std::string& cf_name) {
+  if (f->prop.num_entries == 0) {
+    std::shared_ptr<const TableProperties> tp;
+    auto s = table_cache_->GetTableProperties(
+        env_options_, *icmp_, f->fd, &tp, opt.prefix_extractor.get(), false);
+    if (!s.ok()) {
+      ROCKS_LOG_BUFFER(log_buffer,
+                       "[%s] CompactionPicker::PickGarbageCollection "
+                       "GetTableProperties fail\n",
+                       cf_name.c_str(), s.ToString().c_str());
+      return 0;
+    }
+    return tp->num_entries;
+  } else {
+    return f->prop.num_entries;
+  }
 }
 
 // Delete this compaction from the list of running compactions.
@@ -818,14 +848,14 @@ Compaction* CompactionPicker::PickGarbageCollection(
     info.score = std::min(1.0, (double)f->num_antiquation / info.num_entries);
     if (f->prop.inheritance_chain.empty()) {
       // sst from flush or compaction
-      info.estimated_size = f->fd.file_size;
+      info.estimate_size = f->fd.file_size;
     } else {
       // sst from gc
-      info.estimated_size =
+      info.estimate_size =
           static_cast<uint64_t>(f->fd.file_size * (1 - info.score));
     }
     if (info.score >= mutable_cf_options.blob_gc_ratio ||
-        info.estimated_size <= fragment_size) {
+        info.estimate_size <= fragment_size) {
       gc_files.push_back(info);
     } else if (f->marked_for_compaction) {
       info.score = mutable_cf_options.blob_gc_ratio;
@@ -850,14 +880,14 @@ Compaction* CompactionPicker::PickGarbageCollection(
   inputs.level = -1;
   inputs.files.push_back(gc_files.front().f);
 
-  uint64_t total_estimated_size = gc_files.front().estimated_size;
+  uint64_t total_estimate_size = gc_files.front().estimate_size;
   uint64_t num_antiquation = gc_files.front().f->num_antiquation;
   for (auto it = std::next(gc_files.begin()); it != gc_files.end(); ++it) {
     auto& info = *it;
-    if (total_estimated_size + info.estimated_size > max_file_size) {
+    if (total_estimate_size + info.estimate_size > max_file_size) {
       continue;
     }
-    total_estimated_size += info.estimated_size;
+    total_estimate_size += info.estimate_size;
     num_antiquation += info.f->num_antiquation;
     inputs.files.push_back(info.f);
     if (inputs.size() >= 8) {
@@ -2534,6 +2564,39 @@ Compaction* LevelCompactionBuilder::PickLazyCompaction(
     };
     std::vector<LevelMapRangeSrc> src;
     {
+      // we may not find FileMetaData from `DependenceMap`
+      // cuz we may create `MapSstElement`s just-in-time
+      // todo(linyuanjin): avoid creating std::unordered_map
+      std::unordered_map<uint64_t, const FileMetaData*> src_map;
+      for (const FileMetaData* meta : level_files) {
+        src_map.emplace(meta->fd.GetNumber(), meta);
+      }
+      const DependenceMap& depend_map = vstorage_->dependence_map();
+
+      auto calc_estimate_info = [&](const MapSstElement& elem) {
+        double total_entry_num = 0;
+        double total_del_num = 0;
+        for (const auto& link : elem.link) {
+          // try to use depend_map first
+          const FileMetaData* meta = nullptr;
+          auto dmap_it = depend_map.find(link->file_number);
+          if (dmap_it != depend_map.end()) {
+            meta = it->second;
+          } else {  // we must find it in src_map
+            auto smap_it = src_map.find(link->file_numer);
+            assert(smap_it != src_map.end());
+            meta = smap_it->second;
+          }
+          double ratio = link->size / meta->fd.GetFileSize();
+          total_entry_num += picker->GetTableNumberEntries(
+                                 meta, mutable_cf_options_, cf_name_) *
+                             ratio;
+          total_del_num += meta->prop.num_deletions * ratio;
+        }
+        assert(total_size > 0);
+        return std::make_pair(total_entry_num, total_del_num);
+      };
+
       Arena arena;
       ScopedArenaIterator iter(
           NewMapElementIterator(level_files.data(), level_files.size(),
@@ -2548,7 +2611,11 @@ Compaction* LevelCompactionBuilder::PickLazyCompaction(
                                               log_buffer_, cf_name_)) {
           return Status::Corruption("CompactionPicker bad map element");
         }
-        src.emplace_back(map_element);
+        double estimate_entry_num;
+        double estimate_del_num;
+        std::tie(estimate_entry_num, estimate_del_num) =
+            calc_estimate_info(map_element, estimate_size);
+        src.emplace_back(map_element, estimate_entry_num, estimate_del_num);
       }
     }
     if (src.empty()) {
@@ -2613,25 +2680,38 @@ Compaction* LevelCompactionBuilder::PickLazyCompaction(
         }
         src[i].limit_index = p < m ? p : m - 1;
       }
-      std::queue<size_t> queue;
-      queue.push(src[0].estimate_size);
-      size_t bb = 0, ee = 0, ss = src[0].estimate_size;
+      auto queue_start = src.begin();
+      auto queue_limit = queue_start;
+      size_t src_size = queue_start->estimate_size;
+      double entry_num = queue_start->estimate_entry_num;
+      double del_num = queue_start->estimate_del_num;
       while (true) {
-        while (ss < base_size) {
-          if (++ee == n) break;
-          queue.push(src[ee].estimate_size);
-          ss += src[ee].estimate_size;
+        while (src_size < base_size) {
+          if (++queue_limit == src.end()) {
+            break;
+          }
+          src_size += queue_limit->estimate_size;
+          entry_num += queue_limit->estimate_entry_num;
+          del_num += queue_limit->estimate_del_num;
         }
-        if (ee == n) break;
+        if (queue_limit == src.end()) {
+          break;
+        }
+        double overlap_ratio =
+            (double)src_size /
+            (src_size + dst[queue_limit->limit_index].accumulate_estimate_size -
+             dst[queue_start->start_index].accumulate_estimate_size +
+             dst[queue_start->start_index].estimate_size + 1);
+        double deletion_ratio = del_num / entry_num;
         sections.emplace_back(LevelMapSection{
-            bb, ee,
-            (double)ss /
-                (ss + dst[src[ee].limit_index].accumulate_estimate_size -
-                 dst[src[bb].start_index].accumulate_estimate_size +
-                 dst[src[bb].start_index].estimate_size)});
-        bb++;
-        ss -= queue.front();
-        queue.pop();
+            queue_start - src.begin(), queue_limit - src.begin(),
+            MixOverlapRatioAndDeletionRatio(overlap_ratio, deletion_ratio)});
+        while (src > base_size && queue_start <= queue_limit) {
+          src_size -= queue_start->estimate_size;
+          entry_num -= queue_start->estimate_entry_num;
+          del_num -= queue_start->estimate_del_num;
+          ++queue_start;
+        }
       }
       std::sort(sections.begin(), sections.end(),
                 [&](const LevelMapSection& lhs, const LevelMapSection& rhs) {
