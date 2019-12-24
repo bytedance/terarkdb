@@ -15,6 +15,12 @@
 #endif
 
 #include <inttypes.h>
+#include "rocksdb/comparator.h"
+#include "rocksdb/status.h"
+#include "rocksdb/types.h"
+#include "rocksdb/compaction_filter.h"
+#include "rocksdb/merge_operator.h"
+#include "rocksdb/advanced_options.h"
 #include "rocksdb/convenience.h"
 #include "rocksdb/table.h"
 #include "rocksdb/filter_policy.h"
@@ -229,9 +235,9 @@ RemoteCompactionDispatcher::Worker::~Worker() {
 }
 
 std::string RemoteCompactionDispatcher::Worker::DoCompaction(
-    const std::string& data) {
+    Slice data) {
   CompactionWorkerContext context;
-  ajson::load_from_buff(context, &std::string(data)[0], data.size());
+  ajson::load_from_buff(context, &data.ToString()[0], data.size());
 
   auto make_error = [](Status status) {
     CompactionWorkerResult result;
@@ -895,7 +901,7 @@ class CommandLineCompactionDispatcher : public RemoteCompactionDispatcher {
 public:
   CommandLineCompactionDispatcher(std::string&& cmd) : m_cmd(std::move(cmd)) {}
 
-  std::future<std::string> DoCompaction(const std::string& data) override {
+  std::future<std::string> DoCompaction(Slice data) override {
     std::promise<std::string> promise;
     std::future<std::string> future = promise.get_future();
     std::thread([this, data](std::promise<std::string>&& prom) {
@@ -916,7 +922,7 @@ public:
           cmdw.reserve(m_cmd.size() + 32);
           cmdw << m_cmd << " > /dev/fd/" << fd;
           ProcPipeStream proc(cmdw, "w");
-          proc.ensureWrite(data.c_str(), data.size());
+          proc.ensureWrite(data.data(), data.size());
         }
         //
         // now cmd sub process must have finished

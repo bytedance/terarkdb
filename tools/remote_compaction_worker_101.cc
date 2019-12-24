@@ -36,7 +36,7 @@ int main() {
 
   terark::LineBuf buf;
   buf.read_all(stdin);
-  std::cout << worker.DoCompaction(std::string(buf.p, buf.n));
+  std::cout << worker.DoCompaction(rocksdb::Slice(buf.p, buf.n));
   return 0;
 }
 

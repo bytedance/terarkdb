@@ -8,27 +8,16 @@
 
 #pragma once
 
+#include <functional>
 #include <future>
 #include <string>
-
-#include "rocksdb/comparator.h"
-#include "rocksdb/env.h"
-#include "rocksdb/status.h"
-#include "rocksdb/types.h"
-#include "rocksdb/compaction_filter.h"
-#include "rocksdb/merge_operator.h"
-#include "rocksdb/advanced_options.h"
 #include <boost/noncopyable.hpp>
+#include "rocksdb/env.h"
 
 namespace rocksdb {
 
-class ColumnFamilyHandle;
 struct CompactionWorkerContext;
 struct CompactionWorkerResult;
-struct FileMetaData;
-class VersionStorageInfo;
-struct ImmutableCFOptions;
-struct MutableCFOptions;
 
 class CompactionDispatcher : boost::noncopyable {
  public:
@@ -47,14 +36,14 @@ class RemoteCompactionDispatcher : public CompactionDispatcher {
 
   virtual const char* Name() const override;
 
-  virtual std::future<std::string> DoCompaction(const std::string& data) = 0;
+  virtual std::future<std::string> DoCompaction(Slice data) = 0;
 
   class Worker : boost::noncopyable {
    public:
     Worker(EnvOptions env_options, Env* env);
     virtual ~Worker();
     virtual std::string GenerateOutputFileName(size_t file_index) = 0;
-    std::string DoCompaction(const std::string& data);
+    std::string DoCompaction(Slice data);
    protected:
     struct Rep;
     Rep* rep_;

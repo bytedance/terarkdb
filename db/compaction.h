@@ -13,6 +13,7 @@
 #include "util/arena.h"
 #include "util/autovector.h"
 #include "rocksdb/listener.h"
+#include "rocksdb/compaction_filter.h"
 
 namespace rocksdb {
 
