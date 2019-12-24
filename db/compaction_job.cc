@@ -47,6 +47,7 @@
 #include "port/port.h"
 #include "rocksdb/db.h"
 #include "rocksdb/env.h"
+#include "rocksdb/merge_operator.h"
 #include "rocksdb/statistics.h"
 #include "rocksdb/status.h"
 #include "rocksdb/table.h"
@@ -739,7 +740,7 @@ Status CompactionJob::Run() {
       collector->Serialize(&param);
     }
     context.int_tbl_prop_collector_factories.push_back(
-      {collector->Name(), std::move(param)});
+      {collector->Name(), {std::move(param)}});
   }
   std::vector<std::function<CompactionWorkerResult()>> results;
   for (const auto& state : compact_->sub_compact_states) {
@@ -2192,8 +2193,8 @@ Status CompactionJob::InstallCompactionResults(
 
   TablePropertiesCollection tp;
   for (const auto& state : compact_->sub_compact_states) {
-    auto& tts = compaction->transient_stat().back();
     compaction->transient_stat().push_back(TableTransientStat());
+    auto& tts = compaction->transient_stat().back();
     tts.aggregate = state.stat_all;
     for (const auto& output : state.outputs) {
       /*
