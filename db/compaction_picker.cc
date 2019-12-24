@@ -2724,7 +2724,7 @@ Compaction* LevelCompactionBuilder::PickLazyCompaction(
         while (src_size < pick_size && queue_limit != queue_end) {
           fn_step_right();
         }
-        while (src_size >= base_size && queue_start != queue_limit) {
+        while (src_size >= base_size) {
           fn_step_left();
         }
       } while (queue_limit != queue_end);
