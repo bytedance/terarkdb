@@ -2190,6 +2190,10 @@ Status CompactionJob::InstallCompactionResults(
     }
   }
 
+  ROCKS_LOG_DEBUG(db_options_.info_log, "[%s] [JOB %d] sub_compact_states.size() = %zd",
+      compaction->column_family_data()->GetName().c_str(), job_id_,
+      compact_->sub_compact_states.size());
+
   TablePropertiesCollection tp;
   for (const auto& state : compact_->sub_compact_states) {
     compaction->transient_stat().push_back(TableTransientStat());
