@@ -1244,8 +1244,10 @@ void DBIter::SeekForPrev(const Slice& target) {
 
   {
     PERF_TIMER_GUARD(seek_internal_seek_time);
+    // ROCKS_LOG_INFO(logger_, "SeekForPrev.Start");
     iter_->SeekForPrev(saved_key_.GetInternalKey());
     range_del_agg_.InvalidateRangeDelMapPositions();
+    // ROCKS_LOG_INFO(logger_, "SeekForPrev.End");
   }
 
 #ifndef ROCKSDB_LITE
