@@ -2686,8 +2686,9 @@ Compaction* LevelCompactionBuilder::PickLazyCompaction(
       double entry_num = queue_start->estimate_entry_num;
       double del_num = queue_start->estimate_del_num;
 
-      auto fn_new_section = [&]{
-        auto overlap_ratio = (double)src_size /
+      auto fn_new_section = [&] {
+        auto overlap_ratio =
+            (double)src_size /
             (src_size + dst[queue_limit->limit_index].accumulate_estimate_size -
              dst[queue_start->start_index].accumulate_estimate_size +
              dst[queue_start->start_index].estimate_size + 1);
@@ -2697,7 +2698,7 @@ Compaction* LevelCompactionBuilder::PickLazyCompaction(
             MixOverlapRatioAndDeletionRatio(overlap_ratio, deletion_ratio)});
       };
 
-      auto fn_step_right = [&]{
+      auto fn_step_right = [&] {
         ++queue_limit;
         src_size += queue_limit->estimate_size;
         entry_num += queue_limit->estimate_entry_num;
@@ -2706,8 +2707,8 @@ Compaction* LevelCompactionBuilder::PickLazyCompaction(
           fn_new_section();
         }
       };
-      
-      auto fn_step_left = [&]{
+
+      auto fn_step_left = [&] {
         src_size -= queue_start->estimate_size;
         entry_num -= queue_start->estimate_entry_num;
         del_num -= queue_start->estimate_del_num;
@@ -2717,15 +2718,17 @@ Compaction* LevelCompactionBuilder::PickLazyCompaction(
         ++queue_start;
       };
 
+      assert(!src.empty());
+      auto queue_end = src.end() - 1;
       do {
-        while (src_size < pick_size && queue_limit != src.end()) {
+        while (src_size < pick_size && queue_limit != queue_end) {
           fn_step_right();
         }
         while (src_size >= base_size && queue_start != queue_limit) {
           fn_step_left();
         }
-      } while (queue_limit != src.end());
-      
+      } while (queue_limit != queue_end);
+
       std::sort(sections.begin(), sections.end(),
                 [&](const LevelMapSection& lhs, const LevelMapSection& rhs) {
                   return lhs.weight > rhs.weight;
