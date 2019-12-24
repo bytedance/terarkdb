@@ -2712,10 +2712,10 @@ Compaction* LevelCompactionBuilder::PickLazyCompaction(
         src_size -= queue_start->estimate_size;
         entry_num -= queue_start->estimate_entry_num;
         del_num -= queue_start->estimate_del_num;
+        ++queue_start;
         if (src_size > base_size) {
           fn_new_section();
         }
-        ++queue_start;
       };
 
       assert(!src.empty());
