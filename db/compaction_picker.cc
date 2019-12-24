@@ -2712,10 +2712,10 @@ Compaction* LevelCompactionBuilder::PickLazyCompaction(
         src_size -= queue_start->estimate_size;
         entry_num -= queue_start->estimate_entry_num;
         del_num -= queue_start->estimate_del_num;
+        ++queue_start;
         if (src_size > base_size) {
           fn_new_section();
         }
-        ++queue_start;
       };
 
       assert(!src.empty());
@@ -2724,7 +2724,7 @@ Compaction* LevelCompactionBuilder::PickLazyCompaction(
         while (src_size < pick_size && queue_limit != queue_end) {
           fn_step_right();
         }
-        while (src_size >= base_size && queue_start != queue_limit) {
+        while (src_size >= base_size) {
           fn_step_left();
         }
       } while (queue_limit != queue_end);
