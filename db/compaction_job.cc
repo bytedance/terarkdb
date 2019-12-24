@@ -650,16 +650,15 @@ Status CompactionJob::Run() {
   assert(!IsCompactionWorkerNode());
   ColumnFamilyData* cfd = compact_->compaction->column_family_data();
   CompactionDispatcher* dispatcher = cfd->ioptions()->compaction_dispatcher;
+  Compaction* c = compact_->compaction;
   if (!dispatcher) {
     static std::shared_ptr<CompactionDispatcher>
         command_line_dispatcher(GetCmdLineDispatcher());
     dispatcher = command_line_dispatcher.get();
   }
-  if (dispatcher == nullptr ||
-      compact_->compaction->compaction_type() != kKeyValueCompaction) {
+  if (!dispatcher || c->compaction_type() != kKeyValueCompaction) {
     return RunSelf();
   }
-  Compaction* c = compact_->compaction;
   Status s;
   const ImmutableCFOptions* iopt = c->immutable_cf_options();
   CompactionWorkerContext context;
