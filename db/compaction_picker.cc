@@ -2685,34 +2685,46 @@ Compaction* LevelCompactionBuilder::PickLazyCompaction(
       size_t src_size = queue_start->estimate_size;
       double entry_num = queue_start->estimate_entry_num;
       double del_num = queue_start->estimate_del_num;
-      while (true) {
-        while (src_size < base_size) {
-          if (++queue_limit == src.end()) {
-            break;
-          }
-          src_size += queue_limit->estimate_size;
-          entry_num += queue_limit->estimate_entry_num;
-          del_num += queue_limit->estimate_del_num;
-        }
-        if (queue_limit == src.end()) {
-          break;
-        }
-        double overlap_ratio =
-            (double)src_size /
-            (src_size + dst[queue_limit->limit_index].accumulate_estimate_size -
-             dst[queue_start->start_index].accumulate_estimate_size +
-             dst[queue_start->start_index].estimate_size + 1);
+      auto fn_new_section = [&]{
+        (double)src_size /
+        (src_size + dst[queue_limit->limit_index].accumulate_estimate_size -
+         dst[queue_start->start_index].accumulate_estimate_size +
+         dst[queue_start->start_index].estimate_size + 1);
         double deletion_ratio = del_num / entry_num;
         sections.emplace_back(LevelMapSection{
             queue_start - src.begin(), queue_limit - src.begin(),
             MixOverlapRatioAndDeletionRatio(overlap_ratio, deletion_ratio)});
-        while (src_size > base_size && queue_start <= queue_limit) {
-          src_size -= queue_start->estimate_size;
-          entry_num -= queue_start->estimate_entry_num;
-          del_num -= queue_start->estimate_del_num;
-          ++queue_start;
+      };
+      auto fn_step_right = [&]{
+        ++queue_limit;
+        src_size += queue_limit->estimate_size;
+        entry_num += queue_limit->estimate_entry_num;
+        del_num += queue_limit->estimate_del_num;
+        if (src_size > base_size) fn_new_section();
+        return queue_limit == src.end();
+      };
+      auto fn_step_left = [&]{
+        ++queue_start;
+        src_size -= queue_start->estimate_size;
+        entry_num -= queue_start->estimate_entry_num;
+        del_num -= queue_start->estimate_del_num;
+        if (src_size > base_size) fn_new_section();
+        return queue_start == queue_limit;
+      };
+
+      do {
+        while (src_size < pick_size) {
+          if (fn_step_right()) {
+            break;
+          }
         }
-      }
+        while (src_size >= base_size) {
+          if (fn_step_left()){
+            break;
+          }
+        }
+      } while (queue_limit != src.end());
+      
       std::sort(sections.begin(), sections.end(),
                 [&](const LevelMapSection& lhs, const LevelMapSection& rhs) {
                   return lhs.weight > rhs.weight;
