@@ -2195,6 +2195,9 @@ Status CompactionJob::InstallCompactionResults(
     compaction->transient_stat().push_back(TableTransientStat());
     auto& tts = compaction->transient_stat().back();
     tts.aggregate = state.stat_all;
+    ROCKS_LOG_DEBUG(db_options_.info_log, "[%s] [JOB %d] stat_all[len=%zd] = %s",
+        compaction->column_family_data()->GetName().c_str(), job_id_,
+        state.stat_all.size(), state.stat_all.c_str());
     for (const auto& output : state.outputs) {
       /*
       auto iter = output.table_properties->user_collected_properties.find("User.Collected.Transient.Stat");
