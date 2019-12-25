@@ -241,21 +241,27 @@ InternalIterator* TableCache::NewIterator(
     *table_reader_ptr = nullptr;
   }
   size_t readahead = 0;
-  if (for_compaction) {
-#ifndef NDEBUG
-    bool use_direct_reads_for_compaction = env_options.use_direct_reads;
-    TEST_SYNC_POINT_CALLBACK("TableCache::NewIterator:for_compaction",
-                             &use_direct_reads_for_compaction);
-#endif  // !NDEBUG
-    if (ioptions_.new_table_reader_for_compaction_inputs) {
-      // get compaction_readahead_size from env_options allows us to set the
-      // value dynamically
-      readahead = env_options.compaction_readahead_size;
-      create_new_table_reader = true;
-    }
+  bool record_stats = !for_compaction;
+  if (file_meta.prop.purpose == kMapSst) {
+    record_stats = false;
   } else {
-    readahead = options.readahead_size;
-    create_new_table_reader = readahead > 0;
+    // MapSST don't handle these
+    if (for_compaction) {
+#ifndef NDEBUG
+      bool use_direct_reads_for_compaction = env_options.use_direct_reads;
+      TEST_SYNC_POINT_CALLBACK("TableCache::NewIterator:for_compaction",
+                               &use_direct_reads_for_compaction);
+#endif  // !NDEBUG
+      if (ioptions_.new_table_reader_for_compaction_inputs) {
+        // get compaction_readahead_size from env_options allows us to set the
+        // value dynamically
+        readahead = env_options.compaction_readahead_size;
+        create_new_table_reader = true;
+      }
+    } else {
+      readahead = options.readahead_size;
+      create_new_table_reader = readahead > 0;
+    }
   }
 
   auto& fd = file_meta.fd;
@@ -263,8 +269,8 @@ InternalIterator* TableCache::NewIterator(
     std::unique_ptr<TableReader> table_reader_unique_ptr;
     s = GetTableReader(
         env_options, icomparator, fd, true /* sequential_mode */, readahead,
-        !for_compaction /* record stats */, nullptr, &table_reader_unique_ptr,
-        prefix_extractor, false /* skip_filters */, level,
+        record_stats, nullptr, &table_reader_unique_ptr, prefix_extractor,
+        false /* skip_filters */, level,
         true /* prefetch_index_and_filter_in_cache */, for_compaction);
     if (s.ok()) {
       table_reader = table_reader_unique_ptr.release();
@@ -274,8 +280,7 @@ InternalIterator* TableCache::NewIterator(
     if (table_reader == nullptr) {
       s = FindTable(env_options, icomparator, fd, &handle, prefix_extractor,
                     options.read_tier == kBlockCacheTier /* no_io */,
-                    !for_compaction /* record read_stats */, file_read_hist,
-                    skip_filters, level);
+                    record_stats, file_read_hist, skip_filters, level);
       if (s.ok()) {
         table_reader = GetTableReaderFromHandle(handle);
       }
@@ -283,13 +288,22 @@ InternalIterator* TableCache::NewIterator(
   }
   InternalIterator* result = nullptr;
   if (s.ok()) {
-    if (options.table_filter &&
-        !options.table_filter(*table_reader->GetTableProperties())) {
-      result = NewEmptyInternalIterator<LazyBuffer>(arena);
+    if (file_meta.prop.purpose != kMapSst) {
+      if (options.table_filter &&
+          !options.table_filter(*table_reader->GetTableProperties())) {
+        result = NewEmptyInternalIterator<LazyBuffer>(arena);
+      } else {
+        result = table_reader->NewIterator(options, prefix_extractor, arena,
+                                           skip_filters, for_compaction);
+      }
     } else {
-      result = table_reader->NewIterator(options, prefix_extractor, arena,
-                                         skip_filters, for_compaction);
-      if (file_meta.prop.purpose == kMapSst && !dependence_map.empty()) {
+      ReadOptions map_options = options;
+      map_options.total_order_seek = true;
+      map_options.readahead_size = 0;
+      result =
+          table_reader->NewIterator(map_options, prefix_extractor, arena,
+                                    skip_filters, false /* for_compaction */);
+      if (!dependence_map.empty()) {
         LazyCreateIterator* lazy_create_iter;
         if (arena != nullptr) {
           void* buffer = arena->AllocateAligned(sizeof(LazyCreateIterator));
