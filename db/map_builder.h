@@ -88,8 +88,6 @@ class MapBuilder {
   const EnvOptions& env_options_;
 
   Env* env_;
-  // env_option optimized for compaction table reads
-  EnvOptions env_options_for_read_;
   VersionSet* versions_;
   Statistics* stats_;
 };

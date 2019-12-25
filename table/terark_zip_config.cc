@@ -440,6 +440,7 @@ void TerarkZipDBOptionsFromEnv(DBOptions& dbo) {
   MyGetInt(dbo,  max_background_garbage_collections, 4);
   MyGetInt(dbo,  max_background_flushes    , 4);
   MyGetInt(dbo,  max_subcompactions        , 4);
+  MyGetInt(dbo,  max_open_files            , -1);
   MyGetBool(dbo, allow_mmap_populate       , false);
   dbo.max_background_jobs = dbo.max_background_flushes +
                             dbo.max_background_compactions +
@@ -451,7 +452,6 @@ void TerarkZipDBOptionsFromEnv(DBOptions& dbo) {
   dbo.env->SetBackgroundThreads(dbo.max_background_flushes, rocksdb::Env::HIGH);
   dbo.allow_mmap_reads = true;
   dbo.new_table_reader_for_compaction_inputs = false;
-  dbo.max_open_files = -1;
 }
 
 class TerarkBlackListCF : public terark::hash_strmap<> {

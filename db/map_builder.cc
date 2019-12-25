@@ -80,17 +80,16 @@ struct IteratorCacheContext {
     read_options.total_order_seek = true;
 
     return ctx->cfd->table_cache()->NewIterator(
-        read_options, *ctx->env_options_for_read,
-        ctx->cfd->internal_comparator(), *f,
+        read_options, *ctx->env_options, ctx->cfd->internal_comparator(), *f,
         f->prop.purpose == kMapSst ? empty_dependence_map : dependence_map,
         nullptr, ctx->mutable_cf_options->prefix_extractor.get(), reader_ptr,
-        nullptr /* no per level latency histogram */, true /* for_compaction */,
-        arena, false /* skip_filters */, -1);
+        nullptr /* no per level latency histogram */,
+        false /* for_compaction */, arena, false /* skip_filters */, -1);
   }
 
   ColumnFamilyData* cfd;
   const MutableCFOptions* mutable_cf_options;
-  EnvOptions* env_options_for_read;
+  const EnvOptions* env_options;
 };
 
 struct RangeWithDepend {
@@ -778,8 +777,6 @@ MapBuilder::MapBuilder(int job_id, const ImmutableDBOptions& db_options,
       db_options_(db_options),
       env_options_(env_options),
       env_(db_options.env),
-      env_options_for_read_(
-          env_->OptimizeForCompactionTableRead(env_options, db_options_)),
       versions_(versions),
       stats_(stats) {}
 
@@ -797,7 +794,7 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
   auto vstorage = version->storage_info();
   auto& icomp = cfd->internal_comparator();
   IteratorCacheContext iterator_cache_ctx = {
-      cfd, &version->GetMutableCFOptions(), &env_options_for_read_};
+      cfd, &version->GetMutableCFOptions(), &env_options_};
   IteratorCache iterator_cache(vstorage->dependence_map(), &iterator_cache_ctx,
                                IteratorCacheContext::invoke);
 
@@ -994,8 +991,7 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
   }
   std::vector<RangeWithDepend> ranges;
   if (!level_ranges.empty()) {
-    s = AdjustRange(cfd, version, env_options_for_read_, level_ranges.front(),
-                    ranges);
+    s = AdjustRange(cfd, version, env_options_, level_ranges.front(), ranges);
     level_ranges.clear();
     if (!s.ok()) {
       return s;
@@ -1127,7 +1123,7 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
   auto vstorage = version->storage_info();
   auto& icomp = cfd->internal_comparator();
   IteratorCacheContext iterator_cache_ctx = {
-      cfd, &version->GetMutableCFOptions(), &env_options_for_read_};
+      cfd, &version->GetMutableCFOptions(), &env_options_};
   IteratorCache iterator_cache(vstorage->dependence_map(), &iterator_cache_ctx,
                                IteratorCacheContext::invoke);
 
@@ -1279,7 +1275,7 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
 
   for (auto& level_ranges : range_items) {
     std::vector<RangeWithDepend> adjusted_range;
-    s = AdjustRange(cfd, version, env_options_for_read_, level_ranges.ranges,
+    s = AdjustRange(cfd, version, env_options_, level_ranges.ranges,
                     adjusted_range);
     if (!s.ok()) {
       return s;
@@ -1380,7 +1376,7 @@ Status MapBuilder::GetInputCoverage(
     ColumnFamilyData* cfd, const MutableCFOptions& mutable_cf_options,
     std::vector<RangeStorage>* coverage) {
   IteratorCacheContext iterator_cache_ctx = {cfd, &mutable_cf_options,
-                                             &env_options_for_read_};
+                                             &env_options_};
   IteratorCache iterator_cache(vstorage->dependence_map(), &iterator_cache_ctx,
                                IteratorCacheContext::invoke);
 
