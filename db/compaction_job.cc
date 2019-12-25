@@ -2190,7 +2190,7 @@ Status CompactionJob::InstallCompactionResults(
     }
   }
 
-  ROCKS_LOG_DEBUG(db_options_.info_log, "[%s] [JOB %d] sub_compact_states.size() = %zd",
+  ROCKS_LOG_INFO(db_options_.info_log, "[%s] [JOB %d] sub_compact_states.size() = %zd",
       compaction->column_family_data()->GetName().c_str(), job_id_,
       compact_->sub_compact_states.size());
 
@@ -2199,7 +2199,7 @@ Status CompactionJob::InstallCompactionResults(
     compaction->transient_stat().push_back(TableTransientStat());
     auto& tts = compaction->transient_stat().back();
     tts.aggregate = state.stat_all;
-    ROCKS_LOG_DEBUG(db_options_.info_log, "[%s] [JOB %d] stat_all[len=%zd] = %s",
+    ROCKS_LOG_INFO(db_options_.info_log, "[%s] [JOB %d] stat_all[len=%zd] = %s",
         compaction->column_family_data()->GetName().c_str(), job_id_,
         state.stat_all.size(), state.stat_all.c_str());
     for (const auto& output : state.outputs) {
