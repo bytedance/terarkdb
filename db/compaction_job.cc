@@ -271,7 +271,7 @@ struct CompactionJob::CompactionState {
 
   // REQUIRED: subcompaction states are stored in order of increasing
   // key-range
-  std::vector<CompactionJob::SubcompactionState> sub_compact_states;
+  std::vector<SubcompactionState> sub_compact_states;
   Status status;
 
   uint64_t total_bytes;
@@ -2198,7 +2198,7 @@ Status CompactionJob::InstallCompactionResults(
   for (const auto& state : compact_->sub_compact_states) {
     compaction->transient_stat().push_back(TableTransientStat());
     auto& tts = compaction->transient_stat().back();
-    tts.aggregate = state.stat_all;
+    tts.stat_all = state.stat_all;
     ROCKS_LOG_INFO(db_options_.info_log, "[%s] [JOB %d] stat_all[len=%zd] = %s",
         compaction->column_family_data()->GetName().c_str(), job_id_,
         state.stat_all.size(), state.stat_all.c_str());
@@ -2528,7 +2528,7 @@ bool ReapMatureAction(const void* obj, std::string* result) {
   g_fa_map_mutex.lock();
   auto iter = g_fa_map.find(obj);
   if (g_fa_map.end() != iter) {
-     auto action = iter->second;
+     auto action = std::move(iter->second);
      g_fa_map.erase(iter);
      g_fa_map_mutex.unlock();
      action(obj, result);

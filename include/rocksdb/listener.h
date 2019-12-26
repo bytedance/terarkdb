@@ -200,7 +200,7 @@ struct TableTransientStat {
   // complex, so we DO SAVE it to SST, to avoid errors
   //std::map<std::string, std::string> per_table;
 
-  std::string                        aggregate;
+  std::string                        stat_all;
 };
 
 void PlantFutureAction(const void* obj, void (*action)(const void* p_obj, std::string* result));
