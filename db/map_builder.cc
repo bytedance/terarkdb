@@ -677,6 +677,7 @@ Status AdjustRange(const InternalKeyComparator* ic, InternalIterator* iter,
       new_ranges.pop_back();
     } else {
       last->point[1] = split.point[0];
+      last->stable = false;
       assert(last->include[1]);
     }
     if (is_same_dependence(split, *range) ||
@@ -685,10 +686,11 @@ Status AdjustRange(const InternalKeyComparator* ic, InternalIterator* iter,
       assert(range->include[1]);
       new_ranges.emplace_back(std::move(split));
     } else {
-      new_ranges.emplace_back(std::move(split));
       assert(GetInternalKeySeqno(split.point[1]) == kMaxSequenceNumber);
       range->point[0] = split.point[1];
+      range->stable = false;
       assert(!split.include[0]);
+      new_ranges.emplace_back(std::move(split));
       new_ranges.emplace_back(std::move(*range));
     }
   }
@@ -1355,10 +1357,8 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
               return icomp.Compare(a.point[1], b.point[1]) < 0;
             }));
         if (range_items.empty()) {
-          bool is_map = level_files.size() == 1 &&
-                        level_files.files.front()->prop.is_map_sst();
-          range_items.emplace_back(FileMetaDataBoundBuilder(nullptr), 0, is_map,
-                                   std::move(ranges));
+          range_items.emplace_back(FileMetaDataBoundBuilder(nullptr), 0,
+                                   f->prop.is_map_sst(), std::move(ranges));
         } else {
           assert(range_items.front().level == 0);
           auto& level_ranges = range_items.front();
@@ -1985,5 +1985,31 @@ InternalIterator* NewMapElementIterator(
                            create_iter);
   }
 }
+
+#if 0
+struct PartitionRangeTest {
+  PartitionRangeTest() {
+    Arena arena;
+    std::vector<RangeWithDepend> a, b;
+    auto push = [&arena](std::vector<RangeWithDepend>& v, const char* l,
+                         const char* r, bool stable,
+                         std::initializer_list<uint64_t> fn_list = {}) {
+      v.emplace_back(Range(l, r, true, false), &arena);
+      auto& back = v.back();
+      for (auto fn : fn_list) {
+        back.dependence.emplace_back(MapSstElement::LinkTarget{fn, 0});
+      }
+      back.stable = stable;
+    };
+    push(a, "00", "10", true, {1});
+    push(b, "00", "05", false);
+    InternalKeyComparator icmp(BytewiseComparator());
+    auto c = PartitionRangeWithDepend(a, b, icmp, PartitionType::kDelete);
+    printf("");
+  }
+};
+
+static PartitionRangeTest init_test;
+#endif
 
 }  // namespace rocksdb
