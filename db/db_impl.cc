@@ -2762,19 +2762,13 @@ Status DBImpl::DeleteFilesInRanges(ColumnFamilyHandle* column_family,
         if (vstorage->LevelFiles(i).empty()) {
           continue;
         }
-        bool unroll_delete_range =
-            i != input_version->storage_info()->num_non_empty_levels() - 1 &&
-            mutable_cf_options.enable_lazy_compaction &&
-            cfd->ioptions()->compaction_style ==
-                CompactionStyle::kCompactionStyleLevel;
         if (mutable_cf_options.enable_lazy_compaction &&
             !level_being_compacted(i)) {
           status = map_builder.Build(
               {CompactionInputFiles{i, vstorage->LevelFiles(i)}}, deleted_range,
-              {}, unroll_delete_range, i,
-              vstorage->LevelFiles(i)[0]->fd.GetPathId(), cfd, input_version,
-              &edit, nullptr /* file_meta */, nullptr /* porp */,
-              &deleted_files);
+              {}, i /* level */, vstorage->LevelFiles(i)[0]->fd.GetPathId(),
+              cfd, input_version, &edit, nullptr /* file_meta */,
+              nullptr /* porp */, &deleted_files);
           if (!status.ok()) {
             break;
           }
@@ -2783,11 +2777,10 @@ Status DBImpl::DeleteFilesInRanges(ColumnFamilyHandle* column_family,
             if (auto_release.file_marked.count(f) == 0) {
               continue;
             }
-            status = map_builder.Build({CompactionInputFiles{i, {f}}},
-                                       deleted_range, {}, unroll_delete_range,
-                                       i, f->fd.GetPathId(), cfd, input_version,
-                                       &edit, nullptr /* file_meta */,
-                                       nullptr /* porp */, &deleted_files);
+            status = map_builder.Build(
+                {CompactionInputFiles{i, {f}}}, deleted_range, {},
+                i /* level */, f->fd.GetPathId(), cfd, input_version, &edit,
+                nullptr /* file_meta */, nullptr /* porp */, &deleted_files);
             if (!status.ok()) {
               break;
             }

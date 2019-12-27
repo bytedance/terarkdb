@@ -10,9 +10,11 @@
 #pragma once
 
 #include <stdint.h>
+
 #include <string>
 #include <utility>
 #include <vector>
+
 #include "db/dbformat.h"
 #include "db/table_properties_collector.h"
 #include "options/cf_options.h"
@@ -81,7 +83,7 @@ struct TableBuilderOptions {
       CompressionType _compression_type,
       const CompressionOptions& _compression_opts,
       const std::string* _compression_dict, bool _skip_filters,
-      bool _ignore_key_type, const std::string& _column_family_name, int _level,
+      const std::string& _column_family_name, int _level,
       double _compaction_load, uint64_t _creation_time = 0,
       int64_t _oldest_key_time = 0, SstPurpose _sst_purpose = kEssenceSst)
       : ioptions(_ioptions),
@@ -92,7 +94,6 @@ struct TableBuilderOptions {
         compression_opts(_compression_opts),
         compression_dict(_compression_dict),
         skip_filters(_skip_filters),
-        ignore_key_type(_ignore_key_type),
         column_family_name(_column_family_name),
         level(_level),
         compaction_load(_compaction_load),
@@ -110,7 +111,6 @@ struct TableBuilderOptions {
   const std::string* compression_dict;
   bool skip_filters;  // only used by BlockBasedTableBuilder
   // Ignore key type, force store all keys, no tombstones
-  bool ignore_key_type;
   const std::string& column_family_name;
   int level;  // what level this table/file is on, -1 for "not set, don't know"
   const double compaction_load;
@@ -137,6 +137,11 @@ class TableBuilder {
   // REQUIRES: key is after any previously added key according to comparator.
   // REQUIRES: Finish(), Abandon() have not been called
   virtual Status Add(const Slice& key, const LazyBuffer& value) = 0;
+
+  virtual Status AddTombstone(const Slice& /*key*/,
+                              const LazyBuffer& /*value*/) {
+    return Status::NotSupported();
+  }
 
   // Finish building the table.
   // REQUIRES: Finish(), Abandon() have not been called

@@ -303,9 +303,8 @@ Status ReadProperties(const Slice& handle_value, RandomAccessFileReader* file,
     }
     val.clear();
     auto error_msg =
-        "Detect malformed value in properties meta-block:"
-        "\tkey: " +
-        key + "\tval: " + raw_val->ToString();
+        "Detect malformed value in properties meta-block:\tkey: " + key +
+        "\tval: " + raw_val->ToString();
     ROCKS_LOG_ERROR(ioptions.info_log, "%s", error_msg.c_str());
   };
 
@@ -327,9 +326,8 @@ Status ReadProperties(const Slice& handle_value, RandomAccessFileReader* file,
 
     auto log_error = [&] {
       auto error_msg =
-          "Detect malformed value in properties meta-block:"
-          "\tkey: " +
-          key + "\tval: " + raw_val.ToString();
+          "Detect malformed value in properties meta-block:\tkey: " + key +
+          "\tval: " + raw_val.ToString();
       ROCKS_LOG_ERROR(ioptions.info_log, "%s", error_msg.c_str());
     };
 

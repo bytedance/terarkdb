@@ -65,6 +65,7 @@
 #endif
 
 #include <inttypes.h>
+
 #include "db/builder.h"
 #include "db/db_impl.h"
 #include "db/dbformat.h"
@@ -264,7 +265,7 @@ class Repairer {
     std::vector<std::string> to_search_paths;
 
     for (size_t path_id = 0; path_id < db_options_.db_paths.size(); path_id++) {
-        to_search_paths.push_back(db_options_.db_paths[path_id].path);
+      to_search_paths.push_back(db_options_.db_paths[path_id].path);
     }
 
     // search wal_dir if user uses a customize wal_dir
@@ -320,7 +321,8 @@ class Repairer {
 
   void ConvertLogFilesToTables() {
     for (size_t i = 0; i < logs_.size(); i++) {
-      // we should use LogFileName(wal_dir, logs_[i]) here. user might uses wal_dir option.
+      // we should use LogFileName(wal_dir, logs_[i]) here. user might uses
+      // wal_dir option.
       std::string logname = LogFileName(db_options_.wal_dir, logs_[i]);
       Status status = ConvertLogToTable(logs_[i]);
       if (!status.ok()) {
@@ -383,8 +385,8 @@ class Repairer {
     int counter = 0;
     while (reader.ReadRecord(&record, &scratch)) {
       if (record.size() < WriteBatchInternal::kHeader) {
-        reporter.Corruption(
-            record.size(), Status::Corruption("log record too small"));
+        reporter.Corruption(record.size(),
+                            Status::Corruption("log record too small"));
         continue;
       }
       WriteBatchInternal::SetContents(&batch, record);
@@ -432,10 +434,9 @@ class Repairer {
       };
       status = BuildTable(
           dbname_, env_, *cfd->ioptions(), *cfd->GetLatestMutableCFOptions(),
-          env_options_, table_cache_,
-          c_style_callback(get_arena_input_iter), &get_arena_input_iter,
-          c_style_callback(get_range_del_iters), &get_range_del_iters,
-          &meta, cfd->internal_comparator(),
+          env_options_, table_cache_, c_style_callback(get_arena_input_iter),
+          &get_arena_input_iter, c_style_callback(get_range_del_iters),
+          &get_range_del_iters, &meta, cfd->internal_comparator(),
           cfd->int_tbl_prop_collector_factories(), cfd->GetID(), cfd->GetName(),
           {}, kMaxSequenceNumber, snapshot_checker, kNoCompression,
           CompressionOptions(), false, nullptr /* internal_stats */,
@@ -460,7 +461,7 @@ class Repairer {
 
   void ExtractMetaData() {
     DependenceMap dependence_map;
-    std::map<uint64_t, TableInfo*> mediate_sst; // map or link sst
+    std::map<uint64_t, TableInfo*> mediate_sst;  // map or link sst
     // make sure tables_ enouth, so we can hold ptr of elements
     tables_.reserve(table_fds_.size());
     for (size_t i = 0; i < table_fds_.size(); i++) {
@@ -479,7 +480,7 @@ class Repairer {
       } else {
         tables_.push_back(t);
         dependence_map.emplace(t.meta.fd.GetNumber(), &tables_.back().meta);
-        if (t.meta.prop.purpose != 0) {
+        if (t.meta.prop.is_map_sst()) {
           mediate_sst.emplace(t.meta.fd.GetNumber(), &tables_.back());
         }
       }
@@ -487,14 +488,16 @@ class Repairer {
     // recover map/link sst meta data
     while (!mediate_sst.empty()) {
       size_t mediate_sst_count = mediate_sst.size();
-      for (auto it = mediate_sst.begin(); it != mediate_sst.end(); ) {
+      for (auto it = mediate_sst.begin(); it != mediate_sst.end();) {
         auto& t = *it->second;
         auto cfd =
             vset_.GetColumnFamilySet()->GetColumnFamily(t.column_family_id);
         InternalKey smallest, largest;
         SequenceNumber min_sequence = kMaxSequenceNumber, max_sequence = 0;
         enum {
-          kOK, kError, kRetry,
+          kOK,
+          kError,
+          kRetry,
         } result = kOK;
         for (auto& dependence : t.meta.prop.dependence) {
           auto find = dependence_map.find(dependence.file_number);
@@ -691,7 +694,7 @@ class Repairer {
 
       std::unordered_set<uint64_t> dependence_set;
       for (const auto* table : cf_id_and_tables.second) {
-        if (table->meta.prop.purpose != 0) {
+        if (table->meta.prop.is_map_sst()) {
           for (auto& dependence : table->meta.prop.dependence) {
             dependence_set.emplace(dependence.file_number);
           }
@@ -763,13 +766,11 @@ Status GetDefaultCFOptions(
 }  // anonymous namespace
 
 Status RepairDB(const std::string& dbname, const DBOptions& db_options,
-                const std::vector<ColumnFamilyDescriptor>& column_families
-                ) {
+                const std::vector<ColumnFamilyDescriptor>& column_families) {
   ColumnFamilyOptions default_cf_opts;
   Status status = GetDefaultCFOptions(column_families, &default_cf_opts);
   if (status.ok()) {
-    Repairer repairer(dbname, db_options, column_families,
-                      default_cf_opts,
+    Repairer repairer(dbname, db_options, column_families, default_cf_opts,
                       ColumnFamilyOptions() /* unknown_cf_opts */,
                       false /* create_unknown_cfs */);
     status = repairer.Run();
@@ -783,8 +784,7 @@ Status RepairDB(const std::string& dbname, const DBOptions& db_options,
   ColumnFamilyOptions default_cf_opts;
   Status status = GetDefaultCFOptions(column_families, &default_cf_opts);
   if (status.ok()) {
-    Repairer repairer(dbname, db_options,
-                      column_families, default_cf_opts,
+    Repairer repairer(dbname, db_options, column_families, default_cf_opts,
                       unknown_cf_opts, true /* create_unknown_cfs */);
     status = repairer.Run();
   }
@@ -794,8 +794,7 @@ Status RepairDB(const std::string& dbname, const DBOptions& db_options,
 Status RepairDB(const std::string& dbname, const Options& options) {
   DBOptions db_options(options);
   ColumnFamilyOptions cf_options(options);
-  Repairer repairer(dbname, db_options,
-                    {}, cf_options /* default_cf_opts */,
+  Repairer repairer(dbname, db_options, {}, cf_options /* default_cf_opts */,
                     cf_options /* unknown_cf_opts */,
                     true /* create_unknown_cfs */);
   return repairer.Run();

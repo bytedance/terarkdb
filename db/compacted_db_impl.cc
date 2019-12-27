@@ -136,7 +136,7 @@ Status CompactedDBImpl::Init(const Options& options) {
     if (vstorage->num_non_empty_levels() > 1) {
       return Status::NotSupported("Both L0 and other level contain files");
     }
-    if (l0.files[0].file_metadata->prop.purpose != kEssenceSst) {
+    if (l0.files[0].file_metadata->prop.is_map_sst()) {
       return Status::NotSupported("L0 has read amp");
     }
     files_ = l0;
@@ -151,7 +151,7 @@ Status CompactedDBImpl::Init(const Options& options) {
 
   int level = vstorage->num_non_empty_levels() - 1;
   for (auto f : vstorage->LevelFiles(level)) {
-    if (f->prop.purpose != kEssenceSst) {
+    if (f->prop.is_map_sst()) {
       return Status::NotSupported("Level has read amp");
     }
   }

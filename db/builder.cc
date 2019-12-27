@@ -50,17 +50,17 @@ TableBuilder* NewTableBuilder(
     WritableFileWriter* file, const CompressionType compression_type,
     const CompressionOptions& compression_opts, int level,
     double compaction_load, const std::string* compression_dict,
-    bool skip_filters, bool ignore_key_type, uint64_t creation_time,
-    uint64_t oldest_key_time, SstPurpose sst_purpose) {
+    bool skip_filters, uint64_t creation_time, uint64_t oldest_key_time,
+    SstPurpose sst_purpose) {
   assert((column_family_id ==
           TablePropertiesCollectorFactory::Context::kUnknownColumnFamily) ==
          column_family_name.empty());
   return ioptions.table_factory->NewTableBuilder(
-      TableBuilderOptions(
-          ioptions, moptions, internal_comparator,
-          int_tbl_prop_collector_factories, compression_type, compression_opts,
-          compression_dict, skip_filters, ignore_key_type, column_family_name,
-          level, compaction_load, creation_time, oldest_key_time, sst_purpose),
+      TableBuilderOptions(ioptions, moptions, internal_comparator,
+                          int_tbl_prop_collector_factories, compression_type,
+                          compression_opts, compression_dict, skip_filters,
+                          column_family_name, level, compaction_load,
+                          creation_time, oldest_key_time, sst_purpose),
       column_family_id, file);
 }
 
@@ -138,8 +138,7 @@ Status BuildTable(
           int_tbl_prop_collector_factories, column_family_id,
           column_family_name, file_writer.get(), compression, compression_opts,
           level, compaction_load, nullptr /* compression_dict */,
-          false /* skip_filters */, false /* ignore_key_type */, creation_time,
-          oldest_key_time);
+          false /* skip_filters */, creation_time, oldest_key_time);
     }
 
     MergeHelper merge(env, internal_comparator.user_comparator(),
@@ -214,7 +213,7 @@ Status BuildTable(
          range_del_it->Next()) {
       auto tombstone = range_del_it->Tombstone();
       auto kv = tombstone.Serialize();
-      s = builder->Add(kv.first.Encode(), LazyBuffer(kv.second));
+      s = builder->AddTombstone(kv.first.Encode(), LazyBuffer(kv.second));
       meta->UpdateBoundariesForRange(kv.first, tombstone.SerializeEndKey(),
                                      tombstone.seq_, internal_comparator);
     }
@@ -264,7 +263,7 @@ Status BuildTable(
     if (s.ok() && !empty) {
       // this sst has no depend ...
       DependenceMap empty_dependence_map;
-      assert(meta->prop.purpose == 0);
+      assert(!meta->prop.is_map_sst());
       // Verify that the table is usable
       // We set for_compaction to false and don't OptimizeForCompactionTableRead
       // here because this is a special case after we finish the table building

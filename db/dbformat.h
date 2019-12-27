@@ -8,10 +8,12 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #pragma once
-#include <numeric>
 #include <stdio.h>
+
+#include <numeric>
 #include <string>
 #include <utility>
+
 #include "monitoring/perf_context_imp.h"
 #include "rocksdb/comparator.h"
 #include "rocksdb/db.h"
@@ -20,6 +22,7 @@
 #include "rocksdb/slice_transform.h"
 #include "rocksdb/table.h"
 #include "rocksdb/types.h"
+#include "util/arena.h"
 #include "util/coding.h"
 #include "util/logging.h"
 
@@ -811,5 +814,9 @@ class SeparateHelper {
   virtual void TransToCombined(const Slice& user_key, uint64_t sequence,
                                LazyBuffer& value) const = 0;
 };
+
+extern Slice ArenaPinSlice(const Slice& slice, Arena* arena);
+extern Slice ArenaPinInternalKey(const Slice& user_key, SequenceNumber seq,
+                                 ValueType type, Arena* arena);
 
 }  // namespace rocksdb

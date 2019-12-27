@@ -560,8 +560,8 @@ void TestBoundary(InternalKey& ik1, std::string& v1, InternalKey& ik2,
                           &int_tbl_prop_collector_factories,
                           options.compression, CompressionOptions(),
                           nullptr /* compression_dict */,
-                          false /* skip_filters */, false /* ignore_key_type */,
-                          column_family_name, level_, 0 /* compaction_load */),
+                          false /* skip_filters */, column_family_name, level_,
+                          0 /* compaction_load */),
       TablePropertiesCollectorFactory::Context::kUnknownColumnFamily,
       file_writer.get()));
 

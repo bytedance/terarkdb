@@ -481,4 +481,11 @@ CompactionRangeDelAggregator::NewIterator(const Slice* lower_bound,
           kMaxSequenceNumber /* upper_bound */));
 }
 
+InternalIteratorBase<Slice>* NewTruncatedRangeDelMergingIter(
+    const InternalKeyComparator* icmp,
+    const std::vector<std::unique_ptr<TruncatedRangeDelIterator>>& children) {
+  return new TruncatedRangeDelMergingIter(icmp, nullptr, nullptr, false,
+                                          children);
+}
+
 }  // namespace rocksdb

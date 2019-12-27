@@ -177,7 +177,6 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(
       table_factory_(table_factory),
       ioptions_(tbo.ioptions),
       range_del_block_(1),
-      ignore_key_type_(tbo.ignore_key_type),
       prefixLen_(key_prefixLen),
       compaction_load_(0) {
   try {
@@ -416,125 +415,157 @@ Status TerarkZipTableBuilder::Add(const Slice& key,
   } else if (value_type == kTypeMerge) {
     ++properties_.num_merge_operands;
   }
-  if (IsValueType(value_type) || ignore_key_type_) {
-    assert(key.size() >= 8);
-    fstring userKey(key.data(), key.size() - 8);
-    assert(userKey.size() >= prefixLen_);
-    auto ShouldStartBuild = [&] {
-      size_t indexSize = UintVecMin0::compute_mem_size_by_max_val(
-          r22_->stat.sumKeyLen, r22_->stat.keyCount);
-      size_t indexBuildMemSize = r22_->stat.sumKeyLen + indexSize;
-      if (terark_unlikely(indexBuildMemSize > singleIndexMaxSize_)) {
-        return true;
-      }
-      return !MergeRangeStatus(
-          r22_.get(), r11_.get(), r21_.get(),
-          freq_hist_o1::estimate_size_unfinish(freq_[2]->k, freq_[1]->k));
-    };
-    size_t samePrefix = userKey.commonPrefixLen(prevUserKey_);
-    if (!r00_ || (prevUserKey_ != userKey &&
-                  keyDataSize_ > table_options_.singleIndexMinSize)) {
-      if (!r00_) {
-        assert(prefixBuildInfos_.empty());
-        t0 = g_pf.now();
-        assert(!r22_ && !r11_ && !r21_ && !r10_ && !r20_);
-        freq_[0].reset(new FreqPair);
-        freq_[1].reset(new FreqPair);
-        freq_[2].reset(new FreqPair);
-        r00_.reset(new RangeStatus(userKey, prefixLen_, seqType));  // skip
-        r10_.reset(new RangeStatus(userKey, prefixLen_, seqType));  // skip
-        r20_.reset(new RangeStatus(userKey, prefixLen_, seqType));  // skip
-      } else if (!r11_) {
-        assert(prefixBuildInfos_.empty());
-        assert(!r22_ && !r21_);
-        kv_freq_.add_hist(freq_[0]->k);
-        kv_freq_.add_hist(freq_[0]->v);
-        freq_[1].swap(freq_[0]);
-        r11_.swap(r00_);                                            // add last
-        r00_.reset(new RangeStatus(userKey, prefixLen_, seqType));  // skip
-        AddPrevUserKey(samePrefix, {r10_.get(), r20_.get()}, {r11_.get()});
-      } else if (!r22_) {
-        kv_freq_.add_hist(freq_[0]->k);
-        kv_freq_.add_hist(freq_[0]->v);
-        freq_[2].swap(freq_[1]);
-        freq_[1].swap(freq_[0]);
-        assert(prefixBuildInfos_.empty());
-        r22_.swap(r11_);                                            // ignore
-        r11_.reset(new RangeStatus(*r00_));                         // add last
-        r21_.swap(r10_);                                            // add last
-        r10_.swap(r00_);                                            // add prev
-        r00_.reset(new RangeStatus(userKey, prefixLen_, seqType));  // skip
-        AddPrevUserKey(samePrefix, {r10_.get(), r20_.get()},
-                       {r11_.get(), r21_.get()});
+  assert(key.size() >= 8);
+  fstring userKey(key.data(), key.size() - 8);
+  assert(userKey.size() >= prefixLen_);
+  auto ShouldStartBuild = [&] {
+    size_t indexSize = UintVecMin0::compute_mem_size_by_max_val(
+        r22_->stat.sumKeyLen, r22_->stat.keyCount);
+    size_t indexBuildMemSize = r22_->stat.sumKeyLen + indexSize;
+    if (terark_unlikely(indexBuildMemSize > singleIndexMaxSize_)) {
+      return true;
+    }
+    return !MergeRangeStatus(
+        r22_.get(), r11_.get(), r21_.get(),
+        freq_hist_o1::estimate_size_unfinish(freq_[2]->k, freq_[1]->k));
+  };
+  size_t samePrefix = userKey.commonPrefixLen(prevUserKey_);
+  if (!r00_ || (prevUserKey_ != userKey &&
+                keyDataSize_ > table_options_.singleIndexMinSize)) {
+    if (!r00_) {
+      assert(prefixBuildInfos_.empty());
+      t0 = g_pf.now();
+      assert(!r22_ && !r11_ && !r21_ && !r10_ && !r20_);
+      freq_[0].reset(new FreqPair);
+      freq_[1].reset(new FreqPair);
+      freq_[2].reset(new FreqPair);
+      r00_.reset(new RangeStatus(userKey, prefixLen_, seqType));  // skip
+      r10_.reset(new RangeStatus(userKey, prefixLen_, seqType));  // skip
+      r20_.reset(new RangeStatus(userKey, prefixLen_, seqType));  // skip
+    } else if (!r11_) {
+      assert(prefixBuildInfos_.empty());
+      assert(!r22_ && !r21_);
+      kv_freq_.add_hist(freq_[0]->k);
+      kv_freq_.add_hist(freq_[0]->v);
+      freq_[1].swap(freq_[0]);
+      r11_.swap(r00_);                                            // add last
+      r00_.reset(new RangeStatus(userKey, prefixLen_, seqType));  // skip
+      AddPrevUserKey(samePrefix, {r10_.get(), r20_.get()}, {r11_.get()});
+    } else if (!r22_) {
+      kv_freq_.add_hist(freq_[0]->k);
+      kv_freq_.add_hist(freq_[0]->v);
+      freq_[2].swap(freq_[1]);
+      freq_[1].swap(freq_[0]);
+      assert(prefixBuildInfos_.empty());
+      r22_.swap(r11_);                                            // ignore
+      r11_.reset(new RangeStatus(*r00_));                         // add last
+      r21_.swap(r10_);                                            // add last
+      r10_.swap(r00_);                                            // add prev
+      r00_.reset(new RangeStatus(userKey, prefixLen_, seqType));  // skip
+      AddPrevUserKey(samePrefix, {r10_.get(), r20_.get()},
+                     {r11_.get(), r21_.get()});
+    } else {
+      kv_freq_.add_hist(freq_[0]->k);
+      kv_freq_.add_hist(freq_[0]->v);
+      if (ShouldStartBuild()) {
+        auto kvs =
+            new KeyValueStatus(std::move(*r22_), std::move(freq_[2]->v));
+        prefixBuildInfos_.emplace_back(kvs);
+        BuildIndex(*kvs, freq_hist_o1::estimate_size_unfinish(freq_[2]->k));
+        BuildStore(*kvs, nullptr, BuildStoreInit);
+        r22_.swap(r11_);  // ignore
+        *r21_ = *r10_;    // add last
+        r20_.swap(r10_);  // add prev
       } else {
-        kv_freq_.add_hist(freq_[0]->k);
-        kv_freq_.add_hist(freq_[0]->v);
-        if (ShouldStartBuild()) {
-          auto kvs =
-              new KeyValueStatus(std::move(*r22_), std::move(freq_[2]->v));
-          prefixBuildInfos_.emplace_back(kvs);
-          BuildIndex(*kvs, freq_hist_o1::estimate_size_unfinish(freq_[2]->k));
-          BuildStore(*kvs, nullptr, BuildStoreInit);
-          r22_.swap(r11_);  // ignore
-          *r21_ = *r10_;    // add last
-          r20_.swap(r10_);  // add prev
-        } else {
-          freq_[1]->k.add_hist(freq_[2]->k);
-          freq_[1]->v.add_hist(freq_[2]->v);
-          r22_.swap(r21_);  // ignore
-          *r21_ = *r20_;    // add last
-        }
-        freq_[2].swap(freq_[1]);
-        freq_[1].swap(freq_[0]);
-        freq_[0]->k.clear();
-        freq_[0]->v.reset1();
-        *r11_ = *r00_;                                              // add last
-        r10_.swap(r00_);                                            // add prev
-        r00_.reset(new RangeStatus(userKey, prefixLen_, seqType));  // skip
-        AddPrevUserKey(samePrefix, {r10_.get(), r20_.get()},
-                       {r11_.get(), r21_.get()});
+        freq_[1]->k.add_hist(freq_[2]->k);
+        freq_[1]->v.add_hist(freq_[2]->v);
+        r22_.swap(r21_);  // ignore
+        *r21_ = *r20_;    // add last
       }
-      if (filePair_) {
-        filePair_->key.complete_write();
-        filePair_->value.complete_write();
-      }
-      filePair_ = NewFilePair();
-      r00_->fileVec.push_back(filePair_);
-      r10_->fileVec.push_back(filePair_);
-      r20_->fileVec.push_back(filePair_);
-      prevSamePrefix_ = 0;
-      keyDataSize_ = 0;
-      valueDataSize_ = 0;
-      prevUserKey_.assign(userKey);
-      keyDataSize_ += userKey.size();
-    } else if (prevUserKey_ != userKey) {
-      assert((prevUserKey_ < userKey) ^ isReverseBytewiseOrder_);
-      AddPrevUserKey(samePrefix, {r00_.get(), r10_.get(), r20_.get()}, {});
-      prevUserKey_.assign(userKey);
-      keyDataSize_ += userKey.size();
+      freq_[2].swap(freq_[1]);
+      freq_[1].swap(freq_[0]);
+      freq_[0]->k.clear();
+      freq_[0]->v.reset1();
+      *r11_ = *r00_;                                              // add last
+      r10_.swap(r00_);                                            // add prev
+      r00_.reset(new RangeStatus(userKey, prefixLen_, seqType));  // skip
+      AddPrevUserKey(samePrefix, {r10_.get(), r20_.get()},
+                     {r11_.get(), r21_.get()});
     }
-    AddValueBit();
-    valueDataSize_ += value.size() + 8;
-    valueBuf_.emplace_back((char*)&seqType, 8);
-    valueBuf_.back_append(value.data(), value.size());
-    if (!value.empty() && randomGenerator_() < sampleUpperBound_) {
-      tmpSampleFile_.writer << fstringOf(value);
-      sampleLenSum_ += value.size();
+    if (filePair_) {
+      filePair_->key.complete_write();
+      filePair_->value.complete_write();
     }
-    if (filePair_->isFullValue && second_pass_iter_ &&
-        table_options_.debugLevel != 2 && valueDataSize_ > (1ull << 20) &&
-        valueDataSize_ > keyDataSize_ * 2) {
-      filePair_->isFullValue = false;
-    }
-    assert(filePair_->value.fp);
-    filePair_->value.writer
-        << seqType << fstringOf(filePair_->isFullValue ? value : Slice());
-  } else if (value_type == kTypeRangeDeletion) {
-    range_del_block_.Add(key, value);
-    ++properties_.num_range_deletions;
-  } else {
-    assert(false);
+    filePair_ = NewFilePair();
+    r00_->fileVec.push_back(filePair_);
+    r10_->fileVec.push_back(filePair_);
+    r20_->fileVec.push_back(filePair_);
+    prevSamePrefix_ = 0;
+    keyDataSize_ = 0;
+    valueDataSize_ = 0;
+    prevUserKey_.assign(userKey);
+    keyDataSize_ += userKey.size();
+  } else if (prevUserKey_ != userKey) {
+    assert((prevUserKey_ < userKey) ^ isReverseBytewiseOrder_);
+    AddPrevUserKey(samePrefix, {r00_.get(), r10_.get(), r20_.get()}, {});
+    prevUserKey_.assign(userKey);
+    keyDataSize_ += userKey.size();
   }
+  AddValueBit();
+  valueDataSize_ += value.size() + 8;
+  valueBuf_.emplace_back((char*)&seqType, 8);
+  valueBuf_.back_append(value.data(), value.size());
+  if (!value.empty() && randomGenerator_() < sampleUpperBound_) {
+    tmpSampleFile_.writer << fstringOf(value);
+    sampleLenSum_ += value.size();
+  }
+  if (filePair_->isFullValue && second_pass_iter_ &&
+      table_options_.debugLevel != 2 && valueDataSize_ > (1ull << 20) &&
+      valueDataSize_ > keyDataSize_ * 2) {
+    filePair_->isFullValue = false;
+  }
+  assert(filePair_->value.fp);
+  filePair_->value.writer
+      << seqType << fstringOf(filePair_->isFullValue ? value : Slice());
+
+  size_t freq_size = properties_.raw_key_size + properties_.raw_value_size;
+  if (freq_size >= next_freq_size_) {
+    auto kv_freq_copy =
+        std::unique_ptr<freq_hist_o1>(new freq_hist_o1(kv_freq_));
+    kv_freq_copy->add_hist(freq_[0]->k);
+    kv_freq_copy->add_hist(freq_[0]->v);
+    estimateOffset_ = uint64_t(
+        freq_hist_o1::estimate_size_unfinish(*kv_freq_copy) * estimateRatio_);
+    next_freq_size_ = freq_size + (1ULL << 20);
+  }
+  NotifyCollectTableCollectorsOnAdd(key, value, estimateOffset_, collectors_,
+                                    ioptions_.info_log);
+  return Status::OK();
+} catch (const std::exception& ex) {
+  WARN_EXCEPT(ioptions_.info_log, "%s: Exception: %s", BOOST_CURRENT_FUNCTION,
+              ex.what());
+  return Status::Corruption(ex.what());
+}
+
+Status TerarkZipTableBuilder::AddTombstone(const Slice& key,
+                                           const LazyBuffer& lazy_value) try {
+  auto s = lazy_value.fetch();
+  if (!s.ok()) {
+    return s;
+  }
+  const Slice& value = lazy_value.slice();
+  if (table_options_.debugLevel == 3) {
+    rocksdb::ParsedInternalKey ikey;
+    rocksdb::ParseInternalKey(key, &ikey);
+    fprintf(tmpDumpFile_, "DEBUG: 1st pass => %s / %s \n",
+            ikey.DebugString(true).c_str(), value.ToString(true).c_str());
+  }
+  properties_.raw_key_size += key.size();
+  properties_.raw_value_size += value.size();
+
+  assert(GetInternalKeyType(key) == kTypeRangeDeletion);
+  range_del_block_.Add(key, value);
+  ++properties_.num_range_deletions;
   size_t freq_size = properties_.raw_key_size + properties_.raw_value_size;
   if (freq_size >= next_freq_size_) {
     auto kv_freq_copy =

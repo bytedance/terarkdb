@@ -87,7 +87,7 @@ struct FileSampledStats {
 struct TablePropertyCache {
   enum {
     kHasRangeDeletions = 1ULL << 0,
-    kHasSnapshots =      1ULL << 1,
+    kHasSnapshots      = 1ULL << 1,
   };
   uint64_t num_entries = 0;                 // the number of entries.
   uint64_t num_deletions = 0;               // the number of deletion entries.
@@ -97,6 +97,10 @@ struct TablePropertyCache {
   float read_amp = 1;                       // expt read amp from sst
   std::vector<Dependence> dependence;       // make these sst hidden
   std::vector<uint64_t> inheritance_chain;  // inheritance chain
+
+  bool is_map_sst() const { return purpose == kMapSst; }
+  bool has_range_deletions() const { return (flags & kHasRangeDeletions) != 0; }
+  bool has_snapshots() const { return (flags & kHasSnapshots) != 0; }
 };
 
 struct FileMetaData {

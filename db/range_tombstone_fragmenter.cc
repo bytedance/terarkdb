@@ -11,6 +11,7 @@
 
 #include <inttypes.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "util/autovector.h"
 #include "util/kv_map.h"
@@ -166,16 +167,12 @@ void FragmentedRangeTombstoneList::FragmentTombstones(
   for (unfragmented_tombstones->SeekToFirst(); unfragmented_tombstones->Valid();
        unfragmented_tombstones->Next()) {
     const Slice& ikey = unfragmented_tombstones->key();
-    Slice tombstone_start_key = ExtractUserKey(ikey);
-    SequenceNumber tombstone_seq = GetInternalKeySeqno(ikey);
-    pinned_slices_.emplace_back(tombstone_start_key.data(),
-                                tombstone_start_key.size());
-    tombstone_start_key = pinned_slices_.back();
 
-    Slice tombstone_end_key = unfragmented_tombstones->value();
-    pinned_slices_.emplace_back(tombstone_end_key.data(),
-                                tombstone_end_key.size());
-    tombstone_end_key = pinned_slices_.back();
+    Slice tombstone_start_key = ArenaPinSlice(ExtractUserKey(ikey), &arena_);
+    Slice tombstone_end_key =
+        ArenaPinSlice(unfragmented_tombstones->value(), &arena_);
+    SequenceNumber tombstone_seq = GetInternalKeySeqno(ikey);
+
     if (!cur_end_keys.empty() && icmp.user_comparator()->Compare(
                                      cur_start_key, tombstone_start_key) != 0) {
       // The start key has changed. Flush all tombstones that start before
