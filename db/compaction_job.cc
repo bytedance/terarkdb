@@ -822,8 +822,15 @@ Status CompactionJob::Run() {
     }
     if (s.ok()) {
       status = Status::OK();
-    } else if (!status.ok()) {
-      status = s;
+    } else {
+      ROCKS_LOG_ERROR(
+        db_options_.info_log,
+        "[%s] [JOB %d] remote sub_compact failed with status = %s",
+        sub_compact.compaction->column_family_data()->GetName().c_str(),
+        job_id_, s.ToString().c_str());
+      LogFlush(db_options_.info_log);
+      if (!status.ok()) {
+        status = s;
     }
   }
   if (status.ok()) {

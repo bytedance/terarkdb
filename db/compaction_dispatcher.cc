@@ -205,8 +205,15 @@ RemoteCompactionDispatcher::StartCompaction(
     CompactionWorkerResult operator()() {
       CompactionWorkerResult result;
       std::string encoded_result = future.get();
-      ajson::load_from_buff(result, &encoded_result[0],
-                            encoded_result.size());
+      try {
+        ajson::load_from_buff(result, &encoded_result[0],
+                              encoded_result.size());
+      }
+      catch (const std::exception& ex) {
+        result.status = Status::Corruption(
+          terark::fstring("failed with exception.what = ") + ex.what(),
+          terark::fstring("encoded_result = ") + encoded_result);
+      }
       return result;
     }
   };
