@@ -74,7 +74,8 @@ class LazyCreateIterator : public Snapshot {
                      const InternalKeyComparator& icomparator,
                      RangeDelAggregator* range_del_agg,
                      const SliceTransform* prefix_extractor,
-                     bool for_compaction, bool skip_filters, int level)
+                     bool for_compaction, bool skip_filters,
+                     bool ignore_range_deletions, int level)
       : table_cache_(table_cache),
         options_(options),
         snapshot_(0),
@@ -91,6 +92,7 @@ class LazyCreateIterator : public Snapshot {
     }
     options_.iterate_lower_bound = nullptr;
     options_.iterate_upper_bound = nullptr;
+    options_.ignore_range_deletions = ignore_range_deletions;
   }
   ~LazyCreateIterator() = default;
 
@@ -242,7 +244,7 @@ InternalIterator* TableCache::NewIterator(
   }
   size_t readahead = 0;
   bool record_stats = !for_compaction;
-  if (file_meta.prop.purpose == kMapSst) {
+  if (file_meta.prop.is_map_sst()) {
     record_stats = false;
   } else {
     // MapSST don't handle these
@@ -288,7 +290,7 @@ InternalIterator* TableCache::NewIterator(
   }
   InternalIterator* result = nullptr;
   if (s.ok()) {
-    if (file_meta.prop.purpose != kMapSst) {
+    if (!file_meta.prop.is_map_sst()) {
       if (options.table_filter &&
           !options.table_filter(*table_reader->GetTableProperties())) {
         result = NewEmptyInternalIterator<LazyBuffer>(arena);
@@ -304,17 +306,21 @@ InternalIterator* TableCache::NewIterator(
           table_reader->NewIterator(map_options, prefix_extractor, arena,
                                     skip_filters, false /* for_compaction */);
       if (!dependence_map.empty()) {
+        bool ignore_range_deletions = options.ignore_range_deletions ||
+                                      file_meta.prop.has_range_deletions();
         LazyCreateIterator* lazy_create_iter;
         if (arena != nullptr) {
           void* buffer = arena->AllocateAligned(sizeof(LazyCreateIterator));
           lazy_create_iter = new (buffer) LazyCreateIterator(
               this, options, env_options, icomparator, range_del_agg,
-              prefix_extractor, for_compaction, skip_filters, level);
+              prefix_extractor, for_compaction, skip_filters,
+              ignore_range_deletions, level);
 
         } else {
           lazy_create_iter = new LazyCreateIterator(
               this, options, env_options, icomparator, range_del_agg,
-              prefix_extractor, for_compaction, skip_filters, level);
+              prefix_extractor, for_compaction, skip_filters,
+              ignore_range_deletions, level);
         }
         auto map_sst_iter = NewMapSstIterator(
             &file_meta, result, dependence_map, icomparator, lazy_create_iter,
@@ -353,8 +359,7 @@ InternalIterator* TableCache::NewIterator(
       *table_reader_ptr = table_reader;
     }
   }
-  if (s.ok() && range_del_agg != nullptr && !options.ignore_range_deletions &&
-      file_meta.prop.purpose != kMapSst) {
+  if (s.ok() && range_del_agg != nullptr && !options.ignore_range_deletions) {
     if (range_del_agg->AddFile(fd.GetNumber())) {
       std::unique_ptr<FragmentedRangeTombstoneIterator> range_del_iter(
           static_cast<FragmentedRangeTombstoneIterator*>(
@@ -401,16 +406,18 @@ Status TableCache::Get(const ReadOptions& options,
     }
   }
   if (s.ok()) {
-    if (file_meta.prop.purpose != kMapSst) {
-      t->UpdateMaxCoveringTombstoneSeq(
-          options, ExtractUserKey(k),
-          get_context->max_covering_tombstone_seq());
+    t->UpdateMaxCoveringTombstoneSeq(options, ExtractUserKey(k),
+                                     get_context->max_covering_tombstone_seq());
+    if (!file_meta.prop.is_map_sst()) {
       s = t->Get(options, k, get_context, prefix_extractor, skip_filters);
     } else if (dependence_map.empty()) {
       s = Status::Corruption(
           "TableCache::Get: Composite sst depend files missing");
     } else {
       // Forward query to target sst
+      ReadOptions forward_options = options;
+      forward_options.ignore_range_deletions |=
+          file_meta.prop.has_range_deletions();
       auto get_from_map = [&](const Slice& largest_key,
                               LazyBuffer&& map_value) {
         s = map_value.fetch();
@@ -495,9 +502,9 @@ Status TableCache::Get(const ReadOptions& options,
             return false;
           }
           assert(find->second->fd.GetNumber() == file_number);
-          s = Get(options, internal_comparator, *find->second, dependence_map,
-                  find_k, get_context, prefix_extractor, file_read_hist,
-                  skip_filters, level);
+          s = Get(forward_options, internal_comparator, *find->second,
+                  dependence_map, find_k, get_context, prefix_extractor,
+                  file_read_hist, skip_filters, level);
 
           if (!s.ok() || get_context->is_finished()) {
             // error or found, recovery min_seq_type_backup is unnecessary

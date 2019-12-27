@@ -758,11 +758,8 @@ void CompactionIterator::PrepareOutput() {
                                                      earliest_snapshot_))) &&
              ikey_.type != kTypeMerge) {
     assert(ikey_.type != kTypeDeletion && ikey_.type != kTypeSingleDeletion);
-    if (0) {
-      // disable temporary
-      ikey_.sequence = 0;
-      current_key_.UpdateInternalKey(0, ikey_.type);
-    }
+    ikey_.sequence = 0;
+    current_key_.UpdateInternalKey(0, ikey_.type);
   }
 }
 

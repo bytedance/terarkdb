@@ -23,10 +23,16 @@ struct FileMetaData;
 struct FileMetaDataBoundBuilder;
 class InstrumentedMutex;
 class InternalKeyComparator;
-class MapSstElementIterator;
 class TableCache;
 class VersionEdit;
 class VersionSet;
+
+class MapSstRangeIterator : public InternalIterator {
+ public:
+  virtual const std::unordered_map<uint64_t, uint64_t>& GetDependence()
+      const = 0;
+  virtual std::pair<size_t, double> GetSstReadAmp() const = 0;
+};
 
 struct MapBuilderOutput {
   int level;
@@ -47,34 +53,31 @@ class MapBuilder {
   MapBuilder& operator=(const MapBuilder& job) = delete;
 
   // All params are references or pointers
-  // deleted_range use internal keys
+  // deleted_range use user key
   // added_files is sorted
   // file_meta::fd::file_size == 0 if don't need create map files
   // file_meta , porp , deleted_files nullptr if ignore
   Status Build(const std::vector<CompactionInputFiles>& inputs,
                const std::vector<Range>& deleted_range,
                const std::vector<const FileMetaData*>& added_files,
-               bool unroll_delete_range, int output_level,
-               uint32_t output_path_id, ColumnFamilyData* cfd, Version* version,
-               VersionEdit* edit, FileMetaData* file_meta = nullptr,
+               int output_level, uint32_t output_path_id, ColumnFamilyData* cfd,
+               Version* version, VersionEdit* edit,
+               FileMetaData* file_meta = nullptr,
                std::unique_ptr<TableProperties>* porp = nullptr,
                std::set<FileMetaData*>* deleted_files = nullptr);
 
+  // All params are references or pointers
+  // push_range use user key
   Status Build(const std::vector<CompactionInputFiles>& inputs,
                const std::vector<Range>& push_range, int output_level,
                uint32_t output_path_id, ColumnFamilyData* cfd, Version* version,
                VersionEdit* edit,
                std::vector<MapBuilderOutput>* output = nullptr);
 
-  Status GetInputCoverage(const std::vector<CompactionInputFiles>& inputs,
-                          const Slice* lower_bound, const Slice* upper_bound,
-                          VersionStorageInfo* vstorage, ColumnFamilyData* cfd,
-                          const MutableCFOptions& mutable_cf_options,
-                          std::vector<RangeStorage>* coverage);
-
  private:
   Status WriteOutputFile(const FileMetaDataBoundBuilder& bound_builder,
-                         MapSstElementIterator* range_iter,
+                         MapSstRangeIterator* range_iter,
+                         InternalIterator* tombstone_iter,
                          uint32_t output_path_id, ColumnFamilyData* cfd,
                          const MutableCFOptions& mutable_cf_options,
                          FileMetaData* file_meta,

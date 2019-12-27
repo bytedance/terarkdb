@@ -496,7 +496,7 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
     }
     auto iterator = reader->NewIterator(
         ReadOptions(), mutable_cf_options.prefix_extractor.get(), arena);
-    if (file_metadata->prop.purpose == kMapSst && !depend_map.empty()) {
+    if (file_metadata->prop.is_map_sst() && !depend_map.empty()) {
       auto sst_iterator = NewMapSstIterator(
           file_metadata, iterator, depend_map, *icmp, c_style_new_iterator.arg,
           c_style_new_iterator.callback, arena);
@@ -705,7 +705,9 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
     TableBuilderOptions table_builder_options(
         immutable_cf_options, mutable_cf_options, *icmp,
         &int_tbl_prop_collector_factories.data, context.compression,
-        context.compression_opts, nullptr, true, false, context.cf_name, -1, 0);
+        context.compression_opts, nullptr /* compression_dict */,
+        true /* skip_filters */, context.cf_name, -1 /* level */,
+        0 /* compaction_load */);
     std::unique_ptr<WritableFile> sst_file;
     s = rep_->env->NewWritableFile(file_name, &sst_file, rep_->env_options);
     if (!s.ok()) {
@@ -727,7 +729,7 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
                                 const Slice* next_key) {
     auto writer = writer_ptr->get();
     auto builder = builder_ptr->get();
-    if (s.ok()) {
+    if (s.ok() && !range_del_agg.IsEmpty()) {
       Slice lower_bound_guard, upper_bound_guard;
       std::string smallest_user_key;
       const Slice *lower_bound, *upper_bound;
@@ -744,11 +746,9 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
       }
       if (next_key != nullptr) {
         upper_bound_guard = ExtractUserKey(*next_key);
-        if (end != nullptr && ucmp->Compare(upper_bound_guard, *end) >= 0) {
-          upper_bound = end;
-        } else {
-          upper_bound = &upper_bound_guard;
-        }
+        assert(end == nullptr || ucmp->Compare(upper_bound_guard, *end) < 0);
+        assert(meta->largest.size() == 0 ||
+               ucmp->Compare(meta->largest.user_key(), upper_bound_guard) != 0);
       } else {
         upper_bound = end;
       }
@@ -756,71 +756,65 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
       if (context.existing_snapshots.size() > 0) {
         earliest_snapshot = context.existing_snapshots[0];
       }
-      bool has_overlapping_endpoints;
-      if (upper_bound != nullptr && meta->largest.size() > 0) {
-        has_overlapping_endpoints =
-            ucmp->Compare(meta->largest.user_key(), *upper_bound) == 0;
-      } else {
-        has_overlapping_endpoints = false;
-      }
       assert(end == nullptr || upper_bound == nullptr ||
              ucmp->Compare(*upper_bound, *end) <= 0);
-      auto it = range_del_agg.NewIterator(lower_bound, upper_bound,
-                                          has_overlapping_endpoints);
-      if (lower_bound != nullptr) {
-        it->Seek(*lower_bound);
-      } else {
-        it->SeekToFirst();
-      }
-      for (; it->Valid(); it->Next()) {
+      InternalKey smallest_candidate;
+      InternalKey largest_candidate;
+      auto it = range_del_agg.NewIterator();
+      for (it->SeekToFirst(); it->Valid(); it->Next()) {
         auto tombstone = it->Tombstone();
-        if (upper_bound != nullptr) {
-          int cmp = ucmp->Compare(*upper_bound, tombstone.start_key_);
-          if ((has_overlapping_endpoints && cmp < 0) ||
-              (!has_overlapping_endpoints && cmp <= 0)) {
-            break;
-          }
+        if (lower_bound != nullptr &&
+            ucmp->Compare(tombstone.end_key_, *lower_bound) <= 0) {
+          continue;
         }
-
+        if (upper_bound != nullptr &&
+            ucmp->Compare(tombstone.start_key_, *upper_bound) >= 0) {
+          break;
+        }
         if (context.bottommost_level && tombstone.seq_ <= earliest_snapshot) {
+          continue;
+        }
+        if (lower_bound != nullptr &&
+            ucmp->Compare(tombstone.start_key_, *lower_bound) < 0) {
+          tombstone.start_key_ = *lower_bound;
+          smallest_candidate.Set(*lower_bound, tombstone.seq_,
+                                 kTypeRangeDeletion);
+        } else {
+          smallest_candidate.Set(tombstone.start_key_, tombstone.seq_,
+                                 kTypeRangeDeletion);
+        }
+        if (upper_bound != nullptr &&
+            ucmp->Compare(tombstone.end_key_, *upper_bound) > 0) {
+          tombstone.end_key_ = *upper_bound;
+          largest_candidate.Set(*upper_bound, kMaxSequenceNumber,
+                                kTypeRangeDeletion);
+        } else {
+          largest_candidate.Set(tombstone.end_key_, kMaxSequenceNumber,
+                                kTypeRangeDeletion);
+        }
+        assert(lower_bound == nullptr ||
+               ucmp->Compare(*lower_bound, tombstone.start_key_) <= 0);
+        assert(lower_bound == nullptr ||
+               ucmp->Compare(*lower_bound, tombstone.end_key_) < 0);
+        assert(upper_bound == nullptr ||
+               ucmp->Compare(*upper_bound, tombstone.start_key_) > 0);
+        assert(upper_bound == nullptr ||
+               ucmp->Compare(*upper_bound, tombstone.end_key_) >= 0);
+        if (ucmp->Compare(tombstone.start_key_, tombstone.end_key_) >= 0) {
           continue;
         }
 
         auto kv = tombstone.Serialize();
-        assert(lower_bound == nullptr ||
-               ucmp->Compare(*lower_bound, kv.second) < 0);
-        s = builder->Add(kv.first.Encode(), LazyBuffer(kv.second));
+        s = builder->AddTombstone(kv.first.Encode(), LazyBuffer(kv.second));
         if (!s.ok()) {
           break;
         }
-        InternalKey smallest_candidate = std::move(kv.first);
-        if (lower_bound != nullptr &&
-            ucmp->Compare(smallest_candidate.user_key(), *lower_bound) <= 0) {
-          smallest_candidate = InternalKey(
-              *lower_bound, lower_bound_from_sub_compact ? tombstone.seq_ : 0,
-              kTypeRangeDeletion);
-        }
-        InternalKey largest_candidate = tombstone.SerializeEndKey();
-        if (upper_bound != nullptr &&
-            ucmp->Compare(*upper_bound, largest_candidate.user_key()) <= 0) {
-          largest_candidate =
-              InternalKey(*upper_bound, kMaxSequenceNumber, kTypeRangeDeletion);
-        }
-#ifndef NDEBUG
-        SequenceNumber smallest_ikey_seqnum = kMaxSequenceNumber;
-        if (meta->smallest.size() > 0) {
-          smallest_ikey_seqnum = GetInternalKeySeqno(meta->smallest.Encode());
-        }
-#endif
         meta->UpdateBoundariesForRange(smallest_candidate, largest_candidate,
                                        tombstone.seq_, *icmp);
-        assert(smallest_ikey_seqnum == 0 ||
-               ExtractInternalKeyFooter(meta->smallest.Encode()) !=
-                   PackSequenceAndType(0, kTypeRangeDeletion));
       }
-      meta->marked_for_compaction = builder->NeedCompact();
     }
     if (s.ok()) {
+      meta->marked_for_compaction = builder->NeedCompact();
       meta->prop.num_entries = builder->NumEntries();
       for (auto& pair : dependence) {
         meta->prop.dependence.emplace_back(Dependence{pair.first, pair.second});

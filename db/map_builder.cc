@@ -24,6 +24,7 @@
 #include "db/builder.h"
 #include "db/dbformat.h"
 #include "db/event_helpers.h"
+#include "db/range_del_aggregator.h"
 #include "monitoring/thread_status_util.h"
 #include "table/merging_iterator.h"
 #include "table/two_level_iterator.h"
@@ -60,18 +61,26 @@ struct FileMetaDataBoundBuilder {
 
 bool IsPerfectRange(const Range& range, const FileMetaData* f,
                     const InternalKeyComparator& icomp) {
-  return range.include_start && range.include_limit &&
-         f->prop.purpose == kEssenceSst &&
-         icomp.Compare(range.start, f->smallest.Encode()) == 0 &&
-         icomp.Compare(range.limit, f->largest.Encode()) == 0;
+  if (f->prop.is_map_sst()) {
+    return false;
+  }
+  int c = icomp.Compare(range.start, f->smallest.Encode());
+  if (range.include_start ? c > 0 : c >= 0) {
+    return false;
+  }
+  c = icomp.Compare(range.limit, f->largest.Encode());
+  if (range.include_limit ? c < 0 : c <= 0) {
+    return false;
+  }
+  return true;
 }
 
 namespace {
 
 struct IteratorCacheContext {
-  static InternalIterator* invoke(void* arg, const FileMetaData* f,
-                                  const DependenceMap& dependence_map,
-                                  Arena* arena, TableReader** reader_ptr) {
+  static InternalIterator* CreateIter(void* arg, const FileMetaData* f,
+                                      const DependenceMap& dependence_map,
+                                      Arena* arena, TableReader** reader_ptr) {
     IteratorCacheContext* ctx = static_cast<IteratorCacheContext*>(arg);
     DependenceMap empty_dependence_map;
     ReadOptions read_options;
@@ -81,19 +90,33 @@ struct IteratorCacheContext {
 
     return ctx->cfd->table_cache()->NewIterator(
         read_options, *ctx->env_options, ctx->cfd->internal_comparator(), *f,
-        f->prop.purpose == kMapSst ? empty_dependence_map : dependence_map,
-        nullptr, ctx->mutable_cf_options->prefix_extractor.get(), reader_ptr,
+        f->prop.is_map_sst() ? empty_dependence_map : dependence_map,
+        nullptr /* range_del_agg */,
+        ctx->mutable_cf_options->prefix_extractor.get(), reader_ptr,
         nullptr /* no per level latency histogram */,
-        false /* for_compaction */, arena, false /* skip_filters */, -1);
+        false /* for_compaction */, arena, false /* skip_filters */,
+        -1 /* level */);
+  }
+  static InternalIterator* CreateVersionIter(void* arg, Arena* arena) {
+    IteratorCacheContext* ctx = static_cast<IteratorCacheContext*>(arg);
+    ReadOptions read_options;
+    read_options.verify_checksums = true;
+    read_options.fill_cache = false;
+    read_options.total_order_seek = true;
+    MergeIteratorBuilder builder(&ctx->cfd->internal_comparator(), arena);
+    ctx->version->AddIterators(read_options, *ctx->env_options, &builder,
+                               nullptr /* range_del_agg */);
+    return builder.Finish();
   }
 
   ColumnFamilyData* cfd;
   const MutableCFOptions* mutable_cf_options;
+  Version* version;
   const EnvOptions* env_options;
 };
 
 struct RangeWithDepend {
-  InternalKey point[2];
+  Slice point[2];
   bool include[2];
   bool no_records;
   bool has_delete_range;
@@ -102,13 +125,14 @@ struct RangeWithDepend {
 
   RangeWithDepend() = default;
 
-  RangeWithDepend(const FileMetaData* f) {
+  RangeWithDepend(const FileMetaData* f, Arena* arena) {
     assert(GetInternalKeySeqno(f->smallest.Encode()) != kMaxSequenceNumber);
-    point[0] = f->smallest;
+    point[0] = f->smallest.Encode();
     if (GetInternalKeySeqno(f->largest.Encode()) == kMaxSequenceNumber) {
-      point[1].Set(f->largest.user_key(), kMaxSequenceNumber, kTypeDeletion);
+      point[1] = ArenaPinInternalKey(f->largest.user_key(), kMaxSequenceNumber,
+                                     static_cast<ValueType>(0), arena);
     } else {
-      point[1] = f->largest;
+      point[1] = f->largest.Encode();
     }
     include[0] = true;
     include[1] = true;
@@ -118,9 +142,9 @@ struct RangeWithDepend {
     dependence.emplace_back(MapSstElement::LinkTarget{f->fd.GetNumber(), 0});
   }
 
-  RangeWithDepend(const MapSstElement& map_element) {
-    point[0].DecodeFrom(map_element.smallest_key);
-    point[1].DecodeFrom(map_element.largest_key);
+  RangeWithDepend(const MapSstElement& map_element, Arena* arena) {
+    point[0] = ArenaPinSlice(map_element.smallest_key, arena);
+    point[1] = ArenaPinSlice(map_element.largest_key, arena);
     include[0] = map_element.include_smallest;
     include[1] = map_element.include_largest;
     no_records = map_element.no_records;
@@ -128,33 +152,24 @@ struct RangeWithDepend {
     stable = true;
     dependence = map_element.link;
   }
-  RangeWithDepend(const Range& range) {
-    point[0].DecodeFrom(range.start);
-    point[1].DecodeFrom(range.limit);
-    include[0] = range.include_start;
-    include[1] = range.include_limit;
+  RangeWithDepend(const Range& range, Arena* arena) {
+    assert(range.include_start);
+    point[0] = ArenaPinInternalKey(range.start, kMaxSequenceNumber,
+                                   static_cast<ValueType>(0), arena);
+    if (range.include_limit) {
+      point[1] =
+          ArenaPinInternalKey(range.limit, 0, static_cast<ValueType>(0), arena);
+    } else {
+      point[1] = ArenaPinInternalKey(range.limit, kMaxSequenceNumber,
+                                     static_cast<ValueType>(0), arena);
+    }
+    include[0] = false;
+    include[1] = true;
     no_records = false;
     has_delete_range = false;
     stable = false;
   }
 };
-
-bool IsEmptyMapSstElement(const RangeWithDepend& range,
-                          const InternalKeyComparator& icomp) {
-  if (range.dependence.size() != 1) {
-    return false;
-  }
-  if (icomp.user_comparator()->Compare(range.point[0].user_key(),
-                                       range.point[1].user_key()) != 0) {
-    return false;
-  }
-  ParsedInternalKey pikey;
-  if (!ParseInternalKey(range.point[1].Encode(), &pikey)) {
-    // TODO log error
-    return false;
-  }
-  return pikey.sequence == kMaxSequenceNumber;
-}
 
 int CompInclude(int c, size_t ab, size_t ai, size_t bb, size_t bi) {
 #define CASE(a, b, c, d) \
@@ -188,33 +203,79 @@ int CompInclude(int c, size_t ab, size_t ai, size_t bb, size_t bi) {
   }
 #undef CASE
 }
-}  // namespace
 
-class MapSstElementIterator {
+struct MapBuilderRangesItem {
+  MapBuilderRangesItem(FileMetaDataBoundBuilder&& _bound_builder, int _level,
+                       bool _is_map, std::vector<RangeWithDepend>&& _ranges)
+      : bound_builder(std::move(_bound_builder)),
+        level(_level),
+        is_map(_is_map),
+        input_range_count(_ranges.size()),
+        ranges(std::move(_ranges)),
+        self_tombstone_index(size_t(-1)),
+        inputs(nullptr) {}
+  struct TombstonsItem {
+    TombstonsItem(std::shared_ptr<FragmentedRangeTombstoneList> _tombstones)
+        : tombstones(_tombstones) {}
+    void SetRanges(const std::vector<RangeWithDepend>& _ranges) {
+      ranges.clear();
+      ranges.reserve(_ranges.size());
+      for (auto& r : _ranges) {
+        ranges.emplace_back(TombstonsRange{r.point[0], r.point[1]});
+        assert(!r.include[0]);
+        assert(r.include[1]);
+      }
+    }
+    struct TombstonsRange {
+      Slice start_ikey, end_ikey;
+    };
+    std::vector<TombstonsRange> ranges;
+    std::shared_ptr<FragmentedRangeTombstoneList> tombstones;
+  };
+
+  FileMetaDataBoundBuilder bound_builder;
+  int level;
+  bool is_map;
+  size_t input_range_count;
+  std::vector<RangeWithDepend> ranges;
+  std::vector<TombstonsItem> tombstones;
+  size_t self_tombstone_index;
+  const std::vector<FileMetaData*>* inputs;
+
+  bool is_stable() {
+    return is_map && ranges.size() == input_range_count &&
+           !std::any_of(ranges.begin(), ranges.end(),
+                        [](const RangeWithDepend& e) { return !e.stable; });
+  }
+};
+
+class MapSstElementIterator : public MapSstRangeIterator {
  public:
   MapSstElementIterator(const std::vector<RangeWithDepend>& ranges,
                         IteratorCache& iterator_cache,
                         const InternalKeyComparator& icomp)
       : ranges_(ranges), iterator_cache_(iterator_cache), icomp_(icomp) {}
-  bool Valid() const { return !buffer_.empty(); }
-  void SeekToFirst() {
+  bool Valid() const override { return !buffer_.empty(); }
+  void SeekToFirst() override {
     where_ = ranges_.begin();
     PrepareNext();
   }
-  void Next() { PrepareNext(); }
-  Slice key() const { return map_elements_.Key(); }
-  Slice value() const { return buffer_; }
-  Status status() const { return status_; }
+  void SeekToLast() override { assert(false); }
+  void Seek(const Slice&) override { assert(false); }
+  void SeekForPrev(const Slice&) override { assert(false); }
+  void Next() override { PrepareNext(); }
+  void Prev() override { assert(false); }
+  Slice key() const override { return map_elements_.Key(); }
+  LazyBuffer value() const override { return LazyBuffer(buffer_); }
+  Status status() const override { return status_; }
 
-  const std::unordered_map<uint64_t, uint64_t>& GetDependence() const {
+  const std::unordered_map<uint64_t, uint64_t>& GetDependence() const override {
     return dependence_build_;
   }
 
-  std::pair<size_t, double> GetSstReadAmp() const {
+  std::pair<size_t, double> GetSstReadAmp() const override {
     return {sst_read_amp_, sst_read_amp_ratio_};
   }
-
-  bool HasDeleteRange() const { return has_delete_range_; }
 
  private:
   void CheckIter(InternalIterator* iter) {
@@ -243,17 +304,16 @@ class MapSstElementIterator {
       }
       return;
     }
-    auto& start = map_elements_.smallest_key = where_->point[0].Encode();
-    auto& end = map_elements_.largest_key = where_->point[1].Encode();
+    auto& start = map_elements_.smallest_key = where_->point[0];
+    auto& end = map_elements_.largest_key = where_->point[1];
     assert(icomp_.Compare(start, end) <= 0);
     map_elements_.include_smallest = where_->include[0];
     map_elements_.include_largest = where_->include[1];
     bool& no_records = map_elements_.no_records = where_->no_records;
-    bool& has_delete_range = map_elements_.has_delete_range =
-        where_->has_delete_range;
+    map_elements_.has_delete_range = where_->has_delete_range;
     bool stable = where_->stable;
     map_elements_.link = where_->dependence;
-    assert(map_elements_.include_smallest);
+    assert(!map_elements_.include_smallest);
     assert(map_elements_.include_largest);
 
     ++where_;
@@ -313,7 +373,6 @@ class MapSstElementIterator {
     sst_read_amp_ = std::max(sst_read_amp_, map_elements_.link.size());
     sst_read_amp_ratio_ += map_elements_.link.size() * range_size;
     sst_read_amp_size_ += range_size;
-    has_delete_range_ |= has_delete_range;
     map_elements_.Value(&buffer_);  // Encode value
   }
 
@@ -325,7 +384,6 @@ class MapSstElementIterator {
   std::vector<RangeWithDepend>::const_iterator where_;
   const std::vector<RangeWithDepend>& ranges_;
   std::unordered_map<uint64_t, uint64_t> dependence_build_;
-  bool has_delete_range_ = false;
   size_t sst_read_amp_ = 0;
   double sst_read_amp_ratio_ = 0;
   size_t sst_read_amp_size_ = 0;
@@ -333,42 +391,130 @@ class MapSstElementIterator {
   const InternalKeyComparator& icomp_;
 };
 
-namespace {
+class MapSstTombstoneIterator : public InternalIterator {
+ public:
+  MapSstTombstoneIterator(const MapBuilderRangesItem::TombstonsItem& rombstons,
+                          const InternalKeyComparator& icomp)
+      : ranges_(rombstons.ranges),
+        tombstone_list_(rombstons.tombstones.get()),
+        list_seq_(size_t(-1)),
+        icomp_(icomp) {}
 
-Status AppendUserKeyRange(std::vector<RangeStorage>& ranges,
-                          IteratorCache& iterator_cache,
-                          const FileMetaData* const* file_meta, size_t n) {
-  MapSstElement map_element;
-  for (size_t i = 0; i < n; ++i) {
-    auto f = file_meta[i];
-    if (f->prop.purpose == kMapSst) {
-      auto iter = iterator_cache.GetIterator(f, nullptr);
-      assert(iter != nullptr);
-      if (!iter->status().ok()) {
-        return iter->status();
+  bool Valid() const override { return encoded_key_.size() >= 8; }
+  void SeekToFirst() override {
+    where_ = ranges_.begin();
+    list_seq_ = size_t(-1);
+    PrepareNext();
+  }
+  void SeekToLast() override { assert(false); }
+  void Seek(const Slice&) override { assert(false); }
+  void SeekForPrev(const Slice&) override { assert(false); }
+  void Next() override { PrepareNext(); }
+  void Prev() override { assert(false); }
+  Slice key() const override { return encoded_key_.Encode(); }
+  LazyBuffer value() const override { return LazyBuffer(tombstone_end_key_); }
+  Status status() const override { return status_; }
+
+ private:
+  bool PrepareTombstone() {
+    auto uc = icomp_.user_comparator();
+    if (tombstone_where_ == tombstone_list_->end() ||
+        uc->Compare(tombstone_where_->start_key, end_key_) >= 0) {
+      return false;
+    }
+    tombstone_start_key_ = tombstone_where_->start_key;
+    if (uc->Compare(tombstone_start_key_, start_key_) < 0) {
+      tombstone_start_key_ = start_key_;
+    }
+    auto next = std::next(tombstone_where_);
+    while (next != tombstone_list_->end() &&
+           uc->Compare(next->start_key, tombstone_where_->end_key) == 0 &&
+           next->seq_end_idx - next->seq_start_idx ==
+               tombstone_where_->seq_end_idx -
+                   tombstone_where_->seq_start_idx &&
+           std::mismatch(
+               tombstone_list_->seq_iter(next->seq_start_idx),
+               tombstone_list_->seq_iter(next->seq_end_idx),
+               tombstone_list_->seq_iter(tombstone_where_->seq_start_idx))
+                   .first == tombstone_list_->seq_iter(next->seq_end_idx)) {
+      tombstone_where_ = next++;
+    }
+    tombstone_end_key_ = tombstone_where_->end_key;
+    if (uc->Compare(tombstone_end_key_, end_key_) > 0) {
+      tombstone_end_key_ = end_key_;
+    }
+    list_seq_ = tombstone_where_->seq_start_idx;
+    encoded_key_.Set(tombstone_start_key_,
+                     *tombstone_list_->seq_iter(list_seq_), kTypeRangeDeletion);
+    return true;
+  }
+  void PrepareNext() {
+    auto uc = icomp_.user_comparator();
+    while (true) {
+      if (where_ == ranges_.end()) {
+        encoded_key_.Clear();
+        return;
       }
-      for (iter->SeekToFirst(); iter->Valid(); iter->Next()) {
-        auto value = iter->value();
-        auto s = value.fetch();
-        if (!s.ok()) {
-          return s;
+      if (list_seq_ == size_t(-1)) {
+        start_key_ = ExtractUserKey(where_->start_ikey);
+        end_key_ = ExtractUserKey(where_->end_ikey);
+        auto next = std::next(where_);
+        while (next != ranges_.end() &&
+               uc->Compare(end_key_, ExtractUserKey(next->start_ikey)) == 0) {
+          assert(GetInternalKeySeqno(where_->end_ikey) == kMaxSequenceNumber);
+          assert(GetInternalKeySeqno(next->start_ikey) == kMaxSequenceNumber);
+          end_key_ = ExtractUserKey(next->end_ikey);
+          where_ = next++;
         }
-        if (!map_element.Decode(iter->key(), value.slice())) {
-          return Status::Corruption("LoadRange: Map sst invalid key or value");
+        tombstone_where_ = std::upper_bound(
+            tombstone_list_->begin(), tombstone_list_->end(), start_key_,
+            [uc](const Slice& a,
+                 const FragmentedRangeTombstoneList::RangeTombstoneStack& b) {
+              return uc->Compare(a, b.end_key) < 0;
+            });
+        if (PrepareTombstone()) {
+          return;
         }
-        ranges.emplace_back(ExtractUserKey(map_element.smallest_key),
-                            ExtractUserKey(map_element.largest_key), true,
-                            true);
+      } else if (++list_seq_ < tombstone_where_->seq_end_idx) {
+        encoded_key_.Set(tombstone_start_key_,
+                         *tombstone_list_->seq_iter(list_seq_),
+                         kTypeRangeDeletion);
+        return;
+      } else {
+        ++tombstone_where_;
+        if (PrepareTombstone()) {
+          return;
+        }
       }
-    } else {
-      ranges.emplace_back(f->smallest.user_key(), f->largest.user_key(), true,
-                          true);
+      if (!status_.ok()) {
+        encoded_key_.Clear();
+        return;
+      }
+      ++where_;
+      list_seq_ = size_t(-1);
     }
   }
-  return Status::OK();
-}
 
-Status LoadRangeWithDepend(std::vector<RangeWithDepend>& ranges,
+ private:
+  Status status_;
+  InternalKey encoded_key_;
+  InternalKey seek_key_;
+  std::vector<MapBuilderRangesItem::TombstonsItem::TombstonsRange>::
+      const_iterator where_;
+  Slice start_key_;
+  Slice end_key_;
+  const std::vector<MapBuilderRangesItem::TombstonsItem::TombstonsRange>&
+      ranges_;
+  std::vector<FragmentedRangeTombstoneList::RangeTombstoneStack>::const_iterator
+      tombstone_where_;
+  Slice tombstone_start_key_;
+  Slice tombstone_end_key_;
+  FragmentedRangeTombstoneList* tombstone_list_;
+  size_t list_seq_;
+  const InternalKeyComparator& icomp_;
+};
+
+Status LoadRangeWithDepend(std::vector<RangeWithDepend>& ranges, Arena* arena,
                            FileMetaDataBoundBuilder* bound_builder,
                            IteratorCache& iterator_cache,
                            const FileMetaData* const* file_meta, size_t n) {
@@ -376,7 +522,7 @@ Status LoadRangeWithDepend(std::vector<RangeWithDepend>& ranges,
   for (size_t i = 0; i < n; ++i) {
     auto f = file_meta[i];
     TableReader* reader;
-    if (f->prop.purpose == kMapSst) {
+    if (f->prop.is_map_sst()) {
       auto iter = iterator_cache.GetIterator(f, &reader);
       assert(iter != nullptr);
       if (!iter->status().ok()) {
@@ -392,7 +538,7 @@ Status LoadRangeWithDepend(std::vector<RangeWithDepend>& ranges,
           return Status::Corruption(
               "LoadRangeWithDepend: Map sst invalid key or value");
         }
-        ranges.emplace_back(map_element);
+        ranges.emplace_back(map_element, arena);
       }
     } else {
       auto iter = iterator_cache.GetIterator(f, &reader);
@@ -400,7 +546,7 @@ Status LoadRangeWithDepend(std::vector<RangeWithDepend>& ranges,
       if (!iter->status().ok()) {
         return iter->status();
       }
-      ranges.emplace_back(f);
+      ranges.emplace_back(f, arena);
     }
     if (bound_builder != nullptr) {
       bound_builder->Update(f);
@@ -412,27 +558,13 @@ Status LoadRangeWithDepend(std::vector<RangeWithDepend>& ranges,
   return Status::OK();
 }
 
-Status AdjustRange(ColumnFamilyData* cfd, Version* version,
-                   const EnvOptions& env_options,
-                   const std::vector<RangeWithDepend>& ranges,
-                   std::vector<RangeWithDepend>& new_ranges) {
+Status AdjustRange(const InternalKeyComparator* ic, InternalIterator* iter,
+                   Arena* arena, const InternalKey& largest_key,
+                   std::vector<RangeWithDepend>& ranges) {
   if (ranges.empty()) {
     return Status::OK();
   }
-  Arena arena;
-  ScopedArenaIterator iterator;
-  auto get_iter = [&] {
-    if (iterator.get() == nullptr) {
-      ReadOptions read_options;
-      read_options.verify_checksums = true;
-      read_options.fill_cache = false;
-      read_options.total_order_seek = true;
-      MergeIteratorBuilder builder(&cfd->internal_comparator(), &arena);
-      version->AddIterators(read_options, env_options, &builder, nullptr);
-      iterator.set(builder.Finish());
-    }
-    return iterator.get();
-  };
+  std::vector<RangeWithDepend> new_ranges;
   auto merge_dependence = [](std::vector<MapSstElement::LinkTarget>& e,
                              const std::vector<MapSstElement::LinkTarget>& d) {
     size_t insert_pos = e.size();
@@ -451,138 +583,116 @@ Status AdjustRange(ColumnFamilyData* cfd, Version* version,
     }
   };
   new_ranges.clear();
-  auto ic = &cfd->internal_comparator();
+  Slice largest = ArenaPinInternalKey(
+      largest_key.user_key(),
+      GetInternalKeySeqno(largest_key.Encode()) == kMaxSequenceNumber
+          ? kMaxSequenceNumber
+          : 0,
+      static_cast<ValueType>(0), arena);
   auto uc = ic->user_comparator();
   InternalKey ik;
   enum { kSetMin, kSetMax };
-  auto set_ik = [&ik](const InternalKey& k, int min_or_max) {
+  auto set_ik = [&ik](const Slice& uk, int min_or_max) {
     ik.Clear();
     if (min_or_max == kSetMin) {
-      ik.SetMinPossibleForUserKey(k.user_key());
+      ik.SetMinPossibleForUserKey(uk);
     } else {
-      ik.SetMaxPossibleForUserKey(k.user_key());
+      ik.SetMaxPossibleForUserKey(uk);
     }
     return ik.Encode();
   };
-  for (auto range : ranges) {
-    if (!range.include[0]) {
-      auto iter = get_iter();
-      iter->Seek(range.point[0].Encode());
-      if (iter->Valid() &&
-          ic->Compare(iter->key(), range.point[0].Encode()) == 0) {
-        iter->Next();
-      }
-      if (!iter->Valid()) {
-        if (!iter->status().ok()) {
-          return iter->status();
-        }
-        continue;
-      }
-      assert(ic->Compare(iter->key(), range.point[0].Encode()) > 0);
-      if (ic->Compare(iter->key(), range.point[1].Encode()) > 0) {
-        continue;
-      }
-      range.point[0].DecodeFrom(iter->key());
-      range.include[0] = true;
+  for (auto it = ranges.begin(); it != ranges.end(); ++it) {
+    auto range = &*it;
+    if (range->include[0] ||
+        GetInternalKeySeqno(range->point[0]) != kMaxSequenceNumber) {
+      range->point[0] = ArenaPinInternalKey(ExtractUserKey(range->point[0]),
+                                            kMaxSequenceNumber,
+                                            static_cast<ValueType>(0), arena);
+      range->include[0] = false;
     }
-    if (!range.include[1]) {
-      auto iter = get_iter();
-      iter->SeekForPrev(range.point[1].Encode());
-      if (iter->Valid() &&
-          ic->Compare(iter->key(), range.point[1].Encode()) == 0) {
-        iter->Prev();
-      }
-      if (!iter->Valid()) {
-        if (!iter->status().ok()) {
-          return iter->status();
-        }
-        continue;
-      }
-      assert(ic->Compare(iter->key(), range.point[1].Encode()) < 0);
-      if (ic->Compare(iter->key(), range.point[0].Encode()) < 0) {
-        continue;
-      }
-      range.point[1].DecodeFrom(iter->key());
-      range.include[1] = true;
-    }
-    if (new_ranges.empty()) {
-      new_ranges.emplace_back(std::move(range));
-      continue;
-    }
-    auto last = &new_ranges.back();
-    auto& split_key = range.point[0];
-    if (uc->Compare(last->point[1].user_key(), split_key.user_key()) != 0) {
-      new_ranges.emplace_back(std::move(range));
-      continue;
-    }
-    auto iter = get_iter();
-    RangeWithDepend split;
-    split.include[0] = true;
-    split.include[1] = true;
-    split.no_records = last->no_records && range.no_records;
-    split.has_delete_range = last->has_delete_range || range.has_delete_range;
-    split.stable = false;
-    split.dependence = last->dependence;
-    merge_dependence(split.dependence, range.dependence);
-    if (uc->Compare(last->point[0].user_key(), split_key.user_key()) != 0) {
-      iter->SeekForPrev(set_ik(split_key, kSetMin));
-      assert(!iter->Valid() ||
-             uc->Compare(ExtractUserKey(iter->key()), ik.user_key()) < 0);
-      if (iter->Valid() &&
-          ic->Compare(iter->key(), last->point[0].Encode()) >= 0) {
-        last->point[1].DecodeFrom(iter->key());
-      } else if (!iter->status().ok()) {
-        return iter->status();
-      } else {
-        new_ranges.pop_back();
-      }
-    } else {
-      new_ranges.pop_back();
-    }
-    do {
-      iter->Seek(set_ik(split_key, kSetMin));
-      if (!iter->Valid()) {
-        if (!iter->status().ok()) {
-          return iter->status();
-        }
-        break;
-      }
-      assert(ic->Compare(iter->key(), ik.Encode()) >= 0);
-      if (uc->Compare(ExtractUserKey(iter->key()), split_key.user_key()) != 0) {
-        break;
-      }
-      split.point[0].DecodeFrom(iter->key());
-      iter->SeekForPrev(set_ik(split_key, kSetMax));
-      if (!iter->Valid()) {
-        if (!iter->status().ok()) {
-          return iter->status();
-        }
-        break;
-      }
-      assert(ic->Compare(iter->key(), ik.Encode()) <= 0);
-      if (uc->Compare(ExtractUserKey(iter->key()), split_key.user_key()) != 0) {
-        break;
-      }
-      split.point[1].DecodeFrom(iter->key());
-      assert(ic->Compare(split.point[0], split.point[1]) <= 0);
-      new_ranges.emplace_back(std::move(split));
-    } while (false);
-
-    if (uc->Compare(split_key.user_key(), range.point[1].user_key()) != 0) {
-      iter->Seek(set_ik(split_key, kSetMax));
+    if (ic->Compare(range->point[1], largest) >= 0) {
+      range->point[1] = largest;
+      range->include[1] = true;
+    } else if (GetInternalKeySeqno(range->point[1]) != kMaxSequenceNumber) {
+      iter->Seek(set_ik(ExtractUserKey(range->point[1]), kSetMax));
       if (iter->Valid() && ic->Compare(iter->key(), ik.Encode()) == 0) {
         iter->Next();
       }
-      assert(!iter->Valid() || ic->Compare(iter->key(), ik.Encode()) > 0);
-      if (iter->Valid() &&
-          ic->Compare(iter->key(), range.point[1].Encode()) <= 0) {
-        range.point[0].DecodeFrom(iter->key());
-        new_ranges.emplace_back(std::move(range));
+      if (iter->Valid() && ic->Compare(iter->key(), largest) <= 0) {
+        range->point[1] =
+            ArenaPinInternalKey(ExtractUserKey(iter->key()), kMaxSequenceNumber,
+                                static_cast<ValueType>(0), arena);
       } else if (!iter->status().ok()) {
         return iter->status();
+      } else {
+        range->point[1] = largest;
       }
+      range->include[1] = true;
+    } else {
+      assert(range->include[1]);
+    }
+    if (new_ranges.empty()) {
+      new_ranges.emplace_back(std::move(*range));
+      continue;
+    }
+    auto last = &new_ranges.back();
+    int c = uc->Compare(ExtractUserKey(range->point[0]),
+                        ExtractUserKey(last->point[1]));
+    if (GetInternalKeySeqno(last->point[1]) == kMaxSequenceNumber ? c >= 0
+                                                                  : c > 0) {
+      new_ranges.emplace_back(std::move(*range));
+      continue;
+    }
+    RangeWithDepend split;
+    split.point[0] = range->point[0];
+    split.point[1] = last->point[1];
+    assert(!range->include[0]);
+    assert(last->include[1]);
+    split.include[0] = false;
+    split.include[1] = true;
+    split.no_records = last->no_records && range->no_records;
+    split.has_delete_range = last->has_delete_range || range->has_delete_range;
+    split.stable = false;
+    split.dependence = last->dependence;
+    merge_dependence(split.dependence, range->dependence);
+
+    auto is_same_dependence = [&](const RangeWithDepend& l,
+                                  const RangeWithDepend& r) {
+      if (l.dependence.size() == r.dependence.size()) {
+        assert(std::mismatch(l.dependence.begin(), l.dependence.end(),
+                             r.dependence.begin(),
+                             [](const MapSstElement::LinkTarget& l,
+                                const MapSstElement::LinkTarget& r) {
+                               return l.file_number == r.file_number;
+                             })
+                   .first == l.dependence.end());
+        return true;
+      }
+      return false;
+    };
+    if (is_same_dependence(*last, split) ||
+        ic->Compare(last->point[0], split.point[0]) >= 0) {
+      split.point[0] = last->point[0];
+      assert(!last->include[0]);
+      new_ranges.pop_back();
+    } else {
+      last->point[1] = split.point[0];
+      assert(last->include[1]);
+    }
+    if (is_same_dependence(split, *range) ||
+        ic->Compare(split.point[1], range->point[1]) >= 0) {
+      split.point[1] = range->point[1];
+      assert(range->include[1]);
+      new_ranges.emplace_back(std::move(split));
+    } else {
+      new_ranges.emplace_back(std::move(split));
+      assert(GetInternalKeySeqno(split.point[1]) == kMaxSequenceNumber);
+      range->point[0] = split.point[1];
+      assert(!split.include[0]);
+      new_ranges.emplace_back(std::move(*range));
     }
   }
+  new_ranges.swap(ranges);
   return Status::OK();
 }
 
@@ -603,7 +713,7 @@ std::vector<RangeWithDepend> PartitionRangeWithDepend(
   std::vector<RangeWithDepend> output;
   assert(!ranges_a.empty() && !ranges_b.empty());
   const RangeWithDepend* source;
-  auto put_left = [&](const InternalKey& key, bool include,
+  auto put_left = [&](const Slice& key, bool include,
                       const RangeWithDepend* r) {
     assert(output.empty() || icomp.Compare(output.back().point[1], key) < 0 ||
            !output.back().include[1] || !include);
@@ -613,7 +723,7 @@ std::vector<RangeWithDepend> PartitionRangeWithDepend(
     back.include[0] = include;
     source = r;
   };
-  auto put_right = [&](const InternalKey& key, bool include,
+  auto put_right = [&](const Slice& key, bool include,
                        const RangeWithDepend* r) {
     auto& back = output.back();
     if (back.dependence.empty() || (icomp.Compare(key, back.point[0]) == 0 &&
@@ -624,9 +734,6 @@ std::vector<RangeWithDepend> PartitionRangeWithDepend(
     back.point[1] = key;
     back.include[1] = include;
     assert(icomp.Compare(back.point[0], back.point[1]) <= 0);
-    if (IsEmptyMapSstElement(back, icomp)) {
-      output.pop_back();
-    }
     if (source == nullptr || r == nullptr || source != r) {
       back.stable = false;
     }
@@ -767,6 +874,52 @@ std::vector<RangeWithDepend> PartitionRangeWithDepend(
   return output;
 }
 
+Status LoadDeleteRangeIterImpl(
+    const FileMetaData* f, const InternalKeyComparator& ic,
+    IteratorCache& iterator_cache,
+    std::vector<std::unique_ptr<TruncatedRangeDelIterator>>*
+        range_del_iter_vec) {
+  TableReader* reader;
+  auto iter = iterator_cache.GetIterator(f, &reader);
+  if (!iter->status().ok()) {
+    return iter->status();
+  }
+  assert(reader != nullptr);
+  std::unique_ptr<FragmentedRangeTombstoneIterator> range_del_iter(
+      reader->NewRangeTombstoneIterator(ReadOptions()));
+  if (range_del_iter) {
+    range_del_iter_vec->emplace_back(new TruncatedRangeDelIterator(
+        std::move(range_del_iter), &ic, nullptr, nullptr));
+  }
+  return Status::OK();
+};
+
+Status LoadDeleteRangeIter(
+    const FileMetaData* file_meta, const InternalKeyComparator& ic,
+    IteratorCache& iterator_cache,
+    std::vector<std::unique_ptr<TruncatedRangeDelIterator>>*
+        range_del_iter_vec) {
+  if (file_meta->prop.is_map_sst() && !file_meta->prop.has_range_deletions()) {
+    for (auto& dependence : file_meta->prop.dependence) {
+      auto f = iterator_cache.GetFileMetaData(dependence.file_number);
+      if (f == nullptr) {
+        return Status::Aborted("Missing Dependence files");
+      }
+      auto s = LoadDeleteRangeIter(f, ic, iterator_cache, range_del_iter_vec);
+      if (!s.ok()) {
+        return s;
+      }
+    }
+  } else {
+    auto s = LoadDeleteRangeIterImpl(file_meta, ic, iterator_cache,
+                                     range_del_iter_vec);
+    if (!s.ok()) {
+      return s;
+    }
+  }
+  return Status::OK();
+};
+
 }  // namespace
 
 MapBuilder::MapBuilder(int job_id, const ImmutableDBOptions& db_options,
@@ -783,10 +936,9 @@ MapBuilder::MapBuilder(int job_id, const ImmutableDBOptions& db_options,
 Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
                          const std::vector<Range>& deleted_range,
                          const std::vector<const FileMetaData*>& added_files,
-                         bool unroll_delete_range, int output_level,
-                         uint32_t output_path_id, ColumnFamilyData* cfd,
-                         Version* version, VersionEdit* edit,
-                         FileMetaData* file_meta_ptr,
+                         int output_level, uint32_t output_path_id,
+                         ColumnFamilyData* cfd, Version* version,
+                         VersionEdit* edit, FileMetaData* file_meta_ptr,
                          std::unique_ptr<TableProperties>* prop_ptr,
                          std::set<FileMetaData*>* deleted_files) {
   assert(output_level != 0 || inputs.front().level == 0);
@@ -794,76 +946,36 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
   auto vstorage = version->storage_info();
   auto& icomp = cfd->internal_comparator();
   IteratorCacheContext iterator_cache_ctx = {
-      cfd, &version->GetMutableCFOptions(), &env_options_};
+      cfd, &version->GetMutableCFOptions(), version, &env_options_};
   IteratorCache iterator_cache(vstorage->dependence_map(), &iterator_cache_ctx,
-                               IteratorCacheContext::invoke);
+                               IteratorCacheContext::CreateIter);
+  Arena* arena = iterator_cache.GetArena();
+  LazyInternalIteratorWrapper version_iter(
+      IteratorCacheContext::CreateVersionIter, &iterator_cache_ctx, nullptr,
+      nullptr, arena);
 
   std::list<std::vector<RangeWithDepend>> level_ranges;
-  std::vector<RangeWithDepend> range_deletion_ranges;
+  std::vector<std::unique_ptr<TruncatedRangeDelIterator>> range_del_iter_vec;
   MapSstElement map_element;
   FileMetaDataBoundBuilder bound_builder(&cfd->internal_comparator());
+  std::vector<MapBuilderRangesItem::TombstonsItem> tombstones;
   Status s;
   size_t input_range_count = 0;
-
-  // load range_deletions
-  auto load_range_deletion = [&](const FileMetaData* f) {
-    if (f->prop.purpose == kMapSst ||
-        (f->prop.flags & TablePropertyCache::kHasRangeDeletions) == 0) {
-      return Status::OK();
-    }
-    TableReader* reader;
-    auto iter = iterator_cache.GetIterator(f, &reader);
-    if (!iter->status().ok()) {
-      return iter->status();
-    }
-    assert(reader != nullptr);
-    std::unique_ptr<FragmentedRangeTombstoneIterator> range_del_iter(
-        reader->NewRangeTombstoneIterator(ReadOptions()));
-    assert(range_del_iter);
-    if (!range_del_iter) {
-      return Status::OK();
-    }
-    auto& ranges = range_deletion_ranges;
-    for (range_del_iter->SeekToTopFirst(); range_del_iter->Valid();
-         range_del_iter->TopNext()) {
-      if (!ranges.empty() && icomp.user_comparator()->Compare(
-                                 range_del_iter->start_key(),
-                                 ranges.back().point[1].user_key()) == 0) {
-        ranges.back().point[1].Clear();
-        ranges.back().point[1].SetMinPossibleForUserKey(
-            range_del_iter->end_key());
-      } else {
-        ranges.emplace_back();
-        auto& r = ranges.back();
-        r.point[0].SetMinPossibleForUserKey(range_del_iter->start_key());
-        r.point[1].SetMinPossibleForUserKey(range_del_iter->end_key());
-        r.include[0] = true;
-        r.include[1] = false;
-        r.has_delete_range = true;
-        r.no_records = true;
-        r.stable = false;
-      }
-    }
-    return Status::OK();
-  };
 
   // load input files into level_ranges
   for (auto& level_files : inputs) {
     if (level_files.files.empty()) {
       continue;
     }
-    if (unroll_delete_range) {
+    if (level_files.level == 0) {
       for (auto f : level_files.files) {
-        s = load_range_deletion(f);
+        s = LoadDeleteRangeIter(f, icomp, iterator_cache, &range_del_iter_vec);
         if (!s.ok()) {
           return s;
         }
-      }
-    }
-    if (level_files.level == 0) {
-      for (auto f : level_files.files) {
         std::vector<RangeWithDepend> ranges;
-        s = LoadRangeWithDepend(ranges, &bound_builder, iterator_cache, &f, 1);
+        s = LoadRangeWithDepend(ranges, arena, &bound_builder, iterator_cache,
+                                &f, 1);
         if (!s.ok()) {
           return s;
         }
@@ -876,13 +988,19 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
         level_ranges.emplace_back(std::move(ranges));
       }
     } else {
+      for (auto f : level_files.files) {
+        s = LoadDeleteRangeIter(f, icomp, iterator_cache, &range_del_iter_vec);
+        if (!s.ok()) {
+          return s;
+        }
+      }
       std::vector<RangeWithDepend> ranges;
       assert(std::is_sorted(
           level_files.files.begin(), level_files.files.end(),
           [&icomp](const FileMetaData* f1, const FileMetaData* f2) {
             return icomp.Compare(f1->largest, f2->largest) < 0;
           }));
-      s = LoadRangeWithDepend(ranges, &bound_builder, iterator_cache,
+      s = LoadRangeWithDepend(ranges, arena, &bound_builder, iterator_cache,
                               level_files.files.data(),
                               level_files.files.size());
       if (!s.ok()) {
@@ -925,7 +1043,7 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
     std::vector<RangeWithDepend> ranges;
     ranges.reserve(deleted_range.size());
     for (auto& r : deleted_range) {
-      ranges.emplace_back(r);
+      ranges.emplace_back(r, arena);
     }
     assert(std::is_sorted(
         ranges.begin(), ranges.end(),
@@ -939,17 +1057,53 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
       level_ranges.pop_front();
     }
   }
+  if (!level_ranges.empty() && !range_del_iter_vec.empty()) {
+    tombstones.emplace_back(std::shared_ptr<FragmentedRangeTombstoneList>(
+        new FragmentedRangeTombstoneList(
+            std::unique_ptr<InternalIteratorBase<Slice>>(
+                NewTruncatedRangeDelMergingIter(&icomp, range_del_iter_vec)),
+            icomp)));
+    s = AdjustRange(&icomp, &version_iter, arena, bound_builder.largest,
+                    level_ranges.front());
+    if (!s.ok()) {
+      return s;
+    }
+    tombstones.back().SetRanges(level_ranges.front());
+  }
   if (!added_files.empty()) {
+    std::vector<std::unique_ptr<TruncatedRangeDelIterator>>
+        added_range_del_iter_vec;
     std::vector<RangeWithDepend> ranges;
     assert(std::is_sorted(
         added_files.begin(), added_files.end(),
         [&icomp](const FileMetaData* f1, const FileMetaData* f2) {
           return icomp.Compare(f1->largest, f2->largest) < 0;
         }));
-    s = LoadRangeWithDepend(ranges, &bound_builder, iterator_cache,
+    s = LoadRangeWithDepend(ranges, arena, &bound_builder, iterator_cache,
                             added_files.data(), added_files.size());
     if (!s.ok()) {
       return s;
+    }
+    for (auto f : added_files) {
+      s = LoadDeleteRangeIter(f, icomp, iterator_cache,
+                              &added_range_del_iter_vec);
+      if (!s.ok()) {
+        return s;
+      }
+    }
+    if (!added_range_del_iter_vec.empty()) {
+      tombstones.emplace_back(std::shared_ptr<FragmentedRangeTombstoneList>(
+          new FragmentedRangeTombstoneList(
+              std::unique_ptr<InternalIteratorBase<Slice>>(
+                  NewTruncatedRangeDelMergingIter(&icomp,
+                                                  added_range_del_iter_vec)),
+              icomp)));
+      s = AdjustRange(&icomp, &version_iter, arena, added_files.back()->largest,
+                      ranges);
+      if (!s.ok()) {
+        return s;
+      }
+      tombstones.back().SetRanges(ranges);
     }
     if (level_ranges.empty()) {
       level_ranges.emplace_back(std::move(ranges));
@@ -958,45 +1112,72 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
           level_ranges.front(), ranges, cfd->internal_comparator(),
           PartitionType::kMerge);
     }
-    if (unroll_delete_range) {
-      for (auto f : added_files) {
-        s = load_range_deletion(f);
-        if (!s.ok()) {
-          return s;
-        }
-      }
+    for (auto& range_del_it : added_range_del_iter_vec) {
+      range_del_iter_vec.emplace_back(std::move(range_del_it));
     }
   }
+  bool build_range_deletion_ranges =
+      cfd->ioptions()->compaction_style ==
+          CompactionStyle::kCompactionStyleLevel &&
+      version->GetMutableCFOptions().enable_lazy_compaction &&
+      output_level < vstorage->num_non_empty_levels() - 1;
 
-  if (!level_ranges.empty() && !range_deletion_ranges.empty()) {
-    auto& ranges = range_deletion_ranges;
-    std::sort(ranges.begin(), ranges.end(),
-              [&icomp](const RangeWithDepend& f1, const RangeWithDepend& f2) {
-                return icomp.Compare(f1.point[0], f2.point[0]) < 0;
-              });
-    size_t c = 0, n = ranges.size();
-    auto it = ranges.begin();
-    for (size_t i = 1; i < n; ++i) {
-      if (icomp.Compare(it[c].point[1], it[i].point[0]) >= 0) {
-        if (icomp.Compare(it[c].point[1], it[i].point[1]) < 0) {
-          it[c].point[1] = std::move(it[i].point[1]);
-        }
-      } else if (++c != i) {
-        it[c] = std::move(it[i]);
-      }
+  ScopedArenaIterator tombstone_iter;
+  if (!tombstones.empty()) {
+    MergeIteratorBuilder builder(&icomp, iterator_cache.GetArena());
+    for (auto& item : tombstones) {
+      builder.AddIterator(
+          new (iterator_cache.GetArena()->AllocateAligned(
+              sizeof(MapSstTombstoneIterator)))
+              MapSstTombstoneIterator(item, cfd->internal_comparator()));
     }
-    ranges.resize(c + 1);
+    tombstone_iter.set(builder.Finish());
+  }
+  if (build_range_deletion_ranges && !tombstones.empty()) {
+    std::vector<RangeWithDepend> ranges;
+    auto uc = icomp.user_comparator();
+    Slice last_end_key;
+    for (tombstone_iter->SeekToFirst(); tombstone_iter->Valid();
+         tombstone_iter->Next()) {
+      auto start_key = ExtractUserKey(tombstone_iter->key());
+      auto v = tombstone_iter->value();
+      s = v.fetch();
+      if (!s.ok()) {
+        return s;
+      }
+      auto end_key = v.slice();
+
+      if (!ranges.empty() && uc->Compare(start_key, last_end_key) <= 0) {
+        if (uc->Compare(end_key, last_end_key) > 0) {
+          ranges.back().point[1] = ArenaPinInternalKey(
+              end_key, kMaxSequenceNumber, static_cast<ValueType>(0), arena);
+        }
+      } else {
+        ranges.emplace_back();
+        auto& r = ranges.back();
+        r.point[0] = ArenaPinInternalKey(start_key, kMaxSequenceNumber,
+                                         static_cast<ValueType>(0), arena);
+        r.point[1] = ArenaPinInternalKey(end_key, kMaxSequenceNumber,
+                                         static_cast<ValueType>(0), arena);
+        r.include[0] = false;
+        r.include[1] = true;
+        r.no_records = true;
+        r.has_delete_range = true;
+        r.stable = false;
+      }
+      last_end_key = ExtractUserKey(ranges.back().point[1]);
+    }
     level_ranges.front() = PartitionRangeWithDepend(
         level_ranges.front(), ranges, icomp, PartitionType::kMerge);
   }
-  std::vector<RangeWithDepend> ranges;
   if (!level_ranges.empty()) {
-    s = AdjustRange(cfd, version, env_options_, level_ranges.front(), ranges);
-    level_ranges.clear();
+    s = AdjustRange(&icomp, &version_iter, arena, bound_builder.largest,
+                    level_ranges.front());
     if (!s.ok()) {
       return s;
     }
   }
+  auto& ranges = level_ranges.front();
 
   auto edit_add_file = [edit](int level, const FileMetaData* f) {
     // don't call edit->AddFile(level, *f)
@@ -1022,26 +1203,29 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
   }
 
   // make sure level 0 files seqno no overlap
-  if (range_deletion_ranges.empty() &&
-      (output_level != 0 || ranges.size() == 1)) {
+  if (output_level != 0 || ranges.size() == 1) {
     std::unordered_map<uint64_t, const FileMetaData*> sst_live;
     bool build_map_sst = false;
     // check is need build map
-    for (auto it = ranges.begin(); it != ranges.end(); ++it) {
-      if (it->dependence.size() > 1) {
+    for (auto& range : ranges) {
+      if (range.dependence.size() > 1) {
         build_map_sst = true;
         break;
       }
       auto f =
-          iterator_cache.GetFileMetaData(it->dependence.front().file_number);
+          iterator_cache.GetFileMetaData(range.dependence.front().file_number);
       assert(f != nullptr);
-      Range r(it->point[0].Encode(), it->point[1].Encode(), it->include[0],
-              it->include[1]);
+      if (f->prop.is_map_sst()) {
+        build_map_sst = true;
+        break;
+      }
+      Range r(range.point[0], range.point[1], range.include[0],
+              range.include[1]);
       if (!IsPerfectRange(r, f, icomp)) {
         build_map_sst = true;
         break;
       }
-      sst_live.emplace(it->dependence.front().file_number, f);
+      sst_live.emplace(range.dependence.front().file_number, f);
     }
     if (!build_map_sst) {
       // unnecessary build map sst
@@ -1066,7 +1250,7 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
     }
   }
   if (inputs.size() == 1 && inputs.front().files.size() == 1 &&
-      inputs.front().files.front()->prop.purpose == kMapSst &&
+      inputs.front().files.front()->prop.is_map_sst() &&
       ranges.size() == input_range_count &&
       !std::any_of(ranges.begin(), ranges.end(),
                    [](const RangeWithDepend& e) { return !e.stable; })) {
@@ -1074,11 +1258,8 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
     return s;
   }
 
-  using IterType = MapSstElementIterator;
-  void* buffer = iterator_cache.GetArena()->AllocateAligned(sizeof(IterType));
-  std::unique_ptr<IterType, void (*)(IterType*)> output_iter(
-      new (buffer) IterType(ranges, iterator_cache, cfd->internal_comparator()),
-      [](IterType* iter) { iter->~IterType(); });
+  MapSstElementIterator output_iter(ranges, iterator_cache,
+                                    cfd->internal_comparator());
 
   assert(std::is_sorted(
       ranges.begin(), ranges.end(),
@@ -1089,8 +1270,9 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
   FileMetaData file_meta;
   std::unique_ptr<TableProperties> prop;
 
-  s = WriteOutputFile(bound_builder, output_iter.get(), output_path_id, cfd,
-                      version->GetMutableCFOptions(), &file_meta, &prop);
+  s = WriteOutputFile(bound_builder, &output_iter, tombstone_iter.get(),
+                      output_path_id, cfd, version->GetMutableCFOptions(),
+                      &file_meta, &prop);
 
   if (s.ok()) {
     for (auto& input_level : inputs) {
@@ -1112,7 +1294,7 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
     prop_ptr->swap(prop);
   }
   return s;
-}
+}  // namespace rocksdb
 
 Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
                          const std::vector<Range>& push_range, int output_level,
@@ -1123,34 +1305,15 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
   auto vstorage = version->storage_info();
   auto& icomp = cfd->internal_comparator();
   IteratorCacheContext iterator_cache_ctx = {
-      cfd, &version->GetMutableCFOptions(), &env_options_};
+      cfd, &version->GetMutableCFOptions(), version, &env_options_};
   IteratorCache iterator_cache(vstorage->dependence_map(), &iterator_cache_ctx,
-                               IteratorCacheContext::invoke);
+                               IteratorCacheContext::CreateIter);
+  Arena* arena = iterator_cache.GetArena();
+  LazyInternalIteratorWrapper version_iter(
+      IteratorCacheContext::CreateVersionIter, &iterator_cache_ctx, nullptr,
+      nullptr, arena);
 
-  struct RangesItem {
-    RangesItem(FileMetaDataBoundBuilder&& _bound_builder, int _level,
-               bool _is_map, std::vector<RangeWithDepend>&& _ranges)
-        : bound_builder(std::move(_bound_builder)),
-          level(_level),
-          is_map(_is_map),
-          input_range_count(_ranges.size()),
-          ranges(std::move(_ranges)),
-          inputs(nullptr) {}
-
-    FileMetaDataBoundBuilder bound_builder;
-    int level;
-    bool is_map;
-    size_t input_range_count;
-    std::vector<RangeWithDepend> ranges;
-    const std::vector<FileMetaData*>* inputs;
-
-    bool is_stable() {
-      return is_map && ranges.size() == input_range_count &&
-             !std::any_of(ranges.begin(), ranges.end(),
-                          [](const RangeWithDepend& e) { return !e.stable; });
-    }
-  };
-  std::vector<RangesItem> range_items;
+  std::vector<MapBuilderRangesItem> range_items;
   MapSstElement map_element;
   Status s;
   size_t output_index = size_t(-1);
@@ -1158,7 +1321,7 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
   std::vector<RangeWithDepend> push_ranges;
   push_ranges.reserve(push_range.size());
   for (auto& r : push_range) {
-    push_ranges.emplace_back(r);
+    push_ranges.emplace_back(r, arena);
   }
   assert(std::is_sorted(
       push_ranges.begin(), push_ranges.end(),
@@ -1171,12 +1334,18 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
     if (level_files.files.empty()) {
       continue;
     }
+    std::vector<std::unique_ptr<TruncatedRangeDelIterator>> range_del_iter_vec;
     assert(level_files.level <= output_level);
     FileMetaDataBoundBuilder bound_builder(&cfd->internal_comparator());
     if (level_files.level == 0) {
       for (auto f : level_files.files) {
+        s = LoadDeleteRangeIter(f, icomp, iterator_cache, &range_del_iter_vec);
+        if (!s.ok()) {
+          return s;
+        }
         std::vector<RangeWithDepend> ranges;
-        s = LoadRangeWithDepend(ranges, &bound_builder, iterator_cache, &f, 1);
+        s = LoadRangeWithDepend(ranges, arena, &bound_builder, iterator_cache,
+                                &f, 1);
         if (!s.ok()) {
           return s;
         }
@@ -1187,7 +1356,7 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
             }));
         if (range_items.empty()) {
           bool is_map = level_files.size() == 1 &&
-                        level_files.files.front()->prop.purpose == kMapSst;
+                        level_files.files.front()->prop.is_map_sst();
           range_items.emplace_back(FileMetaDataBoundBuilder(nullptr), 0, is_map,
                                    std::move(ranges));
         } else {
@@ -1202,21 +1371,38 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
       }
       range_items.front().bound_builder = std::move(bound_builder);
     } else {
+      for (auto f : level_files.files) {
+        s = LoadDeleteRangeIter(f, icomp, iterator_cache, &range_del_iter_vec);
+        if (!s.ok()) {
+          return s;
+        }
+      }
       std::vector<RangeWithDepend> ranges;
       if (level_files.level == output_level) {
         output_index = range_items.size();
       }
-      s = LoadRangeWithDepend(ranges, &bound_builder, iterator_cache,
+      s = LoadRangeWithDepend(ranges, arena, &bound_builder, iterator_cache,
                               level_files.files.data(), level_files.size());
       if (!s.ok()) {
         return s;
       }
       bool is_map = level_files.size() == 1 &&
-                    level_files.files.front()->prop.purpose == kMapSst;
+                    level_files.files.front()->prop.is_map_sst();
       range_items.emplace_back(std::move(bound_builder), level_files.level,
                                is_map, std::move(ranges));
     }
-    range_items.back().inputs = &level_files.files;
+    auto& back = range_items.back();
+    back.inputs = &level_files.files;
+    if (!range_del_iter_vec.empty()) {
+      back.self_tombstone_index = back.tombstones.size();
+      back.tombstones.emplace_back(
+          std::shared_ptr<FragmentedRangeTombstoneList>(
+              new FragmentedRangeTombstoneList(
+                  std::unique_ptr<InternalIteratorBase<Slice>>(
+                      NewTruncatedRangeDelMergingIter(&icomp,
+                                                      range_del_iter_vec)),
+                  icomp)));
+    }
   }
   if (output_index == size_t(-1)) {
     output_index = range_items.size();
@@ -1231,9 +1417,9 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
     if (level_ranges.level == output_level) {
       continue;
     }
-    auto extract = PartitionRangeWithDepend(level_ranges.ranges, push_ranges,
-                                            cfd->internal_comparator(),
-                                            PartitionType::kExtract);
+    std::vector<RangeWithDepend> extract = PartitionRangeWithDepend(
+        level_ranges.ranges, push_ranges, cfd->internal_comparator(),
+        PartitionType::kExtract);
     if (!extract.empty()) {
       level_ranges.ranges = PartitionRangeWithDepend(
           level_ranges.ranges, push_ranges, cfd->internal_comparator(),
@@ -1253,12 +1439,24 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
                        reader->GetTableProperties()->creation_time);
         }
       }
-      auto& output_ranges = range_items[output_index].ranges;
-      output_ranges = output_ranges.empty()
-                          ? std::move(extract)
-                          : PartitionRangeWithDepend(extract, output_ranges,
-                                                     cfd->internal_comparator(),
-                                                     PartitionType::kMerge);
+      auto& output_range_items = range_items[output_index];
+      if (!level_ranges.tombstones.empty()) {
+        s = AdjustRange(&icomp, &version_iter, arena,
+                        level_ranges.bound_builder.largest, extract);
+        if (!s.ok()) {
+          return s;
+        }
+        assert(level_ranges.tombstones.size() == 1);
+        output_range_items.tombstones.emplace_back(
+            level_ranges.tombstones.front().tombstones);
+        output_range_items.tombstones.back().SetRanges(extract);
+      }
+      output_range_items.ranges =
+          output_range_items.ranges.empty()
+              ? std::move(extract)
+              : PartitionRangeWithDepend(extract, output_range_items.ranges,
+                                         cfd->internal_comparator(),
+                                         PartitionType::kMerge);
     }
   }
 
@@ -1274,13 +1472,11 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
   };
 
   for (auto& level_ranges : range_items) {
-    std::vector<RangeWithDepend> adjusted_range;
-    s = AdjustRange(cfd, version, env_options_, level_ranges.ranges,
-                    adjusted_range);
+    s = AdjustRange(&icomp, &version_iter, arena,
+                    level_ranges.bound_builder.largest, level_ranges.ranges);
     if (!s.ok()) {
       return s;
     }
-    level_ranges.ranges = std::move(adjusted_range);
     if (level_ranges.ranges.empty()) {
       if (level_ranges.inputs != nullptr) {
         for (auto f : *level_ranges.inputs) {
@@ -1289,27 +1485,34 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
       }
       continue;
     }
+    if (level_ranges.self_tombstone_index != size_t(-1)) {
+      level_ranges.tombstones[level_ranges.self_tombstone_index].SetRanges(
+          level_ranges.ranges);
+    }
     // make sure level 0 files seqno no overlap
     if (level_ranges.level != 0 || level_ranges.ranges.size() == 1) {
       std::unordered_map<uint64_t, const FileMetaData*> sst_live;
       bool build_map_sst = false;
       // check is need build map
-      for (auto it = level_ranges.ranges.begin();
-           it != level_ranges.ranges.end(); ++it) {
-        if (it->dependence.size() > 1) {
+      for (auto& range : level_ranges.ranges) {
+        if (range.dependence.size() > 1) {
           build_map_sst = true;
           break;
         }
-        auto f =
-            iterator_cache.GetFileMetaData(it->dependence.front().file_number);
+        auto f = iterator_cache.GetFileMetaData(
+            range.dependence.front().file_number);
         assert(f != nullptr);
-        Range r(it->point[0].Encode(), it->point[1].Encode(), it->include[0],
-                it->include[1]);
+        if (f->prop.is_map_sst()) {
+          build_map_sst = true;
+          break;
+        }
+        Range r(range.point[0], range.point[1], range.include[0],
+                range.include[1]);
         if (!IsPerfectRange(r, f, icomp)) {
           build_map_sst = true;
           break;
         }
-        sst_live.emplace(it->dependence.front().file_number, f);
+        sst_live.emplace(range.dependence.front().file_number, f);
       }
       if (!build_map_sst) {
         // unnecessary build map sst
@@ -1333,12 +1536,19 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
       continue;
     }
 
-    using IterType = MapSstElementIterator;
-    void* buffer = iterator_cache.GetArena()->AllocateAligned(sizeof(IterType));
-    std::unique_ptr<IterType, void (*)(IterType*)> output_iter(
-        new (buffer) IterType(level_ranges.ranges, iterator_cache,
-                              cfd->internal_comparator()),
-        [](IterType* iter) { iter->~IterType(); });
+    MapSstElementIterator output_iter(level_ranges.ranges, iterator_cache,
+                                      cfd->internal_comparator());
+    ScopedArenaIterator tombstone_iter;
+    if (!level_ranges.tombstones.empty()) {
+      MergeIteratorBuilder builder(&icomp, iterator_cache.GetArena());
+      for (auto& item : level_ranges.tombstones) {
+        builder.AddIterator(
+            new (iterator_cache.GetArena()->AllocateAligned(
+                sizeof(MapSstTombstoneIterator)))
+                MapSstTombstoneIterator(item, cfd->internal_comparator()));
+      }
+      tombstone_iter.set(builder.Finish());
+    }
 
     assert(std::is_sorted(
         level_ranges.ranges.begin(), level_ranges.ranges.end(),
@@ -1347,9 +1557,10 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
         }));
 
     MapBuilderOutput output_item;
-    s = WriteOutputFile(level_ranges.bound_builder, output_iter.get(),
-                        output_path_id, cfd, version->GetMutableCFOptions(),
-                        &output_item.file_meta, &output_item.prop);
+    s = WriteOutputFile(level_ranges.bound_builder, &output_iter,
+                        tombstone_iter.get(), output_path_id, cfd,
+                        version->GetMutableCFOptions(), &output_item.file_meta,
+                        &output_item.prop);
 
     if (!s.ok()) {
       return s;
@@ -1370,78 +1581,12 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
   return s;
 }
 
-Status MapBuilder::GetInputCoverage(
-    const std::vector<CompactionInputFiles>& inputs, const Slice* lower_bound,
-    const Slice* upper_bound, VersionStorageInfo* vstorage,
-    ColumnFamilyData* cfd, const MutableCFOptions& mutable_cf_options,
-    std::vector<RangeStorage>* coverage) {
-  IteratorCacheContext iterator_cache_ctx = {cfd, &mutable_cf_options,
-                                             &env_options_};
-  IteratorCache iterator_cache(vstorage->dependence_map(), &iterator_cache_ctx,
-                               IteratorCacheContext::invoke);
-
-  for (auto& level_files : inputs) {
-    auto s = AppendUserKeyRange(*coverage, iterator_cache,
-                                level_files.files.data(), level_files.size());
-    if (!s.ok()) {
-      return s;
-    }
-  }
-  auto uc = cfd->user_comparator();
-  std::sort(coverage->begin(), coverage->end(),
-            [uc](const RangeStorage& a, const RangeStorage& b) {
-              return uc->Compare(a.start, b.start) < 0;
-            });
-  if (coverage->size() > 1) {
-    size_t c = 0, n = coverage->size();
-    auto it = coverage->begin();
-    for (size_t i = 1; i < n; ++i) {
-      if (uc->Compare(it[c].limit, it[i].start) >= 0) {
-        if (uc->Compare(it[c].limit, it[i].limit) < 0) {
-          it[c].limit = std::move(it[i].limit);
-        }
-      } else if (++c != i) {
-        it[c] = std::move(it[i]);
-      }
-    }
-    coverage->resize(c + 1);
-  }
-  if (lower_bound != nullptr) {
-    auto find =
-        std::lower_bound(coverage->begin(), coverage->end(), *lower_bound,
-                         [uc](const RangeStorage& a, const Slice& b) {
-                           return uc->Compare(a.limit, b) < 0;
-                         });
-    if (find != coverage->end()) {
-      if (uc->Compare(find->start, *lower_bound) < 0) {
-        find->start.assign(lower_bound->data(), lower_bound->size());
-      }
-      coverage->erase(coverage->begin(), find);
-    }
-  }
-  if (upper_bound != nullptr) {
-    auto find =
-        std::upper_bound(coverage->begin(), coverage->end(), *upper_bound,
-                         [uc](const Slice& a, const RangeStorage& b) {
-                           return uc->Compare(a, b.start) < 0;
-                         });
-    if (find != coverage->begin()) {
-      --find;
-      if (uc->Compare(find->limit, *upper_bound) >= 0) {
-        find->limit.assign(upper_bound->data(), upper_bound->size());
-        find->include_limit = false;
-      }
-      coverage->erase(find + 1, coverage->end());
-    }
-  }
-  return Status::OK();
-}
-
 Status MapBuilder::WriteOutputFile(
     const FileMetaDataBoundBuilder& bound_builder,
-    MapSstElementIterator* range_iter, uint32_t output_path_id,
-    ColumnFamilyData* cfd, const MutableCFOptions& mutable_cf_options,
-    FileMetaData* file_meta, std::unique_ptr<TableProperties>* prop) {
+    MapSstRangeIterator* range_iter, InternalIterator* tombstone_iter,
+    uint32_t output_path_id, ColumnFamilyData* cfd,
+    const MutableCFOptions& mutable_cf_options, FileMetaData* file_meta,
+    std::unique_ptr<TableProperties>* prop) {
   std::vector<std::unique_ptr<IntTblPropCollectorFactory>> collectors;
 
   // no need to lock because VersionSet::next_file_number_ is atomic
@@ -1502,8 +1647,7 @@ Status MapBuilder::WriteOutputFile(
       &collectors, cfd->GetID(), cfd->GetName(), outfile.get(), kNoCompression,
       CompressionOptions(), -1 /* level */, 0 /* compaction_load */,
       nullptr /* compression_dict */, true /* skip_filters */,
-      true /* ignore_key_type */, output_file_creation_time,
-      0 /* oldest_key_time */, kMapSst));
+      output_file_creation_time, 0 /* oldest_key_time */, kMapSst));
   LogFlush(db_options_.info_log);
 
   // Update boundaries
@@ -1512,16 +1656,33 @@ Status MapBuilder::WriteOutputFile(
   file_meta->fd.smallest_seqno = bound_builder.smallest_seqno;
   file_meta->fd.largest_seqno = bound_builder.largest_seqno;
 
-  for (range_iter->SeekToFirst(); range_iter->Valid(); range_iter->Next()) {
-    builder->Add(range_iter->key(), LazyBuffer(range_iter->value()));
+  for (range_iter->SeekToFirst(); s.ok() && range_iter->Valid();
+       range_iter->Next()) {
+    s = builder->Add(range_iter->key(), range_iter->value());
   }
-  if (!range_iter->status().ok()) {
+  if (s.ok() && !range_iter->status().ok()) {
     s = range_iter->status();
+  }
+  if (s.ok() && tombstone_iter != nullptr) {
+    // fprintf(stderr, "Write RangeDel Begin\n");
+    for (tombstone_iter->SeekToFirst(); s.ok() && tombstone_iter->Valid();
+         tombstone_iter->Next()) {
+      // fprintf(stderr, "Write RangeDel [%s, %s) %zd\n",
+      //         ExtractUserKey(tombstone_iter->key()).ToString().c_str(),
+      //         tombstone_iter->value().ToString().c_str(),
+      //         size_t(GetInternalKeySeqno(tombstone_iter->key())));
+      s = builder->AddTombstone(tombstone_iter->key(), tombstone_iter->value());
+    }
+    if (s.ok() && !tombstone_iter->status().ok()) {
+      s = tombstone_iter->status();
+    }
+    // fprintf(stderr, "Write RangeDel End\n");
   }
 
   // Prepare prop
   file_meta->prop.num_entries = builder->NumEntries();
   file_meta->prop.purpose = kMapSst;
+  file_meta->prop.flags |= TablePropertyCache::kHasRangeDeletions;
   std::tie(file_meta->prop.max_read_amp, file_meta->prop.read_amp) =
       range_iter->GetSstReadAmp();
   auto& dependence_build = range_iter->GetDependence();
@@ -1567,9 +1728,6 @@ Status MapBuilder::WriteOutputFile(
                    " keys, %" PRIu64 " bytes%s",
                    cfd->GetName().c_str(), job_id_, file_number,
                    current_entries, current_bytes, compaction_msg);
-    file_meta->prop.flags |= range_iter->HasDeleteRange()
-                                 ? TablePropertyCache::kHasRangeDeletions
-                                 : 0;
   }
   EventHelpers::LogAndNotifyTableFileCreationFinished(
       nullptr, cfd->ioptions()->listeners, dbname_, cfd->GetName(), fname, -1,
@@ -1619,7 +1777,7 @@ struct MapElementIterator : public InternalIterator {
       ResetIter();
       return;
     }
-    if (meta_array_[where_]->prop.purpose == kMapSst) {
+    if (meta_array_[where_]->prop.is_map_sst()) {
       if (!InitIter()) {
         return;
       }
@@ -1629,7 +1787,7 @@ struct MapElementIterator : public InternalIterator {
         if (++where_ == meta_size_) {
           return;
         }
-        if (meta_array_[where_]->prop.purpose == kMapSst) {
+        if (meta_array_[where_]->prop.is_map_sst()) {
           if (!InitIter()) {
             return;
           }
@@ -1653,7 +1811,7 @@ struct MapElementIterator : public InternalIterator {
       ResetIter();
       return;
     }
-    if (meta_array_[where_]->prop.purpose == kMapSst) {
+    if (meta_array_[where_]->prop.is_map_sst()) {
       if (!InitIter()) {
         return;
       }
@@ -1664,7 +1822,7 @@ struct MapElementIterator : public InternalIterator {
           where_ = meta_size_;
           return;
         }
-        if (meta_array_[where_]->prop.purpose == kMapSst) {
+        if (meta_array_[where_]->prop.is_map_sst()) {
           if (!InitIter()) {
             return;
           }
@@ -1678,7 +1836,7 @@ struct MapElementIterator : public InternalIterator {
   }
   virtual void SeekToFirst() override {
     where_ = 0;
-    if (meta_array_[where_]->prop.purpose == kMapSst) {
+    if (meta_array_[where_]->prop.is_map_sst()) {
       if (!InitIter()) {
         return;
       }
@@ -1690,7 +1848,7 @@ struct MapElementIterator : public InternalIterator {
   }
   virtual void SeekToLast() override {
     where_ = meta_size_ - 1;
-    if (meta_array_[where_]->prop.purpose == kMapSst) {
+    if (meta_array_[where_]->prop.is_map_sst()) {
       if (!InitIter()) {
         return;
       }
@@ -1714,7 +1872,7 @@ struct MapElementIterator : public InternalIterator {
       ResetIter();
       return;
     }
-    if (meta_array_[where_]->prop.purpose == kMapSst) {
+    if (meta_array_[where_]->prop.is_map_sst()) {
       if (!InitIter()) {
         return;
       }
@@ -1739,7 +1897,7 @@ struct MapElementIterator : public InternalIterator {
       ResetIter();
       return;
     }
-    if (meta_array_[where_]->prop.purpose == kMapSst) {
+    if (meta_array_[where_]->prop.is_map_sst()) {
       if (!InitIter()) {
         return;
       }
@@ -1814,7 +1972,7 @@ InternalIterator* NewMapElementIterator(
     const IteratorCache::CreateIterCallback& create_iter, Arena* arena) {
   if (meta_size == 0) {
     return NewEmptyInternalIterator(arena);
-  } else if (meta_size == 1 && meta_array[0]->prop.purpose == kMapSst) {
+  } else if (meta_size == 1 && meta_array[0]->prop.is_map_sst()) {
     DependenceMap empty_dependence_map;
     return create_iter(callback_arg, meta_array[0], empty_dependence_map, arena,
                        nullptr);

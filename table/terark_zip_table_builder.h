@@ -68,6 +68,7 @@ class TerarkZipTableBuilder : public TableBuilder, boost::noncopyable {
   ~TerarkZipTableBuilder();
 
   Status Add(const Slice& key, const LazyBuffer& value) override;
+  Status AddTombstone(const Slice& key, const LazyBuffer& value) override;
   Status Finish(const TablePropertyCache* prop,
                 const std::vector<SequenceNumber>* snapshots) override;
   Status AbortFinish(const std::exception& ex);
@@ -248,7 +249,6 @@ class TerarkZipTableBuilder : public TableBuilder, boost::noncopyable {
   bool waitInited_ = false;
   bool closed_ = false;  // Either Finish() or Abandon() has been called.
   bool isReverseBytewiseOrder_;
-  bool ignore_key_type_;
   int level_;
 
   long long t0 = 0;

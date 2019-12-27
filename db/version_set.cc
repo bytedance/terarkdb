@@ -460,13 +460,14 @@ namespace {
 
 class LevelIterator final : public InternalIterator, public Snapshot {
  public:
-  LevelIterator(
-      TableCache* table_cache, const ReadOptions& read_options,
-      const EnvOptions& env_options, const InternalKeyComparator& icomparator,
-      const LevelFilesBrief* flevel, const DependenceMap& dependence_map,
-      const SliceTransform* prefix_extractor, bool should_sample,
-      HistogramImpl* file_read_hist, bool for_compaction, bool skip_filters,
-      int level, RangeDelAggregator* range_del_agg)
+  LevelIterator(TableCache* table_cache, const ReadOptions& read_options,
+                const EnvOptions& env_options,
+                const InternalKeyComparator& icomparator,
+                const LevelFilesBrief* flevel,
+                const DependenceMap& dependence_map,
+                const SliceTransform* prefix_extractor, bool should_sample,
+                HistogramImpl* file_read_hist, bool for_compaction,
+                bool skip_filters, int level, RangeDelAggregator* range_del_agg)
       : table_cache_(table_cache),
         read_options_(read_options),
         snapshot_(0),
@@ -804,7 +805,7 @@ Status Version::GetPropertiesOfTablesInRange(
                                          false);
       for (size_t j = 0; j < files.size(); ++j) {
         const auto file_meta = files[j];
-        if (file_meta->prop.purpose != SstPurpose::kEssenceSst) {
+        if (file_meta->prop.is_map_sst()) {
           for (auto& dependence : file_meta->prop.dependence) {
             auto find =
                 storage_info_.dependence_map_.find(dependence.file_number);
@@ -1588,7 +1589,7 @@ void VersionStorageInfo::ComputeCompensatedSizes() {
         // size of deletion entries in a stable workload, the deletion
         // compensation logic might introduce unwanted effet which changes the
         // shape of LSM tree.
-        if (f->prop.purpose == 0) {
+        if (!f->prop.is_map_sst()) {
           if (f->prop.num_deletions * 2 >= f->prop.num_entries) {
             compensated_file_size +=
                 (f->prop.num_deletions * 2 - f->prop.num_entries) *
@@ -1977,11 +1978,11 @@ void VersionStorageInfo::AddFile(int level, FileMetaData* f,
       }
     }
   } else {
-    if (f->prop.purpose != 0) {
+    if (f->prop.is_map_sst()) {
       space_amplification_[level] |= kHasMapSst;
     }
   }
-  if ((f->prop.flags & TablePropertyCache::kHasRangeDeletions) != 0) {
+  if (f->prop.has_range_deletions()) {
     space_amplification_[level] |= kHasRangeDeletion;
   }
 }
@@ -2000,7 +2001,7 @@ uint64_t VersionStorageInfo::FileSize(const FileMetaData* f,
     assert(file_number == uint64_t(-1));
   }
   uint64_t file_size = f->fd.GetFileSize();
-  if (f->prop.purpose == kMapSst) {
+  if (f->prop.is_map_sst()) {
     for (auto& dependence : f->prop.dependence) {
       file_size +=
           FileSize(nullptr, dependence.file_number, dependence.entry_count);
@@ -2027,11 +2028,11 @@ uint64_t VersionStorageInfo::FileSizeWithBlob(const FileMetaData* f,
     assert(file_number == uint64_t(-1));
   }
   uint64_t file_size = f->fd.GetFileSize();
-  if (recursive || f->prop.purpose == kMapSst) {
+  if (recursive || f->prop.is_map_sst()) {
     for (auto& dependence : f->prop.dependence) {
       file_size +=
           FileSizeWithBlob(nullptr, dependence.file_number,
-                           f->prop.purpose == kMapSst, dependence.entry_count);
+                           f->prop.is_map_sst(), dependence.entry_count);
     }
   }
   assert(entry_count <= std::max<uint64_t>(1, f->prop.num_entries));
@@ -2525,8 +2526,8 @@ void VersionStorageInfo::ExtendFileRangeOverlappingInterval(
     if (sstableKeyCompare(user_cmp, begin, smallest) <= 0) {
       assert(sstableKeyCompare(user_cmp, smallest, end) <= 0);
     } else {
-      // fprintf(stderr, "ExtendFileRangeOverlappingInterval\n%s - %s\n%s -
-      // %s\n%d %d\n",
+      // fprintf(stderr, "ExtendFileRangeOverlappingInterval\n%s - %s\n%s"
+      //                 " - %s\n%d %d\n",
       //         begin ? begin->DebugString().c_str() : "(null)",
       //         end ? end->DebugString().c_str() : "(null)",
       //         smallest->DebugString().c_str(),
@@ -4142,7 +4143,7 @@ Status VersionSet::ReduceNumberOfLevels(const std::string& dbname,
     new_files_list[new_levels - 1] = vstorage->LevelFiles(first_nonempty_level);
   }
 
-  delete[]-- vstorage->files_;
+  delete[](vstorage->files_ - 1);
   vstorage->files_ = new_files_list;
   vstorage->num_levels_ = new_levels;
 
@@ -4536,7 +4537,7 @@ uint64_t VersionSet::ApproximateSize(Version* v, const FdWithKeyRange& f,
   auto approximate_size_lambda = [v, &approximate_size,
                                   &key](const FileMetaData* file_meta) {
     uint64_t result = 0;
-    if (file_meta->prop.purpose == 0) {
+    if (!file_meta->prop.is_map_sst()) {
       auto& icomp = v->cfd_->internal_comparator();
       if (icomp.Compare(file_meta->largest.Encode(), key) <= 0) {
         // Entire file is before "key", so just add the file size

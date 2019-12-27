@@ -8,6 +8,7 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #include "table/two_level_iterator.h"
+
 #include "db/version_edit.h"
 #include "rocksdb/options.h"
 #include "rocksdb/table.h"
@@ -215,7 +216,7 @@ class MapSstIterator final : public InternalIterator {
     InternalIterator* iter;
     Slice key;
   };
-  template<bool is_less>
+  template <bool is_less>
   class HeapComparator {
    public:
     HeapComparator(const InternalKeyComparator& comparator) : c_(comparator) {}
@@ -395,7 +396,7 @@ class MapSstIterator final : public InternalIterator {
         include_smallest_(false),
         include_largest_(false),
         min_heap_(icomp) {
-    if (file_meta != nullptr && file_meta_->prop.purpose != kMapSst) {
+    if (file_meta != nullptr && !file_meta_->prop.is_map_sst()) {
       abort();
     }
   }
@@ -600,7 +601,7 @@ InternalIterator* NewMapSstIterator(
     const DependenceMap& dependence_map, const InternalKeyComparator& icomp,
     void* callback_arg, const IteratorCache::CreateIterCallback& create_iter,
     Arena* arena) {
-  assert(file_meta == nullptr || file_meta->prop.purpose == kMapSst);
+  assert(file_meta == nullptr || file_meta->prop.is_map_sst());
   if (arena == nullptr) {
     return new MapSstIterator(file_meta, mediate_sst_iter, dependence_map,
                               icomp, callback_arg, create_iter);

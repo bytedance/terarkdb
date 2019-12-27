@@ -24,7 +24,6 @@
 #include "db/event_helpers.h"
 #include "db/log_reader.h"
 #include "db/log_writer.h"
-#include "db/map_builder.h"
 #include "db/memtable.h"
 #include "db/memtable_list.h"
 #include "db/merge_context.h"
@@ -251,7 +250,7 @@ Status FlushJob::Run(LogsWithPrepTracker* prep_tracker,
   auto vstorage = cfd_->current()->storage_info();
   for (int level = 0; level < vstorage->num_levels(); ++level) {
     if (vstorage->LevelFiles(level).size() == 1 &&
-        vstorage->LevelFiles(level).front()->prop.purpose == kMapSst) {
+        vstorage->LevelFiles(level).front()->prop.is_map_sst()) {
       stream << std::to_string(
           vstorage->LevelFiles(level).front()->prop.num_entries);
     } else {
