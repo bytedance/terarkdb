@@ -822,7 +822,8 @@ Status CompactionJob::Run() {
     }
     if (s.ok()) {
       status = Status::OK();
-    } else {
+    }
+    else {
       ROCKS_LOG_ERROR(
         db_options_.info_log,
         "[%s] [JOB %d] remote sub_compact failed with status = %s",
@@ -831,6 +832,7 @@ Status CompactionJob::Run() {
       LogFlush(db_options_.info_log);
       if (!status.ok()) {
         status = s;
+      }
     }
   }
   if (status.ok()) {
