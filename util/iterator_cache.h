@@ -32,18 +32,21 @@ class IteratorCache {
   InternalIterator* GetIterator(const FileMetaData* f,
                                 TableReader** reader_ptr = nullptr);
 
-  InternalIterator* GetIterator(uint64_t file_number,
-                                TableReader** reader_ptr = nullptr);
+  InternalIterator* GetIterator(
+      uint64_t file_number, TableReader** reader_ptr = nullptr,
+      const FileMetaData** file_metadata_ptr = nullptr);
 
   Status GetReader(uint64_t file_number, TableReader** reader_ptr = nullptr,
                    const FileMetaData** file_metadata_ptr = nullptr);
 
+  void PutFileMetaData(FileMetaData* f);
   const FileMetaData* GetFileMetaData(uint64_t file_number);
 
   Arena* GetArena() { return &arena_; }
 
  private:
   const DependenceMap& dependence_map_;
+  DependenceMap dependence_map_ext_;
   void* callback_arg_;
   CreateIterCallback create_iter_;
   Arena arena_;

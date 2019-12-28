@@ -53,8 +53,8 @@ extern const double kIncSlowdownRatio;
 class ColumnFamilyHandleImpl : public ColumnFamilyHandle {
  public:
   // create while holding the mutex
-  ColumnFamilyHandleImpl(
-      ColumnFamilyData* cfd, DBImpl* db, InstrumentedMutex* mutex);
+  ColumnFamilyHandleImpl(ColumnFamilyData* cfd, DBImpl* db,
+                         InstrumentedMutex* mutex);
   // destroy without mutex
   virtual ~ColumnFamilyHandleImpl();
   virtual ColumnFamilyData* cfd() const { return cfd_; }
@@ -79,10 +79,11 @@ class ColumnFamilyHandleImpl : public ColumnFamilyHandle {
 class ColumnFamilyHandleInternal : public ColumnFamilyHandleImpl {
  public:
   ColumnFamilyHandleInternal()
-      : ColumnFamilyHandleImpl(nullptr, nullptr, nullptr), internal_cfd_(nullptr) {}
+      : ColumnFamilyHandleImpl(nullptr, nullptr, nullptr),
+        internal_cfd_(nullptr) {}
 
   void SetCFD(ColumnFamilyData* _cfd) { internal_cfd_ = _cfd; }
-  virtual ColumnFamilyData* cfd() const override { return internal_cfd_; }
+  ColumnFamilyData* cfd() const override { return internal_cfd_; }
 
  private:
   ColumnFamilyData* internal_cfd_;
@@ -246,7 +247,7 @@ class ColumnFamilyData {
   Version* current() { return current_; }
   Version* dummy_versions() { return dummy_versions_; }
   void SetCurrent(Version* _current);
-  uint64_t GetNumLiveVersions() const;  // REQUIRE: DB mutex held
+  uint64_t GetNumLiveVersions() const;    // REQUIRE: DB mutex held
   uint64_t GetTotalSstFilesSize() const;  // REQUIRE: DB mutex held
   uint64_t GetLiveSstFilesSize() const;   // REQUIRE: DB mutex held
   void SetMemtable(MemTable* new_mem) {
@@ -263,8 +264,7 @@ class ColumnFamilyData {
                                  bool needs_dup_key_check,
                                  SequenceNumber earliest_seq);
   void CreateNewMemtable(const MutableCFOptions& mutable_cf_options,
-                         bool needs_dup_key_check,
-                         SequenceNumber earliest_seq);
+                         bool needs_dup_key_check, SequenceNumber earliest_seq);
 
   TableCache* table_cache() const { return table_cache_.get(); }
 
@@ -304,8 +304,7 @@ class ColumnFamilyData {
   // REQUIRES: DB mutex held
   void PrepareManualCompaction(
       const MutableCFOptions& mutable_cf_options, const Slice* begin,
-      const Slice* end, std::unordered_set<uint64_t>* files_being_compact,
-      bool enable_lazy_compaction);
+      const Slice* end, std::unordered_set<uint64_t>* files_being_compact);
 
   // REQUIRES: DB mutex held
   Compaction* CompactRange(
@@ -313,8 +312,7 @@ class ColumnFamilyData {
       int output_level, uint32_t output_path_id, uint32_t max_subcompactions,
       const InternalKey* begin, const InternalKey* end,
       InternalKey** compaction_end, bool* manual_conflict,
-      const std::unordered_set<uint64_t>* files_being_compact,
-      bool enable_lazy_compaction);
+      const std::unordered_set<uint64_t>* files_being_compact);
 
   CompactionPicker* compaction_picker() { return compaction_picker_.get(); }
   // thread-safe
@@ -423,7 +421,7 @@ class ColumnFamilyData {
   Version* dummy_versions_;  // Head of circular doubly-linked list of versions.
   Version* current_;         // == dummy_versions->prev_
 
-  std::atomic<int> refs_;      // outstanding references to ColumnFamilyData
+  std::atomic<int> refs_;  // outstanding references to ColumnFamilyData
   std::atomic<bool> initialized_;
   std::atomic<bool> dropped_;  // true if client dropped it
 
@@ -521,8 +519,7 @@ class ColumnFamilySet {
   // ColumnFamilySet supports iteration
   class iterator {
    public:
-    explicit iterator(ColumnFamilyData* cfd)
-        : current_(cfd) {}
+    explicit iterator(ColumnFamilyData* cfd) : current_(cfd) {}
     iterator& operator++() {
       // dropped column families might still be included in this iteration
       // (we're only removing them when client drops the last reference to the

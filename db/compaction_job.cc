@@ -788,9 +788,9 @@ Status CompactionJob::Run() {
         output.meta.raw_key_size = tp->raw_key_size;
         output.meta.prop.num_entries = tp->num_entries;
         output.meta.prop.num_deletions = tp->num_deletions;
-        output.meta.prop.flags |= tp->num_range_deletions == 0
+        output.meta.prop.flags |= tp->num_range_deletions > 0
                                       ? 0
-                                      : TablePropertyCache::kHasRangeDeletions;
+                                      : TablePropertyCache::kNoRangeDeletions;
         output.meta.prop.flags |=
             tp->snapshots.empty() ? 0 : TablePropertyCache::kHasSnapshots;
         output.meta.prop.purpose = tp->purpose;
@@ -1775,12 +1775,10 @@ Status CompactionJob::FinishCompactionOutputFile(
     Slice lower_bound_guard, upper_bound_guard;
     std::string smallest_user_key;
     const Slice *lower_bound, *upper_bound;
-    bool lower_bound_from_sub_compact = false;
     if (sub_compact->outputs.size() == 1) {
       // For the first output table, include range tombstones before the min key
       // but after the subcompaction boundary.
       lower_bound = sub_compact->start;
-      lower_bound_from_sub_compact = true;
     } else if (meta->smallest.size() > 0) {
       smallest_user_key = meta->smallest.user_key().ToString(false /*hex*/);
       lower_bound_guard = Slice(smallest_user_key);
@@ -1905,9 +1903,8 @@ Status CompactionJob::FinishCompactionOutputFile(
   if (s.ok()) {
     tp = sub_compact->builder->GetTableProperties();
     meta->prop.num_deletions = tp.num_deletions;
-    meta->prop.flags |= tp.num_range_deletions == 0
-                            ? 0
-                            : TablePropertyCache::kHasRangeDeletions;
+    meta->prop.flags |=
+        tp.num_range_deletions > 0 ? 0 : TablePropertyCache::kNoRangeDeletions;
     meta->prop.flags |=
         tp.snapshots.empty() ? 0 : TablePropertyCache::kHasSnapshots;
   }
@@ -2061,14 +2058,14 @@ Status CompactionJob::InstallCompactionResults(
   } else if (compaction->compaction_type() != kGarbageCollection &&
              (compaction->compaction_type() == kMapCompaction ||
               !compaction->input_range().empty() ||
-              mutable_cf_options.enable_lazy_compaction ||
+              cfd->ioptions()->enable_lazy_compaction ||
               cfd->ioptions()->compaction_dispatcher != nullptr)) {
     MapBuilder map_builder(job_id_, db_options_, env_options_, versions_,
                            stats_, dbname_);
     std::unique_ptr<TableProperties> prop;
     FileMetaData file_meta;
     std::vector<Range> deleted_range;
-    std::vector<const FileMetaData*> added_files;
+    std::vector<FileMetaData*> added_files;
     if (compaction->compaction_type() != kMapCompaction) {
       for (auto& sub_compact : compact_->sub_compact_states) {
         if (sub_compact.actual_start.size() == 0) {

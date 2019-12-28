@@ -31,6 +31,7 @@
 #include "util/c_style_callback.h"
 #include "util/iterator_cache.h"
 #include "util/sst_file_manager_impl.h"
+#include "version_edit.h"
 
 namespace rocksdb {
 
@@ -39,13 +40,9 @@ struct FileMetaDataBoundBuilder {
   InternalKey smallest, largest;
   SequenceNumber smallest_seqno;
   SequenceNumber largest_seqno;
-  uint64_t creation_time;
 
   FileMetaDataBoundBuilder(const InternalKeyComparator* _icomp)
-      : icomp(_icomp),
-        smallest_seqno(kMaxSequenceNumber),
-        largest_seqno(0),
-        creation_time(0) {}
+      : icomp(_icomp), smallest_seqno(kMaxSequenceNumber), largest_seqno(0) {}
 
   void Update(const FileMetaData* f) {
     if (smallest.size() == 0 || icomp->Compare(f->smallest, smallest) < 0) {
@@ -285,95 +282,139 @@ class MapSstElementIterator : public MapSstRangeIterator {
     }
   }
   void PrepareNext() {
-    if (where_ == ranges_.end()) {
-      buffer_.clear();
-      if (sst_read_amp_size_ == 0) {
-        sst_read_amp_ratio_ = sst_read_amp_;
-      } else {
-        sst_read_amp_ratio_ /= sst_read_amp_size_;
+    while (true) {
+      if (where_ == ranges_.end()) {
+        buffer_.clear();
+        if (sst_read_amp_size_ == 0) {
+          sst_read_amp_ratio_ = sst_read_amp_;
+        } else {
+          sst_read_amp_ratio_ /= sst_read_amp_size_;
+        }
+        assert(sst_read_amp_ratio_ >= 1);
+        assert(sst_read_amp_ratio_ <= sst_read_amp_);
+        for (auto& pair : dependence_build_) {
+          auto f = iterator_cache_.GetFileMetaData(pair.first);
+          assert(f != nullptr);
+          assert(f->fd.file_size > 0);
+          pair.second = f->prop.num_entries * pair.second / f->fd.file_size;
+          pair.second = std::min<uint64_t>(pair.second, f->prop.num_entries);
+          pair.second = std::max<uint64_t>(pair.second, 1);
+        }
+        return;
       }
-      assert(sst_read_amp_ratio_ >= 1);
-      assert(sst_read_amp_ratio_ <= sst_read_amp_);
-      for (auto& pair : dependence_build_) {
-        auto f = iterator_cache_.GetFileMetaData(pair.first);
-        assert(f != nullptr);
-        assert(f->fd.file_size > 0);
-        pair.second = f->prop.num_entries * pair.second / f->fd.file_size;
-        pair.second = std::min<uint64_t>(pair.second, f->prop.num_entries);
-        pair.second = std::max<uint64_t>(pair.second, 1);
-      }
-      return;
-    }
-    auto& start = map_elements_.smallest_key = where_->point[0];
-    auto& end = map_elements_.largest_key = where_->point[1];
-    assert(icomp_.Compare(start, end) <= 0);
-    map_elements_.include_smallest = where_->include[0];
-    map_elements_.include_largest = where_->include[1];
-    bool& no_records = map_elements_.no_records = where_->no_records;
-    map_elements_.has_delete_range = where_->has_delete_range;
-    bool stable = where_->stable;
-    map_elements_.link = where_->dependence;
-    assert(!map_elements_.include_smallest);
-    assert(map_elements_.include_largest);
+      auto& start = map_elements_.smallest_key = where_->point[0];
+      auto& end = map_elements_.largest_key = where_->point[1];
+      assert(icomp_.Compare(start, end) <= 0);
+      map_elements_.include_smallest = where_->include[0];
+      map_elements_.include_largest = where_->include[1];
+      bool& no_records = map_elements_.no_records = where_->no_records;
+      map_elements_.has_delete_range = where_->has_delete_range;
+      bool stable = where_->stable;
+      auto& links = map_elements_.link = where_->dependence;
+      assert(!map_elements_.include_smallest);
+      assert(map_elements_.include_largest);
 
-    ++where_;
-    size_t range_size = 0;
-    auto put_dependence = [&](uint64_t file_number, uint64_t size) {
-      auto ib = dependence_build_.emplace(file_number, size);
-      if (!ib.second) {
-        ib.first->second += size;
-      }
-    };
-    if (stable) {
-      for (auto& link : map_elements_.link) {
-        put_dependence(link.file_number, link.size);
-        range_size += link.size;
-      }
-    } else {
-      no_records = true;
-      for (auto& link : map_elements_.link) {
-        link.size = 0;
-        TableReader* reader;
-        auto iter = iterator_cache_.GetIterator(link.file_number, &reader);
-        if (!iter->status().ok()) {
-          buffer_.clear();
-          status_ = iter->status();
-          return;
+      ++where_;
+      size_t range_size = 0;
+      auto put_dependence = [&](uint64_t file_number, uint64_t size) {
+        auto ib = dependence_build_.emplace(file_number, size);
+        if (!ib.second) {
+          ib.first->second += size;
         }
-        do {
-          iter->Seek(start);
-          if (!iter->Valid()) {
-            CheckIter(iter);
-            break;
+      };
+      if (stable) {
+        for (auto& link : links) {
+          put_dependence(link.file_number, link.size);
+          range_size += link.size;
+        }
+      } else {
+        no_records = true;
+        for (auto& link : links) {
+          link.size = 0;
+          const FileMetaData* meta =
+              iterator_cache_.GetFileMetaData(link.file_number);
+          if (meta == nullptr) {
+            status_ = Status::Corruption(
+                "MapSstElementIterator missing FileMetaData");
+            buffer_.clear();
+            return;
           }
-          temp_start_.DecodeFrom(iter->key());
-          iter->SeekForPrev(end);
-          if (!iter->Valid()) {
-            CheckIter(iter);
-            break;
-          }
-          temp_end_.DecodeFrom(iter->key());
-          if (icomp_.Compare(temp_start_, temp_end_) <= 0) {
-            uint64_t start_offset =
-                reader->ApproximateOffsetOf(temp_start_.Encode());
-            uint64_t end_offset =
-                reader->ApproximateOffsetOf(temp_end_.Encode());
-            link.size = end_offset - start_offset;
+          TableReader* reader;
+          if (icomp_.Compare(meta->smallest.Encode(), end) > 0 ||
+              icomp_.Compare(meta->largest.Encode(), start) <= 0) {
+            // non overlap with file, drop this link
+            link.file_number = uint64_t(-1);
+            continue;
+          } else if (icomp_.Compare(meta->smallest.Encode(), start) > 0 &&
+                     icomp_.Compare(meta->largest.Encode(), end) <= 0) {
+            // cover whole file
+            uint64_t num_entries = meta->prop.num_entries;
+            if (num_entries == 0) {
+              auto iter = iterator_cache_.GetIterator(meta, &reader);
+              if (!iter->status().ok()) {
+                buffer_.clear();
+                status_ = iter->status();
+                return;
+              }
+              num_entries = reader->GetTableProperties()->num_entries;
+            }
+            if (num_entries > 0) {
+              no_records = false;
+            }
+            link.size = meta->fd.GetFileSize();
             range_size += link.size;
-            no_records = false;
+          } else {
+            auto iter = iterator_cache_.GetIterator(meta, &reader);
+            if (!iter->status().ok()) {
+              buffer_.clear();
+              status_ = iter->status();
+              return;
+            }
+            do {
+              iter->Seek(start);
+              if (!iter->Valid()) {
+                CheckIter(iter);
+                break;
+              }
+              temp_start_.DecodeFrom(iter->key());
+              iter->SeekForPrev(end);
+              if (!iter->Valid()) {
+                CheckIter(iter);
+                break;
+              }
+              temp_end_.DecodeFrom(iter->key());
+              if (icomp_.Compare(temp_start_, temp_end_) <= 0) {
+                uint64_t start_offset =
+                    reader->ApproximateOffsetOf(temp_start_.Encode());
+                uint64_t end_offset =
+                    reader->ApproximateOffsetOf(temp_end_.Encode());
+                link.size = end_offset - start_offset;
+                range_size += link.size;
+                no_records = false;
+              }
+            } while (false);
+            if (!status_.ok()) {
+              buffer_.clear();
+              return;
+            }
           }
-        } while (false);
-        if (!status_.ok()) {
-          buffer_.clear();
-          return;
+          put_dependence(link.file_number, link.size);
         }
-        put_dependence(link.file_number, link.size);
+        links.erase(std::remove_if(links.begin(), links.end(),
+                                   [](const MapSstElement::LinkTarget& link) {
+                                     return link.file_number == uint64_t(-1);
+                                   }),
+                    links.end());
+        if (links.empty()) {
+          continue;
+        }
       }
+      sst_read_amp_ = std::max(sst_read_amp_, map_elements_.link.size());
+      sst_read_amp_ratio_ += map_elements_.link.size() * range_size;
+      sst_read_amp_size_ += range_size;
+      map_elements_.Value(&buffer_);  // Encode value
+      break;
     }
-    sst_read_amp_ = std::max(sst_read_amp_, map_elements_.link.size());
-    sst_read_amp_ratio_ += map_elements_.link.size() * range_size;
-    sst_read_amp_size_ += range_size;
-    map_elements_.Value(&buffer_);  // Encode value
   }
 
  private:
@@ -521,9 +562,8 @@ Status LoadRangeWithDepend(std::vector<RangeWithDepend>& ranges, Arena* arena,
   MapSstElement map_element;
   for (size_t i = 0; i < n; ++i) {
     auto f = file_meta[i];
-    TableReader* reader;
     if (f->prop.is_map_sst()) {
-      auto iter = iterator_cache.GetIterator(f, &reader);
+      auto iter = iterator_cache.GetIterator(f, nullptr);
       assert(iter != nullptr);
       if (!iter->status().ok()) {
         return iter->status();
@@ -541,18 +581,10 @@ Status LoadRangeWithDepend(std::vector<RangeWithDepend>& ranges, Arena* arena,
         ranges.emplace_back(map_element, arena);
       }
     } else {
-      auto iter = iterator_cache.GetIterator(f, &reader);
-      assert(iter != nullptr);
-      if (!iter->status().ok()) {
-        return iter->status();
-      }
       ranges.emplace_back(f, arena);
     }
     if (bound_builder != nullptr) {
       bound_builder->Update(f);
-      bound_builder->creation_time =
-          std::max(bound_builder->creation_time,
-                   reader->GetTableProperties()->creation_time);
     }
   }
   return Status::OK();
@@ -901,18 +933,21 @@ Status LoadDeleteRangeIter(
     IteratorCache& iterator_cache,
     std::vector<std::unique_ptr<TruncatedRangeDelIterator>>*
         range_del_iter_vec) {
-  if (file_meta->prop.is_map_sst() && !file_meta->prop.has_range_deletions()) {
+  if (file_meta->prop.is_map_sst() &&
+      !file_meta->prop.map_handle_range_deletions()) {
     for (auto& dependence : file_meta->prop.dependence) {
       auto f = iterator_cache.GetFileMetaData(dependence.file_number);
       if (f == nullptr) {
         return Status::Aborted("Missing Dependence files");
       }
-      auto s = LoadDeleteRangeIter(f, ic, iterator_cache, range_del_iter_vec);
-      if (!s.ok()) {
-        return s;
+      if (f->prop.has_range_deletions()) {
+        auto s = LoadDeleteRangeIter(f, ic, iterator_cache, range_del_iter_vec);
+        if (!s.ok()) {
+          return s;
+        }
       }
     }
-  } else {
+  } else if (file_meta->prop.has_range_deletions()) {
     auto s = LoadDeleteRangeIterImpl(file_meta, ic, iterator_cache,
                                      range_del_iter_vec);
     if (!s.ok()) {
@@ -937,7 +972,7 @@ MapBuilder::MapBuilder(int job_id, const ImmutableDBOptions& db_options,
 
 Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
                          const std::vector<Range>& deleted_range,
-                         const std::vector<const FileMetaData*>& added_files,
+                         const std::vector<FileMetaData*>& added_files,
                          int output_level, uint32_t output_path_id,
                          ColumnFamilyData* cfd, Version* version,
                          VersionEdit* edit, FileMetaData* file_meta_ptr,
@@ -1081,6 +1116,9 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
         [&icomp](const FileMetaData* f1, const FileMetaData* f2) {
           return icomp.Compare(f1->largest, f2->largest) < 0;
         }));
+    for (auto f : added_files) {
+      iterator_cache.PutFileMetaData(f);
+    }
     s = LoadRangeWithDepend(ranges, arena, &bound_builder, iterator_cache,
                             added_files.data(), added_files.size());
     if (!s.ok()) {
@@ -1121,7 +1159,7 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
   bool build_range_deletion_ranges =
       cfd->ioptions()->compaction_style ==
           CompactionStyle::kCompactionStyleLevel &&
-      version->GetMutableCFOptions().enable_lazy_compaction &&
+      cfd->ioptions()->enable_lazy_compaction &&
       output_level < vstorage->num_non_empty_levels() - 1;
 
   ScopedArenaIterator tombstone_iter;
@@ -1427,16 +1465,13 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
       auto& bound_builder = range_items[output_index].bound_builder;
       for (auto& r : extract) {
         for (auto& dependence : r.dependence) {
-          TableReader* reader;
-          const FileMetaData* f;
-          s = iterator_cache.GetReader(dependence.file_number, &reader, &f);
-          if (!s.ok()) {
-            return s;
+          const FileMetaData* f =
+              iterator_cache.GetFileMetaData(dependence.file_number);
+          if (f == nullptr) {
+            // TODO log error
+            return Status::Corruption("MapBuilder::Build missing FileMetaData");
           }
           bound_builder.Update(f);
-          bound_builder.creation_time =
-              std::max(bound_builder.creation_time,
-                       reader->GetTableProperties()->creation_time);
         }
       }
       auto& output_range_items = range_items[output_index];
@@ -1626,8 +1661,8 @@ Status MapBuilder::WriteOutputFile(
   std::unique_ptr<WritableFileWriter> outfile(new WritableFileWriter(
       std::move(writable_file), fname, env_options_, stats_));
 
-  uint64_t output_file_creation_time = bound_builder.creation_time;
-  if (output_file_creation_time == 0) {
+  uint64_t output_file_creation_time;
+  {
     int64_t _current_time = 0;
     auto status = env_->GetCurrentTime(&_current_time);
     // Safe to proceed even if GetCurrentTime fails. So, log and proceed.
@@ -1663,26 +1698,24 @@ Status MapBuilder::WriteOutputFile(
   if (s.ok() && !range_iter->status().ok()) {
     s = range_iter->status();
   }
+  bool has_range_deletions = false;
   if (s.ok() && tombstone_iter != nullptr) {
-    // fprintf(stderr, "Write RangeDel Begin\n");
     for (tombstone_iter->SeekToFirst(); s.ok() && tombstone_iter->Valid();
          tombstone_iter->Next()) {
-      // fprintf(stderr, "Write RangeDel [%s, %s) %zd\n",
-      //         ExtractUserKey(tombstone_iter->key()).ToString().c_str(),
-      //         tombstone_iter->value().ToString().c_str(),
-      //         size_t(GetInternalKeySeqno(tombstone_iter->key())));
       s = builder->AddTombstone(tombstone_iter->key(), tombstone_iter->value());
+      has_range_deletions = true;
     }
     if (s.ok() && !tombstone_iter->status().ok()) {
       s = tombstone_iter->status();
     }
-    // fprintf(stderr, "Write RangeDel End\n");
   }
 
   // Prepare prop
   file_meta->prop.num_entries = builder->NumEntries();
   file_meta->prop.purpose = kMapSst;
-  file_meta->prop.flags |= TablePropertyCache::kHasRangeDeletions;
+  file_meta->prop.flags |= TablePropertyCache::kMapHandleRangeDeletions;
+  file_meta->prop.flags |=
+      has_range_deletions ? 0 : TablePropertyCache::kNoRangeDeletions;
   std::tie(file_meta->prop.max_read_amp, file_meta->prop.read_amp) =
       range_iter->GetSstReadAmp();
   auto& dependence_build = range_iter->GetDependence();

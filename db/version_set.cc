@@ -1956,20 +1956,17 @@ void VersionStorageInfo::AddFile(int level, FileMetaData* f,
 #endif
   f->refs++;
   level_files->push_back(f);
+  dependence_map_.emplace(f->fd.GetNumber(), f);
   if (level == -1) {
     // Function exists indicates if subject file were relying by other files.
     // When this function is not set, dependence_map_ will update with subject
     // file's property.
     if (exists == nullptr) {
-      dependence_map_.emplace(f->fd.GetNumber(), f);
       for (auto file_number : f->prop.inheritance_chain) {
         assert(dependence_map_.count(file_number) == 0);
         dependence_map_.emplace(file_number, f);
       }
     } else {
-      if (exists(exists_args, f->fd.GetNumber())) {
-        dependence_map_.emplace(f->fd.GetNumber(), f);
-      }
       for (auto file_number : f->prop.inheritance_chain) {
         assert(dependence_map_.count(file_number) == 0);
         if (exists(exists_args, file_number)) {
@@ -2731,7 +2728,7 @@ void VersionStorageInfo::CalculateBaseBytes(const ImmutableCFOptions& ioptions,
   // It is to match the previous behavior when all files are in L0.
   int num_l0_count = static_cast<int>(files_[0].size());
   if (compaction_style_ == kCompactionStyleUniversal &&
-      !options.enable_lazy_compaction) {
+      !ioptions.enable_lazy_compaction) {
     // For universal compaction, we use level0 score to indicate
     // compaction score for the whole DB. Adding other levels as if
     // they are L0 files.

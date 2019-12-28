@@ -733,10 +733,8 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
       Slice lower_bound_guard, upper_bound_guard;
       std::string smallest_user_key;
       const Slice *lower_bound, *upper_bound;
-      bool lower_bound_from_sub_compact = false;
       if (result.files.size() == 1) {
         lower_bound = start;
-        lower_bound_from_sub_compact = true;
       } else if (meta->smallest.size() > 0) {
         smallest_user_key = meta->smallest.user_key().ToString(false /*hex*/);
         lower_bound_guard = Slice(smallest_user_key);
@@ -749,6 +747,7 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
         assert(end == nullptr || ucmp->Compare(upper_bound_guard, *end) < 0);
         assert(meta->largest.size() == 0 ||
                ucmp->Compare(meta->largest.user_key(), upper_bound_guard) != 0);
+        upper_bound = &upper_bound_guard;
       } else {
         upper_bound = end;
       }
@@ -844,9 +843,9 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
     if (s.ok()) {
       tp = builder->GetTableProperties();
       meta->prop.num_deletions = tp.num_deletions;
-      meta->prop.flags |= tp.num_range_deletions == 0
+      meta->prop.flags |= tp.num_range_deletions > 0
                               ? 0
-                              : TablePropertyCache::kHasRangeDeletions;
+                              : TablePropertyCache::kNoRangeDeletions;
       meta->prop.flags |=
           tp.snapshots.empty() ? 0 : TablePropertyCache::kHasSnapshots;
     }

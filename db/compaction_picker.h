@@ -115,8 +115,7 @@ class CompactionPicker {
   virtual void InitFilesBeingCompact(
       const MutableCFOptions& mutable_cf_options, VersionStorageInfo* vstorage,
       const InternalKey* begin, const InternalKey* end,
-      std::unordered_set<uint64_t>* files_being_compact,
-      bool enable_lazy_compaction);
+      std::unordered_set<uint64_t>* files_being_compact);
 
   // Return a compaction object for compacting the range [begin,end] in
   // the specified level.  Returns nullptr if there is nothing in that
@@ -135,8 +134,7 @@ class CompactionPicker {
       uint32_t output_path_id, uint32_t max_subcompactions,
       const InternalKey* begin, const InternalKey* end,
       InternalKey** compaction_end, bool* manual_conflict,
-      const std::unordered_set<uint64_t>* files_being_compact,
-      bool enable_lazy_compaction);
+      const std::unordered_set<uint64_t>* files_being_compact);
 
   // Pick compaction which pointed range files
   // range use internal keys
@@ -152,8 +150,8 @@ class CompactionPicker {
 
   virtual bool NeedsCompaction(const VersionStorageInfo* vstorage) const = 0;
 
-  bool NeedsGarbageCollection(
-      const VersionStorageInfo* vstorage, double ratio) const;
+  bool NeedsGarbageCollection(const VersionStorageInfo* vstorage,
+                              double ratio) const;
 
 // Sanitize the input set of compaction input files.
 // When the input parameters do not describe a valid compaction, the
@@ -329,11 +327,11 @@ class LevelCompactionPicker : public CompactionPicker {
                         const ImmutableCFOptions& ioptions,
                         const InternalKeyComparator* icmp)
       : CompactionPicker(table_cache, env_options, ioptions, icmp) {}
-  Compaction* PickCompaction(
-      const std::string& cf_name, const MutableCFOptions& mutable_cf_options,
-      VersionStorageInfo* vstorage,
-      const std::vector<SequenceNumber>& snapshots,
-      LogBuffer* log_buffer) override;
+  Compaction* PickCompaction(const std::string& cf_name,
+                             const MutableCFOptions& mutable_cf_options,
+                             VersionStorageInfo* vstorage,
+                             const std::vector<SequenceNumber>& snapshots,
+                             LogBuffer* log_buffer) override;
 
   bool NeedsCompaction(const VersionStorageInfo* vstorage) const override;
 };
@@ -366,8 +364,7 @@ class NullCompactionPicker : public CompactionPicker {
       uint32_t /*max_subcompactions*/, const InternalKey* /*begin*/,
       const InternalKey* /*end*/, InternalKey** /*compaction_end*/,
       bool* /*manual_conflict*/,
-      const std::unordered_set<uint64_t>* /*files_being_compact*/,
-      bool /*enable_lazy_compaction*/) override {
+      const std::unordered_set<uint64_t>* /*files_being_compact*/) override {
     return nullptr;
   }
 

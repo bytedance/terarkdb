@@ -415,7 +415,9 @@ void Compaction::ReleaseCompactionFiles(Status status) {
 
 void Compaction::ResetNextCompactionIndex() {
   assert(input_version_ != nullptr);
-  input_vstorage_->ResetNextCompactionIndex(start_level_);
+  if (start_level_ >= 0) {
+    input_vstorage_->ResetNextCompactionIndex(start_level_);
+  }
 }
 
 namespace {

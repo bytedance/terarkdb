@@ -1055,8 +1055,7 @@ const int ColumnFamilyData::kCompactToBaseLevel = -2;
 
 void ColumnFamilyData::PrepareManualCompaction(
     const MutableCFOptions& mutable_cf_options, const Slice* begin,
-    const Slice* end, std::unordered_set<uint64_t>* files_being_compact,
-    bool enable_lazy_compaction) {
+    const Slice* end, std::unordered_set<uint64_t>* files_being_compact) {
   InternalKey ibegin, iend;
   InternalKey* ibegin_ptr = nullptr;
   InternalKey* iend_ptr = nullptr;
@@ -1070,7 +1069,7 @@ void ColumnFamilyData::PrepareManualCompaction(
   }
   compaction_picker_->InitFilesBeingCompact(
       mutable_cf_options, current_->storage_info(), ibegin_ptr, iend_ptr,
-      files_being_compact, enable_lazy_compaction);
+      files_being_compact);
 }
 
 Compaction* ColumnFamilyData::CompactRange(
@@ -1078,12 +1077,11 @@ Compaction* ColumnFamilyData::CompactRange(
     int output_level, uint32_t output_path_id, uint32_t max_subcompactions,
     const InternalKey* begin, const InternalKey* end,
     InternalKey** compaction_end, bool* conflict,
-    const std::unordered_set<uint64_t>* files_being_compact,
-    bool enable_lazy_compaction) {
+    const std::unordered_set<uint64_t>* files_being_compact) {
   auto* result = compaction_picker_->CompactRange(
       GetName(), mutable_cf_options, current_->storage_info(), input_level,
       output_level, output_path_id, max_subcompactions, begin, end,
-      compaction_end, conflict, files_being_compact, enable_lazy_compaction);
+      compaction_end, conflict, files_being_compact);
   if (result != nullptr) {
     result->SetInputVersion(current_);
   }
