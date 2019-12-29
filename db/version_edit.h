@@ -92,6 +92,8 @@ struct TablePropertyCache {
   };
   uint64_t num_entries = 0;                 // the number of entries.
   uint64_t num_deletions = 0;               // the number of deletion entries.
+  uint64_t raw_key_size = 0;                // total uncompressed key size.
+  uint64_t raw_value_size = 0;              // total uncompressed value size.
   uint8_t flags = 0;                        // save flags
   uint8_t purpose = 0;                      // zero for essence sst
   uint16_t max_read_amp = 1;                // max read amp from sst
@@ -126,14 +128,10 @@ struct FileMetaData {
   // These values can mutate, but they can only be read or written from
   // single-threaded LogAndApply thread
   uint64_t num_antiquation;  // the number of out-dated entries.
-  uint64_t raw_key_size;     // total uncompressed key size.
-  uint64_t raw_value_size;   // total uncompressed value size.
 
   int refs;  // Reference count
 
-  bool being_compacted;       // Is this file undergoing compaction?
-  bool init_stats_from_file;  // true if the data-entry stats of this file
-                              // has initialized from file.
+  bool being_compacted;  // Is this file undergoing compaction ?
 
   bool marked_for_compaction;  // True if client asked us nicely to compact this
                                // file.
@@ -145,11 +143,8 @@ struct FileMetaData {
       : table_reader_handle(nullptr),
         compensated_file_size(0),
         num_antiquation(0),
-        raw_key_size(0),
-        raw_value_size(0),
         refs(0),
         being_compacted(false),
-        init_stats_from_file(false),
         marked_for_compaction(false),
         is_skip_gc(false) {}
 

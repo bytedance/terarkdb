@@ -4,6 +4,7 @@
 //  (found in the LICENSE.Apache file in the root directory).
 
 #include <string>
+
 #include "db/version_edit.h"
 #include "db/version_set.h"
 #include "util/logging.h"
@@ -31,7 +32,7 @@ class VersionBuilderTest : public testing::Test {
         ioptions_(options_),
         mutable_cf_options_(options_),
         vstorage_(&icmp_, ucmp_, options_.num_levels, kCompactionStyleLevel,
-                  nullptr, false),
+                  false),
         file_num_(1) {
     mutable_cf_options_.RefreshDerivedOptions(ioptions_);
     size_being_compacted_.resize(options_.num_levels);
@@ -56,8 +57,7 @@ class VersionBuilderTest : public testing::Test {
            const char* largest, uint64_t file_size = 0, uint32_t path_id = 0,
            SequenceNumber smallest_seq = 100, SequenceNumber largest_seq = 100,
            uint64_t num_entries = 0, uint64_t num_deletions = 0,
-           bool sampled = false, SequenceNumber smallest_seqno = 0,
-           SequenceNumber largest_seqno = 0,
+           SequenceNumber smallest_seqno = 0, SequenceNumber largest_seqno = 0,
            const TablePropertyCache& prop = TablePropertyCache{}) {
     assert(level < vstorage_.num_levels());
     FileMetaData* f = new FileMetaData;
@@ -72,10 +72,6 @@ class VersionBuilderTest : public testing::Test {
     f->prop.num_entries = num_entries;
     f->prop.num_deletions = num_deletions;
     vstorage_.AddFile(level, f);
-    if (sampled) {
-      f->init_stats_from_file = true;
-      vstorage_.UpdateAccumulatedStats(f);
-    }
   }
 
   void UpdateVersionStorageInfo() {
@@ -117,10 +113,8 @@ TablePropertyCache GetPropCache(
     uint8_t purpose, std::initializer_list<uint64_t> dependence = {},
     std::initializer_list<uint64_t> inheritance_chain = {}) {
   std::vector<Dependence> dep;
-  for(auto& d : dependence) dep.emplace_back(Dependence{d, 1});
-  return TablePropertyCache{
-      0, purpose, 1, 1, dep, inheritance_chain
-  };
+  for (auto& d : dependence) dep.emplace_back(Dependence{d, 1});
+  return TablePropertyCache{0, purpose, 1, 1, dep, inheritance_chain};
 }
 
 TEST_F(VersionBuilderTest, ApplyAndSaveTo) {
@@ -141,7 +135,8 @@ TEST_F(VersionBuilderTest, ApplyAndSaveTo) {
 
   VersionEdit version_edit;
   version_edit.AddFile(2, 666, 0, 100U, GetInternalKey("301"),
-                       GetInternalKey("350"), 200, 200, false, GetPropCache(1, {27U}));
+                       GetInternalKey("350"), 200, 200, false,
+                       GetPropCache(1, {27U}));
   version_edit.DeleteFile(3, 27U);
 
   EnvOptions env_options;
@@ -176,7 +171,8 @@ TEST_F(VersionBuilderTest, ApplyAndSaveToDynamic) {
 
   VersionEdit version_edit;
   version_edit.AddFile(3, 666, 0, 100U, GetInternalKey("301"),
-                       GetInternalKey("350"), 200, 200, false, GetPropCache(1, {1U}));
+                       GetInternalKey("350"), 200, 200, false,
+                       GetPropCache(1, {1U}));
   version_edit.DeleteFile(0, 1U);
   version_edit.DeleteFile(0, 88U);
 
@@ -201,8 +197,8 @@ TEST_F(VersionBuilderTest, ApplyAndSaveToDynamic) {
 TEST_F(VersionBuilderTest, ApplyAndSaveToDynamic2) {
   ioptions_.level_compaction_dynamic_level_bytes = true;
 
-Add(0, 1U, "150", "200", 100U, 0, 200U, 200U, 0, 0, false, 200U, 200U);
-Add(0, 88U, "201", "300", 100U, 0, 100U, 100U, 0, 0, false, 100U, 100U,
+  Add(0, 1U, "150", "200", 100U, 0, 200U, 200U, 0, 0, false, 200U, 200U);
+  Add(0, 88U, "201", "300", 100U, 0, 100U, 100U, 0, 0, false, 100U, 100U,
       GetPropCache(1, {4U, 5U}));
 
   Add(4, 6U, "150", "179", 100U);
@@ -268,7 +264,6 @@ TEST_F(VersionBuilderTest, ApplyAndSaveToDynamic3) {
   version_edit.AddFile(1, 15U, 0, 100U, GetInternalKey("150"),
                        GetInternalKey("149"), 2, 2, false, {});
 
-  
   version_edit.AddFile(-1, 2U, 0, 100U, GetInternalKey("100"),
                        GetInternalKey("109"), 2, 2, false, {});
   version_edit.AddFile(-1, 4U, 0, 50U, GetInternalKey("100"),
@@ -312,7 +307,6 @@ TEST_F(VersionBuilderTest, ApplyAndSaveToDynamic3) {
                         GetPropCache(1, {14U, 15U}));
   version_edit5.DeleteFile(2, 23U);
   version_builder.Apply(&version_edit5);
-
 
   VersionStorageInfo new_vstorage(&icmp_, ucmp_, options_.num_levels,
                                   kCompactionStyleLevel, nullptr, false);
@@ -403,10 +397,8 @@ TEST_F(VersionBuilderTest, EstimatedActiveKeys) {
   for (uint32_t i = 0; i < kNumFiles; ++i) {
     Add(static_cast<int>(i / kFilesPerLevel), i + 1,
         ToString((i + 100) * 1000).c_str(),
-        ToString((i + 100) * 1000 + 999).c_str(),
-        100U,  0, 100, 100,
-        kEntriesPerFile, kDeletionsPerFile,
-        (i < kTotalSamples));
+        ToString((i + 100) * 1000 + 999).c_str(), 100U, 0, 100, 100,
+        kEntriesPerFile, kDeletionsPerFile, (i < kTotalSamples));
   }
   // minus 2X for the number of deletion entries because:
   // 1x for deletion entry does not count as a data entry.

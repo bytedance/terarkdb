@@ -95,7 +95,6 @@ class VersionStorageInfo {
   VersionStorageInfo(const InternalKeyComparator* internal_comparator,
                      const Comparator* user_comparator, int num_levels,
                      CompactionStyle compaction_style,
-                     VersionStorageInfo* src_vstorage,
                      bool _force_consistency_checks);
   ~VersionStorageInfo();
 
@@ -105,10 +104,11 @@ class VersionStorageInfo {
                bool (*exists)(void*, uint64_t) = nullptr,
                void* exists_args = nullptr, Logger* info_log = nullptr);
 
-  uint64_t FileSize(const FileMetaData* f, uint64_t file_number,
+  uint64_t FileSize(const FileMetaData* f, uint64_t file_number = uint64_t(-1),
                     uint64_t entry_count = 0) const;
 
-  uint64_t FileSizeWithBlob(const FileMetaData* f, uint64_t file_number,
+  uint64_t FileSizeWithBlob(const FileMetaData* f,
+                            uint64_t file_number = uint64_t(-1),
                             bool recursive = true,
                             uint64_t entry_count = 0) const;
 
@@ -123,9 +123,6 @@ class VersionStorageInfo {
 
   // Update the accumulated stats from a file-meta.
   void UpdateAccumulatedStats(FileMetaData* file_meta);
-
-  // Decrease the current stat from a to-be-deleted file-meta
-  void RemoveCurrentStats(FileMetaData* file_meta);
 
   void ComputeCompensatedSizes();
 
@@ -416,14 +413,12 @@ class VersionStorageInfo {
   std::string DebugString(bool hex = false) const;
 
   uint64_t GetAverageValueSize() const {
-    if (accumulated_num_non_deletions_ == 0) {
+    if (accumulated_num_entries_ == 0 ||
+        accumulated_num_entries_ == accumulated_num_deletions_) {
       return 0;
     }
-    assert(accumulated_raw_key_size_ + accumulated_raw_value_size_ > 0);
-    assert(accumulated_file_size_ > 0);
-    return accumulated_raw_value_size_ / accumulated_num_non_deletions_ *
-           accumulated_file_size_ /
-           (accumulated_raw_key_size_ + accumulated_raw_value_size_);
+    return accumulated_file_size_ /
+           (accumulated_num_entries_ - accumulated_num_deletions_);
   }
 
   uint64_t GetEstimatedActiveKeys() const;
@@ -567,26 +562,14 @@ class VersionStorageInfo {
   int l0_delay_trigger_count_ = 0;  // Count used to trigger slow down and stop
                                     // for number of L0 files.
 
-  // the following are the sampled temporary stats.
-  // the current accumulated size of sampled files.
   uint64_t accumulated_file_size_;
-  // the current accumulated size of all raw keys based on the sampled files.
-  uint64_t accumulated_raw_key_size_;
-  // the current accumulated size of all raw keys based on the sampled files.
-  uint64_t accumulated_raw_value_size_;
-  // total number of non-deletion entries
-  uint64_t accumulated_num_non_deletions_;
-  // total number of deletion entries
+  uint64_t accumulated_num_entries_;
   uint64_t accumulated_num_deletions_;
-  // current number of non_deletion entries
-  uint64_t current_num_non_deletions_;
-  // current number of deletion entries
-  uint64_t current_num_deletions_;
-  // current number of file samples
-  uint64_t current_num_samples_;
+
   // Estimated bytes needed to be compacted until all levels' size is down to
   // target sizes.
   uint64_t estimated_compaction_needed_bytes_;
+
   // Store quantity of files that needs gc.
   double total_garbage_ratio_;
 
@@ -651,8 +634,7 @@ class Version : public SeparateHelper, private LazyBufferState {
 
   // Loads some stats information from files. Call without mutex held. It needs
   // to be called before applying the version to the version set.
-  void PrepareApply(const MutableCFOptions& mutable_cf_options,
-                    bool update_stats);
+  void PrepareApply(const MutableCFOptions& mutable_cf_options);
 
   // Reference count management (so Versions do not disappear out from
   // under live iterators)

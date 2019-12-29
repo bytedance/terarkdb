@@ -2496,23 +2496,23 @@ Compaction* LevelCompactionBuilder::PickLazyCompaction(
   }
 
   size_t base_size = mutable_cf_options_.write_buffer_size;
-  double q;
-  {
+  auto get_q = [&] {
     std::vector<double> level_ratio(vstorage_->num_levels() - 1);
-    double base_size_real = double(base_size);
+    auto base_size_real = double(base_size);
     for (int i = 1; i < vstorage_->num_levels(); ++i) {
       auto& sr = sorted_runs[i];
       sr.level = i;
       for (auto f : vstorage_->LevelFiles(i)) {
-        sr.size += vstorage_->FileSize(f, uint64_t(-1));
+        sr.size += vstorage_->FileSize(f);
+        sr.compensated_file_size += f->compensated_file_size;
       }
-      sr.compensated_file_size = sr.size;
-      level_ratio[i - 1] = sr.size / base_size_real;
+      level_ratio[i - 1] = sr.compensated_file_size / base_size_real;
     }
-    q = std::max(1.5,
-                 CompactionPicker::GetQ(level_ratio.begin(), level_ratio.end(),
-                                        level_ratio.size()));
-  }
+    return std::max<double>(
+        1.5, CompactionPicker::GetQ(level_ratio.begin(), level_ratio.end(),
+                                    level_ratio.size()));
+  };
+  double q = get_q();
 
   sorted_runs[bottommost_level].being_compacted =
       picker->AreFilesInCompaction(vstorage_->LevelFiles(bottommost_level));
@@ -2801,7 +2801,8 @@ Compaction* LevelCompactionBuilder::PickLazyCompaction(
   for (int i = 1; i < vstorage_->num_levels() - 1; ++i) {
     uint64_t pick_size = std::max<uint64_t>(base_size, level_size);
     level_size *= q;
-    if (sorted_runs[i].size <= level_size || vstorage_->LevelFiles(i).empty() ||
+    if (sorted_runs[i].compensated_file_size <= level_size ||
+        vstorage_->LevelFiles(i).empty() ||
         pick_size * 2 > sorted_runs[i].size) {
       continue;
     }

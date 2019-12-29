@@ -620,13 +620,6 @@ class VersionBuilder::Rep {
         }
       }
     }
-    // Handle actual deleted files
-    for (auto f : base_vstorage_->LevelFiles(-1)) {
-      if (dependence_map_.count(f->fd.GetNumber()) == 0) {
-        // f is to-be-deleted table file
-        vstorage->RemoveCurrentStats(f);
-      }
-    }
     for (auto& pair : dependence_map_) {
       auto& item = pair.second;
       if (item.level == -1) {
@@ -636,6 +629,7 @@ class VersionBuilder::Rep {
         vstorage->AddFile(-1, item.f, c_style_callback(exists), &exists,
                           info_log_);
       }
+      vstorage->UpdateAccumulatedStats(item.f);
     }
     size_t old_file_count = std::max<size_t>(
         1, std::min(dependence_map_.size() / 128, old_file_queue.size()));
@@ -827,7 +821,7 @@ void VersionBuilderDebugger::Verify(VersionBuilder::Rep* rep,
     VersionStorageInfo vstorage_0(
         vstorage->InternalComparator(),
         vstorage->InternalComparator()->user_comparator(),
-        vstorage->num_levels(), kCompactionStyleNone, nullptr, true);
+        vstorage->num_levels(), kCompactionStyleNone, true);
     VersionBuilder::Rep rep_0(rep->env_options_, rep->info_log_,
                               rep->table_cache_, &vstorage_0);
     for (size_t j = 0; j < i; ++j) {
@@ -838,7 +832,7 @@ void VersionBuilderDebugger::Verify(VersionBuilder::Rep* rep,
     VersionStorageInfo vstorage_1(
         vstorage->InternalComparator(),
         vstorage->InternalComparator()->user_comparator(),
-        vstorage->num_levels(), kCompactionStyleNone, nullptr, true);
+        vstorage->num_levels(), kCompactionStyleNone, true);
     rep_0.SaveTo(&vstorage_1);
     VersionBuilder::Rep rep_1(rep->env_options_, rep->info_log_,
                               rep->table_cache_, &vstorage_1);

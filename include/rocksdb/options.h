@@ -900,12 +900,7 @@ struct DBOptions {
   // Default: 3
   uint64_t write_thread_slow_yield_usec = 3;
 
-  // If true, then DB::Open() will not update the statistics used to optimize
-  // compaction decision by loading table properties from many files.
-  // Turning off this feature will improve DBOpen time especially in
-  // disk environment.
-  //
-  // Default: false
+  // Deprecated
   bool skip_stats_update_on_db_open = false;
 
   // Recovery mode to control the consistency while replaying WAL

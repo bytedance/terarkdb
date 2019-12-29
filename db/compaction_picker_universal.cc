@@ -233,13 +233,13 @@ UniversalCompactionPicker::CalculateSortedRuns(
                      f->compensated_file_size, f->being_compacted);
   }
   for (int level = 1; level < vstorage.num_levels(); level++) {
-    uint64_t total_compensated_size = 0U;
     uint64_t total_size = 0U;
+    uint64_t total_compensated_size = 0U;
     bool being_compacted = false;
     bool is_first = true;
     for (FileMetaData* f : vstorage.LevelFiles(level)) {
-      total_compensated_size += f->compensated_file_size;
       total_size += vstorage.FileSize(f, uint64_t(-1));
+      total_compensated_size += f->compensated_file_size;
       if (mutable_cf_options.compaction_options_universal.allow_trivial_move) {
         being_compacted |= f->being_compacted;
       } else {
@@ -1341,8 +1341,9 @@ Compaction* UniversalCompactionPicker::PickCompactionToReduceSortedRuns(
   std::vector<double> sorted_run_ratio(sorted_runs.size());
   double base_size = double(mutable_cf_options.write_buffer_size);
   std::transform(sorted_runs.begin(), sorted_runs.end(),
-                 sorted_run_ratio.begin(),
-                 [&](const SortedRun& sr) { return sr.size / base_size; });
+                 sorted_run_ratio.begin(), [&](const SortedRun& sr) {
+                   return sr.compensated_file_size / base_size;
+                 });
   std::vector<SortedRunGroup> group;
   auto common_ratio =
       GenSortedRunGroup(sorted_run_ratio, reduce_sorted_run_target, &group);

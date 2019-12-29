@@ -656,6 +656,8 @@ class Repairer {
 
       t->meta.prop.num_entries = props->num_entries;
       t->meta.prop.num_deletions = props->num_deletions;
+      t->meta.prop.raw_key_size = props->raw_key_size;
+      t->meta.prop.raw_value_size = props->raw_value_size;
       t->meta.prop.flags |= props->num_range_deletions > 0
                                 ? 0
                                 : TablePropertyCache::kNoRangeDeletions;
