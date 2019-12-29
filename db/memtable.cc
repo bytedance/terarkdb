@@ -469,7 +469,7 @@ FragmentedRangeTombstoneIterator* MemTable::NewRangeTombstoneIterator(
             std::unique_ptr<InternalIteratorBase<Slice>>(unfragmented_iter),
             comparator_.comparator, false /* for_compaction */,
             std::vector<SequenceNumber>() /* snapshots */, num_range_del);
-    if (timer.ElapsedNanos() > 10000000ULL) {
+    if (timer.ElapsedNanos() > 1000000ULL) {
       is_range_del_slow_ = true;
     }
     if (num_range_del == num_range_del_.load(std::memory_order_relaxed)) {

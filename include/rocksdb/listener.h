@@ -95,6 +95,8 @@ enum class CompactionReason : int {
   kTrivialMoveLevel,
   // kv separate GC.
   kGarbageCollection,
+  // Found RangeDeletion
+  kRangeDeletion,
   // total number of compaction reasons, new reasons must be added above this.
   kNumOfReasons,
 };

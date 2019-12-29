@@ -43,8 +43,9 @@ InternalIterator* IteratorCache::GetIterator(const FileMetaData* f,
   return item.iter;
 }
 
-InternalIterator* IteratorCache::GetIterator(uint64_t file_number,
-                                             TableReader** reader_ptr) {
+InternalIterator* IteratorCache::GetIterator(
+    uint64_t file_number, TableReader** reader_ptr,
+    const FileMetaData** file_metadata_ptr) {
   auto find = iterator_map_.find(file_number);
   if (find != iterator_map_.end()) {
     if (reader_ptr != nullptr) {
@@ -53,34 +54,69 @@ InternalIterator* IteratorCache::GetIterator(uint64_t file_number,
     return find->second.iter;
   }
   CacheItem item;
-  auto find_f = dependence_map_.find(file_number);
-  if (find_f == dependence_map_.end()) {
-    auto s = Status::Corruption("Composite sst depend files missing");
+  item.meta = GetFileMetaData(file_number);
+  if (item.meta == nullptr) {
+    auto s = Status::Corruption(
+        "IteratorCache::GetIterator: Composite sst depend files missing");
     item.iter = NewErrorInternalIterator<LazyBuffer>(s, &arena_);
     item.reader = nullptr;
-    item.meta = nullptr;
   } else {
-    auto f = find_f->second;
-    item.iter =
-        create_iter_(callback_arg_, f, dependence_map_, &arena_, &item.reader);
-    item.meta = f;
+    item.iter = create_iter_(callback_arg_, item.meta, dependence_map_, &arena_,
+                             &item.reader);
+  }
+  iterator_map_.emplace(file_number, item);
+  if (reader_ptr != nullptr) {
+    *reader_ptr = item.reader;
+  }
+  if (file_metadata_ptr != nullptr) {
+    *file_metadata_ptr = item.meta;
+  }
+  return item.iter;
+}
+
+Status IteratorCache::GetReader(uint64_t file_number, TableReader** reader_ptr,
+                                const FileMetaData** file_metadata_ptr) {
+  auto find = iterator_map_.find(file_number);
+  if (find != iterator_map_.end()) {
+    if (reader_ptr != nullptr) {
+      *reader_ptr = find->second.reader;
+    }
+    if (file_metadata_ptr != nullptr) {
+      *file_metadata_ptr = find->second.meta;
+    }
+    return find->second.iter->status();
+  }
+  CacheItem item;
+  item.meta = GetFileMetaData(file_number);
+  if (item.meta == nullptr) {
+    return Status::Corruption(
+        "IteratorCache::GetReader: Composite sst depend files missing");
+  } else {
+    item.iter = create_iter_(callback_arg_, item.meta, dependence_map_, &arena_,
+                             &item.reader);
     assert(item.iter != nullptr);
   }
   iterator_map_.emplace(file_number, item);
   if (reader_ptr != nullptr) {
     *reader_ptr = item.reader;
   }
-  return item.iter;
+  if (file_metadata_ptr != nullptr) {
+    *file_metadata_ptr = item.meta;
+  }
+  return item.iter->status();
+}
+
+void IteratorCache::PutFileMetaData(FileMetaData* f) {
+  dependence_map_ext_.emplace(f->fd.GetNumber(), f);
 }
 
 const FileMetaData* IteratorCache::GetFileMetaData(uint64_t file_number) {
-  auto find = iterator_map_.find(file_number);
-  if (find != iterator_map_.end()) {
-    return find->second.meta;
+  auto find = dependence_map_.find(file_number);
+  if (find == dependence_map_.end()) {
+    find = dependence_map_ext_.find(file_number);
   }
-  auto find_depend = dependence_map_.find(file_number);
-  if (find_depend != dependence_map_.end()) {
-    return find_depend->second;
+  if (find != dependence_map_.end()) {
+    return find->second;
   }
   return nullptr;
 }

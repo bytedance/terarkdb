@@ -5,6 +5,7 @@
 
 #pragma once
 #include <string>
+
 #include "db/merge_context.h"
 #include "db/read_callback.h"
 #include "rocksdb/env.h"
@@ -67,7 +68,7 @@ class GetContext {
                  bool* matched);
 
   GetState State() const { return state_; }
-  Status&& CorruptReason()&& { return std::move(corrupt_); }
+  Status&& CorruptReason() && { return std::move(corrupt_); }
 
   SequenceNumber* max_covering_tombstone_seq() {
     return max_covering_tombstone_seq_;
@@ -81,12 +82,7 @@ class GetContext {
   bool sample() const { return sample_; }
   bool is_index() const { return is_index_; }
 
-  bool is_finished() const {
-    return (state_ != kNotFound &&
-            (separate_helper_ == nullptr || state_ != kMerge)) ||
-           (max_covering_tombstone_seq_ != nullptr &&
-            *max_covering_tombstone_seq_ != 0);
-  }
+  bool is_finished() const { return is_finished_; }
 
   void SetMinSequenceAndType(uint64_t min_seq_type) {
     min_seq_type_ = min_seq_type;
@@ -126,6 +122,7 @@ class GetContext {
   ReadCallback* callback_;
   bool sample_;
   bool is_index_;
+  bool is_finished_;
 };
 
 }  // namespace rocksdb

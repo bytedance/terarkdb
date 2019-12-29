@@ -196,4 +196,22 @@ void IterKey::EnlargeBuffer(size_t key_size) {
   buf_ = new char[key_size];
   buf_size_ = key_size;
 }
+
+Slice ArenaPinSlice(const Slice& slice, Arena* arena) {
+  char* buf = static_cast<char*>(arena->Allocate(slice.size() + 1));
+  memcpy(buf, slice.data(), slice.size());
+  buf[slice.size()] = '\0';  // better for debug read
+  return Slice(buf, slice.size());
+}
+
+Slice ArenaPinInternalKey(const Slice& user_key, SequenceNumber seq,
+                          ValueType type, Arena* arena) {
+  size_t key_size = user_key.size() + 8;
+  char* buf = static_cast<char*>(arena->Allocate(key_size + 1));
+  memcpy(buf, user_key.data(), user_key.size());
+  EncodeFixed64(buf + user_key.size(), PackSequenceAndType(seq, type));
+  buf[key_size] = '\0';  // better for debug read
+  return Slice(buf, key_size);
+}
+
 }  // namespace rocksdb

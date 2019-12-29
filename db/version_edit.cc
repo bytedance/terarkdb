@@ -64,6 +64,19 @@ uint64_t PackFileNumberAndPathId(uint64_t number, uint64_t path_id) {
   return number | (path_id * (kFileNumberMask + 1));
 }
 
+std::vector<SequenceNumber> FileMetaData::ShrinkSnapshot(
+    const std::vector<SequenceNumber>& snapshots) const {
+  std::vector<SequenceNumber> ret = snapshots;
+  auto end = std::unique(ret.begin(), ret.end());
+  end = std::remove_if(ret.begin(), end,
+                       [this](SequenceNumber seqno) {
+                         return seqno < fd.smallest_seqno ||
+                                seqno > fd.largest_seqno;
+                       });
+  ret.erase(end, ret.end());
+  return ret;
+}
+
 void VersionEdit::Clear() {
   comparator_.clear();
   max_level_ = 0;
@@ -190,6 +203,8 @@ bool VersionEdit::EncodeTo(std::string* dst) const {
       for (auto& dependence : f.prop.dependence) {
         PutVarint64(&encode_property_cache, dependence.entry_count);
       }
+      PutVarint64(&encode_property_cache, f.prop.num_deletions);
+      encode_property_cache.push_back(char(f.prop.flags));
       PutLengthPrefixedSlice(dst, encode_property_cache);
     }
     TEST_SYNC_POINT_CALLBACK("VersionEdit::EncodeTo:NewFile4:CustomizeFields",
@@ -345,6 +360,14 @@ const char* VersionEdit::DecodeNewFile4From(Slice* input) {
                   return error_msg;
                 }
               }
+            }
+            if (!field.empty()) {
+              if (!GetVarint64(&field, &f.prop.num_deletions) ||
+                  field.empty()) {
+                return error_msg;
+              }
+              f.prop.flags = uint8_t(field[0]);
+              field.remove_prefix(1);
             }
           }
           break;

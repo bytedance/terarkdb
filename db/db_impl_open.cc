@@ -15,6 +15,7 @@
 
 #include "db/builder.h"
 #include "db/error_handler.h"
+#include "db/map_builder.h"
 #include "options/options_helper.h"
 #include "rocksdb/wal_filter.h"
 #include "table/block_based_table_factory.h"
@@ -23,8 +24,8 @@
 #include "util/sst_file_manager_impl.h"
 #include "util/sync_point.h"
 #if !defined(_MSC_VER) && !defined(__APPLE__)
-# include <sys/unistd.h>
-# include <table/terark_zip_weak_function.h>
+#include <sys/unistd.h>
+#include <table/terark_zip_table.h>
 #endif
 
 namespace rocksdb {
@@ -62,8 +63,8 @@ DBOptions SanitizeOptions(const std::string& dbname, const DBOptions& src) {
   }
   auto bg_job_limits = DBImpl::GetBGJobLimits(
       result.max_background_flushes, result.max_background_compactions,
-      result.max_background_garbage_collections,
-      result.max_background_jobs, true /* parallelize_compactions */);
+      result.max_background_garbage_collections, result.max_background_jobs,
+      true /* parallelize_compactions */);
   result.env->IncBackgroundThreadsIfNeeded(bg_job_limits.max_compactions,
                                            Env::Priority::LOW);
   result.env->IncBackgroundThreadsIfNeeded(bg_job_limits.max_flushes,
@@ -155,9 +156,16 @@ Status SanitizeOptionsByTable(
     const std::vector<ColumnFamilyDescriptor>& column_families) {
   Status s;
   for (auto cf : column_families) {
-    s = cf.options.table_factory->SanitizeOptions(db_opts, cf.options);
+    auto& op = cf.options;
+    s = op.table_factory->SanitizeOptions(db_opts, op);
     if (!s.ok()) {
       return s;
+    }
+    if (op.compaction_dispatcher && op.enable_lazy_compaction &&
+        op.compaction_style == CompactionStyle::kCompactionStyleLevel) {
+      return Status::InvalidArgument(
+          "Does not support enabling_lazy_compaction and "
+          "compaction_dispatcher at the same time under LevelCompaction");
     }
   }
   return Status::OK();

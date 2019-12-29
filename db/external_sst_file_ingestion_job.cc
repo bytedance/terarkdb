@@ -12,6 +12,7 @@
 #endif
 
 #include <inttypes.h>
+
 #include <algorithm>
 #include <string>
 #include <vector>
@@ -94,9 +95,8 @@ Status ExternalSstFileIngestionJob::Prepare(
     f.fd = FileDescriptor(next_file_number++, 0, f.file_size);
 
     const std::string path_outside_db = f.external_file_path;
-    const std::string path_inside_db =
-        TableFileName(cfd_->ioptions()->cf_paths, f.fd.GetNumber(),
-                      f.fd.GetPathId());
+    const std::string path_inside_db = TableFileName(
+        cfd_->ioptions()->cf_paths, f.fd.GetNumber(), f.fd.GetPathId());
 
     if (ingestion_options_.move_files) {
       status = env_->LinkFile(path_outside_db, path_inside_db);
@@ -187,8 +187,8 @@ Status ExternalSstFileIngestionJob::Run() {
       status = CheckLevelForIngestedBehindFile(&f);
     } else {
       status = AssignLevelAndSeqnoForIngestedFile(
-         super_version, force_global_seqno, cfd_->ioptions()->compaction_style,
-         &f, &assigned_seqno);
+          super_version, force_global_seqno, cfd_->ioptions()->compaction_style,
+          &f, &assigned_seqno);
     }
     if (!status.ok()) {
       return status;
@@ -202,10 +202,16 @@ Status ExternalSstFileIngestionJob::Run() {
     if (!status.ok()) {
       return status;
     }
+    TablePropertyCache prop;
+    prop.num_entries = f.table_properties.num_entries;
+    prop.num_deletions = f.table_properties.num_deletions;
+    prop.flags |= f.table_properties.num_range_deletions > 0
+                      ? 0
+                      : TablePropertyCache::kNoRangeDeletions;
     edit_.AddFile(f.picked_level, f.fd.GetNumber(), f.fd.GetPathId(),
                   f.fd.GetFileSize(), f.smallest_internal_key(),
                   f.largest_internal_key(), f.assigned_seqno, f.assigned_seqno,
-                  false /* marked_for_compaction */, TablePropertyCache());
+                  false /* marked_for_compaction */, prop);
   }
 
   if (consumed_seqno) {
@@ -223,7 +229,8 @@ void ExternalSstFileIngestionJob::UpdateStats() {
   uint64_t total_l0_files = 0;
   uint64_t total_time = env_->NowMicros() - job_start_time_;
   for (IngestedFileInfo& f : files_to_ingest_) {
-    InternalStats::CompactionStats stats(CompactionReason::kExternalSstIngestion, 1);
+    InternalStats::CompactionStats stats(
+        CompactionReason::kExternalSstIngestion, 1);
     stats.micros = total_time;
     // If actual copy occurred for this file, then we need to count the file
     // size as the actual bytes written. If the file was linked, then we ignore
@@ -304,8 +311,8 @@ Status ExternalSstFileIngestionJob::GetIngestedFileInfo(
   if (!status.ok()) {
     return status;
   }
-  sst_file_reader.reset(new RandomAccessFileReader(std::move(sst_file),
-                                                   external_file));
+  sst_file_reader.reset(
+      new RandomAccessFileReader(std::move(sst_file), external_file));
 
   status = cfd_->ioptions()->table_factory->NewTableReader(
       TableReaderOptions(*cfd_->ioptions(),
@@ -342,9 +349,9 @@ Status ExternalSstFileIngestionJob::GetIngestedFileInfo(
     assert(seqno_iter == uprops.end());
     file_to_ingest->original_seqno = 0;
     if (ingestion_options_.allow_blocking_flush ||
-            ingestion_options_.allow_global_seqno) {
+        ingestion_options_.allow_global_seqno) {
       return Status::InvalidArgument(
-            "External SST file V1 does not support global seqno");
+          "External SST file V1 does not support global seqno");
     }
   } else {
     return Status::InvalidArgument("External file version is not supported");
@@ -425,10 +432,8 @@ Status ExternalSstFileIngestionJob::AssignLevelAndSeqnoForIngestedFile(
     IngestedFileInfo* file_to_ingest, SequenceNumber* assigned_seqno) {
   Status status;
   *assigned_seqno = 0;
-  bool enableTerarkDB = cfd_->GetCurrentMutableCFOptions()->enable_lazy_compaction;
   const SequenceNumber last_seqno = versions_->LastSequence();
-  // Temporary fix: Always ingest to L0 when using TerarkDB.
-  if (force_global_seqno || enableTerarkDB) {
+  if (force_global_seqno) {
     *assigned_seqno = last_seqno + 1;
     if (compaction_style == kCompactionStyleUniversal) {
       file_to_ingest->picked_level = 0;
@@ -450,9 +455,9 @@ Status ExternalSstFileIngestionJob::AssignLevelAndSeqnoForIngestedFile(
 
     if (vstorage->NumLevelFiles(lvl) > 0) {
       bool overlap_with_level = false;
-      status = sv->current->OverlapWithLevelIterator(ro, env_options_,
-          file_to_ingest->smallest_user_key, file_to_ingest->largest_user_key,
-          lvl, &overlap_with_level);
+      status = sv->current->OverlapWithLevelIterator(
+          ro, env_options_, file_to_ingest->smallest_user_key,
+          file_to_ingest->largest_user_key, lvl, &overlap_with_level);
       if (!status.ok()) {
         return status;
       }
@@ -493,7 +498,7 @@ Status ExternalSstFileIngestionJob::AssignLevelAndSeqnoForIngestedFile(
       target_level = lvl;
     }
   }
- TEST_SYNC_POINT_CALLBACK(
+  TEST_SYNC_POINT_CALLBACK(
       "ExternalSstFileIngestionJob::AssignLevelAndSeqnoForIngestedFile",
       &overlap_with_db);
   file_to_ingest->picked_level = target_level;
@@ -508,10 +513,10 @@ Status ExternalSstFileIngestionJob::CheckLevelForIngestedBehindFile(
   auto* vstorage = cfd_->current()->storage_info();
   // first check if new files fit in the bottommost level
   int bottom_lvl = cfd_->NumberLevels() - 1;
-  if(!IngestedFileFitInLevel(file_to_ingest, bottom_lvl)) {
+  if (!IngestedFileFitInLevel(file_to_ingest, bottom_lvl)) {
     return Status::InvalidArgument(
-      "Can't ingest_behind file as it doesn't fit "
-      "at the bottommost level!");
+        "Can't ingest_behind file as it doesn't fit "
+        "at the bottommost level!");
   }
 
   // second check if despite allow_ingest_behind=true we still have 0 seqnums
@@ -520,8 +525,8 @@ Status ExternalSstFileIngestionJob::CheckLevelForIngestedBehindFile(
     for (auto file : vstorage->LevelFiles(lvl)) {
       if (file->fd.smallest_seqno == 0) {
         return Status::InvalidArgument(
-          "Can't ingest_behind file as despite allow_ingest_behind=true "
-          "there are files with 0 seqno in database at upper levels!");
+            "Can't ingest_behind file as despite allow_ingest_behind=true "
+            "there are files with 0 seqno in database at upper levels!");
       }
     }
   }
