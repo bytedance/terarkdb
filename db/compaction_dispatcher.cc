@@ -155,7 +155,7 @@ void DataIO_loadObject(DataIO& dio, rocksdb::Status& x) {
   AJsonStatus s;
   dio >> s;
   x = rocksdb::Status(s.code, s.subcode, s.sev,
-                        s.state.empty() ? nullptr : s.state.c_str());
+                      s.state.empty() ? nullptr : s.state.c_str());
 }
 
 template<class DataIO>
@@ -197,9 +197,9 @@ AJSON(Dependence, file_number, entry_count);
 
 using FileInfo = CompactionWorkerResult::FileInfo;
 AJSON(FileInfo, smallest, largest, file_name,
-                                        smallest_seqno, largest_seqno,
-                                        file_size,
-                                        marked_for_compaction);
+                smallest_seqno, largest_seqno,
+                file_size,
+                marked_for_compaction);
 
 AJSON(CompactionWorkerResult, status, actual_start, actual_end, files);
 
