@@ -275,6 +275,11 @@ int ServerMain(ServerRunner *runner, rocksdb::DBImpl *db,
     ServerCron(&last_cron_time, curr_time, &el, log);
   }
 #else
+  (void)runner;
+  (void)db;
+  (void)path;
+  (void)env;
+  (void)log;
   runner->closed_ = true;
   return 0;
 #endif
