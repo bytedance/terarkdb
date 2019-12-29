@@ -31,7 +31,6 @@
 #include "table/merging_iterator.h"
 #include "table/table_reader.h"
 #include "table/two_level_iterator.h"
-#include "util/ajson_msd.hpp"
 #include "util/c_style_callback.h"
 #include "util/filename.h"
 
@@ -40,6 +39,18 @@
 #include <terark/util/autoclose.hpp>
 #include <terark/num_to_str.hpp>
 
+//#define USE_AJSON 1
+
+#ifdef USE_AJSON
+  #include "util/ajson_msd.hpp"
+#else
+  #include <terark/io/DataIO.hpp>
+  #include <terark/io/MemStream.hpp>
+  #include <terark/preproc.hpp>
+  #define AJSON(Class, ...) DATA_IO_LOAD_SAVE_E(Class, TERARK_PP_APPLY( \
+     TERARK_PP_JOIN, TERARK_PP_MAP(TERARK_PP_PREPEND, &, __VA_ARGS__)))
+#endif
+
 struct AJsonStatus {
   unsigned char code, subcode, sev;
   std::string state;
@@ -47,6 +58,7 @@ struct AJsonStatus {
 AJSON(AJsonStatus, code, subcode, sev, state);
 
 namespace ajson {
+#ifdef USE_AJSON
 template<>
 struct json_impl<rocksdb::Status, void> {
   static inline void read(reader& rd, rocksdb::Status& v) {
@@ -98,50 +110,139 @@ struct json_impl<rocksdb::InternalKey, void> {
     json_impl<std::string>::template write<write_ty>(wt, s.ToString(true));
   }
 };
+
+template<class T>
+void load_from_buff(T& x, std::string& data) {
+  load_from_buff(x, &data[0], data.size());
 }
 
-AJSON(rocksdb::Dependence, file_number, entry_count);
+template<class T>
+void load_from_buff(T& x, const rocksdb::Slice& data) {
+  load_from_buff(x, &data.ToString()[0], data.size());
+}
 
-AJSON(rocksdb::CompactionWorkerResult::FileInfo, smallest, largest, file_name,
-                                                 smallest_seqno, largest_seqno,
-                                                 file_size,
-                                                 marked_for_compaction);
+#else // USE_AJSON
 
-AJSON(rocksdb::CompactionWorkerResult, status, actual_start, actual_end, files);
+template<class T>
+void load_from_buff(T& x, const rocksdb::Slice& data) {
+  using namespace terark;
+  LittleEndianDataInput<MemIO> dio; dio.set((char*)data.data(), data.size());
+  dio >> x;
+}
 
-AJSON(rocksdb::FileDescriptor, packed_number_and_path_id, file_size,
-                               smallest_seqno, largest_seqno);
+struct string_stream : terark::LittleEndianDataOutput<terark::AutoGrownMemIO> {
+  std::string str() const {
+    return std::string((char*)m_beg, m_pos - m_beg);
+  }
+};
 
-AJSON(rocksdb::TablePropertyCache, purpose, max_read_amp, read_amp, dependence,
-                                   inheritance_chain);
+template<class T>
+void save_to(string_stream& ss, const T& x) {
+  ss.resize(128*1024);
+  ss << x;
+}
 
-AJSON(rocksdb::FileMetaData, fd, smallest, largest, prop);
+#endif
+} // namespace ajson
 
-AJSON(rocksdb::CompressionOptions, window_bits, level, strategy, max_dict_bytes,
-                                   zstd_max_train_bytes, enabled);
+#ifdef USE_AJSON
+using namespace rocksdb;
+#else
+namespace rocksdb {
 
-AJSON(rocksdb::CompactionFilter::Context, is_full_compaction,
-                                          is_manual_compaction,
-                                          column_family_id);
+template<class DataIO>
+void DataIO_loadObject(DataIO& dio, rocksdb::Status& x) {
+  AJsonStatus s;
+  dio >> s;
+  x = rocksdb::Status(s.code, s.subcode, s.sev,
+                        s.state.empty() ? nullptr : s.state.c_str());
+}
 
-AJSON(rocksdb::CompactionWorkerContext::NameParam, name, param);
-AJSON(rocksdb::CompactionWorkerContext, user_comparator, merge_operator,
-                                        merge_operator_data, compaction_filter,
-                                        compaction_filter_factory,
-                                        compaction_filter_context,
-                                        compaction_filter_data, blob_size,
-                                        table_factory, table_factory_options,
-                                        bloom_locality, cf_paths,
-                                        prefix_extractor,
-                                        prefix_extractor_options,
-                                        has_start, has_end,
-                                        start, end, last_sequence,
-                                        earliest_write_conflict_snapshot,
-                                        preserve_deletes_seqnum, file_metadata,
-                                        inputs, cf_name, target_file_size,
-                                        compression, compression_opts,
-                                        existing_snapshots, bottommost_level,
-                                        int_tbl_prop_collector_factories);
+template<class DataIO>
+void DataIO_saveObject(DataIO& dio, const rocksdb::Status& v) {
+  AJsonStatus s = {
+      v.code(), v.subcode(), v.severity(),
+      v.getState() == nullptr ? std::string() : v.getState()
+  };
+  dio << s;
+}
+
+template<class DataIO>
+void DataIO_loadObject(DataIO& dio, InternalKey& x) {
+  dio >> *x.rep();
+}
+
+template<class DataIO>
+void DataIO_saveObject(DataIO& dio, const InternalKey& x) {
+  dio << *x.rep();
+}
+
+template<class DataIO>
+void DataIO_loadObject(DataIO& dio, CompressionType& x) {
+  static_assert(sizeof(CompressionType) == 1, "sizeof(CompressionType) == 1");
+  dio >> (unsigned char&)x;
+}
+
+template<class DataIO>
+void DataIO_saveObject(DataIO& dio, const CompressionType x) {
+  dio << (unsigned char)x;
+}
+
+using EncodedString = CompactionWorkerContext::EncodedString;
+AJSON(EncodedString, data);
+
+#endif
+
+AJSON(Dependence, file_number, entry_count);
+
+using FileInfo = CompactionWorkerResult::FileInfo;
+AJSON(FileInfo, smallest, largest, file_name,
+                                        smallest_seqno, largest_seqno,
+                                        file_size,
+                                        marked_for_compaction);
+
+AJSON(CompactionWorkerResult, status, actual_start, actual_end, files);
+
+AJSON(FileDescriptor, packed_number_and_path_id, file_size,
+                      smallest_seqno, largest_seqno);
+
+AJSON(TablePropertyCache, purpose, max_read_amp, read_amp, dependence,
+                          inheritance_chain);
+
+AJSON(FileMetaData, fd, smallest, largest, prop);
+
+AJSON(CompressionOptions, window_bits, level, strategy, max_dict_bytes,
+                          zstd_max_train_bytes, enabled);
+
+AJSON(CompactionFilterContext, is_full_compaction,
+                               is_manual_compaction,
+                               column_family_id);
+
+using NameParam = CompactionWorkerContext::NameParam;
+AJSON(NameParam, name, param);
+
+AJSON(CompactionWorkerContext, user_comparator, merge_operator,
+                               merge_operator_data, compaction_filter,
+                               compaction_filter_factory,
+                               compaction_filter_context,
+                               compaction_filter_data, blob_size,
+                               table_factory, table_factory_options,
+                               bloom_locality, cf_paths,
+                               prefix_extractor,
+                               prefix_extractor_options,
+                               has_start, has_end,
+                               start, end, last_sequence,
+                               earliest_write_conflict_snapshot,
+                               preserve_deletes_seqnum, file_metadata,
+                               inputs, cf_name, target_file_size,
+                               compression, compression_opts,
+                               existing_snapshots, bottommost_level,
+                               int_tbl_prop_collector_factories);
+
+#ifdef USE_AJSON
+#else
+} // namespace rocksdb
+#endif
 
 namespace rocksdb {
 
@@ -206,8 +307,7 @@ RemoteCompactionDispatcher::StartCompaction(
       CompactionWorkerResult result;
       std::string encoded_result = future.get();
       try {
-        ajson::load_from_buff(result, &encoded_result[0],
-                              encoded_result.size());
+        ajson::load_from_buff(result, encoded_result);
       }
       catch (const std::exception& ex) {
         result.status = Status::Corruption(
@@ -244,7 +344,7 @@ RemoteCompactionDispatcher::Worker::~Worker() {
 std::string RemoteCompactionDispatcher::Worker::DoCompaction(
     Slice data) {
   CompactionWorkerContext context;
-  ajson::load_from_buff(context, &data.ToString()[0], data.size());
+  ajson::load_from_buff(context, data);
 
   auto make_error = [](Status status) {
     CompactionWorkerResult result;
