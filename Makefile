@@ -244,6 +244,10 @@ ifeq ($(TERARKDB_ENABLE_METRICS),1)
 OPT += -DTERARKDB_ENABLE_METRICS
 endif
 
+ifeq ($(TERARKDB_ENABLE_CONSOLE),1)
+OPT += -DTERARKDB_ENABLE_CONSOLE
+endif
+
 #-----------------------------------------------
 include src.mk
 

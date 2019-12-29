@@ -138,6 +138,7 @@ static void ServerCron(long *last_cron_time, long curr_time,
 
 int ServerMain(ServerRunner *runner, rocksdb::DBImpl *db,
                const std::string &path, Env *env, Logger *log) {
+#ifdef TERARKDB_ENABLE_CONSOLE
   const int el_fd = EventLoop<Client>::Open();
   if (el_fd < 0) {
     ROCKS_LOG_ERROR(log, "Failed creating the event loop. Error message: '%s'",
@@ -273,5 +274,9 @@ int ServerMain(ServerRunner *runner, rocksdb::DBImpl *db,
     ExecuteTasks(executor.get(), curr_time, &el);
     ServerCron(&last_cron_time, curr_time, &el, log);
   }
+#else
+  runner->closed_ = true;
+  return 0;
+#endif
 }
 }  // namespace cheapis
