@@ -656,9 +656,9 @@ class Repairer {
 
       t->meta.prop.num_entries = props->num_entries;
       t->meta.prop.num_deletions = props->num_deletions;
-      t->meta.prop.flags |= props->num_range_deletions == 0
+      t->meta.prop.flags |= props->num_range_deletions > 0
                                 ? 0
-                                : TablePropertyCache::kHasRangeDeletions;
+                                : TablePropertyCache::kNoRangeDeletions;
       t->meta.prop.flags |=
           props->snapshots.empty() ? 0 : TablePropertyCache::kHasSnapshots;
       t->meta.prop.purpose = props->purpose;

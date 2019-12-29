@@ -558,7 +558,7 @@ class VersionStorageInfo {
   std::vector<int> compaction_level_;
 
   enum {
-    kHasMapSst        = 1ULL << 0,
+    kHasMapSst = 1ULL << 0,
     kHasRangeDeletion = 1ULL << 1,
   };
   std::unordered_map<int, int> space_amplification_;

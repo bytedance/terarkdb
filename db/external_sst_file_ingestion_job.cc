@@ -205,9 +205,9 @@ Status ExternalSstFileIngestionJob::Run() {
     TablePropertyCache prop;
     prop.num_entries = f.table_properties.num_entries;
     prop.num_deletions = f.table_properties.num_deletions;
-    prop.flags |= f.table_properties.num_range_deletions == 0
+    prop.flags |= f.table_properties.num_range_deletions > 0
                       ? 0
-                      : TablePropertyCache::kHasRangeDeletions;
+                      : TablePropertyCache::kNoRangeDeletions;
     edit_.AddFile(f.picked_level, f.fd.GetNumber(), f.fd.GetPathId(),
                   f.fd.GetFileSize(), f.smallest_internal_key(),
                   f.largest_internal_key(), f.assigned_seqno, f.assigned_seqno,
@@ -432,11 +432,8 @@ Status ExternalSstFileIngestionJob::AssignLevelAndSeqnoForIngestedFile(
     IngestedFileInfo* file_to_ingest, SequenceNumber* assigned_seqno) {
   Status status;
   *assigned_seqno = 0;
-  bool enableTerarkDB =
-      cfd_->GetCurrentMutableCFOptions()->enable_lazy_compaction;
   const SequenceNumber last_seqno = versions_->LastSequence();
-  // Temporary fix: Always ingest to L0 when using TerarkDB.
-  if (force_global_seqno || enableTerarkDB) {
+  if (force_global_seqno) {
     *assigned_seqno = last_seqno + 1;
     if (compaction_style == kCompactionStyleUniversal) {
       file_to_ingest->picked_level = 0;

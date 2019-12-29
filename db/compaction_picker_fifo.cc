@@ -221,8 +221,7 @@ Compaction* FIFOCompactionPicker::CompactRange(
     uint32_t /*output_path_id*/, uint32_t /*max_subcompactions*/,
     const InternalKey* /*begin*/, const InternalKey* /*end*/,
     InternalKey** compaction_end, bool* /*manual_conflict*/,
-    const std::unordered_set<uint64_t>* /*files_being_compact*/,
-    bool /*enable_lazy_compaction*/) {
+    const std::unordered_set<uint64_t>* /*files_being_compact*/) {
 #ifdef NDEBUG
   (void)input_level;
   (void)output_level;

@@ -59,10 +59,9 @@ class MapBuilder {
   // file_meta , porp , deleted_files nullptr if ignore
   Status Build(const std::vector<CompactionInputFiles>& inputs,
                const std::vector<Range>& deleted_range,
-               const std::vector<const FileMetaData*>& added_files,
-               int output_level, uint32_t output_path_id, ColumnFamilyData* cfd,
-               Version* version, VersionEdit* edit,
-               FileMetaData* file_meta = nullptr,
+               const std::vector<FileMetaData*>& added_files, int output_level,
+               uint32_t output_path_id, ColumnFamilyData* cfd, Version* version,
+               VersionEdit* edit, FileMetaData* file_meta = nullptr,
                std::unique_ptr<TableProperties>* porp = nullptr,
                std::set<FileMetaData*>* deleted_files = nullptr);
 

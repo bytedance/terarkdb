@@ -306,8 +306,9 @@ InternalIterator* TableCache::NewIterator(
           table_reader->NewIterator(map_options, prefix_extractor, arena,
                                     skip_filters, false /* for_compaction */);
       if (!dependence_map.empty()) {
-        bool ignore_range_deletions = options.ignore_range_deletions ||
-                                      file_meta.prop.has_range_deletions();
+        bool ignore_range_deletions =
+            options.ignore_range_deletions ||
+            file_meta.prop.map_handle_range_deletions();
         LazyCreateIterator* lazy_create_iter;
         if (arena != nullptr) {
           void* buffer = arena->AllocateAligned(sizeof(LazyCreateIterator));
@@ -417,7 +418,7 @@ Status TableCache::Get(const ReadOptions& options,
       // Forward query to target sst
       ReadOptions forward_options = options;
       forward_options.ignore_range_deletions |=
-          file_meta.prop.has_range_deletions();
+          file_meta.prop.map_handle_range_deletions();
       auto get_from_map = [&](const Slice& largest_key,
                               LazyBuffer&& map_value) {
         s = map_value.fetch();

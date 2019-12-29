@@ -9,6 +9,7 @@
 #include <cstdlib>
 #include <unordered_set>
 #include <vector>
+
 #include "rocksdb/cache.h"
 #include "rocksdb/compaction_filter.h"
 #include "rocksdb/convenience.h"
@@ -126,10 +127,8 @@ DBOptions BuildDBOptions(const ImmutableDBOptions& immutable_db_options,
       immutable_db_options.avoid_flush_during_recovery;
   options.avoid_flush_during_shutdown =
       mutable_db_options.avoid_flush_during_shutdown;
-  options.allow_ingest_behind =
-      immutable_db_options.allow_ingest_behind;
-  options.preserve_deletes =
-      immutable_db_options.preserve_deletes;
+  options.allow_ingest_behind = immutable_db_options.allow_ingest_behind;
+  options.preserve_deletes = immutable_db_options.preserve_deletes;
   options.two_write_queues = immutable_db_options.two_write_queues;
   options.manual_wal_flush = immutable_db_options.manual_wal_flush;
   options.atomic_flush = immutable_db_options.atomic_flush;
@@ -157,8 +156,6 @@ ColumnFamilyOptions BuildColumnFamilyOptions(
   // Compaction related options
   cf_opts.disable_auto_compactions =
       mutable_cf_options.disable_auto_compactions;
-  cf_opts.enable_lazy_compaction =
-      mutable_cf_options.enable_lazy_compaction;
   cf_opts.blob_size = mutable_cf_options.blob_size;
   cf_opts.blob_gc_ratio = mutable_cf_options.blob_gc_ratio;
   cf_opts.soft_pending_compaction_bytes_limit =
@@ -392,7 +389,7 @@ bool ParseStructOptions(
   }
   return true;
 }
-}  // anonymouse namespace
+}  // namespace
 
 bool ParseSliceTransformHelper(
     const std::string& kFixedPrefixName, const std::string& kCappedPrefixName,
@@ -468,7 +465,8 @@ bool ParseOptionHelper(char* opt_address, const OptionType& opt_type,
       *reinterpret_cast<uint32_t*>(opt_address) = ParseUint32(value);
       break;
     case OptionType::kUInt64T:
-      PutUnaligned(reinterpret_cast<uint64_t*>(opt_address), ParseUint64(value));
+      PutUnaligned(reinterpret_cast<uint64_t*>(opt_address),
+                   ParseUint64(value));
       break;
     case OptionType::kSizeT:
       PutUnaligned(reinterpret_cast<size_t*>(opt_address), ParseSizeT(value));
@@ -537,8 +535,8 @@ bool ParseOptionHelper(char* opt_address, const OptionType& opt_type,
       return true;
     }
     case OptionType::kLRUCacheOptions: {
-      return ParseStructOptions<LRUCacheOptions>(value,
-          reinterpret_cast<LRUCacheOptions*>(opt_address),
+      return ParseStructOptions<LRUCacheOptions>(
+          value, reinterpret_cast<LRUCacheOptions*>(opt_address),
           lru_cache_options_type_info);
     }
     case OptionType::kCompactionOptionsUniversal:
@@ -558,7 +556,6 @@ bool ParseOptionHelper(char* opt_address, const OptionType& opt_type,
 bool SerializeSingleOptionHelper(const char* opt_address,
                                  const OptionType opt_type,
                                  std::string* value) {
-
   assert(value);
   switch (opt_type) {
     case OptionType::kBoolean:
@@ -576,20 +573,16 @@ bool SerializeSingleOptionHelper(const char* opt_address,
     case OptionType::kUInt32T:
       *value = ToString(*(reinterpret_cast<const uint32_t*>(opt_address)));
       break;
-    case OptionType::kUInt64T:
-      {
-        uint64_t v;
-        GetUnaligned(reinterpret_cast<const uint64_t*>(opt_address), &v);
-        *value = ToString(v);
-      }
-      break;
-    case OptionType::kSizeT:
-      {
-        size_t v;
-        GetUnaligned(reinterpret_cast<const size_t*>(opt_address), &v);
-        *value = ToString(v);
-      }
-      break;
+    case OptionType::kUInt64T: {
+      uint64_t v;
+      GetUnaligned(reinterpret_cast<const uint64_t*>(opt_address), &v);
+      *value = ToString(v);
+    } break;
+    case OptionType::kSizeT: {
+      size_t v;
+      GetUnaligned(reinterpret_cast<const size_t*>(opt_address), &v);
+      *value = ToString(v);
+    } break;
     case OptionType::kDouble:
       *value = ToString(*(reinterpret_cast<const double*>(opt_address)));
       break;
@@ -880,8 +873,9 @@ Status StringToMap(const std::string& opts_str,
   return Status::OK();
 }
 
-Status ParseCompressionOptions(const std::string& value, const std::string& name,
-                              CompressionOptions& compression_opts) {
+Status ParseCompressionOptions(const std::string& value,
+                               const std::string& name,
+                               CompressionOptions& compression_opts) {
   size_t start = 0;
   size_t end = value.find(':');
   if (end == std::string::npos) {
@@ -971,8 +965,8 @@ Status ParseColumnFamilyOption(const std::string& name,
       if (plain_table_factory != nullptr) {
         base_table_options = plain_table_factory->table_options();
       }
-      Status table_opt_s = GetPlainTableOptionsFromString(
-          base_table_options, value, &table_opt);
+      Status table_opt_s =
+          GetPlainTableOptionsFromString(base_table_options, value, &table_opt);
       if (!table_opt_s.ok()) {
         return Status::InvalidArgument(
             "unable to parse the specified CF option " + name);
@@ -1016,9 +1010,8 @@ Status ParseColumnFamilyOption(const std::string& name,
         case OptionVerificationType::kByName:
         case OptionVerificationType::kByNameAllowNull:
         case OptionVerificationType::kByNameAllowFromNull:
-          return Status::NotSupported(
-              "Deserializing the specified CF option " + name +
-                  " is not supported");
+          return Status::NotSupported("Deserializing the specified CF option " +
+                                      name + " is not supported");
         case OptionVerificationType::kDeprecated:
           return Status::OK();
         default:
@@ -1027,8 +1020,8 @@ Status ParseColumnFamilyOption(const std::string& name,
       }
     }
   } catch (const std::exception&) {
-    return Status::InvalidArgument(
-        "unable to parse the specified option " + name);
+    return Status::InvalidArgument("unable to parse the specified option " +
+                                   name);
   }
   return Status::OK();
 }
@@ -1116,8 +1109,7 @@ std::vector<CompressionType> GetSupportedCompressions() {
   return supported_compressions;
 }
 
-Status ParseDBOption(const std::string& name,
-                     const std::string& org_value,
+Status ParseDBOption(const std::string& name, const std::string& org_value,
                      DBOptions* new_options,
                      bool input_strings_escaped = false) {
   const std::string& value =
@@ -1141,9 +1133,8 @@ Status ParseDBOption(const std::string& name,
       switch (opt_info.verification) {
         case OptionVerificationType::kByName:
         case OptionVerificationType::kByNameAllowNull:
-          return Status::NotSupported(
-              "Deserializing the specified DB option " + name +
-                  " is not supported");
+          return Status::NotSupported("Deserializing the specified DB option " +
+                                      name + " is not supported");
         case OptionVerificationType::kDeprecated:
           return Status::OK();
         default:
@@ -1180,7 +1171,7 @@ Status GetColumnFamilyOptionsFromMapInternal(
   }
   for (const auto& o : opts_map) {
     auto s = ParseColumnFamilyOption(o.first, o.second, new_options,
-                                 input_strings_escaped);
+                                     input_strings_escaped);
     if (!s.ok()) {
       if (s.IsNotSupported()) {
         // If the deserialization of the specified option is not supported
@@ -1204,10 +1195,9 @@ Status GetColumnFamilyOptionsFromMapInternal(
   return Status::OK();
 }
 
-Status GetColumnFamilyOptionsFromString(
-    const ColumnFamilyOptions& base_options,
-    const std::string& opts_str,
-    ColumnFamilyOptions* new_options) {
+Status GetColumnFamilyOptionsFromString(const ColumnFamilyOptions& base_options,
+                                        const std::string& opts_str,
+                                        ColumnFamilyOptions* new_options) {
   std::unordered_map<std::string, std::string> opts_map;
   Status s = StringToMap(opts_str, &opts_map);
   if (!s.ok()) {
@@ -1239,8 +1229,8 @@ Status GetDBOptionsFromMapInternal(
     unsupported_options_names->clear();
   }
   for (const auto& o : opts_map) {
-    auto s = ParseDBOption(o.first, o.second,
-                           new_options, input_strings_escaped);
+    auto s =
+        ParseDBOption(o.first, o.second, new_options, input_strings_escaped);
     if (!s.ok()) {
       if (s.IsNotSupported()) {
         // If the deserialization of the specified option is not supported
@@ -1264,10 +1254,9 @@ Status GetDBOptionsFromMapInternal(
   return Status::OK();
 }
 
-Status GetDBOptionsFromString(
-    const DBOptions& base_options,
-    const std::string& opts_str,
-    DBOptions* new_options) {
+Status GetDBOptionsFromString(const DBOptions& base_options,
+                              const std::string& opts_str,
+                              DBOptions* new_options) {
   std::unordered_map<std::string, std::string> opts_map;
   Status s = StringToMap(opts_str, &opts_map);
   if (!s.ok()) {
@@ -1288,8 +1277,8 @@ Status GetOptionsFromString(const Options& base_options,
   ColumnFamilyOptions new_cf_options(base_options);
   for (const auto& o : opts_map) {
     if (ParseDBOption(o.first, o.second, &new_db_options).ok()) {
-    } else if (ParseColumnFamilyOption(
-        o.first, o.second, &new_cf_options).ok()) {
+    } else if (ParseColumnFamilyOption(o.first, o.second, &new_cf_options)
+                   .ok()) {
     } else {
       return Status::InvalidArgument("Can't parse option " + o.first);
     }
@@ -1348,8 +1337,8 @@ std::unordered_map<std::string, OptionTypeInfo>
          {offsetof(struct DBOptions, advise_random_on_open),
           OptionType::kBoolean, OptionVerificationType::kNormal, false, 0}},
         {"allow_mmap_populate",
-         {offsetof(struct DBOptions, allow_mmap_populate),
-          OptionType::kBoolean, OptionVerificationType::kNormal, false, 0}},
+         {offsetof(struct DBOptions, allow_mmap_populate), OptionType::kBoolean,
+          OptionVerificationType::kNormal, false, 0}},
         {"allow_mmap_reads",
          {offsetof(struct DBOptions, allow_mmap_reads), OptionType::kBoolean,
           OptionVerificationType::kNormal, false, 0}},
@@ -1707,21 +1696,21 @@ std::unordered_map<std::string, OptionTypeInfo>
          {offset_of(&ColumnFamilyOptions::disable_auto_compactions),
           OptionType::kBoolean, OptionVerificationType::kNormal, true,
           offsetof(struct MutableCFOptions, disable_auto_compactions)}},
-        {"enable_lazy_compaction",
-         {offset_of(&ColumnFamilyOptions::enable_lazy_compaction),
-          OptionType::kBoolean, OptionVerificationType::kNormal, true,
-          offsetof(struct MutableCFOptions, enable_lazy_compaction)}},
         {"blob_size",
-         {offset_of(&ColumnFamilyOptions::blob_size),
-          OptionType::kSizeT, OptionVerificationType::kNormal, true,
+         {offset_of(&ColumnFamilyOptions::blob_size), OptionType::kSizeT,
+          OptionVerificationType::kNormal, true,
           offsetof(struct MutableCFOptions, blob_size)}},
         {"blob_gc_ratio",
-         {offset_of(&ColumnFamilyOptions::blob_gc_ratio),
-          OptionType::kDouble, OptionVerificationType::kNormal, true,
+         {offset_of(&ColumnFamilyOptions::blob_gc_ratio), OptionType::kDouble,
+          OptionVerificationType::kNormal, true,
           offsetof(struct MutableCFOptions, blob_gc_ratio)}},
         {"filter_deletes",
          {0, OptionType::kBoolean, OptionVerificationType::kDeprecated, true,
           0}},
+        {"enable_lazy_compaction",
+         {offset_of(&ColumnFamilyOptions::enable_lazy_compaction),
+          OptionType::kBoolean, OptionVerificationType::kNormal, true,
+          offset_of(&ColumnFamilyOptions::enable_lazy_compaction)}},
         {"inplace_update_support",
          {offset_of(&ColumnFamilyOptions::inplace_update_support),
           OptionType::kBoolean, OptionVerificationType::kNormal, false, 0}},

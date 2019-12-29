@@ -2649,9 +2649,7 @@ Status DBImpl::DeleteFilesInRanges(ColumnFamilyHandle* column_family,
                       input_version, true, &mutex_};
 
     auto* vstorage = input_version->storage_info();
-    const MutableCFOptions& mutable_cf_options =
-        *cfd->GetCurrentMutableCFOptions();
-    if (mutable_cf_options.enable_lazy_compaction) {
+    if (cfd->ioptions()->enable_lazy_compaction) {
       const InternalKeyComparator& ic = cfd->ioptions()->internal_comparator;
 
       // deref nullptr of start/limit
@@ -2762,7 +2760,7 @@ Status DBImpl::DeleteFilesInRanges(ColumnFamilyHandle* column_family,
         if (vstorage->LevelFiles(i).empty()) {
           continue;
         }
-        if (mutable_cf_options.enable_lazy_compaction &&
+        if (cfd->ioptions()->enable_lazy_compaction &&
             !level_being_compacted(i)) {
           status = map_builder.Build(
               {CompactionInputFiles{i, vstorage->LevelFiles(i)}}, deleted_range,

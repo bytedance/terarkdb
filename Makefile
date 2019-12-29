@@ -776,7 +776,7 @@ $(SHARED2): $(SHARED3)
 $(SHARED3): $(SHARED4)
 	ln -fs $(SHARED4) $(SHARED3)
 $(SHARED4): shared-objects/${xdir}/${SHARED4} cpputil_metrics2
-	ln -sf $< $@
+	ln -fs $< $@
 
 ifeq ($(HAVE_POWER8),1)
 SHARED_C_OBJECTS = $(addprefix ${xdir}/, $(LIB_SOURCES_C:.c=.o))
@@ -1217,7 +1217,7 @@ $(LIBRARY): $(LIBOBJECTS) cpputil_metrics2
 	$(AM_V_at)$(AR) $(ARFLAGS) $@ $(LIBOBJECTS)
 ifeq (${BUNDLE_ALL_TERARK_STATIC},1)
 	mv $@ orgin-$@
-	ln -s ${TERARK_CORE_PKG_DIR}/lib_static/libterark-{idx,zbs,fsa,core}-${DBG_OR_RLS}.a .
+	ln -fs ${TERARK_CORE_PKG_DIR}/lib_static/libterark-{idx,zbs,fsa,core}-${DBG_OR_RLS}.a .
 	(\
 	echo create $@; \
 	echo addlib libterark-idx-${DBG_OR_RLS}.a; \

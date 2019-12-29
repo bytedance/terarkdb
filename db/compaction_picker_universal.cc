@@ -298,7 +298,7 @@ Compaction* UniversalCompactionPicker::PickCompaction(
       sorted_runs.size() >=
           static_cast<size_t>(
               mutable_cf_options.level0_file_num_compaction_trigger)) {
-    if (mutable_cf_options.enable_lazy_compaction) {
+    if (ioptions_.enable_lazy_compaction) {
       bool has_map_compaction = false;
       for (auto cip : compactions_in_progress_) {
         if (cip->compaction_type() == kMapCompaction) {
@@ -389,7 +389,7 @@ Compaction* UniversalCompactionPicker::PickCompaction(
     c = PickCompositeCompaction(cf_name, mutable_cf_options, vstorage,
                                 snapshots, sorted_runs, log_buffer);
   }
-  if (c == nullptr && !mutable_cf_options.enable_lazy_compaction) {
+  if (c == nullptr && !ioptions_.enable_lazy_compaction) {
     if ((c = PickDeleteTriggeredCompaction(cf_name, mutable_cf_options,
                                            vstorage, score, sorted_runs,
                                            log_buffer)) != nullptr) {
@@ -538,10 +538,9 @@ Compaction* UniversalCompactionPicker::CompactRange(
     uint32_t output_path_id, uint32_t max_subcompactions,
     const InternalKey* begin, const InternalKey* end,
     InternalKey** compaction_end, bool* manual_conflict,
-    const std::unordered_set<uint64_t>* files_being_compact,
-    bool enable_lazy_compaction) {
+    const std::unordered_set<uint64_t>* files_being_compact) {
   if (input_level == ColumnFamilyData::kCompactAllLevels &&
-      enable_lazy_compaction) {
+      ioptions_.enable_lazy_compaction) {
     auto hit_sst = [&](const FileMetaData* f) {
       if (files_being_compact->count(f->fd.GetNumber()) > 0) {
         return true;
@@ -649,7 +648,7 @@ Compaction* UniversalCompactionPicker::CompactRange(
         GetCompressionOptions(ioptions_, vstorage, output_level);
     params.max_subcompactions = max_subcompactions;
     params.manual_compaction = true;
-    if (enable_lazy_compaction) {
+    if (ioptions_.enable_lazy_compaction) {
       params.max_subcompactions = 1;
       params.compaction_type = kMapCompaction;
     } else {
@@ -658,11 +657,11 @@ Compaction* UniversalCompactionPicker::CompactRange(
     return RegisterCompaction(new Compaction(std::move(params)));
   }
 
-  if (!enable_lazy_compaction) {
+  if (!ioptions_.enable_lazy_compaction) {
     return CompactionPicker::CompactRange(
         cf_name, mutable_cf_options, vstorage, input_level, output_level,
         output_path_id, max_subcompactions, begin, end, compaction_end,
-        manual_conflict, files_being_compact, enable_lazy_compaction);
+        manual_conflict, files_being_compact);
   }
   LogBuffer log_buffer(InfoLogLevel::INFO_LEVEL, ioptions_.info_log);
   auto c = PickRangeCompaction(cf_name, mutable_cf_options, vstorage,
@@ -1227,7 +1226,7 @@ Compaction* UniversalCompactionPicker::PickDeleteTriggeredCompaction(
       GetPathId(ioptions_, mutable_cf_options, estimated_total_size);
   CompactionType compaction_type = kKeyValueCompaction;
   uint32_t max_subcompactions = 0;
-  if (mutable_cf_options.enable_lazy_compaction && output_level != 0) {
+  if (ioptions_.enable_lazy_compaction && output_level != 0) {
     compaction_type = kMapCompaction;
     max_subcompactions = 1;
   }
