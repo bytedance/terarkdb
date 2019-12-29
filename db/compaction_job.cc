@@ -784,10 +784,10 @@ Status CompactionJob::Run() {
         }
         output.table_properties = reader->GetTableProperties();
         auto tp = output.table_properties.get();
-        output.meta.raw_value_size = tp->raw_value_size;
-        output.meta.raw_key_size = tp->raw_key_size;
         output.meta.prop.num_entries = tp->num_entries;
         output.meta.prop.num_deletions = tp->num_deletions;
+        output.meta.prop.raw_key_size = tp->raw_key_size;
+        output.meta.prop.raw_value_size = tp->raw_value_size;
         output.meta.prop.flags |= tp->num_range_deletions > 0
                                       ? 0
                                       : TablePropertyCache::kNoRangeDeletions;
@@ -1903,6 +1903,8 @@ Status CompactionJob::FinishCompactionOutputFile(
   if (s.ok()) {
     tp = sub_compact->builder->GetTableProperties();
     meta->prop.num_deletions = tp.num_deletions;
+    meta->prop.raw_key_size = tp.raw_key_size;
+    meta->prop.raw_value_size = tp.raw_value_size;
     meta->prop.flags |=
         tp.num_range_deletions > 0 ? 0 : TablePropertyCache::kNoRangeDeletions;
     meta->prop.flags |=

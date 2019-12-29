@@ -230,6 +230,8 @@ Status BuildTable(
       auto shrinked_snapshots = meta->ShrinkSnapshot(snapshots);
       s = builder->Finish(&meta->prop, &shrinked_snapshots);
       meta->prop.num_deletions = tp.num_deletions;
+      meta->prop.raw_key_size = tp.raw_key_size;
+      meta->prop.raw_value_size = tp.raw_value_size;
       meta->prop.flags |= tp.num_range_deletions > 0
                               ? 0
                               : TablePropertyCache::kNoRangeDeletions;

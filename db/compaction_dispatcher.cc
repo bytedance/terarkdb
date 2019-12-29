@@ -843,6 +843,8 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
     if (s.ok()) {
       tp = builder->GetTableProperties();
       meta->prop.num_deletions = tp.num_deletions;
+      meta->prop.raw_key_size = tp.raw_key_size;
+      meta->prop.raw_value_size = tp.raw_value_size;
       meta->prop.flags |= tp.num_range_deletions > 0
                               ? 0
                               : TablePropertyCache::kNoRangeDeletions;

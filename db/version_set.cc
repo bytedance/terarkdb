@@ -944,8 +944,9 @@ void Version::GetColumnFamilyMetaData(ColumnFamilyMetaData* cf_meta) {
           file->largest.user_key().ToString(),
           file->stats.num_reads_sampled.load(std::memory_order_relaxed),
           file->being_compacted});
-      files.back().num_entries = file->prop.num_entries;
-      files.back().num_deletions = file->prop.num_deletions;
+      auto& back = files.back();
+      back.num_entries = file->prop.num_entries;
+      back.num_deletions = file->prop.num_deletions;
       level_size += file->fd.GetFileSize();
     }
     cf_meta->levels.emplace_back(level, level_size, std::move(files));
@@ -968,39 +969,57 @@ uint64_t VersionStorageInfo::GetEstimatedActiveKeys() const {
   // (1) there exist merge keys
   // (2) keys are directly overwritten
   // (3) deletion on non-existing keys
-  // (4) low number of samples
-  if (current_num_samples_ == 0) {
+  if (accumulated_num_entries_ == 0 ||
+      accumulated_num_entries_ == accumulated_num_deletions_) {
     return 0;
   }
-
-  if (current_num_non_deletions_ <= current_num_deletions_) {
-    return 0;
-  }
-
-  uint64_t est = current_num_non_deletions_ - current_num_deletions_;
-
-  uint64_t file_count = 0;
-  for (int level = -1; level < num_levels_; ++level) {
-    file_count += files_[level].size();
-  }
-
-  if (current_num_samples_ < file_count) {
-    // casting to avoid overflowing
-    return static_cast<uint64_t>(est * static_cast<double>(file_count) /
-                                 current_num_samples_);
-  } else {
-    return est;
-  }
+  return accumulated_num_entries_ - accumulated_num_deletions_;
 }
 
 double VersionStorageInfo::GetEstimatedCompressionRatioAtLevel(
     int level) const {
   assert(level < num_levels_);
+
+  struct {
+    std::pair<uint64_t, uint64_t> (*callback)(void* args, const FileMetaData* f,
+                                              uint64_t file_number);
+    void* args;
+  } get_file_info;
+  auto get_file_size_lambda = [this, &get_file_info](
+                                  const FileMetaData* f,
+                                  uint64_t file_number = uint64_t(
+                                      -1)) -> std::pair<uint64_t, uint64_t> {
+    if (f == nullptr) {
+      auto find = dependence_map_.find(file_number);
+      if (find == dependence_map_.end()) {
+        // TODO log error
+        return {};
+      }
+      f = find->second;
+    } else {
+      assert(file_number == uint64_t(-1));
+    }
+    uint64_t file_size = f->fd.GetFileSize();
+    uint64_t data_size = f->prop.raw_key_size + f->prop.raw_value_size;
+    if (f->prop.is_map_sst()) {
+      for (auto& dependence : f->prop.dependence) {
+        auto pair = get_file_info.callback(get_file_info.args, nullptr,
+                                           dependence.file_number);
+        file_size += pair.first;
+        data_size += pair.second;
+      }
+    }
+    return std::make_pair(file_size, data_size);
+  };
+  get_file_info.callback = c_style_callback(get_file_size_lambda);
+  get_file_info.args = &get_file_size_lambda;
+
   uint64_t sum_file_size_bytes = 0;
   uint64_t sum_data_size_bytes = 0;
   for (auto* file_meta : files_[level]) {
-    sum_file_size_bytes += file_meta->fd.GetFileSize();
-    sum_data_size_bytes += file_meta->raw_key_size + file_meta->raw_value_size;
+    auto pair = get_file_size_lambda(file_meta);
+    sum_file_size_bytes += pair.first;
+    sum_data_size_bytes += pair.second;
   }
   if (sum_file_size_bytes == 0) {
     return -1.0;
@@ -1136,8 +1155,7 @@ Status Version::OverlapWithLevelIterator(const ReadOptions& read_options,
 VersionStorageInfo::VersionStorageInfo(
     const InternalKeyComparator* internal_comparator,
     const Comparator* user_comparator, int levels,
-    CompactionStyle compaction_style, VersionStorageInfo* ref_vstorage,
-    bool _force_consistency_checks)
+    CompactionStyle compaction_style, bool _force_consistency_checks)
     : internal_comparator_(internal_comparator),
       user_comparator_(user_comparator),
       // cfd is nullptr if Version is dummy
@@ -1155,13 +1173,8 @@ VersionStorageInfo::VersionStorageInfo(
       compaction_level_(num_levels_),
       l0_delay_trigger_count_(0),
       accumulated_file_size_(0),
-      accumulated_raw_key_size_(0),
-      accumulated_raw_value_size_(0),
-      accumulated_num_non_deletions_(0),
+      accumulated_num_entries_(0),
       accumulated_num_deletions_(0),
-      current_num_non_deletions_(0),
-      current_num_deletions_(0),
-      current_num_samples_(0),
       estimated_compaction_needed_bytes_(0),
       total_garbage_ratio_(0),
       finalized_(false),
@@ -1169,18 +1182,6 @@ VersionStorageInfo::VersionStorageInfo(
       is_pick_garbage_collection_fail(false),
       force_consistency_checks_(_force_consistency_checks) {
   ++files_;  // level -1 used for dependence files
-  if (ref_vstorage != nullptr) {
-    accumulated_file_size_ = ref_vstorage->accumulated_file_size_;
-    accumulated_raw_key_size_ = ref_vstorage->accumulated_raw_key_size_;
-    accumulated_raw_value_size_ = ref_vstorage->accumulated_raw_value_size_;
-    accumulated_num_non_deletions_ =
-        ref_vstorage->accumulated_num_non_deletions_;
-    accumulated_num_deletions_ = ref_vstorage->accumulated_num_deletions_;
-    current_num_non_deletions_ = ref_vstorage->current_num_non_deletions_;
-    current_num_deletions_ = ref_vstorage->current_num_deletions_;
-    current_num_samples_ = ref_vstorage->current_num_samples_;
-    oldest_snapshot_seqnum_ = ref_vstorage->oldest_snapshot_seqnum_;
-  }
 }
 
 Version::Version(ColumnFamilyData* column_family_data, VersionSet* vset,
@@ -1201,9 +1202,6 @@ Version::Version(ColumnFamilyData* column_family_data, VersionSet* vset,
           cfd_ == nullptr ? 0 : cfd_->NumberLevels(),
           cfd_ == nullptr ? kCompactionStyleLevel
                           : cfd_->ioptions()->compaction_style,
-          (cfd_ == nullptr || cfd_->current() == nullptr)
-              ? nullptr
-              : cfd_->current()->storage_info(),
           cfd_ == nullptr ? false : cfd_->ioptions()->force_consistency_checks),
       vset_(vset),
       next_(this),
@@ -1449,9 +1447,8 @@ void VersionStorageInfo::GenerateLevelFilesBrief() {
   }
 }
 
-void Version::PrepareApply(const MutableCFOptions& mutable_cf_options,
-                           bool update_stats) {
-  UpdateAccumulatedStats(update_stats);
+void Version::PrepareApply(const MutableCFOptions& mutable_cf_options) {
+  storage_info_.ComputeCompensatedSizes();
   storage_info_.UpdateNumNonEmptyLevels();
   storage_info_.CalculateBaseBytes(*cfd_->ioptions(), mutable_cf_options);
   storage_info_.UpdateFilesByCompactionPri(cfd_->ioptions()->compaction_pri);
@@ -1461,156 +1458,57 @@ void Version::PrepareApply(const MutableCFOptions& mutable_cf_options,
   storage_info_.GenerateBottommostFiles();
 }
 
-bool Version::MaybeInitializeFileMetaData(FileMetaData* file_meta) {
-  if (file_meta->init_stats_from_file || file_meta->compensated_file_size > 0) {
-    return false;
-  }
-  std::shared_ptr<const TableProperties> tp;
-  Status s = GetTableProperties(&tp, file_meta);
-  file_meta->init_stats_from_file = true;
-  if (!s.ok()) {
-    ROCKS_LOG_ERROR(vset_->db_options_->info_log,
-                    "Unable to load table properties for file %" PRIu64
-                    " --- %s\n",
-                    file_meta->fd.GetNumber(), s.ToString().c_str());
-    return false;
-  }
-  if (tp.get() == nullptr) return false;
-  if (file_meta->prop.num_entries == 0) {
-    file_meta->prop.num_entries = tp->num_entries;
-  } else {
-    assert(file_meta->prop.num_entries == tp->num_entries);
-  }
-  if (file_meta->prop.num_deletions == 0) {
-    file_meta->prop.num_deletions = tp->num_deletions;
-  } else {
-    assert(file_meta->prop.num_deletions = tp->num_deletions);
-  }
-  file_meta->raw_value_size = tp->raw_value_size;
-  file_meta->raw_key_size = tp->raw_key_size;
-
-  return true;
-}
-
 void VersionStorageInfo::UpdateAccumulatedStats(FileMetaData* file_meta) {
-  assert(file_meta->init_stats_from_file);
   accumulated_file_size_ += file_meta->fd.GetFileSize();
-  accumulated_raw_key_size_ += file_meta->raw_key_size;
-  accumulated_raw_value_size_ += file_meta->raw_value_size;
-  accumulated_num_non_deletions_ +=
-      file_meta->prop.num_entries - file_meta->prop.num_deletions;
+  accumulated_num_entries_ += file_meta->prop.num_entries;
   accumulated_num_deletions_ += file_meta->prop.num_deletions;
-
-  current_num_non_deletions_ +=
-      file_meta->prop.num_entries - file_meta->prop.num_deletions;
-  current_num_deletions_ += file_meta->prop.num_deletions;
-  current_num_samples_++;
-}
-
-void VersionStorageInfo::RemoveCurrentStats(FileMetaData* file_meta) {
-  if (file_meta->init_stats_from_file) {
-    current_num_non_deletions_ -=
-        file_meta->prop.num_entries - file_meta->prop.num_deletions;
-    current_num_deletions_ -= file_meta->prop.num_deletions;
-    current_num_samples_--;
-  }
-}
-
-void Version::UpdateAccumulatedStats(bool update_stats) {
-  if (update_stats) {
-    // maximum number of table properties loaded from files.
-    const int kMaxInitCount = 20;
-    int init_count = 0;
-    // here only the first kMaxInitCount files which haven't been
-    // initialized from file will be updated with num_deletions.
-    // The motivation here is to cap the maximum I/O per Version creation.
-    // The reason for choosing files from lower-level instead of higher-level
-    // is that such design is able to propagate the initialization from
-    // lower-level to higher-level:  When the num_deletions of lower-level
-    // files are updated, it will make the lower-level files have accurate
-    // compensated_file_size, making lower-level to higher-level compaction
-    // will be triggered, which creates higher-level files whose num_deletions
-    // will be updated here.
-    for (int level = -1;
-         level < storage_info_.num_levels_ && init_count < kMaxInitCount;
-         ++level) {
-      for (auto* file_meta : storage_info_.files_[level]) {
-        if (MaybeInitializeFileMetaData(file_meta)) {
-          // each FileMeta will be initialized only once.
-          storage_info_.UpdateAccumulatedStats(file_meta);
-          // when option "max_open_files" is -1, all the file metadata has
-          // already been read, so MaybeInitializeFileMetaData() won't incur
-          // any I/O cost. "max_open_files=-1" means that the table cache passed
-          // to the VersionSet and then to the ColumnFamilySet has a size of
-          // TableCache::kInfiniteCapacity
-          if (vset_->GetColumnFamilySet()->get_table_cache()->GetCapacity() ==
-              TableCache::kInfiniteCapacity) {
-            continue;
-          }
-          if (++init_count >= kMaxInitCount) {
-            break;
-          }
-        }
-      }
-    }
-    // In case all sampled-files contain only deletion entries, then we
-    // load the table-property of a file in higher-level to initialize
-    // that value.
-    // here use level start from num_levels for include depend files
-    for (int level = storage_info_.num_levels_ - 1;
-         storage_info_.accumulated_raw_value_size_ == 0 && level >= -1;
-         --level) {
-      for (int i = static_cast<int>(storage_info_.files_[level].size()) - 1;
-           storage_info_.accumulated_raw_value_size_ == 0 && i >= 0; --i) {
-        if (MaybeInitializeFileMetaData(storage_info_.files_[level][i])) {
-          storage_info_.UpdateAccumulatedStats(storage_info_.files_[level][i]);
-        }
-      }
-    }
-  }
-
-  storage_info_.ComputeCompensatedSizes();
 }
 
 void VersionStorageInfo::ComputeCompensatedSizes() {
   static const int kDeletionWeightOnCompaction = 2;
   uint64_t average_value_size = GetAverageValueSize();
 
-  std::function<uint64_t(const FileMetaData*)> compute_compensated_size;
+  struct {
+    uint64_t (*callback)(void* args, const FileMetaData* f,
+                         uint64_t file_number, uint64_t entry_count);
+    void* args;
+  } compute_compensated_size;
   auto compute_compensated_size_lambda =
-      [this, average_value_size,
-       &compute_compensated_size](const FileMetaData* f) {
-        uint64_t compensated_file_size = f->fd.GetFileSize();
-        // Here we only boost the size of deletion entries of a file only
-        // when the number of deletion entries is greater than the number of
-        // non-deletion entries in the file.  The motivation here is that in
-        // a stable workload, the number of deletion entries should be roughly
-        // equal to the number of non-deletion entries.  If we compensate the
-        // size of deletion entries in a stable workload, the deletion
-        // compensation logic might introduce unwanted effet which changes the
-        // shape of LSM tree.
-        if (!f->prop.is_map_sst()) {
-          if (f->prop.num_deletions * 2 >= f->prop.num_entries) {
-            compensated_file_size +=
-                (f->prop.num_deletions * 2 - f->prop.num_entries) *
-                average_value_size * kDeletionWeightOnCompaction;
-          }
-        } else {
-          for (auto& dependence : f->prop.dependence) {
-            auto find = dependence_map_.find(dependence.file_number);
-            if (find == dependence_map_.end()) {
-              // TODO log error
-              continue;
-            }
-            compensated_file_size += compute_compensated_size(find->second);
-          }
-        }
-        return compensated_file_size;
-      };
-  compute_compensated_size = std::ref(compute_compensated_size_lambda);
+      [this, average_value_size, &compute_compensated_size](
+          const FileMetaData* f, uint64_t file_number = uint64_t(-1),
+          uint64_t entry_count = 0) -> uint64_t {
+    if (f == nullptr) {
+      auto find = dependence_map_.find(file_number);
+      if (find == dependence_map_.end()) {
+        // TODO log error
+        return 0;
+      }
+      f = find->second;
+    } else {
+      assert(file_number == uint64_t(-1));
+    }
+    uint64_t file_size = 0;
+    if (f->prop.is_map_sst()) {
+      for (auto& dependence : f->prop.dependence) {
+        file_size += compute_compensated_size.callback(
+            compute_compensated_size.args, nullptr, dependence.file_number,
+            dependence.entry_count);
+      }
+    } else {
+      file_size = f->fd.GetFileSize() + f->prop.num_deletions *
+                                            average_value_size *
+                                            kDeletionWeightOnCompaction;
+    }
+    return entry_count == 0 ? file_size
+                            : file_size * entry_count /
+                                  std::max<uint64_t>(1, f->prop.num_entries);
+  };
+  compute_compensated_size.callback =
+      c_style_callback(compute_compensated_size_lambda);
+  compute_compensated_size.args = &compute_compensated_size_lambda;
 
   // compute the compensated size
-  for (int level = 0; level < num_levels_; level++) {
+  for (int level = -1; level < num_levels_; level++) {
     for (auto* file_meta : files_[level]) {
       // Here we only compute compensated_file_size for those file_meta
       // which compensated_file_size is uninitialized (== 0). This is true only
@@ -3297,7 +3195,7 @@ Status VersionSet::ProcessManifestWrites(
 
     if (!first_writer.edit_list.front()->IsColumnFamilyManipulation()) {
       for (int i = 0; i < static_cast<int>(versions.size()); ++i) {
-        versions[i]->PrepareApply(*mutable_cf_options_ptrs[i], true);
+        versions[i]->PrepareApply(*mutable_cf_options_ptrs[i]);
       }
     }
 
@@ -3949,8 +3847,7 @@ Status VersionSet::Recover(
       builder->SaveTo(v->storage_info());
 
       // Install recovered version
-      v->PrepareApply(*cfd->GetLatestMutableCFOptions(),
-                      !(db_options_->skip_stats_update_on_db_open));
+      v->PrepareApply(*cfd->GetLatestMutableCFOptions());
       AppendVersion(cfd, v);
     }
 
@@ -4319,7 +4216,7 @@ Status VersionSet::DumpManifest(Options& options, std::string& dscname,
                                *cfd->GetLatestMutableCFOptions(),
                                current_version_number_++);
       builder->SaveTo(v->storage_info());
-      v->PrepareApply(*cfd->GetLatestMutableCFOptions(), false);
+      v->PrepareApply(*cfd->GetLatestMutableCFOptions());
 
       printf("--------------- Column family \"%s\"  (ID %u) --------------\n",
              cfd->GetName().c_str(), (unsigned int)cfd->GetID());

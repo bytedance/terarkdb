@@ -205,6 +205,8 @@ Status ExternalSstFileIngestionJob::Run() {
     TablePropertyCache prop;
     prop.num_entries = f.table_properties.num_entries;
     prop.num_deletions = f.table_properties.num_deletions;
+    prop.raw_key_size = f.table_properties.raw_key_size;
+    prop.raw_value_size = f.table_properties.raw_value_size;
     prop.flags |= f.table_properties.num_range_deletions > 0
                       ? 0
                       : TablePropertyCache::kNoRangeDeletions;
