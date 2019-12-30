@@ -69,6 +69,8 @@
 #include "util/stop_watch.h"
 #include "util/string_util.h"
 #include "util/sync_point.h"
+#include "terark/valvec.hpp"
+#include "terark/util/function.hpp"
 
 namespace rocksdb {
 
@@ -1982,13 +1984,9 @@ Status CompactionJob::FinishCompactionOutputFile(
     for (auto& pair : dependence) {
       meta->prop.dependence.emplace_back(Dependence{pair.first, pair.second});
     }
-    std::sort(meta->prop.dependence.begin(), meta->prop.dependence.end(),
-              [](const Dependence& l, const Dependence& r) {
-                return l.file_number < r.file_number;
-              });
+    terark::sort_ex_a(meta->prop.dependence, TERARK_FIELD(file_number));
     assert(std::is_sorted(inheritance_chain.begin(), inheritance_chain.end()));
-    meta->prop.inheritance_chain.assign(inheritance_chain.begin(),
-                                        inheritance_chain.end());
+    meta->prop.inheritance_chain = inheritance_chain;
 
     s = sub_compact->builder->Finish(&meta->prop);
   } else {

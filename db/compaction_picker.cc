@@ -29,6 +29,9 @@
 #include "util/string_util.h"
 #include "util/sync_point.h"
 
+#include "terark/valvec.hpp"
+#include "terark/util/function.hpp"
+
 namespace rocksdb {
 
 namespace {
@@ -621,7 +624,7 @@ Compaction* CompactionPicker::PickGarbageCollection(
   std::vector<FileInfo> gc_files;
 
   // Setting fragment_size as one eighth max_file_size prevents selecting massive
-  // files to single compaction which would pin down the maximum deletable file 
+  // files to single compaction which would pin down the maximum deletable file
   // number for a long time resulting possible storage leakage.
   size_t max_file_size =
       MaxFileSizeForLevel(mutable_cf_options, 1, ioptions_.compaction_style);
@@ -675,10 +678,7 @@ Compaction* CompactionPicker::PickGarbageCollection(
   }
 
   // Sorting by ratio decreasing.
-  std::sort(gc_files.begin(), gc_files.end(),
-            [](const FileInfo& l, const FileInfo& r) {
-              return l.score > r.score;
-            });
+  terark::sort_ex_a(gc_files, TERARK_FIELD(score), std::greater<double>());
 
   // Return nullptr if nothing to do.
   if (gc_files.empty() ||

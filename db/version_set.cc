@@ -52,6 +52,9 @@
 #include "util/string_util.h"
 #include "util/sync_point.h"
 
+#include "terark/valvec.hpp"
+#include "terark/util/function.hpp"
+
 namespace rocksdb {
 
 namespace {
@@ -2139,18 +2142,10 @@ void VersionStorageInfo::UpdateFilesByCompactionPri(
                           CompareCompensatedSizeDescending);
         break;
       case kOldestLargestSeqFirst:
-        std::sort(temp.begin(), temp.end(),
-                  [](const Fsize& f1, const Fsize& f2) -> bool {
-                    return f1.file->fd.largest_seqno <
-                           f2.file->fd.largest_seqno;
-                  });
+        terark::sort_ex_a(temp, TERARK_FIELD(file->fd.largest_seqno));
         break;
       case kOldestSmallestSeqFirst:
-        std::sort(temp.begin(), temp.end(),
-                  [](const Fsize& f1, const Fsize& f2) -> bool {
-                    return f1.file->fd.smallest_seqno <
-                           f2.file->fd.smallest_seqno;
-                  });
+        terark::sort_ex_a(temp, TERARK_FIELD(file->fd.smallest_seqno));
         break;
       case kMinOverlappingRatio:
         SortFileByOverlappingRatio(*internal_comparator_, files_[level],

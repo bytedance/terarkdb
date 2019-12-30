@@ -28,6 +28,9 @@
 #include "util/iterator_cache.h"
 #include "util/sst_file_manager_impl.h"
 
+#include "terark/valvec.hpp"
+#include "terark/util/function.hpp"
+
 namespace rocksdb {
 
 struct FileMetaDataBoundBuilder {
@@ -935,10 +938,7 @@ Status MapBuilder::WriteOutputFile(
   for (auto& pair : dependence_build) {
     dependence.emplace_back(Dependence{pair.first, pair.second});
   }
-  std::sort(dependence.begin(), dependence.end(),
-            [](const Dependence& l, const Dependence& r) {
-              return l.file_number < r.file_number;
-            });
+  terark::sort_ex_a(dependence, TERARK_FIELD(file_number));
 
   // Map sst don't write tombstones
   if (s.ok()) {

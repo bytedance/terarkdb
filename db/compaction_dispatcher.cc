@@ -853,10 +853,7 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
       for (auto& pair : dependence) {
         meta->prop.dependence.emplace_back(Dependence{pair.first, pair.second});
       }
-      std::sort(meta->prop.dependence.begin(), meta->prop.dependence.end(),
-                [](const Dependence& l, const Dependence& r) {
-                  return l.file_number < r.file_number;
-                });
+      terark::sort_ex_a(meta->prop.dependence, TERARK_FIELD(file_number));
       s = builder->Finish(&meta->prop);
     } else {
       builder->Abandon();
