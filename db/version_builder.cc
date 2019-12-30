@@ -14,17 +14,18 @@
 #endif
 
 #include <inttypes.h>
+
 #include <algorithm>
 #include <atomic>
 #include <functional>
 #include <map>
+#include <queue>
 #include <set>
 #include <thread>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
-#include <queue>
 
 #include "db/dbformat.h"
 #include "db/internal_stats.h"
@@ -70,9 +71,7 @@ struct VersionBuilderDebugger {
   std::vector<std::pair<int, FileMetaData>> addition;
   std::vector<Item> pos;
 
-  VersionBuilderDebugger() {
-    pos.emplace_back(Item{0, 0});
-  }
+  VersionBuilderDebugger() { pos.emplace_back(Item{0, 0}); }
 
   void PushEdit(VersionEdit* edit) {
     auto& edit_deletion = edit->GetDeletedFiles();
@@ -106,15 +105,18 @@ struct VersionBuilderDebugger {
 };
 #endif
 
-
 class VersionBuilder::Rep {
   friend VersionBuilderDebugger;
+
  private:
   // Helper to sort files_ in v
   // kLevel0 -- NewestFirstBySeqNo
   // kLevelNon0 -- BySmallestKey
   struct FileComparator {
-    enum SortMethod { kLevel0 = 0, kLevelNon0 = 1, } sort_method;
+    enum SortMethod {
+      kLevel0 = 0,
+      kLevelNon0 = 1,
+    } sort_method;
     const InternalKeyComparator* internal_comparator;
 
     FileComparator() : internal_comparator(nullptr) {}
@@ -222,9 +224,8 @@ class VersionBuilder::Rep {
   void PutInheritance(DependenceItem* item) {
     bool replace = inheritance_counter_.count(item->f->fd.GetNumber()) == 0;
     auto emplace = [&](uint64_t file_number) {
-      auto ib =
-          inheritance_counter_.emplace(file_number,
-                                       InheritanceItem{0, 1, item});
+      auto ib = inheritance_counter_.emplace(file_number,
+                                             InheritanceItem{0, 1, item});
       if (!ib.second) {
         ++ib.first->second.count;
         if (replace) {
@@ -303,10 +304,10 @@ class VersionBuilder::Rep {
       if (is_map) {
         item->skip_gc_version = dependence_version_;
         if (!item->f->prop.dependence.empty()) {
-          SetDependence(
-              item->f, item->f->prop.purpose == kMapSst,
-              ratio * dependence.entry_count / item->f->prop.num_entries,
-              finish);
+          SetDependence(item->f, item->f->prop.is_map_sst(),
+                        ratio * dependence.entry_count /
+                            std::max<uint64_t>(1, item->f->prop.num_entries),
+                        finish);
         }
       }
     }
@@ -327,11 +328,11 @@ class VersionBuilder::Rep {
         item.dependence_version = dependence_version_;
         item.skip_gc_version = dependence_version_;
         if (!item.f->prop.dependence.empty()) {
-          SetDependence(item.f, item.f->prop.purpose == kMapSst, 1, finish);
+          SetDependence(item.f, item.f->prop.is_map_sst(), 1, finish);
         }
       }
     }
-    for (auto it = dependence_map_.begin(); it != dependence_map_.end(); ) {
+    for (auto it = dependence_map_.begin(); it != dependence_map_.end();) {
       auto& item = it->second;
       if (item.dependence_version == dependence_version_) {
         assert(inheritance_counter_.count(it->first) > 0 &&
@@ -352,6 +353,9 @@ class VersionBuilder::Rep {
             }
             item.f->is_skip_gc = is_skip_gc;
           }
+          uint64_t entry_depended = std::max<uint64_t>(1, item.entry_depended);
+          entry_depended = std::min(item.f->prop.num_entries, entry_depended);
+          item.f->num_antiquation = item.f->prop.num_entries - entry_depended;
         }
         ++it;
       } else {
@@ -365,15 +369,14 @@ class VersionBuilder::Rep {
 
   void CheckDependence(VersionStorageInfo* vstorage, FileMetaData* f,
                        bool is_map) {
-    for (auto& dependence: f->prop.dependence) {
+    for (auto& dependence : f->prop.dependence) {
       auto item = TransFileNumber(dependence.file_number);
       if (item == nullptr) {
         fprintf(stderr, "Missing dependence files");
         abort();
       }
       if (is_map && !item->f->prop.dependence.empty()) {
-        CheckDependence(vstorage, item->f,
-                        item->f->prop.purpose == kMapSst);
+        CheckDependence(vstorage, item->f, item->f->prop.is_map_sst());
       }
     }
   }
@@ -392,7 +395,7 @@ class VersionBuilder::Rep {
       if (check_dependence) {
         for (auto f : level_files) {
           if (!f->prop.dependence.empty()) {
-            CheckDependence(vstorage, f, f->prop.purpose == kMapSst);
+            CheckDependence(vstorage, f, f->prop.is_map_sst());
           }
         }
       }
@@ -573,10 +576,11 @@ class VersionBuilder::Rep {
       }
     };
     std::priority_queue<FileMetaData*, std::vector<FileMetaData*>,
-        priority_queue_cmp> old_file_queue;
+                        priority_queue_cmp>
+        old_file_queue;
     constexpr size_t max_queue_size = 8;
     auto push_old_file = [&](FileMetaData* f) {
-      if (f->prop.purpose != kMapSst && !f->prop.dependence.empty()) {
+      if (!f->prop.is_map_sst() && !f->prop.dependence.empty()) {
         for (auto& dependence : f->prop.dependence) {
           auto item = TransFileNumber(dependence.file_number);
           if (item->f->fd.GetNumber() != dependence.file_number) {
@@ -612,15 +616,8 @@ class VersionBuilder::Rep {
         if (level == 0) {
           read_amp[level] += f->prop.read_amp;
         } else {
-          read_amp[level] = std::max<int>(read_amp[level], f->prop.read_amp);
+          read_amp[level] = std::max<double>(read_amp[level], f->prop.read_amp);
         }
-      }
-    }
-    // Handle actual deleted files
-    for (auto f : base_vstorage_->LevelFiles(-1)) {
-      if (dependence_map_.count(f->fd.GetNumber()) == 0) {
-        // f is to-be-deleted table file
-        vstorage->RemoveCurrentStats(f);
       }
     }
     for (auto& pair : dependence_map_) {
@@ -628,18 +625,14 @@ class VersionBuilder::Rep {
       if (item.level == -1) {
         if (item.f->is_skip_gc) {
           push_old_file(item.f);
-        } else {
-          uint64_t entry_depended = std::max<uint64_t>(1, item.entry_depended);
-          entry_depended = std::min(item.f->prop.num_entries, entry_depended);
-          item.f->num_antiquation = item.f->prop.num_entries - entry_depended;
         }
         vstorage->AddFile(-1, item.f, c_style_callback(exists), &exists,
                           info_log_);
       }
+      vstorage->UpdateAccumulatedStats(item.f);
     }
-    size_t old_file_count =
-        std::max<size_t>(1, std::min(dependence_map_.size() / 128,
-                                     old_file_queue.size()));
+    size_t old_file_count = std::max<size_t>(
+        1, std::min(dependence_map_.size() / 128, old_file_queue.size()));
     while (old_file_queue.size() > old_file_count) {
       old_file_queue.pop();
     }
@@ -693,8 +686,8 @@ class VersionBuilder::Rep {
         table_cache_->FindTable(
             env_options_, *(base_vstorage_->InternalComparator()),
             file_meta->fd, &file_meta->table_reader_handle, prefix_extractor,
-            false /*no_io */, true /* record_read_stats */,
-            file_read_hist, false, level, prefetch_index_and_filter_in_cache);
+            false /*no_io */, true /* record_read_stats */, file_read_hist,
+            false, level, prefetch_index_and_filter_in_cache);
         if (file_meta->table_reader_handle != nullptr) {
           // Load table_reader
           file_meta->fd.table_reader = table_cache_->GetTableReaderFromHandle(
@@ -719,7 +712,7 @@ VersionBuilder::VersionBuilder(const EnvOptions& env_options,
                                VersionStorageInfo* base_vstorage,
                                Logger* info_log)
     : rep_(new Rep(env_options, info_log, table_cache, base_vstorage,
-                   true/* enable_debugger */)) {}
+                   true /* enable_debugger */)) {}
 
 VersionBuilder::~VersionBuilder() { delete rep_; }
 
@@ -746,11 +739,9 @@ void VersionBuilder::LoadTableHandlers(InternalStats* internal_stats,
                                        bool prefetch_index_and_filter_in_cache,
                                        const SliceTransform* prefix_extractor,
                                        int max_threads) {
-  rep_->LoadTableHandlers(internal_stats,
-                          prefetch_index_and_filter_in_cache, prefix_extractor,
-                          max_threads);
+  rep_->LoadTableHandlers(internal_stats, prefetch_index_and_filter_in_cache,
+                          prefix_extractor, max_threads);
 }
-
 
 #if ROCKS_VERSION_BUILDER_DEBUG
 void VersionBuilderDebugger::Verify(VersionBuilder::Rep* rep,
@@ -767,16 +758,16 @@ void VersionBuilderDebugger::Verify(VersionBuilder::Rep* rep,
     }
   };
   auto verify = [rep](VersionStorageInfo* l,
-                   VersionStorageInfo* r) -> std::string {
+                      VersionStorageInfo* r) -> std::string {
     auto eq = [](FileMetaData* fl, FileMetaData* fr) {
       return fl->fd.GetNumber() == fr->fd.GetNumber() &&
              fl->num_antiquation == fr->num_antiquation &&
              fl->is_skip_gc == fr->is_skip_gc;
     };
     auto lt = [](FileMetaData* fl, FileMetaData* fr) {
-      return fl->fd.GetNumber() != fr->fd.GetNumber() ?
-             fl->fd.GetNumber() < fr->fd.GetNumber() :
-             fl->num_antiquation < fr->num_antiquation;
+      return fl->fd.GetNumber() != fr->fd.GetNumber()
+                 ? fl->fd.GetNumber() < fr->fd.GetNumber()
+                 : fl->num_antiquation < fr->num_antiquation;
     };
     using cmp = std::function<bool(FileMetaData*, FileMetaData*)>;
     auto debug_show = [&](const std::vector<FileMetaData*>& l_sst,
@@ -792,8 +783,8 @@ void VersionBuilderDebugger::Verify(VersionBuilder::Rep* rep,
     for (int i = 0; i < l->num_levels(); ++i) {
       if (l->LevelFiles(i).size() != r->LevelFiles(i).size() ||
           std::mismatch(l->LevelFiles(i).begin(), l->LevelFiles(i).end(),
-                        r->LevelFiles(i).begin(), eq).first !=
-          l->LevelFiles(i).end()) {
+                        r->LevelFiles(i).begin(), eq)
+                  .first != l->LevelFiles(i).end()) {
         debug_show(l->LevelFiles(i), r->LevelFiles(i),
                    i == 0 ? rep->level_zero_cmp_ : rep->level_nonzero_cmp_);
         char buffer[32];
@@ -806,7 +797,7 @@ void VersionBuilderDebugger::Verify(VersionBuilder::Rep* rep,
     std::sort(r_sst.begin(), r_sst.end(), lt);
     if (l_sst.size() != r_sst.size() ||
         std::mismatch(l_sst.begin(), l_sst.end(), r_sst.begin(), eq).first !=
-        l_sst.end()) {
+            l_sst.end()) {
       debug_show(l_sst, r_sst, lt);
       return "Level -1";
     }
@@ -830,7 +821,7 @@ void VersionBuilderDebugger::Verify(VersionBuilder::Rep* rep,
     VersionStorageInfo vstorage_0(
         vstorage->InternalComparator(),
         vstorage->InternalComparator()->user_comparator(),
-        vstorage->num_levels(), kCompactionStyleNone, nullptr, true);
+        vstorage->num_levels(), kCompactionStyleNone, true);
     VersionBuilder::Rep rep_0(rep->env_options_, rep->info_log_,
                               rep->table_cache_, &vstorage_0);
     for (size_t j = 0; j < i; ++j) {
@@ -841,7 +832,7 @@ void VersionBuilderDebugger::Verify(VersionBuilder::Rep* rep,
     VersionStorageInfo vstorage_1(
         vstorage->InternalComparator(),
         vstorage->InternalComparator()->user_comparator(),
-        vstorage->num_levels(), kCompactionStyleNone, nullptr, true);
+        vstorage->num_levels(), kCompactionStyleNone, true);
     rep_0.SaveTo(&vstorage_1);
     VersionBuilder::Rep rep_1(rep->env_options_, rep->info_log_,
                               rep->table_cache_, &vstorage_1);
@@ -854,9 +845,10 @@ void VersionBuilderDebugger::Verify(VersionBuilder::Rep* rep,
     auto err = verify(vstorage, &vstorage_0);
     if (!err.empty()) {
       has_err = true;
-      fprintf(stderr, "VersionBuilder debug verify fail : edit count = %zd, "
-                      "break = %zd, error = %s\n", pos.size() - 2, i,
-                      err.c_str());
+      fprintf(stderr,
+              "VersionBuilder debug verify fail : edit count = %zd, "
+              "break = %zd, error = %s\n",
+              pos.size() - 2, i, err.c_str());
     }
     for (int j = -1; j < vstorage->num_levels(); ++j) {
       for (auto f : vstorage_0.LevelFiles(j)) {

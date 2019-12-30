@@ -10,9 +10,11 @@
 #endif
 
 #include <inttypes.h>
+
 #include <limits>
 #include <queue>
 #include <string>
+
 #include "db/db_impl.h"
 #include "db/memtable.h"
 #include "db/range_tombstone_fragmenter.h"
@@ -400,7 +402,7 @@ Status MemTableList::TryInstallMemtableFlushResults(
       bool apply_callback_called = false;
 #endif
 
-      auto apply_callback = [&] (const Status& apply_s) {
+      auto apply_callback = [&](const Status& apply_s) {
 #ifndef NDEBUG
         assert(!apply_callback_called);
         apply_callback_called = true;
@@ -431,8 +433,9 @@ Status MemTableList::TryInstallMemtableFlushResults(
         if (apply_s.ok() && !cfd->IsDropped()) {  // commit new state
           while (batch_count-- > 0) {
             MemTable* m = current_->memlist_.back();
-            ROCKS_LOG_BUFFER(log_buffer, "[%s] Level-0 commit table #%" PRIu64
-                                         ": memtable #%" PRIu64 " done",
+            ROCKS_LOG_BUFFER(log_buffer,
+                             "[%s] Level-0 commit table #%" PRIu64
+                             ": memtable #%" PRIu64 " done",
                              cfd->GetName().c_str(), m->file_number_, mem_id);
             assert(m->file_number_ > 0);
             current_->Remove(m, to_delete);
@@ -442,8 +445,9 @@ Status MemTableList::TryInstallMemtableFlushResults(
           for (auto it = current_->memlist_.rbegin(); batch_count-- > 0; it++) {
             MemTable* m = *it;
             // commit failed. setup state so that we can flush again.
-            ROCKS_LOG_BUFFER(log_buffer, "Level-0 commit table #%" PRIu64
-                                         ": memtable #%" PRIu64 " failed",
+            ROCKS_LOG_BUFFER(log_buffer,
+                             "Level-0 commit table #%" PRIu64
+                             ": memtable #%" PRIu64 " failed",
                              m->file_number_, mem_id);
             m->flush_completed_ = false;
             m->flush_in_progress_ = false;
@@ -454,7 +458,6 @@ Status MemTableList::TryInstallMemtableFlushResults(
             ++mem_id;
           }
         }
-
       };
 
       edit_list.back()->SetApplyCallback(c_style_callback(apply_callback),

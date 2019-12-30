@@ -23,11 +23,22 @@ struct FileMetaData;
 struct FileMetaDataBoundBuilder;
 class InstrumentedMutex;
 class InternalKeyComparator;
-class RangeDelAggregator;
-class MapSstElementIterator;
 class TableCache;
 class VersionEdit;
 class VersionSet;
+
+class MapSstRangeIterator : public InternalIterator {
+ public:
+  virtual const std::unordered_map<uint64_t, uint64_t>& GetDependence()
+      const = 0;
+  virtual std::pair<size_t, double> GetSstReadAmp() const = 0;
+};
+
+struct MapBuilderOutput {
+  int level;
+  FileMetaData file_meta;
+  std::unique_ptr<TableProperties> prop;
+};
 
 class MapBuilder {
  public:
@@ -42,23 +53,30 @@ class MapBuilder {
   MapBuilder& operator=(const MapBuilder& job) = delete;
 
   // All params are references or pointers
-  // deleted_range use internal keys
+  // deleted_range use user key
   // added_files is sorted
   // file_meta::fd::file_size == 0 if don't need create map files
   // file_meta , porp , deleted_files nullptr if ignore
   Status Build(const std::vector<CompactionInputFiles>& inputs,
                const std::vector<Range>& deleted_range,
-               const std::vector<const FileMetaData*>& added_files,
-               int output_level, uint32_t output_path_id,
-               VersionStorageInfo* vstorage, ColumnFamilyData* cfd,
-               const MutableCFOptions& mutable_cf_options,
+               const std::vector<FileMetaData*>& added_files, int output_level,
+               uint32_t output_path_id, ColumnFamilyData* cfd, Version* version,
                VersionEdit* edit, FileMetaData* file_meta = nullptr,
                std::unique_ptr<TableProperties>* porp = nullptr,
                std::set<FileMetaData*>* deleted_files = nullptr);
 
+  // All params are references or pointers
+  // push_range use user key
+  Status Build(const std::vector<CompactionInputFiles>& inputs,
+               const std::vector<Range>& push_range, int output_level,
+               uint32_t output_path_id, ColumnFamilyData* cfd, Version* version,
+               VersionEdit* edit,
+               std::vector<MapBuilderOutput>* output = nullptr);
+
  private:
   Status WriteOutputFile(const FileMetaDataBoundBuilder& bound_builder,
-                         MapSstElementIterator* range_iter,
+                         MapSstRangeIterator* range_iter,
+                         InternalIterator* tombstone_iter,
                          uint32_t output_path_id, ColumnFamilyData* cfd,
                          const MutableCFOptions& mutable_cf_options,
                          FileMetaData* file_meta,
@@ -72,8 +90,6 @@ class MapBuilder {
   const EnvOptions& env_options_;
 
   Env* env_;
-  // env_option optimized for compaction table reads
-  EnvOptions env_options_for_read_;
   VersionSet* versions_;
   Statistics* stats_;
 };
@@ -84,7 +100,7 @@ extern InternalIterator* NewMapElementIterator(
     const IteratorCache::CreateIterCallback& create_iter,
     Arena* arena = nullptr);
 
-extern bool IsPrefaceRange(const Range& range, const FileMetaData* f,
+extern bool IsPerfectRange(const Range& range, const FileMetaData* f,
                            const InternalKeyComparator& icomp);
 
 }  // namespace rocksdb

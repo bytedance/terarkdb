@@ -8,6 +8,7 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #include "table/two_level_iterator.h"
+
 #include "db/version_edit.h"
 #include "rocksdb/options.h"
 #include "rocksdb/table.h"
@@ -215,7 +216,7 @@ class MapSstIterator final : public InternalIterator {
     InternalIterator* iter;
     Slice key;
   };
-  template<bool is_less>
+  template <bool is_less>
   class HeapComparator {
    public:
     HeapComparator(const InternalKeyComparator& comparator) : c_(comparator) {}
@@ -262,17 +263,34 @@ class MapSstIterator final : public InternalIterator {
     uint64_t link_count;
     if (!GetVarint64(&map_input, &flags) ||
         !GetVarint64(&map_input, &link_count) ||
-        // TODO support kNoSmallest
-        ((flags >> MapSstElement::kNoSmallest) & 1) ||
         !GetLengthPrefixedSlice(&map_input, &smallest_key_)) {
       status_ = Status::Corruption(err_msg);
       return kInitFirstIterInvalid;
     }
-    if ((flags >> MapSstElement::kNoRecords) & 1) {
+    if ((flags & MapSstElement::kNoRecords) != 0) {
+      uint64_t file_number;
+      for (uint64_t i = 0; i < link_count; ++i) {
+        if (!GetVarint64(&map_input, &file_number)) {
+          status_ = Status::Corruption(err_msg);
+          return kInitFirstIterInvalid;
+        }
+        // create iterator to load range deletions
+        status_ = iterator_cache_.GetReader(file_number);
+        if (!status_.ok()) {
+          return kInitFirstIterInvalid;
+        }
+        assert(file_meta_ == nullptr ||
+               std::binary_search(file_meta_->prop.dependence.begin(),
+                                  file_meta_->prop.dependence.end(),
+                                  Dependence{file_number, 0},
+                                  [](const Dependence& l, const Dependence& r) {
+                                    return l.file_number < r.file_number;
+                                  }));
+      }
       return kInitFirstIterEmpty;
     }
-    include_smallest_ = (flags >> MapSstElement::kIncludeSmallest) & 1;
-    include_largest_ = (flags >> MapSstElement::kIncludeLargest) & 1;
+    include_smallest_ = (flags & MapSstElement::kIncludeSmallest) != 0;
+    include_largest_ = (flags & MapSstElement::kIncludeLargest) != 0;
     link_.resize(link_count);
     for (uint64_t i = 0; i < link_count; ++i) {
       if (!GetVarint64(&map_input, &link_[i])) {
@@ -326,6 +344,7 @@ class MapSstIterator final : public InternalIterator {
       }
       auto k = it->key();
       if (icomp.Compare(k, largest_key_) < include_largest_) {
+        assert(IsInRange(k));
         min_heap_.push(HeapElement{it, k});
       }
     }
@@ -353,14 +372,14 @@ class MapSstIterator final : public InternalIterator {
       }
       auto k = it->key();
       if (icomp.Compare(smallest_key_, k) < include_smallest_) {
+        assert(IsInRange(k));
         max_heap_.push(HeapElement{it, k});
       }
     }
   }
 
-  bool IsInRange() {
+  bool IsInRange(const Slice& k) {
     auto& icomp = min_heap_.comparator().internal_comparator();
-    auto k = max_heap_.top().key;
     return icomp.Compare(smallest_key_, k) < include_smallest_ &&
            icomp.Compare(k, largest_key_) < include_largest_;
   }
@@ -377,7 +396,7 @@ class MapSstIterator final : public InternalIterator {
         include_smallest_(false),
         include_largest_(false),
         min_heap_(icomp) {
-    if (file_meta != nullptr && file_meta_->prop.purpose != kMapSst) {
+    if (file_meta != nullptr && !file_meta_->prop.is_map_sst()) {
       abort();
     }
   }
@@ -395,7 +414,7 @@ class MapSstIterator final : public InternalIterator {
     if (InitFirstLevelIter()) {
       InitSecondLevelMinHeap(smallest_key_, include_smallest_);
       assert(!min_heap_.empty());
-      assert(IsInRange());
+      assert(IsInRange(min_heap_.top().key));
     }
   }
   virtual void SeekToLast() override {
@@ -405,7 +424,7 @@ class MapSstIterator final : public InternalIterator {
     if (InitFirstLevelIter()) {
       InitSecondLevelMaxHeap(largest_key_, include_largest_);
       assert(!max_heap_.empty());
-      assert(IsInRange());
+      assert(IsInRange(max_heap_.top().key));
     }
   }
   virtual void Seek(const Slice& target) override {
@@ -443,18 +462,21 @@ class MapSstIterator final : public InternalIterator {
       if (InitFirstLevelIter()) {
         InitSecondLevelMinHeap(smallest_key_, include_smallest_);
         assert(!min_heap_.empty());
-        assert(IsInRange());
+        assert(IsInRange(min_heap_.top().key));
       }
     } else {
-      assert(IsInRange());
+      assert(IsInRange(min_heap_.top().key));
     }
   }
   virtual void SeekForPrev(const Slice& target) override {
     is_backword_ = true;
     first_level_value_.reset();
     first_level_iter_->Seek(target);
+    if (!first_level_iter_->Valid()) {
+      first_level_iter_->SeekToLast();
+    }
     if (!InitFirstLevelIter()) {
-      MapSstIterator::SeekToLast();
+      assert(max_heap_.empty());
       return;
     }
     auto& icomp = min_heap_.comparator().internal_comparator();
@@ -470,8 +492,9 @@ class MapSstIterator final : public InternalIterator {
       }
       seek_target = largest_key_;
       include = include_largest_;
-    } else if (icomp.Compare(target, largest_key_) == 0 && !include_largest_) {
-      include = false;
+    } else if (icomp.Compare(target, largest_key_) >= include_largest_) {
+      seek_target = largest_key_;
+      include = include_largest_;
     }
     InitSecondLevelMaxHeap(seek_target, include);
     if (max_heap_.empty()) {
@@ -483,10 +506,10 @@ class MapSstIterator final : public InternalIterator {
       if (InitFirstLevelIter()) {
         InitSecondLevelMaxHeap(largest_key_, include_largest_);
         assert(!max_heap_.empty());
-        assert(IsInRange());
+        assert(IsInRange(max_heap_.top().key));
       }
     } else {
-      assert(IsInRange());
+      assert(IsInRange(max_heap_.top().key));
     }
   }
   virtual void Next() override {
@@ -515,10 +538,10 @@ class MapSstIterator final : public InternalIterator {
       if (InitFirstLevelIter()) {
         InitSecondLevelMinHeap(smallest_key_, include_smallest_);
         assert(!min_heap_.empty());
-        assert(IsInRange());
+        assert(IsInRange(min_heap_.top().key));
       }
     } else {
-      assert(IsInRange());
+      assert(IsInRange(min_heap_.top().key));
     }
   }
   virtual void Prev() override {
@@ -548,10 +571,10 @@ class MapSstIterator final : public InternalIterator {
       if (InitFirstLevelIter()) {
         InitSecondLevelMaxHeap(largest_key_, include_largest_);
         assert(!max_heap_.empty());
-        assert(IsInRange());
+        assert(IsInRange(max_heap_.top().key));
       }
     } else {
-      assert(IsInRange());
+      assert(IsInRange(max_heap_.top().key));
     }
   }
   virtual Slice key() const override {
@@ -578,7 +601,7 @@ InternalIterator* NewMapSstIterator(
     const DependenceMap& dependence_map, const InternalKeyComparator& icomp,
     void* callback_arg, const IteratorCache::CreateIterCallback& create_iter,
     Arena* arena) {
-  assert(file_meta == nullptr || file_meta->prop.purpose == kMapSst);
+  assert(file_meta == nullptr || file_meta->prop.is_map_sst());
   if (arena == nullptr) {
     return new MapSstIterator(file_meta, mediate_sst_iter, dependence_map,
                               icomp, callback_arg, create_iter);

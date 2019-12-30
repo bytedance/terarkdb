@@ -58,6 +58,7 @@
 #include "util/stop_watch.h"
 #include "util/thread_local.h"
 #include "util/trace_replay.h"
+#include "utilities/trace/bytedance_metrics.h"
 
 namespace rocksdb {
 
@@ -112,8 +113,7 @@ class DBImpl : public DB {
   // Note: 'value_found' from KeyMayExist propagates here
   Status GetImpl(const ReadOptions& options, ColumnFamilyHandle* column_family,
                  const Slice& key, LazyBuffer* value,
-                 bool* value_found = nullptr,
-                 ReadCallback* callback = nullptr);
+                 bool* value_found = nullptr, ReadCallback* callback = nullptr);
 
   using DB::MultiGet;
   virtual std::vector<Status> MultiGet(
@@ -175,10 +175,9 @@ class DBImpl : public DB {
   virtual bool GetAggregatedIntProperty(const Slice& property,
                                         uint64_t* aggregated_value) override;
   using DB::GetApproximateSizes;
-  virtual void GetApproximateSizes(ColumnFamilyHandle* column_family,
-                                   const Range* range, int n, uint64_t* sizes,
-                                   uint8_t include_flags
-                                   = INCLUDE_FILES) override;
+  virtual void GetApproximateSizes(
+      ColumnFamilyHandle* column_family, const Range* range, int n,
+      uint64_t* sizes, uint8_t include_flags = INCLUDE_FILES) override;
   using DB::GetApproximateMemTableStats;
   virtual void GetApproximateMemTableStats(ColumnFamilyHandle* column_family,
                                            const Range& range,
@@ -190,13 +189,12 @@ class DBImpl : public DB {
                               const Slice* begin, const Slice* end) override;
 
   using DB::CompactFiles;
-  virtual Status CompactFiles(const CompactionOptions& compact_options,
-                              ColumnFamilyHandle* column_family,
-                              const std::vector<std::string>& input_file_names,
-                              const int output_level,
-                              const int output_path_id = -1,
-                              std::vector<std::string>* const output_file_names
-                              = nullptr) override;
+  virtual Status CompactFiles(
+      const CompactionOptions& compact_options,
+      ColumnFamilyHandle* column_family,
+      const std::vector<std::string>& input_file_names, const int output_level,
+      const int output_path_id = -1,
+      std::vector<std::string>* const output_file_names = nullptr) override;
 
   virtual Status PauseBackgroundWork() override;
   virtual Status ContinueBackgroundWork() override;
@@ -273,9 +271,8 @@ class DBImpl : public DB {
   // Status::NotFound() will be returned if the current DB does not have
   // any column family match the specified name.
   // TODO(yhchiang): output parameter is placed in the end in this codebase.
-  virtual void GetColumnFamilyMetaData(
-      ColumnFamilyHandle* column_family,
-      ColumnFamilyMetaData* metadata) override;
+  virtual void GetColumnFamilyMetaData(ColumnFamilyHandle* column_family,
+                                       ColumnFamilyMetaData* metadata) override;
 
   Status SuggestCompactRange(ColumnFamilyHandle* column_family,
                              const Slice* begin, const Slice* end) override;
@@ -364,8 +361,7 @@ class DBImpl : public DB {
       ColumnFamilyData* cfd, int input_level, int output_level,
       uint32_t output_path_id, uint32_t max_subcompactions, const Slice* begin,
       const Slice* end, const std::unordered_set<uint64_t>* files_being_compact,
-      bool exclusive, bool disallow_trivial_move = false,
-      bool enable_lazy_compaction = false);
+      bool exclusive, bool disallow_trivial_move = false);
 
   // Return an internal iterator over the current state of the database.
   // The keys of this iterator are internal keys (see format.h).
@@ -412,8 +408,8 @@ class DBImpl : public DB {
 
   // Return the maximum overlapping data (in bytes) at next level for any
   // file at a level >= 1.
-  int64_t TEST_MaxNextLevelOverlappingBytes(ColumnFamilyHandle* column_family =
-                                                nullptr);
+  int64_t TEST_MaxNextLevelOverlappingBytes(
+      ColumnFamilyHandle* column_family = nullptr);
 
   // Return the current manifest file no.
   uint64_t TEST_Current_Manifest_FileNo();
@@ -636,6 +632,13 @@ class DBImpl : public DB {
 
   bool allow_2pc() const { return immutable_db_options_.allow_2pc; }
 
+  const std::string& bytedance_tags() const { return bytedance_tags_; }
+
+  QPSReporter& seek_qps_reporter() { return seek_qps_reporter_; }
+  QPSReporter& seekforprev_qps_reporter() { return seekforprev_qps_reporter_; }
+  QPSReporter& next_qps_reporter() { return next_qps_reporter_; }
+  QPSReporter& prev_qps_reporter() { return prev_qps_reporter_; }
+
   std::unordered_map<std::string, RecoveredTransaction*>
   recovered_transactions() {
     return recovered_transactions_;
@@ -747,13 +750,12 @@ class DBImpl : public DB {
                               const MutableCFOptions& mutable_cf_options,
                               int job_id, TableProperties prop);
 
-  void NotifyOnCompactionBegin(ColumnFamilyData* cfd,
-                               Compaction *c, const Status &st,
-                               const CompactionJobStats& job_stats,
-                               int job_id);
+  void NotifyOnCompactionBegin(ColumnFamilyData* cfd, Compaction* c,
+                               const Status& st,
+                               const CompactionJobStats& job_stats, int job_id);
 
-  void NotifyOnCompactionCompleted(ColumnFamilyData* cfd,
-                                   Compaction *c, const Status &st,
+  void NotifyOnCompactionCompleted(ColumnFamilyData* cfd, Compaction* c,
+                                   const Status& st,
                                    const CompactionJobStats& job_stats,
                                    int job_id);
   void NotifyOnMemTableSealed(ColumnFamilyData* cfd,
@@ -1121,7 +1123,8 @@ class DBImpl : public DB {
   // Return the minimum empty level that could hold the total data in the
   // input level. Return the input level, if such level could not be found.
   int FindMinimumEmptyLevelFitting(ColumnFamilyData* cfd,
-      const MutableCFOptions& mutable_cf_options, int level);
+                                   const MutableCFOptions& mutable_cf_options,
+                                   int level);
 
   // Move the files in the input level to the target level.
   // If target_level < 0, automatically calculate the minimum level that could
@@ -1202,8 +1205,7 @@ class DBImpl : public DB {
   InternalStats* default_cf_internal_stats_;
   std::unique_ptr<ColumnFamilyMemTablesImpl> column_family_memtables_;
   struct LogFileNumberSize {
-    explicit LogFileNumberSize(uint64_t _number)
-        : number(_number) {}
+    explicit LogFileNumberSize(uint64_t _number) : number(_number) {}
     void AddSize(uint64_t new_size) { size += new_size; }
     uint64_t number;
     uint64_t size = 0;
@@ -1396,7 +1398,8 @@ class DBImpl : public DB {
   // count how many background compactions are running or have been scheduled
   int bg_compaction_scheduled_;
 
-  // count how many background garbage collections are running or have been scheduled
+  // count how many background garbage collections are running or have been
+  // scheduled
   int bg_garbage_collection_scheduled_;
 
   // stores the number of compactions are currently running
@@ -1422,16 +1425,15 @@ class DBImpl : public DB {
     uint32_t output_path_id;
     Status status;
     bool done;
-    bool in_progress;             // compaction request being processed?
-    bool incomplete;              // only part of requested range compacted
-    bool exclusive;               // current behavior of only one manual
-    bool disallow_trivial_move;   // Force actual compaction to run
-    bool enable_lazy_compaction;  // Enable lazy compaction
-    const InternalKey* begin;     // nullptr means beginning of key range
-    const InternalKey* end;       // nullptr means end of key range
-    InternalKey* manual_end;      // how far we are compacting
-    InternalKey tmp_storage;      // Used to keep track of compaction progress
-    InternalKey tmp_storage1;     // Used to keep track of compaction progress
+    bool in_progress;            // compaction request being processed?
+    bool incomplete;             // only part of requested range compacted
+    bool exclusive;              // current behavior of only one manual
+    bool disallow_trivial_move;  // Force actual compaction to run
+    const InternalKey* begin;    // nullptr means beginning of key range
+    const InternalKey* end;      // nullptr means end of key range
+    InternalKey* manual_end;     // how far we are compacting
+    InternalKey tmp_storage;     // Used to keep track of compaction progress
+    InternalKey tmp_storage1;    // Used to keep track of compaction progress
   };
   struct PrepickedCompaction {
     // background compaction takes ownership of `compaction`.
@@ -1552,9 +1554,9 @@ class DBImpl : public DB {
 
 #ifndef ROCKSDB_LITE
   using DB::GetPropertiesOfAllTables;
-  virtual Status GetPropertiesOfAllTables(ColumnFamilyHandle* column_family,
-                                          TablePropertiesCollection* props)
-      override;
+  virtual Status GetPropertiesOfAllTables(
+      ColumnFamilyHandle* column_family,
+      TablePropertiesCollection* props) override;
   virtual Status GetPropertiesOfTablesInRange(
       ColumnFamilyHandle* column_family, const Range* range, std::size_t n,
       TablePropertiesCollection* props) override;
@@ -1578,9 +1580,7 @@ class DBImpl : public DB {
   void MarkAsGrabbedForPurge(uint64_t file_number);
 
   size_t GetWalPreallocateBlockSize(uint64_t write_buffer_size) const;
-  Env::WriteLifeTimeHint CalculateWALWriteHint() {
-    return Env::WLTH_SHORT;
-  }
+  Env::WriteLifeTimeHint CalculateWALWriteHint() { return Env::WLTH_SHORT; }
 
   // When set, we use a separate queue for writes that dont write to memtable.
   // In 2PC these are the writes at Prepare phase.
@@ -1640,10 +1640,18 @@ class DBImpl : public DB {
   // results sequentially. Flush results of memtables with lower IDs get
   // installed to MANIFEST first.
   InstrumentedCondVar atomic_flush_install_cv_;
+
+  std::string bytedance_tags_;
+  QPSReporter write_qps_reporter_;
+  QPSReporter read_qps_reporter_;
+  QPSReporter newiterator_qps_reporter_;
+  QPSReporter seek_qps_reporter_;
+  QPSReporter next_qps_reporter_;
+  QPSReporter seekforprev_qps_reporter_;
+  QPSReporter prev_qps_reporter_;
 };
 
-extern Options SanitizeOptions(const std::string& db,
-                               const Options& src);
+extern Options SanitizeOptions(const std::string& db, const Options& src);
 
 extern DBOptions SanitizeOptions(const std::string& db, const DBOptions& src);
 

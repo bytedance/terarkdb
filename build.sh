@@ -12,6 +12,16 @@ if [ "$USE_VALGRIND" == "1" ]; then
   VALGRIND=1
 fi
 
+PORTABLE=1
+if [ "$PORTABLE_BUILD" == "0" ]; then
+  PORTABLE=
+fi
+
+TERARKDB_ENABLE_METRICS=1
+if [ "$ENABLE_METRICS_BUILD" == "0" ]; then
+  TERARKDB_ENABLE_METRICS=0
+fi
+
 if [ `uname` == Darwin ]; then
 	cpuNum=`sysctl -n machdep.cpu.thread_count`
 else
@@ -42,18 +52,24 @@ make LINK_TERARK=static \
      EXTRA_CXXFLAGS="-DROCKSDB_VALGRIND_RUN=$VALGRIND" \
      BMI2=$WITH_BMI2 \
      DISABLE_WARNING_AS_ERROR=1 \
+     TERARKDB_ENABLE_METRICS=$TERARKDB_ENABLE_METRICS \
+     PORTABLE=$PORTABLE \
      DEBUG_LEVEL=0 shared_lib -j $cpuNum
 
 make LINK_TERARK=static \
      EXTRA_CXXFLAGS="-DROCKSDB_VALGRIND_RUN=$VALGRIND" \
      BMI2=$WITH_BMI2 \
      DISABLE_WARNING_AS_ERROR=1 \
+     TERARKDB_ENABLE_METRICS=$TERARKDB_ENABLE_METRICS \
+     PORTABLE=$PORTABLE \
      DEBUG_LEVEL=1 shared_lib -j $cpuNum
 
 make LINK_TERARK=static \
      EXTRA_CXXFLAGS="-DROCKSDB_VALGRIND_RUN=$VALGRIND" \
      BMI2=$WITH_BMI2 \
      DISABLE_WARNING_AS_ERROR=1 \
+     TERARKDB_ENABLE_METRICS=$TERARKDB_ENABLE_METRICS \
+     PORTABLE=$PORTABLE \
      DEBUG_LEVEL=2 shared_lib -j $cpuNum
 
 # static library
@@ -61,12 +77,16 @@ make LINK_TERARK=static \
      EXTRA_CXXFLAGS="-DROCKSDB_VALGRIND_RUN=$VALGRIND" \
      BMI2=$WITH_BMI2 \
      DISABLE_WARNING_AS_ERROR=1 \
+     TERARKDB_ENABLE_METRICS=$TERARKDB_ENABLE_METRICS \
+     PORTABLE=$PORTABLE \
      DEBUG_LEVEL=0 static_lib -j $cpuNum
 
 make LINK_TERARK=static \
      EXTRA_CXXFLAGS="-DROCKSDB_VALGRIND_RUN=$VALGRIND" \
      BMI2=$WITH_BMI2 \
      DISABLE_WARNING_AS_ERROR=1 \
+     TERARKDB_ENABLE_METRICS=$TERARKDB_ENABLE_METRICS \
+     PORTABLE=$PORTABLE \
      DEBUG_LEVEL=2 static_lib -j $cpuNum
 
 pkgdir=output
@@ -103,5 +123,7 @@ cp -a shared-objects/build/$PLATFORM_DIR/dbg-0/librocksdb* $pkgdir/lib
 cp -a shared-objects/build/$PLATFORM_DIR/dbg-1/librocksdb* $pkgdir/lib
 cp -a shared-objects/build/$PLATFORM_DIR/dbg-2/librocksdb* $pkgdir/lib
 cp -a librocksdb*.a $pkgdir/lib_static
+cp -a liblz4.a $pkgdir/lib_static
+cp -a libsnappy.a $pkgdir/lib_static
 
 echo "build and package successful!"

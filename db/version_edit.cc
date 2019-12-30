@@ -64,6 +64,17 @@ uint64_t PackFileNumberAndPathId(uint64_t number, uint64_t path_id) {
   return number | (path_id * (kFileNumberMask + 1));
 }
 
+std::vector<SequenceNumber> FileMetaData::ShrinkSnapshot(
+    const std::vector<SequenceNumber>& snapshots) const {
+  std::vector<SequenceNumber> ret = snapshots;
+  auto end = std::unique(ret.begin(), ret.end());
+  end = std::remove_if(ret.begin(), end, [this](SequenceNumber seqno) {
+    return seqno < fd.smallest_seqno || seqno > fd.largest_seqno;
+  });
+  ret.erase(end, ret.end());
+  return ret;
+}
+
 void VersionEdit::Clear() {
   comparator_.clear();
   max_level_ = 0;
@@ -190,6 +201,10 @@ bool VersionEdit::EncodeTo(std::string* dst) const {
       for (auto& dependence : f.prop.dependence) {
         PutVarint64(&encode_property_cache, dependence.entry_count);
       }
+      PutVarint64(&encode_property_cache, f.prop.num_deletions);
+      encode_property_cache.push_back(char(f.prop.flags));
+      PutVarint64Varint64(&encode_property_cache, f.prop.raw_key_size,
+                          f.prop.raw_value_size);
       PutLengthPrefixedSlice(dst, encode_property_cache);
     }
     TEST_SYNC_POINT_CALLBACK("VersionEdit::EncodeTo:NewFile4:CustomizeFields",
@@ -346,6 +361,20 @@ const char* VersionEdit::DecodeNewFile4From(Slice* input) {
                 }
               }
             }
+            if (!field.empty()) {
+              if (!GetVarint64(&field, &f.prop.num_deletions) ||
+                  field.empty()) {
+                return error_msg;
+              }
+              f.prop.flags = uint8_t(field[0]);
+              field.remove_prefix(1);
+            }
+            if (!field.empty()) {
+              if (!GetVarint64(&field, &f.prop.raw_key_size) ||
+                  !GetVarint64(&field, &f.prop.raw_value_size)) {
+                return error_msg;
+              }
+            }
           }
           break;
         default:
@@ -437,8 +466,7 @@ Status VersionEdit::DecodeFrom(const Slice& src) {
         break;
 
       case kCompactPointer:
-        if (GetLevel(&input, &level, &msg) &&
-            GetInternalKey(&input, &key)) {
+        if (GetLevel(&input, &level, &msg) && GetInternalKey(&input, &key)) {
           // we don't use compact pointers anymore,
           // but we should not fail if they are still
           // in manifest
@@ -604,8 +632,7 @@ std::string VersionEdit::DebugString(bool hex_key) const {
     AppendNumberTo(&r, last_sequence_);
   }
   for (DeletedFileSet::const_iterator iter = deleted_files_.begin();
-       iter != deleted_files_.end();
-       ++iter) {
+       iter != deleted_files_.end(); ++iter) {
     r.append("\n  DeleteFile: ");
     AppendNumberTo(&r, iter->first);
     r.append(" ");
@@ -671,8 +698,7 @@ std::string VersionEdit::DebugJSON(int edit_num, bool hex_key) const {
     jw.StartArray();
 
     for (DeletedFileSet::const_iterator iter = deleted_files_.begin();
-         iter != deleted_files_.end();
-         ++iter) {
+         iter != deleted_files_.end(); ++iter) {
       jw.StartArrayedObject();
       jw << "Level" << iter->first;
       jw << "FileNumber" << iter->second;

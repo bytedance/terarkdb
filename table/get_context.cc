@@ -4,6 +4,7 @@
 //  (found in the LICENSE.Apache file in the root directory).
 
 #include "table/get_context.h"
+
 #include "db/merge_helper.h"
 #include "db/read_callback.h"
 #include "monitoring/file_read_sample.h"
@@ -26,7 +27,7 @@ static void DeleteEntry(const Slice& /*key*/, void* value) {
   delete typed_value;
 }
 
-}
+}  // namespace
 
 #endif  // ROCKSDB_LITE
 
@@ -54,7 +55,8 @@ GetContext::GetContext(const Comparator* ucmp,
       seq_(seq),
       min_seq_type_(0),
       callback_(callback),
-      is_index_(false) {
+      is_index_(false),
+      is_finished_(false) {
   if (seq_) {
     *seq_ = kMaxSequenceNumber;
   }
@@ -146,7 +148,7 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
                            LazyBuffer&& value, bool* matched) {
   assert(matched);
   assert((state_ != kMerge && parsed_key.type != kTypeMerge &&
-         parsed_key.type != kTypeMergeIndex) ||
+          parsed_key.type != kTypeMergeIndex) ||
          merge_context_ != nullptr || separate_helper_ == nullptr);
   if (ucmp_->Equal(parsed_key.user_key, user_key_)) {
     if (PackSequenceAndType(parsed_key.sequence, parsed_key.type) <
@@ -170,7 +172,8 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
     auto type = parsed_key.type;
     // Key matches. Process it
     if ((type == kTypeValue || type == kTypeMerge || type == kTypeValueIndex ||
-         type == kTypeMergeIndex) && max_covering_tombstone_seq_ != nullptr &&
+         type == kTypeMergeIndex) &&
+        max_covering_tombstone_seq_ != nullptr &&
         *max_covering_tombstone_seq_ > parsed_key.sequence) {
       type = kTypeRangeDeletion;
       value.clear();
@@ -183,6 +186,10 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
       state_ = kCorrupt;
       return false;
     };
+    auto Finish = [this]() {
+      is_finished_ = true;
+      return false;
+    };
     switch (type) {
       case kTypeValueIndex:
         if (separate_helper_ == nullptr) {
@@ -191,7 +198,7 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
           if (LIKELY(lazy_val_ != nullptr)) {
             OK(std::move(value).dump(*lazy_val_));
           }
-          return false;
+          return Finish();
         }
         separate_helper_->TransToCombined(user_key_, parsed_key.sequence,
                                           value);
@@ -205,7 +212,7 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
             *lazy_val_ = std::move(value);
             lazy_val_->pin();
           }
-          return false;
+          return Finish();
         }
         if (kNotFound == state_) {
           state_ = kFound;
@@ -217,14 +224,14 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
           state_ = kFound;
           if (LIKELY(lazy_val_ != nullptr)) {
             if (OK(MergeHelper::TimedFullMerge(
-                merge_operator_, user_key_, &value,
-                merge_context_->GetOperands(), lazy_val_, logger_, statistics_,
-                env_))) {
+                    merge_operator_, user_key_, &value,
+                    merge_context_->GetOperands(), lazy_val_, logger_,
+                    statistics_, env_))) {
               lazy_val_->pin();
             }
           }
         }
-        return false;
+        return Finish();
 
       case kTypeDeletion:
       case kTypeSingleDeletion:
@@ -238,14 +245,14 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
           state_ = kFound;
           if (LIKELY(lazy_val_ != nullptr)) {
             if (OK(MergeHelper::TimedFullMerge(
-                merge_operator_, user_key_, nullptr,
-                merge_context_->GetOperands(), lazy_val_, logger_, statistics_,
-                env_))) {
+                    merge_operator_, user_key_, nullptr,
+                    merge_context_->GetOperands(), lazy_val_, logger_,
+                    statistics_, env_))) {
               lazy_val_->pin();
             }
           }
         }
-        return false;
+        return Finish();
 
       case kTypeMergeIndex:
         if (separate_helper_ == nullptr) {
@@ -254,7 +261,7 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
           if (LIKELY(lazy_val_ != nullptr)) {
             OK(std::move(value).dump(*lazy_val_));
           }
-          return false;
+          return Finish();
         }
         separate_helper_->TransToCombined(user_key_, parsed_key.sequence,
                                           value);
@@ -268,7 +275,7 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
             *lazy_val_ = std::move(value);
             lazy_val_->pin();
           }
-          return false;
+          return Finish();
         }
         state_ = kMerge;
         merge_context_->PushOperand(std::move(value));
@@ -278,13 +285,13 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
           state_ = kFound;
           if (LIKELY(lazy_val_ != nullptr)) {
             if (OK(MergeHelper::TimedFullMerge(
-                merge_operator_, user_key_, nullptr,
-                merge_context_->GetOperands(), lazy_val_, logger_, statistics_,
-                env_))) {
+                    merge_operator_, user_key_, nullptr,
+                    merge_context_->GetOperands(), lazy_val_, logger_,
+                    statistics_, env_))) {
               lazy_val_->pin();
             }
           }
-          return false;
+          return Finish();
         }
         return true;
 

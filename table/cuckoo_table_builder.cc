@@ -242,7 +242,9 @@ Status CuckooTableBuilder::MakeHashTable(std::vector<CuckooBucket>* buckets) {
   return Status::OK();
 }
 
-Status CuckooTableBuilder::Finish(const TablePropertyCache* prop) {
+Status CuckooTableBuilder::Finish(
+    const TablePropertyCache* prop,
+    const std::vector<SequenceNumber>* snapshots) {
   assert(!closed_);
   closed_ = true;
   if (prop != nullptr) {
@@ -251,6 +253,9 @@ Status CuckooTableBuilder::Finish(const TablePropertyCache* prop) {
     properties_.read_amp = prop->read_amp;
     properties_.dependence = prop->dependence;
     properties_.inheritance_chain = prop->inheritance_chain;
+  }
+  if (snapshots != nullptr) {
+    properties_.snapshots = *snapshots;
   }
   std::vector<CuckooBucket> buckets;
   Status s;

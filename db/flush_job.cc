@@ -56,7 +56,7 @@
 
 namespace rocksdb {
 
-const char* GetFlushReasonString (FlushReason flush_reason) {
+const char* GetFlushReasonString(FlushReason flush_reason) {
   switch (flush_reason) {
     case FlushReason::kOthers:
       return "Other Reasons";
@@ -87,22 +87,19 @@ const char* GetFlushReasonString (FlushReason flush_reason) {
   }
 }
 
-FlushJob::FlushJob(const std::string& dbname, ColumnFamilyData* cfd,
-                   const ImmutableDBOptions& db_options,
-                   const MutableCFOptions& mutable_cf_options,
-                   const uint64_t* max_memtable_id,
-                   const EnvOptions& env_options, VersionSet* versions,
-                   InstrumentedMutex* db_mutex,
-                   std::atomic<bool>* shutting_down,
-                   std::vector<SequenceNumber> existing_snapshots,
-                   SequenceNumber earliest_write_conflict_snapshot,
-                   SnapshotChecker* snapshot_checker, JobContext* job_context,
-                   LogBuffer* log_buffer, Directory* db_directory,
-                   Directory* output_file_directory,
-                   CompressionType output_compression, Statistics* stats,
-                   EventLogger* event_logger, bool measure_io_stats,
-                   bool sync_output_directory, bool write_manifest,
-                   double flush_load)
+FlushJob::FlushJob(
+    const std::string& dbname, ColumnFamilyData* cfd,
+    const ImmutableDBOptions& db_options,
+    const MutableCFOptions& mutable_cf_options, const uint64_t* max_memtable_id,
+    const EnvOptions& env_options, VersionSet* versions,
+    InstrumentedMutex* db_mutex, std::atomic<bool>* shutting_down,
+    std::vector<SequenceNumber> existing_snapshots,
+    SequenceNumber earliest_write_conflict_snapshot,
+    SnapshotChecker* snapshot_checker, JobContext* job_context,
+    LogBuffer* log_buffer, Directory* db_directory,
+    Directory* output_file_directory, CompressionType output_compression,
+    Statistics* stats, EventLogger* event_logger, bool measure_io_stats,
+    bool sync_output_directory, bool write_manifest, double flush_load)
     : dbname_(dbname),
       cfd_(cfd),
       db_options_(db_options),
@@ -134,17 +131,14 @@ FlushJob::FlushJob(const std::string& dbname, ColumnFamilyData* cfd,
   TEST_SYNC_POINT("FlushJob::FlushJob()");
 }
 
-FlushJob::~FlushJob() {
-  ThreadStatusUtil::ResetThreadStatus();
-}
+FlushJob::~FlushJob() { ThreadStatusUtil::ResetThreadStatus(); }
 
 void FlushJob::ReportStartedFlush() {
   ThreadStatusUtil::SetColumnFamily(cfd_, cfd_->ioptions()->env,
                                     db_options_.enable_thread_tracking);
   ThreadStatusUtil::SetThreadOperation(ThreadStatus::OP_FLUSH);
-  ThreadStatusUtil::SetThreadOperationProperty(
-      ThreadStatus::COMPACTION_JOB_ID,
-      job_context_->job_id);
+  ThreadStatusUtil::SetThreadOperationProperty(ThreadStatus::COMPACTION_JOB_ID,
+                                               job_context_->job_id);
   IOSTATS_RESET(bytes_written);
 }
 
@@ -154,8 +148,7 @@ void FlushJob::ReportFlushInputSize(const autovector<MemTable*>& mems) {
     input_size += mem->ApproximateMemoryUsage();
   }
   ThreadStatusUtil::IncreaseThreadOperationProperty(
-      ThreadStatus::FLUSH_BYTES_MEMTABLES,
-      input_size);
+      ThreadStatus::FLUSH_BYTES_MEMTABLES, input_size);
 }
 
 void FlushJob::RecordFlushIOStats() {
@@ -200,8 +193,7 @@ Status FlushJob::Run(LogsWithPrepTracker* prep_tracker,
   TEST_SYNC_POINT("FlushJob::Start");
   db_mutex_->AssertHeld();
   assert(pick_memtable_called);
-  AutoThreadOperationStageUpdater stage_run(
-      ThreadStatus::STAGE_FLUSH_RUN);
+  AutoThreadOperationStageUpdater stage_run(ThreadStatus::STAGE_FLUSH_RUN);
   if (mems_.empty()) {
     ROCKS_LOG_BUFFER(log_buffer_, "[%s] Nothing in memtable to flush",
                      cfd_->GetName().c_str());
@@ -249,18 +241,18 @@ Status FlushJob::Run(LogsWithPrepTracker* prep_tracker,
   RecordFlushIOStats();
 
   auto stream = event_logger_->LogToBuffer(log_buffer_);
-  stream << "job" << job_context_->job_id << "event"
-         << "flush_finished";
-  stream << "output_compression"
-         << CompressionTypeToString(output_compression_);
-  stream << "lsm_state";
+  stream << "job" << job_context_->job_id << "cf_name" << cfd_->GetName()
+         << "event"
+         << "flush_finished"
+         << "output_compression" << CompressionTypeToString(output_compression_)
+         << "lsm_state";
   stream.StartArray();
   auto vstorage = cfd_->current()->storage_info();
   for (int level = 0; level < vstorage->num_levels(); ++level) {
     if (vstorage->LevelFiles(level).size() == 1 &&
-        vstorage->LevelFiles(level).front()->prop.purpose == kMapSst) {
-      stream <<
-          std::to_string(vstorage->LevelFiles(level).front()->prop.num_entries);
+        vstorage->LevelFiles(level).front()->prop.is_map_sst()) {
+      stream << std::to_string(
+          vstorage->LevelFiles(level).front()->prop.num_entries);
     } else {
       stream << vstorage->NumLevelFiles(level);
     }
@@ -319,13 +311,13 @@ Status FlushJob::WriteLevel0Table() {
       total_memory_usage += m->ApproximateMemoryUsage();
     }
 
-    event_logger_->Log()
-        << "job" << job_context_->job_id << "event"
-        << "flush_started"
-        << "num_memtables" << mems_.size() << "num_entries" << total_num_entries
-        << "num_deletes" << total_num_deletes << "memory_usage"
-        << total_memory_usage << "flush_reason"
-        << GetFlushReasonString(cfd_->GetFlushReason());
+    event_logger_->Log() << "job" << job_context_->job_id << "event"
+                         << "flush_started"
+                         << "num_memtables" << mems_.size() << "num_entries"
+                         << total_num_entries << "num_deletes"
+                         << total_num_deletes << "memory_usage"
+                         << total_memory_usage << "flush_reason"
+                         << GetFlushReasonString(cfd_->GetFlushReason());
 
     {
       ROCKS_LOG_INFO(db_options_.info_log,
@@ -347,24 +339,25 @@ Status FlushJob::WriteLevel0Table() {
       }
       const uint64_t current_time = static_cast<uint64_t>(_current_time);
 
-      uint64_t oldest_key_time =
-          mems_.front()->ApproximateOldestKeyTime();
+      uint64_t oldest_key_time = mems_.front()->ApproximateOldestKeyTime();
 
       auto get_arena_input_iter = [&](Arena& arena) {
         auto memtables =
-            new(arena.AllocateAligned(sizeof(std::vector<InternalIterator*>)))
-            std::vector<InternalIterator*>();
+            new (arena.AllocateAligned(sizeof(std::vector<InternalIterator*>)))
+                std::vector<InternalIterator*>();
         for (MemTable* m : mems_) {
           memtables->push_back(m->NewIterator(ro, &arena));
         }
-        auto input = NewMergingIterator(&cfd_->internal_comparator(),
-                                        memtables->data(),
-                                        static_cast<int>(memtables->size()),
-                                        &arena);
-        input->RegisterCleanup([](void* arg1, void* /*arg2*/) {
-          auto ptr = reinterpret_cast<std::vector<InternalIterator*>*>(arg1);
-          ptr->~vector();
-        }, memtables, nullptr);
+        auto input =
+            NewMergingIterator(&cfd_->internal_comparator(), memtables->data(),
+                               static_cast<int>(memtables->size()), &arena);
+        input->RegisterCleanup(
+            [](void* arg1, void* /*arg2*/) {
+              auto ptr =
+                  reinterpret_cast<std::vector<InternalIterator*>*>(arg1);
+              ptr->~vector();
+            },
+            memtables, nullptr);
         return input;
       };
       auto get_range_del_iters = [&] {

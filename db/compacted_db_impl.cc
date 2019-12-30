@@ -5,14 +5,14 @@
 
 #ifndef ROCKSDB_LITE
 #include "db/compacted_db_impl.h"
+
 #include "db/db_impl.h"
 #include "db/version_set.h"
 #include "table/get_context.h"
 #if !defined(_MSC_VER) && !defined(__APPLE__)
-# include <sys/unistd.h>
-# include <table/terark_zip_weak_function.h>
+#include <sys/unistd.h>
+#include <table/terark_zip_table.h>
 #endif
-
 
 namespace rocksdb {
 
@@ -20,22 +20,23 @@ extern void MarkKeyMayExist(void* arg);
 extern bool SaveValue(void* arg, const ParsedInternalKey& parsed_key,
                       const Slice& v, bool hit_and_return);
 
-CompactedDBImpl::CompactedDBImpl(
-  const DBOptions& options, const std::string& dbname)
-  : DBImpl(options, dbname), cfd_(nullptr), version_(nullptr),
-    user_comparator_(nullptr) {
-}
+CompactedDBImpl::CompactedDBImpl(const DBOptions& options,
+                                 const std::string& dbname)
+    : DBImpl(options, dbname),
+      cfd_(nullptr),
+      version_(nullptr),
+      user_comparator_(nullptr) {}
 
-CompactedDBImpl::~CompactedDBImpl() {
-}
+CompactedDBImpl::~CompactedDBImpl() {}
 
 size_t CompactedDBImpl::FindFile(const Slice& key) {
   size_t right = files_.num_files - 1;
   auto cmp = [&](const FdWithKeyRange& f, const Slice& k) -> bool {
     return user_comparator_->Compare(ExtractUserKey(f.largest_key), k) < 0;
   };
-  return static_cast<size_t>(std::lower_bound(files_.files,
-                            files_.files + right, key, cmp) - files_.files);
+  return static_cast<size_t>(
+      std::lower_bound(files_.files, files_.files + right, key, cmp) -
+      files_.files);
 }
 
 Status CompactedDBImpl::Get(const ReadOptions& options, ColumnFamilyHandle*,
@@ -60,8 +61,8 @@ Status CompactedDBImpl::Get(const ReadOptions& options, ColumnFamilyHandle*,
   return Status::NotFound();
 }
 
-std::vector<Status> CompactedDBImpl::MultiGet(const ReadOptions& options,
-    const std::vector<ColumnFamilyHandle*>&,
+std::vector<Status> CompactedDBImpl::MultiGet(
+    const ReadOptions& options, const std::vector<ColumnFamilyHandle*>&,
     const std::vector<Slice>& keys, std::vector<std::string>* values) {
   autovector<TableReader*, 16> reader_list;
   SequenceNumber snapshot;
@@ -110,8 +111,8 @@ Status CompactedDBImpl::Init(const Options& options) {
                             ColumnFamilyOptions(options));
   Status s = Recover({cf}, true /* read only */, false, true);
   if (s.ok()) {
-    cfd_ = reinterpret_cast<ColumnFamilyHandleImpl*>(
-              DefaultColumnFamily())->cfd();
+    cfd_ =
+        reinterpret_cast<ColumnFamilyHandleImpl*>(DefaultColumnFamily())->cfd();
     cfd_->InstallSuperVersion(&sv_context, &mutex_);
   }
   mutex_.Unlock();
@@ -135,7 +136,7 @@ Status CompactedDBImpl::Init(const Options& options) {
     if (vstorage->num_non_empty_levels() > 1) {
       return Status::NotSupported("Both L0 and other level contain files");
     }
-    if (l0.files[0].file_metadata->prop.purpose != kEssenceSst) {
+    if (l0.files[0].file_metadata->prop.is_map_sst()) {
       return Status::NotSupported("L0 has read amp");
     }
     files_ = l0;
@@ -150,7 +151,7 @@ Status CompactedDBImpl::Init(const Options& options) {
 
   int level = vstorage->num_non_empty_levels() - 1;
   for (auto f : vstorage->LevelFiles(level)) {
-    if (f->prop.purpose != kEssenceSst) {
+    if (f->prop.is_map_sst()) {
       return Status::NotSupported("Level has read amp");
     }
   }
@@ -161,8 +162,8 @@ Status CompactedDBImpl::Init(const Options& options) {
   return Status::NotSupported("no file exists");
 }
 
-Status CompactedDBImpl::Open(const Options& options,
-                             const std::string& dbname, DB** dbptr) {
+Status CompactedDBImpl::Open(const Options& options, const std::string& dbname,
+                             DB** dbptr) {
   *dbptr = nullptr;
 #if !defined(_MSC_VER) && !defined(__APPLE__)
   const char* terarkdb_localTempDir = getenv("TerarkZipTable_localTempDir");
@@ -206,5 +207,5 @@ Status CompactedDBImpl::Open(const Options& options,
   return s;
 }
 
-}   // namespace rocksdb
+}  // namespace rocksdb
 #endif  // ROCKSDB_LITE

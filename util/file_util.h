@@ -30,10 +30,12 @@ extern Status DeleteDBFile(const ImmutableDBOptions* db_options,
                             const std::string& path_to_sync,
                             const bool force_bg);
 
-enum SetThreadPriority {
-  kSetThreadPriorityNormal = 0,
-  kSetThreadPriorityLow = 1,
+enum SchedClass {
+  kSchedOther = 0,
+  kSchedBatch = 1,
+  kSchedIdle = 2
 };
-extern void SetSelfThreadPriority(SetThreadPriority priority);
+
+extern int SetThreadSched(SchedClass sched_class, int nice = 0);
 
 }  // namespace rocksdb

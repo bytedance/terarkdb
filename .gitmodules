@@ -2,3 +2,6 @@
 	path = terark-core
 	url = git@code.byted.org:storage/terark-core.git
 	branch = dev
+[submodule "third-party/metrics2-cmake"]
+	path = third-party/metrics2-cmake
+	url = git@code.byted.org:storage/metrics2-cmake.git

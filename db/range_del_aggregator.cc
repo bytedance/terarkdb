@@ -428,7 +428,6 @@ class TruncatedRangeDelMergingIter : public InternalIteratorBase<Slice> {
 
   Slice value() const override {
     auto* top = heap_.top();
-    assert(top->end_key().sequence == kMaxSequenceNumber);
     return top->end_key().user_key;
   }
 
@@ -480,6 +479,13 @@ CompactionRangeDelAggregator::NewIterator(const Slice* lower_bound,
       new FragmentedRangeTombstoneIterator(
           fragmented_tombstone_list, *icmp_,
           kMaxSequenceNumber /* upper_bound */));
+}
+
+InternalIteratorBase<Slice>* NewTruncatedRangeDelMergingIter(
+    const InternalKeyComparator* icmp,
+    const std::vector<std::unique_ptr<TruncatedRangeDelIterator>>& children) {
+  return new TruncatedRangeDelMergingIter(icmp, nullptr, nullptr, false,
+                                          children);
 }
 
 }  // namespace rocksdb

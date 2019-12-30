@@ -37,6 +37,7 @@ ImmutableCFOptions::ImmutableCFOptions(const ImmutableDBOptions& db_options,
           cf_options.min_write_buffer_number_to_merge),
       max_write_buffer_number_to_maintain(
           cf_options.max_write_buffer_number_to_maintain),
+      enable_lazy_compaction(cf_options.enable_lazy_compaction),
       inplace_update_support(cf_options.inplace_update_support),
       inplace_callback(cf_options.inplace_callback),
       info_log(db_options.info_log.get()),
@@ -146,8 +147,6 @@ void MutableCFOptions::Dump(Logger* log) const {
       prefix_extractor == nullptr ? "nullptr" : prefix_extractor->Name());
   ROCKS_LOG_INFO(log, "                 disable_auto_compactions: %d",
                  disable_auto_compactions);
-  ROCKS_LOG_INFO(log, "                   enable_lazy_compaction: %d",
-                 enable_lazy_compaction);
   ROCKS_LOG_INFO(log, "                                blob_size: %d",
                  blob_size);
   ROCKS_LOG_INFO(log, "                            blob_gc_ratio: %f",

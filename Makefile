@@ -129,6 +129,11 @@ LINK_SHARED_BOOST := -L${BOOST_LIB_DIR} \
 CXXFLAGS += -march=haswell
 CXXFLAGS += -I${TERARK_CORE_HOME}/src -I${TERARK_CORE_HOME}/boost-include -I${TERARK_CORE_HOME}/3rdparty/zstd
 
+CPPUTIL_METRICS2_HOME ?= third-party/metrics2-cmake
+LDFLAGS += ${CPPUTIL_METRICS2_HOME}/cmake-build/libmetrics2.a
+CFLAGS += -I${CPPUTIL_METRICS2_HOME}
+CXXFLAGS += -I${CPPUTIL_METRICS2_HOME}
+
 #------------------------------------------------------------------------------
 ifeq (${TERARK_CORE_HOME},terark-core)
 terark-core.got:
@@ -233,6 +238,10 @@ else
 endif
 else
 $(warning Warning: Compiling in debug mode. Don't use the resulting binary in production)
+endif
+
+ifeq ($(TERARKDB_ENABLE_METRICS),1)
+OPT += -DTERARKDB_ENABLE_METRICS
 endif
 
 #-----------------------------------------------
@@ -766,8 +775,8 @@ $(SHARED2): $(SHARED3)
 	ln -fs $(SHARED3) $(SHARED2)
 $(SHARED3): $(SHARED4)
 	ln -fs $(SHARED4) $(SHARED3)
-$(SHARED4): shared-objects/${xdir}/${SHARED4}
-	ln -sf $< $@
+$(SHARED4): shared-objects/${xdir}/${SHARED4} cpputil_metrics2
+	ln -fs $< $@
 
 ifeq ($(HAVE_POWER8),1)
 SHARED_C_OBJECTS = $(addprefix ${xdir}/, $(LIB_SOURCES_C:.c=.o))
@@ -825,6 +834,11 @@ endif  # PLATFORM_SHARED_EXT
 all: $(LIBRARY) $(SHARED) $(BENCHMARKS) tools tools_lib test_libs $(TESTS)
 
 all_but_some_tests: $(LIBRARY) $(BENCHMARKS) tools tools_lib test_libs $(SUBSET)
+
+${CPPUTIL_METRICS2_HOME}/cmake-build/libmetrics2.a:
+	mkdir -p ${CPPUTIL_METRICS2_HOME}/cmake-build && cd ${CPPUTIL_METRICS2_HOME}/cmake-build && cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo && make
+
+cpputil_metrics2: ${CPPUTIL_METRICS2_HOME}/cmake-build/libmetrics2.a
 
 static_lib: $(LIBRARY)
 
@@ -1174,6 +1188,7 @@ clean:
 	rm -rf librocksdb*
 	rm -f terark-core.got
 	cd java; $(MAKE) clean
+	cd ${TERARK_CORE_HOME}; ${MAKE} clean
 
 tags:
 	ctags -R .
@@ -1196,18 +1211,20 @@ package:
 # ---------------------------------------------------------------------------
 # 	Unit tests and tools
 # ---------------------------------------------------------------------------
-$(LIBRARY): $(LIBOBJECTS)
+
+$(LIBRARY): $(LIBOBJECTS) cpputil_metrics2
 	$(AM_V_AR)rm -f $@
 	$(AM_V_at)$(AR) $(ARFLAGS) $@ $(LIBOBJECTS)
 ifeq (${BUNDLE_ALL_TERARK_STATIC},1)
 	mv $@ orgin-$@
-	ln -s ${TERARK_CORE_PKG_DIR}/lib_static/libterark-{idx,zbs,fsa,core}-${DBG_OR_RLS}.a .
+	ln -fs ${TERARK_CORE_PKG_DIR}/lib_static/libterark-{idx,zbs,fsa,core}-${DBG_OR_RLS}.a .
 	(\
 	echo create $@; \
 	echo addlib libterark-idx-${DBG_OR_RLS}.a; \
 	echo addlib libterark-zbs-${DBG_OR_RLS}.a; \
 	echo addlib libterark-fsa-${DBG_OR_RLS}.a; \
 	echo addlib libterark-core-${DBG_OR_RLS}.a; \
+	echo addlib ${CPPUTIL_METRICS2_HOME}/cmake-build/libmetrics2.a; \
 	echo addlib orgin-$@; \
 	echo save; \
 	echo end; \
@@ -1224,10 +1241,10 @@ librocksdb_env_basic_test.a: env/env_basic_test.o $(TESTHARNESS)
 	$(AM_V_at)$(AR) $(ARFLAGS) $@ $^
 
 db_bench: tools/db_bench.o $(BENCHTOOLOBJECTS) 
-	$(AM_LINK_SHR) -lgflags
+	$(AM_LINK) librocksdb.a -lgflags -fopenmp
 
 trace_analyzer: tools/trace_analyzer.o $(ANALYZETOOLOBJECTS) $(LIBOBJECTS)
-	$(AM_LINK_SHR)
+	$(AM_LINK) librocksdb.a -fopenmp
 
 cache_bench: cache/cache_bench.o $(TESTUTIL)
 	$(AM_LINK_SHR)
