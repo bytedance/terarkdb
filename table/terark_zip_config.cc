@@ -24,6 +24,26 @@ namespace terark {
 void DictZipBlobStore_setZipThreads(int zipThreads);
 }
 
+#define MyGetInt(obj, name, Default) \
+  obj.name = (int)terark::getEnvLong("TerarkZipTable_" #name, Default)
+#define MyGetUInt(obj, name, Default) \
+  obj.name = (unsigned)terark::getEnvLong("TerarkZipTable_" #name, Default)
+#define MyGetBool(obj, name, Default) \
+  obj.name = terark::getEnvBool("TerarkZipTable_" #name, Default)
+#define MyGetDouble(obj, name, Default) \
+  obj.name = terark::getEnvDouble("TerarkZipTable_" #name, Default)
+
+#define MyOverrideInt(obj, name) MyGetInt(obj, name, obj.name)
+#define MyOverrideBool(obj, name) MyGetBool(obj, name, obj.name)
+#define MyOverrideDouble(obj, name) MyGetDouble(obj, name, obj.name)
+#define MyOverrideXiB(obj, name)                         \
+  if (const char* env = getenv("TerarkZipTable_" #name)) \
+  obj.name = terark::ParseSizeXiB(env)
+
+#define MyOverrideUniversalUint(obj, name)          \
+  MyGetUInt(obj.compaction_options_universal, name, \
+            obj.compaction_options_universal.name)
+
 namespace rocksdb {
 
 void TerarkZipDeleteTempFiles(const std::string& tmpPath) {
@@ -32,17 +52,12 @@ void TerarkZipDeleteTempFiles(const std::string& tmpPath) {
   env->GetChildren(tmpPath, &files);
   std::string fpath;
   for (const std::string& f : files) {
-    if (false
-        || fstring(f).startsWith("Terark-")
-        || fstring(f).startsWith("q1-")
-        || fstring(f).startsWith("q2-")
-        || fstring(f).startsWith("linkSeqVec-")
-        || fstring(f).startsWith("linkVec-")
-        || fstring(f).startsWith("label-")
-        || fstring(f).startsWith("nextStrVec-")
-        || fstring(f).startsWith("nestStrVec-")
-        || fstring(f).startsWith("nestStrPool-")
-        ) {
+    if (fstring(f).startsWith("Terark-") || fstring(f).startsWith("q1-") ||
+        fstring(f).startsWith("q2-") || fstring(f).startsWith("linkSeqVec-") ||
+        fstring(f).startsWith("linkVec-") || fstring(f).startsWith("label-") ||
+        fstring(f).startsWith("nextStrVec-") ||
+        fstring(f).startsWith("nestStrVec-") ||
+        fstring(f).startsWith("nestStrPool-")) {
       fpath.resize(0);
       fpath.append(tmpPath);
       fpath.push_back('/');
@@ -142,13 +157,12 @@ void TerarkZipAutoConfigForBulkLoad(struct TerarkZipTableOptions& tzo,
   cfo.max_compaction_bytes = (static_cast<uint64_t>(1) << 60);
   cfo.disable_auto_compactions = true;
   cfo.level0_file_num_compaction_trigger = (1 << 30);
-  cfo.level0_slowdown_writes_trigger     = (1 << 30);
-  cfo.level0_stop_writes_trigger         = (1 << 30);
+  cfo.level0_slowdown_writes_trigger = (1 << 30);
+  cfo.level0_stop_writes_trigger = (1 << 30);
   cfo.soft_pending_compaction_bytes_limit = 0;
   cfo.hard_pending_compaction_bytes_limit = 0;
 
   dbo.create_if_missing = true;
-  dbo.allow_concurrent_memtable_write = false;
   dbo.allow_mmap_reads = true;
   dbo.allow_mmap_populate = false;
   dbo.max_background_flushes = 4;
@@ -173,27 +187,17 @@ void TerarkZipAutoConfigForOnlineDB(struct TerarkZipTableOptions& tzo,
 void TerarkZipAutoConfigForOnlineDB_DBOptions(struct DBOptions& dbo,
                                               size_t cpuNum) {
   using namespace std;  // max, min
-  int iCpuNum = int(cpuNum);
+  int zipThreads = 8;
   if (cpuNum > 0) {
-    terark::DictZipBlobStore_setZipThreads((iCpuNum * 3 + 1) / 5);
+    zipThreads = (int(cpuNum) * 3 + 1) / 5;
   }
+  terark::DictZipBlobStore_setZipThreads(
+      (int)terark::getEnvLong("DictZipBlobStore_zipThreads", zipThreads));
   dbo.create_if_missing = true;
   dbo.allow_mmap_reads = true;
   dbo.allow_mmap_populate = true;
-  dbo.max_background_flushes = 4;
-  dbo.max_subcompactions = 4;
-  dbo.base_background_compactions = 4;
-  dbo.max_background_compactions = 8;
-  dbo.max_background_garbage_collections = 4;
-  dbo.allow_concurrent_memtable_write = false;
-  dbo.max_background_jobs = dbo.max_background_compactions +
-                            dbo.max_background_flushes +
-                            dbo.max_background_garbage_collections;
-
-  dbo.env->SetBackgroundThreads(
-      dbo.max_background_compactions + dbo.max_background_garbage_collections,
-      rocksdb::Env::LOW);
-  dbo.env->SetBackgroundThreads(dbo.max_background_flushes, rocksdb::Env::HIGH);
+  dbo.new_table_reader_for_compaction_inputs = false;
+  dbo.base_background_compactions = 1;
 }
 
 void TerarkZipAutoConfigForOnlineDB_CFOptions(struct TerarkZipTableOptions& tzo,
@@ -216,22 +220,6 @@ void TerarkZipAutoConfigForOnlineDB_CFOptions(struct TerarkZipTableOptions& tzo,
   tzo.softZipWorkingMemLimit = memBytesLimit * 1 / 8;
   tzo.hardZipWorkingMemLimit = tzo.softZipWorkingMemLimit * 2;
   tzo.smallTaskMemory = memBytesLimit / 64;
-
-  cfo.write_buffer_size = 256ull << 20;
-  cfo.num_levels = 7;
-  cfo.max_write_buffer_number = 16;
-  cfo.target_file_size_base = 128ull << 20;
-  cfo.target_file_size_multiplier = 1;
-  cfo.compaction_style = rocksdb::kCompactionStyleUniversal;
-  cfo.compaction_options_universal.allow_trivial_move = true;
-
-  // intended: less than target_file_size_base
-  cfo.max_bytes_for_level_base = cfo.write_buffer_size * 8;
-  cfo.max_bytes_for_level_multiplier = 2;
-
-  cfo.level0_file_num_compaction_trigger = 2;
-  cfo.level0_slowdown_writes_trigger = 8;
-  cfo.level0_stop_writes_trigger = 40;
 }
 
 bool TerarkZipConfigFromEnv(DBOptions& dbo, ColumnFamilyOptions& cfo) {
@@ -299,31 +287,17 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo,
     tzo.indexType = env;
   }
 
-#define MyGetInt(obj, name, Default) \
-    obj.name = (int)terark::getEnvLong("TerarkZipTable_" #name, Default)
-#define MyGetBool(obj, name, Default) \
-    obj.name = terark::getEnvBool("TerarkZipTable_" #name, Default)
-#define MyGetDouble(obj, name, Default) \
-    obj.name = terark::getEnvDouble("TerarkZipTable_" #name, Default)
-#define MyGetXiB(obj, name) \
-  if (const char* env = getenv("TerarkZipTable_" #name))\
-    obj.name = terark::ParseSizeXiB(env)
+  MyOverrideInt(tzo, checksumLevel);
+  MyOverrideInt(tzo, checksumSmallValSize);
+  MyOverrideInt(tzo, indexNestLevel);
+  MyOverrideInt(tzo, terarkZipMinLevel);
+  MyOverrideInt(tzo, debugLevel);
+  MyOverrideInt(tzo, keyPrefixLen);
+  MyOverrideInt(tzo, offsetArrayBlockUnits);
+  MyOverrideInt(tzo, indexNestScale);
 
-#define MyOverrideInt(obj, name) MyGetInt(obj, name, obj.name)
-
-  MyGetInt   (tzo, checksumLevel           , 3    );
-  MyGetInt   (tzo, checksumSmallValSize    , 40   );
-  MyGetInt   (tzo, indexNestLevel          , 3    );
-  MyGetInt   (tzo, terarkZipMinLevel       , 0    );
-  MyGetInt   (tzo, debugLevel              , 0    );
-  MyGetInt   (tzo, keyPrefixLen            , 0    );
-  MyGetInt   (tzo, offsetArrayBlockUnits   , 128  );
-  MyGetInt   (tzo, indexNestScale          , 8    );
-  if (true
-      &&   0 != tzo.offsetArrayBlockUnits
-      &&  64 != tzo.offsetArrayBlockUnits
-      && 128 != tzo.offsetArrayBlockUnits
-    ) {
+  if (0 != tzo.offsetArrayBlockUnits && 64 != tzo.offsetArrayBlockUnits &&
+      128 != tzo.offsetArrayBlockUnits) {
     STD_WARN(
         "TerarkZipConfigFromEnv: bad offsetArrayBlockUnits = %d, must be one "
         "of {0,64,128}, reset to 128\n",
@@ -338,29 +312,29 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo,
     tzo.indexNestScale = 8;
   }
 
-  MyGetBool  (tzo, useSuffixArrayLocalMatch, false);
-  MyGetBool  (tzo, warmUpIndexOnOpen       , true );
-  MyGetBool  (tzo, warmUpValueOnOpen       , false);
-  MyGetBool  (tzo, disableSecondPassIter   , false);
-  MyGetBool  (tzo, enableCompressionProbe  , true );
-  MyGetBool  (tzo, disableCompressDict     , false);
-  MyGetBool  (tzo, optimizeCpuL3Cache      , true );
-  MyGetBool  (tzo, forceMetaInMemory       , false);
-  MyGetBool  (tzo, enableEntropyStore      , true );
+  MyOverrideBool(tzo, useSuffixArrayLocalMatch);
+  MyOverrideBool(tzo, warmUpIndexOnOpen);
+  MyOverrideBool(tzo, warmUpValueOnOpen);
+  MyOverrideBool(tzo, disableSecondPassIter);
+  MyOverrideBool(tzo, enableCompressionProbe);
+  MyOverrideBool(tzo, disableCompressDict);
+  MyOverrideBool(tzo, optimizeCpuL3Cache);
+  MyOverrideBool(tzo, forceMetaInMemory);
+  MyOverrideBool(tzo, enableEntropyStore);
 
-  MyGetDouble(tzo, sampleRatio             , 0.03 );
-  MyGetDouble(tzo, indexCacheRatio         , 0.00 );
+  MyOverrideDouble(tzo, sampleRatio);
+  MyOverrideDouble(tzo, indexCacheRatio);
 
-  MyGetInt(tzo, minDictZipValueSize, 15);
-  MyGetInt(tzo, minPreadLen, 0);
+  MyOverrideInt(tzo, minDictZipValueSize);
+  MyOverrideInt(tzo, minPreadLen);
 
-  MyGetXiB(tzo, softZipWorkingMemLimit);
-  MyGetXiB(tzo, hardZipWorkingMemLimit);
-  MyGetXiB(tzo, smallTaskMemory);
-  MyGetXiB(tzo, singleIndexMinSize);
-  MyGetXiB(tzo, singleIndexMaxSize);
-  MyGetXiB(tzo, cacheCapacityBytes);
-  MyGetInt(tzo, cacheShards, 67);
+  MyOverrideXiB(tzo, softZipWorkingMemLimit);
+  MyOverrideXiB(tzo, hardZipWorkingMemLimit);
+  MyOverrideXiB(tzo, smallTaskMemory);
+  MyOverrideXiB(tzo, singleIndexMinSize);
+  MyOverrideXiB(tzo, singleIndexMaxSize);
+  MyOverrideXiB(tzo, cacheCapacityBytes);
+  MyOverrideInt(tzo, cacheShards);
 
   tzo.singleIndexMinSize = std::max<size_t>(tzo.singleIndexMinSize, 1ull << 20);
   tzo.singleIndexMaxSize =
@@ -369,63 +343,55 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo,
   cfo.table_factory.reset(NewTerarkZipTableFactory(
       tzo, std::shared_ptr<TableFactory>(
                NewAdaptiveTableFactory(cfo.table_factory))));
-  const char* compaction_style = "Universal";
   if (const char* env = getenv("TerarkZipTable_compaction_style")) {
-    compaction_style = env;
-  }
-  if (strcasecmp(compaction_style, "Level") == 0) {
-    cfo.compaction_style = kCompactionStyleLevel;
-  } else {
-    if (strcasecmp(compaction_style, "Universal") != 0) {
-      STD_WARN(
-          "bad env TerarkZipTable_compaction_style=%s, use default 'universal'",
-          compaction_style);
-    }
-    cfo.compaction_style = kCompactionStyleUniversal;
-    cfo.compaction_options_universal.allow_trivial_move = true;
-#define MyGetUniversal_uint(name, Default) \
-  cfo.compaction_options_universal.name =  \
-      (uint32_t)terark::getEnvLong("TerarkZipTable_" #name, Default)
-    MyGetUniversal_uint(min_merge_width, 3);
-    MyGetUniversal_uint(max_merge_width, 7);
-    cfo.compaction_options_universal.size_ratio = (unsigned)terark::getEnvLong(
-        "TerarkZipTable_universal_compaction_size_ratio",
-        cfo.compaction_options_universal.size_ratio);
-    const char* env_stop_style =
-        getenv("TerarkZipTable_universal_compaction_stop_style");
-    if (env_stop_style) {
-      auto& ou = cfo.compaction_options_universal;
-      if (strncasecmp(env_stop_style, "Similar", 7) == 0) {
-        ou.stop_style = kCompactionStopStyleSimilarSize;
-      } else if (strncasecmp(env_stop_style, "Total", 5) == 0) {
-        ou.stop_style = kCompactionStopStyleTotalSize;
-      } else {
-        STD_WARN(
-            "bad env TerarkZipTable_universal_compaction_stop_style=%s, use "
-            "rocksdb default 'TotalSize'",
-            env_stop_style);
-        ou.stop_style = kCompactionStopStyleTotalSize;
+    if (strcasecmp(env, "Level") == 0) {
+      cfo.compaction_style = kCompactionStyleLevel;
+    } else if (strcasecmp(env, "Universal") == 0) {
+      cfo.compaction_style = kCompactionStyleUniversal;
+      cfo.compaction_options_universal.allow_trivial_move = true;
+      MyOverrideUniversalUint(cfo, min_merge_width);
+      MyOverrideUniversalUint(cfo, max_merge_width);
+      MyOverrideUniversalUint(cfo, size_ratio);
+
+      const char* env_stop_style =
+          getenv("TerarkZipTable_universal_compaction_stop_style");
+      if (env_stop_style) {
+        auto& ou = cfo.compaction_options_universal;
+        if (strncasecmp(env_stop_style, "Similar", 7) == 0) {
+          ou.stop_style = kCompactionStopStyleSimilarSize;
+        } else if (strncasecmp(env_stop_style, "Total", 5) == 0) {
+          ou.stop_style = kCompactionStopStyleTotalSize;
+        } else {
+          STD_WARN(
+              "bad env TerarkZipTable_universal_compaction_stop_style=%s, use "
+              "rocksdb default 'TotalSize'",
+              env_stop_style);
+          ou.stop_style = kCompactionStopStyleTotalSize;
+        }
       }
+    } else {
+      STD_WARN("bad env TerarkZipTable_compaction_style=%s ", env);
     }
   }
-  MyGetXiB(cfo, write_buffer_size);
-  MyGetXiB(cfo, target_file_size_base);
+
   MyGetBool(cfo, enable_lazy_compaction, true);
+
+  MyOverrideXiB(cfo, write_buffer_size);
+  MyOverrideXiB(cfo, target_file_size_base);
   MyOverrideInt(cfo, max_write_buffer_number);
   MyOverrideInt(cfo, target_file_size_multiplier);
   MyOverrideInt(cfo, num_levels);
+
   MyOverrideInt(cfo, level0_file_num_compaction_trigger);
   MyOverrideInt(cfo, level0_slowdown_writes_trigger);
   MyOverrideInt(cfo, level0_stop_writes_trigger);
-
-  cfo.max_compaction_bytes = cfo.target_file_size_base;
-  MyGetXiB(cfo, max_compaction_bytes);
+  MyOverrideXiB(cfo, max_compaction_bytes);
 
   if (tzo.debugLevel) {
     STD_INFO("TerarkZipConfigFromEnv(dbo, cfo) successed\n");
   }
   return true;
-}
+}  // namespace rocksdb
 
 void TerarkZipDBOptionsFromEnv(DBOptions& dbo) {
   auto configMap = TerarkGetConfigMapFromEnv();
@@ -435,13 +401,13 @@ void TerarkZipDBOptionsFromEnv(DBOptions& dbo) {
 
   TerarkZipAutoConfigForOnlineDB_DBOptions(dbo, 0);
 
-  MyGetInt(dbo, base_background_compactions, 4);
-  MyGetInt(dbo,  max_background_compactions, 8);
-  MyGetInt(dbo,  max_background_garbage_collections, 4);
-  MyGetInt(dbo,  max_background_flushes    , 4);
-  MyGetInt(dbo,  max_subcompactions        , 4);
-  MyGetInt(dbo,  max_open_files            , -1);
-  MyGetBool(dbo, allow_mmap_populate       , false);
+  MyOverrideInt(dbo, max_subcompactions);
+  MyOverrideInt(dbo, max_background_flushes);
+  MyOverrideInt(dbo, max_background_compactions);
+  MyOverrideInt(dbo, max_background_garbage_collections);
+
+  MyOverrideInt(dbo, max_open_files);
+  MyOverrideBool(dbo, allow_mmap_populate);
   dbo.max_background_jobs = dbo.max_background_flushes +
                             dbo.max_background_compactions +
                             dbo.max_background_garbage_collections;
@@ -450,8 +416,6 @@ void TerarkZipDBOptionsFromEnv(DBOptions& dbo) {
       dbo.max_background_compactions + dbo.max_background_garbage_collections,
       rocksdb::Env::LOW);
   dbo.env->SetBackgroundThreads(dbo.max_background_flushes, rocksdb::Env::HIGH);
-  dbo.allow_mmap_reads = true;
-  dbo.new_table_reader_for_compaction_inputs = false;
 }
 
 class TerarkBlackListCF : public terark::hash_strmap<> {
