@@ -26,6 +26,9 @@
 #include "util/stop_watch.h"
 #include "util/sync_point.h"
 
+#include <terark/valvec.hpp>
+#include <terark/util/function.hpp>
+
 namespace rocksdb {
 
 Status ExternalSstFileIngestionJob::Prepare(
@@ -63,12 +66,8 @@ Status ExternalSstFileIngestionJob::Prepare(
       sorted_files.push_back(&files_to_ingest_[i]);
     }
 
-    std::sort(
-        sorted_files.begin(), sorted_files.end(),
-        [&ucmp](const IngestedFileInfo* info1, const IngestedFileInfo* info2) {
-          return ucmp->Compare(info1->smallest_user_key,
-                               info2->smallest_user_key) < 0;
-        });
+    terark::sort_ex_a(sorted_files,
+      TERARK_FIELD_P(smallest_user_key), StdCompareLess(ucmp));
 
     for (size_t i = 0; i < num_files - 1; i++) {
       if (ucmp->Compare(sorted_files[i]->largest_user_key,

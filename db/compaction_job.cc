@@ -559,19 +559,11 @@ void CompactionJob::GenSubcompactionBoundaries() {
     }
   }
 
-  std::sort(bounds.begin(), bounds.end(),
-            [cfd_comparator](const Slice& a, const Slice& b) -> bool {
-              return cfd_comparator->Compare(ExtractUserKey(a),
-                                             ExtractUserKey(b)) < 0;
-            });
+  terark::sort_ex_a(bounds, &ExtractUserKey, StdCompareLess(cfd_comparator));
+
   // Remove duplicated entries from bounds
-  bounds.erase(
-      std::unique(bounds.begin(), bounds.end(),
-                  [cfd_comparator](const Slice& a, const Slice& b) -> bool {
-                    return cfd_comparator->Compare(ExtractUserKey(a),
-                                                   ExtractUserKey(b)) == 0;
-                  }),
-      bounds.end());
+  bounds.resize(terark::unique_ex_a(bounds,
+     &ExtractUserKey, StdCompareEqual(cfd_comparator)));
 
   // Combine consecutive pairs of boundaries into ranges with an approximate
   // size of data covered by keys in that range

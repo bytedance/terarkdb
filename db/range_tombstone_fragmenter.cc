@@ -16,6 +16,8 @@
 #include "util/kv_map.h"
 #include "util/vector_iterator.h"
 
+#include <terark/valvec.hpp>
+
 namespace rocksdb {
 
 FragmentedRangeTombstoneList::FragmentedRangeTombstoneList(
@@ -115,8 +117,7 @@ void FragmentedRangeTombstoneList::FragmentTombstones(
       for (auto flush_it = it; flush_it != cur_end_keys.end(); ++flush_it) {
         seqnums_to_flush.push_back(flush_it->sequence);
       }
-      std::sort(seqnums_to_flush.begin(), seqnums_to_flush.end(),
-                std::greater<SequenceNumber>());
+      terark::sort_a(seqnums_to_flush, std::greater<SequenceNumber>());
 
       size_t start_idx = tombstone_seqs_.size();
       size_t end_idx = start_idx + seqnums_to_flush.size();

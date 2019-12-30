@@ -91,4 +91,41 @@ extern const Comparator* BytewiseComparator();
 // ordering.
 extern const Comparator* ReverseBytewiseComparator();
 
+template<class Comp>
+struct StdComparareLessType {
+  const Comp* cmp;
+  template<class T>
+  bool operator()(const T& x, const T& y) const {
+    return cmp->Compare(x, y) < 0;
+  }
+};
+template<class Comp>
+struct StdComparareGreaterType {
+  const Comp* cmp;
+  template<class T>
+  bool operator()(const T& x, const T& y) const {
+    return cmp->Compare(x, y) > 0;
+  }
+};
+template<class Comp>
+struct StdComparareEqualType {
+  const Comp* cmp;
+  template<class T>
+  bool operator()(const T& x, const T& y) const {
+    return cmp->Compare(x, y) == 0;
+  }
+};
+template<class Comp>
+StdComparareLessType<Comp> StdCompareLess(const Comp* cmp) {
+  return StdComparareLessType<Comp>{cmp};
+}
+template<class Comp>
+StdComparareGreaterType<Comp> StdCompareGreater(const Comp* cmp) {
+  return StdComparareGreaterType<Comp>{cmp};
+}
+template<class Comp>
+StdComparareEqualType<Comp> StdCompareEqual(const Comp* cmp) {
+  return StdComparareEqualType<Comp>{cmp};
+}
+
 }  // namespace rocksdb

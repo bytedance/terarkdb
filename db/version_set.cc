@@ -2102,11 +2102,8 @@ void SortFileByOverlappingRatio(
         overlapping_bytes * 1024u / file->fd.file_size;
   }
 
-  std::sort(temp->begin(), temp->end(),
-            [&](const Fsize& f1, const Fsize& f2) -> bool {
-              return file_to_order[f1.file->fd.GetNumber()] <
-                     file_to_order[f2.file->fd.GetNumber()];
-            });
+  terark::sort_ex_a(*temp,
+    [&](const Fsize& f) { return file_to_order[f.file->fd.GetNumber()]; });
 }
 }  // namespace
 
@@ -2176,11 +2173,8 @@ void VersionStorageInfo::GenerateLevel0NonOverlapping() {
   std::vector<FdWithKeyRange> level0_sorted_file(
       level_files_brief_[0].files,
       level_files_brief_[0].files + level_files_brief_[0].num_files);
-  std::sort(level0_sorted_file.begin(), level0_sorted_file.end(),
-            [this](const FdWithKeyRange& f1, const FdWithKeyRange& f2) -> bool {
-              return (internal_comparator_->Compare(f1.smallest_key,
-                                                    f2.smallest_key) < 0);
-            });
+  terark::sort_ex_a(level0_sorted_file,
+    TERARK_FIELD(smallest_key), StdCompareLess(internal_comparator_));
 
   for (size_t i = 1; i < level0_sorted_file.size(); ++i) {
     FdWithKeyRange& f = level0_sorted_file[i];
