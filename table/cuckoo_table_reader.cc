@@ -23,6 +23,7 @@
 #include "table/get_context.h"
 #include "util/arena.h"
 #include "util/coding.h"
+#include <terark/valvec.hpp>
 
 namespace rocksdb {
 namespace {
@@ -284,8 +285,7 @@ void CuckooTableIterator::InitIfNeeded() {
   }
   assert(sorted_bucket_ids_.size() ==
       reader_->GetTableProperties()->num_entries);
-  std::sort(sorted_bucket_ids_.begin(), sorted_bucket_ids_.end(),
-            bucket_comparator_);
+  terark::sort_a(sorted_bucket_ids_, bucket_comparator_);
   curr_key_idx_ = kInvalidIndex;
   initialized_ = true;
 }
@@ -308,12 +308,8 @@ void CuckooTableIterator::Seek(const Slice& target) {
       reader_->file_data_, reader_->ucomp_,
       reader_->bucket_length_, reader_->user_key_length_,
       ExtractUserKey(target));
-  auto seek_it = std::lower_bound(sorted_bucket_ids_.begin(),
-      sorted_bucket_ids_.end(),
-      kInvalidIndex,
-      seek_comparator);
-  curr_key_idx_ =
-      static_cast<uint32_t>(std::distance(sorted_bucket_ids_.begin(), seek_it));
+  curr_key_idx_ = static_cast<uint32_t>(terark::lower_bound_a(
+            sorted_bucket_ids_, kInvalidIndex, seek_comparator));
   PrepareKVAtCurrIdx();
 }
 

@@ -10,6 +10,7 @@
 #include <memory>
 
 #include "utilities/cassandra/serialize.h"
+#include <terark/valvec.hpp>
 
 namespace rocksdb {
 namespace cassandra {
@@ -339,10 +340,7 @@ RowValue RowValue::Merge(std::vector<RowValue>&& values) {
 
   // Merge columns by their last modified time, and skip once we hit
   // a row tombstone.
-  std::sort(values.begin(), values.end(),
-    [](const RowValue& r1, const RowValue& r2) {
-      return r1.LastModifiedTime() > r2.LastModifiedTime();
-    });
+  terark::sort_a(values, TERARK_CMP(>, LastModifiedTime()));
 
   std::map<int8_t, std::shared_ptr<ColumnBase>> merged_columns;
   int64_t tombstone_timestamp = 0;

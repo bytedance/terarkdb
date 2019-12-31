@@ -122,6 +122,7 @@ struct JobContext {
   struct CandidateFileInfo {
     std::string file_name;
     std::string file_path;
+    CandidateFileInfo(){}
     CandidateFileInfo(std::string name, std::string path)
         : file_name(std::move(name)), file_path(std::move(path)) {}
     bool operator==(const CandidateFileInfo& other) const {

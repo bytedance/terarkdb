@@ -42,6 +42,7 @@ struct FragmentedRangeTombstoneList {
       const std::vector<SequenceNumber>& snapshots = {},
       uint64_t _user_tag = uint64_t(-1));
 
+  typedef std::vector<RangeTombstoneStack>::const_iterator const_iterator;
   std::vector<RangeTombstoneStack>::const_iterator begin() const {
     return tombstones_.begin();
   }

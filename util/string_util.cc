@@ -23,6 +23,9 @@
 #include "rocksdb/env.h"
 #include "rocksdb/slice.h"
 
+#include <terark/util/function.hpp>
+#include <boost/range/algorithm.hpp>
+
 namespace rocksdb {
 
 const std::string kNullptrString = "nullptr";
@@ -186,8 +189,7 @@ using CharMap = std::pair<char, char>;
 char UnescapeChar(const char c) {
   static const CharMap convert_map[] = {{'r', '\r'}, {'n', '\n'}};
 
-  auto iter = std::find_if(std::begin(convert_map), std::end(convert_map),
-                           [c](const CharMap& p) { return p.first == c; });
+  auto iter = boost::find_if(convert_map, TERARK_GET(.first) == c);
 
   if (iter == std::end(convert_map)) {
     return c;
@@ -198,8 +200,7 @@ char UnescapeChar(const char c) {
 char EscapeChar(const char c) {
   static const CharMap convert_map[] = {{'\n', 'n'}, {'\r', 'r'}};
 
-  auto iter = std::find_if(std::begin(convert_map), std::end(convert_map),
-                           [c](const CharMap& p) { return p.first == c; });
+  auto iter = boost::find_if(convert_map, TERARK_GET(.first) == c);
 
   if (iter == std::end(convert_map)) {
     return c;

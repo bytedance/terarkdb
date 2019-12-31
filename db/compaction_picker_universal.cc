@@ -30,6 +30,10 @@
 #include "util/string_util.h"
 #include "util/sync_point.h"
 
+#include "terark/util/function.hpp"
+#include <boost/range/algorithm.hpp>
+#include <boost/range/algorithm_ext/is_sorted.hpp>
+
 namespace rocksdb {
 namespace {
 // Used in universal compaction when trivial move is enabled.
@@ -93,7 +97,7 @@ SmallestKeyHeap create_level_heap(Compaction* c, const Comparator* icmp) {
   return smallest_key_priority_q;
 }
 
-#if !defined(NDEBUG) && 0
+#if !defined(NDEBUG)
 // smallest_seqno and largest_seqno are set iff. `files` is not empty.
 void GetSmallestLargestSeqno(const std::vector<FileMetaData*>& files,
                              SequenceNumber* smallest_seqno,
@@ -467,7 +471,7 @@ Compaction* UniversalCompactionPicker::PickCompaction(
   }
 
 // validate that all the chosen files of L0 are non overlapping in time
-#if !defined(NDEBUG) && 0
+#if !defined(NDEBUG)
   if (c->compaction_reason() != CompactionReason::kCompositeAmplification) {
     struct SortedRunDebug {
       bool is_vstorage;
@@ -490,14 +494,8 @@ Compaction* UniversalCompactionPicker::PickCompaction(
                                              largest_seqno});
       }
     }
-    assert(std::is_sorted(sr_debug.begin(), sr_debug.end(),
-                          [](SortedRunDebug& l, SortedRunDebug& r) {
-                            return l.smallest > r.smallest;
-                          }));
-    assert(std::is_sorted(sr_debug.begin(), sr_debug.end(),
-                          [](SortedRunDebug& l, SortedRunDebug& r) {
-                            return l.largest > r.largest;
-                          }));
+    assert(boost::is_sorted(sr_debug, TERARK_GET(.smallest) > cmp));
+    assert(boost::is_sorted(sr_debug, TERARK_GET(.largest ) > cmp));
     SortedRunDebug o{false, c->output_level(), nullptr,
                      std::numeric_limits<SequenceNumber>::max(), 0U};
     for (auto& input_level : *c->inputs()) {
@@ -544,22 +542,9 @@ Compaction* UniversalCompactionPicker::PickCompaction(
     }
     assert(o.smallest != std::numeric_limits<SequenceNumber>::max());
     sr_debug.emplace_back(o);
-    std::sort(sr_debug.begin(), sr_debug.end(),
-              [](SortedRunDebug& l, SortedRunDebug& r) {
-                if (l.smallest != r.smallest) {
-                  return l.smallest > r.smallest;
-                } else {
-                  return l.level < r.level;
-                }
-              });
-    assert(std::is_sorted(sr_debug.begin(), sr_debug.end(),
-                          [](SortedRunDebug& l, SortedRunDebug& r) {
-                            return l.largest > r.largest;
-                          }));
-    assert(std::is_sorted(sr_debug.begin(), sr_debug.end(),
-                          [](SortedRunDebug& l, SortedRunDebug& r) {
-                            return l.level < r.level;
-                          }));
+    boost::sort(sr_debug, TERARK_CMP_EX(.smallest, >, .level, <));
+    assert(boost::is_sorted(sr_debug, TERARK_GET(.largest) > cmp));
+    assert(boost::is_sorted(sr_debug, TERARK_GET(.level) > cmp));
   }
 #endif
   // update statistics
@@ -1462,18 +1447,9 @@ Compaction* UniversalCompactionPicker::PickCompositeCompaction(
         }
       }
     }
-    assert(std::is_sorted(
-        input_range.begin(), input_range.end(),
-        [uc](const RangeStorage& a, const RangeStorage& b) {
-          return uc->Compare(a.start, b.start) < 0;
-        }));
-    assert(std::is_sorted(
-        input_range.begin(), input_range.end(),
-        [uc](const RangeStorage& a, const RangeStorage& b) {
-          return uc->Compare(a.limit, b.limit) < 0;
-        }));
-    assert(std::find_if(
-        input_range.begin(), input_range.end(),
+    assert(boost::is_sorted(input_range, TERARK_FIELD(.start) < *uc));
+    assert(boost::is_sorted(input_range, TERARK_FIELD(.limit) < *uc));
+    assert(boost::find_if(input_range,
         [uc](const RangeStorage& r) {
           return uc->Compare(r.start, r.limit) > 0;
         }) == input_range.end());

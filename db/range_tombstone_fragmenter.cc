@@ -17,6 +17,7 @@
 #include "util/vector_iterator.h"
 
 #include <terark/valvec.hpp>
+#include <boost/range/algorithm.hpp>
 
 namespace rocksdb {
 
@@ -284,8 +285,7 @@ void FragmentedRangeTombstoneIterator::SeekForPrev(const Slice& target) {
 
 void FragmentedRangeTombstoneIterator::SeekToCoveringTombstone(
     const Slice& target) {
-  pos_ = std::upper_bound(tombstones_->begin(), tombstones_->end(), target,
-                          tombstone_end_cmp_);
+  pos_ = boost::upper_bound(*tombstones_, target, tombstone_end_cmp_);
   if (pos_ == tombstones_->end()) {
     // All tombstones end before target.
     seq_pos_ = tombstones_->seq_end();
@@ -302,8 +302,7 @@ void FragmentedRangeTombstoneIterator::SeekForPrevToCoveringTombstone(
     Invalidate();
     return;
   }
-  pos_ = std::upper_bound(tombstones_->begin(), tombstones_->end(), target,
-                          tombstone_start_cmp_);
+  pos_ = boost::upper_bound(*tombstones_, target, tombstone_start_cmp_);
   if (pos_ == tombstones_->begin()) {
     // All tombstones start after target.
     Invalidate();

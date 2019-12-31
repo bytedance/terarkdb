@@ -18,6 +18,7 @@
 #include "db/memtable_list.h"
 #include "util/file_util.h"
 #include "util/sst_file_manager_impl.h"
+#include <terark/valvec.hpp>
 
 namespace rocksdb {
 
@@ -341,11 +342,8 @@ void DBImpl::PurgeObsoleteFiles(JobContext& state, bool schedule_only) {
 
   // dedup state.candidate_files so we don't try to delete the same
   // file twice
-  std::sort(candidate_files.begin(), candidate_files.end(),
-            CompareCandidateFile);
-  candidate_files.erase(
-      std::unique(candidate_files.begin(), candidate_files.end()),
-      candidate_files.end());
+  terark::sort_a(candidate_files, CompareCandidateFile);
+  candidate_files.resize(terark::unique_a(candidate_files));
 
   if (state.prev_total_log_size > 0) {
     ROCKS_LOG_INFO(immutable_db_options_.info_log,

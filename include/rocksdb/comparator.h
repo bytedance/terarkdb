@@ -10,6 +10,7 @@
 
 #include <string>
 #include <terark/util/factory.hpp>
+#include <terark/util/function.hpp>
 
 namespace rocksdb {
 
@@ -126,6 +127,93 @@ StdComparareGreaterType<Comp> StdCompareGreater(const Comp* cmp) {
 template<class Comp>
 StdComparareEqualType<Comp> StdCompareEqual(const Comp* cmp) {
   return StdComparareEqualType<Comp>{cmp};
+}
+
+template<class KeyExtractor, class KeyComparator>
+auto operator<(const KeyExtractor& ex, const KeyComparator& cmp) ->
+decltype(cmp.Compare("",""),
+         terark::ExtractorComparator(ex, StdCompareLess(&cmp)))
+{
+  return terark::ExtractorComparator(ex, StdCompareLess(&cmp));
+}
+
+template<class KeyExtractor, class KeyComparator>
+auto operator>(const KeyExtractor& ex, const KeyComparator& cmp) ->
+decltype(cmp.Compare("",""),
+         terark::ExtractorComparator(ex, StdCompareGreater(&cmp)))
+{
+  return terark::ExtractorComparator(ex, StdCompareGreater(&cmp));
+}
+
+template<class KeyExtractor, class KeyComparator>
+auto operator==(const KeyExtractor& ex, const KeyComparator& cmp) ->
+decltype(cmp.Compare("",""),
+         terark::ExtractorComparator(ex, StdCompareEqual(&cmp)))
+{
+  return terark::ExtractorComparator(ex, StdCompareEqual(&cmp));
+}
+
+template<class KeyComparator>
+auto operator<(const char[1], const KeyComparator& cmp) ->
+decltype(cmp.Compare("",""), StdCompareLess(&cmp))
+{
+  return StdCompareLess(&cmp);
+}
+template<class KeyComparator>
+auto operator>(const char[1], const KeyComparator& cmp) ->
+decltype(cmp.Compare("",""), StdCompareGreater(&cmp))
+{
+  return StdCompareGreater(&cmp);
+}
+template<class KeyComparator>
+auto operator==(const char[1], const KeyComparator& cmp) ->
+decltype(cmp.Compare("",""), StdCompareEqual(&cmp))
+{
+  return StdCompareEqual(&cmp);
+}
+
+template<class Cmp3>
+struct Cmp3_to_Less {
+  template<class T>
+  bool operator()(const T& x, const T& y) const {
+    return (*p_cmp3)(x, y) < 0;
+  }
+  const Cmp3* p_cmp3;
+};
+template<class Cmp3>
+struct Cmp3_to_Greater {
+  template<class T>
+  bool operator()(const T& x, const T& y) const {
+    return (*p_cmp3)(x, y) > 0;
+  }
+  const Cmp3* p_cmp3;
+};
+template<class Cmp3>
+struct Cmp3_to_Equal {
+  template<class T>
+  bool operator()(const T& x, const T& y) const {
+    return (*p_cmp3)(x, y) == 0;
+  }
+  const Cmp3* p_cmp3;
+};
+
+template<class Cmp3>
+auto operator<(const char[1], const Cmp3& cmp) ->
+decltype(cmp("",""), Cmp3_to_Less<Cmp3>{&cmp})
+{
+  return Cmp3_to_Less<Cmp3>{&cmp};
+}
+template<class Cmp3>
+auto operator>(const char[1], const Cmp3& cmp) ->
+decltype(cmp("",""), Cmp3_to_Greater<Cmp3>{&cmp})
+{
+  return Cmp3_to_Greater<Cmp3>{&cmp};
+}
+template<class Cmp3>
+auto operator>(const char[1], const Cmp3& cmp) ->
+decltype(cmp("",""), Cmp3_to_Equal<Cmp3>{&cmp})
+{
+  return Cmp3_to_Equal<Cmp3>{&cmp};
 }
 
 }  // namespace rocksdb

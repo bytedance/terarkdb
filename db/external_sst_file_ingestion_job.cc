@@ -66,8 +66,7 @@ Status ExternalSstFileIngestionJob::Prepare(
       sorted_files.push_back(&files_to_ingest_[i]);
     }
 
-    terark::sort_ex_a(sorted_files,
-      TERARK_FIELD_P(smallest_user_key), StdCompareLess(ucmp));
+    terark::sort_a(sorted_files, TERARK_FIELD(->smallest_user_key) < *ucmp);
 
     for (size_t i = 0; i < num_files - 1; i++) {
       if (ucmp->Compare(sorted_files[i]->largest_user_key,

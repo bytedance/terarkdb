@@ -12,7 +12,7 @@
 # include <sys/unistd.h>
 # include <table/terark_zip_weak_function.h>
 #endif
-
+#include <terark/valvec.hpp>
 
 namespace rocksdb {
 
@@ -31,11 +31,8 @@ CompactedDBImpl::~CompactedDBImpl() {
 
 size_t CompactedDBImpl::FindFile(const Slice& key) {
   size_t right = files_.num_files - 1;
-  auto cmp = [&](const FdWithKeyRange& f, const Slice& k) -> bool {
-    return user_comparator_->Compare(ExtractUserKey(f.largest_key), k) < 0;
-  };
-  return static_cast<size_t>(std::lower_bound(files_.files,
-                            files_.files + right, key, cmp) - files_.files);
+  return terark::lower_bound_ex_0(files_.files, right, key,
+    TERARK_GET(.largest_key) + &ExtractUserKey, "" < *user_comparator_);
 }
 
 Status CompactedDBImpl::Get(const ReadOptions& options, ColumnFamilyHandle*,

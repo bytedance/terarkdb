@@ -46,6 +46,9 @@
 #include <stdexcept>
 #include <string>
 
+#include <boost/range/algorithm.hpp>
+#include <terark/util/function.hpp>
+
 namespace rocksdb {
 
 const std::string LDBCommand::ARG_DB = "db";
@@ -501,11 +504,8 @@ bool LDBCommand::ParseStringOption(
 
 Options LDBCommand::PrepareOptionsForOpenDB() {
   ColumnFamilyOptions* cf_opts;
-  auto column_families_iter =
-      std::find_if(column_families_.begin(), column_families_.end(),
-                   [this](const ColumnFamilyDescriptor& cf_desc) {
-                     return cf_desc.name == column_family_name_;
-                   });
+  auto column_families_iter = boost::find_if(
+    column_families_, TERARK_GET(.name) == std::cref(column_family_name_));
   if (column_families_iter != column_families_.end()) {
     cf_opts = &column_families_iter->options;
   } else {

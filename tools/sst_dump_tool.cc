@@ -45,6 +45,7 @@
 # include <sys/unistd.h>
 # include <table/terark_zip_weak_function.h>
 #endif
+#include <boost/range/algorithm.hpp>
 
 namespace rocksdb {
 
@@ -516,11 +517,7 @@ int SSTDumpTool::Run(int argc, char** argv) {
       std::istringstream iss(compression_types_csv);
       std::string compression_type;
       while (std::getline(iss, compression_type, ',')) {
-        auto iter = std::find_if(
-            kCompressions.begin(), kCompressions.end(),
-            [&compression_type](std::pair<CompressionType, const char*> curr) {
-              return curr.second == compression_type;
-            });
+        auto iter = boost::find_if(kCompressions, TERARK_GET(.second) == compression_type);
         if (iter == kCompressions.end()) {
           fprintf(stderr, "%s is not a valid CompressionType\n",
                   compression_type.c_str());

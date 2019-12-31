@@ -30,7 +30,6 @@
 #include "util/sync_point.h"
 
 #include "terark/valvec.hpp"
-#include "terark/util/function.hpp"
 
 namespace rocksdb {
 
@@ -678,7 +677,7 @@ Compaction* CompactionPicker::PickGarbageCollection(
   }
 
   // Sorting by ratio decreasing.
-  terark::sort_ex_a(gc_files, TERARK_FIELD(score), std::greater<double>());
+  terark::sort_ex_a(gc_files, TERARK_FIELD(.score), std::greater<double>());
 
   // Return nullptr if nothing to do.
   if (gc_files.empty() ||

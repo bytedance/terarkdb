@@ -22,6 +22,8 @@
 #include "rocksdb/memtablerep.h"
 #include "util/murmurhash.h"
 #include "util/string_util.h"
+#include <terark/valvec.hpp>
+#include <boost/range/algorithm.hpp>
 
 namespace rocksdb {
 namespace {
@@ -548,8 +550,7 @@ HashCuckooRep::Iterator::Iterator(
 
 void HashCuckooRep::Iterator::DoSort() const {
   if (!sorted_) {
-    std::sort(bucket_->begin(), bucket_->end(),
-              stl_wrappers::Compare(compare_));
+    terark::sort_a(*bucket_, "" < compare_);
     cit_ = bucket_->begin();
     sorted_ = true;
   }
@@ -598,10 +599,7 @@ void HashCuckooRep::Iterator::Seek(const Slice& user_key,
   // Do binary search to find first value not less than the target
   const char* encoded_key =
       (memtable_key != nullptr) ? memtable_key : EncodeKey(&tmp_, user_key);
-  cit_ = std::lower_bound(bucket_->begin(), bucket_->end(), encoded_key,
-                          [this](const char* a, const char* b) {
-                            return compare_(a, b) < 0;
-                          });
+  cit_ = boost::lower_bound(*bucket_, encoded_key, "" < compare_);
 }
 
 // Retreat to the last entry with a key <= target
@@ -611,10 +609,7 @@ void HashCuckooRep::Iterator::SeekForPrev(const Slice& user_key,
   // Do binary search to find first value not less than the target
   const char* encoded_key =
       (memtable_key != nullptr) ? memtable_key : EncodeKey(&tmp_, user_key);
-  cit_ = std::upper_bound(bucket_->begin(), bucket_->end(), encoded_key,
-                          [this](const char* a, const char* b) {
-                            return compare_(a, b) < 0;
-                          });
+  cit_ = boost::upper_bound(*bucket_, encoded_key, "" < compare_);
   Prev();
 }
 

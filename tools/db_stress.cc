@@ -77,6 +77,9 @@ int main() {
 
 #include "utilities/merge_operators.h"
 
+#include <boost/range/algorithm.hpp>
+#include <terark/util/function.hpp>
+
 using GFLAGS_NAMESPACE::ParseCommandLineFlags;
 using GFLAGS_NAMESPACE::RegisterFlagValidator;
 using GFLAGS_NAMESPACE::SetUsageMessage;
@@ -528,11 +531,8 @@ enum rocksdb::ChecksumType StringToChecksumType(const char* ctype) {
 }
 
 std::string ChecksumTypeToString(rocksdb::ChecksumType ctype) {
-  auto iter = std::find_if(
-      rocksdb::checksum_type_string_map.begin(),
-      rocksdb::checksum_type_string_map.end(),
-      [&](const std::pair<std::string, rocksdb::ChecksumType>&
-              name_and_enum_val) { return name_and_enum_val.second == ctype; });
+  auto iter = boost::find_if(
+    rocksdb::checksum_type_string_map, TERARK_GET(.second) == ctype);
   assert(iter != rocksdb::checksum_type_string_map.end());
   return iter->first;
 }
@@ -2544,9 +2544,8 @@ class StressTest {
         // this is a reopen. just assert that existing column_family_names are
         // equivalent to what we remember
         auto sorted_cfn = column_family_names_;
-        std::sort(sorted_cfn.begin(), sorted_cfn.end());
-        std::sort(existing_column_families.begin(),
-                  existing_column_families.end());
+        boost::sort(sorted_cfn);
+        boost::sort(existing_column_families);
         if (sorted_cfn != existing_column_families) {
           fprintf(stderr,
                   "Expected column families differ from the existing:\n");

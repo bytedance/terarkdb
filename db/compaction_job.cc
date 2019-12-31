@@ -559,11 +559,10 @@ void CompactionJob::GenSubcompactionBoundaries() {
     }
   }
 
-  terark::sort_ex_a(bounds, &ExtractUserKey, StdCompareLess(cfd_comparator));
+  terark::sort_a(bounds, &ExtractUserKey < *cfd_comparator);
 
   // Remove duplicated entries from bounds
-  bounds.resize(terark::unique_ex_a(bounds,
-     &ExtractUserKey, StdCompareEqual(cfd_comparator)));
+  bounds.resize(terark::unique_a(bounds, &ExtractUserKey == *cfd_comparator));
 
   // Combine consecutive pairs of boundaries into ranges with an approximate
   // size of data covered by keys in that range
@@ -1976,7 +1975,7 @@ Status CompactionJob::FinishCompactionOutputFile(
     for (auto& pair : dependence) {
       meta->prop.dependence.emplace_back(Dependence{pair.first, pair.second});
     }
-    terark::sort_ex_a(meta->prop.dependence, TERARK_FIELD(file_number));
+    terark::sort_ex_a(meta->prop.dependence, TERARK_FIELD(.file_number));
     assert(std::is_sorted(inheritance_chain.begin(), inheritance_chain.end()));
     meta->prop.inheritance_chain = inheritance_chain;
 

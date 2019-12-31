@@ -25,6 +25,8 @@
 // third party
 #include <zstd/zstd.h>
 
+#include <boost/range/algorithm.hpp>
+
 namespace rocksdb {
 
 using namespace terark;
@@ -275,8 +277,7 @@ TerarkZipTableBuilder::~TerarkZipTableBuilder() {
   pipeline_.stop();
   pipeline_.wait();
   std::unique_lock<std::mutex> zipLock(zipMutex);
-  waitQueue.trim(std::remove_if(waitQueue.begin(), waitQueue.end(),
-                                [this](PendingTask x) { return this == x.tztb; }));
+  waitQueue.trim(boost::remove_if(waitQueue, TERARK_GET(.tztb) == this));
 }
 
 uint64_t TerarkZipTableBuilder::FileSize() const {

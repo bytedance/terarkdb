@@ -100,6 +100,7 @@
 # include <sys/unistd.h>
 # include <table/terark_zip_weak_function.h>
 #endif
+#include <terark/valvec.hpp>
 
 #ifdef __GNUC__
 # pragma GCC diagnostic push
@@ -2687,10 +2688,7 @@ Status DBImpl::DeleteFilesInRanges(ColumnFamilyHandle* column_family,
         deleted_range[i].limit = storage.second.Encode();
       }
       // sort & merge ranges
-      std::sort(deleted_range.begin(), deleted_range.end(),
-                [&ic](const Range& rl, const Range& rr) {
-                  return ic.Compare(rl.start, rr.start) < 0;
-                });
+      terark::sort_a(deleted_range, TERARK_FIELD(.start) < ic);
       size_t c = 0;
       for (size_t i = 1; i < n; ++i) {
         if (ic.Compare(deleted_range[c].limit, deleted_range[i].start) >= 0) {

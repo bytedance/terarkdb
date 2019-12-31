@@ -24,6 +24,8 @@
 #include "util/string_util.h"
 #include "util/sync_point.h"
 
+#include <terark/valvec.hpp>
+
 namespace rocksdb {
 
 // Usage:
@@ -842,13 +844,9 @@ bool ForwardIterator::TEST_CheckDeletedIters(int* pdeleted_iters,
 uint32_t ForwardIterator::FindFileInRange(
     const std::vector<FileMetaData*>& files, const Slice& internal_key,
     uint32_t left, uint32_t right) {
-  auto cmp = [&](const FileMetaData* f, const Slice& key) -> bool {
-    return cfd_->internal_comparator().InternalKeyComparator::Compare(
-            f->largest.Encode(), key) < 0;
-  };
-  const auto &b = files.begin();
-  return static_cast<uint32_t>(std::lower_bound(b + left,
-                                 b + right, internal_key, cmp) - b);
+  return static_cast<uint32_t>(terark::lower_bound_ex_n(
+    files.begin(), left, right, internal_key,
+    TERARK_FIELD(->largest.Encode()), "" < cfd_->internal_comparator()));
 }
 
 void ForwardIterator::DeleteIterator(InternalIterator* iter, bool is_arena) {
