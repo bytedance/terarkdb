@@ -12,16 +12,15 @@
 #include <vector>
 
 #include "db/memtable.h"
+#include "port/port.h"
 #include "rocksdb/convenience.h"
 #include "rocksdb/memtablerep.h"
 #include "table/terark_zip_internal.h"
-#include "util/arena.h"
-#include "port/port.h"
-
 #include "terark/fsa/cspptrie.inl"
 #include "terark/heap_ext.hpp"
 #include "terark/io/byte_swap.hpp"
 #include "terark/thread/instance_tls_owner.hpp"
+#include "util/arena.h"
 
 namespace rocksdb {
 
@@ -49,29 +48,34 @@ struct VectorData {
   const typename tag_vector_t::data_t *data;
 };
 
-}
+}  // namespace terark_memtable_details
 
 namespace detail = terark_memtable_details;
 
 // data structure inheriting terark's cspptrie for supporting memtable
 class MemPatricia : public terark::MainPatricia {
-public:
-  MemPatricia(size_t valsize,
-              intptr_t maxMem = 512<<10,
-              ConcurrentLevel level = OneWriteMultiRead,
-              fstring fpath = "")
-    : MainPatricia(valsize, maxMem, level, fpath) {}
+ public:
+  MemPatricia(size_t valsize, intptr_t maxMem = 512 << 10,
+              ConcurrentLevel level = OneWriteMultiRead, fstring fpath = "")
+      : MainPatricia(valsize, maxMem, level, fpath) {}
 };
 
 // Write token pairing with MemPatricia
 class MemWriterToken : public terark::Patricia::WriterToken {
   uint64_t tag_;
   Slice value_;
-public:
+
+ public:
   uint64_t get_tag() { return tag_; }
   MemWriterToken(MemPatricia *trie, uint64_t tag, const Slice &value)
-        : terark::Patricia::WriterToken(trie), tag_(tag), value_(value) {};
-protected:
+      : terark::Patricia::WriterToken(trie), tag_(tag), value_(value){};
+
+  void reset_tag_value(uint64_t tag, const Slice &value) {
+    tag_ = tag;
+    value_ = value;
+  }
+
+ protected:
   bool init_value(void *valptr, size_t valsize) noexcept;
 };
 
@@ -85,12 +89,11 @@ class PatriciaTrieRep : public MemTableRep {
   int64_t write_buffer_size_;
   static const int64_t size_limit_ = 1LL << 30;
 
-public:
+ public:
   // Create a new patricia trie memtable rep with following options
   PatriciaTrieRep(detail::ConcurrentType concurrent_type,
                   detail::PatriciaKeyType patricia_key_type,
-                  bool handle_duplicate,
-                  intptr_t write_buffer_size,
+                  bool handle_duplicate, intptr_t write_buffer_size,
                   Allocator *allocator,
                   const MemTableRep::KeyComparator &compare);
 
@@ -98,9 +101,9 @@ public:
   // all patricia trie handled by this rep.
   virtual size_t ApproximateMemoryUsage() override;
 
-  // This approximition is not supported, return 0 instead.  
-  virtual uint64_t ApproximateNumEntries(const Slice &/*start_ikey*/,
-                                         const Slice &/*end_ikey*/) override {
+  // This approximition is not supported, return 0 instead.
+  virtual uint64_t ApproximateNumEntries(const Slice & /*start_ikey*/,
+                                         const Slice & /*end_ikey*/) override {
     return 0;
   }
 
@@ -109,24 +112,24 @@ public:
 
   // Get with lazyslice feedback, parsing the value when truly needed.
   virtual void Get(const LookupKey &k, void *callback_args,
-                   bool (*callback_func)(void *arg, const Slice& key,
-                                         LazyBuffer&& value)) override;
+                   bool (*callback_func)(void *arg, const Slice &key,
+                                         LazyBuffer &&value)) override;
 
   // Return iterator of this rep
   virtual MemTableRep::Iterator *GetIterator(Arena *arena) override;
 
-  // Insert with keyhandle is not supported. 
+  // Insert with keyhandle is not supported.
   virtual void Insert(KeyHandle /*handle*/) override { assert(false); }
 
   // Return true if insertion successed.
-  virtual bool InsertKeyValue(
-    const Slice &internal_key,
-    const Slice &value) override;
+  virtual bool InsertKeyValue(const Slice &internal_key,
+                              const Slice &value) override;
 
   // Concurrent write is supported by default.
-  virtual bool InsertKeyValueConcurrently(
-    const Slice &internal_key,
-    const Slice &value) override { return InsertKeyValue(internal_key, value); }
+  virtual bool InsertKeyValueConcurrently(const Slice &internal_key,
+                                          const Slice &value) override {
+    return InsertKeyValue(internal_key, value);
+  }
 
   virtual void MarkReadOnly() override {
     for (auto iter : trie_vec_) iter->set_readonly();
@@ -134,18 +137,17 @@ public:
   }
 };
 
-// Heap iterator for traversing multi tries simultaneously. 
-// Create a heap to merge iterators from all tries. 
+// Heap iterator for traversing multi tries simultaneously.
+// Create a heap to merge iterators from all tries.
 template <bool heap_mode>
-class PatriciaRepIterator :
-    public MemTableRep::Iterator,
-    public LazyBufferState,
-    boost::noncopyable {
+class PatriciaRepIterator : public MemTableRep::Iterator,
+                            public LazyBufferState,
+                            boost::noncopyable {
   typedef terark::Patricia::ReaderToken token_t;
 
   // Inner iterator abstructiong for polymorphism
   class HeapItem : boost::noncopyable {
-  public:
+   public:
     terark::MainPatricia::IterMem handle;
     uint64_t tag;
     size_t index;
@@ -192,7 +194,9 @@ class PatriciaRepIterator :
   int direction_;
 
   // Return pointer of current heap item.
-  const HeapItem *Current() const { return heap_mode ? *multi_.heap : &single_; }
+  const HeapItem *Current() const {
+    return heap_mode ? *multi_.heap : &single_;
+  }
 
   // Return pointer of current heap item.
   HeapItem *Current() { return heap_mode ? *multi_.heap : &single_; }
@@ -206,7 +210,8 @@ class PatriciaRepIterator :
   // Lexicographical order 3 way compartor
   struct ForwardComp {
     bool operator()(HeapItem *l, HeapItem *r) const {
-      int c = terark::fstring_func::compare3()(l->handle.iter()->word(), r->handle.iter()->word());
+      int c = terark::fstring_func::compare3()(l->handle.iter()->word(),
+                                               r->handle.iter()->word());
       return c == 0 ? l->tag < r->tag : c > 0;
     }
   };
@@ -214,44 +219,52 @@ class PatriciaRepIterator :
   // Reverse lexicographical order 3 way compartor
   struct BackwardComp {
     bool operator()(HeapItem *l, HeapItem *r) const {
-      int c = terark::fstring_func::compare3()(l->handle.iter()->word(), r->handle.iter()->word());
+      int c = terark::fstring_func::compare3()(l->handle.iter()->word(),
+                                               r->handle.iter()->word());
       return c == 0 ? l->tag > r->tag : c < 0;
     }
   };
 
   // Rebuild heap for orderness
-  template <int direction, class func_t> void Rebuild(func_t &&callback_func);
+  template <int direction, class func_t>
+  void Rebuild(func_t &&callback_func);
 
-public:
+ public:
   PatriciaRepIterator(std::vector<MemPatricia *> tries);
 
   virtual ~PatriciaRepIterator();
 
   // LazyBufferState override
-  virtual void destroy(LazyBuffer* /*buffer*/) const override {}
+  virtual void destroy(LazyBuffer * /*buffer*/) const override {}
 
   // LazyBufferState override
-  virtual void pin_buffer(LazyBuffer* buffer) const override {
+  virtual void pin_buffer(LazyBuffer *buffer) const override {
     if (!buffer->valid()) {
       buffer->reset(GetValue());
     }
   }
 
   // LazyBufferState override
-  Status fetch_buffer(LazyBuffer* buffer) const override {
+  Status fetch_buffer(LazyBuffer *buffer) const override {
     set_slice(buffer, GetValue());
     return Status::OK();
   }
 
-  // Returns true iff the iterator is at valid position. 
+  // Returns true iff the iterator is at valid position.
   virtual bool Valid() const override { return direction_ != 0; }
 
   // No needs to encode.
-  virtual const char* EncodedKey() const override { assert(false); return nullptr; }
+  virtual const char *EncodedKey() const override {
+    assert(false);
+    return nullptr;
+  }
 
   // Return the key of current position
   // REQUIRES : Valid()
-  virtual Slice key() const override { assert(direction_ != 0); return buffer_; }
+  virtual Slice key() const override {
+    assert(direction_ != 0);
+    return buffer_;
+  }
 
   // Return the value of current position immediately
   // REQUIRES : Valid()
@@ -291,48 +304,46 @@ public:
 };
 
 class PatriciaTrieRepFactory : public MemTableRepFactory {
-private:
+ private:
   std::shared_ptr<class MemTableRepFactory> fallback_;
   detail::ConcurrentType concurrent_type_;
   detail::PatriciaKeyType patricia_key_type_;
   int64_t write_buffer_size_;
 
-public:
+ public:
   PatriciaTrieRepFactory(
-    std::shared_ptr<class MemTableRepFactory> &fallback,
-    detail::ConcurrentType concurrent_type = detail::ConcurrentType::Native,
-    detail::PatriciaKeyType patricia_key_type = detail::PatriciaKeyType::UserKey,
-    int64_t write_buffer_size = 512LL * 1048576)
-  : fallback_(fallback),
-    concurrent_type_(concurrent_type),
-    patricia_key_type_(patricia_key_type),
-    write_buffer_size_(write_buffer_size) {}
+      std::shared_ptr<class MemTableRepFactory> &fallback,
+      detail::ConcurrentType concurrent_type = detail::ConcurrentType::Native,
+      detail::PatriciaKeyType patricia_key_type =
+          detail::PatriciaKeyType::UserKey,
+      int64_t write_buffer_size = 512LL * 1048576)
+      : fallback_(fallback),
+        concurrent_type_(concurrent_type),
+        patricia_key_type_(patricia_key_type),
+        write_buffer_size_(write_buffer_size) {}
 
   virtual ~PatriciaTrieRepFactory() {}
 
-  virtual MemTableRep *
-  CreateMemTableRep(const MemTableRep::KeyComparator &key_cmp,
-                    bool needs_dup_key_check, Allocator *allocator,
-                    const SliceTransform *transform, Logger *logger) override;
+  virtual MemTableRep *CreateMemTableRep(
+      const MemTableRep::KeyComparator &key_cmp, bool needs_dup_key_check,
+      Allocator *allocator, const SliceTransform *transform,
+      Logger *logger) override;
 
-  virtual MemTableRep *
-  CreateMemTableRep(const MemTableRep::KeyComparator& key_cmp, 
-                    bool needs_dup_key_check, Allocator* allocator,
-                    const SliceTransform* slice_transform, Logger* logger, uint32_t) override {
-    return CreateMemTableRep(key_cmp, needs_dup_key_check, allocator, slice_transform, logger);
+  virtual MemTableRep *CreateMemTableRep(
+      const MemTableRep::KeyComparator &key_cmp, bool needs_dup_key_check,
+      Allocator *allocator, const SliceTransform *slice_transform,
+      Logger *logger, uint32_t) override {
+    return CreateMemTableRep(key_cmp, needs_dup_key_check, allocator,
+                             slice_transform, logger);
   }
 
-  virtual MemTableRep *
-  CreateMemTableRep(const MemTableRep::KeyComparator &key_cmp,
-                    bool needs_dup_key_check,
-                    Allocator *allocator,
-                    const ImmutableCFOptions &ioptions,
-                    const MutableCFOptions &mutable_cf_options,
-                    uint32_t column_family_id) override;
+  virtual MemTableRep *CreateMemTableRep(
+      const MemTableRep::KeyComparator &key_cmp, bool needs_dup_key_check,
+      Allocator *allocator, const ImmutableCFOptions &ioptions,
+      const MutableCFOptions &mutable_cf_options,
+      uint32_t column_family_id) override;
 
-  virtual const char *Name() const override {
-    return "PatriciaTrieRepFactory";
-  }
+  virtual const char *Name() const override { return "PatriciaTrieRepFactory"; }
 
   virtual bool IsInsertConcurrentlySupported() const override {
     return concurrent_type_ != detail::ConcurrentType::None;
@@ -341,10 +352,10 @@ public:
   virtual bool CanHandleDuplicatedKey() const override { return true; }
 };
 
-MemTableRepFactory* NewPatriciaTrieRepFactory(
+MemTableRepFactory *NewPatriciaTrieRepFactory(
     std::shared_ptr<MemTableRepFactory> fallback);
 
 MemTableRepFactory *NewPatriciaTrieRepFactory(
     const std::unordered_map<std::string, std::string> &options, Status *s);
 
-}
+}  // namespace rocksdb

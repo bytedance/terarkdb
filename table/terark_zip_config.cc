@@ -200,10 +200,9 @@ void TerarkZipAutoConfigForOnlineDB_DBOptions(struct DBOptions& dbo,
   dbo.base_background_compactions = 1;
 }
 
-void TerarkZipAutoConfigForOnlineDB_CFOptions(struct TerarkZipTableOptions& tzo,
-                                              struct ColumnFamilyOptions& cfo,
-                                              size_t memBytesLimit,
-                                              size_t /*diskBytesLimit*/) {
+void TerarkZipAutoConfigForOnlineDB_CFOptions(
+    struct TerarkZipTableOptions& tzo, struct ColumnFamilyOptions& /*cfo*/,
+    size_t memBytesLimit, size_t /*diskBytesLimit*/) {
   using namespace std;  // max, min
   if (0 == memBytesLimit) {
 #ifdef _MSC_VER
