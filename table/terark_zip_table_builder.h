@@ -216,7 +216,7 @@ class TerarkZipTableBuilder : public TableBuilder, boost::noncopyable {
   freq_hist_o1 kv_freq_;
   valvec<std::unique_ptr<KeyValueStatus>> prefixBuildInfos_;
   std::shared_ptr<FilePair> filePair_;
-  valvec<byte_t> prevUserKey_;
+  InternalKey prevKey_;
   TempFileDeleteOnClose tmpSentryFile_;
   TempFileDeleteOnClose tmpSampleFile_;
   AutoDeleteFile tmpIndexFile_;
