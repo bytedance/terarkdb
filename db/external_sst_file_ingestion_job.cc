@@ -28,6 +28,7 @@
 
 #include <terark/valvec.hpp>
 #include <terark/util/function.hpp>
+#include <boost/range/algorithm.hpp>
 
 namespace rocksdb {
 
@@ -463,14 +464,10 @@ Status ExternalSstFileIngestionJob::AssignLevelAndSeqnoForIngestedFile(
       }
 
       if (compaction_style == kCompactionStyleUniversal && lvl != 0) {
-        using std::max_element;
         const std::vector<FileMetaData*>& level_files =
             vstorage->LevelFiles(lvl);
         const SequenceNumber level_largest_seqno =
-            (*max_element(level_files.begin(), level_files.end(),
-                          [](FileMetaData* f1, FileMetaData* f2) {
-                            return f1->fd.largest_seqno < f2->fd.largest_seqno;
-                          }))
+            (*boost::max_element(level_files,TERARK_CMP_P(fd.largest_seqno,<)))
                 ->fd.largest_seqno;
         // should only assign seqno to current level's largest seqno when
         // the file fits

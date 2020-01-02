@@ -16,6 +16,8 @@
 #include "util/arena.h"
 #include "util/heap.h"
 
+#include <terark/util/function.hpp>
+
 namespace rocksdb {
 
 namespace {
@@ -283,9 +285,7 @@ class MapSstIterator final : public InternalIterator {
              std::binary_search(file_meta_->prop.dependence.begin(),
                                 file_meta_->prop.dependence.end(),
                                 Dependence{link_[i], 0},
-                                [](const Dependence& l, const Dependence& r) {
-                                  return l.file_number < r.file_number;
-                                }));
+                                TERARK_CMP(file_number, <)));
     }
     return kInitFirstIterOK;
   }

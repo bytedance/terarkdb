@@ -494,8 +494,8 @@ Compaction* UniversalCompactionPicker::PickCompaction(
                                              largest_seqno});
       }
     }
-    assert(boost::is_sorted(sr_debug, TERARK_GET(.smallest) > cmp));
-    assert(boost::is_sorted(sr_debug, TERARK_GET(.largest ) > cmp));
+    assert(boost::is_sorted(sr_debug, TERARK_CMP(smallest, >)));
+    assert(boost::is_sorted(sr_debug, TERARK_CMP(largest , >)));
     SortedRunDebug o{false, c->output_level(), nullptr,
                      std::numeric_limits<SequenceNumber>::max(), 0U};
     for (auto& input_level : *c->inputs()) {
@@ -542,9 +542,9 @@ Compaction* UniversalCompactionPicker::PickCompaction(
     }
     assert(o.smallest != std::numeric_limits<SequenceNumber>::max());
     sr_debug.emplace_back(o);
-    boost::sort(sr_debug, TERARK_CMP_EX(.smallest, >, .level, <));
-    assert(boost::is_sorted(sr_debug, TERARK_GET(.largest) > cmp));
-    assert(boost::is_sorted(sr_debug, TERARK_GET(.level) > cmp));
+    boost::sort(sr_debug, TERARK_CMP(smallest,>, level,<));
+    assert(boost::is_sorted(sr_debug, TERARK_CMP(largest, >)));
+    assert(boost::is_sorted(sr_debug, TERARK_CMP(level, >)));
   }
 #endif
   // update statistics

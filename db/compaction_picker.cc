@@ -677,7 +677,7 @@ Compaction* CompactionPicker::PickGarbageCollection(
   }
 
   // Sorting by ratio decreasing.
-  terark::sort_ex_a(gc_files, TERARK_FIELD(.score), std::greater<double>());
+  terark::sort_a(gc_files, TERARK_CMP(score, >));
 
   // Return nullptr if nothing to do.
   if (gc_files.empty() ||

@@ -778,8 +778,7 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
   if (inputs.size() == 1 && inputs.front().files.size() == 1 &&
       inputs.front().files.front()->prop.purpose == kMapSst &&
       ranges.size() == input_range_count &&
-      !std::any_of(ranges.begin(), ranges.end(),
-                   [](const RangeWithDepend& e) { return !e.stable; })) {
+      !std::any_of(ranges.begin(), ranges.end(), !TERARK_GET(.stable))) {
     // all ranges stable, new map will equals to input map, done
     return s;
   }

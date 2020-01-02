@@ -1944,12 +1944,6 @@ struct Fsize {
   FileMetaData* file;
 };
 
-// Compator that is used to sort files based on their size
-// In normal mode: descending size
-bool CompareCompensatedSizeDescending(const Fsize& first, const Fsize& second) {
-  return (first.file->compensated_file_size >
-          second.file->compensated_file_size);
-}
 } // anonymous namespace
 
 void VersionStorageInfo::AddFile(int level, FileMetaData* f,
@@ -2131,13 +2125,13 @@ void VersionStorageInfo::UpdateFilesByCompactionPri(
     switch (compaction_pri) {
       case kByCompensatedSize:
         std::partial_sort(temp.begin(), temp.begin() + num, temp.end(),
-                          CompareCompensatedSizeDescending);
+                          TERARK_CMP(file->compensated_file_size, >));
         break;
       case kOldestLargestSeqFirst:
-        terark::sort_ex_a(temp, TERARK_FIELD(.file->fd.largest_seqno));
+        terark::sort_a(temp, TERARK_CMP(file->fd.largest_seqno, <));
         break;
       case kOldestSmallestSeqFirst:
-        terark::sort_ex_a(temp, TERARK_FIELD(.file->fd.smallest_seqno));
+        terark::sort_a(temp, TERARK_CMP(file->fd.smallest_seqno, <));
         break;
       case kMinOverlappingRatio:
         SortFileByOverlappingRatio(*internal_comparator_, files_[level],
@@ -2168,12 +2162,13 @@ void VersionStorageInfo::GenerateLevel0NonOverlapping() {
   std::vector<FdWithKeyRange> level0_sorted_file(
       level_files_brief_[0].files,
       level_files_brief_[0].files + level_files_brief_[0].num_files);
-  terark::sort_a(level0_sorted_file, TERARK_FIELD(.smallest_key) < *internal_comparator_);
+  auto icmp = internal_comparator_;
+  terark::sort_a(level0_sorted_file, TERARK_FIELD(.smallest_key) < *icmp);
 
   for (size_t i = 1; i < level0_sorted_file.size(); ++i) {
     FdWithKeyRange& f = level0_sorted_file[i];
     FdWithKeyRange& prev = level0_sorted_file[i - 1];
-    if (internal_comparator_->Compare(prev.largest_key, f.smallest_key) >= 0) {
+    if (icmp->Compare(prev.largest_key, f.smallest_key) >= 0) {
       level0_non_overlapping_ = false;
       break;
     }
