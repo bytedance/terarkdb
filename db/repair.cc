@@ -746,7 +746,7 @@ Status GetDefaultCFOptions(
     ColumnFamilyOptions* res) {
   assert(res != nullptr);
   auto iter = boost::find_if(column_families,
-       TERARK_GET(.name) == kDefaultColumnFamilyName);
+       TERARK_GET(.name) == std::cref(kDefaultColumnFamilyName));
   if (iter == column_families.end()) {
     return Status::InvalidArgument(
         "column_families", "Must contain entry for default column family");
