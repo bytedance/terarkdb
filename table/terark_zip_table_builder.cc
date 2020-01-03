@@ -1066,6 +1066,7 @@ Status TerarkZipTableBuilder::WaitBuildIndex() {
   Status result = Status::OK();
   for (auto& kvs : prefixBuildInfos_) {
     assert(kvs);
+    assert(kvs->indexWait);
     assert(kvs->indexWait->future.valid());
     auto s = kvs->indexWait->future.get();
     if (terark_unlikely(!s.ok() && result.ok())) {
@@ -2281,6 +2282,9 @@ Status TerarkZipTableBuilder::WriteMetaData(
 
 void TerarkZipTableBuilder::Abandon() {
   assert(!closed_);
+  ioptions_.env->UnSchedule(&indexTag, rocksdb::Env::Priority::LOW);
+  ioptions_.env->UnSchedule(&storeTag, rocksdb::Env::Priority::LOW);
+  ioptions_.env->UnSchedule(&dictTag, rocksdb::Env::Priority::LOW);
   closed_ = true;
   for (auto& kvs : prefixBuildInfos_) {
     if (!kvs) {
@@ -2293,34 +2297,7 @@ void TerarkZipTableBuilder::Abandon() {
         pair->key.close();
       }
     }
-    if (kvs->storeWait->future.valid()) {
-      kvs->storeWait->future.get();
-    }
-  }
-  prefixBuildInfos_.clear();
-  tmpSentryFile_.complete_write();
-  tmpSampleFile_.complete_write();
-  tmpIndexFile_.Delete();
-  tmpStoreFile_.Delete();
-  tmpZipDictFile_.Delete();
-  tmpZipValueFile_.Delete();
-}
-
-// based on Abandon
-Status TerarkZipTableBuilder::AbortFinish(const std::exception& ex) {
-  closed_ = true;
-  for (auto& kvs : prefixBuildInfos_) {
-    if (!kvs) {
-      continue;
-    }
-    if (kvs->indexWait->future.valid()) {
-      kvs->indexWait->future.get();
-    } else {
-      for (auto& pair : kvs->status.fileVec) {
-        pair->key.close();
-      }
-    }
-    if (kvs->storeWait->future.valid()) {
+    if (kvs->storeWait && kvs->storeWait->future.valid()) {
       kvs->storeWait->future.get();
     }
   }
@@ -2331,6 +2308,11 @@ Status TerarkZipTableBuilder::AbortFinish(const std::exception& ex) {
   tmpStoreFile_.Delete();
   tmpZipDictFile_.Delete();
   tmpZipValueFile_.Delete();
+}
+
+// based on Abandon
+Status TerarkZipTableBuilder::AbortFinish(const std::exception& ex) {
+  TerarkZipTableBuilder::Abandon();
   return Status::Aborted("exception", ex.what());
 }
 

@@ -77,11 +77,9 @@ FilterBlockBuilder* CreateFilterBlockBuilder(
       // until index builder actully cuts the partition, we take the lower bound
       // as partition size.
       assert(table_opt.block_size_deviation <= 100);
-      auto partition_size =
-          static_cast<uint32_t>(((table_opt.metadata_block_size *
-                                  (100 - table_opt.block_size_deviation)) +
-                                 99) /
-                                100);
+      auto partition_size = static_cast<uint32_t>(
+          ((table_opt.metadata_block_size *
+          (100 - table_opt.block_size_deviation)) + 99) / 100);
       partition_size = std::max(partition_size, static_cast<uint32_t>(1));
       return new PartitionedFilterBlockBuilder(
           mopt.prefix_extractor.get(), table_opt.whole_key_filtering,
@@ -156,9 +154,10 @@ Slice CompressBlock(const Slice& raw, const CompressionContext& compression_ctx,
           GoodCompressionRatio(compressed_output->size(), raw.size())) {
         return *compressed_output;
       }
-      break;  // fall back to no compression.
+      break;     // fall back to no compression.
     case kXpressCompression:
-      if (XPRESS_Compress(raw.data(), raw.size(), compressed_output) &&
+      if (XPRESS_Compress(raw.data(), raw.size(),
+          compressed_output) &&
           GoodCompressionRatio(compressed_output->size(), raw.size())) {
         return *compressed_output;
       }
@@ -170,9 +169,8 @@ Slice CompressBlock(const Slice& raw, const CompressionContext& compression_ctx,
           GoodCompressionRatio(compressed_output->size(), raw.size())) {
         return *compressed_output;
       }
-      break;  // fall back to no compression.
-    default: {
-    }  // Do not recognize this compression type
+      break;     // fall back to no compression.
+    default: {}  // Do not recognize this compression type
   }
 
   // Compression method is not supported, or not good compression ratio, so just
@@ -523,9 +521,8 @@ void BlockBasedTableBuilder::WriteBlock(const Slice& raw_block_contents,
   Slice block_contents;
   bool abort_compression = false;
 
-  StopWatchNano timer(
-      r->ioptions.env,
-      ShouldReportDetailedTime(r->ioptions.env, r->ioptions.statistics));
+  StopWatchNano timer(r->ioptions.env,
+    ShouldReportDetailedTime(r->ioptions.env, r->ioptions.statistics));
 
   if (raw_block_contents.size() < kCompressionSizeLimit) {
     Slice compression_dict;
@@ -635,12 +632,11 @@ void BlockBasedTableBuilder::WriteRawBlock(const Slice& block_contents,
         XXH64_state_t* const state = XXH64_createState();
         XXH64_reset(state, 0);
         XXH64_update(state, block_contents.data(),
-                     static_cast<uint32_t>(block_contents.size()));
+                static_cast<uint32_t>(block_contents.size()));
         XXH64_update(state, trailer, 1);  // Extend  to cover block type
-        EncodeFixed32(
-            trailer_without_type,
-            static_cast<uint32_t>(XXH64_digest(state) &  // lower 32 bits
-                                  uint64_t{0xffffffff}));
+        EncodeFixed32(trailer_without_type,
+          static_cast<uint32_t>(XXH64_digest(state) & // lower 32 bits
+                                   uint64_t{0xffffffff}));
         XXH64_freeState(state);
         break;
       }
@@ -667,7 +663,9 @@ void BlockBasedTableBuilder::WriteRawBlock(const Slice& block_contents,
   }
 }
 
-Status BlockBasedTableBuilder::status() const { return rep_->status; }
+Status BlockBasedTableBuilder::status() const {
+  return rep_->status;
+}
 
 static void DeleteCachedBlockContents(const Slice& /*key*/, void* value) {
   BlockContents* bc = reinterpret_cast<BlockContents*>(value);
@@ -699,10 +697,11 @@ Status BlockBasedTableBuilder::InsertBlockInCache(const Slice& block_contents,
 
     // make cache key by appending the file offset to the cache prefix id
     char* end = EncodeVarint64(
-        r->compressed_cache_key_prefix + r->compressed_cache_key_prefix_size,
-        handle->offset());
-    Slice key(r->compressed_cache_key_prefix,
-              static_cast<size_t>(end - r->compressed_cache_key_prefix));
+                  r->compressed_cache_key_prefix +
+                  r->compressed_cache_key_prefix_size,
+                  handle->offset());
+    Slice key(r->compressed_cache_key_prefix, static_cast<size_t>
+              (end - r->compressed_cache_key_prefix));
 
     // Insert into compressed block cache.
     block_cache_compressed->Insert(
@@ -977,7 +976,9 @@ uint64_t BlockBasedTableBuilder::NumEntries() const {
   return rep_->props.num_entries;
 }
 
-uint64_t BlockBasedTableBuilder::FileSize() const { return rep_->offset; }
+uint64_t BlockBasedTableBuilder::FileSize() const {
+  return rep_->offset;
+}
 
 bool BlockBasedTableBuilder::NeedCompact() const {
   for (const auto& collector : rep_->table_properties_collectors) {
