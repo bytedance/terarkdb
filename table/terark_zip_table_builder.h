@@ -85,7 +85,7 @@ class TerarkZipTableBuilder : public TableBuilder, boost::noncopyable {
     std::promise<Status> promise;
     std::future<Status> future;
     std::function<Status()> func;
-    void operator() () {
+    void operator()() {
       Status s;
       try {
         s = func();
@@ -93,9 +93,10 @@ class TerarkZipTableBuilder : public TableBuilder, boost::noncopyable {
         s = Status::Aborted("exception", ex.what());
       }
       promise.set_value(std::move(s));
-    } 
+    }
 
-    TerarkZipTableBuilderTask(std::function<Status()>&& f) : func(std::move(f)) {
+    TerarkZipTableBuilderTask(std::function<Status()>&& f)
+        : func(std::move(f)) {
       future = promise.get_future();
     }
   };
@@ -158,7 +159,8 @@ class TerarkZipTableBuilder : public TableBuilder, boost::noncopyable {
   };
   WaitHandle WaitForMemory(const char* who, size_t memorySize);
   Status EmptyTableFinish();
-  std::unique_ptr<TerarkZipTableBuilderTask> Async(std::function<Status()> func, void* tag);
+  std::unique_ptr<TerarkZipTableBuilderTask> Async(std::function<Status()> func,
+                                                   void* tag);
   void BuildIndex(KeyValueStatus& kvs, size_t entropyLen);
   enum BuildStoreFlag {
     BuildStoreInit = 1,
@@ -166,8 +168,10 @@ class TerarkZipTableBuilder : public TableBuilder, boost::noncopyable {
   };
   Status BuildStore(KeyValueStatus& kvs, DictZipBlobStore::ZipBuilder* zbuilder,
                     uint64_t flag);
-  std::unique_ptr<TerarkZipTableBuilderTask> CompressDict(fstring tmpDictFile, fstring dict,
-                                   std::string* type, long long* td);
+  std::unique_ptr<TerarkZipTableBuilderTask> CompressDict(fstring tmpDictFile,
+                                                          fstring dict,
+                                                          std::string* type,
+                                                          long long* td);
   Status WaitBuildIndex();
   Status WaitBuildStore();
   struct BuildReorderParams {
@@ -215,11 +219,9 @@ class TerarkZipTableBuilder : public TableBuilder, boost::noncopyable {
   Arena arena_;
   const TerarkZipTableOptions& table_options_;
   const TerarkZipTableFactory* table_factory_;
-  // fuck out TableBuilderOptions
   const ImmutableCFOptions& ioptions_;
   TerarkZipMultiOffsetInfo offset_info_;
   std::vector<std::unique_ptr<IntTblPropCollector>> collectors_;
-  // end fuck out TableBuilderOptions
   InternalIterator* second_pass_iter_ = nullptr;
   size_t nameSeed_ = 0;
   size_t keyDataSize_ = 0;
