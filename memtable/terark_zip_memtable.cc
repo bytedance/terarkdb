@@ -122,27 +122,25 @@ void PatriciaTrieRep::Get(const LookupKey &k, void *callback_args,
     valvec<char> buffer;
   };
 
-  class Controller : public LazyBufferState {
+  class LazyBufferStateImpl : public LazyBufferState {
    public:
     virtual void destroy(LazyBuffer * /*buffer*/) const override {}
 
-    virtual void pin_buffer(LazyBuffer *buffer) const override {
-      buffer->reset(buffer->slice());
-    }
+    virtual void pin_buffer(LazyBuffer * /*buffer*/) const override {}
 
-    Status fetch_buffer(LazyBuffer * /*buffer*/) const override {
+    Status fetch_buffer(LazyBuffer *buffer) const override {
+      auto context = get_context(buffer);
+      auto trie = reinterpret_cast<MemPatricia *>(context->data[0]);
+      auto loc = static_cast<uint32_t>(context->data[1]);
+      auto idx = static_cast<uint32_t>(context->data[2]);
+      auto vector = (detail::tag_vector_t *)trie->mem_get(loc);
+      auto data = (detail::tag_vector_t::data_t *)trie->mem_get(vector->loc);
+      set_slice(buffer, GetLengthPrefixedSlice(
+                            (const char *)trie->mem_get(data[idx].loc)));
       return Status::OK();
     }
-
-    Slice GetValue() const {
-      auto vector = (detail::tag_vector_t *)heap->trie->mem_get(heap->loc);
-      auto data =
-          (detail::tag_vector_t::data_t *)heap->trie->mem_get(vector->loc);
-      return GetLengthPrefixedSlice(
-          (const char *)heap->trie->mem_get(data[heap->idx].loc));
-    }
-    HeapItem *heap;
-  } controller;
+  };
+  static LazyBufferStateImpl static_state;
 
   // variable definition
   static thread_local TlsItem tls_ctx;
@@ -154,9 +152,11 @@ void PatriciaTrieRep::Get(const LookupKey &k, void *callback_args,
 
   auto do_callback = [&](HeapItem *heap) {
     build_key(find_key, heap->tag, buffer);
-    controller.heap = heap;
-    return callback_func(callback_args, Slice(buffer->data(), buffer->size()),
-                         LazyBuffer(&controller, {}, controller.GetValue()));
+    return callback_func(
+        callback_args, Slice(buffer->data(), buffer->size()),
+        LazyBuffer(&static_state, {reinterpret_cast<uint64_t>(heap->trie),
+                                   static_cast<uint64_t>(heap->loc),
+                                   static_cast<uint64_t>(heap->idx)}));
   };
 
   valvec<HeapItem> &heap = tls_ctx.heap;
