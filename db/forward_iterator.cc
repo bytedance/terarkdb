@@ -846,7 +846,7 @@ uint32_t ForwardIterator::FindFileInRange(
     uint32_t left, uint32_t right) {
   return static_cast<uint32_t>(terark::lower_bound_ex_n(
     files.begin(), left, right, internal_key,
-    TERARK_FIELD(->largest.Encode()), "" < cfd_->internal_comparator()));
+    TERARK_FIELD_P(largest.Encode()), "" < cfd_->internal_comparator()));
 }
 
 void ForwardIterator::DeleteIterator(InternalIterator* iter, bool is_arena) {

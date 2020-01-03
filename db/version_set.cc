@@ -66,7 +66,7 @@ int FindFileInRange(const InternalKeyComparator& icmp,
     uint32_t left,
     uint32_t right) {
   return static_cast<int>(terark::lower_bound_ex_n(file_level.files,
-      left, right, key, TERARK_FIELD(.largest_key), "" < icmp));
+      left, right, key, TERARK_FIELD(largest_key), "" < icmp));
 }
 
 Status OverlapWithIterator(const Comparator* ucmp,
@@ -2163,7 +2163,7 @@ void VersionStorageInfo::GenerateLevel0NonOverlapping() {
       level_files_brief_[0].files,
       level_files_brief_[0].files + level_files_brief_[0].num_files);
   auto icmp = internal_comparator_;
-  terark::sort_a(level0_sorted_file, TERARK_FIELD(.smallest_key) < *icmp);
+  terark::sort_a(level0_sorted_file, TERARK_FIELD(smallest_key) < *icmp);
 
   for (size_t i = 1; i < level0_sorted_file.size(); ++i) {
     FdWithKeyRange& f = level0_sorted_file[i];

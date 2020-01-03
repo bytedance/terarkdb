@@ -1447,8 +1447,8 @@ Compaction* UniversalCompactionPicker::PickCompositeCompaction(
         }
       }
     }
-    assert(boost::is_sorted(input_range, TERARK_FIELD(.start) < *uc));
-    assert(boost::is_sorted(input_range, TERARK_FIELD(.limit) < *uc));
+    assert(boost::is_sorted(input_range, TERARK_FIELD(start) < *uc));
+    assert(boost::is_sorted(input_range, TERARK_FIELD(limit) < *uc));
     assert(boost::find_if(input_range,
         [uc](const RangeStorage& r) {
           return uc->Compare(r.start, r.limit) > 0;

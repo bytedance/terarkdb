@@ -1975,7 +1975,7 @@ Status CompactionJob::FinishCompactionOutputFile(
     for (auto& pair : dependence) {
       meta->prop.dependence.emplace_back(Dependence{pair.first, pair.second});
     }
-    terark::sort_ex_a(meta->prop.dependence, TERARK_FIELD(.file_number));
+    terark::sort_a(meta->prop.dependence, TERARK_CMP(file_number, <));
     assert(std::is_sorted(inheritance_chain.begin(), inheritance_chain.end()));
     meta->prop.inheritance_chain = inheritance_chain;
 

@@ -2688,7 +2688,7 @@ Status DBImpl::DeleteFilesInRanges(ColumnFamilyHandle* column_family,
         deleted_range[i].limit = storage.second.Encode();
       }
       // sort & merge ranges
-      terark::sort_a(deleted_range, TERARK_FIELD(.start) < ic);
+      terark::sort_a(deleted_range, TERARK_FIELD(start) < ic);
       size_t c = 0;
       for (size_t i = 1; i < n; ++i) {
         if (ic.Compare(deleted_range[c].limit, deleted_range[i].start) >= 0) {

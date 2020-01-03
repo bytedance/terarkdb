@@ -769,7 +769,7 @@ void VersionBuilderDebugger::Verify(VersionBuilder::Rep* rep,
   auto verify = [rep](VersionStorageInfo* l,
                    VersionStorageInfo* r) -> std::string {
     auto eq = TERARK_EQUAL_P(fd.GetNumber(), num_antiquation, is_skip_gc);
-    auto lt = TERARK_CMP(fd.GetNumber(),<, num_antiquation,<);
+    auto lt = TERARK_CMP_P(fd.GetNumber(),<, num_antiquation,<);
 /*
     auto eq = [](FileMetaData* fl, FileMetaData* fr) {
       return fl->fd.GetNumber() == fr->fd.GetNumber() &&
