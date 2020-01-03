@@ -1004,42 +1004,13 @@ public:
     std::promise<std::string> promise;
     std::future<std::string> future = promise.get_future();
     std::thread([this, data](std::promise<std::string>&& prom) {
-      bool tmp_file_created = false;
-      char tmp_file[] = "/tmp/Compaction-XXXXXX";
       try {
-        int fd = mkstemp(tmp_file);
-        if (fd < 0) {
-          THROW_STD(runtime_error, "mkstemp(%s) = %s", tmp_file,
-                    strerror(errno));
-        }
-        tmp_file_created = true;
-        using namespace terark;
-        {
-          // use  " > /dev/fd/xxx" will prevent from tmp_file being
-          // deleted unexpected
-          string_appender<> cmdw;
-          cmdw.reserve(m_cmd.size() + 32);
-          cmdw << m_cmd << " > /dev/fd/" << fd;
-          ProcPipeStream proc(cmdw, "w");
-          proc.ensureWrite(data.data(), data.size());
-        }
-        //
-        // now cmd sub process must have finished
-        //
-        Auto_fclose tmp_result_file(fdopen(fd, "rb"));
-        if (!tmp_result_file) {
-          THROW_STD(runtime_error, "fdopen(fd=%d(fname=%s), rb) = %s", fd,
-                    tmp_file, strerror(errno));
-        }
-        terark::LineBuf result;
-        result.read_all(tmp_result_file);
-        prom.set_value(std::string(result.p, result.n));
+        std::string result =
+            terark::ProcPipeStream::run_cmd(m_cmd, data, "/tmp/Compaction-");
+        prom.set_value(result);
       }
       catch (...) {
         prom.set_exception(std::current_exception());
-      }
-      if (tmp_file_created) {
-        ::remove(tmp_file);
       }
     }, std::move(promise)).detach();
     return future;
