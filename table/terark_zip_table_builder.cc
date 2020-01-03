@@ -404,6 +404,11 @@ Status TerarkZipTableBuilder::Add(const Slice& key,
     fprintf(tmpDumpFile_, "DEBUG: 1st pass => %s / %s \n",
             ikey.DebugString(true).c_str(), value.ToString(true).c_str());
   }
+  if (properties_.num_entries > 0 &&
+      ioptions_.internal_comparator.Compare(key, prevKey_.Encode()) <= 0) {
+    return Status::Corruption(
+        "TerarkZipTableBuilder::Add: overlapping key");
+  }
   ++properties_.num_entries;
   properties_.raw_key_size += key.size();
   properties_.raw_value_size += value.size();
@@ -429,8 +434,10 @@ Status TerarkZipTableBuilder::Add(const Slice& key,
         r22_.get(), r11_.get(), r21_.get(),
         freq_hist_o1::estimate_size_unfinish(freq_[2]->k, freq_[1]->k));
   };
-  size_t samePrefix = userKey.commonPrefixLen(prevUserKey_);
-  if (!r00_ || (prevUserKey_ != userKey &&
+  fstring prevUserKey =
+      prevKey_.size() == 0 ? fstring() : fstringOf(prevKey_.user_key());
+  size_t samePrefix = userKey.commonPrefixLen(prevUserKey);
+  if (!r00_ || (prevUserKey != userKey &&
                 keyDataSize_ > table_options_.singleIndexMinSize)) {
     if (!r00_) {
       assert(prefixBuildInfos_.empty());
@@ -503,14 +510,13 @@ Status TerarkZipTableBuilder::Add(const Slice& key,
     prevSamePrefix_ = 0;
     keyDataSize_ = 0;
     valueDataSize_ = 0;
-    prevUserKey_.assign(userKey);
     keyDataSize_ += userKey.size();
-  } else if (prevUserKey_ != userKey) {
-    assert((prevUserKey_ < userKey) ^ isReverseBytewiseOrder_);
+  } else if (prevUserKey != userKey) {
+    assert((prevUserKey < userKey) ^ isReverseBytewiseOrder_);
     AddPrevUserKey(samePrefix, {r00_.get(), r10_.get(), r20_.get()}, {});
-    prevUserKey_.assign(userKey);
     keyDataSize_ += userKey.size();
   }
+  prevKey_.DecodeFrom(key);
   AddValueBit();
   valueDataSize_ += value.size() + 8;
   valueBuf_.emplace_back((char*)&seqType, 8);
@@ -2378,20 +2384,21 @@ void TerarkZipTableBuilder::AddPrevUserKey(
     multiValueExpandSize_ += headerSize;
   }
   valueBuf_.erase_all();
+  auto prevUserKey = fstringOf(prevKey_.user_key());
   if (keyDataSize_ == 0) {
-    filePair_->key.writer << var_uint64_t(0) << prevUserKey_;
+    filePair_->key.writer << var_uint64_t(0) << prevUserKey;
   } else {
     filePair_->key.writer << var_uint64_t(prevSamePrefix_)
-                          << fstring(prevUserKey_).substr(prevSamePrefix_);
+                          << prevUserKey.substr(prevSamePrefix_);
   }
   prevSamePrefix_ = samePrefix;
   for (auto ptr : r) {
-    ptr->AddKey(prevUserKey_, prefixLen_, samePrefix, valueLen, zeroSeq);
+    ptr->AddKey(prevUserKey, prefixLen_, samePrefix, valueLen, zeroSeq);
   }
   for (auto ptr : e) {
-    ptr->AddKey(prevUserKey_, prefixLen_, size_t(-1), valueLen, zeroSeq);
+    ptr->AddKey(prevUserKey, prefixLen_, size_t(-1), valueLen, zeroSeq);
   }
-  freq_[0]->k.add_record(prevUserKey_);
+  freq_[0]->k.add_record(prevUserKey);
 }
 
 void TerarkZipTableBuilder::AddValueBit() {
