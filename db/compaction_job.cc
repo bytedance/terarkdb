@@ -754,8 +754,12 @@ Status CompactionJob::Run() {
   }
   Status status = Status::Corruption();
   for (size_t i = 0; i < compact_->sub_compact_states.size(); ++i) {
-    auto result = results[i]();
     auto& sub_compact = compact_->sub_compact_states[i];
+    CompactionWorkerResult result;
+#if defined(NDEBUG)
+  try {
+#endif
+    result = results[i]();
     sub_compact.status = std::move(result.status);
     s = sub_compact.status;
     if (s.ok()) {
@@ -827,6 +831,21 @@ Status CompactionJob::Run() {
         status = s;
       }
     }
+#if defined(NDEBUG)
+  }
+  catch (const std::exception& ex) {
+    ROCKS_LOG_ERROR(
+      db_options_.info_log,
+      "[%s] [JOB %d] remote sub_compact failed with exception = %s",
+      sub_compact.compaction->column_family_data()->GetName().c_str(),
+      job_id_, ex.what());
+    LogFlush(db_options_.info_log);
+    if (!status.ok()) {
+      status = Status::Corruption("remote sub_compact failed with exception",
+          ex.what());
+    }
+  }
+#endif
   }
   if (status.ok()) {
     status = VerifyFiles();
