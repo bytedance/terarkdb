@@ -310,9 +310,11 @@ RemoteCompactionDispatcher::StartCompaction(
         ajson::load_from_buff(result, encoded_result);
       }
       catch (const std::exception& ex) {
+        terark::string_appender<> detail;
+        detail << "encoded_result[len=" << encoded_result.size() << "]: ";
+        detail << Slice(encoded_result).ToString(true/*hex*/);
         result.status = Status::Corruption(
-          terark::fstring("failed with exception.what = ") + ex.what(),
-          terark::fstring("encoded_result = ") + encoded_result);
+          terark::fstring("exception.what = ") + ex.what(), detail);
       }
       return result;
     }
@@ -1024,9 +1026,9 @@ public:
         //
         // now cmd sub process must have finished
         //
-        Auto_fclose tmp_result_file(fdopen(fd, "r"));
+        Auto_fclose tmp_result_file(fdopen(fd, "rb"));
         if (!tmp_result_file) {
-          THROW_STD(runtime_error, "fdopen(fd=%d(fname=%s), r) = %s", fd,
+          THROW_STD(runtime_error, "fdopen(fd=%d(fname=%s), rb) = %s", fd,
                     tmp_file, strerror(errno));
         }
         terark::LineBuf result;

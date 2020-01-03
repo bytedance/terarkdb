@@ -734,7 +734,7 @@ Status CompactionJob::Run() {
     context.int_tbl_prop_collector_factories.push_back(
       {collector->Name(), {std::move(param)}});
   }
-  std::vector<std::function<CompactionWorkerResult()>> results;
+  std::vector<std::function<CompactionWorkerResult()>> results_fn;
   for (const auto& state : compact_->sub_compact_states) {
     if (state.start != nullptr) {
       context.has_start = true;
@@ -750,7 +750,7 @@ Status CompactionJob::Run() {
       context.has_end = false;
       context.end.clear();
     }
-    results.emplace_back(dispatcher->StartCompaction(context));
+    results_fn.emplace_back(dispatcher->StartCompaction(context));
   }
   Status status = Status::Corruption();
   for (size_t i = 0; i < compact_->sub_compact_states.size(); ++i) {
@@ -759,7 +759,7 @@ Status CompactionJob::Run() {
 #if defined(NDEBUG)
   try {
 #endif
-    result = results[i]();
+    result = results_fn[i]();
     sub_compact.status = std::move(result.status);
     s = sub_compact.status;
     if (s.ok()) {
