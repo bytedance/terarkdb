@@ -11,6 +11,7 @@
 #include <rocksdb/compaction_filter.h>
 #include <rocksdb/merge_operator.h>
 #include <table/meta_blocks.h>
+#include <util/c_style_callback.h>
 #include <util/xxhash.h>
 // terark headers
 #include <terark/io/MemStream.hpp>
@@ -146,29 +147,6 @@ rocksdb::Status MyRocksTablePropertiesCollectorHack(
 }
 ///////////////////////////////////////////////////////////////////
 
-class TerarkZipTableBuilderTask : public PipelineTask {
- public:
-  std::promise<Status> promise;
-  std::function<Status()> func;
-};
-
-class TerarkZipTableBuilderStage : public PipelineStage {
- protected:
-  void process(int /*threadno*/, PipelineQueueItem* item) final {
-    auto task = static_cast<TerarkZipTableBuilderTask*>(item->task);
-    Status s;
-    try {
-      s = task->func();
-    } catch (const std::exception& ex) {
-      s = Status::Aborted("exception", ex.what());
-    }
-    task->promise.set_value(s);
-  }
-
- public:
-  TerarkZipTableBuilderStage() : PipelineStage(3) { m_step_name = "build"; }
-};
-
 TerarkZipTableBuilder::TerarkZipTableBuilder(
     const TerarkZipTableFactory* table_factory,
     const TerarkZipTableOptions& tzto, const TableBuilderOptions& tbo,
@@ -249,10 +227,6 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(
     if (table_options_.debugLevel == 3) {
       tmpDumpFile_.open(tmpSentryFile_.path + ".dump", "wb+");
     }
-    pipeline_.setLogLevel(0);
-    pipeline_ >> new TerarkZipTableBuilderStage;
-    pipeline_.setQueueSize(50);  // we thought it's enough ...
-    pipeline_.compile();
   } catch (const std::exception& ex) {
     WARN_EXCEPT(tbo.ioptions.info_log, "%s: Exception: %s",
                 BOOST_CURRENT_FUNCTION, ex.what());
@@ -272,8 +246,6 @@ DictZipBlobStore::ZipBuilder* TerarkZipTableBuilder::createZipBuilder() const {
 }
 
 TerarkZipTableBuilder::~TerarkZipTableBuilder() {
-  pipeline_.stop();
-  pipeline_.wait();
   std::unique_lock<std::mutex> zipLock(zipMutex);
   waitQueue.trim(
       std::remove_if(waitQueue.begin(), waitQueue.end(),
@@ -804,12 +776,13 @@ Status TerarkZipTableBuilder::Finish(
   return AbortFinish(ex);
 }
 
-std::future<Status> TerarkZipTableBuilder::Async(std::function<Status()> func) {
-  auto task = new TerarkZipTableBuilderTask;
-  task->func = std::move(func);
-  auto future = task->promise.get_future();
-  pipeline_.enqueue(task);
-  return future;
+std::unique_ptr<TerarkZipTableBuilder::TerarkZipTableBuilderTask>
+TerarkZipTableBuilder::Async(std::function<Status()> func, void* tag) {
+  auto task = std::unique_ptr<TerarkZipTableBuilder::TerarkZipTableBuilderTask>(new TerarkZipTableBuilderTask(std::move(func)));
+  ioptions_.env->Schedule(
+    c_style_callback(*task), task.get(), rocksdb::Env::Priority::LOW, tag,
+    c_style_callback(*task));
+  return task;
 }
 
 void TerarkZipTableBuilder::BuildIndex(KeyValueStatus& kvs, size_t entropyLen) {
@@ -931,7 +904,7 @@ void TerarkZipTableBuilder::BuildIndex(KeyValueStatus& kvs, size_t entropyLen) {
       }
     }
     return Status::OK();
-  });
+  }, &indexTag);
 }
 
 Status TerarkZipTableBuilder::BuildStore(KeyValueStatus& kvs,
@@ -1021,7 +994,7 @@ Status TerarkZipTableBuilder::BuildStore(KeyValueStatus& kvs,
         if (flag & BuildStoreSync) {
           return buildUncompressedStore();
         } else {
-          kvs.storeWait = Async(buildUncompressedStore);
+          kvs.storeWait = Async(buildUncompressedStore, &storeTag);
         }
       }
     } else {
@@ -1037,15 +1010,16 @@ Status TerarkZipTableBuilder::BuildStore(KeyValueStatus& kvs,
     return kvs.isUseDictZip ? buildCompressedStore() : buildUncompressedStore();
   } else {
     if (kvs.isUseDictZip) {
-      kvs.storeWait = Async(buildCompressedStore);
+      kvs.storeWait = Async(buildCompressedStore, &storeTag);
     } else {
-      kvs.storeWait = Async(buildUncompressedStore);
+      kvs.storeWait = Async(buildUncompressedStore, &storeTag);
     }
   }
   return Status::OK();
 }
 
-std::future<Status> TerarkZipTableBuilder::CompressDict(fstring tmpDictFile,
+std::unique_ptr<TerarkZipTableBuilder::TerarkZipTableBuilderTask>
+TerarkZipTableBuilder::CompressDict(fstring tmpDictFile,
                                                         fstring dict,
                                                         std::string* info,
                                                         long long* td) {
@@ -1056,7 +1030,7 @@ std::future<Status> TerarkZipTableBuilder::CompressDict(fstring tmpDictFile,
       info->clear();
       *td = g_pf.now() - tds;
       return Status::OK();
-    });
+    }, &dictTag);
   }
   return Async([=] {
     long long tds = g_pf.now();
@@ -1075,15 +1049,16 @@ std::future<Status> TerarkZipTableBuilder::CompressDict(fstring tmpDictFile,
     }
     *td = g_pf.now() - tds;
     return Status::OK();
-  });
+  }, &dictTag);
 }
 
 Status TerarkZipTableBuilder::WaitBuildIndex() {
+  ioptions_.env->UnSchedule(&indexTag, rocksdb::Env::Priority::LOW);
   Status result = Status::OK();
   for (auto& kvs : prefixBuildInfos_) {
     assert(kvs);
-    assert(kvs->indexWait.valid());
-    auto s = kvs->indexWait.get();
+    assert(kvs->indexWait->future.valid());
+    auto s = kvs->indexWait->future.get();
     if (terark_unlikely(!s.ok() && result.ok())) {
       result = std::move(s);
     }
@@ -1092,11 +1067,12 @@ Status TerarkZipTableBuilder::WaitBuildIndex() {
 }
 
 Status TerarkZipTableBuilder::WaitBuildStore() {
+  ioptions_.env->UnSchedule(&storeTag, rocksdb::Env::Priority::LOW);
   Status result = Status::OK();
   for (auto& kvs : prefixBuildInfos_) {
     assert(kvs);
-    if (kvs->storeWait.valid()) {
-      auto s = kvs->storeWait.get();
+    if (kvs->storeWait->future.valid()) {
+      auto s = kvs->storeWait->future.get();
       if (terark_unlikely(!s.ok() && result.ok())) {
         result = std::move(s);
       }
@@ -1343,7 +1319,7 @@ Status TerarkZipTableBuilder::ZipValueToFinish() {
   AutoDeleteFile tmpDictFile{tmpSentryFile_.path + ".dict"};
   std::unique_ptr<DictZipBlobStore::ZipBuilder> zbuilder;
   WaitHandle dictWaitHandle;
-  std::future<Status> dictWait;
+  std::unique_ptr<TerarkZipTableBuilderTask> dictWait;
   DictZipBlobStore::ZipStat dzstat;
   std::string dictInfo;
   uint64_t dictHash = 0;
@@ -1377,8 +1353,9 @@ Status TerarkZipTableBuilder::ZipValueToFinish() {
   if (zbuilder) {
     zbuilder->freeDict();
     t4 = g_pf.now();
-    assert(dictWait.valid());
-    s = dictWait.get();
+    ioptions_.env->UnSchedule(&dictTag, rocksdb::Env::Priority::LOW);
+    assert(dictWait->future.valid());
+    s = dictWait->future.get();
     if (!s.ok()) {
       return s;
     }
@@ -1405,7 +1382,7 @@ Status TerarkZipTableBuilder::ZipValueToFinishMulti() {
   AutoDeleteFile tmpDictFile{tmpSentryFile_.path + ".dict"};
   std::unique_ptr<DictZipBlobStore::ZipBuilder> zbuilder;
   WaitHandle dictWaitHandle;
-  std::future<Status> dictWait;
+  std::unique_ptr<TerarkZipTableBuilderTask> dictWait;
   std::unique_ptr<AbstractBlobStore> store;
   DictZipBlobStore::ZipStat dzstat;
   std::string dictInfo;
@@ -1456,8 +1433,8 @@ Status TerarkZipTableBuilder::ZipValueToFinishMulti() {
   if (zbuilder) {
     zbuilder->freeDict();
     t4 = g_pf.now();
-    assert(dictWait.valid());
-    s = dictWait.get();
+    assert(dictWait->future.valid());
+    s = dictWait->future.get();
 
     if (!s.ok()) {
       return s;
@@ -2299,15 +2276,15 @@ void TerarkZipTableBuilder::Abandon() {
     if (!kvs) {
       continue;
     }
-    if (kvs->indexWait.valid()) {
-      kvs->indexWait.get();
+    if (kvs->indexWait->future.valid()) {
+      kvs->indexWait->future.get();
     } else {
       for (auto& pair : kvs->status.fileVec) {
         pair->key.close();
       }
     }
-    if (kvs->storeWait.valid()) {
-      kvs->storeWait.get();
+    if (kvs->storeWait->future.valid()) {
+      kvs->storeWait->future.get();
     }
   }
   prefixBuildInfos_.clear();
@@ -2326,15 +2303,15 @@ Status TerarkZipTableBuilder::AbortFinish(const std::exception& ex) {
     if (!kvs) {
       continue;
     }
-    if (kvs->indexWait.valid()) {
-      kvs->indexWait.get();
+    if (kvs->indexWait->future.valid()) {
+      kvs->indexWait->future.get();
     } else {
       for (auto& pair : kvs->status.fileVec) {
         pair->key.close();
       }
     }
-    if (kvs->storeWait.valid()) {
-      kvs->storeWait.get();
+    if (kvs->storeWait->future.valid()) {
+      kvs->storeWait->future.get();
     }
   }
   prefixBuildInfos_.clear();
