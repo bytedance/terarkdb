@@ -222,22 +222,15 @@ using NameParam = CompactionWorkerContext::NameParam;
 AJSON(NameParam, name, param);
 
 AJSON(CompactionWorkerContext, user_comparator, merge_operator,
-                               merge_operator_data, compaction_filter,
-                               compaction_filter_factory,
-                               compaction_filter_context,
-                               compaction_filter_data, blob_size,
-                               table_factory, table_factory_options,
-                               bloom_locality, cf_paths,
-                               prefix_extractor,
-                               prefix_extractor_options,
-                               has_start, has_end,
-                               start, end, last_sequence,
-                               earliest_write_conflict_snapshot,
-                               preserve_deletes_seqnum, file_metadata,
-                               inputs, cf_name, target_file_size,
-                               compression, compression_opts,
-                               existing_snapshots, bottommost_level,
-                               int_tbl_prop_collector_factories);
+      merge_operator_data, compaction_filter, compaction_filter_factory,
+      compaction_filter_context, compaction_filter_data, blob_size,
+      table_factory, table_factory_options, bloom_locality, cf_paths,
+      prefix_extractor, prefix_extractor_options, has_start, has_end, start,
+      end, last_sequence, earliest_write_conflict_snapshot,
+      preserve_deletes_seqnum, file_metadata, inputs, cf_name, target_file_size,
+      compression, compression_opts, existing_snapshots, smallest_user_key,
+      largest_user_key, level, number_levels, bottommost_level,
+      allow_ingest_behind, preserve_deletes, int_tbl_prop_collector_factories);
 
 #ifdef USE_AJSON
 #else
@@ -343,6 +336,37 @@ RemoteCompactionDispatcher::Worker::Worker(EnvOptions env_options, Env* env) {
 RemoteCompactionDispatcher::Worker::~Worker() {
   delete rep_;
 }
+
+class RemoteCompactionProxy : public CompactionIterator::CompactionProxy {
+ public:
+  RemoteCompactionProxy(const CompactionWorkerContext* context)
+      : CompactionProxy(),
+        largest_user_key_(context->largest_user_key.data),
+        level_(context->level),
+        number_levels_(context->number_levels),
+        bottommost_level_(context->bottommost_level),
+        allow_ingest_behind_(context->allow_ingest_behind),
+        preserve_deletes_(context->preserve_deletes) {}
+
+  int level(size_t /*compaction_input_level*/ = 0) const override {
+    return level_;
+  }
+  bool KeyNotExistsBeyondOutputLevel(
+      const Slice& /*user_key*/,
+      std::vector<size_t>* /*level_ptrs*/) const override {
+    return false;
+  }
+  bool bottommost_level() const override { return bottommost_level_; }
+  int number_levels() const override { return number_levels_; }
+  Slice GetLargestUserKey() const override { return largest_user_key_; }
+  bool allow_ingest_behind() const override { return allow_ingest_behind_; }
+  bool preserve_deletes() const override { return preserve_deletes_; }
+
+ protected:
+  Slice largest_user_key_;
+  int level_, number_levels_;
+  bool bottommost_level_, allow_ingest_behind_, preserve_deletes_;
+};
 
 std::string RemoteCompactionDispatcher::Worker::DoCompaction(Slice data) {
   CompactionWorkerContext context;
@@ -654,7 +678,9 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(Slice data) {
   std::unique_ptr<CompactionIterator> c_iter(new CompactionIterator(
       input.get(), &separate_helper, end, ucmp, &merge, context.last_sequence,
       &context.existing_snapshots, context.earliest_write_conflict_snapshot,
-      nullptr, env, false, false, &range_del_agg, nullptr,
+      nullptr, env, false, false, &range_del_agg,
+      std::unique_ptr<CompactionIterator::CompactionProxy>(
+          new RemoteCompactionProxy(&context)),
       mutable_cf_options.blob_size, compaction_filter, nullptr,
       context.preserve_deletes_seqnum));
 
@@ -715,11 +741,13 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(Slice data) {
     } else {
       second_pass_iter_storage.input.set(NewErrorInternalIterator(s, &arena));
     }
+    std::unique_ptr<CompactionIterator::CompactionProxy> compaction(
+        new RemoteCompactionProxy(&context));
     return new CompactionIterator(
         second_pass_iter_storage.input.get(), &separate_helper, end, ucmp,
         merge_ptr, context.last_sequence, &context.existing_snapshots,
-        context.earliest_write_conflict_snapshot, nullptr, env, false,
-        false, range_del_agg_ptr, nullptr, mutable_cf_options.blob_size,
+        context.earliest_write_conflict_snapshot, nullptr, env, false, false,
+        range_del_agg_ptr, std::move(compaction), mutable_cf_options.blob_size,
         second_pass_iter_storage.compaction_filter, nullptr,
         context.preserve_deletes_seqnum);
   };

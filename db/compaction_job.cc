@@ -725,7 +725,13 @@ Status CompactionJob::Run() {
   context.compression = c->output_compression();
   context.compression_opts = c->output_compression_opts();
   context.existing_snapshots = existing_snapshots_;
-  context.bottommost_level = bottommost_level_;
+  context.smallest_user_key = c->GetSmallestUserKey();
+  context.largest_user_key = c->GetLargestUserKey();
+  context.level = c->level();
+  context.number_levels = iopt->num_levels;
+  context.bottommost_level = c->bottommost_level();
+  context.allow_ingest_behind = iopt->allow_ingest_behind;
+  context.preserve_deletes = iopt->preserve_deletes;
   for (auto& collector : *cfd->int_tbl_prop_collector_factories()) {
     std::string param;
     if (collector->NeedSerialize()) {

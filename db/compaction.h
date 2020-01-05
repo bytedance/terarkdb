@@ -155,7 +155,9 @@ struct CompactionWorkerContext {
   CompressionType compression;
   CompressionOptions compression_opts;
   std::vector<SequenceNumber> existing_snapshots;
-  bool bottommost_level;
+  EncodedString smallest_user_key, largest_user_key;
+  int level, number_levels;
+  bool bottommost_level, allow_ingest_behind, preserve_deletes;
   std::vector<NameParam> int_tbl_prop_collector_factories;
 };
 
