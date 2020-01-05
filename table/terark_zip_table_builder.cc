@@ -11,6 +11,7 @@
 #include <rocksdb/compaction_filter.h>
 #include <rocksdb/merge_operator.h>
 #include <table/meta_blocks.h>
+#include <util/c_style_callback.h>
 #include <util/xxhash.h>
 // terark headers
 #include <terark/io/MemStream.hpp>
@@ -146,29 +147,6 @@ rocksdb::Status MyRocksTablePropertiesCollectorHack(
 }
 ///////////////////////////////////////////////////////////////////
 
-class TerarkZipTableBuilderTask : public PipelineTask {
- public:
-  std::promise<Status> promise;
-  std::function<Status()> func;
-};
-
-class TerarkZipTableBuilderStage : public PipelineStage {
- protected:
-  void process(int /*threadno*/, PipelineQueueItem* item) final {
-    auto task = static_cast<TerarkZipTableBuilderTask*>(item->task);
-    Status s;
-    try {
-      s = task->func();
-    } catch (const std::exception& ex) {
-      s = Status::Aborted("exception", ex.what());
-    }
-    task->promise.set_value(s);
-  }
-
- public:
-  TerarkZipTableBuilderStage() : PipelineStage(3) { m_step_name = "build"; }
-};
-
 TerarkZipTableBuilder::TerarkZipTableBuilder(
     const TerarkZipTableFactory* table_factory,
     const TerarkZipTableOptions& tzto, const TableBuilderOptions& tbo,
@@ -249,10 +227,6 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(
     if (table_options_.debugLevel == 3) {
       tmpDumpFile_.open(tmpSentryFile_.path + ".dump", "wb+");
     }
-    pipeline_.setLogLevel(0);
-    pipeline_ >> new TerarkZipTableBuilderStage;
-    pipeline_.setQueueSize(50);  // we thought it's enough ...
-    pipeline_.compile();
   } catch (const std::exception& ex) {
     WARN_EXCEPT(tbo.ioptions.info_log, "%s: Exception: %s",
                 BOOST_CURRENT_FUNCTION, ex.what());
@@ -272,8 +246,6 @@ DictZipBlobStore::ZipBuilder* TerarkZipTableBuilder::createZipBuilder() const {
 }
 
 TerarkZipTableBuilder::~TerarkZipTableBuilder() {
-  pipeline_.stop();
-  pipeline_.wait();
   std::unique_lock<std::mutex> zipLock(zipMutex);
   waitQueue.trim(
       std::remove_if(waitQueue.begin(), waitQueue.end(),
@@ -406,8 +378,8 @@ Status TerarkZipTableBuilder::Add(const Slice& key,
   }
   if (properties_.num_entries > 0 &&
       ioptions_.internal_comparator.Compare(key, prevKey_.Encode()) <= 0) {
-    return Status::Corruption(
-        "TerarkZipTableBuilder::Add: overlapping key");
+    assert(ioptions_.internal_comparator.Compare(key, prevKey_.Encode()) > 0);
+    return Status::Corruption("TerarkZipTableBuilder::Add: overlapping key");
   }
   ++properties_.num_entries;
   properties_.raw_key_size += key.size();
@@ -475,8 +447,7 @@ Status TerarkZipTableBuilder::Add(const Slice& key,
       kv_freq_.add_hist(freq_[0]->k);
       kv_freq_.add_hist(freq_[0]->v);
       if (ShouldStartBuild()) {
-        auto kvs =
-            new KeyValueStatus(std::move(*r22_), std::move(freq_[2]->v));
+        auto kvs = new KeyValueStatus(std::move(*r22_), std::move(freq_[2]->v));
         prefixBuildInfos_.emplace_back(kvs);
         BuildIndex(*kvs, freq_hist_o1::estimate_size_unfinish(freq_[2]->k));
         BuildStore(*kvs, nullptr, BuildStoreInit);
@@ -531,8 +502,9 @@ Status TerarkZipTableBuilder::Add(const Slice& key,
     filePair_->isFullValue = false;
   }
   assert(filePair_->value.fp);
-  filePair_->value.writer
-      << seqType << fstringOf(filePair_->isFullValue ? value : Slice());
+  filePair_->value.writer << seqType
+                          << fstringOf(filePair_->isFullValue ? value
+                                                              : Slice());
 
   size_t freq_size = properties_.raw_key_size + properties_.raw_value_size;
   if (freq_size >= next_freq_size_) {
@@ -804,134 +776,142 @@ Status TerarkZipTableBuilder::Finish(
   return AbortFinish(ex);
 }
 
-std::future<Status> TerarkZipTableBuilder::Async(std::function<Status()> func) {
-  auto task = new TerarkZipTableBuilderTask;
-  task->func = std::move(func);
-  auto future = task->promise.get_future();
-  pipeline_.enqueue(task);
-  return future;
+std::unique_ptr<TerarkZipTableBuilder::TerarkZipTableBuilderTask>
+TerarkZipTableBuilder::Async(std::function<Status()> func, void* tag) {
+  auto task = std::unique_ptr<TerarkZipTableBuilder::TerarkZipTableBuilderTask>(
+      new TerarkZipTableBuilderTask(std::move(func)));
+  ioptions_.env->Schedule(c_style_callback(*task), task.get(),
+                          rocksdb::Env::Priority::LOW, tag,
+                          c_style_callback(*task));
+  return task;
 }
 
 void TerarkZipTableBuilder::BuildIndex(KeyValueStatus& kvs, size_t entropyLen) {
   kvs.status.stat.entropyLen = entropyLen;
   assert(kvs.status.stat.keyCount > 0);
-  kvs.indexWait = Async([this, &kvs]() {
-    auto& keyStat = kvs.status.stat;
-    std::unique_ptr<TerarkKeyReader> tempKeyFileReader(
-        TerarkKeyReader::MakeReader(kvs.status.fileVec, true));
-    const size_t myWorkMem = TerarkIndex::Factory::MemSizeForBuild(keyStat);
-    auto waitHandle = WaitForMemory("nltTrie", myWorkMem);
+  kvs.indexWait = Async(
+      [this, &kvs]() {
+        auto& keyStat = kvs.status.stat;
+        std::unique_ptr<TerarkKeyReader> tempKeyFileReader(
+            TerarkKeyReader::MakeReader(kvs.status.fileVec, true));
+        const size_t myWorkMem = TerarkIndex::Factory::MemSizeForBuild(keyStat);
+        auto waitHandle = WaitForMemory("nltTrie", myWorkMem);
 
-    long long t1 = g_pf.now();
-    std::unique_ptr<TerarkIndex> indexPtr;
-    try {
-      terark::TerarkIndexOptions tiopt;
-      tiopt.debugLevel = table_options_.debugLevel;
-      tiopt.indexNestLevel = table_options_.indexNestLevel;
-      tiopt.indexNestScale = table_options_.indexNestScale;
-      tiopt.indexTempLevel = table_options_.indexTempLevel;
-      tiopt.indexType = table_options_.indexType;
-      tiopt.localTempDir = table_options_.localTempDir;
-      tiopt.smallTaskMemory = table_options_.smallTaskMemory;
-      auto& ref = tiopt;
-      indexPtr.reset(TerarkIndex::Factory::Build(tempKeyFileReader.get(), ref,
-                                                 keyStat, nullptr));
-    } catch (const std::exception& ex) {
-      WARN_EXCEPT(ioptions_.info_log,
-                  "TerarkZipTableBuilder::Finish():this=%12p:\n  index build "
-                  "fail , error = %s\n",
-                  this, ex.what());
-      return Status::Corruption("TerarkZipTableBuilder index build error",
-                                ex.what());
-    }
-    auto verify_index_impl = [&] {
-      // check index correctness
-      tempKeyFileReader->rewind();
-      auto it = UniquePtrOf(indexPtr->NewIterator(nullptr));
-      if (fstring(kvs.status.stat.minKey) < fstring(kvs.status.stat.maxKey)) {
-        for (it->SeekToFirst(); it->Valid(); it->Next()) {
-          if (it->key() != tempKeyFileReader->next()) {
-            return false;
-          }
+        long long t1 = g_pf.now();
+        std::unique_ptr<TerarkIndex> indexPtr;
+        try {
+          terark::TerarkIndexOptions tiopt;
+          tiopt.debugLevel = table_options_.debugLevel;
+          tiopt.indexNestLevel = table_options_.indexNestLevel;
+          tiopt.indexNestScale = table_options_.indexNestScale;
+          tiopt.indexTempLevel = table_options_.indexTempLevel;
+          tiopt.indexType = table_options_.indexType;
+          tiopt.localTempDir = table_options_.localTempDir;
+          tiopt.smallTaskMemory = table_options_.smallTaskMemory;
+          auto& ref = tiopt;
+          indexPtr.reset(TerarkIndex::Factory::Build(tempKeyFileReader.get(),
+                                                     ref, keyStat, nullptr));
+        } catch (const std::exception& ex) {
+          WARN_EXCEPT(
+              ioptions_.info_log,
+              "TerarkZipTableBuilder::Finish():this=%12p:\n  index build "
+              "fail , error = %s\n",
+              this, ex.what());
+          return Status::Corruption("TerarkZipTableBuilder index build error",
+                                    ex.what());
         }
-      } else {
-        for (it->SeekToLast(); it->Valid(); it->Prev()) {
-          if (it->key() != tempKeyFileReader->next()) {
-            return false;
+        auto verify_index_impl = [&] {
+          // check index correctness
+          tempKeyFileReader->rewind();
+          auto it = UniquePtrOf(indexPtr->NewIterator(nullptr));
+          if (fstring(kvs.status.stat.minKey) <
+              fstring(kvs.status.stat.maxKey)) {
+            for (it->SeekToFirst(); it->Valid(); it->Next()) {
+              if (it->key() != tempKeyFileReader->next()) {
+                return false;
+              }
+            }
+          } else {
+            for (it->SeekToLast(); it->Valid(); it->Prev()) {
+              if (it->key() != tempKeyFileReader->next()) {
+                return false;
+              }
+            }
           }
-        }
-      }
-      return true;
-    };
-    auto verify_index = [&] {
-      if (verify_index_impl()) {
-        return true;
-      }
+          return true;
+        };
+        auto verify_index = [&] {
+          if (verify_index_impl()) {
+            return true;
+          }
 #ifndef NDEBUG
-      assert(false);
+          assert(false);
 #endif
 #ifdef _MSV_VER
-      BOOL IsDbgPresent = FALSE;
-      CheckRemoteDebuggerPresent(GetCurrentProcess(), &IsDbgPresent);
-      if (IsDbgPresent || IsDebuggerPresent()) {
-        verify_index_impl();
-      }
+          BOOL IsDbgPresent = FALSE;
+          CheckRemoteDebuggerPresent(GetCurrentProcess(), &IsDbgPresent);
+          if (IsDbgPresent || IsDebuggerPresent()) {
+            verify_index_impl();
+          }
 #endif
-      return false;
-    };
-    if (table_options_.debugLevel == 2 && !verify_index()) {
-      return Status::Corruption("TerarkZipTableBuilder index check fail",
-                                indexPtr->Name().data());
-    }
-    size_t fileSize = 0;
-    {
-      std::unique_lock<std::mutex> l(indexBuildMutex_);
-      FileStream writer(tmpIndexFile_, "ab+");
-      kvs.indexFileBegin = writer.fsize();
-      indexPtr->SaveMmap([&fileSize, &writer](const void* data, size_t size) {
-        fileSize += size;
-        writer.ensureWrite(data, size);
-      });
-      writer.flush();
-      kvs.indexFileEnd = writer.fsize();
-    }
-    assert(kvs.indexFileEnd - kvs.indexFileBegin == fileSize);
-    assert(fileSize % 8 == 0);
-    MmapWholeFile mmap_file;
-    if (table_options_.debugLevel == 2) {
-      std::unique_lock<std::mutex> l(indexBuildMutex_);
-      MmapWholeFile(tmpIndexFile_.fpath).swap(mmap_file);
-      indexPtr.reset();
-      indexPtr = TerarkIndex::LoadMemory(
-          mmap_file.memory().substr(kvs.indexFileBegin, fileSize));
-      if (!verify_index()) {
-        return Status::Corruption(
-            "TerarkZipTableBuilder index check fail after reload",
-            indexPtr->Name().data());
-      }
-    }
-    long long tt = g_pf.now();
-    size_t rawKeySize = kvs.status.stat.sumKeyLen;
-    size_t keyCount = kvs.status.stat.keyCount;
-    INFO(ioptions_.info_log,
-         "TerarkZipTableBuilder::Finish():this=%12p:\n  index pass time "
-         "=%8.2f's,%8.3f'MB/sec\n"
-         "    index type = %s\n"
-         "    usrkeys = %zd  min-keylen = %zd  max-keylen = %zd\n"
-         "    raw-key =%9.4f GB  zip-key =%9.4f GB  avg-key =%7.2f  avg-zkey "
-         "=%7.2f\n",
-         this, g_pf.sf(t1, tt), rawKeySize * 1.0 / g_pf.uf(t1, tt),
-         indexPtr->Name().data(), keyCount, kvs.status.stat.minKeyLen,
-         kvs.status.stat.maxKeyLen, rawKeySize * 1.0 / 1e9,
-         fileSize * 1.0 / 1e9, rawKeySize * 1.0 / keyCount,
-         fileSize * 1.0 / keyCount);
-    if (--kvs.keyFileRef == 0) {
-      for (auto& pair : kvs.status.fileVec) {
-        pair->key.close();
-      }
-    }
-    return Status::OK();
-  });
+          return false;
+        };
+        if (table_options_.debugLevel == 2 && !verify_index()) {
+          return Status::Corruption("TerarkZipTableBuilder index check fail",
+                                    indexPtr->Name().data());
+        }
+        size_t fileSize = 0;
+        {
+          std::unique_lock<std::mutex> l(indexBuildMutex_);
+          FileStream writer(tmpIndexFile_, "ab+");
+          kvs.indexFileBegin = writer.fsize();
+          indexPtr->SaveMmap(
+              [&fileSize, &writer](const void* data, size_t size) {
+                fileSize += size;
+                writer.ensureWrite(data, size);
+              });
+          writer.flush();
+          kvs.indexFileEnd = writer.fsize();
+        }
+        assert(kvs.indexFileEnd - kvs.indexFileBegin == fileSize);
+        assert(fileSize % 8 == 0);
+        MmapWholeFile mmap_file;
+        if (table_options_.debugLevel == 2) {
+          std::unique_lock<std::mutex> l(indexBuildMutex_);
+          MmapWholeFile(tmpIndexFile_.fpath).swap(mmap_file);
+          indexPtr.reset();
+          indexPtr = TerarkIndex::LoadMemory(
+              mmap_file.memory().substr(kvs.indexFileBegin, fileSize));
+          if (!verify_index()) {
+            return Status::Corruption(
+                "TerarkZipTableBuilder index check fail after reload",
+                indexPtr->Name().data());
+          }
+        }
+        long long tt = g_pf.now();
+        size_t rawKeySize = kvs.status.stat.sumKeyLen;
+        size_t keyCount = kvs.status.stat.keyCount;
+        INFO(ioptions_.info_log,
+             "TerarkZipTableBuilder::Finish():this=%12p:\n  index pass time "
+             "=%8.2f's,%8.3f'MB/sec\n"
+             "    index type = %s\n"
+             "    usrkeys = %zd  min-keylen = %zd  max-keylen = %zd\n"
+             "    raw-key =%9.4f GB  zip-key =%9.4f GB  avg-key =%7.2f  "
+             "avg-zkey "
+             "=%7.2f\n",
+             this, g_pf.sf(t1, tt), rawKeySize * 1.0 / g_pf.uf(t1, tt),
+             indexPtr->Name().data(), keyCount, kvs.status.stat.minKeyLen,
+             kvs.status.stat.maxKeyLen, rawKeySize * 1.0 / 1e9,
+             fileSize * 1.0 / 1e9, rawKeySize * 1.0 / keyCount,
+             fileSize * 1.0 / keyCount);
+        if (--kvs.keyFileRef == 0) {
+          for (auto& pair : kvs.status.fileVec) {
+            pair->key.close();
+          }
+        }
+        return Status::OK();
+      },
+      &indexTag);
 }
 
 Status TerarkZipTableBuilder::BuildStore(KeyValueStatus& kvs,
@@ -1021,7 +1001,7 @@ Status TerarkZipTableBuilder::BuildStore(KeyValueStatus& kvs,
         if (flag & BuildStoreSync) {
           return buildUncompressedStore();
         } else {
-          kvs.storeWait = Async(buildUncompressedStore);
+          kvs.storeWait = Async(buildUncompressedStore, &storeTag);
         }
       }
     } else {
@@ -1037,53 +1017,58 @@ Status TerarkZipTableBuilder::BuildStore(KeyValueStatus& kvs,
     return kvs.isUseDictZip ? buildCompressedStore() : buildUncompressedStore();
   } else {
     if (kvs.isUseDictZip) {
-      kvs.storeWait = Async(buildCompressedStore);
+      kvs.storeWait = Async(buildCompressedStore, &storeTag);
     } else {
-      kvs.storeWait = Async(buildUncompressedStore);
+      kvs.storeWait = Async(buildUncompressedStore, &storeTag);
     }
   }
   return Status::OK();
 }
 
-std::future<Status> TerarkZipTableBuilder::CompressDict(fstring tmpDictFile,
-                                                        fstring dict,
-                                                        std::string* info,
-                                                        long long* td) {
+std::unique_ptr<TerarkZipTableBuilder::TerarkZipTableBuilderTask>
+TerarkZipTableBuilder::CompressDict(fstring tmpDictFile, fstring dict,
+                                    std::string* info, long long* td) {
   if (table_options_.disableCompressDict) {
-    return Async([=] {
-      long long tds = g_pf.now();
-      FileStream(tmpDictFile, "wb+").ensureWrite(dict.data(), dict.size());
-      info->clear();
-      *td = g_pf.now() - tds;
-      return Status::OK();
-    });
+    return Async(
+        [=] {
+          long long tds = g_pf.now();
+          FileStream(tmpDictFile, "wb+").ensureWrite(dict.data(), dict.size());
+          info->clear();
+          *td = g_pf.now() - tds;
+          return Status::OK();
+        },
+        &dictTag);
   }
-  return Async([=] {
-    long long tds = g_pf.now();
-    FileStream(tmpDictFile, "wb+").chsize(dict.size());
-    MmapWholeFile dictFile(tmpDictFile, true);
-    size_t zstd_size = ZSTD_compress(dictFile.base, dictFile.size, dict.data(),
-                                     dict.size(), 0);
-    if (ZSTD_isError(zstd_size) || zstd_size >= dict.size()) {
-      memcpy(dictFile.base, dict.data(), dict.size());
-      info->clear();
-    } else {
-      MmapWholeFile().swap(dictFile);
-      FileStream(tmpDictFile, "rb+").chsize(zstd_size);
-      *info = "ZSTD_";
-      info->append(lcast(ZSTD_versionNumber()));
-    }
-    *td = g_pf.now() - tds;
-    return Status::OK();
-  });
+  return Async(
+      [=] {
+        long long tds = g_pf.now();
+        FileStream(tmpDictFile, "wb+").chsize(dict.size());
+        MmapWholeFile dictFile(tmpDictFile, true);
+        size_t zstd_size = ZSTD_compress(dictFile.base, dictFile.size,
+                                         dict.data(), dict.size(), 0);
+        if (ZSTD_isError(zstd_size) || zstd_size >= dict.size()) {
+          memcpy(dictFile.base, dict.data(), dict.size());
+          info->clear();
+        } else {
+          MmapWholeFile().swap(dictFile);
+          FileStream(tmpDictFile, "rb+").chsize(zstd_size);
+          *info = "ZSTD_";
+          info->append(lcast(ZSTD_versionNumber()));
+        }
+        *td = g_pf.now() - tds;
+        return Status::OK();
+      },
+      &dictTag);
 }
 
 Status TerarkZipTableBuilder::WaitBuildIndex() {
+  ioptions_.env->UnSchedule(&indexTag, rocksdb::Env::Priority::LOW);
   Status result = Status::OK();
   for (auto& kvs : prefixBuildInfos_) {
     assert(kvs);
-    assert(kvs->indexWait.valid());
-    auto s = kvs->indexWait.get();
+    assert(kvs->indexWait);
+    assert(kvs->indexWait->future.valid());
+    auto s = kvs->indexWait->future.get();
     if (terark_unlikely(!s.ok() && result.ok())) {
       result = std::move(s);
     }
@@ -1092,11 +1077,13 @@ Status TerarkZipTableBuilder::WaitBuildIndex() {
 }
 
 Status TerarkZipTableBuilder::WaitBuildStore() {
+  ioptions_.env->UnSchedule(&storeTag, rocksdb::Env::Priority::LOW);
   Status result = Status::OK();
   for (auto& kvs : prefixBuildInfos_) {
     assert(kvs);
-    if (kvs->storeWait.valid()) {
-      auto s = kvs->storeWait.get();
+    if (kvs->storeWait) {
+      assert(kvs->storeWait->future.valid());
+      auto s = kvs->storeWait->future.get();
       if (terark_unlikely(!s.ok() && result.ok())) {
         result = std::move(s);
       }
@@ -1343,7 +1330,7 @@ Status TerarkZipTableBuilder::ZipValueToFinish() {
   AutoDeleteFile tmpDictFile{tmpSentryFile_.path + ".dict"};
   std::unique_ptr<DictZipBlobStore::ZipBuilder> zbuilder;
   WaitHandle dictWaitHandle;
-  std::future<Status> dictWait;
+  std::unique_ptr<TerarkZipTableBuilderTask> dictWait;
   DictZipBlobStore::ZipStat dzstat;
   std::string dictInfo;
   uint64_t dictHash = 0;
@@ -1377,8 +1364,9 @@ Status TerarkZipTableBuilder::ZipValueToFinish() {
   if (zbuilder) {
     zbuilder->freeDict();
     t4 = g_pf.now();
-    assert(dictWait.valid());
-    s = dictWait.get();
+    ioptions_.env->UnSchedule(&dictTag, rocksdb::Env::Priority::LOW);
+    assert(dictWait->future.valid());
+    s = dictWait->future.get();
     if (!s.ok()) {
       return s;
     }
@@ -1405,7 +1393,7 @@ Status TerarkZipTableBuilder::ZipValueToFinishMulti() {
   AutoDeleteFile tmpDictFile{tmpSentryFile_.path + ".dict"};
   std::unique_ptr<DictZipBlobStore::ZipBuilder> zbuilder;
   WaitHandle dictWaitHandle;
-  std::future<Status> dictWait;
+  std::unique_ptr<TerarkZipTableBuilderTask> dictWait;
   std::unique_ptr<AbstractBlobStore> store;
   DictZipBlobStore::ZipStat dzstat;
   std::string dictInfo;
@@ -1456,8 +1444,8 @@ Status TerarkZipTableBuilder::ZipValueToFinishMulti() {
   if (zbuilder) {
     zbuilder->freeDict();
     t4 = g_pf.now();
-    assert(dictWait.valid());
-    s = dictWait.get();
+    assert(dictWait->future.valid());
+    s = dictWait->future.get();
 
     if (!s.ok()) {
       return s;
@@ -2294,47 +2282,23 @@ Status TerarkZipTableBuilder::WriteMetaData(
 
 void TerarkZipTableBuilder::Abandon() {
   assert(!closed_);
+  ioptions_.env->UnSchedule(&indexTag, rocksdb::Env::Priority::LOW);
+  ioptions_.env->UnSchedule(&storeTag, rocksdb::Env::Priority::LOW);
+  ioptions_.env->UnSchedule(&dictTag, rocksdb::Env::Priority::LOW);
   closed_ = true;
   for (auto& kvs : prefixBuildInfos_) {
     if (!kvs) {
       continue;
     }
-    if (kvs->indexWait.valid()) {
-      kvs->indexWait.get();
+    if (kvs->indexWait->future.valid()) {
+      kvs->indexWait->future.get();
     } else {
       for (auto& pair : kvs->status.fileVec) {
         pair->key.close();
       }
     }
-    if (kvs->storeWait.valid()) {
-      kvs->storeWait.get();
-    }
-  }
-  prefixBuildInfos_.clear();
-  tmpSentryFile_.complete_write();
-  tmpSampleFile_.complete_write();
-  tmpIndexFile_.Delete();
-  tmpStoreFile_.Delete();
-  tmpZipDictFile_.Delete();
-  tmpZipValueFile_.Delete();
-}
-
-// based on Abandon
-Status TerarkZipTableBuilder::AbortFinish(const std::exception& ex) {
-  closed_ = true;
-  for (auto& kvs : prefixBuildInfos_) {
-    if (!kvs) {
-      continue;
-    }
-    if (kvs->indexWait.valid()) {
-      kvs->indexWait.get();
-    } else {
-      for (auto& pair : kvs->status.fileVec) {
-        pair->key.close();
-      }
-    }
-    if (kvs->storeWait.valid()) {
-      kvs->storeWait.get();
+    if (kvs->storeWait && kvs->storeWait->future.valid()) {
+      kvs->storeWait->future.get();
     }
   }
   prefixBuildInfos_.clear();
@@ -2344,6 +2308,11 @@ Status TerarkZipTableBuilder::AbortFinish(const std::exception& ex) {
   tmpStoreFile_.Delete();
   tmpZipDictFile_.Delete();
   tmpZipValueFile_.Delete();
+}
+
+// based on Abandon
+Status TerarkZipTableBuilder::AbortFinish(const std::exception& ex) {
+  TerarkZipTableBuilder::Abandon();
   return Status::Aborted("exception", ex.what());
 }
 

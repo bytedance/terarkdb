@@ -1253,9 +1253,13 @@ Compaction* CompactionPicker::PickRangeCompaction(
   auto& ic = ioptions_.internal_comparator;
   auto uc = ic.user_comparator();
   auto need_compact = [&](const MapSstElement& e) {
-    if (begin != nullptr &&
-        uc->Compare(ExtractUserKey(e.largest_key), begin->user_key()) < 0) {
-      return false;
+    if (begin != nullptr) {
+      int c = uc->Compare(ExtractUserKey(e.largest_key), begin->user_key());
+      if (GetInternalKeySeqno(e.largest_key) == kMaxSequenceNumber) {
+        if (c <= 0) return false;
+      } else {
+        if (c < 0) return false;
+      }
     }
     if (end != nullptr &&
         uc->Compare(ExtractUserKey(e.smallest_key), end->user_key()) >= 0) {

@@ -244,6 +244,10 @@ ifeq ($(TERARKDB_ENABLE_METRICS),1)
 OPT += -DTERARKDB_ENABLE_METRICS
 endif
 
+ifeq ($(TERARKDB_ENABLE_CONSOLE),1)
+OPT += -DTERARKDB_ENABLE_CONSOLE
+endif
+
 #-----------------------------------------------
 include src.mk
 
@@ -280,8 +284,10 @@ endif
 
 LIB_SOURCES += ${TERARK_ZIP_SRC}
 
+CMAKE_BUILD_TYPE=Debug
 ifeq ($(DEBUG_LEVEL),0)
   LIBNAME_SUFFIX=
+	CMAKE_BUILD_TYPE=RelWithDebInfo
 endif
 ifeq ($(DEBUG_LEVEL),1)
   LIBNAME_SUFFIX=_assert
@@ -836,7 +842,7 @@ all: $(LIBRARY) $(SHARED) $(BENCHMARKS) tools tools_lib test_libs $(TESTS)
 all_but_some_tests: $(LIBRARY) $(BENCHMARKS) tools tools_lib test_libs $(SUBSET)
 
 ${CPPUTIL_METRICS2_HOME}/cmake-build/libmetrics2.a:
-	mkdir -p ${CPPUTIL_METRICS2_HOME}/cmake-build && cd ${CPPUTIL_METRICS2_HOME}/cmake-build && cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo && make
+	mkdir -p ${CPPUTIL_METRICS2_HOME}/cmake-build && cd ${CPPUTIL_METRICS2_HOME}/cmake-build && cmake .. -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} && make
 
 cpputil_metrics2: ${CPPUTIL_METRICS2_HOME}/cmake-build/libmetrics2.a
 
