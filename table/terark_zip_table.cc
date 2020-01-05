@@ -497,10 +497,17 @@ Status TerarkZipTableOptions::Parse(Slice opt) {
   const char* end = opt.size() + beg;
   std::unordered_map<std::string, std::string> map;
   while (beg < end) {
-    int namelen = -1, val_beg = -1, val_end, eol = -1;
-    sscanf(beg, "%*s%n=%n%*s%n\n%n", &namelen, &val_beg, &val_end, &eol);
-    map[std::string(beg, namelen)] = std::string(beg + val_beg, val_end - val_beg);
-    if (-1 == eol && beg + val_end < end) {
+    const char* eq = (char*)memchr(beg, '=', end-beg);
+    if (eq) {
+      const char* eol = std::find(eq+1, end, '\n');
+      fstring name(beg, eq);
+      fstring value(eq+1, eol);
+      name.trim();
+      value.trim();
+      map[name.str()] = value.str();
+      beg = eol + 1;
+    }
+    else {
       //return Status::InvalidArgument("TerarkZipTableOptions::Parse", "Missing linefeed char");
       Slice line(beg, end-beg);
       fprintf(stderr,
@@ -508,7 +515,6 @@ Status TerarkZipTableOptions::Parse(Slice opt) {
        DOT_STAR_S(opt), DOT_STAR_S(line));
       break;
     }
-    beg += eol;
   }
 #define M_String(name) { \
     auto iter = map.find(#name); \
