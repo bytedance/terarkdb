@@ -1029,6 +1029,12 @@ public:
       try {
         std::string result =
             terark::ProcPipeStream::run_cmd(m_cmd, data, "/tmp/Compaction-");
+
+        fprintf(stderr,
+            "INFO: CompactionCmd(%s, %s): returned result[len=%zd]: %s\n",
+            m_cmd.c_str(), Slice(data).ToString(true).c_str(),
+            result.size(), Slice(result).ToString(true).c_str());
+
         prom.set_value(result);
       }
       catch (...) {
