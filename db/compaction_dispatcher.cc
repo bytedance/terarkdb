@@ -990,6 +990,14 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(Slice data) {
   return stream.str();
 }
 
+
+void RemoteCompactionDispatcher::Worker::DebugSerializeCheckResult(Slice data) {
+    using namespace terark;
+    LittleEndianDataInput<MemIO> dio; dio.set((void*)(data.data_), data.size());
+    CompactionWorkerResult res;
+    dio >> res;
+}
+
 const char* RemoteCompactionDispatcher::Name() const {
   return "RemoteCompactionDispatcher";
 }

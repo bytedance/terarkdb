@@ -44,6 +44,7 @@ class RemoteCompactionDispatcher : public CompactionDispatcher {
     virtual ~Worker();
     virtual std::string GenerateOutputFileName(size_t file_index) = 0;
     std::string DoCompaction(Slice data);
+    static void DebugSerializeCheckResult(Slice data);
    protected:
     struct Rep;
     Rep* rep_;
