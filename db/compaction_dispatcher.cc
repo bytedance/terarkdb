@@ -1027,12 +1027,11 @@ public:
     std::thread(
      [this, data = std::move(data)](std::promise<std::string>&& prom) {
       try {
-        std::string result =
-            terark::ProcPipeStream::run_cmd(m_cmd, data, "/tmp/Compaction-");
+        std::string result = terark::vfork_cmd(m_cmd, data, "/tmp/compact-");
 
         fprintf(stderr,
-            "INFO: CompactionCmd(%s, %s): returned result[len=%zd]: %s\n",
-            m_cmd.c_str(), Slice(data).ToString(true).c_str(),
+            "INFO: CompactCmd(%s, datalen=%zd) = result[len=%zd]: %s\n",
+            m_cmd.c_str(), data.size(),
             result.size(), Slice(result).ToString(true).c_str());
 
         prom.set_value(result);
