@@ -1,6 +1,15 @@
 
 ## CHANGELOG
+
+2020-01-05
+- Remove terark index build pipeline
+- Fix PatriciaTrieMemTable bugs
+
+2019-12-30
+- Refactor terark env logic
+
 2019-12-29
+- Level based lazy compaction dev completed
 - Add Redis-protocol OPS Console
 
 2019-12-16
