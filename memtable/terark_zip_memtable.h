@@ -54,7 +54,7 @@ class MemWriterToken : public terark::Patricia::WriterToken {
 
 namespace terark_memtable_details {
 
-typedef std::array<MemPatricia*, 32> tries_t;
+typedef std::array<MemPatricia *, 32> tries_t;
 
 enum class ConcurrentType { Native, None };
 
@@ -236,7 +236,8 @@ class PatriciaRepIterator : public MemTableRep::Iterator,
   void Rebuild(func_t &&callback_func);
 
  public:
-  PatriciaRepIterator(terark_memtable_details::tries_t& tries, size_t tries_size);
+  PatriciaRepIterator(terark_memtable_details::tries_t &tries,
+                      size_t tries_size);
 
   virtual ~PatriciaRepIterator();
 
@@ -319,7 +320,8 @@ class PatriciaTrieRepFactory : public MemTableRepFactory {
  public:
   PatriciaTrieRepFactory(
       std::shared_ptr<class MemTableRepFactory> &fallback,
-      terark_memtable_details::ConcurrentType concurrent_type = terark_memtable_details::ConcurrentType::Native,
+      terark_memtable_details::ConcurrentType concurrent_type =
+          terark_memtable_details::ConcurrentType::Native,
       terark_memtable_details::PatriciaKeyType patricia_key_type =
           terark_memtable_details::PatriciaKeyType::UserKey,
       int64_t write_buffer_size = 512LL * 1048576)

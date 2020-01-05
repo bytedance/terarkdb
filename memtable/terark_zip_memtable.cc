@@ -27,7 +27,7 @@ inline const char *build_key(terark::fstring user_key, uint64_t tag,
   return buffer->data();
 }
 
-}
+}  // namespace
 
 namespace rocksdb {
 
@@ -84,7 +84,7 @@ PatriciaTrieRep::PatriciaTrieRep(details::ConcurrentType concurrent_type,
     concurrent_level_ = terark::Patricia::ConcurrentLevel::MultiWriteMultiRead;
   else
     concurrent_level_ = terark::Patricia::ConcurrentLevel::OneWriteMultiRead;
-  trie_vec_[0] = 
+  trie_vec_[0] =
       new MemPatricia(sizeof(uint32_t), write_buffer_size_, concurrent_level_);
   trie_vec_size_ = 1;
 }
@@ -103,10 +103,11 @@ bool PatriciaTrieRep::Contains(const Slice &internal_key) const {
   for (size_t i = 0; i < trie_vec_size_; ++i) {
     auto token = trie_vec_[i]->acquire_tls_reader_token();
     if ((trie_vec_[i])->lookup(find_key, token)) {
-      auto vector =
-          (details::tag_vector_t *)(trie_vec_[i])->mem_get(*(uint32_t *)token->value());
+      auto vector = (details::tag_vector_t *)(trie_vec_[i])
+                        ->mem_get(*(uint32_t *)token->value());
       size_t size = vector->size;
-      auto data = (details::tag_vector_t::data_t *)trie_vec_[i]->mem_get(vector->loc);
+      auto data =
+          (details::tag_vector_t::data_t *)trie_vec_[i]->mem_get(vector->loc);
       return terark::binary_search_0(data, size, tag);
     }
   }
@@ -178,10 +179,12 @@ void PatriciaTrieRep::Get(const LookupKey &k, void *callback_args,
       uint32_t loc = *(uint32_t *)token->value();
       auto vector = (details::tag_vector_t *)trie_vec_[i]->mem_get(loc);
       size_t size = vector->size;
-      auto data = (details::tag_vector_t::data_t *)trie_vec_[i]->mem_get(vector->loc);
+      auto data =
+          (details::tag_vector_t::data_t *)trie_vec_[i]->mem_get(vector->loc);
       size_t idx = terark::upper_bound_0(data, size, tag) - 1;
       if (idx != size_t(-1)) {
-        heap.emplace_back(HeapItem{(uint32_t)idx, loc, data[idx].tag, trie_vec_[i]});
+        heap.emplace_back(
+            HeapItem{(uint32_t)idx, loc, data[idx].tag, trie_vec_[i]});
       }
       break;
     }
@@ -305,9 +308,8 @@ bool PatriciaTrieRep::InsertKeyValue(const Slice &internal_key,
       if (size_t(write_buffer_size_) < bound)
         write_buffer_size_ = std::min(bound + (16 << 20), size_t(-1) >> 1);
     }
-    trie_vec_[trie_vec_size_] = new MemPatricia(sizeof(uint32_t),
-                                                write_buffer_size_,
-                                                concurrent_level_);
+    trie_vec_[trie_vec_size_] = new MemPatricia(
+        sizeof(uint32_t), write_buffer_size_, concurrent_level_);
     trie_vec_size_++;
   };
   // tool lambda fn end
@@ -317,10 +319,11 @@ bool PatriciaTrieRep::InsertKeyValue(const Slice &internal_key,
     for (size_t i = 0; i < trie_vec_size_; ++i) {
       auto token = trie_vec_[i]->acquire_tls_reader_token();
       if (trie_vec_[i]->lookup(key, token)) {
-        auto vector =
-            (details::tag_vector_t *)trie_vec_[i]->mem_get(*(uint32_t *)token->value());
+        auto vector = (details::tag_vector_t *)trie_vec_[i]->mem_get(
+            *(uint32_t *)token->value());
         size_t size = vector->size;
-        auto data = (details::tag_vector_t::data_t *)trie_vec_[i]->mem_get(vector->loc);
+        auto data =
+            (details::tag_vector_t::data_t *)trie_vec_[i]->mem_get(vector->loc);
         if (terark::binary_search_0(data, size, tag)) {
           return false;
         }
@@ -504,8 +507,8 @@ void PatriciaRepIterator<heap_mode>::Rebuild(func_t &&callback_func) {
 }
 
 template <bool heap_mode>
-PatriciaRepIterator<heap_mode>::PatriciaRepIterator(
-    details::tries_t& tries, size_t tries_size)
+PatriciaRepIterator<heap_mode>::PatriciaRepIterator(details::tries_t &tries,
+                                                    size_t tries_size)
     : direction_(0) {
   assert(tries.size() > 0);
   if (heap_mode) {
@@ -771,7 +774,8 @@ MemTableRepFactory *NewPatriciaTrieRepFactory(
   details::ConcurrentType concurrent_type = details::ConcurrentType::Native;
   int64_t write_buffer_size = 64 * 1024 * 1024;
   std::shared_ptr<class MemTableRepFactory> fallback;
-  details::PatriciaKeyType patricia_key_type = details::PatriciaKeyType::UserKey;
+  details::PatriciaKeyType patricia_key_type =
+      details::PatriciaKeyType::UserKey;
 
   auto c = options.find("concurrent_type");
   if (c != options.end() && c->second == "none")
