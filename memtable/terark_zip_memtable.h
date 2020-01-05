@@ -2,6 +2,7 @@
 // Oct. 21. 2019.
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cstdlib>
 #include <iterator>
@@ -23,34 +24,6 @@
 #include "util/arena.h"
 
 namespace rocksdb {
-
-namespace terark_memtable_details {
-
-enum class ConcurrentType { Native, None };
-
-enum class PatriciaKeyType { UserKey, FullKey };
-
-enum class InsertResult { Success, Duplicated, Fail, InsufficientMemory };
-
-struct tag_vector_t {
-  uint32_t size;
-  uint32_t loc;
-  struct data_t {
-    uint64_t tag;
-    uint32_t loc;
-    operator uint64_t() const { return tag; }
-  };
-  bool full() { return terark::fast_popcount(size) == 1; }
-};
-
-struct VectorData {
-  size_t size;
-  const typename tag_vector_t::data_t *data;
-};
-
-}  // namespace terark_memtable_details
-
-namespace detail = terark_memtable_details;
 
 // data structure inheriting terark's cspptrie for supporting memtable
 class MemPatricia : public terark::MainPatricia {
@@ -79,20 +52,50 @@ class MemWriterToken : public terark::Patricia::WriterToken {
   bool init_value(void *valptr, size_t valsize) noexcept;
 };
 
+namespace terark_memtable_details {
+
+typedef std::array<MemPatricia*, 32> tries_t;
+
+enum class ConcurrentType { Native, None };
+
+enum class PatriciaKeyType { UserKey, FullKey };
+
+enum class InsertResult { Success, Duplicated, Fail, InsufficientMemory };
+
+struct tag_vector_t {
+  uint32_t size;
+  uint32_t loc;
+  struct data_t {
+    uint64_t tag;
+    uint32_t loc;
+    operator uint64_t() const { return tag; }
+  };
+  bool full() { return terark::fast_popcount(size) == 1; }
+};
+
+struct VectorData {
+  size_t size;
+  const typename tag_vector_t::data_t *data;
+};
+
+}  // namespace terark_memtable_details
+
 // Patricia trie memtable rep
 class PatriciaTrieRep : public MemTableRep {
   terark::Patricia::ConcurrentLevel concurrent_level_;
-  detail::PatriciaKeyType patricia_key_type_;
+  terark_memtable_details::PatriciaKeyType patricia_key_type_;
   bool handle_duplicate_;
   std::atomic_bool immutable_;
-  std::vector<MemPatricia *> trie_vec_;
+  terark_memtable_details::tries_t trie_vec_;
+  size_t trie_vec_size_;
   int64_t write_buffer_size_;
   static const int64_t size_limit_ = 1LL << 30;
+  std::mutex mutex_;
 
  public:
   // Create a new patricia trie memtable rep with following options
-  PatriciaTrieRep(detail::ConcurrentType concurrent_type,
-                  detail::PatriciaKeyType patricia_key_type,
+  PatriciaTrieRep(terark_memtable_details::ConcurrentType concurrent_type,
+                  terark_memtable_details::PatriciaKeyType patricia_key_type,
                   bool handle_duplicate, intptr_t write_buffer_size,
                   Allocator *allocator,
                   const MemTableRep::KeyComparator &compare);
@@ -154,7 +157,7 @@ class PatriciaRepIterator : public MemTableRep::Iterator,
 
     struct VectorData {
       size_t size;
-      const typename detail::tag_vector_t::data_t *data;
+      const typename terark_memtable_details::tag_vector_t::data_t *data;
     };
 
     HeapItem(terark::Patricia *trie) : tag(uint64_t(-1)), index(size_t(-1)) {
@@ -230,7 +233,7 @@ class PatriciaRepIterator : public MemTableRep::Iterator,
   void Rebuild(func_t &&callback_func);
 
  public:
-  PatriciaRepIterator(std::vector<MemPatricia *> tries);
+  PatriciaRepIterator(terark_memtable_details::tries_t& tries, size_t tries_size);
 
   virtual ~PatriciaRepIterator();
 
@@ -306,16 +309,16 @@ class PatriciaRepIterator : public MemTableRep::Iterator,
 class PatriciaTrieRepFactory : public MemTableRepFactory {
  private:
   std::shared_ptr<class MemTableRepFactory> fallback_;
-  detail::ConcurrentType concurrent_type_;
-  detail::PatriciaKeyType patricia_key_type_;
+  terark_memtable_details::ConcurrentType concurrent_type_;
+  terark_memtable_details::PatriciaKeyType patricia_key_type_;
   int64_t write_buffer_size_;
 
  public:
   PatriciaTrieRepFactory(
       std::shared_ptr<class MemTableRepFactory> &fallback,
-      detail::ConcurrentType concurrent_type = detail::ConcurrentType::Native,
-      detail::PatriciaKeyType patricia_key_type =
-          detail::PatriciaKeyType::UserKey,
+      terark_memtable_details::ConcurrentType concurrent_type = terark_memtable_details::ConcurrentType::Native,
+      terark_memtable_details::PatriciaKeyType patricia_key_type =
+          terark_memtable_details::PatriciaKeyType::UserKey,
       int64_t write_buffer_size = 512LL * 1048576)
       : fallback_(fallback),
         concurrent_type_(concurrent_type),
@@ -346,7 +349,7 @@ class PatriciaTrieRepFactory : public MemTableRepFactory {
   virtual const char *Name() const override { return "PatriciaTrieRepFactory"; }
 
   virtual bool IsInsertConcurrentlySupported() const override {
-    return concurrent_type_ != detail::ConcurrentType::None;
+    return concurrent_type_ != terark_memtable_details::ConcurrentType::None;
   }
 
   virtual bool CanHandleDuplicatedKey() const override { return true; }
