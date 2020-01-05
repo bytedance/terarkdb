@@ -138,7 +138,9 @@ class PatriciaTrieRep : public MemTableRep {
   }
 
   virtual void MarkReadOnly() override {
-    for (auto iter : trie_vec_) iter->set_readonly();
+    for (size_t i = 0; i < trie_vec_size_; ++i) {
+      trie_vec_[i]->set_readonly();
+    }
     immutable_ = true;
   }
 };
