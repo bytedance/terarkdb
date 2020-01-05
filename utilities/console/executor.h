@@ -5,7 +5,6 @@
 #include <memory>
 #include <string>
 
-#include "db/db_impl.h"
 #include "server.h"
 #include "string_view.hpp"
 #include "util/autovector.h"

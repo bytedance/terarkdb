@@ -1,6 +1,7 @@
 #include <deque>
 #include <map>
 
+#include "db/db_impl.h"
 #include "executor.h"
 #include "string_view.hpp"
 #include "util/autovector.h"

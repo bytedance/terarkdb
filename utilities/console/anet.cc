@@ -48,6 +48,10 @@
 
 #include "anet.h"
 
+#if __clang__
+#pragma clang diagnostic ignored "-Wshorten-64-to-32"
+#endif
+
 extern "C" {
 
 static void anetSetError(char *err, const char *fmt, ...) {

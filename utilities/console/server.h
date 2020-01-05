@@ -6,11 +6,14 @@
 #include <string>
 #include <thread>
 
-#include "db/db_impl.h"
 #include "gujia.h"
 #include "gujia_impl.h"
 #include "resp_machine.h"
 #include "rocksdb/env.h"
+
+namespace rocksdb {
+class DBImpl;
+}
 
 namespace cheapis {
 using namespace gujia;
