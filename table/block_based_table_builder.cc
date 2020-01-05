@@ -418,9 +418,9 @@ Status BlockBasedTableBuilder::Add(const Slice& key,
     return s;
   }
   const Slice& value = lazy_value.slice();
-  ValueType value_type = ExtractValueType(key);
-  if (r->props.num_entries > 0) {
-    assert(r->internal_comparator.Compare(key, Slice(r->last_key)) > 0);
+  if (r->props.num_entries > 0 &&
+      r->internal_comparator.Compare(key, Slice(r->last_key)) <= 0) {
+    return Status::Corruption("BlockBasedTableBuilder::Add: overlapping key");
   }
 
   auto should_flush = r->flush_block_policy->Update(key, value);
@@ -451,6 +451,7 @@ Status BlockBasedTableBuilder::Add(const Slice& key,
   r->props.num_entries++;
   r->props.raw_key_size += key.size();
   r->props.raw_value_size += value.size();
+  ValueType value_type = ExtractValueType(key);
   if (value_type == kTypeDeletion || value_type == kTypeSingleDeletion) {
     r->props.num_deletions++;
   } else if (value_type == kTypeMerge) {
