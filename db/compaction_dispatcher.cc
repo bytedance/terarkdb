@@ -996,6 +996,18 @@ void RemoteCompactionDispatcher::Worker::DebugSerializeCheckResult(Slice data) {
     LittleEndianDataInput<MemIO> dio; dio.set((void*)(data.data_), data.size());
     CompactionWorkerResult res;
     dio >> res;
+    string_appender<> str;
+    str << "CompactionWorkerResult\n";
+    str << "\tstatus = " << res.status.ToString() << "\n";
+    str << "\tactual_start = " << res.actual_start.DebugString(true) << "\n";
+    str << "\tactual_end   = " << res.actual_end.DebugString(true) << "\n";
+    str << "\tfiles[size=" << res.files.size() << "]\n";
+    str << "\tstat_all[size=" << res.stat_all.size()
+        << "] = " << res.stat_all << "\n";
+    intptr_t wlen = ::write(2, str.data(), str.size());
+    if (size_t(wlen) != str.size()) {
+      abort();
+    }
 }
 
 const char* RemoteCompactionDispatcher::Name() const {
