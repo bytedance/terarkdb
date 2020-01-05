@@ -87,6 +87,7 @@ PatriciaTrieRep::PatriciaTrieRep(details::ConcurrentType concurrent_type,
   trie_vec_[0] =
       new MemPatricia(sizeof(uint32_t), write_buffer_size_, concurrent_level_);
   trie_vec_size_ = 1;
+  overhead_ = trie_vec_[0]->mem_size_inline();
 }
 
 size_t PatriciaTrieRep::ApproximateMemoryUsage() {
@@ -94,7 +95,8 @@ size_t PatriciaTrieRep::ApproximateMemoryUsage() {
   for (size_t i = 0; i < trie_vec_size_; ++i) {
     sum += trie_vec_[i]->mem_size_inline();
   }
-  return sum;
+  assert(sum >= overhead_);
+  return sum - overhead_;
 }
 
 bool PatriciaTrieRep::Contains(const Slice &internal_key) const {

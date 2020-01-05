@@ -91,10 +91,11 @@ class PatriciaTrieRep : public MemTableRep {
   std::atomic_bool immutable_;
   terark_memtable_details::tries_t trie_vec_;
   size_t trie_vec_size_;
+  size_t overhead_; // this overhead is for new memtable size check
   int64_t write_buffer_size_;
   static const int64_t size_limit_ = 1LL << 30;
   std::mutex mutex_;
-
+  
  public:
   // Create a new patricia trie memtable rep with following options
   PatriciaTrieRep(terark_memtable_details::ConcurrentType concurrent_type,
