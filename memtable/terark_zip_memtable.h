@@ -32,9 +32,11 @@ enum class PatriciaKeyType { UserKey, FullKey };
 
 enum class InsertResult { Success, Duplicated, Fail, InsufficientMemory };
 
+#pragma pack(push)
+#pragma pack(4)
 struct tag_vector_t {
-  uint32_t size;
-  uint32_t loc;
+  std::atomic_uint32_t size;
+  std::atomic_uint32_t loc;
   struct data_t {
     uint64_t tag;
     uint32_t loc;
@@ -42,6 +44,7 @@ struct tag_vector_t {
   };
   bool full() { return terark::fast_popcount(size) == 1; }
 };
+#pragma pack(pop)
 
 struct VectorData {
   size_t size;
