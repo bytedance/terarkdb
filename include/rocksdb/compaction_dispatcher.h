@@ -36,7 +36,7 @@ class RemoteCompactionDispatcher : public CompactionDispatcher {
 
   virtual const char* Name() const override;
 
-  virtual std::future<std::string> DoCompaction(Slice data) = 0;
+  virtual std::future<std::string> DoCompaction(std::string data) = 0;
 
   class Worker : boost::noncopyable {
    public:

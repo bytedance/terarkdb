@@ -319,7 +319,8 @@ RemoteCompactionDispatcher::StartCompaction(
       return result;
     }
   };
-  return Result(DoCompaction(stream.str()));
+  std::future<std::string> str_result = DoCompaction(stream.str());
+  return Result(std::move(str_result));
 }
 
 static bool g_isCompactionWorkerNode = false;
@@ -358,7 +359,7 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(Slice data) {
   ImmutableDBOptions immutable_db_options = ImmutableDBOptions(DBOptions());
   ColumnFamilyOptions cf_options;
   if (context.user_comparator.empty()) {
-    return make_error(Status::Corruption("Bad comparator name !"));
+    return make_error(Status::Corruption("Comparator name is empty!"));
   } else {
     cf_options.comparator = Comparator::create(context.user_comparator);
     if (!cf_options.comparator) {
@@ -1020,10 +1021,11 @@ class CommandLineCompactionDispatcher : public RemoteCompactionDispatcher {
 public:
   CommandLineCompactionDispatcher(std::string&& cmd) : m_cmd(std::move(cmd)) {}
 
-  std::future<std::string> DoCompaction(Slice data) override {
+  std::future<std::string> DoCompaction(std::string data) override {
     std::promise<std::string> promise;
     std::future<std::string> future = promise.get_future();
-    std::thread([this, data](std::promise<std::string>&& prom) {
+    std::thread(
+     [this, data = std::move(data)](std::promise<std::string>&& prom) {
       try {
         std::string result =
             terark::ProcPipeStream::run_cmd(m_cmd, data, "/tmp/Compaction-");
