@@ -420,6 +420,7 @@ Status BlockBasedTableBuilder::Add(const Slice& key,
   const Slice& value = lazy_value.slice();
   if (r->props.num_entries > 0 &&
       r->internal_comparator.Compare(key, Slice(r->last_key)) <= 0) {
+    assert(r->internal_comparator.Compare(key, Slice(r->last_key)) > 0);
     return Status::Corruption("BlockBasedTableBuilder::Add: overlapping key");
   }
 
@@ -681,7 +682,6 @@ Status BlockBasedTableBuilder::InsertBlockInCache(const Slice& block_contents,
   Cache* block_cache_compressed = r->table_options.block_cache_compressed.get();
 
   if (type != kNoCompression && block_cache_compressed != nullptr) {
-
     size_t size = block_contents.size();
 
     auto ubuf =
