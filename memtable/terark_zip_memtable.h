@@ -25,35 +25,6 @@
 
 namespace rocksdb {
 
-namespace terark_memtable_details {
-
-enum class ConcurrentType { Native, None };
-
-enum class PatriciaKeyType { UserKey, FullKey };
-
-enum class InsertResult { Success, Duplicated, Fail, InsufficientMemory };
-
-#pragma pack(push)
-#pragma pack(4)
-struct tag_vector_t {
-  std::atomic_uint32_t size;
-  std::atomic_uint32_t loc;
-  struct data_t {
-    uint64_t tag;
-    uint32_t loc;
-    operator uint64_t() const { return tag; }
-  };
-  bool full() { return terark::fast_popcount(size) == 1; }
-};
-#pragma pack(pop)
-
-struct VectorData {
-  size_t size;
-  const typename tag_vector_t::data_t *data;
-};
-
-}  // namespace terark_memtable_details
-
 // data structure inheriting terark's cspptrie for supporting memtable
 class MemPatricia : public terark::MainPatricia {
  public:
@@ -91,6 +62,8 @@ enum class PatriciaKeyType { UserKey, FullKey };
 
 enum class InsertResult { Success, Duplicated, Fail, InsufficientMemory };
 
+#pragma pack(push)
+#pragma pack(4)
 struct tag_vector_t {
   uint32_t size;
   uint32_t loc;
@@ -101,6 +74,7 @@ struct tag_vector_t {
   };
   bool full() { return terark::fast_popcount(size) == 1; }
 };
+#pragma pack(pop)
 
 struct VectorData {
   size_t size;
