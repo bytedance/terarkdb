@@ -1,11 +1,20 @@
+#include "server.h"
+
 #include <cerrno>
 #include <cstring>
 
 #include "anet.h"
+#include "db/db_impl.h"
 #include "executor.h"
 #include "rocksdb/env.h"
-#include "server.h"
 #include "util/logging.h"
+
+#if __clang__
+#pragma clang diagnostic ignored "-Wunused-const-variable"
+#endif
+#ifdef __GNUC__
+#pragma GCC diagnostic ignored "-Wunused-const-variable"
+#endif
 
 namespace cheapis {
 using namespace rocksdb;
@@ -280,6 +289,10 @@ int ServerMain(ServerRunner *runner, rocksdb::DBImpl *db,
   (void)path;
   (void)env;
   (void)log;
+  (void)ServerCron;
+  (void)ExecuteTasks;
+  (void)WriteToClient;
+  (void)ReadFromClient;
   runner->closed_ = true;
   return 0;
 #endif

@@ -1207,17 +1207,20 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
       }
       last_end_key = ExtractUserKey(ranges.back().point[1]);
     }
+    assert(!level_ranges.empty());
     level_ranges.front() = PartitionRangeWithDepend(
         level_ranges.front(), ranges, icomp, PartitionType::kMerge);
   }
+  std::vector<RangeWithDepend> ranges;
   if (!level_ranges.empty()) {
     s = AdjustRange(&icomp, &version_iter, arena, bound_builder.largest,
                     level_ranges.front());
     if (!s.ok()) {
       return s;
     }
+    ranges = std::move(level_ranges.front());
+    level_ranges.clear();
   }
-  auto& ranges = level_ranges.front();
 
   auto edit_add_file = [edit](int level, const FileMetaData* f) {
     // don't call edit->AddFile(level, *f)

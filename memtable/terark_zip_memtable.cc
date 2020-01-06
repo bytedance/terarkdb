@@ -1,9 +1,9 @@
 #include "terark_zip_memtable.h"
 
-namespace rocksdb {
+namespace {
 
 inline const char *build_key(terark::fstring user_key, uint64_t tag,
-                             valvec<char> *buffer) {
+                             terark::valvec<char> *buffer) {
   buffer->resize(0);
   buffer->reserve(user_key.size() + 8);
   buffer->append(user_key.data(), user_key.size());
@@ -12,7 +12,7 @@ inline const char *build_key(terark::fstring user_key, uint64_t tag,
                    sizeof(tag));
   } else {
     char buf[sizeof(tag)];
-    EncodeFixed64(buf, tag);
+    rocksdb::EncodeFixed64(buf, tag);
     buffer->append(buf, sizeof(buf));
   }
   return buffer->data();
@@ -23,11 +23,15 @@ inline const char *build_key(terark::fstring user_key, uint64_t tag,
   buffer->resize(0);
   buffer->reserve(user_key.size() + 8);
   buffer->append(user_key.data(), user_key.size());
-  PutFixed64(buffer, tag);
+  rocksdb::PutFixed64(buffer, tag);
   return buffer->data();
 }
 
-namespace detail = terark_memtable_details;
+}  // namespace
+
+namespace rocksdb {
+
+namespace details = terark_memtable_details;
 
 bool MemWriterToken::init_value(void *valptr, size_t valsize) noexcept {
   assert(valsize == sizeof(uint32_t));
@@ -37,19 +41,19 @@ bool MemWriterToken::init_value(void *valptr, size_t valsize) noexcept {
   size_t value_size = VarintLength(value_.size()) + value_.size();
   auto trie = static_cast<MemPatricia *>(m_trie);
   do {
-    vector_loc = trie->mem_alloc(sizeof(detail::tag_vector_t));
+    vector_loc = trie->mem_alloc(sizeof(details::tag_vector_t));
     if (vector_loc == MemPatricia::mem_alloc_fail) break;
-    data_loc = trie->mem_alloc(sizeof(detail::tag_vector_t::data_t));
+    data_loc = trie->mem_alloc(sizeof(details::tag_vector_t::data_t));
     if (data_loc == MemPatricia::mem_alloc_fail) break;
     value_loc = trie->mem_alloc(value_size);
     if (value_loc == MemPatricia::mem_alloc_fail) break;
     char *value_dst = EncodeVarint32((char *)trie->mem_get(value_loc),
                                      (uint32_t)value_.size());
     memcpy(value_dst, value_.data(), value_.size());
-    auto *data = (detail::tag_vector_t::data_t *)trie->mem_get(data_loc);
+    auto *data = (details::tag_vector_t::data_t *)trie->mem_get(data_loc);
     data->loc = (uint32_t)value_loc;
     data->tag = tag_;
-    auto *vector = (detail::tag_vector_t *)trie->mem_get(vector_loc);
+    auto *vector = (details::tag_vector_t *)trie->mem_get(vector_loc);
     vector->loc = (uint32_t)data_loc;
     vector->size = 1;
     uint32_t u32_vector_loc = (uint32_t)vector_loc;
@@ -59,14 +63,14 @@ bool MemWriterToken::init_value(void *valptr, size_t valsize) noexcept {
   if (value_loc != MemPatricia::mem_alloc_fail)
     trie->mem_free(value_loc, value_size);
   if (data_loc != MemPatricia::mem_alloc_fail)
-    trie->mem_free(data_loc, sizeof(detail::tag_vector_t::data_t));
+    trie->mem_free(data_loc, sizeof(details::tag_vector_t::data_t));
   if (vector_loc != MemPatricia::mem_alloc_fail)
-    trie->mem_free(vector_loc, sizeof(detail::tag_vector_t));
+    trie->mem_free(vector_loc, sizeof(details::tag_vector_t));
   return false;
 }
 
-PatriciaTrieRep::PatriciaTrieRep(detail::ConcurrentType concurrent_type,
-                                 detail::PatriciaKeyType patricia_key_type,
+PatriciaTrieRep::PatriciaTrieRep(details::ConcurrentType concurrent_type,
+                                 details::PatriciaKeyType patricia_key_type,
                                  bool handle_duplicate,
                                  intptr_t write_buffer_size,
                                  Allocator *allocator,
@@ -76,30 +80,36 @@ PatriciaTrieRep::PatriciaTrieRep(detail::ConcurrentType concurrent_type,
   patricia_key_type_ = patricia_key_type;
   handle_duplicate_ = handle_duplicate;
   write_buffer_size_ = write_buffer_size;
-  if (concurrent_type == detail::ConcurrentType::Native)
+  if (concurrent_type == details::ConcurrentType::Native)
     concurrent_level_ = terark::Patricia::ConcurrentLevel::MultiWriteMultiRead;
   else
     concurrent_level_ = terark::Patricia::ConcurrentLevel::OneWriteMultiRead;
-  trie_vec_.emplace_back(
-      new MemPatricia(sizeof(uint32_t), write_buffer_size_, concurrent_level_));
+  trie_vec_[0] =
+      new MemPatricia(sizeof(uint32_t), write_buffer_size_, concurrent_level_);
+  trie_vec_size_ = 1;
+  overhead_ = trie_vec_[0]->mem_size_inline();
 }
 
 size_t PatriciaTrieRep::ApproximateMemoryUsage() {
   size_t sum = 0;
-  for (auto trie : trie_vec_) sum += trie->mem_size_inline();
-  return sum;
+  for (size_t i = 0; i < trie_vec_size_; ++i) {
+    sum += trie_vec_[i]->mem_size_inline();
+  }
+  assert(sum >= overhead_);
+  return sum - overhead_;
 }
 
 bool PatriciaTrieRep::Contains(const Slice &internal_key) const {
   terark::fstring find_key(internal_key.data(), internal_key.size() - 8);
   uint64_t tag = ExtractInternalKeyFooter(internal_key);
-  for (auto trie : trie_vec_) {
-    auto token = trie->acquire_tls_reader_token();
-    if (trie->lookup(find_key, token)) {
-      auto vector =
-          (detail::tag_vector_t *)trie->mem_get(*(uint32_t *)token->value());
+  for (size_t i = 0; i < trie_vec_size_; ++i) {
+    auto token = trie_vec_[i]->acquire_tls_reader_token();
+    if ((trie_vec_[i])->lookup(find_key, token)) {
+      auto vector = (details::tag_vector_t *)(trie_vec_[i])
+                        ->mem_get(*(uint32_t *)token->value());
       size_t size = vector->size;
-      auto data = (detail::tag_vector_t::data_t *)trie->mem_get(vector->loc);
+      auto data =
+          (details::tag_vector_t::data_t *)trie_vec_[i]->mem_get(vector->loc);
       return terark::binary_search_0(data, size, tag);
     }
   }
@@ -133,8 +143,8 @@ void PatriciaTrieRep::Get(const LookupKey &k, void *callback_args,
       auto trie = reinterpret_cast<MemPatricia *>(context->data[0]);
       auto loc = static_cast<uint32_t>(context->data[1]);
       auto idx = static_cast<uint32_t>(context->data[2]);
-      auto vector = (detail::tag_vector_t *)trie->mem_get(loc);
-      auto data = (detail::tag_vector_t::data_t *)trie->mem_get(vector->loc);
+      auto vector = (details::tag_vector_t *)trie->mem_get(loc);
+      auto data = (details::tag_vector_t::data_t *)trie->mem_get(vector->loc);
       set_slice(buffer, GetLengthPrefixedSlice(
                             (const char *)trie->mem_get(data[idx].loc)));
       return Status::OK();
@@ -161,20 +171,22 @@ void PatriciaTrieRep::Get(const LookupKey &k, void *callback_args,
 
   valvec<HeapItem> &heap = tls_ctx.heap;
   assert(heap.empty());
-  heap.reserve(trie_vec_.size());
+  heap.reserve(trie_vec_size_);
 
   // initialization
-  for (auto trie : trie_vec_) {
-    auto token = trie->acquire_tls_reader_token();
+  for (size_t i = 0; i < trie_vec_size_; ++i) {
+    auto token = trie_vec_[i]->acquire_tls_reader_token();
     token->update_lazy();
-    if (trie->lookup(find_key, token)) {
+    if (trie_vec_[i]->lookup(find_key, token)) {
       uint32_t loc = *(uint32_t *)token->value();
-      auto vector = (detail::tag_vector_t *)trie->mem_get(loc);
+      auto vector = (details::tag_vector_t *)trie_vec_[i]->mem_get(loc);
       size_t size = vector->size;
-      auto data = (detail::tag_vector_t::data_t *)trie->mem_get(vector->loc);
+      auto data =
+          (details::tag_vector_t::data_t *)trie_vec_[i]->mem_get(vector->loc);
       size_t idx = terark::upper_bound_0(data, size, tag) - 1;
       if (idx != size_t(-1)) {
-        heap.emplace_back(HeapItem{(uint32_t)idx, loc, data[idx].tag, trie});
+        heap.emplace_back(
+            HeapItem{(uint32_t)idx, loc, data[idx].tag, trie_vec_[i]});
       }
       break;
     }
@@ -194,9 +206,9 @@ void PatriciaTrieRep::Get(const LookupKey &k, void *callback_args,
       continue;
     }
     --item.idx;
-    auto vector = (detail::tag_vector_t *)(item.trie->mem_get(item.loc));
+    auto vector = (details::tag_vector_t *)(item.trie->mem_get(item.loc));
     auto data =
-        (detail::tag_vector_t::data_t *)(item.trie->mem_get(vector->loc));
+        (details::tag_vector_t::data_t *)(item.trie->mem_get(vector->loc));
     item.tag = data[item.idx].tag;
     terark::adjust_heap_top(heap.begin(), heap.size(), heap_comp);
   }
@@ -205,16 +217,16 @@ void PatriciaTrieRep::Get(const LookupKey &k, void *callback_args,
 
 MemTableRep::Iterator *PatriciaTrieRep::GetIterator(Arena *arena) {
   MemTableRep::Iterator *iter;
-  if (trie_vec_.size() == 1) {
+  if (trie_vec_size_ == 1) {
     typedef PatriciaRepIterator<false> iter_t;
     iter = arena ? new (arena->AllocateAligned(sizeof(iter_t)))
-                       iter_t(trie_vec_)
-                 : new iter_t(trie_vec_);
+                       iter_t(trie_vec_, 1)
+                 : new iter_t(trie_vec_, 1);
   } else {
     typedef PatriciaRepIterator<true> iter_t;
     iter = arena ? new (arena->AllocateAligned(sizeof(iter_t)))
-                       iter_t(trie_vec_)
-                 : new iter_t(trie_vec_);
+                       iter_t(trie_vec_, trie_vec_size_)
+                 : new iter_t(trie_vec_, trie_vec_size_);
   }
   return iter;
 }
@@ -241,24 +253,22 @@ bool PatriciaTrieRep::InsertKeyValue(const Slice &internal_key,
     }
     uint32_t tmp_loc;
     if (!token->insert(key, &tmp_loc)) {
-      if (token->value() == nullptr)
-        return detail::InsertResult::InsufficientMemory;
       size_t vector_loc = *(uint32_t *)token->value();
-      auto *vector = (detail::tag_vector_t *)trie->mem_get(vector_loc);
+      auto *vector = (details::tag_vector_t *)trie->mem_get(vector_loc);
       size_t data_loc = vector->loc;
-      auto *data = (detail::tag_vector_t::data_t *)trie->mem_get(data_loc);
+      auto *data = (details::tag_vector_t::data_t *)trie->mem_get(data_loc);
       uint32_t size = vector->size;
       assert(size > 0);
       if ((tag >> 8) == (data[size - 1].tag >> 8)) {
         vector->size = size;
-        return detail::InsertResult::Duplicated;
+        return details::InsertResult::Duplicated;
       }
       assert(tag > data[size - 1].tag);
       size_t value_size = VarintLength(value.size()) + value.size();
       size_t value_loc = trie->mem_alloc(value_size);
       if (value_loc == MemPatricia::mem_alloc_fail) {
         vector->size = size;
-        return detail::InsertResult::Fail;
+        return details::InsertResult::Fail;
       }
       memcpy(EncodeVarint32((char *)trie->mem_get(value_loc),
                             (uint32_t)value.size()),
@@ -267,29 +277,29 @@ bool PatriciaTrieRep::InsertKeyValue(const Slice &internal_key,
         data[size].loc = (uint32_t)value_loc;
         data[size].tag = tag;
         vector->size = size + 1;
-        return detail::InsertResult::Success;
+        return details::InsertResult::Success;
       }
       size_t cow_data_loc =
-          trie->mem_alloc(sizeof(detail::tag_vector_t::data_t) * size * 2);
+          trie->mem_alloc(sizeof(details::tag_vector_t::data_t) * size * 2);
       if (cow_data_loc == MemPatricia::mem_alloc_fail) {
         vector->size = size;
         trie->mem_free(value_loc, value_size);
-        return detail::InsertResult::Fail;
+        return details::InsertResult::Fail;
       }
       auto *cow_data =
-          (detail::tag_vector_t::data_t *)trie->mem_get(cow_data_loc);
-      memcpy(cow_data, data, sizeof(detail::tag_vector_t::data_t) * size);
+          (details::tag_vector_t::data_t *)trie->mem_get(cow_data_loc);
+      memcpy(cow_data, data, sizeof(details::tag_vector_t::data_t) * size);
       cow_data[size].loc = (uint32_t)value_loc;
       cow_data[size].tag = tag;
       vector->loc = (uint32_t)cow_data_loc;
       vector->size = size + 1;
       trie->mem_lazy_free(data_loc,
-                          sizeof(detail::tag_vector_t::data_t) * size);
-      return detail::InsertResult::Success;
+                          sizeof(details::tag_vector_t::data_t) * size);
+      return details::InsertResult::Success;
     } else if (token->value() != nullptr) {
-      return detail::InsertResult::Success;
+      return details::InsertResult::Success;
     } else
-      return detail::InsertResult::Fail;
+      return details::InsertResult::Fail;
   };
 
   auto fn_create_new_trie = [&]() {
@@ -300,54 +310,68 @@ bool PatriciaTrieRep::InsertKeyValue(const Slice &internal_key,
       if (size_t(write_buffer_size_) < bound)
         write_buffer_size_ = std::min(bound + (16 << 20), size_t(-1) >> 1);
     }
-    return new MemPatricia(sizeof(uint32_t), write_buffer_size_,
-                           concurrent_level_);
+    trie_vec_[trie_vec_size_] = new MemPatricia(
+        sizeof(uint32_t), write_buffer_size_, concurrent_level_);
+    trie_vec_size_++;
   };
   // tool lambda fn end
   // function start
-  detail::InsertResult insert_result = detail::InsertResult::Fail;
   if (handle_duplicate_) {
     uint64_t tag = DecodeFixed64(key.end());
-    for (auto trie : trie_vec_) {
-      auto token = trie->acquire_tls_reader_token();
-      if (trie->lookup(key, token)) {
-        auto vector =
-            (detail::tag_vector_t *)trie->mem_get(*(uint32_t *)token->value());
+    for (size_t i = 0; i < trie_vec_size_; ++i) {
+      auto token = trie_vec_[i]->acquire_tls_reader_token();
+      if (trie_vec_[i]->lookup(key, token)) {
+        auto vector = (details::tag_vector_t *)trie_vec_[i]->mem_get(
+            *(uint32_t *)token->value());
         size_t size = vector->size;
-        auto data = (detail::tag_vector_t::data_t *)trie->mem_get(vector->loc);
+        auto data =
+            (details::tag_vector_t::data_t *)trie_vec_[i]->mem_get(vector->loc);
         if (terark::binary_search_0(data, size, tag)) {
           return false;
         }
       }
     }
   }
-  insert_result = fn_insert_impl(trie_vec_.back());
-  if (insert_result == detail::InsertResult::InsufficientMemory) {
-    trie_vec_.emplace_back(fn_create_new_trie());
-    insert_result = fn_insert_impl(trie_vec_.back());
+  details::InsertResult insert_result = details::InsertResult::Fail;
+  for (;;) {
+    insert_result = fn_insert_impl(trie_vec_[trie_vec_size_ - 1]);
+    if (insert_result == details::InsertResult::Duplicated) {
+      return !handle_duplicate_;
+    }
+    if (insert_result == details::InsertResult::Success) {
+      break;
+    } else {
+      assert(insert_result == details::InsertResult::Fail);
+      if (mutex_.try_lock()) {
+        fn_create_new_trie();
+      } else {
+        mutex_.lock();
+      }
+      mutex_.unlock();
+    }
   }
-  assert(insert_result != detail::InsertResult::Fail);
-  return insert_result == detail::InsertResult::Success;
+  assert(insert_result == details::InsertResult::Success);
+  return true;
 }
 
 template <bool heap_mode>
 typename PatriciaRepIterator<heap_mode>::HeapItem::VectorData
 PatriciaRepIterator<heap_mode>::HeapItem::GetVector() {
   auto trie = static_cast<terark::MainPatricia *>(handle.iter()->trie());
-  auto vector = (detail::tag_vector_t *)trie->mem_get(
+  auto vector = (details::tag_vector_t *)trie->mem_get(
       *(uint32_t *)handle.iter()->value());
   size_t size = vector->size;
   auto data =
-      (typename detail::tag_vector_t::data_t *)trie->mem_get(vector->loc);
+      (typename details::tag_vector_t::data_t *)trie->mem_get(vector->loc);
   return {size, data};
 }
 
 template <bool heap_mode>
 uint32_t PatriciaRepIterator<heap_mode>::HeapItem::GetValue() const {
   auto trie = static_cast<terark::MainPatricia *>(handle.iter()->trie());
-  auto vector = (detail::tag_vector_t *)trie->mem_get(
+  auto vector = (details::tag_vector_t *)trie->mem_get(
       *(uint32_t *)handle.iter()->value());
-  auto data = (detail::tag_vector_t::data_t *)trie->mem_get(vector->loc);
+  auto data = (details::tag_vector_t::data_t *)trie->mem_get(vector->loc);
   return data[index].loc;
 }
 
@@ -485,15 +509,15 @@ void PatriciaRepIterator<heap_mode>::Rebuild(func_t &&callback_func) {
 }
 
 template <bool heap_mode>
-PatriciaRepIterator<heap_mode>::PatriciaRepIterator(
-    std::vector<MemPatricia *> tries)
+PatriciaRepIterator<heap_mode>::PatriciaRepIterator(details::tries_t &tries,
+                                                    size_t tries_size)
     : direction_(0) {
   assert(tries.size() > 0);
   if (heap_mode) {
     valvec<HeapItem> hitem(tries.size(), terark::valvec_reserve());
     valvec<HeapItem *> hptrs(tries.size(), terark::valvec_reserve());
-    for (auto trie : tries) {
-      hptrs.push_back(new (hitem.grow_no_init(1)) HeapItem(trie));
+    for (size_t i = 0; i < tries_size; ++i) {
+      hptrs.push_back(new (hitem.grow_no_init(1)) HeapItem(tries[i]));
     }
     assert(hitem.size() == hptrs.size());
     multi_.count = hitem.size();
@@ -733,8 +757,8 @@ MemTableRep *PatriciaTrieRepFactory::CreateMemTableRep(
 
 static MemTableRepFactory *CreatePatriciaTrieRepFactory(
     std::shared_ptr<class MemTableRepFactory> &fallback,
-    detail::ConcurrentType concurrent_type,
-    detail::PatriciaKeyType patricia_key_type, int64_t write_buffer_size) {
+    details::ConcurrentType concurrent_type,
+    details::PatriciaKeyType patricia_key_type, int64_t write_buffer_size) {
   if (!fallback) fallback.reset(new SkipListFactory());
   return new PatriciaTrieRepFactory(fallback, concurrent_type,
                                     patricia_key_type, write_buffer_size);
@@ -742,21 +766,22 @@ static MemTableRepFactory *CreatePatriciaTrieRepFactory(
 
 MemTableRepFactory *NewPatriciaTrieRepFactory(
     std::shared_ptr<class MemTableRepFactory> fallback) {
-  return CreatePatriciaTrieRepFactory(fallback, detail::ConcurrentType::Native,
-                                      detail::PatriciaKeyType::FullKey,
+  return CreatePatriciaTrieRepFactory(fallback, details::ConcurrentType::Native,
+                                      details::PatriciaKeyType::FullKey,
                                       64ull << 20);
 }
 
 MemTableRepFactory *NewPatriciaTrieRepFactory(
     const std::unordered_map<std::string, std::string> &options, Status *s) {
-  detail::ConcurrentType concurrent_type = detail::ConcurrentType::Native;
+  details::ConcurrentType concurrent_type = details::ConcurrentType::Native;
   int64_t write_buffer_size = 64 * 1024 * 1024;
   std::shared_ptr<class MemTableRepFactory> fallback;
-  detail::PatriciaKeyType patricia_key_type = detail::PatriciaKeyType::UserKey;
+  details::PatriciaKeyType patricia_key_type =
+      details::PatriciaKeyType::UserKey;
 
   auto c = options.find("concurrent_type");
   if (c != options.end() && c->second == "none")
-    concurrent_type = detail::ConcurrentType::None;
+    concurrent_type = details::ConcurrentType::None;
 
   auto u = options.find("use_virtual_mem");
   if (u != options.end() && u->second == "enable") {
@@ -778,7 +803,7 @@ MemTableRepFactory *NewPatriciaTrieRepFactory(
 
   auto p = options.find("key_catagory");
   if (p != options.end() && p->second == "full")
-    patricia_key_type = detail::PatriciaKeyType::FullKey;
+    patricia_key_type = details::PatriciaKeyType::FullKey;
 
   return CreatePatriciaTrieRepFactory(fallback, concurrent_type,
                                       patricia_key_type, write_buffer_size);
