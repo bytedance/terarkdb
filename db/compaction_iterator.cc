@@ -5,23 +5,24 @@
 
 #include "db/compaction_iterator.h"
 
+#include <boost/range/algorithm.hpp>
+
 #include "db/snapshot_checker.h"
 #include "port/likely.h"
 #include "rocksdb/listener.h"
 #include "table/internal_iterator.h"
-#include <boost/range/algorithm.hpp>
 
 namespace rocksdb {
 
 class CompactionIteratorToInternalIterator : public InternalIterator {
-  CompactionIterator*(*new_compaction_iter_callback_)(void*);
+  CompactionIterator* (*new_compaction_iter_callback_)(void*);
   void* arg_;
   const Slice* start_user_key_;
   std::unique_ptr<CompactionIterator> c_iter_;
 
  public:
   CompactionIteratorToInternalIterator(
-      CompactionIterator*(*new_compaction_iter_callback)(void*), void* arg,
+      CompactionIterator* (*new_compaction_iter_callback)(void*), void* arg,
       const Slice* start_user_key)
       : new_compaction_iter_callback_(new_compaction_iter_callback),
         arg_(arg),
@@ -37,9 +38,7 @@ class CompactionIteratorToInternalIterator : public InternalIterator {
     }
   }
   virtual void SeekToLast() override { assert(false); }
-  virtual void SeekForPrev(const rocksdb::Slice&) override {
-    assert(false);
-  }
+  virtual void SeekForPrev(const rocksdb::Slice&) override { assert(false); }
   virtual void Seek(const Slice& target) override;
   virtual void Next() override { c_iter_->Next(); }
   virtual void Prev() override { abort(); }  // do not support
@@ -100,10 +99,10 @@ void CompactionIteratorToInternalIterator::Seek(const Slice& target) {
 }
 
 InternalIterator* NewCompactionIterator(
-    CompactionIterator*(*new_compaction_iter_callback)(void*), void* arg,
+    CompactionIterator* (*new_compaction_iter_callback)(void*), void* arg,
     const Slice* start_user_key) {
-  return new CompactionIteratorToInternalIterator(
-      new_compaction_iter_callback, arg, start_user_key);
+  return new CompactionIteratorToInternalIterator(new_compaction_iter_callback,
+                                                  arg, start_user_key);
 }
 
 CompactionIterator::CompactionIterator(
@@ -146,7 +145,7 @@ CompactionIterator::CompactionIterator(
       earliest_write_conflict_snapshot_(earliest_write_conflict_snapshot),
       snapshot_checker_(snapshot_checker),
       env_(env),
-      //report_detailed_time_(report_detailed_time),
+      // report_detailed_time_(report_detailed_time),
       expect_valid_internal_key_(expect_valid_internal_key),
       range_del_agg_(range_del_agg),
       compaction_(std::move(compaction)),
@@ -191,8 +190,7 @@ CompactionIterator::CompactionIterator(
   }
 }
 
-CompactionIterator::~CompactionIterator() {
-}
+CompactionIterator::~CompactionIterator() {}
 
 void CompactionIterator::ResetRecordCounts() {
   iter_stats_.num_record_drop_user = 0;
@@ -221,7 +219,7 @@ void CompactionIterator::Next() {
       key_ = merge_out_iter_.key();
       value_ = LazyBufferReference(merge_out_iter_.value());
       bool valid_key __attribute__((__unused__));
-      valid_key =  ParseInternalKey(key_, &ikey_);
+      valid_key = ParseInternalKey(key_, &ikey_);
       // MergeUntil stops when it encounters a corrupt key and does not
       // include them in the result, so we expect the keys here to be valid.
       assert(valid_key);
@@ -273,8 +271,7 @@ void CompactionIterator::InvokeFilterIfNeeded(bool* need_skip,
       filter = compaction_filter_->FilterV2(
           compaction_->level(), ikey_.user_key,
           CompactionFilter::ValueType::kValue, value_,
-          &compaction_filter_value_,
-          compaction_filter_skip_until_.rep());
+          &compaction_filter_value_, compaction_filter_skip_until_.rep());
     };
     auto sample = filter_sample_interval_;
     if (env_ && sample && (filter_hit_count_ & (sample - 1)) == 0) {
@@ -630,15 +627,14 @@ void CompactionIterator::NextFromInput() {
     } else if ((ikey_.type == kTypeDeletion) && bottommost_level_ &&
                ikeyNotNeededForIncrementalSnapshot()) {
       // Handle the case where we have a delete key at the bottom most level
-      // We can skip outputting the key iff there are no subsequent puts for this
-      // key
+      // We can skip outputting the key iff there are no subsequent puts for
+      // this key
       ParsedInternalKey next_ikey;
       value_.pin();
       input_->Next();
-      // Skip over all versions of this key that happen to occur in the same snapshot
-      // range as the delete
-      while (input_->Valid() &&
-             ParseInternalKey(input_->key(), &next_ikey) &&
+      // Skip over all versions of this key that happen to occur in the same
+      // snapshot range as the delete
+      while (input_->Valid() && ParseInternalKey(input_->key(), &next_ikey) &&
              cmp_->Equal(ikey_.user_key, next_ikey.user_key) &&
              (prev_snapshot == 0 || next_ikey.sequence > prev_snapshot ||
               (snapshot_checker_ != nullptr &&
@@ -646,8 +642,8 @@ void CompactionIterator::NextFromInput() {
                                                          prev_snapshot))))) {
         input_->Next();
       }
-      // If you find you still need to output a row with this key, we need to output the
-      // delete too
+      // If you find you still need to output a row with this key, we need to
+      // output the delete too
       if (input_->Valid() && ParseInternalKey(input_->key(), &next_ikey) &&
           cmp_->Equal(ikey_.user_key, next_ikey.user_key)) {
         valid_ = true;
@@ -663,7 +659,7 @@ void CompactionIterator::NextFromInput() {
       // have hit (A)
       // We encapsulate the merge related state machine in a different
       // object to minimize change to the existing flow.
-      value_.reset(); // MergeUntil will get iter value and move iter
+      value_.reset();  // MergeUntil will get iter value and move iter
       Status s = merge_helper_->MergeUntil(current_key_.GetUserKey(), &input_,
                                            range_del_agg_, prev_snapshot,
                                            bottommost_level_);

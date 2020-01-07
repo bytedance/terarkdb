@@ -6,11 +6,11 @@
 // This file defines a collection of statistics collectors.
 #pragma once
 
-#include "rocksdb/table_properties.h"
-
 #include <memory>
 #include <string>
 #include <vector>
+
+#include "rocksdb/table_properties.h"
 
 namespace rocksdb {
 
@@ -45,10 +45,10 @@ class IntTblPropCollectorFactory {
 
   virtual bool NeedSerialize() const { return false; }
   virtual Status Serialize(std::string*) const {
-     return Status::NotSupported("Serialize()", this->Name());
+    return Status::NotSupported("Serialize()", this->Name());
   }
   virtual Status Deserialize(Slice) {
-     return Status::NotSupported("Deserialize()", this->Name());
+    return Status::NotSupported("Deserialize()", this->Name());
   }
 };
 
@@ -137,10 +137,10 @@ class UserKeyTablePropertiesCollectorFactory
     return user_collector_factory_->NeedSerialize();
   }
   Status Serialize(std::string* bytes) const override {
-     return user_collector_factory_->Serialize(bytes);
+    return user_collector_factory_->Serialize(bytes);
   }
   Status Deserialize(Slice bytes) override {
-     return user_collector_factory_->Deserialize(bytes);
+    return user_collector_factory_->Deserialize(bytes);
   }
 
  private:

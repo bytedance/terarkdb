@@ -8,10 +8,11 @@
 
 #pragma once
 
+#include <boost/noncopyable.hpp>
 #include <functional>
 #include <future>
 #include <string>
-#include <boost/noncopyable.hpp>
+
 #include "rocksdb/env.h"
 
 namespace rocksdb {
@@ -45,14 +46,14 @@ class RemoteCompactionDispatcher : public CompactionDispatcher {
     virtual std::string GenerateOutputFileName(size_t file_index) = 0;
     std::string DoCompaction(Slice data);
     static void DebugSerializeCheckResult(Slice data);
+
    protected:
     struct Rep;
     Rep* rep_;
   };
 };
 
-extern std::shared_ptr<CompactionDispatcher>
-    NewCommandLineCompactionDispatcher(std::string cmd);
-
+extern std::shared_ptr<CompactionDispatcher> NewCommandLineCompactionDispatcher(
+    std::string cmd);
 
 }  // namespace rocksdb

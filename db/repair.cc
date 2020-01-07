@@ -66,6 +66,9 @@
 
 #include <inttypes.h>
 
+#include <boost/range/algorithm.hpp>
+#include <terark/util/function.hpp>
+
 #include "db/builder.h"
 #include "db/db_impl.h"
 #include "db/dbformat.h"
@@ -86,9 +89,6 @@
 #include "util/file_reader_writer.h"
 #include "util/filename.h"
 #include "util/string_util.h"
-
-#include <boost/range/algorithm.hpp>
-#include <terark/util/function.hpp>
 
 namespace rocksdb {
 
@@ -560,8 +560,8 @@ class Repairer {
         break;
       }
     }
-    auto new_end = boost::remove_if(tables_,
-     TERARK_GET(.column_family_id) == uint32_t(-1));
+    auto new_end = boost::remove_if(
+        tables_, TERARK_GET(.column_family_id) == uint32_t(-1));
     tables_.erase(new_end, tables_.end());
   }
 
@@ -756,8 +756,9 @@ Status GetDefaultCFOptions(
     const std::vector<ColumnFamilyDescriptor>& column_families,
     ColumnFamilyOptions* res) {
   assert(res != nullptr);
-  auto iter = boost::find_if(column_families,
-       TERARK_GET(.name) == std::cref(kDefaultColumnFamilyName));
+  auto iter =
+      boost::find_if(column_families,
+                     TERARK_GET(.name) == std::cref(kDefaultColumnFamilyName));
   if (iter == column_families.end()) {
     return Status::InvalidArgument(
         "column_families", "Must contain entry for default column family");

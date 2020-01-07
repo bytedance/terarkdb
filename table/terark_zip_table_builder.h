@@ -217,7 +217,7 @@ class TerarkZipTableBuilder : public TableBuilder, boost::noncopyable {
   DictZipBlobStore::ZipBuilder* createZipBuilder() const;
 
   Arena arena_;
-  TerarkZipTableOptions  table_options_;
+  TerarkZipTableOptions table_options_;
   const TerarkZipTableFactory* table_factory_;
   const ImmutableCFOptions& ioptions_;
   TerarkZipMultiOffsetInfo offset_info_;

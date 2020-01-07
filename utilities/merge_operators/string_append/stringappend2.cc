@@ -5,20 +5,20 @@
 
 #include "stringappend2.h"
 
-#include <memory>
-#include <string>
 #include <assert.h>
 
-#include "rocksdb/slice.h"
+#include <memory>
+#include <string>
+
 #include "rocksdb/merge_operator.h"
+#include "rocksdb/slice.h"
 #include "utilities/merge_operators.h"
 
 namespace rocksdb {
 
 // Constructor: also specify the delimiter character.
 StringAppendTESTOperator::StringAppendTESTOperator(char delim_char)
-    : delim_(delim_char) {
-}
+    : delim_(delim_char) {}
 
 // Implementation for the merge operation (concatenates two strings)
 bool StringAppendTESTOperator::FullMergeV2(
@@ -127,10 +127,9 @@ bool StringAppendTESTOperator::_AssocPartialMergeMulti(
   return true;
 }
 
-const char* StringAppendTESTOperator::Name() const  {
+const char* StringAppendTESTOperator::Name() const {
   return "StringAppendTESTOperator";
 }
-
 
 std::shared_ptr<MergeOperator>
 MergeOperators::CreateStringAppendTESTOperator() {
@@ -143,8 +142,8 @@ static MergeOperator* NewStringAppendTESTOperator(const std::string& options) {
   return new StringAppendTESTOperator(delim);
 }
 
-TERARK_FACTORY_REGISTER   (StringAppendTESTOperator, &NewStringAppendTESTOperator);
+TERARK_FACTORY_REGISTER(StringAppendTESTOperator, &NewStringAppendTESTOperator);
 TERARK_FACTORY_REGISTER_EX(StringAppendTESTOperator, "stringappend",
-                       &NewStringAppendTESTOperator);
+                           &NewStringAppendTESTOperator);
 
-} // namespace rocksdb
+}  // namespace rocksdb

@@ -1558,7 +1558,8 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
       tombstone_iter.set(builder.Finish());
     }
 
-    assert(boost::is_sorted(level_ranges, TERARK_FIELD(point[1]) < icomp));
+    assert(
+        boost::is_sorted(level_ranges.ranges, TERARK_FIELD(point[1]) < icomp));
 
     MapBuilderOutput output_item;
     s = WriteOutputFile(level_ranges.bound_builder, &output_iter,

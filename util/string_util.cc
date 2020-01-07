@@ -14,17 +14,18 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
+
 #include <algorithm>
+#include <boost/range/algorithm.hpp>
 #include <cmath>
 #include <sstream>
 #include <string>
+#include <terark/util/function.hpp>
 #include <utility>
 #include <vector>
+
 #include "rocksdb/env.h"
 #include "rocksdb/slice.h"
-
-#include <terark/util/function.hpp>
-#include <boost/range/algorithm.hpp>
 
 namespace rocksdb {
 

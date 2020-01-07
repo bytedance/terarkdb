@@ -4,6 +4,7 @@
 //  (found in the LICENSE.Apache file in the root directory).
 
 #include "db/table_properties_collector.h"
+
 #include <terark/util/factory.ipp>
 
 #include "db/dbformat.h"
@@ -51,7 +52,6 @@ UserCollectedProperties UserKeyTablePropertiesCollector::GetReadableProperties()
   return collector_->GetReadableProperties();
 }
 
-
 uint64_t GetDeletedKeys(const UserCollectedProperties& props) {
   bool property_present_ignored;
   return GetUint64Property(props, TablePropertiesNames::kDeletedKeys,
@@ -60,11 +60,10 @@ uint64_t GetDeletedKeys(const UserCollectedProperties& props) {
 
 uint64_t GetMergeOperands(const UserCollectedProperties& props,
                           bool* property_present) {
-  return GetUint64Property(
-      props, TablePropertiesNames::kMergeOperands, property_present);
+  return GetUint64Property(props, TablePropertiesNames::kMergeOperands,
+                           property_present);
 }
 
 }  // namespace rocksdb
 
 TERARK_FACTORY_INSTANTIATE_GNS(rocksdb::TablePropertiesCollectorFactory*);
-

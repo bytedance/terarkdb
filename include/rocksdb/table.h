@@ -19,8 +19,8 @@
 
 #include <memory>
 #include <string>
-#include <unordered_map>
 #include <terark/util/factory.hpp>
+#include <unordered_map>
 
 #include "rocksdb/cache.h"
 #include "rocksdb/env.h"
@@ -355,13 +355,13 @@ struct PlainTableOptions {
 };
 
 // -- Plain Table with prefix-only seek
-// For this factory, you need to set Options.prefix_extractor properly to make it
-// work. Look-up will starts with prefix hash lookup for key prefix. Inside the
-// hash bucket found, a binary search is executed for hash conflicts. Finally,
-// a linear search is used.
+// For this factory, you need to set Options.prefix_extractor properly to make
+// it work. Look-up will starts with prefix hash lookup for key prefix. Inside
+// the hash bucket found, a binary search is executed for hash conflicts.
+// Finally, a linear search is used.
 
-extern TableFactory* NewPlainTableFactory(const PlainTableOptions& options =
-                                              PlainTableOptions());
+extern TableFactory* NewPlainTableFactory(
+    const PlainTableOptions& options = PlainTableOptions());
 
 struct CuckooTablePropertyNames {
   // The key that is used to fill empty buckets.
@@ -433,8 +433,8 @@ extern TableFactory* NewCuckooTableFactory(
 class RandomAccessFileReader;
 
 // A base class for table factories.
-class TableFactory : public
-  terark::Factoryable<TableFactory*, const std::string&, Status*> {
+class TableFactory
+    : public terark::Factoryable<TableFactory*, const std::string&, Status*> {
  public:
   virtual ~TableFactory() {}
 
@@ -456,7 +456,8 @@ class TableFactory : public
   //     and cache the table object returned.
   // (2) SstFileDumper (for SST Dump) opens the table and dump the table
   //     contents using the iterator of the table.
-  // (3) DBImpl::IngestExternalFile() calls this function to read the contents of
+  // (3) DBImpl::IngestExternalFile() calls this function to read the contents
+  // of
   //     the sst file it's attempting to add
   //
   // table_reader_options is a TableReaderOptions which contain all the
@@ -496,9 +497,8 @@ class TableFactory : public
   //
   // If the function cannot find a way to sanitize the input DB Options,
   // a non-ok Status will be returned.
-  virtual Status SanitizeOptions(
-      const DBOptions& db_opts,
-      const ColumnFamilyOptions& cf_opts) const = 0;
+  virtual Status SanitizeOptions(const DBOptions& db_opts,
+                                 const ColumnFamilyOptions& cf_opts) const = 0;
 
   // Return a string that contains printable format of table configurations.
   // RocksDB prints configurations at DB Open().
@@ -541,7 +541,8 @@ class TableFactory : public
 // @block_based_table_factory:  block based table factory to use. If NULL, use
 //                              a default one.
 // @plain_table_factory: plain table factory to use. If NULL, use a default one.
-// @cuckoo_table_factory: cuckoo table factory to use. If NULL, use a default one.
+// @cuckoo_table_factory: cuckoo table factory to use. If NULL, use a default
+// one.
 extern TableFactory* NewAdaptiveTableFactory(
     std::shared_ptr<TableFactory> table_factory_to_write = nullptr,
     std::shared_ptr<TableFactory> block_based_table_factory = nullptr,

@@ -7,21 +7,24 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
+#include "rocksdb/comparator.h"
+
+#include <stdint.h>
+
 #include <algorithm>
 #include <memory>
-#include <stdint.h>
-#include "rocksdb/comparator.h"
-#include "rocksdb/slice.h"
-#include "port/port.h"
-#include "util/logging.h"
 #include <terark/util/factory.ipp>
+
+#include "port/port.h"
+#include "rocksdb/slice.h"
+#include "util/logging.h"
 
 namespace rocksdb {
 
 namespace {
 class BytewiseComparatorImpl : public Comparator {
  public:
-  BytewiseComparatorImpl() { }
+  BytewiseComparatorImpl() {}
 
   virtual const char* Name() const override {
     return "leveldb.BytewiseComparator";
@@ -93,7 +96,7 @@ class BytewiseComparatorImpl : public Comparator {
       const uint8_t byte = (*key)[i];
       if (byte != static_cast<uint8_t>(0xff)) {
         (*key)[i] = byte + 1;
-        key->resize(i+1);
+        key->resize(i + 1);
         return;
       }
     }
@@ -133,7 +136,7 @@ class BytewiseComparatorImpl : public Comparator {
 
 class ReverseBytewiseComparatorImpl : public BytewiseComparatorImpl {
  public:
-  ReverseBytewiseComparatorImpl() { }
+  ReverseBytewiseComparatorImpl() {}
 
   virtual const char* Name() const override {
     return "rocksdb.ReverseBytewiseComparator";
@@ -198,7 +201,7 @@ class ReverseBytewiseComparatorImpl : public BytewiseComparatorImpl {
     return false;
   }
 };
-}// namespace
+}  // namespace
 
 const Comparator* BytewiseComparator() {
   static BytewiseComparatorImpl bytewise;
@@ -210,21 +213,16 @@ const Comparator* ReverseBytewiseComparator() {
   return &rbytewise;
 }
 
-TERARK_FACTORY_REGISTER_EX(Comparator,
-          "leveldb.BytewiseComparator",
-                  &BytewiseComparator);
+TERARK_FACTORY_REGISTER_EX(Comparator, "leveldb.BytewiseComparator",
+                           &BytewiseComparator);
 
-TERARK_FACTORY_REGISTER_EX(Comparator,
-                  "RocksDB_SE_v3.10",
-                  &BytewiseComparator);
+TERARK_FACTORY_REGISTER_EX(Comparator, "RocksDB_SE_v3.10", &BytewiseComparator);
 
-TERARK_FACTORY_REGISTER_EX(Comparator,
-   "rocksdb.ReverseBytewiseComparator",
-           &ReverseBytewiseComparator);
+TERARK_FACTORY_REGISTER_EX(Comparator, "rocksdb.ReverseBytewiseComparator",
+                           &ReverseBytewiseComparator);
 
-TERARK_FACTORY_REGISTER_EX(Comparator,
-           "rev:RocksDB_SE_v3.10",
-           &ReverseBytewiseComparator);
+TERARK_FACTORY_REGISTER_EX(Comparator, "rev:RocksDB_SE_v3.10",
+                           &ReverseBytewiseComparator);
 
 }  // namespace rocksdb
 

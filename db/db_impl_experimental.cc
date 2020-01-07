@@ -14,13 +14,14 @@
 #endif
 
 #include <inttypes.h>
+
+#include <terark/valvec.hpp>
 #include <vector>
 
 #include "db/column_family.h"
 #include "db/job_context.h"
 #include "db/version_set.h"
 #include "rocksdb/status.h"
-#include <terark/valvec.hpp>
 
 namespace rocksdb {
 

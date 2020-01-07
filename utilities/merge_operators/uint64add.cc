@@ -14,7 +14,7 @@
 
 using namespace rocksdb;
 
-namespace { // anonymous namespace
+namespace {  // anonymous namespace
 
 // A 'model' merge operator with uint64 addition semantics
 // Implemented as an AssociativeMergeOperator for simplicity and example.
@@ -24,7 +24,7 @@ class UInt64AddOperator : public AssociativeMergeOperator {
                      const Slice& value, std::string* new_value,
                      Logger* logger) const override {
     uint64_t orig_value = 0;
-    if (existing_value){
+    if (existing_value) {
       orig_value = DecodeInteger(*existing_value, logger);
     }
     uint64_t operand = DecodeInteger(value, logger);
@@ -36,9 +36,7 @@ class UInt64AddOperator : public AssociativeMergeOperator {
     return true;  // Return true always since corruption will be treated as 0
   }
 
-  virtual const char* Name() const override {
-    return "UInt64AddOperator";
-  }
+  virtual const char* Name() const override { return "UInt64AddOperator"; }
 
  private:
   // Takes the string and decodes it into a uint64_t
@@ -50,17 +48,17 @@ class UInt64AddOperator : public AssociativeMergeOperator {
       result = DecodeFixed64(value.data());
     } else if (logger != nullptr) {
       // If value is corrupted, treat it as 0
-      ROCKS_LOG_ERROR(logger, "uint64 value corruption, size: %" ROCKSDB_PRIszt
-                              " > %" ROCKSDB_PRIszt,
+      ROCKS_LOG_ERROR(logger,
+                      "uint64 value corruption, size: %" ROCKSDB_PRIszt
+                      " > %" ROCKSDB_PRIszt,
                       value.size(), sizeof(uint64_t));
     }
 
     return result;
   }
-
 };
 
-}
+}  // namespace
 
 namespace rocksdb {
 
@@ -72,9 +70,8 @@ static MergeOperator* NewUInt64AddOperator(const std::string&) {
   return new UInt64AddOperator;
 }
 
-TERARK_FACTORY_REGISTER   (UInt64AddOperator, &NewUInt64AddOperator);
+TERARK_FACTORY_REGISTER(UInt64AddOperator, &NewUInt64AddOperator);
 TERARK_FACTORY_REGISTER_EX(UInt64AddOperator, "uint64add",
-                       &NewUInt64AddOperator);
+                           &NewUInt64AddOperator);
 
-
-}
+}  // namespace rocksdb

@@ -24,6 +24,7 @@
 #include <memory>
 #include <random>
 #include <set>
+#include <terark/util/function.hpp>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -58,7 +59,6 @@
 #include "table/get_context.h"
 #include "table/merging_iterator.h"
 #include "table/table_builder.h"
-#include "terark/util/function.hpp"
 #include "terark/valvec.hpp"
 #include "util/c_style_callback.h"
 #include "util/coding.h"

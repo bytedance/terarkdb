@@ -7,13 +7,16 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
-#include <algorithm>
-#include "rocksdb/slice_transform.h"
 #include "rocksdb/slice.h"
+
+#include <stdio.h>
+
+#include <algorithm>
+#include <terark/util/factory.ipp>
+
+#include "rocksdb/slice_transform.h"
 #include "table/format.h"
 #include "util/string_util.h"
-#include <stdio.h>
-#include <terark/util/factory.ipp>
 
 namespace rocksdb {
 
@@ -60,7 +63,7 @@ class FixedPrefixTransform : public SliceTransform {
 
   std::string GetOptionString() const override {
     char buf[32];
-    return std::string(buf, snprintf(buf, sizeof(buf)-1, "%zd", prefix_len_));
+    return std::string(buf, snprintf(buf, sizeof(buf) - 1, "%zd", prefix_len_));
   }
 };
 
@@ -103,13 +106,13 @@ class CappedPrefixTransform : public SliceTransform {
 
   std::string GetOptionString() const override {
     char buf[32];
-    return std::string(buf, snprintf(buf, sizeof(buf)-1, "%zd", cap_len_));
+    return std::string(buf, snprintf(buf, sizeof(buf) - 1, "%zd", cap_len_));
   }
 };
 
 class NoopTransform : public SliceTransform {
  public:
-  explicit NoopTransform() { }
+  explicit NoopTransform() {}
 
   virtual const char* Name() const override { return "rocksdb.Noop"; }
 
@@ -124,7 +127,7 @@ class NoopTransform : public SliceTransform {
   }
 };
 
-}
+}  // namespace
 
 // 2 small internal utility functions, for efficient hex conversions
 // and no need for snprintf, toupper etc...
@@ -213,9 +216,7 @@ const SliceTransform* NewCappedPrefixTransform(size_t cap_len) {
   return new CappedPrefixTransform(cap_len);
 }
 
-const SliceTransform* NewNoopTransform() {
-  return new NoopTransform;
-}
+const SliceTransform* NewNoopTransform() { return new NoopTransform; }
 
 SliceTransform* S_NewFixedPrefixTransform(const std::string& options) {
   size_t prefix_len = std::stol(options);
@@ -231,18 +232,15 @@ SliceTransform* S_NewNoopTransform(const std::string&) {
   return new NoopTransform;
 }
 
-std::string SliceTransform::GetOptionString() const {
-  return "";
-}
+std::string SliceTransform::GetOptionString() const { return ""; }
 
 TERARK_FACTORY_REGISTER_EX(SliceTransform, "rocksdb.FixedPrefix",
-  &S_NewFixedPrefixTransform);
+                           &S_NewFixedPrefixTransform);
 
 TERARK_FACTORY_REGISTER_EX(SliceTransform, "rocksdb.CappedPrefix",
-  &S_NewCappedPrefixTransform);
+                           &S_NewCappedPrefixTransform);
 
-TERARK_FACTORY_REGISTER_EX(SliceTransform, "rocksdb.Noop",
-  &S_NewNoopTransform);
+TERARK_FACTORY_REGISTER_EX(SliceTransform, "rocksdb.Noop", &S_NewNoopTransform);
 
 }  // namespace rocksdb
 

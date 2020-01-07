@@ -3,10 +3,11 @@
 //
 
 #include <rocksdb/db.h>
+
 #include <iostream>
 #include <sstream>
-#include <thread>
 #include <terark/util/linebuf.hpp>
+#include <thread>
 
 class MyWorker : public rocksdb::RemoteCompactionDispatcher::Worker {
   std::string GenerateOutputFileName(size_t file_index) override {
@@ -24,14 +25,14 @@ int main() {
   rocksdb::EnvOptions env_options;
   MyWorker worker(env_options, rocksdb::Env::Default());
 
-  //worker.RegistComparator(const Comparator*);
-  //worker.RegistPrefixExtractor(std::shared_ptr<const SliceTransform>);
-  //worker.RegistTableFactory(const char* Name, CreateTableFactoryCallback);
-  //worker.RegistMergeOperator(CreateMergeOperatorCallback);
-  //worker.RegistCompactionFilter(const CompactionFilter*);
-  //worker.RegistCompactionFilterFactory(
+  // worker.RegistComparator(const Comparator*);
+  // worker.RegistPrefixExtractor(std::shared_ptr<const SliceTransform>);
+  // worker.RegistTableFactory(const char* Name, CreateTableFactoryCallback);
+  // worker.RegistMergeOperator(CreateMergeOperatorCallback);
+  // worker.RegistCompactionFilter(const CompactionFilter*);
+  // worker.RegistCompactionFilterFactory(
   //    std::shared_ptr<CompactionFilterFactory>);
-  //worker.RegistTablePropertiesCollectorFactory(
+  // worker.RegistTablePropertiesCollectorFactory(
   //    std::shared_ptr<TablePropertiesCollectorFactory>);
 
   terark::LineBuf buf;

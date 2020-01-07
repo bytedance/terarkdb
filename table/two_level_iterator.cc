@@ -9,6 +9,8 @@
 
 #include "table/two_level_iterator.h"
 
+#include <terark/util/function.hpp>
+
 #include "db/version_edit.h"
 #include "rocksdb/options.h"
 #include "rocksdb/table.h"
@@ -16,8 +18,6 @@
 #include "table/format.h"
 #include "util/arena.h"
 #include "util/heap.h"
-
-#include <terark/util/function.hpp>
 
 namespace rocksdb {
 

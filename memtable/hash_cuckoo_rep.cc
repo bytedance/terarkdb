@@ -9,10 +9,12 @@
 
 #include <algorithm>
 #include <atomic>
+#include <boost/range/algorithm.hpp>
 #include <limits>
 #include <memory>
 #include <queue>
 #include <string>
+#include <terark/valvec.hpp>
 #include <vector>
 
 #include "db/memtable.h"
@@ -22,8 +24,6 @@
 #include "rocksdb/memtablerep.h"
 #include "util/murmurhash.h"
 #include "util/string_util.h"
-#include <terark/valvec.hpp>
-#include <boost/range/algorithm.hpp>
 
 namespace rocksdb {
 namespace {
@@ -342,9 +342,8 @@ void HashCuckooRep::Insert(KeyHandle handle) {
     if (backup_table_.get() == nullptr) {
       VectorRepFactory factory(10);
       const bool needs_dup_key_check = false;
-      backup_table_.reset(
-          factory.CreateMemTableRep(compare_, needs_dup_key_check, allocator_,
-                                    nullptr, nullptr));
+      backup_table_.reset(factory.CreateMemTableRep(
+          compare_, needs_dup_key_check, allocator_, nullptr, nullptr));
       is_nearly_full_ = true;
     }
     backup_table_->Insert(key);
@@ -368,9 +367,9 @@ void HashCuckooRep::Insert(KeyHandle handle) {
     int kicked_out_bid = cuckoo_path_[i - 1];
     int current_bid = cuckoo_path_[i];
     // since we only allow one writer at a time, it is safe to do relaxed read.
-    cuckoo_array_[kicked_out_bid]
-        .store(cuckoo_array_[current_bid].load(std::memory_order_relaxed),
-               std::memory_order_release);
+    cuckoo_array_[kicked_out_bid].store(
+        cuckoo_array_[current_bid].load(std::memory_order_relaxed),
+        std::memory_order_release);
   }
   int insert_key_bid = cuckoo_path_[cuckoo_path_length - 1];
   cuckoo_array_[insert_key_bid].store(key, std::memory_order_release);
@@ -564,9 +563,7 @@ bool HashCuckooRep::Iterator::Valid() const {
 
 // Returns the key at the current position.
 // REQUIRES: Valid()
-const char* HashCuckooRep::Iterator::EncodedKey() const {
-  return *cit_;
-}
+const char* HashCuckooRep::Iterator::EncodedKey() const { return *cit_; }
 
 // Advances to the next position.
 // REQUIRES: Valid()
@@ -630,7 +627,7 @@ void HashCuckooRep::Iterator::SeekToLast() {
   }
 }
 
-}  // anom namespace
+}  // namespace
 
 MemTableRep* HashCuckooRepFactory::CreateMemTableRep(
     const MemTableRep::KeyComparator& compare, bool /*needs_dup_key_check*/,
@@ -643,8 +640,7 @@ MemTableRep* HashCuckooRepFactory::CreateMemTableRep(
   static const float kFullness = 0.7f;
   size_t pointer_size = sizeof(std::atomic<const char*>);
   assert(write_buffer_size_ >= (average_data_size_ + pointer_size));
-  size_t bucket_count =
-    static_cast<size_t>(
+  size_t bucket_count = static_cast<size_t>(
       (write_buffer_size_ / (average_data_size_ + pointer_size)) / kFullness +
       1);
   unsigned int hash_function_count = hash_function_count_;
@@ -654,11 +650,9 @@ MemTableRep* HashCuckooRepFactory::CreateMemTableRep(
   if (hash_function_count > kMaxHashCount) {
     hash_function_count = kMaxHashCount;
   }
-  return new HashCuckooRep(compare, allocator, bucket_count,
-                           hash_function_count,
-                           static_cast<size_t>(
-                             (average_data_size_ + pointer_size) / kFullness)
-                           );
+  return new HashCuckooRep(
+      compare, allocator, bucket_count, hash_function_count,
+      static_cast<size_t>((average_data_size_ + pointer_size) / kFullness));
 }
 
 MemTableRepFactory* NewHashCuckooRepFactory(size_t write_buffer_size,

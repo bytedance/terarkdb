@@ -200,8 +200,6 @@ void TerarkZipAutoConfigForOnlineDB_DBOptions(struct DBOptions& dbo,
   dbo.base_background_compactions = 1;
 }
 
-void TerarkZipAutoConfigForOnlineDB_CFOptions_aux(ColumnFamilyOptions& /*cfo*/,
-                                                  size_t memBytesLimit);
 size_t TerarkGetSysMemSize() {
 #ifdef _MSC_VER
   MEMORYSTATUSEX statex;
@@ -215,10 +213,9 @@ size_t TerarkGetSysMemSize() {
 #endif
 }
 
-void TerarkZipAutoConfigForOnlineDB_CFOptions(struct TerarkZipTableOptions& tzo,
-                                              struct ColumnFamilyOptions& cfo,
-                                              size_t memBytesLimit,
-                                              size_t /*diskBytesLimit*/) {
+void TerarkZipAutoConfigForOnlineDB_CFOptions(
+    struct TerarkZipTableOptions& tzo, struct ColumnFamilyOptions& /*cfo*/,
+    size_t memBytesLimit, size_t /*diskBytesLimit*/) {
   using namespace std;  // max, min
   if (0 == memBytesLimit) {
     memBytesLimit = TerarkGetSysMemSize();
@@ -226,7 +223,6 @@ void TerarkZipAutoConfigForOnlineDB_CFOptions(struct TerarkZipTableOptions& tzo,
     memBytesLimit = std::min(TerarkGetSysMemSize(), memBytesLimit);
   }
   TerarkZipConfigMemLimitFromSystem(tzo, memBytesLimit);
-  TerarkZipAutoConfigForOnlineDB_CFOptions_aux(cfo, memBytesLimit);
 }
 
 void TerarkZipConfigMemLimitFromSystem(TerarkZipTableOptions& tzo,
@@ -236,26 +232,6 @@ void TerarkZipConfigMemLimitFromSystem(TerarkZipTableOptions& tzo,
   tzo.smallTaskMemory = memBytesLimit / 64;
   tzo.singleIndexMaxSize =
       std::min(tzo.softZipWorkingMemLimit, tzo.singleIndexMaxSize);
-}
-
-void TerarkZipAutoConfigForOnlineDB_CFOptions_aux(ColumnFamilyOptions& cfo,
-                                                  size_t memBytesLimit) {
-  using namespace std;  // max, min
-  cfo.write_buffer_size = min<size_t>(256ull << 20, memBytesLimit / 32);
-  cfo.num_levels = 7;
-  cfo.max_write_buffer_number = 16;
-  cfo.target_file_size_base = 128ull << 20;
-  cfo.target_file_size_multiplier = 1;
-  cfo.compaction_style = rocksdb::kCompactionStyleUniversal;
-  cfo.compaction_options_universal.allow_trivial_move = true;
-
-  // intended: less than target_file_size_base
-  cfo.max_bytes_for_level_base = cfo.write_buffer_size * 8;
-  cfo.max_bytes_for_level_multiplier = 2;
-
-  cfo.level0_file_num_compaction_trigger = 2;
-  cfo.level0_slowdown_writes_trigger = 8;
-  cfo.level0_stop_writes_trigger = 40;
 }
 
 bool TerarkZipConfigFromEnv(DBOptions& dbo, ColumnFamilyOptions& cfo) {

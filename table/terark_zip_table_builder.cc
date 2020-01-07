@@ -6,6 +6,7 @@
 #include <cfloat>
 #include <future>
 // boost headers
+#include <boost/range/algorithm.hpp>
 // rocksdb headers
 #include <db/version_edit.h>
 #include <rocksdb/compaction_filter.h>
@@ -26,8 +27,6 @@
 #include <terark/zbs/zip_offset_blob_store.hpp>
 // third party
 #include <zstd/zstd.h>
-
-#include <boost/range/algorithm.hpp>
 
 namespace rocksdb {
 
@@ -254,8 +253,7 @@ DictZipBlobStore::ZipBuilder* TerarkZipTableBuilder::createZipBuilder() const {
 
 TerarkZipTableBuilder::~TerarkZipTableBuilder() {
   std::unique_lock<std::mutex> zipLock(zipMutex);
-  waitQueue.trim(
-      boost::remove_if(waitQueue, TERARK_GET(.tztb) == this));
+  waitQueue.trim(boost::remove_if(waitQueue, TERARK_GET(.tztb) == this));
 }
 
 uint64_t TerarkZipTableBuilder::FileSize() const {

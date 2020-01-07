@@ -9,6 +9,7 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+
 #include "rocksdb/compaction_job_stats.h"
 #include "rocksdb/status.h"
 #include "rocksdb/table_properties.h"
@@ -200,20 +201,21 @@ struct TableTransientStat {
   // Same as user_collected_properties["User.Collected.Transient.Stat"].
   // Should be transient and do not save to SST, but the code is too
   // complex, so we DO SAVE it to SST, to avoid errors
-  //std::map<std::string, std::string> per_table;
+  // std::map<std::string, std::string> per_table;
 
-  std::string                        stat_all;
+  std::string stat_all;
 };
 
-void PlantFutureAction(const void* obj, void (*action)(const void* p_obj, std::string* result));
+void PlantFutureAction(const void* obj,
+                       void (*action)(const void* p_obj, std::string* result));
 void EraseFutureAction(const void* obj);
 bool ExistFutureAction(const void* obj);
 bool ReapMatureAction(const void* obj, std::string* result);
 
 struct CompactionJobInfo {
   CompactionJobInfo() = default;
-  explicit CompactionJobInfo(const CompactionJobStats& _stats) :
-      stats(_stats) {}
+  explicit CompactionJobInfo(const CompactionJobStats& _stats)
+      : stats(_stats) {}
 
   // the id of the column family where the compaction happened.
   uint32_t cf_id;
@@ -268,7 +270,6 @@ struct MemTableInfo {
   uint64_t num_entries;
   // Total number of deletes in memtable
   uint64_t num_deletes;
-
 };
 
 struct ExternalFileIngestionInfo {
@@ -348,8 +349,7 @@ class EventListener {
   // Note that the this function must be implemented in a way such that
   // it should not run for an extended period of time before the function
   // returns.  Otherwise, RocksDB may be blocked.
-  virtual void OnCompactionBegin(DB* /*db*/,
-                                 const CompactionJobInfo& /*ci*/) {}
+  virtual void OnCompactionBegin(DB* /*db*/, const CompactionJobInfo& /*ci*/) {}
 
   // A callback function for RocksDB which will be called whenever
   // a registered RocksDB compacts a file. The default implementation
@@ -404,8 +404,7 @@ class EventListener {
   // Note that if applications would like to use the passed reference
   // outside this function call, they should make copies from these
   // returned value.
-  virtual void OnMemTableSealed(
-    const MemTableInfo& /*info*/) {}
+  virtual void OnMemTableSealed(const MemTableInfo& /*info*/) {}
 
   // A callback function for RocksDB which will be called before
   // a column family handle is deleted.
@@ -481,8 +480,7 @@ class EventListener {
 
 #else
 
-class EventListener {
-};
+class EventListener {};
 
 #endif  // ROCKSDB_LITE
 

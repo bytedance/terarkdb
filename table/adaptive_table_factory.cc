@@ -3,12 +3,13 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #ifndef ROCKSDB_LITE
-#include <terark/util/factory.ipp>
 #include "table/adaptive_table_factory.h"
 
-#include "table/table_builder.h"
-#include "table/format.h"
+#include <terark/util/factory.ipp>
+
 #include "port/port.h"
+#include "table/format.h"
+#include "table/table_builder.h"
 
 namespace rocksdb {
 
@@ -57,7 +58,7 @@ Status AdaptiveTableFactory::NewTableReader(
     return plain_table_factory_->NewTableReader(
         table_reader_options, std::move(file), file_size, table);
   } else if (footer.table_magic_number() == kBlockBasedTableMagicNumber ||
-      footer.table_magic_number() == kLegacyBlockBasedTableMagicNumber) {
+             footer.table_magic_number() == kLegacyBlockBasedTableMagicNumber) {
     return block_based_table_factory_->NewTableReader(
         table_reader_options, std::move(file), file_size, table);
   } else if (footer.table_magic_number() == kCuckooTableMagicNumber) {
@@ -124,12 +125,13 @@ extern TableFactory* NewAdaptiveTableFactory(
     std::shared_ptr<TableFactory> plain_table_factory,
     std::shared_ptr<TableFactory> cuckoo_table_factory) {
   return new AdaptiveTableFactory(table_factory_to_write,
-      block_based_table_factory, plain_table_factory, cuckoo_table_factory);
+                                  block_based_table_factory,
+                                  plain_table_factory, cuckoo_table_factory);
 }
 
 }  // namespace rocksdb
 
-TERARK_FACTORY_INSTANTIATE_GNS(rocksdb::TableFactory*,
-  const std::string&, rocksdb::Status*);
+TERARK_FACTORY_INSTANTIATE_GNS(rocksdb::TableFactory*, const std::string&,
+                               rocksdb::Status*);
 
 #endif  // ROCKSDB_LITE

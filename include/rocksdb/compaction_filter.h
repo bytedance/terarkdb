@@ -11,10 +11,10 @@
 #include <cassert>
 #include <memory>
 #include <string>
-#include <vector>
 #include <terark/util/factory.hpp>
-#include "rocksdb/lazy_buffer.h"
+#include <vector>
 
+#include "rocksdb/lazy_buffer.h"
 #include "rocksdb/status.h"
 
 namespace rocksdb {
@@ -36,10 +36,11 @@ struct CompactionFilterContext {
   uint32_t column_family_id;
 };
 
-class CompactionFilter : public
-  /// CompactionFilter can also be created by new factory mechanism.
-  /// CompactionFilterFactory the old factory mechanism are also kept.
-  terark::Factoryable<CompactionFilter*, Slice, CompactionFilterContext> {
+class CompactionFilter
+    : public
+      /// CompactionFilter can also be created by new factory mechanism.
+      /// CompactionFilterFactory the old factory mechanism are also kept.
+      terark::Factoryable<CompactionFilter*, Slice, CompactionFilterContext> {
  public:
   enum ValueType {
     kValue,
@@ -201,10 +202,10 @@ class CompactionFilter : public
 
 // Each compaction will create a new CompactionFilter allowing the
 // application to know about different compactions
-class CompactionFilterFactory : public
-  terark::Factoryable<CompactionFilterFactory*, Slice> {
+class CompactionFilterFactory
+    : public terark::Factoryable<CompactionFilterFactory*, Slice> {
  public:
-  virtual ~CompactionFilterFactory() { }
+  virtual ~CompactionFilterFactory() {}
 
   virtual std::unique_ptr<CompactionFilter> CreateCompactionFilter(
       const CompactionFilter::Context& context) = 0;

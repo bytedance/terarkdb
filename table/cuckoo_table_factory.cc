@@ -7,9 +7,9 @@
 #include "table/cuckoo_table_factory.h"
 
 #include "db/dbformat.h"
+#include "rocksdb/convenience.h"
 #include "table/cuckoo_table_builder.h"
 #include "table/cuckoo_table_reader.h"
-#include "rocksdb/convenience.h"
 
 namespace rocksdb {
 

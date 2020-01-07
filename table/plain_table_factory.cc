@@ -6,7 +6,9 @@
 #include "table/plain_table_factory.h"
 
 #include <stdint.h>
+
 #include <memory>
+
 #include "db/dbformat.h"
 #include "options/options_helper.h"
 #include "port/port.h"
@@ -163,8 +165,7 @@ Status GetMemTableRepFactoryFromString(
     }
     Status s;
     mem_factory = CreateMemTableRepFactory(opts_list[0], opts_map, &s);
-    if (!mem_factory)
-      return s;
+    if (!mem_factory) return s;
   }
 
   if (mem_factory != nullptr) {

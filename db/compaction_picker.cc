@@ -15,9 +15,12 @@
 
 #include <inttypes.h>
 
+#include <boost/range/algorithm.hpp>
+#include <boost/range/algorithm_ext/is_sorted.hpp>
 #include <limits>
 #include <queue>
 #include <string>
+#include <terark/util/function.hpp>
 #include <utility>
 #include <vector>
 
@@ -361,10 +364,9 @@ bool CompactionPicker::FixInputRange(std::vector<RangeStorage>& input_range,
   }
   assert(boost::is_sorted(input_range, TERARK_FIELD(start) < *uc));
   assert(boost::is_sorted(input_range, TERARK_FIELD(limit) < *uc));
-  assert(boost::find_if(input_range,
-                        [uc](const RangeStorage& r) {
-                          return uc->Compare(r.start, r.limit) > 0;
-                        }) == input_range.end());
+  assert(boost::find_if(input_range, [uc](const RangeStorage& r) {
+           return uc->Compare(r.start, r.limit) > 0;
+         }) == input_range.end());
   return !input_range.empty();
 }
 
@@ -807,108 +809,107 @@ Compaction* CompactionPicker::PickGarbageCollection(
 
   // Setting fragment_size as one eighth max_file_size prevents selecting
   // massive files to single compaction which would pin down the maximum
-  // deletable file
-   number for a long time resulting possible storage leakage.
+  // deletable file number for a long time resulting possible storage leakage.
   size_t max_file_size =
       MaxFileSizeForLevel(mutable_cf_options, 1, ioptions_.compaction_style);
-   size_t fragment_size = max_file_size / 8;
+  size_t fragment_size = max_file_size / 8;
 
-   auto fn_num_entries = [&](FileMetaData* f) -> uint64_t {
-     if (f->prop.num_entries == 0) {
-       std::shared_ptr<const TableProperties> tp;
-       auto s = table_cache_->GetTableProperties(
-           env_options_, *icmp_, f->fd, &tp,
-           mutable_cf_options.prefix_extractor.get(), false);
-       if (!s.ok()) {
-         ROCKS_LOG_BUFFER(log_buffer,
-                          "[%s] CompactionPicker::PickGarbageCollection "
-                          "GetTableProperties fail\n",
-                          cf_name.c_str(), s.ToString().c_str());
-         return 0;
-       }
-       return tp->num_entries;
-     } else {
-       return f->prop.num_entries;
-     }
-   };
+  auto fn_num_entries = [&](FileMetaData* f) -> uint64_t {
+    if (f->prop.num_entries == 0) {
+      std::shared_ptr<const TableProperties> tp;
+      auto s = table_cache_->GetTableProperties(
+          env_options_, *icmp_, f->fd, &tp,
+          mutable_cf_options.prefix_extractor.get(), false);
+      if (!s.ok()) {
+        ROCKS_LOG_BUFFER(log_buffer,
+                         "[%s] CompactionPicker::PickGarbageCollection "
+                         "GetTableProperties fail\n",
+                         cf_name.c_str(), s.ToString().c_str());
+        return 0;
+      }
+      return tp->num_entries;
+    } else {
+      return f->prop.num_entries;
+    }
+  };
 
-   // Traverse level -1 to filter out all blob sstables needs GC.
-   // 1. score more than garbage collection baseline.
-   // 2. fragile files that can be reorganized
-   // 3. marked for compaction for other reasons
-   for (auto f : vstorage->LevelFiles(-1)) {
-     if (f->is_skip_gc || f->being_compacted) {
-       continue;
-     }
-     GarbageFileInfo info = {f};
-     info.num_entries = fn_num_entries(f);
-     info.score = std::min(1.0, (double)f->num_antiquation / info.num_entries);
-     if (f->prop.inheritance_chain.empty()) {
-       // sst from flush or compaction
-       info.estimate_size = f->fd.file_size;
-     } else {
-       // sst from gc
-       info.estimate_size =
-           static_cast<uint64_t>(f->fd.file_size * (1 - info.score));
-     }
-     if (info.score >= mutable_cf_options.blob_gc_ratio ||
-         info.estimate_size <= fragment_size) {
-       gc_files.push_back(info);
-     } else if (f->marked_for_compaction) {
-       info.score = mutable_cf_options.blob_gc_ratio;
-       gc_files.push_back(info);
-     }
-   }
+  // Traverse level -1 to filter out all blob sstables needs GC.
+  // 1. score more than garbage collection baseline.
+  // 2. fragile files that can be reorganized
+  // 3. marked for compaction for other reasons
+  for (auto f : vstorage->LevelFiles(-1)) {
+    if (f->is_skip_gc || f->being_compacted) {
+      continue;
+    }
+    GarbageFileInfo info = {f};
+    info.num_entries = fn_num_entries(f);
+    info.score = std::min(1.0, (double)f->num_antiquation / info.num_entries);
+    if (f->prop.inheritance_chain.empty()) {
+      // sst from flush or compaction
+      info.estimate_size = f->fd.file_size;
+    } else {
+      // sst from gc
+      info.estimate_size =
+          static_cast<uint64_t>(f->fd.file_size * (1 - info.score));
+    }
+    if (info.score >= mutable_cf_options.blob_gc_ratio ||
+        info.estimate_size <= fragment_size) {
+      gc_files.push_back(info);
+    } else if (f->marked_for_compaction) {
+      info.score = mutable_cf_options.blob_gc_ratio;
+      gc_files.push_back(info);
+    }
+  }
 
-   // Sorting by ratio decreasing.
-   terark::sort_a(gc_files, TERARK_CMP(score, >));
+  // Sorting by ratio decreasing.
+  terark::sort_a(gc_files, TERARK_CMP(score, >));
 
-   // Return nullptr if nothing to do.
-   if (gc_files.empty() ||
-       gc_files.front().score < mutable_cf_options.blob_gc_ratio) {
-     return nullptr;
-   }
+  // Return nullptr if nothing to do.
+  if (gc_files.empty() ||
+      gc_files.front().score < mutable_cf_options.blob_gc_ratio) {
+    return nullptr;
+  }
 
-   // Set up inputs for garbage collection.
-   std::vector<CompactionInputFiles> inputs(1);
-   auto& input = inputs.front();
-   input.level = -1;
-   input.files.push_back(gc_files.front().f);
+  // Set up inputs for garbage collection.
+  std::vector<CompactionInputFiles> inputs(1);
+  auto& input = inputs.front();
+  input.level = -1;
+  input.files.push_back(gc_files.front().f);
 
-   uint64_t total_estimate_size = gc_files.front().estimate_size;
-   uint64_t num_antiquation = gc_files.front().f->num_antiquation;
-   for (auto it = std::next(gc_files.begin()); it != gc_files.end(); ++it) {
-     auto& info = *it;
-     if (total_estimate_size + info.estimate_size > max_file_size) {
-       continue;
-     }
-     total_estimate_size += info.estimate_size;
-     num_antiquation += info.f->num_antiquation;
-     input.files.push_back(info.f);
-     if (input.size() >= 8) {
-       break;
-     }
-   }
+  uint64_t total_estimate_size = gc_files.front().estimate_size;
+  uint64_t num_antiquation = gc_files.front().f->num_antiquation;
+  for (auto it = std::next(gc_files.begin()); it != gc_files.end(); ++it) {
+    auto& info = *it;
+    if (total_estimate_size + info.estimate_size > max_file_size) {
+      continue;
+    }
+    total_estimate_size += info.estimate_size;
+    num_antiquation += info.f->num_antiquation;
+    input.files.push_back(info.f);
+    if (input.size() >= 8) {
+      break;
+    }
+  }
 
-   int bottommost_level = vstorage->num_levels() - 1;
+  int bottommost_level = vstorage->num_levels() - 1;
 
-   // Set compaction params.
-   CompactionParams params(vstorage, ioptions_, mutable_cf_options);
-   params.inputs = std::move(inputs);
-   params.output_level = -1;
-   params.num_antiquation = num_antiquation;
-   params.max_compaction_bytes = LLONG_MAX;
-   params.output_path_id = GetPathId(ioptions_, mutable_cf_options, 1);
-   params.compression = GetCompressionType(
-       ioptions_, vstorage, mutable_cf_options, bottommost_level, 1, true);
-   params.compression_opts =
-       GetCompressionOptions(ioptions_, vstorage, bottommost_level, true);
-   params.max_subcompactions = 1;
-   params.score = 0;
-   params.compaction_type = kGarbageCollection;
-   params.compaction_reason = CompactionReason::kGarbageCollection;
+  // Set compaction params.
+  CompactionParams params(vstorage, ioptions_, mutable_cf_options);
+  params.inputs = std::move(inputs);
+  params.output_level = -1;
+  params.num_antiquation = num_antiquation;
+  params.max_compaction_bytes = LLONG_MAX;
+  params.output_path_id = GetPathId(ioptions_, mutable_cf_options, 1);
+  params.compression = GetCompressionType(
+      ioptions_, vstorage, mutable_cf_options, bottommost_level, 1, true);
+  params.compression_opts =
+      GetCompressionOptions(ioptions_, vstorage, bottommost_level, true);
+  params.max_subcompactions = 1;
+  params.score = 0;
+  params.compaction_type = kGarbageCollection;
+  params.compaction_reason = CompactionReason::kGarbageCollection;
 
-   return RegisterCompaction(new Compaction(std::move(params)));
+  return RegisterCompaction(new Compaction(std::move(params)));
 }
 
 void CompactionPicker::InitFilesBeingCompact(

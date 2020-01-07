@@ -5,20 +5,19 @@
 
 #include "db/range_tombstone_fragmenter.h"
 
-#include <algorithm>
-#include <functional>
-#include <set>
-
 #include <inttypes.h>
 #include <stdio.h>
 #include <string.h>
 
+#include <algorithm>
+#include <boost/range/algorithm.hpp>
+#include <functional>
+#include <set>
+#include <terark/valvec.hpp>
+
 #include "util/autovector.h"
 #include "util/kv_map.h"
 #include "util/vector_iterator.h"
-
-#include <terark/valvec.hpp>
-#include <boost/range/algorithm.hpp>
 
 namespace rocksdb {
 

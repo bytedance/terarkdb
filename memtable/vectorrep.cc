@@ -4,21 +4,20 @@
 //  (found in the LICENSE.Apache file in the root directory).
 //
 #ifndef ROCKSDB_LITE
-#include "rocksdb/memtablerep.h"
-
-#include <unordered_set>
-#include <set>
-#include <memory>
 #include <algorithm>
+#include <boost/range/algorithm.hpp>
+#include <memory>
+#include <set>
 #include <type_traits>
+#include <unordered_set>
 
-#include "util/arena.h"
 #include "db/memtable.h"
 #include "memtable/stl_wrappers.h"
 #include "port/port.h"
+#include "rocksdb/memtablerep.h"
+#include "util/arena.h"
 #include "util/mutexlock.h"
 #include "util/string_util.h"
-#include <boost/range/algorithm.hpp>
 
 namespace rocksdb {
 namespace {
@@ -46,25 +45,26 @@ class VectorRep : public MemTableRep {
                    bool (*callback_func)(void* arg, const Slice& key,
                                          LazyBuffer&& value)) override;
 
-  virtual ~VectorRep() override { }
+  virtual ~VectorRep() override {}
 
   class Iterator : public MemTableRep::Iterator {
     class VectorRep* vrep_;
     std::shared_ptr<std::vector<const char*>> bucket_;
     std::vector<const char*>::const_iterator mutable cit_;
     const KeyComparator& compare_;
-    std::string tmp_;       // For passing to EncodeKey
+    std::string tmp_;  // For passing to EncodeKey
     bool mutable sorted_;
     void DoSort() const;
+
    public:
     explicit Iterator(class VectorRep* vrep,
-      std::shared_ptr<std::vector<const char*>> bucket,
-      const KeyComparator& compare);
+                      std::shared_ptr<std::vector<const char*>> bucket,
+                      const KeyComparator& compare);
 
     // Initialize an iterator over the specified collection.
     // The returned iterator is not valid.
     // explicit Iterator(const MemTableRep* collection);
-    virtual ~Iterator() override { };
+    virtual ~Iterator() override{};
 
     // Returns true iff the iterator is positioned at a valid node.
     virtual bool Valid() const override;
@@ -134,12 +134,10 @@ void VectorRep::MarkReadOnly() {
 }
 
 size_t VectorRep::ApproximateMemoryUsage() {
-  return
-    sizeof(bucket_) + sizeof(*bucket_) +
-    bucket_->size() *
-    sizeof(
-      std::remove_reference<decltype(*bucket_)>::type::value_type
-    );
+  return sizeof(bucket_) + sizeof(*bucket_) +
+         bucket_->size() *
+             sizeof(
+                 std::remove_reference<decltype(*bucket_)>::type::value_type);
 }
 
 VectorRep::VectorRep(const KeyComparator& compare, Allocator* allocator,
@@ -152,14 +150,14 @@ VectorRep::VectorRep(const KeyComparator& compare, Allocator* allocator,
   bucket_.get()->reserve(count);
 }
 
-VectorRep::Iterator::Iterator(
-    class VectorRep* vrep, std::shared_ptr<std::vector<const char*>> bucket,
-    const KeyComparator& compare)
-: vrep_(vrep),
-  bucket_(bucket),
-  cit_(bucket_->end()),
-  compare_(compare),
-  sorted_(false) { }
+VectorRep::Iterator::Iterator(class VectorRep* vrep,
+                              std::shared_ptr<std::vector<const char*>> bucket,
+                              const KeyComparator& compare)
+    : vrep_(vrep),
+      bucket_(bucket),
+      cit_(bucket_->end()),
+      compare_(compare),
+      sorted_(false) {}
 
 void VectorRep::Iterator::DoSort() const {
   // vrep is non-null means that we are working on an immutable memtable
@@ -292,7 +290,7 @@ MemTableRep::Iterator* VectorRep::GetIterator(Arena* arena) {
     }
   } else {
     std::shared_ptr<Bucket> tmp;
-    tmp.reset(new Bucket(*bucket_)); // make a copy
+    tmp.reset(new Bucket(*bucket_));  // make a copy
     if (arena == nullptr) {
       return new Iterator(nullptr, tmp, compare_);
     } else {
@@ -300,7 +298,7 @@ MemTableRep::Iterator* VectorRep::GetIterator(Arena* arena) {
     }
   }
 }
-} // anon namespace
+}  // namespace
 
 MemTableRep* VectorRepFactory::CreateMemTableRep(
     const MemTableRep::KeyComparator& compare, bool /*needs_dup_key_check*/,
@@ -320,5 +318,5 @@ static MemTableRepFactory* NewVectorRepFactory(
 
 ROCKSDB_REGISTER_MEM_TABLE("vector", VectorRepFactory);
 
-} // namespace rocksdb
+}  // namespace rocksdb
 #endif  // ROCKSDB_LITE
