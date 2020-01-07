@@ -1465,7 +1465,6 @@ void VersionStorageInfo::UpdateAccumulatedStats(FileMetaData* file_meta) {
 }
 
 void VersionStorageInfo::ComputeCompensatedSizes() {
-  static const int kDeletionWeightOnCompaction = 2;
   uint64_t average_value_size = GetAverageValueSize();
 
   struct {
@@ -1495,9 +1494,8 @@ void VersionStorageInfo::ComputeCompensatedSizes() {
             dependence.entry_count);
       }
     } else {
-      file_size = f->fd.GetFileSize() + f->prop.num_deletions *
-                                            average_value_size *
-                                            kDeletionWeightOnCompaction;
+      file_size =
+          f->fd.GetFileSize() + f->prop.num_deletions * average_value_size;
     }
     return entry_count == 0 ? file_size
                             : file_size * entry_count /
@@ -2770,40 +2768,13 @@ void VersionStorageInfo::CalculateBaseBytes(const ImmutableCFOptions& ioptions,
 }
 
 uint64_t VersionStorageInfo::EstimateLiveDataSize() const {
-  // Estimate the live data size by adding up the size of the last level for all
-  // key ranges. Note: Estimate depends on the ordering of files in level 0
-  // because files in level 0 can be overlapping.
-  uint64_t size = 0;
-
-  auto ikey_lt = [this](InternalKey* x, InternalKey* y) {
-    return internal_comparator_->Compare(*x, *y) < 0;
-  };
-  // (Ordered) map of largest keys in non-overlapping files
-  std::map<InternalKey*, FileMetaData*, decltype(ikey_lt)> ranges(ikey_lt);
-
-  for (int l = num_levels_ - 1; l >= 0; l--) {
-    bool found_end = false;
-    for (auto file : files_[l]) {
-      // Find the first file where the largest key is larger than the smallest
-      // key of the current file. If this file does not overlap with the
-      // current file, none of the files in the map does. If there is
-      // no potential overlap, we can safely insert the rest of this level
-      // (if the level is not 0) into the map without checking again because
-      // the elements in the level are sorted and non-overlapping.
-      auto lb = (found_end && l != 0) ? ranges.end()
-                                      : ranges.lower_bound(&file->smallest);
-      found_end = (lb == ranges.end());
-      if (found_end || internal_comparator_->Compare(
-                           file->largest, (*lb).second->smallest) < 0) {
-        ranges.emplace_hint(lb, &file->largest, file);
-        size += file->fd.file_size;
-      }
-    }
+  // See VersionStorageInfo::GetEstimatedActiveKeys
+  if (accumulated_num_entries_ == 0 ||
+      accumulated_num_entries_ == accumulated_num_deletions_) {
+    return 0;
   }
-  for (auto file : files_[-1]) {
-    size += file->fd.file_size;
-  }
-  return size;
+  return accumulated_file_size_ / accumulated_num_entries_ *
+         (accumulated_num_entries_ - accumulated_num_deletions_);
 }
 
 bool VersionStorageInfo::RangeMightExistAfterSortedRun(
@@ -4431,11 +4402,16 @@ uint64_t VersionSet::ApproximateSize(Version* v, const FdWithKeyRange& f,
   auto approximate_size_lambda = [v, &approximate_size,
                                   &key](const FileMetaData* file_meta) {
     uint64_t result = 0;
+    auto vstorage = v->storage_info();
     if (!file_meta->prop.is_map_sst()) {
       auto& icomp = v->cfd_->internal_comparator();
       if (icomp.Compare(file_meta->largest.Encode(), key) <= 0) {
         // Entire file is before "key", so just add the file size
-        result = file_meta->fd.GetFileSize();
+        if (!file_meta->prop.dependence.empty()) {
+          result = vstorage->FileSizeWithBlob(file_meta);
+        } else {
+          result = file_meta->fd.GetFileSize();
+        }
       } else if (icomp.Compare(file_meta->smallest.Encode(), key) > 0) {
         // Entire file is after "key", so ignore
         result = 0;
@@ -4456,6 +4432,10 @@ uint64_t VersionSet::ApproximateSize(Version* v, const FdWithKeyRange& f,
             result = table_reader_ptr->ApproximateOffsetOf(key);
             table_cache->ReleaseHandle(handle);
           }
+        }
+        if (result > 0 && !file_meta->prop.dependence.empty()) {
+          result = uint64_t(double(result) / file_meta->fd.GetFileSize() *
+                            vstorage->FileSizeWithBlob(file_meta));
         }
       }
     } else {
@@ -4747,12 +4727,10 @@ uint64_t VersionSet::GetTotalSstFilesSize(Version* dummy_versions) {
   uint64_t total_files_size = 0;
   for (Version* v = dummy_versions->next_; v != dummy_versions; v = v->next_) {
     VersionStorageInfo* storage_info = v->storage_info();
-    for (int level = 0; level < storage_info->num_levels_; level++) {
-      for (const auto& file_meta : storage_info->LevelFiles(level)) {
-        if (unique_files.find(file_meta->fd.packed_number_and_path_id) ==
-            unique_files.end()) {
-          unique_files.insert(file_meta->fd.packed_number_and_path_id);
-          total_files_size += file_meta->fd.GetFileSize();
+    for (int level = -1; level < storage_info->num_levels_; level++) {
+      for (auto f : storage_info->LevelFiles(level)) {
+        if (unique_files.insert(f->fd.packed_number_and_path_id).second) {
+          total_files_size += f->fd.GetFileSize();
         }
       }
     }

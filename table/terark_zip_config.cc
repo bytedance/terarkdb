@@ -386,6 +386,9 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo,
   MyOverrideInt(cfo, level0_stop_writes_trigger);
   MyOverrideXiB(cfo, max_compaction_bytes);
 
+  MyOverrideXiB(cfo, blob_size);
+  MyOverrideDouble(cfo, blob_gc_ratio);
+
   if (tzo.debugLevel) {
     STD_INFO("TerarkZipConfigFromEnv(dbo, cfo) successed\n");
   }

@@ -1,6 +1,11 @@
 
 ## CHANGELOG
 
+2020-01-07
+- Fix fake assertion of universal compaction picker
+- Refine lazy level compaction pick size
+- Refine database statistics report relevance
+
 2020-01-05
 - Remove terark index build pipeline
 - Fix PatriciaTrieMemTable bugs
