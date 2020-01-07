@@ -60,19 +60,19 @@ enum class ConcurrentType { Native, None };
 
 enum class PatriciaKeyType { UserKey, FullKey };
 
-enum class InsertResult { Success, Duplicated, Fail, InsufficientMemory };
+enum class InsertResult { Success, Duplicated, Fail };
 
 #pragma pack(push)
 #pragma pack(4)
 struct tag_vector_t {
-  uint32_t size;
-  uint32_t loc;
+  std::atomic<uint32_t> size;
+  std::atomic<uint32_t> loc;
   struct data_t {
     uint64_t tag;
     uint32_t loc;
     operator uint64_t() const { return tag; }
   };
-  bool full() { return terark::fast_popcount(size) == 1; }
+  static bool full(uint32_t size) { return terark::fast_popcount(size) == 1; }
 };
 #pragma pack(pop)
 
@@ -91,11 +91,11 @@ class PatriciaTrieRep : public MemTableRep {
   std::atomic_bool immutable_;
   terark_memtable_details::tries_t trie_vec_;
   size_t trie_vec_size_;
-  size_t overhead_; // this overhead is for new memtable size check
+  size_t overhead_;  // this overhead is for new memtable size check
   int64_t write_buffer_size_;
   static const int64_t size_limit_ = 1LL << 30;
   std::mutex mutex_;
-  
+
  public:
   // Create a new patricia trie memtable rep with following options
   PatriciaTrieRep(terark_memtable_details::ConcurrentType concurrent_type,

@@ -226,7 +226,7 @@ void UniversalCompactionPicker::SortedRun::DumpSizeInfo(
 std::vector<UniversalCompactionPicker::SortedRun>
 UniversalCompactionPicker::CalculateSortedRuns(
     const VersionStorageInfo& vstorage, const ImmutableCFOptions& /*ioptions*/,
-    const MutableCFOptions& mutable_cf_options) {
+    const MutableCFOptions& /*mutable_cf_options*/) {
   std::vector<UniversalCompactionPicker::SortedRun> ret;
   for (FileMetaData* f : vstorage.LevelFiles(0)) {
     ret.emplace_back(0, f, vstorage.FileSize(f, uint64_t(-1)),
@@ -236,25 +236,10 @@ UniversalCompactionPicker::CalculateSortedRuns(
     uint64_t total_size = 0U;
     uint64_t total_compensated_size = 0U;
     bool being_compacted = false;
-    bool is_first = true;
     for (FileMetaData* f : vstorage.LevelFiles(level)) {
       total_size += vstorage.FileSize(f, uint64_t(-1));
       total_compensated_size += f->compensated_file_size;
-      if (mutable_cf_options.compaction_options_universal.allow_trivial_move) {
-        being_compacted |= f->being_compacted;
-      } else {
-        // Compaction always includes all files for a non-zero level, so for a
-        // non-zero level, all the files should share the same being_compacted
-        // value.
-        // This assumption is only valid when
-        // mutable_cf_options.compaction_options_universal.allow_trivial_move is
-        // false
-        assert(is_first || f->being_compacted == being_compacted);
-      }
-      if (is_first) {
-        being_compacted = f->being_compacted;
-        is_first = false;
-      }
+      being_compacted |= f->being_compacted;
     }
     if (total_compensated_size > 0) {
       ret.emplace_back(level, nullptr, total_size, total_compensated_size,
