@@ -1051,9 +1051,10 @@ public:
   CommandLineCompactionDispatcher(std::string&& cmd) : m_cmd(std::move(cmd)) {}
 
   std::future<std::string> DoCompaction(std::string data) override {
-    // if use vfork_cmd_future, we have no a chance to print log
-    //return terark::vfork_cmd_future(m_cmd, data, "/tmp/compact-");
-
+    // if use future vfork_cmd, we have no a chance to print log
+    //return terark::vfork_cmd(m_cmd, data, "/tmp/compact-");
+    //
+    // use onFinish callback, so we can print log
     auto promise = std::make_shared<std::promise<std::string> >();
     std::future<std::string> future = promise->get_future();
     size_t datalen = data.size();
