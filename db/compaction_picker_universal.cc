@@ -97,7 +97,7 @@ SmallestKeyHeap create_level_heap(Compaction* c, const Comparator* icmp) {
   return smallest_key_priority_q;
 }
 
-#if !defined(NDEBUG)
+#if !defined(NDEBUG) & 0
 // smallest_seqno and largest_seqno are set iff. `files` is not empty.
 void GetSmallestLargestSeqno(const std::vector<FileMetaData*>& files,
                              SequenceNumber* smallest_seqno,

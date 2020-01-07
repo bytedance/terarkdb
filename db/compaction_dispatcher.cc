@@ -645,6 +645,7 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(Slice data) {
                                             &arena);
         level_iter->RegisterCleanup([](void* arg1, void* arg2) {
           assert(nullptr != arg2); // arg2 is arena
+          TERARK_UNUSED_VAR(arg2);
           static_cast<InternalIterator*>(arg1)->~InternalIterator();
         }, map_iter, nullptr);
         merge_iter_builder.AddIterator(level_iter);
@@ -1050,24 +1051,28 @@ public:
   CommandLineCompactionDispatcher(std::string&& cmd) : m_cmd(std::move(cmd)) {}
 
   std::future<std::string> DoCompaction(std::string data) override {
-    std::promise<std::string> promise;
-    std::future<std::string> future = promise.get_future();
-    std::thread(
-     [this, data = std::move(data)](std::promise<std::string>&& prom) {
-      try {
-        std::string result = terark::vfork_cmd(m_cmd, data, "/tmp/compact-");
+    // if use vfork_cmd_future, we have no a chance to print log
+    //return terark::vfork_cmd_future(m_cmd, data, "/tmp/compact-");
 
-        fprintf(stderr,
-            "INFO: CompactCmd(%s, datalen=%zd) = result[len=%zd]: %s\n",
-            m_cmd.c_str(), data.size(),
-            result.size(), Slice(result).ToString(true).c_str());
-
-        prom.set_value(result);
+    auto promise = std::make_shared<std::promise<std::string> >();
+    std::future<std::string> future = promise->get_future();
+    size_t datalen = data.size();
+    auto onFinish = [this,promise,datalen]
+                    (std::string&& result, std::exception* ex) {
+      fprintf(stderr,
+          "INFO: CompactCmd(%s, datalen=%zd) = exception[%p] = %s, result[len=%zd]: %s\n",
+          this->m_cmd.c_str(), datalen, ex, ex?ex->what():"",
+          result.size(), Slice(result).ToString(true).c_str());
+      promise->set_value(std::move(result));
+      if (ex) {
+          try {
+              throw *ex;
+          } catch (...) {
+              promise->set_exception(std::current_exception());
+          }
       }
-      catch (...) {
-        prom.set_exception(std::current_exception());
-      }
-    }, std::move(promise)).detach();
+    };
+    terark::vfork_cmd(m_cmd, data, std::move(onFinish), "/tmp/compact-");
     return future;
   }
 };
