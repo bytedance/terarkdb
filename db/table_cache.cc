@@ -12,8 +12,6 @@
 #include "db/dbformat.h"
 #include "db/range_tombstone_fragmenter.h"
 #include "db/version_edit.h"
-#include "util/filename.h"
-
 #include "monitoring/perf_context_imp.h"
 #include "rocksdb/statistics.h"
 #include "table/get_context.h"
@@ -25,6 +23,7 @@
 #include "util/c_style_callback.h"
 #include "util/coding.h"
 #include "util/file_reader_writer.h"
+#include "util/filename.h"
 #include "util/stop_watch.h"
 #include "util/sync_point.h"
 
@@ -75,7 +74,8 @@ class LazyCreateIterator : public Snapshot {
                      const InternalKeyComparator& icomparator,
                      RangeDelAggregator* range_del_agg,
                      const SliceTransform* prefix_extractor,
-                     bool for_compaction, bool skip_filters, int level)
+                     bool for_compaction, bool skip_filters,
+                     bool ignore_range_deletions, int level)
       : table_cache_(table_cache),
         options_(options),
         snapshot_(0),
@@ -92,12 +92,11 @@ class LazyCreateIterator : public Snapshot {
     }
     options_.iterate_lower_bound = nullptr;
     options_.iterate_upper_bound = nullptr;
+    options_.ignore_range_deletions = ignore_range_deletions;
   }
   ~LazyCreateIterator() = default;
 
-  SequenceNumber GetSequenceNumber() const override {
-    return snapshot_;
-  }
+  SequenceNumber GetSequenceNumber() const override { return snapshot_; }
 
   InternalIterator* operator()(const FileMetaData* _f,
                                const DependenceMap& _dependence_map,
@@ -124,8 +123,7 @@ TableCache::TableCache(const ImmutableCFOptions& ioptions,
   }
 }
 
-TableCache::~TableCache() {
-}
+TableCache::~TableCache() {}
 
 TableReader* TableCache::GetTableReaderFromHandle(Cache::Handle* handle) {
   return reinterpret_cast<TableReader*>(cache_->Value(handle));
@@ -234,8 +232,7 @@ InternalIterator* TableCache::NewIterator(
     const DependenceMap& dependence_map, RangeDelAggregator* range_del_agg,
     const SliceTransform* prefix_extractor, TableReader** table_reader_ptr,
     HistogramImpl* file_read_hist, bool for_compaction, Arena* arena,
-    bool skip_filters, int level, const InternalKey* smallest_compaction_key,
-    const InternalKey* largest_compaction_key) {
+    bool skip_filters, int level) {
   PERF_TIMER_GUARD(new_table_iterator_nanos);
 
   Status s;
@@ -246,21 +243,27 @@ InternalIterator* TableCache::NewIterator(
     *table_reader_ptr = nullptr;
   }
   size_t readahead = 0;
-  if (for_compaction) {
-#ifndef NDEBUG
-    bool use_direct_reads_for_compaction = env_options.use_direct_reads;
-    TEST_SYNC_POINT_CALLBACK("TableCache::NewIterator:for_compaction",
-                             &use_direct_reads_for_compaction);
-#endif  // !NDEBUG
-    if (ioptions_.new_table_reader_for_compaction_inputs) {
-      // get compaction_readahead_size from env_options allows us to set the
-      // value dynamically
-      readahead = env_options.compaction_readahead_size;
-      create_new_table_reader = true;
-    }
+  bool record_stats = !for_compaction;
+  if (file_meta.prop.is_map_sst()) {
+    record_stats = false;
   } else {
-    readahead = options.readahead_size;
-    create_new_table_reader = readahead > 0;
+    // MapSST don't handle these
+    if (for_compaction) {
+#ifndef NDEBUG
+      bool use_direct_reads_for_compaction = env_options.use_direct_reads;
+      TEST_SYNC_POINT_CALLBACK("TableCache::NewIterator:for_compaction",
+                               &use_direct_reads_for_compaction);
+#endif  // !NDEBUG
+      if (ioptions_.new_table_reader_for_compaction_inputs) {
+        // get compaction_readahead_size from env_options allows us to set the
+        // value dynamically
+        readahead = env_options.compaction_readahead_size;
+        create_new_table_reader = true;
+      }
+    } else {
+      readahead = options.readahead_size;
+      create_new_table_reader = readahead > 0;
+    }
   }
 
   auto& fd = file_meta.fd;
@@ -268,8 +271,8 @@ InternalIterator* TableCache::NewIterator(
     std::unique_ptr<TableReader> table_reader_unique_ptr;
     s = GetTableReader(
         env_options, icomparator, fd, true /* sequential_mode */, readahead,
-        !for_compaction /* record stats */, nullptr, &table_reader_unique_ptr,
-        prefix_extractor, false /* skip_filters */, level,
+        record_stats, nullptr, &table_reader_unique_ptr, prefix_extractor,
+        false /* skip_filters */, level,
         true /* prefetch_index_and_filter_in_cache */, for_compaction);
     if (s.ok()) {
       table_reader = table_reader_unique_ptr.release();
@@ -279,8 +282,7 @@ InternalIterator* TableCache::NewIterator(
     if (table_reader == nullptr) {
       s = FindTable(env_options, icomparator, fd, &handle, prefix_extractor,
                     options.read_tier == kBlockCacheTier /* no_io */,
-                    !for_compaction /* record read_stats */, file_read_hist,
-                    skip_filters, level);
+                    record_stats, file_read_hist, skip_filters, level);
       if (s.ok()) {
         table_reader = GetTableReaderFromHandle(handle);
       }
@@ -288,32 +290,42 @@ InternalIterator* TableCache::NewIterator(
   }
   InternalIterator* result = nullptr;
   if (s.ok()) {
-    if (options.table_filter &&
-        !options.table_filter(*table_reader->GetTableProperties())) {
-      result = NewEmptyInternalIterator<LazyBuffer>(arena);
+    if (!file_meta.prop.is_map_sst()) {
+      if (options.table_filter &&
+          !options.table_filter(*table_reader->GetTableProperties())) {
+        result = NewEmptyInternalIterator<LazyBuffer>(arena);
+      } else {
+        result = table_reader->NewIterator(options, prefix_extractor, arena,
+                                           skip_filters, for_compaction);
+      }
     } else {
-      result = table_reader->NewIterator(options, prefix_extractor, arena,
-                                         skip_filters, for_compaction);
-      if (file_meta.prop.purpose == kMapSst && !dependence_map.empty()) {
+      ReadOptions map_options = options;
+      map_options.total_order_seek = true;
+      map_options.readahead_size = 0;
+      result =
+          table_reader->NewIterator(map_options, prefix_extractor, arena,
+                                    skip_filters, false /* for_compaction */);
+      if (!dependence_map.empty()) {
+        bool ignore_range_deletions =
+            options.ignore_range_deletions ||
+            file_meta.prop.map_handle_range_deletions();
         LazyCreateIterator* lazy_create_iter;
         if (arena != nullptr) {
           void* buffer = arena->AllocateAligned(sizeof(LazyCreateIterator));
-          lazy_create_iter =
-              new (buffer) LazyCreateIterator(this, options, env_options,
-                                              icomparator, range_del_agg,
-                                              prefix_extractor, for_compaction,
-                                              skip_filters, level);
+          lazy_create_iter = new (buffer) LazyCreateIterator(
+              this, options, env_options, icomparator, range_del_agg,
+              prefix_extractor, for_compaction, skip_filters,
+              ignore_range_deletions, level);
 
         } else {
-          lazy_create_iter =
-              new LazyCreateIterator(this, options, env_options, icomparator,
-                                     range_del_agg, prefix_extractor,
-                                     for_compaction, skip_filters, level);
+          lazy_create_iter = new LazyCreateIterator(
+              this, options, env_options, icomparator, range_del_agg,
+              prefix_extractor, for_compaction, skip_filters,
+              ignore_range_deletions, level);
         }
-        auto map_sst_iter =
-            NewMapSstIterator(&file_meta, result, dependence_map, icomparator,
-                              lazy_create_iter,
-                              c_style_callback(*lazy_create_iter), arena);
+        auto map_sst_iter = NewMapSstIterator(
+            &file_meta, result, dependence_map, icomparator, lazy_create_iter,
+            c_style_callback(*lazy_create_iter), arena);
         if (arena != nullptr) {
           map_sst_iter->RegisterCleanup(
               [](void* arg1, void* arg2) {
@@ -348,8 +360,7 @@ InternalIterator* TableCache::NewIterator(
       *table_reader_ptr = table_reader;
     }
   }
-  if (s.ok() && range_del_agg != nullptr && !options.ignore_range_deletions &&
-      file_meta.prop.purpose != kMapSst) {
+  if (s.ok() && range_del_agg != nullptr && !options.ignore_range_deletions) {
     if (range_del_agg->AddFile(fd.GetNumber())) {
       std::unique_ptr<FragmentedRangeTombstoneIterator> range_del_iter(
           static_cast<FragmentedRangeTombstoneIterator*>(
@@ -358,16 +369,7 @@ InternalIterator* TableCache::NewIterator(
         s = range_del_iter->status();
       }
       if (s.ok()) {
-        const InternalKey* smallest = &file_meta.smallest;
-        const InternalKey* largest = &file_meta.largest;
-        if (smallest_compaction_key != nullptr) {
-          smallest = smallest_compaction_key;
-        }
-        if (largest_compaction_key != nullptr) {
-          largest = largest_compaction_key;
-        }
-        range_del_agg->AddTombstones(std::move(range_del_iter), smallest,
-                                     largest);
+        range_del_agg->AddTombstones(std::move(range_del_iter));
       }
     }
   }
@@ -405,15 +407,18 @@ Status TableCache::Get(const ReadOptions& options,
     }
   }
   if (s.ok()) {
-    if (file_meta.prop.purpose != kMapSst) {
-      t->UpdateMaxCoveringTombstoneSeq(
-          options, ExtractUserKey(k),
-          get_context->max_covering_tombstone_seq());
+    t->UpdateMaxCoveringTombstoneSeq(options, ExtractUserKey(k),
+                                     get_context->max_covering_tombstone_seq());
+    if (!file_meta.prop.is_map_sst()) {
       s = t->Get(options, k, get_context, prefix_extractor, skip_filters);
     } else if (dependence_map.empty()) {
-      s = Status::Corruption("Composite sst depend files missing");
+      s = Status::Corruption(
+          "TableCache::Get: Composite sst depend files missing");
     } else {
       // Forward query to target sst
+      ReadOptions forward_options = options;
+      forward_options.ignore_range_deletions |=
+          file_meta.prop.map_handle_range_deletions();
       auto get_from_map = [&](const Slice& largest_key,
                               LazyBuffer&& map_value) {
         s = map_value.fetch();
@@ -431,16 +436,14 @@ Status TableCache::Get(const ReadOptions& options,
 
         if (!GetVarint64(&map_input, &flags) ||
             !GetVarint64(&map_input, &link_count) ||
-            // TODO support kNoSmallest
-            ((flags >> MapSstElement::kNoSmallest) & 1) ||
             !GetLengthPrefixedSlice(&map_input, &smallest_key)) {
           s = Status::Corruption(err_msg);
           return false;
         }
         // don't care kNoRecords, Get call need load
         // max_covering_tombstone_seq
-        int include_smallest = (flags >> MapSstElement::kIncludeSmallest) & 1;
-        int include_largest = (flags >> MapSstElement::kIncludeLargest) & 1;
+        int include_smallest = (flags & MapSstElement::kIncludeSmallest) != 0;
+        int include_largest = (flags & MapSstElement::kIncludeLargest) != 0;
 
         // include_smallest ? cmp_result > 0 : cmp_result >= 0
         if (icomp.Compare(smallest_key, k) >= include_smallest) {
@@ -464,9 +467,8 @@ Status TableCache::Get(const ReadOptions& options,
             // make find_k a bit greater than smallest_key
             key_buffer.SetInternalKey(smallest_key, true);
             find_k = key_buffer.GetInternalKey();
-            EncodeFixed64(
-                const_cast<char*>(find_k.data() + find_k.size() - 8),
-                seq_type - 1);
+            EncodeFixed64(const_cast<char*>(find_k.data() + find_k.size() - 8),
+                          seq_type - 1);
           }
         }
 
@@ -501,9 +503,9 @@ Status TableCache::Get(const ReadOptions& options,
             return false;
           }
           assert(find->second->fd.GetNumber() == file_number);
-          s = Get(options, internal_comparator,
-                  *find->second, dependence_map, find_k, get_context,
-                  prefix_extractor, file_read_hist, skip_filters, level);
+          s = Get(forward_options, internal_comparator, *find->second,
+                  dependence_map, find_k, get_context, prefix_extractor,
+                  file_read_hist, skip_filters, level);
 
           if (!s.ok() || get_context->is_finished()) {
             // error or found, recovery min_seq_type_backup is unnecessary

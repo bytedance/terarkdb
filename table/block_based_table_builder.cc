@@ -18,10 +18,9 @@
 #include <string>
 #include <unordered_map>
 #include <utility>
-#include <db/version_edit.h>
 
 #include "db/dbformat.h"
-
+#include "db/version_edit.h"
 #include "rocksdb/cache.h"
 #include "rocksdb/comparator.h"
 #include "rocksdb/env.h"
@@ -29,7 +28,6 @@
 #include "rocksdb/flush_block_policy.h"
 #include "rocksdb/merge_operator.h"
 #include "rocksdb/table.h"
-
 #include "table/block.h"
 #include "table/block_based_filter_block.h"
 #include "table/block_based_table_factory.h"
@@ -38,8 +36,9 @@
 #include "table/filter_block.h"
 #include "table/format.h"
 #include "table/full_filter_block.h"
+#include "table/index_builder.h"
+#include "table/partitioned_filter_block.h"
 #include "table/table_builder.h"
-
 #include "util/coding.h"
 #include "util/compression.h"
 #include "util/crc32c.h"
@@ -47,9 +46,6 @@
 #include "util/stop_watch.h"
 #include "util/string_util.h"
 #include "util/xxhash.h"
-
-#include "table/index_builder.h"
-#include "table/partitioned_filter_block.h"
 
 namespace rocksdb {
 
@@ -270,7 +266,6 @@ struct BlockBasedTableBuilder::Rep {
 
   bool closed = false;  // Either Finish() or Abandon() has been called.
   const bool use_delta_encoding_for_index_values;
-  const bool ignore_key_type;
   std::unique_ptr<FilterBlockBuilder> filter_builder;
   char compressed_cache_key_prefix[BlockBasedTable::kMaxCacheKeyPrefixSize];
   size_t compressed_cache_key_prefix_size;
@@ -295,8 +290,8 @@ struct BlockBasedTableBuilder::Rep {
       const CompressionType _compression_type,
       const CompressionOptions& _compression_opts,
       const std::string* _compression_dict, bool skip_filters,
-      bool _ignore_key_type, const std::string& _column_family_name,
-      uint64_t _creation_time, uint64_t _oldest_key_time)
+      const std::string& _column_family_name, uint64_t _creation_time,
+      uint64_t _oldest_key_time)
       : ioptions(_ioptions),
         moptions(_moptions),
         table_options(table_opt),
@@ -319,7 +314,6 @@ struct BlockBasedTableBuilder::Rep {
         compression_ctx(_compression_type, _compression_opts),
         use_delta_encoding_for_index_values(table_opt.format_version >= 4 &&
                                             !table_opt.block_align),
-        ignore_key_type(_ignore_key_type),
         compressed_cache_key_prefix_size(0),
         flush_block_policy(
             table_options.flush_block_policy_factory->NewFlushBlockPolicy(
@@ -378,8 +372,8 @@ BlockBasedTableBuilder::BlockBasedTableBuilder(
     const CompressionType compression_type,
     const CompressionOptions& compression_opts,
     const std::string* compression_dict, bool skip_filters,
-    bool ignore_key_type, const std::string& column_family_name,
-    uint64_t creation_time, uint64_t oldest_key_time) {
+    const std::string& column_family_name, uint64_t creation_time,
+    uint64_t oldest_key_time) {
   BlockBasedTableOptions sanitized_table_options(table_options);
   if (sanitized_table_options.format_version == 0 &&
       sanitized_table_options.checksum != kCRC32c) {
@@ -396,8 +390,7 @@ BlockBasedTableBuilder::BlockBasedTableBuilder(
       new Rep(ioptions, moptions, sanitized_table_options, internal_comparator,
               int_tbl_prop_collector_factories, column_family_id, file,
               compression_type, compression_opts, compression_dict,
-              skip_filters, ignore_key_type, column_family_name, creation_time,
-              oldest_key_time);
+              skip_filters, column_family_name, creation_time, oldest_key_time);
 
   if (rep_->filter_builder != nullptr) {
     rep_->filter_builder->StartBlock(0);
@@ -425,63 +418,72 @@ Status BlockBasedTableBuilder::Add(const Slice& key,
     return s;
   }
   const Slice& value = lazy_value.slice();
-  ValueType value_type = ExtractValueType(key);
-  if (r->ignore_key_type || IsValueType(value_type)) {
-    if (r->props.num_entries > 0) {
-      assert(r->internal_comparator.Compare(key, Slice(r->last_key)) > 0);
-    }
-
-    auto should_flush = r->flush_block_policy->Update(key, value);
-    if (should_flush) {
-      assert(!r->data_block.empty());
-      Flush();
-
-      // Add item to index block.
-      // We do not emit the index entry for a block until we have seen the
-      // first key for the next data block.  This allows us to use shorter
-      // keys in the index block.  For example, consider a block boundary
-      // between the keys "the quick brown fox" and "the who".  We can use
-      // "the r" as the key for the index block entry since it is >= all
-      // entries in the first block and < all entries in subsequent
-      // blocks.
-      if (ok()) {
-        r->index_builder->AddIndexEntry(&r->last_key, &key, r->pending_handle);
-      }
-    }
-
-    // Note: PartitionedFilterBlockBuilder requires key being added to filter
-    // builder after being added to index builder.
-    if (r->filter_builder != nullptr) {
-      r->filter_builder->Add(ExtractUserKey(key));
-    }
-
-    r->last_key.assign(key.data(), key.size());
-    r->data_block.Add(key, value);
-    r->props.num_entries++;
-    r->props.raw_key_size += key.size();
-    r->props.raw_value_size += value.size();
-    if (value_type == kTypeDeletion || value_type == kTypeSingleDeletion) {
-      r->props.num_deletions++;
-    } else if (value_type == kTypeMerge) {
-      r->props.num_merge_operands++;
-    }
-
-    r->index_builder->OnKeyAdded(key);
-    NotifyCollectTableCollectorsOnAdd(key, value, r->offset,
-                                      r->table_properties_collectors,
-                                      r->ioptions.info_log);
-
-  } else if (value_type == kTypeRangeDeletion) {
-    r->range_del_block.Add(key, value);
-    ++r->props.num_range_deletions;
-    r->props.raw_key_size += key.size();
-    r->props.raw_value_size += value.size();
-    NotifyCollectTableCollectorsOnAdd(key, value, r->offset,
-                                      r->table_properties_collectors,
-                                      r->ioptions.info_log);
-  } else {
-    assert(false);
+  if (r->props.num_entries > 0 &&
+      r->internal_comparator.Compare(key, Slice(r->last_key)) <= 0) {
+    assert(r->internal_comparator.Compare(key, Slice(r->last_key)) > 0);
+    return Status::Corruption("BlockBasedTableBuilder::Add: overlapping key");
   }
+
+  auto should_flush = r->flush_block_policy->Update(key, value);
+  if (should_flush) {
+    assert(!r->data_block.empty());
+    Flush();
+
+    // Add item to index block.
+    // We do not emit the index entry for a block until we have seen the first
+    // key for the next data block.  This allows us to use shorter keys in the
+    // index block.  For example, consider a block boundary between the keys
+    // "the quick brown fox" and "the who".  We can use "the r" as the key for
+    // the index block entry since it is >= all entries in the first block and <
+    // all entries in subsequent blocks.
+    if (ok()) {
+      r->index_builder->AddIndexEntry(&r->last_key, &key, r->pending_handle);
+    }
+  }
+
+  // Note: PartitionedFilterBlockBuilder requires key being added to filter
+  // builder after being added to index builder.
+  if (r->filter_builder != nullptr) {
+    r->filter_builder->Add(ExtractUserKey(key));
+  }
+
+  r->last_key.assign(key.data(), key.size());
+  r->data_block.Add(key, value);
+  r->props.num_entries++;
+  r->props.raw_key_size += key.size();
+  r->props.raw_value_size += value.size();
+  ValueType value_type = ExtractValueType(key);
+  if (value_type == kTypeDeletion || value_type == kTypeSingleDeletion) {
+    r->props.num_deletions++;
+  } else if (value_type == kTypeMerge) {
+    r->props.num_merge_operands++;
+  }
+
+  r->index_builder->OnKeyAdded(key);
+  NotifyCollectTableCollectorsOnAdd(key, value, r->offset,
+                                    r->table_properties_collectors,
+                                    r->ioptions.info_log);
+  return r->status;
+}
+
+Status BlockBasedTableBuilder::AddTombstone(const Slice& key,
+                                            const LazyBuffer& lazy_value) {
+  Rep* r = rep_;
+  assert(!r->closed);
+  assert(ok());
+  auto s = lazy_value.fetch();
+  if (!s.ok()) {
+    return s;
+  }
+  const Slice& value = lazy_value.slice();
+  assert(ExtractValueType(key) == kTypeRangeDeletion);
+  r->range_del_block.Add(key, value);
+  ++r->props.num_range_deletions;
+  r->props.raw_key_size += key.size();
+  r->props.raw_value_size += value.size();
+  NotifyCollectTableCollectorsOnAdd(key, value, r->offset,
+                                    r->table_properties_collectors,
+                                    r->ioptions.info_log);
   return r->status;
 }
 
@@ -680,7 +682,6 @@ Status BlockBasedTableBuilder::InsertBlockInCache(const Slice& block_contents,
   Cache* block_cache_compressed = r->table_options.block_cache_compressed.get();
 
   if (type != kNoCompression && block_cache_compressed != nullptr) {
-
     size_t size = block_contents.size();
 
     auto ubuf =
@@ -886,7 +887,9 @@ void BlockBasedTableBuilder::WriteRangeDelBlock(
   }
 }
 
-Status BlockBasedTableBuilder::Finish(const TablePropertyCache* prop) {
+Status BlockBasedTableBuilder::Finish(
+    const TablePropertyCache* prop,
+    const std::vector<SequenceNumber>* snapshots) {
   Rep* r = rep_;
   assert(r->status.ok());
   bool empty_data_block = r->data_block.empty();
@@ -900,6 +903,9 @@ Status BlockBasedTableBuilder::Finish(const TablePropertyCache* prop) {
     r->props.read_amp = prop->read_amp;
     r->props.dependence = prop->dependence;
     r->props.inheritance_chain = prop->inheritance_chain;
+  }
+  if (snapshots != nullptr) {
+    r->props.snapshots = *snapshots;
   }
 
   // To make sure properties block is able to keep the accurate size of index

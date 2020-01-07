@@ -114,8 +114,8 @@ Status DBImpl::FlushMemTableToOutputFile(
     SuperVersionContext* superversion_context, LogBuffer* log_buffer) {
   mutex_.AssertHeld();
   // TODO(ZouZhiZhang) find out Assertion reason
-  //assert(cfd->imm()->NumNotFlushed() != 0);
-  //assert(cfd->imm()->IsFlushPending());
+  // assert(cfd->imm()->NumNotFlushed() != 0);
+  // assert(cfd->imm()->IsFlushPending());
 
   SequenceNumber earliest_write_conflict_snapshot;
   std::vector<SequenceNumber> snapshot_seqs =
@@ -128,7 +128,7 @@ Status DBImpl::FlushMemTableToOutputFile(
   auto flushes = num_running_flushes() - 1;
   auto max_flushes = std::max(flushes, GetBGJobLimits().max_flushes - 1);
   assert(flushes >= 0 && max_flushes >= 0);
-  double flush_load = -1. * flushes / max_flushes ;
+  double flush_load = -1. * flushes / max_flushes;
   FlushJob flush_job(
       dbname_, cfd, immutable_db_options_, mutable_cf_options,
       nullptr /* memtable_id */, env_options_for_compaction_, versions_.get(),
@@ -206,7 +206,8 @@ Status DBImpl::FlushMemTableToOutputFile(
           cfd->ioptions()->cf_paths[0].path, file_meta.fd.GetNumber());
       sfm->OnAddFile(file_path);
       if (sfm->IsMaxAllowedSpaceReached()) {
-        Status new_bg_error = Status::SpaceLimit("Max allowed space was reached");
+        Status new_bg_error =
+            Status::SpaceLimit("Max allowed space was reached");
         TEST_SYNC_POINT_CALLBACK(
             "DBImpl::FlushMemTableToOutputFile:MaxAllowedSpaceReached",
             &new_bg_error);
@@ -287,7 +288,7 @@ Status DBImpl::AtomicFlushMemTablesToOutputFiles(
   auto flushes = num_running_flushes() + num_cfs - 2;
   auto max_flushes = std::max(flushes, GetBGJobLimits().max_flushes - 1);
   assert(flushes >= 0 && max_flushes >= 0);
-  double flush_load = -1. * flushes / max_flushes ;
+  double flush_load = -1. * flushes / max_flushes;
   for (int i = 0; i < num_cfs; ++i) {
     auto cfd = cfds[i];
     Directory* data_dir = GetDataDir(cfd, 0U);
@@ -666,8 +667,6 @@ Status DBImpl::CompactRange(const CompactRangeOptions& options,
   }
 
   int max_level_with_files = 0;
-  bool enable_lazy_compaction =
-      cfd->GetCurrentMutableCFOptions()->enable_lazy_compaction;
   std::unordered_set<uint64_t> files_being_compact;
   {
     InstrumentedMutexLock l(&mutex_);
@@ -679,13 +678,14 @@ Status DBImpl::CompactRange(const CompactRangeOptions& options,
       }
     }
     cfd->PrepareManualCompaction(*cfd->GetLatestMutableCFOptions(), begin, end,
-                                 &files_being_compact, enable_lazy_compaction);
+                                 &files_being_compact);
   }
 
   int final_output_level = 0;
   if (cfd->ioptions()->compaction_style == kCompactionStyleUniversal &&
       cfd->NumberLevels() > 1 &&
-      (!enable_lazy_compaction || (begin == nullptr && end == nullptr))) {
+      (!cfd->ioptions()->enable_lazy_compaction ||
+       (begin == nullptr && end == nullptr))) {
     // Always compact all files together.
     final_output_level = cfd->NumberLevels() - 1;
     // if bottom most level is reserved
@@ -695,8 +695,7 @@ Status DBImpl::CompactRange(const CompactRangeOptions& options,
     s = RunManualCompaction(cfd, ColumnFamilyData::kCompactAllLevels,
                             final_output_level, options.target_path_id,
                             options.max_subcompactions, begin, end,
-                            &files_being_compact, exclusive, false,
-                            enable_lazy_compaction);
+                            &files_being_compact, exclusive, false);
   } else {
     for (int level = 0; level <= max_level_with_files; level++) {
       int output_level;
@@ -731,8 +730,7 @@ Status DBImpl::CompactRange(const CompactRangeOptions& options,
       }
       s = RunManualCompaction(cfd, level, output_level, options.target_path_id,
                               options.max_subcompactions, begin, end,
-                              &files_being_compact, exclusive, false,
-                              enable_lazy_compaction);
+                              &files_being_compact, exclusive, false);
       if (!s.ok()) {
         break;
       }
@@ -1060,8 +1058,8 @@ Status DBImpl::ContinueBackgroundWork() {
   return Status::OK();
 }
 
-void DBImpl::NotifyOnCompactionBegin(ColumnFamilyData* cfd,
-                                     Compaction *c, const Status &st,
+void DBImpl::NotifyOnCompactionBegin(ColumnFamilyData* cfd, Compaction* c,
+                                     const Status& st,
                                      const CompactionJobStats& job_stats,
                                      int job_id) {
 #ifndef ROCKSDB_LITE
@@ -1355,7 +1353,7 @@ Status DBImpl::RunManualCompaction(
     ColumnFamilyData* cfd, int input_level, int output_level,
     uint32_t output_path_id, uint32_t max_subcompactions, const Slice* begin,
     const Slice* end, const std::unordered_set<uint64_t>* files_being_compact,
-    bool exclusive, bool disallow_trivial_move, bool enable_lazy_compaction) {
+    bool exclusive, bool disallow_trivial_move) {
   assert(input_level == ColumnFamilyData::kCompactAllLevels ||
          input_level >= 0);
 
@@ -1364,6 +1362,7 @@ Status DBImpl::RunManualCompaction(
 
   bool scheduled = false;
   bool manual_conflict = false;
+  bool enable_lazy_compaction = cfd->ioptions()->enable_lazy_compaction;
   ManualCompactionState manual;
   manual.cfd = cfd;
   manual.input_level = input_level;
@@ -1374,7 +1373,6 @@ Status DBImpl::RunManualCompaction(
   manual.incomplete = false;
   manual.exclusive = exclusive;
   manual.disallow_trivial_move = disallow_trivial_move;
-  manual.enable_lazy_compaction = enable_lazy_compaction;
   // For universal compaction, we enforce every manual compaction to compact
   // all files.
   if (begin == nullptr ||
@@ -1432,7 +1430,6 @@ Status DBImpl::RunManualCompaction(
   ROCKS_LOG_INFO(immutable_db_options_.info_log,
                  "[%s] Manual compaction starting", cfd->GetName().c_str());
 
-
   // We don't check bg_error_ here, because if we get the error in compaction,
   // the compaction will set manual.status to bg_error_ and set manual.done to
   // true.
@@ -1447,7 +1444,7 @@ Status DBImpl::RunManualCompaction(
                *manual.cfd->GetLatestMutableCFOptions(), manual.input_level,
                manual.output_level, manual.output_path_id, max_subcompactions,
                manual.begin, manual.end, &manual.manual_end, &manual_conflict,
-               files_being_compact, enable_lazy_compaction)) == nullptr &&
+               files_being_compact)) == nullptr &&
           manual_conflict))) {
       // exclusive manual compactions should not see a conflict during
       // CompactRange
@@ -1839,9 +1836,9 @@ void DBImpl::MaybeScheduleFlushOrCompaction() {
     return;
   }
 
-  while (
-      bg_garbage_collection_scheduled_ < bg_job_limits.max_garbage_collections
-      && unscheduled_garbage_collections_ > 0) {
+  while (bg_garbage_collection_scheduled_ <
+             bg_job_limits.max_garbage_collections &&
+         unscheduled_garbage_collections_ > 0) {
     CompactionArg* ca = new CompactionArg;
     ca->db = this;
     ca->prepicked_compaction = nullptr;
@@ -1950,8 +1947,8 @@ ColumnFamilyData* DBImpl::PopFirstFromGarbageCollectionQueue() {
   assert(!garbage_collection_queue_.empty());
   auto max_iter = garbage_collection_queue_.begin();
   double max_load = (*max_iter)->current()->GetGarbageCollectionLoad();
-  for (auto it = std::next(max_iter);
-       it != garbage_collection_queue_.end(); ++it) {
+  for (auto it = std::next(max_iter); it != garbage_collection_queue_.end();
+       ++it) {
     double tmp_load = (*it)->current()->GetGarbageCollectionLoad();
     if (max_load < tmp_load) {
       max_load = tmp_load;
@@ -2325,7 +2322,6 @@ void DBImpl::BackgroundCallCompaction(PrepickedCompaction* prepicked_compaction,
   }
 }
 
-
 void DBImpl::BackgroundCallGarbageCollection() {
   bool made_progress = false;
   JobContext job_context(next_job_id_.fetch_add(1), true);
@@ -2345,8 +2341,8 @@ void DBImpl::BackgroundCallGarbageCollection() {
         CaptureCurrentFileNumberInPendingOutputs();
 
     assert(bg_garbage_collection_scheduled_);
-    Status s = BackgroundGarbageCollection(&made_progress, &job_context,
-                                           &log_buffer);
+    Status s =
+        BackgroundGarbageCollection(&made_progress, &job_context, &log_buffer);
     TEST_SYNC_POINT("BackgroundCallGarbageCollection:1");
     if (!s.ok() && !s.IsShutdownInProgress()) {
       // Wait a little bit before retrying background garbage collection in
@@ -2373,7 +2369,8 @@ void DBImpl::BackgroundCallGarbageCollection() {
     // we might have created (they might not be all recorded in job_context in
     // case of a failure). Thus, we force full scan in FindObsoleteFiles()
     FindObsoleteFiles(&job_context, !s.ok() && !s.IsShutdownInProgress());
-    TEST_SYNC_POINT("DBImpl::BackgroundCallGarbageCollection:FoundObsoleteFiles");
+    TEST_SYNC_POINT(
+        "DBImpl::BackgroundCallGarbageCollection:FoundObsoleteFiles");
 
     // delete unnecessary files if any, this is done outside the mutex
     if (job_context.HaveSomethingToClean() ||
@@ -2480,9 +2477,11 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
   // InternalKey manual_end_storage;
   // InternalKey* manual_end = &manual_end_storage;
   bool sfm_reserved_compact_space = false;
+  bool enable_lazy_compaction = false;
   if (is_manual) {
     ManualCompactionState* m = manual_compaction;
     assert(m->in_progress);
+    enable_lazy_compaction = m->cfd->ioptions()->enable_lazy_compaction;
     if (!c) {
       m->done = true;
       m->manual_end = nullptr;
@@ -2541,6 +2540,7 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
       // compact.
       return Status::OK();
     }
+    enable_lazy_compaction = cfd->ioptions()->enable_lazy_compaction;
 
     // Pick up latest mutable CF Options and use it throughout the
     // compaction job
@@ -2553,7 +2553,8 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
       // compaction is not necessary. Need to make sure mutex is held
       // until we make a copy in the following code
       TEST_SYNC_POINT("DBImpl::BackgroundCompaction():BeforePickCompaction");
-      c.reset(cfd->PickCompaction(*mutable_cf_options, log_buffer));
+      c.reset(cfd->PickCompaction(*mutable_cf_options, snapshots_.GetAll(),
+                                  log_buffer));
       TEST_SYNC_POINT("DBImpl::BackgroundCompaction():AfterPickCompaction");
 
       if (c != nullptr) {
@@ -2655,11 +2656,10 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
       for (size_t i = 0; i < c->num_input_files(l); i++) {
         FileMetaData* f = c->input(l, i);
         c->edit()->DeleteFile(c->level(l), f->fd.GetNumber());
-        c->edit()->AddFile(c->output_level(), f->fd.GetNumber(),
-                           f->fd.GetPathId(), f->fd.GetFileSize(), f->smallest,
-                           f->largest, f->fd.smallest_seqno,
-                           f->fd.largest_seqno, f->marked_for_compaction,
-                           f->prop);
+        c->edit()->AddFile(
+            c->output_level(), f->fd.GetNumber(), f->fd.GetPathId(),
+            f->fd.GetFileSize(), f->smallest, f->largest, f->fd.smallest_seqno,
+            f->fd.largest_seqno, f->marked_for_compaction, f->prop);
         // Make EventListenerTest.OnSingleDBCompactionTest happy
         c->AddOutputTableFileNumber(f->fd.GetNumber());
 
@@ -2740,9 +2740,9 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
         env_options_for_compaction_, versions_.get(), &shutting_down_,
         preserve_deletes_seqnum_.load(), log_buffer, directories_.GetDbDir(),
         GetDataDir(c->column_family_data(), c->output_path_id()), stats_,
-        &mutex_, &error_handler_, snapshot_seqs, earliest_write_conflict_snapshot,
-        snapshot_checker, table_cache_, &event_logger_,
-        c->mutable_cf_options()->paranoid_file_checks,
+        &mutex_, &error_handler_, snapshot_seqs,
+        earliest_write_conflict_snapshot, snapshot_checker, table_cache_,
+        &event_logger_, c->mutable_cf_options()->paranoid_file_checks,
         c->mutable_cf_options()->report_bg_io_stats, dbname_,
         &compaction_job_stats);
     compaction_job.Prepare();
@@ -2828,15 +2828,15 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
     // Stop the compaction if manual_end points to nullptr -- this means
     // that we compacted the whole range. manual_end should always point
     // to nullptr in case of universal compaction
-    if (m->manual_end == nullptr) {
+    if (m->manual_end == nullptr && !enable_lazy_compaction) {
       m->done = true;
     }
     if (!m->done) {
       // We only compacted part of the requested range.  Update *m
       // to the range that is left to be compacted.
       // Universal and FIFO compactions should always compact the whole range
-      if (m->cfd->ioptions()->compaction_style == kCompactionStyleUniversal &&
-          m->enable_lazy_compaction) {
+      if (m->cfd->ioptions()->compaction_style == kCompactionStyleUniversal ||
+          enable_lazy_compaction) {
         // do nothing
       } else {
         assert(m->cfd->ioptions()->compaction_style !=
@@ -2959,9 +2959,9 @@ Status DBImpl::BackgroundGarbageCollection(bool* made_progress,
         env_options_for_compaction_, versions_.get(), &shutting_down_,
         preserve_deletes_seqnum_.load(), log_buffer, directories_.GetDbDir(),
         GetDataDir(c->column_family_data(), c->output_path_id()), stats_,
-        &mutex_, &error_handler_, snapshot_seqs, earliest_write_conflict_snapshot,
-        snapshot_checker, table_cache_, &event_logger_,
-        c->mutable_cf_options()->paranoid_file_checks,
+        &mutex_, &error_handler_, snapshot_seqs,
+        earliest_write_conflict_snapshot, snapshot_checker, table_cache_,
+        &event_logger_, c->mutable_cf_options()->paranoid_file_checks,
         c->mutable_cf_options()->report_bg_io_stats, dbname_,
         &garbage_collection_job_stats);
     garbage_collection_job.Prepare();
@@ -3047,9 +3047,7 @@ void DBImpl::RemoveManualCompaction(DBImpl::ManualCompactionState* m) {
     it++;
   }
   assert(false);
-  return;
 }
-
 
 bool DBImpl::ShouldntRunManualCompaction(ManualCompactionState* m) {
   if (num_running_ingest_file_ > 0) {

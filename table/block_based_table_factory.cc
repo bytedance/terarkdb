@@ -218,7 +218,6 @@ TableBuilder* BlockBasedTableFactory::NewTableBuilder(
       table_builder_options.compression_opts,
       table_builder_options.compression_dict,
       table_builder_options.skip_filters,
-      table_builder_options.ignore_key_type,
       table_builder_options.column_family_name,
       table_builder_options.creation_time,
       table_builder_options.oldest_key_time);

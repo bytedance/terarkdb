@@ -97,14 +97,14 @@
 #include "util/sync_point.h"
 #include "utilities/trace/bytedance_metrics.h"
 #if !defined(_MSC_VER) && !defined(__APPLE__)
-# include <sys/unistd.h>
-# include <table/terark_zip_weak_function.h>
+#include <sys/unistd.h>
+#include <table/terark_zip_table.h>
 #endif
 #include <terark/valvec.hpp>
 
 #ifdef __GNUC__
-# pragma GCC diagnostic push
-# pragma GCC diagnostic ignored "-Wunused-parameter"
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
 #endif
 
 //#include <terark/util/fiber_pool.hpp>
@@ -113,7 +113,7 @@
 #include <terark/thread/fiber_yield.hpp>
 
 #ifdef __GNUC__
-# pragma GCC diagnostic pop
+#pragma GCC diagnostic pop
 #endif
 
 namespace rocksdb {
@@ -157,6 +157,14 @@ void DumpSupportInfo(Logger* logger) {
 
 int64_t kDefaultLowPriThrottledRate = 2 * 1024 * 1024;
 }  // namespace
+
+static std::string write_qps_metric_name = "dbimpl_writeimpl_qps";
+static std::string read_qps_metric_name = "dbimpl_getimpl_qps";
+static std::string newiterator_qps_metric_name = "dbimpl_newiterator_qps";
+static std::string seek_qps_metric_name = "dbiter_seek_qps";
+static std::string next_qps_metric_name = "dbiter_next_qps";
+static std::string seekforprev_qps_metric_name = "dbiter_seekforprev_qps";
+static std::string prev_qps_metric_name = "dbiter_prev_qps";
 
 DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
                const bool seq_per_batch, const bool batch_per_txn)
@@ -245,7 +253,16 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
       closed_(false),
       error_handler_(this, immutable_db_options_, &mutex_),
       atomic_flush_install_cv_(&mutex_),
-      bytedance_tags_("dbname=" + dbname) {
+      bytedance_tags_("dbname=" + dbname),
+      console_runner_(this, dbname, env_,
+                      immutable_db_options_.info_log.get()),
+      write_qps_reporter_(write_qps_metric_name, bytedance_tags_),
+      read_qps_reporter_(read_qps_metric_name, bytedance_tags_),
+      newiterator_qps_reporter_(newiterator_qps_metric_name, bytedance_tags_),
+      seek_qps_reporter_(seek_qps_metric_name, bytedance_tags_),
+      next_qps_reporter_(next_qps_metric_name, bytedance_tags_),
+      seekforprev_qps_reporter_(seekforprev_qps_metric_name, bytedance_tags_),
+      prev_qps_reporter_(prev_qps_metric_name, bytedance_tags_) {
   // !batch_per_trx_ implies seq_per_batch_ because it is only unset for
   // WriteUnprepared, which should use seq_per_batch_.
   assert(batch_per_txn_ || seq_per_batch_);
@@ -395,8 +412,8 @@ Status DBImpl::ResumeImpl() {
   // Wake up any waiters - in this case, it could be the shutdown thread
   bg_cv_.SignalAll();
 
-  // No need to check BGError again. If something happened, event listener would be
-  // notified and the operation causing it would have failed
+  // No need to check BGError again. If something happened, event listener would
+  // be notified and the operation causing it would have failed
   return s;
 }
 
@@ -410,7 +427,6 @@ void DBImpl::WaitForBackgroundWork() {
 
 // Will lock the mutex_,  will wait for completion if wait is true
 void DBImpl::CancelAllBackgroundWork(bool wait) {
-
   ROCKS_LOG_INFO(immutable_db_options_.info_log,
                  "Shutdown: canceling all background work");
 
@@ -456,6 +472,8 @@ void DBImpl::CancelAllBackgroundWork(bool wait) {
 }
 
 Status DBImpl::CloseHelper() {
+  console_runner_.closing_ = true;
+
   // Guarantee that there is no background error recovery in progress before
   // continuing with the shutdown
   mutex_.Lock();
@@ -473,18 +491,17 @@ Status DBImpl::CloseHelper() {
 
   Status ret;
   mutex_.Lock();
-  int bg_unscheduled =
-      env_->UnSchedule(this, Env::Priority::BOTTOM);
+  int bg_unscheduled = env_->UnSchedule(this, Env::Priority::BOTTOM);
   bg_unscheduled += env_->UnSchedule(this, Env::Priority::LOW);
   bg_unscheduled += env_->UnSchedule(this, Env::Priority::HIGH);
 
   // Wait for background work to finish
   while (true) {
     int bg_scheduled = bg_bottom_compaction_scheduled_ +
-        bg_compaction_scheduled_ + bg_flush_scheduled_ +
-        bg_purge_scheduled_ - bg_unscheduled;
+                       bg_compaction_scheduled_ + bg_flush_scheduled_ +
+                       bg_purge_scheduled_ - bg_unscheduled;
     if (bg_scheduled || pending_purge_obsolete_files_ ||
-         error_handler_.IsRecoveryInProgress()) {
+        error_handler_.IsRecoveryInProgress() || !console_runner_.closed_) {
       TEST_SYNC_POINT("DBImpl::~DBImpl:WaitJob");
       bg_cv_.TimedWait(10000);
     } else {
@@ -611,7 +628,7 @@ Status DBImpl::CloseHelper() {
         immutable_db_options_.sst_file_manager.get());
     sfm->Close();
   }
-#endif // ROCKSDB_LITE
+#endif  // ROCKSDB_LITE
 
   if (immutable_db_options_.info_log && own_info_log_) {
     Status s = immutable_db_options_.info_log->Close();
@@ -845,19 +862,18 @@ Status DBImpl::SetDBOptions(
       }
       if (new_options.stats_dump_period_sec !=
           mutable_db_options_.stats_dump_period_sec) {
-          if (thread_dump_stats_) {
-            mutex_.Unlock();
-            thread_dump_stats_->cancel();
-            mutex_.Lock();
-          }
-          if (new_options.stats_dump_period_sec > 0) {
-            thread_dump_stats_.reset(new rocksdb::RepeatableThread(
-                [this]() { DBImpl::DumpStats(); }, "dump_st", env_,
-                new_options.stats_dump_period_sec * 1000000));
-          }
-          else {
-            thread_dump_stats_.reset();
-          }
+        if (thread_dump_stats_) {
+          mutex_.Unlock();
+          thread_dump_stats_->cancel();
+          mutex_.Lock();
+        }
+        if (new_options.stats_dump_period_sec > 0) {
+          thread_dump_stats_.reset(new rocksdb::RepeatableThread(
+              [this]() { DBImpl::DumpStats(); }, "dump_st", env_,
+              new_options.stats_dump_period_sec * 1000000));
+        } else {
+          thread_dump_stats_.reset();
+        }
       }
       write_controller_.set_max_delayed_write_rate(
           new_options.delayed_write_rate);
@@ -1261,6 +1277,7 @@ Status DBImpl::GetImpl(const ReadOptions& read_options,
                        ReadCallback* callback) {
   static const std::string metric_name = "dbimpl_getimpl";
   OperationTimerReporter reporter(metric_name, bytedance_tags_);
+  read_qps_reporter_.AddCount(1);
 
   assert(lazy_val != nullptr);
   StopWatch sw(env_, stats_, DB_GET);
@@ -1366,10 +1383,10 @@ Status DBImpl::GetImpl(const ReadOptions& read_options,
     ReturnAndCleanupSuperVersion(cfd, sv);
 
     RecordTick(stats_, NUMBER_KEYS_READ);
-    //size_t size = lazy_val->size();
-    //RecordTick(stats_, BYTES_READ, size);
-    //MeasureTime(stats_, BYTES_PER_READ, size);
-    //PERF_COUNTER_ADD(get_read_bytes, size);
+    // size_t size = lazy_val->size();
+    // RecordTick(stats_, BYTES_READ, size);
+    // MeasureTime(stats_, BYTES_PER_READ, size);
+    // PERF_COUNTER_ADD(get_read_bytes, size);
   }
   return s;
 }
@@ -1383,8 +1400,7 @@ struct SimpleFiberTls {
   boost::fibers::buffered_channel<task_t> channel;
 
   SimpleFiberTls(boost::fibers::context** activepp)
-      : m_fy(activepp), channel(MAX_QUEUE_LEN) {
-  }
+      : m_fy(activepp), channel(MAX_QUEUE_LEN) {}
 
   void update_fiber_count(intptr_t count) {
     count = std::max<intptr_t>(count, 1);
@@ -1425,19 +1441,19 @@ struct SimpleFiberTls {
 
     using namespace std::chrono;
 
-    //do not use sleep_for, because we want to return as soon as possible
-    //boost::this_fiber::sleep_for(microseconds(timeout_us));
-    //return tls->pending_count - old_pending_count;
+    // do not use sleep_for, because we want to return as soon as possible
+    // boost::this_fiber::sleep_for(microseconds(timeout_us));
+    // return tls->pending_count - old_pending_count;
 
     auto start = std::chrono::system_clock::now();
     while (true) {
-      //boost::this_fiber::yield(); // wait once
+      // boost::this_fiber::yield(); // wait once
       m_fy.unchecked_yield();
       if (pending_count > 0) {
         auto now = system_clock::now();
         auto dur = duration_cast<microseconds>(now - start).count();
         if (dur >= timeout_us) {
-          return int(pending_count - old_pending_count - 1); // negtive
+          return int(pending_count - old_pending_count - 1);  // negtive
         }
       } else {
         break;
@@ -1449,7 +1465,7 @@ struct SimpleFiberTls {
   int wait() {
     intptr_t cnt = pending_count;
     while (pending_count > 0) {
-      //boost::this_fiber::yield(); // wait once
+      // boost::this_fiber::yield(); // wait once
       m_fy.unchecked_yield();
     }
     return int(cnt);
@@ -1563,7 +1579,7 @@ std::vector<Status> DBImpl::MultiGet(
   };
 
   if (read_options.aio_concurrency && immutable_db_options_.use_aio_reads) {
-  #if 0
+#if 0
     static thread_local terark::RunOnceFiberPool fiber_pool(16);
     // current calling fiber's list head, can be treated as a handle
     int myhead = -1; // must be initialized to -1
@@ -1572,19 +1588,18 @@ std::vector<Status> DBImpl::MultiGet(
     }
     fiber_pool.reap(myhead);
     assert(0 == counting);
-  #else
+#else
     auto tls = &gt_fibers;
     tls->update_fiber_count(read_options.aio_concurrency);
     for (size_t i = 0; i < num_keys; ++i) {
       tls->push([&, i]() { get_one(i); });
     }
     while (counting) {
-      //boost::this_fiber::yield();
+      // boost::this_fiber::yield();
       tls->m_fy.unchecked_yield();
     }
-  #endif
-  }
-  else {
+#endif
+  } else {
     for (size_t i = 0; i < num_keys; ++i) {
       get_one(i);
     }
@@ -1705,7 +1720,8 @@ Status DBImpl::CreateColumnFamilyImpl(const ColumnFamilyOptions& cf_options,
         ::access(terarkdb_localTempDir, R_OK | W_OK) != 0) {
       return Status::InvalidArgument(
           "Must exists, and Permission ReadWrite is required on "
-          "env TerarkZipTable_localTempDir", terarkdb_localTempDir);
+          "env TerarkZipTable_localTempDir",
+          terarkdb_localTempDir);
     }
     if (!TerarkZipIsBlackListCF(column_family_name)) {
       TerarkZipCFOptionsFromEnv(const_cast<ColumnFamilyOptions&>(cf_options),
@@ -1922,6 +1938,7 @@ Iterator* DBImpl::NewIterator(const ReadOptions& read_options,
                               ColumnFamilyHandle* column_family) {
   static const std::string metric_name = "dbimpl_newiterator";
   OperationTimerReporter reporter(metric_name, bytedance_tags_);
+  newiterator_qps_reporter_.AddCount(1);
 
   if (read_options.managed) {
     return NewErrorIterator(
@@ -2598,26 +2615,46 @@ Status DBImpl::DeleteFilesInRanges(ColumnFamilyHandle* column_family,
   JobContext job_context(next_job_id_.fetch_add(1), true);
   {
     VersionEdit edit;
-    InstrumentedMutexLock l(&mutex_);
+    mutex_.Lock();
     Version* input_version = cfd->current();
     edit.SetColumnFamily(cfd->GetID());
+    input_version->Ref();
 
-    struct AutoReleasePendingOutputs {
+    struct AutoRelease {
       std::list<uint64_t>::iterator pending_outputs_inserted_elem;
       DBImpl* db_impl;
+      Version* input_version;
+      bool is_lock;
+      InstrumentedMutex* db_mutex;
+      std::unordered_set<FileMetaData*> file_marked;
 
-      ~AutoReleasePendingOutputs() {
+      void Lock() {
+        assert(!is_lock);
+        is_lock = true;
+        db_mutex->Lock();
+      }
+      void Unlock() {
+        assert(is_lock);
+        is_lock = false, db_mutex->Unlock();
+      }
+
+      ~AutoRelease() {
         db_impl->ReleaseFileNumberFromPendingOutputs(
             pending_outputs_inserted_elem);
+        if (!is_lock) {
+          db_mutex->Lock();
+        }
+        input_version->Unref();
+        for (auto f : file_marked) {
+          f->being_compacted = false;
+        }
+        db_mutex->Unlock();
       }
-    } auto_release_pending_outputs = {
-        CaptureCurrentFileNumberInPendingOutputs(), this
-    };
+    } auto_release = {CaptureCurrentFileNumberInPendingOutputs(), this,
+                      input_version, true, &mutex_};
 
     auto* vstorage = input_version->storage_info();
-    const MutableCFOptions& mutable_cf_options =
-        *cfd->GetCurrentMutableCFOptions();
-    if (mutable_cf_options.enable_lazy_compaction) {
+    if (cfd->ioptions()->enable_lazy_compaction) {
       const InternalKeyComparator& ic = cfd->ioptions()->internal_comparator;
 
       // deref nullptr of start/limit
@@ -2697,43 +2734,53 @@ Status DBImpl::DeleteFilesInRanges(ColumnFamilyHandle* column_family,
             deleted_range[c].limit = deleted_range[i].limit;
             deleted_range[c].include_limit |= deleted_range[i].include_limit;
           }
-        } else {
-          deleted_range[++c] = deleted_range[i];
+        } else if (++c != i) {
+          deleted_range[c] = deleted_range[i];
         }
       }
       deleted_range.resize(c + 1);
       MapBuilder map_builder(job_context.job_id, immutable_db_options_,
                              env_options_, versions_.get(), stats_, dbname_);
-      auto level_being_compacted = [vstorage](int level) {
+      auto level_being_compacted = [vstorage, &auto_release](int level) {
         for (auto f : vstorage->LevelFiles(level)) {
-          if (f->being_compacted) {
+          if (auto_release.file_marked.count(f) == 0) {
             return true;
           }
         }
         return false;
       };
       for (int i = 0; i < cfd->NumberLevels(); i++) {
+        for (auto f : vstorage->LevelFiles(i)) {
+          if (!f->being_compacted) {
+            auto_release.file_marked.emplace(f);
+            f->being_compacted = true;
+          }
+        }
+      }
+      auto_release.Unlock();
+      for (int i = 0; i < cfd->NumberLevels(); i++) {
         if (vstorage->LevelFiles(i).empty()) {
           continue;
         }
-        if (cfd->ioptions()->compaction_style == kCompactionStyleUniversal &&
+        if (cfd->ioptions()->enable_lazy_compaction &&
             !level_being_compacted(i)) {
           status = map_builder.Build(
               {CompactionInputFiles{i, vstorage->LevelFiles(i)}}, deleted_range,
-              {}, i, vstorage->LevelFiles(i)[0]->fd.GetPathId(), vstorage, cfd,
-              mutable_cf_options, &edit, nullptr, nullptr, &deleted_files);
+              {}, i /* level */, vstorage->LevelFiles(i)[0]->fd.GetPathId(),
+              cfd, input_version, &edit, nullptr /* file_meta */,
+              nullptr /* porp */, &deleted_files);
           if (!status.ok()) {
             break;
           }
         } else {
           for (auto f : vstorage->LevelFiles(i)) {
-            if (f->being_compacted) {
+            if (auto_release.file_marked.count(f) == 0) {
               continue;
             }
-            status = map_builder.Build({CompactionInputFiles{i, {f}}},
-                                       deleted_range, {}, i, f->fd.GetPathId(),
-                                       vstorage, cfd, mutable_cf_options, &edit,
-                                       nullptr, nullptr, &deleted_files);
+            status = map_builder.Build(
+                {CompactionInputFiles{i, {f}}}, deleted_range, {},
+                i /* level */, f->fd.GetPathId(), cfd, input_version, &edit,
+                nullptr /* file_meta */, nullptr /* porp */, &deleted_files);
             if (!status.ok()) {
               break;
             }
@@ -2742,9 +2789,10 @@ Status DBImpl::DeleteFilesInRanges(ColumnFamilyHandle* column_family,
       }
       if (status.ok()) {
         for (auto f : deleted_files) {
-          f->being_compacted = true;
+          auto_release.file_marked.erase(f);
         }
       }
+      auto_release.Lock();
     } else {
       for (size_t r = 0; r < n; r++) {
         auto begin = ranges[r].start, end = ranges[r].limit;
@@ -2804,7 +2852,6 @@ Status DBImpl::DeleteFilesInRanges(ColumnFamilyHandle* column_family,
       job_context.Clean();
       return status;
     }
-    input_version->Ref();
     status = versions_->LogAndApply(cfd, *cfd->GetLatestMutableCFOptions(),
                                     &edit, &mutex_, directories_.GetDbDir());
     if (status.ok()) {
@@ -2815,7 +2862,6 @@ Status DBImpl::DeleteFilesInRanges(ColumnFamilyHandle* column_family,
     for (auto* deleted_file : deleted_files) {
       deleted_file->being_compacted = false;
     }
-    input_version->Unref();
     FindObsoleteFiles(&job_context, false);
   }  // lock released here
 
@@ -2978,42 +3024,37 @@ bool DB::TrySubmitAsyncTask(const std::function<void()>& fn,
 }
 
 void DB::GetAsync(const ReadOptions& ro, ColumnFamilyHandle* cfh,
-                  std::string key, std::string* value,
-                  GetAsyncCallback cb) {
+                  std::string key, std::string* value, GetAsyncCallback cb) {
   using namespace boost::fibers;
   using std::move;
   auto tls = &gt_fibers;
   tls->update_fiber_count(ro.aio_concurrency);
-  tls->push([=, key = move(key), cb = move(cb)]()mutable {
+  tls->push([=, key = move(key), cb = move(cb)]() mutable {
     auto s = this->Get(ro, cfh, key, value);
     cb(move(s), move(key), value);
   });
 }
 
-void DB::GetAsync(const ReadOptions& ro,
-                  std::string key, std::string* value,
+void DB::GetAsync(const ReadOptions& ro, std::string key, std::string* value,
                   GetAsyncCallback cb) {
   using std::move;
   GetAsync(ro, DefaultColumnFamily(), move(key), value, move(cb));
 }
 
 void DB::GetAsync(const ReadOptions& ro, ColumnFamilyHandle* cfh,
-                  std::string key,
-                  GetAsyncCallback cb) {
+                  std::string key, GetAsyncCallback cb) {
   using namespace boost::fibers;
   using std::move;
   auto tls = &gt_fibers;
   tls->update_fiber_count(ro.aio_concurrency);
-  tls->push([=, key = move(key), cb = move(cb)]()mutable {
+  tls->push([=, key = move(key), cb = move(cb)]() mutable {
     std::string value;
     Status s = this->Get(ro, cfh, key, &value);
     cb(move(s), move(key), &value);
   });
 }
 
-void DB::GetAsync(const ReadOptions& ro,
-                  std::string key,
-                  GetAsyncCallback cb) {
+void DB::GetAsync(const ReadOptions& ro, std::string key, GetAsyncCallback cb) {
   using std::move;
   GetAsync(ro, DefaultColumnFamily(), move(key), move(cb));
 }
@@ -3023,18 +3064,14 @@ void DB::GetAsync(const ReadOptions& ro,
 ///              timeout
 ///          > 0 indicate number of all GetAsync/GetFuture requests have
 ///              finished within timeout
-int DB::WaitAsync(int timeout_us) {
-  return gt_fibers.wait(timeout_us);
-}
+int DB::WaitAsync(int timeout_us) { return gt_fibers.wait(timeout_us); }
 
-int DB::WaitAsync() {
-  return gt_fibers.wait();
-}
+int DB::WaitAsync() { return gt_fibers.wait(); }
 
 // boost::fibers::promise has some problem for being captured by
 // std::move for std::function
 // use intrusive_ptr to workaround (capture by copy intrusive_ptr)
-template<class T>
+template <class T>
 struct DB_Promise {
   DB_Promise(std::string& k) : key(std::move(k)) {}
 
@@ -3045,20 +3082,19 @@ struct DB_Promise {
   friend void intrusive_ptr_add_ref(DB_Promise* p) { p->refcnt++; }
 
   friend void intrusive_ptr_release(DB_Promise* p) {
-    if (0 == --p->refcnt)
-      delete p;
+    if (0 == --p->refcnt) delete p;
   }
 };
 
-template<class T>
+template <class T>
 struct DB_PromisePtr : boost::intrusive_ptr<DB_Promise<T>> {
   DB_PromisePtr(std::string& k)
       : boost::intrusive_ptr<DB_Promise<T>>(new DB_Promise<T>(k)) {}
 };
 
-future<std::tuple<Status, std::string, std::string*>>
-DB::GetFuture(const ReadOptions& ro, ColumnFamilyHandle* cfh,
-              std::string key, std::string* value) {
+future<std::tuple<Status, std::string, std::string*>> DB::GetFuture(
+    const ReadOptions& ro, ColumnFamilyHandle* cfh, std::string key,
+    std::string* value) {
   using namespace boost::fibers;
   using std::move;
   auto tls = &gt_fibers;
@@ -3075,13 +3111,13 @@ DB::GetFuture(const ReadOptions& ro, ColumnFamilyHandle* cfh,
   return fu;
 }
 
-future<std::tuple<Status, std::string, std::string*>>
-DB::GetFuture(const ReadOptions& ro, std::string key, std::string* value) {
+future<std::tuple<Status, std::string, std::string*>> DB::GetFuture(
+    const ReadOptions& ro, std::string key, std::string* value) {
   return GetFuture(ro, DefaultColumnFamily(), std::move(key), value);
 }
 
-future<std::tuple<Status, std::string, std::string>>
-DB::GetFuture(const ReadOptions& ro, ColumnFamilyHandle* cfh, std::string key) {
+future<std::tuple<Status, std::string, std::string>> DB::GetFuture(
+    const ReadOptions& ro, ColumnFamilyHandle* cfh, std::string key) {
   using namespace boost::fibers;
   using std::move;
   auto tls = &gt_fibers;
@@ -3097,8 +3133,8 @@ DB::GetFuture(const ReadOptions& ro, ColumnFamilyHandle* cfh, std::string key) {
   return fu;
 }
 
-future<std::tuple<Status, std::string, std::string>>
-DB::GetFuture(const ReadOptions& ro, std::string key) {
+future<std::tuple<Status, std::string, std::string>> DB::GetFuture(
+    const ReadOptions& ro, std::string key) {
   return GetFuture(ro, DefaultColumnFamily(), std::move(key));
 }
 
@@ -3709,8 +3745,8 @@ Status DBImpl::VerifyChecksum() {
     Options opts;
     {
       InstrumentedMutexLock l(&mutex_);
-      opts = Options(BuildDBOptions(immutable_db_options_,
-          mutable_db_options_), cfd->GetLatestCFOptions());
+      opts = Options(BuildDBOptions(immutable_db_options_, mutable_db_options_),
+                     cfd->GetLatestCFOptions());
     }
     for (int i = 0; i < vstorage->num_non_empty_levels() && s.ok(); i++) {
       for (size_t j = 0; j < vstorage->LevelFilesBrief(i).num_files && s.ok();

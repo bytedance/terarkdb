@@ -14,6 +14,7 @@
 #include "db/dbformat.h"
 #include "rocksdb/status.h"
 #include "table/internal_iterator.h"
+#include "util/arena.h"
 
 namespace rocksdb {
 
@@ -84,7 +85,7 @@ struct FragmentedRangeTombstoneList {
   std::vector<RangeTombstoneStack> tombstones_;
   std::vector<SequenceNumber> tombstone_seqs_;
   std::set<SequenceNumber> seq_set_;
-  std::list<std::string> pinned_slices_;
+  Arena arena_;
 };
 
 // FragmentedRangeTombstoneIterator converts an InternalIterator of a range-del

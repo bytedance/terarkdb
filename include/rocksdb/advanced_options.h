@@ -210,6 +210,9 @@ struct AdvancedColumnFamilyOptions {
   // set by the user.  Otherwise, the default is 0.
   int max_write_buffer_number_to_maintain = 0;
 
+  // LazyCompaction
+  bool enable_lazy_compaction = false;
+
   // Allows thread-safe inplace updates. If this is true, there is no way to
   // achieve point-in-time consistency using snapshot or iterator (assuming
   // concurrent updates). Hence iterator and multi-get will return results

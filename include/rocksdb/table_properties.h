@@ -58,6 +58,7 @@ struct TablePropertiesNames {
   static const std::string kCompression;
   static const std::string kCreationTime;
   static const std::string kOldestKeyTime;
+  static const std::string kSnapshots;
   static const std::string kPurpose;
   static const std::string kReadAmp;
   static const std::string kDependence;
@@ -218,6 +219,9 @@ struct TableProperties {
 
   // The compression algo used to compress the SST files.
   std::string compression_name;
+
+  // Snapshots
+  std::vector<SequenceNumber> snapshots;
 
   // Zero for essence sst
   uint8_t purpose = 0;

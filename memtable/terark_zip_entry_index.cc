@@ -3,11 +3,12 @@
 //  LICENSE file in the root directory of this source tree. An additional grant
 //  of patent rights can be found in the PATENTS file in the same directory.
 
+#include <terark/fsa/cspptrie.inl>
+
 #include "table/terark_zip_internal.h"
 #include "util/arena.h"
 #include "util/coding.h"
 #include "utilities/write_batch_with_index/write_batch_with_index_internal.h"
-#include <terark/fsa/cspptrie.inl>
 
 namespace rocksdb {
 
@@ -21,14 +22,10 @@ struct value_vector_t {
   struct data_t {
     WriteBatchIndexEntry* value;
 
-    operator size_t() const {
-      return value->offset;
-    }
+    operator size_t() const { return value->offset; }
   };
 
-  bool full() {
-    return terark::fast_popcount(size) == 1;
-  }
+  bool full() { return terark::fast_popcount(size) == 1; }
 };
 #pragma pack(pop)
 typedef typename value_vector_t::data_t value_wrap_t;
@@ -43,20 +40,21 @@ struct IteratorImplBase {
 };
 
 struct IteratorImplWithoutOffset : public IteratorImplBase {
-
   WriteBatchIndexEntry* GetValue() {
     return *(WriteBatchIndexEntry**)handle.iter()->value();
   }
   WriteBatchIndexEntry* Seek(WriteBatchIndexEntry* entry) {
     auto key = extractor(entry);
-    if (!handle.iter()->seek_lower_bound(terark::fstring(key.data(), key.size()))) {
+    if (!handle.iter()->seek_lower_bound(
+            terark::fstring(key.data(), key.size()))) {
       return nullptr;
     }
     return GetValue();
   }
   WriteBatchIndexEntry* SeekForPrev(WriteBatchIndexEntry* entry) {
     auto key = extractor(entry);
-    if (!handle.iter()->seek_rev_lower_bound(terark::fstring(key.data(), key.size()))) {
+    if (!handle.iter()->seek_rev_lower_bound(
+            terark::fstring(key.data(), key.size()))) {
       return nullptr;
     }
     return GetValue();
@@ -89,14 +87,14 @@ struct IteratorImplWithoutOffset : public IteratorImplBase {
   }
 };
 struct IteratorImplWithOffset : public IteratorImplBase {
-
   struct VectorData {
     size_t size;
     const value_wrap_t* data;
   };
   VectorData GetVector() {
     auto trie = static_cast<terark::MainPatricia*>(handle.iter()->trie());
-    auto vector = (value_vector_t*)trie->mem_get(*(uint32_t*)handle.iter()->value());
+    auto vector =
+        (value_vector_t*)trie->mem_get(*(uint32_t*)handle.iter()->value());
     size_t size = vector->size;
     auto data = (value_wrap_t*)trie->mem_get(vector->loc);
     return {size, data};
@@ -132,7 +130,8 @@ struct IteratorImplWithOffset : public IteratorImplBase {
     auto vec = GetVector();
     if (handle.iter()->word() == find_key) {
       index =
-          (uint32_t)terark::upper_bound_0(vec.data, vec.size, entry->offset) - 1;
+          (uint32_t)terark::upper_bound_0(vec.data, vec.size, entry->offset) -
+          1;
       if (index != vec.size) {
         return vec.data[index].value;
       }
@@ -190,9 +189,9 @@ struct IteratorImplWithOffset : public IteratorImplBase {
 };
 
 static thread_local IteratorImplBase tls_impl;
-}
+}  // namespace WriteBatchEntryPTrieIndexDetail
 
-template<bool OverwriteKey>
+template <bool OverwriteKey>
 class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
  protected:
   terark::MainPatricia index_;
@@ -205,17 +204,14 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
   using IteratorImplWithOffset =
       WriteBatchEntryPTrieIndexDetail::IteratorImplWithOffset;
 
-  typedef typename std::conditional<OverwriteKey,
-      IteratorImplWithoutOffset,
-      IteratorImplWithOffset
-  >::type IteratorImpl;
+  typedef typename std::conditional<OverwriteKey, IteratorImplWithoutOffset,
+                                    IteratorImplWithOffset>::type IteratorImpl;
 
   class PTrieIterator : public WriteBatchEntryIndex::Iterator {
    public:
     PTrieIterator(terark::Patricia* index, WriteBatchKeyExtractor e,
                   bool ephemeral)
-        : impl_(nullptr),
-          key_(nullptr) {
+        : impl_(nullptr), key_(nullptr) {
       if (ephemeral) {
         auto& tls_impl = WriteBatchEntryPTrieIndexDetail::tls_impl;
         impl_ = reinterpret_cast<IteratorImpl*>(&tls_impl);
@@ -238,42 +234,29 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
     WriteBatchIndexEntry* key_;
 
    public:
-    virtual bool Valid() const override {
-      return key_ != nullptr;
-    }
-    virtual void SeekToFirst() override {
-      key_ = impl_->SeekToFirst();
-    }
-    virtual void SeekToLast() override {
-      key_ = impl_->SeekToLast();
-    }
+    virtual bool Valid() const override { return key_ != nullptr; }
+    virtual void SeekToFirst() override { key_ = impl_->SeekToFirst(); }
+    virtual void SeekToLast() override { key_ = impl_->SeekToLast(); }
     virtual void Seek(WriteBatchIndexEntry* target) override {
       key_ = impl_->Seek(target);
     }
     virtual void SeekForPrev(WriteBatchIndexEntry* target) override {
       key_ = impl_->SeekForPrev(target);
     }
-    virtual void Next() override {
-      key_ = impl_->Next();
-    }
-    virtual void Prev() override {
-      key_ = impl_->Prev();
-    }
-    virtual WriteBatchIndexEntry* key() const override {
-      return key_;
-    }
+    virtual void Next() override { key_ = impl_->Next(); }
+    virtual void Prev() override { key_ = impl_->Prev(); }
+    virtual WriteBatchIndexEntry* key() const override { return key_; }
   };
 
  public:
-  WriteBatchEntryPTrieIndex(WriteBatchKeyExtractor e,
-                            const Comparator* /*c*/, Arena* /*a*/)
+  WriteBatchEntryPTrieIndex(WriteBatchKeyExtractor e, const Comparator* /*c*/,
+                            Arena* /*a*/)
       : index_(trie_value_size, 512ull << 10,
                terark::MainPatricia::SingleThreadShared),
-        extractor_(e) {
-  }
+        extractor_(e) {}
 
   static constexpr size_t trie_value_size =
-    OverwriteKey ? sizeof(void*) : sizeof(uint32_t);
+      OverwriteKey ? sizeof(void*) : sizeof(uint32_t);
 
   virtual Iterator* NewIterator() override {
     return new PTrieIterator(&index_, extractor_, false);
@@ -281,7 +264,8 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
   virtual void NewIterator(IteratorStorage& storage, bool ephemeral) override {
     static_assert(sizeof(PTrieIterator) <= sizeof storage.buffer,
                   "Need larger buffer for PTrieIterator");
-    storage.iter = new(storage.buffer) PTrieIterator(&index_, extractor_, ephemeral);
+    storage.iter =
+        new (storage.buffer) PTrieIterator(&index_, extractor_, ephemeral);
   }
   virtual bool Upsert(WriteBatchIndexEntry* key) override {
     auto slice_key = extractor_(key);
@@ -300,12 +284,12 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
       class Token : public terark::Patricia::WriterToken {
        public:
         Token(terark::Patricia* trie, WriteBatchIndexEntry* value)
-          : terark::Patricia::WriterToken(trie),
-            value_(value) {}
+            : terark::Patricia::WriterToken(trie), value_(value) {}
+
        protected:
         bool init_value(void* valptr, size_t valsize) noexcept override {
           assert(valsize == sizeof(uint32_t));
-          auto trie = static_cast<terark::MainPatricia *>(m_trie);
+          auto trie = static_cast<terark::MainPatricia*>(m_trie);
           size_t data_loc = trie->mem_alloc(sizeof(value_wrap_t));
           assert(data_loc != terark::MainPatricia::mem_alloc_fail);
           auto* data = (value_wrap_t*)trie->mem_get(data_loc);
@@ -321,6 +305,7 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
           memcpy(valptr, &u32_vector_loc, valsize);
           return true;
         }
+
        private:
         WriteBatchIndexEntry* value_;
       };
@@ -344,6 +329,8 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
               index_.mem_alloc(sizeof(value_wrap_t) * size * 2);
           assert(cow_data_loc != terark::MainPatricia::mem_alloc_fail);
           auto* cow_data = (value_wrap_t*)index_.mem_get(cow_data_loc);
+          vector = (value_vector_t*)index_.mem_get(vector_loc);
+          data = (value_wrap_t*)index_.mem_get(data_loc);
           memcpy(cow_data, data, sizeof(value_wrap_t) * size);
           cow_data[size].value = key;
           vector->loc = (uint32_t)cow_data_loc;
@@ -356,13 +343,12 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
   }
 };
 
-const WriteBatchEntryIndexFactory* patricia_WriteBatchEntryIndexFactory(const WriteBatchEntryIndexFactory* fallback) {
+const WriteBatchEntryIndexFactory* patricia_WriteBatchEntryIndexFactory(
+    const WriteBatchEntryIndexFactory* fallback) {
   class WriteBatchEntryPTrieIndexContext : public WriteBatchEntryIndexContext {
    public:
     WriteBatchEntryIndexContext* fallback_context;
-    WriteBatchEntryPTrieIndexContext()
-      : fallback_context(nullptr) {
-    }
+    WriteBatchEntryPTrieIndexContext() : fallback_context(nullptr) {}
 
     ~WriteBatchEntryPTrieIndexContext() {
       if (fallback_context != nullptr) {
@@ -374,31 +360,31 @@ const WriteBatchEntryIndexFactory* patricia_WriteBatchEntryIndexFactory(const Wr
    public:
     WriteBatchEntryIndexContext* NewContext(Arena* a) const override {
       typedef WriteBatchEntryPTrieIndexContext ctx_t;
-      auto ctx = new(a->AllocateAligned(sizeof(ctx_t))) ctx_t();
+      auto ctx = new (a->AllocateAligned(sizeof(ctx_t))) ctx_t();
       ctx->fallback_context = fallback->NewContext(a);
       return ctx;
     }
     WriteBatchEntryIndex* New(WriteBatchEntryIndexContext* ctx,
-                              WriteBatchKeyExtractor e,
-                              const Comparator* c, Arena* a,
-                              bool overwrite_key) const override {
+                              WriteBatchKeyExtractor e, const Comparator* c,
+                              Arena* a, bool overwrite_key) const override {
       auto ptrie_ctx = static_cast<WriteBatchEntryPTrieIndexContext*>(ctx);
       if (!IsForwardBytewiseComparator(c)) {
-        return fallback->New(ptrie_ctx->fallback_context, e, c, a, overwrite_key);
+        return fallback->New(ptrie_ctx->fallback_context, e, c, a,
+                             overwrite_key);
       } else if (overwrite_key) {
         typedef WriteBatchEntryPTrieIndex<true> index_t;
-        return new(a->AllocateAligned(sizeof(index_t))) index_t(e, c, a);
+        return new (a->AllocateAligned(sizeof(index_t))) index_t(e, c, a);
       } else {
         typedef WriteBatchEntryPTrieIndex<false> index_t;
-        return new(a->AllocateAligned(sizeof(index_t))) index_t(e, c, a);
+        return new (a->AllocateAligned(sizeof(index_t))) index_t(e, c, a);
       }
     }
     PTrieIndexFactory(const WriteBatchEntryIndexFactory* _fallback)
-      : fallback(_fallback) {
-    }
+        : fallback(_fallback) {}
     virtual const char* Name() const override {
       return "WriteBatchEntryIndexFactory";
     }
+
    private:
     const WriteBatchEntryIndexFactory* fallback;
   };
@@ -409,4 +395,4 @@ const WriteBatchEntryIndexFactory* patricia_WriteBatchEntryIndexFactory(const Wr
   return &factory;
 }
 
-} // namespace rocksdb
+}  // namespace rocksdb

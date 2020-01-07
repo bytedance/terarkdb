@@ -240,6 +240,14 @@ else
 $(warning Warning: Compiling in debug mode. Don't use the resulting binary in production)
 endif
 
+ifeq ($(TERARKDB_ENABLE_METRICS),1)
+OPT += -DTERARKDB_ENABLE_METRICS
+endif
+
+ifeq ($(TERARKDB_ENABLE_CONSOLE),1)
+OPT += -DTERARKDB_ENABLE_CONSOLE
+endif
+
 #-----------------------------------------------
 include src.mk
 
@@ -276,8 +284,10 @@ endif
 
 LIB_SOURCES += ${TERARK_ZIP_SRC}
 
+CMAKE_BUILD_TYPE=Debug
 ifeq ($(DEBUG_LEVEL),0)
   LIBNAME_SUFFIX=
+	CMAKE_BUILD_TYPE=RelWithDebInfo
 endif
 ifeq ($(DEBUG_LEVEL),1)
   LIBNAME_SUFFIX=_assert
@@ -772,7 +782,7 @@ $(SHARED2): $(SHARED3)
 $(SHARED3): $(SHARED4)
 	ln -fs $(SHARED4) $(SHARED3)
 $(SHARED4): shared-objects/${xdir}/${SHARED4} cpputil_metrics2
-	ln -sf $< $@
+	ln -fs $< $@
 
 ifeq ($(HAVE_POWER8),1)
 SHARED_C_OBJECTS = $(addprefix ${xdir}/, $(LIB_SOURCES_C:.c=.o))
@@ -832,7 +842,7 @@ all: $(LIBRARY) $(SHARED) $(BENCHMARKS) tools tools_lib test_libs $(TESTS)
 all_but_some_tests: $(LIBRARY) $(BENCHMARKS) tools tools_lib test_libs $(SUBSET)
 
 ${CPPUTIL_METRICS2_HOME}/cmake-build/libmetrics2.a:
-	mkdir -p ${CPPUTIL_METRICS2_HOME}/cmake-build && cd ${CPPUTIL_METRICS2_HOME}/cmake-build && cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo && make
+	mkdir -p ${CPPUTIL_METRICS2_HOME}/cmake-build && cd ${CPPUTIL_METRICS2_HOME}/cmake-build && cmake .. -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} && make
 
 cpputil_metrics2: ${CPPUTIL_METRICS2_HOME}/cmake-build/libmetrics2.a
 
@@ -1213,7 +1223,7 @@ $(LIBRARY): $(LIBOBJECTS) cpputil_metrics2
 	$(AM_V_at)$(AR) $(ARFLAGS) $@ $(LIBOBJECTS)
 ifeq (${BUNDLE_ALL_TERARK_STATIC},1)
 	mv $@ orgin-$@
-	ln -s ${TERARK_CORE_PKG_DIR}/lib_static/libterark-{idx,zbs,fsa,core}-${DBG_OR_RLS}.a .
+	ln -fs ${TERARK_CORE_PKG_DIR}/lib_static/libterark-{idx,zbs,fsa,core}-${DBG_OR_RLS}.a .
 	(\
 	echo create $@; \
 	echo addlib libterark-idx-${DBG_OR_RLS}.a; \
@@ -1237,10 +1247,10 @@ librocksdb_env_basic_test.a: env/env_basic_test.o $(TESTHARNESS)
 	$(AM_V_at)$(AR) $(ARFLAGS) $@ $^
 
 db_bench: tools/db_bench.o $(BENCHTOOLOBJECTS) 
-	$(AM_LINK_SHR) -lgflags
+	$(AM_LINK) librocksdb.a -lgflags -fopenmp
 
 trace_analyzer: tools/trace_analyzer.o $(ANALYZETOOLOBJECTS) $(LIBOBJECTS)
-	$(AM_LINK_SHR)
+	$(AM_LINK) librocksdb.a -fopenmp
 
 cache_bench: cache/cache_bench.o $(TESTUTIL)
 	$(AM_LINK_SHR)

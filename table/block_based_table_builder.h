@@ -49,8 +49,8 @@ class BlockBasedTableBuilder : public TableBuilder {
       const CompressionType compression_type,
       const CompressionOptions& compression_opts,
       const std::string* compression_dict, bool skip_filters,
-      bool ignore_key_type, const std::string& column_family_name,
-      uint64_t creation_time = 0, uint64_t oldest_key_time = 0);
+      const std::string& column_family_name, uint64_t creation_time = 0,
+      uint64_t oldest_key_time = 0);
 
   // REQUIRES: Either Finish() or Abandon() has been called.
   ~BlockBasedTableBuilder();
@@ -64,10 +64,13 @@ class BlockBasedTableBuilder : public TableBuilder {
   // REQUIRES: Finish(), Abandon() have not been called
   Status Add(const Slice& key, const LazyBuffer& value) override;
 
+  Status AddTombstone(const Slice& key, const LazyBuffer& value) override;
+
   // Finish building the table.  Stops using the file passed to the
   // constructor after this function returns.
   // REQUIRES: Finish(), Abandon() have not been called
-  Status Finish(const TablePropertyCache* prop) override;
+  Status Finish(const TablePropertyCache* prop,
+                const std::vector<uint64_t>* snapshots) override;
 
   // Indicate that the contents of this builder should be abandoned.  Stops
   // using the file passed to the constructor after this function returns.

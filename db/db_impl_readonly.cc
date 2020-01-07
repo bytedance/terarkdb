@@ -11,8 +11,8 @@
 #include "db/merge_context.h"
 #include "monitoring/perf_context_imp.h"
 #if !defined(_MSC_VER) && !defined(__APPLE__)
-# include <sys/unistd.h>
-# include <table/terark_zip_weak_function.h>
+#include <sys/unistd.h>
+#include <table/terark_zip_table.h>
 #endif
 
 namespace rocksdb {

@@ -10,10 +10,10 @@
 #pragma once
 #include "db/version_set.h"
 #include "options/cf_options.h"
+#include "rocksdb/compaction_filter.h"
+#include "rocksdb/listener.h"
 #include "util/arena.h"
 #include "util/autovector.h"
-#include "rocksdb/listener.h"
-#include "rocksdb/compaction_filter.h"
 
 namespace rocksdb {
 
@@ -37,23 +37,11 @@ int sstableKeyCompare(const Comparator* user_cmp, const InternalKey* a,
 int sstableKeyCompare(const Comparator* user_cmp, const InternalKey& a,
                       const InternalKey* b);
 
-// An AtomicCompactionUnitBoundary represents a range of keys [smallest,
-// largest] that exactly spans one ore more neighbouring SSTs on the same
-// level. Every pair of  SSTs in this range "overlap" (i.e., the largest
-// user key of one file is the smallest user key of the next file). These
-// boundaries are propagated down to RangeDelAggregator during compaction
-// to provide safe truncation boundaries for range tombstones.
-struct AtomicCompactionUnitBoundary {
-  const InternalKey* smallest = nullptr;
-  const InternalKey* largest = nullptr;
-};
-
 // The structure that manages compaction input files associated
 // with the same physical level.
 struct CompactionInputFiles {
   int level;
   std::vector<FileMetaData*> files;
-  std::vector<AtomicCompactionUnitBoundary> atomic_compaction_unit_boundaries;
   inline bool empty() const { return files.empty(); }
   inline size_t size() const { return files.size(); }
   inline void clear() { files.clear(); }
@@ -69,8 +57,7 @@ class VersionStorageInfo;
 enum CompactionType {
   kKeyValueCompaction = 0,
   kMapCompaction = 1,
-  kLinkCompaction = 2,
-  kGarbageCollection = 3,
+  kGarbageCollection = 2,
 };
 
 struct CompactionParams {
@@ -107,11 +94,11 @@ struct CompactionWorkerContext {
   struct EncodedString {
     std::string data;
 
-    EncodedString& operator = (const std::string& v) {
+    EncodedString& operator=(const std::string& v) {
       data = v;
       return *this;
     }
-    EncodedString& operator = (const Slice& v) {
+    EncodedString& operator=(const Slice& v) {
       data.assign(v.data(), v.size());
       return *this;
     }
@@ -234,12 +221,6 @@ class Compaction {
     return inputs_[compaction_input_level][i];
   }
 
-  const std::vector<AtomicCompactionUnitBoundary>* boundaries(
-      size_t compaction_input_level) const {
-    assert(compaction_input_level < inputs_.size());
-    return &inputs_[compaction_input_level].atomic_compaction_unit_boundaries;
-  }
-
   // Returns the list of file meta data of the specified compaction
   // input level.
   // REQUIREMENT: "compaction_input_level" must be >= 0 and
@@ -288,9 +269,7 @@ class Compaction {
   CompactionType compaction_type() const { return compaction_type_; }
 
   // Range limit for inputs
-  const std::vector<RangeStorage>& input_range() const {
-    return input_range_;
-  };
+  const std::vector<RangeStorage>& input_range() const { return input_range_; };
 
   // Add all inputs to this compaction as delete operations to *edit.
   void AddInputDeletions(VersionEdit* edit);
@@ -425,24 +404,19 @@ class Compaction {
 
   uint64_t MaxInputFileCreationTime() const;
 
-  const std::vector<TableTransientStat>& transient_stat() const { return transient_stat_; }
-  std::vector<TableTransientStat>& transient_stat() { return transient_stat_; }
-
- private:
-  // mark (or clear) all files that are being compacted
-  void MarkFilesBeingCompacted(bool mark_as_compacted);
-
   // get the smallest and largest key present in files to be compacted
   static void GetBoundaryKeys(VersionStorageInfo* vstorage,
                               const std::vector<CompactionInputFiles>& inputs,
                               Slice* smallest_key, Slice* largest_key);
 
-  // Get the atomic file boundaries for all files in the compaction. Necessary
-  // in order to avoid the scenario described in
-  // https://github.com/facebook/rocksdb/pull/4432#discussion_r221072219 and plumb
-  // down appropriate key boundaries to RangeDelAggregator during compaction.
-  static std::vector<CompactionInputFiles> PopulateWithAtomicBoundaries(
-      VersionStorageInfo* vstorage, std::vector<CompactionInputFiles> inputs);
+  const std::vector<TableTransientStat>& transient_stat() const {
+    return transient_stat_;
+  }
+  std::vector<TableTransientStat>& transient_stat() { return transient_stat_; }
+
+ private:
+  // mark (or clear) all files that are being compacted
+  void MarkFilesBeingCompacted(bool mark_as_compacted);
 
   // helper function to determine if compaction with inputs and storage is
   // bottommost
@@ -455,7 +429,7 @@ class Compaction {
 
   VersionStorageInfo* input_vstorage_;
 
-  const int start_level_;    // the lowest level to be compacted
+  const int start_level_;   // the lowest level to be compacted
   const int output_level_;  // levels to which output files are stored
   uint64_t num_antiquation_;
   uint64_t max_output_file_size_;
@@ -467,7 +441,7 @@ class Compaction {
   VersionEdit edit_;
   const int number_levels_;
   ColumnFamilyData* cfd_;
-  Arena arena_;          // Arena used to allocate space for file_levels_
+  Arena arena_;  // Arena used to allocate space for file_levels_
 
   const uint32_t output_path_id_;
   CompressionType output_compression_;

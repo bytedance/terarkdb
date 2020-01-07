@@ -13,6 +13,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+
 #include "db/dbformat.h"
 #include "rocksdb/cache.h"
 #include "util/arena.h"
@@ -35,7 +36,7 @@ struct FileDescriptor {
   // Table reader in table_reader_handle
   TableReader* table_reader;
   uint64_t packed_number_and_path_id;
-  uint64_t file_size;  // File size in bytes
+  uint64_t file_size;             // File size in bytes
   SequenceNumber smallest_seqno;  // The smallest seqno in this file
   SequenceNumber largest_seqno;   // The largest seqno in this file
 
@@ -65,8 +66,8 @@ struct FileDescriptor {
     return packed_number_and_path_id & kFileNumberMask;
   }
   uint32_t GetPathId() const {
-    return static_cast<uint32_t>(
-        packed_number_and_path_id / (kFileNumberMask + 1));
+    return static_cast<uint32_t>(packed_number_and_path_id /
+                                 (kFileNumberMask + 1));
   }
   uint64_t GetFileSize() const { return file_size; }
 };
@@ -84,18 +85,34 @@ struct FileSampledStats {
 };
 
 struct TablePropertyCache {
+  enum {
+    kMapHandleRangeDeletions = 1ULL << 0,
+    kHasSnapshots = 1ULL << 1,
+    kNoRangeDeletions = 1ULL << 2,
+  };
   uint64_t num_entries = 0;                 // the number of entries.
+  uint64_t num_deletions = 0;               // the number of deletion entries.
+  uint64_t raw_key_size = 0;                // total uncompressed key size.
+  uint64_t raw_value_size = 0;              // total uncompressed value size.
+  uint8_t flags = 0;                        // save flags
   uint8_t purpose = 0;                      // zero for essence sst
   uint16_t max_read_amp = 1;                // max read amp from sst
   float read_amp = 1;                       // expt read amp from sst
   std::vector<Dependence> dependence;       // make these sst hidden
   std::vector<uint64_t> inheritance_chain;  // inheritance chain
+
+  bool is_map_sst() const { return purpose == kMapSst; }
+  bool has_range_deletions() const { return (flags & kNoRangeDeletions) == 0; }
+  bool map_handle_range_deletions() const {
+    return (flags & kMapHandleRangeDeletions) != 0;
+  }
+  bool has_snapshots() const { return (flags & kHasSnapshots) != 0; }
 };
 
 struct FileMetaData {
   FileDescriptor fd;
-  InternalKey smallest;            // Smallest internal key served by table
-  InternalKey largest;             // Largest internal key served by table
+  InternalKey smallest;  // Smallest internal key served by table
+  InternalKey largest;   // Largest internal key served by table
 
   // Needs to be disposed when refs becomes 0.
   Cache::Handle* table_reader_handle;
@@ -110,35 +127,29 @@ struct FileMetaData {
   uint64_t compensated_file_size;
   // These values can mutate, but they can only be read or written from
   // single-threaded LogAndApply thread
-  uint64_t num_deletions;          // the number of deletion entries.
-  uint64_t num_antiquation;        // the number of out-dated entries.
-  uint64_t raw_key_size;           // total uncompressed key size.
-  uint64_t raw_value_size;         // total uncompressed value size.
+  uint64_t num_antiquation;  // the number of out-dated entries.
 
   int refs;  // Reference count
 
-  bool being_compacted;        // Is this file undergoing compaction?
-  bool init_stats_from_file;   // true if the data-entry stats of this file
-                               // has initialized from file.
+  bool being_compacted;  // Is this file undergoing compaction ?
 
   bool marked_for_compaction;  // True if client asked us nicely to compact this
                                // file.
   bool is_skip_gc;             // True if the SST in LSM
 
-  TablePropertyCache prop;     // Cache some TableProperty fields into manifest
+  TablePropertyCache prop;  // Cache some TableProperty fields into manifest
 
   FileMetaData()
       : table_reader_handle(nullptr),
         compensated_file_size(0),
-        num_deletions(0),
         num_antiquation(0),
-        raw_key_size(0),
-        raw_value_size(0),
         refs(0),
         being_compacted(false),
-        init_stats_from_file(false),
         marked_for_compaction(false),
         is_skip_gc(false) {}
+
+  std::vector<SequenceNumber> ShrinkSnapshot(
+      const std::vector<SequenceNumber>& snapshots) const;
 
   // REQUIRED: Keys must be given to the function in sorted order (it expects
   // the last key to be the largest).
@@ -173,15 +184,11 @@ struct FileMetaData {
 struct FdWithKeyRange {
   FileDescriptor fd;
   FileMetaData* file_metadata;  // Point to all metadata
-  Slice smallest_key;    // slice that contain smallest key
-  Slice largest_key;     // slice that contain largest key
+  Slice smallest_key;           // slice that contain smallest key
+  Slice largest_key;            // slice that contain largest key
 
   FdWithKeyRange()
-      : fd(),
-        file_metadata(nullptr),
-        smallest_key(),
-        largest_key() {
-  }
+      : fd(), file_metadata(nullptr), smallest_key(), largest_key() {}
 
   FdWithKeyRange(FileDescriptor _fd, Slice _smallest_key, Slice _largest_key,
                  FileMetaData* _file_metadata)
@@ -205,7 +212,7 @@ struct LevelFilesBrief {
 class VersionEdit {
  public:
   VersionEdit() { Clear(); }
-  ~VersionEdit() { }
+  ~VersionEdit() {}
 
   void Clear();
 
@@ -260,12 +267,7 @@ class VersionEdit {
     f.fd.largest_seqno = largest_seqno;
     f.num_antiquation = 0;
     f.marked_for_compaction = marked_for_compaction;
-    f.prop.num_entries = prop.num_entries;
-    f.prop.purpose = prop.purpose;
-    f.prop.max_read_amp = prop.max_read_amp;
-    f.prop.read_amp = prop.read_amp;
-    f.prop.dependence = prop.dependence;
-    f.prop.inheritance_chain = prop.inheritance_chain;
+    f.prop = prop;
     new_files_.emplace_back(level, std::move(f));
   }
 
@@ -279,7 +281,7 @@ class VersionEdit {
     deleted_files_.insert({level, file});
   }
 
-  void SetApplyCallback(void(*apply_callback)(void*, const Status&),
+  void SetApplyCallback(void (*apply_callback)(void*, const Status&),
                         void* apply_callback_arg) {
     apply_callback_ = apply_callback;
     apply_callback_arg_ = apply_callback_arg;

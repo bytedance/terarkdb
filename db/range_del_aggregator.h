@@ -427,4 +427,8 @@ class CompactionRangeDelAggregator : public RangeDelAggregator {
   const std::vector<SequenceNumber>* snapshots_;
 };
 
+extern InternalIteratorBase<Slice>* NewTruncatedRangeDelMergingIter(
+    const InternalKeyComparator* icmp,
+    const std::vector<std::unique_ptr<TruncatedRangeDelIterator>>& children);
+
 }  // namespace rocksdb

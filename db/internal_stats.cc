@@ -13,6 +13,7 @@
 #endif
 
 #include <inttypes.h>
+
 #include <algorithm>
 #include <limits>
 #include <string>
@@ -540,11 +541,13 @@ bool InternalStats::HandleCompressionRatioAtLevelPrefix(std::string* value,
   uint64_t level;
   const auto* vstorage = cfd_->current()->storage_info();
   bool ok = ConsumeDecimalNumber(&suffix, &level) && suffix.empty();
-  if (!ok || level >= static_cast<uint64_t>(number_levels_)) {
+  if (!ok || level > static_cast<uint64_t>(number_levels_)) {
     return false;
   }
-  *value = ToString(
-      vstorage->GetEstimatedCompressionRatioAtLevel(static_cast<int>(level)));
+  int real_level = level < static_cast<uint64_t>(number_levels_)
+                       ? static_cast<int>(level)
+                       : -1;
+  *value = ToString(vstorage->GetEstimatedCompressionRatioAtLevel(real_level));
   return true;
 }
 

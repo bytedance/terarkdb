@@ -15,11 +15,13 @@
 #endif
 
 #include <inttypes.h>
+
 #include <limits>
 #include <numeric>
 #include <queue>
 #include <string>
 #include <utility>
+
 #include "db/column_family.h"
 #include "db/map_builder.h"
 #include "monitoring/statistics.h"
@@ -56,8 +58,8 @@ struct SmallestKeyHeapComparator {
   explicit SmallestKeyHeapComparator(const Comparator* icmp) { icmp_ = icmp; }
 
   bool operator()(InputFileInfo i1, InputFileInfo i2) const {
-    return (icmp_->Compare(i1.f->smallest.Encode(),
-                           i2.f->smallest.Encode()) > 0);
+    return (icmp_->Compare(i1.f->smallest.Encode(), i2.f->smallest.Encode()) >
+            0);
   }
 
  private:
@@ -97,7 +99,7 @@ SmallestKeyHeap create_level_heap(Compaction* c, const Comparator* icmp) {
   return smallest_key_priority_q;
 }
 
-#if !defined(NDEBUG) & 0
+#if !defined(NDEBUG) && 0
 // smallest_seqno and largest_seqno are set iff. `files` is not empty.
 void GetSmallestLargestSeqno(const std::vector<FileMetaData*>& files,
                              SequenceNumber* smallest_seqno,
@@ -121,27 +123,6 @@ void GetSmallestLargestSeqno(const std::vector<FileMetaData*>& files,
 }
 #endif
 
-bool ReadMapElement(MapSstElement& map_element, InternalIterator* iter,
-                      LogBuffer* log_buffer, const std::string& cf_name) {
-  LazyBuffer value = iter->value();
-  auto s = value.fetch();
-  if (!s.ok()) {
-    ROCKS_LOG_BUFFER(
-        log_buffer,
-        "[%s] UniversalCompactionPicker LazyBuffer decode fail: %s\n",
-        cf_name.c_str(), s.ToString().c_str());
-    return false;
-  }
-  if (!map_element.Decode(iter->key(), value.slice())) {
-    ROCKS_LOG_BUFFER(
-        log_buffer,
-        "[%s] UniversalCompactionPicker MapSstElement Decode fail\n",
-        cf_name.c_str());
-    return false;
-  }
-  return true;
-}
-
 }  // namespace
 
 // Algorithm that checks to see if there are any overlapping
@@ -164,8 +145,8 @@ bool UniversalCompactionPicker::IsInputFilesNonOverlapping(Compaction* c) {
       prev = curr;
       first_iter = 0;
     } else {
-      if (icmp_->Compare(prev.f->largest.Encode(),
-                         curr.f->smallest.Encode()) >= 0) {
+      if (icmp_->Compare(prev.f->largest.Encode(), curr.f->smallest.Encode()) >=
+          0) {
         // found overlapping files, return false
         return false;
       }
@@ -246,60 +227,23 @@ void UniversalCompactionPicker::SortedRun::DumpSizeInfo(
   }
 }
 
-static size_t GetFilesSize(const FileMetaData* f, uint64_t file_number,
-                           const VersionStorageInfo& vstorage) {
-  auto& dependence_map = vstorage.dependence_map();
-  if (f == nullptr) {
-    auto find = dependence_map.find(file_number);
-    if (find == dependence_map.end()) {
-      // TODO log error
-      return 0;
-    }
-    f = find->second;
-  } else {
-    assert(file_number == uint64_t(-1));
-  }
-  uint64_t file_size = f->fd.GetFileSize();
-  if (f->prop.purpose == kMapSst) {
-    for (auto& dependence : f->prop.dependence) {
-      file_size += GetFilesSize(nullptr, dependence.file_number, vstorage);
-    }
-  }
-  return file_size;
-}
-
 std::vector<UniversalCompactionPicker::SortedRun>
 UniversalCompactionPicker::CalculateSortedRuns(
     const VersionStorageInfo& vstorage, const ImmutableCFOptions& /*ioptions*/,
-    const MutableCFOptions& mutable_cf_options) {
+    const MutableCFOptions& /*mutable_cf_options*/) {
   std::vector<UniversalCompactionPicker::SortedRun> ret;
   for (FileMetaData* f : vstorage.LevelFiles(0)) {
-    ret.emplace_back(0, f, GetFilesSize(f, uint64_t(-1), vstorage),
+    ret.emplace_back(0, f, vstorage.FileSize(f, uint64_t(-1)),
                      f->compensated_file_size, f->being_compacted);
   }
   for (int level = 1; level < vstorage.num_levels(); level++) {
-    uint64_t total_compensated_size = 0U;
     uint64_t total_size = 0U;
+    uint64_t total_compensated_size = 0U;
     bool being_compacted = false;
-    bool is_first = true;
     for (FileMetaData* f : vstorage.LevelFiles(level)) {
+      total_size += vstorage.FileSize(f, uint64_t(-1));
       total_compensated_size += f->compensated_file_size;
-      total_size += GetFilesSize(f, uint64_t(-1), vstorage);
-      if (mutable_cf_options.compaction_options_universal.allow_trivial_move) {
-        being_compacted |= f->being_compacted;
-      } else {
-        // Compaction always includes all files for a non-zero level, so for a
-        // non-zero level, all the files should share the same being_compacted
-        // value.
-        // This assumption is only valid when
-        // mutable_cf_options.compaction_options_universal.allow_trivial_move is
-        // false
-        assert(is_first || f->being_compacted == being_compacted);
-      }
-      if (is_first) {
-        being_compacted = f->being_compacted;
-        is_first = false;
-      }
+      being_compacted |= f->being_compacted;
     }
     if (total_compensated_size > 0) {
       ret.emplace_back(level, nullptr, total_size, total_compensated_size,
@@ -313,7 +257,8 @@ UniversalCompactionPicker::CalculateSortedRuns(
 // time-range to compact.
 Compaction* UniversalCompactionPicker::PickCompaction(
     const std::string& cf_name, const MutableCFOptions& mutable_cf_options,
-    VersionStorageInfo* vstorage, LogBuffer* log_buffer) {
+    VersionStorageInfo* vstorage, const std::vector<SequenceNumber>& snapshots,
+    LogBuffer* log_buffer) {
   const int kLevel0 = 0;
   double score = vstorage->CompactionScore(kLevel0);
   std::vector<SortedRun> sorted_runs =
@@ -342,7 +287,7 @@ Compaction* UniversalCompactionPicker::PickCompaction(
       sorted_runs.size() >=
           static_cast<size_t>(
               mutable_cf_options.level0_file_num_compaction_trigger)) {
-    if (mutable_cf_options.enable_lazy_compaction) {
+    if (ioptions_.enable_lazy_compaction) {
       bool has_map_compaction = false;
       for (auto cip : compactions_in_progress_) {
         if (cip->compaction_type() == kMapCompaction) {
@@ -355,22 +300,19 @@ Compaction* UniversalCompactionPicker::PickCompaction(
           (c = PickTrivialMoveCompaction(cf_name, mutable_cf_options, vstorage,
                                          sorted_runs, log_buffer)) == nullptr &&
           table_cache_ != nullptr) {
-
         int min_sorted_run_size = std::max(1, ioptions_.num_levels - 1);
         int max_sorted_run_size =
             std::max(1, mutable_cf_options.level0_file_num_compaction_trigger +
-                     ioptions_.num_levels - 2);
+                            ioptions_.num_levels - 2);
 
-        int read_amp_target =
-            vstorage->read_amplification() -
-            llround(sqrt(vstorage->read_amplification()));
+        int read_amp_target = vstorage->read_amplification() -
+                              llround(sqrt(vstorage->read_amplification()));
         int sorted_runs_target = int(sorted_runs.size()) - 2;
 
-        reduce_sorted_run_target = std::max({min_sorted_run_size,
-                                             sorted_runs_target,
-                                             read_amp_target});
-        reduce_sorted_run_target = std::min(max_sorted_run_size,
-                                            reduce_sorted_run_target);
+        reduce_sorted_run_target = std::max(
+            {min_sorted_run_size, sorted_runs_target, read_amp_target});
+        reduce_sorted_run_target =
+            std::min(max_sorted_run_size, reduce_sorted_run_target);
       }
       if (int(sorted_runs.size()) > reduce_sorted_run_target &&
           (c = PickCompactionToReduceSortedRuns(
@@ -434,9 +376,9 @@ Compaction* UniversalCompactionPicker::PickCompaction(
   }
   if (c == nullptr && table_cache_ != nullptr) {
     c = PickCompositeCompaction(cf_name, mutable_cf_options, vstorage,
-                                sorted_runs, log_buffer);
+                                snapshots, sorted_runs, log_buffer);
   }
-  if (c == nullptr && !mutable_cf_options.enable_lazy_compaction) {
+  if (c == nullptr && !ioptions_.enable_lazy_compaction) {
     if ((c = PickDeleteTriggeredCompaction(cf_name, mutable_cf_options,
                                            vstorage, score, sorted_runs,
                                            log_buffer)) != nullptr) {
@@ -458,7 +400,7 @@ Compaction* UniversalCompactionPicker::PickCompaction(
       allow_trivial_move) {
     // check level has map or link sst
     for (auto& level_files : *c->inputs()) {
-      if (vstorage->has_space_amplification(level_files.level)) {
+      if (vstorage->has_map_sst(level_files.level)) {
         allow_trivial_move = false;
         break;
       }
@@ -490,8 +432,8 @@ Compaction* UniversalCompactionPicker::PickCompaction(
         SequenceNumber largest_seqno = 0U;
         GetSmallestLargestSeqno(vstorage->LevelFiles(i), &smallest_seqno,
                                 &largest_seqno);
-        sr_debug.emplace_back(SortedRunDebug{true, i, nullptr, smallest_seqno,
-                                             largest_seqno});
+        sr_debug.emplace_back(
+            SortedRunDebug{true, i, nullptr, smallest_seqno, largest_seqno});
       }
     }
     assert(boost::is_sorted(sr_debug, TERARK_CMP(smallest, >)));
@@ -530,11 +472,12 @@ Compaction* UniversalCompactionPicker::PickCompaction(
         }
         assert(it != sr_debug.end());
         assert(vstorage->LevelFiles(input_level.level).size() ==
-               input_level.size() &&
+                   input_level.size() &&
                input_level.files.end() ==
-               std::mismatch(
-                   input_level.files.begin(), input_level.files.end(),
-                   vstorage->LevelFiles(input_level.level).begin()).first);
+                   std::mismatch(
+                       input_level.files.begin(), input_level.files.end(),
+                       vstorage->LevelFiles(input_level.level).begin())
+                       .first);
         o.smallest = std::min(o.smallest, it->smallest);
         o.largest = std::max(o.largest, it->largest);
         sr_debug.erase(it);
@@ -565,10 +508,9 @@ Compaction* UniversalCompactionPicker::CompactRange(
     uint32_t output_path_id, uint32_t max_subcompactions,
     const InternalKey* begin, const InternalKey* end,
     InternalKey** compaction_end, bool* manual_conflict,
-    const std::unordered_set<uint64_t>* files_being_compact,
-    bool enable_lazy_compaction) {
+    const std::unordered_set<uint64_t>* files_being_compact) {
   if (input_level == ColumnFamilyData::kCompactAllLevels &&
-      enable_lazy_compaction) {
+      ioptions_.enable_lazy_compaction) {
     auto hit_sst = [&](const FileMetaData* f) {
       if (files_being_compact->count(f->fd.GetNumber()) > 0) {
         return true;
@@ -676,7 +618,7 @@ Compaction* UniversalCompactionPicker::CompactRange(
         GetCompressionOptions(ioptions_, vstorage, output_level);
     params.max_subcompactions = max_subcompactions;
     params.manual_compaction = true;
-    if (enable_lazy_compaction) {
+    if (ioptions_.enable_lazy_compaction) {
       params.max_subcompactions = 1;
       params.compaction_type = kMapCompaction;
     } else {
@@ -685,11 +627,11 @@ Compaction* UniversalCompactionPicker::CompactRange(
     return RegisterCompaction(new Compaction(std::move(params)));
   }
 
-  if (!enable_lazy_compaction) {
+  if (!ioptions_.enable_lazy_compaction) {
     return CompactionPicker::CompactRange(
         cf_name, mutable_cf_options, vstorage, input_level, output_level,
         output_path_id, max_subcompactions, begin, end, compaction_end,
-        manual_conflict, files_being_compact, enable_lazy_compaction);
+        manual_conflict, files_being_compact);
   }
   LogBuffer log_buffer(InfoLogLevel::INFO_LEVEL, ioptions_.info_log);
   auto c = PickRangeCompaction(cf_name, mutable_cf_options, vstorage,
@@ -743,39 +685,17 @@ struct SortedRunGroup {
 
 double GenSortedRunGroup(const std::vector<double>& sr, size_t group,
                          std::vector<SortedRunGroup>* output_group) {
-  auto Q = [](std::vector<double>::const_iterator b,
-              std::vector<double>::const_iterator e, size_t g) {
-    double S = std::accumulate(b, e, 0.0);
-    // sum of [q, q^2, q^3, ... , q^n]
-    auto F = [](double q, size_t n) {
-      return (std::pow(q, n + 1) - q) / (q - 1);
-    };
-    // let S = ∑q^i, i in <1..n>, seek q
-    double q = std::pow(S, 1.0 / g);
-    if (S <= g + 1) {
-      q = 1;
-    } else {
-      // Newton-Raphson method
-      for (size_t c = 0; c < 8; ++c) {
-        double Fp = q, q_k = q;
-        for (size_t k = 2; k <= g; ++k) {
-          Fp += k * (q_k *= q);
-        }
-        q -= (F(q, g) - S) / Fp;
-      }
-    }
-    return q;
-  };
   auto& o = *output_group;
   o.resize(group);
-  double ret_q = Q(sr.begin(), sr.end(), group);
+  double ret_q = CompactionPicker::GetQ(sr.begin(), sr.end(), group);
   size_t sr_size = sr.size();
   size_t g = group;
   double q = ret_q;
   // Skip oversized element of ending
   for (size_t i = g - 1; q > 1 && i > 0; --i) {
     size_t e = g - i;
-    double new_q = Q(sr.begin(), sr.begin() + sr_size - e, g - e);
+    double new_q =
+        CompactionPicker::GetQ(sr.begin(), sr.begin() + sr_size - e, g - e);
     if (new_q < q) {
       for (size_t j = i; j < g; ++j) {
         size_t start = j + sr_size - g;
@@ -1276,7 +1196,7 @@ Compaction* UniversalCompactionPicker::PickDeleteTriggeredCompaction(
       GetPathId(ioptions_, mutable_cf_options, estimated_total_size);
   CompactionType compaction_type = kKeyValueCompaction;
   uint32_t max_subcompactions = 0;
-  if (mutable_cf_options.enable_lazy_compaction && output_level != 0) {
+  if (ioptions_.enable_lazy_compaction && output_level != 0) {
     compaction_type = kMapCompaction;
     max_subcompactions = 1;
   }
@@ -1323,14 +1243,13 @@ Compaction* UniversalCompactionPicker::PickTrivialMoveCompaction(
   int output_level = 0, start_level = -1;
   for (auto rit = sorted_runs.rbegin(); rit != sorted_runs.rend(); ++rit) {
     auto& sr = *rit;
-    if (!sr.being_compacted && !is_compaction_output_level(sr.level)) {
-
+    if (!sr.being_compacted &&
+        (sr.level == 0 || !is_compaction_output_level(sr.level))) {
       // found start level
       start_level = sr.level;
 
       for (int test_output_level = sr.level + 1;
            test_output_level <= max_output_level; ++test_output_level) {
-
         if (vstorage->LevelFiles(test_output_level).empty() &&
             !is_compaction_output_level(test_output_level)) {
           // found output level
@@ -1338,12 +1257,10 @@ Compaction* UniversalCompactionPicker::PickTrivialMoveCompaction(
         } else {
           break;
         }
-
       }
       if (output_level > 0) {
         break;
       }
-
     }
     if (sr.level == 0) {
       break;
@@ -1951,8 +1868,9 @@ Compaction* UniversalCompactionPicker::PickCompactionToReduceSortedRuns(
   std::vector<double> sorted_run_ratio(sorted_runs.size());
   double base_size = double(mutable_cf_options.write_buffer_size);
   std::transform(sorted_runs.begin(), sorted_runs.end(),
-                 sorted_run_ratio.begin(),
-                 [&](const SortedRun& sr) { return sr.size / base_size; });
+                 sorted_run_ratio.begin(), [&](const SortedRun& sr) {
+                   return sr.compensated_file_size / base_size;
+                 });
   std::vector<SortedRunGroup> group;
   auto common_ratio =
       GenSortedRunGroup(sorted_run_ratio, reduce_sorted_run_target, &group);
@@ -1968,7 +1886,7 @@ Compaction* UniversalCompactionPicker::PickCompactionToReduceSortedRuns(
       for (size_t sr_i = g.start, sr_end = g.start + g.count; sr_i < sr_end;
            ++sr_i) {
         being_compacted |= sorted_runs[sr_i].being_compacted;
-        sorted_runs[sr_i].wait_reduce = true;
+        sorted_runs[sr_i].skip_composite = true;
       }
     }
     if (end_index != 0) {
