@@ -204,8 +204,9 @@ AJSON(CompactionWorkerResult, status, actual_start, actual_end, files);
 AJSON(FileDescriptor, packed_number_and_path_id, file_size, smallest_seqno,
       largest_seqno);
 
-AJSON(TablePropertyCache, num_entries, num_deletions, purpose, max_read_amp,
-      read_amp, dependence, inheritance_chain);
+AJSON(TablePropertyCache, num_entries, num_deletions, raw_key_size,
+      raw_value_size, flags, purpose, max_read_amp, read_amp, dependence,
+      inheritance_chain);
 
 AJSON(FileMetaData, fd, smallest, largest, prop);
 
@@ -854,8 +855,7 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(Slice data) {
       for (auto& pair : dependence) {
         meta.prop.dependence.emplace_back(Dependence{pair.first, pair.second});
       }
-      std::sort(meta.prop.dependence.begin(), meta.prop.dependence.end(),
-                TERARK_CMP(file_number, <));
+      terark::sort_a(meta.prop.dependence, TERARK_CMP(file_number, <));
       auto shrinked_snapshots = meta.ShrinkSnapshot(context.existing_snapshots);
       s = builder->Finish(&meta.prop, &shrinked_snapshots);
     } else {

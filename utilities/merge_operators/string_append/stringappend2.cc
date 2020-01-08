@@ -97,7 +97,7 @@ bool StringAppendTESTOperator::PartialMergeMulti(
 }
 
 // A version of PartialMerge that actually performs "partial merging".
-// Use this to simulate the exact behaviour of the StringAppendTESTOperator.
+// Use this to simulate the exact behaviour of the StringAppendOperator.
 bool StringAppendTESTOperator::_AssocPartialMergeMulti(
     const Slice& /*key*/, const std::deque<Slice>& operand_list,
     std::string* new_value, Logger* /*logger*/) const {
