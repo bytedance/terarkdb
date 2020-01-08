@@ -90,8 +90,7 @@ std::shared_ptr<MergeOperator> MergeOperators::CreateMaxOperator() {
   return std::make_shared<MaxOperator>();
 }
 
-static MergeOperator* NewMaxOperator(const std::string& options) {
-  assert(options.size() <= 1);
+static MergeOperator* NewMaxOperator(const std::string& /*options*/) {
   return new MaxOperator;
 }
 

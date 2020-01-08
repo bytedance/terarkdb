@@ -54,8 +54,7 @@ void BytesXOROperator::XOR(const Slice* existing_value, const Slice& value,
   }
 }
 
-static MergeOperator* NewBytesXOROperator(const std::string& options) {
-  assert(options.size() <= 1);
+static MergeOperator* NewBytesXOROperator(const std::string& /*options*/) {
   return new BytesXOROperator;
 }
 
