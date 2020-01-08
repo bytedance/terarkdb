@@ -963,9 +963,6 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(Slice data) {
     if (output_file_ended) {
       status = finish_output_file(input_status, next_key);
       dependence.clear();
-      if (next_key != nullptr) {
-        actual_end.SetMinPossibleForUserKey(ExtractUserKey(*next_key));
-      }
       break;
     }
   }
