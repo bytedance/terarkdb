@@ -565,7 +565,8 @@ class VersionStorageInfo {
   uint64_t accumulated_file_size_;
   uint64_t accumulated_num_entries_;
   uint64_t accumulated_num_deletions_;
-
+  uint64_t actual_accumulated_num_entries_;
+  uint64_t actual_accumulated_num_deletions_;
   // Estimated bytes needed to be compacted until all levels' size is down to
   // target sizes.
   uint64_t estimated_compaction_needed_bytes_;

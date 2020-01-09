@@ -969,11 +969,10 @@ uint64_t VersionStorageInfo::GetEstimatedActiveKeys() const {
   // (1) there exist merge keys
   // (2) keys are directly overwritten
   // (3) deletion on non-existing keys
-  if (accumulated_num_entries_ == 0 ||
-      accumulated_num_entries_ == accumulated_num_deletions_) {
+  if (actual_accumulated_num_entries_ <= actual_accumulated_num_deletions_) {
     return 0;
   }
-  return accumulated_num_entries_ - accumulated_num_deletions_;
+  return accumulated_num_entries_ - actual_accumulated_num_deletions_;
 }
 
 double VersionStorageInfo::GetEstimatedCompressionRatioAtLevel(
@@ -1175,6 +1174,8 @@ VersionStorageInfo::VersionStorageInfo(
       accumulated_file_size_(0),
       accumulated_num_entries_(0),
       accumulated_num_deletions_(0),
+      actual_accumulated_num_entries_(0),
+      actual_accumulated_num_deletions_(0),
       estimated_compaction_needed_bytes_(0),
       total_garbage_ratio_(0),
       finalized_(false),
@@ -1460,8 +1461,13 @@ void Version::PrepareApply(const MutableCFOptions& mutable_cf_options) {
 
 void VersionStorageInfo::UpdateAccumulatedStats(FileMetaData* file_meta) {
   accumulated_file_size_ += file_meta->fd.GetFileSize();
-  accumulated_num_entries_ += file_meta->prop.num_entries;
-  accumulated_num_deletions_ += file_meta->prop.num_deletions;
+  if (file_meta->is_skip_gc) {
+    actual_accumulated_num_entries_ += file_meta->prop.num_entries;
+    actual_accumulated_num_deletions_ += file_meta->prop.num_deletions;
+  } else {
+    accumulated_num_entries_ += file_meta->prop.num_entries;
+    accumulated_num_deletions_ += file_meta->prop.num_deletions;
+  }
 }
 
 void VersionStorageInfo::ComputeCompensatedSizes() {
@@ -2769,12 +2775,14 @@ void VersionStorageInfo::CalculateBaseBytes(const ImmutableCFOptions& ioptions,
 
 uint64_t VersionStorageInfo::EstimateLiveDataSize() const {
   // See VersionStorageInfo::GetEstimatedActiveKeys
-  if (accumulated_num_entries_ == 0 ||
-      accumulated_num_entries_ == accumulated_num_deletions_) {
+  if (actual_accumulated_num_entries_ + accumulated_num_entries_ <=
+      actual_accumulated_num_deletions_ + accumulated_num_deletions_) {
     return 0;
   }
-  return accumulated_file_size_ / accumulated_num_entries_ *
-         (accumulated_num_entries_ - accumulated_num_deletions_);
+  return accumulated_file_size_ * 
+        (actual_accumulated_num_entries_ + accumulated_num_entries_ - 
+         actual_accumulated_num_deletions_ + accumulated_num_deletions_) /
+        (actual_accumulated_num_entries_ + accumulated_num_entries_);
 }
 
 bool VersionStorageInfo::RangeMightExistAfterSortedRun(
