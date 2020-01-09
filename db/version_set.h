@@ -413,12 +413,29 @@ class VersionStorageInfo {
   std::string DebugString(bool hex = false) const;
 
   uint64_t GetAverageValueSize() const {
-    if (accumulated_num_entries_ == 0 ||
-        accumulated_num_entries_ == accumulated_num_deletions_) {
+    double long_cnt = 0, long_weight = 0, short_cnt = 0, short_weight = 0;
+    if (blob_num_entries_ > blob_num_antiquation_) {
+      long_cnt = blob_num_entries_ - blob_num_antiquation_;
+    }
+    if (blob_num_entries_ > blob_num_deletions_) {
+      long_weight = blob_num_entries_ - blob_num_deletions_;
+    }
+    if (lsm_num_entries_ > lsm_num_deletions_ + long_cnt) {
+      short_cnt = lsm_num_entries_ - lsm_num_deletions_ - long_cnt;
+    }
+    short_weight = short_cnt;
+    if (long_weight == 0 && short_weight == 0) {
       return 0;
     }
-    return accumulated_file_size_ /
-           (accumulated_num_entries_ - accumulated_num_deletions_);
+    double long_avg = 0, short_avg = 0;
+    if (long_cnt != 0) {
+      long_avg = blob_file_size_ / long_cnt;
+    }
+    if (short_cnt != 0) {
+      short_avg = lsm_file_size_ / short_cnt;
+    }
+    return uint64_t(short_avg * short_weight + long_avg * long_weight) /
+           (short_weight + long_weight);
   }
 
   uint64_t GetEstimatedActiveKeys() const;
@@ -562,10 +579,13 @@ class VersionStorageInfo {
   int l0_delay_trigger_count_ = 0;  // Count used to trigger slow down and stop
                                     // for number of L0 files.
 
-  uint64_t accumulated_file_size_;
-  uint64_t accumulated_num_entries_;
-  uint64_t accumulated_num_deletions_;
-
+  uint64_t blob_file_size_;
+  uint64_t blob_num_entries_;
+  uint64_t blob_num_deletions_;
+  uint64_t blob_num_antiquation_;
+  uint64_t lsm_file_size_;
+  uint64_t lsm_num_entries_;
+  uint64_t lsm_num_deletions_;
   // Estimated bytes needed to be compacted until all levels' size is down to
   // target sizes.
   uint64_t estimated_compaction_needed_bytes_;

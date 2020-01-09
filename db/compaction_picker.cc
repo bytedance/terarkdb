@@ -2466,10 +2466,12 @@ Compaction* LevelCompactionBuilder::PickLazyCompaction(
   int bottommost_level = vstorage_->num_non_empty_levels() - 1;
 
   auto picker = compaction_picker_;
+  // filter out being_compacted levels
   for (int i = 0; i <= bottommost_level; ++i) {
     sorted_runs[i].being_compacted =
         picker->AreFilesInCompaction(vstorage_->LevelFiles(i));
   }
+  // if level 0 has any range deletion or map sstable, try to push them down. 
   if ((vstorage_->has_range_deletion(0) &&
        (bottommost_level > 0 || vstorage_->LevelFiles(0).size() > 1)) ||
       vstorage_->has_map_sst(0) ||

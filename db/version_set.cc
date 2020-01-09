@@ -968,11 +968,10 @@ uint64_t VersionStorageInfo::GetEstimatedActiveKeys() const {
   // (1) there exist merge keys
   // (2) keys are directly overwritten
   // (3) deletion on non-existing keys
-  if (accumulated_num_entries_ == 0 ||
-      accumulated_num_entries_ == accumulated_num_deletions_) {
+  if (lsm_num_entries_ <= lsm_num_deletions_) {
     return 0;
   }
-  return accumulated_num_entries_ - accumulated_num_deletions_;
+  return lsm_num_entries_ - lsm_num_deletions_;
 }
 
 double VersionStorageInfo::GetEstimatedCompressionRatioAtLevel(
@@ -985,9 +984,8 @@ double VersionStorageInfo::GetEstimatedCompressionRatioAtLevel(
     void* args;
   } get_file_info;
   auto get_file_size_lambda = [this, &get_file_info](
-                                  const FileMetaData* f,
-                                  uint64_t file_number = uint64_t(
-                                      -1)) -> std::pair<uint64_t, uint64_t> {
+      const FileMetaData* f,
+      uint64_t file_number = uint64_t(-1)) -> std::pair<uint64_t, uint64_t> {
     if (f == nullptr) {
       auto find = dependence_map_.find(file_number);
       if (find == dependence_map_.end()) {
@@ -1171,9 +1169,13 @@ VersionStorageInfo::VersionStorageInfo(
       compaction_score_(num_levels_),
       compaction_level_(num_levels_),
       l0_delay_trigger_count_(0),
-      accumulated_file_size_(0),
-      accumulated_num_entries_(0),
-      accumulated_num_deletions_(0),
+      blob_file_size_(0),
+      blob_num_entries_(0),
+      blob_num_deletions_(0),
+      blob_num_antiquation_(0),
+      lsm_file_size_(0),
+      lsm_num_entries_(0),
+      lsm_num_deletions_(0),
       estimated_compaction_needed_bytes_(0),
       total_garbage_ratio_(0),
       finalized_(false),
@@ -1458,9 +1460,16 @@ void Version::PrepareApply(const MutableCFOptions& mutable_cf_options) {
 }
 
 void VersionStorageInfo::UpdateAccumulatedStats(FileMetaData* file_meta) {
-  accumulated_file_size_ += file_meta->fd.GetFileSize();
-  accumulated_num_entries_ += file_meta->prop.num_entries;
-  accumulated_num_deletions_ += file_meta->prop.num_deletions;
+  if (file_meta->is_skip_gc) {
+    lsm_file_size_ += file_meta->fd.GetFileSize();
+    lsm_num_entries_ += file_meta->prop.num_entries;
+    lsm_num_deletions_ += file_meta->prop.num_deletions;
+  } else {
+    blob_file_size_ += file_meta->fd.GetFileSize();
+    blob_num_entries_ += file_meta->prop.num_entries;
+    blob_num_deletions_ += file_meta->prop.num_deletions;
+    blob_num_antiquation_ += file_meta->num_antiquation;
+  }
 }
 
 void VersionStorageInfo::ComputeCompensatedSizes() {
@@ -1471,10 +1480,10 @@ void VersionStorageInfo::ComputeCompensatedSizes() {
                          uint64_t file_number, uint64_t entry_count);
     void* args;
   } compute_compensated_size;
-  auto compute_compensated_size_lambda =
-      [this, average_value_size, &compute_compensated_size](
-          const FileMetaData* f, uint64_t file_number = uint64_t(-1),
-          uint64_t entry_count = 0) -> uint64_t {
+  auto compute_compensated_size_lambda = [this, average_value_size,
+                                          &compute_compensated_size](
+      const FileMetaData* f, uint64_t file_number = uint64_t(-1),
+      uint64_t entry_count = 0) -> uint64_t {
     if (f == nullptr) {
       auto find = dependence_map_.find(file_number);
       if (find == dependence_map_.end()) {
@@ -1821,17 +1830,16 @@ void VersionStorageInfo::AddFile(int level, FileMetaData* f,
                                  bool (*exists)(void*, uint64_t),
                                  void* exists_args, Logger* info_log) {
   auto* level_files = &files_[level];
-  // Must not overlap
+// Must not overlap
 #ifndef NDEBUG
   if (level > 0 && !level_files->empty() &&
       internal_comparator_->Compare(level_files->back()->largest,
                                     f->smallest) >= 0) {
     auto* f2 = level_files->back();
     if (info_log != nullptr) {
-      Error(info_log,
-            "Adding new file %" PRIu64
-            " range (%s, %s) to level %d but overlapping "
-            "with existing file %" PRIu64 " %s %s",
+      Error(info_log, "Adding new file %" PRIu64
+                      " range (%s, %s) to level %d but overlapping "
+                      "with existing file %" PRIu64 " %s %s",
             f->fd.GetNumber(), f->smallest.DebugString(true).c_str(),
             f->largest.DebugString(true).c_str(), level, f2->fd.GetNumber(),
             f2->smallest.DebugString(true).c_str(),
@@ -2749,12 +2757,12 @@ void VersionStorageInfo::CalculateBaseBytes(const ImmutableCFOptions& ioptions,
 
 uint64_t VersionStorageInfo::EstimateLiveDataSize() const {
   // See VersionStorageInfo::GetEstimatedActiveKeys
-  if (accumulated_num_entries_ == 0 ||
-      accumulated_num_entries_ == accumulated_num_deletions_) {
-    return 0;
+  size_t ret = lsm_file_size_ * lsm_num_deletions_ / lsm_num_entries_;
+  if (blob_num_entries_ > blob_num_antiquation_) {
+    ret += (blob_num_entries_ - blob_num_antiquation_) * blob_file_size_ *
+           lsm_num_deletions_ / lsm_num_entries_;
   }
-  return accumulated_file_size_ / accumulated_num_entries_ *
-         (accumulated_num_entries_ - accumulated_num_deletions_);
+  return ret;
 }
 
 bool VersionStorageInfo::RangeMightExistAfterSortedRun(
@@ -3274,9 +3282,8 @@ Status VersionSet::ProcessManifestWrites(
       delete v;
     }
     if (new_descriptor_log) {
-      ROCKS_LOG_INFO(db_options_->info_log,
-                     "Deleting manifest %" PRIu64 " current manifest %" PRIu64
-                     "\n",
+      ROCKS_LOG_INFO(db_options_->info_log, "Deleting manifest %" PRIu64
+                                            " current manifest %" PRIu64 "\n",
                      manifest_file_number_, pending_manifest_file_number_);
       descriptor_log_.reset();
       env_->DeleteFile(
@@ -3362,9 +3369,9 @@ Status VersionSet::LogAndApply(
     first_writer.cv.Wait();
   }
   if (first_writer.done) {
-    // All non-CF-manipulation operations can be grouped together and committed
-    // to MANIFEST. They should all have finished. The status code is stored in
-    // the first manifest writer.
+// All non-CF-manipulation operations can be grouped together and committed
+// to MANIFEST. They should all have finished. The status code is stored in
+// the first manifest writer.
 #ifndef NDEBUG
     for (const auto& writer : writers) {
       assert(writer.done);
@@ -4495,9 +4502,10 @@ InternalIterator* VersionSet::MakeInputIterator(
   // Level-0 files have to be merged together.  For other levels,
   // we will make a concatenating iterator per level.
   // TODO(opt): use concatenating iterator for level-0 if there is no overlap
-  const size_t space = (c->level() <= 0 ? c->input_levels(0)->num_files +
-                                              c->num_input_levels() - 1
-                                        : c->num_input_levels());
+  const size_t space =
+      (c->level() <= 0
+           ? c->input_levels(0)->num_files + c->num_input_levels() - 1
+           : c->num_input_levels());
   InternalIterator** list = new InternalIterator*[space];
   auto& dependence_map = c->input_version()->storage_info()->dependence_map();
   size_t num = 0;
