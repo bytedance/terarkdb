@@ -262,16 +262,15 @@ bool PatriciaTrieRep::InsertKeyValue(const Slice &internal_key,
     if (!token->insert(key, &tmp_loc)) {
       size_t vector_loc = *(uint32_t *)token->value();
       auto *vector = (details::tag_vector_t *)trie->mem_get(vector_loc);
-      uint32_t size;
       size_t value_size = VarintLength(value.size()) + value.size();
       size_t value_loc = trie->mem_alloc(value_size);
       if (value_loc == MemPatricia::mem_alloc_fail) {
-        vector->size.store(size, std::memory_order_release);
         return details::InsertResult::Fail;
       }
       memcpy(EncodeVarint32((char *)trie->mem_get(value_loc),
                             (uint32_t)value.size()),
              value.data(), value.size());
+      uint32_t size;
       do {
         do {
           size = vector->size.load(std::memory_order_relaxed);
