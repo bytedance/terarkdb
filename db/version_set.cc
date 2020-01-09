@@ -1172,6 +1172,7 @@ VersionStorageInfo::VersionStorageInfo(
       l0_delay_trigger_count_(0),
       blob_file_size_(0),
       blob_num_entries_(0),
+      blob_num_deletions_(0),
       blob_num_antiquation_(0),
       lsm_file_size_(0),
       lsm_num_entries_(0),
@@ -1467,6 +1468,7 @@ void VersionStorageInfo::UpdateAccumulatedStats(FileMetaData* file_meta) {
   } else {
     blob_file_size_ += file_meta->fd.GetFileSize();
     blob_num_entries_ += file_meta->prop.num_entries;
+    blob_num_deletions_ += file_meta->prop.num_deletions;
     blob_num_antiquation_ += file_meta->num_antiquation;
   }
 }
@@ -2773,11 +2775,10 @@ void VersionStorageInfo::CalculateBaseBytes(const ImmutableCFOptions& ioptions,
 
 uint64_t VersionStorageInfo::EstimateLiveDataSize() const {
   // See VersionStorageInfo::GetEstimatedActiveKeys
-  size_t ret = lsm_file_size_ * (lsm_num_deletions_) /
-               (lsm_num_entries_ + lsm_num_deletions_);
+  size_t ret = lsm_file_size_ * lsm_num_deletions_ / lsm_num_entries_;
   if (blob_num_entries_ > blob_num_antiquation_) {
     ret += (blob_num_entries_ - blob_num_antiquation_) * blob_file_size_ *
-           (lsm_num_deletions_) / (lsm_num_entries_ + lsm_num_deletions_);
+           lsm_num_deletions_ / lsm_num_entries_;
   }
   return ret;
 }
