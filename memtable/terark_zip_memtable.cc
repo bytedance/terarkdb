@@ -90,6 +90,12 @@ PatriciaTrieRep::PatriciaTrieRep(details::ConcurrentType concurrent_type,
   overhead_ = trie_vec_[0]->mem_size_inline();
 }
 
+PatriciaTrieRep::~PatriciaTrieRep() {
+  for (size_t i = 0; i < trie_vec_size_; ++i) {
+    trie_vec_[i]->~PatriciaMem();
+  }
+}
+
 size_t PatriciaTrieRep::ApproximateMemoryUsage() {
   size_t sum = 0;
   for (size_t i = 0; i < trie_vec_size_; ++i) {

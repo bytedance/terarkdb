@@ -104,6 +104,8 @@ class PatriciaTrieRep : public MemTableRep {
                   Allocator *allocator,
                   const MemTableRep::KeyComparator &compare);
 
+  ~PatriciaTrieRep();
+
   // Return approximate memory usage which is sum of memory usage from
   // all patricia trie handled by this rep.
   virtual size_t ApproximateMemoryUsage() override;
