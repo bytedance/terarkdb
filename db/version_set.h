@@ -413,12 +413,10 @@ class VersionStorageInfo {
   std::string DebugString(bool hex = false) const;
 
   uint64_t GetAverageValueSize() const {
-    if (blob_num_entries_ == 0 ||
-        blob_num_entries_ == accumulated_num_deletions_) {
+    if (blob_num_entries_ <= blob_num_antiquation_) {
       return 0;
     }
-    return accumulated_file_size_ /
-           (blob_num_entries_ - accumulated_num_deletions_);
+    return blob_file_size_ / (blob_num_entries_ - blob_num_antiquation_);
   }
 
   uint64_t GetEstimatedActiveKeys() const;

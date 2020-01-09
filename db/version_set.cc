@@ -1173,7 +1173,7 @@ VersionStorageInfo::VersionStorageInfo(
       blob_file_size_(0),
       blob_num_entries_(0),
       blob_num_antiquation_(0),
-      actual_blob_file_size_(0),
+      lsm_file_size_(0),
       lsm_num_entries_(0),
       lsm_num_deletions_(0),
       estimated_compaction_needed_bytes_(0),
@@ -1461,13 +1461,13 @@ void Version::PrepareApply(const MutableCFOptions& mutable_cf_options) {
 
 void VersionStorageInfo::UpdateAccumulatedStats(FileMetaData* file_meta) {
   if (file_meta->is_skip_gc) {
-    actual_blob_file_size_ += file_meta->fd.GetFileSize();
+    lsm_file_size_ += file_meta->fd.GetFileSize();
     lsm_num_entries_ += file_meta->prop.num_entries;
     lsm_num_deletions_ += file_meta->prop.num_deletions;
   } else {
     blob_file_size_ += file_meta->fd.GetFileSize();
     blob_num_entries_ += file_meta->prop.num_entries;
-    blob_num_antiquation_ += file_meta->prop.num_antiquation;
+    blob_num_antiquation_ += file_meta->num_antiquation;
   }
 }
 
