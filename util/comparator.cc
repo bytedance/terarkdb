@@ -213,15 +213,19 @@ const Comparator* ReverseBytewiseComparator() {
   return &rbytewise;
 }
 
-TERARK_FACTORY_REGISTER_EX(Comparator, "leveldb.BytewiseComparator",
+TERARK_FACTORY_REGISTER_EX(BytewiseComparatorImpl,
+                           "leveldb.BytewiseComparator",
                            &BytewiseComparator);
 
-TERARK_FACTORY_REGISTER_EX(Comparator, "RocksDB_SE_v3.10", &BytewiseComparator);
+TERARK_FACTORY_REGISTER_EX(BytewiseComparatorImpl,
+                           "RocksDB_SE_v3.10", &BytewiseComparator);
 
-TERARK_FACTORY_REGISTER_EX(Comparator, "rocksdb.ReverseBytewiseComparator",
+TERARK_FACTORY_REGISTER_EX(ReverseBytewiseComparatorImpl,
+                           "rocksdb.ReverseBytewiseComparator",
                            &ReverseBytewiseComparator);
 
-TERARK_FACTORY_REGISTER_EX(Comparator, "rev:RocksDB_SE_v3.10",
+TERARK_FACTORY_REGISTER_EX(ReverseBytewiseComparatorImpl,
+                           "rev:RocksDB_SE_v3.10",
                            &ReverseBytewiseComparator);
 
 }  // namespace rocksdb

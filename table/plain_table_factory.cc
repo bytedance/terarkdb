@@ -253,7 +253,7 @@ static TableFactory* PlainCreator(const std::string& options, Status* s) {
   return nullptr;
 }
 
-TERARK_FACTORY_REGISTER_EX(TableFactory, "PlainTable", &PlainCreator);
+TERARK_FACTORY_REGISTER_EX(PlainTableFactory, "PlainTable", &PlainCreator);
 
 }  // namespace rocksdb
 #endif  // ROCKSDB_LITE

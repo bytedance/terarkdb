@@ -627,6 +627,7 @@ static TableFactory* BlockedCreator(const std::string& options, Status* s) {
   return nullptr;
 }
 
-TERARK_FACTORY_REGISTER_EX(TableFactory, "BlockBasedTable", &BlockedCreator);
+TERARK_FACTORY_REGISTER_EX(BlockBasedTableFactory,
+                          "BlockBasedTable", &BlockedCreator);
 
 }  // namespace rocksdb

@@ -234,13 +234,13 @@ SliceTransform* S_NewNoopTransform(const std::string&) {
 
 std::string SliceTransform::GetOptionString() const { return ""; }
 
-TERARK_FACTORY_REGISTER_EX(SliceTransform, "rocksdb.FixedPrefix",
+TERARK_FACTORY_REGISTER_EX(FixedPrefixTransform, "rocksdb.FixedPrefix",
                            &S_NewFixedPrefixTransform);
 
-TERARK_FACTORY_REGISTER_EX(SliceTransform, "rocksdb.CappedPrefix",
+TERARK_FACTORY_REGISTER_EX(CappedPrefixTransform, "rocksdb.CappedPrefix",
                            &S_NewCappedPrefixTransform);
 
-TERARK_FACTORY_REGISTER_EX(SliceTransform, "rocksdb.Noop", &S_NewNoopTransform);
+TERARK_FACTORY_REGISTER_EX(NoopTransform, "rocksdb.Noop", &S_NewNoopTransform);
 
 }  // namespace rocksdb
 
