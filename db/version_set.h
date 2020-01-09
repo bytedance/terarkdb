@@ -413,12 +413,12 @@ class VersionStorageInfo {
   std::string DebugString(bool hex = false) const;
 
   uint64_t GetAverageValueSize() const {
-    if (accumulated_num_entries_ == 0 ||
-        accumulated_num_entries_ == accumulated_num_deletions_) {
+    if (blob_num_entries_ == 0 ||
+        blob_num_entries_ == accumulated_num_deletions_) {
       return 0;
     }
     return accumulated_file_size_ /
-           (accumulated_num_entries_ - accumulated_num_deletions_);
+           (blob_num_entries_ - accumulated_num_deletions_);
   }
 
   uint64_t GetEstimatedActiveKeys() const;
@@ -562,11 +562,12 @@ class VersionStorageInfo {
   int l0_delay_trigger_count_ = 0;  // Count used to trigger slow down and stop
                                     // for number of L0 files.
 
-  uint64_t accumulated_file_size_;
-  uint64_t accumulated_num_entries_;
-  uint64_t accumulated_num_deletions_;
-  uint64_t actual_accumulated_num_entries_;
-  uint64_t actual_accumulated_num_deletions_;
+  uint64_t blob_file_size_;
+  uint64_t blob_num_entries_;
+  uint64_t blob_num_antiquation_;
+  uint64_t lsm_file_size_;
+  uint64_t lsm_num_entries_;
+  uint64_t lsm_num_deletions_;
   // Estimated bytes needed to be compacted until all levels' size is down to
   // target sizes.
   uint64_t estimated_compaction_needed_bytes_;
