@@ -53,7 +53,7 @@
 
 #if TEST_TERARK
 # include <terark/idx/terark_zip_index.hpp>
-# include <terark/util/common.hpp>
+# include <terark/util/tmpfile.hpp>
 # include <table/terark_zip_common.h>
 # include <table/terark_zip_table.h>
 #else
