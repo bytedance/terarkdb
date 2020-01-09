@@ -40,6 +40,7 @@
 
 // terark headers
 #include <terark/lcast.hpp>
+#include <terark/util/tmpfile.hpp>
 #include <terark/zbs/xxhash_helper.hpp>
 
 static std::once_flag PrintVersionHashInfoFlag;

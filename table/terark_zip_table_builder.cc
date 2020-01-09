@@ -1475,6 +1475,41 @@ Status TerarkZipTableBuilder::ZipValueToFinishMulti() {
   return WriteSSTFileMulti(t3, t4, td, tmpDictFile, dictInfo, dictHash, dzstat);
 }
 
+class TerarkValueReader {
+  const valvec<std::shared_ptr<FilePair>>& files;
+  size_t index;
+  NativeDataInput<InputBuffer> reader;
+  valvec<byte_t> buffer;
+
+  void checkEOF(){
+    if (terark_unlikely(reader.eof())) {
+      FileStream* fp = &files[++index]->value.fp;
+      fp->rewind();
+      reader.attach(fp);
+    }
+  }
+
+public:
+  TerarkValueReader(const valvec<std::shared_ptr<FilePair>>& _files) : files(_files) {}
+
+  uint64_t readUInt64(){
+    checkEOF();
+    return reader.load_as<uint64_t>();
+  }
+
+  void appendBuffer(valvec<byte_t>* buffer) {
+    checkEOF();
+    reader.load_add(*buffer);
+  }
+
+  void rewind(){
+    index = 0;
+    FileStream* fp = &files.front()->value.fp;
+    fp->rewind();
+    reader.attach(fp);
+  }
+};
+
 Status TerarkZipTableBuilder::BuilderWriteValues(
     KeyValueStatus& kvs, std::function<void(fstring)> write) {
   auto& bzvType = kvs.type;

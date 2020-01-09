@@ -32,6 +32,7 @@
 #include <terark/idx/terark_zip_index.hpp>
 #include <terark/stdtypes.hpp>
 #include <terark/util/fstrvec.hpp>
+#include <terark/util/tmpfile.hpp>
 #include <terark/valvec.hpp>
 #include <terark/zbs/abstract_blob_store.hpp>
 #include <terark/zbs/dict_zip_blob_store.hpp>
