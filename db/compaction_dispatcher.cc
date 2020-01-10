@@ -199,7 +199,7 @@ using FileInfo = CompactionWorkerResult::FileInfo;
 AJSON(FileInfo, smallest, largest, file_name, smallest_seqno, largest_seqno,
       file_size, marked_for_compaction);
 
-AJSON(CompactionWorkerResult, status, actual_start, actual_end, files);
+AJSON(CompactionWorkerResult, status, actual_start, actual_end, files, stat_all);
 
 AJSON(FileDescriptor, packed_number_and_path_id, file_size, smallest_seqno,
       largest_seqno);
