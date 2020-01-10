@@ -40,6 +40,7 @@
 
 // terark headers
 #include <terark/lcast.hpp>
+#include <terark/util/tmpfile.hpp>
 #include <terark/zbs/xxhash_helper.hpp>
 
 static std::once_flag PrintVersionHashInfoFlag;
@@ -163,6 +164,17 @@ TableFactory* NewTerarkZipTableFactory(const TerarkZipTableOptions& tzto,
              factory->GetPrintableTableOptions().c_str());
   }
   return factory;
+}
+
+TableFactory* NewTerarkZipTableFactory(Slice options,
+                                       std::shared_ptr<TableFactory> fallback,
+                                       Status* s) {
+  TerarkZipTableOptions opt;
+  *s = opt.Parse(options);
+  if (s->ok()) {
+    return NewTerarkZipTableFactory(opt, fallback);
+  }
+  return nullptr;
 }
 
 std::shared_ptr<TableFactory> SingleTerarkZipTableFactory(
@@ -477,6 +489,81 @@ Status TerarkZipTableFactory::SanitizeOptions(
   return Status::OK();
 }
 
+// delimiter must be "\n"
+Status TerarkZipTableOptions::Parse(Slice opt) {
+  const char* beg = opt.data();
+  const char* end = opt.size() + beg;
+  std::unordered_map<std::string, std::string> map;
+  while (beg < end) {
+    const char* eq = (char*)memchr(beg, '=', end - beg);
+    if (eq) {
+      const char* eol = std::find(eq + 1, end, '\n');
+      fstring name(beg, eq);
+      fstring value(eq + 1, eol);
+      name.trim();
+      value.trim();
+      map[name.str()] = value.str();
+      beg = eol + 1;
+    } else {
+      // return Status::InvalidArgument("TerarkZipTableOptions::Parse", "Missing
+      // linefeed char");
+      Slice line(beg, end - beg);
+      fprintf(stderr,
+              "ERROR: TerarkZipTableOptions::Parse(): opt=\n%.*s\n---Missing "
+              "\\n\nremaining = %.*s\n",
+              DOT_STAR_S(opt), DOT_STAR_S(line));
+      break;
+    }
+  }
+#define M_String(name)                          \
+  {                                             \
+    auto iter = map.find(#name);                \
+    if (map.end() != iter) name = iter->second; \
+  }
+#define M_NumFmt(name, fmt)                                               \
+  {                                                                       \
+    auto iter = map.find(#name);                                          \
+    if (map.end() != iter) {                                              \
+      if (sscanf(iter->second.c_str(), fmt, &name) != 1) {                \
+        return Status::InvalidArgument("TerarkZipTableOptions::Parse():", \
+                                       "bad " #name);                     \
+      }                                                                   \
+    }                                                                     \
+  }
+#define M_NumGiB(name)                                  \
+  {                                                     \
+    auto iter = map.find(#name);                        \
+    if (map.end() != iter) {                            \
+      double dval = strtof(iter->second.c_str(), NULL); \
+      name = size_t(dval * GiB);                        \
+    }                                                   \
+  }
+#define M_Boolea(name)                                                    \
+  {                                                                       \
+    auto iter = map.find(#name);                                          \
+    if (map.end() != iter) {                                              \
+      if (strcasecmp(iter->second.c_str(), "true") == 0)                  \
+        name = true;                                                      \
+      else if (strcasecmp(iter->second.c_str(), "false") == 0)            \
+        name = false;                                                     \
+      else                                                                \
+        return Status::InvalidArgument("TerarkZipTableOptions::Parse():", \
+                                       "bad " #name);                     \
+    }                                                                     \
+  }
+  int entropyAlgo;
+  int debugLevel, indexNestScale, indexTempLevel, offsetArrayBlockUnits;
+#include "terark_zip_table_property_print.h"
+
+  this->debugLevel = (byte_t)debugLevel;
+  this->indexNestScale = (byte_t)indexNestScale;
+  this->indexTempLevel = (byte_t)indexTempLevel;
+  this->offsetArrayBlockUnits = (uint16_t)offsetArrayBlockUnits;
+  this->entropyAlgo = (EntropyAlgo)entropyAlgo;
+
+  return Status::OK();
+}
+
 bool TerarkZipTablePrintCacheStat(TableFactory* factory, FILE* fp) {
   auto tztf = dynamic_cast<const TerarkZipTableFactory*>(factory);
   if (tztf) {
@@ -491,5 +578,11 @@ bool TerarkZipTablePrintCacheStat(TableFactory* factory, FILE* fp) {
   }
   return false;
 }
+
+TERARK_FACTORY_REGISTER_EX(TerarkZipTableFactory, "TerarkZipTable",
+                           ([](const std::string& options, Status* s) {
+                             return NewTerarkZipTableFactory(options, nullptr,
+                                                             s);
+                           }));
 
 } /* namespace rocksdb */

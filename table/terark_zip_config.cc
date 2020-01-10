@@ -200,25 +200,38 @@ void TerarkZipAutoConfigForOnlineDB_DBOptions(struct DBOptions& dbo,
   dbo.base_background_compactions = 1;
 }
 
+size_t TerarkGetSysMemSize() {
+#ifdef _MSC_VER
+  MEMORYSTATUSEX statex;
+  statex.dwLength = sizeof(statex);
+  GlobalMemoryStatusEx(&statex);
+  return statex.ullTotalPhys;
+#else
+  size_t page_num = sysconf(_SC_PHYS_PAGES);
+  size_t page_size = sysconf(_SC_PAGE_SIZE);
+  return page_num * page_size;
+#endif
+}
+
 void TerarkZipAutoConfigForOnlineDB_CFOptions(
     struct TerarkZipTableOptions& tzo, struct ColumnFamilyOptions& /*cfo*/,
     size_t memBytesLimit, size_t /*diskBytesLimit*/) {
   using namespace std;  // max, min
   if (0 == memBytesLimit) {
-#ifdef _MSC_VER
-    MEMORYSTATUSEX statex;
-    statex.dwLength = sizeof(statex);
-    GlobalMemoryStatusEx(&statex);
-    memBytesLimit = statex.ullTotalPhys;
-#else
-    size_t page_num = sysconf(_SC_PHYS_PAGES);
-    size_t page_size = sysconf(_SC_PAGE_SIZE);
-    memBytesLimit = page_num * page_size;
-#endif
+    memBytesLimit = TerarkGetSysMemSize();
+  } else {
+    memBytesLimit = std::min(TerarkGetSysMemSize(), memBytesLimit);
   }
+  TerarkZipConfigMemLimitFromSystem(tzo, memBytesLimit);
+}
+
+void TerarkZipConfigMemLimitFromSystem(TerarkZipTableOptions& tzo,
+                                       size_t memBytesLimit) {
   tzo.softZipWorkingMemLimit = memBytesLimit * 1 / 8;
   tzo.hardZipWorkingMemLimit = tzo.softZipWorkingMemLimit * 2;
   tzo.smallTaskMemory = memBytesLimit / 64;
+  tzo.singleIndexMaxSize =
+      std::min(tzo.softZipWorkingMemLimit, tzo.singleIndexMaxSize);
 }
 
 bool TerarkZipConfigFromEnv(DBOptions& dbo, ColumnFamilyOptions& cfo) {
@@ -394,6 +407,25 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo,
   }
   return true;
 }  // namespace rocksdb
+
+void TerarkZipConfigCompactionWorkerFromEnv(TerarkZipTableOptions& tzo) {
+  assert(IsCompactionWorkerNode());
+  if (const char* env = getenv("TerarkZipTable_localTempDir")) {
+    tzo.localTempDir = env;
+  } else if (const char* env = getenv("TMPDIR")) {
+    tzo.localTempDir = env;
+  } else {
+    tzo.localTempDir = "/tmp";
+  }
+  size_t sys_mem = TerarkGetSysMemSize();
+  tzo.softZipWorkingMemLimit = sys_mem / 2;
+  tzo.hardZipWorkingMemLimit = sys_mem / 2;
+  tzo.smallTaskMemory = sys_mem / 4;
+
+  MyOverrideXiB(tzo, softZipWorkingMemLimit);
+  MyOverrideXiB(tzo, hardZipWorkingMemLimit);
+  MyOverrideXiB(tzo, smallTaskMemory);
+}
 
 void TerarkZipDBOptionsFromEnv(DBOptions& dbo) {
   auto configMap = TerarkGetConfigMapFromEnv();

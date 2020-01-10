@@ -21,6 +21,7 @@
 #include <map>
 #include <set>
 #include <string>
+#include <terark/valvec.hpp>
 #include <unordered_map>
 #include <vector>
 
@@ -64,11 +65,9 @@ namespace {
 int FindFileInRange(const InternalKeyComparator& icmp,
                     const LevelFilesBrief& file_level, const Slice& key,
                     uint32_t left, uint32_t right) {
-  auto cmp = [&](const FdWithKeyRange& f, const Slice& k) -> bool {
-    return icmp.InternalKeyComparator::Compare(f.largest_key, k) < 0;
-  };
-  const auto& b = file_level.files;
-  return static_cast<int>(std::lower_bound(b + left, b + right, key, cmp) - b);
+  return static_cast<int>(
+      terark::lower_bound_ex_n(file_level.files, left, right, key,
+                               TERARK_FIELD(largest_key), "" < icmp));
 }
 
 Status OverlapWithIterator(const Comparator* ucmp,
@@ -969,11 +968,10 @@ uint64_t VersionStorageInfo::GetEstimatedActiveKeys() const {
   // (1) there exist merge keys
   // (2) keys are directly overwritten
   // (3) deletion on non-existing keys
-  if (accumulated_num_entries_ == 0 ||
-      accumulated_num_entries_ == accumulated_num_deletions_) {
+  if (lsm_num_entries_ <= lsm_num_deletions_) {
     return 0;
   }
-  return accumulated_num_entries_ - accumulated_num_deletions_;
+  return lsm_num_entries_ - lsm_num_deletions_;
 }
 
 double VersionStorageInfo::GetEstimatedCompressionRatioAtLevel(
@@ -986,9 +984,8 @@ double VersionStorageInfo::GetEstimatedCompressionRatioAtLevel(
     void* args;
   } get_file_info;
   auto get_file_size_lambda = [this, &get_file_info](
-                                  const FileMetaData* f,
-                                  uint64_t file_number = uint64_t(
-                                      -1)) -> std::pair<uint64_t, uint64_t> {
+      const FileMetaData* f,
+      uint64_t file_number = uint64_t(-1)) -> std::pair<uint64_t, uint64_t> {
     if (f == nullptr) {
       auto find = dependence_map_.find(file_number);
       if (find == dependence_map_.end()) {
@@ -1172,9 +1169,13 @@ VersionStorageInfo::VersionStorageInfo(
       compaction_score_(num_levels_),
       compaction_level_(num_levels_),
       l0_delay_trigger_count_(0),
-      accumulated_file_size_(0),
-      accumulated_num_entries_(0),
-      accumulated_num_deletions_(0),
+      blob_file_size_(0),
+      blob_num_entries_(0),
+      blob_num_deletions_(0),
+      blob_num_antiquation_(0),
+      lsm_file_size_(0),
+      lsm_num_entries_(0),
+      lsm_num_deletions_(0),
       estimated_compaction_needed_bytes_(0),
       total_garbage_ratio_(0),
       finalized_(false),
@@ -1459,9 +1460,16 @@ void Version::PrepareApply(const MutableCFOptions& mutable_cf_options) {
 }
 
 void VersionStorageInfo::UpdateAccumulatedStats(FileMetaData* file_meta) {
-  accumulated_file_size_ += file_meta->fd.GetFileSize();
-  accumulated_num_entries_ += file_meta->prop.num_entries;
-  accumulated_num_deletions_ += file_meta->prop.num_deletions;
+  if (file_meta->is_skip_gc) {
+    lsm_file_size_ += file_meta->fd.GetFileSize();
+    lsm_num_entries_ += file_meta->prop.num_entries;
+    lsm_num_deletions_ += file_meta->prop.num_deletions;
+  } else {
+    blob_file_size_ += file_meta->fd.GetFileSize();
+    blob_num_entries_ += file_meta->prop.num_entries;
+    blob_num_deletions_ += file_meta->prop.num_deletions;
+    blob_num_antiquation_ += file_meta->num_antiquation;
+  }
 }
 
 void VersionStorageInfo::ComputeCompensatedSizes() {
@@ -1472,10 +1480,10 @@ void VersionStorageInfo::ComputeCompensatedSizes() {
                          uint64_t file_number, uint64_t entry_count);
     void* args;
   } compute_compensated_size;
-  auto compute_compensated_size_lambda =
-      [this, average_value_size, &compute_compensated_size](
-          const FileMetaData* f, uint64_t file_number = uint64_t(-1),
-          uint64_t entry_count = 0) -> uint64_t {
+  auto compute_compensated_size_lambda = [this, average_value_size,
+                                          &compute_compensated_size](
+      const FileMetaData* f, uint64_t file_number = uint64_t(-1),
+      uint64_t entry_count = 0) -> uint64_t {
     if (f == nullptr) {
       auto find = dependence_map_.find(file_number);
       if (find == dependence_map_.end()) {
@@ -1816,29 +1824,22 @@ struct Fsize {
   FileMetaData* file;
 };
 
-// Compator that is used to sort files based on their size
-// In normal mode: descending size
-bool CompareCompensatedSizeDescending(const Fsize& first, const Fsize& second) {
-  return (first.file->compensated_file_size >
-          second.file->compensated_file_size);
-}
 }  // anonymous namespace
 
 void VersionStorageInfo::AddFile(int level, FileMetaData* f,
                                  bool (*exists)(void*, uint64_t),
                                  void* exists_args, Logger* info_log) {
   auto* level_files = &files_[level];
-  // Must not overlap
+// Must not overlap
 #ifndef NDEBUG
   if (level > 0 && !level_files->empty() &&
       internal_comparator_->Compare(level_files->back()->largest,
                                     f->smallest) >= 0) {
     auto* f2 = level_files->back();
     if (info_log != nullptr) {
-      Error(info_log,
-            "Adding new file %" PRIu64
-            " range (%s, %s) to level %d but overlapping "
-            "with existing file %" PRIu64 " %s %s",
+      Error(info_log, "Adding new file %" PRIu64
+                      " range (%s, %s) to level %d but overlapping "
+                      "with existing file %" PRIu64 " %s %s",
             f->fd.GetNumber(), f->smallest.DebugString(true).c_str(),
             f->largest.DebugString(true).c_str(), level, f2->fd.GetNumber(),
             f2->smallest.DebugString(true).c_str(),
@@ -1901,9 +1902,10 @@ uint64_t VersionStorageInfo::FileSize(const FileMetaData* f,
     }
   }
   assert(entry_count <= std::max<uint64_t>(1, f->prop.num_entries));
-  return entry_count == 0 ? file_size
-                          : file_size * entry_count /
-                                std::max<uint64_t>(1, f->prop.num_entries);
+  return entry_count == 0
+             ? file_size
+             : uint64_t(double(file_size) * entry_count /
+                        std::max<uint64_t>(1, f->prop.num_entries));
 }
 
 uint64_t VersionStorageInfo::FileSizeWithBlob(const FileMetaData* f,
@@ -1921,17 +1923,17 @@ uint64_t VersionStorageInfo::FileSizeWithBlob(const FileMetaData* f,
     assert(file_number == uint64_t(-1));
   }
   uint64_t file_size = f->fd.GetFileSize();
-  if (recursive || f->prop.is_map_sst()) {
+  if (recursive) {
     for (auto& dependence : f->prop.dependence) {
-      file_size +=
-          FileSizeWithBlob(nullptr, dependence.file_number,
-                           f->prop.is_map_sst(), dependence.entry_count);
+      file_size += FileSizeWithBlob(nullptr, dependence.file_number, false,
+                                    dependence.entry_count);
     }
   }
   assert(entry_count <= std::max<uint64_t>(1, f->prop.num_entries));
-  return entry_count == 0 ? file_size
-                          : file_size * entry_count /
-                                std::max<uint64_t>(1, f->prop.num_entries);
+  return entry_count == 0
+             ? file_size
+             : uint64_t(double(file_size) * entry_count /
+                        std::max<uint64_t>(1, f->prop.num_entries));
 }
 
 // Version::PrepareApply() need to be called before calling the function, or
@@ -2024,11 +2026,9 @@ void SortFileByOverlappingRatio(
         overlapping_bytes * 1024u / file->fd.file_size;
   }
 
-  std::sort(temp->begin(), temp->end(),
-            [&](const Fsize& f1, const Fsize& f2) -> bool {
-              return file_to_order[f1.file->fd.GetNumber()] <
-                     file_to_order[f2.file->fd.GetNumber()];
-            });
+  terark::sort_ex_a(*temp, [&](const Fsize& f) {
+    return file_to_order[f.file->fd.GetNumber()];
+  });
 }
 }  // namespace
 
@@ -2061,21 +2061,13 @@ void VersionStorageInfo::UpdateFilesByCompactionPri(
     switch (compaction_pri) {
       case kByCompensatedSize:
         std::partial_sort(temp.begin(), temp.begin() + num, temp.end(),
-                          CompareCompensatedSizeDescending);
+                          TERARK_CMP(file->compensated_file_size, >));
         break;
       case kOldestLargestSeqFirst:
-        std::sort(temp.begin(), temp.end(),
-                  [](const Fsize& f1, const Fsize& f2) -> bool {
-                    return f1.file->fd.largest_seqno <
-                           f2.file->fd.largest_seqno;
-                  });
+        terark::sort_a(temp, TERARK_CMP(file->fd.largest_seqno, <));
         break;
       case kOldestSmallestSeqFirst:
-        std::sort(temp.begin(), temp.end(),
-                  [](const Fsize& f1, const Fsize& f2) -> bool {
-                    return f1.file->fd.smallest_seqno <
-                           f2.file->fd.smallest_seqno;
-                  });
+        terark::sort_a(temp, TERARK_CMP(file->fd.smallest_seqno, <));
         break;
       case kMinOverlappingRatio:
         SortFileByOverlappingRatio(*internal_comparator_, files_[level],
@@ -2106,16 +2098,13 @@ void VersionStorageInfo::GenerateLevel0NonOverlapping() {
   std::vector<FdWithKeyRange> level0_sorted_file(
       level_files_brief_[0].files,
       level_files_brief_[0].files + level_files_brief_[0].num_files);
-  std::sort(level0_sorted_file.begin(), level0_sorted_file.end(),
-            [this](const FdWithKeyRange& f1, const FdWithKeyRange& f2) -> bool {
-              return (internal_comparator_->Compare(f1.smallest_key,
-                                                    f2.smallest_key) < 0);
-            });
+  auto icmp = internal_comparator_;
+  terark::sort_a(level0_sorted_file, TERARK_FIELD(smallest_key) < *icmp);
 
   for (size_t i = 1; i < level0_sorted_file.size(); ++i) {
     FdWithKeyRange& f = level0_sorted_file[i];
     FdWithKeyRange& prev = level0_sorted_file[i - 1];
-    if (internal_comparator_->Compare(prev.largest_key, f.smallest_key) >= 0) {
+    if (icmp->Compare(prev.largest_key, f.smallest_key) >= 0) {
       level0_non_overlapping_ = false;
       break;
     }
@@ -2769,12 +2758,12 @@ void VersionStorageInfo::CalculateBaseBytes(const ImmutableCFOptions& ioptions,
 
 uint64_t VersionStorageInfo::EstimateLiveDataSize() const {
   // See VersionStorageInfo::GetEstimatedActiveKeys
-  if (accumulated_num_entries_ == 0 ||
-      accumulated_num_entries_ == accumulated_num_deletions_) {
-    return 0;
+  size_t ret = lsm_file_size_ * lsm_num_deletions_ / lsm_num_entries_;
+  if (blob_num_entries_ > blob_num_antiquation_) {
+    ret += (blob_num_entries_ - blob_num_antiquation_) * blob_file_size_ *
+           lsm_num_deletions_ / lsm_num_entries_;
   }
-  return accumulated_file_size_ / accumulated_num_entries_ *
-         (accumulated_num_entries_ - accumulated_num_deletions_);
+  return ret;
 }
 
 bool VersionStorageInfo::RangeMightExistAfterSortedRun(
@@ -3294,9 +3283,8 @@ Status VersionSet::ProcessManifestWrites(
       delete v;
     }
     if (new_descriptor_log) {
-      ROCKS_LOG_INFO(db_options_->info_log,
-                     "Deleting manifest %" PRIu64 " current manifest %" PRIu64
-                     "\n",
+      ROCKS_LOG_INFO(db_options_->info_log, "Deleting manifest %" PRIu64
+                                            " current manifest %" PRIu64 "\n",
                      manifest_file_number_, pending_manifest_file_number_);
       descriptor_log_.reset();
       env_->DeleteFile(
@@ -3382,9 +3370,9 @@ Status VersionSet::LogAndApply(
     first_writer.cv.Wait();
   }
   if (first_writer.done) {
-    // All non-CF-manipulation operations can be grouped together and committed
-    // to MANIFEST. They should all have finished. The status code is stored in
-    // the first manifest writer.
+// All non-CF-manipulation operations can be grouped together and committed
+// to MANIFEST. They should all have finished. The status code is stored in
+// the first manifest writer.
 #ifndef NDEBUG
     for (const auto& writer : writers) {
       assert(writer.done);
@@ -4515,9 +4503,10 @@ InternalIterator* VersionSet::MakeInputIterator(
   // Level-0 files have to be merged together.  For other levels,
   // we will make a concatenating iterator per level.
   // TODO(opt): use concatenating iterator for level-0 if there is no overlap
-  const size_t space = (c->level() <= 0 ? c->input_levels(0)->num_files +
-                                              c->num_input_levels() - 1
-                                        : c->num_input_levels());
+  const size_t space =
+      (c->level() <= 0
+           ? c->input_levels(0)->num_files + c->num_input_levels() - 1
+           : c->num_input_levels());
   InternalIterator** list = new InternalIterator*[space];
   auto& dependence_map = c->input_version()->storage_info()->dependence_map();
   size_t num = 0;

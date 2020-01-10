@@ -100,6 +100,7 @@
 #include <sys/unistd.h>
 #include <table/terark_zip_table.h>
 #endif
+#include <terark/valvec.hpp>
 
 #ifdef __GNUC__
 #pragma GCC diagnostic push
@@ -253,8 +254,7 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
       error_handler_(this, immutable_db_options_, &mutex_),
       atomic_flush_install_cv_(&mutex_),
       bytedance_tags_("dbname=" + dbname),
-      console_runner_(this, dbname, env_,
-                      immutable_db_options_.info_log.get()),
+      console_runner_(this, dbname, env_, immutable_db_options_.info_log.get()),
       write_qps_reporter_(write_qps_metric_name, bytedance_tags_),
       read_qps_reporter_(read_qps_metric_name, bytedance_tags_),
       newiterator_qps_reporter_(newiterator_qps_metric_name, bytedance_tags_),
@@ -2724,10 +2724,7 @@ Status DBImpl::DeleteFilesInRanges(ColumnFamilyHandle* column_family,
         deleted_range[i].limit = storage.second.Encode();
       }
       // sort & merge ranges
-      std::sort(deleted_range.begin(), deleted_range.end(),
-                [&ic](const Range& rl, const Range& rr) {
-                  return ic.Compare(rl.start, rr.start) < 0;
-                });
+      terark::sort_a(deleted_range, TERARK_FIELD(start) < ic);
       size_t c = 0;
       for (size_t i = 1; i < n; ++i) {
         if (ic.Compare(deleted_range[c].limit, deleted_range[i].start) >= 0) {

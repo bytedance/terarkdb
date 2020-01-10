@@ -26,15 +26,35 @@
 #include "db/map_builder.h"
 #include "db/merge_helper.h"
 #include "db/range_del_aggregator.h"
+#include "rocksdb/advanced_options.h"
+#include "rocksdb/compaction_filter.h"
+#include "rocksdb/comparator.h"
 #include "rocksdb/convenience.h"
 #include "rocksdb/filter_policy.h"
+#include "rocksdb/merge_operator.h"
+#include "rocksdb/status.h"
 #include "rocksdb/table.h"
+#include "rocksdb/types.h"
 #include "table/merging_iterator.h"
 #include "table/table_reader.h"
 #include "table/two_level_iterator.h"
-#include "util/ajson_msd.hpp"
 #include "util/c_style_callback.h"
 #include "util/filename.h"
+
+//#define USE_AJSON 1
+
+#ifdef USE_AJSON
+#include "util/ajson_msd.hpp"
+#else
+#include <terark/io/DataIO.hpp>
+#include <terark/io/MemStream.hpp>
+#include <terark/preproc.hpp>
+#define AJSON(Class, ...)             \
+  DATA_IO_LOAD_SAVE_E(                \
+      Class,                          \
+      TERARK_PP_APPLY(TERARK_PP_JOIN, \
+                      TERARK_PP_MAP(TERARK_PP_PREPEND, &, __VA_ARGS__)))
+#endif
 
 struct AJsonStatus {
   unsigned char code, subcode, sev;
@@ -43,6 +63,7 @@ struct AJsonStatus {
 AJSON(AJsonStatus, code, subcode, sev, state);
 
 namespace ajson {
+#ifdef USE_AJSON
 template <>
 struct json_impl<rocksdb::Status, void> {
   static inline void read(reader& rd, rocksdb::Status& v) {
@@ -92,42 +113,130 @@ struct json_impl<rocksdb::InternalKey, void> {
     json_impl<std::string>::template write<write_ty>(wt, s.ToString(true));
   }
 };
+
+template <class T>
+void load_from_buff(T& x, std::string& data) {
+  load_from_buff(x, &data[0], data.size());
+}
+
+template <class T>
+void load_from_buff(T& x, const rocksdb::Slice& data) {
+  load_from_buff(x, &data.ToString()[0], data.size());
+}
+
+#else  // USE_AJSON
+
+template <class T>
+void load_from_buff(T& x, const rocksdb::Slice& data) {
+  using namespace terark;
+  LittleEndianDataInput<MemIO> dio;
+  dio.set((char*)data.data(), data.size());
+  dio >> x;
+}
+
+struct string_stream : terark::LittleEndianDataOutput<terark::AutoGrownMemIO> {
+  std::string str() const { return std::string((char*)m_beg, m_pos - m_beg); }
+};
+
+template <class T>
+void save_to(string_stream& ss, const T& x) {
+  ss.resize(128 * 1024);
+  ss << x;
+}
+
+#endif
 }  // namespace ajson
 
-AJSON(rocksdb::Dependence, file_number, entry_count);
+#ifdef USE_AJSON
+using namespace rocksdb;
+#else
+namespace rocksdb {
 
-AJSON(rocksdb::CompactionWorkerResult::FileInfo, smallest, largest, file_name,
-      smallest_seqno, largest_seqno, file_size, marked_for_compaction);
+template <class DataIO>
+void DataIO_loadObject(DataIO& dio, rocksdb::Status& x) {
+  AJsonStatus s;
+  dio >> s;
+  x = rocksdb::Status(s.code, s.subcode, s.sev,
+                      s.state.empty() ? nullptr : s.state.c_str());
+}
 
-AJSON(rocksdb::CompactionWorkerResult, status, actual_start, actual_end, files);
+template <class DataIO>
+void DataIO_saveObject(DataIO& dio, const rocksdb::Status& v) {
+  AJsonStatus s = {v.code(), v.subcode(), v.severity(),
+                   v.getState() == nullptr ? std::string() : v.getState()};
+  dio << s;
+}  // namespace ajson
 
-AJSON(rocksdb::FileDescriptor, packed_number_and_path_id, file_size,
-      smallest_seqno, largest_seqno);
+template <class DataIO>
+void DataIO_loadObject(DataIO& dio, InternalKey& x) {
+  dio >> *x.rep();
+}
 
-AJSON(rocksdb::TablePropertyCache, num_entries, num_deletions, purpose,
-      max_read_amp, read_amp, dependence, inheritance_chain);
+template <class DataIO>
+void DataIO_saveObject(DataIO& dio, const InternalKey& x) {
+  dio << *x.rep();
+}
 
-AJSON(rocksdb::FileMetaData, fd, smallest, largest, prop);
+template <class DataIO>
+void DataIO_loadObject(DataIO& dio, CompressionType& x) {
+  static_assert(sizeof(CompressionType) == 1, "sizeof(CompressionType) == 1");
+  dio >> (unsigned char&)x;
+}
 
-AJSON(rocksdb::CompressionOptions, window_bits, level, strategy, max_dict_bytes,
+template <class DataIO>
+void DataIO_saveObject(DataIO& dio, const CompressionType x) {
+  dio << (unsigned char)x;
+}
+
+using EncodedString = CompactionWorkerContext::EncodedString;
+AJSON(EncodedString, data);
+
+#endif
+
+AJSON(Dependence, file_number, entry_count);
+
+using FileInfo = CompactionWorkerResult::FileInfo;
+AJSON(FileInfo, smallest, largest, file_name, smallest_seqno, largest_seqno,
+      file_size, marked_for_compaction);
+
+AJSON(CompactionWorkerResult, status, actual_start, actual_end, files, stat_all);
+
+AJSON(FileDescriptor, packed_number_and_path_id, file_size, smallest_seqno,
+      largest_seqno);
+
+AJSON(TablePropertyCache, num_entries, num_deletions, raw_key_size,
+      raw_value_size, flags, purpose, max_read_amp, read_amp, dependence,
+      inheritance_chain);
+
+AJSON(FileMetaData, fd, smallest, largest, prop);
+
+AJSON(CompressionOptions, window_bits, level, strategy, max_dict_bytes,
       zstd_max_train_bytes, enabled);
 
-AJSON(rocksdb::CompactionFilter::Context, is_full_compaction,
-      is_manual_compaction, column_family_id);
+AJSON(CompactionFilterContext, is_full_compaction, is_manual_compaction,
+      column_family_id);
 
-AJSON(rocksdb::CompactionWorkerContext, user_comparator, merge_operator,
+using NameParam = CompactionWorkerContext::NameParam;
+AJSON(NameParam, name, param);
+
+AJSON(CompactionWorkerContext, user_comparator, merge_operator,
       merge_operator_data, compaction_filter, compaction_filter_factory,
       compaction_filter_context, compaction_filter_data, blob_size,
       table_factory, table_factory_options, bloom_locality, cf_paths,
-      prefix_extractor, has_start, has_end, start, end, last_sequence,
-      earliest_write_conflict_snapshot, preserve_deletes_seqnum, file_metadata,
-      inputs, cf_name, target_file_size, compression, compression_opts,
-      existing_snapshots, bottommost_level, int_tbl_prop_collector_factories);
+      prefix_extractor, prefix_extractor_options, has_start, has_end, start,
+      end, last_sequence, earliest_write_conflict_snapshot,
+      preserve_deletes_seqnum, file_metadata, inputs, cf_name, target_file_size,
+      compression, compression_opts, existing_snapshots, smallest_user_key,
+      largest_user_key, level, number_levels, bottommost_level,
+      allow_ingest_behind, preserve_deletes, int_tbl_prop_collector_factories);
+
+#ifdef USE_AJSON
+#else
+}  // namespace rocksdb
+#endif
 
 namespace rocksdb {
 
-template <class T>
-using TMap = std::unordered_map<std::string, T>;
 template <class T>
 using STMap = std::unordered_map<std::string, std::shared_ptr<T>>;
 
@@ -188,199 +297,129 @@ RemoteCompactionDispatcher::StartCompaction(
     CompactionWorkerResult operator()() {
       CompactionWorkerResult result;
       std::string encoded_result = future.get();
-      ajson::load_from_buff(result, &encoded_result[0], encoded_result.size());
+      try {
+        ajson::load_from_buff(result, encoded_result);
+      } catch (const std::exception& ex) {
+        terark::string_appender<> detail;
+        detail << "encoded_result[len=" << encoded_result.size() << "]: ";
+        detail << Slice(encoded_result).ToString(true /*hex*/);
+        result.status = Status::Corruption(
+            terark::fstring("exception.what = ") + ex.what(), detail);
+      }
       return result;
     }
   };
-  return Result(DoCompaction(stream.str()));
+  std::future<std::string> str_result = DoCompaction(stream.str());
+  return Result(std::move(str_result));
 }
+
+static bool g_isCompactionWorkerNode = false;
+bool IsCompactionWorkerNode() { return g_isCompactionWorkerNode; }
 
 struct RemoteCompactionDispatcher::Worker::Rep {
   EnvOptions env_options;
   Env* env;
-  TMap<const Comparator*> comparator_map;
-  STMap<const SliceTransform> prefix_extractor_map;
-  TMap<CreateTableFactoryCallback> table_factory_map;
-  TMap<CreateMergeOperatorCallback> merge_operator_map;
-  TMap<const CompactionFilter*> compaction_filter_map;
-  STMap<CompactionFilterFactory> compaction_filter_factory_map;
-  STMap<IntTblPropCollectorFactory> int_tbl_prop_collector_factory_map;
 };
-
-void RemoteCompactionDispatcher::Worker::RegistComparator(
-    const Comparator* comparator) {
-  rep_->comparator_map[comparator->Name()] = comparator;
-}
-
-void RemoteCompactionDispatcher::Worker::RegistPrefixExtractor(
-    std::shared_ptr<const SliceTransform> prefix_extractor) {
-  rep_->prefix_extractor_map[prefix_extractor->Name()] = prefix_extractor;
-}
-
-void RemoteCompactionDispatcher::Worker::RegistTableFactory(
-    const char* name, CreateTableFactoryCallback callback) {
-  rep_->table_factory_map[name] = callback;
-}
-
-void RemoteCompactionDispatcher::Worker::RegistMergeOperator(
-    CreateMergeOperatorCallback merge_operator_callback) {
-  std::shared_ptr<MergeOperator> merge_operator;
-  auto s = merge_operator_callback(&merge_operator);
-  if (s.ok()) {
-    rep_->merge_operator_map[merge_operator->Name()] = merge_operator_callback;
-  }
-}
-
-void RemoteCompactionDispatcher::Worker::RegistCompactionFilter(
-    const CompactionFilter* compaction_filter) {
-  rep_->compaction_filter_map[compaction_filter->Name()] = compaction_filter;
-}
-
-void RemoteCompactionDispatcher::Worker::RegistCompactionFilterFactory(
-    std::shared_ptr<CompactionFilterFactory> compaction_filter_factory) {
-  rep_->compaction_filter_factory_map[compaction_filter_factory->Name()] =
-      compaction_filter_factory;
-}
-
-void RemoteCompactionDispatcher::Worker::RegistTablePropertiesCollectorFactory(
-    std::shared_ptr<TablePropertiesCollectorFactory>
-        table_prop_collector_factory) {
-  rep_->int_tbl_prop_collector_factory_map[table_prop_collector_factory
-                                               ->Name()] =
-      std::make_shared<UserKeyTablePropertiesCollectorFactory>(
-          table_prop_collector_factory);
-}
 
 RemoteCompactionDispatcher::Worker::Worker(EnvOptions env_options, Env* env) {
   rep_ = new Rep();
   rep_->env_options = env_options;
   rep_->env = env;
-  RegistComparator(BytewiseComparator());
-  RegistComparator(ReverseBytewiseComparator());
-  RegistTableFactory(
-      NewBlockBasedTableFactory(BlockBasedTableOptions())->Name(),
-      [](std::shared_ptr<TableFactory>* ptr, const std::string& options) {
-        ptr->reset();
-        BlockBasedTableOptions base, bbto;
-        auto s = GetBlockBasedTableOptionsFromString(base, options, &bbto);
-        if (s.ok()) {
-          ptr->reset(NewBlockBasedTableFactory(bbto));
-        }
-        return s;
-      });
-  RegistTableFactory(
-      NewCuckooTableFactory(CuckooTableOptions())->Name(),
-      [](std::shared_ptr<TableFactory>* ptr, const std::string& options) {
-        ptr->reset();
-        CuckooTableOptions cto;
-        std::unordered_map<std::string, std::string> opts_map;
-        Status s = StringToMap(options, &opts_map);
-        if (!s.ok()) {
-          return s;
-        }
-        auto get_option = [&](const char* opt) {
-          auto find = opts_map.find(opt);
-          if (find == opts_map.end()) {
-            return std::string();
-          }
-          return find->second;
-        };
-        std::string opt;
-        if (!(opt = get_option("hash_table_ratio")).empty()) {
-          cto.hash_table_ratio = std::atof(opt.c_str());
-        }
-        if (!(opt = get_option("max_search_depth")).empty()) {
-          cto.max_search_depth = std::atoi(opt.c_str());
-        }
-        if (!(opt = get_option("cuckoo_block_size")).empty()) {
-          cto.cuckoo_block_size = std::atoi(opt.c_str());
-        }
-        if (!(opt = get_option("identity_as_first_hash")).empty()) {
-          cto.identity_as_first_hash = std::atoi(opt.c_str());
-        }
-        ptr->reset(NewCuckooTableFactory(cto));
-        return Status::OK();
-      });
-  RegistTableFactory(
-      NewPlainTableFactory(PlainTableOptions())->Name(),
-      [](std::shared_ptr<TableFactory>* ptr, const std::string& options) {
-        ptr->reset();
-        PlainTableOptions base, pto;
-        auto s = GetPlainTableOptionsFromString(base, options, &pto);
-        if (s.ok()) {
-          ptr->reset(NewPlainTableFactory(pto));
-        }
-        return s;
-      });
+  g_isCompactionWorkerNode = true;
 }
 
 RemoteCompactionDispatcher::Worker::~Worker() { delete rep_; }
 
-std::string RemoteCompactionDispatcher::Worker::DoCompaction(
-    const std::string& data) {
-  CompactionWorkerContext context;
-  ajson::load_from_buff(context, &std::string(data)[0], data.size());
+class RemoteCompactionProxy : public CompactionIterator::CompactionProxy {
+ public:
+  RemoteCompactionProxy(const CompactionWorkerContext* context)
+      : CompactionProxy(),
+        largest_user_key_(context->largest_user_key.data),
+        level_(context->level),
+        number_levels_(context->number_levels),
+        bottommost_level_(context->bottommost_level),
+        allow_ingest_behind_(context->allow_ingest_behind),
+        preserve_deletes_(context->preserve_deletes) {}
 
-  auto make_error = [](Status status) {
-    CompactionWorkerResult result;
-    result.status = std::move(status);
-    ajson::string_stream stream;
-    ajson::save_to(stream, result);
-    return stream.str();
-  };
+  int level(size_t /*compaction_input_level*/ = 0) const override {
+    return level_;
+  }
+  bool KeyNotExistsBeyondOutputLevel(
+      const Slice& /*user_key*/,
+      std::vector<size_t>* /*level_ptrs*/) const override {
+    return false;
+  }
+  bool bottommost_level() const override { return bottommost_level_; }
+  int number_levels() const override { return number_levels_; }
+  Slice GetLargestUserKey() const override { return largest_user_key_; }
+  bool allow_ingest_behind() const override { return allow_ingest_behind_; }
+  bool preserve_deletes() const override { return preserve_deletes_; }
+
+ protected:
+  Slice largest_user_key_;
+  int level_, number_levels_;
+  bool bottommost_level_, allow_ingest_behind_, preserve_deletes_;
+};
+
+static std::string make_error(Status&& status) {
+  CompactionWorkerResult result;
+  result.status = std::move(status);
+  ajson::string_stream stream;
+  ajson::save_to(stream, result);
+  return stream.str();
+};
+
+std::string RemoteCompactionDispatcher::Worker::DoCompaction(Slice data) {
+  CompactionWorkerContext context;
+  ajson::load_from_buff(context, data);
 
   ImmutableDBOptions immutable_db_options = ImmutableDBOptions(DBOptions());
   ColumnFamilyOptions cf_options;
   if (context.user_comparator.empty()) {
-    return make_error(Status::Corruption("Bad comparator name !"));
+    return make_error(Status::Corruption("Comparator name is empty!"));
   } else {
-    auto find = rep_->comparator_map.find(context.user_comparator);
-    if (find == rep_->comparator_map.end()) {
-      return make_error(Status::Corruption("Missing comparator !"));
+    cf_options.comparator = Comparator::create(context.user_comparator);
+    if (!cf_options.comparator) {
+      return make_error(Status::Corruption("Can not find comparator",
+                                           context.user_comparator));
     }
-    cf_options.comparator = find->second;
   }
   if (!context.merge_operator.empty()) {
-    auto find = rep_->merge_operator_map.find(context.merge_operator);
-    if (find == rep_->merge_operator_map.end()) {
+    cf_options.merge_operator.reset(MergeOperator::create(
+        context.merge_operator, context.merge_operator_data));
+    if (!cf_options.merge_operator) {
       return make_error(Status::Corruption("Missing merge_operator !"));
     }
-    auto s = find->second(&cf_options.merge_operator);
-    if (s.ok() && cf_options.merge_operator &&
-        !context.merge_operator_data.empty()) {
-      s = cf_options.merge_operator->Deserialize(context.merge_operator_data);
-    }
-    if (!s.ok()) {
-      return make_error(std::move(s));
-    }
   }
+  std::unique_ptr<CompactionFilter> filter_ptr;
   if (!context.compaction_filter.empty()) {
-    auto find = rep_->compaction_filter_map.find(context.compaction_filter);
-    if (find == rep_->compaction_filter_map.end()) {
-      return make_error(Status::Corruption("Missing compaction_filter !"));
+    if (!context.compaction_filter_factory.empty()) {
+      return make_error(Status::Corruption(
+          "CompactonFilter and CompactionFilterFactory are both specified"));
     }
-    cf_options.compaction_filter = find->second;
-  }
-  if (!context.compaction_filter_factory.empty()) {
-    auto find = rep_->compaction_filter_factory_map.find(
-        context.compaction_filter_factory);
-    if (find == rep_->compaction_filter_factory_map.end()) {
-      return make_error(
-          Status::Corruption("Missing compaction_filter_factory !"));
+    filter_ptr.reset(CompactionFilter::create(
+        context.compaction_filter, context.compaction_filter_data.data,
+        context.compaction_filter_context));
+    if (!filter_ptr) {
+      return make_error(Status::Corruption("Missing CompactionFilterFactory!"));
     }
-    cf_options.compaction_filter_factory = find->second;
+    cf_options.compaction_filter = filter_ptr.get();
+  } else if (!context.compaction_filter_factory.empty()) {
+    cf_options.compaction_filter_factory.reset(
+        CompactionFilterFactory::create(context.compaction_filter_factory,
+                                        context.compaction_filter_data.data));
+    if (!cf_options.compaction_filter_factory) {
+      return make_error(Status::Corruption("Missing CompactionFilterFactory!"));
+    }
   }
   cf_options.blob_size = context.blob_size;
   if (context.table_factory.empty()) {
     return make_error(Status::Corruption("Bad table_factory name !"));
   } else {
-    auto find = rep_->table_factory_map.find(context.table_factory);
-    if (find == rep_->table_factory_map.end()) {
-      return make_error(Status::Corruption("Missing table_factory !"));
-    }
-    auto s =
-        find->second(&cf_options.table_factory, context.table_factory_options);
-    if (!s.ok()) {
+    Status s;
+    cf_options.table_factory.reset(TableFactory::create(
+        context.table_factory, context.table_factory_options, &s));
+    if (!cf_options.table_factory) {
       return make_error(std::move(s));
     }
   }
@@ -389,11 +428,11 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
     cf_options.cf_paths.emplace_back(DbPath(path, 0));
   }
   if (!context.prefix_extractor.empty()) {
-    auto find = rep_->prefix_extractor_map.find(context.prefix_extractor);
-    if (find == rep_->prefix_extractor_map.end()) {
+    cf_options.prefix_extractor.reset(SliceTransform::create(
+        context.prefix_extractor, context.prefix_extractor_options));
+    if (!cf_options.prefix_extractor) {
       return make_error(Status::Corruption("Missing prefix_extractor !"));
     }
-    cf_options.prefix_extractor = find->second;
   }
   ImmutableCFOptions immutable_cf_options(immutable_db_options, cf_options);
   MutableCFOptions mutable_cf_options(cf_options);
@@ -408,12 +447,20 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
     }
   } int_tbl_prop_collector_factories;
   for (auto& collector : context.int_tbl_prop_collector_factories) {
-    auto find = rep_->int_tbl_prop_collector_factory_map.find(collector);
-    if (find == rep_->int_tbl_prop_collector_factory_map.end()) {
+    auto user_fac = TablePropertiesCollectorFactory::create(collector.name);
+    if (!user_fac) {
       return make_error(
           Status::Corruption("Missing int_tbl_prop_collector_factories !"));
     }
-    int_tbl_prop_collector_factories.data.emplace_back(find->second.get());
+    if (user_fac->NeedSerialize()) {
+      Status s = user_fac->Deserialize(collector.param);
+      if (!s.ok()) {
+        return make_error(std::move(s));
+      }
+    }
+    int_tbl_prop_collector_factories.data.emplace_back(
+        new UserKeyTablePropertiesCollectorFactory(
+            user_fac->shared_from_this()));
   }
   const Slice* start = nullptr;
   const Slice* end = nullptr;
@@ -429,6 +476,8 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
 
   auto icmp = &immutable_cf_options.internal_comparator;
   auto ucmp = icmp->user_comparator();
+  Env* env = rep_->env;
+  auto& env_opt = rep_->env_options;
 
   // start run
   DependenceMap contxt_dependence_map;
@@ -437,12 +486,14 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
   }
   std::unordered_map<int, std::vector<const FileMetaData*>> inputs;
   for (auto pair : context.inputs) {
-    assert(contxt_dependence_map.find(pair.second) !=
-           contxt_dependence_map.end());
-    inputs[pair.first].push_back(contxt_dependence_map[pair.second]);
+    auto found = contxt_dependence_map.find(pair.second);
+    if (contxt_dependence_map.end() != found) {
+      inputs[pair.first].push_back(found->second);
+    } else {
+      assert(false);
+    }
   }
-  std::unordered_map<uint64_t, std::unique_ptr<rocksdb::TableReader>>
-      table_cache;
+  std::unordered_map<uint64_t, std::unique_ptr<TableReader>> table_cache;
   std::mutex table_cache_mutex;
   auto get_table_reader = [&](uint64_t file_number, TableReader** reader_ptr) {
     std::lock_guard<std::mutex> lock(table_cache_mutex);
@@ -453,19 +504,17 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
       std::string file_name =
           TableFileName(immutable_cf_options.cf_paths, file_number,
                         file_metadata->fd.GetPathId());
-      std::unique_ptr<rocksdb::RandomAccessFile> file;
-      auto s =
-          rep_->env->NewRandomAccessFile(file_name, &file, rep_->env_options);
+      std::unique_ptr<RandomAccessFile> file;
+      auto s = env->NewRandomAccessFile(file_name, &file, env_opt);
       if (!s.ok()) {
         return s;
       }
-      std::unique_ptr<rocksdb::RandomAccessFileReader> file_reader(
-          new rocksdb::RandomAccessFileReader(std::move(file), file_name,
-                                              rep_->env));
-      std::unique_ptr<rocksdb::TableReader> reader;
+      std::unique_ptr<RandomAccessFileReader> file_reader(
+          new RandomAccessFileReader(std::move(file), file_name, env));
+      std::unique_ptr<TableReader> reader;
       TableReaderOptions table_reader_options(
           immutable_cf_options, mutable_cf_options.prefix_extractor.get(),
-          rep_->env_options, *icmp, true, false, -1, file_number);
+          env_opt, *icmp, true, false, -1, file_number);
       s = immutable_cf_options.table_factory->NewTableReader(
           table_reader_options, std::move(file_reader),
           file_metadata->fd.file_size, &reader, false);
@@ -479,7 +528,7 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
     }
     return Status::OK();
   };
-  struct {
+  struct c_style_new_iterator_t {
     void* arg;
     IteratorCache::CreateIterCallback callback;
   } c_style_new_iterator;
@@ -518,7 +567,7 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
   c_style_new_iterator.callback = c_style_callback(new_iterator);
 
   auto separate_inplace_decode = [&](LazyBuffer* buffer,
-                                     LazyBufferContext* context) {
+                                     LazyBufferContext* context) -> Status {
     Slice user_key(reinterpret_cast<const char*>(context->data[0]),
                    context->data[1]);
     uint64_t sequence = context->data[2];
@@ -527,7 +576,7 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
     SequenceNumber context_seq;
     GetContext get_context(ucmp, nullptr, immutable_cf_options.info_log,
                            nullptr, GetContext::kNotFound, user_key, buffer,
-                           &value_found, nullptr, nullptr, nullptr, rep_->env,
+                           &value_found, nullptr, nullptr, nullptr, env,
                            &context_seq);
     IterKey iter_key;
     iter_key.SetInternalKey(user_key, sequence, kValueTypeForSeek);
@@ -566,7 +615,7 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
   CompactionRangeDelAggregator range_del_agg(icmp, context.existing_snapshots);
 
   Arena arena;
-  auto create_input_iterator = [&] {
+  auto create_input_iterator = [&]() -> InternalIterator* {
     MergeIteratorBuilder merge_iter_builder(icmp, &arena);
     for (auto& pair : inputs) {
       if (pair.first == 0 || pair.second.size() == 1) {
@@ -595,20 +644,13 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
   std::unique_ptr<CompactionFilter> compaction_filter_from_factory = nullptr;
   if (compaction_filter == nullptr &&
       immutable_cf_options.compaction_filter_factory != nullptr) {
-    auto factory = immutable_cf_options.compaction_filter_factory;
     compaction_filter_from_factory =
-        factory->CreateCompactionFilter(context.compaction_filter_context);
-    if (compaction_filter_from_factory) {
-      auto s = compaction_filter_from_factory->Deserialize(
-          context.compaction_filter_data);
-      if (!s.ok()) {
-        return make_error(std::move(s));
-      }
-    }
+        immutable_cf_options.compaction_filter_factory->CreateCompactionFilter(
+            context.compaction_filter_context);
     compaction_filter = compaction_filter_from_factory.get();
   }
 
-  MergeHelper merge(rep_->env, ucmp, immutable_cf_options.merge_operator,
+  MergeHelper merge(env, ucmp, immutable_cf_options.merge_operator,
                     compaction_filter, immutable_db_options.info_log.get(),
                     false /* internal key corruption is expected */,
                     context.existing_snapshots.empty()
@@ -622,7 +664,9 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
   std::unique_ptr<CompactionIterator> c_iter(new CompactionIterator(
       input.get(), &separate_helper, end, ucmp, &merge, context.last_sequence,
       &context.existing_snapshots, context.earliest_write_conflict_snapshot,
-      nullptr, rep_->env, false, false, &range_del_agg, nullptr,
+      nullptr, env, false, false, &range_del_agg,
+      std::unique_ptr<CompactionIterator::CompactionProxy>(
+          new RemoteCompactionProxy(&context)),
       mutable_cf_options.blob_size, compaction_filter, nullptr,
       context.preserve_deletes_seqnum));
 
@@ -640,12 +684,16 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
                          alignof(CompactionRangeDelAggregator)>::type
         range_del_agg;
     std::unique_ptr<CompactionFilter> compaction_filter_holder;
-    const CompactionFilter* compaction_filter;
+    const CompactionFilter* compaction_filter = nullptr;
     std::aligned_storage<sizeof(MergeHelper), alignof(MergeHelper)>::type merge;
     ScopedArenaIterator input;
 
     ~SecondPassIterStorage() {
       if (input.get() != nullptr) {
+        if (compaction_filter) {
+          //assert(!ExistFutureAction(compaction_filter));
+          EraseFutureAction(compaction_filter);
+        }
         input.set(nullptr);
         auto merge_ptr = reinterpret_cast<MergeHelper*>(&merge);
         merge_ptr->~MergeHelper();
@@ -657,7 +705,7 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
     }
   } second_pass_iter_storage;
 
-  auto make_compaction_iterator = [&] {
+  auto make_compaction_iterator = [&]() {
     Status s;
     auto range_del_agg_ptr = new (&second_pass_iter_storage.range_del_agg)
         CompactionRangeDelAggregator(icmp, context.existing_snapshots);
@@ -668,15 +716,11 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
       second_pass_iter_storage.compaction_filter_holder =
           immutable_cf_options.compaction_filter_factory
               ->CreateCompactionFilter(context.compaction_filter_context);
-      auto compaction_filter_from_factory =
-          second_pass_iter_storage.compaction_filter_holder.get();
-      if (compaction_filter_from_factory != nullptr) {
-        s = compaction_filter_from_factory->Deserialize(
-            context.compaction_filter_data);
-      }
+      second_pass_iter_storage.compaction_filter =
+      second_pass_iter_storage.compaction_filter_holder.get();
     }
     auto merge_ptr = new (&second_pass_iter_storage.merge) MergeHelper(
-        rep_->env, ucmp, immutable_cf_options.merge_operator, compaction_filter,
+        env, ucmp, immutable_cf_options.merge_operator, compaction_filter,
         immutable_db_options.info_log.get(),
         false /* internal key corruption is expected */,
         context.existing_snapshots.empty() ? 0
@@ -686,11 +730,13 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
     } else {
       second_pass_iter_storage.input.set(NewErrorInternalIterator(s, &arena));
     }
+    std::unique_ptr<CompactionIterator::CompactionProxy> compaction(
+        new RemoteCompactionProxy(&context));
     return new CompactionIterator(
         second_pass_iter_storage.input.get(), &separate_helper, end, ucmp,
         merge_ptr, context.last_sequence, &context.existing_snapshots,
-        context.earliest_write_conflict_snapshot, nullptr, rep_->env, false,
-        false, range_del_agg_ptr, nullptr, mutable_cf_options.blob_size,
+        context.earliest_write_conflict_snapshot, nullptr, env, false, false,
+        range_del_agg_ptr, std::move(compaction), mutable_cf_options.blob_size,
         second_pass_iter_storage.compaction_filter, nullptr,
         context.preserve_deletes_seqnum);
   };
@@ -709,34 +755,31 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
         true /* skip_filters */, context.cf_name, -1 /* level */,
         0 /* compaction_load */);
     std::unique_ptr<WritableFile> sst_file;
-    s = rep_->env->NewWritableFile(file_name, &sst_file, rep_->env_options);
+    s = env->NewWritableFile(file_name, &sst_file, env_opt);
     if (!s.ok()) {
       return s;
     }
     writer_ptr->reset(new WritableFileWriter(std::move(sst_file), file_name,
-                                             rep_->env_options, nullptr,
+                                             env_opt, nullptr,
                                              immutable_db_options.listeners));
     builder_ptr->reset(immutable_cf_options.table_factory->NewTableBuilder(
         table_builder_options, 0, writer_ptr->get()));
     (*builder_ptr)->SetSecondPassIterator(second_pass_iter.get());
     return s;
   };
-  auto finish_output_file = [&](Status s, FileMetaData* meta,
-                                std::unique_ptr<WritableFileWriter>* writer_ptr,
-                                std::unique_ptr<TableBuilder>* builder_ptr,
-                                const std::unordered_map<uint64_t, uint64_t>&
-                                    dependence,
-                                const Slice* next_key) {
-    auto writer = writer_ptr->get();
-    auto builder = builder_ptr->get();
+  std::unique_ptr<WritableFileWriter> writer;
+  std::unique_ptr<TableBuilder> builder;
+  FileMetaData meta;
+  std::unordered_map<uint64_t, uint64_t> dependence;
+  auto finish_output_file = [&](Status s, const Slice* next_key) -> Status {
     if (s.ok() && !range_del_agg.IsEmpty()) {
       Slice lower_bound_guard, upper_bound_guard;
       std::string smallest_user_key;
       const Slice *lower_bound, *upper_bound;
       if (result.files.size() == 1) {
         lower_bound = start;
-      } else if (meta->smallest.size() > 0) {
-        smallest_user_key = meta->smallest.user_key().ToString(false /*hex*/);
+      } else if (meta.smallest.size() > 0) {
+        smallest_user_key = meta.smallest.user_key().ToString(false /*hex*/);
         lower_bound_guard = Slice(smallest_user_key);
         lower_bound = &lower_bound_guard;
       } else {
@@ -745,8 +788,8 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
       if (next_key != nullptr) {
         upper_bound_guard = ExtractUserKey(*next_key);
         assert(end == nullptr || ucmp->Compare(upper_bound_guard, *end) < 0);
-        assert(meta->largest.size() == 0 ||
-               ucmp->Compare(meta->largest.user_key(), upper_bound_guard) != 0);
+        assert(meta.largest.size() == 0 ||
+               ucmp->Compare(meta.largest.user_key(), upper_bound_guard) != 0);
         upper_bound = &upper_bound_guard;
       } else {
         upper_bound = end;
@@ -808,29 +851,25 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
         if (!s.ok()) {
           break;
         }
-        meta->UpdateBoundariesForRange(smallest_candidate, largest_candidate,
-                                       tombstone.seq_, *icmp);
+        meta.UpdateBoundariesForRange(smallest_candidate, largest_candidate,
+                                      tombstone.seq_, *icmp);
       }
     }
     if (s.ok()) {
-      meta->marked_for_compaction = builder->NeedCompact();
-      meta->prop.num_entries = builder->NumEntries();
+      meta.marked_for_compaction = builder->NeedCompact();
+      meta.prop.num_entries = builder->NumEntries();
       for (auto& pair : dependence) {
-        meta->prop.dependence.emplace_back(Dependence{pair.first, pair.second});
+        meta.prop.dependence.emplace_back(Dependence{pair.first, pair.second});
       }
-      std::sort(meta->prop.dependence.begin(), meta->prop.dependence.end(),
-                [](const Dependence& l, const Dependence& r) {
-                  return l.file_number < r.file_number;
-                });
-      auto shrinked_snapshots =
-          meta->ShrinkSnapshot(context.existing_snapshots);
-      s = builder->Finish(&meta->prop, &shrinked_snapshots);
+      terark::sort_a(meta.prop.dependence, TERARK_CMP(file_number, <));
+      auto shrinked_snapshots = meta.ShrinkSnapshot(context.existing_snapshots);
+      s = builder->Finish(&meta.prop, &shrinked_snapshots);
     } else {
       builder->Abandon();
     }
     const uint64_t current_bytes = builder->FileSize();
     if (s.ok()) {
-      meta->fd.file_size = current_bytes;
+      meta.fd.file_size = current_bytes;
     }
     if (s.ok()) {
       s = writer->Sync(true);
@@ -842,13 +881,13 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
     TableProperties tp;
     if (s.ok()) {
       tp = builder->GetTableProperties();
-      meta->prop.num_deletions = tp.num_deletions;
-      meta->prop.raw_key_size = tp.raw_key_size;
-      meta->prop.raw_value_size = tp.raw_value_size;
-      meta->prop.flags |= tp.num_range_deletions > 0
-                              ? 0
-                              : TablePropertyCache::kNoRangeDeletions;
-      meta->prop.flags |=
+      meta.prop.num_deletions = tp.num_deletions;
+      meta.prop.raw_key_size = tp.raw_key_size;
+      meta.prop.raw_value_size = tp.raw_value_size;
+      meta.prop.flags |= tp.num_range_deletions > 0
+                             ? 0
+                             : TablePropertyCache::kNoRangeDeletions;
+      meta.prop.flags |=
           tp.snapshots.empty() ? 0 : TablePropertyCache::kHasSnapshots;
     }
     if (s.ok()) {
@@ -860,26 +899,22 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
         actual_end.rep()->clear();
       }
       CompactionWorkerResult::FileInfo file_info;
-      if (meta->prop.num_entries > 0 || tp.num_range_deletions > 0) {
+      if (meta.prop.num_entries > 0 || tp.num_range_deletions > 0) {
         file_info.file_name = writer->file_name();
       }
-      file_info.smallest = meta->smallest;
-      file_info.largest = meta->largest;
-      file_info.smallest_seqno = meta->fd.smallest_seqno;
-      file_info.largest_seqno = meta->fd.largest_seqno;
-      file_info.file_size = meta->fd.file_size;
+      file_info.smallest = meta.smallest;
+      file_info.largest = meta.largest;
+      file_info.smallest_seqno = meta.fd.smallest_seqno;
+      file_info.largest_seqno = meta.fd.largest_seqno;
+      file_info.file_size = meta.fd.file_size;
       file_info.marked_for_compaction = builder->NeedCompact();
       result.files.emplace_back(file_info);
     }
-    *meta = FileMetaData();
-    builder_ptr->reset();
-    writer_ptr->reset();
+    meta = FileMetaData();
+    builder.reset();
+    writer.reset();
     return s;
   };
-  std::unique_ptr<WritableFileWriter> writer;
-  std::unique_ptr<TableBuilder> builder;
-  FileMetaData meta;
-  std::unordered_map<uint64_t, uint64_t> dependence;
 
   Status& status = result.status;
   const Slice* next_key = nullptr;
@@ -932,12 +967,8 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
       }
     }
     if (output_file_ended) {
-      status = finish_output_file(input_status, &meta, &writer, &builder,
-                                  dependence, next_key);
+      status = finish_output_file(input_status, next_key);
       dependence.clear();
-      if (next_key != nullptr) {
-        actual_end.SetMinPossibleForUserKey(ExtractUserKey(*next_key));
-      }
       break;
     }
   }
@@ -954,9 +985,41 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
     status = create_builder(&writer, &builder);
   }
   if (builder) {
-    status = finish_output_file(status, &meta, &writer, &builder, dependence,
-                                nullptr);
+    status = finish_output_file(status, nullptr);
     dependence.clear();
+  }
+
+  if (compaction_filter) {
+    if (ReapMatureAction(compaction_filter, &result.stat_all)) {
+      fprintf(stderr
+        , "INFO: ReapMatureAction(compaction_filter=%p) = %s\n"
+        , compaction_filter, result.stat_all.c_str());
+    }
+    else {
+      fprintf(stderr
+        , "ERROR: ReapMatureAction(compaction_filter=%p) = false\n"
+        , compaction_filter);
+    }
+  }
+  else {
+    fprintf(stderr
+      , "INFO: compaction_filter = null, name = { filter: %s, factory: %s }\n"
+      , context.compaction_filter.c_str()
+      , context.compaction_filter_factory.c_str()
+    );
+  }
+  if (second_pass_iter_storage.compaction_filter) {
+    bool ret = EraseFutureAction(second_pass_iter_storage.compaction_filter);
+    fprintf(stderr
+        , "INFO: EraseFutureAction(secondpass.compaction_filter=%p) = %d\n"
+        , second_pass_iter_storage.compaction_filter, ret);
+  }
+  else {
+    fprintf(stderr
+      , "INFO: secondpass.compaction_filter = null, name = { filter: %s, factory: %s }\n"
+      , context.compaction_filter.c_str()
+      , context.compaction_filter_factory.c_str()
+    );
   }
 
   c_iter.reset();
@@ -965,6 +1028,35 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(
   ajson::string_stream stream;
   ajson::save_to(stream, result);
   return stream.str();
+}
+
+void RemoteCompactionDispatcher::Worker::DebugSerializeCheckResult(Slice data) {
+  using namespace terark;
+  LittleEndianDataInput<MemIO> dio;
+  dio.set((void*)(data.data_), data.size());
+  CompactionWorkerResult res;
+  dio >> res;
+  string_appender<> str;
+  str << "CompactionWorkerResult\n";
+  str << "  status = " << res.status.ToString() << "\n";
+  str << "  actual_start = " << res.actual_start.DebugString(true) << "\n";
+  str << "  actual_end   = " << res.actual_end.DebugString(true) << "\n";
+  str << "  files[size=" << res.files.size() << "]\n";
+  for (size_t i = 0; i < res.files.size(); ++i) {
+    const auto& f = res.files[i];
+    str << "    " << i  << " = " << f.file_name << " : marked_for_compaction = " << f.marked_for_compaction << "\n";
+    str << "        filesize = " << f.file_size << "\n";
+    str << "        smallest = " << f.smallest.DebugString(true) << "\n";
+    str << "         largest = " << f. largest.DebugString(true) << "\n";
+    str << "    seq_smallest = " << f.smallest_seqno << "\n";
+    str << "    seq__largest = " << f. largest_seqno << "\n";
+  }
+  str << "  stat_all[size=" << res.stat_all.size() << "] = " << res.stat_all
+      << "\n";
+  intptr_t wlen = ::write(2, str.data(), str.size());
+  if (size_t(wlen) != str.size()) {
+    abort();
+  }
 }
 
 const char* RemoteCompactionDispatcher::Name() const {
@@ -977,50 +1069,34 @@ class CommandLineCompactionDispatcher : public RemoteCompactionDispatcher {
  public:
   CommandLineCompactionDispatcher(std::string&& cmd) : m_cmd(std::move(cmd)) {}
 
-  std::future<std::string> DoCompaction(const std::string& data) override {
-    std::promise<std::string> promise;
-    std::future<std::string> future = promise.get_future();
-    std::thread(
-        [this, data](std::promise<std::string>&& prom) {
-          bool tmp_file_created = false;
-          char tmp_file[] = "/tmp/Compaction-XXXXXX";
-          try {
-            int fd = mkstemp(tmp_file);
-            if (fd < 0) {
-              THROW_STD(runtime_error, "mkstemp(%s) = %s", tmp_file,
-                        strerror(errno));
-            }
-            tmp_file_created = true;
-            using namespace terark;
-            {
-              // use  " > /dev/fd/xxx" will prevent from tmp_file being
-              // deleted unexpected
-              string_appender<> cmdw;
-              cmdw.reserve(m_cmd.size() + 32);
-              cmdw << m_cmd << " > /dev/fd/" << fd;
-              ProcPipeStream proc(cmdw, "w");
-              proc.ensureWrite(data.c_str(), data.size());
-            }
-            //
-            // now cmd sub process must have finished
-            //
-            Auto_fclose tmp_result_file(fdopen(fd, "r"));
-            if (!tmp_result_file) {
-              THROW_STD(runtime_error, "fdopen(fd=%d(fname=%s), r) = %s", fd,
-                        tmp_file, strerror(errno));
-            }
-            terark::LineBuf result;
-            result.read_all(tmp_result_file);
-            prom.set_value(std::string(result.p, result.n));
-          } catch (...) {
-            prom.set_exception(std::current_exception());
-          }
-          if (tmp_file_created) {
-            ::remove(tmp_file);
-          }
-        },
-        std::move(promise))
-        .detach();
+  std::future<std::string> DoCompaction(std::string data) override {
+    // if use future vfork_cmd, we have no a chance to print log
+    // return terark::vfork_cmd(m_cmd, data, "/tmp/compact-");
+    //
+    // use onFinish callback, so we can print log
+    auto promise = std::make_shared<std::promise<std::string>>();
+    std::future<std::string> future = promise->get_future();
+    size_t datalen = data.size();
+    auto onFinish = [this, promise, datalen](std::string&& result,
+                                             std::exception* ex) {
+      fprintf(stderr
+        , "INFO: CompactCmd(%s, datalen=%zd) = exception[%p] = %s, "
+          //"result[len=%zd]: %s\n"
+          "result[len=%zd]\n"
+        , this->m_cmd.c_str(), datalen, ex, ex ? ex->what() : ""
+        , result.size()
+        //, Slice(result).ToString(true).c_str()
+      );
+      promise->set_value(std::move(result));
+      if (ex) {
+        try {
+          throw *ex;
+        } catch (...) {
+          promise->set_exception(std::current_exception());
+        }
+      }
+    };
+    terark::vfork_cmd(m_cmd, data, std::move(onFinish), "/tmp/compact-");
     return future;
   }
 };

@@ -14,6 +14,8 @@
 #endif
 
 #include <inttypes.h>
+
+#include <terark/valvec.hpp>
 #include <vector>
 
 #include "db/column_family.h"
@@ -86,10 +88,7 @@ Status DBImpl::PromoteL0(ColumnFamilyHandle* column_family, int target_level) {
     // Sort L0 files by range.
     const InternalKeyComparator* icmp = &cfd->internal_comparator();
     auto l0_files = vstorage->LevelFiles(0);
-    std::sort(l0_files.begin(), l0_files.end(),
-              [icmp](FileMetaData* f1, FileMetaData* f2) {
-                return icmp->Compare(f1->largest, f2->largest) < 0;
-              });
+    terark::sort_a(l0_files, TERARK_FIELD_P(largest) < *icmp);
 
     // Check that no L0 file is being compacted and that they have
     // non-overlapping ranges.

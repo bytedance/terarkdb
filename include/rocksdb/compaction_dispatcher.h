@@ -8,28 +8,19 @@
 
 #pragma once
 
+#include <boost/noncopyable.hpp>
+#include <functional>
 #include <future>
 #include <string>
 
-#include "rocksdb/comparator.h"
 #include "rocksdb/env.h"
-#include "rocksdb/status.h"
-#include "rocksdb/types.h"
-#include "rocksdb/compaction_filter.h"
-#include "rocksdb/merge_operator.h"
-#include "rocksdb/advanced_options.h"
 
 namespace rocksdb {
 
-class ColumnFamilyHandle;
 struct CompactionWorkerContext;
 struct CompactionWorkerResult;
-struct FileMetaData;
-class VersionStorageInfo;
-struct ImmutableCFOptions;
-struct MutableCFOptions;
 
-class CompactionDispatcher {
+class CompactionDispatcher : boost::noncopyable {
  public:
   virtual ~CompactionDispatcher() = default;
 
@@ -46,44 +37,23 @@ class RemoteCompactionDispatcher : public CompactionDispatcher {
 
   virtual const char* Name() const override;
 
-  virtual std::future<std::string> DoCompaction(const std::string& data) = 0;
+  virtual std::future<std::string> DoCompaction(std::string data) = 0;
 
-  class Worker {
+  class Worker : boost::noncopyable {
    public:
     Worker(EnvOptions env_options, Env* env);
     virtual ~Worker();
-
-    using CreateTableFactoryCallback =
-        std::function<Status(std::shared_ptr<TableFactory>*,
-                             const std::string& options)>;
-    using CreateMergeOperatorCallback =
-    std::function<Status(std::shared_ptr<MergeOperator>*)>;
-
-    void RegistComparator(const Comparator*);
-    void RegistPrefixExtractor(std::shared_ptr<const SliceTransform>);
-    void RegistTableFactory(const char* Name, CreateTableFactoryCallback);
-    void RegistMergeOperator(CreateMergeOperatorCallback);
-    void RegistCompactionFilter(const CompactionFilter*);
-    void RegistCompactionFilterFactory(
-        std::shared_ptr<CompactionFilterFactory>);
-    void RegistTablePropertiesCollectorFactory(
-        std::shared_ptr<TablePropertiesCollectorFactory>);
-
     virtual std::string GenerateOutputFileName(size_t file_index) = 0;
-
-    std::string DoCompaction(const std::string& data);
+    std::string DoCompaction(Slice data);
+    static void DebugSerializeCheckResult(Slice data);
 
    protected:
-    Worker(const Worker&) = delete;
-    Worker& operator = (const Worker&) = delete;
-
     struct Rep;
     Rep* rep_;
   };
 };
 
-extern std::shared_ptr<CompactionDispatcher>
-    NewCommandLineCompactionDispatcher(std::string cmd);
-
+extern std::shared_ptr<CompactionDispatcher> NewCommandLineCompactionDispatcher(
+    std::string cmd);
 
 }  // namespace rocksdb

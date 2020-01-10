@@ -58,7 +58,7 @@ struct TerarkZipTableOptions {
   /// 1 : enable infomation output
   /// 2 : verify 2nd pass iter keys & values
   /// 3 : dump 1st & 2nd pass data to file
-  uint8_t debugLevel     = 0;
+  uint8_t debugLevel = 0;
   uint8_t indexNestScale = 8;
 
   /// -1: dont use temp file for  any  index build
@@ -68,18 +68,18 @@ struct TerarkZipTableOptions {
   ///  3: only use temp file for large index build, same as NLT.tmpLevel
   ///  4: only use temp file for large index build, same as NLT.tmpLevel
   ///  5:      use temp file for  all  index build
-  int8_t   indexTempLevel           = 0;
-  bool     enableCompressionProbe   = true;
-  bool     useSuffixArrayLocalMatch = false;
-  bool     warmUpIndexOnOpen        = true;
-  bool     warmUpValueOnOpen        = false;
-  bool     disableSecondPassIter    = false;
-  bool     disableCompressDict      = false;
-  bool     optimizeCpuL3Cache       = true;
-  bool     forceMetaInMemory        = false;
-  bool     enableEntropyStore       = true;
-  uint8_t  reserveBytes0[6]         = {};
-  uint16_t offsetArrayBlockUnits    = 0;
+  int8_t indexTempLevel = 0;
+  bool enableCompressionProbe = true;
+  bool useSuffixArrayLocalMatch = false;
+  bool warmUpIndexOnOpen = true;
+  bool warmUpValueOnOpen = false;
+  bool disableSecondPassIter = false;
+  bool disableCompressDict = false;
+  bool optimizeCpuL3Cache = true;
+  bool forceMetaInMemory = false;
+  bool enableEntropyStore = true;
+  uint8_t reserveBytes0[6] = {};
+  uint16_t offsetArrayBlockUnits = 0;
 
   double sampleRatio = 0.03;
   // should be a small value, typically 0.001
@@ -91,7 +91,7 @@ struct TerarkZipTableOptions {
 
   uint64_t softZipWorkingMemLimit = 16ull << 30;
   uint64_t hardZipWorkingMemLimit = 32ull << 30;
-  uint64_t smallTaskMemory        = 1200 << 20;  // 1.2G
+  uint64_t smallTaskMemory = 1200 << 20;  // 1.2G
   // use dictZip for value when average value length >= minDictZipValueSize
   // otherwise do not use dictZip
   uint32_t minDictZipValueSize = 15;
@@ -107,6 +107,8 @@ struct TerarkZipTableOptions {
   int32_t cacheShards = 17;         // to reduce lock competition
   uint64_t cacheCapacityBytes = 0;  // non-zero implies direct io read
   uint8_t reserveBytes1[24] = {};
+
+  class Status Parse(class Slice);
 };
 
 void TerarkZipDeleteTempFiles(const std::string& tmpPath);
@@ -132,6 +134,9 @@ void TerarkZipAutoConfigForOnlineDB_CFOptions(struct TerarkZipTableOptions& tzo,
                                               struct ColumnFamilyOptions& cfo,
                                               size_t memBytesLimit = 0,
                                               size_t diskBytesLimit = 0);
+
+void TerarkZipConfigMemLimitFromSystem(TerarkZipTableOptions& tzo,
+                                       size_t memBytesLimit = 0);
 
 bool TerarkZipConfigFromEnv(struct DBOptions&, struct ColumnFamilyOptions&);
 
@@ -162,6 +167,10 @@ class MemTableRepFactory* NewPatriciaTrieRepFactory(
 
 class TableFactory* NewTerarkZipTableFactory(
     const TerarkZipTableOptions&, std::shared_ptr<class TableFactory> fallback);
+
+class TableFactory* NewTerarkZipTableFactory(
+    class Slice options, std::shared_ptr<class TableFactory> fallback,
+    class Status*);
 
 std::shared_ptr<class TableFactory> SingleTerarkZipTableFactory(
     const TerarkZipTableOptions&, std::shared_ptr<class TableFactory> fallback);

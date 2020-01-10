@@ -32,6 +32,7 @@
 #include <terark/idx/terark_zip_index.hpp>
 #include <terark/stdtypes.hpp>
 #include <terark/util/fstrvec.hpp>
+#include <terark/util/tmpfile.hpp>
 #include <terark/valvec.hpp>
 #include <terark/zbs/abstract_blob_store.hpp>
 #include <terark/zbs/dict_zip_blob_store.hpp>
@@ -217,7 +218,7 @@ class TerarkZipTableBuilder : public TableBuilder, boost::noncopyable {
   DictZipBlobStore::ZipBuilder* createZipBuilder() const;
 
   Arena arena_;
-  const TerarkZipTableOptions& table_options_;
+  TerarkZipTableOptions table_options_;
   const TerarkZipTableFactory* table_factory_;
   const ImmutableCFOptions& ioptions_;
   TerarkZipMultiOffsetInfo offset_info_;

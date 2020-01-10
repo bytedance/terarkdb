@@ -10,6 +10,8 @@
 #pragma once
 #include "db/version_set.h"
 #include "options/cf_options.h"
+#include "rocksdb/compaction_filter.h"
+#include "rocksdb/listener.h"
 #include "util/arena.h"
 #include "util/autovector.h"
 
@@ -105,35 +107,45 @@ struct CompactionWorkerContext {
     bool empty() const { return data.empty(); }
     void clear() { data.clear(); }
   };
+  struct NameParam {
+    std::string name;
+    EncodedString param;
+  };
   // options
   std::string user_comparator;
   std::string merge_operator;
   EncodedString merge_operator_data;
   std::string compaction_filter;
   std::string compaction_filter_factory;
-  rocksdb::CompactionFilter::Context compaction_filter_context;
+  CompactionFilter::Context compaction_filter_context;
+
+  /// For both filter and filter_factory according to which is not null
   EncodedString compaction_filter_data;
+
   uint64_t blob_size;
   std::string table_factory;
   std::string table_factory_options;
   uint32_t bloom_locality;
   std::vector<std::string> cf_paths;
   std::string prefix_extractor;
+  std::string prefix_extractor_options;
   // compaction
   bool has_start, has_end;
   EncodedString start, end;
-  rocksdb::SequenceNumber last_sequence;
-  rocksdb::SequenceNumber earliest_write_conflict_snapshot;
-  rocksdb::SequenceNumber preserve_deletes_seqnum;
-  std::vector<std::pair<uint64_t, rocksdb::FileMetaData>> file_metadata;
+  SequenceNumber last_sequence;
+  SequenceNumber earliest_write_conflict_snapshot;
+  SequenceNumber preserve_deletes_seqnum;
+  std::vector<std::pair<uint64_t, FileMetaData>> file_metadata;
   std::vector<std::pair<int, uint64_t>> inputs;
   std::string cf_name;
   uint64_t target_file_size;
-  rocksdb::CompressionType compression;
-  rocksdb::CompressionOptions compression_opts;
-  std::vector<rocksdb::SequenceNumber> existing_snapshots;
-  bool bottommost_level;
-  std::vector<std::string> int_tbl_prop_collector_factories;
+  CompressionType compression;
+  CompressionOptions compression_opts;
+  std::vector<SequenceNumber> existing_snapshots;
+  EncodedString smallest_user_key, largest_user_key;
+  int level, number_levels;
+  bool bottommost_level, allow_ingest_behind, preserve_deletes;
+  std::vector<NameParam> int_tbl_prop_collector_factories;
 };
 
 struct CompactionWorkerResult {
@@ -144,9 +156,14 @@ struct CompactionWorkerResult {
     std::string file_name;
     SequenceNumber smallest_seqno, largest_seqno;
     size_t file_size;
+
+    // use UserProperties["User.Collected.Transient.Stat"] to reduce complexity
+    // std::string stat_one;
+
     bool marked_for_compaction;
   };
   std::vector<FileInfo> files;
+  std::string stat_all;
 };
 
 // A Compaction encapsulates information about a compaction.
@@ -392,6 +409,11 @@ class Compaction {
                               const std::vector<CompactionInputFiles>& inputs,
                               Slice* smallest_key, Slice* largest_key);
 
+  const std::vector<TableTransientStat>& transient_stat() const {
+    return transient_stat_;
+  }
+  std::vector<TableTransientStat>& transient_stat() { return transient_stat_; }
+
  private:
   // mark (or clear) all files that are being compacted
   void MarkFilesBeingCompacted(bool mark_as_compacted);
@@ -480,6 +502,9 @@ class Compaction {
 
   // Reason for compaction
   CompactionReason compaction_reason_;
+
+  // per sub compact
+  std::vector<TableTransientStat> transient_stat_;
 };
 
 // Utility function

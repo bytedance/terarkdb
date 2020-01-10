@@ -8,6 +8,9 @@
  */
 
 #include "rocksdb/merge_operator.h"
+
+#include <terark/util/factory.ipp>
+
 #include "rocksdb/status.h"
 
 namespace rocksdb {
@@ -102,4 +105,6 @@ bool AssociativeMergeOperator::PartialMerge(const Slice& key,
                new_value->trans_to_string(), logger);
 }
 
-} // namespace rocksdb
+}  // namespace rocksdb
+
+TERARK_FACTORY_INSTANTIATE_GNS(rocksdb::MergeOperator*, const std::string&);

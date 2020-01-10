@@ -8,6 +8,7 @@
 #include <deque>
 #include <memory>
 #include <string>
+#include <terark/util/factory.hpp>
 #include <vector>
 
 #include "rocksdb/lazy_buffer.h"
@@ -44,7 +45,8 @@ class Logger;
 //
 // Refer to rocksdb-merge wiki for more details and example implementations.
 //
-class MergeOperator {
+class MergeOperator
+    : public terark::Factoryable<MergeOperator*, const std::string&> {
  protected:
   static bool Fetch(const LazyBuffer& buffer, LazyBuffer* new_value) {
     auto s = buffer.fetch();
@@ -54,6 +56,7 @@ class MergeOperator {
     }
     return true;
   }
+
  public:
   virtual ~MergeOperator() {}
 
@@ -240,12 +243,9 @@ class AssociativeMergeOperator : public MergeOperator {
   // returns false, it is because client specified bad data or there was
   // internal corruption. The client should assume that this will be treated
   // as an error by the library.
-  virtual bool Merge(const Slice& key,
-                     const Slice* existing_value,
-                     const Slice& value,
-                     std::string* new_value,
+  virtual bool Merge(const Slice& key, const Slice* existing_value,
+                     const Slice& value, std::string* new_value,
                      Logger* logger) const = 0;
-
 
  private:
   // Default implementations of the MergeOperator functions
@@ -253,8 +253,7 @@ class AssociativeMergeOperator : public MergeOperator {
                    MergeOperationOutput* merge_out) const override;
 
   bool PartialMerge(const Slice& key, const LazyBuffer& left_operand,
-                    const LazyBuffer& right_operand,
-                    LazyBuffer* new_value,
+                    const LazyBuffer& right_operand, LazyBuffer* new_value,
                     Logger* logger) const override;
 };
 

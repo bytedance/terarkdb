@@ -8,6 +8,7 @@
 
 #include <limits>
 #include <string>
+#include <terark/valvec.hpp>
 #include <utility>
 
 #include "db/column_family.h"
@@ -87,9 +88,7 @@ class ForwardLevelIterator : public InternalIterator {
     status_ = Status::NotSupported("ForwardLevelIterator::Prev()");
     valid_ = false;
   }
-  bool Valid() const override {
-    return valid_;
-  }
+  bool Valid() const override { return valid_; }
   void SeekToFirst() override {
     assert(file_iter_ != nullptr);
     if (!status_.ok()) {
@@ -197,9 +196,7 @@ ForwardIterator::ForwardIterator(DBImpl* db, const ReadOptions& read_options,
   }
 }
 
-ForwardIterator::~ForwardIterator() {
-  Cleanup(true);
-}
+ForwardIterator::~ForwardIterator() { Cleanup(true); }
 
 void ForwardIterator::SVCleanup(DBImpl* db, SuperVersion* sv,
                                 bool background_purge_on_iterator_cleanup) {
@@ -233,8 +230,8 @@ struct SVCleanupParams {
 // Used in PinnedIteratorsManager to release pinned SuperVersion
 void ForwardIterator::DeferredSVCleanup(void* arg) {
   auto d = reinterpret_cast<SVCleanupParams*>(arg);
-  ForwardIterator::SVCleanup(
-      d->db, d->sv, d->background_purge_on_iterator_cleanup);
+  ForwardIterator::SVCleanup(d->db, d->sv,
+                             d->background_purge_on_iterator_cleanup);
   delete d;
 }
 
@@ -361,8 +358,8 @@ void ForwardIterator::SeekInternal(const Slice& internal_key,
       } else {
         // If the target key passes over the larget key, we are sure Next()
         // won't go over this file.
-        if (user_comparator_->Compare(user_key,
-                                      l0[i]->largest.user_key()) > 0) {
+        if (user_comparator_->Compare(user_key, l0[i]->largest.user_key()) >
+            0) {
           if (read_options_.iterate_upper_bound != nullptr) {
             has_iter_trimmed_for_upper_bound_ = true;
             DeleteIterator(l0_iters_[i]);
@@ -442,8 +439,7 @@ void ForwardIterator::Next() {
   assert(valid_);
   bool update_prev_key = false;
 
-  if (sv_ == nullptr ||
-      sv_->version_number != cfd_->GetSuperVersionNumber()) {
+  if (sv_ == nullptr || sv_->version_number != cfd_->GetSuperVersionNumber()) {
     std::string current_key = key().ToString();
     Slice old_key(current_key.data(), current_key.size());
 
@@ -467,7 +463,6 @@ void ForwardIterator::Next() {
     } else {
       update_prev_key = true;
     }
-
 
     if (update_prev_key) {
       prev_key_.SetInternalKey(current_->key());
@@ -842,13 +837,9 @@ bool ForwardIterator::TEST_CheckDeletedIters(int* pdeleted_iters,
 uint32_t ForwardIterator::FindFileInRange(
     const std::vector<FileMetaData*>& files, const Slice& internal_key,
     uint32_t left, uint32_t right) {
-  auto cmp = [&](const FileMetaData* f, const Slice& key) -> bool {
-    return cfd_->internal_comparator().InternalKeyComparator::Compare(
-            f->largest.Encode(), key) < 0;
-  };
-  const auto &b = files.begin();
-  return static_cast<uint32_t>(std::lower_bound(b + left,
-                                 b + right, internal_key, cmp) - b);
+  return static_cast<uint32_t>(terark::lower_bound_ex_n(
+      files.begin(), left, right, internal_key,
+      TERARK_FIELD_P(largest.Encode()), "" < cfd_->internal_comparator()));
 }
 
 void ForwardIterator::DeleteIterator(InternalIterator* iter, bool is_arena) {
