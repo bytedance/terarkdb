@@ -980,6 +980,15 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(Slice data) {
     status = c_iter->status();
   }
 
+  if (status.ok() && !builder && result.files.empty() &&
+      !range_del_agg.IsEmpty()) {
+    status = create_builder(&writer, &builder);
+  }
+  if (builder) {
+    status = finish_output_file(status, nullptr);
+    dependence.clear();
+  }
+
   if (compaction_filter) {
     if (ReapMatureAction(compaction_filter, &result.stat_all)) {
       fprintf(stderr
@@ -1002,8 +1011,8 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(Slice data) {
   if (second_pass_iter_storage.compaction_filter) {
     bool ret = EraseFutureAction(second_pass_iter_storage.compaction_filter);
     fprintf(stderr
-        , "INFO: EraseFutureAction(compaction_filter=%p) = %d\n"
-        , compaction_filter, ret);
+        , "INFO: EraseFutureAction(secondpass.compaction_filter=%p) = %d\n"
+        , second_pass_iter_storage.compaction_filter, ret);
   }
   else {
     fprintf(stderr
@@ -1011,14 +1020,6 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(Slice data) {
       , context.compaction_filter.c_str()
       , context.compaction_filter_factory.c_str()
     );
-  }
-  if (status.ok() && !builder && result.files.empty() &&
-      !range_del_agg.IsEmpty()) {
-    status = create_builder(&writer, &builder);
-  }
-  if (builder) {
-    status = finish_output_file(status, nullptr);
-    dependence.clear();
   }
 
   c_iter.reset();
