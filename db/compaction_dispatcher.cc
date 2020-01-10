@@ -361,17 +361,17 @@ class RemoteCompactionProxy : public CompactionIterator::CompactionProxy {
   bool bottommost_level_, allow_ingest_behind_, preserve_deletes_;
 };
 
+static std::string make_error(Status&& status) {
+  CompactionWorkerResult result;
+  result.status = std::move(status);
+  ajson::string_stream stream;
+  ajson::save_to(stream, result);
+  return stream.str();
+};
+
 std::string RemoteCompactionDispatcher::Worker::DoCompaction(Slice data) {
   CompactionWorkerContext context;
   ajson::load_from_buff(context, data);
-
-  auto make_error = [](Status status) -> std::string {
-    CompactionWorkerResult result;
-    result.status = std::move(status);
-    ajson::string_stream stream;
-    ajson::save_to(stream, result);
-    return stream.str();
-  };
 
   ImmutableDBOptions immutable_db_options = ImmutableDBOptions(DBOptions());
   ColumnFamilyOptions cf_options;
@@ -684,7 +684,7 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(Slice data) {
                          alignof(CompactionRangeDelAggregator)>::type
         range_del_agg;
     std::unique_ptr<CompactionFilter> compaction_filter_holder;
-    const CompactionFilter* compaction_filter;
+    const CompactionFilter* compaction_filter = nullptr;
     std::aligned_storage<sizeof(MergeHelper), alignof(MergeHelper)>::type merge;
     ScopedArenaIterator input;
 
@@ -712,6 +712,8 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(Slice data) {
       second_pass_iter_storage.compaction_filter_holder =
           immutable_cf_options.compaction_filter_factory
               ->CreateCompactionFilter(context.compaction_filter_context);
+      second_pass_iter_storage.compaction_filter =
+      second_pass_iter_storage.compaction_filter_holder.get();
     }
     auto merge_ptr = new (&second_pass_iter_storage.merge) MergeHelper(
         env, ucmp, immutable_cf_options.merge_operator, compaction_filter,

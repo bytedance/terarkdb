@@ -2516,8 +2516,9 @@ bool ExistFutureAction(const void* obj) {
   g_fa_map_mutex.lock();
   auto end = g_fa_map.end();
   auto iter = g_fa_map.find(obj);
+  bool exists = end != iter;
   g_fa_map_mutex.unlock();
-  return end != iter;
+  return exists;
 }
 
 bool ReapMatureAction(const void* obj, std::string* result) {
