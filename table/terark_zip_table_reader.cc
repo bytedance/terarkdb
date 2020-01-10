@@ -1288,6 +1288,7 @@ void TerarkZipTableReader::RangeScan(
 uint64_t TerarkZipTableReader::ApproximateOffsetOf(const Slice& ikey) {
   size_t numRecords = subReader_.index_->NumKeys();
   size_t rank = subReader_.DictRank(fstringOf(ExtractUserKey(ikey)));
+  assert(rank <= numRecords);
   auto offset = uint64_t(subReader_.rawReaderSize_ * 1.0 * rank / numRecords);
   if (isReverseBytewiseOrder_) return subReader_.rawReaderSize_ - offset;
   return offset;
@@ -1542,6 +1543,7 @@ uint64_t TerarkZipTableMultiReader::ApproximateOffsetOf(const Slice& ikey) {
   } else {
     numRecords = subReader->index_->NumKeys();
     rank = subReader->DictRank(key);
+    assert(rank <= numRecords);
   }
   auto offset = uint64_t(subReader->rawReaderOffset_ +
                          1.0 * subReader->rawReaderSize_ * rank / numRecords);
