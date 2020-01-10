@@ -26,7 +26,7 @@ namespace {
 bool IsFileSectorAligned(const size_t off, size_t sector_size) {
   return off % sector_size == 0;
 }
-}
+}  // namespace
 #endif
 
 Status SequentialFileReader::Read(size_t n, Slice* result, char* scratch) {
@@ -58,7 +58,6 @@ Status SequentialFileReader::Read(size_t n, Slice* result, char* scratch) {
   return s;
 }
 
-
 Status SequentialFileReader::Skip(uint64_t n) {
 #ifndef ROCKSDB_LITE
   if (use_direct_io()) {
@@ -76,14 +75,16 @@ Status RandomAccessFileReader::Read(uint64_t offset, size_t n, Slice* result,
   {
     StopWatch sw(env_, stats_, hist_type_,
                  (stats_ != nullptr) ? &elapsed : nullptr, true /*overwrite*/,
-                true /*delay_enabled*/);
+                 true /*delay_enabled*/);
     IOSTATS_TIMER_GUARD(read_nanos);
     if (use_direct_io()) {
 #ifndef ROCKSDB_LITE
       size_t alignment = file_->GetRequiredBufferAlignment();
-      size_t aligned_offset = TruncateToPageBoundary(alignment, static_cast<size_t>(offset));
+      size_t aligned_offset =
+          TruncateToPageBoundary(alignment, static_cast<size_t>(offset));
       size_t offset_advance = static_cast<size_t>(offset) - aligned_offset;
-      size_t read_size = Roundup(static_cast<size_t>(offset + n), alignment) - aligned_offset;
+      size_t read_size =
+          Roundup(static_cast<size_t>(offset + n), alignment) - aligned_offset;
       AlignedBuffer buf;
       buf.Alignment(alignment);
       buf.AllocateNewBuffer(read_size);
@@ -248,6 +249,9 @@ Status WritableFileWriter::Append(const Slice& data) {
   }
 
   TEST_KILL_RANDOM("WritableFileWriter::Append:1", rocksdb_kill_odds);
+  if (s.ok()) {
+    filesize_ += data.size();
+  }
   return s;
 }
 
@@ -272,11 +276,11 @@ Status WritableFileWriter::Pad(const size_t pad_bytes) {
     cap = buf_.Capacity() - buf_.CurrentSize();
   }
   pending_sync_ = true;
+  filesize_ += pad_bytes;
   return Status::OK();
 }
 
 Status WritableFileWriter::Close() {
-
   // Do not quit immediately on failure the file MUST be closed
   Status s;
 
@@ -341,7 +345,7 @@ Status WritableFileWriter::Flush() {
     return s;
   }
 
-  return AutoRangeSync();
+  return AutoRangeSync(filesize_);
 }
 
 Status WritableFileWriter::Sync(bool use_fsync) {
@@ -364,8 +368,8 @@ Status WritableFileWriter::Sync(bool use_fsync) {
 Status WritableFileWriter::SyncWithoutFlush(bool use_fsync) {
   if (!writable_file_->IsSyncThreadSafe()) {
     return Status::NotSupported(
-      "Can't WritableFileWriter::SyncWithoutFlush() because "
-      "WritableFile::IsSyncThreadSafe() is false");
+        "Can't WritableFileWriter::SyncWithoutFlush() because "
+        "WritableFile::IsSyncThreadSafe() is false");
   }
   TEST_SYNC_POINT("WritableFileWriter::SyncWithoutFlush:1");
   Status s = SyncInternal(use_fsync);
@@ -385,7 +389,7 @@ Status WritableFileWriter::SyncInternal(bool use_fsync) {
   return s;
 }
 
-Status WritableFileWriter::AutoRangeSync() {
+Status WritableFileWriter::AutoRangeSync(uint64_t filesize_for_sync) {
   // sync OS cache to disk for every bytes_per_sync_
   // TODO: give log file and sst file different options (log
   // files could be potentially cached in OS for their whole
@@ -399,10 +403,12 @@ Status WritableFileWriter::AutoRangeSync() {
   // need to make sure sync range is far from the write offset.
   Status s;
   if (!use_direct_io() && bytes_per_sync_) {
-    const uint64_t kBytesNotSyncRange = 1024 * 1024;  // recent 1MB is not synced.
-    const uint64_t kBytesAlignWhenSync = 4 * 1024;    // Align 4KB.
-    if (filesize_ > kBytesNotSyncRange) {
-      uint64_t offset_sync_to = filesize_ - kBytesNotSyncRange;
+    // recent 1MB is not synced.
+    const uint64_t kBytesNotSyncRange = 1024 * 1024;
+    // Align 4KB.
+    const uint64_t kBytesAlignWhenSync = 4 * 1024;
+    if (filesize_for_sync > kBytesNotSyncRange) {
+      uint64_t offset_sync_to = filesize_for_sync - kBytesNotSyncRange;
       offset_sync_to -= offset_sync_to % kBytesAlignWhenSync;
       assert(offset_sync_to >= last_sync_size_);
       if (offset_sync_to > 0 &&
@@ -429,6 +435,7 @@ Status WritableFileWriter::WriteBuffered(const char* data, size_t size,
   assert(!use_direct_io());
   const char* src = data;
   size_t left = size;
+  size_t filesize_for_sync = filesize_;
 
   while (left > 0) {
     size_t allowed;
@@ -462,9 +469,9 @@ Status WritableFileWriter::WriteBuffered(const char* data, size_t size,
       if (!s.ok()) {
         return s;
       }
-      filesize_ += allowed;
+      filesize_for_sync += allowed;
       if (auto_sync) {
-        s = AutoRangeSync();
+        s = AutoRangeSync(filesize_for_sync);
         if (!s.ok()) {
           return s;
         }
@@ -480,7 +487,6 @@ Status WritableFileWriter::WriteBuffered(const char* data, size_t size,
   buf_.Size(0);
   return s;
 }
-
 
 // This flushes the accumulated data in the buffer. We pad data with zeros if
 // necessary to the whole page.
@@ -498,8 +504,7 @@ Status WritableFileWriter::WriteDirect() {
   assert((next_write_offset_ % alignment) == 0);
 
   // Calculate whole page final file advance if all writes succeed
-  size_t file_advance =
-    TruncateToPageBoundary(alignment, buf_.CurrentSize());
+  size_t file_advance = TruncateToPageBoundary(alignment, buf_.CurrentSize());
 
   // Calculate the leftover tail, we write it here padded with zeros BUT we
   // will write
@@ -580,13 +585,13 @@ class ReadaheadRandomAccessFile : public RandomAccessFile {
     buffer_.AllocateNewBuffer(readahead_size_);
   }
 
- ReadaheadRandomAccessFile(const ReadaheadRandomAccessFile&) = delete;
+  ReadaheadRandomAccessFile(const ReadaheadRandomAccessFile&) = delete;
 
- ReadaheadRandomAccessFile& operator=(const ReadaheadRandomAccessFile&) = delete;
+  ReadaheadRandomAccessFile& operator=(const ReadaheadRandomAccessFile&) =
+      delete;
 
   virtual Status Read(uint64_t offset, size_t n, Slice* result,
                       char* scratch) const override {
-
     if (n + alignment_ >= readahead_size_) {
       return file_->Read(offset, n, result, scratch);
     }
@@ -657,9 +662,7 @@ class ReadaheadRandomAccessFile : public RandomAccessFile {
     return file_->InvalidateCache(offset, length);
   }
 
-  virtual bool use_direct_io() const override {
-    return file_->use_direct_io();
-  }
+  virtual bool use_direct_io() const override { return file_->use_direct_io(); }
 
   virtual intptr_t FileDescriptor() const override {
     return file_->FileDescriptor();
@@ -667,7 +670,7 @@ class ReadaheadRandomAccessFile : public RandomAccessFile {
 
  private:
   bool TryReadFromCache(uint64_t offset, size_t n, size_t* cached_len,
-                         char* scratch) const {
+                        char* scratch) const {
     if (offset < buffer_offset_ ||
         offset >= buffer_offset_ + buffer_.CurrentSize()) {
       *cached_len = 0;
@@ -698,7 +701,7 @@ class ReadaheadRandomAccessFile : public RandomAccessFile {
 
   std::unique_ptr<RandomAccessFile> file_;
   const size_t alignment_;
-  size_t               readahead_size_;
+  size_t readahead_size_;
 
   mutable std::mutex lock_;
   mutable AlignedBuffer buffer_;
@@ -736,7 +739,8 @@ Status FilePrefetchBuffer::Prefetch(RandomAccessFileReader* reader,
       // Only a few requested bytes are in the buffer. memmove those chunk of
       // bytes to the beginning, and memcpy them back into the new buffer if a
       // new buffer is created.
-      chunk_offset_in_buffer = Rounddown(static_cast<size_t>(offset - buffer_offset_), alignment);
+      chunk_offset_in_buffer =
+          Rounddown(static_cast<size_t>(offset - buffer_offset_), alignment);
       chunk_len = buffer_.CurrentSize() - chunk_offset_in_buffer;
       assert(chunk_offset_in_buffer % alignment == 0);
       assert(chunk_len % alignment == 0);
@@ -761,7 +765,8 @@ Status FilePrefetchBuffer::Prefetch(RandomAccessFileReader* reader,
   } else if (chunk_len > 0) {
     // New buffer not needed. But memmove bytes from tail to the beginning since
     // chunk_len is greater than 0.
-    buffer_.RefitTail(static_cast<size_t>(chunk_offset_in_buffer), static_cast<size_t>(chunk_len));
+    buffer_.RefitTail(static_cast<size_t>(chunk_offset_in_buffer),
+                      static_cast<size_t>(chunk_len));
   }
 
   Slice result;
@@ -811,7 +816,7 @@ bool FilePrefetchBuffer::TryReadFromCache(uint64_t offset, size_t n,
 std::unique_ptr<RandomAccessFile> NewReadaheadRandomAccessFile(
     std::unique_ptr<RandomAccessFile>&& file, size_t readahead_size) {
   std::unique_ptr<RandomAccessFile> result(
-    new ReadaheadRandomAccessFile(std::move(file), readahead_size));
+      new ReadaheadRandomAccessFile(std::move(file), readahead_size));
   return result;
 }
 
