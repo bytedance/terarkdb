@@ -975,7 +975,16 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(Slice data) {
   }
 
   if (compaction_filter) {
-    ReapMatureAction(compaction_filter, &result.stat_all);
+    if (ReapMatureAction(compaction_filter, &result.stat_all)) {
+      fprintf(stderr
+        , "INFO: ReapMatureAction(compaction_filter=%p) = %s\n"
+        , compaction_filter, result.stat_all.c_str());
+    }
+    else {
+      fprintf(stderr
+        , "ERROR: ReapMatureAction(compaction_filter=%p) = false\n"
+        , compaction_filter);
+    }
   }
   if (second_pass_iter_storage.compaction_filter) {
     EraseFutureAction(second_pass_iter_storage.compaction_filter);
@@ -1005,11 +1014,20 @@ void RemoteCompactionDispatcher::Worker::DebugSerializeCheckResult(Slice data) {
   dio >> res;
   string_appender<> str;
   str << "CompactionWorkerResult\n";
-  str << "\tstatus = " << res.status.ToString() << "\n";
-  str << "\tactual_start = " << res.actual_start.DebugString(true) << "\n";
-  str << "\tactual_end   = " << res.actual_end.DebugString(true) << "\n";
-  str << "\tfiles[size=" << res.files.size() << "]\n";
-  str << "\tstat_all[size=" << res.stat_all.size() << "] = " << res.stat_all
+  str << "  status = " << res.status.ToString() << "\n";
+  str << "  actual_start = " << res.actual_start.DebugString(true) << "\n";
+  str << "  actual_end   = " << res.actual_end.DebugString(true) << "\n";
+  str << "  files[size=" << res.files.size() << "]\n";
+  for (size_t i = 0; i < res.files.size(); ++i) {
+    const auto& f = res.files[i];
+    str << "    " << i  << " = " << f.file_name << " : marked_for_compaction = " << f.marked_for_compaction << "\n";
+    str << "        filesize = " << f.file_size << "\n";
+    str << "        smallest = " << f.smallest.DebugString(true) << "\n";
+    str << "         largest = " << f. largest.DebugString(true) << "\n";
+    str << "    seq_smallest = " << f.smallest_seqno << "\n";
+    str << "    seq__largest = " << f. largest_seqno << "\n";
+  }
+  str << "  stat_all[size=" << res.stat_all.size() << "] = " << res.stat_all
       << "\n";
   intptr_t wlen = ::write(2, str.data(), str.size());
   if (size_t(wlen) != str.size()) {
@@ -1037,11 +1055,14 @@ class CommandLineCompactionDispatcher : public RemoteCompactionDispatcher {
     size_t datalen = data.size();
     auto onFinish = [this, promise, datalen](std::string&& result,
                                              std::exception* ex) {
-      fprintf(stderr,
-              "INFO: CompactCmd(%s, datalen=%zd) = exception[%p] = %s, "
-              "result[len=%zd]: %s\n",
-              this->m_cmd.c_str(), datalen, ex, ex ? ex->what() : "",
-              result.size(), Slice(result).ToString(true).c_str());
+      fprintf(stderr
+        , "INFO: CompactCmd(%s, datalen=%zd) = exception[%p] = %s, "
+          //"result[len=%zd]: %s\n"
+          "result[len=%zd]\n"
+        , this->m_cmd.c_str(), datalen, ex, ex ? ex->what() : ""
+        , result.size()
+        //, Slice(result).ToString(true).c_str()
+      );
       promise->set_value(std::move(result));
       if (ex) {
         try {
