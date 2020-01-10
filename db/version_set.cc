@@ -1902,9 +1902,10 @@ uint64_t VersionStorageInfo::FileSize(const FileMetaData* f,
     }
   }
   assert(entry_count <= std::max<uint64_t>(1, f->prop.num_entries));
-  return entry_count == 0 ? file_size
-                          : file_size * entry_count /
-                                std::max<uint64_t>(1, f->prop.num_entries);
+  return entry_count == 0
+             ? file_size
+             : uint64_t(double(file_size) * entry_count /
+                        std::max<uint64_t>(1, f->prop.num_entries));
 }
 
 uint64_t VersionStorageInfo::FileSizeWithBlob(const FileMetaData* f,
@@ -1922,17 +1923,17 @@ uint64_t VersionStorageInfo::FileSizeWithBlob(const FileMetaData* f,
     assert(file_number == uint64_t(-1));
   }
   uint64_t file_size = f->fd.GetFileSize();
-  if (recursive || f->prop.is_map_sst()) {
+  if (recursive) {
     for (auto& dependence : f->prop.dependence) {
-      file_size +=
-          FileSizeWithBlob(nullptr, dependence.file_number,
-                           f->prop.is_map_sst(), dependence.entry_count);
+      file_size += FileSizeWithBlob(nullptr, dependence.file_number, false,
+                                    dependence.entry_count);
     }
   }
   assert(entry_count <= std::max<uint64_t>(1, f->prop.num_entries));
-  return entry_count == 0 ? file_size
-                          : file_size * entry_count /
-                                std::max<uint64_t>(1, f->prop.num_entries);
+  return entry_count == 0
+             ? file_size
+             : uint64_t(double(file_size) * entry_count /
+                        std::max<uint64_t>(1, f->prop.num_entries));
 }
 
 // Version::PrepareApply() need to be called before calling the function, or

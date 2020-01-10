@@ -1031,20 +1031,20 @@ Compaction* CompactionPicker::CompactRange(
       AssignUserKey(range.limit, end->Encode());
       range.include_limit = false;
     } else {
-      Slice smallest_key, largest_key;
-      Compaction::GetBoundaryKeys(vstorage, input_vec, &smallest_key,
-                                  &largest_key);
+      Slice smallest_user_key, largest_user_key;
+      Compaction::GetBoundaryKeys(vstorage, input_vec, &smallest_user_key,
+                                  &largest_user_key);
       if (begin != nullptr) {
         AssignUserKey(range.start, begin->Encode());
       } else {
-        AssignUserKey(range.start, smallest_key);
+        range.start.assign(smallest_user_key.data(), smallest_user_key.size());
       }
       range.include_start = true;
       if (end != nullptr) {
         AssignUserKey(range.limit, end->Encode());
         range.include_limit = false;
       } else {
-        AssignUserKey(range.limit, largest_key);
+        range.limit.assign(largest_user_key.data(), largest_user_key.size());
         range.include_limit = true;
       }
     }
