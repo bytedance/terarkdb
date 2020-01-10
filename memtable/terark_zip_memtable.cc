@@ -92,7 +92,7 @@ PatriciaTrieRep::PatriciaTrieRep(details::ConcurrentType concurrent_type,
 
 PatriciaTrieRep::~PatriciaTrieRep() {
   for (size_t i = 0; i < trie_vec_size_; ++i) {
-    trie_vec_[i]->~PatriciaMem();
+    delete trie_vec_[i];
   }
 }
 
