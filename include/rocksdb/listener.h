@@ -208,7 +208,7 @@ struct TableTransientStat {
 
 void PlantFutureAction(const void* obj,
                        void (*action)(const void* p_obj, std::string* result));
-void EraseFutureAction(const void* obj);
+bool EraseFutureAction(const void* obj);
 bool ExistFutureAction(const void* obj);
 bool ReapMatureAction(const void* obj, std::string* result);
 

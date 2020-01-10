@@ -689,7 +689,8 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(Slice data) {
     ScopedArenaIterator input;
 
     ~SecondPassIterStorage() {
-      assert(!ExistFutureAction(compaction_filter));
+      //assert(!ExistFutureAction(compaction_filter));
+      EraseFutureAction(compaction_filter);
       if (input.get() != nullptr) {
         input.set(nullptr);
         auto merge_ptr = reinterpret_cast<MergeHelper*>(&merge);
@@ -990,7 +991,10 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(Slice data) {
     }
   }
   if (second_pass_iter_storage.compaction_filter) {
-    EraseFutureAction(second_pass_iter_storage.compaction_filter);
+    bool ret = EraseFutureAction(second_pass_iter_storage.compaction_filter);
+    fprintf(stderr
+        , "INFO: EraseFutureAction(compaction_filter=%p) = %s\n"
+        , compaction_filter, ret);
   }
   if (status.ok() && !builder && result.files.empty() &&
       !range_del_agg.IsEmpty()) {

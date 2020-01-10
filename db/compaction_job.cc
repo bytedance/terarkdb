@@ -2504,11 +2504,12 @@ void PlantFutureAction(const void* obj,
   }
 }
 
-void EraseFutureAction(const void* obj) {
+bool EraseFutureAction(const void* obj) {
   assert(nullptr != obj);
   g_fa_map_mutex.lock();
-  g_fa_map.erase(obj);
+  size_t cnt = g_fa_map.erase(obj);
   g_fa_map_mutex.unlock();
+  return cnt > 0;
 }
 
 bool ExistFutureAction(const void* obj) {
