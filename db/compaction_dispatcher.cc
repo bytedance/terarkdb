@@ -993,7 +993,7 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(Slice data) {
   if (second_pass_iter_storage.compaction_filter) {
     bool ret = EraseFutureAction(second_pass_iter_storage.compaction_filter);
     fprintf(stderr
-        , "INFO: EraseFutureAction(compaction_filter=%p) = %s\n"
+        , "INFO: EraseFutureAction(compaction_filter=%p) = %d\n"
         , compaction_filter, ret);
   }
   if (status.ok() && !builder && result.files.empty() &&
