@@ -689,9 +689,11 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(Slice data) {
     ScopedArenaIterator input;
 
     ~SecondPassIterStorage() {
-      //assert(!ExistFutureAction(compaction_filter));
-      EraseFutureAction(compaction_filter);
       if (input.get() != nullptr) {
+        if (compaction_filter) {
+          //assert(!ExistFutureAction(compaction_filter));
+          EraseFutureAction(compaction_filter);
+        }
         input.set(nullptr);
         auto merge_ptr = reinterpret_cast<MergeHelper*>(&merge);
         merge_ptr->~MergeHelper();
