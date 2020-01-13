@@ -95,6 +95,7 @@ class CompactionPickerTest : public testing::Test {
     f->largest = InternalKey(largest, largest_seq, kTypeValue);
     f->fd.smallest_seqno = smallest_seq;
     f->fd.largest_seqno = largest_seq;
+    f->prop.flags |= TablePropertyCache::kNoRangeDeletions;
     f->compensated_file_size = file_size;
     f->refs = 0;
     vstorage_->AddFile(level, f);
