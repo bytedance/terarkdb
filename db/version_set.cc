@@ -1923,10 +1923,11 @@ uint64_t VersionStorageInfo::FileSizeWithBlob(const FileMetaData* f,
     assert(file_number == uint64_t(-1));
   }
   uint64_t file_size = f->fd.GetFileSize();
-  if (recursive) {
+  if (recursive || f->prop.is_map_sst()) {
     for (auto& dependence : f->prop.dependence) {
-      file_size += FileSizeWithBlob(nullptr, dependence.file_number, false,
-                                    dependence.entry_count);
+      file_size +=
+          FileSizeWithBlob(nullptr, dependence.file_number,
+                           f->prop.is_map_sst(), dependence.entry_count);
     }
   }
   assert(entry_count <= std::max<uint64_t>(1, f->prop.num_entries));
