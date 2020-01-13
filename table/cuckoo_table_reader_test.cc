@@ -105,7 +105,7 @@ class CuckooReaderTest : public testing::Test {
       ASSERT_OK(builder.Add(Slice(keys[key_idx]), LazyBuffer(values[key_idx])));
       ASSERT_EQ(builder.NumEntries(), key_idx + 1);
     }
-    ASSERT_OK(builder.Finish(nullptr));
+    ASSERT_OK(builder.Finish(nullptr, nullptr));
     ASSERT_EQ(num_items, builder.NumEntries());
     file_size = builder.FileSize();
     ASSERT_OK(file_writer->Close());
@@ -430,7 +430,7 @@ void WriteFile(const std::vector<std::string>& keys,
               LazyBuffer(&keys[key_idx][0], 4)));
     ASSERT_EQ(builder.NumEntries(), key_idx + 1);
   }
-  ASSERT_OK(builder.Finish(nullptr));
+  ASSERT_OK(builder.Finish(nullptr, nullptr));
   ASSERT_EQ(num, builder.NumEntries());
   ASSERT_OK(file_writer->Close());
 

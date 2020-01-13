@@ -20,7 +20,7 @@ namespace {
     std::vector<Dependence> dep;
     for (auto& d : dependence) dep.emplace_back(Dependence{d, 1});
     return TablePropertyCache{
-        0, purpose, 1, 1, dep, inheritance_chain
+        0, purpose, 1, 1, 0, 0, 0, 0, dep, inheritance_chain
     };
   }
 }

@@ -114,7 +114,7 @@ TablePropertyCache GetPropCache(
     std::initializer_list<uint64_t> inheritance_chain = {}) {
   std::vector<Dependence> dep;
   for (auto& d : dependence) dep.emplace_back(Dependence{d, 1});
-  return TablePropertyCache{0, purpose, 1, 1, dep, inheritance_chain};
+  return TablePropertyCache{0, purpose, 1, 1, 0, 0, 0, 0, dep, inheritance_chain};
 }
 
 TEST_F(VersionBuilderTest, ApplyAndSaveTo) {
@@ -144,7 +144,7 @@ TEST_F(VersionBuilderTest, ApplyAndSaveTo) {
   VersionBuilder version_builder(env_options, nullptr, &vstorage_);
 
   VersionStorageInfo new_vstorage(&icmp_, ucmp_, options_.num_levels,
-                                  kCompactionStyleLevel, nullptr, false);
+                                  kCompactionStyleLevel, false);
   version_builder.Apply(&version_edit);
   version_builder.SaveTo(&new_vstorage);
 
@@ -158,8 +158,8 @@ TEST_F(VersionBuilderTest, ApplyAndSaveTo) {
 TEST_F(VersionBuilderTest, ApplyAndSaveToDynamic) {
   ioptions_.level_compaction_dynamic_level_bytes = true;
 
-  Add(0, 1U, "150", "200", 100U, 0, 200U, 200U, 0, 0, false, 200U, 200U);
-  Add(0, 88U, "201", "300", 100U, 0, 100U, 100U, 0, 0, false, 100U, 100U);
+  Add(0, 1U, "150", "200", 100U, 0, 200U, 200U, 0, 0, false, 200U);
+  Add(0, 88U, "201", "300", 100U, 0, 100U, 100U, 0, 0, false, 100U);
 
   Add(4, 6U, "150", "179", 100U);
   Add(4, 7U, "180", "220", 100U);
@@ -181,7 +181,7 @@ TEST_F(VersionBuilderTest, ApplyAndSaveToDynamic) {
   VersionBuilder version_builder(env_options, nullptr, &vstorage_);
 
   VersionStorageInfo new_vstorage(&icmp_, ucmp_, options_.num_levels,
-                                  kCompactionStyleLevel, nullptr, false);
+                                  kCompactionStyleLevel, false);
   version_builder.Apply(&version_edit);
   version_builder.SaveTo(&new_vstorage);
 
@@ -197,8 +197,8 @@ TEST_F(VersionBuilderTest, ApplyAndSaveToDynamic) {
 TEST_F(VersionBuilderTest, ApplyAndSaveToDynamic2) {
   ioptions_.level_compaction_dynamic_level_bytes = true;
 
-  Add(0, 1U, "150", "200", 100U, 0, 200U, 200U, 0, 0, false, 200U, 200U);
-  Add(0, 88U, "201", "300", 100U, 0, 100U, 100U, 0, 0, false, 100U, 100U,
+  Add(0, 1U, "150", "200", 100U, 0, 200U, 200U, 0, 0, false, 200U);
+  Add(0, 88U, "201", "300", 100U, 0, 100U, 100U, 0, 0, false, 100U,
       GetPropCache(1, {4U, 5U}));
 
   Add(4, 6U, "150", "179", 100U);
@@ -231,7 +231,7 @@ TEST_F(VersionBuilderTest, ApplyAndSaveToDynamic2) {
   VersionBuilder version_builder(env_options, nullptr, &vstorage_);
 
   VersionStorageInfo new_vstorage(&icmp_, ucmp_, options_.num_levels,
-                                  kCompactionStyleLevel, nullptr, false);
+                                  kCompactionStyleLevel, false);
   version_builder.Apply(&version_edit);
   version_builder.SaveTo(&new_vstorage);
 
@@ -309,7 +309,7 @@ TEST_F(VersionBuilderTest, ApplyAndSaveToDynamic3) {
   version_builder.Apply(&version_edit5);
 
   VersionStorageInfo new_vstorage(&icmp_, ucmp_, options_.num_levels,
-                                  kCompactionStyleLevel, nullptr, false);
+                                  kCompactionStyleLevel, false);
   version_builder.SaveTo(&new_vstorage);
 
   ASSERT_EQ(0U, new_vstorage.NumLevelBytes(1));
@@ -339,7 +339,7 @@ TEST_F(VersionBuilderTest, ApplyMultipleAndSaveTo) {
   VersionBuilder version_builder(env_options, nullptr, &vstorage_);
 
   VersionStorageInfo new_vstorage(&icmp_, ucmp_, options_.num_levels,
-                                  kCompactionStyleLevel, nullptr, false);
+                                  kCompactionStyleLevel, false);
   version_builder.Apply(&version_edit);
   version_builder.SaveTo(&new_vstorage);
 
@@ -355,7 +355,7 @@ TEST_F(VersionBuilderTest, ApplyDeleteAndSaveTo) {
   EnvOptions env_options;
   VersionBuilder version_builder(env_options, nullptr, &vstorage_);
   VersionStorageInfo new_vstorage(&icmp_, ucmp_, options_.num_levels,
-                                  kCompactionStyleLevel, nullptr, false);
+                                  kCompactionStyleLevel, false);
 
   VersionEdit version_edit;
   version_edit.AddFile(2, 666, 0, 100U, GetInternalKey("301"),
