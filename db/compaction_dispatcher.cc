@@ -1046,19 +1046,19 @@ void RemoteCompactionDispatcher::Worker::DebugSerializeCheckResult(Slice data) {
   dio >> res;
   string_appender<> str;
   str << "CompactionWorkerResult: time_us = "
-      << res.time_us << " (" << (res.time_us * 1e-6) << " sec)\n";
+      << res.time_us << " (" << (res.time_us * 1e-6) << " sec), ";
   str << "  status = " << res.status.ToString() << "\n";
   str << "  actual_start = " << res.actual_start.DebugString(true) << "\n";
   str << "  actual_end   = " << res.actual_end.DebugString(true) << "\n";
   str << "  files[size=" << res.files.size() << "]\n";
   for (size_t i = 0; i < res.files.size(); ++i) {
     const auto& f = res.files[i];
-    str << "    " << i  << " = " << f.file_name << " : marked_for_compaction = " << f.marked_for_compaction << "\n";
-    str << "        filesize = " << f.file_size << "\n";
-    str << "        smallest = " << f.smallest.DebugString(true) << "\n";
-    str << "         largest = " << f. largest.DebugString(true) << "\n";
-    str << "    seq_smallest = " << f.smallest_seqno << "\n";
-    str << "    seq__largest = " << f. largest_seqno << "\n";
+    str << "    " << i  << " = " << f.file_name
+        << " : marked_for_compaction = " << f.marked_for_compaction
+        << "  filesize = " << f.file_size
+        << "\n";
+    str << "    seq_smallest = " << f.smallest_seqno << "  key_smallest = " << f.smallest.DebugString(true) << "\n";
+    str << "    seq__largest = " << f. largest_seqno << "  key__largest = " << f. largest.DebugString(true) << "\n";
   }
   str << "  stat_all[size=" << res.stat_all.size() << "] = " << res.stat_all
       << "\n";
