@@ -40,6 +40,7 @@
 #include "table/two_level_iterator.h"
 #include "util/c_style_callback.h"
 #include "util/filename.h"
+#include <chrono>
 
 //#define USE_AJSON 1
 
@@ -199,7 +200,8 @@ using FileInfo = CompactionWorkerResult::FileInfo;
 AJSON(FileInfo, smallest, largest, file_name, smallest_seqno, largest_seqno,
       file_size, marked_for_compaction);
 
-AJSON(CompactionWorkerResult, status, actual_start, actual_end, files, stat_all);
+AJSON(CompactionWorkerResult, status, actual_start, actual_end, files,
+      stat_all, time_us);
 
 AJSON(FileDescriptor, packed_number_and_path_id, file_size, smallest_seqno,
       largest_seqno);
@@ -478,6 +480,9 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(Slice data) {
   auto ucmp = icmp->user_comparator();
   Env* env = rep_->env;
   auto& env_opt = rep_->env_options;
+
+  using namespace std::chrono;
+  auto start_time = system_clock::now();
 
   // start run
   DependenceMap contxt_dependence_map;
@@ -1025,6 +1030,9 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(Slice data) {
   c_iter.reset();
   input.set(nullptr);
 
+  auto finish_time = system_clock::now();
+  auto duration = duration_cast<microseconds>(finish_time - start_time);
+  result.time_us = duration.count();
   ajson::string_stream stream;
   ajson::save_to(stream, result);
   return stream.str();
@@ -1037,7 +1045,8 @@ void RemoteCompactionDispatcher::Worker::DebugSerializeCheckResult(Slice data) {
   CompactionWorkerResult res;
   dio >> res;
   string_appender<> str;
-  str << "CompactionWorkerResult\n";
+  str << "CompactionWorkerResult: time_us = "
+      << res.time_us << " (" << (res.time_us * 1e-6) << " sec)\n";
   str << "  status = " << res.status.ToString() << "\n";
   str << "  actual_start = " << res.actual_start.DebugString(true) << "\n";
   str << "  actual_end   = " << res.actual_end.DebugString(true) << "\n";
