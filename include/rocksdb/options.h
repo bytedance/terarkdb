@@ -1342,6 +1342,8 @@ struct IngestExternalFileOptions {
   // 2. Without writing external SST file, it's possible to do checksum.
   // We have a plan to set this option to false by default in the future.
   bool write_global_seqno = true;
+  // Mark all files need compaction
+  bool marked_for_compaction = false;
 };
 
 // TraceOptions is used for StartTrace

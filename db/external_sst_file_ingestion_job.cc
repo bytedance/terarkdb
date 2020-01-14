@@ -211,7 +211,7 @@ Status ExternalSstFileIngestionJob::Run() {
     edit_.AddFile(f.picked_level, f.fd.GetNumber(), f.fd.GetPathId(),
                   f.fd.GetFileSize(), f.smallest_internal_key(),
                   f.largest_internal_key(), f.assigned_seqno, f.assigned_seqno,
-                  false /* marked_for_compaction */, prop);
+                  ingestion_options_.marked_for_compaction, prop);
   }
 
   if (consumed_seqno) {
