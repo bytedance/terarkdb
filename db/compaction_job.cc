@@ -1735,11 +1735,12 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
         "[%s] [JOB %d] Table #%" PRIu64 " GC: %" PRIu64
         " inputs from %zd files. %" PRIu64 " clear, %" PRIu64
         " expectation: [ %" PRIu64 " garbage type, %" PRIu64
-        " get not found, %" PRIu64 " file number mismatch ]",
+        " get not found, %" PRIu64 " file number mismatch ], chain: %" PRIu64,
         cfd->GetName().c_str(), job_id_, meta.fd.GetNumber(), counter.input,
         inputs.front().size(), counter.input - meta.prop.num_entries,
         sub_compact->compaction->num_antiquation(), counter.garbage_type,
-        counter.get_not_found, counter.file_number_mismatch);
+        counter.get_not_found, counter.file_number_mismatch,
+        inheritance_chain.size());
   }
 
   if (measure_io_stats_) {

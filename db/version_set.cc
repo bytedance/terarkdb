@@ -1909,32 +1909,25 @@ uint64_t VersionStorageInfo::FileSize(const FileMetaData* f,
 }
 
 uint64_t VersionStorageInfo::FileSizeWithBlob(const FileMetaData* f,
-                                              uint64_t file_number,
                                               bool recursive,
-                                              uint64_t entry_count) const {
-  if (f == nullptr) {
-    auto find = dependence_map_.find(file_number);
-    if (find == dependence_map_.end()) {
-      // TODO log error
-      return 0;
-    }
-    f = find->second;
-  } else {
-    assert(file_number == uint64_t(-1));
-  }
+                                              double ratio) const {
   uint64_t file_size = f->fd.GetFileSize();
   if (recursive || f->prop.is_map_sst()) {
     for (auto& dependence : f->prop.dependence) {
+      auto find = dependence_map_.find(dependence.file_number);
+      if (find == dependence_map_.end()) {
+        // TODO log error
+        continue;
+      }
+      double new_ratio =
+          find->second->prop.num_entries == 0
+              ? ratio
+              : ratio * dependence.entry_count / find->second->prop.num_entries;
       file_size +=
-          FileSizeWithBlob(nullptr, dependence.file_number,
-                           f->prop.is_map_sst(), dependence.entry_count);
+          FileSizeWithBlob(find->second, f->prop.is_map_sst(), new_ratio);
     }
   }
-  assert(entry_count <= std::max<uint64_t>(1, f->prop.num_entries));
-  return entry_count == 0
-             ? file_size
-             : uint64_t(double(file_size) * entry_count /
-                        std::max<uint64_t>(1, f->prop.num_entries));
+  return uint64_t(ratio * file_size);
 }
 
 // Version::PrepareApply() need to be called before calling the function, or
@@ -4385,22 +4378,22 @@ uint64_t VersionSet::ApproximateSize(Version* v, const FdWithKeyRange& f,
   assert(v);
 
   struct {
-    uint64_t (*callback)(void*, const FileMetaData*);
+    uint64_t (*callback)(void*, const FileMetaData*, uint64_t);
     void* args;
   } approximate_size;
-  auto approximate_size_lambda = [v, &approximate_size,
-                                  &key](const FileMetaData* file_meta) {
+  auto approximate_size_lambda = [v, &approximate_size, &key](
+                                     const FileMetaData* file_meta,
+                                     uint64_t entry_count) {
     uint64_t result = 0;
+    double ratio = file_meta->prop.num_entries == 0
+                       ? 1
+                       : double(entry_count) / file_meta->prop.num_entries;
     auto vstorage = v->storage_info();
     if (!file_meta->prop.is_map_sst()) {
       auto& icomp = v->cfd_->internal_comparator();
       if (icomp.Compare(file_meta->largest.Encode(), key) <= 0) {
         // Entire file is before "key", so just add the file size
-        if (!file_meta->prop.dependence.empty()) {
-          result = vstorage->FileSizeWithBlob(file_meta);
-        } else {
-          result = file_meta->fd.GetFileSize();
-        }
+        result = vstorage->FileSizeWithBlob(file_meta, false, ratio);
       } else if (icomp.Compare(file_meta->smallest.Encode(), key) > 0) {
         // Entire file is after "key", so ignore
         result = 0;
@@ -4422,9 +4415,10 @@ uint64_t VersionSet::ApproximateSize(Version* v, const FdWithKeyRange& f,
             table_cache->ReleaseHandle(handle);
           }
         }
-        if (result > 0 && !file_meta->prop.dependence.empty()) {
-          result = uint64_t(double(result) / file_meta->fd.GetFileSize() *
-                            vstorage->FileSizeWithBlob(file_meta));
+        if (result > 0) {
+          result =
+              uint64_t(double(result) / file_meta->fd.GetFileSize() *
+                       vstorage->FileSizeWithBlob(file_meta, false, ratio));
         }
       }
     } else {
@@ -4435,15 +4429,16 @@ uint64_t VersionSet::ApproximateSize(Version* v, const FdWithKeyRange& f,
           // TODO log error
           continue;
         }
-        result +=
-            approximate_size.callback(approximate_size.args, find->second);
+        result += approximate_size.callback(approximate_size.args, find->second,
+                                            dependence.entry_count);
       }
     }
     return result;
   };
   approximate_size.callback = c_style_callback(approximate_size_lambda);
   approximate_size.args = &approximate_size_lambda;
-  return approximate_size_lambda(f.file_metadata);
+  return approximate_size_lambda(f.file_metadata,
+                                 f.file_metadata->prop.num_entries);
 }
 
 void VersionSet::AddLiveFiles(std::vector<FileDescriptor>* live_list) {
