@@ -459,7 +459,8 @@ void CompactionJob::Prepare() {
     }
   } else if (c->ShouldFormSubcompactions()) {
     const uint64_t start_micros = env_->NowMicros();
-    GenSubcompactionBoundaries();
+    auto limits = env_->GetBGJobLimits();
+    GenSubcompactionBoundaries(limits.max_background_compactions);
     MeasureTime(stats_, SUBCOMPACTION_SETUP_TIME,
                 env_->NowMicros() - start_micros);
 
@@ -490,7 +491,7 @@ struct RangeWithSize {
 // to the working set and then finds the approximate size of data in between
 // each consecutive pair of slices. Then it divides these ranges into
 // consecutive groups such that each group has a similar size.
-void CompactionJob::GenSubcompactionBoundaries() {
+void CompactionJob::GenSubcompactionBoundaries(uint64_t limit) {
   auto* c = compact_->compaction;
   auto* cfd = c->column_family_data();
   const Comparator* cfd_comparator = cfd->user_comparator();
@@ -602,9 +603,9 @@ void CompactionJob::GenSubcompactionBoundaries() {
           *(c->mutable_cf_options()), out_lvl,
           c->immutable_cf_options()->compaction_style, base_level,
           c->immutable_cf_options()->level_compaction_dynamic_level_bytes)));
-  uint64_t subcompactions = std::min(
+  uint64_t subcompactions = std::min(limit, std::min(
       {static_cast<uint64_t>(ranges.size()),
-       static_cast<uint64_t>(c->max_subcompactions()), max_output_files});
+       static_cast<uint64_t>(c->max_subcompactions()), max_output_files}));
 
   if (subcompactions > 1) {
     double mean = sum * 1.0 / subcompactions;
