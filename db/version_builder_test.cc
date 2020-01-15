@@ -71,7 +71,9 @@ class VersionBuilderTest : public testing::Test {
     f->prop = prop;
     f->prop.num_entries = num_entries;
     f->prop.num_deletions = num_deletions;
+    f->is_skip_gc = true;
     vstorage_.AddFile(level, f);
+    vstorage_.UpdateAccumulatedStats(f);
   }
 
   void UpdateVersionStorageInfo() {
@@ -150,7 +152,7 @@ TEST_F(VersionBuilderTest, ApplyAndSaveTo) {
 
   ASSERT_EQ(400U, new_vstorage.NumLevelBytes(2));
   ASSERT_EQ(300U, new_vstorage.NumLevelBytes(3));
-  ASSERT_TRUE(VerifyDependFiles(&new_vstorage, {27U}));
+  ASSERT_TRUE(VerifyDependFiles(&new_vstorage, {1U, 66U, 88U, 6U, 7U, 8U, 26U, 27U, 28U, 29U, 666}));
 
   UnrefFilesInVersion(&new_vstorage);
 }
@@ -158,8 +160,8 @@ TEST_F(VersionBuilderTest, ApplyAndSaveTo) {
 TEST_F(VersionBuilderTest, ApplyAndSaveToDynamic) {
   ioptions_.level_compaction_dynamic_level_bytes = true;
 
-  Add(0, 1U, "150", "200", 100U, 0, 200U, 200U, 0, 0, false, 200U);
-  Add(0, 88U, "201", "300", 100U, 0, 100U, 100U, 0, 0, false, 100U);
+  Add(0, 1U, "150", "200", 100U, 0, 200U, 200U, 0, 0, 200U);
+  Add(0, 88U, "201", "300", 100U, 0, 100U, 100U, 0, 0, 100U);
 
   Add(4, 6U, "150", "179", 100U);
   Add(4, 7U, "180", "220", 100U);
@@ -189,7 +191,7 @@ TEST_F(VersionBuilderTest, ApplyAndSaveToDynamic) {
   ASSERT_EQ(100U, new_vstorage.NumLevelBytes(3));
   ASSERT_EQ(300U, new_vstorage.NumLevelBytes(4));
   ASSERT_EQ(200U, new_vstorage.NumLevelBytes(5));
-  ASSERT_TRUE(VerifyDependFiles(&new_vstorage, {1U}));
+  ASSERT_TRUE(VerifyDependFiles(&new_vstorage, {1U, 6U, 7U, 8U, 26U, 27U, 666}));
 
   UnrefFilesInVersion(&new_vstorage);
 }
@@ -197,9 +199,8 @@ TEST_F(VersionBuilderTest, ApplyAndSaveToDynamic) {
 TEST_F(VersionBuilderTest, ApplyAndSaveToDynamic2) {
   ioptions_.level_compaction_dynamic_level_bytes = true;
 
-  Add(0, 1U, "150", "200", 100U, 0, 200U, 200U, 0, 0, false, 200U);
-  Add(0, 88U, "201", "300", 100U, 0, 100U, 100U, 0, 0, false, 100U,
-      GetPropCache(1, {4U, 5U}));
+  Add(0, 1U, "150", "200", 100U, 0, 200U, 200U, 0, 0, 200U);
+  Add(0, 88U, "201", "300", 100U, 0, 100U, 100U, 0, 0, 100U);
 
   Add(4, 6U, "150", "179", 100U);
   Add(4, 7U, "180", "220", 100U);
@@ -238,7 +239,7 @@ TEST_F(VersionBuilderTest, ApplyAndSaveToDynamic2) {
   ASSERT_EQ(0U, new_vstorage.NumLevelBytes(0));
   ASSERT_EQ(200U, new_vstorage.NumLevelBytes(4));
   ASSERT_EQ(200U, new_vstorage.NumLevelBytes(5));
-  ASSERT_TRUE(VerifyDependFiles(&new_vstorage, {1U, 4U}));
+  ASSERT_TRUE(VerifyDependFiles(&new_vstorage, {1U, 4U, 26U, 27U, 4U, 5U}));
 
   UnrefFilesInVersion(&new_vstorage);
 }
@@ -314,7 +315,7 @@ TEST_F(VersionBuilderTest, ApplyAndSaveToDynamic3) {
 
   ASSERT_EQ(0U, new_vstorage.NumLevelBytes(1));
   ASSERT_EQ(150U, new_vstorage.NumLevelBytes(2));
-  ASSERT_TRUE(VerifyDependFiles(&new_vstorage, {14U, 15U}));
+  ASSERT_TRUE(VerifyDependFiles(&new_vstorage, {5U, 15U, 14U, 24U}));
 
   UnrefFilesInVersion(&new_vstorage);
 }
@@ -344,7 +345,7 @@ TEST_F(VersionBuilderTest, ApplyMultipleAndSaveTo) {
   version_builder.SaveTo(&new_vstorage);
 
   ASSERT_EQ(500U, new_vstorage.NumLevelBytes(2));
-  ASSERT_TRUE(VerifyDependFiles(&new_vstorage, {}));
+  ASSERT_TRUE(VerifyDependFiles(&new_vstorage, {666, 676, 636, 616, 606}));
 
   UnrefFilesInVersion(&new_vstorage);
 }
@@ -382,13 +383,13 @@ TEST_F(VersionBuilderTest, ApplyDeleteAndSaveTo) {
   version_builder.SaveTo(&new_vstorage);
 
   ASSERT_EQ(300U, new_vstorage.NumLevelBytes(2));
-  ASSERT_TRUE(VerifyDependFiles(&new_vstorage, {}));
+  ASSERT_TRUE(VerifyDependFiles(&new_vstorage, {666, 676, 606}));
 
   UnrefFilesInVersion(&new_vstorage);
 }
 
 TEST_F(VersionBuilderTest, EstimatedActiveKeys) {
-  const uint32_t kTotalSamples = 20;
+  // const uint32_t kTotalSamples = 20;
   const uint32_t kNumLevels = 5;
   const uint32_t kFilesPerLevel = 8;
   const uint32_t kNumFiles = kNumLevels * kFilesPerLevel;
@@ -398,13 +399,15 @@ TEST_F(VersionBuilderTest, EstimatedActiveKeys) {
     Add(static_cast<int>(i / kFilesPerLevel), i + 1,
         ToString((i + 100) * 1000).c_str(),
         ToString((i + 100) * 1000 + 999).c_str(), 100U, 0, 100, 100,
-        kEntriesPerFile, kDeletionsPerFile, (i < kTotalSamples));
+        kEntriesPerFile, kDeletionsPerFile, kNumFiles-i, kNumFiles-i);
   }
+
+  
   // minus 2X for the number of deletion entries because:
   // 1x for deletion entry does not count as a data entry.
   // 1x for each deletion entry will actually remove one data entry.
   ASSERT_EQ(vstorage_.GetEstimatedActiveKeys(),
-            (kEntriesPerFile - 2 * kDeletionsPerFile) * kNumFiles);
+            (kEntriesPerFile - kDeletionsPerFile) * kNumFiles);
 }
 
 }  // namespace rocksdb
