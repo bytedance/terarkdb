@@ -422,10 +422,9 @@ void CompactionJob::ReportStartedCompaction(Compaction* compaction) {
   }
 }
 
-void CompactionJob::Prepare() {
+void CompactionJob::Prepare(int max_usable_threads) {
   AutoThreadOperationStageUpdater stage_updater(
       ThreadStatus::STAGE_COMPACTION_PREPARE);
-
   // Generate file_levels_ for compaction berfore making Iterator
   auto* c = compact_->compaction;
   assert(c->column_family_data() != nullptr);
@@ -442,7 +441,8 @@ void CompactionJob::Prepare() {
     assert(input_range.size() <= c->max_subcompactions());
     boundaries_.resize(input_range.size() * 2);
     auto uc = c->column_family_data()->user_comparator();
-    for (size_t i = 0; i < input_range.size(); i++) {
+    int n = std::min(max_usable_threads, static_cast<int>(input_range.size()));
+    for (int i = 0; i < n; ++i) {
       Slice* start = &boundaries_[i * 2];
       Slice* end = &boundaries_[i * 2 + 1];
       *start = input_range[i].start;
@@ -459,8 +459,7 @@ void CompactionJob::Prepare() {
     }
   } else if (c->ShouldFormSubcompactions()) {
     const uint64_t start_micros = env_->NowMicros();
-    auto limits = env_->GetBGJobLimits();
-    GenSubcompactionBoundaries(limits.max_background_compactions);
+    GenSubcompactionBoundaries(max_usable_threads);
     MeasureTime(stats_, SUBCOMPACTION_SETUP_TIME,
                 env_->NowMicros() - start_micros);
 
@@ -491,7 +490,7 @@ struct RangeWithSize {
 // to the working set and then finds the approximate size of data in between
 // each consecutive pair of slices. Then it divides these ranges into
 // consecutive groups such that each group has a similar size.
-void CompactionJob::GenSubcompactionBoundaries(uint64_t limit) {
+void CompactionJob::GenSubcompactionBoundaries(int max_usable_threads) {
   auto* c = compact_->compaction;
   auto* cfd = c->column_family_data();
   const Comparator* cfd_comparator = cfd->user_comparator();
@@ -603,9 +602,10 @@ void CompactionJob::GenSubcompactionBoundaries(uint64_t limit) {
           *(c->mutable_cf_options()), out_lvl,
           c->immutable_cf_options()->compaction_style, base_level,
           c->immutable_cf_options()->level_compaction_dynamic_level_bytes)));
-  uint64_t subcompactions = std::min(limit, std::min(
-      {static_cast<uint64_t>(ranges.size()),
-       static_cast<uint64_t>(c->max_subcompactions()), max_output_files}));
+  int subcompactions =
+      std::min({max_usable_threads, static_cast<int>(ranges.size()),
+                static_cast<int>(c->max_subcompactions()),
+                static_cast<int>(max_output_files)});
 
   if (subcompactions > 1) {
     double mean = sum * 1.0 / subcompactions;
@@ -829,27 +829,22 @@ Status CompactionJob::RunSelf() {
   const size_t num_threads = compact_->sub_compact_states.size();
   assert(num_threads > 0);
   const uint64_t start_micros = env_->NowMicros();
-
-  // Launch a thread for each of subcompactions 1...num_threads-1
-  std::vector<port::Thread> thread_pool;
+      
   if (compact_->compaction->compaction_type() != kMapCompaction) {
     // map compact don't need multithreads
-    thread_pool.reserve(num_threads - 1);
-    for (size_t i = 1; i < compact_->sub_compact_states.size(); i++) {
-      thread_pool.emplace_back(&CompactionJob::ProcessCompaction, this,
-                               &compact_->sub_compact_states[i]);
+    std::vector<std::future<bool>> finish(num_threads);
+    std::vector<ProcessArg> vec_process_arg;
+    for (size_t i = 0; i < num_threads; i++) {
+      vec_process_arg.emplace_back(ProcessArg(this, i));
+      finish[i] = vec_process_arg[i].finished.get_future();
+      env_->Schedule(&CompactionJob::CallProcessCompaction, &vec_process_arg[i],
+                     rocksdb::Env::LOW, this, nullptr);
     }
-
-    // Always schedule the first subcompaction (whether or not there are also
-    // others) in the current thread to be efficient with resources
-    ProcessCompaction(&compact_->sub_compact_states[0]);
-
-    // Wait for all other threads (if there are any) to finish execution
-    for (auto& thread : thread_pool) {
-      thread.join();
+    for (auto& f : finish) {
+      f.wait();
     }
   } else {
-    assert(compact_->sub_compact_states.size() == 1);
+    assert(num_threads == 1);
   }
 
   compaction_stats_.micros = env_->NowMicros() - start_micros;
@@ -1065,7 +1060,7 @@ Status CompactionJob::Install(const MutableCFOptions& mutable_cf_options) {
 }
 
 void CompactionJob::ProcessCompaction(SubcompactionState* sub_compact) {
-  SetThreadSched(kSchedIdle);
+  // SetThreadSched(kSchedIdle);
   switch (sub_compact->compaction->compaction_type()) {
     case kKeyValueCompaction:
       ProcessKeyValueCompaction(sub_compact);
@@ -1080,7 +1075,7 @@ void CompactionJob::ProcessCompaction(SubcompactionState* sub_compact) {
       assert(false);
       break;
   }
-  SetThreadSched(kSchedOther);
+  // SetThreadSched(kSchedOther);
 }
 
 void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
@@ -1979,6 +1974,13 @@ Status CompactionJob::FinishCompactionOutputFile(
   sub_compact->builder.reset();
   sub_compact->current_output_file_size = 0;
   return s;
+}
+
+void CompactionJob::CallProcessCompaction(void* arg) {
+  ProcessArg* args = (ProcessArg*) arg;
+  args->job->ProcessCompaction(
+      &args->job->compact_->sub_compact_states[args->task_id]);
+  args->finished.set_value(true);
 }
 
 Status CompactionJob::InstallCompactionResults(

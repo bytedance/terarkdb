@@ -967,8 +967,8 @@ Status DBImpl::CompactFilesImpl(
   // here.
   version->storage_info()->ComputeCompactionScore(*cfd->ioptions(),
                                                   *c->mutable_cf_options());
-
-  compaction_job.Prepare();
+  
+  compaction_job.Prepare(this->GetBGJobLimits().max_compactions);
 
   mutex_.Unlock();
   TEST_SYNC_POINT("CompactFilesImpl:0");
@@ -2744,7 +2744,7 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
         &event_logger_, c->mutable_cf_options()->paranoid_file_checks,
         c->mutable_cf_options()->report_bg_io_stats, dbname_,
         &compaction_job_stats);
-    compaction_job.Prepare();
+    compaction_job.Prepare(this->GetBGJobLimits().max_compactions);
 
     NotifyOnCompactionBegin(c->column_family_data(), c.get(), status,
                             compaction_job_stats, job_context->job_id);
@@ -2963,7 +2963,7 @@ Status DBImpl::BackgroundGarbageCollection(bool* made_progress,
         &event_logger_, c->mutable_cf_options()->paranoid_file_checks,
         c->mutable_cf_options()->report_bg_io_stats, dbname_,
         &garbage_collection_job_stats);
-    garbage_collection_job.Prepare();
+    garbage_collection_job.Prepare(this->GetBGJobLimits().max_compactions);
 
     NotifyOnCompactionBegin(c->column_family_data(), c.get(), status,
                             garbage_collection_job_stats, job_context->job_id);
