@@ -832,16 +832,16 @@ Status CompactionJob::RunSelf() {
       
   if (compact_->compaction->compaction_type() != kMapCompaction) {
     // map compact don't need multithreads
-    std::vector<std::future<bool>> finish(num_threads);
-    std::vector<ProcessArg> vec_process_arg;
-    for (size_t i = 0; i < num_threads; i++) {
-      vec_process_arg.emplace_back(ProcessArg(this, i));
-      finish[i] = vec_process_arg[i].finished.get_future();
+    std::vector<ProcessArg> vec_process_arg(num_threads);
+    for (size_t i = 0; i < num_threads - 1; i++) {
+      vec_process_arg[i].job = this;
+      vec_process_arg[i].task_id = i;
       env_->Schedule(&CompactionJob::CallProcessCompaction, &vec_process_arg[i],
                      rocksdb::Env::LOW, this, nullptr);
     }
-    for (auto& f : finish) {
-      f.wait();
+    ProcessCompaction(&compact_->sub_compact_states.back());
+    for (size_t i = 0; i < num_threads - 1; i++) {
+      vec_process_arg[i].finished.get_future().wait();
     }
   } else {
     assert(num_threads == 1);

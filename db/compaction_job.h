@@ -95,11 +95,6 @@ class CompactionJob {
       CompactionJob* job;
       int task_id;
       std::promise<bool> finished;
-
-      ProcessArg(CompactionJob* _job, int _task_id)
-          : job(_job), task_id(_task_id) {
-        finished.set_value(false);
-      }
   };
 
   static void CallProcessCompaction(void* arg);
