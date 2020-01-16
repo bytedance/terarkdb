@@ -177,9 +177,14 @@ bool UniversalCompactionPicker::NeedsCompaction(
   if (!vstorage->FilesMarkedForCompaction().empty()) {
     return true;
   }
-  if (vstorage->has_space_amplification()) {
-    return true;
+  for (int i = 0; i < vstorage->num_levels(); ++i) {
+    if (vstorage->has_map_sst(i)) {
+      return true;
+    }
   }
+  // if (vstorage->has_space_amplification()) {
+  //   return true;
+  // }
   if (!vstorage->LevelFiles(-1).empty()) {
     return true;
   }
