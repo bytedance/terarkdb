@@ -104,6 +104,8 @@ class VersionStorageInfo {
                bool (*exists)(void*, uint64_t) = nullptr,
                void* exists_args = nullptr, Logger* info_log = nullptr);
 
+  void IncRefs();
+
   uint64_t FileSize(const FileMetaData* f, uint64_t file_number = uint64_t(-1),
                     uint64_t entry_count = 0) const;
 
