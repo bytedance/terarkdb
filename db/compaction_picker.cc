@@ -604,9 +604,7 @@ Compaction* CompactionPicker::CompactFiles(
   params.compression_opts =
       GetCompressionOptions(ioptions_, vstorage, output_level);
 
-  params.max_subcompactions =
-      std::min((uint32_t)ioptions_.env->GetBackgroundThreads(),
-               compact_options.max_subcompactions);
+  params.max_subcompactions = compact_options.max_subcompactions;
   params.manual_compaction = true;
 
   return RegisterCompaction(new Compaction(std::move(params)));
@@ -1176,8 +1174,8 @@ Compaction* CompactionPicker::CompactRange(
                          vstorage->base_level());
   params.compression_opts =
       GetCompressionOptions(ioptions_, vstorage, output_level);
-  params.max_subcompactions = std::min(
-      (uint32_t)ioptions_.env->GetBackgroundThreads(), max_subcompactions);
+  params.max_subcompactions =
+      std::min(ioptions_.max_subcompactions, max_subcompactions);
   params.grandparents = std::move(grandparents);
   params.manual_compaction = true;
 
@@ -1715,9 +1713,7 @@ Compaction* CompactionPicker::PickCompositeCompaction(
     }
   }
   CompactionType compaction_type = kKeyValueCompaction;
-  uint32_t max_subcompactions =
-      std::min((uint32_t)ioptions_.env->GetBackgroundThreads(),
-               ioptions_.max_subcompactions);
+  uint32_t max_subcompactions = ioptions_.max_subcompactions;
   std::vector<RangeStorage> input_range;
 
   auto new_compaction = [&] {
@@ -2083,9 +2079,7 @@ Compaction* CompactionPicker::PickBottommostLevelCompaction(
                                           mutable_cf_options, level, 1, true);
   params.compression_opts =
       GetCompressionOptions(ioptions_, vstorage, level, true);
-  params.max_subcompactions =
-      std::min((uint32_t)ioptions_.env->GetBackgroundThreads(),
-               ioptions_.max_subcompactions);
+  params.max_subcompactions = ioptions_.max_subcompactions;
   params.score = 0;
   params.partial_compaction = true;
   params.compaction_type = kKeyValueCompaction;

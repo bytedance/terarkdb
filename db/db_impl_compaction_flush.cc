@@ -2963,7 +2963,8 @@ Status DBImpl::BackgroundGarbageCollection(bool* made_progress,
         &event_logger_, c->mutable_cf_options()->paranoid_file_checks,
         c->mutable_cf_options()->report_bg_io_stats, dbname_,
         &garbage_collection_job_stats);
-    garbage_collection_job.Prepare(this->GetBGJobLimits().max_compactions);
+    garbage_collection_job.Prepare(
+        this->GetBGJobLimits().max_garbage_collections);
 
     NotifyOnCompactionBegin(c->column_family_data(), c.get(), status,
                             garbage_collection_job_stats, job_context->job_id);
