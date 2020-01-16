@@ -146,6 +146,7 @@ class VersionBuilder::Rep {
   };
 
   std::unique_ptr<VersionBuilderDebugger> debugger_;
+  std::vector<FileMetaData*> unref_;
   const EnvOptions& env_options_;
   Logger* info_log_;
   TableCache* table_cache_;
@@ -205,6 +206,9 @@ class VersionBuilder::Rep {
       if (pair.second.f != nullptr) {
         UnrefFile(pair.second.f);
       }
+    }
+    for (auto f : unref_) {
+      UnrefFile(f);
     }
     delete[] levels_;
   }
@@ -313,8 +317,8 @@ class VersionBuilder::Rep {
     }
   }
 
-  void CalculateDependence(bool finish) {
-    if (new_deleted_files_ < 65536 && !finish) {
+  void CalculateDependence(bool finish, bool is_open_db = false) {
+    if (!finish && (!is_open_db || new_deleted_files_ < 65536)) {
       return;
     }
     ++dependence_version_;
@@ -348,7 +352,7 @@ class VersionBuilder::Rep {
               f->table_reader_handle = nullptr;
               f->refs = 1;
               f->being_compacted = false;
-              UnrefFile(item.f);
+              unref_.emplace_back(item.f);
               item.f = f;
             }
             item.f->is_skip_gc = is_skip_gc;
@@ -360,7 +364,7 @@ class VersionBuilder::Rep {
         ++it;
       } else {
         DelInheritance(item.f);
-        UnrefFile(item.f);
+        unref_.emplace_back(item.f);
         it = dependence_map_.erase(it);
       }
     }
@@ -556,10 +560,17 @@ class VersionBuilder::Rep {
     }
 
     // shrink files
-    CalculateDependence(false);
+    CalculateDependence(false, edit->is_open_db());
+    if (!unref_.empty()) {
+      for (auto f : unref_) {
+        UnrefFile(f);
+      }
+      unref_.clear();
+    }
   }
 
   // Save the current state in *v.
+  // WARNING: this func will call out of mutex
   void SaveTo(VersionStorageInfo* vstorage) {
     CheckConsistency(vstorage, true);
     CalculateDependence(true);

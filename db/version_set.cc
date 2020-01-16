@@ -1851,7 +1851,6 @@ void VersionStorageInfo::AddFile(int level, FileMetaData* f,
 #else
   (void)info_log;
 #endif
-  f->refs++;
   level_files->push_back(f);
   dependence_map_.emplace(f->fd.GetNumber(), f);
   if (level == -1) {
@@ -1878,6 +1877,14 @@ void VersionStorageInfo::AddFile(int level, FileMetaData* f,
   }
   if (f->prop.has_range_deletions()) {
     space_amplification_[level] |= kHasRangeDeletion;
+  }
+}
+
+void VersionStorageInfo::IncRefs() {
+  for (int i = -1; i < num_levels_; ++i) {
+    for (auto f : files_[i]) {
+      ++f->refs;
+    }
   }
 }
 
@@ -3040,12 +3047,6 @@ Status VersionSet::ProcessManifestWrites(
         batch_edits.push_back(e);
       }
     }
-    for (int i = 0; i < static_cast<int>(versions.size()); ++i) {
-      assert(!builder_guards.empty() &&
-             builder_guards.size() == versions.size());
-      auto* builder = builder_guards[i]->version_builder();
-      builder->SaveTo(versions[i]->storage_info());
-    }
   }
 
 #ifndef NDEBUG
@@ -3110,6 +3111,15 @@ Status VersionSet::ProcessManifestWrites(
   {
     EnvOptions opt_env_opts = env_->OptimizeForManifestWrite(env_options_);
     mu->Unlock();
+
+    if (!first_writer.edit_list.front()->IsColumnFamilyManipulation()) {
+      for (int i = 0; i < static_cast<int>(versions.size()); ++i) {
+        assert(!builder_guards.empty() &&
+               builder_guards.size() == versions.size());
+        auto* builder = builder_guards[i]->version_builder();
+        builder->SaveTo(versions[i]->storage_info());
+      }
+    }
 
     TEST_SYNC_POINT("VersionSet::LogAndApply:WriteManifest");
     if (!first_writer.edit_list.front()->IsColumnFamilyManipulation() &&
@@ -3203,6 +3213,12 @@ Status VersionSet::ProcessManifestWrites(
     LogFlush(db_options_->info_log);
     TEST_SYNC_POINT("VersionSet::LogAndApply:WriteManifestDone");
     mu->Lock();
+  }
+
+  if (!first_writer.edit_list.front()->IsColumnFamilyManipulation()) {
+    for (int i = 0; i < static_cast<int>(versions.size()); ++i) {
+      versions[i]->storage_info()->IncRefs();
+    }
   }
 
   // Append the old manifest file to the obsolete_manifest_ list to be deleted
@@ -3693,6 +3709,7 @@ Status VersionSet::Recover(
           TEST_SYNC_POINT_CALLBACK("VersionSet::Recover:LastInAtomicGroup",
                                    &edit);
           for (auto& e : replay_buffer) {
+            e.set_open_db(true);
             s = ApplyOneVersionEdit(
                 e, cf_name_to_options, column_families_not_found, builders,
                 &have_log_number, &log_number, &have_prev_log_number,
@@ -3714,6 +3731,7 @@ Status VersionSet::Recover(
           s = Status::Corruption("corrupted atomic group");
           break;
         }
+        edit.set_open_db(true);
         s = ApplyOneVersionEdit(
             edit, cf_name_to_options, column_families_not_found, builders,
             &have_log_number, &log_number, &have_prev_log_number,
@@ -3751,7 +3769,7 @@ Status VersionSet::Recover(
 
   // there were some column families in the MANIFEST that weren't specified
   // in the argument. This is OK in read_only mode
-  if (read_only == false && !column_families_not_found.empty()) {
+  if (!read_only && !column_families_not_found.empty()) {
     std::string list_of_not_found;
     for (const auto& cf : column_families_not_found) {
       list_of_not_found += ", " + cf.second;
