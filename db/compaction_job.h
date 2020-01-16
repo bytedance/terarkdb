@@ -81,10 +81,10 @@ class CompactionJob {
   CompactionJob& operator=(const CompactionJob& job) = delete;
 
   // REQUIRED: mutex held
-  void Prepare(int limit);
+  void Prepare(int& delta_bg_works);
   // REQUIRED mutex not held
-  Status Run();
-  Status RunSelf();
+  Status Run(int& delta_bg_works);
+  Status RunSelf(int& delta_bg_works);
 
   Status VerifyFiles();
 

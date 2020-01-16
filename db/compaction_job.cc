@@ -422,7 +422,7 @@ void CompactionJob::ReportStartedCompaction(Compaction* compaction) {
   }
 }
 
-void CompactionJob::Prepare(int max_usable_threads) {
+void CompactionJob::Prepare(int& delta_bg_works) {
   AutoThreadOperationStageUpdater stage_updater(
       ThreadStatus::STAGE_COMPACTION_PREPARE);
   // Generate file_levels_ for compaction berfore making Iterator
@@ -441,8 +441,7 @@ void CompactionJob::Prepare(int max_usable_threads) {
     assert(input_range.size() <= c->max_subcompactions());
     boundaries_.resize(input_range.size() * 2);
     auto uc = c->column_family_data()->user_comparator();
-    int n = std::min(max_usable_threads, static_cast<int>(input_range.size()));
-    for (int i = 0; i < n; ++i) {
+    for (size_t i = 0; i < input_range.size(); ++i) {
       Slice* start = &boundaries_[i * 2];
       Slice* end = &boundaries_[i * 2 + 1];
       *start = input_range[i].start;
@@ -459,7 +458,7 @@ void CompactionJob::Prepare(int max_usable_threads) {
     }
   } else if (c->ShouldFormSubcompactions()) {
     const uint64_t start_micros = env_->NowMicros();
-    GenSubcompactionBoundaries(max_usable_threads);
+    GenSubcompactionBoundaries(c->max_subcompactions());
     MeasureTime(stats_, SUBCOMPACTION_SETUP_TIME,
                 env_->NowMicros() - start_micros);
 
@@ -475,6 +474,7 @@ void CompactionJob::Prepare(int max_usable_threads) {
   } else {
     compact_->sub_compact_states.emplace_back(c, nullptr, nullptr);
   }
+  delta_bg_works = static_cast<int>(compact_->sub_compact_states.size() - 1);
 }
 
 struct RangeWithSize {
@@ -641,7 +641,7 @@ static std::shared_ptr<CompactionDispatcher> GetCmdLineDispatcher() {
   return {};
 }
 
-Status CompactionJob::Run() {
+Status CompactionJob::Run(int& delta_bg_works) {
   ColumnFamilyData* cfd = compact_->compaction->column_family_data();
   CompactionDispatcher* dispatcher = cfd->ioptions()->compaction_dispatcher;
   if (!dispatcher) {
@@ -651,7 +651,7 @@ Status CompactionJob::Run() {
   }
   if (dispatcher == nullptr ||
       compact_->compaction->compaction_type() != kKeyValueCompaction) {
-    return RunSelf();
+    return RunSelf(delta_bg_works);
   }
   Compaction* c = compact_->compaction;
   Status s;
@@ -662,7 +662,7 @@ Status CompactionJob::Run() {
     context.merge_operator = iopt->merge_operator->Name();
     s = iopt->merge_operator->Serialize(&context.merge_operator_data.data);
     if (s.IsNotSupported()) {
-      return RunSelf();
+      return RunSelf(delta_bg_works);
     } else if (!s.ok()) {
       return s;
     }
@@ -681,7 +681,7 @@ Status CompactionJob::Run() {
         context.compaction_filter_context);
     s = filter->Serialize(&context.compaction_filter_data.data);
     if (s.IsNotSupported()) {
-      return RunSelf();
+      return RunSelf(delta_bg_works);
     } else if (!s.ok()) {
       return s;
     }
@@ -691,7 +691,7 @@ Status CompactionJob::Run() {
   s = iopt->table_factory->GetOptionString(&context.table_factory_options,
                                            "\n");
   if (s.IsNotSupported()) {
-    return RunSelf();
+    return RunSelf(delta_bg_works);
   } else if (!s.ok()) {
     return s;
   }
@@ -819,7 +819,7 @@ Status CompactionJob::Run() {
   return status;
 }
 
-Status CompactionJob::RunSelf() {
+Status CompactionJob::RunSelf(int& delta_bg_works) {
   AutoThreadOperationStageUpdater stage_updater(
       ThreadStatus::STAGE_COMPACTION_RUN);
   TEST_SYNC_POINT("CompactionJob::Run():Start");
@@ -849,7 +849,7 @@ Status CompactionJob::RunSelf() {
 
   compaction_stats_.micros = env_->NowMicros() - start_micros;
   MeasureTime(stats_, COMPACTION_TIME, compaction_stats_.micros);
-
+  delta_bg_works = static_cast<int>(compact_->sub_compact_states.size() - 1);
   TEST_SYNC_POINT("CompactionJob::Run:BeforeVerify");
 
   // Check if any thread encountered an error during execution
