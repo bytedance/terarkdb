@@ -3816,6 +3816,7 @@ Status VersionSet::Recover(
                                *cfd->GetLatestMutableCFOptions(),
                                current_version_number_++);
       builder->SaveTo(v->storage_info());
+      v->storage_info()->IncRefs();
 
       // Install recovered version
       v->PrepareApply(*cfd->GetLatestMutableCFOptions());
@@ -4187,6 +4188,7 @@ Status VersionSet::DumpManifest(Options& options, std::string& dscname,
                                *cfd->GetLatestMutableCFOptions(),
                                current_version_number_++);
       builder->SaveTo(v->storage_info());
+      v->storage_info()->IncRefs();
       v->PrepareApply(*cfd->GetLatestMutableCFOptions());
 
       printf("--------------- Column family \"%s\"  (ID %u) --------------\n",
