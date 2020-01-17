@@ -967,17 +967,18 @@ Status DBImpl::CompactFilesImpl(
   // here.
   version->storage_info()->ComputeCompactionScore(*cfd->ioptions(),
                                                   *c->mutable_cf_options());
-
-  compaction_job.Prepare();
-
+  
+  int delta_bg_works = 0;
+  compaction_job.Prepare(delta_bg_works);
+  bg_compaction_scheduled_ += delta_bg_works;
   mutex_.Unlock();
   TEST_SYNC_POINT("CompactFilesImpl:0");
   TEST_SYNC_POINT("CompactFilesImpl:1");
-  compaction_job.Run();
+  compaction_job.Run(delta_bg_works);
   TEST_SYNC_POINT("CompactFilesImpl:2");
   TEST_SYNC_POINT("CompactFilesImpl:3");
   mutex_.Lock();
-
+  bg_compaction_scheduled_ -= delta_bg_works;
   Status status = compaction_job.Install(*c->mutable_cf_options());
   if (status.ok()) {
     InstallSuperVersionAndScheduleWork(
@@ -2722,6 +2723,7 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
     env_->Schedule(&DBImpl::BGWorkBottomCompaction, ca, Env::Priority::BOTTOM,
                    this, &DBImpl::UnscheduleCallback);
   } else {
+    // Normal compactions that needs to control the quantity of workers.
     int output_level __attribute__((__unused__));
     output_level = c->output_level();
     TEST_SYNC_POINT_CALLBACK("DBImpl::BackgroundCompaction:NonTrivial",
@@ -2745,16 +2747,18 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
         &event_logger_, c->mutable_cf_options()->paranoid_file_checks,
         c->mutable_cf_options()->report_bg_io_stats, dbname_,
         &compaction_job_stats);
-    compaction_job.Prepare();
+    int delta_bg_works = 0;
+    compaction_job.Prepare(delta_bg_works);
+    bg_compaction_scheduled_ += delta_bg_works;
 
     NotifyOnCompactionBegin(c->column_family_data(), c.get(), status,
                             compaction_job_stats, job_context->job_id);
 
     mutex_.Unlock();
-    compaction_job.Run();
+    compaction_job.Run(delta_bg_works);
     TEST_SYNC_POINT("DBImpl::BackgroundCompaction:NonTrivial:AfterRun");
     mutex_.Lock();
-
+    bg_compaction_scheduled_ -= delta_bg_works;
     status = compaction_job.Install(*c->mutable_cf_options());
     if (status.ok()) {
       InstallSuperVersionAndScheduleWork(
@@ -2964,16 +2968,17 @@ Status DBImpl::BackgroundGarbageCollection(bool* made_progress,
         &event_logger_, c->mutable_cf_options()->paranoid_file_checks,
         c->mutable_cf_options()->report_bg_io_stats, dbname_,
         &garbage_collection_job_stats);
-    garbage_collection_job.Prepare();
-
+    int delta_bg_works = 0;
+    garbage_collection_job.Prepare(delta_bg_works);
+    unscheduled_garbage_collections_ += delta_bg_works;
     NotifyOnCompactionBegin(c->column_family_data(), c.get(), status,
                             garbage_collection_job_stats, job_context->job_id);
 
     mutex_.Unlock();
-    garbage_collection_job.Run();
+    garbage_collection_job.Run(delta_bg_works);
     TEST_SYNC_POINT("DBImpl::BackgroundGarbageCollection:NonTrivial:AfterRun");
     mutex_.Lock();
-
+    unscheduled_garbage_collections_ -= delta_bg_works;
     status = garbage_collection_job.Install(*c->mutable_cf_options());
     if (status.ok()) {
       InstallSuperVersionAndScheduleWork(

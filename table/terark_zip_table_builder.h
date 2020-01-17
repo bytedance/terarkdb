@@ -40,6 +40,8 @@
 
 namespace rocksdb {
 
+template <typename T> struct AsyncTask;
+
 using terark::AbstractBlobStore;
 using terark::AutoDeleteFile;
 using terark::byte_t;
@@ -82,26 +84,6 @@ class TerarkZipTableBuilder : public TableBuilder, boost::noncopyable {
     }
   }
 
-  struct TerarkZipTableBuilderTask {
-    std::promise<Status> promise;
-    std::future<Status> future;
-    std::function<Status()> func;
-    void operator()() {
-      Status s;
-      try {
-        s = func();
-      } catch (const std::exception& ex) {
-        s = Status::Aborted("exception", ex.what());
-      }
-      promise.set_value(std::move(s));
-    }
-
-    TerarkZipTableBuilderTask(std::function<Status()>&& f)
-        : func(std::move(f)) {
-      future = promise.get_future();
-    }
-  };
-
  private:
   struct RangeStatus {
     fstrvec prefixVec;
@@ -137,8 +119,8 @@ class TerarkZipTableBuilder : public TableBuilder, boost::noncopyable {
     bool isValueBuild = false;
     bool isUseDictZip = false;
     bool isFullValue = false;
-    std::unique_ptr<TerarkZipTableBuilderTask> indexWait;
-    std::unique_ptr<TerarkZipTableBuilderTask> storeWait;
+    std::unique_ptr<AsyncTask<Status>> indexWait;
+    std::unique_ptr<AsyncTask<Status>> storeWait;
     std::atomic<size_t> keyFileRef = {2};
 
     KeyValueStatus(RangeStatus&& s, freq_hist_o1&& f);
@@ -160,7 +142,7 @@ class TerarkZipTableBuilder : public TableBuilder, boost::noncopyable {
   };
   WaitHandle WaitForMemory(const char* who, size_t memorySize);
   Status EmptyTableFinish();
-  std::unique_ptr<TerarkZipTableBuilderTask> Async(std::function<Status()> func,
+  std::unique_ptr<AsyncTask<Status>> Async(std::function<Status()> func,
                                                    void* tag);
   void BuildIndex(KeyValueStatus& kvs, size_t entropyLen);
   enum BuildStoreFlag {
@@ -169,7 +151,7 @@ class TerarkZipTableBuilder : public TableBuilder, boost::noncopyable {
   };
   Status BuildStore(KeyValueStatus& kvs, DictZipBlobStore::ZipBuilder* zbuilder,
                     uint64_t flag);
-  std::unique_ptr<TerarkZipTableBuilderTask> CompressDict(fstring tmpDictFile,
+  std::unique_ptr<AsyncTask<Status>> CompressDict(fstring tmpDictFile,
                                                           fstring dict,
                                                           std::string* type,
                                                           long long* td);

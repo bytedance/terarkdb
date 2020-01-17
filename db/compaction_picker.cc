@@ -599,6 +599,7 @@ Compaction* CompactionPicker::CompactFiles(
   params.compression = compression_type;
   params.compression_opts =
       GetCompressionOptions(ioptions_, vstorage, output_level);
+
   params.max_subcompactions = compact_options.max_subcompactions;
   params.manual_compaction = true;
 
@@ -1166,7 +1167,8 @@ Compaction* CompactionPicker::CompactRange(
                          vstorage->base_level());
   params.compression_opts =
       GetCompressionOptions(ioptions_, vstorage, output_level);
-  params.max_subcompactions = max_subcompactions;
+  params.max_subcompactions =
+      std::min(ioptions_.max_subcompactions, max_subcompactions);
   params.grandparents = std::move(grandparents);
   params.manual_compaction = true;
 
