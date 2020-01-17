@@ -388,9 +388,6 @@ class BlockBasedTable : public TableReader {
 
   friend class PartitionedFilterBlockReader;
   friend class PartitionedFilterBlockTest;
-
-  InternalIteratorBase<Slice>* NewUnfragmentedRangeTombstoneIterator(
-      const ReadOptions& read_options);
 };
 
 // Maitaning state of a two-level iteration on a partitioned index structure
@@ -450,7 +447,6 @@ struct BlockBasedTable::Rep {
         hash_index_allow_collision(false),
         whole_key_filtering(_table_opt.whole_key_filtering),
         prefix_filtering(true),
-        range_del_handle(BlockHandle::NullBlockHandle()),
         global_seqno(kDisableGlobalSequenceNumber),
         level(_level),
         immortal_table(_immortal_table) {}
@@ -514,10 +510,6 @@ struct BlockBasedTable::Rep {
   // push flush them out, hence they're pinned
   CachableEntry<FilterBlockReader> filter_entry;
   CachableEntry<IndexReader> index_entry;
-  // range deletion meta-block is pinned through reader's lifetime when LRU
-  // cache is enabled.
-  CachableEntry<Block> range_del_entry;
-  BlockHandle range_del_handle;
   std::shared_ptr<const FragmentedRangeTombstoneList> fragmented_range_dels;
 
   // If global_seqno is used, all Keys in this file will have the same
