@@ -895,12 +895,33 @@ Status CompactionJob::VerifyFiles() {
   auto prefix_extractor =
       compact_->compaction->mutable_cf_options()->prefix_extractor.get();
   std::atomic<size_t> next_file_meta_idx(0);
-  auto verify_table = [&](Status& output_status) {
-    SetThreadSched(kSchedIdle);
+
+  struct VerifyTask {
+    std::promise<Status> promise;
+    std::future<Status> future;
+    std::function<Status()> func;
+    void operator()() {
+      Status s;
+      try {
+        s = func();
+      } catch (const std::exception& ex) {
+        s = Status::Aborted("exception", ex.what());
+      }
+      promise.set_value(std::move(s));
+    }
+
+    VerifyTask(std::function<Status()>&& f)
+        : func(std::move(f)) {
+      future = promise.get_future();
+    }
+  };
+
+  auto verify_table = [&]() {
+    // SetThreadSched(kSchedIdle);
     while (true) {
       size_t file_idx = next_file_meta_idx.fetch_add(1);
       if (file_idx >= files_meta.size()) {
-        break;
+        return Status::OK();
       }
       // Use empty depend files to disable map or link sst forward calls.
       // depend files will build in InstallCompactionResults
@@ -931,22 +952,26 @@ Status CompactionJob::VerifyFiles() {
       delete iter;
 
       if (!s.ok()) {
-        output_status = s;
-        break;
+        return s;
       }
     }
-    SetThreadSched(kSchedOther);
+    // SetThreadSched(kSchedOther);
   };
   size_t thread_count =
       std::min(files_meta.size(), compact_->sub_compact_states.size());
+
+  auto task = std::unique_ptr<VerifyTask>(new VerifyTask(verify_table));
   for (size_t i = 1; i < thread_count; i++) {
-    thread_pool.emplace_back(verify_table,
-                             std::ref(compact_->sub_compact_states[i].status));
+    vec_future[i] = vec_promise[i].get_future();
+    env_->Schedule(c_style_callback(verify_table), &(vec_promise[i]));
   }
-  verify_table(compact_->sub_compact_states[0].status);
-  for (auto& thread : thread_pool) {
-    thread.join();
+  vec_future[0] = vec_promise[0].get_future();
+  verify_table(&vec_promise[0]);
+  for (size_t i = 0; i < thread_count; ++i) {
+    vec_future[i].wait();
+    compact_->sub_compact_states[i].status = vec_future[i].get();
   }
+
   for (const auto& state : compact_->sub_compact_states) {
     if (!state.status.ok()) {
       return state.status;
