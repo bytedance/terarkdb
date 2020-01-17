@@ -57,6 +57,7 @@
 #include "table/get_context.h"
 #include "table/merging_iterator.h"
 #include "table/table_builder.h"
+#include "util/async_task.h"
 #include "util/c_style_callback.h"
 #include "util/coding.h"
 #include "util/file_reader_writer.h"
@@ -896,28 +897,7 @@ Status CompactionJob::VerifyFiles() {
       compact_->compaction->mutable_cf_options()->prefix_extractor.get();
   std::atomic<size_t> next_file_meta_idx(0);
 
-  struct VerifyTask {
-    std::promise<Status> promise;
-    std::future<Status> future;
-    std::function<Status()> func;
-    void operator()() {
-      Status s;
-      try {
-        s = func();
-      } catch (const std::exception& ex) {
-        s = Status::Aborted("exception", ex.what());
-      }
-      promise.set_value(std::move(s));
-    }
-
-    VerifyTask(std::function<Status()>&& f)
-        : func(std::move(f)) {
-      future = promise.get_future();
-    }
-  };
-
   auto verify_table = [&]() {
-    // SetThreadSched(kSchedIdle);
     while (true) {
       size_t file_idx = next_file_meta_idx.fetch_add(1);
       if (file_idx >= files_meta.size()) {
@@ -955,29 +935,30 @@ Status CompactionJob::VerifyFiles() {
         return s;
       }
     }
-    // SetThreadSched(kSchedOther);
   };
   size_t thread_count =
       std::min(files_meta.size(), compact_->sub_compact_states.size());
-
-  auto task = std::unique_ptr<VerifyTask>(new VerifyTask(verify_table));
-  for (size_t i = 1; i < thread_count; i++) {
-    vec_future[i] = vec_promise[i].get_future();
-    env_->Schedule(c_style_callback(verify_table), &(vec_promise[i]));
-  }
-  vec_future[0] = vec_promise[0].get_future();
-  verify_table(&vec_promise[0]);
-  for (size_t i = 0; i < thread_count; ++i) {
-    vec_future[i].wait();
-    compact_->sub_compact_states[i].status = vec_future[i].get();
-  }
-
-  for (const auto& state : compact_->sub_compact_states) {
-    if (!state.status.ok()) {
-      return state.status;
+  std::vector<std::unique_ptr<AsyncTask<Status>>> vec_task;
+  if (thread_count > 1) {
+    vec_task.resize(thread_count - 1);
+    for (size_t i = 0; i < thread_count - 1; ++i) {
+      vec_task[i] = std::unique_ptr<AsyncTask<Status>>(
+          new AsyncTask<Status>(verify_table));
+      env_->Schedule(c_style_callback(*(vec_task[i])), vec_task[i].get());
     }
   }
-  return Status::OK();
+  Status s = verify_table();
+  for (auto& task : vec_task) {
+    task.get()->future.wait();
+  }
+  if (s.ok()) {
+    for (auto& task : vec_task) {
+      if (!(s = task.get()->future.get()).ok()) {
+        return s;
+      }
+    }
+  }
+  return s;
 }
 
 Status CompactionJob::Install(const MutableCFOptions& mutable_cf_options) {

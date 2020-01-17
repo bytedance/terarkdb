@@ -11,6 +11,7 @@
 #include <rocksdb/compaction_filter.h>
 #include <rocksdb/merge_operator.h>
 #include <table/meta_blocks.h>
+#include <util/async_task.h>
 #include <util/c_style_callback.h>
 #include <util/xxhash.h>
 // terark headers
@@ -776,10 +777,16 @@ Status TerarkZipTableBuilder::Finish(
   return AbortFinish(ex);
 }
 
-std::unique_ptr<TerarkZipTableBuilder::TerarkZipTableBuilderTask>
+std::unique_ptr<rocksdb::AsyncTask<rocksdb::Status>>
 TerarkZipTableBuilder::Async(std::function<Status()> func, void* tag) {
-  auto task = std::unique_ptr<TerarkZipTableBuilder::TerarkZipTableBuilderTask>(
-      new TerarkZipTableBuilderTask(std::move(func)));
+  auto task = std::unique_ptr<rocksdb::AsyncTask<rocksdb::Status>>(
+      new AsyncTask<Status>([func]() {
+        try {
+          return func();
+        } catch (const std::exception& ex) {
+          return Status::Aborted(ex.what());
+        }
+      }));
   ioptions_.env->Schedule(c_style_callback(*task), task.get(),
                           rocksdb::Env::Priority::LOW, tag,
                           c_style_callback(*task));
@@ -1025,7 +1032,7 @@ Status TerarkZipTableBuilder::BuildStore(KeyValueStatus& kvs,
   return Status::OK();
 }
 
-std::unique_ptr<TerarkZipTableBuilder::TerarkZipTableBuilderTask>
+std::unique_ptr<rocksdb::AsyncTask<rocksdb::Status>>
 TerarkZipTableBuilder::CompressDict(fstring tmpDictFile, fstring dict,
                                     std::string* info, long long* td) {
   if (table_options_.disableCompressDict) {
@@ -1330,7 +1337,7 @@ Status TerarkZipTableBuilder::ZipValueToFinish() {
   AutoDeleteFile tmpDictFile{tmpSentryFile_.path + ".dict"};
   std::unique_ptr<DictZipBlobStore::ZipBuilder> zbuilder;
   WaitHandle dictWaitHandle;
-  std::unique_ptr<TerarkZipTableBuilderTask> dictWait;
+  std::unique_ptr<AsyncTask<Status>> dictWait;
   DictZipBlobStore::ZipStat dzstat;
   std::string dictInfo;
   uint64_t dictHash = 0;
@@ -1365,8 +1372,8 @@ Status TerarkZipTableBuilder::ZipValueToFinish() {
     zbuilder->freeDict();
     t4 = g_pf.now();
     ioptions_.env->UnSchedule(&dictTag, rocksdb::Env::Priority::LOW);
-    assert(dictWait->future.valid());
-    s = dictWait->future.get();
+    assert(dictWait.get()->future.valid());
+    s = dictWait.get()->future.get();
     if (!s.ok()) {
       return s;
     }
@@ -1393,7 +1400,7 @@ Status TerarkZipTableBuilder::ZipValueToFinishMulti() {
   AutoDeleteFile tmpDictFile{tmpSentryFile_.path + ".dict"};
   std::unique_ptr<DictZipBlobStore::ZipBuilder> zbuilder;
   WaitHandle dictWaitHandle;
-  std::unique_ptr<TerarkZipTableBuilderTask> dictWait;
+  std::unique_ptr<AsyncTask<Status>> dictWait;
   std::unique_ptr<AbstractBlobStore> store;
   DictZipBlobStore::ZipStat dzstat;
   std::string dictInfo;
@@ -1444,8 +1451,8 @@ Status TerarkZipTableBuilder::ZipValueToFinishMulti() {
   if (zbuilder) {
     zbuilder->freeDict();
     t4 = g_pf.now();
-    assert(dictWait->future.valid());
-    s = dictWait->future.get();
+    assert(dictWait.get()->future.valid());
+    s = dictWait.get()->future.get();
 
     if (!s.ok()) {
       return s;
