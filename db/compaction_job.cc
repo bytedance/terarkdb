@@ -1704,8 +1704,10 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
     status = input->status();
   }
   std::vector<uint64_t> inheritance_chain;
+  size_t raw_chain_length = 0;
   for (auto& level : *sub_compact->compaction->inputs()) {
     for (auto f : level.files) {
+      raw_chain_length += f->prop.inheritance_chain.size() + 1;
       inheritance_chain.push_back(f->fd.GetNumber());
       for (size_t i = 0; i < f->prop.inheritance_chain.size(); ++i) {
         if (dependence_map.count(f->prop.inheritance_chain[i]) > 0) {
@@ -1735,11 +1737,12 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
         "[%s] [JOB %d] Table #%" PRIu64 " GC: %" PRIu64
         " inputs from %zd files. %" PRIu64 " clear, %" PRIu64
         " expectation: [ %" PRIu64 " garbage type, %" PRIu64
-        " get not found, %" PRIu64 " file number mismatch ], chain: %" PRIu64,
+        " get not found, %" PRIu64
+        " file number mismatch ], inheritance chain: %" PRIu64 " -> %" PRIu64,
         cfd->GetName().c_str(), job_id_, meta.fd.GetNumber(), counter.input,
         inputs.front().size(), counter.input - meta.prop.num_entries,
         sub_compact->compaction->num_antiquation(), counter.garbage_type,
-        counter.get_not_found, counter.file_number_mismatch,
+        counter.get_not_found, counter.file_number_mismatch, raw_chain_length,
         inheritance_chain.size());
   }
 
