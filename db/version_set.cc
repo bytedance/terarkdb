@@ -2759,12 +2759,16 @@ void VersionStorageInfo::CalculateBaseBytes(const ImmutableCFOptions& ioptions,
 
 uint64_t VersionStorageInfo::EstimateLiveDataSize() const {
   // See VersionStorageInfo::GetEstimatedActiveKeys
-  size_t ret = lsm_file_size_ * lsm_num_deletions_ / lsm_num_entries_;
-  if (blob_num_entries_ > blob_num_antiquation_) {
-    ret += (blob_num_entries_ - blob_num_antiquation_) * blob_file_size_ *
-           lsm_num_deletions_ / lsm_num_entries_;
+  if (lsm_num_entries_ <= lsm_num_deletions_) {
+    return 0;
   }
-  return ret;
+  double r = double(lsm_num_entries_ - lsm_num_deletions_) /
+             lsm_num_entries_;
+  return size_t(r * (lsm_file_size_ +
+                     (blob_num_entries_ > blob_num_antiquation_
+                          ? double(blob_num_entries_ - blob_num_antiquation_) /
+                                blob_num_entries_ * blob_file_size_
+                          : 0)));
 }
 
 bool VersionStorageInfo::RangeMightExistAfterSortedRun(
