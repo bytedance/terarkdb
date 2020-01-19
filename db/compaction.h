@@ -164,6 +164,7 @@ struct CompactionWorkerResult {
   };
   std::vector<FileInfo> files;
   std::string stat_all;
+  size_t time_us = 0;
 };
 
 // A Compaction encapsulates information about a compaction.

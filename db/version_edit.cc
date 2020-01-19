@@ -99,6 +99,7 @@ void VersionEdit::Clear() {
   is_column_family_add_ = 0;
   is_column_family_drop_ = 0;
   column_family_name_.clear();
+  is_open_db_ = false;
   is_in_atomic_group_ = false;
   remaining_entries_ = 0;
 }
