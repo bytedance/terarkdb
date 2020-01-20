@@ -1,4 +1,5 @@
 #include "key_path_analysis.hpp"
+#include <boost/filesystem.hpp>
 
 using namespace rocksdb;
 
@@ -185,10 +186,10 @@ void KeyPathAnalysis::ListKeys(const std::string& sst_fname) {
  */
 void PrintHelp() {
   std::cout << "usage:" << std::endl;
-  std::cout << "\t./key_path_analysis listkeys [target_sst_path]" << std::endl;
-  std::cout << "\t./key_path_analysis getkey [target_sst_path] [target_key]"
+  std::cout << "\t./key_path_analysis listkeys $target_sst" << std::endl;
+  std::cout << "\t./key_path_analysis getkey $target_sst $target_key [--dir]"
             << std::endl;
-  std::cout << "\t./key_path_analysis seekkey [target_sst_path] [target_key]"
+  std::cout << "\t./key_path_analysis seekkey $target_sst $target_key"
             << std::endl;
 }
 
@@ -208,8 +209,20 @@ int main(const int argc, const char** argv) {
   } else if (memcmp(argv[1], "getkey", 6) == 0) {
     target_key = argv[3];
     assert(target_key);
-    std::cout << "Get(" << target_key << ") Analysis..." << std::endl;
-    kp->Get(target_sst, target_key);
+    std::cout << "Get(" << target_key << ") from " << target_sst << std::endl;
+    // if input target is a directory
+    if (strncmp("--dir", argv[4], 5) == 0) {
+      for (auto& p : boost::filesystem::directory_iterator(target_sst)) {
+        auto fname = p.path().string().c_str();
+        // std::cout << "checking file: " << fname << std::endl;
+        if (strncmp(boost::filesystem::extension(fname).c_str(), ".sst", 4) ==
+            0) {
+          std::cout << "checking sst file: " << fname << std::endl;
+          kp->Get(fname, target_key);
+        }
+      }
+    }
+
   } else if (memcmp(argv[1], "seekkey", 7) == 0) {
     target_key = argv[3];
     assert(target_key);
