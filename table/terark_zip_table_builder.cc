@@ -6,6 +6,7 @@
 #include <cfloat>
 #include <future>
 // boost headers
+#include <boost/range/algorithm.hpp>
 // rocksdb headers
 #include <db/version_edit.h>
 #include <rocksdb/compaction_filter.h>
@@ -148,6 +149,8 @@ rocksdb::Status MyRocksTablePropertiesCollectorHack(
 }
 ///////////////////////////////////////////////////////////////////
 
+extern void TerarkZipConfigCompactionWorkerFromEnv(TerarkZipTableOptions&);
+
 TerarkZipTableBuilder::TerarkZipTableBuilder(
     const TerarkZipTableFactory* table_factory,
     const TerarkZipTableOptions& tzto, const TableBuilderOptions& tbo,
@@ -159,6 +162,9 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(
       prefixLen_(key_prefixLen),
       compaction_load_(0) {
   try {
+    if (IsCompactionWorkerNode()) {
+      TerarkZipConfigCompactionWorkerFromEnv(table_options_);
+    }
     singleIndexMaxSize_ = std::min(table_options_.softZipWorkingMemLimit,
                                    table_options_.singleIndexMaxSize);
     level_ = tbo.level;
@@ -218,7 +224,7 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(
     file_ = file;
     sampleUpperBound_ =
         uint64_t(randomGenerator_.max() * table_options_.sampleRatio);
-    tmpSentryFile_.path = tzto.localTempDir + "/Terark-XXXXXX";
+    tmpSentryFile_.path = table_options_.localTempDir + "/Terark-XXXXXX";
     tmpSentryFile_.open_temp();
     tmpSampleFile_.path = tmpSentryFile_.path + ".sample";
     tmpSampleFile_.open();
@@ -248,9 +254,7 @@ DictZipBlobStore::ZipBuilder* TerarkZipTableBuilder::createZipBuilder() const {
 
 TerarkZipTableBuilder::~TerarkZipTableBuilder() {
   std::unique_lock<std::mutex> zipLock(zipMutex);
-  waitQueue.trim(
-      std::remove_if(waitQueue.begin(), waitQueue.end(),
-                     [this](PendingTask x) { return this == x.tztb; }));
+  waitQueue.trim(boost::remove_if(waitQueue, TERARK_GET(.tztb) == this));
 }
 
 uint64_t TerarkZipTableBuilder::FileSize() const {
@@ -1477,6 +1481,41 @@ Status TerarkZipTableBuilder::ZipValueToFinishMulti() {
   }
   return WriteSSTFileMulti(t3, t4, td, tmpDictFile, dictInfo, dictHash, dzstat);
 }
+
+class TerarkValueReader {
+  const valvec<std::shared_ptr<FilePair>>& files;
+  size_t index;
+  NativeDataInput<InputBuffer> reader;
+  valvec<byte_t> buffer;
+
+  void checkEOF(){
+    if (terark_unlikely(reader.eof())) {
+      FileStream* fp = &files[++index]->value.fp;
+      fp->rewind();
+      reader.attach(fp);
+    }
+  }
+
+public:
+  TerarkValueReader(const valvec<std::shared_ptr<FilePair>>& _files) : files(_files) {}
+
+  uint64_t readUInt64(){
+    checkEOF();
+    return reader.load_as<uint64_t>();
+  }
+
+  void appendBuffer(valvec<byte_t>* buffer) {
+    checkEOF();
+    reader.load_add(*buffer);
+  }
+
+  void rewind(){
+    index = 0;
+    FileStream* fp = &files.front()->value.fp;
+    fp->rewind();
+    reader.attach(fp);
+  }
+};
 
 Status TerarkZipTableBuilder::BuilderWriteValues(
     KeyValueStatus& kvs, std::function<void(fstring)> write) {

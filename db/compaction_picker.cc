@@ -15,15 +15,19 @@
 
 #include <inttypes.h>
 
+#include <boost/range/algorithm.hpp>
+#include <boost/range/algorithm_ext/is_sorted.hpp>
 #include <limits>
 #include <queue>
 #include <string>
+#include <terark/util/function.hpp>
 #include <utility>
 #include <vector>
 
 #include "db/column_family.h"
 #include "db/map_builder.h"
 #include "monitoring/statistics.h"
+#include "terark/valvec.hpp"
 #include "util/c_style_callback.h"
 #include "util/filename.h"
 #include "util/log_buffer.h"
@@ -358,19 +362,11 @@ bool CompactionPicker::FixInputRange(std::vector<SelectedRange>& input_range,
       }
     }
   }
-  assert(std::is_sorted(input_range.begin(), input_range.end(),
-                        [uc](const SelectedRange& a, const SelectedRange& b) {
-                          return uc->Compare(a.start, b.start) < 0;
-                        }));
-  assert(std::is_sorted(input_range.begin(), input_range.end(),
-                        [uc](const SelectedRange& a, const SelectedRange& b) {
-                          return uc->Compare(a.limit, b.limit) < 0;
-                        }));
-  assert(std::find_if(input_range.begin(), input_range.end(),
-                      [uc](const SelectedRange& r) {
-                        int c = uc->Compare(r.start, r.limit);
-                        return r.include_limit ? c > 0 : c >= 0;
-                      }) == input_range.end());
+  assert(boost::is_sorted(input_range, TERARK_FIELD(start) < *uc));
+  assert(boost::is_sorted(input_range, TERARK_FIELD(limit) < *uc));
+  assert(boost::find_if(input_range, [uc](const RangeStorage& r) {
+           return uc->Compare(r.start, r.limit) > 0;
+         }) == input_range.end());
   return !input_range.empty();
 }
 
@@ -867,10 +863,7 @@ Compaction* CompactionPicker::PickGarbageCollection(
   }
 
   // Sorting by ratio decreasing.
-  std::sort(gc_files.begin(), gc_files.end(),
-            [](const GarbageFileInfo& l, const GarbageFileInfo& r) {
-              return l.score > r.score;
-            });
+  terark::sort_a(gc_files, TERARK_CMP(score, >));
 
   // Return nullptr if nothing to do.
   if (gc_files.empty() ||
@@ -1039,20 +1032,20 @@ Compaction* CompactionPicker::CompactRange(
       AssignUserKey(range.limit, end->Encode());
       range.include_limit = false;
     } else {
-      Slice smallest_key, largest_key;
-      Compaction::GetBoundaryKeys(vstorage, input_vec, &smallest_key,
-                                  &largest_key);
+      Slice smallest_user_key, largest_user_key;
+      Compaction::GetBoundaryKeys(vstorage, input_vec, &smallest_user_key,
+                                  &largest_user_key);
       if (begin != nullptr) {
         AssignUserKey(range.start, begin->Encode());
       } else {
-        AssignUserKey(range.start, smallest_key);
+        range.start.assign(smallest_user_key.data(), smallest_user_key.size());
       }
       range.include_start = true;
       if (end != nullptr) {
         AssignUserKey(range.limit, end->Encode());
         range.include_limit = false;
       } else {
-        AssignUserKey(range.limit, largest_key);
+        range.limit.assign(largest_user_key.data(), largest_user_key.size());
         range.include_limit = true;
       }
     }
@@ -2476,10 +2469,12 @@ Compaction* LevelCompactionBuilder::PickLazyCompaction(
   int bottommost_level = vstorage_->num_non_empty_levels() - 1;
 
   auto picker = compaction_picker_;
+  // filter out being_compacted levels
   for (int i = 0; i <= bottommost_level; ++i) {
     sorted_runs[i].being_compacted =
         picker->AreFilesInCompaction(vstorage_->LevelFiles(i));
   }
+  // if level 0 has any range deletion or map sstable, try to push them down. 
   if ((vstorage_->has_range_deletion(0) &&
        (bottommost_level > 0 || vstorage_->LevelFiles(0).size() > 1)) ||
       vstorage_->has_map_sst(0) ||

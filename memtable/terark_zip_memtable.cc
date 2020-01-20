@@ -90,6 +90,12 @@ PatriciaTrieRep::PatriciaTrieRep(details::ConcurrentType concurrent_type,
   overhead_ = trie_vec_[0]->mem_size_inline();
 }
 
+PatriciaTrieRep::~PatriciaTrieRep() {
+  for (size_t i = 0; i < trie_vec_size_; ++i) {
+    delete trie_vec_[i];
+  }
+}
+
 size_t PatriciaTrieRep::ApproximateMemoryUsage() {
   size_t sum = 0;
   for (size_t i = 0; i < trie_vec_size_; ++i) {
@@ -256,31 +262,31 @@ bool PatriciaTrieRep::InsertKeyValue(const Slice &internal_key,
     if (!token->insert(key, &tmp_loc)) {
       size_t vector_loc = *(uint32_t *)token->value();
       auto *vector = (details::tag_vector_t *)trie->mem_get(vector_loc);
+      size_t value_size = VarintLength(value.size()) + value.size();
+      size_t value_loc = trie->mem_alloc(value_size);
+      if (value_loc == MemPatricia::mem_alloc_fail) {
+        return details::InsertResult::Fail;
+      }
+      memcpy(EncodeVarint32((char *)trie->mem_get(value_loc),
+                            (uint32_t)value.size()),
+             value.data(), value.size());
       uint32_t size;
       do {
         do {
           size = vector->size.load(std::memory_order_relaxed);
         } while ((size >> 31) != 0);
       } while (((size = vector->size.fetch_or(1u << 31,
-                                              std::memory_order_acquire)) >>
+                                              std::memory_order_acq_rel)) >>
                 31) != 0);
       uint32_t data_loc = vector->loc.load(std::memory_order_relaxed);
       auto *data = (details::tag_vector_t::data_t *)trie->mem_get(data_loc);
       assert(size > 0);
       if ((tag >> 8) == (data[size - 1].tag >> 8)) {
         vector->size.store(size, std::memory_order_release);
+        trie->mem_free(value_loc, value_size);
         return details::InsertResult::Duplicated;
       }
       assert(tag > data[size - 1].tag);
-      size_t value_size = VarintLength(value.size()) + value.size();
-      size_t value_loc = trie->mem_alloc(value_size);
-      if (value_loc == MemPatricia::mem_alloc_fail) {
-        vector->size.store(size, std::memory_order_release);
-        return details::InsertResult::Fail;
-      }
-      memcpy(EncodeVarint32((char *)trie->mem_get(value_loc),
-                            (uint32_t)value.size()),
-             value.data(), value.size());
       if (!details::tag_vector_t::full(size)) {
         data[size].loc = (uint32_t)value_loc;
         data[size].tag = tag;

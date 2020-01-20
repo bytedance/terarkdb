@@ -23,6 +23,7 @@
 #include <util/arena.h>
 // terark headers
 #include <terark/bitfield_array.hpp>
+#include <terark/entropy/entropy_base.hpp>
 #include <terark/idx/terark_zip_index.hpp>
 #include <terark/util/throw.hpp>
 #include <terark/zbs/abstract_blob_store.hpp>

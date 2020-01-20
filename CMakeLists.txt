@@ -764,7 +764,7 @@ else()
                         LINKER_LANGUAGE CXX
                         VERSION ${ROCKSDB_VERSION}
                         SOVERSION ${ROCKSDB_VERSION_MAJOR}
-                        CXX_STANDARD 11
+                        CXX_STANDARD 14
                         OUTPUT_NAME "rocksdb")
 endif()
 

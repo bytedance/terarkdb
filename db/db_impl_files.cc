@@ -12,8 +12,11 @@
 #define __STDC_FORMAT_MACROS
 #endif
 #include <inttypes.h>
+
 #include <set>
+#include <terark/valvec.hpp>
 #include <unordered_set>
+
 #include "db/event_helpers.h"
 #include "db/memtable_list.h"
 #include "util/file_util.h"
@@ -108,7 +111,7 @@ void DBImpl::FindObsoleteFiles(JobContext* job_context, bool force,
   versions_->AddLiveFiles(&job_context->sst_live);
   if (doing_the_full_scan) {
     InfoLogPrefix info_log_prefix(!immutable_db_options_.db_log_dir.empty(),
-        dbname_);
+                                  dbname_);
     std::set<std::string> paths;
     for (size_t path_id = 0; path_id < immutable_db_options_.db_paths.size();
          path_id++) {
@@ -152,8 +155,7 @@ void DBImpl::FindObsoleteFiles(JobContext* job_context, bool force,
         }
 
         // TODO(icanadi) clean up this mess to avoid having one-off "/" prefixes
-        job_context->full_scan_candidate_files.emplace_back(
-            "/" + file, path);
+        job_context->full_scan_candidate_files.emplace_back("/" + file, path);
       }
     }
 
@@ -163,8 +165,8 @@ void DBImpl::FindObsoleteFiles(JobContext* job_context, bool force,
       env_->GetChildren(immutable_db_options_.wal_dir,
                         &log_files);  // Ignore errors
       for (const std::string& log_file : log_files) {
-        job_context->full_scan_candidate_files.emplace_back(log_file,
-            immutable_db_options_.wal_dir);
+        job_context->full_scan_candidate_files.emplace_back(
+            log_file, immutable_db_options_.wal_dir);
       }
     }
     // Add info log files in db_log_dir
@@ -174,8 +176,8 @@ void DBImpl::FindObsoleteFiles(JobContext* job_context, bool force,
       // Ignore errors
       env_->GetChildren(immutable_db_options_.db_log_dir, &info_log_files);
       for (std::string& log_file : info_log_files) {
-        job_context->full_scan_candidate_files.emplace_back(log_file,
-            immutable_db_options_.db_log_dir);
+        job_context->full_scan_candidate_files.emplace_back(
+            log_file, immutable_db_options_.db_log_dir);
       }
     }
   }
@@ -267,7 +269,7 @@ void DBImpl::DeleteObsoleteFileImpl(int job_id, const std::string& fname,
     file_deletion_status = env_->DeleteFile(fname);
   }
   TEST_SYNC_POINT_CALLBACK("DBImpl::DeleteObsoleteFileImpl:AfterDeletion",
-      &file_deletion_status);
+                           &file_deletion_status);
   if (file_deletion_status.ok()) {
     ROCKS_LOG_DEBUG(immutable_db_options_.info_log,
                     "[JOB %d] Delete %s type=%d #%" PRIu64 " -- %s\n", job_id,
@@ -322,7 +324,8 @@ void DBImpl::PurgeObsoleteFiles(JobContext& state, bool schedule_only) {
   const char* kDumbDbName = "";
   for (auto& file : state.sst_delete_files) {
     candidate_files.emplace_back(
-        MakeTableFileName(kDumbDbName, file.metadata->fd.GetNumber()), file.path);
+        MakeTableFileName(kDumbDbName, file.metadata->fd.GetNumber()),
+        file.path);
     if (file.metadata->table_reader_handle) {
       table_cache_->Release(file.metadata->table_reader_handle);
     }
@@ -332,7 +335,7 @@ void DBImpl::PurgeObsoleteFiles(JobContext& state, bool schedule_only) {
   for (auto file_num : state.log_delete_files) {
     if (file_num > 0) {
       candidate_files.emplace_back(LogFileName(kDumbDbName, file_num),
-          immutable_db_options_.wal_dir);
+                                   immutable_db_options_.wal_dir);
     }
   }
   for (const auto& filename : state.manifest_delete_files) {
@@ -341,11 +344,8 @@ void DBImpl::PurgeObsoleteFiles(JobContext& state, bool schedule_only) {
 
   // dedup state.candidate_files so we don't try to delete the same
   // file twice
-  std::sort(candidate_files.begin(), candidate_files.end(),
-            CompareCandidateFile);
-  candidate_files.erase(
-      std::unique(candidate_files.begin(), candidate_files.end()),
-      candidate_files.end());
+  terark::sort_a(candidate_files, CompareCandidateFile);
+  candidate_files.resize(terark::unique_a(candidate_files));
 
   if (state.prev_total_log_size > 0) {
     ROCKS_LOG_INFO(immutable_db_options_.info_log,
@@ -465,13 +465,12 @@ void DBImpl::PurgeObsoleteFiles(JobContext& state, bool schedule_only) {
     } else {
       dir_to_sync =
           (type == kLogFile) ? immutable_db_options_.wal_dir : dbname_;
-      fname = dir_to_sync
-            + (
-                (!dir_to_sync.empty() && dir_to_sync.back() == '/') ||
-                (!to_delete.empty() && to_delete.front() == '/')
-                ? "" : "/"
-              )
-            + to_delete;
+      fname = dir_to_sync +
+              ((!dir_to_sync.empty() && dir_to_sync.back() == '/') ||
+                       (!to_delete.empty() && to_delete.front() == '/')
+                   ? ""
+                   : "/") +
+              to_delete;
     }
 
 #ifndef ROCKSDB_LITE
