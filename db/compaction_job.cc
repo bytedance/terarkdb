@@ -24,6 +24,8 @@
 #include <memory>
 #include <random>
 #include <set>
+#include <terark/util/function.hpp>
+#include <terark/valvec.hpp>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -431,7 +433,7 @@ void CompactionJob::Prepare(int& delta_bg_works) {
   assert(c->column_family_data() != nullptr);
   assert(c->column_family_data()->current()->storage_info()->NumLevelFiles(
              compact_->compaction->level()) > 0);
-
+  auto& icmp = c->column_family_data()->internal_comparator();
   write_hint_ =
       c->column_family_data()->CalculateSSTWriteHint(c->output_level());
   // Is this compaction producing files at the bottommost level?
@@ -439,10 +441,18 @@ void CompactionJob::Prepare(int& delta_bg_works) {
 
   if (c->compaction_type() != kMapCompaction && !c->input_range().empty()) {
     auto& input_range = c->input_range();
-    assert(input_range.size() <= c->max_subcompactions());
-    boundaries_.resize(input_range.size() * 2);
+    size_t n = std::min((uint32_t)input_range.size(), c->max_subcompactions());
+    boundaries_.resize(n * 2);
     auto uc = c->column_family_data()->user_comparator();
-    for (size_t i = 0; i < input_range.size(); ++i) {
+    std::nth_element(input_range.begin(), input_range.begin() + n,
+                     input_range.end(), TERARK_CMP(weight, >));
+    input_range.resize(n);
+    // std::sort(input_range.begin(), input_range.end(),
+    //           [&icmp](const SelectedRange& lhs, const SelectedRange& rhs) {
+    //             return icmp.Compare(lhs.range.start, rhs.range.start) < 0;
+    //           });
+    terark::sort_a(input_range, TERARK_FIELD(start) < icmp);
+    for (size_t i = 0; i < n; ++i) {
       Slice* start = &boundaries_[i * 2];
       Slice* end = &boundaries_[i * 2 + 1];
       *start = input_range[i].start;
