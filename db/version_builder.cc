@@ -146,7 +146,6 @@ class VersionBuilder::Rep {
   };
 
   std::unique_ptr<VersionBuilderDebugger> debugger_;
-  std::vector<FileMetaData*> unref_;
   const EnvOptions& env_options_;
   Logger* info_log_;
   TableCache* table_cache_;
@@ -206,9 +205,6 @@ class VersionBuilder::Rep {
       if (pair.second.f != nullptr) {
         UnrefFile(pair.second.f);
       }
-    }
-    for (auto f : unref_) {
-      UnrefFile(f);
     }
     delete[] levels_;
   }
@@ -317,8 +313,8 @@ class VersionBuilder::Rep {
     }
   }
 
-  void CalculateDependence(bool finish, bool is_open_db = false) {
-    if (!finish && (!is_open_db || new_deleted_files_ < 65536)) {
+  void CalculateDependence(bool finish) {
+    if (new_deleted_files_ < 65536 && !finish) {
       return;
     }
     ++dependence_version_;
@@ -352,7 +348,7 @@ class VersionBuilder::Rep {
               f->table_reader_handle = nullptr;
               f->refs = 1;
               f->being_compacted = false;
-              unref_.emplace_back(item.f);
+              UnrefFile(item.f);
               item.f = f;
             }
             item.f->is_skip_gc = is_skip_gc;
@@ -364,7 +360,7 @@ class VersionBuilder::Rep {
         ++it;
       } else {
         DelInheritance(item.f);
-        unref_.emplace_back(item.f);
+        UnrefFile(item.f);
         it = dependence_map_.erase(it);
       }
     }
@@ -560,17 +556,10 @@ class VersionBuilder::Rep {
     }
 
     // shrink files
-    CalculateDependence(false, edit->is_open_db());
-    if (!unref_.empty()) {
-      for (auto f : unref_) {
-        UnrefFile(f);
-      }
-      unref_.clear();
-    }
+    CalculateDependence(false);
   }
 
   // Save the current state in *v.
-  // WARNING: this func will call out of mutex
   void SaveTo(VersionStorageInfo* vstorage) {
     CheckConsistency(vstorage, true);
     CalculateDependence(true);
@@ -693,7 +682,7 @@ class VersionBuilder::Rep {
         auto* file_meta = files_meta[file_idx].first;
         int level = files_meta[file_idx].second;
         auto file_read_hist =
-            level > 0 ? internal_stats->GetFileReadHist(level) : nullptr;
+            level >= 0 ? internal_stats->GetFileReadHist(level) : nullptr;
         table_cache_->FindTable(
             env_options_, *(base_vstorage_->InternalComparator()),
             file_meta->fd, &file_meta->table_reader_handle, prefix_extractor,
