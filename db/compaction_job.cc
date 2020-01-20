@@ -693,7 +693,7 @@ Status CompactionJob::Run(int& delta_bg_works) {
   } else if (auto factory = iopt->compaction_filter_factory) {
     s = factory->Serialize(&context.compaction_filter_data.data);
     if (s.IsNotSupported()) {
-      return RunSelf();
+      return RunSelf(delta_bg_works);
     } else if (!s.ok()) {
       return s;
     }

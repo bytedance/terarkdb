@@ -33,7 +33,7 @@
 #include "util/c_style_callback.h"
 #include "util/iterator_cache.h"
 #include "util/sst_file_manager_impl.h"
-#include "version_edit.h"
+#include "version_set.h"
 
 namespace rocksdb {
 

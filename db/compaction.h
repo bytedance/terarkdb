@@ -8,6 +8,8 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #pragma once
+#include <unordered_set>
+
 #include "db/version_edit.h"
 #include "options/cf_options.h"
 #include "rocksdb/compaction_filter.h"
