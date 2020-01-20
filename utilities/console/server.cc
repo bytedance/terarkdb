@@ -172,7 +172,7 @@ int ServerMain(ServerRunner *runner, rocksdb::DBImpl *db,
       return 1;
     }
   } else {
-    std::string sock_path = path + "/console.sock";
+    std::string sock_path = path + "/CONSOLE";
     unlink(sock_path.c_str()); /* don't care if this fails */
     ac_fd = anetUnixServer(err, (char *)sock_path.c_str(), kUnixSocketPerm,
                            kBacklog);

@@ -36,7 +36,7 @@ TEST_F(DBEncryptionTest, CheckEncrypted) {
   auto defaultEnv = Env::Default();
   int hits = 0;
   for (auto it = fileNames.begin() ; it != fileNames.end(); ++it) {
-    if ((*it == "..") || (*it == ".") || (*it == "console.sock")) {
+    if ((*it == "..") || (*it == ".") || (*it == "CONSOLE")) {
       continue;
     }
     auto filePath = dbname_ + "/" + *it;
