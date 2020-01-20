@@ -302,11 +302,11 @@ bool CompactionPicker::ReadMapElement(MapSstElement& map_element,
   return true;
 }
 
-bool CompactionPicker::FixInputRange(std::vector<RangeStorage>& input_range,
+bool CompactionPicker::FixInputRange(std::vector<SelectedRange>& input_range,
                                      const InternalKeyComparator& icmp,
                                      bool sort, bool merge) {
   auto uc = icmp.user_comparator();
-  auto range_cmp = [uc](const RangeStorage& a, const RangeStorage& b) {
+  auto range_cmp = [uc](const SelectedRange& a, const SelectedRange& b) {
     int r = uc->Compare(a.limit, b.limit);
     if (r == 0) {
       r = int(a.include_limit) - int(b.include_limit);
@@ -1025,7 +1025,7 @@ Compaction* CompactionPicker::CompactRange(
     input_vec[1].level = output_level;
     input_vec[1].files = vstorage->LevelFiles(output_level);
 
-    RangeStorage range;
+    SelectedRange range;
     if (begin != nullptr && end != nullptr) {
       AssignUserKey(range.start, begin->Encode());
       range.include_start = true;
@@ -1222,7 +1222,7 @@ Compaction* CompactionPicker::PickRangeCompaction(
     return new Compaction(std::move(params));
   }
 
-  std::vector<RangeStorage> input_range;
+  std::vector<SelectedRange> input_range;
   Arena arena;
   DependenceMap empty_dependence_map;
   ReadOptions options;
@@ -1244,7 +1244,7 @@ Compaction* CompactionPicker::PickRangeCompaction(
   }
 
   MapSstElement map_element;
-  RangeStorage range;
+  SelectedRange range;
   auto& ic = ioptions_.internal_comparator;
   auto uc = ic.user_comparator();
   auto need_compact = [&](const MapSstElement& e) {
@@ -1707,7 +1707,7 @@ Compaction* CompactionPicker::PickCompositeCompaction(
   }
   CompactionType compaction_type = kKeyValueCompaction;
   uint32_t max_subcompactions = ioptions_.max_subcompactions;
-  std::vector<RangeStorage> input_range;
+  std::vector<SelectedRange> input_range;
 
   auto new_compaction = [&] {
     int level = input.level;
@@ -1774,7 +1774,7 @@ Compaction* CompactionPicker::PickCompositeCompaction(
 
   std::unordered_map<uint64_t, FileUseInfo> file_used;
   MapSstElement map_element;
-  RangeStorage range;
+  SelectedRange range;
   auto uc = ioptions_.internal_comparator.user_comparator();
   (void)uc;
 
@@ -1851,6 +1851,7 @@ Compaction* CompactionPicker::PickCompositeCompaction(
   };
   while (!priority_heap.empty()) {
     auto key = priority_heap.front().k;
+    auto weight = priority_heap.front().s;
     std::pop_heap(priority_heap.begin(), priority_heap.end(),
                   std::less<double>());
     priority_heap.pop_back();
@@ -1905,7 +1906,7 @@ Compaction* CompactionPicker::PickCompositeCompaction(
         push_unique(iter->key());
       } while (sum < pick_size);
     }
-    input_range.emplace_back(std::move(range));
+    input_range.emplace_back(SelectedRange(std::move(range), weight));
     if (input_range.size() >= ioptions_.max_subcompactions) {
       break;
     }
@@ -1930,7 +1931,7 @@ Compaction* CompactionPicker::PickCompositeCompaction(
         AssignUserKey(range.limit, map_element.smallest_key);
         range.include_start = true;
         range.include_limit = false;
-        input_range.emplace_back(std::move(range));
+        input_range.emplace_back(std::move(range), 0);
         if (input_range.size() >= ioptions_.max_subcompactions) {
           break;
         }
@@ -2008,8 +2009,8 @@ Compaction* CompactionPicker::PickBottommostLevelCompaction(
   std::vector<CompactionInputFiles> inputs;
   inputs.emplace_back(CompactionInputFiles{level, level_files});
 
-  std::vector<RangeStorage> input_range;
-  RangeStorage range;
+  std::vector<SelectedRange> input_range;
+  SelectedRange range;
   bool has_start = false;
   size_t max_compaction_bytes = mutable_cf_options.max_compaction_bytes;
   size_t subcompact_size = 0;
@@ -2250,7 +2251,7 @@ class LevelCompactionBuilder {
   CompactionInputFiles output_level_inputs_;
   std::vector<FileMetaData*> grandparents_;
   CompactionType compaction_type_ = CompactionType::kKeyValueCompaction;
-  std::vector<RangeStorage> input_range_ = {};
+  std::vector<SelectedRange> input_range_ = {};
   CompactionReason compaction_reason_ = CompactionReason::kUnknown;
 
   const MutableCFOptions& mutable_cf_options_;

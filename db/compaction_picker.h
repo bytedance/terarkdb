@@ -84,7 +84,7 @@ class CompactionPicker {
   static bool ReadMapElement(MapSstElement& map_element, InternalIterator* iter,
                              LogBuffer* log_buffer, const std::string& cf_name);
 
-  static bool FixInputRange(std::vector<RangeStorage>& input_range,
+  static bool FixInputRange(std::vector<SelectedRange>& input_range,
                             const InternalKeyComparator& icmp, bool sort,
                             bool merge);
 

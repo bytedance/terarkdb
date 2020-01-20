@@ -7,6 +7,7 @@
 
 #ifndef ROCKSDB_LITE
 
+#include <list>
 #include <string>
 
 #include "port/port.h"

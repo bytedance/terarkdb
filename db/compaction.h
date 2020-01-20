@@ -8,7 +8,9 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #pragma once
-#include "db/version_set.h"
+#include <unordered_set>
+
+#include "db/version_edit.h"
 #include "options/cf_options.h"
 #include "rocksdb/compaction_filter.h"
 #include "rocksdb/listener.h"
@@ -48,6 +50,21 @@ struct CompactionInputFiles {
   inline FileMetaData* operator[](size_t i) const { return files[i]; }
 };
 
+struct SelectedRange : public RangeStorage {
+  double weight;
+
+  SelectedRange(RangeStorage&& _range, double _weight = 0)
+      : RangeStorage(std::move(_range)), weight(_weight) {}
+
+  SelectedRange(const Slice& _start, const Slice& _limit,
+                bool _include_start = true, bool _include_limit = true)
+      : RangeStorage(std::move(_start), std::move(_limit), _include_start,
+                     _include_limit),
+        weight(0) {}
+
+  SelectedRange() : weight(0) {} 
+};
+
 class ColumnFamilyData;
 class CompactionFilter;
 class LevelFileContainer;
@@ -79,7 +96,7 @@ struct CompactionParams {
   bool deletion_compaction = false;
   bool partial_compaction = false;
   CompactionType compaction_type = kKeyValueCompaction;
-  std::vector<RangeStorage> input_range = {};
+  std::vector<SelectedRange> input_range = {};
   CompactionReason compaction_reason = CompactionReason::kUnknown;
 
   CompactionParams(VersionStorageInfo* _input_version,
@@ -270,7 +287,7 @@ class Compaction {
   CompactionType compaction_type() const { return compaction_type_; }
 
   // Range limit for inputs
-  const std::vector<RangeStorage>& input_range() const { return input_range_; };
+  std::vector<SelectedRange>& input_range() { return input_range_; };
 
   // Add all inputs to this compaction as delete operations to *edit.
   void AddInputDeletions(VersionEdit* edit);
@@ -456,7 +473,7 @@ class Compaction {
   const CompactionType compaction_type_;
 
   // Range limit for inputs
-  const std::vector<RangeStorage> input_range_;
+  std::vector<SelectedRange> input_range_;
 
   // Compaction input files organized by level. Constant after construction
   const std::vector<CompactionInputFiles> inputs_;
