@@ -68,6 +68,7 @@ AdvancedColumnFamilyOptions::AdvancedColumnFamilyOptions(const Options& options)
       max_bytes_for_level_multiplier(options.max_bytes_for_level_multiplier),
       max_bytes_for_level_multiplier_additional(
           options.max_bytes_for_level_multiplier_additional),
+      max_cf_subcompactions(options.max_cf_subcompactions),
       max_compaction_bytes(options.max_compaction_bytes),
       soft_pending_compaction_bytes_limit(
           options.soft_pending_compaction_bytes_limit),

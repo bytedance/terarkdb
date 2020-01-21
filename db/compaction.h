@@ -89,7 +89,7 @@ struct CompactionParams {
   uint32_t output_path_id = 0;
   CompressionType compression = kNoCompression;
   CompressionOptions compression_opts;
-  uint32_t max_subcompactions = 0;
+  uint32_t max_subcompactions = 0; // No limitation.
   std::vector<FileMetaData*> grandparents;
   bool manual_compaction = false;
   double score = -1;
