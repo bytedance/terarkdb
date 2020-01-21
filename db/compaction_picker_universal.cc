@@ -182,9 +182,6 @@ bool UniversalCompactionPicker::NeedsCompaction(
       return true;
     }
   }
-  // if (vstorage->has_space_amplification()) {
-  //   return true;
-  // }
   if (!vstorage->LevelFiles(-1).empty()) {
     return true;
   }

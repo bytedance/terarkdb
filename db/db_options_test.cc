@@ -655,7 +655,7 @@ TEST_F(DBOptionsTest, SetFIFOCompactionOptions) {
   ASSERT_EQ(NumTableFilesAtLevel(0), 10);
 
   // Set ttl to 1 minute. So all files should get deleted.
-  ASSERT_OK(dbfull()->SetOptions({{"compaction_options_fifo", "ttl=60"}}));
+  ASSERT_OK(dbfull()->SetOptions({{"compaction_options_fifo", "{ttl=60;}"}}));
   ASSERT_EQ(dbfull()->GetOptions().compaction_options_fifo.ttl, 60);
   dbfull()->CompactRange(CompactRangeOptions(), nullptr, nullptr);
   ASSERT_OK(dbfull()->TEST_WaitForCompact());

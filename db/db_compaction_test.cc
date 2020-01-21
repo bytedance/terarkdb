@@ -1850,7 +1850,8 @@ TEST_F(DBCompactionTest, DeleteFileRangeFileEndpointsOverlapBug) {
   // "1 -> vals[0]" to reappear.
   std::string begin_str = Key(0), end_str = Key(1);
   Slice begin = begin_str, end = end_str;
-  ASSERT_OK(DeleteFilesInRange(db_, db_->DefaultColumnFamily(), &begin, &end, false));
+  ASSERT_OK(
+      DeleteFilesInRange(db_, db_->DefaultColumnFamily(), &begin, &end, false));
   ASSERT_EQ(vals[1], Get(Key(1)));
 
   db_->ReleaseSnapshot(snapshot);

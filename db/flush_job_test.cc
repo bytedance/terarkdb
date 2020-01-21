@@ -161,7 +161,9 @@ TEST_F(FlushJobTest, NonEmpty) {
 
   autovector<MemTable*> to_delete;
   cfd->imm()->Add(new_mem, &to_delete);
-  
+  for (auto& m : to_delete) {
+    delete m;
+  }
 
   EventLogger event_logger(db_options_.info_log.get());
   SnapshotChecker* snapshot_checker = nullptr;  // not relavant
@@ -190,10 +192,6 @@ TEST_F(FlushJobTest, NonEmpty) {
   ASSERT_EQ(1, file_meta.fd.smallest_seqno);
   ASSERT_EQ(10000, file_meta.fd.largest_seqno);  // range tombstone seqnum 10000
   mock_table_factory_->AssertSingleFile(inserted_keys);
-  for (auto m : to_delete) {
-    delete m;
-  }
-  to_delete.clear();
   job_context.Clean();
 }
 
