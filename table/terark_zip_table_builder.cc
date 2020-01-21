@@ -788,7 +788,7 @@ TerarkZipTableBuilder::Async(std::function<Status()> func, void* tag) {
         try {
           return func();
         } catch (const std::exception& ex) {
-          return Status::Aborted(ex.what());
+          return Status::Corruption(ex.what());
         }
       }));
   ioptions_.env->Schedule(c_style_callback(*task), task.get(),
@@ -2359,7 +2359,7 @@ void TerarkZipTableBuilder::Abandon() {
 // based on Abandon
 Status TerarkZipTableBuilder::AbortFinish(const std::exception& ex) {
   TerarkZipTableBuilder::Abandon();
-  return Status::Aborted("exception", ex.what());
+  return Status::Corruption("exception", ex.what());
 }
 
 void TerarkZipTableBuilder::AddPrevUserKey(

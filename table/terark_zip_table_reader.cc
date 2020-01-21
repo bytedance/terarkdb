@@ -548,7 +548,7 @@ class TerarkZipTableIterator : public TerarkZipTableIndexIterator,
     auto& value_buf = ValueBuf();
     switch (zip_value_type_) {
       default:
-        status_ = Status::Aborted(
+        status_ = Status::Corruption(
             "TerarkZipTableIterator::DecodeCurrKeyValue()", "Bad ZipValueType");
         abort();  // must not goes here, if it does, it should be a bug!!
         break;
@@ -956,7 +956,8 @@ Status TerarkZipSubReader::Get(SequenceNumber global_seqno,
       break;
     }
     default:
-      return Status::Aborted("TerarkZipTableReader::Get()", "Bad ZipValueType");
+      return Status::Corruption("TerarkZipTableReader::Get()",
+                                "Bad ZipValueType");
   }
   return Status::OK();
 }
