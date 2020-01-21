@@ -698,6 +698,7 @@ class BaseReferencedVersionBuilder {
     version_->Unref();
   }
   VersionBuilder* version_builder() { return version_builder_; }
+  VersionStorageInfo* version_storage() { return version_->storage_info(); }
 
  private:
   VersionBuilder* version_builder_;
@@ -1883,7 +1884,8 @@ void VersionStorageInfo::AddFile(int level, FileMetaData* f,
   }
 }
 
-void VersionStorageInfo::IncRefs() {
+void VersionStorageInfo::FinishAddFile(SequenceNumber _oldest_snapshot_seqnum) {
+  oldest_snapshot_seqnum_ = _oldest_snapshot_seqnum;
   for (int i = -1; i < num_levels_; ++i) {
     for (auto f : files_[i]) {
       ++f->refs;
@@ -3220,7 +3222,10 @@ Status VersionSet::ProcessManifestWrites(
 
   if (!first_writer.edit_list.front()->IsColumnFamilyManipulation()) {
     for (int i = 0; i < static_cast<int>(versions.size()); ++i) {
-      versions[i]->storage_info()->IncRefs();
+      assert(!builder_guards.empty() &&
+             builder_guards.size() == versions.size());
+      versions[i]->storage_info()->FinishAddFile(
+          builder_guards[i]->version_storage()->oldest_snapshot_seqnum());
     }
   }
 
@@ -3823,7 +3828,8 @@ Status VersionSet::Recover(
                                *cfd->GetLatestMutableCFOptions(),
                                current_version_number_++);
       builder->SaveTo(v->storage_info());
-      v->storage_info()->IncRefs();
+      v->storage_info()->FinishAddFile(
+          builders_iter->second->version_storage()->oldest_snapshot_seqnum());
 
       // Install recovered version
       v->PrepareApply(*cfd->GetLatestMutableCFOptions());
@@ -4195,7 +4201,8 @@ Status VersionSet::DumpManifest(Options& options, std::string& dscname,
                                *cfd->GetLatestMutableCFOptions(),
                                current_version_number_++);
       builder->SaveTo(v->storage_info());
-      v->storage_info()->IncRefs();
+      v->storage_info()->FinishAddFile(
+          builders_iter->second->version_storage()->oldest_snapshot_seqnum());
       v->PrepareApply(*cfd->GetLatestMutableCFOptions());
 
       printf("--------------- Column family \"%s\"  (ID %u) --------------\n",
