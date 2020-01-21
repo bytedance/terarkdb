@@ -1752,6 +1752,9 @@ void VersionStorageInfo::ComputeCompactionScore(
   // Calculate total_garbage_ratio_ as criterion for NeedsGarbageCollection().
   double num_entries = 0;
   for (auto& f : LevelFiles(-1)) {
+    if (f->is_skip_gc) {
+      continue;
+    }
     total_garbage_ratio_ += f->num_antiquation;
     num_entries += f->prop.num_entries;
   }
@@ -1851,6 +1854,7 @@ void VersionStorageInfo::AddFile(int level, FileMetaData* f,
 #else
   (void)info_log;
 #endif
+  f->refs++;
   level_files->push_back(f);
   dependence_map_.emplace(f->fd.GetNumber(), f);
   if (level == -1) {
@@ -1877,14 +1881,6 @@ void VersionStorageInfo::AddFile(int level, FileMetaData* f,
   }
   if (f->prop.has_range_deletions()) {
     space_amplification_[level] |= kHasRangeDeletion;
-  }
-}
-
-void VersionStorageInfo::IncRefs() {
-  for (int i = -1; i < num_levels_; ++i) {
-    for (auto f : files_[i]) {
-      ++f->refs;
-    }
   }
 }
 
@@ -1916,25 +1912,31 @@ uint64_t VersionStorageInfo::FileSize(const FileMetaData* f,
 }
 
 uint64_t VersionStorageInfo::FileSizeWithBlob(const FileMetaData* f,
+                                              uint64_t file_number,
                                               bool recursive,
-                                              double ratio) const {
+                                              uint64_t entry_count) const {
+  if (f == nullptr) {
+    auto find = dependence_map_.find(file_number);
+    if (find == dependence_map_.end()) {
+      // TODO log error
+      return 0;
+    }
+    f = find->second;
+  } else {
+    assert(file_number == uint64_t(-1));
+  }
   uint64_t file_size = f->fd.GetFileSize();
-  if (recursive || f->prop.is_map_sst()) {
+  if (recursive) {
     for (auto& dependence : f->prop.dependence) {
-      auto find = dependence_map_.find(dependence.file_number);
-      if (find == dependence_map_.end()) {
-        // TODO log error
-        continue;
-      }
-      double new_ratio =
-          find->second->prop.num_entries == 0
-              ? ratio
-              : ratio * dependence.entry_count / find->second->prop.num_entries;
-      file_size +=
-          FileSizeWithBlob(find->second, f->prop.is_map_sst(), new_ratio);
+      file_size += FileSizeWithBlob(nullptr, dependence.file_number, false,
+                                    dependence.entry_count);
     }
   }
-  return uint64_t(ratio * file_size);
+  assert(entry_count <= std::max<uint64_t>(1, f->prop.num_entries));
+  return entry_count == 0
+             ? file_size
+             : uint64_t(double(file_size) * entry_count /
+                        std::max<uint64_t>(1, f->prop.num_entries));
 }
 
 // Version::PrepareApply() need to be called before calling the function, or
@@ -2759,16 +2761,12 @@ void VersionStorageInfo::CalculateBaseBytes(const ImmutableCFOptions& ioptions,
 
 uint64_t VersionStorageInfo::EstimateLiveDataSize() const {
   // See VersionStorageInfo::GetEstimatedActiveKeys
-  if (lsm_num_entries_ <= lsm_num_deletions_) {
-    return 0;
+  size_t ret = lsm_file_size_ * lsm_num_deletions_ / lsm_num_entries_;
+  if (blob_num_entries_ > blob_num_antiquation_) {
+    ret += (blob_num_entries_ - blob_num_antiquation_) * blob_file_size_ *
+           lsm_num_deletions_ / lsm_num_entries_;
   }
-  double r = double(lsm_num_entries_ - lsm_num_deletions_) /
-             lsm_num_entries_;
-  return size_t(r * (lsm_file_size_ +
-                     (blob_num_entries_ > blob_num_antiquation_
-                          ? double(blob_num_entries_ - blob_num_antiquation_) /
-                                blob_num_entries_ * blob_file_size_
-                          : 0)));
+  return ret;
 }
 
 bool VersionStorageInfo::RangeMightExistAfterSortedRun(
@@ -3047,6 +3045,12 @@ Status VersionSet::ProcessManifestWrites(
         batch_edits.push_back(e);
       }
     }
+    for (int i = 0; i < static_cast<int>(versions.size()); ++i) {
+      assert(!builder_guards.empty() &&
+             builder_guards.size() == versions.size());
+      auto* builder = builder_guards[i]->version_builder();
+      builder->SaveTo(versions[i]->storage_info());
+    }
   }
 
 #ifndef NDEBUG
@@ -3111,15 +3115,6 @@ Status VersionSet::ProcessManifestWrites(
   {
     EnvOptions opt_env_opts = env_->OptimizeForManifestWrite(env_options_);
     mu->Unlock();
-
-    if (!first_writer.edit_list.front()->IsColumnFamilyManipulation()) {
-      for (int i = 0; i < static_cast<int>(versions.size()); ++i) {
-        assert(!builder_guards.empty() &&
-               builder_guards.size() == versions.size());
-        auto* builder = builder_guards[i]->version_builder();
-        builder->SaveTo(versions[i]->storage_info());
-      }
-    }
 
     TEST_SYNC_POINT("VersionSet::LogAndApply:WriteManifest");
     if (!first_writer.edit_list.front()->IsColumnFamilyManipulation() &&
@@ -3213,12 +3208,6 @@ Status VersionSet::ProcessManifestWrites(
     LogFlush(db_options_->info_log);
     TEST_SYNC_POINT("VersionSet::LogAndApply:WriteManifestDone");
     mu->Lock();
-  }
-
-  if (!first_writer.edit_list.front()->IsColumnFamilyManipulation()) {
-    for (int i = 0; i < static_cast<int>(versions.size()); ++i) {
-      versions[i]->storage_info()->IncRefs();
-    }
   }
 
   // Append the old manifest file to the obsolete_manifest_ list to be deleted
@@ -3709,7 +3698,6 @@ Status VersionSet::Recover(
           TEST_SYNC_POINT_CALLBACK("VersionSet::Recover:LastInAtomicGroup",
                                    &edit);
           for (auto& e : replay_buffer) {
-            e.set_open_db(true);
             s = ApplyOneVersionEdit(
                 e, cf_name_to_options, column_families_not_found, builders,
                 &have_log_number, &log_number, &have_prev_log_number,
@@ -3731,7 +3719,6 @@ Status VersionSet::Recover(
           s = Status::Corruption("corrupted atomic group");
           break;
         }
-        edit.set_open_db(true);
         s = ApplyOneVersionEdit(
             edit, cf_name_to_options, column_families_not_found, builders,
             &have_log_number, &log_number, &have_prev_log_number,
@@ -3769,7 +3756,7 @@ Status VersionSet::Recover(
 
   // there were some column families in the MANIFEST that weren't specified
   // in the argument. This is OK in read_only mode
-  if (!read_only && !column_families_not_found.empty()) {
+  if (read_only == false && !column_families_not_found.empty()) {
     std::string list_of_not_found;
     for (const auto& cf : column_families_not_found) {
       list_of_not_found += ", " + cf.second;
@@ -3820,7 +3807,6 @@ Status VersionSet::Recover(
                                *cfd->GetLatestMutableCFOptions(),
                                current_version_number_++);
       builder->SaveTo(v->storage_info());
-      v->storage_info()->IncRefs();
 
       // Install recovered version
       v->PrepareApply(*cfd->GetLatestMutableCFOptions());
@@ -4192,7 +4178,6 @@ Status VersionSet::DumpManifest(Options& options, std::string& dscname,
                                *cfd->GetLatestMutableCFOptions(),
                                current_version_number_++);
       builder->SaveTo(v->storage_info());
-      v->storage_info()->IncRefs();
       v->PrepareApply(*cfd->GetLatestMutableCFOptions());
 
       printf("--------------- Column family \"%s\"  (ID %u) --------------\n",
@@ -4402,22 +4387,22 @@ uint64_t VersionSet::ApproximateSize(Version* v, const FdWithKeyRange& f,
   assert(v);
 
   struct {
-    uint64_t (*callback)(void*, const FileMetaData*, uint64_t);
+    uint64_t (*callback)(void*, const FileMetaData*);
     void* args;
   } approximate_size;
-  auto approximate_size_lambda = [v, &approximate_size, &key](
-                                     const FileMetaData* file_meta,
-                                     uint64_t entry_count) {
+  auto approximate_size_lambda = [v, &approximate_size,
+                                  &key](const FileMetaData* file_meta) {
     uint64_t result = 0;
-    double ratio = file_meta->prop.num_entries == 0
-                       ? 1
-                       : double(entry_count) / file_meta->prop.num_entries;
     auto vstorage = v->storage_info();
     if (!file_meta->prop.is_map_sst()) {
       auto& icomp = v->cfd_->internal_comparator();
       if (icomp.Compare(file_meta->largest.Encode(), key) <= 0) {
         // Entire file is before "key", so just add the file size
-        result = vstorage->FileSizeWithBlob(file_meta, false, ratio);
+        if (!file_meta->prop.dependence.empty()) {
+          result = vstorage->FileSizeWithBlob(file_meta);
+        } else {
+          result = file_meta->fd.GetFileSize();
+        }
       } else if (icomp.Compare(file_meta->smallest.Encode(), key) > 0) {
         // Entire file is after "key", so ignore
         result = 0;
@@ -4439,10 +4424,9 @@ uint64_t VersionSet::ApproximateSize(Version* v, const FdWithKeyRange& f,
             table_cache->ReleaseHandle(handle);
           }
         }
-        if (result > 0) {
-          result =
-              uint64_t(double(result) / file_meta->fd.GetFileSize() *
-                       vstorage->FileSizeWithBlob(file_meta, false, ratio));
+        if (result > 0 && !file_meta->prop.dependence.empty()) {
+          result = uint64_t(double(result) / file_meta->fd.GetFileSize() *
+                            vstorage->FileSizeWithBlob(file_meta));
         }
       }
     } else {
@@ -4453,16 +4437,15 @@ uint64_t VersionSet::ApproximateSize(Version* v, const FdWithKeyRange& f,
           // TODO log error
           continue;
         }
-        result += approximate_size.callback(approximate_size.args, find->second,
-                                            dependence.entry_count);
+        result +=
+            approximate_size.callback(approximate_size.args, find->second);
       }
     }
     return result;
   };
   approximate_size.callback = c_style_callback(approximate_size_lambda);
   approximate_size.args = &approximate_size_lambda;
-  return approximate_size_lambda(f.file_metadata,
-                                 f.file_metadata->prop.num_entries);
+  return approximate_size_lambda(f.file_metadata);
 }
 
 void VersionSet::AddLiveFiles(std::vector<FileDescriptor>* live_list) {

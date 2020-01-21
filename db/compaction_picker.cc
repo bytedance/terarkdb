@@ -1977,7 +1977,7 @@ Compaction* CompactionPicker::PickBottommostLevelCompaction(
     if (f->marked_for_compaction) {
       return true;
     }
-    if (!f->prop.has_snapshots()) {
+    if (!f->prop.has_snapshots() && f->prop.num_deletions == 0) {
       return false;
     }
     std::shared_ptr<const TableProperties> tp;
