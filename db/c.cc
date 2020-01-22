@@ -2468,6 +2468,11 @@ void rocksdb_options_set_max_subcompactions(rocksdb_options_t* opt,
   opt->rep.max_subcompactions = n;
 }
 
+void rocksdb_options_set_max_cf_subcompactions(rocksdb_options_t* opt,
+                                               uint32_t n) {
+  opt->rep.max_cf_subcompactions = n;
+}
+
 void rocksdb_options_set_max_background_jobs(rocksdb_options_t* opt, int n) {
   opt->rep.max_background_jobs = n;
 }

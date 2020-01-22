@@ -967,8 +967,8 @@ Status DBImpl::CompactFilesImpl(
   // here.
   version->storage_info()->ComputeCompactionScore(*cfd->ioptions(),
                                                   *c->mutable_cf_options());
-  
-  int delta_bg_works = 0;
+
+  int delta_bg_works = env_->GetBackgroundThreads() - bg_compaction_scheduled_;
   compaction_job.Prepare(delta_bg_works);
   bg_compaction_scheduled_ += delta_bg_works;
   mutex_.Unlock();
@@ -2747,7 +2747,7 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
         &event_logger_, c->mutable_cf_options()->paranoid_file_checks,
         c->mutable_cf_options()->report_bg_io_stats, dbname_,
         &compaction_job_stats);
-    int delta_bg_works = 0;
+    int delta_bg_works = env_->GetBackgroundThreads() - bg_compaction_scheduled_;
     compaction_job.Prepare(delta_bg_works);
     bg_compaction_scheduled_ += delta_bg_works;
 
@@ -2968,7 +2968,8 @@ Status DBImpl::BackgroundGarbageCollection(bool* made_progress,
         &event_logger_, c->mutable_cf_options()->paranoid_file_checks,
         c->mutable_cf_options()->report_bg_io_stats, dbname_,
         &garbage_collection_job_stats);
-    int delta_bg_works = 0;
+    int delta_bg_works = GetBGJobLimits().max_garbage_collections -
+                         unscheduled_garbage_collections_;
     garbage_collection_job.Prepare(delta_bg_works);
     unscheduled_garbage_collections_ += delta_bg_works;
     NotifyOnCompactionBegin(c->column_family_data(), c.get(), status,

@@ -75,7 +75,6 @@ ImmutableCFOptions::ImmutableCFOptions(const ImmutableDBOptions& db_options,
       preserve_deletes(db_options.preserve_deletes),
       listeners(db_options.listeners),
       row_cache(db_options.row_cache),
-      max_subcompactions(db_options.max_subcompactions),
       memtable_insert_with_hint_prefix_extractor(
           cf_options.memtable_insert_with_hint_prefix_extractor.get()),
       cf_paths(cf_options.cf_paths) {}
@@ -161,6 +160,8 @@ void MutableCFOptions::Dump(Logger* log) const {
                  level0_slowdown_writes_trigger);
   ROCKS_LOG_INFO(log, "               level0_stop_writes_trigger: %d",
                  level0_stop_writes_trigger);
+  ROCKS_LOG_INFO(log, "                       max_subcompactions: %" PRIu64,
+                 max_subcompactions);
   ROCKS_LOG_INFO(log, "                     max_compaction_bytes: %" PRIu64,
                  max_compaction_bytes);
   ROCKS_LOG_INFO(log, "                    target_file_size_base: %" PRIu64,

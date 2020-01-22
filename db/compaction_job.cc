@@ -447,20 +447,18 @@ void CompactionJob::Prepare(int& delta_bg_works) {
   // Is this compaction producing files at the bottommost level?
   bottommost_level_ = c->bottommost_level();
 
+  int n = c->max_subcompactions() == 0
+              ? delta_bg_works + 1
+              : std::min(delta_bg_works + 1, (int)c->max_subcompactions());
   if (c->compaction_type() != kMapCompaction && !c->input_range().empty()) {
     auto& input_range = c->input_range();
-    size_t n = std::min((uint32_t)input_range.size(), c->max_subcompactions());
     boundaries_.resize(n * 2);
     auto uc = c->column_family_data()->user_comparator();
     std::nth_element(input_range.begin(), input_range.begin() + n,
                      input_range.end(), TERARK_CMP(weight, >));
     input_range.resize(n);
-    // std::sort(input_range.begin(), input_range.end(),
-    //           [&icmp](const SelectedRange& lhs, const SelectedRange& rhs) {
-    //             return icmp.Compare(lhs.range.start, rhs.range.start) < 0;
-    //           });
     terark::sort_a(input_range, TERARK_FIELD(start) < icmp);
-    for (size_t i = 0; i < n; ++i) {
+    for (int i = 0; i < n; ++i) {
       Slice* start = &boundaries_[i * 2];
       Slice* end = &boundaries_[i * 2 + 1];
       *start = input_range[i].start;
@@ -477,7 +475,7 @@ void CompactionJob::Prepare(int& delta_bg_works) {
     }
   } else if (c->ShouldFormSubcompactions()) {
     const uint64_t start_micros = env_->NowMicros();
-    GenSubcompactionBoundaries(c->max_subcompactions());
+    GenSubcompactionBoundaries(n);
     MeasureTime(stats_, SUBCOMPACTION_SETUP_TIME,
                 env_->NowMicros() - start_micros);
 
