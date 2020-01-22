@@ -854,10 +854,19 @@ Status DBImpl::SetDBOptions(
     s = GetMutableDBOptionsFromStrings(mutable_db_options_, options_map,
                                        &new_options);
     if (s.ok()) {
-      if (new_options.max_background_compactions >
-          mutable_db_options_.max_background_compactions) {
-        env_->IncBackgroundThreadsIfNeeded(
-            new_options.max_background_compactions, Env::Priority::LOW);
+      auto bg_job_limits = DBImpl::GetBGJobLimits(
+          immutable_db_options_.max_background_flushes,
+          new_options.max_background_compactions,
+          new_options.max_background_garbage_collections,
+          new_options.max_background_jobs, true /* parallelize_compactions */);
+      if (bg_job_limits.max_compactions >
+              env_->GetBackgroundThreads(Env::Priority::LOW) ||
+          bg_job_limits.max_flushes >
+              env_->GetBackgroundThreads(Env::Priority::HIGH)) {
+        env_->IncBackgroundThreadsIfNeeded(bg_job_limits.max_compactions,
+                                           Env::Priority::LOW);
+        env_->IncBackgroundThreadsIfNeeded(bg_job_limits.max_flushes,
+                                           Env::Priority::HIGH);
         MaybeScheduleFlushOrCompaction();
       }
       if (new_options.stats_dump_period_sec !=

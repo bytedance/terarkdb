@@ -332,6 +332,17 @@ ColumnFamilyOptions SanitizeOptions(const ImmutableDBOptions& db_options,
     result.max_compaction_bytes = result.target_file_size_base * 25;
   }
 
+  if (result.max_subcompactions == 0) {
+    result.max_subcompactions = 1;
+  }
+
+  if (result.blob_gc_ratio > 1) {
+    result.blob_gc_ratio = 1;
+  }
+  if (result.blob_gc_ratio < 0) {
+    result.blob_gc_ratio = 0;
+  }
+
   return result;
 }
 
@@ -1078,6 +1089,9 @@ Compaction* ColumnFamilyData::CompactRange(
     const InternalKey* begin, const InternalKey* end,
     InternalKey** compaction_end, bool* conflict,
     const std::unordered_set<uint64_t>* files_being_compact) {
+  if (max_subcompactions == 0) {
+    max_subcompactions = mutable_cf_options.max_subcompactions;
+  }
   auto* result = compaction_picker_->CompactRange(
       GetName(), mutable_cf_options, current_->storage_info(), input_level,
       output_level, output_path_id, max_subcompactions, begin, end,

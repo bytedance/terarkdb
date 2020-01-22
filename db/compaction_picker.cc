@@ -1009,8 +1009,9 @@ Compaction* CompactionPicker::CompactRange(
     }
     if (input_level == output_level) {
       return PickRangeCompaction(cf_name, mutable_cf_options, vstorage,
-                                 input_level, begin, end, files_being_compact,
-                                 manual_conflict, &log_buffer);
+                                 input_level, begin, end, max_subcompactions,
+                                 files_being_compact, manual_conflict,
+                                 &log_buffer);
     } else if ((*compaction_end)->size() > 0) {
       return nullptr;
     }
@@ -1167,8 +1168,7 @@ Compaction* CompactionPicker::CompactRange(
                          vstorage->base_level());
   params.compression_opts =
       GetCompressionOptions(ioptions_, vstorage, output_level);
-  params.max_subcompactions =
-      std::min(mutable_cf_options.max_subcompactions, max_subcompactions);
+  params.max_subcompactions = max_subcompactions;
   params.grandparents = std::move(grandparents);
   params.manual_compaction = true;
 
@@ -1189,14 +1189,12 @@ Compaction* CompactionPicker::CompactRange(
 Compaction* CompactionPicker::PickRangeCompaction(
     const std::string& cf_name, const MutableCFOptions& mutable_cf_options,
     VersionStorageInfo* vstorage, int level, const InternalKey* begin,
-    const InternalKey* end,
+    const InternalKey* end, uint32_t max_subcompactions,
     const std::unordered_set<uint64_t>* files_being_compact,
     bool* manual_conflict, LogBuffer* log_buffer) {
   assert(ioptions_.enable_lazy_compaction);
   auto& level_files = vstorage->LevelFiles(level);
-  uint32_t max_subs = mutable_cf_options.max_subcompactions == 0
-                          ? ioptions_.env->GetBackgroundThreads()
-                          : mutable_cf_options.max_subcompactions;
+
   if (files_being_compact == nullptr || files_being_compact->empty() ||
       level_files.empty()) {
     return nullptr;
@@ -1302,7 +1300,7 @@ Compaction* CompactionPicker::PickRangeCompaction(
           range.include_start = true;
           range.include_limit = false;
           input_range.emplace_back(std::move(range));
-          if (input_range.size() >= max_subs) {
+          if (input_range.size() >= max_subcompactions) {
             has_start = false;
             break;
           }
@@ -1316,7 +1314,7 @@ Compaction* CompactionPicker::PickRangeCompaction(
         range.include_start = true;
         range.include_limit = false;
         input_range.emplace_back(std::move(range));
-        if (input_range.size() >= max_subs) {
+        if (input_range.size() >= max_subcompactions) {
           break;
         }
         subcompact_size = 0;
@@ -1376,7 +1374,7 @@ Compaction* CompactionPicker::PickRangeCompaction(
   params.manual_compaction = true;
   params.score = 0;
   params.partial_compaction = true;
-  params.max_subcompactions = max_subs;
+  params.max_subcompactions = max_subcompactions;
   params.compaction_type = kKeyValueCompaction;
   params.input_range = std::move(input_range);
 
@@ -1650,14 +1648,11 @@ Compaction* CompactionPicker::PickCompositeCompaction(
   if (!vstorage->has_space_amplification()) {
     return nullptr;
   }
-  ;
   std::vector<CompactionInputFiles> inputs(1);
   auto& input = inputs.front();
   input.level = -1;
   double max_read_amp_ratio = -std::numeric_limits<double>::infinity();
-  uint32_t max_subs = mutable_cf_options.max_subcompactions == 0
-                          ? ioptions_.env->GetBackgroundThreads()
-                          : mutable_cf_options.max_subcompactions;
+  uint32_t max_subcompactions = mutable_cf_options.max_subcompactions;
   // Traverse all sorted_runs from the highest to bottomest finding selection.
   for (auto& sr : sorted_runs) {
     // Skip if this sorted run was occupied by other compaction.
@@ -1729,7 +1724,7 @@ Compaction* CompactionPicker::PickCompositeCompaction(
                                             mutable_cf_options, level, 1, true);
     params.compression_opts =
         GetCompressionOptions(ioptions_, vstorage, level, true);
-    params.max_subcompactions = max_subs;
+    params.max_subcompactions = max_subcompactions;
     params.score = 0;
     params.partial_compaction = true;
     params.compaction_type = compaction_type;
@@ -1743,7 +1738,7 @@ Compaction* CompactionPicker::PickCompositeCompaction(
     input.files = vstorage->LevelFiles(input.level);
     assert(input.files.size() > 1);
     compaction_type = kMapCompaction;
-    max_subs = 1;
+    max_subcompactions = 1;
     return new_compaction();
   }
 
@@ -1914,7 +1909,7 @@ Compaction* CompactionPicker::PickCompositeCompaction(
       } while (sum < pick_size);
     }
     input_range.emplace_back(SelectedRange(std::move(range), weight));
-    if (input_range.size() >= max_subs) {
+    if (input_range.size() >= max_subcompactions) {
       break;
     }
   }
@@ -1939,7 +1934,7 @@ Compaction* CompactionPicker::PickCompositeCompaction(
         range.include_start = true;
         range.include_limit = false;
         input_range.emplace_back(std::move(range), 0);
-        if (input_range.size() >= max_subs) {
+        if (input_range.size() >= max_subcompactions) {
           break;
         }
       } else {
@@ -1964,7 +1959,7 @@ Compaction* CompactionPicker::PickCompositeCompaction(
   }
   // for unmap level 0
   if (input.level != 0) {
-    max_subs = 1;
+    max_subcompactions = 1;
     compaction_type = kMapCompaction;
     return new_compaction();
   }
@@ -2013,9 +2008,7 @@ Compaction* CompactionPicker::PickBottommostLevelCompaction(
   };
   int level = vstorage->num_non_empty_levels() - 1;
   auto& level_files = vstorage->LevelFiles(level);
-  uint32_t max_subs = mutable_cf_options.max_subcompactions == 0
-                          ? ioptions_.env->GetBackgroundThreads()
-                          : mutable_cf_options.max_subcompactions;
+  uint32_t max_subcompactions = mutable_cf_options.max_subcompactions;
   std::vector<CompactionInputFiles> inputs;
   inputs.emplace_back(CompactionInputFiles{level, level_files});
 
@@ -2035,7 +2028,7 @@ Compaction* CompactionPicker::PickBottommostLevelCompaction(
           range.include_start = true;
           range.include_limit = false;
           input_range.emplace_back(std::move(range));
-          if (input_range.size() >= max_subs) {
+          if (input_range.size() >= max_subcompactions) {
             has_start = false;
             break;
           }
@@ -2049,7 +2042,7 @@ Compaction* CompactionPicker::PickBottommostLevelCompaction(
         range.include_start = true;
         range.include_limit = false;
         input_range.emplace_back(std::move(range));
-        if (input_range.size() >= max_subs) {
+        if (input_range.size() >= max_subcompactions) {
           break;
         }
         subcompact_size = 0;
@@ -2083,7 +2076,7 @@ Compaction* CompactionPicker::PickBottommostLevelCompaction(
                                           mutable_cf_options, level, 1, true);
   params.compression_opts =
       GetCompressionOptions(ioptions_, vstorage, level, true);
-  params.max_subcompactions = max_subs;
+  params.max_subcompactions = max_subcompactions;
   params.score = 0;
   params.partial_compaction = true;
   params.compaction_type = kKeyValueCompaction;
@@ -2484,7 +2477,7 @@ Compaction* LevelCompactionBuilder::PickLazyCompaction(
     sorted_runs[i].being_compacted =
         picker->AreFilesInCompaction(vstorage_->LevelFiles(i));
   }
-  // if level 0 has any range deletion or map sstable, try to push them down. 
+  // if level 0 has any range deletion or map sstable, try to push them down.
   if ((vstorage_->has_range_deletion(0) &&
        (bottommost_level > 0 || vstorage_->LevelFiles(0).size() > 1)) ||
       vstorage_->has_map_sst(0) ||

@@ -153,6 +153,7 @@ void TerarkZipAutoConfigForBulkLoad(struct TerarkZipTableOptions& tzo,
   cfo.target_file_size_multiplier = 1;
   cfo.compaction_style = rocksdb::kCompactionStyleUniversal;
   cfo.compaction_options_universal.allow_trivial_move = true;
+  cfo.max_subcompactions = 1;  // no sub compactions
 
   cfo.max_compaction_bytes = (static_cast<uint64_t>(1) << 60);
   cfo.disable_auto_compactions = true;
@@ -166,7 +167,6 @@ void TerarkZipAutoConfigForBulkLoad(struct TerarkZipTableOptions& tzo,
   dbo.allow_mmap_reads = true;
   dbo.allow_mmap_populate = false;
   dbo.max_background_flushes = 4;
-  dbo.max_subcompactions = 1;  // no sub compactions
   dbo.new_table_reader_for_compaction_inputs = false;
   dbo.max_open_files = -1;
 
@@ -399,6 +399,7 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo,
   MyOverrideInt(cfo, level0_stop_writes_trigger);
   MyOverrideXiB(cfo, max_compaction_bytes);
 
+  MyOverrideInt(cfo, max_subcompactions);
   MyOverrideXiB(cfo, blob_size);
   MyOverrideDouble(cfo, blob_gc_ratio);
 
@@ -435,7 +436,6 @@ void TerarkZipDBOptionsFromEnv(DBOptions& dbo) {
 
   TerarkZipAutoConfigForOnlineDB_DBOptions(dbo, 0);
 
-  MyOverrideInt(dbo, max_subcompactions);
   MyOverrideInt(dbo, max_background_flushes);
   MyOverrideInt(dbo, max_background_compactions);
   MyOverrideInt(dbo, max_background_garbage_collections);

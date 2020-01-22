@@ -633,9 +633,9 @@ Compaction* UniversalCompactionPicker::CompactRange(
         manual_conflict, files_being_compact);
   }
   LogBuffer log_buffer(InfoLogLevel::INFO_LEVEL, ioptions_.info_log);
-  auto c = PickRangeCompaction(cf_name, mutable_cf_options, vstorage,
-                               input_level, begin, end, files_being_compact,
-                               manual_conflict, &log_buffer);
+  auto c = PickRangeCompaction(
+      cf_name, mutable_cf_options, vstorage, input_level, begin, end,
+      max_subcompactions, files_being_compact, manual_conflict, &log_buffer);
   log_buffer.FlushBufferToLog();
   return c;
 }

@@ -70,9 +70,6 @@ DBOptions SanitizeOptions(const std::string& dbname, const DBOptions& src) {
   result.env->IncBackgroundThreadsIfNeeded(bg_job_limits.max_flushes,
                                            Env::Priority::HIGH);
 
-  result.max_subcompactions =
-      bg_job_limits.max_compactions - bg_job_limits.max_garbage_collections;
-
   if (result.rate_limiter.get() != nullptr) {
     if (result.bytes_per_sync == 0) {
       result.bytes_per_sync = 1024 * 1024;

@@ -146,7 +146,9 @@ void MutableCFOptions::Dump(Logger* log) const {
       prefix_extractor == nullptr ? "nullptr" : prefix_extractor->Name());
   ROCKS_LOG_INFO(log, "                 disable_auto_compactions: %d",
                  disable_auto_compactions);
-  ROCKS_LOG_INFO(log, "                                blob_size: %d",
+  ROCKS_LOG_INFO(log, "                       max_subcompactions: %u",
+                 max_subcompactions);
+  ROCKS_LOG_INFO(log, "                                blob_size: %zd",
                  blob_size);
   ROCKS_LOG_INFO(log, "                            blob_gc_ratio: %f",
                  blob_gc_ratio);
@@ -160,8 +162,6 @@ void MutableCFOptions::Dump(Logger* log) const {
                  level0_slowdown_writes_trigger);
   ROCKS_LOG_INFO(log, "               level0_stop_writes_trigger: %d",
                  level0_stop_writes_trigger);
-  ROCKS_LOG_INFO(log, "                       max_subcompactions: %" PRIu64,
-                 max_subcompactions);
   ROCKS_LOG_INFO(log, "                     max_compaction_bytes: %" PRIu64,
                  max_compaction_bytes);
   ROCKS_LOG_INFO(log, "                    target_file_size_base: %" PRIu64,

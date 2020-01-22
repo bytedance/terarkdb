@@ -967,18 +967,21 @@ Status DBImpl::CompactFilesImpl(
   // here.
   version->storage_info()->ComputeCompactionScore(*cfd->ioptions(),
                                                   *c->mutable_cf_options());
-
-  int delta_bg_works = env_->GetBackgroundThreads() - bg_compaction_scheduled_;
-  compaction_job.Prepare(delta_bg_works);
-  bg_compaction_scheduled_ += delta_bg_works;
+  uint32_t max_subcompactions =
+      compact_options.max_subcompactions > 0
+          ? compact_options.max_subcompactions
+          : c->mutable_cf_options()->max_subcompactions;
+  int sub_compaction_scheduled =
+      compaction_job.Prepare(GetSubCompactionSlots(max_subcompactions));
+  bg_compaction_scheduled_ += sub_compaction_scheduled;
   mutex_.Unlock();
   TEST_SYNC_POINT("CompactFilesImpl:0");
   TEST_SYNC_POINT("CompactFilesImpl:1");
-  compaction_job.Run(delta_bg_works);
+  compaction_job.Run();
   TEST_SYNC_POINT("CompactFilesImpl:2");
   TEST_SYNC_POINT("CompactFilesImpl:3");
   mutex_.Lock();
-  bg_compaction_scheduled_ -= delta_bg_works;
+  bg_compaction_scheduled_ -= sub_compaction_scheduled;
   Status status = compaction_job.Install(*c->mutable_cf_options());
   if (status.ok()) {
     InstallSuperVersionAndScheduleWork(
@@ -1912,6 +1915,22 @@ DBImpl::BGJobLimits DBImpl::GetBGJobLimits(
   return res;
 }
 
+int DBImpl::GetSubCompactionSlots(uint32_t max_subcompactions) {
+  mutex_.AssertHeld();
+  auto bg_job_limits =
+      GetBGJobLimits(immutable_db_options_.max_background_flushes,
+                     mutable_db_options_.max_background_compactions,
+                     mutable_db_options_.max_background_garbage_collections,
+                     mutable_db_options_.max_background_jobs,
+                     true /* parallelize_compactions */);
+  int slots =
+      (bg_job_limits.max_compactions - bg_job_limits.max_garbage_collections) -
+      (bg_compaction_scheduled_ - bg_garbage_collection_scheduled_);
+  slots = std::max(0, slots + 1) / 2;
+  // max_subcompactions == 0 ? slots : min(max_subcompactions - 1, slots)
+  return (int)std::min(max_subcompactions - 1, uint32_t(slots));
+}
+
 void DBImpl::AddToCompactionQueue(ColumnFamilyData* cfd) {
   assert(!cfd->queued_for_compaction());
   cfd->Ref();
@@ -2747,18 +2766,18 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
         &event_logger_, c->mutable_cf_options()->paranoid_file_checks,
         c->mutable_cf_options()->report_bg_io_stats, dbname_,
         &compaction_job_stats);
-    int delta_bg_works = env_->GetBackgroundThreads() - bg_compaction_scheduled_;
-    compaction_job.Prepare(delta_bg_works);
-    bg_compaction_scheduled_ += delta_bg_works;
+    int sub_compaction_scheduled =
+        compaction_job.Prepare(GetSubCompactionSlots(c->max_subcompactions()));
+    bg_compaction_scheduled_ += sub_compaction_scheduled;
 
     NotifyOnCompactionBegin(c->column_family_data(), c.get(), status,
                             compaction_job_stats, job_context->job_id);
 
     mutex_.Unlock();
-    compaction_job.Run(delta_bg_works);
+    compaction_job.Run();
     TEST_SYNC_POINT("DBImpl::BackgroundCompaction:NonTrivial:AfterRun");
     mutex_.Lock();
-    bg_compaction_scheduled_ -= delta_bg_works;
+    bg_compaction_scheduled_ -= sub_compaction_scheduled;
     status = compaction_job.Install(*c->mutable_cf_options());
     if (status.ok()) {
       InstallSuperVersionAndScheduleWork(
@@ -2968,18 +2987,14 @@ Status DBImpl::BackgroundGarbageCollection(bool* made_progress,
         &event_logger_, c->mutable_cf_options()->paranoid_file_checks,
         c->mutable_cf_options()->report_bg_io_stats, dbname_,
         &garbage_collection_job_stats);
-    int delta_bg_works = GetBGJobLimits().max_garbage_collections -
-                         unscheduled_garbage_collections_;
-    garbage_collection_job.Prepare(delta_bg_works);
-    unscheduled_garbage_collections_ += delta_bg_works;
+    garbage_collection_job.Prepare(0 /* sub_compaction_slots */);
     NotifyOnCompactionBegin(c->column_family_data(), c.get(), status,
                             garbage_collection_job_stats, job_context->job_id);
 
     mutex_.Unlock();
-    garbage_collection_job.Run(delta_bg_works);
+    garbage_collection_job.Run();
     TEST_SYNC_POINT("DBImpl::BackgroundGarbageCollection:NonTrivial:AfterRun");
     mutex_.Lock();
-    unscheduled_garbage_collections_ -= delta_bg_works;
     status = garbage_collection_job.Install(*c->mutable_cf_options());
     if (status.ok()) {
       InstallSuperVersionAndScheduleWork(

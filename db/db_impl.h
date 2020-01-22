@@ -483,6 +483,7 @@ class DBImpl : public DB {
                                     int max_background_garbage_collections,
                                     int max_background_jobs,
                                     bool parallelize_compactions);
+  int GetSubCompactionSlots(uint32_t max_subcompactions);
 
   // move logs pending closing from job_context to the DB queue and
   // schedule a purge

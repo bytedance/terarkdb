@@ -81,20 +81,20 @@ class CompactionJob {
   CompactionJob& operator=(const CompactionJob& job) = delete;
 
   // REQUIRED: mutex held
-  void Prepare(int& delta_bg_works);
+  int Prepare(int sub_compaction_slots);
   // REQUIRED mutex not held
-  Status Run(int& delta_bg_works);
-  Status RunSelf(int& delta_bg_works);
+  Status Run();
+  Status RunSelf();
 
   Status VerifyFiles();
 
   // REQUIRED: mutex held
   Status Install(const MutableCFOptions& mutable_cf_options);
-  
+
   struct ProcessArg {
-      CompactionJob* job;
-      int task_id;
-      std::promise<bool> finished;
+    CompactionJob* job;
+    int task_id;
+    std::promise<bool> finished;
   };
 
   static void CallProcessCompaction(void* arg);

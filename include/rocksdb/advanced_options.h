@@ -501,7 +501,6 @@ struct AdvancedColumnFamilyOptions {
   std::vector<int> max_bytes_for_level_multiplier_additional =
       std::vector<int>(num_levels, 1);
 
-  uint32_t max_cf_subcompactions = 1;
   // We try to limit number of bytes in one compaction to be lower than this
   // threshold. But it's not guaranteed.
   // Value 0 will be sanitized.

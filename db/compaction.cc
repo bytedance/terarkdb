@@ -214,6 +214,9 @@ Compaction::Compaction(CompactionParams&& params)
   if (is_manual_compaction_) {
     compaction_reason_ = CompactionReason::kManualCompaction;
   }
+  if (max_subcompactions_ == 0) {
+    max_subcompactions_ = mutable_cf_options_.max_subcompactions;
+  }
 
 #ifndef NDEBUG
   for (size_t i = 1; i < inputs_.size(); ++i) {
