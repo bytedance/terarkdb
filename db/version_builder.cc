@@ -693,7 +693,7 @@ class VersionBuilder::Rep {
         auto* file_meta = files_meta[file_idx].first;
         int level = files_meta[file_idx].second;
         auto file_read_hist =
-            level > 0 ? internal_stats->GetFileReadHist(level) : nullptr;
+            level >= 0 ? internal_stats->GetFileReadHist(level) : nullptr;
         table_cache_->FindTable(
             env_options_, *(base_vstorage_->InternalComparator()),
             file_meta->fd, &file_meta->table_reader_handle, prefix_extractor,

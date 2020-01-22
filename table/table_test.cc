@@ -280,7 +280,7 @@ class TableConstructor: public Constructor {
             ioptions, moptions, internal_comparator,
             &int_tbl_prop_collector_factories, options.compression,
             CompressionOptions(), nullptr /* compression_dict */,
-            false /* skip_filters */, false /* ignore_key_tyoe */,
+            false /* skip_filters */,
             column_family_name, level_, 0 /* compaction_load */),
         TablePropertiesCollectorFactory::Context::kUnknownColumnFamily,
         file_writer_.get()));
@@ -295,7 +295,7 @@ class TableConstructor: public Constructor {
         EXPECT_TRUE(builder->Add(kv.first, LazyBuffer(kv.second)).ok());
       }
     }
-    Status s = builder->Finish(nullptr);
+    Status s = builder->Finish(nullptr, nullptr);
     file_writer_->Flush();
     EXPECT_TRUE(s.ok()) << s.ToString();
 
@@ -2597,7 +2597,7 @@ TEST_F(PlainTableTest, BasicPlainTableProperties) {
     std::string value(28, c + 42);
     builder->Add(key, LazyBuffer(value));
   }
-  ASSERT_OK(builder->Finish(nullptr));
+  ASSERT_OK(builder->Finish(nullptr, nullptr));
   file_writer->Flush();
 
   test::StringSink* ss =
@@ -3239,7 +3239,7 @@ TEST_P(BlockBasedTableTest, BlockAlignTest) {
 
     builder->Add(ik.Encode(), LazyBuffer(value));
   }
-  ASSERT_OK(builder->Finish(nullptr));
+  ASSERT_OK(builder->Finish(nullptr, nullptr));
   file_writer->Flush();
 
   test::RandomRWStringSink ss_rw(sink);
@@ -3333,7 +3333,7 @@ TEST_P(BlockBasedTableTest, PropertiesBlockRestartPointTest) {
 
     builder->Add(ik.Encode(), LazyBuffer(value));
   }
-  ASSERT_OK(builder->Finish(nullptr));
+  ASSERT_OK(builder->Finish(nullptr, nullptr));
   file_writer->Flush();
 
   test::RandomRWStringSink ss_rw(sink);

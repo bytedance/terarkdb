@@ -115,7 +115,7 @@ class VersionStorageInfoTest : public testing::Test {
         options_(GetOptionsWithNumLevels(6, logger_)),
         ioptions_(options_),
         mutable_cf_options_(options_),
-        vstorage_(&icmp_, ucmp_, 6, kCompactionStyleLevel, nullptr, false) {}
+        vstorage_(&icmp_, ucmp_, 6, kCompactionStyleLevel, false) {}
 
   ~VersionStorageInfoTest() {
     for (int i = 0; i < vstorage_.num_levels(); i++) {
@@ -136,7 +136,8 @@ class VersionStorageInfoTest : public testing::Test {
     f->largest = GetInternalKey(largest, 0);
     f->compensated_file_size = file_size;
     f->refs = 1;
-    f->num_deletions = 0;
+    f->prop.num_entries = 1;
+    f->prop.num_deletions = 0;
     vstorage_.AddFile(level, f);
   }
 
@@ -149,7 +150,8 @@ class VersionStorageInfoTest : public testing::Test {
     f->largest = largest;
     f->compensated_file_size = file_size;
     f->refs = 1;
-    f->num_deletions = 0;
+    f->prop.num_entries = 1;
+    f->prop.num_deletions = 0;
     vstorage_.AddFile(level, f);
   }
 

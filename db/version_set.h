@@ -104,7 +104,7 @@ class VersionStorageInfo {
                bool (*exists)(void*, uint64_t) = nullptr,
                void* exists_args = nullptr, Logger* info_log = nullptr);
 
-  void IncRefs();
+  void FinishAddFile(SequenceNumber _oldest_snapshot_seqnum = 0);
 
   uint64_t FileSize(const FileMetaData* f, uint64_t file_number = uint64_t(-1),
                     uint64_t entry_count = 0) const;
@@ -176,7 +176,10 @@ class VersionStorageInfo {
   // Updates the oldest snapshot and related internal state, like the bottommost
   // files marked for compaction.
   // REQUIRES: DB mutex held
-  void UpdateOldestSnapshot(SequenceNumber oldest_snapshot_seqnum);
+  void UpdateOldestSnapshot(SequenceNumber _oldest_snapshot_seqnum);
+  SequenceNumber oldest_snapshot_seqnum() const {
+    return oldest_snapshot_seqnum_;
+  }
 
   int MaxInputLevel() const;
   int MaxOutputLevel(bool allow_ingest_behind) const;

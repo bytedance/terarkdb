@@ -76,7 +76,7 @@ void createSST(const std::string& file_name,
   for (uint32_t i = 0; i < num_keys; i++) {
     ASSERT_OK(tb->Add(MakeKey(i), LazyBuffer(MakeValue(i))));
   }
-  tb->Finish(nullptr);
+  tb->Finish(nullptr, nullptr);
   file_writer->Close();
 }
 

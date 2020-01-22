@@ -256,7 +256,7 @@ void WalManager::PurgeObsoleteWALFiles() {
   if (total_log_file_size <= db_options_.wal_size_limit_mb * 1024 * 1024) {
     return;
   }
-  uint64_t overflow_size =
+  int64_t overflow_size =
       total_log_file_size - db_options_.wal_size_limit_mb * 1024 * 1024;
 
   VectorLogPtr archived_logs;
@@ -272,11 +272,15 @@ void WalManager::PurgeObsoleteWALFiles() {
                       file_path.c_str(), s.ToString().c_str());
       return;
     }
-    if (file_size > overflow_size) {
+    // if (file_size > overflow_size) {
+    //   break;
+    // }
+    overflow_size -= file_size;
+    
+    s = env_->DeleteFile(file_path);
+    if(overflow_size <= 0) {
       break;
     }
-    overflow_size -= file_size;
-    s = env_->DeleteFile(file_path);
     if (!s.ok()) {
       ROCKS_LOG_WARN(db_options_.info_log, "Unable to delete file: %s: %s",
                      file_path.c_str(), s.ToString().c_str());

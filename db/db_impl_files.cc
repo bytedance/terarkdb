@@ -443,6 +443,7 @@ void DBImpl::PurgeObsoleteFiles(JobContext& state, bool schedule_only) {
             reinterpret_cast<void*>(&keep));
         break;
       case kCurrentFile:
+      case kSocketFile:
       case kDBLockFile:
       case kIdentityFile:
       case kMetaDatabase:

@@ -287,9 +287,8 @@ TEST(PatriciaMemTableTest, Normal){
   options.memtable_factory = factory;
   ImmutableCFOptions ioptions(options);
   WriteBufferManager wb(options.db_write_buffer_size);
-  MemTable* mem = new MemTable(cmp, ioptions, MutableCFOptions(options),
-                               false, &wb,
-                               kMaxSequenceNumber, 0);
+  MemTable* mem = new MemTable(cmp, ioptions, MutableCFOptions(options), true,
+                               &wb, kMaxSequenceNumber, 0);
 
   // Write some keys and make sure it returns false on duplicates
   bool res;
