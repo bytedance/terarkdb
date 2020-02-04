@@ -119,6 +119,7 @@ TEST_F(LazyBufferTest, BufferState) {
 
     auto builder = b.get_builder();
     ASSERT_TRUE(b.valid());
+    // builder->resize() has no reload function
     // ASSERT_FALSE(builder->resize(size_t(-1)));
     // ASSERT_NOK(builder->fetch());
     // ASSERT_FALSE(builder->resize(3));
