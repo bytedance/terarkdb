@@ -193,6 +193,7 @@ ColumnFamilyOptions BuildColumnFamilyOptions(
   cf_opts.paranoid_file_checks = mutable_cf_options.paranoid_file_checks;
   cf_opts.report_bg_io_stats = mutable_cf_options.report_bg_io_stats;
   cf_opts.compression = mutable_cf_options.compression;
+  cf_opts.max_subcompactions = mutable_cf_options.max_subcompactions;
 
   cf_opts.table_factory = options.table_factory;
   // TODO(yhchiang): find some way to handle the following derived options
