@@ -234,7 +234,6 @@ TEST_F(OptionsSettableTest, DBOptionsAllFieldsSettable) {
                              "WAL_size_limit_MB=4295036161;"
                              "wal_dir=path/to/wal_dir;"
                              "db_write_buffer_size=2587;"
-                             "max_subcompactions=64330;"
                              "table_cache_numshardbits=28;"
                              "max_open_files=72;"
                              "max_file_opening_threads=35;"
@@ -406,6 +405,7 @@ TEST_F(OptionsSettableTest, ColumnFamilyOptionsAllFieldsSettable) {
   // Need to update the option string if a new option is added.
   ASSERT_OK(GetColumnFamilyOptionsFromString(
       *options,
+      "max_subcompactions=1;"
       "compaction_filter_factory=mpudlojcujCompactionFilterFactory;"
       "table_factory=PlainTable;"
       "prefix_extractor=rocksdb.CappedPrefix.13;"
