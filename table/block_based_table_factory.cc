@@ -618,4 +618,16 @@ const std::string kHashIndexPrefixesMetadataBlock =
 const std::string kPropTrue = "1";
 const std::string kPropFalse = "0";
 
+static TableFactory* BlockedCreator(const std::string& options, Status* s) {
+  BlockBasedTableOptions base, bbto;
+  *s = GetBlockBasedTableOptionsFromString(base, options, &bbto);
+  if (s->ok()) {
+    return NewBlockBasedTableFactory(bbto);
+  }
+  return nullptr;
+}
+
+TERARK_FACTORY_REGISTER_EX(BlockBasedTableFactory,
+                          "BlockBasedTable", &BlockedCreator);
+
 }  // namespace rocksdb

@@ -119,9 +119,10 @@ TEST_F(LazyBufferTest, BufferState) {
 
     auto builder = b.get_builder();
     ASSERT_TRUE(b.valid());
-    ASSERT_FALSE(builder->resize(size_t(-1)));
-    ASSERT_NOK(builder->fetch());
-    ASSERT_FALSE(builder->resize(3));
+    // builder->resize() has no reload function
+    // ASSERT_FALSE(builder->resize(size_t(-1)));
+    // ASSERT_NOK(builder->fetch());
+    // ASSERT_FALSE(builder->resize(3));
 
     ASSERT_TRUE(builder->resize(0));
     ASSERT_TRUE(builder->resize(3));
@@ -142,7 +143,9 @@ TEST_F(LazyBufferTest, BufferState) {
 
     b.reset(LazyBuffer());
   };
-  LazyBuffer buffer(size_t(-1));
+
+  // LazyBuffer buffer(size_t(-1));
+  LazyBuffer buffer(Status::Aborted());
   ASSERT_EQ(buffer.TEST_state(), LazyBufferState::buffer_state());
   ASSERT_NOK(buffer.fetch());
   ASSERT_NOK(buffer.fetch()); // test fetch twice
@@ -248,7 +251,7 @@ TEST_F(LazyBufferTest, ConstructorUninitializedResize) {
   ASSERT_TRUE(buffer_2.valid());
   ASSERT_EQ(buffer_2.size(), 100);
 
-  LazyBuffer buffer_3(size_t(-1));
+  LazyBuffer buffer_3(Status::Aborted());
   ASSERT_EQ(buffer_3.TEST_state(), LazyBufferState::buffer_state());
   ASSERT_FALSE(buffer_3.valid());
   ASSERT_NOK(buffer_3.fetch());

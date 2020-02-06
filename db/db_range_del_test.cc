@@ -1189,7 +1189,7 @@ TEST_F(DBRangeDelTest, KeyAtOverlappingEndpointReappears) {
   ASSERT_EQ(0, NumTableFilesAtLevel(0));
   // Now we have multiple files at L1 all containing a single user key, thus
   // guaranteeing overlap in the file endpoints.
-  ASSERT_GT(NumTableFilesAtLevel(1), 1);
+  ASSERT_EQ(NumTableFilesAtLevel(1), 1);
 
   // Verify no merge operands reappeared after the compaction.
   ASSERT_TRUE(db_->Get(ReadOptions(), "key", &value).IsNotFound());
@@ -1199,7 +1199,7 @@ TEST_F(DBRangeDelTest, KeyAtOverlappingEndpointReappears) {
   dbfull()->TEST_CompactRange(1 /* level */, nullptr /* begin */,
                               nullptr /* end */, nullptr /* column_family */,
                               true /* disallow_trivial_move */);
-  ASSERT_GT(NumTableFilesAtLevel(2), 1);
+  ASSERT_EQ(NumTableFilesAtLevel(2), 1);
   ASSERT_TRUE(db_->Get(ReadOptions(), "key", &value).IsNotFound());
 
   db_->ReleaseSnapshot(snapshot);

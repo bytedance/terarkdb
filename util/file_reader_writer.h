@@ -270,7 +270,7 @@ class WritableFileWriter {
 #endif  // !ROCKSDB_LITE
   // Normal write
   Status WriteBuffered(const char* data, size_t size, bool auto_sync);
-  Status AutoRangeSync();
+  Status AutoRangeSync(uint64_t filesize_for_sync);
   Status RangeSync(uint64_t offset, uint64_t nbytes);
   Status SyncInternal(bool use_fsync);
 };

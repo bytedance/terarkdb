@@ -6,11 +6,13 @@
 #include <cfloat>
 #include <future>
 // boost headers
+#include <boost/range/algorithm.hpp>
 // rocksdb headers
 #include <db/version_edit.h>
 #include <rocksdb/compaction_filter.h>
 #include <rocksdb/merge_operator.h>
 #include <table/meta_blocks.h>
+#include <util/async_task.h>
 #include <util/c_style_callback.h>
 #include <util/xxhash.h>
 // terark headers
@@ -147,6 +149,8 @@ rocksdb::Status MyRocksTablePropertiesCollectorHack(
 }
 ///////////////////////////////////////////////////////////////////
 
+extern void TerarkZipConfigCompactionWorkerFromEnv(TerarkZipTableOptions&);
+
 TerarkZipTableBuilder::TerarkZipTableBuilder(
     const TerarkZipTableFactory* table_factory,
     const TerarkZipTableOptions& tzto, const TableBuilderOptions& tbo,
@@ -158,6 +162,9 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(
       prefixLen_(key_prefixLen),
       compaction_load_(0) {
   try {
+    if (IsCompactionWorkerNode()) {
+      TerarkZipConfigCompactionWorkerFromEnv(table_options_);
+    }
     singleIndexMaxSize_ = std::min(table_options_.softZipWorkingMemLimit,
                                    table_options_.singleIndexMaxSize);
     level_ = tbo.level;
@@ -217,7 +224,7 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(
     file_ = file;
     sampleUpperBound_ =
         uint64_t(randomGenerator_.max() * table_options_.sampleRatio);
-    tmpSentryFile_.path = tzto.localTempDir + "/Terark-XXXXXX";
+    tmpSentryFile_.path = table_options_.localTempDir + "/Terark-XXXXXX";
     tmpSentryFile_.open_temp();
     tmpSampleFile_.path = tmpSentryFile_.path + ".sample";
     tmpSampleFile_.open();
@@ -247,9 +254,7 @@ DictZipBlobStore::ZipBuilder* TerarkZipTableBuilder::createZipBuilder() const {
 
 TerarkZipTableBuilder::~TerarkZipTableBuilder() {
   std::unique_lock<std::mutex> zipLock(zipMutex);
-  waitQueue.trim(
-      std::remove_if(waitQueue.begin(), waitQueue.end(),
-                     [this](PendingTask x) { return this == x.tztb; }));
+  waitQueue.trim(boost::remove_if(waitQueue, TERARK_GET(.tztb) == this));
 }
 
 uint64_t TerarkZipTableBuilder::FileSize() const {
@@ -776,10 +781,16 @@ Status TerarkZipTableBuilder::Finish(
   return AbortFinish(ex);
 }
 
-std::unique_ptr<TerarkZipTableBuilder::TerarkZipTableBuilderTask>
+std::unique_ptr<rocksdb::AsyncTask<rocksdb::Status>>
 TerarkZipTableBuilder::Async(std::function<Status()> func, void* tag) {
-  auto task = std::unique_ptr<TerarkZipTableBuilder::TerarkZipTableBuilderTask>(
-      new TerarkZipTableBuilderTask(std::move(func)));
+  auto task = std::unique_ptr<rocksdb::AsyncTask<rocksdb::Status>>(
+      new AsyncTask<Status>([func]() {
+        try {
+          return func();
+        } catch (const std::exception& ex) {
+          return Status::Corruption(ex.what());
+        }
+      }));
   ioptions_.env->Schedule(c_style_callback(*task), task.get(),
                           rocksdb::Env::Priority::LOW, tag,
                           c_style_callback(*task));
@@ -1025,7 +1036,7 @@ Status TerarkZipTableBuilder::BuildStore(KeyValueStatus& kvs,
   return Status::OK();
 }
 
-std::unique_ptr<TerarkZipTableBuilder::TerarkZipTableBuilderTask>
+std::unique_ptr<rocksdb::AsyncTask<rocksdb::Status>>
 TerarkZipTableBuilder::CompressDict(fstring tmpDictFile, fstring dict,
                                     std::string* info, long long* td) {
   if (table_options_.disableCompressDict) {
@@ -1330,7 +1341,7 @@ Status TerarkZipTableBuilder::ZipValueToFinish() {
   AutoDeleteFile tmpDictFile{tmpSentryFile_.path + ".dict"};
   std::unique_ptr<DictZipBlobStore::ZipBuilder> zbuilder;
   WaitHandle dictWaitHandle;
-  std::unique_ptr<TerarkZipTableBuilderTask> dictWait;
+  std::unique_ptr<AsyncTask<Status>> dictWait;
   DictZipBlobStore::ZipStat dzstat;
   std::string dictInfo;
   uint64_t dictHash = 0;
@@ -1365,8 +1376,8 @@ Status TerarkZipTableBuilder::ZipValueToFinish() {
     zbuilder->freeDict();
     t4 = g_pf.now();
     ioptions_.env->UnSchedule(&dictTag, rocksdb::Env::Priority::LOW);
-    assert(dictWait->future.valid());
-    s = dictWait->future.get();
+    assert(dictWait.get()->future.valid());
+    s = dictWait.get()->future.get();
     if (!s.ok()) {
       return s;
     }
@@ -1393,7 +1404,7 @@ Status TerarkZipTableBuilder::ZipValueToFinishMulti() {
   AutoDeleteFile tmpDictFile{tmpSentryFile_.path + ".dict"};
   std::unique_ptr<DictZipBlobStore::ZipBuilder> zbuilder;
   WaitHandle dictWaitHandle;
-  std::unique_ptr<TerarkZipTableBuilderTask> dictWait;
+  std::unique_ptr<AsyncTask<Status>> dictWait;
   std::unique_ptr<AbstractBlobStore> store;
   DictZipBlobStore::ZipStat dzstat;
   std::string dictInfo;
@@ -1444,8 +1455,8 @@ Status TerarkZipTableBuilder::ZipValueToFinishMulti() {
   if (zbuilder) {
     zbuilder->freeDict();
     t4 = g_pf.now();
-    assert(dictWait->future.valid());
-    s = dictWait->future.get();
+    assert(dictWait.get()->future.valid());
+    s = dictWait.get()->future.get();
 
     if (!s.ok()) {
       return s;
@@ -1470,6 +1481,41 @@ Status TerarkZipTableBuilder::ZipValueToFinishMulti() {
   }
   return WriteSSTFileMulti(t3, t4, td, tmpDictFile, dictInfo, dictHash, dzstat);
 }
+
+class TerarkValueReader {
+  const valvec<std::shared_ptr<FilePair>>& files;
+  size_t index;
+  NativeDataInput<InputBuffer> reader;
+  valvec<byte_t> buffer;
+
+  void checkEOF(){
+    if (terark_unlikely(reader.eof())) {
+      FileStream* fp = &files[++index]->value.fp;
+      fp->rewind();
+      reader.attach(fp);
+    }
+  }
+
+public:
+  TerarkValueReader(const valvec<std::shared_ptr<FilePair>>& _files) : files(_files) {}
+
+  uint64_t readUInt64(){
+    checkEOF();
+    return reader.load_as<uint64_t>();
+  }
+
+  void appendBuffer(valvec<byte_t>* buffer) {
+    checkEOF();
+    reader.load_add(*buffer);
+  }
+
+  void rewind(){
+    index = 0;
+    FileStream* fp = &files.front()->value.fp;
+    fp->rewind();
+    reader.attach(fp);
+  }
+};
 
 Status TerarkZipTableBuilder::BuilderWriteValues(
     KeyValueStatus& kvs, std::function<void(fstring)> write) {
@@ -2313,7 +2359,7 @@ void TerarkZipTableBuilder::Abandon() {
 // based on Abandon
 Status TerarkZipTableBuilder::AbortFinish(const std::exception& ex) {
   TerarkZipTableBuilder::Abandon();
-  return Status::Aborted("exception", ex.what());
+  return Status::Corruption("exception", ex.what());
 }
 
 void TerarkZipTableBuilder::AddPrevUserKey(

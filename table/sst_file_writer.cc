@@ -126,8 +126,8 @@ struct SstFileWriter::Rep {
     }
 
     auto ikey_and_end_key = tombstone.Serialize();
-    builder->Add(ikey_and_end_key.first.Encode(),
-                 LazyBuffer(ikey_and_end_key.second));
+    builder->AddTombstone(ikey_and_end_key.first.Encode(),
+                          LazyBuffer(ikey_and_end_key.second));
 
     // update file info
     file_info.num_range_del_entries++;

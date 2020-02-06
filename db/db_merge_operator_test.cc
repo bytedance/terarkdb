@@ -423,7 +423,7 @@ TEST_P(MergeOperatorPinningTest, EvictCacheBeforeMerge) {
 
   VerifyDBFromMap(true_data, &total_reads);
 }
-
+#ifdef OLD_TAILING_ITER
 TEST_P(MergeOperatorPinningTest, TailingIterator) {
   Options options = CurrentOptions();
   options.merge_operator = MergeOperators::CreateMaxOperator();
@@ -536,6 +536,7 @@ TEST_F(DBMergeOperatorTest, TailingIteratorMemtableUnrefedBySomeoneElse) {
   EXPECT_TRUE(pushed_first_operand);
   EXPECT_TRUE(stepped_to_next_operand);
 }
+#endif // OLD_TAILING_ITER
 #endif  // ROCKSDB_LITE
 
 TEST_F(DBMergeOperatorTest, SnapshotCheckerAndReadCallback) {

@@ -308,7 +308,7 @@ TEST_F(DBPropertiesTest, ValidateSampleNumber) {
   std::string num;
   Reopen(options);
   ASSERT_TRUE(dbfull()->GetProperty("rocksdb.estimate-num-keys", &num));
-  ASSERT_EQ("45", num);
+  ASSERT_EQ("50", num);
   options.max_open_files = -1;
   Reopen(options);
   ASSERT_TRUE(dbfull()->GetProperty("rocksdb.estimate-num-keys", &num));

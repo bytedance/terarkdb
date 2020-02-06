@@ -9,6 +9,8 @@
 
 #include "table/two_level_iterator.h"
 
+#include <terark/util/function.hpp>
+
 #include "db/version_edit.h"
 #include "rocksdb/options.h"
 #include "rocksdb/table.h"
@@ -301,9 +303,7 @@ class MapSstIterator final : public InternalIterator {
              std::binary_search(file_meta_->prop.dependence.begin(),
                                 file_meta_->prop.dependence.end(),
                                 Dependence{link_[i], 0},
-                                [](const Dependence& l, const Dependence& r) {
-                                  return l.file_number < r.file_number;
-                                }));
+                                TERARK_CMP(file_number, <)));
     }
     return kInitFirstIterOK;
   }

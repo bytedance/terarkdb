@@ -61,7 +61,6 @@ DBOptions BuildDBOptions(const ImmutableDBOptions& immutable_db_options,
       mutable_db_options.max_background_garbage_collections;
   options.bytes_per_sync = mutable_db_options.bytes_per_sync;
   options.wal_bytes_per_sync = mutable_db_options.wal_bytes_per_sync;
-  options.max_subcompactions = immutable_db_options.max_subcompactions;
   options.max_background_flushes = immutable_db_options.max_background_flushes;
   options.max_log_file_size = immutable_db_options.max_log_file_size;
   options.log_file_time_to_roll = immutable_db_options.log_file_time_to_roll;
@@ -194,6 +193,7 @@ ColumnFamilyOptions BuildColumnFamilyOptions(
   cf_opts.paranoid_file_checks = mutable_cf_options.paranoid_file_checks;
   cf_opts.report_bg_io_stats = mutable_cf_options.report_bg_io_stats;
   cf_opts.compression = mutable_cf_options.compression;
+  cf_opts.max_subcompactions = mutable_cf_options.max_subcompactions;
 
   cf_opts.table_factory = options.table_factory;
   // TODO(yhchiang): find some way to handle the following derived options
@@ -1466,9 +1466,6 @@ std::unordered_map<std::string, OptionTypeInfo>
         {"wal_dir",
          {offsetof(struct DBOptions, wal_dir), OptionType::kString,
           OptionVerificationType::kNormal, false, 0}},
-        {"max_subcompactions",
-         {offsetof(struct DBOptions, max_subcompactions), OptionType::kUInt32T,
-          OptionVerificationType::kNormal, false, 0}},
         {"WAL_size_limit_MB",
          {offsetof(struct DBOptions, WAL_size_limit_MB), OptionType::kUInt64T,
           OptionVerificationType::kNormal, false, 0}},
@@ -1696,6 +1693,10 @@ std::unordered_map<std::string, OptionTypeInfo>
          {offset_of(&ColumnFamilyOptions::disable_auto_compactions),
           OptionType::kBoolean, OptionVerificationType::kNormal, true,
           offsetof(struct MutableCFOptions, disable_auto_compactions)}},
+        {"max_subcompactions",
+         {offset_of(&ColumnFamilyOptions::max_subcompactions),
+          OptionType::kUInt32T, OptionVerificationType::kNormal, true,
+          offsetof(struct MutableCFOptions, max_subcompactions)}},
         {"blob_size",
          {offset_of(&ColumnFamilyOptions::blob_size), OptionType::kSizeT,
           OptionVerificationType::kNormal, true,

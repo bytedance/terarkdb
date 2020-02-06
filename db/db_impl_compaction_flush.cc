@@ -967,9 +967,13 @@ Status DBImpl::CompactFilesImpl(
   // here.
   version->storage_info()->ComputeCompactionScore(*cfd->ioptions(),
                                                   *c->mutable_cf_options());
-
-  compaction_job.Prepare();
-
+  uint32_t max_subcompactions =
+      compact_options.max_subcompactions > 0
+          ? compact_options.max_subcompactions
+          : c->mutable_cf_options()->max_subcompactions;
+  int sub_compaction_scheduled =
+      compaction_job.Prepare(GetSubCompactionSlots(max_subcompactions));
+  bg_compaction_scheduled_ += sub_compaction_scheduled;
   mutex_.Unlock();
   TEST_SYNC_POINT("CompactFilesImpl:0");
   TEST_SYNC_POINT("CompactFilesImpl:1");
@@ -977,7 +981,7 @@ Status DBImpl::CompactFilesImpl(
   TEST_SYNC_POINT("CompactFilesImpl:2");
   TEST_SYNC_POINT("CompactFilesImpl:3");
   mutex_.Lock();
-
+  bg_compaction_scheduled_ -= sub_compaction_scheduled;
   Status status = compaction_job.Install(*c->mutable_cf_options());
   if (status.ok()) {
     InstallSuperVersionAndScheduleWork(
@@ -1150,6 +1154,7 @@ void DBImpl::NotifyOnCompactionCompleted(
     info.table_properties = c->GetOutputTableProperties();
     info.compaction_reason = c->compaction_reason();
     info.compression = c->output_compression();
+    info.transient_stat = c->transient_stat();
     for (size_t i = 0; i < c->num_input_levels(); ++i) {
       for (const auto fmd : *c->inputs(i)) {
         auto fn = TableFileName(c->immutable_cf_options()->cf_paths,
@@ -1908,6 +1913,22 @@ DBImpl::BGJobLimits DBImpl::GetBGJobLimits(
     res.max_compactions = 1;
   }
   return res;
+}
+
+int DBImpl::GetSubCompactionSlots(uint32_t max_subcompactions) {
+  mutex_.AssertHeld();
+  auto bg_job_limits =
+      GetBGJobLimits(immutable_db_options_.max_background_flushes,
+                     mutable_db_options_.max_background_compactions,
+                     mutable_db_options_.max_background_garbage_collections,
+                     mutable_db_options_.max_background_jobs,
+                     true /* parallelize_compactions */);
+  int slots =
+      (bg_job_limits.max_compactions - bg_job_limits.max_garbage_collections) -
+      (bg_compaction_scheduled_ - bg_garbage_collection_scheduled_);
+  slots = std::max(0, slots + 1) / 2;
+  // max_subcompactions == 0 ? slots : min(max_subcompactions - 1, slots)
+  return (int)std::min(max_subcompactions - 1, uint32_t(slots));
 }
 
 void DBImpl::AddToCompactionQueue(ColumnFamilyData* cfd) {
@@ -2721,6 +2742,7 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
     env_->Schedule(&DBImpl::BGWorkBottomCompaction, ca, Env::Priority::BOTTOM,
                    this, &DBImpl::UnscheduleCallback);
   } else {
+    // Normal compactions that needs to control the quantity of workers.
     int output_level __attribute__((__unused__));
     output_level = c->output_level();
     TEST_SYNC_POINT_CALLBACK("DBImpl::BackgroundCompaction:NonTrivial",
@@ -2744,7 +2766,9 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
         &event_logger_, c->mutable_cf_options()->paranoid_file_checks,
         c->mutable_cf_options()->report_bg_io_stats, dbname_,
         &compaction_job_stats);
-    compaction_job.Prepare();
+    int sub_compaction_scheduled =
+        compaction_job.Prepare(GetSubCompactionSlots(c->max_subcompactions()));
+    bg_compaction_scheduled_ += sub_compaction_scheduled;
 
     NotifyOnCompactionBegin(c->column_family_data(), c.get(), status,
                             compaction_job_stats, job_context->job_id);
@@ -2753,7 +2777,7 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
     compaction_job.Run();
     TEST_SYNC_POINT("DBImpl::BackgroundCompaction:NonTrivial:AfterRun");
     mutex_.Lock();
-
+    bg_compaction_scheduled_ -= sub_compaction_scheduled;
     status = compaction_job.Install(*c->mutable_cf_options());
     if (status.ok()) {
       InstallSuperVersionAndScheduleWork(
@@ -2963,8 +2987,7 @@ Status DBImpl::BackgroundGarbageCollection(bool* made_progress,
         &event_logger_, c->mutable_cf_options()->paranoid_file_checks,
         c->mutable_cf_options()->report_bg_io_stats, dbname_,
         &garbage_collection_job_stats);
-    garbage_collection_job.Prepare();
-
+    garbage_collection_job.Prepare(0 /* sub_compaction_slots */);
     NotifyOnCompactionBegin(c->column_family_data(), c.get(), status,
                             garbage_collection_job_stats, job_context->job_id);
 
@@ -2972,7 +2995,6 @@ Status DBImpl::BackgroundGarbageCollection(bool* made_progress,
     garbage_collection_job.Run();
     TEST_SYNC_POINT("DBImpl::BackgroundGarbageCollection:NonTrivial:AfterRun");
     mutex_.Lock();
-
     status = garbage_collection_job.Install(*c->mutable_cf_options());
     if (status.ok()) {
       InstallSuperVersionAndScheduleWork(

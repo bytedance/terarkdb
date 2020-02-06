@@ -568,7 +568,7 @@ void TestBoundary(InternalKey& ik1, std::string& v1, InternalKey& ik2,
   EXPECT_TRUE(builder->Add(ik1.Encode().ToString(), LazyBuffer(v1)).ok());
   EXPECT_TRUE(builder->Add(ik2.Encode().ToString(), LazyBuffer(v2)).ok());
 
-  Status s = builder->Finish(nullptr);
+  Status s = builder->Finish(nullptr, nullptr);
   file_writer->Flush();
   EXPECT_TRUE(s.ok()) << s.ToString();
 

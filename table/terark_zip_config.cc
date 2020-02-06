@@ -153,6 +153,7 @@ void TerarkZipAutoConfigForBulkLoad(struct TerarkZipTableOptions& tzo,
   cfo.target_file_size_multiplier = 1;
   cfo.compaction_style = rocksdb::kCompactionStyleUniversal;
   cfo.compaction_options_universal.allow_trivial_move = true;
+  cfo.max_subcompactions = 1;  // no sub compactions
 
   cfo.max_compaction_bytes = (static_cast<uint64_t>(1) << 60);
   cfo.disable_auto_compactions = true;
@@ -166,7 +167,6 @@ void TerarkZipAutoConfigForBulkLoad(struct TerarkZipTableOptions& tzo,
   dbo.allow_mmap_reads = true;
   dbo.allow_mmap_populate = false;
   dbo.max_background_flushes = 4;
-  dbo.max_subcompactions = 1;  // no sub compactions
   dbo.new_table_reader_for_compaction_inputs = false;
   dbo.max_open_files = -1;
 
@@ -200,25 +200,38 @@ void TerarkZipAutoConfigForOnlineDB_DBOptions(struct DBOptions& dbo,
   dbo.base_background_compactions = 1;
 }
 
+size_t TerarkGetSysMemSize() {
+#ifdef _MSC_VER
+  MEMORYSTATUSEX statex;
+  statex.dwLength = sizeof(statex);
+  GlobalMemoryStatusEx(&statex);
+  return statex.ullTotalPhys;
+#else
+  size_t page_num = sysconf(_SC_PHYS_PAGES);
+  size_t page_size = sysconf(_SC_PAGE_SIZE);
+  return page_num * page_size;
+#endif
+}
+
 void TerarkZipAutoConfigForOnlineDB_CFOptions(
     struct TerarkZipTableOptions& tzo, struct ColumnFamilyOptions& /*cfo*/,
     size_t memBytesLimit, size_t /*diskBytesLimit*/) {
   using namespace std;  // max, min
   if (0 == memBytesLimit) {
-#ifdef _MSC_VER
-    MEMORYSTATUSEX statex;
-    statex.dwLength = sizeof(statex);
-    GlobalMemoryStatusEx(&statex);
-    memBytesLimit = statex.ullTotalPhys;
-#else
-    size_t page_num = sysconf(_SC_PHYS_PAGES);
-    size_t page_size = sysconf(_SC_PAGE_SIZE);
-    memBytesLimit = page_num * page_size;
-#endif
+    memBytesLimit = TerarkGetSysMemSize();
+  } else {
+    memBytesLimit = std::min(TerarkGetSysMemSize(), memBytesLimit);
   }
+  TerarkZipConfigMemLimitFromSystem(tzo, memBytesLimit);
+}
+
+void TerarkZipConfigMemLimitFromSystem(TerarkZipTableOptions& tzo,
+                                       size_t memBytesLimit) {
   tzo.softZipWorkingMemLimit = memBytesLimit * 1 / 8;
   tzo.hardZipWorkingMemLimit = tzo.softZipWorkingMemLimit * 2;
   tzo.smallTaskMemory = memBytesLimit / 64;
+  tzo.singleIndexMaxSize =
+      std::min(tzo.softZipWorkingMemLimit, tzo.singleIndexMaxSize);
 }
 
 bool TerarkZipConfigFromEnv(DBOptions& dbo, ColumnFamilyOptions& cfo) {
@@ -386,6 +399,7 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo,
   MyOverrideInt(cfo, level0_stop_writes_trigger);
   MyOverrideXiB(cfo, max_compaction_bytes);
 
+  MyOverrideInt(cfo, max_subcompactions);
   MyOverrideXiB(cfo, blob_size);
   MyOverrideDouble(cfo, blob_gc_ratio);
 
@@ -395,6 +409,25 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo,
   return true;
 }  // namespace rocksdb
 
+void TerarkZipConfigCompactionWorkerFromEnv(TerarkZipTableOptions& tzo) {
+  assert(IsCompactionWorkerNode());
+  if (const char* env = getenv("TerarkZipTable_localTempDir")) {
+    tzo.localTempDir = env;
+  } else if (const char* env = getenv("TMPDIR")) {
+    tzo.localTempDir = env;
+  } else {
+    tzo.localTempDir = "/tmp";
+  }
+  size_t sys_mem = TerarkGetSysMemSize();
+  tzo.softZipWorkingMemLimit = sys_mem / 2;
+  tzo.hardZipWorkingMemLimit = sys_mem / 2;
+  tzo.smallTaskMemory = sys_mem / 4;
+
+  MyOverrideXiB(tzo, softZipWorkingMemLimit);
+  MyOverrideXiB(tzo, hardZipWorkingMemLimit);
+  MyOverrideXiB(tzo, smallTaskMemory);
+}
+
 void TerarkZipDBOptionsFromEnv(DBOptions& dbo) {
   auto configMap = TerarkGetConfigMapFromEnv();
   if (!configMap.empty()) {
@@ -403,7 +436,6 @@ void TerarkZipDBOptionsFromEnv(DBOptions& dbo) {
 
   TerarkZipAutoConfigForOnlineDB_DBOptions(dbo, 0);
 
-  MyOverrideInt(dbo, max_subcompactions);
   MyOverrideInt(dbo, max_background_flushes);
   MyOverrideInt(dbo, max_background_compactions);
   MyOverrideInt(dbo, max_background_garbage_collections);

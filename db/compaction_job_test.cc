@@ -271,7 +271,9 @@ class CompactionJobTest : public testing::Test {
         &event_logger, false, false, dbname_, &compaction_job_stats_);
     VerifyInitializationOfCompactionJobStats(compaction_job_stats_);
 
-    compaction_job.Prepare();
+    int sub_compaction_used =
+        compaction_job.Prepare(0 /* sub_compaction_slots */);
+    ASSERT_EQ(sub_compaction_used, 0);
     mutex_.Unlock();
     Status s;
     s = compaction_job.Run();

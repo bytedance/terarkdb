@@ -993,29 +993,31 @@ Status BlockBasedTable::Open(const ImmutableCFOptions& ioptions,
 
   // Read the range del meta block
   bool found_range_del_block;
+  BlockHandle range_del_handle;
   s = SeekToRangeDelBlock(meta_iter.get(), &found_range_del_block,
-                          &rep->range_del_handle);
+                          &range_del_handle);
   if (!s.ok()) {
     ROCKS_LOG_WARN(
         rep->ioptions.info_log,
         "Error when seeking to range delete tombstones block from file: %s",
         s.ToString().c_str());
-  } else if (found_range_del_block && !rep->range_del_handle.IsNull()) {
+  } else if (found_range_del_block && !range_del_handle.IsNull()) {
     ReadOptions read_options;
-    s = MaybeReadBlockAndLoadToCache(
-        prefetch_buffer.get(), rep, read_options, rep->range_del_handle,
-        Slice() /* compression_dict */, &rep->range_del_entry,
-        false /* is_index */, nullptr /* get_context */);
+    std::unique_ptr<InternalIteratorBase<Slice>> iter(
+        NewDataBlockIterator<DataBlockIter>(rep, read_options,
+                                            range_del_handle));
+    assert(iter != nullptr);
+    s = iter->status();
     if (!s.ok()) {
       ROCKS_LOG_WARN(
           rep->ioptions.info_log,
           "Encountered error while reading data from range del block %s",
           s.ToString().c_str());
+    } else {
+      rep->fragmented_range_dels =
+          std::make_shared<FragmentedRangeTombstoneList>(std::move(iter),
+                                                         internal_comparator);
     }
-    auto iter = std::unique_ptr<InternalIteratorBase<Slice>>(
-        new_table->NewUnfragmentedRangeTombstoneIterator(read_options));
-    rep->fragmented_range_dels = std::make_shared<FragmentedRangeTombstoneList>(
-        std::move(iter), internal_comparator);
   }
 
   bool need_upper_bound_check =
@@ -2357,36 +2359,6 @@ FragmentedRangeTombstoneIterator* BlockBasedTable::NewRangeTombstoneIterator(
       rep_->fragmented_range_dels, rep_->internal_comparator, snapshot);
 }
 
-InternalIteratorBase<Slice>*
-BlockBasedTable::NewUnfragmentedRangeTombstoneIterator(
-    const ReadOptions& read_options) {
-  if (rep_->range_del_handle.IsNull()) {
-    // The block didn't exist, nullptr indicates no range tombstones.
-    return nullptr;
-  }
-  if (rep_->range_del_entry.cache_handle != nullptr) {
-    // We have a handle to an uncompressed block cache entry that's held for
-    // this table's lifetime. Increment its refcount before returning an
-    // iterator based on it since the returned iterator may outlive this table
-    // reader.
-    assert(rep_->range_del_entry.value != nullptr);
-    Cache* block_cache = rep_->table_options.block_cache.get();
-    assert(block_cache != nullptr);
-    if (block_cache->Ref(rep_->range_del_entry.cache_handle)) {
-      auto iter = rep_->range_del_entry.value->NewIterator<DataBlockIter>(
-          &rep_->internal_comparator,
-          rep_->internal_comparator.user_comparator());
-      iter->RegisterCleanup(&ReleaseCachedEntry, block_cache,
-                            rep_->range_del_entry.cache_handle);
-      return iter;
-    }
-  }
-  // The meta-block exists but isn't in uncompressed block cache (maybe
-  // because it is disabled), so go through the full lookup process.
-  return NewDataBlockIterator<DataBlockIter>(rep_, read_options,
-                                             rep_->range_del_handle);
-}
-
 bool BlockBasedTable::FullFilterKeyMayMatch(
     const ReadOptions& read_options, FilterBlockReader* filter,
     const Slice& internal_key, const bool no_io,
@@ -3046,7 +3018,6 @@ void BlockBasedTable::Close() {
   }
   rep_->filter_entry.Release(rep_->table_options.block_cache.get());
   rep_->index_entry.Release(rep_->table_options.block_cache.get());
-  rep_->range_del_entry.Release(rep_->table_options.block_cache.get());
   // cleanup index and filter blocks to avoid accessing dangling pointer
   if (!rep_->table_options.no_block_cache) {
     char cache_key[kMaxCacheKeyPrefixSize + kMaxVarint64Length];

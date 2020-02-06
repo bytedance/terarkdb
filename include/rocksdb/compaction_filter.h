@@ -11,15 +11,19 @@
 #include <cassert>
 #include <memory>
 #include <string>
+#include <terark/util/factory.hpp>
 #include <vector>
-#include "rocksdb/lazy_buffer.h"
 
+#include "rocksdb/lazy_buffer.h"
 #include "rocksdb/status.h"
 
 namespace rocksdb {
 
 class Slice;
 class SliceTransform;
+
+// CompactionFilter allows an application to modify/delete a key-value at
+// the time of compaction.
 
 // Context information of a compaction run
 struct CompactionFilterContext {
@@ -28,12 +32,15 @@ struct CompactionFilterContext {
   // Is this compaction requested by the client (true),
   // or is it occurring as an automatic compaction process
   bool is_manual_compaction;
+  // Which column family this compaction is for.
+  uint32_t column_family_id;
 };
 
-// CompactionFilter allows an application to modify/delete a key-value at
-// the time of compaction.
-
-class CompactionFilter {
+class CompactionFilter
+    : public
+      /// CompactionFilter can also be created by new factory mechanism.
+      /// CompactionFilterFactory the old factory mechanism are also kept.
+      terark::Factoryable<CompactionFilter*, Slice, CompactionFilterContext> {
  public:
   enum ValueType {
     kValue,
@@ -47,16 +54,7 @@ class CompactionFilter {
     kRemoveAndSkipUntil,
   };
 
-  // Context information of a compaction run
-  struct Context {
-    // Does this compaction run include all data files
-    bool is_full_compaction;
-    // Is this compaction requested by the client (true),
-    // or is it occurring as an automatic compaction process
-    bool is_manual_compaction;
-    // Which column family this compaction is for.
-    uint32_t column_family_id;
-  };
+  using Context = CompactionFilterContext;
 
   virtual ~CompactionFilter() {}
 
@@ -200,22 +198,24 @@ class CompactionFilter {
   virtual Status Serialize(std::string* /*bytes*/) const {
     return Status::NotSupported();
   }
-  virtual Status Deserialize(const Slice& /*bytes*/) {
-    return Status::NotSupported();
-  }
 };
 
 // Each compaction will create a new CompactionFilter allowing the
 // application to know about different compactions
-class CompactionFilterFactory {
+class CompactionFilterFactory
+    : public terark::Factoryable<CompactionFilterFactory*, Slice> {
  public:
-  virtual ~CompactionFilterFactory() { }
+  virtual ~CompactionFilterFactory() {}
 
   virtual std::unique_ptr<CompactionFilter> CreateCompactionFilter(
       const CompactionFilter::Context& context) = 0;
 
   // Returns a name that identifies this compaction filter factory.
   virtual const char* Name() const = 0;
+
+  virtual Status Serialize(std::string* /*bytes*/) const {
+    return Status::NotSupported();
+  }
 };
 
 }  // namespace rocksdb

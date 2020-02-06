@@ -75,7 +75,6 @@ ImmutableCFOptions::ImmutableCFOptions(const ImmutableDBOptions& db_options,
       preserve_deletes(db_options.preserve_deletes),
       listeners(db_options.listeners),
       row_cache(db_options.row_cache),
-      max_subcompactions(db_options.max_subcompactions),
       memtable_insert_with_hint_prefix_extractor(
           cf_options.memtable_insert_with_hint_prefix_extractor.get()),
       cf_paths(cf_options.cf_paths) {}
@@ -147,7 +146,9 @@ void MutableCFOptions::Dump(Logger* log) const {
       prefix_extractor == nullptr ? "nullptr" : prefix_extractor->Name());
   ROCKS_LOG_INFO(log, "                 disable_auto_compactions: %d",
                  disable_auto_compactions);
-  ROCKS_LOG_INFO(log, "                                blob_size: %d",
+  ROCKS_LOG_INFO(log, "                       max_subcompactions: %u",
+                 max_subcompactions);
+  ROCKS_LOG_INFO(log, "                                blob_size: %zd",
                  blob_size);
   ROCKS_LOG_INFO(log, "                            blob_gc_ratio: %f",
                  blob_gc_ratio);

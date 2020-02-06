@@ -6,11 +6,11 @@
 // This file defines a collection of statistics collectors.
 #pragma once
 
-#include "rocksdb/table_properties.h"
-
 #include <memory>
 #include <string>
 #include <vector>
+
+#include "rocksdb/table_properties.h"
 
 namespace rocksdb {
 
@@ -42,6 +42,14 @@ class IntTblPropCollectorFactory {
 
   // The name of the properties collector can be used for debugging purpose.
   virtual const char* Name() const = 0;
+
+  virtual bool NeedSerialize() const { return false; }
+  virtual Status Serialize(std::string*) const {
+    return Status::NotSupported("Serialize()", this->Name());
+  }
+  virtual Status Deserialize(Slice) {
+    return Status::NotSupported("Deserialize()", this->Name());
+  }
 };
 
 // Collecting the statistics for internal keys. Visible only by internal
@@ -123,6 +131,16 @@ class UserKeyTablePropertiesCollectorFactory
 
   virtual const char* Name() const override {
     return user_collector_factory_->Name();
+  }
+
+  bool NeedSerialize() const override {
+    return user_collector_factory_->NeedSerialize();
+  }
+  Status Serialize(std::string* bytes) const override {
+    return user_collector_factory_->Serialize(bytes);
+  }
+  Status Deserialize(Slice bytes) override {
+    return user_collector_factory_->Deserialize(bytes);
   }
 
  private:

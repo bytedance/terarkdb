@@ -4,9 +4,13 @@
 #pragma once
 
 #include <stdint.h>
+
 #include <map>
+#include <memory>
 #include <string>
+#include <terark/util/factory.hpp>
 #include <vector>
+
 #include "rocksdb/status.h"
 #include "rocksdb/types.h"
 
@@ -118,7 +122,9 @@ class TablePropertiesCollector {
 
 // Constructs TablePropertiesCollector. Internals create a new
 // TablePropertiesCollector for each new table
-class TablePropertiesCollectorFactory {
+class TablePropertiesCollectorFactory
+    : public std::enable_shared_from_this<TablePropertiesCollectorFactory>,
+      public terark::Factoryable<TablePropertiesCollectorFactory*> {
  public:
   struct Context {
     uint32_t column_family_id;
@@ -127,8 +133,16 @@ class TablePropertiesCollectorFactory {
 
   virtual ~TablePropertiesCollectorFactory() {}
   // has to be thread-safe
-  virtual TablePropertiesCollector* CreateTablePropertiesCollector(
-      TablePropertiesCollectorFactory::Context context) = 0;
+  virtual TablePropertiesCollector* CreateTablePropertiesCollector(Context) = 0;
+
+  virtual bool NeedSerialize() const { return false; }
+
+  virtual Status Serialize(std::string*) const {
+    return Status::NotSupported("Serialize()", this->Name());
+  }
+  virtual Status Deserialize(Slice) {
+    return Status::NotSupported("Deserialize()", this->Name());
+  }
 
   // The name of the properties collector can be used for debugging purpose.
   virtual const char* Name() const = 0;
