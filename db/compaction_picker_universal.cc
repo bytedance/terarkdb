@@ -16,16 +16,17 @@
 
 #include <inttypes.h>
 
+#include <boost/range/algorithm.hpp>
+#include <boost/range/algorithm_ext/is_sorted.hpp>
 #include <limits>
 #include <numeric>
 #include <queue>
 #include <string>
-#include <utility>
+#include <terark/util/function.hpp>
 
 #include "db/column_family.h"
 #include "db/map_builder.h"
 #include "monitoring/statistics.h"
-#include "util/c_style_callback.h"
 #include "util/filename.h"
 #include "util/log_buffer.h"
 #include "util/random.h"
@@ -176,8 +177,10 @@ bool UniversalCompactionPicker::NeedsCompaction(
   if (!vstorage->FilesMarkedForCompaction().empty()) {
     return true;
   }
-  if (vstorage->has_space_amplification()) {
-    return true;
+  for (int i = 0; i < vstorage->num_levels(); ++i) {
+    if (vstorage->has_map_sst(i)) {
+      return true;
+    }
   }
   if (!vstorage->LevelFiles(-1).empty()) {
     return true;
@@ -226,7 +229,7 @@ void UniversalCompactionPicker::SortedRun::DumpSizeInfo(
 std::vector<UniversalCompactionPicker::SortedRun>
 UniversalCompactionPicker::CalculateSortedRuns(
     const VersionStorageInfo& vstorage, const ImmutableCFOptions& /*ioptions*/,
-    const MutableCFOptions& mutable_cf_options) {
+    const MutableCFOptions& /*mutable_cf_options*/) {
   std::vector<UniversalCompactionPicker::SortedRun> ret;
   for (FileMetaData* f : vstorage.LevelFiles(0)) {
     ret.emplace_back(0, f, vstorage.FileSize(f, uint64_t(-1)),
@@ -236,25 +239,10 @@ UniversalCompactionPicker::CalculateSortedRuns(
     uint64_t total_size = 0U;
     uint64_t total_compensated_size = 0U;
     bool being_compacted = false;
-    bool is_first = true;
     for (FileMetaData* f : vstorage.LevelFiles(level)) {
       total_size += vstorage.FileSize(f, uint64_t(-1));
       total_compensated_size += f->compensated_file_size;
-      if (mutable_cf_options.compaction_options_universal.allow_trivial_move) {
-        being_compacted |= f->being_compacted;
-      } else {
-        // Compaction always includes all files for a non-zero level, so for a
-        // non-zero level, all the files should share the same being_compacted
-        // value.
-        // This assumption is only valid when
-        // mutable_cf_options.compaction_options_universal.allow_trivial_move is
-        // false
-        assert(is_first || f->being_compacted == being_compacted);
-      }
-      if (is_first) {
-        being_compacted = f->being_compacted;
-        is_first = false;
-      }
+      being_compacted |= f->being_compacted;
     }
     if (total_compensated_size > 0) {
       ret.emplace_back(level, nullptr, total_size, total_compensated_size,
@@ -447,14 +435,8 @@ Compaction* UniversalCompactionPicker::PickCompaction(
             SortedRunDebug{true, i, nullptr, smallest_seqno, largest_seqno});
       }
     }
-    assert(std::is_sorted(sr_debug.begin(), sr_debug.end(),
-                          [](SortedRunDebug& l, SortedRunDebug& r) {
-                            return l.smallest > r.smallest;
-                          }));
-    assert(std::is_sorted(sr_debug.begin(), sr_debug.end(),
-                          [](SortedRunDebug& l, SortedRunDebug& r) {
-                            return l.largest > r.largest;
-                          }));
+    assert(boost::is_sorted(sr_debug, TERARK_CMP(smallest, >)));
+    assert(boost::is_sorted(sr_debug, TERARK_CMP(largest, >)));
     SortedRunDebug o{false, c->output_level(), nullptr,
                      std::numeric_limits<SequenceNumber>::max(), 0U};
     for (auto& input_level : *c->inputs()) {
@@ -502,22 +484,9 @@ Compaction* UniversalCompactionPicker::PickCompaction(
     }
     assert(o.smallest != std::numeric_limits<SequenceNumber>::max());
     sr_debug.emplace_back(o);
-    std::sort(sr_debug.begin(), sr_debug.end(),
-              [](SortedRunDebug& l, SortedRunDebug& r) {
-                if (l.smallest != r.smallest) {
-                  return l.smallest > r.smallest;
-                } else {
-                  return l.level < r.level;
-                }
-              });
-    assert(std::is_sorted(sr_debug.begin(), sr_debug.end(),
-                          [](SortedRunDebug& l, SortedRunDebug& r) {
-                            return l.largest > r.largest;
-                          }));
-    assert(std::is_sorted(sr_debug.begin(), sr_debug.end(),
-                          [](SortedRunDebug& l, SortedRunDebug& r) {
-                            return l.level < r.level;
-                          }));
+    boost::sort(sr_debug, TERARK_CMP(smallest, >, level, <));
+    assert(boost::is_sorted(sr_debug, TERARK_CMP(largest, >)));
+    assert(boost::is_sorted(sr_debug, TERARK_CMP(level, >)));
   }
 #endif
   // update statistics
@@ -664,9 +633,9 @@ Compaction* UniversalCompactionPicker::CompactRange(
         manual_conflict, files_being_compact);
   }
   LogBuffer log_buffer(InfoLogLevel::INFO_LEVEL, ioptions_.info_log);
-  auto c = PickRangeCompaction(cf_name, mutable_cf_options, vstorage,
-                               input_level, begin, end, files_being_compact,
-                               manual_conflict, &log_buffer);
+  auto c = PickRangeCompaction(
+      cf_name, mutable_cf_options, vstorage, input_level, begin, end,
+      max_subcompactions, files_being_compact, manual_conflict, &log_buffer);
   log_buffer.FlushBufferToLog();
   return c;
 }

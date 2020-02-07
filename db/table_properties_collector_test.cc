@@ -269,7 +269,7 @@ void TestCustomizedTablePropertiesCollector(
     InternalKey ikey(kv.first.first, seqNum++, kv.first.second);
     ASSERT_OK(builder->Add(ikey.Encode(), LazyBuffer(kv.second)));
   }
-  ASSERT_OK(builder->Finish(nullptr));
+  ASSERT_OK(builder->Finish(nullptr, nullptr));
   writer->Flush();
 
   // -- Step 2: Read properties
@@ -410,7 +410,7 @@ void TestInternalKeyPropertiesCollector(
       ASSERT_OK(builder->Add(k.Encode(), LazyBuffer("val")));
     }
 
-    ASSERT_OK(builder->Finish(nullptr));
+    ASSERT_OK(builder->Finish(nullptr, nullptr));
     writable->Flush();
 
     test::StringSink* fwf =

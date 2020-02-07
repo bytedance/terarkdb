@@ -180,6 +180,11 @@ LIB_SOURCES =                                                   \
   utilities/cassandra/merge_operator.cc                         \
   utilities/checkpoint/checkpoint_impl.cc                       \
   utilities/compaction_filters/remove_emptyvalue_compactionfilter.cc    \
+  utilities/console/anet.cc                                     \
+  utilities/console/executor_mem_impl.cc                        \
+  utilities/console/resp_machine.cc                             \
+  utilities/console/server.cc                                   \
+  utilities/console/util.cc                                     \
   utilities/convenience/info_log_finder.cc                      \
   utilities/date_tiered/date_tiered_db_impl.cc                  \
   utilities/debug.cc                                            \

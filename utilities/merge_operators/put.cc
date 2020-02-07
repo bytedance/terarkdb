@@ -4,13 +4,14 @@
 //  (found in the LICENSE.Apache file in the root directory).
 
 #include <memory>
-#include "rocksdb/slice.h"
+
 #include "rocksdb/merge_operator.h"
+#include "rocksdb/slice.h"
 #include "utilities/merge_operators.h"
 
 using namespace rocksdb;
 
-namespace { // anonymous namespace
+namespace {  // anonymous namespace
 
 // A merge operator that mimics Put semantics
 // Since this merge-operator will not be used in production,
@@ -51,9 +52,7 @@ class PutOperator : public MergeOperator {
     return true;
   }
 
-  virtual const char* Name() const override {
-    return "PutOperator";
-  }
+  virtual const char* Name() const override { return "PutOperator"; }
 };
 
 class PutOperatorV2 : public PutOperator {
@@ -74,7 +73,7 @@ class PutOperatorV2 : public PutOperator {
   }
 };
 
-} // end of anonymous namespace
+}  // end of anonymous namespace
 
 namespace rocksdb {
 
@@ -85,4 +84,14 @@ std::shared_ptr<MergeOperator> MergeOperators::CreateDeprecatedPutOperator() {
 std::shared_ptr<MergeOperator> MergeOperators::CreatePutOperator() {
   return std::make_shared<PutOperatorV2>();
 }
-}
+
+static MergeOperator* NewV1(const std::string&) { return new PutOperator; }
+static MergeOperator* NewV2(const std::string&) { return new PutOperatorV2; }
+
+TERARK_FACTORY_REGISTER(PutOperator, &NewV2);
+TERARK_FACTORY_REGISTER(PutOperatorV2, &NewV2);
+
+TERARK_FACTORY_REGISTER_EX(PutOperator, "put_v1", &NewV1);
+TERARK_FACTORY_REGISTER_EX(PutOperatorV2, "put", &NewV2);
+
+}  // namespace rocksdb

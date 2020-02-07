@@ -53,7 +53,7 @@
 
 #if TEST_TERARK
 # include <terark/idx/terark_zip_index.hpp>
-# include <terark/util/common.hpp>
+# include <terark/util/tmpfile.hpp>
 # include <table/terark_zip_common.h>
 # include <table/terark_zip_table.h>
 #else
@@ -79,11 +79,11 @@ public:
   virtual const char* Name() const override {
     return n;
   }
-  
+
   virtual int Compare(const rocksdb::Slice& a, const rocksdb::Slice& b) const override {
     return c->Compare(a, b);
   }
-  
+
   virtual bool Equal(const rocksdb::Slice& a, const rocksdb::Slice& b) const override {
     return c->Equal(a, b);
   }
@@ -91,14 +91,14 @@ public:
                                      const rocksdb::Slice& limit) const override {
     c->FindShortestSeparator(start, limit);
   }
-  
+
   virtual void FindShortSuccessor(std::string* key) const override {
     c->FindShortSuccessor(key);
   }
-  
+
   const char* n;
   const rocksdb::Comparator* c;
-  
+
   ComparatorRename(const char* _n, const rocksdb::Comparator* _c) : n(_n), c(_c) {}
 };
 
@@ -133,19 +133,19 @@ public:
     std::string working_dir_;
     uint64_t seed_;
   };
-  
+
   AsyncCompactionDispatcher(const std::string& self, const std::string& working_dir)
     : self_(self),
       working_dir_(working_dir) {}
-  
-  virtual std::future<std::string> DoCompaction(const std::string& data) {
+
+  virtual std::future<std::string> DoCompaction(rocksdb::Slice data) {
     uint64_t seed = seed_.fetch_add(65536);
     return std::async([this, data, seed]()->std::string {
       //popen("self working_dir seed" << data) >> result
       char buffer[64];
       snprintf(buffer, sizeof buffer, "/Terark-%08" PRIx64 ".param", seed);
       std::string param = working_dir_ + buffer;
-      
+
       std::fstream(param, std::ios::out) << data;
       std::string cmd = "bash start.sh " + self_ + " " + working_dir_ + " " + terark::lcast(seed) + " < " + param;
       FILE* p = popen(cmd.c_str(), "r");
@@ -175,7 +175,7 @@ class TestMergeOperator : public rocksdb::StringAppendOperator {
 public:
 TestMergeOperator(char delim_char) : rocksdb::StringAppendOperator(delim_char) {}
   //TestMergeOperator(char delim_char) : rocksdb::StringAppendTESTOperator(delim_char) {}
-  
+
   virtual rocksdb::Status Serialize(std::string* /*bytes*/) const override {
     return rocksdb::Status::OK();
   }
@@ -256,24 +256,24 @@ void get_options(int argc, const char* argv[],
                  rocksdb::Options &options,
                  rocksdb::BlockBasedTableOptions& bbto,
                  rocksdb::TerarkZipTableOptions& tzto) {
-  
+
   //bbto.no_block_cache = true;
   //bbto.block_cache = rocksdb::NewLRUCache(1ULL << 30, 5, false);
-  
+
   //options.compaction_style = rocksdb::kCompactionStyleUniversal;
   options.compaction_pri = rocksdb::kMinOverlappingRatio;
   //options.compression = rocksdb::kZSTD;
-  
+
   static ComparatorRename  c{     "RocksDB_SE_v3.10", rocksdb::       BytewiseComparator() };
   static ComparatorRename rc{ "rev:RocksDB_SE_v3.10", rocksdb::ReverseBytewiseComparator() };
   static TestCompactionFilter filter;
-  
+
   options.comparator = &c;
   options.compaction_filter = &filter;
   //options.prefix_extractor.reset(rocksdb::NewFixedPrefixTransform(1));
   options.allow_concurrent_memtable_write = false;
   options.max_open_files = -1;
-  
+
   options.allow_mmap_reads = true;
   options.target_file_size_multiplier = 1;
   options.max_bytes_for_level_multiplier = 8;
@@ -288,7 +288,7 @@ void get_options(int argc, const char* argv[],
   options.compaction_options_universal.allow_trivial_move = true;
   //options.compaction_options_universal.allow_trivial_move = false;
   options.compaction_options_universal.stop_style = rocksdb::kCompactionStopStyleSimilarSize;
-  
+
   options.use_aio_reads = true;
   options.base_background_compactions = 3;
   options.max_background_compactions = 3;
@@ -301,20 +301,20 @@ void get_options(int argc, const char* argv[],
   options.level0_file_num_compaction_trigger = 2;
   options.level0_slowdown_writes_trigger = 4;
   options.level0_stop_writes_trigger = 10;
-  
+
   options.max_manifest_file_size = 8ull << 20;
   options.max_manifest_edit_count = 256;
-  
+
   options.force_consistency_checks = true;
   options.max_file_opening_threads = 64;
   //options.delayed_write_rate = 32ull << 20;
   //options.rate_limiter.reset(rocksdb::NewGenericRateLimiter(16ull << 20, 1000));
-  
+
 #if WORKER_TEST
   options.compaction_dispatcher.reset(new AsyncCompactionDispatcher(argv[0], argv[1]));
 #endif
-  
-  
+
+
 #if TEST_TERARK
   tzto.localTempDir = argv[1];
   tzto.indexNestLevel = 3;
@@ -435,7 +435,7 @@ void test_g() {
   std::vector<SortedRunGroup> o;
   std::vector<double> sr;
   std::mt19937_64 mt;
-  
+
   sr = {1600, 16, 100, 1, 200, 2, 400, 4, 8000, 80};
   //GenSortedRunGroup(sr, sr.size() - 3, &o);
 
@@ -521,18 +521,18 @@ int main(int argc, const char* argv[], const char* env[])
       return { &handle, &uninitialized_resize };
     }
   };
-    
+
 
 
     std::string string;
     LazyBuffer buffer(&string);
     buffer.trans_to_string()->assign("abc");
     std::move(buffer).dump(&string);
-    
+
     fprintf(stderr, "OK\n");
 
   }
-  
+
   //{
   //  terark::FileStream f;
   //  std::string name = terark::fstring(argv[1]) + "/test_file";
@@ -600,7 +600,7 @@ int main(int argc, const char* argv[], const char* env[])
   rocksdb::TerarkZipTableOptions tzto;
   get_options(argc, argv, options, bbto, tzto);
   options.statistics = statistics;
-  
+
   if (argc == 3) {
 #if WORKER_TEST
     AsyncCompactionDispatcher::AsyncWorker worker(options, argv[1], terark::lcast(argv[2]));
@@ -613,7 +613,7 @@ int main(int argc, const char* argv[], const char* env[])
       ptr->reset(new TestMergeOperator(','));
       return rocksdb::Status::OK();
     });
-    
+
     std::string input;
     std::getline(std::cin, input);
     //std::getline(std::fstream("data/Terark-00000000.param", std::ios::in), input);
@@ -625,7 +625,7 @@ int main(int argc, const char* argv[], const char* env[])
 #if TEST_TERARK
   rocksdb::TerarkZipDeleteTempFiles(tzto.localTempDir);
 #endif
-  
+
 #if TEST_TERARK
   if (0) {
     for (int i = 3; i < argc; ++i) {
@@ -733,7 +733,7 @@ int main(int argc, const char* argv[], const char* env[])
     size_t new_index_size = output.size();
     delete[] data;
   }
-  
+
 //  if (0) {
 //    terark::fstring dict_file_name = "/Users/zhaoming/Downloads/QQ_V6.5.3.dmg";
 //    terark::FileStream dict_file(dict_file_name, "rb");
@@ -894,7 +894,7 @@ int main(int argc, const char* argv[], const char* env[])
 //    //s = builder->Finish();
 //    builder.reset();
 //    file_writter.reset();
-    
+
     auto proc = [&](std::string file_name) {
       std::cout << "# open file " + file_name + " ...\n";
       std::unique_ptr<rocksdb::RandomAccessFile> file;
@@ -909,13 +909,13 @@ int main(int argc, const char* argv[], const char* env[])
       m.fd.largest_seqno = 0;
       rocksdb::ParsedInternalKey pik;
       std::string save;
-      
+
 //      rocksdb::InternalKey ikey;
 //      ikey.Set("FFF9900000000", 0, rocksdb::kTypeValue);
 //      size_t as = reader->ApproximateOffsetOf(ikey.Encode());
 //      ikey.Set("FFFFF", 0, rocksdb::kTypeValue);
 //      size_t ae = reader->ApproximateOffsetOf(ikey.Encode());
-      
+
       auto cmp = [c = options.comparator](const std::string& a, const std::string& b) {
         int r = c->Compare(rocksdb::ExtractUserKey(a), rocksdb::ExtractUserKey(b));
         if (r == 0) {
@@ -976,7 +976,7 @@ int main(int argc, const char* argv[], const char* env[])
         assert(s.ok());
         rocksdb::ParsedInternalKey ikey;
         rocksdb::ParseInternalKey(it->key(), &ikey);
-        
+
         printf("DEBUG: 1st pass => %s / %s \n",
                 ikey.DebugString(true).c_str(), value.ToString(true).c_str());
         data.emplace(it->key().ToString());
@@ -1020,7 +1020,7 @@ int main(int argc, const char* argv[], const char* env[])
       t.join();
     }
   }
-  
+
 
   //rocksdb::DestroyDB(argv[1], options);
   //rocksdb::TransactionDBOptions tdbo;
@@ -1041,11 +1041,11 @@ int main(int argc, const char* argv[], const char* env[])
   rocksdb::ColumnFamilyHandle *h0 = hs[0], *h1 = hs[1];
 
   //std::this_thread::sleep_for(std::chrono::hours(24));
-  
+
   rocksdb::WriteOptions wo;
   rocksdb::FlushOptions fo;
   rocksdb::CompactRangeOptions co;
-  
+
   //std::random_device rd;
   //mt.seed(rd());
   uint64_t stop = 1000000000;
@@ -1053,7 +1053,7 @@ int main(int argc, const char* argv[], const char* env[])
 //  char key_buf[] = { "2A66EE89FB12FEB7B41A6A9E0D9E399459E36813D1CB1E2A45B721466A89FBB8" };
 //  std::string vvv;
 //  s = db->Get(ro, h0, key_buf, &vvv);
-  
+
   if (0) {
     std::string file_name = "/Users/zhaoming/Documents/Work/000030.sst";
     rocksdb::ImmutableCFOptions icfo(rocksdb::ImmutableDBOptions(options), cfDescriptors[0].options);
@@ -1067,7 +1067,7 @@ int main(int argc, const char* argv[], const char* env[])
     std::unique_ptr<rocksdb::TableReader> reader;
     auto s = icfo.table_factory->NewTableReader(tro, std::move(file_reader), file_size, &reader, false);
     auto it = reader->NewIterator(rocksdb::ReadOptions(), nullptr);
-    
+
     rocksdb::ReadOptions ro;
     rocksdb::WriteBatch b;
     size_t c = 0;
@@ -1111,7 +1111,7 @@ int main(int argc, const char* argv[], const char* env[])
       }
     }
   }
-  
+
 //  for (count = 1000000; count < 1000000000; ++count)
 //  {
 //    std::uniform_int_distribution<uint64_t> uid(10000, count);
@@ -1156,7 +1156,7 @@ int main(int argc, const char* argv[], const char* env[])
   //  key = k.ToString();
   //  assert(!k.starts_with(rocksdb::Slice(key_buf + 8, 4)));
   //}
-  
+
   std::vector<std::shared_ptr<const rocksdb::Snapshot>> snapshot;
   std::mutex snapshot_mutex;
 
@@ -1165,7 +1165,7 @@ int main(int argc, const char* argv[], const char* env[])
   //db->CompactRange(co, h0, nullptr, nullptr);
   //db->CompactRange(co, h1, nullptr, nullptr);
   //std::uniform_int_distribution<uint64_t> uid(0, stop);
-  
+
   struct ReadContext {
     rocksdb::ReadOptions ro;
     uint64_t seqno;
@@ -1180,7 +1180,7 @@ int main(int argc, const char* argv[], const char* env[])
     std::vector<std::string> values = std::vector<std::string>(2);
   };
   std::atomic<bool> has_error{false};
-  
+
   auto check_assert = [db, &hs, h0, h1, &has_error](ReadContext *ctx, bool assert_value, const char* err) {
     auto& ro = ctx->ro;
     auto& seqno = ctx->seqno;
@@ -1204,7 +1204,7 @@ int main(int argc, const char* argv[], const char* env[])
       fprintf(stderr, "ik0 = %s\nik1 = %s\n", raw_iter0->Valid() ? raw_iter0->key().ToString().c_str() : "Invalid", raw_iter1->Valid() ? raw_iter1->key().ToString().c_str() : "Invalid");
       fprintf(stderr, "iv0 = %s\niv1 = %s\n", raw_iter0->Valid() ? raw_iter0->value().ToString().c_str() : "Invalid", raw_iter1->Valid() ? raw_iter1->value().ToString().c_str() : "Invalid");
   #endif
-      
+
       has_error = true;
     }
     assert(assert_value);
@@ -1213,7 +1213,7 @@ int main(int argc, const char* argv[], const char* env[])
 #if ITER_TEST
       size_t i;
       std::string save;
-      
+
       i = 0;
       for (raw_iter0->SeekToFirst(); raw_iter0->Valid(); raw_iter0->Next()) {
         rocksdb::LazyBuffer value;
@@ -1222,7 +1222,7 @@ int main(int argc, const char* argv[], const char* env[])
         assert(value.valid());
         ++i;
       }
-      
+
       i = 0;
       raw_iter0->SeekToFirst();
       for (raw_iter1->SeekToFirst(); raw_iter0->Valid(); raw_iter0->Next()) {
@@ -1232,7 +1232,7 @@ int main(int argc, const char* argv[], const char* env[])
         ++i;
       }
       assert(!raw_iter1->Valid());
-      
+
       i = 0;
       raw_iter0->SeekToLast();
       for (raw_iter1->SeekToLast(); raw_iter0->Valid(); raw_iter0->Prev()) {
@@ -1242,7 +1242,7 @@ int main(int argc, const char* argv[], const char* env[])
         ++i;
       }
       assert(!raw_iter1->Valid());
-      
+
       i = 0;
       raw_iter0->SeekToFirst();
       while (raw_iter0->Valid()) {
@@ -1259,7 +1259,7 @@ int main(int argc, const char* argv[], const char* env[])
         }
         ++i;
       }
-      
+
       i = 0;
       raw_iter1->SeekToFirst();
       while (raw_iter1->Valid()) {
@@ -1276,7 +1276,7 @@ int main(int argc, const char* argv[], const char* env[])
         }
         ++i;
       }
-      
+
       i = 0;
       raw_iter0->SeekToFirst();
       for (raw_iter1->SeekToFirst(); raw_iter0->Valid(); raw_iter0->Next()) {
@@ -1297,7 +1297,7 @@ int main(int argc, const char* argv[], const char* env[])
         ++i;
       }
       assert(!raw_iter1->Valid());
-      
+
       i = 0;
       raw_iter0->SeekToLast();
       for (raw_iter1->SeekToLast(); raw_iter0->Valid(); raw_iter0->Prev()) {
@@ -1447,7 +1447,7 @@ int main(int argc, const char* argv[], const char* env[])
     }
     assert(assert_value || for_each_check());
   };
-  
+
 //  ro.snapshot = db->GetSnapshot();
 //  ((uint64_t*)ro.snapshot)[1] = 285148008;
 //  key = "A2E9F64CF2688DF6713631754C5A8877026040";
@@ -1507,7 +1507,7 @@ int main(int argc, const char* argv[], const char* env[])
 //  raw_iter0->SeekForPrev(key);
 //  raw_iter1->SeekForPrev(key);
 //  check_assert(0, false);
-  
+
 //  db->Put(wo, h0, "0000123123123123123", "");
 //  db->Flush(fo, h0);
 //
@@ -1524,7 +1524,7 @@ int main(int argc, const char* argv[], const char* env[])
 //  delete db;
 //  return -1;
   auto time = std::chrono::system_clock::now() + std::chrono::minutes(1);
-  
+
   std::atomic<uint64_t> atomic_count{1};
   {
     auto snapshot = db->GetSnapshot();
@@ -1539,7 +1539,7 @@ int main(int argc, const char* argv[], const char* env[])
     snapshot_mutex.unlock();
     return ret;
   };
-  
+
   auto read_func = [db, &hs, h0, h1, &has_error, &atomic_count, &options, get_snapshot, check_assert](int seed) {
     ReadContext ctx;
     uint64_t iter_seqno = uint64_t(-1);
@@ -1913,8 +1913,8 @@ int main(int argc, const char* argv[], const char* env[])
   for (auto& t : thread_vec) {
     t.join();
   }
-    
-  
+
+
   //db->CompactRange(rocksdb::CompactRangeOptions(), nullptr, nullptr);
 
   snapshot.clear();

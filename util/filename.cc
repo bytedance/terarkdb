@@ -261,6 +261,9 @@ bool ParseFileName(const std::string& fname, uint64_t* number,
   } else if (rest == "LOCK") {
     *number = 0;
     *type = kDBLockFile;
+  } else if (rest == "CONSOLE") {
+    *number = 0;
+    *type = kSocketFile;
   } else if (info_log_name_prefix.size() > 0 &&
              rest.starts_with(info_log_name_prefix)) {
     rest.remove_prefix(info_log_name_prefix.size());

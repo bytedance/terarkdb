@@ -338,6 +338,9 @@ class VersionEdit {
     remaining_entries_ = remaining_entries;
   }
 
+  void set_open_db(bool b) { is_open_db_ = b; }
+  bool is_open_db() const { return is_open_db_; }
+
   std::string DebugString(bool hex_key = false) const;
   std::string DebugJSON(int edit_num, bool hex_key = false) const;
 
@@ -379,6 +382,7 @@ class VersionEdit {
   bool is_column_family_add_;
   std::string column_family_name_;
 
+  bool is_open_db_;
   bool is_in_atomic_group_;
   uint32_t remaining_entries_;
 };

@@ -84,7 +84,7 @@ class CompactionPicker {
   static bool ReadMapElement(MapSstElement& map_element, InternalIterator* iter,
                              LogBuffer* log_buffer, const std::string& cf_name);
 
-  static bool FixInputRange(std::vector<RangeStorage>& input_range,
+  static bool FixInputRange(std::vector<SelectedRange>& input_range,
                             const InternalKeyComparator& icmp, bool sort,
                             bool merge);
 
@@ -141,7 +141,7 @@ class CompactionPicker {
   Compaction* PickRangeCompaction(
       const std::string& cf_name, const MutableCFOptions& mutable_cf_options,
       VersionStorageInfo* vstorage, int level, const InternalKey* begin,
-      const InternalKey* end,
+      const InternalKey* end, uint32_t max_subcompactions,
       const std::unordered_set<uint64_t>* files_being_compact,
       bool* manual_conflict, LogBuffer* log_buffer);
 

@@ -81,7 +81,7 @@ class CompactionJob {
   CompactionJob& operator=(const CompactionJob& job) = delete;
 
   // REQUIRED: mutex held
-  void Prepare();
+  int Prepare(int sub_compaction_slots);
   // REQUIRED mutex not held
   Status Run();
   Status RunSelf();
@@ -91,11 +91,19 @@ class CompactionJob {
   // REQUIRED: mutex held
   Status Install(const MutableCFOptions& mutable_cf_options);
 
+  struct ProcessArg {
+    CompactionJob* job;
+    int task_id;
+    std::promise<bool> finished;
+  };
+
+  static void CallProcessCompaction(void* arg);
+
  private:
   struct SubcompactionState;
 
   void AggregateStatistics();
-  void GenSubcompactionBoundaries();
+  void GenSubcompactionBoundaries(int max_usable_threads);
 
   // update the thread status for starting a compaction.
   void ReportStartedCompaction(Compaction* compaction);
@@ -105,7 +113,6 @@ class CompactionJob {
   void ProcessCompaction(SubcompactionState* sub_compact);
   void ProcessKeyValueCompaction(SubcompactionState* sub_compact);
   void ProcessGarbageCollection(SubcompactionState* sub_compact);
-  void ProcessLinkCompaction(SubcompactionState* sub_compact);
 
   Status FinishCompactionOutputFile(
       const Status& input_status, SubcompactionState* sub_compact,

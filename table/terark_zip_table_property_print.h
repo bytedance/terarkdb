@@ -23,8 +23,8 @@
   M_Boolea(enableEntropyStore);
   M_NumFmt(minPreadLen              , "%d");
   M_NumFmt(offsetArrayBlockUnits    , "%d");
-  M_NumFmt(sampleRatio              , "%f");
-  M_NumFmt(indexCacheRatio          , "%f");
+  M_NumFmt(sampleRatio              , "%lf");
+  M_NumFmt(indexCacheRatio          , "%lf");
   M_NumGiB(softZipWorkingMemLimit);
   M_NumGiB(hardZipWorkingMemLimit);
   M_NumGiB(smallTaskMemory);

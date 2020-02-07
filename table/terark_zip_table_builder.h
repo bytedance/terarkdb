@@ -31,14 +31,16 @@
 #include <terark/histogram.hpp>
 #include <terark/idx/terark_zip_index.hpp>
 #include <terark/stdtypes.hpp>
-#include <terark/thread/pipeline.hpp>
 #include <terark/util/fstrvec.hpp>
+#include <terark/util/tmpfile.hpp>
 #include <terark/valvec.hpp>
 #include <terark/zbs/abstract_blob_store.hpp>
 #include <terark/zbs/dict_zip_blob_store.hpp>
 #include <terark/zbs/zip_reorder_map.hpp>
 
 namespace rocksdb {
+
+template <typename T> struct AsyncTask;
 
 using terark::AbstractBlobStore;
 using terark::AutoDeleteFile;
@@ -49,7 +51,6 @@ using terark::FilePair;
 using terark::freq_hist_o1;
 using terark::fstring;
 using terark::fstrvec;
-using terark::PipelineProcessor;
 using terark::TempFileDeleteOnClose;
 using terark::TerarkIndex;
 using terark::Uint64Histogram;
@@ -105,6 +106,7 @@ class TerarkZipTableBuilder : public TableBuilder, boost::noncopyable {
                 size_t valueLen, bool zeroSeq);
     void AddValueBit();
   };
+
   struct KeyValueStatus {
     RangeStatus status;
     freq_hist_o1 valueFreq;
@@ -117,8 +119,8 @@ class TerarkZipTableBuilder : public TableBuilder, boost::noncopyable {
     bool isValueBuild = false;
     bool isUseDictZip = false;
     bool isFullValue = false;
-    std::future<Status> indexWait;
-    std::future<Status> storeWait;
+    std::unique_ptr<AsyncTask<Status>> indexWait;
+    std::unique_ptr<AsyncTask<Status>> storeWait;
     std::atomic<size_t> keyFileRef = {2};
 
     KeyValueStatus(RangeStatus&& s, freq_hist_o1&& f);
@@ -140,7 +142,8 @@ class TerarkZipTableBuilder : public TableBuilder, boost::noncopyable {
   };
   WaitHandle WaitForMemory(const char* who, size_t memorySize);
   Status EmptyTableFinish();
-  std::future<Status> Async(std::function<Status()> func);
+  std::unique_ptr<AsyncTask<Status>> Async(std::function<Status()> func,
+                                                   void* tag);
   void BuildIndex(KeyValueStatus& kvs, size_t entropyLen);
   enum BuildStoreFlag {
     BuildStoreInit = 1,
@@ -148,8 +151,10 @@ class TerarkZipTableBuilder : public TableBuilder, boost::noncopyable {
   };
   Status BuildStore(KeyValueStatus& kvs, DictZipBlobStore::ZipBuilder* zbuilder,
                     uint64_t flag);
-  std::future<Status> CompressDict(fstring tmpDictFile, fstring dict,
-                                   std::string* type, long long* td);
+  std::unique_ptr<AsyncTask<Status>> CompressDict(fstring tmpDictFile,
+                                                          fstring dict,
+                                                          std::string* type,
+                                                          long long* td);
   Status WaitBuildIndex();
   Status WaitBuildStore();
   struct BuildReorderParams {
@@ -195,13 +200,11 @@ class TerarkZipTableBuilder : public TableBuilder, boost::noncopyable {
   DictZipBlobStore::ZipBuilder* createZipBuilder() const;
 
   Arena arena_;
-  const TerarkZipTableOptions& table_options_;
+  TerarkZipTableOptions table_options_;
   const TerarkZipTableFactory* table_factory_;
-  // fuck out TableBuilderOptions
   const ImmutableCFOptions& ioptions_;
   TerarkZipMultiOffsetInfo offset_info_;
   std::vector<std::unique_ptr<IntTblPropCollector>> collectors_;
-  // end fuck out TableBuilderOptions
   InternalIterator* second_pass_iter_ = nullptr;
   size_t nameSeed_ = 0;
   size_t keyDataSize_ = 0;
@@ -216,7 +219,7 @@ class TerarkZipTableBuilder : public TableBuilder, boost::noncopyable {
   freq_hist_o1 kv_freq_;
   valvec<std::unique_ptr<KeyValueStatus>> prefixBuildInfos_;
   std::shared_ptr<FilePair> filePair_;
-  valvec<byte_t> prevUserKey_;
+  InternalKey prevKey_;
   TempFileDeleteOnClose tmpSentryFile_;
   TempFileDeleteOnClose tmpSampleFile_;
   AutoDeleteFile tmpIndexFile_;
@@ -244,7 +247,6 @@ class TerarkZipTableBuilder : public TableBuilder, boost::noncopyable {
   BlockBuilder range_del_block_;
   fstrvec valueBuf_;  // collect multiple values for one key
   valvec<byte_t> valueTestBuf_;
-  PipelineProcessor pipeline_;
   uint64_t next_freq_size_ = 1ULL << 20;
   bool waitInited_ = false;
   bool closed_ = false;  // Either Finish() or Abandon() has been called.
@@ -252,7 +254,16 @@ class TerarkZipTableBuilder : public TableBuilder, boost::noncopyable {
   int level_;
 
   long long t0 = 0;
-  size_t prefixLen_;
+  // Tags in following union are only indicating different function types for
+  // Schedule() functions. Keeping the memory layout without further ado.
+  union {
+    size_t prefixLen_;
+    struct {
+      char indexTag;
+      char storeTag;
+      char dictTag;
+    };
+  };
   double compaction_load_;
 };
 

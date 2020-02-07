@@ -39,7 +39,7 @@ void MemTableRep::EncodeKeyValue(const Slice& key, const Slice& value,
 
 LazyBuffer MemTableRep::DecodeToLazyBuffer(const char* key) {
 
-  struct SliceControllerImpl : public LazyBufferState {
+  struct LazyBufferStateImpl : public LazyBufferState {
 
     void destroy(LazyBuffer* /*buffer*/) const override {}
 
@@ -55,9 +55,9 @@ LazyBuffer MemTableRep::DecodeToLazyBuffer(const char* key) {
     }
   };
 
-  static SliceControllerImpl controller_impl;
+  static LazyBufferStateImpl static_state;
 
-  return LazyBuffer(&controller_impl, {reinterpret_cast<uint64_t>(key)});
+  return LazyBuffer(&static_state, {reinterpret_cast<uint64_t>(key)});
 }
 
 bool MemTableRep::InsertKeyValue(const Slice& internal_key,

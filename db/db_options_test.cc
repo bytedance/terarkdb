@@ -430,7 +430,7 @@ TEST_F(DBOptionsTest, SetBackgroundJobs) {
 
     ASSERT_EQ(options.max_background_jobs / 4,
               dbfull()->TEST_BGFlushesAllowed());
-    ASSERT_EQ(3 * options.max_background_jobs / 8,
+    ASSERT_EQ(3 * options.max_background_jobs / 4,
               dbfull()->TEST_BGCompactionsAllowed());
     ASSERT_EQ(3 * options.max_background_jobs / 8,
               dbfull()->TEST_BGGarbageCollectionAllowed());

@@ -244,6 +244,10 @@ ifeq ($(TERARKDB_ENABLE_METRICS),1)
 OPT += -DTERARKDB_ENABLE_METRICS
 endif
 
+ifeq ($(TERARKDB_ENABLE_CONSOLE),1)
+OPT += -DTERARKDB_ENABLE_CONSOLE
+endif
+
 #-----------------------------------------------
 include src.mk
 
@@ -280,8 +284,10 @@ endif
 
 LIB_SOURCES += ${TERARK_ZIP_SRC}
 
+CMAKE_BUILD_TYPE=Debug
 ifeq ($(DEBUG_LEVEL),0)
   LIBNAME_SUFFIX=
+	CMAKE_BUILD_TYPE=RelWithDebInfo
 endif
 ifeq ($(DEBUG_LEVEL),1)
   LIBNAME_SUFFIX=_assert
@@ -518,7 +524,7 @@ VALGRIND_VER := $(join $(VALGRIND_VER),valgrind)
 
 VALGRIND_OPTS = --error-exitcode=$(VALGRIND_ERROR) --leak-check=full
 
-BENCHTOOLOBJECTS = $(BENCH_LIB_SOURCES:.cc=.o) $(TESTUTIL) 
+BENCHTOOLOBJECTS = $(BENCH_LIB_SOURCES:.cc=.o) $(TESTUTIL)
 
 ANALYZETOOLOBJECTS = $(ANALYZER_LIB_SOURCES:.cc=.o)
 
@@ -836,7 +842,7 @@ all: $(LIBRARY) $(SHARED) $(BENCHMARKS) tools tools_lib test_libs $(TESTS)
 all_but_some_tests: $(LIBRARY) $(BENCHMARKS) tools tools_lib test_libs $(SUBSET)
 
 ${CPPUTIL_METRICS2_HOME}/cmake-build/libmetrics2.a:
-	mkdir -p ${CPPUTIL_METRICS2_HOME}/cmake-build && cd ${CPPUTIL_METRICS2_HOME}/cmake-build && cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo && make
+	mkdir -p ${CPPUTIL_METRICS2_HOME}/cmake-build && cd ${CPPUTIL_METRICS2_HOME}/cmake-build && cmake .. -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} && make
 
 cpputil_metrics2: ${CPPUTIL_METRICS2_HOME}/cmake-build/libmetrics2.a
 
@@ -1240,11 +1246,11 @@ librocksdb_env_basic_test.a: env/env_basic_test.o $(TESTHARNESS)
 	$(AM_V_AR)rm -f $@
 	$(AM_V_at)$(AR) $(ARFLAGS) $@ $^
 
-db_bench: tools/db_bench.o $(BENCHTOOLOBJECTS) 
-	$(AM_LINK) librocksdb.a -lgflags -fopenmp
+db_bench: tools/db_bench.o $(BENCHTOOLOBJECTS)
+	$(AM_LINK_SHR) librocksdb.a -lgflags -fopenmp
 
 trace_analyzer: tools/trace_analyzer.o $(ANALYZETOOLOBJECTS) $(LIBOBJECTS)
-	$(AM_LINK) librocksdb.a -fopenmp
+	$(AM_LINK_SHR) librocksdb.a -fopenmp
 
 cache_bench: cache/cache_bench.o $(TESTUTIL)
 	$(AM_LINK_SHR)
@@ -2152,6 +2158,7 @@ endif
 
 all_sources = $(LIB_SOURCES) $(MAIN_SOURCES) $(MOCK_LIB_SOURCES) $(TOOL_LIB_SOURCES) $(BENCH_LIB_SOURCES) $(TEST_LIB_SOURCES) $(EXP_LIB_SOURCES) $(ANALYZER_LIB_SOURCES)
 DEPFILES = $(addprefix ${xdir}/,$(all_sources:.cc=.cc.d))
+DEPFILES += $(addprefix shared-objects/${xdir}/,$(all_sources:.cc=.cc.d))
 
 # Add proper dependency support so changing a .h file forces a .cc file to
 # rebuild.
@@ -2161,21 +2168,39 @@ DEPFILES = $(addprefix ${xdir}/,$(all_sources:.cc=.cc.d))
 ${xdir}/%.cc.d: %.cc
 	@mkdir -p $(dir $@)
 	@$(CXX) $(CXXFLAGS) $(PLATFORM_SHARED_CFLAGS) \
-	  -MM -MT'$@' -MT'$(<:.cc=.o)' "$<" -o '$@'
+	  -MM -MT'$@' -MT'$(@:.cc.d=.o)' "$<" -o '$@'
+
+shared-objects/${xdir}/%.cc.d: %.cc
+	@mkdir -p $(dir $@)
+	@$(CXX) $(CXXFLAGS) $(PLATFORM_SHARED_CFLAGS) \
+	  -MM -MT'$@' -MT'$(@:.cc.d=.o)' "$<" -o '$@'
 
 ifeq ($(HAVE_POWER8),1)
 DEPFILES_C = $(addprefix ${xdir}/,$(LIB_SOURCES_C:.c=.c.d))
 DEPFILES_ASM = $(addprefix ${xdir}/,$(LIB_SOURCES_ASM:.S=.S.d))
 
+DEPFILES_C += $(addprefix shared-objects/${xdir}/,$(LIB_SOURCES_C:.c=.c.d))
+DEPFILES_ASM += $(addprefix shared-objects/${xdir}/,$(LIB_SOURCES_ASM:.S=.S.d))
+
 ${xdir}/%.c.d: %.c
 	@mkdir -p $(dir $@)
 	@$(CXX) $(CXXFLAGS) $(PLATFORM_SHARED_CFLAGS) \
-	  -MM -MT'$@' -MT'$(<:.c=.o)' "$<" -o '$@'
+	  -MM -MT'$@' -MT'$(@:.c.d=.o)' "$<" -o '$@'
 
 ${xdir}/%.S.d: %.S
 	@mkdir -p $(dir $@)
 	@$(CXX) $(CXXFLAGS) $(PLATFORM_SHARED_CFLAGS) \
-	  -MM -MT'$@' -MT'$(<:.S=.o)' "$<" -o '$@'
+	  -MM -MT'$@' -MT'$(@:.S.d=.o)' "$<" -o '$@'
+
+shared-objects/${xdir}/%.c.d: %.c
+	@mkdir -p $(dir $@)
+	@$(CXX) $(CXXFLAGS) $(PLATFORM_SHARED_CFLAGS) \
+	  -MM -MT'$@' -MT'$(@:.c.d=.o)' "$<" -o '$@'
+
+shared-objects/${xdir}/%.S.d: %.S
+	@mkdir -p $(dir $@)
+	@$(CXX) $(CXXFLAGS) $(PLATFORM_SHARED_CFLAGS) \
+	  -MM -MT'$@' -MT'$(@:.S.d=.o)' "$<" -o '$@'
 
 $(DEPFILES_C): %.c.d
 

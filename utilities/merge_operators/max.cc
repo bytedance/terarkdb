@@ -5,15 +5,15 @@
 
 #include <memory>
 
-#include "rocksdb/merge_operator.h"
 #include "rocksdb/lazy_buffer.h"
+#include "rocksdb/merge_operator.h"
 #include "utilities/merge_operators.h"
 
-using rocksdb::Slice;
 using rocksdb::LazyBuffer;
 using rocksdb::LazyBufferReference;
 using rocksdb::Logger;
 using rocksdb::MergeOperator;
+using rocksdb::Slice;
 
 namespace {  // anonymous namespace
 
@@ -89,4 +89,12 @@ namespace rocksdb {
 std::shared_ptr<MergeOperator> MergeOperators::CreateMaxOperator() {
   return std::make_shared<MaxOperator>();
 }
+
+static MergeOperator* NewMaxOperator(const std::string& /*options*/) {
+  return new MaxOperator;
 }
+
+TERARK_FACTORY_REGISTER(MaxOperator, &NewMaxOperator);
+TERARK_FACTORY_REGISTER_EX(MaxOperator, "max", &NewMaxOperator);
+
+}  // namespace rocksdb

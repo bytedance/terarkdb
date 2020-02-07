@@ -38,7 +38,6 @@ ImmutableDBOptions::ImmutableDBOptions(const DBOptions& options)
       db_paths(options.db_paths),
       db_log_dir(options.db_log_dir),
       wal_dir(options.wal_dir),
-      max_subcompactions(options.max_subcompactions),
       max_background_flushes(options.max_background_flushes),
       max_log_file_size(options.max_log_file_size),
       log_file_time_to_roll(options.log_file_time_to_roll),
@@ -149,9 +148,6 @@ void ImmutableDBOptions::Dump(Logger* log) const {
                    wal_dir.c_str());
   ROCKS_LOG_HEADER(log, "               Options.table_cache_numshardbits: %d",
                    table_cache_numshardbits);
-  ROCKS_LOG_HEADER(log,
-                   "                     Options.max_subcompactions: %" PRIu32,
-                   max_subcompactions);
   ROCKS_LOG_HEADER(log, "                 Options.max_background_flushes: %d",
                    max_background_flushes);
   ROCKS_LOG_HEADER(log,

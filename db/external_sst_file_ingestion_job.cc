@@ -14,7 +14,10 @@
 #include <inttypes.h>
 
 #include <algorithm>
+#include <boost/range/algorithm.hpp>
 #include <string>
+#include <terark/util/function.hpp>
+#include <terark/valvec.hpp>
 #include <vector>
 
 #include "db/version_edit.h"
@@ -64,12 +67,7 @@ Status ExternalSstFileIngestionJob::Prepare(
       sorted_files.push_back(&files_to_ingest_[i]);
     }
 
-    std::sort(
-        sorted_files.begin(), sorted_files.end(),
-        [&ucmp](const IngestedFileInfo* info1, const IngestedFileInfo* info2) {
-          return ucmp->Compare(info1->smallest_user_key,
-                               info2->smallest_user_key) < 0;
-        });
+    terark::sort_a(sorted_files, TERARK_FIELD_P(smallest_user_key) < *ucmp);
 
     for (size_t i = 0; i < num_files - 1; i++) {
       if (ucmp->Compare(sorted_files[i]->largest_user_key,
@@ -213,7 +211,7 @@ Status ExternalSstFileIngestionJob::Run() {
     edit_.AddFile(f.picked_level, f.fd.GetNumber(), f.fd.GetPathId(),
                   f.fd.GetFileSize(), f.smallest_internal_key(),
                   f.largest_internal_key(), f.assigned_seqno, f.assigned_seqno,
-                  false /* marked_for_compaction */, prop);
+                  ingestion_options_.marked_for_compaction, prop);
   }
 
   if (consumed_seqno) {
@@ -472,14 +470,11 @@ Status ExternalSstFileIngestionJob::AssignLevelAndSeqnoForIngestedFile(
       }
 
       if (compaction_style == kCompactionStyleUniversal && lvl != 0) {
-        using std::max_element;
         const std::vector<FileMetaData*>& level_files =
             vstorage->LevelFiles(lvl);
         const SequenceNumber level_largest_seqno =
-            (*max_element(level_files.begin(), level_files.end(),
-                          [](FileMetaData* f1, FileMetaData* f2) {
-                            return f1->fd.largest_seqno < f2->fd.largest_seqno;
-                          }))
+            (*boost::max_element(level_files,
+                                 TERARK_CMP_P(fd.largest_seqno, <)))
                 ->fd.largest_seqno;
         // should only assign seqno to current level's largest seqno when
         // the file fits

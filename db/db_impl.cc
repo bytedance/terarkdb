@@ -82,6 +82,7 @@
 #include "util/auto_roll_logger.h"
 #include "util/autovector.h"
 #include "util/build_version.h"
+#include "util/c_style_callback.h"
 #include "util/coding.h"
 #include "util/compression.h"
 #include "util/crc32c.h"
@@ -100,6 +101,7 @@
 #include <sys/unistd.h>
 #include <table/terark_zip_table.h>
 #endif
+#include <terark/valvec.hpp>
 
 #ifdef __GNUC__
 #pragma GCC diagnostic push
@@ -253,6 +255,7 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
       error_handler_(this, immutable_db_options_, &mutex_),
       atomic_flush_install_cv_(&mutex_),
       bytedance_tags_("dbname=" + dbname),
+      console_runner_(this, dbname, env_, immutable_db_options_.info_log.get()),
       write_qps_reporter_(write_qps_metric_name, bytedance_tags_),
       read_qps_reporter_(read_qps_metric_name, bytedance_tags_),
       newiterator_qps_reporter_(newiterator_qps_metric_name, bytedance_tags_),
@@ -469,6 +472,8 @@ void DBImpl::CancelAllBackgroundWork(bool wait) {
 }
 
 Status DBImpl::CloseHelper() {
+  console_runner_.closing_ = true;
+
   // Guarantee that there is no background error recovery in progress before
   // continuing with the shutdown
   mutex_.Lock();
@@ -496,7 +501,7 @@ Status DBImpl::CloseHelper() {
                        bg_compaction_scheduled_ + bg_flush_scheduled_ +
                        bg_purge_scheduled_ - bg_unscheduled;
     if (bg_scheduled || pending_purge_obsolete_files_ ||
-        error_handler_.IsRecoveryInProgress()) {
+        error_handler_.IsRecoveryInProgress() || !console_runner_.closed_) {
       TEST_SYNC_POINT("DBImpl::~DBImpl:WaitJob");
       bg_cv_.TimedWait(10000);
     } else {
@@ -849,10 +854,19 @@ Status DBImpl::SetDBOptions(
     s = GetMutableDBOptionsFromStrings(mutable_db_options_, options_map,
                                        &new_options);
     if (s.ok()) {
-      if (new_options.max_background_compactions >
-          mutable_db_options_.max_background_compactions) {
-        env_->IncBackgroundThreadsIfNeeded(
-            new_options.max_background_compactions, Env::Priority::LOW);
+      auto bg_job_limits = DBImpl::GetBGJobLimits(
+          immutable_db_options_.max_background_flushes,
+          new_options.max_background_compactions,
+          new_options.max_background_garbage_collections,
+          new_options.max_background_jobs, true /* parallelize_compactions */);
+      if (bg_job_limits.max_compactions >
+              env_->GetBackgroundThreads(Env::Priority::LOW) ||
+          bg_job_limits.max_flushes >
+              env_->GetBackgroundThreads(Env::Priority::HIGH)) {
+        env_->IncBackgroundThreadsIfNeeded(bg_job_limits.max_compactions,
+                                           Env::Priority::LOW);
+        env_->IncBackgroundThreadsIfNeeded(bg_job_limits.max_flushes,
+                                           Env::Priority::HIGH);
         MaybeScheduleFlushOrCompaction();
       }
       if (new_options.stats_dump_period_sec !=
@@ -2630,7 +2644,8 @@ Status DBImpl::DeleteFilesInRanges(ColumnFamilyHandle* column_family,
       }
       void Unlock() {
         assert(is_lock);
-        is_lock = false, db_mutex->Unlock();
+        is_lock = false;
+        db_mutex->Unlock();
       }
 
       ~AutoRelease() {
@@ -2651,7 +2666,7 @@ Status DBImpl::DeleteFilesInRanges(ColumnFamilyHandle* column_family,
     auto* vstorage = input_version->storage_info();
     if (cfd->ioptions()->enable_lazy_compaction) {
       const InternalKeyComparator& ic = cfd->ioptions()->internal_comparator;
-
+      auto uc = ic.user_comparator();
       // deref nullptr of start/limit
       InternalKey* nullptr_start = nullptr;
       InternalKey* nullptr_limit = nullptr;
@@ -2687,48 +2702,96 @@ Status DBImpl::DeleteFilesInRanges(ColumnFamilyHandle* column_family,
         job_context.Clean();
         return Status::OK();
       }
-      // trans user_key to internal_key
-      std::vector<std::pair<InternalKey, InternalKey>> deleted_range_storage;
+      // fix user_key to [ ... )
       std::vector<Range> deleted_range;
-      deleted_range_storage.resize(n);
-      deleted_range.resize(n);
+      deleted_range.reserve(n);
+      Arena arena;
+      auto create_iter = [&](Arena* arena) {
+        ReadOptions read_options;
+        read_options.verify_checksums = true;
+        read_options.fill_cache = false;
+        read_options.total_order_seek = true;
+        MergeIteratorBuilder builder(&ic, arena);
+        input_version->AddIterators(read_options, env_options_, &builder,
+                                    nullptr /* range_del_agg */);
+        return builder.Finish();
+      };
+      LazyInternalIteratorWrapper version_iter(c_style_callback(create_iter),
+                                               &create_iter, nullptr, nullptr,
+                                               &arena);
+      InternalKey ik;
+      auto set_ik = [&ik](const Slice& uk) {
+        ik.Clear();
+        ik.SetMaxPossibleForUserKey(uk);
+        return ik.Encode();
+      };
       for (size_t i = 0; i < n; ++i) {
-        deleted_range[i].include_start = ranges[i].include_start;
-        deleted_range[i].include_limit = ranges[i].include_limit;
-        auto& storage = deleted_range_storage[i];
+        Range deleted;
         if (ranges[i].start == nullptr) {
-          storage.first = *nullptr_start;
-          deleted_range[i].include_start = true;
+          deleted.start = nullptr_start->user_key();
         } else {
-          if (deleted_range[i].include_start) {
-            storage.first.SetMinPossibleForUserKey(*ranges[i].start);
+          if (ranges[i].include_start) {
+            deleted.start = *ranges[i].start;
           } else {
-            storage.first.SetMaxPossibleForUserKey(*ranges[i].start);
+            version_iter.Seek(set_ik(*ranges[i].start));
+            if (version_iter.Valid() &&
+                uc->Compare(ExtractUserKey(version_iter.key()),
+                            *ranges[i].start) == 0) {
+              version_iter.Next();
+            }
+            if (version_iter.Valid()) {
+              deleted.start =
+                  ArenaPinSlice(ExtractUserKey(version_iter.key()), &arena);
+            } else if (!version_iter.status().ok()) {
+              return version_iter.status();
+            } else {
+              // ranges[i].start >
+              continue;
+            }
           }
         }
+        deleted.include_start = true;
         if (ranges[i].limit == nullptr) {
-          storage.second = *nullptr_limit;
-          deleted_range[i].include_limit = true;
+          deleted.limit = nullptr_limit->user_key();
+          deleted.include_limit = true;
         } else {
-          if (deleted_range[i].include_limit) {
-            storage.second.SetMaxPossibleForUserKey(*ranges[i].limit);
+          if (!ranges[i].include_limit) {
+            deleted.limit = *ranges[i].limit;
+            deleted.include_limit = false;
           } else {
-            storage.second.SetMinPossibleForUserKey(*ranges[i].limit);
+            version_iter.Seek(set_ik(*ranges[i].limit));
+            if (version_iter.Valid() &&
+                uc->Compare(ExtractUserKey(version_iter.key()),
+                            *ranges[i].limit) == 0) {
+              version_iter.Next();
+            }
+            if (version_iter.Valid()) {
+              deleted.limit =
+                  ArenaPinSlice(ExtractUserKey(version_iter.key()), &arena);
+              deleted.include_limit = false;
+            } else if (!version_iter.status().ok()) {
+              return version_iter.status();
+            } else {
+              deleted.limit = *ranges[i].limit;
+              deleted.include_limit = true;
+            }
           }
         }
-        deleted_range[i].start = storage.first.Encode();
-        deleted_range[i].limit = storage.second.Encode();
+        // deleted.include_limit ? limit < start : limit <= start
+        if (uc->Compare(deleted.limit, deleted.start) <
+            !deleted.include_limit) {
+          continue;
+        }
+        deleted_range.push_back(deleted);
       }
       // sort & merge ranges
-      std::sort(deleted_range.begin(), deleted_range.end(),
-                [&ic](const Range& rl, const Range& rr) {
-                  return ic.Compare(rl.start, rr.start) < 0;
-                });
+      terark::sort_a(deleted_range, TERARK_FIELD(start) < *uc);
       size_t c = 0;
+      n = deleted_range.size();
       for (size_t i = 1; i < n; ++i) {
-        if (ic.Compare(deleted_range[c].limit, deleted_range[i].start) >= 0) {
-          deleted_range[c].include_start |= deleted_range[i].include_start;
-          if (ic.Compare(deleted_range[c].limit, deleted_range[i].limit) <= 0) {
+        if (uc->Compare(deleted_range[c].limit, deleted_range[i].start) >= 0) {
+          if (uc->Compare(deleted_range[c].limit, deleted_range[i].limit) <=
+              0) {
             deleted_range[c].limit = deleted_range[i].limit;
             deleted_range[c].include_limit |= deleted_range[i].include_limit;
           }

@@ -507,42 +507,7 @@ TEST_F(DBCompactionTest, SkipStatsUpdateTest) {
   // This test verify UpdateAccumulatedStats is not on
   // if options.skip_stats_update_on_db_open = true
   // The test will need to be updated if the internal behavior changes.
-
-  Options options = DeletionTriggerOptions(CurrentOptions());
-  options.env = env_;
-  DestroyAndReopen(options);
-  Random rnd(301);
-
-  const int kTestSize = kCDTKeysPerBuffer * 512;
-  std::vector<std::string> values;
-  for (int k = 0; k < kTestSize; ++k) {
-    values.push_back(RandomString(&rnd, kCDTValueSize));
-    ASSERT_OK(Put(Key(k), values[k]));
-  }
-  dbfull()->TEST_WaitForFlushMemTable();
-  dbfull()->TEST_WaitForCompact();
-
-  // Reopen the DB with stats-update disabled
-  options.skip_stats_update_on_db_open = true;
-  env_->random_file_open_counter_.store(0);
-  Reopen(options);
-
-  // As stats-update is disabled, we expect a very low number of
-  // random file open.
-  // Note that this number must be changed accordingly if we change
-  // the number of files needed to be opened in the DB::Open process.
-  const int kMaxFileOpenCount = 10;
-  ASSERT_LT(env_->random_file_open_counter_.load(), kMaxFileOpenCount);
-
-  // Repeat the reopen process, but this time we enable
-  // stats-update.
-  options.skip_stats_update_on_db_open = false;
-  env_->random_file_open_counter_.store(0);
-  Reopen(options);
-
-  // Since we do a normal stats update on db-open, there
-  // will be more random open files.
-  ASSERT_GT(env_->random_file_open_counter_.load(), kMaxFileOpenCount);
+  // terarkdb: options.skip_stats_update_on_db_open is Deprecated
 }
 
 TEST_F(DBCompactionTest, TestTableReaderForCompaction) {
@@ -633,7 +598,7 @@ TEST_F(DBCompactionTest, TestTableReaderForCompaction) {
 
   rocksdb::SyncPoint::GetInstance()->ClearAllCallBacks();
 }
-
+#ifdef OLD_DELETEFILE_DANGE
 TEST_P(DBCompactionTestWithParam, CompactionDeletionTriggerReopen) {
   for (int tid = 0; tid < 2; ++tid) {
     uint64_t db_size[3];
@@ -690,7 +655,7 @@ TEST_P(DBCompactionTestWithParam, CompactionDeletionTriggerReopen) {
     ASSERT_GT(db_size[0] / 3, db_size[2]);
   }
 }
-
+#endif  // OLD_DELETEFILE_DANGE
 TEST_F(DBCompactionTest, DisableStatsUpdateReopen) {
   uint64_t db_size[3];
   for (int test = 0; test < 2; ++test) {
@@ -737,14 +702,11 @@ TEST_F(DBCompactionTest, DisableStatsUpdateReopen) {
     dbfull()->TEST_WaitForCompact();
     db_size[2] = Size(Key(0), Key(kTestSize - 1));
 
-    if (options.skip_stats_update_on_db_open) {
-      // If update stats on DB::Open is disable, we don't expect
-      // deletion entries taking effect.
-      ASSERT_LT(db_size[0] / 3, db_size[2]);
-    } else {
-      // Otherwise, we should see a significant drop in db size.
-      ASSERT_GT(db_size[0] / 3, db_size[2]);
-    }
+    // If update stats on DB::Open is disable, we don't expect
+    // deletion entries taking effect.
+    // terarkdb: options.skip_stats_update_on_db_open is deprecated
+    // Otherwise, we should see a significant drop in db size.
+    ASSERT_GT(db_size[0] / 3, db_size[2]);
   }
 }
 
@@ -1603,7 +1565,7 @@ TEST_F(DBCompactionTest, DISABLED_ManualPartialFill) {
     ASSERT_EQ(Get(Key(i)), values[i]);
   }
 }
-
+#ifdef OLD_DELETEFILE_DANGE
 TEST_F(DBCompactionTest, DeleteFileRange) {
   Options options = CurrentOptions();
   options.write_buffer_size = 10 * 1024 * 1024;
@@ -1723,6 +1685,7 @@ TEST_F(DBCompactionTest, DeleteFileRange) {
   size_t new_num_files = CountFiles();
   ASSERT_GT(old_num_files, new_num_files);
 }
+#endif // OLD_DELETEFILE_DANGE
 
 TEST_F(DBCompactionTest, DeleteFilesInRanges) {
   Options options = CurrentOptions();
@@ -1888,7 +1851,8 @@ TEST_F(DBCompactionTest, DeleteFileRangeFileEndpointsOverlapBug) {
   // "1 -> vals[0]" to reappear.
   std::string begin_str = Key(0), end_str = Key(1);
   Slice begin = begin_str, end = end_str;
-  ASSERT_OK(DeleteFilesInRange(db_, db_->DefaultColumnFamily(), &begin, &end));
+  ASSERT_OK(
+      DeleteFilesInRange(db_, db_->DefaultColumnFamily(), &begin, &end, false));
   ASSERT_EQ(vals[1], Get(Key(1)));
 
   db_->ReleaseSnapshot(snapshot);
@@ -1936,6 +1900,7 @@ TEST_F(DBCompactionTest, LazyCompactionDeleteFileRangeFile) {
   };
   ASSERT_OK(DeleteFilesInRanges(db_, db_->DefaultColumnFamily(), ranges.data(),
                                 ranges.size()));
+  dbfull()->TEST_WaitForCompact();
   verify_result();
 
   ASSERT_OK(
@@ -2859,7 +2824,7 @@ TEST_P(DBCompactionTestWithParam, PartialCompactionFailure) {
     ASSERT_EQ(values[k], Get(keys[k]));
   }
 }
-
+#ifdef OLD_DELETEFILE_DANGE
 TEST_P(DBCompactionTestWithParam, DeleteMovedFileAfterCompaction) {
   // iter 1 -- delete_obsolete_files_period_micros == 0
   for (int iter = 0; iter < 2; ++iter) {
@@ -2938,7 +2903,7 @@ TEST_P(DBCompactionTestWithParam, DeleteMovedFileAfterCompaction) {
     listener->VerifyMatchedCount(1);
   }
 }
-
+#endif // OLD_DELETEFILE_DANGE
 TEST_P(DBCompactionTestWithParam, CompressLevelCompaction) {
   if (!Zlib_Supported()) {
     return;

@@ -279,9 +279,6 @@ void RandomInitDBOptions(DBOptions* db_opt, Random* rnd) {
   db_opt->db_log_dir = "path/to/db_log_dir";
   db_opt->wal_dir = "path/to/wal_dir";
 
-  // uint32_t options
-  db_opt->max_subcompactions = rnd->Uniform(100000);
-
   // uint64_t options
   static const uint64_t uint_max = static_cast<uint64_t>(UINT_MAX);
   db_opt->WAL_size_limit_MB = uint_max + rnd->Uniform(100000);
@@ -347,6 +344,7 @@ void RandomInitCFOptions(ColumnFamilyOptions* cf_opt, Random* rnd) {
   // uint32_t options
   cf_opt->bloom_locality = rnd->Uniform(10000);
   cf_opt->max_bytes_for_level_base = rnd->Uniform(10000);
+  cf_opt->max_subcompactions = rnd->Uniform(100000);
 
   // uint64_t options
   static const uint64_t uint_max = static_cast<uint64_t>(UINT_MAX);

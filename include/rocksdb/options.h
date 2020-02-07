@@ -283,6 +283,12 @@ struct ColumnFamilyOptions : public AdvancedColumnFamilyOptions {
   // Dynamically changeable through SetOptions() API
   bool disable_auto_compactions = false;
 
+  // This value represents the maximum number of threads that will
+  // concurrently perform a compaction job by breaking it into multiple,
+  // smaller ones that are run simultaneously.
+  // Default: 0 (init from DBOptions::max_subcompactions.)
+  uint32_t max_subcompactions = 0;
+
   // Key Value separate blob value size
   size_t blob_size = size_t(-1);
 
@@ -551,12 +557,6 @@ struct DBOptions {
   // Dynamically changeable through SetDBOptions() API.
   int max_background_compactions = -1;
   int max_background_garbage_collections = -1;
-
-  // This value represents the maximum number of threads that will
-  // concurrently perform a compaction job by breaking it into multiple,
-  // smaller ones that are run simultaneously.
-  // Default: 1 (i.e. no subcompactions)
-  uint32_t max_subcompactions = 1;
 
   // NOT SUPPORTED ANYMORE: RocksDB automatically decides this based on the
   // value of max_background_jobs. For backwards compatibility we will set
@@ -1263,7 +1263,7 @@ struct CompactionOptions {
   // Compaction will create files of size `output_file_size_limit`.
   // Default: MAX, which means that compaction will create a single file
   uint64_t output_file_size_limit;
-  // If > 0, it will replace the option in the DBOptions for this compaction.
+  // If > 0, it will replace the option in the CFOptions for this compaction.
   uint32_t max_subcompactions;
 
   CompactionOptions()
@@ -1305,7 +1305,7 @@ struct CompactRangeOptions {
   // If true, will execute immediately even if doing so would cause the DB to
   // enter write stall mode. Otherwise, it'll sleep until load is low enough.
   bool allow_write_stall = false;
-  // If > 0, it will replace the option in the DBOptions for this compaction.
+  // If > 0, it will replace the option in the CFOptions for this compaction.
   uint32_t max_subcompactions = 0;
 };
 
@@ -1342,6 +1342,8 @@ struct IngestExternalFileOptions {
   // 2. Without writing external SST file, it's possible to do checksum.
   // We have a plan to set this option to false by default in the future.
   bool write_global_seqno = true;
+  // Mark all files need compaction
+  bool marked_for_compaction = false;
 };
 
 // TraceOptions is used for StartTrace

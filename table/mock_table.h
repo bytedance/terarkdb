@@ -134,7 +134,11 @@ class MockTableBuilder : public TableBuilder {
     return Status::OK();
   }
 
-  Status Finish(const TablePropertyCache* prop) override {
+  Status AddTombstone(const Slice& key, const LazyBuffer& value) override {
+    return Add(key, value);
+  }
+
+  Status Finish(const TablePropertyCache* prop, const std::vector<uint64_t>*) override {
     MutexLock lock_guard(&file_system_->mutex);
     file_system_->files.insert({id_, table_});
     if (prop != nullptr) {

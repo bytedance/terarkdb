@@ -329,6 +329,8 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
               index_.mem_alloc(sizeof(value_wrap_t) * size * 2);
           assert(cow_data_loc != terark::MainPatricia::mem_alloc_fail);
           auto* cow_data = (value_wrap_t*)index_.mem_get(cow_data_loc);
+          vector = (value_vector_t*)index_.mem_get(vector_loc);
+          data = (value_wrap_t*)index_.mem_get(data_loc);
           memcpy(cow_data, data, sizeof(value_wrap_t) * size);
           cow_data[size].value = key;
           vector->loc = (uint32_t)cow_data_loc;

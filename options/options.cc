@@ -179,7 +179,7 @@ void ColumnFamilyOptions::Dump(Logger* log) const {
       bottommost_compression_opts.max_dict_bytes);
   ROCKS_LOG_HEADER(
       log,
-      "        Options.bottommost_compression_opts.zstd_max_train_bytes: "
+      "  Options.bottommost_compression_opts.zstd_max_train_bytes: "
       "%" ROCKSDB_PRIszt,
       bottommost_compression_opts.zstd_max_train_bytes);
   ROCKS_LOG_HEADER(
@@ -194,11 +194,10 @@ void ColumnFamilyOptions::Dump(Logger* log) const {
   ROCKS_LOG_HEADER(
       log, "        Options.compression_opts.max_dict_bytes: %" ROCKSDB_PRIszt,
       compression_opts.max_dict_bytes);
-  ROCKS_LOG_HEADER(log,
-                   "        Options.compression_opts.zstd_max_train_bytes: "
-                   "%" ROCKSDB_PRIszt,
-                   compression_opts.zstd_max_train_bytes);
-  ROCKS_LOG_HEADER(log, "                 Options.compression_opts.enabled: %s",
+  ROCKS_LOG_HEADER(
+      log, "  Options.compression_opts.zstd_max_train_bytes: %" ROCKSDB_PRIszt,
+      compression_opts.zstd_max_train_bytes);
+  ROCKS_LOG_HEADER(log, "               Options.compression_opts.enabled: %s",
                    compression_opts.enabled ? "true" : "false");
   ROCKS_LOG_HEADER(log, "     Options.level0_file_num_compaction_trigger: %d",
                    level0_file_num_compaction_trigger);
@@ -214,7 +213,7 @@ void ColumnFamilyOptions::Dump(Logger* log) const {
   ROCKS_LOG_HEADER(log,
                    "               Options.max_bytes_for_level_base: %" PRIu64,
                    max_bytes_for_level_base);
-  ROCKS_LOG_HEADER(log, "Options.level_compaction_dynamic_level_bytes: %d",
+  ROCKS_LOG_HEADER(log, "   Options.level_compaction_dynamic_level_bytes: %d",
                    level_compaction_dynamic_level_bytes);
   ROCKS_LOG_HEADER(log, "         Options.max_bytes_for_level_multiplier: %f",
                    max_bytes_for_level_multiplier);
@@ -235,16 +234,18 @@ void ColumnFamilyOptions::Dump(Logger* log) const {
       log, "                       Options.arena_block_size: %" ROCKSDB_PRIszt,
       arena_block_size);
   ROCKS_LOG_HEADER(log,
-                   "  Options.soft_pending_compaction_bytes_limit: %" PRIu64,
+                   "    Options.soft_pending_compaction_bytes_limit: %" PRIu64,
                    soft_pending_compaction_bytes_limit);
   ROCKS_LOG_HEADER(log,
-                   "  Options.hard_pending_compaction_bytes_limit: %" PRIu64,
+                   "    Options.hard_pending_compaction_bytes_limit: %" PRIu64,
                    hard_pending_compaction_bytes_limit);
   ROCKS_LOG_HEADER(log, "      Options.rate_limit_delay_max_milliseconds: %u",
                    rate_limit_delay_max_milliseconds);
   ROCKS_LOG_HEADER(log, "               Options.disable_auto_compactions: %d",
                    disable_auto_compactions);
-  ROCKS_LOG_HEADER(log, "                              Options.blob_size: %d",
+  ROCKS_LOG_HEADER(log, "                     Options.max_subcompactions: %u",
+                   max_subcompactions);
+  ROCKS_LOG_HEADER(log, "                              Options.blob_size: %zd",
                    blob_size);
   ROCKS_LOG_HEADER(log, "                          Options.blob_gc_ratio: %f",
                    blob_gc_ratio);
@@ -296,7 +297,7 @@ void ColumnFamilyOptions::Dump(Logger* log) const {
   } else {
     str_compaction_stop_style = it_compaction_stop_style->second;
   }
-  ROCKS_LOG_HEADER(log, "Options.compaction_options_universal.stop_style: %s",
+  ROCKS_LOG_HEADER(log, " Options.compaction_options_universal.stop_style: %s",
                    str_compaction_stop_style.c_str());
   ROCKS_LOG_HEADER(
       log, "Options.compaction_options_fifo.max_table_files_size: %" PRIu64,
@@ -310,38 +311,38 @@ void ColumnFamilyOptions::Dump(Logger* log) const {
     collector_names.append(collector_factory->Name());
     collector_names.append("; ");
   }
-  ROCKS_LOG_HEADER(log,
-                   "                  Options.table_properties_collectors: %s",
+  ROCKS_LOG_HEADER(log, "            Options.table_properties_collectors: %s",
                    collector_names.c_str());
-  ROCKS_LOG_HEADER(log, "                  Options.enable_lazy_compaction: %d",
+  ROCKS_LOG_HEADER(log, "                 Options.enable_lazy_compaction: %d",
                    enable_lazy_compaction);
-  ROCKS_LOG_HEADER(log, "                  Options.inplace_update_support: %d",
+  ROCKS_LOG_HEADER(log, "                 Options.inplace_update_support: %d",
                    inplace_update_support);
   ROCKS_LOG_HEADER(
-      log, "                Options.inplace_update_num_locks: %" ROCKSDB_PRIszt,
+      log, "               Options.inplace_update_num_locks: %" ROCKSDB_PRIszt,
       inplace_update_num_locks);
   // TODO: easier config for bloom (maybe based on avg key/value size)
-  ROCKS_LOG_HEADER(log,
-                   "              Options.memtable_prefix_bloom_size_ratio: %f",
+  ROCKS_LOG_HEADER(log, "       Options.memtable_prefix_bloom_size_ratio: %f",
                    memtable_prefix_bloom_size_ratio);
 
-  ROCKS_LOG_HEADER(log, "  Options.memtable_huge_page_size: %" ROCKSDB_PRIszt,
-                   memtable_huge_page_size);
-  ROCKS_LOG_HEADER(log, "                          Options.bloom_locality: %d",
+  ROCKS_LOG_HEADER(
+      log, "                Options.memtable_huge_page_size: %" ROCKSDB_PRIszt,
+      memtable_huge_page_size);
+  ROCKS_LOG_HEADER(log, "                         Options.bloom_locality: %d",
                    bloom_locality);
 
   ROCKS_LOG_HEADER(
-      log, "                   Options.max_successive_merges: %" ROCKSDB_PRIszt,
+      log, "                  Options.max_successive_merges: %" ROCKSDB_PRIszt,
       max_successive_merges);
-  ROCKS_LOG_HEADER(log, "               Options.optimize_filters_for_hits: %d",
+  ROCKS_LOG_HEADER(log, "              Options.optimize_filters_for_hits: %d",
                    optimize_filters_for_hits);
-  ROCKS_LOG_HEADER(log, "               Options.paranoid_file_checks: %d",
+  ROCKS_LOG_HEADER(log, "                   Options.paranoid_file_checks: %d",
                    paranoid_file_checks);
   ROCKS_LOG_HEADER(log, "               Options.force_consistency_checks: %d",
                    force_consistency_checks);
-  ROCKS_LOG_HEADER(log, "               Options.report_bg_io_stats: %d",
+  ROCKS_LOG_HEADER(log, "                     Options.report_bg_io_stats: %d",
                    report_bg_io_stats);
-  ROCKS_LOG_HEADER(log, "                              Options.ttl: %d", ttl);
+  ROCKS_LOG_HEADER(log, "                                    Options.ttl: %d",
+                   ttl);
 }  // ColumnFamilyOptions::Dump
 
 void Options::Dump(Logger* log) const {

@@ -206,6 +206,9 @@ Compaction* FIFOCompactionPicker::PickCompaction(
   assert(vstorage->num_levels() == 1);
 
   Compaction* c = nullptr;
+  if (!compactions_in_progress_.empty()) {
+    return nullptr;
+  }
   if (mutable_cf_options.compaction_options_fifo.ttl > 0) {
     c = PickTTLCompaction(cf_name, mutable_cf_options, vstorage, log_buffer);
   }

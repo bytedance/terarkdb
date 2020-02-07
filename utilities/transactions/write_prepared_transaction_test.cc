@@ -963,6 +963,7 @@ TEST_P(WritePreparedTransactionTest, CheckAgainstSnapshotsTest) {
 }
 
 // This test is too slow for travis
+#ifdef SNAPSHOT_CONCURRENT
 #ifndef TRAVIS
 #ifndef ROCKSDB_VALGRIND_RUN
 // Test that CheckAgainstSnapshots will not miss a live snapshot if it is run in
@@ -1045,6 +1046,7 @@ TEST_P(SnapshotConcurrentAccessTest, SnapshotConcurrentAccessTest) {
 }
 #endif  // ROCKSDB_VALGRIND_RUN
 #endif  // TRAVIS
+#endif  // SNAPSHOT_CONCURRENT
 
 // This test clarifies the contract of AdvanceMaxEvictedSeq method
 TEST_P(WritePreparedTransactionTest, AdvanceMaxEvictedSeqBasicTest) {

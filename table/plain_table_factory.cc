@@ -6,7 +6,9 @@
 #include "table/plain_table_factory.h"
 
 #include <stdint.h>
+
 #include <memory>
+
 #include "db/dbformat.h"
 #include "options/options_helper.h"
 #include "port/port.h"
@@ -163,8 +165,7 @@ Status GetMemTableRepFactoryFromString(
     }
     Status s;
     mem_factory = CreateMemTableRepFactory(opts_list[0], opts_map, &s);
-    if (!mem_factory)
-      return s;
+    if (!mem_factory) return s;
   }
 
   if (mem_factory != nullptr) {
@@ -242,6 +243,17 @@ const std::string PlainTablePropertyNames::kBloomVersion =
 
 const std::string PlainTablePropertyNames::kNumBloomBlocks =
     "rocksdb.plain.table.bloom.numblocks";
+
+static TableFactory* PlainCreator(const std::string& options, Status* s) {
+  PlainTableOptions base, pto;
+  *s = GetPlainTableOptionsFromString(base, options, &pto);
+  if (s->ok()) {
+    return NewPlainTableFactory(pto);
+  }
+  return nullptr;
+}
+
+TERARK_FACTORY_REGISTER_EX(PlainTableFactory, "PlainTable", &PlainCreator);
 
 }  // namespace rocksdb
 #endif  // ROCKSDB_LITE

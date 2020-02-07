@@ -180,7 +180,7 @@ TEST_F(FlushJobTest, NonEmpty) {
   FileMetaData file_meta;
   mutex_.Lock();
   flush_job.PickMemTable();
-  ASSERT_OK(flush_job.Run(nullptr, &file_meta));
+  ASSERT_OK(flush_job.Run(nullptr /* prep_tracker */, &file_meta));
   mutex_.Unlock();
   db_options_.statistics->histogramData(FLUSH_TIME, &hist);
   ASSERT_GT(hist.average, 0.0);

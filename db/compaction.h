@@ -8,8 +8,12 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #pragma once
-#include "db/version_set.h"
+#include <unordered_set>
+
+#include "db/version_edit.h"
 #include "options/cf_options.h"
+#include "rocksdb/compaction_filter.h"
+#include "rocksdb/listener.h"
 #include "util/arena.h"
 #include "util/autovector.h"
 
@@ -46,6 +50,21 @@ struct CompactionInputFiles {
   inline FileMetaData* operator[](size_t i) const { return files[i]; }
 };
 
+struct SelectedRange : public RangeStorage {
+  double weight;
+
+  SelectedRange(RangeStorage&& _range, double _weight = 0)
+      : RangeStorage(std::move(_range)), weight(_weight) {}
+
+  SelectedRange(const Slice& _start, const Slice& _limit,
+                bool _include_start = true, bool _include_limit = true)
+      : RangeStorage(std::move(_start), std::move(_limit), _include_start,
+                     _include_limit),
+        weight(0) {}
+
+  SelectedRange() : weight(0) {} 
+};
+
 class ColumnFamilyData;
 class CompactionFilter;
 class LevelFileContainer;
@@ -77,7 +96,7 @@ struct CompactionParams {
   bool deletion_compaction = false;
   bool partial_compaction = false;
   CompactionType compaction_type = kKeyValueCompaction;
-  std::vector<RangeStorage> input_range = {};
+  std::vector<SelectedRange> input_range = {};
   CompactionReason compaction_reason = CompactionReason::kUnknown;
 
   CompactionParams(VersionStorageInfo* _input_version,
@@ -105,35 +124,45 @@ struct CompactionWorkerContext {
     bool empty() const { return data.empty(); }
     void clear() { data.clear(); }
   };
+  struct NameParam {
+    std::string name;
+    EncodedString param;
+  };
   // options
   std::string user_comparator;
   std::string merge_operator;
   EncodedString merge_operator_data;
   std::string compaction_filter;
   std::string compaction_filter_factory;
-  rocksdb::CompactionFilter::Context compaction_filter_context;
+  CompactionFilter::Context compaction_filter_context;
+
+  /// For both filter and filter_factory according to which is not null
   EncodedString compaction_filter_data;
+
   uint64_t blob_size;
   std::string table_factory;
   std::string table_factory_options;
   uint32_t bloom_locality;
   std::vector<std::string> cf_paths;
   std::string prefix_extractor;
+  std::string prefix_extractor_options;
   // compaction
   bool has_start, has_end;
   EncodedString start, end;
-  rocksdb::SequenceNumber last_sequence;
-  rocksdb::SequenceNumber earliest_write_conflict_snapshot;
-  rocksdb::SequenceNumber preserve_deletes_seqnum;
-  std::vector<std::pair<uint64_t, rocksdb::FileMetaData>> file_metadata;
+  SequenceNumber last_sequence;
+  SequenceNumber earliest_write_conflict_snapshot;
+  SequenceNumber preserve_deletes_seqnum;
+  std::vector<std::pair<uint64_t, FileMetaData>> file_metadata;
   std::vector<std::pair<int, uint64_t>> inputs;
   std::string cf_name;
   uint64_t target_file_size;
-  rocksdb::CompressionType compression;
-  rocksdb::CompressionOptions compression_opts;
-  std::vector<rocksdb::SequenceNumber> existing_snapshots;
-  bool bottommost_level;
-  std::vector<std::string> int_tbl_prop_collector_factories;
+  CompressionType compression;
+  CompressionOptions compression_opts;
+  std::vector<SequenceNumber> existing_snapshots;
+  EncodedString smallest_user_key, largest_user_key;
+  int level, number_levels;
+  bool bottommost_level, allow_ingest_behind, preserve_deletes;
+  std::vector<NameParam> int_tbl_prop_collector_factories;
 };
 
 struct CompactionWorkerResult {
@@ -144,9 +173,15 @@ struct CompactionWorkerResult {
     std::string file_name;
     SequenceNumber smallest_seqno, largest_seqno;
     size_t file_size;
+
+    // use UserProperties["User.Collected.Transient.Stat"] to reduce complexity
+    // std::string stat_one;
+
     bool marked_for_compaction;
   };
   std::vector<FileInfo> files;
+  std::string stat_all;
+  size_t time_us = 0;
 };
 
 // A Compaction encapsulates information about a compaction.
@@ -252,7 +287,7 @@ class Compaction {
   CompactionType compaction_type() const { return compaction_type_; }
 
   // Range limit for inputs
-  const std::vector<RangeStorage>& input_range() const { return input_range_; };
+  std::vector<SelectedRange>& input_range() { return input_range_; };
 
   // Add all inputs to this compaction as delete operations to *edit.
   void AddInputDeletions(VersionEdit* edit);
@@ -392,6 +427,11 @@ class Compaction {
                               const std::vector<CompactionInputFiles>& inputs,
                               Slice* smallest_key, Slice* largest_key);
 
+  const std::vector<TableTransientStat>& transient_stat() const {
+    return transient_stat_;
+  }
+  std::vector<TableTransientStat>& transient_stat() { return transient_stat_; }
+
  private:
   // mark (or clear) all files that are being compacted
   void MarkFilesBeingCompacted(bool mark_as_compacted);
@@ -433,7 +473,7 @@ class Compaction {
   const CompactionType compaction_type_;
 
   // Range limit for inputs
-  const std::vector<RangeStorage> input_range_;
+  std::vector<SelectedRange> input_range_;
 
   // Compaction input files organized by level. Constant after construction
   const std::vector<CompactionInputFiles> inputs_;
@@ -480,6 +520,9 @@ class Compaction {
 
   // Reason for compaction
   CompactionReason compaction_reason_;
+
+  // per sub compact
+  std::vector<TableTransientStat> transient_stat_;
 };
 
 // Utility function

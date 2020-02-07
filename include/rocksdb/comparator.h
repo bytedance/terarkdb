@@ -9,6 +9,9 @@
 #pragma once
 
 #include <string>
+#include <terark/util/factory.hpp>
+#include <terark/util/function.hpp>
+#include "comparator_lambda.h"
 
 namespace rocksdb {
 
@@ -18,7 +21,7 @@ class Slice;
 // used as keys in an sstable or a database.  A Comparator implementation
 // must be thread-safe since rocksdb may invoke its methods concurrently
 // from multiple threads.
-class Comparator {
+class Comparator : public terark::Factoryable<const Comparator*> {
  public:
   virtual ~Comparator() {}
 
@@ -55,9 +58,8 @@ class Comparator {
   // If *start < limit, changes *start to a short string in [start,limit).
   // Simple comparator implementations may return with *start unchanged,
   // i.e., an implementation of this method that does nothing is correct.
-  virtual void FindShortestSeparator(
-      std::string* start,
-      const Slice& limit) const = 0;
+  virtual void FindShortestSeparator(std::string* start,
+                                     const Slice& limit) const = 0;
 
   // Changes *key to a short string >= *key.
   // Simple comparator implementations may return with *key unchanged,

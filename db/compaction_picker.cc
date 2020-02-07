@@ -15,15 +15,19 @@
 
 #include <inttypes.h>
 
+#include <boost/range/algorithm.hpp>
+#include <boost/range/algorithm_ext/is_sorted.hpp>
 #include <limits>
 #include <queue>
 #include <string>
+#include <terark/util/function.hpp>
 #include <utility>
 #include <vector>
 
 #include "db/column_family.h"
 #include "db/map_builder.h"
 #include "monitoring/statistics.h"
+#include "terark/valvec.hpp"
 #include "util/c_style_callback.h"
 #include "util/filename.h"
 #include "util/log_buffer.h"
@@ -298,11 +302,11 @@ bool CompactionPicker::ReadMapElement(MapSstElement& map_element,
   return true;
 }
 
-bool CompactionPicker::FixInputRange(std::vector<RangeStorage>& input_range,
+bool CompactionPicker::FixInputRange(std::vector<SelectedRange>& input_range,
                                      const InternalKeyComparator& icmp,
                                      bool sort, bool merge) {
   auto uc = icmp.user_comparator();
-  auto range_cmp = [uc](const RangeStorage& a, const RangeStorage& b) {
+  auto range_cmp = [uc](const SelectedRange& a, const SelectedRange& b) {
     int r = uc->Compare(a.limit, b.limit);
     if (r == 0) {
       r = int(a.include_limit) - int(b.include_limit);
@@ -358,19 +362,11 @@ bool CompactionPicker::FixInputRange(std::vector<RangeStorage>& input_range,
       }
     }
   }
-  assert(std::is_sorted(input_range.begin(), input_range.end(),
-                        [uc](const RangeStorage& a, const RangeStorage& b) {
-                          return uc->Compare(a.start, b.start) < 0;
-                        }));
-  assert(std::is_sorted(input_range.begin(), input_range.end(),
-                        [uc](const RangeStorage& a, const RangeStorage& b) {
-                          return uc->Compare(a.limit, b.limit) < 0;
-                        }));
-  assert(std::find_if(input_range.begin(), input_range.end(),
-                      [uc](const RangeStorage& r) {
-                        int c = uc->Compare(r.start, r.limit);
-                        return r.include_limit ? c > 0 : c >= 0;
-                      }) == input_range.end());
+  assert(boost::is_sorted(input_range, TERARK_FIELD(start) < *uc));
+  assert(boost::is_sorted(input_range, TERARK_FIELD(limit) < *uc));
+  assert(boost::find_if(input_range, [uc](const RangeStorage& r) {
+           return uc->Compare(r.start, r.limit) > 0;
+         }) == input_range.end());
   return !input_range.empty();
 }
 
@@ -603,6 +599,7 @@ Compaction* CompactionPicker::CompactFiles(
   params.compression = compression_type;
   params.compression_opts =
       GetCompressionOptions(ioptions_, vstorage, output_level);
+
   params.max_subcompactions = compact_options.max_subcompactions;
   params.manual_compaction = true;
 
@@ -866,10 +863,7 @@ Compaction* CompactionPicker::PickGarbageCollection(
   }
 
   // Sorting by ratio decreasing.
-  std::sort(gc_files.begin(), gc_files.end(),
-            [](const GarbageFileInfo& l, const GarbageFileInfo& r) {
-              return l.score > r.score;
-            });
+  terark::sort_a(gc_files, TERARK_CMP(score, >));
 
   // Return nullptr if nothing to do.
   if (gc_files.empty() ||
@@ -1015,8 +1009,9 @@ Compaction* CompactionPicker::CompactRange(
     }
     if (input_level == output_level) {
       return PickRangeCompaction(cf_name, mutable_cf_options, vstorage,
-                                 input_level, begin, end, files_being_compact,
-                                 manual_conflict, &log_buffer);
+                                 input_level, begin, end, max_subcompactions,
+                                 files_being_compact, manual_conflict,
+                                 &log_buffer);
     } else if ((*compaction_end)->size() > 0) {
       return nullptr;
     }
@@ -1031,27 +1026,27 @@ Compaction* CompactionPicker::CompactRange(
     input_vec[1].level = output_level;
     input_vec[1].files = vstorage->LevelFiles(output_level);
 
-    RangeStorage range;
+    SelectedRange range;
     if (begin != nullptr && end != nullptr) {
       AssignUserKey(range.start, begin->Encode());
       range.include_start = true;
       AssignUserKey(range.limit, end->Encode());
       range.include_limit = false;
     } else {
-      Slice smallest_key, largest_key;
-      Compaction::GetBoundaryKeys(vstorage, input_vec, &smallest_key,
-                                  &largest_key);
+      Slice smallest_user_key, largest_user_key;
+      Compaction::GetBoundaryKeys(vstorage, input_vec, &smallest_user_key,
+                                  &largest_user_key);
       if (begin != nullptr) {
         AssignUserKey(range.start, begin->Encode());
       } else {
-        AssignUserKey(range.start, smallest_key);
+        range.start.assign(smallest_user_key.data(), smallest_user_key.size());
       }
       range.include_start = true;
       if (end != nullptr) {
         AssignUserKey(range.limit, end->Encode());
         range.include_limit = false;
       } else {
-        AssignUserKey(range.limit, largest_key);
+        range.limit.assign(largest_user_key.data(), largest_user_key.size());
         range.include_limit = true;
       }
     }
@@ -1194,7 +1189,7 @@ Compaction* CompactionPicker::CompactRange(
 Compaction* CompactionPicker::PickRangeCompaction(
     const std::string& cf_name, const MutableCFOptions& mutable_cf_options,
     VersionStorageInfo* vstorage, int level, const InternalKey* begin,
-    const InternalKey* end,
+    const InternalKey* end, uint32_t max_subcompactions,
     const std::unordered_set<uint64_t>* files_being_compact,
     bool* manual_conflict, LogBuffer* log_buffer) {
   assert(ioptions_.enable_lazy_compaction);
@@ -1222,12 +1217,13 @@ Compaction* CompactionPicker::PickRangeCompaction(
     params.output_path_id = path_id;
     params.compression_opts = ioptions_.compression_opts;
     params.manual_compaction = true;
+    params.max_subcompactions = 1;
     params.score = 0;
     params.compaction_type = kMapCompaction;
     return new Compaction(std::move(params));
   }
 
-  std::vector<RangeStorage> input_range;
+  std::vector<SelectedRange> input_range;
   Arena arena;
   DependenceMap empty_dependence_map;
   ReadOptions options;
@@ -1249,13 +1245,17 @@ Compaction* CompactionPicker::PickRangeCompaction(
   }
 
   MapSstElement map_element;
-  RangeStorage range;
+  SelectedRange range;
   auto& ic = ioptions_.internal_comparator;
   auto uc = ic.user_comparator();
   auto need_compact = [&](const MapSstElement& e) {
-    if (begin != nullptr &&
-        uc->Compare(ExtractUserKey(e.largest_key), begin->user_key()) < 0) {
-      return false;
+    if (begin != nullptr) {
+      int c = uc->Compare(ExtractUserKey(e.largest_key), begin->user_key());
+      if (GetInternalKeySeqno(e.largest_key) == kMaxSequenceNumber) {
+        if (c <= 0) return false;
+      } else {
+        if (c < 0) return false;
+      }
     }
     if (end != nullptr &&
         uc->Compare(ExtractUserKey(e.smallest_key), end->user_key()) >= 0) {
@@ -1300,7 +1300,7 @@ Compaction* CompactionPicker::PickRangeCompaction(
           range.include_start = true;
           range.include_limit = false;
           input_range.emplace_back(std::move(range));
-          if (input_range.size() >= ioptions_.max_subcompactions) {
+          if (input_range.size() >= max_subcompactions) {
             has_start = false;
             break;
           }
@@ -1314,7 +1314,7 @@ Compaction* CompactionPicker::PickRangeCompaction(
         range.include_start = true;
         range.include_limit = false;
         input_range.emplace_back(std::move(range));
-        if (input_range.size() >= ioptions_.max_subcompactions) {
+        if (input_range.size() >= max_subcompactions) {
           break;
         }
         subcompact_size = 0;
@@ -1374,6 +1374,7 @@ Compaction* CompactionPicker::PickRangeCompaction(
   params.manual_compaction = true;
   params.score = 0;
   params.partial_compaction = true;
+  params.max_subcompactions = max_subcompactions;
   params.compaction_type = kKeyValueCompaction;
   params.input_range = std::move(input_range);
 
@@ -1651,6 +1652,7 @@ Compaction* CompactionPicker::PickCompositeCompaction(
   auto& input = inputs.front();
   input.level = -1;
   double max_read_amp_ratio = -std::numeric_limits<double>::infinity();
+  uint32_t max_subcompactions = mutable_cf_options.max_subcompactions;
   // Traverse all sorted_runs from the highest to bottomest finding selection.
   for (auto& sr : sorted_runs) {
     // Skip if this sorted run was occupied by other compaction.
@@ -1707,8 +1709,7 @@ Compaction* CompactionPicker::PickCompositeCompaction(
     }
   }
   CompactionType compaction_type = kKeyValueCompaction;
-  uint32_t max_subcompactions = ioptions_.max_subcompactions;
-  std::vector<RangeStorage> input_range;
+  std::vector<SelectedRange> input_range;
 
   auto new_compaction = [&] {
     int level = input.level;
@@ -1775,7 +1776,7 @@ Compaction* CompactionPicker::PickCompositeCompaction(
 
   std::unordered_map<uint64_t, FileUseInfo> file_used;
   MapSstElement map_element;
-  RangeStorage range;
+  SelectedRange range;
   auto uc = ioptions_.internal_comparator.user_comparator();
   (void)uc;
 
@@ -1852,6 +1853,7 @@ Compaction* CompactionPicker::PickCompositeCompaction(
   };
   while (!priority_heap.empty()) {
     auto key = priority_heap.front().k;
+    auto weight = priority_heap.front().s;
     std::pop_heap(priority_heap.begin(), priority_heap.end(),
                   std::less<double>());
     priority_heap.pop_back();
@@ -1906,8 +1908,8 @@ Compaction* CompactionPicker::PickCompositeCompaction(
         push_unique(iter->key());
       } while (sum < pick_size);
     }
-    input_range.emplace_back(std::move(range));
-    if (input_range.size() >= ioptions_.max_subcompactions) {
+    input_range.emplace_back(SelectedRange(std::move(range), weight));
+    if (input_range.size() >= max_subcompactions) {
       break;
     }
   }
@@ -1931,8 +1933,8 @@ Compaction* CompactionPicker::PickCompositeCompaction(
         AssignUserKey(range.limit, map_element.smallest_key);
         range.include_start = true;
         range.include_limit = false;
-        input_range.emplace_back(std::move(range));
-        if (input_range.size() >= ioptions_.max_subcompactions) {
+        input_range.emplace_back(std::move(range), 0);
+        if (input_range.size() >= max_subcompactions) {
           break;
         }
       } else {
@@ -1980,7 +1982,7 @@ Compaction* CompactionPicker::PickBottommostLevelCompaction(
     if (f->marked_for_compaction) {
       return true;
     }
-    if (!f->prop.has_snapshots()) {
+    if (!f->prop.has_snapshots() && f->prop.num_deletions == 0) {
       return false;
     }
     std::shared_ptr<const TableProperties> tp;
@@ -2006,11 +2008,12 @@ Compaction* CompactionPicker::PickBottommostLevelCompaction(
   };
   int level = vstorage->num_non_empty_levels() - 1;
   auto& level_files = vstorage->LevelFiles(level);
+  uint32_t max_subcompactions = mutable_cf_options.max_subcompactions;
   std::vector<CompactionInputFiles> inputs;
   inputs.emplace_back(CompactionInputFiles{level, level_files});
 
-  std::vector<RangeStorage> input_range;
-  RangeStorage range;
+  std::vector<SelectedRange> input_range;
+  SelectedRange range;
   bool has_start = false;
   size_t max_compaction_bytes = mutable_cf_options.max_compaction_bytes;
   size_t subcompact_size = 0;
@@ -2025,7 +2028,7 @@ Compaction* CompactionPicker::PickBottommostLevelCompaction(
           range.include_start = true;
           range.include_limit = false;
           input_range.emplace_back(std::move(range));
-          if (input_range.size() >= ioptions_.max_subcompactions) {
+          if (input_range.size() >= max_subcompactions) {
             has_start = false;
             break;
           }
@@ -2039,7 +2042,7 @@ Compaction* CompactionPicker::PickBottommostLevelCompaction(
         range.include_start = true;
         range.include_limit = false;
         input_range.emplace_back(std::move(range));
-        if (input_range.size() >= ioptions_.max_subcompactions) {
+        if (input_range.size() >= max_subcompactions) {
           break;
         }
         subcompact_size = 0;
@@ -2073,7 +2076,7 @@ Compaction* CompactionPicker::PickBottommostLevelCompaction(
                                           mutable_cf_options, level, 1, true);
   params.compression_opts =
       GetCompressionOptions(ioptions_, vstorage, level, true);
-  params.max_subcompactions = ioptions_.max_subcompactions;
+  params.max_subcompactions = max_subcompactions;
   params.score = 0;
   params.partial_compaction = true;
   params.compaction_type = kKeyValueCompaction;
@@ -2251,7 +2254,7 @@ class LevelCompactionBuilder {
   CompactionInputFiles output_level_inputs_;
   std::vector<FileMetaData*> grandparents_;
   CompactionType compaction_type_ = CompactionType::kKeyValueCompaction;
-  std::vector<RangeStorage> input_range_ = {};
+  std::vector<SelectedRange> input_range_ = {};
   CompactionReason compaction_reason_ = CompactionReason::kUnknown;
 
   const MutableCFOptions& mutable_cf_options_;
@@ -2469,10 +2472,12 @@ Compaction* LevelCompactionBuilder::PickLazyCompaction(
   int bottommost_level = vstorage_->num_non_empty_levels() - 1;
 
   auto picker = compaction_picker_;
+  // filter out being_compacted levels
   for (int i = 0; i <= bottommost_level; ++i) {
     sorted_runs[i].being_compacted =
         picker->AreFilesInCompaction(vstorage_->LevelFiles(i));
   }
+  // if level 0 has any range deletion or map sstable, try to push them down.
   if ((vstorage_->has_range_deletion(0) &&
        (bottommost_level > 0 || vstorage_->LevelFiles(0).size() > 1)) ||
       vstorage_->has_map_sst(0) ||
@@ -2799,16 +2804,19 @@ Compaction* LevelCompactionBuilder::PickLazyCompaction(
   }
   double level_size = double(base_size);
   for (int i = 1; i < vstorage_->num_levels() - 1; ++i) {
-    uint64_t pick_size = std::max<uint64_t>(base_size, level_size);
     level_size *= q;
     if (sorted_runs[i].compensated_file_size <= level_size ||
-        vstorage_->LevelFiles(i).empty() ||
-        pick_size * 2 > sorted_runs[i].size) {
+        vstorage_->LevelFiles(i).empty()) {
       continue;
     }
     if (sorted_runs[i].being_compacted || sorted_runs[i + 1].being_compacted) {
       sorted_runs[i + 1].skip_composite = true;
       continue;
+    }
+    uint64_t pick_size = base_size;
+    double diff_size = double(sorted_runs[i].size) - level_size + base_size / 2;
+    if (diff_size > double(pick_size)) {
+      pick_size = uint64_t(diff_size);
     }
     auto s = pick_map_compaction(i, pick_size);
     if (!s.ok()) {

@@ -15,9 +15,11 @@
 
 #include <inttypes.h>
 
+#include <terark/util/factory.ipp>
 #include <vector>
 
 #include "db/column_family.h"
+#include "db/version_set.h"
 #include "rocksdb/compaction_filter.h"
 #include "util/string_util.h"
 #include "util/sync_point.h"
@@ -213,7 +215,7 @@ Compaction::Compaction(CompactionParams&& params)
     compaction_reason_ = CompactionReason::kManualCompaction;
   }
   if (max_subcompactions_ == 0) {
-    max_subcompactions_ = immutable_cf_options_.max_subcompactions;
+    max_subcompactions_ = mutable_cf_options_.max_subcompactions;
   }
 
 #ifndef NDEBUG
@@ -537,3 +539,8 @@ int Compaction::GetInputBaseLevel() const {
 }
 
 }  // namespace rocksdb
+
+using namespace rocksdb;
+TERARK_FACTORY_INSTANTIATE_GNS(CompactionFilter*, Slice,
+                               CompactionFilterContext);
+TERARK_FACTORY_INSTANTIATE_GNS(CompactionFilterFactory*, Slice);
