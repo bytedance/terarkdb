@@ -11,6 +11,57 @@ extern const uint64_t kLegacyPlainTableMagicNumber;
 
 namespace terark {
 
+static void EscapeInternal(const Slice& input, std::string* output,
+                           bool always_escape) {
+  const char* src = input.data();
+  const char* src_end = input.data() + input.size();
+  char buffer[5];
+  int blen = 5;
+  for (; src < src_end; src++) {
+    unsigned char c = *src;
+    if (always_escape) {
+      snprintf(buffer, blen, "\\x%02X", c);
+      output->append(buffer, 4);
+      continue;
+    }
+    switch (c) {
+      case '\n':
+        output->append("\\n");
+        break;
+      case '\r':
+        output->append("\\r");
+        break;
+      case '\t':
+        output->append("\\t");
+        break;
+      case '\"':
+        output->append("\\\"");
+        break;
+      case '\'':
+        output->append("\\\'");
+        break;
+      case '\\':
+        output->append("\\\\");
+        break;
+      default:
+        if (c < ' ' || c > '~') {
+          snprintf(buffer, blen, "\\x%02X", c);
+          output->append(buffer, 4);
+        } else {
+          output->push_back(c);
+        }
+        break;
+    }
+  }
+}
+
+std::string Escape(const Slice& src) {
+  std::string dest;
+  dest.reserve(src.size() * 4 + 1);
+  EscapeInternal(src, &dest, false);
+  return dest;
+}
+
 /**
  * Print table types and their magic number.
  */
@@ -37,7 +88,7 @@ void KeyPathAnalysis::printTableType(const uint64_t magic_number) {
 }
 
 uint64_t KeyPathAnalysis::GetMagicNumber(const std::string& sst_fname) {
-  std::cout << "GetMagicNumber(" << sst_fname << ")..." << std::endl;
+  // std::cout << "GetMagicNumber(" << sst_fname << ")..." << std::endl;
   uint64_t magic_number = Footer::kInvalidTableMagicNumber;
   Footer footer;
 
@@ -46,7 +97,7 @@ uint64_t KeyPathAnalysis::GetMagicNumber(const std::string& sst_fname) {
   Status s = options_.env->NewRandomAccessFile(sst_fname, &file, envOptions_);
   if (s.ok()) {
     s = options_.env->GetFileSize(sst_fname, &file_size);
-    std::cout << "SST FileSize : " << file_size << std::endl;
+    // std::cout << "SST FileSize : " << file_size << std::endl;
   } else {
     std::cout << "GetMagicNumber(" << sst_fname << "), GetFileSize Failed!"
               << std::endl;
@@ -57,8 +108,8 @@ uint64_t KeyPathAnalysis::GetMagicNumber(const std::string& sst_fname) {
 
   if (s.ok()) {
     magic_number = footer.table_magic_number();
-    std::cout << "Magic Number: " << magic_number << std::endl;
-    printTableType(magic_number);
+    // std::cout << "Magic Number: " << magic_number << std::endl;
+    // printTableType(magic_number);
   } else {
     std::cout << "GetMagicNumber(" << sst_fname
               << "), Read Magic Number Failed!" << std::endl;
@@ -80,8 +131,8 @@ Status KeyPathAnalysis::GetTableReader(const std::string& sst_fname) {
   TableProperties* table_properties = nullptr;
   uint64_t file_size = 0;
   auto s = options_.env->GetFileSize(sst_fname, &file_size);
-  std::cout << "Try ReadTableProperties, file_size = " << file_size
-            << std::endl;
+  // std::cout << "Try ReadTableProperties, file_size = " << file_size
+  //          << std::endl;
   s = rocksdb::ReadTableProperties(file_reader_.get(), file_size, magic_number,
                                    ioptions_, &table_properties);
   if (s.ok()) {
@@ -93,13 +144,13 @@ Status KeyPathAnalysis::GetTableReader(const std::string& sst_fname) {
     return s;
   }
 
-  std::cout << "Creating Table Reader by options..." << std::endl;
+  // std::cout << "Creating Table Reader by options..." << std::endl;
   auto readerOptions =
       TableReaderOptions(ioptions_, nullptr, envOptions_, internal_comparator_);
   s = options_.table_factory->NewTableReader(
       readerOptions, std::move(file_reader_), file_size, &table_reader_);
   if (s.ok()) {
-    std::cout << "Finish TableReader Creation for" << sst_fname << std::endl;
+    // std::cout << "Finish TableReader Creation for" << sst_fname << std::endl;
   } else {
     std::cout << "Failed to Build TableReader for sst file: " << sst_fname
               << std::endl;
@@ -117,14 +168,13 @@ void KeyPathAnalysis::Get(const std::string& sst_fname, const Slice& key) {
                           nullptr, nullptr, GetContext::GetState::kNotFound,
                           key, &val, nullptr, nullptr, nullptr, nullptr,
                           nullptr, nullptr, nullptr);
-  // auto table_properties = table_reader_->GetTableProperties();
+  auto table_properties = table_reader_->GetTableProperties();
   std::cout << "Table Entries: " << table_properties_->num_entries << ", ";
   std::cout << "Table CF Name: " << table_properties_->column_family_name
             << std::endl;
   s = table_reader_->Get(rocksdb::ReadOptions(), key, &ctx, nullptr, false);
   if (s.ok()) {
-    std::cout << "KEY FOUND, FULL KEY = " << key.ToString()
-              << ", VALUE=" << val.data() << std::endl;
+    std::cout << "KEY FOUND, KEY = " << key.ToString(true) << std::endl;
   } else {
     std::cout << "KEY NOT FOUND!" << std::endl;
   }
@@ -133,20 +183,19 @@ void KeyPathAnalysis::Get(const std::string& sst_fname, const Slice& key) {
 void KeyPathAnalysis::Seek(const std::string& sst_fname, const Slice& key) {
   auto s = GetTableReader(sst_fname);
   auto it = table_reader_->NewIterator(rocksdb::ReadOptions(), nullptr);
-
   // std::cout << "Table Entries: " << table_properties_->num_entries <<
   // std::endl; std::cout << "Table CF Name: " <<
   // table_properties_->column_family_name
-  //           << std::endl;
+  //          << std::endl;
 
   // default sequence number is 0
-  InternalKey ikey(Slice(key), 0, kTypeValue);
+  InternalKey ikey(key, 0, kTypeValue);
   it->Seek(ikey.Encode());
 
-  std::cout << "seek key: " << ikey.Encode().ToString(true) << std::endl;
+  // std::cout << "seek key: " << ikey.Encode().ToString(true) << std::endl;
   if (!it->Valid()) {
     std::cout << "seek fail, can't seek target key." << std::endl;
-    std::cout << "it->key()=" << it->key().ToString() << std::endl;
+    // std::cout << "it->key()=" << it->key().ToString(true) << std::endl;
     return;
   } else {
     rocksdb::ParsedInternalKey parsed_key;
@@ -155,9 +204,10 @@ void KeyPathAnalysis::Seek(const std::string& sst_fname, const Slice& key) {
     if (memcmp(parsed_key.user_key.data(), key.data(), key.size() - 8) != 0) {
       return;
     }
-
     std::cout << "found seek_ukey=" << parsed_key.user_key.ToString()
               << " | seq=" << parsed_key.sequence << std::endl;
+    std::cout << "found Escape(seek_ukey)="
+              << Escape(parsed_key.user_key.ToString()) << std::endl;
     auto value = it->value();
     std::cout << "found seek_value=" << value.ToString() << std::endl;
   }
@@ -167,13 +217,11 @@ void KeyPathAnalysis::Seek(const std::string& sst_fname, const Slice& key) {
     std::cout << "\tstep forward:" << std::endl;
     rocksdb::ParsedInternalKey parsed_key;
     rocksdb::ParseInternalKey(it->key(), &parsed_key);
-    std::cout << "\t\tseek_ukey=" << parsed_key.user_key.ToString()
+    std::cout << "\t\tseek_ukey=" << parsed_key.user_key.ToString(false)
               << " | seq=" << parsed_key.sequence << std::endl;
-
     if (memcmp(parsed_key.user_key.data(), key.data(), key.size() - 8) != 0) {
       return;
     }
-
     it->Next();
   }
 }
@@ -196,6 +244,7 @@ void KeyPathAnalysis::ListKeys(const std::string& sst_fname) {
               << " | seq=" << parsed_key.sequence
               << " | type=" << parsed_key.type << " | "
               << parsed_key.user_key.ToString(true) << " | "
+              << Escape(parsed_key.user_key) << " | "
               << parsed_key.user_key.ToString() << std::endl;
   }
   std::cout << "total key count: " << cnt << std::endl;
@@ -211,81 +260,85 @@ void KeyPathAnalysis::ListKeys(const std::string& sst_fname) {
 void PrintHelp() {
   std::cout << "usage:" << std::endl;
   std::cout << "\t./key_path_analysis listkeys $target_sst" << std::endl;
-  std::cout << "\t./key_path_analysis getkey $target_sst $target_key "
-               "[--dir|file] [--hex]"
+  std::cout << "\t./key_path_analysis getkey $target_sst $target_key [--dir]"
             << std::endl;
-  std::cout << "\t./key_path_analysis seekkey $target_sst $target_key "
-               "[--dir|file] [--hex]"
+  std::cout << "\t./key_path_analysis seekkey $target_sst $target_key [--dir]"
             << std::endl;
 }
 
 int main(const int argc, const char** argv) {
-  setenv("TerarkZipTable_localTempDir", "./", true);
   const char* target_sst = nullptr;
   const char* target_key = nullptr;
-  const char* command = nullptr;
-  bool dir = false;
-  bool hex = false;
-
   if (argc < 3) {
     PrintHelp();
     return 1;
   }
-  if (argv[4] && strncmp("--dir", argv[4], 5) == 0) {
-    dir = true;
-  }
-  if (argv[5] && strncmp("--hex", argv[5], 5) == 0) {
-    hex = true;
-  }
 
-  command = argv[1];
-  target_sst = argv[2];
-  target_key = argv[3];
+  const char bytekv_key[] =
+      "\351\003\000\000\000\000\000\000@"
+      "zXOSdEuh\tMFE0e\000\000\000\005\000\000\000\000\000\000\000\000";
+  const int bytekv_sz = sizeof(bytekv_key) - 1;
 
-  Slice target_key_slice(target_key);
-  std::string tmp;
-  if (hex) {
-    target_key_slice.DecodeHex(&tmp);
-    target_key_slice = Slice(tmp);
-  }
+  /*
+  Slice
+  hex("E90300000000000040777A656138365834097233344D3773306508EA146DF8C850A160");
+  std::string decoded_hex;
+  hex.DecodeHex(&decoded_hex);
+  Slice key_slice(decoded_hex);
+  */
+  Slice key_slice(bytekv_key, bytekv_sz);
 
+  setenv("TerarkZipTable_localTempDir", "./", true);
   std::unique_ptr<terark::KeyPathAnalysis> kp(new terark::KeyPathAnalysis());
+  target_sst = argv[2];
 
-  if (memcmp(command, "listkeys", 8) == 0) {
+  if (memcmp(argv[1], "listkeys", 8) == 0) {
     kp->ListKeys(target_sst);
-  } else if (memcmp(command, "getkey", 6) == 0) {
+  } else if (memcmp(argv[1], "getkey", 6) == 0) {
+    target_key = argv[3];
     assert(target_key);
-    std::cout << "Get(" << target_key << ") from " << target_sst << std::endl;
     // if input target is a directory
-    if (dir) {
-      for (auto& p : boost::filesystem::directory_iterator(target_sst)) {
-        auto fname = p.path().string().c_str();
+    if (argv[4] && strncmp("--dir", argv[4], 5) == 0) {
+      std::cout << "Get(" << key_slice.ToString(true) << ") from " << target_sst
+                << std::endl;
+      boost::filesystem::recursive_directory_iterator p(target_sst), end;
+      while (p != end) {
+        auto fname = p->path().string().c_str();
         // std::cout << "checking file: " << fname << std::endl;
         if (strncmp(boost::filesystem::extension(fname).c_str(), ".sst", 4) ==
             0) {
           std::cout << "checking sst file: " << fname << std::endl;
-          kp->Get(fname, target_key);
+          kp->Get(fname, key_slice);
         }
+        ++p;
       }
     } else {
-      kp->Get(target_sst, target_key);
+      std::cout << "Get from single file" << std::endl;
+      kp->Get(target_sst, key_slice);
     }
 
   } else if (memcmp(argv[1], "seekkey", 7) == 0) {
     target_key = argv[3];
     assert(target_key);
-    std::cout << "Seek(" << target_key << ") from " << target_sst << std::endl;
     // if input target is a directory
-    if (strncmp("--dir", argv[4], 5) == 0) {
-      for (auto& p : boost::filesystem::directory_iterator(target_sst)) {
+    if (argv[4] && strncmp("--dir", argv[4], 5) == 0) {
+      std::cout << "Seek(" << target_key << ") from " << target_sst
+                << std::endl;
+      for (auto& p :
+           boost::filesystem::recursive_directory_iterator(target_sst)) {
         auto fname = p.path().string().c_str();
         // std::cout << "checking file: " << fname << std::endl;
         if (strncmp(boost::filesystem::extension(fname).c_str(), ".sst", 4) ==
             0) {
           std::cout << "checking sst file: " << fname << std::endl;
-          kp->Seek(fname, target_key);
+          // kp->Seek(fname, target_key);
+          kp->Seek(fname, key_slice);
         }
       }
+    } else {
+      std::cout << "Seek(" << target_key << ") from single file " << target_sst
+                << std::endl;
+      kp->Seek(target_sst, key_slice);
     }
   } else {
     std::cout << "Unsupported Operation!" << std::endl;

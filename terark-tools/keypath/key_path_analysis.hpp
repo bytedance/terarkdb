@@ -46,10 +46,10 @@ class KeyPathAnalysis {
 
   Status GetTableReader(const std::string& sst_fname);
 
-  void Get(const std::string& sst_fname, const char* key);
+  void Get(const std::string& sst_fname, const Slice& key);
 
   void ListKeys(const std::string& sst_fname);
 
-  void Seek(const std::string& sst_fname, const char* key);
+  void Seek(const std::string& sst_fname, const Slice& key);
 };
 }  // namespace terark
