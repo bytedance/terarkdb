@@ -655,7 +655,7 @@ struct MapSstElement {
       bool include_smallest;
       bool include_largest;
       bool has_delete_range;
-      bool no_records;
+      bool reserve_bool;
     };
     uint64_t union_flags;
   };
@@ -669,7 +669,7 @@ struct MapSstElement {
     kIncludeSmallest = 1ULL << 0,
     kIncludeLargest  = 1ULL << 1,
     kHasDeleteRange  = 1ULL << 2,
-    kNoRecords       = 1ULL << 3,
+    kReserve         = 1ULL << 3,
   };
 
   MapSstElement()
@@ -687,7 +687,6 @@ struct MapSstElement {
     include_smallest = (flags & kIncludeSmallest) != 0;
     include_largest  = (flags & kIncludeLargest ) != 0;
     has_delete_range = (flags & kHasDeleteRange ) != 0;
-    no_records       = (flags & kNoRecords      ) != 0;
     if (!GetLengthPrefixedSlice(&value, &smallest_key)) {
       return false;
     }
@@ -712,8 +711,7 @@ struct MapSstElement {
     buffer->clear();
     uint64_t flags = (include_smallest ? kIncludeSmallest : kEmpty) |
                      (include_largest  ? kIncludeLargest  : kEmpty) |
-                     (has_delete_range ? kHasDeleteRange  : kEmpty) |
-                     (no_records       ? kNoRecords       : kEmpty);
+                     (has_delete_range ? kHasDeleteRange  : kEmpty);
     PutVarint64Varint64(buffer, flags, link.size());
     PutLengthPrefixedSlice(buffer, smallest_key);
     for (auto& l : link) {
