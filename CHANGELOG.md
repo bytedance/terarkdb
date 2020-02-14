@@ -9,6 +9,7 @@
   - 无
 - 修复问题：
   - 修复 MapSstIterator 触发断言的问题
+  - 修复 DictZipBlobStore 校验级别为 2 时，写入空数据导致宕机的问题
   - 核心库为 MixedLenBlobStore 增加更严格的校验
 - 已知问题：
   - 重启或长时间运行，会出现若干 hugepage warning
