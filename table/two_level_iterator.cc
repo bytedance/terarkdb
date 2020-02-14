@@ -474,6 +474,7 @@ class MapSstIterator final : public InternalIterator {
       where.DecodeFrom(max_heap_.top().key);
       max_heap_.clear();
       InitSecondLevelMinHeap(where.Encode(), false);
+      assert(min_heap_.empty() || IsInRange(max_heap_.top().key));
       is_backword_ = false;
     } else {
       auto current = min_heap_.top();
@@ -484,19 +485,20 @@ class MapSstIterator final : public InternalIterator {
       } else {
         min_heap_.pop();
       }
-    }
-    auto& icomp = min_heap_.comparator().internal_comparator();
-    if (min_heap_.empty() ||
-        icomp.Compare(min_heap_.top().key, largest_key_) >= include_largest_) {
-      // out of largest bound
-      first_level_value_.reset();
-      first_level_iter_->Next();
-      if (InitFirstLevelIter()) {
-        InitSecondLevelMinHeap(smallest_key_, include_smallest_);
-        assert(min_heap_.empty() || IsInRange(min_heap_.top().key));
+      auto& icomp = min_heap_.comparator().internal_comparator();
+      if (min_heap_.empty() ||
+          icomp.Compare(min_heap_.top().key, largest_key_) >=
+              include_largest_) {
+        // out of largest bound
+        first_level_value_.reset();
+        first_level_iter_->Next();
+        if (InitFirstLevelIter()) {
+          InitSecondLevelMinHeap(smallest_key_, include_smallest_);
+          assert(min_heap_.empty() || IsInRange(min_heap_.top().key));
+        }
+      } else {
+        assert(IsInRange(min_heap_.top().key));
       }
-    } else {
-      assert(IsInRange(min_heap_.top().key));
     }
   }
   virtual void Prev() override {
@@ -505,6 +507,7 @@ class MapSstIterator final : public InternalIterator {
       where.DecodeFrom(min_heap_.top().key);
       min_heap_.clear();
       InitSecondLevelMaxHeap(where.Encode(), false);
+      assert(min_heap_.empty() || IsInRange(min_heap_.top().key));
       is_backword_ = true;
     } else {
       auto current = max_heap_.top();
@@ -515,20 +518,20 @@ class MapSstIterator final : public InternalIterator {
       } else {
         max_heap_.pop();
       }
-    }
-    auto& icomp = min_heap_.comparator().internal_comparator();
-    if (max_heap_.empty() ||
-        icomp.Compare(smallest_key_, max_heap_.top().key) >=
-            include_smallest_) {
-      // out of smallest bound
-      first_level_value_.reset();
-      first_level_iter_->Prev();
-      if (InitFirstLevelIter()) {
-        InitSecondLevelMaxHeap(largest_key_, include_largest_);
-        assert(max_heap_.empty() || IsInRange(max_heap_.top().key));
+      auto& icomp = min_heap_.comparator().internal_comparator();
+      if (max_heap_.empty() ||
+          icomp.Compare(smallest_key_, max_heap_.top().key) >=
+          include_smallest_) {
+        // out of smallest bound
+        first_level_value_.reset();
+        first_level_iter_->Prev();
+        if (InitFirstLevelIter()) {
+          InitSecondLevelMaxHeap(largest_key_, include_largest_);
+          assert(max_heap_.empty() || IsInRange(max_heap_.top().key));
+        }
+      } else {
+        assert(IsInRange(max_heap_.top().key));
       }
-    } else {
-      assert(IsInRange(max_heap_.top().key));
     }
   }
   virtual Slice key() const override {
