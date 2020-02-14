@@ -1,6 +1,20 @@
 
 ## CHANGELOG
 
+- 版本号：v1.2.2
+- 日期：2020-02-13
+- 发版说明：
+  - 计划内例行发版
+- 功能变更：
+  - 无
+- 修复问题：
+  - 修复 MapSstIterator 触发断言的问题
+  - 修复 DictZipBlobStore 校验级别为 2 时，写入空数据导致宕机的问题
+  - 核心库为 MixedLenBlobStore 增加更严格的校验
+- 已知问题：
+  - 重启或长时间运行，会出现若干 hugepage warning
+  - 极低概率后台 Compact 触发异常导致 Write 失败，如果出现请保留现场，联系@zhaoming.274
+
 - 版本号：v1.2.1
 - 日期：2020-02-06
 - 发版说明：
@@ -19,7 +33,7 @@
   - 修复 BlockBasedTable 与 RangeDeletion 同时使用导致内存泄露的问题
   - 修复信息上报 API 的数据错误
 - 已知问题：
-  - 重启或长时间运行，会出现若干 hugepage warning，下个版本修复
+  - 重启或长时间运行，会出现若干 hugepage warning
   - 使用了 PinnableSlice、MergeOperator、CompactionFilter 的接口可能需要少许代码修改完成迁移
     - 后续版本提供有少许性能损失的平滑迁移
   - 因为不再支持 BlobDB，自此版本发布后，所有使用了 BlobDB 的实例无法迁移至此版本

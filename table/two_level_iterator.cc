@@ -240,23 +240,17 @@ class MapSstIterator final : public InternalIterator {
     BinaryHeap<HeapElement, HeapComparator<1>, HeapVectorType> max_heap_;
   };
 
-  enum TryInitFirstLevelIterResult {
-    kInitFirstIterOK,
-    kInitFirstIterEmpty,
-    kInitFirstIterInvalid,
-  };
-
-  TryInitFirstLevelIterResult TryInitFirstLevelIter() {
+  bool InitFirstLevelIter() {
     min_heap_.clear();
     if (!first_level_iter_->Valid()) {
-      return kInitFirstIterInvalid;
+      return false;
     }
     // Manual inline MapSstElement::Decode
     const char* err_msg = "Invalid MapSstElement";
     first_level_value_ = first_level_iter_->value();
     status_ = first_level_value_.fetch();
     if (!status_.ok()) {
-      return kInitFirstIterInvalid;
+      return false;
     }
     Slice map_input = first_level_value_.slice();
     link_.clear();
@@ -267,29 +261,7 @@ class MapSstIterator final : public InternalIterator {
         !GetVarint64(&map_input, &link_count) ||
         !GetLengthPrefixedSlice(&map_input, &smallest_key_)) {
       status_ = Status::Corruption(err_msg);
-      return kInitFirstIterInvalid;
-    }
-    if ((flags & MapSstElement::kNoRecords) != 0) {
-      uint64_t file_number;
-      for (uint64_t i = 0; i < link_count; ++i) {
-        if (!GetVarint64(&map_input, &file_number)) {
-          status_ = Status::Corruption(err_msg);
-          return kInitFirstIterInvalid;
-        }
-        // create iterator to load range deletions
-        status_ = iterator_cache_.GetReader(file_number);
-        if (!status_.ok()) {
-          return kInitFirstIterInvalid;
-        }
-        assert(file_meta_ == nullptr ||
-               std::binary_search(file_meta_->prop.dependence.begin(),
-                                  file_meta_->prop.dependence.end(),
-                                  Dependence{file_number, 0},
-                                  [](const Dependence& l, const Dependence& r) {
-                                    return l.file_number < r.file_number;
-                                  }));
-      }
-      return kInitFirstIterEmpty;
+      return false;
     }
     include_smallest_ = (flags & MapSstElement::kIncludeSmallest) != 0;
     include_largest_ = (flags & MapSstElement::kIncludeLargest) != 0;
@@ -297,7 +269,7 @@ class MapSstIterator final : public InternalIterator {
     for (uint64_t i = 0; i < link_count; ++i) {
       if (!GetVarint64(&map_input, &link_[i])) {
         status_ = Status::Corruption(err_msg);
-        return kInitFirstIterInvalid;
+        return false;
       }
       assert(file_meta_ == nullptr ||
              std::binary_search(file_meta_->prop.dependence.begin(),
@@ -305,24 +277,23 @@ class MapSstIterator final : public InternalIterator {
                                 Dependence{link_[i], 0},
                                 TERARK_CMP(file_number, <)));
     }
-    return kInitFirstIterOK;
-  }
-
-  bool InitFirstLevelIter() {
-    auto result = TryInitFirstLevelIter();
-    while (result == kInitFirstIterEmpty) {
-      first_level_value_.reset();
-      if (is_backword_) {
-        first_level_iter_->Prev();
-      } else {
-        first_level_iter_->Next();
-      }
-      result = TryInitFirstLevelIter();
-    }
-    return result == kInitFirstIterOK;
+    return true;
   }
 
   void InitSecondLevelMinHeap(const Slice& target, bool include) {
+    InitSecondLevelMinHeapImpl(target, include);
+    while (status_.ok() && min_heap_.empty()) {
+      first_level_value_.reset();
+      first_level_iter_->Next();
+      if (InitFirstLevelIter()) {
+        InitSecondLevelMinHeapImpl(smallest_key_, include_smallest_);
+      } else {
+        break;
+      }
+    }
+  }
+
+  void InitSecondLevelMinHeapImpl(const Slice& target, bool include) {
     assert(min_heap_.empty());
     auto& icomp = min_heap_.comparator().internal_comparator();
     for (auto file_number : link_) {
@@ -351,6 +322,19 @@ class MapSstIterator final : public InternalIterator {
   }
 
   void InitSecondLevelMaxHeap(const Slice& target, bool include) {
+    InitSecondLevelMaxHeapImpl(target, include);
+    while (status_.ok() && max_heap_.empty()) {
+      first_level_value_.reset();
+      first_level_iter_->Prev();
+      if (InitFirstLevelIter()) {
+        InitSecondLevelMaxHeapImpl(largest_key_, include_largest_);
+      } else {
+        break;
+      }
+    }
+  }
+
+  void InitSecondLevelMaxHeapImpl(const Slice& target, bool include) {
     assert(max_heap_.empty());
     auto& icomp = min_heap_.comparator().internal_comparator();
     for (auto file_number : link_) {
@@ -413,8 +397,7 @@ class MapSstIterator final : public InternalIterator {
     first_level_iter_->SeekToFirst();
     if (InitFirstLevelIter()) {
       InitSecondLevelMinHeap(smallest_key_, include_smallest_);
-      assert(!min_heap_.empty());
-      assert(IsInRange(min_heap_.top().key));
+      assert(min_heap_.empty() || IsInRange(min_heap_.top().key));
     }
   }
   virtual void SeekToLast() override {
@@ -423,8 +406,7 @@ class MapSstIterator final : public InternalIterator {
     first_level_iter_->SeekToLast();
     if (InitFirstLevelIter()) {
       InitSecondLevelMaxHeap(largest_key_, include_largest_);
-      assert(!max_heap_.empty());
-      assert(IsInRange(max_heap_.top().key));
+      assert(max_heap_.empty() || IsInRange(max_heap_.top().key));
     }
   }
   virtual void Seek(const Slice& target) override {
@@ -453,20 +435,7 @@ class MapSstIterator final : public InternalIterator {
       include = include_smallest_;
     }
     InitSecondLevelMinHeap(seek_target, include);
-    if (min_heap_.empty()) {
-      if (!status_.ok()) {
-        return;
-      }
-      first_level_value_.reset();
-      first_level_iter_->Next();
-      if (InitFirstLevelIter()) {
-        InitSecondLevelMinHeap(smallest_key_, include_smallest_);
-        assert(!min_heap_.empty());
-        assert(IsInRange(min_heap_.top().key));
-      }
-    } else {
-      assert(IsInRange(min_heap_.top().key));
-    }
+    assert(min_heap_.empty() || IsInRange(min_heap_.top().key));
   }
   virtual void SeekForPrev(const Slice& target) override {
     is_backword_ = true;
@@ -497,20 +466,7 @@ class MapSstIterator final : public InternalIterator {
       include = include_largest_;
     }
     InitSecondLevelMaxHeap(seek_target, include);
-    if (max_heap_.empty()) {
-      if (!status_.ok()) {
-        return;
-      }
-      first_level_value_.reset();
-      first_level_iter_->Prev();
-      if (InitFirstLevelIter()) {
-        InitSecondLevelMaxHeap(largest_key_, include_largest_);
-        assert(!max_heap_.empty());
-        assert(IsInRange(max_heap_.top().key));
-      }
-    } else {
-      assert(IsInRange(max_heap_.top().key));
-    }
+    assert(max_heap_.empty() || IsInRange(max_heap_.top().key));
   }
   virtual void Next() override {
     if (is_backword_) {
@@ -518,6 +474,7 @@ class MapSstIterator final : public InternalIterator {
       where.DecodeFrom(max_heap_.top().key);
       max_heap_.clear();
       InitSecondLevelMinHeap(where.Encode(), false);
+      assert(min_heap_.empty() || IsInRange(max_heap_.top().key));
       is_backword_ = false;
     } else {
       auto current = min_heap_.top();
@@ -528,20 +485,20 @@ class MapSstIterator final : public InternalIterator {
       } else {
         min_heap_.pop();
       }
-    }
-    auto& icomp = min_heap_.comparator().internal_comparator();
-    if (min_heap_.empty() ||
-        icomp.Compare(min_heap_.top().key, largest_key_) >= include_largest_) {
-      // out of largest bound
-      first_level_value_.reset();
-      first_level_iter_->Next();
-      if (InitFirstLevelIter()) {
-        InitSecondLevelMinHeap(smallest_key_, include_smallest_);
-        assert(!min_heap_.empty());
+      auto& icomp = min_heap_.comparator().internal_comparator();
+      if (min_heap_.empty() ||
+          icomp.Compare(min_heap_.top().key, largest_key_) >=
+              include_largest_) {
+        // out of largest bound
+        first_level_value_.reset();
+        first_level_iter_->Next();
+        if (InitFirstLevelIter()) {
+          InitSecondLevelMinHeap(smallest_key_, include_smallest_);
+          assert(min_heap_.empty() || IsInRange(min_heap_.top().key));
+        }
+      } else {
         assert(IsInRange(min_heap_.top().key));
       }
-    } else {
-      assert(IsInRange(min_heap_.top().key));
     }
   }
   virtual void Prev() override {
@@ -550,6 +507,7 @@ class MapSstIterator final : public InternalIterator {
       where.DecodeFrom(min_heap_.top().key);
       min_heap_.clear();
       InitSecondLevelMaxHeap(where.Encode(), false);
+      assert(min_heap_.empty() || IsInRange(min_heap_.top().key));
       is_backword_ = true;
     } else {
       auto current = max_heap_.top();
@@ -560,21 +518,20 @@ class MapSstIterator final : public InternalIterator {
       } else {
         max_heap_.pop();
       }
-    }
-    auto& icomp = min_heap_.comparator().internal_comparator();
-    if (max_heap_.empty() ||
-        icomp.Compare(smallest_key_, max_heap_.top().key) >=
-            include_smallest_) {
-      // out of smallest bound
-      first_level_value_.reset();
-      first_level_iter_->Prev();
-      if (InitFirstLevelIter()) {
-        InitSecondLevelMaxHeap(largest_key_, include_largest_);
-        assert(!max_heap_.empty());
+      auto& icomp = min_heap_.comparator().internal_comparator();
+      if (max_heap_.empty() ||
+          icomp.Compare(smallest_key_, max_heap_.top().key) >=
+          include_smallest_) {
+        // out of smallest bound
+        first_level_value_.reset();
+        first_level_iter_->Prev();
+        if (InitFirstLevelIter()) {
+          InitSecondLevelMaxHeap(largest_key_, include_largest_);
+          assert(max_heap_.empty() || IsInRange(max_heap_.top().key));
+        }
+      } else {
         assert(IsInRange(max_heap_.top().key));
       }
-    } else {
-      assert(IsInRange(max_heap_.top().key));
     }
   }
   virtual Slice key() const override {

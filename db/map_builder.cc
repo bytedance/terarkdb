@@ -117,7 +117,6 @@ struct IteratorCacheContext {
 struct RangeWithDepend {
   Slice point[2];
   bool include[2];
-  bool no_records;
   bool has_delete_range;
   bool stable;
   std::vector<MapSstElement::LinkTarget> dependence;
@@ -135,7 +134,6 @@ struct RangeWithDepend {
     }
     include[0] = true;
     include[1] = true;
-    no_records = false;
     has_delete_range = false;
     stable = false;
     dependence.emplace_back(MapSstElement::LinkTarget{f->fd.GetNumber(), 0});
@@ -146,7 +144,6 @@ struct RangeWithDepend {
     point[1] = ArenaPinSlice(map_element.largest_key, arena);
     include[0] = map_element.include_smallest;
     include[1] = map_element.include_largest;
-    no_records = map_element.no_records;
     has_delete_range = map_element.has_delete_range;
     stable = true;
     dependence = map_element.link;
@@ -164,7 +161,6 @@ struct RangeWithDepend {
     }
     include[0] = false;
     include[1] = true;
-    no_records = false;
     has_delete_range = false;
     stable = false;
   }
@@ -309,7 +305,6 @@ class MapSstElementIterator : public MapSstRangeIterator {
       assert(icomp_.Compare(start, end) <= 0);
       map_elements_.include_smallest = where_->include[0];
       map_elements_.include_largest = where_->include[1];
-      bool& no_records = map_elements_.no_records = where_->no_records;
       map_elements_.has_delete_range = where_->has_delete_range;
       bool stable = where_->stable;
       auto& links = map_elements_.link = where_->dependence;
@@ -330,7 +325,6 @@ class MapSstElementIterator : public MapSstRangeIterator {
           range_size += link.size;
         }
       } else {
-        no_records = true;
         for (auto& link : links) {
           link.size = 0;
           const FileMetaData* meta =
@@ -350,19 +344,6 @@ class MapSstElementIterator : public MapSstRangeIterator {
           } else if (icomp_.Compare(meta->smallest.Encode(), start) > 0 &&
                      icomp_.Compare(meta->largest.Encode(), end) <= 0) {
             // cover whole file
-            uint64_t num_entries = meta->prop.num_entries;
-            if (num_entries == 0) {
-              auto iter = iterator_cache_.GetIterator(meta, &reader);
-              if (!iter->status().ok()) {
-                buffer_.clear();
-                status_ = iter->status();
-                return;
-              }
-              num_entries = reader->GetTableProperties()->num_entries;
-            }
-            if (num_entries > 0) {
-              no_records = false;
-            }
             link.size = meta->fd.GetFileSize();
             range_size += link.size;
           } else {
@@ -392,7 +373,6 @@ class MapSstElementIterator : public MapSstRangeIterator {
                     reader->ApproximateOffsetOf(temp_end_.Encode());
                 link.size = end_offset - start_offset;
                 range_size += link.size;
-                no_records = false;
               }
             } while (false);
             if (!status_.ok()) {
@@ -684,7 +664,6 @@ Status AdjustRange(const InternalKeyComparator* ic, InternalIterator* iter,
     assert(last->include[1]);
     split.include[0] = false;
     split.include[1] = true;
-    split.no_records = last->no_records && range->no_records;
     split.has_delete_range = last->has_delete_range || range->has_delete_range;
     split.stable = false;
     split.dependence = last->dependence;
@@ -776,7 +755,6 @@ std::vector<RangeWithDepend> PartitionRangeWithDepend(
   };
   auto put_depend = [&](const RangeWithDepend* a, const RangeWithDepend* b) {
     auto& dependence = output.back().dependence;
-    auto& no_records = output.back().no_records;
     auto& has_delete_range = output.back().has_delete_range;
     auto& stable = output.back().stable;
     assert(a != nullptr || b != nullptr);
@@ -790,12 +768,10 @@ std::vector<RangeWithDepend> PartitionRangeWithDepend(
                               b->dependence.end());
             has_delete_range = a->has_delete_range || b->has_delete_range;
           } else {
-            no_records = a->no_records;
             has_delete_range = a->has_delete_range;
             stable = a->stable;
           }
         } else {
-          no_records = b->no_records;
           has_delete_range = b->has_delete_range;
           stable = b->stable;
           dependence = b->dependence;
@@ -803,7 +779,6 @@ std::vector<RangeWithDepend> PartitionRangeWithDepend(
         break;
       case PartitionType::kDelete:
         if (b == nullptr) {
-          no_records = a->no_records;
           has_delete_range = a->has_delete_range;
           stable = a->stable;
           dependence = a->dependence;
@@ -813,7 +788,6 @@ std::vector<RangeWithDepend> PartitionRangeWithDepend(
         break;
       case PartitionType::kExtract:
         if (a != nullptr && b != nullptr) {
-          no_records = a->no_records;
           has_delete_range = a->has_delete_range;
           stable = a->stable;
           dependence = a->dependence;
@@ -1184,7 +1158,6 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
                                          static_cast<ValueType>(0), arena);
         r.include[0] = false;
         r.include[1] = true;
-        r.no_records = true;
         r.has_delete_range = true;
         r.stable = false;
       }
@@ -1937,7 +1910,6 @@ struct MapElementIterator : public InternalIterator {
       element_.largest_key = f->largest.Encode();
       element_.include_smallest = true;
       element_.include_largest = true;
-      element_.no_records = false;
       element_.has_delete_range = false;  // for pick_range_deletion
       element_.link.clear();
       element_.link.emplace_back(
