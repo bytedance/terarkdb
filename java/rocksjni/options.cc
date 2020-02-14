@@ -709,8 +709,8 @@ void Java_org_rocksdb_Options_setMaxBackgroundCompactions(JNIEnv* /*env*/,
 void Java_org_rocksdb_Options_setMaxSubcompactions(JNIEnv* /*env*/,
                                                    jobject /*jobj*/,
                                                    jlong jhandle, jint max) {
-  reinterpret_cast<rocksdb::Options*>(jhandle)->max_subcompactions =
-      static_cast<int32_t>(max);
+  // reinterpret_cast<rocksdb::Options*>(jhandle)->max_subcompactions =
+  //     static_cast<int32_t>(max);
 }
 
 /*
@@ -721,7 +721,7 @@ void Java_org_rocksdb_Options_setMaxSubcompactions(JNIEnv* /*env*/,
 jint Java_org_rocksdb_Options_maxSubcompactions(JNIEnv* /*env*/,
                                                 jobject /*jobj*/,
                                                 jlong jhandle) {
-  return reinterpret_cast<rocksdb::Options*>(jhandle)->max_subcompactions;
+  return 0;
 }
 
 /*
@@ -5029,8 +5029,8 @@ jint Java_org_rocksdb_DBOptions_maxBackgroundCompactions(JNIEnv* /*env*/,
 void Java_org_rocksdb_DBOptions_setMaxSubcompactions(JNIEnv* /*env*/,
                                                      jobject /*jobj*/,
                                                      jlong jhandle, jint max) {
-  reinterpret_cast<rocksdb::DBOptions*>(jhandle)->max_subcompactions =
-      static_cast<int32_t>(max);
+  // reinterpret_cast<rocksdb::DBOptions*>(jhandle)->max_subcompactions =
+  //     static_cast<int32_t>(max);
 }
 
 /*
@@ -5041,7 +5041,7 @@ void Java_org_rocksdb_DBOptions_setMaxSubcompactions(JNIEnv* /*env*/,
 jint Java_org_rocksdb_DBOptions_maxSubcompactions(JNIEnv* /*env*/,
                                                   jobject /*jobj*/,
                                                   jlong jhandle) {
-  return reinterpret_cast<rocksdb::DBOptions*>(jhandle)->max_subcompactions;
+  return 0;
 }
 
 /*

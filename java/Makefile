@@ -23,6 +23,7 @@ NATIVE_JAVA_CLASSES = org.rocksdb.AbstractCompactionFilter\
 	org.rocksdb.DirectSlice\
 	org.rocksdb.Env\
 	org.rocksdb.EnvOptions\
+	org.rocksdb.FlinkCompactionFilter\
 	org.rocksdb.FlushOptions\
 	org.rocksdb.Filter\
 	org.rocksdb.IngestExternalFileOptions\
@@ -62,6 +63,7 @@ NATIVE_JAVA_CLASSES = org.rocksdb.AbstractCompactionFilter\
 	org.rocksdb.VectorMemTableConfig\
 	org.rocksdb.Snapshot\
 	org.rocksdb.StringAppendOperator\
+	org.rocksdb.StringAppendOperatorWithVariableDelimitor\
 	org.rocksdb.UInt64AddOperator\
 	org.rocksdb.WriteBatch\
 	org.rocksdb.WriteBatch.Handler\
@@ -193,7 +195,7 @@ ifneq ($(DEBUG_LEVEL),0)
 endif
 
 SEARCH_REPO_URL?=http://search.maven.org/remotecontent?filepath=
-CENTRAL_REPO_URL?=http://central.maven.org/maven2/
+CENTRAL_REPO_URL?=https://repo1.maven.org/maven2/
 
 clean:
 	$(AM_V_at)rm -rf include/*

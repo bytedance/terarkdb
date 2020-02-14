@@ -19,6 +19,7 @@ set(JNI_NATIVE_SOURCES
         rocksjni/compression_options.cc
         rocksjni/env.cc
         rocksjni/env_options.cc
+        rocksjni/flink_compactionfilterjni.cc
         rocksjni/filter.cc
         rocksjni/ingest_external_file_options.cc
         rocksjni/iterator.cc
@@ -92,6 +93,7 @@ set(NATIVE_JAVA_CLASSES
         org.rocksdb.Env
         org.rocksdb.EnvOptions
         org.rocksdb.Filter
+        org.rocksdb.FlinkCompactionFilter
         org.rocksdb.FlushOptions
         org.rocksdb.HashLinkedListMemTableConfig
         org.rocksdb.HashSkipListMemTableConfig
@@ -126,6 +128,7 @@ set(NATIVE_JAVA_CLASSES
         org.rocksdb.SstFileWriter
         org.rocksdb.Statistics
         org.rocksdb.StringAppendOperator
+        org.rocksdb.StringAppendOperatorWithVariableDelimitor
         org.rocksdb.TableFormatConfig
         org.rocksdb.Transaction
         org.rocksdb.TransactionDB
@@ -217,6 +220,7 @@ add_jar(
   src/main/java/org/rocksdb/EnvOptions.java
   src/main/java/org/rocksdb/Experimental.java
   src/main/java/org/rocksdb/Filter.java
+  src/main/java/org/rocksdb/FlinkCompactionFilter.java
   src/main/java/org/rocksdb/FlushOptions.java
   src/main/java/org/rocksdb/HashLinkedListMemTableConfig.java
   src/main/java/org/rocksdb/HashSkipListMemTableConfig.java
@@ -267,6 +271,7 @@ add_jar(
   src/main/java/org/rocksdb/StatsLevel.java
   src/main/java/org/rocksdb/Status.java
   src/main/java/org/rocksdb/StringAppendOperator.java
+  src/main/java/org/rocksdb/StringAppendOperatorWithVariableDelimitor.java
   src/main/java/org/rocksdb/TableFormatConfig.java
   src/main/java/org/rocksdb/TickerType.java
   src/main/java/org/rocksdb/TransactionalDB.java
@@ -318,7 +323,7 @@ if (DEFINED CUSTOM_REPO_URL)
   set(CENTRAL_REPO_URL ${CUSTOM_REPO_URL}/)
 else ()
   set(SEARCH_REPO_URL "http://search.maven.org/remotecontent?filepath=")
-  set(CENTRAL_REPO_URL "http://central.maven.org/maven2/")
+  set(CENTRAL_REPO_URL "https://repo1.maven.org/maven2/")
 endif()
 
 if(NOT EXISTS ${JAVA_JUNIT_JAR})

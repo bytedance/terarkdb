@@ -662,6 +662,7 @@ set(SOURCES
         utilities/env_mirror.cc
         utilities/env_timed.cc
         utilities/geodb/geodb_impl.cc
+        utilities/flink/flink_compaction_filter.cc
         utilities/leveldb_options/leveldb_options.cc
         utilities/lua/rocks_lua_compaction_filter.cc
         utilities/memory/memory_util.cc
@@ -979,6 +980,7 @@ if(WITH_TESTS)
         utilities/cassandra/cassandra_format_test.cc
         utilities/cassandra/cassandra_row_merge_test.cc
         utilities/cassandra/cassandra_serialize_test.cc
+        utilities/flink/flink_compaction_filter_test.cc
         utilities/checkpoint/checkpoint_test.cc
         utilities/column_aware_encoding_test.cc
         utilities/date_tiered/date_tiered_test.cc

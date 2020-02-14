@@ -206,6 +206,35 @@ public class MergeTest {
   }
 
   @Test
+  public void stringDelimiter() throws RocksDBException {
+    stringDelimiter("DELIM");
+    stringDelimiter("");
+  }
+
+  private void stringDelimiter(String delim) throws RocksDBException {
+    try (final MergeOperator stringAppendOperator = new StringAppendOperatorWithVariableDelimitor(delim.getBytes());
+         final Options opt = new Options()
+                 .setCreateIfMissing(true)
+                 .setMergeOperator(stringAppendOperator);
+         final RocksDB db = RocksDB.open(opt, dbFolder.getRoot().getAbsolutePath())) {
+      // Writing aa under key
+      db.put("key".getBytes(), "aa".getBytes());
+
+      // Writing bb under key
+      db.merge("key".getBytes(), "bb".getBytes());
+
+      // Writing empty under key
+      db.merge("key".getBytes(), "".getBytes());
+
+      final byte[] value = db.get("key".getBytes());
+      final String strValue = new String(value);
+
+      assertThat(strValue).isEqualTo("aa" + delim + "bb" + delim);
+    }
+  }
+
+
+  @Test
   public void cFOperatorOption()
       throws InterruptedException, RocksDBException {
     try (final StringAppendOperator stringAppendOperator = new StringAppendOperator();

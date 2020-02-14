@@ -194,6 +194,7 @@ LIB_SOURCES =                                                   \
   utilities/env_mirror.cc                                       \
   utilities/env_timed.cc                                        \
   utilities/geodb/geodb_impl.cc                                 \
+  utilities/flink/flink_compaction_filter.cc                    \
   utilities/leveldb_options/leveldb_options.cc                  \
   utilities/lua/rocks_lua_compaction_filter.cc                  \
   utilities/memory/memory_util.cc                               \
@@ -416,6 +417,7 @@ MAIN_SOURCES =                                                          \
   utilities/document/document_db_test.cc                                \
   utilities/document/json_document_test.cc                              \
   utilities/geodb/geodb_test.cc                                         \
+  utilities/flink/flink_compaction_filter_test.cc                       \
   utilities/lua/rocks_lua_test.cc                                       \
   utilities/memory/memory_test.cc                                       \
   utilities/merge_operators/string_append/stringappend_test.cc          \
@@ -450,6 +452,7 @@ JNI_NATIVE_SOURCES =                                          \
   java/rocksjni/compression_options.cc                        \
   java/rocksjni/env.cc                                        \
   java/rocksjni/env_options.cc                                \
+  java/rocksjni/flink_compactionfilterjni.cc                  \
   java/rocksjni/ingest_external_file_options.cc               \
   java/rocksjni/filter.cc                                     \
   java/rocksjni/iterator.cc                                   \

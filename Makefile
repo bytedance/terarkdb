@@ -7,6 +7,9 @@
 #-----------------------------------------------
 USE_RTTI = 1
 
+# For Flink Rocksdb Version
+FROCKSDB_VERSION ?= 2.0
+
 BASH_EXISTS := $(shell which bash)
 SHELL := $(shell which bash)
 
@@ -95,6 +98,24 @@ ifeq ($(MAKECMDGOALS),rocksdbjavastaticreleasedocker)
 endif
 
 ifeq ($(MAKECMDGOALS),rocksdbjavastaticpublish)
+	DEBUG_LEVEL=0
+endif
+
+ifeq ($(MAKECMDGOALS),frocksdbjavastatic)
+	ifneq ($(DEBUG_LEVEL),2)
+		DEBUG_LEVEL=0
+	endif
+endif
+
+ifeq ($(MAKECMDGOALS),frocksdbjavastaticrelease)
+	DEBUG_LEVEL=0
+endif
+
+ifeq ($(MAKECMDGOALS),frocksdbjavastaticreleasedocker)
+        DEBUG_LEVEL=0
+endif
+
+ifeq ($(MAKECMDGOALS),frocksdbjavastaticpublish)
 	DEBUG_LEVEL=0
 endif
 
@@ -630,6 +651,7 @@ TESTS = \
 	compaction_picker_test \
 	version_builder_test \
 	file_indexer_test \
+	flink_compaction_filter_test \
 	write_batch_test \
 	write_batch_with_index_test \
 	write_controller_test\
@@ -1221,7 +1243,7 @@ package:
 $(LIBRARY): $(LIBOBJECTS) cpputil_metrics2
 	$(AM_V_AR)rm -f $@
 	$(AM_V_at)$(AR) $(ARFLAGS) $@ $(LIBOBJECTS)
-ifeq (${BUNDLE_ALL_TERARK_STATIC},1)
+ifeq (${BUNDLE_ALL_TERARK_STATIC},1)\
 	mv $@ orgin-$@
 	ln -fs ${TERARK_CORE_PKG_DIR}/lib_static/libterark-{idx,zbs,fsa,core}-${DBG_OR_RLS}.a .
 	(\
@@ -1322,6 +1344,9 @@ cassandra_serialize_test: utilities/cassandra/cassandra_serialize_test.o $(TESTH
 	$(AM_LINK_SHR)
 
 redis_test: utilities/redis/redis_lists_test.o $(TESTHARNESS)
+	$(AM_LINK_SHR)
+
+flink_compaction_filter_test: utilities/flink/flink_compaction_filter_test.o $(TESTHARNESS) $(TESTHARNESS)
 	$(AM_LINK_SHR)
 
 hash_table_test: utilities/persistent_cache/hash_table_test.o $(TESTHARNESS)
@@ -1968,11 +1993,11 @@ CLEAN_FILES += jls
 java_static_all_libobjects = $(java_static_libobjects)
 
 ifneq ($(ROCKSDB_JAVA_NO_COMPRESSION), 1)
-JAVA_COMPRESSIONS = libz.a libbz2.a libsnappy.a liblz4.a libzstd.a
+JAVA_COMPRESSIONS = libz.a libsnappy.a liblz4.a
 endif
 
-JAVA_STATIC_FLAGS = -DZLIB -DBZIP2 -DSNAPPY -DLZ4 -DZSTD
-JAVA_STATIC_INCLUDES = -I./zlib-$(ZLIB_VER) -I./bzip2-$(BZIP2_VER) -I./snappy-$(SNAPPY_VER) -I./lz4-$(LZ4_VER)/lib -I./zstd-$(ZSTD_VER)/lib/include
+JAVA_STATIC_FLAGS = -DZLIB -DSNAPPY -DLZ4 -DZSTD
+JAVA_STATIC_INCLUDES = -I./zlib-$(ZLIB_VER) -I./snappy-$(SNAPPY_VER) -I./lz4-$(LZ4_VER)/lib -I./zstd-$(ZSTD_VER)/lib/include
 
 ifeq ($(HAVE_POWER8),1)
 JAVA_STATIC_C_LIBOBJECTS = $(patsubst %.c.o,jls/%.c.o,$(addprefix ${xdir},$(LIB_SOURCES_C:.c=.o)))
@@ -1992,27 +2017,98 @@ endif
 $(java_static_libobjects): jls/${xdir}/%.o: %.cc $(JAVA_COMPRESSIONS)
 	$(AM_V_CC)mkdir -p $(@D) && $(CXX) $(CXXFLAGS) $(JAVA_STATIC_FLAGS) $(JAVA_STATIC_INCLUDES) -fPIC -c $< -o $@ $(COVERAGEFLAGS)
 
+fakemake: $(java_static_all_libobjects)
+	@echo "-------------------"
+	@echo $(java_static_libobjects)
+	@echo "-------------------"
+	@echo $(AM_LINK)
+	@echo "-------------------"
+	@echo $(LINK_STATIC_TERARK) $(LDFLAGS) $(COVERAGEFLAGS)
+
 rocksdbjavastatic: $(java_static_all_libobjects)
 	cd java;$(MAKE) javalib;
 	rm -f ./java/target/$(ROCKSDBJNILIB)
 	$(CXX) $(CXXFLAGS) -I./java/. $(JAVA_INCLUDE) -shared -fPIC \
 	  -o ./java/target/$(ROCKSDBJNILIB) $(JNI_NATIVE_SOURCES) \
 	  $(java_static_all_libobjects) $(COVERAGEFLAGS) \
-	  $(JAVA_COMPRESSIONS) $(JAVA_STATIC_LDFLAGS)
+	  $(JAVA_COMPRESSIONS) $(JAVA_STATIC_LDFLAGS) \
+	  $(LINK_STATIC_TERARK) $(LDFLAGS) $(COVERAGEFLAGS) \
+	  -Wno-unused-parameter
+	  
 	cd java/target;if [ "$(DEBUG_LEVEL)" == "0" ]; then \
 		strip $(STRIPFLAGS) $(ROCKSDBJNILIB); \
 	fi
 	cd java;jar -cf target/$(ROCKSDB_JAR) HISTORY*.md
+	jar -uf java/target/$(ROCKSDB_JAR) HISTORY*.md
 	cd java/target;jar -uf $(ROCKSDB_JAR) $(ROCKSDBJNILIB)
 	cd java/target/classes;jar -uf ../$(ROCKSDB_JAR) org/rocksdb/*.class org/rocksdb/util/*.class
 	cd java/target/apidocs;jar -cf ../$(ROCKSDB_JAVADOCS_JAR) *
 	cd java/src/main/java;jar -cf ../../../target/$(ROCKSDB_SOURCES_JAR) org
 
+	mkdir -p java/target/META-INF
+	cp LICENSE.Apache java/target/META-INF/LICENSE
+	cd java/target;jar -uf $(ROCKSDB_JAR) META-INF/LICENSE
+
 rocksdbjavastaticrelease: rocksdbjavastatic
-	cd java/crossbuild && vagrant destroy -f && vagrant up linux32 && vagrant halt linux32 && vagrant up linux64 && vagrant halt linux64
+	# We only have to support Linux-64 build for now
+	# TODO enable crossbuild again (guokuankuan)
+	# cd java/crossbuild && vagrant destroy -f && vagrant up linux32 && vagrant halt linux32 && vagrant up linux64 && vagrant halt linux64
 	cd java;jar -cf target/$(ROCKSDB_JAR_ALL) HISTORY*.md
-	cd java/target;jar -uf $(ROCKSDB_JAR_ALL) librocksdbjni-*.so librocksdbjni-*.jnilib
+	jar -uf java/target/$(ROCKSDB_JAR_ALL) HISTORY*.md
+
+	# Enable crossbuild again(guokuankuan)
+	# cd java/target;jar -uf $(ROCKSDB_JAR_ALL) librocksdbjni-*.so librocksdbjni-*.jnilib librocksdbjni-win64.dll
+	cd java/target;jar -uf $(ROCKSDB_JAR_ALL) *.so
 	cd java/target/classes;jar -uf ../$(ROCKSDB_JAR_ALL) org/rocksdb/*.class org/rocksdb/util/*.class
+
+frocksdbjavastaticrelease: rocksdbjavastaticrelease
+	# update license
+	mkdir -p java/target/META-INF
+	cp LICENSE.Apache java/target/META-INF/LICENSE
+	cd java/target;jar -uf $(ROCKSDB_JAR_ALL) META-INF/LICENSE
+
+	# platform jars
+	$(eval JAR_PREF=rocksdbjni-$(ROCKSDB_MAJOR).$(ROCKSDB_MINOR).$(ROCKSDB_PATCH))
+	$(eval JAR_DOCS=$(JAR_PREF)-javadoc.jar)
+	$(eval JAR_SOURCES=$(JAR_PREF)-sources.jar)
+	# $(eval OSX_JAR=$(JAR_PREF)-osx.jar)
+	# $(eval WIN_JAR=$(JAR_PREF)-win64.jar)
+	# $(eval LINUX32_JAR=$(JAR_PREF)-linux32.jar)
+	$(eval LINUX64_JAR=$(JAR_PREF)-linux64.jar)
+
+	# update windows jar
+	# cd java/target;cp rocksdbjni_classes.jar $(WIN_JAR)
+	# cd java;jar -uf target/$(WIN_JAR) HISTORY*.md
+	# jar -uf java/target/$(WIN_JAR) HISTORY*.md
+	# cd java/target;jar -uf $(WIN_JAR) librocksdbjni-win64.dll
+	# cd java/target;jar -uf $(WIN_JAR) META-INF/LICENSE
+
+	# update linux 64 jar with ppc64 lib
+	# cd java/target;jar -uf $(LINUX64_JAR) librocksdbjni-linux-ppc64le.so
+
+	cd java/target;jar -uf $(JAR_DOCS) META-INF/LICENSE
+	cd java/target;jar -uf $(JAR_SOURCES) META-INF/LICENSE
+
+	# prepare frocksdb release
+	cd java/target;mkdir -p frocksdb-release
+
+	$(eval FJAR_PREF=frocksdbjni-$(ROCKSDB_MAJOR).$(ROCKSDB_MINOR).$(ROCKSDB_PATCH)-artisans-$(FROCKSDB_VERSION))
+	$(eval FJAR=$(FJAR_PREF).jar)
+	$(eval FJAR_DOCS=$(FJAR_PREF)-javadoc.jar)
+	$(eval FJAR_SOURCES=$(FJAR_PREF)-sources.jar)
+	# $(eval OSX_FJAR=$(FJAR_PREF)-osx.jar)
+	# $(eval WIN_FJAR=$(FJAR_PREF)-win64.jar)
+	# $(eval LINUX32_FJAR=$(FJAR_PREF)-linux32.jar)
+	$(eval LINUX64_FJAR=$(FJAR_PREF)-linux64.jar)
+
+	cd java/target;cp $(ROCKSDB_JAR_ALL) frocksdb-release/$(FJAR)
+	cd java/target;cp $(JAR_DOCS) frocksdb-release/$(FJAR_DOCS)
+	cd java/target;cp $(JAR_SOURCES) frocksdb-release/$(FJAR_SOURCES)
+	# cd java/target;cp $(OSX_JAR) frocksdb-release/$(OSX_FJAR)
+	# cd java/target;cp $(WIN_JAR) frocksdb-release/$(WIN_FJAR)
+	# cd java/target;cp $(LINUX32_JAR) frocksdb-release/$(LINUX32_FJAR)
+	cd java/target;cp $(LINUX64_JAR) frocksdb-release/$(LINUX64_FJAR)
+	cd java;cp rocksjni_flink.pom target/frocksdb-release/$(FJAR_PREF).pom
 
 rocksdbjavastaticreleasedocker: rocksdbjavastatic rocksdbjavastaticdockerx86 rocksdbjavastaticdockerx86_64
 	cd java;jar -cf target/$(ROCKSDB_JAR_ALL) HISTORY*.md

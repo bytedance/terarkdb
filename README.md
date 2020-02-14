@@ -67,3 +67,19 @@ env Terark_hasValgrind=1 ./application
 
 ## Non-Portable Build
 If your compiler enviornment is same as your prodution environment, you can use `PORTABLE_BUILD=0 ./build.sh`
+
+
+## Flink
+TerarkDB now support flink on Linux x86-64.
+
+Usage:
+
+Download latest terarkdb jar and replace your frocksdb jar, then start your application with this two env variables:
+
+```
+# temp dir for terarkdb, slower device is OK
+TerarkZipTable_localTempDir=
+
+# terark control parameters
+TerarkConfigString=TerarkConfigString='TerarkZipTable_compaction_style=Level;DictZipBlobStore_zipThreads=0;TerarkZipTable_max_subcompactions=4;TerarkZipTable_max_background_flushes=6;TerarkZipTable_max_background_compactions=4;TerarkZipTable_max_background_garbage_collections=3;TerarkZipTable_level0_file_num_compaction_trigger=4;TerarkZipTable_level0_slowdown_writes_trigger=20;TerarkZipTable_level0_stop_writes_trigger=36;TerarkZipTable_max_compaction_bytes=256M;TerarkZipTable_max_write_buffer_number=8;TerarkZipTable_target_file_size_base=64M;TerarkZipTable_blob_size=64'
+```

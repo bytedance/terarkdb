@@ -13,6 +13,7 @@
 #pragma once
 #include <deque>
 #include <string>
+#include <utility>
 
 #include "rocksdb/merge_operator.h"
 #include "rocksdb/slice.h"
@@ -22,17 +23,18 @@ namespace rocksdb {
 class StringAppendTESTOperator : public MergeOperator {
  public:
   // Constructor with delimiter
-  explicit StringAppendTESTOperator(char delim_char);
+  explicit StringAppendTESTOperator(char delim_char): delim_(std::string(1, delim_char)) {};
 
-  virtual bool FullMergeV2(const MergeOperationInput& merge_in,
-                           MergeOperationOutput* merge_out) const override;
+  explicit StringAppendTESTOperator(std::string delim_str) : delim_(std::move(delim_str)) {};
 
-  virtual bool PartialMergeMulti(const Slice& key,
-                                 const std::vector<LazyBuffer>& operand_list,
-                                 LazyBuffer* new_value, Logger* logger) const
-      override;
+  bool FullMergeV2(const MergeOperationInput& merge_in,
+                   MergeOperationOutput* merge_out) const override;
 
-  virtual const char* Name() const override;
+  bool PartialMergeMulti(const Slice& key,
+                         const std::vector<LazyBuffer>& operand_list,
+                         LazyBuffer* new_value, Logger* logger) const override;
+
+  const char* Name() const override;
 
  protected:
   // A version of PartialMerge that actually performs "partial merging".
@@ -41,7 +43,9 @@ class StringAppendTESTOperator : public MergeOperator {
                                const std::deque<Slice>& operand_list,
                                std::string* new_value, Logger* logger) const;
 
-  char delim_;         // The delimiter is inserted between elements
+  // char delim_;       
+  // Use variable length delimiter.  
+  std::string delim_;
 
 };
 

@@ -14,7 +14,6 @@ make_config.mk
 *_stress
 *.out
 *.class
-*.jar
 *.*jnilib*
 *.d-e
 *.o-*
@@ -51,7 +50,6 @@ trace_analyzer_test
 
 java/out
 java/target
-java/test-libs
 java/*.log
 java/include/org_rocksdb_*.h
 

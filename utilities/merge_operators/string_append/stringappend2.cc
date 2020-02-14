@@ -16,10 +16,6 @@
 
 namespace rocksdb {
 
-// Constructor: also specify the delimiter character.
-StringAppendTESTOperator::StringAppendTESTOperator(char delim_char)
-    : delim_(delim_char) {}
-
 // Implementation for the merge operation (concatenates two strings)
 bool StringAppendTESTOperator::FullMergeV2(
     const MergeOperationInput& merge_in,
@@ -34,7 +30,7 @@ bool StringAppendTESTOperator::FullMergeV2(
   }
 
   // Only print the delimiter after the first entry has been printed
-  bool printDelim = false;
+  bool printDelim = !delim_.empty();
   auto builder = merge_out->new_value.get_builder();
   size_t pos = 0;
   size_t cap = 0;
@@ -73,7 +69,7 @@ bool StringAppendTESTOperator::FullMergeV2(
   for (auto it = merge_in.operand_list.begin();
        it != merge_in.operand_list.end(); ++it) {
     if (printDelim) {
-      if (!append(&delim_, 1)) {
+      if (!append(delim_.c_str(), delim_.size())) {
         return true;
       }
     }
@@ -83,7 +79,7 @@ bool StringAppendTESTOperator::FullMergeV2(
     if (!append(it->data(), it->size())) {
       return true;
     }
-    printDelim = true;
+    printDelim = !delim_.empty();
   }
   builder->uninitialized_resize(pos);
 
@@ -110,17 +106,16 @@ bool StringAppendTESTOperator::_AssocPartialMergeMulti(
   // Determine and reserve correct size for *new_value.
   size_t size = 0;
   for (const auto& operand : operand_list) {
-    size += operand.size();
+    size += operand.size() + delim_.size();
   }
-  size += operand_list.size() - 1;  // Delimiters
+  size -= delim_.size();  // since we have one less delimiter
   new_value->reserve(size);
 
   // Apply concatenation
   new_value->assign(operand_list.front().data(), operand_list.front().size());
 
-  for (std::deque<Slice>::const_iterator it = operand_list.begin() + 1;
-       it != operand_list.end(); ++it) {
-    new_value->append(1, delim_);
+  for (auto it = operand_list.begin() + 1; it != operand_list.end(); ++it) {
+    new_value->append(delim_);
     new_value->append(it->data(), it->size());
   }
 
@@ -134,6 +129,11 @@ const char* StringAppendTESTOperator::Name() const {
 std::shared_ptr<MergeOperator>
 MergeOperators::CreateStringAppendTESTOperator() {
   return std::make_shared<StringAppendTESTOperator>(',');
+}
+
+std::shared_ptr<MergeOperator>
+MergeOperators::CreateStringAppendTESTOperator(std::string delim) {
+  return std::make_shared<StringAppendTESTOperator>(delim);
 }
 
 static MergeOperator* NewStringAppendTESTOperator(const std::string& options) {

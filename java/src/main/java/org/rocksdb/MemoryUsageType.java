@@ -54,9 +54,9 @@ public enum MemoryUsageType {
    *     cannot be found
    */
   public static MemoryUsageType getMemoryUsageType(final byte byteIdentifier) {
-    for (final MemoryUsageType MemoryUsageType : MemoryUsageType.values()) {
-      if (MemoryUsageType.getValue() == byteIdentifier) {
-        return MemoryUsageType;
+    for (final MemoryUsageType t : MemoryUsageType.values()) {
+      if (t.getValue() == byteIdentifier) {
+        return t;
       }
     }
 
