@@ -117,6 +117,8 @@ cp -r util         $pkgdir/include
 cp -r utilities    $pkgdir/include
 cp -r options      $pkgdir/include
 cp -r monitoring   $pkgdir/include
+cp -r terark-core/src/terark $pkgdir/include
+cp -r terark-core/boost-include/boost $pkgdir/include
 
 rm -f `find $pkgdir -name '*.cc' -o -name '*.d' -o -name '*.o'`
 
