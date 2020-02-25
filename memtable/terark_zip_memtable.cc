@@ -183,7 +183,7 @@ void PatriciaTrieRep::Get(const LookupKey &k, void *callback_args,
   // initialization
   for (size_t i = 0; i < trie_vec_size_; ++i) {
     auto token = trie_vec_[i]->acquire_tls_reader_token();
-    token->update_lazy();
+    token->update();
     if (trie_vec_[i]->lookup(find_key, token)) {
       uint32_t loc = *(uint32_t *)token->value();
       auto vector = (details::tag_vector_t *)trie_vec_[i]->mem_get(loc);
@@ -372,9 +372,9 @@ bool PatriciaTrieRep::InsertKeyValue(const Slice &internal_key,
 template <bool heap_mode>
 typename PatriciaRepIterator<heap_mode>::HeapItem::VectorData
 PatriciaRepIterator<heap_mode>::HeapItem::GetVector() {
-  auto trie = static_cast<terark::MainPatricia *>(handle.iter()->trie());
+  auto trie = static_cast<terark::MainPatricia *>(handle->trie());
   auto vector = (details::tag_vector_t *)trie->mem_get(
-      *(uint32_t *)handle.iter()->value());
+      *(uint32_t *)handle->value());
   auto size = vector->size.load(std::memory_order_relaxed) & ~(1u << 31);
   auto data = (typename details::tag_vector_t::data_t *)trie->mem_get(
       vector->loc.load(std::memory_order_relaxed));
@@ -383,9 +383,9 @@ PatriciaRepIterator<heap_mode>::HeapItem::GetVector() {
 
 template <bool heap_mode>
 uint32_t PatriciaRepIterator<heap_mode>::HeapItem::GetValue() const {
-  auto trie = static_cast<terark::MainPatricia *>(handle.iter()->trie());
+  auto trie = static_cast<terark::MainPatricia *>(handle->trie());
   auto vector = (details::tag_vector_t *)trie->mem_get(
-      *(uint32_t *)handle.iter()->value());
+      *(uint32_t *)handle->value());
   auto data = (details::tag_vector_t::data_t *)trie->mem_get(
       vector->loc.load(std::memory_order_relaxed));
   return data[index].loc;
@@ -394,24 +394,24 @@ uint32_t PatriciaRepIterator<heap_mode>::HeapItem::GetValue() const {
 template <bool heap_mode>
 void PatriciaRepIterator<heap_mode>::HeapItem::Seek(terark::fstring find_key,
                                                     uint64_t find_tag) {
-  if (!handle.iter()->seek_lower_bound(find_key)) {
+  if (!handle->seek_lower_bound(find_key)) {
     index = size_t(-1);
     return;
   }
   auto vec = GetVector();
-  if (handle.iter()->word() == find_key) {
+  if (handle->word() == find_key) {
     index = terark::upper_bound_0(vec.data, vec.size, find_tag) - 1;
     if (index != size_t(-1)) {
       tag = vec.data[index];
       return;
     }
-    if (!handle.iter()->incr()) {
+    if (!handle->incr()) {
       assert(index == size_t(-1));
       return;
     }
     vec = GetVector();
   }
-  assert(handle.iter()->word() > find_key);
+  assert(handle->word() > find_key);
   index = vec.size - 1;
   tag = vec.data[index].tag;
 }
@@ -419,31 +419,31 @@ void PatriciaRepIterator<heap_mode>::HeapItem::Seek(terark::fstring find_key,
 template <bool heap_mode>
 void PatriciaRepIterator<heap_mode>::HeapItem::SeekForPrev(
     terark::fstring find_key, uint64_t find_tag) {
-  if (!handle.iter()->seek_rev_lower_bound(find_key)) {
+  if (!handle->seek_rev_lower_bound(find_key)) {
     index = size_t(-1);
     return;
   }
   auto vec = GetVector();
-  if (handle.iter()->word() == find_key) {
+  if (handle->word() == find_key) {
     index = terark::lower_bound_0(vec.data, vec.size, find_tag);
     if (index != vec.size) {
       tag = vec.data[index].tag;
       return;
     }
-    if (!handle.iter()->decr()) {
+    if (!handle->decr()) {
       index = size_t(-1);
       return;
     }
     vec = GetVector();
   }
-  assert(handle.iter()->word() < find_key);
+  assert(handle->word() < find_key);
   index = 0;
   tag = vec.data[index].tag;
 }
 
 template <bool heap_mode>
 void PatriciaRepIterator<heap_mode>::HeapItem::SeekToFirst() {
-  if (!handle.iter()->seek_begin()) {
+  if (!handle->seek_begin()) {
     index = size_t(-1);
     return;
   }
@@ -454,7 +454,7 @@ void PatriciaRepIterator<heap_mode>::HeapItem::SeekToFirst() {
 
 template <bool heap_mode>
 void PatriciaRepIterator<heap_mode>::HeapItem::SeekToLast() {
-  if (!handle.iter()->seek_end()) {
+  if (!handle->seek_end()) {
     index = size_t(-1);
     return;
   }
@@ -467,7 +467,7 @@ template <bool heap_mode>
 void PatriciaRepIterator<heap_mode>::HeapItem::Next() {
   assert(index != size_t(-1));
   if (index-- == 0) {
-    if (!handle.iter()->incr()) {
+    if (!handle->incr()) {
       assert(index == size_t(-1));
       return;
     }
@@ -485,7 +485,7 @@ void PatriciaRepIterator<heap_mode>::HeapItem::Prev() {
   assert(index != size_t(-1));
   auto vec = GetVector();
   if (++index == vec.size) {
-    if (!handle.iter()->decr()) {
+    if (!handle->decr()) {
       index = size_t(-1);
       return;
     }
@@ -561,7 +561,7 @@ template <bool heap_mode>
 Slice PatriciaRepIterator<heap_mode>::GetValue() const {
   const HeapItem *item = Current();
   uint32_t value_loc = item->GetValue();
-  auto trie = static_cast<terark::MainPatricia *>(item->handle.iter()->trie());
+  auto trie = static_cast<terark::MainPatricia *>(item->handle->trie());
   return GetLengthPrefixedSlice((const char *)trie->mem_get(value_loc));
 }
 

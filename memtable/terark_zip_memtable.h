@@ -41,7 +41,7 @@ class MemWriterToken : public terark::Patricia::WriterToken {
  public:
   uint64_t get_tag() { return tag_; }
   MemWriterToken(MemPatricia *trie, uint64_t tag, const Slice &value)
-      : terark::Patricia::WriterToken(trie), tag_(tag), value_(value){};
+      : tag_(tag), value_(value){}
 
   void reset_tag_value(uint64_t tag, const Slice &value) {
     tag_ = tag;
@@ -159,7 +159,7 @@ class PatriciaRepIterator : public MemTableRep::Iterator,
   // Inner iterator abstructiong for polymorphism
   class HeapItem : boost::noncopyable {
    public:
-    terark::MainPatricia::IterMem handle;
+    terark::Patricia::IteratorPtr handle;
     uint64_t tag;
     size_t index;
 
@@ -169,7 +169,7 @@ class PatriciaRepIterator : public MemTableRep::Iterator,
     };
 
     HeapItem(terark::Patricia *trie) : tag(uint64_t(-1)), index(size_t(-1)) {
-      handle.construct(trie);
+      handle.reset(trie->new_iter());
     }
 
     VectorData GetVector();
@@ -213,7 +213,7 @@ class PatriciaRepIterator : public MemTableRep::Iterator,
   HeapItem *Current() { return heap_mode ? *multi_.heap : &single_; }
 
   // Return current key.
-  terark::fstring CurrentKey() { return Current()->handle.iter()->word(); }
+  terark::fstring CurrentKey() { return Current()->handle->word(); }
 
   // Return current tag.
   uint64_t CurrentTag() { return Current()->tag; }
@@ -221,8 +221,8 @@ class PatriciaRepIterator : public MemTableRep::Iterator,
   // Lexicographical order 3 way compartor
   struct ForwardComp {
     bool operator()(HeapItem *l, HeapItem *r) const {
-      int c = terark::fstring_func::compare3()(l->handle.iter()->word(),
-                                               r->handle.iter()->word());
+      int c = terark::fstring_func::compare3()(l->handle->word(),
+                                               r->handle->word());
       return c == 0 ? l->tag < r->tag : c > 0;
     }
   };
@@ -230,8 +230,8 @@ class PatriciaRepIterator : public MemTableRep::Iterator,
   // Reverse lexicographical order 3 way compartor
   struct BackwardComp {
     bool operator()(HeapItem *l, HeapItem *r) const {
-      int c = terark::fstring_func::compare3()(l->handle.iter()->word(),
-                                               r->handle.iter()->word());
+      int c = terark::fstring_func::compare3()(l->handle->word(),
+                                               r->handle->word());
       return c == 0 ? l->tag > r->tag : c < 0;
     }
   };
