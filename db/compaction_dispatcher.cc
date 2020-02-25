@@ -1057,8 +1057,8 @@ void RemoteCompactionDispatcher::Worker::DebugSerializeCheckResult(Slice data) {
         << " : marked_for_compaction = " << f.marked_for_compaction
         << "  filesize = " << f.file_size
         << "\n";
-    str << "    seq_smallest = " << f.smallest_seqno << "  key_smallest = " << f.smallest.DebugString(true) << "\n";
-    str << "    seq__largest = " << f. largest_seqno << "  key__largest = " << f. largest.DebugString(true) << "\n";
+    str << "        seq_smallest = " << f.smallest_seqno << "  key_smallest = " << f.smallest.DebugString(true) << "\n";
+    str << "        seq__largest = " << f. largest_seqno << "  key__largest = " << f. largest.DebugString(true) << "\n";
   }
   str << "  stat_all[size=" << res.stat_all.size() << "] = " << res.stat_all
       << "\n";
