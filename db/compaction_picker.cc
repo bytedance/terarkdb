@@ -2514,8 +2514,9 @@ Compaction* LevelCompactionBuilder::PickLazyCompaction(
       level_ratio[i - 1] = sr.compensated_file_size / base_size_real;
     }
     return std::max<double>(
-        1.5, CompactionPicker::GetQ(level_ratio.begin(), level_ratio.end(),
-                                    level_ratio.size()));
+        std::atan(1) * 4,
+        CompactionPicker::GetQ(level_ratio.begin(), level_ratio.end(),
+                               level_ratio.size()));
   };
   double q = get_q();
 

@@ -96,7 +96,7 @@
 #include "util/stop_watch.h"
 #include "util/string_util.h"
 #include "util/sync_point.h"
-#include "utilities/trace/bytedance_metrics.h"
+#include "utilities/trace/bytedance_metrics_reporter.h"
 #if !defined(_MSC_VER) && !defined(__APPLE__)
 #include <sys/unistd.h>
 #include <table/terark_zip_table.h>
@@ -166,6 +166,18 @@ static std::string seek_qps_metric_name = "dbiter_seek_qps";
 static std::string next_qps_metric_name = "dbiter_next_qps";
 static std::string seekforprev_qps_metric_name = "dbiter_seekforprev_qps";
 static std::string prev_qps_metric_name = "dbiter_prev_qps";
+
+static std::string write_latency_metric_name = "dbimpl_writeimpl_latency";
+static std::string read_latency_metric_name = "dbimpl_getimpl_latency";
+static std::string newiterator_latency_metric_name =
+    "dbimpl_newiterator_latency";
+static std::string seek_latency_metric_name = "dbiter_seek_latency";
+static std::string next_latency_metric_name = "dbiter_next_latency";
+static std::string seekforprev_latency_metric_name =
+    "dbiter_seekforprev_latency";
+static std::string prev_latency_metric_name = "dbiter_prev_latency";
+
+static std::string write_throughput_metric_name = "dbimpl_writeimpl_throughput";
 
 DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
                const bool seq_per_batch, const bool batch_per_txn)
@@ -255,14 +267,45 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
       error_handler_(this, immutable_db_options_, &mutex_),
       atomic_flush_install_cv_(&mutex_),
       bytedance_tags_("dbname=" + dbname),
+      metrics_reporter_factory_(
+          options.metrics_reporter_factory == nullptr
+              ? std::make_shared<ByteDanceMetricsReporterFactory>()
+              : options.metrics_reporter_factory),
       console_runner_(this, dbname, env_, immutable_db_options_.info_log.get()),
-      write_qps_reporter_(write_qps_metric_name, bytedance_tags_),
-      read_qps_reporter_(read_qps_metric_name, bytedance_tags_),
-      newiterator_qps_reporter_(newiterator_qps_metric_name, bytedance_tags_),
-      seek_qps_reporter_(seek_qps_metric_name, bytedance_tags_),
-      next_qps_reporter_(next_qps_metric_name, bytedance_tags_),
-      seekforprev_qps_reporter_(seekforprev_qps_metric_name, bytedance_tags_),
-      prev_qps_reporter_(prev_qps_metric_name, bytedance_tags_) {
+
+      write_qps_reporter_(*metrics_reporter_factory_->BuildCountReporter(
+          write_qps_metric_name, bytedance_tags_)),
+      read_qps_reporter_(*metrics_reporter_factory_->BuildCountReporter(
+          read_qps_metric_name, bytedance_tags_)),
+      newiterator_qps_reporter_(*metrics_reporter_factory_->BuildCountReporter(
+          newiterator_qps_metric_name, bytedance_tags_)),
+      seek_qps_reporter_(*metrics_reporter_factory_->BuildCountReporter(
+          seek_qps_metric_name, bytedance_tags_)),
+      next_qps_reporter_(*metrics_reporter_factory_->BuildCountReporter(
+          next_qps_metric_name, bytedance_tags_)),
+      seekforprev_qps_reporter_(*metrics_reporter_factory_->BuildCountReporter(
+          seekforprev_qps_metric_name, bytedance_tags_)),
+      prev_qps_reporter_(*metrics_reporter_factory_->BuildCountReporter(
+          prev_qps_metric_name, bytedance_tags_)),
+
+      write_latency_reporter_(*metrics_reporter_factory_->BuildHistReporter(
+          write_latency_metric_name, bytedance_tags_)),
+      read_latency_reporter_(*metrics_reporter_factory_->BuildHistReporter(
+          read_latency_metric_name, bytedance_tags_)),
+      newiterator_latency_reporter_(
+          *metrics_reporter_factory_->BuildHistReporter(
+              newiterator_latency_metric_name, bytedance_tags_)),
+      seek_latency_reporter_(*metrics_reporter_factory_->BuildHistReporter(
+          seek_latency_metric_name, bytedance_tags_)),
+      next_latency_reporter_(*metrics_reporter_factory_->BuildHistReporter(
+          next_latency_metric_name, bytedance_tags_)),
+      seekforprev_latency_reporter_(
+          *metrics_reporter_factory_->BuildHistReporter(
+              seekforprev_latency_metric_name, bytedance_tags_)),
+      prev_latency_reporter_(*metrics_reporter_factory_->BuildHistReporter(
+          prev_latency_metric_name, bytedance_tags_)),
+      write_throughput_reporter_(*metrics_reporter_factory_->BuildCountReporter(
+          write_throughput_metric_name, bytedance_tags_)) {
   // !batch_per_trx_ implies seq_per_batch_ because it is only unset for
   // WriteUnprepared, which should use seq_per_batch_.
   assert(batch_per_txn_ || seq_per_batch_);
@@ -1284,8 +1327,7 @@ Status DBImpl::GetImpl(const ReadOptions& read_options,
                        ColumnFamilyHandle* column_family, const Slice& key,
                        LazyBuffer* lazy_val, bool* value_found,
                        ReadCallback* callback) {
-  static const std::string metric_name = "dbimpl_getimpl";
-  OperationTimerReporter reporter(metric_name, bytedance_tags_);
+  LatencyHistGuard guard(&read_latency_reporter_);
   read_qps_reporter_.AddCount(1);
 
   assert(lazy_val != nullptr);
@@ -1945,8 +1987,7 @@ bool DBImpl::KeyMayExist(const ReadOptions& read_options,
 
 Iterator* DBImpl::NewIterator(const ReadOptions& read_options,
                               ColumnFamilyHandle* column_family) {
-  static const std::string metric_name = "dbimpl_newiterator";
-  OperationTimerReporter reporter(metric_name, bytedance_tags_);
+  LatencyHistGuard guard(&newiterator_latency_reporter_);
   newiterator_qps_reporter_.AddCount(1);
 
   if (read_options.managed) {

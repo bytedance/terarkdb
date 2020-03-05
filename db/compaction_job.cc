@@ -1745,7 +1745,7 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
         db_options_.info_log,
         "[%s] [JOB %d] Table #%" PRIu64 " GC: %" PRIu64
         " inputs from %zd files. %" PRIu64 " clear, %" PRIu64
-        " expectation: [ %" PRIu64 " garbage type, %" PRIu64
+        " estimation: [ %" PRIu64 " garbage type, %" PRIu64
         " get not found, %" PRIu64
         " file number mismatch ], inheritance chain: %" PRIu64 " -> %" PRIu64,
         cfd->GetName().c_str(), job_id_, meta.fd.GetNumber(), counter.input,

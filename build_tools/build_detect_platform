@@ -515,7 +515,7 @@ if test "$USE_HDFS"; then
   JAVA_LDFLAGS="$JAVA_LDFLAGS $HDFS_LDFLAGS"
 fi
 
-if test "$USE_HASWELL"; then
+if test "$USE_HASWELL" || [ "$PORTABLE" == "1" ]; then
   COMMON_FLAGS="$COMMON_FLAGS -march=haswell"
 elif test "$USE_SSE"; then
   COMMON_FLAGS="$COMMON_FLAGS -msse4.2 -mpclmul"

@@ -773,10 +773,12 @@ Status TerarkZipTableBuilder::Finish(
          "=%8.2f's,%8.3f'MB/sec\n",
          this, g_pf.sf(t0, tt), rawBytes * 1.0 / g_pf.uf(t0, tt));
   }
-  if (prefixBuildInfos_.size() > 1) {
-    return ZipValueToFinishMulti();
+  Status s = prefixBuildInfos_.size() > 1 ? ZipValueToFinishMulti()
+                                          : ZipValueToFinish();
+  if (!s.ok()) {
+    TerarkZipTableBuilder::Abandon();
   }
-  return ZipValueToFinish();
+  return s;
 } catch (const std::exception& ex) {
   return AbortFinish(ex);
 }
@@ -1243,9 +1245,10 @@ TerarkZipTableBuilder::WaitHandle TerarkZipTableBuilder::LoadSample(
   }
   tmpSampleFile_.close();
   if (realSampleLenSum == 0) {  // prevent from empty
-    zbuilder->addSample(sample.empty()
-                            ? fstring("Hello World!")
-                            : fstring(sample).substr(0, newSampleLen));
+    zbuilder->addSample(
+        sample.empty()
+            ? fstring("Hello World!")
+            : fstring(sample).substr(0, std::min(sample.size(), newSampleLen)));
   }
   zbuilder->finishSample();
   return waitHandle;
@@ -2327,7 +2330,6 @@ Status TerarkZipTableBuilder::WriteMetaData(
 }
 
 void TerarkZipTableBuilder::Abandon() {
-  assert(!closed_);
   ioptions_.env->UnSchedule(&indexTag, rocksdb::Env::Priority::LOW);
   ioptions_.env->UnSchedule(&storeTag, rocksdb::Env::Priority::LOW);
   ioptions_.env->UnSchedule(&dictTag, rocksdb::Env::Priority::LOW);

@@ -46,6 +46,7 @@
 #include "rocksdb/db.h"
 #include "rocksdb/env.h"
 #include "rocksdb/memtablerep.h"
+#include "rocksdb/metrics_reporter.h"
 #include "rocksdb/status.h"
 #include "rocksdb/trace_reader_writer.h"
 #include "rocksdb/transaction_log.h"
@@ -59,7 +60,6 @@
 #include "util/thread_local.h"
 #include "util/trace_replay.h"
 #include "utilities/console/server.h"
-#include "utilities/trace/bytedance_metrics.h"
 
 namespace rocksdb {
 
@@ -636,10 +636,21 @@ class DBImpl : public DB {
 
   const std::string& bytedance_tags() const { return bytedance_tags_; }
 
-  QPSReporter& seek_qps_reporter() { return seek_qps_reporter_; }
-  QPSReporter& seekforprev_qps_reporter() { return seekforprev_qps_reporter_; }
-  QPSReporter& next_qps_reporter() { return next_qps_reporter_; }
-  QPSReporter& prev_qps_reporter() { return prev_qps_reporter_; }
+  using QPSReporter = CountReporterHandle&;
+  QPSReporter seek_qps_reporter() { return seek_qps_reporter_; }
+  QPSReporter seekforprev_qps_reporter() { return seekforprev_qps_reporter_; }
+  QPSReporter next_qps_reporter() { return next_qps_reporter_; }
+  QPSReporter prev_qps_reporter() { return prev_qps_reporter_; }
+
+  using LatencyReporter = HistReporterHandle&;
+  LatencyReporter seek_latency_reporter() { return seek_latency_reporter_; }
+  LatencyReporter seekforprev_latency_reporter() {
+    return seekforprev_latency_reporter_;
+  }
+  LatencyReporter next_latency_reporter() { return next_latency_reporter_; }
+  LatencyReporter prev_latency_reporter() { return prev_latency_reporter_; }
+
+  using ThroughputReporter = CountReporterHandle&;
 
   std::unordered_map<std::string, RecoveredTransaction*>
   recovered_transactions() {
@@ -1644,7 +1655,9 @@ class DBImpl : public DB {
   InstrumentedCondVar atomic_flush_install_cv_;
 
   std::string bytedance_tags_;
+  std::shared_ptr<MetricsReporterFactory> metrics_reporter_factory_;
   cheapis::ServerRunner console_runner_;
+
   QPSReporter write_qps_reporter_;
   QPSReporter read_qps_reporter_;
   QPSReporter newiterator_qps_reporter_;
@@ -1652,6 +1665,16 @@ class DBImpl : public DB {
   QPSReporter next_qps_reporter_;
   QPSReporter seekforprev_qps_reporter_;
   QPSReporter prev_qps_reporter_;
+
+  LatencyReporter write_latency_reporter_;
+  LatencyReporter read_latency_reporter_;
+  LatencyReporter newiterator_latency_reporter_;
+  LatencyReporter seek_latency_reporter_;
+  LatencyReporter next_latency_reporter_;
+  LatencyReporter seekforprev_latency_reporter_;
+  LatencyReporter prev_latency_reporter_;
+
+  ThroughputReporter write_throughput_reporter_;
 };
 
 extern Options SanitizeOptions(const std::string& db, const Options& src);

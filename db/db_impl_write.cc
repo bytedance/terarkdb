@@ -13,12 +13,12 @@
 #endif
 #include <inttypes.h>
 
+#include "rocksdb/metrics_reporter.h"
 #include "db/error_handler.h"
 #include "db/event_helpers.h"
 #include "monitoring/perf_context_imp.h"
 #include "options/options_helper.h"
 #include "util/sync_point.h"
-#include "utilities/trace/bytedance_metrics.h"
 
 namespace rocksdb {
 // Convenience methods
@@ -74,9 +74,9 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
                          bool disable_memtable, uint64_t* seq_used,
                          size_t batch_cnt,
                          PreReleaseCallback* pre_release_callback) {
-  static const std::string metric_name = "dbimpl_writeimpl";
-  OperationTimerReporter reporter(metric_name, bytedance_tags_);
+  LatencyHistGuard guard(&write_latency_reporter_);
   write_qps_reporter_.AddCount(WriteBatchInternal::Count(my_batch));
+  write_throughput_reporter_.AddCount(WriteBatchInternal::ByteSize(my_batch));
 
   assert(!seq_per_batch_ || batch_cnt != 0);
   if (my_batch == nullptr) {

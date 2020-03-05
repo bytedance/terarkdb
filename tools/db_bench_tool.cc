@@ -74,6 +74,8 @@
 #include "utilities/merge_operators/bytesxor.h"
 #include "utilities/persistent_cache/block_cache_tier.h"
 
+#include "table/terark_zip_table.h"
+
 #ifdef OS_WIN
 #include <io.h>  // open/close
 #endif
@@ -393,7 +395,7 @@ DEFINE_int32(universal_compression_size_percent, -1,
              "The percentage of the database to compress for universal "
              "compaction. -1 means compress everything.");
 
-DEFINE_bool(universal_allow_trivial_move, false,
+DEFINE_bool(universal_allow_trivial_move, true,
             "Allow trivial move in universal compaction.");
 
 DEFINE_int64(cache_size, 8 << 20,  // 8MB
@@ -921,18 +923,18 @@ DEFINE_bool(print_malloc_stats, false,
 
 DEFINE_bool(disable_auto_compactions, false, "Do not auto trigger compactions");
 
-DEFINE_bool(enable_lazy_compaction, false, "Enable map or link compaction");
+DEFINE_bool(enable_lazy_compaction, true, "Enable map or link compaction");
 
-DEFINE_uint64(blob_size, 1024, "Key Value Separate blob size");
+DEFINE_uint64(blob_size, 0, "Key Value Separate blob size");
 
-DEFINE_double(blob_gc_ratio, 0.05, "Blob SST gc ratio");
+DEFINE_double(blob_gc_ratio, 0.2, "Blob SST gc ratio");
 
 DEFINE_uint64(wal_ttl_seconds, 0, "Set the TTL for the WAL Files in seconds.");
 DEFINE_uint64(wal_size_limit_MB, 0, "Set the size limit for the WAL Files"
               " in MB.");
 DEFINE_uint64(max_total_wal_size, 0, "Set total max WAL size");
 
-DEFINE_bool(mmap_read, rocksdb::Options().allow_mmap_reads,
+DEFINE_bool(mmap_read, true,
             "Allow reads to occur via mmap-ing files");
 
 DEFINE_bool(mmap_write, rocksdb::Options().allow_mmap_writes,
@@ -1060,6 +1062,7 @@ DEFINE_bool(use_plain_table, false, "if use plain table "
             "instead of block-based table format");
 DEFINE_bool(use_cuckoo_table, false, "if use cuckoo table format");
 DEFINE_double(cuckoo_hash_ratio, 0.9, "Hash ratio for Cuckoo SST table.");
+DEFINE_bool(use_terark_table, true, "if use trark table format");
 DEFINE_bool(use_hash_search, false, "if use kHashSearch "
             "instead of kBinarySearch. "
             "This is valid if only we use BlockTable");
@@ -3266,7 +3269,7 @@ void VerifyDBFromDB(std::string& truth_db_name) {
       if (FLAGS_use_hash_search) {
         if (FLAGS_prefix_size == 0) {
           fprintf(stderr,
-              "prefix_size not assigned when enable use_hash_search \n");
+                  "prefix_size not assigned when enable use_hash_search \n");
           exit(1);
         }
         block_based_options.index_type = BlockBasedTableOptions::kHashSearch;
@@ -3360,8 +3363,13 @@ void VerifyDBFromDB(std::string& truth_db_name) {
 
 #endif
       }
+    }
+    if (FLAGS_use_terark_table) {
+      rocksdb::TerarkZipTableOptions tzto{};
+      tzto.localTempDir = FLAGS_db + ".tmp";
+      rocksdb::TerarkZipDeleteTempFiles(tzto.localTempDir);
       options.table_factory.reset(
-          NewBlockBasedTableFactory(block_based_options));
+          rocksdb::NewTerarkZipTableFactory(tzto, options.table_factory));
     }
     if (FLAGS_max_bytes_for_level_multiplier_additional_v.size() > 0) {
       if (FLAGS_max_bytes_for_level_multiplier_additional_v.size() !=
