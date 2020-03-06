@@ -44,8 +44,8 @@ static int GetThreadID() {
   return id;
 }
 
-void ByteDanceHistReporterHandle::AddRecord(size_t val) {
 #ifdef TERARKDB_ENABLE_METRICS
+void ByteDanceHistReporterHandle::AddRecord(size_t val) {
   auto* tls_stat_ptr = GetThreadLocalStats();
   if (tls_stat_ptr == nullptr) {
     return;
@@ -82,8 +82,10 @@ void ByteDanceHistReporterHandle::AddRecord(size_t val) {
     tls_stat.Reset();
     tls_stat.last_report_time = curr_time;
   }
-#endif
 }
+#else
+void ByteDanceHistReporterHandle::AddRecord(size_t) {}
+#endif
 
 HistStats<>* ByteDanceHistReporterHandle::GetThreadLocalStats() {
   auto id = GetThreadID();
@@ -97,8 +99,8 @@ HistStats<>* ByteDanceHistReporterHandle::GetThreadLocalStats() {
   return s;
 }
 
-void ByteDanceCountReporterHandle::AddCount(size_t n) {
 #ifdef TERARKDB_ENABLE_METRICS
+void ByteDanceCountReporterHandle::AddCount(size_t n) {
   count_.fetch_add(n, std::memory_order_relaxed);
   if (!reporter_lock_.load(std::memory_order_relaxed)) {
     if (!reporter_lock_.exchange(true, std::memory_order_acquire)) {
@@ -119,8 +121,10 @@ void ByteDanceCountReporterHandle::AddCount(size_t n) {
       reporter_lock_.store(false, std::memory_order_release);
     }
   }
-#endif
 }
+#else
+void ByteDanceCountReporterHandle::AddCount(size_t) {}
+#endif
 
 ByteDanceMetricsReporterFactory::ByteDanceMetricsReporterFactory() {
   InitNamespace(default_namespace);
@@ -131,8 +135,8 @@ ByteDanceMetricsReporterFactory::ByteDanceMetricsReporterFactory(
   InitNamespace(ns);
 }
 
-void ByteDanceMetricsReporterFactory::InitNamespace(const std::string& ns) {
 #ifdef TERARKDB_ENABLE_METRICS
+void ByteDanceMetricsReporterFactory::InitNamespace(const std::string& ns) {
   if (!metrics_init.load(std::memory_order_acquire)) {
     std::lock_guard<std::mutex> guard(metrics_mtx);
     if (!metrics_init.load(std::memory_order_relaxed)) {
@@ -142,8 +146,10 @@ void ByteDanceMetricsReporterFactory::InitNamespace(const std::string& ns) {
       metrics_init.store(true, std::memory_order_release);
     }
   }
-#endif
 }
+#else
+void ByteDanceMetricsReporterFactory::InitNamespace(const std::string&) {}
+#endif
 
 ByteDanceHistReporterHandle* ByteDanceMetricsReporterFactory::BuildHistReporter(
     const std::string& name, const std::string& tags) {

@@ -199,7 +199,7 @@ int ServerMain(ServerRunner *runner, rocksdb::DBImpl *db,
     return 1;
   }
 
-  long last_cron_time = 0;
+  int64_t last_cron_time = 0;
   auto status = env->GetCurrentTime(&last_cron_time);
   if (!status.ok()) {
     ROCKS_LOG_ERROR(log, "Failed getting time. Error message: '%s'",
