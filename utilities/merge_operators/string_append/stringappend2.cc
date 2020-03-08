@@ -30,7 +30,7 @@ bool StringAppendTESTOperator::FullMergeV2(
   }
 
   // Only print the delimiter after the first entry has been printed
-  bool printDelim = !delim_.empty();
+  bool printDelim = false;
   auto builder = merge_out->new_value.get_builder();
   size_t pos = 0;
   size_t cap = 0;
@@ -62,7 +62,7 @@ bool StringAppendTESTOperator::FullMergeV2(
                 merge_in.existing_value->size())) {
       return true;
     }
-    printDelim = true;
+    printDelim = !delim_.empty();
   }
 
   // Concatenate the sequence of strings (and add a delimiter between each)
