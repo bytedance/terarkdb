@@ -1926,9 +1926,8 @@ int DBImpl::GetSubCompactionSlots(uint32_t max_subcompactions) {
   int slots =
       (bg_job_limits.max_compactions - bg_job_limits.max_garbage_collections) -
       (bg_compaction_scheduled_ - bg_garbage_collection_scheduled_);
-  slots = std::max(0, slots + 1) / 2;
   // max_subcompactions == 0 ? slots : min(max_subcompactions - 1, slots)
-  return (int)std::min(max_subcompactions - 1, uint32_t(slots));
+  return (int)std::min(max_subcompactions - 1, uint32_t(std::max(0, slots)));
 }
 
 void DBImpl::AddToCompactionQueue(ColumnFamilyData* cfd) {
