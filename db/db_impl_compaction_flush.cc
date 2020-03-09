@@ -1923,9 +1923,7 @@ int DBImpl::GetSubCompactionSlots(uint32_t max_subcompactions) {
                      mutable_db_options_.max_background_garbage_collections,
                      mutable_db_options_.max_background_jobs,
                      true /* parallelize_compactions */);
-  int slots =
-      (bg_job_limits.max_compactions - bg_job_limits.max_garbage_collections) -
-      (bg_compaction_scheduled_ - bg_garbage_collection_scheduled_);
+  int slots = bg_job_limits.max_compactions - bg_compaction_scheduled_ - 1;
   // max_subcompactions == 0 ? slots : min(max_subcompactions - 1, slots)
   return (int)std::min(max_subcompactions - 1, uint32_t(std::max(0, slots)));
 }
