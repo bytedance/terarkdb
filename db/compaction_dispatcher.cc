@@ -679,8 +679,8 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(Slice data) {
     actual_start.SetMinPossibleForUserKey(*start);
     input->Seek(actual_start.Encode());
   } else {
+    actual_start.SetMinPossibleForUserKey(context.smallest_user_key);
     input->SeekToFirst();
-    actual_start.SetMinPossibleForUserKey(ExtractUserKey(input->key()));
   }
   c_iter->SeekToFirst();
 
