@@ -144,8 +144,8 @@ class WritePreparedTxnDB : public PessimisticTransactionDB {
       // We should not normally reach here
       WPRecordTick(TXN_PREPARE_MUTEX_OVERHEAD);
       ReadLock rl(&prepared_mutex_);
-      ROCKS_LOG_WARN(info_log_, "prepared_mutex_ overhead %" PRIu64,
-                     static_cast<uint64_t>(delayed_prepared_.size()));
+      // ROCKS_LOG_WARN(info_log_, "prepared_mutex_ overhead %" PRIu64,
+      //                static_cast<uint64_t>(delayed_prepared_.size()));
       if (delayed_prepared_.find(prep_seq) != delayed_prepared_.end()) {
         // Then it is not committed yet
         ROCKS_LOG_DETAILS(info_log_,
