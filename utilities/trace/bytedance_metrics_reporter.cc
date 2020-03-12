@@ -7,6 +7,8 @@
 #include "metrics.h"
 #endif
 
+#include "util/logging.h"
+
 namespace rocksdb {
 static std::mutex metrics_mtx;
 static std::atomic<bool> metrics_init{false};
@@ -75,6 +77,19 @@ void ByteDanceHistReporterHandle::AddRecord(size_t val) {
       cpputil::metrics2::Metrics::emit_store(name_ + "_p50", result[0], tags_);
       cpputil::metrics2::Metrics::emit_store(name_ + "_p99", result[1], tags_);
       cpputil::metrics2::Metrics::emit_store(name_ + "_p999", result[2], tags_);
+
+      diff_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    curr_time - last_log_time_)
+                    .count();
+      if (diff_ms > 10 * 60 * 1000) {
+        ROCKS_LOG_INFO(log_, "name:%s P50, tags:%s, val:%zu", name_.c_str(),
+                       tags_.c_str(), result[0]);
+        ROCKS_LOG_INFO(log_, "name:%s P99, tags:%s, val:%zu", name_.c_str(),
+                       tags_.c_str(), result[1]);
+        ROCKS_LOG_INFO(log_, "name:%s P999, tags:%s, val:%zu", name_.c_str(),
+                       tags_.c_str(), result[2]);
+        last_log_time_ = curr_time;
+      }
     } else {
       merge_lock_.store(false, std::memory_order_release);
     }
@@ -117,6 +132,15 @@ void ByteDanceCountReporterHandle::AddCount(size_t n) {
 
         last_report_time_ = curr_time;
         last_report_count_ = curr_count;
+
+        diff_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                      curr_time - last_log_time_)
+                      .count();
+        if (diff_ms > 10 * 60 * 1000) {
+          ROCKS_LOG_INFO(log_, "name:%s, tags:%s, val:%zu", name_.c_str(),
+                         tags_.c_str(), qps);
+          last_log_time_ = curr_time;
+        }
       }
       reporter_lock_.store(false, std::memory_order_release);
     }
@@ -152,17 +176,18 @@ void ByteDanceMetricsReporterFactory::InitNamespace(const std::string&) {}
 #endif
 
 ByteDanceHistReporterHandle* ByteDanceMetricsReporterFactory::BuildHistReporter(
-    const std::string& name, const std::string& tags) {
+    const std::string& name, const std::string& tags, Logger* log) {
   std::lock_guard<std::mutex> guard(metrics_mtx);
-  hist_reporters_.emplace_back(name, tags);
+  hist_reporters_.emplace_back(name, tags, log);
   return &hist_reporters_.back();
 }
 
 ByteDanceCountReporterHandle*
 ByteDanceMetricsReporterFactory::BuildCountReporter(const std::string& name,
-                                                    const std::string& tags) {
+                                                    const std::string& tags,
+                                                    Logger* log) {
   std::lock_guard<std::mutex> guard(metrics_mtx);
-  count_reporters_.emplace_back(name, tags);
+  count_reporters_.emplace_back(name, tags, log);
   return &count_reporters_.back();
 }
 }  // namespace rocksdb

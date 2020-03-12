@@ -274,38 +274,53 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
       console_runner_(this, dbname, env_, immutable_db_options_.info_log.get()),
 
       write_qps_reporter_(*metrics_reporter_factory_->BuildCountReporter(
-          write_qps_metric_name, bytedance_tags_)),
+          write_qps_metric_name, bytedance_tags_,
+          immutable_db_options_.info_log.get())),
       read_qps_reporter_(*metrics_reporter_factory_->BuildCountReporter(
-          read_qps_metric_name, bytedance_tags_)),
+          read_qps_metric_name, bytedance_tags_,
+          immutable_db_options_.info_log.get())),
       newiterator_qps_reporter_(*metrics_reporter_factory_->BuildCountReporter(
-          newiterator_qps_metric_name, bytedance_tags_)),
+          newiterator_qps_metric_name, bytedance_tags_,
+          immutable_db_options_.info_log.get())),
       seek_qps_reporter_(*metrics_reporter_factory_->BuildCountReporter(
-          seek_qps_metric_name, bytedance_tags_)),
+          seek_qps_metric_name, bytedance_tags_,
+          immutable_db_options_.info_log.get())),
       next_qps_reporter_(*metrics_reporter_factory_->BuildCountReporter(
-          next_qps_metric_name, bytedance_tags_)),
+          next_qps_metric_name, bytedance_tags_,
+          immutable_db_options_.info_log.get())),
       seekforprev_qps_reporter_(*metrics_reporter_factory_->BuildCountReporter(
-          seekforprev_qps_metric_name, bytedance_tags_)),
+          seekforprev_qps_metric_name, bytedance_tags_,
+          immutable_db_options_.info_log.get())),
       prev_qps_reporter_(*metrics_reporter_factory_->BuildCountReporter(
-          prev_qps_metric_name, bytedance_tags_)),
+          prev_qps_metric_name, bytedance_tags_,
+          immutable_db_options_.info_log.get())),
 
       write_latency_reporter_(*metrics_reporter_factory_->BuildHistReporter(
-          write_latency_metric_name, bytedance_tags_)),
+          write_latency_metric_name, bytedance_tags_,
+          immutable_db_options_.info_log.get())),
       read_latency_reporter_(*metrics_reporter_factory_->BuildHistReporter(
-          read_latency_metric_name, bytedance_tags_)),
+          read_latency_metric_name, bytedance_tags_,
+          immutable_db_options_.info_log.get())),
       newiterator_latency_reporter_(
           *metrics_reporter_factory_->BuildHistReporter(
-              newiterator_latency_metric_name, bytedance_tags_)),
+              newiterator_latency_metric_name, bytedance_tags_,
+              immutable_db_options_.info_log.get())),
       seek_latency_reporter_(*metrics_reporter_factory_->BuildHistReporter(
-          seek_latency_metric_name, bytedance_tags_)),
+          seek_latency_metric_name, bytedance_tags_,
+          immutable_db_options_.info_log.get())),
       next_latency_reporter_(*metrics_reporter_factory_->BuildHistReporter(
-          next_latency_metric_name, bytedance_tags_)),
+          next_latency_metric_name, bytedance_tags_,
+          immutable_db_options_.info_log.get())),
       seekforprev_latency_reporter_(
           *metrics_reporter_factory_->BuildHistReporter(
-              seekforprev_latency_metric_name, bytedance_tags_)),
+              seekforprev_latency_metric_name, bytedance_tags_,
+              immutable_db_options_.info_log.get())),
       prev_latency_reporter_(*metrics_reporter_factory_->BuildHistReporter(
-          prev_latency_metric_name, bytedance_tags_)),
+          prev_latency_metric_name, bytedance_tags_,
+          immutable_db_options_.info_log.get())),
       write_throughput_reporter_(*metrics_reporter_factory_->BuildCountReporter(
-          write_throughput_metric_name, bytedance_tags_)) {
+          write_throughput_metric_name, bytedance_tags_,
+          immutable_db_options_.info_log.get())) {
   // !batch_per_trx_ implies seq_per_batch_ because it is only unset for
   // WriteUnprepared, which should use seq_per_batch_.
   assert(batch_per_txn_ || seq_per_batch_);
