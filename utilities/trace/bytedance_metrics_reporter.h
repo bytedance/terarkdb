@@ -4,13 +4,18 @@
 #include <chrono>
 #include <list>
 
+#include "rocksdb/env.h"
 #include "stats.h"
 
 namespace rocksdb {
 class ByteDanceHistReporterHandle : public HistReporterHandle {
  public:
-  ByteDanceHistReporterHandle(const std::string& name, const std::string& tags)
-      : name_(name), tags_(tags) {}
+  ByteDanceHistReporterHandle(const std::string& name, const std::string& tags,
+                              Logger* log)
+      : name_(name),
+        tags_(tags),
+        last_log_time_(std::chrono::high_resolution_clock::now()),
+        log_(log) {}
 
   ~ByteDanceHistReporterHandle() override {
     for (auto* s : stats_arr_) {
@@ -29,6 +34,9 @@ class ByteDanceHistReporterHandle : public HistReporterHandle {
   const std::string& name_;
   const std::string& tags_;
 
+  std::chrono::high_resolution_clock::time_point last_log_time_;
+  Logger* log_;
+
   std::array<HistStats<>*, kMaxThreadNum> stats_arr_{};
 
   std::atomic<bool> merge_lock_{false};
@@ -39,10 +47,13 @@ class ByteDanceHistReporterHandle : public HistReporterHandle {
 
 class ByteDanceCountReporterHandle : public CountReporterHandle {
  public:
-  ByteDanceCountReporterHandle(const std::string& name, const std::string& tags)
+  ByteDanceCountReporterHandle(const std::string& name, const std::string& tags,
+                               Logger* log)
       : name_(name),
         tags_(tags),
-        last_report_time_(std::chrono::high_resolution_clock::now()) {}
+        last_report_time_(std::chrono::high_resolution_clock::now()),
+        last_log_time_(std::chrono::high_resolution_clock::now()),
+        log_(log) {}
 
   ~ByteDanceCountReporterHandle() override = default;
 
@@ -58,7 +69,10 @@ class ByteDanceCountReporterHandle : public CountReporterHandle {
   std::chrono::high_resolution_clock::time_point last_report_time_;
   size_t last_report_count_ = 0;
 
-  char _padding_[64 /* x86 cache line size */ - 8 * 5];
+  std::chrono::high_resolution_clock::time_point last_log_time_;
+  Logger* log_;
+
+  char _padding_[64 /* x86 cache line size */ - 8 * 7];
 
   std::atomic<size_t> count_{0};
 };
@@ -72,11 +86,13 @@ class ByteDanceMetricsReporterFactory : public MetricsReporterFactory {
   ~ByteDanceMetricsReporterFactory() override = default;
 
  public:
-  ByteDanceHistReporterHandle* BuildHistReporter(
-      const std::string& name, const std::string& tags) override;
+  ByteDanceHistReporterHandle* BuildHistReporter(const std::string& name,
+                                                 const std::string& tags,
+                                                 Logger* log) override;
 
-  ByteDanceCountReporterHandle* BuildCountReporter(
-      const std::string& name, const std::string& tags) override;
+  ByteDanceCountReporterHandle* BuildCountReporter(const std::string& name,
+                                                   const std::string& tags,
+                                                   Logger* log) override;
 
  private:
   std::list<ByteDanceHistReporterHandle> hist_reporters_;

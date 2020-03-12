@@ -4,6 +4,8 @@
 #include <cstddef>
 #include <string>
 
+#include "rocksdb/env.h"
+
 namespace rocksdb {
 class HistReporterHandle {
  public:
@@ -53,9 +55,11 @@ class MetricsReporterFactory {
 
  public:
   virtual HistReporterHandle* BuildHistReporter(const std::string& name,
-                                                const std::string& tags) = 0;
+                                                const std::string& tags,
+                                                Logger* log) = 0;
 
   virtual CountReporterHandle* BuildCountReporter(const std::string& name,
-                                                  const std::string& tags) = 0;
+                                                  const std::string& tags,
+                                                  Logger* log) = 0;
 };
 }  // namespace rocksdb
