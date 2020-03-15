@@ -498,6 +498,7 @@ void LazyBuffer::reset(std::string* _string) {
     ::new (&context->status) Status;
   }
   slice_ = *context->string;
+  file_number_ = uint64_t(-1);
 }
 
 void LazyBuffer::assign(const LazyBuffer& source) {
