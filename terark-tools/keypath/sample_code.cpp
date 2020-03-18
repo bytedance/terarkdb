@@ -784,7 +784,7 @@ int main(int argc, const char* argv[], const char* env[])
     options.target_file_size_multiplier = 1;
     //options.level0_stop_writes_trigger = 40;
     options.enable_lazy_compaction = true;
-    options.blob_size = 1;
+    options.blob_size = 8;
     options.blob_gc_ratio = 0.1;
 #if TEST_TERARK
     //options.table_factory.reset(rocksdb::NewBlockBasedTableFactory(bbto));
@@ -803,7 +803,7 @@ int main(int argc, const char* argv[], const char* env[])
     options.max_bytes_for_level_base = options.target_file_size_base * 4;
     options.target_file_size_multiplier = 1;
     //options.level0_stop_writes_trigger = 40;
-    options.blob_size = 1;
+    options.blob_size = 8;
     options.blob_gc_ratio = 0.1;
 #if WORKER_TEST
     options.compaction_dispatcher.reset();

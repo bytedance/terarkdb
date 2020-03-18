@@ -336,8 +336,17 @@ ColumnFamilyOptions SanitizeOptions(const ImmutableDBOptions& db_options,
     result.max_subcompactions = 1;
   }
 
-  if (result.blob_gc_ratio > 1) {
-    result.blob_gc_ratio = 1;
+  if (result.blob_size < 8) {
+    result.blob_size = 8;
+  }
+  if (result.blob_large_key_ratio > 1) {
+    result.blob_large_key_ratio = 1;
+  }
+  if (result.blob_large_key_ratio < 0) {
+    result.blob_large_key_ratio = 0;
+  }
+  if (result.blob_gc_ratio > 0.5) {
+    result.blob_gc_ratio = 0.5;
   }
   if (result.blob_gc_ratio < 0) {
     result.blob_gc_ratio = 0;

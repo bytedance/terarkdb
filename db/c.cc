@@ -2560,6 +2560,16 @@ void rocksdb_options_set_blob_size(rocksdb_options_t* opt, size_t blob_size) {
   opt->rep.blob_size = blob_size;
 }
 
+void rocksdb_options_set_blob_large_key_size(rocksdb_options_t* opt,
+                                             size_t large_key_size) {
+  opt->rep.blob_large_key_size = large_key_size;
+}
+
+void rocksdb_options_set_blob_large_key_ratio(rocksdb_options_t* opt,
+                                              size_t large_key_ratio) {
+  opt->rep.blob_large_key_ratio = large_key_ratio;
+}
+
 void rocksdb_options_set_blob_gc_ratio(rocksdb_options_t* opt, int ratio) {
   opt->rep.blob_gc_ratio = ratio;
 }

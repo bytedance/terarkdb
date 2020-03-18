@@ -1059,7 +1059,7 @@ class DB {
       const TransactionLogIterator::ReadOptions& read_options =
           TransactionLogIterator::ReadOptions()) = 0;
 
-  virtual void SetGuardSeqno(SequenceNumber guard_seqno) {}
+  virtual void SetGuardSeqno(SequenceNumber /*guard_seqno*/) {}
   
 // Windows API macro interference
 #undef DeleteFile

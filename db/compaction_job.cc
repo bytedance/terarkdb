@@ -699,7 +699,7 @@ Status CompactionJob::Run() {
     }
     context.compaction_filter_factory = factory->Name();
   }
-  context.blob_size = c->mutable_cf_options()->blob_size;
+  context.blob_config = c->mutable_cf_options()->get_blob_config();
   context.table_factory = iopt->table_factory->Name();
   s = iopt->table_factory->GetOptionString(&context.table_factory_options,
                                            "\n");
@@ -1234,8 +1234,9 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
       cfd->user_comparator(), &merge, versions_->LastSequence(),
       &existing_snapshots_, earliest_write_conflict_snapshot_,
       snapshot_checker_, env_, ShouldReportDetailedTime(env_, stats_), false,
-      &range_del_agg, sub_compact->compaction, mutable_cf_options->blob_size,
-      compaction_filter, shutting_down_, preserve_deletes_seqnum_));
+      &range_del_agg, sub_compact->compaction,
+      mutable_cf_options->get_blob_config(), compaction_filter, shutting_down_,
+      preserve_deletes_seqnum_));
   auto c_iter = sub_compact->c_iter.get();
   c_iter->SeekToFirst();
 
@@ -1288,7 +1289,7 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
         merge_ptr, versions_->LastSequence(), &existing_snapshots_,
         earliest_write_conflict_snapshot_, snapshot_checker_, env_, false,
         false, range_del_agg_ptr, sub_compact->compaction,
-        mutable_cf_options->blob_size,
+        mutable_cf_options->get_blob_config(),
         second_pass_iter_storage.compaction_filter, shutting_down_,
         preserve_deletes_seqnum_);
   };

@@ -156,6 +156,8 @@ ColumnFamilyOptions BuildColumnFamilyOptions(
   cf_opts.disable_auto_compactions =
       mutable_cf_options.disable_auto_compactions;
   cf_opts.blob_size = mutable_cf_options.blob_size;
+  cf_opts.blob_large_key_size = mutable_cf_options.blob_large_key_size;
+  cf_opts.blob_large_key_ratio = mutable_cf_options.blob_large_key_ratio;
   cf_opts.blob_gc_ratio = mutable_cf_options.blob_gc_ratio;
   cf_opts.soft_pending_compaction_bytes_limit =
       mutable_cf_options.soft_pending_compaction_bytes_limit;
@@ -1701,6 +1703,14 @@ std::unordered_map<std::string, OptionTypeInfo>
          {offset_of(&ColumnFamilyOptions::blob_size), OptionType::kSizeT,
           OptionVerificationType::kNormal, true,
           offsetof(struct MutableCFOptions, blob_size)}},
+        {"blob_large_key_size",
+         {offset_of(&ColumnFamilyOptions::blob_large_key_size),
+          OptionType::kSizeT, OptionVerificationType::kNormal, true,
+          offsetof(struct MutableCFOptions, blob_large_key_size)}},
+        {"blob_large_key_ratio",
+         {offset_of(&ColumnFamilyOptions::blob_large_key_ratio),
+          OptionType::kDouble, OptionVerificationType::kNormal, true,
+          offsetof(struct MutableCFOptions, blob_large_key_ratio)}},
         {"blob_gc_ratio",
          {offset_of(&ColumnFamilyOptions::blob_gc_ratio), OptionType::kDouble,
           OptionVerificationType::kNormal, true,

@@ -94,7 +94,7 @@ struct TerarkZipTableOptions {
   uint64_t smallTaskMemory = 1200 << 20;  // 1.2G
   // use dictZip for value when average value length >= minDictZipValueSize
   // otherwise do not use dictZip
-  uint32_t minDictZipValueSize = 15;
+  uint32_t minDictZipValueSize = 32;
   uint32_t keyPrefixLen = 0;  // for IndexID
 
   uint64_t singleIndexMinSize = 8ULL << 20;   // 8M

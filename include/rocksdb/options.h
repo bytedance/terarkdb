@@ -288,12 +288,24 @@ struct ColumnFamilyOptions : public AdvancedColumnFamilyOptions {
   // concurrently perform a compaction job by breaking it into multiple,
   // smaller ones that are run simultaneously.
   // Default: 0 (init from DBOptions::max_subcompactions.)
-  uint32_t max_subcompactions = 0;
+  uint32_t max_subcompactions = 8;
 
-  // Key Value separate blob value size
-  size_t blob_size = size_t(-1);
+  // Don't separate Value if value.size < blob_size
+  // Set size_t(-1) to disable Key Value separation
+  // valid [8 , size_t(-1)]
+  size_t blob_size = 512;
 
-  // Key Value separate gc ratio
+  // Don't separate Value if key.size > blob_large_ley_size
+  // valid [0 , size_t(-1)]
+  size_t blob_large_key_size = 128;
+
+  // Don't separate Value if key.size > value.size * blob_large_ley_ratio
+  // valid [0 , 1]
+  double blob_large_key_ratio = 0.25;
+
+  // Key Value separation gc ratio
+  // Startup GC when garbage ratio larger than blob_gc_ratio
+  // valid [0 , 0.5]
   double blob_gc_ratio = 0.05;
 
   // This is a factory that provides TableFactory objects.

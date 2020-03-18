@@ -352,9 +352,17 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo,
   tzo.singleIndexMaxSize =
       std::min<size_t>(tzo.singleIndexMaxSize, 0x1E0000000);
 
-  cfo.table_factory.reset(NewTerarkZipTableFactory(
-      tzo, std::shared_ptr<TableFactory>(
-               NewAdaptiveTableFactory(cfo.table_factory))));
+  bool use_terark_zip_table = true;
+  if (const char* env = getenv("TerarkZipTable_table_factory")) {
+    if (strcasecmp(env, "default") == 0) {
+      use_terark_zip_table = false;
+    }
+  }
+  if (use_terark_zip_table) {
+    cfo.table_factory.reset(NewTerarkZipTableFactory(
+        tzo, std::shared_ptr<TableFactory>(
+                 NewAdaptiveTableFactory(cfo.table_factory))));
+  }
   if (const char* env = getenv("TerarkZipTable_compaction_style")) {
     if (strcasecmp(env, "Level") == 0) {
       cfo.compaction_style = kCompactionStyleLevel;
@@ -401,6 +409,8 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo,
 
   MyOverrideInt(cfo, max_subcompactions);
   MyOverrideXiB(cfo, blob_size);
+  MyOverrideXiB(cfo, blob_large_key_size);
+  MyOverrideDouble(cfo, blob_large_key_ratio);
   MyOverrideDouble(cfo, blob_gc_ratio);
 
   if (tzo.debugLevel) {

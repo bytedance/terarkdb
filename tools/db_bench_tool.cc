@@ -925,7 +925,12 @@ DEFINE_bool(disable_auto_compactions, false, "Do not auto trigger compactions");
 
 DEFINE_bool(enable_lazy_compaction, true, "Enable map or link compaction");
 
-DEFINE_uint64(blob_size, 0, "Key Value Separate blob size");
+DEFINE_uint64(blob_size, size_t(-1), "Key Value Separate blob size");
+
+DEFINE_uint64(blob_large_key_size, size_t(-1),
+              "Key Value Separate large key size");
+
+DEFINE_double(blob_large_key_ratio, 1, "Key Value Separate large key ratio");
 
 DEFINE_double(blob_gc_ratio, 0.2, "Blob SST gc ratio");
 
@@ -3425,6 +3430,8 @@ void VerifyDBFromDB(std::string& truth_db_name) {
     options.disable_auto_compactions = FLAGS_disable_auto_compactions;
     options.enable_lazy_compaction = FLAGS_enable_lazy_compaction;
     options.blob_size = FLAGS_blob_size;
+    options.blob_large_key_size = FLAGS_blob_large_key_size;
+    options.blob_large_key_ratio = FLAGS_large_key_ratio;
     options.blob_gc_ratio = FLAGS_blob_gc_ratio;
     options.optimize_filters_for_hits = FLAGS_optimize_filters_for_hits;
 
