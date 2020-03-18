@@ -221,9 +221,11 @@ AJSON(CompactionFilterContext, is_full_compaction, is_manual_compaction,
 using NameParam = CompactionWorkerContext::NameParam;
 AJSON(NameParam, name, param);
 
+AJSON(BlobConfig, blob_size, large_key_size, large_key_ratio);
+
 AJSON(CompactionWorkerContext, user_comparator, merge_operator,
       merge_operator_data, compaction_filter, compaction_filter_factory,
-      compaction_filter_context, compaction_filter_data, blob_size,
+      compaction_filter_context, compaction_filter_data, blob_config,
       table_factory, table_factory_options, bloom_locality, cf_paths,
       prefix_extractor, prefix_extractor_options, has_start, has_end, start,
       end, last_sequence, earliest_write_conflict_snapshot,
@@ -414,7 +416,6 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(Slice data) {
       return make_error(Status::Corruption("Missing CompactionFilterFactory!"));
     }
   }
-  cf_options.blob_size = context.blob_size;
   if (context.table_factory.empty()) {
     return make_error(Status::Corruption("Bad table_factory name !"));
   } else {
@@ -672,7 +673,7 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(Slice data) {
       nullptr, env, false, false, &range_del_agg,
       std::unique_ptr<CompactionIterator::CompactionProxy>(
           new RemoteCompactionProxy(&context)),
-      mutable_cf_options.blob_size, compaction_filter, nullptr,
+      context.blob_config, compaction_filter, nullptr,
       context.preserve_deletes_seqnum));
 
   if (start != nullptr) {
@@ -741,7 +742,7 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(Slice data) {
         second_pass_iter_storage.input.get(), &separate_helper, end, ucmp,
         merge_ptr, context.last_sequence, &context.existing_snapshots,
         context.earliest_write_conflict_snapshot, nullptr, env, false, false,
-        range_del_agg_ptr, std::move(compaction), mutable_cf_options.blob_size,
+        range_del_agg_ptr, std::move(compaction), context.blob_config,
         second_pass_iter_storage.compaction_filter, nullptr,
         context.preserve_deletes_seqnum);
   };

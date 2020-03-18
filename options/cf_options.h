@@ -126,6 +126,12 @@ struct ImmutableCFOptions {
   std::vector<DbPath> cf_paths;
 };
 
+struct BlobConfig {
+  size_t blob_size;
+  size_t large_key_size;
+  double large_key_ratio;
+};
+
 struct MutableCFOptions {
   explicit MutableCFOptions(const ColumnFamilyOptions& options)
       : write_buffer_size(options.write_buffer_size),
@@ -141,6 +147,8 @@ struct MutableCFOptions {
         disable_auto_compactions(options.disable_auto_compactions),
         max_subcompactions(options.max_subcompactions),
         blob_size(options.blob_size),
+        blob_large_key_size(options.blob_large_key_size),
+        blob_large_key_ratio(options.blob_large_key_ratio),
         blob_gc_ratio(options.blob_gc_ratio),
         soft_pending_compaction_bytes_limit(
             options.soft_pending_compaction_bytes_limit),
@@ -180,6 +188,8 @@ struct MutableCFOptions {
         disable_auto_compactions(false),
         max_subcompactions(0),
         blob_size(0),
+        blob_large_key_size(0),
+        blob_large_key_ratio(0),
         blob_gc_ratio(0),
         soft_pending_compaction_bytes_limit(0),
         hard_pending_compaction_bytes_limit(0),
@@ -199,6 +209,10 @@ struct MutableCFOptions {
         compression(Snappy_Supported() ? kSnappyCompression : kNoCompression) {}
 
   explicit MutableCFOptions(const Options& options);
+
+  BlobConfig get_blob_config() const {
+    return BlobConfig{ blob_size, blob_large_key_size, blob_large_key_ratio };
+  }
 
   // Must be called after any change to MutableCFOptions
   void RefreshDerivedOptions(int num_levels);
@@ -232,6 +246,8 @@ struct MutableCFOptions {
   bool disable_auto_compactions;
   uint32_t max_subcompactions;
   size_t blob_size;
+  size_t blob_large_key_size;
+  double blob_large_key_ratio;
   double blob_gc_ratio;
   uint64_t soft_pending_compaction_bytes_limit;
   uint64_t hard_pending_compaction_bytes_limit;

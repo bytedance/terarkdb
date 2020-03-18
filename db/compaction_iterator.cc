@@ -113,7 +113,7 @@ CompactionIterator::CompactionIterator(
     const SnapshotChecker* snapshot_checker, Env* env,
     bool report_detailed_time, bool expect_valid_internal_key,
     CompactionRangeDelAggregator* range_del_agg, const Compaction* compaction,
-    size_t blob_size, const CompactionFilter* compaction_filter,
+    BlobConfig blob_config, const CompactionFilter* compaction_filter,
     const std::atomic<bool>* shutting_down,
     const SequenceNumber preserve_deletes_seqnum)
     : CompactionIterator(
@@ -122,7 +122,7 @@ CompactionIterator::CompactionIterator(
           report_detailed_time, expect_valid_internal_key, range_del_agg,
           std::unique_ptr<CompactionProxy>(
               compaction ? new CompactionProxy(compaction) : nullptr),
-          blob_size, compaction_filter, shutting_down,
+          blob_config, compaction_filter, shutting_down,
           preserve_deletes_seqnum) {}
 
 CompactionIterator::CompactionIterator(
@@ -133,7 +133,7 @@ CompactionIterator::CompactionIterator(
     const SnapshotChecker* snapshot_checker, Env* env,
     bool /*report_detailed_time*/, bool expect_valid_internal_key,
     CompactionRangeDelAggregator* range_del_agg,
-    std::unique_ptr<CompactionProxy> compaction, size_t blob_size,
+    std::unique_ptr<CompactionProxy> compaction, BlobConfig blob_config,
     const CompactionFilter* compaction_filter,
     const std::atomic<bool>* shutting_down,
     const SequenceNumber preserve_deletes_seqnum)
@@ -149,7 +149,8 @@ CompactionIterator::CompactionIterator(
       expect_valid_internal_key_(expect_valid_internal_key),
       range_del_agg_(range_del_agg),
       compaction_(std::move(compaction)),
-      blob_size_(blob_size),
+      blob_config_(blob_config),
+      blob_large_key_ratio_lsh16_(blob_config.large_key_ratio * 65536),
       compaction_filter_(compaction_filter),
       shutting_down_(shutting_down),
       preserve_deletes_seqnum_(preserve_deletes_seqnum),
@@ -730,11 +731,18 @@ void CompactionIterator::PrepareOutput() {
   //
   // Can we do the same for levels above bottom level as long as
   // KeyNotExistsBeyondOutputLevel() return true?
-  if (blob_size_ > 0 && value_.file_number() != uint64_t(-1) &&
+  if (blob_config_.blob_size < size_t(-1) &&
+      current_user_key_.size() <= blob_config_.large_key_size &&
+      value_.file_number() != uint64_t(-1) &&
       (ikey_.type == kTypeValue || ikey_.type == kTypeMerge)) {
     auto s = value_.fetch();
     if (s.ok()) {
-      if (value_.size() >= blob_size_) {
+      assert(value_.size() < (1ull << 49));
+      assert(blob_large_key_ratio_lsh16_ < (1ull << 17));
+      // key.size << 16 <= value.size * large_key_ratio_lsh16
+      if (value_.size() >= blob_config_.blob_size &&
+          (current_user_key_.size() << 16) <=
+              value_.size() * blob_large_key_ratio_lsh16_) {
         ikey_.type =
             ikey_.type == kTypeValue ? kTypeValueIndex : kTypeMergeIndex;
         current_key_.UpdateInternalKey(ikey_.sequence, ikey_.type);

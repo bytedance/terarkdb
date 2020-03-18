@@ -150,6 +150,10 @@ void MutableCFOptions::Dump(Logger* log) const {
                  max_subcompactions);
   ROCKS_LOG_INFO(log, "                                blob_size: %zd",
                  blob_size);
+  ROCKS_LOG_INFO(log, "                      blob_large_key_size: %zd",
+                 blob_large_key_size);
+  ROCKS_LOG_INFO(log, "                     blob_large_key_ratio: %f",
+                 blob_large_key_ratio);
   ROCKS_LOG_INFO(log, "                            blob_gc_ratio: %f",
                  blob_gc_ratio);
   ROCKS_LOG_INFO(log, "      soft_pending_compaction_bytes_limit: %" PRIu64,
