@@ -423,6 +423,9 @@ TEST_F(DBCompactionTest, LazyCompactionTest) {
     ASSERT_EQ(db_iter->key(), std::get<0>(*it));
     ASSERT_EQ(db_iter->value(), std::get<2>(*it));
   }
+  for (auto& it : snapshots) {
+    dbfull()->ReleaseSnapshot(it);
+  }
 }
 
 TEST_P(DBCompactionTestWithParam, CompactionsPreserveDeletes) {

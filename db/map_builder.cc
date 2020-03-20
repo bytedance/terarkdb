@@ -536,7 +536,7 @@ class MapSstTombstoneIterator : public InternalIterator {
   size_t list_seq_;
   const InternalKeyComparator& icomp_;
 };
-
+// 更新FileMetaDataBoundBuilder上下边界， 普通文件直接加入ranges， map sst 对每一条kv创建一个map element 加入ranges
 Status LoadRangeWithDepend(std::vector<RangeWithDepend>& ranges, Arena* arena,
                            FileMetaDataBoundBuilder* bound_builder,
                            IteratorCache& iterator_cache,
@@ -615,8 +615,10 @@ Status AdjustRange(const InternalKeyComparator* ic, InternalIterator* iter,
     }
     return ik.Encode();
   };
+  // fix range to (...] and seq_num to kMaxSequenceNumber
   for (auto it = ranges.begin(); it != ranges.end(); ++it) {
     auto range = &*it;
+    // left
     if (range->include[0] ||
         GetInternalKeySeqno(range->point[0]) != kMaxSequenceNumber) {
       range->point[0] = ArenaPinInternalKey(ExtractUserKey(range->point[0]),
@@ -624,6 +626,7 @@ Status AdjustRange(const InternalKeyComparator* ic, InternalIterator* iter,
                                             static_cast<ValueType>(0), arena);
       range->include[0] = false;
     }
+    // right
     if (ic->Compare(range->point[1], largest) >= 0) {
       range->point[1] = largest;
       range->include[1] = true;
@@ -904,6 +907,7 @@ Status LoadDeleteRangeIterImpl(
   return Status::OK();
 };
 
+// 把 f 的RangeTombstoneIterator创建出来并加入到range_del_iter_vec中，对map sst 则对其dependence进行递归加入
 Status LoadDeleteRangeIter(
     const FileMetaData* file_meta, const InternalKeyComparator& ic,
     IteratorCache& iterator_cache,
@@ -1130,7 +1134,7 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
     }
     tombstone_iter.set(builder.Finish());
   }
-  if (build_range_deletion_ranges && !tombstones.empty()) {
+  if (build_range_deletion_ranges && !tombstones.empty() && !level_ranges.empty()) {
     std::vector<RangeWithDepend> ranges;
     auto uc = icomp.user_comparator();
     Slice last_end_key;
@@ -1163,7 +1167,7 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
       }
       last_end_key = ExtractUserKey(ranges.back().point[1]);
     }
-    assert(!level_ranges.empty());
+    // assert(!level_ranges.empty());
     level_ranges.front() = PartitionRangeWithDepend(
         level_ranges.front(), ranges, icomp, PartitionType::kMerge);
   }
@@ -1177,7 +1181,6 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
     ranges = std::move(level_ranges.front());
     level_ranges.clear();
   }
-
   auto edit_add_file = [edit](int level, const FileMetaData* f) {
     // don't call edit->AddFile(level, *f)
     // assert(!file_meta->table_reader_handle);

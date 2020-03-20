@@ -70,6 +70,17 @@ DBOptions SanitizeOptions(const std::string& dbname, const DBOptions& src) {
   result.env->IncBackgroundThreadsIfNeeded(bg_job_limits.max_flushes,
                                            Env::Priority::HIGH);
 
+  // NOT released
+  result.max_task_per_thread = 1;
+  if (result.max_task_per_thread < 1) {
+    result.max_task_per_thread = 1;
+  }
+  if (result.max_task_per_thread > 4) {
+    result.max_task_per_thread = 4;
+  }
+  result.env->SetMaxTaskPerThread(result.max_task_per_thread,
+                                  Env::Priority::LOW);
+
   if (result.rate_limiter.get() != nullptr) {
     if (result.bytes_per_sync == 0) {
       result.bytes_per_sync = 1024 * 1024;
@@ -205,6 +216,22 @@ static Status ValidateOptions(
   if (db_options.db_paths.size() > 4) {
     return Status::NotSupported(
         "More than four DB paths are not supported yet. ");
+  }
+
+  if (db_options.max_task_per_thread != 1) {
+    return Status::InvalidArgument("NOT released");
+  }
+
+  if (db_options.max_task_per_thread > 4 ||
+      db_options.max_task_per_thread < 1) {
+    return Status::InvalidArgument(
+        "Invalid max_task_per_thread. Should be [1 , 4]");
+  }
+
+  if (!db_options.use_aio_reads && db_options.max_task_per_thread != 1) {
+    return Status::NotSupported(
+        "If async I/O reads (use_aio_reads) are disable "
+        "then max task pre thread (max_task_per_thread) must be 1. ");
   }
 
   if (db_options.allow_mmap_reads && db_options.use_direct_reads) {

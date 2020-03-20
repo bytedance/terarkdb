@@ -46,7 +46,8 @@ struct ThreadPoolImpl::Impl {
 
   void JoinThreads(bool wait_for_jobs_to_complete);
 
-  void SetBackgroundThreadsInternal(int num, bool allow_reduce);
+  void SetBackgroundThreadsInternal(int num, bool allow_reduce,
+                                    int max_task_per_thread);
   int GetBackgroundThreads();
 
   unsigned int GetQueueLen() const {
@@ -123,6 +124,13 @@ private:
   std::mutex               mu_;
   std::condition_variable  bgsignal_;
   std::vector<port::Thread> bgthreads_;
+  // parameter for fiber
+  std::atomic_int max_task_per_thread_{1};
+  std::atomic_int total_task_{0};
+  
+  std::chrono::milliseconds wait_interval_{10};
+  std::chrono::milliseconds wait_zero_{0};
+  int wait_time_us_ = 1000;
 };
 
 
@@ -186,49 +194,64 @@ void ThreadPoolImpl::Impl::LowerCPUPriority() {
 void ThreadPoolImpl::Impl::BGThread(size_t thread_id) {
   bool low_io_priority = false;
   bool low_cpu_priority = false;
-
+  int current_task = 0;
+  auto on_thread_exit = [&] {
+    if (current_task > 0) {
+      ssize_t n = DB::WaitAsync();
+      assert(n == current_task);
+      current_task -= n;
+      total_task_ -= int(n);
+    }
+  };
   while (true) {
-    // Wait until there is an item that is ready to run
-    std::unique_lock<std::mutex> lock(mu_);
-    // Stop waiting if the thread needs to do work or needs to terminate.
-    while (!exit_all_threads_ && !IsLastExcessiveThread(thread_id) &&
-           (queue_.empty() || IsExcessiveThread(thread_id))) {
-      bgsignal_.wait(lock);
-    }
+    BGItem item;
+    bool decrease_io_priority = false;
+    bool decrease_cpu_priority = false;
+    if (current_task < max_task_per_thread_) {
+      std::unique_lock<std::mutex> lock(mu_);
+      auto should_pop_task = [&] {
+        int balanced_max_task =
+            total_task_ / std::max<size_t>(1, bgthreads_.size()) + 2;
+        return !queue_.empty() && current_task < balanced_max_task &&
+               !IsExcessiveThread(thread_id);
+      };
+      if (bgsignal_.wait_for(
+              lock, current_task == 0 ? wait_interval_ : wait_zero_, [&] {
+                assert(!bgthreads_.empty());
+                return should_pop_task() || exit_all_threads_ ||
+                       IsLastExcessiveThread(thread_id);
+              })) {
+        if (exit_all_threads_) {  // mechanism to let BG threads exit safely
+          if (!wait_for_jobs_to_complete_ || queue_.empty()) {
+            on_thread_exit();
+            break;
+          }
+        }
+        if (IsLastExcessiveThread(thread_id)) {
+          // Current thread is the last generated one and is excessive.
+          // We always terminate excessive thread in the reverse order of
+          // generation time.
+          on_thread_exit();
 
-    if (exit_all_threads_) {  // mechanism to let BG threads exit safely
+          auto& terminating_thread = bgthreads_.back();
+          terminating_thread.detach();
+          bgthreads_.pop_back();
 
-      if (!wait_for_jobs_to_complete_ ||
-          queue_.empty()) {
-        break;
-       }
-    }
-
-    if (IsLastExcessiveThread(thread_id)) {
-      // Current thread is the last generated one and is excessive.
-      // We always terminate excessive thread in the reverse order of
-      // generation time.
-      auto& terminating_thread = bgthreads_.back();
-      terminating_thread.detach();
-      bgthreads_.pop_back();
-
-      if (HasExcessiveThread()) {
-        // There is still at least more excessive thread to terminate.
-        WakeUpAllThreads();
+          if (HasExcessiveThread()) {
+            WakeUpAllThreads();
+          }
+          break;
+        }
+        if (should_pop_task()) {
+          item = std::move(queue_.front());
+          queue_.pop_front();
+          queue_len_.store(static_cast<unsigned int>(queue_.size()),
+                           std::memory_order_relaxed);
+        }
+        decrease_io_priority = (low_io_priority != low_io_priority_);
+        decrease_cpu_priority = (low_cpu_priority != low_cpu_priority_);
       }
-      break;
     }
-
-    auto func = std::move(queue_.front().function);
-    queue_.pop_front();
-
-    queue_len_.store(static_cast<unsigned int>(queue_.size()),
-                     std::memory_order_relaxed);
-
-    bool decrease_io_priority = (low_io_priority != low_io_priority_);
-    bool decrease_cpu_priority = (low_cpu_priority != low_cpu_priority_);
-    lock.unlock();
-
 #ifdef OS_LINUX
     if (decrease_cpu_priority) {
       setpriority(
@@ -262,7 +285,32 @@ void ThreadPoolImpl::Impl::BGThread(size_t thread_id) {
     (void)decrease_io_priority;  // avoid 'unused variable' error
     (void)decrease_cpu_priority;
 #endif
-    func();
+    if (item.function) {
+      if (current_task == 0 && max_task_per_thread_ == 1) {
+        item.function();
+      } else if (DB::TrySubmitAsyncTask(item.function)) {
+        ++current_task;
+        ++total_task_;
+      } else {
+        std::unique_lock<std::mutex> lock(mu_);
+        queue_.push_front(std::move(item));
+        queue_len_.store(static_cast<unsigned int>(queue_.size()),
+                         std::memory_order_relaxed);
+      }
+    }
+    if (current_task > 0) {
+      ssize_t n = DB::WaitAsync(wait_time_us_);
+      if (n > 0) {
+        assert(n == current_task);
+        current_task -= n;
+        total_task_ -= int(n);
+      } else if (n < -1) {
+        current_task -= ~n;
+        total_task_ -= int(~n);
+      } else {
+        assert(n != 0);
+      }
+    }
   }
 }
 
@@ -307,15 +355,19 @@ void* ThreadPoolImpl::Impl::BGThreadWrapper(void* arg) {
   return nullptr;
 }
 
-void ThreadPoolImpl::Impl::SetBackgroundThreadsInternal(int num,
-  bool allow_reduce) {
+void ThreadPoolImpl::Impl::SetBackgroundThreadsInternal(
+    int num, bool allow_reduce, int max_task_per_thread) {
   std::unique_lock<std::mutex> lock(mu_);
   if (exit_all_threads_) {
     lock.unlock();
     return;
   }
-  if (num > total_threads_limit_ ||
-      (num < total_threads_limit_ && allow_reduce)) {
+  if (max_task_per_thread > 0) {
+    // NOT released
+    //max_task_per_thread_ = max_task_per_thread;
+  }
+  if (num >= 0 && (num > total_threads_limit_ ||
+                  (num < total_threads_limit_ && allow_reduce))) {
     total_threads_limit_ = std::max(0, num);
     WakeUpAllThreads();
     StartBGThreads();
@@ -429,8 +481,8 @@ void ThreadPoolImpl::JoinAllThreads() {
   impl_->JoinThreads(false);
 }
 
-void ThreadPoolImpl::SetBackgroundThreads(int num) {
-  impl_->SetBackgroundThreadsInternal(num, true);
+void ThreadPoolImpl::SetBackgroundThreads(int num, int max_task_per_thread) {
+  impl_->SetBackgroundThreadsInternal(num, true, max_task_per_thread);
 }
 
 int ThreadPoolImpl::GetBackgroundThreads() {
@@ -454,7 +506,7 @@ void ThreadPoolImpl::LowerCPUPriority() {
 }
 
 void ThreadPoolImpl::IncBackgroundThreadsIfNeeded(int num) {
-  impl_->SetBackgroundThreadsInternal(num, false);
+  impl_->SetBackgroundThreadsInternal(num, false, 0);
 }
 
 void ThreadPoolImpl::SubmitJob(const std::function<void()>& job) {
@@ -498,7 +550,7 @@ void ThreadPoolImpl::SetThreadPriority(Env::Priority priority) {
 
 ThreadPool* NewThreadPool(int num_threads) {
   ThreadPoolImpl* thread_pool = new ThreadPoolImpl();
-  thread_pool->SetBackgroundThreads(num_threads);
+  thread_pool->SetBackgroundThreads(num_threads, 0);
   return thread_pool;
 }
 

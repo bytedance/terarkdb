@@ -585,4 +585,11 @@ void TableCache::Evict(Cache* cache, uint64_t file_number) {
   cache->Erase(GetSliceForFileNumber(&file_number));
 }
 
+void TableCache::TEST_AddMockTableReader(TableReader* table_reader, FileDescriptor fd) {
+  Status s;
+  uint64_t number = fd.GetNumber();
+  Slice key = GetSliceForFileNumber(&number);
+  s = cache_->Insert(key, table_reader, 1, &DeleteEntry<TableReader>);
+}
+
 }  // namespace rocksdb

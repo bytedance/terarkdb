@@ -2472,6 +2472,12 @@ void rocksdb_options_set_max_background_jobs(rocksdb_options_t* opt, int n) {
   opt->rep.max_background_jobs = n;
 }
 
+void rocksdb_options_set_max_task_per_thread(rocksdb_options_t* opt, int n) {
+  // NOT released
+  n = 1;
+  opt->rep.max_task_per_thread = n;
+}
+
 void rocksdb_options_set_max_background_compactions(rocksdb_options_t* opt, int n) {
   opt->rep.max_background_compactions = n;
 }

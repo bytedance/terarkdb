@@ -947,19 +947,21 @@ Status DBImpl::CompactFilesImpl(
       snapshot_checker, table_cache_, &event_logger_,
       c->mutable_cf_options()->paranoid_file_checks,
       c->mutable_cf_options()->report_bg_io_stats, dbname_,
-      nullptr);  // Here we pass a nullptr for CompactionJobStats because
-                 // CompactFiles does not trigger OnCompactionCompleted(),
-                 // which is the only place where CompactionJobStats is
-                 // returned.  The idea of not triggering OnCompationCompleted()
-                 // is that CompactFiles runs in the caller thread, so the user
-                 // should always know when it completes.  As a result, it makes
-                 // less sense to notify the users something they should already
-                 // know.
-                 //
-                 // In the future, if we would like to add CompactionJobStats
-                 // support for CompactFiles, we should have CompactFiles API
-                 // pass a pointer of CompactionJobStats as the out-value
-                 // instead of using EventListener.
+      nullptr /* compaction_job_stats */,
+      mutable_db_options_.max_task_per_thread);
+  // Here we pass a nullptr for CompactionJobStats because
+  // CompactFiles does not trigger OnCompactionCompleted(),
+  // which is the only place where CompactionJobStats is
+  // returned.  The idea of not triggering OnCompationCompleted()
+  // is that CompactFiles runs in the caller thread, so the user
+  // should always know when it completes.  As a result, it makes
+  // less sense to notify the users something they should already
+  // know.
+  //
+  // In the future, if we would like to add CompactionJobStats
+  // support for CompactFiles, we should have CompactFiles API
+  // pass a pointer of CompactionJobStats as the out-value
+  // instead of using EventListener.
 
   // Creating a compaction influences the compaction score because the score
   // takes running compactions into account (by skipping files that are already
@@ -1841,7 +1843,8 @@ void DBImpl::MaybeScheduleFlushOrCompaction() {
   }
 
   while (bg_garbage_collection_scheduled_ <
-             bg_job_limits.max_garbage_collections &&
+             bg_job_limits.max_garbage_collections *
+                 mutable_db_options_.max_task_per_thread &&
          unscheduled_garbage_collections_ > 0) {
     CompactionArg* ca = new CompactionArg;
     ca->db = this;
@@ -1860,7 +1863,9 @@ void DBImpl::MaybeScheduleFlushOrCompaction() {
     return;
   }
 
-  while (bg_compaction_scheduled_ < bg_job_limits.max_compactions &&
+  while (bg_compaction_scheduled_ <
+             bg_job_limits.max_compactions *
+                 mutable_db_options_.max_task_per_thread &&
          unscheduled_compactions_ > 0) {
     CompactionArg* ca = new CompactionArg;
     ca->db = this;
@@ -1923,7 +1928,9 @@ int DBImpl::GetSubCompactionSlots(uint32_t max_subcompactions) {
                      mutable_db_options_.max_background_garbage_collections,
                      mutable_db_options_.max_background_jobs,
                      true /* parallelize_compactions */);
-  int slots = bg_job_limits.max_compactions - bg_compaction_scheduled_ - 1;
+  int slots =
+      bg_job_limits.max_compactions * mutable_db_options_.max_task_per_thread -
+      bg_compaction_scheduled_ - 1;
   // max_subcompactions == 0 ? slots : min(max_subcompactions - 1, slots)
   return (int)std::min(max_subcompactions - 1, uint32_t(std::max(0, slots)));
 }
@@ -2762,7 +2769,7 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
         earliest_write_conflict_snapshot, snapshot_checker, table_cache_,
         &event_logger_, c->mutable_cf_options()->paranoid_file_checks,
         c->mutable_cf_options()->report_bg_io_stats, dbname_,
-        &compaction_job_stats);
+        &compaction_job_stats, mutable_db_options_.max_task_per_thread);
     int sub_compaction_scheduled =
         compaction_job.Prepare(GetSubCompactionSlots(c->max_subcompactions()));
     bg_compaction_scheduled_ += sub_compaction_scheduled;
@@ -2983,7 +2990,7 @@ Status DBImpl::BackgroundGarbageCollection(bool* made_progress,
         earliest_write_conflict_snapshot, snapshot_checker, table_cache_,
         &event_logger_, c->mutable_cf_options()->paranoid_file_checks,
         c->mutable_cf_options()->report_bg_io_stats, dbname_,
-        &garbage_collection_job_stats);
+        &garbage_collection_job_stats, mutable_db_options_.max_task_per_thread);
     garbage_collection_job.Prepare(0 /* sub_compaction_slots */);
     NotifyOnCompactionBegin(c->column_family_data(), c.get(), status,
                             garbage_collection_job_stats, job_context->job_id);

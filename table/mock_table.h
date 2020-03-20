@@ -37,7 +37,13 @@ struct MockTableFileSystem {
 
 class MockTableReader : public TableReader {
  public:
-  explicit MockTableReader(const stl_wrappers::KVMap& table) : table_(table) {}
+  explicit MockTableReader(const stl_wrappers::KVMap& table)
+    : table_(table),
+      range_delete_table_(table) {}
+
+  MockTableReader(const stl_wrappers::KVMap& table, const stl_wrappers::KVMap& range_delete_table)
+    : table_(table),
+      range_delete_table_(range_delete_table) {}
 
   InternalIterator* NewIterator(const ReadOptions&,
                                 const SliceTransform* prefix_extractor,
@@ -59,10 +65,14 @@ class MockTableReader : public TableReader {
 
   std::shared_ptr<const TableProperties> GetTableProperties() const override;
 
+  FragmentedRangeTombstoneIterator* NewRangeTombstoneIterator(
+     const ReadOptions& /*read_options*/) override;
+
   ~MockTableReader() {}
 
  private:
   const stl_wrappers::KVMap& table_;
+  const stl_wrappers::KVMap& range_delete_table_;
 };
 
 class MockTableIterator : public InternalIterator {

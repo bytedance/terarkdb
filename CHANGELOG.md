@@ -1,6 +1,20 @@
 
 ## CHANGELOG
 
+- 版本号：v1.2.4
+- 日期：2020-03-19
+- 发版说明：
+  - 计划内例行发版
+- 功能变更：
+  - 丰富 Key Value 分离相关配置
+- 修复问题：
+  - 修复 checksum level 为 2 时启动过慢的问题
+- 已知问题：
+  - 从 RocksDB 迁移，若使用了 RangeDeletion，有可能丢失部分数据
+    - 未使用 RangeDeletion 则不受影响
+    - 实现方式有差异，未做完兼容。整库 Compact 消除 RangeDeletion 后迁移即可
+  - 极低概率后台 Compact 触发异常导致 Write 失败，如果出现请保留现场，联系@zhaoming.274
+
 - 版本号：v1.2.3
 - 日期：2020-03-05
 - 发版说明：

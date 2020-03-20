@@ -16,7 +16,7 @@ def my_check_output(*popenargs, **kwargs):
     if 'stdout' in kwargs:
         raise ValueError('stdout argument not allowed, it will be overridden.')
     process = subprocess.Popen(stderr=subprocess.PIPE, stdout=subprocess.PIPE,
-                               *popenargs, **kwargs)
+                                close_fds=True, *popenargs, **kwargs)
     output, unused_err = process.communicate()
     retcode = process.poll()
     if retcode:

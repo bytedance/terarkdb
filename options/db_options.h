@@ -93,6 +93,7 @@ struct MutableDBOptions {
   void Dump(Logger* log) const;
 
   int max_background_jobs;
+  int max_task_per_thread;
   int base_background_compactions;
   int max_background_compactions;
   int max_background_garbage_collections;

@@ -865,9 +865,13 @@ Compaction* CompactionPicker::PickGarbageCollection(
   // Sorting by ratio decreasing.
   terark::sort_a(gc_files, TERARK_CMP(score, >));
 
-  // Return nullptr if nothing to do.
+  // Return nullptr if
+  //   1. Got empty section.
+  //   2. Score lower than setting ratio.
+  //   3. Only one small file were selected.
   if (gc_files.empty() ||
-      gc_files.front().score < mutable_cf_options.blob_gc_ratio) {
+      gc_files.front().score < mutable_cf_options.blob_gc_ratio ||
+      (gc_files.size() == 1 && gc_files[0].f->fd.file_size <= fragment_size)) {
     return nullptr;
   }
 

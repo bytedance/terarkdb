@@ -912,6 +912,8 @@ Status DBImpl::SetDBOptions(
     s = GetMutableDBOptionsFromStrings(mutable_db_options_, options_map,
                                        &new_options);
     if (s.ok()) {
+      // NOT released
+      new_options.max_task_per_thread = 1;
       auto bg_job_limits = DBImpl::GetBGJobLimits(
           immutable_db_options_.max_background_flushes,
           new_options.max_background_compactions,
@@ -927,6 +929,8 @@ Status DBImpl::SetDBOptions(
                                            Env::Priority::HIGH);
         MaybeScheduleFlushOrCompaction();
       }
+      env_->SetMaxTaskPerThread(new_options.max_task_per_thread,
+                                Env::Priority::LOW);
       if (new_options.stats_dump_period_sec !=
           mutable_db_options_.stats_dump_period_sec) {
         if (thread_dump_stats_) {
@@ -1459,6 +1463,7 @@ Status DBImpl::GetImpl(const ReadOptions& read_options,
 
 struct SimpleFiberTls {
   static constexpr intptr_t MAX_QUEUE_LEN = 256;
+  static constexpr intptr_t DEFAULT_FIBER_CNT = 8;
   typedef std::function<void()> task_t;
   intptr_t fiber_count = 0;
   intptr_t pending_count = 0;
@@ -1466,14 +1471,19 @@ struct SimpleFiberTls {
   boost::fibers::buffered_channel<task_t> channel;
 
   SimpleFiberTls(boost::fibers::context** activepp)
-      : m_fy(activepp), channel(MAX_QUEUE_LEN) {}
+      : m_fy(activepp), channel(MAX_QUEUE_LEN)
+  {
+    update_fiber_count(DEFAULT_FIBER_CNT);
+  }
 
   void update_fiber_count(intptr_t count) {
-    count = std::max<intptr_t>(count, 1);
+    if (count <= 0) {
+      return;
+    }
     count = std::min<intptr_t>(count, +MAX_QUEUE_LEN);
-    using namespace boost::fibers;
+    using boost::fibers::channel_op_status;
     for (intptr_t i = fiber_count; i < count; ++i) {
-      fiber([this, i]() {
+      boost::fibers::fiber([this, i]() {
         task_t task;
         while (i < fiber_count &&
                channel.pop(task) == channel_op_status::success) {
@@ -3129,7 +3139,7 @@ void DB::SubmitAsyncTask(std::function<void()> fn) {
 void DB::SubmitAsyncTask(std::function<void()> fn, size_t aio_concurrency) {
   auto tls = &gt_fibers;
   tls->update_fiber_count(aio_concurrency);
-  gt_fibers.push(std::move(fn));
+  tls->push(std::move(fn));
 }
 
 bool DB::TrySubmitAsyncTask(const std::function<void()>& fn) {

@@ -10,6 +10,7 @@
 #include "util/logging.h"
 
 namespace rocksdb {
+#ifdef TERARKDB_ENABLE_METRICS
 static std::mutex metrics_mtx;
 static std::atomic<bool> metrics_init{false};
 static const char default_namespace[] = "terarkdb.engine.stats";
@@ -45,6 +46,7 @@ static int GetThreadID() {
   }
   return id;
 }
+#endif
 
 #ifdef TERARKDB_ENABLE_METRICS
 void ByteDanceHistReporterHandle::AddRecord(size_t val) {
@@ -103,6 +105,7 @@ void ByteDanceHistReporterHandle::AddRecord(size_t) {}
 #endif
 
 HistStats<>* ByteDanceHistReporterHandle::GetThreadLocalStats() {
+#ifdef TERARKDB_ENABLE_METRICS
   auto id = GetThreadID();
   if (id == -1) {
     return nullptr;
@@ -112,6 +115,9 @@ HistStats<>* ByteDanceHistReporterHandle::GetThreadLocalStats() {
     s = new HistStats<>;
   }
   return s;
+#else
+  return nullptr;
+#endif
 }
 
 #ifdef TERARKDB_ENABLE_METRICS
@@ -151,13 +157,21 @@ void ByteDanceCountReporterHandle::AddCount(size_t) {}
 #endif
 
 ByteDanceMetricsReporterFactory::ByteDanceMetricsReporterFactory() {
+#ifdef TERARKDB_ENABLE_METRICS
   InitNamespace(default_namespace);
+#endif
 }
 
+#ifdef TERARKDB_ENABLE_METRICS
 ByteDanceMetricsReporterFactory::ByteDanceMetricsReporterFactory(
     const std::string& ns) {
   InitNamespace(ns);
 }
+#else
+ByteDanceMetricsReporterFactory::ByteDanceMetricsReporterFactory(
+    const std::string& /*ns*/) {
+}
+#endif
 
 #ifdef TERARKDB_ENABLE_METRICS
 void ByteDanceMetricsReporterFactory::InitNamespace(const std::string& ns) {
@@ -175,13 +189,21 @@ void ByteDanceMetricsReporterFactory::InitNamespace(const std::string& ns) {
 void ByteDanceMetricsReporterFactory::InitNamespace(const std::string&) {}
 #endif
 
+#ifdef TERARKDB_ENABLE_METRICS
 ByteDanceHistReporterHandle* ByteDanceMetricsReporterFactory::BuildHistReporter(
     const std::string& name, const std::string& tags, Logger* log) {
   std::lock_guard<std::mutex> guard(metrics_mtx);
   hist_reporters_.emplace_back(name, tags, log);
   return &hist_reporters_.back();
 }
+#else
+ByteDanceHistReporterHandle* ByteDanceMetricsReporterFactory::BuildHistReporter(
+    const std::string& /*name*/, const std::string& /*tags*/, Logger* /*log*/) {
+  return nullptr;
+}
+#endif
 
+#ifdef TERARKDB_ENABLE_METRICS
 ByteDanceCountReporterHandle*
 ByteDanceMetricsReporterFactory::BuildCountReporter(const std::string& name,
                                                     const std::string& tags,
@@ -190,4 +212,12 @@ ByteDanceMetricsReporterFactory::BuildCountReporter(const std::string& name,
   count_reporters_.emplace_back(name, tags, log);
   return &count_reporters_.back();
 }
+#else
+ByteDanceCountReporterHandle*
+ByteDanceMetricsReporterFactory::BuildCountReporter(const std::string& /*name*/,
+                                                    const std::string& /*tags*/,
+                                                    Logger* /*log*/) {
+  return nullptr;
+}
+#endif
 }  // namespace rocksdb

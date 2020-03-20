@@ -134,6 +134,8 @@ class TableCache {
     }
   }
 
+  void TEST_AddMockTableReader(TableReader* table_reader, FileDescriptor fd);
+
  private:
   // Build a table reader
   Status GetTableReader(const EnvOptions& env_options,

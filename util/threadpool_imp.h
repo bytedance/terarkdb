@@ -35,7 +35,7 @@ class ThreadPoolImpl : public ThreadPool {
 
   // Set the number of background threads that will be executing the
   // scheduled jobs.
-  void SetBackgroundThreads(int num) override;
+  void SetBackgroundThreads(int num, int max_task_per_thread) override;
   int GetBackgroundThreads() override;
 
   // Get the number of jobs scheduled in the ThreadPool queue.

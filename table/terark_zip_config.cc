@@ -446,6 +446,7 @@ void TerarkZipDBOptionsFromEnv(DBOptions& dbo) {
 
   TerarkZipAutoConfigForOnlineDB_DBOptions(dbo, 0);
 
+  MyOverrideInt(dbo, max_task_per_thread);
   MyOverrideInt(dbo, max_background_flushes);
   MyOverrideInt(dbo, max_background_compactions);
   MyOverrideInt(dbo, max_background_garbage_collections);
@@ -460,6 +461,7 @@ void TerarkZipDBOptionsFromEnv(DBOptions& dbo) {
       dbo.max_background_compactions + dbo.max_background_garbage_collections,
       rocksdb::Env::LOW);
   dbo.env->SetBackgroundThreads(dbo.max_background_flushes, rocksdb::Env::HIGH);
+  dbo.env->SetMaxTaskPerThread(dbo.max_task_per_thread, rocksdb::Env::LOW);
 }
 
 class TerarkBlackListCF : public terark::hash_strmap<> {
