@@ -2504,7 +2504,9 @@ Compaction* LevelCompactionBuilder::PickLazyCompaction(
     sorted_runs[1].skip_composite = true;
   }
 
-  size_t base_size = mutable_cf_options_.write_buffer_size;
+  size_t target_file_size_base = mutable_cf_options_.target_file_size_base;
+  size_t base_size = mutable_cf_options_.write_buffer_size *
+                     mutable_cf_options_.level0_file_num_compaction_trigger;
   auto get_q = [&] {
     std::vector<double> level_ratio(vstorage_->num_levels() - 1);
     auto base_size_real = double(base_size);
@@ -2682,7 +2684,7 @@ Compaction* LevelCompactionBuilder::PickLazyCompaction(
         entry_num -= queue_start->estimate_entry_num;
         del_num -= queue_start->estimate_del_num;
         ++queue_start;
-        if (src_size > base_size) {
+        if (src_size > target_file_size_base) {
           fn_new_section();
         }
       };
@@ -2693,7 +2695,7 @@ Compaction* LevelCompactionBuilder::PickLazyCompaction(
         while (src_size < pick_size && queue_limit != queue_end) {
           fn_step_right();
         }
-        while (src_size >= base_size) {
+        while (src_size >= target_file_size_base) {
           fn_step_left();
         }
       } while (queue_limit != queue_end);
@@ -2818,8 +2820,9 @@ Compaction* LevelCompactionBuilder::PickLazyCompaction(
       sorted_runs[i + 1].skip_composite = true;
       continue;
     }
-    uint64_t pick_size = base_size;
-    double diff_size = double(sorted_runs[i].size) - level_size + base_size / 2;
+    uint64_t pick_size = target_file_size_base;
+    double diff_size =
+        double(sorted_runs[i].size) - level_size + target_file_size_base / 2;
     if (diff_size > double(pick_size)) {
       pick_size = uint64_t(diff_size);
     }
