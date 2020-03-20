@@ -6,7 +6,7 @@
 #pragma once
 
 #include "monitoring/statistics.h"
-#include "port/port.h"
+#include <boost/fiber/all.hpp>
 #include "rocksdb/env.h"
 #include "rocksdb/statistics.h"
 #include "rocksdb/thread_status.h"
@@ -19,30 +19,30 @@ class InstrumentedCondVar;
 // for collecting stats and instrumentation.
 class InstrumentedMutex {
  public:
-  explicit InstrumentedMutex(bool adaptive = false)
-      : mutex_(adaptive), stats_(nullptr), env_(nullptr),
+  explicit InstrumentedMutex(bool /*adaptive*/ = false)
+      : mutex_(), stats_(nullptr), env_(nullptr),
         stats_code_(0) {}
 
   InstrumentedMutex(
       Statistics* stats, Env* env,
-      int stats_code, bool adaptive = false)
-      : mutex_(adaptive), stats_(stats), env_(env),
+      int stats_code, bool /*adaptive*/ = false)
+      : mutex_(), stats_(stats), env_(env),
         stats_code_(stats_code) {}
 
   void Lock();
 
   void Unlock() {
-    mutex_.Unlock();
+    mutex_.unlock();
   }
 
   void AssertHeld() {
-    mutex_.AssertHeld();
+    assert(!mutex_.try_lock());
   }
 
  private:
   void LockInternal();
   friend class InstrumentedCondVar;
-  port::Mutex mutex_;
+  boost::fibers::mutex mutex_;
   Statistics* stats_;
   Env* env_;
   int stats_code_;
@@ -69,7 +69,8 @@ class InstrumentedMutexLock {
 class InstrumentedCondVar {
  public:
   explicit InstrumentedCondVar(InstrumentedMutex* instrumented_mutex)
-      : cond_(&(instrumented_mutex->mutex_)),
+      : cond_(),
+        mutex_(&instrumented_mutex->mutex_),
         stats_(instrumented_mutex->stats_),
         env_(instrumented_mutex->env_),
         stats_code_(instrumented_mutex->stats_code_) {}
@@ -79,17 +80,18 @@ class InstrumentedCondVar {
   bool TimedWait(uint64_t abs_time_us);
 
   void Signal() {
-    cond_.Signal();
+    cond_.notify_one();
   }
 
   void SignalAll() {
-    cond_.SignalAll();
+    cond_.notify_all();
   }
 
  private:
   void WaitInternal();
   bool TimedWaitInternal(uint64_t abs_time_us);
-  port::CondVar cond_;
+  boost::fibers::condition_variable cond_;
+  boost::fibers::mutex* mutex_;
   Statistics* stats_;
   Env* env_;
   int stats_code_;

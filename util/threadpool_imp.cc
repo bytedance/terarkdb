@@ -363,8 +363,7 @@ void ThreadPoolImpl::Impl::SetBackgroundThreadsInternal(
     return;
   }
   if (max_task_per_thread > 0) {
-    // NOT released
-    //max_task_per_thread_ = max_task_per_thread;
+    max_task_per_thread_ = max_task_per_thread;
   }
   if (num >= 0 && (num > total_threads_limit_ ||
                   (num < total_threads_limit_ && allow_reduce))) {

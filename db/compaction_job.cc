@@ -1332,8 +1332,7 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
   size_t yield_count = 0;
   while (status.ok() && !cfd->IsDropped() && c_iter->Valid()) {
     if (max_task_per_thread_ > 1 && ++yield_count % 128 == 0) {
-      // NOT released
-      //boost::this_fiber::yield();
+      boost::this_fiber::yield();
     }
     // Invariant: c_iter.status() is guaranteed to be OK if c_iter->Valid()
     // returns true.
@@ -1652,8 +1651,7 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
   while (status.ok() && !cfd->IsDropped() && input->Valid()) {
     ++counter.input;
     if (max_task_per_thread_ > 1 && counter.input % 32 == 0) {
-      // NOT released
-      //boost::this_fiber::yield();
+      boost::this_fiber::yield();
     }
     Slice curr_key = input->key();
     uint64_t curr_file_number = uint64_t(-1);

@@ -70,8 +70,6 @@ DBOptions SanitizeOptions(const std::string& dbname, const DBOptions& src) {
   result.env->IncBackgroundThreadsIfNeeded(bg_job_limits.max_flushes,
                                            Env::Priority::HIGH);
 
-  // NOT released
-  result.max_task_per_thread = 1;
   if (result.max_task_per_thread < 1) {
     result.max_task_per_thread = 1;
   }
@@ -216,10 +214,6 @@ static Status ValidateOptions(
   if (db_options.db_paths.size() > 4) {
     return Status::NotSupported(
         "More than four DB paths are not supported yet. ");
-  }
-
-  if (db_options.max_task_per_thread != 1) {
-    return Status::InvalidArgument("NOT released");
   }
 
   if (db_options.max_task_per_thread > 4 ||
