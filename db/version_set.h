@@ -1072,6 +1072,12 @@ class VersionSet {
 
   static uint64_t GetTotalSstFilesSize(Version* dummy_versions);
 
+  ColumnFamilyData* TEST_CreateColumnFamily(const ColumnFamilyOptions& cf_options,
+                                       VersionEdit* edit) {
+      return CreateColumnFamily(cf_options, edit);
+  }
+
+
  private:
   struct ManifestWriter;
 

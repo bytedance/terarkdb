@@ -71,7 +71,8 @@ class CompactionJob {
                 std::shared_ptr<Cache> table_cache, EventLogger* event_logger,
                 bool paranoid_file_checks, bool measure_io_stats,
                 const std::string& dbname,
-                CompactionJobStats* compaction_job_stats);
+                CompactionJobStats* compaction_job_stats,
+                int max_task_per_thread);
 
   ~CompactionJob();
 
@@ -181,6 +182,7 @@ class CompactionJob {
   bool bottommost_level_;
   bool paranoid_file_checks_;
   bool measure_io_stats_;
+  int max_task_per_thread_;
   // Stores the Slices that designate the boundaries for each subcompaction
   std::vector<Slice> boundaries_;
   // Stores the approx size of keys covered in the range of each subcompaction

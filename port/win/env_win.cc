@@ -1239,6 +1239,12 @@ int WinEnvThreads::GetBackgroundThreads(Env::Priority pri) {
   return thread_pools_[pri].GetBackgroundThreads();
 }
 
+void WinEnvThreads::SetMaxTaskPerThread(int max_task_per_thread,
+                                        Env::Priority pri) {
+  assert(pri >= Env::Priority::BOTTOM && pri <= Env::Priority::HIGH);
+  thread_pools_[pri].SetBackgroundThreads(-1, max_task_per_thread);
+}
+
 void WinEnvThreads::IncBackgroundThreadsIfNeeded(int num, Env::Priority pri) {
   assert(pri >= Env::Priority::BOTTOM && pri <= Env::Priority::HIGH);
   thread_pools_[pri].IncBackgroundThreadsIfNeeded(num);
@@ -1441,6 +1447,10 @@ void  WinEnv::SetBackgroundThreads(int num, Env::Priority pri) {
 
 int WinEnv::GetBackgroundThreads(Env::Priority pri) {
   return winenv_threads_.GetBackgroundThreads(pri);
+}
+
+void WinEnv::SetMaxTaskPerThread(int max_task_per_thread, Env::Priority pri) {
+  return winenv_threads_.SetMaxTaskPerThread(max_task_per_thread, pri);
 }
 
 void  WinEnv::IncBackgroundThreadsIfNeeded(int num, Env::Priority pri) {

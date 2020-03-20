@@ -28,8 +28,13 @@ stl_wrappers::KVMap MakeMockFile(
 
 InternalIterator* MockTableReader::NewIterator(
     const ReadOptions&, const SliceTransform* /* prefix_extractor */,
-    Arena* /*arena*/, bool /*skip_filters*/, bool /*for_compaction*/) {
-  return new MockTableIterator(table_);
+    Arena* arena, bool /*skip_filters*/, bool /*for_compaction*/) {
+  if (arena == nullptr) {
+    return new MockTableIterator(table_);
+  } else {
+    return new (arena->AllocateAligned(sizeof(MockTableIterator)))
+        MockTableIterator(table_);
+  }
 }
 
 Status MockTableReader::Get(const ReadOptions&, const Slice& key,
@@ -58,6 +63,26 @@ std::shared_ptr<const TableProperties> MockTableReader::GetTableProperties()
   tp->raw_key_size = table_.size();
   tp->raw_value_size = table_.size();
   return std::shared_ptr<const TableProperties>(tp);
+}
+
+FragmentedRangeTombstoneIterator* MockTableReader::NewRangeTombstoneIterator(
+    const ReadOptions& /*read_options*/) {
+  std::vector<std::string> range_del_ks;
+  std::vector<std::string> range_del_vs;
+  for (auto& kv : range_delete_table_) {
+    auto& skey = kv.first;
+    auto& value = kv.second;
+    range_del_ks.emplace_back(skey);
+    range_del_vs.emplace_back(value);
+  }
+  std::unique_ptr<InternalIteratorBase<Slice>> unfragmented_range_del_iter(
+      new test::VectorIteratorBase<Slice>(range_del_ks, range_del_vs));
+  auto tombstone_list = std::make_shared<FragmentedRangeTombstoneList>(
+      std::move(unfragmented_range_del_iter), icmp_);
+  FragmentedRangeTombstoneIterator* range_del_iter = 
+      new FragmentedRangeTombstoneIterator(tombstone_list, icmp_,
+                                           kMaxSequenceNumber);
+  return range_del_iter;
 }
 
 MockTableFactory::MockTableFactory() : next_id_(1) {}

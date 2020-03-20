@@ -403,6 +403,9 @@ class Env {
   virtual void SetBackgroundThreads(int number, Priority pri = LOW) = 0;
   virtual int GetBackgroundThreads(Priority pri = LOW) = 0;
 
+  virtual void SetMaxTaskPerThread(int /*max_task_per_thread*/,
+                                   Priority /*pri*/ = LOW) = 0;
+
   virtual Status SetAllowNonOwnerAccess(bool /*allow_non_owner_access*/) {
     return Status::NotSupported("Not supported.");
   }
@@ -1147,6 +1150,10 @@ class EnvWrapper : public Env {
   }
   int GetBackgroundThreads(Priority pri) override {
     return target_->GetBackgroundThreads(pri);
+  }
+
+  void SetMaxTaskPerThread(int num, Priority pri) override {
+    return target_->SetMaxTaskPerThread(num, pri);
   }
 
   Status SetAllowNonOwnerAccess(bool allow_non_owner_access) override {

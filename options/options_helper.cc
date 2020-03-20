@@ -53,6 +53,7 @@ DBOptions BuildDBOptions(const ImmutableDBOptions& immutable_db_options,
   options.delete_obsolete_files_period_micros =
       mutable_db_options.delete_obsolete_files_period_micros;
   options.max_background_jobs = mutable_db_options.max_background_jobs;
+  options.max_task_per_thread = mutable_db_options.max_task_per_thread;
   options.base_background_compactions =
       mutable_db_options.base_background_compactions;
   options.max_background_compactions =
@@ -1418,6 +1419,10 @@ std::unordered_map<std::string, OptionTypeInfo>
          {offsetof(struct DBOptions, max_background_jobs), OptionType::kInt,
           OptionVerificationType::kNormal, true,
           offsetof(struct MutableDBOptions, max_background_jobs)}},
+        {"max_task_per_thread",
+         {offsetof(struct DBOptions, max_task_per_thread), OptionType::kInt,
+          OptionVerificationType::kNormal, true,
+          offsetof(struct MutableDBOptions, max_task_per_thread)}},
         {"max_background_compactions",
          {offsetof(struct DBOptions, max_background_compactions),
           OptionType::kInt, OptionVerificationType::kNormal, true,

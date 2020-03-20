@@ -28,7 +28,7 @@ class ThreadPool {
 
   // Set the number of background threads that will be executing the
   // scheduled jobs.
-  virtual void SetBackgroundThreads(int num) = 0;
+  virtual void SetBackgroundThreads(int num, int max_task_per_thread) = 0;
   virtual int GetBackgroundThreads() = 0;
 
   // Get the number of jobs scheduled in the ThreadPool queue.

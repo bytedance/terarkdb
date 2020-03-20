@@ -227,6 +227,7 @@ void ImmutableDBOptions::Dump(Logger* log) const {
 
 MutableDBOptions::MutableDBOptions()
     : max_background_jobs(2),
+      max_task_per_thread(1),
       base_background_compactions(-1),
       max_background_compactions(-1),
       max_background_garbage_collections(-1),
@@ -243,6 +244,7 @@ MutableDBOptions::MutableDBOptions()
 
 MutableDBOptions::MutableDBOptions(const DBOptions& options)
     : max_background_jobs(options.max_background_jobs),
+      max_task_per_thread(options.max_task_per_thread),
       base_background_compactions(options.base_background_compactions),
       max_background_compactions(options.max_background_compactions),
       max_background_garbage_collections(
@@ -262,6 +264,8 @@ MutableDBOptions::MutableDBOptions(const DBOptions& options)
 void MutableDBOptions::Dump(Logger* log) const {
   ROCKS_LOG_HEADER(log, "            Options.max_background_jobs: %d",
                    max_background_jobs);
+  ROCKS_LOG_HEADER(log, "            Options.max_task_per_thread: %d",
+                   max_task_per_thread);
   ROCKS_LOG_HEADER(log, "            Options.max_background_compactions: %d",
                    max_background_compactions);
   ROCKS_LOG_HEADER(

@@ -698,6 +698,7 @@ DBOptions GetDBOptionsFromSpatialDBOptions(const SpatialDBOptions& options) {
       db_options.max_background_garbage_collections, Env::LOW);
   db_options.env->SetBackgroundThreads(db_options.max_background_flushes,
                                        Env::HIGH);
+  db_options.env->SetMaxTaskPerThread(db_options.max_task_per_thread, Env::LOW);
   db_options.statistics = CreateDBStatistics();
   if (options.bulk_load) {
     db_options.stats_dump_period_sec = 600;

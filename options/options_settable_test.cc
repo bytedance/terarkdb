@@ -238,6 +238,7 @@ TEST_F(OptionsSettableTest, DBOptionsAllFieldsSettable) {
                              "max_open_files=72;"
                              "max_file_opening_threads=35;"
                              "max_background_jobs=8;"
+                             "max_task_per_thread=3;"
                              "base_background_compactions=3;"
                              "max_background_compactions=33;"
                              "max_background_garbage_collections=333;"
