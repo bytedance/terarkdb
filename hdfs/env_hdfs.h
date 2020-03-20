@@ -382,6 +382,8 @@ class HdfsEnv : public Env {
   virtual uint64_t GetThreadID() const override {
     return 0;
   }
+  virtual void SetMaxTaskPerThread(int /*max_task_per_thread*/,
+                                   Priority /*pri*/ = LOW) override {}
 };
 }
 
