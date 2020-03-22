@@ -1326,10 +1326,13 @@ Status TerarkZipTableBuilder::buildZipOffsetBlobStore(
                        static_cast<size_t>(table_options_.checksumSmallValSize))
                           ? kCRC16C
                           : kCRC32C;
-  size_t blockUnits = table_options_.offsetArrayBlockUnits;
-  terark::ZipOffsetBlobStore::MyBuilder builder(
-      blockUnits, params.fpath, params.offset, table_options_.checksumLevel,
-      checksumType);
+  terark::ZipOffsetBlobStore::Options options;
+  options.block_units = table_options_.offsetArrayBlockUnits;
+  options.compress_level = 0;
+  options.checksum_level = table_options_.checksumLevel;
+  options.checksum_type = checksumType;
+  terark::ZipOffsetBlobStore::MyBuilder builder(params.fpath, params.offset,
+                                                options);
   auto s =
       BuilderWriteValues(kvs, [&](fstring value) { builder.addRecord(value); });
   if (s.ok()) {
