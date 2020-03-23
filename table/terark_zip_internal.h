@@ -19,6 +19,7 @@
 #include <rocksdb/slice.h>
 #include <rocksdb/env.h>
 #include <rocksdb/table.h>
+#include <rocksdb/convenience.h>
 // terark headers
 #include <terark/fstring.hpp>
 #include <terark/valvec.hpp>
@@ -220,6 +221,23 @@ public:
     return collect_;
   }
 };
+
+Status GetTerarkZipTableOptionsFromMap(
+    const TerarkZipTableOptions& table_options,
+    const std::unordered_map<std::string, std::string>& opts_map,
+    TerarkZipTableOptions* new_table_options, bool input_strings_escaped = false,
+    bool ignore_unknown_options = false) {
+  //TODO
+  return Status();
+}
+
+Status GetTerarkZipTableOptionsFromString(
+    const TerarkZipTableOptions& table_options,
+    const std::string& opts_str,
+    TerarkZipTableOptions* new_table_options) {
+  //TODO
+  return Status();
+}
 
 
 }  // namespace rocksdb
