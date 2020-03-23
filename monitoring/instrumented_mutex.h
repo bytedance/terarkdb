@@ -35,9 +35,7 @@ class InstrumentedMutex {
     mutex_.unlock();
   }
 
-  void AssertHeld() {
-    assert(!mutex_.try_lock());
-  }
+  void AssertHeld();
 
  private:
   void LockInternal();
