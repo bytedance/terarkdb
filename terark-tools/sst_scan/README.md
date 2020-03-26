@@ -1,4 +1,4 @@
-## Key Path Analysis Tool
+## SST SCANTool
 
 ### Features
 
@@ -13,11 +13,11 @@
 
 ### Compile
 - Compile TerarkDB first and make sure `output/` dir is not empty
-- Use `build.sh` to build key_path_analysis tool
+- Use `build.sh` to build  tool
 
 ### Usage
 
 ```
     # list all keys
-    env TerarkZipTable_localTempDir=~/ ./key_path_analysis listkeys ~/021649.sst
+    ./sst_scan listkeys ~/021649.sst
 ```
