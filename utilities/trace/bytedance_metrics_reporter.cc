@@ -46,6 +46,11 @@ static int GetThreadID() {
   }
   return id;
 }
+#else
+namespace {
+static ByteDanceHistReporterHandle dummy_hist_("", "", nullptr);
+static ByteDanceCountReporterHandle dummy_count_("", "", nullptr);
+}
 #endif
 
 #ifdef TERARKDB_ENABLE_METRICS
@@ -199,7 +204,7 @@ ByteDanceHistReporterHandle* ByteDanceMetricsReporterFactory::BuildHistReporter(
 #else
 ByteDanceHistReporterHandle* ByteDanceMetricsReporterFactory::BuildHistReporter(
     const std::string& /*name*/, const std::string& /*tags*/, Logger* /*log*/) {
-  return nullptr;
+  return &dummy_hist_;
 }
 #endif
 
@@ -217,7 +222,7 @@ ByteDanceCountReporterHandle*
 ByteDanceMetricsReporterFactory::BuildCountReporter(const std::string& /*name*/,
                                                     const std::string& /*tags*/,
                                                     Logger* /*log*/) {
-  return nullptr;
+  return &dummy_count_;
 }
 #endif
 }  // namespace rocksdb
