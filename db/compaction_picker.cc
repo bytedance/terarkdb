@@ -2474,6 +2474,10 @@ Compaction* LevelCompactionBuilder::PickLazyCompaction(
   using SortedRun = CompactionPicker::SortedRun;
   std::vector<SortedRun> sorted_runs(vstorage_->num_levels());
   int bottommost_level = vstorage_->num_non_empty_levels() - 1;
+  if (bottommost_level < 0) {
+    return nullptr;
+  }
+  assert(bottommost_level < vstorage_->num_levels());
 
   auto picker = compaction_picker_;
   // filter out being_compacted levels

@@ -9,6 +9,7 @@
   - 丰富 Key Value 分离相关配置
 - 修复问题：
   - 修复 checksum level 为 2 时启动过慢的问题
+  - 修复 ColumnFamily 数据删空后 CompactionPicker 内存越界的问题
   - 修复 CompactionFilter 非幂等时，有概率残留部分被过滤掉的 Key 的问题
     - 开启 KV 分离，或使用 BlockBasedTable 不受影响
 - 已知问题：
