@@ -1,10 +1,5 @@
 #pragma once
 
-#include <cassert>
-#include <cstdio>
-#include <cstring>
-#include <iostream>
-
 #include <options/cf_options.h>
 #include <rocksdb/env.h>
 #include <rocksdb/options.h>
@@ -17,12 +12,32 @@
 #include <table/terark_zip_internal.h>
 #include <table/terark_zip_table.h>
 
+#include <cassert>
+#include <cstdio>
+#include <cstring>
+#include <iostream>
+
 using namespace rocksdb;
 
 namespace terark {
 
+inline std::string ToHex(const char* data_, int size_) {
+  std::string result;
+  static const char hextab[] = "0123456789ABCDEF";
+  if (size_) {
+    result.resize(2 * size_);
+    auto beg = &result[0];
+    for (size_t i = 0; i < size_; ++i) {
+      unsigned char c = data_[i];
+      beg[i * 2 + 0] = hextab[c >> 4];
+      beg[i * 2 + 1] = hextab[c & 0xf];
+    }
+  }
+  return result;
+}
+
 class KeyPathAnalysis {
- private:
+ public:
   InternalKeyComparator internal_comparator_;
 
   std::unique_ptr<RandomAccessFileReader> file_reader_;
@@ -31,6 +46,11 @@ class KeyPathAnalysis {
   EnvOptions envOptions_;        // env level
   Options options_;              // database level
   ImmutableCFOptions ioptions_;  // column familiy level
+
+  bool DEBUG_INFO = true;
+
+  // tmp storage
+  std::unordered_map<std::string, int> mp;
 
   std::unique_ptr<TableProperties> table_properties_;
 
@@ -48,7 +68,9 @@ class KeyPathAnalysis {
 
   void Get(const std::string& sst_fname, const Slice& key);
 
-  void ListKeys(const std::string& sst_fname);
+  void ListKeys(const std::string& sst_fname, bool print_val);
+
+  void ListAllEmptyValues(const std::string& sst_fname);
 
   void Seek(const std::string& sst_fname, const Slice& key);
 };

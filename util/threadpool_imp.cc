@@ -127,7 +127,7 @@ private:
   // parameter for fiber
   std::atomic_int max_task_per_thread_{1};
   std::atomic_int total_task_{0};
-  
+
   std::chrono::milliseconds wait_interval_{10};
   std::chrono::milliseconds wait_zero_{0};
   int wait_time_us_ = 1000;

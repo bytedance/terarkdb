@@ -547,7 +547,7 @@ struct DBOptions {
   int max_background_jobs = 2;
 
   // Max task per BG threads
-  // valid [1 , 8]
+  // valid [1 , 4]
   int max_task_per_thread = 1;
 
   // NOT SUPPORTED ANYMORE: RocksDB automatically decides this based on the

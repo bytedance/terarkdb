@@ -1526,6 +1526,7 @@ public:
 Status TerarkZipTableBuilder::BuilderWriteValues(
     KeyValueStatus& kvs, std::function<void(fstring)> write) {
   auto& bzvType = kvs.type;
+  size_t zeroSeqCount = 0;
   auto& stat = kvs.status.stat;
   bzvType.resize(kvs.status.stat.keyCount);
   auto seekSecondPassIter = [&] {
@@ -1575,6 +1576,7 @@ Status TerarkZipTableBuilder::BuilderWriteValues(
       if (1 == oneSeqLen && (kTypeDeletion == vType || kTypeValue == vType)) {
         if (0 == seqNum && kTypeValue == vType) {
           bzvType.set0(recId, size_t(ZipValueType::kZeroSeq));
+          ++zeroSeqCount;
           value.erase_all();
           input.appendBuffer(&value);
         } else {
@@ -1671,6 +1673,7 @@ Status TerarkZipTableBuilder::BuilderWriteValues(
         if (cmpRet == 0) {  // curKey == bufKey
           if (pIKey.sequence == 0 && pIKey.type == kTypeValue) {
             bzvType.set0(recId, size_t(ZipValueType::kZeroSeq));
+            ++zeroSeqCount;
             write(fstringOf(curVal));
           } else if (pIKey.type == kTypeValue) {
             bzvType.set0(recId, size_t(ZipValueType::kValue));
@@ -1800,6 +1803,7 @@ Status TerarkZipTableBuilder::BuilderWriteValues(
     }
 #undef ITER_MOVE_NEXT
   }
+  kvs.status.zeroSeqCount = zeroSeqCount;
   kvs.status.valueBits.clear();
   return Status::OK();
 }
