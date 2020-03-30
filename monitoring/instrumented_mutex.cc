@@ -55,6 +55,9 @@ void InstrumentedCondVar::WaitInternal() {
   std::unique_lock<boost::fibers::mutex> lk(*mutex_, std::adopt_lock);
   cond_.wait(lk);
   lk.release();
+#ifndef NDEBUG
+  instrumented_mutex_->owner_id_ = boost::this_fiber::get_id();
+#endif
 }
 
 bool InstrumentedCondVar::TimedWait(uint64_t abs_time_us) {
@@ -75,6 +78,11 @@ bool InstrumentedCondVar::TimedWaitInternal(uint64_t abs_time_us) {
   bool r = cond_.wait_for(lk, std::chrono::microseconds(abs_time_us)) !=
            boost::fibers::cv_status::timeout;
   lk.release();
+#ifndef NDEBUG
+  if (r) {
+    instrumented_mutex_->owner_id_ = boost::this_fiber::get_id();
+  }
+#endif
   return r;
 }
 

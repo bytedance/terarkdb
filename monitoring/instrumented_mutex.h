@@ -75,11 +75,16 @@ class InstrumentedMutexLock {
 class InstrumentedCondVar {
  public:
   explicit InstrumentedCondVar(InstrumentedMutex* instrumented_mutex)
-      : cond_(),
+      :
+#ifndef NDEBUG
+        instrumented_mutex_(instrumented_mutex),
+#endif
+        cond_(),
         mutex_(&instrumented_mutex->mutex_),
         stats_(instrumented_mutex->stats_),
         env_(instrumented_mutex->env_),
-        stats_code_(instrumented_mutex->stats_code_) {}
+        stats_code_(instrumented_mutex->stats_code_) {
+  }
 
   void Wait();
 
@@ -92,6 +97,9 @@ class InstrumentedCondVar {
  private:
   void WaitInternal();
   bool TimedWaitInternal(uint64_t abs_time_us);
+#ifndef NDEBUG
+  InstrumentedMutex* instrumented_mutex_;
+#endif
   boost::fibers::condition_variable cond_;
   boost::fibers::mutex* mutex_;
   Statistics* stats_;
