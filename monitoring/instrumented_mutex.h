@@ -7,6 +7,7 @@
 
 #include <boost/fiber/condition_variable.hpp>
 #include <boost/fiber/mutex.hpp>
+#include <boost/fiber/operatios.hpp>
 
 #include <boost/fiber/all.hpp>
 #include "rocksdb/env.h"
@@ -34,9 +35,14 @@ class InstrumentedMutex {
 
   void Lock();
 
-  void Unlock() { mutex_.unlock(); }
+  void Unlock() {
+#ifndef NDEBUG
+    owner_id_ = boost::fibers::fiber::id{};
+#endif
+    mutex_.unlock();
+  }
 
-  void AssertHeld() {}
+  void AssertHeld();
 
  private:
   void LockInternal();
@@ -45,6 +51,9 @@ class InstrumentedMutex {
   Statistics* stats_;
   Env* env_;
   int stats_code_;
+#ifndef NDEBUG
+  boost::fibers::fiber::id owner_id_{};
+#endif
 };
 
 // A wrapper class for port::Mutex that provides additional layer

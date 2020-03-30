@@ -28,11 +28,7 @@ void InstrumentedMutex::Lock() {
 }
 
 void InstrumentedMutex::AssertHeld() {
-  try {
-    mutex_.try_lock();  // throw lock_error
-    assert(false);
-  } catch (const boost::fibers::lock_error&) {
-  }
+  assert(owner_id_ == boost::this_fiber::get_id(););
 }
 
 void InstrumentedMutex::LockInternal() {
@@ -40,6 +36,9 @@ void InstrumentedMutex::LockInternal() {
   ThreadStatusUtil::TEST_StateDelay(ThreadStatus::STATE_MUTEX_WAIT);
 #endif
   mutex_.lock();
+#ifndef NDEBUG
+  owner_id_ = boost::this_fiber::get_id();
+#endif
 }
 
 void InstrumentedCondVar::Wait() {
