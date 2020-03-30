@@ -2000,7 +2000,6 @@ Compaction* CompactionPicker::PickBottommostLevelCompaction(
                        cf_name.c_str(), s.ToString().c_str());
       return false;
     }
-    assert(!tp || !tp->snapshots.empty());
     if (!tp || tp->snapshots.empty()) {
       return false;
     }
