@@ -5,7 +5,9 @@
 
 #pragma once
 
-#include "monitoring/statistics.h"
+#include <boost/fiber/condition_variable.hpp>
+#include <boost/fiber/mutex.hpp>
+
 #include <boost/fiber/all.hpp>
 #include "rocksdb/env.h"
 #include "rocksdb/statistics.h"
@@ -19,23 +21,22 @@ class InstrumentedCondVar;
 // for collecting stats and instrumentation.
 class InstrumentedMutex {
  public:
-  explicit InstrumentedMutex(bool /*adaptive*/ = false)
-      : mutex_(), stats_(nullptr), env_(nullptr),
-        stats_code_(0) {}
+  explicit InstrumentedMutex(bool adaptive = false)
+      : mutex_(), stats_(nullptr), env_(nullptr), stats_code_(0) {
+    (void)adaptive;
+  }
 
-  InstrumentedMutex(
-      Statistics* stats, Env* env,
-      int stats_code, bool /*adaptive*/ = false)
-      : mutex_(), stats_(stats), env_(env),
-        stats_code_(stats_code) {}
+  InstrumentedMutex(Statistics* stats, Env* env, int stats_code,
+                    bool adaptive = false)
+      : mutex_(), stats_(stats), env_(env), stats_code_(stats_code) {
+    (void)adaptive;
+  }
 
   void Lock();
 
-  void Unlock() {
-    mutex_.unlock();
-  }
+  void Unlock() { mutex_.unlock(); }
 
-  void AssertHeld();
+  void AssertHeld() {}
 
  private:
   void LockInternal();
@@ -54,9 +55,7 @@ class InstrumentedMutexLock {
     mutex_->Lock();
   }
 
-  ~InstrumentedMutexLock() {
-    mutex_->Unlock();
-  }
+  ~InstrumentedMutexLock() { mutex_->Unlock(); }
 
  private:
   InstrumentedMutex* const mutex_;
@@ -77,13 +76,9 @@ class InstrumentedCondVar {
 
   bool TimedWait(uint64_t abs_time_us);
 
-  void Signal() {
-    cond_.notify_one();
-  }
+  void Signal() { cond_.notify_one(); }
 
-  void SignalAll() {
-    cond_.notify_all();
-  }
+  void SignalAll() { cond_.notify_all(); }
 
  private:
   void WaitInternal();

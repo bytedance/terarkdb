@@ -31,7 +31,8 @@ void InstrumentedMutex::AssertHeld() {
   try {
     mutex_.try_lock();  // throw lock_error
     assert(false);
-  } catch (const boost::fibers::lock_error&) {}
+  } catch (const boost::fibers::lock_error&) {
+  }
 }
 
 void InstrumentedMutex::LockInternal() {
@@ -52,8 +53,9 @@ void InstrumentedCondVar::WaitInternal() {
 #ifndef NDEBUG
   ThreadStatusUtil::TEST_StateDelay(ThreadStatus::STATE_MUTEX_WAIT);
 #endif
-  std::unique_lock<boost::fibers::mutex> lock(*mutex_, std::defer_lock);
-  cond_.wait(lock);
+  std::unique_lock<boost::fibers::mutex> lk(*mutex_, std::adopt_lock);
+  cond_.wait(lk);
+  lk.release();
 }
 
 bool InstrumentedCondVar::TimedWait(uint64_t abs_time_us) {
@@ -70,10 +72,11 @@ bool InstrumentedCondVar::TimedWaitInternal(uint64_t abs_time_us) {
 
   TEST_SYNC_POINT_CALLBACK("InstrumentedCondVar::TimedWaitInternal",
                            &abs_time_us);
-
-  std::unique_lock<boost::fibers::mutex> lock(*mutex_, std::defer_lock);
-  return cond_.wait_for(lock, std::chrono::microseconds(abs_time_us)) ==
-         boost::fibers::cv_status::timeout;
+  std::unique_lock<boost::fibers::mutex> lk(*mutex_, std::adopt_lock);
+  bool r = cond_.wait_for(lk, std::chrono::microseconds(abs_time_us)) !=
+           boost::fibers::cv_status::timeout;
+  lk.release();
+  return r;
 }
 
 }  // namespace rocksdb
