@@ -7,7 +7,7 @@
 
 #include <boost/fiber/condition_variable.hpp>
 #include <boost/fiber/mutex.hpp>
-#include <boost/fiber/operatios.hpp>
+#include <boost/fiber/operations.hpp>
 
 #include <boost/fiber/all.hpp>
 #include "rocksdb/env.h"

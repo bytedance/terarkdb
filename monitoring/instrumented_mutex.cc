@@ -28,7 +28,7 @@ void InstrumentedMutex::Lock() {
 }
 
 void InstrumentedMutex::AssertHeld() {
-  assert(owner_id_ == boost::this_fiber::get_id(););
+  assert(owner_id_ == boost::this_fiber::get_id());
 }
 
 void InstrumentedMutex::LockInternal() {
