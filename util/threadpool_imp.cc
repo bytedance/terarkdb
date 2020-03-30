@@ -288,7 +288,7 @@ void ThreadPoolImpl::Impl::BGThread(size_t thread_id) {
     if (item.function) {
       if (current_task == 0 && max_task_per_thread_ == 1) {
         item.function();
-      } else if (DB::TrySubmitAsyncTask(item.function)) {
+      } else if (DB::TrySubmitAsyncTask(item.function, max_task_per_thread_)) {
         ++current_task;
         ++total_task_;
       } else {
