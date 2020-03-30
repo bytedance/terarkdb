@@ -18,6 +18,8 @@
 #include <future>
 #include <random>
 // rocksdb headers
+#include <options/options_helper.h>
+#include <options/options_parser.h>
 #include <table/block_builder.h>
 #include <table/format.h>
 #include <table/internal_iterator.h>
@@ -57,6 +59,18 @@ using terark::Uint64Histogram;
 using terark::UintVecMin0;
 using terark::valvec;
 using terark::ZReorderMap;
+
+static std::unordered_map<std::string, OptionTypeInfo>
+  terark_zip_table_type_info = {
+    {"index_nest_level", offsetof(struct TerarkZipTableOptions, indexNestLevel), 
+     OptionType::kInt, OptionVerificationType::kNormal, false, 0},
+    {"check_sum_level", offsetof(struct TerarkZipTableOptions, checkSumLevel),
+     OptionType::kInt, OptionVerificationType::kNormal, false, 0},
+    {"check_sum_small_val_size", offsetof(struct TerarkZipTableOptions, checkSumSmallValSize), OptionType::kInt, OptionVerificationType::kNormal, false, 0},
+    {"entropy_algo", offsetof(struct TerarkZipTableOptions, entropyAlgo),
+     OptionType::},
+    {}
+  };
 
 class TerarkZipTableBuilder : public TableBuilder, boost::noncopyable {
  public:

@@ -2460,4 +2460,66 @@ TableBuilder* createTerarkZipTableBuilder(
                                    file, key_prefixLen);
 }
 
+std::string ParseTerarkZipTableOption(const std::string& name,
+                                      const std::string& org_value,
+                                      TerarkZipTableOptions* new_options,
+                                      bool input_strings_escaped = false,
+                                      bool ignore_unknown_options = false) {
+  const std::string& value =
+      input_strings_escaped ? UnescapeOptionString(org_value) : org_value;
+  if(!input_strings_escaped) {
+    // TODO
+    // In case of invoked from SetOptions
+  }
+  const auto iter = terark_zip_table_type_info.find(name);
+}
+
+Status GetTerarkZipTableOptionsFromMap(
+    const TerarkZipTableOptions& table_options,
+    const std::unordered_map<std::string, std::string>& opts_map,
+    TerarkZipTableOptions* new_table_options, bool input_strings_escaped,
+    bool ignore_unknown_options) {
+  assert(new_table_options);
+  *new_table_options = table_options;
+  for (const auto& o : opts_map) {
+    auto error_message = ParseTerarkZipTableOption(
+        o.first, o.second, new_table_options, input_strings_escaped,
+        ignore_unknown_options);
+    if (error_message != "") {
+      const auto iter = terark_zip_table_type_info.find(o.first);
+      if (iter == terark_zip_table_type_info.end() ||
+          !input_strings_escaped ||  // !input_strings_escaped indicates
+                                     // the old API, where everything is
+                                     // parsable.
+          (iter->second.verification != OptionVerificationType::kByName &&
+           iter->second.verification !=
+               OptionVerificationType::kByNameAllowNull &&
+           iter->second.verification !=
+               OptionVerificationType::kByNameAllowFromNull &&
+           iter->second.verification != OptionVerificationType::kDeprecated)) {
+        // Restore "new_options" to the default "base_options".
+        *new_table_options = table_options;
+        return Status::InvalidArgument("Can't parse TerarkZipTableOption:",
+                                       o.first + " " + error_message);
+      }
+    }
+  }
+  return Status::OK();
+  return Status();
+}
+
+Status GetTerarkZipTableOptionsFromString(
+    const TerarkZipTableOptions& table_options,
+    const std::string& opts_str,
+    TerarkZipTableOptions* new_table_options) {
+  std::unordered_map<std::string, std::string> opts_map;
+  Status s = StringToMap(opts_str, &opts_map);
+  if (!s.ok()) {
+    return s;
+  }
+
+  return GetTerarkZipTableOptionsFromMap(table_options, opts_map,
+                                         new_table_options);
+}
+
 }  // namespace rocksdb
