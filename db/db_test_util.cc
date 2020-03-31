@@ -320,6 +320,8 @@ Options DBTestBase::GetDefaultOptions() {
   options.max_open_files = 5000;
   options.wal_recovery_mode = WALRecoveryMode::kTolerateCorruptedTailRecords;
   options.compaction_pri = CompactionPri::kByCompensatedSize;
+  options.enable_lazy_compaction = false;
+  options.blob_size = -1;
   return options;
 }
 
