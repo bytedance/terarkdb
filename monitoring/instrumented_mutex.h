@@ -5,54 +5,54 @@
 
 #pragma once
 
-#include <boost/fiber/condition_variable.hpp>
-#include <boost/fiber/mutex.hpp>
-#include <boost/fiber/operations.hpp>
+#include <type_traits>
 
-#include <boost/fiber/all.hpp>
 #include "rocksdb/env.h"
 #include "rocksdb/statistics.h"
 #include "rocksdb/thread_status.h"
 #include "util/stop_watch.h"
 
+namespace boost {
+namespace fibers {
+class mutex;
+}  // namespace fibers
+}  // namespace boost
+
 namespace rocksdb {
 class InstrumentedCondVar;
+
+static const unsigned int kBoostFiberMutexSize = 32;
+static const unsigned int kBoostFiberCondVarSize = 24;
+static const unsigned int kBoostFiberIDSize = 8;
 
 // A wrapper class for port::Mutex that provides additional layer
 // for collecting stats and instrumentation.
 class InstrumentedMutex {
  public:
-  explicit InstrumentedMutex(bool adaptive = false)
-      : mutex_(), stats_(nullptr), env_(nullptr), stats_code_(0) {
-    (void)adaptive;
-  }
+  explicit InstrumentedMutex(bool adaptive = false);
 
   InstrumentedMutex(Statistics* stats, Env* env, int stats_code,
-                    bool adaptive = false)
-      : mutex_(), stats_(stats), env_(env), stats_code_(stats_code) {
-    (void)adaptive;
-  }
+                    bool adaptive = false);
+
+  ~InstrumentedMutex();
 
   void Lock();
 
-  void Unlock() {
-#ifndef NDEBUG
-    owner_id_ = boost::fibers::fiber::id{};
-#endif
-    mutex_.unlock();
-  }
+  void Unlock();
 
   void AssertHeld();
 
  private:
   void LockInternal();
   friend class InstrumentedCondVar;
-  boost::fibers::mutex mutex_;
+  typename std::aligned_storage<kBoostFiberMutexSize,
+                                alignof(std::max_align_t)>::type mutex_;
   Statistics* stats_;
   Env* env_;
   int stats_code_;
 #ifndef NDEBUG
-  boost::fibers::fiber::id owner_id_{};
+  typename std::aligned_storage<kBoostFiberIDSize,
+                                alignof(std::max_align_t)>::type owner_id_{};
 #endif
 };
 
@@ -74,25 +74,17 @@ class InstrumentedMutexLock {
 
 class InstrumentedCondVar {
  public:
-  explicit InstrumentedCondVar(InstrumentedMutex* instrumented_mutex)
-      :
-#ifndef NDEBUG
-        instrumented_mutex_(instrumented_mutex),
-#endif
-        cond_(),
-        mutex_(&instrumented_mutex->mutex_),
-        stats_(instrumented_mutex->stats_),
-        env_(instrumented_mutex->env_),
-        stats_code_(instrumented_mutex->stats_code_) {
-  }
+  explicit InstrumentedCondVar(InstrumentedMutex* instrumented_mutex);
+
+  ~InstrumentedCondVar();
 
   void Wait();
 
   bool TimedWait(uint64_t abs_time_us);
 
-  void Signal() { cond_.notify_one(); }
+  void Signal();
 
-  void SignalAll() { cond_.notify_all(); }
+  void SignalAll();
 
  private:
   void WaitInternal();
@@ -100,7 +92,8 @@ class InstrumentedCondVar {
 #ifndef NDEBUG
   InstrumentedMutex* instrumented_mutex_;
 #endif
-  boost::fibers::condition_variable cond_;
+  typename std::aligned_storage<kBoostFiberCondVarSize,
+                                alignof(std::max_align_t)>::type cond_;
   boost::fibers::mutex* mutex_;
   Statistics* stats_;
   Env* env_;
