@@ -41,7 +41,9 @@ InstrumentedMutex::InstrumentedMutex(bool adaptive)
     : mutex_(), stats_(nullptr), env_(nullptr), stats_code_(0) {
   (void)adaptive;
   new (reinterpret_cast<void*>(&mutex_)) boost::fibers::mutex();
+#ifndef NDEBUG
   new (reinterpret_cast<void*>(&owner_id_)) boost::fibers::fiber::id();
+#endif
 }
 
 InstrumentedMutex::InstrumentedMutex(Statistics* stats, Env* env,
@@ -49,12 +51,16 @@ InstrumentedMutex::InstrumentedMutex(Statistics* stats, Env* env,
     : mutex_(), stats_(stats), env_(env), stats_code_(stats_code) {
   (void)adaptive;
   new (reinterpret_cast<void*>(&mutex_)) boost::fibers::mutex();
+#ifndef NDEBUG
   new (reinterpret_cast<void*>(&owner_id_)) boost::fibers::fiber::id();
+#endif
 }
 
 InstrumentedMutex::~InstrumentedMutex() {
   AS_BOOST_FIBER_MUTEX(mutex_).~mutex();
+#ifndef NDEBUG
   AS_BOOST_FIBER_ID(owner_id_).~id();
+#endif
 }
 
 void InstrumentedMutex::Lock() {
