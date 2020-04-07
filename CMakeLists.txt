@@ -929,6 +929,7 @@ if(WITH_TESTS)
           table/block_based_table_builder_ttl_test.cc
           db/db_impl_gc_ttl_test.cc
           options/options_settable_test.cc
+          util/timer_test.cc
   )
 
   if(WITH_LIBRADOS)
