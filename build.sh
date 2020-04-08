@@ -17,10 +17,6 @@ if [ "$PORTABLE_BUILD" == "0" ]; then
   PORTABLE=
 fi
 
-if [ "$USE_JEMALLOC" == "1" ]; then
-  cd third-party/jemalloc && bash autogen.sh && ./configure --enable-prof-libunwind && make -j20 && cd ../../
-fi
-
 TERARKDB_ENABLE_METRICS=1
 if [ "$ENABLE_METRICS_BUILD" == "0" ]; then
   TERARKDB_ENABLE_METRICS=0
@@ -53,6 +49,9 @@ if test -z "$NO_INIT"; then
   fi
 fi
 
+if [ "$USE_JEMALLOC" == "1" ]; then
+  cd third-party/jemalloc && bash autogen.sh && ./configure --enable-prof-libunwind && make -j20 && cd ../../
+fi
 
 export BUNDLE_ALL_TERARK_STATIC=${BUNDLE_ALL_TERARK_STATIC:-1}
 
