@@ -238,6 +238,13 @@ struct TablePropertiesBase {
 
   // Inheritance chain
   std::vector<uint64_t> inheritance_chain;
+
+
+  // convert this object to a human readable form
+  //   @prop_delim: delimiter for each property.
+  std::string ToString(const std::string& prop_delim = "; ",
+                       const std::string& kv_delim = "=") const;
+
 };
 
 
@@ -245,11 +252,6 @@ struct TableProperties : public TablePropertiesBase {
   // user collected properties
   UserCollectedProperties user_collected_properties;
   UserCollectedProperties readable_properties;
-
-  // convert this object to a human readable form
-  //   @prop_delim: delimiter for each property.
-  std::string ToString(const std::string& prop_delim = "; ",
-                       const std::string& kv_delim = "=") const;
 
   // Aggregate the numerical member variables of the specified
   // TableProperties.

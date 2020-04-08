@@ -193,18 +193,18 @@ Cache::Handle* GetEntryFromCache(Cache* block_cache, const Slice& key,
 // For hash based index, return true if prefix_extractor and
 // prefix_extractor_block mismatch, false otherwise. This flag will be used
 // as total_order_seek via NewIndexIterator
-bool PrefixExtractorChanged(const TablePropertiesBase* table_properties,
+bool PrefixExtractorChanged(const TablePropertiesBase* table_properties_base,
                             const SliceTransform* prefix_extractor) {
   // BlockBasedTableOptions::kHashSearch requires prefix_extractor to be set.
   // Turn off hash index in prefix_extractor is not set; if  prefix_extractor
   // is set but prefix_extractor_block is not set, also disable hash index
-  if (prefix_extractor == nullptr || table_properties == nullptr ||
-      table_properties_base.prefix_extractor_name.empty()) {
+  if (prefix_extractor == nullptr || table_properties_base == nullptr ||
+      table_properties_base->prefix_extractor_name.empty()) {
     return true;
   }
 
   // prefix_extractor and prefix_extractor_block are both non-empty
-  if (table_properties_base.prefix_extractor_name.compare(
+  if (table_properties_base->prefix_extractor_name.compare(
           prefix_extractor->Name()) != 0) {
     return true;
   } else {
@@ -1174,7 +1174,7 @@ std::shared_ptr<const TableProperties> BlockBasedTable::GetTableProperties()
   if (rep_->table_properties) {
     return rep_->table_properties;
   } else {
-    TableReader::ReadTableProperties(rep_->file.get());
+    //TableReader::ReadTableProperties(rep_->file.get(), rep_->file);
   }
 }
 
@@ -2932,7 +2932,7 @@ Status BlockBasedTable::DumpTable(WritableFile* out_file,
   }
 
   // Output TableProperties
-  const rocksdb::TablePropertiesBase* table_properties =
+  const rocksdb::TablePropertiesBase* table_properties_base =
       &rep_->table_properties_base;
 
   if (rep_->found_table_properties) {
@@ -2940,18 +2940,18 @@ Status BlockBasedTable::DumpTable(WritableFile* out_file,
         "Table Properties:\n"
         "--------------------------------------\n"
         "  ");
-    out_file->Append(table_properties_base.ToString("\n  ", ": ").c_str());
+    out_file->Append(table_properties_base->ToString("\n  ", ": ").c_str());
     out_file->Append("\n");
 
     // Output Filter blocks
-    if (!rep_->filter && !table_properties_base.filter_policy_name.empty()) {
+    if (!rep_->filter && !table_properties_base->filter_policy_name.empty()) {
       // Support only BloomFilter as off now
       rocksdb::BlockBasedTableOptions table_options;
       table_options.filter_policy.reset(rocksdb::NewBloomFilterPolicy(1));
-      if (table_properties->filter_policy_name.compare(
+      if (table_properties_base->filter_policy_name.compare(
               table_options.filter_policy->Name()) == 0) {
         std::string filter_block_key = kFilterBlockPrefix;
-        filter_block_key.append(table_properties->filter_policy_name);
+        filter_block_key.append(table_properties_base->filter_policy_name);
         BlockHandle handle;
         if (FindMetaBlock(meta_iter.get(), filter_block_key, &handle).ok()) {
           BlockContents block;
