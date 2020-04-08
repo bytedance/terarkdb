@@ -24,6 +24,11 @@ MACHINE ?= $(shell uname -m)
 ARFLAGS = ${EXTRA_ARFLAGS} rs
 STRIPFLAGS = -S -x
 
+USE_JEMALLOC ?= 0
+ifeq (${USE_JEMALLOC},1)
+	LDFLAGS += -L./third-party/jemalloc/lib -ljemalloc
+endif
+
 CXXFLAGS += -fPIC
 # Transform parallel LOG output into something more readable.
 perl_command = perl -n \
