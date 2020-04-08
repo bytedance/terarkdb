@@ -50,10 +50,8 @@ class InstrumentedMutex {
   Statistics* stats_;
   Env* env_;
   int stats_code_;
-#ifndef NDEBUG
   typename std::aligned_storage<kBoostFiberIDSize,
                                 alignof(std::max_align_t)>::type owner_id_{};
-#endif
 };
 
 // A wrapper class for port::Mutex that provides additional layer
@@ -89,9 +87,7 @@ class InstrumentedCondVar {
  private:
   void WaitInternal();
   bool TimedWaitInternal(uint64_t abs_time_us);
-#ifndef NDEBUG
   InstrumentedMutex* instrumented_mutex_;
-#endif
   typename std::aligned_storage<kBoostFiberCondVarSize,
                                 alignof(std::max_align_t)>::type cond_;
   boost::fibers::mutex* mutex_;

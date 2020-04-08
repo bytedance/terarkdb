@@ -8,6 +8,7 @@
 #include <boost/fiber/condition_variable.hpp>
 #include <boost/fiber/mutex.hpp>
 #include <boost/fiber/operations.hpp>
+#include <stdexcept>
 
 #include "monitoring/perf_context_imp.h"
 #include "monitoring/thread_status_util.h"
@@ -41,9 +42,7 @@ InstrumentedMutex::InstrumentedMutex(bool adaptive)
     : mutex_(), stats_(nullptr), env_(nullptr), stats_code_(0) {
   (void)adaptive;
   new (reinterpret_cast<void*>(&mutex_)) boost::fibers::mutex();
-#ifndef NDEBUG
   new (reinterpret_cast<void*>(&owner_id_)) boost::fibers::fiber::id();
-#endif
 }
 
 InstrumentedMutex::InstrumentedMutex(Statistics* stats, Env* env,
@@ -51,16 +50,12 @@ InstrumentedMutex::InstrumentedMutex(Statistics* stats, Env* env,
     : mutex_(), stats_(stats), env_(env), stats_code_(stats_code) {
   (void)adaptive;
   new (reinterpret_cast<void*>(&mutex_)) boost::fibers::mutex();
-#ifndef NDEBUG
   new (reinterpret_cast<void*>(&owner_id_)) boost::fibers::fiber::id();
-#endif
 }
 
 InstrumentedMutex::~InstrumentedMutex() {
   AS_BOOST_FIBER_MUTEX(mutex_).~mutex();
-#ifndef NDEBUG
   AS_BOOST_FIBER_ID(owner_id_).~id();
-#endif
 }
 
 void InstrumentedMutex::Lock() {
@@ -71,14 +66,15 @@ void InstrumentedMutex::Lock() {
 }
 
 void InstrumentedMutex::Unlock() {
-#ifndef NDEBUG
+  AssertHeld();
   AS_BOOST_FIBER_ID(owner_id_) = boost::fibers::fiber::id{};
-#endif
   AS_BOOST_FIBER_MUTEX(mutex_).unlock();
 }
 
 void InstrumentedMutex::AssertHeld() {
-  assert(AS_BOOST_FIBER_ID(owner_id_) == boost::this_fiber::get_id());
+  if (AS_BOOST_FIBER_ID(owner_id_) != boost::this_fiber::get_id()) {
+    throw std::runtime_error("MutexNotHeld");
+  }
 }
 
 void InstrumentedMutex::LockInternal() {
@@ -86,16 +82,14 @@ void InstrumentedMutex::LockInternal() {
   ThreadStatusUtil::TEST_StateDelay(ThreadStatus::STATE_MUTEX_WAIT);
 #endif
   AS_BOOST_FIBER_MUTEX(mutex_).lock();
-#ifndef NDEBUG
+  if (AS_BOOST_FIBER_ID(owner_id_) != boost::fibers::fiber::id{}) {
+    throw std::runtime_error("MutexAlreadyHeld");
+  }
   AS_BOOST_FIBER_ID(owner_id_) = boost::this_fiber::get_id();
-#endif
 }
 
 InstrumentedCondVar::InstrumentedCondVar(InstrumentedMutex* instrumented_mutex)
-    :
-#ifndef NDEBUG
-      instrumented_mutex_(instrumented_mutex),
-#endif
+    : instrumented_mutex_(instrumented_mutex),
       cond_(),
       mutex_(
           reinterpret_cast<boost::fibers::mutex*>(&instrumented_mutex->mutex_)),
@@ -123,10 +117,8 @@ void InstrumentedCondVar::WaitInternal() {
   std::unique_lock<boost::fibers::mutex> lk(*mutex_, std::adopt_lock);
   AS_BOOST_FIBER_COND_VAR(cond_).wait(lk);
   lk.release();
-#ifndef NDEBUG
   AS_BOOST_FIBER_ID(instrumented_mutex_->owner_id_) =
       boost::this_fiber::get_id();
-#endif
 }
 
 bool InstrumentedCondVar::TimedWait(uint64_t abs_time_us) {
@@ -147,12 +139,10 @@ bool InstrumentedCondVar::TimedWaitInternal(uint64_t abs_time_us) {
                lk, std::chrono::microseconds(abs_time_us)) !=
            boost::fibers::cv_status::timeout;
   lk.release();
-#ifndef NDEBUG
   if (r) {
     AS_BOOST_FIBER_ID(instrumented_mutex_->owner_id_) =
         boost::this_fiber::get_id();
   }
-#endif
   return r;
 }
 
