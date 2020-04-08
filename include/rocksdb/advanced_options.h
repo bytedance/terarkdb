@@ -213,6 +213,9 @@ struct AdvancedColumnFamilyOptions {
   // LazyCompaction
   bool enable_lazy_compaction = true;
 
+  // Read TableProperties from file if false
+  bool pin_table_properties_in_reader = true;
+
   // Allows thread-safe inplace updates. If this is true, there is no way to
   // achieve point-in-time consistency using snapshot or iterator (assuming
   // concurrent updates). Hence iterator and multi-get will return results

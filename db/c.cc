@@ -2554,12 +2554,19 @@ void rocksdb_options_set_arena_block_size(
   opt->rep.arena_block_size = v;
 }
 
-void rocksdb_options_set_disable_auto_compactions(rocksdb_options_t* opt, int disable) {
+void rocksdb_options_set_disable_auto_compactions(rocksdb_options_t* opt,
+                                                  int disable) {
   opt->rep.disable_auto_compactions = disable;
 }
 
-void rocksdb_options_set_enable_lazy_compaction(rocksdb_options_t* opt, int enable) {
+void rocksdb_options_set_enable_lazy_compaction(rocksdb_options_t* opt,
+                                                int enable) {
   opt->rep.enable_lazy_compaction = enable;
+}
+
+void rocksdb_options_set_pin_table_properties_in_reader(rocksdb_options_t* opt,
+                                                        int v) {
+  opt->rep.pin_table_properties_in_reader = v;
 }
 
 void rocksdb_options_set_blob_size(rocksdb_options_t* opt, size_t blob_size) {
@@ -2641,11 +2648,6 @@ void rocksdb_options_set_max_successive_merges(
 void rocksdb_options_set_bloom_locality(
     rocksdb_options_t* opt, uint32_t v) {
   opt->rep.bloom_locality = v;
-}
-
-void rocksdb_options_set_inplace_update_support(
-    rocksdb_options_t* opt, unsigned char v) {
-  opt->rep.inplace_update_support = v;
 }
 
 void rocksdb_options_set_inplace_update_num_locks(

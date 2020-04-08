@@ -193,18 +193,18 @@ Cache::Handle* GetEntryFromCache(Cache* block_cache, const Slice& key,
 // For hash based index, return true if prefix_extractor and
 // prefix_extractor_block mismatch, false otherwise. This flag will be used
 // as total_order_seek via NewIndexIterator
-bool PrefixExtractorChanged(const TableProperties* table_properties,
+bool PrefixExtractorChanged(const TablePropertiesBase* table_properties,
                             const SliceTransform* prefix_extractor) {
   // BlockBasedTableOptions::kHashSearch requires prefix_extractor to be set.
   // Turn off hash index in prefix_extractor is not set; if  prefix_extractor
   // is set but prefix_extractor_block is not set, also disable hash index
   if (prefix_extractor == nullptr || table_properties == nullptr ||
-      table_properties->prefix_extractor_name.empty()) {
+      table_properties_base.prefix_extractor_name.empty()) {
     return true;
   }
 
   // prefix_extractor and prefix_extractor_block are both non-empty
-  if (table_properties->prefix_extractor_name.compare(
+  if (table_properties_base.prefix_extractor_name.compare(
           prefix_extractor->Name()) != 0) {
     return true;
   } else {
@@ -922,7 +922,7 @@ Status BlockBasedTable::Open(const ImmutableCFOptions& ioptions,
     } else {
       assert(table_properties != nullptr);
       rep->table_properties.reset(table_properties);
-      rep->blocks_maybe_compressed = rep->table_properties->compression_name !=
+      rep->blocks_maybe_compressed = rep->table_properties_base.compression_name !=
                                      CompressionTypeToString(kNoCompression);
     }
   } else {
@@ -931,10 +931,14 @@ Status BlockBasedTable::Open(const ImmutableCFOptions& ioptions,
   }
 #ifndef ROCKSDB_LITE
   if (rep->table_properties) {
-    ParseSliceTransform(rep->table_properties->prefix_extractor_name,
+    ParseSliceTransform(rep->table_properties_base.prefix_extractor_name,
                         &(rep->table_prefix_extractor));
   }
 #endif  // ROCKSDB_LITE
+  if (rep->table_properties) {
+    rep->found_table_properties = true;
+    rep->table_properties_base = *rep->table_properties;
+  }
 
   // Read the compression dictionary meta block
   bool found_compression_dict;
@@ -1023,7 +1027,8 @@ Status BlockBasedTable::Open(const ImmutableCFOptions& ioptions,
   bool need_upper_bound_check =
       PrefixExtractorChanged(rep->table_properties.get(), prefix_extractor);
 
-  BlockBasedTableOptions::IndexType index_type = new_table->UpdateIndexType();
+  BlockBasedTableOptions::IndexType index_type = rep->index_type =
+      GetIndexType(rep->table_properties.get());
   // prefetch the first level of index
   const bool prefetch_index =
       prefetch_all ||
@@ -1057,7 +1062,7 @@ Status BlockBasedTable::Open(const ImmutableCFOptions& ioptions,
       CachableEntry<IndexReader> index_entry;
       // check prefix_extractor match only if hash based index is used
       bool disable_prefix_seek =
-          rep->index_type == BlockBasedTableOptions::kHashSearch &&
+          index_type == BlockBasedTableOptions::kHashSearch &&
           need_upper_bound_check;
       std::unique_ptr<InternalIteratorBase<BlockHandle>> iter(
           new_table->NewIndexIterator(ReadOptions(), disable_prefix_seek,
@@ -1139,6 +1144,10 @@ Status BlockBasedTable::Open(const ImmutableCFOptions& ioptions,
     *table_reader = std::move(new_table);
   }
 
+  if (!ioptions.pin_table_properties_in_reader) {
+    rep->table_properties.reset();
+  }
+
   return s;
 }
 
@@ -1162,7 +1171,11 @@ void BlockBasedTable::SetupForCompaction() {
 
 std::shared_ptr<const TableProperties> BlockBasedTable::GetTableProperties()
     const {
-  return rep_->table_properties;
+  if (rep_->table_properties) {
+    return rep_->table_properties;
+  } else {
+    TableReader::ReadTableProperties(rep_->file.get());
+  }
 }
 
 size_t BlockBasedTable::ApproximateMemoryUsage() const {
@@ -1485,10 +1498,10 @@ FilterBlockReader* BlockBasedTable::ReadFilter(
           rep->prefix_filtering ? prefix_extractor : nullptr,
           rep->whole_key_filtering, std::move(block), nullptr,
           rep->ioptions.statistics, rep->internal_comparator, this,
-          rep_->table_properties == nullptr ||
-              rep_->table_properties->index_key_is_user_key == 0,
-          rep_->table_properties == nullptr ||
-              rep_->table_properties->index_value_is_delta_encoded == 0);
+          !rep_->found_table_properties ||
+              rep_->table_properties_base.index_key_is_user_key == 0,
+          !rep_->found_table_properties ||
+              rep_->table_properties_base.index_value_is_delta_encoded == 0);
     }
 
     case Rep::FilterType::kBlockFilter:
@@ -2040,8 +2053,8 @@ bool BlockBasedTable::PrefixMayMatch(
         // and we're not really sure that we're past the end
         // of the file
         may_match = iiter->status().IsIncomplete();
-      } else if ((rep_->table_properties &&
-                          rep_->table_properties->index_key_is_user_key
+      } else if ((rep_->found_table_properties &&
+                          rep_->table_properties_base.index_key_is_user_key
                       ? iiter->key()
                       : ExtractUserKey(iiter->key()))
                      .starts_with(ExtractUserKey(internal_prefix))) {
@@ -2319,7 +2332,7 @@ InternalIterator* BlockBasedTable::NewIterator(
     const ReadOptions& read_options, const SliceTransform* prefix_extractor,
     Arena* arena, bool skip_filters, bool for_compaction) {
   bool need_upper_bound_check =
-      PrefixExtractorChanged(rep_->table_properties.get(), prefix_extractor);
+      PrefixExtractorChanged(&rep_->table_properties_base, prefix_extractor);
   const bool kIsNotIndex = false;
   if (arena == nullptr) {
     return new BlockBasedTableIterator<DataBlockIter, LazyBuffer>(
@@ -2373,7 +2386,7 @@ bool BlockBasedTable::FullFilterKeyMayMatch(
     may_match = filter->KeyMayMatch(user_key, prefix_extractor, kNotValid,
                                     no_io, const_ikey_ptr);
   } else if (!read_options.total_order_seek && prefix_extractor &&
-             rep_->table_properties->prefix_extractor_name.compare(
+             rep_->table_properties_base.prefix_extractor_name.compare(
                  prefix_extractor->Name()) == 0 &&
              prefix_extractor->InDomain(user_key) &&
              !filter->PrefixMayMatch(prefix_extractor->Transform(user_key),
@@ -2416,7 +2429,7 @@ Status BlockBasedTable::Get(const ReadOptions& read_options, const Slice& key,
     bool need_upper_bound_check = false;
     if (rep_->index_type == BlockBasedTableOptions::kHashSearch) {
       need_upper_bound_check = PrefixExtractorChanged(
-          rep_->table_properties.get(), prefix_extractor);
+          &rep_->table_properties_base, prefix_extractor);
     }
     auto iiter =
         NewIndexIterator(read_options, need_upper_bound_check, &iiter_on_stack,
@@ -2540,8 +2553,8 @@ Status BlockBasedTable::Prefetch(const Slice* const begin,
   for (begin ? iiter->Seek(*begin) : iiter->SeekToFirst(); iiter->Valid();
        iiter->Next()) {
     BlockHandle block_handle = iiter->value();
-    const bool is_user_key = rep_->table_properties &&
-                             rep_->table_properties->index_key_is_user_key > 0;
+    const bool is_user_key = rep_->found_table_properties &&
+                             rep_->table_properties_base.index_key_is_user_key > 0;
     if (end &&
         ((!is_user_key && comparator.Compare(iiter->key(), *end) >= 0) ||
          (is_user_key &&
@@ -2682,19 +2695,18 @@ bool BlockBasedTable::TEST_KeyInCache(const ReadOptions& options,
   return in_cache;
 }
 
-BlockBasedTableOptions::IndexType BlockBasedTable::UpdateIndexType() {
+BlockBasedTableOptions::IndexType BlockBasedTable::GetIndexType(
+    const TableProperties* table_properties) {
   // Some old version of block-based tables don't have index type present in
   // table properties. If that's the case we can safely use the kBinarySearch.
   BlockBasedTableOptions::IndexType index_type_on_file =
       BlockBasedTableOptions::kBinarySearch;
-  if (rep_->table_properties) {
-    auto& props = rep_->table_properties->user_collected_properties;
+  if (table_properties != nullptr) {
+    auto& props = table_properties->user_collected_properties;
     auto pos = props.find(BlockBasedTablePropertyNames::kIndexType);
     if (pos != props.end()) {
       index_type_on_file = static_cast<BlockBasedTableOptions::IndexType>(
           DecodeFixed32(pos->second.c_str()));
-      // update index_type with the true type
-      rep_->index_type = index_type_on_file;
     }
   }
   return index_type_on_file;
@@ -2709,7 +2721,7 @@ BlockBasedTableOptions::IndexType BlockBasedTable::UpdateIndexType() {
 Status BlockBasedTable::CreateIndexReader(
     FilePrefetchBuffer* prefetch_buffer, IndexReader** index_reader,
     InternalIteratorBase<Slice>* preloaded_meta_index_iter, int level) {
-  auto index_type_on_file = UpdateIndexType();
+  auto index_type = rep_->index_type;
 
   auto file = rep_->file.get();
   const InternalKeyComparator* icomparator = &rep_->internal_comparator;
@@ -2721,26 +2733,26 @@ Status BlockBasedTable::CreateIndexReader(
   // If prefix_extractor does not match prefix_extractor_name from table
   // properties, turn off Hash Index by setting total_order_seek to true
 
-  switch (index_type_on_file) {
+  switch (index_type) {
     case BlockBasedTableOptions::kTwoLevelIndexSearch: {
       return PartitionIndexReader::Create(
           this, file, prefetch_buffer, footer, footer.index_handle(),
           rep_->ioptions, icomparator, index_reader,
           rep_->persistent_cache_options, level,
-          rep_->table_properties == nullptr ||
-              rep_->table_properties->index_key_is_user_key == 0,
-          rep_->table_properties == nullptr ||
-              rep_->table_properties->index_value_is_delta_encoded == 0,
+          !rep_->found_table_properties ||
+              rep_->table_properties_base.index_key_is_user_key == 0,
+          !rep_->found_table_properties ||
+              rep_->table_properties_base.index_value_is_delta_encoded == 0,
           GetMemoryAllocator(rep_->table_options));
     }
     case BlockBasedTableOptions::kBinarySearch: {
       return BinarySearchIndexReader::Create(
           file, prefetch_buffer, footer, footer.index_handle(), rep_->ioptions,
           icomparator, index_reader, rep_->persistent_cache_options,
-          rep_->table_properties == nullptr ||
-              rep_->table_properties->index_key_is_user_key == 0,
-          rep_->table_properties == nullptr ||
-              rep_->table_properties->index_value_is_delta_encoded == 0,
+          !rep_->found_table_properties ||
+              rep_->table_properties_base.index_key_is_user_key == 0,
+          !rep_->found_table_properties ||
+              rep_->table_properties_base.index_value_is_delta_encoded == 0,
           GetMemoryAllocator(rep_->table_options));
     }
     case BlockBasedTableOptions::kHashSearch: {
@@ -2760,10 +2772,10 @@ Status BlockBasedTable::CreateIndexReader(
               file, prefetch_buffer, footer, footer.index_handle(),
               rep_->ioptions, icomparator, index_reader,
               rep_->persistent_cache_options,
-              rep_->table_properties == nullptr ||
-                  rep_->table_properties->index_key_is_user_key == 0,
-              rep_->table_properties == nullptr ||
-                  rep_->table_properties->index_value_is_delta_encoded == 0,
+              !rep_->found_table_properties ||
+                  rep_->table_properties_base.index_key_is_user_key == 0,
+              !rep_->found_table_properties ||
+                  rep_->table_properties_base.index_value_is_delta_encoded == 0,
               GetMemoryAllocator(rep_->table_options));
         }
         meta_index_iter = meta_iter_guard.get();
@@ -2774,15 +2786,15 @@ Status BlockBasedTable::CreateIndexReader(
           rep_->ioptions, icomparator, footer.index_handle(), meta_index_iter,
           index_reader, rep_->hash_index_allow_collision,
           rep_->persistent_cache_options,
-          rep_->table_properties == nullptr ||
-              rep_->table_properties->index_key_is_user_key == 0,
-          rep_->table_properties == nullptr ||
-              rep_->table_properties->index_value_is_delta_encoded == 0,
+          !rep_->found_table_properties ||
+              rep_->table_properties_base.index_key_is_user_key == 0,
+          !rep_->found_table_properties ||
+              rep_->table_properties_base.index_value_is_delta_encoded == 0,
           GetMemoryAllocator(rep_->table_options));
     }
     default: {
       std::string error_message =
-          "Unrecognized index type: " + ToString(index_type_on_file);
+          "Unrecognized index type: " + ToString(index_type);
       return Status::InvalidArgument(error_message.c_str());
     }
   }
@@ -2803,7 +2815,7 @@ uint64_t BlockBasedTable::ApproximateOffsetOf(const Slice& key) {
     // metaindex block (which is right near the end of the file).
     result = 0;
     if (rep_->table_properties) {
-      result = rep_->table_properties->data_size;
+      result = rep_->table_properties_base.data_size;
     }
     // table_properties is not present in the table.
     if (result == 0) {
@@ -2920,19 +2932,19 @@ Status BlockBasedTable::DumpTable(WritableFile* out_file,
   }
 
   // Output TableProperties
-  const rocksdb::TableProperties* table_properties;
-  table_properties = rep_->table_properties.get();
+  const rocksdb::TablePropertiesBase* table_properties =
+      &rep_->table_properties_base;
 
-  if (table_properties != nullptr) {
+  if (rep_->found_table_properties) {
     out_file->Append(
         "Table Properties:\n"
         "--------------------------------------\n"
         "  ");
-    out_file->Append(table_properties->ToString("\n  ", ": ").c_str());
+    out_file->Append(table_properties_base.ToString("\n  ", ": ").c_str());
     out_file->Append("\n");
 
     // Output Filter blocks
-    if (!rep_->filter && !table_properties->filter_policy_name.empty()) {
+    if (!rep_->filter && !table_properties_base.filter_policy_name.empty()) {
       // Support only BloomFilter as off now
       rocksdb::BlockBasedTableOptions table_options;
       table_options.filter_policy.reset(rocksdb::NewBloomFilterPolicy(1));
@@ -3057,8 +3069,8 @@ Status BlockBasedTable::DumpIndexBlock(WritableFile* out_file) {
     Slice key = blockhandles_iter->key();
     Slice user_key;
     InternalKey ikey;
-    if (rep_->table_properties &&
-        rep_->table_properties->index_key_is_user_key != 0) {
+    if (rep_->found_table_properties &&
+        rep_->table_properties_base.index_key_is_user_key != 0) {
       user_key = key;
     } else {
       ikey.DecodeFrom(key);

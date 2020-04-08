@@ -150,8 +150,7 @@ class TablePropertiesCollectorFactory
 
 // TableProperties contains a bunch of read-only properties of its associated
 // table.
-struct TableProperties {
- public:
+struct TablePropertiesBase {
   // the total size of all data blocks.
   uint64_t data_size = 0;
   // the size of index block.
@@ -239,7 +238,10 @@ struct TableProperties {
 
   // Inheritance chain
   std::vector<uint64_t> inheritance_chain;
+};
 
+
+struct TableProperties : public TablePropertiesBase {
   // user collected properties
   UserCollectedProperties user_collected_properties;
   UserCollectedProperties readable_properties;

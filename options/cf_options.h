@@ -47,6 +47,8 @@ struct ImmutableCFOptions {
 
   bool enable_lazy_compaction;
 
+  bool pin_table_properties_in_reader;
+
   bool inplace_update_support;
 
   UpdateStatus (*inplace_callback)(char* existing_value,

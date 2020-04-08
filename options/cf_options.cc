@@ -38,6 +38,7 @@ ImmutableCFOptions::ImmutableCFOptions(const ImmutableDBOptions& db_options,
       max_write_buffer_number_to_maintain(
           cf_options.max_write_buffer_number_to_maintain),
       enable_lazy_compaction(cf_options.enable_lazy_compaction),
+      pin_table_properties_in_reader(cf_options.pin_table_properties_in_reader),
       inplace_update_support(cf_options.inplace_update_support),
       inplace_callback(cf_options.inplace_callback),
       info_log(db_options.info_log.get()),

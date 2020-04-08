@@ -87,6 +87,7 @@ TEST_F(OptionsTest, GetOptionsFromMapTest) {
       {"compaction_options_fifo", "23"},
       {"max_sequential_skip_in_iterations", "24"},
       {"enable_lazy_compaction", "true"},
+      {"pin_table_properties_in_reader", "false"},
       {"inplace_update_support", "true"},
       {"report_bg_io_stats", "true"},
       {"compaction_measure_io_stats", "false"},
@@ -196,6 +197,8 @@ TEST_F(OptionsTest, GetOptionsFromMapTest) {
             static_cast<uint64_t>(23));
   ASSERT_EQ(new_cf_opt.max_sequential_skip_in_iterations,
             static_cast<uint64_t>(24));
+  ASSERT_EQ(new_cf_opt.enable_lazy_compaction, true);
+  ASSERT_EQ(new_cf_opt.pin_table_properties_in_reader, false);
   ASSERT_EQ(new_cf_opt.inplace_update_support, true);
   ASSERT_EQ(new_cf_opt.inplace_update_num_locks, 25U);
   ASSERT_EQ(new_cf_opt.memtable_prefix_bloom_size_ratio, 0.26);

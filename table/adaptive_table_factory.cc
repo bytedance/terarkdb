@@ -78,37 +78,38 @@ TableBuilder* AdaptiveTableFactory::NewTableBuilder(
 
 std::string AdaptiveTableFactory::GetPrintableTableOptions() const {
   std::string ret;
-  ret.reserve(20000);
-  const int kBufferSize = 200;
-  char buffer[kBufferSize];
+  ret.resize(20000);
+  char* pos = &ret[0];
+  char* end = pos + ret.size();
 
   if (table_factory_to_write_) {
-    snprintf(buffer, kBufferSize, "  write factory (%s) options:\n%s\n",
-             (table_factory_to_write_->Name() ? table_factory_to_write_->Name()
-                                              : ""),
-             table_factory_to_write_->GetPrintableTableOptions().c_str());
-    ret.append(buffer);
+    pos += snprintf(
+        pos, end - pos, "  write factory (%s) options:\n%s\n",
+        (table_factory_to_write_->Name() ? table_factory_to_write_->Name()
+                                         : ""),
+        table_factory_to_write_->GetPrintableTableOptions().c_str());
   }
   if (plain_table_factory_) {
-    snprintf(buffer, kBufferSize, "  %s options:\n%s\n",
-             plain_table_factory_->Name() ? plain_table_factory_->Name() : "",
-             plain_table_factory_->GetPrintableTableOptions().c_str());
-    ret.append(buffer);
+    pos += snprintf(
+        pos, end - pos, "  %s options:\n%s\n",
+        plain_table_factory_->Name() ? plain_table_factory_->Name() : "",
+        plain_table_factory_->GetPrintableTableOptions().c_str());
   }
   if (block_based_table_factory_) {
-    snprintf(
-        buffer, kBufferSize, "  %s options:\n%s\n",
+    pos += snprintf(
+        pos, end - pos, "  %s options:\n%s\n",
         (block_based_table_factory_->Name() ? block_based_table_factory_->Name()
                                             : ""),
         block_based_table_factory_->GetPrintableTableOptions().c_str());
-    ret.append(buffer);
   }
   if (cuckoo_table_factory_) {
-    snprintf(buffer, kBufferSize, "  %s options:\n%s\n",
-             cuckoo_table_factory_->Name() ? cuckoo_table_factory_->Name() : "",
-             cuckoo_table_factory_->GetPrintableTableOptions().c_str());
-    ret.append(buffer);
+    pos += snprintf(
+        pos, end - pos, "  %s options:\n%s\n",
+        cuckoo_table_factory_->Name() ? cuckoo_table_factory_->Name() : "",
+        cuckoo_table_factory_->GetPrintableTableOptions().c_str());
   }
+  assert(pos <= end);
+  ret.resize(pos - &ret[0]);
   return ret;
 }
 
