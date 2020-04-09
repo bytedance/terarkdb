@@ -302,7 +302,10 @@ Status PlainTableReader::PopulateIndex(TableProperties* props,
                                        size_t index_sparseness,
                                        size_t huge_page_tlb_size) {
   assert(props != nullptr);
-  table_properties_.reset(props);
+  if (ioptions_.pin_table_properties_in_reader) {
+    table_properties_.reset(props);
+  }
+  table_properties_base_ = *props;
 
   BlockContents index_block_contents;
   Status s = ReadMetaBlock(file_info_.file.get(), nullptr /* prefetch_buffer */,
@@ -361,7 +364,7 @@ Status PlainTableReader::PopulateIndex(TableProperties* props,
     // Allocate bloom filter here for total order mode.
     if (IsTotalOrderMode()) {
       uint32_t num_bloom_bits =
-          static_cast<uint32_t>(table_properties_->num_entries) *
+          static_cast<uint32_t>(table_properties_base_.num_entries) *
           bloom_bits_per_key;
       if (num_bloom_bits > 0) {
         enable_bloom_ = true;

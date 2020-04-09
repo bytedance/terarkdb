@@ -36,9 +36,7 @@ class CuckooTableReader: public TableReader {
                                                uint64_t));
   ~CuckooTableReader() {}
 
-  std::shared_ptr<const TableProperties> GetTableProperties() const override {
-    return table_props_;
-  }
+  std::shared_ptr<const TableProperties> GetTableProperties() const override;
 
   Status status() const { return status_; }
 
@@ -74,6 +72,7 @@ class CuckooTableReader: public TableReader {
   bool identity_as_first_hash_;
   bool use_module_hash_;
   std::shared_ptr<const TableProperties> table_props_;
+  TablePropertiesBase props_base_;
   Status status_;
   uint32_t num_hash_func_;
   std::string unused_key_;
@@ -85,6 +84,7 @@ class CuckooTableReader: public TableReader {
   uint32_t cuckoo_block_bytes_minus_one_;
   uint64_t file_number_;
   uint64_t table_size_;
+  const ImmutableCFOptions& ioptions_;
   const Comparator* ucomp_;
   uint64_t (*get_slice_hash_)(const Slice& s, uint32_t index,
       uint64_t max_num_buckets);
