@@ -234,7 +234,9 @@ DEFINE_int32(bloom_locality, 0, "Control bloom filter probes locality");
 DEFINE_int64(seed, 0, "Seed base for random number generators. "
              "When 0 it is deterministic.");
 
-DEFINE_int32(threads, 1, "Number of concurrent threads to run.");
+DEFINE_int32(threads, 1, "Number of concurrent threads to run. read_threads + write_threads");
+DEFINE_int32(read_threads, -1, "Number of concurrent threads to read");
+DEFINE_int32(write_threads, -1, "Number of concurrent threads to write");
 
 DEFINE_int32(duration, 0, "Time in seconds for the random-ops tests to run."
              " When 0 then num & reads determine the test duration");
@@ -1916,11 +1918,13 @@ struct ThreadState {
   int tid;             // 0..n-1 when running in n threads
   Random64 rand;         // Has different seeds for different threads
   Stats stats;
+  Stats write_stats;
   SharedState* shared;
+  bool write;
 
   /* implicit */ ThreadState(int index)
       : tid(index),
-        rand((FLAGS_seed ? FLAGS_seed : 1000) + index) {
+        rand((FLAGS_seed ? FLAGS_seed : 1000) + index), write(true) {
   }
 };
 
@@ -2396,7 +2400,7 @@ class Benchmark {
   //   ----------------------------
   //   |        key 00000         |
   //   ----------------------------
-  void GenerateKeyFromInt(uint64_t v, int64_t num_keys, Slice* key) {
+  void GenerateKeyFromInt(uint64_t v, int64_t num_keys, Slice* key, int tid) {
     char* start = const_cast<char*>(key->data());
     char* pos = start;
     if (keys_per_prefix_ > 0) {
@@ -2427,7 +2431,10 @@ class Benchmark {
     }
     pos += bytes_to_fill;
     if (key_size_ > pos - start) {
-      memset(pos, '0', key_size_ - (pos - start));
+      if (tid > 0)
+        memset(pos, tid + '0', key_size_ - (pos - start));
+      else
+        memset(pos, '0', key_size_ - (pos - start));
     }
   }
 
@@ -2511,6 +2518,8 @@ void VerifyDBFromDB(std::string& truth_db_name) {
 
       bool fresh_db = false;
       int num_threads = FLAGS_threads;
+      if (FLAGS_write_threads > 0 && FLAGS_read_threads > 0)
+        num_threads = FLAGS_write_threads + FLAGS_read_threads;
 
       int num_repeat = 1;
       int num_warmup = 0;
@@ -2584,6 +2593,9 @@ void VerifyDBFromDB(std::string& truth_db_name) {
           num_threads = 1;
         }
         method = &Benchmark::WriteUniqueRandom;
+      } else if (name == "multifilluniquerandom") {
+        fresh_db = true;
+        method = &Benchmark::MultiWriteUniqueRandom;
       } else if (name == "overwrite") {
         method = &Benchmark::WriteRandom;
       } else if (name == "fillsync") {
@@ -2852,8 +2864,11 @@ void VerifyDBFromDB(std::string& truth_db_name) {
     SetPerfLevel(static_cast<PerfLevel> (shared->perf_level));
     perf_context.EnablePerLevelPerfContext();
     thread->stats.Start(thread->tid);
+    thread->write_stats.Start(thread->tid);
     (arg->bm->*(arg->method))(thread);
+    thread->write_stats.Stop();
     thread->stats.Stop();
+    
 
     {
       MutexLock l(&shared->mu);
@@ -2882,9 +2897,12 @@ void VerifyDBFromDB(std::string& truth_db_name) {
     }
 
     std::unique_ptr<ReporterAgent> reporter_agent;
+    std::unique_ptr<ReporterAgent> write_reporter_agent;
     if (FLAGS_report_interval_seconds > 0) {
       reporter_agent.reset(new ReporterAgent(FLAGS_env, FLAGS_report_file,
                                              FLAGS_report_interval_seconds));
+      write_reporter_agent.reset(new ReporterAgent(
+          FLAGS_env, FLAGS_report_file, FLAGS_report_interval_seconds));
     }
 
     ThreadArg* arg = new ThreadArg[n];
@@ -2912,7 +2930,9 @@ void VerifyDBFromDB(std::string& truth_db_name) {
       arg[i].shared = &shared;
       arg[i].thread = new ThreadState(i);
       arg[i].thread->stats.SetReporterAgent(reporter_agent.get());
+      arg[i].thread->write_stats.SetReporterAgent(reporter_agent.get());
       arg[i].thread->shared = &shared;
+      if (i < FLAGS_read_threads) arg[i].thread->write = false;
       FLAGS_env->StartThread(ThreadBody, &arg[i]);
     }
 
@@ -2929,12 +2949,20 @@ void VerifyDBFromDB(std::string& truth_db_name) {
     shared.mu.Unlock();
 
     // Stats for some threads can be excluded.
+    Stats read_merge_stats;
+    Stats write_merge_stats;
     Stats merge_stats;
     for (int i = 0; i < n; i++) {
-      merge_stats.Merge(arg[i].thread->stats);
+      if (arg[i].thread->write)
+        write_merge_stats.Merge(arg[i].thread->write_stats);
+      else
+        read_merge_stats.Merge(arg[i].thread->stats);
     }
-    merge_stats.Report(name);
-
+    read_merge_stats.Report(name.ToString() + "_read");
+    write_merge_stats.Report(name.ToString() + "_write");
+    merge_stats.Merge(read_merge_stats);
+    merge_stats.Merge(write_merge_stats);
+    // merge_stats.Report(name);
     for (int i = 0; i < n; i++) {
       delete arg[i].thread;
     }
@@ -3688,7 +3716,7 @@ void VerifyDBFromDB(std::string& truth_db_name) {
   }
 
   enum WriteMode {
-    RANDOM, SEQUENTIAL, UNIQUE_RANDOM
+    RANDOM, SEQUENTIAL, UNIQUE_RANDOM, MULTI_UNIQUE_RANDOM,
   };
 
   void WriteSeqDeterministic(ThreadState* thread) {
@@ -3712,12 +3740,16 @@ void VerifyDBFromDB(std::string& truth_db_name) {
     DoWrite(thread, UNIQUE_RANDOM);
   }
 
+  void MultiWriteUniqueRandom(ThreadState* thread) {
+    DoWrite(thread, MULTI_UNIQUE_RANDOM);
+  }
+
   class KeyGenerator {
    public:
     KeyGenerator(Random64* rand, WriteMode mode, uint64_t num,
                  uint64_t /*num_per_set*/ = 64 * 1024)
         : rand_(rand), mode_(mode), num_(num), next_(0) {
-      if (mode_ == UNIQUE_RANDOM) {
+      if (mode_ == UNIQUE_RANDOM || mode_ == MULTI_UNIQUE_RANDOM) {
         // NOTE: if memory consumption of this approach becomes a concern,
         // we can either break it into pieces and only random shuffle a section
         // each time. Alternatively, use a bit map implementation
@@ -3738,6 +3770,7 @@ void VerifyDBFromDB(std::string& truth_db_name) {
           return next_++;
         case RANDOM:
           return rand_->Next() % num_;
+        case MULTI_UNIQUE_RANDOM:
         case UNIQUE_RANDOM:
           assert(next_ < num_);
           return values_[next_++];
@@ -3854,7 +3887,7 @@ void VerifyDBFromDB(std::string& truth_db_name) {
 
       for (int64_t j = 0; j < entries_per_batch_; j++) {
         int64_t rand_num = key_gens[id]->Next();
-        GenerateKeyFromInt(rand_num, FLAGS_num, &key);
+        GenerateKeyFromInt(rand_num, FLAGS_num, &key, thread->tid);
         if (FLAGS_num_column_families <= 1) {
           batch.Put(key, gen.Generate(value_size_));
         } else {
@@ -3879,7 +3912,7 @@ void VerifyDBFromDB(std::string& truth_db_name) {
             for (int64_t offset = 0; offset < range_tombstone_width_;
                  ++offset) {
               GenerateKeyFromInt(begin_num + offset, FLAGS_num,
-                                 &expanded_keys[offset]);
+                                 &expanded_keys[offset], -1);
               if (FLAGS_num_column_families <= 1) {
                 batch.Delete(expanded_keys[offset]);
               } else {
@@ -3888,9 +3921,9 @@ void VerifyDBFromDB(std::string& truth_db_name) {
               }
             }
           } else {
-            GenerateKeyFromInt(begin_num, FLAGS_num, &begin_key);
+            GenerateKeyFromInt(begin_num, FLAGS_num, &begin_key, -1);
             GenerateKeyFromInt(begin_num + range_tombstone_width_, FLAGS_num,
-                               &end_key);
+                               &end_key, -1);
             if (FLAGS_num_column_families <= 1) {
               batch.DeleteRange(begin_key, end_key);
             } else {
@@ -4327,7 +4360,7 @@ void VerifyDBFromDB(std::string& truth_db_name) {
     do {
       for (int i = 0; i < 100; ++i) {
         int64_t key_rand = thread->rand.Next() & (pot - 1);
-        GenerateKeyFromInt(key_rand, FLAGS_num, &key);
+        GenerateKeyFromInt(key_rand, FLAGS_num, &key, -1);
         ++read;
         auto status = db->Get(options, key, &value);
         if (status.ok()) {
@@ -4399,7 +4432,7 @@ void VerifyDBFromDB(std::string& truth_db_name) {
       // deterministically find the cfh corresponding to a particular key, as it
       // is done in DoWrite method.
       int64_t key_rand = GetRandomKey(&thread->rand);
-      GenerateKeyFromInt(key_rand, FLAGS_num, &key);
+      GenerateKeyFromInt(key_rand, FLAGS_num, &key, -1);
       read++;
       Status s;
       if (FLAGS_num_column_families > 1) {
@@ -4460,7 +4493,7 @@ void VerifyDBFromDB(std::string& truth_db_name) {
     while (!duration.Done(1)) {
       DB* db = SelectDB(thread);
       for (int64_t i = 0; i < entries_per_batch_; ++i) {
-        GenerateKeyFromInt(GetRandomKey(&thread->rand), FLAGS_num, &keys[i]);
+        GenerateKeyFromInt(GetRandomKey(&thread->rand), FLAGS_num, &keys[i], -1);
       }
       std::vector<Status> statuses = db->MultiGet(options, keys, &values);
       assert(static_cast<int64_t>(statuses.size()) == entries_per_batch_);
@@ -4539,18 +4572,18 @@ void VerifyDBFromDB(std::string& truth_db_name) {
     char value_buffer[256];
     while (!duration.Done(1)) {
       int64_t seek_pos = thread->rand.Next() % FLAGS_num;
-      GenerateKeyFromInt((uint64_t)seek_pos, FLAGS_num, &key);
+      GenerateKeyFromInt((uint64_t)seek_pos, FLAGS_num, &key, -1);
       if (FLAGS_max_scan_distance != 0) {
         if (FLAGS_reverse_iterator) {
           GenerateKeyFromInt(
               (uint64_t)std::max((int64_t)0,
                                  seek_pos - FLAGS_max_scan_distance),
-              FLAGS_num, &lower_bound);
+              FLAGS_num, &lower_bound, -1);
           options.iterate_lower_bound = &lower_bound;
         } else {
           GenerateKeyFromInt(
               (uint64_t)std::min(FLAGS_num, seek_pos + FLAGS_max_scan_distance),
-              FLAGS_num, &upper_bound);
+              FLAGS_num, &upper_bound, -1);
           options.iterate_upper_bound = &upper_bound;
         }
       }
@@ -4648,7 +4681,7 @@ void VerifyDBFromDB(std::string& truth_db_name) {
       batch.Clear();
       for (int64_t j = 0; j < entries_per_batch_; ++j) {
         const int64_t k = seq ? i + j : (thread->rand.Next() % FLAGS_num);
-        GenerateKeyFromInt(k, FLAGS_num, &key);
+        GenerateKeyFromInt(k, FLAGS_num, &key, -1);
         batch.Delete(key);
       }
       auto s = db->Write(write_options_, &batch);
@@ -4670,7 +4703,7 @@ void VerifyDBFromDB(std::string& truth_db_name) {
   }
 
   void ReadWhileWriting(ThreadState* thread) {
-    if (thread->tid > 0) {
+    if (!thread->write) {
       ReadRandom(thread);
     } else {
       BGWriter(thread, kWrite);
@@ -4690,14 +4723,14 @@ void VerifyDBFromDB(std::string& truth_db_name) {
     RandomGenerator gen;
     int64_t bytes = 0;
 
-    std::unique_ptr<RateLimiter> write_rate_limiter;
-    if (FLAGS_benchmark_write_rate_limit > 0) {
-      write_rate_limiter.reset(
-          NewGenericRateLimiter(FLAGS_benchmark_write_rate_limit));
-    }
+    // std::unique_ptr<RateLimiter> write_rate_limiter;
+    // if (FLAGS_benchmark_write_rate_limit > 0) {
+    //   write_rate_limiter.reset(
+    //       NewGenericRateLimiter(FLAGS_benchmark_write_rate_limit));
+    // }
 
     // Don't merge stats from this thread with the readers.
-    thread->stats.SetExcludeFromMerge();
+    // thread->stats.SetExcludeFromMerge();
 
     std::unique_ptr<const char[]> key_guard;
     Slice key = AllocateKey(&key_guard);
@@ -4712,7 +4745,7 @@ void VerifyDBFromDB(std::string& truth_db_name) {
           fprintf(stderr, "Exiting the writer after %u writes...\n", written);
           break;
         }
-        if (thread->shared->num_done + 1 >= thread->shared->num_initialized) {
+        if (thread->shared->num_done + FLAGS_write_threads + 1 >= thread->shared->num_initialized) {
           // Other threads have finished
           if (FLAGS_finish_after_writes) {
             // Wait for the writes to be finished
@@ -4728,7 +4761,7 @@ void VerifyDBFromDB(std::string& truth_db_name) {
         }
       }
 
-      GenerateKeyFromInt(thread->rand.Next() % FLAGS_num, FLAGS_num, &key);
+      GenerateKeyFromInt(thread->rand.Next() % FLAGS_num, FLAGS_num, &key, -1);
       Status s;
 
       if (write_merge == kWrite) {
@@ -4743,15 +4776,16 @@ void VerifyDBFromDB(std::string& truth_db_name) {
         exit(1);
       }
       bytes += key.size() + value_size_;
-      thread->stats.FinishedOps(&db_, db_.db, 1, kWrite);
+      thread->write_stats.FinishedOps(&db_, db_.db, 1, kWrite);
 
-      if (FLAGS_benchmark_write_rate_limit > 0) {
-        write_rate_limiter->Request(
+      if (FLAGS_benchmark_write_rate_limit > 0 &&
+          thread->shared->write_rate_limiter.get() != nullptr) {
+        thread->shared->write_rate_limiter->Request(
             entries_per_batch_ * (value_size_ + key_size_), Env::IO_HIGH,
             nullptr /* stats */, RateLimiter::OpType::kWrite);
       }
     }
-    thread->stats.AddBytes(bytes);
+    thread->write_stats.AddBytes(bytes);
   }
 
   void ReadWhileScanning(ThreadState* thread) {
@@ -4902,7 +4936,7 @@ void VerifyDBFromDB(std::string& truth_db_name) {
         put_weight = 100 - get_weight - delete_weight;
       }
       GenerateKeyFromInt(thread->rand.Next() % FLAGS_numdistinct,
-          FLAGS_numdistinct, &key);
+          FLAGS_numdistinct, &key, -1);
       if (get_weight > 0) {
         // do all the gets first
         Status s = GetMany(db, options, key, &value);
@@ -4965,7 +4999,7 @@ void VerifyDBFromDB(std::string& truth_db_name) {
     // the number of iterations is the larger of read_ or write_
     while (!duration.Done(1)) {
       DB* db = SelectDB(thread);
-      GenerateKeyFromInt(thread->rand.Next() % FLAGS_num, FLAGS_num, &key);
+      GenerateKeyFromInt(thread->rand.Next() % FLAGS_num, FLAGS_num, &key, -1);
       if (get_weight == 0 && put_weight == 0) {
         // one batch completed, reinitialize for next batch
         get_weight = FLAGS_readwritepercent;
@@ -5019,7 +5053,7 @@ void VerifyDBFromDB(std::string& truth_db_name) {
     // the number of iterations is the larger of read_ or write_
     while (!duration.Done(1)) {
       DB* db = SelectDB(thread);
-      GenerateKeyFromInt(thread->rand.Next() % FLAGS_num, FLAGS_num, &key);
+      GenerateKeyFromInt(thread->rand.Next() % FLAGS_num, FLAGS_num, &key, -1);
 
       auto status = db->Get(options, key, &value);
       if (status.ok()) {
@@ -5070,7 +5104,7 @@ void VerifyDBFromDB(std::string& truth_db_name) {
     // the number of iterations is the larger of read_ or write_
     while (!duration.Done(1)) {
       DB* db = SelectDB(thread);
-      GenerateKeyFromInt(thread->rand.Next() % FLAGS_num, FLAGS_num, &key);
+      GenerateKeyFromInt(thread->rand.Next() % FLAGS_num, FLAGS_num, &key, -1);
 
       auto status = db->Get(options, key, &existing_value);
       if (status.ok()) {
@@ -5120,7 +5154,7 @@ void VerifyDBFromDB(std::string& truth_db_name) {
     Duration duration(FLAGS_duration, readwrites_);
     while (!duration.Done(1)) {
       DB* db = SelectDB(thread);
-      GenerateKeyFromInt(thread->rand.Next() % FLAGS_num, FLAGS_num, &key);
+      GenerateKeyFromInt(thread->rand.Next() % FLAGS_num, FLAGS_num, &key, -1);
 
       auto status = db->Get(options, key, &value);
       if (status.ok()) {
@@ -5180,7 +5214,7 @@ void VerifyDBFromDB(std::string& truth_db_name) {
     while (!duration.Done(1)) {
       DBWithColumnFamilies* db_with_cfh = SelectDBWithCfh(thread);
       int64_t key_rand = thread->rand.Next() % merge_keys_;
-      GenerateKeyFromInt(key_rand, merge_keys_, &key);
+      GenerateKeyFromInt(key_rand, merge_keys_, &key, -1);
 
       Status s;
       if (FLAGS_num_column_families > 1) {
@@ -5230,7 +5264,7 @@ void VerifyDBFromDB(std::string& truth_db_name) {
     Duration duration(FLAGS_duration, readwrites_);
     while (!duration.Done(1)) {
       DB* db = SelectDB(thread);
-      GenerateKeyFromInt(thread->rand.Next() % merge_keys_, merge_keys_, &key);
+      GenerateKeyFromInt(thread->rand.Next() % merge_keys_, merge_keys_, &key, -1);
 
       bool do_merge = int(thread->rand.Next() % 100) < FLAGS_mergereadpercent;
 
@@ -5280,7 +5314,7 @@ void VerifyDBFromDB(std::string& truth_db_name) {
     std::unique_ptr<const char[]> key_guard;
     Slice key = AllocateKey(&key_guard);
     for (int64_t i = 0; i < FLAGS_num; ++i) {
-      GenerateKeyFromInt(i, FLAGS_num, &key);
+      GenerateKeyFromInt(i, FLAGS_num, &key, -1);
       iter->Seek(key);
       assert(iter->Valid() && iter->key() == key);
       thread->stats.FinishedOps(nullptr, db, 1, kSeek);
@@ -5291,7 +5325,7 @@ void VerifyDBFromDB(std::string& truth_db_name) {
         } else {
           iter->Prev();
         }
-        GenerateKeyFromInt(++i, FLAGS_num, &key);
+        GenerateKeyFromInt(++i, FLAGS_num, &key, -1);
         assert(iter->Valid() && iter->key() == key);
         thread->stats.FinishedOps(nullptr, db, 1, kSeek);
       }
@@ -5419,7 +5453,7 @@ void VerifyDBFromDB(std::string& truth_db_name) {
     Status s;
     DB* db = SelectDB(thread);
     for (int64_t i = 0; i < FLAGS_numdistinct; i++) {
-      GenerateKeyFromInt(i * max_counter, FLAGS_num, &key);
+      GenerateKeyFromInt(i * max_counter, FLAGS_num, &key, -1);
       s = db->Put(write_options_, key, gen.Generate(value_size_));
       if (!s.ok()) {
         fprintf(stderr, "Operation failed: %s\n", s.ToString().c_str());
@@ -5438,13 +5472,13 @@ void VerifyDBFromDB(std::string& truth_db_name) {
       int64_t key_id = std::max(std::min(FLAGS_numdistinct - 1, rnd_id),
                                 static_cast<int64_t>(0));
       GenerateKeyFromInt(key_id * max_counter + counters[key_id], FLAGS_num,
-                         &key);
+                         &key, -1);
       s = FLAGS_use_single_deletes ? db->SingleDelete(write_options_, key)
                                    : db->Delete(write_options_, key);
       if (s.ok()) {
         counters[key_id] = (counters[key_id] + 1) % max_counter;
         GenerateKeyFromInt(key_id * max_counter + counters[key_id], FLAGS_num,
-                           &key);
+                           &key, -1);
         s = db->Put(write_options_, key, Slice());
       }
 
@@ -5494,7 +5528,7 @@ void VerifyDBFromDB(std::string& truth_db_name) {
       // Pick a Iterator to use
 
       int64_t key_id = thread->rand.Next() % FLAGS_key_id_range;
-      GenerateKeyFromInt(key_id, FLAGS_num, &key);
+      GenerateKeyFromInt(key_id, FLAGS_num, &key, -1);
       // Reset last 8 bytes to 0
       char* start = const_cast<char*>(key.data());
       start += key.size() - 8;
@@ -5568,7 +5602,7 @@ void VerifyDBFromDB(std::string& truth_db_name) {
 
       uint64_t key_id = thread->rand.Next() % FLAGS_key_id_range;
       // Write key id
-      GenerateKeyFromInt(key_id, FLAGS_num, &key);
+      GenerateKeyFromInt(key_id, FLAGS_num, &key, -1);
       // Write timestamp
 
       char* start = const_cast<char*>(key.data());
@@ -5699,11 +5733,11 @@ int db_bench_tool(int argc, char** argv) {
   rocksdb::port::InstallStackTraceHandler();
   static bool initialized = false;
   if (!initialized) {
-    SetUsageMessage(std::string("\nUSAGE:\n") + std::string(argv[0]) +
+    google::SetUsageMessage(std::string("\nUSAGE:\n") + std::string(argv[0]) +
                     " [OPTIONS]...");
     initialized = true;
   }
-  ParseCommandLineFlags(&argc, &argv, true);
+  google::ParseCommandLineFlags(&argc, &argv, true);
   FLAGS_compaction_style_e = (rocksdb::CompactionStyle) FLAGS_compaction_style;
 #ifndef ROCKSDB_LITE
   if (FLAGS_statistics && !FLAGS_statistics_string.empty()) {

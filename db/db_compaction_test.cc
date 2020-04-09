@@ -586,6 +586,7 @@ TEST_F(DBCompactionTest, TestTableReaderForCompaction) {
   cro.change_level = true;
   cro.target_level = 2;
   cro.bottommost_level_compaction = BottommostLevelCompaction::kForce;
+  cro.max_subcompactions = 1;
   db_->CompactRange(cro, nullptr, nullptr);
   // Only verifying compaction outputs issues one table cache lookup
   // for both data block and range deletion block).
@@ -2763,6 +2764,8 @@ TEST_P(DBCompactionTestWithParam, PartialCompactionFailure) {
   options.max_bytes_for_level_multiplier = 2;
   options.compression = kNoCompression;
   options.max_subcompactions = max_subcompactions_;
+  options.enable_lazy_compaction = false;
+  options.blob_size = -1;
 
   env_->SetBackgroundThreads(1, Env::HIGH);
   env_->SetBackgroundThreads(1, Env::LOW);

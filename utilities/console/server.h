@@ -40,8 +40,10 @@ struct ServerRunner {
   ServerRunner(rocksdb::DBImpl* db, const std::string& path, rocksdb::Env* env,
                rocksdb::Logger* log) {
     auto p = &path;
-    std::thread job(
-        [this, db, p, env, log]() { ServerMain(this, db, *p, env, log); });
+    std::thread job([this, db, p, env, log]() {
+      ServerMain(this, db, *p, env, log);
+      closed_ = true;
+    });
     job.detach();
   }
 
