@@ -791,6 +791,28 @@ TerarkZipTableReaderBase::NewRangeTombstoneIterator(
                                               snapshot);
 }
 
+std::shared_ptr<const TableProperties>
+TerarkZipTableReaderBase::GetTableProperties() const {
+  if (table_properties_) {
+    return table_properties_;
+  } else {
+    TableProperties* props = nullptr;
+    size_t filesize = size_t(-1);
+    auto& ioptions = table_reader_options_.ioptions;
+    Status s = ioptions.env->GetFileSize(file_.get()->file_name(), &filesize);
+    if (!s.ok()) {
+      return nullptr;
+    }
+    s = ReadTableProperties(file_.get(), filesize,
+                            kTerarkZipTableMagicNumber, ioptions, &props);
+    if (!s.ok()) {
+      return nullptr;
+    }
+    assert(props != nullptr);
+    return std::shared_ptr<const TableProperties>(props);
+  }
+}
+
 void TerarkZipSubReader::InitUsePread(int minPreadLen) {
   if (minPreadLen < 0) {
     storeUsePread_ = false;
@@ -979,7 +1001,9 @@ Status TerarkEmptyTableReader::Open(RandomAccessFileReader* file,
     return s;
   }
   assert(nullptr != props);
-  table_properties_.reset(props);
+  if (ioptions.pin_table_properties_in_reader) {
+    table_properties_.reset(props);
+  }
   Slice file_data;
   if (table_reader_options_.env_options.use_mmap_reads) {
     s = file->Read(0, file_size, &file_data, nullptr);
@@ -1028,7 +1052,9 @@ Status TerarkZipTableReader::Open(RandomAccessFileReader* file,
     return s;
   }
   assert(nullptr != props);
-  table_properties_.reset(props);
+  if (ioptions.pin_table_properties_in_reader) {
+    table_properties_.reset(props);
+  }
   Slice file_data;
   if (table_reader_options_.env_options.use_mmap_reads) {
     s = file->Read(0, file_size, &file_data, nullptr);
@@ -1306,7 +1332,7 @@ TerarkZipTableReader::~TerarkZipTableReader() {
 TerarkZipTableReader::TerarkZipTableReader(
     const TerarkZipTableFactory* table_factory, const TableReaderOptions& tro,
     const TerarkZipTableOptions& tzto)
-    : table_reader_options_(tro),
+    : TerarkZipTableReaderBase(tro),
       table_factory_(table_factory),
       global_seqno_(kDisableGlobalSequenceNumber),
       tzto_(tzto) {
@@ -1560,7 +1586,7 @@ TerarkZipTableMultiReader::~TerarkZipTableMultiReader() {}
 TerarkZipTableMultiReader::TerarkZipTableMultiReader(
     const TerarkZipTableFactory* table_factory, const TableReaderOptions& tro,
     const TerarkZipTableOptions& tzto)
-    : table_reader_options_(tro),
+    : TerarkZipTableReaderBase(tro),
       table_factory_(table_factory),
       global_seqno_(kDisableGlobalSequenceNumber),
       tzto_(tzto) {
@@ -1578,7 +1604,9 @@ Status TerarkZipTableMultiReader::Open(RandomAccessFileReader* file,
     return s;
   }
   assert(nullptr != props);
-  table_properties_.reset(props);
+  if (ioptions.pin_table_properties_in_reader) {
+    table_properties_.reset(props);
+  }
   Slice file_data;
   if (table_reader_options_.env_options.use_mmap_reads) {
     s = file->Read(0, file_size, &file_data, nullptr);
