@@ -198,6 +198,10 @@ class CompactionFilter
   virtual Status Serialize(std::string* /*bytes*/) const {
     return Status::NotSupported();
   }
+
+  virtual CompactionFilter* Clone() const {
+    return nullptr;
+  }
 };
 
 // Each compaction will create a new CompactionFilter allowing the
