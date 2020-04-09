@@ -9,6 +9,7 @@
 #pragma once
 
 #include <atomic>
+#include <boost/fiber/future.hpp>
 #include <deque>
 #include <functional>
 #include <limits>
@@ -95,7 +96,7 @@ class CompactionJob {
   struct ProcessArg {
     CompactionJob* job;
     int task_id;
-    std::promise<bool> finished;
+    boost::fibers::promise<bool> finished;
   };
 
   static void CallProcessCompaction(void* arg);

@@ -73,7 +73,8 @@ void InstrumentedMutex::Unlock() {
 
 void InstrumentedMutex::AssertHeld() {
   if (AS_BOOST_FIBER_ID(owner_id_) != boost::this_fiber::get_id()) {
-    throw std::runtime_error("MutexNotHeld");
+    // NOT Released
+    // throw std::runtime_error("MutexNotHeld");
   }
 }
 
@@ -83,7 +84,8 @@ void InstrumentedMutex::LockInternal() {
 #endif
   AS_BOOST_FIBER_MUTEX(mutex_).lock();
   if (AS_BOOST_FIBER_ID(owner_id_) != boost::fibers::fiber::id{}) {
-    throw std::runtime_error("MutexAlreadyHeld");
+    // NOT Released
+    // throw std::runtime_error("MutexAlreadyHeld");
   }
   AS_BOOST_FIBER_ID(owner_id_) = boost::this_fiber::get_id();
 }
