@@ -2823,9 +2823,12 @@ Compaction* LevelCompactionBuilder::PickLazyCompaction(
       sorted_runs[i + 1].skip_composite = true;
       continue;
     }
+    double final_level_size = std::min(
+        level_size,
+        double(sorted_runs[i].size + sorted_runs[i + 1].size) / (q + 1));
     uint64_t pick_size = target_file_size_base;
-    double diff_size =
-        double(sorted_runs[i].size) - level_size + target_file_size_base / 2;
+    double diff_size = double(sorted_runs[i].size) - final_level_size +
+                       target_file_size_base / 2;
     if (diff_size > double(pick_size)) {
       pick_size = uint64_t(diff_size);
     }
