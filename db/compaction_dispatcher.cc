@@ -374,6 +374,8 @@ static std::string make_error(Status&& status) {
 std::string RemoteCompactionDispatcher::Worker::DoCompaction(Slice data) {
   CompactionWorkerContext context;
   ajson::load_from_buff(context, data);
+  context.compaction_filter_context.smallest_user_key = context.smallest_user_key;
+  context.compaction_filter_context.largest_user_key = context.largest_user_key;
 
   ImmutableDBOptions immutable_db_options = ImmutableDBOptions(DBOptions());
   ColumnFamilyOptions cf_options;
