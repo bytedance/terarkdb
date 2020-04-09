@@ -396,6 +396,7 @@ class DB {
   static int WaitAsync(int timeout_us);
   static int WaitAsync();
 
+#if defined(TERARKDB_WITH_AIO_FUTURE)
   future<std::tuple<Status, std::string, std::string*>> GetFuture(
       const ReadOptions&, ColumnFamilyHandle*, std::string key,
       std::string* value);
@@ -408,6 +409,7 @@ class DB {
 
   future<std::tuple<Status, std::string, std::string>> GetFuture(
       const ReadOptions&, std::string key);
+#endif
 
   // If keys[i] does not exist in the database, then the i'th returned
   // status will be one for which Status::IsNotFound() is true, and
