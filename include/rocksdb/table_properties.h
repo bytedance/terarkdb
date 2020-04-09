@@ -128,6 +128,8 @@ class TablePropertiesCollectorFactory
  public:
   struct Context {
     uint32_t column_family_id;
+    Slice smallest_user_key;
+    Slice largest_user_key;
     static const uint32_t kUnknownColumnFamily;
   };
 
