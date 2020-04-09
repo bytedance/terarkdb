@@ -8,15 +8,15 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #pragma once
-#include <future>
+#include <boost/fiber/future.hpp>
 #include <functional>
 
 namespace rocksdb {
 
   template <typename T>
   struct AsyncTask {
-    std::promise<T> promise;
-    std::future<T> future;
+    boost::fibers::promise<T> promise;
+    boost::fibers::future<T> future;
     std::function<T()> func;
     void operator()() {
       promise.set_value(std::move(func()));
