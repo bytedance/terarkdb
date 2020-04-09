@@ -151,6 +151,7 @@ CXXFLAGS += -march=haswell
 CXXFLAGS += -I${TERARK_CORE_HOME}/src -I${TERARK_CORE_HOME}/boost-include -I${TERARK_CORE_HOME}/3rdparty/zstd
 
 CPPUTIL_METRICS2_HOME ?= third-party/metrics2-cmake
+CPPUTIL_JEMALLOC_HOME ?= third-party/jemalloc
 LDFLAGS += ${CPPUTIL_METRICS2_HOME}/cmake-build/libmetrics2.a
 CFLAGS += -I${CPPUTIL_METRICS2_HOME}
 CXXFLAGS += -I${CPPUTIL_METRICS2_HOME}
@@ -1238,6 +1239,23 @@ $(LIBRARY): $(LIBOBJECTS) cpputil_metrics2
 	$(AM_V_AR)rm -f $@
 	$(AM_V_at)$(AR) $(ARFLAGS) $@ $(LIBOBJECTS)
 ifeq (${BUNDLE_ALL_TERARK_STATIC},1)
+ifeq (${USE_JEMALLOC},1)
+	mv $@ orgin-$@
+	ln -fs ${TERARK_CORE_PKG_DIR}/lib_static/libterark-{idx,zbs,fsa,core}-${DBG_OR_RLS}.a .
+	(\
+	echo create $@; \
+	echo addlib libterark-idx-${DBG_OR_RLS}.a; \
+	echo addlib libterark-zbs-${DBG_OR_RLS}.a; \
+	echo addlib libterark-fsa-${DBG_OR_RLS}.a; \
+	echo addlib libterark-core-${DBG_OR_RLS}.a; \
+	echo addlib ${CPPUTIL_METRICS2_HOME}/cmake-build/libmetrics2.a; \
+	echo addlib ${CPPUTIL_JEMALLOC_HOME}/lib/libjemalloc.a; \
+	echo addlib orgin-$@; \
+	echo save; \
+	echo end; \
+	) | ar -M
+	rm -f libterark-{idx,zbs,fsa,core}-${DBG_OR_RLS}.a
+else
 	mv $@ orgin-$@
 	ln -fs ${TERARK_CORE_PKG_DIR}/lib_static/libterark-{idx,zbs,fsa,core}-${DBG_OR_RLS}.a .
 	(\
@@ -1252,6 +1270,7 @@ ifeq (${BUNDLE_ALL_TERARK_STATIC},1)
 	echo end; \
 	) | ar -M
 	rm -f libterark-{idx,zbs,fsa,core}-${DBG_OR_RLS}.a
+endif
 endif
 
 $(TOOLS_LIBRARY): $(BENCH_LIB_SOURCES:.cc=.o) $(TOOL_LIB_SOURCES:.cc=.o) $(LIB_SOURCES:.cc=.o) $(TESTUTIL) $(ANALYZER_LIB_SOURCES:.cc=.o)
