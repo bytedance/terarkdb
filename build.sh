@@ -51,7 +51,9 @@ fi
 
 JEMALLOC=0
 if [ "$USE_JEMALLOC" == "1" ]; then
-  cd third-party/jemalloc && bash autogen.sh && ./configure --enable-prof-libunwind && make -j20 && cd ../../
+  if [ ! -f "third-party/jemalloc/lib/libjemalloc.a" ]; then
+    cd third-party/jemalloc && bash autogen.sh && ./configure --enable-prof-libunwind && make -j20 && cd ../../
+  fi
   JEMALLOC=1
 fi
 

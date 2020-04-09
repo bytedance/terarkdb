@@ -1174,7 +1174,17 @@ std::shared_ptr<const TableProperties> BlockBasedTable::GetTableProperties()
   if (rep_->table_properties) {
     return rep_->table_properties;
   } else {
-    //TableReader::ReadTableProperties(rep_->file.get(), rep_->file);
+    TableProperties* prop = nullptr;
+    size_t filesize = size_t(-1);
+    Status s;
+    s = rep_->ioptions.env->GetFileSize(rep_->file.get()->file_name(),
+                                        &filesize);
+    assert(filesize != size_t(-1));
+    s = ReadTableProperties(rep_->file.get(), filesize,
+                            kBlockBasedTableMagicNumber, rep_->ioptions, &prop);
+    assert(prop != nullptr);
+    rep_->table_properties.reset(prop);
+    return rep_->table_properties;
   }
 }
 
