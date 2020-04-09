@@ -912,8 +912,6 @@ Status DBImpl::SetDBOptions(
     s = GetMutableDBOptionsFromStrings(mutable_db_options_, options_map,
                                        &new_options);
     if (s.ok()) {
-      // NOT released
-      new_options.max_task_per_thread = 1;
       auto bg_job_limits = DBImpl::GetBGJobLimits(
           immutable_db_options_.max_background_flushes,
           new_options.max_background_compactions,
