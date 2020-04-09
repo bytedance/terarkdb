@@ -1179,12 +1179,16 @@ std::shared_ptr<const TableProperties> BlockBasedTable::GetTableProperties()
     Status s;
     s = rep_->ioptions.env->GetFileSize(rep_->file.get()->file_name(),
                                         &filesize);
-    assert(filesize != size_t(-1));
+    if (!s.ok()) {
+      return nullptr;
+    }
     s = ReadTableProperties(rep_->file.get(), filesize,
                             kBlockBasedTableMagicNumber, rep_->ioptions, &prop);
+    if (!s.ok()) {
+      return nullptr;
+    }
     assert(prop != nullptr);
-    rep_->table_properties.reset(prop);
-    return rep_->table_properties;
+    return std::shared_ptr<const TableProperties>(prop);
   }
 }
 

@@ -270,7 +270,7 @@ OPT += -DTERARKDB_ENABLE_CONSOLE
 endif
 
 ifeq (${USE_JEMALLOC},1)
-	LDFLAGS += -L./third-party/jemalloc/lib -ljemalloc
+	LDFLAGS += ./third-party/jemalloc/lib/libjemalloc.a
 endif
 
 #-----------------------------------------------
