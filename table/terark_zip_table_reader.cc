@@ -1604,7 +1604,9 @@ Status TerarkZipTableMultiReader::Open(RandomAccessFileReader* file,
     return s;
   }
   assert(nullptr != props);
-  table_properties_.reset(props);
+  if (ioptions.pin_table_properties_in_reader) {
+    table_properties_.reset(props);
+  }
   Slice file_data;
   if (table_reader_options_.env_options.use_mmap_reads) {
     s = file->Read(0, file_size, &file_data, nullptr);
