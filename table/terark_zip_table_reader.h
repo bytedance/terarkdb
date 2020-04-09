@@ -48,7 +48,6 @@ class TerarkZipTableReaderBase : public TableReader, boost::noncopyable {
   const TableReaderOptions table_reader_options_;
 
   std::shared_ptr<const TableProperties> table_properties_;
-  TablePropertiesBase table_properties_base_;
   unique_ptr<RandomAccessFileReader> file_;
 
   virtual SequenceNumber GetSequenceNumber() const = 0;

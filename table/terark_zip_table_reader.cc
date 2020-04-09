@@ -1004,7 +1004,6 @@ Status TerarkEmptyTableReader::Open(RandomAccessFileReader* file,
   if (ioptions.pin_table_properties_in_reader) {
     table_properties_.reset(props);
   }
-  table_properties_base_ = *props;
   Slice file_data;
   if (table_reader_options_.env_options.use_mmap_reads) {
     s = file->Read(0, file_size, &file_data, nullptr);
@@ -1056,7 +1055,6 @@ Status TerarkZipTableReader::Open(RandomAccessFileReader* file,
   if (ioptions.pin_table_properties_in_reader) {
     table_properties_.reset(props);
   }
-  table_properties_base_ = *props;
   Slice file_data;
   if (table_reader_options_.env_options.use_mmap_reads) {
     s = file->Read(0, file_size, &file_data, nullptr);

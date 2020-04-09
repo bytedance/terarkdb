@@ -72,7 +72,7 @@ class CuckooTableReader: public TableReader {
   bool identity_as_first_hash_;
   bool use_module_hash_;
   std::shared_ptr<const TableProperties> table_props_;
-  TablePropertiesBase props_base_;
+  TablePropertiesBase table_props_base_;
   Status status_;
   uint32_t num_hash_func_;
   std::string unused_key_;

@@ -167,7 +167,6 @@ class PlainTableReader: public TableReader {
   uint64_t file_number_;
   uint64_t file_size_;
   std::shared_ptr<const TableProperties> table_properties_;
-  TablePropertiesBase table_properties_base_;
   Cache* table_cache_;
   Cache::Handle *table_cache_handle_;
   port::Mutex table_cache_mutex_;
