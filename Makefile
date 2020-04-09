@@ -151,10 +151,11 @@ CXXFLAGS += -march=haswell
 CXXFLAGS += -I${TERARK_CORE_HOME}/src -I${TERARK_CORE_HOME}/boost-include -I${TERARK_CORE_HOME}/3rdparty/zstd
 
 CPPUTIL_METRICS2_HOME ?= third-party/metrics2-cmake
-CPPUTIL_JEMALLOC_HOME ?= third-party/jemalloc
 LDFLAGS += ${CPPUTIL_METRICS2_HOME}/cmake-build/libmetrics2.a
 CFLAGS += -I${CPPUTIL_METRICS2_HOME}
 CXXFLAGS += -I${CPPUTIL_METRICS2_HOME}
+
+CPPUTIL_JEMALLOC_HOME ?= third-party/jemalloc
 
 #------------------------------------------------------------------------------
 ifeq (${TERARK_CORE_HOME},terark-core)
@@ -266,7 +267,7 @@ OPT += -DTERARKDB_ENABLE_CONSOLE
 endif
 
 ifeq (${USE_JEMALLOC},1)
-	LDFLAGS += ./third-party/jemalloc/lib/libjemalloc.a
+	LDFLAGS += ${CPPUTIL_JEMALLOC_HOME}/lib/libjemalloc.a
 endif
 
 #-----------------------------------------------
@@ -798,7 +799,7 @@ $(SHARED2): $(SHARED3)
 	ln -fs $(SHARED3) $(SHARED2)
 $(SHARED3): $(SHARED4)
 	ln -fs $(SHARED4) $(SHARED3)
-$(SHARED4): shared-objects/${xdir}/${SHARED4} cpputil_metrics2
+$(SHARED4): shared-objects/${xdir}/${SHARED4}
 	ln -fs $< $@
 
 ifeq ($(HAVE_POWER8),1)
@@ -839,6 +840,11 @@ shared-objects/${xdir}/$(SHARED3): shared-objects/${xdir}/$(SHARED4)
 
 endif # PLATFORM_SHARED_VERSIONED
 
+ifeq (${USE_JEMALLOC},1)
+${shared_all_libobjects}: cpputil_metrics2 cpputil_jemalloc
+else
+${shared_all_libobjects}: cpputil_metrics2
+endif
 shared-objects/${xdir}/$(SHARED4): $(shared_all_libobjects)
 	$(CXX) $^ $(PLATFORM_SHARED_LDFLAGS)$(SHARED3) \
 		      $(PLATFORM_SHARED_CFLAGS) $(LDFLAGS) $(LINK_STATIC_TERARK) $(TerarkLDFLAGS) -o $@
@@ -852,7 +858,7 @@ endif  # PLATFORM_SHARED_EXT
 .PHONY: blackbox_crash_test check clean coverage crash_test ldb_tests package \
 	release tags tags0 valgrind_check whitebox_crash_test format static_lib shared_lib all \
 	dbg rocksdbjavastatic rocksdbjava install install-static install-shared uninstall \
-	analyze tools tools_lib
+	analyze tools tools_lib cpputil_metrics2 cpputil_jemalloc
 
 all: $(LIBRARY) $(SHARED) $(BENCHMARKS) tools tools_lib test_libs $(TESTS)
 
@@ -861,7 +867,12 @@ all_but_some_tests: $(LIBRARY) $(BENCHMARKS) tools tools_lib test_libs $(SUBSET)
 ${CPPUTIL_METRICS2_HOME}/cmake-build/libmetrics2.a:
 	mkdir -p ${CPPUTIL_METRICS2_HOME}/cmake-build && cd ${CPPUTIL_METRICS2_HOME}/cmake-build && cmake .. -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} && make -j20
 
+${CPPUTIL_JEMALLOC_HOME}/lib/libjemalloc.a:
+	cd ${CPPUTIL_JEMALLOC_HOME} && bash autogen.sh && CFLAGS=-fPIC CXXFLAGS=-fPIC LDFLAGS=-fPIC ./configure --enable-prof --enable-prof-libunwind && make -j20
+
 cpputil_metrics2: ${CPPUTIL_METRICS2_HOME}/cmake-build/libmetrics2.a
+
+cpputil_jemalloc: ${CPPUTIL_JEMALLOC_HOME}/lib/libjemalloc.a
 
 static_lib: $(LIBRARY)
 
@@ -1235,6 +1246,9 @@ package:
 # 	Unit tests and tools
 # ---------------------------------------------------------------------------
 
+ifeq (${USE_JEMALLOC},1)
+$(LIBRARY): cpputil_jemalloc
+endif
 $(LIBRARY): $(LIBOBJECTS) cpputil_metrics2
 	$(AM_V_AR)rm -f $@
 	$(AM_V_at)$(AR) $(ARFLAGS) $@ $(LIBOBJECTS)
