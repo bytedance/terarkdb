@@ -139,7 +139,8 @@ class TablePropertiesCollectorFactory
 
   virtual bool NeedSerialize() const { return false; }
 
-  virtual Status Serialize(std::string*) const {
+  // Maybe Serialize a part of meta data
+  virtual Status Serialize(std::string*, Context) const {
     return Status::NotSupported("Serialize()", this->Name());
   }
   virtual Status Deserialize(Slice) {
