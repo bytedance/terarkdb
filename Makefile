@@ -868,7 +868,7 @@ ${CPPUTIL_METRICS2_HOME}/cmake-build/libmetrics2.a:
 	mkdir -p ${CPPUTIL_METRICS2_HOME}/cmake-build && cd ${CPPUTIL_METRICS2_HOME}/cmake-build && cmake .. -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} && make -j20
 
 ${CPPUTIL_JEMALLOC_HOME}/lib/libjemalloc.a:
-	cd ${CPPUTIL_JEMALLOC_HOME} && bash autogen.sh && CFLAGS=-fPIC CXXFLAGS=-fPIC LDFLAGS=-fPIC ./configure --enable-prof --enable-prof-libunwind && make -j20
+	cd ${CPPUTIL_JEMALLOC_HOME} && bash autogen.sh && CFLAGS=-fPIC CXXFLAGS=-fPIC LDFLAGS=-fPIC ./configure --enable-prof && make -j20
 
 cpputil_metrics2: ${CPPUTIL_METRICS2_HOME}/cmake-build/libmetrics2.a
 
