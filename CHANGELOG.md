@@ -1,6 +1,26 @@
 
 ## CHANGELOG
 
+- 版本号：v1.2.5
+- 日期：2020-04-10
+- 发版说明：
+  - 计划内例行发版
+- 功能变更：
+  - 增加 pin_table_properties_in_reader 选项，降低 TableProperties 内存占用
+  - 增加 max_task_per_thread 选项，支持单线程运行多个 Compaction/GC 任务
+  - 支持内嵌 jemalloc，make 参数增加 USE_JEMALLOC=1 启用
+  - ZipOffsetBlobStore 新增 ZSTD 算法支持
+- 修复问题：
+  - 修复从 RocksDB 迁移，若使用了 RangeDeletion，有可能丢失部分数据的问题
+  - 修复 Ingest SST 读取数据错误的问题
+    - https://github.com/facebook/rocksdb/issues/6666
+  - 修复 Lazy Level Compaction 在数据量很少时出现"松树"形 LSM 树的问题
+  - 修复后台 Domain Socket 退出问题导致 DB 关闭卡住的问题
+  - 修复后台 GC 任务导致排他性手动 Compact 被阻塞的问题
+  - 修复 AdaptiveTableFactory 输出配置被截断的问题
+- 已知问题：
+  - 暂无
+
 - 版本号：v1.2.4
 - 日期：2020-03-26
 - 发版说明：
