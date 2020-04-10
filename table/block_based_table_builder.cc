@@ -281,21 +281,13 @@ struct BlockBasedTableBuilder::Rep {
 
   std::vector<std::unique_ptr<IntTblPropCollector>> table_properties_collectors;
 
-  Rep(const ImmutableCFOptions& _ioptions, const MutableCFOptions& _moptions,
+  Rep(const TableBuilderOptions& builder_opt,
       const BlockBasedTableOptions& table_opt,
-      const InternalKeyComparator& icomparator,
-      const std::vector<std::unique_ptr<IntTblPropCollectorFactory>>*
-          int_tbl_prop_collector_factories,
-      uint32_t _column_family_id, WritableFileWriter* f,
-      const CompressionType _compression_type,
-      const CompressionOptions& _compression_opts,
-      const std::string* _compression_dict, bool skip_filters,
-      const std::string& _column_family_name, uint64_t _creation_time,
-      uint64_t _oldest_key_time)
-      : ioptions(_ioptions),
-        moptions(_moptions),
+      uint32_t _column_family_id, WritableFileWriter* f)
+      : ioptions(builder_opt.ioptions),
+        moptions(builder_opt.moptions),
         table_options(table_opt),
-        internal_comparator(icomparator),
+        internal_comparator(builder_opt.internal_comparator),
         file(f),
         alignment(table_options.block_align
                       ? std::min(table_options.block_size, kDefaultPageSize)
@@ -303,15 +295,15 @@ struct BlockBasedTableBuilder::Rep {
         data_block(table_options.block_restart_interval,
                    table_options.use_delta_encoding,
                    false /* use_value_delta_encoding */,
-                   icomparator.user_comparator()
+                   builder_opt.internal_comparator.user_comparator()
                            ->CanKeysWithDifferentByteContentsBeEqual()
                        ? BlockBasedTableOptions::kDataBlockBinarySearch
                        : table_options.data_block_index_type,
                    table_options.data_block_hash_table_util_ratio),
         range_del_block(1 /* block_restart_interval */),
-        internal_prefix_transform(_moptions.prefix_extractor.get()),
-        compression_dict(_compression_dict),
-        compression_ctx(_compression_type, _compression_opts),
+        internal_prefix_transform(builder_opt.moptions.prefix_extractor.get()),
+        compression_dict(builder_opt.compression_dict),
+        compression_ctx(builder_opt.compression_type, builder_opt.compression_opts),
         use_delta_encoding_for_index_values(table_opt.format_version >= 4 &&
                                             !table_opt.block_align),
         compressed_cache_key_prefix_size(0),
@@ -319,9 +311,9 @@ struct BlockBasedTableBuilder::Rep {
             table_options.flush_block_policy_factory->NewFlushBlockPolicy(
                 table_options, data_block)),
         column_family_id(_column_family_id),
-        column_family_name(_column_family_name),
-        creation_time(_creation_time),
-        oldest_key_time(_oldest_key_time) {
+        column_family_name(builder_opt.column_family_name),
+        creation_time(builder_opt.creation_time),
+        oldest_key_time(builder_opt.oldest_key_time) {
     if (table_options.index_type ==
         BlockBasedTableOptions::kTwoLevelIndexSearch) {
       p_index_builder_ = PartitionedIndexBuilder::CreateIndexBuilder(
@@ -334,22 +326,19 @@ struct BlockBasedTableBuilder::Rep {
           &this->internal_prefix_transform, use_delta_encoding_for_index_values,
           table_options));
     }
-    if (skip_filters) {
+    if (builder_opt.skip_filters) {
       filter_builder = nullptr;
     } else {
       filter_builder.reset(CreateFilterBlockBuilder(
-          _ioptions, _moptions, table_options,
+          builder_opt.ioptions, builder_opt.moptions, table_options,
           use_delta_encoding_for_index_values, p_index_builder_));
     }
 
-    for (auto& collector_factories : *int_tbl_prop_collector_factories) {
-      table_properties_collectors.emplace_back(
-          collector_factories->CreateIntTblPropCollector(column_family_id));
-    }
+    builder_opt.PushIntTblPropCollectors(&table_properties_collectors, column_family_id);
     table_properties_collectors.emplace_back(
         new BlockBasedTablePropertiesCollector(
             table_options.index_type, table_options.whole_key_filtering,
-            _moptions.prefix_extractor != nullptr));
+            builder_opt.moptions.prefix_extractor != nullptr));
     if (table_options.verify_compression) {
       verify_ctx.reset(new UncompressionContext(UncompressionContext::NoCache(),
                                                 compression_ctx.type()));
@@ -363,22 +352,14 @@ struct BlockBasedTableBuilder::Rep {
 };
 
 BlockBasedTableBuilder::BlockBasedTableBuilder(
-    const ImmutableCFOptions& ioptions, const MutableCFOptions& moptions,
+    const TableBuilderOptions& builder_options,
     const BlockBasedTableOptions& table_options,
-    const InternalKeyComparator& internal_comparator,
-    const std::vector<std::unique_ptr<IntTblPropCollectorFactory>>*
-        int_tbl_prop_collector_factories,
-    uint32_t column_family_id, WritableFileWriter* file,
-    const CompressionType compression_type,
-    const CompressionOptions& compression_opts,
-    const std::string* compression_dict, bool skip_filters,
-    const std::string& column_family_name, uint64_t creation_time,
-    uint64_t oldest_key_time) {
+    uint32_t column_family_id, WritableFileWriter* file) {
   BlockBasedTableOptions sanitized_table_options(table_options);
   if (sanitized_table_options.format_version == 0 &&
       sanitized_table_options.checksum != kCRC32c) {
     ROCKS_LOG_WARN(
-        ioptions.info_log,
+        builder_options.ioptions.info_log,
         "Silently converting format_version to 1 because checksum is "
         "non-default");
     // silently convert format_version to 1 to keep consistent with current
@@ -387,10 +368,8 @@ BlockBasedTableBuilder::BlockBasedTableBuilder(
   }
 
   rep_ =
-      new Rep(ioptions, moptions, sanitized_table_options, internal_comparator,
-              int_tbl_prop_collector_factories, column_family_id, file,
-              compression_type, compression_opts, compression_dict,
-              skip_filters, column_family_name, creation_time, oldest_key_time);
+      new Rep(builder_options, sanitized_table_options,
+              column_family_id, file);
 
   if (rep_->filter_builder != nullptr) {
     rep_->filter_builder->StartBlock(0);

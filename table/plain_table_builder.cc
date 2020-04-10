@@ -58,29 +58,27 @@ extern const uint64_t kPlainTableMagicNumber = 0x8242229663bf9564ull;
 extern const uint64_t kLegacyPlainTableMagicNumber = 0x4f3418eb7a8f13b8ull;
 
 PlainTableBuilder::PlainTableBuilder(
-    const ImmutableCFOptions& ioptions, const MutableCFOptions& moptions,
-    const std::vector<std::unique_ptr<IntTblPropCollectorFactory>>*
-        int_tbl_prop_collector_factories,
+    const TableBuilderOptions& builder_options,
     uint32_t column_family_id, WritableFileWriter* file, uint32_t user_key_len,
     EncodingType encoding_type, size_t index_sparseness,
-    uint32_t bloom_bits_per_key, const std::string& column_family_name,
+    uint32_t bloom_bits_per_key,
     uint32_t num_probes, size_t huge_page_tlb_size, double hash_table_ratio,
     bool store_index_in_file)
-    : ioptions_(ioptions),
-      moptions_(moptions),
+    : ioptions_(builder_options.ioptions),
+      moptions_(builder_options.moptions),
       bloom_block_(num_probes),
       file_(file),
       bloom_bits_per_key_(bloom_bits_per_key),
       huge_page_tlb_size_(huge_page_tlb_size),
-      encoder_(encoding_type, user_key_len, moptions.prefix_extractor.get(),
+      encoder_(encoding_type, user_key_len, builder_options.moptions.prefix_extractor.get(),
                index_sparseness),
       store_index_in_file_(store_index_in_file),
-      prefix_extractor_(moptions.prefix_extractor.get()) {
+      prefix_extractor_(builder_options.moptions.prefix_extractor.get()) {
   // Build index block and save it in the file if hash_table_ratio > 0
   if (store_index_in_file_) {
     assert(hash_table_ratio > 0 || IsTotalOrderMode());
     index_builder_.reset(new PlainTableIndexBuilder(
-        &arena_, ioptions, moptions.prefix_extractor.get(), index_sparseness,
+        &arena_, builder_options.ioptions, builder_options.moptions.prefix_extractor.get(), index_sparseness,
         hash_table_ratio, huge_page_tlb_size_));
     properties_.user_collected_properties
         [PlainTablePropertyNames::kBloomVersion] = "1";  // For future use
@@ -97,7 +95,7 @@ PlainTableBuilder::PlainTableBuilder(
   // plain encoding.
   properties_.format_version = (encoding_type == kPlain) ? 0 : 1;
   properties_.column_family_id = column_family_id;
-  properties_.column_family_name = column_family_name;
+  properties_.column_family_name = builder_options.column_family_name;
   properties_.prefix_extractor_name = moptions_.prefix_extractor != nullptr
                                           ? moptions_.prefix_extractor->Name()
                                           : "nullptr";
@@ -107,10 +105,7 @@ PlainTableBuilder::PlainTableBuilder(
   properties_.user_collected_properties
       [PlainTablePropertyNames::kEncodingType] = val;
 
-  for (auto& collector_factories : *int_tbl_prop_collector_factories) {
-    table_properties_collectors_.emplace_back(
-        collector_factories->CreateIntTblPropCollector(column_family_id));
-  }
+  builder_options.PushIntTblPropCollectors(&table_properties_collectors_, column_family_id);
 }
 
 PlainTableBuilder::~PlainTableBuilder() {

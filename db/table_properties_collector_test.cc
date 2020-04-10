@@ -195,7 +195,7 @@ class RegularKeysStartWithAFactory : public IntTblPropCollectorFactory,
     }
   }
   virtual IntTblPropCollector* CreateIntTblPropCollector(
-      uint32_t /*column_family_id*/) override {
+      const TablePropertiesCollectorFactory::Context&) override {
     return new RegularKeysStartWithAInternal();
   }
   const char* Name() const override { return "RegularKeysStartWithA"; }
