@@ -44,7 +44,8 @@ class IntTblPropCollectorFactory {
   virtual const char* Name() const = 0;
 
   virtual bool NeedSerialize() const { return false; }
-  virtual Status Serialize(std::string*) const {
+  virtual Status Serialize(std::string*,
+      const TablePropertiesCollectorFactory::Context&) const {
     return Status::NotSupported("Serialize()", this->Name());
   }
   virtual Status Deserialize(Slice) {
@@ -134,8 +135,9 @@ class UserKeyTablePropertiesCollectorFactory
   bool NeedSerialize() const override {
     return user_collector_factory_->NeedSerialize();
   }
-  Status Serialize(std::string* bytes) const override {
-    return user_collector_factory_->Serialize(bytes);
+  Status Serialize(std::string* bytes,
+      const TablePropertiesCollectorFactory::Context& ctx) const override {
+    return user_collector_factory_->Serialize(bytes, ctx);
   }
   Status Deserialize(Slice bytes) override {
     return user_collector_factory_->Deserialize(bytes);
