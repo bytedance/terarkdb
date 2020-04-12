@@ -761,6 +761,8 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(Slice data) {
         context.compression_opts, nullptr /* compression_dict */,
         true /* skip_filters */, context.cf_name, -1 /* level */,
         0 /* compaction_load */);
+    table_builder_options.smallest_user_key = context.smallest_user_key;
+    table_builder_options.largest_user_key = context.largest_user_key;
     std::unique_ptr<WritableFile> sst_file;
     s = env->NewWritableFile(file_name, &sst_file, env_opt);
     if (!s.ok()) {
