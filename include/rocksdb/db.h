@@ -987,6 +987,15 @@ class DB {
   virtual Status FlushWAL(bool /*sync*/) {
     return Status::NotSupported("FlushWAL not implemented");
   }
+  // Lock the WAL. Also flushes the WAL after locking.
+  virtual Status LockWAL() {
+    return Status::NotSupported("LockWAL not implemented");
+  }
+
+  // Unlock the WAL.
+  virtual Status UnlockWAL() {
+    return Status::NotSupported("UnlockWAL not implemented");
+  }
   // Sync the wal. Note that Write() followed by SyncWAL() is not exactly the
   // same as Write() with sync=true: in the latter case the changes won't be
   // visible until the sync is done.
