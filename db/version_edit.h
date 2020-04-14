@@ -135,7 +135,8 @@ struct FileMetaData {
 
   bool marked_for_compaction;  // True if client asked us nicely to compact this
                                // file.
-  bool is_skip_gc;             // True if the SST in LSM
+
+  uint8_t gc_status;           // for gc picker
 
   TablePropertyCache prop;  // Cache some TableProperty fields into manifest
 
@@ -146,7 +147,7 @@ struct FileMetaData {
         refs(0),
         being_compacted(false),
         marked_for_compaction(false),
-        is_skip_gc(false) {}
+        gc_status(kGarbageCollectionForbidden) {}
 
   std::vector<SequenceNumber> ShrinkSnapshot(
       const std::vector<SequenceNumber>& snapshots) const;
@@ -176,6 +177,23 @@ struct FileMetaData {
     fd.smallest_seqno = std::min(fd.smallest_seqno, seqno);
     fd.largest_seqno = std::max(fd.largest_seqno, seqno);
   }
+
+  enum {
+    kGarbageCollectionForbidden = 0,
+    kGarbageCollectionCandidate = 1,
+    kGarbageCollectionPermitted = 2,
+  };
+
+  bool is_gc_forbidden() const {
+    return gc_status == kGarbageCollectionForbidden;
+  }
+  bool is_gc_candidate() const {
+    return gc_status == kGarbageCollectionCandidate;
+  }
+  bool is_gc_permitted() const {
+    return gc_status == kGarbageCollectionPermitted;
+  }
+  void set_gc_candidate() { gc_status = kGarbageCollectionCandidate; }
 };
 
 // A compressed copy of file meta data that just contain minimum data needed

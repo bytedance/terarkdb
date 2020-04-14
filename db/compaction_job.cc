@@ -1766,15 +1766,23 @@ void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
     ROCKS_LOG_INFO(
         db_options_.info_log,
         "[%s] [JOB %d] Table #%" PRIu64 " GC: %" PRIu64
-        " inputs from %zd files. %" PRIu64 " clear, %" PRIu64
-        " estimation: [ %" PRIu64 " garbage type, %" PRIu64
+        " inputs from %zd files. %" PRIu64
+        " clear, %.2f%% estimation: [ %" PRIu64 " garbage type, %" PRIu64
         " get not found, %" PRIu64
         " file number mismatch ], inheritance chain: %" PRIu64 " -> %" PRIu64,
         cfd->GetName().c_str(), job_id_, meta.fd.GetNumber(), counter.input,
         inputs.front().size(), counter.input - meta.prop.num_entries,
-        sub_compact->compaction->num_antiquation(), counter.garbage_type,
-        counter.get_not_found, counter.file_number_mismatch, raw_chain_length,
+        sub_compact->compaction->num_antiquation() * 100. / counter.input,
+        counter.garbage_type, counter.get_not_found,
+        counter.file_number_mismatch, raw_chain_length,
         inheritance_chain.size());
+    if (counter.input == meta.prop.num_entries) {
+      ROCKS_LOG_INFO(db_options_.info_log,
+                     "[%s] [JOB %d] Table #%" PRIu64
+                     " GC purge nothing, dropped",
+                     cfd->GetName().c_str(), job_id_, meta.fd.GetNumber());
+      sub_compact->outputs.clear();
+    }
   }
 
   if (measure_io_stats_) {

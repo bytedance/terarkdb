@@ -839,7 +839,7 @@ Compaction* CompactionPicker::PickGarbageCollection(
   // 2. fragile files that can be reorganized
   // 3. marked for compaction for other reasons
   for (auto f : vstorage->LevelFiles(-1)) {
-    if (f->is_skip_gc || f->being_compacted) {
+    if (!f->is_gc_permitted() || f->being_compacted) {
       continue;
     }
     GarbageFileInfo info = {f};
@@ -880,6 +880,7 @@ Compaction* CompactionPicker::PickGarbageCollection(
   auto& input = inputs.front();
   input.level = -1;
   input.files.push_back(gc_files.front().f);
+  gc_files.front().f->set_gc_candidate();
 
   uint64_t total_estimate_size = gc_files.front().estimate_size;
   uint64_t num_antiquation = gc_files.front().f->num_antiquation;
@@ -891,6 +892,7 @@ Compaction* CompactionPicker::PickGarbageCollection(
     total_estimate_size += info.estimate_size;
     num_antiquation += info.f->num_antiquation;
     input.files.push_back(info.f);
+    info.f->set_gc_candidate();
     if (input.size() >= 8) {
       break;
     }

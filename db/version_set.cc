@@ -895,7 +895,7 @@ double Version::GetGarbageCollectionLoad() const {
   auto icmp = storage_info_.internal_comparator_;
   std::shared_ptr<const TableProperties> tp;
   for (auto f : storage_info_.LevelFiles(-1)) {
-    if (f->is_skip_gc || f->being_compacted) {
+    if (f->is_gc_forbidden() || f->being_compacted) {
       continue;
     }
     if (f->prop.num_entries != 0) {
@@ -904,7 +904,9 @@ double Version::GetGarbageCollectionLoad() const {
       auto s = table_cache_->GetTableProperties(
           env_options_, *icmp, f->fd, &tp,
           mutable_cf_options_.prefix_extractor.get(), false);
-      if (!s.ok()) continue;
+      if (!s.ok()) {
+        continue;
+      }
       sum += tp->num_entries;
     }
     antiquated += f->num_antiquation;
@@ -1461,7 +1463,7 @@ void Version::PrepareApply(const MutableCFOptions& mutable_cf_options) {
 }
 
 void VersionStorageInfo::UpdateAccumulatedStats(FileMetaData* file_meta) {
-  if (file_meta->is_skip_gc) {
+  if (file_meta->is_gc_forbidden()) {
     lsm_file_size_ += file_meta->fd.GetFileSize();
     lsm_num_entries_ += file_meta->prop.num_entries;
     lsm_num_deletions_ += file_meta->prop.num_deletions;
@@ -1753,7 +1755,7 @@ void VersionStorageInfo::ComputeCompactionScore(
   // Calculate total_garbage_ratio_ as criterion for NeedsGarbageCollection().
   double num_entries = 0;
   for (auto& f : LevelFiles(-1)) {
-    if (f->is_skip_gc) {
+    if (f->is_gc_forbidden()) {
       continue;
     }
     total_garbage_ratio_ += f->num_antiquation;
