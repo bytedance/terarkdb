@@ -304,6 +304,18 @@ void KeyPathAnalysis::ListAllEmptyValues(const std::string& sst_fname) {
   // std::cout << "Total Key Count : " << cnt << std::endl;
 }
 
+void KeyPathAnalysis::GetSize(const std::string& sst_fname) {
+  auto s = GetTableReader(sst_fname);
+  std::string name = table_properties_->column_family_name;
+  size_t size = table_properties_->data_size;
+  auto it = sz.find(name);
+  if (it != sz.end()){
+    it->second += size;
+  } else {
+    sz.insert({name, size});
+  }
+}
+
 }  // namespace terark
 
 /**
@@ -439,6 +451,20 @@ int main(const int argc, const char** argv) {
                 << ", Count = " << it.second << std::endl;
     }
 
+  } else if (memcmp(command, "getsize", 7) == 0) {
+    kp->DEBUG_INFO = false;
+    std::cout << "Get Size of Column families." << std::endl;
+    std::map<std::string, size_t> cfs;
+    for (auto& p : boost::filesystem::directory_iterator(target_sst)) {
+      auto fname = p.path().string().c_str();
+      if (strncmp(boost::filesystem::extension(fname).c_str(), ".sst", 4) ==
+          0) {
+        kp->GetSize(fname);
+      }
+    }
+    for(auto& it : kp->sz) {
+      std::cout << it.first << " : " << it.second << std::endl;
+    }
   } else {
     std::cout << "Unsupported Operation!" << std::endl;
     PrintHelp();

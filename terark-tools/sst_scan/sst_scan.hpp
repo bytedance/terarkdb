@@ -52,6 +52,8 @@ class KeyPathAnalysis {
   // tmp storage
   std::unordered_map<std::string, int> mp;
 
+  std::unordered_map<std::string, size_t> sz;
+
   std::unique_ptr<TableProperties> table_properties_;
 
   void printTableType(const uint64_t magic_number);
@@ -73,5 +75,7 @@ class KeyPathAnalysis {
   void ListAllEmptyValues(const std::string& sst_fname);
 
   void Seek(const std::string& sst_fname, const Slice& key);
+
+  void GetSize(const std::string& sst_fname);
 };
 }  // namespace terark
