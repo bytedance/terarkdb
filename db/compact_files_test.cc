@@ -129,6 +129,8 @@ TEST_F(CompactFilesTest, ObsoleteFiles) {
   options.write_buffer_size = kWriteBufferSize;
   options.max_write_buffer_number = 2;
   options.compression = kNoCompression;
+  options.enable_lazy_compaction = false;
+  options.blob_size = -1;
 
   // Add listener
   FlushedFileCollector* collector = new FlushedFileCollector();

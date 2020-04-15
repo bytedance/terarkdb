@@ -51,6 +51,8 @@ class TerarkZipTableDBTest : public testing::Test {
 
   Options CurrentOptions() {
     Options options;
+    options.enable_lazy_compaction = false;
+    options.blob_size = -1;
     UseTerarkZipTable(options);
     return options;
   }

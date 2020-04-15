@@ -520,6 +520,8 @@ TEST_F(DBBasicTest, CompactBetweenSnapshots) {
   do {
     Options options = CurrentOptions(options_override);
     options.disable_auto_compactions = true;
+    options.enable_lazy_compaction = false;
+    options.blob_size = -1;
     CreateAndReopenWithCF({"pikachu"}, options);
     Random rnd(301);
     FillLevels("a", "z", 1);
@@ -773,6 +775,8 @@ TEST_F(DBBasicTest, MultiGetEmpty) {
     // Empty Database, Empty Key Set
     Options options = CurrentOptions();
     options.create_if_missing = true;
+    options.enable_lazy_compaction = false;
+    options.blob_size = -1;
     DestroyAndReopen(options);
     CreateAndReopenWithCF({"pikachu"}, options);
     s = db_->MultiGet(ReadOptions(), cfs, keys, &values);
@@ -793,6 +797,8 @@ TEST_F(DBBasicTest, MultiGetEmpty) {
 TEST_F(DBBasicTest, ChecksumTest) {
   BlockBasedTableOptions table_options;
   Options options = CurrentOptions();
+  options.enable_lazy_compaction = false;
+  options.blob_size = -1;
   // change when new checksum type added
   int max_checksum = static_cast<int>(kxxHash64);
   const int kNumPerFile = 2;

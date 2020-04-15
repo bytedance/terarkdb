@@ -1258,6 +1258,8 @@ TEST_F(DBBloomFilterTest, DynamicBloomFilterUpperBound) {
   for (bool use_block_based_builder : {true, false}) {
     Options options;
     options.create_if_missing = true;
+    options.enable_lazy_compaction = false;
+    options.blob_size = -1;
     options.prefix_extractor.reset(NewCappedPrefixTransform(4));
     options.disable_auto_compactions = true;
     options.statistics = CreateDBStatistics();
@@ -1389,6 +1391,8 @@ TEST_F(DBBloomFilterTest, DynamicBloomFilterMultipleSST) {
   for (bool use_block_based_builder : {true, false}) {
     Options options;
     options.create_if_missing = true;
+    options.enable_lazy_compaction = false;
+    options.blob_size = -1; 
     options.prefix_extractor.reset(NewFixedPrefixTransform(1));
     options.disable_auto_compactions = true;
     options.statistics = CreateDBStatistics();
@@ -1527,6 +1531,8 @@ TEST_F(DBBloomFilterTest, DynamicBloomFilterNewColumnFamily) {
     options.create_if_missing = true;
     options.prefix_extractor.reset(NewFixedPrefixTransform(1));
     options.disable_auto_compactions = true;
+    options.enable_lazy_compaction = false;
+    options.blob_size = -1;
     options.statistics = CreateDBStatistics();
     // Enable prefix bloom for SST files
     BlockBasedTableOptions table_options;
@@ -1585,6 +1591,8 @@ TEST_F(DBBloomFilterTest, DynamicBloomFilterOptions) {
   for (bool use_block_based_builder : {true, false}) {
     Options options;
     options.create_if_missing = true;
+    options.enable_lazy_compaction = false;
+    options.blob_size = -1;
     options.prefix_extractor.reset(NewFixedPrefixTransform(1));
     options.disable_auto_compactions = true;
     options.statistics = CreateDBStatistics();

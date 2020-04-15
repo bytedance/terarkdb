@@ -126,6 +126,8 @@ public:
     DB* db;
     Options options;
     options.create_if_missing = true;
+    options.enable_lazy_compaction = false;
+    options.blob_size = -1;
     options.merge_operator.reset(new CassandraValueMergeOperator(gc_grace_period_in_seconds_));
     auto* cf_factory = new TestCompactionFilterFactory(
         purge_ttl_on_expiration_, gc_grace_period_in_seconds_);
