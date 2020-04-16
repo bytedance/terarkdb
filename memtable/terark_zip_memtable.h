@@ -41,7 +41,7 @@ class MemWriterToken : public terark::Patricia::WriterToken {
  public:
   uint64_t get_tag() { return tag_; }
   MemWriterToken(MemPatricia *trie, uint64_t tag, const Slice &value)
-      : terark::Patricia::WriterToken(trie), tag_(tag), value_(value){};
+      : terark::Patricia::WriterToken(trie), tag_(tag), value_(value){}
 
   void reset_tag_value(uint64_t tag, const Slice &value) {
     tag_ = tag;
@@ -72,7 +72,7 @@ struct tag_vector_t {
     uint32_t loc;
     operator uint64_t() const { return tag; }
   };
-  static bool full(uint32_t size) { return terark::fast_popcount(size) == 1; }
+  static bool full(uint32_t size) { return ((size - 1) & size) == 0; }
 };
 #pragma pack(pop)
 
@@ -201,7 +201,6 @@ class PatriciaRepIterator : public MemTableRep::Iterator,
   };
 
   std::string buffer_;
-  PatriciaTrieRep *rep_;
   int direction_;
 
   // Return pointer of current heap item.
