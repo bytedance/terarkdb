@@ -409,7 +409,6 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo,
 
   MyOverrideInt(cfo, max_subcompactions);
   MyOverrideXiB(cfo, blob_size);
-  MyOverrideXiB(cfo, blob_large_key_size);
   MyOverrideDouble(cfo, blob_large_key_ratio);
   MyOverrideDouble(cfo, blob_gc_ratio);
 

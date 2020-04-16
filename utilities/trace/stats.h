@@ -22,9 +22,11 @@ class HistStats {
   }
 
   template <size_t N>
-  auto GetResult(const double (&percentiles)[N]) {
-    double total = std::accumulate(buckets_.cbegin(), buckets_.cend(), 0) +
-                   large_nums_.size();
+  auto GetResult(const double (&percentiles)[N]) -> std::array<size_t, N + 2> {
+    assert(std::is_sorted(std::begin(percentiles), std::end(percentiles)));
+    double reciprocal_total =
+        1.0 / (std::accumulate(buckets_.cbegin(), buckets_.cend(), 0) +
+               large_nums_.size());
 
     std::array<size_t, N + 2> result{};
     size_t idx = 0;
@@ -38,7 +40,7 @@ class HistStats {
       if (c) {
         accum += c;
         total_tm += d * c;
-        if (idx < N && accum / total >= percentiles[idx]) {
+        if (idx < N && accum * reciprocal_total >= percentiles[idx]) {
           result[idx++] = d;
         }
         max = d;
@@ -50,13 +52,13 @@ class HistStats {
       for (size_t i = 0; i < large_nums_.size(); ++i) {
         ++accum;
         total_tm += large_nums_[i];
-        if (idx < N && accum / total >= percentiles[idx]) {
+        if (idx < N && accum * reciprocal_total >= percentiles[idx]) {
           result[idx++] = large_nums_[i];
         }
       }
       max = large_nums_.back();
     }
-    avg = total_tm / accum;
+    avg = total_tm / std::max<size_t>(1, accum);
     return result;
   }
 
