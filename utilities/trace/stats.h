@@ -40,7 +40,7 @@ class HistStats {
       if (c) {
         accum += c;
         total_tm += d * c;
-        if (idx < N && accum * reciprocal_total >= percentiles[idx]) {
+        while (idx < N && accum * reciprocal_total >= percentiles[idx]) {
           result[idx++] = d;
         }
         max = d;
@@ -52,7 +52,7 @@ class HistStats {
       for (size_t i = 0; i < large_nums_.size(); ++i) {
         ++accum;
         total_tm += large_nums_[i];
-        if (idx < N && accum * reciprocal_total >= percentiles[idx]) {
+        while (idx < N && accum * reciprocal_total >= percentiles[idx]) {
           result[idx++] = large_nums_[i];
         }
       }
