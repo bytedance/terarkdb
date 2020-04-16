@@ -71,8 +71,8 @@ class HistStats {
 
   void Reset() {
     buckets_.fill(0);
-    if (large_nums_.size() > MAX_LATENCY_US_FAST) {
-      large_nums_.resize(0);
+    large_nums_.resize(0);
+    if (large_nums_.capacity() > MAX_LATENCY_US_FAST) {
       large_nums_.shrink_to_fit();
     }
   }
