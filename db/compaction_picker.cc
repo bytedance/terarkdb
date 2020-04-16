@@ -41,7 +41,7 @@ namespace {
 
 inline double MixOverlapRatioAndDeletionRatio(double overlap_ratio,
                                               double deletion_ratio) {
-  return overlap_ratio + deletion_ratio * 4;
+  return overlap_ratio + deletion_ratio * 64;
 }
 
 struct LevelMapRangeSrc {

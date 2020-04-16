@@ -783,7 +783,7 @@ static MemTableRepFactory *CreatePatriciaTrieRepFactory(
 MemTableRepFactory *NewPatriciaTrieRepFactory(
     std::shared_ptr<class MemTableRepFactory> fallback) {
   return CreatePatriciaTrieRepFactory(fallback, details::ConcurrentType::Native,
-                                      details::PatriciaKeyType::FullKey,
+                                      details::PatriciaKeyType::UserKey,
                                       64ull << 20);
 }
 
@@ -796,8 +796,9 @@ MemTableRepFactory *NewPatriciaTrieRepFactory(
       details::PatriciaKeyType::UserKey;
 
   auto c = options.find("concurrent_type");
-  if (c != options.end() && c->second == "none")
+  if (c != options.end() && c->second == "none") {
     concurrent_type = details::ConcurrentType::None;
+  }
 
   auto u = options.find("use_virtual_mem");
   if (u != options.end() && u->second == "enable") {
@@ -818,8 +819,9 @@ MemTableRepFactory *NewPatriciaTrieRepFactory(
   }
 
   auto p = options.find("key_catagory");
-  if (p != options.end() && p->second == "full")
+  if (p != options.end() && p->second == "full") {
     patricia_key_type = details::PatriciaKeyType::FullKey;
+  }
 
   return CreatePatriciaTrieRepFactory(fallback, concurrent_type,
                                       patricia_key_type, write_buffer_size);
