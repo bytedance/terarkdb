@@ -1506,7 +1506,7 @@ void VersionStorageInfo::ComputeCompensatedSizes() {
       }
     } else {
       file_size =
-          f->fd.GetFileSize() + f->prop.num_deletions * average_value_size;
+          FileSizeWithBlob(f) + f->prop.num_deletions * average_value_size;
     }
     return entry_count == 0 ? file_size
                             : file_size * entry_count /
