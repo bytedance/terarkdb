@@ -1175,7 +1175,7 @@ std::shared_ptr<const TableProperties> BlockBasedTable::GetTableProperties()
     return rep_->table_properties;
   } else {
     TableProperties* props = nullptr;
-    size_t filesize = size_t(-1);
+    uint64_t filesize = uint64_t(-1);
     Status s;
     s = rep_->ioptions.env->GetFileSize(rep_->file.get()->file_name(),
                                         &filesize);

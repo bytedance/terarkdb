@@ -8,8 +8,10 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #include "table/merging_iterator.h"
+
 #include <string>
 #include <vector>
+
 #include "db/dbformat.h"
 #include "monitoring/perf_context_imp.h"
 #include "rocksdb/comparator.h"
@@ -296,10 +298,7 @@ class MergingIterator : public InternalIterator {
   // If any of the children have non-ok status, this is one of them.
   Status status_;
   // Which direction is the iterator moving?
-  enum Direction {
-    kForward,
-    kReverse
-  };
+  enum Direction { kForward, kReverse };
   Direction direction_;
   MergerMinIterHeap minHeap_;
   bool prefix_seek_mode_;
@@ -405,17 +404,19 @@ void MergeIteratorBuilder::AddIterator(InternalIterator* iter) {
 }
 
 void MergeIteratorBuilder::AddIterator(InternalIterator* iter,
-                                       const SeparateHelper* separate_helper) {
+                                       SeparateHelper* separate_helper) {
   if (separate_helper == nullptr) {
     AddIterator(iter);
     return;
   }
   auto ptr = arena->AllocateAligned(sizeof(CombinedInternalIterator));
   InternalIterator* separate_iter =
-      new(ptr) CombinedInternalIterator(iter, separate_helper);
-  separate_iter->RegisterCleanup([](void* arg1, void* /*arg2*/) {
-    reinterpret_cast<InternalIterator*>(arg1)->~InternalIterator();
-  }, iter, nullptr);
+      new (ptr) CombinedInternalIterator(iter, separate_helper);
+  separate_iter->RegisterCleanup(
+      [](void* arg1, void* /*arg2*/) {
+        reinterpret_cast<InternalIterator*>(arg1)->~InternalIterator();
+      },
+      iter, nullptr);
   AddIterator(separate_iter);
 }
 

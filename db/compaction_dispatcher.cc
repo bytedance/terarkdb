@@ -17,6 +17,7 @@
 
 #include <inttypes.h>
 
+#include <chrono>
 #include <terark/num_to_str.hpp>
 #include <terark/util/autoclose.hpp>
 #include <terark/util/linebuf.hpp>
@@ -40,7 +41,6 @@
 #include "table/two_level_iterator.h"
 #include "util/c_style_callback.h"
 #include "util/filename.h"
-#include <chrono>
 
 //#define USE_AJSON 1
 
@@ -200,8 +200,8 @@ using FileInfo = CompactionWorkerResult::FileInfo;
 AJSON(FileInfo, smallest, largest, file_name, smallest_seqno, largest_seqno,
       file_size, marked_for_compaction);
 
-AJSON(CompactionWorkerResult, status, actual_start, actual_end, files,
-      stat_all, time_us);
+AJSON(CompactionWorkerResult, status, actual_start, actual_end, files, stat_all,
+      time_us);
 
 AJSON(FileDescriptor, packed_number_and_path_id, file_size, smallest_seqno,
       largest_seqno);
@@ -231,8 +231,9 @@ AJSON(CompactionWorkerContext, user_comparator, merge_operator,
       end, last_sequence, earliest_write_conflict_snapshot,
       preserve_deletes_seqnum, file_metadata, inputs, cf_name, target_file_size,
       compression, compression_opts, existing_snapshots, smallest_user_key,
-      largest_user_key, level, number_levels, bottommost_level,
-      allow_ingest_behind, preserve_deletes, int_tbl_prop_collector_factories);
+      largest_user_key, level, output_level, number_levels, skip_filters,
+      bottommost_level, allow_ingest_behind, preserve_deletes,
+      int_tbl_prop_collector_factories);
 
 #ifdef USE_AJSON
 #else
@@ -697,7 +698,7 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(Slice data) {
     ~SecondPassIterStorage() {
       if (input.get() != nullptr) {
         if (compaction_filter) {
-          //assert(!ExistFutureAction(compaction_filter));
+          // assert(!ExistFutureAction(compaction_filter));
           EraseFutureAction(compaction_filter);
         }
         input.set(nullptr);
@@ -723,7 +724,7 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(Slice data) {
           immutable_cf_options.compaction_filter_factory
               ->CreateCompactionFilter(context.compaction_filter_context);
       second_pass_iter_storage.compaction_filter =
-      second_pass_iter_storage.compaction_filter_holder.get();
+          second_pass_iter_storage.compaction_filter_holder.get();
     }
     auto merge_ptr = new (&second_pass_iter_storage.merge) MergeHelper(
         env, ucmp, immutable_cf_options.merge_operator, compaction_filter,
@@ -758,7 +759,7 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(Slice data) {
         immutable_cf_options, mutable_cf_options, *icmp,
         &int_tbl_prop_collector_factories.data, context.compression,
         context.compression_opts, nullptr /* compression_dict */,
-        true /* skip_filters */, context.cf_name, -1 /* level */,
+        context.skip_filters, context.cf_name, -1 /* level */,
         0 /* compaction_load */);
     std::unique_ptr<WritableFile> sst_file;
     s = env->NewWritableFile(file_name, &sst_file, env_opt);
@@ -997,35 +998,30 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(Slice data) {
 
   if (compaction_filter) {
     if (ReapMatureAction(compaction_filter, &result.stat_all)) {
-      fprintf(stderr
-        , "INFO: ReapMatureAction(compaction_filter=%p) = %s\n"
-        , compaction_filter, result.stat_all.c_str());
+      fprintf(stderr, "INFO: ReapMatureAction(compaction_filter=%p) = %s\n",
+              compaction_filter, result.stat_all.c_str());
+    } else {
+      fprintf(stderr, "ERROR: ReapMatureAction(compaction_filter=%p) = false\n",
+              compaction_filter);
     }
-    else {
-      fprintf(stderr
-        , "ERROR: ReapMatureAction(compaction_filter=%p) = false\n"
-        , compaction_filter);
-    }
-  }
-  else {
-    fprintf(stderr
-      , "INFO: compaction_filter = null, name = { filter: %s, factory: %s }\n"
-      , context.compaction_filter.c_str()
-      , context.compaction_filter_factory.c_str()
-    );
+  } else {
+    fprintf(
+        stderr,
+        "INFO: compaction_filter = null, name = { filter: %s, factory: %s }\n",
+        context.compaction_filter.c_str(),
+        context.compaction_filter_factory.c_str());
   }
   if (second_pass_iter_storage.compaction_filter) {
     bool ret = EraseFutureAction(second_pass_iter_storage.compaction_filter);
-    fprintf(stderr
-        , "INFO: EraseFutureAction(secondpass.compaction_filter=%p) = %d\n"
-        , second_pass_iter_storage.compaction_filter, ret);
-  }
-  else {
-    fprintf(stderr
-      , "INFO: secondpass.compaction_filter = null, name = { filter: %s, factory: %s }\n"
-      , context.compaction_filter.c_str()
-      , context.compaction_filter_factory.c_str()
-    );
+    fprintf(stderr,
+            "INFO: EraseFutureAction(secondpass.compaction_filter=%p) = %d\n",
+            second_pass_iter_storage.compaction_filter, ret);
+  } else {
+    fprintf(stderr,
+            "INFO: secondpass.compaction_filter = null, name = { filter: %s, "
+            "factory: %s }\n",
+            context.compaction_filter.c_str(),
+            context.compaction_filter_factory.c_str());
   }
 
   c_iter.reset();
@@ -1046,20 +1042,21 @@ void RemoteCompactionDispatcher::Worker::DebugSerializeCheckResult(Slice data) {
   CompactionWorkerResult res;
   dio >> res;
   string_appender<> str;
-  str << "CompactionWorkerResult: time_us = "
-      << res.time_us << " (" << (res.time_us * 1e-6) << " sec), ";
+  str << "CompactionWorkerResult: time_us = " << res.time_us << " ("
+      << (res.time_us * 1e-6) << " sec), ";
   str << "  status = " << res.status.ToString() << "\n";
   str << "  actual_start = " << res.actual_start.DebugString(true) << "\n";
   str << "  actual_end   = " << res.actual_end.DebugString(true) << "\n";
   str << "  files[size=" << res.files.size() << "]\n";
   for (size_t i = 0; i < res.files.size(); ++i) {
     const auto& f = res.files[i];
-    str << "    " << i  << " = " << f.file_name
+    str << "    " << i << " = " << f.file_name
         << " : marked_for_compaction = " << f.marked_for_compaction
-        << "  filesize = " << f.file_size
-        << "\n";
-    str << "    seq_smallest = " << f.smallest_seqno << "  key_smallest = " << f.smallest.DebugString(true) << "\n";
-    str << "    seq__largest = " << f. largest_seqno << "  key__largest = " << f. largest.DebugString(true) << "\n";
+        << "  filesize = " << f.file_size << "\n";
+    str << "    seq_smallest = " << f.smallest_seqno
+        << "  key_smallest = " << f.smallest.DebugString(true) << "\n";
+    str << "    seq__largest = " << f.largest_seqno
+        << "  key__largest = " << f.largest.DebugString(true) << "\n";
   }
   str << "  stat_all[size=" << res.stat_all.size() << "] = " << res.stat_all
       << "\n";
@@ -1089,13 +1086,13 @@ class CommandLineCompactionDispatcher : public RemoteCompactionDispatcher {
     size_t datalen = data.size();
     auto onFinish = [this, promise, datalen](std::string&& result,
                                              std::exception* ex) {
-      fprintf(stderr
-        , "INFO: CompactCmd(%s, datalen=%zd) = exception[%p] = %s, "
-          //"result[len=%zd]: %s\n"
-          "result[len=%zd]\n"
-        , this->m_cmd.c_str(), datalen, ex, ex ? ex->what() : ""
-        , result.size()
-        //, Slice(result).ToString(true).c_str()
+      fprintf(stderr,
+              "INFO: CompactCmd(%s, datalen=%zd) = exception[%p] = %s, "
+              //"result[len=%zd]: %s\n"
+              "result[len=%zd]\n",
+              this->m_cmd.c_str(), datalen, ex, ex ? ex->what() : "",
+              result.size()
+              //, Slice(result).ToString(true).c_str()
       );
       promise->set_value(std::move(result));
       if (ex) {

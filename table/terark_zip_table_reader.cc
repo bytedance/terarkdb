@@ -797,7 +797,7 @@ TerarkZipTableReaderBase::GetTableProperties() const {
     return table_properties_;
   } else {
     TableProperties* props = nullptr;
-    size_t filesize = size_t(-1);
+    uint64_t filesize = uint64_t(-1);
     auto& ioptions = table_reader_options_.ioptions;
     Status s = ioptions.env->GetFileSize(file_.get()->file_name(), &filesize);
     if (!s.ok()) {

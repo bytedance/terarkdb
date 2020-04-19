@@ -387,7 +387,7 @@ Iterator* DateTieredDBImpl::NewIterator(const ReadOptions& opts) {
   auto arena = db_iter->GetArena();
   if (handle_map_.size() == 1) {
     auto handle = handle_map_.begin()->second;
-    const SeparateHelper* separate_helper;
+    SeparateHelper* separate_helper;
     auto internal_iter = db_impl->NewInternalIterator(
         arena, db_iter->GetRangeDelAggregator(), kMaxSequenceNumber, handle,
         &separate_helper);
@@ -396,7 +396,7 @@ Iterator* DateTieredDBImpl::NewIterator(const ReadOptions& opts) {
     MergeIteratorBuilder builder(&icomp_, arena);
     for (auto& item : handle_map_) {
       auto handle = item.second;
-      const SeparateHelper* separate_helper;
+      SeparateHelper* separate_helper;
       auto internal_iter = db_impl->NewInternalIterator(
           arena, db_iter->GetRangeDelAggregator(), kMaxSequenceNumber, handle,
           &separate_helper);

@@ -61,7 +61,7 @@ class CompactionIterator {
   };
 
   CompactionIterator(
-      InternalIterator* input, const SeparateHelper* separate_helper,
+      InternalIterator* input, SeparateHelper* separate_helper,
       const Slice* end, const Comparator* cmp, MergeHelper* merge_helper,
       SequenceNumber last_sequence, std::vector<SequenceNumber>* snapshots,
       SequenceNumber earliest_write_conflict_snapshot,
@@ -76,7 +76,7 @@ class CompactionIterator {
 
   // Constructor with custom CompactionProxy, used for tests.
   CompactionIterator(
-      InternalIterator* input, const SeparateHelper* separate_helper,
+      InternalIterator* input, SeparateHelper* separate_helper,
       const Slice* end, const Comparator* cmp, MergeHelper* merge_helper,
       SequenceNumber last_sequence, std::vector<SequenceNumber>* snapshots,
       SequenceNumber earliest_write_conflict_snapshot,

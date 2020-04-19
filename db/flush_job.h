@@ -136,6 +136,7 @@ class FlushJob {
 
   // Variables below are set by PickMemTable():
   FileMetaData meta_;
+  std::vector<FileMetaData> blob_meta_;
   autovector<MemTable*> mems_;
   VersionEdit* edit_;
   Version* base_;

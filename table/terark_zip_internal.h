@@ -200,6 +200,8 @@ public:
 
   bool IsDeleteRangeSupported() const override { return true; }
 
+  bool IsBuilderNeedSecondPass() const override { return true; }
+
   LruReadonlyCache* cache() const { return cache_.get(); }
 
   Status GetOptionString(std::string* opt_string, const std::string& delimiter)

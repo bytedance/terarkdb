@@ -5,9 +5,16 @@
 
 #include "monitoring/instrumented_mutex.h"
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-parameter"
+#endif
 #include <boost/fiber/condition_variable.hpp>
 #include <boost/fiber/mutex.hpp>
 #include <boost/fiber/operations.hpp>
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 #include <stdexcept>
 
 #include "monitoring/perf_context_imp.h"

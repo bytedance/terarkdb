@@ -9,8 +9,10 @@
 #include <string>
 #include <utility>
 #include <vector>
+
 #include "db/range_tombstone_fragmenter.h"
 #include "db/table_properties_collector.h"
+#include "db/version_edit.h"
 #include "options/cf_options.h"
 #include "rocksdb/comparator.h"
 #include "rocksdb/env.h"
@@ -63,14 +65,17 @@ TableBuilder* NewTableBuilder(
 // @param column_family_name Name of the column family that is also identified
 //    by column_family_id, or empty string if unknown.
 extern Status BuildTable(
-    const std::string& dbname, Env* env, const ImmutableCFOptions& options,
+    const std::string& dbname, VersionSet* versions_, Env* env,
+    const ImmutableCFOptions& options,
     const MutableCFOptions& mutable_cf_options, const EnvOptions& env_options,
     TableCache* table_cache,
     InternalIterator* (*get_input_iter_callback)(void*, Arena&),
     void* get_input_iter_arg,
-    std::vector<std::unique_ptr<FragmentedRangeTombstoneIterator>>
-        (*get_range_del_iters_callback)(void*), void* get_range_del_iters_arg,
-    FileMetaData* meta, const InternalKeyComparator& internal_comparator,
+    std::vector<std::unique_ptr<FragmentedRangeTombstoneIterator>> (
+        *get_range_del_iters_callback)(void*),
+    void* get_range_del_iters_arg, FileMetaData* meta,
+    std::vector<FileMetaData>* blob_meta,
+    const InternalKeyComparator& internal_comparator,
     const std::vector<std::unique_ptr<IntTblPropCollectorFactory>>*
         int_tbl_prop_collector_factories,
     uint32_t column_family_id, const std::string& column_family_name,

@@ -9,7 +9,14 @@
 #pragma once
 
 #include <atomic>
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-parameter"
+#endif
 #include <boost/fiber/future.hpp>
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 #include <deque>
 #include <functional>
 #include <limits>
@@ -121,11 +128,14 @@ class CompactionJob {
       CompactionRangeDelAggregator* range_del_agg,
       CompactionIterationStats* range_del_out_stats,
       const std::unordered_map<uint64_t, uint64_t>& dependence,
-      const std::vector<uint64_t>& inheritance_chain,
       const Slice* next_table_min_key = nullptr);
+  Status FinishCompactionOutputBlob(
+      const Status& input_status, SubcompactionState* sub_compact,
+      const std::vector<uint64_t>& inheritance_chain);
   Status InstallCompactionResults(const MutableCFOptions& mutable_cf_options);
   void RecordCompactionIOStats();
   Status OpenCompactionOutputFile(SubcompactionState* sub_compact);
+  Status OpenCompactionOutputBlob(SubcompactionState* sub_compact);
   void CleanupCompaction();
   void UpdateCompactionJobStats(
       const InternalStats::CompactionStats& stats) const;

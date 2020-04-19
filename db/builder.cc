@@ -65,7 +65,8 @@ TableBuilder* NewTableBuilder(
 }
 
 Status BuildTable(
-    const std::string& dbname, Env* env, const ImmutableCFOptions& ioptions,
+    const std::string& dbname, VersionSet* versions_, Env* env,
+    const ImmutableCFOptions& ioptions,
     const MutableCFOptions& mutable_cf_options, const EnvOptions& env_options,
     TableCache* table_cache,
     InternalIterator* (*get_input_iter_callback)(void*, Arena&),
@@ -73,6 +74,7 @@ Status BuildTable(
     std::vector<std::unique_ptr<FragmentedRangeTombstoneIterator>> (
         *get_range_del_iters_callback)(void*),
     void* get_range_del_iters_arg, FileMetaData* meta,
+    std::vector<FileMetaData>* blob_meta,
     const InternalKeyComparator& internal_comparator,
     const std::vector<std::unique_ptr<IntTblPropCollectorFactory>>*
         int_tbl_prop_collector_factories,
@@ -147,12 +149,131 @@ Status BuildTable(
                       snapshots.empty() ? 0 : snapshots.back(),
                       snapshot_checker);
 
+    struct BuilderSeparateHelper : public SeparateHelper {
+      std::vector<FileMetaData>* output = nullptr;
+      std::string fname;
+      std::unique_ptr<WritableFileWriter> file_writer;
+      std::unique_ptr<TableBuilder> builder;
+      FileMetaData* current_output = nullptr;
+      Status (*trans_to_separate_callback)(void* args, const Slice& key,
+                                           LazyBuffer& value);
+      void* trans_to_separate_callback_args;
+
+      Status TransToSeparate(const Slice& key, LazyBuffer& value) override {
+        if (trans_to_separate_callback == nullptr) {
+          return Status::NotSupported();
+        }
+        return trans_to_separate_callback(trans_to_separate_callback_args, key,
+                                          value);
+      }
+
+      void TransToCombined(const Slice& /*user_key*/, uint64_t /*sequence*/,
+                           LazyBuffer& /*value*/) const override {
+        assert(false);
+      }
+    } separate_helper;
+
+    auto finish_output_blob_sst = [&] {
+      Status status;
+      TableBuilder* blob_builder = separate_helper.builder.get();
+      FileMetaData* blob_meta = separate_helper.current_output;
+      blob_meta->prop.num_entries = blob_builder->NumEntries();
+      blob_meta->prop.purpose = kEssenceSst;
+      blob_meta->prop.flags |= TablePropertyCache::kNoRangeDeletions;
+      status = blob_builder->Finish(&blob_meta->prop, nullptr);
+      blob_meta->marked_for_compaction = blob_builder->NeedCompact();
+      TableProperties tp;
+      if (status.ok()) {
+        blob_meta->fd.file_size = blob_builder->FileSize();
+        tp = blob_builder->GetTableProperties();
+        StopWatch sw(env, ioptions.statistics, TABLE_SYNC_MICROS);
+        status = separate_helper.file_writer->Sync(ioptions.use_fsync);
+      }
+      if (status.ok()) {
+        status = separate_helper.file_writer->Close();
+      }
+      separate_helper.file_writer.reset();
+      EventHelpers::LogAndNotifyTableFileCreationFinished(
+          event_logger, ioptions.listeners, dbname, column_family_name,
+          separate_helper.fname, -1, blob_meta->fd, tp,
+          TableFileCreationReason::kFlush, status);
+
+      separate_helper.builder.reset();
+      return s;
+    };
+
+    auto trans_to_separate = [&](const Slice& key, LazyBuffer& value) {
+      assert(value.file_number() == uint64_t(-1));
+      Status status;
+      TableBuilder* blob_builder = separate_helper.builder.get();
+      FileMetaData* blob_meta = separate_helper.current_output;
+      if (blob_builder != nullptr &&
+          blob_builder->FileSize() > mutable_cf_options.target_file_size_base) {
+        status = finish_output_blob_sst();
+      }
+      if (status.ok() && blob_builder == nullptr) {
+        std::unique_ptr<WritableFile> blob_file;
+#ifndef NDEBUG
+        bool use_direct_writes = env_options.use_direct_writes;
+        TEST_SYNC_POINT_CALLBACK("BuildTable:create_file", &use_direct_writes);
+#endif  // !NDEBUG
+        separate_helper.output->emplace_back();
+        blob_meta = separate_helper.current_output =
+            &separate_helper.output->back();
+        blob_meta->fd =
+            FileDescriptor(versions_->NewFileNumber(), meta->fd.GetPathId(), 0);
+        separate_helper.fname = TableFileName(
+            ioptions.cf_paths, blob_meta->fd.GetNumber(), meta->fd.GetPathId());
+        status = NewWritableFile(env, separate_helper.fname, &blob_file,
+                                 env_options);
+        if (!status.ok()) {
+          EventHelpers::LogAndNotifyTableFileCreationFinished(
+              event_logger, ioptions.listeners, dbname, column_family_name,
+              fname, job_id, blob_meta->fd, TableProperties(), reason, status);
+          return status;
+        }
+        blob_file->SetIOPriority(io_priority);
+        blob_file->SetWriteLifeTimeHint(write_hint);
+
+        separate_helper.file_writer.reset(
+            new WritableFileWriter(std::move(blob_file), fname, env_options,
+                                   ioptions.statistics, ioptions.listeners));
+        separate_helper.builder.reset(NewTableBuilder(
+            ioptions, mutable_cf_options, internal_comparator,
+            int_tbl_prop_collector_factories, column_family_id,
+            column_family_name, separate_helper.file_writer.get(), compression,
+            compression_opts, -1 /* level */, 0 /* compaction_load */, nullptr,
+            true));
+        blob_builder = separate_helper.builder.get();
+      }
+      if (status.ok()) {
+        status = blob_builder->Add(key, value);
+      }
+      if (status.ok()) {
+        blob_meta->UpdateBoundaries(key, GetInternalKeySeqno(key));
+        uint64_t file_number = blob_meta->fd.GetNumber();
+        value.reset(SeparateHelper::EncodeFileNumber(file_number), true,
+                    file_number);
+      }
+      return status;
+    };
+
+    separate_helper.output = blob_meta;
+    BlobConfig blob_config = mutable_cf_options.get_blob_config();
+    if (!ioptions.table_factory->IsBuilderNeedSecondPass()) {
+      blob_config.blob_size = size_t(-1);
+      separate_helper.trans_to_separate_callback =
+          c_style_callback(trans_to_separate);
+      separate_helper.trans_to_separate_callback_args = &trans_to_separate;
+    }
+
     CompactionIterator c_iter(
-        iter.get(), nullptr, nullptr, internal_comparator.user_comparator(),
-        &merge, kMaxSequenceNumber, &snapshots,
-        earliest_write_conflict_snapshot, snapshot_checker, env,
+        iter.get(), &separate_helper, nullptr,
+        internal_comparator.user_comparator(), &merge, kMaxSequenceNumber,
+        &snapshots, earliest_write_conflict_snapshot, snapshot_checker, env,
         ShouldReportDetailedTime(env, ioptions.statistics),
-        true /* internal key corruption is not ok */, range_del_agg.get());
+        true /* internal key corruption is not ok */, range_del_agg.get(),
+        nullptr, blob_config);
 
     struct SecondPassIterStorage {
       std::unique_ptr<CompactionRangeDelAggregator> range_del_agg;
@@ -186,7 +307,7 @@ Status BuildTable(
           true /* internal key corruption is not ok */,
           snapshots.empty() ? 0 : snapshots.back(), snapshot_checker);
       return new CompactionIterator(
-          second_pass_iter_storage.iter.get(), nullptr, nullptr,
+          second_pass_iter_storage.iter.get(), &separate_helper, nullptr,
           internal_comparator.user_comparator(), merge_ptr, kMaxSequenceNumber,
           &snapshots, earliest_write_conflict_snapshot, snapshot_checker, env,
           false /* report_detailed_time */,
@@ -194,6 +315,7 @@ Status BuildTable(
     };
     std::unique_ptr<InternalIterator> second_pass_iter(NewCompactionIterator(
         c_style_callback(make_compaction_iterator), &make_compaction_iterator));
+
     builder->SetSecondPassIterator(second_pass_iter.get());
     c_iter.SeekToFirst();
     for (; s.ok() && c_iter.Valid(); c_iter.Next()) {
@@ -223,6 +345,9 @@ Status BuildTable(
     bool empty = builder->NumEntries() == 0 && tp.num_range_deletions == 0;
     if (s.ok()) {
       s = c_iter.status();
+    }
+    if (s.ok() && separate_helper.builder) {
+      s = finish_output_blob_sst();
     }
     if (!s.ok() || empty) {
       builder->Abandon();

@@ -1177,7 +1177,7 @@ bool DBImpl::SetPreserveDeletesSequenceNumber(SequenceNumber seqnum) {
 
 InternalIterator* DBImpl::NewInternalIterator(
     Arena* arena, RangeDelAggregator* range_del_agg, SequenceNumber sequence,
-    ColumnFamilyHandle* column_family, const SeparateHelper** separate_helper) {
+    ColumnFamilyHandle* column_family, SeparateHelper** separate_helper) {
   ColumnFamilyData* cfd;
   if (column_family == nullptr) {
     cfd = default_cf_handle_->cfd();
@@ -1300,7 +1300,7 @@ InternalIterator* DBImpl::NewInternalIterator(
     const ReadOptions& read_options, ColumnFamilyData* cfd,
     SuperVersion* super_version, Arena* arena,
     RangeDelAggregator* range_del_agg, SequenceNumber sequence,
-    const SeparateHelper** separate_helper) {
+    SeparateHelper** separate_helper) {
   InternalIterator* internal_iter;
   assert(arena != nullptr);
   assert(range_del_agg != nullptr);
@@ -1488,8 +1488,7 @@ struct SimpleFiberTls {
   boost::fibers::buffered_channel<task_t> channel;
 
   SimpleFiberTls(boost::fibers::context** activepp)
-      : m_fy(activepp), channel(MAX_QUEUE_LEN)
-  {
+      : m_fy(activepp), channel(MAX_QUEUE_LEN) {
     update_fiber_count(DEFAULT_FIBER_CNT);
   }
 
