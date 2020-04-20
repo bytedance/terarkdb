@@ -150,7 +150,6 @@ Status BuildTable(
                       snapshot_checker);
 
     struct BuilderSeparateHelper : public SeparateHelper {
-      std::vector<Dependence> dependence;
       std::vector<FileMetaData>* output = nullptr;
       std::string fname;
       std::unique_ptr<WritableFileWriter> file_writer;
@@ -256,15 +255,6 @@ Status BuildTable(
         uint64_t file_number = blob_meta->fd.GetNumber();
         value.reset(SeparateHelper::EncodeFileNumber(file_number), true,
                     file_number);
-        auto& dependence = separate_helper.dependence;
-        if (dependence.empty() ||
-            dependence.back().file_number != file_number) {
-          assert(dependence.empty() ||
-                 file_number > dependence.back().file_number);
-          dependence.emplace_back(Dependence{file_number, 1});
-        } else {
-          ++dependence.back().entry_count;
-        }
       }
       return status;
     };
@@ -364,7 +354,12 @@ Status BuildTable(
     if (!s.ok() || empty) {
       builder->Abandon();
     } else {
-      meta->prop.dependence = std::move(separate_helper.dependence);
+      for (auto& blob : *blob_meta) {
+        assert(meta->prop.dependence.empty() ||
+               blob.fd.GetNumber() > meta->prop.dependence.back().file_number);
+        meta->prop.dependence.emplace_back(
+            Dependence{blob.fd.GetNumber(), blob.prop.num_entries});
+      }
       auto shrinked_snapshots = meta->ShrinkSnapshot(snapshots);
       s = builder->Finish(&meta->prop, &shrinked_snapshots);
       meta->prop.num_deletions = tp.num_deletions;
