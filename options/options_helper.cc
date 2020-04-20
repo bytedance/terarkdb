@@ -22,6 +22,7 @@
 #include "rocksdb/table.h"
 #include "table/block_based_table_factory.h"
 #include "table/plain_table_factory.h"
+#include "table/terark_zip_table.h"
 #include "util/cast_util.h"
 #include "util/string_util.h"
 
@@ -550,6 +551,10 @@ bool ParseOptionHelper(char* opt_address, const OptionType& opt_type,
       return ParseEnum<CompactionStopStyle>(
           compaction_stop_style_string_map, value,
           reinterpret_cast<CompactionStopStyle*>(opt_address));
+    case OptionType::kEntropyAlgo:
+      return ParseEnum<TerarkZipTableOptions::EntropyAlgo>(
+          entropy_algo_string_map, value,
+          reinterpret_cast<TerarkZipTableOptions::EntropyAlgo*>(opt_address));
     default:
       return false;
   }
@@ -2008,6 +2013,13 @@ std::unordered_map<std::string, OptionTypeInfo>
          {offset_of(&LRUCacheOptions::high_pri_pool_ratio), OptionType::kDouble,
           OptionVerificationType::kNormal, true,
           offsetof(struct LRUCacheOptions, high_pri_pool_ratio)}}};
+
+std::unordered_map<std::string, TerarkZipTableOptions::EntropyAlgo>
+    OptionsHelper::entropy_algo_string_map = {
+      {"no_entropy", TerarkZipTableOptions::EntropyAlgo::kNoEntropy},
+      {"huffman", TerarkZipTableOptions::EntropyAlgo::kHuffman},
+      {"fse", TerarkZipTableOptions::EntropyAlgo::kFSE}
+    };
 
 #endif  // !ROCKSDB_LITE
 

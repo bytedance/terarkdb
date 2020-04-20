@@ -15,6 +15,7 @@
 #include <util/async_task.h>
 #include <util/c_style_callback.h>
 #include <util/xxhash.h>
+#include <util/string_util.h>
 // terark headers
 #include <terark/io/MemStream.hpp>
 #include <terark/lcast.hpp>
@@ -2467,11 +2468,21 @@ std::string ParseTerarkZipTableOption(const std::string& name,
                                       bool ignore_unknown_options = false) {
   const std::string& value =
       input_strings_escaped ? UnescapeOptionString(org_value) : org_value;
-  if(!input_strings_escaped) {
-    // TODO
-    // In case of invoked from SetOptions
-  }
   const auto iter = terark_zip_table_type_info.find(name);
+  if (iter == terark_zip_table_type_info.end()) {
+    if (ignore_unknown_options) {
+      return "";
+    } else {
+      return "Unrecognized option";
+    }
+  }
+  const auto& opt_info = iter->second;
+  if (opt_info.verification != OptionVerificationType::kDeprecated &&
+      !ParseOptionHelper(reinterpret_cast<char*>(new_options) + opt_info.offset,
+                         opt_info.type, value)) {
+    return "Invalid value";
+  }
+  return "";
 }
 
 Status GetTerarkZipTableOptionsFromMap(
