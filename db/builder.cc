@@ -260,8 +260,9 @@ Status BuildTable(
 
     separate_helper.output = blob_meta;
     BlobConfig blob_config = mutable_cf_options.get_blob_config();
-    if (!ioptions.table_factory->IsBuilderNeedSecondPass()) {
+    if (ioptions.table_factory->IsBuilderNeedSecondPass()) {
       blob_config.blob_size = size_t(-1);
+    } else {
       separate_helper.trans_to_separate_callback =
           c_style_callback(trans_to_separate);
       separate_helper.trans_to_separate_callback_args = &trans_to_separate;
