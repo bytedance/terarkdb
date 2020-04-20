@@ -1250,10 +1250,10 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
       db_options_.statistics.get(), shutting_down_);
 
   struct BuilderSeparateHelper : public SeparateHelper {
-    SeparateHelper* separate_helper;
+    SeparateHelper* separate_helper = nullptr;
     Status (*trans_to_separate_callback)(void* args, const Slice& key,
-                                         LazyBuffer& value);
-    void* trans_to_separate_callback_args;
+                                         LazyBuffer& value) = nullptr;
+    void* trans_to_separate_callback_args = nullptr;
 
     Status TransToSeparate(const Slice& key, LazyBuffer& value) override {
       if (trans_to_separate_callback == nullptr) {

@@ -156,8 +156,8 @@ Status BuildTable(
       std::unique_ptr<TableBuilder> builder;
       FileMetaData* current_output = nullptr;
       Status (*trans_to_separate_callback)(void* args, const Slice& key,
-                                           LazyBuffer& value);
-      void* trans_to_separate_callback_args;
+                                           LazyBuffer& value) = nullptr;
+      void* trans_to_separate_callback_args = nullptr;
 
       Status TransToSeparate(const Slice& key, LazyBuffer& value) override {
         if (trans_to_separate_callback == nullptr) {
