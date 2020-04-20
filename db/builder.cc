@@ -210,6 +210,7 @@ Status BuildTable(
       if (blob_builder != nullptr &&
           blob_builder->FileSize() > mutable_cf_options.target_file_size_base) {
         status = finish_output_blob_sst();
+        blob_builder = nullptr;
       }
       if (status.ok() && blob_builder == nullptr) {
         std::unique_ptr<WritableFile> blob_file;
