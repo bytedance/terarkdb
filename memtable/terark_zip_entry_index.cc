@@ -227,18 +227,18 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
     WriteBatchIndexEntry* key_;
 
    public:
-    virtual bool Valid() const override { return key_ != nullptr; }
-    virtual void SeekToFirst() override { key_ = impl_->SeekToFirst(); }
-    virtual void SeekToLast() override { key_ = impl_->SeekToLast(); }
-    virtual void Seek(WriteBatchIndexEntry* target) override {
+    bool Valid() const override { return key_ != nullptr; }
+    void SeekToFirst() override { key_ = impl_->SeekToFirst(); }
+    void SeekToLast() override { key_ = impl_->SeekToLast(); }
+    void Seek(WriteBatchIndexEntry* target) override {
       key_ = impl_->Seek(target);
     }
-    virtual void SeekForPrev(WriteBatchIndexEntry* target) override {
+    void SeekForPrev(WriteBatchIndexEntry* target) override {
       key_ = impl_->SeekForPrev(target);
     }
-    virtual void Next() override { key_ = impl_->Next(); }
-    virtual void Prev() override { key_ = impl_->Prev(); }
-    virtual WriteBatchIndexEntry* key() const override { return key_; }
+    void Next() override { key_ = impl_->Next(); }
+    void Prev() override { key_ = impl_->Prev(); }
+    WriteBatchIndexEntry* key() const override { return key_; }
   };
 
  public:
@@ -249,16 +249,16 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
   static constexpr size_t trie_value_size =
       OverwriteKey ? sizeof(void*) : sizeof(uint32_t);
 
-  virtual Iterator* NewIterator() override {
+  Iterator* NewIterator() override {
     return new PTrieIterator(&index_, extractor_, false);
   }
-  virtual void NewIterator(IteratorStorage& storage, bool ephemeral) override {
+  void NewIterator(IteratorStorage& storage, bool ephemeral) override {
     static_assert(sizeof(PTrieIterator) <= sizeof storage.buffer,
                   "Need larger buffer for PTrieIterator");
     storage.iter =
         new (storage.buffer) PTrieIterator(&index_, extractor_, ephemeral);
   }
-  virtual bool Upsert(WriteBatchIndexEntry* key) override {
+  bool Upsert(WriteBatchIndexEntry* key) override {
     fstring slice_key = extractor_(key);
     if (OverwriteKey) {
       auto& token = *index_.tls_writer_token_nn<Patricia::WriterToken>();
@@ -372,7 +372,7 @@ const WriteBatchEntryIndexFactory* patricia_WriteBatchEntryIndexFactory(
     }
     PTrieIndexFactory(const WriteBatchEntryIndexFactory* _fallback)
         : fallback(_fallback) {}
-    virtual const char* Name() const override {
+    const char* Name() const override {
       return "WriteBatchEntryIndexFactory";
     }
 
