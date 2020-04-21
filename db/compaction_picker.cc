@@ -2507,29 +2507,35 @@ Compaction* LevelCompactionBuilder::PickLazyCompaction(
 
   size_t target_file_size_base = mutable_cf_options_.target_file_size_base;
   size_t base_size = mutable_cf_options_.write_buffer_size *
+                     ioptions_.min_write_buffer_number_to_merge *
                      mutable_cf_options_.level0_file_num_compaction_trigger;
   auto get_q = [&] {
-    std::vector<double> level_ratio(vstorage_->num_levels() - 1);
+    int n = vstorage_->num_levels();
+    std::vector<double> level_ratio(n * 2);
     auto base_size_real = double(base_size);
-    for (int i = 1; i < vstorage_->num_levels(); ++i) {
+    for (int i = 1; i < n; ++i) {
       auto& sr = sorted_runs[i];
       sr.level = i;
       for (auto f : vstorage_->LevelFiles(i)) {
         sr.size += vstorage_->FileSize(f);
         sr.compensated_file_size += f->compensated_file_size;
       }
-      level_ratio[i - 1] = sr.compensated_file_size / base_size_real;
+      level_ratio[i] = sr.size / base_size_real;
+      level_ratio[i + n] = sr.compensated_file_size / base_size_real;
     }
-    return std::max<double>(
+    double q1 = std::max<double>(
         std::atan(1) * 4,
-        CompactionPicker::GetQ(level_ratio.begin(), level_ratio.end(),
-                               level_ratio.size()));
+        CompactionPicker::GetQ(level_ratio.begin() + 1, level_ratio.begin() + n,
+                               n - 1));
+    double q2 = std::max<double>(
+        std::atan(1) * 4, CompactionPicker::GetQ(level_ratio.begin() + n + 1,
+                                                 level_ratio.end(), n - 1));
+    return std::pair<double, double>(q1, q2);
   };
-  double q = get_q();
 
   sorted_runs[bottommost_level].being_compacted =
       picker->AreFilesInCompaction(vstorage_->LevelFiles(bottommost_level));
-  auto pick_map_compaction = [&](int level, uint64_t pick_size) {
+  auto pick_map_compaction = [&](int level, uint64_t pick_size, double q) {
     auto& level_files = vstorage_->LevelFiles(level);
     auto& next_level_files = vstorage_->LevelFiles(level + 1);
     DependenceMap empty_dependence_map;
@@ -2701,10 +2707,14 @@ Compaction* LevelCompactionBuilder::PickLazyCompaction(
         }
       } while (queue_limit != queue_end);
 
-      std::sort(sections.begin(), sections.end(),
-                [&](const LevelMapSection& lhs, const LevelMapSection& rhs) {
-                  return lhs.weight > rhs.weight;
-                });
+      if (sections.empty()) {
+        fn_new_section();
+      } else {
+        std::sort(sections.begin(), sections.end(),
+                  [&](const LevelMapSection& lhs, const LevelMapSection& rhs) {
+                    return lhs.weight > rhs.weight;
+                  });
+      }
       src_size = 0;
       for (size_t i = 0; i < sections.size(); ++i) {
         for (ptrdiff_t j = sections[i].start_index;
@@ -2811,36 +2821,58 @@ Compaction* LevelCompactionBuilder::PickLazyCompaction(
     }
   }
   double level_size = double(base_size);
+  double level_compensated_size = double(base_size);
+  auto q_pair = get_q();
   for (int i = 1; i < vstorage_->num_levels() - 1; ++i) {
-    level_size *= q;
+    level_size *= q_pair.first;
+    level_compensated_size *= q_pair.second;
+    if (vstorage_->LevelFiles(i).empty()) {
+      continue;
+    }
     if (sorted_runs[i].being_compacted || sorted_runs[i + 1].being_compacted) {
       sorted_runs[i + 1].skip_composite = true;
       continue;
     }
-    double fixed_level_size = level_size;
+    double fixed_size = level_size;
     if (i < bottommost_level) {
-      fixed_level_size = std::min(
-          fixed_level_size,
-          double(sorted_runs[i].size + sorted_runs[i + 1].size) / (q + 1));
+      fixed_size = std::min(
+          fixed_size, double(sorted_runs[i].size + sorted_runs[i + 1].size) /
+                          (q_pair.first + 1));
     }
-    if (sorted_runs[i].compensated_file_size <= fixed_level_size ||
-        vstorage_->LevelFiles(i).empty()) {
-      continue;
+    if (sorted_runs[i].size > fixed_size) {
+      uint64_t pick_size = target_file_size_base;
+      double diff_size =
+          double(sorted_runs[i].size) - fixed_size + target_file_size_base / 2;
+      if (diff_size > double(pick_size)) {
+        pick_size = uint64_t(diff_size);
+      }
+      auto s = pick_map_compaction(i, pick_size, q_pair.first);
+      if (!s.ok()) {
+        ROCKS_LOG_BUFFER(log_buffer_, "[%s] PickCompaction map error %s.",
+                         cf_name_.c_str(), s.getState());
+        return nullptr;
+      }
+      if (!input_range_.empty()) {
+        return GetCompaction();
+      }
     }
-    uint64_t pick_size = target_file_size_base;
-    double diff_size = double(sorted_runs[i].size) - fixed_level_size +
-                       target_file_size_base / 2;
-    if (diff_size > double(pick_size)) {
-      pick_size = uint64_t(diff_size);
+    fixed_size = level_compensated_size;
+    if (i < bottommost_level) {
+      fixed_size = std::min(fixed_size,
+                            double(sorted_runs[i].compensated_file_size +
+                                   sorted_runs[i + 1].compensated_file_size) /
+                                (q_pair.second + 1));
     }
-    auto s = pick_map_compaction(i, pick_size);
-    if (!s.ok()) {
-      ROCKS_LOG_BUFFER(log_buffer_, "[%s] PickCompaction map error %s.",
-                       cf_name_.c_str(), s.getState());
-      return nullptr;
-    }
-    if (!input_range_.empty()) {
-      return GetCompaction();
+    if (sorted_runs[i].compensated_file_size > fixed_size) {
+      auto s = pick_map_compaction(i, target_file_size_base, q_pair.second);
+      if (!s.ok()) {
+        ROCKS_LOG_BUFFER(log_buffer_, "[%s] PickCompaction map error %s.",
+                         cf_name_.c_str(), s.getState());
+        return nullptr;
+      }
+      if (!input_range_.empty()) {
+        return GetCompaction();
+      }
     }
   }
   sorted_runs.erase(sorted_runs.begin());

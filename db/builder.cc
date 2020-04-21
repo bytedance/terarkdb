@@ -195,7 +195,7 @@ Status BuildTable(
       separate_helper.file_writer.reset();
       EventHelpers::LogAndNotifyTableFileCreationFinished(
           event_logger, ioptions.listeners, dbname, column_family_name,
-          separate_helper.fname, -1, blob_meta->fd, tp,
+          separate_helper.fname, job_id, blob_meta->fd, tp,
           TableFileCreationReason::kFlush, status);
 
       separate_helper.builder.reset();
