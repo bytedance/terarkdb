@@ -73,8 +73,7 @@ PatriciaTrieRep::PatriciaTrieRep(details::ConcurrentType concurrent_type,
                                  details::PatriciaKeyType patricia_key_type,
                                  bool handle_duplicate,
                                  intptr_t write_buffer_size,
-                                 Allocator *allocator,
-                                 const MemTableRep::KeyComparator & /*compare*/)
+                                 Allocator *allocator)
     : MemTableRep(allocator) {
   immutable_ = false;
   patricia_key_type_ = patricia_key_type;
@@ -761,7 +760,7 @@ MemTableRep *PatriciaTrieRepFactory::CreateMemTableRep(
   if (IsForwardBytewiseComparator(key_cmp.icomparator()->user_comparator())) {
     return new PatriciaTrieRep(concurrent_type_, patricia_key_type_,
                                needs_dup_key_check, write_buffer_size_,
-                               allocator, key_cmp);
+                               allocator);
   } else {
     return fallback_->CreateMemTableRep(key_cmp, needs_dup_key_check, allocator,
                                         transform, logger);
@@ -775,7 +774,7 @@ MemTableRep *PatriciaTrieRepFactory::CreateMemTableRep(
   if (IsForwardBytewiseComparator(key_cmp.icomparator()->user_comparator())) {
     return new PatriciaTrieRep(concurrent_type_, patricia_key_type_,
                                needs_dup_key_check, write_buffer_size_,
-                               allocator, key_cmp);
+                               allocator);
   } else {
     return fallback_->CreateMemTableRep(key_cmp, needs_dup_key_check, allocator,
                                         ioptions, mutable_cf_options,

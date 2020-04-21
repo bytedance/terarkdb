@@ -101,8 +101,7 @@ class PatriciaTrieRep : public MemTableRep {
   PatriciaTrieRep(terark_memtable_details::ConcurrentType concurrent_type,
                   terark_memtable_details::PatriciaKeyType patricia_key_type,
                   bool handle_duplicate, intptr_t write_buffer_size,
-                  Allocator *allocator,
-                  const MemTableRep::KeyComparator &compare);
+                  Allocator *allocator);
 
   ~PatriciaTrieRep();
 
