@@ -1342,6 +1342,7 @@ Status GetTableFactoryFromMap(
     table_factory->reset(NewTerarkZipTableFactory(
         tzt_opt,
         std::shared_ptr<rocksdb::TableFactory>(NewBlockBasedTableFactory())));
+    return Status::OK();
   }
   // Return OK for not supported table factories as TableFactory
   // Deserialization is optional.
