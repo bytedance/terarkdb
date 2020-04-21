@@ -1050,7 +1050,8 @@ enum RepFactory {
   kPrefixHash,
   kVectorRep,
   kHashLinkedList,
-  kCuckoo
+  kCuckoo,
+  kPatriciaTrie
 };
 
 static enum RepFactory StringToRepFactory(const char* ctype) {
@@ -1066,6 +1067,8 @@ static enum RepFactory StringToRepFactory(const char* ctype) {
     return kHashLinkedList;
   else if (!strcasecmp(ctype, "cuckoo"))
     return kCuckoo;
+  else if (!strcasecmp(ctype, "patricil_trie"))
+    return kPatriciaTrie;
 
   fprintf(stdout, "Cannot parse memreptable %s\n", ctype);
   return kSkipList;
@@ -2143,6 +2146,9 @@ class Benchmark {
         break;
       case kCuckoo:
         fprintf(stdout, "Memtablerep: cuckoo\n");
+        break;
+      case kPatriciaTrie:
+        fprintf(stdout, "Memtablerep: patricil_trie\n");
         break;
     }
     fprintf(stdout, "Perf Level: %d\n", FLAGS_perf_level);
@@ -3247,6 +3253,10 @@ void VerifyDBFromDB(std::string& truth_db_name) {
         options.memtable_factory.reset(NewHashCuckooRepFactory(
             options.write_buffer_size, FLAGS_key_size + FLAGS_value_size));
         break;
+      case kPatriciaTrie:
+        Status ignore;
+        options.memtable_factory.reset(NewPatriciaTrieRepFactory({}, &ignore));
+        break;
 #else
       default:
         fprintf(stderr, "Only skip list is supported in lite mode\n");
@@ -3457,7 +3467,7 @@ void VerifyDBFromDB(std::string& truth_db_name) {
     options.disable_auto_compactions = FLAGS_disable_auto_compactions;
     options.enable_lazy_compaction = FLAGS_enable_lazy_compaction;
     options.blob_size = FLAGS_blob_size;
-    options.blob_large_key_size = FLAGS_blob_large_key_size;
+    // options.blob_large_key_size = FLAGS_blob_large_key_size;
     options.blob_large_key_ratio = FLAGS_blob_large_key_ratio;
     options.blob_gc_ratio = FLAGS_blob_gc_ratio;
     options.optimize_filters_for_hits = FLAGS_optimize_filters_for_hits;
