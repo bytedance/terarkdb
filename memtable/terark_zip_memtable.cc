@@ -254,16 +254,9 @@ bool PatriciaTrieRep::InsertKeyValue(const Slice &internal_key,
   auto tag = ExtractInternalKeyFooter(internal_key);
   // lambda impl fn for insert
   auto fn_insert_impl = [&](MemPatricia *trie) {
-    MemWriterToken *token;
-    if (trie->tls_writer_token() == nullptr) {
-      trie->tls_writer_token().reset(
-          token = new MemWriterToken(trie, DecodeFixed64(key.end()), value));
-    } else {
-      assert(dynamic_cast<MemWriterToken *>(trie->tls_writer_token().get()) !=
-             nullptr);
-      token = static_cast<MemWriterToken *>(trie->tls_writer_token().get());
-      token->reset_tag_value(DecodeFixed64(key.end()), value);
-    }
+    auto token = trie->tls_writer_token_nn<MemWriterToken>();
+    assert(dynamic_cast<MemWriterToken*>(token) != nullptr);
+    token->reset_tag_value(tag, value);
     token->acquire(trie);
     TERARK_SCOPE_EXIT(token->idle());
     uint32_t tmp_loc;

@@ -40,8 +40,6 @@ class MemWriterToken : public terark::Patricia::WriterToken {
 
  public:
   uint64_t get_tag() { return tag_; }
-  MemWriterToken(MemPatricia *trie, uint64_t tag, const Slice &value)
-      : tag_(tag), value_(value){}
 
   void reset_tag_value(uint64_t tag, const Slice &value) {
     tag_ = tag;
