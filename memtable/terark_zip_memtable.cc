@@ -109,15 +109,19 @@ bool PatriciaTrieRep::Contains(const Slice &internal_key) const {
   terark::fstring find_key(internal_key.data(), internal_key.size() - 8);
   uint64_t tag = ExtractInternalKeyFooter(internal_key);
   for (size_t i = 0; i < trie_vec_size_; ++i) {
-    auto token = trie_vec_[i]->acquire_tls_reader_token();
-    if ((trie_vec_[i])->lookup(find_key, token)) {
-      auto vector = (details::tag_vector_t *)(trie_vec_[i])
+    auto* trie = trie_vec_[i];
+    auto token = trie->tls_reader_token();
+    token->acquire(trie);
+    if (trie->lookup(find_key, token)) {
+      auto vector = (details::tag_vector_t *)trie
                         ->mem_get(*(uint32_t *)token->value());
       size_t size = vector->size.load(std::memory_order_relaxed) & ~(1u << 31);
-      auto data = (details::tag_vector_t::data_t *)trie_vec_[i]->mem_get(
+      auto data = (details::tag_vector_t::data_t *)trie->mem_get(
           vector->loc.load(std::memory_order_relaxed));
+      token->idle();
       return terark::binary_search_0(data, size, tag);
     }
+    token->idle();
   }
   return false;
 }
@@ -182,21 +186,24 @@ void PatriciaTrieRep::Get(const LookupKey &k, void *callback_args,
 
   // initialization
   for (size_t i = 0; i < trie_vec_size_; ++i) {
-    auto token = trie_vec_[i]->acquire_tls_reader_token();
-    token->update();
+    auto* trie = trie_vec_[i];
+    auto token = trie->tls_reader_token();
+    token->acquire(trie);
     if (trie_vec_[i]->lookup(find_key, token)) {
       uint32_t loc = *(uint32_t *)token->value();
-      auto vector = (details::tag_vector_t *)trie_vec_[i]->mem_get(loc);
+      auto vector = (details::tag_vector_t *)trie->mem_get(loc);
       size_t size = vector->size.load(std::memory_order_relaxed) & ~(1u << 31);
-      auto data = (details::tag_vector_t::data_t *)trie_vec_[i]->mem_get(
+      auto data = (details::tag_vector_t::data_t *)trie->mem_get(
           vector->loc.load(std::memory_order_relaxed));
       size_t idx = terark::upper_bound_0(data, size, tag) - 1;
       if (idx != size_t(-1)) {
         heap.emplace_back(
-            HeapItem{(uint32_t)idx, loc, data[idx].tag, trie_vec_[i]});
+            HeapItem{(uint32_t)idx, loc, data[idx].tag, trie});
       }
+      token->idle();
       break;
     }
+    token->idle();
   }
 
   // make heap for multi-merge
@@ -258,6 +265,8 @@ bool PatriciaTrieRep::InsertKeyValue(const Slice &internal_key,
       token = static_cast<MemWriterToken *>(trie->tls_writer_token().get());
       token->reset_tag_value(DecodeFixed64(key.end()), value);
     }
+    token->acquire(trie);
+    TERARK_SCOPE_EXIT(token->idle());
     uint32_t tmp_loc;
     if (!token->insert(key, &tmp_loc)) {
       size_t vector_loc = *(uint32_t *)token->value();
@@ -333,13 +342,16 @@ bool PatriciaTrieRep::InsertKeyValue(const Slice &internal_key,
   if (handle_duplicate_) {
     uint64_t tag = DecodeFixed64(key.end());
     for (size_t i = 0; i < trie_vec_size_; ++i) {
-      auto token = trie_vec_[i]->acquire_tls_reader_token();
-      if (trie_vec_[i]->lookup(key, token)) {
-        auto vector = (details::tag_vector_t *)trie_vec_[i]->mem_get(
+      auto* trie = trie_vec_[i];
+      auto token = trie->tls_reader_token();
+      token->acquire(trie);
+      TERARK_SCOPE_EXIT(token->idle());
+      if (trie->lookup(key, token)) {
+        auto vector = (details::tag_vector_t *)trie->mem_get(
             *(uint32_t *)token->value());
         size_t size =
             vector->size.load(std::memory_order_relaxed) & ~(1u << 31);
-        auto data = (details::tag_vector_t::data_t *)trie_vec_[i]->mem_get(
+        auto data = (details::tag_vector_t::data_t *)trie->mem_get(
             vector->loc.load(std::memory_order_relaxed));
         if (terark::binary_search_0(data, size, tag)) {
           return false;

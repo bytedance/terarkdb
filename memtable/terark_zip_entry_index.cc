@@ -72,14 +72,12 @@ struct IteratorImplWithoutOffset : public IteratorImplBase {
     return GetValue();
   }
   WriteBatchIndexEntry* Next() {
-    handle->update();
     if (!handle->incr()) {
       return nullptr;
     }
     return GetValue();
   }
   WriteBatchIndexEntry* Prev() {
-    handle->update();
     if (!handle->decr()) {
       return nullptr;
     }
@@ -161,7 +159,6 @@ struct IteratorImplWithOffset : public IteratorImplBase {
     return vec.data[index].value;
   }
   WriteBatchIndexEntry* Next() {
-    handle->update();
     auto vec = GetVector();
     if (++index == vec.size) {
       if (!handle->incr()) {
@@ -173,7 +170,6 @@ struct IteratorImplWithOffset : public IteratorImplBase {
     return vec.data[index].value;
   }
   WriteBatchIndexEntry* Prev() {
-    handle->update();
     if (index-- == 0) {
       if (!handle->decr()) {
         return nullptr;
