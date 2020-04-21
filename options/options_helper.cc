@@ -1001,6 +1001,17 @@ Status ParseColumnFamilyOption(const std::string& name,
       if (!s.ok()) {
         return s;
       }
+    } else if (name == "terark_zip_table_factory") {
+      TerarkZipTableOptions tzto, tzto_base;
+      Status table_opt_s = GetTerarkZipTableOptionsFromString(
+          tzto_base, value, &tzto);
+      if (!table_opt_s.ok()) {
+        return Status::InvalidArgument(
+            "unable to parse the specified CF option " + name);
+      }
+      new_options->table_factory.reset(NewTerarkZipTableFactory(
+          tzto,
+          std::shared_ptr<rocksdb::TableFactory>(NewBlockBasedTableFactory())));
     } else {
       auto iter = cf_options_type_info.find(name);
       if (iter == cf_options_type_info.end()) {
@@ -1321,6 +1332,16 @@ Status GetTableFactoryFromMap(
     }
     table_factory->reset(new PlainTableFactory(pt_opt));
     return Status::OK();
+  } else if (factory_name == "TerarkZipTable") {
+    TerarkZipTableOptions tzt_opt;
+    s = GetTerarkZipTableOptionsFromMap(TerarkZipTableOptions(), opt_map,
+                                        &tzt_opt, true, ignore_unknown_options);
+    if (!s.ok()) {
+      return s;
+    }
+    table_factory->reset(NewTerarkZipTableFactory(
+        tzt_opt,
+        std::shared_ptr<rocksdb::TableFactory>(NewBlockBasedTableFactory())));
   }
   // Return OK for not supported table factories as TableFactory
   // Deserialization is optional.
