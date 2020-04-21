@@ -172,19 +172,12 @@ class PatriciaRepIterator : public MemTableRep::Iterator,
     }
 
     VectorData GetVector();
-
     uint32_t GetValue() const;
-
     void Seek(terark::fstring find_key, uint64_t find_tag);
-
     void SeekForPrev(terark::fstring find_key, uint64_t find_tag);
-
     void SeekToFirst();
-
     void SeekToLast();
-
     void Next();
-
     void Prev();
   };
 
