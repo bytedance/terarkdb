@@ -1822,7 +1822,7 @@ Compaction* CompactionPicker::PickCompositeCompaction(
       size += find->second.size;
       used += find->second.used;
     }
-    p += 2.0 * double(size - std::min(used, size)) / size;
+    p *= (1 + double(size - std::min(used, size)) / size);
     if (p <= 2.0) {
       continue;
     }
