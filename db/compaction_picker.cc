@@ -1842,12 +1842,12 @@ Compaction* CompactionPicker::PickCompositeCompaction(
   auto push_unique = [&](const Slice& key) {
     unique_check.emplace(ArenaPinSlice(key, &arena));
   };
-  size_t pick_size =
+  uint64_t pick_size =
       size_t(MaxFileSizeForLevel(mutable_cf_options, std::max(1, input.level),
                                  ioptions_.compaction_style) *
-             4);
+             2);
   auto estimate_size = [](const MapSstElement& element) {
-    size_t sum = 0;
+    uint64_t sum = 0;
     for (auto& l : element.link) {
       sum += l.size;
     }
@@ -1871,7 +1871,7 @@ Compaction* CompactionPicker::PickCompositeCompaction(
     AssignUserKey(range.limit, map_element.largest_key);
     range.include_start = true;
     range.include_limit = false;
-    size_t sum = estimate_size(map_element);
+    uint64_t sum = estimate_size(map_element);
     push_unique(iter->key());
     while (sum < pick_size) {
       iter->Next();
@@ -1891,25 +1891,24 @@ Compaction* CompactionPicker::PickCompositeCompaction(
         push_unique(iter->key());
       }
     }
-    if (sum < pick_size) {
-      iter->SeekForPrev(key);
-      assert(iter->Valid());
-      do {
-        iter->Prev();
-        if (!iter->Valid() || unique_check.count(iter->key()) > 0) {
-          break;
-        }
-        if (!ReadMapElement(map_element, iter.get(), log_buffer, cf_name)) {
-          return nullptr;
-        }
-        if (is_perfect(map_element)) {
-          break;
-        }
-        AssignUserKey(range.start, map_element.smallest_key);
-        sum += estimate_size(map_element);
-        push_unique(iter->key());
-      } while (sum < pick_size);
-    }
+    // always try pick prev range
+    iter->SeekForPrev(key);
+    assert(iter->Valid());
+    do {
+      iter->Prev();
+      if (!iter->Valid() || unique_check.count(iter->key()) > 0) {
+        break;
+      }
+      if (!ReadMapElement(map_element, iter.get(), log_buffer, cf_name)) {
+        return nullptr;
+      }
+      if (is_perfect(map_element)) {
+        break;
+      }
+      AssignUserKey(range.start, map_element.smallest_key);
+      sum += estimate_size(map_element);
+      push_unique(iter->key());
+    } while (sum < pick_size);
     input_range.emplace_back(SelectedRange(std::move(range), weight));
     if (input_range.size() >= max_subcompactions) {
       break;
@@ -2708,6 +2707,16 @@ Compaction* LevelCompactionBuilder::PickLazyCompaction(
       } while (queue_limit != queue_end);
 
       if (sections.empty()) {
+        auto queue_start = src.begin();
+        auto queue_limit = src.end() - 1;
+        size_t src_size = 0;
+        double entry_num = 0;
+        double del_num = 0;
+        for (auto& item : src) {
+          src_size += item.estimate_size;
+          entry_num += item.estimate_entry_num;
+          del_num += item.estimate_del_num;
+        }
         fn_new_section();
       } else {
         std::sort(sections.begin(), sections.end(),
