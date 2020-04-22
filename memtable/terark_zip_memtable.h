@@ -25,15 +25,7 @@
 
 namespace rocksdb {
 
-// data structure inheriting terark's cspptrie for supporting memtable
-class MemPatricia : public terark::MainPatricia {
- public:
-  MemPatricia(size_t valsize, intptr_t maxMem = 512 << 10,
-              ConcurrentLevel level = OneWriteMultiRead, fstring fpath = "")
-      : MainPatricia(valsize, maxMem, level, fpath) {}
-};
-
-// Write token pairing with MemPatricia
+// Write token pairing with MainPatricia
 class MemWriterToken : public terark::Patricia::WriterToken {
   uint64_t tag_;
   Slice value_;
@@ -52,7 +44,7 @@ class MemWriterToken : public terark::Patricia::WriterToken {
 
 namespace terark_memtable_details {
 
-typedef std::array<MemPatricia *, 32> tries_t;
+typedef std::array<terark::MainPatricia*, 32> tries_t;
 
 enum class ConcurrentType { Native, None };
 

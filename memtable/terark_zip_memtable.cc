@@ -1,5 +1,7 @@
 #include "terark_zip_memtable.h"
 
+using terark::MainPatricia;
+
 namespace {
 
 inline const char *build_key(terark::fstring user_key, uint64_t tag,
@@ -35,18 +37,18 @@ namespace details = terark_memtable_details;
 
 bool MemWriterToken::init_value(void *valptr, size_t valsize) noexcept {
   assert(valsize == sizeof(uint32_t));
-  size_t data_loc = MemPatricia::mem_alloc_fail;
-  size_t value_loc = MemPatricia::mem_alloc_fail;
-  size_t vector_loc = MemPatricia::mem_alloc_fail;
+  size_t data_loc = MainPatricia::mem_alloc_fail;
+  size_t value_loc = MainPatricia::mem_alloc_fail;
+  size_t vector_loc = MainPatricia::mem_alloc_fail;
   size_t value_size = VarintLength(value_.size()) + value_.size();
-  auto trie = static_cast<MemPatricia *>(m_trie);
+  auto trie = static_cast<MainPatricia *>(m_trie);
   do {
     vector_loc = trie->mem_alloc(sizeof(details::tag_vector_t));
-    if (vector_loc == MemPatricia::mem_alloc_fail) break;
+    if (vector_loc == MainPatricia::mem_alloc_fail) break;
     data_loc = trie->mem_alloc(sizeof(details::tag_vector_t::data_t));
-    if (data_loc == MemPatricia::mem_alloc_fail) break;
+    if (data_loc == MainPatricia::mem_alloc_fail) break;
     value_loc = trie->mem_alloc(value_size);
-    if (value_loc == MemPatricia::mem_alloc_fail) break;
+    if (value_loc == MainPatricia::mem_alloc_fail) break;
     char *value_dst = EncodeVarint32((char *)trie->mem_get(value_loc),
                                      (uint32_t)value_.size());
     memcpy(value_dst, value_.data(), value_.size());
@@ -60,11 +62,11 @@ bool MemWriterToken::init_value(void *valptr, size_t valsize) noexcept {
     memcpy(valptr, &u32_vector_loc, valsize);
     return true;
   } while (false);
-  if (value_loc != MemPatricia::mem_alloc_fail)
+  if (value_loc != MainPatricia::mem_alloc_fail)
     trie->mem_free(value_loc, value_size);
-  if (data_loc != MemPatricia::mem_alloc_fail)
+  if (data_loc != MainPatricia::mem_alloc_fail)
     trie->mem_free(data_loc, sizeof(details::tag_vector_t::data_t));
-  if (vector_loc != MemPatricia::mem_alloc_fail)
+  if (vector_loc != MainPatricia::mem_alloc_fail)
     trie->mem_free(vector_loc, sizeof(details::tag_vector_t));
   return false;
 }
@@ -84,7 +86,7 @@ PatriciaTrieRep::PatriciaTrieRep(details::ConcurrentType concurrent_type,
   else
     concurrent_level_ = terark::Patricia::ConcurrentLevel::OneWriteMultiRead;
   trie_vec_[0] =
-      new MemPatricia(sizeof(uint32_t), write_buffer_size_, concurrent_level_);
+      new MainPatricia(sizeof(uint32_t), write_buffer_size_, concurrent_level_);
   trie_vec_size_ = 1;
   overhead_ = trie_vec_[0]->mem_size_inline();
 }
@@ -133,7 +135,7 @@ void PatriciaTrieRep::Get(const LookupKey &k, void *callback_args,
     uint32_t idx;
     uint32_t loc;
     uint64_t tag;
-    MemPatricia *trie;
+    MainPatricia *trie;
   };
 
   struct TlsItem {
@@ -149,7 +151,7 @@ void PatriciaTrieRep::Get(const LookupKey &k, void *callback_args,
 
     Status fetch_buffer(LazyBuffer *buffer) const override {
       auto context = get_context(buffer);
-      auto trie = reinterpret_cast<MemPatricia *>(context->data[0]);
+      auto trie = reinterpret_cast<MainPatricia *>(context->data[0]);
       auto loc = static_cast<uint32_t>(context->data[1]);
       auto idx = static_cast<uint32_t>(context->data[2]);
       auto vector = (details::tag_vector_t *)trie->mem_get(loc);
@@ -253,7 +255,7 @@ bool PatriciaTrieRep::InsertKeyValue(const Slice &internal_key,
                       internal_key.data() + internal_key.size() - 8);
   auto tag = ExtractInternalKeyFooter(internal_key);
   // lambda impl fn for insert
-  auto fn_insert_impl = [&](MemPatricia *trie) {
+  auto fn_insert_impl = [&](MainPatricia *trie) {
     auto token = trie->tls_writer_token_nn<MemWriterToken>();
     assert(dynamic_cast<MemWriterToken*>(token) != nullptr);
     token->reset_tag_value(tag, value);
@@ -265,7 +267,7 @@ bool PatriciaTrieRep::InsertKeyValue(const Slice &internal_key,
       auto *vector = (details::tag_vector_t *)trie->mem_get(vector_loc);
       size_t value_size = VarintLength(value.size()) + value.size();
       size_t value_loc = trie->mem_alloc(value_size);
-      if (value_loc == MemPatricia::mem_alloc_fail) {
+      if (value_loc == MainPatricia::mem_alloc_fail) {
         return details::InsertResult::Fail;
       }
       memcpy(EncodeVarint32((char *)trie->mem_get(value_loc),
@@ -296,7 +298,7 @@ bool PatriciaTrieRep::InsertKeyValue(const Slice &internal_key,
       }
       size_t cow_data_loc =
           trie->mem_alloc(sizeof(details::tag_vector_t::data_t) * size * 2);
-      if (cow_data_loc == MemPatricia::mem_alloc_fail) {
+      if (cow_data_loc == MainPatricia::mem_alloc_fail) {
         vector->size.store(size, std::memory_order_release);
         trie->mem_free(value_loc, value_size);
         return details::InsertResult::Fail;
@@ -325,7 +327,7 @@ bool PatriciaTrieRep::InsertKeyValue(const Slice &internal_key,
       if (size_t(write_buffer_size_) < bound)
         write_buffer_size_ = std::min(bound + (16 << 20), size_t(-1) >> 1);
     }
-    trie_vec_[trie_vec_size_] = new MemPatricia(
+    trie_vec_[trie_vec_size_] = new MainPatricia(
         sizeof(uint32_t), write_buffer_size_, concurrent_level_);
     trie_vec_size_++;
   };
