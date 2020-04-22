@@ -1822,7 +1822,7 @@ Compaction* CompactionPicker::PickCompositeCompaction(
       size += find->second.size;
       used += find->second.used;
     }
-    p += 2.0 * double(size - std::min(used, size)) / size;
+    p *= (1 + double(size - std::min(used, size)) / size);
     if (p <= 2.0) {
       continue;
     }
@@ -1845,7 +1845,7 @@ Compaction* CompactionPicker::PickCompositeCompaction(
   size_t pick_size =
       size_t(MaxFileSizeForLevel(mutable_cf_options, std::max(1, input.level),
                                  ioptions_.compaction_style) *
-             2);
+             4);
   auto estimate_size = [](const MapSstElement& element) {
     size_t sum = 0;
     for (auto& l : element.link) {
@@ -2829,10 +2829,6 @@ Compaction* LevelCompactionBuilder::PickLazyCompaction(
     if (vstorage_->LevelFiles(i).empty()) {
       continue;
     }
-    if (sorted_runs[i].being_compacted || sorted_runs[i + 1].being_compacted) {
-      sorted_runs[i + 1].skip_composite = true;
-      continue;
-    }
     double fixed_size = level_size;
     if (i < bottommost_level) {
       fixed_size = std::min(
@@ -2840,6 +2836,12 @@ Compaction* LevelCompactionBuilder::PickLazyCompaction(
                           (q_pair.first + 1));
     }
     if (sorted_runs[i].size > fixed_size) {
+      if (sorted_runs[i].being_compacted ||
+          sorted_runs[i + 1].being_compacted) {
+        sorted_runs[i].skip_composite = true;
+        sorted_runs[i + 1].skip_composite = true;
+        continue;
+      }
       uint64_t pick_size = target_file_size_base;
       double diff_size =
           double(sorted_runs[i].size) - fixed_size + target_file_size_base / 2;
@@ -2864,6 +2866,12 @@ Compaction* LevelCompactionBuilder::PickLazyCompaction(
                                 (q_pair.second + 1));
     }
     if (sorted_runs[i].compensated_file_size > fixed_size) {
+      if (sorted_runs[i].being_compacted ||
+          sorted_runs[i + 1].being_compacted) {
+        sorted_runs[i].skip_composite = true;
+        sorted_runs[i + 1].skip_composite = true;
+        continue;
+      }
       auto s = pick_map_compaction(i, target_file_size_base, q_pair.second);
       if (!s.ok()) {
         ROCKS_LOG_BUFFER(log_buffer_, "[%s] PickCompaction map error %s.",
