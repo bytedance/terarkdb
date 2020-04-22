@@ -71,7 +71,7 @@ class VersionBuilderTest : public testing::Test {
     f->prop = prop;
     f->prop.num_entries = num_entries;
     f->prop.num_deletions = num_deletions;
-    f->is_skip_gc = true;
+    f->gc_status = FileMetaData::kGarbageCollectionForbidden;
     vstorage_.AddFile(level, f);
     vstorage_.UpdateAccumulatedStats(f);
   }

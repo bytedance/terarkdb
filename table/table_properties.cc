@@ -68,7 +68,7 @@ namespace {
   }
 }
 
-std::string TableProperties::ToString(
+std::string TablePropertiesBase::ToString(
     const std::string& prop_delim,
     const std::string& kv_delim) const {
   std::string result;

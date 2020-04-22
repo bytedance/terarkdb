@@ -160,8 +160,8 @@ struct CompactionWorkerContext {
   CompressionOptions compression_opts;
   std::vector<SequenceNumber> existing_snapshots;
   EncodedString smallest_user_key, largest_user_key;
-  int level, number_levels;
-  bool bottommost_level, allow_ingest_behind, preserve_deletes;
+  int level, output_level, number_levels;
+  bool skip_filters, bottommost_level, allow_ingest_behind, preserve_deletes;
   std::vector<NameParam> int_tbl_prop_collector_factories;
 };
 
@@ -176,7 +176,6 @@ struct CompactionWorkerResult {
 
     // use UserProperties["User.Collected.Transient.Stat"] to reduce complexity
     // std::string stat_one;
-
     bool marked_for_compaction;
   };
   std::vector<FileInfo> files;

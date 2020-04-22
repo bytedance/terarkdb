@@ -289,6 +289,11 @@ class BlockIter : public InternalIteratorBase<TValue> {
   // e.g. PinnableSlice, the pointer to the bytes will still be valid.
   bool block_contents_pinned_;
   SequenceNumber global_seqno_;
+  // Save the actual sequence before replaced by global seqno, which potentially
+  // is used as part of prefix of delta encoding.
+  SequenceNumber stored_seqno_ = 0;
+  // Save the value type of key_. Used to restore stored_seqno_.
+  ValueType stored_value_type_ = kMaxValue;
 
  public:
   // Return the offset in data_ just past the end of the current entry.

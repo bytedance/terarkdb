@@ -38,6 +38,7 @@ ImmutableCFOptions::ImmutableCFOptions(const ImmutableDBOptions& db_options,
       max_write_buffer_number_to_maintain(
           cf_options.max_write_buffer_number_to_maintain),
       enable_lazy_compaction(cf_options.enable_lazy_compaction),
+      pin_table_properties_in_reader(cf_options.pin_table_properties_in_reader),
       inplace_update_support(cf_options.inplace_update_support),
       inplace_callback(cf_options.inplace_callback),
       info_log(db_options.info_log.get()),
@@ -93,11 +94,14 @@ uint64_t MultiplyCheckOverflow(uint64_t op1, double op2) {
 // when level_compaction_dynamic_level_bytes is true and leveled compaction
 // is used, the base level is not always L1, so precomupted max_file_size can
 // no longer be used. Recompute file_size_for_level from base level.
-uint64_t MaxFileSizeForLevel(const MutableCFOptions& cf_options,
-    int level, CompactionStyle compaction_style, int base_level,
-    bool level_compaction_dynamic_level_bytes) {
+uint64_t MaxFileSizeForLevel(const MutableCFOptions& cf_options, int level,
+                             CompactionStyle compaction_style, int base_level,
+                             bool level_compaction_dynamic_level_bytes) {
   if (!level_compaction_dynamic_level_bytes || level < base_level ||
       compaction_style != kCompactionStyleLevel) {
+    if (cf_options.max_file_size.size() == 1 && level == 1) {
+      level = 0;
+    }
     assert(level >= 0);
     assert(level < (int)cf_options.max_file_size.size());
     return cf_options.max_file_size[level];
@@ -110,7 +114,7 @@ uint64_t MaxFileSizeForLevel(const MutableCFOptions& cf_options,
 
 void MutableCFOptions::RefreshDerivedOptions(int num_levels) {
   max_file_size.resize(num_levels);
-  max_file_size[0] = 0; // unlimited
+  max_file_size[0] = 0;  // unlimited
   if (num_levels > 1) {
     max_file_size[1] = target_file_size_base;
   }
@@ -150,8 +154,6 @@ void MutableCFOptions::Dump(Logger* log) const {
                  max_subcompactions);
   ROCKS_LOG_INFO(log, "                                blob_size: %zd",
                  blob_size);
-  ROCKS_LOG_INFO(log, "                      blob_large_key_size: %zd",
-                 blob_large_key_size);
   ROCKS_LOG_INFO(log, "                     blob_large_key_ratio: %f",
                  blob_large_key_ratio);
   ROCKS_LOG_INFO(log, "                            blob_gc_ratio: %f",

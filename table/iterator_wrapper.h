@@ -97,7 +97,7 @@ using IteratorWrapper = IteratorWrapperBase<LazyBuffer>;
 class CombinedInternalIterator : public InternalIterator {
  public:
   CombinedInternalIterator(InternalIterator* iter,
-                           const SeparateHelper* separate_helper)
+                           SeparateHelper* separate_helper)
       : iter_(iter), separate_helper_(separate_helper) {}
 
   bool Valid() const override { return iter_->Valid(); }
@@ -112,12 +112,12 @@ class CombinedInternalIterator : public InternalIterator {
   void SeekToFirst() override { iter_->SeekToFirst(); }
   void SeekToLast() override { iter_->SeekToLast(); }
 
-  const SeparateHelper* separate_helper() const { return separate_helper_; }
+  SeparateHelper* separate_helper() const { return separate_helper_; }
 
   InternalIterator* operator->() { return iter_; }
 
   InternalIterator* iter_;
-  const SeparateHelper* separate_helper_;
+  SeparateHelper* separate_helper_;
 };
 
 class LazyInternalIteratorWrapper : public InternalIterator {

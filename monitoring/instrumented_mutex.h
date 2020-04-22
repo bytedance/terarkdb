@@ -5,47 +5,53 @@
 
 #pragma once
 
-#include "monitoring/statistics.h"
-#include "port/port.h"
+#include <type_traits>
+
 #include "rocksdb/env.h"
 #include "rocksdb/statistics.h"
 #include "rocksdb/thread_status.h"
 #include "util/stop_watch.h"
 
+namespace boost {
+namespace fibers {
+class mutex;
+}  // namespace fibers
+}  // namespace boost
+
 namespace rocksdb {
 class InstrumentedCondVar;
+
+static const unsigned int kBoostFiberMutexSize = 32;
+static const unsigned int kBoostFiberCondVarSize = 24;
+static const unsigned int kBoostFiberIDSize = 8;
 
 // A wrapper class for port::Mutex that provides additional layer
 // for collecting stats and instrumentation.
 class InstrumentedMutex {
  public:
-  explicit InstrumentedMutex(bool adaptive = false)
-      : mutex_(adaptive), stats_(nullptr), env_(nullptr),
-        stats_code_(0) {}
+  explicit InstrumentedMutex(bool adaptive = false);
 
-  InstrumentedMutex(
-      Statistics* stats, Env* env,
-      int stats_code, bool adaptive = false)
-      : mutex_(adaptive), stats_(stats), env_(env),
-        stats_code_(stats_code) {}
+  InstrumentedMutex(Statistics* stats, Env* env, int stats_code,
+                    bool adaptive = false);
+
+  ~InstrumentedMutex();
 
   void Lock();
 
-  void Unlock() {
-    mutex_.Unlock();
-  }
+  void Unlock();
 
-  void AssertHeld() {
-    mutex_.AssertHeld();
-  }
+  void AssertHeld();
 
  private:
   void LockInternal();
   friend class InstrumentedCondVar;
-  port::Mutex mutex_;
+  typename std::aligned_storage<kBoostFiberMutexSize,
+                                alignof(std::max_align_t)>::type mutex_;
   Statistics* stats_;
   Env* env_;
   int stats_code_;
+  typename std::aligned_storage<kBoostFiberIDSize,
+                                alignof(std::max_align_t)>::type owner_id_{};
 };
 
 // A wrapper class for port::Mutex that provides additional layer
@@ -56,9 +62,7 @@ class InstrumentedMutexLock {
     mutex_->Lock();
   }
 
-  ~InstrumentedMutexLock() {
-    mutex_->Unlock();
-  }
+  ~InstrumentedMutexLock() { mutex_->Unlock(); }
 
  private:
   InstrumentedMutex* const mutex_;
@@ -68,28 +72,25 @@ class InstrumentedMutexLock {
 
 class InstrumentedCondVar {
  public:
-  explicit InstrumentedCondVar(InstrumentedMutex* instrumented_mutex)
-      : cond_(&(instrumented_mutex->mutex_)),
-        stats_(instrumented_mutex->stats_),
-        env_(instrumented_mutex->env_),
-        stats_code_(instrumented_mutex->stats_code_) {}
+  explicit InstrumentedCondVar(InstrumentedMutex* instrumented_mutex);
+
+  ~InstrumentedCondVar();
 
   void Wait();
 
   bool TimedWait(uint64_t abs_time_us);
 
-  void Signal() {
-    cond_.Signal();
-  }
+  void Signal();
 
-  void SignalAll() {
-    cond_.SignalAll();
-  }
+  void SignalAll();
 
  private:
   void WaitInternal();
   bool TimedWaitInternal(uint64_t abs_time_us);
-  port::CondVar cond_;
+  InstrumentedMutex* instrumented_mutex_;
+  typename std::aligned_storage<kBoostFiberCondVarSize,
+                                alignof(std::max_align_t)>::type cond_;
+  boost::fibers::mutex* mutex_;
   Statistics* stats_;
   Env* env_;
   int stats_code_;

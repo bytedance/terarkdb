@@ -337,7 +337,8 @@ class BlockBasedTable : public TableReader {
   void ReadMeta(const Footer& footer);
 
   // Figure the index type, update it in rep_, and also return it.
-  BlockBasedTableOptions::IndexType UpdateIndexType();
+  static BlockBasedTableOptions::IndexType GetIndexType(
+      const TableProperties* table_properties);
 
   // Create a index reader based on the index type stored in the table.
   // Optionally, user can pass a preloaded meta_index_iter for the index that
@@ -443,6 +444,7 @@ struct BlockBasedTable::Rep {
         filter_policy(skip_filters ? nullptr : _table_opt.filter_policy.get()),
         internal_comparator(_internal_comparator),
         filter_type(FilterType::kNoFilter),
+        found_table_properties(false),
         index_type(BlockBasedTableOptions::IndexType::kBinarySearch),
         hash_index_allow_collision(false),
         whole_key_filtering(_table_opt.whole_key_filtering),
@@ -486,6 +488,9 @@ struct BlockBasedTable::Rep {
   BlockHandle filter_handle;
 
   std::shared_ptr<const TableProperties> table_properties;
+  TablePropertiesBase table_properties_base;
+  bool found_table_properties;
+
   // Block containing the data for the compression dictionary. We take ownership
   // for the entire block struct, even though we only use its Slice member. This
   // is easier because the Slice member depends on the continued existence of

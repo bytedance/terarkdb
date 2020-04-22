@@ -369,7 +369,8 @@ InternalIterator* TableCache::NewIterator(
         s = range_del_iter->status();
       }
       if (s.ok()) {
-        range_del_agg->AddTombstones(std::move(range_del_iter));
+        range_del_agg->AddTombstones(
+            std::move(range_del_iter), &file_meta.smallest, &file_meta.largest);
       }
     }
   }

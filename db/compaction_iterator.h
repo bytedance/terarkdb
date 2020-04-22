@@ -61,7 +61,7 @@ class CompactionIterator {
   };
 
   CompactionIterator(
-      InternalIterator* input, const SeparateHelper* separate_helper,
+      InternalIterator* input, SeparateHelper* separate_helper,
       const Slice* end, const Comparator* cmp, MergeHelper* merge_helper,
       SequenceNumber last_sequence, std::vector<SequenceNumber>* snapshots,
       SequenceNumber earliest_write_conflict_snapshot,
@@ -69,14 +69,14 @@ class CompactionIterator {
       bool report_detailed_time, bool expect_valid_internal_key,
       CompactionRangeDelAggregator* range_del_agg,
       const Compaction* compaction = nullptr,
-      BlobConfig blob_config = BlobConfig{size_t(-1), size_t(0), 0.0},
+      BlobConfig blob_config = BlobConfig{size_t(-1), 0.0},
       const CompactionFilter* compaction_filter = nullptr,
       const std::atomic<bool>* shutting_down = nullptr,
       const SequenceNumber preserve_deletes_seqnum = 0);
 
   // Constructor with custom CompactionProxy, used for tests.
   CompactionIterator(
-      InternalIterator* input, const SeparateHelper* separate_helper,
+      InternalIterator* input, SeparateHelper* separate_helper,
       const Slice* end, const Comparator* cmp, MergeHelper* merge_helper,
       SequenceNumber last_sequence, std::vector<SequenceNumber>* snapshots,
       SequenceNumber earliest_write_conflict_snapshot,

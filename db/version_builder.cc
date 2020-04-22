@@ -134,7 +134,8 @@ class VersionBuilder::Rep {
   };
   struct DependenceItem {
     size_t dependence_version;
-    size_t skip_gc_version;
+    size_t gc_forbidden_version;
+    bool is_estimation;
     int level;
     FileMetaData* f;
     double entry_depended;
@@ -258,8 +259,9 @@ class VersionBuilder::Rep {
   }
 
   void PutSst(FileMetaData* f, int level) {
-    auto ib = dependence_map_.emplace(f->fd.GetNumber(),
-                                      DependenceItem{0, 0, level, f, 0});
+    auto ib = dependence_map_.emplace(
+        f->fd.GetNumber(),
+        DependenceItem{0, 0, false, level, f, 0});
     f->refs++;
     if (ib.second) {
       PutInheritance(&ib.first->second);
@@ -289,7 +291,8 @@ class VersionBuilder::Rep {
     return nullptr;
   }
 
-  void SetDependence(FileMetaData* f, bool is_map, double ratio, bool finish) {
+  void SetDependence(FileMetaData* f, bool is_map, bool is_estimation,
+                     double ratio, bool finish) {
     for (auto& dependence : f->prop.dependence) {
       auto find = inheritance_counter_.find(dependence.file_number);
       if (find == inheritance_counter_.end()) {
@@ -301,14 +304,16 @@ class VersionBuilder::Rep {
       auto item = find->second.item;
       if (finish) {
         find->second.depended = true;
+        item->is_estimation |= is_estimation;
         assert(is_map || dependence.entry_count > 0);
         item->entry_depended += dependence.entry_count * ratio;
       }
       item->dependence_version = dependence_version_;
       if (is_map) {
-        item->skip_gc_version = dependence_version_;
+        item->gc_forbidden_version = dependence_version_;
         if (!item->f->prop.dependence.empty()) {
           SetDependence(item->f, item->f->prop.is_map_sst(),
+                        is_estimation || item->f->prop.is_map_sst(),
                         ratio * dependence.entry_count /
                             std::max<uint64_t>(1, item->f->prop.num_entries),
                         finish);
@@ -330,9 +335,10 @@ class VersionBuilder::Rep {
         auto& item = dependence_map_[file_number];
         assert(item.level >= 0);
         item.dependence_version = dependence_version_;
-        item.skip_gc_version = dependence_version_;
+        item.gc_forbidden_version = dependence_version_;
         if (!item.f->prop.dependence.empty()) {
-          SetDependence(item.f, item.f->prop.is_map_sst(), 1, finish);
+          SetDependence(item.f, item.f->prop.is_map_sst(),
+                        item.f->prop.is_map_sst(), 1, finish);
         }
       }
     }
@@ -342,24 +348,39 @@ class VersionBuilder::Rep {
         assert(inheritance_counter_.count(it->first) > 0 &&
                inheritance_counter_.find(it->first)->second.item == &item);
         if (finish) {
-          bool is_skip_gc = item.skip_gc_version == dependence_version_;
-          if (item.f->is_skip_gc != is_skip_gc) {
-            if (item.f->refs > 1 && item.f->is_skip_gc) {
-              // if item.f in other versions, that assigning item.f->is_skip_gc
-              // to false might let this item participate in GC before current
-              // version was installed. It will cause database corruption.
-              auto f = new FileMetaData(*item.f);
-              f->table_reader_handle = nullptr;
-              f->refs = 1;
-              f->being_compacted = false;
-              unref_.emplace_back(item.f);
-              item.f = f;
-            }
-            item.f->is_skip_gc = is_skip_gc;
-          }
           uint64_t entry_depended = std::max<uint64_t>(1, item.entry_depended);
           entry_depended = std::min(item.f->prop.num_entries, entry_depended);
-          item.f->num_antiquation = item.f->prop.num_entries - entry_depended;
+          uint64_t num_antiquation = item.f->prop.num_entries - entry_depended;
+          switch (item.f->gc_status) {
+            case FileMetaData::kGarbageCollectionForbidden:
+              if (item.gc_forbidden_version != dependence_version_) {
+                if (item.f->refs > 1) {
+                  // if item.f in other versions, that assigning
+                  // item.f->gc_status to permitted might let this item
+                  // participate in GC before current version was installed. It
+                  // will cause database corruption.
+                  auto f = new FileMetaData(*item.f);
+                  f->table_reader_handle = nullptr;
+                  f->refs = 1;
+                  f->being_compacted = false;
+                  unref_.emplace_back(item.f);
+                  item.f = f;
+                }
+                item.f->gc_status = FileMetaData::kGarbageCollectionPermitted;
+              }
+              break;
+            case FileMetaData::kGarbageCollectionCandidate:
+              assert(item.gc_forbidden_version != dependence_version_);
+              if (!item.is_estimation ||
+                  num_antiquation != item.f->num_antiquation) {
+                item.f->gc_status = FileMetaData::kGarbageCollectionPermitted;
+              }
+              break;
+            case FileMetaData::kGarbageCollectionPermitted:
+              assert(item.gc_forbidden_version != dependence_version_);
+              break;
+          }
+          item.f->num_antiquation = num_antiquation;
         }
         ++it;
       } else {
@@ -634,7 +655,7 @@ class VersionBuilder::Rep {
     for (auto& pair : dependence_map_) {
       auto& item = pair.second;
       if (item.level == -1) {
-        if (item.f->is_skip_gc) {
+        if (item.f->is_gc_forbidden()) {
           push_old_file(item.f);
         }
         vstorage->AddFile(-1, item.f, c_style_callback(exists), &exists,
@@ -770,13 +791,13 @@ void VersionBuilderDebugger::Verify(VersionBuilder::Rep* rep,
   };
   auto verify = [rep](VersionStorageInfo* l,
                       VersionStorageInfo* r) -> std::string {
-    auto eq = TERARK_EQUAL_P(fd.GetNumber(), num_antiquation, is_skip_gc);
+    auto eq = TERARK_EQUAL_P(fd.GetNumber(), num_antiquation, gc_status);
     auto lt = TERARK_CMP_P(fd.GetNumber(), <, num_antiquation, <);
     /*
     auto eq = [](FileMetaData* fl, FileMetaData* fr) {
       return fl->fd.GetNumber() == fr->fd.GetNumber() &&
              fl->num_antiquation == fr->num_antiquation &&
-             fl->is_skip_gc == fr->is_skip_gc;
+             fl->gc_status == fr->gc_status;
     };
     auto lt = [](FileMetaData* fl, FileMetaData* fr) {
       return fl->fd.GetNumber() != fr->fd.GetNumber() ?

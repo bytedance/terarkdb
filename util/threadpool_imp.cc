@@ -127,7 +127,7 @@ private:
   // parameter for fiber
   std::atomic_int max_task_per_thread_{1};
   std::atomic_int total_task_{0};
-  
+
   std::chrono::milliseconds wait_interval_{10};
   std::chrono::milliseconds wait_zero_{0};
   int wait_time_us_ = 1000;
@@ -288,7 +288,7 @@ void ThreadPoolImpl::Impl::BGThread(size_t thread_id) {
     if (item.function) {
       if (current_task == 0 && max_task_per_thread_ == 1) {
         item.function();
-      } else if (DB::TrySubmitAsyncTask(item.function)) {
+      } else if (DB::TrySubmitAsyncTask(item.function, max_task_per_thread_)) {
         ++current_task;
         ++total_task_;
       } else {
@@ -363,8 +363,7 @@ void ThreadPoolImpl::Impl::SetBackgroundThreadsInternal(
     return;
   }
   if (max_task_per_thread > 0) {
-    // NOT released
-    //max_task_per_thread_ = max_task_per_thread;
+    max_task_per_thread_ = max_task_per_thread;
   }
   if (num >= 0 && (num > total_threads_limit_ ||
                   (num < total_threads_limit_ && allow_reduce))) {

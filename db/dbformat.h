@@ -803,10 +803,15 @@ class SeparateHelper {
     return file_number;
   }
 
-  virtual void TransToSeparate(LazyBuffer& value) const {
+  static void TransToSeparate(LazyBuffer& value) {
     assert(value.file_number() != uint64_t(-1));
     uint64_t file_number = value.file_number();
     value.reset(EncodeFileNumber(file_number), true, file_number);
+  }
+
+  virtual Status TransToSeparate(const Slice& /*internal_key*/,
+                                 LazyBuffer& /*value*/) {
+    return Status::NotSupported();
   }
 
   virtual void TransToCombined(const Slice& user_key, uint64_t sequence,

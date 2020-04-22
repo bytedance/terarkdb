@@ -19,7 +19,7 @@ class HistReporterHandle {
 
 class LatencyHistGuard {
  public:
-  LatencyHistGuard(HistReporterHandle* handle)
+  explicit LatencyHistGuard(HistReporterHandle* handle)
       : handle_(handle),
         begin_time_(std::chrono::high_resolution_clock::now()) {}
 

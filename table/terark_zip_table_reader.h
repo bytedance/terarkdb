@@ -45,18 +45,31 @@ class TerarkZipTableReaderBase : public TableReader, boost::noncopyable {
   std::shared_ptr<const FragmentedRangeTombstoneList> fragmented_range_dels_;
 
  protected:
+  const TableReaderOptions table_reader_options_;
+
+  std::shared_ptr<const TableProperties> table_properties_;
+  unique_ptr<RandomAccessFileReader> file_;
+
   virtual SequenceNumber GetSequenceNumber() const = 0;
-  virtual const TableReaderOptions& GetTableReaderOptions() const = 0;
+
+  const TableReaderOptions& GetTableReaderOptions() const {
+    return table_reader_options_;
+  }
 
   Status LoadTombstone(RandomAccessFileReader* file, uint64_t file_size);
 
   uint64_t FileNumber() const override {
-    return GetTableReaderOptions().file_number;
+    return table_reader_options_.file_number;
   }
+
+  TerarkZipTableReaderBase(const TableReaderOptions& tro)
+      : table_reader_options_(tro) {}
 
  public:
   virtual FragmentedRangeTombstoneIterator* NewRangeTombstoneIterator(
       const ReadOptions& read_options) override;
+
+  std::shared_ptr<const TableProperties> GetTableProperties() const override;
 };
 
 class TerarkEmptyTableReader : public TerarkZipTableReaderBase {
@@ -77,11 +90,8 @@ class TerarkEmptyTableReader : public TerarkZipTableReaderBase {
     }
     Status status() const override { return Status::OK(); }
   };
-  const TableReaderOptions table_reader_options_;
-  std::shared_ptr<const TableProperties> table_properties_;
   SequenceNumber global_seqno_;
   Slice file_data_;
-  unique_ptr<RandomAccessFileReader> file_;
 
  public:
   InternalIterator* NewIterator(const ReadOptions& /*ro*/,
@@ -106,20 +116,14 @@ class TerarkEmptyTableReader : public TerarkZipTableReaderBase {
   size_t ApproximateMemoryUsage() const override { return 100; }
   uint64_t ApproximateOffsetOf(const Slice&) override { return 0; }
   void SetupForCompaction() override {}
-  std::shared_ptr<const TableProperties> GetTableProperties() const override {
-    return table_properties_;
-  }
 
   virtual ~TerarkEmptyTableReader() {}
   TerarkEmptyTableReader(const TableReaderOptions& o)
-      : table_reader_options_(o), global_seqno_(kDisableGlobalSequenceNumber) {}
+      : TerarkZipTableReaderBase(o), global_seqno_(kDisableGlobalSequenceNumber) {}
   Status Open(RandomAccessFileReader* file, uint64_t file_size);
 
  private:
   SequenceNumber GetSequenceNumber() const override { return global_seqno_; }
-  const TableReaderOptions& GetTableReaderOptions() const override {
-    return table_reader_options_;
-  }
 };
 
 struct TerarkZipSubReader {
@@ -184,10 +188,6 @@ class TerarkZipTableReader : public TerarkZipTableReaderBase {
   uint64_t ApproximateOffsetOf(const Slice& key) override;
   void SetupForCompaction() override {}
 
-  std::shared_ptr<const TableProperties> GetTableProperties() const override {
-    return table_properties_;
-  }
-
   size_t ApproximateMemoryUsage() const override { return file_data_.size(); }
 
   virtual ~TerarkZipTableReader();
@@ -197,19 +197,13 @@ class TerarkZipTableReader : public TerarkZipTableReaderBase {
 
  private:
   SequenceNumber GetSequenceNumber() const override { return global_seqno_; }
-  const TableReaderOptions& GetTableReaderOptions() const override {
-    return table_reader_options_;
-  }
 
   TerarkZipSubReader subReader_;
   static const size_t kNumInternalBytes = 8;
   Slice file_data_;
-  unique_ptr<RandomAccessFileReader> file_;
   valvec<byte_t> dict_;
   valvec<byte_t> meta_;
-  const TableReaderOptions table_reader_options_;
   const TerarkZipTableFactory* table_factory_;
-  std::shared_ptr<const TableProperties> table_properties_;
   SequenceNumber global_seqno_;
   const TerarkZipTableOptions& tzto_;
   bool isReverseBytewiseOrder_;
@@ -242,10 +236,6 @@ class TerarkZipTableMultiReader : public TerarkZipTableReaderBase {
 
   uint64_t ApproximateOffsetOf(const Slice& key) override;
   void SetupForCompaction() override {}
-
-  std::shared_ptr<const TableProperties> GetTableProperties() const override {
-    return table_properties_;
-  }
 
   size_t ApproximateMemoryUsage() const override { return file_data_.size(); }
 
@@ -288,19 +278,13 @@ class TerarkZipTableMultiReader : public TerarkZipTableReaderBase {
 
  private:
   SequenceNumber GetSequenceNumber() const override { return global_seqno_; }
-  const TableReaderOptions& GetTableReaderOptions() const override {
-    return table_reader_options_;
-  }
 
   SubIndex subIndex_;
   static const size_t kNumInternalBytes = 8;
   Slice file_data_;
-  unique_ptr<RandomAccessFileReader> file_;
   valvec<byte_t> dict_;
   valvec<byte_t> meta_;
-  const TableReaderOptions table_reader_options_;
   const TerarkZipTableFactory* table_factory_;
-  std::shared_ptr<const TableProperties> table_properties_;
   SequenceNumber global_seqno_;
   const TerarkZipTableOptions& tzto_;
   bool isReverseBytewiseOrder_;

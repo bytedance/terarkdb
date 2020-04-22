@@ -413,6 +413,7 @@ class Repairer {
       }
 
       FileMetaData meta;
+      std::vector<FileMetaData> blob_meta;
       meta.fd = FileDescriptor(next_file_number_++, 0, 0);
       ReadOptions ro;
       ro.total_order_seek = true;
@@ -436,10 +437,11 @@ class Repairer {
         return range_del_iters;
       };
       status = BuildTable(
-          dbname_, env_, *cfd->ioptions(), *cfd->GetLatestMutableCFOptions(),
-          env_options_, table_cache_, c_style_callback(get_arena_input_iter),
-          &get_arena_input_iter, c_style_callback(get_range_del_iters),
-          &get_range_del_iters, &meta, cfd->internal_comparator(),
+          dbname_, &vset_, env_, *cfd->ioptions(),
+          *cfd->GetLatestMutableCFOptions(), env_options_, table_cache_,
+          c_style_callback(get_arena_input_iter), &get_arena_input_iter,
+          c_style_callback(get_range_del_iters), &get_range_del_iters, &meta,
+          &blob_meta, cfd->internal_comparator(),
           cfd->int_tbl_prop_collector_factories(), cfd->GetID(), cfd->GetName(),
           {}, kMaxSequenceNumber, snapshot_checker, kNoCompression,
           CompressionOptions(), false, nullptr /* internal_stats */,
@@ -453,6 +455,9 @@ class Repairer {
       if (status.ok()) {
         if (meta.fd.GetFileSize() > 0) {
           table_fds_.push_back(meta.fd);
+          for (auto& blob : blob_meta) {
+            table_fds_.push_back(blob.fd);
+          }
         }
       } else {
         break;

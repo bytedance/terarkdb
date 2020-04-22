@@ -295,11 +295,7 @@ struct ColumnFamilyOptions : public AdvancedColumnFamilyOptions {
   // valid [8 , size_t(-1)]
   size_t blob_size = 512;
 
-  // Don't separate Value if key.size > blob_large_ley_size
-  // valid [0 , size_t(-1)]
-  size_t blob_large_key_size = 128;
-
-  // Don't separate Value if key.size > value.size * blob_large_ley_ratio
+  // Don't separate Value if key.size > value.size * blob_large_key_ratio
   // valid [0 , 1]
   double blob_large_key_ratio = 0.25;
 

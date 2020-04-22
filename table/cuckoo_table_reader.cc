@@ -53,6 +53,7 @@ CuckooTableReader::CuckooTableReader(
       cuckoo_block_bytes_minus_one_(0),
       file_number_(file_number),
       table_size_(0),
+      ioptions_(ioptions),
       ucomp_(comparator),
       get_slice_hash_(get_slice_hash) {
   if (!ioptions.allow_mmap_reads) {
@@ -65,7 +66,9 @@ CuckooTableReader::CuckooTableReader(
   if (!status_.ok()) {
     return;
   }
-  table_props_.reset(props);
+  if (ioptions.pin_table_properties_in_reader) {
+    table_props_.reset(props);
+  }
   auto& user_props = props->user_collected_properties;
   auto hash_funs = user_props.find(CuckooTablePropertyNames::kNumHashFunc);
   if (hash_funs == user_props.end()) {
@@ -142,6 +145,23 @@ CuckooTableReader::CuckooTableReader(
   cuckoo_block_bytes_minus_one_ = cuckoo_block_size_ * bucket_length_ - 1;
   status_ =
       file_->Read(0, static_cast<size_t>(file_size), &file_data_, nullptr);
+}
+
+std::shared_ptr<const TableProperties> CuckooTableReader::GetTableProperties()
+    const {
+  if (table_props_) {
+    return table_props_;
+  } else {
+    TableProperties* props = nullptr;
+    Status s = ReadTableProperties(file_.get(), table_size_,
+                                   kCuckooTableMagicNumber, ioptions_, &props,
+                                   true /* compression_type_missing */);
+    if (!s.ok()) {
+      return nullptr;
+    }
+    assert(props != nullptr);
+    return std::shared_ptr<const TableProperties>(props);
+  }
 }
 
 Status CuckooTableReader::Get(const ReadOptions& /*readOptions*/,

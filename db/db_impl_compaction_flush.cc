@@ -3082,7 +3082,7 @@ bool DBImpl::ShouldntRunManualCompaction(ManualCompactionState* m) {
   }
   if (m->exclusive) {
     return (bg_bottom_compaction_scheduled_ > 0 ||
-            bg_compaction_scheduled_ > 0);
+            bg_compaction_scheduled_ - bg_garbage_collection_scheduled_ > 0);
   }
   std::deque<ManualCompactionState*>::iterator it =
       manual_compaction_dequeue_.begin();

@@ -1327,10 +1327,13 @@ Status TerarkZipTableBuilder::buildZipOffsetBlobStore(
                        static_cast<size_t>(table_options_.checksumSmallValSize))
                           ? kCRC16C
                           : kCRC32C;
-  size_t blockUnits = table_options_.offsetArrayBlockUnits;
-  terark::ZipOffsetBlobStore::MyBuilder builder(
-      blockUnits, params.fpath, params.offset, table_options_.checksumLevel,
-      checksumType);
+  terark::ZipOffsetBlobStore::Options options;
+  options.block_units = table_options_.offsetArrayBlockUnits;
+  options.compress_level = 0;
+  options.checksum_level = table_options_.checksumLevel;
+  options.checksum_type = checksumType;
+  terark::ZipOffsetBlobStore::MyBuilder builder(params.fpath, params.offset,
+                                                options);
   auto s =
       BuilderWriteValues(kvs, [&](fstring value) { builder.addRecord(value); });
   if (s.ok()) {
@@ -1524,6 +1527,7 @@ public:
 Status TerarkZipTableBuilder::BuilderWriteValues(
     KeyValueStatus& kvs, std::function<void(fstring)> write) {
   auto& bzvType = kvs.type;
+  size_t zeroSeqCount = 0;
   auto& stat = kvs.status.stat;
   bzvType.resize(kvs.status.stat.keyCount);
   auto seekSecondPassIter = [&] {
@@ -1573,6 +1577,7 @@ Status TerarkZipTableBuilder::BuilderWriteValues(
       if (1 == oneSeqLen && (kTypeDeletion == vType || kTypeValue == vType)) {
         if (0 == seqNum && kTypeValue == vType) {
           bzvType.set0(recId, size_t(ZipValueType::kZeroSeq));
+          ++zeroSeqCount;
           value.erase_all();
           input.appendBuffer(&value);
         } else {
@@ -1669,6 +1674,7 @@ Status TerarkZipTableBuilder::BuilderWriteValues(
         if (cmpRet == 0) {  // curKey == bufKey
           if (pIKey.sequence == 0 && pIKey.type == kTypeValue) {
             bzvType.set0(recId, size_t(ZipValueType::kZeroSeq));
+            ++zeroSeqCount;
             write(fstringOf(curVal));
           } else if (pIKey.type == kTypeValue) {
             bzvType.set0(recId, size_t(ZipValueType::kValue));
@@ -1798,6 +1804,7 @@ Status TerarkZipTableBuilder::BuilderWriteValues(
     }
 #undef ITER_MOVE_NEXT
   }
+  kvs.status.zeroSeqCount = zeroSeqCount;
   kvs.status.valueBits.clear();
   return Status::OK();
 }

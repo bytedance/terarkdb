@@ -47,7 +47,7 @@ class MergeIteratorBuilder {
   // Add iter to the merging iterator.
   void AddIterator(InternalIterator* iter);
   void AddIterator(InternalIterator* iter,
-                   const SeparateHelper* separate_helper);
+                   SeparateHelper* separate_helper);
 
   // Get arena used to build the merging iterator. It is called one a child
   // iterator needs to be allocated.

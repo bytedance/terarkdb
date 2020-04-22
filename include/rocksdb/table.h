@@ -528,6 +528,9 @@ class TableFactory
 
   // Return is delete range supported
   virtual bool IsDeleteRangeSupported() const { return false; }
+
+  // Return if table builder need second pass iter
+  virtual bool IsBuilderNeedSecondPass() const { return false; }
 };
 
 #ifndef ROCKSDB_LITE

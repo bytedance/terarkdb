@@ -70,8 +70,6 @@ DBOptions SanitizeOptions(const std::string& dbname, const DBOptions& src) {
   result.env->IncBackgroundThreadsIfNeeded(bg_job_limits.max_flushes,
                                            Env::Priority::HIGH);
 
-  // NOT released
-  result.max_task_per_thread = 1;
   if (result.max_task_per_thread < 1) {
     result.max_task_per_thread = 1;
   }
@@ -216,10 +214,6 @@ static Status ValidateOptions(
   if (db_options.db_paths.size() > 4) {
     return Status::NotSupported(
         "More than four DB paths are not supported yet. ");
-  }
-
-  if (db_options.max_task_per_thread != 1) {
-    return Status::InvalidArgument("NOT released");
   }
 
   if (db_options.max_task_per_thread > 4 ||
@@ -1018,6 +1012,7 @@ Status DBImpl::WriteLevel0TableForRecovery(int job_id, ColumnFamilyData* cfd,
   mutex_.AssertHeld();
   const uint64_t start_micros = env_->NowMicros();
   FileMetaData meta;
+  std::vector<FileMetaData> blob_meta;
   auto pending_outputs_inserted_elem =
       CaptureCurrentFileNumberInPendingOutputs();
   meta.fd = FileDescriptor(versions_->NewFileNumber(), 0, 0);
@@ -1066,13 +1061,13 @@ Status DBImpl::WriteLevel0TableForRecovery(int job_id, ColumnFamilyData* cfd,
         return range_del_iters;
       };
       s = BuildTable(
-          dbname_, env_, *cfd->ioptions(), mutable_cf_options,
+          dbname_, versions_.get(), env_, *cfd->ioptions(), mutable_cf_options,
           env_options_for_compaction_, cfd->table_cache(),
           c_style_callback(get_arena_input_iter), &get_arena_input_iter,
           c_style_callback(get_range_del_iters), &get_range_del_iters, &meta,
-          cfd->internal_comparator(), cfd->int_tbl_prop_collector_factories(),
-          cfd->GetID(), cfd->GetName(), snapshot_seqs,
-          earliest_write_conflict_snapshot, snapshot_checker,
+          &blob_meta, cfd->internal_comparator(),
+          cfd->int_tbl_prop_collector_factories(), cfd->GetID(), cfd->GetName(),
+          snapshot_seqs, earliest_write_conflict_snapshot, snapshot_checker,
           GetCompressionFlush(*cfd->ioptions(), mutable_cf_options),
           cfd->ioptions()->compression_opts, paranoid_file_checks,
           cfd->internal_stats(), TableFileCreationReason::kRecovery,
@@ -1097,11 +1092,20 @@ Status DBImpl::WriteLevel0TableForRecovery(int job_id, ColumnFamilyData* cfd,
                   meta.fd.GetFileSize(), meta.smallest, meta.largest,
                   meta.fd.smallest_seqno, meta.fd.largest_seqno,
                   meta.marked_for_compaction, meta.prop);
+    for (auto& blob : blob_meta) {
+      edit->AddFile(-1 /* level */, blob.fd.GetNumber(), blob.fd.GetPathId(),
+                    blob.fd.GetFileSize(), blob.smallest, blob.largest,
+                    blob.fd.smallest_seqno, blob.fd.largest_seqno,
+                    blob.marked_for_compaction, blob.prop);
+    }
   }
 
   InternalStats::CompactionStats stats(CompactionReason::kFlush, 1);
   stats.micros = env_->NowMicros() - start_micros;
   stats.bytes_written = meta.fd.GetFileSize();
+  for (auto& blob : blob_meta) {
+    stats.bytes_written = blob.fd.GetFileSize();
+  }
   stats.num_output_files = 1;
   cfd->internal_stats()->AddCompactionStats(level, stats);
   cfd->internal_stats()->AddCFStats(InternalStats::BYTES_FLUSHED,

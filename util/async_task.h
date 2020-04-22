@@ -8,23 +8,28 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #pragma once
-#include <future>
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-parameter"
+#endif
+#include <boost/fiber/future.hpp>
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 #include <functional>
 
 namespace rocksdb {
 
-  template <typename T>
-  struct AsyncTask {
-    std::promise<T> promise;
-    std::future<T> future;
-    std::function<T()> func;
-    void operator()() {
-      promise.set_value(std::move(func()));
-    }
+template <typename T>
+struct AsyncTask {
+  boost::fibers::promise<T> promise;
+  boost::fibers::future<T> future;
+  std::function<T()> func;
+  void operator()() { promise.set_value(std::move(func())); }
 
-    AsyncTask(std::function<T()>&& f) : func(std::move(f)) {
-      future = promise.get_future();
-    }
-  };
-  
-} // namespace rocksdb
+  AsyncTask(std::function<T()>&& f) : func(std::move(f)) {
+    future = promise.get_future();
+  }
+};
+
+}  // namespace rocksdb

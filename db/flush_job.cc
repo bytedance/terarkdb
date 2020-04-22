@@ -373,12 +373,13 @@ Status FlushJob::WriteLevel0Table() {
         return range_del_iters;
       };
       s = BuildTable(
-          dbname_, db_options_.env, *cfd_->ioptions(), mutable_cf_options_,
-          env_options_, cfd_->table_cache(),
+          dbname_, versions_, db_options_.env, *cfd_->ioptions(),
+          mutable_cf_options_, env_options_, cfd_->table_cache(),
           c_style_callback(get_arena_input_iter), &get_arena_input_iter,
           c_style_callback(get_range_del_iters), &get_range_del_iters, &meta_,
-          cfd_->internal_comparator(), cfd_->int_tbl_prop_collector_factories(),
-          cfd_->GetID(), cfd_->GetName(), existing_snapshots_,
+          &blob_meta_, cfd_->internal_comparator(),
+          cfd_->int_tbl_prop_collector_factories(), cfd_->GetID(),
+          cfd_->GetName(), existing_snapshots_,
           earliest_write_conflict_snapshot_, snapshot_checker_,
           output_compression_, cfd_->ioptions()->compression_opts,
           mutable_cf_options_.paranoid_file_checks, cfd_->internal_stats(),
@@ -416,12 +417,21 @@ Status FlushJob::WriteLevel0Table() {
                    meta_.fd.GetFileSize(), meta_.smallest, meta_.largest,
                    meta_.fd.smallest_seqno, meta_.fd.largest_seqno,
                    meta_.marked_for_compaction, meta_.prop);
+    for (auto& blob : blob_meta_) {
+      edit_->AddFile(-1 /* level */, blob.fd.GetNumber(), blob.fd.GetPathId(),
+                     blob.fd.GetFileSize(), blob.smallest, blob.largest,
+                     blob.fd.smallest_seqno, blob.fd.largest_seqno,
+                     blob.marked_for_compaction, blob.prop);
+    }
   }
 
   // Note that here we treat flush as level 0 compaction in internal stats
   InternalStats::CompactionStats stats(CompactionReason::kFlush, 1);
   stats.micros = db_options_.env->NowMicros() - start_micros;
   stats.bytes_written = meta_.fd.GetFileSize();
+  for (auto& blob : blob_meta_) {
+    stats.bytes_written = blob.fd.GetFileSize();
+  }
   MeasureTime(stats_, FLUSH_TIME, stats.micros);
   cfd_->internal_stats()->AddCompactionStats(0 /* level */, stats);
   cfd_->internal_stats()->AddCFStats(InternalStats::BYTES_FLUSHED,

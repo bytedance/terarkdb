@@ -912,8 +912,6 @@ Status DBImpl::SetDBOptions(
     s = GetMutableDBOptionsFromStrings(mutable_db_options_, options_map,
                                        &new_options);
     if (s.ok()) {
-      // NOT released
-      new_options.max_task_per_thread = 1;
       auto bg_job_limits = DBImpl::GetBGJobLimits(
           immutable_db_options_.max_background_flushes,
           new_options.max_background_compactions,
@@ -1117,6 +1115,25 @@ Status DBImpl::SyncWAL() {
   return status;
 }
 
+Status DBImpl::LockWAL() {
+  log_write_mutex_.Lock();
+  auto cur_log_writer = logs_.back().writer;
+  auto status = cur_log_writer->WriteBuffer();
+  if (!status.ok()) {
+    ROCKS_LOG_ERROR(immutable_db_options_.info_log, "WAL flush error %s",
+                    status.ToString().c_str());
+    // In case there is a fs error we should set it globally to prevent the
+    // future writes
+    WriteStatusCheck(status);
+  }
+  return status;
+}
+
+Status DBImpl::UnlockWAL() {
+  log_write_mutex_.Unlock();
+  return Status::OK();
+}
+
 void DBImpl::MarkLogsSynced(uint64_t up_to, bool synced_dir,
                             const Status& status) {
   mutex_.AssertHeld();
@@ -1160,7 +1177,7 @@ bool DBImpl::SetPreserveDeletesSequenceNumber(SequenceNumber seqnum) {
 
 InternalIterator* DBImpl::NewInternalIterator(
     Arena* arena, RangeDelAggregator* range_del_agg, SequenceNumber sequence,
-    ColumnFamilyHandle* column_family, const SeparateHelper** separate_helper) {
+    ColumnFamilyHandle* column_family, SeparateHelper** separate_helper) {
   ColumnFamilyData* cfd;
   if (column_family == nullptr) {
     cfd = default_cf_handle_->cfd();
@@ -1283,7 +1300,7 @@ InternalIterator* DBImpl::NewInternalIterator(
     const ReadOptions& read_options, ColumnFamilyData* cfd,
     SuperVersion* super_version, Arena* arena,
     RangeDelAggregator* range_del_agg, SequenceNumber sequence,
-    const SeparateHelper** separate_helper) {
+    SeparateHelper** separate_helper) {
   InternalIterator* internal_iter;
   assert(arena != nullptr);
   assert(range_del_agg != nullptr);
@@ -1471,8 +1488,7 @@ struct SimpleFiberTls {
   boost::fibers::buffered_channel<task_t> channel;
 
   SimpleFiberTls(boost::fibers::context** activepp)
-      : m_fy(activepp), channel(MAX_QUEUE_LEN)
-  {
+      : m_fy(activepp), channel(MAX_QUEUE_LEN) {
     update_fiber_count(DEFAULT_FIBER_CNT);
   }
 

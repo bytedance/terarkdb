@@ -47,6 +47,8 @@ AdvancedColumnFamilyOptions::AdvancedColumnFamilyOptions(const Options& options)
           options.min_write_buffer_number_to_merge),
       max_write_buffer_number_to_maintain(
           options.max_write_buffer_number_to_maintain),
+      enable_lazy_compaction(options.enable_lazy_compaction),
+      pin_table_properties_in_reader(options.pin_table_properties_in_reader),
       inplace_update_support(options.inplace_update_support),
       inplace_update_num_locks(options.inplace_update_num_locks),
       inplace_callback(options.inplace_callback),
@@ -247,8 +249,6 @@ void ColumnFamilyOptions::Dump(Logger* log) const {
                    max_subcompactions);
   ROCKS_LOG_HEADER(log, "                              Options.blob_size: %zd",
                    blob_size);
-  ROCKS_LOG_HEADER(log, "                    Options.blob_large_key_size: %zd",
-                   blob_large_key_size);
   ROCKS_LOG_HEADER(log, "                   Options.blob_large_key_ratio: %f",
                    blob_large_key_ratio);
   ROCKS_LOG_HEADER(log, "                          Options.blob_gc_ratio: %f",
@@ -319,6 +319,8 @@ void ColumnFamilyOptions::Dump(Logger* log) const {
                    collector_names.c_str());
   ROCKS_LOG_HEADER(log, "                 Options.enable_lazy_compaction: %d",
                    enable_lazy_compaction);
+  ROCKS_LOG_HEADER(log, "         Options.pin_table_properties_in_reader: %d",
+                   pin_table_properties_in_reader);
   ROCKS_LOG_HEADER(log, "                 Options.inplace_update_support: %d",
                    inplace_update_support);
   ROCKS_LOG_HEADER(
