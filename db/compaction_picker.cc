@@ -2707,11 +2707,11 @@ Compaction* LevelCompactionBuilder::PickLazyCompaction(
       } while (queue_limit != queue_end);
 
       if (sections.empty()) {
-        auto queue_start = src.begin();
-        auto queue_limit = src.end() - 1;
-        size_t src_size = 0;
-        double entry_num = 0;
-        double del_num = 0;
+        queue_start = src.begin();
+        queue_limit = src.end() - 1;
+        src_size = 0;
+        entry_num = 0;
+        del_num = 0;
         for (auto& item : src) {
           src_size += item.estimate_size;
           entry_num += item.estimate_entry_num;
@@ -2814,7 +2814,7 @@ Compaction* LevelCompactionBuilder::PickLazyCompaction(
       continue;
     }
     if (sorted_runs[i].being_compacted || sorted_runs[i + 1].being_compacted) {
-      sorted_runs[i].skip_composite = vstorage_->read_amplification(i) == 1;
+      sorted_runs[i].skip_composite = true;
       sorted_runs[i + 1].skip_composite = true;
       continue;
     }
