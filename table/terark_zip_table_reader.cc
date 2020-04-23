@@ -125,7 +125,9 @@ static void MmapColdizeBytes(const void* addr, size_t len) {
 #ifdef POSIX_MADV_DONTNEED
     posix_madvise((void*)low, size, POSIX_MADV_DONTNEED);
 #elif defined(_MSC_VER)  // defined(_WIN32) || defined(_WIN64)
-    VirtualFree((void*)low, size, MEM_DECOMMIT);
+    // Calling VirtualUnlock on a range of memory that is not locked
+    // releases the pages from the process's working set.
+    VirtualUnlock((void*)low, size);
 #endif
   }
 }
