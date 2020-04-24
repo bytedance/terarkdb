@@ -26,6 +26,43 @@ namespace rocksdb {
 // This test assumes entries size is different for each of the tables.
 namespace {
 
+class TerarkPropertiesCollector : public TablePropertiesCollector {
+ public:
+  const char* Name() const override { return "terark"; }
+
+  Status AddUserKey(const Slice& key, const Slice& value,
+                    EntryType type, SequenceNumber sequence,
+                    uint64_t file_size) override {
+    if (type == kEntryPut) {
+      size_ += key.size() + value.size();
+    }
+    return Status::OK();
+  }
+
+  Status Finish(UserCollectedProperties* user_props) override {
+    std::cout << "finish " << size_ << std::endl;
+    user_props->emplace("terark", std::to_string(size_));
+    return Status::OK();
+  }
+
+  UserCollectedProperties GetReadableProperties() const override {
+    return UserCollectedProperties();
+  }
+
+ private:
+  int size_{0};
+};
+
+class TerarkPropertiesCollectorFactory : public TablePropertiesCollectorFactory {
+ public:
+  const char* Name() const override { return "terark"; }
+
+  TablePropertiesCollector* CreateTablePropertiesCollector(
+      Context context) override {
+    return new TerarkPropertiesCollector;
+  }
+};
+
 void VerifyTableProperties(DB* db, uint64_t expected_entries_size) {
   TablePropertiesCollection props;
   ASSERT_OK(db->GetPropertiesOfAllTables(&props));
@@ -87,6 +124,42 @@ TEST_F(DBTablePropertiesTest, GetPropertiesOfAllTablesTest) {
     Get(ToString(i * 100 + 0));
   }
   VerifyTableProperties(db_, 10 + 11 + 12 + 13);
+}
+
+TEST_F(DBTablePropertiesTest, GetPropertiesOfAllTablesTestKeyValueSep) {
+  Options options = CurrentOptions();
+  options.blob_size = 512;
+  options.level0_file_num_compaction_trigger = 4;
+  auto factory = std::make_shared<TerarkPropertiesCollectorFactory>();
+  options.table_properties_collector_factories.push_back(factory);
+  Reopen(options);
+
+  std::string value(4096, 0);
+  Status s;
+  for (int i = 0; i < 10; i++) {
+    auto key = std::to_string(i);
+    s = db_->Put(WriteOptions(), key, value);
+    ASSERT_TRUE(s.ok());
+  }
+  s = db_->Flush(FlushOptions());
+  ASSERT_TRUE(s.ok());
+
+  TablePropertiesCollection collection;
+  Range range("0", "9");
+  auto handle = db->DefaultColumnFamily();
+  s = db_->GetPropertiesOfTablesInRange(handle, &range, 1, &collection);
+  ASSERT_TRUE(s.ok());
+
+  size_t size = 0;
+  ASSERT_FALSE(collection.empty());
+  for (auto& pair : collection) {
+    auto props = pair.second;
+    auto user_props = props->user_collected_properties;
+    auto it = user_props.find("terark");
+    ASSERT_TRUE(it != user_props.end());
+    size += std::stoi(it->second);
+  }
+  ASSERT_TRUE(size > 0);
 }
 
 TablePropertiesCollection

@@ -795,6 +795,21 @@ Status Version::GetPropertiesOfAllTables(TablePropertiesCollection* props,
 
 Status Version::GetPropertiesOfTablesInRange(
     const Range* range, std::size_t n, TablePropertiesCollection* props) const {
+  auto push_props = [&](FileMetaData* file_meta, Status* s) {
+    auto fname =
+        TableFileName(cfd_->ioptions()->cf_paths, file_meta->fd.GetNumber(),
+                      file_meta->fd.GetPathId());
+    if (props->count(fname) == 0) {
+      // 1. If the table is already present in table cache, load table
+      // properties from there.
+      std::shared_ptr<const TableProperties> table_properties;
+      *s = GetTableProperties(&table_properties, file_meta, &fname);
+      if (s->ok()) {
+        props->insert({fname, table_properties});
+      }
+    }
+  };
+  Status s;
   for (int level = 0; level < storage_info_.num_non_empty_levels(); level++) {
     for (decltype(n) i = 0; i < n; i++) {
       // Convert user_key into a corresponding internal key.
@@ -804,30 +819,25 @@ Status Version::GetPropertiesOfTablesInRange(
       storage_info_.GetOverlappingInputs(level, &k1, &k2, &files, -1, nullptr,
                                          false);
       for (size_t j = 0; j < files.size(); ++j) {
-        const auto file_meta = files[j];
-        if (file_meta->prop.is_map_sst()) {
-          for (auto& dependence : file_meta->prop.dependence) {
-            auto find =
-                storage_info_.dependence_map_.find(dependence.file_number);
-            if (find == storage_info_.dependence_map_.end()) {
-              // TODO: log error
-              continue;
-            }
-            // use const_cast to append into files, we will not nodify it
-            files.push_back(const_cast<FileMetaData*>(find->second));
+        auto file_meta = files[j];
+        if (!file_meta->prop.is_map_sst()) {
+          push_props(file_meta, &s);
+          if (!s.ok()) {
+            return s;
           }
-        } else {
-          auto fname = TableFileName(cfd_->ioptions()->cf_paths,
-                                     file_meta->fd.GetNumber(),
-                                     file_meta->fd.GetPathId());
-          if (props->count(fname) == 0) {
-            // 1. If the table is already present in table cache, load table
-            // properties from there.
-            std::shared_ptr<const TableProperties> table_properties;
-            Status s = GetTableProperties(&table_properties, file_meta, &fname);
-            if (s.ok()) {
-              props->insert({fname, table_properties});
-            } else {
+        }
+        for (auto& dependence : file_meta->prop.dependence) {
+          auto find =
+              storage_info_.dependence_map_.find(dependence.file_number);
+          if (find == storage_info_.dependence_map_.end()) {
+            return Status::Aborted(
+                "Version::GetPropertiesOfTablesInRange missing dependence sst");
+          }
+          if (file_meta->prop.is_map_sst()) {
+            files.push_back(find->second);
+          } else {
+            push_props(find->second, &s);
+            if (!s.ok()) {
               return s;
             }
           }
