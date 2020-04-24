@@ -54,7 +54,7 @@ class JuxtaposeDB : public StackableDB {
         ref_options, column_family_names, &new_handles);
     assert(db_status == ref_status);
     assert(new_handles.size() == handles->size());
-    for (auto i = 0; i < handles->size(); ++i) {
+    for (size_t i = 0; i < handles->size(); ++i) {
       cfh_map_[(*handles)[i]] = new_handles[i];
     }
     return db_status;
@@ -70,7 +70,7 @@ class JuxtaposeDB : public StackableDB {
         db_ref_->CreateColumnFamilies(column_families, &new_handles);
     assert(db_status == ref_status);
     assert(new_handles.size() == handles->size());
-    for (auto i = 0; i < handles->size(); ++i) {
+    for (size_t i = 0; i < handles->size(); ++i) {
       cfh_map_[(*handles)[i]] = new_handles[i];
     }
     return db_status;
