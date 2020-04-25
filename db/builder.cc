@@ -178,6 +178,7 @@ Status BuildTable(
       TableBuilder* blob_builder = separate_helper.builder.get();
       FileMetaData* blob_meta = separate_helper.current_output;
       blob_meta->prop.num_entries = blob_builder->NumEntries();
+      blob_meta->prop.num_deletions = 0;
       blob_meta->prop.purpose = kEssenceSst;
       blob_meta->prop.flags |= TablePropertyCache::kNoRangeDeletions;
       status = blob_builder->Finish(&blob_meta->prop, nullptr);
@@ -186,6 +187,8 @@ Status BuildTable(
       if (status.ok()) {
         blob_meta->fd.file_size = blob_builder->FileSize();
         tp = blob_builder->GetTableProperties();
+        blob_meta->prop.raw_key_size = tp.raw_key_size;
+        blob_meta->prop.raw_value_size = tp.raw_value_size;
         StopWatch sw(env, ioptions.statistics, TABLE_SYNC_MICROS);
         status = separate_helper.file_writer->Sync(ioptions.use_fsync);
       }

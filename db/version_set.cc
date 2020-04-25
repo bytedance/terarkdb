@@ -4439,7 +4439,7 @@ uint64_t VersionSet::ApproximateSize(Version* v, const FdWithKeyRange& f,
       auto& icomp = v->cfd_->internal_comparator();
       if (icomp.Compare(file_meta->largest.Encode(), key) <= 0) {
         // Entire file is before "key", so just add the file size
-        result = vstorage->FileSizeWithBlob(file_meta, false, ratio);
+        result = vstorage->FileSizeWithBlob(file_meta, true, ratio);
       } else if (icomp.Compare(file_meta->smallest.Encode(), key) > 0) {
         // Entire file is after "key", so ignore
         result = 0;
@@ -4464,7 +4464,7 @@ uint64_t VersionSet::ApproximateSize(Version* v, const FdWithKeyRange& f,
         if (result > 0) {
           result =
               uint64_t(double(result) / file_meta->fd.GetFileSize() *
-                       vstorage->FileSizeWithBlob(file_meta, false, ratio));
+                       vstorage->FileSizeWithBlob(file_meta, true, ratio));
         }
       }
     } else {
