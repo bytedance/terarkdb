@@ -37,11 +37,14 @@ public:
   DBOptions db_options_;
   ColumnFamilyDescriptor cf_desc_;
 
-  BloatTest (const std::string &conf_path, const std::string &&name) :
+  BloatTest (const std::string &conf_path,
+      const std::string &&name,
+      const std::string &&ss_name,
+      const std::string &&ms_name) :
     config_file_(conf_path),
     db_name_(name),
-    db_ss_name_(name+"ss"),
-    db_ms_name_(name+"ms") {
+    db_ss_name_(ss_name),
+    db_ms_name_(ms_name) {
 
     std::vector<rocksdb::ColumnFamilyDescriptor> cf_descs;
 
@@ -166,7 +169,10 @@ private:
 
 int main(int argc, char *argv[])
 {
-  rocksdb::BloatTest t("./db.ini", "/data02/lymtestdata/bloatdb");
+  rocksdb::BloatTest t("./db.ini",
+      "/data02/lymtestdata/bloatdb",
+      "/data02/lymtestdata/bloatSsdb",
+      "/data02/lymtestdata/bloatMsdb");
 
   uint32_t thread_num  = 8;
   std::vector<std::thread> thread_vec;
