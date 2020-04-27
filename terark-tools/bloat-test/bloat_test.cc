@@ -1,5 +1,7 @@
 #include <string>
 #include <atomic>
+#include <random>
+#include <chrono>
 
 #include "rocksdb/utilities/options_util.h"
 #include "rocksdb/utilities/write_batch_with_index.h"
@@ -10,21 +12,11 @@
 
 namespace rocksdb {
 
-void RandomString(std::string& key, size_t length)
-{
-    auto randchar = []() -> char
-    {
-        const char charset[] =
-        "0123456789"
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-        "abcdefghijklmnopqrstuvwxyz";
-        const size_t max_index = (sizeof(charset) - 1);
-        return charset[ rand() % max_index ];
-    };
-
-    key.resize(length);
-    std::generate_n(key.begin(), length, randchar);
+uint64_t gene_seed() {
+  return std::chrono::high_resolution_clock::now().time_since_epoch().count();
 }
+
+
 
 class BloatTest
 {
@@ -112,14 +104,41 @@ public:
     assert(cf_ms_handles_.size() == 64);
   }
 
-  void WriteFunc(int seed) {
+  void WriteFunc() {
+
+    auto char_rand = std::bind(
+        std::uniform_int_distribution<int>(1,10+26+26),
+        std::mt19937(gene_seed()));
+
+    auto randchar = [&]() -> char
+    {
+        const char charset[] =
+        "0123456789"
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        "abcdefghijklmnopqrstuvwxyz";
+        const size_t max_index = (sizeof(charset) - 1);
+        return charset[char_rand() % max_index ];
+    };
+
+
+    auto key_rand = std::bind(
+        std::uniform_int_distribution<int>(1,20),
+        std::mt19937(gene_seed()));
+    auto val_rand = std::bind(
+        std::uniform_int_distribution<int>(1,14208),
+        std::mt19937(gene_seed()));
 
     std::string key, value;
-    std::atomic<uint64_t> atomic_count{1};
-    for (uint64_t count = atomic_count;; count = ++atomic_count) {
+    for (;;) {
 
-      RandomString(key, 40 + rand() % (10*2));
-      RandomString(value, 40000 + rand() % (7104*2) );
+      uint32_t key_length = 40 + key_rand();
+      uint32_t val_length = 40000 + val_rand();
+
+      key.resize(key_length);
+      std::generate_n(key.begin(), key_length, randchar);
+      value.resize(val_length);
+      std::generate_n(value.begin(), val_length, randchar);
+
       fprintf(stderr, "key size: %u, value size: %u \n", key.size(), value.size());
 
       rocksdb::Status s;
@@ -154,9 +173,10 @@ int main(int argc, char *argv[])
 {
   rocksdb::BloatTest t("./db.ini", "/data02/lymtestdata/bloatdb");
 
+  uint32_t thread_num  = 8;
   std::vector<std::thread> thread_vec;
-  for (int j = 0; j < 8; ++j) {
-    thread_vec.emplace_back(&rocksdb::BloatTest::WriteFunc, std::ref(t), j);
+  for (int j = 0; j < thread_num; ++j) {
+    thread_vec.emplace_back(&rocksdb::BloatTest::WriteFunc, std::ref(t));
   }
   for (auto &t : thread_vec) {
     t.join();
