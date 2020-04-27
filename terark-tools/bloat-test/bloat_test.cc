@@ -13,10 +13,9 @@
 namespace rocksdb {
 
 uint64_t gene_seed() {
-  return std::chrono::high_resolution_clock::now().time_since_epoch().count();
+  std::random_device rd;
+  return rd();
 }
-
-
 
 class BloatTest
 {
@@ -105,9 +104,8 @@ public:
   }
 
   void WriteFunc() {
-
     auto char_rand = std::bind(
-        std::uniform_int_distribution<int>(1,10+26+26),
+        std::uniform_int_distribution<int>(0,10+26+26-1),
         std::mt19937(gene_seed()));
 
     auto randchar = [&]() -> char
@@ -117,27 +115,24 @@ public:
         "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
         "abcdefghijklmnopqrstuvwxyz";
         const size_t max_index = (sizeof(charset) - 1);
-        return charset[char_rand() % max_index ];
+        return charset[char_rand()];
     };
 
 
     auto key_rand = std::bind(
-        std::uniform_int_distribution<int>(1,20),
+        std::uniform_int_distribution<int>(50-10, 50+10),
         std::mt19937(gene_seed()));
     auto val_rand = std::bind(
-        std::uniform_int_distribution<int>(1,14208),
+        std::uniform_int_distribution<int>(46000-20000, 46000+20000),
         std::mt19937(gene_seed()));
 
     std::string key, value;
     for (;;) {
 
-      uint32_t key_length = 40 + key_rand();
-      uint32_t val_length = 40000 + val_rand();
-
-      key.resize(key_length);
-      std::generate_n(key.begin(), key_length, randchar);
-      value.resize(val_length);
-      std::generate_n(value.begin(), val_length, randchar);
+      key.resize(key_rand());
+      std::generate_n(key.begin(), key.size(), randchar);
+      value.resize(val_rand());
+      std::generate_n(value.begin(), value.size(), randchar);
 
       fprintf(stderr, "key size: %u, value size: %u \n", key.size(), value.size());
 
