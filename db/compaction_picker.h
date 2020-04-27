@@ -150,9 +150,6 @@ class CompactionPicker {
 
   virtual bool NeedsCompaction(const VersionStorageInfo* vstorage) const = 0;
 
-  bool NeedsGarbageCollection(const VersionStorageInfo* vstorage,
-                              double ratio) const;
-
 // Sanitize the input set of compaction input files.
 // When the input parameters do not describe a valid compaction, the
 // function will try to fix the input_files by adding necessary
