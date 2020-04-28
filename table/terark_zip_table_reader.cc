@@ -123,9 +123,12 @@ static void MmapColdizeBytes(const void* addr, size_t len) {
   if (low < hig) {
     size_t size = hig - low;
 #ifdef POSIX_MADV_DONTNEED
-    posix_madvise((void*)low, size, POSIX_MADV_DONTNEED);
+    // After glibc 2.7, in the case of POSIX_MADV_DONTNEED, posize_madvise do nothing.
+    // Since we need invoke the syscall, we do it by ourself.
+    madvise((void*)low, size, MADV_DONTNEED);
 #elif defined(_MSC_VER)  // defined(_WIN32) || defined(_WIN64)
-    VirtualFree((void*)low, size, MEM_DECOMMIT);
+    // VirtualFree((void*)low, size, MEM_DECOMMIT);
+    (void)size;
 #endif
   }
 }
@@ -182,11 +185,28 @@ static void MmapAdviseRandom(const void* addr, size_t len) {
 #ifdef POSIX_MADV_RANDOM
     posix_madvise((void*)low, size, POSIX_MADV_RANDOM);
 #elif defined(_MSC_VER)  // defined(_WIN32) || defined(_WIN64)
+    (void)size;
 #endif
   }
 }
 static void MmapAdviseRandom(fstring mem) {
   MmapAdviseRandom(mem.data(), mem.size());
+}
+
+static void MmapAdviseSequential(const void* addr, size_t len) {
+  size_t low = terark::align_up(size_t(addr), 4096);
+  size_t hig = terark::align_down(size_t(addr) + len, 4096);
+  if (low < hig) {
+    size_t size = hig - low;
+#ifdef POSIX_MADV_SEQUENTIAL
+    posix_madvise((void*)low, size, POSIX_MADV_SEQUENTIAL);
+#elif defined(_MSC_VER)  // defined(_WIN32) || defined(_WIN64)
+    (void)size;
+#endif
+  }
+}
+static void MmapAdviseSequential(fstring mem) {
+  MmapAdviseSequential(mem.data(), mem.size());
 }
 
 void UpdateCollectInfo(const TerarkZipTableFactory* table_factory,
@@ -1158,6 +1178,8 @@ Status TerarkZipTableReader::Open(RandomAccessFileReader* file,
       subReader_.storeFD_ = subReader_.cache_->open(subReader_.storeFD_);
     }
   }
+
+  valvec<fstring> meta_data_in_mmap;
   if (tzto_.forceMetaInMemory) {
     valvec<fstring> index_meta_data = subReader_.index_->GetMetaData();
     valvec<fstring> store_meta_data = subReader_.store_->get_meta_blocks();
@@ -1171,11 +1193,21 @@ Status TerarkZipTableReader::Open(RandomAccessFileReader* file,
     use_hugepage_resize_no_init(&meta_, size);
     size = 0;
     for (auto& b : index_meta_data) {
+      if (b.data() >= file_data_.data() &&
+          b.data() <  file_data_.data() + file_data_.size()) {
+        meta_data_in_mmap.emplace_back(b.data(), b.size());
+        continue;
+      }
       memcpy(meta_.data() + size, b.data(), b.size());
       b = fstring(meta_.data() + size, b.size());
       size += b.size();
     }
     for (auto& b : store_meta_data) {
+      if (b.data() >= file_data_.data() &&
+          b.data() <  file_data_.data() + file_data_.size()) {
+        meta_data_in_mmap.emplace_back(b.data(), b.size());
+        continue;
+      }
       memcpy(meta_.data() + size, b.data(), b.size());
       b = fstring(meta_.data() + size, b.size());
       size += b.size();
@@ -1216,6 +1248,13 @@ Status TerarkZipTableReader::Open(RandomAccessFileReader* file,
        size_t(file_size), size_t(props->num_entries),
        subReader_.index_->NumKeys(), size_t(props->index_size),
        size_t(props->data_size), g_pf.sf(t0, t1), g_pf.sf(t1, t2));
+
+  if (!tzto_.warmUpIndexOnOpen) {
+    MmapColdize(fstring(file_data.data(), file_data.size()));
+  }
+  for (fstring meta_item : meta_data_in_mmap) {
+    MmapAdviseSequential(meta_item);
+  }
   return Status::OK();
 }
 
@@ -1661,6 +1700,7 @@ Status TerarkZipTableMultiReader::Open(RandomAccessFileReader* file,
   if (!s.ok()) {
     return s;
   }
+  valvec<fstring> meta_data_in_mmap;
   if (tzto_.forceMetaInMemory) {
     valvec<std::pair<valvec<fstring>, valvec<fstring>>> meta_data;
     size_t sub_count = subIndex_.GetSubCount();
@@ -1684,11 +1724,21 @@ Status TerarkZipTableMultiReader::Open(RandomAccessFileReader* file,
     for (size_t i = 0; i < sub_count; ++i) {
       auto& pair = meta_data.data()[i];
       for (auto& b : pair.first) {
+        if (b.data() >= file_data_.data() &&
+            b.data() <  file_data_.data() + file_data_.size()) {
+          meta_data_in_mmap.emplace_back(b.data(), b.size());
+          continue;
+        }
         memcpy(meta_.data() + size, b.data(), b.size());
         b = fstring(meta_.data() + size, b.size());
         size += b.size();
       }
       for (auto& b : pair.second) {
+        if (b.data() >= file_data_.data() &&
+            b.data() <  file_data_.data() + file_data_.size()) {
+          meta_data_in_mmap.emplace_back(b.data(), b.size());
+          continue;
+        }
         memcpy(meta_.data() + size, b.data(), b.size());
         b = fstring(meta_.data() + size, b.size());
         size += b.size();
@@ -1746,6 +1796,13 @@ Status TerarkZipTableMultiReader::Open(RandomAccessFileReader* file,
        size_t(file_size), size_t(props->num_entries), keyCount,
        size_t(props->index_size), size_t(props->data_size), g_pf.sf(t0, t1),
        g_pf.sf(t1, t2));
+
+  if (!tzto_.warmUpIndexOnOpen) {
+    MmapColdize(fstring(file_data.data(), file_data.size()));
+  }
+  for (fstring meta_item : meta_data_in_mmap) {
+    MmapAdviseSequential(meta_item);
+  }
   return Status::OK();
 }
 
