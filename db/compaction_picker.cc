@@ -2177,11 +2177,6 @@ bool LevelCompactionPicker::NeedsCompaction(
   return vstorage->has_space_amplification();
 }
 
-bool CompactionPicker::NeedsGarbageCollection(
-    const VersionStorageInfo* vstorage, double ratio) const {
-  return vstorage->total_garbage_ratio() >= ratio;
-}
-
 namespace {
 // A class to build a leveled compaction step-by-step.
 class LevelCompactionBuilder {

@@ -66,18 +66,18 @@ class ChaosTest {
 
   void set_options() {
     options.atomic_flush = false;
-    options.allow_mmap_reads = false;
+    options.allow_mmap_reads = true;
     options.max_open_files = 8192;
     options.allow_fallocate = true;
     options.writable_file_max_buffer_size = 1048576;
     options.allow_mmap_writes = false;
     options.allow_concurrent_memtable_write = true;
-    options.use_direct_reads = true;
+    options.use_direct_reads = false;
     options.max_background_garbage_collections = 8;
     options.WAL_size_limit_MB = 0;
     options.use_aio_reads = true;
     options.max_background_jobs = 32;
-    options.max_task_per_thread = 8;
+    options.max_task_per_thread = 4;
     options.WAL_ttl_seconds = 0;
     options.enable_thread_tracking = true;
     options.error_if_exists = false;
@@ -141,7 +141,7 @@ class ChaosTest {
     bbto.pin_top_level_index_and_filter = true;
     bbto.pin_l0_filter_and_index_blocks_in_cache = true;
     bbto.filter_policy.reset(NewBloomFilterPolicy(10, true));
-    bbto.block_cache = NewLRUCache(64ULL << 30, 6, false);
+    bbto.block_cache = NewLRUCache(4ULL << 30, 6, false);
 
     options.compaction_pri = kMinOverlappingRatio;
     options.compression = kZSTD;
@@ -204,8 +204,6 @@ class ChaosTest {
     // options.use_aio_reads = (flags_ & TestAsync) ? true : false;
     options.table_factory.reset(rocksdb::NewBlockBasedTableFactory(bbto));
     if (flags_ & TestTerark) {
-      options.table_factory.reset(
-          rocksdb::NewTerarkZipTableFactory(tzto, options.table_factory));
       tzto.localTempDir = dbname_;
       tzto.indexNestLevel = 3;
       tzto.checksumLevel = 2;
@@ -235,11 +233,13 @@ class ChaosTest {
       tzto.singleIndexMaxSize = 64ULL << 20;
       tzto.minPreadLen = 0;
       tzto.cacheShards = 257;        // to reduce lock competition
-      tzto.cacheCapacityBytes = 16ULL << 30;  // non-zero implies direct io read
+      tzto.cacheCapacityBytes = 4ULL << 30;  // non-zero implies direct io read
       tzto.disableCompressDict = false;
       tzto.optimizeCpuL3Cache = false;
       tzto.forceMetaInMemory = false;
-    }
+      options.table_factory.reset(
+          rocksdb::NewTerarkZipTableFactory(tzto, options.table_factory));
+   }
   }
 
   std::pair<std::string, std::string> get_ran_range_pair(
@@ -514,28 +514,28 @@ class ChaosTest {
             IsSame(ctx.iter,
                    [](auto &l, auto &r) { return l->value() == r->value(); }),
             "Iter Seek Next Value");
-      }
 
-      for (auto &it : ctx.iter) {
-        it->Prev();
-      }
-      if (IsAny(ctx.iter, [](auto &it) { return !it->Valid(); })) {
-        CheckAssert(ctx, IsAll(ctx.iter, [](auto &it) { return !it->Valid(); }),
-                    "Iter Seek Next Prev Valid");
-        CheckAssert(ctx,
-                    IsAll(ctx.iter, [](auto &it) { return it->status().ok(); }),
-                    "Iter Seek Next Prev Status");
-      } else {
-        CheckAssert(
-            ctx,
-            IsSame(ctx.iter,
-                   [](auto &l, auto &r) { return l->key() == r->key(); }),
-            "Iter Seek Next Prev Key");
-        CheckAssert(
-            ctx,
-            IsSame(ctx.iter,
-                   [](auto &l, auto &r) { return l->value() == r->value(); }),
-            "Iter Seek Next Prev Value");
+        for (auto &it : ctx.iter) {
+          it->Prev();
+        }
+        if (IsAny(ctx.iter, [](auto &it) { return !it->Valid(); })) {
+          CheckAssert(ctx, IsAll(ctx.iter, [](auto &it) { return !it->Valid(); }),
+                      "Iter Seek Next Prev Valid");
+          CheckAssert(ctx,
+                      IsAll(ctx.iter, [](auto &it) { return it->status().ok(); }),
+                      "Iter Seek Next Prev Status");
+        } else {
+          CheckAssert(
+              ctx,
+              IsSame(ctx.iter,
+                     [](auto &l, auto &r) { return l->key() == r->key(); }),
+              "Iter Seek Next Prev Key");
+          CheckAssert(
+              ctx,
+              IsSame(ctx.iter,
+                     [](auto &l, auto &r) { return l->value() == r->value(); }),
+              "Iter Seek Next Prev Value");
+        }
       }
     }
 
@@ -857,10 +857,10 @@ int main(int argc, const char *argv[]) {
   }
   rocksdb::ChaosTest test(flags);
   std::vector<std::thread> thread_vec;
-  for (int j = 0; j < 1; ++j) {
+  for (int j = 0; j < 4; ++j) {
     thread_vec.emplace_back(&rocksdb::ChaosTest::ReadFunc, std::ref(test), j);
   }
-  for (int j = 0; j < 8; ++j) {
+  for (int j = 0; j < 2; ++j) {
     thread_vec.emplace_back(&rocksdb::ChaosTest::WriteFunc, std::ref(test), j);
   }
   for (auto &t : thread_vec) {
