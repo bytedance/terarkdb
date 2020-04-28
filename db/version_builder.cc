@@ -259,9 +259,8 @@ class VersionBuilder::Rep {
   }
 
   void PutSst(FileMetaData* f, int level) {
-    auto ib = dependence_map_.emplace(
-        f->fd.GetNumber(),
-        DependenceItem{0, 0, false, level, f, 0});
+    auto ib = dependence_map_.emplace(f->fd.GetNumber(),
+                                      DependenceItem{0, 0, false, level, f, 0});
     f->refs++;
     if (ib.second) {
       PutInheritance(&ib.first->second);
@@ -737,6 +736,52 @@ class VersionBuilder::Rep {
       t.join();
     }
   }
+
+  void UpgradeFileMetaData(const SliceTransform* prefix_extractor,
+                           int max_threads) {
+    assert(table_cache_ != nullptr);
+    std::vector<FileMetaData*> files_meta;
+    for (auto& pair : dependence_map_) {
+      auto& item = pair.second;
+      if (item.dependence_version == dependence_version_ &&
+          item.f->need_upgrade) {
+        files_meta.emplace_back(item.f);
+      }
+    }
+
+    std::atomic<size_t> next_file_meta_idx(0);
+    std::function<void()> load_handlers_func([&]() {
+      while (true) {
+        size_t file_idx = next_file_meta_idx.fetch_add(1);
+        if (file_idx >= files_meta.size()) {
+          break;
+        }
+
+        auto* file_meta = files_meta[file_idx];
+        std::shared_ptr<const TableProperties> properties;
+
+        auto s = table_cache_->GetTableProperties(
+            env_options_, *(base_vstorage_->InternalComparator()),
+            file_meta->fd, &properties, prefix_extractor, false /*no_io */);
+
+        if (s.ok()) {
+          file_meta->prop.num_entries = properties->num_entries;
+          file_meta->prop.num_deletions = properties->num_deletions;
+          file_meta->prop.raw_key_size = properties->raw_key_size;
+          file_meta->prop.raw_value_size = properties->raw_value_size;
+        }
+      }
+    });
+
+    std::vector<port::Thread> threads;
+    for (int i = 1; i < max_threads; i++) {
+      threads.emplace_back(load_handlers_func);
+    }
+    load_handlers_func();
+    for (auto& t : threads) {
+      t.join();
+    }
+  }
 };
 
 VersionBuilder::VersionBuilder(const EnvOptions& env_options,
@@ -773,6 +818,11 @@ void VersionBuilder::LoadTableHandlers(InternalStats* internal_stats,
                                        int max_threads) {
   rep_->LoadTableHandlers(internal_stats, prefetch_index_and_filter_in_cache,
                           prefix_extractor, max_threads);
+}
+
+void VersionBuilder::UpgradeFileMetaData(const SliceTransform* prefix_extractor,
+                                         int max_threads) {
+  rep_->UpgradeFileMetaData(prefix_extractor, max_threads);
 }
 
 #if ROCKS_VERSION_BUILDER_DEBUG

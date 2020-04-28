@@ -997,8 +997,9 @@ double VersionStorageInfo::GetEstimatedCompressionRatioAtLevel(
     void* args;
   } get_file_info;
   auto get_file_size_lambda = [this, &get_file_info](
-      const FileMetaData* f,
-      uint64_t file_number = uint64_t(-1)) -> std::pair<uint64_t, uint64_t> {
+                                  const FileMetaData* f,
+                                  uint64_t file_number = uint64_t(
+                                      -1)) -> std::pair<uint64_t, uint64_t> {
     if (f == nullptr) {
       auto find = dependence_map_.find(file_number);
       if (find == dependence_map_.end()) {
@@ -1493,10 +1494,10 @@ void VersionStorageInfo::ComputeCompensatedSizes() {
                          uint64_t file_number, uint64_t entry_count);
     void* args;
   } compute_compensated_size;
-  auto compute_compensated_size_lambda = [this, average_value_size,
-                                          &compute_compensated_size](
-      const FileMetaData* f, uint64_t file_number = uint64_t(-1),
-      uint64_t entry_count = 0) -> uint64_t {
+  auto compute_compensated_size_lambda =
+      [this, average_value_size, &compute_compensated_size](
+          const FileMetaData* f, uint64_t file_number = uint64_t(-1),
+          uint64_t entry_count = 0) -> uint64_t {
     if (f == nullptr) {
       auto find = dependence_map_.find(file_number);
       if (find == dependence_map_.end()) {
@@ -1853,9 +1854,10 @@ void VersionStorageInfo::AddFile(int level, FileMetaData* f,
                                     f->smallest) >= 0) {
     auto* f2 = level_files->back();
     if (info_log != nullptr) {
-      Error(info_log, "Adding new file %" PRIu64
-                      " range (%s, %s) to level %d but overlapping "
-                      "with existing file %" PRIu64 " %s %s",
+      Error(info_log,
+            "Adding new file %" PRIu64
+            " range (%s, %s) to level %d but overlapping "
+            "with existing file %" PRIu64 " %s %s",
             f->fd.GetNumber(), f->smallest.DebugString(true).c_str(),
             f->largest.DebugString(true).c_str(), level, f2->fd.GetNumber(),
             f2->smallest.DebugString(true).c_str(),
@@ -2779,8 +2781,7 @@ uint64_t VersionStorageInfo::EstimateLiveDataSize() const {
   if (lsm_num_entries_ <= lsm_num_deletions_) {
     return 0;
   }
-  double r = double(lsm_num_entries_ - lsm_num_deletions_) /
-             lsm_num_entries_;
+  double r = double(lsm_num_entries_ - lsm_num_deletions_) / lsm_num_entries_;
   return size_t(r * (lsm_file_size_ +
                      (blob_num_entries_ > blob_num_antiquation_
                           ? double(blob_num_entries_ - blob_num_antiquation_) /
@@ -3317,8 +3318,9 @@ Status VersionSet::ProcessManifestWrites(
       delete v;
     }
     if (new_descriptor_log) {
-      ROCKS_LOG_INFO(db_options_->info_log, "Deleting manifest %" PRIu64
-                                            " current manifest %" PRIu64 "\n",
+      ROCKS_LOG_INFO(db_options_->info_log,
+                     "Deleting manifest %" PRIu64 " current manifest %" PRIu64
+                     "\n",
                      manifest_file_number_, pending_manifest_file_number_);
       descriptor_log_.reset();
       env_->DeleteFile(
@@ -3835,6 +3837,9 @@ Status VersionSet::Recover(
             cfd->GetLatestMutableCFOptions()->prefix_extractor.get(),
             db_options_->max_file_opening_threads);
       }
+      builder->UpgradeFileMetaData(
+          cfd->GetLatestMutableCFOptions()->prefix_extractor.get(),
+          db_options_->max_file_opening_threads);
 
       Version* v = new Version(cfd, this, env_options_,
                                *cfd->GetLatestMutableCFOptions(),
@@ -4462,9 +4467,8 @@ uint64_t VersionSet::ApproximateSize(Version* v, const FdWithKeyRange& f,
           }
         }
         if (result > 0) {
-          result =
-              uint64_t(double(result) / file_meta->fd.GetFileSize() *
-                       vstorage->FileSizeWithBlob(file_meta, true, ratio));
+          result = uint64_t(double(result) / file_meta->fd.GetFileSize() *
+                            vstorage->FileSizeWithBlob(file_meta, true, ratio));
         }
       }
     } else {
@@ -4545,10 +4549,9 @@ InternalIterator* VersionSet::MakeInputIterator(
   // Level-0 files have to be merged together.  For other levels,
   // we will make a concatenating iterator per level.
   // TODO(opt): use concatenating iterator for level-0 if there is no overlap
-  const size_t space =
-      (c->level() <= 0
-           ? c->input_levels(0)->num_files + c->num_input_levels() - 1
-           : c->num_input_levels());
+  const size_t space = (c->level() <= 0 ? c->input_levels(0)->num_files +
+                                              c->num_input_levels() - 1
+                                        : c->num_input_levels());
   InternalIterator** list = new InternalIterator*[space];
   auto& dependence_map = c->input_version()->storage_info()->dependence_map();
   size_t num = 0;

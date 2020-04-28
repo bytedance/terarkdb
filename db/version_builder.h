@@ -25,6 +25,7 @@ struct VersionBuilderDebugger;
 // Versions that contain full copies of the intermediate state.
 class VersionBuilder {
   friend VersionBuilderDebugger;
+
  public:
   VersionBuilder(const EnvOptions& env_options, TableCache* table_cache,
                  VersionStorageInfo* base_vstorage, Logger* info_log = nullptr);
@@ -39,6 +40,8 @@ class VersionBuilder {
                          bool prefetch_index_and_filter_in_cache,
                          const SliceTransform* prefix_extractor,
                          int max_threads = 1);
+  void UpgradeFileMetaData(const SliceTransform* prefix_extractor,
+                           int max_threads = 1);
 
  private:
   class Rep;

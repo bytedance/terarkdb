@@ -262,6 +262,7 @@ const char* VersionEdit::DecodeNewFile4From(Slice* input) {
   const char* msg = nullptr;
   int level;
   FileMetaData f;
+  f.need_upgrade = true;
   uint64_t number;
   uint32_t path_id = 0;
   uint64_t file_size;
@@ -376,6 +377,10 @@ const char* VersionEdit::DecodeNewFile4From(Slice* input) {
                 return error_msg;
               }
             }
+            if (f.prop.num_entries > 0 || f.prop.raw_key_size > 0 ||
+                f.prop.raw_value_size > 0) {
+              f.need_upgrade = false;
+            }
           }
           break;
         default:
@@ -404,6 +409,7 @@ Status VersionEdit::DecodeFrom(const Slice& src) {
   // Temporary storage for parsing
   int level;
   FileMetaData f;
+  f.need_upgrade = true;
   Slice str;
   InternalKey key;
 

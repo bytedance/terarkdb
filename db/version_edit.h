@@ -136,7 +136,9 @@ struct FileMetaData {
   bool marked_for_compaction;  // True if client asked us nicely to compact this
                                // file.
 
-  uint8_t gc_status;           // for gc picker
+  bool need_upgrade;  // this sst from origin rocksdb
+
+  uint8_t gc_status;  // for gc picker
 
   TablePropertyCache prop;  // Cache some TableProperty fields into manifest
 
@@ -147,6 +149,7 @@ struct FileMetaData {
         refs(0),
         being_compacted(false),
         marked_for_compaction(false),
+        need_upgrade(false),
         gc_status(kGarbageCollectionForbidden) {}
 
   std::vector<SequenceNumber> ShrinkSnapshot(
