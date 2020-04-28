@@ -715,10 +715,10 @@ class VersionBuilder::Rep {
         auto file_read_hist =
             level >= 0 ? internal_stats->GetFileReadHist(level) : nullptr;
         table_cache_->FindTable(
-            env_options_, *(base_vstorage_->InternalComparator()),
-            file_meta->fd, &file_meta->table_reader_handle, prefix_extractor,
-            false /*no_io */, true /* record_read_stats */, file_read_hist,
-            false, level, prefetch_index_and_filter_in_cache);
+            env_options_, *base_vstorage_->InternalComparator(), file_meta->fd,
+            &file_meta->table_reader_handle, prefix_extractor, false /*no_io */,
+            true /* record_read_stats */, file_read_hist, false, level,
+            prefetch_index_and_filter_in_cache);
         if (file_meta->table_reader_handle != nullptr) {
           // Load table_reader
           file_meta->fd.table_reader = table_cache_->GetTableReaderFromHandle(
@@ -750,7 +750,7 @@ class VersionBuilder::Rep {
     }
 
     std::atomic<size_t> next_file_meta_idx(0);
-    std::function<void()> load_handlers_func([&]() {
+    std::function<void()> upgrade_func([&]() {
       while (true) {
         size_t file_idx = next_file_meta_idx.fetch_add(1);
         if (file_idx >= files_meta.size()) {
@@ -761,10 +761,10 @@ class VersionBuilder::Rep {
         std::shared_ptr<const TableProperties> properties;
 
         auto s = table_cache_->GetTableProperties(
-            env_options_, *(base_vstorage_->InternalComparator()),
-            file_meta->fd, &properties, prefix_extractor, false /*no_io */);
+            env_options_, *base_vstorage_->InternalComparator(), file_meta->fd,
+            &properties, prefix_extractor, false /*no_io */);
 
-        if (s.ok()) {
+        if (s.ok() && properties) {
           file_meta->prop.num_entries = properties->num_entries;
           file_meta->prop.num_deletions = properties->num_deletions;
           file_meta->prop.raw_key_size = properties->raw_key_size;
@@ -775,9 +775,9 @@ class VersionBuilder::Rep {
 
     std::vector<port::Thread> threads;
     for (int i = 1; i < max_threads; i++) {
-      threads.emplace_back(load_handlers_func);
+      threads.emplace_back(upgrade_func);
     }
-    load_handlers_func();
+    upgrade_func();
     for (auto& t : threads) {
       t.join();
     }

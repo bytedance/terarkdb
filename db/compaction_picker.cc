@@ -76,7 +76,6 @@ struct LevelMapSection {
 };
 struct GarbageFileInfo {
   FileMetaData* f;
-  uint64_t num_entries;
   double score;
   uint64_t estimate_size;
 };
@@ -368,27 +367,6 @@ bool CompactionPicker::FixInputRange(std::vector<SelectedRange>& input_range,
            return uc->Compare(r.start, r.limit) > 0;
          }) == input_range.end());
   return !input_range.empty();
-}
-
-uint64_t CompactionPicker::GetTableNumberEntries(const FileMetaData* f,
-                                                 const MutableCFOptions& opt,
-                                                 const std::string& cf_name,
-                                                 LogBuffer* log_buffer) {
-  if (f->prop.num_entries == 0) {
-    std::shared_ptr<const TableProperties> tp;
-    auto s = table_cache_->GetTableProperties(
-        env_options_, *icmp_, f->fd, &tp, opt.prefix_extractor.get(), false);
-    if (!s.ok()) {
-      ROCKS_LOG_BUFFER(log_buffer,
-                       "[%s] CompactionPicker::PickGarbageCollection "
-                       "GetTableProperties fail\n",
-                       cf_name.c_str(), s.ToString().c_str());
-      return 0;
-    }
-    return tp->num_entries;
-  } else {
-    return f->prop.num_entries;
-  }
 }
 
 // Delete this compaction from the list of running compactions.
@@ -804,8 +782,8 @@ void CompactionPicker::GetGrandparents(
 // Try to perform garbage collection from certain column family.
 // Resulting as a pointer of compaction, nullptr as nothing to do.
 Compaction* CompactionPicker::PickGarbageCollection(
-    const std::string& cf_name, const MutableCFOptions& mutable_cf_options,
-    VersionStorageInfo* vstorage, LogBuffer* log_buffer) {
+    const std::string& /*cf_name*/, const MutableCFOptions& mutable_cf_options,
+    VersionStorageInfo* vstorage, LogBuffer* /*log_buffer*/) {
   std::vector<GarbageFileInfo> gc_files;
 
   // Setting fragment_size as one eighth max_file_size prevents selecting
@@ -814,25 +792,6 @@ Compaction* CompactionPicker::PickGarbageCollection(
   size_t max_file_size =
       MaxFileSizeForLevel(mutable_cf_options, 1, ioptions_.compaction_style);
   size_t fragment_size = max_file_size / 8;
-
-  auto fn_num_entries = [&](FileMetaData* f) -> uint64_t {
-    if (f->prop.num_entries == 0) {
-      std::shared_ptr<const TableProperties> tp;
-      auto s = table_cache_->GetTableProperties(
-          env_options_, *icmp_, f->fd, &tp,
-          mutable_cf_options.prefix_extractor.get(), false);
-      if (!s.ok()) {
-        ROCKS_LOG_BUFFER(log_buffer,
-                         "[%s] CompactionPicker::PickGarbageCollection "
-                         "GetTableProperties fail\n",
-                         cf_name.c_str(), s.ToString().c_str());
-        return 0;
-      }
-      return tp->num_entries;
-    } else {
-      return f->prop.num_entries;
-    }
-  };
 
   // Traverse level -1 to filter out all blob sstables needs GC.
   // 1. score more than garbage collection baseline.
@@ -843,8 +802,8 @@ Compaction* CompactionPicker::PickGarbageCollection(
       continue;
     }
     GarbageFileInfo info = {f};
-    info.num_entries = fn_num_entries(f);
-    info.score = std::min(1.0, (double)f->num_antiquation / info.num_entries);
+    info.score = std::min(
+        1.0, f->num_antiquation / std::max<double>(1, f->prop.num_entries));
     info.estimate_size =
         static_cast<uint64_t>(f->fd.file_size * (1 - info.score));
     if (info.score >= mutable_cf_options.blob_gc_ratio ||
@@ -2558,10 +2517,7 @@ Compaction* LevelCompactionBuilder::PickLazyCompaction(
           }
           auto meta = find->second;
           double ratio = link.size / meta->fd.GetFileSize();
-          total_entry_num +=
-              picker->GetTableNumberEntries(meta, mutable_cf_options_, cf_name_,
-                                            log_buffer_) *
-              ratio;
+          total_entry_num += meta->prop.num_entries * ratio;
           total_del_num += meta->prop.num_deletions * ratio;
         }
         return std::make_pair(total_entry_num, total_del_num);

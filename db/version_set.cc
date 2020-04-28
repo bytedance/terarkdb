@@ -902,23 +902,11 @@ double Version::GetCompactionLoad() const {
 
 double Version::GetGarbageCollectionLoad() const {
   double sum = 0, antiquated = 0;
-  auto icmp = storage_info_.internal_comparator_;
-  std::shared_ptr<const TableProperties> tp;
   for (auto f : storage_info_.LevelFiles(-1)) {
-    if (f->is_gc_forbidden() || f->being_compacted) {
+    if (!f->is_gc_permitted() || f->being_compacted) {
       continue;
     }
-    if (f->prop.num_entries != 0) {
-      sum += f->prop.num_entries;
-    } else {
-      auto s = table_cache_->GetTableProperties(
-          env_options_, *icmp, f->fd, &tp,
-          mutable_cf_options_.prefix_extractor.get(), false);
-      if (!s.ok()) {
-        continue;
-      }
-      sum += tp->num_entries;
-    }
+    sum += f->prop.num_entries;
     antiquated += f->num_antiquation;
   }
   return sum > 0 ? antiquated / sum : sum;

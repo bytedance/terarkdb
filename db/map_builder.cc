@@ -536,7 +536,8 @@ class MapSstTombstoneIterator : public InternalIterator {
   size_t list_seq_;
   const InternalKeyComparator& icomp_;
 };
-// 更新FileMetaDataBoundBuilder上下边界， 普通文件直接加入ranges， map sst 对每一条kv创建一个map element 加入ranges
+// 更新FileMetaDataBoundBuilder上下边界， 普通文件直接加入ranges， map sst
+// 对每一条kv创建一个map element 加入ranges
 Status LoadRangeWithDepend(std::vector<RangeWithDepend>& ranges, Arena* arena,
                            FileMetaDataBoundBuilder* bound_builder,
                            IteratorCache& iterator_cache,
@@ -907,7 +908,8 @@ Status LoadDeleteRangeIterImpl(
   return Status::OK();
 };
 
-// 把 f 的RangeTombstoneIterator创建出来并加入到range_del_iter_vec中，对map sst 则对其dependence进行递归加入
+// 把 f 的RangeTombstoneIterator创建出来并加入到range_del_iter_vec中，对map sst
+// 则对其dependence进行递归加入
 Status LoadDeleteRangeIter(
     const FileMetaData* file_meta, const InternalKeyComparator& ic,
     IteratorCache& iterator_cache,
@@ -1134,7 +1136,8 @@ Status MapBuilder::Build(const std::vector<CompactionInputFiles>& inputs,
     }
     tombstone_iter.set(builder.Finish());
   }
-  if (build_range_deletion_ranges && !tombstones.empty() && !level_ranges.empty()) {
+  if (build_range_deletion_ranges && !tombstones.empty() &&
+      !level_ranges.empty()) {
     std::vector<RangeWithDepend> ranges;
     auto uc = icomp.user_comparator();
     Slice last_end_key;
@@ -1696,6 +1699,8 @@ Status MapBuilder::WriteOutputFile(
 
   if (s.ok()) {
     prop->reset(new TableProperties(builder->GetTableProperties()));
+    file_meta->prop.raw_key_size = (*prop)->raw_key_size;
+    file_meta->prop.raw_value_size = (*prop)->raw_value_size;
     // Output to event logger and fire events.
     const char* compaction_msg =
         file_meta->marked_for_compaction ? " (need compaction)" : "";
