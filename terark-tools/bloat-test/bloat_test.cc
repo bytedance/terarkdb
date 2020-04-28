@@ -107,36 +107,25 @@ public:
   }
 
   void WriteFunc() {
-    auto char_rand = std::bind(
-        std::uniform_int_distribution<int>(0,10+26+26-1),
-        std::mt19937(gene_seed()));
 
-    auto randchar = [&]() -> char
-    {
-        const char charset[] =
-        "0123456789"
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-        "abcdefghijklmnopqrstuvwxyz";
-        const size_t max_index = (sizeof(charset) - 1);
-        return charset[char_rand()];
+    auto fill_kv = [&](uint64_t seed, std::string& k, std::string& v) {
+        std::mt19937_64 mt(seed);
+        auto uid = std::uniform_int_distribution<char>(0, 255);
+        auto klen = std::uniform_int_distribution<size_t>(50 - 10, 50 + 10);
+        auto vlen = std::uniform_int_distribution<size_t>(46000 - 20000, 46000 + 20000);
+        k.resize(klen(mt));
+        v.resize(vlen(mt));
+        std::generate_n(k.begin(), k.size(), std::bind(uid, std::ref(mt)));
+        std::generate_n(v.begin(), v.size(), std::bind(uid, std::ref(mt)));
     };
-
-
-    auto key_rand = std::bind(
-        std::uniform_int_distribution<int>(50-10, 50+10),
-        std::mt19937(gene_seed()));
-    auto val_rand = std::bind(
-        std::uniform_int_distribution<int>(46000-20000, 46000+20000),
-        std::mt19937(gene_seed()));
+    auto key_seed = std::bind(
+        std::uniform_int_distribution<uint64_t>(0, 12000000),
+        std::mt19937_64(gene_seed()));
 
     std::string key, value;
     for (;;) {
 
-      key.resize(key_rand());
-      std::generate_n(key.begin(), key.size(), randchar);
-      value.resize(val_rand());
-      std::generate_n(value.begin(), value.size(), randchar);
-
+      fill_kv(key_seed(), key, value);
       fprintf(stderr, "key size: %u, value size: %u \n", key.size(), value.size());
 
       rocksdb::Status s;
@@ -170,11 +159,11 @@ private:
 int main(int argc, char *argv[])
 {
   rocksdb::BloatTest t("./db.ini",
-      "/data02/lymtestdata/bloatdb",
-      "/data02/lymtestdata/bloatSsdb",
-      "/data02/lymtestdata/bloatMsdb");
+      "/data00/bt/sn-bloatdb",
+      "/data01/bt/ss-bloatdb",
+      "/data04/bt/ms-bloatdb");
 
-  uint32_t thread_num  = 8;
+  uint32_t thread_num  = 2;
   std::vector<std::thread> thread_vec;
   for (int j = 0; j < thread_num; ++j) {
     thread_vec.emplace_back(&rocksdb::BloatTest::WriteFunc, std::ref(t));
