@@ -22,6 +22,7 @@
 #include "rocksdb/table.h"
 #include "table/block_based_table_factory.h"
 #include "table/plain_table_factory.h"
+#include "table/terark_zip_table.h"
 #include "util/cast_util.h"
 #include "util/string_util.h"
 
@@ -549,6 +550,10 @@ bool ParseOptionHelper(char* opt_address, const OptionType& opt_type,
       return ParseEnum<CompactionStopStyle>(
           compaction_stop_style_string_map, value,
           reinterpret_cast<CompactionStopStyle*>(opt_address));
+    case OptionType::kEntropyAlgo:
+      return ParseEnum<TerarkZipTableOptions::EntropyAlgo>(
+          entropy_algo_string_map, value,
+          reinterpret_cast<TerarkZipTableOptions::EntropyAlgo*>(opt_address));
     default:
       return false;
   }
@@ -995,6 +1000,17 @@ Status ParseColumnFamilyOption(const std::string& name,
       if (!s.ok()) {
         return s;
       }
+    } else if (name == "terark_zip_table_factory") {
+      TerarkZipTableOptions tzto, tzto_base;
+      Status table_opt_s = GetTerarkZipTableOptionsFromString(
+          tzto_base, value, &tzto);
+      if (!table_opt_s.ok()) {
+        return Status::InvalidArgument(
+            "unable to parse the specified CF option " + name);
+      }
+      new_options->table_factory.reset(NewTerarkZipTableFactory(
+          tzto,
+          std::shared_ptr<rocksdb::TableFactory>(NewBlockBasedTableFactory())));
     } else {
       auto iter = cf_options_type_info.find(name);
       if (iter == cf_options_type_info.end()) {
@@ -1314,6 +1330,17 @@ Status GetTableFactoryFromMap(
       return s;
     }
     table_factory->reset(new PlainTableFactory(pt_opt));
+    return Status::OK();
+  } else if (factory_name == "TerarkZipTable") {
+    TerarkZipTableOptions tzt_opt;
+    s = GetTerarkZipTableOptionsFromMap(TerarkZipTableOptions(), opt_map,
+                                        &tzt_opt, true, ignore_unknown_options);
+    if (!s.ok()) {
+      return s;
+    }
+    table_factory->reset(NewTerarkZipTableFactory(
+        tzt_opt,
+        std::shared_ptr<rocksdb::TableFactory>(NewBlockBasedTableFactory())));
     return Status::OK();
   }
   // Return OK for not supported table factories as TableFactory
@@ -2005,6 +2032,13 @@ std::unordered_map<std::string, OptionTypeInfo>
          {offset_of(&LRUCacheOptions::high_pri_pool_ratio), OptionType::kDouble,
           OptionVerificationType::kNormal, true,
           offsetof(struct LRUCacheOptions, high_pri_pool_ratio)}}};
+
+std::unordered_map<std::string, TerarkZipTableOptions::EntropyAlgo>
+    OptionsHelper::entropy_algo_string_map = {
+      {"no_entropy", TerarkZipTableOptions::EntropyAlgo::kNoEntropy},
+      {"huffman", TerarkZipTableOptions::EntropyAlgo::kHuffman},
+      {"fse", TerarkZipTableOptions::EntropyAlgo::kFSE}
+    };
 
 #endif  // !ROCKSDB_LITE
 

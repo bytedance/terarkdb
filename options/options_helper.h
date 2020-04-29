@@ -16,6 +16,7 @@
 #include "rocksdb/status.h"
 #include "rocksdb/table.h"
 #include "rocksdb/universal_compaction.h"
+#include "table/terark_zip_table.h"
 
 namespace rocksdb {
 
@@ -78,6 +79,7 @@ enum class OptionType {
   kAccessHint,
   kInfoLogLevel,
   kLRUCacheOptions,
+  kEntropyAlgo,
   kUnknown
 };
 
@@ -162,6 +164,7 @@ struct OptionsHelper {
   static std::unordered_map<std::string, OptionTypeInfo> db_options_type_info;
   static std::unordered_map<std::string, OptionTypeInfo>
       lru_cache_options_type_info;
+  static std::unordered_map<std::string, TerarkZipTableOptions::EntropyAlgo> entropy_algo_string_map;
   static std::unordered_map<std::string, BlockBasedTableOptions::IndexType>
       block_base_table_index_type_string_map;
   static std::unordered_map<std::string,
@@ -200,6 +203,7 @@ static auto& universal_compaction_options_type_info =
     OptionsHelper::universal_compaction_options_type_info;
 static auto& compaction_stop_style_string_map =
     OptionsHelper::compaction_stop_style_string_map;
+static auto& entropy_algo_string_map = OptionsHelper::entropy_algo_string_map;
 static auto& db_options_type_info = OptionsHelper::db_options_type_info;
 static auto& lru_cache_options_type_info =
     OptionsHelper::lru_cache_options_type_info;

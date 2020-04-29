@@ -19,6 +19,7 @@
 #include <rocksdb/slice.h>
 #include <rocksdb/env.h>
 #include <rocksdb/table.h>
+#include <rocksdb/convenience.h>
 // terark headers
 #include <terark/fstring.hpp>
 #include <terark/valvec.hpp>
@@ -222,6 +223,5 @@ public:
     return collect_;
   }
 };
-
 
 }  // namespace rocksdb
