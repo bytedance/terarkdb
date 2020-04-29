@@ -127,7 +127,7 @@ class PlainTableDBTest : public testing::Test,
     Options options;
     options.enable_lazy_compaction = false;
     options.blob_size = -1;
-    
+
     PlainTableOptions plain_table_options;
     plain_table_options.user_key_len = 0;
     plain_table_options.bloom_bits_per_key = 2;

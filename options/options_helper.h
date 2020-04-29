@@ -164,7 +164,8 @@ struct OptionsHelper {
   static std::unordered_map<std::string, OptionTypeInfo> db_options_type_info;
   static std::unordered_map<std::string, OptionTypeInfo>
       lru_cache_options_type_info;
-  static std::unordered_map<std::string, TerarkZipTableOptions::EntropyAlgo> entropy_algo_string_map;
+  static std::unordered_map<std::string, TerarkZipTableOptions::EntropyAlgo>
+      entropy_algo_string_map;
   static std::unordered_map<std::string, BlockBasedTableOptions::IndexType>
       block_base_table_index_type_string_map;
   static std::unordered_map<std::string,

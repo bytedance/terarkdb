@@ -1002,8 +1002,8 @@ Status ParseColumnFamilyOption(const std::string& name,
       }
     } else if (name == "terark_zip_table_factory") {
       TerarkZipTableOptions tzto, tzto_base;
-      Status table_opt_s = GetTerarkZipTableOptionsFromString(
-          tzto_base, value, &tzto);
+      Status table_opt_s =
+          GetTerarkZipTableOptionsFromString(tzto_base, value, &tzto);
       if (!table_opt_s.ok()) {
         return Status::InvalidArgument(
             "unable to parse the specified CF option " + name);
@@ -2035,10 +2035,9 @@ std::unordered_map<std::string, OptionTypeInfo>
 
 std::unordered_map<std::string, TerarkZipTableOptions::EntropyAlgo>
     OptionsHelper::entropy_algo_string_map = {
-      {"no_entropy", TerarkZipTableOptions::EntropyAlgo::kNoEntropy},
-      {"huffman", TerarkZipTableOptions::EntropyAlgo::kHuffman},
-      {"fse", TerarkZipTableOptions::EntropyAlgo::kFSE}
-    };
+        {"no_entropy", TerarkZipTableOptions::EntropyAlgo::kNoEntropy},
+        {"huffman", TerarkZipTableOptions::EntropyAlgo::kHuffman},
+        {"fse", TerarkZipTableOptions::EntropyAlgo::kFSE}};
 
 #endif  // !ROCKSDB_LITE
 

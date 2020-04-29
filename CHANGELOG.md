@@ -1,6 +1,27 @@
 
 ## CHANGELOG
 
+- 版本号：v1.2.6
+- 日期：2020-04-29
+- 发版说明：
+  - 计划内例行发版
+- 功能变更：
+  - Key Value 实现优化，更早的分离大 Value，降低 GC 压力
+  - TerarkZipTable 配置深度集成，支持所有原版 RocksDB 的配置方式
+  - LazyLevelCompaction 增大 SST 中 Tombstone 的下推权重，更快回收存储空间
+- 修复问题：
+  - 修复使用 TerarkZipTable 可能导致 OOM Kill 的问题
+  - 修复开启 Key Value 分离之后的一系列问题：
+    - 修复返回用户的 Properties 未包含对应 Blob SST 的问题
+    - 修复估算数据信息未包含 Blob SST 的问题
+    - 修复 LSM 树过小导致空间回收不及时的问题
+    - 修复大量删除数据有风险反复触发无效 GC 的问题
+  - 修复继承原版 RocksDB 数据后开启 Key Value 分离后空间泄露的问题
+  - 修复 Metrics 汇报长尾错误的问题
+- 已知问题：
+  - 使用 LazyUniversalCompaction 有极低概率触发无效 TrivialMove 导致写阻塞 
+  - BlockBasedTable 工作在 mmap 模式下有潜在的 OOM Kill 风险
+
 - 版本号：v1.2.5
 - 日期：2020-04-10
 - 发版说明：
