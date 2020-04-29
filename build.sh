@@ -56,7 +56,7 @@ fi
 
 export BUNDLE_ALL_TERARK_STATIC=${BUNDLE_ALL_TERARK_STATIC:-1}
 
-# # build targets
+# build targets
 make LINK_TERARK=static \
      EXTRA_CXXFLAGS="-DROCKSDB_VALGRIND_RUN=$VALGRIND" \
      BMI2=$WITH_BMI2 \
