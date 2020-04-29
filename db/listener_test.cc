@@ -126,6 +126,8 @@ TEST_F(EventListenerTest, OnSingleDBCompactionTest) {
   options.level0_file_num_compaction_trigger = kNumL0Files;
   options.table_properties_collector_factories.push_back(
       std::make_shared<TestPropertiesCollectorFactory>());
+  options.enable_lazy_compaction = false;
+  options.blob_size = -1;
 
   TestCompactionListener* listener = new TestCompactionListener();
   options.listeners.emplace_back(listener);
@@ -448,6 +450,8 @@ TEST_F(EventListenerTest, CompactionReasonLevel) {
 
   options.level0_file_num_compaction_trigger = 4;
   options.compaction_style = kCompactionStyleLevel;
+  options.enable_lazy_compaction = false;
+  options.blob_size = -1;
 
   DestroyAndReopen(options);
   Random rnd(301);
@@ -519,6 +523,8 @@ TEST_F(EventListenerTest, CompactionReasonUniversal) {
   options.level0_file_num_compaction_trigger = 8;
   options.compaction_options_universal.max_size_amplification_percent = 100000;
   options.compaction_options_universal.size_ratio = 100000;
+  options.enable_lazy_compaction = false;
+  options.blob_size = -1;
   DestroyAndReopen(options);
   listener->compaction_reasons_.clear();
 
@@ -697,6 +703,8 @@ TEST_F(EventListenerTest, TableFileCreationListenersTest) {
   options.create_if_missing = true;
   options.listeners.push_back(listener);
   options.env = &listener->test_env;
+  options.enable_lazy_compaction = false;
+  options.blob_size = -1;
   DestroyAndReopen(options);
 
   ASSERT_OK(Put("foo", "aaa"));

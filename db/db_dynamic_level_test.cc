@@ -75,7 +75,8 @@ TEST_F(DBTestDynamicLevel, DynamicLevelMaxBytesBase) {
       options.compression_per_level[1] = kLZ4Compression;
       options.compression_per_level[2] = kSnappyCompression;
       options.env = env_;
-
+      options.enable_lazy_compaction = false;
+      options.blob_size = -1;
       DestroyAndReopen(options);
 
       for (int i = 0; i < kNKeys; i++) {
@@ -139,6 +140,8 @@ TEST_F(DBTestDynamicLevel, DynamicLevelMaxBytesBase2) {
   options.max_background_compactions = 2;
   options.num_levels = 5;
   options.max_compaction_bytes = 0;  // Force not expanding in compactions
+  options.enable_lazy_compaction = false;
+  options.blob_size = -1;
   BlockBasedTableOptions table_options;
   table_options.block_size = 1024;
   options.table_factory.reset(NewBlockBasedTableFactory(table_options));
@@ -292,6 +295,8 @@ TEST_F(DBTestDynamicLevel, DynamicLevelMaxBytesCompactRange) {
   const int kNumLevels = 5;
   options.num_levels = kNumLevels;
   options.max_compaction_bytes = 1;  // Force not expanding in compactions
+  options.enable_lazy_compaction = false;
+  options.blob_size = -1;
   BlockBasedTableOptions table_options;
   table_options.block_size = 1024;
   options.table_factory.reset(NewBlockBasedTableFactory(table_options));
@@ -369,6 +374,8 @@ TEST_F(DBTestDynamicLevel, DynamicLevelMaxBytesBaseInc) {
   options.max_background_compactions = 2;
   options.num_levels = 5;
   options.max_compaction_bytes = 100000000;
+  options.enable_lazy_compaction = false;
+  options.blob_size = -1;
 
   DestroyAndReopen(options);
 
@@ -419,6 +426,8 @@ TEST_F(DBTestDynamicLevel, DISABLED_MigrateToDynamicLevelMaxBytesBase) {
   options.max_bytes_for_level_multiplier = 4;
   options.soft_rate_limit = 1.1;
   options.num_levels = 8;
+  options.enable_lazy_compaction = false;
+  options.blob_size = -1;
 
   DestroyAndReopen(options);
 

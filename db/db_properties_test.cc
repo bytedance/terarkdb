@@ -1277,6 +1277,8 @@ TEST_F(DBPropertiesTest, TablePropertiesNeedCompactTest) {
   options.soft_pending_compaction_bytes_limit = 1024 * 1024;
   options.num_levels = 8;
   options.env = env_;
+  options.enable_lazy_compaction = false;
+  options.blob_size = -1;
 
   std::shared_ptr<TablePropertiesCollectorFactory> collector_factory =
       std::make_shared<CountingDeleteTabPropCollectorFactory>();
@@ -1349,6 +1351,8 @@ TEST_F(DBPropertiesTest, NeedCompactHintPersistentTest) {
   options.level0_stop_writes_trigger = 10;
   options.disable_auto_compactions = true;
   options.env = env_;
+  options.enable_lazy_compaction = false;
+  options.blob_size = -1;
 
   std::shared_ptr<TablePropertiesCollectorFactory> collector_factory =
       std::make_shared<CountingDeleteTabPropCollectorFactory>();
@@ -1508,6 +1512,8 @@ TEST_F(DBPropertiesTest, SstFilesSize) {
 
   Options options;
   options.disable_auto_compactions = true;
+  options.enable_lazy_compaction = false;
+  options.blob_size = -1;
   options.listeners.push_back(listener);
   Reopen(options);
 

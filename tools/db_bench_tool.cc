@@ -45,6 +45,7 @@
 #include "rocksdb/db.h"
 #include "rocksdb/env.h"
 #include "rocksdb/filter_policy.h"
+#include "rocksdb/iostats_context.h"
 #include "rocksdb/memtablerep.h"
 #include "rocksdb/options.h"
 #include "rocksdb/perf_context.h"
@@ -90,7 +91,9 @@ DEFINE_string(
     "fillseqdeterministic,"
     "fillsync,"
     "fillrandom,"
+    "filluniquerandom,"
     "filluniquerandomdeterministic,"
+    "multifillunique,"
     "overwrite,"
     "readrandom,"
     "newiterator,"
@@ -107,6 +110,7 @@ DEFINE_string(
     "readtocache,"
     "readreverse,"
     "readwhilewriting,"
+    "multireadwriting,"
     "readwhilemerging,"
     "readwhilescanning,"
     "readrandomwriterandom,"
@@ -1043,7 +1047,8 @@ enum RepFactory {
   kPrefixHash,
   kVectorRep,
   kHashLinkedList,
-  kCuckoo
+  kCuckoo,
+  kPatriciaTrie
 };
 
 static enum RepFactory StringToRepFactory(const char* ctype) {
@@ -1059,6 +1064,8 @@ static enum RepFactory StringToRepFactory(const char* ctype) {
     return kHashLinkedList;
   else if (!strcasecmp(ctype, "cuckoo"))
     return kCuckoo;
+  else if (!strcasecmp(ctype, "patricil_trie"))
+    return kPatriciaTrie;
 
   fprintf(stdout, "Cannot parse memreptable %s\n", ctype);
   return kSkipList;
@@ -1915,7 +1922,6 @@ struct ThreadState {
   int tid;             // 0..n-1 when running in n threads
   Random64 rand;         // Has different seeds for different threads
   Stats stats;
-  Stats write_stats;
   SharedState* shared;
   bool write;
 
@@ -2137,6 +2143,9 @@ class Benchmark {
         break;
       case kCuckoo:
         fprintf(stdout, "Memtablerep: cuckoo\n");
+        break;
+      case kPatriciaTrie:
+        fprintf(stdout, "Memtablerep: patricil_trie\n");
         break;
     }
     fprintf(stdout, "Perf Level: %d\n", FLAGS_perf_level);
@@ -2515,7 +2524,7 @@ void VerifyDBFromDB(std::string& truth_db_name) {
 
       bool fresh_db = false;
       int num_threads = FLAGS_threads;
-      if (FLAGS_write_threads > 0 && FLAGS_read_threads > 0)
+      if (FLAGS_write_threads >= 0 && FLAGS_read_threads >= 0)
         num_threads = FLAGS_write_threads + FLAGS_read_threads;
 
       int num_repeat = 1;
@@ -2647,6 +2656,14 @@ void VerifyDBFromDB(std::string& truth_db_name) {
       } else if (name == "readwhilewriting") {
         num_threads++;  // Add extra thread for writing
         method = &Benchmark::ReadWhileWriting;
+      } else if (name == "multireadwriting") {
+        if (FLAGS_read_threads < 0 || FLAGS_write_threads < 0) {
+          fprintf(stdout,
+                  "readwhilewriting must specify the read_threads and "
+                  "write_threads");
+          exit(1);
+        }
+        method = &Benchmark::MultiReadWriting;
       } else if (name == "readwhilemerging") {
         num_threads++;  // Add extra thread for writing
         method = &Benchmark::ReadWhileMerging;
@@ -2857,16 +2874,11 @@ void VerifyDBFromDB(std::string& truth_db_name) {
         shared->cv.Wait();
       }
     }
-
     SetPerfLevel(static_cast<PerfLevel> (shared->perf_level));
     perf_context.EnablePerLevelPerfContext();
     thread->stats.Start(thread->tid);
-    thread->write_stats.Start(thread->tid);
     (arg->bm->*(arg->method))(thread);
-    thread->write_stats.Stop();
     thread->stats.Stop();
-    
-
     {
       MutexLock l(&shared->mu);
       shared->num_done++;
@@ -2894,12 +2906,9 @@ void VerifyDBFromDB(std::string& truth_db_name) {
     }
 
     std::unique_ptr<ReporterAgent> reporter_agent;
-    std::unique_ptr<ReporterAgent> write_reporter_agent;
     if (FLAGS_report_interval_seconds > 0) {
       reporter_agent.reset(new ReporterAgent(FLAGS_env, FLAGS_report_file,
                                              FLAGS_report_interval_seconds));
-      write_reporter_agent.reset(new ReporterAgent(
-          FLAGS_env, FLAGS_report_file, FLAGS_report_interval_seconds));
     }
 
     ThreadArg* arg = new ThreadArg[n];
@@ -2927,7 +2936,6 @@ void VerifyDBFromDB(std::string& truth_db_name) {
       arg[i].shared = &shared;
       arg[i].thread = new ThreadState(i);
       arg[i].thread->stats.SetReporterAgent(reporter_agent.get());
-      arg[i].thread->write_stats.SetReporterAgent(reporter_agent.get());
       arg[i].thread->shared = &shared;
       if (i < FLAGS_read_threads) arg[i].thread->write = false;
       FLAGS_env->StartThread(ThreadBody, &arg[i]);
@@ -2946,20 +2954,11 @@ void VerifyDBFromDB(std::string& truth_db_name) {
     shared.mu.Unlock();
 
     // Stats for some threads can be excluded.
-    Stats read_merge_stats;
-    Stats write_merge_stats;
     Stats merge_stats;
-    for (int i = 0; i < n; i++) {
-      if (arg[i].thread->write)
-        write_merge_stats.Merge(arg[i].thread->write_stats);
-      else
-        read_merge_stats.Merge(arg[i].thread->stats);
+    for (int i = 0; i < n; ++i) {
+      merge_stats.Merge(arg[i].thread->stats);
     }
-    read_merge_stats.Report(name.ToString() + "_read");
-    write_merge_stats.Report(name.ToString() + "_write");
-    merge_stats.Merge(read_merge_stats);
-    merge_stats.Merge(write_merge_stats);
-    // merge_stats.Report(name);
+    merge_stats.Report(name);
     for (int i = 0; i < n; i++) {
       delete arg[i].thread;
     }
@@ -3250,6 +3249,10 @@ void VerifyDBFromDB(std::string& truth_db_name) {
       case kCuckoo:
         options.memtable_factory.reset(NewHashCuckooRepFactory(
             options.write_buffer_size, FLAGS_key_size + FLAGS_value_size));
+        break;
+      case kPatriciaTrie:
+        Status ignore;
+        options.memtable_factory.reset(NewPatriciaTrieRepFactory({}, &ignore));
         break;
 #else
       default:
@@ -3883,7 +3886,10 @@ void VerifyDBFromDB(std::string& truth_db_name) {
 
       for (int64_t j = 0; j < entries_per_batch_; j++) {
         int64_t rand_num = key_gens[id]->Next();
-        GenerateKeyFromInt(rand_num, FLAGS_num, &key, thread->tid);
+        if (write_mode == MULTI_UNIQUE_RANDOM)
+          GenerateKeyFromInt(rand_num, FLAGS_num, &key, thread->tid);
+        else
+          GenerateKeyFromInt(rand_num, FLAGS_num, &key, -1);
         if (FLAGS_num_column_families <= 1) {
           batch.Put(key, gen.Generate(value_size_));
         } else {
@@ -4699,7 +4705,7 @@ void VerifyDBFromDB(std::string& truth_db_name) {
   }
 
   void ReadWhileWriting(ThreadState* thread) {
-    if (!thread->write) {
+    if (thread->tid > 0) {
       ReadRandom(thread);
     } else {
       BGWriter(thread, kWrite);
@@ -4714,19 +4720,28 @@ void VerifyDBFromDB(std::string& truth_db_name) {
     }
   }
 
+  void MultiReadWriting(ThreadState* thread) {
+    if (!thread->write) {
+      ReadRandom(thread);
+    } else {
+      DoWrite(thread, RANDOM);
+    }
+  }
+
+
   void BGWriter(ThreadState* thread, enum OperationType write_merge) {
     // Special thread that keeps writing until other threads are done.
     RandomGenerator gen;
     int64_t bytes = 0;
 
-    // std::unique_ptr<RateLimiter> write_rate_limiter;
-    // if (FLAGS_benchmark_write_rate_limit > 0) {
-    //   write_rate_limiter.reset(
-    //       NewGenericRateLimiter(FLAGS_benchmark_write_rate_limit));
-    // }
+    std::unique_ptr<RateLimiter> write_rate_limiter;
+    if (FLAGS_benchmark_write_rate_limit > 0) {
+      write_rate_limiter.reset(
+          NewGenericRateLimiter(FLAGS_benchmark_write_rate_limit));
+    }
 
     // Don't merge stats from this thread with the readers.
-    // thread->stats.SetExcludeFromMerge();
+    thread->stats.SetExcludeFromMerge();
 
     std::unique_ptr<const char[]> key_guard;
     Slice key = AllocateKey(&key_guard);
@@ -4741,7 +4756,7 @@ void VerifyDBFromDB(std::string& truth_db_name) {
           fprintf(stderr, "Exiting the writer after %u writes...\n", written);
           break;
         }
-        if (thread->shared->num_done + FLAGS_write_threads + 1 >= thread->shared->num_initialized) {
+        if (thread->shared->num_done + 1 >= thread->shared->num_initialized) {
           // Other threads have finished
           if (FLAGS_finish_after_writes) {
             // Wait for the writes to be finished
@@ -4759,29 +4774,26 @@ void VerifyDBFromDB(std::string& truth_db_name) {
 
       GenerateKeyFromInt(thread->rand.Next() % FLAGS_num, FLAGS_num, &key, -1);
       Status s;
-
       if (write_merge == kWrite) {
         s = db->Put(write_options_, key, gen.Generate(value_size_));
       } else {
         s = db->Merge(write_options_, key, gen.Generate(value_size_));
       }
       written++;
-
       if (!s.ok()) {
         fprintf(stderr, "put or merge error: %s\n", s.ToString().c_str());
         exit(1);
       }
       bytes += key.size() + value_size_;
-      thread->write_stats.FinishedOps(&db_, db_.db, 1, kWrite);
+      thread->stats.FinishedOps(&db_, db_.db, 1, kWrite);
 
-      if (FLAGS_benchmark_write_rate_limit > 0 &&
-          thread->shared->write_rate_limiter.get() != nullptr) {
-        thread->shared->write_rate_limiter->Request(
+      if (FLAGS_benchmark_write_rate_limit > 0) {
+        write_rate_limiter->Request(
             entries_per_batch_ * (value_size_ + key_size_), Env::IO_HIGH,
             nullptr /* stats */, RateLimiter::OpType::kWrite);
       }
     }
-    thread->write_stats.AddBytes(bytes);
+    thread->stats.AddBytes(bytes);
   }
 
   void ReadWhileScanning(ThreadState* thread) {
@@ -5729,11 +5741,11 @@ int db_bench_tool(int argc, char** argv) {
   rocksdb::port::InstallStackTraceHandler();
   static bool initialized = false;
   if (!initialized) {
-    google::SetUsageMessage(std::string("\nUSAGE:\n") + std::string(argv[0]) +
+    SetUsageMessage(std::string("\nUSAGE:\n") + std::string(argv[0]) +
                     " [OPTIONS]...");
     initialized = true;
   }
-  google::ParseCommandLineFlags(&argc, &argv, true);
+  ParseCommandLineFlags(&argc, &argv, true);
   FLAGS_compaction_style_e = (rocksdb::CompactionStyle) FLAGS_compaction_style;
 #ifndef ROCKSDB_LITE
   if (FLAGS_statistics && !FLAGS_statistics_string.empty()) {

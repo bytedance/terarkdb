@@ -1058,6 +1058,8 @@ TEST_F(DBTest2, PresetCompressionDict) {
   options.target_file_size_base = kL0FileBytes;
   options.target_file_size_multiplier = 2;
   options.write_buffer_size = kL0FileBytes;
+  options.enable_lazy_compaction = false;
+  options.blob_size = -1;
   BlockBasedTableOptions table_options;
   table_options.block_size = kBlockSizeBytes;
   std::vector<CompressionType> compression_types;
@@ -2405,6 +2407,8 @@ TEST_F(DBTest2, ReadCallbackTest) {
   Options options;
   options.disable_auto_compactions = true;
   options.num_levels = 7;
+  options.enable_lazy_compaction = false;
+  options.blob_size = -1;
   Reopen(options);
   std::vector<const Snapshot*> snapshots;
   // Try to create a db with multiple layers and a memtable

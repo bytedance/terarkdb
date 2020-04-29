@@ -284,7 +284,7 @@ Status GenericRateLimiter::Tune() {
 
   std::chrono::microseconds prev_tuned_time = tuned_time_;
   tuned_time_ = std::chrono::microseconds(NowMicrosMonotonic(env_));
-
+  // 经过了多少个refill_period_us_，即两次tune期间填充了几次
   int64_t elapsed_intervals = (tuned_time_ - prev_tuned_time +
                                std::chrono::microseconds(refill_period_us_) -
                                std::chrono::microseconds(1)) /
@@ -320,6 +320,7 @@ Status GenericRateLimiter::Tune() {
   if (new_bytes_per_sec != prev_bytes_per_sec) {
     SetBytesPerSecond(new_bytes_per_sec);
   }
+  // 貌似写错了？
   num_drains_ = prev_num_drains_;
   return Status::OK();
 }

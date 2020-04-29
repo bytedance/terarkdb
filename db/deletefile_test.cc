@@ -47,6 +47,8 @@ class DeleteFileTest : public testing::Test {
     options_.WAL_size_limit_MB = 1024; // Used to test log files
     dbname_ = test::PerThreadDBPath("deletefile_test");
     options_.wal_dir = dbname_ + "/wal_files";
+    options_.enable_lazy_compaction = false;
+    options_.blob_size = -1;
 
     // clean up all the files that might have been there before
     std::vector<std::string> old_files;

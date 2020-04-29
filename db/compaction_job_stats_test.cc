@@ -102,6 +102,8 @@ class CompactionJobStatsTest : public testing::Test,
     alternative_wal_dir_ = dbname_ + "/wal";
     Options options;
     options.create_if_missing = true;
+    options.enable_lazy_compaction = false;
+    options.blob_size = -1;
     max_subcompactions_ = GetParam();
     options.max_subcompactions = max_subcompactions_;
     auto delete_options = options;
@@ -662,6 +664,9 @@ TEST_P(CompactionJobStatsTest, CompactionJobStatsTest) {
   options.bytes_per_sync = 512 * 1024;
 
   options.report_bg_io_stats = true;
+  options.enable_lazy_compaction = false;
+  options.blob_size = -1;
+
   for (int test = 0; test < 2; ++test) {
     DestroyAndReopen(options);
     CreateAndReopenWithCF({"pikachu"}, options);
@@ -880,7 +885,8 @@ TEST_P(CompactionJobStatsTest, DeletionStatsTest) {
   options.compression = kNoCompression;
   options.max_bytes_for_level_multiplier = 2;
   options.max_subcompactions = max_subcompactions_;
-
+  options.enable_lazy_compaction = false;
+  options.blob_size = -1;
   DestroyAndReopen(options);
   CreateAndReopenWithCF({"pikachu"}, options);
 
@@ -972,7 +978,8 @@ TEST_P(CompactionJobStatsTest, UniversalCompactionTest) {
   options.compaction_options_universal.size_ratio = 1;
   options.compaction_options_universal.max_size_amplification_percent = 1000;
   options.max_subcompactions = max_subcompactions_;
-
+  options.enable_lazy_compaction = false;
+  options.blob_size = -1;
   DestroyAndReopen(options);
   CreateAndReopenWithCF({"pikachu"}, options);
 

@@ -127,6 +127,8 @@ TEST_F(DBOptionsTest, SetBytesPerSync) {
   options.disable_auto_compactions = true;
   options.compression = kNoCompression;
   options.env = env_;
+  options.enable_lazy_compaction = false;
+  options.blob_size = -1;
   Reopen(options);
   int counter = 0;
   int low_bytes_per_sync = 0;
@@ -178,6 +180,8 @@ TEST_F(DBOptionsTest, SetWalBytesPerSync) {
   options.disable_auto_compactions = true;
   options.compression = kNoCompression;
   options.env = env_;
+  options.enable_lazy_compaction = false;
+  options.blob_size = -1;
   Reopen(options);
   ASSERT_EQ(512, dbfull()->GetDBOptions().wal_bytes_per_sync);
   int counter = 0;
@@ -215,6 +219,8 @@ TEST_F(DBOptionsTest, WritableFileMaxBufferSize) {
   options.level0_file_num_compaction_trigger = 3;
   options.max_manifest_file_size = 1;
   options.env = env_;
+  options.enable_lazy_compaction = false;
+  options.blob_size = -1;
   int buffer_size = 1024 * 1024;
   Reopen(options);
   ASSERT_EQ(buffer_size,
@@ -288,6 +294,8 @@ TEST_F(DBOptionsTest, EnableAutoCompactionAndTriggerStall) {
       options.soft_pending_compaction_bytes_limit =
           std::numeric_limits<uint64_t>::max();
       options.env = env_;
+      options.enable_lazy_compaction = false;
+      options.blob_size = -1;
 
       DestroyAndReopen(options);
       int i = 0;
@@ -380,6 +388,8 @@ TEST_F(DBOptionsTest, SetOptionsMayTriggerCompaction) {
   options.create_if_missing = true;
   options.level0_file_num_compaction_trigger = 1000;
   options.env = env_;
+  options.enable_lazy_compaction = false;
+  options.blob_size = -1;
   Reopen(options);
   for (int i = 0; i < 3; i++) {
     // Need to insert two keys to avoid trivial move.
@@ -399,6 +409,8 @@ TEST_F(DBOptionsTest, SetBackgroundCompactionThreads) {
   options.create_if_missing = true;
   options.max_background_compactions = 1;   // default value
   options.env = env_;
+  options.enable_lazy_compaction = false;
+  options.blob_size = -1;
   Reopen(options);
   ASSERT_EQ(1, dbfull()->TEST_BGCompactionsAllowed());
   ASSERT_OK(dbfull()->SetDBOptions({{"max_background_compactions", "3"}}));
@@ -412,6 +424,8 @@ TEST_F(DBOptionsTest, SetBackgroundJobs) {
   options.create_if_missing = true;
   options.max_background_jobs = 8;
   options.env = env_;
+  options.enable_lazy_compaction = false;
+  options.blob_size = -1;
   Reopen(options);
 
   for (int i = 0; i < 2; ++i) {
@@ -442,6 +456,8 @@ TEST_F(DBOptionsTest, AvoidFlushDuringShutdown) {
   options.create_if_missing = true;
   options.disable_auto_compactions = true;
   options.env = env_;
+  options.enable_lazy_compaction = false;
+  options.blob_size = -1;
   WriteOptions write_without_wal;
   write_without_wal.disableWAL = true;
 
@@ -505,6 +521,8 @@ TEST_F(DBOptionsTest, SetStatsDumpPeriodSec) {
   options.create_if_missing = true;
   options.stats_dump_period_sec = 5;
   options.env = env_;
+  options.enable_lazy_compaction = false;
+  options.blob_size = -1;
   Reopen(options);
   ASSERT_EQ(5, dbfull()->GetDBOptions().stats_dump_period_sec);
 
@@ -520,6 +538,8 @@ TEST_F(DBOptionsTest, RunStatsDumpPeriodSec) {
   Options options;
   options.create_if_missing = true;
   options.stats_dump_period_sec = 5;
+  options.enable_lazy_compaction = false;
+  options.blob_size = -1;
   std::unique_ptr<rocksdb::MockTimeEnv> mock_env;
   mock_env.reset(new rocksdb::MockTimeEnv(env_));
   mock_env->set_current_time(0); // in seconds
@@ -563,6 +583,8 @@ TEST_F(DBOptionsTest, DeleteObsoleteFilesPeriodChange) {
   Options options;
   options.env = &env;
   options.create_if_missing = true;
+  options.enable_lazy_compaction = false;
+  options.blob_size = -1;
   ASSERT_OK(TryReopen(options));
 
   // Verify that candidate files set is empty when no full scan requested.
@@ -594,6 +616,8 @@ TEST_F(DBOptionsTest, MaxOpenFilesChange) {
   Options options;
   options.env = CurrentOptions().env;
   options.max_open_files = -1;
+  options.enable_lazy_compaction = false;
+  options.blob_size = -1;
 
   Reopen(options);
 
@@ -611,6 +635,8 @@ TEST_F(DBOptionsTest, MaxOpenFilesChange) {
 TEST_F(DBOptionsTest, SanitizeDelayedWriteRate) {
   Options options;
   options.delayed_write_rate = 0;
+  options.enable_lazy_compaction = false;
+  options.blob_size = -1;
   Reopen(options);
   ASSERT_EQ(16 * 1024 * 1024, dbfull()->GetDBOptions().delayed_write_rate);
 
@@ -629,6 +655,8 @@ TEST_F(DBOptionsTest, SetFIFOCompactionOptions) {
   options.compaction_options_fifo.allow_compaction = false;
   env_->time_elapse_only_sleep_ = false;
   options.env = env_;
+  options.enable_lazy_compaction = false;
+  options.blob_size = -1;
 
   // Test dynamically changing compaction_options_fifo.ttl
   env_->addon_time_.store(0);
@@ -735,6 +763,8 @@ TEST_F(DBOptionsTest, CompactionReadaheadSizeChange) {
   options.compaction_readahead_size = 0;
   options.new_table_reader_for_compaction_inputs = true;
   options.level0_file_num_compaction_trigger = 2;
+  options.enable_lazy_compaction = false;
+  options.blob_size = -1;
   const std::string kValue(1024, 'v');
   Reopen(options);
 

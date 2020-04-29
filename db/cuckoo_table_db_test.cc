@@ -237,6 +237,8 @@ TEST_F(CuckooTableDBTest, CompactionIntoMultipleFiles) {
   // Two SST files should be created, each containing 14 keys.
   // Number of buckets will be 16. Total size ~156 KB.
   options.target_file_size_base = 160 << 10;
+  options.enable_lazy_compaction = false;
+  options.blob_size = -1;
   Reopen(&options);
 
   // Write 28 values, each 10016 B ~ 10KB
@@ -260,6 +262,8 @@ TEST_F(CuckooTableDBTest, SameKeyInsertedInTwoDifferentFilesAndCompacted) {
   Options options = CurrentOptions();
   options.write_buffer_size = 100 << 10;  // 100KB
   options.level0_file_num_compaction_trigger = 2;
+  options.enable_lazy_compaction = false;
+  options.blob_size = -1;
   Reopen(&options);
 
   // Write 11 values, each 10016 B
