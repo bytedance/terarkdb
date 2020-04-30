@@ -983,7 +983,7 @@ Status TerarkEmptyTableReader::Open(RandomAccessFileReader* file,
   table_properties_.reset(props);
   Slice file_data;
   if (table_reader_options_.env_options.use_mmap_reads) {
-    s = file->Read(0, file_size, &file_data, nullptr);
+    s = file->file()->Read(0, file_size, &file_data, nullptr);
     if (!s.ok()) return s;
   } else {
     return Status::InvalidArgument("TerarkZipTableReader::Open()",
@@ -1032,7 +1032,7 @@ Status TerarkZipTableReader::Open(RandomAccessFileReader* file,
   table_properties_.reset(props);
   Slice file_data;
   if (table_reader_options_.env_options.use_mmap_reads) {
-    s = file->Read(0, file_size, &file_data, nullptr);
+    s = file->file()->Read(0, file_size, &file_data, nullptr);
     if (!s.ok()) return s;
   } else {
     return Status::InvalidArgument("TerarkZipTableReader::Open()",
@@ -1582,7 +1582,7 @@ Status TerarkZipTableMultiReader::Open(RandomAccessFileReader* file,
   table_properties_.reset(props);
   Slice file_data;
   if (table_reader_options_.env_options.use_mmap_reads) {
-    s = file->Read(0, file_size, &file_data, nullptr);
+    s = file->file()->Read(0, file_size, &file_data, nullptr);
     if (!s.ok()) return s;
   } else {
     return Status::InvalidArgument("TerarkZipTableReader::Open()",
