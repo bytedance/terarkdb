@@ -117,6 +117,25 @@ struct TableBuilderOptions {
   const uint64_t creation_time;
   const int64_t oldest_key_time;
   const SstPurpose sst_purpose;
+  Slice smallest_user_key;
+  Slice largest_user_key;
+
+  void PushIntTblPropCollectors(
+        std::vector<std::unique_ptr<IntTblPropCollector>>* collectors,
+        uint32_t cf_id) const {
+    if (!int_tbl_prop_collector_factories) {
+      return;
+    }
+    collectors->reserve(collectors->size() + int_tbl_prop_collector_factories->size() + 2);
+    TablePropertiesCollectorFactory::Context ctx;
+    ctx.column_family_id = cf_id;
+    ctx.smallest_user_key = smallest_user_key;
+    ctx.largest_user_key = largest_user_key;
+    for (auto& collector_factories : *int_tbl_prop_collector_factories) {
+      collectors->emplace_back(
+          collector_factories->CreateIntTblPropCollector(ctx));
+    }
+  }
 };
 
 // TableBuilder provides the interface used to build a Table

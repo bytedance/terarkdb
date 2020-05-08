@@ -34,6 +34,9 @@ struct CompactionFilterContext {
   bool is_manual_compaction;
   // Which column family this compaction is for.
   uint32_t column_family_id;
+
+  Slice smallest_user_key;
+  Slice largest_user_key;
 };
 
 class CompactionFilter
@@ -197,6 +200,10 @@ class CompactionFilter
 
   virtual Status Serialize(std::string* /*bytes*/) const {
     return Status::NotSupported();
+  }
+
+  virtual CompactionFilter* Clone() const {
+    return nullptr;
   }
 };
 

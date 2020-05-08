@@ -32,13 +32,11 @@ class PlainTableBuilder: public TableBuilder {
   // will be part of level specified by 'level'.  A value of -1 means
   // that the caller does not know which level the output file will reside.
   PlainTableBuilder(
-      const ImmutableCFOptions& ioptions, const MutableCFOptions& moptions,
-      const std::vector<std::unique_ptr<IntTblPropCollectorFactory>>*
-          int_tbl_prop_collector_factories,
+      const TableBuilderOptions&,
       uint32_t column_family_id, WritableFileWriter* file,
       uint32_t user_key_size, EncodingType encoding_type,
       size_t index_sparseness, uint32_t bloom_bits_per_key,
-      const std::string& column_family_name, uint32_t num_probes = 6,
+      uint32_t num_probes = 6,
       size_t huge_page_tlb_size = 0, double hash_table_ratio = 0,
       bool store_index_in_file = false);
 

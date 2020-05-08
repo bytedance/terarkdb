@@ -3215,6 +3215,10 @@ int DB::WaitAsync(int timeout_us) { return gt_fibers.wait(timeout_us); }
 
 int DB::WaitAsync() { return gt_fibers.wait(); }
 
+// using future needs boost symbols to be exported, but we don't want to
+// export boost symbols
+#if defined(TERARKDB_WITH_AIO_FUTURE)
+
 // boost::fibers::promise has some problem for being captured by
 // std::move for std::function
 // use intrusive_ptr to workaround (capture by copy intrusive_ptr)
@@ -3284,6 +3288,8 @@ future<std::tuple<Status, std::string, std::string>> DB::GetFuture(
     const ReadOptions& ro, std::string key) {
   return GetFuture(ro, DefaultColumnFamily(), std::move(key));
 }
+
+#endif // TERARKDB_WITH_AIO_FUTURE
 
 Status DBImpl::Close() {
   if (!closed_) {

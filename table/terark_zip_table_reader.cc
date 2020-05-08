@@ -127,8 +127,9 @@ static void MmapColdizeBytes(const void* addr, size_t len) {
     // Since we need invoke the syscall, we do it by ourself.
     madvise((void*)low, size, MADV_DONTNEED);
 #elif defined(_MSC_VER)  // defined(_WIN32) || defined(_WIN64)
-    // VirtualFree((void*)low, size, MEM_DECOMMIT);
-    (void)size;
+    // Calling VirtualUnlock on a range of memory that is not locked
+    // releases the pages from the process's working set.
+    VirtualUnlock((void*)low, size);
 #endif
   }
 }
@@ -1026,7 +1027,7 @@ Status TerarkEmptyTableReader::Open(RandomAccessFileReader* file,
   }
   Slice file_data;
   if (table_reader_options_.env_options.use_mmap_reads) {
-    s = file->Read(0, file_size, &file_data, nullptr);
+    s = file->file()->Read(0, file_size, &file_data, nullptr);
     if (!s.ok()) return s;
   } else {
     return Status::InvalidArgument("TerarkZipTableReader::Open()",
@@ -1077,7 +1078,7 @@ Status TerarkZipTableReader::Open(RandomAccessFileReader* file,
   }
   Slice file_data;
   if (table_reader_options_.env_options.use_mmap_reads) {
-    s = file->Read(0, file_size, &file_data, nullptr);
+    s = file->file()->Read(0, file_size, &file_data, nullptr);
     if (!s.ok()) return s;
   } else {
     return Status::InvalidArgument("TerarkZipTableReader::Open()",
@@ -1648,7 +1649,7 @@ Status TerarkZipTableMultiReader::Open(RandomAccessFileReader* file,
   }
   Slice file_data;
   if (table_reader_options_.env_options.use_mmap_reads) {
-    s = file->Read(0, file_size, &file_data, nullptr);
+    s = file->file()->Read(0, file_size, &file_data, nullptr);
     if (!s.ok()) return s;
   } else {
     return Status::InvalidArgument("TerarkZipTableReader::Open()",

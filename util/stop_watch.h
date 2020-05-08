@@ -19,8 +19,8 @@ class StopWatch {
             bool delay_enabled = false)
       : env_(env),
         statistics_(statistics),
-        hist_type_(hist_type),
         elapsed_(elapsed),
+        hist_type_(hist_type),
         overwrite_(overwrite),
         stats_enabled_(statistics && statistics->HistEnabledForType(hist_type)),
         delay_enabled_(delay_enabled),
@@ -71,8 +71,8 @@ class StopWatch {
  private:
   Env* const env_;
   Statistics* statistics_;
-  const uint32_t hist_type_;
   uint64_t* elapsed_;
+  const uint32_t hist_type_;
   bool overwrite_;
   bool stats_enabled_;
   bool delay_enabled_;

@@ -25,23 +25,13 @@
 
 namespace rocksdb {
 
-// data structure inheriting terark's cspptrie for supporting memtable
-class MemPatricia : public terark::MainPatricia {
- public:
-  MemPatricia(size_t valsize, intptr_t maxMem = 512 << 10,
-              ConcurrentLevel level = OneWriteMultiRead, fstring fpath = "")
-      : MainPatricia(valsize, maxMem, level, fpath) {}
-};
-
-// Write token pairing with MemPatricia
+// Write token pairing with MainPatricia
 class MemWriterToken : public terark::Patricia::WriterToken {
   uint64_t tag_;
   Slice value_;
 
  public:
   uint64_t get_tag() { return tag_; }
-  MemWriterToken(MemPatricia *trie, uint64_t tag, const Slice &value)
-      : terark::Patricia::WriterToken(trie), tag_(tag), value_(value){}
 
   void reset_tag_value(uint64_t tag, const Slice &value) {
     tag_ = tag;
@@ -54,7 +44,7 @@ class MemWriterToken : public terark::Patricia::WriterToken {
 
 namespace terark_memtable_details {
 
-typedef std::array<MemPatricia *, 32> tries_t;
+typedef std::array<terark::MainPatricia*, 32> tries_t;
 
 enum class ConcurrentType { Native, None };
 
@@ -101,8 +91,7 @@ class PatriciaTrieRep : public MemTableRep {
   PatriciaTrieRep(terark_memtable_details::ConcurrentType concurrent_type,
                   terark_memtable_details::PatriciaKeyType patricia_key_type,
                   bool handle_duplicate, intptr_t write_buffer_size,
-                  Allocator *allocator,
-                  const MemTableRep::KeyComparator &compare);
+                  Allocator *allocator);
 
   ~PatriciaTrieRep();
 
@@ -159,7 +148,7 @@ class PatriciaRepIterator : public MemTableRep::Iterator,
   // Inner iterator abstructiong for polymorphism
   class HeapItem : boost::noncopyable {
    public:
-    terark::MainPatricia::IterMem handle;
+    terark::Patricia::IteratorPtr handle;
     uint64_t tag;
     size_t index;
 
@@ -169,23 +158,16 @@ class PatriciaRepIterator : public MemTableRep::Iterator,
     };
 
     HeapItem(terark::Patricia *trie) : tag(uint64_t(-1)), index(size_t(-1)) {
-      handle.construct(trie);
+      handle.reset(trie->new_iter());
     }
 
     VectorData GetVector();
-
     uint32_t GetValue() const;
-
     void Seek(terark::fstring find_key, uint64_t find_tag);
-
     void SeekForPrev(terark::fstring find_key, uint64_t find_tag);
-
     void SeekToFirst();
-
     void SeekToLast();
-
     void Next();
-
     void Prev();
   };
 
@@ -212,7 +194,7 @@ class PatriciaRepIterator : public MemTableRep::Iterator,
   HeapItem *Current() { return heap_mode ? *multi_.heap : &single_; }
 
   // Return current key.
-  terark::fstring CurrentKey() { return Current()->handle.iter()->word(); }
+  terark::fstring CurrentKey() { return Current()->handle->word(); }
 
   // Return current tag.
   uint64_t CurrentTag() { return Current()->tag; }
@@ -220,8 +202,8 @@ class PatriciaRepIterator : public MemTableRep::Iterator,
   // Lexicographical order 3 way compartor
   struct ForwardComp {
     bool operator()(HeapItem *l, HeapItem *r) const {
-      int c = terark::fstring_func::compare3()(l->handle.iter()->word(),
-                                               r->handle.iter()->word());
+      int c = terark::fstring_func::compare3()(l->handle->word(),
+                                               r->handle->word());
       return c == 0 ? l->tag < r->tag : c > 0;
     }
   };
@@ -229,8 +211,8 @@ class PatriciaRepIterator : public MemTableRep::Iterator,
   // Reverse lexicographical order 3 way compartor
   struct BackwardComp {
     bool operator()(HeapItem *l, HeapItem *r) const {
-      int c = terark::fstring_func::compare3()(l->handle.iter()->word(),
-                                               r->handle.iter()->word());
+      int c = terark::fstring_func::compare3()(l->handle->word(),
+                                               r->handle->word());
       return c == 0 ? l->tag > r->tag : c < 0;
     }
   };

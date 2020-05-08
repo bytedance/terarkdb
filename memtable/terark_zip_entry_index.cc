@@ -12,6 +12,11 @@
 
 namespace rocksdb {
 
+using terark::lower_bound_0;
+using terark::upper_bound_0;
+using terark::Patricia;
+using terark::MainPatricia;
+
 namespace WriteBatchEntryPTrieIndexDetail {
 
 #pragma pack(push)
@@ -33,7 +38,7 @@ typedef typename value_vector_t::data_t value_wrap_t;
 struct IteratorImplBase {
   bool is_tls;
   uint32_t index;
-  terark::Patricia::IterMem handle;
+  terark::Patricia::IteratorPtr handle;
   WriteBatchKeyExtractor extractor;
 
   IteratorImplBase() : is_tls(false), extractor(nullptr) {}
@@ -41,46 +46,42 @@ struct IteratorImplBase {
 
 struct IteratorImplWithoutOffset : public IteratorImplBase {
   WriteBatchIndexEntry* GetValue() {
-    return *(WriteBatchIndexEntry**)handle.iter()->value();
+    return *(WriteBatchIndexEntry**)handle->value();
   }
   WriteBatchIndexEntry* Seek(WriteBatchIndexEntry* entry) {
     auto key = extractor(entry);
-    if (!handle.iter()->seek_lower_bound(
-            terark::fstring(key.data(), key.size()))) {
+    if (!handle->seek_lower_bound(key)) {
       return nullptr;
     }
     return GetValue();
   }
   WriteBatchIndexEntry* SeekForPrev(WriteBatchIndexEntry* entry) {
     auto key = extractor(entry);
-    if (!handle.iter()->seek_rev_lower_bound(
-            terark::fstring(key.data(), key.size()))) {
+    if (!handle->seek_rev_lower_bound(key)) {
       return nullptr;
     }
     return GetValue();
   }
   WriteBatchIndexEntry* SeekToFirst() {
-    if (!handle.iter()->seek_begin()) {
+    if (!handle->seek_begin()) {
       return nullptr;
     }
     return GetValue();
   }
   WriteBatchIndexEntry* SeekToLast() {
-    if (!handle.iter()->seek_end()) {
+    if (!handle->seek_end()) {
       return nullptr;
     }
     return GetValue();
   }
   WriteBatchIndexEntry* Next() {
-    handle.iter()->update_now();
-    if (!handle.iter()->incr()) {
+    if (!handle->incr()) {
       return nullptr;
     }
     return GetValue();
   }
   WriteBatchIndexEntry* Prev() {
-    handle.iter()->update_now();
-    if (!handle.iter()->decr()) {
+    if (!handle->decr()) {
       return nullptr;
     }
     return GetValue();
@@ -92,60 +93,55 @@ struct IteratorImplWithOffset : public IteratorImplBase {
     const value_wrap_t* data;
   };
   VectorData GetVector() {
-    auto trie = static_cast<terark::MainPatricia*>(handle.iter()->trie());
+    auto trie = static_cast<MainPatricia*>(handle->trie());
     auto vector =
-        (value_vector_t*)trie->mem_get(*(uint32_t*)handle.iter()->value());
+        (value_vector_t*)trie->mem_get(*(uint32_t*)handle->value());
     size_t size = vector->size;
     auto data = (value_wrap_t*)trie->mem_get(vector->loc);
     return {size, data};
   }
   WriteBatchIndexEntry* Seek(WriteBatchIndexEntry* entry) {
-    auto slice_key = extractor(entry);
-    auto find_key = terark::fstring(slice_key.data(), slice_key.size());
-    if (!handle.iter()->seek_lower_bound(find_key)) {
+    fstring find_key = extractor(entry);
+    if (!handle->seek_lower_bound(find_key)) {
       return nullptr;
     }
     auto vec = GetVector();
-    if (handle.iter()->word() == find_key) {
-      index =
-          (uint32_t)terark::lower_bound_0(vec.data, vec.size, entry->offset);
+    if (handle->word() == find_key) {
+      index = (uint32_t)lower_bound_0(vec.data, vec.size, entry->offset);
       if (index != vec.size) {
         return vec.data[index].value;
       }
-      if (!handle.iter()->incr()) {
+      if (!handle->incr()) {
         return nullptr;
       }
       vec = GetVector();
     }
-    assert(handle.iter()->word() > find_key);
+    assert(handle->word() > find_key);
     index = 0;
     return vec.data[index].value;
   }
   WriteBatchIndexEntry* SeekForPrev(WriteBatchIndexEntry* entry) {
-    auto slice_key = extractor(entry);
-    auto find_key = terark::fstring(slice_key.data(), slice_key.size());
-    if (!handle.iter()->seek_rev_lower_bound(find_key)) {
+    fstring find_key = extractor(entry);
+    if (!handle->seek_rev_lower_bound(find_key)) {
       return nullptr;
     }
     auto vec = GetVector();
-    if (handle.iter()->word() == find_key) {
-      index =
-          (uint32_t)terark::upper_bound_0(vec.data, vec.size, entry->offset) -
-          1;
+    if (handle->word() == find_key) {
+      index = (uint32_t)upper_bound_0(vec.data, vec.size, entry->offset) - 1;
       if (index != vec.size) {
         return vec.data[index].value;
       }
-      if (!handle.iter()->decr()) {
+      if (!handle->decr()) {
         return nullptr;
       }
       vec = GetVector();
     }
-    assert(handle.iter()->word() < find_key);
+    assert(handle->word() < find_key);
     index = (uint32_t)vec.size - 1;
     return vec.data[index].value;
   }
   WriteBatchIndexEntry* SeekToFirst() {
-    if (!handle.iter()->seek_begin()) {
+    if (!handle->seek_begin()) {
       return nullptr;
     }
     auto vec = GetVector();
@@ -153,7 +149,7 @@ struct IteratorImplWithOffset : public IteratorImplBase {
     return vec.data[index].value;
   }
   WriteBatchIndexEntry* SeekToLast() {
-    if (!handle.iter()->seek_end()) {
+    if (!handle->seek_end()) {
       return nullptr;
     }
     auto vec = GetVector();
@@ -161,10 +157,9 @@ struct IteratorImplWithOffset : public IteratorImplBase {
     return vec.data[index].value;
   }
   WriteBatchIndexEntry* Next() {
-    handle.iter()->update_now();
     auto vec = GetVector();
     if (++index == vec.size) {
-      if (!handle.iter()->incr()) {
+      if (!handle->incr()) {
         return nullptr;
       }
       vec = GetVector();
@@ -173,9 +168,8 @@ struct IteratorImplWithOffset : public IteratorImplBase {
     return vec.data[index].value;
   }
   WriteBatchIndexEntry* Prev() {
-    handle.iter()->update_now();
     if (index-- == 0) {
-      if (!handle.iter()->decr()) {
+      if (!handle->decr()) {
         return nullptr;
       }
       auto vec = GetVector();
@@ -209,8 +203,7 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
 
   class PTrieIterator : public WriteBatchEntryIndex::Iterator {
    public:
-    PTrieIterator(terark::Patricia* index, WriteBatchKeyExtractor e,
-                  bool ephemeral)
+    PTrieIterator(Patricia* index, WriteBatchKeyExtractor e, bool ephemeral)
         : impl_(nullptr), key_(nullptr) {
       if (ephemeral) {
         auto& tls_impl = WriteBatchEntryPTrieIndexDetail::tls_impl;
@@ -219,7 +212,7 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
       } else {
         impl_ = new IteratorImpl();
       }
-      impl_->handle.reset(index);
+      impl_->handle.reset(index->new_iter());
       impl_->extractor = e;
     }
     ~PTrieIterator() {
@@ -234,69 +227,66 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
     WriteBatchIndexEntry* key_;
 
    public:
-    virtual bool Valid() const override { return key_ != nullptr; }
-    virtual void SeekToFirst() override { key_ = impl_->SeekToFirst(); }
-    virtual void SeekToLast() override { key_ = impl_->SeekToLast(); }
-    virtual void Seek(WriteBatchIndexEntry* target) override {
+    bool Valid() const override { return key_ != nullptr; }
+    void SeekToFirst() override { key_ = impl_->SeekToFirst(); }
+    void SeekToLast() override { key_ = impl_->SeekToLast(); }
+    void Seek(WriteBatchIndexEntry* target) override {
       key_ = impl_->Seek(target);
     }
-    virtual void SeekForPrev(WriteBatchIndexEntry* target) override {
+    void SeekForPrev(WriteBatchIndexEntry* target) override {
       key_ = impl_->SeekForPrev(target);
     }
-    virtual void Next() override { key_ = impl_->Next(); }
-    virtual void Prev() override { key_ = impl_->Prev(); }
-    virtual WriteBatchIndexEntry* key() const override { return key_; }
+    void Next() override { key_ = impl_->Next(); }
+    void Prev() override { key_ = impl_->Prev(); }
+    WriteBatchIndexEntry* key() const override { return key_; }
   };
 
  public:
-  WriteBatchEntryPTrieIndex(WriteBatchKeyExtractor e, const Comparator* /*c*/,
-                            Arena* /*a*/)
-      : index_(trie_value_size, 512ull << 10,
-               terark::MainPatricia::SingleThreadShared),
+  WriteBatchEntryPTrieIndex(WriteBatchKeyExtractor e)
+      : index_(trie_value_size, 512ull << 10, Patricia::SingleThreadShared),
         extractor_(e) {}
 
   static constexpr size_t trie_value_size =
       OverwriteKey ? sizeof(void*) : sizeof(uint32_t);
 
-  virtual Iterator* NewIterator() override {
+  Iterator* NewIterator() override {
     return new PTrieIterator(&index_, extractor_, false);
   }
-  virtual void NewIterator(IteratorStorage& storage, bool ephemeral) override {
+  void NewIterator(IteratorStorage& storage, bool ephemeral) override {
     static_assert(sizeof(PTrieIterator) <= sizeof storage.buffer,
                   "Need larger buffer for PTrieIterator");
     storage.iter =
         new (storage.buffer) PTrieIterator(&index_, extractor_, ephemeral);
   }
-  virtual bool Upsert(WriteBatchIndexEntry* key) override {
-    auto slice_key = extractor_(key);
-
+  bool Upsert(WriteBatchIndexEntry* key) override {
+    fstring slice_key = extractor_(key);
     if (OverwriteKey) {
-      terark::Patricia::WriterToken token(&index_);
-      if (index_.insert(terark::fstring(slice_key.data(), slice_key.size()),
-                        &key, &token)) {
+      auto& token = *index_.tls_writer_token_nn<Patricia::WriterToken>();
+      token.acquire(&index_);
+      if (index_.insert(slice_key, &key, &token)) {
+        token.release();
         return true;
       }
       // insert fail , replace
       auto entry = *(WriteBatchIndexEntry**)token.value();
       std::swap(entry->offset, key->offset);
+      token.release();
       return false;
     } else {
       class Token : public terark::Patricia::WriterToken {
        public:
-        Token(terark::Patricia* trie, WriteBatchIndexEntry* value)
-            : terark::Patricia::WriterToken(trie), value_(value) {}
-
+        Token(WriteBatchIndexEntry* value) : value_(value) {}
        protected:
         bool init_value(void* valptr, size_t valsize) noexcept override {
           assert(valsize == sizeof(uint32_t));
-          auto trie = static_cast<terark::MainPatricia*>(m_trie);
+          auto trie = static_cast<MainPatricia*>(m_trie);
           size_t data_loc = trie->mem_alloc(sizeof(value_wrap_t));
-          assert(data_loc != terark::MainPatricia::mem_alloc_fail);
+          assert(data_loc != MainPatricia::mem_alloc_fail);
           auto* data = (value_wrap_t*)trie->mem_get(data_loc);
           data->value = value_;
 
           size_t vector_loc = trie->mem_alloc(sizeof(value_vector_t));
-          assert(vector_loc != terark::MainPatricia::mem_alloc_fail);
+          assert(vector_loc != MainPatricia::mem_alloc_fail);
           auto* vector = (value_vector_t*)trie->mem_get(vector_loc);
           vector->loc = (uint32_t)data_loc;
           vector->size = 1;
@@ -309,10 +299,10 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
        private:
         WriteBatchIndexEntry* value_;
       };
-      Token token(&index_, key);
+      Token& token = *index_.tls_writer_token_nn([&]{return new Token(key);});
+      token.acquire(&index_);
       WriteBatchIndexEntry* value_store;
-      if (!index_.insert(terark::fstring(slice_key.data(), slice_key.size()),
-                         &value_store, &token)) {
+      if (!index_.insert(slice_key, &value_store, &token)) {
         // insert fail , append to vector
         size_t vector_loc = *(uint32_t*)token.value();
         auto* vector = (value_vector_t*)index_.mem_get(vector_loc);
@@ -327,7 +317,7 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
         } else {
           size_t cow_data_loc =
               index_.mem_alloc(sizeof(value_wrap_t) * size * 2);
-          assert(cow_data_loc != terark::MainPatricia::mem_alloc_fail);
+          assert(cow_data_loc != MainPatricia::mem_alloc_fail);
           auto* cow_data = (value_wrap_t*)index_.mem_get(cow_data_loc);
           vector = (value_vector_t*)index_.mem_get(vector_loc);
           data = (value_wrap_t*)index_.mem_get(data_loc);
@@ -338,6 +328,7 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
           index_.mem_lazy_free(data_loc, sizeof(value_wrap_t) * size);
         }
       }
+      token.release();
       return true;
     }
   }
@@ -373,15 +364,15 @@ const WriteBatchEntryIndexFactory* patricia_WriteBatchEntryIndexFactory(
                              overwrite_key);
       } else if (overwrite_key) {
         typedef WriteBatchEntryPTrieIndex<true> index_t;
-        return new (a->AllocateAligned(sizeof(index_t))) index_t(e, c, a);
+        return new (a->AllocateAligned(sizeof(index_t))) index_t(e);
       } else {
         typedef WriteBatchEntryPTrieIndex<false> index_t;
-        return new (a->AllocateAligned(sizeof(index_t))) index_t(e, c, a);
+        return new (a->AllocateAligned(sizeof(index_t))) index_t(e);
       }
     }
     PTrieIndexFactory(const WriteBatchEntryIndexFactory* _fallback)
         : fallback(_fallback) {}
-    virtual const char* Name() const override {
+    const char* Name() const override {
       return "WriteBatchEntryIndexFactory";
     }
 
