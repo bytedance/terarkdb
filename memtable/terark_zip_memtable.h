@@ -66,11 +66,6 @@ struct tag_vector_t {
 };
 #pragma pack(pop)
 
-struct VectorData {
-  size_t size;
-  const typename tag_vector_t::data_t *data;
-};
-
 }  // namespace terark_memtable_details
 
 // Patricia trie memtable rep
