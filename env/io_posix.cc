@@ -153,7 +153,7 @@ PosixSequentialFile::PosixSequentialFile(const std::string& fname, FILE* file,
 }
 
 PosixSequentialFile::~PosixSequentialFile() {
-  if (!use_direct_io()) {
+  if (!use_direct_io_) {
     assert(file_);
     fclose(file_);
   } else {
@@ -163,7 +163,7 @@ PosixSequentialFile::~PosixSequentialFile() {
 }
 
 Status PosixSequentialFile::Read(size_t n, Slice* result, char* scratch) {
-  assert(result != nullptr && !use_direct_io());
+  assert(result != nullptr && !use_direct_io_);
   Status s;
   size_t r = 0;
   do {
@@ -186,7 +186,7 @@ Status PosixSequentialFile::Read(size_t n, Slice* result, char* scratch) {
 
 Status PosixSequentialFile::PositionedRead(uint64_t offset, size_t n,
                                            Slice* result, char* scratch) {
-  assert(use_direct_io());
+  assert(use_direct_io_);
   assert(IsSectorAligned(offset, GetRequiredBufferAlignment()));
   assert(IsSectorAligned(n, GetRequiredBufferAlignment()));
   assert(IsSectorAligned(scratch, GetRequiredBufferAlignment()));
@@ -236,7 +236,7 @@ Status PosixSequentialFile::InvalidateCache(size_t offset, size_t length) {
   (void)length;
   return Status::OK();
 #else
-  if (!use_direct_io()) {
+  if (!use_direct_io_) {
     // free OS pages
     int ret = Fadvise(fd_, offset, length, POSIX_FADV_DONTNEED);
     if (ret != 0) {
@@ -326,11 +326,13 @@ bool PosixRandomAccessFile::use_aio_reads() const {
 
 Status PosixRandomAccessFile::Read(uint64_t offset, size_t n, Slice* result,
                                    char* scratch) const {
-  if (use_direct_io()) {
+#if !defined(NDEBUG)
+  if (use_direct_io_) {
     assert(IsSectorAligned(offset, GetRequiredBufferAlignment()));
     assert(IsSectorAligned(n, GetRequiredBufferAlignment()));
     assert(IsSectorAligned(scratch, GetRequiredBufferAlignment()));
   }
+#endif
   Status s;
   ssize_t r = -1;
   size_t left = n;
@@ -351,7 +353,7 @@ Status PosixRandomAccessFile::Read(uint64_t offset, size_t n, Slice* result,
     ptr += r;
     offset += r;
     left -= r;
-    if (use_direct_io() &&
+    if (use_direct_io_ &&
         r % static_cast<ssize_t>(GetRequiredBufferAlignment()) != 0) {
       // Bytes reads don't fill sectors. Should only happen at the end
       // of the file.
@@ -370,7 +372,7 @@ Status PosixRandomAccessFile::Read(uint64_t offset, size_t n, Slice* result,
 
 Status PosixRandomAccessFile::Prefetch(uint64_t offset, size_t n) {
   Status s;
-  if (!use_direct_io()) {
+  if (!use_direct_io_) {
     ssize_t r = 0;
 #ifdef OS_LINUX
     r = readahead(fd_, offset, n);
@@ -397,7 +399,7 @@ size_t PosixRandomAccessFile::GetUniqueId(char* id, size_t max_size) const {
 #endif
 
 void PosixRandomAccessFile::Hint(AccessPattern pattern) {
-  if (use_direct_io()) {
+  if (use_direct_io_) {
     return;
   }
   switch (pattern) {
@@ -423,7 +425,7 @@ void PosixRandomAccessFile::Hint(AccessPattern pattern) {
 }
 
 Status PosixRandomAccessFile::InvalidateCache(size_t offset, size_t length) {
-  if (use_direct_io()) {
+  if (use_direct_io_) {
     return Status::OK();
   }
 #ifndef OS_LINUX
@@ -492,6 +494,10 @@ Status PosixMmapReadableFile::Read(uint64_t offset, size_t n, Slice* result,
 }
 
 // Now FsRead is only used by TerarkDB
+// Now FsRead is also used by RandomAccessFileReader
+// There are 2 purpose of FsRead:
+// 1. Preventing link page cache to process's address space
+// 2. Implement network fs by client lib(faster than fuse...)
 Status PosixMmapReadableFile::FsRead(uint64_t offset, size_t len, void* buf)
 const {
     Status s;
@@ -514,27 +520,17 @@ const {
 }
 
 Status PosixMmapReadableFile::InvalidateCache(size_t offset, size_t length) {
-#ifndef OS_LINUX
   size_t upper_offset = ((offset +   4095) & ~4095);
   size_t lower_length = ((offset + length) & ~4095) - upper_offset;
   if (lower_length) {
     char* upper_addr = (char*)mmapped_region_ + upper_offset;
     int ret = ::madvise(upper_addr, lower_length, MADV_DONTNEED);
-    return IOError("While madvise(DONTNEED). Offset " + ToString(offset) +
-                     " len" + ToString(length),
-                 filename_, errno);
+    if (ret)
+      return IOError("While madvise(DONTNEED). Offset " + ToString(offset) +
+                          " len" + ToString(length),
+                      filename_, errno);
   }
   return Status::OK();
-#else
-  // free OS pages
-  int ret = Fadvise(fd_, offset, length, POSIX_FADV_DONTNEED);
-  if (ret == 0) {
-    return Status::OK();
-  }
-  return IOError("While fadvise not needed. Offset " + ToString(offset) +
-                     " len" + ToString(length),
-                 filename_, errno);
-#endif
 }
 
 intptr_t PosixMmapReadableFile::FileDescriptor() const {
@@ -798,7 +794,7 @@ PosixWritableFile::~PosixWritableFile() {
 }
 
 Status PosixWritableFile::Append(const Slice& data) {
-  if (use_direct_io()) {
+  if (use_direct_io_) {
     assert(IsSectorAligned(data.size(), GetRequiredBufferAlignment()));
     assert(IsSectorAligned(data.data(), GetRequiredBufferAlignment()));
   }
@@ -820,11 +816,13 @@ Status PosixWritableFile::Append(const Slice& data) {
 }
 
 Status PosixWritableFile::PositionedAppend(const Slice& data, uint64_t offset) {
-  if (use_direct_io()) {
+#if !defined(NDEBUG)
+  if (use_direct_io_) {
     assert(IsSectorAligned(offset, GetRequiredBufferAlignment()));
     assert(IsSectorAligned(data.size(), GetRequiredBufferAlignment()));
     assert(IsSectorAligned(data.data(), GetRequiredBufferAlignment()));
   }
+#endif
   assert(offset <= std::numeric_limits<off_t>::max());
   const char* src = data.data();
   size_t left = data.size();
@@ -950,7 +948,7 @@ void PosixWritableFile::SetWriteLifeTimeHint(Env::WriteLifeTimeHint hint) {
 }
 
 Status PosixWritableFile::InvalidateCache(size_t offset, size_t length) {
-  if (use_direct_io()) {
+  if (use_direct_io_) {
     return Status::OK();
   }
 #ifndef OS_LINUX
