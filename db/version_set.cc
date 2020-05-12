@@ -793,8 +793,9 @@ Status Version::GetPropertiesOfAllTables(TablePropertiesCollection* props,
   return Status::OK();
 }
 
-Status Version::GetPropertiesOfTablesInRange(
-    const Range* range, std::size_t n, TablePropertiesCollection* props) const {
+Status Version::GetPropertiesOfTablesInRange(const Range* range, std::size_t n,
+                                             TablePropertiesCollection* props,
+                                             bool include_blob) const {
   auto push_props = [&](FileMetaData* file_meta, Status* s) {
     auto fname =
         TableFileName(cfd_->ioptions()->cf_paths, file_meta->fd.GetNumber(),
@@ -825,6 +826,8 @@ Status Version::GetPropertiesOfTablesInRange(
           if (!s.ok()) {
             return s;
           }
+        } else if (!include_blob) {
+          continue;
         }
         for (auto& dependence : file_meta->prop.dependence) {
           auto find =

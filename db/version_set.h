@@ -691,7 +691,8 @@ class Version : public SeparateHelper, private LazyBufferState {
   Status GetPropertiesOfAllTables(TablePropertiesCollection* props);
   Status GetPropertiesOfAllTables(TablePropertiesCollection* props, int level);
   Status GetPropertiesOfTablesInRange(const Range* range, std::size_t n,
-                                      TablePropertiesCollection* props) const;
+                                      TablePropertiesCollection* props,
+                                      bool include_blob = true) const;
 
   // REQUIRES: lock is held
   // On success, "tp" will contains the aggregated table property among

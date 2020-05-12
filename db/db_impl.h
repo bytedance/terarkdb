@@ -1575,7 +1575,7 @@ class DBImpl : public DB {
       TablePropertiesCollection* props) override;
   virtual Status GetPropertiesOfTablesInRange(
       ColumnFamilyHandle* column_family, const Range* range, std::size_t n,
-      TablePropertiesCollection* props) override;
+      TablePropertiesCollection* props, bool include_blob = true) override;
 
 #endif  // ROCKSDB_LITE
 
