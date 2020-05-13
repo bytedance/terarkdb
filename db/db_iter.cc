@@ -232,12 +232,12 @@ class DBIter final : public Iterator {
   bool ParseKey(ParsedInternalKey* key);
   bool MergeValuesNewToOld();
   LazyBuffer GetValue(const ParsedInternalKey& ikey, ValueType index_type) {
-    LazyBuffer v = iter_->value();
-    if (separate_helper_ != nullptr && ikey.type == index_type) {
-      separate_helper_->TransToCombined(saved_key_.GetUserKey(), ikey.sequence,
-                                        v);
+    if (separate_helper_ == nullptr || ikey.type != index_type) {
+      return iter_->value();
+    } else {
+      return separate_helper_->TransToCombined(saved_key_.GetUserKey(),
+                                               ikey.sequence, iter_->value());
     }
-    return v;
   }
 
   void PrevInternal();

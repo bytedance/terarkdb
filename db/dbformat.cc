@@ -14,6 +14,7 @@
 
 #include <inttypes.h>
 #include <stdio.h>
+
 #include "monitoring/perf_context_imp.h"
 #include "port/port.h"
 #include "util/coding.h"
@@ -108,9 +109,7 @@ std::string InternalKey::DebugString(bool hex) const {
   return result;
 }
 
-const char* InternalKeyComparator::Name() const {
-  return name_.c_str();
-}
+const char* InternalKeyComparator::Name() const { return name_.c_str(); }
 
 int InternalKeyComparator::Compare(const ParsedInternalKey& a,
                                    const ParsedInternalKey& b) const {
@@ -134,9 +133,8 @@ int InternalKeyComparator::Compare(const ParsedInternalKey& a,
   return r;
 }
 
-void InternalKeyComparator::FindShortestSeparator(
-      std::string* start,
-      const Slice& limit) const {
+void InternalKeyComparator::FindShortestSeparator(std::string* start,
+                                                  const Slice& limit) const {
   // Attempt to shorten the user portion of the key
   Slice user_start = ExtractUserKey(*start);
   Slice user_limit = ExtractUserKey(limit);
@@ -146,7 +144,8 @@ void InternalKeyComparator::FindShortestSeparator(
       user_comparator_->Compare(user_start, tmp) < 0) {
     // User key has become shorter physically, but larger logically.
     // Tack on the earliest possible number to the shortened user key.
-    PutFixed64(&tmp, PackSequenceAndType(kMaxSequenceNumber,kValueTypeForSeek));
+    PutFixed64(&tmp,
+               PackSequenceAndType(kMaxSequenceNumber, kValueTypeForSeek));
     assert(this->Compare(*start, tmp) < 0);
     assert(this->Compare(tmp, limit) < 0);
     start->swap(tmp);
@@ -161,7 +160,8 @@ void InternalKeyComparator::FindShortSuccessor(std::string* key) const {
       user_comparator_->Compare(user_key, tmp) < 0) {
     // User key has become shorter physically, but larger logically.
     // Tack on the earliest possible number to the shortened user key.
-    PutFixed64(&tmp, PackSequenceAndType(kMaxSequenceNumber,kValueTypeForSeek));
+    PutFixed64(&tmp,
+               PackSequenceAndType(kMaxSequenceNumber, kValueTypeForSeek));
     assert(this->Compare(*key, tmp) < 0);
     key->swap(tmp);
   }
@@ -195,6 +195,32 @@ void IterKey::EnlargeBuffer(size_t key_size) {
   ResetBuffer();
   buf_ = new char[key_size];
   buf_size_ = key_size;
+}
+
+Status SeparateHelper::TransToSeparate(
+    LazyBuffer& value, const Slice& meta, bool is_merge, bool is_index,
+    const SliceTransform* value_meta_extractor) {
+  assert(value.file_number() != uint64_t(-1));
+  uint64_t file_number = value.file_number();
+  if (value_meta_extractor == nullptr || is_merge) {
+    value.reset(EncodeFileNumber(file_number), true, file_number);
+    return Status::OK();
+  }
+  if (is_index) {
+    Slice parts[] = {EncodeFileNumber(file_number), meta};
+    value.reset(SliceParts(parts, 2), file_number);
+  } else {
+    auto s = value.fetch();
+    if (!s.ok()) {
+      return s;
+    }
+    Slice parts[] = {EncodeFileNumber(file_number),
+                     value_meta_extractor->Transform(value.slice())};
+    LazyBuffer new_value(SliceParts(parts, 2), file_number);
+    // DO NOT use value.reset(slice parts, file number)
+    value = std::move(new_value);
+  }
+  return Status::OK();
 }
 
 Slice ArenaPinSlice(const Slice& slice, Arena* arena) {

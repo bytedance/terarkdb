@@ -705,6 +705,11 @@ Status CompactionJob::Run() {
       return s;
     }
   }
+  if (iopt->value_meta_extractor != nullptr) {
+    context.value_meta_extractor = iopt->value_meta_extractor->Name();
+    context.value_meta_extractor_options =
+        iopt->value_meta_extractor->GetOptionString();
+  }
   context.compaction_filter_context.is_full_compaction =
       c->is_full_compaction();
   context.compaction_filter_context.is_manual_compaction =
@@ -1251,9 +1256,16 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
 
   struct BuilderSeparateHelper : public SeparateHelper {
     SeparateHelper* separate_helper = nullptr;
+    const SliceTransform* value_meta_extractor = nullptr;
     Status (*trans_to_separate_callback)(void* args, const Slice& key,
                                          LazyBuffer& value) = nullptr;
     void* trans_to_separate_callback_args = nullptr;
+
+    Status TransToSeparate(LazyBuffer& value, const Slice& meta,
+                           bool is_merge, bool is_index) override {
+      return SeparateHelper::TransToSeparate(value, meta, is_merge, is_index,
+                                             value_meta_extractor);
+    }
 
     Status TransToSeparate(const Slice& key, LazyBuffer& value) override {
       if (trans_to_separate_callback == nullptr) {
@@ -1263,11 +1275,13 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
                                         value);
     }
 
-    void TransToCombined(const Slice& user_key, uint64_t sequence,
-                         LazyBuffer& value) const override {
-      separate_helper->TransToCombined(user_key, sequence, value);
+    LazyBuffer TransToCombined(const Slice& user_key, uint64_t sequence,
+                               const LazyBuffer& value) const override {
+      return separate_helper->TransToCombined(user_key, sequence, value);
     }
   } separate_helper;
+  separate_helper.value_meta_extractor =
+      compact_->compaction->immutable_cf_options()->value_meta_extractor;
 
   auto trans_to_separate = [&](const Slice& key, LazyBuffer& value) {
     assert(value.file_number() == uint64_t(-1));

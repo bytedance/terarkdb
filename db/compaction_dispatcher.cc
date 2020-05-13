@@ -224,16 +224,16 @@ AJSON(NameParam, name, param);
 AJSON(BlobConfig, blob_size, large_key_ratio);
 
 AJSON(CompactionWorkerContext, user_comparator, merge_operator,
-      merge_operator_data, compaction_filter, compaction_filter_factory,
-      compaction_filter_context, compaction_filter_data, blob_config,
-      table_factory, table_factory_options, bloom_locality, cf_paths,
-      prefix_extractor, prefix_extractor_options, has_start, has_end, start,
-      end, last_sequence, earliest_write_conflict_snapshot,
-      preserve_deletes_seqnum, file_metadata, inputs, cf_name, target_file_size,
-      compression, compression_opts, existing_snapshots, smallest_user_key,
-      largest_user_key, level, output_level, number_levels, skip_filters,
-      bottommost_level, allow_ingest_behind, preserve_deletes,
-      int_tbl_prop_collector_factories);
+      merge_operator_data, value_meta_extractor, value_meta_extractor_options,
+      compaction_filter, compaction_filter_factory, compaction_filter_context,
+      compaction_filter_data, blob_config, table_factory, table_factory_options,
+      bloom_locality, cf_paths, prefix_extractor, prefix_extractor_options,
+      has_start, has_end, start, end, last_sequence,
+      earliest_write_conflict_snapshot, preserve_deletes_seqnum, file_metadata,
+      inputs, cf_name, target_file_size, compression, compression_opts,
+      existing_snapshots, smallest_user_key, largest_user_key, level,
+      output_level, number_levels, skip_filters, bottommost_level,
+      allow_ingest_behind, preserve_deletes, int_tbl_prop_collector_factories);
 
 #ifdef USE_AJSON
 #else
@@ -256,34 +256,44 @@ class WorkerSeparateHelper : public SeparateHelper, public LazyBufferState {
                                     get_context(buffer));
   }
 
-  void TransToCombined(const Slice& user_key, uint64_t sequence,
-                       LazyBuffer& value) const override {
+  Status TransToSeparate(LazyBuffer& value, const Slice& meta,
+                         bool is_merge, bool is_index) override {
+    return SeparateHelper::TransToSeparate(value, meta, is_merge, is_index,
+                                           value_meta_extractor_);
+  }
+
+  LazyBuffer TransToCombined(const Slice& user_key, uint64_t sequence,
+                             const LazyBuffer& value) const override {
     auto s = value.fetch();
     if (!s.ok()) {
-      value.reset(std::move(s));
-      return;
+      return LazyBuffer(std::move(s));
     }
     uint64_t file_number = SeparateHelper::DecodeFileNumber(value.slice());
     auto find = dependence_map_->find(file_number);
     if (find == dependence_map_->end()) {
-      value.reset(Status::Corruption("Separate value dependence missing"));
+      return LazyBuffer(
+          Status::Corruption("Separate value dependence missing"));
     } else {
-      value.reset(this,
-                  {reinterpret_cast<uint64_t>(user_key.data()), user_key.size(),
-                   sequence, reinterpret_cast<uint64_t>(&*find)},
-                  Slice::Invalid(), find->second->fd.GetNumber());
+      return LazyBuffer(
+          this,
+          {reinterpret_cast<uint64_t>(user_key.data()), user_key.size(),
+           sequence, reinterpret_cast<uint64_t>(&*find)},
+          Slice::Invalid(), find->second->fd.GetNumber());
     }
   }
 
   WorkerSeparateHelper(
-      DependenceMap* dependence_map, void* inplace_decode_arg,
+      DependenceMap* dependence_map, const SliceTransform* value_meta_extractor,
+      void* inplace_decode_arg,
       Status (*inplace_decode_callback)(void* arg, LazyBuffer* buffer,
                                         LazyBufferContext* rep))
       : dependence_map_(dependence_map),
+        value_meta_extractor_(value_meta_extractor),
         inplace_decode_arg_(inplace_decode_arg),
         inplace_decode_callback_(inplace_decode_callback) {}
 
   DependenceMap* dependence_map_;
+  const SliceTransform* value_meta_extractor_;
   void* inplace_decode_arg_;
   Status (*inplace_decode_callback_)(void* arg, LazyBuffer* buffer,
                                      LazyBufferContext* rep);
@@ -394,6 +404,13 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(Slice data) {
         context.merge_operator, context.merge_operator_data));
     if (!cf_options.merge_operator) {
       return make_error(Status::Corruption("Missing merge_operator !"));
+    }
+  }
+  if (!context.value_meta_extractor.empty()) {
+    cf_options.value_meta_extractor.reset(SliceTransform::create(
+        context.value_meta_extractor, context.value_meta_extractor_options));
+    if (!cf_options.value_meta_extractor) {
+      return make_error(Status::Corruption("Missing value_meta_extractor !"));
     }
   }
   std::unique_ptr<CompactionFilter> filter_ptr;
@@ -616,8 +633,8 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(Slice data) {
   };
 
   WorkerSeparateHelper separate_helper(
-      &contxt_dependence_map, &separate_inplace_decode,
-      c_style_callback(separate_inplace_decode));
+      &contxt_dependence_map, immutable_cf_options.value_meta_extractor,
+      &separate_inplace_decode, c_style_callback(separate_inplace_decode));
 
   CompactionRangeDelAggregator range_del_agg(icmp, context.existing_snapshots);
 

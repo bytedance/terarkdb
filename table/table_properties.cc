@@ -143,6 +143,11 @@ std::string TablePropertiesBase::ToString(
       merge_operator_name.empty() ? std::string("N/A") : merge_operator_name,
       prop_delim, kv_delim);
 
+  AppendProperty(result, "value meta extractor name",
+                 value_meta_extractor_name.empty() ? std::string("N/A")
+                                                   : value_meta_extractor_name,
+                 prop_delim, kv_delim);
+
   AppendProperty(result, "property collectors names",
                  property_collectors_names.empty() ? std::string("N/A")
                                                    : property_collectors_names,
@@ -218,6 +223,8 @@ const std::string TablePropertiesNames::kColumnFamilyName =
 const std::string TablePropertiesNames::kComparator = "rocksdb.comparator";
 const std::string TablePropertiesNames::kMergeOperator =
     "rocksdb.merge.operator";
+const std::string TablePropertiesNames::kValueMetaExtractorName =
+    "rocksdb.value.meta.extractor.name";
 const std::string TablePropertiesNames::kPrefixExtractorName =
     "rocksdb.prefix.extractor.name";
 const std::string TablePropertiesNames::kPropertyCollectors =

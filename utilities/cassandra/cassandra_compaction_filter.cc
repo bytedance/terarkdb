@@ -18,8 +18,8 @@ const char* CassandraCompactionFilter::Name() const {
 
 CompactionFilter::Decision CassandraCompactionFilter::FilterV2(
     int /*level*/, const Slice& /*key*/, ValueType value_type,
-    const LazyBuffer& existing_value, LazyBuffer* new_value,
-    std::string* /*skip_until*/) const {
+    const Slice& /*existing_value_meta*/, const LazyBuffer& existing_value,
+    LazyBuffer* new_value, std::string* /*skip_until*/) const {
   bool value_changed = false;
   auto s = existing_value.fetch();
   if (!s.ok()) {

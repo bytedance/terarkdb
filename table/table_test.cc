@@ -1169,6 +1169,8 @@ TEST_P(BlockBasedTableTest, BlockBasedTableProperties2) {
     ASSERT_EQ("leveldb.BytewiseComparator", props.comparator_name);
     // No merge operator
     ASSERT_EQ("nullptr", props.merge_operator_name);
+    // No merge operator
+    ASSERT_EQ("nullptr", props.value_meta_extractor_name);
     // No prefix extractor
     ASSERT_EQ("nullptr", props.prefix_extractor_name);
     // No property collectors

@@ -792,8 +792,8 @@ class Version : public SeparateHelper, private LazyBufferState {
 
   Status fetch_buffer(LazyBuffer* buffer) const override;
 
-  void TransToCombined(const Slice& user_key, uint64_t sequence,
-                       LazyBuffer& value) const override;
+  LazyBuffer TransToCombined(const Slice& user_key, uint64_t sequence,
+                             const LazyBuffer& value) const override;
 
   // No copying allowed
   Version(const Version&);

@@ -119,6 +119,9 @@ void ColumnFamilyOptions::Dump(Logger* log) const {
                    comparator->Name());
   ROCKS_LOG_HEADER(log, "          Options.merge_operator: %s",
                    merge_operator ? merge_operator->Name() : "None");
+  ROCKS_LOG_HEADER(
+      log, "    Options.value_meta_extractor: %s",
+      value_meta_extractor ? value_meta_extractor->Name() : "None");
   ROCKS_LOG_HEADER(log, "       Options.compaction_filter: %s",
                    compaction_filter ? compaction_filter->Name() : "None");
   ROCKS_LOG_HEADER(

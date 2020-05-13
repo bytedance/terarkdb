@@ -109,8 +109,8 @@ inline void FlinkCompactionFilter::InitConfigIfNotYet() const {
 
 CompactionFilter::Decision FlinkCompactionFilter::FilterV2(
     int /*level*/, const Slice& key, ValueType value_type,
-    const LazyBuffer& existing_lazy_value, LazyBuffer* new_value,
-    std::string* /*skip_until*/) const {
+    const Slice& /*existing_value_meta*/, const LazyBuffer& existing_lazy_value,
+    LazyBuffer* new_value, std::string* /*skip_until*/) const {
   auto s = existing_lazy_value.fetch();
   if (!s.ok()) {
     new_value->reset(std::move(s));

@@ -137,6 +137,10 @@ void PropertyBlockBuilder::AddTableProperty(const TableProperties& props) {
   if (!props.merge_operator_name.empty()) {
     Add(TablePropertiesNames::kMergeOperator, props.merge_operator_name);
   }
+  if (!props.value_meta_extractor_name.empty()) {
+    Add(TablePropertiesNames::kValueMetaExtractorName,
+        props.value_meta_extractor_name);
+  }
   if (!props.prefix_extractor_name.empty()) {
     Add(TablePropertiesNames::kPrefixExtractorName,
         props.prefix_extractor_name);
@@ -354,6 +358,8 @@ Status ReadProperties(const Slice& handle_value, RandomAccessFileReader* file,
       new_table_properties->comparator_name = raw_val.ToString();
     } else if (key == TablePropertiesNames::kMergeOperator) {
       new_table_properties->merge_operator_name = raw_val.ToString();
+    } else if (key == TablePropertiesNames::kValueMetaExtractorName) {
+      new_table_properties->value_meta_extractor_name = raw_val.ToString();
     } else if (key == TablePropertiesNames::kPrefixExtractorName) {
       new_table_properties->prefix_extractor_name = raw_val.ToString();
     } else if (key == TablePropertiesNames::kPropertyCollectors) {
