@@ -322,8 +322,10 @@ void LazyBufferState::uninitialized_resize(LazyBuffer* buffer,
 void LazyBufferState::assign_slice(LazyBuffer* buffer,
                                    const Slice& slice) const {
   buffer->state_->destroy(buffer);
-  if (reserve_buffer(buffer, slice.size())) {
-    ::memcpy(buffer->data_, slice.data(), slice.size());
+  auto data = slice.data();
+  auto size = slice.size();
+  if (reserve_buffer(buffer, size)) {
+    ::memcpy(buffer->data_, data, size);
   }
 }
 

@@ -1304,8 +1304,18 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
     if (status.ok()) {
       blob_meta->UpdateBoundaries(key, GetInternalKeySeqno(key));
       uint64_t file_number = blob_meta->fd.GetNumber();
-      value.reset(SeparateHelper::EncodeFileNumber(file_number), true,
-                  file_number);
+      if (separate_helper.value_meta_extractor == nullptr) {
+        value.reset(SeparateHelper::EncodeFileNumber(file_number), true,
+                    file_number);
+      } else {
+        assert(value.valid());
+        Slice parts[] = {
+            SeparateHelper::EncodeFileNumber(file_number),
+            separate_helper.value_meta_extractor->Transform(value.slice())};
+        LazyBuffer new_value(SliceParts(parts, 2), file_number);
+        // DO NOT use value.reset(slice parts, file number)
+        value = std::move(new_value);
+      }
     }
     return status;
   };

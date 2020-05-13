@@ -256,6 +256,7 @@ class WorkerSeparateHelper : public SeparateHelper, public LazyBufferState {
                                     get_context(buffer));
   }
 
+  using SeparateHelper::TransToSeparate;
   Status TransToSeparate(LazyBuffer& value, const Slice& meta,
                          bool is_merge, bool is_index) override {
     return SeparateHelper::TransToSeparate(value, meta, is_merge, is_index,
