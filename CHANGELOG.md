@@ -1,6 +1,20 @@
 
 ## CHANGELOG
 
+- 版本号：v1.2.7
+- 日期：2020-05-15
+- 发版说明：
+  - 计划内例行发版
+- 功能变更：
+  - 新增 ValueMetaExtractor 用来获取 Value 的元数据
+    - CompactionFilter::FilterV2 接口增加 Value 元数据参数
+    - 解决 Key Value 分离后 CompactionFilter 成本过高的问题
+  - GetPropertiesOfTablesInRange 增加 include_blob 参数
+- 修复问题：
+  - 修复 BlockBasedTable 工作在 mmap 模式下有潜在的 OOM Kill 风险的问题
+- 已知问题：
+  - 使用 LazyUniversalCompaction 有极低概率触发无效 TrivialMove 导致写阻塞
+
 - 版本号：v1.2.6
 - 日期：2020-04-29
 - 发版说明：
