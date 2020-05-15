@@ -282,8 +282,8 @@ struct BlockBasedTableBuilder::Rep {
   std::vector<std::unique_ptr<IntTblPropCollector>> table_properties_collectors;
 
   Rep(const TableBuilderOptions& builder_opt,
-      const BlockBasedTableOptions& table_opt,
-      uint32_t _column_family_id, WritableFileWriter* f)
+      const BlockBasedTableOptions& table_opt, uint32_t _column_family_id,
+      WritableFileWriter* f)
       : ioptions(builder_opt.ioptions),
         moptions(builder_opt.moptions),
         table_options(table_opt),
@@ -303,7 +303,8 @@ struct BlockBasedTableBuilder::Rep {
         range_del_block(1 /* block_restart_interval */),
         internal_prefix_transform(builder_opt.moptions.prefix_extractor.get()),
         compression_dict(builder_opt.compression_dict),
-        compression_ctx(builder_opt.compression_type, builder_opt.compression_opts),
+        compression_ctx(builder_opt.compression_type,
+                        builder_opt.compression_opts),
         use_delta_encoding_for_index_values(table_opt.format_version >= 4 &&
                                             !table_opt.block_align),
         compressed_cache_key_prefix_size(0),
@@ -334,7 +335,8 @@ struct BlockBasedTableBuilder::Rep {
           use_delta_encoding_for_index_values, p_index_builder_));
     }
 
-    builder_opt.PushIntTblPropCollectors(&table_properties_collectors, column_family_id);
+    builder_opt.PushIntTblPropCollectors(&table_properties_collectors,
+                                         column_family_id);
     table_properties_collectors.emplace_back(
         new BlockBasedTablePropertiesCollector(
             table_options.index_type, table_options.whole_key_filtering,
@@ -353,8 +355,8 @@ struct BlockBasedTableBuilder::Rep {
 
 BlockBasedTableBuilder::BlockBasedTableBuilder(
     const TableBuilderOptions& builder_options,
-    const BlockBasedTableOptions& table_options,
-    uint32_t column_family_id, WritableFileWriter* file) {
+    const BlockBasedTableOptions& table_options, uint32_t column_family_id,
+    WritableFileWriter* file) {
   BlockBasedTableOptions sanitized_table_options(table_options);
   if (sanitized_table_options.format_version == 0 &&
       sanitized_table_options.checksum != kCRC32c) {
@@ -368,8 +370,7 @@ BlockBasedTableBuilder::BlockBasedTableBuilder(
   }
 
   rep_ =
-      new Rep(builder_options, sanitized_table_options,
-              column_family_id, file);
+      new Rep(builder_options, sanitized_table_options, column_family_id, file);
 
   if (rep_->filter_builder != nullptr) {
     rep_->filter_builder->StartBlock(0);

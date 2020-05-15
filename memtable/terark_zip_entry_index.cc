@@ -13,9 +13,9 @@
 namespace rocksdb {
 
 using terark::lower_bound_0;
-using terark::upper_bound_0;
-using terark::Patricia;
 using terark::MainPatricia;
+using terark::Patricia;
+using terark::upper_bound_0;
 
 namespace WriteBatchEntryPTrieIndexDetail {
 
@@ -94,8 +94,7 @@ struct IteratorImplWithOffset : public IteratorImplBase {
   };
   VectorData GetVector() {
     auto trie = static_cast<MainPatricia*>(handle->trie());
-    auto vector =
-        (value_vector_t*)trie->mem_get(*(uint32_t*)handle->value());
+    auto vector = (value_vector_t*)trie->mem_get(*(uint32_t*)handle->value());
     size_t size = vector->size;
     auto data = (value_wrap_t*)trie->mem_get(vector->loc);
     return {size, data};
@@ -276,6 +275,7 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
       class Token : public terark::Patricia::WriterToken {
        public:
         Token(WriteBatchIndexEntry* value) : value_(value) {}
+
        protected:
         bool init_value(void* valptr, size_t valsize) noexcept override {
           assert(valsize == sizeof(uint32_t));
@@ -299,7 +299,8 @@ class WriteBatchEntryPTrieIndex : public WriteBatchEntryIndex {
        private:
         WriteBatchIndexEntry* value_;
       };
-      Token& token = *index_.tls_writer_token_nn([&]{return new Token(key);});
+      Token& token =
+          *index_.tls_writer_token_nn([&] { return new Token(key); });
       token.acquire(&index_);
       WriteBatchIndexEntry* value_store;
       if (!index_.insert(slice_key, &value_store, &token)) {
@@ -372,9 +373,7 @@ const WriteBatchEntryIndexFactory* patricia_WriteBatchEntryIndexFactory(
     }
     PTrieIndexFactory(const WriteBatchEntryIndexFactory* _fallback)
         : fallback(_fallback) {}
-    const char* Name() const override {
-      return "WriteBatchEntryIndexFactory";
-    }
+    const char* Name() const override { return "WriteBatchEntryIndexFactory"; }
 
    private:
     const WriteBatchEntryIndexFactory* fallback;

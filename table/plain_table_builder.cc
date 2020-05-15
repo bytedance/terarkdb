@@ -58,11 +58,10 @@ extern const uint64_t kPlainTableMagicNumber = 0x8242229663bf9564ull;
 extern const uint64_t kLegacyPlainTableMagicNumber = 0x4f3418eb7a8f13b8ull;
 
 PlainTableBuilder::PlainTableBuilder(
-    const TableBuilderOptions& builder_options,
-    uint32_t column_family_id, WritableFileWriter* file, uint32_t user_key_len,
-    EncodingType encoding_type, size_t index_sparseness,
-    uint32_t bloom_bits_per_key,
-    uint32_t num_probes, size_t huge_page_tlb_size, double hash_table_ratio,
+    const TableBuilderOptions& builder_options, uint32_t column_family_id,
+    WritableFileWriter* file, uint32_t user_key_len, EncodingType encoding_type,
+    size_t index_sparseness, uint32_t bloom_bits_per_key, uint32_t num_probes,
+    size_t huge_page_tlb_size, double hash_table_ratio,
     bool store_index_in_file)
     : ioptions_(builder_options.ioptions),
       moptions_(builder_options.moptions),
@@ -70,7 +69,8 @@ PlainTableBuilder::PlainTableBuilder(
       file_(file),
       bloom_bits_per_key_(bloom_bits_per_key),
       huge_page_tlb_size_(huge_page_tlb_size),
-      encoder_(encoding_type, user_key_len, builder_options.moptions.prefix_extractor.get(),
+      encoder_(encoding_type, user_key_len,
+               builder_options.moptions.prefix_extractor.get(),
                index_sparseness),
       store_index_in_file_(store_index_in_file),
       prefix_extractor_(builder_options.moptions.prefix_extractor.get()) {
@@ -78,10 +78,12 @@ PlainTableBuilder::PlainTableBuilder(
   if (store_index_in_file_) {
     assert(hash_table_ratio > 0 || IsTotalOrderMode());
     index_builder_.reset(new PlainTableIndexBuilder(
-        &arena_, builder_options.ioptions, builder_options.moptions.prefix_extractor.get(), index_sparseness,
+        &arena_, builder_options.ioptions,
+        builder_options.moptions.prefix_extractor.get(), index_sparseness,
         hash_table_ratio, huge_page_tlb_size_));
-    properties_.user_collected_properties
-        [PlainTablePropertyNames::kBloomVersion] = "1";  // For future use
+    properties_
+        .user_collected_properties[PlainTablePropertyNames::kBloomVersion] =
+        "1";  // For future use
   }
 
   properties_.fixed_key_len = user_key_len;
@@ -105,7 +107,8 @@ PlainTableBuilder::PlainTableBuilder(
   properties_.user_collected_properties
       [PlainTablePropertyNames::kEncodingType] = val;
 
-  builder_options.PushIntTblPropCollectors(&table_properties_collectors_, column_family_id);
+  builder_options.PushIntTblPropCollectors(&table_properties_collectors_,
+                                           column_family_id);
 }
 
 PlainTableBuilder::~PlainTableBuilder() {

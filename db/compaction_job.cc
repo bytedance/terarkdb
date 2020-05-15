@@ -715,8 +715,10 @@ Status CompactionJob::Run() {
   context.compaction_filter_context.is_manual_compaction =
       c->is_manual_compaction();
   context.compaction_filter_context.column_family_id = cfd->GetID();
-  context.compaction_filter_context.smallest_user_key = compact_->SmallestUserKey();
-  context.compaction_filter_context.smallest_user_key = compact_->LargestUserKey();
+  context.compaction_filter_context.smallest_user_key =
+      compact_->SmallestUserKey();
+  context.compaction_filter_context.smallest_user_key =
+      compact_->LargestUserKey();
   if (auto cf = iopt->compaction_filter) {
     s = cf->Serialize(&context.compaction_filter_data.data);
     if (s.IsNotSupported()) {
@@ -782,7 +784,8 @@ Status CompactionJob::Run() {
   context.allow_ingest_behind = iopt->allow_ingest_behind;
   context.preserve_deletes = iopt->preserve_deletes;
   TablePropertiesCollectorFactory::Context collector_context;
-  collector_context.column_family_id = context.compaction_filter_context.column_family_id;
+  collector_context.column_family_id =
+      context.compaction_filter_context.column_family_id;
   collector_context.smallest_user_key = context.smallest_user_key;
   collector_context.largest_user_key = context.largest_user_key;
   for (auto& collector : *cfd->int_tbl_prop_collector_factories()) {

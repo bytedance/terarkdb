@@ -211,9 +211,7 @@ TableBuilder* BlockBasedTableFactory::NewTableBuilder(
     const TableBuilderOptions& table_builder_options, uint32_t column_family_id,
     WritableFileWriter* file) const {
   auto table_builder = new BlockBasedTableBuilder(
-      table_builder_options,
-      table_options_, column_family_id,
-      file);
+      table_builder_options, table_options_, column_family_id, file);
 
   return table_builder;
 }

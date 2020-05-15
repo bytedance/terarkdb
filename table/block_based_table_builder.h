@@ -39,10 +39,9 @@ class BlockBasedTableBuilder : public TableBuilder {
   // caller to close the file after calling Finish().
   // @param compression_dict Data for presetting the compression library's
   //    dictionary, or nullptr.
-  BlockBasedTableBuilder(
-      const TableBuilderOptions&,
-      const BlockBasedTableOptions& table_options,
-      uint32_t column_family_id, WritableFileWriter* file);
+  BlockBasedTableBuilder(const TableBuilderOptions&,
+                         const BlockBasedTableOptions& table_options,
+                         uint32_t column_family_id, WritableFileWriter* file);
 
   // REQUIRES: Either Finish() or Abandon() has been called.
   ~BlockBasedTableBuilder();

@@ -121,12 +121,13 @@ struct TableBuilderOptions {
   Slice largest_user_key;
 
   void PushIntTblPropCollectors(
-        std::vector<std::unique_ptr<IntTblPropCollector>>* collectors,
-        uint32_t cf_id) const {
+      std::vector<std::unique_ptr<IntTblPropCollector>>* collectors,
+      uint32_t cf_id) const {
     if (!int_tbl_prop_collector_factories) {
       return;
     }
-    collectors->reserve(collectors->size() + int_tbl_prop_collector_factories->size() + 2);
+    collectors->reserve(collectors->size() +
+                        int_tbl_prop_collector_factories->size() + 2);
     TablePropertiesCollectorFactory::Context ctx;
     ctx.column_family_id = cf_id;
     ctx.smallest_user_key = smallest_user_key;

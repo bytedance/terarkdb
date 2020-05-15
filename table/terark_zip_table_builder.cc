@@ -204,7 +204,8 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(
     isReverseBytewiseOrder_ =
         IsBackwardBytewiseComparator(properties_.comparator_name);
 
-    tbo.PushIntTblPropCollectors(&collectors_, (uint32_t)properties_.column_family_id);
+    tbo.PushIntTblPropCollectors(&collectors_,
+                                 (uint32_t)properties_.column_family_id);
 
     std::string property_collectors_names = "[";
     for (size_t i = 0;

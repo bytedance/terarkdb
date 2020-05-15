@@ -520,15 +520,15 @@ const {
 }
 
 Status PosixMmapReadableFile::InvalidateCache(size_t offset, size_t length) {
-  size_t upper_offset = ((offset +   4095) & ~4095);
+  size_t upper_offset = ((offset + 4095) & ~4095);
   size_t lower_length = ((offset + length) & ~4095) - upper_offset;
   if (lower_length) {
     char* upper_addr = (char*)mmapped_region_ + upper_offset;
     int ret = ::madvise(upper_addr, lower_length, MADV_DONTNEED);
     if (ret)
       return IOError("While madvise(DONTNEED). Offset " + ToString(offset) +
-                          " len" + ToString(length),
-                      filename_, errno);
+                         " len" + ToString(length),
+                     filename_, errno);
   }
   return Status::OK();
 }
