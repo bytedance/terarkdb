@@ -819,10 +819,9 @@ void TerarkZipTableBuilder::BuildIndex(KeyValueStatus& kvs, size_t entropyLen) {
           tiopt.indexType = table_options_.indexType;
           tiopt.localTempDir = table_options_.localTempDir;
           tiopt.smallTaskMemory = table_options_.smallTaskMemory;
-          tiopt.compressGlobalDict = table_options_.disableCompressDict? false : true;
-          auto& ref = tiopt;
+          tiopt.compressGlobalDict = !table_options_.disableCompressDict;
           indexPtr.reset(TerarkIndex::Factory::Build(tempKeyFileReader.get(),
-                                                     ref, keyStat, nullptr));
+                                                     tiopt, keyStat, nullptr));
         } catch (const std::exception& ex) {
           WARN_EXCEPT(
               ioptions_.info_log,
