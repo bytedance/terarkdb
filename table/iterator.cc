@@ -114,8 +114,8 @@ LazyBuffer CombinedInternalIterator::value() const {
   if (pikey.type != kTypeValueIndex && pikey.type != kTypeMergeIndex) {
     return iter_->value();
   }
-  LazyBuffer v = iter_->value();
-  separate_helper_->TransToCombined(pikey.user_key, pikey.sequence, v);
+  LazyBuffer v = separate_helper_->TransToCombined(
+      pikey.user_key, pikey.sequence, iter_->value());
   auto s = v.fetch();
   if (!s.ok()) {
     v.reset(std::move(s));
@@ -123,7 +123,11 @@ LazyBuffer CombinedInternalIterator::value() const {
   return v;
 }
 
-LazyBuffer CombinedInternalIterator::value(const Slice& user_key) const {
+LazyBuffer CombinedInternalIterator::value(const Slice& user_key,
+                                           std::string* meta) const {
+  if (meta != nullptr) {
+    meta->clear();
+  }
   if (separate_helper_ == nullptr) {
     return iter_->value();
   }
@@ -134,11 +138,15 @@ LazyBuffer CombinedInternalIterator::value(const Slice& user_key) const {
   if (pikey.type != kTypeValueIndex && pikey.type != kTypeMergeIndex) {
     return iter_->value();
   }
-  LazyBuffer v = iter_->value();
-  separate_helper_->TransToCombined(user_key, pikey.sequence, v);
+  LazyBuffer value_index = iter_->value();
+  LazyBuffer v =
+      separate_helper_->TransToCombined(user_key, pikey.sequence, value_index);
+  if (meta != nullptr && value_index.valid()) {
+    auto meta_slice = SeparateHelper::DecodeValueMeta(value_index.slice());
+    meta->assign(meta_slice.data(), meta_slice.size());
+  }
   return v;
 }
-
 
 namespace {
 class EmptyIterator : public Iterator {

@@ -177,7 +177,7 @@ Status MergeHelper::MergeUntil(
       // hit an entry that's visible by the previous snapshot, can't touch that
       break;
     }
-    LazyBuffer val = iter->value(user_key);
+    LazyBuffer val = iter->value(user_key, nullptr);
 
     // At this point we are guaranteed that we need to process this key.
 
@@ -400,7 +400,7 @@ CompactionFilter::Decision MergeHelper::FilterMerge(
   compaction_filter_value_.clear();
   compaction_filter_skip_until_.Clear();
   auto ret = compaction_filter_->FilterV2(
-      level_, user_key, CompactionFilter::ValueType::kMergeOperand,
+      level_, user_key, CompactionFilter::ValueType::kMergeOperand, Slice(),
       value_slice, &compaction_filter_value_,
       compaction_filter_skip_until_.rep());
   if (ret == CompactionFilter::Decision::kRemoveAndSkipUntil) {

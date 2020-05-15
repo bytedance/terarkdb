@@ -2266,7 +2266,8 @@ Status DBImpl::GetPropertiesOfAllTables(ColumnFamilyHandle* column_family,
 
 Status DBImpl::GetPropertiesOfTablesInRange(ColumnFamilyHandle* column_family,
                                             const Range* range, std::size_t n,
-                                            TablePropertiesCollection* props) {
+                                            TablePropertiesCollection* props,
+                                            bool include_blob) {
   auto cfh = reinterpret_cast<ColumnFamilyHandleImpl*>(column_family);
   auto cfd = cfh->cfd();
 
@@ -2276,7 +2277,7 @@ Status DBImpl::GetPropertiesOfTablesInRange(ColumnFamilyHandle* column_family,
   version->Ref();
   mutex_.Unlock();
 
-  auto s = version->GetPropertiesOfTablesInRange(range, n, props);
+  auto s = version->GetPropertiesOfTablesInRange(range, n, props, include_blob);
 
   // Decrement the ref count
   mutex_.Lock();

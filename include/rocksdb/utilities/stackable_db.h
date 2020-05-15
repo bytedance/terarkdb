@@ -364,8 +364,9 @@ class StackableDB : public DB {
   using DB::GetPropertiesOfTablesInRange;
   virtual Status GetPropertiesOfTablesInRange(
       ColumnFamilyHandle* column_family, const Range* range, std::size_t n,
-      TablePropertiesCollection* props) override {
-    return db_->GetPropertiesOfTablesInRange(column_family, range, n, props);
+      TablePropertiesCollection* props, bool include_blob = true) override {
+    return db_->GetPropertiesOfTablesInRange(column_family, range, n, props,
+                                             include_blob);
   }
 
   virtual Status GetUpdatesSince(

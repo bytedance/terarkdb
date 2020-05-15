@@ -170,6 +170,7 @@ class CompactionIterator {
   // Points to the value in the underlying iterator that corresponds to the
   // current output.
   LazyBuffer value_;
+  std::string value_meta_;
   // The status is OK unless compaction iterator encounters a merge operand
   // while not having a merge operator defined.
   Status status_;

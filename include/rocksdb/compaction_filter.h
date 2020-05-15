@@ -157,6 +157,7 @@ class CompactionFilter
   // failed. Instead, it is better to implement any Merge filtering inside the
   // MergeOperator.
   virtual Decision FilterV2(int level, const Slice& key, ValueType value_type,
+                            const Slice& /*existing_value_meta*/,
                             const LazyBuffer& existing_value,
                             LazyBuffer* new_value,
                             std::string* /*skip_until*/) const {

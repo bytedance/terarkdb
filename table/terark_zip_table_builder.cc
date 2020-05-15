@@ -191,6 +191,10 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(
                                       : "nullptr";
     properties_.merge_operator_name =
         ioptions_.merge_operator ? ioptions_.merge_operator->Name() : "nullptr";
+    properties_.value_meta_extractor_name =
+        ioptions_.value_meta_extractor != nullptr
+            ? ioptions_.value_meta_extractor->Name()
+            : "nullptr";
     properties_.compression_name =
         CompressionTypeToString(tbo.compression_type);
     properties_.prefix_extractor_name =

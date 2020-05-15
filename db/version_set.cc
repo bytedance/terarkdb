@@ -793,8 +793,9 @@ Status Version::GetPropertiesOfAllTables(TablePropertiesCollection* props,
   return Status::OK();
 }
 
-Status Version::GetPropertiesOfTablesInRange(
-    const Range* range, std::size_t n, TablePropertiesCollection* props) const {
+Status Version::GetPropertiesOfTablesInRange(const Range* range, std::size_t n,
+                                             TablePropertiesCollection* props,
+                                             bool include_blob) const {
   auto push_props = [&](FileMetaData* file_meta, Status* s) {
     auto fname =
         TableFileName(cfd_->ioptions()->cf_paths, file_meta->fd.GetNumber(),
@@ -825,6 +826,8 @@ Status Version::GetPropertiesOfTablesInRange(
           if (!s.ok()) {
             return s;
           }
+        } else if (!include_blob) {
+          continue;
         }
         for (auto& dependence : file_meta->prop.dependence) {
           auto find =
@@ -1251,23 +1254,23 @@ Status Version::fetch_buffer(LazyBuffer* buffer) const {
   return Status::OK();
 }
 
-void Version::TransToCombined(const Slice& user_key, uint64_t sequence,
-                              LazyBuffer& value) const {
+LazyBuffer Version::TransToCombined(const Slice& user_key, uint64_t sequence,
+                                    const LazyBuffer& value) const {
   auto s = value.fetch();
   if (!s.ok()) {
-    value.reset(std::move(s));
-    return;
+    return LazyBuffer(std::move(s));
   }
   uint64_t file_number = SeparateHelper::DecodeFileNumber(value.slice());
   auto& dependence_map = storage_info_.dependence_map();
   auto find = dependence_map.find(file_number);
   if (find == dependence_map.end()) {
-    value.reset(Status::Corruption("Separate value dependence missing"));
+    return LazyBuffer(Status::Corruption("Separate value dependence missing"));
   } else {
-    value.reset(this,
-                {reinterpret_cast<uint64_t>(user_key.data()), user_key.size(),
-                 sequence, reinterpret_cast<uint64_t>(&*find)},
-                Slice::Invalid(), find->second->fd.GetNumber());
+    return LazyBuffer(
+        this,
+        {reinterpret_cast<uint64_t>(user_key.data()), user_key.size(), sequence,
+         reinterpret_cast<uint64_t>(&*find)},
+        Slice::Invalid(), find->second->fd.GetNumber());
   }
 }
 

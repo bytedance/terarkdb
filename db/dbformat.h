@@ -794,7 +794,7 @@ class SeparateHelper {
     return Slice(reinterpret_cast<char*>(&file_number), sizeof file_number);
   }
   static uint64_t DecodeFileNumber(const Slice& slice) {
-    assert(slice.size() == sizeof(uint64_t));
+    assert(slice.size() >= sizeof(uint64_t));
     uint64_t file_number;
     memcpy(&file_number, slice.data(), sizeof(uint64_t));
     if (!port::kLittleEndian) {
@@ -802,20 +802,28 @@ class SeparateHelper {
     }
     return file_number;
   }
-
-  static void TransToSeparate(LazyBuffer& value) {
-    assert(value.file_number() != uint64_t(-1));
-    uint64_t file_number = value.file_number();
-    value.reset(EncodeFileNumber(file_number), true, file_number);
+  static Slice DecodeValueMeta(const Slice& slice) {
+    assert(slice.size() >= sizeof(uint64_t));
+    return Slice(slice.data() + sizeof(uint64_t),
+                 slice.size() - sizeof(uint64_t));
   }
+
+  virtual Status TransToSeparate(LazyBuffer& value, const Slice& meta,
+                                 bool is_merge, bool is_index) {
+    return TransToSeparate(value, meta, is_merge, is_index, nullptr);
+  }
+
+  static Status TransToSeparate(LazyBuffer& value, const Slice& meta,
+                                bool is_merge, bool is_index,
+                                const SliceTransform* value_meta_extractor);
 
   virtual Status TransToSeparate(const Slice& /*internal_key*/,
                                  LazyBuffer& /*value*/) {
     return Status::NotSupported();
   }
 
-  virtual void TransToCombined(const Slice& user_key, uint64_t sequence,
-                               LazyBuffer& value) const = 0;
+  virtual LazyBuffer TransToCombined(const Slice& user_key, uint64_t sequence,
+                                     const LazyBuffer& value) const = 0;
 };
 
 extern Slice ArenaPinSlice(const Slice& slice, Arena* arena);

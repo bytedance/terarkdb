@@ -55,6 +55,7 @@ struct TablePropertiesNames {
   static const std::string kColumnFamilyId;
   static const std::string kComparator;
   static const std::string kMergeOperator;
+  static const std::string kValueMetaExtractorName;
   static const std::string kPrefixExtractorName;
   static const std::string kPropertyCollectors;
   static const std::string kCompression;
@@ -211,6 +212,11 @@ struct TablePropertiesBase {
   // The name of the merge operator used in this table.
   // If no merge operator is used, `merge_operator_name` will be "nullptr".
   std::string merge_operator_name;
+
+  // The name of the value meta extractor used in this table.
+  // If no value meta extractor is used, `value_meta_extractor_name` will be
+  // "nullptr".
+  std::string value_meta_extractor_name;
 
   // The name of the prefix extractor used in this table
   // If no prefix extractor is used, `prefix_extractor_name` will be "nullptr".

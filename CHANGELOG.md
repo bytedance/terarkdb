@@ -6,7 +6,7 @@
 - 发版说明：
   - 计划内例行发版
 - 功能变更：
-  - Key Value 实现优化，更早的分离大 Value，降低 GC 压力
+  - Key Value 分离实现优化，更早的分离大 Value，降低 GC 压力
   - TerarkZipTable 配置深度集成，支持所有原版 RocksDB 的配置方式
   - LazyLevelCompaction 增大 SST 中 Tombstone 的下推权重，更快回收存储空间
 - 修复问题：

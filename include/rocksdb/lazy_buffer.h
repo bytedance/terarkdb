@@ -82,6 +82,9 @@ class LazyBufferState {
   // context -> Cleanable
   static const LazyBufferState* cleanable_state();
 
+  // Reserve buffer capacity
+  static bool reserve_buffer(LazyBuffer* buffer, size_t size);
+
   // Set buffer->slice_ = slice
   static void set_slice(LazyBuffer* buffer, const Slice& slice);
 
@@ -128,6 +131,10 @@ class LazyBuffer {
 
   // Init with slice from copying or referring
   explicit LazyBuffer(const Slice& _slice, bool _copy = false,
+                      uint64_t _file_number = uint64_t(-1));
+
+  // Init with slice parts from copying
+  explicit LazyBuffer(const SliceParts& _slice_parts,
                       uint64_t _file_number = uint64_t(-1));
 
   // Init with Status
@@ -253,6 +260,10 @@ class LazyBuffer {
 
   // Reset buffer from copying or referring
   void reset(const Slice& _slice, bool _copy = false,
+             uint64_t _file_number = uint64_t(-1));
+
+  // Reset buffer from copying
+  void reset(const SliceParts& _slice_parts,
              uint64_t _file_number = uint64_t(-1));
 
   // Reset with Status

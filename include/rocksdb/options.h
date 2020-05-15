@@ -149,6 +149,9 @@ struct ColumnFamilyOptions : public AdvancedColumnFamilyOptions {
   // Default: nullptr
   std::shared_ptr<MergeOperator> merge_operator = nullptr;
 
+  // Default: nullptr
+  std::shared_ptr<const SliceTransform> value_meta_extractor = nullptr;
+
   // A single CompactionFilter instance to call into during compaction.
   // Allows an application to modify/delete a key-value during background
   // compaction.

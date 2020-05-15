@@ -2139,6 +2139,10 @@ void rocksdb_options_set_merge_operator(
   opt->rep.merge_operator = std::shared_ptr<MergeOperator>(merge_operator);
 }
 
+void rocksdb_options_set_value_meta_extractor(
+    rocksdb_options_t* opt, rocksdb_slicetransform_t* value_meta_extractor) {
+  opt->rep.value_meta_extractor.reset(value_meta_extractor);
+}
 
 void rocksdb_options_set_create_if_missing(
     rocksdb_options_t* opt, unsigned char v) {

@@ -322,26 +322,10 @@ void LazyBufferState::uninitialized_resize(LazyBuffer* buffer,
 void LazyBufferState::assign_slice(LazyBuffer* buffer,
                                    const Slice& slice) const {
   buffer->state_->destroy(buffer);
-  if (slice.size() <= sizeof(LazyBufferContext)) {
-    buffer->state_ = light_state();
-    auto context = union_cast<LightLazyBufferState::Context>(&buffer->context_);
-    ::memcpy(context->data, slice.data(), slice.size());
-    buffer->data_ = context->data;
-    buffer->size_ = slice.size();
-  } else {
-    buffer->state_ = buffer_state();
-    auto context =
-        union_cast<BufferLazyBufferState::Context>(&buffer->context_);
-    context->buffer.handle = ::malloc(slice.size());
-    context->buffer.uninitialized_resize = nullptr;
-    if (context->buffer.handle == nullptr) {
-      ::new (&context->status) Status(Status::BadAlloc());
-    } else {
-      ::new (&context->status) Status;
-      ::memcpy(context->buffer.handle, slice.data(), slice.size());
-      buffer->data_ = (char*)context->buffer.handle;
-      buffer->size_ = slice.size();
-    }
+  auto data = slice.data();
+  auto size = slice.size();
+  if (reserve_buffer(buffer, size)) {
+    ::memcpy(buffer->data_, data, size);
   }
 }
 
@@ -406,6 +390,32 @@ const LazyBufferState* LazyBufferState::cleanable_state() {
   return &static_state;
 }
 
+bool LazyBufferState::reserve_buffer(LazyBuffer* buffer, size_t size) {
+  if (size <= sizeof(LazyBufferContext)) {
+    buffer->state_ = light_state();
+    auto context = union_cast<LightLazyBufferState::Context>(&buffer->context_);
+    buffer->data_ = context->data;
+    buffer->size_ = size;
+    return true;
+  } else {
+    buffer->state_ = buffer_state();
+    auto context =
+        union_cast<BufferLazyBufferState::Context>(&buffer->context_);
+    context->buffer.handle = ::malloc(size);
+    context->buffer.uninitialized_resize = nullptr;
+    if (context->buffer.handle == nullptr) {
+      ::new (&context->status) Status(Status::BadAlloc());
+      buffer->slice_ = Slice::Invalid();
+      return false;
+    } else {
+      ::new (&context->status) Status;
+      buffer->data_ = (char*)context->buffer.handle;
+      buffer->size_ = size;
+      return true;
+    }
+  }
+}
+
 void LazyBuffer::fix_light_state(const LazyBuffer& other) {
   assert(state_ == LazyBufferState::light_state());
   assert(other.size_ <= sizeof(LazyBufferContext));
@@ -423,21 +433,22 @@ void LazyBuffer::fix_light_state(const LazyBuffer& other) {
 
 LazyBuffer::LazyBuffer(size_t _size) noexcept
     : context_{}, file_number_(uint64_t(-1)) {
-  if (_size <= sizeof(LazyBufferContext)) {
-    state_ = LazyBufferState::light_state();
-    data_ = union_cast<LightLazyBufferState::Context>(&context_)->data;
-    size_ = _size;
-  } else {
-    state_ = LazyBufferState::buffer_state();
-    auto context = union_cast<BufferLazyBufferState::Context>(&context_);
-    context->buffer.handle = ::malloc(_size);
-    if (context->buffer.handle == nullptr) {
-      ::new (&context->status) Status(Status::BadAlloc());
-      slice_ = Slice::Invalid();
-    } else {
-      ::new (&context->status) Status;
-      data_ = (char*)context->buffer.handle;
-      size_ = _size;
+  LazyBufferState::reserve_buffer(this, _size);
+}
+
+LazyBuffer::LazyBuffer(const SliceParts& _slice_parts, uint64_t _file_number)
+    : state_(LazyBufferState::light_state()),
+      context_{},
+      file_number_(_file_number) {
+  size_t size = 0;
+  for (int i = 0; i < _slice_parts.num_parts; ++i) {
+    size += _slice_parts.parts[i].size();
+  }
+  if (LazyBufferState::reserve_buffer(this, size)) {
+    char* dst = data_;
+    for (int i = 0; i < _slice_parts.num_parts; ++i) {
+      ::memcpy(dst, _slice_parts.parts[i].data(), _slice_parts.parts[i].size());
+      dst += _slice_parts.parts[i].size();
     }
   }
 }
@@ -464,6 +475,24 @@ LazyBuffer::LazyBuffer(std::string* _string) noexcept
 #ifdef __GNUC__
 #pragma GCC diagnostic pop
 #endif
+
+void LazyBuffer::reset(const SliceParts& _slice_parts, uint64_t _file_number) {
+  destroy();
+  size_t size = 0;
+  for (int i = 0; i < _slice_parts.num_parts; ++i) {
+    size += _slice_parts.parts[i].size();
+  }
+  if (LazyBufferState::reserve_buffer(this, size)) {
+    char* dst = data_;
+    for (int i = 0; i < _slice_parts.num_parts; ++i) {
+      ::memcpy(dst, _slice_parts.parts[i].data(), _slice_parts.parts[i].size());
+      dst += _slice_parts.parts[i].size();
+    }
+    file_number_ = _file_number;
+  } else {
+    file_number_ = uint64_t(-1);
+  }
+}
 
 void LazyBuffer::reset(LazyBufferCustomizeBuffer _buffer) {
   assert(_buffer.handle != nullptr);

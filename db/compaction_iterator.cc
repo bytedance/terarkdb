@@ -219,6 +219,7 @@ void CompactionIterator::Next() {
     if (merge_out_iter_.Valid()) {
       key_ = merge_out_iter_.key();
       value_ = LazyBufferReference(merge_out_iter_.value());
+      value_meta_.clear();
       bool valid_key __attribute__((__unused__));
       valid_key = ParseInternalKey(key_, &ikey_);
       // MergeUntil stops when it encounters a corrupt key and does not
@@ -271,7 +272,7 @@ void CompactionIterator::InvokeFilterIfNeeded(bool* need_skip,
     auto doFilter = [&]() {
       filter = compaction_filter_->FilterV2(
           compaction_->level(), ikey_.user_key,
-          CompactionFilter::ValueType::kValue, value_,
+          CompactionFilter::ValueType::kValue, value_meta_, value_,
           &compaction_filter_value_, compaction_filter_skip_until_.rep());
     };
     auto sample = filter_sample_interval_;
@@ -374,7 +375,7 @@ void CompactionIterator::NextFromInput() {
       // First occurrence of this user key
       // Copy key for output
       key_ = current_key_.SetInternalKey(key_, &ikey_);
-      value_ = input_.value(current_key_.GetUserKey());
+      value_ = input_.value(current_key_.GetUserKey(), &value_meta_);
       current_user_key_ = ikey_.user_key;
       has_current_user_key_ = true;
       has_outputted_key_ = false;
@@ -397,7 +398,7 @@ void CompactionIterator::NextFromInput() {
       // if we have versions on both sides of a snapshot
       current_key_.UpdateInternalKey(ikey_.sequence, ikey_.type);
       key_ = current_key_.GetInternalKey();
-      value_ = input_.value(current_key_.GetUserKey());
+      value_ = input_.value(current_key_.GetUserKey(), &value_meta_);
       ikey_.user_key = current_key_.GetUserKey();
 
       // Note that newer version of a key is ordered before older versions. If a
@@ -676,6 +677,7 @@ void CompactionIterator::NextFromInput() {
         //       These will be correctly set below.
         key_ = merge_out_iter_.key();
         value_ = LazyBufferReference(merge_out_iter_.value());
+        value_meta_.clear();
         bool valid_key __attribute__((__unused__));
         valid_key = ParseInternalKey(key_, &ikey_);
         // MergeUntil stops when it encounters a corrupt key and does not
@@ -751,7 +753,12 @@ void CompactionIterator::PrepareOutput() {
         ikey_.type =
             ikey_.type == kTypeValue ? kTypeValueIndex : kTypeMergeIndex;
         current_key_.UpdateInternalKey(ikey_.sequence, ikey_.type);
-        SeparateHelper::TransToSeparate(value_);
+        s = input_.separate_helper()->TransToSeparate(
+            value_, value_meta_, ikey_.type == kTypeMergeIndex, false);
+        if (!s.ok()) {
+          valid_ = false;
+          status_ = std::move(s);
+        }
         return;
       }
       s = input_.separate_helper()->TransToSeparate(
@@ -771,7 +778,12 @@ void CompactionIterator::PrepareOutput() {
   }
   if (ikey_.type == kTypeValueIndex || ikey_.type == kTypeMergeIndex) {
     assert(value_.file_number() != uint64_t(-1));
-    SeparateHelper::TransToSeparate(value_);
+    auto s = input_.separate_helper()->TransToSeparate(
+        value_, value_meta_, ikey_.type == kTypeMergeIndex, true);
+    if (!s.ok()) {
+      valid_ = false;
+      status_ = std::move(s);
+    }
     return;
   }
   if ((compaction_ != nullptr && !compaction_->allow_ingest_behind()) &&
