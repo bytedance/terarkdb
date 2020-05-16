@@ -68,9 +68,6 @@ Status SequentialFileReader::Skip(uint64_t n) {
   return file_->Skip(n);
 }
 
-// this is a workaround for resolve non-TerarkZipTable using mmap read will OOM
-const bool g_UseFsRead = terark::getEnvBool("TerarkDB_FileReaderUseFsRead");
-
 Status RandomAccessFileReader::Read(uint64_t offset, size_t n, Slice* result,
                                     char* scratch) const {
   Status s;
@@ -155,6 +152,9 @@ Status RandomAccessFileReader::Read(uint64_t offset, size_t n, Slice* result,
           start_ts = std::chrono::system_clock::now();
         }
 #endif
+        // this is a workaround for resolve non-TerarkZipTable using mmap read will OOM
+        // use 'static' for 'init on first use'
+        static const bool g_UseFsRead = terark::getEnvBool("TerarkDB_FileReaderUseFsRead");
         if (g_UseFsRead) {
           s = file_->FsRead(offset + pos, allowed, scratch + pos);
         } else {
