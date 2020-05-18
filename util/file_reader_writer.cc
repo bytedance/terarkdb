@@ -157,6 +157,7 @@ Status RandomAccessFileReader::Read(uint64_t offset, size_t n, Slice* result,
         static const bool g_UseFsRead = terark::getEnvBool("TerarkDB_FileReaderUseFsRead");
         if (g_UseFsRead) {
           s = file_->FsRead(offset + pos, allowed, scratch + pos);
+          tmp_result = Slice(scratch + pos, s.ok() ? allowed : 0);
         } else {
           s = file_->Read(offset + pos, allowed, &tmp_result, scratch + pos);
         }
