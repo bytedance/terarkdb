@@ -281,7 +281,7 @@ const {
         errno);
   }
   */
-  *res = Slice((char*)res, bytes_read);
+  *res = Slice((char*)buf, bytes_read);
   return s;
 }
 
