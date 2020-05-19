@@ -83,9 +83,8 @@ SequentialFile::~SequentialFile() {}
 
 RandomAccessFile::~RandomAccessFile() {}
 
-Status RandomAccessFile::FsRead(uint64_t offset, size_t len, void* buf) const {
-  Slice res;
-  return Read(offset, len, &res, (char*)buf);
+Status RandomAccessFile::FsRead(uint64_t offset, size_t len, Slice* res, void* buf) const {
+  return Read(offset, len, res, (char*)buf);
 }
 
 WritableFile::~WritableFile() {}

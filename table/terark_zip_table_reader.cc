@@ -854,7 +854,8 @@ static const byte_t* FsPread(void* vself, size_t offset, size_t len,
                              valvec<byte_t>* buf) {
   TerarkZipSubReader* self = (TerarkZipSubReader*)vself;
   buf->resize_no_init(len);
-  Status s = self->storeFileObj_->FsRead(offset, len, buf->data());
+  Slice unused;
+  Status s = self->storeFileObj_->FsRead(offset, len, &unused, buf->data());
   if (terark_unlikely(!s.ok())) {
     // to be catched by TerarkZipSubReader::Get()
     throw std::logic_error(s.ToString());
