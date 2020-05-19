@@ -829,6 +829,7 @@ TerarkZipTableReaderBase::GetTableProperties() const {
     if (!s.ok()) {
       return nullptr;
     }
+    props->compression_name = "TERARK";
     assert(props != nullptr);
     return std::shared_ptr<const TableProperties>(props);
   }
@@ -1022,6 +1023,7 @@ Status TerarkEmptyTableReader::Open(RandomAccessFileReader* file,
     return s;
   }
   assert(nullptr != props);
+  props->compression_name = "TERARK";
   if (ioptions.pin_table_properties_in_reader) {
     table_properties_.reset(props);
   }
@@ -1073,6 +1075,7 @@ Status TerarkZipTableReader::Open(RandomAccessFileReader* file,
     return s;
   }
   assert(nullptr != props);
+  props->compression_name = "TERARK";
   if (ioptions.pin_table_properties_in_reader) {
     table_properties_.reset(props);
   }
@@ -1644,6 +1647,7 @@ Status TerarkZipTableMultiReader::Open(RandomAccessFileReader* file,
     return s;
   }
   assert(nullptr != props);
+  props->compression_name = "TERARK";
   if (ioptions.pin_table_properties_in_reader) {
     table_properties_.reset(props);
   }
