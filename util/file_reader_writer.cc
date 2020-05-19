@@ -68,6 +68,35 @@ Status SequentialFileReader::Skip(uint64_t n) {
   return file_->Skip(n);
 }
 
+RandomAccessFileReader::RandomAccessFileReader(
+      std::unique_ptr<RandomAccessFile>&& raf, std::string _file_name,
+      Env* env, Statistics* stats, uint32_t hist_type,
+      HistogramImpl* file_read_hist,
+      RateLimiter* rate_limiter, bool for_compaction,
+      const std::vector<std::shared_ptr<EventListener>>& listeners)
+      : file_(std::move(raf)),
+        file_name_(std::move(_file_name)),
+        env_(env),
+        stats_(stats),
+        hist_type_(hist_type),
+        for_compaction_(for_compaction),
+        file_read_hist_(file_read_hist),
+        rate_limiter_(rate_limiter),
+        listeners_()
+{
+#ifndef ROCKSDB_LITE
+    std::for_each(listeners.begin(), listeners.end(),
+                  [this](const std::shared_ptr<EventListener>& e) {
+                    if (e->ShouldBeNotifiedOnFileIO()) {
+                      listeners_.emplace_back(e);
+                    }
+                  });
+#else  // !ROCKSDB_LITE
+    (void)listeners;
+#endif
+    use_fsread_ = terark::getEnvBool("TerarkDB_FileReaderUseFsRead");
+}
+
 Status RandomAccessFileReader::Read(uint64_t offset, size_t n, Slice* result,
                                     char* scratch) const {
   Status s;
@@ -154,8 +183,7 @@ Status RandomAccessFileReader::Read(uint64_t offset, size_t n, Slice* result,
 #endif
         // this is a workaround for resolve non-TerarkZipTable using mmap read will OOM
         // use 'static' for 'init on first use'
-        static const bool g_UseFsRead = terark::getEnvBool("TerarkDB_FileReaderUseFsRead");
-        if (g_UseFsRead) {
+        if (use_fsread_) {
           s = file_->FsRead(offset + pos, allowed, &tmp_result, scratch + pos);
         } else {
           s = file_->Read(offset + pos, allowed, &tmp_result, scratch + pos);

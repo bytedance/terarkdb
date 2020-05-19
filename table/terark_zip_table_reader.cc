@@ -1015,6 +1015,7 @@ TerarkZipSubReader::~TerarkZipSubReader() { type_.risk_release_ownership(); }
 
 Status TerarkEmptyTableReader::Open(RandomAccessFileReader* file,
                                     uint64_t file_size) {
+  file->set_use_fsread(false);
   file_.reset(file);  // take ownership
   const auto& ioptions = table_reader_options_.ioptions;
   TableProperties* props = nullptr;
@@ -1067,6 +1068,7 @@ AbstractBlobStore::Dictionary getVerifyDict(Slice dictData) {
 
 Status TerarkZipTableReader::Open(RandomAccessFileReader* file,
                                   uint64_t file_size) {
+  file->set_use_fsread(false);
   file_.reset(file);  // take ownership
   const auto& ioptions = table_reader_options_.ioptions;
   TableProperties* props = nullptr;
@@ -1639,6 +1641,7 @@ TerarkZipTableMultiReader::TerarkZipTableMultiReader(
 
 Status TerarkZipTableMultiReader::Open(RandomAccessFileReader* file,
                                        uint64_t file_size) {
+  file->set_use_fsread(false);
   file_.reset(file);  // take ownership
   const auto& ioptions = table_reader_options_.ioptions;
   TableProperties* props = nullptr;
