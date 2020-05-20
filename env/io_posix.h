@@ -167,7 +167,7 @@ class PosixMmapReadableFile : public RandomAccessFile {
   virtual bool use_aio_reads() const final;
   virtual Status Read(uint64_t offset, size_t n, Slice* result,
                       char* scratch) const override;
-  virtual Status FsRead(uint64_t offset, size_t len, void* buf) const override;
+  virtual Status FsRead(uint64_t offset, size_t len, Slice* result, void* buf) const override;
   virtual Status InvalidateCache(size_t offset, size_t length) override;
   virtual intptr_t FileDescriptor() const override;
 };

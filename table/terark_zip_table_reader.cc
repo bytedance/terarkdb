@@ -854,7 +854,8 @@ static const byte_t* FsPread(void* vself, size_t offset, size_t len,
                              valvec<byte_t>* buf) {
   TerarkZipSubReader* self = (TerarkZipSubReader*)vself;
   buf->resize_no_init(len);
-  Status s = self->storeFileObj_->FsRead(offset, len, buf->data());
+  Slice unused;
+  Status s = self->storeFileObj_->FsRead(offset, len, &unused, buf->data());
   if (terark_unlikely(!s.ok())) {
     // to be catched by TerarkZipSubReader::Get()
     throw std::logic_error(s.ToString());
@@ -1014,6 +1015,7 @@ TerarkZipSubReader::~TerarkZipSubReader() { type_.risk_release_ownership(); }
 
 Status TerarkEmptyTableReader::Open(RandomAccessFileReader* file,
                                     uint64_t file_size) {
+  file->set_use_fsread(false);
   file_.reset(file);  // take ownership
   const auto& ioptions = table_reader_options_.ioptions;
   TableProperties* props = nullptr;
@@ -1066,6 +1068,7 @@ AbstractBlobStore::Dictionary getVerifyDict(Slice dictData) {
 
 Status TerarkZipTableReader::Open(RandomAccessFileReader* file,
                                   uint64_t file_size) {
+  file->set_use_fsread(false);
   file_.reset(file);  // take ownership
   const auto& ioptions = table_reader_options_.ioptions;
   TableProperties* props = nullptr;
@@ -1638,6 +1641,7 @@ TerarkZipTableMultiReader::TerarkZipTableMultiReader(
 
 Status TerarkZipTableMultiReader::Open(RandomAccessFileReader* file,
                                        uint64_t file_size) {
+  file->set_use_fsread(false);
   file_.reset(file);  // take ownership
   const auto& ioptions = table_reader_options_.ioptions;
   TableProperties* props = nullptr;

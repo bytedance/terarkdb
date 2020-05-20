@@ -324,15 +324,10 @@ bool PosixRandomAccessFile::use_aio_reads() const {
     return use_aio_reads_;
 }
 
-Status PosixRandomAccessFile::Read(uint64_t offset, size_t n, Slice* result,
-                                   char* scratch) const {
-#if !defined(NDEBUG)
-  if (use_direct_io_) {
-    assert(IsSectorAligned(offset, GetRequiredBufferAlignment()));
-    assert(IsSectorAligned(n, GetRequiredBufferAlignment()));
-    assert(IsSectorAligned(scratch, GetRequiredBufferAlignment()));
-  }
-#endif
+static Status PosixFsRead(uint64_t offset, size_t n, Slice* result,
+                          char* scratch,
+                          int fd_, const std::string& filename_,
+                          bool use_aio_reads_, bool use_direct_io_, size_t filealign) {
   Status s;
   ssize_t r = -1;
   size_t left = n;
@@ -354,7 +349,7 @@ Status PosixRandomAccessFile::Read(uint64_t offset, size_t n, Slice* result,
     offset += r;
     left -= r;
     if (use_direct_io_ &&
-        r % static_cast<ssize_t>(GetRequiredBufferAlignment()) != 0) {
+        r % static_cast<ssize_t>(filealign) != 0) {
       // Bytes reads don't fill sectors. Should only happen at the end
       // of the file.
       break;
@@ -368,6 +363,19 @@ Status PosixRandomAccessFile::Read(uint64_t offset, size_t n, Slice* result,
   }
   *result = Slice(scratch, (r < 0) ? 0 : n - left);
   return s;
+}
+
+Status PosixRandomAccessFile::Read(uint64_t offset, size_t n, Slice* result,
+                                   char* scratch) const {
+#if !defined(NDEBUG)
+  if (use_direct_io_) {
+    assert(IsSectorAligned(offset, GetRequiredBufferAlignment()));
+    assert(IsSectorAligned(n, GetRequiredBufferAlignment()));
+    assert(IsSectorAligned(scratch, GetRequiredBufferAlignment()));
+  }
+#endif
+  return PosixFsRead(offset, n, result, scratch, fd_, filename_,
+      use_aio_reads_, use_direct_io_, GetRequiredBufferAlignment());
 }
 
 Status PosixRandomAccessFile::Prefetch(uint64_t offset, size_t n) {
@@ -498,25 +506,11 @@ Status PosixMmapReadableFile::Read(uint64_t offset, size_t n, Slice* result,
 // There are 2 purpose of FsRead:
 // 1. Preventing link page cache to process's address space
 // 2. Implement network fs by client lib(faster than fuse...)
-Status PosixMmapReadableFile::FsRead(uint64_t offset, size_t len, void* buf)
+Status PosixMmapReadableFile::FsRead(uint64_t offset, size_t len, Slice* result, void* buf)
 const {
-    Status s;
-    ssize_t nRead;
-    if (use_aio_reads_) {
-        assert(size_t(buf) % 4096 == 0);
-        nRead = terark::fiber_aio_read(fd_, buf, len, offset);
-    } else {
-        nRead = ::pread(fd_, buf, len, offset);
-    }
-    if (nRead != ssize_t(len)) {
-        s = IOError("PosixMmapReadableFile::FsRead(): pread(offset = "
-                    + ToString(offset)
-                    + ", len = " + ToString(len)
-                    + ", aio = " + ToString(use_aio_reads_)
-                    + ") = " + ToString(nRead),
-                filename_, errno);
-    }
-    return s;
+  bool use_direct_io = false;
+  return PosixFsRead(offset, len, result, (char*)buf, fd_, filename_,
+      use_aio_reads_, use_direct_io, 0);
 }
 
 Status PosixMmapReadableFile::InvalidateCache(size_t offset, size_t length) {
