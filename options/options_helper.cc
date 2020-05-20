@@ -741,6 +741,10 @@ bool SerializeSingleOptionHelper(const char* opt_address,
       return SerializeEnum<CompactionStopStyle>(
           compaction_stop_style_string_map,
           *reinterpret_cast<const CompactionStopStyle*>(opt_address), value);
+    case OptionType::kEntropyAlgo:
+      return SerializeEnum<TerarkZipTableOptions::EntropyAlgo>(
+          entropy_algo_string_map,
+          *reinterpret_cast<const TerarkZipTableOptions::EntropyAlgo*>(opt_address), value);
     case OptionType::kWriteBufferFlushPri:
       return SerializeEnum<WriteBufferFlushPri>(
           write_buffer_flush_pri_string_map,

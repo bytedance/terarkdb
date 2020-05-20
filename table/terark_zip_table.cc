@@ -431,34 +431,45 @@ std::string TerarkZipTableFactory::GetPrintableTableOptions() const {
   return ret;
 }
 
+namespace {
+bool SerializeSingleTerarkZipTableOption(
+    std::string* opt_string, const TerarkZipTableOptions& tzto_options,
+    const std::string& name, const std::string& delimiter) {
+  auto iter = terark_zip_table_type_info.find(name);
+  if (iter == terark_zip_table_type_info.end()) {
+    return false;
+  }
+  auto& opt_info = iter->second;
+  const char* opt_address =
+      reinterpret_cast<const char*>(&tzto_options) + opt_info.offset;
+  std::string value;
+  bool result = SerializeSingleOptionHelper(opt_address, opt_info.type, &value);
+  if (result) {
+    *opt_string = name + "=" + value + delimiter;
+  }
+  return result;
+}
+}  // namespace
+
 Status TerarkZipTableFactory::GetOptionString(
     std::string* opt_string, const std::string& delimiter) const {
-  const char* cvb[] = {"false", "true"};
-  const int kBufferSize = 200;
-  char buffer[kBufferSize];
-  const auto& tzto = table_options_;
-
-  std::string& ret = *opt_string;
-  ret.resize(0);
-
-#define WriteName(name) ret.append(#name).append("=")
-
-#define M_String(name) WriteName(name).append(tzto.name).append(delimiter)
-#define M_NumFmt(name, fmt) \
-  WriteName(name);          \
-  PrintBuf(fmt, tzto.name); \
-  ret.append(delimiter)
-#define M_NumGiB(name)                  \
-  WriteName(name);                      \
-  PrintBuf("%.3fGiB", tzto.name / GiB); \
-  ret.append(delimiter)
-#define M_Boolea(name)              \
-  WriteName(name);                  \
-  PrintBuf("%s", cvb[!!tzto.name]); \
-  ret.append(delimiter)
-
-#include "terark_zip_table_property_print.h"
-
+  assert(opt_string);
+  opt_string->clear();
+  for (auto iter = terark_zip_table_type_info.begin();
+       iter != terark_zip_table_type_info.end(); ++iter) {
+    if (iter->second.verification == OptionVerificationType::kDeprecated) {
+      // If the option is no longer used in rocksdb and marked as deprecated,
+      // we skip it in the serialization.
+      continue;
+    }
+    std::string single_output;
+    bool result = SerializeSingleTerarkZipTableOption(
+        &single_output, table_options_, iter->first, delimiter);
+    assert(result);
+    if (result) {
+      opt_string->append(single_output);
+    }
+  }
   return Status::OK();
 }
 
