@@ -247,6 +247,7 @@ DictZipBlobStore::ZipBuilder* TerarkZipTableBuilder::createZipBuilder() const {
   dzopt.offsetArrayBlockUnits = table_options_.offsetArrayBlockUnits;
   dzopt.useSuffixArrayLocalMatch = table_options_.useSuffixArrayLocalMatch;
   dzopt.enableLake = table_options_.optimizeCpuL3Cache;
+  dzopt.compressGlobalDict = !table_options_.disableCompressDict;
   return DictZipBlobStore::createZipBuilder(dzopt);
 }
 
