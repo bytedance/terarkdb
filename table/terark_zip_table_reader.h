@@ -49,6 +49,7 @@ class TerarkZipTableReaderBase : public TableReader, boost::noncopyable {
 
   std::shared_ptr<const TableProperties> table_properties_;
   unique_ptr<RandomAccessFileReader> file_;
+  Slice file_data_;
 
   virtual SequenceNumber GetSequenceNumber() const = 0;
 
@@ -70,6 +71,13 @@ class TerarkZipTableReaderBase : public TableReader, boost::noncopyable {
       const ReadOptions& read_options) override;
 
   std::shared_ptr<const TableProperties> GetTableProperties() const override;
+
+  void MmapColdize(const void* addr, size_t len);
+  void MmapColdize(terark::fstring mem) { MmapColdize(mem.data(), mem.size()); }
+  template <class Vec>
+  void MmapColdize(const Vec& uv) {
+    MmapColdize(uv.data(), uv.mem_size());
+  }
 };
 
 class TerarkEmptyTableReader : public TerarkZipTableReaderBase {
@@ -91,7 +99,6 @@ class TerarkEmptyTableReader : public TerarkZipTableReaderBase {
     Status status() const override { return Status::OK(); }
   };
   SequenceNumber global_seqno_;
-  Slice file_data_;
 
  public:
   InternalIterator* NewIterator(const ReadOptions& /*ro*/,
@@ -200,7 +207,6 @@ class TerarkZipTableReader : public TerarkZipTableReaderBase {
 
   TerarkZipSubReader subReader_;
   static const size_t kNumInternalBytes = 8;
-  Slice file_data_;
   valvec<byte_t> dict_;
   valvec<byte_t> meta_;
   const TerarkZipTableFactory* table_factory_;
@@ -281,7 +287,6 @@ class TerarkZipTableMultiReader : public TerarkZipTableReaderBase {
 
   SubIndex subIndex_;
   static const size_t kNumInternalBytes = 8;
-  Slice file_data_;
   valvec<byte_t> dict_;
   valvec<byte_t> meta_;
   const TerarkZipTableFactory* table_factory_;

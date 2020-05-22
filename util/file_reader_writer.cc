@@ -750,9 +750,15 @@ class MemoryRandomAccessFile : public RandomAccessFile {
     data_.reset(new char[size]);
     Slice result;
     status_ = file_->Read(0, size, &result, data_.get());
-    if (status_.ok() && result.size() != size) {
-      status_ = Status::Corruption("MemoryRandomAccessFile", "Bad FileSize");
+    if (status_.ok()) {
+      if (result.size() != size) {
+        status_ = Status::Corruption("MemoryRandomAccessFile", "Bad FileSize");
+      }
+      if (result.data() != data_.get()) {
+        memcpy(data_.get(), result.data(), size);
+      }
     }
+    file_->InvalidateCache(0, size);
   }
 
   Status Read(uint64_t offset, size_t n, Slice* result,
