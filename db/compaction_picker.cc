@@ -1945,10 +1945,18 @@ Compaction* CompactionPicker::PickBottommostLevelCompaction(
     if (!f->prop.has_snapshots() && f->prop.num_deletions == 0) {
       return false;
     }
+    SequenceNumber oldest_snapshot_seqnum =
+        snapshots.empty() ? kMaxSequenceNumber : snapshots.front();
+    if (!ioptions_.pin_table_properties_in_reader) {
+      return f->fd.largest_seqno < oldest_snapshot_seqnum;
+    }
     std::shared_ptr<const TableProperties> tp;
     auto s = table_cache_->GetTableProperties(
-        env_options_, *icmp_, f->fd, &tp,
-        mutable_cf_options.prefix_extractor.get(), false);
+        env_options_, *icmp_, *f, &tp,
+        mutable_cf_options.prefix_extractor.get(), true);
+    if (s.IsIncomplete()) {
+      return f->fd.largest_seqno < oldest_snapshot_seqnum;
+    }
     if (!s.ok()) {
       ROCKS_LOG_BUFFER(log_buffer,
                        "[%s] CompactionPicker::PickBottommostLevelCompaction "

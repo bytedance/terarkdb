@@ -712,7 +712,7 @@ Status Version::GetTableProperties(std::shared_ptr<const TableProperties>* tp,
   auto table_cache = cfd_->table_cache();
   auto ioptions = cfd_->ioptions();
   Status s = table_cache->GetTableProperties(
-      env_options_, cfd_->internal_comparator(), file_meta->fd, tp,
+      env_options_, cfd_->internal_comparator(), *file_meta, tp,
       mutable_cf_options_.prefix_extractor.get(), true /* no io */);
   if (s.ok()) {
     return s;
@@ -3131,9 +3131,11 @@ Status VersionSet::ProcessManifestWrites(
     }
 
     TEST_SYNC_POINT("VersionSet::LogAndApply:WriteManifest");
-    if (!first_writer.edit_list.front()->IsColumnFamilyManipulation() &&
-        column_family_set_->get_table_cache()->GetCapacity() ==
-            TableCache::kInfiniteCapacity) {
+
+    if (!first_writer.edit_list.front()->IsColumnFamilyManipulation()) {
+      bool load_essence_sst =
+          column_family_set_->get_table_cache()->GetCapacity() ==
+          TableCache::kInfiniteCapacity;
       for (int i = 0; i < static_cast<int>(versions.size()); ++i) {
         assert(!builder_guards.empty() &&
                builder_guards.size() == versions.size());
@@ -3142,7 +3144,8 @@ Status VersionSet::ProcessManifestWrites(
         ColumnFamilyData* cfd = versions[i]->cfd_;
         builder_guards[i]->version_builder()->LoadTableHandlers(
             cfd->internal_stats(), cfd->ioptions()->optimize_filters_for_hits,
-            mutable_cf_options_ptrs[i]->prefix_extractor.get());
+            mutable_cf_options_ptrs[i]->prefix_extractor.get(),
+            load_essence_sst);
       }
     }
 
@@ -3818,16 +3821,17 @@ Status VersionSet::Recover(
       assert(builders_iter != builders.end());
       auto* builder = builders_iter->second->version_builder();
 
-      if (GetColumnFamilySet()->get_table_cache()->GetCapacity() ==
-          TableCache::kInfiniteCapacity) {
-        // unlimited table cache. Pre-load table handle now.
-        // Need to do it out of the mutex.
-        builder->LoadTableHandlers(
-            cfd->internal_stats(),
-            false /* prefetch_index_and_filter_in_cache */,
-            cfd->GetLatestMutableCFOptions()->prefix_extractor.get(),
-            db_options_->max_file_opening_threads);
-      }
+      bool load_essence_sst =
+          GetColumnFamilySet()->get_table_cache()->GetCapacity() ==
+          TableCache::kInfiniteCapacity;
+      // if unlimited table cache, pre-load all table handle. otherwise only
+      // pre-load map sst.
+      // Need to do it out of the mutex.
+      builder->LoadTableHandlers(
+          cfd->internal_stats(), false /* prefetch_index_and_filter_in_cache */,
+          cfd->GetLatestMutableCFOptions()->prefix_extractor.get(),
+          load_essence_sst, db_options_->max_file_opening_threads);
+
       builder->UpgradeFileMetaData(
           cfd->GetLatestMutableCFOptions()->prefix_extractor.get(),
           db_options_->max_file_opening_threads);

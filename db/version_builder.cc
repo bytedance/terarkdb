@@ -682,14 +682,15 @@ class VersionBuilder::Rep {
   void LoadTableHandlers(InternalStats* internal_stats,
                          bool prefetch_index_and_filter_in_cache,
                          const SliceTransform* prefix_extractor,
-                         int max_threads) {
+                         bool load_essence_sst, int max_threads) {
     assert(table_cache_ != nullptr);
     // <file metadata, level>
     std::vector<std::pair<FileMetaData*, int>> files_meta;
     for (int level = 0; level < num_levels_; level++) {
       for (auto& file_meta_pair : levels_[level]) {
         auto* file_meta = file_meta_pair.second;
-        if (file_meta->table_reader_handle == nullptr) {
+        if ((load_essence_sst || file_meta->prop.is_map_sst()) &&
+            file_meta->table_reader_handle == nullptr) {
           files_meta.emplace_back(file_meta, level);
         }
       }
@@ -697,6 +698,7 @@ class VersionBuilder::Rep {
     for (auto& pair : dependence_map_) {
       auto& item = pair.second;
       if (item.dependence_version == dependence_version_ && item.level == -1 &&
+          (load_essence_sst || item.f->prop.is_map_sst()) &&
           item.f->table_reader_handle == nullptr) {
         files_meta.emplace_back(item.f, -1);
       }
@@ -718,7 +720,7 @@ class VersionBuilder::Rep {
             env_options_, *base_vstorage_->InternalComparator(), file_meta->fd,
             &file_meta->table_reader_handle, prefix_extractor, false /*no_io */,
             true /* record_read_stats */, file_read_hist, false, level,
-            prefetch_index_and_filter_in_cache);
+            prefetch_index_and_filter_in_cache, file_meta->prop.is_map_sst());
         if (file_meta->table_reader_handle != nullptr) {
           // Load table_reader
           file_meta->fd.table_reader = table_cache_->GetTableReaderFromHandle(
@@ -761,7 +763,7 @@ class VersionBuilder::Rep {
         std::shared_ptr<const TableProperties> properties;
 
         auto s = table_cache_->GetTableProperties(
-            env_options_, *base_vstorage_->InternalComparator(), file_meta->fd,
+            env_options_, *base_vstorage_->InternalComparator(), *file_meta,
             &properties, prefix_extractor, false /*no_io */);
 
         if (s.ok() && properties) {
@@ -815,9 +817,9 @@ void VersionBuilder::SaveTo(VersionStorageInfo* vstorage) {
 void VersionBuilder::LoadTableHandlers(InternalStats* internal_stats,
                                        bool prefetch_index_and_filter_in_cache,
                                        const SliceTransform* prefix_extractor,
-                                       int max_threads) {
+                                       bool load_essence_sst, int max_threads) {
   rep_->LoadTableHandlers(internal_stats, prefetch_index_and_filter_in_cache,
-                          prefix_extractor, max_threads);
+                          prefix_extractor, load_essence_sst, max_threads);
 }
 
 void VersionBuilder::UpgradeFileMetaData(const SliceTransform* prefix_extractor,

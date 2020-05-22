@@ -139,7 +139,8 @@ Status TableCache::GetTableReader(
     bool sequential_mode, size_t readahead, bool record_read_stats,
     HistogramImpl* file_read_hist, std::unique_ptr<TableReader>* table_reader,
     const SliceTransform* prefix_extractor, bool skip_filters, int level,
-    bool prefetch_index_and_filter_in_cache, bool for_compaction) {
+    bool prefetch_index_and_filter_in_cache, bool for_compaction,
+    bool force_memory) {
   std::string fname =
       TableFileName(ioptions_.cf_paths, fd.GetNumber(), fd.GetPathId());
   std::unique_ptr<RandomAccessFile> file;
@@ -147,7 +148,9 @@ Status TableCache::GetTableReader(
 
   RecordTick(ioptions_.statistics, NO_FILE_OPENS);
   if (s.ok()) {
-    if (readahead > 0 && !env_options.use_mmap_reads) {
+    if (force_memory) {
+      file = NewMemoryRandomAccessFile(std::move(file), fd.GetFileSize());
+    } else if (readahead > 0 && !env_options.use_mmap_reads) {
       // Not compatible with mmap files since ReadaheadRandomAccessFile requires
       // its wrapped file's Read() to copy data into the provided scratch
       // buffer, which mmap files don't use.
@@ -188,8 +191,8 @@ Status TableCache::FindTable(const EnvOptions& env_options,
                              const SliceTransform* prefix_extractor,
                              const bool no_io, bool record_read_stats,
                              HistogramImpl* file_read_hist, bool skip_filters,
-                             int level,
-                             bool prefetch_index_and_filter_in_cache) {
+                             int level, bool prefetch_index_and_filter_in_cache,
+                             bool force_memory) {
   PERF_TIMER_GUARD(find_table_nanos);
   Status s;
   uint64_t number = fd.GetNumber();
@@ -207,7 +210,8 @@ Status TableCache::FindTable(const EnvOptions& env_options,
                        false /* sequential mode */, 0 /* readahead */,
                        record_read_stats, file_read_hist, &table_reader,
                        prefix_extractor, skip_filters, level,
-                       prefetch_index_and_filter_in_cache);
+                       prefetch_index_and_filter_in_cache,
+                       false /* for_compaction */, force_memory);
     if (!s.ok()) {
       assert(table_reader == nullptr);
       RecordTick(ioptions_.statistics, NO_FILE_ERRORS);
@@ -269,11 +273,12 @@ InternalIterator* TableCache::NewIterator(
   auto& fd = file_meta.fd;
   if (create_new_table_reader) {
     std::unique_ptr<TableReader> table_reader_unique_ptr;
-    s = GetTableReader(
-        env_options, icomparator, fd, true /* sequential_mode */, readahead,
-        record_stats, nullptr, &table_reader_unique_ptr, prefix_extractor,
-        false /* skip_filters */, level,
-        true /* prefetch_index_and_filter_in_cache */, for_compaction);
+    s = GetTableReader(env_options, icomparator, fd, true /* sequential_mode */,
+                       readahead, record_stats, nullptr,
+                       &table_reader_unique_ptr, prefix_extractor,
+                       false /* skip_filters */, level,
+                       true /* prefetch_index_and_filter_in_cache */,
+                       for_compaction, file_meta.prop.is_map_sst());
     if (s.ok()) {
       table_reader = table_reader_unique_ptr.release();
     }
@@ -282,7 +287,9 @@ InternalIterator* TableCache::NewIterator(
     if (table_reader == nullptr) {
       s = FindTable(env_options, icomparator, fd, &handle, prefix_extractor,
                     options.read_tier == kBlockCacheTier /* no_io */,
-                    record_stats, file_read_hist, skip_filters, level);
+                    record_stats, file_read_hist, skip_filters, level,
+                    true /* prefetch_index_and_filter_in_cache */,
+                    file_meta.prop.is_map_sst());
       if (s.ok()) {
         table_reader = GetTableReaderFromHandle(handle);
       }
@@ -369,8 +376,8 @@ InternalIterator* TableCache::NewIterator(
         s = range_del_iter->status();
       }
       if (s.ok()) {
-        range_del_agg->AddTombstones(
-            std::move(range_del_iter), &file_meta.smallest, &file_meta.largest);
+        range_del_agg->AddTombstones(std::move(range_del_iter),
+                                     &file_meta.smallest, &file_meta.largest);
       }
     }
   }
@@ -399,10 +406,12 @@ Status TableCache::Get(const ReadOptions& options,
   TableReader* t = fd.table_reader;
   Cache::Handle* handle = nullptr;
   if (t == nullptr) {
-    s = FindTable(
-        env_options_, internal_comparator, fd, &handle, prefix_extractor,
-        options.read_tier == kBlockCacheTier /* no_io */,
-        true /* record_read_stats */, file_read_hist, skip_filters, level);
+    s = FindTable(env_options_, internal_comparator, fd, &handle,
+                  prefix_extractor,
+                  options.read_tier == kBlockCacheTier /* no_io */,
+                  true /* record_read_stats */, file_read_hist, skip_filters,
+                  level, true /* prefetch_index_and_filter_in_cache */,
+                  file_meta.prop.is_map_sst());
     if (s.ok()) {
       t = GetTableReaderFromHandle(handle);
     }
@@ -533,10 +542,12 @@ Status TableCache::Get(const ReadOptions& options,
 
 Status TableCache::GetTableProperties(
     const EnvOptions& env_options,
-    const InternalKeyComparator& internal_comparator, const FileDescriptor& fd,
+    const InternalKeyComparator& internal_comparator,
+    const FileMetaData& file_meta,
     std::shared_ptr<const TableProperties>* properties,
     const SliceTransform* prefix_extractor, bool no_io) {
   Status s;
+  auto& fd = file_meta.fd;
   auto table_reader = fd.table_reader;
   // table already been pre-loaded?
   if (table_reader) {
@@ -547,7 +558,10 @@ Status TableCache::GetTableProperties(
 
   Cache::Handle* table_handle = nullptr;
   s = FindTable(env_options, internal_comparator, fd, &table_handle,
-                prefix_extractor, no_io);
+                prefix_extractor, no_io, true /* record_read_stats */,
+                nullptr /* file_read_hist */, false /* skip_filters */,
+                -1 /* level */, true /* prefetch_index_and_filter_in_cache */,
+                file_meta.prop.is_map_sst());
   if (!s.ok()) {
     return s;
   }
@@ -586,7 +600,8 @@ void TableCache::Evict(Cache* cache, uint64_t file_number) {
   cache->Erase(GetSliceForFileNumber(&file_number));
 }
 
-void TableCache::TEST_AddMockTableReader(TableReader* table_reader, FileDescriptor fd) {
+void TableCache::TEST_AddMockTableReader(TableReader* table_reader,
+                                         FileDescriptor fd) {
   Status s;
   uint64_t number = fd.GetNumber();
   Slice key = GetSliceForFileNumber(&number);

@@ -17,6 +17,7 @@
 #include "port/port.h"
 #include "util/random.h"
 #include "util/rate_limiter.h"
+#include "util/string_util.h"
 #include "util/sync_point.h"
 
 namespace rocksdb {
@@ -69,32 +70,30 @@ Status SequentialFileReader::Skip(uint64_t n) {
 }
 
 RandomAccessFileReader::RandomAccessFileReader(
-      std::unique_ptr<RandomAccessFile>&& raf, std::string _file_name,
-      Env* env, Statistics* stats, uint32_t hist_type,
-      HistogramImpl* file_read_hist,
-      RateLimiter* rate_limiter, bool for_compaction,
-      const std::vector<std::shared_ptr<EventListener>>& listeners)
-      : file_(std::move(raf)),
-        file_name_(std::move(_file_name)),
-        env_(env),
-        stats_(stats),
-        hist_type_(hist_type),
-        for_compaction_(for_compaction),
-        file_read_hist_(file_read_hist),
-        rate_limiter_(rate_limiter),
-        listeners_()
-{
+    std::unique_ptr<RandomAccessFile>&& raf, std::string _file_name, Env* env,
+    Statistics* stats, uint32_t hist_type, HistogramImpl* file_read_hist,
+    RateLimiter* rate_limiter, bool for_compaction,
+    const std::vector<std::shared_ptr<EventListener>>& listeners)
+    : file_(std::move(raf)),
+      file_name_(std::move(_file_name)),
+      env_(env),
+      stats_(stats),
+      hist_type_(hist_type),
+      for_compaction_(for_compaction),
+      file_read_hist_(file_read_hist),
+      rate_limiter_(rate_limiter),
+      listeners_() {
 #ifndef ROCKSDB_LITE
-    std::for_each(listeners.begin(), listeners.end(),
-                  [this](const std::shared_ptr<EventListener>& e) {
-                    if (e->ShouldBeNotifiedOnFileIO()) {
-                      listeners_.emplace_back(e);
-                    }
-                  });
+  std::for_each(listeners.begin(), listeners.end(),
+                [this](const std::shared_ptr<EventListener>& e) {
+                  if (e->ShouldBeNotifiedOnFileIO()) {
+                    listeners_.emplace_back(e);
+                  }
+                });
 #else  // !ROCKSDB_LITE
-    (void)listeners;
+  (void)listeners;
 #endif
-    use_fsread_ = terark::getEnvBool("TerarkDB_FileReaderUseFsRead");
+  use_fsread_ = terark::getEnvBool("TerarkDB_FileReaderUseFsRead");
 }
 
 Status RandomAccessFileReader::Read(uint64_t offset, size_t n, Slice* result,
@@ -181,8 +180,8 @@ Status RandomAccessFileReader::Read(uint64_t offset, size_t n, Slice* result,
           start_ts = std::chrono::system_clock::now();
         }
 #endif
-        // this is a workaround for resolve non-TerarkZipTable using mmap read will OOM
-        // use 'static' for 'init on first use'
+        // this is a workaround for resolve non-TerarkZipTable using mmap read
+        // will OOM use 'static' for 'init on first use'
         if (use_fsread_) {
           s = file_->FsRead(offset + pos, allowed, &tmp_result, scratch + pos);
         } else {
@@ -742,6 +741,74 @@ class ReadaheadRandomAccessFile : public RandomAccessFile {
   mutable AlignedBuffer buffer_;
   mutable uint64_t buffer_offset_;
 };
+
+class MemoryRandomAccessFile : public RandomAccessFile {
+ public:
+  MemoryRandomAccessFile(std::unique_ptr<RandomAccessFile>&& file,
+                         uint64_t size)
+      : file_(std::move(file)), size_(size) {
+    data_.reset(new char[size]);
+    Slice result;
+    status_ = file_->Read(0, size, &result, data_.get());
+    if (status_.ok() && result.size() != size) {
+      status_ = Status::Corruption("MemoryRandomAccessFile", "Bad FileSize");
+    }
+  }
+
+  Status Read(uint64_t offset, size_t n, Slice* result,
+              char* /*scratch*/) const override {
+    if (offset > size_) {
+      *result = Slice();
+      return Status::IOError("MemoryRandomAccessFile::Read offset " +
+                                 ToString(offset) +
+                                 " larger than file length " + ToString(size_),
+                             ToString(file_->FileDescriptor()));
+    }
+    *result = Slice(data_.get() + offset, std::min(size_ - offset, n));
+    return status_;
+  }
+
+  Status Prefetch(uint64_t /*offset*/, size_t /*n*/) override {
+    return status_;
+  }
+
+  size_t GetUniqueId(char* id, size_t max_size) const override {
+    return file_->GetUniqueId(id, max_size);
+  }
+
+  bool use_direct_io() const override { return false; }
+  bool use_aio_reads() const override { return false; }
+
+  size_t GetRequiredBufferAlignment() const override {
+    return file_->GetRequiredBufferAlignment();
+  }
+
+  Status InvalidateCache(size_t /*offset*/, size_t /*length*/) override {
+    return Status::NotSupported("InvalidateCache not supported.");
+  }
+
+  Status FsRead(uint64_t offset, size_t len, Slice* result,
+                void* buf) const override {
+    if (offset > size_) {
+      *result = Slice();
+      return Status::IOError("MemoryRandomAccessFile::FsRead offset " +
+                                 ToString(offset) +
+                                 " larger than file length " + ToString(size_),
+                             ToString(file_->FileDescriptor()));
+    }
+    *result = Slice((char*)buf, std::min(size_ - offset, len));
+    memcpy(buf, data_.get() + offset, result->size());
+    return status_;
+  }
+
+  intptr_t FileDescriptor() const override { return file_->FileDescriptor(); }
+
+ protected:
+  std::unique_ptr<RandomAccessFile> file_;
+  std::unique_ptr<char[]> data_;
+  uint64_t size_;
+  Status status_;
+};
 }  // namespace
 
 Status FilePrefetchBuffer::Prefetch(RandomAccessFileReader* reader,
@@ -852,6 +919,13 @@ std::unique_ptr<RandomAccessFile> NewReadaheadRandomAccessFile(
     std::unique_ptr<RandomAccessFile>&& file, size_t readahead_size) {
   std::unique_ptr<RandomAccessFile> result(
       new ReadaheadRandomAccessFile(std::move(file), readahead_size));
+  return result;
+}
+
+std::unique_ptr<RandomAccessFile> NewMemoryRandomAccessFile(
+    std::unique_ptr<RandomAccessFile>&& file, uint64_t file_size) {
+  std::unique_ptr<RandomAccessFile> result(
+      new MemoryRandomAccessFile(std::move(file), file_size));
   return result;
 }
 
