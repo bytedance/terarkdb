@@ -430,7 +430,9 @@ Status FlushJob::WriteLevel0Table() {
   stats.micros = db_options_.env->NowMicros() - start_micros;
   stats.bytes_written = meta_.fd.GetFileSize();
   for (auto& blob : blob_meta_) {
-    stats.bytes_written = blob.fd.GetFileSize();
+    stats.bytes_written += blob.fd.GetFileSize();
+    cfd_->internal_stats()->AddCFStats(InternalStats::BYTES_FLUSHED,
+                                       blob.fd.GetFileSize());
   }
   MeasureTime(stats_, FLUSH_TIME, stats.micros);
   cfd_->internal_stats()->AddCompactionStats(0 /* level */, stats);
