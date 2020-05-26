@@ -1270,8 +1270,8 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
                                          LazyBuffer& value) = nullptr;
     void* trans_to_separate_callback_args = nullptr;
 
-    Status TransToSeparate(LazyBuffer& value, const Slice& meta,
-                           bool is_merge, bool is_index) override {
+    Status TransToSeparate(LazyBuffer& value, const Slice& meta, bool is_merge,
+                           bool is_index) override {
       return SeparateHelper::TransToSeparate(value, meta, is_merge, is_index,
                                              value_meta_extractor);
     }
@@ -1468,7 +1468,12 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
       if (!status.ok()) {
         break;
       }
-      sub_compact->builder->SetSecondPassIterator(second_pass_iter.get());
+      if ((compaction_filter == nullptr ||
+           compaction_filter->IsStableChangeValue()) &&
+          (cfd->ioptions()->merge_operator == nullptr ||
+           cfd->ioptions()->merge_operator->IsStableMerge())) {
+        sub_compact->builder->SetSecondPassIterator(second_pass_iter.get());
+      }
     }
     assert(sub_compact->builder != nullptr);
     assert(sub_compact->current_output() != nullptr);

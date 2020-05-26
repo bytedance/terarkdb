@@ -257,8 +257,8 @@ class WorkerSeparateHelper : public SeparateHelper, public LazyBufferState {
   }
 
   using SeparateHelper::TransToSeparate;
-  Status TransToSeparate(LazyBuffer& value, const Slice& meta,
-                         bool is_merge, bool is_index) override {
+  Status TransToSeparate(LazyBuffer& value, const Slice& meta, bool is_merge,
+                         bool is_index) override {
     return SeparateHelper::TransToSeparate(value, meta, is_merge, is_index,
                                            value_meta_extractor_);
   }
@@ -388,7 +388,8 @@ static std::string make_error(Status&& status) {
 std::string RemoteCompactionDispatcher::Worker::DoCompaction(Slice data) {
   CompactionWorkerContext context;
   ajson::load_from_buff(context, data);
-  context.compaction_filter_context.smallest_user_key = context.smallest_user_key;
+  context.compaction_filter_context.smallest_user_key =
+      context.smallest_user_key;
   context.compaction_filter_context.largest_user_key = context.largest_user_key;
 
   ImmutableDBOptions immutable_db_options = ImmutableDBOptions(DBOptions());
@@ -744,7 +745,7 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(Slice data) {
           immutable_cf_options.compaction_filter_factory
               ->CreateCompactionFilter(context.compaction_filter_context);
       second_pass_iter_storage.compaction_filter =
-      second_pass_iter_storage.compaction_filter_holder.get();
+          second_pass_iter_storage.compaction_filter_holder.get();
     }
     auto merge_ptr = new (&second_pass_iter_storage.merge) MergeHelper(
         env, ucmp, immutable_cf_options.merge_operator, compaction_filter,
@@ -793,7 +794,13 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(Slice data) {
                                              immutable_db_options.listeners));
     builder_ptr->reset(immutable_cf_options.table_factory->NewTableBuilder(
         table_builder_options, 0, writer_ptr->get()));
-    (*builder_ptr)->SetSecondPassIterator(second_pass_iter.get());
+
+    if ((compaction_filter == nullptr ||
+         compaction_filter->IsStableChangeValue()) &&
+        (immutable_cf_options.merge_operator == nullptr ||
+         immutable_cf_options.merge_operator->IsStableMerge())) {
+      (*builder_ptr)->SetSecondPassIterator(second_pass_iter.get());
+    }
     return s;
   };
   std::unique_ptr<WritableFileWriter> writer;

@@ -203,6 +203,10 @@ class MergeOperator
   // correctly to handle a single operand.
   virtual bool AllowSingleOperand() const { return false; }
 
+  // Determines whether composite merge would change the outcome of itself.
+  // Default as false, which means stability of outcome is not promised.
+  virtual bool IsStableMerge() const { return false; }
+
   // Allows to control when to invoke a full merge during Get.
   // This could be used to limit the number of merge operands that are looked at
   // during a point lookup, thereby helping in limiting the number of levels to
