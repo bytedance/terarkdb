@@ -147,13 +147,11 @@ extern bool ParseOptionHelper(char* opt_address, const OptionType& opt_type,
 #endif  // !ROCKSDB_LITE
 
 struct OptionsHelper {
-  static std::unordered_map<CompactionStyle, std::string>
-      compaction_style_to_string;
-  static std::unordered_map<CompactionPri, std::string>
-      compaction_pri_to_string;
-  static std::unordered_map<WriteBufferFlushPri, std::string>
+  static std::map<CompactionStyle, std::string> compaction_style_to_string;
+  static std::map<CompactionPri, std::string> compaction_pri_to_string;
+  static std::map<WriteBufferFlushPri, std::string>
       write_buffer_flush_pri_to_string;
-  static std::unordered_map<CompactionStopStyle, std::string>
+  static std::map<CompactionStopStyle, std::string>
       compaction_stop_style_to_string;
   static std::unordered_map<std::string, ChecksumType> checksum_type_string_map;
   static std::unordered_map<std::string, CompressionType>

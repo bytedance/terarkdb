@@ -206,25 +206,24 @@ ColumnFamilyOptions BuildColumnFamilyOptions(
   return cf_opts;
 }
 
-std::unordered_map<CompactionStyle, std::string>
+std::map<CompactionStyle, std::string>
     OptionsHelper::compaction_style_to_string = {
         {kCompactionStyleLevel, "kCompactionStyleLevel"},
         {kCompactionStyleUniversal, "kCompactionStyleUniversal"},
         {kCompactionStyleFIFO, "kCompactionStyleFIFO"},
         {kCompactionStyleNone, "kCompactionStyleNone"}};
 
-std::unordered_map<CompactionPri, std::string>
-    OptionsHelper::compaction_pri_to_string = {
-        {kByCompensatedSize, "kByCompensatedSize"},
-        {kOldestLargestSeqFirst, "kOldestLargestSeqFirst"},
-        {kOldestSmallestSeqFirst, "kOldestSmallestSeqFirst"},
-        {kMinOverlappingRatio, "kMinOverlappingRatio"}};
+std::map<CompactionPri, std::string> OptionsHelper::compaction_pri_to_string = {
+    {kByCompensatedSize, "kByCompensatedSize"},
+    {kOldestLargestSeqFirst, "kOldestLargestSeqFirst"},
+    {kOldestSmallestSeqFirst, "kOldestSmallestSeqFirst"},
+    {kMinOverlappingRatio, "kMinOverlappingRatio"}};
 
-std::unordered_map<WriteBufferFlushPri, std::string>
+std::map<WriteBufferFlushPri, std::string>
     OptionsHelper::write_buffer_flush_pri_to_string = {
         {kFlushOldest, "kFlushOldest"}, {kFlushLargest, "kFlushLargest"}};
 
-std::unordered_map<CompactionStopStyle, std::string>
+std::map<CompactionStopStyle, std::string>
     OptionsHelper::compaction_stop_style_to_string = {
         {kCompactionStopStyleSimilarSize, "kCompactionStopStyleSimilarSize"},
         {kCompactionStopStyleTotalSize, "kCompactionStopStyleTotalSize"}};
