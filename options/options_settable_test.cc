@@ -233,6 +233,7 @@ TEST_F(OptionsSettableTest, DBOptionsAllFieldsSettable) {
                              "WAL_ttl_seconds=4295008036;"
                              "WAL_size_limit_MB=4295036161;"
                              "wal_dir=path/to/wal_dir;"
+                             "write_buffer_flush_pri=kFlushLargest;"
                              "db_write_buffer_size=2587;"
                              "table_cache_numshardbits=28;"
                              "max_open_files=72;"

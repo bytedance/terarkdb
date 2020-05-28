@@ -717,7 +717,7 @@ struct DBOptions {
   bool allow_mmap_populate = false;
 
   //
-  WriteBufferFlushPri write_buffer_flush_pri = kFlushOldest;
+  WriteBufferFlushPri write_buffer_flush_pri = kFlushLargest;
 
   // Amount of data to build up in memtables across all column
   // families before writing to disk.
