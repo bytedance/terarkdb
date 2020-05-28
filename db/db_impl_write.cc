@@ -1154,6 +1154,7 @@ Status DBImpl::HandleWriteBufferFull(WriteContext* write_context) {
   } else {
     ColumnFamilyData* cfd_picked = nullptr;
     SequenceNumber seq_num_for_cf_picked = kMaxSequenceNumber;
+    size_t largest_cfd_size = 0;
 
     for (auto cfd : *versions_->GetColumnFamilySet()) {
       if (cfd->IsDropped()) {
@@ -1162,10 +1163,19 @@ Status DBImpl::HandleWriteBufferFull(WriteContext* write_context) {
       if (!cfd->mem()->IsEmpty()) {
         // We only consider active mem table, hoping immutable memtable is
         // already in the process of flushing.
-        uint64_t seq = cfd->mem()->GetCreationSeq();
-        if (cfd_picked == nullptr || seq < seq_num_for_cf_picked) {
-          cfd_picked = cfd;
-          seq_num_for_cf_picked = seq;
+        if (immutable_db_options_.write_buffer_flush_pri == kFlushOldest) {
+          uint64_t seq = cfd->mem()->GetCreationSeq();
+          if (cfd_picked == nullptr || seq < seq_num_for_cf_picked) {
+            cfd_picked = cfd;
+            seq_num_for_cf_picked = seq;
+          }
+        } else {
+          assert(immutable_db_options_.write_buffer_flush_pri == kFlushLargest);
+          size_t cfd_size = cfd->mem()->ApproximateMemoryUsage();
+          if (cfd_picked == nullptr || cfd_size > largest_cfd_size) {
+            cfd_picked = cfd;
+            largest_cfd_size = cfd_size;
+          }
         }
       }
     }

@@ -78,6 +78,10 @@ enum CompressionType : unsigned char {
   kDisableCompressionOption = 0xff,
 };
 
+enum WriteBufferFlushPri : unsigned char {
+  kFlushOldest, kFlushLargest
+};
+
 // Sst purpose
 enum SstPurpose {
   kEssenceSst,  // Actual data storage sst
@@ -711,6 +715,9 @@ struct DBOptions {
   bool advise_random_on_open = true;
 
   bool allow_mmap_populate = false;
+
+  //
+  WriteBufferFlushPri write_buffer_flush_pri = kFlushOldest;
 
   // Amount of data to build up in memtables across all column
   // families before writing to disk.

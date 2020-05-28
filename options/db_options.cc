@@ -12,6 +12,7 @@
 #include <inttypes.h>
 
 #include "port/port.h"
+#include "options/options_helper.h"
 #include "rocksdb/cache.h"
 #include "rocksdb/env.h"
 #include "rocksdb/sst_file_manager.h"
@@ -59,6 +60,7 @@ ImmutableDBOptions::ImmutableDBOptions(const DBOptions& options)
       is_fd_close_on_exec(options.is_fd_close_on_exec),
       advise_random_on_open(options.advise_random_on_open),
       allow_mmap_populate(options.allow_mmap_populate),
+      write_buffer_flush_pri(options.write_buffer_flush_pri),
       db_write_buffer_size(options.db_write_buffer_size),
       write_buffer_manager(options.write_buffer_manager),
       access_hint_on_compaction_start(options.access_hint_on_compaction_start),
@@ -165,6 +167,18 @@ void ImmutableDBOptions::Dump(Logger* log) const {
                    advise_random_on_open);
   ROCKS_LOG_HEADER(log, "                    Options.allow_mmap_populate: %d",
                    allow_mmap_populate);
+  const auto& it_write_buffer_flush_pri =
+      write_buffer_flush_pri_to_string.find(write_buffer_flush_pri);
+  std::string str_write_buffer_flush_pri;
+  if (it_write_buffer_flush_pri == write_buffer_flush_pri_to_string.end()) {
+    assert(false);
+    str_write_buffer_flush_pri =
+        "unknow_" + std::to_string(write_buffer_flush_pri);
+  } else {
+    str_write_buffer_flush_pri = it_write_buffer_flush_pri->second;
+  }
+  ROCKS_LOG_HEADER(log, "                 Options.write_buffer_flush_pri: %s",
+                   str_write_buffer_flush_pri.c_str());
   ROCKS_LOG_HEADER(
       log, "                   Options.db_write_buffer_size: %" ROCKSDB_PRIszt,
       db_write_buffer_size);

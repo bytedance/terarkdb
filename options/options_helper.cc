@@ -88,6 +88,7 @@ DBOptions BuildDBOptions(const ImmutableDBOptions& immutable_db_options,
   options.stats_dump_period_sec = mutable_db_options.stats_dump_period_sec;
   options.advise_random_on_open = immutable_db_options.advise_random_on_open;
   options.allow_mmap_populate = immutable_db_options.allow_mmap_populate;
+  options.write_buffer_flush_pri = immutable_db_options.write_buffer_flush_pri;
   options.db_write_buffer_size = immutable_db_options.db_write_buffer_size;
   options.write_buffer_manager = immutable_db_options.write_buffer_manager;
   options.access_hint_on_compaction_start =
@@ -205,20 +206,25 @@ ColumnFamilyOptions BuildColumnFamilyOptions(
   return cf_opts;
 }
 
-std::map<CompactionStyle, std::string>
+std::unordered_map<CompactionStyle, std::string>
     OptionsHelper::compaction_style_to_string = {
         {kCompactionStyleLevel, "kCompactionStyleLevel"},
         {kCompactionStyleUniversal, "kCompactionStyleUniversal"},
         {kCompactionStyleFIFO, "kCompactionStyleFIFO"},
         {kCompactionStyleNone, "kCompactionStyleNone"}};
 
-std::map<CompactionPri, std::string> OptionsHelper::compaction_pri_to_string = {
-    {kByCompensatedSize, "kByCompensatedSize"},
-    {kOldestLargestSeqFirst, "kOldestLargestSeqFirst"},
-    {kOldestSmallestSeqFirst, "kOldestSmallestSeqFirst"},
-    {kMinOverlappingRatio, "kMinOverlappingRatio"}};
+std::unordered_map<CompactionPri, std::string>
+    OptionsHelper::compaction_pri_to_string = {
+        {kByCompensatedSize, "kByCompensatedSize"},
+        {kOldestLargestSeqFirst, "kOldestLargestSeqFirst"},
+        {kOldestSmallestSeqFirst, "kOldestSmallestSeqFirst"},
+        {kMinOverlappingRatio, "kMinOverlappingRatio"}};
 
-std::map<CompactionStopStyle, std::string>
+std::unordered_map<WriteBufferFlushPri, std::string>
+    OptionsHelper::write_buffer_flush_pri_to_string = {
+        {kFlushOldest, "kFlushOldest"}, {kFlushLargest, "kFlushLargest"}};
+
+std::unordered_map<CompactionStopStyle, std::string>
     OptionsHelper::compaction_stop_style_to_string = {
         {kCompactionStopStyleSimilarSize, "kCompactionStopStyleSimilarSize"},
         {kCompactionStopStyleTotalSize, "kCompactionStopStyleTotalSize"}};
@@ -554,6 +560,10 @@ bool ParseOptionHelper(char* opt_address, const OptionType& opt_type,
       return ParseEnum<TerarkZipTableOptions::EntropyAlgo>(
           entropy_algo_string_map, value,
           reinterpret_cast<TerarkZipTableOptions::EntropyAlgo*>(opt_address));
+    case OptionType::kWriteBufferFlushPri:
+      return ParseEnum<WriteBufferFlushPri>(
+          write_buffer_flush_pri_string_map, value,
+          reinterpret_cast<WriteBufferFlushPri*>(opt_address));
     default:
       return false;
   }
@@ -1475,6 +1485,10 @@ std::unordered_map<std::string, OptionTypeInfo>
         {"table_cache_numshardbits",
          {offsetof(struct DBOptions, table_cache_numshardbits),
           OptionType::kInt, OptionVerificationType::kNormal, false, 0}},
+        {"write_buffer_flush_pri",
+         {offsetof(struct DBOptions, write_buffer_flush_pri),
+          OptionType::kWriteBufferFlushPri, OptionVerificationType::kNormal,
+          false, 0}},
         {"db_write_buffer_size",
          {offsetof(struct DBOptions, db_write_buffer_size), OptionType::kSizeT,
           OptionVerificationType::kNormal, false, 0}},
@@ -1636,6 +1650,10 @@ std::unordered_map<std::string, CompactionPri>
         {"kOldestLargestSeqFirst", kOldestLargestSeqFirst},
         {"kOldestSmallestSeqFirst", kOldestSmallestSeqFirst},
         {"kMinOverlappingRatio", kMinOverlappingRatio}};
+
+std::unordered_map<std::string, WriteBufferFlushPri>
+    OptionsHelper::write_buffer_flush_pri_string_map = {
+        {"kFlushOldest", kFlushOldest}, {"kFlushLargest", kFlushLargest}};
 
 std::unordered_map<std::string, WALRecoveryMode>
     OptionsHelper::wal_recovery_mode_string_map = {

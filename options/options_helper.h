@@ -80,6 +80,7 @@ enum class OptionType {
   kInfoLogLevel,
   kLRUCacheOptions,
   kEntropyAlgo,
+  kWriteBufferFlushPri,
   kUnknown
 };
 
@@ -146,9 +147,13 @@ extern bool ParseOptionHelper(char* opt_address, const OptionType& opt_type,
 #endif  // !ROCKSDB_LITE
 
 struct OptionsHelper {
-  static std::map<CompactionStyle, std::string> compaction_style_to_string;
-  static std::map<CompactionPri, std::string> compaction_pri_to_string;
-  static std::map<CompactionStopStyle, std::string>
+  static std::unordered_map<CompactionStyle, std::string>
+      compaction_style_to_string;
+  static std::unordered_map<CompactionPri, std::string>
+      compaction_pri_to_string;
+  static std::unordered_map<WriteBufferFlushPri, std::string>
+      write_buffer_flush_pri_to_string;
+  static std::unordered_map<CompactionStopStyle, std::string>
       compaction_stop_style_to_string;
   static std::unordered_map<std::string, ChecksumType> checksum_type_string_map;
   static std::unordered_map<std::string, CompressionType>
@@ -176,6 +181,8 @@ struct OptionsHelper {
       compaction_style_string_map;
   static std::unordered_map<std::string, CompactionPri>
       compaction_pri_string_map;
+  static std::unordered_map<std::string, WriteBufferFlushPri>
+      write_buffer_flush_pri_string_map;
   static std::unordered_map<std::string, WALRecoveryMode>
       wal_recovery_mode_string_map;
   static std::unordered_map<std::string, DBOptions::AccessHint>
@@ -193,6 +200,8 @@ struct OptionsHelper {
 static auto& compaction_style_to_string =
     OptionsHelper::compaction_style_to_string;
 static auto& compaction_pri_to_string = OptionsHelper::compaction_pri_to_string;
+static auto& write_buffer_flush_pri_to_string =
+    OptionsHelper::write_buffer_flush_pri_to_string;
 static auto& compaction_stop_style_to_string =
     OptionsHelper::compaction_stop_style_to_string;
 static auto& checksum_type_string_map = OptionsHelper::checksum_type_string_map;
@@ -219,6 +228,8 @@ static auto& compaction_style_string_map =
     OptionsHelper::compaction_style_string_map;
 static auto& compaction_pri_string_map =
     OptionsHelper::compaction_pri_string_map;
+static auto& write_buffer_flush_pri_string_map =
+    OptionsHelper::write_buffer_flush_pri_string_map;
 static auto& wal_recovery_mode_string_map =
     OptionsHelper::wal_recovery_mode_string_map;
 static auto& access_hint_string_map = OptionsHelper::access_hint_string_map;
