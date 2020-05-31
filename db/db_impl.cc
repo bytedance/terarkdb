@@ -194,6 +194,8 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
       shutting_down_(false),
       bg_cv_(&mutex_),
       logfile_number_(0),
+      log_writer_pool_lock_(false),
+      memtable_info_queue_lock_(false),
       log_dir_synced_(false),
       log_empty_(true),
       default_cf_handle_(nullptr),
@@ -596,6 +598,14 @@ Status DBImpl::CloseHelper() {
       delete cfd;
     }
   }
+
+  log_writer_pool_.clear();
+  for (auto& item : memtable_info_queue_) {
+    if (item.first->Unref()) {
+      delete item.first;
+    }
+  }
+  memtable_info_queue_.clear();
 
   if (default_cf_handle_ != nullptr) {
     // we need to delete handle outside of lock because it does its own locking
@@ -3290,7 +3300,7 @@ future<std::tuple<Status, std::string, std::string>> DB::GetFuture(
   return GetFuture(ro, DefaultColumnFamily(), std::move(key));
 }
 
-#endif // TERARKDB_WITH_AIO_FUTURE
+#endif  // TERARKDB_WITH_AIO_FUTURE
 
 Status DBImpl::Close() {
   if (!closed_) {

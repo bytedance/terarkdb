@@ -2176,6 +2176,30 @@ void DBImpl::BackgroundCallFlush() {
                        immutable_db_options_.info_log.get());
   {
     InstrumentedMutexLock l(&mutex_);
+
+#ifndef ROCKSDB_LITE
+    if (!memtable_info_queue_.empty() && !memtable_info_queue_lock_) {
+      memtable_info_queue_lock_ = true;
+      autovector<std::pair<ColumnFamilyData*, MemTableInfo>> queue;
+      for (auto& item : memtable_info_queue_) {
+        queue.emplace_back(std::move(item));
+      }
+      memtable_info_queue_.clear();
+      mutex_.Unlock();
+      for (auto& item : queue) {
+        NotifyOnMemTableSealed(item.first, item.second);
+      }
+      mutex_.Lock();
+      memtable_info_queue_lock_ = false;
+      for (auto& item : queue) {
+        if (item.first->Unref()) {
+          delete item.first;
+        }
+      }
+    }
+#endif  // ROCKSDB_LITE
+    FillLogWriterPool();
+
     assert(bg_flush_scheduled_);
     num_running_flushes_++;
 

@@ -850,6 +850,8 @@ extern ROCKSDB_LIBRARY_API void rocksdb_options_set_keep_log_file_num(
     rocksdb_options_t*, size_t);
 extern ROCKSDB_LIBRARY_API void rocksdb_options_set_recycle_log_file_num(
     rocksdb_options_t*, size_t);
+extern ROCKSDB_LIBRARY_API void rocksdb_options_set_prepare_log_writer_num(
+    rocksdb_options_t*, size_t);
 extern ROCKSDB_LIBRARY_API void rocksdb_options_set_soft_rate_limit(
     rocksdb_options_t*, double);
 extern ROCKSDB_LIBRARY_API void rocksdb_options_set_hard_rate_limit(

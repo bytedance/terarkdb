@@ -13,11 +13,11 @@
 #endif
 #include <inttypes.h>
 
-#include "rocksdb/metrics_reporter.h"
 #include "db/error_handler.h"
 #include "db/event_helpers.h"
 #include "monitoring/perf_context_imp.h"
 #include "options/options_helper.h"
+#include "rocksdb/metrics_reporter.h"
 #include "util/sync_point.h"
 
 namespace rocksdb {
@@ -722,22 +722,26 @@ Status DBImpl::PreprocessWrite(const WriteOptions& write_options,
 
   assert(!single_column_family_mode_ ||
          versions_->GetColumnFamilySet()->NumberOfColumnFamilies() == 1);
-  if (UNLIKELY(status.ok() && !single_column_family_mode_ &&
-               total_log_size_ > GetMaxTotalWalSize())) {
-    status = SwitchWAL(write_context);
-  }
 
-  if (UNLIKELY(status.ok() && write_buffer_manager_->ShouldFlush())) {
-    // Before a new memtable is added in SwitchMemtable(),
-    // write_buffer_manager_->ShouldFlush() will keep returning true. If another
-    // thread is writing to another DB with the same write buffer, they may also
-    // be flushed. We may end up with flushing much more DBs than needed. It's
-    // suboptimal but still correct.
-    status = HandleWriteBufferFull(write_context);
-  }
+  if (immutable_db_options_.prepare_log_writer_num == 0 ||
+      !log_writer_pool_.empty()) {
+    if (UNLIKELY(status.ok() && !single_column_family_mode_ &&
+                 total_log_size_ > GetMaxTotalWalSize())) {
+      status = SwitchWAL(write_context);
+    }
 
-  if (UNLIKELY(status.ok() && !flush_scheduler_.Empty())) {
-    status = ScheduleFlushes(write_context);
+    if (UNLIKELY(status.ok() && write_buffer_manager_->ShouldFlush())) {
+      // Before a new memtable is added in SwitchMemtable(),
+      // write_buffer_manager_->ShouldFlush() will keep returning true. If
+      // another thread is writing to another DB with the same write buffer,
+      // they may also be flushed. We may end up with flushing much more DBs
+      // than needed. It's suboptimal but still correct.
+      status = HandleWriteBufferFull(write_context);
+    }
+
+    if (UNLIKELY(status.ok() && !flush_scheduler_.Empty())) {
+      status = ScheduleFlushes(write_context);
+    }
   }
 
   PERF_TIMER_STOP(write_scheduling_flushes_compactions_time);
@@ -1380,6 +1384,86 @@ void DBImpl::NotifyOnMemTableSealed(ColumnFamilyData* /*cfd*/,
 }
 #endif  // ROCKSDB_LITE
 
+Status DBImpl::NewLogWriter(std::unique_ptr<log::Writer>* new_log,
+                            uint64_t recycle_log_number,
+                            const DBOptions& db_options,
+                            Env::WriteLifeTimeHint write_hint) {
+  assert(new_log != nullptr);
+  assert(*new_log == nullptr);
+  assert(immutable_db_options_.recycle_log_file_num == 0);
+
+  std::unique_ptr<WritableFile> lfile;
+  uint64_t new_log_number = versions_->NewFileNumber();
+  std::string log_fname =
+      LogFileName(immutable_db_options_.wal_dir, new_log_number);
+  EnvOptions opt_env_opt = env_->OptimizeForLogWrite(env_options_, db_options);
+  Status s;
+  if (recycle_log_number) {
+    ROCKS_LOG_INFO(immutable_db_options_.info_log,
+                   "reusing log %" PRIu64 " from recycle list\n",
+                   recycle_log_number);
+    std::string old_log_fname =
+        LogFileName(immutable_db_options_.wal_dir, recycle_log_number);
+    s = env_->ReuseWritableFile(log_fname, old_log_fname, &lfile, opt_env_opt);
+  } else {
+    s = NewWritableFile(env_, log_fname, &lfile, opt_env_opt);
+  }
+  if (s.ok()) {
+    lfile->SetWriteLifeTimeHint(write_hint);
+    std::unique_ptr<WritableFileWriter> file_writer(new WritableFileWriter(
+        std::move(lfile), log_fname, opt_env_opt, nullptr /* stats */,
+        immutable_db_options_.listeners));
+    new_log->reset(new log::Writer(
+        std::move(file_writer), new_log_number,
+        immutable_db_options_.recycle_log_file_num > 0, manual_wal_flush_));
+  }
+  return s;
+}
+
+void DBImpl::FillLogWriterPool() {
+  mutex_.AssertHeld();
+  if (log_writer_pool_.size() < immutable_db_options_.prepare_log_writer_num &&
+      !log_writer_pool_lock_) {
+    log_writer_pool_lock_ = true;
+    autovector<std::pair<std::unique_ptr<log::Writer>, uint64_t>> new_writers;
+    new_writers.resize(immutable_db_options_.prepare_log_writer_num -
+                       log_writer_pool_.size());
+    for (auto& item : new_writers) {
+      if (log_recycle_files_.empty()) {
+        item.second = 0;
+      } else {
+        item.second = log_recycle_files_.front();
+        log_recycle_files_.pop_front();
+      }
+    }
+
+    DBOptions db_options =
+        BuildDBOptions(immutable_db_options_, mutable_db_options_);
+    auto write_hint = CalculateWALWriteHint();
+
+    mutex_.Unlock();
+    for (auto& item : new_writers) {
+      Status s = NewLogWriter(&item.first, item.second, db_options, write_hint);
+      if (!s.ok()) {
+        ROCKS_LOG_ERROR(immutable_db_options_.info_log,
+                        "Failed to create log writer: %s",
+                        s.ToString().c_str());
+        break;
+      }
+      ROCKS_LOG_INFO(immutable_db_options_.info_log,
+                     "Pre-create log writer: %" PRIu64,
+                     item.first->get_log_number());
+    }
+    mutex_.Lock();
+    for (auto& item : new_writers) {
+      if (item.first != nullptr) {
+        log_writer_pool_.emplace_back(std::move(item.first));
+      }
+    }
+    log_writer_pool_lock_ = false;
+  }
+}
+
 // REQUIRES: mutex_ is held
 // REQUIRES: this thread is currently at the front of the writer queue
 Status DBImpl::SwitchMemtable(ColumnFamilyData* cfd, WriteContext* context) {
@@ -1393,7 +1477,6 @@ Status DBImpl::SwitchMemtable(ColumnFamilyData* cfd, WriteContext* context) {
 
   std::unique_ptr<WritableFile> lfile;
   log::Writer* new_log = nullptr;
-  MemTable* new_mem = nullptr;
 
   // Recoverable state is persisted in WAL. After memtable switch, WAL might
   // be deleted, so we write the state to memtable to be persisted as well.
@@ -1422,14 +1505,7 @@ Status DBImpl::SwitchMemtable(ColumnFamilyData* cfd, WriteContext* context) {
   if (two_write_queues_) {
     log_write_mutex_.Unlock();
   }
-  uint64_t recycle_log_number = 0;
-  if (creating_new_log && immutable_db_options_.recycle_log_file_num &&
-      !log_recycle_files_.empty()) {
-    recycle_log_number = log_recycle_files_.front();
-    log_recycle_files_.pop_front();
-  }
-  uint64_t new_log_number =
-      creating_new_log ? versions_->NewFileNumber() : logfile_number_;
+  uint64_t new_log_number = logfile_number_;
   const MutableCFOptions mutable_cf_options = *cfd->GetLatestMutableCFOptions();
 
   // Set memtable_info for memtable sealed callback
@@ -1444,72 +1520,57 @@ Status DBImpl::SwitchMemtable(ColumnFamilyData* cfd, WriteContext* context) {
   // Log this later after lock release. It may be outdated, e.g., if background
   // flush happens before logging, but that should be ok.
   int num_imm_unflushed = cfd->imm()->NumNotFlushed();
-  DBOptions db_options =
-      BuildDBOptions(immutable_db_options_, mutable_db_options_);
-  const auto preallocate_block_size =
-      GetWalPreallocateBlockSize(mutable_cf_options.write_buffer_size);
-  auto write_hint = CalculateWALWriteHint();
-  mutex_.Unlock();
-  {
-    std::string log_fname =
-        LogFileName(immutable_db_options_.wal_dir, new_log_number);
-    if (creating_new_log) {
-      EnvOptions opt_env_opt =
-          env_->OptimizeForLogWrite(env_options_, db_options);
-      if (recycle_log_number) {
-        ROCKS_LOG_INFO(immutable_db_options_.info_log,
-                       "reusing log %" PRIu64 " from recycle list\n",
-                       recycle_log_number);
-        std::string old_log_fname =
-            LogFileName(immutable_db_options_.wal_dir, recycle_log_number);
-        s = env_->ReuseWritableFile(log_fname, old_log_fname, &lfile,
-                                    opt_env_opt);
-      } else {
-        s = NewWritableFile(env_, log_fname, &lfile, opt_env_opt);
-      }
-      if (s.ok()) {
-        // Our final size should be less than write_buffer_size
-        // (compression, etc) but err on the side of caution.
+  if (creating_new_log && !log_writer_pool_.empty()) {
+    new_log = log_writer_pool_.front().release();
+    log_writer_pool_.pop_front();
+    new_log_number = new_log->get_log_number();
 
-        // use preallocate_block_size instead
-        // of calling GetWalPreallocateBlockSize()
-        lfile->SetPreallocationBlockSize(preallocate_block_size);
-        lfile->SetWriteLifeTimeHint(write_hint);
-        std::unique_ptr<WritableFileWriter> file_writer(new WritableFileWriter(
-            std::move(lfile), log_fname, opt_env_opt, nullptr /* stats */,
-            immutable_db_options_.listeners));
-        new_log = new log::Writer(
-            std::move(file_writer), new_log_number,
-            immutable_db_options_.recycle_log_file_num > 0, manual_wal_flush_);
-      }
+  } else if (creating_new_log) {
+    uint64_t recycle_log_number = 0;
+    if (!log_recycle_files_.empty()) {
+      recycle_log_number = log_recycle_files_.front();
+      log_recycle_files_.pop_front();
     }
+    DBOptions db_options =
+        BuildDBOptions(immutable_db_options_, mutable_db_options_);
+    auto write_hint = CalculateWALWriteHint();
 
-    if (s.ok()) {
-      SequenceNumber seq = versions_->LastSequence();
-      new_mem =
-          cfd->ConstructNewMemtable(mutable_cf_options, seq_per_batch_, seq);
-      context->superversion_context.NewSuperVersion();
-    }
+    mutex_.Unlock();
+    std::unique_ptr<log::Writer> unique_new_log;
+    s = NewLogWriter(&unique_new_log, recycle_log_number, db_options,
+                     write_hint);
+    new_log = unique_new_log.release();
+    new_log_number = new_log->get_log_number();
 
-#ifndef ROCKSDB_LITE
-    // PLEASE NOTE: We assume that there are no failable operations
-    // after lock is acquired below since we are already notifying
-    // client about mem table becoming immutable.
-    NotifyOnMemTableSealed(cfd, memtable_info);
-#endif  // ROCKSDB_LITE
+    mutex_.Lock();
   }
+  // PLEASE NOTE: We assume that there are no failable operations
+  // after lock is acquired below since we are already notifying
+  // client about mem table becoming immutable.
+  cfd->Ref();
+  memtable_info_queue_.emplace_back(cfd, std::move(memtable_info));
   ROCKS_LOG_INFO(immutable_db_options_.info_log,
                  "[%s] New memtable created with log file: #%" PRIu64
                  ". Immutable memtables: %d.\n",
                  cfd->GetName().c_str(), new_log_number, num_imm_unflushed);
-  mutex_.Lock();
   if (s.ok() && creating_new_log) {
 #ifndef ROCKSDB_LITE
     wal_manager_.AddLogNumber(new_log_number);
 #endif
+    assert(new_log != nullptr);
+    const auto preallocate_block_size =
+        GetWalPreallocateBlockSize(mutable_cf_options.write_buffer_size);
+
+    // Our final size should be less than write_buffer_size
+    // (compression, etc) but err on the side of caution.
+
+    // use preallocate_block_size instead
+    // of calling GetWalPreallocateBlockSize()
+    new_log->file()->writable_file()->SetPreallocationBlockSize(
+        preallocate_block_size);
+
     log_write_mutex_.Lock();
     logfile_number_ = new_log_number;
-    assert(new_log != nullptr);
     log_empty_ = true;
     log_dir_synced_ = false;
     if (!logs_.empty()) {
@@ -1532,7 +1593,6 @@ Status DBImpl::SwitchMemtable(ColumnFamilyData* cfd, WriteContext* context) {
   if (!s.ok()) {
     // how do we fail if we're not creating new log?
     assert(creating_new_log);
-    assert(!new_mem);
     assert(!new_log);
     if (two_write_queues_) {
       nonmem_write_thread_.ExitUnbatched(&nonmem_w);
@@ -1553,6 +1613,11 @@ Status DBImpl::SwitchMemtable(ColumnFamilyData* cfd, WriteContext* context) {
       loop_cfd->mem()->SetCreationSeq(versions_->LastSequence());
     }
   }
+
+  SequenceNumber seq = versions_->LastSequence();
+  MemTable* new_mem =
+      cfd->ConstructNewMemtable(mutable_cf_options, seq_per_batch_, seq);
+  context->superversion_context.NewSuperVersion();
 
   cfd->mem()->SetNextLogNumber(logfile_number_);
   cfd->imm()->Add(cfd->mem(), &context->memtables_to_free_);

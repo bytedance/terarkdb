@@ -628,6 +628,9 @@ struct DBOptions {
   // Default: 0
   size_t recycle_log_file_num = 0;
 
+  //
+  size_t prepare_log_writer_num = 4;
+
   // manifest file is rolled over on reaching this limit.
   // The older manifest file be deleted.
   // The default value is 1GB so that the manifest file can grow, but not

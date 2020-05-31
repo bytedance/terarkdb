@@ -261,6 +261,7 @@ TEST_F(OptionsSettableTest, DBOptionsAllFieldsSettable) {
                              "bytes_per_sync=4295013613;"
                              "enable_thread_tracking=false;"
                              "recycle_log_file_num=0;"
+                             "prepare_log_writer_num=0;"
                              "create_missing_column_families=true;"
                              "log_file_time_to_roll=3097;"
                              "max_background_flushes=35;"

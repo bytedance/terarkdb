@@ -109,6 +109,11 @@ DBOptions SanitizeOptions(const std::string& dbname, const DBOptions& src) {
     result.wal_recovery_mode = WALRecoveryMode::kTolerateCorruptedTailRecords;
   }
 
+  if (result.recycle_log_file_num && result.prepare_log_writer_num) {
+    result.recycle_log_file_num =
+        std::max(result.prepare_log_writer_num, result.recycle_log_file_num);
+  }
+
   if (result.wal_dir.empty()) {
     // Use dbname as default
     result.wal_dir = dbname;
@@ -498,6 +503,21 @@ Status DBImpl::Recover(
     if (!logs.empty()) {
       // Recover in the order in which the logs were generated
       std::sort(logs.begin(), logs.end());
+      if (!read_only) {
+        // Remove tailing empty log files that create by pre-create log writer
+        while (!logs.empty()) {
+          std::string fname =
+              LogFileName(immutable_db_options_.wal_dir, logs.back());
+          uint64_t bytes;
+          if (!env_->GetFileSize(fname, &bytes).ok() || bytes > 0) {
+            break;
+          }
+          env_->DeleteFile(fname);
+          logs.pop_back();
+        }
+      }
+    }
+    if (!logs.empty()) {
       s = RecoverLogFiles(logs, &next_sequence, read_only);
       if (!s.ok()) {
         // Clear memtables if recovery failed
@@ -1342,6 +1362,7 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
     impl->opened_successfully_ = true;
     impl->MaybeScheduleFlushOrCompaction();
   }
+  impl->FillLogWriterPool();
   impl->mutex_.Unlock();
 
 #ifndef ROCKSDB_LITE

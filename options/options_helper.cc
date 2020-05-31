@@ -68,6 +68,7 @@ DBOptions BuildDBOptions(const ImmutableDBOptions& immutable_db_options,
   options.log_file_time_to_roll = immutable_db_options.log_file_time_to_roll;
   options.keep_log_file_num = immutable_db_options.keep_log_file_num;
   options.recycle_log_file_num = immutable_db_options.recycle_log_file_num;
+  options.prepare_log_writer_num = immutable_db_options.prepare_log_writer_num;
   options.max_manifest_file_size = immutable_db_options.max_manifest_file_size;
   options.max_manifest_edit_count =
       immutable_db_options.max_manifest_edit_count;
@@ -1497,6 +1498,9 @@ std::unordered_map<std::string, OptionTypeInfo>
         {"recycle_log_file_num",
          {offsetof(struct DBOptions, recycle_log_file_num), OptionType::kSizeT,
           OptionVerificationType::kNormal, false, 0}},
+        {"prepare_log_writer_num",
+         {offsetof(struct DBOptions, prepare_log_writer_num),
+          OptionType::kSizeT, OptionVerificationType::kNormal, false, 0}},
         {"log_file_time_to_roll",
          {offsetof(struct DBOptions, log_file_time_to_roll), OptionType::kSizeT,
           OptionVerificationType::kNormal, false, 0}},

@@ -44,6 +44,7 @@ ImmutableDBOptions::ImmutableDBOptions(const DBOptions& options)
       log_file_time_to_roll(options.log_file_time_to_roll),
       keep_log_file_num(options.keep_log_file_num),
       recycle_log_file_num(options.recycle_log_file_num),
+      prepare_log_writer_num(options.prepare_log_writer_num),
       max_manifest_file_size(options.max_manifest_file_size),
       max_manifest_edit_count(options.max_manifest_edit_count),
       table_cache_numshardbits(options.table_cache_numshardbits),
@@ -128,6 +129,9 @@ void ImmutableDBOptions::Dump(Logger* log) const {
   ROCKS_LOG_HEADER(
       log, "                   Options.recycle_log_file_num: %" ROCKSDB_PRIszt,
       recycle_log_file_num);
+  ROCKS_LOG_HEADER(
+      log, "                 Options.prepare_log_writer_num: %" ROCKSDB_PRIszt,
+      prepare_log_writer_num);
   ROCKS_LOG_HEADER(log, "                        Options.allow_fallocate: %d",
                    allow_fallocate);
   ROCKS_LOG_HEADER(log, "                       Options.allow_mmap_reads: %d",

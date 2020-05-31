@@ -83,6 +83,7 @@ class ChaosTest {
     options.error_if_exists = false;
     options.is_fd_close_on_exec = true;
     options.recycle_log_file_num = 0;
+    options.prepare_log_writer_num = 0;
     options.max_manifest_file_size = 1073741824;
     options.skip_log_error_on_recovery = false;
     options.skip_stats_update_on_db_open = false;
