@@ -571,7 +571,7 @@ bool ParseOptionHelper(char* opt_address, const OptionType& opt_type,
 }
 
 bool SerializeSingleOptionHelper(const char* opt_address,
-                                 const OptionType opt_type,
+                                 const OptionType& opt_type,
                                  std::string* value) {
   assert(value);
   switch (opt_type) {
@@ -741,6 +741,10 @@ bool SerializeSingleOptionHelper(const char* opt_address,
       return SerializeEnum<CompactionStopStyle>(
           compaction_stop_style_string_map,
           *reinterpret_cast<const CompactionStopStyle*>(opt_address), value);
+    case OptionType::kWriteBufferFlushPri:
+      return SerializeEnum<WriteBufferFlushPri>(
+          write_buffer_flush_pri_string_map,
+          *reinterpret_cast<const WriteBufferFlushPri*>(opt_address), value);
     default:
       return false;
   }
@@ -1057,7 +1061,7 @@ Status ParseColumnFamilyOption(const std::string& name,
 template <typename T>
 bool SerializeSingleStructOption(
     std::string* opt_string, const T& options,
-    const std::unordered_map<std::string, OptionTypeInfo> type_info,
+    const std::unordered_map<std::string, OptionTypeInfo>& type_info,
     const std::string& name, const std::string& delimiter) {
   auto iter = type_info.find(name);
   if (iter == type_info.end()) {
@@ -1077,7 +1081,7 @@ bool SerializeSingleStructOption(
 template <typename T>
 Status GetStringFromStruct(
     std::string* opt_string, const T& options,
-    const std::unordered_map<std::string, OptionTypeInfo> type_info,
+    const std::unordered_map<std::string, OptionTypeInfo>& type_info,
     const std::string& delimiter) {
   assert(opt_string);
   opt_string->clear();

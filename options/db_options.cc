@@ -11,8 +11,8 @@
 
 #include <inttypes.h>
 
-#include "port/port.h"
 #include "options/options_helper.h"
+#include "port/port.h"
 #include "rocksdb/cache.h"
 #include "rocksdb/env.h"
 #include "rocksdb/sst_file_manager.h"
@@ -177,7 +177,7 @@ void ImmutableDBOptions::Dump(Logger* log) const {
   if (it_write_buffer_flush_pri == write_buffer_flush_pri_to_string.end()) {
     assert(false);
     str_write_buffer_flush_pri =
-        "unknow_" + std::to_string(write_buffer_flush_pri);
+        "unknown_" + std::to_string(write_buffer_flush_pri);
   } else {
     str_write_buffer_flush_pri = it_write_buffer_flush_pri->second;
   }
@@ -286,8 +286,7 @@ void MutableDBOptions::Dump(Logger* log) const {
                    max_task_per_thread);
   ROCKS_LOG_HEADER(log, "            Options.max_background_compactions: %d",
                    max_background_compactions);
-  ROCKS_LOG_HEADER(
-      log, "     Options.max_background_garbage_collections: %d",
+  ROCKS_LOG_HEADER(log, "     Options.max_background_garbage_collections: %d",
                    max_background_garbage_collections);
   ROCKS_LOG_HEADER(log, "            Options.avoid_flush_during_shutdown: %d",
                    avoid_flush_during_shutdown);

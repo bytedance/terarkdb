@@ -3485,7 +3485,7 @@ Status DBImpl::WriteOptionsFile(bool need_mutex_lock,
   }
   if (!s.ok()) {
     ROCKS_LOG_WARN(immutable_db_options_.info_log,
-                   "Unnable to persist options -- %s", s.ToString().c_str());
+                   "Unable to persist options -- %s", s.ToString().c_str());
     if (immutable_db_options_.fail_if_options_file_error) {
       return Status::IOError("Unable to persist options.",
                              s.ToString().c_str());
