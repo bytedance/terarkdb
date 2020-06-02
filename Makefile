@@ -1970,7 +1970,8 @@ libbz2.a:
 	cp bzip2-$(BZIP2_VER)/libbz2.a .
 
 libsnappy.a: snappy-1.1.4/snappy.h
-snappy-1.1.4/snappy.h:
+snappy-1.1.4/snappy.h: snappy-1.1.4/snappy-stubs-public.h
+snappy-1.1.4/snappy-stubs-public.h:
 	-rm -rf snappy-$(SNAPPY_VER)
 	cp -a downloads/snappy-$(SNAPPY_VER).tar.gz .
 	#wget ${SNAPPY_DOWNLOAD_BASE}/$(SNAPPY_VER)/snappy-$(SNAPPY_VER).tar.gz
@@ -1981,7 +1982,8 @@ snappy-1.1.4/snappy.h:
 		exit 1; \
 	fi
 	tar xvzf snappy-$(SNAPPY_VER).tar.gz
-	cd snappy-$(SNAPPY_VER) && CFLAGS='${EXTRA_CFLAGS}' CXXFLAGS='${EXTRA_CXXFLAGS}' LDFLAGS='${EXTRA_LDFLAGS}' ./configure --with-pic --enable-static --disable-shared
+	cd snappy-$(SNAPPY_VER) && CFLAGS='${EXTRA_CFLAGS}' CXXFLAGS='${EXTRA_CXXFLAGS}' LDFLAGS='${EXTRA_LDFLAGS}' ./configure --with-pic --enable-static --disable-shared --disable-gtest
+	cd snappy-$(SNAPPY_VER) && sed -i -e /HAVE_LIBZ/d -e /HAVE_LIBLZO/d config.h
 	cd snappy-$(SNAPPY_VER) && CFLAGS='${EXTRA_CFLAGS}' CXXFLAGS='${EXTRA_CXXFLAGS}' LDFLAGS='${EXTRA_LDFLAGS}' $(MAKE) ${SNAPPY_MAKE_TARGET}
 	cp snappy-$(SNAPPY_VER)/.libs/libsnappy.a .
 
@@ -2338,6 +2340,7 @@ endif
 
 COMPRESSION_HEADERS :=          \
   snappy-1.1.4/snappy.h         \
+  snappy-1.1.4/snappy-stubs-public.h \
   lz4-1.8.0/lib/lz4.h           \
   zstd-1.3.3/lib/include/zstd.h \
   zlib-1.2.11/zlib.h
