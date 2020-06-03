@@ -144,7 +144,7 @@ rm -f `find $pkgdir -name '*.cc' -o -name '*.d' -o -name '*.o'`
 # detect output dir name
 SYSTEM=`uname -m -s | sed 's:[ /]:-:g'`
 tmpfile=`mktemp compiler-XXXXXX`
-COMPILER=`gcc terark-tools/detect-compiler.cpp -o $tmpfile.exe && ./$tmpfile.exe && rm -f $tmpfile*`
+COMPILER=`${CXX:-gcc} terark-tools/detect-compiler.cpp -o $tmpfile.exe && ./$tmpfile.exe && rm -f $tmpfile*`
 PLATFORM_DIR=$SYSTEM-$COMPILER-bmi2-$WITH_BMI2
 
 #echo build/$PLATFORM_DIR/shared_lib/dbg-0/
