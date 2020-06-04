@@ -1,6 +1,23 @@
 
 ## CHANGELOG
 
+- 版本号：v1.2.8
+- 日期：2020-06-04
+- 发版说明：
+  - 计划内例行发版
+- 功能变更：
+  - 预创建指定个 WAL 文件，将创建 WAL 文件的逻辑从锁内移动到后台线程，降低写入长尾
+  - 让描述 LSM 树拓补关系的 SST 文件常驻内存，降低读取长尾
+  - 增加 WriteBufferFlushPri 选项，对多 CF 支持更友好
+- 修复问题：
+  - 修复 LOG 中输出的 Flush 信息未包含 Key Value 分离 Blob 信息的问题
+  - 修复 Feature 冲突导致数据集损坏的问题，不能同时启用下面的 Feature
+    - TerarkZipTable 开启 SecondPassIter 支持
+    - 开启 Key Value 分离
+    - 在 CompactionFilter 中改变了 Value 或 MergeOperator 结果不稳定
+- 已知问题：
+  - 使用 LazyUniversalCompaction 有极低概率触发无效 TrivialMove 导致写阻塞
+
 - 版本号：v1.2.7
 - 日期：2020-05-15
 - 发版说明：

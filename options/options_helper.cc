@@ -252,7 +252,7 @@ std::unordered_map<std::string, CompressionType>
 template <typename T>
 Status GetStringFromStruct(
     std::string* opt_string, const T& options,
-    const std::unordered_map<std::string, OptionTypeInfo> type_info,
+    const std::unordered_map<std::string, OptionTypeInfo>& type_info,
     const std::string& delimiter);
 
 namespace {
@@ -347,7 +347,7 @@ bool FIFOCompactionOptionsSpecialCase(const std::string& opt_str,
 template <typename T>
 bool SerializeStruct(
     const T& options, std::string* value,
-    std::unordered_map<std::string, OptionTypeInfo> type_info_map) {
+    const std::unordered_map<std::string, OptionTypeInfo>& type_info_map) {
   std::string opt_str;
   Status s = GetStringFromStruct(&opt_str, options, type_info_map, ";");
   if (!s.ok()) {
@@ -360,7 +360,7 @@ bool SerializeStruct(
 template <typename T>
 bool ParseSingleStructOption(
     const std::string& opt_val_str, T* options,
-    std::unordered_map<std::string, OptionTypeInfo> type_info_map) {
+    const std::unordered_map<std::string, OptionTypeInfo>& type_info_map) {
   size_t end = opt_val_str.find('=');
   std::string key = opt_val_str.substr(0, end);
   std::string value = opt_val_str.substr(end + 1);
@@ -377,7 +377,7 @@ bool ParseSingleStructOption(
 template <typename T>
 bool ParseStructOptions(
     const std::string& opt_str, T* options,
-    std::unordered_map<std::string, OptionTypeInfo> type_info_map) {
+    const std::unordered_map<std::string, OptionTypeInfo>& type_info_map) {
   assert(!opt_str.empty());
 
   size_t start = 0;
@@ -744,7 +744,9 @@ bool SerializeSingleOptionHelper(const char* opt_address,
     case OptionType::kEntropyAlgo:
       return SerializeEnum<TerarkZipTableOptions::EntropyAlgo>(
           entropy_algo_string_map,
-          *reinterpret_cast<const TerarkZipTableOptions::EntropyAlgo*>(opt_address), value);
+          *reinterpret_cast<const TerarkZipTableOptions::EntropyAlgo*>(
+              opt_address),
+          value);
     case OptionType::kWriteBufferFlushPri:
       return SerializeEnum<WriteBufferFlushPri>(
           write_buffer_flush_pri_string_map,

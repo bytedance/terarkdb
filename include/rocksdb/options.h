@@ -629,7 +629,7 @@ struct DBOptions {
   size_t recycle_log_file_num = 0;
 
   //
-  size_t prepare_log_writer_num = 4;
+  size_t prepare_log_writer_num = 1;
 
   // manifest file is rolled over on reaching this limit.
   // The older manifest file be deleted.
