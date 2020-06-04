@@ -1,0 +1,5 @@
+binwidth=16*1024*1024
+bin(x,width)=width*floor(x/width)
+
+plot ARG1 using (bin($1,binwidth)):(1.0) smooth freq with boxes
+pause -1
