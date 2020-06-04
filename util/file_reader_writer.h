@@ -23,7 +23,10 @@ class Statistics;
 class HistogramImpl;
 
 std::unique_ptr<RandomAccessFile> NewReadaheadRandomAccessFile(
-  std::unique_ptr<RandomAccessFile>&& file, size_t readahead_size);
+    std::unique_ptr<RandomAccessFile>&& file, size_t readahead_size);
+
+std::unique_ptr<RandomAccessFile> NewMemoryRandomAccessFile(
+    std::unique_ptr<RandomAccessFile>&& file, uint64_t file_size);
 
 class SequentialFileReader {
  private:

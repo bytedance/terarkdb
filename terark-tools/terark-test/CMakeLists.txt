@@ -28,6 +28,7 @@ target_link_libraries(
         stdc++
         pthread
         snappy
+        bz2
         lz4
         z
 	aio

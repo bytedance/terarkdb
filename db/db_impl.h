@@ -992,6 +992,12 @@ class DBImpl : public DB {
 
   Status ScheduleFlushes(WriteContext* context);
 
+  Status NewLogWriter(std::unique_ptr<log::Writer>* new_log,
+                      uint64_t recycle_log_number, const DBOptions& db_options,
+                      Env::WriteLifeTimeHint write_hint);
+
+  void FillLogWriterPool();
+
   Status SwitchMemtable(ColumnFamilyData* cfd, WriteContext* context);
 
   void SelectColumnFamiliesForAtomicFlush(autovector<ColumnFamilyData*>* cfds);
@@ -1209,6 +1215,10 @@ class DBImpl : public DB {
   uint64_t logfile_number_;
   std::deque<uint64_t>
       log_recycle_files_;  // a list of log files that we can recycle
+  std::deque<std::unique_ptr<log::Writer>> log_writer_pool_;
+  autovector<std::pair<ColumnFamilyData*, MemTableInfo>> memtable_info_queue_;
+  bool log_writer_pool_lock_;
+  bool memtable_info_queue_lock_;
   bool log_dir_synced_;
   // Without two_write_queues, read and writes to log_empty_ are protected by
   // mutex_. Since it is currently updated/read only in write_thread_, it can be

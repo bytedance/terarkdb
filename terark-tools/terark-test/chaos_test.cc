@@ -83,6 +83,7 @@ class ChaosTest {
     options.error_if_exists = false;
     options.is_fd_close_on_exec = true;
     options.recycle_log_file_num = 0;
+    options.prepare_log_writer_num = 0;
     options.max_manifest_file_size = 1073741824;
     options.skip_log_error_on_recovery = false;
     options.skip_stats_update_on_db_open = false;
@@ -666,7 +667,9 @@ class ChaosTest {
     for (int i = 0; i < 4; ++i) {
       ctx.values.clear();
       ctx.async_values.clear();
+#if defined(TERARKDB_WITH_AIO_FUTURE)
       ctx.futures.clear();
+#endif
       ctx.async_status.clear();
       ctx.multi_values.clear();
       ctx.ss.clear();
@@ -687,7 +690,9 @@ class ChaosTest {
             [&ctx, &i](Status &&s, std::string &&key, std::string *value) {
               (ctx.async_status)[i] = s;
             });
+#if defined(TERARKDB_WITH_AIO_FUTURE)
         ctx.futures[i] = db->GetFuture(ctx.ro, hs[i], ctx.key);
+#endif
       }
       db->WaitAsync();      
       if (IsAny(ctx.ss, [](auto &s) { return s.IsNotFound(); })) {
@@ -697,14 +702,17 @@ class ChaosTest {
             ctx,
             IsAll(ctx.async_status, [](auto &s) { return s.IsNotFound(); }),
             "GetAsync Status");
+#if defined(TERARKDB_WITH_AIO_FUTURE)
         CheckAssert(ctx, IsAll(ctx.futures, [](auto &fu) {
                       return std::get<0>(fu.get()).IsNotFound();
                     }), "GetFuture Status");
+#endif
       } else {
         CheckAssert(ctx,
                     AllSame(ctx.values, ctx.async_values,
                             [](auto &l, auto &r) { return l == r; }),
                     "Get vs GetAsync");
+#if defined(TERARKDB_WITH_AIO_FUTURE)
         CheckAssert(ctx,
                     AllSame(ctx.values, ctx.futures,
                             [](auto &l, auto &r) {
@@ -713,6 +721,7 @@ class ChaosTest {
                               return l == std::get<2>(tmp_tuple);
                             }),
                     "Get vs GetFuture");
+#endif
       }
     }
   }
@@ -739,7 +748,9 @@ class ChaosTest {
     ReadContext ctx;
     ctx.keys.resize(hs.size());
     ctx.values.resize(hs.size());
+#if defined(TERARKDB_WITH_AIO_FUTURE)
     ctx.futures.resize(hs.size());
+#endif
     ctx.ss.resize(hs.size());
     ctx.async_values.resize(hs.size());
     ctx.multi_values.resize(hs.size());
@@ -798,11 +809,12 @@ class ChaosTest {
       if (flags_ & TestAsync) {
         fprintf(stderr, "Async:\n");
         for (size_t i = 0; i < hs.size(); ++i) {
-          const auto &tmp_tuple = ctx.futures[i].get();
           fprintf(stderr, "Get : s%zd = %s, k%zd = %s, v%zd = %s\n", i,
                   ctx.ss.size() > i ? ctx.ss[i].ToString().c_str() : "null", i,
                   ctx.key.c_str(), i,
                   ctx.values.size() > i ? ctx.values[i].c_str() : "null");
+#if defined(TERARKDB_WITH_AIO_FUTURE)
+          const auto &tmp_tuple = ctx.futures[i].get();
           fprintf(stderr, "GetFuture : s%zd = %s, k%zd = %s, v%zd = %s\n", i,
                   std::get<0>(tmp_tuple).ToString().c_str(), i,
                   std::get<1>(tmp_tuple).c_str(), i,
@@ -810,6 +822,7 @@ class ChaosTest {
           fprintf(stderr, "GetAsync : s%zd = %s, k%zd = %s, v%zd = %s\n", i,
                   ctx.async_status[i].ToString().c_str(), i, ctx.key.c_str(), i,
                   ctx.async_values[i].c_str());
+#endif
         }
       }
       has_error = true;

@@ -195,6 +195,10 @@ class CompactionFilter
   // using a snapshot.
   virtual bool IgnoreSnapshots() const { return false; }
 
+  // Determines whether value changed by compaction filter were stable.
+  // Default as false, which means stability of outcome is not promised.
+  virtual bool IsStableChangeValue() const { return false; }
+
   // Returns a name that identifies this compaction filter.
   // The name will be printed to LOG file on start up for diagnosis.
   virtual const char* Name() const = 0;

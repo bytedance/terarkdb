@@ -2521,7 +2521,6 @@ Status GetTerarkZipTableOptionsFromMap(
     }
   }
   return Status::OK();
-  return Status();
 }
 
 Status GetTerarkZipTableOptionsFromString(

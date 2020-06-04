@@ -117,35 +117,9 @@ static void MmapWarmUp(const Vec& uv) {
   MmapWarmUpBytes(uv.data(), uv.mem_size());
 }
 
-static void MmapColdizeBytes(const void* addr, size_t len) {
-  size_t low = terark::align_up(size_t(addr), 4096);
-  size_t hig = terark::align_down(size_t(addr) + len, 4096);
-  if (low < hig) {
-    size_t size = hig - low;
-#ifdef POSIX_MADV_DONTNEED
-    // After glibc 2.7, in the case of POSIX_MADV_DONTNEED, posize_madvise do nothing.
-    // Since we need invoke the syscall, we do it by ourself.
-    madvise((void*)low, size, MADV_DONTNEED);
-#elif defined(_MSC_VER)  // defined(_WIN32) || defined(_WIN64)
-    // Calling VirtualUnlock on a range of memory that is not locked
-    // releases the pages from the process's working set.
-    VirtualUnlock((void*)low, size);
-#endif
-  }
-}
-static void MmapColdize(fstring mem) {
-  MmapColdizeBytes(mem.data(), mem.size());
-}
-// static void MmapColdize(Slice mem) {
-//  MmapColdizeBytes(mem.data(), mem.size());
-//}
-template <class Vec>
-static void MmapColdize(const Vec& uv) {
-  MmapColdizeBytes(uv.data(), uv.mem_size());
-}
-
 Status DecompressDict(const TableProperties& table_properties, fstring dict,
-                      valvec<byte_t>* output_dict) {
+                      valvec<byte_t>* output_dict,
+                      TerarkZipTableReaderBase* reader) {
   auto find =
       table_properties.user_collected_properties.find(kTerarkZipTableDictInfo);
   if (find == table_properties.user_collected_properties.end()) {
@@ -174,7 +148,7 @@ Status DecompressDict(const TableProperties& table_properties, fstring dict,
                               ZSTD_getErrorName(size));
   }
   assert(size == raw_size);
-  MmapColdize(dict);
+  reader->MmapColdize(dict);
   return Status::OK();
 }
 
@@ -835,6 +809,12 @@ TerarkZipTableReaderBase::GetTableProperties() const {
   }
 }
 
+void TerarkZipTableReaderBase::MmapColdize(const void* addr, size_t len) {
+  if (file_data_.size() > 0) {
+    file_->file()->InvalidateCache((char*)addr - file_data_.data(), len);
+  }
+}
+
 void TerarkZipSubReader::InitUsePread(int minPreadLen) {
   if (minPreadLen < 0) {
     storeUsePread_ = false;
@@ -1108,7 +1088,7 @@ Status TerarkZipTableReader::Open(RandomAccessFileReader* file,
                           kTerarkZipTableValueDictBlock, &valueDictBlock);
   Slice dict = valueDictBlock.data;
   if (s.ok()) {
-    s = DecompressDict(*props, fstringOf(valueDictBlock.data), &dict_);
+    s = DecompressDict(*props, fstringOf(valueDictBlock.data), &dict_, this);
     if (!s.ok()) {
       return s;
     }
@@ -1686,7 +1666,7 @@ Status TerarkZipTableMultiReader::Open(RandomAccessFileReader* file,
                           kTerarkZipTableValueDictBlock, &valueDictBlock);
   Slice dict;
   if (s.ok()) {
-    s = DecompressDict(*props, fstringOf(valueDictBlock.data), &dict_);
+    s = DecompressDict(*props, fstringOf(valueDictBlock.data), &dict_, this);
     if (!s.ok()) {
       return s;
     }

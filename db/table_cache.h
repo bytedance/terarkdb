@@ -11,6 +11,7 @@
 
 #pragma once
 #include <stdint.h>
+
 #include <string>
 #include <vector>
 
@@ -93,7 +94,8 @@ class TableCache {
                    const bool no_io = false, bool record_read_stats = true,
                    HistogramImpl* file_read_hist = nullptr,
                    bool skip_filters = false, int level = -1,
-                   bool prefetch_index_and_filter_in_cache = true);
+                   bool prefetch_index_and_filter_in_cache = true,
+                   bool force_memory = false);
 
   // Get TableReader from a cache handle.
   TableReader* GetTableReaderFromHandle(Cache::Handle* handle);
@@ -106,7 +108,7 @@ class TableCache {
   //            we set `no_io` to be true.
   Status GetTableProperties(const EnvOptions& toptions,
                             const InternalKeyComparator& internal_comparator,
-                            const FileDescriptor& file_meta,
+                            const FileMetaData& file_meta,
                             std::shared_ptr<const TableProperties>* properties,
                             const SliceTransform* prefix_extractor = nullptr,
                             bool no_io = false);
@@ -147,7 +149,7 @@ class TableCache {
                         const SliceTransform* prefix_extractor = nullptr,
                         bool skip_filters = false, int level = -1,
                         bool prefetch_index_and_filter_in_cache = true,
-                        bool for_compaction = false);
+                        bool for_compaction = false, bool force_memory = false);
 
   const ImmutableCFOptions& ioptions_;
   const EnvOptions& env_options_;

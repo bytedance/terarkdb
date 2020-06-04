@@ -286,6 +286,12 @@ const {
 }
 
 Status WinMmapReadableFile::InvalidateCache(size_t offset, size_t length) {
+  size_t upper_offset = ((offset + 4095) & ~4095);
+  size_t lower_length = ((offset + length) & ~4095) - upper_offset;
+  if (lower_length) {
+    char* upper_addr = (char*)mapped_region_ + upper_offset;
+    VirtualUnlock((void*)upper_addr, lower_length);
+  }
   return Status::OK();
 }
 

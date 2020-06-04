@@ -1012,12 +1012,12 @@ DEBUG: 1st pass => '00000007' seq:4, type:1 / 000100000101
 
     std::unique_ptr<rocksdb::WritableFile> sst_file;
     options.env->NewWritableFile(sst_file_path, &sst_file, eo);
-    std::unique_ptr<rocksdb::WritableFileWriter> file_writter(
+    std::unique_ptr<rocksdb::WritableFileWriter> file_writer(
         new rocksdb::WritableFileWriter(std::move(sst_file), sst_file_path, eo,
                                         nullptr, idbo.listeners));
     std::unique_ptr<rocksdb::TableBuilder> builder(
         ioptions.table_factory->NewTableBuilder(table_builder_options, 0,
-                                                file_writter.get()));
+                                                file_writer.get()));
     rocksdb::InternalKey ik;
     for (auto str : make_split(string_ref<>(dump), '\n')) {
       auto sr = string_ref<>(str);
@@ -1045,7 +1045,7 @@ DEBUG: 1st pass => '00000007' seq:4, type:1 / 000100000101
     s = builder->Finish(nullptr);
     // s = builder->Finish();
     builder.reset();
-    file_writter.reset();
+    file_writer.reset();
 #endif
 
     auto proc = [&](std::string file_name) {

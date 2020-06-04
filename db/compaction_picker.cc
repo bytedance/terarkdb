@@ -1611,7 +1611,7 @@ Compaction* CompactionPicker::PickCompositeCompaction(
   auto& input = inputs.front();
   input.level = -1;
   double max_read_amp_ratio = -std::numeric_limits<double>::infinity();
-  double max_read_amp = 1;
+  double read_amp = 1;
   uint32_t max_subcompactions = mutable_cf_options.max_subcompactions;
   // Traverse all sorted_runs from the highest to bottomest finding selection.
   for (auto& sr : sorted_runs) {
@@ -1647,12 +1647,12 @@ Compaction* CompactionPicker::PickCompositeCompaction(
     // Estimate overall read amplification of selects.
     double level_read_amp = f->prop.read_amp;
     double level_read_amp_ratio = 1. * level_read_amp / sr.size;
-    max_read_amp = std::max(max_read_amp, level_read_amp);
     if (level_read_amp <= 1) {
       level_read_amp_ratio = -level_read_amp_ratio;
     }
     if (level_read_amp_ratio >= max_read_amp_ratio) {
       max_read_amp_ratio = level_read_amp_ratio;
+      read_amp = level_read_amp;
       input.level = sr.level;
       input.files = {f};
     }
@@ -1686,7 +1686,7 @@ Compaction* CompactionPicker::PickCompositeCompaction(
     params.compression_opts =
         GetCompressionOptions(ioptions_, vstorage, level, true);
     params.max_subcompactions = max_subcompactions;
-    params.score = max_read_amp;
+    params.score = read_amp;
     params.partial_compaction = true;
     params.compaction_type = compaction_type;
     params.input_range = std::move(input_range);
@@ -1945,10 +1945,18 @@ Compaction* CompactionPicker::PickBottommostLevelCompaction(
     if (!f->prop.has_snapshots() && f->prop.num_deletions == 0) {
       return false;
     }
+    SequenceNumber oldest_snapshot_seqnum =
+        snapshots.empty() ? kMaxSequenceNumber : snapshots.front();
+    if (!ioptions_.pin_table_properties_in_reader) {
+      return f->fd.largest_seqno < oldest_snapshot_seqnum;
+    }
     std::shared_ptr<const TableProperties> tp;
     auto s = table_cache_->GetTableProperties(
-        env_options_, *icmp_, f->fd, &tp,
-        mutable_cf_options.prefix_extractor.get(), false);
+        env_options_, *icmp_, *f, &tp,
+        mutable_cf_options.prefix_extractor.get(), true);
+    if (s.IsIncomplete()) {
+      return f->fd.largest_seqno < oldest_snapshot_seqnum;
+    }
     if (!s.ok()) {
       ROCKS_LOG_BUFFER(log_buffer,
                        "[%s] CompactionPicker::PickBottommostLevelCompaction "

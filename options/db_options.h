@@ -40,6 +40,7 @@ struct ImmutableDBOptions {
   size_t log_file_time_to_roll;
   size_t keep_log_file_num;
   size_t recycle_log_file_num;
+  size_t prepare_log_writer_num;
   uint64_t max_manifest_file_size;
   uint64_t max_manifest_edit_count;
   int table_cache_numshardbits;
@@ -55,6 +56,7 @@ struct ImmutableDBOptions {
   bool is_fd_close_on_exec;
   bool advise_random_on_open;
   bool allow_mmap_populate;
+  WriteBufferFlushPri write_buffer_flush_pri;
   size_t db_write_buffer_size;
   std::shared_ptr<WriteBufferManager> write_buffer_manager;
   DBOptions::AccessHint access_hint_on_compaction_start;

@@ -619,13 +619,15 @@ class RandomAccessFile {
   //   glusterfs support fuse, glfs_pread is faster than fuse pread when
   //   cache miss, but fuse support mmap, we can read a glusterfs file by
   //   both mmap and glfs_pread
-  virtual Status FsRead(uint64_t offset, size_t len, Slice* result, void* buf) const;
+  virtual Status FsRead(uint64_t offset, size_t len, Slice* result,
+                        void* buf) const;
 
   virtual intptr_t FileDescriptor() const {
     assert(false);
     return -1;
   }
 };
+
 // A file abstraction for sequential writing.  The implementation
 // must provide buffering since callers may append small fragments
 // at a time to the file.

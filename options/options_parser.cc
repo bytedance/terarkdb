@@ -596,6 +596,9 @@ bool AreEqualOptions(
       }
       return false;
     }
+    case OptionType::kWriteBufferFlushPri:
+      return (*reinterpret_cast<const WriteBufferFlushPri*>(offset1) ==
+              *reinterpret_cast<const WriteBufferFlushPri*>(offset2));
     default:
       if (type_info.verification == OptionVerificationType::kByName ||
           type_info.verification ==

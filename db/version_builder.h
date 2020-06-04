@@ -39,7 +39,7 @@ class VersionBuilder {
   void LoadTableHandlers(InternalStats* internal_stats,
                          bool prefetch_index_and_filter_in_cache,
                          const SliceTransform* prefix_extractor,
-                         int max_threads = 1);
+                         bool load_essence_sst, int max_threads = 1);
   void UpgradeFileMetaData(const SliceTransform* prefix_extractor,
                            int max_threads = 1);
 

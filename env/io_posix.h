@@ -90,7 +90,7 @@ class PosixRandomAccessFile : public RandomAccessFile {
   virtual ~PosixRandomAccessFile();
   virtual bool use_aio_reads() const final;
   virtual Status Read(uint64_t offset, size_t n, Slice* result,
-                      char* scratch) const override;
+                      char* scratch) const final;
 
   virtual Status Prefetch(uint64_t offset, size_t n) override;
 
@@ -98,12 +98,12 @@ class PosixRandomAccessFile : public RandomAccessFile {
   virtual size_t GetUniqueId(char* id, size_t max_size) const override;
 #endif
   virtual void Hint(AccessPattern pattern) override;
-  virtual Status InvalidateCache(size_t offset, size_t length) override;
-  virtual bool use_direct_io() const override { return use_direct_io_; }
-  virtual size_t GetRequiredBufferAlignment() const override {
+  virtual Status InvalidateCache(size_t offset, size_t length) final;
+  virtual bool use_direct_io() const final { return use_direct_io_; }
+  virtual size_t GetRequiredBufferAlignment() const final {
     return logical_sector_size_;
   }
-  virtual intptr_t FileDescriptor() const override;
+  virtual intptr_t FileDescriptor() const final;
 };
 
 class PosixWritableFile : public WritableFile {
@@ -137,7 +137,7 @@ class PosixWritableFile : public WritableFile {
   virtual void SetWriteLifeTimeHint(Env::WriteLifeTimeHint hint) override;
   virtual uint64_t GetFileSize() override;
   virtual Status InvalidateCache(size_t offset, size_t length) override;
-  virtual size_t GetRequiredBufferAlignment() const override {
+  virtual size_t GetRequiredBufferAlignment() const final {
     return logical_sector_size_;
   }
 #ifdef ROCKSDB_FALLOCATE_PRESENT
@@ -166,10 +166,10 @@ class PosixMmapReadableFile : public RandomAccessFile {
   virtual ~PosixMmapReadableFile();
   virtual bool use_aio_reads() const final;
   virtual Status Read(uint64_t offset, size_t n, Slice* result,
-                      char* scratch) const override;
-  virtual Status FsRead(uint64_t offset, size_t len, Slice* result, void* buf) const override;
-  virtual Status InvalidateCache(size_t offset, size_t length) override;
-  virtual intptr_t FileDescriptor() const override;
+                      char* scratch) const final;
+  virtual Status FsRead(uint64_t offset, size_t len, Slice* result, void* buf) const final;
+  virtual Status InvalidateCache(size_t offset, size_t length) final;
+  virtual intptr_t FileDescriptor() const final;
 };
 
 class PosixMmapFile : public WritableFile {

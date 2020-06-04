@@ -68,6 +68,7 @@ DBOptions BuildDBOptions(const ImmutableDBOptions& immutable_db_options,
   options.log_file_time_to_roll = immutable_db_options.log_file_time_to_roll;
   options.keep_log_file_num = immutable_db_options.keep_log_file_num;
   options.recycle_log_file_num = immutable_db_options.recycle_log_file_num;
+  options.prepare_log_writer_num = immutable_db_options.prepare_log_writer_num;
   options.max_manifest_file_size = immutable_db_options.max_manifest_file_size;
   options.max_manifest_edit_count =
       immutable_db_options.max_manifest_edit_count;
@@ -88,6 +89,7 @@ DBOptions BuildDBOptions(const ImmutableDBOptions& immutable_db_options,
   options.stats_dump_period_sec = mutable_db_options.stats_dump_period_sec;
   options.advise_random_on_open = immutable_db_options.advise_random_on_open;
   options.allow_mmap_populate = immutable_db_options.allow_mmap_populate;
+  options.write_buffer_flush_pri = immutable_db_options.write_buffer_flush_pri;
   options.db_write_buffer_size = immutable_db_options.db_write_buffer_size;
   options.write_buffer_manager = immutable_db_options.write_buffer_manager;
   options.access_hint_on_compaction_start =
@@ -217,6 +219,10 @@ std::map<CompactionPri, std::string> OptionsHelper::compaction_pri_to_string = {
     {kOldestLargestSeqFirst, "kOldestLargestSeqFirst"},
     {kOldestSmallestSeqFirst, "kOldestSmallestSeqFirst"},
     {kMinOverlappingRatio, "kMinOverlappingRatio"}};
+
+std::map<WriteBufferFlushPri, std::string>
+    OptionsHelper::write_buffer_flush_pri_to_string = {
+        {kFlushOldest, "kFlushOldest"}, {kFlushLargest, "kFlushLargest"}};
 
 std::map<CompactionStopStyle, std::string>
     OptionsHelper::compaction_stop_style_to_string = {
@@ -554,6 +560,10 @@ bool ParseOptionHelper(char* opt_address, const OptionType& opt_type,
       return ParseEnum<TerarkZipTableOptions::EntropyAlgo>(
           entropy_algo_string_map, value,
           reinterpret_cast<TerarkZipTableOptions::EntropyAlgo*>(opt_address));
+    case OptionType::kWriteBufferFlushPri:
+      return ParseEnum<WriteBufferFlushPri>(
+          write_buffer_flush_pri_string_map, value,
+          reinterpret_cast<WriteBufferFlushPri*>(opt_address));
     default:
       return false;
   }
@@ -561,7 +571,7 @@ bool ParseOptionHelper(char* opt_address, const OptionType& opt_type,
 }
 
 bool SerializeSingleOptionHelper(const char* opt_address,
-                                 const OptionType opt_type,
+                                 const OptionType& opt_type,
                                  std::string* value) {
   assert(value);
   switch (opt_type) {
@@ -731,6 +741,14 @@ bool SerializeSingleOptionHelper(const char* opt_address,
       return SerializeEnum<CompactionStopStyle>(
           compaction_stop_style_string_map,
           *reinterpret_cast<const CompactionStopStyle*>(opt_address), value);
+    case OptionType::kEntropyAlgo:
+      return SerializeEnum<TerarkZipTableOptions::EntropyAlgo>(
+          entropy_algo_string_map,
+          *reinterpret_cast<const TerarkZipTableOptions::EntropyAlgo*>(opt_address), value);
+    case OptionType::kWriteBufferFlushPri:
+      return SerializeEnum<WriteBufferFlushPri>(
+          write_buffer_flush_pri_string_map,
+          *reinterpret_cast<const WriteBufferFlushPri*>(opt_address), value);
     default:
       return false;
   }
@@ -1047,7 +1065,7 @@ Status ParseColumnFamilyOption(const std::string& name,
 template <typename T>
 bool SerializeSingleStructOption(
     std::string* opt_string, const T& options,
-    const std::unordered_map<std::string, OptionTypeInfo> type_info,
+    const std::unordered_map<std::string, OptionTypeInfo>& type_info,
     const std::string& name, const std::string& delimiter) {
   auto iter = type_info.find(name);
   if (iter == type_info.end()) {
@@ -1067,7 +1085,7 @@ bool SerializeSingleStructOption(
 template <typename T>
 Status GetStringFromStruct(
     std::string* opt_string, const T& options,
-    const std::unordered_map<std::string, OptionTypeInfo> type_info,
+    const std::unordered_map<std::string, OptionTypeInfo>& type_info,
     const std::string& delimiter) {
   assert(opt_string);
   opt_string->clear();
@@ -1475,6 +1493,10 @@ std::unordered_map<std::string, OptionTypeInfo>
         {"table_cache_numshardbits",
          {offsetof(struct DBOptions, table_cache_numshardbits),
           OptionType::kInt, OptionVerificationType::kNormal, false, 0}},
+        {"write_buffer_flush_pri",
+         {offsetof(struct DBOptions, write_buffer_flush_pri),
+          OptionType::kWriteBufferFlushPri, OptionVerificationType::kNormal,
+          false, 0}},
         {"db_write_buffer_size",
          {offsetof(struct DBOptions, db_write_buffer_size), OptionType::kSizeT,
           OptionVerificationType::kNormal, false, 0}},
@@ -1484,6 +1506,9 @@ std::unordered_map<std::string, OptionTypeInfo>
         {"recycle_log_file_num",
          {offsetof(struct DBOptions, recycle_log_file_num), OptionType::kSizeT,
           OptionVerificationType::kNormal, false, 0}},
+        {"prepare_log_writer_num",
+         {offsetof(struct DBOptions, prepare_log_writer_num),
+          OptionType::kSizeT, OptionVerificationType::kNormal, false, 0}},
         {"log_file_time_to_roll",
          {offsetof(struct DBOptions, log_file_time_to_roll), OptionType::kSizeT,
           OptionVerificationType::kNormal, false, 0}},
@@ -1636,6 +1661,10 @@ std::unordered_map<std::string, CompactionPri>
         {"kOldestLargestSeqFirst", kOldestLargestSeqFirst},
         {"kOldestSmallestSeqFirst", kOldestSmallestSeqFirst},
         {"kMinOverlappingRatio", kMinOverlappingRatio}};
+
+std::unordered_map<std::string, WriteBufferFlushPri>
+    OptionsHelper::write_buffer_flush_pri_string_map = {
+        {"kFlushOldest", kFlushOldest}, {"kFlushLargest", kFlushLargest}};
 
 std::unordered_map<std::string, WALRecoveryMode>
     OptionsHelper::wal_recovery_mode_string_map = {

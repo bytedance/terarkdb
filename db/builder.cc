@@ -26,6 +26,7 @@
 #include "rocksdb/db.h"
 #include "rocksdb/env.h"
 #include "rocksdb/iterator.h"
+#include "rocksdb/merge_operator.h"
 #include "rocksdb/options.h"
 #include "rocksdb/table.h"
 #include "table/block_based_table_builder.h"
@@ -341,7 +342,10 @@ Status BuildTable(
     std::unique_ptr<InternalIterator> second_pass_iter(NewCompactionIterator(
         c_style_callback(make_compaction_iterator), &make_compaction_iterator));
 
-    builder->SetSecondPassIterator(second_pass_iter.get());
+    if (ioptions.merge_operator == nullptr ||
+        ioptions.merge_operator->IsStableMerge()) {
+      builder->SetSecondPassIterator(second_pass_iter.get());
+    }
     c_iter.SeekToFirst();
     for (; s.ok() && c_iter.Valid(); c_iter.Next()) {
       s = builder->Add(c_iter.key(), c_iter.value());

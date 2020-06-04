@@ -78,6 +78,10 @@ enum CompressionType : unsigned char {
   kDisableCompressionOption = 0xff,
 };
 
+enum WriteBufferFlushPri : unsigned char {
+  kFlushOldest, kFlushLargest
+};
+
 // Sst purpose
 enum SstPurpose {
   kEssenceSst,  // Actual data storage sst
@@ -624,6 +628,9 @@ struct DBOptions {
   // Default: 0
   size_t recycle_log_file_num = 0;
 
+  //
+  size_t prepare_log_writer_num = 4;
+
   // manifest file is rolled over on reaching this limit.
   // The older manifest file be deleted.
   // The default value is 1GB so that the manifest file can grow, but not
@@ -711,6 +718,9 @@ struct DBOptions {
   bool advise_random_on_open = true;
 
   bool allow_mmap_populate = false;
+
+  //
+  WriteBufferFlushPri write_buffer_flush_pri = kFlushLargest;
 
   // Amount of data to build up in memtables across all column
   // families before writing to disk.

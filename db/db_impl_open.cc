@@ -109,6 +109,11 @@ DBOptions SanitizeOptions(const std::string& dbname, const DBOptions& src) {
     result.wal_recovery_mode = WALRecoveryMode::kTolerateCorruptedTailRecords;
   }
 
+  if (result.recycle_log_file_num && result.prepare_log_writer_num) {
+    result.recycle_log_file_num =
+        std::max(result.prepare_log_writer_num, result.recycle_log_file_num);
+  }
+
   if (result.wal_dir.empty()) {
     // Use dbname as default
     result.wal_dir = dbname;
@@ -498,6 +503,21 @@ Status DBImpl::Recover(
     if (!logs.empty()) {
       // Recover in the order in which the logs were generated
       std::sort(logs.begin(), logs.end());
+      if (!read_only) {
+        // Remove tailing empty log files that create by pre-create log writer
+        while (!logs.empty()) {
+          std::string fname =
+              LogFileName(immutable_db_options_.wal_dir, logs.back());
+          uint64_t bytes;
+          if (!env_->GetFileSize(fname, &bytes).ok() || bytes > 0) {
+            break;
+          }
+          env_->DeleteFile(fname);
+          logs.pop_back();
+        }
+      }
+    }
+    if (!logs.empty()) {
       s = RecoverLogFiles(logs, &next_sequence, read_only);
       if (!s.ok()) {
         // Clear memtables if recovery failed
@@ -1104,9 +1124,12 @@ Status DBImpl::WriteLevel0TableForRecovery(int job_id, ColumnFamilyData* cfd,
   stats.micros = env_->NowMicros() - start_micros;
   stats.bytes_written = meta.fd.GetFileSize();
   for (auto& blob : blob_meta) {
-    stats.bytes_written = blob.fd.GetFileSize();
+    stats.bytes_written += blob.fd.GetFileSize();
+    cfd->internal_stats()->AddCFStats(InternalStats::BYTES_FLUSHED,
+                                      blob.fd.GetFileSize());
+    RecordTick(stats_, COMPACT_WRITE_BYTES, blob.fd.GetFileSize());
   }
-  stats.num_output_files = 1;
+  stats.num_output_files = 1 + blob_meta.size();
   cfd->internal_stats()->AddCompactionStats(level, stats);
   cfd->internal_stats()->AddCFStats(InternalStats::BYTES_FLUSHED,
                                     meta.fd.GetFileSize());
@@ -1339,6 +1362,7 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
     impl->opened_successfully_ = true;
     impl->MaybeScheduleFlushOrCompaction();
   }
+  impl->FillLogWriterPool();
   impl->mutex_.Unlock();
 
 #ifndef ROCKSDB_LITE

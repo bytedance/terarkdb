@@ -11,6 +11,7 @@
 
 #include <inttypes.h>
 
+#include "options/options_helper.h"
 #include "port/port.h"
 #include "rocksdb/cache.h"
 #include "rocksdb/env.h"
@@ -43,6 +44,7 @@ ImmutableDBOptions::ImmutableDBOptions(const DBOptions& options)
       log_file_time_to_roll(options.log_file_time_to_roll),
       keep_log_file_num(options.keep_log_file_num),
       recycle_log_file_num(options.recycle_log_file_num),
+      prepare_log_writer_num(options.prepare_log_writer_num),
       max_manifest_file_size(options.max_manifest_file_size),
       max_manifest_edit_count(options.max_manifest_edit_count),
       table_cache_numshardbits(options.table_cache_numshardbits),
@@ -59,6 +61,7 @@ ImmutableDBOptions::ImmutableDBOptions(const DBOptions& options)
       is_fd_close_on_exec(options.is_fd_close_on_exec),
       advise_random_on_open(options.advise_random_on_open),
       allow_mmap_populate(options.allow_mmap_populate),
+      write_buffer_flush_pri(options.write_buffer_flush_pri),
       db_write_buffer_size(options.db_write_buffer_size),
       write_buffer_manager(options.write_buffer_manager),
       access_hint_on_compaction_start(options.access_hint_on_compaction_start),
@@ -126,6 +129,9 @@ void ImmutableDBOptions::Dump(Logger* log) const {
   ROCKS_LOG_HEADER(
       log, "                   Options.recycle_log_file_num: %" ROCKSDB_PRIszt,
       recycle_log_file_num);
+  ROCKS_LOG_HEADER(
+      log, "                 Options.prepare_log_writer_num: %" ROCKSDB_PRIszt,
+      prepare_log_writer_num);
   ROCKS_LOG_HEADER(log, "                        Options.allow_fallocate: %d",
                    allow_fallocate);
   ROCKS_LOG_HEADER(log, "                       Options.allow_mmap_reads: %d",
@@ -165,6 +171,18 @@ void ImmutableDBOptions::Dump(Logger* log) const {
                    advise_random_on_open);
   ROCKS_LOG_HEADER(log, "                    Options.allow_mmap_populate: %d",
                    allow_mmap_populate);
+  const auto& it_write_buffer_flush_pri =
+      write_buffer_flush_pri_to_string.find(write_buffer_flush_pri);
+  std::string str_write_buffer_flush_pri;
+  if (it_write_buffer_flush_pri == write_buffer_flush_pri_to_string.end()) {
+    assert(false);
+    str_write_buffer_flush_pri =
+        "unknown_" + std::to_string(write_buffer_flush_pri);
+  } else {
+    str_write_buffer_flush_pri = it_write_buffer_flush_pri->second;
+  }
+  ROCKS_LOG_HEADER(log, "                 Options.write_buffer_flush_pri: %s",
+                   str_write_buffer_flush_pri.c_str());
   ROCKS_LOG_HEADER(
       log, "                   Options.db_write_buffer_size: %" ROCKSDB_PRIszt,
       db_write_buffer_size);
@@ -268,8 +286,7 @@ void MutableDBOptions::Dump(Logger* log) const {
                    max_task_per_thread);
   ROCKS_LOG_HEADER(log, "            Options.max_background_compactions: %d",
                    max_background_compactions);
-  ROCKS_LOG_HEADER(
-      log, "     Options.max_background_garbage_collections: %d",
+  ROCKS_LOG_HEADER(log, "     Options.max_background_garbage_collections: %d",
                    max_background_garbage_collections);
   ROCKS_LOG_HEADER(log, "            Options.avoid_flush_during_shutdown: %d",
                    avoid_flush_during_shutdown);
