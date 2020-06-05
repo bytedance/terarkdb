@@ -21,6 +21,7 @@
   M_Boolea(optimizeCpuL3Cache);
   M_Boolea(forceMetaInMemory);
   M_Boolea(enableEntropyStore);
+  M_NumFmt(cbtHashBits              , "%d");
   M_NumFmt(minPreadLen              , "%d");
   M_NumFmt(offsetArrayBlockUnits    , "%d");
   M_NumFmt(sampleRatio              , "%lf");
@@ -32,6 +33,9 @@
   M_NumGiB(singleIndexMaxSize);
   M_NumGiB(cacheCapacityBytes);
   M_NumFmt(cacheShards              , "%d");
+  M_NumFmt(cbtEntryPerTrie          , "%u");
+  M_NumFmt(cbtMinKeySize            , "%u");
+  M_NumFmt(cbtMinKeyRatio           , "%lf");
 
 #undef M_NumFmt
 #undef M_NumGiB

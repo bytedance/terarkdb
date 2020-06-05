@@ -54,6 +54,7 @@ using terark::FilePair;
 using terark::freq_hist_o1;
 using terark::fstring;
 using terark::fstrvec;
+using terark::TerarkIndexOptions;
 using terark::TempFileDeleteOnClose;
 using terark::TerarkIndex;
 using terark::Uint64Histogram;
@@ -204,6 +205,7 @@ class TerarkZipTableBuilder : public TableBuilder, boost::noncopyable {
 
   Arena arena_;
   TerarkZipTableOptions table_options_;
+  TerarkIndexOptions tiopt_;
   const TerarkZipTableFactory* table_factory_;
   const ImmutableCFOptions& ioptions_;
   TerarkZipMultiOffsetInfo offset_info_;

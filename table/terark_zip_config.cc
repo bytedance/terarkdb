@@ -334,11 +334,15 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo,
   MyOverrideBool(tzo, forceMetaInMemory);
   MyOverrideBool(tzo, enableEntropyStore);
 
+
   MyOverrideDouble(tzo, sampleRatio);
   MyOverrideDouble(tzo, indexCacheRatio);
+  MyOverrideDouble(tzo, cbtMinKeyRatio);
 
   MyOverrideInt(tzo, minDictZipValueSize);
   MyOverrideInt(tzo, minPreadLen);
+  MyOverrideInt(tzo, cbtHashBits);
+
 
   MyOverrideXiB(tzo, softZipWorkingMemLimit);
   MyOverrideXiB(tzo, hardZipWorkingMemLimit);
@@ -346,6 +350,8 @@ bool TerarkZipCFOptionsFromEnv(ColumnFamilyOptions& cfo,
   MyOverrideXiB(tzo, singleIndexMinSize);
   MyOverrideXiB(tzo, singleIndexMaxSize);
   MyOverrideXiB(tzo, cacheCapacityBytes);
+  MyOverrideInt(tzo, cbtEntryPerTrie);
+  MyOverrideInt(tzo, cbtMinKeySize);
   MyOverrideInt(tzo, cacheShards);
 
   tzo.singleIndexMinSize = std::max<size_t>(tzo.singleIndexMinSize, 1ull << 20);

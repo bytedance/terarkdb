@@ -500,6 +500,118 @@ Status TerarkZipTableFactory::SanitizeOptions(
   return Status::OK();
 }
 
+std::unordered_map<std::string, OptionTypeInfo>
+    TerarkZipTableFactory::terark_zip_table_type_info = {
+        {"index_nest_level",
+         {offsetof(struct TerarkZipTableOptions, indexNestLevel),
+          OptionType::kInt, OptionVerificationType::kNormal, false, 0}},
+        {"checksum_level",
+         {offsetof(struct TerarkZipTableOptions, checksumLevel),
+          OptionType::kInt, OptionVerificationType::kNormal, false, 0}},
+        {"checksum_small_val_size",
+         {offsetof(struct TerarkZipTableOptions, checksumSmallValSize),
+          OptionType::kInt, OptionVerificationType::kNormal, false, 0}},
+        {"entropy_algo",
+         {offsetof(struct TerarkZipTableOptions, entropyAlgo),
+          OptionType::kEntropyAlgo, OptionVerificationType::kNormal, false, 0}},
+        {"terark_zip_min_level",
+         {offsetof(struct TerarkZipTableOptions, terarkZipMinLevel),
+          OptionType::kInt, OptionVerificationType::kNormal, false, 0}},
+        {"debug_level",
+         {offsetof(struct TerarkZipTableOptions, debugLevel), OptionType::kUInt,
+          OptionVerificationType::kNormal, false, 0}},
+        {"index_nest_scale",
+         {offsetof(struct TerarkZipTableOptions, indexNestScale),
+          OptionType::kUInt, OptionVerificationType::kNormal, false, 0}},
+        {"index_temp_level",
+         {offsetof(struct TerarkZipTableOptions, indexTempLevel),
+          OptionType::kInt, OptionVerificationType::kNormal, false, 0}},
+        {"enable_compression_probe",
+         {offsetof(struct TerarkZipTableOptions, enableCompressionProbe),
+          OptionType::kBoolean, OptionVerificationType::kNormal, false, 0}},
+        {"use_suffix_array_local_match",
+         {offsetof(struct TerarkZipTableOptions, useSuffixArrayLocalMatch),
+          OptionType::kBoolean, OptionVerificationType::kNormal, false, 0}},
+        {"warm_up_index_on_open",
+         {offsetof(struct TerarkZipTableOptions, warmUpIndexOnOpen),
+          OptionType::kBoolean, OptionVerificationType::kNormal, false, 0}},
+        {"warm_up_value_on_open",
+         {offsetof(struct TerarkZipTableOptions, warmUpValueOnOpen),
+          OptionType::kBoolean, OptionVerificationType::kNormal, false, 0}},
+        {"disable_second_pass_iter",
+         {offsetof(struct TerarkZipTableOptions, disableSecondPassIter),
+          OptionType::kBoolean, OptionVerificationType::kNormal, false, 0}},
+        {"disable_compress_dict",
+         {offsetof(struct TerarkZipTableOptions, disableCompressDict),
+          OptionType::kBoolean, OptionVerificationType::kNormal, false, 0}},
+        {"optimize_cpu_l3_cache",
+         {offsetof(struct TerarkZipTableOptions, optimizeCpuL3Cache),
+          OptionType::kBoolean, OptionVerificationType::kNormal, false, 0}},
+        {"force_meta_in_memory",
+         {offsetof(struct TerarkZipTableOptions, forceMetaInMemory),
+          OptionType::kBoolean, OptionVerificationType::kNormal, false, 0}},
+        {"enable_entropy_store",
+         {offsetof(struct TerarkZipTableOptions, enableEntropyStore),
+          OptionType::kBoolean, OptionVerificationType::kNormal, false, 0}},
+        {"cbt_hash_bits",
+         {offsetof(struct TerarkZipTableOptions, cbtHashBits),
+          OptionType::kUInt, OptionVerificationType::kNormal, false, 0}},
+        {"offset_array_block_units",
+         {offsetof(struct TerarkZipTableOptions, offsetArrayBlockUnits),
+          OptionType::kUInt, OptionVerificationType::kNormal, false, 0}},
+        {"sample_ratio",
+         {offsetof(struct TerarkZipTableOptions, sampleRatio),
+          OptionType::kDouble, OptionVerificationType::kNormal, false, 0}},
+        {"index_cache_ratio",
+         {offsetof(struct TerarkZipTableOptions, indexCacheRatio),
+          OptionType::kDouble, OptionVerificationType::kNormal, false, 0}},
+        {"local_temp_dir",
+         {offsetof(struct TerarkZipTableOptions, localTempDir),
+          OptionType::kString, OptionVerificationType::kNormal, false, 0}},
+        {"index_type",
+         {offsetof(struct TerarkZipTableOptions, indexType),
+          OptionType::kString, OptionVerificationType::kNormal, false, 0}},
+        {"soft_zip_working_mem_limit",
+         {offsetof(struct TerarkZipTableOptions, softZipWorkingMemLimit),
+          OptionType::kUInt64T, OptionVerificationType::kNormal, false, 0}},
+        {"hard_zip_working_mem_limit",
+         {offsetof(struct TerarkZipTableOptions, hardZipWorkingMemLimit),
+          OptionType::kUInt64T, OptionVerificationType::kNormal, false, 0}},
+        {"small_task_memory",
+         {offsetof(struct TerarkZipTableOptions, smallTaskMemory),
+          OptionType::kUInt64T, OptionVerificationType::kNormal, false, 0}},
+        {"min_dict_zip_value_size",
+         {offsetof(struct TerarkZipTableOptions, minDictZipValueSize),
+          OptionType::kUInt32T, OptionVerificationType::kNormal, false, 0}},
+        {"key_prefix_len",
+         {offsetof(struct TerarkZipTableOptions, keyPrefixLen),
+          OptionType::kUInt32T, OptionVerificationType::kNormal, false, 0}},
+        {"single_index_min_size",
+         {offsetof(struct TerarkZipTableOptions, singleIndexMinSize),
+          OptionType::kUInt64T, OptionVerificationType::kNormal, false, 0}},
+        {"single_index_max_size",
+         {offsetof(struct TerarkZipTableOptions, singleIndexMaxSize),
+          OptionType::kUInt64T, OptionVerificationType::kNormal, false, 0}},
+        {"min_pread_len",
+         {offsetof(struct TerarkZipTableOptions, minPreadLen), OptionType::kInt,
+          OptionVerificationType::kNormal, false, 0}},
+        {"cache_shards",
+         {offsetof(struct TerarkZipTableOptions, cacheShards), OptionType::kInt,
+          OptionVerificationType::kNormal, false, 0}},
+        {"cache_capacity_bytes",
+         {offsetof(struct TerarkZipTableOptions, cacheCapacityBytes),
+          OptionType::kUInt64T, OptionVerificationType::kNormal, false, 0}},
+        {"cbt_entry_per_trie",
+         {offsetof(struct TerarkZipTableOptions, cbtEntryPerTrie),
+          OptionType::kUInt32T, OptionVerificationType::kNormal, false, 0}},
+        {"cbt_min_key_size",
+         {offsetof(struct TerarkZipTableOptions, cbtMinKeySize),
+          OptionType::kUInt32T, OptionVerificationType::kNormal, false, 0}},
+        {"cbt_min_key_ratio",
+         {offsetof(struct TerarkZipTableOptions, cbtMinKeyRatio),
+          OptionType::kDouble, OptionVerificationType::kNormal, false, 0}},
+};
+
 // delimiter must be "\n"
 Status TerarkZipTableOptions::Parse(Slice opt) {
   const char* beg = opt.data();
@@ -562,13 +674,14 @@ Status TerarkZipTableOptions::Parse(Slice opt) {
                                        "bad " #name);                     \
     }                                                                     \
   }
-  int entropyAlgo;
+  int entropyAlgo, cbtHashBits;
   int debugLevel, indexNestScale, indexTempLevel, offsetArrayBlockUnits;
 #include "terark_zip_table_property_print.h"
 
   this->debugLevel = (byte_t)debugLevel;
   this->indexNestScale = (byte_t)indexNestScale;
   this->indexTempLevel = (byte_t)indexTempLevel;
+  this->cbtHashBits = (byte_t)cbtHashBits;
   this->offsetArrayBlockUnits = (uint16_t)offsetArrayBlockUnits;
   this->entropyAlgo = (EntropyAlgo)entropyAlgo;
 

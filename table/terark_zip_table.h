@@ -78,7 +78,8 @@ struct TerarkZipTableOptions {
   bool optimizeCpuL3Cache = true;
   bool forceMetaInMemory = false;
   bool enableEntropyStore = true;
-  uint8_t reserveBytes0[6] = {};
+  uint8_t cbtHashBits = 0;
+  uint8_t reserveBytes0[5] = {};
   uint16_t offsetArrayBlockUnits = 0;
 
   double sampleRatio = 0.03;
@@ -106,7 +107,10 @@ struct TerarkZipTableOptions {
   int32_t minPreadLen = 0;
   int32_t cacheShards = 17;         // to reduce lock competition
   uint64_t cacheCapacityBytes = 0;  // non-zero implies direct io read
-  uint8_t reserveBytes1[24] = {};
+  uint32_t cbtEntryPerTrie = 65536;
+  uint32_t cbtMinKeySize = 16;
+  double cbtMinKeyRatio = 0.5;
+  uint8_t reserveBytes1[8] = {};
 
   class Status Parse(class Slice);
 };

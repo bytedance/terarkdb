@@ -1390,7 +1390,6 @@ Status DBImpl::NewLogWriter(std::unique_ptr<log::Writer>* new_log,
                             Env::WriteLifeTimeHint write_hint) {
   assert(new_log != nullptr);
   assert(*new_log == nullptr);
-  assert(immutable_db_options_.recycle_log_file_num == 0);
 
   std::unique_ptr<WritableFile> lfile;
   uint64_t new_log_number = versions_->NewFileNumber();

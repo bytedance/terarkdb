@@ -162,6 +162,18 @@ TerarkZipTableBuilder::TerarkZipTableBuilder(
       range_del_block_(1),
       prefixLen_(key_prefixLen),
       compaction_load_(0) {
+  tiopt_.debugLevel = table_options_.debugLevel;
+  tiopt_.indexNestLevel = table_options_.indexNestLevel;
+  tiopt_.indexNestScale = table_options_.indexNestScale;
+  tiopt_.indexTempLevel = table_options_.indexTempLevel;
+  tiopt_.indexType = table_options_.indexType;
+  tiopt_.localTempDir = table_options_.localTempDir;
+  tiopt_.smallTaskMemory = table_options_.smallTaskMemory;
+  tiopt_.compressGlobalDict = !table_options_.disableCompressDict;
+  tiopt_.cbtHashBits = tbo.skip_filters ? 0 : table_options_.cbtHashBits;
+  tiopt_.cbtEntryPerTrie = table_options_.cbtEntryPerTrie;
+  tiopt_.cbtMinKeySize = table_options_.cbtMinKeySize;
+  tiopt_.cbtMinKeyRatio = table_options_.cbtMinKeyRatio;
   try {
     if (IsCompactionWorkerNode()) {
       TerarkZipConfigCompactionWorkerFromEnv(table_options_);
@@ -309,6 +321,7 @@ void TerarkZipTableBuilder::RangeStatus::AddKey(fstring key,
   stat.minKeyLen = std::min(key.size(), stat.minKeyLen);
   stat.maxKeyLen = std::max(key.size(), stat.maxKeyLen);
   stat.sumKeyLen += key.size();
+  stat.sumValueLen += valueLen;
   stat.sumPrefixLen += prefixSize;
   stat.minPrefixLen = std::min(stat.minPrefixLen, prefixSize);
   stat.maxPrefixLen = std::max(stat.maxPrefixLen, prefixSize);
@@ -812,17 +825,8 @@ void TerarkZipTableBuilder::BuildIndex(KeyValueStatus& kvs, size_t entropyLen) {
         long long t1 = g_pf.now();
         std::unique_ptr<TerarkIndex> indexPtr;
         try {
-          terark::TerarkIndexOptions tiopt;
-          tiopt.debugLevel = table_options_.debugLevel;
-          tiopt.indexNestLevel = table_options_.indexNestLevel;
-          tiopt.indexNestScale = table_options_.indexNestScale;
-          tiopt.indexTempLevel = table_options_.indexTempLevel;
-          tiopt.indexType = table_options_.indexType;
-          tiopt.localTempDir = table_options_.localTempDir;
-          tiopt.smallTaskMemory = table_options_.smallTaskMemory;
-          tiopt.compressGlobalDict = !table_options_.disableCompressDict;
           indexPtr.reset(TerarkIndex::Factory::Build(tempKeyFileReader.get(),
-                                                     tiopt, keyStat, nullptr));
+                                                     tiopt_, keyStat, nullptr));
         } catch (const std::exception& ex) {
           WARN_EXCEPT(
               ioptions_.info_log,
@@ -2441,17 +2445,25 @@ bool TerarkZipTableBuilder::MergeRangeStatus(RangeStatus* aa, RangeStatus* bb,
   assert(aa->stat.minKey == ab->stat.minKey);
   assert(bb->stat.maxKey == ab->stat.maxKey);
   assert((aa->stat.maxKey < bb->stat.minKey) ^ isReverseBytewiseOrder_);
-  auto aai = TerarkIndex::GetUintPrefixBuildInfo(aa->stat);
-  auto bbi = TerarkIndex::GetUintPrefixBuildInfo(bb->stat);
-  using info_t = TerarkIndex::UintPrefixBuildInfo;
-  if (aai.type == info_t::fail && bbi.type == info_t::fail) {
+  auto aai = TerarkIndex::GetPrefixBuildInfo(tiopt_, aa->stat);
+  auto bbi = TerarkIndex::GetPrefixBuildInfo(tiopt_, bb->stat);
+  using info_t = TerarkIndex::PrefixBuildInfo;
+  if (aai.type == info_t::nest_louds_trie &&
+      bbi.type == info_t::nest_louds_trie) {
     return true;
   }
-  if (aai.type == info_t::fail || bbi.type == info_t::fail) {
+  if (aai.type == info_t::crit_bit_trie && bbi.type == info_t::crit_bit_trie) {
+    return true;
+  }
+  if (aai.type == info_t::nest_louds_trie ||
+      aai.type == info_t::crit_bit_trie ||
+      bbi.type == info_t::nest_louds_trie ||
+      bbi.type == info_t::crit_bit_trie) {
     return false;
   }
-  auto abi = TerarkIndex::GetUintPrefixBuildInfo(ab->stat);
-  if (abi.type == info_t::fail) {
+  auto abi = TerarkIndex::GetPrefixBuildInfo(tiopt_, ab->stat);
+  if (abi.type == info_t::nest_louds_trie ||
+      abi.type == info_t::crit_bit_trie) {
     return false;
   }
   return aai.estimate_size + bbi.estimate_size >= aai.estimate_size * 0.9;
