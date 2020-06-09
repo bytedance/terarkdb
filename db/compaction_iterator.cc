@@ -754,7 +754,8 @@ void CompactionIterator::PrepareOutput() {
             ikey_.type == kTypeValue ? kTypeValueIndex : kTypeMergeIndex;
         current_key_.UpdateInternalKey(ikey_.sequence, ikey_.type);
         s = input_.separate_helper()->TransToSeparate(
-            value_, value_meta_, ikey_.type == kTypeMergeIndex, false);
+            current_key_.GetInternalKey(), value_, value_meta_,
+            ikey_.type == kTypeMergeIndex, false);
         if (!s.ok()) {
           valid_ = false;
           status_ = std::move(s);
@@ -779,7 +780,8 @@ void CompactionIterator::PrepareOutput() {
   if (ikey_.type == kTypeValueIndex || ikey_.type == kTypeMergeIndex) {
     assert(value_.file_number() != uint64_t(-1));
     auto s = input_.separate_helper()->TransToSeparate(
-        value_, value_meta_, ikey_.type == kTypeMergeIndex, true);
+        current_key_.GetInternalKey(), value_, value_meta_,
+        ikey_.type == kTypeMergeIndex, true);
     if (!s.ok()) {
       valid_ = false;
       status_ = std::move(s);

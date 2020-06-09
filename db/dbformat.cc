@@ -198,10 +198,10 @@ void IterKey::EnlargeBuffer(size_t key_size) {
 }
 
 Status SeparateHelper::TransToSeparate(
-    LazyBuffer& value, const Slice& meta, bool is_merge, bool is_index,
-    const SliceTransform* value_meta_extractor) {
-  assert(value.file_number() != uint64_t(-1));
-  uint64_t file_number = value.file_number();
+    const Slice& internal_key, LazyBuffer& value, uint64_t file_number,
+    const Slice& meta, bool is_merge, bool is_index,
+    const ValueExtractor* value_meta_extractor) {
+  assert(file_number != uint64_t(-1));
   if (value_meta_extractor == nullptr || is_merge) {
     value.reset(EncodeFileNumber(file_number), true, file_number);
     return Status::OK();
@@ -209,18 +209,21 @@ Status SeparateHelper::TransToSeparate(
   if (is_index) {
     Slice parts[] = {EncodeFileNumber(file_number), meta};
     value.reset(SliceParts(parts, 2), file_number);
+    return Status::OK();
   } else {
     auto s = value.fetch();
     if (!s.ok()) {
       return s;
     }
-    Slice parts[] = {EncodeFileNumber(file_number),
-                     value_meta_extractor->Transform(value.slice())};
-    LazyBuffer new_value(SliceParts(parts, 2), file_number);
-    // DO NOT use value.reset(slice parts, file number)
-    value = std::move(new_value);
+    std::string value_meta;
+    s = value_meta_extractor->Extract(ExtractUserKey(internal_key),
+                                      value.slice(), &value_meta);
+    if (s.ok()) {
+      Slice parts[] = {EncodeFileNumber(file_number), value_meta};
+      value.reset(SliceParts(parts, 2), file_number);
+    }
+    return s;
   }
-  return Status::OK();
 }
 
 Slice ArenaPinSlice(const Slice& slice, Arena* arena) {

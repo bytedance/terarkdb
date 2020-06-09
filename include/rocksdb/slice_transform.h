@@ -96,6 +96,22 @@ class SliceTransform
   virtual std::string GetOptionString() const;
 };
 
+class ValueExtractor
+    : public terark::Factoryable<ValueExtractor*, const std::string&> {
+ public:
+  virtual ~ValueExtractor(){};
+
+  // Return the name of this transformation.
+  virtual const char* Name() const = 0;
+
+  // Extract a custom info from a specified key value pair. This method is
+  // called when a value will trans to separate.
+  virtual Status Extract(const Slice& key, const Slice& value,
+                         std::string* output) const = 0;
+
+  virtual std::string GetOptionString() const;
+};
+
 extern const SliceTransform* NewFixedPrefixTransform(size_t prefix_len);
 
 extern const SliceTransform* NewCappedPrefixTransform(size_t cap_len);

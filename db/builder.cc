@@ -156,23 +156,26 @@ Status BuildTable(
       std::unique_ptr<WritableFileWriter> file_writer;
       std::unique_ptr<TableBuilder> builder;
       FileMetaData* current_output = nullptr;
-      const SliceTransform* value_meta_extractor = nullptr;
+      const ValueExtractor* value_meta_extractor = nullptr;
       Status (*trans_to_separate_callback)(void* args, const Slice& key,
                                            LazyBuffer& value) = nullptr;
       void* trans_to_separate_callback_args = nullptr;
 
-      Status TransToSeparate(LazyBuffer& value, const Slice& meta,
-                             bool is_merge, bool is_index) override {
-        return SeparateHelper::TransToSeparate(value, meta, is_merge, is_index,
+      Status TransToSeparate(const Slice& internal_key, LazyBuffer& value,
+                             const Slice& meta, bool is_merge,
+                             bool is_index) override {
+        return SeparateHelper::TransToSeparate(internal_key, value, meta,
+                                               is_merge, is_index,
                                                value_meta_extractor);
       }
 
-      Status TransToSeparate(const Slice& key, LazyBuffer& value) override {
+      Status TransToSeparate(const Slice& internal_key,
+                             LazyBuffer& value) override {
         if (trans_to_separate_callback == nullptr) {
           return Status::NotSupported();
         }
-        return trans_to_separate_callback(trans_to_separate_callback_args, key,
-                                          value);
+        return trans_to_separate_callback(trans_to_separate_callback_args,
+                                          internal_key, value);
       }
 
       LazyBuffer TransToCombined(const Slice& /*user_key*/,
@@ -266,19 +269,10 @@ Status BuildTable(
       }
       if (status.ok()) {
         blob_meta->UpdateBoundaries(key, GetInternalKeySeqno(key));
-        uint64_t file_number = blob_meta->fd.GetNumber();
-        if (separate_helper.value_meta_extractor == nullptr) {
-          value.reset(SeparateHelper::EncodeFileNumber(file_number), true,
-                      file_number);
-        } else {
-          assert(value.valid());
-          Slice parts[] = {
-              SeparateHelper::EncodeFileNumber(file_number),
-              separate_helper.value_meta_extractor->Transform(value.slice())};
-          LazyBuffer new_value(SliceParts(parts, 2), file_number);
-          // DO NOT use value.reset(slice parts, file number)
-          value = std::move(new_value);
-        }
+        status = SeparateHelper::TransToSeparate(
+            key, value, blob_meta->fd.GetNumber(), Slice(),
+            GetInternalKeyType(key) == kTypeMerge, false,
+            separate_helper.value_meta_extractor);
       }
       return status;
     };

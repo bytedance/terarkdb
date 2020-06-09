@@ -257,10 +257,11 @@ class WorkerSeparateHelper : public SeparateHelper, public LazyBufferState {
   }
 
   using SeparateHelper::TransToSeparate;
-  Status TransToSeparate(LazyBuffer& value, const Slice& meta, bool is_merge,
+  Status TransToSeparate(const Slice& internal_key, LazyBuffer& value,
+                         const Slice& meta, bool is_merge,
                          bool is_index) override {
-    return SeparateHelper::TransToSeparate(value, meta, is_merge, is_index,
-                                           value_meta_extractor_);
+    return SeparateHelper::TransToSeparate(internal_key, value, meta, is_merge,
+                                           is_index, value_meta_extractor_);
   }
 
   LazyBuffer TransToCombined(const Slice& user_key, uint64_t sequence,
@@ -284,7 +285,7 @@ class WorkerSeparateHelper : public SeparateHelper, public LazyBufferState {
   }
 
   WorkerSeparateHelper(
-      DependenceMap* dependence_map, const SliceTransform* value_meta_extractor,
+      DependenceMap* dependence_map, const ValueExtractor* value_meta_extractor,
       void* inplace_decode_arg,
       Status (*inplace_decode_callback)(void* arg, LazyBuffer* buffer,
                                         LazyBufferContext* rep))
@@ -294,7 +295,7 @@ class WorkerSeparateHelper : public SeparateHelper, public LazyBufferState {
         inplace_decode_callback_(inplace_decode_callback) {}
 
   DependenceMap* dependence_map_;
-  const SliceTransform* value_meta_extractor_;
+  const ValueExtractor* value_meta_extractor_;
   void* inplace_decode_arg_;
   Status (*inplace_decode_callback_)(void* arg, LazyBuffer* buffer,
                                      LazyBufferContext* rep);
@@ -411,7 +412,7 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(Slice data) {
     }
   }
   if (!context.value_meta_extractor.empty()) {
-    cf_options.value_meta_extractor.reset(SliceTransform::create(
+    cf_options.value_meta_extractor.reset(ValueExtractor::create(
         context.value_meta_extractor, context.value_meta_extractor_options));
     if (!cf_options.value_meta_extractor) {
       return make_error(Status::Corruption("Missing value_meta_extractor !"));

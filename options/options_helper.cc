@@ -564,6 +564,10 @@ bool ParseOptionHelper(char* opt_address, const OptionType& opt_type,
       return ParseEnum<WriteBufferFlushPri>(
           write_buffer_flush_pri_string_map, value,
           reinterpret_cast<WriteBufferFlushPri*>(opt_address));
+    case OptionsType::kValueExtractor:
+      return ParseValueExtractor(
+          value, reinterpret_cast<std::shared_ptr<const ValueExtractor>*>(
+                     opt_address));
     default:
       return false;
   }
@@ -751,6 +755,14 @@ bool SerializeSingleOptionHelper(const char* opt_address,
       return SerializeEnum<WriteBufferFlushPri>(
           write_buffer_flush_pri_string_map,
           *reinterpret_cast<const WriteBufferFlushPri*>(opt_address), value);
+
+    case OptionsType::kValueExtractor:
+      const auto* value_extractor_ptr =
+          reinterpret_cast<const std::shared_ptr<const ValueExtractor>*>(
+              opt_address);
+      *value = value_extractor_ptr->get() ? value_extractor_ptr->get()->Name()
+                                          : kNullptrString;
+      break;
     default:
       return false;
   }
@@ -1971,7 +1983,7 @@ std::unordered_map<std::string, OptionTypeInfo>
           OptionVerificationType::kByNameAllowFromNull, false, 0}},
         {"value_meta_extractor",
          {offset_of(&ColumnFamilyOptions::value_meta_extractor),
-          OptionType::kSliceTransform,
+          OptionType::kValueExtractor,
           OptionVerificationType::kByNameAllowFromNull, false, 0}},
         {"compaction_style",
          {offset_of(&ColumnFamilyOptions::compaction_style),

@@ -1265,15 +1265,16 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
 
   struct BuilderSeparateHelper : public SeparateHelper {
     SeparateHelper* separate_helper = nullptr;
-    const SliceTransform* value_meta_extractor = nullptr;
+    const ValueExtractor* value_meta_extractor = nullptr;
     Status (*trans_to_separate_callback)(void* args, const Slice& key,
                                          LazyBuffer& value) = nullptr;
     void* trans_to_separate_callback_args = nullptr;
 
-    Status TransToSeparate(LazyBuffer& value, const Slice& meta, bool is_merge,
+    Status TransToSeparate(const Slice& internal_key, LazyBuffer& value,
+                           const Slice& meta, bool is_merge,
                            bool is_index) override {
-      return SeparateHelper::TransToSeparate(value, meta, is_merge, is_index,
-                                             value_meta_extractor);
+      return SeparateHelper::TransToSeparate(
+          internal_key, value, meta, is_merge, is_index, value_meta_extractor);
     }
 
     Status TransToSeparate(const Slice& key, LazyBuffer& value) override {
@@ -1312,390 +1313,377 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
     }
     if (status.ok()) {
       blob_meta->UpdateBoundaries(key, GetInternalKeySeqno(key));
-      uint64_t file_number = blob_meta->fd.GetNumber();
-      if (separate_helper.value_meta_extractor == nullptr) {
-        value.reset(SeparateHelper::EncodeFileNumber(file_number), true,
-                    file_number);
-      } else {
-        assert(value.valid());
-        Slice parts[] = {
-            SeparateHelper::EncodeFileNumber(file_number),
-            separate_helper.value_meta_extractor->Transform(value.slice())};
-        LazyBuffer new_value(SliceParts(parts, 2), file_number);
-        // DO NOT use value.reset(slice parts, file number)
-        value = std::move(new_value);
-      }
+      status = SeparateHelper::TransToSeparate(
+          key, value, blob_meta->fd.GetNumber(), Slice(),
+          GetInternalKeyType(key) == kTypeMerge, false,
+          separate_helper.value_meta_extractor);
     }
-    return status;
-  };
+  } return status;
+};
 
-  separate_helper.separate_helper = sub_compact->compaction->input_version();
-  if (!sub_compact->compaction->immutable_cf_options()
-           ->table_factory->IsBuilderNeedSecondPass()) {
-    separate_helper.trans_to_separate_callback =
-        c_style_callback(trans_to_separate);
-    separate_helper.trans_to_separate_callback_args = &trans_to_separate;
-  }
+separate_helper.separate_helper = sub_compact->compaction->input_version();
+if (!sub_compact->compaction->immutable_cf_options()
+         ->table_factory->IsBuilderNeedSecondPass()) {
+  separate_helper.trans_to_separate_callback =
+      c_style_callback(trans_to_separate);
+  separate_helper.trans_to_separate_callback_args = &trans_to_separate;
+}
 
-  TEST_SYNC_POINT("CompactionJob::Run():Inprogress");
+TEST_SYNC_POINT("CompactionJob::Run():Inprogress");
 
-  const Slice* start = sub_compact->start;
-  const Slice* end = sub_compact->end;
-  if (start != nullptr) {
-    sub_compact->actual_start.SetMinPossibleForUserKey(*start);
-    input->Seek(sub_compact->actual_start.Encode());
-  } else {
-    sub_compact->actual_start.SetMinPossibleForUserKey(
-        sub_compact->compaction->GetSmallestUserKey());
-    input->SeekToFirst();
-  }
+const Slice* start = sub_compact->start;
+const Slice* end = sub_compact->end;
+if (start != nullptr) {
+  sub_compact->actual_start.SetMinPossibleForUserKey(*start);
+  input->Seek(sub_compact->actual_start.Encode());
+} else {
+  sub_compact->actual_start.SetMinPossibleForUserKey(
+      sub_compact->compaction->GetSmallestUserKey());
+  input->SeekToFirst();
+}
 
-  Status status;
-  sub_compact->c_iter.reset(new CompactionIterator(
-      input.get(), &separate_helper, end, cfd->user_comparator(), &merge,
-      versions_->LastSequence(), &existing_snapshots_,
-      earliest_write_conflict_snapshot_, snapshot_checker_, env_,
-      ShouldReportDetailedTime(env_, stats_), false, &range_del_agg,
-      sub_compact->compaction, mutable_cf_options->get_blob_config(),
-      compaction_filter, shutting_down_, preserve_deletes_seqnum_));
-  auto c_iter = sub_compact->c_iter.get();
-  c_iter->SeekToFirst();
+Status status;
+sub_compact->c_iter.reset(new CompactionIterator(
+    input.get(), &separate_helper, end, cfd->user_comparator(), &merge,
+    versions_->LastSequence(), &existing_snapshots_,
+    earliest_write_conflict_snapshot_, snapshot_checker_, env_,
+    ShouldReportDetailedTime(env_, stats_), false, &range_del_agg,
+    sub_compact->compaction, mutable_cf_options->get_blob_config(),
+    compaction_filter, shutting_down_, preserve_deletes_seqnum_));
+auto c_iter = sub_compact -> c_iter.get();
+c_iter->SeekToFirst();
 
-  struct SecondPassIterStorage {
-    std::aligned_storage<sizeof(CompactionRangeDelAggregator),
-                         alignof(CompactionRangeDelAggregator)>::type
-        range_del_agg;
-    std::unique_ptr<CompactionFilter> compaction_filter_holder;
-    const CompactionFilter* compaction_filter;
-    std::aligned_storage<sizeof(MergeHelper), alignof(MergeHelper)>::type merge;
-    std::unique_ptr<InternalIterator> input;
+struct SecondPassIterStorage {
+  std::aligned_storage<sizeof(CompactionRangeDelAggregator),
+                       alignof(CompactionRangeDelAggregator)>::type
+      range_del_agg;
+  std::unique_ptr<CompactionFilter> compaction_filter_holder;
+  const CompactionFilter* compaction_filter;
+  std::aligned_storage<sizeof(MergeHelper), alignof(MergeHelper)>::type merge;
+  std::unique_ptr<InternalIterator> input;
 
-    ~SecondPassIterStorage() {
-      if (input) {
-        input.reset();
-        auto merge_ptr = reinterpret_cast<MergeHelper*>(&merge);
-        merge_ptr->~MergeHelper();
-        compaction_filter_holder.reset();
-        auto range_del_agg_ptr =
-            reinterpret_cast<CompactionRangeDelAggregator*>(&range_del_agg);
-        range_del_agg_ptr->~CompactionRangeDelAggregator();
-      }
+  ~SecondPassIterStorage() {
+    if (input) {
+      input.reset();
+      auto merge_ptr = reinterpret_cast<MergeHelper*>(&merge);
+      merge_ptr->~MergeHelper();
+      compaction_filter_holder.reset();
+      auto range_del_agg_ptr =
+          reinterpret_cast<CompactionRangeDelAggregator*>(&range_del_agg);
+      range_del_agg_ptr->~CompactionRangeDelAggregator();
     }
-  } second_pass_iter_storage;
+  }
+} second_pass_iter_storage;
 
-  auto make_compaction_iterator = [&] {
-    auto range_del_agg_ptr = new (&second_pass_iter_storage.range_del_agg)
-        CompactionRangeDelAggregator(&cfd->internal_comparator(),
-                                     existing_snapshots_);
+auto make_compaction_iterator = [&] {
+  auto range_del_agg_ptr = new (&second_pass_iter_storage.range_del_agg)
+      CompactionRangeDelAggregator(&cfd->internal_comparator(),
+                                   existing_snapshots_);
+  second_pass_iter_storage.compaction_filter =
+      cfd->ioptions()->compaction_filter;
+  if (second_pass_iter_storage.compaction_filter == nullptr) {
+    second_pass_iter_storage.compaction_filter_holder =
+        sub_compact->compaction->CreateCompactionFilter();
     second_pass_iter_storage.compaction_filter =
-        cfd->ioptions()->compaction_filter;
-    if (second_pass_iter_storage.compaction_filter == nullptr) {
-      second_pass_iter_storage.compaction_filter_holder =
-          sub_compact->compaction->CreateCompactionFilter();
-      second_pass_iter_storage.compaction_filter =
-          second_pass_iter_storage.compaction_filter_holder.get();
-    }
-    auto merge_ptr = new (&second_pass_iter_storage.merge) MergeHelper(
-        env_, cfd->user_comparator(), cfd->ioptions()->merge_operator,
-        second_pass_iter_storage.compaction_filter, db_options_.info_log.get(),
-        false /* internal key corruption is expected */,
-        existing_snapshots_.empty() ? 0 : existing_snapshots_.back(),
-        snapshot_checker_, compact_->compaction->level(),
-        db_options_.statistics.get(), shutting_down_);
-    second_pass_iter_storage.input.reset(versions_->MakeInputIterator(
-        sub_compact->compaction, range_del_agg_ptr, env_options_for_read_));
-    return new CompactionIterator(
-        second_pass_iter_storage.input.get(), &separate_helper, end,
-        cfd->user_comparator(), merge_ptr, versions_->LastSequence(),
-        &existing_snapshots_, earliest_write_conflict_snapshot_,
-        snapshot_checker_, env_, false, false, range_del_agg_ptr,
-        sub_compact->compaction, mutable_cf_options->get_blob_config(),
-        second_pass_iter_storage.compaction_filter, shutting_down_,
-        preserve_deletes_seqnum_);
-  };
-  std::unique_ptr<InternalIterator> second_pass_iter(
-      NewCompactionIterator(c_style_callback(make_compaction_iterator),
-                            &make_compaction_iterator, start));
-  if (c_iter->Valid() && sub_compact->compaction->output_level() != 0) {
-    // ShouldStopBefore() maintains state based on keys processed so far. The
-    // compaction loop always calls it on the "next" key, thus won't tell it the
-    // first key. So we do that here.
-    sub_compact->ShouldStopBefore(c_iter->key(),
-                                  sub_compact->current_output_file_size);
+        second_pass_iter_storage.compaction_filter_holder.get();
   }
-  const auto& c_iter_stats = c_iter->iter_stats();
-  auto sample_begin_offset_iter = sample_begin_offsets.cbegin();
-  // data_begin_offset and dict_sample_data are only valid while generating
-  // dictionary from the first output file.
-  size_t data_begin_offset = 0;
-  std::string dict_sample_data;
-  // single_output don't need sample
-  if (!sub_compact->compaction->partial_compaction()) {
-    dict_sample_data.reserve(kSampleBytes);
+  auto merge_ptr = new (&second_pass_iter_storage.merge) MergeHelper(
+      env_, cfd->user_comparator(), cfd->ioptions()->merge_operator,
+      second_pass_iter_storage.compaction_filter, db_options_.info_log.get(),
+      false /* internal key corruption is expected */,
+      existing_snapshots_.empty() ? 0 : existing_snapshots_.back(),
+      snapshot_checker_, compact_->compaction->level(),
+      db_options_.statistics.get(), shutting_down_);
+  second_pass_iter_storage.input.reset(versions_->MakeInputIterator(
+      sub_compact->compaction, range_del_agg_ptr, env_options_for_read_));
+  return new CompactionIterator(
+      second_pass_iter_storage.input.get(), &separate_helper, end,
+      cfd->user_comparator(), merge_ptr, versions_->LastSequence(),
+      &existing_snapshots_, earliest_write_conflict_snapshot_,
+      snapshot_checker_, env_, false, false, range_del_agg_ptr,
+      sub_compact->compaction, mutable_cf_options->get_blob_config(),
+      second_pass_iter_storage.compaction_filter, shutting_down_,
+      preserve_deletes_seqnum_);
+};
+std::unique_ptr<InternalIterator> second_pass_iter(
+    NewCompactionIterator(c_style_callback(make_compaction_iterator),
+                          &make_compaction_iterator, start));
+if (c_iter->Valid() && sub_compact->compaction->output_level() != 0) {
+  // ShouldStopBefore() maintains state based on keys processed so far. The
+  // compaction loop always calls it on the "next" key, thus won't tell it the
+  // first key. So we do that here.
+  sub_compact->ShouldStopBefore(c_iter->key(),
+                                sub_compact->current_output_file_size);
+}
+const auto& c_iter_stats = c_iter -> iter_stats();
+auto sample_begin_offset_iter = sample_begin_offsets.cbegin();
+// data_begin_offset and dict_sample_data are only valid while generating
+// dictionary from the first output file.
+size_t data_begin_offset = 0;
+std::string dict_sample_data;
+// single_output don't need sample
+if (!sub_compact->compaction->partial_compaction()) {
+  dict_sample_data.reserve(kSampleBytes);
+}
+std::unordered_map<uint64_t, uint64_t> dependence;
+
+size_t yield_count = 0;
+while (status.ok() && !cfd->IsDropped() && c_iter->Valid()) {
+  if (max_task_per_thread_ > 1 && ++yield_count % 128 == 0) {
+    boost::this_fiber::yield();
   }
-  std::unordered_map<uint64_t, uint64_t> dependence;
+  // Invariant: c_iter.status() is guaranteed to be OK if c_iter->Valid()
+  // returns true.
+  const Slice& key = c_iter->key();
+  const LazyBuffer& value = c_iter->value();
+  if (c_iter->ikey().type == kTypeValueIndex ||
+      c_iter->ikey().type == kTypeMergeIndex) {
+    assert(value.file_number() != uint64_t(-1));
+    auto ib = dependence.emplace(value.file_number(), 1);
+    if (!ib.second) {
+      ++ib.first->second;
+    }
+  }
 
-  size_t yield_count = 0;
-  while (status.ok() && !cfd->IsDropped() && c_iter->Valid()) {
-    if (max_task_per_thread_ > 1 && ++yield_count % 128 == 0) {
-      boost::this_fiber::yield();
-    }
-    // Invariant: c_iter.status() is guaranteed to be OK if c_iter->Valid()
-    // returns true.
-    const Slice& key = c_iter->key();
-    const LazyBuffer& value = c_iter->value();
-    if (c_iter->ikey().type == kTypeValueIndex ||
-        c_iter->ikey().type == kTypeMergeIndex) {
-      assert(value.file_number() != uint64_t(-1));
-      auto ib = dependence.emplace(value.file_number(), 1);
-      if (!ib.second) {
-        ++ib.first->second;
-      }
-    }
+  assert(end == nullptr ||
+         cfd->user_comparator()->Compare(c_iter->user_key(), *end) < 0);
+  if (c_iter_stats.num_input_records % kRecordStatsEvery ==
+      kRecordStatsEvery - 1) {
+    RecordDroppedKeys(c_iter_stats, &sub_compact->compaction_job_stats);
+    c_iter->ResetRecordCounts();
+    RecordCompactionIOStats();
+  }
 
-    assert(end == nullptr ||
-           cfd->user_comparator()->Compare(c_iter->user_key(), *end) < 0);
-    if (c_iter_stats.num_input_records % kRecordStatsEvery ==
-        kRecordStatsEvery - 1) {
-      RecordDroppedKeys(c_iter_stats, &sub_compact->compaction_job_stats);
-      c_iter->ResetRecordCounts();
-      RecordCompactionIOStats();
-    }
-
-    // Open output file if necessary
-    if (sub_compact->builder == nullptr) {
-      status = OpenCompactionOutputFile(sub_compact);
-      if (!status.ok()) {
-        break;
-      }
-      if ((compaction_filter == nullptr ||
-           compaction_filter->IsStableChangeValue()) &&
-          (cfd->ioptions()->merge_operator == nullptr ||
-           cfd->ioptions()->merge_operator->IsStableMerge())) {
-        sub_compact->builder->SetSecondPassIterator(second_pass_iter.get());
-      }
-    }
-    assert(sub_compact->builder != nullptr);
-    assert(sub_compact->current_output() != nullptr);
-    status = sub_compact->builder->Add(key, value);
+  // Open output file if necessary
+  if (sub_compact->builder == nullptr) {
+    status = OpenCompactionOutputFile(sub_compact);
     if (!status.ok()) {
       break;
     }
-    sub_compact->current_output_file_size = sub_compact->builder->FileSize();
-    sub_compact->current_output()->meta.UpdateBoundaries(
-        key, c_iter->ikey().sequence);
-    sub_compact->num_output_records++;
+    if ((compaction_filter == nullptr ||
+         compaction_filter->IsStableChangeValue()) &&
+        (cfd->ioptions()->merge_operator == nullptr ||
+         cfd->ioptions()->merge_operator->IsStableMerge())) {
+      sub_compact->builder->SetSecondPassIterator(second_pass_iter.get());
+    }
+  }
+  assert(sub_compact->builder != nullptr);
+  assert(sub_compact->current_output() != nullptr);
+  status = sub_compact->builder->Add(key, value);
+  if (!status.ok()) {
+    break;
+  }
+  sub_compact->current_output_file_size = sub_compact->builder->FileSize();
+  sub_compact->current_output()->meta.UpdateBoundaries(key,
+                                                       c_iter->ikey().sequence);
+  sub_compact->num_output_records++;
 
-    // partial_compaction always output single sst, don't need sample
-    if (!sub_compact->compaction->partial_compaction() &&
-        sub_compact->outputs.size() == 1) {  // first output file
-      // Check if this key/value overlaps any sample intervals; if so, appends
-      // overlapping portions to the dictionary.
-      status = value.fetch();
-      if (!status.ok()) {
-        break;
-      }
-      for (const auto& data_elmt : {key, value.slice()}) {
-        size_t data_end_offset = data_begin_offset + data_elmt.size();
-        while (sample_begin_offset_iter != sample_begin_offsets.cend() &&
-               *sample_begin_offset_iter < data_end_offset) {
-          size_t sample_end_offset =
-              *sample_begin_offset_iter + (1 << kSampleLenShift);
-          // Invariant: Because we advance sample iterator while processing the
-          // data_elmt containing the sample's last byte, the current sample
-          // cannot end before the current data_elmt.
-          assert(data_begin_offset < sample_end_offset);
+  // partial_compaction always output single sst, don't need sample
+  if (!sub_compact->compaction->partial_compaction() &&
+      sub_compact->outputs.size() == 1) {  // first output file
+    // Check if this key/value overlaps any sample intervals; if so, appends
+    // overlapping portions to the dictionary.
+    status = value.fetch();
+    if (!status.ok()) {
+      break;
+    }
+    for (const auto& data_elmt : {key, value.slice()}) {
+      size_t data_end_offset = data_begin_offset + data_elmt.size();
+      while (sample_begin_offset_iter != sample_begin_offsets.cend() &&
+             *sample_begin_offset_iter < data_end_offset) {
+        size_t sample_end_offset =
+            *sample_begin_offset_iter + (1 << kSampleLenShift);
+        // Invariant: Because we advance sample iterator while processing the
+        // data_elmt containing the sample's last byte, the current sample
+        // cannot end before the current data_elmt.
+        assert(data_begin_offset < sample_end_offset);
 
-          size_t data_elmt_copy_offset, data_elmt_copy_len;
-          if (*sample_begin_offset_iter <= data_begin_offset) {
-            // The sample starts before data_elmt starts, so take bytes starting
-            // at the beginning of data_elmt.
-            data_elmt_copy_offset = 0;
-          } else {
-            // data_elmt starts before the sample starts, so take bytes starting
-            // at the below offset into data_elmt.
-            data_elmt_copy_offset =
-                *sample_begin_offset_iter - data_begin_offset;
-          }
-          if (sample_end_offset <= data_end_offset) {
-            // The sample ends before data_elmt ends, so take as many bytes as
-            // needed.
-            data_elmt_copy_len =
-                sample_end_offset - (data_begin_offset + data_elmt_copy_offset);
-          } else {
-            // data_elmt ends before the sample ends, so take all remaining
-            // bytes in data_elmt.
-            data_elmt_copy_len =
-                data_end_offset - (data_begin_offset + data_elmt_copy_offset);
-          }
-          dict_sample_data.append(&data_elmt.data()[data_elmt_copy_offset],
-                                  data_elmt_copy_len);
-          if (sample_end_offset > data_end_offset) {
-            // Didn't finish sample. Try to finish it with the next data_elmt.
-            break;
-          }
-          // Next sample may require bytes from same data_elmt.
-          sample_begin_offset_iter++;
-        }
-        data_begin_offset = data_end_offset;
-      }
-    }
-
-    // Close output file if it is big enough. Two possibilities determine it's
-    // time to close it: (1) the current key should be this file's last key, (2)
-    // the next key should not be in this file.
-    //
-    // TODO(aekmekji): determine if file should be closed earlier than this
-    // during subcompactions (i.e. if output size, estimated by input size, is
-    // going to be 1.2MB and max_output_file_size = 1MB, prefer to have 0.6MB
-    // and 0.6MB instead of 1MB and 0.2MB)
-    bool output_file_ended = false;
-    Status input_status;
-    if (sub_compact->compaction->max_output_file_size() != 0 &&
-        sub_compact->current_output_file_size >=
-            sub_compact->compaction->max_output_file_size()) {
-      // (1) this key terminates the file. For historical reasons, the iterator
-      // status before advancing will be given to FinishCompactionOutputFile().
-      input_status = input->status();
-      output_file_ended = true;
-    }
-    c_iter->Next();
-    if (!output_file_ended && c_iter->Valid() &&
-        sub_compact->compaction->max_output_file_size() != 0 &&
-        sub_compact->ShouldStopBefore(c_iter->key(),
-                                      sub_compact->current_output_file_size) &&
-        sub_compact->builder != nullptr) {
-      // (2) this key belongs to the next file. For historical reasons, the
-      // iterator status after advancing will be given to
-      // FinishCompactionOutputFile().
-      input_status = input->status();
-      output_file_ended = true;
-    }
-    const Slice* next_key = nullptr;
-    if (output_file_ended) {
-      assert(sub_compact->compaction->max_output_file_size() != 0);
-      if (c_iter->Valid()) {
-        next_key = &c_iter->key();
-      }
-      // compaction_picker use user_key boundary, single user_key in multi
-      // sst will make picker pick one or more unnecessary sst file(s) ???
-      if (next_key != nullptr &&
-          cfd->user_comparator()->Compare(
-              ExtractUserKey(*next_key),
-              sub_compact->outputs.back().meta.largest.user_key()) == 0) {
-        output_file_ended = false;
-      }
-    }
-    if (output_file_ended) {
-      CompactionIterationStats range_del_out_stats;
-      status = FinishCompactionOutputFile(input_status, sub_compact,
-                                          &range_del_agg, &range_del_out_stats,
-                                          dependence, next_key);
-      dependence.clear();
-      RecordDroppedKeys(range_del_out_stats,
-                        &sub_compact->compaction_job_stats);
-      if (sub_compact->compaction->partial_compaction()) {
-        if (next_key != nullptr) {
-          sub_compact->actual_end.SetMinPossibleForUserKey(
-              ExtractUserKey(*next_key));
-        }
-        break;
-      }
-      if (sub_compact->outputs.size() == 1) {
-        // Use samples from first output file to create dictionary for
-        // compression of subsequent files.
-        if (kUseZstdTrainer) {
-          sub_compact->compression_dict = ZSTD_TrainDictionary(
-              dict_sample_data, kSampleLenShift,
-              sub_compact->compaction->output_compression_opts()
-                  .max_dict_bytes);
+        size_t data_elmt_copy_offset, data_elmt_copy_len;
+        if (*sample_begin_offset_iter <= data_begin_offset) {
+          // The sample starts before data_elmt starts, so take bytes starting
+          // at the beginning of data_elmt.
+          data_elmt_copy_offset = 0;
         } else {
-          sub_compact->compression_dict = std::move(dict_sample_data);
+          // data_elmt starts before the sample starts, so take bytes starting
+          // at the below offset into data_elmt.
+          data_elmt_copy_offset = *sample_begin_offset_iter - data_begin_offset;
         }
+        if (sample_end_offset <= data_end_offset) {
+          // The sample ends before data_elmt ends, so take as many bytes as
+          // needed.
+          data_elmt_copy_len =
+              sample_end_offset - (data_begin_offset + data_elmt_copy_offset);
+        } else {
+          // data_elmt ends before the sample ends, so take all remaining
+          // bytes in data_elmt.
+          data_elmt_copy_len =
+              data_end_offset - (data_begin_offset + data_elmt_copy_offset);
+        }
+        dict_sample_data.append(&data_elmt.data()[data_elmt_copy_offset],
+                                data_elmt_copy_len);
+        if (sample_end_offset > data_end_offset) {
+          // Didn't finish sample. Try to finish it with the next data_elmt.
+          break;
+        }
+        // Next sample may require bytes from same data_elmt.
+        sample_begin_offset_iter++;
+      }
+      data_begin_offset = data_end_offset;
+    }
+  }
+
+  // Close output file if it is big enough. Two possibilities determine it's
+  // time to close it: (1) the current key should be this file's last key, (2)
+  // the next key should not be in this file.
+  //
+  // TODO(aekmekji): determine if file should be closed earlier than this
+  // during subcompactions (i.e. if output size, estimated by input size, is
+  // going to be 1.2MB and max_output_file_size = 1MB, prefer to have 0.6MB
+  // and 0.6MB instead of 1MB and 0.2MB)
+  bool output_file_ended = false;
+  Status input_status;
+  if (sub_compact->compaction->max_output_file_size() != 0 &&
+      sub_compact->current_output_file_size >=
+          sub_compact->compaction->max_output_file_size()) {
+    // (1) this key terminates the file. For historical reasons, the iterator
+    // status before advancing will be given to FinishCompactionOutputFile().
+    input_status = input->status();
+    output_file_ended = true;
+  }
+  c_iter->Next();
+  if (!output_file_ended && c_iter->Valid() &&
+      sub_compact->compaction->max_output_file_size() != 0 &&
+      sub_compact->ShouldStopBefore(c_iter->key(),
+                                    sub_compact->current_output_file_size) &&
+      sub_compact->builder != nullptr) {
+    // (2) this key belongs to the next file. For historical reasons, the
+    // iterator status after advancing will be given to
+    // FinishCompactionOutputFile().
+    input_status = input->status();
+    output_file_ended = true;
+  }
+  const Slice* next_key = nullptr;
+  if (output_file_ended) {
+    assert(sub_compact->compaction->max_output_file_size() != 0);
+    if (c_iter->Valid()) {
+      next_key = &c_iter->key();
+    }
+    // compaction_picker use user_key boundary, single user_key in multi
+    // sst will make picker pick one or more unnecessary sst file(s) ???
+    if (next_key != nullptr &&
+        cfd->user_comparator()->Compare(
+            ExtractUserKey(*next_key),
+            sub_compact->outputs.back().meta.largest.user_key()) == 0) {
+      output_file_ended = false;
+    }
+  }
+  if (output_file_ended) {
+    CompactionIterationStats range_del_out_stats;
+    status =
+        FinishCompactionOutputFile(input_status, sub_compact, &range_del_agg,
+                                   &range_del_out_stats, dependence, next_key);
+    dependence.clear();
+    RecordDroppedKeys(range_del_out_stats, &sub_compact->compaction_job_stats);
+    if (sub_compact->compaction->partial_compaction()) {
+      if (next_key != nullptr) {
+        sub_compact->actual_end.SetMinPossibleForUserKey(
+            ExtractUserKey(*next_key));
+      }
+      break;
+    }
+    if (sub_compact->outputs.size() == 1) {
+      // Use samples from first output file to create dictionary for
+      // compression of subsequent files.
+      if (kUseZstdTrainer) {
+        sub_compact->compression_dict = ZSTD_TrainDictionary(
+            dict_sample_data, kSampleLenShift,
+            sub_compact->compaction->output_compression_opts().max_dict_bytes);
+      } else {
+        sub_compact->compression_dict = std::move(dict_sample_data);
       }
     }
   }
-
-  sub_compact->num_input_records = c_iter_stats.num_input_records;
-  sub_compact->compaction_job_stats.num_input_deletion_records =
-      c_iter_stats.num_input_deletion_records;
-  sub_compact->compaction_job_stats.num_corrupt_keys =
-      c_iter_stats.num_input_corrupt_records;
-  sub_compact->compaction_job_stats.num_single_del_fallthru =
-      c_iter_stats.num_single_del_fallthru;
-  sub_compact->compaction_job_stats.num_single_del_mismatch =
-      c_iter_stats.num_single_del_mismatch;
-  sub_compact->compaction_job_stats.total_input_raw_key_bytes +=
-      c_iter_stats.total_input_raw_key_bytes;
-  sub_compact->compaction_job_stats.total_input_raw_value_bytes +=
-      c_iter_stats.total_input_raw_value_bytes;
-
-  RecordTick(stats_, FILTER_OPERATION_TOTAL_TIME,
-             c_iter_stats.total_filter_time);
-  RecordDroppedKeys(c_iter_stats, &sub_compact->compaction_job_stats);
-  RecordCompactionIOStats();
-
-  if (status.ok() &&
-      (shutting_down_->load(std::memory_order_relaxed) || cfd->IsDropped())) {
-    status = Status::ShutdownInProgress(
-        "Database shutdown or Column family drop during compaction");
-  }
-  if (status.ok()) {
-    status = input->status();
-  }
-  if (status.ok()) {
-    status = c_iter->status();
-  }
-
-  if (status.ok() && sub_compact->builder == nullptr &&
-      sub_compact->outputs.size() == 0 && !range_del_agg.IsEmpty()) {
-    // handle subcompaction containing only range deletions
-    status = OpenCompactionOutputFile(sub_compact);
-  }
-
-  // Call FinishCompactionOutputFile() even if status is not ok: it needs to
-  // close the output file.
-  if (sub_compact->builder != nullptr) {
-    CompactionIterationStats range_del_out_stats;
-    Status s = FinishCompactionOutputFile(status, sub_compact, &range_del_agg,
-                                          &range_del_out_stats, dependence);
-    dependence.clear();
-    if (status.ok()) {
-      status = s;
-    }
-    RecordDroppedKeys(range_del_out_stats, &sub_compact->compaction_job_stats);
-  }
-  if (sub_compact->blob_builder != nullptr) {
-    Status s = FinishCompactionOutputBlob(status, sub_compact, {});
-    if (status.ok()) {
-      status = s;
-    }
-  }
-
-  if (measure_io_stats_) {
-    sub_compact->compaction_job_stats.file_write_nanos +=
-        IOSTATS(write_nanos) - prev_write_nanos;
-    sub_compact->compaction_job_stats.file_fsync_nanos +=
-        IOSTATS(fsync_nanos) - prev_fsync_nanos;
-    sub_compact->compaction_job_stats.file_range_sync_nanos +=
-        IOSTATS(range_sync_nanos) - prev_range_sync_nanos;
-    sub_compact->compaction_job_stats.file_prepare_write_nanos +=
-        IOSTATS(prepare_write_nanos) - prev_prepare_write_nanos;
-    if (prev_perf_level != PerfLevel::kEnableTime) {
-      SetPerfLevel(prev_perf_level);
-    }
-  }
-  if (auto filt = compaction_filter) {
-    ReapMatureAction(filt, &sub_compact->stat_all);
-  }
-  if (auto filt = second_pass_iter_storage.compaction_filter) {
-    EraseFutureAction(filt);
-  }
-
-  sub_compact->c_iter.reset();
-  input.reset();
-  sub_compact->status = status;
 }
+
+sub_compact->num_input_records = c_iter_stats.num_input_records;
+sub_compact->compaction_job_stats.num_input_deletion_records =
+    c_iter_stats.num_input_deletion_records;
+sub_compact->compaction_job_stats.num_corrupt_keys =
+    c_iter_stats.num_input_corrupt_records;
+sub_compact->compaction_job_stats.num_single_del_fallthru =
+    c_iter_stats.num_single_del_fallthru;
+sub_compact->compaction_job_stats.num_single_del_mismatch =
+    c_iter_stats.num_single_del_mismatch;
+sub_compact->compaction_job_stats.total_input_raw_key_bytes +=
+    c_iter_stats.total_input_raw_key_bytes;
+sub_compact->compaction_job_stats.total_input_raw_value_bytes +=
+    c_iter_stats.total_input_raw_value_bytes;
+
+RecordTick(stats_, FILTER_OPERATION_TOTAL_TIME, c_iter_stats.total_filter_time);
+RecordDroppedKeys(c_iter_stats, &sub_compact->compaction_job_stats);
+RecordCompactionIOStats();
+
+if (status.ok() &&
+    (shutting_down_->load(std::memory_order_relaxed) || cfd->IsDropped())) {
+  status = Status::ShutdownInProgress(
+      "Database shutdown or Column family drop during compaction");
+}
+if (status.ok()) {
+  status = input->status();
+}
+if (status.ok()) {
+  status = c_iter->status();
+}
+
+if (status.ok() && sub_compact->builder == nullptr &&
+    sub_compact->outputs.size() == 0 && !range_del_agg.IsEmpty()) {
+  // handle subcompaction containing only range deletions
+  status = OpenCompactionOutputFile(sub_compact);
+}
+
+// Call FinishCompactionOutputFile() even if status is not ok: it needs to
+// close the output file.
+if (sub_compact->builder != nullptr) {
+  CompactionIterationStats range_del_out_stats;
+  Status s = FinishCompactionOutputFile(status, sub_compact, &range_del_agg,
+                                        &range_del_out_stats, dependence);
+  dependence.clear();
+  if (status.ok()) {
+    status = s;
+  }
+  RecordDroppedKeys(range_del_out_stats, &sub_compact->compaction_job_stats);
+}
+if (sub_compact->blob_builder != nullptr) {
+  Status s = FinishCompactionOutputBlob(status, sub_compact, {});
+  if (status.ok()) {
+    status = s;
+  }
+}
+
+if (measure_io_stats_) {
+  sub_compact->compaction_job_stats.file_write_nanos +=
+      IOSTATS(write_nanos) - prev_write_nanos;
+  sub_compact->compaction_job_stats.file_fsync_nanos +=
+      IOSTATS(fsync_nanos) - prev_fsync_nanos;
+  sub_compact->compaction_job_stats.file_range_sync_nanos +=
+      IOSTATS(range_sync_nanos) - prev_range_sync_nanos;
+  sub_compact->compaction_job_stats.file_prepare_write_nanos +=
+      IOSTATS(prepare_write_nanos) - prev_prepare_write_nanos;
+  if (prev_perf_level != PerfLevel::kEnableTime) {
+    SetPerfLevel(prev_perf_level);
+  }
+}
+if (auto filt = compaction_filter) {
+  ReapMatureAction(filt, &sub_compact->stat_all);
+}
+if (auto filt = second_pass_iter_storage.compaction_filter) {
+  EraseFutureAction(filt);
+}
+
+sub_compact->c_iter.reset();
+input.reset();
+sub_compact->status = status;
+}  // namespace rocksdb
 
 void CompactionJob::ProcessGarbageCollection(SubcompactionState* sub_compact) {
   assert(sub_compact != nullptr);
