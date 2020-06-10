@@ -822,8 +822,9 @@ void TerarkZipTableBuilder::BuildIndex(KeyValueStatus& kvs, size_t entropyLen) {
         const size_t myWorkMem = TerarkIndex::Factory::MemSizeForBuild(keyStat);
         auto waitHandle = WaitForMemory("nltTrie", myWorkMem);
 
-        long long t1 = g_pf.now();
+        MmapWholeFile mmap_file;
         std::unique_ptr<TerarkIndex> indexPtr;
+        long long t1 = g_pf.now();
         try {
           indexPtr.reset(TerarkIndex::Factory::Build(tempKeyFileReader.get(),
                                                      tiopt_, keyStat, nullptr));
@@ -891,7 +892,6 @@ void TerarkZipTableBuilder::BuildIndex(KeyValueStatus& kvs, size_t entropyLen) {
         }
         assert(kvs.indexFileEnd - kvs.indexFileBegin == fileSize);
         assert(fileSize % 8 == 0);
-        MmapWholeFile mmap_file;
         if (table_options_.debugLevel == 2) {
           std::unique_lock<std::mutex> l(indexBuildMutex_);
           MmapWholeFile(tmpIndexFile_.fpath).swap(mmap_file);
@@ -1270,7 +1270,8 @@ Status TerarkZipTableBuilder::buildEntropyZipBlobStore(
                           : 128;
   terark::EntropyZipBlobStore::MyBuilder builder(
       kvs.valueFreq, blockUnits, params.fpath, params.offset,
-      table_options_.checksumLevel, checksumType);
+      table_options_.checksumLevel, checksumType,
+      !table_options_.disableCompressDict);
   auto s =
       BuilderWriteValues(kvs, [&](fstring value) { builder.addRecord(value); });
   if (s.ok()) {
