@@ -1270,11 +1270,12 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
                                          LazyBuffer& value) = nullptr;
     void* trans_to_separate_callback_args = nullptr;
 
-    Status TransToSeparate(const Slice& internal_key, LazyBuffer& value,
-                           const Slice& meta, bool is_merge,
-                           bool is_index) override {
+    Status TransToSeparate(
+        const Slice& internal_key, LazyBuffer& value, const Slice& meta,
+        bool is_merge, bool is_index) override {
       return SeparateHelper::TransToSeparate(
-          internal_key, value, meta, is_merge, is_index, value_meta_extractor);
+          internal_key, value, value.file_number(), meta, is_merge, is_index,
+          value_meta_extractor);
     }
 
     Status TransToSeparate(const Slice& key, LazyBuffer& value) override {
@@ -1318,15 +1319,15 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
           GetInternalKeyType(key) == kTypeMerge, false,
           separate_helper.value_meta_extractor);
     }
-  } return status;
-};
+    return status;
+  };
 
-separate_helper.separate_helper = sub_compact->compaction->input_version();
-if (!sub_compact->compaction->immutable_cf_options()
-         ->table_factory->IsBuilderNeedSecondPass()) {
-  separate_helper.trans_to_separate_callback =
-      c_style_callback(trans_to_separate);
-  separate_helper.trans_to_separate_callback_args = &trans_to_separate;
+  separate_helper.separate_helper = sub_compact->compaction->input_version();
+  if (!sub_compact->compaction->immutable_cf_options()
+           ->table_factory->IsBuilderNeedSecondPass()) {
+    separate_helper.trans_to_separate_callback =
+        c_style_callback(trans_to_separate);
+    separate_helper.trans_to_separate_callback_args = &trans_to_separate;
 }
 
 TEST_SYNC_POINT("CompactionJob::Run():Inprogress");

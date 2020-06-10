@@ -17,6 +17,7 @@ namespace rocksdb {
 
 class Slice;
 class SliceTransform;
+class ValueExtractor;
 enum CompressionType : unsigned char;
 class TablePropertiesCollectorFactory;
 class TableFactory;

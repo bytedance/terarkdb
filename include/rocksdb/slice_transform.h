@@ -20,6 +20,7 @@
 namespace rocksdb {
 
 class Slice;
+class Status;
 
 /*
  * A SliceTransform is a generic pluggable way of transforming one string

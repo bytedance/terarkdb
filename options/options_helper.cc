@@ -564,10 +564,10 @@ bool ParseOptionHelper(char* opt_address, const OptionType& opt_type,
       return ParseEnum<WriteBufferFlushPri>(
           write_buffer_flush_pri_string_map, value,
           reinterpret_cast<WriteBufferFlushPri*>(opt_address));
-    case OptionsType::kValueExtractor:
-      return ParseValueExtractor(
-          value, reinterpret_cast<std::shared_ptr<const ValueExtractor>*>(
-                     opt_address));
+//    case OptionType::kValueExtractor:
+//      return ParseValueExtractor(
+//          value, reinterpret_cast<std::shared_ptr<const ValueExtractor>*>(
+//                     opt_address));
     default:
       return false;
   }
@@ -756,13 +756,12 @@ bool SerializeSingleOptionHelper(const char* opt_address,
           write_buffer_flush_pri_string_map,
           *reinterpret_cast<const WriteBufferFlushPri*>(opt_address), value);
 
-    case OptionsType::kValueExtractor:
-      const auto* value_extractor_ptr =
-          reinterpret_cast<const std::shared_ptr<const ValueExtractor>*>(
-              opt_address);
-      *value = value_extractor_ptr->get() ? value_extractor_ptr->get()->Name()
-                                          : kNullptrString;
-      break;
+//    case OptionType::kValueExtractor:
+//      const auto* value_extractor_ptr =
+//          reinterpret_cast<const std::shared_ptr<const ValueExtractor>*>(
+//              opt_address);
+//      *value = value_extractor_ptr->get() ? value_extractor_ptr->get()->Name()
+//                                          : kNullptrString;
     default:
       return false;
   }

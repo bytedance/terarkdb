@@ -260,7 +260,8 @@ class WorkerSeparateHelper : public SeparateHelper, public LazyBufferState {
   Status TransToSeparate(const Slice& internal_key, LazyBuffer& value,
                          const Slice& meta, bool is_merge,
                          bool is_index) override {
-    return SeparateHelper::TransToSeparate(internal_key, value, meta, is_merge,
+    return SeparateHelper::TransToSeparate(internal_key, value,
+                                           value.file_number(), meta, is_merge,
                                            is_index, value_meta_extractor_);
   }
 
