@@ -458,7 +458,7 @@ bool ParseValueExtractor(
     std::shared_ptr<const ValueExtractor>* value_extractor) {
   // for test
   assert(value=="myrocks_value_ttl_extractor");
-  value_extractor->reset(ValueExtractor::create(value));
+  value_extractor->reset(ValueExtractor::create(value, ""));
 }
 
 bool ParseOptionHelper(char* opt_address, const OptionType& opt_type,

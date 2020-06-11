@@ -414,8 +414,7 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(Slice data) {
   }
   if (!context.value_meta_extractor.empty()) {
     cf_options.value_meta_extractor.reset(ValueExtractor::create(
-        context.value_meta_extractor));
-    // , context.value_meta_extractor_options
+        context.value_meta_extractor, context.value_meta_extractor_options));
     if (!cf_options.value_meta_extractor) {
       return make_error(Status::Corruption("Missing value_meta_extractor !"));
     }

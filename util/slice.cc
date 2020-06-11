@@ -245,3 +245,4 @@ TERARK_FACTORY_REGISTER_EX(NoopTransform, "rocksdb.Noop", &S_NewNoopTransform);
 }  // namespace rocksdb
 
 TERARK_FACTORY_INSTANTIATE_GNS(rocksdb::SliceTransform*, const std::string&);
+TERARK_FACTORY_INSTANTIATE_GNS(rocksdb::ValueExtractor*, const std::string&);

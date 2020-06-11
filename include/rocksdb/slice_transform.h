@@ -98,7 +98,7 @@ class SliceTransform
 };
 
 class ValueExtractor
-    : public terark::Factoryable<ValueExtractor*> {
+    : public terark::Factoryable<ValueExtractor*, const std::string&> {
  public:
   virtual ~ValueExtractor(){};
 
