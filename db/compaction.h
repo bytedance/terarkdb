@@ -132,8 +132,8 @@ struct CompactionWorkerContext {
   std::string user_comparator;
   std::string merge_operator;
   EncodedString merge_operator_data;
-  std::string value_meta_extractor;
-  std::string value_meta_extractor_options;
+  std::string value_meta_extractor_factory;
+  EncodedString value_meta_extractor_factory_options;
   std::string compaction_filter;
   std::string compaction_filter_factory;
   CompactionFilter::Context compaction_filter_context;

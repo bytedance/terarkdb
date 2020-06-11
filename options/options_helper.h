@@ -81,7 +81,7 @@ enum class OptionType {
   kLRUCacheOptions,
   kEntropyAlgo,
   kWriteBufferFlushPri,
-  kValueExtractor,
+  kValueExtractorFactory,
   kUnknown
 };
 

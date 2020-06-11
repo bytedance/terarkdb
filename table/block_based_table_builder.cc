@@ -795,8 +795,8 @@ void BlockBasedTableBuilder::WritePropertiesBlock(
             ? rep_->ioptions.merge_operator->Name()
             : "nullptr";
     rep_->props.value_meta_extractor_name =
-        rep_->ioptions.value_meta_extractor != nullptr
-            ? rep_->ioptions.value_meta_extractor->Name()
+        rep_->ioptions.value_meta_extractor_factory != nullptr
+            ? rep_->ioptions.value_meta_extractor_factory->Name()
             : "nullptr";
     rep_->props.compression_name =
         CompressionTypeToString(rep_->compression_ctx.type());

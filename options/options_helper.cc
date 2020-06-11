@@ -453,12 +453,12 @@ bool ParseSliceTransform(
   //                 SliceTransforms here.
   return false;
 }
-bool ParseValueExtractor(
+bool ParseValueExtractorFactory(
     const std::string& value,
-    std::shared_ptr<const ValueExtractor>* value_extractor) {
-  // for test
-  assert(value=="myrocks_value_ttl_extractor");
-  value_extractor->reset(ValueExtractor::create(value, ""));
+    std::shared_ptr<const ValueExtractorFactory>* value_extractor_factory) {
+#warning "ParseValueExtractorFactory test code"
+  assert(value == "myrocks_value_ttl_extractor");
+  value_extractor_factory->reset(ValueExtractorFactory::create(value, ""));
 }
 
 bool ParseOptionHelper(char* opt_address, const OptionType& opt_type,
@@ -570,8 +570,8 @@ bool ParseOptionHelper(char* opt_address, const OptionType& opt_type,
       return ParseEnum<WriteBufferFlushPri>(
           write_buffer_flush_pri_string_map, value,
           reinterpret_cast<WriteBufferFlushPri*>(opt_address));
-    case OptionType::kValueExtractor:
-      return ParseValueExtractor(
+    case OptionType::kValueExtractorFactory:
+      return ParseValueExtractorFactory(
           value, reinterpret_cast<std::shared_ptr<const ValueExtractor>*>(
                      opt_address));
     default:
@@ -761,7 +761,7 @@ bool SerializeSingleOptionHelper(const char* opt_address,
       return SerializeEnum<WriteBufferFlushPri>(
           write_buffer_flush_pri_string_map,
           *reinterpret_cast<const WriteBufferFlushPri*>(opt_address), value);
-    case OptionType::kValueExtractor: {
+    case OptionType::kValueExtractorFactory: {
       const auto* value_extractor_ptr =
           reinterpret_cast<const std::shared_ptr<const ValueExtractor>*>(
               opt_address);
@@ -1987,9 +1987,9 @@ std::unordered_map<std::string, OptionTypeInfo>
          {offset_of(&ColumnFamilyOptions::merge_operator),
           OptionType::kMergeOperator,
           OptionVerificationType::kByNameAllowFromNull, false, 0}},
-        {"value_meta_extractor",
-         {offset_of(&ColumnFamilyOptions::value_meta_extractor),
-          OptionType::kValueExtractor,
+        {"value_meta_extractor_factory",
+         {offset_of(&ColumnFamilyOptions::value_meta_extractor_factory),
+          OptionType::kValueExtractorFactory,
           OptionVerificationType::kByNameAllowFromNull, false, 0}},
         {"compaction_style",
          {offset_of(&ColumnFamilyOptions::compaction_style),

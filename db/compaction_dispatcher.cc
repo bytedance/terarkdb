@@ -224,8 +224,9 @@ AJSON(NameParam, name, param);
 AJSON(BlobConfig, blob_size, large_key_ratio);
 
 AJSON(CompactionWorkerContext, user_comparator, merge_operator,
-      merge_operator_data, value_meta_extractor, value_meta_extractor_options,
-      compaction_filter, compaction_filter_factory, compaction_filter_context,
+      merge_operator_data, value_meta_extractor_factory,
+      value_meta_extractor_factory_options, compaction_filter,
+      compaction_filter_factory, compaction_filter_context,
       compaction_filter_data, blob_config, table_factory, table_factory_options,
       bloom_locality, cf_paths, prefix_extractor, prefix_extractor_options,
       has_start, has_end, start, end, last_sequence,
@@ -260,9 +261,9 @@ class WorkerSeparateHelper : public SeparateHelper, public LazyBufferState {
   Status TransToSeparate(const Slice& internal_key, LazyBuffer& value,
                          const Slice& meta, bool is_merge,
                          bool is_index) override {
-    return SeparateHelper::TransToSeparate(internal_key, value,
-                                           value.file_number(), meta, is_merge,
-                                           is_index, value_meta_extractor_);
+    return SeparateHelper::TransToSeparate(
+        internal_key, value, value.file_number(), meta, is_merge, is_index,
+        value_meta_extractor_.get());
   }
 
   LazyBuffer TransToCombined(const Slice& user_key, uint64_t sequence,
@@ -286,17 +287,18 @@ class WorkerSeparateHelper : public SeparateHelper, public LazyBufferState {
   }
 
   WorkerSeparateHelper(
-      DependenceMap* dependence_map, const ValueExtractor* value_meta_extractor,
+      DependenceMap* dependence_map,
+      std::unique_ptr<ValueExtractor> value_meta_extractor,
       void* inplace_decode_arg,
       Status (*inplace_decode_callback)(void* arg, LazyBuffer* buffer,
                                         LazyBufferContext* rep))
       : dependence_map_(dependence_map),
-        value_meta_extractor_(value_meta_extractor),
+        value_meta_extractor_(std::move(value_meta_extractor)),
         inplace_decode_arg_(inplace_decode_arg),
         inplace_decode_callback_(inplace_decode_callback) {}
 
   DependenceMap* dependence_map_;
-  const ValueExtractor* value_meta_extractor_;
+  std::unique_ptr<ValueExtractor> value_meta_extractor_;
   void* inplace_decode_arg_;
   Status (*inplace_decode_callback_)(void* arg, LazyBuffer* buffer,
                                      LazyBufferContext* rep);
@@ -412,10 +414,11 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(Slice data) {
       return make_error(Status::Corruption("Missing merge_operator !"));
     }
   }
-  if (!context.value_meta_extractor.empty()) {
-    cf_options.value_meta_extractor.reset(ValueExtractor::create(
-        context.value_meta_extractor, context.value_meta_extractor_options));
-    if (!cf_options.value_meta_extractor) {
+  if (!context.value_meta_extractor_factory.empty()) {
+    cf_options.value_meta_extractor_factory.reset(ValueExtractorFactory::create(
+        context.value_meta_extractor_factory,
+        context.value_meta_extractor_factory_options));
+    if (!cf_options.value_meta_extractor_factory) {
       return make_error(Status::Corruption("Missing value_meta_extractor !"));
     }
   }
@@ -426,16 +429,15 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(Slice data) {
           "CompactonFilter and CompactionFilterFactory are both specified"));
     }
     filter_ptr.reset(CompactionFilter::create(
-        context.compaction_filter, context.compaction_filter_data.data,
+        context.compaction_filter, context.compaction_filter_data,
         context.compaction_filter_context));
     if (!filter_ptr) {
       return make_error(Status::Corruption("Missing CompactionFilterFactory!"));
     }
     cf_options.compaction_filter = filter_ptr.get();
   } else if (!context.compaction_filter_factory.empty()) {
-    cf_options.compaction_filter_factory.reset(
-        CompactionFilterFactory::create(context.compaction_filter_factory,
-                                        context.compaction_filter_data.data));
+    cf_options.compaction_filter_factory.reset(CompactionFilterFactory::create(
+        context.compaction_filter_factory, context.compaction_filter_data));
     if (!cf_options.compaction_filter_factory) {
       return make_error(Status::Corruption("Missing CompactionFilterFactory!"));
     }
@@ -638,8 +640,21 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(Slice data) {
     return Status::OK();
   };
 
+  auto create_value_meta_extractor =
+      [&] {
+        std::unique_ptr<ValueExtractor> value_meta_extractor;
+        if (immutable_cf_options.value_meta_extractor_factory != nullptr) {
+          ValueExtractorContext context = {
+              context.compaction_filter_context.column_family_id};
+          value_meta_extractor =
+              immutable_cf_options.value_meta_extractor_factory
+                  ->CreateValueExtractor(context);
+        }
+        return value_meta_extractor;
+      }
+
   WorkerSeparateHelper separate_helper(
-      &contxt_dependence_map, immutable_cf_options.value_meta_extractor,
+      &contxt_dependence_map, create_value_meta_extractor(),
       &separate_inplace_decode, c_style_callback(separate_inplace_decode));
 
   CompactionRangeDelAggregator range_del_agg(icmp, context.existing_snapshots);

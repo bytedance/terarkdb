@@ -20,7 +20,6 @@
 namespace rocksdb {
 
 class Slice;
-class Status;
 
 /*
  * A SliceTransform is a generic pluggable way of transforming one string
@@ -93,22 +92,6 @@ class SliceTransform
   virtual bool SameResultWhenAppended(const Slice& /*prefix*/) const {
     return false;
   }
-
-  virtual std::string GetOptionString() const;
-};
-
-class ValueExtractor
-    : public terark::Factoryable<ValueExtractor*, const std::string&> {
- public:
-  virtual ~ValueExtractor(){};
-
-  // Return the name of this transformation.
-  virtual const char* Name() const = 0;
-
-  // Extract a custom info from a specified key value pair. This method is
-  // called when a value will trans to separate.
-  virtual Status Extract(const Slice& key, const Slice& value,
-                         std::string* output) const = 0;
 
   virtual std::string GetOptionString() const;
 };

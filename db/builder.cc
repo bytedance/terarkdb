@@ -156,7 +156,7 @@ Status BuildTable(
       std::unique_ptr<WritableFileWriter> file_writer;
       std::unique_ptr<TableBuilder> builder;
       FileMetaData* current_output = nullptr;
-      const ValueExtractor* value_meta_extractor = nullptr;
+      std::unique_ptr<ValueExtractor> value_meta_extractor;
       Status (*trans_to_separate_callback)(void* args, const Slice& key,
                                            LazyBuffer& value) = nullptr;
       void* trans_to_separate_callback_args = nullptr;
@@ -166,7 +166,7 @@ Status BuildTable(
                              bool is_index) override {
         return SeparateHelper::TransToSeparate(
             internal_key, value, value.file_number(), meta, is_merge, is_index,
-            value_meta_extractor);
+            value_meta_extractor.get());
       }
 
       Status TransToSeparate(const Slice& internal_key,
@@ -185,7 +185,11 @@ Status BuildTable(
         return LazyBuffer();
       }
     } separate_helper;
-    separate_helper.value_meta_extractor = ioptions.value_meta_extractor;
+    if (ioptions.value_meta_extractor_factory != nullptr) {
+      ValueExtractorContext context = {column_family_id};
+      separate_helper.value_meta_extractor =
+          ioptions.value_meta_extractor_factory->CreateValueExtractor(context);
+    }
 
     auto finish_output_blob_sst = [&] {
       Status status;

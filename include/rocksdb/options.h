@@ -24,6 +24,7 @@
 #include "rocksdb/listener.h"
 #include "rocksdb/metrics_reporter.h"
 #include "rocksdb/universal_compaction.h"
+#include "rocksdb/value_extractor.h"
 #include "rocksdb/version.h"
 #include "rocksdb/write_buffer_manager.h"
 
@@ -152,7 +153,8 @@ struct ColumnFamilyOptions : public AdvancedColumnFamilyOptions {
   std::shared_ptr<MergeOperator> merge_operator = nullptr;
 
   // Default: nullptr
-  std::shared_ptr<const ValueExtractor> value_meta_extractor = nullptr;
+  std::shared_ptr<const ValueExtractorFactory> value_meta_extractor_factory =
+      nullptr;
 
   // A single CompactionFilter instance to call into during compaction.
   // Allows an application to modify/delete a key-value during background
