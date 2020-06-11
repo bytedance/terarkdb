@@ -429,7 +429,6 @@ bool ParseSliceTransformHelper(
 
   return true;
 }
-
 bool ParseSliceTransform(
     const std::string& value,
     std::shared_ptr<const SliceTransform>* slice_transform) {
@@ -453,6 +452,13 @@ bool ParseSliceTransform(
   // TODO(yhchiang): we can further support other default
   //                 SliceTransforms here.
   return false;
+}
+bool ParseValueExtractor(
+    const std::string& value,
+    std::shared_ptr<const ValueExtractor>* value_extractor) {
+  // for test
+  assert(value=="myrocks_value_ttl_extractor");
+  value_extractor->reset(ValueExtractor::create(value));
 }
 
 bool ParseOptionHelper(char* opt_address, const OptionType& opt_type,
@@ -564,10 +570,10 @@ bool ParseOptionHelper(char* opt_address, const OptionType& opt_type,
       return ParseEnum<WriteBufferFlushPri>(
           write_buffer_flush_pri_string_map, value,
           reinterpret_cast<WriteBufferFlushPri*>(opt_address));
-//    case OptionType::kValueExtractor:
-//      return ParseValueExtractor(
-//          value, reinterpret_cast<std::shared_ptr<const ValueExtractor>*>(
-//                     opt_address));
+    case OptionType::kValueExtractor:
+      return ParseValueExtractor(
+          value, reinterpret_cast<std::shared_ptr<const ValueExtractor>*>(
+                     opt_address));
     default:
       return false;
   }
@@ -755,13 +761,14 @@ bool SerializeSingleOptionHelper(const char* opt_address,
       return SerializeEnum<WriteBufferFlushPri>(
           write_buffer_flush_pri_string_map,
           *reinterpret_cast<const WriteBufferFlushPri*>(opt_address), value);
-
-//    case OptionType::kValueExtractor:
-//      const auto* value_extractor_ptr =
-//          reinterpret_cast<const std::shared_ptr<const ValueExtractor>*>(
-//              opt_address);
-//      *value = value_extractor_ptr->get() ? value_extractor_ptr->get()->Name()
-//                                          : kNullptrString;
+    case OptionType::kValueExtractor: {
+      const auto* value_extractor_ptr =
+          reinterpret_cast<const std::shared_ptr<const ValueExtractor>*>(
+              opt_address);
+      *value = value_extractor_ptr->get() ? value_extractor_ptr->get()->Name()
+                                          : kNullptrString;
+      break;
+    }
     default:
       return false;
   }
