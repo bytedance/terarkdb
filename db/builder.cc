@@ -276,7 +276,7 @@ Status BuildTable(
         status = SeparateHelper::TransToSeparate(
             key, value, blob_meta->fd.GetNumber(), Slice(),
             GetInternalKeyType(key) == kTypeMerge, false,
-            separate_helper.value_meta_extractor);
+            separate_helper.value_meta_extractor.get());
       }
       return status;
     };

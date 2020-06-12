@@ -640,18 +640,16 @@ std::string RemoteCompactionDispatcher::Worker::DoCompaction(Slice data) {
     return Status::OK();
   };
 
-  auto create_value_meta_extractor =
-      [&] {
-        std::unique_ptr<ValueExtractor> value_meta_extractor;
-        if (immutable_cf_options.value_meta_extractor_factory != nullptr) {
-          ValueExtractorContext context = {
-              context.compaction_filter_context.column_family_id};
-          value_meta_extractor =
-              immutable_cf_options.value_meta_extractor_factory
-                  ->CreateValueExtractor(context);
-        }
-        return value_meta_extractor;
-      }
+  auto create_value_meta_extractor = [&] {
+    std::unique_ptr<ValueExtractor> value_meta_extractor;
+    if (immutable_cf_options.value_meta_extractor_factory != nullptr) {
+      ValueExtractorContext ve_context = {
+          context.compaction_filter_context.column_family_id};
+      value_meta_extractor = immutable_cf_options.value_meta_extractor_factory
+                                 ->CreateValueExtractor(ve_context);
+    }
+    return value_meta_extractor;
+  };
 
   WorkerSeparateHelper separate_helper(
       &contxt_dependence_map, create_value_meta_extractor(),

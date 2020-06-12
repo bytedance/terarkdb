@@ -457,7 +457,7 @@ bool ParseValueExtractorFactory(
     const std::string& value,
     std::shared_ptr<const ValueExtractorFactory>* value_extractor_factory) {
 #warning "ParseValueExtractorFactory test code"
-  assert(value == "myrocks_value_ttl_extractor");
+  assert(value == "myrocks_value_ttl_extractor_factory" || value == "nullptr");
   value_extractor_factory->reset(ValueExtractorFactory::create(value, ""));
 }
 
@@ -572,7 +572,7 @@ bool ParseOptionHelper(char* opt_address, const OptionType& opt_type,
           reinterpret_cast<WriteBufferFlushPri*>(opt_address));
     case OptionType::kValueExtractorFactory:
       return ParseValueExtractorFactory(
-          value, reinterpret_cast<std::shared_ptr<const ValueExtractor>*>(
+          value, reinterpret_cast<std::shared_ptr<const ValueExtractorFactory>*>(
                      opt_address));
     default:
       return false;
@@ -762,11 +762,12 @@ bool SerializeSingleOptionHelper(const char* opt_address,
           write_buffer_flush_pri_string_map,
           *reinterpret_cast<const WriteBufferFlushPri*>(opt_address), value);
     case OptionType::kValueExtractorFactory: {
-      const auto* value_extractor_ptr =
-          reinterpret_cast<const std::shared_ptr<const ValueExtractor>*>(
+      const auto* value_extractor_factory_ptr =
+          reinterpret_cast<const std::shared_ptr<const ValueExtractorFactory>*>(
               opt_address);
-      *value = value_extractor_ptr->get() ? value_extractor_ptr->get()->Name()
-                                          : kNullptrString;
+      *value = value_extractor_factory_ptr->get()
+                   ? value_extractor_factory_ptr->get()->Name()
+                   : kNullptrString;
       break;
     }
     default:

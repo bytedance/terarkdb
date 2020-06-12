@@ -706,9 +706,9 @@ Status CompactionJob::Run() {
     }
   }
   if (iopt->value_meta_extractor_factory != nullptr) {
-    context.value_meta_extractor = iopt->value_meta_extractor_factory->Name();
+    context.value_meta_extractor_factory = iopt->value_meta_extractor_factory->Name();
     s = iopt->value_meta_extractor_factory->Serialize(
-        &context.value_meta_extractor_options.data);
+        &context.value_meta_extractor_factory_options.data);
     if (s.IsNotSupported()) {
       return RunSelf();
     } else if (!s.ok()) {
@@ -1327,7 +1327,7 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
       status = SeparateHelper::TransToSeparate(
           key, value, blob_meta->fd.GetNumber(), Slice(),
           GetInternalKeyType(key) == kTypeMerge, false,
-          separate_helper.value_meta_extractor);
+          separate_helper.value_meta_extractor.get());
     }
     return status;
   };

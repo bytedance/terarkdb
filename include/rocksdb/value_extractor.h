@@ -45,7 +45,7 @@ class ValueExtractorFactory
   using Context = ValueExtractorContext;
 
   virtual std::unique_ptr<ValueExtractor> CreateValueExtractor(
-      const Context& context) = 0;
+      const Context& context) const = 0;
 
   // Returns a name that identifies this value extractor factory.
   virtual const char* Name() const = 0;

@@ -35,7 +35,7 @@ struct ImmutableCFOptions {
 
   MergeOperator* merge_operator;
 
-  const ValueExtractor* value_meta_extractor;
+  const ValueExtractorFactory* value_meta_extractor_factory;
 
   const CompactionFilter* compaction_filter;
 
