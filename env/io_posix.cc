@@ -355,7 +355,7 @@ static Status PosixFsRead(uint64_t offset, size_t n, Slice* result,
       break;
     }
   }
-  if (r < 0) {
+  if (r < 0 && n > 0) {
     // An error: return a non-ok status
     s = IOError(
         "While pread offset " + ToString(offset) + " len " + ToString(n),
