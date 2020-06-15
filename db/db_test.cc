@@ -2721,7 +2721,11 @@ class ModelDB : public DB {
     return Status::OK();
   }
 
-  virtual SequenceNumber GetLatestSequenceNumber() const override { return 0; }
+  Status GetDbSessionId(std::string& /*session_id*/) const override {
+    return Status::OK();
+  }
+
+  SequenceNumber GetLatestSequenceNumber() const override { return 0; }
 
   virtual bool SetPreserveDeletesSequenceNumber(
       SequenceNumber /*seqnum*/) override {
