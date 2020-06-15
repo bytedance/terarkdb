@@ -453,12 +453,20 @@ bool ParseSliceTransform(
   //                 SliceTransforms here.
   return false;
 }
+
 bool ParseValueExtractorFactory(
-    const std::string& value,
-    std::shared_ptr<const ValueExtractorFactory>* value_extractor_factory) {
-#warning "ParseValueExtractorFactory test code"
-  assert(value == "myrocks_value_ttl_extractor_factory" || value == "nullptr");
-  value_extractor_factory->reset(ValueExtractorFactory::create(value, ""));
+    const std::string& value_meta_extractor_factory_name,
+    std::shared_ptr<const ValueExtractorFactory>*
+        value_meta_extractor_factory) {
+  if (value_meta_extractor_factory_name == kNullptrString) {
+    value_meta_extractor_factory->reset();
+    return true;
+  }
+  value_meta_extractor_factory->reset(ValueExtractorFactory::create(
+      value_meta_extractor_factory_name,
+      "" /* value_meta_extractor_factory_option */));
+  // value meta extractor can be null, so always return true
+  return true;
 }
 
 bool ParseOptionHelper(char* opt_address, const OptionType& opt_type,
