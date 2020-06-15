@@ -255,6 +255,11 @@ class DBImpl : public DB {
 
   virtual bool SetPreserveDeletesSequenceNumber(SequenceNumber seqnum) override;
 
+  virtual Status GetDbIdentity(std::string& identity) const override;
+
+  virtual Status GetDbIdentityFromIdentityFile(std::string* identity) const;
+
+  virtual Status GetDbSessionId(std::string& session_id) const override;
   ColumnFamilyHandle* DefaultColumnFamily() const override;
 
   ColumnFamilyHandle* PersistentStatsColumnFamily() const;
@@ -788,6 +793,10 @@ class DBImpl : public DB {
  protected:
   Env* const env_;
   const std::string dbname_;
+  std::string db_id_;
+  // db_session_id_ is an identifier that gets reset
+  // every time the DB is opened
+  std::string db_session_id_;
   std::unique_ptr<VersionSet> versions_;
   // Flag to check whether we allocated and own the info log file
   bool own_info_log_;
@@ -887,7 +896,31 @@ class DBImpl : public DB {
 
   // Actual implementation of Close()
   Status CloseImpl();
+  // Recover the descriptor from persistent storage.  May do a significant
+  // amount of work to recover recently logged updates.  Any changes to
+  // be made to the descriptor are added to *edit.
+  // recovered_seq is set to less than kMaxSequenceNumber if the log's tail is
+  // skipped.
+  virtual Status Recover(
+      const std::vector<ColumnFamilyDescriptor>& column_families,
+      bool read_only = false, bool error_if_log_file_exist = false,
+      bool error_if_data_exists_in_logs = false,
+      uint64_t* recovered_seq = nullptr);
 
+  virtual bool OwnTablesAndLogs() const { return true; }
+
+  // REQUIRES: db mutex held when calling this function, but the db mutex can
+  // be released and re-acquired. Db mutex will be held when the function
+  // returns.
+  // After best-efforts recovery, there may be SST files in db/cf paths that are
+  // not referenced in the MANIFEST. We delete these SST files. In the
+  // meantime, we find out the largest file number present in the paths, and
+  // bump up the version set's next_file_number_ to be 1 + largest_file_number.
+  Status FinishBestEffortsRecovery();
+
+  // SetDbSessionId() should be called in the constuctor DBImpl()
+  // to ensure that db_session_id_ gets updated every time the DB is opened
+  void SetDbSessionId();
  private:
   friend class DB;
   friend class ErrorHandler;
@@ -936,13 +969,6 @@ class DBImpl : public DB {
 
   struct PrepickedCompaction;
   struct PurgeFileInfo;
-
-  // Recover the descriptor from persistent storage.  May do a significant
-  // amount of work to recover recently logged updates.  Any changes to
-  // be made to the descriptor are added to *edit.
-  Status Recover(const std::vector<ColumnFamilyDescriptor>& column_families,
-                 bool read_only = false, bool error_if_log_file_exist = false,
-                 bool error_if_data_exists_in_logs = false);
 
   // Initialize the built-in column family for persistent stats. Depending on
   // whether on-disk persistent stats have been enabled before, it may either
