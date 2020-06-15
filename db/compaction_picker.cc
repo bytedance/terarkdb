@@ -2678,10 +2678,7 @@ Compaction* LevelCompactionBuilder::PickLazyCompaction(
         }
         fn_new_section();
       } else {
-        std::sort(sections.begin(), sections.end(),
-                  [&](const LevelMapSection& lhs, const LevelMapSection& rhs) {
-                    return lhs.weight > rhs.weight;
-                  });
+        terark::sort_a(sections, TERARK_CMP(weight, >));
       }
       src_size = 0;
       for (size_t i = 0; i < sections.size(); ++i) {
