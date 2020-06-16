@@ -84,6 +84,8 @@ void ByteDanceHistReporterHandle::AddRecord(size_t val) {
       cpputil::metrics2::Metrics::emit_store(name_ + "_p50", result[0], tags_);
       cpputil::metrics2::Metrics::emit_store(name_ + "_p99", result[1], tags_);
       cpputil::metrics2::Metrics::emit_store(name_ + "_p999", result[2], tags_);
+      cpputil::metrics2::Metrics::emit_store(name_ + "_avg", result[3], tags_);
+      cpputil::metrics2::Metrics::emit_store(name_ + "_max", result[4], tags_);
 
       diff_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                     curr_time - last_log_time_)
@@ -95,6 +97,10 @@ void ByteDanceHistReporterHandle::AddRecord(size_t val) {
                        tags_.c_str(), result[1]);
         ROCKS_LOG_INFO(log_, "name:%s P999, tags:%s, val:%zu", name_.c_str(),
                        tags_.c_str(), result[2]);
+        ROCKS_LOG_INFO(log_, "name:%s Avg, tags:%s, val:%zu", name_.c_str(),
+                       tags_.c_str(), result[3]);
+        ROCKS_LOG_INFO(log_, "name:%s Max, tags:%s, val:%zu", name_.c_str(),
+                       tags_.c_str(), result[4]);
         last_log_time_ = curr_time;
       }
     } else {
