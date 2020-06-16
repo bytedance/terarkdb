@@ -559,7 +559,7 @@ class PosixEnv : public Env {
     }
     struct dirent* entry;
     while ((entry = readdir(d)) != nullptr) {
-      result->push_back(entry->d_name);
+      result->emplace_back(entry->d_name, entry->d_namlen);
     }
     closedir(d);
     return Status::OK();
