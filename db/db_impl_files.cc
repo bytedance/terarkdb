@@ -58,20 +58,18 @@ void DBImpl::FindObsoleteFiles(JobContext* job_context, bool force,
     return;
   }
 
-  bool doing_the_full_scan = false;
-
   // logic for figuring out if we're doing the full scan
   if (no_full_scan) {
-    doing_the_full_scan = false;
+    assert(!job_context->doing_the_full_scan);
   } else if (force ||
              mutable_db_options_.delete_obsolete_files_period_micros == 0) {
-    doing_the_full_scan = true;
+    job_context->doing_the_full_scan = true;
   } else {
     const uint64_t now_micros = env_->NowMicros();
     if ((delete_obsolete_files_last_run_ +
          mutable_db_options_.delete_obsolete_files_period_micros) <
         now_micros) {
-      doing_the_full_scan = true;
+      job_context->doing_the_full_scan = true;
       delete_obsolete_files_last_run_ = now_micros;
     }
   }
@@ -109,78 +107,6 @@ void DBImpl::FindObsoleteFiles(JobContext* job_context, bool force,
   job_context->prev_log_number = versions_->prev_log_number();
 
   versions_->AddLiveFiles(&job_context->sst_live);
-  if (doing_the_full_scan) {
-    InfoLogPrefix info_log_prefix(!immutable_db_options_.db_log_dir.empty(),
-                                  dbname_);
-    std::set<std::string> paths;
-    for (size_t path_id = 0; path_id < immutable_db_options_.db_paths.size();
-         path_id++) {
-      paths.insert(immutable_db_options_.db_paths[path_id].path);
-    }
-
-    // Note that if cf_paths is not specified in the ColumnFamilyOptions
-    // of a particular column family, we use db_paths as the cf_paths
-    // setting. Hence, there can be multiple duplicates of files from db_paths
-    // in the following code. The duplicate are removed while identifying
-    // unique files in PurgeObsoleteFiles.
-    for (auto cfd : *versions_->GetColumnFamilySet()) {
-      for (size_t path_id = 0; path_id < cfd->ioptions()->cf_paths.size();
-           path_id++) {
-        auto& path = cfd->ioptions()->cf_paths[path_id].path;
-
-        if (paths.find(path) == paths.end()) {
-          paths.insert(path);
-        }
-      }
-    }
-
-    for (auto& path : paths) {
-      // set of all files in the directory. We'll exclude files that are still
-      // alive in the subsequent processings.
-      std::vector<std::string> files;
-      env_->GetChildren(path, &files);  // Ignore errors
-      for (const std::string& file : files) {
-        uint64_t number;
-        FileType type;
-        // 1. If we cannot parse the file name, we skip;
-        // 2. If the file with file_number equals number has already been
-        // grabbed for purge by another compaction job, or it has already been
-        // schedule for purge, we also skip it if we
-        // are doing full scan in order to avoid double deletion of the same
-        // file under race conditions. See
-        // https://github.com/facebook/rocksdb/issues/3573
-        if (!ParseFileName(file, &number, info_log_prefix.prefix, &type) ||
-            !ShouldPurge(number)) {
-          continue;
-        }
-
-        // TODO(icanadi) clean up this mess to avoid having one-off "/" prefixes
-        job_context->full_scan_candidate_files.emplace_back("/" + file, path);
-      }
-    }
-
-    // Add log files in wal_dir
-    if (immutable_db_options_.wal_dir != dbname_) {
-      std::vector<std::string> log_files;
-      env_->GetChildren(immutable_db_options_.wal_dir,
-                        &log_files);  // Ignore errors
-      for (const std::string& log_file : log_files) {
-        job_context->full_scan_candidate_files.emplace_back(
-            log_file, immutable_db_options_.wal_dir);
-      }
-    }
-    // Add info log files in db_log_dir
-    if (!immutable_db_options_.db_log_dir.empty() &&
-        immutable_db_options_.db_log_dir != dbname_) {
-      std::vector<std::string> info_log_files;
-      // Ignore errors
-      env_->GetChildren(immutable_db_options_.db_log_dir, &info_log_files);
-      for (std::string& log_file : info_log_files) {
-        job_context->full_scan_candidate_files.emplace_back(
-            log_file, immutable_db_options_.db_log_dir);
-      }
-    }
-  }
 
   // logs_ is empty when called during recovery, in which case there can't yet
   // be any tracked obsolete logs
@@ -247,13 +173,19 @@ void DBImpl::FindObsoleteFiles(JobContext* job_context, bool force,
 namespace {
 bool CompareCandidateFile(const JobContext::CandidateFileInfo& first,
                           const JobContext::CandidateFileInfo& second) {
-  if (first.file_name > second.file_name) {
-    return true;
-  } else if (first.file_name < second.file_name) {
-    return false;
-  } else {
-    return (first.file_path > second.file_path);
+  int c = Slice(first.file_name).compare(second.file_name);
+  if (c == 0) {
+    c = Slice(*first.file_path).compare(*second.file_path);
   }
+  return c > 0;
+}
+bool EqualCandidateFile(const JobContext::CandidateFileInfo& first,
+                        const JobContext::CandidateFileInfo& second) {
+  int c = Slice(first.file_name).compare(second.file_name);
+  if (c == 0) {
+    c = Slice(*first.file_path).compare(*second.file_path);
+  }
+  return c == 0;
 }
 };  // namespace
 
@@ -313,19 +245,85 @@ void DBImpl::PurgeObsoleteFiles(JobContext& state, bool schedule_only) {
   for (const FileDescriptor& fd : state.sst_live) {
     sst_live_map[fd.GetNumber()] = &fd;
   }
+
+  auto& candidate_files = state.full_scan_candidate_files;
+  auto push_file = [&](std::string& file, const Slice& info_log_name_prefix,
+                       const std::string* path_ptr) {
+    uint64_t number;
+    FileType type;
+    // If we cannot parse the file name, we skip;
+    if (ParseFileName(file, &number, info_log_name_prefix, &type)) {
+      candidate_files.emplace_back(JobContext::CandidateFileInfo{
+          std::move(file), number, type, path_ptr});
+    }
+  };
+
+  if (state.doing_the_full_scan) {
+    InfoLogPrefix info_log_prefix(!immutable_db_options_.db_log_dir.empty(),
+                                  dbname_);
+
+    mutex_.Lock();
+    // Note that if cf_paths is not specified in the ColumnFamilyOptions
+    // of a particular column family, we use db_paths as the cf_paths
+    // setting. Hence, there can be multiple duplicates of files from db_paths
+    // in the following code. The duplicate are removed while identifying
+    // unique files in PurgeObsoleteFiles.
+    for (auto cfd : *versions_->GetColumnFamilySet()) {
+      for (auto& db_path : cfd->ioptions()->cf_paths) {
+        state.PushPath(db_path.path);
+      }
+    }
+    mutex_.Unlock();
+
+    for (auto& db_path : immutable_db_options_.db_paths) {
+      state.PushPath(db_path.path);
+    }
+
+    for (const auto& path : state.paths) {
+      // set of all files in the directory. We'll exclude files that are still
+      // alive in the subsequent processings.
+      std::vector<std::string> files;
+      env_->GetChildren(path, &files);  // Ignore errors
+      for (std::string& file : files) {
+        push_file(file, info_log_prefix.prefix, &path);
+      }
+    }
+
+    // Add log files in wal_dir & db_log_dir
+    for (auto& path :
+         {immutable_db_options_.wal_dir, immutable_db_options_.db_log_dir}) {
+      if (!path.empty() && path != dbname_) {
+        auto path_ptr = state.PushPath(path);
+        std::vector<std::string> log_files;
+        env_->GetChildren(immutable_db_options_.wal_dir,
+                          &log_files);  // Ignore errors
+        for (std::string& log_file : log_files) {
+          push_file(log_file, info_log_prefix.prefix, path_ptr);
+        }
+      }
+    }
+
+    mutex_.Lock();
+
+    // update log_recycle_files after full scan
+    state.log_recycle_files.assign(log_recycle_files_.begin(),
+                                   log_recycle_files_.end());
+    assert(state.HaveSomethingToDelete());
+
+    mutex_.Unlock();
+  }
   std::unordered_set<uint64_t> log_recycle_files_set(
       state.log_recycle_files.begin(), state.log_recycle_files.end());
 
-  auto candidate_files = state.full_scan_candidate_files;
   candidate_files.reserve(
       candidate_files.size() + state.sst_delete_files.size() +
       state.log_delete_files.size() + state.manifest_delete_files.size());
   // We may ignore the dbname when generating the file names.
   const char* kDumbDbName = "";
   for (auto& file : state.sst_delete_files) {
-    candidate_files.emplace_back(
+    candidate_files.emplace_back(JobContext::CandidateFileInfo{
         MakeTableFileName(kDumbDbName, file.metadata->fd.GetNumber()),
-        file.path);
+        file.metadata->fd.GetNumber(), kTableFile, state.PushPath(file.path)});
     if (file.metadata->table_reader_handle) {
       table_cache_->Release(file.metadata->table_reader_handle);
     }
@@ -334,18 +332,19 @@ void DBImpl::PurgeObsoleteFiles(JobContext& state, bool schedule_only) {
 
   for (auto file_num : state.log_delete_files) {
     if (file_num > 0) {
-      candidate_files.emplace_back(LogFileName(kDumbDbName, file_num),
-                                   immutable_db_options_.wal_dir);
+      candidate_files.emplace_back(JobContext::CandidateFileInfo{
+          LogFileName(kDumbDbName, file_num), file_num, kLogFile,
+          state.PushPath(immutable_db_options_.wal_dir)});
     }
   }
-  for (const auto& filename : state.manifest_delete_files) {
-    candidate_files.emplace_back(filename, dbname_);
+  for (auto filename : state.manifest_delete_files) {
+    push_file(filename, Slice(), state.PushPath(dbname_));
   }
 
   // dedup state.candidate_files so we don't try to delete the same
   // file twice
   terark::sort_a(candidate_files, CompareCandidateFile);
-  candidate_files.resize(terark::unique_a(candidate_files));
+  candidate_files.resize(terark::unique_a(candidate_files, EqualCandidateFile));
 
   if (state.prev_total_log_size > 0) {
     ROCKS_LOG_INFO(immutable_db_options_.info_log,
@@ -385,12 +384,8 @@ void DBImpl::PurgeObsoleteFiles(JobContext& state, bool schedule_only) {
   std::unordered_set<uint64_t> files_to_del;
   for (const auto& candidate_file : candidate_files) {
     const std::string& to_delete = candidate_file.file_name;
-    uint64_t number;
-    FileType type;
-    // Ignore file if we cannot recognize it.
-    if (!ParseFileName(to_delete, &number, info_log_prefix.prefix, &type)) {
-      continue;
-    }
+    uint64_t number = candidate_file.number;
+    FileType type = candidate_file.type;
 
     bool keep = true;
     switch (type) {
@@ -447,7 +442,6 @@ void DBImpl::PurgeObsoleteFiles(JobContext& state, bool schedule_only) {
       case kDBLockFile:
       case kIdentityFile:
       case kMetaDatabase:
-      case kBlobFile:
         keep = true;
         break;
     }
@@ -461,8 +455,8 @@ void DBImpl::PurgeObsoleteFiles(JobContext& state, bool schedule_only) {
     if (type == kTableFile) {
       // evict from cache
       TableCache::Evict(table_cache_.get(), number);
-      fname = MakeTableFileName(candidate_file.file_path, number);
-      dir_to_sync = candidate_file.file_path;
+      fname = MakeTableFileName(*candidate_file.file_path, number);
+      dir_to_sync = *candidate_file.file_path;
     } else {
       dir_to_sync =
           (type == kLogFile) ? immutable_db_options_.wal_dir : dbname_;

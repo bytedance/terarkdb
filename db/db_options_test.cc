@@ -567,7 +567,7 @@ static void assert_candidate_files_empty(DBImpl* dbfull, const bool empty) {
   dbfull->TEST_LockMutex();
   JobContext job_context(0);
   dbfull->FindObsoleteFiles(&job_context, false);
-  ASSERT_EQ(empty, job_context.full_scan_candidate_files.empty());
+  ASSERT_EQ(empty, !job_context.doing_the_full_scan);
   dbfull->TEST_UnlockMutex();
   if (job_context.HaveSomethingToDelete()) {
     // fulfill the contract of FindObsoleteFiles by calling PurgeObsoleteFiles

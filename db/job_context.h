@@ -103,7 +103,7 @@ struct SuperVersionContext {
 
 struct JobContext {
   inline bool HaveSomethingToDelete() const {
-    return full_scan_candidate_files.size() || sst_delete_files.size() ||
+    return doing_the_full_scan || sst_delete_files.size() ||
            log_delete_files.size() || manifest_delete_files.size();
   }
 
@@ -122,17 +122,19 @@ struct JobContext {
   // Structure to store information for candidate files to delete.
   struct CandidateFileInfo {
     std::string file_name;
-    std::string file_path;
-    CandidateFileInfo() {}
-    CandidateFileInfo(std::string name, std::string path)
-        : file_name(std::move(name)), file_path(std::move(path)) {}
-    bool operator==(const CandidateFileInfo& other) const {
-      return file_name == other.file_name && file_path == other.file_path;
-    }
+    uint64_t number;
+    FileType type;
+    const std::string* file_path;
   };
 
   // Unique job id
   int job_id;
+
+  //
+  bool doing_the_full_scan;
+
+  // full_scan_candidate_files file path
+  std::unordered_set<std::string> paths;
 
   // a list of all files that we'll consider deleting
   // (every once in a while this is filled up with all files
@@ -178,6 +180,7 @@ struct JobContext {
 
   explicit JobContext(int _job_id, bool create_superversion = false) {
     job_id = _job_id;
+    doing_the_full_scan = false;
     manifest_file_number = 0;
     pending_manifest_file_number = 0;
     log_number = 0;
@@ -185,6 +188,10 @@ struct JobContext {
     superversion_contexts.emplace_back(
         SuperVersionContext(create_superversion));
   }
+
+  const std::string* PushPath(const std::string& path) {
+    return &*paths.emplace(path).first;
+  };
 
   // For non-empty JobContext Clean() has to be called at least once before
   // before destruction (see asserts in ~JobContext()). Should be called with

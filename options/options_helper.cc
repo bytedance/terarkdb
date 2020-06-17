@@ -464,7 +464,7 @@ bool ParseValueExtractorFactory(
   }
   value_meta_extractor_factory->reset(ValueExtractorFactory::create(
       value_meta_extractor_factory_name,
-      "" /* value_meta_extractor_factory_option */));
+      Slice() /* value_meta_extractor_factory_option */));
   // value meta extractor can be null, so always return true
   return true;
 }
@@ -580,8 +580,9 @@ bool ParseOptionHelper(char* opt_address, const OptionType& opt_type,
           reinterpret_cast<WriteBufferFlushPri*>(opt_address));
     case OptionType::kValueExtractorFactory:
       return ParseValueExtractorFactory(
-          value, reinterpret_cast<std::shared_ptr<const ValueExtractorFactory>*>(
-                     opt_address));
+          value,
+          reinterpret_cast<std::shared_ptr<const ValueExtractorFactory>*>(
+              opt_address));
     default:
       return false;
   }
