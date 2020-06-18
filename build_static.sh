@@ -100,9 +100,6 @@ PLATFORM_DIR=$SYSTEM-$COMPILER-bmi2-$WITH_BMI2
 #echo build/$PLATFORM_DIR/shared_lib/dbg-0/
 
 # copy terark-rocksdb dynamic lib
-cp -a shared-objects/build/$PLATFORM_DIR/dbg-0/librocksdb* $pkgdir/lib
-cp -a shared-objects/build/$PLATFORM_DIR/dbg-1/librocksdb* $pkgdir/lib
-cp -a shared-objects/build/$PLATFORM_DIR/dbg-2/librocksdb* $pkgdir/lib
 cp -a librocksdb*.a $pkgdir/lib_static
 cp -a liblz4.a $pkgdir/lib_static
 cp -a libsnappy.a $pkgdir/lib_static
