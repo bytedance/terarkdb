@@ -1078,7 +1078,10 @@ DEFINE_bool(use_plain_table, false, "if use plain table "
             "instead of block-based table format");
 DEFINE_bool(use_cuckoo_table, false, "if use cuckoo table format");
 DEFINE_double(cuckoo_hash_ratio, 0.9, "Hash ratio for Cuckoo SST table.");
-DEFINE_bool(use_terark_table, true, "if use trark table format");
+DEFINE_bool(use_terark_table, true, "if use terark table format");
+DEFINE_int32(cbt_hash_bit, 0, "the num of hash bits when use critbit trie prefix");
+DEFINE_int32(cbt_entry_per_trie, 65536, "the num of entry per trie when use critbit trie prefix");
+
 DEFINE_bool(use_hash_search, false, "if use kHashSearch "
             "instead of kBinarySearch. "
             "This is valid if only we use BlockTable");
@@ -3405,8 +3408,11 @@ void VerifyDBFromDB(std::string& truth_db_name) {
     }
     if (FLAGS_use_terark_table) {
       rocksdb::TerarkZipTableOptions tzto{};
-      tzto.localTempDir = FLAGS_db + ".tmp";
+      tzto.localTempDir = FLAGS_db;
+      tzto.cbtHashBits = FLAGS_cbt_hash_bit;
+      tzto.cbtEntryPerTrie = FLAGS_cbt_entry_per_trie;
       rocksdb::TerarkZipDeleteTempFiles(tzto.localTempDir);
+      FLAGS_env->CreateDir(FLAGS_db);
       options.table_factory.reset(
           rocksdb::NewTerarkZipTableFactory(tzto, options.table_factory));
     }
