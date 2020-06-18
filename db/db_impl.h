@@ -1408,14 +1408,13 @@ class DBImpl : public DB {
   // A queue to store filenames of the files to be purged
   std::deque<PurgeFileInfo> purge_queue_;
 
-  // A unordered_set to store the file numbers that have been assigned to
-  // certain JobContext. Current implementation tracks SST, WAL & MANIFEST
-  // files.
-  std::unordered_set<uint64_t> files_grabbed_for_purge_;
+  // A vector to store the file numbers that have been assigned to certain
+  // JobContext. Current implementation tracks SST, WAL & MANIFEST files.
+  std::vector<uint64_t> files_grabbed_for_purge_;
 
   // when doing the full scan, we need to know which elements removed from
   // `purge_queue_` and `files_grabbed_for_purge_`
-  std::list<std::unordered_set<uint64_t>*> candidate_file_listener_;
+  std::list<std::vector<uint64_t>*> candidate_file_listener_;
 
   // A queue to store log writers to close
   std::deque<log::Writer*> logs_to_free_queue_;

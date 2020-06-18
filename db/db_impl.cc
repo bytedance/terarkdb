@@ -1239,7 +1239,7 @@ void DBImpl::BackgroundCallPurge() {
       auto job_id = purge_file->job_id;
       purge_queue_.pop_front();
       for (auto listener : candidate_file_listener_) {
-        listener->emplace(number);
+        listener->emplace_back(number);
       }
 
       mutex_.Unlock();

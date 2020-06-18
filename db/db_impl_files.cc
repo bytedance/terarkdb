@@ -160,11 +160,13 @@ void DBImpl::FindObsoleteFiles(JobContext* job_context, bool force,
 
     mutex_.Lock();
     candidate_file_listener_.erase(candidate_file_listener_it);
-  }
-  job_context->skip_candidate_files.insert(files_grabbed_for_purge_.begin(),
-                                           files_grabbed_for_purge_.end());
-  for (const auto& purge_file_info : purge_queue_) {
-    job_context->skip_candidate_files.emplace(purge_file_info.number);
+
+    job_context->skip_candidate_files.insert(
+        job_context->skip_candidate_files.end(),
+        files_grabbed_for_purge_.begin(), files_grabbed_for_purge_.end());
+    for (const auto& purge_file_info : purge_queue_) {
+      job_context->skip_candidate_files.emplace_back(purge_file_info.number);
+    }
   }
 
   // don't delete files that might be currently written to from compaction
@@ -185,14 +187,16 @@ void DBImpl::FindObsoleteFiles(JobContext* job_context, bool force,
                               &job_context->manifest_delete_files,
                               job_context->min_pending_output);
 
+  auto push_files_grabbed_for_purge = [=](uint64_t number) {
+    job_context->files_grabbed_for_purge.emplace_back(number);
+    files_grabbed_for_purge_.emplace_back(number);
+  };
+
   // Mark the elements in job_context->sst_delete_files as grabbedForPurge
   // so that other threads calling FindObsoleteFiles with full_scan=true
   // will not add these files to candidate list for purge.
   for (const auto& sst_to_del : job_context->sst_delete_files) {
-    uint64_t number = sst_to_del.metadata->fd.GetNumber();
-    assert(files_grabbed_for_purge_.count(number) == 0);
-    job_context->files_grabbed_for_purge.emplace_back(
-        files_grabbed_for_purge_.emplace(number).first);
+    push_files_grabbed_for_purge(sst_to_del.metadata->fd.GetNumber());
   }
   for (const auto& manifest_to_del : job_context->manifest_delete_files) {
     uint64_t number;
@@ -200,9 +204,7 @@ void DBImpl::FindObsoleteFiles(JobContext* job_context, bool force,
     // If we cannot parse the file name, we skip;
     if (ParseFileName(manifest_to_del, &number, &type)) {
       assert(type == kDescriptorFile);
-      assert(files_grabbed_for_purge_.count(number) == 0);
-      job_context->files_grabbed_for_purge.emplace_back(
-          files_grabbed_for_purge_.emplace(number).first);
+      push_files_grabbed_for_purge(number);
     } else {
       assert(false);
     }
@@ -233,9 +235,7 @@ void DBImpl::FindObsoleteFiles(JobContext* job_context, bool force,
         log_recycle_files_.push_back(earliest.number);
       } else {
         job_context->log_delete_files.push_back(earliest.number);
-        assert(files_grabbed_for_purge_.count(earliest.number) == 0);
-        job_context->files_grabbed_for_purge.emplace_back(
-            files_grabbed_for_purge_.emplace(earliest.number).first);
+        push_files_grabbed_for_purge(earliest.number);
       }
       if (job_context->size_log_to_delete == 0) {
         job_context->prev_total_log_size = total_log_size_;
@@ -372,6 +372,8 @@ void DBImpl::PurgeObsoleteFiles(JobContext& state, bool schedule_only) {
   // dedup state.candidate_files so we don't try to delete the same
   // file twice
   terark::sort_a(candidate_files, CompareCandidateFile);
+  terark::sort_a(state.skip_candidate_files);
+  terark::sort_a(state.files_grabbed_for_purge);
 
   if (state.prev_total_log_size > 0) {
     ROCKS_LOG_INFO(immutable_db_options_.info_log,
@@ -403,7 +405,7 @@ void DBImpl::PurgeObsoleteFiles(JobContext& state, bool schedule_only) {
     if ((i > 0 && EqualCandidateFile(candidate_file, candidate_files[i - 1])) ||
         !ParseFileName(fname, &number, info_log_prefix.prefix, &type) ||
         (type != kInfoLogFile &&
-         state.skip_candidate_files.count(number) > 0)) {
+         terark::binary_search_a(state.skip_candidate_files, number))) {
       // erase this candidate_files
       candidate_files[i] = std::move(candidate_files.back());
       candidate_files.pop_back();
@@ -526,13 +528,22 @@ void DBImpl::PurgeObsoleteFiles(JobContext& state, bool schedule_only) {
 
   {
     // After purging obsolete files, remove them from files_grabbed_for_purge_.
+    // Use a temporary vector to perform bulk deletion via swap.
     InstrumentedMutexLock guard_lock(&mutex_);
-    for (const auto& it : state.files_grabbed_for_purge) {
-      for (auto listener : candidate_file_listener_) {
-        listener->emplace(*it);
+    std::vector<uint64_t> tmp;
+    tmp.reserve(std::max(state.files_grabbed_for_purge.size(),
+                         files_grabbed_for_purge_.size()) -
+                state.files_grabbed_for_purge.size());
+    for (auto fn : files_grabbed_for_purge_) {
+      if (terark::binary_search_a(state.files_grabbed_for_purge, fn)) {
+        for (auto listener : candidate_file_listener_) {
+          listener->emplace_back(fn);
+        }
+      } else {
+        tmp.emplace_back(fn);
       }
-      files_grabbed_for_purge_.erase(it);
     }
+    files_grabbed_for_purge_.swap(tmp);
   }
 
   // Delete old info log files.

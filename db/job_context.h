@@ -132,10 +132,10 @@ struct JobContext {
   std::unordered_set<std::string> paths;
 
   // full_scan_candidate_files file path
-  std::unordered_set<uint64_t> skip_candidate_files;
+  std::vector<uint64_t> skip_candidate_files;
 
   // used for clean up DBImpl::files_grabbed_for_purge_
-  std::vector<std::unordered_set<uint64_t>::iterator> files_grabbed_for_purge;
+  std::vector<uint64_t> files_grabbed_for_purge;
 
   // a list of all files that we'll consider deleting
   // (every once in a while this is filled up with all files
