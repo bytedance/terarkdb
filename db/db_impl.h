@@ -490,7 +490,8 @@ class DBImpl : public DB {
 
   // move logs pending closing from job_context to the DB queue and
   // schedule a purge
-  void ScheduleBgLogWriterClose(JobContext* job_context);
+  // add superversion to the DB queue and schedule a purge
+  void ScheduleBgFree(JobContext* job_context, SuperVersion* sv);
 
   uint64_t MinLogNumberToKeep();
 
@@ -709,6 +710,10 @@ class DBImpl : public DB {
 
   void AddToLogsToFreeQueue(log::Writer* log_writer) {
     logs_to_free_queue_.push_back(log_writer);
+  }
+
+  void AddToSuperVersionToFreeQueue(SuperVersion* sv) {
+    superversion_to_free_queue_.push_back(sv);
   }
 
   void SetSnapshotChecker(SnapshotChecker* snapshot_checker);
@@ -1416,8 +1421,12 @@ class DBImpl : public DB {
   // `purge_queue_` and `files_grabbed_for_purge_`
   std::list<std::vector<uint64_t>*> candidate_file_listener_;
 
+  // A queue to store superversions to delete
+  std::deque<SuperVersion*> superversion_to_free_queue_;
+
   // A queue to store log writers to close
   std::deque<log::Writer*> logs_to_free_queue_;
+
   int unscheduled_flushes_;
   int unscheduled_compactions_;
   int unscheduled_garbage_collections_;

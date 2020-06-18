@@ -208,7 +208,8 @@ void ForwardIterator::SVCleanup(DBImpl* db, SuperVersion* sv,
     sv->Cleanup();
     db->FindObsoleteFiles(&job_context, false, true);
     if (background_purge_on_iterator_cleanup) {
-      db->ScheduleBgLogWriterClose(&job_context);
+      db->ScheduleBgFree(&job_context, sv);
+      sv = nullptr;
     }
     db->mutex_.Unlock();
     delete sv;
@@ -529,7 +530,7 @@ void ForwardIterator::RebuildIterators(bool refresh_sv) {
   Cleanup(refresh_sv);
   if (refresh_sv) {
     // New
-    sv_ = cfd_->GetReferencedSuperVersion(&(db_->mutex_));
+    sv_ = cfd_->GetReferencedSuperVersion(db_);
   }
   ReadRangeDelAggregator range_del_agg(&cfd_->internal_comparator(),
                                        kMaxSequenceNumber /* upper_bound */);
@@ -578,7 +579,7 @@ void ForwardIterator::RebuildIterators(bool refresh_sv) {
 void ForwardIterator::RenewIterators() {
   SuperVersion* svnew;
   assert(sv_);
-  svnew = cfd_->GetReferencedSuperVersion(&(db_->mutex_));
+  svnew = cfd_->GetReferencedSuperVersion(db_);
 
   if (mutable_iter_ != nullptr) {
     DeleteIterator(mutable_iter_, true /* is_arena */);
