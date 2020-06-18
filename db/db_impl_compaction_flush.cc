@@ -2030,6 +2030,10 @@ void DBImpl::SchedulePendingPurge(const std::string& fname,
   mutex_.AssertHeld();
   PurgeFileInfo file_info(fname, dir_to_sync, type, number, job_id);
   purge_queue_.push_back(std::move(file_info));
+
+  for (auto listener : candidate_file_listener_) {
+    listener->emplace_back(number);
+  }
 }
 
 void DBImpl::BGWorkFlush(void* db) {

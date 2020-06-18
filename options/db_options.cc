@@ -234,16 +234,17 @@ void ImmutableDBOptions::Dump(Logger* log) const {
 
   ROCKS_LOG_HEADER(log, "            Options.avoid_flush_during_recovery: %d",
                    avoid_flush_during_recovery);
-  ROCKS_LOG_HEADER(log, "            Options.allow_ingest_behind: %d",
+  ROCKS_LOG_HEADER(log, "                    Options.allow_ingest_behind: %d",
                    allow_ingest_behind);
-  ROCKS_LOG_HEADER(log, "            Options.preserve_deletes: %d",
+  ROCKS_LOG_HEADER(log, "                       Options.preserve_deletes: %d",
                    preserve_deletes);
-  ROCKS_LOG_HEADER(log, "            Options.two_write_queues: %d",
+  ROCKS_LOG_HEADER(log, "                       Options.two_write_queues: %d",
                    two_write_queues);
-  ROCKS_LOG_HEADER(log, "            Options.manual_wal_flush: %d",
+  ROCKS_LOG_HEADER(log, "                       Options.manual_wal_flush: %d",
                    manual_wal_flush);
-  ROCKS_LOG_HEADER(log, "            Options.atomic_flush: %d", atomic_flush);
-  ROCKS_LOG_HEADER(log, "            Options.avoid_unnecessary_blocking_io: %d",
+  ROCKS_LOG_HEADER(log, "                           Options.atomic_flush: %d",
+                   atomic_flush);
+  ROCKS_LOG_HEADER(log, "          Options.avoid_unnecessary_blocking_io: %d",
                    avoid_unnecessary_blocking_io);
 }
 

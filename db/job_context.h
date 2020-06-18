@@ -128,10 +128,12 @@ struct JobContext {
   // Unique job id
   int job_id;
 
+  bool doing_the_full_scan;
+
   // full_scan_candidate_files file path
   std::unordered_set<std::string> paths;
 
-  // full_scan_candidate_files file path
+  // full_scan_candidate_files by other jobs
   std::vector<uint64_t> skip_candidate_files;
 
   // used for clean up DBImpl::files_grabbed_for_purge_
@@ -181,6 +183,7 @@ struct JobContext {
 
   explicit JobContext(int _job_id, bool create_superversion = false) {
     job_id = _job_id;
+    doing_the_full_scan = false;
     manifest_file_number = 0;
     pending_manifest_file_number = 0;
     log_number = 0;

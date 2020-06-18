@@ -230,6 +230,7 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
       last_stats_dump_time_microsec_(0),
       next_job_id_(1),
       has_unpersisted_data_(false),
+      delete_obsolete_files_lock_(false),
       unable_to_release_oldest_log_(false),
       env_options_(BuildDBOptions(immutable_db_options_, mutable_db_options_)),
       env_options_for_compaction_(env_->OptimizeForCompactionTableWrite(
@@ -1255,9 +1256,6 @@ void DBImpl::BackgroundCallPurge() {
       auto number = purge_file->number;
       auto job_id = purge_file->job_id;
       purge_queue_.pop_front();
-      for (auto listener : candidate_file_listener_) {
-        listener->emplace_back(number);
-      }
 
       mutex_.Unlock();
       DeleteObsoleteFileImpl(job_id, fname, dir_to_sync, type, number);

@@ -10,9 +10,11 @@
 #ifndef ROCKSDB_LITE
 
 #include <stdlib.h>
+
 #include <map>
 #include <string>
 #include <vector>
+
 #include "db/db_impl.h"
 #include "db/version_set.h"
 #include "db/write_batch_internal.h"
@@ -48,11 +50,11 @@ class ObsoleteFilesTest : public testing::Test {
     options_.disable_auto_compactions = false;
     options_.delete_obsolete_files_period_micros = 0;  // always do full purge
     options_.enable_thread_tracking = true;
-    options_.write_buffer_size = 1024*1024*1000;
-    options_.target_file_size_base = 1024*1024*1000;
-    options_.max_bytes_for_level_base = 1024*1024*1000;
-    options_.WAL_ttl_seconds = 300; // Used to test log files
-    options_.WAL_size_limit_MB = 1024; // Used to test log files
+    options_.write_buffer_size = 1024 * 1024 * 1000;
+    options_.target_file_size_base = 1024 * 1024 * 1000;
+    options_.max_bytes_for_level_base = 1024 * 1024 * 1000;
+    options_.WAL_ttl_seconds = 300;     // Used to test log files
+    options_.WAL_size_limit_MB = 1024;  // Used to test log files
     dbname_ = test::PerThreadDBPath("obsolete_files_test");
     options_.wal_dir = dbname_ + "/wal_files";
 
@@ -90,7 +92,7 @@ class ObsoleteFilesTest : public testing::Test {
   void AddKeys(int numkeys, int startkey) {
     WriteOptions options;
     options.sync = false;
-    for (int i = startkey; i < (numkeys + startkey) ; i++) {
+    for (int i = startkey; i < (numkeys + startkey); i++) {
       std::string temp = ToString(i);
       Slice key(temp);
       Slice value(temp);
@@ -98,10 +100,8 @@ class ObsoleteFilesTest : public testing::Test {
     }
   }
 
-  int numKeysInLevels(
-    std::vector<LiveFileMetaData> &metadata,
-    std::vector<int> *keysperlevel = nullptr) {
-
+  int numKeysInLevels(std::vector<LiveFileMetaData>& metadata,
+                      std::vector<int>* keysperlevel = nullptr) {
     if (keysperlevel != nullptr) {
       keysperlevel->resize(numlevels_);
     }
@@ -117,8 +117,7 @@ class ObsoleteFilesTest : public testing::Test {
       }
       fprintf(stderr, "level %d name %s smallest %s largest %s\n",
               metadata[i].level, metadata[i].name.c_str(),
-              metadata[i].smallestkey.c_str(),
-              metadata[i].largestkey.c_str());
+              metadata[i].smallestkey.c_str(), metadata[i].largestkey.c_str());
     }
     return numKeys;
   }
@@ -134,10 +133,8 @@ class ObsoleteFilesTest : public testing::Test {
     }
   }
 
-  void CheckFileTypeCounts(std::string& dir,
-                            int required_log,
-                            int required_sst,
-                            int required_manifest) {
+  void CheckFileTypeCounts(std::string& dir, int required_log, int required_sst,
+                           int required_manifest) {
     std::vector<std::string> filenames;
     env_->GetChildren(dir, &filenames);
 
@@ -166,7 +163,7 @@ TEST_F(ObsoleteFilesTest, RaceForObsoleteFileDeletion) {
        "ObsoleteFilesTest::RaceForObsoleteFileDeletion:1"},
       {"DBImpl::BackgroundCallCompaction:PurgedObsoleteFiles",
        "ObsoleteFilesTest::RaceForObsoleteFileDeletion:2"},
-      });
+  });
   SyncPoint::GetInstance()->SetCallBack(
       "DBImpl::DeleteObsoleteFileImpl:AfterDeletion", [&](void* arg) {
         Status* p_status = reinterpret_cast<Status*>(arg);
@@ -174,8 +171,10 @@ TEST_F(ObsoleteFilesTest, RaceForObsoleteFileDeletion) {
       });
   SyncPoint::GetInstance()->SetCallBack(
       "DBImpl::CloseHelper:PendingPurgeFinished", [&](void* arg) {
-        std::vector<uint64_t>* files_grabbed_for_purge_ptr =
-            reinterpret_cast<std::vector<uint64_t>*>(arg);
+        std::unordered_set<
+            const std::vector<uint64_t>*>* files_grabbed_for_purge_ptr =
+            reinterpret_cast<std::unordered_set<const std::vector<uint64_t>*>*>(
+                arg);
         ASSERT_TRUE(files_grabbed_for_purge_ptr->empty());
       });
   SyncPoint::GetInstance()->EnableProcessing();
@@ -185,8 +184,8 @@ TEST_F(ObsoleteFilesTest, RaceForObsoleteFileDeletion) {
     JobContext jobCxt(0);
     TEST_SYNC_POINT("ObsoleteFilesTest::RaceForObsoleteFileDeletion:1");
     dbi->TEST_LockMutex();
-    dbi->FindObsoleteFiles(&jobCxt,
-      true /* force=true */, false /* no_full_scan=false */);
+    dbi->FindObsoleteFiles(&jobCxt, true /* force=true */,
+                           false /* no_full_scan=false */);
     dbi->TEST_UnlockMutex();
     TEST_SYNC_POINT("ObsoleteFilesTest::RaceForObsoleteFileDeletion:2");
     dbi->PurgeObsoleteFiles(jobCxt);
@@ -247,7 +246,7 @@ TEST_F(ObsoleteFilesTest, DeleteObsoleteOptionsFile) {
   ASSERT_EQ(2, opts_file_count);
 }
 
-} //namespace rocksdb
+}  // namespace rocksdb
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

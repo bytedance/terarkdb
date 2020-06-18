@@ -1413,9 +1413,9 @@ class DBImpl : public DB {
   // A queue to store filenames of the files to be purged
   std::deque<PurgeFileInfo> purge_queue_;
 
-  // A vector to store the file numbers that have been assigned to certain
+  // A pointer to the file numbers that have been assigned to certain
   // JobContext. Current implementation tracks SST, WAL & MANIFEST files.
-  std::vector<uint64_t> files_grabbed_for_purge_;
+  std::unordered_set<const std::vector<uint64_t>*> files_grabbed_for_purge_;
 
   // when doing the full scan, we need to know which elements removed from
   // `purge_queue_` and `files_grabbed_for_purge_`
@@ -1518,6 +1518,9 @@ class DBImpl : public DB {
   // data that is not yet persisted into either WAL or SST file.
   // Used when disableWAL is true.
   std::atomic<bool> has_unpersisted_data_;
+
+  // full scan running lock
+  bool delete_obsolete_files_lock_;
 
   // if an attempt was made to flush all column families that
   // the oldest log depends on but uncommited data in the oldest

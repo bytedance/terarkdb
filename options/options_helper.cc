@@ -1664,8 +1664,7 @@ std::unordered_map<std::string, OptionTypeInfo>
         {"avoid_unnecessary_blocking_io",
          {offsetof(struct DBOptions, avoid_unnecessary_blocking_io),
           OptionType::kBoolean, OptionVerificationType::kNormal, false,
-          offsetof(struct ImmutableDBOptions, avoid_unnecessary_blocking_io)}}
-      };
+          offsetof(struct ImmutableDBOptions, avoid_unnecessary_blocking_io)}}};
 
 std::unordered_map<std::string, BlockBasedTableOptions::IndexType>
     OptionsHelper::block_base_table_index_type_string_map = {

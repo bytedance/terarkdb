@@ -802,8 +802,8 @@ TerarkZipTableReaderBase::GetTableProperties() const {
     if (!s.ok()) {
       return nullptr;
     }
-    s = ReadTableProperties(file_.get(), filesize,
-                            kTerarkZipTableMagicNumber, ioptions, &props);
+    s = ReadTableProperties(file_.get(), filesize, kTerarkZipTableMagicNumber,
+                            ioptions, &props);
     if (!s.ok()) {
       return nullptr;
     }
