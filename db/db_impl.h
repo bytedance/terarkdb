@@ -1106,8 +1106,9 @@ class DBImpl : public DB {
 
   void SchedulePendingCompaction(ColumnFamilyData* cfd);
   void SchedulePendingGarbageCollection(ColumnFamilyData* cfd);
-  void SchedulePendingPurge(std::string fname, std::string dir_to_sync,
-                            FileType type, uint64_t number, int job_id);
+  void SchedulePendingPurge(const std::string& fname,
+                            const std::string& dir_to_sync, FileType type,
+                            uint64_t number, int job_id);
   static void BGWorkCompaction(void* arg);
   static void BGWorkGarbageCollection(void* arg);
   // Runs a pre-chosen universal compaction involving bottom level in a
@@ -1407,9 +1408,14 @@ class DBImpl : public DB {
   // A queue to store filenames of the files to be purged
   std::deque<PurgeFileInfo> purge_queue_;
 
-  // A vector to store the file numbers that have been assigned to certain
-  // JobContext. Current implementation tracks ssts only.
-  std::vector<uint64_t> files_grabbed_for_purge_;
+  // A unordered_set to store the file numbers that have been assigned to
+  // certain JobContext. Current implementation tracks SST, WAL & MANIFEST
+  // files.
+  std::unordered_set<uint64_t> files_grabbed_for_purge_;
+
+  // when doing the full scan, we need to know which elements removed from
+  // `purge_queue_` and `files_grabbed_for_purge_`
+  std::list<std::unordered_set<uint64_t>*> candidate_file_listener_;
 
   // A queue to store log writers to close
   std::deque<log::Writer*> logs_to_free_queue_;
@@ -1601,9 +1607,6 @@ class DBImpl : public DB {
   bool ShouldntRunManualCompaction(ManualCompactionState* m);
   bool HaveManualCompaction(ColumnFamilyData* cfd);
   bool MCOverlap(ManualCompactionState* m, ManualCompactionState* m1);
-
-  bool ShouldPurge(uint64_t file_number) const;
-  void MarkAsGrabbedForPurge(uint64_t file_number);
 
   size_t GetWalPreallocateBlockSize(uint64_t write_buffer_size) const;
   Env::WriteLifeTimeHint CalculateWALWriteHint() { return Env::WLTH_SHORT; }

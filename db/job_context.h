@@ -103,7 +103,7 @@ struct SuperVersionContext {
 
 struct JobContext {
   inline bool HaveSomethingToDelete() const {
-    return doing_the_full_scan || sst_delete_files.size() ||
+    return full_scan_candidate_files.size() || sst_delete_files.size() ||
            log_delete_files.size() || manifest_delete_files.size();
   }
 
@@ -122,19 +122,20 @@ struct JobContext {
   // Structure to store information for candidate files to delete.
   struct CandidateFileInfo {
     std::string file_name;
-    uint64_t number;
-    FileType type;
     const std::string* file_path;
   };
 
   // Unique job id
   int job_id;
 
-  //
-  bool doing_the_full_scan;
-
   // full_scan_candidate_files file path
   std::unordered_set<std::string> paths;
+
+  // full_scan_candidate_files file path
+  std::unordered_set<uint64_t> skip_candidate_files;
+
+  // used for clean up DBImpl::files_grabbed_for_purge_
+  std::vector<std::unordered_set<uint64_t>::iterator> files_grabbed_for_purge;
 
   // a list of all files that we'll consider deleting
   // (every once in a while this is filled up with all files
@@ -180,7 +181,6 @@ struct JobContext {
 
   explicit JobContext(int _job_id, bool create_superversion = false) {
     job_id = _job_id;
-    doing_the_full_scan = false;
     manifest_file_number = 0;
     pending_manifest_file_number = 0;
     log_number = 0;

@@ -203,6 +203,10 @@ void UpdateCollectInfo(const TerarkZipTableFactory* table_factory,
   collect.update(timestamp, entropy, file_size);
 }
 
+static bool Overlap(const fstring& a, const fstring& b) {
+  return a.data() >= b.data() && a.data() < b.data() + b.size();
+}
+
 template <class T>
 void CallDestructor(T* ptr) {
   ptr->~T();
@@ -1172,32 +1176,34 @@ Status TerarkZipTableReader::Open(RandomAccessFileReader* file,
     valvec<fstring> store_meta_data = subReader_.store_->get_meta_blocks();
     size_t size = 0;
     for (auto b : index_meta_data) {
-      size += b.size();
+      if (Overlap(b, file_data_)) {
+        meta_data_in_mmap.emplace_back(b.data(), b.size());
+      } else {
+        size += b.size();
+      }
     }
     for (auto b : store_meta_data) {
-      size += b.size();
+      if (Overlap(b, file_data_)) {
+        meta_data_in_mmap.emplace_back(b.data(), b.size());
+      } else {
+        size += b.size();
+      }
     }
     use_hugepage_resize_no_init(&meta_, size);
     size = 0;
     for (auto& b : index_meta_data) {
-      if (b.data() >= file_data_.data() &&
-          b.data() <  file_data_.data() + file_data_.size()) {
-        meta_data_in_mmap.emplace_back(b.data(), b.size());
-        continue;
+      if (!Overlap(b, file_data_)) {
+        memcpy(meta_.data() + size, b.data(), b.size());
+        b = fstring(meta_.data() + size, b.size());
+        size += b.size();
       }
-      memcpy(meta_.data() + size, b.data(), b.size());
-      b = fstring(meta_.data() + size, b.size());
-      size += b.size();
     }
     for (auto& b : store_meta_data) {
-      if (b.data() >= file_data_.data() &&
-          b.data() <  file_data_.data() + file_data_.size()) {
-        meta_data_in_mmap.emplace_back(b.data(), b.size());
-        continue;
+      if (!Overlap(b, file_data_)) {
+        memcpy(meta_.data() + size, b.data(), b.size());
+        b = fstring(meta_.data() + size, b.size());
+        size += b.size();
       }
-      memcpy(meta_.data() + size, b.data(), b.size());
-      b = fstring(meta_.data() + size, b.size());
-      size += b.size();
     }
     assert(size == meta_.size());
     subReader_.index_->DetachMetaData(index_meta_data);
@@ -1702,10 +1708,18 @@ Status TerarkZipTableMultiReader::Open(RandomAccessFileReader* file,
     size_t size = 0;
     for (auto& pair : meta_data) {
       for (auto b : pair.first) {
-        size += b.size();
+        if (Overlap(b, file_data_)) {
+          meta_data_in_mmap.emplace_back(b.data(), b.size());
+        } else {
+          size += b.size();
+        }
       }
       for (auto b : pair.second) {
-        size += b.size();
+        if (Overlap(b, file_data_)) {
+          meta_data_in_mmap.emplace_back(b.data(), b.size());
+        } else {
+          size += b.size();
+        }
       }
     }
     use_hugepage_resize_no_init(&meta_, size);
@@ -1713,24 +1727,18 @@ Status TerarkZipTableMultiReader::Open(RandomAccessFileReader* file,
     for (size_t i = 0; i < sub_count; ++i) {
       auto& pair = meta_data.data()[i];
       for (auto& b : pair.first) {
-        if (b.data() >= file_data_.data() &&
-            b.data() <  file_data_.data() + file_data_.size()) {
-          meta_data_in_mmap.emplace_back(b.data(), b.size());
-          continue;
+        if (!Overlap(b, file_data_)) {
+          memcpy(meta_.data() + size, b.data(), b.size());
+          b = fstring(meta_.data() + size, b.size());
+          size += b.size();
         }
-        memcpy(meta_.data() + size, b.data(), b.size());
-        b = fstring(meta_.data() + size, b.size());
-        size += b.size();
       }
       for (auto& b : pair.second) {
-        if (b.data() >= file_data_.data() &&
-            b.data() <  file_data_.data() + file_data_.size()) {
-          meta_data_in_mmap.emplace_back(b.data(), b.size());
-          continue;
+        if (!Overlap(b, file_data_)) {
+          memcpy(meta_.data() + size, b.data(), b.size());
+          b = fstring(meta_.data() + size, b.size());
+          size += b.size();
         }
-        memcpy(meta_.data() + size, b.data(), b.size());
-        b = fstring(meta_.data() + size, b.size());
-        size += b.size();
       }
       auto subReader = subIndex_.GetSubReader(i);
       subReader->index_->DetachMetaData(pair.first);
