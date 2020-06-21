@@ -748,8 +748,17 @@ class MemoryRandomAccessFile : public RandomAccessFile {
                          uint64_t size)
       : file_(std::move(file)), size_(size) {
     data_.reset(new char[size]);
+    AlignedBuffer buf;
     Slice result;
-    status_ = file_->Read(0, size, &result, data_.get());
+    if (file_->use_direct_io()) {
+      size_t alignment = file_->GetRequiredBufferAlignment();
+      size_t read_size = Roundup(static_cast<size_t>(size), alignment);
+      buf.Alignment(alignment);
+      buf.AllocateNewBuffer(read_size);
+      status_ = file_->Read(0, read_size, &result, buf.Destination());
+    } else {
+      status_ = file_->Read(0, size, &result, data_.get());
+    }
     if (status_.ok()) {
       if (result.size() != size) {
         status_ = Status::Corruption("MemoryRandomAccessFile", "Bad FileSize");
