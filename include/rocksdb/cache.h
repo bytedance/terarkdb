@@ -23,8 +23,10 @@
 #pragma once
 
 #include <stdint.h>
+
 #include <memory>
 #include <string>
+
 #include "rocksdb/memory_allocator.h"
 #include "rocksdb/slice.h"
 #include "rocksdb/statistics.h"
@@ -79,6 +81,23 @@ struct LRUCacheOptions {
         memory_allocator(std::move(_memory_allocator)) {}
 };
 
+struct LIRSCacheOptions {
+  size_t capacity = 0;
+  int num_shard_bits = -1;
+  bool strict_capacity_limit = false;
+  double irr_ratio = 0.01;
+  std::shared_ptr<MemoryAllocator> memory_allocator;
+  LIRSCacheOptions() {}
+  LIRSCacheOptions(size_t _capacity, int _num_shard_bits,
+                   bool _strict_capacity_limit, double _irr_ratio,
+                   std::shared_ptr<MemoryAllocator> _memory_allocator = nullptr)
+      : capacity(_capacity),
+        num_shard_bits(_num_shard_bits),
+        strict_capacity_limit(_strict_capacity_limit),
+        irr_ratio(_irr_ratio),
+        memory_allocator(std::move(_memory_allocator)) {}
+};
+
 // Create a new cache with a fixed size capacity. The cache is sharded
 // to 2^num_shard_bits shards, by hash of the key. The total capacity
 // is divided and evenly assigned to each shard. If strict_capacity_limit
@@ -93,6 +112,13 @@ extern std::shared_ptr<Cache> NewLRUCache(
     std::shared_ptr<MemoryAllocator> memory_allocator = nullptr);
 
 extern std::shared_ptr<Cache> NewLRUCache(const LRUCacheOptions& cache_opts);
+
+extern std::shared_ptr<Cache> NewLIRSCache(
+    size_t capacity, int num_shard_bits = -1,
+    bool strict_capacity_limit = false, double irr_ratio = 0.0,
+    std::shared_ptr<MemoryAllocator> memory_allocator = nullptr);
+
+extern std::shared_ptr<Cache> NewLIRSCache(const LIRSCacheOptions& cache_opts);
 
 // Similar to NewLRUCache, but create a cache based on CLOCK algorithm with
 // better concurrent performance in some cases. See util/clock_cache.cc for
