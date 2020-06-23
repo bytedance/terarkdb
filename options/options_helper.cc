@@ -2104,9 +2104,9 @@ std::unordered_map<std::string, OptionTypeInfo>
 
 std::unordered_map<std::string, TerarkZipTableOptions::EntropyAlgo>
     OptionsHelper::entropy_algo_string_map = {
-        {"no_entropy", TerarkZipTableOptions::EntropyAlgo::kNoEntropy},
-        {"huffman", TerarkZipTableOptions::EntropyAlgo::kHuffman},
-        {"fse", TerarkZipTableOptions::EntropyAlgo::kFSE}};
+        {"kNoEntropy", TerarkZipTableOptions::EntropyAlgo::kNoEntropy},
+        {"kHuffman", TerarkZipTableOptions::EntropyAlgo::kHuffman},
+        {"kFSE", TerarkZipTableOptions::EntropyAlgo::kFSE}};
 
 #endif  // !ROCKSDB_LITE
 
