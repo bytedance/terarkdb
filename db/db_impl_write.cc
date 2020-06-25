@@ -1538,6 +1538,12 @@ Status DBImpl::SwitchMemtable(ColumnFamilyData* cfd, WriteContext* context) {
     new_log = unique_new_log.release();
     new_log_number = new_log->get_log_number();
 
+    if (immutable_db_options_.prepare_log_writer_num > 0) {
+      ROCKS_LOG_WARN(immutable_db_options_.info_log,
+                     "Synchronous create log writer: %" PRIu64
+                     ", prepare_log_writer_num may should increment.",
+                     new_log_number);
+    }
     mutex_.Lock();
   }
   // PLEASE NOTE: We assume that there are no failable operations
