@@ -802,6 +802,8 @@ static bool ValidateTableCacheNumshardbits(const char* flagname,
 }
 DEFINE_int32(table_cache_numshardbits, 4, "");
 
+DEFINE_uint64(prepare_log_writer_num, 1, "");
+
 #ifndef ROCKSDB_LITE
 DEFINE_string(env_uri, "", "URI for registry Env lookup. Mutually exclusive"
               " with --hdfs.");
@@ -3465,6 +3467,7 @@ void VerifyDBFromDB(std::string& truth_db_name) {
     options.write_thread_slow_yield_usec = FLAGS_write_thread_slow_yield_usec;
     options.rate_limit_delay_max_milliseconds =
       FLAGS_rate_limit_delay_max_milliseconds;
+    options.prepare_log_writer_num = FLAGS_prepare_log_writer_num;
     options.table_cache_numshardbits = FLAGS_table_cache_numshardbits;
     options.max_compaction_bytes = FLAGS_max_compaction_bytes;
     options.disable_auto_compactions = FLAGS_disable_auto_compactions;

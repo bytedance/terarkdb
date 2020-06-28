@@ -723,25 +723,22 @@ Status DBImpl::PreprocessWrite(const WriteOptions& write_options,
   assert(!single_column_family_mode_ ||
          versions_->GetColumnFamilySet()->NumberOfColumnFamilies() == 1);
 
-  if (immutable_db_options_.prepare_log_writer_num == 0 ||
-      !log_writer_pool_.empty()) {
-    if (UNLIKELY(status.ok() && !single_column_family_mode_ &&
-                 total_log_size_ > GetMaxTotalWalSize())) {
-      status = SwitchWAL(write_context);
-    }
+  if (UNLIKELY(status.ok() && !single_column_family_mode_ &&
+               total_log_size_ > GetMaxTotalWalSize())) {
+    status = SwitchWAL(write_context);
+  }
 
-    if (UNLIKELY(status.ok() && write_buffer_manager_->ShouldFlush())) {
-      // Before a new memtable is added in SwitchMemtable(),
-      // write_buffer_manager_->ShouldFlush() will keep returning true. If
-      // another thread is writing to another DB with the same write buffer,
-      // they may also be flushed. We may end up with flushing much more DBs
-      // than needed. It's suboptimal but still correct.
-      status = HandleWriteBufferFull(write_context);
-    }
+  if (UNLIKELY(status.ok() && write_buffer_manager_->ShouldFlush())) {
+    // Before a new memtable is added in SwitchMemtable(),
+    // write_buffer_manager_->ShouldFlush() will keep returning true. If another
+    // thread is writing to another DB with the same write buffer, they may also
+    // be flushed. We may end up with flushing much more DBs than needed. It's
+    // suboptimal but still correct.
+    status = HandleWriteBufferFull(write_context);
+  }
 
-    if (UNLIKELY(status.ok() && !flush_scheduler_.Empty())) {
-      status = ScheduleFlushes(write_context);
-    }
+  if (UNLIKELY(status.ok() && !flush_scheduler_.Empty())) {
+    status = ScheduleFlushes(write_context);
   }
 
   PERF_TIMER_STOP(write_scheduling_flushes_compactions_time);

@@ -9,7 +9,7 @@ CPU_CNT=$(nproc)
 echo $TERARKDB_HOME
 
 # clean and build static terarkdb
-cd $TERARKDB_HOME && ./build_static.sh
+cd $TERARKDB_HOME && ./build.sh
 
 # clean and build db_bench
 
