@@ -13,8 +13,7 @@ import sys
 from datetime import datetime
 
 # how many config string do you want to test
-BENCH_CONFIGS=['TerarkZipTable_max_open_files=-1;TerarkZipTable_target_file_size_base=64m;TerarkZipTable_target_file_size_multiplier=1;TerarkZipTable_disableCompressDict=true;TerarkZipTable_offsetArrayBlockUnits=128;TerarkZipTable_sampleRatio=0.005;TerarkZipTable_compaction_style=Level;TerarkZipTable_entropyAlgo=huf;DictZipBlobStore_zipThreads=0;TerarkZipTable_max_subcompactions=8;TerarkZipTable_max_background_flushes=4;TerarkZipTable_max_background_compactions=6;TerarkZipTable_max_background_garbage_collections=4;TerarkZipTable_level0_file_num_compaction_trigger=4;TerarkZipTable_level0_slowdown_writes_trigger=1000;TerarkZipTable_level0_stop_writes_trigger=1000;TerarkZipTable_max_compaction_bytes=256M;TerarkZipTable_blob_size=256;TerarkZipTable_warmUpIndexOnOpen=false;TerarkZipTable_minPreadLen=128;TerarkDB_FileReaderUseFsRead=1',
-               '']
+TERARK_CONFIG_STRING = 'TerarkZipTable_max_open_files=-1;TerarkZipTable_target_file_size_base=64m;TerarkZipTable_target_file_size_multiplier=1;TerarkZipTable_disableCompressDict=true;TerarkZipTable_offsetArrayBlockUnits=128;TerarkZipTable_sampleRatio=0.005;TerarkZipTable_compaction_style=Level;TerarkZipTable_entropyAlgo=huf;DictZipBlobStore_zipThreads=0;TerarkZipTable_max_subcompactions=8;TerarkZipTable_max_background_flushes=4;TerarkZipTable_max_background_compactions=6;TerarkZipTable_max_background_garbage_collections=4;TerarkZipTable_level0_file_num_compaction_trigger=4;TerarkZipTable_level0_slowdown_writes_trigger=1000;TerarkZipTable_level0_stop_writes_trigger=1000;TerarkZipTable_max_compaction_bytes=256M;TerarkZipTable_blob_size=256;TerarkZipTable_warmUpIndexOnOpen=false;TerarkZipTable_minPreadLen=128;TerarkDB_FileReaderUseFsRead=1'
 
 
 # Dont Change !
@@ -23,7 +22,6 @@ GB_PER_THREAD = 20
 TOTAL_MEM_IN_GB = 64
 THREADS = 16
 DB_DIR = ""
-TERARK_CONFIG_STRING = ''
 LOG_RESULT_FNAME = "log.txt"
 
 # MALLOC_CONF="prof:true,lg_prof_interval:32,prof_prefix:jeprof.out" \
@@ -159,16 +157,13 @@ if __name__=='__main__':
     LOG_RESULT_FNAME = 'log_%s_%s.txt' % (GB_PER_THREAD, THREADS)
 
     with open(LOG_RESULT_FNAME, 'a') as f:
-        f.write('[%s] GB_PER_THREAD: %s, THREADS = %s, VSIZE = %s \n' % (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), GB_PER_THREAD, THREADS, VALUE_SIZES[0]) )
+        f.write('[%s] GB_PER_THREAD: %s, THREADS = %s, VSIZE = %s \n' % (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), GB_PER_THREAD, THREADS, VALUE_SIZES) )
 
 
-    for config in BENCH_CONFIGS:
-        with open(LOG_RESULT_FNAME, 'a') as f:
-            f.write('vvvvvvvvvv config vvvvvvvvvv\n')
-            f.write(config)
-            f.write('\n^^^^^^^^^^ config ^^^^^^^^^^\n\n')
+    with open(LOG_RESULT_FNAME, 'a') as f:
+        f.write('vvvvvvvvvv config vvvvvvvvvv\n')
+        f.write(TERARK_CONFIG_STRING)
+        f.write('\n\n')
 
-        TERARK_CONFIG_STRING = config
-        run()
-
+    run()
     gather_result()
