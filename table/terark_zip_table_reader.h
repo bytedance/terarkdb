@@ -25,6 +25,7 @@
 #include <terark/bitfield_array.hpp>
 #include <terark/entropy/entropy_base.hpp>
 #include <terark/idx/terark_zip_index.hpp>
+#include <terark/util/fstrvec.hpp>
 #include <terark/util/throw.hpp>
 #include <terark/zbs/abstract_blob_store.hpp>
 
@@ -126,7 +127,8 @@ class TerarkEmptyTableReader : public TerarkZipTableReaderBase {
 
   virtual ~TerarkEmptyTableReader() {}
   TerarkEmptyTableReader(const TableReaderOptions& o)
-      : TerarkZipTableReaderBase(o), global_seqno_(kDisableGlobalSequenceNumber) {}
+      : TerarkZipTableReaderBase(o),
+        global_seqno_(kDisableGlobalSequenceNumber) {}
   Status Open(RandomAccessFileReader* file, uint64_t file_size);
 
  private:
