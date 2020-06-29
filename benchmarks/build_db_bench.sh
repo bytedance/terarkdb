@@ -9,10 +9,9 @@ CPU_CNT=$(nproc)
 echo $TERARKDB_HOME
 
 # clean and build static terarkdb
-cd $TERARKDB_HOME && ./build.sh
+ cd $TERARKDB_HOME && ./build.sh
 
 # clean and build db_bench
-
 cd $TERARKDB_HOME && DEBUG_LEVEL=0 DISABLE_WARNING_AS_ERROR=1 make db_bench -j $CPU_CNT
 
 cd $BENCH_HOME && rm -rf db_bench && cp ../db_bench .

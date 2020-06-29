@@ -1296,7 +1296,7 @@ librocksdb_env_basic_test.a: env/env_basic_test.o $(TESTHARNESS)
 	$(AM_V_at)$(AR) $(ARFLAGS) $@ $^
 
 db_bench: tools/db_bench.o $(BENCHTOOLOBJECTS)
-	$(AM_LINK) librocksdb.a -lgflags -fopenmp
+	$(AM_LINK) librocksdb.a liblz4.a libsnappy.a libz.a -lgflags -fopenmp
 
 trace_analyzer: tools/trace_analyzer.o $(ANALYZETOOLOBJECTS) $(LIBOBJECTS)
 	$(AM_LINK) librocksdb.a -fopenmp
