@@ -122,8 +122,9 @@ bool PatriciaTrieRep::Contains(const Slice &internal_key) const {
       size_t size = vector->size.load(std::memory_order_relaxed) & SIZE_MASK;
       auto data = (details::tag_vector_t::data_t *)trie->mem_get(
           vector->loc.load(std::memory_order_relaxed));
+      bool ret = terark::binary_search_0(data, size, tag);
       token->idle();
-      return terark::binary_search_0(data, size, tag);
+      return ret;
     }
     token->idle();
   }
