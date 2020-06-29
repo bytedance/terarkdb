@@ -139,7 +139,9 @@ void PatriciaTrieRep::Get(const LookupKey &k, void *callback_args,
     uint32_t idx;
     uint32_t loc;
     uint64_t tag;
-    MainPatricia *trie;
+    MainPatricia::ReaderToken* token;
+
+    MainPatricia* trie() { return static_cast<MainPatricia*>(token->trie()); }
   };
 
   struct TlsItem {
@@ -180,7 +182,7 @@ void PatriciaTrieRep::Get(const LookupKey &k, void *callback_args,
     build_key(find_key, heap->tag, buffer);
     return callback_func(
         callback_args, Slice(buffer->data(), buffer->size()),
-        LazyBuffer(&static_state, {reinterpret_cast<uint64_t>(heap->trie),
+        LazyBuffer(&static_state, {reinterpret_cast<uint64_t>(heap->trie()),
                                    static_cast<uint64_t>(heap->loc),
                                    static_cast<uint64_t>(heap->idx)}));
   };
@@ -202,10 +204,9 @@ void PatriciaTrieRep::Get(const LookupKey &k, void *callback_args,
           vector->loc.load(std::memory_order_relaxed));
       size_t idx = terark::upper_bound_0(data, size, tag) - 1;
       if (idx != size_t(-1)) {
-        heap.emplace_back(HeapItem{(uint32_t)idx, loc, data[idx].tag, trie});
+        heap.emplace_back(HeapItem{(uint32_t)idx, loc, data[idx].tag, token});
+        continue;
       }
-      token->idle();
-      break;
     }
     token->idle();
   }
@@ -217,18 +218,22 @@ void PatriciaTrieRep::Get(const LookupKey &k, void *callback_args,
 
   std::make_heap(heap.begin(), heap.end(), heap_comp);
   while (heap.size() > 0 && do_callback(&heap.front())) {
-    auto item = heap.front();
+    auto& item = heap.front();
     if (item.idx == 0) {
+      item.token->idle();
       std::pop_heap(heap.begin(), heap.end(), heap_comp);
       heap.pop_back();
       continue;
     }
     --item.idx;
-    auto vector = (details::tag_vector_t *)(item.trie->mem_get(item.loc));
-    auto data = (details::tag_vector_t::data_t *)(item.trie->mem_get(
+    auto vector = (details::tag_vector_t *)(item.trie()->mem_get(item.loc));
+    auto data = (details::tag_vector_t::data_t *)(item.trie()->mem_get(
         vector->loc.load(std::memory_order_relaxed)));
     item.tag = data[item.idx].tag;
     terark::adjust_heap_top(heap.begin(), heap.size(), heap_comp);
+  }
+  for (auto& item : heap) {
+    item.token->idle();
   }
   heap.erase_all();
 }
