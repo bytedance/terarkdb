@@ -11,7 +11,7 @@ namespace rocksdb {
 struct LIRSHandle {
   void* value;
   void (*deleter)(const Slice&, void* value);
-  LRUHandle* next_hash;
+  LIRSHandle* next_hash;
   LIRSHandle* next;
   LIRSHandle* prev;
   size_t charge;
@@ -117,11 +117,13 @@ class ALIGN_AS(CACHE_LINE_SIZE) LIRSCacheShard : public CacheShard {
   bool Unref(LIRSHandle* h);
   void EvictFromLIRS(size_t charge, autovector<LIRSHandle*>* deleted);
   size_t capacity_;
+  size_t stack_capacity_;
+  size_t stack_elem_size_;
   size_t usage_;
   size_t lirs_usage_;
   double irr_ratio_;
-  LIRSHandle* stack_;
-  LIRSHandle* queue_;
+  LIRSHandle stack_;
+  LIRSHandle queue_;
   LIRSHandleTable table_;
   mutable port::Mutex mutex_;
 };
