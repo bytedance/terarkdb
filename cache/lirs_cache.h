@@ -12,27 +12,31 @@ struct LIRSHandle {
   void* value;
   void (*deleter)(const Slice&, void* value);
   LIRSHandle* next_hash;
-  LIRSHandle* next;
-  LIRSHandle* prev;
+  LIRSHandle* next_stack;
+  LIRSHandle* prev_stack;
+  LIRSHandle* next_queue;
+  LIRSHandle* prev_queue;
   size_t charge;
   size_t key_length;
   uint32_t refs;
   uint32_t hash;  // Hash of key(); used for fast sharding and comparisons
 
-  enum State { kLIR = 0, kRHIR, kNotRHIR, kPinDown, kInvalid } state;
+  enum State { kLIR = 0, kHIR, kNHIR, kInvalid } state;
 
   char key_data[1];  // Beginning of key
 
   Slice key() const { return Slice(key_data, key_length); }
 
   bool LIR() { return state == kLIR; }
-  bool RHIR() { return state == kRHIR; }
-  bool IsPinDown() { return state == kPinDown; }
-  bool InCache() { return state == kLIR || state == kRHIR || state == kPinDown; }
-  bool NotRHIR() { return state == kNotRHIR; }
+  bool HIR() { return state == kHIR; }
+  bool InCache() { return state == kLIR || state == kHIR || state == kNHIR; }
+  bool NHIR() { return state == kNHIR; }
   bool Valid() { return state != kInvalid; }
 
-  void SetState(State s) { state = s; }
+  void SetLIR() { state = kLIR; }
+  void SetHIR() { state = kHIR; }
+  void SetNHIR() { state = kNHIR; }
+  void SetInvalid() { state = kInvalid; }
 
   void Free() {
     assert((refs == 1 && InCache()) || (refs == 0 && !InCache()));
@@ -75,15 +79,14 @@ class LIRSHandleTable {
 
   // The table consists of an array of buckets where each bucket is
   // a linked list of cache entries that hash into the bucket.
-  LIRSStack* stack_list_;
-  LIRSQueue* queue_list_;
+  LIRSHandle** list_;
   uint32_t length_;
   uint32_t elems_;
 };
 
 class ALIGN_AS(CACHE_LINE_SIZE) LIRSCacheShard : public CacheShard {
  public:
-  LIRSCacheShard(size_t capacity, bool strict_capacity_limit, double irr_ratio);
+  LIRSCacheShard(size_t capacity, bool strict_capacity_limit, double irr_ratio = 0.9);
   virtual ~LIRSCacheShard();
 
   virtual void SetCapacity(size_t capacity) override;
@@ -112,19 +115,27 @@ class ALIGN_AS(CACHE_LINE_SIZE) LIRSCacheShard : public CacheShard {
   virtual std::string GetPrintableOptions() const override;
 
  private:
+  void PushToQueue(LIRSHandle* h);
+  void RemoveFromQueue(LIRSHandle* h);
+  void AdjustToQueueTail(LIRSHandle* h);
+  void ShiftQueueHead();
+  void PushToStack(LIRSHandle* h);
+  void RemoveFromStack(LIRSHandle* h);
+  void AdjustToStackTop(LIRSHandle* h);
+  void AdjustStackBottom();
+  void StackPruning();
   void LIRS_Remove(LIRSHandle* h);
   void LIRS_Insert(LIRSHandle* h);
   bool Unref(LIRSHandle* h);
   void EvictFromLIRS(size_t charge, autovector<LIRSHandle*>* deleted);
   size_t capacity_;
   size_t stack_capacity_;
-  size_t stack_elem_size_;
   size_t usage_;
-  size_t lirs_usage_;
+  size_t stack_usage_;
   double irr_ratio_;
-  LIRSHandle stack_;
-  LIRSHandle queue_;
+  LIRSHandle cache_;
   LIRSHandleTable table_;
+  bool strict_capacity_limit_;
   mutable port::Mutex mutex_;
 };
 

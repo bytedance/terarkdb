@@ -87,16 +87,100 @@ void LIRSHandleTable::Resize() {
 
 LIRSCacheShard::LIRSCacheShard(size_t capacity, bool strict_capacity_limit,
                                double irr_ratio)
-    : capacity_(0),
+    : capacity_(capacity),
       strict_capacity_limit_(strict_capacity_limit),
       irr_ratio_(irr_ratio),
-      usage_(0) {
+      usage_(0),
+      stack_usage_(0) {
+  cache_.next_stack = cache_.prev_stack = cache_.next_queue =
+      cache_.prev_queue = &cache_;
   SetCapacity(capacity);
 }
 
 LIRSCacheShard::~LIRSCacheShard() {}
 
-bool bool LIRSCacheShard::Unref(LIRSHandle* h) {
+void LIRSCacheShard::PushToQueue(LIRSHandle* h) {
+  cache_.next_queue->prev_queue = h;
+  h->next_queue = cache_.next_queue;
+  cache_.next_queue = h;
+  h->prev_queue = &cache_;
+}
+
+void LIRSCacheShard::RemoveFromQueue(LIRSHandle* h) {
+  h->next_queue->prev_queue = h->prev_queue;
+  h->prev_queue->next_queue = h->next_queue;
+  h->next_queue = nullptr;
+  h->prev_queue = nullptr;
+}
+
+void LIRSCacheShard::AdjustToQueueTail(LIRSHandle* h) {
+  h->next_queue->prev_queue = h->prev_queue;
+  h->prev_queue->next_queue = h->next_queue;
+  cache_.next_queue->prev_queue = h;
+  h->next_queue = cache_.next_queue;
+  cache_.next_queue = h;
+  h->prev_queue = &cache_;
+}
+
+void LIRSCacheShard::ShiftQueueHead() {
+  if (cache_.prev_queue == &cache_) {
+    return;
+  }
+  auto head = cache_.prev_queue;
+  RemoveFromQueue(head);
+  if (head->next_stack != nullptr) {
+    head->SetNHIR();
+  } else {
+    LIRS_Remove(head);
+  }
+}
+
+void LIRSCacheShard::PushToStack(LIRSHandle* h) {
+  cache_.next_stack->prev_stack = h;
+  h->next_stack = cache_.next_stack;
+  cache_.next_stack = h;
+  h->prev_stack = &cache_;
+}
+
+void LIRSCacheShard::RemoveFromStack(LIRSHandle* h) {
+  h->next_stack->prev_stack = h->prev_stack;
+  h->prev_stack->next_stack = h->next_stack;
+  h->next_stack = nullptr;
+  h->prev_stack = nullptr;
+}
+
+void LIRSCacheShard::AdjustToStackTop(LIRSHandle* h) {
+  h->next_stack->prev_stack = h->prev_stack;
+  h->prev_stack->next_stack = h->next_stack;
+  cache_.next_stack->prev_stack = h;
+  h->next_stack = cache_.next_stack;
+  cache_.next_stack = h;
+  h->prev_stack = &cache_;
+}
+
+void LIRSCacheShard::AdjustStackBottom() {
+  if (cache_.prev_stack == &cache_) {
+    return;
+  }
+  auto bottom = cache_.prev_stack;
+  if (bottom->LIR()) {
+    bottom->SetHIR();
+    if (bottom->next_queue != nullptr) {
+      RemoveFromQueue(bottom);
+    }
+    PushToQueue(bottom);
+  }
+}
+
+void LIRSCacheShard::StackPruning() {
+  while (cache_.prev_stack != &cache_ && !cache_.prev_stack->LIR()) {
+    auto bottom = cache_.prev_stack;
+    RemoveFromStack(bottom);
+    PushToQueue(bottom);
+  }
+}
+
+bool LIRSCacheShard::Unref(LIRSHandle* h) {
   assert(h->refs > 0);
   h->refs--;
   return h->refs == 0;
@@ -106,14 +190,11 @@ void LIRSCacheShard::EraseUnRefEntries() {
   autovector<LIRSHandle*> last_reference_list;
   {
     MutexLock l(&mutex_);
-    while (head_.next_s != &LIRS_) {
-      LIRSHandle* old = LIRS_.next;
-      assert(old->InCache());
-      assert(old->refs ==
-             1);  // LIRS list contains elements which may be evicted
+    while (cache_.prev_queue != &cache_) {
+      LIRSHandle* old = cache_.prev_queue;
       LIRS_Remove(old);
       table_.Remove(old->key(), old->hash);
-      old->SetInCache(false);
+      old->SetInvalid();
       Unref(old);
       usage_ -= old->charge;
       last_reference_list.push_back(old);
@@ -137,59 +218,53 @@ void LIRSCacheShard::ApplyToAllCacheEntries(void (*callback)(void*, size_t),
   }
 }
 
-void MoveToQueueTail(LIRSHandle* h){
-  h->next->prev = h->prev;
-  h->prev->next = h->next;
-  queue_.next->prev = h;
-  h->next = queue_.next;
-  h->prev = &queue_;
-  queue_.next = h;
-  h->SetState(kRHIR);
-}
-
-void MoveToStackTop(LIRSHandle* h){
-  h->next->prev = h->prev;
-  h->prev->next = h->next;
-  stack_.next->prev = h;
-  h->next = stack_.next;
-  h->prev = &stack_;
-  stack_.next = h;
-  h->SetState(kLIR);
-}
-
-void CopyToStackTop(LIRSHandle* h){
-  h->next->prev = h->prev;
-  h->prev->next = h->next;
-  stack_.next->prev = h;
-  h->next = stack_.next;
-  h->prev = &stack_;
-  stack_.next = h;
-  h->SetState(kLIR);
-}
-
-void StackPruning() {
-  while(stack_.prev != &stack_ && !stack_.prev->LIR()) {
-    MoveToQueueTail(stack_.prev);
+void LIRSCacheShard::LIRS_Remove(LIRSHandle* e) {
+  if (e->next_queue != nullptr) {
+    e->next_queue->prev_queue = e->prev_queue;
+    e->prev_queue->next_queue = e->next_queue;
+    e->next_queue = e->prev_queue = nullptr;
   }
+  if (e->next_stack != nullptr) {
+    e->next_stack->prev_stack = e->prev_stack;
+    e->prev_stack->next_stack = e->next_stack;
+    e->next_stack = e->prev_stack = nullptr;
+  }
+  usage_ -= e->charge;
+  if (e->LIR()) {
+    stack_usage_ -= e->charge;
+  }
+}
+
+void LIRSCacheShard::LIRS_Insert(LIRSHandle* e) {
+  if (stack_usage_ + e->charge <= stack_capacity_) {
+    PushToStack(e);
+    e->SetLIR();
+    stack_usage_ += e->charge;
+  } else {
+    PushToQueue(e);
+    e->SetHIR();
+  }
+  usage_ += e->charge;
 }
 
 void LIRSCacheShard::EvictFromLIRS(size_t charge,
                                    autovector<LIRSHandle*>* deleted) {
-  while (usage_ - stack_usage_ + charge > capacity_ - stack_capacity_ && queue_.next != &queue_) {
-    LIRSHandle* old = queue_.next;
-    assert(old->InCache());
+  while (usage_ - stack_usage_ + charge > capacity_ - stack_capacity_ &&
+         cache_.prev_queue != &cache_) {
+    LIRSHandle* old = cache_.prev_queue;
     assert(old->refs == 1);
     LIRS_Remove(old);
     table_.Remove(old->key(), old->hash);
-    old->SetState(kInvalid);
+    old->SetInvalid();
     Unref(old);
     usage_ -= old->charge;
     deleted->push_back(old);
   }
-  while (stack_usage_ + charge > capacity_ && stack_.next != &stack_) {
-    LIRSHandle* old = stack_.next;
-    assert(old->InCache());
-    MoveToQueue(old);
+  while (stack_usage_ + charge > stack_capacity_ &&
+         cache_.prev_stack != &cache_) {
+    LIRSHandle* old = cache_.prev_stack;
+    PushToQueue(old);
+    stack_usage_ -= old->charge;
   }
 }
 
@@ -201,24 +276,39 @@ void LIRSCacheShard::SetCapacity(size_t capacity) {
 
 Cache::Handle* LIRSCacheShard::Lookup(const Slice& key, uint32_t hash) {
   MutexLock l(&mutex_);
-  LIRSHandle* e = table_.Lookup(key, hash);
-  if (e != nullptr) {
-    assert(e->InCache());
-    if (e->refs == 1) {
-      LIRS_Remove(e);
+  LIRSHandle* h = table_.Lookup(key, hash);
+  if (h != nullptr) {
+    if (h->refs == 1) {
+      LIRS_Remove(h);
     }
-    e->refs++;
-    if (e->LIR()) {
-      bool need_pruning = e->next == &stack_;
-      MoveToStackTop(e);
-      if (need_pruning) {
-        StackPruning();
+    h->refs++;
+    if (h->LIR()) {
+      AdjustToStackTop(h);
+    } else if (h->HIR()) {
+      if (h->next_stack != nullptr) {
+        h->SetLIR();
+        AdjustToStackTop(h);
+        RemoveFromQueue(h);
+        AdjustStackBottom();
+      } else {
+        PushToStack(h);
+        AdjustToQueueTail(h);
       }
-    } else if (e->HIR()) {
-      CopyToStackTop(e);
+    } else {
+      ShiftQueueHead();
+      if (h->next_stack != nullptr) {
+        h->SetLIR();
+        AdjustToStackTop(h);
+        AdjustStackBottom();
+      } else {
+        h->SetHIR();
+        PushToStack(h);
+        PushToQueue(h);
+      }
     }
   }
-  return reinterpret_cast<Cache::Handle*>(e);
+  StackPruning();
+  return reinterpret_cast<Cache::Handle*>(h);
 }
 
 bool LIRSCacheShard::Ref(Cache::Handle* h) {
@@ -247,17 +337,12 @@ bool LIRSCacheShard::Release(Cache::Handle* handle, bool force_erase) {
       // The item is still in cache, and nobody else holds a reference to it
       if (usage_ > capacity_ || force_erase) {
         // the cache is full
-        // The LIRS list must be empty since the cache is full
-        assert(!(usage_ > capacity_) || LIRS_.next == &LIRS_);
         // take this opportunity and remove the item
         table_.Remove(e->key(), e->hash);
-        e->SetInCache(false);
+        e->SetInvalid();
         Unref(e);
         usage_ -= e->charge;
         last_reference = true;
-      } else {
-        // put the item on the list to be potentially freed
-        LIRS_Insert(e);
       }
     }
   }
@@ -268,8 +353,6 @@ bool LIRSCacheShard::Release(Cache::Handle* handle, bool force_erase) {
   }
   return last_reference;
 }
-
-
 
 Status LIRSCacheShard::Insert(const Slice& key, uint32_t hash, void* value,
                               size_t charge,
@@ -284,17 +367,16 @@ Status LIRSCacheShard::Insert(const Slice& key, uint32_t hash, void* value,
   e->deleter = deleter;
   e->charge = charge;
   e->key_length = key.size();
-  e->flags = 0;
   e->hash = hash;
   e->refs = (handle == nullptr ? 1 : 2);
-  e->next = e->prev = nullptr;
-  e->SetState(kLIR);
+  e->next_stack = e->prev_stack = e->next_queue = e->prev_queue = nullptr;
   memcpy(e->key_data, key.data(), key.size());
 
+  autovector<LIRSHandle*> last_reference_list;
   {
     MutexLock l(&mutex_);
-    EvictFromLIRS(charge);
-    if (stack_usage_ + charge > stack_capacity_) {
+    EvictFromLIRS(charge, &last_reference_list);
+    if (usage_ + charge > capacity_) {
       delete[] reinterpret_cast<char*>(e);
       *handle = nullptr;
       s = Status::Incomplete("Insert failed due to LIRS cache being full.");
@@ -302,7 +384,7 @@ Status LIRSCacheShard::Insert(const Slice& key, uint32_t hash, void* value,
       LIRSHandle* old = table_.Insert(e);
       usage_ += e->charge;
       if (old != nullptr) {
-        old->SetState(kInvalid);
+        old->SetInvalid();
         if (Unref(old)) {
           usage_ -= old->charge;
           LIRS_Remove(old);
@@ -315,6 +397,10 @@ Status LIRSCacheShard::Insert(const Slice& key, uint32_t hash, void* value,
       }
       s = Status::OK();
     }
+  }
+
+  for (auto entry : last_reference_list) {
+    entry->Free();
   }
 
   return s;
@@ -334,7 +420,7 @@ void LIRSCacheShard::Erase(const Slice& key, uint32_t hash) {
       if (last_reference && e->InCache()) {
         LIRS_Remove(e);
       }
-      e->SetState(kInvalid);
+      e->SetInvalid();
     }
   }
 
@@ -368,15 +454,16 @@ std::string LIRSCacheShard::GetPrintableOptions() const {
 
 LIRSCache::LIRSCache(
     size_t capacity, int num_shard_bits, bool strict_capacity_limit,
-    double irr_ratio,
-    std::shared_ptr<MemoryAllocator> memory_allocator = nullptr) {
+    double irr_ratio,std::shared_ptr<MemoryAllocator> memory_allocator)
+    : ShardedCache(capacity, num_shard_bits, strict_capacity_limit,
+                   std::move(memory_allocator)) {
   num_shards_ = 1 << num_shard_bits;
   shards_ = reinterpret_cast<LIRSCacheShard*>(
       port::cacheline_aligned_alloc(sizeof(LIRSCacheShard) * num_shards_));
   size_t size_per_shard = (capacity + (num_shards_ - 1)) / num_shards_;
   for (int i = 0; i < num_shards_; i++) {
     new (&shards_[i])
-        LIRSCacheShard(size_per_shard, strict_capacity_limit, irr_ratio_);
+        LIRSCacheShard(size_per_shard, strict_capacity_limit, irr_ratio);
   }
 }
 
