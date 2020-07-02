@@ -29,6 +29,8 @@ size_t f_delete = 100;
 int n_graphcnt = 0;
 std::string outfname;
 
+using namespace rocksdb;
+
 /*-----------------------------------{ Main }---------------------------------*/
 int main(int argc, char** argv) {
 
@@ -36,6 +38,7 @@ int main(int argc, char** argv) {
     std::mt19937_64 gen(42);
 
     rocksdb::Status s;
+    rocksdb::DB* db;
 /*-------------------------------{ Metrics Name }-----------------------------*/
     //rocksdb::OperationTimerReporter::InitNamespace("terarkdb.iterdebug");
 
@@ -71,13 +74,16 @@ int main(int argc, char** argv) {
     options.max_file_opening_threads = 64;
     options.memtable_factory.reset(new rocksdb::SkipListFactory());
     options.enable_lazy_compaction = false;
-    options.table_factory.reset(rocksdb::NewBlockBasedTableFactory());
+    std::shared_ptr<Cache> cache = NewLIRSCache(1ull << 30, 4, false, 0.9);
+    BlockBasedTableOptions table_options;
+    table_options.block_cache = cache;
+    options.table_factory.reset(rocksdb::NewBlockBasedTableFactory(table_options));
     options.create_if_missing = true;
     options.blob_size = size_t(-1);
     options.create_missing_column_families = true;
     options.write_buffer_size = file_size_base;
     options.target_file_size_base = file_size_base;
-    //options.blob_gc_ratio = 0.1;
+    options.blob_gc_ratio = 0.1;
     options.db_write_buffer_size = 1UL << 30;
     options.max_total_wal_size = 1UL << 30;
 
@@ -99,7 +105,7 @@ int main(int argc, char** argv) {
     tzto.indexTempLevel = 0;
     tzto.offsetArrayBlockUnits = 128;
     tzto.sampleRatio = 0.03;
-    //tzto.indexType = "Mixed_XL_256_32_FL";
+    tzto.indexType = "Mixed_XL_256_32_FL";
     tzto.softZipWorkingMemLimit = 32ull << 30;
     tzto.hardZipWorkingMemLimit = 64ull << 30;
     tzto.smallTaskMemory = 1200 << 20; // 1.2G
@@ -113,8 +119,31 @@ int main(int argc, char** argv) {
     tzto.disableCompressDict = false;
     tzto.optimizeCpuL3Cache = true;
     tzto.forceMetaInMemory = false;
-    //tzto.compressLevel = -1;
+    // tzto.compressLevel = -1;
+/*---------------------------{ Options file test }----------------------------*/
 
+    // rocksdb::DBOptions db_options, last_db_options;
+    // std::vector<rocksdb::ColumnFamilyDescriptor> cf_descriptors, last_cf_descriptors;
+    // s = rocksdb::LoadOptionsFromFile("./option_file.ini", rocksdb::Env::Default(),
+    //                                 &db_options, &cf_descriptors);
+    // assert(s.ok());
+    // s = rocksdb::DB::Open(db_options, "./db", cf_descriptors, &v_cfh, &db);
+    // assert(s.ok());
+    // for(auto& cfh : v_cfh) db->DestroyColumnFamilyHandle(cfh);
+    // s = db->Close();
+    // v_cfh.clear();
+    // delete db;
+    // assert(s.ok());
+    // s = rocksdb::LoadLatestOptions("./db", rocksdb::Env::Default(), &last_db_options, &last_cf_descriptors);
+    // assert(s.ok());
+    // s = rocksdb::DB::Open(last_db_options, "./db2", last_cf_descriptors, &v_cfh, &db);
+    // assert(s.ok());
+    // for(auto& cfh : v_cfh) db->DestroyColumnFamilyHandle(cfh);
+    // s = db->Close();
+    // v_cfh.clear();
+    // delete db;
+    // assert(s.ok());
+    // return 0;
 /*---------------------{ Default Rocksdb Column Family }----------------------*/
     options.compaction_style = rocksdb::kCompactionStyleLevel;
     options.write_buffer_size = size_t(file_size_base * 1.0);
@@ -170,7 +199,7 @@ int main(int argc, char** argv) {
     cro.exclusive_manual_compaction = false;
 
 /*--------------------------------{ Open DB }---------------------------------*/
-    rocksdb::DB* db;
+    
     rocksdb::DBOptions dbo = options;
     s = rocksdb::DB::Open(dbo, "./db", v_cfd, &v_cfh, &db);
 

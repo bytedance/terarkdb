@@ -28,6 +28,7 @@
 #include <rocksdb/slice.h>
 #include <rocksdb/slice_transform.h>
 #include <rocksdb/sst_file_writer.h>
+#include <rocksdb/utilities/options_util.h>
 #include <rocksdb/utilities/optimistic_transaction_db.h>
 #include <rocksdb/utilities/transaction_db.h>
 #include <rocksdb/utilities/write_batch_with_index.h>

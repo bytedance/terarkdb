@@ -452,6 +452,11 @@ std::string LIRSCacheShard::GetPrintableOptions() const {
   return std::string(buffer);
 }
 
+void LIRSCacheShard::SetStrictCapacityLimit(bool strict_capacity_limit) {
+  MutexLock l(&mutex_);
+  strict_capacity_limit_ = strict_capacity_limit;
+}
+
 LIRSCache::LIRSCache(
     size_t capacity, int num_shard_bits, bool strict_capacity_limit,
     double irr_ratio,std::shared_ptr<MemoryAllocator> memory_allocator)
@@ -495,6 +500,21 @@ size_t LIRSCache::GetCharge(Handle* handle) const {
 
 uint32_t LIRSCache::GetHash(Handle* handle) const {
   return reinterpret_cast<const LIRSHandle*>(handle)->hash;
+}
+
+void LIRSCache::DisownData() {
+// Do not drop data if compile with ASAN to suppress leak warning.
+#if defined(__clang__)
+#if !defined(__has_feature) || !__has_feature(address_sanitizer)
+  shards_ = nullptr;
+  num_shards_ = 0;
+#endif
+#else  // __clang__
+#ifndef __SANITIZE_ADDRESS__
+  shards_ = nullptr;
+  num_shards_ = 0;
+#endif  // !__SANITIZE_ADDRESS__
+#endif  // __clang__
 }
 
 std::shared_ptr<Cache> NewLIRSCache(const LIRSCacheOptions& cache_opts) {
