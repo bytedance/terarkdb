@@ -93,7 +93,7 @@ def run():
     db_size_bytes = int(GB_PER_THREAD) * 1024 * 1024 * 1024
     for vsize in VALUE_SIZES:
         records = db_size_bytes / vsize
-        bench(records, vsize, "fillrandom", 0)
+        bench(records, vsize, "multifilluniquerandom", 0)
         bench(records, vsize, "readrandomwriterandom", 1)
 
 
