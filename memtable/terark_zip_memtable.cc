@@ -256,8 +256,9 @@ MemTableRep::Iterator *PatriciaTrieRep::GetIterator(Arena *arena) {
 
 bool PatriciaTrieRep::InsertKeyValue(const Slice &internal_key,
                                      const Slice &value) {
+  TERARK_VERIFY(!immutable_);
   // immutable check
-  if (immutable_) return false;
+  // if (immutable_) return false;
   // prepare key
   terark::fstring key(internal_key.data(), internal_key.size() - 8);
   auto tag = ExtractInternalKeyFooter(internal_key);
