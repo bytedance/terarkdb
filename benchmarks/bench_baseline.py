@@ -35,6 +35,7 @@ def bench(records, value_size, bench_type, exist_db):
            --sync=0
 	   --db={db_dir}
 	   --wal_dir={db_dir}
+           --wal_bytes_per_sync=4194304
            --num={records}
            --threads={threads}
 	   --num_levels=6
@@ -57,7 +58,7 @@ def bench(records, value_size, bench_type, exist_db):
 	   --verify_checksum=1
 	   --delete_obsolete_files_period_micros=62914560
 	   --max_bytes_for_level_multiplier=8
-	   --statistics=0
+	   --statistics=1
 	   --stats_per_interval=1
 	   --stats_interval_seconds=60
 	   --histogram=1
@@ -99,7 +100,7 @@ def run():
 
 def gather_result():
     rst = {}
-    for bench_type in ['fillrandom', 'readrandomwriterandom']:
+    for bench_type in ['multifilluniquerandom', 'readrandomwriterandom']:
         rst[bench_type] = {}
         
         for vsize in VALUE_SIZES:
