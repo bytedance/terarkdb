@@ -124,14 +124,7 @@ class PatriciaTrieRep : public MemTableRep {
     return InsertKeyValue(internal_key, value);
   }
 
-  virtual void MarkReadOnly() override {
-#if 0 // set_readonly not released
-    for (size_t i = 0; i < trie_vec_size_; ++i) {
-      trie_vec_[i]->set_readonly();
-    }
-#endif
-    immutable_ = true;
-  }
+  virtual void MarkReadOnly() override;
 };
 
 // Heap iterator for traversing multi tries simultaneously.
