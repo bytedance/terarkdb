@@ -163,8 +163,8 @@ void PatriciaTrieRep::Get(const LookupKey &k, void *callback_args,
       auto vector = (details::tag_vector_t *)trie->mem_get(loc);
       auto data = (details::tag_vector_t::data_t *)trie->mem_get(
           vector->loc.load(std::memory_order_relaxed));
-      set_slice(buffer, GetLengthPrefixedSlice(
-                            (const char *)trie->mem_get(data[idx].loc)));
+      auto valptr = (const char *)trie->mem_get(data[idx].loc);
+      set_slice(buffer, GetLengthPrefixedSlice(valptr));
       return Status::OK();
     }
   };
@@ -178,7 +178,7 @@ void PatriciaTrieRep::Get(const LookupKey &k, void *callback_args,
   auto find_key = terark::fstring(internal_key.data(), internal_key.size() - 8);
   uint64_t tag = DecodeFixed64(find_key.end());
 
-  auto do_callback = [&](HeapItem *heap) {
+  auto do_callback = [&](HeapItem *heap) -> bool {
     build_key(find_key, heap->tag, buffer);
     return callback_func(
         callback_args, Slice(buffer->data(), buffer->size()),
@@ -318,7 +318,7 @@ bool PatriciaTrieRep::InsertKeyValue(const Slice &internal_key,
       memcpy(cow_data, data, sizeof(details::tag_vector_t::data_t) * size);
       cow_data[size].loc = (uint32_t)value_loc;
       cow_data[size].tag = tag;
-      vector->loc.store((uint32_t)cow_data_loc, std::memory_order_release);
+      vector->loc.store((uint32_t)cow_data_loc, std::memory_order_relaxed);
       vector->size.store(size + 1, std::memory_order_release);
       trie->mem_lazy_free(data_loc,
                           sizeof(details::tag_vector_t::data_t) * size);
