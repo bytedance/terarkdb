@@ -154,10 +154,6 @@ bool PatriciaTrieRep::Contains(const Slice &internal_key) const {
 void PatriciaTrieRep::Get(const LookupKey &k, void *callback_args,
                           bool (*callback_func)(void *arg, const Slice &key,
                                                 LazyBuffer &&value)) {
-  if (0 == trie_vec_size_) {
-    return;
-  }
-
   // assistant structures
   struct HeapItem {
     uint32_t idx;
@@ -239,7 +235,9 @@ void PatriciaTrieRep::Get(const LookupKey &k, void *callback_args,
   auto heap_comp = [](const HeapItem &l, const HeapItem &r) {
     return l.tag < r.tag;
   };
-
+  if (heap.empty()) {
+    return;
+  }
   std::make_heap(heap.begin(), heap.end(), heap_comp);
   while (do_callback(&heap.front())) {
     auto& item = heap.front();
