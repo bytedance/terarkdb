@@ -781,7 +781,7 @@ class MemoryRandomAccessFile : public RandomAccessFile {
                                  " larger than file length " + ToString(size_),
                              ToString(file_->FileDescriptor()));
     }
-    *result = Slice(data_.get() + offset, std::min(size_ - offset, n));
+    *result = Slice(data_.get() + offset, std::min(size_t(size_ - offset), n));
     return status_;
   }
 
@@ -813,7 +813,7 @@ class MemoryRandomAccessFile : public RandomAccessFile {
                                  " larger than file length " + ToString(size_),
                              ToString(file_->FileDescriptor()));
     }
-    *result = Slice((char*)buf, std::min(size_ - offset, len));
+    *result = Slice((char*)buf, std::min(size_t(size_ - offset), len));
     memcpy(buf, data_.get() + offset, result->size());
     return status_;
   }

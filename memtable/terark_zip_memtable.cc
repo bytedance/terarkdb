@@ -53,8 +53,8 @@ bool MemWriterToken::init_value(void *valptr, size_t valsize) noexcept {
     if (data_loc == MainPatricia::mem_alloc_fail) break;
     value_loc = trie->mem_alloc(value_size);
     if (value_loc == MainPatricia::mem_alloc_fail) break;
-    char *value_dst = EncodeVarint32((char *)trie->mem_get(value_loc),
-                                     (uint32_t)value_.size());
+    auto value_enc = (char *)trie->mem_get(value_loc);
+    auto value_dst = EncodeVarint32(value_enc, (uint32_t)value_.size());
     memcpy(value_dst, value_.data(), value_.size());
     auto *data = (details::tag_vector_t::data_t *)trie->mem_get(data_loc);
     data->loc = (uint32_t)value_loc;
@@ -85,9 +85,9 @@ PatriciaTrieRep::PatriciaTrieRep(details::ConcurrentType concurrent_type,
   handle_duplicate_ = handle_duplicate;
   write_buffer_size_ = write_buffer_size;
   if (concurrent_type == details::ConcurrentType::Native)
-    concurrent_level_ = terark::Patricia::ConcurrentLevel::MultiWriteMultiRead;
+    concurrent_level_ = terark::Patricia::MultiWriteMultiRead;
   else
-    concurrent_level_ = terark::Patricia::ConcurrentLevel::OneWriteMultiRead;
+    concurrent_level_ = terark::Patricia::OneWriteMultiRead;
   trie_vec_[0] =
       new MainPatricia(sizeof(uint32_t), write_buffer_size_, concurrent_level_);
   trie_vec_size_ = 1;
