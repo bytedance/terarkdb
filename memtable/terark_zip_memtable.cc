@@ -1,5 +1,11 @@
 #include "terark_zip_memtable.h"
 
+#if defined(_MSC_VER)
+   //#include <windows.h>
+#else
+   #include <sys/mman.h>
+#endif
+
 using terark::MainPatricia;
 
 namespace {
@@ -96,7 +102,16 @@ PatriciaTrieRep::PatriciaTrieRep(details::ConcurrentType concurrent_type,
 
 PatriciaTrieRep::~PatriciaTrieRep() {
   for (size_t i = 0; i < trie_vec_size_; ++i) {
-    delete trie_vec_[i];
+    auto trie = trie_vec_[i];
+    void* base = trie->mem_get(0);
+    size_t size = terark::align_up(trie->mem_size(), 4096);
+    if (mprotect(base, size, PROT_READ|PROT_WRITE) < 0) {
+      fprintf(stderr,
+              "%s:%d: %s: FATAL: mprotect(%p, %zd, READ|WRITE) = %s\n",
+              __FILE__, __LINE__, BOOST_CURRENT_FUNCTION,
+              base, size, strerror(errno));
+    }
+    delete trie;
   }
 }
 
@@ -115,6 +130,16 @@ void PatriciaTrieRep::MarkReadOnly() {
       snprintf(fname, sizeof(fname)-1,
         "cspp-memtab-%06d-%03zd.mmap", curr_seq, i);
       trie_vec_[i]->save_mmap(fname);
+    }
+  }
+  for (size_t i = 0; i < trie_vec_size_; ++i) {
+    auto trie = trie_vec_[i];
+    void* base = trie->mem_get(0);
+    size_t size = terark::align_up(trie->mem_size(), 4096);
+    if (mprotect(base, size, PROT_READ) < 0) {
+      fprintf(stderr, "%s:%d: %s: FATAL: mprotect(%p, %zd, READ) = %s\n",
+              __FILE__, __LINE__, BOOST_CURRENT_FUNCTION,
+              base, size, strerror(errno));
     }
   }
   immutable_ = true;
