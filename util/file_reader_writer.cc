@@ -20,6 +20,8 @@
 #include "util/string_util.h"
 #include "util/sync_point.h"
 
+#undef min
+
 namespace rocksdb {
 
 #ifndef NDEBUG

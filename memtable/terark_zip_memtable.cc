@@ -415,21 +415,21 @@ template <bool heap_mode>
 typename PatriciaRepIterator<heap_mode>::HeapItem::VectorData
 PatriciaRepIterator<heap_mode>::HeapItem::GetVector() {
   auto trie = static_cast<terark::MainPatricia *>(handle->trie());
-  auto vector =
-      (details::tag_vector_t *)trie->mem_get(*(uint32_t *)handle->value());
+  auto vectorloc = aligned_load<uint32_t>(handle->value());
+  auto vector = (details::tag_vector_t *)trie->mem_get(vectorloc);
   auto size = vector->size.load(std::memory_order_relaxed) & SIZE_MASK;
-  auto data = (typename details::tag_vector_t::data_t *)trie->mem_get(
-      vector->loc.load(std::memory_order_relaxed));
+  auto dataloc = vector->loc.load(std::memory_order_relaxed);
+  auto data = (details::tag_vector_t::data_t *)trie->mem_get(dataloc);
   return {size, data};
 }
 
 template <bool heap_mode>
 uint32_t PatriciaRepIterator<heap_mode>::HeapItem::GetValue() const {
   auto trie = static_cast<terark::MainPatricia *>(handle->trie());
-  auto vector =
-      (details::tag_vector_t *)trie->mem_get(*(uint32_t *)handle->value());
-  auto data = (details::tag_vector_t::data_t *)trie->mem_get(
-      vector->loc.load(std::memory_order_relaxed));
+  auto vectorloc = aligned_load<uint32_t>(handle->value());
+  auto vector = (details::tag_vector_t *)trie->mem_get(vectorloc);
+  auto dataloc = vector->loc.load(std::memory_order_relaxed);
+  auto data = (details::tag_vector_t::data_t *)trie->mem_get(dataloc);
   return data[index].loc;
 }
 
