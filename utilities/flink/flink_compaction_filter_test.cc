@@ -76,7 +76,7 @@ void SetTimestamp(int64_t timestamp, size_t offset = 0, char* value = data) {
 }
 
 CompactionFilter::Decision decide(size_t data_size = sizeof(data)) {
-  return filter->FilterV2(0, key, value_type, LazyBuffer(Slice(data, data_size)), &new_list,
+  return filter->FilterV2(0, key, value_type, nullptr, LazyBuffer(Slice(data, data_size)), &new_list,
                           &stub);
 }
 

@@ -42,6 +42,7 @@ class NoMergingMergeOp : public MergeOperator {
 class StallingFilter : public CompactionFilter {
  public:
   Decision FilterV2(int /*level*/, const Slice& key, ValueType /*type*/,
+                    const Slice& /*existing_value_meta*/,
                     const LazyBuffer& /*existing_value*/,
                     LazyBuffer* /*new_value*/,
                     std::string* /*skip_until*/) const override {
@@ -79,6 +80,7 @@ class StallingFilter : public CompactionFilter {
 class FilterAllKeysCompactionFilter : public CompactionFilter {
  public:
   Decision FilterV2(int /*level*/, const Slice& /*key*/, ValueType /*type*/,
+                    const Slice& /*existing_value_meta*/,
                     const LazyBuffer& /*existing_value*/,
                     LazyBuffer* /*new_value*/,
                     std::string* /*skip_until*/) const override {
@@ -378,6 +380,7 @@ TEST_P(CompactionIteratorTest, RangeDeletionWithSnapshots) {
 TEST_P(CompactionIteratorTest, CompactionFilterSkipUntil) {
   class Filter : public CompactionFilter {
     virtual Decision FilterV2(int /*level*/, const Slice& key, ValueType t,
+                              const Slice& /*existing_value_meta*/,
                               const LazyBuffer& existing_value,
                               LazyBuffer* /*new_value*/,
                               std::string* skip_until) const override {
@@ -567,6 +570,7 @@ TEST_P(CompactionIteratorTest, ShuttingDownInMerge) {
 TEST_P(CompactionIteratorTest, SingleMergeOperand) {
   class Filter : public CompactionFilter {
     virtual Decision FilterV2(int /*level*/, const Slice& key, ValueType t,
+                              const Slice& /*existing_value_meta*/,
                               const LazyBuffer& existing_value,
                               LazyBuffer* /*new_value*/,
                               std::string* /*skip_until*/) const override {
