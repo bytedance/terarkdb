@@ -8,3 +8,15 @@
 [submodule "third-party/jemalloc"]
 	path = third-party/jemalloc
 	url = git@code.byted.org:storage/jemalloc.git
+[submodule "third-party/zstd"]
+	path = third-party/zstd
+	url = git@code.byted.org:storage/zstd.git
+[submodule "third-party/snappy"]
+	path = third-party/snappy
+	url = git@code.byted.org:inf/snappy.git
+[submodule "third-party/zlib"]
+	path = third-party/zlib
+	url = git@code.byted.org:inf/zlib.git
+[submodule "third-party/lz4"]
+	path = third-party/lz4
+	url = git@code.byted.org:storage/lz4.git

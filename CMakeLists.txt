@@ -32,7 +32,7 @@
 # 3. cmake ..
 # 4. make -j
 
-cmake_minimum_required(VERSION 2.8.12)
+cmake_minimum_required(VERSION 3.8)
 project(rocksdb)
 enable_language(CXX)
 enable_language(C)
@@ -49,14 +49,16 @@ endif()
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake/modules/")
 
 option(WITH_JEMALLOC "build with JeMalloc" OFF)
-option(WITH_SNAPPY "build with SNAPPY" OFF)
-option(WITH_LZ4 "build with lz4" OFF)
+option(WITH_SNAPPY "build with SNAPPY" ON)
+option(WITH_LZ4 "build with lz4" ON)
 option(WITH_ZLIB "build with zlib" OFF)
-option(WITH_ZSTD "build with zstd" OFF)
+option(WITH_ZSTD "build with zstd" ON)
 option(WITH_WINDOWS_UTF8_FILENAMES "use UTF8 as characterset for opening files, regardles of the system code page" OFF)
 if (WITH_WINDOWS_UTF8_FILENAMES)
   add_definitions(-DROCKSDB_WINDOWS_UTF8_FILENAMES)
 endif()
+
+ADD_SUBDIRECTORY(third-party)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/terark-core/boost-include)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/terark-core/src)
@@ -94,17 +96,21 @@ else()
   endif()
 
   if(WITH_SNAPPY)
-    find_package(snappy REQUIRED)
+    # find_package(snappy REQUIRED)
     add_definitions(-DSNAPPY)
-    include_directories(${SNAPPY_INCLUDE_DIR})
-    list(APPEND THIRDPARTY_LIBS ${SNAPPY_LIBRARIES})
+    include_directories(${CMAKE_CURRENT_BINARY_DIR}/third-party/snappy
+                        ${CMAKE_CURRENT_SOURCE_DIR}/third-party/snappy)
+    list(APPEND THIRDPARTY_LIBS ${CMAKE_CURRENT_BINARY_DIR}/third-party/snappy/libsnappy.a)
   endif()
 
   if(WITH_ZLIB)
-    find_package(zlib REQUIRED)
+    # find_package(zlib REQUIRED)
     add_definitions(-DZLIB)
-    include_directories(${ZLIB_INCLUDE_DIR})
-    list(APPEND THIRDPARTY_LIBS ${ZLIB_LIBRARIES})
+    # include_directories(${ZLIB_INCLUDE_DIR})
+    # list(APPEND THIRDPARTY_LIBS ${ZLIB_LIBRARIES})
+    include_directories(${CMAKE_CURRENT_BINARY_DIR}/third-party/zlib
+                        ${CMAKE_CURRENT_SOURCE_DIR}/third-party/zlib)
+    list(APPEND THIRDPARTY_LIBS ${CMAKE_CURRENT_BINARY_DIR}/third-party/zlib/libz.a)
   endif()
 
   option(WITH_BZ2 "build with bzip2" OFF)
@@ -116,17 +122,20 @@ else()
   endif()
 
   if(WITH_LZ4)
-    find_package(lz4 REQUIRED)
+    # find_package(lz4 REQUIRED)
     add_definitions(-DLZ4)
-    include_directories(${LZ4_INCLUDE_DIR})
-    list(APPEND THIRDPARTY_LIBS ${LZ4_LIBRARIES})
+    include_directories(${CMAKE_CURRENT_BINARY_DIR}/third-party/lz4/include)
+    list(APPEND THIRDPARTY_LIBS ${CMAKE_CURRENT_BINARY_DIR}/third-party/lz4/lib/liblz4.a)
   endif()
 
   if(WITH_ZSTD)
-    find_package(zstd REQUIRED)
+    # find_package(zstd REQUIRED)
     add_definitions(-DZSTD)
-    include_directories(${ZSTD_INCLUDE_DIR})
-    list(APPEND THIRDPARTY_LIBS ${ZSTD_LIBRARIES})
+    include_directories(${CMAKE_CURRENT_BINARY_DIR}/third-party/zstd/include
+                        ${CMAKE_CURRENT_SOURCE_DIR}/third-party/zstd)
+    # MESSAGE(${CMAKE_CURRENT_BINARY_DIR}/third-party/zstd/include)
+    # terark-core already linked with zstd, so we ignore it here (for now)
+    # list(APPEND THIRDPARTY_LIBS ${CMAKE_CURRENT_BINARY_DIR}/third-party/zstd/libzstd.a)
   endif()
 endif()
 
@@ -272,6 +281,9 @@ if(MSVC)
 endif()
 
 option(WITH_ASAN "build with ASAN" OFF)
+IF(CMAKE_BUILD_TYPE STREQUAL "Debug")
+  SET(WITH_ASAN ON)
+ENDIF()
 if(WITH_ASAN)
   set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=address")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address")
@@ -515,6 +527,11 @@ SET_TARGET_PROPERTIES(terark-zbs PROPERTIES
 
 LINK_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/terark-core/output/lib_static)
 SET(TERARK_DEPEND_LIBS libterark-fsa-${TERARK_SUFFIX}.a libterark-idx-${TERARK_SUFFIX}.a libterark-zbs-${TERARK_SUFFIX}.a libterark-core-${TERARK_SUFFIX}.a gomp aio rt)
+
+IF(CMAKE_BUILD_TYPE STREQUAL "Debug")
+  LIST(APPEND TERARK_DEPEND_LIBS asan)
+ENDIF()
+
 # End --- Build terark-core seperately and install their libraries
 
 add_subdirectory(third-party/gtest-1.7.0/fused-src/gtest)
