@@ -132,10 +132,11 @@ else()
     # find_package(zstd REQUIRED)
     add_definitions(-DZSTD)
     include_directories(${CMAKE_CURRENT_BINARY_DIR}/third-party/zstd/include
-                        ${CMAKE_CURRENT_SOURCE_DIR}/third-party/zstd)
-    # MESSAGE(${CMAKE_CURRENT_BINARY_DIR}/third-party/zstd/include)
+                        ${CMAKE_CURRENT_SOURCE_DIR}/third-party/zstd/lib/dictBuilder
+                        ${CMAKE_CURRENT_SOURCE_DIR}/third-party/zstd/lib)
+
     # terark-core already linked with zstd, so we ignore it here (for now)
-    # list(APPEND THIRDPARTY_LIBS ${CMAKE_CURRENT_BINARY_DIR}/third-party/zstd/libzstd.a)
+    # list(APPEND THIRDPARTY_LIBS ${CMAKE_CURRENT_BINARY_DIR}/third-party/zstd/lib/libzstd.a)
   endif()
 endif()
 

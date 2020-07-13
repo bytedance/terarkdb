@@ -1,0 +1,14 @@
+before_script:
+  - apt-get update -qq && apt-get install -y -qq libaio
+
+configure:
+  script:
+    - mkdir build && cd build && cmake ../ -DCMAKE_BUILD_TYPE=Debug
+
+build:
+  script:
+    - cd build && make -j $(nproc)
+
+tests:
+  script:
+    - bundle exec rubocop
