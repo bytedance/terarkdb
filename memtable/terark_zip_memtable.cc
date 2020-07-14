@@ -41,6 +41,7 @@ static const uint32_t SIZE_MASK = ~LOCK_FLAG;
 bool MemWriterToken::init_value(void *valptr, size_t valsize) noexcept {
   assert(valsize == sizeof(uint32_t));
   assert(size_t(valptr) % sizeof(uint32_t) == 0); // must be aligned
+  (void)valsize;
   size_t data_loc = MainPatricia::mem_alloc_fail;
   size_t value_loc = MainPatricia::mem_alloc_fail;
   size_t vector_loc = MainPatricia::mem_alloc_fail;

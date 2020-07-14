@@ -21,15 +21,25 @@
 namespace rocksdb {
 
 template <typename T>
-struct AsyncTask {
+class AsyncTask {
+ private:
   boost::fibers::promise<T> promise;
   boost::fibers::future<T> future;
   std::function<T()> func;
-  void operator()() { promise.set_value(std::move(func())); }
 
-  AsyncTask(std::function<T()>&& f) : func(std::move(f)) {
-    future = promise.get_future();
+ public:
+  bool valid() const { return future.valid(); }
+  void wait() { future.wait(); }
+  T get() { return future.get(); }
+
+  void operator()() {
+    // DO NOT call `promise.set_value(std::move(func()));` directly
+    auto safe_promise = std::move(promise);
+    safe_promise.set_value(std::move(func()));
   }
+
+  AsyncTask(std::function<T()>&& f)
+      : promise(), future(promise.get_future()), func(std::move(f)) {}
 };
 
 }  // namespace rocksdb
