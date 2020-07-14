@@ -297,7 +297,7 @@ bool PatriciaTrieRep::InsertKeyValue(const Slice &internal_key,
     token->reset_tag_value(tag, value);
     token->acquire(trie);
     TERARK_SCOPE_EXIT(token->idle());
-    uint32_t tmp_loc;
+    uint32_t tmp_loc = UINT32_MAX;
     if (!token->insert(key, &tmp_loc)) {
       size_t vector_loc = *(uint32_t *)token->value();
       auto *vector = (details::tag_vector_t *)trie->mem_get(vector_loc);
@@ -306,9 +306,9 @@ bool PatriciaTrieRep::InsertKeyValue(const Slice &internal_key,
       if (value_loc == MainPatricia::mem_alloc_fail) {
         return details::InsertResult::Fail;
       }
-      memcpy(EncodeVarint32((char *)trie->mem_get(value_loc),
-                            (uint32_t)value.size()),
-             value.data(), value.size());
+      auto valptr = (char *)trie->mem_get(value_loc);
+      valptr = EncodeVarint32(valptr, (uint32_t)value.size());
+      memcpy(valptr, value.data(), value.size());
       uint32_t size;
       // row lock: infinite spin on LOCK_FLAG
       do {
@@ -352,6 +352,8 @@ bool PatriciaTrieRep::InsertKeyValue(const Slice &internal_key,
                           sizeof(details::tag_vector_t::data_t) * size);
       return details::InsertResult::Success;
     } else if (token->value() != nullptr) {
+      const auto token_value_loc = aligned_load<uint32_t>(token->value());
+      TERARK_VERIFY(token_value_loc == tmp_loc);
       return details::InsertResult::Success;
     } else
       return details::InsertResult::Fail;
