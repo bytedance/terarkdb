@@ -1,14 +1,23 @@
-before_script:
-  - apt-get update -qq && apt-get install -y -qq libaio
+stages:
+  - config
+  - build
+  - test
 
-configure:
+config:
+  stage: config
   script:
+    - apt-get update && apt-get install -y libaio
     - mkdir build && cd build && cmake ../ -DCMAKE_BUILD_TYPE=Debug
+  tags: [terarkdb]
 
 build:
+  stage: build
   script:
     - cd build && make -j $(nproc)
 
-tests:
+test:
+  stage: test
   script:
-    - bundle exec rubocop
+    - cd build
+
+

@@ -496,7 +496,7 @@ ExternalProject_Add(terark-core-project
     CONFIGURE_COMMAND ""
     BUILD_IN_SOURCE 1
     BUILD_COMMAND cd ${CMAKE_CURRENT_SOURCE_DIR}/terark-core && ./build.sh
-    INSTALL_COMMAND prefix=${CMAKE_CURRENT_SOURCE_DIR}/terark-core)
+    INSTALL_COMMAND ls -l ${CMAKE_CURRENT_SOURCE_DIR}/terark-core/output)
 
 # terark-core
 ADD_LIBRARY(terark-core STATIC IMPORTED GLOBAL)
@@ -527,7 +527,7 @@ SET_TARGET_PROPERTIES(terark-zbs PROPERTIES
     INCLUDE_DIRECTORIES ${CMAKE_CURRENT_SOURCE_DIR}/output/include)
 
 LINK_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/terark-core/output/lib_static)
-SET(TERARK_DEPEND_LIBS libterark-fsa-${TERARK_SUFFIX}.a libterark-idx-${TERARK_SUFFIX}.a libterark-zbs-${TERARK_SUFFIX}.a libterark-core-${TERARK_SUFFIX}.a gomp aio rt)
+SET(TERARK_DEPEND_LIBS terark-fsa terark-idx terark-zbs terark-core gomp aio rt)
 
 IF(CMAKE_BUILD_TYPE STREQUAL "Debug")
   LIST(APPEND TERARK_DEPEND_LIBS asan)
@@ -803,21 +803,22 @@ if(WIN32)
     port/win/win_logger.cc
     port/win/win_thread.cc)
 
-if(WITH_XPRESS)
-  list(APPEND SOURCES
-    port/win/xpress_win.cc)
-endif()
+    if(WITH_XPRESS)
+      list(APPEND SOURCES
+        port/win/xpress_win.cc)
+    endif()
 
-if(WITH_JEMALLOC)
-  list(APPEND SOURCES
-    port/win/win_jemalloc.cc)
-endif()
+    if(WITH_JEMALLOC)
+      list(APPEND SOURCES
+        port/win/win_jemalloc.cc)
+    endif()
 
-else()
-  list(APPEND SOURCES
-    port/port_posix.cc
-    env/env_posix.cc
-    env/io_posix.cc)
+  else()
+    list(APPEND SOURCES
+      port/port_posix.cc
+      env/env_posix.cc
+      env/io_posix.cc
+      env/env_skvds.cc)
 endif()
 
 set(ROCKSDB_STATIC_LIB rocksdb${ARTIFACT_SUFFIX})
@@ -1015,6 +1016,7 @@ if(WITH_TESTS)
         db/write_controller_test.cc
         env/env_basic_test.cc
         env/env_test.cc
+        env/env_skvds_test.cc
         env/mock_env_test.cc
         memtable/inlineskiplist_test.cc
         memtable/skiplist_test.cc
