@@ -540,8 +540,8 @@ add_subdirectory(third-party/gtest-1.7.0/fused-src/gtest)
 # Main library source code
 set(SOURCES
         cache/clock_cache.cc
+        cache/lirs_cache.cc
         cache/lru_cache.cc
-	cache/lirs_cache.cc
         cache/sharded_cache.cc
         db/builder.cc
         db/c.cc

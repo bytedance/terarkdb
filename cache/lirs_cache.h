@@ -86,7 +86,8 @@ class LIRSHandleTable {
 
 class ALIGN_AS(CACHE_LINE_SIZE) LIRSCacheShard : public CacheShard {
  public:
-  LIRSCacheShard(size_t capacity, bool strict_capacity_limit, double irr_ratio = 0.9);
+  LIRSCacheShard(size_t capacity, bool strict_capacity_limit,
+                 double irr_ratio = 0.9);
   virtual ~LIRSCacheShard();
 
   virtual void SetCapacity(size_t capacity) override;
@@ -128,6 +129,7 @@ class ALIGN_AS(CACHE_LINE_SIZE) LIRSCacheShard : public CacheShard {
   void LIRS_Insert(LIRSHandle* h);
   bool Unref(LIRSHandle* h);
   void EvictFromLIRS(size_t charge, autovector<LIRSHandle*>* deleted);
+
   size_t capacity_;
   size_t stack_capacity_;
   size_t usage_;

@@ -88,10 +88,10 @@ void LIRSHandleTable::Resize() {
 LIRSCacheShard::LIRSCacheShard(size_t capacity, bool strict_capacity_limit,
                                double irr_ratio)
     : capacity_(capacity),
-      strict_capacity_limit_(strict_capacity_limit),
-      irr_ratio_(irr_ratio),
       usage_(0),
-      stack_usage_(0) {
+      stack_usage_(0),
+      irr_ratio_(irr_ratio),
+      strict_capacity_limit_(strict_capacity_limit) {
   cache_.next_stack = cache_.prev_stack = cache_.next_queue =
       cache_.prev_queue = &cache_;
   SetCapacity(capacity);
@@ -292,6 +292,7 @@ Cache::Handle* LIRSCacheShard::Lookup(const Slice& key, uint32_t hash) {
         AdjustStackBottom();
       } else {
         PushToStack(h);
+	PushToQueue(h);
         AdjustToQueueTail(h);
       }
     } else {
@@ -358,7 +359,7 @@ Status LIRSCacheShard::Insert(const Slice& key, uint32_t hash, void* value,
                               size_t charge,
                               void (*deleter)(const Slice& key, void* value),
                               Cache::Handle** handle,
-                              Cache::Priority priority) {
+                              Cache::Priority /*priority*/) {
   LIRSHandle* e = reinterpret_cast<LIRSHandle*>(
       new char[sizeof(LIRSHandle) - 1 + key.size()]);
   Status s;
@@ -457,9 +458,9 @@ void LIRSCacheShard::SetStrictCapacityLimit(bool strict_capacity_limit) {
   strict_capacity_limit_ = strict_capacity_limit;
 }
 
-LIRSCache::LIRSCache(
-    size_t capacity, int num_shard_bits, bool strict_capacity_limit,
-    double irr_ratio,std::shared_ptr<MemoryAllocator> memory_allocator)
+LIRSCache::LIRSCache(size_t capacity, int num_shard_bits,
+                     bool strict_capacity_limit, double irr_ratio,
+                     std::shared_ptr<MemoryAllocator> memory_allocator)
     : ShardedCache(capacity, num_shard_bits, strict_capacity_limit,
                    std::move(memory_allocator)) {
   num_shards_ = 1 << num_shard_bits;
