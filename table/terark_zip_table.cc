@@ -45,7 +45,7 @@
 
 static std::once_flag PrintVersionHashInfoFlag;
 
-#if defined(_MSC_VER) && !defined(BUILD_BY_CMAKE)
+#if !defined(_MSC_VER) && !defined(BUILD_BY_CMAKE)
 const char* git_version_hash_info_core();
 const char* git_version_hash_info_fsa();
 const char* git_version_hash_info_zbs();
