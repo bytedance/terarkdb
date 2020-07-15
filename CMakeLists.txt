@@ -48,6 +48,7 @@ endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake/modules/")
 
+option(BUILD_SHARED_LIB "build shared lib" OFF)
 option(WITH_JEMALLOC "build with JeMalloc" OFF)
 option(WITH_SNAPPY "build with SNAPPY" ON)
 option(WITH_LZ4 "build with lz4" ON)
@@ -191,7 +192,7 @@ else()
   if(MINGW)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-format")
   endif()
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14 -DBUILD_BY_CMAKE")
   if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-omit-frame-pointer")
     include(CheckCXXCompilerFlag)
@@ -485,49 +486,16 @@ find_package(Threads REQUIRED)
 
 # Start --- Build terark-core seperately and install their libraries
 # TODO change terark-core into CMake project
-SET(TERARK_SUFFIX "d")
-IF(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
-  SET(TERARK_SUFFIX "r")
+SET(BUILD_SUFFIX "d")
+IF(NOT ${CMAKE_BUILD_TYPE} STREQUAL "Debug")
+  MESSAGE("build with release")
+  SET(BUILD_SUFFIX "r")
+ELSE()
+  MESSAGE("build with debug")
 ENDIF()
 
-INCLUDE(ExternalProject)
-ExternalProject_Add(terark-core-project
-    SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/terark-core
-    CONFIGURE_COMMAND ""
-    BUILD_IN_SOURCE 1
-    BUILD_COMMAND cd ${CMAKE_CURRENT_SOURCE_DIR}/terark-core && ./build.sh
-    INSTALL_COMMAND ls -l ${CMAKE_CURRENT_SOURCE_DIR}/terark-core/output)
-
-# terark-core
-ADD_LIBRARY(terark-core STATIC IMPORTED GLOBAL)
-ADD_DEPENDENCIES(terark-core terark-core-project)
-SET_TARGET_PROPERTIES(terark-core PROPERTIES
-    IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/terark-core/output/lib_static/libterark-core-${TERARK_SUFFIX}.a
-    INCLUDE_DIRECTORIES ${CMAKE_CURRENT_SOURCE_DIR}/output/include)
-
-# terark-fsa
-ADD_LIBRARY(terark-fsa STATIC IMPORTED GLOBAL)
-ADD_DEPENDENCIES(terark-fsa terark-core-project)
-SET_TARGET_PROPERTIES(terark-fsa PROPERTIES
-    IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/terark-core/output/lib_static/libterark-fsa-${TERARK_SUFFIX}.a
-    INCLUDE_DIRECTORIES ${CMAKE_CURRENT_SOURCE_DIR}/output/include)
-
-# terark-idx
-ADD_LIBRARY(terark-idx STATIC IMPORTED GLOBAL)
-ADD_DEPENDENCIES(terark-idx terark-core-project)
-SET_TARGET_PROPERTIES(terark-idx PROPERTIES
-    IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/terark-core/output/lib_static/libterark-idx-${TERARK_SUFFIX}.a
-    INCLUDE_DIRECTORIES ${CMAKE_CURRENT_SOURCE_DIR}/output/include)
-
-# terark-zbs
-ADD_LIBRARY(terark-zbs STATIC IMPORTED GLOBAL)
-ADD_DEPENDENCIES(terark-zbs terark-core-project)
-SET_TARGET_PROPERTIES(terark-zbs PROPERTIES
-    IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/terark-core/output/lib_static/libterark-zbs-${TERARK_SUFFIX}.a
-    INCLUDE_DIRECTORIES ${CMAKE_CURRENT_SOURCE_DIR}/output/include)
-
-LINK_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/terark-core/output/lib_static)
-SET(TERARK_DEPEND_LIBS terark-fsa terark-idx terark-zbs terark-core gomp aio rt)
+ADD_SUBDIRECTORY(terark-core)
+SET(TERARK_DEPEND_LIBS terark-core-${BUILD_SUFFIX} gomp)
 
 IF(CMAKE_BUILD_TYPE STREQUAL "Debug")
   LIST(APPEND TERARK_DEPEND_LIBS asan)
@@ -835,27 +803,31 @@ if(WIN32)
   set(SYSTEM_LIBS ${SYSTEM_LIBS} Shlwapi.lib Rpcrt4.lib)
   set(LIBS ${ROCKSDB_STATIC_LIB} ${THIRDPARTY_LIBS} ${SYSTEM_LIBS})
 else()
-  set(SYSTEM_LIBS ${CMAKE_THREAD_LIBS_INIT})
-  set(LIBS ${ROCKSDB_SHARED_LIB} ${THIRDPARTY_LIBS} ${SYSTEM_LIBS})
-  # shared rocksdb lib
-  add_library(${ROCKSDB_SHARED_LIB} SHARED ${SOURCES})
-  target_link_libraries(${ROCKSDB_SHARED_LIB} ${THIRDPARTY_LIBS} ${SYSTEM_LIBS} ${TERARK_DEPEND_LIBS})
-  set_target_properties(${ROCKSDB_SHARED_LIB} PROPERTIES
-                        LINKER_LANGUAGE CXX
-                        VERSION ${ROCKSDB_VERSION}
-                        SOVERSION ${ROCKSDB_VERSION_MAJOR}
-                        CXX_STANDARD 14
-                        OUTPUT_NAME "rocksdb")
+  if(BUILD_SHARED_LIB)
+    set(SYSTEM_LIBS ${CMAKE_THREAD_LIBS_INIT})
+    set(LIBS ${ROCKSDB_SHARED_LIB} ${THIRDPARTY_LIBS} ${SYSTEM_LIBS})
+    add_library(${ROCKSDB_SHARED_LIB} SHARED ${SOURCES})
+    target_link_libraries(${ROCKSDB_SHARED_LIB} ${THIRDPARTY_LIBS} ${SYSTEM_LIBS} ${TERARK_DEPEND_LIBS})
+    target_include_directories(${ROCKSDB_SHARED_LIB} PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+    set_target_properties(${ROCKSDB_SHARED_LIB} PROPERTIES
+                          LINKER_LANGUAGE CXX
+                          VERSION ${ROCKSDB_VERSION}
+                          SOVERSION ${ROCKSDB_VERSION_MAJOR}
+                          CXX_STANDARD 14
+                          OUTPUT_NAME "rocksdb")
+  endif()
 endif()
 
 # static rocksdb lib
 add_library(${ROCKSDB_STATIC_LIB} STATIC ${SOURCES})
 target_link_libraries(${ROCKSDB_STATIC_LIB} ${THIRDPARTY_LIBS} ${SYSTEM_LIBS} ${TERARK_DEPEND_LIBS})
+target_include_directories(${ROCKSDB_STATIC_LIB} PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
 
 if(WIN32)
   # imported rocksdb lib
   add_library(${ROCKSDB_IMPORT_LIB} SHARED ${SOURCES})
   target_link_libraries(${ROCKSDB_IMPORT_LIB} ${THIRDPARTY_LIBS} ${SYSTEM_LIBS} ${TERARK_DEPEND_LIBS})
+  target_include_directories(${ROCKSDB_IMPORT_LIB} PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
   set_target_properties(${ROCKSDB_IMPORT_LIB} PROPERTIES
     COMPILE_DEFINITIONS "ROCKSDB_DLL;ROCKSDB_LIBRARY_EXPORTS")
   if(MSVC)
@@ -912,14 +884,16 @@ if(NOT WIN32 OR ROCKSDB_INSTALL_ON_WINDOWS)
     INCLUDES DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
   )
 
-  install(
-    TARGETS ${ROCKSDB_SHARED_LIB}
-    EXPORT RocksDBTargets
-    COMPONENT runtime
-    RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
-    LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
-    INCLUDES DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
-  )
+  if(BUILD_SHARED_LIB)
+    install(
+      TARGETS ${ROCKSDB_SHARED_LIB}
+      EXPORT RocksDBTargets
+      COMPONENT runtime
+      RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
+      LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+      INCLUDES DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
+    )
+  endif()
 
   install(
     EXPORT RocksDBTargets
@@ -1109,7 +1083,7 @@ if(WITH_TESTS)
     get_filename_component(exename ${sourcefile} NAME_WE)
     add_executable(${exename}${ARTIFACT_SUFFIX} ${sourcefile}
       $<TARGET_OBJECTS:testharness>)
-    target_link_libraries(${exename}${ARTIFACT_SUFFIX} gtest ${LIBS})
+    target_link_libraries(${exename}${ARTIFACT_SUFFIX} gtest ${ROCKSDB_STATIC_LIB})
   endforeach(sourcefile ${BENCHMARKS})
 
   # For test util library that is build only in DEBUG mode
@@ -1148,7 +1122,7 @@ if(WITH_TESTS)
         EXCLUDE_FROM_DEFAULT_BUILD_RELWITHDEBINFO 1
         OUTPUT_NAME ${exename}${ARTIFACT_SUFFIX}
         )
-      target_link_libraries(${CMAKE_PROJECT_NAME}_${exename}${ARTIFACT_SUFFIX} testutillib${ARTIFACT_SUFFIX} gtest ${LIBS})
+      target_link_libraries(${CMAKE_PROJECT_NAME}_${exename}${ARTIFACT_SUFFIX} testutillib${ARTIFACT_SUFFIX} gtest ${ROCKSDB_STATIC_LIB})
       if(NOT "${exename}" MATCHES "db_sanity_test")
         add_test(NAME ${exename} COMMAND ${exename}${ARTIFACT_SUFFIX})
         add_dependencies(check ${CMAKE_PROJECT_NAME}_${exename}${ARTIFACT_SUFFIX})
@@ -1168,7 +1142,7 @@ if(WITH_TESTS)
         EXCLUDE_FROM_DEFAULT_BUILD_MINRELEASE 1
         EXCLUDE_FROM_DEFAULT_BUILD_RELWITHDEBINFO 1
         )
-      target_link_libraries(${exename}${ARTIFACT_SUFFIX} ${ROCKSDB_IMPORT_LIB} testutillib${ARTIFACT_SUFFIX})
+      target_link_libraries(${exename}${ARTIFACT_SUFFIX} ${ROCKSDB_STATIC_LIB} testutillib${ARTIFACT_SUFFIX})
       add_test(NAME ${exename} COMMAND ${exename}${ARTIFACT_SUFFIX})
       add_dependencies(check ${exename}${ARTIFACT_SUFFIX})
   endforeach(sourcefile ${C_TEST_EXES})
