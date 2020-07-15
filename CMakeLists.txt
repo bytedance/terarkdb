@@ -817,8 +817,7 @@ if(WIN32)
     list(APPEND SOURCES
       port/port_posix.cc
       env/env_posix.cc
-      env/io_posix.cc
-      env/env_skvds.cc)
+      env/io_posix.cc)
 endif()
 
 set(ROCKSDB_STATIC_LIB rocksdb${ARTIFACT_SUFFIX})
@@ -1016,7 +1015,6 @@ if(WITH_TESTS)
         db/write_controller_test.cc
         env/env_basic_test.cc
         env/env_test.cc
-        env/env_skvds_test.cc
         env/mock_env_test.cc
         memtable/inlineskiplist_test.cc
         memtable/skiplist_test.cc
