@@ -706,7 +706,8 @@ Status CompactionJob::Run() {
     }
   }
   if (iopt->value_meta_extractor_factory != nullptr) {
-    context.value_meta_extractor_factory = iopt->value_meta_extractor_factory->Name();
+    context.value_meta_extractor_factory =
+        iopt->value_meta_extractor_factory->Name();
     s = iopt->value_meta_extractor_factory->Serialize(
         &context.value_meta_extractor_factory_options.data);
     if (s.IsNotSupported()) {
@@ -935,16 +936,17 @@ Status CompactionJob::RunSelf() {
 
   if (compact_->compaction->compaction_type() != kMapCompaction) {
     // map compact don't need multithreads
-    std::vector<ProcessArg> vec_process_arg(num_threads);
+    std::vector<ProcessArg> vec_process_arg(num_threads - 1);
     for (size_t i = 0; i < num_threads - 1; i++) {
       vec_process_arg[i].job = this;
       vec_process_arg[i].task_id = int(i);
+      vec_process_arg[i].future = vec_process_arg[i].finished.get_future();
       env_->Schedule(&CompactionJob::CallProcessCompaction, &vec_process_arg[i],
                      rocksdb::Env::LOW, this, nullptr);
     }
     ProcessCompaction(&compact_->sub_compact_states.back());
-    for (size_t i = 0; i < num_threads - 1; i++) {
-      vec_process_arg[i].finished.get_future().wait();
+    for (auto& arg : vec_process_arg) {
+      arg.future.wait();
     }
   } else {
     assert(num_threads == 1);
@@ -2290,7 +2292,8 @@ void CompactionJob::CallProcessCompaction(void* arg) {
   ProcessArg* args = (ProcessArg*)arg;
   args->job->ProcessCompaction(
       &args->job->compact_->sub_compact_states[args->task_id]);
-  args->finished.set_value(true);
+  auto finished = std::move(args->finished);
+  finished.set_value(true);
 }
 
 Status CompactionJob::InstallCompactionResults(
