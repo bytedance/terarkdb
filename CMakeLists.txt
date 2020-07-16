@@ -491,6 +491,7 @@ IF(NOT ${CMAKE_BUILD_TYPE} STREQUAL "Debug")
   MESSAGE("build with release")
   SET(BUILD_SUFFIX "r")
 ELSE()
+  SET(CMAKE_BUILD_TYPE "Debug")
   MESSAGE("build with debug")
 ENDIF()
 
