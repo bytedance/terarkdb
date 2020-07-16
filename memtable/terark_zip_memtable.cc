@@ -242,7 +242,7 @@ void PatriciaTrieRep::Get(const LookupKey &k, void *callback_args,
     auto token = trie->tls_reader_token();
     token->acquire(trie);
     if (trie_vec_[i]->lookup(find_key, token)) {
-      uint32_t loc = aligned_load<uint32_t>(token->value());
+      uint32_t loc = token->value_of<uint32_t>();
       auto vector = (details::tag_vector_t *)trie->mem_get(loc);
       size_t size = vector->size.load(std::memory_order_relaxed) & SIZE_MASK;
       auto data = (details::tag_vector_t::data_t *)trie->mem_get(
@@ -324,7 +324,7 @@ bool PatriciaTrieRep::InsertKeyValue(const Slice &internal_key,
     TERARK_SCOPE_EXIT(token->idle());
     uint32_t tmp_loc = UINT32_MAX;
     if (!token->insert(key, &tmp_loc)) {
-      size_t vector_loc = *(uint32_t *)token->value();
+      size_t vector_loc = token->value_of<uint32_t>();
       auto *vector = (details::tag_vector_t *)trie->mem_get(vector_loc);
       size_t value_size = VarintLength(value.size()) + value.size();
       size_t value_loc = trie->mem_alloc(value_size);
@@ -359,8 +359,8 @@ bool PatriciaTrieRep::InsertKeyValue(const Slice &internal_key,
         vector->size.store(size + 1, std::memory_order_release);
         return details::InsertResult::Success;
       }
-      size_t cow_data_loc =
-          trie->mem_alloc(sizeof(details::tag_vector_t::data_t) * size * 2);
+      size_t old_data_cap = sizeof(details::tag_vector_t::data_t) * size;
+      size_t cow_data_loc = trie->mem_alloc(old_data_cap * 2);
       if (cow_data_loc == MainPatricia::mem_alloc_fail) {
         vector->size.store(size, std::memory_order_release);
         trie->mem_free(value_loc, value_size);
@@ -368,16 +368,15 @@ bool PatriciaTrieRep::InsertKeyValue(const Slice &internal_key,
       }
       auto *cow_data =
           (details::tag_vector_t::data_t *)trie->mem_get(cow_data_loc);
-      memcpy(cow_data, data, sizeof(details::tag_vector_t::data_t) * size);
+      memcpy(cow_data, data, old_data_cap);
       cow_data[size].loc = (uint32_t)value_loc;
       cow_data[size].tag = tag;
       vector->loc.store((uint32_t)cow_data_loc, std::memory_order_relaxed);
       vector->size.store(size + 1, std::memory_order_release);
-      trie->mem_lazy_free(data_loc,
-                          sizeof(details::tag_vector_t::data_t) * size);
+      trie->mem_lazy_free(data_loc, old_data_cap);
       return details::InsertResult::Success;
     } else if (token->value() != nullptr) {
-      const auto token_value_loc = aligned_load<uint32_t>(token->value());
+      const auto token_value_loc = token->value_of<uint32_t>();
       TERARK_VERIFY(token_value_loc == tmp_loc);
       return details::InsertResult::Success;
     } else
@@ -407,7 +406,7 @@ bool PatriciaTrieRep::InsertKeyValue(const Slice &internal_key,
       TERARK_SCOPE_EXIT(token->idle());
       if (trie->lookup(key, token)) {
         auto vector =
-            (details::tag_vector_t *)trie->mem_get(*(uint32_t *)token->value());
+            (details::tag_vector_t *)trie->mem_get(token->value_of<uint32_t>());
         size_t size = vector->size.load(std::memory_order_relaxed) & SIZE_MASK;
         auto data = (details::tag_vector_t::data_t *)trie->mem_get(
             vector->loc.load(std::memory_order_relaxed));
@@ -442,7 +441,7 @@ template <bool heap_mode>
 typename PatriciaRepIterator<heap_mode>::HeapItem::VectorData
 PatriciaRepIterator<heap_mode>::HeapItem::GetVector() {
   auto trie = static_cast<terark::MainPatricia *>(handle->trie());
-  auto vectorloc = aligned_load<uint32_t>(handle->value());
+  auto vectorloc = handle->value_of<uint32_t>();
   auto vector = (details::tag_vector_t *)trie->mem_get(vectorloc);
   auto size = vector->size.load(std::memory_order_relaxed) & SIZE_MASK;
   auto dataloc = vector->loc.load(std::memory_order_relaxed);
@@ -453,7 +452,7 @@ PatriciaRepIterator<heap_mode>::HeapItem::GetVector() {
 template <bool heap_mode>
 uint32_t PatriciaRepIterator<heap_mode>::HeapItem::GetValue() const {
   auto trie = static_cast<terark::MainPatricia *>(handle->trie());
-  auto vectorloc = aligned_load<uint32_t>(handle->value());
+  auto vectorloc = handle->value_of<uint32_t>();
   auto vector = (details::tag_vector_t *)trie->mem_get(vectorloc);
   auto dataloc = vector->loc.load(std::memory_order_relaxed);
   auto data = (details::tag_vector_t::data_t *)trie->mem_get(dataloc);
