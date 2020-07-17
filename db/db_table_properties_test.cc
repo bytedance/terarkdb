@@ -31,8 +31,8 @@ class TerarkPropertiesCollector : public TablePropertiesCollector {
   const char* Name() const override { return "terark"; }
 
   Status AddUserKey(const Slice& key, const Slice& value,
-                    EntryType type, SequenceNumber sequence,
-                    uint64_t file_size) override {
+                    EntryType type, SequenceNumber /*sequence*/,
+                    uint64_t /*file_size*/) override {
     if (type == kEntryPut) {
       size_ += key.size() + value.size();
     }
@@ -58,7 +58,7 @@ class TerarkPropertiesCollectorFactory : public TablePropertiesCollectorFactory 
   const char* Name() const override { return "terark"; }
 
   TablePropertiesCollector* CreateTablePropertiesCollector(
-      Context context) override {
+      Context /*context*/) override {
     return new TerarkPropertiesCollector;
   }
 };
@@ -146,7 +146,7 @@ TEST_F(DBTablePropertiesTest, GetPropertiesOfAllTablesTestKeyValueSep) {
 
   TablePropertiesCollection collection;
   Range range("0", "9");
-  auto handle = db->DefaultColumnFamily();
+  auto handle = db_->DefaultColumnFamily();
   s = db_->GetPropertiesOfTablesInRange(handle, &range, 1, &collection);
   ASSERT_TRUE(s.ok());
 

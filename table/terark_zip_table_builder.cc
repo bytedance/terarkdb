@@ -1083,8 +1083,8 @@ Status TerarkZipTableBuilder::WaitBuildIndex() {
   for (auto& kvs : prefixBuildInfos_) {
     assert(kvs);
     assert(kvs->indexWait);
-    assert(kvs->indexWait->future.valid());
-    auto s = kvs->indexWait->future.get();
+    assert(kvs->indexWait->valid());
+    auto s = kvs->indexWait->get();
     if (terark_unlikely(!s.ok() && result.ok())) {
       result = std::move(s);
     }
@@ -1098,8 +1098,8 @@ Status TerarkZipTableBuilder::WaitBuildStore() {
   for (auto& kvs : prefixBuildInfos_) {
     assert(kvs);
     if (kvs->storeWait) {
-      assert(kvs->storeWait->future.valid());
-      auto s = kvs->storeWait->future.get();
+      assert(kvs->storeWait->valid());
+      auto s = kvs->storeWait->get();
       if (terark_unlikely(!s.ok() && result.ok())) {
         result = std::move(s);
       }
@@ -1376,6 +1376,10 @@ Status TerarkZipTableBuilder::ZipValueToFinish() {
     }
     s = BuildStore(kvs, zbuilder.get(), BuildStoreSync);
     if (!s.ok()) {
+      if (dictWait) {
+        assert(dictWait->valid());
+        dictWait->wait();
+      }
       return s;
     }
     if (zbuilder) {
@@ -1386,8 +1390,8 @@ Status TerarkZipTableBuilder::ZipValueToFinish() {
     zbuilder->freeDict();
     t4 = g_pf.now();
     ioptions_.env->UnSchedule(&dictTag, rocksdb::Env::Priority::LOW);
-    assert(dictWait.get()->future.valid());
-    s = dictWait.get()->future.get();
+    assert(dictWait->valid());
+    s = dictWait->get();
     if (!s.ok()) {
       return s;
     }
@@ -1460,13 +1464,17 @@ Status TerarkZipTableBuilder::ZipValueToFinishMulti() {
     }
   }
   if (!s.ok()) {
+    if (dictWait) {
+      assert(dictWait->valid());
+      dictWait->wait();
+    }
     return s;
   }
   if (zbuilder) {
     zbuilder->freeDict();
     t4 = g_pf.now();
-    assert(dictWait.get()->future.valid());
-    s = dictWait.get()->future.get();
+    assert(dictWait->valid());
+    s = dictWait->get();
 
     if (!s.ok()) {
       return s;
@@ -2341,28 +2349,32 @@ Status TerarkZipTableBuilder::WriteMetaData(
 }
 
 void TerarkZipTableBuilder::Abandon() {
+  closed_ = true;
   ioptions_.env->UnSchedule(&indexTag, rocksdb::Env::Priority::LOW);
   ioptions_.env->UnSchedule(&storeTag, rocksdb::Env::Priority::LOW);
   ioptions_.env->UnSchedule(&dictTag, rocksdb::Env::Priority::LOW);
-  closed_ = true;
   for (auto& kvs : prefixBuildInfos_) {
     if (!kvs) {
       continue;
     }
-    if (kvs->indexWait->future.valid()) {
-      kvs->indexWait->future.get();
+    if (kvs->indexWait && kvs->indexWait->valid()) {
+      kvs->indexWait->wait();
     } else {
       for (auto& pair : kvs->status.fileVec) {
         pair->key.close();
       }
     }
-    if (kvs->storeWait && kvs->storeWait->future.valid()) {
-      kvs->storeWait->future.get();
+    if (kvs->storeWait && kvs->storeWait->valid()) {
+      kvs->storeWait->wait();
     }
   }
   prefixBuildInfos_.clear();
-  if (tmpSentryFile_.fp) tmpSentryFile_.complete_write();
-  if (tmpSampleFile_.fp) tmpSampleFile_.complete_write();
+  if (tmpSentryFile_.fp) {
+    tmpSentryFile_.complete_write();
+  }
+  if (tmpSampleFile_.fp) {
+    tmpSampleFile_.complete_write();
+  }
   tmpIndexFile_.Delete();
   tmpStoreFile_.Delete();
   tmpZipDictFile_.Delete();

@@ -1053,14 +1053,7 @@ Status CompactionJob::VerifyFiles() {
   }
   Status s = verify_table();
   for (auto& task : vec_task) {
-    task.get()->future.wait();
-  }
-  if (s.ok()) {
-    for (auto& task : vec_task) {
-      if (!(s = task.get()->future.get()).ok()) {
-        return s;
-      }
-    }
+    s.ok() ? s = task->get() : task->get();
   }
   return s;
 }

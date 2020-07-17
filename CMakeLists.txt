@@ -32,7 +32,7 @@
 # 3. cmake ..
 # 4. make -j
 
-cmake_minimum_required(VERSION 2.8.12)
+cmake_minimum_required(VERSION 3.8)
 project(rocksdb)
 enable_language(CXX)
 enable_language(C)
@@ -42,21 +42,27 @@ if(POLICY CMP0042)
   cmake_policy(SET CMP0042 NEW)
 endif()
 
+# Output full compile commands
+# SET(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+# SET(CMAKE_VERBOSE_MAKEFILE ON)
+
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake/modules/")
 
 option(WITH_JEMALLOC "build with JeMalloc" OFF)
-option(WITH_SNAPPY "build with SNAPPY" OFF)
-option(WITH_LZ4 "build with lz4" OFF)
+option(WITH_SNAPPY "build with SNAPPY" ON)
+option(WITH_LZ4 "build with lz4" ON)
 option(WITH_ZLIB "build with zlib" OFF)
-option(WITH_ZSTD "build with zstd" OFF)
+option(WITH_ZSTD "build with zstd" ON)
 option(WITH_WINDOWS_UTF8_FILENAMES "use UTF8 as characterset for opening files, regardles of the system code page" OFF)
 if (WITH_WINDOWS_UTF8_FILENAMES)
   add_definitions(-DROCKSDB_WINDOWS_UTF8_FILENAMES)
 endif()
 
-include_directories(${CMAKE_CURRENT_LIST_DIR}/../terark-core/boost-include)
-include_directories(${CMAKE_CURRENT_LIST_DIR}/../terark-core/src)
-include_directories(${CMAKE_CURRENT_LIST_DIR}/../terark-core/3rdparty/zstd)
+ADD_SUBDIRECTORY(third-party)
+
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/terark-core/boost-include)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/terark-core/src)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/terark-core/3rdparty/zstd)
 
 if(MSVC)
   # Defaults currently different for GFLAGS.
@@ -90,17 +96,21 @@ else()
   endif()
 
   if(WITH_SNAPPY)
-    find_package(snappy REQUIRED)
+    # find_package(snappy REQUIRED)
     add_definitions(-DSNAPPY)
-    include_directories(${SNAPPY_INCLUDE_DIR})
-    list(APPEND THIRDPARTY_LIBS ${SNAPPY_LIBRARIES})
+    include_directories(${CMAKE_CURRENT_BINARY_DIR}/third-party/snappy
+                        ${CMAKE_CURRENT_SOURCE_DIR}/third-party/snappy)
+    list(APPEND THIRDPARTY_LIBS ${CMAKE_CURRENT_BINARY_DIR}/third-party/snappy/libsnappy.a)
   endif()
 
   if(WITH_ZLIB)
-    find_package(zlib REQUIRED)
+    # find_package(zlib REQUIRED)
     add_definitions(-DZLIB)
-    include_directories(${ZLIB_INCLUDE_DIR})
-    list(APPEND THIRDPARTY_LIBS ${ZLIB_LIBRARIES})
+    # include_directories(${ZLIB_INCLUDE_DIR})
+    # list(APPEND THIRDPARTY_LIBS ${ZLIB_LIBRARIES})
+    include_directories(${CMAKE_CURRENT_BINARY_DIR}/third-party/zlib
+                        ${CMAKE_CURRENT_SOURCE_DIR}/third-party/zlib)
+    list(APPEND THIRDPARTY_LIBS ${CMAKE_CURRENT_BINARY_DIR}/third-party/zlib/libz.a)
   endif()
 
   option(WITH_BZ2 "build with bzip2" OFF)
@@ -112,17 +122,21 @@ else()
   endif()
 
   if(WITH_LZ4)
-    find_package(lz4 REQUIRED)
+    # find_package(lz4 REQUIRED)
     add_definitions(-DLZ4)
-    include_directories(${LZ4_INCLUDE_DIR})
-    list(APPEND THIRDPARTY_LIBS ${LZ4_LIBRARIES})
+    include_directories(${CMAKE_CURRENT_BINARY_DIR}/third-party/lz4/include)
+    list(APPEND THIRDPARTY_LIBS ${CMAKE_CURRENT_BINARY_DIR}/third-party/lz4/lib/liblz4.a)
   endif()
 
   if(WITH_ZSTD)
-    find_package(zstd REQUIRED)
+    # find_package(zstd REQUIRED)
     add_definitions(-DZSTD)
-    include_directories(${ZSTD_INCLUDE_DIR})
-    list(APPEND THIRDPARTY_LIBS ${ZSTD_LIBRARIES})
+    include_directories(${CMAKE_CURRENT_BINARY_DIR}/third-party/zstd/include
+                        ${CMAKE_CURRENT_SOURCE_DIR}/third-party/zstd/lib/dictBuilder
+                        ${CMAKE_CURRENT_SOURCE_DIR}/third-party/zstd/lib)
+
+    # terark-core already linked with zstd, so we ignore it here (for now)
+    # list(APPEND THIRDPARTY_LIBS ${CMAKE_CURRENT_BINARY_DIR}/third-party/zstd/lib/libzstd.a)
   endif()
 endif()
 
@@ -173,11 +187,11 @@ if(MSVC)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /FC /d2Zi+ /W4 /wd4127 /wd4800 /wd4996 /wd4351 /wd4100 /wd4204 /wd4324")
 else()
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -W -Wextra -Wall")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wsign-compare -Wshadow -Wno-unused-parameter -Wno-unused-variable -Woverloaded-virtual -Wnon-virtual-dtor -Wno-missing-field-initializers -Wno-strict-aliasing")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wsign-compare -Wno-shadow -Wno-unused-parameter -Wno-unused-variable -Woverloaded-virtual -Wnon-virtual-dtor -Wno-missing-field-initializers -Wno-strict-aliasing")
   if(MINGW)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-format")
   endif()
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
   if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-omit-frame-pointer")
     include(CheckCXXCompilerFlag)
@@ -268,6 +282,9 @@ if(MSVC)
 endif()
 
 option(WITH_ASAN "build with ASAN" OFF)
+IF(CMAKE_BUILD_TYPE STREQUAL "Debug")
+  SET(WITH_ASAN ON)
+ENDIF()
 if(WITH_ASAN)
   set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=address")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address")
@@ -320,7 +337,8 @@ if(DISABLE_STALL_NOTIF)
   add_definitions(-DROCKSDB_DISABLE_STALL_NOTIFICATION)
 endif()
 
-
+# terark-core uses typeid() so we can't disable it.
+SET(USE_RTTI ON)
 if(DEFINED USE_RTTI)
   if(USE_RTTI)
     message(STATUS "Enabling RTTI")
@@ -464,13 +482,66 @@ include_directories(${PROJECT_SOURCE_DIR}/include)
 include_directories(SYSTEM ${PROJECT_SOURCE_DIR}/third-party/gtest-1.7.0/fused-src)
 find_package(Threads REQUIRED)
 
+
+# Start --- Build terark-core seperately and install their libraries
+# TODO change terark-core into CMake project
+SET(TERARK_SUFFIX "d")
+IF(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
+  SET(TERARK_SUFFIX "r")
+ENDIF()
+
+INCLUDE(ExternalProject)
+ExternalProject_Add(terark-core-project
+    SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/terark-core
+    CONFIGURE_COMMAND ""
+    BUILD_IN_SOURCE 1
+    BUILD_COMMAND cd ${CMAKE_CURRENT_SOURCE_DIR}/terark-core && ./build.sh
+    INSTALL_COMMAND ls -l ${CMAKE_CURRENT_SOURCE_DIR}/terark-core/output)
+
+# terark-core
+ADD_LIBRARY(terark-core STATIC IMPORTED GLOBAL)
+ADD_DEPENDENCIES(terark-core terark-core-project)
+SET_TARGET_PROPERTIES(terark-core PROPERTIES
+    IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/terark-core/output/lib_static/libterark-core-${TERARK_SUFFIX}.a
+    INCLUDE_DIRECTORIES ${CMAKE_CURRENT_SOURCE_DIR}/output/include)
+
+# terark-fsa
+ADD_LIBRARY(terark-fsa STATIC IMPORTED GLOBAL)
+ADD_DEPENDENCIES(terark-fsa terark-core-project)
+SET_TARGET_PROPERTIES(terark-fsa PROPERTIES
+    IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/terark-core/output/lib_static/libterark-fsa-${TERARK_SUFFIX}.a
+    INCLUDE_DIRECTORIES ${CMAKE_CURRENT_SOURCE_DIR}/output/include)
+
+# terark-idx
+ADD_LIBRARY(terark-idx STATIC IMPORTED GLOBAL)
+ADD_DEPENDENCIES(terark-idx terark-core-project)
+SET_TARGET_PROPERTIES(terark-idx PROPERTIES
+    IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/terark-core/output/lib_static/libterark-idx-${TERARK_SUFFIX}.a
+    INCLUDE_DIRECTORIES ${CMAKE_CURRENT_SOURCE_DIR}/output/include)
+
+# terark-zbs
+ADD_LIBRARY(terark-zbs STATIC IMPORTED GLOBAL)
+ADD_DEPENDENCIES(terark-zbs terark-core-project)
+SET_TARGET_PROPERTIES(terark-zbs PROPERTIES
+    IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/terark-core/output/lib_static/libterark-zbs-${TERARK_SUFFIX}.a
+    INCLUDE_DIRECTORIES ${CMAKE_CURRENT_SOURCE_DIR}/output/include)
+
+LINK_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/terark-core/output/lib_static)
+SET(TERARK_DEPEND_LIBS terark-fsa terark-idx terark-zbs terark-core gomp aio rt)
+
+IF(CMAKE_BUILD_TYPE STREQUAL "Debug")
+  LIST(APPEND TERARK_DEPEND_LIBS asan)
+ENDIF()
+
+# End --- Build terark-core seperately and install their libraries
+
 add_subdirectory(third-party/gtest-1.7.0/fused-src/gtest)
 
 # Main library source code
-
 set(SOURCES
         cache/clock_cache.cc
         cache/lru_cache.cc
+	cache/lirs_cache.cc
         cache/sharded_cache.cc
         db/builder.cc
         db/c.cc
@@ -653,6 +724,7 @@ set(SOURCES
         utilities/col_buf_decoder.cc
         utilities/col_buf_encoder.cc
         utilities/column_aware_encoding_util.cc
+        utilities/console/server.cc
         utilities/compaction_filters/remove_emptyvalue_compactionfilter.cc
         utilities/date_tiered/date_tiered_db_impl.cc
         utilities/debug.cc
@@ -684,6 +756,7 @@ set(SOURCES
         utilities/spatialdb/spatial_db.cc
         utilities/table_properties_collectors/compact_on_deletion_collector.cc
         utilities/trace/file_trace_reader_writer.cc
+        utilities/trace/bytedance_metrics_reporter.cc
         utilities/transactions/optimistic_transaction_db_impl.cc
         utilities/transactions/optimistic_transaction.cc
         utilities/transactions/pessimistic_transaction.cc
@@ -701,6 +774,13 @@ set(SOURCES
         utilities/write_batch_with_index/write_batch_with_index.cc
         utilities/write_batch_with_index/write_batch_with_index_internal.cc
         $<TARGET_OBJECTS:build_version>)
+
+# scan more sources
+file(GLOB CONSOLE_SOURCES utilities/console/*.cc)
+file(GLOB TEST_CONSOLE_SOURCES utilities/console/*_test.cc)
+# LIST(REMOVE_ITEM CONSOLE_SOURCES ${TEST_CONSOLE_SOURCES})
+LIST(APPEND SOURCES ${CONSOLE_SOURCES})
+
 
 if(HAVE_SSE42 AND NOT MSVC)
   set_source_files_properties(
@@ -723,21 +803,22 @@ if(WIN32)
     port/win/win_logger.cc
     port/win/win_thread.cc)
 
-if(WITH_XPRESS)
-  list(APPEND SOURCES
-    port/win/xpress_win.cc)
-endif()
+    if(WITH_XPRESS)
+      list(APPEND SOURCES
+        port/win/xpress_win.cc)
+    endif()
 
-if(WITH_JEMALLOC)
-  list(APPEND SOURCES
-    port/win/win_jemalloc.cc)
-endif()
+    if(WITH_JEMALLOC)
+      list(APPEND SOURCES
+        port/win/win_jemalloc.cc)
+    endif()
 
-else()
-  list(APPEND SOURCES
-    port/port_posix.cc
-    env/env_posix.cc
-    env/io_posix.cc)
+  else()
+    list(APPEND SOURCES
+      port/port_posix.cc
+      env/env_posix.cc
+      env/io_posix.cc
+      env/env_skvds.cc)
 endif()
 
 set(ROCKSDB_STATIC_LIB rocksdb${ARTIFACT_SUFFIX})
@@ -757,10 +838,9 @@ if(WIN32)
 else()
   set(SYSTEM_LIBS ${CMAKE_THREAD_LIBS_INIT})
   set(LIBS ${ROCKSDB_SHARED_LIB} ${THIRDPARTY_LIBS} ${SYSTEM_LIBS})
-
+  # shared rocksdb lib
   add_library(${ROCKSDB_SHARED_LIB} SHARED ${SOURCES})
-  target_link_libraries(${ROCKSDB_SHARED_LIB}
-    ${THIRDPARTY_LIBS} ${SYSTEM_LIBS})
+  target_link_libraries(${ROCKSDB_SHARED_LIB} ${THIRDPARTY_LIBS} ${SYSTEM_LIBS} ${TERARK_DEPEND_LIBS})
   set_target_properties(${ROCKSDB_SHARED_LIB} PROPERTIES
                         LINKER_LANGUAGE CXX
                         VERSION ${ROCKSDB_VERSION}
@@ -769,14 +849,14 @@ else()
                         OUTPUT_NAME "rocksdb")
 endif()
 
+# static rocksdb lib
 add_library(${ROCKSDB_STATIC_LIB} STATIC ${SOURCES})
-target_link_libraries(${ROCKSDB_STATIC_LIB}
-  ${THIRDPARTY_LIBS} ${SYSTEM_LIBS})
+target_link_libraries(${ROCKSDB_STATIC_LIB} ${THIRDPARTY_LIBS} ${SYSTEM_LIBS} ${TERARK_DEPEND_LIBS})
 
 if(WIN32)
+  # imported rocksdb lib
   add_library(${ROCKSDB_IMPORT_LIB} SHARED ${SOURCES})
-  target_link_libraries(${ROCKSDB_IMPORT_LIB}
-    ${THIRDPARTY_LIBS} ${SYSTEM_LIBS})
+  target_link_libraries(${ROCKSDB_IMPORT_LIB} ${THIRDPARTY_LIBS} ${SYSTEM_LIBS} ${TERARK_DEPEND_LIBS})
   set_target_properties(${ROCKSDB_IMPORT_LIB} PROPERTIES
     COMPILE_DEFINITIONS "ROCKSDB_DLL;ROCKSDB_LIBRARY_EXPORTS")
   if(MSVC)
@@ -859,6 +939,10 @@ if(NOT WIN32 OR ROCKSDB_INSTALL_ON_WINDOWS)
 endif()
 
 option(WITH_TESTS "build with tests" ON)
+# Lots of RocksDB test cases could only run under debug mode, so we should disable test cases for Release build.
+if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
+  SET(WITH_TESTS OFF)
+endif()
 if(WITH_TESTS)
   set(TESTS
         cache/cache_test.cc
@@ -932,6 +1016,7 @@ if(WITH_TESTS)
         db/write_controller_test.cc
         env/env_basic_test.cc
         env/env_test.cc
+        env/env_skvds_test.cc
         env/mock_env_test.cc
         memtable/inlineskiplist_test.cc
         memtable/skiplist_test.cc
@@ -1006,6 +1091,9 @@ if(WITH_TESTS)
         utilities/ttl/ttl_test.cc
         utilities/write_batch_with_index/write_batch_with_index_test.cc
   )
+
+  
+
   if(WITH_LIBRADOS)
     list(APPEND TESTS utilities/env_librados_test.cc)
   endif()
@@ -1051,7 +1139,7 @@ if(WITH_TESTS)
 
   # Tests are excluded from Release builds
   set(TEST_EXES ${TESTS})
-
+ 
   foreach(sourcefile ${TEST_EXES})
       get_filename_component(exename ${sourcefile} NAME_WE)
       add_executable(${CMAKE_PROJECT_NAME}_${exename}${ARTIFACT_SUFFIX} ${sourcefile}
@@ -1091,5 +1179,4 @@ endif()
 option(WITH_TOOLS "build with tools" ON)
 if(WITH_TOOLS)
   add_subdirectory(tools)
-  add_subdirectory(terark-tools/keypath)
 endif()

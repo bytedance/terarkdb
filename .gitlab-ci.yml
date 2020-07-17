@@ -1,0 +1,23 @@
+stages:
+  - config
+  - build
+  - test
+
+config:
+  stage: config
+  script:
+    - apt-get update && apt-get install -y libaio
+    - mkdir build && cd build && cmake ../ -DCMAKE_BUILD_TYPE=Debug
+  tags: [terarkdb]
+
+build:
+  stage: build
+  script:
+    - cd build && make -j $(nproc)
+
+test:
+  stage: test
+  script:
+    - cd build
+
+
