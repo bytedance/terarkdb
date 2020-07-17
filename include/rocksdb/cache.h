@@ -85,7 +85,7 @@ struct LIRSCacheOptions {
   size_t capacity = 0;
   int num_shard_bits = -1;
   bool strict_capacity_limit = false;
-  double irr_ratio = 0.01;
+  double irr_ratio = 0.9;
   std::shared_ptr<MemoryAllocator> memory_allocator;
   LIRSCacheOptions() {}
   LIRSCacheOptions(size_t _capacity, int _num_shard_bits,
@@ -115,7 +115,7 @@ extern std::shared_ptr<Cache> NewLRUCache(const LRUCacheOptions& cache_opts);
 
 extern std::shared_ptr<Cache> NewLIRSCache(
     size_t capacity, int num_shard_bits = -1,
-    bool strict_capacity_limit = false, double irr_ratio = 0.0,
+    bool strict_capacity_limit = false, double irr_ratio = 0.9,
     std::shared_ptr<MemoryAllocator> memory_allocator = nullptr);
 
 extern std::shared_ptr<Cache> NewLIRSCache(const LIRSCacheOptions& cache_opts);

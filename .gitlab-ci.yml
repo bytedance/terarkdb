@@ -6,18 +6,24 @@ stages:
 config:
   stage: config
   script:
-    - apt-get update && apt-get install -y libaio
+    - apt-get update && apt-get install -y libaio-dev cmake
+    - git submodule update --init --recursive
     - mkdir build && cd build && cmake ../ -DCMAKE_BUILD_TYPE=Debug
-  tags: [terarkdb]
+  tags: 
+    - shared
 
 build:
   stage: build
   script:
     - cd build && make -j $(nproc)
+  tags: 
+    - shared
 
 test:
   stage: test
   script:
-    - cd build
+    - cd build && make test
+  tags: 
+    - shared
 
 

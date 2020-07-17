@@ -20,4 +20,3 @@ LINK_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/../../)
 
 ADD_EXECUTABLE(deleterange deleterange.cc)
 TARGET_LINK_LIBRARIES(deleterange rocksdb libboost_filesystem.a libboost_system.a gomp snappy pthread aio lz4 z rt bz2)
-SET(CMAKE_BUILD_TYPE Release)

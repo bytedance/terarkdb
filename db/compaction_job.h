@@ -104,6 +104,7 @@ class CompactionJob {
     CompactionJob* job;
     int task_id;
     boost::fibers::promise<bool> finished;
+    boost::fibers::future<bool> future;
   };
 
   static void CallProcessCompaction(void* arg);

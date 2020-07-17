@@ -1,11 +1,10 @@
 # TerarkDB
 
-## Dependencies
-- terark-core
-  - Terark's core algorithms, including CO-Index and PA-Zip etc.
 
-## Documentation
-[Documentation](https://bytedance.feishu.cn/space/doc/doccnPkcQEZ10MmaIKZTow#)
+## CMake Support
+- clone terarkdb && git submodule update --init --recursive
+- add_subdirectory(terarkdb) in your CMakeLists.txt
+- You are all set!
 
 
 ## Build

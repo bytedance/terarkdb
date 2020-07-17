@@ -45,7 +45,7 @@
 
 static std::once_flag PrintVersionHashInfoFlag;
 
-#ifndef _MSC_VER
+#if !defined(_MSC_VER) && !defined(BUILD_BY_CMAKE)
 const char* git_version_hash_info_core();
 const char* git_version_hash_info_fsa();
 const char* git_version_hash_info_zbs();
@@ -54,7 +54,7 @@ const char* git_version_hash_info_idx();
 
 void PrintVersionHashInfo(rocksdb::Logger* info_log) {
   std::call_once(PrintVersionHashInfoFlag, [info_log] {
-#ifndef _MSC_VER
+#if !defined(_MSC_VER) && !defined(BUILD_BY_CMAKE)
     INFO(info_log, "core %s", git_version_hash_info_core());
     INFO(info_log, "fsa %s", git_version_hash_info_fsa());
     INFO(info_log, "zbs %s", git_version_hash_info_zbs());

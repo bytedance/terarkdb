@@ -13,7 +13,6 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../terark-core/3rdparty/zstd)
 INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/../../terark-core/src)
 INCLUDE_DIRECTORIES(/usr/local/include)
 
-SET(CMAKE_BUILD_TYPE "Debug")
 LINK_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/../../output/lib_static)
 LINK_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/../../)
 
