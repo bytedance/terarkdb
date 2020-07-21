@@ -67,7 +67,7 @@ class VersionBuilderTest : public testing::Test {
     f->fd.smallest_seqno = smallest_seqno;
     f->fd.largest_seqno = largest_seqno;
     f->compensated_file_size = file_size;
-    f->refs = 0;
+    f->refs = 1;
     f->prop = prop;
     f->prop.num_entries = num_entries;
     f->prop.num_deletions = num_deletions;
