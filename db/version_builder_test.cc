@@ -84,6 +84,7 @@ class VersionBuilderTest : public testing::Test {
     vstorage_.CalculateBaseBytes(ioptions_, mutable_cf_options_);
     vstorage_.GenerateLevel0NonOverlapping();
     vstorage_.SetFinalized();
+    vstorage_.FinishAddFile();
   }
 };
 
@@ -411,7 +412,7 @@ TEST_F(VersionBuilderTest, EstimatedActiveKeys) {
         ToString((i + 100) * 1000 + 999).c_str(), 100U, 0, 100, 100,
         kEntriesPerFile, kDeletionsPerFile, kNumFiles-i, kNumFiles-i);
   }
-
+  UpdateVersionStorageInfo();
   
   // minus 2X for the number of deletion entries because:
   // 1x for deletion entry does not count as a data entry.
