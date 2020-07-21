@@ -67,7 +67,7 @@ class VersionBuilderTest : public testing::Test {
     f->fd.smallest_seqno = smallest_seqno;
     f->fd.largest_seqno = largest_seqno;
     f->compensated_file_size = file_size;
-    f->refs = 1;
+    f->refs = 0;
     f->prop = prop;
     f->prop.num_entries = num_entries;
     f->prop.num_deletions = num_deletions;
@@ -116,7 +116,11 @@ TablePropertyCache GetPropCache(
     std::initializer_list<uint64_t> inheritance_chain = {}) {
   std::vector<Dependence> dep;
   for (auto& d : dependence) dep.emplace_back(Dependence{d, 1});
-  return TablePropertyCache{0, purpose, 1, 1, 0, 0, 0, 0, dep, inheritance_chain};
+  TablePropertyCache ret;
+  ret.purpose = purpose;
+  ret.dependence = dep;
+  ret.inheritance_chain = inheritance_chain;
+  return ret;
 }
 
 TEST_F(VersionBuilderTest, ApplyAndSaveTo) {
@@ -253,6 +257,7 @@ TEST_F(VersionBuilderTest, ApplyAndSaveToDynamic3) {
   EnvOptions env_options;
   VersionBuilder version_builder(env_options, nullptr, &vstorage_);
 
+  Add(-1, 31U, "115", "119", 50U);
   UpdateVersionStorageInfo();
 
   VersionEdit version_edit;
@@ -281,7 +286,6 @@ TEST_F(VersionBuilderTest, ApplyAndSaveToDynamic3) {
   version_edit2.AddFile(2, 21U, 0, 100U, GetInternalKey("110"),
                         GetInternalKey("159"), 2, 2, false,
                         GetPropCache(1, {11U, 12U, 13U, 14U, 15U}));
-  Add(-1, 31U, "115", "119", 50U);
   version_edit2.DeleteFile(1, 11U);
   version_edit2.DeleteFile(1, 12U);
   version_edit2.DeleteFile(1, 13U);
