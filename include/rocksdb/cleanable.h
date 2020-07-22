@@ -38,6 +38,8 @@ class Cleanable {
   Cleanable(Cleanable&&) noexcept;
   Cleanable& operator=(Cleanable&&) noexcept;
 
+  inline bool Empty() { return cleanup_.function == nullptr; }
+
   // Clients are allowed to register function/arg1/arg2 triples that
   // will be invoked when this object is destroyed.
   //

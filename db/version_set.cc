@@ -1382,7 +1382,7 @@ void Version::Get(const ReadOptions& read_options, const Slice& user_key,
         merge_operator_, user_key, nullptr, merge_context->GetOperands(), value,
         info_log_, db_statistics_, env_, true);
     if (status->ok()) {
-      value->pin();
+      value->pin(LazyBufferPinLevel::Internal);
     }
   } else {
     if (key_exists != nullptr) {

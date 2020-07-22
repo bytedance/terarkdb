@@ -263,7 +263,7 @@ const char* EncodeKey(std::string* scratch, const Slice& target) {
   return scratch->data();
 }
 
-template<class TValue>
+template <class TValue>
 class MemTableIteratorBase : public InternalIteratorBase<TValue> {
  public:
   MemTableIteratorBase(const MemTable& mem, const ReadOptions& read_options,
@@ -397,8 +397,8 @@ class MemTableTombstoneIterator : public MemTableIteratorBase<Slice> {
   }
 };
 
-class MemTableIterator
-    : public MemTableIteratorBase<LazyBuffer>, public LazyBufferState {
+class MemTableIterator : public MemTableIteratorBase<LazyBuffer>,
+                         public LazyBufferState {
   using Base = MemTableIteratorBase<LazyBuffer>;
   using Base::iter_;
   using Base::valid_;
@@ -409,13 +409,13 @@ class MemTableIterator
 
   void destroy(LazyBuffer* /*buffer*/) const override {}
 
-  void pin_buffer(LazyBuffer* buffer) const override {
+  Status pin_buffer(LazyBuffer* buffer) const override {
     if (!value_pinned_ || !iter_->IsValuePinned()) {
-      LazyBufferState::pin_buffer(buffer);
-    } else {
-      *buffer = iter_->value();
-      buffer->pin();
+      return Status::NotSupported();
     }
+    *buffer = iter_->value();
+    buffer->pin(LazyBufferPinLevel::Internal);
+    return Status::OK();
   }
 
   Status dump_buffer(LazyBuffer* buffer, LazyBuffer* target) const override {
@@ -456,19 +456,17 @@ FragmentedRangeTombstoneIterator* MemTable::NewRangeTombstoneIterator(
 
   if (!fragmented_tombstone_list ||
       fragmented_tombstone_list->user_tag() != num_range_del) {
-
-    auto* unfragmented_iter = new MemTableTombstoneIterator(
-        *this, read_options, nullptr /* arena */,
-        true /* use_range_del_table */);
+    auto* unfragmented_iter =
+        new MemTableTombstoneIterator(*this, read_options, nullptr /* arena */,
+                                      true /* use_range_del_table */);
     if (unfragmented_iter == nullptr) {
       return nullptr;
     }
     StopWatchNano timer(env_, true);
-    fragmented_tombstone_list =
-        std::make_shared<FragmentedRangeTombstoneList>(
-            std::unique_ptr<InternalIteratorBase<Slice>>(unfragmented_iter),
-            comparator_.comparator, false /* for_compaction */,
-            std::vector<SequenceNumber>() /* snapshots */, num_range_del);
+    fragmented_tombstone_list = std::make_shared<FragmentedRangeTombstoneList>(
+        std::unique_ptr<InternalIteratorBase<Slice>>(unfragmented_iter),
+        comparator_.comparator, false /* for_compaction */,
+        std::vector<SequenceNumber>() /* snapshots */, num_range_del);
     if (timer.ElapsedNanos() > 1000000ULL) {
       is_range_del_slow_ = true;
     }
@@ -662,7 +660,8 @@ static bool SaveValue(void* arg, const Slice& internal_key,
     s->seq = seq;
 
     if ((type == kTypeValue || type == kTypeMerge || type == kTypeValueIndex ||
-         type == kTypeMergeIndex) && max_covering_tombstone_seq > seq) {
+         type == kTypeMergeIndex) &&
+        max_covering_tombstone_seq > seq) {
       type = kTypeRangeDeletion;
       value.clear();
     }
@@ -682,7 +681,7 @@ static bool SaveValue(void* arg, const Slice& internal_key,
                 merge_context->GetOperands(), s->value, s->logger,
                 s->statistics, s->env_, true);
             if (s->status->ok()) {
-              s->value->pin();
+              s->value->pin(LazyBufferPinLevel::Internal);
             }
           }
         } else if (s->value != nullptr) {
@@ -704,7 +703,7 @@ static bool SaveValue(void* arg, const Slice& internal_key,
                 merge_context->GetOperands(), s->value, s->logger,
                 s->statistics, s->env_, true);
             if (s->status->ok()) {
-              s->value->pin();
+              s->value->pin(LazyBufferPinLevel::Internal);
             }
           }
         } else {
@@ -736,7 +735,7 @@ static bool SaveValue(void* arg, const Slice& internal_key,
               merge_context->GetOperands(), s->value, s->logger, s->statistics,
               s->env_, true);
           if (s->status->ok()) {
-            s->value->pin();
+            s->value->pin(LazyBufferPinLevel::Internal);
           }
           *s->found_final_value = true;
           return false;
@@ -818,8 +817,7 @@ bool MemTable::Get(const LookupKey& key, LazyBuffer* value, Status* s,
   return found_final_value;
 }
 
-void MemTable::Update(SequenceNumber seq,
-                      const Slice& key,
+void MemTable::Update(SequenceNumber seq, const Slice& key,
                       const Slice& value) {
   LookupKey lkey(key, seq);
   Slice mem_key = lkey.memtable_key();
@@ -865,8 +863,7 @@ void MemTable::Update(SequenceNumber seq,
   assert(add_res);
 }
 
-bool MemTable::UpdateCallback(SequenceNumber seq,
-                              const Slice& key,
+bool MemTable::UpdateCallback(SequenceNumber seq, const Slice& key,
                               const Slice& delta) {
   LookupKey lkey(key, seq);
   Slice memkey = lkey.memtable_key();
@@ -887,7 +884,7 @@ bool MemTable::UpdateCallback(SequenceNumber seq,
       uint64_t unused;
       UnPackSequenceAndType(tag, &unused, &type);
       LazyBuffer old_value = iter->value();
-      if(type == kTypeValue && old_value.fetch().ok()) {
+      if (type == kTypeValue && old_value.fetch().ok()) {
         assert(old_value.valid());
         uint32_t old_size = static_cast<uint32_t>(old_value.size());
 

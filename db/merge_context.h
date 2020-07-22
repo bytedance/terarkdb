@@ -6,6 +6,7 @@
 #pragma once
 #include <string>
 #include <vector>
+
 #include "db/dbformat.h"
 #include "rocksdb/slice.h"
 #include "table/internal_iterator.h"
@@ -19,9 +20,7 @@ namespace rocksdb {
 class MergeContext {
  public:
   // Clear all the operands
-  void Clear() {
-    operand_list_.clear();
-  }
+  void Clear() { operand_list_.clear(); }
 
   // Push a merge operand
   void PushOperand(LazyBuffer&& operand_slice, bool operand_pinned = true) {
@@ -29,7 +28,7 @@ class MergeContext {
 
     operand_list_.emplace_back(std::move(operand_slice));
     if (operand_pinned) {
-      operand_list_.back().pin();
+      operand_list_.back().pin(LazyBufferPinLevel::Internal);
     }
   }
 
@@ -39,14 +38,12 @@ class MergeContext {
 
     operand_list_.emplace_back(std::move(operand_slice));
     if (operand_pinned) {
-      operand_list_.back().pin();
+      operand_list_.back().pin(LazyBufferPinLevel::Internal);
     }
   }
 
   // return total number of operands in the list
-  size_t GetNumOperands() const {
-    return operand_list_.size();
-  }
+  size_t GetNumOperands() const { return operand_list_.size(); }
 
   // Get the operand at the index.
   const LazyBuffer& GetOperand(int index) {
@@ -93,4 +90,4 @@ class MergeContext {
   bool operands_reversed_ = true;
 };
 
-} // namespace rocksdb
+}  // namespace rocksdb

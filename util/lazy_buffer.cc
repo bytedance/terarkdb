@@ -64,14 +64,15 @@ class LightLazyBufferState : public LazyBufferState {
     }
   }
 
-  void pin_buffer(LazyBuffer* buffer) const override {
+  Status pin_buffer(LazyBuffer* buffer) const override {
     auto context = union_cast<Context>(get_context(buffer));
-    if (buffer->size() > sizeof(Context)) {
-      LazyBufferState::assign_slice(buffer, buffer->slice());
-    } else if (buffer->data() != context->data && !buffer->empty()) {
+    if (buffer->data() != context->data && !buffer->empty() &&
+        buffer->size() <= sizeof(Context)) {
       ::memmove(context->data, buffer->data(), buffer->size());
       set_slice(buffer, Slice(context->data, buffer->size()));
+      return Status::OK();
     }
+    return Status::NotSupported();
   }
 
   Status dump_buffer(LazyBuffer* buffer, LazyBuffer* target) const override {
@@ -157,7 +158,9 @@ class BufferLazyBufferState : public LazyBufferState {
     set_slice(buffer, Slice::Invalid());
   }
 
-  void pin_buffer(LazyBuffer* /*buffer*/) const override {}
+  Status pin_buffer(LazyBuffer* /*buffer*/) const override {
+    return Status::OK();
+  }
 
   Status dump_buffer(LazyBuffer* buffer, LazyBuffer* target) const override {
     auto context = union_cast<Context>(get_context(buffer));
@@ -232,7 +235,9 @@ struct StringLazyBufferState : public LazyBufferState {
     set_slice(buffer, Slice::Invalid());
   }
 
-  void pin_buffer(LazyBuffer* /*buffer*/) const override {}
+  Status pin_buffer(LazyBuffer* /*buffer*/) const override {
+    return Status::OK();
+  }
 
   Status dump_buffer(LazyBuffer* buffer, LazyBuffer* target) const override {
     auto context = union_cast<Context>(get_context(buffer));
@@ -278,7 +283,9 @@ struct CleanableLazyBufferState : public LazyBufferState {
     union_cast<Cleanable>(get_context(buffer))->Reset();
   }
 
-  void pin_buffer(LazyBuffer* /*buffer*/) const override {}
+  Status pin_buffer(LazyBuffer* /*buffer*/) const override {
+    return Status::OK();
+  }
 
   Status dump_buffer(LazyBuffer* buffer, LazyBuffer* target) const override {
     target->reset(buffer->slice(), true, buffer->file_number());
@@ -339,15 +346,8 @@ void LazyBufferState::assign_error(LazyBuffer* buffer, Status&& status) const {
   buffer->slice_ = Slice::Invalid();
 }
 
-void LazyBufferState::pin_buffer(LazyBuffer* buffer) const {
-  LazyBuffer tmp;
-  auto s = dump_buffer(buffer, &tmp);
-  if (s.ok()) {
-    *buffer = std::move(tmp);
-  } else {
-    assign_error(buffer, std::move(s));
-    assert(!buffer->valid());
-  }
+Status LazyBufferState::pin_buffer(LazyBuffer* /*buffer*/) const {
+  return Status::NotSupported();
 }
 
 Status LazyBufferState::dump_buffer(LazyBuffer* buffer,
@@ -578,6 +578,27 @@ std::string* LazyBuffer::trans_to_string() {
   }
 }
 
+void LazyBuffer::pin(LazyBufferPinLevel level) {
+  assert(state_ != nullptr);
+  Status s = Status::NotSupported();
+  if (level == LazyBufferPinLevel::Internal) {
+    s = state_->pin_buffer(this);
+    if (s.ok()) {
+      return;
+    }
+  }
+  if (s.IsNotSupported()) {
+    LazyBuffer tmp;
+    s = state_->dump_buffer(this, &tmp);
+    if (s.ok()) {
+      *this = std::move(tmp);
+      return;
+    }
+  }
+  assign_error(std::move(s));
+  assert(!valid());
+}
+
 Status LazyBuffer::dump(LazyBufferCustomizeBuffer _buffer) && {
   assert(state_ != nullptr);
   if (slice_.valid()) {
@@ -640,6 +661,18 @@ Status LazyBuffer::dump(std::string* _string) && {
     assert(reinterpret_cast<std::string*>(buffer.context_.data[0]) == _string);
   }
   return Status::OK();
+}
+
+Status LazyBuffer::dump(LazyBuffer& _target) && {
+  assert(state_ != nullptr);
+  assert(this != &_target);
+  auto s = state_->pin_buffer(this);
+  if (s.ok()) {
+    _target.reset(std::move(*this));
+  } else if (s.IsNotSupported()) {
+    s = state_->dump_buffer(this, &_target);
+  }
+  return s;
 }
 
 bool LazyBufferBuilder::resize(size_t _size) {

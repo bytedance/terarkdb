@@ -250,7 +250,9 @@ class WorkerSeparateHelper : public SeparateHelper, public LazyBufferState {
  public:
   void destroy(LazyBuffer* /*buffer*/) const override {}
 
-  void pin_buffer(LazyBuffer* /*buffer*/) const override {}
+  Status pin_buffer(LazyBuffer* /*buffer*/) const override {
+    return Status::OK();
+  }
 
   Status fetch_buffer(LazyBuffer* buffer) const override {
     return inplace_decode_callback_(inplace_decode_arg_, buffer,

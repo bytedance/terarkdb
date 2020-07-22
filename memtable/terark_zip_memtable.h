@@ -33,13 +33,13 @@ class MemWriterToken : public terark::Patricia::WriterToken {
  public:
   uint64_t get_tag() { return tag_; }
 
-  void reset_tag_value(uint64_t tag, const Slice &value) {
+  void reset_tag_value(uint64_t tag, const Slice& value) {
     tag_ = tag;
     value_ = value;
   }
 
  protected:
-  bool init_value(void *valptr, size_t valsize) noexcept;
+  bool init_value(void* valptr, size_t valsize) noexcept;
 };
 
 namespace terark_memtable_details {
@@ -86,7 +86,7 @@ class PatriciaTrieRep : public MemTableRep {
   PatriciaTrieRep(terark_memtable_details::ConcurrentType concurrent_type,
                   terark_memtable_details::PatriciaKeyType patricia_key_type,
                   bool handle_duplicate, intptr_t write_buffer_size,
-                  Allocator *allocator);
+                  Allocator* allocator);
 
   ~PatriciaTrieRep();
 
@@ -95,32 +95,32 @@ class PatriciaTrieRep : public MemTableRep {
   virtual size_t ApproximateMemoryUsage() override;
 
   // This approximition is not supported, return 0 instead.
-  virtual uint64_t ApproximateNumEntries(const Slice & /*start_ikey*/,
-                                         const Slice & /*end_ikey*/) override {
+  virtual uint64_t ApproximateNumEntries(const Slice& /*start_ikey*/,
+                                         const Slice& /*end_ikey*/) override {
     return 0;
   }
 
   // Return true if this rep contains querying key.
-  virtual bool Contains(const Slice &internal_key) const override;
+  virtual bool Contains(const Slice& internal_key) const override;
 
   // Get with lazyslice feedback, parsing the value when truly needed.
-  virtual void Get(const LookupKey &k, void *callback_args,
-                   bool (*callback_func)(void *arg, const Slice &key,
-                                         LazyBuffer &&value)) override;
+  virtual void Get(const LookupKey& k, void* callback_args,
+                   bool (*callback_func)(void* arg, const Slice& key,
+                                         LazyBuffer&& value)) override;
 
   // Return iterator of this rep
-  virtual MemTableRep::Iterator *GetIterator(Arena *arena) override;
+  virtual MemTableRep::Iterator* GetIterator(Arena* arena) override;
 
   // Insert with keyhandle is not supported.
   virtual void Insert(KeyHandle /*handle*/) override { assert(false); }
 
   // Return true if insertion successed.
-  virtual bool InsertKeyValue(const Slice &internal_key,
-                              const Slice &value) override;
+  virtual bool InsertKeyValue(const Slice& internal_key,
+                              const Slice& value) override;
 
   // Concurrent write is supported by default.
-  virtual bool InsertKeyValueConcurrently(const Slice &internal_key,
-                                          const Slice &value) override {
+  virtual bool InsertKeyValueConcurrently(const Slice& internal_key,
+                                          const Slice& value) override {
     return InsertKeyValue(internal_key, value);
   }
 
@@ -144,10 +144,10 @@ class PatriciaRepIterator : public MemTableRep::Iterator,
 
     struct VectorData {
       size_t size;
-      const typename terark_memtable_details::tag_vector_t::data_t *data;
+      const typename terark_memtable_details::tag_vector_t::data_t* data;
     };
 
-    HeapItem(terark::Patricia *trie) : tag(uint64_t(-1)), index(size_t(-1)) {
+    HeapItem(terark::Patricia* trie) : tag(uint64_t(-1)), index(size_t(-1)) {
       handle.reset(trie->new_iter());
     }
 
@@ -164,9 +164,9 @@ class PatriciaRepIterator : public MemTableRep::Iterator,
   // union definition as unify interface for iterator polymorphism
   union {
     struct {
-      HeapItem *array;
+      HeapItem* array;
       size_t count;
-      HeapItem **heap;
+      HeapItem** heap;
       size_t size;
     } multi_;
     HeapItem single_;
@@ -176,12 +176,12 @@ class PatriciaRepIterator : public MemTableRep::Iterator,
   int direction_;
 
   // Return pointer of current heap item.
-  const HeapItem *Current() const {
+  const HeapItem* Current() const {
     return heap_mode ? *multi_.heap : &single_;
   }
 
   // Return pointer of current heap item.
-  HeapItem *Current() { return heap_mode ? *multi_.heap : &single_; }
+  HeapItem* Current() { return heap_mode ? *multi_.heap : &single_; }
 
   // Return current key.
   terark::fstring CurrentKey() { return Current()->handle->word(); }
@@ -191,7 +191,7 @@ class PatriciaRepIterator : public MemTableRep::Iterator,
 
   // Lexicographical order 3 way compartor
   struct ForwardComp {
-    bool operator()(HeapItem *l, HeapItem *r) const {
+    bool operator()(HeapItem* l, HeapItem* r) const {
       int c = terark::fstring_func::compare3()(l->handle->word(),
                                                r->handle->word());
       return c == 0 ? l->tag < r->tag : c > 0;
@@ -200,7 +200,7 @@ class PatriciaRepIterator : public MemTableRep::Iterator,
 
   // Reverse lexicographical order 3 way compartor
   struct BackwardComp {
-    bool operator()(HeapItem *l, HeapItem *r) const {
+    bool operator()(HeapItem* l, HeapItem* r) const {
       int c = terark::fstring_func::compare3()(l->handle->word(),
                                                r->handle->word());
       return c == 0 ? l->tag > r->tag : c < 0;
@@ -209,26 +209,27 @@ class PatriciaRepIterator : public MemTableRep::Iterator,
 
   // Rebuild heap for orderness
   template <int direction, class func_t>
-  void Rebuild(func_t &&callback_func);
+  void Rebuild(func_t&& callback_func);
 
  public:
-  PatriciaRepIterator(terark_memtable_details::tries_t &tries,
+  PatriciaRepIterator(terark_memtable_details::tries_t& tries,
                       size_t tries_size);
 
   virtual ~PatriciaRepIterator();
 
   // LazyBufferState override
-  virtual void destroy(LazyBuffer * /*buffer*/) const override {}
+  virtual void destroy(LazyBuffer* /*buffer*/) const override {}
 
   // LazyBufferState override
-  virtual void pin_buffer(LazyBuffer *buffer) const override {
+  virtual Status pin_buffer(LazyBuffer* buffer) const override {
     if (!buffer->valid()) {
-      buffer->reset(GetValue());
+      buffer->reset(GetValue(), Cleanable());
     }
+    return Status::OK();
   }
 
   // LazyBufferState override
-  Status fetch_buffer(LazyBuffer *buffer) const override {
+  Status fetch_buffer(LazyBuffer* buffer) const override {
     set_slice(buffer, GetValue());
     return Status::OK();
   }
@@ -237,7 +238,7 @@ class PatriciaRepIterator : public MemTableRep::Iterator,
   virtual bool Valid() const override { return direction_ != 0; }
 
   // No needs to encode.
-  virtual const char *EncodedKey() const override {
+  virtual const char* EncodedKey() const override {
     assert(false);
     return nullptr;
   }
@@ -268,11 +269,11 @@ class PatriciaRepIterator : public MemTableRep::Iterator,
   virtual void Prev() override;
 
   // Advance to the first entry with a key >= target
-  virtual void Seek(const Slice &user_key, const char *memtable_key) override;
+  virtual void Seek(const Slice& user_key, const char* memtable_key) override;
 
   // Retreat to the last entry with a key <= target
-  virtual void SeekForPrev(const Slice &user_key,
-                           const char *memtable_key) override;
+  virtual void SeekForPrev(const Slice& user_key,
+                           const char* memtable_key) override;
 
   // Position at the first entry in this rep.
   // Final state of iterator is Valid() iff this rep is not empty.
@@ -295,7 +296,7 @@ class PatriciaTrieRepFactory : public MemTableRepFactory {
 
  public:
   PatriciaTrieRepFactory(
-      std::shared_ptr<class MemTableRepFactory> &fallback,
+      std::shared_ptr<class MemTableRepFactory>& fallback,
       terark_memtable_details::ConcurrentType concurrent_type =
           terark_memtable_details::ConcurrentType::Native,
       terark_memtable_details::PatriciaKeyType patricia_key_type =
@@ -308,26 +309,26 @@ class PatriciaTrieRepFactory : public MemTableRepFactory {
 
   virtual ~PatriciaTrieRepFactory() {}
 
-  virtual MemTableRep *CreateMemTableRep(
-      const MemTableRep::KeyComparator &key_cmp, bool needs_dup_key_check,
-      Allocator *allocator, const SliceTransform *transform,
-      Logger *logger) override;
+  virtual MemTableRep* CreateMemTableRep(
+      const MemTableRep::KeyComparator& key_cmp, bool needs_dup_key_check,
+      Allocator* allocator, const SliceTransform* transform,
+      Logger* logger) override;
 
-  virtual MemTableRep *CreateMemTableRep(
-      const MemTableRep::KeyComparator &key_cmp, bool needs_dup_key_check,
-      Allocator *allocator, const SliceTransform *slice_transform,
-      Logger *logger, uint32_t) override {
+  virtual MemTableRep* CreateMemTableRep(
+      const MemTableRep::KeyComparator& key_cmp, bool needs_dup_key_check,
+      Allocator* allocator, const SliceTransform* slice_transform,
+      Logger* logger, uint32_t) override {
     return CreateMemTableRep(key_cmp, needs_dup_key_check, allocator,
                              slice_transform, logger);
   }
 
-  virtual MemTableRep *CreateMemTableRep(
-      const MemTableRep::KeyComparator &key_cmp, bool needs_dup_key_check,
-      Allocator *allocator, const ImmutableCFOptions &ioptions,
-      const MutableCFOptions &mutable_cf_options,
+  virtual MemTableRep* CreateMemTableRep(
+      const MemTableRep::KeyComparator& key_cmp, bool needs_dup_key_check,
+      Allocator* allocator, const ImmutableCFOptions& ioptions,
+      const MutableCFOptions& mutable_cf_options,
       uint32_t column_family_id) override;
 
-  virtual const char *Name() const override { return "PatriciaTrieRepFactory"; }
+  virtual const char* Name() const override { return "PatriciaTrieRepFactory"; }
 
   virtual bool IsInsertConcurrentlySupported() const override {
     return concurrent_type_ != terark_memtable_details::ConcurrentType::None;
@@ -336,10 +337,10 @@ class PatriciaTrieRepFactory : public MemTableRepFactory {
   virtual bool CanHandleDuplicatedKey() const override { return true; }
 };
 
-MemTableRepFactory *NewPatriciaTrieRepFactory(
+MemTableRepFactory* NewPatriciaTrieRepFactory(
     std::shared_ptr<MemTableRepFactory> fallback);
 
-MemTableRepFactory *NewPatriciaTrieRepFactory(
-    const std::unordered_map<std::string, std::string> &options, Status *s);
+MemTableRepFactory* NewPatriciaTrieRepFactory(
+    const std::unordered_map<std::string, std::string>& options, Status* s);
 
 }  // namespace rocksdb

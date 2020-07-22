@@ -616,7 +616,7 @@ bool DBIter::MergeValuesNewToOld() {
         return false;
       }
       val.reset();
-      value_.pin();
+      value_.pin(LazyBufferPinLevel::Internal);
       // iter_ is positioned after put
       iter_->Next();
       if (!iter_->status().ok()) {
@@ -851,7 +851,7 @@ bool DBIter::FindValueForCurrentKey() {
           PERF_COUNTER_ADD(internal_delete_skipped_count, 1);
         } else {
           value_ = GetValue(ikey, kTypeValueIndex);
-          value_.pin();
+          value_.pin(LazyBufferPinLevel::Internal);
         }
         merge_context_.Clear();
         last_not_merge_type = last_key_entry_type;
@@ -983,7 +983,7 @@ bool DBIter::FindValueForCurrentKeyUsingSeek() {
   }
   if (ikey.type == kTypeValue || ikey.type == kTypeValueIndex) {
     value_ = GetValue(ikey, kTypeValueIndex);
-    value_.pin();
+    value_.pin(LazyBufferPinLevel::Internal);
     valid_ = true;
     return true;
   }
@@ -1027,7 +1027,7 @@ bool DBIter::FindValueForCurrentKeyUsingSeek() {
         status_ = s;
         return false;
       }
-      value_.pin();
+      value_.pin(LazyBufferPinLevel::Internal);
       valid_ = true;
       return true;
     } else if (ikey.type == kTypeMerge || ikey.type == kTypeMergeIndex) {
@@ -1047,7 +1047,7 @@ bool DBIter::FindValueForCurrentKeyUsingSeek() {
     status_ = s;
     return false;
   }
-  value_.pin();
+  value_.pin(LazyBufferPinLevel::Internal);
 
   // Make sure we leave iter_ in a good state. If it's valid and we don't care
   // about prefixes, that's already good enough. Otherwise it needs to be

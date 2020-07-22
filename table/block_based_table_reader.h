@@ -689,7 +689,7 @@ class BlockBasedTableIterator<DataBlockIter, LazyBuffer>
 
   virtual void destroy(LazyBuffer* /*buffer*/) const override {}
 
-  virtual void pin_buffer(LazyBuffer* buffer) const override;
+  virtual Status pin_buffer(LazyBuffer* buffer) const override;
 
   virtual Status fetch_buffer(LazyBuffer* /*buffer*/) const override {
     return Status::OK();

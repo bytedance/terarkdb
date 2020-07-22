@@ -788,7 +788,9 @@ class Version : public SeparateHelper, private LazyBufferState {
 
   void destroy(LazyBuffer* /*buffer*/) const override {}
 
-  void pin_buffer(LazyBuffer* /*buffer*/) const override {}
+  Status pin_buffer(LazyBuffer* /*buffer*/) const override {
+    return Status::OK();
+  }
 
   Status fetch_buffer(LazyBuffer* buffer) const override;
 
@@ -1073,11 +1075,10 @@ class VersionSet {
 
   static uint64_t GetTotalSstFilesSize(Version* dummy_versions);
 
-  ColumnFamilyData* TEST_CreateColumnFamily(const ColumnFamilyOptions& cf_options,
-                                       VersionEdit* edit) {
-      return CreateColumnFamily(cf_options, edit);
+  ColumnFamilyData* TEST_CreateColumnFamily(
+      const ColumnFamilyOptions& cf_options, VersionEdit* edit) {
+    return CreateColumnFamily(cf_options, edit);
   }
-
 
  private:
   struct ManifestWriter;

@@ -1491,6 +1491,7 @@ Status DBImpl::GetImpl(const ReadOptions& read_options,
   }
 
   if (s.ok()) {
+    lazy_val->pin(LazyBufferPinLevel::DB);
     s = lazy_val->fetch();
   }
 
@@ -1603,6 +1604,8 @@ std::vector<Status> DBImpl::MultiGet(
     const ReadOptions& read_options,
     const std::vector<ColumnFamilyHandle*>& column_family,
     const std::vector<Slice>& keys, std::vector<std::string>* values) {
+  LatencyHistGuard guard(&read_latency_reporter_);
+  read_qps_reporter_.AddCount(keys.size());
   StopWatch sw(env_, stats_, DB_MULTIGET);
   PERF_TIMER_GUARD(get_snapshot_time);
 
@@ -2182,6 +2185,9 @@ Status DBImpl::NewIterators(
     return Status::NotSupported(
         "ReadTier::kPersistedData is not yet supported in iterators.");
   }
+  LatencyHistGuard guard(&newiterator_latency_reporter_);
+  newiterator_qps_reporter_.AddCount(column_families.size());
+
   ReadCallback* read_callback = nullptr;  // No read callback provided.
   iterators->clear();
   iterators->reserve(column_families.size());

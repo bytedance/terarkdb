@@ -10,6 +10,7 @@
 #pragma once
 #include <stddef.h>
 #include <stdint.h>
+
 #include <string>
 #include <vector>
 #ifdef ROCKSDB_MALLOC_USABLE_SIZE
@@ -22,6 +23,7 @@
 
 #include "db/dbformat.h"
 #include "format.h"
+#include "rocksdb/cache.h"
 #include "rocksdb/iterator.h"
 #include "rocksdb/options.h"
 #include "rocksdb/statistics.h"
@@ -52,8 +54,8 @@ class BlockReadAmpBitmap {
       : bitmap_(nullptr),
         bytes_per_bit_pow_(0),
         statistics_(statistics),
-        rnd_(
-            Random::GetTLSInstance()->Uniform(static_cast<int>(bytes_per_bit))) {
+        rnd_(Random::GetTLSInstance()->Uniform(
+            static_cast<int>(bytes_per_bit))) {
     TEST_SYNC_POINT_CALLBACK("BlockReadAmpBitmap:rnd", &rnd_);
     assert(block_size > 0 && bytes_per_bit > 0);
 
@@ -63,8 +65,7 @@ class BlockReadAmpBitmap {
     }
 
     // num_bits_needed = ceil(block_size / bytes_per_bit)
-    size_t num_bits_needed =
-      ((block_size - 1) >> bytes_per_bit_pow_) + 1;
+    size_t num_bits_needed = ((block_size - 1) >> bytes_per_bit_pow_) + 1;
     assert(num_bits_needed > 0);
 
     // bitmap_size = ceil(num_bits_needed / kBitsPerEntry)
@@ -179,11 +180,10 @@ class Block {
   //
   // If `block_contents_pinned` is true, the caller will guarantee that when
   // the cleanup functions are transferred from the iterator to other
-  // classes, e.g. PinnableSlice, the pointer to the bytes will still be
-  // valid. Either the iterator holds cache handle or ownership of some resource
-  // and release them in a release function, or caller is sure that the data
-  // will not go away (for example, it's from mmapped file which will not be
-  // closed).
+  // classes, e.g. LazyBuffer, the pointer to the bytes will still be valid.
+  // Either the iterator holds cache handle or ownership of some resource and
+  // release them in a release function, or caller is sure that the data will
+  // not go away (for example, it's from mmapped file which will not be closed).
   //
   // NOTE: for the hash based lookup, if a key prefix doesn't match any key,
   // the iterator will simply be set as "invalid", rather than returning
@@ -203,9 +203,9 @@ class Block {
 
  private:
   BlockContents contents_;
-  const char* data_;            // contents_.data.data()
-  size_t size_;                 // contents_.data.size()
-  uint32_t restart_offset_;     // Offset in data_ of restart array
+  const char* data_;         // contents_.data.data()
+  size_t size_;              // contents_.data.size()
+  uint32_t restart_offset_;  // Offset in data_ of restart array
   uint32_t num_restarts_;
   std::unique_ptr<BlockReadAmpBitmap> read_amp_bitmap_;
   // All keys in the block will have seqno = global_seqno_, regardless of
@@ -225,8 +225,8 @@ class BlockIter : public InternalIteratorBase<TValue> {
   void InitializeBase(const Comparator* comparator, const char* data,
                       uint32_t restarts, uint32_t num_restarts,
                       SequenceNumber global_seqno, bool block_contents_pinned) {
-    assert(data_ == nullptr);           // Ensure it is called only once
-    assert(num_restarts > 0);           // Ensure the param is valid
+    assert(data_ == nullptr);  // Ensure it is called only once
+    assert(num_restarts > 0);  // Ensure the param is valid
 
     comparator_ = comparator;
     data_ = data;
@@ -238,6 +238,13 @@ class BlockIter : public InternalIteratorBase<TValue> {
     block_contents_pinned_ = block_contents_pinned;
   }
 
+  ~BlockIter() {
+    if (cache_handle_ != nullptr) {
+      assert(cache_ != nullptr);
+      cache_->Release(cache_handle_, cache_force_release_);
+    }
+  }
+
   // Makes Valid() return false, status() return `s`, and Seek()/Prev()/etc do
   // nothing. Calls cleanup functions.
   void InvalidateBase(Status s) {
@@ -246,8 +253,44 @@ class BlockIter : public InternalIteratorBase<TValue> {
     current_ = restarts_;
     status_ = s;
 
+    if (cache_handle_ != nullptr) {
+      assert(cache_ != nullptr);
+      cache_->Release(cache_handle_, cache_force_release_);
+      cache_handle_ = nullptr;
+    }
     // Call cleanup callbacks.
     Cleanable::Reset();
+  }
+
+  void SetReleaseCache(Cache* cache, Cache::Handle* cache_handle,
+                       bool force_release) {
+    assert(cache != nullptr);
+    assert(cache_handle != nullptr);
+    cache_ = cache;
+    cache_handle_ = cache_handle;
+    cache_force_release_ = force_release;
+  }
+  Cleanable RefCache() const {
+    if (cache_handle_ == nullptr || !block_contents_pinned_) {
+      return Cleanable();
+    }
+    assert(cache_ != nullptr);
+    cache_->Ref(cache_handle_);
+    if (cache_force_release_) {
+      return Cleanable(
+          [](void* c, void* h) {
+            static_cast<Cache*>(c)->Release(static_cast<Cache::Handle*>(h),
+                                            true);
+          },
+          cache_, cache_handle_);
+    } else {
+      return Cleanable(
+          [](void* c, void* h) {
+            static_cast<Cache*>(c)->Release(static_cast<Cache::Handle*>(h),
+                                            false);
+          },
+          cache_, cache_handle_);
+    }
   }
 
   virtual bool Valid() const override { return current_ < restarts_; }
@@ -256,11 +299,6 @@ class BlockIter : public InternalIteratorBase<TValue> {
     assert(Valid());
     return key_.GetKey();
   }
-
-#ifndef NDEBUG
-  virtual ~BlockIter() {
-  }
-#endif
 
   size_t TEST_CurrentEntrySize() { return NextEntryOffset() - current_; }
 
@@ -277,7 +315,7 @@ class BlockIter : public InternalIteratorBase<TValue> {
 
   // Index of restart block in which current_ or current_-1 falls
   uint32_t restart_index_;
-  uint32_t restarts_;       // Offset of restart array (list of fixed32)
+  uint32_t restarts_;  // Offset of restart array (list of fixed32)
   // current_ is offset in data_ of current entry.  >= restarts_ if !Valid
   uint32_t current_;
   IterKey key_;
@@ -286,14 +324,18 @@ class BlockIter : public InternalIteratorBase<TValue> {
   bool key_pinned_;
   // Whether the block data is guaranteed to outlive this iterator, and
   // as long as the cleanup functions are transferred to another class,
-  // e.g. PinnableSlice, the pointer to the bytes will still be valid.
+  // e.g. LazyBuffer, the pointer to the bytes will still be valid.
   bool block_contents_pinned_;
+  bool cache_force_release_ = false;
   SequenceNumber global_seqno_;
   // Save the actual sequence before replaced by global seqno, which potentially
   // is used as part of prefix of delta encoding.
   SequenceNumber stored_seqno_ = 0;
   // Save the value type of key_. Used to restore stored_seqno_.
   ValueType stored_value_type_ = kMaxValue;
+
+  Cache* cache_ = nullptr;
+  Cache::Handle* cache_handle_ = nullptr;
 
  public:
   // Return the offset in data_ just past the end of the current entry.
@@ -524,8 +566,7 @@ class IndexBlockIter final : public BlockIter<BlockHandle> {
 
   bool PrefixSeek(const Slice& target, uint32_t* index);
   bool BinaryBlockIndexSeek(const Slice& target, uint32_t* block_ids,
-                            uint32_t left, uint32_t right,
-                            uint32_t* index);
+                            uint32_t left, uint32_t right, uint32_t* index);
   inline int CompareBlockKey(uint32_t block_index, const Slice& target);
 
   inline int Compare(const Slice& a, const Slice& b) const {

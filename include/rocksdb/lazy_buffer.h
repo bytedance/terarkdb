@@ -24,6 +24,12 @@ namespace rocksdb {
 class LazyBuffer;
 class LazyBufferBuilder;
 
+enum class LazyBufferPinLevel {
+  Internal,  // detach life cycle from iterator or temporary object, still
+             // depend SuperVersion
+  DB,        // detach life cycle from SuperVersion, still depend DB
+};
+
 struct LazyBufferContext {
   uint64_t data[4];
 };
@@ -50,7 +56,7 @@ class LazyBufferState {
   virtual void assign_error(LazyBuffer* buffer, Status&& status) const;
 
   // Pin the buffer, turn the state into editable
-  virtual void pin_buffer(LazyBuffer* buffer) const;
+  virtual Status pin_buffer(LazyBuffer* buffer) const;
 
   // Fetch buffer and dump to target, the buffer may be destroyed
   virtual Status dump_buffer(LazyBuffer* buffer, LazyBuffer* target) const;
@@ -296,8 +302,8 @@ class LazyBuffer {
   // Return the certain file number of SST, -1 for unknown
   uint64_t file_number() const { return file_number_; }
 
-  // Pin this buffer, turn the state into editable
-  void pin();
+  // Pin this buffer, detach life cycle from some object
+  void pin(LazyBufferPinLevel level = LazyBufferPinLevel::DB);
 
   // Dump buffer to customize buffer
   Status dump(LazyBufferCustomizeBuffer _buffer) &&;
@@ -490,20 +496,6 @@ inline void LazyBuffer::reset(const LazyBufferState* _state,
   state_ = _state;
   context_ = _context;
   file_number_ = _file_number;
-}
-
-inline void LazyBuffer::pin() {
-  assert(state_ != nullptr);
-  return state_->pin_buffer(this);
-}
-
-inline Status LazyBuffer::dump(LazyBuffer& _target) && {
-  assert(state_ != nullptr);
-  assert(this != &_target);
-  if (_target.state_ == nullptr) {
-    _target.state_ = LazyBufferState::light_state();
-  }
-  return state_->dump_buffer(this, &_target);
 }
 
 inline Status LazyBuffer::fetch() const {
