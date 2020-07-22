@@ -1,6 +1,29 @@
 
 ## CHANGELOG
 
+- 版本号：v1.2.9
+- 日期：2020-07-22
+- 发版说明：
+  - 计划内例行发版
+- 功能变更：
+  - 支持 PatriciaTrie MemTable
+  - 降低 SkipList MemTable 比较器成本，优化性能
+  - 支持 LIRS Cache 算法 
+  - 支持 cmake 集成构建
+  - 支持 avoid_unnecessary_blocking_io 选项，降低长尾
+  - 减少调用链中的内存拷贝
+  - ValueMetaExtractor 重构，支持取得 Key
+  - Metrics 新增 Avg 与 PMax 的上报
+- 修复问题：
+  - 修复迭代器删除时，清理 MemTable 内存导致长尾的问题
+  - 修复后台在锁内执行目录扫描导致长尾的问题
+  - 修复 ReadOptions::tailing 为 true 导致野指针访问的 BUG
+  - 修复 promise 生存周期管控导致 Crash 的 BUG
+  - 修复 WAL 后台创建引入 WriteStpo 风险的 BUG
+  - 修复读取空 Value 失败的 BUG
+- 已知问题：
+  - 使用 LazyUniversalCompaction 有极低概率触发无效 TrivialMove 导致写阻塞
+
 - 版本号：v1.2.8
 - 日期：2020-06-04
 - 发版说明：
@@ -8,7 +31,7 @@
 - 功能变更：
   - 预创建指定个 WAL 文件，将创建 WAL 文件的逻辑从锁内移动到后台线程，降低写入长尾
   - 让描述 LSM 树拓补关系的 SST 文件常驻内存，降低读取长尾
-  - 增加 WriteBufferFlushPri 选项，对多 CF 支持更友好
+  - 增加 WriteBufferFlushPri 选项，对多 CF 支持更r友好
 - 修复问题：
   - 修复 LOG 中输出的 Flush 信息未包含 Key Value 分离 Blob 信息的问题
   - 修复 Feature 冲突导致数据集损坏的问题，不能同时启用下面的 Feature
