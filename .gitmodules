@@ -20,3 +20,6 @@
 [submodule "third-party/lz4"]
 	path = third-party/lz4
 	url = git@code.byted.org:storage/lz4.git
+[submodule "third-party/gflags"]
+	path = third-party/gflags
+	url = git@code.byted.org:storage/gflags.git
