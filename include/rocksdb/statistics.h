@@ -8,8 +8,8 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
-#include <string>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "rocksdb/status.h"
@@ -244,7 +244,8 @@ enum Tickers : uint32_t {
   // # of times snapshot_mutex_ is acquired in the fast path.
   TXN_SNAPSHOT_MUTEX_OVERHEAD,
 
-  // Number of keys actually found in MultiGet calls (vs number requested by caller)
+  // Number of keys actually found in MultiGet calls (vs number requested by
+  // caller)
   // NUMBER_MULTIGET_KEYS_READ gives the number requested by caller
   NUMBER_MULTIGET_KEYS_FOUND,
 
@@ -308,6 +309,8 @@ enum Histograms : uint32_t {
 
   // Time spent flushing memtable to disk
   FLUSH_TIME,
+  PICK_COMPACTION_TIME,
+  PICK_GARBAGE_COLLECTION_TIME,
 
   HISTOGRAM_ENUM_MAX,
 };
@@ -356,9 +359,7 @@ class Statistics {
   virtual void measureTime(uint32_t histogramType, uint64_t time) = 0;
 
   // Resets all ticker and histogram stats
-  virtual Status Reset() {
-    return Status::NotSupported("Not implemented");
-  }
+  virtual Status Reset() { return Status::NotSupported("Not implemented"); }
 
   // String representation of the statistic object.
   virtual std::string ToString() const {

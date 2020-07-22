@@ -10,10 +10,12 @@
 #endif
 
 #include <inttypes.h>
-#include "rocksdb/statistics.h"
-#include "port/likely.h"
+
 #include <algorithm>
 #include <cstdio>
+
+#include "port/likely.h"
+#include "rocksdb/statistics.h"
 
 namespace rocksdb {
 
@@ -167,6 +169,8 @@ const std::vector<std::pair<Histograms, std::string>> HistogramsNameMap = {
     {DECOMPRESSION_TIMES_NANOS, "rocksdb.decompression.times.nanos"},
     {READ_NUM_MERGE_OPERANDS, "rocksdb.read.num.merge_operands"},
     {FLUSH_TIME, "rocksdb.db.flush.micros"},
+    {PICK_COMPACTION_TIME, "rocksdb.pick.compaction.micros"},
+    {PICK_GARBAGE_COLLECTION_TIME, "rocksdb.pick.gc.micros"},
 };
 
 std::shared_ptr<Statistics> CreateDBStatistics() {
@@ -287,7 +291,7 @@ namespace {
 // a buffer size used for temp string buffers
 const int kTmpStrBufferSize = 200;
 
-} // namespace
+}  // namespace
 
 std::string StatisticsImpl::ToString() const {
   MutexLock lock(&aggregate_lock_);
@@ -309,10 +313,10 @@ std::string StatisticsImpl::ToString() const {
     // should be provided correctly
     int ret = snprintf(
         buffer, kTmpStrBufferSize,
-        "%s P50 : %f P95 : %f P99 : %f P99.9 : %f P100 : %f COUNT : %" PRIu64 
-        " SUM : %" PRIu64 "\n", h.second.c_str(), hData.median,
-        hData.percentile95, hData.percentile99, hData.percentile999, hData.max,
-        hData.count, hData.sum);
+        "%s P50 : %f P95 : %f P99 : %f P99.9 : %f P100 : %f COUNT : %" PRIu64
+        " SUM : %" PRIu64 "\n",
+        h.second.c_str(), hData.median, hData.percentile95, hData.percentile99,
+        hData.percentile999, hData.max, hData.count, hData.sum);
     if (ret < 0 || ret >= kTmpStrBufferSize) {
       assert(false);
       continue;
@@ -327,4 +331,4 @@ bool StatisticsImpl::HistEnabledForType(uint32_t type) const {
   return type < HISTOGRAM_ENUM_MAX;
 }
 
-} // namespace rocksdb
+}  // namespace rocksdb
