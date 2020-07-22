@@ -220,17 +220,10 @@ void LIRSCacheShard::ApplyToAllCacheEntries(void (*callback)(void*, size_t),
 
 void LIRSCacheShard::LIRS_Remove(LIRSHandle* e) {
   if (e->next_queue != nullptr) {
-    e->next_queue->prev_queue = e->prev_queue;
-    e->prev_queue->next_queue = e->next_queue;
-    e->next_queue = e->prev_queue = nullptr;
+    RemoveFromQueue(e);
   }
   if (e->next_stack != nullptr) {
-    e->next_stack->prev_stack = e->prev_stack;
-    e->prev_stack->next_stack = e->next_stack;
-    e->next_stack = e->prev_stack = nullptr;
-  }
-  usage_ -= e->charge;
-  if (e->LIR()) {
+    RemoveFromStack(e);
     stack_usage_ -= e->charge;
   }
 }
@@ -244,7 +237,6 @@ void LIRSCacheShard::LIRS_Insert(LIRSHandle* e) {
     PushToQueue(e);
     e->SetHIR();
   }
-  usage_ += e->charge;
 }
 
 void LIRSCacheShard::EvictFromLIRS(size_t charge,
@@ -263,8 +255,9 @@ void LIRSCacheShard::EvictFromLIRS(size_t charge,
   while (stack_usage_ + charge > stack_capacity_ &&
          cache_.prev_stack != &cache_) {
     LIRSHandle* old = cache_.prev_stack;
-    PushToQueue(old);
     stack_usage_ -= old->charge;
+    RemoveFromStack(old);
+    PushToQueue(old);
   }
 }
 
@@ -278,37 +271,39 @@ Cache::Handle* LIRSCacheShard::Lookup(const Slice& key, uint32_t hash) {
   MutexLock l(&mutex_);
   LIRSHandle* h = table_.Lookup(key, hash);
   if (h != nullptr) {
-    if (h->refs == 1) {
-      LIRS_Remove(h);
+    if (!h->Remote()) {
+      if (h->refs == 1) {
+        LIRS_Remove(h);
+      } else {
+        if (h->LIR()) {
+          AdjustToStackTop(h);
+        } else if (h->HIR()) {
+          if (h->next_stack != nullptr) {
+            h->SetLIR();
+            AdjustToStackTop(h);
+            RemoveFromQueue(h);
+            AdjustStackBottom();
+          } else {
+            PushToStack(h);
+            AdjustToQueueTail(h);
+          }
+        } else {
+          ShiftQueueHead();
+          if (h->next_stack != nullptr) {
+            h->SetLIR();
+            AdjustToStackTop(h);
+            AdjustStackBottom();
+          } else {
+            h->SetHIR();
+            PushToStack(h);
+            PushToQueue(h);
+          }
+        }
+        StackPruning();
+      }
     }
     h->refs++;
-    if (h->LIR()) {
-      AdjustToStackTop(h);
-    } else if (h->HIR()) {
-      if (h->next_stack != nullptr) {
-        h->SetLIR();
-        AdjustToStackTop(h);
-        RemoveFromQueue(h);
-        AdjustStackBottom();
-      } else {
-        PushToStack(h);
-	PushToQueue(h);
-        AdjustToQueueTail(h);
-      }
-    } else {
-      ShiftQueueHead();
-      if (h->next_stack != nullptr) {
-        h->SetLIR();
-        AdjustToStackTop(h);
-        AdjustStackBottom();
-      } else {
-        h->SetHIR();
-        PushToStack(h);
-        PushToQueue(h);
-      }
-    }
   }
-  StackPruning();
   return reinterpret_cast<Cache::Handle*>(h);
 }
 
@@ -377,9 +372,12 @@ Status LIRSCacheShard::Insert(const Slice& key, uint32_t hash, void* value,
   {
     MutexLock l(&mutex_);
     EvictFromLIRS(charge, &last_reference_list);
-    if (usage_ + charge > capacity_) {
-      delete[] reinterpret_cast<char*>(e);
-      *handle = nullptr;
+    if (usage_ + charge > capacity_ && strict_capacity_limit_) {
+      e->refs = 0;
+      last_reference_list.push_back(e);
+      if (handle != nullptr) {
+        *handle = nullptr;
+      }
       s = Status::Incomplete("Insert failed due to LIRS cache being full.");
     } else {
       LIRSHandle* old = table_.Insert(e);
@@ -394,6 +392,7 @@ Status LIRSCacheShard::Insert(const Slice& key, uint32_t hash, void* value,
       if (handle == nullptr) {
         LIRS_Insert(e);
       } else {
+        e->SetRemote();
         *handle = reinterpret_cast<Cache::Handle*>(e);
       }
       s = Status::OK();
