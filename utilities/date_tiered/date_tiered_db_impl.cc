@@ -391,7 +391,7 @@ Iterator* DateTieredDBImpl::NewIterator(const ReadOptions& opts) {
     auto internal_iter = db_impl->NewInternalIterator(
         arena, db_iter->GetRangeDelAggregator(), kMaxSequenceNumber, handle,
         &separate_helper);
-    db_iter->SetIterUnderDBIter(internal_iter, separate_helper);
+    db_iter->SetIterUnderDBIter(internal_iter, nullptr, separate_helper);
   } else {
     MergeIteratorBuilder builder(&icomp_, arena);
     for (auto& item : handle_map_) {
@@ -403,7 +403,7 @@ Iterator* DateTieredDBImpl::NewIterator(const ReadOptions& opts) {
       builder.AddIterator(internal_iter, separate_helper);
     }
     auto internal_iter = builder.Finish();
-    db_iter->SetIterUnderDBIter(internal_iter, nullptr);
+    db_iter->SetIterUnderDBIter(internal_iter, nullptr, nullptr);
   }
   return db_iter;
 }

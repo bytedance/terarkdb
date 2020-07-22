@@ -56,6 +56,12 @@ class MergeContext {
     return GetOperandsDirectionForward();
   }
 
+  void PinLazyBuffer() {
+    for (auto& lazy_buffer : operand_list_) {
+      lazy_buffer.pin(LazyBufferPinLevel::DB);
+    }
+  }
+
   // Return all the operands in the order as they were merged (passed to
   // FullMerge or FullMergeV2)
   std::vector<LazyBuffer>& GetOperandsDirectionForward() {
@@ -72,14 +78,14 @@ class MergeContext {
 
  private:
   void SetDirectionForward() {
-    if (operands_reversed_ == true) {
+    if (operands_reversed_) {
       std::reverse(operand_list_.begin(), operand_list_.end());
       operands_reversed_ = false;
     }
   }
 
   void SetDirectionBackward() {
-    if (operands_reversed_ == false) {
+    if (!operands_reversed_) {
       std::reverse(operand_list_.begin(), operand_list_.end());
       operands_reversed_ = true;
     }

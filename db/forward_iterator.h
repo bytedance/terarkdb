@@ -6,14 +6,14 @@
 
 #ifndef ROCKSDB_LITE
 
+#include <queue>
 #include <string>
 #include <vector>
-#include <queue>
 
+#include "db/dbformat.h"
 #include "rocksdb/db.h"
 #include "rocksdb/iterator.h"
 #include "rocksdb/options.h"
-#include "db/dbformat.h"
 #include "table/internal_iterator.h"
 #include "util/arena.h"
 
@@ -29,18 +29,36 @@ struct FileMetaData;
 
 class MinIterComparator {
  public:
-  explicit MinIterComparator(const Comparator* comparator) :
-    comparator_(comparator) {}
+  explicit MinIterComparator(const Comparator* comparator)
+      : comparator_(comparator) {}
 
   bool operator()(InternalIterator* a, InternalIterator* b) {
     return comparator_->Compare(a->key(), b->key()) > 0;
   }
+
  private:
   const Comparator* comparator_;
 };
 
 typedef std::priority_queue<InternalIterator*, std::vector<InternalIterator*>,
-                            MinIterComparator> MinIterHeap;
+                            MinIterComparator>
+    MinIterHeap;
+
+struct SVDestructCallback {
+  void Set(void (*callback)(void* arg, SuperVersion* sv), void* callback_arg) {
+    assert(callback != nullptr);
+    callback_ = callback;
+    callback_arg_ = callback_arg;
+  }
+  void Invoke(SuperVersion* sv) {
+    if (callback_ != nullptr) {
+      callback_(callback_arg_, sv);
+    }
+  }
+
+  void (*callback_)(void* arg, SuperVersion* sv) = nullptr;
+  void* callback_arg_ = nullptr;
+};
 
 /**
  * ForwardIterator is a special type of iterator that only supports Seek()
@@ -49,7 +67,7 @@ typedef std::priority_queue<InternalIterator*, std::vector<InternalIterator*>,
  * the iterator. At the current implementation, snapshot is taken at the
  * time Seek() is called. The Next() followed do not see new values after.
  */
-class ForwardIterator : public InternalIterator {
+class ForwardIterator : public InternalIterator, public SVDestructCallback {
  public:
   ForwardIterator(DBImpl* db, const ReadOptions& read_options,
                   ColumnFamilyData* cfd, SuperVersion* current_sv = nullptr);
@@ -85,8 +103,8 @@ class ForwardIterator : public InternalIterator {
   // either done immediately or deferred until this iterator is unpinned by
   // PinnedIteratorsManager.
   void SVCleanup();
-  static void SVCleanup(
-    DBImpl* db, SuperVersion* sv, bool background_purge_on_iterator_cleanup);
+  static void SVCleanup(DBImpl* db, SuperVersion* sv,
+                        bool background_purge_on_iterator_cleanup);
   static void DeferredSVCleanup(void* arg);
 
   void RebuildIterators(bool refresh_sv);
@@ -97,9 +115,9 @@ class ForwardIterator : public InternalIterator {
   void UpdateCurrent();
   bool NeedToSeekImmutable(const Slice& internal_key);
   void DeleteCurrentIter();
-  uint32_t FindFileInRange(
-    const std::vector<FileMetaData*>& files, const Slice& internal_key,
-    uint32_t left, uint32_t right);
+  uint32_t FindFileInRange(const std::vector<FileMetaData*>& files,
+                           const Slice& internal_key, uint32_t left,
+                           uint32_t right);
 
   bool IsOverUpperBound(const Slice& internal_key) const;
 

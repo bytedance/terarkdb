@@ -66,9 +66,10 @@ class LightLazyBufferState : public LazyBufferState {
 
   Status pin_buffer(LazyBuffer* buffer) const override {
     auto context = union_cast<Context>(get_context(buffer));
-    if (buffer->data() != context->data && !buffer->empty() &&
-        buffer->size() <= sizeof(Context)) {
-      ::memmove(context->data, buffer->data(), buffer->size());
+    if (buffer->size() <= sizeof(Context)) {
+      if (buffer->data() != context->data && buffer->size() > 0) {
+        ::memmove(context->data, buffer->data(), buffer->size());
+      }
       set_slice(buffer, Slice(context->data, buffer->size()));
       return Status::OK();
     }
@@ -579,7 +580,9 @@ std::string* LazyBuffer::trans_to_string() {
 }
 
 void LazyBuffer::pin(LazyBufferPinLevel level) {
-  assert(state_ != nullptr);
+  if (state_ == nullptr) {
+    return;
+  }
   Status s = Status::NotSupported();
   if (level == LazyBufferPinLevel::Internal) {
     s = state_->pin_buffer(this);

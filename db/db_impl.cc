@@ -2095,7 +2095,7 @@ Iterator* DBImpl::NewIterator(const ReadOptions& read_options,
     auto iter = new ForwardIterator(this, read_options, cfd, sv);
     result = NewDBIterator(
         env_, read_options, *cfd->ioptions(), sv->mutable_cf_options,
-        cfd->user_comparator(), iter, kMaxSequenceNumber, sv->current,
+        cfd->user_comparator(), iter, iter, kMaxSequenceNumber, sv->current,
         sv->mutable_cf_options.max_sequential_skip_in_iterations, read_callback,
         this, cfd);
 #endif
@@ -2169,7 +2169,7 @@ ArenaWrappedDBIter* DBImpl::NewIteratorImpl(const ReadOptions& read_options,
   InternalIterator* internal_iter =
       NewInternalIterator(read_options, cfd, sv, db_iter->GetArena(),
                           db_iter->GetRangeDelAggregator(), snapshot);
-  db_iter->SetIterUnderDBIter(internal_iter, sv->current);
+  db_iter->SetIterUnderDBIter(internal_iter, nullptr, sv->current);
 
   return db_iter;
 }
@@ -2202,7 +2202,7 @@ Status DBImpl::NewIterators(
       auto iter = new ForwardIterator(this, read_options, cfd, sv);
       iterators->push_back(NewDBIterator(
           env_, read_options, *cfd->ioptions(), sv->mutable_cf_options,
-          cfd->user_comparator(), iter, kMaxSequenceNumber, sv->current,
+          cfd->user_comparator(), iter, iter, kMaxSequenceNumber, sv->current,
           sv->mutable_cf_options.max_sequential_skip_in_iterations,
           read_callback, this, cfd));
     }
