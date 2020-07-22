@@ -1,9 +1,9 @@
 #include "terark_zip_memtable.h"
 
 #if defined(_MSC_VER)
-   //#include <windows.h>
+//#include <windows.h>
 #else
-   #include <sys/mman.h>
+#include <sys/mman.h>
 #endif
 
 using terark::MainPatricia;
@@ -106,11 +106,10 @@ PatriciaTrieRep::~PatriciaTrieRep() {
     auto trie = trie_vec_[i];
     void* base = trie->mem_get(0);
     size_t size = terark::align_up(trie->mem_size(), 4096);
-    if (mprotect(base, size, PROT_READ|PROT_WRITE) < 0) {
-      fprintf(stderr,
-              "%s:%d: %s: FATAL: mprotect(%p, %zd, READ|WRITE) = %s\n",
-              __FILE__, __LINE__, BOOST_CURRENT_FUNCTION,
-              base, size, strerror(errno));
+    if (mprotect(base, size, PROT_READ | PROT_WRITE) < 0) {
+      fprintf(stderr, "%s:%d: %s: FATAL: mprotect(%p, %zd, READ|WRITE) = %s\n",
+              __FILE__, __LINE__, BOOST_CURRENT_FUNCTION, base, size,
+              strerror(errno));
     }
     delete trie;
   }
@@ -139,8 +138,8 @@ void PatriciaTrieRep::MarkReadOnly() {
     size_t size = terark::align_up(trie->mem_size(), 4096);
     if (mprotect(base, size, PROT_READ) < 0) {
       fprintf(stderr, "%s:%d: %s: FATAL: mprotect(%p, %zd, READ) = %s\n",
-              __FILE__, __LINE__, BOOST_CURRENT_FUNCTION,
-              base, size, strerror(errno));
+              __FILE__, __LINE__, BOOST_CURRENT_FUNCTION, base, size,
+              strerror(errno));
     }
   }
   immutable_ = true;
@@ -348,13 +347,15 @@ bool PatriciaTrieRep::InsertKeyValue(const Slice& internal_key,
       uint32_t data_loc = vector->loc.load(std::memory_order_relaxed);
       auto* data = (details::tag_vector_t::data_t*)trie->mem_get(data_loc);
       assert(size > 0);
-      if ((tag >> 8) == (data[size - 1].tag >> 8)) {
+      size_t insert_pos = terark::lower_bound_ex_n(
+          data, 0, size, tag >> 8,
+          [](details::tag_vector_t::data_t& item) { return item.tag >> 8; });
+      if (insert_pos < size && (tag >> 8) == (data[insert_pos].tag >> 8)) {
         vector->size.store(size, std::memory_order_release);
         trie->mem_free(value_loc, value_size);
         return details::InsertResult::Duplicated;
       }
-      assert(tag > data[size - 1].tag);
-      if (!details::tag_vector_t::full(size)) {
+      if (!details::tag_vector_t::full(size) && insert_pos == size) {
         data[size].loc = (uint32_t)value_loc;
         data[size].tag = tag;
 
@@ -363,7 +364,8 @@ bool PatriciaTrieRep::InsertKeyValue(const Slice& internal_key,
         return details::InsertResult::Success;
       }
       size_t old_data_cap = sizeof(details::tag_vector_t::data_t) * size;
-      size_t cow_data_loc = trie->mem_alloc(old_data_cap * 2);
+      size_t cow_data_loc = trie->mem_alloc(
+          old_data_cap * (1 + details::tag_vector_t::full(size)));
       if (cow_data_loc == MainPatricia::mem_alloc_fail) {
         vector->size.store(size, std::memory_order_release);
         trie->mem_free(value_loc, value_size);
@@ -371,9 +373,12 @@ bool PatriciaTrieRep::InsertKeyValue(const Slice& internal_key,
       }
       auto* cow_data =
           (details::tag_vector_t::data_t*)trie->mem_get(cow_data_loc);
-      memcpy(cow_data, data, old_data_cap);
-      cow_data[size].loc = (uint32_t)value_loc;
-      cow_data[size].tag = tag;
+      memcpy(cow_data, data,
+             sizeof(details::tag_vector_t::data_t) * insert_pos);
+      cow_data[insert_pos].loc = (uint32_t)value_loc;
+      cow_data[insert_pos].tag = tag;
+      memcpy(cow_data + insert_pos, data + insert_pos + 1,
+             sizeof(details::tag_vector_t::data_t) * (size - insert_pos));
       vector->loc.store((uint32_t)cow_data_loc, std::memory_order_relaxed);
       vector->size.store(size + 1, std::memory_order_release);
       trie->mem_lazy_free(data_loc, old_data_cap);
