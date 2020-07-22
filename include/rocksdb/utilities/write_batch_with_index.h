@@ -45,18 +45,23 @@ enum WriteType {
 // Singleton factory instance, DO NOT delete the returned pointer
 const WriteBatchEntryIndexFactory* skip_list_WriteBatchEntryIndexFactory();
 
+// Singleton factory instance, DO NOT delete the returned pointer
+const WriteBatchEntryIndexFactory* patricia_WriteBatchEntryIndexFactory(
+    const WriteBatchEntryIndexFactory* fallback = nullptr);
+
 struct WriteBatchEntryIndexFactoryRegister {
   WriteBatchEntryIndexFactoryRegister(const char* name,
                                       const WriteBatchEntryIndexFactory*);
 };
-#define ROCKSDB_REGISTER_WRITE_BATCH_WITH_INDEX(name)  \
-    WriteBatchEntryIndexFactoryRegister                \
-    s_reg_##name##_##WriteBatchEntryIndexFactory(#name, \
-            name##_##WriteBatchEntryIndexFactory())
+#define ROCKSDB_REGISTER_WRITE_BATCH_WITH_INDEX(name) \
+  WriteBatchEntryIndexFactoryRegister                 \
+      s_reg_##name##_##WriteBatchEntryIndexFactory(   \
+          #name, name##_##WriteBatchEntryIndexFactory())
 
 // name: skiplist or other names registed
 // return nullptr if invalid name
-const WriteBatchEntryIndexFactory* GetWriteBatchEntryIndexFactory(const char* name);
+const WriteBatchEntryIndexFactory* GetWriteBatchEntryIndexFactory(
+    const char* name);
 
 // an entry for Put, Merge, Delete, or SingleDelete entry for write batches.
 // Used in WBWIIterator.
@@ -66,16 +71,14 @@ struct WriteEntry {
   Slice value;
 };
 
-template<class T, size_t N>
+template <class T, size_t N>
 struct WBIteratorStorage {
   ~WBIteratorStorage() {
-    if(iter != nullptr) {
+    if (iter != nullptr) {
       iter->~T();
     }
   }
-  T* operator->() const {
-    return iter;
-  }
+  T* operator->() const { return iter; }
   T* iter = nullptr;
   uint8_t buffer[N];
 };

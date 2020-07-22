@@ -48,6 +48,10 @@ endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake/modules/")
 
+SET(CMAKE_INSTALL_LIBDIR ${CMAKE_CURRENT_BINARY_DIR}/terarkdb/lib)
+SET(CMAKE_INSTALL_BINDIR ${CMAKE_CURRENT_BINARY_DIR}/terarkdb/bin)
+SET(CMAKE_INSTALL_INCLUDEDIR ${CMAKE_CURRENT_BINARY_DIR}/terarkdb/include)
+
 option(BUILD_SHARED_LIB "build shared lib" OFF)
 option(WITH_JEMALLOC "build with JeMalloc" OFF)
 option(WITH_SNAPPY "build with SNAPPY" ON)
@@ -484,15 +488,13 @@ include_directories(SYSTEM ${PROJECT_SOURCE_DIR}/third-party/gtest-1.7.0/fused-s
 find_package(Threads REQUIRED)
 
 
-# Start --- Build terark-core seperately and install their libraries
-# TODO change terark-core into CMake project
 SET(BUILD_SUFFIX "d")
 IF(NOT ${CMAKE_BUILD_TYPE} STREQUAL "Debug")
-  MESSAGE("build with release")
+  MESSAGE("-- build with release")
   SET(BUILD_SUFFIX "r")
 ELSE()
   SET(CMAKE_BUILD_TYPE "Debug")
-  MESSAGE("build with debug")
+  MESSAGE("-- build with debug")
 ENDIF()
 
 ADD_SUBDIRECTORY(terark-core)
@@ -502,7 +504,6 @@ IF(CMAKE_BUILD_TYPE STREQUAL "Debug")
   LIST(APPEND TERARK_DEPEND_LIBS asan)
 ENDIF()
 
-# End --- Build terark-core seperately and install their libraries
 
 add_subdirectory(third-party/gtest-1.7.0/fused-src/gtest)
 
@@ -862,7 +863,7 @@ if(NOT WIN32 OR ROCKSDB_INSTALL_ON_WINDOWS)
   include(GNUInstallDirs)
   include(CMakePackageConfigHelpers)
 
-  set(package_config_destination ${CMAKE_INSTALL_LIBDIR}/cmake/rocksdb)
+  set(package_config_destination ${CMAKE_INSTALL_LIBDIR})
 
   configure_package_config_file(
     ${CMAKE_CURRENT_LIST_DIR}/cmake/RocksDBConfig.cmake.in RocksDBConfig.cmake
@@ -875,14 +876,16 @@ if(NOT WIN32 OR ROCKSDB_INSTALL_ON_WINDOWS)
     COMPATIBILITY SameMajorVersion
   )
 
-  install(DIRECTORY include/rocksdb COMPONENT devel DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
+  install(
+          DIRECTORY include/rocksdb 
+          COMPONENT devel 
+          DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
   install(
     TARGETS ${ROCKSDB_STATIC_LIB}
     EXPORT RocksDBTargets
     COMPONENT devel
-    ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
-    INCLUDES DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
   )
 
   if(BUILD_SHARED_LIB)
@@ -1152,4 +1155,5 @@ endif()
 option(WITH_TOOLS "build with tools" ON)
 if(WITH_TOOLS)
   add_subdirectory(tools)
+  add_subdirectory(terark-tools/terark-test)
 endif()

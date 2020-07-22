@@ -39,6 +39,7 @@
 #include <rocksdb/status.h>
 #include <stdint.h>
 #include <stdlib.h>
+
 #include <memory>
 #include <stdexcept>
 #include <unordered_map>
@@ -202,9 +203,7 @@ class MemTableRep {
 
     // Returns the key at the current position.
     // REQUIRES: Valid()
-    virtual Slice key() const {
-      return GetLengthPrefixedSlice(EncodedKey());
-    }
+    virtual Slice key() const { return GetLengthPrefixedSlice(EncodedKey()); }
 
     // Returns LazyBuffer at the current position.
     // REQUIRES: Valid()
@@ -360,7 +359,7 @@ class VectorRepFactory : public MemTableRepFactory {
   virtual const char* Name() const override { return "VectorRepFactory"; }
 };
 
-  // This class contains a fixed array of buckets, each
+// This class contains a fixed array of buckets, each
 // pointing to a skiplist (null if the bucket is empty).
 // bucket_count: number of fixed array buckets
 // skiplist_height: the max height of the skiplist
@@ -427,6 +426,12 @@ extern MemTableRepFactory* NewHashCuckooRepFactory(
     size_t write_buffer_size, size_t average_data_size = 64,
     unsigned int hash_function_count = 4);
 
+extern MemTableRepFactory* NewPatriciaTrieRepFactory(
+    std::shared_ptr<class MemTableRepFactory> fallback = nullptr);
+
+extern MemTableRepFactory* NewPatriciaTrieRepFactory(
+    const std::unordered_map<std::string, std::string>& options,
+    class Status* s);
 
 #endif  // ROCKSDB_LITE
 

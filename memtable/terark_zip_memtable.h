@@ -337,10 +337,4 @@ class PatriciaTrieRepFactory : public MemTableRepFactory {
   virtual bool CanHandleDuplicatedKey() const override { return true; }
 };
 
-MemTableRepFactory* NewPatriciaTrieRepFactory(
-    std::shared_ptr<MemTableRepFactory> fallback);
-
-MemTableRepFactory* NewPatriciaTrieRepFactory(
-    const std::unordered_map<std::string, std::string>& options, Status* s);
-
 }  // namespace rocksdb
