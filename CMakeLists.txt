@@ -124,14 +124,15 @@ else()
   endif()
 
   if(WITH_LZ4)
-    # find_package(lz4 REQUIRED)
     add_definitions(-DLZ4)
     include_directories(${CMAKE_CURRENT_BINARY_DIR}/third-party/lz4/include)
-    list(APPEND THIRDPARTY_LIBS ${CMAKE_CURRENT_BINARY_DIR}/third-party/lz4/lib/liblz4.a)
+    # The previous include_directories should worked but it doesn't, don't know why
+    # So we append the headers directory from its source dir
+    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/third-party/lz4/lib)
+    list(APPEND THIRDPARTY_LIBS lz4)
   endif()
 
   if(WITH_ZSTD)
-    # find_package(zstd REQUIRED)
     add_definitions(-DZSTD)
     include_directories(${CMAKE_CURRENT_BINARY_DIR}/third-party/zstd/include
                         ${CMAKE_CURRENT_SOURCE_DIR}/third-party/zstd/lib/dictBuilder
@@ -874,8 +875,8 @@ if(NOT WIN32 OR ROCKSDB_INSTALL_ON_WINDOWS)
   )
 
   install(
-          DIRECTORY include/rocksdb 
-          COMPONENT devel 
+          DIRECTORY include/rocksdb
+          COMPONENT devel
           DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
   install(
@@ -1065,7 +1066,7 @@ if(WITH_TESTS)
         utilities/write_batch_with_index/write_batch_with_index_test.cc
   )
 
-  
+
 
   if(WITH_LIBRADOS)
     list(APPEND TESTS utilities/env_librados_test.cc)
@@ -1112,7 +1113,7 @@ if(WITH_TESTS)
 
   # Tests are excluded from Release builds
   set(TEST_EXES ${TESTS})
- 
+
   foreach(sourcefile ${TEST_EXES})
       get_filename_component(exename ${sourcefile} NAME_WE)
       add_executable(${CMAKE_PROJECT_NAME}_${exename}${ARTIFACT_SUFFIX} ${sourcefile}
