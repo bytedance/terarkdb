@@ -12,11 +12,35 @@ SET(HAVE_LIBLZO2 OFF CACHE BOOL "disable liblzo2" FORCE)
 ADD_SUBDIRECTORY(snappy)
 SET_PROPERTY(TARGET snappy PROPERTY POSITION_INDEPENDENT_CODE ON)
 
-# ZLib
-#ADD_SUBDIRECTORY(zlib)
-#SET_PROPERTY(TARGET zlib PROPERTY POSITION_INDEPENDENT_CODE ON)
-
 INCLUDE(ExternalProject)
+
+# Metrics
+ExternalProject_Add(metrics2-project
+    SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/metrics2-cmake
+    CONFIGURE_COMMAND mkdir -p build && mkdir -p ${CMAKE_CURRENT_BINARY_DIR}/metrics2
+    BUILD_IN_SOURCE 1
+    BUILD_COMMAND cd build && cmake ../ && make -j $(nproc)
+    # metrics2 doesn't have a install instruction, so we have to manully install it
+    INSTALL_COMMAND cp build/libmetrics2.a ${CMAKE_CURRENT_BINARY_DIR}/metrics2/ && rm -rf ${CMAKE_CURRENT_SOURCE_DIR}/metrics2-cmake/build)
+ADD_LIBRARY(metrics2 STATIC IMPORTED GLOBAL)
+ADD_DEPENDENCIES(metrics2 metrics2-project)
+SET_TARGET_PROPERTIES(metrics2 PROPERTIES
+    IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/metrics2/libmetrics2.a
+    INCLUDE_DIRECTORIES ${CMAKE_CURRENT_SOURCE_DIR}/metrics2/)
+
+# Zlib
+ExternalProject_Add(zlib-project
+    SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/zlib
+    CONFIGURE_COMMAND mkdir -p build
+    BUILD_IN_SOURCE 1
+    BUILD_COMMAND cd build && cmake ../ -DCMAKE_INSTALL_PREFIX=${CMAKE_CURRENT_BINARY_DIR}/zlib && make
+    # zlib compile will produce some dirty files, we need to clean them.
+    INSTALL_COMMAND cd build && make install && cd ../ && rm -rf build zconf.h.included && git checkout . )
+ADD_LIBRARY(zlib STATIC IMPORTED GLOBAL)
+ADD_DEPENDENCIES(zlib zlib-project)
+SET_TARGET_PROPERTIES(zlib PROPERTIES
+    IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/zlib/lib/libz.a
+    INCLUDE_DIRECTORIES ${CMAKE_CURRENT_BINARY_DIR}/zlib/include)
 
 # Gflags
 ExternalProject_Add(gflags-project

@@ -56,9 +56,11 @@ option(BUILD_SHARED_LIB "build shared lib" OFF)
 option(WITH_JEMALLOC "build with JeMalloc" OFF)
 option(WITH_SNAPPY "build with SNAPPY" ON)
 option(WITH_LZ4 "build with lz4" ON)
-option(WITH_ZLIB "build with zlib" OFF)
+option(WITH_ZLIB "build with zlib" ON)
 option(WITH_ZSTD "build with zstd" ON)
 option(WITH_WINDOWS_UTF8_FILENAMES "use UTF8 as characterset for opening files, regardles of the system code page" OFF)
+option(WITH_METRICS "build with metrics" ON)
+
 if (WITH_WINDOWS_UTF8_FILENAMES)
   add_definitions(-DROCKSDB_WINDOWS_UTF8_FILENAMES)
 endif()
@@ -106,11 +108,8 @@ else()
 
   if(WITH_ZLIB)
     add_definitions(-DZLIB)
-    # include_directories(${ZLIB_INCLUDE_DIR})
-    # list(APPEND THIRDPARTY_LIBS ${ZLIB_LIBRARIES})
-    include_directories(${CMAKE_CURRENT_BINARY_DIR}/third-party/zlib
-                        ${CMAKE_CURRENT_SOURCE_DIR}/third-party/zlib)
-    list(APPEND THIRDPARTY_LIBS ${CMAKE_CURRENT_BINARY_DIR}/third-party/zlib/libz.a)
+    include_directories(${CMAKE_CURRENT_BINARY_DIR}/third-party/zlib/include)
+    list(APPEND THIRDPARTY_LIBS zlib)
   endif()
 
   option(WITH_BZ2 "build with bzip2" OFF)
@@ -135,9 +134,13 @@ else()
     include_directories(${CMAKE_CURRENT_BINARY_DIR}/third-party/zstd/include
                         ${CMAKE_CURRENT_SOURCE_DIR}/third-party/zstd/lib/dictBuilder
                         ${CMAKE_CURRENT_SOURCE_DIR}/third-party/zstd/lib)
-
     # terark-core already linked with zstd, so we ignore it here (for now)
-    # list(APPEND THIRDPARTY_LIBS ${CMAKE_CURRENT_BINARY_DIR}/third-party/zstd/lib/libzstd.a)
+  endif()
+
+  if (WITH_METRICS)
+    add_definitions(-DTERARKDB_ENABLE_METRICS)
+    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/third-party/metrics2-cmake)
+    list(APPEND THIRDPARTY_LIBS metrics2)
   endif()
 endif()
 
