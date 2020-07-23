@@ -7,6 +7,7 @@
 #include <table/internal_iterator.h>
 #include <table/meta_blocks.h>
 #include <table/sst_file_writer_collectors.h>
+#include <util/util.h>
 // terark headers
 #include <terark/lcast.hpp>
 #include <terark/util/crc.hpp>
@@ -207,10 +208,6 @@ static bool Overlap(const fstring& a, const fstring& b) {
   return a.data() >= b.data() && a.data() < b.data() + b.size();
 }
 
-template <class T>
-void CallDestructor(T* ptr) {
-  ptr->~T();
-}
 }  // namespace
 
 namespace rocksdb {
@@ -322,7 +319,7 @@ class TerarkZipTableIterator : public TerarkZipTableIndexIterator,
   }
   ~TerarkZipTableIterator() {
     if (iter_ != nullptr) {
-      CallDestructor(iter_);
+      call_destructor(iter_);
     }
     ContextBuffer(std::move(iter_storage_), ctx_ptr_);
   }
@@ -726,7 +723,7 @@ class TerarkZipTableMultiIterator : public TerarkZipTableIterator<reverse> {
     }
     subReader_ = subReader;
     if (iter_ != nullptr) {
-      CallDestructor(iter_);
+      call_destructor(iter_);
     }
     iter_ = subReader->index_->NewIterator(&iter_storage_, ctx_ptr_);
     invalidate_offsets_cache();

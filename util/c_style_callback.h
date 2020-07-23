@@ -9,25 +9,27 @@
 
 #pragma once
 
+#include <utility>
+
 namespace rocksdb {
 
-template<class Lambda>
+template <class Lambda>
 struct c_style_callback_fetcher {
-  template<class R, class... Args>
+  template <class R, class... Args>
   static R invoke(void* vlamb, Args... args) {
     return (*(Lambda*)vlamb)(std::forward<Args>(args)...);
   }
 
-  template<class R, class... Args>
+  template <class R, class... Args>
   using target_callback = R (*)(void*, Args...);
 
-  template<class R, class... Args>
+  template <class R, class... Args>
   operator target_callback<R, Args...>() const {
     return &c_style_callback_fetcher::invoke<R, Args...>;
   }
 };
 
-template<class Lambda>
+template <class Lambda>
 c_style_callback_fetcher<Lambda> c_style_callback(Lambda&) {
   return c_style_callback_fetcher<Lambda>();
 }
