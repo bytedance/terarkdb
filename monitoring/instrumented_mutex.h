@@ -12,7 +12,8 @@
 #include "rocksdb/thread_status.h"
 #include "util/stop_watch.h"
 
-#define MUTEX_DEBUG_MILLISECONDS 100  // 0 to disable
+// MUTEX_DEBUG_MILLISECONDS set 0 to disable
+#define MUTEX_DEBUG_MILLISECONDS 0
 
 namespace boost {
 namespace fibers {

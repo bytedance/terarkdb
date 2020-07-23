@@ -244,7 +244,6 @@ TEST_F(MapBuilderTest, KV) {
   AddMockFile(kv_contents2, 1, false, del_contents1);
   AddMockFile(kv_contents1, 2, false, del_contents1);
   AddMockFile(kv_contents2, 3, false, del_contents1);
-  vstorage_->FinishAddFile();
   UpdateVersionStorageInfo();
   std::vector<Range> deleted_range;
   std::vector<FileMetaData*> added_files;
@@ -271,7 +270,6 @@ TEST_F(MapBuilderTest, RangeDel) {
   AddMockFile(kv_contents2, 1, true, del_contents1);
   AddMockFile(kv_contents1, 2, true, del_contents2);
   AddMockFile(kv_contents2, 3, false, del_contents2);
-  vstorage_->FinishAddFile();
   UpdateVersionStorageInfo();
   std::vector<Range> deleted_range;
   std::vector<FileMetaData*> added_files;
@@ -298,7 +296,6 @@ TEST_F(MapBuilderTest, DeletedRange) {
   AddMockFile(kv_contents2, 1, true, del_contents1);
   AddMockFile(kv_contents1, 2, true, del_contents2);
   AddMockFile(kv_contents2, 3, false, del_contents2);
-  vstorage_->FinishAddFile();
   UpdateVersionStorageInfo();
   std::vector<Range> deleted_range({Range(Slice("3"), Slice("4"))});
   std::vector<FileMetaData*> added_files;
@@ -325,7 +322,6 @@ TEST_F(MapBuilderTest, AddedFiles) {
   AddMockFile(kv_contents2, 1, true, del_contents1);
   AddMockFile(kv_contents1, 2, true, del_contents2);
   AddMockFile(kv_contents2, 3, false, del_contents2);
-  vstorage_->FinishAddFile();
   UpdateVersionStorageInfo();
   std::vector<Range> deleted_range({Range(Slice("3"), Slice("4"))});
   std::vector<FileMetaData*> added_files;
@@ -353,7 +349,6 @@ TEST_F(MapBuilderTest, MapSstInput) {
   AddMockFile(kv_contents2, 1, true, del_contents1);
   AddMockFile(kv_contents1, 2, true, del_contents2);
   AddMockFile(kv_contents2, 3, false, del_contents2);
-  vstorage_->FinishAddFile();
   UpdateVersionStorageInfo();
   std::vector<Range> deleted_range({Range(Slice("3"), Slice("4"))});
   std::vector<FileMetaData*> added_files;
@@ -382,7 +377,6 @@ TEST_F(MapBuilderTest, NoNeedBuildMapSst) {
   kv_contents = CreateFile(0, 9, false /*is_range_delete*/);
   stl_wrappers::KVMap del_contents;
   AddMockFile(kv_contents, 0, false, del_contents);
-  vstorage_->FinishAddFile();
   UpdateVersionStorageInfo();
   std::vector<Range> deleted_range;
   std::vector<FileMetaData*> added_files;

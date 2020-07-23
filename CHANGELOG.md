@@ -6,20 +6,21 @@
 - 发版说明：
   - 计划内例行发版
 - 功能变更：
-  - 支持 PatriciaTrie MemTable
   - 降低 SkipList MemTable 比较器成本，优化性能
+  - 支持 PatriciaTrie MemTable
   - 支持 LIRS Cache 算法 
-  - 支持 cmake 集成构建
+  - 支持 CMake 集成构建
   - 支持 avoid_unnecessary_blocking_io 选项，降低长尾
-  - 减少调用链中的内存拷贝
+  - 减少调用链中的内存拷贝，降低大 Value 读取成本
   - ValueMetaExtractor 重构，支持取得 Key
-  - Metrics 新增 Avg 与 PMax 的上报
+  - Metrics 新增 Latency 的 Avg 与 Max 上报
 - 修复问题：
+  - 修复 VersionBuilder 在锁内执行逻辑过复杂导致的长尾问题
   - 修复迭代器删除时，清理 MemTable 内存导致长尾的问题
   - 修复后台在锁内执行目录扫描导致长尾的问题
   - 修复 ReadOptions::tailing 为 true 导致野指针访问的 BUG
   - 修复 promise 生存周期管控导致 Crash 的 BUG
-  - 修复 WAL 后台创建引入 WriteStpo 风险的 BUG
+  - 修复后台创建 WAL 引入 WriteStop 风险的 BUG
   - 修复读取空 Value 失败的 BUG
 - 已知问题：
   - 使用 LazyUniversalCompaction 有极低概率触发无效 TrivialMove 导致写阻塞

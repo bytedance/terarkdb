@@ -147,7 +147,6 @@ class VersionBuilder::Rep {
   };
 
   std::unique_ptr<VersionBuilderDebugger> debugger_;
-  std::vector<FileMetaData*> unref_;
   const EnvOptions& env_options_;
   Logger* info_log_;
   TableCache* table_cache_;
@@ -178,27 +177,12 @@ class VersionBuilder::Rep {
         table_cache_(table_cache),
         base_vstorage_(base_vstorage),
         num_levels_(base_vstorage->num_levels()),
+        levels_(nullptr),
         dependence_version_(0),
         new_deleted_files_(0),
         has_invalid_levels_(false) {
     if (enable_debugger) {
       debugger_.reset(new VersionBuilderDebugger);
-    }
-    // level -1 used for dependence files
-    levels_ = new std::unordered_map<uint64_t, FileMetaData*>[num_levels_];
-    level_zero_cmp_.sort_method = FileComparator::kLevel0;
-    level_nonzero_cmp_.sort_method = FileComparator::kLevelNon0;
-    level_nonzero_cmp_.internal_comparator =
-        base_vstorage_->InternalComparator();
-
-    for (int level = -1; level < num_levels_; level++) {
-      for (auto f : base_vstorage_->LevelFiles(level)) {
-        PutSst(f, level);
-      }
-    }
-    CheckConsistency(base_vstorage_, true);
-    if (debugger_) {
-      debugger_->PushVersion(base_vstorage_);
     }
   }
 
@@ -208,15 +192,11 @@ class VersionBuilder::Rep {
         UnrefFile(pair.second.f);
       }
     }
-    for (auto f : unref_) {
-      UnrefFile(f);
-    }
     delete[] levels_;
   }
 
   void UnrefFile(FileMetaData* f) {
-    f->refs--;
-    if (f->refs <= 0) {
+    if (f->Unref()) {
       if (f->table_reader_handle) {
         assert(table_cache_ != nullptr);
         table_cache_->ReleaseHandle(f->table_reader_handle);
@@ -261,7 +241,7 @@ class VersionBuilder::Rep {
   void PutSst(FileMetaData* f, int level) {
     auto ib = dependence_map_.emplace(f->fd.GetNumber(),
                                       DependenceItem{0, 0, false, level, f, 0});
-    f->refs++;
+    f->Ref();
     if (ib.second) {
       PutInheritance(&ib.first->second);
     } else {
@@ -362,7 +342,7 @@ class VersionBuilder::Rep {
                   f->table_reader_handle = nullptr;
                   f->refs = 1;
                   f->being_compacted = false;
-                  unref_.emplace_back(item.f);
+                  UnrefFile(item.f);
                   item.f = f;
                 }
                 item.f->gc_status = FileMetaData::kGarbageCollectionPermitted;
@@ -384,7 +364,7 @@ class VersionBuilder::Rep {
         ++it;
       } else {
         DelInheritance(item.f);
-        unref_.emplace_back(item.f);
+        UnrefFile(item.f);
         it = dependence_map_.erase(it);
       }
     }
@@ -532,8 +512,31 @@ class VersionBuilder::Rep {
     return true;
   }
 
+  void Init() {
+    if (levels_ != nullptr) {
+      return;
+    }
+    // level -1 used for dependence files
+    levels_ = new std::unordered_map<uint64_t, FileMetaData*>[num_levels_];
+    level_zero_cmp_.sort_method = FileComparator::kLevel0;
+    level_nonzero_cmp_.sort_method = FileComparator::kLevelNon0;
+    level_nonzero_cmp_.internal_comparator =
+        base_vstorage_->InternalComparator();
+
+    for (int level = -1; level < num_levels_; level++) {
+      for (auto f : base_vstorage_->LevelFiles(level)) {
+        PutSst(f, level);
+      }
+    }
+    CheckConsistency(base_vstorage_, true);
+    if (debugger_) {
+      debugger_->PushVersion(base_vstorage_);
+    }
+  }
+
   // Apply all of the edits in *edit to the current state.
   void Apply(VersionEdit* edit) {
+    Init();
     CheckConsistency(base_vstorage_, false);
     if (debugger_) {
       debugger_->PushEdit(edit);
@@ -581,17 +584,12 @@ class VersionBuilder::Rep {
 
     // shrink files
     CalculateDependence(false, edit->is_open_db());
-    if (!unref_.empty()) {
-      for (auto f : unref_) {
-        UnrefFile(f);
-      }
-      unref_.clear();
-    }
   }
 
   // Save the current state in *v.
   // WARNING: this func will call out of mutex
   void SaveTo(VersionStorageInfo* vstorage) {
+    Init();
     CheckConsistency(vstorage, true);
     CalculateDependence(true);
     auto exists = [&](uint64_t file_number) {
@@ -672,6 +670,7 @@ class VersionBuilder::Rep {
       old_file_queue.pop();
     }
     vstorage->set_read_amplification(read_amp);
+    vstorage->oldest_snapshot_seqnum(base_vstorage_->oldest_snapshot_seqnum());
 
     CheckConsistency(vstorage, true);
     if (debugger_) {
@@ -940,10 +939,10 @@ void VersionBuilderDebugger::Verify(VersionBuilder::Rep* rep,
     }
     for (int j = -1; j < vstorage->num_levels(); ++j) {
       for (auto f : vstorage_0.LevelFiles(j)) {
-        --f->refs;
+        f->Unref();
       }
       for (auto f : vstorage_1.LevelFiles(j)) {
-        --f->refs;
+        f->Unref();
       }
     }
   }

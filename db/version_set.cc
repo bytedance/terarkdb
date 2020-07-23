@@ -355,9 +355,7 @@ Version::~Version() {
   for (int level = -1; level < storage_info_.num_levels_; level++) {
     for (size_t i = 0; i < storage_info_.files_[level].size(); i++) {
       FileMetaData* f = storage_info_.files_[level][i];
-      assert(f->refs > 0);
-      f->refs--;
-      if (f->refs <= 0) {
+      if (f->Unref()) {
         assert(cfd_ != nullptr);
         uint32_t path_id = f->fd.GetPathId();
         assert(path_id < cfd_->ioptions()->cf_paths.size());
@@ -699,10 +697,23 @@ class BaseReferencedVersionBuilder {
   }
   VersionBuilder* version_builder() { return version_builder_; }
   VersionStorageInfo* version_storage() { return version_->storage_info(); }
+  void PushEdit(VersionEdit* edit, VersionSet* versions,
+                InstrumentedMutex* mu) {
+    edit_list_.push_back(edit);
+    versions->LogAndApplyHelper(version_->cfd(), version_builder_, version_,
+                                edit, mu, false);
+  }
+  void DoApplyAndSaveTo(VersionStorageInfo* vstorage) {
+    for (auto edit : edit_list_) {
+      version_builder_->Apply(edit);
+    }
+    version_builder_->SaveTo(vstorage);
+  }
 
  private:
   VersionBuilder* version_builder_;
   Version* version_;
+  std::vector<VersionEdit*> edit_list_;
 };
 }  // anonymous namespace
 
@@ -1860,6 +1871,7 @@ void VersionStorageInfo::AddFile(int level, FileMetaData* f,
 #else
   (void)info_log;
 #endif
+  f->Ref();
   level_files->push_back(f);
   dependence_map_.emplace(f->fd.GetNumber(), f);
   if (level == -1) {
@@ -1886,15 +1898,6 @@ void VersionStorageInfo::AddFile(int level, FileMetaData* f,
   }
   if (f->prop.has_range_deletions()) {
     space_amplification_[level] |= kHasRangeDeletion;
-  }
-}
-
-void VersionStorageInfo::FinishAddFile(SequenceNumber _oldest_snapshot_seqnum) {
-  oldest_snapshot_seqnum_ = _oldest_snapshot_seqnum;
-  for (int i = -1; i < num_levels_; ++i) {
-    for (auto f : files_[i]) {
-      ++f->refs;
-    }
   }
 }
 
@@ -3017,29 +3020,27 @@ Status VersionSet::ProcessManifestWrites(
       }
       // We do a linear search on versions because versions is small.
       // TODO(yanqin) maybe consider unordered_map
-      Version* version = nullptr;
-      VersionBuilder* builder = nullptr;
+      BaseReferencedVersionBuilder* builder = nullptr;
       for (int i = 0; i != static_cast<int>(versions.size()); ++i) {
         uint32_t cf_id = last_writer->cfd->GetID();
         if (versions[i]->cfd()->GetID() == cf_id) {
-          version = versions[i];
           assert(!builder_guards.empty() &&
                  builder_guards.size() == versions.size());
-          builder = builder_guards[i]->version_builder();
+          builder = builder_guards[i].get();
           TEST_SYNC_POINT_CALLBACK(
               "VersionSet::ProcessManifestWrites:SameColumnFamily", &cf_id);
           break;
         }
       }
-      if (version == nullptr) {
-        version = new Version(last_writer->cfd, this, env_options_,
-                              last_writer->mutable_cf_options,
-                              current_version_number_++);
+      if (builder == nullptr) {
+        auto version = new Version(last_writer->cfd, this, env_options_,
+                                   last_writer->mutable_cf_options,
+                                   current_version_number_++);
         versions.push_back(version);
         mutable_cf_options_ptrs.push_back(&last_writer->mutable_cf_options);
         builder_guards.emplace_back(
             new BaseReferencedVersionBuilder(last_writer->cfd));
-        builder = builder_guards.back()->version_builder();
+        builder = builder_guards.back().get();
       }
       assert(builder != nullptr);  // make checker happy
       for (const auto& e : last_writer->edit_list) {
@@ -3052,7 +3053,7 @@ Status VersionSet::ProcessManifestWrites(
         } else if (group_start != std::numeric_limits<size_t>::max()) {
           group_start = std::numeric_limits<size_t>::max();
         }
-        LogAndApplyHelper(last_writer->cfd, builder, version, e, mu);
+        builder->PushEdit(e, this, mu);
         batch_edits.push_back(e);
       }
     }
@@ -3125,8 +3126,7 @@ Status VersionSet::ProcessManifestWrites(
       for (int i = 0; i < static_cast<int>(versions.size()); ++i) {
         assert(!builder_guards.empty() &&
                builder_guards.size() == versions.size());
-        auto* builder = builder_guards[i]->version_builder();
-        builder->SaveTo(versions[i]->storage_info());
+        builder_guards[i]->DoApplyAndSaveTo(versions[i]->storage_info());
       }
     }
 
@@ -3225,15 +3225,6 @@ Status VersionSet::ProcessManifestWrites(
     LogFlush(db_options_->info_log);
     TEST_SYNC_POINT("VersionSet::LogAndApply:WriteManifestDone");
     mu->Lock();
-  }
-
-  if (!first_writer.edit_list.front()->IsColumnFamilyManipulation()) {
-    for (int i = 0; i < static_cast<int>(versions.size()); ++i) {
-      assert(!builder_guards.empty() &&
-             builder_guards.size() == versions.size());
-      versions[i]->storage_info()->FinishAddFile(
-          builder_guards[i]->version_storage()->oldest_snapshot_seqnum());
-    }
   }
 
   // Append the old manifest file to the obsolete_manifest_ list to be deleted
@@ -3454,7 +3445,8 @@ void VersionSet::LogAndApplyCFHelper(VersionEdit* edit) {
 
 void VersionSet::LogAndApplyHelper(ColumnFamilyData* cfd,
                                    VersionBuilder* builder, Version* /*v*/,
-                                   VersionEdit* edit, InstrumentedMutex* mu) {
+                                   VersionEdit* edit, InstrumentedMutex* mu,
+                                   bool apply) {
 #ifdef NDEBUG
   (void)cfd;
 #endif
@@ -3478,7 +3470,9 @@ void VersionSet::LogAndApplyHelper(ColumnFamilyData* cfd,
   edit->SetLastSequence(db_options_->two_write_queues ? last_allocated_sequence_
                                                       : last_sequence_);
 
-  builder->Apply(edit);
+  if (apply) {
+    builder->Apply(edit);
+  }
 }
 
 Status VersionSet::ApplyOneVersionEdit(
@@ -3840,8 +3834,6 @@ Status VersionSet::Recover(
                                *cfd->GetLatestMutableCFOptions(),
                                current_version_number_++);
       builder->SaveTo(v->storage_info());
-      v->storage_info()->FinishAddFile(
-          builders_iter->second->version_storage()->oldest_snapshot_seqnum());
 
       // Install recovered version
       v->PrepareApply(*cfd->GetLatestMutableCFOptions());
@@ -4213,8 +4205,6 @@ Status VersionSet::DumpManifest(Options& options, std::string& dscname,
                                *cfd->GetLatestMutableCFOptions(),
                                current_version_number_++);
       builder->SaveTo(v->storage_info());
-      v->storage_info()->FinishAddFile(
-          builders_iter->second->version_storage()->oldest_snapshot_seqnum());
       v->PrepareApply(*cfd->GetLatestMutableCFOptions());
 
       printf("--------------- Column family \"%s\"  (ID %u) --------------\n",
