@@ -21,7 +21,7 @@ INCLUDE(ExternalProject)
 # Gflags
 ExternalProject_Add(gflags-project
     SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/gflags
-    CONFIGURE_COMMAND ""
+    CONFIGURE_COMMAND mkdir -p build
     BUILD_IN_SOURCE 1
     BUILD_COMMAND cmake -S . -B build -DCMAKE_INSTALL_PREFIX=${CMAKE_CURRENT_BINARY_DIR}/gflags && cd build && make
     INSTALL_COMMAND cd build && make install)
