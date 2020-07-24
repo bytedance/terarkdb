@@ -2,21 +2,20 @@
 ## CHANGELOG
 
 - 版本号：v1.2.9
-- 日期：2020-07-22
+- 日期：2020-07-24
 - 发版说明：
   - 计划内例行发版
 - 功能变更：
   - 降低 SkipList MemTable 比较器成本，优化性能
   - 支持 PatriciaTrie MemTable
-  - 支持 LIRS Cache 算法 
   - 支持 CMake 集成构建
   - 支持 avoid_unnecessary_blocking_io 选项，降低长尾
   - 减少调用链中的内存拷贝，降低大 Value 读取成本
-  - ValueMetaExtractor 重构，支持取得 Key
+  - ValueMetaExtractor 重构，支持取得 Key 与 CF_ID
   - Metrics 新增 Latency 的 Avg 与 Max 上报
 - 修复问题：
   - 修复 VersionBuilder 在锁内执行逻辑过复杂导致的长尾问题
-  - 修复迭代器删除时，清理 MemTable 内存导致长尾的问题
+  - 修复删除迭代器时，清理 MemTable 内存导致长尾的问题
   - 修复后台在锁内执行目录扫描导致长尾的问题
   - 修复 ReadOptions::tailing 为 true 导致野指针访问的 BUG
   - 修复 promise 生存周期管控导致 Crash 的 BUG
