@@ -43,17 +43,25 @@ SET_TARGET_PROPERTIES(zlib PROPERTIES
     INCLUDE_DIRECTORIES ${CMAKE_CURRENT_BINARY_DIR}/zlib/include)
 
 # Gflags
-ExternalProject_Add(gflags-project
-    SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/gflags
-    CONFIGURE_COMMAND mkdir -p build
-    BUILD_IN_SOURCE 1
-    BUILD_COMMAND cd build && cmake ../ -DCMAKE_INSTALL_PREFIX=${CMAKE_CURRENT_BINARY_DIR}/gflags && make
-    INSTALL_COMMAND cd build && make install)
-ADD_LIBRARY(gflags STATIC IMPORTED GLOBAL)
-ADD_DEPENDENCIES(gflags gflags-project)
-SET_TARGET_PROPERTIES(gflags PROPERTIES
-    IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/gflags/lib/libgflags.a
-    INCLUDE_DIRECTORIES ${CMAKE_CURRENT_BINARY_DIR}/gflags/include)
+IF(WITH_GFLAGS)
+  FIND_PACKAGE(gflags QUIET)
+  IF(NOT gflags_FOUND)
+    MESSAGE("[terarkdb/third-party] gflags not find, building....")
+    ExternalProject_Add(gflags-project
+        SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/gflags
+        CONFIGURE_COMMAND mkdir -p build
+        BUILD_IN_SOURCE 1
+        BUILD_COMMAND cd build && cmake ../ -DCMAKE_INSTALL_PREFIX=${CMAKE_CURRENT_BINARY_DIR}/gflags && make
+        INSTALL_COMMAND cd build && make install)
+    ADD_LIBRARY(gflags STATIC IMPORTED GLOBAL)
+    ADD_DEPENDENCIES(gflags gflags-project)
+    SET_TARGET_PROPERTIES(gflags PROPERTIES
+        IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/gflags/lib/libgflags.a
+        INCLUDE_DIRECTORIES ${CMAKE_CURRENT_BINARY_DIR}/gflags/include)
+  ELSE()
+    MESSAGE("[terarkdb/third-party] gflags exist, skip build")
+  ENDIF()
+ENDIF()
 
 # ZSTD
 ExternalProject_Add(zstd-project

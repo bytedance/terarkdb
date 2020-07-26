@@ -48,9 +48,9 @@ endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake/modules/")
 
-SET(CMAKE_INSTALL_LIBDIR ${CMAKE_CURRENT_BINARY_DIR}/terarkdb/lib)
-SET(CMAKE_INSTALL_BINDIR ${CMAKE_CURRENT_BINARY_DIR}/terarkdb/bin)
-SET(CMAKE_INSTALL_INCLUDEDIR ${CMAKE_CURRENT_BINARY_DIR}/terarkdb/include)
+SET(CMAKE_INSTALL_LIBDIR ${CMAKE_CURRENT_BINARY_DIR}/lib)
+SET(CMAKE_INSTALL_BINDIR ${CMAKE_CURRENT_BINARY_DIR}/bin)
+SET(CMAKE_INSTALL_INCLUDEDIR ${CMAKE_CURRENT_BINARY_DIR}/include)
 
 option(BUILD_SHARED_LIB "build shared lib" OFF)
 option(WITH_JEMALLOC "build with JeMalloc" OFF)
@@ -60,6 +60,12 @@ option(WITH_ZLIB "build with zlib" ON)
 option(WITH_ZSTD "build with zstd" ON)
 option(WITH_WINDOWS_UTF8_FILENAMES "use UTF8 as characterset for opening files, regardles of the system code page" OFF)
 option(WITH_METRICS "build with metrics" ON)
+option(WITH_ASAN "build with ASAN" ON)
+
+# We don't need asan for Release build
+if (CMAKE_BUILD_TYPE STREQUAL "Release")
+  set(WITH_ASAN OFF)
+endif()
 
 if (WITH_WINDOWS_UTF8_FILENAMES)
   add_definitions(-DROCKSDB_WINDOWS_UTF8_FILENAMES)
@@ -94,9 +100,17 @@ else()
   # No config file for this
   option(WITH_GFLAGS "build with GFlags" ON)
   if(WITH_GFLAGS)
+    find_package(gflags REQUIRED)
     add_definitions(-DGFLAGS=1)
-    include_directories(${CMAKE_CURRENT_BINARY_DIR}/third-party/gflags/include)
-    list(APPEND THIRDPARTY_LIBS gflags)
+    if(NOT gflags_FOUND)
+      MESSAGE("[terarkdb] gflags not found")
+      include_directories(${CMAKE_CURRENT_BINARY_DIR}/third-party/gflags/include)
+      list(APPEND THIRDPARTY_LIBS gflags)
+    else()
+      MESSAGE("[terarkdb] gflags found")
+      include_directories(${gflags_INCLUDE_DIR})
+      list(APPEND THIRDPARTY_LIBS gflags)
+    endif()
   endif()
 
   if(WITH_SNAPPY)
@@ -285,10 +299,6 @@ if(MSVC)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP /FR /std:c++14")
 endif()
 
-option(WITH_ASAN "build with ASAN" OFF)
-IF(CMAKE_BUILD_TYPE STREQUAL "Debug")
-  SET(WITH_ASAN ON)
-ENDIF()
 if(WITH_ASAN)
   set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=address")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address")
@@ -296,6 +306,7 @@ if(WITH_ASAN)
   if(WITH_JEMALLOC)
     message(FATAL "ASAN does not work well with JeMalloc")
   endif()
+  list(APPEND THIRDPARTY_LIBS asan)
 endif()
 
 option(WITH_TSAN "build with TSAN" OFF)
@@ -483,9 +494,21 @@ endif()
 
 include_directories(${PROJECT_SOURCE_DIR})
 include_directories(${PROJECT_SOURCE_DIR}/include)
-include_directories(SYSTEM ${PROJECT_SOURCE_DIR}/third-party/gtest-1.7.0/fused-src)
 find_package(Threads REQUIRED)
 
+if(NOT TARGET gtest)
+  find_package(gtest QUIET)
+  if(gtest_FOUND)
+    MESSAGE("[terarkdb] gtest found, skip build")
+    include_directories(${gtest_INCLUDE_DIR})
+  else()
+    MESSAGE("[terarkdb] gtest not found, building...")
+    include_directories(SYSTEM ${PROJECT_SOURCE_DIR}/third-party/gtest-1.7.0/fused-src)
+    add_subdirectory(third-party/gtest-1.7.0/fused-src/gtest)
+  endif()
+else()
+  MESSAGE("[terarkdb] gtest target provided, skip build") 
+endif()
 
 SET(BUILD_SUFFIX "d")
 IF(NOT ${CMAKE_BUILD_TYPE} STREQUAL "Debug")
@@ -499,12 +522,6 @@ ENDIF()
 ADD_SUBDIRECTORY(terark-core)
 SET(TERARK_DEPEND_LIBS terark-core-${BUILD_SUFFIX} gomp)
 
-IF(CMAKE_BUILD_TYPE STREQUAL "Debug")
-  LIST(APPEND TERARK_DEPEND_LIBS asan)
-ENDIF()
-
-
-add_subdirectory(third-party/gtest-1.7.0/fused-src/gtest)
 
 # Main library source code
 set(SOURCES
@@ -822,7 +839,11 @@ endif()
 # static rocksdb lib
 add_library(${ROCKSDB_STATIC_LIB} STATIC ${SOURCES})
 target_link_libraries(${ROCKSDB_STATIC_LIB} ${THIRDPARTY_LIBS} ${SYSTEM_LIBS} ${TERARK_DEPEND_LIBS})
-target_include_directories(${ROCKSDB_STATIC_LIB} PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+MESSAGE("1:${THIRDPARTY_LIBS}")
+MESSAGE("2:${SYSTEM_LIBS}")
+MESSAGE("3:${TERARK_DEPEND_LIBS}")
+target_include_directories(${ROCKSDB_STATIC_LIB} PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+                                                        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
 
 if(WIN32)
   # imported rocksdb lib
@@ -881,10 +902,10 @@ if(NOT WIN32 OR ROCKSDB_INSTALL_ON_WINDOWS)
           DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
   install(
-    TARGETS ${ROCKSDB_STATIC_LIB}
-    EXPORT RocksDBTargets
-    COMPONENT devel
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        TARGETS ${ROCKSDB_STATIC_LIB}
+        #EXPORT RocksDBTargets
+        COMPONENT devel
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
   )
 
   if(BUILD_SHARED_LIB)
@@ -898,12 +919,12 @@ if(NOT WIN32 OR ROCKSDB_INSTALL_ON_WINDOWS)
     )
   endif()
 
-  install(
-    EXPORT RocksDBTargets
-    COMPONENT devel
-    DESTINATION ${package_config_destination}
-    NAMESPACE RocksDB::
-  )
+  #install(
+  #  EXPORT RocksDBTargets
+  #  COMPONENT devel
+  #  DESTINATION ${package_config_destination}
+  #  NAMESPACE RocksDB::
+  #)
 
   install(
     FILES
@@ -1086,7 +1107,7 @@ if(WITH_TESTS)
     get_filename_component(exename ${sourcefile} NAME_WE)
     add_executable(${exename}${ARTIFACT_SUFFIX} ${sourcefile}
       $<TARGET_OBJECTS:testharness>)
-    target_link_libraries(${exename}${ARTIFACT_SUFFIX} gtest ${ROCKSDB_STATIC_LIB} asan)
+    target_link_libraries(${exename}${ARTIFACT_SUFFIX} gtest ${ROCKSDB_STATIC_LIB})
   endforeach(sourcefile ${BENCHMARKS})
 
   # For test util library that is build only in DEBUG mode
@@ -1125,7 +1146,7 @@ if(WITH_TESTS)
         EXCLUDE_FROM_DEFAULT_BUILD_RELWITHDEBINFO 1
         OUTPUT_NAME ${exename}${ARTIFACT_SUFFIX}
         )
-      target_link_libraries(${CMAKE_PROJECT_NAME}_${exename}${ARTIFACT_SUFFIX} testutillib${ARTIFACT_SUFFIX} gtest ${ROCKSDB_STATIC_LIB} asan)
+      target_link_libraries(${CMAKE_PROJECT_NAME}_${exename}${ARTIFACT_SUFFIX} testutillib${ARTIFACT_SUFFIX} gtest ${ROCKSDB_STATIC_LIB})
       if(NOT "${exename}" MATCHES "db_sanity_test")
         add_test(NAME ${exename} COMMAND ${exename}${ARTIFACT_SUFFIX})
         add_dependencies(check ${CMAKE_PROJECT_NAME}_${exename}${ARTIFACT_SUFFIX})
@@ -1145,7 +1166,7 @@ if(WITH_TESTS)
         EXCLUDE_FROM_DEFAULT_BUILD_MINRELEASE 1
         EXCLUDE_FROM_DEFAULT_BUILD_RELWITHDEBINFO 1
         )
-      target_link_libraries(${exename}${ARTIFACT_SUFFIX} ${ROCKSDB_STATIC_LIB} testutillib${ARTIFACT_SUFFIX} asan)
+      target_link_libraries(${exename}${ARTIFACT_SUFFIX} ${ROCKSDB_STATIC_LIB} testutillib${ARTIFACT_SUFFIX})
       add_test(NAME ${exename} COMMAND ${exename}${ARTIFACT_SUFFIX})
       add_dependencies(check ${exename}${ARTIFACT_SUFFIX})
   endforeach(sourcefile ${C_TEST_EXES})
