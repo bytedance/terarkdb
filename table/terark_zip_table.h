@@ -159,16 +159,6 @@ void TerarkZipMultiCFOptionsFromEnv(
     const std::vector<struct ColumnFamilyDescriptor>& cfvec,
     const std::string& terarkTempDirIfNotFound = {});
 
-const class WriteBatchEntryIndexFactory* patricia_WriteBatchEntryIndexFactory(
-    const WriteBatchEntryIndexFactory* fallback = nullptr);
-
-class MemTableRepFactory* NewPatriciaTrieRepFactory(
-    std::shared_ptr<class MemTableRepFactory> fallback = nullptr);
-
-class MemTableRepFactory* NewPatriciaTrieRepFactory(
-    const std::unordered_map<std::string, std::string>& options,
-    class Status* s);
-
 class TableFactory* NewTerarkZipTableFactory(
     const TerarkZipTableOptions&, std::shared_ptr<class TableFactory> fallback);
 

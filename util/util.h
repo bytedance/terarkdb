@@ -5,6 +5,8 @@
 
 #pragma once
 
+#include <utility>
+
 #ifndef FALLTHROUGH_INTENDED
 #if defined(__clang__)
 #define FALLTHROUGH_INTENDED [[clang::fallthrough]]
@@ -14,3 +16,15 @@
 #define FALLTHROUGH_INTENDED do {} while (0)
 #endif
 #endif
+
+namespace rocksdb {
+template <class T>
+void call_destructor(T* ptr) {
+  ptr->~T();
+}
+
+template <class T, class... Args>
+void call_constructor(T* ptr, Args&&... args) {
+  ::new (ptr) T(std::forward<Args>(args)...);
+}
+}  // namespace rocksdb

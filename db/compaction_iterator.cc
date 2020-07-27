@@ -445,7 +445,6 @@ void CompactionIterator::NextFromInput() {
       assert(current_user_key_snapshot_ == last_snapshot);
 
       value_.clear();
-      value_.pin();
       valid_ = true;
       clear_and_output_next_key_ = false;
     } else if (ikey_.type == kTypeSingleDeletion) {
@@ -484,7 +483,7 @@ void CompactionIterator::NextFromInput() {
       // The easiest way to process a SingleDelete during iteration is to peek
       // ahead at the next key.
       ParsedInternalKey next_ikey;
-      value_.pin();
+      value_.pin(LazyBufferPinLevel::Internal);
       input_->Next();
 
       // Check whether the next key exists, is not corrupt, and is the same key
@@ -634,7 +633,7 @@ void CompactionIterator::NextFromInput() {
       // We can skip outputting the key iff there are no subsequent puts for
       // this key
       ParsedInternalKey next_ikey;
-      value_.pin();
+      value_.pin(LazyBufferPinLevel::Internal);
       input_->Next();
       // Skip over all versions of this key that happen to occur in the same
       // snapshot range as the delete

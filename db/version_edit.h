@@ -9,6 +9,7 @@
 
 #pragma once
 #include <algorithm>
+#include <atomic>
 #include <set>
 #include <string>
 #include <utility>
@@ -151,6 +152,17 @@ struct FileMetaData {
         marked_for_compaction(false),
         need_upgrade(false),
         gc_status(kGarbageCollectionForbidden) {}
+
+  void Ref() {
+    reinterpret_cast<std::atomic<int>&>(refs).fetch_add(
+        1, std::memory_order_relaxed);
+  }
+  bool Unref() {
+    int old_refs = reinterpret_cast<std::atomic<int>&>(refs).fetch_sub(
+        1, std::memory_order_relaxed);
+    assert(old_refs > 0);
+    return old_refs == 1;
+  }
 
   std::vector<SequenceNumber> ShrinkSnapshot(
       const std::vector<SequenceNumber>& snapshots) const;

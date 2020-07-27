@@ -992,6 +992,7 @@ bool ColumnFamilyData::NeedsGarbageCollection() const {
 Compaction* ColumnFamilyData::PickCompaction(
     const MutableCFOptions& mutable_options,
     const std::vector<SequenceNumber>& snapshots, LogBuffer* log_buffer) {
+  StopWatch sw(ioptions_.env, ioptions_.statistics, PICK_COMPACTION_TIME);
   auto* result = compaction_picker_->PickCompaction(GetName(), mutable_options,
                                                     current_->storage_info(),
                                                     snapshots, log_buffer);
@@ -1006,6 +1007,8 @@ Compaction* ColumnFamilyData::PickCompaction(
 
 Compaction* ColumnFamilyData::PickGarbageCollection(
     const MutableCFOptions& mutable_options, LogBuffer* log_buffer) {
+  StopWatch sw(ioptions_.env, ioptions_.statistics,
+               PICK_GARBAGE_COLLECTION_TIME);
   auto* result = compaction_picker_->PickGarbageCollection(
       GetName(), mutable_options, current_->storage_info(), log_buffer);
   if (result != nullptr) {

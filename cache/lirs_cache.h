@@ -21,18 +21,20 @@ struct LIRSHandle {
   uint32_t refs;
   uint32_t hash;  // Hash of key(); used for fast sharding and comparisons
 
-  enum State { kLIR = 0, kHIR, kNHIR, kInvalid } state;
+  enum State { kRemote = 0, kLIR, kHIR, kNHIR, kInvalid } state;
 
   char key_data[1];  // Beginning of key
 
   Slice key() const { return Slice(key_data, key_length); }
 
+  bool Remote() { return state == kRemote; }
   bool LIR() { return state == kLIR; }
   bool HIR() { return state == kHIR; }
   bool InCache() { return state == kLIR || state == kHIR || state == kNHIR; }
   bool NHIR() { return state == kNHIR; }
   bool Valid() { return state != kInvalid; }
 
+  void SetRemote() { state = kRemote; }
   void SetLIR() { state = kLIR; }
   void SetHIR() { state = kHIR; }
   void SetNHIR() { state = kNHIR; }

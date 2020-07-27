@@ -9,7 +9,9 @@
 
 #pragma once
 #include <stdint.h>
+
 #include <string>
+
 #include "db/db_impl.h"
 #include "db/dbformat.h"
 #include "db/range_del_aggregator.h"
@@ -23,6 +25,7 @@ namespace rocksdb {
 
 class Arena;
 class DBIter;
+struct SVDestructCallback;
 
 // Return a new iterator that converts internal keys (yielded by
 // "*internal_iter") that were live at the specified "sequence" number
@@ -32,7 +35,8 @@ extern Iterator* NewDBIterator(
     const ImmutableCFOptions& cf_options,
     const MutableCFOptions& mutable_cf_options,
     const Comparator* user_key_comparator, InternalIterator* internal_iter,
-    const SequenceNumber& sequence, const SeparateHelper* separate_helper,
+    SVDestructCallback* sv_destruct_callback, const SequenceNumber& sequence,
+    const SeparateHelper* separate_helper,
     uint64_t max_sequential_skip_in_iterations, ReadCallback* read_callback,
     DBImpl* db_impl = nullptr, ColumnFamilyData* cfd = nullptr);
 
@@ -53,6 +57,7 @@ class ArenaWrappedDBIter : public Iterator {
   // Set the internal iterator wrapped inside the DB Iterator. Usually it is
   // a merging iterator.
   virtual void SetIterUnderDBIter(InternalIterator* iter,
+                                  SVDestructCallback* sv_destruct_callback,
                                   const SeparateHelper* separate_helper);
   virtual bool Valid() const override;
   virtual void SeekToFirst() override;

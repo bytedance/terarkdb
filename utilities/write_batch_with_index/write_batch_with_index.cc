@@ -331,28 +331,19 @@ class BaseDeltaIterator : public Iterator {
 
 class WBWIIteratorImpl : public WBWIIterator {
  public:
-  WBWIIteratorImpl(uint32_t column_family_id,
-                   WriteBatchEntryIndex* entry_index,
-                   const ReadableWriteBatch* write_batch,
-                   bool ephemeral)
-    : column_family_id_(column_family_id),
-      write_batch_(write_batch) {
+  WBWIIteratorImpl(uint32_t column_family_id, WriteBatchEntryIndex* entry_index,
+                   const ReadableWriteBatch* write_batch, bool ephemeral)
+      : column_family_id_(column_family_id), write_batch_(write_batch) {
     entry_index->NewIterator(iter_, ephemeral);
   }
 
   virtual ~WBWIIteratorImpl() {}
 
-  virtual bool Valid() const override {
-    return iter_->Valid();
-  }
+  virtual bool Valid() const override { return iter_->Valid(); }
 
-  virtual void SeekToFirst() override {
-    iter_->SeekToFirst();
-  }
+  virtual void SeekToFirst() override { iter_->SeekToFirst(); }
 
-  virtual void SeekToLast() override {
-    iter_->SeekToLast();
-  }
+  virtual void SeekToLast() override { iter_->SeekToLast(); }
 
   virtual void Seek(const Slice& key) override {
     WriteBatchIndexEntry search_entry(&key, column_family_id_);
@@ -390,9 +381,7 @@ class WBWIIteratorImpl : public WBWIIterator {
     return Status::OK();
   }
 
-  const WriteBatchIndexEntry* GetRawEntry() const {
-    return iter_->key();
-  }
+  const WriteBatchIndexEntry* GetRawEntry() const { return iter_->key(); }
 
  private:
   uint32_t column_family_id_;
@@ -475,8 +464,10 @@ struct WriteBatchWithIndex::Rep {
   Status ReBuildIndex();
 };
 
-void WriteBatchWithIndex::Rep::AddOrUpdateIndex(ColumnFamilyHandle* column_family) {
-  AddOrUpdateIndex(GetColumnFamilyID(column_family), GetEntryIndex(column_family));
+void WriteBatchWithIndex::Rep::AddOrUpdateIndex(
+    ColumnFamilyHandle* column_family) {
+  AddOrUpdateIndex(GetColumnFamilyID(column_family),
+                   GetEntryIndex(column_family));
 }
 
 void WriteBatchWithIndex::Rep::AddOrUpdateIndex(uint32_t column_family_id) {
@@ -487,8 +478,8 @@ void WriteBatchWithIndex::Rep::AddOrUpdateIndex() {
   AddOrUpdateIndex(0, GetEntryIndex(nullptr));
 }
 
-void WriteBatchWithIndex::Rep::AddOrUpdateIndex(uint32_t column_family_id,
-                                                WriteBatchEntryIndex* entry_index) {
+void WriteBatchWithIndex::Rep::AddOrUpdateIndex(
+    uint32_t column_family_id, WriteBatchEntryIndex* entry_index) {
   assert(entry_index == GetEntryIndexWithCfId(column_family_id));
   const std::string& wb_data = write_batch.Data();
   Slice entry_ptr = Slice(wb_data.data() + last_entry_offset,
@@ -504,8 +495,8 @@ void WriteBatchWithIndex::Rep::AddOrUpdateIndex(uint32_t column_family_id,
     mem = arena.Allocate(sizeof(WriteBatchIndexEntry));
   }
   auto* index_entry =
-          new (mem) WriteBatchIndexEntry(last_entry_offset, column_family_id,
-                                         key.data() - wb_data.data(), key.size());
+      new (mem) WriteBatchIndexEntry(last_entry_offset, column_family_id,
+                                     key.data() - wb_data.data(), key.size());
   if (!entry_index->Upsert(index_entry)) {
     // overwrite key
     if (LIKELY(last_sub_batch_offset <= index_entry->offset)) {
@@ -519,7 +510,7 @@ void WriteBatchWithIndex::Rep::AddOrUpdateIndex(uint32_t column_family_id,
 }
 
 WriteBatchEntryIndex* WriteBatchWithIndex::Rep::GetEntryIndex(
-        ColumnFamilyHandle* column_family) {
+    ColumnFamilyHandle* column_family) {
   uint32_t cf_id = GetColumnFamilyID(column_family);
   if (cf_id >= entry_indices.size()) {
     entry_indices.resize(cf_id + 1);
@@ -531,29 +522,29 @@ WriteBatchEntryIndex* WriteBatchWithIndex::Rep::GetEntryIndex(
       cf_cmp = default_comparator;
     }
     entry_indices[cf_id].comparator = cf_cmp;
-    entry_indices[cf_id].index = index =
-            index_factory->New(factory_context, WriteBatchKeyExtractor(&write_batch),
-                               cf_cmp, &arena, overwrite_key);
+    entry_indices[cf_id].index = index = index_factory->New(
+        factory_context, WriteBatchKeyExtractor(&write_batch), cf_cmp, &arena,
+        overwrite_key);
   }
   return index;
 }
 
 WriteBatchEntryIndex* WriteBatchWithIndex::Rep::GetEntryIndexWithCfId(
-        uint32_t column_family_id) {
+    uint32_t column_family_id) {
   assert(column_family_id < entry_indices.size());
   auto index = entry_indices[column_family_id].index;
   if (index == nullptr) {
     const auto* cf_cmp = entry_indices[column_family_id].comparator;
     assert(cf_cmp != nullptr);
-    entry_indices[column_family_id].index = index =
-            index_factory->New(factory_context, WriteBatchKeyExtractor(&write_batch),
-                               cf_cmp, &arena, overwrite_key);
+    entry_indices[column_family_id].index = index = index_factory->New(
+        factory_context, WriteBatchKeyExtractor(&write_batch), cf_cmp, &arena,
+        overwrite_key);
   }
   return index;
 }
 
 const Comparator* WriteBatchWithIndex::Rep::GetComparator(
-        ColumnFamilyHandle* column_family) {
+    ColumnFamilyHandle* column_family) {
   uint32_t cf_id = GetColumnFamilyID(column_family);
   if (cf_id >= entry_indices.size()) {
     return nullptr;
@@ -572,7 +563,6 @@ void WriteBatchWithIndex::Rep::ClearIndex() {
       pair.index->~WriteBatchEntryIndex();
       pair.index = nullptr;
     }
-
   }
   if (factory_context != nullptr) {
     factory_context->~WriteBatchEntryIndexContext();
@@ -611,8 +601,8 @@ Status WriteBatchWithIndex::Rep::ReBuildIndex() {
     // set offset of current entry for call to AddNewEntry()
     last_entry_offset = input.data() - write_batch.Data().data();
 
-    s = ReadRecordFromWriteBatch(&input, &tag, &column_family_id, &key,
-                                  &value, &blob, &xid);
+    s = ReadRecordFromWriteBatch(&input, &tag, &column_family_id, &key, &value,
+                                 &blob, &xid);
     if (!s.ok()) {
       break;
     }
@@ -665,8 +655,8 @@ WriteBatch* WriteBatchWithIndex::GetWriteBatch() { return &rep->write_batch; }
 size_t WriteBatchWithIndex::SubBatchCnt() { return rep->sub_batch_cnt; }
 
 WBWIIterator* WriteBatchWithIndex::NewIterator() {
-  return new WBWIIteratorImpl(0, rep->GetEntryIndex(nullptr),
-                              &rep->write_batch, false);
+  return new WBWIIteratorImpl(0, rep->GetEntryIndex(nullptr), &rep->write_batch,
+                              false);
 }
 
 WBWIIterator* WriteBatchWithIndex::NewIterator(
@@ -681,10 +671,9 @@ void WriteBatchWithIndex::NewIterator(ColumnFamilyHandle* column_family,
                                       bool ephemeral) {
   static_assert(sizeof(WBWIIteratorImpl) <= sizeof storage.buffer,
                 "Need larger buffer for WBWIIteratorImpl");
-  storage.iter = new (storage.buffer)
-          WBWIIteratorImpl(GetColumnFamilyID(column_family),
-                           rep->GetEntryIndex(column_family), &rep->write_batch,
-                           ephemeral);
+  storage.iter = new (storage.buffer) WBWIIteratorImpl(
+      GetColumnFamilyID(column_family), rep->GetEntryIndex(column_family),
+      &rep->write_batch, ephemeral);
 }
 
 Iterator* WriteBatchWithIndex::NewIteratorWithBase(
@@ -812,8 +801,7 @@ void WriteBatchWithIndex::Clear() { rep->Clear(); }
 
 Status WriteBatchWithIndex::GetFromBatch(ColumnFamilyHandle* column_family,
                                          const DBOptions& options,
-                                         const Slice& key,
-                                         std::string* value) {
+                                         const Slice& key, std::string* value) {
   Status s;
   MergeContext merge_context;
   const ImmutableDBOptions immuable_db_options(options);
@@ -876,8 +864,7 @@ Status WriteBatchWithIndex::GetFromBatchAndDB(DB* db,
                                               std::string* value) {
   assert(value != nullptr);
   LazyBuffer lazy_val(value);
-  auto s =
-      GetFromBatchAndDB(db, read_options, column_family, key, &lazy_val);
+  auto s = GetFromBatchAndDB(db, read_options, column_family, key, &lazy_val);
   if (s.ok()) {
     s = std::move(lazy_val).dump(value);
   }
@@ -911,7 +898,7 @@ Status WriteBatchWithIndex::GetFromBatchAndDB(
           rep->GetComparator(column_family), lazy_val, rep->overwrite_key, &s);
 
   if (result == WriteBatchWithIndexInternal::Result::kFound) {
-    lazy_val->pin();
+    lazy_val->pin(LazyBufferPinLevel::DB);
     s = lazy_val->fetch();
     return s;
   }
@@ -956,14 +943,14 @@ Status WriteBatchWithIndex::GetFromBatchAndDB(
 
       if (merge_operator) {
         LazyBuffer merge_result;
-        s = MergeHelper::TimedFullMerge(
-            merge_operator, key, merge_data, merge_context.GetOperands(),
-            &merge_result, logger, statistics, env);
+        s = MergeHelper::TimedFullMerge(merge_operator, key, merge_data,
+                                        merge_context.GetOperands(),
+                                        &merge_result, logger, statistics, env);
         if (s.ok()) {
           s = std::move(merge_result).dump(*lazy_val);
         }
         if (s.ok()) {
-          lazy_val->pin();
+          lazy_val->pin(LazyBufferPinLevel::DB);
         }
       } else {
         s = Status::InvalidArgument("Options::merge_operator must be set");

@@ -12,6 +12,9 @@
 #include "rocksdb/thread_status.h"
 #include "util/stop_watch.h"
 
+// MUTEX_DEBUG_MILLISECONDS set 0 to disable
+#define MUTEX_DEBUG_MILLISECONDS 0
+
 namespace boost {
 namespace fibers {
 class mutex;
@@ -52,6 +55,11 @@ class InstrumentedMutex {
   int stats_code_;
   typename std::aligned_storage<kBoostFiberIDSize,
                                 alignof(std::max_align_t)>::type owner_id_{};
+#if MUTEX_DEBUG_MILLISECONDS
+  void* start_stacktrace_ = nullptr;
+  std::chrono::high_resolution_clock::time_point wait_start_;
+  std::chrono::high_resolution_clock::time_point lock_start_;
+#endif
 };
 
 // A wrapper class for port::Mutex that provides additional layer

@@ -104,8 +104,6 @@ class VersionStorageInfo {
                bool (*exists)(void*, uint64_t) = nullptr,
                void* exists_args = nullptr, Logger* info_log = nullptr);
 
-  void FinishAddFile(SequenceNumber _oldest_snapshot_seqnum = 0);
-
   uint64_t FileSize(const FileMetaData* f, uint64_t file_number = uint64_t(-1),
                     uint64_t entry_count = 0) const;
 
@@ -177,6 +175,9 @@ class VersionStorageInfo {
   // files marked for compaction.
   // REQUIRES: DB mutex held
   void UpdateOldestSnapshot(SequenceNumber _oldest_snapshot_seqnum);
+  void oldest_snapshot_seqnum(SequenceNumber _oldest_snapshot_seqnum) {
+    oldest_snapshot_seqnum_ = _oldest_snapshot_seqnum;
+  }
   SequenceNumber oldest_snapshot_seqnum() const {
     return oldest_snapshot_seqnum_;
   }
@@ -788,7 +789,9 @@ class Version : public SeparateHelper, private LazyBufferState {
 
   void destroy(LazyBuffer* /*buffer*/) const override {}
 
-  void pin_buffer(LazyBuffer* /*buffer*/) const override {}
+  Status pin_buffer(LazyBuffer* /*buffer*/) const override {
+    return Status::OK();
+  }
 
   Status fetch_buffer(LazyBuffer* buffer) const override;
 
@@ -1073,11 +1076,10 @@ class VersionSet {
 
   static uint64_t GetTotalSstFilesSize(Version* dummy_versions);
 
-  ColumnFamilyData* TEST_CreateColumnFamily(const ColumnFamilyOptions& cf_options,
-                                       VersionEdit* edit) {
-      return CreateColumnFamily(cf_options, edit);
+  ColumnFamilyData* TEST_CreateColumnFamily(
+      const ColumnFamilyOptions& cf_options, VersionEdit* edit) {
+    return CreateColumnFamily(cf_options, edit);
   }
-
 
  private:
   struct ManifestWriter;
@@ -1180,8 +1182,11 @@ class VersionSet {
   void operator=(const VersionSet&);
 
   void LogAndApplyCFHelper(VersionEdit* edit);
+
+ public:
   void LogAndApplyHelper(ColumnFamilyData* cfd, VersionBuilder* b, Version* v,
-                         VersionEdit* edit, InstrumentedMutex* mu);
+                         VersionEdit* edit, InstrumentedMutex* mu,
+                         bool apply = true);
 };
 
 }  // namespace rocksdb

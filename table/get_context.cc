@@ -210,7 +210,7 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
           state_ = kFound;
           if (LIKELY(lazy_val_ != nullptr)) {
             *lazy_val_ = std::move(value);
-            lazy_val_->pin();
+            lazy_val_->pin(LazyBufferPinLevel::Internal);
           }
           return Finish();
         }
@@ -227,7 +227,7 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
                     merge_operator_, user_key_, &value,
                     merge_context_->GetOperands(), lazy_val_, logger_,
                     statistics_, env_))) {
-              lazy_val_->pin();
+              lazy_val_->pin(LazyBufferPinLevel::Internal);
             }
           }
         }
@@ -248,7 +248,7 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
                     merge_operator_, user_key_, nullptr,
                     merge_context_->GetOperands(), lazy_val_, logger_,
                     statistics_, env_))) {
-              lazy_val_->pin();
+              lazy_val_->pin(LazyBufferPinLevel::Internal);
             }
           }
         }
@@ -273,7 +273,7 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
           state_ = kMerge;
           if (LIKELY(lazy_val_ != nullptr)) {
             *lazy_val_ = std::move(value);
-            lazy_val_->pin();
+            lazy_val_->pin(LazyBufferPinLevel::Internal);
           }
           return Finish();
         }
@@ -288,7 +288,7 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
                     merge_operator_, user_key_, nullptr,
                     merge_context_->GetOperands(), lazy_val_, logger_,
                     statistics_, env_))) {
-              lazy_val_->pin();
+              lazy_val_->pin(LazyBufferPinLevel::Internal);
             }
           }
           return Finish();

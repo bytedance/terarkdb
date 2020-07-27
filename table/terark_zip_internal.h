@@ -138,9 +138,6 @@ struct ZipValueMultiValue {
     *pNum = num;
     return me;
   }
-  static const ZipValueMultiValue* decode(valvec<byte_t>& buf, size_t* pNum) {
-    return decode(buf.data(), buf.size(), pNum);
-  }
   Slice getValueData(size_t nth, size_t num) const {
     assert(nth < num);
     size_t offset0 = offsets[nth + 0];

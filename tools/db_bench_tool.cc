@@ -3256,8 +3256,7 @@ void VerifyDBFromDB(std::string& truth_db_name) {
             options.write_buffer_size, FLAGS_key_size + FLAGS_value_size));
         break;
       case kPatriciaTrie:
-        Status ignore;
-        options.memtable_factory.reset(NewPatriciaTrieRepFactory({}, &ignore));
+        options.memtable_factory.reset(NewPatriciaTrieRepFactory());
         break;
 #else
       default:

@@ -1491,6 +1491,7 @@ Status DBImpl::GetImpl(const ReadOptions& read_options,
   }
 
   if (s.ok()) {
+    lazy_val->pin(LazyBufferPinLevel::DB);
     s = lazy_val->fetch();
   }
 
@@ -1603,6 +1604,8 @@ std::vector<Status> DBImpl::MultiGet(
     const ReadOptions& read_options,
     const std::vector<ColumnFamilyHandle*>& column_family,
     const std::vector<Slice>& keys, std::vector<std::string>* values) {
+  LatencyHistGuard guard(&read_latency_reporter_);
+  read_qps_reporter_.AddCount(keys.size());
   StopWatch sw(env_, stats_, DB_MULTIGET);
   PERF_TIMER_GUARD(get_snapshot_time);
 
@@ -2092,7 +2095,7 @@ Iterator* DBImpl::NewIterator(const ReadOptions& read_options,
     auto iter = new ForwardIterator(this, read_options, cfd, sv);
     result = NewDBIterator(
         env_, read_options, *cfd->ioptions(), sv->mutable_cf_options,
-        cfd->user_comparator(), iter, kMaxSequenceNumber, sv->current,
+        cfd->user_comparator(), iter, iter, kMaxSequenceNumber, sv->current,
         sv->mutable_cf_options.max_sequential_skip_in_iterations, read_callback,
         this, cfd);
 #endif
@@ -2166,7 +2169,7 @@ ArenaWrappedDBIter* DBImpl::NewIteratorImpl(const ReadOptions& read_options,
   InternalIterator* internal_iter =
       NewInternalIterator(read_options, cfd, sv, db_iter->GetArena(),
                           db_iter->GetRangeDelAggregator(), snapshot);
-  db_iter->SetIterUnderDBIter(internal_iter, sv->current);
+  db_iter->SetIterUnderDBIter(internal_iter, nullptr, sv->current);
 
   return db_iter;
 }
@@ -2182,6 +2185,9 @@ Status DBImpl::NewIterators(
     return Status::NotSupported(
         "ReadTier::kPersistedData is not yet supported in iterators.");
   }
+  LatencyHistGuard guard(&newiterator_latency_reporter_);
+  newiterator_qps_reporter_.AddCount(column_families.size());
+
   ReadCallback* read_callback = nullptr;  // No read callback provided.
   iterators->clear();
   iterators->reserve(column_families.size());
@@ -2196,7 +2202,7 @@ Status DBImpl::NewIterators(
       auto iter = new ForwardIterator(this, read_options, cfd, sv);
       iterators->push_back(NewDBIterator(
           env_, read_options, *cfd->ioptions(), sv->mutable_cf_options,
-          cfd->user_comparator(), iter, kMaxSequenceNumber, sv->current,
+          cfd->user_comparator(), iter, iter, kMaxSequenceNumber, sv->current,
           sv->mutable_cf_options.max_sequential_skip_in_iterations,
           read_callback, this, cfd));
     }

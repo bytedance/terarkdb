@@ -84,7 +84,6 @@ class VersionBuilderTest : public testing::Test {
     vstorage_.CalculateBaseBytes(ioptions_, mutable_cf_options_);
     vstorage_.GenerateLevel0NonOverlapping();
     vstorage_.SetFinalized();
-    vstorage_.FinishAddFile();
   }
 };
 
@@ -154,7 +153,6 @@ TEST_F(VersionBuilderTest, ApplyAndSaveTo) {
                                   kCompactionStyleLevel, false);
   version_builder.Apply(&version_edit);
   version_builder.SaveTo(&new_vstorage);
-  new_vstorage.FinishAddFile();
 
   ASSERT_EQ(400U, new_vstorage.NumLevelBytes(2));
   ASSERT_EQ(300U, new_vstorage.NumLevelBytes(3));
@@ -192,7 +190,6 @@ TEST_F(VersionBuilderTest, ApplyAndSaveToDynamic) {
                                   kCompactionStyleLevel, false);
   version_builder.Apply(&version_edit);
   version_builder.SaveTo(&new_vstorage);
-  new_vstorage.FinishAddFile();
 
   ASSERT_EQ(0U, new_vstorage.NumLevelBytes(0));
   ASSERT_EQ(100U, new_vstorage.NumLevelBytes(3));
@@ -242,7 +239,6 @@ TEST_F(VersionBuilderTest, ApplyAndSaveToDynamic2) {
                                   kCompactionStyleLevel, false);
   version_builder.Apply(&version_edit);
   version_builder.SaveTo(&new_vstorage);
-  new_vstorage.FinishAddFile();
 
   ASSERT_EQ(0U, new_vstorage.NumLevelBytes(0));
   ASSERT_EQ(200U, new_vstorage.NumLevelBytes(4));
@@ -320,7 +316,6 @@ TEST_F(VersionBuilderTest, ApplyAndSaveToDynamic3) {
   VersionStorageInfo new_vstorage(&icmp_, ucmp_, options_.num_levels,
                                   kCompactionStyleLevel, false);
   version_builder.SaveTo(&new_vstorage);
-  new_vstorage.FinishAddFile();
 
   ASSERT_EQ(0U, new_vstorage.NumLevelBytes(1));
   ASSERT_EQ(150U, new_vstorage.NumLevelBytes(2));
@@ -352,7 +347,6 @@ TEST_F(VersionBuilderTest, ApplyMultipleAndSaveTo) {
                                   kCompactionStyleLevel, false);
   version_builder.Apply(&version_edit);
   version_builder.SaveTo(&new_vstorage);
-  new_vstorage.FinishAddFile();
 
   ASSERT_EQ(500U, new_vstorage.NumLevelBytes(2));
   ASSERT_TRUE(VerifyDependFiles(&new_vstorage, {666, 676, 636, 616, 606}));
@@ -391,7 +385,6 @@ TEST_F(VersionBuilderTest, ApplyDeleteAndSaveTo) {
   version_builder.Apply(&version_edit2);
 
   version_builder.SaveTo(&new_vstorage);
-  new_vstorage.FinishAddFile();
 
   ASSERT_EQ(300U, new_vstorage.NumLevelBytes(2));
   ASSERT_TRUE(VerifyDependFiles(&new_vstorage, {666, 676, 606}));

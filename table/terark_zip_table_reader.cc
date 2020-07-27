@@ -7,6 +7,7 @@
 #include <table/internal_iterator.h>
 #include <table/meta_blocks.h>
 #include <table/sst_file_writer_collectors.h>
+#include <util/util.h>
 // terark headers
 #include <terark/lcast.hpp>
 #include <terark/util/crc.hpp>
@@ -207,10 +208,6 @@ static bool Overlap(const fstring& a, const fstring& b) {
   return a.data() >= b.data() && a.data() < b.data() + b.size();
 }
 
-template <class T>
-void CallDestructor(T* ptr) {
-  ptr->~T();
-}
 }  // namespace
 
 namespace rocksdb {
@@ -247,7 +244,7 @@ class TerarkZipTableIterator : public TerarkZipTableIndexIterator,
   const TableReaderOptions* table_reader_options_;
   SequenceNumber global_seqno_;
   uint64_t key_tag_;
-  byte_t* key_ptr_;
+  const char* key_ptr_;
   size_t key_length_;
   size_t value_length_;
   terark::BlobStore::CacheOffsets* cache_offsets_;
@@ -263,7 +260,38 @@ class TerarkZipTableIterator : public TerarkZipTableIndexIterator,
   using TerarkZipTableIndexIterator::iter_;
   using TerarkZipTableIndexIterator::subReader_;
 
-  valvec<byte_t>& ValueBuf() const { return cache_offsets_->recData; }
+  static void ReleaseBuffer(void* b, void*) {
+    auto& counter = *static_cast<std::atomic<size_t>*>(b);
+    if (--counter == 0) {
+      free(b);
+    }
+  }
+  byte_t* ShareBuffer() const {
+    assert(cache_offsets_->recData.size() >= sizeof(std::atomic<size_t>));
+    auto& counter =
+        *reinterpret_cast<std::atomic<size_t>*>(cache_offsets_->recData.data());
+    ++counter;
+    return cache_offsets_->recData.data();
+  }
+
+  valvec<byte_t>& ValueBuffer() const {
+    if (cache_offsets_->recData.size() < sizeof(std::atomic<size_t>)) {
+      return cache_offsets_->recData;
+    }
+    auto& counter =
+        *reinterpret_cast<std::atomic<size_t>*>(cache_offsets_->recData.data());
+    assert(counter > 0);
+    if (--counter == 0) {
+      ++counter;
+      assert(counter == 1);
+    } else {
+      cache_offsets_->recData.risk_release_ownership();
+    }
+    return cache_offsets_->recData;
+  }
+  fstring ValueSlice() const {
+    return fstring(cache_offsets_->recData).substr(sizeof(std::atomic<size_t>));
+  }
 
  public:
   TerarkZipTableIterator(const TableReaderOptions& tro,
@@ -291,7 +319,7 @@ class TerarkZipTableIterator : public TerarkZipTableIndexIterator,
   }
   ~TerarkZipTableIterator() {
     if (iter_ != nullptr) {
-      CallDestructor(iter_);
+      call_destructor(iter_);
     }
     ContextBuffer(std::move(iter_storage_), ctx_ptr_);
   }
@@ -368,7 +396,7 @@ class TerarkZipTableIterator : public TerarkZipTableIndexIterator,
     assert(iter_->Valid());
     assert(key_tag_ != port::kMaxUint64);
     assert(key_length_ >= 8);
-    return Slice((const char*)key_ptr_, key_length_);
+    return Slice(key_ptr_, key_length_);
   }
 
   LazyBuffer value() const override {
@@ -381,14 +409,20 @@ class TerarkZipTableIterator : public TerarkZipTableIndexIterator,
 
   void destroy(LazyBuffer* /*buffer*/) const override {}
 
-  void pin_buffer(LazyBuffer* buffer) const override {
-    // TODO support real lazy unzip
-    buffer->reset(user_value_, true, table_reader_options_->file_number);
+  Status pin_buffer(LazyBuffer* buffer) const override {
+    if (user_value_.size() <= sizeof(LazyBufferContext)) {
+      buffer->reset(user_value_, true, table_reader_options_->file_number);
+    } else {
+      buffer->reset(user_value_,
+                    Cleanable(&TerarkZipTableIterator::ReleaseBuffer,
+                              ShareBuffer(), nullptr),
+                    table_reader_options_->file_number);
+    }
+    return Status::OK();
   }
 
   Status dump_buffer(LazyBuffer* /*buffer*/,
                      LazyBuffer* target) const override {
-    // TODO support real lazy unzip
     target->reset(user_value_, true, table_reader_options_->file_number);
     return Status::OK();
   }
@@ -492,7 +526,7 @@ class TerarkZipTableIterator : public TerarkZipTableIndexIterator,
   }
   bool UnzipIterRecord(bool hasRecord) {
     if (hasRecord) {
-      auto& value_buf = ValueBuf();
+      auto& value_buffer = ValueBuffer();
       fstring user_key = iter_->key();
       try {
         size_t recId = iter_->id();
@@ -500,13 +534,14 @@ class TerarkZipTableIterator : public TerarkZipTableIndexIterator,
                               ? ZipValueType(subReader_->type_[recId])
                               : ZipValueType::kZeroSeq;
         key_length_ = user_key.size() + sizeof key_tag_;
-        size_t mulnum_size = 0;
+        size_t mulnum_size = sizeof(std::atomic<size_t>);
         if (ZipValueType::kMulti == zip_value_type_) {
-          mulnum_size = sizeof(uint32_t);  // for offsets[valnum_]
+          mulnum_size += sizeof(uint32_t);  // for offsets[valnum_]
         }
-        value_buf.ensure_capacity(key_length_ + subReader_->estimateUnzipCap_ +
-                                  mulnum_size);
-        value_buf.resize_no_init(mulnum_size);
+        value_buffer.ensure_capacity(
+            key_length_ + subReader_->estimateUnzipCap_ + mulnum_size);
+        value_buffer.resize_no_init(mulnum_size);
+        *reinterpret_cast<size_t*>(value_buffer.data()) = 1;
         subReader_->GetRecordAppend(recId, cache_offsets_);
       } catch (const std::exception& ex) {  // crc checksum error
         SetIterInvalid();
@@ -514,10 +549,15 @@ class TerarkZipTableIterator : public TerarkZipTableIndexIterator,
             "TerarkZipTableIterator::UnzipIterRecord()", ex.what());
         return false;
       }
+      byte_t* value_buffer_data =
+          value_buffer.data() + sizeof(std::atomic<size_t>);
+      size_t value_buffer_size =
+          value_buffer.size() - sizeof(std::atomic<size_t>);
       if (ZipValueType::kMulti == zip_value_type_ &&
-          value_buf.size() != sizeof(uint32_t)) {
-        ZipValueMultiValue::decode(value_buf, &value_count_);
-        uint32_t* offsets = (uint32_t*)value_buf.data();
+          value_buffer_size != sizeof(uint32_t)) {
+        ZipValueMultiValue::decode(value_buffer_data, value_buffer_size,
+                                   &value_count_);
+        uint32_t* offsets = (uint32_t*)value_buffer_data;
         uint32_t pos = 0;
         char* base = (char*)(offsets + value_count_ + 1);
         for (size_t i = 0; i < value_count_; ++i) {
@@ -533,8 +573,9 @@ class TerarkZipTableIterator : public TerarkZipTableIndexIterator,
         value_count_ = 1;
       }
       value_index_ = 0;
-      value_length_ = value_buf.size();
-      value_buf.resize_no_init(value_length_ + key_length_ * value_count_);
+      value_length_ = value_buffer_size;
+      value_buffer.resize_no_init(value_buffer.size() +
+                                  key_length_ * value_count_);
       return true;
     } else {
       SetIterInvalid();
@@ -544,7 +585,7 @@ class TerarkZipTableIterator : public TerarkZipTableIndexIterator,
   virtual void DecodeCurrKeyValue() {
     assert(status_.ok());
     assert(iter_->id() < subReader_->index_->NumKeys());
-    auto& value_buf = ValueBuf();
+    auto value_slice = ValueSlice();
     switch (zip_value_type_) {
       default:
         status_ = Status::Corruption(
@@ -554,34 +595,34 @@ class TerarkZipTableIterator : public TerarkZipTableIndexIterator,
       case ZipValueType::kZeroSeq:
         assert(0 == value_index_);
         assert(1 == value_count_);
-        key_ptr_ = value_buf.data() + value_length_;
+        key_ptr_ = value_slice.data() + value_length_;
         key_tag_ = PackSequenceAndType(global_seqno_, kTypeValue);
-        user_value_ = SliceOf(fstring(value_buf).substr(0, value_length_));
+        user_value_ = SliceOf(value_slice.substr(0, value_length_));
         break;
       case ZipValueType::kValue:  // should be a kTypeValue, the normal case
         assert(0 == value_index_);
         assert(1 == value_count_);
-        key_ptr_ = value_buf.data() + value_length_;
+        key_ptr_ = value_slice.data() + value_length_;
         // little endian uint64_t
         key_tag_ = PackSequenceAndType(
-            *(uint64_t*)value_buf.data() & kMaxSequenceNumber, kTypeValue);
-        user_value_ = SliceOf(fstring(value_buf).substr(7, value_length_ - 7));
+            *(uint64_t*)value_slice.data() & kMaxSequenceNumber, kTypeValue);
+        user_value_ = SliceOf(value_slice.substr(7, value_length_ - 7));
         break;
       case ZipValueType::kDelete:
         assert(0 == value_index_);
         assert(1 == value_count_);
-        key_ptr_ = value_buf.data() + value_length_;
+        key_ptr_ = value_slice.data() + value_length_;
         // little endian uint64_t
         key_tag_ = PackSequenceAndType(
-            *(uint64_t*)value_buf.data() & kMaxSequenceNumber, kTypeDeletion);
-        user_value_ = SliceOf(fstring(value_buf).substr(7, value_length_ - 7));
+            *(uint64_t*)value_slice.data() & kMaxSequenceNumber, kTypeDeletion);
+        user_value_ = SliceOf(value_slice.substr(7, value_length_ - 7));
         break;
       case ZipValueType::kMulti: {  // more than one value
-        auto zmValue = (const ZipValueMultiValue*)value_buf.data();
+        auto zmValue = (const ZipValueMultiValue*)value_slice.data();
         assert(0 != value_count_);
         assert(value_index_ < value_count_);
         key_ptr_ =
-            value_buf.data() + value_length_ + key_length_ * value_index_;
+            value_slice.data() + value_length_ + key_length_ * value_index_;
         Slice d;
         if (value_length_ == sizeof(uint32_t) ||
             (d = zmValue->getValueData(value_index_, value_count_),
@@ -596,11 +637,11 @@ class TerarkZipTableIterator : public TerarkZipTableIndexIterator,
         break;
       }
     }
-    byte_t* key_ptr = key_ptr_;
+    char* key_ptr = const_cast<char*>(key_ptr_);
     fstring user_key = iter_->key();
     memcpy(key_ptr, user_key.data(), user_key.size());
     key_ptr += user_key.size();
-    EncodeFixed64((char*)key_ptr, key_tag_);
+    EncodeFixed64(key_ptr, key_tag_);
   }
 };
 
@@ -682,7 +723,7 @@ class TerarkZipTableMultiIterator : public TerarkZipTableIterator<reverse> {
     }
     subReader_ = subReader;
     if (iter_ != nullptr) {
-      CallDestructor(iter_);
+      call_destructor(iter_);
     }
     iter_ = subReader->index_->NewIterator(&iter_storage_, ctx_ptr_);
     invalidate_offsets_cache();
@@ -743,10 +784,10 @@ class IterZO : public Base {
     // it is safe to reinterpret_cast here
     using CacheOffsets = terark::BlobStore::CacheOffsets;
     this->cache_offsets_ = reinterpret_cast<CacheOffsets*>(&rb_);
-    Base::ValueBuf().swap(Base::ctx_ptr_->alloc());
+    Base::ValueBuffer().swap(Base::ctx_ptr_->alloc());
   }
   virtual ~IterZO() {
-    ContextBuffer(std::move(Base::ValueBuf()), Base::ctx_ptr_);
+    ContextBuffer(std::move(Base::ValueBuffer()), Base::ctx_ptr_);
   }
   virtual void invalidate_offsets_cache() override {
     rb_.invalidate_offsets_cache();
@@ -901,12 +942,14 @@ Status TerarkZipSubReader::Get(SequenceNumber global_seqno,
     static constexpr size_t pin_size = 8192;
     bool pin_value = v.size() >= pin_size;
     if (pin_value) {
-      Cleanable value_cleanup;
-      value_cleanup.RegisterCleanup([](void* arg1, void*) { free(arg1); },
-                                    buf.data(), nullptr);
       buf.risk_release_ownership();
       get_context->SaveValue(
-          k, LazyBuffer(v, std::move(value_cleanup), file_number_), &matched);
+          k,
+          LazyBuffer(v,
+                     Cleanable([](void* arg1, void*) { free(arg1); },
+                               buf.data(), nullptr),
+                     file_number_),
+          &matched);
     } else {
       get_context->SaveValue(k, LazyBuffer(v, false, file_number_), &matched);
     }
@@ -963,7 +1006,7 @@ Status TerarkZipSubReader::Get(SequenceNumber global_seqno,
         break;
       }
       size_t num = 0;
-      auto multi_val = ZipValueMultiValue::decode(buf, &num);
+      auto multi_val = ZipValueMultiValue::decode(buf.data(), buf.size(), &num);
       for (size_t i = 0; i < num; ++i) {
         Slice val = multi_val->getValueData(i, num);
         if (val.empty()) {

@@ -15,6 +15,7 @@
 
 #include "db/db_impl.h"
 #include "db/dbformat.h"
+#include "db/forward_iterator.h"
 #include "db/merge_context.h"
 #include "db/merge_helper.h"
 #include "monitoring/perf_context_imp.h"
@@ -112,9 +113,9 @@ class DBIter final : public Iterator {
   DBIter(Env* _env, const ReadOptions& read_options,
          const ImmutableCFOptions& cf_options,
          const MutableCFOptions& mutable_cf_options, const Comparator* cmp,
-         InternalIterator* iter, SequenceNumber s,
-         const SeparateHelper* separate_helper, bool arena_mode,
-         uint64_t max_sequential_skip_in_iterations,
+         InternalIterator* iter, SVDestructCallback* sv_destruct_callback,
+         SequenceNumber s, const SeparateHelper* separate_helper,
+         bool arena_mode, uint64_t max_sequential_skip_in_iterations,
          ReadCallback* read_callback, DBImpl* db_impl, ColumnFamilyData* cfd)
       : arena_mode_(arena_mode),
         env_(_env),
@@ -142,6 +143,7 @@ class DBIter final : public Iterator {
     prefix_extractor_ = mutable_cf_options.prefix_extractor.get();
     max_skip_ = max_sequential_skip_in_iterations;
     max_skippable_internal_keys_ = read_options.max_skippable_internal_keys;
+    SetSVDestructCallback(sv_destruct_callback);
   }
   virtual ~DBIter() {
     RecordTick(statistics_, NO_ITERATOR_DELETED);
@@ -154,11 +156,22 @@ class DBIter final : public Iterator {
       iter_->~InternalIterator();
     }
   }
+  void SetSVDestructCallback(SVDestructCallback* sv_destruct_callback) {
+    if (sv_destruct_callback != nullptr) {
+      sv_destruct_callback->Set(
+          [](void* arg, SuperVersion* /*sv*/) {
+            static_cast<DBIter*>(arg)->PinLazyBuffer();
+          },
+          this);
+    }
+  }
   virtual void SetIter(InternalIterator* iter,
+                       SVDestructCallback* sv_destruct_callback,
                        const SeparateHelper* separate_helper) {
     assert(iter_ == nullptr);
     iter_ = iter;
     separate_helper_ = separate_helper;
+    SetSVDestructCallback(sv_destruct_callback);
   }
   virtual ReadRangeDelAggregator* GetRangeDelAggregator() {
     return &range_del_agg_;
@@ -222,6 +235,7 @@ class DBIter final : public Iterator {
   // PRE: iter_->Valid() && status_.ok()
   // Return false if there was an error, and status() is non-ok, valid_ = false;
   // in this case callers would usually stop what they were doing and return.
+  void PinLazyBuffer();
   bool ReverseToForward();
   bool ReverseToBackward();
   bool FindValueForCurrentKey();
@@ -616,7 +630,7 @@ bool DBIter::MergeValuesNewToOld() {
         return false;
       }
       val.reset();
-      value_.pin();
+      value_.pin(LazyBufferPinLevel::Internal);
       // iter_ is positioned after put
       iter_->Next();
       if (!iter_->status().ok()) {
@@ -684,6 +698,11 @@ void DBIter::Prev() {
       local_stats_.bytes_read_ += key().size();
     }
   }
+}
+
+void DBIter::PinLazyBuffer() {
+  value_.pin(LazyBufferPinLevel::DB);
+  merge_context_.PinLazyBuffer();
 }
 
 bool DBIter::ReverseToForward() {
@@ -851,7 +870,7 @@ bool DBIter::FindValueForCurrentKey() {
           PERF_COUNTER_ADD(internal_delete_skipped_count, 1);
         } else {
           value_ = GetValue(ikey, kTypeValueIndex);
-          value_.pin();
+          value_.pin(LazyBufferPinLevel::Internal);
         }
         merge_context_.Clear();
         last_not_merge_type = last_key_entry_type;
@@ -983,7 +1002,7 @@ bool DBIter::FindValueForCurrentKeyUsingSeek() {
   }
   if (ikey.type == kTypeValue || ikey.type == kTypeValueIndex) {
     value_ = GetValue(ikey, kTypeValueIndex);
-    value_.pin();
+    value_.pin(LazyBufferPinLevel::Internal);
     valid_ = true;
     return true;
   }
@@ -1027,7 +1046,7 @@ bool DBIter::FindValueForCurrentKeyUsingSeek() {
         status_ = s;
         return false;
       }
-      value_.pin();
+      value_.pin(LazyBufferPinLevel::Internal);
       valid_ = true;
       return true;
     } else if (ikey.type == kTypeMerge || ikey.type == kTypeMergeIndex) {
@@ -1047,7 +1066,7 @@ bool DBIter::FindValueForCurrentKeyUsingSeek() {
     status_ = s;
     return false;
   }
-  value_.pin();
+  value_.pin(LazyBufferPinLevel::Internal);
 
   // Make sure we leave iter_ in a good state. If it's valid and we don't care
   // about prefixes, that's already good enough. Otherwise it needs to be
@@ -1378,6 +1397,7 @@ Iterator* NewDBIterator(Env* env, const ReadOptions& read_options,
                         const MutableCFOptions& mutable_cf_options,
                         const Comparator* user_key_comparator,
                         InternalIterator* internal_iter,
+                        SVDestructCallback* sv_destruct_callback,
                         const SequenceNumber& sequence,
                         const SeparateHelper* separate_helper,
                         uint64_t max_sequential_skip_in_iterations,
@@ -1385,7 +1405,7 @@ Iterator* NewDBIterator(Env* env, const ReadOptions& read_options,
                         ColumnFamilyData* cfd) {
   DBIter* db_iter = new DBIter(
       env, read_options, cf_options, mutable_cf_options, user_key_comparator,
-      internal_iter, sequence, separate_helper, false,
+      internal_iter, sv_destruct_callback, sequence, separate_helper, false,
       max_sequential_skip_in_iterations, read_callback, db_impl, cfd);
   return db_iter;
 }
@@ -1397,8 +1417,10 @@ ReadRangeDelAggregator* ArenaWrappedDBIter::GetRangeDelAggregator() {
 }
 
 void ArenaWrappedDBIter::SetIterUnderDBIter(
-    InternalIterator* iter, const SeparateHelper* separate_helper) {
-  static_cast<DBIter*>(db_iter_)->SetIter(iter, separate_helper);
+    InternalIterator* iter, SVDestructCallback* sv_destruct_callback,
+    const SeparateHelper* separate_helper) {
+  static_cast<DBIter*>(db_iter_)->SetIter(iter, sv_destruct_callback,
+                                          separate_helper);
 }
 
 inline bool ArenaWrappedDBIter::Valid() const { return db_iter_->Valid(); }
@@ -1436,10 +1458,10 @@ void ArenaWrappedDBIter::Init(Env* env, const ReadOptions& read_options,
                               ReadCallback* read_callback, DBImpl* db_impl,
                               ColumnFamilyData* cfd, bool allow_refresh) {
   auto mem = arena_.AllocateAligned(sizeof(DBIter));
-  db_iter_ = new (mem)
-      DBIter(env, read_options, cf_options, mutable_cf_options,
-             cf_options.user_comparator, nullptr, sequence, nullptr, true,
-             max_sequential_skip_in_iteration, read_callback, db_impl, cfd);
+  db_iter_ = new (mem) DBIter(
+      env, read_options, cf_options, mutable_cf_options,
+      cf_options.user_comparator, nullptr, nullptr, sequence, nullptr, true,
+      max_sequential_skip_in_iteration, read_callback, db_impl, cfd);
   sv_number_ = version_number;
   allow_refresh_ = allow_refresh;
 }
@@ -1468,7 +1490,7 @@ Status ArenaWrappedDBIter::Refresh() {
     InternalIterator* internal_iter = db_impl_->NewInternalIterator(
         read_options_, cfd_, sv, &arena_, db_iter_->GetRangeDelAggregator(),
         latest_seq);
-    SetIterUnderDBIter(internal_iter, sv->current);
+    SetIterUnderDBIter(internal_iter, nullptr, sv->current);
   } else {
     db_iter_->set_sequence(latest_seq);
     db_iter_->set_valid(false);

@@ -16,7 +16,7 @@
 #include <vector>
 
 #include "db/dbformat.h"
-
+#include "monitoring/perf_context_imp.h"
 #include "rocksdb/cache.h"
 #include "rocksdb/comparator.h"
 #include "rocksdb/env.h"
@@ -26,7 +26,6 @@
 #include "rocksdb/statistics.h"
 #include "rocksdb/table.h"
 #include "rocksdb/table_properties.h"
-
 #include "table/block.h"
 #include "table/block_based_filter_block.h"
 #include "table/block_based_table_factory.h"
@@ -42,8 +41,6 @@
 #include "table/persistent_cache_helper.h"
 #include "table/sst_file_writer_collectors.h"
 #include "table/two_level_iterator.h"
-
-#include "monitoring/perf_context_imp.h"
 #include "util/coding.h"
 #include "util/file_reader_writer.h"
 #include "util/stop_watch.h"
@@ -129,13 +126,6 @@ void ReleaseCachedEntry(void* arg, void* h) {
   Cache* cache = reinterpret_cast<Cache*>(arg);
   Cache::Handle* handle = reinterpret_cast<Cache::Handle*>(h);
   cache->Release(handle);
-}
-
-// Release the cached entry and decrement its ref count.
-void ForceReleaseCachedEntry(void* arg, void* h) {
-  Cache* cache = reinterpret_cast<Cache*>(arg);
-  Cache::Handle* handle = reinterpret_cast<Cache::Handle*>(h);
-  cache->Release(handle, true /* force_erase */);
 }
 
 Slice GetCacheKeyFromOffset(const char* cache_key_prefix,
@@ -637,9 +627,8 @@ void BlockBasedTable::SetupCacheKeyPrefix(Rep* rep, uint64_t file_size) {
   }
 }
 
-void BlockBasedTable::GenerateCachePrefix(Cache* cc,
-    RandomAccessFile* file, char* buffer, size_t* size) {
-
+void BlockBasedTable::GenerateCachePrefix(Cache* cc, RandomAccessFile* file,
+                                          char* buffer, size_t* size) {
   // generate an id from the file
   *size = file->GetUniqueId(buffer, kMaxCacheKeyPrefixSize);
 
@@ -651,9 +640,8 @@ void BlockBasedTable::GenerateCachePrefix(Cache* cc,
   }
 }
 
-void BlockBasedTable::GenerateCachePrefix(Cache* cc,
-    WritableFile* file, char* buffer, size_t* size) {
-
+void BlockBasedTable::GenerateCachePrefix(Cache* cc, WritableFile* file,
+                                          char* buffer, size_t* size) {
   // generate an id from the file
   *size = file->GetUniqueId(buffer, kMaxCacheKeyPrefixSize);
 
@@ -907,11 +895,10 @@ Status BlockBasedTable::Open(const ImmutableCFOptions& ioptions,
     s = meta_iter->status();
     TableProperties* table_properties = nullptr;
     if (s.ok()) {
-      s = ReadProperties(meta_iter->value(), rep->file.get(),
-                         prefetch_buffer.get(), rep->footer, rep->ioptions,
-                         &table_properties,
-                         false /* compression_type_missing */,
-                         nullptr /* memory_allocator */);
+      s = ReadProperties(
+          meta_iter->value(), rep->file.get(), prefetch_buffer.get(),
+          rep->footer, rep->ioptions, &table_properties,
+          false /* compression_type_missing */, nullptr /* memory_allocator */);
     }
 
     if (!s.ok()) {
@@ -922,8 +909,9 @@ Status BlockBasedTable::Open(const ImmutableCFOptions& ioptions,
     } else {
       assert(table_properties != nullptr);
       rep->table_properties.reset(table_properties);
-      rep->blocks_maybe_compressed = rep->table_properties_base.compression_name !=
-                                     CompressionTypeToString(kNoCompression);
+      rep->blocks_maybe_compressed =
+          rep->table_properties_base.compression_name !=
+          CompressionTypeToString(kNoCompression);
     }
   } else {
     ROCKS_LOG_ERROR(rep->ioptions.info_log,
@@ -1183,7 +1171,8 @@ std::shared_ptr<const TableProperties> BlockBasedTable::GetTableProperties()
       return nullptr;
     }
     s = ReadTableProperties(rep_->file.get(), filesize,
-                            kBlockBasedTableMagicNumber, rep_->ioptions, &props);
+                            kBlockBasedTableMagicNumber, rep_->ioptions,
+                            &props);
     if (!s.ok()) {
       return nullptr;
     }
@@ -1203,10 +1192,7 @@ size_t BlockBasedTable::ApproximateMemoryUsage() const {
   return usage;
 }
 
-
-uint64_t BlockBasedTable::FileNumber() const {
-  return rep_->file_number;
-}
+uint64_t BlockBasedTable::FileNumber() const { return rep_->file_number; }
 
 // Load the meta-block from the file. On success, return the loaded meta block
 // and its iterator.
@@ -1592,8 +1578,8 @@ BlockBasedTable::CachableEntry<FilterBlockReader> BlockBasedTable::GetFilter(
 
   FilterBlockReader* filter = nullptr;
   if (cache_handle != nullptr) {
-    filter = reinterpret_cast<FilterBlockReader*>(
-        block_cache->Value(cache_handle));
+    filter =
+        reinterpret_cast<FilterBlockReader*>(block_cache->Value(cache_handle));
   } else if (no_io) {
     // Do not invoke any io.
     return CachableEntry<FilterBlockReader>();
@@ -1821,8 +1807,7 @@ TBlockIter* BlockBasedTable::NewDataBlockIterator(
         iter, rep->ioptions.statistics, kTotalOrderSeek, key_includes_seq,
         index_key_is_full, block_contents_pinned);
     if (block.cache_handle != nullptr) {
-      iter->RegisterCleanup(&ReleaseCachedEntry, block_cache,
-                            block.cache_handle);
+      iter->SetReleaseCache(block_cache, block.cache_handle, false);
     } else {
       if (!ro.fill_cache && rep->cache_key_prefix_size != 0) {
         // insert a dummy record to block cache to track the memory usage
@@ -1850,8 +1835,7 @@ TBlockIter* BlockBasedTable::NewDataBlockIterator(
                                 &cache_handle);
         if (s.ok()) {
           if (cache_handle != nullptr) {
-            iter->RegisterCleanup(&ForceReleaseCachedEntry, block_cache,
-                                  cache_handle);
+            iter->SetReleaseCache(block_cache, cache_handle, true);
           }
         }
       }
@@ -1956,8 +1940,9 @@ BlockBasedTable::PartitionedIndexIteratorState::PartitionedIndexIteratorState(
       index_key_is_full_(index_key_is_full) {}
 
 template <class TBlockIter, typename TValue>
-const size_t BlockBasedTableIteratorBase<TBlockIter, TValue>::kMaxReadaheadSize =
-    256 * 1024;
+const size_t
+    BlockBasedTableIteratorBase<TBlockIter, TValue>::kMaxReadaheadSize =
+        256 * 1024;
 
 InternalIteratorBase<BlockHandle>*
 BlockBasedTable::PartitionedIndexIteratorState::NewSecondaryIterator(
@@ -2114,7 +2099,8 @@ bool BlockBasedTable::PrefixMayMatch(
 }
 
 template <class TBlockIter, typename TValue>
-void BlockBasedTableIteratorBase<TBlockIter, TValue>::Seek(const Slice& target) {
+void BlockBasedTableIteratorBase<TBlockIter, TValue>::Seek(
+    const Slice& target) {
   is_out_of_bound_ = false;
   if (!CheckPrefixMayMatch(target)) {
     ResetDataIter();
@@ -2360,9 +2346,8 @@ InternalIterator* BlockBasedTable::NewIterator(
         need_upper_bound_check, prefix_extractor, kIsNotIndex,
         true /*key_includes_seq*/, for_compaction);
   } else {
-    auto* mem =
-        arena->AllocateAligned(
-            sizeof(BlockBasedTableIterator<DataBlockIter, LazyBuffer>));
+    auto* mem = arena->AllocateAligned(
+        sizeof(BlockBasedTableIterator<DataBlockIter, LazyBuffer>));
     return new (mem) BlockBasedTableIterator<DataBlockIter, LazyBuffer>(
         this, read_options, rep_->internal_comparator,
         NewIndexIterator(read_options, need_upper_bound_check),
@@ -2498,6 +2483,34 @@ Status BlockBasedTable::Get(const ReadOptions& read_options, const Slice& key,
           break;
         }
 
+        class LazyBufferStateImpl : public LazyBufferState {
+         public:
+          virtual void destroy(LazyBuffer* /*buffer*/) const override {}
+
+          virtual Status pin_buffer(LazyBuffer* buffer) const override {
+            if (buffer->size() <= sizeof(LazyBufferContext)) {
+              buffer->reset(buffer->slice(), true, buffer->file_number());
+              return Status::OK();
+            }
+            auto context = get_context(buffer);
+            DataBlockIter* iter =
+                reinterpret_cast<DataBlockIter*>(context->data[0]);
+            assert(iter != nullptr);
+            Cleanable release_cached_entry = iter->RefCache();
+            if (release_cached_entry.Empty()) {
+              return Status::NotSupported();
+            }
+            buffer->reset(buffer->slice(), std::move(release_cached_entry),
+                          buffer->file_number());
+            return Status::OK();
+          }
+
+          Status fetch_buffer(LazyBuffer* /*buffer*/) const override {
+            return Status::OK();
+          }
+        };
+        static LazyBufferStateImpl static_state;
+
         // Call the *saver function on each entry/block until it returns false
         for (; biter.Valid(); biter.Next()) {
           ParsedInternalKey parsed_key;
@@ -2505,10 +2518,12 @@ Status BlockBasedTable::Get(const ReadOptions& read_options, const Slice& key,
             s = Status::Corruption(Slice());
           }
 
-          if (!get_context->SaveValue(parsed_key,
-                                      LazyBuffer(biter.value(), false,
-                                                 rep_->file_number),
-                                      &matched)) {
+          if (!get_context->SaveValue(
+                  parsed_key,
+                  LazyBuffer(&static_state,
+                             {reinterpret_cast<uint64_t>(&biter)},
+                             biter.value(), rep_->file_number),
+                  &matched)) {
             done = true;
             break;
           }
@@ -2567,8 +2582,9 @@ Status BlockBasedTable::Prefetch(const Slice* const begin,
   for (begin ? iiter->Seek(*begin) : iiter->SeekToFirst(); iiter->Valid();
        iiter->Next()) {
     BlockHandle block_handle = iiter->value();
-    const bool is_user_key = rep_->found_table_properties &&
-                             rep_->table_properties_base.index_key_is_user_key > 0;
+    const bool is_user_key =
+        rep_->found_table_properties &&
+        rep_->table_properties_base.index_key_is_user_key > 0;
     if (end &&
         ((!is_user_key && comparator.Compare(iiter->key(), *end) >= 0) ||
          (is_user_key &&
@@ -3249,13 +3265,19 @@ void DeleteCachedIndexEntry(const Slice& /*key*/, void* value) {
 
 }  // anonymous namespace
 
-void BlockBasedTableIterator<DataBlockIter, LazyBuffer>::pin_buffer(
+Status BlockBasedTableIterator<DataBlockIter, LazyBuffer>::pin_buffer(
     LazyBuffer* buffer) const {
-  //TODO ref block
-  //[block handle]->ref()
-  //Cleanable cleanup = [](args...){ [block handle]->deref() };
-  //buffer->reset(*slice, &cleanup, buffer->file_number());
-  buffer->reset(block_iter_.value(), true, buffer->file_number());
+  if (block_iter_.value().size() <= sizeof(LazyBufferContext)) {
+    buffer->reset(block_iter_.value(), true, buffer->file_number());
+    return Status::OK();
+  }
+  Cleanable release_cached_entry = block_iter_.RefCache();
+  if (release_cached_entry.Empty()) {
+    return Status::NotSupported();
+  }
+  buffer->reset(block_iter_.value(), std::move(release_cached_entry),
+                buffer->file_number());
+  return Status::OK();
 }
 
 }  // namespace rocksdb
