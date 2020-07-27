@@ -602,7 +602,7 @@ TEST_F(DBCompactionTest, TestTableReaderForCompaction) {
 
   rocksdb::SyncPoint::GetInstance()->ClearAllCallBacks();
 }
-#ifdef OLD_DELETEFILE_DANGE
+
 TEST_P(DBCompactionTestWithParam, CompactionDeletionTriggerReopen) {
   for (int tid = 0; tid < 2; ++tid) {
     uint64_t db_size[3];
@@ -659,7 +659,7 @@ TEST_P(DBCompactionTestWithParam, CompactionDeletionTriggerReopen) {
     ASSERT_GT(db_size[0] / 3, db_size[2]);
   }
 }
-#endif  // OLD_DELETEFILE_DANGE
+
 TEST_F(DBCompactionTest, DisableStatsUpdateReopen) {
   uint64_t db_size[3];
   for (int test = 0; test < 2; ++test) {
@@ -1065,6 +1065,7 @@ TEST_F(DBCompactionTest, ManualCompactionUnknownOutputSize) {
 
 // Check that writes done during a memtable compaction are recovered
 // if the database is shutdown during the memtable compaction.
+
 TEST_F(DBCompactionTest, RecoverDuringMemtableCompaction) {
   do {
     Options options = CurrentOptions();
@@ -1076,6 +1077,7 @@ TEST_F(DBCompactionTest, RecoverDuringMemtableCompaction) {
     ASSERT_OK(Put(1, "big1", std::string(10000000, 'x')));  // Fills memtable
     ASSERT_OK(Put(1, "big2", std::string(1000, 'y')));  // Triggers compaction
     ASSERT_OK(Put(1, "bar", "v2"));                     // Goes to new log file
+
     ReopenWithColumnFamilies({"default", "pikachu"}, options);
     ASSERT_EQ("v1", Get(1, "foo"));
     ASSERT_EQ("v2", Get(1, "bar"));
@@ -1568,7 +1570,7 @@ TEST_F(DBCompactionTest, DISABLED_ManualPartialFill) {
     ASSERT_EQ(Get(Key(i)), values[i]);
   }
 }
-#ifdef OLD_DELETEFILE_DANGE
+
 TEST_F(DBCompactionTest, DeleteFileRange) {
   Options options = CurrentOptions();
   options.write_buffer_size = 10 * 1024 * 1024;
@@ -1688,7 +1690,6 @@ TEST_F(DBCompactionTest, DeleteFileRange) {
   size_t new_num_files = CountFiles();
   ASSERT_GT(old_num_files, new_num_files);
 }
-#endif // OLD_DELETEFILE_DANGE
 
 TEST_F(DBCompactionTest, DeleteFilesInRanges) {
   Options options = CurrentOptions();
@@ -2829,7 +2830,7 @@ TEST_P(DBCompactionTestWithParam, PartialCompactionFailure) {
     ASSERT_EQ(values[k], Get(keys[k]));
   }
 }
-#ifdef OLD_DELETEFILE_DANGE
+
 TEST_P(DBCompactionTestWithParam, DeleteMovedFileAfterCompaction) {
   // iter 1 -- delete_obsolete_files_period_micros == 0
   for (int iter = 0; iter < 2; ++iter) {
@@ -2908,7 +2909,7 @@ TEST_P(DBCompactionTestWithParam, DeleteMovedFileAfterCompaction) {
     listener->VerifyMatchedCount(1);
   }
 }
-#endif // OLD_DELETEFILE_DANGE
+
 TEST_P(DBCompactionTestWithParam, CompressLevelCompaction) {
   if (!Zlib_Supported()) {
     return;
