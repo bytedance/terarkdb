@@ -409,6 +409,7 @@ TEST_F(DBWALTest, RecoveryWithEmptyLog) {
 #if !(defined NDEBUG) || !defined(OS_WIN)
 TEST_F(DBWALTest, PreallocateBlock) {
   Options options = CurrentOptions();
+  options.prepare_log_writer_num = 0;
   options.write_buffer_size = 10 * 1000 * 1000;
   options.max_total_wal_size = 0;
 
