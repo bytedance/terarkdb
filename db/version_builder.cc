@@ -386,6 +386,7 @@ class VersionBuilder::Rep {
   }
 
   void CheckConsistency(VersionStorageInfo* vstorage, bool check_dependence) {
+    Init();
 #ifdef NDEBUG
     if (!vstorage->force_consistency_checks()) {
       // Dont run consistency checks in release mode except if
@@ -453,6 +454,7 @@ class VersionBuilder::Rep {
 
   void CheckConsistencyForDeletes(VersionEdit* /*edit*/, uint64_t number,
                                   int level) {
+    Init();
 #ifdef NDEBUG
     if (!base_vstorage_->force_consistency_checks()) {
       // Dont run consistency checks in release mode except if
@@ -500,6 +502,7 @@ class VersionBuilder::Rep {
   }
 
   bool CheckConsistencyForNumLevels() {
+    Init();
     // Make sure there are no files on or beyond num_levels().
     if (has_invalid_levels_) {
       return false;
@@ -682,6 +685,7 @@ class VersionBuilder::Rep {
                          bool prefetch_index_and_filter_in_cache,
                          const SliceTransform* prefix_extractor,
                          bool load_essence_sst, int max_threads) {
+    Init();
     assert(table_cache_ != nullptr);
     // <file metadata, level>
     std::vector<std::pair<FileMetaData*, int>> files_meta;
@@ -740,6 +744,7 @@ class VersionBuilder::Rep {
 
   void UpgradeFileMetaData(const SliceTransform* prefix_extractor,
                            int max_threads) {
+    Init();
     assert(table_cache_ != nullptr);
     std::vector<FileMetaData*> files_meta;
     for (auto& pair : dependence_map_) {
