@@ -113,7 +113,7 @@ std::string Reverse(const Slice& key) {
 class ReverseKeyComparator : public Comparator {
  public:
   virtual const char* Name() const override {
-    return "rocksdb.ReverseBytewiseComparator";
+    return "rocksdb.ReverseKeyBytewiseComparator";
   }
 
   virtual int Compare(const Slice& a, const Slice& b) const override {
@@ -1201,7 +1201,7 @@ TEST_P(BlockBasedTableTest, BlockBasedTableProperties2) {
 
     auto& props = *c.GetTableReader()->GetTableProperties();
 
-    ASSERT_EQ("rocksdb.ReverseBytewiseComparator", props.comparator_name);
+    ASSERT_EQ("rocksdb.ReverseKeyBytewiseComparator", props.comparator_name);
     ASSERT_EQ("UInt64AddOperator", props.merge_operator_name);
     ASSERT_EQ("rocksdb.Noop", props.prefix_extractor_name);
     ASSERT_EQ("[DummyPropertiesCollector1,DummyPropertiesCollector2]",
@@ -2094,7 +2094,7 @@ TEST_P(BlockBasedTableTest, FilterBlockInBlockCache) {
   ASSERT_OK(reader->Get(ReadOptions(), internal_key.Encode(), &get_context,
                         moptions4.prefix_extractor.get()));
   ASSERT_OK(value.fetch());
-  ASSERT_STREQ(value.data(), "hello");
+  ASSERT_STREQ(value.ToString().c_str(), "hello");
   BlockCachePropertiesSnapshot props(options.statistics.get());
   props.AssertFilterBlockStat(0, 0);
   c3.ResetTableReader();
@@ -2189,7 +2189,7 @@ TEST_P(BlockBasedTableTest, BlockReadCountTest) {
         ASSERT_EQ(get_perf_context()->block_read_count, 1);
       }
       ASSERT_EQ(get_context.State(), GetContext::kFound);
-      ASSERT_STREQ(value.data(), "hello");
+      ASSERT_STREQ(value.ToString().c_str(), "hello");
 
       // Get non-existing key
       user_key = "does-not-exist";
@@ -2341,7 +2341,7 @@ TEST_P(BlockBasedTableTest, NoObjectInCacheAfterTableClose) {
                                          moptions.prefix_extractor.get());
               ASSERT_OK(value.fetch());
               ASSERT_EQ(get_context.State(), GetContext::kFound);
-              ASSERT_STREQ(value.data(), "hello");
+              ASSERT_STREQ(value.ToString().c_str(), "hello");
 
               // Close the table
               c.ResetTableReader();
