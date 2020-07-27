@@ -10,27 +10,24 @@
 #include <vector>
 
 #include "db/dbformat.h"
-
+#include "monitoring/histogram.h"
+#include "monitoring/perf_context_imp.h"
 #include "rocksdb/cache.h"
 #include "rocksdb/comparator.h"
 #include "rocksdb/env.h"
 #include "rocksdb/filter_policy.h"
 #include "rocksdb/options.h"
 #include "rocksdb/statistics.h"
-
 #include "table/block.h"
 #include "table/bloom_block.h"
 #include "table/filter_block.h"
 #include "table/format.h"
+#include "table/get_context.h"
 #include "table/internal_iterator.h"
 #include "table/meta_blocks.h"
-#include "table/two_level_iterator.h"
 #include "table/plain_table_factory.h"
 #include "table/plain_table_key_coding.h"
-#include "table/get_context.h"
-
-#include "monitoring/histogram.h"
-#include "monitoring/perf_context_imp.h"
+#include "table/two_level_iterator.h"
 #include "util/arena.h"
 #include "util/coding.h"
 #include "util/dynamic_bloom.h"
@@ -93,7 +90,7 @@ class PlainTableIterator : public InternalIterator {
 extern const uint64_t kPlainTableMagicNumber;
 
 void PlainTableReader::SetTableCacheHandle(Cache* table_cache,
-                                           Cache::Handle *handle) {
+                                           Cache::Handle* handle) {
   MutexLock lock(&table_cache_mutex_);
   assert(table_cache != nullptr);
   assert(handle != nullptr);
@@ -104,9 +101,8 @@ void PlainTableReader::SetTableCacheHandle(Cache* table_cache,
 PlainTableReader::PlainTableReader(
     const ImmutableCFOptions& ioptions,
     std::unique_ptr<RandomAccessFileReader>&& file,
-    const EnvOptions& storage_options,
-    const InternalKeyComparator& icomparator, EncodingType encoding_type,
-    uint64_t file_number, uint64_t file_size,
+    const EnvOptions& storage_options, const InternalKeyComparator& icomparator,
+    EncodingType encoding_type, uint64_t file_number, uint64_t file_size,
     const TableProperties* table_properties,
     const SliceTransform* prefix_extractor)
     : internal_comparator_(icomparator),
@@ -125,17 +121,18 @@ PlainTableReader::PlainTableReader(
       table_cache_(nullptr),
       table_cache_handle_(nullptr) {}
 
-PlainTableReader::~PlainTableReader() {
-}
+PlainTableReader::~PlainTableReader() {}
 
-Status PlainTableReader::Open(
-    const ImmutableCFOptions& ioptions, const EnvOptions& env_options,
-    const InternalKeyComparator& internal_comparator,
-    std::unique_ptr<RandomAccessFileReader>&& file, uint64_t file_number,
-    uint64_t file_size, std::unique_ptr<TableReader>* table_reader,
-    const int bloom_bits_per_key, double hash_table_ratio,
-    size_t index_sparseness, size_t huge_page_tlb_size, bool full_scan_mode,
-    const SliceTransform* prefix_extractor) {
+Status PlainTableReader::Open(const ImmutableCFOptions& ioptions,
+                              const EnvOptions& env_options,
+                              const InternalKeyComparator& internal_comparator,
+                              std::unique_ptr<RandomAccessFileReader>&& file,
+                              uint64_t file_number, uint64_t file_size,
+                              std::unique_ptr<TableReader>* table_reader,
+                              const int bloom_bits_per_key,
+                              double hash_table_ratio, size_t index_sparseness,
+                              size_t huge_page_tlb_size, bool full_scan_mode,
+                              const SliceTransform* prefix_extractor) {
   if (file_size > PlainTableIndex::kMaxFileSize) {
     return Status::NotSupported("File is too large for PlainTableReader!");
   }
@@ -200,8 +197,7 @@ Status PlainTableReader::Open(
   return s;
 }
 
-void PlainTableReader::SetupForCompaction() {
-}
+void PlainTableReader::SetupForCompaction() {}
 
 InternalIterator* PlainTableReader::NewIterator(
     const ReadOptions& options, const SliceTransform* /* prefix_extractor */,
@@ -291,7 +287,8 @@ void PlainTableReader::FillBloom(vector<uint32_t>* prefix_hashes) {
 Status PlainTableReader::MmapDataIfNeeded() {
   if (file_info_.is_mmap_mode) {
     // Get mmapped memory.
-    return file_info_.file->Read(0, static_cast<size_t>(file_size_), &file_info_.file_data, nullptr);
+    return file_info_.file->Read(0, static_cast<size_t>(file_size_),
+                                 &file_info_.file_data, nullptr);
   }
   return Status::OK();
 }
@@ -307,11 +304,11 @@ Status PlainTableReader::PopulateIndex(TableProperties* props,
   }
 
   BlockContents index_block_contents;
-  Status s = ReadMetaBlock(file_info_.file.get(), nullptr /* prefetch_buffer */,
-                           file_size_, kPlainTableMagicNumber, ioptions_,
-                           PlainTableIndexBuilder::kPlainTableIndexBlock,
-                           &index_block_contents,
-                           true /* compression_type_missing */);
+  Status s =
+      ReadMetaBlock(file_info_.file.get(), nullptr /* prefetch_buffer */,
+                    file_size_, kPlainTableMagicNumber, ioptions_,
+                    PlainTableIndexBuilder::kPlainTableIndexBlock,
+                    &index_block_contents, true /* compression_type_missing */);
 
   bool index_in_file = s.ok();
 
@@ -363,8 +360,7 @@ Status PlainTableReader::PopulateIndex(TableProperties* props,
     // Allocate bloom filter here for total order mode.
     if (IsTotalOrderMode()) {
       uint32_t num_bloom_bits =
-          static_cast<uint32_t>(props->num_entries) *
-          bloom_bits_per_key;
+          static_cast<uint32_t>(props->num_entries) * bloom_bits_per_key;
       if (num_bloom_bits > 0) {
         enable_bloom_ = true;
         bloom_.SetTotalBits(&arena_, num_bloom_bits, ioptions_.bloom_locality,
@@ -525,6 +521,24 @@ bool PlainTableReader::MatchBloom(uint32_t hash) const {
   }
 }
 
+LazyBuffer PlainTableReader::ToLazyBuffer(const Slice& value) {
+  if (value.size() <= sizeof(LazyBufferContext) ||
+      !file_info_.file_data.contain(value) || table_cache_handle_ == nullptr ||
+      !table_cache_->Ref(table_cache_handle_)) {
+    return LazyBuffer(LazyBuffer(value, false, file_number_));
+  } else {
+    return LazyBuffer(value,
+                      Cleanable(
+                          [](void* arg1, void* arg2) {
+                            auto c = static_cast<Cache*>(arg1);
+                            auto h = static_cast<Cache::Handle*>(arg2);
+                            c->Release(h);
+                          },
+                          table_cache_, table_cache_handle_),
+                      file_number_);
+  }
+}
+
 Status PlainTableReader::Next(PlainTableKeyDecoder* decoder, uint32_t* offset,
                               ParsedInternalKey* parsed_key,
                               Slice* internal_key, Slice* value,
@@ -615,26 +629,9 @@ Status PlainTableReader::Get(const ReadOptions& /*ro*/, const Slice& target,
     // can we enable the fast path?
     if (internal_comparator_.Compare(found_key, parsed_target) >= 0) {
       bool dont_care __attribute__((__unused__));
-      if (found_value.size() <= sizeof(LazyBufferContext) ||
-          table_cache_handle_ == nullptr ||
-          !table_cache_->Ref(table_cache_handle_)) {
-        if (!get_context->SaveValue(found_key,
-                                    LazyBuffer(found_value, false,
-                                               file_number_),
-                                    &dont_care)) {
-          break;
-        }
-      } else {
-        if (!get_context->SaveValue(
-            found_key, LazyBuffer(
-                found_value, Cleanable([](void* arg1, void* arg2) {
-                  auto c = static_cast<Cache*>(arg1);
-                  auto h = static_cast<Cache::Handle*>(arg2);
-                  c->Release(h);
-                }, table_cache_, table_cache_handle_), file_number_),
-            &dont_care)) {
-          break;
-        }
+      if (!get_context->SaveValue(found_key, ToLazyBuffer(found_value),
+                                  &dont_care)) {
+        break;
       }
     }
   }
@@ -654,8 +651,7 @@ PlainTableIterator::PlainTableIterator(PlainTableReader* table,
   next_offset_ = offset_ = table_->file_info_.data_end_offset;
 }
 
-PlainTableIterator::~PlainTableIterator() {
-}
+PlainTableIterator::~PlainTableIterator() {}
 
 bool PlainTableIterator::Valid() const {
   return offset_ < table_->file_info_.data_end_offset &&
@@ -685,9 +681,8 @@ void PlainTableIterator::Seek(const Slice& target) {
     // it. This is needed for compaction: it creates iterator with
     // total_order_seek = true but usually never does Seek() on it,
     // only SeekToFirst().
-    status_ =
-        Status::InvalidArgument(
-          "total_order_seek not implemented for PlainTable.");
+    status_ = Status::InvalidArgument(
+        "total_order_seek not implemented for PlainTable.");
     offset_ = next_offset_ = table_->file_info_.data_end_offset;
     return;
   }
@@ -768,9 +763,7 @@ void PlainTableIterator::Next() {
   }
 }
 
-void PlainTableIterator::Prev() {
-  assert(false);
-}
+void PlainTableIterator::Prev() { assert(false); }
 
 Slice PlainTableIterator::key() const {
   assert(Valid());
@@ -779,12 +772,10 @@ Slice PlainTableIterator::key() const {
 
 LazyBuffer PlainTableIterator::value() const {
   assert(Valid());
-  return LazyBuffer(value_, false, table_->file_number_);
+  return table_->ToLazyBuffer(value_);
 }
 
-Status PlainTableIterator::status() const {
-  return status_;
-}
+Status PlainTableIterator::status() const { return status_; }
 
 }  // namespace rocksdb
 #endif  // ROCKSDB_LITE

@@ -271,11 +271,11 @@ class BlockIter : public InternalIteratorBase<TValue> {
     cache_force_release_ = force_release;
   }
   Cleanable RefCache() const {
-    if (cache_handle_ == nullptr || !block_contents_pinned_) {
+    if (cache_handle_ == nullptr || !block_contents_pinned_ ||
+        !cache_->Ref(cache_handle_)) {
       return Cleanable();
     }
     assert(cache_ != nullptr);
-    cache_->Ref(cache_handle_);
     if (cache_force_release_) {
       return Cleanable(
           [](void* c, void* h) {

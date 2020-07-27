@@ -5,11 +5,12 @@
 #pragma once
 
 #ifndef ROCKSDB_LITE
-#include <unordered_map>
-#include <memory>
-#include <vector>
-#include <string>
 #include <stdint.h>
+
+#include <memory>
+#include <string>
+#include <unordered_map>
+#include <vector>
 
 #include "db/dbformat.h"
 #include "rocksdb/env.h"
@@ -17,9 +18,9 @@
 #include "rocksdb/slice_transform.h"
 #include "rocksdb/table.h"
 #include "rocksdb/table_properties.h"
-#include "table/table_reader.h"
 #include "table/plain_table_factory.h"
 #include "table/plain_table_index.h"
+#include "table/table_reader.h"
 #include "util/arena.h"
 #include "util/dynamic_bloom.h"
 #include "util/file_reader_writer.h"
@@ -66,7 +67,7 @@ struct PlainTableReaderFileInfo {
 // create a binary search-able index from the suffix to offset on disk.
 //
 // The implementation of IndexedTableReader requires output file is mmaped
-class PlainTableReader: public TableReader {
+class PlainTableReader : public TableReader {
  public:
   static Status Open(const ImmutableCFOptions& ioptions,
                      const EnvOptions& env_options,
@@ -104,11 +105,9 @@ class PlainTableReader: public TableReader {
     return arena_.MemoryAllocatedBytes();
   }
 
-  uint64_t FileNumber() const override {
-    return file_number_;
-  }
+  uint64_t FileNumber() const override { return file_number_; }
 
-  void SetTableCacheHandle(Cache* table_cache, Cache::Handle *handle) override;
+  void SetTableCacheHandle(Cache* table_cache, Cache::Handle* handle) override;
 
   PlainTableReader(const ImmutableCFOptions& ioptions,
                    std::unique_ptr<RandomAccessFileReader>&& file,
@@ -124,6 +123,8 @@ class PlainTableReader: public TableReader {
   // The hash of the prefix is given, since it can be reused for index lookup
   // too.
   virtual bool MatchBloom(uint32_t hash) const;
+
+  LazyBuffer ToLazyBuffer(const Slice&);
 
   // PopulateIndex() builds index of keys. It must be called before any query
   // to the table.
@@ -168,7 +169,7 @@ class PlainTableReader: public TableReader {
   uint64_t file_size_;
   std::shared_ptr<const TableProperties> table_properties_;
   Cache* table_cache_;
-  Cache::Handle *table_cache_handle_;
+  Cache::Handle* table_cache_handle_;
   port::Mutex table_cache_mutex_;
 
   bool IsFixedLength() const {

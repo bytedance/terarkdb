@@ -140,6 +140,15 @@ class Slice {
             (memcmp(data_ + size_ - x.size_, x.data_, x.size_) == 0));
   }
 
+  bool overlap(const Slice& x) {
+    return (data_ >= x.data_ && data_ < x.data_ + x.size_) ||
+           (data_ + size_ >= x.data_ && data_ + size_ < x.data_ + x.size_);
+  }
+
+  bool contain(const Slice& x) {
+    return data_ <= x.data_ && data_ + size_ >= x.data_ + x.size_;
+  }
+
   // Compare two slices and returns the first byte where they differ
   size_t difference_offset(const Slice& b) const;
 
