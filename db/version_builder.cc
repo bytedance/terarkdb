@@ -689,6 +689,7 @@ class VersionBuilder::Rep {
     assert(table_cache_ != nullptr);
     // <file metadata, level>
     std::vector<std::pair<FileMetaData*, int>> files_meta;
+    Init();
     for (int level = 0; level < num_levels_; level++) {
       for (auto& file_meta_pair : levels_[level]) {
         auto* file_meta = file_meta_pair.second;

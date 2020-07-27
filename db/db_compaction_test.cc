@@ -1076,7 +1076,6 @@ TEST_F(DBCompactionTest, RecoverDuringMemtableCompaction) {
     ASSERT_OK(Put(1, "big1", std::string(10000000, 'x')));  // Fills memtable
     ASSERT_OK(Put(1, "big2", std::string(1000, 'y')));  // Triggers compaction
     ASSERT_OK(Put(1, "bar", "v2"));                     // Goes to new log file
-
     ReopenWithColumnFamilies({"default", "pikachu"}, options);
     ASSERT_EQ("v1", Get(1, "foo"));
     ASSERT_EQ("v2", Get(1, "bar"));
