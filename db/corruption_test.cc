@@ -53,6 +53,7 @@ class CorruptionTest : public testing::Test {
 
     db_ = nullptr;
     options_.create_if_missing = true;
+    options_.prepare_log_writer_num = 0;
     BlockBasedTableOptions table_options;
     table_options.block_size_deviation = 0;  // make unit test pass for now
     options_.table_factory.reset(NewBlockBasedTableFactory(table_options));
@@ -122,7 +123,8 @@ class CorruptionTest : public testing::Test {
     // will detect whether the appropriate corruptions have
     // occurred.
     Iterator* iter = db_->NewIterator(ReadOptions(false, true));
-    for (iter->SeekToFirst(); iter->Valid(); iter->Next()) {
+    for (iter->SeekToFirst(); iter->Valid() && iter->value().valid();
+         iter->Next()) {
       uint64_t key;
       Slice in(iter->key());
       if (!ConsumeDecimalNumber(&in, &key) ||

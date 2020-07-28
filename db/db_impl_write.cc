@@ -1536,16 +1536,18 @@ Status DBImpl::SwitchMemtable(ColumnFamilyData* cfd, WriteContext* context) {
     std::unique_ptr<log::Writer> unique_new_log;
     s = NewLogWriter(&unique_new_log, recycle_log_number, db_options,
                      write_hint);
-    new_log = unique_new_log.release();
-    new_log_number = new_log->get_log_number();
+    if (s.ok()) {
+      new_log = unique_new_log.release();
+      new_log_number = new_log->get_log_number();
 
-    ROCKS_LOG_WARN(immutable_db_options_.info_log,
-                   "Synchronous create log writer: %" PRIu64
-                   ", time elapse: %" PRIu64 "us%s",
-                   new_log_number, timer.ElapsedNanos() / 1000,
-                   immutable_db_options_.prepare_log_writer_num == 0
-                       ? "."
-                       : ", prepare_log_writer_num should be increased.");
+      ROCKS_LOG_WARN(immutable_db_options_.info_log,
+                     "Synchronous create log writer: %" PRIu64
+                     ", time elapse: %" PRIu64 "us%s",
+                     new_log_number, timer.ElapsedNanos() / 1000,
+                     immutable_db_options_.prepare_log_writer_num == 0
+                         ? "."
+                         : ", prepare_log_writer_num should be increased.");
+    }
     mutex_.Lock();
   }
   // PLEASE NOTE: We assume that there are no failable operations

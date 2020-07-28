@@ -3942,16 +3942,15 @@ Status DBImpl::VerifyChecksum() {
       opts = Options(BuildDBOptions(immutable_db_options_, mutable_db_options_),
                      cfd->GetLatestCFOptions());
     }
-    for (int i = 0; i < vstorage->num_non_empty_levels() && s.ok(); i++) {
-      for (size_t j = 0; j < vstorage->LevelFilesBrief(i).num_files && s.ok();
-           j++) {
-        const auto& fd = vstorage->LevelFilesBrief(i).files[j].fd;
+    for (int i = -1; i < vstorage->num_non_empty_levels() && s.ok(); i++) {
+      for (size_t j = 0; j < vstorage->LevelFiles(i).size() && s.ok(); j++) {
+        const auto& fd = vstorage->LevelFiles(i)[j]->fd;
         std::string fname = TableFileName(cfd->ioptions()->cf_paths,
                                           fd.GetNumber(), fd.GetPathId());
         s = rocksdb::VerifySstFileChecksum(opts, env_options_, fname);
       }
     }
-    if (!s.ok()) {
+   if (!s.ok()) {
       break;
     }
   }
