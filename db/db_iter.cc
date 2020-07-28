@@ -159,8 +159,14 @@ class DBIter final : public Iterator {
   void SetSVDestructCallback(SVDestructCallback* sv_destruct_callback) {
     if (sv_destruct_callback != nullptr) {
       sv_destruct_callback->Set(
-          [](void* arg, SuperVersion* /*sv*/) {
-            static_cast<DBIter*>(arg)->PinLazyBuffer();
+          [](void* arg, SuperVersion* old_sv, SuperVersion* new_sv) {
+            auto self = static_cast<DBIter*>(arg);
+            assert(old_sv == nullptr ||
+                   old_sv->current == self->separate_helper_);
+            (void)old_sv;
+            self->PinLazyBuffer();
+            self->separate_helper_ =
+                new_sv == nullptr ? nullptr : new_sv->current;
           },
           this);
     }

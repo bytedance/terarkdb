@@ -45,18 +45,21 @@ typedef std::priority_queue<InternalIterator*, std::vector<InternalIterator*>,
     MinIterHeap;
 
 struct SVDestructCallback {
-  void Set(void (*callback)(void* arg, SuperVersion* sv), void* callback_arg) {
+  void Set(void (*callback)(void* arg, SuperVersion* old_sv,
+                            SuperVersion* new_sv),
+           void* callback_arg) {
     assert(callback != nullptr);
     callback_ = callback;
     callback_arg_ = callback_arg;
   }
-  void Invoke(SuperVersion* sv) {
+  void Invoke(SuperVersion* old_sv, SuperVersion* new_sv) {
     if (callback_ != nullptr) {
-      callback_(callback_arg_, sv);
+      callback_(callback_arg_, old_sv, new_sv);
     }
   }
 
-  void (*callback_)(void* arg, SuperVersion* sv) = nullptr;
+  void (*callback_)(void* arg, SuperVersion* old_sv,
+                    SuperVersion* new_sv) = nullptr;
   void* callback_arg_ = nullptr;
 };
 
@@ -98,11 +101,11 @@ class ForwardIterator : public InternalIterator, public SVDestructCallback {
   bool TEST_CheckDeletedIters(int* deleted_iters, int* num_iters);
 
  private:
-  void Cleanup(bool release_sv);
+  void Cleanup();
   // Unreference and, if needed, clean up the current SuperVersion. This is
   // either done immediately or deferred until this iterator is unpinned by
   // PinnedIteratorsManager.
-  void SVCleanup();
+  void SVUpdate(SuperVersion* new_sv);
   static void SVCleanup(DBImpl* db, SuperVersion* sv,
                         bool background_purge_on_iterator_cleanup);
   static void DeferredSVCleanup(void* arg);

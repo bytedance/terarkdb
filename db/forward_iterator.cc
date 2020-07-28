@@ -196,7 +196,10 @@ ForwardIterator::ForwardIterator(DBImpl* db, const ReadOptions& read_options,
   }
 }
 
-ForwardIterator::~ForwardIterator() { Cleanup(true); }
+ForwardIterator::~ForwardIterator() {
+  Cleanup();
+  SVUpdate(nullptr);
+}
 
 void ForwardIterator::SVCleanup(DBImpl* db, SuperVersion* sv,
                                 bool background_purge_on_iterator_cleanup) {
@@ -236,18 +239,18 @@ void ForwardIterator::DeferredSVCleanup(void* arg) {
   delete d;
 }
 
-void ForwardIterator::SVCleanup() {
-  if (sv_ == nullptr) {
-    return;
+void ForwardIterator::SVUpdate(SuperVersion* new_sv) {
+  SVDestructCallback::Invoke(sv_, new_sv);
+  if (sv_ != nullptr) {
+    bool background_purge =
+        read_options_.background_purge_on_iterator_cleanup ||
+        db_->immutable_db_options().avoid_unnecessary_blocking_io;
+    SVCleanup(db_, sv_, background_purge);
   }
-  SVDestructCallback::Invoke(sv_);
-  bool background_purge =
-      read_options_.background_purge_on_iterator_cleanup ||
-      db_->immutable_db_options().avoid_unnecessary_blocking_io;
-  SVCleanup(db_, sv_, background_purge);
+  sv_ = new_sv;
 }
 
-void ForwardIterator::Cleanup(bool release_sv) {
+void ForwardIterator::Cleanup() {
   if (mutable_iter_ != nullptr) {
     DeleteIterator(mutable_iter_, true /* is_arena */);
   }
@@ -266,10 +269,6 @@ void ForwardIterator::Cleanup(bool release_sv) {
     DeleteIterator(l);
   }
   level_iters_.clear();
-
-  if (release_sv) {
-    SVCleanup();
-  }
 }
 
 bool ForwardIterator::Valid() const {
@@ -528,10 +527,9 @@ Status ForwardIterator::GetProperty(std::string prop_name, std::string* prop) {
 
 void ForwardIterator::RebuildIterators(bool refresh_sv) {
   // Clean up
-  Cleanup(refresh_sv);
+  Cleanup();
   if (refresh_sv) {
-    // New
-    sv_ = cfd_->GetReferencedSuperVersion(db_);
+    SVUpdate(cfd_->GetReferencedSuperVersion(db_));
   }
   ReadRangeDelAggregator range_del_agg(&cfd_->internal_comparator(),
                                        kMaxSequenceNumber /* upper_bound */);
@@ -651,8 +649,7 @@ void ForwardIterator::RenewIterators() {
   BuildLevelIterators(vstorage_new);
   current_ = nullptr;
   is_prev_set_ = false;
-  SVCleanup();
-  sv_ = svnew;
+  SVUpdate(svnew);
 
   if (!range_del_agg.IsEmpty()) {
     status_ = Status::NotSupported(
