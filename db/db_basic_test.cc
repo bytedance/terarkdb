@@ -417,7 +417,7 @@ TEST_F(DBBasicTest, ManifestRollOver) {
       uint64_t manifest_after_flush = dbfull()->TEST_Current_Manifest_FileNo();
       ASSERT_GT(manifest_after_flush, manifest_before_flush);
       ReopenWithColumnFamilies({"default", "pikachu"}, options);
-      ASSERT_GT(dbfull()->TEST_Current_Manifest_FileNo(), manifest_after_flush);
+      ASSERT_GE(dbfull()->TEST_Current_Manifest_FileNo(), manifest_after_flush);
       // check if a new manifest file got inserted or not.
       ASSERT_EQ(std::string(1000, '1'), Get(1, "manifest_key1"));
       ASSERT_EQ(std::string(1000, '2'), Get(1, "manifest_key2"));
@@ -579,6 +579,7 @@ TEST_F(DBBasicTest, DBOpen_Options) {
 
   // Does not exist, and create_if_missing == false: error
   DB* db = nullptr;
+  options.prepare_log_writer_num = 0;
   options.create_if_missing = false;
   Status s = DB::Open(options, dbname_, &db);
   ASSERT_TRUE(strstr(s.ToString().c_str(), "does not exist") != nullptr);
