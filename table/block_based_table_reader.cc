@@ -2831,10 +2831,8 @@ Status BlockBasedTable::CreateIndexReader(
 }
 
 uint64_t BlockBasedTable::ApproximateOffsetOf(const Slice& key) {
-  ReadOptions opt;
-  opt.total_order_seek = true;
   std::unique_ptr<InternalIteratorBase<BlockHandle>> index_iter(
-      NewIndexIterator(opt));
+      NewIndexIterator(ReadOptions(), true /* disable prefix seek */));
 
   index_iter->Seek(key);
   uint64_t result;

@@ -404,6 +404,7 @@ TEST_F(DBBasicTest, FLUSH) {
 TEST_F(DBBasicTest, ManifestRollOver) {
   do {
     Options options;
+    options.prepare_log_writer_num = 0;
     options.max_manifest_file_size = 10;  // 10 bytes
     options = CurrentOptions(options);
     CreateAndReopenWithCF({"pikachu"}, options);
