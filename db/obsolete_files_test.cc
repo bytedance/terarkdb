@@ -48,6 +48,7 @@ class ObsoleteFilesTest : public testing::Test {
     // Trigger compaction when the number of level 0 files reaches 2.
     options_.level0_file_num_compaction_trigger = 2;
     options_.disable_auto_compactions = false;
+    options_.prepare_log_writer_num = 0;
     options_.delete_obsolete_files_period_micros = 0;  // always do full purge
     options_.enable_thread_tracking = true;
     options_.write_buffer_size = 1024 * 1024 * 1000;
