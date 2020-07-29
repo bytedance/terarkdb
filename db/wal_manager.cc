@@ -14,10 +14,11 @@
 #endif
 
 #include <inttypes.h>
+
 #include <algorithm>
-#include <vector>
 #include <memory>
 #include <set>
+#include <vector>
 
 #include "db/log_reader.h"
 #include "db/log_writer.h"
@@ -39,6 +40,25 @@
 namespace rocksdb {
 
 #ifndef ROCKSDB_LITE
+
+namespace {
+struct CompareLogByPointer {
+  bool operator()(const std::unique_ptr<LogFile>& a,
+                  const std::unique_ptr<LogFile>& b) {
+    LogFileImpl* a_impl = static_cast_with_check<LogFileImpl, LogFile>(a.get());
+    LogFileImpl* b_impl = static_cast_with_check<LogFileImpl, LogFile>(b.get());
+    return *a_impl < *b_impl;
+  }
+};
+struct EqualLogByPointer {
+  bool operator()(const std::unique_ptr<LogFile>& a,
+                  const std::unique_ptr<LogFile>& b) {
+    LogFileImpl* a_impl = static_cast_with_check<LogFileImpl, LogFile>(a.get());
+    LogFileImpl* b_impl = static_cast_with_check<LogFileImpl, LogFile>(b.get());
+    return a_impl->LogNumber() == b_impl->LogNumber();
+  }
+};
+}  // namespace
 
 void WalManager::AddLogNumber(const uint64_t number) {
   MutexLock l(&read_first_record_cache_mutex_);
@@ -72,7 +92,7 @@ Status WalManager::GetSortedWalFiles(VectorLogPtr& files) {
   Status s;
   // list wal files in main db dir.
   VectorLogPtr logs;
-  s = GetSortedWalsOfType(db_options_.wal_dir, logs, kAliveLogFile);
+  s = GetWalsOfType(db_options_.wal_dir, logs, kAliveLogFile);
   if (!s.ok()) {
     return s;
   }
@@ -88,7 +108,7 @@ Status WalManager::GetSortedWalFiles(VectorLogPtr& files) {
   std::string archivedir = ArchivalDirectory(db_options_.wal_dir);
   Status exists = env_->FileExists(archivedir);
   if (exists.ok()) {
-    s = GetSortedWalsOfType(archivedir, files, kArchivedLogFile);
+    s = GetWalsOfType(archivedir, files, kArchivedLogFile);
     if (!s.ok()) {
       return s;
     }
@@ -97,27 +117,23 @@ Status WalManager::GetSortedWalFiles(VectorLogPtr& files) {
     return s;
   }
 
-  uint64_t latest_archived_log_number = 0;
   if (!files.empty()) {
-    latest_archived_log_number = files.back()->LogNumber();
+    // is this necessary ?
+    auto& latest_archived_log =
+        *std::max_element(files.begin(), files.end(), CompareLogByPointer());
     ROCKS_LOG_INFO(db_options_.info_log, "Latest Archived log: %" PRIu64,
-                   latest_archived_log_number);
+                   latest_archived_log->LogNumber());
   }
 
-  files.reserve(files.size() + logs.size());
-  for (auto& log : logs) {
-    if (log->LogNumber() > latest_archived_log_number) {
-      files.push_back(std::move(log));
-    } else {
-      // When the race condition happens, we could see the
-      // same log in both db dir and archived dir. Simply
-      // ignore the one in db dir. Note that, if we read
-      // archived dir first, we would have missed the log file.
-      ROCKS_LOG_WARN(db_options_.info_log, "%s already moved to archive",
-                     log->PathName().c_str());
-    }
-  }
-
+  using MoveIter = std::move_iterator<VectorLogPtr::iterator>;
+  files.insert(files.end(), MoveIter(logs.begin()), MoveIter(logs.end()));
+  logs.clear();
+  std::sort(files.begin(), files.end(), CompareLogByPointer());
+  // When the race condition happens, we could see the same log in both db dir
+  // and archived dir. Simply ignore the one in db dir. Note that, if we read
+  // archived dir first, we would have missed the log file.
+  files.erase(std::unique(files.begin(), files.end(), EqualLogByPointer()),
+              files.end());
   return s;
 }
 
@@ -125,7 +141,6 @@ Status WalManager::GetUpdatesSince(
     SequenceNumber seq, std::unique_ptr<TransactionLogIterator>* iter,
     const TransactionLogIterator::ReadOptions& read_options,
     VersionSet* version_set) {
-
   //  Get all sorted Wal Files.
   //  Do binary search and open files and find the seq number.
 
@@ -179,91 +194,59 @@ void WalManager::PurgeObsoleteWALFiles() {
 
   purge_wal_files_last_run_ = now_seconds;
 
-  std::string archival_dir = ArchivalDirectory(db_options_.wal_dir);
-  std::vector<std::string> files;
-  s = env_->GetChildren(archival_dir, &files);
+  VectorLogPtr files;
+  s = GetSortedWalFiles(files);
   if (!s.ok()) {
-    ROCKS_LOG_ERROR(db_options_.info_log, "Can't get archive files: %s",
+    ROCKS_LOG_ERROR(db_options_.info_log, "GetSortedWalFiles fail: %s",
                     s.ToString().c_str());
     assert(false);
     return;
   }
-
-
   uint64_t total_log_file_size = 0;
 
-  std::set<std::string> guard_logs;
-  if (guard_seqno_ <= kMaxSequenceNumber) {
-    VectorLogPtr logs;
-    GetSortedWalsOfType(archival_dir, logs, kArchivedLogFile);
-    RetainProbableWalFiles(logs, guard_seqno_);
-    for (auto& log : logs) {
-      guard_logs.emplace(log->PathName());
+  auto delete_file = [&](uint64_t number, const std::string& file_path) {
+    s = env_->DeleteFile(file_path);
+    if (!s.ok()) {
+      ROCKS_LOG_WARN(db_options_.info_log, "Can't delete file: %s: %s",
+                     file_path.c_str(), s.ToString().c_str());
+    } else {
+      MutexLock l(&read_first_record_cache_mutex_);
+      read_first_record_cache_.erase(number);
+      log_numbers_.erase(number);
     }
-  }
+  };
 
-  for (auto& f : files) {
-    uint64_t number;
-    FileType type;
-    if (ParseFileName(f, &number, &type) && type == kLogFile) {
-      std::string const file_path = archival_dir + "/" + f;
+  SequenceNumber guard_seqno = guard_seqno_.load(std::memory_order_relaxed);
+  for (size_t i = 0; i < files.size(); ++i) {
+    auto& f = files[i];
+    if (f->Type() == WalFileType::kAliveLogFile ||
+        (guard_seqno <= kMaxSequenceNumber &&
+         (i + 1 == files.size() ||
+          guard_seqno < files[i + 1]->StartSequence()))) {
+      files.resize(i);
+      break;
+    }
+    uint64_t number = f->LogNumber();
+    std::string file_path = ArchivedLogFileName(db_options_.wal_dir, number);
 
-      bool keep_flag = false;
-      if (guard_logs.find("/" + ARCHIVAL_DIR + "/" + f) != guard_logs.end()) {
-        keep_flag = true;
+    if (ttl_enabled) {
+      uint64_t file_m_time;
+      s = env_->GetFileModificationTime(file_path, &file_m_time);
+      if (!s.ok()) {
+        ROCKS_LOG_WARN(db_options_.info_log, "Can't get file mod time: %s: %s",
+                       file_path.c_str(), s.ToString().c_str());
+      } else if (now_seconds - file_m_time > db_options_.wal_ttl_seconds) {
+        f.reset();
+        delete_file(number, file_path);
       }
-
-      if (ttl_enabled) {
-        uint64_t file_m_time;
-        s = env_->GetFileModificationTime(file_path, &file_m_time);
-        if (!s.ok()) {
-          ROCKS_LOG_WARN(db_options_.info_log,
-                         "Can't get file mod time: %s: %s", file_path.c_str(),
-                         s.ToString().c_str());
-          continue;
-        }
-        if (now_seconds - file_m_time > db_options_.wal_ttl_seconds && !keep_flag) {
-          s = env_->DeleteFile(file_path);
-          if (!s.ok()) {
-            ROCKS_LOG_WARN(db_options_.info_log, "Can't delete file: %s: %s",
-                           file_path.c_str(), s.ToString().c_str());
-            continue;
-          } else {
-            MutexLock l(&read_first_record_cache_mutex_);
-            read_first_record_cache_.erase(number);
-            log_numbers_.erase(number);
-          }
-          continue;
-        }
-      }
-
-      if (size_limit_enabled) {
-        uint64_t file_size;
-        s = env_->GetFileSize(file_path, &file_size);
-        if (!s.ok()) {
-          ROCKS_LOG_ERROR(db_options_.info_log,
-                          "Unable to get file size: %s: %s", file_path.c_str(),
-                          s.ToString().c_str());
-          return;
-        } else {
-          if (file_size > 0) {
-            total_log_file_size += file_size;
-          } else {
-            if(!keep_flag){
-              s = env_->DeleteFile(file_path);
-              if (!s.ok()) {
-                ROCKS_LOG_WARN(db_options_.info_log,
-                              "Unable to delete file: %s: %s", file_path.c_str(),
-                              s.ToString().c_str());
-                continue;
-              } else {
-                MutexLock l(&read_first_record_cache_mutex_);
-                read_first_record_cache_.erase(number);
-                log_numbers_.erase(number);
-              }
-            }
-          }
-        }
+    }
+    if (size_limit_enabled && f) {
+      uint64_t file_size = f->SizeFileBytes();
+      if (file_size > 0) {
+        total_log_file_size += file_size;
+      } else {
+        f.reset();
+        delete_file(number, file_path);
       }
     }
   }
@@ -278,39 +261,17 @@ void WalManager::PurgeObsoleteWALFiles() {
   int64_t overflow_size =
       total_log_file_size - db_options_.wal_size_limit_mb * 1024 * 1024;
 
-  VectorLogPtr archived_logs;
-  GetSortedWalsOfType(archival_dir, archived_logs, kArchivedLogFile);
-
-  for (const auto& log: archived_logs) {
-    if (guard_logs.find(log->PathName()) != guard_logs.end()) {
+  for (auto& f : files) {
+    if (!f) {
       continue;
     }
-
-    std::string const file_path =
-        db_options_.wal_dir + "/" + log->PathName();
-    uint64_t file_size;
-    s = env_->GetFileSize(file_path, &file_size);
-    if (!s.ok()) {
-      ROCKS_LOG_ERROR(db_options_.info_log, "Unable to get file size: %s: %s",
-                      file_path.c_str(), s.ToString().c_str());
-      return;
-    }
-    // if (file_size > overflow_size) {
-    //   break;
-    // }
+    uint64_t number = f->LogNumber();
+    std::string file_path = ArchivedLogFileName(db_options_.wal_dir, number);
+    int64_t file_size = int64_t(f->SizeFileBytes());
     overflow_size -= file_size;
-    
-    s = env_->DeleteFile(file_path);
-    if(overflow_size <= 0) {
+    delete_file(number, file_path);
+    if (overflow_size <= 0) {
       break;
-    }
-    if (!s.ok()) {
-      ROCKS_LOG_WARN(db_options_.info_log, "Unable to delete file: %s: %s",
-                     file_path.c_str(), s.ToString().c_str());
-      continue;
-    } else {
-      MutexLock l(&read_first_record_cache_mutex_);
-      read_first_record_cache_.erase(log->LogNumber());
     }
   }
 }
@@ -327,20 +288,9 @@ void WalManager::ArchiveWALFile(const std::string& fname, uint64_t number) {
                  s.ToString().c_str());
 }
 
-namespace {
-struct CompareLogByPointer {
-  bool operator()(const std::unique_ptr<LogFile>& a,
-                  const std::unique_ptr<LogFile>& b) {
-    LogFileImpl* a_impl = static_cast_with_check<LogFileImpl, LogFile>(a.get());
-    LogFileImpl* b_impl = static_cast_with_check<LogFileImpl, LogFile>(b.get());
-    return *a_impl < *b_impl;
-  }
-};
-}
-
-Status WalManager::GetSortedWalsOfType(const std::string& path,
-                                       VectorLogPtr& log_files,
-                                       WalFileType log_type) {
+Status WalManager::GetWalsOfType(const std::string& path,
+                                 VectorLogPtr& log_files,
+                                 WalFileType log_type) {
   std::vector<std::string> all_files;
   const Status status = env_->GetChildren(path, &all_files);
   if (!status.ok()) {
@@ -364,8 +314,8 @@ Status WalManager::GetSortedWalsOfType(const std::string& path,
       // Reproduce the race condition where a log file is moved
       // to archived dir, between these two sync points, used in
       // (DBTest,TransactionLogIteratorRace)
-      TEST_SYNC_POINT("WalManager::GetSortedWalsOfType:1");
-      TEST_SYNC_POINT("WalManager::GetSortedWalsOfType:2");
+      TEST_SYNC_POINT("WalManager::GetWalsOfType:1");
+      TEST_SYNC_POINT("WalManager::GetWalsOfType:2");
 
       uint64_t size_bytes;
       s = env_->GetFileSize(LogFileName(path, number), &size_bytes);
@@ -394,8 +344,6 @@ Status WalManager::GetSortedWalsOfType(const std::string& path,
           new LogFileImpl(number, log_type, sequence, size_bytes)));
     }
   }
-  CompareLogByPointer compare_log_files;
-  std::sort(log_files.begin(), log_files.end(), compare_log_files);
   return status;
 }
 
@@ -432,8 +380,7 @@ Status WalManager::ReadFirstRecord(const WalFileType type,
   if (type != kAliveLogFile && type != kArchivedLogFile) {
     ROCKS_LOG_ERROR(db_options_.info_log, "[WalManger] Unknown file type %s",
                     ToString(type).c_str());
-    return Status::NotSupported(
-        "File Type Not Known " + ToString(type));
+    return Status::NotSupported("File Type Not Known " + ToString(type));
   }
   {
     MutexLock l(&read_first_record_cache_mutex_);

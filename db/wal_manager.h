@@ -11,11 +11,11 @@
 #include <atomic>
 #include <deque>
 #include <limits>
+#include <memory>
 #include <set>
+#include <string>
 #include <utility>
 #include <vector>
-#include <string>
-#include <memory>
 
 #include "db/version_set.h"
 #include "options/db_options.h"
@@ -37,7 +37,7 @@ class WalManager {
         env_(db_options.env),
         purge_wal_files_last_run_(0),
         seq_per_batch_(seq_per_batch),
-        guard_seqno_(kMaxSequenceNumber + 1) {}
+        guard_seqno_{SequenceNumber(-1)} {}
 
   void AddLogNumber(const uint64_t number);
 
@@ -66,11 +66,13 @@ class WalManager {
     return ReadFirstLine(fname, number, sequence);
   }
 
-  void SetGuardSeqno(SequenceNumber guard_seqno) { guard_seqno_ = guard_seqno; }
+  void SetGuardSeqno(SequenceNumber guard_seqno) {
+    guard_seqno_.store(guard_seqno, std::memory_order_relaxed);
+  }
 
  private:
-  Status GetSortedWalsOfType(const std::string& path, VectorLogPtr& log_files,
-                             WalFileType type);
+  Status GetWalsOfType(const std::string& path, VectorLogPtr& log_files,
+                       WalFileType type);
   // Requires: all_logs should be sorted with earliest log file first
   // Retains all log files in all_logs which contain updates with seq no.
   // Greater Than or Equal to the requested SequenceNumber.
@@ -103,7 +105,7 @@ class WalManager {
   // enabled and archive size_limit is disabled.
   static const uint64_t kDefaultIntervalToDeleteObsoleteWAL = 600;
 
-  SequenceNumber guard_seqno_;
+  std::atomic<SequenceNumber> guard_seqno_;
 };
 
 #endif  // ROCKSDB_LITE
