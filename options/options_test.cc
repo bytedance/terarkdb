@@ -118,7 +118,7 @@ TEST_F(OptionsTest, GetOptionsFromMapTest) {
       {"log_file_time_to_roll", "38"},
       {"keep_log_file_num", "39"},
       {"recycle_log_file_num", "5"},
-      {"prepare_log_writer_num", "4"},
+      {"prepare_log_writer_num", "3"},
       {"max_manifest_file_size", "40"},
       {"table_cache_numshardbits", "41"},
       {"WAL_ttl_seconds", "43"},
