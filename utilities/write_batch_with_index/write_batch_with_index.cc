@@ -951,6 +951,7 @@ Status WriteBatchWithIndex::GetFromBatchAndDB(
         }
         if (s.ok()) {
           lazy_val->pin(LazyBufferPinLevel::DB);
+          s = lazy_val->fetch();
         }
       } else {
         s = Status::InvalidArgument("Options::merge_operator must be set");

@@ -595,6 +595,7 @@ void LazyBuffer::pin(LazyBufferPinLevel level) {
     s = state_->dump_buffer(this, &tmp);
     if (s.ok()) {
       *this = std::move(tmp);
+      assert(valid());
       return;
     }
   }
@@ -672,8 +673,10 @@ Status LazyBuffer::dump(LazyBuffer& _target) && {
   auto s = state_->pin_buffer(this);
   if (s.ok()) {
     _target.reset(std::move(*this));
+    s = _target.fetch();
   } else if (s.IsNotSupported()) {
     s = state_->dump_buffer(this, &_target);
+    assert(!s.ok() || _target.valid());
   }
   return s;
 }

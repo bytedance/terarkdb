@@ -4,6 +4,8 @@
 //  (found in the LICENSE.Apache file in the root directory).
 #pragma once
 
+#include <db/version_edit.h>
+
 #include <algorithm>
 #include <atomic>
 #include <map>
@@ -11,15 +13,14 @@
 #include <set>
 #include <string>
 #include <utility>
-#include <db/version_edit.h>
 
-#include "util/kv_map.h"
 #include "port/port.h"
 #include "rocksdb/comparator.h"
 #include "rocksdb/table.h"
 #include "table/internal_iterator.h"
 #include "table/table_builder.h"
 #include "table/table_reader.h"
+#include "util/kv_map.h"
 #include "util/mutexlock.h"
 #include "util/testharness.h"
 #include "util/testutil.h"
@@ -32,18 +33,17 @@ stl_wrappers::KVMap MakeMockFile(
 
 struct MockTableFileSystem {
   port::Mutex mutex;
-  std::map<uint32_t, stl_wrappers::KVMap> files;
+  struct FileData {
+    stl_wrappers::KVMap table;
+    stl_wrappers::KVMap tombstone;
+    std::shared_ptr<const TableProperties> prop;
+  };
+  std::map<uint32_t, FileData> files;
 };
 
 class MockTableReader : public TableReader {
  public:
-  explicit MockTableReader(const stl_wrappers::KVMap& table)
-    : table_(table),
-      range_delete_table_(table) {}
-
-  MockTableReader(const stl_wrappers::KVMap& table, const stl_wrappers::KVMap& range_delete_table)
-    : table_(table),
-      range_delete_table_(range_delete_table) {}
+  MockTableReader(const MockTableFileSystem::FileData& file_data) : file_data_(file_data) {}
 
   InternalIterator* NewIterator(const ReadOptions&,
                                 const SliceTransform* prefix_extractor,
@@ -59,23 +59,23 @@ class MockTableReader : public TableReader {
 
   virtual size_t ApproximateMemoryUsage() const override { return 0; }
 
-  uint64_t FileNumber() const override  { return uint64_t(-1); }
+  uint64_t FileNumber() const override { return uint64_t(-1); }
 
   void SetupForCompaction() override {}
 
   std::shared_ptr<const TableProperties> GetTableProperties() const override;
 
   FragmentedRangeTombstoneIterator* NewRangeTombstoneIterator(
-     const ReadOptions& /*read_options*/) override;
+      const ReadOptions& /*read_options*/) override;
 
   ~MockTableReader() {}
 
  private:
-  const stl_wrappers::KVMap& table_;
-  const stl_wrappers::KVMap& range_delete_table_;
+  const MockTableFileSystem::FileData& file_data_;
 };
 
-class MockTableIterator : public InternalIterator {
+template <class ValueType>
+class MockTableIterator : public InternalIteratorBase<ValueType> {
  public:
   explicit MockTableIterator(const stl_wrappers::KVMap& table) : table_(table) {
     itr_ = table_.end();
@@ -87,7 +87,7 @@ class MockTableIterator : public InternalIterator {
 
   void SeekToLast() override {
     itr_ = table_.end();
-    --itr_;
+    Prev();
   }
 
   void Seek(const Slice& target) override {
@@ -113,7 +113,7 @@ class MockTableIterator : public InternalIterator {
 
   Slice key() const override { return Slice(itr_->first); }
 
-  LazyBuffer value() const override { return LazyBuffer(itr_->second); }
+  ValueType value() const override { return ValueType(itr_->second); }
 
   Status status() const override { return Status::OK(); }
 
@@ -126,31 +126,39 @@ class MockTableBuilder : public TableBuilder {
  public:
   MockTableBuilder(uint32_t id, MockTableFileSystem* file_system)
       : id_(id), file_system_(file_system) {
-    table_ = MakeMockFile({});
+    file_data_.table = MakeMockFile({});
+    file_data_.tombstone = MakeMockFile({});
   }
 
   // REQUIRES: Either Finish() or Abandon() has been called.
   ~MockTableBuilder() {}
 
-  // Add key,value to the table being constructed.
-  // REQUIRES: key is after any previously added key according to comparator.
-  // REQUIRES: Finish(), Abandon() have not been called
-  Status Add(const Slice& key, const LazyBuffer& value) override {
+  Status AddToTable(const Slice& key, const LazyBuffer& value,
+                    stl_wrappers::KVMap& table) {
     auto s = value.fetch();
     if (!s.ok()) {
       return s;
     }
-    table_.insert({key.ToString(), value.ToString()});
+    table.insert({key.ToString(), value.ToString()});
     return Status::OK();
   }
 
-  Status AddTombstone(const Slice& key, const LazyBuffer& value) override {
-    return Add(key, value);
+  // Add key,value to the table being constructed.
+  // REQUIRES: key is after any previously added key according to comparator.
+  // REQUIRES: Finish(), Abandon() have not been called
+  Status Add(const Slice& key, const LazyBuffer& value) override {
+    return AddToTable(key, value, file_data_.table);
   }
 
-  Status Finish(const TablePropertyCache* prop, const std::vector<uint64_t>*) override {
-    MutexLock lock_guard(&file_system_->mutex);
-    file_system_->files.insert({id_, table_});
+  Status AddTombstone(const Slice& key, const LazyBuffer& value) override {
+    return AddToTable(key, value, file_data_.tombstone);
+  }
+
+  Status Finish(const TablePropertyCache* prop,
+                const std::vector<uint64_t>*) override {
+    prop_.num_entries = file_data_.table.size();
+    prop_.raw_key_size = file_data_.table.size();
+    prop_.raw_value_size = file_data_.table.size();
     if (prop != nullptr) {
       prop_.purpose = prop->purpose;
       prop_.max_read_amp = prop->max_read_amp;
@@ -158,28 +166,25 @@ class MockTableBuilder : public TableBuilder {
       prop_.dependence = prop->dependence;
       prop_.inheritance_chain = prop->inheritance_chain;
     }
+    file_data_.prop = std::make_shared<const TableProperties>(prop_);
+    MutexLock lock_guard(&file_system_->mutex);
+    file_system_->files.emplace(id_, std::move(file_data_));
     return Status::OK();
   }
 
   void Abandon() override {}
 
-  uint64_t NumEntries() const override { return table_.size(); }
+  uint64_t NumEntries() const override { return file_data_.table.size(); }
 
   uint64_t FileSize() const override { return sizeof(id_); }
 
-  TableProperties GetTableProperties() const override {
-    TableProperties tp;
-    tp.num_entries = table_.size();
-    tp.raw_key_size = table_.size();
-    tp.raw_value_size = table_.size();
-    return tp;
-  }
+  TableProperties GetTableProperties() const override { return prop_; }
 
  private:
   uint32_t id_;
   MockTableFileSystem* file_system_;
-  stl_wrappers::KVMap table_;
-  TablePropertyCache prop_;
+  MockTableFileSystem::FileData file_data_;
+  TableProperties prop_;
 };
 
 class MockTableFactory : public TableFactory {

@@ -29,11 +29,12 @@ stl_wrappers::KVMap MakeMockFile(
 InternalIterator* MockTableReader::NewIterator(
     const ReadOptions&, const SliceTransform* /* prefix_extractor */,
     Arena* arena, bool /*skip_filters*/, bool /*for_compaction*/) {
+  using IterType = MockTableIterator<LazyBuffer>;
   if (arena == nullptr) {
-    return new MockTableIterator(table_);
+    return new IterType(file_data_.table);
   } else {
-    return new (arena->AllocateAligned(sizeof(MockTableIterator)))
-        MockTableIterator(table_);
+    return new (arena->AllocateAligned(sizeof(IterType)))
+        IterType(file_data_.table);
   }
 }
 
@@ -41,15 +42,15 @@ Status MockTableReader::Get(const ReadOptions&, const Slice& key,
                             GetContext* get_context,
                             const SliceTransform* /*prefix_extractor*/,
                             bool /*skip_filters*/) {
-  std::unique_ptr<MockTableIterator> iter(new MockTableIterator(table_));
-  for (iter->Seek(key); iter->Valid(); iter->Next()) {
+  MockTableIterator<LazyBuffer> iter(file_data_.table);
+  for (iter.Seek(key); iter.Valid(); iter.Next()) {
     ParsedInternalKey parsed_key;
-    if (!ParseInternalKey(iter->key(), &parsed_key)) {
+    if (!ParseInternalKey(iter.key(), &parsed_key)) {
       return Status::Corruption(Slice());
     }
 
     bool dont_care __attribute__((__unused__));
-    if (!get_context->SaveValue(parsed_key, iter->value(), &dont_care)) {
+    if (!get_context->SaveValue(parsed_key, iter.value(), &dont_care)) {
       break;
     }
   }
@@ -58,28 +59,16 @@ Status MockTableReader::Get(const ReadOptions&, const Slice& key,
 
 std::shared_ptr<const TableProperties> MockTableReader::GetTableProperties()
     const {
-  auto tp = new TableProperties();
-  tp->num_entries = table_.size();
-  tp->raw_key_size = table_.size();
-  tp->raw_value_size = table_.size();
-  return std::shared_ptr<const TableProperties>(tp);
+  return file_data_.prop;
 }
 
 FragmentedRangeTombstoneIterator* MockTableReader::NewRangeTombstoneIterator(
     const ReadOptions& /*read_options*/) {
-  std::vector<std::string> range_del_ks;
-  std::vector<std::string> range_del_vs;
-  for (auto& kv : range_delete_table_) {
-    auto& skey = kv.first;
-    auto& value = kv.second;
-    range_del_ks.emplace_back(skey);
-    range_del_vs.emplace_back(value);
-  }
   std::unique_ptr<InternalIteratorBase<Slice>> unfragmented_range_del_iter(
-      new test::VectorIteratorBase<Slice>(range_del_ks, range_del_vs));
+      new MockTableIterator<Slice>(file_data_.tombstone));
   auto tombstone_list = std::make_shared<FragmentedRangeTombstoneList>(
       std::move(unfragmented_range_del_iter), icmp_);
-  FragmentedRangeTombstoneIterator* range_del_iter = 
+  FragmentedRangeTombstoneIterator* range_del_iter =
       new FragmentedRangeTombstoneIterator(tombstone_list, icmp_,
                                            kMaxSequenceNumber);
   return range_del_iter;
@@ -125,7 +114,18 @@ Status MockTableFactory::CreateMockTable(Env* env, const std::string& fname,
   WritableFileWriter file_writer(std::move(file), fname, EnvOptions());
 
   uint32_t id = GetAndWriteNextID(&file_writer);
-  file_system_.files.insert({id, std::move(file_contents)});
+
+  MockTableFileSystem::FileData file_data;
+  TableProperties prop;
+
+  file_data.table = std::move(file_contents);
+
+  prop.num_entries = file_data.table.size();
+  prop.raw_key_size = file_data.table.size();
+  prop.raw_value_size = file_data.table.size();
+  file_data.prop = std::make_shared<const TableProperties>(std::move(prop));
+
+  file_system_.files.emplace(id, std::move(file_data));
   return Status::OK();
 }
 
@@ -148,7 +148,7 @@ uint32_t MockTableFactory::GetIDFromFile(RandomAccessFileReader* file) const {
 void MockTableFactory::AssertSingleFile(
     const stl_wrappers::KVMap& file_contents) {
   ASSERT_EQ(file_system_.files.size(), 1U);
-  ASSERT_EQ(file_contents, file_system_.files.begin()->second);
+  ASSERT_EQ(file_contents, file_system_.files.begin()->second.table);
 }
 
 void MockTableFactory::AssertLatestFile(
@@ -157,9 +157,9 @@ void MockTableFactory::AssertLatestFile(
   auto latest = file_system_.files.end();
   --latest;
 
-  if (file_contents != latest->second) {
+  if (file_contents != latest->second.table) {
     std::cout << "Wrong content! Content of latest file:" << std::endl;
-    for (const auto& kv : latest->second) {
+    for (const auto& kv : latest->second.table) {
       ParsedInternalKey ikey;
       std::string key, value;
       std::tie(key, value) = kv;
