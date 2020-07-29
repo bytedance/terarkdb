@@ -50,6 +50,7 @@ class DeleteFileTest : public testing::Test {
     dbname_ = test::PerThreadDBPath("deletefile_test");
     options_.wal_dir = dbname_ + "/wal_files";
     options_.enable_lazy_compaction = false;
+    options_.prepare_log_writer_num = 0;
     options_.blob_size = -1;
 
     // clean up all the files that might have been there before
@@ -298,8 +299,15 @@ TEST_F(DeleteFileTest, BackgroundPurgeCFDropTest) {
 
     delete cfh;
     test::SleepingBackgroundTask sleeping_task_after;
-    env_->Schedule(&test::SleepingBackgroundTask::DoSleepTask,
+    for (int i = 0, e = env_->GetBackgroundThreads(Env::Priority::HIGH); i < e; ++i) {
+      env_->Schedule(&test::SleepingBackgroundTask::DoSleepTask,
                    &sleeping_task_after, Env::Priority::HIGH);
+    }
+    for (int i = 0, e = env_->GetBackgroundThreads(Env::Priority::LOW); i < e; ++i) {
+      env_->Schedule(&test::SleepingBackgroundTask::DoSleepTask,
+                   &sleeping_task_after, Env::Priority::LOW);
+    }
+    
     // If background purge is enabled, the file should still be there.
     CheckFileTypeCounts(dbname_, 0, bg_purge ? 1 : 0, 1);
 
