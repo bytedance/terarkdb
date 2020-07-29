@@ -1730,6 +1730,8 @@ TEST_P(WritePreparedTransactionTest, DisableGCDuringRecoveryTest) {
 }
 
 TEST_P(WritePreparedTransactionTest, SequenceNumberZeroTest) {
+  options.enable_lazy_compaction = false;
+  ReOpen();
   ASSERT_OK(db->Put(WriteOptions(), "foo", "bar"));
   VerifyKeys({{"foo", "bar"}});
   const Snapshot* snapshot = db->GetSnapshot();
@@ -1752,6 +1754,7 @@ TEST_P(WritePreparedTransactionTest, SequenceNumberZeroTest) {
 // proceed with older versions of the key as-if the new version doesn't exist.
 TEST_P(WritePreparedTransactionTest, CompactionShouldKeepUncommittedKeys) {
   options.disable_auto_compactions = true;
+  options.enable_lazy_compaction = false;
   ReOpen();
   DBImpl* db_impl = reinterpret_cast<DBImpl*>(db->GetRootDB());
   // Snapshots to avoid keys get evicted.
@@ -1843,6 +1846,7 @@ TEST_P(WritePreparedTransactionTest, CompactionShouldKeepUncommittedKeys) {
 // not just prepare sequence.
 TEST_P(WritePreparedTransactionTest, CompactionShouldKeepSnapshotVisibleKeys) {
   options.disable_auto_compactions = true;
+  options.enable_lazy_compaction = false;
   ReOpen();
   // Keep track of expected sequence number.
   SequenceNumber expected_seq = 0;
@@ -1995,6 +1999,7 @@ TEST_P(WritePreparedTransactionTest,
 TEST_P(WritePreparedTransactionTest,
        CompactionShouldKeepSequenceForUncommittedKeys) {
   options.disable_auto_compactions = true;
+  options.enable_lazy_compaction = false;
   ReOpen();
   // Keep track of expected sequence number.
   SequenceNumber expected_seq = 0;
