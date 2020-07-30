@@ -182,6 +182,7 @@ TEST_F(DBOptionsTest, SetWalBytesPerSync) {
   options.env = env_;
   options.enable_lazy_compaction = false;
   options.blob_size = -1;
+  options.prepare_log_writer_num = 0;
   Reopen(options);
   ASSERT_EQ(512, dbfull()->GetDBOptions().wal_bytes_per_sync);
   int counter = 0;
