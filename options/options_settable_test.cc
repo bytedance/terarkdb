@@ -10,7 +10,7 @@
 #ifndef __STDC_FORMAT_MACROS
 #define __STDC_FORMAT_MACROS
 #endif
-
+// #define OS_LINUX
 #include <cstring>
 
 #include "options/options_helper.h"
@@ -199,6 +199,7 @@ TEST_F(OptionsSettableTest, DBOptionsAllFieldsSettable) {
       {offsetof(struct DBOptions, listeners),
        sizeof(std::vector<std::shared_ptr<EventListener>>)},
       {offsetof(struct DBOptions, row_cache), sizeof(std::shared_ptr<Cache>)},
+      {offsetof(struct DBOptions, metrics_reporter_factory), sizeof(std::shared_ptr<MetricsReporterFactory>)},
       {offsetof(struct DBOptions, wal_filter), sizeof(const WalFilter*)},
   };
 
@@ -349,6 +350,8 @@ TEST_F(OptionsSettableTest, ColumnFamilyOptionsAllFieldsSettable) {
       {offset_of(&ColumnFamilyOptions::comparator), sizeof(Comparator*)},
       {offset_of(&ColumnFamilyOptions::merge_operator),
        sizeof(std::shared_ptr<MergeOperator>)},
+      {offset_of(&ColumnFamilyOptions::value_meta_extractor_factory),
+       sizeof(const std::shared_ptr<ValueExtractorFactory>)},
       {offset_of(&ColumnFamilyOptions::compaction_filter),
        sizeof(const CompactionFilter*)},
       {offset_of(&ColumnFamilyOptions::compaction_filter_factory),
