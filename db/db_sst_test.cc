@@ -178,7 +178,9 @@ TEST_F(DBSSTTest, DeleteObsoleteFilesPendingOutputs) {
       2;  // trigger compaction when we have 2 files
   options.max_background_flushes = 2;
   options.max_background_compactions = 2;
-
+  options.enable_lazy_compaction = false;
+  options.blob_size = -1;
+  
   OnFileDeletionListener* listener = new OnFileDeletionListener();
   options.listeners.emplace_back(listener);
 
@@ -318,6 +320,7 @@ TEST_F(DBSSTTest, DBWithSstFileManager) {
   rocksdb::SyncPoint::GetInstance()->DisableProcessing();
 }
 
+#ifdef DEAD_LOCK_OF_BOOST 
 TEST_F(DBSSTTest, RateLimitedDelete) {
   Destroy(last_options_);
   rocksdb::SyncPoint::GetInstance()->LoadDependency({
@@ -356,6 +359,9 @@ TEST_F(DBSSTTest, RateLimitedDelete) {
   env_->time_elapse_only_sleep_ = true;
   Options options = CurrentOptions();
   options.disable_auto_compactions = true;
+  options.enable_lazy_compaction = false;
+  options.prepare_log_writer_num = 0;
+  options.blob_size = -1;
   options.env = env_;
 
   int64_t rate_bytes_per_sec = 1024 * 10;  // 10 Kbs / Sec
@@ -429,7 +435,6 @@ TEST_F(DBSSTTest, OpenDBWithExistingTrash) {
   ASSERT_NOK(env_->FileExists(dbname_ + "/" + "002.sst.trash"));
   ASSERT_NOK(env_->FileExists(dbname_ + "/" + "003.sst.trash"));
 }
-
 
 // Create a DB with 2 db_paths, and generate multiple files in the 2
 // db_paths using CompactRangeOptions, make sure that files that were
@@ -546,6 +551,9 @@ TEST_F(DBSSTTest, DestroyDBWithRateLimitedDelete) {
   // We have deleted the 4 sst files in the delete_scheduler
   ASSERT_EQ(bg_delete_file, 4);
 }
+
+#endif
+#undef DEAD_LOCK_OF_BOOST
 
 TEST_F(DBSSTTest, DBWithMaxSpaceAllowed) {
   std::shared_ptr<SstFileManager> sst_file_manager(NewSstFileManager(env_));
