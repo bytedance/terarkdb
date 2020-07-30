@@ -839,9 +839,6 @@ endif()
 # static rocksdb lib
 add_library(${ROCKSDB_STATIC_LIB} STATIC ${SOURCES})
 target_link_libraries(${ROCKSDB_STATIC_LIB} ${THIRDPARTY_LIBS} ${SYSTEM_LIBS} ${TERARK_DEPEND_LIBS})
-MESSAGE("1:${THIRDPARTY_LIBS}")
-MESSAGE("2:${SYSTEM_LIBS}")
-MESSAGE("3:${TERARK_DEPEND_LIBS}")
 target_include_directories(${ROCKSDB_STATIC_LIB} PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
                                                         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
 
@@ -940,6 +937,7 @@ option(WITH_TESTS "build with tests" ON)
 if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
   SET(WITH_TESTS OFF)
 endif()
+
 if(WITH_TESTS)
   set(TESTS
         cache/cache_test.cc
@@ -1094,21 +1092,6 @@ if(WITH_TESTS)
     list(APPEND TESTS utilities/env_librados_test.cc)
   endif()
 
-  set(BENCHMARKS
-    cache/cache_bench.cc
-    memtable/memtablerep_bench.cc
-    db/range_del_aggregator_bench.cc
-    tools/db_bench.cc
-    table/table_reader_bench.cc
-    utilities/column_aware_encoding_exp.cc
-    utilities/persistent_cache/hash_table_bench.cc)
-  add_library(testharness OBJECT util/testharness.cc)
-  foreach(sourcefile ${BENCHMARKS})
-    get_filename_component(exename ${sourcefile} NAME_WE)
-    add_executable(${exename}${ARTIFACT_SUFFIX} ${sourcefile}
-      $<TARGET_OBJECTS:testharness>)
-    target_link_libraries(${exename}${ARTIFACT_SUFFIX} gtest ${ROCKSDB_STATIC_LIB})
-  endforeach(sourcefile ${BENCHMARKS})
 
   # For test util library that is build only in DEBUG mode
   # and linked to tests. Add test only code that is not #ifdefed for Release here.
@@ -1172,8 +1155,28 @@ if(WITH_TESTS)
   endforeach(sourcefile ${C_TEST_EXES})
 endif()
 
+# build benchmark tool
+set(BENCHMARKS
+  cache/cache_bench.cc
+  memtable/memtablerep_bench.cc
+  db/range_del_aggregator_bench.cc
+  tools/db_bench.cc
+  table/table_reader_bench.cc
+  utilities/column_aware_encoding_exp.cc
+  utilities/persistent_cache/hash_table_bench.cc)
+add_library(testharness OBJECT util/testharness.cc)
+foreach(sourcefile ${BENCHMARKS})
+  get_filename_component(exename ${sourcefile} NAME_WE)
+  add_executable(${exename}${ARTIFACT_SUFFIX} ${sourcefile}
+    $<TARGET_OBJECTS:testharness>)
+  target_link_libraries(${exename}${ARTIFACT_SUFFIX} gtest ${ROCKSDB_STATIC_LIB})
+endforeach(sourcefile ${BENCHMARKS})
+
 option(WITH_TOOLS "build with tools" ON)
 if(WITH_TOOLS)
   add_subdirectory(tools)
-  add_subdirectory(terark-tools/terark-test)
+  # chaos test require some debug-only content, need to be fixed in the future
+  if(WITH_TESTS)
+    add_subdirectory(terark-tools/terark-test)
+  endif()
 endif()

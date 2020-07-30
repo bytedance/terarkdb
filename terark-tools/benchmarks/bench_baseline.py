@@ -29,7 +29,7 @@ LOG_RESULT_FNAME = "log.txt"
 def bench(records, value_size, bench_type, exist_db):
     cmd = """
             TerarkConfigString='{config_string}' \
-           ./db_bench \
+           ../../build/db_bench \
            --benchmarks={bench_type}
 	   --use_existing_db={exist_db}
            --sync=0
