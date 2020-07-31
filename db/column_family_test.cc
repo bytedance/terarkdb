@@ -1375,7 +1375,7 @@ TEST_P(ColumnFamilyTest, MultipleManualCompactions) {
   CreateColumnFamilies({"one", "two"});
   ColumnFamilyOptions default_cf, one, two;
   db_options_.max_open_files = 20;  // only 10 files in file cache
-  db_options_.max_background_compactions = 3;
+  db_options_.max_background_compactions = 20;
 
   default_cf.compaction_style = kCompactionStyleLevel;
   default_cf.num_levels = 3;
@@ -2171,7 +2171,8 @@ TEST_P(ColumnFamilyTest, DontRollEmptyLogs) {
   }
   int total_new_writable_files =
       env_->GetNumberOfNewWritableFileCalls() - num_writable_file_start;
-  ASSERT_EQ(static_cast<size_t>(total_new_writable_files), handles_.size() + 1);
+  // Due to the creation of descriptor_log and CURRENT file
+  ASSERT_EQ(static_cast<size_t>(total_new_writable_files), handles_.size() + 3);
   Close();
 }
 #endif  // !ROCKSDB_LITE
@@ -2184,10 +2185,13 @@ TEST_P(ColumnFamilyTest, FlushStaleColumnFamilies) {
   default_cf.write_buffer_size = 100000;  // small write buffer size
   default_cf.arena_block_size = 4096;
   default_cf.disable_auto_compactions = true;
+  default_cf.enable_lazy_compaction = false;
+  default_cf.blob_size = -1;
   one.disable_auto_compactions = true;
   two.disable_auto_compactions = true;
   db_options_.max_total_wal_size = 210000;
-
+  db_options_.prepare_log_writer_num = 0;
+  
   Reopen({default_cf, one, two});
 
   PutRandomData(2, 1, 10);  // 10 bytes
