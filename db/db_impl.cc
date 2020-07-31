@@ -564,7 +564,7 @@ Status DBImpl::CloseHelper() {
     if (bg_scheduled || pending_purge_obsolete_files_ ||
         error_handler_.IsRecoveryInProgress() || !console_runner_.closed_) {
       TEST_SYNC_POINT("DBImpl::~DBImpl:WaitJob");
-      bg_cv_.TimedWait(10000);
+      bg_cv_.TimedWait(env_->NowMicros() + 10000);
     } else {
       bg_bottom_compaction_scheduled_ = 0;
       bg_compaction_scheduled_ = 0;

@@ -12,6 +12,8 @@
 #include <boost/fiber/condition_variable.hpp>
 #include <boost/fiber/mutex.hpp>
 #include <boost/fiber/operations.hpp>
+#include <boost/date_time/posix_time/posix_time.hpp>
+#include <boost/thread/thread_time.hpp>
 #if MUTEX_DEBUG_MILLISECONDS
 #include <boost/stacktrace.hpp>
 #endif
@@ -237,15 +239,17 @@ bool InstrumentedCondVar::TimedWaitInternal(uint64_t abs_time_us) {
 #endif
   TEST_SYNC_POINT_CALLBACK("InstrumentedCondVar::TimedWaitInternal",
                            &abs_time_us);
-  std::unique_lock<boost::fibers::mutex> lk(*mutex_, std::adopt_lock);
-  bool r = AS_BOOST_FIBER_COND_VAR(cond_).wait_for(
-               lk, std::chrono::microseconds(abs_time_us)) !=
-           boost::fibers::cv_status::timeout;
-  lk.release();
-  if (r) {
-    AS_BOOST_FIBER_ID(instrumented_mutex_->owner_id_) =
-        boost::this_fiber::get_id();
-  }
+  uint64_t t = env_->NowMicros();
+  if (abs_time_us > t) {
+    std::unique_lock<boost::fibers::mutex> lk(*mutex_,  std::adopt_lock);
+    bool r = AS_BOOST_FIBER_COND_VAR(cond_).wait_for(
+                 lk, std::chrono::microseconds(abs_time_us - t)) !=
+             boost::fibers::cv_status::timeout;
+    lk.release();
+    if (r) {
+      AS_BOOST_FIBER_ID(instrumented_mutex_->owner_id_) =
+          boost::this_fiber::get_id();
+    }
 #if MUTEX_DEBUG_MILLISECONDS
   auto start = std::chrono::high_resolution_clock::now();
   call_constructor(stacktrace);
@@ -254,7 +258,10 @@ bool InstrumentedCondVar::TimedWaitInternal(uint64_t abs_time_us) {
   instrumented_mutex_->wait_start_ = start;
   instrumented_mutex_->lock_start_ = std::chrono::high_resolution_clock::now();
 #endif
-  return r;
+    return r;
+  } else {
+    return true;
+  }
 }
 
 void InstrumentedCondVar::Signal() {

@@ -27,6 +27,7 @@ DeleteScheduler::DeleteScheduler(Env* env, int64_t rate_bytes_per_sec,
     : env_(env),
       total_trash_size_(0),
       rate_bytes_per_sec_(rate_bytes_per_sec),
+      mu_(nullptr, env, 0, false),
       pending_files_(0),
       bytes_max_delete_chunk_(bytes_max_delete_chunk),
       closing_(false),
@@ -193,11 +194,9 @@ void DeleteScheduler::BackgroundEmptyTrash() {
     while (queue_.empty() && !closing_) {
       cv_.Wait();
     }
-
     if (closing_) {
       return;
     }
-
     // Delete all files in queue_
     uint64_t start_time = env_->NowMicros();
     uint64_t total_deleted_bytes = 0;
@@ -233,6 +232,8 @@ void DeleteScheduler::BackgroundEmptyTrash() {
 
       // Apply penlty if necessary
       uint64_t total_penlty;
+      // InstrumentedMutexLock lw(&mu_wait_);
+      // mu_wait_.Unlock();
       if (current_delete_rate > 0) {
         // rate limiting is enabled
         total_penlty =
@@ -242,6 +243,7 @@ void DeleteScheduler::BackgroundEmptyTrash() {
         // rate limiting is disabled
         total_penlty = 0;
       }
+      // mu_wait_.Lock();q
       TEST_SYNC_POINT_CALLBACK("DeleteScheduler::BackgroundEmptyTrash:Wait",
                                &total_penlty);
 

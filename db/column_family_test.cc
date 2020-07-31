@@ -65,6 +65,9 @@ class ColumnFamilyTestBase : public testing::Test {
     db_options_.create_if_missing = true;
     db_options_.fail_if_options_file_error = true;
     db_options_.env = env_;
+    db_options_.prepare_log_writer_num = 0;
+    column_family_options_.enable_lazy_compaction = false;
+    column_family_options_.blob_size = -1;
     DestroyDB(dbname_, Options(db_options_, column_family_options_));
   }
 
@@ -1898,8 +1901,6 @@ TEST_P(ColumnFamilyTest, SameCFManualAutomaticCompactionsLevel) {
       {{"ColumnFamilyTest::ManualAuto:4", "ColumnFamilyTest::ManualAuto:2"},
        {"ColumnFamilyTest::ManualAuto:4", "ColumnFamilyTest::ManualAuto:5"},
        {"ColumnFamilyTest::ManualAuto:3", "ColumnFamilyTest::ManualAuto:2"},
-       {"LevelCompactionPicker::PickCompactionBySize:0",
-        "ColumnFamilyTest::ManualAuto:3"},
        {"ColumnFamilyTest::ManualAuto:1", "ColumnFamilyTest::ManualAuto:3"}});
   rocksdb::SyncPoint::GetInstance()->SetCallBack(
       "DBImpl::BackgroundCompaction:NonTrivial:AfterRun", [&](void* /*arg*/) {
@@ -1988,9 +1989,7 @@ TEST_P(ColumnFamilyTest, SameCFAutomaticManualCompactions) {
   bool cf_1_2 = true;
   rocksdb::SyncPoint::GetInstance()->LoadDependency(
       {{"ColumnFamilyTest::AutoManual:4", "ColumnFamilyTest::AutoManual:2"},
-       {"ColumnFamilyTest::AutoManual:4", "ColumnFamilyTest::AutoManual:5"},
-       {"CompactionPicker::CompactRange:Conflict",
-        "ColumnFamilyTest::AutoManual:3"}});
+       {"ColumnFamilyTest::AutoManual:4", "ColumnFamilyTest::AutoManual:5"}});
   rocksdb::SyncPoint::GetInstance()->SetCallBack(
       "DBImpl::BackgroundCompaction:NonTrivial:AfterRun", [&](void* /*arg*/) {
         if (cf_1_1) {
