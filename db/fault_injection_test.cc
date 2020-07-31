@@ -105,6 +105,7 @@ class FaultInjectionTest
     sync_use_wal_ = false;
     sync_use_compact_ = true;
     Options options;
+    options.prepare_log_writer_num = 0;
     switch (option_config_) {
       case kWalDir:
         options.wal_dir = test::PerThreadDBPath(env_, "fault_test_wal");
@@ -152,7 +153,7 @@ class FaultInjectionTest
     options_ = CurrentOptions();
     options_.env = env_;
     options_.paranoid_checks = true;
-
+    options_.prepare_log_writer_num = 0;
     BlockBasedTableOptions table_options;
     tiny_cache_ = NewLRUCache(100);
     table_options.block_cache = tiny_cache_;

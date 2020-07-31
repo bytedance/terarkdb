@@ -1,0 +1,1 @@
+make DEBUG_LEVEL=2 COMPILE_WITH_ASAN=1 $1 -j256 && ./$1

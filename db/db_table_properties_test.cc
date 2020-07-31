@@ -222,6 +222,7 @@ TEST_F(DBTablePropertiesTest, GetPropertiesOfTablesInRange) {
   options.hard_pending_compaction_bytes_limit = 16 * 1024;
   options.num_levels = 8;
   options.env = env_;
+  options.blob_size = -1;
 
   DestroyAndReopen(options);
 
