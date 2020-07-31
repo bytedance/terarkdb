@@ -1540,6 +1540,7 @@ TEST_P(DBIteratorTest, ReadAhead) {
   env_->count_random_reads_ = true;
   options.env = env_;
   options.disable_auto_compactions = true;
+  options.blob_size = -1;
   options.write_buffer_size = 4 << 20;
   options.statistics = rocksdb::CreateDBStatistics();
   BlockBasedTableOptions table_options;
