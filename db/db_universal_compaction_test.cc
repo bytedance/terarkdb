@@ -129,6 +129,9 @@ TEST_P(DBTestUniversalCompaction, UniversalCompactionSingleSortedRun) {
   Options options = CurrentOptions();
 
   options.compaction_style = kCompactionStyleUniversal;
+  options.enable_lazy_compaction = false;
+  options.blob_size = -1;
+  options.prepare_log_writer_num = 0;
   options.num_levels = num_levels_;
   // Config universal compaction to always compact to one single sorted run.
   options.level0_file_num_compaction_trigger = 0;
@@ -166,6 +169,9 @@ TEST_P(DBTestUniversalCompaction, UniversalCompactionSingleSortedRun) {
 TEST_P(DBTestUniversalCompaction, OptimizeFiltersForHits) {
   Options options = CurrentOptions();
   options.compaction_style = kCompactionStyleUniversal;
+  options.enable_lazy_compaction = false;
+  options.blob_size = -1;
+  options.prepare_log_writer_num = 0;
   options.compaction_options_universal.size_ratio = 5;
   options.num_levels = num_levels_;
   options.write_buffer_size = 105 << 10;  // 105KB
@@ -236,6 +242,9 @@ TEST_P(DBTestUniversalCompaction, UniversalCompactionTrigger) {
   Options options;
   options.compaction_style = kCompactionStyleUniversal;
   options.compaction_options_universal.size_ratio = 5;
+  options.enable_lazy_compaction = false;
+  options.blob_size = -1;
+  options.prepare_log_writer_num = 0;
   options.num_levels = num_levels_;
   options.write_buffer_size = 105 << 10;  // 105KB
   options.arena_block_size = 4 << 10;
@@ -341,6 +350,9 @@ TEST_P(DBTestUniversalCompaction, UniversalCompactionTrigger) {
 
 TEST_P(DBTestUniversalCompaction, UniversalCompactionSizeAmplification) {
   Options options = CurrentOptions();
+  options.enable_lazy_compaction = false;
+  options.blob_size = -1;
+  options.prepare_log_writer_num = 0;
   options.compaction_style = kCompactionStyleUniversal;
   options.num_levels = num_levels_;
   options.write_buffer_size = 100 << 10;     // 100KB
