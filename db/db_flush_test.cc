@@ -234,6 +234,7 @@ TEST_F(DBFlushTest, FlushError) {
   options.max_write_buffer_number = 4;
   options.min_write_buffer_number_to_merge = 3;
   options.disable_auto_compactions = true;
+  options.prepare_log_writer_num = 0;
   options.env = fault_injection_env.get();
   Reopen(options);
 
