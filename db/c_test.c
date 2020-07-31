@@ -483,6 +483,9 @@ int main(int argc, char** argv) {
   rocksdb_options_set_info_log(options, NULL);
   rocksdb_options_set_write_buffer_size(options, 100000);
   rocksdb_options_set_paranoid_checks(options, 1);
+  rocksdb_options_set_enable_lazy_compaction(options, 0);
+  rocksdb_options_set_blob_size(options, -1);
+  rocksdb_options_set_prepare_log_writer_num(options, 0);
   rocksdb_options_set_max_open_files(options, 10);
   rocksdb_options_set_base_background_compactions(options, 1);
   table_options = rocksdb_block_based_options_create();
@@ -1092,6 +1095,9 @@ int main(int argc, char** argv) {
   {
     rocksdb_options_t* options_with_filter = rocksdb_options_create();
     rocksdb_options_set_create_if_missing(options_with_filter, 1);
+    rocksdb_options_set_enable_lazy_compaction(options_with_filter, 0);
+    rocksdb_options_set_blob_size(options_with_filter, -1);
+    rocksdb_options_set_prepare_log_writer_num(options_with_filter, 0);
     rocksdb_compactionfilter_t* cfilter;
     cfilter = rocksdb_compactionfilter_create(NULL, CFilterDestroy,
                                               CFilterFilter, CFilterName);
@@ -1110,6 +1116,9 @@ int main(int argc, char** argv) {
   {
     rocksdb_options_t* options_with_filter_factory = rocksdb_options_create();
     rocksdb_options_set_create_if_missing(options_with_filter_factory, 1);
+    rocksdb_options_set_enable_lazy_compaction(options_with_filter_factory, 0);
+    rocksdb_options_set_blob_size(options_with_filter_factory, -1);
+    rocksdb_options_set_prepare_log_writer_num(options_with_filter_factory, 0);
     rocksdb_compactionfilterfactory_t* factory;
     factory = rocksdb_compactionfilterfactory_create(
         NULL, CFilterFactoryDestroy, CFilterCreate, CFilterFactoryName);
