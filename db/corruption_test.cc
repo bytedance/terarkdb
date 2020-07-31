@@ -53,6 +53,8 @@ class CorruptionTest : public testing::Test {
 
     db_ = nullptr;
     options_.create_if_missing = true;
+    options_.enable_lazy_compaction = false;
+    options_.blob_size = -1;
     options_.prepare_log_writer_num = 0;
     BlockBasedTableOptions table_options;
     table_options.block_size_deviation = 0;  // make unit test pass for now
@@ -388,6 +390,9 @@ TEST_F(CorruptionTest, CorruptedDescriptor) {
 
 TEST_F(CorruptionTest, CompactionInputError) {
   Options options;
+  options.enable_lazy_compaction = false;
+  options.blob_size = -1;
+  options.prepare_log_writer_num = 0;
   Reopen(&options);
   Build(10);
   DBImpl* dbi = reinterpret_cast<DBImpl*>(db_);
@@ -411,6 +416,9 @@ TEST_F(CorruptionTest, CompactionInputErrorParanoid) {
   options.paranoid_checks = true;
   options.write_buffer_size = 131072;
   options.max_write_buffer_number = 2;
+  options.enable_lazy_compaction = false;
+  options.blob_size = -1;
+  options.prepare_log_writer_num = 0;
   Reopen(&options);
   DBImpl* dbi = reinterpret_cast<DBImpl*>(db_);
 
