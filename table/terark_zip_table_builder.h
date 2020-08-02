@@ -43,7 +43,7 @@
 namespace rocksdb {
 
 template <typename T>
-struct AsyncTask;
+class AsyncTask;
 
 using terark::AbstractBlobStore;
 using terark::AutoDeleteFile;

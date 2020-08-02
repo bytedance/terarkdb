@@ -1129,7 +1129,7 @@ Status DBImpl::WriteLevel0TableForRecovery(int job_id, ColumnFamilyData* cfd,
                                       blob.fd.GetFileSize());
     RecordTick(stats_, COMPACT_WRITE_BYTES, blob.fd.GetFileSize());
   }
-  stats.num_output_files = 1 + blob_meta.size();
+  stats.num_output_files = 1 + int(blob_meta.size());
   cfd->internal_stats()->AddCompactionStats(level, stats);
   cfd->internal_stats()->AddCFStats(InternalStats::BYTES_FLUSHED,
                                     meta.fd.GetFileSize());
