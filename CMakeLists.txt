@@ -62,6 +62,10 @@ option(WITH_WINDOWS_UTF8_FILENAMES "use UTF8 as characterset for opening files, 
 option(WITH_METRICS "build with metrics" ON)
 option(WITH_ASAN "build with ASAN" ON)
 
+if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+  set(WITH_ASAN  OFF)
+endif()
+
 # We don't need asan for Release build
 if (CMAKE_BUILD_TYPE STREQUAL "Release")
   set(WITH_ASAN OFF)
@@ -100,7 +104,7 @@ else()
   # No config file for this
   option(WITH_GFLAGS "build with GFlags" ON)
   if(WITH_GFLAGS)
-    find_package(gflags REQUIRED)
+    find_package(gflags QUIET)
     add_definitions(-DGFLAGS=1)
     if(NOT gflags_FOUND)
       MESSAGE("[terarkdb] gflags not found")
@@ -520,7 +524,9 @@ ELSE()
 ENDIF()
 
 ADD_SUBDIRECTORY(terark-core)
-SET(TERARK_DEPEND_LIBS terark-core-${BUILD_SUFFIX} gomp)
+if (NOT ${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+  SET(TERARK_DEPEND_LIBS terark-core-${BUILD_SUFFIX} gomp)
+endif()
 
 
 # Main library source code

@@ -1,7 +1,6 @@
 cmake_minimum_required(VERSION 3.6)
 
 SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
-SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c++14")
 
 PROJECT(terarkdb-third-party)
 #SET(CMAKE_VERBOSE_MAKEFILE ON)
@@ -17,11 +16,11 @@ INCLUDE(ExternalProject)
 # Metrics
 ExternalProject_Add(metrics2-project
     SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/metrics2-cmake
-    CONFIGURE_COMMAND mkdir -p build && mkdir -p ${CMAKE_CURRENT_BINARY_DIR}/metrics2
+    CONFIGURE_COMMAND mkdir -p cmake-build && mkdir -p ${CMAKE_CURRENT_BINARY_DIR}/metrics2
     BUILD_IN_SOURCE 1
-    BUILD_COMMAND cd build && cmake ../ && make -j $(nproc)
+    BUILD_COMMAND cd cmake-build && cmake ../ && make -j $(nproc)
     # metrics2 doesn't have a install instruction, so we have to manully install it
-    INSTALL_COMMAND cp build/libmetrics2.a ${CMAKE_CURRENT_BINARY_DIR}/metrics2/ && rm -rf ${CMAKE_CURRENT_SOURCE_DIR}/metrics2-cmake/build)
+    INSTALL_COMMAND cp cmake-build/libmetrics2.a ${CMAKE_CURRENT_BINARY_DIR}/metrics2/ && rm -rf ${CMAKE_CURRENT_SOURCE_DIR}/metrics2-cmake/build-cmake)
 ADD_LIBRARY(metrics2 STATIC IMPORTED GLOBAL)
 ADD_DEPENDENCIES(metrics2 metrics2-project)
 SET_TARGET_PROPERTIES(metrics2 PROPERTIES
@@ -49,10 +48,10 @@ IF(WITH_GFLAGS)
     MESSAGE("[terarkdb/third-party] gflags not find, building....")
     ExternalProject_Add(gflags-project
         SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/gflags
-        CONFIGURE_COMMAND mkdir -p build
+        CONFIGURE_COMMAND mkdir -p build-cmake
         BUILD_IN_SOURCE 1
-        BUILD_COMMAND cd build && cmake ../ -DCMAKE_INSTALL_PREFIX=${CMAKE_CURRENT_BINARY_DIR}/gflags && make
-        INSTALL_COMMAND cd build && make install)
+        BUILD_COMMAND cd build-cmake && cmake ../ -DCMAKE_INSTALL_PREFIX=${CMAKE_CURRENT_BINARY_DIR}/gflags && make
+        INSTALL_COMMAND cd build-cmake && make install)
     ADD_LIBRARY(gflags STATIC IMPORTED GLOBAL)
     ADD_DEPENDENCIES(gflags gflags-project)
     SET_TARGET_PROPERTIES(gflags PROPERTIES
