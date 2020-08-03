@@ -64,6 +64,7 @@ class CompactionPickerTest : public testing::Test {
     mutable_cf_options_.RefreshDerivedOptions(ioptions_);
     ioptions_.cf_paths.emplace_back("dummy",
                                     std::numeric_limits<uint64_t>::max());
+    ioptions_.enable_lazy_compaction = false;
   }
 
   ~CompactionPickerTest() {
