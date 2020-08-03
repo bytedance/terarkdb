@@ -66,12 +66,12 @@ TEST_F(ManualCompactionTest, CompactTouchesAllKeys) {
   for (int iter = 0; iter < 2; ++iter) {
     DB* db;
     Options options;
+    options.enable_lazy_compaction = false;
     if (iter == 0) { // level compaction
       options.num_levels = 3;
       options.compaction_style = kCompactionStyleLevel;
     } else { // universal compaction
       options.compaction_style = kCompactionStyleUniversal;
-      options.enable_lazy_compaction = true;
     }
     options.create_if_missing = true;
     options.compression = rocksdb::kNoCompression;
