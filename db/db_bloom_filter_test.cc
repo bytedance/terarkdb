@@ -1259,6 +1259,7 @@ TEST_F(DBBloomFilterTest, DynamicBloomFilterUpperBound) {
     Options options;
     options.create_if_missing = true;
     options.enable_lazy_compaction = false;
+    options.prepare_log_writer_num = 0;
     options.blob_size = -1;
     options.prefix_extractor.reset(NewCappedPrefixTransform(4));
     options.disable_auto_compactions = true;
@@ -1392,6 +1393,7 @@ TEST_F(DBBloomFilterTest, DynamicBloomFilterMultipleSST) {
     Options options;
     options.create_if_missing = true;
     options.enable_lazy_compaction = false;
+    options.prepare_log_writer_num = 0;
     options.blob_size = -1; 
     options.prefix_extractor.reset(NewFixedPrefixTransform(1));
     options.disable_auto_compactions = true;

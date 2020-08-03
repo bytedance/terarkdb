@@ -81,7 +81,8 @@ class FaultInjectionTest
         sync_use_compact_(true),
         base_env_(nullptr),
         env_(nullptr),
-        db_(nullptr) {}
+        db_(nullptr) {
+  }
 
   ~FaultInjectionTest() {
     rocksdb::SyncPoint::GetInstance()->DisableProcessing();
@@ -105,7 +106,6 @@ class FaultInjectionTest
     sync_use_wal_ = false;
     sync_use_compact_ = true;
     Options options;
-    options.prepare_log_writer_num = 0;
     switch (option_config_) {
       case kWalDir:
         options.wal_dir = test::PerThreadDBPath(env_, "fault_test_wal");
@@ -139,6 +139,9 @@ class FaultInjectionTest
       default:
         break;
     }
+    options_.enable_lazy_compaction = false;
+    options_.prepare_log_writer_num = 0;
+    options_.blob_size = -1;
     return options;
   }
 
