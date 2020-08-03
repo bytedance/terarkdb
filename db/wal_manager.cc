@@ -28,6 +28,7 @@
 #include "rocksdb/env.h"
 #include "rocksdb/options.h"
 #include "rocksdb/write_batch.h"
+#include "terark/valvec.hpp"
 #include "util/cast_util.h"
 #include "util/coding.h"
 #include "util/file_reader_writer.h"
@@ -134,6 +135,11 @@ Status WalManager::GetSortedWalFiles(VectorLogPtr& files) {
   // archived dir first, we would have missed the log file.
   files.erase(std::unique(files.begin(), files.end(), EqualLogByPointer()),
               files.end());
+  assert(std::is_sorted(
+      files.begin(), files.end(),
+      [](const std::unique_ptr<LogFile>& a, const std::unique_ptr<LogFile>& b) {
+        return a->StartSequence() < b->StartSequence();
+      }));
   return s;
 }
 
@@ -150,7 +156,7 @@ Status WalManager::GetUpdatesSince(
     return s;
   }
 
-  s = RetainProbableWalFiles(*wal_files, seq);
+  s = RetainProbableWalFiles(*wal_files, seq, version_set);
   if (!s.ok()) {
     return s;
   }
@@ -348,28 +354,26 @@ Status WalManager::GetWalsOfType(const std::string& path,
 }
 
 Status WalManager::RetainProbableWalFiles(VectorLogPtr& all_logs,
-                                          const SequenceNumber target) {
-  int64_t start = 0;  // signed to avoid overflow when target is < first file.
-  int64_t end = static_cast<int64_t>(all_logs.size()) - 1;
-  // Binary Search. avoid opening all files.
-  while (end >= start) {
-    int64_t mid = start + (end - start) / 2;  // Avoid overflow.
-    SequenceNumber current_seq_num =
-        all_logs.at(static_cast<size_t>(mid))->StartSequence();
-    if (current_seq_num == target) {
-      end = mid;
-      break;
-    } else if (current_seq_num < target) {
-      start = mid + 1;
-    } else {
-      end = mid - 1;
-    }
+                                          const SequenceNumber target,
+                                          VersionSet* version_set) {
+  if (all_logs.empty()) {
+    return Status::OK();
   }
-  // end could be -ve.
-  size_t start_index =
-      static_cast<size_t>(std::max(static_cast<int64_t>(0), end));
-  // The last wal file is always included
-  all_logs.erase(all_logs.begin(), all_logs.begin() + start_index);
+  size_t start_index = terark::upper_bound_ex_0(
+      all_logs.data(), all_logs.size(), target,
+      [](const std::unique_ptr<LogFile>& a) { return a->StartSequence(); });
+  if (start_index == 0) {
+    char buf[200];
+    snprintf(buf, sizeof(buf),
+             "Outdated target in log files. Min seq=%" PRIu64
+             ", Expected seq=%" PRIu64 ", Last flushed seq=%" PRIu64 ".",
+             all_logs.front()->StartSequence(), target,
+             version_set->LastSequence());
+    ROCKS_LOG_INFO(db_options_.info_log, "[WalManger] %s", buf);
+  } else {
+    // The last wal file is always included
+    all_logs.erase(all_logs.begin(), all_logs.begin() + start_index - 1);
+  }
   return Status::OK();
 }
 

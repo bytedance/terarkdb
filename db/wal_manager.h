@@ -77,7 +77,8 @@ class WalManager {
   // Retains all log files in all_logs which contain updates with seq no.
   // Greater Than or Equal to the requested SequenceNumber.
   Status RetainProbableWalFiles(VectorLogPtr& all_logs,
-                                const SequenceNumber target);
+                                const SequenceNumber target,
+                                VersionSet* version_set);
 
   Status ReadFirstRecord(const WalFileType type, const uint64_t number,
                          SequenceNumber* sequence);
