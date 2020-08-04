@@ -43,7 +43,7 @@ class WalManager {
 
   uint64_t GetNextLogNumber(const uint64_t number);
 
-  Status GetSortedWalFiles(VectorLogPtr& files);
+  Status GetSortedWalFiles(VectorLogPtr& files, bool allow_empty = false);
 
   Status GetUpdatesSince(
       SequenceNumber seq_number, std::unique_ptr<TransactionLogIterator>* iter,
@@ -72,7 +72,7 @@ class WalManager {
 
  private:
   Status GetWalsOfType(const std::string& path, VectorLogPtr& log_files,
-                       WalFileType type);
+                       WalFileType type, bool allow_empty);
   // Requires: all_logs should be sorted with earliest log file first
   // Retains all log files in all_logs which contain updates with seq no.
   // Greater Than or Equal to the requested SequenceNumber.

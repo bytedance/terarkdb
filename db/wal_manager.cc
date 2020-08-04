@@ -86,14 +86,14 @@ Status WalManager::DeleteFile(const std::string& fname, uint64_t number) {
   return s;
 }
 
-Status WalManager::GetSortedWalFiles(VectorLogPtr& files) {
+Status WalManager::GetSortedWalFiles(VectorLogPtr& files, bool allow_empty) {
   // First get sorted files in db dir, then get sorted files from archived
   // dir, to avoid a race condition where a log file is moved to archived
   // dir in between.
   Status s;
   // list wal files in main db dir.
   VectorLogPtr logs;
-  s = GetWalsOfType(db_options_.wal_dir, logs, kAliveLogFile);
+  s = GetWalsOfType(db_options_.wal_dir, logs, kAliveLogFile, allow_empty);
   if (!s.ok()) {
     return s;
   }
@@ -109,7 +109,7 @@ Status WalManager::GetSortedWalFiles(VectorLogPtr& files) {
   std::string archivedir = ArchivalDirectory(db_options_.wal_dir);
   Status exists = env_->FileExists(archivedir);
   if (exists.ok()) {
-    s = GetWalsOfType(archivedir, files, kArchivedLogFile);
+    s = GetWalsOfType(archivedir, files, kArchivedLogFile, allow_empty);
     if (!s.ok()) {
       return s;
     }
@@ -135,11 +135,6 @@ Status WalManager::GetSortedWalFiles(VectorLogPtr& files) {
   // archived dir first, we would have missed the log file.
   files.erase(std::unique(files.begin(), files.end(), EqualLogByPointer()),
               files.end());
-  assert(std::is_sorted(
-      files.begin(), files.end(),
-      [](const std::unique_ptr<LogFile>& a, const std::unique_ptr<LogFile>& b) {
-        return a->StartSequence() < b->StartSequence();
-      }));
   return s;
 }
 
@@ -151,7 +146,7 @@ Status WalManager::GetUpdatesSince(
   //  Do binary search and open files and find the seq number.
 
   std::unique_ptr<VectorLogPtr> wal_files(new VectorLogPtr);
-  Status s = GetSortedWalFiles(*wal_files);
+  Status s = GetSortedWalFiles(*wal_files, false /* allow_empty */);
   if (!s.ok()) {
     return s;
   }
@@ -201,7 +196,7 @@ void WalManager::PurgeObsoleteWALFiles() {
   purge_wal_files_last_run_ = now_seconds;
 
   VectorLogPtr files;
-  s = GetSortedWalFiles(files);
+  s = GetSortedWalFiles(files, true /* allow_empty */);
   if (!s.ok()) {
     ROCKS_LOG_ERROR(db_options_.info_log, "GetSortedWalFiles fail: %s",
                     s.ToString().c_str());
@@ -295,8 +290,8 @@ void WalManager::ArchiveWALFile(const std::string& fname, uint64_t number) {
 }
 
 Status WalManager::GetWalsOfType(const std::string& path,
-                                 VectorLogPtr& log_files,
-                                 WalFileType log_type) {
+                                 VectorLogPtr& log_files, WalFileType log_type,
+                                 bool allow_empty) {
   std::vector<std::string> all_files;
   const Status status = env_->GetChildren(path, &all_files);
   if (!status.ok()) {
@@ -312,7 +307,7 @@ Status WalManager::GetWalsOfType(const std::string& path,
       if (!s.ok()) {
         return s;
       }
-      if (sequence == 0) {
+      if (!allow_empty && sequence == 0) {
         // empty file
         continue;
       }

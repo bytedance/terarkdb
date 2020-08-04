@@ -1516,12 +1516,20 @@ Status DBImpl::SwitchMemtable(ColumnFamilyData* cfd, WriteContext* context) {
   // Log this later after lock release. It may be outdated, e.g., if background
   // flush happens before logging, but that should be ok.
   int num_imm_unflushed = cfd->imm()->NumNotFlushed();
-  if (creating_new_log && !log_writer_pool_.empty()) {
-    new_log = log_writer_pool_.front().release();
-    log_writer_pool_.pop_front();
-    new_log_number = new_log->get_log_number();
-
-  } else if (creating_new_log) {
+  if (creating_new_log) {
+    while (!log_writer_pool_.empty()) {
+      auto front = std::move(log_writer_pool_.front());
+      log_writer_pool_.pop_front();
+      if (front->get_log_number() > new_log_number) {
+        new_log = front.release();
+        new_log_number = new_log->get_log_number();
+        break;
+      } else {
+        logs_to_free_queue_.emplace_back(std::move(front.release()));
+      }
+    }
+  }
+  if (creating_new_log && new_log == nullptr) {
     uint64_t recycle_log_number = 0;
     if (!log_recycle_files_.empty()) {
       recycle_log_number = log_recycle_files_.front();
