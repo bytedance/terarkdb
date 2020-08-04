@@ -223,6 +223,7 @@ TEST_F(DBTablePropertiesTest, GetPropertiesOfTablesInRange) {
   options.num_levels = 8;
   options.env = env_;
   options.blob_size = -1;
+  options.enable_lazy_compaction = false;
 
   DestroyAndReopen(options);
 
