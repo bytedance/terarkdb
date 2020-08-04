@@ -15,6 +15,7 @@
 
 #include "monitoring/instrumented_mutex.h"
 #include "rocksdb/env.h"
+#include "util/sync_point.h"
 #include "util/mutexlock.h"
 #include "util/sync_point_impl.h"
 
@@ -50,7 +51,6 @@ class Timer {
            const std::string& fn_name,
            uint64_t start_after_us,
            uint64_t repeat_every_us) {
-
     std::unique_ptr<FunctionInfo> fn_info(
         new FunctionInfo(std::move(fn), fn_name,
                          env_->NowMicros() + start_after_us, repeat_every_us));
@@ -176,6 +176,7 @@ class Timer {
     while (running_) {
       if (heap_.empty()) {
         // wait
+        TEST_SYNC_POINT("Timer::Run::Waiting");
         cond_var_.Wait();
         continue;
       }
