@@ -96,8 +96,8 @@ Block* DetachBlockContents(BlockContents& tombstoneBlock,
 }
 
 static void MmapWarmUpBytes(const void* addr, size_t len) {
-  auto base = (const byte_t*)(uintptr_t(addr) & uintptr_t(~4095));
-  auto size = terark::align_up((size_t(addr) & 4095) + len, 4096);
+  auto base = (const byte_t*)((size_t(addr) + 0x3ff) & size_t(~0x3ff));
+  auto size = size_t(len & size_t(~0x3ff));
 #ifdef POSIX_MADV_WILLNEED
   posix_madvise((void*)base, size, POSIX_MADV_WILLNEED);
 #endif
