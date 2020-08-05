@@ -5,26 +5,41 @@ SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
 PROJECT(terarkdb-third-party)
 #SET(CMAKE_VERBOSE_MAKEFILE ON)
 
-# Snappy
-SET(SNAPPY_BUILD_TESTS OFF CACHE BOOL "disable build test cache" FORCE)
-SET(HAVE_LIBLZO2 OFF CACHE BOOL "disable liblzo2" FORCE)
-ADD_SUBDIRECTORY(snappy)
-SET_PROPERTY(TARGET snappy PROPERTY POSITION_INDEPENDENT_CODE ON)
-
 INCLUDE(ExternalProject)
+
+# Snappy
+IF(WITH_SNAPPY)
+  FIND_PACKAGE(snappy QUIET)
+  IF (NOT snappy_FOUND)
+    MESSAGE("[terarkdb/third-party] snappy not found, build target")
+    ExternalProject_Add(snappy-project
+        SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/snappy
+        CONFIGURE_COMMAND mkdir -p build
+        BUILD_IN_SOURCE 1
+        BUILD_COMMAND cd build && cmake ../ -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR} -DSNAPPY_BUILD_TESTS=OFF -DHAVE_LIBLZO2=OFF && make -j $(nproc)
+        INSTALL_COMMAND cd build && make install && cd ../ && rm -rf build)
+    ADD_LIBRARY(snappy STATIC IMPORTED GLOBAL)
+    ADD_DEPENDENCIES(snappy snappy-project)
+    SET_TARGET_PROPERTIES(snappy PROPERTIES
+        IMPORTED_LOCATION ${CMAKE_BINARY_DIR}/lib/libsnappy.a
+        INCLUDE_DIRECTORIES ${CMAKE_BINARY_DIR}/include)
+  ELSE()
+    MESSAGE("[terarkdb/third-party] snappy exist, not build")
+  ENDIF()
+ENDIF()
 
 # Metrics
 ExternalProject_Add(metrics2-project
     SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/metrics2-cmake
-    CONFIGURE_COMMAND mkdir -p cmake-build && mkdir -p ${CMAKE_CURRENT_BINARY_DIR}/metrics2
+    CONFIGURE_COMMAND mkdir -p cmake-build && mkdir -p ${CMAKE_BINARY_DIR}/lib
     BUILD_IN_SOURCE 1
     BUILD_COMMAND cd cmake-build && cmake ../ && make -j $(nproc)
     # metrics2 doesn't have a install instruction, so we have to manully install it
-    INSTALL_COMMAND cp cmake-build/libmetrics2.a ${CMAKE_CURRENT_BINARY_DIR}/metrics2/ && rm -rf ${CMAKE_CURRENT_SOURCE_DIR}/metrics2-cmake/build-cmake)
+    INSTALL_COMMAND cp cmake-build/libmetrics2.a ${CMAKE_BINARY_DIR}/lib/)
 ADD_LIBRARY(metrics2 STATIC IMPORTED GLOBAL)
 ADD_DEPENDENCIES(metrics2 metrics2-project)
 SET_TARGET_PROPERTIES(metrics2 PROPERTIES
-    IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/metrics2/libmetrics2.a
+    IMPORTED_LOCATION ${CMAKE_BINARY_DIR}/lib/libmetrics2.a
     INCLUDE_DIRECTORIES ${CMAKE_CURRENT_SOURCE_DIR}/metrics2/)
 
 # Zlib
@@ -43,9 +58,14 @@ SET_TARGET_PROPERTIES(zlib PROPERTIES
 
 # Gflags
 IF(WITH_GFLAGS)
-  FIND_PACKAGE(gflags QUIET)
-  IF(NOT gflags_FOUND)
-    MESSAGE("[terarkdb/third-party] gflags not find, building....")
+  IF(NOT TARGET gflags)
+    FIND_PACKAGE(gflags QUIET)
+  ELSE()
+	MESSAGE("[terarkdb/third-party] target gflags existed")
+  ENDIF()
+
+  IF(NOT TARGET gflags AND NOT gflags_FOUND)
+    MESSAGE("[terarkdb/third-party] gflags not find, build target")
     ExternalProject_Add(gflags-project
         SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/gflags
         CONFIGURE_COMMAND mkdir -p build-cmake

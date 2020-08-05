@@ -44,13 +44,13 @@ endif()
 
 # Output full compile commands
 # SET(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-# SET(CMAKE_VERBOSE_MAKEFILE ON)
+SET(CMAKE_VERBOSE_MAKEFILE ON)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake/modules/")
 
-SET(CMAKE_INSTALL_LIBDIR ${CMAKE_CURRENT_BINARY_DIR}/lib)
-SET(CMAKE_INSTALL_BINDIR ${CMAKE_CURRENT_BINARY_DIR}/bin)
-SET(CMAKE_INSTALL_INCLUDEDIR ${CMAKE_CURRENT_BINARY_DIR}/include)
+SET(CMAKE_INSTALL_LIBDIR ${CMAKE_BINARY_DIR}/lib)
+SET(CMAKE_INSTALL_BINDIR ${CMAKE_BINARY_DIR}/bin)
+SET(CMAKE_INSTALL_INCLUDEDIR ${CMAKE_BINARY_DIR}/include)
 
 option(BUILD_SHARED_LIB "build shared lib" OFF)
 option(WITH_JEMALLOC "build with JeMalloc" OFF)
@@ -61,6 +61,8 @@ option(WITH_ZSTD "build with zstd" ON)
 option(WITH_WINDOWS_UTF8_FILENAMES "use UTF8 as characterset for opening files, regardles of the system code page" OFF)
 option(WITH_METRICS "build with metrics" ON)
 option(WITH_ASAN "build with ASAN" ON)
+
+ADD_SUBDIRECTORY(third-party)
 
 if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
   set(WITH_ASAN  OFF)
@@ -75,7 +77,14 @@ if (WITH_WINDOWS_UTF8_FILENAMES)
   add_definitions(-DROCKSDB_WINDOWS_UTF8_FILENAMES)
 endif()
 
-ADD_SUBDIRECTORY(third-party)
+SET(BUILD_SUFFIX "d")
+IF(NOT ${CMAKE_BUILD_TYPE} STREQUAL "Debug")
+  MESSAGE("-- build with release")
+  SET(BUILD_SUFFIX "r")
+ELSE()
+  SET(CMAKE_BUILD_TYPE "Debug")
+  MESSAGE("-- build with debug")
+ENDIF()
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/terark-core/boost-include)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/terark-core/src)
@@ -104,24 +113,46 @@ else()
   # No config file for this
   option(WITH_GFLAGS "build with GFlags" ON)
   if(WITH_GFLAGS)
-    find_package(gflags QUIET)
     add_definitions(-DGFLAGS=1)
-    if(NOT gflags_FOUND)
-      MESSAGE("[terarkdb] gflags not found")
-      include_directories(${CMAKE_CURRENT_BINARY_DIR}/third-party/gflags/include)
-      list(APPEND THIRDPARTY_LIBS gflags)
+    if(NOT TARGET gflags)
+      find_package(gflags QUIET)
+      if(NOT gflags_FOUND)
+        MESSAGE("[terarkdb] gflags find_package failed!")
+      else()
+        MESSAGE("[terarkdb] gflags find_package success!")
+      endif()
     else()
-      MESSAGE("[terarkdb] gflags found")
-      include_directories(${gflags_INCLUDE_DIR})
-      list(APPEND THIRDPARTY_LIBS gflags)
+      message("[terarkdb] gflags target existed!")
     endif()
+
+    #include_directories(${CMAKE_CURRENT_BINARY_DIR}/third-party/gflags/include)
+    #include_directories(${CMAKE_BINARY_DIR}/include)
+    if(NOT gflags_INCLUDE_DIR)
+      get_target_property(gflags_INCLUDE_DIR gflags INCLUDE_DIRECTORIES)
+    endif()
+    include_directories(${gflags_INCLUDE_DIR})
+    # message(${gflags_INCLUDE_DIR})
+    list(APPEND THIRDPARTY_LIBS gflags)
   endif()
 
   if(WITH_SNAPPY)
     add_definitions(-DSNAPPY)
-    include_directories(${CMAKE_CURRENT_BINARY_DIR}/third-party/snappy
-                        ${CMAKE_CURRENT_SOURCE_DIR}/third-party/snappy)
-    list(APPEND THIRDPARTY_LIBS ${CMAKE_CURRENT_BINARY_DIR}/third-party/snappy/libsnappy.a)
+    if(NOT TARGET snappy)
+        find_package(snappy QUIET)
+        if(NOT snappy_FOUND)
+            message("[terarkdb] snappy find package failed!")
+        else()
+            message("[terarkdb] snappy find package success!")
+        endif()
+    else()
+        message("[terarkdb] snappy target existed!")
+    endif()
+    #include_directories(${CMAKE_CURRENT_BINARY_DIR}/third-party/snappy)
+    #include_directories(${CMAKE_BINARY_DIR}/include)
+    get_target_property(snappy_INCLUDE_DIR snappy INCLUDE_DIRECTORIES)
+    include_directories(${snappy_INCLUDE_DIR})
+    #message(${snappy_INCLUDE_DIR})
+    list(APPEND THIRDPARTY_LIBS snappy)
   endif()
 
   if(WITH_ZLIB)
@@ -249,7 +280,7 @@ else()
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /arch:AVX2")
   else()
     if(NOT HAVE_POWER8)
-      set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native")
+      set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=haswell")
     endif()
   endif()
 endif()
@@ -514,18 +545,29 @@ else()
   MESSAGE("[terarkdb] gtest target provided, skip build") 
 endif()
 
-SET(BUILD_SUFFIX "d")
-IF(NOT ${CMAKE_BUILD_TYPE} STREQUAL "Debug")
-  MESSAGE("-- build with release")
-  SET(BUILD_SUFFIX "r")
-ELSE()
-  SET(CMAKE_BUILD_TYPE "Debug")
-  MESSAGE("-- build with debug")
-ENDIF()
-
+# TODO, move to `third-party/`
+# INCLUDE(ExternalProject)
+# Use sub_directory is neccessary because external project can't forward synmbol dependencies.
 ADD_SUBDIRECTORY(terark-core)
+# terark-core
+# ExternalProject_Add(terark-core-project
+#     SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/terark-core
+#     CONFIGURE_COMMAND mkdir -p cmake-build
+#     BUILD_IN_SOURCE 1
+#     BUILD_COMMAND cd cmake-build && cmake ../ -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR} && make -j $(nproc)
+#     INSTALL_COMMAND cd cmake-build && ls -l && make install)
+# ADD_LIBRARY(terark-core STATIC IMPORTED GLOBAL)
+# ADD_DEPENDENCIES(terark-core terark-core-project)
+# SET_TARGET_PROPERTIES(terark-core PROPERTIES
+#         IMPORTED_LOCATION ${CMAKE_BINARY_DIR}/lib/libterark-core-${BUILD_SUFFIX}.a
+#         INCLUDE_DIRECTORIES ${CMAKE_BINARY_DIR}/include/)
+SET(TERARK_CORE_LIB terark-core-${BUILD_SUFFIX})
 if (NOT ${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-  SET(TERARK_DEPEND_LIBS terark-core-${BUILD_SUFFIX} gomp)
+  LIST(APPEND TERARK_SHARED_DEPENDS pthread gomp aio rt)
+  if (${CMAKE_BUILD_TYPE} STREQUAL "Debug" AND ${WITH_ASAN})
+    message("[terarkdb] build terarkdb with asan")
+    LIST(APPEND TERARK_SHARED_DEPENDS asan)
+  endif()
 endif()
 
 
@@ -831,7 +873,7 @@ else()
     set(SYSTEM_LIBS ${CMAKE_THREAD_LIBS_INIT})
     set(LIBS ${ROCKSDB_SHARED_LIB} ${THIRDPARTY_LIBS} ${SYSTEM_LIBS})
     add_library(${ROCKSDB_SHARED_LIB} SHARED ${SOURCES})
-    target_link_libraries(${ROCKSDB_SHARED_LIB} ${THIRDPARTY_LIBS} ${SYSTEM_LIBS} ${TERARK_DEPEND_LIBS})
+    target_link_libraries(${ROCKSDB_SHARED_LIB} ${THIRDPARTY_LIBS} ${SYSTEM_LIBS} ${TERARK_CORE_LIB} ${TERARK_SHARED_DEPENDS})
     target_include_directories(${ROCKSDB_SHARED_LIB} PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
     set_target_properties(${ROCKSDB_SHARED_LIB} PROPERTIES
                           LINKER_LANGUAGE CXX
@@ -842,16 +884,16 @@ else()
   endif()
 endif()
 
-# static rocksdb lib
+# static terarkdb lib
 add_library(${ROCKSDB_STATIC_LIB} STATIC ${SOURCES})
-target_link_libraries(${ROCKSDB_STATIC_LIB} ${THIRDPARTY_LIBS} ${SYSTEM_LIBS} ${TERARK_DEPEND_LIBS})
+target_link_libraries(${ROCKSDB_STATIC_LIB} ${THIRDPARTY_LIBS} ${SYSTEM_LIBS} ${TERARK_CORE_LIB} ${TERARK_SHARED_DEPENDS})
 target_include_directories(${ROCKSDB_STATIC_LIB} PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
                                                         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
 
 if(WIN32)
-  # imported rocksdb lib
+  # imported terarkdb lib
   add_library(${ROCKSDB_IMPORT_LIB} SHARED ${SOURCES})
-  target_link_libraries(${ROCKSDB_IMPORT_LIB} ${THIRDPARTY_LIBS} ${SYSTEM_LIBS} ${TERARK_DEPEND_LIBS})
+  target_link_libraries(${ROCKSDB_IMPORT_LIB} ${THIRDPARTY_LIBS} ${SYSTEM_LIBS} ${TERARK_CORE_LIB})
   target_include_directories(${ROCKSDB_IMPORT_LIB} PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
   set_target_properties(${ROCKSDB_IMPORT_LIB} PROPERTIES
     COMPILE_DEFINITIONS "ROCKSDB_DLL;ROCKSDB_LIBRARY_EXPORTS")

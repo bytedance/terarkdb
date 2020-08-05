@@ -1,13 +1,32 @@
 # TerarkDB
 
+## 1. CMake Build
+### Build standalone
+- clone terarkdb && git submodule update --init --recursive
+- mkdir build && cd build && cmake ../ && make -j 48
 
-## CMake Support
+### As a submodule
 - clone terarkdb && git submodule update --init --recursive
 - add_subdirectory(terarkdb) in your CMakeLists.txt
-- You are all set!
+ - `ExternalProject_Add` is not supported yet
+- For your executable, link `rocksdb` and it should works directly
+
+### Example
+```
+cmake ../ \
+  -DCMAKE_BUILD_TYPE=Release
+  -DWITH_TESTS=OFF
+  -DWITH_ASAN=OFF
+```
+
+### Notes
+- TerarkDB build with zstd, lz4, snappy, zlib, gtest, boost by default, if you need these libraries, you can remove them from your high level application.
+- By using `add_subdirectory(terarkdb)` you should able to use these third-party libraries' header file, contact us if you can't.
+  - Or you can include_directory their absolute file path for quick use.
 
 
-## Build
+
+## 2. Makefile build (deprecated)
 
 1. checkout the latest tag version
 2. `./build.sh` will produces release and debug version in the same time

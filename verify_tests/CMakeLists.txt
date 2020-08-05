@@ -9,8 +9,8 @@ SET(CMAKE_RULE_MESSAGES OFF)
 SET(CMAKE_VERBOSE_MAKEFILE ON)
 
 
-INCLUDE_DIRECTORIES(../output/include/ /usr/include)
+INCLUDE_DIRECTORIES(../build/include/ ../)
 
-LINK_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/../output/lib_static ${CMAKE_CURRENT_SOURCE_DIR}/../ /usr/local/lib)
+LINK_DIRECTORIES(../build/lib)
 ADD_EXECUTABLE(basic_test_static basic_test.cc)
-TARGET_LINK_LIBRARIES(basic_test_static rocksdb lz4 z snappy pthread gomp aio rt)
+TARGET_LINK_LIBRARIES(basic_test_static librocksdb.a pthread gomp aio rt asan)
