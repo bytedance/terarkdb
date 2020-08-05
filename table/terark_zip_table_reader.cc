@@ -942,13 +942,13 @@ Status TerarkZipSubReader::Get(SequenceNumber global_seqno,
     static constexpr size_t pin_size = 8192;
     bool pin_value = v.size() >= pin_size;
     if (pin_value) {
+      void* ptr = buf.data();
       buf.risk_release_ownership();
       get_context->SaveValue(
           k,
-          LazyBuffer(v,
-                     Cleanable([](void* arg1, void*) { free(arg1); },
-                               buf.data(), nullptr),
-                     file_number_),
+          LazyBuffer(
+              v, Cleanable([](void* arg1, void*) { free(arg1); }, ptr, nullptr),
+              file_number_),
           &matched);
     } else {
       get_context->SaveValue(k, LazyBuffer(v, false, file_number_), &matched);
