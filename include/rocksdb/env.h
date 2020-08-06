@@ -548,6 +548,37 @@ class SequentialFile {
                                 Slice* /*result*/, char* /*scratch*/) {
     return Status::NotSupported();
   }
+    protected:
+  friend class SequentialFileWrapper;
+};
+
+class SequentialFileWrapper : public SequentialFile {
+  SequentialFile* t_;
+
+ public:
+  SequentialFileWrapper(SequentialFile* file) { t_ = file; }
+  ~SequentialFileWrapper();
+
+  Status Read(size_t n, Slice* result, char* scratch) override {
+    return t_->Read(n, result, scratch);
+  }
+
+  Status Skip(uint64_t n) override { return t_->Skip(n); }
+
+  bool use_direct_io() const override { return t_->use_direct_io(); }
+
+  size_t GetRequiredBufferAlignment() const override {
+    return t_->GetRequiredBufferAlignment();
+  }
+
+  Status InvalidateCache(size_t offset, size_t length) override {
+    return t_->InvalidateCache(offset, length);
+  }
+
+  Status PositionedRead(uint64_t offset, size_t n, Slice* result,
+                                char* scratch) override {
+    return t_->PositionedRead(offset, n, result, scratch);
+  }
 };
 
 // A file abstraction for randomly reading the contents of a file.
@@ -626,6 +657,50 @@ class RandomAccessFile {
     assert(false);
     return -1;
   }
+  protected:
+  friend class RandomAccessFileWrapper;
+};
+
+class RandomAccessFileWrapper : public RandomAccessFile {
+  RandomAccessFile* t_;
+
+ public:
+  RandomAccessFileWrapper(RandomAccessFile* file) { t_ = file; }
+  ~RandomAccessFileWrapper();
+
+  Status Read(uint64_t offset, size_t n, Slice* result,
+              char* scratch) const override {
+    return t_->Read(offset, n, result, scratch);
+  };
+
+  Status Prefetch(uint64_t offset, size_t n) override {
+    return t_->Prefetch(offset, n);
+  }
+
+  size_t GetUniqueId(char* id, size_t max_size) const override {
+    return t_->GetUniqueId(id, max_size);
+  }
+
+  void Hint(AccessPattern pattern) override { return t_->Hint(pattern); }
+
+  bool use_direct_io() const override { return t_->use_direct_io(); }
+
+  bool use_aio_reads() const override { return t_->use_aio_reads(); }
+
+  size_t GetRequiredBufferAlignment() const override {
+    return t_->GetRequiredBufferAlignment();
+  }
+
+  Status InvalidateCache(size_t offset, size_t length) override {
+    return t_->InvalidateCache(offset, length);
+  }
+
+  Status FsRead(uint64_t offset, size_t len, Slice* result,
+                void* buf) const override {
+    return t_->FsRead(offset, len, result, buf);
+  }
+
+  intptr_t FileDescriptor() const override { t_->FileDescriptor(); }
 };
 
 // A file abstraction for sequential writing.  The implementation
@@ -802,6 +877,81 @@ class WritableFile {
   Env::WriteLifeTimeHint write_hint_;
 };
 
+// An implementation of WritableFile that forwards all calls to another
+// WritableFile. May be useful to clients who wish to override just part of the
+// functionality of another WritableFile.
+// It's declared as friend of WritableFile to allow forwarding calls to
+// protected virtual methods.
+class WritableFileWrapper : public WritableFile {
+ public:
+  explicit WritableFileWrapper(WritableFile* t) : target_(t) {}
+
+  Status Append(const Slice& data) override { return target_->Append(data); }
+  Status PositionedAppend(const Slice& data, uint64_t offset) override {
+    return target_->PositionedAppend(data, offset);
+  }
+  Status Truncate(uint64_t size) override { return target_->Truncate(size); }
+  Status Close() override { return target_->Close(); }
+  Status Flush() override { return target_->Flush(); }
+  Status Sync() override { return target_->Sync(); }
+  Status Fsync() override { return target_->Fsync(); }
+  bool IsSyncThreadSafe() const override { return target_->IsSyncThreadSafe(); }
+
+  bool use_direct_io() const override { return target_->use_direct_io(); }
+
+  size_t GetRequiredBufferAlignment() const override {
+    return target_->GetRequiredBufferAlignment();
+  }
+
+  void SetIOPriority(Env::IOPriority pri) override {
+    target_->SetIOPriority(pri);
+  }
+
+  Env::IOPriority GetIOPriority() override { return target_->GetIOPriority(); }
+
+  void SetWriteLifeTimeHint(Env::WriteLifeTimeHint hint) override {
+    target_->SetWriteLifeTimeHint(hint);
+  }
+
+  Env::WriteLifeTimeHint GetWriteLifeTimeHint() override {
+    return target_->GetWriteLifeTimeHint();
+  }
+
+  uint64_t GetFileSize() override { return target_->GetFileSize(); }
+
+  void SetPreallocationBlockSize(size_t size) override {
+    target_->SetPreallocationBlockSize(size);
+  }
+
+  void GetPreallocationStatus(size_t* block_size,
+                              size_t* last_allocated_block) override {
+    target_->GetPreallocationStatus(block_size, last_allocated_block);
+  }
+
+  size_t GetUniqueId(char* id, size_t max_size) const override {
+    return target_->GetUniqueId(id, max_size);
+  }
+
+  Status InvalidateCache(size_t offset, size_t length) override {
+    return target_->InvalidateCache(offset, length);
+  }
+
+  Status RangeSync(uint64_t offset, uint64_t nbytes) override {
+    return target_->RangeSync(offset, nbytes);
+  }
+
+  void PrepareWrite(size_t offset, size_t len) override {
+    target_->PrepareWrite(offset, len);
+  }
+
+  Status Allocate(uint64_t offset, uint64_t len) override {
+    return target_->Allocate(offset, len);
+  }
+
+ private:
+  WritableFile* target_;
+};
+
 // A file abstraction for random reading and writing.
 class RandomRWFile {
  public:
@@ -837,6 +987,42 @@ class RandomRWFile {
   // No copying allowed
   RandomRWFile(const RandomRWFile&) = delete;
   RandomRWFile& operator=(const RandomRWFile&) = delete;
+  protected:
+  friend class RandomRWFileWrapper;
+};
+
+class RandomRWFileWrapper : public RandomRWFile {
+  RandomRWFile* t_;
+
+ public:
+  RandomRWFileWrapper(RandomRWFile* file) { t_ = file; }
+  ~RandomRWFileWrapper() {}
+
+  bool use_direct_io() const override { return t_->use_direct_io(); }
+
+  size_t GetRequiredBufferAlignment() const override {
+    return t_->GetRequiredBufferAlignment();
+  }
+
+  Status Write(uint64_t offset, const Slice& data) override {
+    return t_->Write(offset, data);
+  };
+
+  Status Read(uint64_t offset, size_t n, Slice* result,
+              char* scratch) const override {
+    t_->Read(offset, n, result, scratch);
+  };
+
+  Status Flush() override { return t_->Flush(); };
+
+  Status Sync() override { return t_->Sync(); };
+
+  Status Fsync() override { return t_->Fsync(); }
+
+  Status Close() override { return t_->Close(); };
+
+  RandomRWFileWrapper(const RandomRWFileWrapper&) = delete;
+  RandomRWFileWrapper& operator=(const RandomRWFileWrapper&) = delete;
 };
 
 // MemoryMappedFileBuffer object represents a memory-mapped file's raw buffer.
@@ -1222,81 +1408,6 @@ class EnvWrapper : public Env {
   Env* target_;
 };
 
-// An implementation of WritableFile that forwards all calls to another
-// WritableFile. May be useful to clients who wish to override just part of the
-// functionality of another WritableFile.
-// It's declared as friend of WritableFile to allow forwarding calls to
-// protected virtual methods.
-class WritableFileWrapper : public WritableFile {
- public:
-  explicit WritableFileWrapper(WritableFile* t) : target_(t) {}
-
-  Status Append(const Slice& data) override { return target_->Append(data); }
-  Status PositionedAppend(const Slice& data, uint64_t offset) override {
-    return target_->PositionedAppend(data, offset);
-  }
-  Status Truncate(uint64_t size) override { return target_->Truncate(size); }
-  Status Close() override { return target_->Close(); }
-  Status Flush() override { return target_->Flush(); }
-  Status Sync() override { return target_->Sync(); }
-  Status Fsync() override { return target_->Fsync(); }
-  bool IsSyncThreadSafe() const override { return target_->IsSyncThreadSafe(); }
-
-  bool use_direct_io() const override { return target_->use_direct_io(); }
-
-  size_t GetRequiredBufferAlignment() const override {
-    return target_->GetRequiredBufferAlignment();
-  }
-
-  void SetIOPriority(Env::IOPriority pri) override {
-    target_->SetIOPriority(pri);
-  }
-
-  Env::IOPriority GetIOPriority() override { return target_->GetIOPriority(); }
-
-  void SetWriteLifeTimeHint(Env::WriteLifeTimeHint hint) override {
-    target_->SetWriteLifeTimeHint(hint);
-  }
-
-  Env::WriteLifeTimeHint GetWriteLifeTimeHint() override {
-    return target_->GetWriteLifeTimeHint();
-  }
-
-  uint64_t GetFileSize() override { return target_->GetFileSize(); }
-
-  void SetPreallocationBlockSize(size_t size) override {
-    target_->SetPreallocationBlockSize(size);
-  }
-
-  void GetPreallocationStatus(size_t* block_size,
-                              size_t* last_allocated_block) override {
-    target_->GetPreallocationStatus(block_size, last_allocated_block);
-  }
-
-  size_t GetUniqueId(char* id, size_t max_size) const override {
-    return target_->GetUniqueId(id, max_size);
-  }
-
-  Status InvalidateCache(size_t offset, size_t length) override {
-    return target_->InvalidateCache(offset, length);
-  }
-
-  Status RangeSync(uint64_t offset, uint64_t nbytes) override {
-    return target_->RangeSync(offset, nbytes);
-  }
-
-  void PrepareWrite(size_t offset, size_t len) override {
-    target_->PrepareWrite(offset, len);
-  }
-
-  Status Allocate(uint64_t offset, uint64_t len) override {
-    return target_->Allocate(offset, len);
-  }
-
- private:
-  WritableFile* target_;
-};
-
 // Returns a new environment that stores its data in memory and delegates
 // all non-file-storage tasks to base_env. The caller must delete the result
 // when it is no longer needed.
@@ -1311,5 +1422,9 @@ Status NewHdfsEnv(Env** hdfs_env, const std::string& fsname);
 // operations, reporting results to variables in PerfContext.
 // This is a factory method for TimedEnv defined in utilities/env_timed.cc.
 Env* NewTimedEnv(Env* base_env);
+
+// Returns a new environment for IO profiling
+// This is a env forwarding method defined in env/env_io_prof.cc
+Env* NewIOProfEnv(Env* base_env);
 
 }  // namespace rocksdb
