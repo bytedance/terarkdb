@@ -556,8 +556,8 @@ class SequentialFileWrapper : public SequentialFile {
   SequentialFile* t_;
 
  public:
-  SequentialFileWrapper(SequentialFile* file) { t_ = file; }
-  ~SequentialFileWrapper();
+  explicit SequentialFileWrapper(SequentialFile* file) { t_ = file; }
+  ~SequentialFileWrapper() { delete t_; }
 
   Status Read(size_t n, Slice* result, char* scratch) override {
     return t_->Read(n, result, scratch);
@@ -665,8 +665,8 @@ class RandomAccessFileWrapper : public RandomAccessFile {
   RandomAccessFile* t_;
 
  public:
-  RandomAccessFileWrapper(RandomAccessFile* file) { t_ = file; }
-  ~RandomAccessFileWrapper();
+  explicit RandomAccessFileWrapper(RandomAccessFile* file) { t_ = file; }
+  ~RandomAccessFileWrapper() { delete t_; }
 
   Status Read(uint64_t offset, size_t n, Slice* result,
               char* scratch) const override {
@@ -885,6 +885,7 @@ class WritableFile {
 class WritableFileWrapper : public WritableFile {
  public:
   explicit WritableFileWrapper(WritableFile* t) : target_(t) {}
+  ~WritableFileWrapper() { delete target_; }
 
   Status Append(const Slice& data) override { return target_->Append(data); }
   Status PositionedAppend(const Slice& data, uint64_t offset) override {
@@ -995,8 +996,8 @@ class RandomRWFileWrapper : public RandomRWFile {
   RandomRWFile* t_;
 
  public:
-  RandomRWFileWrapper(RandomRWFile* file) { t_ = file; }
-  ~RandomRWFileWrapper() {}
+  explicit RandomRWFileWrapper(RandomRWFile* file) { t_ = file; }
+  ~RandomRWFileWrapper() { delete t_; }
 
   bool use_direct_io() const override { return t_->use_direct_io(); }
 

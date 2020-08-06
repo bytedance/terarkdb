@@ -132,7 +132,7 @@ class IOProfEnv : public EnvWrapper {
     IOProfiler::Scope _scope_(BOOST_CURRENT_FUNCTION);
     Status s = EnvWrapper::NewSequentialFile(f, rt, options);
     if (s.ok()) {
-      r->reset(new IOProfSequentialFile(rt->get()));
+      r->reset(new IOProfSequentialFile(rt->release()));
     }
     return s;
   }
@@ -144,7 +144,7 @@ class IOProfEnv : public EnvWrapper {
     IOProfiler::Scope _scope_(BOOST_CURRENT_FUNCTION);
     Status s = EnvWrapper::NewRandomAccessFile(f, rt, options);
     if (s.ok()) {
-      r->reset(new IOProfRandomAccessFile(rt->get()));
+      r->reset(new IOProfRandomAccessFile(rt->release()));
     }
     return s;
   }
@@ -155,7 +155,7 @@ class IOProfEnv : public EnvWrapper {
     IOProfiler::Scope _scope_(BOOST_CURRENT_FUNCTION);
     Status s = EnvWrapper::NewWritableFile(f, rt, options);
     if (s.ok()) {
-      r->reset(new IOProfWritableFile(rt->get()));
+      r->reset(new IOProfWritableFile(rt->release()));
     }
     return s;
   }
@@ -167,7 +167,7 @@ class IOProfEnv : public EnvWrapper {
     IOProfiler::Scope _scope_(BOOST_CURRENT_FUNCTION);
     Status s = EnvWrapper::NewRandomRWFile(f, r, options);
     if (s.ok()) {
-      r->reset(new IOProfRandomRWFile(rt->get()));
+      r->reset(new IOProfRandomRWFile(rt->release()));
     }
     return s;
   }
