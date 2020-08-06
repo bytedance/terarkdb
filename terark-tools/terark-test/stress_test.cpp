@@ -200,10 +200,6 @@ class TestCompactionFilter : public rocksdb::CompactionFilter {
   const char *Name() const override { return "TestCompactionFilter"; }
 };
 
-namespace rocksdb {
-MemTableRepFactory *NewTRBTreeRepFactory();
-}
-
 #if __APPLE__
 #define DebugBreak __builtin_debugtrap
 #endif

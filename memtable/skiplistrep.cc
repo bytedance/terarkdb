@@ -90,7 +90,7 @@ class SkipListRep : public MemTableRep {
 
   virtual void Get(const LookupKey& k, void* callback_args,
                    bool (*callback_func)(void* arg, const Slice& key,
-                                         LazyBuffer&& value)) override {
+                                         const char* value)) override {
     SkipListRep::Iterator iter(&skip_list_);
     Slice dummy_slice;
     for (iter.Seek(dummy_slice, k.memtable_key().data());

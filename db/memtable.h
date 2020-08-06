@@ -15,6 +15,7 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+
 #include "db/dbformat.h"
 #include "db/range_tombstone_fragmenter.h"
 #include "db/read_callback.h"
@@ -32,7 +33,7 @@
 namespace rocksdb {
 
 class Mutex;
-template<class TValue>
+template <class TValue>
 class MemTableIteratorBase;
 class MergeContext;
 
@@ -80,7 +81,7 @@ class MemTable {
  public:
   struct KeyComparator : public MemTableRep::KeyComparator {
     const InternalKeyComparator comparator;
-    explicit KeyComparator(const InternalKeyComparator& c) : comparator(c) { }
+    explicit KeyComparator(const InternalKeyComparator& c) : comparator(c) {}
     virtual int operator()(const char* prefix_len_key1,
                            const char* prefix_len_key2) const override;
     virtual int operator()(const char* prefix_len_key,
@@ -214,9 +215,7 @@ class MemTable {
   //
   // REQUIRES: external synchronization to prevent simultaneous
   // operations on the same MemTable.
-  void Update(SequenceNumber seq,
-              const Slice& key,
-              const Slice& value);
+  void Update(SequenceNumber seq, const Slice& key, const Slice& value);
 
   // If prev_value for key exists, attempts to update it inplace.
   // else returns false
@@ -230,9 +229,7 @@ class MemTable {
   //
   // REQUIRES: external synchronization to prevent simultaneous
   // operations on the same MemTable.
-  bool UpdateCallback(SequenceNumber seq,
-                      const Slice& key,
-                      const Slice& delta);
+  bool UpdateCallback(SequenceNumber seq, const Slice& key, const Slice& delta);
 
   // Returns the number of successive merge entries starting from the newest
   // entry for the key up to the last non-merge entry or last entry for the
@@ -336,17 +333,17 @@ class MemTable {
   // After MarkImmutable() is called, you should not attempt to
   // write anything to this MemTable().  (Ie. do not call Add() or Update()).
   void MarkImmutable() {
+    is_immutable_ = true;
     table_->MarkReadOnly();
     mem_tracker_.DoneAllocating();
   }
+  bool IsImmutable() { return is_immutable_; };
 
   // Notify the underlying storage that all data it contained has been
   // persisted.
   // REQUIRES: external synchronization to prevent simultaneous
   // operations on the same MemTable.
-  void MarkFlushed() {
-    table_->MarkFlushed();
-  }
+  void MarkFlushed() { table_->MarkFlushed(); }
 
   // return true if the current MemTableRep supports merge operator.
   bool IsMergeOperatorSupported() const {
@@ -400,7 +397,7 @@ class MemTable {
  private:
   enum FlushStateEnum { FLUSH_NOT_REQUESTED, FLUSH_REQUESTED, FLUSH_SCHEDULED };
 
-  template<class TValue>
+  template <class TValue>
   friend class MemTableIteratorBase;
   friend class MemTableBackwardIterator;
   friend class MemTableList;
@@ -425,10 +422,11 @@ class MemTable {
   std::atomic<size_t> write_buffer_size_;
 
   // These are used to manage memtable flushes to storage
-  bool flush_in_progress_; // started the flush
-  bool flush_completed_;   // finished the flush
+  bool flush_in_progress_;  // started the flush
+  bool flush_completed_;    // finished the flush
   bool is_range_del_slow_;
-  uint64_t file_number_;    // filled up after flush is complete
+  bool is_immutable_;
+  uint64_t file_number_;  // filled up after flush is complete
 
   // The updates to be applied to the transaction log when this
   // memtable is flushed to storage.

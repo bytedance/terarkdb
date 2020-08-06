@@ -196,10 +196,6 @@ class TestCompactionFilter : public rocksdb::CompactionFilter {
   }
 };
 
-namespace rocksdb {
-  MemTableRepFactory* NewTRBTreeRepFactory();
-}
-
 #if __APPLE__
 # define DebugBreak __builtin_debugtrap
 #endif

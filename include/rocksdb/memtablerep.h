@@ -91,6 +91,7 @@ class MemTableRep {
   static size_t EncodeKeyValueSize(const Slice& key, const Slice& value);
   static void EncodeKeyValue(const Slice& key, const Slice& value, char* buf);
   static LazyBuffer DecodeToLazyBuffer(const char* key);
+  static const char* LengthPrefixedValue(const char* key);
 
   explicit MemTableRep(Allocator* allocator) : allocator_(allocator) {}
 
@@ -173,7 +174,7 @@ class MemTableRep {
   // seek and call the call back function.
   virtual void Get(const LookupKey& k, void* callback_args,
                    bool (*callback_func)(void* arg, const Slice& key,
-                                         LazyBuffer&& value));
+                                         const char* value));
 
   virtual uint64_t ApproximateNumEntries(const Slice& /*start_ikey*/,
                                          const Slice& /*end_key*/) {
@@ -205,10 +206,10 @@ class MemTableRep {
     // REQUIRES: Valid()
     virtual Slice key() const { return GetLengthPrefixedSlice(EncodedKey()); }
 
-    // Returns LazyBuffer at the current position.
+    // Returns the value at the current position.
     // REQUIRES: Valid()
-    virtual LazyBuffer value() const {
-      return DecodeToLazyBuffer(EncodedKey());
+    virtual const char* value() const {
+      return LengthPrefixedValue(EncodedKey());
     }
 
     // Advances to the next position.
@@ -233,9 +234,6 @@ class MemTableRep {
     // Position at the last entry in collection.
     // Final state of iterator is Valid() iff collection is not empty.
     virtual void SeekToLast() = 0;
-
-    // If true, this means that the Slice returned by value() is always valid
-    virtual bool IsValuePinned() const { return true; }
 
     virtual bool IsSeekForPrevSupported() const { return false; }
   };

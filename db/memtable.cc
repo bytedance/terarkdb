@@ -91,6 +91,7 @@ MemTable::MemTable(const InternalKeyComparator& cmp,
       flush_in_progress_(false),
       flush_completed_(false),
       is_range_del_slow_(false),
+      is_immutable_(false),
       file_number_(0),
       first_seqno_(0),
       earliest_seqno_(latest_seq),
@@ -266,18 +267,19 @@ const char* EncodeKey(std::string* scratch, const Slice& target) {
 template <class TValue>
 class MemTableIteratorBase : public InternalIteratorBase<TValue> {
  public:
-  MemTableIteratorBase(const MemTable& mem, const ReadOptions& read_options,
+  MemTableIteratorBase(MemTable& mem, const ReadOptions& read_options,
                        Arena* arena, bool use_range_del_table = false)
       : bloom_(nullptr),
-        prefix_extractor_(mem.prefix_extractor_),
-        comparator_(mem.comparator_),
+        mem_(mem),
         valid_(false),
         arena_mode_(arena != nullptr),
         value_pinned_(
-            !mem.GetImmutableMemTableOptions()->inplace_update_support) {
+            !mem.GetImmutableMemTableOptions()->inplace_update_support ||
+            mem.IsImmutable()) {
     if (use_range_del_table) {
       iter_ = mem.range_del_table_->GetIterator(arena);
-    } else if (prefix_extractor_ != nullptr && !read_options.total_order_seek) {
+    } else if (mem_.prefix_extractor_ != nullptr &&
+               !read_options.total_order_seek) {
       bloom_ = mem.prefix_bloom_.get();
       iter_ = mem.table_->GetDynamicPrefixIterator(arena);
     } else {
@@ -300,7 +302,7 @@ class MemTableIteratorBase : public InternalIteratorBase<TValue> {
     PERF_COUNTER_ADD(seek_on_memtable_count, 1);
     if (bloom_ != nullptr) {
       if (!bloom_->MayContain(
-              prefix_extractor_->Transform(ExtractUserKey(k)))) {
+              mem_.prefix_extractor_->Transform(ExtractUserKey(k)))) {
         PERF_COUNTER_ADD(bloom_memtable_miss_count, 1);
         valid_ = false;
         return;
@@ -316,7 +318,7 @@ class MemTableIteratorBase : public InternalIteratorBase<TValue> {
     PERF_COUNTER_ADD(seek_on_memtable_count, 1);
     if (bloom_ != nullptr) {
       if (!bloom_->MayContain(
-              prefix_extractor_->Transform(ExtractUserKey(k)))) {
+              mem_.prefix_extractor_->Transform(ExtractUserKey(k)))) {
         PERF_COUNTER_ADD(bloom_memtable_miss_count, 1);
         valid_ = false;
         return;
@@ -333,7 +335,7 @@ class MemTableIteratorBase : public InternalIteratorBase<TValue> {
       if (!Valid()) {
         SeekToLast();
       }
-      while (Valid() && comparator_.comparator.Compare(k, key()) < 0) {
+      while (Valid() && mem_.comparator_.comparator.Compare(k, key()) < 0) {
         Prev();
       }
     }
@@ -367,8 +369,7 @@ class MemTableIteratorBase : public InternalIteratorBase<TValue> {
 
  protected:
   DynamicBloom* bloom_;
-  const SliceTransform* const prefix_extractor_;
-  const MemTable::KeyComparator comparator_;
+  MemTable& mem_;
   MemTableRep::Iterator* iter_;
   bool valid_;
   bool arena_mode_;
@@ -391,9 +392,7 @@ class MemTableTombstoneIterator : public MemTableIteratorBase<Slice> {
 
   virtual Slice value() const override {
     assert(valid_);
-    LazyBuffer v = iter_->value();
-    assert(v.fetch().ok());
-    return v.fetch().ok() ? v.slice() : Slice::Invalid();
+    return GetLengthPrefixedSlice(iter_->value());
   }
 };
 
@@ -401,6 +400,7 @@ class MemTableIterator : public MemTableIteratorBase<LazyBuffer>,
                          public LazyBufferState {
   using Base = MemTableIteratorBase<LazyBuffer>;
   using Base::iter_;
+  using Base::mem_;
   using Base::valid_;
   using Base::value_pinned_;
 
@@ -410,27 +410,38 @@ class MemTableIterator : public MemTableIteratorBase<LazyBuffer>,
   void destroy(LazyBuffer* /*buffer*/) const override {}
 
   Status pin_buffer(LazyBuffer* buffer) const override {
-    if (!value_pinned_ || !iter_->IsValuePinned()) {
-      return Status::NotSupported();
+    if (buffer->valid()) {
+      // value_pinned_ || (type != kTypeValue && type != kTypeValueIndex)
+      return Status::OK();
+    } else {
+      return MemTableIterator::fetch_buffer(buffer);
     }
-    *buffer = iter_->value();
-    buffer->pin(LazyBufferPinLevel::Internal);
-    return Status::OK();
   }
 
   Status dump_buffer(LazyBuffer* buffer, LazyBuffer* target) const override {
-    *buffer = iter_->value();
-    return std::move(*buffer).dump(*target);
+    if (buffer->valid()) {
+      target->reset(buffer->slice(), true);
+    } else {
+      ReadLock rl(mem_.GetLock(ExtractUserKey(iter_->key())));
+      target->reset(GetLengthPrefixedSlice(iter_->value()), true);
+    }
+    return Status::OK();
   }
 
   Status fetch_buffer(LazyBuffer* buffer) const override {
-    *buffer = iter_->value();
-    return buffer->fetch();
+    ReadLock rl(mem_.GetLock(ExtractUserKey(iter_->key())));
+    buffer->reset(GetLengthPrefixedSlice(iter_->value()), true);
+    return Status::OK();
   }
 
   virtual LazyBuffer value() const override {
     assert(valid_);
-    return LazyBuffer(this, {});
+    ValueType type = GetInternalKeyType(iter_->key());
+    if (value_pinned_ || (type != kTypeValue && type != kTypeValueIndex)) {
+      return LazyBuffer(this, {}, GetLengthPrefixedSlice(iter_->value()));
+    } else {
+      return LazyBuffer(this, {});
+    }
   }
 };
 
@@ -632,8 +643,7 @@ struct Saver {
 };
 }  // namespace
 
-static bool SaveValue(void* arg, const Slice& internal_key,
-                      LazyBuffer&& value) {
+static bool SaveValue(void* arg, const Slice& internal_key, const char* value) {
   Saver* s = reinterpret_cast<Saver*>(arg);
   MergeContext* merge_context = s->merge_context;
   SequenceNumber max_covering_tombstone_seq = s->max_covering_tombstone_seq;
@@ -663,7 +673,6 @@ static bool SaveValue(void* arg, const Slice& internal_key,
          type == kTypeMergeIndex) &&
         max_covering_tombstone_seq > seq) {
       type = kTypeRangeDeletion;
-      value.clear();
     }
     switch (type) {
       case kTypeValueIndex:
@@ -676,8 +685,9 @@ static bool SaveValue(void* arg, const Slice& internal_key,
         *s->status = Status::OK();
         if (*s->merge_in_progress) {
           if (s->value != nullptr) {
+            LazyBuffer lazy_val(GetLengthPrefixedSlice(value), false);
             *s->status = MergeHelper::TimedFullMerge(
-                merge_operator, s->key->user_key(), &value,
+                merge_operator, s->key->user_key(), &lazy_val,
                 merge_context->GetOperands(), s->value, s->logger,
                 s->statistics, s->env_, true);
             if (s->status->ok()) {
@@ -685,7 +695,8 @@ static bool SaveValue(void* arg, const Slice& internal_key,
             }
           }
         } else if (s->value != nullptr) {
-          *s->status = std::move(value).dump(*s->value);
+          s->value->reset(GetLengthPrefixedSlice(value),
+                          s->inplace_update_support);
         }
         if (s->inplace_update_support) {
           s->mem->GetLock(s->key->user_key())->ReadUnlock();
@@ -727,7 +738,8 @@ static bool SaveValue(void* arg, const Slice& internal_key,
           return false;
         }
         *s->merge_in_progress = true;
-        merge_context->PushOperand(std::move(value));
+        merge_context->PushOperand(
+            LazyBuffer(GetLengthPrefixedSlice(value), Cleanable()));
         if (merge_operator->ShouldMerge(
                 merge_context->GetOperandsDirectionBackward())) {
           *s->status = MergeHelper::TimedFullMerge(
@@ -836,18 +848,17 @@ void MemTable::Update(SequenceNumber seq, const Slice& key,
       ValueType type;
       SequenceNumber unused;
       UnPackSequenceAndType(tag, &unused, &type);
-      LazyBuffer old_value = iter->value();
-      if (type == kTypeValue && old_value.fetch().ok()) {
-        assert(old_value.valid());
+      if (type == kTypeValue) {
+        const char* old_value_ptr = iter->value();
+        Slice old_value = GetLengthPrefixedSlice(old_value_ptr);
         uint32_t old_size = static_cast<uint32_t>(old_value.size());
         uint32_t new_size = static_cast<uint32_t>(value.size());
 
         // Update value, if new value size <= old value size
         if (new_size <= old_size) {
-          char* p =
-              const_cast<char*>(old_value.data()) - VarintLength(old_size);
-          p = EncodeVarint32(p, new_size);
+          char* p = const_cast<char*>(old_value_ptr);
           WriteLock wl(GetLock(lkey.user_key()));
+          p = EncodeVarint32(p, new_size);
           memcpy(p, value.data(), value.size());
           RecordTick(moptions_.statistics, NUMBER_KEYS_UPDATED);
           return;
@@ -883,9 +894,9 @@ bool MemTable::UpdateCallback(SequenceNumber seq, const Slice& key,
       ValueType type;
       uint64_t unused;
       UnPackSequenceAndType(tag, &unused, &type);
-      LazyBuffer old_value = iter->value();
-      if (type == kTypeValue && old_value.fetch().ok()) {
-        assert(old_value.valid());
+      if (type == kTypeValue) {
+        const char* old_value_ptr = iter->value();
+        Slice old_value = GetLengthPrefixedSlice(old_value_ptr);
         uint32_t old_size = static_cast<uint32_t>(old_value.size());
 
         char* old_buffer = const_cast<char*>(old_value.data());
@@ -900,7 +911,7 @@ bool MemTable::UpdateCallback(SequenceNumber seq, const Slice& key,
           assert(new_inplace_size <= old_size);
           if (new_inplace_size < old_size) {
             // overwrite the new inplace size
-            char* p = old_buffer - VarintLength(old_size);
+            char* p = const_cast<char*>(old_value_ptr);
             p = EncodeVarint32(p, new_inplace_size);
             if (p < old_buffer) {
               // shift the value buffer as well.

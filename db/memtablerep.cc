@@ -60,6 +60,11 @@ LazyBuffer MemTableRep::DecodeToLazyBuffer(const char* key) {
   return LazyBuffer(&static_state, {reinterpret_cast<uint64_t>(key)});
 }
 
+const char* MemTableRep::LengthPrefixedValue(const char* key) {
+  Slice key_slice = GetLengthPrefixedSlice(key);
+  return key_slice.data() + key_slice.size();
+}
+
 bool MemTableRep::InsertKeyValue(const Slice& internal_key,
                                  const Slice& value) {
   size_t buf_size = EncodeKeyValueSize(internal_key, value);
@@ -97,7 +102,7 @@ KeyHandle MemTableRep::Allocate(const size_t len, char** buf) {
 
 void MemTableRep::Get(const LookupKey& k, void* callback_args,
                       bool (*callback_func)(void* arg, const Slice& key,
-                                            LazyBuffer&& value)) {
+                                            const char* value)) {
   auto iter = GetDynamicPrefixIterator();
   for (iter->Seek(k.internal_key(), k.memtable_key().data());
        iter->Valid() &&

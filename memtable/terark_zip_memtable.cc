@@ -178,7 +178,7 @@ bool PatriciaTrieRep::Contains(const Slice& internal_key) const {
 
 void PatriciaTrieRep::Get(const LookupKey& k, void* callback_args,
                           bool (*callback_func)(void* arg, const Slice& key,
-                                                LazyBuffer&& value)) {
+                                                const char* value)) {
   // assistant structures
   struct HeapItem {
     uint32_t idx;
@@ -194,29 +194,6 @@ void PatriciaTrieRep::Get(const LookupKey& k, void* callback_args,
     valvec<char> buffer;
   };
 
-  class LazyBufferStateImpl : public LazyBufferState {
-   public:
-    virtual void destroy(LazyBuffer* /*buffer*/) const override {}
-
-    virtual Status pin_buffer(LazyBuffer* /*buffer*/) const override {
-      return Status::OK();
-    }
-
-    Status fetch_buffer(LazyBuffer* buffer) const override {
-      auto context = get_context(buffer);
-      auto trie = reinterpret_cast<MainPatricia*>(context->data[0]);
-      auto loc = static_cast<uint32_t>(context->data[1]);
-      auto idx = static_cast<uint32_t>(context->data[2]);
-      auto vector = (details::tag_vector_t*)trie->mem_get(loc);
-      auto data = (details::tag_vector_t::data_t*)trie->mem_get(
-          vector->loc.load(std::memory_order_relaxed));
-      auto valptr = (const char*)trie->mem_get(data[idx].loc);
-      set_slice(buffer, GetLengthPrefixedSlice(valptr));
-      return Status::OK();
-    }
-  };
-  static LazyBufferStateImpl static_state;
-
   // variable definition
   static thread_local TlsItem tls_ctx;
   auto buffer = &tls_ctx.buffer;
@@ -227,11 +204,13 @@ void PatriciaTrieRep::Get(const LookupKey& k, void* callback_args,
 
   auto do_callback = [&](HeapItem* heap) -> bool {
     build_key(find_key, heap->tag, buffer);
-    return callback_func(
-        callback_args, Slice(buffer->data(), buffer->size()),
-        LazyBuffer(&static_state, {reinterpret_cast<uint64_t>(heap->trie()),
-                                   static_cast<uint64_t>(heap->loc),
-                                   static_cast<uint64_t>(heap->idx)}));
+    auto trie = heap->trie();
+    auto vector = (details::tag_vector_t*)trie->mem_get(heap->loc);
+    auto data = (details::tag_vector_t::data_t*)trie->mem_get(
+        vector->loc.load(std::memory_order_relaxed));
+    auto value = (const char*)trie->mem_get(data[heap->idx].loc);
+    return callback_func(callback_args, Slice(buffer->data(), buffer->size()),
+                         value);
   };
 
   valvec<HeapItem>& heap = tls_ctx.heap;
@@ -634,11 +613,12 @@ PatriciaRepIterator<heap_mode>::~PatriciaRepIterator() {
 }
 
 template <bool heap_mode>
-Slice PatriciaRepIterator<heap_mode>::GetValue() const {
+const char* PatriciaRepIterator<heap_mode>::value() const {
+  assert(direction_ != 0);
   const HeapItem* item = Current();
   uint32_t value_loc = item->GetValue();
   auto trie = static_cast<terark::MainPatricia*>(item->handle->trie());
-  return GetLengthPrefixedSlice((const char*)trie->mem_get(value_loc));
+  return (const char*)trie->mem_get(value_loc);
 }
 
 template <bool heap_mode>

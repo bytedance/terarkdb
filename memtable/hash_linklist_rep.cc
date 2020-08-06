@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <atomic>
+
 #include "db/memtable.h"
 #include "memtable/skiplist.h"
 #include "monitoring/histogram.h"
@@ -77,9 +78,7 @@ struct Node {
     next_.store(x, std::memory_order_release);
   }
   // No-barrier variants that can be safely used in a few locations.
-  Node* NoBarrier_Next() {
-    return next_.load(std::memory_order_relaxed);
-  }
+  Node* NoBarrier_Next() { return next_.load(std::memory_order_relaxed); }
 
   void NoBarrier_SetNext(Node* x) { next_.store(x, std::memory_order_relaxed); }
 
@@ -179,14 +178,14 @@ class HashLinkListRep : public MemTableRep {
 
   virtual void Get(const LookupKey& k, void* callback_args,
                    bool (*callback_func)(void* arg, const Slice& key,
-                                         LazyBuffer&& value)) override;
+                                         const char* value)) override;
 
   virtual ~HashLinkListRep();
 
   virtual MemTableRep::Iterator* GetIterator(Arena* arena = nullptr) override;
 
   virtual MemTableRep::Iterator* GetDynamicPrefixIterator(
-       Arena* arena = nullptr) override;
+      Arena* arena = nullptr) override;
 
  private:
   friend class DynamicIterator;
@@ -210,8 +209,8 @@ class HashLinkListRep : public MemTableRep {
 
   bool LinkListContains(Node* head, const Slice& key) const;
 
-  SkipListBucketHeader* GetSkipListBucketHeader(Pointer* first_next_pointer)
-      const;
+  SkipListBucketHeader* GetSkipListBucketHeader(
+      Pointer* first_next_pointer) const;
 
   Node* GetLinkListFirstNode(Pointer* first_next_pointer) const;
 
@@ -266,8 +265,7 @@ class HashLinkListRep : public MemTableRep {
     explicit FullListIterator(MemtableSkipList* list, Allocator* allocator)
         : iter_(list), full_list_(list), allocator_(allocator) {}
 
-    virtual ~FullListIterator() {
-    }
+    virtual ~FullListIterator() {}
 
     // Returns true iff the iterator is positioned at a valid node.
     virtual bool Valid() const override { return iter_.Valid(); }
@@ -296,9 +294,9 @@ class HashLinkListRep : public MemTableRep {
     // Advance to the first entry with a key >= target
     virtual void Seek(const Slice& internal_key,
                       const char* memtable_key) override {
-      const char* encoded_key =
-          (memtable_key != nullptr) ?
-              memtable_key : EncodeKey(&tmp_, internal_key);
+      const char* encoded_key = (memtable_key != nullptr)
+                                    ? memtable_key
+                                    : EncodeKey(&tmp_, internal_key);
       iter_.Seek(encoded_key);
     }
 
@@ -320,12 +318,13 @@ class HashLinkListRep : public MemTableRep {
     virtual void SeekToLast() override { iter_.SeekToLast(); }
 
     virtual bool IsSeekForPrevSupported() const override { return true; }
+
    private:
     MemtableSkipList::Iterator iter_;
     // To destruct with the iterator.
     std::unique_ptr<MemtableSkipList> full_list_;
     std::unique_ptr<Allocator> allocator_;
-    std::string tmp_;       // For passing to EncodeKey
+    std::string tmp_;  // For passing to EncodeKey
   };
 
   class LinkListIterator : public MemTableRep::Iterator {
@@ -366,8 +365,8 @@ class HashLinkListRep : public MemTableRep {
     // Advance to the first entry with a key >= target
     virtual void Seek(const Slice& internal_key,
                       const char* /*memtable_key*/) override {
-      node_ = hash_link_list_rep_->FindGreaterOrEqualInBucket(head_,
-                                                              internal_key);
+      node_ =
+          hash_link_list_rep_->FindGreaterOrEqualInBucket(head_, internal_key);
     }
 
     // Retreat to the last entry with a key <= target
@@ -399,15 +398,14 @@ class HashLinkListRep : public MemTableRep {
       head_ = head;
       node_ = nullptr;
     }
+
    private:
     friend class HashLinkListRep;
     const HashLinkListRep* const hash_link_list_rep_;
     Node* head_;
     Node* node_;
 
-    virtual void SeekToHead() {
-      node_ = head_;
-    }
+    virtual void SeekToHead() { node_ = head_; }
   };
 
   class DynamicIterator : public HashLinkListRep::LinkListIterator {
@@ -478,7 +476,7 @@ class HashLinkListRep : public MemTableRep {
     // This is used when there wasn't a bucket. It is cheaper than
     // instantiating an empty bucket over which to iterate.
    public:
-    EmptyIterator() { }
+    EmptyIterator() {}
     virtual bool Valid() const override { return false; }
     virtual const char* EncodedKey() const override {
       assert(false);
@@ -488,9 +486,9 @@ class HashLinkListRep : public MemTableRep {
       assert(false);
       return Slice::Invalid();
     }
-    virtual LazyBuffer value() const override {
+    virtual const char* value() const override {
       assert(false);
-      return LazyBuffer();
+      return nullptr;
     }
     virtual void Next() override {}
     virtual void Prev() override {}
@@ -521,7 +519,7 @@ HashLinkListRep::HashLinkListRep(
       bucket_entries_logging_threshold_(bucket_entries_logging_threshold),
       if_log_bucket_dist_when_flash_(if_log_bucket_dist_when_flash) {
   char* mem = allocator_->AllocateAligned(sizeof(Pointer) * bucket_size,
-                                      huge_page_tlb_size, logger);
+                                          huge_page_tlb_size, logger);
 
   buckets_ = new (mem) Pointer[bucket_size];
 
@@ -530,8 +528,7 @@ HashLinkListRep::HashLinkListRep(
   }
 }
 
-HashLinkListRep::~HashLinkListRep() {
-}
+HashLinkListRep::~HashLinkListRep() {}
 
 KeyHandle HashLinkListRep::Allocate(const size_t len, char** buf) {
   char* mem = allocator_->AllocateAligned(sizeof(Node) + len);
@@ -631,9 +628,10 @@ void HashLinkListRep::Insert(KeyHandle handle) {
   if (bucket_entries_logging_threshold_ > 0 &&
       header->GetNumEntries() ==
           static_cast<uint32_t>(bucket_entries_logging_threshold_)) {
-    Info(logger_, "HashLinkedList bucket %" ROCKSDB_PRIszt
-                  " has more than %d "
-                  "entries. Key to insert: %s",
+    Info(logger_,
+         "HashLinkedList bucket %" ROCKSDB_PRIszt
+         " has more than %d "
+         "entries. Key to insert: %s",
          GetHash(transformed), header->GetNumEntries(),
          GetLengthPrefixedSlice(x->key).ToString(true).c_str());
   }
@@ -705,7 +703,6 @@ void HashLinkListRep::Insert(KeyHandle handle) {
 }
 
 bool HashLinkListRep::Contains(const Slice& internal_key) const {
-
   auto transformed = GetPrefix(internal_key);
   auto bucket = GetBucket(transformed);
   if (bucket == nullptr) {
@@ -715,8 +712,8 @@ bool HashLinkListRep::Contains(const Slice& internal_key) const {
   SkipListBucketHeader* skip_list_header = GetSkipListBucketHeader(bucket);
   if (skip_list_header != nullptr) {
     std::string memtable_key;
-    return skip_list_header->skip_list.Contains(EncodeKey(&memtable_key,
-                                                          internal_key));
+    return skip_list_header->skip_list.Contains(
+        EncodeKey(&memtable_key, internal_key));
   } else {
     return LinkListContains(GetLinkListFirstNode(bucket), internal_key);
   }
@@ -729,7 +726,7 @@ size_t HashLinkListRep::ApproximateMemoryUsage() {
 
 void HashLinkListRep::Get(const LookupKey& k, void* callback_args,
                           bool (*callback_func)(void* arg, const Slice& key,
-                                                LazyBuffer&& value)) {
+                                                const char* value)) {
   auto transformed = transform_->Transform(k.user_key());
   auto bucket = GetBucket(transformed);
 
@@ -738,9 +735,9 @@ void HashLinkListRep::Get(const LookupKey& k, void* callback_args,
     // Is a skip list
     MemtableSkipList::Iterator iter(&skip_list_header->skip_list);
     for (iter.Seek(k.memtable_key().data());
-         iter.Valid() && callback_func(callback_args,
-                                       GetLengthPrefixedSlice(iter.key()),
-                                       DecodeToLazyBuffer(iter.key()));
+         iter.Valid() &&
+         callback_func(callback_args, GetLengthPrefixedSlice(iter.key()),
+                       LengthPrefixedValue(iter.key()));
          iter.Next()) {
     }
   } else {
@@ -839,7 +836,7 @@ Node* HashLinkListRep::FindGreaterOrEqualInBucket(Node* head,
   return x;
 }
 
-} // anon namespace
+}  // namespace
 
 MemTableRep* HashLinkListRepFactory::CreateMemTableRep(
     const MemTableRep::KeyComparator& compare, bool /*needs_dup_key_check*/,
@@ -883,7 +880,7 @@ MemTableRepFactory* NewHashLinkListRepFactory(
   if (options.end() != f) {
     bucket_entries_logging_threshold = ParseInt(f->second);
   }
-  bool if_log_bucket_dist_when_flash = true; // default
+  bool if_log_bucket_dist_when_flash = true;  // default
   f = options.find("if_log_bucket_dist_when_flash");
   if (options.end() != f) {
     if_log_bucket_dist_when_flash =
@@ -896,5 +893,5 @@ MemTableRepFactory* NewHashLinkListRepFactory(
 
 ROCKSDB_REGISTER_MEM_TABLE("hash_linkedlist", HashLinkListRepFactory);
 
-} // namespace rocksdb
+}  // namespace rocksdb
 #endif  // ROCKSDB_LITE

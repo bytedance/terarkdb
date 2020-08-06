@@ -106,7 +106,7 @@ class PatriciaTrieRep : public MemTableRep {
   // Get with lazyslice feedback, parsing the value when truly needed.
   virtual void Get(const LookupKey& k, void* callback_args,
                    bool (*callback_func)(void* arg, const Slice& key,
-                                         LazyBuffer&& value)) override;
+                                         const char* value)) override;
 
   // Return iterator of this rep
   virtual MemTableRep::Iterator* GetIterator(Arena* arena) override;
@@ -131,7 +131,6 @@ class PatriciaTrieRep : public MemTableRep {
 // Create a heap to merge iterators from all tries.
 template <bool heap_mode>
 class PatriciaRepIterator : public MemTableRep::Iterator,
-                            public LazyBufferState,
                             boost::noncopyable {
   typedef terark::Patricia::ReaderToken token_t;
 
@@ -217,23 +216,6 @@ class PatriciaRepIterator : public MemTableRep::Iterator,
 
   virtual ~PatriciaRepIterator();
 
-  // LazyBufferState override
-  virtual void destroy(LazyBuffer* /*buffer*/) const override {}
-
-  // LazyBufferState override
-  virtual Status pin_buffer(LazyBuffer* buffer) const override {
-    if (!buffer->valid()) {
-      buffer->reset(GetValue(), Cleanable());
-    }
-    return Status::OK();
-  }
-
-  // LazyBufferState override
-  Status fetch_buffer(LazyBuffer* buffer) const override {
-    set_slice(buffer, GetValue());
-    return Status::OK();
-  }
-
   // Returns true iff the iterator is at valid position.
   virtual bool Valid() const override { return direction_ != 0; }
 
@@ -250,15 +232,8 @@ class PatriciaRepIterator : public MemTableRep::Iterator,
     return buffer_;
   }
 
-  // Return the value of current position immediately
-  // REQUIRES : Valid()
-  virtual Slice GetValue() const;
-
   // Return the value of current position, parsing when truly needed.
-  virtual LazyBuffer value() const override {
-    assert(direction_ != 0);
-    return LazyBuffer(this, {});
-  }
+  virtual const char* value() const override;
 
   // Advances to the next position.
   // REQUIRES: Valid()
