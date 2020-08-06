@@ -1,14 +1,6 @@
 #include <rocksdb/env.h>
-
+#include <utilities/ioprof/ioprof.h>
 #include <boost/current_function.hpp>
-
-// dummy for hint
-struct IOProfiler {
-  struct Scope {
-    Scope(const char*) {}
-  };
-};
-// dummy for hint end
 
 namespace rocksdb {
 
@@ -128,11 +120,11 @@ class IOProfEnv : public EnvWrapper {
   Status NewSequentialFile(const std::string& f,
                            std::unique_ptr<SequentialFile>* r,
                            const EnvOptions& options) override {
-    std::unique_ptr<SequentialFile>* rt;
+    std::unique_ptr<SequentialFile> rt;
     IOProfiler::Scope _scope_(BOOST_CURRENT_FUNCTION);
-    Status s = EnvWrapper::NewSequentialFile(f, rt, options);
+    Status s = EnvWrapper::NewSequentialFile(f, &rt, options);
     if (s.ok()) {
-      r->reset(new IOProfSequentialFile(rt->release()));
+      r->reset(new IOProfSequentialFile(rt.release()));
     }
     return s;
   }
@@ -140,22 +132,22 @@ class IOProfEnv : public EnvWrapper {
   Status NewRandomAccessFile(const std::string& f,
                              std::unique_ptr<RandomAccessFile>* r,
                              const EnvOptions& options) override {
-    std::unique_ptr<RandomAccessFile>* rt;
+    std::unique_ptr<RandomAccessFile> rt;
     IOProfiler::Scope _scope_(BOOST_CURRENT_FUNCTION);
-    Status s = EnvWrapper::NewRandomAccessFile(f, rt, options);
+    Status s = EnvWrapper::NewRandomAccessFile(f, &rt, options);
     if (s.ok()) {
-      r->reset(new IOProfRandomAccessFile(rt->release()));
+      r->reset(new IOProfRandomAccessFile(rt.release()));
     }
     return s;
   }
 
   Status NewWritableFile(const std::string& f, std::unique_ptr<WritableFile>* r,
                          const EnvOptions& options) override {
-    std::unique_ptr<WritableFile>* rt;
+    std::unique_ptr<WritableFile> rt;
     IOProfiler::Scope _scope_(BOOST_CURRENT_FUNCTION);
-    Status s = EnvWrapper::NewWritableFile(f, rt, options);
+    Status s = EnvWrapper::NewWritableFile(f, &rt, options);
     if (s.ok()) {
-      r->reset(new IOProfWritableFile(rt->release()));
+      r->reset(new IOProfWritableFile(rt.release()));
     }
     return s;
   }
@@ -163,11 +155,11 @@ class IOProfEnv : public EnvWrapper {
   Status NewRandomRWFile(const std::string& f,
                          std::unique_ptr<RandomRWFile>* r,
                          const EnvOptions& options) override {
-    std::unique_ptr<RandomRWFile>* rt;
+    std::unique_ptr<RandomRWFile> rt;
     IOProfiler::Scope _scope_(BOOST_CURRENT_FUNCTION);
-    Status s = EnvWrapper::NewRandomRWFile(f, r, options);
+    Status s = EnvWrapper::NewRandomRWFile(f, &rt, options);
     if (s.ok()) {
-      r->reset(new IOProfRandomRWFile(rt->release()));
+      r->reset(new IOProfRandomRWFile(rt.release()));
     }
     return s;
   }

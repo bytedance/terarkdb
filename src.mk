@@ -66,6 +66,7 @@ LIB_SOURCES =                                                   \
   env/env_chroot.cc                                             \
   env/env_encryption.cc                                         \
   env/env_hdfs.cc                                               \
+  env/env_io_prof.cc                                            \
   env/env_posix.cc                                              \
   env/io_posix.cc                                               \
   env/mock_env.cc                                               \
@@ -194,8 +195,9 @@ LIB_SOURCES =                                                   \
   utilities/document/json_document_builder.cc                   \
   utilities/env_mirror.cc                                       \
   utilities/env_timed.cc                                        \
-  utilities/geodb/geodb_impl.cc                                 \
   utilities/flink/flink_compaction_filter.cc                    \
+  utilities/geodb/geodb_impl.cc                                 \
+  utilities/ioprof/ioprof.cc                                    \
   utilities/leveldb_options/leveldb_options.cc                  \
   utilities/lua/rocks_lua_compaction_filter.cc                  \
   utilities/memory/memory_util.cc                               \

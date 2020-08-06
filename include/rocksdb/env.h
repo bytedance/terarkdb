@@ -700,7 +700,7 @@ class RandomAccessFileWrapper : public RandomAccessFile {
     return t_->FsRead(offset, len, result, buf);
   }
 
-  intptr_t FileDescriptor() const override { t_->FileDescriptor(); }
+  intptr_t FileDescriptor() const override { return t_->FileDescriptor(); }
 };
 
 // A file abstraction for sequential writing.  The implementation
@@ -919,7 +919,7 @@ class WritableFileWrapper : public WritableFile {
   }
 
   uint64_t GetFileSize() override { return target_->GetFileSize(); }
-
+ 
   void SetPreallocationBlockSize(size_t size) override {
     target_->SetPreallocationBlockSize(size);
   }
@@ -1007,20 +1007,20 @@ class RandomRWFileWrapper : public RandomRWFile {
 
   Status Write(uint64_t offset, const Slice& data) override {
     return t_->Write(offset, data);
-  };
+  }
 
   Status Read(uint64_t offset, size_t n, Slice* result,
               char* scratch) const override {
-    t_->Read(offset, n, result, scratch);
-  };
+    return t_->Read(offset, n, result, scratch);
+  }
 
-  Status Flush() override { return t_->Flush(); };
+  Status Flush() override { return t_->Flush(); }
 
-  Status Sync() override { return t_->Sync(); };
+  Status Sync() override { return t_->Sync(); }
 
   Status Fsync() override { return t_->Fsync(); }
 
-  Status Close() override { return t_->Close(); };
+  Status Close() override { return t_->Close(); }
 
   RandomRWFileWrapper(const RandomRWFileWrapper&) = delete;
   RandomRWFileWrapper& operator=(const RandomRWFileWrapper&) = delete;
