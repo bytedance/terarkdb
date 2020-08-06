@@ -16,8 +16,9 @@ IF(WITH_SNAPPY)
         SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/snappy
         CONFIGURE_COMMAND mkdir -p build
         BUILD_IN_SOURCE 1
-        BUILD_COMMAND cd build && cmake ../ -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR} -DSNAPPY_BUILD_TESTS=OFF -DHAVE_LIBLZO2=OFF && make -j $(nproc)
-        INSTALL_COMMAND cd build && make install && cd ../ && rm -rf build)
+        EXCLUDE_FROM_ALL True
+        BUILD_COMMAND cd build && cmake ../ -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR} -DSNAPPY_BUILD_TESTS=OFF -DHAVE_LIBLZO2=OFF && make -j 10
+        INSTALL_COMMAND cd build && ls -l && make install && cd ../ && rm -rf build)
     ADD_LIBRARY(snappy STATIC IMPORTED GLOBAL)
     ADD_DEPENDENCIES(snappy snappy-project)
     SET_TARGET_PROPERTIES(snappy PROPERTIES
@@ -31,7 +32,7 @@ ENDIF()
 # Metrics
 ExternalProject_Add(metrics2-project
     SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/metrics2-cmake
-    CONFIGURE_COMMAND mkdir -p cmake-build && mkdir -p ${CMAKE_BINARY_DIR}/lib
+    CONFIGURE_COMMAND rm -rf cmake-build && mkdir -p cmake-build && mkdir -p ${CMAKE_BINARY_DIR}/lib
     BUILD_IN_SOURCE 1
     BUILD_COMMAND cd cmake-build && cmake ../ && make -j $(nproc)
     # metrics2 doesn't have a install instruction, so we have to manully install it
@@ -45,8 +46,9 @@ SET_TARGET_PROPERTIES(metrics2 PROPERTIES
 # Zlib
 ExternalProject_Add(zlib-project
     SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/zlib
-    CONFIGURE_COMMAND mkdir -p build
+    CONFIGURE_COMMAND rm -rf build && mkdir -p build
     BUILD_IN_SOURCE 1
+    EXCLUDE_FROM_ALL True
     BUILD_COMMAND cd build && cmake ../ -DCMAKE_INSTALL_PREFIX=${CMAKE_CURRENT_BINARY_DIR}/zlib && make
     # zlib compile will produce some dirty files, we need to clean them.
     INSTALL_COMMAND cd build && make install && cd ../ && rm -rf build zconf.h.included && git checkout . )
@@ -68,8 +70,9 @@ IF(WITH_GFLAGS)
     MESSAGE("[terarkdb/third-party] gflags not find, build target")
     ExternalProject_Add(gflags-project
         SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/gflags
-        CONFIGURE_COMMAND mkdir -p build-cmake
+        CONFIGURE_COMMAND rm -rf build-cmake && mkdir -p build-cmake
         BUILD_IN_SOURCE 1
+        EXCLUDE_FROM_ALL True
         BUILD_COMMAND cd build-cmake && cmake ../ -DCMAKE_INSTALL_PREFIX=${CMAKE_CURRENT_BINARY_DIR}/gflags && make
         INSTALL_COMMAND cd build-cmake && make install)
     ADD_LIBRARY(gflags STATIC IMPORTED GLOBAL)

@@ -147,11 +147,9 @@ else()
     else()
         message("[terarkdb] snappy target existed!")
     endif()
-    #include_directories(${CMAKE_CURRENT_BINARY_DIR}/third-party/snappy)
-    #include_directories(${CMAKE_BINARY_DIR}/include)
     get_target_property(snappy_INCLUDE_DIR snappy INCLUDE_DIRECTORIES)
     include_directories(${snappy_INCLUDE_DIR})
-    #message(${snappy_INCLUDE_DIR})
+    message("snappy include dir : ${snappy_INCLUDE_DIR}")
     list(APPEND THIRDPARTY_LIBS snappy)
   endif()
 
@@ -1150,11 +1148,12 @@ if(WITH_TESTS)
       util/fault_injection_test_env.cc
       utilities/cassandra/test_utils.cc
   )
-  # test utilities are only build in debug
+  # test utilities are built only in debug mode
   enable_testing()
   add_custom_target(check COMMAND ${CMAKE_CTEST_COMMAND})
   set(TESTUTILLIB testutillib${ARTIFACT_SUFFIX})
   add_library(${TESTUTILLIB} STATIC ${TESTUTIL_SOURCE})
+  target_link_libraries(${TESTUTILLIB} ${THIRDPARTY_LIBS})
   if(MSVC)
     set_target_properties(${TESTUTILLIB} PROPERTIES COMPILE_FLAGS "/Fd${CMAKE_CFG_INTDIR}/testutillib${ARTIFACT_SUFFIX}.pdb")
   endif()
