@@ -146,9 +146,11 @@ uint32_t MockTableFactory::GetIDFromFile(RandomAccessFileReader* file) const {
 }
 
 void MockTableFactory::AssertSingleFile(
-    const stl_wrappers::KVMap& file_contents) {
+    const stl_wrappers::KVMap& file_contents,
+    const stl_wrappers::KVMap& range_deletions) {
   ASSERT_EQ(file_system_.files.size(), 1U);
   ASSERT_EQ(file_contents, file_system_.files.begin()->second.table);
+  ASSERT_EQ(range_deletions, file_system_.files.begin()->second.tombstone);
 }
 
 void MockTableFactory::AssertLatestFile(

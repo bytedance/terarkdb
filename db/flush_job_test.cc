@@ -3,12 +3,13 @@
 //  COPYING file in the root directory) and Apache 2.0 License
 //  (found in the LICENSE.Apache file in the root directory).
 
+#include "db/flush_job.h"
+
 #include <algorithm>
 #include <map>
 #include <string>
 
 #include "db/column_family.h"
-#include "db/flush_job.h"
 #include "db/version_set.h"
 #include "rocksdb/cache.h"
 #include "rocksdb/write_buffer_manager.h"
@@ -118,14 +119,14 @@ TEST_F(FlushJobTest, Empty) {
   auto cfd = versions_->GetColumnFamilySet()->GetDefault();
   EventLogger event_logger(db_options_.info_log.get());
   SnapshotChecker* snapshot_checker = nullptr;  // not relavant
-  FlushJob flush_job(
-      dbname_, versions_->GetColumnFamilySet()->GetDefault(), db_options_,
-      *cfd->GetLatestMutableCFOptions(), nullptr /* memtable_id */,
-      env_options_, versions_.get(), &mutex_, &shutting_down_, {},
-      kMaxSequenceNumber, snapshot_checker, &job_context, nullptr, nullptr,
-      nullptr, kNoCompression, nullptr, &event_logger, false,
-      true /* sync_output_directory */, true /* write_manifest */,
-      0 /* flush_load */);
+  FlushJob flush_job(dbname_, versions_->GetColumnFamilySet()->GetDefault(),
+                     db_options_, *cfd->GetLatestMutableCFOptions(),
+                     nullptr /* memtable_id */, env_options_, versions_.get(),
+                     &mutex_, &shutting_down_, {}, kMaxSequenceNumber,
+                     snapshot_checker, &job_context, nullptr, nullptr, nullptr,
+                     kNoCompression, nullptr, &event_logger, false,
+                     true /* sync_output_directory */,
+                     true /* write_manifest */, 0 /* flush_load */);
   {
     InstrumentedMutexLock l(&mutex_);
     flush_job.PickMemTable();
@@ -142,6 +143,7 @@ TEST_F(FlushJobTest, NonEmpty) {
                                            kMaxSequenceNumber);
   new_mem->Ref();
   auto inserted_keys = mock::MakeMockFile();
+  auto range_del_keys = mock::MakeMockFile();
   // Test data:
   //   seqno [    1,    2 ... 8998, 8999, 9000, 9001, 9002 ... 9999 ]
   //   key   [ 1001, 1002 ... 9998, 9999,    0,    1,    2 ...  999 ]
@@ -157,7 +159,7 @@ TEST_F(FlushJobTest, NonEmpty) {
   }
   new_mem->Add(SequenceNumber(10000), kTypeRangeDeletion, "9995", "9999a");
   InternalKey internal_key("9995", SequenceNumber(10000), kTypeRangeDeletion);
-  inserted_keys.insert({internal_key.Encode().ToString(), "9999a"});
+  range_del_keys.insert({internal_key.Encode().ToString(), "9999a"});
 
   autovector<MemTable*> to_delete;
   cfd->imm()->Add(new_mem, &to_delete);
@@ -167,14 +169,14 @@ TEST_F(FlushJobTest, NonEmpty) {
 
   EventLogger event_logger(db_options_.info_log.get());
   SnapshotChecker* snapshot_checker = nullptr;  // not relavant
-  FlushJob flush_job(
-      dbname_, versions_->GetColumnFamilySet()->GetDefault(), db_options_,
-      *cfd->GetLatestMutableCFOptions(), nullptr /* memtable_id */,
-      env_options_, versions_.get(), &mutex_, &shutting_down_, {},
-      kMaxSequenceNumber, snapshot_checker, &job_context, nullptr, nullptr,
-      nullptr, kNoCompression, db_options_.statistics.get(), &event_logger,
-      true, true /* sync_output_directory */, true /* write_manifest */,
-      0 /* flush_load */);
+  FlushJob flush_job(dbname_, versions_->GetColumnFamilySet()->GetDefault(),
+                     db_options_, *cfd->GetLatestMutableCFOptions(),
+                     nullptr /* memtable_id */, env_options_, versions_.get(),
+                     &mutex_, &shutting_down_, {}, kMaxSequenceNumber,
+                     snapshot_checker, &job_context, nullptr, nullptr, nullptr,
+                     kNoCompression, db_options_.statistics.get(),
+                     &event_logger, true, true /* sync_output_directory */,
+                     true /* write_manifest */, 0 /* flush_load */);
 
   HistogramData hist;
   FileMetaData file_meta;
@@ -191,7 +193,7 @@ TEST_F(FlushJobTest, NonEmpty) {
       file_meta.largest.user_key().ToString());  // range tombstone end key
   ASSERT_EQ(1, file_meta.fd.smallest_seqno);
   ASSERT_EQ(10000, file_meta.fd.largest_seqno);  // range tombstone seqnum 10000
-  mock_table_factory_->AssertSingleFile(inserted_keys);
+  mock_table_factory_->AssertSingleFile(inserted_keys, range_del_keys);
   job_context.Clean();
 }
 
@@ -232,14 +234,14 @@ TEST_F(FlushJobTest, FlushMemTablesSingleColumnFamily) {
   uint64_t smallest_memtable_id = memtable_ids.front();
   uint64_t flush_memtable_id = smallest_memtable_id + num_mems_to_flush - 1;
 
-  FlushJob flush_job(
-      dbname_, versions_->GetColumnFamilySet()->GetDefault(), db_options_,
-      *cfd->GetLatestMutableCFOptions(), &flush_memtable_id, env_options_,
-      versions_.get(), &mutex_, &shutting_down_, {}, kMaxSequenceNumber,
-      snapshot_checker, &job_context, nullptr, nullptr, nullptr, kNoCompression,
-      db_options_.statistics.get(), &event_logger, true,
-      true /* sync_output_directory */, true /* write_manifest */,
-      0 /* flush_load */);
+  FlushJob flush_job(dbname_, versions_->GetColumnFamilySet()->GetDefault(),
+                     db_options_, *cfd->GetLatestMutableCFOptions(),
+                     &flush_memtable_id, env_options_, versions_.get(), &mutex_,
+                     &shutting_down_, {}, kMaxSequenceNumber, snapshot_checker,
+                     &job_context, nullptr, nullptr, nullptr, kNoCompression,
+                     db_options_.statistics.get(), &event_logger, true,
+                     true /* sync_output_directory */,
+                     true /* write_manifest */, 0 /* flush_load */);
   HistogramData hist;
   FileMetaData file_meta;
   mutex_.Lock();
@@ -421,19 +423,19 @@ TEST_F(FlushJobTest, Snapshots) {
 
   EventLogger event_logger(db_options_.info_log.get());
   SnapshotChecker* snapshot_checker = nullptr;  // not relavant
-  FlushJob flush_job(
-      dbname_, versions_->GetColumnFamilySet()->GetDefault(), db_options_,
-      *cfd->GetLatestMutableCFOptions(), nullptr /* memtable_id */,
-      env_options_, versions_.get(), &mutex_, &shutting_down_, snapshots,
-      kMaxSequenceNumber, snapshot_checker, &job_context, nullptr, nullptr,
-      nullptr, kNoCompression, db_options_.statistics.get(), &event_logger,
-      true, true /* sync_output_directory */, true /* write_manifest */,
-      0 /* flush_load */);
+  FlushJob flush_job(dbname_, versions_->GetColumnFamilySet()->GetDefault(),
+                     db_options_, *cfd->GetLatestMutableCFOptions(),
+                     nullptr /* memtable_id */, env_options_, versions_.get(),
+                     &mutex_, &shutting_down_, snapshots, kMaxSequenceNumber,
+                     snapshot_checker, &job_context, nullptr, nullptr, nullptr,
+                     kNoCompression, db_options_.statistics.get(),
+                     &event_logger, true, true /* sync_output_directory */,
+                     true /* write_manifest */, 0 /* flush_load */);
   mutex_.Lock();
   flush_job.PickMemTable();
   ASSERT_OK(flush_job.Run());
   mutex_.Unlock();
-  mock_table_factory_->AssertSingleFile(inserted_keys);
+  mock_table_factory_->AssertSingleFile(inserted_keys, mock::MakeMockFile());
   HistogramData hist;
   db_options_.statistics->histogramData(FLUSH_TIME, &hist);
   ASSERT_GT(hist.average, 0.0);

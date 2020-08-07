@@ -5,13 +5,14 @@
 
 #ifndef ROCKSDB_LITE
 
+#include "db/compaction_job.h"
+
 #include <algorithm>
 #include <map>
 #include <string>
 #include <tuple>
 
 #include "db/column_family.h"
-#include "db/compaction_job.h"
 #include "db/error_handler.h"
 #include "db/version_set.h"
 #include "rocksdb/cache.h"
@@ -30,7 +31,7 @@ namespace rocksdb {
 namespace {
 
 void VerifyInitializationOfCompactionJobStats(
-      const CompactionJobStats& compaction_job_stats) {
+    const CompactionJobStats& compaction_job_stats) {
 #if !defined(IOS_CROSS_COMPILE)
   ASSERT_EQ(compaction_job_stats.elapsed_micros, 0U);
 
@@ -137,7 +138,7 @@ class CompactionJobTest : public testing::Test {
 
     VersionEdit edit;
     edit.AddFile(level, file_number, 0, 10, smallest_key, largest_key,
-        smallest_seqno, largest_seqno, false, TablePropertyCache{});
+                 smallest_seqno, largest_seqno, false, TablePropertyCache{});
 
     mutex_.Lock();
     versions_->LogAndApply(versions_->GetColumnFamilySet()->GetDefault(),
@@ -179,11 +180,10 @@ class CompactionJobTest : public testing::Test {
           test::CorruptKeyType(&internal_key);
           test::CorruptKeyType(&bottommost_internal_key);
         }
-        contents.insert({ internal_key.Encode().ToString(), value });
+        contents.insert({internal_key.Encode().ToString(), value});
         if (i == 1 || k < kMatchingKeys || corrupt_id(k - kMatchingKeys)) {
-          expected_results.insert(
-              { bottommost_internal_key.Encode().ToString(),
-                is_corrupt ? "" : value });
+          expected_results.insert({bottommost_internal_key.Encode().ToString(),
+                                   is_corrupt ? "" : value});
         }
       }
 
@@ -242,7 +242,7 @@ class CompactionJobTest : public testing::Test {
       CompactionInputFiles compaction_level;
       compaction_level.level = static_cast<int>(level);
       compaction_level.files.insert(compaction_level.files.end(),
-          level_files.begin(), level_files.end());
+                                    level_files.begin(), level_files.end());
       compaction_input_files.push_back(compaction_level);
       num_input_files += level_files.size();
     }
@@ -324,7 +324,7 @@ TEST_F(CompactionJobTest, Simple) {
   auto cfd = versions_->GetColumnFamilySet()->GetDefault();
   auto files = cfd->current()->storage_info()->LevelFiles(0);
   ASSERT_EQ(2U, files.size());
-  RunCompaction({ files }, expected_results);
+  RunCompaction({files}, expected_results);
 }
 
 TEST_F(CompactionJobTest, SimpleCorrupted) {

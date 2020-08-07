@@ -43,7 +43,8 @@ struct MockTableFileSystem {
 
 class MockTableReader : public TableReader {
  public:
-  MockTableReader(const MockTableFileSystem::FileData& file_data) : file_data_(file_data) {}
+  MockTableReader(const MockTableFileSystem::FileData& file_data)
+      : file_data_(file_data) {}
 
   InternalIterator* NewIterator(const ReadOptions&,
                                 const SliceTransform* prefix_extractor,
@@ -218,7 +219,8 @@ class MockTableFactory : public TableFactory {
 
   // This function will assert that only a single file exists and that the
   // contents are equal to file_contents
-  void AssertSingleFile(const stl_wrappers::KVMap& file_contents);
+  void AssertSingleFile(const stl_wrappers::KVMap& file_contents,
+                        const stl_wrappers::KVMap& range_deletions);
   void AssertLatestFile(const stl_wrappers::KVMap& file_contents);
 
  private:
