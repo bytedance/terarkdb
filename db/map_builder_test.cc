@@ -143,7 +143,10 @@ class MapBuilderTest : public testing::Test {
 
     // add reader
     mock::MockTableReader* reader;
-    reader = new mock::MockTableReader(kv_contents, del_contents);
+    mock::MockTableFileSystem::FileData file_data;
+    file_data.table = kv_contents;
+    file_data.tombstone = del_contents;
+    reader = new mock::MockTableReader(file_data);
     cfd_->table_cache()->TEST_AddMockTableReader(reader, f->fd);
 
     // add files to version

@@ -1037,6 +1037,7 @@ if(WITH_TESTS)
         db/listener_test.cc
         db/log_test.cc
         db/manual_compaction_test.cc
+        db/map_builder_test
         db/memtable_list_test.cc
         db/merge_helper_test.cc
         db/merge_test.cc
