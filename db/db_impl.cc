@@ -641,6 +641,9 @@ Status DBImpl::CloseHelper() {
   for (auto l : logs_to_free_) {
     delete l;
   }
+  for (auto l : logs_to_free_queue_) {
+    delete l;
+  }
   for (auto& log : logs_) {
     uint64_t log_number = log.writer->get_log_number();
     Status s = log.ClearWriter();
@@ -3950,7 +3953,7 @@ Status DBImpl::VerifyChecksum() {
         s = rocksdb::VerifySstFileChecksum(opts, env_options_, fname);
       }
     }
-   if (!s.ok()) {
+    if (!s.ok()) {
       break;
     }
   }
