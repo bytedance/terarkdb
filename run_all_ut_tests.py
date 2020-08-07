@@ -30,23 +30,14 @@ if __name__ == '__main__':
 
     # run all tests
     if sys.argv[1] != None:
-        passed = []
         failed = []
         for testname in TEST_LIST:
             code = run_test(testname)
             if code != 0:
-                failed.insert(testname)
-            else:
-                passed.insert(testname)
-        passed.sort()
-        failed.sort()
-        for e in passed:
-            e = '[x] ' + e
-        for e in failed:
-            e = '[ ] ' + e
+                failed.append(testname)
+        "\n".join(failed)
         f = open(sys.argv[1], "a+w")
-        f.writelines(failed)
-        f.writelines(passed) 
+        f.writelines(failed) 
         f.close()
     else:
         for testname in TEST_LIST:
