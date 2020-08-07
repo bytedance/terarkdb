@@ -438,7 +438,7 @@ class MemTableIterator : public MemTableIteratorBase<LazyBuffer>,
     assert(valid_);
     ValueType type = GetInternalKeyType(iter_->key());
     if (value_pinned_ || (type != kTypeValue && type != kTypeValueIndex)) {
-      return LazyBuffer(this, {}, GetLengthPrefixedSlice(iter_->value()));
+      return LazyBuffer(GetLengthPrefixedSlice(iter_->value()), Cleanable());
     } else {
       return LazyBuffer(this, {});
     }
