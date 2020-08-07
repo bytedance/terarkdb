@@ -4,7 +4,7 @@ from os import walk
 import subprocess
 import sys
 
-SKIP_LIST = ['db_block_cache_test', '']
+SKIP_LIST = ['db_bloom_filter_test', 'transaction_test', 'fault_injection_test', 'perf_context_test', 'obsolete_files_test']
 TEST_LIST = []
 
 def run_test(name):
@@ -19,7 +19,7 @@ def run_test(name):
 
 if __name__ == '__main__':
     for (dirpath, dirnames, filenames) in walk("build"):
-        TEST_LIST = [x for x in filenames if x not in SKIP_LIST]
+        TEST_LIST = [x for x in filenames if x not in SKIP_LIST and x.endswith("test")]
         break
 
     # run all tests
