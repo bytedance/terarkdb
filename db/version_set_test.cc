@@ -135,7 +135,7 @@ class VersionStorageInfoTest : public testing::Test {
     f->smallest = GetInternalKey(smallest, 0);
     f->largest = GetInternalKey(largest, 0);
     f->compensated_file_size = file_size;
-    f->refs = 1;
+    f->refs = 0;
     f->prop.num_entries = 1;
     f->prop.num_deletions = 0;
     vstorage_.AddFile(level, f);
@@ -149,7 +149,7 @@ class VersionStorageInfoTest : public testing::Test {
     f->smallest = smallest;
     f->largest = largest;
     f->compensated_file_size = file_size;
-    f->refs = 1;
+    f->refs = 0;
     f->prop.num_entries = 1;
     f->prop.num_deletions = 0;
     vstorage_.AddFile(level, f);
