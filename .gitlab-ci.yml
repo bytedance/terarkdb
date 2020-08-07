@@ -7,7 +7,7 @@ stages:
 config:
   stage: prepare
   script:
-    - cd /data01/builds && rm -rf terarkdb && git clone git@code.byted.org:storage/terarkdb.git
+    - cd /data00/builds && rm -rf terarkdb && git clone git@code.byted.org:storage/terarkdb.git
     - echo $CI_COMMIT_SHA && cd terarkdb && git checkout $CI_COMMIT_SHA
     - git submodule update --init --recursive
     - mkdir build && cd build && cmake ../ -DCMAKE_BUILD_TYPE=Debug
@@ -17,20 +17,28 @@ config:
 build:
   stage: build
   script:
-    - cd /data01/builds/terarkdb/build && make -j $(nproc)
+    - cd /data00/builds/terarkdb/build && make -j $(nproc)
   tags: 
     - terark
 
 unittest:
   stage: unittest
   script:
-    - cd /data01/builds/terarkdb/ && ./run_all_ut_tests.py
+    - cd /data00/builds/terarkdb/ && ./run_all_ut_tests.py
   tags:
     - terark
 
-# benchmark:
-#   stage: benchmark
-#   script:
-#     - cd /data01/builds/terarkdb/ && ls
-#   tags: 
-#     - terarkdb
+# benchmarks are built and executed on another disk with limited CPUs
+benchmark:
+  stage: benchmark
+  script:
+    - cd /data01/builds && rm -rf terarkdb && git clone git@code.byted.org:storage/terarkdb.git
+    - cd /data01/builds/terarkdb/build
+    - cmake ../ -DWITH_TESTS=OFF -DWITH_ASAN=OFF -DCMAKE_BUILD_TYPE=Release
+    - cd /data01/builds/terarkdb/terark-tools/benchmarks
+    - ./bench_baseline.py 10 20 256,4096
+  tags:
+    - terark
+  only:
+    refs:
+      - stage

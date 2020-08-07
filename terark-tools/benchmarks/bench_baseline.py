@@ -10,6 +10,7 @@ import io
 import os
 import subprocess
 import sys
+import requests
 from datetime import datetime
 
 # how many config string do you want to test
@@ -143,7 +144,17 @@ def gather_result():
         for row in output:
             f.write('{0:<25} {1:<15} {2:<15} {3:<15} {4:<15} {5:<100}\n'.format(*row))
 
+def send_to_bot(rst_fname):
+    url = 'https://open.feishu.cn/open-apis/bot/hook/5e301972-9a77-4f50-808b-bf19f9d79499'
+    with open(rst_fname, 'r') as f:
+        data = f.read()
+    git_hash = get_git_hash()
+    text = {'title': 'TerarkDB Benchmark @ %s' % git_hash, 'text': data}
+    requests.post(url, {}, json = text)
+    print data
 
+def get_git_hash():
+    return subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD'])
 
 if __name__=='__main__':
     if len(sys.argv) != 5:
@@ -155,7 +166,9 @@ if __name__=='__main__':
     THREADS = sys.argv[3]
     VALUE_SIZES = [int(i) for i in sys.argv[4].split(',')]
 
-    LOG_RESULT_FNAME = 'log_%s_%s.txt' % (GB_PER_THREAD, THREADS)
+    LOG_RESULT_FNAME = 'rst_%s_gb_%s_thds.txt' % (GB_PER_THREAD, THREADS)
+    send_to_bot(LOG_RESULT_FNAME)
+    sys.exit()
 
     with open(LOG_RESULT_FNAME, 'a') as f:
         f.write('[%s] GB_PER_THREAD: %s, THREADS = %s, VSIZE = %s \n' % (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), GB_PER_THREAD, THREADS, VALUE_SIZES) )
