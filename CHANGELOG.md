@@ -1,6 +1,19 @@
 
 ## CHANGELOG
 
+- 版本号：v1.2.10
+- 日期：2020-08-07
+- 发版说明：
+  - 计划内例行发版
+- 功能变更：
+  - 无
+- 修复问题：
+  - 修复开启 prepare_log_writer_num 之后有风险导致 WAL 错续的问题
+  - 修复 WalManager::GetUpdatesSince 的两处问题（继承自原版 RocksDB）
+  - 修复开启 MemTable InplaceUpdate 之后可能脏读的问题（继承自原版 RocksDB）
+- 已知问题：
+  - 使用 LazyUniversalCompaction 有极低概率触发无效 TrivialMove 导致写阻塞
+
 - 版本号：v1.2.9
 - 日期：2020-07-24
 - 发版说明：

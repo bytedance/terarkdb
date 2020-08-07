@@ -39,6 +39,7 @@ class MapBuilderTest : public testing::Test {
   std::unique_ptr<VersionSet> versions_;
   InstrumentedMutex mutex_;
   std::shared_ptr<mock::MockTableFactory> mock_table_factory_;
+  mock::MockTableFileSystem mock_table_system_;
   ColumnFamilyData* cfd_;
   VersionStorageInfo* vstorage_;
   Statistics* stats_;
@@ -146,7 +147,10 @@ class MapBuilderTest : public testing::Test {
     mock::MockTableFileSystem::FileData file_data;
     file_data.table = kv_contents;
     file_data.tombstone = del_contents;
-    reader = new mock::MockTableReader(file_data);
+    assert(file_number <= std::numeric_limits<uint32_t>::max());
+    auto ib = mock_table_system_.files.emplace(uint32_t(file_number),
+                                               std::move(file_data));
+    reader = new mock::MockTableReader(ib.first->second);
     cfd_->table_cache()->TEST_AddMockTableReader(reader, f->fd);
 
     // add files to version
