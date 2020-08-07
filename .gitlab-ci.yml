@@ -1,0 +1,36 @@
+stages:
+  - prepare
+  - build
+  - unittest
+  - benchmark
+
+config:
+  stage: prepare
+  script:
+    - cd /data01/builds && rm -rf terarkdb && git clone git@code.byted.org:storage/terarkdb.git
+    - echo $CI_COMMIT_SHA && cd terarkdb && git checkout $CI_COMMIT_SHA
+    - git submodule update --init --recursive
+    - mkdir build && cd build && cmake ../ -DCMAKE_BUILD_TYPE=Debug
+  tags: 
+    - terark
+
+build:
+  stage: build
+  script:
+    - cd /data01/builds/terarkdb/build && make -j $(nproc)
+  tags: 
+    - terark
+
+unittest:
+  stage: unittest
+  script:
+    - cd /data01/builds/terarkdb/ && ./run_all_ut_tests.py
+  tags:
+    - terark
+
+# benchmark:
+#   stage: benchmark
+#   script:
+#     - cd /data01/builds/terarkdb/ && ls
+#   tags: 
+#     - terarkdb
