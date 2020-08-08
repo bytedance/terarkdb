@@ -25,11 +25,11 @@ def run_test(name):
 
 if __name__ == '__main__':
     for (dirpath, dirnames, filenames) in walk("build"):
-        TEST_LIST = [x for x in filenames if x not in SKIP_LIST and x.endswith("test")]
+        TEST_LIST = [x for x in filenames if x not in SKIP_LIST and x.endswith("_test")]
         break
 
     # run all tests
-    if sys.argv[1] != None:
+    if len(sys.argv) > 1 and sys.argv[1] != None:
         failed = []
         for testname in TEST_LIST:
             code = run_test(testname)
