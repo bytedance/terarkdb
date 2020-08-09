@@ -285,12 +285,6 @@ TEST_F(DeleteFileTest, BackgroundPurgeCFDropTest) {
     WriteOptions wo;
     FlushOptions fo;
     ColumnFamilyHandle* cfh = nullptr;
-    
-    rocksdb::SyncPoint::GetInstance()->LoadDependency({
-      {"DeleteFileTest::BackgroundPurgeCFDropTest:1",
-       "DeleteScheduler::BackgroundEmptyTrash"},
-    });
-
     ASSERT_OK(db_->CreateColumnFamily(co, "dropme", &cfh));
 
     ASSERT_OK(db_->Put(wo, cfh, "pika", "chu"));
@@ -302,15 +296,30 @@ TEST_F(DeleteFileTest, BackgroundPurgeCFDropTest) {
     // Still 1 file, it won't be deleted while ColumnFamilyHandle is alive.
     CheckFileTypeCounts(dbname_, 0, 1, 1);
 
+    if (bg_purge) {
+      rocksdb::SyncPoint::GetInstance()->LoadDependency({
+          {"DeleteFileTest::BackgroundPurgeCFDropTest:1",
+           "DBImpl::DeleteObsoleteFileImpl:BeforeDeletion"},
+      });
+      rocksdb::SyncPoint::GetInstance()->LoadDependency({
+          {"DBImpl::DeleteObsoleteFileImpl:AfterDeletion",
+           "DeleteFileTest::BackgroundPurgeCFDropTest:2"},
+      });
+      rocksdb::SyncPoint::GetInstance()->EnableProcessing();
+    }
+
     delete cfh;
-    
+
     // If background purge is enabled, the file should still be there.
     CheckFileTypeCounts(dbname_, 0, bg_purge ? 1 : 0, 1);
     TEST_SYNC_POINT("DeleteFileTest::BackgroundPurgeCFDropTest:1");
+    TEST_SYNC_POINT("DeleteFileTest::BackgroundPurgeCFDropTest:2");
     // Execute background purges.
 
     // The file should have been deleted.
     CheckFileTypeCounts(dbname_, 0, 0, 1);
+
+    rocksdb::SyncPoint::GetInstance()->DisableProcessing();
   };
 
   {

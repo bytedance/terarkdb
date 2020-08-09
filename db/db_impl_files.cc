@@ -295,6 +295,7 @@ void DBImpl::FindObsoleteFiles(JobContext* job_context, bool force,
 void DBImpl::DeleteObsoleteFileImpl(int job_id, const std::string& fname,
                                     const std::string& path_to_sync,
                                     FileType type, uint64_t number) {
+  TEST_SYNC_POINT("DBImpl::DeleteObsoleteFileImpl:BeforeDeletion");
   Status file_deletion_status;
   if (type == kTableFile) {
     file_deletion_status =

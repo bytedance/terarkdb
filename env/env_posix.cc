@@ -29,6 +29,7 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <time.h>
+
 #include <algorithm>
 // Get nano time includes
 #if defined(OS_LINUX) || defined(OS_FREEBSD)
@@ -58,12 +59,12 @@
 #include "util/thread_local.h"
 #include "util/threadpool_imp.h"
 #if __clang__
-# pragma clang diagnostic push
-# pragma clang diagnostic ignored "-Wunused-parameter"
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-parameter"
 #endif
 #include <boost/fiber/operations.hpp>
 #if __clang__
-# pragma clang diagnostic pop
+#pragma clang diagnostic pop
 #endif
 
 #if !defined(TMPFS_MAGIC)
@@ -99,7 +100,7 @@ static int LockOrUnlock(int fd, bool lock) {
   f.l_type = (lock ? F_WRLCK : F_UNLCK);
   f.l_whence = SEEK_SET;
   f.l_start = 0;
-  f.l_len = 0;        // Lock/unlock entire file
+  f.l_len = 0;  // Lock/unlock entire file
   int value = fcntl(fd, F_SETLK, &f);
 
   return value;
@@ -235,8 +236,8 @@ class PosixEnv : public Env {
       if (s.ok()) {
         void* base = mmap(nullptr, size, PROT_READ, MAP_SHARED, fd, 0);
         if (base != MAP_FAILED) {
-          result->reset(new PosixMmapReadableFile(fd, fname, base,
-                                                  size, options));
+          result->reset(
+              new PosixMmapReadableFile(fd, fname, base, size, options));
         } else {
           s = IOError("while mmap file for read", fname, errno);
           close(fd);
@@ -323,7 +324,7 @@ class PosixEnv : public Env {
       }
 #elif defined(OS_SOLARIS)
       if (directio(fd, DIRECTIO_ON) == -1) {
-        if (errno != ENOTTY) { // ZFS filesystems don't support DIRECTIO_ON
+        if (errno != ENOTTY) {  // ZFS filesystems don't support DIRECTIO_ON
           close(fd);
           s = IOError("While calling directio()", fname, errno);
           return s;
@@ -420,7 +421,7 @@ class PosixEnv : public Env {
       }
 #elif defined(OS_SOLARIS)
       if (directio(fd, DIRECTIO_ON) == -1) {
-        if (errno != ENOTTY) { // ZFS filesystems don't support DIRECTIO_ON
+        if (errno != ENOTTY) {  // ZFS filesystems don't support DIRECTIO_ON
           close(fd);
           s = IOError("while calling directio()", fname, errno);
           return s;
@@ -586,10 +587,11 @@ class PosixEnv : public Env {
     if (mkdir(name.c_str(), 0755) != 0) {
       if (errno != EEXIST) {
         result = IOError("While mkdir if missing", name, errno);
-      } else if (!DirExists(name)) { // Check that name is actually a
-                                     // directory.
+      } else if (!DirExists(name)) {  // Check that name is actually a
+                                      // directory.
         // Message is taken from mkdir
-        result = Status::IOError("`"+name+"' exists but is not a directory");
+        result =
+            Status::IOError("`" + name + "' exists but is not a directory");
       }
     }
     return result;
@@ -619,7 +621,7 @@ class PosixEnv : public Env {
   virtual Status GetFileModificationTime(const std::string& fname,
                                          uint64_t* file_mtime) override {
     struct stat s;
-    if (stat(fname.c_str(), &s) !=0) {
+    if (stat(fname.c_str(), &s) != 0) {
       return IOError("while stat a file for modification time", fname, errno);
     }
     *file_mtime = static_cast<uint64_t>(s.st_mtime);
@@ -687,8 +689,8 @@ class PosixEnv : public Env {
     // this lock.
     // We must do this check *before* opening the file:
     // Otherwise, we will open a new file descriptor. Locks are associated with
-    // a process, not a file descriptor and when *any* file descriptor is closed,
-    // all locks the process holds for that *file* are released
+    // a process, not a file descriptor and when *any* file descriptor is
+    // closed, all locks the process holds for that *file* are released
     if (lockedFiles.insert(fname).second == false) {
       mutex_lockedFiles.Unlock();
       errno = ENOLCK;
@@ -705,7 +707,8 @@ class PosixEnv : public Env {
     if (fd < 0) {
       result = IOError("while open a file for lock", fname, errno);
     } else if (LockOrUnlock(fd, true) == -1) {
-      // if there is an error in locking, then remove the pathname from lockedfiles
+      // if there is an error in locking, then remove the pathname from
+      // lockedfiles
       lockedFiles.erase(fname);
       result = IOError("While lock file", fname, errno);
       close(fd);
@@ -803,13 +806,14 @@ class PosixEnv : public Env {
     FILE* f;
     {
       IOSTATS_TIMER_GUARD(open_nanos);
-      f = fopen(fname.c_str(), "w"
+      f = fopen(fname.c_str(),
+                "w"
 #ifdef __GLIBC_PREREQ
 #if __GLIBC_PREREQ(2, 7)
-          "e" // glibc extension to enable O_CLOEXEC
+                "e"  // glibc extension to enable O_CLOEXEC
 #endif
 #endif
-          );
+      );
     }
     if (f == nullptr) {
       result->reset();
@@ -847,13 +851,14 @@ class PosixEnv : public Env {
     return static_cast<uint64_t>(ts.tv_sec) * 1000000000 + ts.tv_nsec;
 #else
     return std::chrono::duration_cast<std::chrono::nanoseconds>(
-       std::chrono::steady_clock::now().time_since_epoch()).count();
+               std::chrono::steady_clock::now().time_since_epoch())
+        .count();
 #endif
   }
 
   virtual void SleepForMicroseconds(int micros) override {
-      boost::this_fiber::sleep_for(std::chrono::microseconds(micros));
-      //usleep(micros);
+    boost::this_fiber::sleep_for(std::chrono::microseconds(micros));
+    // usleep(micros);
   }
 
   virtual Status GetHostName(char* name, uint64_t len) override {
@@ -869,10 +874,10 @@ class PosixEnv : public Env {
 
   virtual Status GetCurrentTime(int64_t* unix_time) override {
     time_t ret = time(nullptr);
-    if (ret == (time_t) -1) {
+    if (ret == (time_t)-1) {
       return IOError("GetCurrentTime", "", errno);
     }
-    *unix_time = (int64_t) ret;
+    *unix_time = (int64_t)ret;
     return Status::OK();
   }
 
@@ -947,14 +952,8 @@ class PosixEnv : public Env {
     dummy.resize(maxsize);
     char* p = &dummy[0];
     localtime_r(&seconds, &t);
-    snprintf(p, maxsize,
-             "%04d/%02d/%02d-%02d:%02d:%02d ",
-             t.tm_year + 1900,
-             t.tm_mon + 1,
-             t.tm_mday,
-             t.tm_hour,
-             t.tm_min,
-             t.tm_sec);
+    snprintf(p, maxsize, "%04d/%02d/%02d-%02d:%02d:%02d ", t.tm_year + 1900,
+             t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec);
     return dummy;
   }
 
@@ -992,13 +991,13 @@ class PosixEnv : public Env {
     if (stat(dname.c_str(), &statbuf) == 0) {
       return S_ISDIR(statbuf.st_mode);
     }
-    return false; // stat() failed return false
+    return false;  // stat() failed return false
   }
 
   bool SupportsFastAllocate(const std::string& path) {
 #ifdef ROCKSDB_FALLOCATE_PRESENT
     struct statfs s;
-    if (statfs(path.c_str(), &s)){
+    if (statfs(path.c_str(), &s)) {
       return false;
     }
     switch (s.f_type) {
@@ -1105,13 +1104,10 @@ std::string Env::GenerateUniqueId() {
   // Could not read uuid_file - generate uuid using "nanos-random"
   Random64 r(time(nullptr));
   uint64_t random_uuid_portion =
-    r.Uniform(std::numeric_limits<uint64_t>::max());
+      r.Uniform(std::numeric_limits<uint64_t>::max());
   uint64_t nanos_uuid_portion = NowNanos();
   char uuid2[200];
-  snprintf(uuid2,
-           200,
-           "%lx-%lx",
-           (unsigned long)nanos_uuid_portion,
+  snprintf(uuid2, 200, "%lx-%lx", (unsigned long)nanos_uuid_portion,
            (unsigned long)random_uuid_portion);
   return uuid2;
 }
