@@ -2863,17 +2863,17 @@ TEST_P(DBCompactionTestWithParam, DeleteMovedFileAfterCompaction) {
     ASSERT_EQ("0,1", FilesPerLevel(0));
 
     // block compactions
-    test::SleepingBackgroundTask sleeping_task;
-    env_->Schedule(&test::SleepingBackgroundTask::DoSleepTask, &sleeping_task,
-                   Env::Priority::LOW);
+    rocksdb::SyncPoint::GetInstance()->LoadDependency({
+      {"DbCompactiontest::DeleteMovedFileAfterCompaction:1",
+       "CompactionJob::Run():OuterStart"},
+    });
 
     options.max_bytes_for_level_base = 1024 * 1024;  // 1 MB
     Reopen(options);
     std::unique_ptr<Iterator> iterator(db_->NewIterator(ReadOptions()));
     ASSERT_EQ("0,1", FilesPerLevel(0));
     // let compactions go
-    sleeping_task.WakeUp();
-    sleeping_task.WaitUntilDone();
+    TEST_SYNC_POINT("DbCompactiontest::DeleteMovedFileAfterCompaction:1");
 
     // this should execute L1->L2 (move)
     dbfull()->TEST_WaitForCompact();
