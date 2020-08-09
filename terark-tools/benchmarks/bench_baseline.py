@@ -167,8 +167,6 @@ if __name__=='__main__':
     VALUE_SIZES = [int(i) for i in sys.argv[4].split(',')]
 
     LOG_RESULT_FNAME = 'rst_%s_gb_%s_thds.txt' % (GB_PER_THREAD, THREADS)
-    send_to_bot(LOG_RESULT_FNAME)
-    sys.exit()
 
     with open(LOG_RESULT_FNAME, 'a') as f:
         f.write('[%s] GB_PER_THREAD: %s, THREADS = %s, VSIZE = %s \n' % (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), GB_PER_THREAD, THREADS, VALUE_SIZES) )
@@ -181,3 +179,4 @@ if __name__=='__main__':
 
     run()
     gather_result()
+    send_to_bot(LOG_RESULT_FNAME)
