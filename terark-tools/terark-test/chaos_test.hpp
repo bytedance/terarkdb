@@ -221,10 +221,10 @@ std::string get_seq_key(size_t i) {
 std::string get_rnd_key(size_t r) {
   std::mt19937_64 mt(r);
   char buffer[65];
-  snprintf(buffer + 0, 17, "%016llX", mt());
-  snprintf(buffer + 16, 17, "%016llX", mt());
-  snprintf(buffer + 32, 17, "%016llX", mt());
-  snprintf(buffer + 48, 17, "%016llX", mt());
+  snprintf(buffer + 0, 17, "%016lX", mt());
+  snprintf(buffer + 16, 17, "%016lX", mt());
+  snprintf(buffer + 32, 17, "%016lX", mt());
+  snprintf(buffer + 48, 17, "%016lX", mt());
   // uint64_t v = mt();
   // memcpy(buffer + 8, &v, sizeof v);
   return std::string(buffer,

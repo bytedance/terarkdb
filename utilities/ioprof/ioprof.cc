@@ -76,7 +76,7 @@ Data LocalDiskCollector::Collect() {
   // getting disk io stats
   int64 pid = (int64)getpid();
   char filename[256];
-  snprintf(filename, sizeof(filename), "/proc/%d/io", pid);
+  snprintf(filename, sizeof(filename), "/proc/%lld/io", pid);
   string content = read_file(filename);
 
   // getting wall time
@@ -93,14 +93,14 @@ void ConsoleReporter::Report(const std::string &fullname, const Data &data) {
   if (!data.error) {
     snprintf(buf, sizeof(buf),
 	     "%s\n"
-	     "\trchar = %d\n"
-	     "\twchar = %d\n"
-	     "\tsyscr = %d\n"
-	     "\tsyscw = %d\n"
-	     "\tread_bytes = %d\n"
-	     "\twrite_bytes = %d\n"
-	     "\tcancelled_write_bytes = %d\n"
-	     "\twalltime = %dns\n",
+	     "\trchar = %lld\n"
+	     "\twchar = %lld\n"
+	     "\tsyscr = %lld\n"
+	     "\tsyscw = %lld\n"
+	     "\tread_bytes = %lld\n"
+	     "\twrite_bytes = %lld\n"
+	     "\tcancelled_write_bytes = %lld\n"
+	     "\twalltime = %lldns\n",
 	     fullname.c_str(),
 	     data.rchar, data.wchar, data.syscr, data.syscw, data.read_bytes, data.write_bytes,
 	     data.cancelled_write_bytes, data.walltime);

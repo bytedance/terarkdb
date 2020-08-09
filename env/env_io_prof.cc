@@ -52,7 +52,7 @@ class IOProfRandomRWFile : public RandomRWFileWrapper {
   Status Read(uint64_t offset, size_t n, Slice* result,
               char* scratch) const override {
     IOProfiler::Scope _scope_(BOOST_CURRENT_FUNCTION);
-    RandomRWFileWrapper::Read(offset, n, result, scratch);
+    return RandomRWFileWrapper::Read(offset, n, result, scratch);
   };
 
   Status Flush() override {
