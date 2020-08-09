@@ -548,7 +548,8 @@ class SequentialFile {
                                 Slice* /*result*/, char* /*scratch*/) {
     return Status::NotSupported();
   }
-    protected:
+
+ protected:
   friend class SequentialFileWrapper;
 };
 
@@ -557,7 +558,6 @@ class SequentialFileWrapper : public SequentialFile {
 
  public:
   explicit SequentialFileWrapper(SequentialFile* file) { t_ = file; }
-  ~SequentialFileWrapper() { delete t_; }
 
   Status Read(size_t n, Slice* result, char* scratch) override {
     return t_->Read(n, result, scratch);
@@ -576,7 +576,7 @@ class SequentialFileWrapper : public SequentialFile {
   }
 
   Status PositionedRead(uint64_t offset, size_t n, Slice* result,
-                                char* scratch) override {
+                        char* scratch) override {
     return t_->PositionedRead(offset, n, result, scratch);
   }
 };
@@ -657,7 +657,8 @@ class RandomAccessFile {
     assert(false);
     return -1;
   }
-  protected:
+
+ protected:
   friend class RandomAccessFileWrapper;
 };
 
@@ -666,7 +667,6 @@ class RandomAccessFileWrapper : public RandomAccessFile {
 
  public:
   explicit RandomAccessFileWrapper(RandomAccessFile* file) { t_ = file; }
-  ~RandomAccessFileWrapper() { delete t_; }
 
   Status Read(uint64_t offset, size_t n, Slice* result,
               char* scratch) const override {
@@ -885,7 +885,6 @@ class WritableFile {
 class WritableFileWrapper : public WritableFile {
  public:
   explicit WritableFileWrapper(WritableFile* t) : target_(t) {}
-  ~WritableFileWrapper() { delete target_; }
 
   Status Append(const Slice& data) override { return target_->Append(data); }
   Status PositionedAppend(const Slice& data, uint64_t offset) override {
@@ -919,7 +918,7 @@ class WritableFileWrapper : public WritableFile {
   }
 
   uint64_t GetFileSize() override { return target_->GetFileSize(); }
- 
+
   void SetPreallocationBlockSize(size_t size) override {
     target_->SetPreallocationBlockSize(size);
   }
@@ -988,7 +987,8 @@ class RandomRWFile {
   // No copying allowed
   RandomRWFile(const RandomRWFile&) = delete;
   RandomRWFile& operator=(const RandomRWFile&) = delete;
-  protected:
+
+ protected:
   friend class RandomRWFileWrapper;
 };
 
@@ -997,7 +997,6 @@ class RandomRWFileWrapper : public RandomRWFile {
 
  public:
   explicit RandomRWFileWrapper(RandomRWFile* file) { t_ = file; }
-  ~RandomRWFileWrapper() { delete t_; }
 
   bool use_direct_io() const override { return t_->use_direct_io(); }
 

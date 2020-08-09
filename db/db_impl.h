@@ -1223,7 +1223,13 @@ class DBImpl : public DB {
       log_recycle_files_;  // a list of log files that we can recycle
   std::deque<std::unique_ptr<log::Writer>> log_writer_pool_;
   autovector<std::pair<ColumnFamilyData*, MemTableInfo>> memtable_info_queue_;
-  bool log_writer_pool_lock_;
+  enum LogWriterPoolFlags : uint8_t {
+    kLogWriterPoolIdle = 0,
+    kLogWriterPoolWorking = 1,
+    kLogWriterPoolWaiting = 2,
+    kLogWriterPoolError = 3,
+  };
+  uint8_t log_writer_pool_state_;
   bool memtable_info_queue_lock_;
   bool log_dir_synced_;
   // Without two_write_queues, read and writes to log_empty_ are protected by

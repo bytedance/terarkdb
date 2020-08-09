@@ -1418,45 +1418,47 @@ Status DBImpl::NewLogWriter(std::unique_ptr<log::Writer>* new_log,
 
 void DBImpl::FillLogWriterPool() {
   mutex_.AssertHeld();
-  if (log_writer_pool_.size() < immutable_db_options_.prepare_log_writer_num &&
-      !log_writer_pool_lock_) {
-    log_writer_pool_lock_ = true;
-    autovector<std::pair<std::unique_ptr<log::Writer>, uint64_t>> new_writers;
-    new_writers.resize(immutable_db_options_.prepare_log_writer_num -
-                       log_writer_pool_.size());
-    for (auto& item : new_writers) {
-      if (log_recycle_files_.empty()) {
-        item.second = 0;
-      } else {
-        item.second = log_recycle_files_.front();
-        log_recycle_files_.pop_front();
-      }
+  for (size_t i = log_writer_pool_.size();
+       log_writer_pool_state_ == kLogWriterPoolIdle &&
+       log_writer_pool_.size() < immutable_db_options_.prepare_log_writer_num &&
+       i < immutable_db_options_.prepare_log_writer_num;
+       ++i) {
+    log_writer_pool_state_ = kLogWriterPoolWorking;
+    std::unique_ptr<log::Writer> new_writer;
+    uint64_t recycle_log_number = 0;
+    if (!log_recycle_files_.empty()) {
+      recycle_log_number = log_recycle_files_.front();
+      log_recycle_files_.pop_front();
     }
-
     DBOptions db_options =
         BuildDBOptions(immutable_db_options_, mutable_db_options_);
     auto write_hint = CalculateWALWriteHint();
 
     mutex_.Unlock();
-    for (auto& item : new_writers) {
-      Status s = NewLogWriter(&item.first, item.second, db_options, write_hint);
-      if (!s.ok()) {
-        ROCKS_LOG_ERROR(immutable_db_options_.info_log,
-                        "Failed to create log writer: %s",
-                        s.ToString().c_str());
-        break;
-      }
+    Status s =
+        NewLogWriter(&new_writer, recycle_log_number, db_options, write_hint);
+    if (s.ok()) {
+      assert(new_writer != nullptr);
       ROCKS_LOG_INFO(immutable_db_options_.info_log,
                      "Pre-create log writer: %" PRIu64,
-                     item.first->get_log_number());
+                     new_writer->get_log_number());
+    } else {
+      ROCKS_LOG_ERROR(immutable_db_options_.info_log,
+                      "Failed to create log writer: %s", s.ToString().c_str());
     }
     mutex_.Lock();
-    for (auto& item : new_writers) {
-      if (item.first != nullptr) {
-        log_writer_pool_.emplace_back(std::move(item.first));
-      }
+    if (new_writer != nullptr) {
+      log_writer_pool_.emplace_back(std::move(new_writer));
     }
-    log_writer_pool_lock_ = false;
+    if (log_writer_pool_state_ == kLogWriterPoolWaiting) {
+      if (!s.ok()) {
+        log_writer_pool_state_ = kLogWriterPoolError;
+      }
+      bg_cv_.SignalAll();
+    } else {
+      log_writer_pool_state_ =
+          s.ok() ? kLogWriterPoolIdle : kLogWriterPoolError;
+    }
   }
 }
 
@@ -1516,20 +1518,31 @@ Status DBImpl::SwitchMemtable(ColumnFamilyData* cfd, WriteContext* context) {
   // Log this later after lock release. It may be outdated, e.g., if background
   // flush happens before logging, but that should be ok.
   int num_imm_unflushed = cfd->imm()->NumNotFlushed();
-  if (creating_new_log) {
-    while (!log_writer_pool_.empty()) {
-      auto front = std::move(log_writer_pool_.front());
+  if (creating_new_log && !log_writer_pool_.empty()) {
+    new_log = log_writer_pool_.front().release();
+    log_writer_pool_.pop_front();
+    new_log_number = new_log->get_log_number();
+    assert(new_log_number > logfile_number_);
+
+  } else if (creating_new_log &&
+             log_writer_pool_state_ == kLogWriterPoolWorking) {
+    log_writer_pool_state_ = kLogWriterPoolWaiting;
+    do {
+      bg_cv_.Wait();
+    } while (log_writer_pool_.empty() &&
+             log_writer_pool_state_ != kLogWriterPoolError);
+    if (!log_writer_pool_.empty()) {
+      new_log = log_writer_pool_.front().release();
       log_writer_pool_.pop_front();
-      if (front->get_log_number() > new_log_number) {
-        new_log = front.release();
-        new_log_number = new_log->get_log_number();
-        break;
-      } else {
-        logs_to_free_queue_.emplace_back(std::move(front.release()));
-      }
+      new_log_number = new_log->get_log_number();
+      assert(new_log_number > logfile_number_);
+      log_writer_pool_state_ = kLogWriterPoolIdle;
     }
   }
   if (creating_new_log && new_log == nullptr) {
+    assert(log_writer_pool_state_ == kLogWriterPoolIdle ||
+           log_writer_pool_state_ == kLogWriterPoolError);
+    log_writer_pool_state_ = kLogWriterPoolWorking;
     uint64_t recycle_log_number = 0;
     if (!log_recycle_files_.empty()) {
       recycle_log_number = log_recycle_files_.front();
@@ -1557,6 +1570,8 @@ Status DBImpl::SwitchMemtable(ColumnFamilyData* cfd, WriteContext* context) {
                          : ", prepare_log_writer_num should be increased.");
     }
     mutex_.Lock();
+    assert(log_writer_pool_state_ == kLogWriterPoolWorking);
+    log_writer_pool_state_ = s.ok() ? kLogWriterPoolIdle : kLogWriterPoolError;
   }
   // PLEASE NOTE: We assume that there are no failable operations
   // after lock is acquired below since we are already notifying
