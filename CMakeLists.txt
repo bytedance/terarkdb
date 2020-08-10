@@ -61,6 +61,7 @@ option(WITH_ZSTD "build with zstd" ON)
 option(WITH_WINDOWS_UTF8_FILENAMES "use UTF8 as characterset for opening files, regardles of the system code page" OFF)
 option(WITH_METRICS "build with metrics" ON)
 option(WITH_ASAN "build with ASAN" ON)
+option(WITH_GFLAGS "build with GFlags" ON)
 
 ADD_SUBDIRECTORY(third-party)
 
@@ -111,7 +112,6 @@ else()
   endif()
 
   # No config file for this
-  option(WITH_GFLAGS "build with GFlags" ON)
   if(WITH_GFLAGS)
     add_definitions(-DGFLAGS=1)
     if(NOT TARGET gflags)
