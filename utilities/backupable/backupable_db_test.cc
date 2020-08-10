@@ -1400,6 +1400,7 @@ TEST_F(BackupableDBTest, ProgressCallbackDuringBackup) {
 
 TEST_F(BackupableDBTest, GarbageCollectionBeforeBackup) {
   DestroyDB(dbname_, options_);
+  options_.prepare_log_writer_num = 0;
   OpenDBAndBackupEngine(true);
 
   backup_chroot_env_->CreateDirIfMissing(backupdir_ + "/shared");
@@ -1700,6 +1701,7 @@ TEST_P(BackupableDBTestWithParam, BackupUsingDirectIO) {
   const int kNumKeysPerBackup = 100;
   const int kNumBackups = 3;
   options_.use_direct_reads = true;
+  options_.prepare_log_writer_num = 0;
   OpenDBAndBackupEngine(true /* destroy_old_data */);
   for (int i = 0; i < kNumBackups; ++i) {
     FillDB(db_.get(), i * kNumKeysPerBackup /* from */,
