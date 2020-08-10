@@ -128,7 +128,7 @@ struct BatchContentClassifier : public WriteBatch::Handler {
   }
 };
 
-}  // anon namespace
+}  // namespace
 
 struct SavePoints {
   std::stack<SavePoint> stack;
@@ -136,8 +136,9 @@ struct SavePoints {
 
 WriteBatch::WriteBatch(size_t reserved_bytes, size_t max_bytes)
     : save_points_(nullptr), content_flags_(0), max_bytes_(max_bytes), rep_() {
-  rep_.reserve((reserved_bytes > WriteBatchInternal::kHeader) ?
-    reserved_bytes : WriteBatchInternal::kHeader);
+  rep_.reserve((reserved_bytes > WriteBatchInternal::kHeader)
+                   ? reserved_bytes
+                   : WriteBatchInternal::kHeader);
   rep_.resize(WriteBatchInternal::kHeader);
 }
 
@@ -185,16 +186,14 @@ WriteBatch& WriteBatch::operator=(WriteBatch&& src) {
 
 WriteBatch::~WriteBatch() { delete save_points_; }
 
-WriteBatch::Handler::~Handler() { }
+WriteBatch::Handler::~Handler() {}
 
 void WriteBatch::Handler::LogData(const Slice& /*blob*/) {
   // If the user has not specified something to do with blobs, then we ignore
   // them.
 }
 
-bool WriteBatch::Handler::Continue() {
-  return true;
-}
+bool WriteBatch::Handler::Continue() { return true; }
 
 void WriteBatch::Clear() {
   rep_.clear();
@@ -211,9 +210,7 @@ void WriteBatch::Clear() {
   wal_term_point_.clear();
 }
 
-int WriteBatch::Count() const {
-  return WriteBatchInternal::Count(this);
-}
+int WriteBatch::Count() const { return WriteBatchInternal::Count(this); }
 
 SequenceNumber WriteBatch::Sequence() const {
   return WriteBatchInternal::Sequence(this);
@@ -424,7 +421,7 @@ Status WriteBatch::Iterate(Handler* handler) const {
       }
     } else {
       assert(s.IsTryAgain());
-      assert(!last_was_try_again); // to detect infinite loop bugs
+      assert(!last_was_try_again);  // to detect infinite loop bugs
       if (UNLIKELY(last_was_try_again)) {
         return Status::Corruption(
             "two consecutive TryAgain in WriteBatch handler; this is either a "
@@ -1004,7 +1001,6 @@ Status WriteBatch::PopSavePoint() {
 }
 
 class MemTableInserter : public WriteBatch::Handler {
-
   SequenceNumber sequence_;
   ColumnFamilyMemTables* const cf_mems_;
   FlushScheduler* const flush_scheduler_;
@@ -1014,7 +1010,7 @@ class MemTableInserter : public WriteBatch::Handler {
   uint64_t log_number_ref_;
   DBImpl* db_;
   const bool concurrent_memtable_writes_;
-  bool       post_info_created_;
+  bool post_info_created_;
 
   bool* has_valid_writes_;
   // On some (!) platforms just default creating
@@ -1038,12 +1034,12 @@ class MemTableInserter : public WriteBatch::Handler {
   // Whether this batch was unprepared or not
   bool unprepared_batch_;
   using DupDetector = std::aligned_storage<sizeof(DuplicateDetector)>::type;
-  DupDetector       duplicate_detector_;
-  bool              dup_dectector_on_;
+  DupDetector duplicate_detector_;
+  bool dup_dectector_on_;
 
   MemPostInfoMap& GetPostMap() {
     assert(concurrent_memtable_writes_);
-    if(!post_info_created_) {
+    if (!post_info_created_) {
       new (&mem_post_info_map_) MemPostInfoMap();
       post_info_created_ = true;
     }
@@ -1057,8 +1053,8 @@ class MemTableInserter : public WriteBatch::Handler {
       new (&duplicate_detector_) DuplicateDetector(db_);
       dup_dectector_on_ = true;
     }
-    return reinterpret_cast<DuplicateDetector*>
-      (&duplicate_detector_)->IsDuplicateKeySeq(column_family_id, key, sequence_);
+    return reinterpret_cast<DuplicateDetector*>(&duplicate_detector_)
+        ->IsDuplicateKeySeq(column_family_id, key, sequence_);
   }
 
  protected:
@@ -1104,12 +1100,11 @@ class MemTableInserter : public WriteBatch::Handler {
 
   ~MemTableInserter() {
     if (dup_dectector_on_) {
-      reinterpret_cast<DuplicateDetector*>
-        (&duplicate_detector_)->~DuplicateDetector();
+      reinterpret_cast<DuplicateDetector*>(&duplicate_detector_)
+          ->~DuplicateDetector();
     }
     if (post_info_created_) {
-      reinterpret_cast<MemPostInfoMap*>
-        (&mem_post_info_map_)->~MemPostInfoMap();
+      reinterpret_cast<MemPostInfoMap*>(&mem_post_info_map_)->~MemPostInfoMap();
     }
     delete rebuilding_trx_;
   }
@@ -1141,7 +1136,7 @@ class MemTableInserter : public WriteBatch::Handler {
     assert(concurrent_memtable_writes_);
     // If post info was not created there is nothing
     // to process and no need to create on demand
-    if(post_info_created_) {
+    if (post_info_created_) {
       for (auto& pair : GetPostMap()) {
         pair.first->BatchPostProcess(pair.second);
       }
@@ -1263,15 +1258,14 @@ class MemTableInserter : public WriteBatch::Handler {
         if (status == UpdateStatus::UPDATED_INPLACE) {
           // prev_value is updated in-place with final value.
           bool mem_res __attribute__((__unused__));
-          mem_res = mem->Add(
-              sequence_, value_type, key, Slice(prev_buffer, prev_size));
+          mem_res = mem->Add(sequence_, value_type, key,
+                             Slice(prev_buffer, prev_size));
           assert(mem_res);
           RecordTick(moptions->statistics, NUMBER_KEYS_WRITTEN);
         } else if (status == UpdateStatus::UPDATED) {
           // merged_value contains the final value.
           bool mem_res __attribute__((__unused__));
-          mem_res =
-              mem->Add(sequence_, value_type, key, Slice(merged_value));
+          mem_res = mem->Add(sequence_, value_type, key, Slice(merged_value));
           assert(mem_res);
           RecordTick(moptions->statistics, NUMBER_KEYS_WRITTEN);
         }
@@ -1531,8 +1525,9 @@ class MemTableInserter : public WriteBatch::Handler {
             const bool BATCH_BOUNDRY = true;
             MaybeAdvanceSeq(BATCH_BOUNDRY);
           }
+        } else {
+          ret_status = std::move(s);
         }
-        ret_status = s;
       }
     }
 

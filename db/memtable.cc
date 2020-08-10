@@ -957,11 +957,7 @@ size_t MemTable::CountSuccessiveMergeEntries(const LookupKey& key) {
       break;
     }
 
-    const uint64_t tag =
-        DecodeFixed64(internal_key.data() + internal_key.size() - 8);
-    ValueType type;
-    uint64_t unused;
-    UnPackSequenceAndType(tag, &unused, &type);
+    ValueType type = GetInternalKeyType(internal_key);
     if (type != kTypeMerge && type != kTypeMergeIndex) {
       break;
     }

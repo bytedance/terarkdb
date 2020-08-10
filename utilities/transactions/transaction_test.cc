@@ -2207,6 +2207,7 @@ TEST_P(TransactionTest, FlushTest2) {
         PlainTableOptions pt_opts;
         pt_opts.hash_table_ratio = 0;
         options.table_factory.reset(NewPlainTableFactory(pt_opts));
+        options.enable_lazy_compaction = false;
         break;
       }
     }
