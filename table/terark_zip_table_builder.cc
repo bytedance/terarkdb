@@ -1114,12 +1114,11 @@ void TerarkZipTableBuilder::BuildReorderMap(std::unique_ptr<TerarkIndex>& index,
                                             fstring mmap_memory,
                                             AbstractBlobStore* store,
                                             long long& t6) {
-  bool reoder = false;
-  index.reset(
+  bool reorder = false;
+  index =
       TerarkIndex::LoadMemory(fstring(mmap_memory.data() + kvs.indexFileBegin,
-                                      kvs.indexFileEnd - kvs.indexFileBegin))
-          .release());
-  reoder = index->NeedsReorder() || isReverseBytewiseOrder_;
+                                      kvs.indexFileEnd - kvs.indexFileBegin));
+  reorder = index->NeedsReorder() || isReverseBytewiseOrder_;
   char buffer[512];
   INFO(ioptions_.info_log,
        "TerarkZipTableBuilder::Finish():this=%12p:\n    index type = %-32s, "
@@ -1127,13 +1126,13 @@ void TerarkZipTableBuilder::BuildReorderMap(std::unique_ptr<TerarkIndex>& index,
        "    raw-val =%9.4f GB  zip-val =%9.4f GB  avg-val =%7.2f  avg-zval "
        "=%7.2f\n",
        this, index->Name().data(), store->name(),
-       index->Info(buffer, sizeof buffer), store->num_records(),
+       index->Info(buffer, sizeof buffer),
        store->total_data_size() * 1.0 / 1e9,
        store->get_mmap().size() * 1.0 / 1e9,
        store->total_data_size() * 1.0 / store->num_records(),
        store->get_mmap().size() * 1.0 / store->num_records());
   t6 = g_pf.now();
-  if (!reoder) {
+  if (!reorder) {
     params.type.clear();
     params.tmpReorderFile.Delete();
     return;
@@ -1835,13 +1834,14 @@ Status TerarkZipTableBuilder::WriteIndexStore(
   size_t storeSize;
   size_t typeSize;
   size_t offset;
-  if (params.type.size() != 0) {
-    params.type.swap(kvs.type);
+  if (params.NeedsReorder()) {
+    params.type.swap(kvs.type); // kvs.type will be written to file
     ZReorderMap reorder(params.tmpReorderFile.fpath);
     t7 = g_pf.now();
     std::string reorder_tmp = tmpSentryFile_.path + ".reorder-tmp";
     try {
       offset = offset_;
+      // Composite Index needs reorder
       index->Reorder(reorder, std::ref(writeAppend), reorder_tmp);
       indexSize = offset_ - offset;
       reorder.rewind();

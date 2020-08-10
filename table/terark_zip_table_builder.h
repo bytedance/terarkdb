@@ -164,6 +164,12 @@ class TerarkZipTableBuilder : public TableBuilder, boost::noncopyable {
   struct BuildReorderParams {
     AutoDeleteFile tmpReorderFile;
     bitfield_array<2> type;
+
+    bool NeedsReorder() const {
+      // use type.size() as flag NeedsReorder: type was clear'ed in
+      // BuildReorderMap if it does not needs NeedsReorder
+      return type.size() != 0;
+    }
   };
   void BuildReorderMap(std::unique_ptr<TerarkIndex>& index,
                        BuildReorderParams& params, KeyValueStatus& kvs,
