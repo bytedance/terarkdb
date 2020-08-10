@@ -1131,7 +1131,7 @@ class CommandLineCompactionDispatcher : public RemoteCompactionDispatcher {
     std::future<std::string> future = promise->get_future();
     size_t datalen = data.size();
     auto onFinish = [this, promise, datalen](std::string&& result,
-                                             std::exception* ex) {
+                                             const std::exception* ex) {
       fprintf(stderr,
               "INFO: CompactCmd(%s, datalen=%zd) = exception[%p] = %s, "
               //"result[len=%zd]: %s\n"
