@@ -919,7 +919,7 @@ Status BlockBasedTable::Open(const ImmutableCFOptions& ioptions,
   }
 #ifndef ROCKSDB_LITE
   if (rep->table_properties) {
-    ParseSliceTransform(rep->table_properties_base.prefix_extractor_name,
+    ParseSliceTransform(rep->table_properties->prefix_extractor_name,
                         &(rep->table_prefix_extractor));
   }
 #endif  // ROCKSDB_LITE
