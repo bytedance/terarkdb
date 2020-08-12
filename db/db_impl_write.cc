@@ -1527,6 +1527,7 @@ Status DBImpl::SwitchMemtable(ColumnFamilyData* cfd, WriteContext* context) {
   } else if (creating_new_log &&
              log_writer_pool_state_ == kLogWriterPoolWorking) {
     log_writer_pool_state_ = kLogWriterPoolWaiting;
+    StopWatchNano timer(env_, true);
     do {
       bg_cv_.Wait();
     } while (log_writer_pool_.empty() &&
@@ -1538,6 +1539,11 @@ Status DBImpl::SwitchMemtable(ColumnFamilyData* cfd, WriteContext* context) {
       assert(new_log_number > logfile_number_);
       log_writer_pool_state_ = kLogWriterPoolIdle;
     }
+    ROCKS_LOG_WARN(
+        immutable_db_options_.info_log,
+        "Wait create log writer: %" PRIu64 ", time elapse: %" PRIu64 "us.",
+        log_writer_pool_state_ == kLogWriterPoolIdle ? new_log_number : 0,
+        timer.ElapsedNanos() / 1000);
   }
   if (creating_new_log && new_log == nullptr) {
     assert(log_writer_pool_state_ == kLogWriterPoolIdle ||
