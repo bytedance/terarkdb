@@ -119,6 +119,7 @@
 
 namespace rocksdb {
 const std::string kDefaultColumnFamilyName("default");
+const uint64_t kDumpStatsWaitMicroseconds = 10000;
 void DumpRocksDBBuildVersion(Logger* log);
 
 CompressionType GetCompressionFlush(
@@ -772,24 +773,40 @@ void DBImpl::DumpStats() {
       GetPropertyInfo(DB::Properties::kDBStats);
   assert(db_property_info != nullptr);
 
-  std::string stats;
   if (shutdown_initiated_) {
     return;
   }
+  std::vector<ColumnFamilyData*> cfd_vec;
+  std::string stats;
   {
     InstrumentedMutexLock l(&mutex_);
-    default_cf_internal_stats_->GetStringProperty(
-        *db_property_info, DB::Properties::kDBStats, &stats);
     for (auto cfd : *versions_->GetColumnFamilySet()) {
       if (cfd->initialized()) {
-        cfd->internal_stats()->GetStringProperty(
-            *cf_property_info, DB::Properties::kCFStatsNoFileHistogram, &stats);
+        cfd->Ref();
+        cfd_vec.emplace_back(cfd);
       }
     }
-    for (auto cfd : *versions_->GetColumnFamilySet()) {
-      if (cfd->initialized()) {
-        cfd->internal_stats()->GetStringProperty(
-            *cf_property_info, DB::Properties::kCFFileHistogram, &stats);
+    default_cf_internal_stats_->GetStringProperty(
+        *db_property_info, DB::Properties::kDBStats, &stats);
+  }
+  for (size_t i = 0; i < cfd_vec.size(); ++i) {
+    stats.reserve(i == 0 ? 4096 : stats.size() / i * cfd_vec.size() + 4096);
+    // Reduce foreground latency
+    env_->SleepForMicroseconds(kDumpStatsWaitMicroseconds);
+    InstrumentedMutexLock l(&mutex_);
+    auto cfd = cfd_vec[i];
+    if (cfd->initialized()) {
+      cfd->internal_stats()->GetStringProperty(
+          *cf_property_info, DB::Properties::kCFStatsNoFileHistogram, &stats);
+      cfd->internal_stats()->GetStringProperty(
+          *cf_property_info, DB::Properties::kCFFileHistogram, &stats);
+    }
+  }
+  {
+    InstrumentedMutexLock l(&mutex_);
+    for (auto cfd : cfd_vec) {
+      if (cfd->Unref()) {
+        delete cfd;
       }
     }
   }
