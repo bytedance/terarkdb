@@ -4,14 +4,7 @@ from os import walk
 import subprocess
 import sys
 
-SKIP_LIST = ['db_bloom_filter_test',
-             'transaction_test',
-             'fault_injection_test',
-             'obsolete_files_test',
-             'db_test',
-             'backupable_db_test',
-             'db_merge_operator_test',
-             'db_compaction_test']
+SKIP_LIST = []
 TEST_LIST = []
 
 def run_test(name):
