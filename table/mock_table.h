@@ -169,15 +169,19 @@ class MockTableBuilder : public TableBuilder {
     }
     file_data_.prop = std::make_shared<const TableProperties>(prop_);
     MutexLock lock_guard(&file_system_->mutex);
-    file_system_->files.emplace(id_, std::move(file_data_));
+    file_system_->files.emplace(id_, file_data_);
     return Status::OK();
   }
 
   void Abandon() override {}
 
-  uint64_t NumEntries() const override { return file_data_.table.size(); }
+  uint64_t NumEntries() const override {
+    return file_data_.table.size() + file_data_.tombstone.size();
+  }
 
-  uint64_t FileSize() const override { return sizeof(id_); }
+  uint64_t FileSize() const override {
+    return file_data_.table.size() + file_data_.tombstone.size();
+  }
 
   TableProperties GetTableProperties() const override { return prop_; }
 

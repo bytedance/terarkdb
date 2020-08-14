@@ -141,7 +141,6 @@ uint32_t MockTableFactory::GetIDFromFile(RandomAccessFileReader* file) const {
   char buf[4];
   Slice result;
   file->Read(0, 4, &result, buf);
-  assert(result.size() == 4);
   return DecodeFixed32(result.data());
 }
 

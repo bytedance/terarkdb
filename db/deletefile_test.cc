@@ -300,8 +300,6 @@ TEST_F(DeleteFileTest, BackgroundPurgeCFDropTest) {
       rocksdb::SyncPoint::GetInstance()->LoadDependency({
           {"DeleteFileTest::BackgroundPurgeCFDropTest:1",
            "DBImpl::DeleteObsoleteFileImpl:BeforeDeletion"},
-      });
-      rocksdb::SyncPoint::GetInstance()->LoadDependency({
           {"DBImpl::DeleteObsoleteFileImpl:AfterDeletion",
            "DeleteFileTest::BackgroundPurgeCFDropTest:2"},
       });

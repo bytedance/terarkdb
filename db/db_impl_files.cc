@@ -159,8 +159,7 @@ void DBImpl::FindObsoleteFiles(JobContext* job_context, bool force,
       if (!path.empty() && path != dbname_) {
         auto path_ptr = job_context->PushPath(path);
         std::vector<std::string> log_files;
-        env_->GetChildren(immutable_db_options_.wal_dir,
-                          &log_files);  // Ignore errors
+        env_->GetChildren(path, &log_files);  // Ignore errors
         for (std::string& log_file : log_files) {
           log_file.insert(log_file.begin(), '/');
           PushCandidateFile(job_context->full_scan_candidate_files, log_file,

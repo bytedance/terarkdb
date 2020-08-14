@@ -46,6 +46,8 @@ class ObsoleteFilesTest : public testing::Test {
     db_ = nullptr;
     env_ = Env::Default();
     // Trigger compaction when the number of level 0 files reaches 2.
+    options_.enable_lazy_compaction = false;
+    options_.blob_size = -1;
     options_.level0_file_num_compaction_trigger = 2;
     options_.disable_auto_compactions = false;
     options_.prepare_log_writer_num = 0;
@@ -189,7 +191,9 @@ TEST_F(ObsoleteFilesTest, RaceForObsoleteFileDeletion) {
                            false /* no_full_scan=false */);
     dbi->TEST_UnlockMutex();
     TEST_SYNC_POINT("ObsoleteFilesTest::RaceForObsoleteFileDeletion:2");
-    dbi->PurgeObsoleteFiles(jobCxt);
+    if (jobCxt.HaveSomethingToDelete()) {
+      dbi->PurgeObsoleteFiles(jobCxt);
+    }
     jobCxt.Clean();
   });
 

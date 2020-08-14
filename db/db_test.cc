@@ -11,6 +11,7 @@
 // in Release build.
 // which is a pity, it is a good test
 #include <fcntl.h>
+
 #include <algorithm>
 #include <set>
 #include <thread>
@@ -73,6 +74,25 @@ namespace rocksdb {
 class DBTest : public DBTestBase {
  public:
   DBTest() : DBTestBase("/db_test") {}
+  Options CurrentOptionsWithOldLogWriter(
+      const anon::OptionsOverride& options_override = anon::OptionsOverride()) {
+    Options opt = CurrentOptions(options_override);
+    opt.prepare_log_writer_num = 0;
+    opt.enable_lazy_compaction = false;
+    opt.blob_size = -1;
+    return opt;
+  }
+
+  Options CurrentOptionsWithOldLogWriter(
+      const Options& default_options,
+      const anon::OptionsOverride& options_override =
+          anon::OptionsOverride()) const {
+    Options opt = CurrentOptions(default_options, options_override);
+    opt.prepare_log_writer_num = 0;
+    opt.enable_lazy_compaction = false;
+    opt.blob_size = -1;
+    return opt;
+  }
 };
 
 class DBTestWithParam
@@ -291,8 +311,7 @@ TEST_F(DBTest, MixedSlowdownOptions) {
   auto token = dbfull()->TEST_write_controler().GetDelayToken(1);
   std::atomic<int> sleep_count(0);
   rocksdb::SyncPoint::GetInstance()->SetCallBack(
-      "DBImpl::DelayWrite:BeginWriteStallDone",
-      [&](void* /*arg*/) {
+      "DBImpl::DelayWrite:BeginWriteStallDone", [&](void* /*arg*/) {
         sleep_count.fetch_add(1);
         if (threads.empty()) {
           for (int i = 0; i < 2; ++i) {
@@ -313,7 +332,7 @@ TEST_F(DBTest, MixedSlowdownOptions) {
   // We need the 2nd write to trigger delay. This is because delay is
   // estimated based on the last write size which is 0 for the first write.
   ASSERT_OK(dbfull()->Put(wo, "foo2", "bar2"));
-          token.reset();
+  token.reset();
 
   for (auto& t : threads) {
     t.join();
@@ -346,8 +365,7 @@ TEST_F(DBTest, MixedSlowdownOptionsInQueue) {
   auto token = dbfull()->TEST_write_controler().GetDelayToken(1);
   std::atomic<int> sleep_count(0);
   rocksdb::SyncPoint::GetInstance()->SetCallBack(
-      "DBImpl::DelayWrite:Sleep",
-      [&](void* /*arg*/) {
+      "DBImpl::DelayWrite:Sleep", [&](void* /*arg*/) {
         sleep_count.fetch_add(1);
         if (threads.empty()) {
           for (int i = 0; i < 2; ++i) {
@@ -372,7 +390,7 @@ TEST_F(DBTest, MixedSlowdownOptionsInQueue) {
   // We need the 2nd write to trigger delay. This is because delay is
   // estimated based on the last write size which is 0 for the first write.
   ASSERT_OK(dbfull()->Put(wo, "foo2", "bar2"));
-          token.reset();
+  token.reset();
 
   for (auto& t : threads) {
     t.join();
@@ -415,8 +433,7 @@ TEST_F(DBTest, MixedSlowdownOptionsStop) {
   auto token = dbfull()->TEST_write_controler().GetStopToken();
   std::atomic<int> wait_count(0);
   rocksdb::SyncPoint::GetInstance()->SetCallBack(
-      "DBImpl::DelayWrite:Wait",
-      [&](void* /*arg*/) {
+      "DBImpl::DelayWrite:Wait", [&](void* /*arg*/) {
         wait_count.fetch_add(1);
         if (threads.empty()) {
           for (int i = 0; i < 2; ++i) {
@@ -442,7 +459,7 @@ TEST_F(DBTest, MixedSlowdownOptionsStop) {
   // We need the 2nd write to trigger delay. This is because delay is
   // estimated based on the last write size which is 0 for the first write.
   ASSERT_OK(dbfull()->Put(wo, "foo2", "bar2"));
-          token.reset();
+  token.reset();
 
   for (auto& t : threads) {
     t.join();
@@ -476,7 +493,6 @@ TEST_F(DBTest, LevelLimitReopen) {
   ASSERT_OK(TryReopenWithColumnFamilies({"default", "pikachu"}, options));
 }
 #endif  // ROCKSDB_LITE
-
 
 TEST_F(DBTest, PutSingleDeleteGet) {
   do {
@@ -775,7 +791,6 @@ TEST_F(DBTest, GetFromImmutableLayer) {
     env_->delay_sstable_sync_.store(false, std::memory_order_release);
   } while (ChangeOptions());
 }
-
 
 TEST_F(DBTest, GetLevel0Ordering) {
   do {
@@ -1871,7 +1886,7 @@ TEST_F(DBTest, CustomComparator) {
 }
 
 TEST_F(DBTest, DBOpen_Options) {
-  Options options = CurrentOptions();
+  Options options = CurrentOptionsWithOldLogWriter();
   std::string dbname = test::PerThreadDBPath("db_options_test");
   ASSERT_OK(DestroyDB(dbname, options));
 
@@ -2096,7 +2111,7 @@ TEST_F(DBTest, SnapshotFiles) {
 #endif
 
 TEST_F(DBTest, PurgeInfoLogs) {
-  Options options = CurrentOptions();
+  Options options = CurrentOptionsWithOldLogWriter();
   options.keep_log_file_num = 5;
   options.create_if_missing = true;
   for (int mode = 0; mode <= 1; mode++) {
@@ -2352,7 +2367,7 @@ TEST_F(DBTest, GroupCommitTest) {
     rocksdb::SyncPoint::GetInstance()->LoadDependency(
         {{"WriteThread::JoinBatchGroup:BeganWaiting",
           "DBImpl::WriteImpl:BeforeLeaderEnters"},
-          {"WriteThread::AwaitState:BlockingWaiting",
+         {"WriteThread::AwaitState:BlockingWaiting",
           "WriteThread::EnterAsBatchGroupLeader:End"}});
     rocksdb::SyncPoint::GetInstance()->EnableProcessing();
 
@@ -2607,8 +2622,8 @@ class ModelDB : public DB {
       ColumnFamilyHandle* /*column_family*/,
       const std::vector<std::string>& /*input_file_names*/,
       const int /*output_level*/, const int /*output_path_id*/ = -1,
-      std::vector<std::string>* const /*output_file_names*/ = nullptr
-      ) override {
+      std::vector<std::string>* const /*output_file_names*/ =
+          nullptr) override {
     return Status::NotSupported("Not supported operation.");
   }
 
@@ -2998,7 +3013,7 @@ TEST_P(DBTestWithParam, FIFOCompactionTest) {
     if (iter == 1) {
       options.disable_auto_compactions = true;
     }
-    options = CurrentOptions(options);
+    options = CurrentOptionsWithOldLogWriter(options);
     DestroyAndReopen(options);
 
     Random rnd(301);
@@ -3035,7 +3050,7 @@ TEST_F(DBTest, FIFOCompactionTestWithCompaction) {
   options.level0_file_num_compaction_trigger = 6;
   options.compression = kNoCompression;
   options.create_if_missing = true;
-  options = CurrentOptions(options);
+  options = CurrentOptionsWithOldLogWriter(options);
   DestroyAndReopen(options);
 
   Random rnd(301);
@@ -3163,8 +3178,8 @@ TEST_F(DBTest, FIFOCompactionWithTTLTest) {
     env_->addon_time_.store(0);
     options.compaction_options_fifo.max_table_files_size = 150 << 10;  // 150KB
     options.compaction_options_fifo.allow_compaction = false;
-    options.compaction_options_fifo.ttl = 1 * 60 * 60 ;  // 1 hour
-    options = CurrentOptions(options);
+    options.compaction_options_fifo.ttl = 1 * 60 * 60;  // 1 hour
+    options = CurrentOptionsWithOldLogWriter(options);
     DestroyAndReopen(options);
 
     Random rnd(301);
@@ -3240,7 +3255,7 @@ TEST_F(DBTest, FIFOCompactionWithTTLTest) {
     options.write_buffer_size = 10 << 10;                              // 10KB
     options.compaction_options_fifo.max_table_files_size = 150 << 10;  // 150KB
     options.compaction_options_fifo.allow_compaction = false;
-    options.compaction_options_fifo.ttl =  1 * 60 * 60;  // 1 hour
+    options.compaction_options_fifo.ttl = 1 * 60 * 60;  // 1 hour
     options = CurrentOptions(options);
     DestroyAndReopen(options);
 
@@ -3624,6 +3639,9 @@ TEST_F(DBTest, DynamicMemtableOptions) {
   options.level0_file_num_compaction_trigger = 1024;
   options.level0_slowdown_writes_trigger = 1024;
   options.level0_stop_writes_trigger = 1024;
+  options.prepare_log_writer_num = 0;
+  options.enable_lazy_compaction = false;
+  options.blob_size = -1;
   DestroyAndReopen(options);
 
   auto gen_l0_kb = [this](int size) {
@@ -3683,6 +3701,7 @@ TEST_F(DBTest, DynamicMemtableOptions) {
   // Block compaction thread, which will also block the flushes because
   // max_background_flushes == 0, so flushes are getting executed by the
   // compaction thread
+  env_->SetMaxTaskPerThread(1, Env::LOW);
   env_->SetBackgroundThreads(1, Env::LOW);
   test::SleepingBackgroundTask sleeping_task_low;
   env_->Schedule(&test::SleepingBackgroundTask::DoSleepTask, &sleeping_task_low,
@@ -3691,13 +3710,14 @@ TEST_F(DBTest, DynamicMemtableOptions) {
   // during compaction but trigger is pretty high
   options.disable_auto_compactions = true;
   DestroyAndReopen(options);
+  env_->SetMaxTaskPerThread(1, Env::LOW);
+  env_->SetBackgroundThreads(1, Env::LOW);
   env_->SetBackgroundThreads(0, Env::HIGH);
 
   // Put until writes are stopped, bounded by 256 puts. We should see stop at
   // ~128KB
   int count = 0;
   Random rnd(301);
-
   rocksdb::SyncPoint::GetInstance()->SetCallBack(
       "DBImpl::DelayWrite:Wait",
       [&](void* /*arg*/) { sleeping_task_low.WakeUp(); });
@@ -4138,7 +4158,7 @@ TEST_P(DBTestWithParam, PreShutdownCompactionMiddle) {
   options.max_bytes_for_level_base =
       options.target_file_size_base * kNumL0Files;
   options.compression = kNoCompression;
-  options = CurrentOptions(options);
+  options = CurrentOptionsWithOldLogWriter(options);
   options.env = env_;
   options.enable_thread_tracking = true;
   options.level0_file_num_compaction_trigger = kNumL0Files;
@@ -4241,7 +4261,9 @@ TEST_F(DBTest, DynamicLevelCompressionPerLevel) {
   options.max_bytes_for_level_multiplier = 4;
   options.max_background_compactions = 1;
   options.num_levels = 5;
-
+  options.prepare_log_writer_num = 0;
+  options.enable_lazy_compaction = false;
+  options.blob_size = -1;
   options.compression_per_level.resize(3);
   options.compression_per_level[0] = kNoCompression;
   options.compression_per_level[1] = kNoCompression;
@@ -4320,7 +4342,9 @@ TEST_F(DBTest, DynamicLevelCompressionPerLevel2) {
   options.level0_stop_writes_trigger = 2;
   options.soft_pending_compaction_bytes_limit = 1024 * 1024;
   options.target_file_size_base = 20;
-
+  options.prepare_log_writer_num = 0;
+  options.enable_lazy_compaction = false;
+  options.blob_size = -1;
   options.level_compaction_dynamic_level_bytes = true;
   options.max_bytes_for_level_base = 200;
   options.max_bytes_for_level_multiplier = 8;
@@ -4444,11 +4468,15 @@ TEST_F(DBTest, DynamicCompactionOptions) {
   options.target_file_size_multiplier = 1;
   options.max_bytes_for_level_base = k128KB;
   options.max_bytes_for_level_multiplier = 4;
-
+  options.prepare_log_writer_num = 0;
+  options.enable_lazy_compaction = false;
+  options.blob_size = -1;
   // Block flush thread and disable compaction thread
-  env_->SetBackgroundThreads(1, Env::LOW);
-  env_->SetBackgroundThreads(1, Env::HIGH);
   DestroyAndReopen(options);
+  env_->SetMaxTaskPerThread(1, Env::LOW);
+  env_->SetBackgroundThreads(1, Env::LOW);
+  env_->SetMaxTaskPerThread(1, Env::HIGH);
+  env_->SetBackgroundThreads(1, Env::HIGH);
 
   auto gen_l0_kb = [this](int start, int size, int stride) {
     Random rnd(301);
@@ -5475,12 +5503,11 @@ TEST_F(DBTest, CompactFilesShouldTriggerAutoCompaction) {
   SyncPoint::GetInstance()->EnableProcessing();
 
   port::Thread manual_compaction_thread([&]() {
-      auto s = db_->CompactFiles(CompactionOptions(),
-          db_->DefaultColumnFamily(), input_files, 0);
+    auto s = db_->CompactFiles(CompactionOptions(), db_->DefaultColumnFamily(),
+                               input_files, 0);
   });
 
-  TEST_SYNC_POINT(
-          "DBTest::CompactFilesShouldTriggerAutoCompaction:Begin");
+  TEST_SYNC_POINT("DBTest::CompactFilesShouldTriggerAutoCompaction:Begin");
   // generate enough files to trigger compaction
   for (int i = 0; i < 20; ++i) {
     for (int j = 0; j < 2; ++j) {
@@ -5490,16 +5517,15 @@ TEST_F(DBTest, CompactFilesShouldTriggerAutoCompaction) {
   }
   db_->GetColumnFamilyMetaData(db_->DefaultColumnFamily(), &cf_meta_data);
   ASSERT_GT(cf_meta_data.levels[0].files.size(),
-      options.level0_file_num_compaction_trigger);
-  TEST_SYNC_POINT(
-          "DBTest::CompactFilesShouldTriggerAutoCompaction:End");
+            options.level0_file_num_compaction_trigger);
+  TEST_SYNC_POINT("DBTest::CompactFilesShouldTriggerAutoCompaction:End");
 
   manual_compaction_thread.join();
   dbfull()->TEST_WaitForCompact();
 
   db_->GetColumnFamilyMetaData(db_->DefaultColumnFamily(), &cf_meta_data);
   ASSERT_LE(cf_meta_data.levels[0].files.size(),
-      options.level0_file_num_compaction_trigger);
+            options.level0_file_num_compaction_trigger);
 }
 
 // Github issue #595
@@ -5601,7 +5627,7 @@ TEST_F(DBTest, DelayedWriteRate) {
   const int kEntriesPerMemTable = 100;
   const int kTotalFlushes = 12;
 
-  Options options = CurrentOptions();
+  Options options = CurrentOptionsWithOldLogWriter();
   env_->SetBackgroundThreads(1, Env::LOW);
   options.env = env_;
   env_->no_slowdown_ = true;
@@ -5617,6 +5643,8 @@ TEST_F(DBTest, DelayedWriteRate) {
 
   CreateAndReopenWithCF({"pikachu"}, options);
 
+  env_->SetMaxTaskPerThread(1, Env::LOW);
+  env_->SetBackgroundThreads(1, Env::LOW);
   // Block compactions
   test::SleepingBackgroundTask sleeping_task_low;
   env_->Schedule(&test::SleepingBackgroundTask::DoSleepTask, &sleeping_task_low,
@@ -5726,13 +5754,14 @@ class WriteStallListener : public EventListener {
     MutexLock l(&mutex_);
     return expected == condition_;
   }
+
  private:
-  port::Mutex   mutex_;
+  port::Mutex mutex_;
   WriteStallCondition condition_;
 };
 
 TEST_F(DBTest, SoftLimit) {
-  Options options = CurrentOptions();
+  Options options = CurrentOptionsWithOldLogWriter();
   options.env = env_;
   options.write_buffer_size = 100000;  // Small write buffer
   options.max_write_buffer_number = 256;
@@ -5810,6 +5839,8 @@ TEST_F(DBTest, SoftLimit) {
 
   test::SleepingBackgroundTask sleeping_task_low;
   // Block compactions
+  env_->SetMaxTaskPerThread(1, Env::LOW);
+  env_->SetBackgroundThreads(1, Env::LOW);
   env_->Schedule(&test::SleepingBackgroundTask::DoSleepTask, &sleeping_task_low,
                  Env::Priority::LOW);
   sleeping_task_low.WaitUntilSleeping();
@@ -5951,7 +5982,8 @@ TEST_F(DBTest, LastWriteBufferDelay) {
   sleeping_task.WakeUp();
   sleeping_task.WaitUntilDone();
 }
-#endif  // !defined(ROCKSDB_LITE) && !defined(ROCKSDB_DISABLE_STALL_NOTIFICATION)
+#endif  // !defined(ROCKSDB_LITE) &&
+        // !defined(ROCKSDB_DISABLE_STALL_NOTIFICATION)
 
 TEST_F(DBTest, FailWhenCompressionNotSupportedTest) {
   CompressionType compressions[] = {kZlibCompression, kBZip2Compression,
@@ -6051,9 +6083,7 @@ TEST_F(DBTest, PauseBackgroundWorkTest) {
 TEST_F(DBTest, ThreadLocalPtrDeadlock) {
   std::atomic<int> flushes_done{0};
   std::atomic<int> threads_destroyed{0};
-  auto done = [&] {
-    return flushes_done.load() > 10;
-  };
+  auto done = [&] { return flushes_done.load() > 10; };
 
   port::Thread flushing_thread([&] {
     for (int i = 0; !done(); ++i) {
@@ -6066,7 +6096,7 @@ TEST_F(DBTest, ThreadLocalPtrDeadlock) {
   });
 
   std::vector<port::Thread> thread_spawning_threads(10);
-  for (auto& t: thread_spawning_threads) {
+  for (auto& t : thread_spawning_threads) {
     t = port::Thread([&] {
       while (!done()) {
         {
@@ -6081,7 +6111,7 @@ TEST_F(DBTest, ThreadLocalPtrDeadlock) {
     });
   }
 
-  for (auto& t: thread_spawning_threads) {
+  for (auto& t : thread_spawning_threads) {
     t.join();
   }
   flushing_thread.join();

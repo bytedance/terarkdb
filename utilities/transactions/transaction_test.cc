@@ -17,6 +17,7 @@
 #include <thread>
 
 #include "db/db_impl.h"
+#include "port/port.h"
 #include "rocksdb/db.h"
 #include "rocksdb/options.h"
 #include "rocksdb/perf_context.h"
@@ -33,8 +34,6 @@
 #include "utilities/merge_operators.h"
 #include "utilities/merge_operators/string_append/stringappend.h"
 #include "utilities/transactions/pessimistic_transaction_db.h"
-
-#include "port/port.h"
 
 using std::string;
 
@@ -2194,16 +2193,20 @@ TEST_P(TransactionTest, FlushTest) {
 
 TEST_P(TransactionTest, FlushTest2) {
   const size_t num_tests = 3;
-
+  MockEnv mock_env(Env::Default());
   for (size_t n = 0; n < num_tests; n++) {
     // Test different table factories
     switch (n) {
       case 0:
         break;
       case 1:
+        options.env = &mock_env;
         options.table_factory.reset(new mock::MockTableFactory());
+        options.enable_lazy_compaction = false;
+        options.blob_size = -1;
         break;
       case 2: {
+        options.env = Env::Default();
         PlainTableOptions pt_opts;
         pt_opts.hash_table_ratio = 0;
         options.table_factory.reset(NewPlainTableFactory(pt_opts));
@@ -2341,7 +2344,7 @@ TEST_P(TransactionTest, FlushTest2) {
     ASSERT_OK(s);
     ASSERT_EQ("z", value);
 
-  delete txn;
+    delete txn;
   }
 }
 
@@ -4224,7 +4227,7 @@ TEST_P(TransactionTest, TimeoutTest) {
   ASSERT_OK(s);
 
   TransactionOptions txn_options0;
-  txn_options0.expiration = 100;  // 100ms
+  txn_options0.expiration = 100;   // 100ms
   txn_options0.lock_timeout = 50;  // txn timeout no longer infinite
   Transaction* txn1 = db->BeginTransaction(write_options, txn_options0);
 

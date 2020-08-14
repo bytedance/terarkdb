@@ -8,10 +8,13 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #include "env/mock_env.h"
+
 #include <algorithm>
 #include <chrono>
+
 #include "port/sys_time.h"
 #include "util/cast_util.h"
+#include "util/filename.h"
 #include "util/murmurhash.h"
 #include "util/random.h"
 #include "util/rate_limiter.h"
@@ -219,6 +222,29 @@ class MockRandomAccessFile : public RandomAccessFile {
   virtual Status Read(uint64_t offset, size_t n, Slice* result,
                       char* scratch) const override {
     return file_->Read(offset, n, result, scratch);
+  }
+
+ private:
+  MemFile* file_;
+};
+
+class MockSSTRandomAccessFile : public RandomAccessFile {
+ public:
+  explicit MockSSTRandomAccessFile(MemFile* file) : file_(file) {
+    file_->Ref();
+  }
+
+  ~MockSSTRandomAccessFile() { file_->Unref(); }
+
+  virtual Status Read(uint64_t offset, size_t n, Slice* result,
+                      char* scratch) const override {
+    auto s = file_->Read(offset, 4, result, scratch);
+    if (s.ok() && n > 4) {
+      memmove(scratch, result->data(), 4);
+      memset(scratch + 4, 0, n - 4);
+      *result = Slice(scratch, n);
+    }
+    return s;
   }
 
  private:
@@ -453,7 +479,13 @@ Status MockEnv::NewRandomAccessFile(const std::string& fname,
   if (f->is_lock_file()) {
     return Status::InvalidArgument(fn, "Cannot open a lock file.");
   }
-  result->reset(new MockRandomAccessFile(f));
+  uint64_t unused = 0;
+  FileType type;
+  if (ParseFileName(fname, &unused, &type) && type == kTableFile) {
+    result->reset(new MockSSTRandomAccessFile(f));
+  } else {
+    result->reset(new MockRandomAccessFile(f));
+  }
   return Status::OK();
 }
 

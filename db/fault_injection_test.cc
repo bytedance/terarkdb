@@ -81,8 +81,7 @@ class FaultInjectionTest
         sync_use_compact_(true),
         base_env_(nullptr),
         env_(nullptr),
-        db_(nullptr) {
-  }
+        db_(nullptr) {}
 
   ~FaultInjectionTest() {
     rocksdb::SyncPoint::GetInstance()->DisableProcessing();
@@ -139,9 +138,9 @@ class FaultInjectionTest
       default:
         break;
     }
-    options_.enable_lazy_compaction = false;
-    options_.prepare_log_writer_num = 0;
-    options_.blob_size = -1;
+    options.enable_lazy_compaction = false;
+    options.prepare_log_writer_num = 0;
+    options.blob_size = -1;
     return options;
   }
 
@@ -335,8 +334,7 @@ class FaultInjectionTest
                      FaultInjectionTest::kValExpectNoError));
   }
 
-  void NoWriteTestPreFault() {
-  }
+  void NoWriteTestPreFault() {}
 
   void NoWriteTestReopenWithFault(ResetMethod reset_method) {
     CloseDB();
