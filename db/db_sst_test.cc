@@ -81,6 +81,7 @@ TEST_F(DBSSTTest, DontDeletePendingOutputs) {
   // db/db_test.cc:975: IO error:
   // /tmp/rocksdbtest-1552237650/db_test/000009.sst: No such file or directory
   Compact("a", "b");
+  dbfull()->TEST_WaitForCompact();
 }
 
 // 1 Create some SST files by inserting K-V pairs into DB

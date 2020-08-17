@@ -586,8 +586,9 @@ TEST_F(DBOptionsTest, DeleteObsoleteFilesPeriodChange) {
   options.create_if_missing = true;
   options.enable_lazy_compaction = false;
   options.blob_size = -1;
+  options.prepare_log_writer_num = 0;
+  options.stats_dump_period_sec = 0;
   ASSERT_OK(TryReopen(options));
-
   // Verify that candidate files set is empty when no full scan requested.
   assert_candidate_files_empty(dbfull(), true);
 

@@ -2765,6 +2765,7 @@ Compaction* LevelCompactionBuilder::PickLazyCompaction(
     }
     return Status::OK();
   };
+  
   for (int i = 1; i < bottommost_level; ++i) {
     if (!vstorage_->has_range_deletion(i)) {
       continue;
