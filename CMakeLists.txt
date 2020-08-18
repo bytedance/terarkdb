@@ -543,22 +543,7 @@ else()
   MESSAGE("[terarkdb] gtest target provided, skip build") 
 endif()
 
-# TODO, move to `third-party/`
-# INCLUDE(ExternalProject)
-# Use sub_directory is neccessary because external project can't forward synmbol dependencies.
 ADD_SUBDIRECTORY(terark-core)
-# terark-core
-# ExternalProject_Add(terark-core-project
-#     SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/terark-core
-#     CONFIGURE_COMMAND mkdir -p cmake-build
-#     BUILD_IN_SOURCE 1
-#     BUILD_COMMAND cd cmake-build && cmake ../ -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR} && make -j $(nproc)
-#     INSTALL_COMMAND cd cmake-build && ls -l && make install)
-# ADD_LIBRARY(terark-core STATIC IMPORTED GLOBAL)
-# ADD_DEPENDENCIES(terark-core terark-core-project)
-# SET_TARGET_PROPERTIES(terark-core PROPERTIES
-#         IMPORTED_LOCATION ${CMAKE_BINARY_DIR}/lib/libterark-core-${BUILD_SUFFIX}.a
-#         INCLUDE_DIRECTORIES ${CMAKE_BINARY_DIR}/include/)
 SET(TERARK_CORE_LIB terark-core-${BUILD_SUFFIX})
 if (NOT ${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
   LIST(APPEND TERARK_SHARED_DEPENDS pthread gomp aio rt)

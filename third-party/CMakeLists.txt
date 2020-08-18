@@ -49,14 +49,14 @@ ExternalProject_Add(zlib-project
     CONFIGURE_COMMAND rm -rf build && mkdir -p build
     BUILD_IN_SOURCE 1
     EXCLUDE_FROM_ALL True
-    BUILD_COMMAND cd build && cmake ../ -DCMAKE_INSTALL_PREFIX=${CMAKE_CURRENT_BINARY_DIR}/zlib && make
+    BUILD_COMMAND cd build && cmake ../ -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR} && make
     # zlib compile will produce some dirty files, we need to clean them.
     INSTALL_COMMAND cd build && make install && cd ../ && rm -rf build zconf.h.included && git checkout . )
 ADD_LIBRARY(zlib STATIC IMPORTED GLOBAL)
 ADD_DEPENDENCIES(zlib zlib-project)
 SET_TARGET_PROPERTIES(zlib PROPERTIES
-    IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/zlib/lib/libz.a
-    INCLUDE_DIRECTORIES ${CMAKE_CURRENT_BINARY_DIR}/zlib/include)
+  IMPORTED_LOCATION ${CMAKE_BINARY_DIR}/lib/libz.a
+  INCLUDE_DIRECTORIES ${CMAKE_BINARY_DIR}/include)
 
 # Gflags
 IF(WITH_GFLAGS)
@@ -73,13 +73,13 @@ IF(WITH_GFLAGS)
         CONFIGURE_COMMAND rm -rf build-cmake && mkdir -p build-cmake
         BUILD_IN_SOURCE 1
         EXCLUDE_FROM_ALL True
-        BUILD_COMMAND cd build-cmake && cmake ../ -DCMAKE_INSTALL_PREFIX=${CMAKE_CURRENT_BINARY_DIR}/gflags && make
+        BUILD_COMMAND cd build-cmake && cmake ../ -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR} && make
         INSTALL_COMMAND cd build-cmake && make install)
     ADD_LIBRARY(gflags STATIC IMPORTED GLOBAL)
     ADD_DEPENDENCIES(gflags gflags-project)
     SET_TARGET_PROPERTIES(gflags PROPERTIES
-        IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/gflags/lib/libgflags.a
-        INCLUDE_DIRECTORIES ${CMAKE_CURRENT_BINARY_DIR}/gflags/include)
+      IMPORTED_LOCATION ${CMAKE_BINARY_DIR}/lib/libgflags.a
+        INCLUDE_DIRECTORIES ${CMAKE_BINARY_DIR}/include)
   ELSE()
     MESSAGE("[terarkdb/third-party] gflags exist, skip build")
   ENDIF()
@@ -91,12 +91,12 @@ ExternalProject_Add(zstd-project
     CONFIGURE_COMMAND ""
     BUILD_IN_SOURCE 1
     BUILD_COMMAND cd ${CMAKE_CURRENT_SOURCE_DIR}/zstd && make "CXXFLAGS=-fPIC -O2" "CFLAGS=-fPIC -O2"
-    INSTALL_COMMAND prefix=${CMAKE_CURRENT_BINARY_DIR}/zstd make install)
+    INSTALL_COMMAND prefix=${CMAKE_BINARY_DIR} make install)
 ADD_LIBRARY(zstd STATIC IMPORTED GLOBAL)
 ADD_DEPENDENCIES(zstd zstd-project)
 SET_TARGET_PROPERTIES(zstd PROPERTIES
-    IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/zstd/lib/libzstd.a
-    INCLUDE_DIRECTORIES ${CMAKE_CURRENT_BINARY_DIR}/zstd/include
+    IMPORTED_LOCATION ${CMAKE_BINARY_DIR}/lib/libzstd.a
+    INCLUDE_DIRECTORIES ${CMAKE_BINARY_DIR}/include
     POSITION_INDEPENDENT_CODE ON)
 
 # LZ4
@@ -105,9 +105,9 @@ ExternalProject_Add(lz4-project
     CONFIGURE_COMMAND ""
     BUILD_IN_SOURCE 1
     BUILD_COMMAND make "CXXFLAGS=-fPIC -O2" "CFLAGS=-fPIC -O2"
-    INSTALL_COMMAND prefix=${CMAKE_CURRENT_BINARY_DIR}/lz4 make install)
+    INSTALL_COMMAND prefix=${CMAKE_BINARY_DIR} make install)
 ADD_LIBRARY(lz4 STATIC IMPORTED GLOBAL)
 ADD_DEPENDENCIES(lz4 lz4-project)
 SET_TARGET_PROPERTIES(lz4 PROPERTIES
-    IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/lz4/lib/liblz4.a
-    INCLUDE_DIRECTORIES ${CMAKE_CURRENT_BINARY_DIR}/lz4/include)
+    IMPORTED_LOCATION ${CMAKE_BINARY_DIR}/lib/liblz4.a
+    INCLUDE_DIRECTORIES ${CMAKE_BINARY_DIR}/include)
