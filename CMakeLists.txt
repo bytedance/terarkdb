@@ -927,11 +927,11 @@ IF(WITH_TESTS OR WITH_TOOLS)
   add_library(testharness OBJECT util/testharness.cc)
 ENDIF()
 
-#          db/periodic_work_scheduler_test.cc
 if(WITH_TESTS)
   set(TESTS
           table/block_based_table_builder_ttl_test.cc
           db/db_impl_gc_ttl_test.cc
+          db/periodic_work_scheduler_test.cc
           options/options_settable_test.cc
           util/timer_test.cc
           monitoring/histogram_test.cc
