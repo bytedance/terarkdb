@@ -922,7 +922,6 @@ IF(WITH_TESTS OR WITH_TOOLS)
   add_library(testharness OBJECT util/testharness.cc)
 ENDIF()
 
-#          db/periodic_work_scheduler_test.cc
 if(WITH_TESTS)
   set(TESTS
         cache/cache_test.cc
@@ -983,6 +982,7 @@ if(WITH_TESTS)
         db/merge_test.cc
         db/options_file_test.cc
         db/perf_context_test.cc
+        db/periodic_work_scheduler_test.cc
         db/plain_table_db_test.cc
         db/prefix_test.cc
         db/range_del_aggregator_test.cc
