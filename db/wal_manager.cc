@@ -170,9 +170,12 @@ Status WalManager::GetUpdatesSince(
 //    b. get sorted non-empty archived logs
 //    c. delete what should be deleted
 void WalManager::PurgeObsoleteWALFiles() {
-  bool const ttl_enabled = db_options_.wal_ttl_seconds > 0;
-  bool const size_limit_enabled = db_options_.wal_size_limit_mb > 0;
+  const bool ttl_enabled = db_options_.wal_ttl_seconds > 0;
+  const bool size_limit_enabled = db_options_.wal_size_limit_mb > 0;
   if (!ttl_enabled && !size_limit_enabled) {
+    return;
+  }
+  if (purge_wal_files_running_) {
     return;
   }
 
@@ -184,97 +187,16 @@ void WalManager::PurgeObsoleteWALFiles() {
     assert(false);
     return;
   }
-  uint64_t const now_seconds = static_cast<uint64_t>(current_time);
-  uint64_t const time_to_check = (ttl_enabled && !size_limit_enabled)
-                                     ? db_options_.wal_ttl_seconds / 2
-                                     : kDefaultIntervalToDeleteObsoleteWAL;
+  const uint64_t now_seconds = static_cast<uint64_t>(current_time);
+  const uint64_t time_to_check = kDefaultIntervalToDeleteObsoleteWAL;
 
   if (purge_wal_files_last_run_ + time_to_check > now_seconds) {
     return;
   }
-
   purge_wal_files_last_run_ = now_seconds;
-
-  VectorLogPtr files;
-  s = GetSortedWalFiles(files, true /* allow_empty */);
-  if (!s.ok()) {
-    ROCKS_LOG_ERROR(db_options_.info_log, "GetSortedWalFiles fail: %s",
-                    s.ToString().c_str());
-    assert(false);
-    return;
-  }
-  uint64_t total_log_file_size = 0;
-
-  auto delete_file = [&](uint64_t number, const std::string& file_path) {
-    s = env_->DeleteFile(file_path);
-    if (!s.ok()) {
-      ROCKS_LOG_WARN(db_options_.info_log, "Can't delete file: %s: %s",
-                     file_path.c_str(), s.ToString().c_str());
-    } else {
-      MutexLock l(&read_first_record_cache_mutex_);
-      read_first_record_cache_.erase(number);
-      log_numbers_.erase(number);
-    }
-  };
-
-  SequenceNumber guard_seqno = guard_seqno_.load(std::memory_order_relaxed);
-  for (size_t i = 0; i < files.size(); ++i) {
-    auto& f = files[i];
-    if (f->Type() == WalFileType::kAliveLogFile ||
-        (guard_seqno <= kMaxSequenceNumber &&
-         (i + 1 == files.size() ||
-          guard_seqno < files[i + 1]->StartSequence()))) {
-      files.resize(i);
-      break;
-    }
-    uint64_t number = f->LogNumber();
-    std::string file_path = ArchivedLogFileName(db_options_.wal_dir, number);
-
-    if (ttl_enabled) {
-      uint64_t file_m_time;
-      s = env_->GetFileModificationTime(file_path, &file_m_time);
-      if (!s.ok()) {
-        ROCKS_LOG_WARN(db_options_.info_log, "Can't get file mod time: %s: %s",
-                       file_path.c_str(), s.ToString().c_str());
-      } else if (now_seconds - file_m_time > db_options_.wal_ttl_seconds) {
-        f.reset();
-        delete_file(number, file_path);
-      }
-    }
-    if (size_limit_enabled && f) {
-      uint64_t file_size = f->SizeFileBytes();
-      if (file_size > 0) {
-        total_log_file_size += file_size;
-      } else {
-        f.reset();
-        delete_file(number, file_path);
-      }
-    }
-  }
-
-  if (total_log_file_size == 0) {
-    return;
-  }
-
-  if (total_log_file_size <= db_options_.wal_size_limit_mb * 1024 * 1024) {
-    return;
-  }
-  int64_t overflow_size =
-      total_log_file_size - db_options_.wal_size_limit_mb * 1024 * 1024;
-
-  for (auto& f : files) {
-    if (!f) {
-      continue;
-    }
-    uint64_t number = f->LogNumber();
-    std::string file_path = ArchivedLogFileName(db_options_.wal_dir, number);
-    int64_t file_size = int64_t(f->SizeFileBytes());
-    overflow_size -= file_size;
-    delete_file(number, file_path);
-    if (overflow_size <= 0) {
-      break;
-    }
-  }
+  purge_wal_files_running_ = true;
+  PurgeObsoleteWALFilesImpl(now_seconds);
+  purge_wal_files_running_ = false;
 }
 
 void WalManager::ArchiveWALFile(const std::string& fname, uint64_t number) {
@@ -481,6 +403,92 @@ Status WalManager::ReadFirstLine(const std::string& fname,
   // return status.ok() in that case and set sequence number to 0
   *sequence = 0;
   return status;
+}
+
+void WalManager::PurgeObsoleteWALFilesImpl(uint64_t now_seconds) {
+  bool const ttl_enabled = db_options_.wal_ttl_seconds > 0;
+  bool const size_limit_enabled = db_options_.wal_size_limit_mb > 0;
+
+  VectorLogPtr files;
+  auto s = GetSortedWalFiles(files, true /* allow_empty */);
+  if (!s.ok()) {
+    ROCKS_LOG_ERROR(db_options_.info_log, "GetSortedWalFiles fail: %s",
+                    s.ToString().c_str());
+    assert(false);
+    return;
+  }
+  uint64_t total_log_file_size = 0;
+
+  auto delete_file = [&](uint64_t number, const std::string& file_path) {
+    s = env_->DeleteFile(file_path);
+    if (!s.ok()) {
+      ROCKS_LOG_WARN(db_options_.info_log, "Can't delete file: %s: %s",
+                     file_path.c_str(), s.ToString().c_str());
+    } else {
+      MutexLock l(&read_first_record_cache_mutex_);
+      read_first_record_cache_.erase(number);
+      log_numbers_.erase(number);
+    }
+  };
+
+  SequenceNumber guard_seqno = guard_seqno_.load(std::memory_order_relaxed);
+  for (size_t i = 0; i < files.size(); ++i) {
+    auto& f = files[i];
+    if (f->Type() == WalFileType::kAliveLogFile ||
+        (guard_seqno <= kMaxSequenceNumber &&
+         (i + 1 == files.size() ||
+          guard_seqno < files[i + 1]->StartSequence()))) {
+      files.resize(i);
+      break;
+    }
+    uint64_t number = f->LogNumber();
+    std::string file_path = ArchivedLogFileName(db_options_.wal_dir, number);
+
+    if (ttl_enabled) {
+      uint64_t file_m_time;
+      s = env_->GetFileModificationTime(file_path, &file_m_time);
+      if (!s.ok()) {
+        ROCKS_LOG_WARN(db_options_.info_log, "Can't get file mod time: %s: %s",
+                       file_path.c_str(), s.ToString().c_str());
+      } else if (now_seconds - file_m_time > db_options_.wal_ttl_seconds) {
+        f.reset();
+        delete_file(number, file_path);
+      }
+    }
+    if (size_limit_enabled && f) {
+      uint64_t file_size = f->SizeFileBytes();
+      if (file_size > 0) {
+        total_log_file_size += file_size;
+      } else {
+        f.reset();
+        delete_file(number, file_path);
+      }
+    }
+  }
+
+  if (total_log_file_size == 0) {
+    return;
+  }
+
+  if (total_log_file_size <= db_options_.wal_size_limit_mb * 1024 * 1024) {
+    return;
+  }
+  int64_t overflow_size =
+      total_log_file_size - db_options_.wal_size_limit_mb * 1024 * 1024;
+
+  for (auto& f : files) {
+    if (!f) {
+      continue;
+    }
+    uint64_t number = f->LogNumber();
+    std::string file_path = ArchivedLogFileName(db_options_.wal_dir, number);
+    int64_t file_size = int64_t(f->SizeFileBytes());
+    overflow_size -= file_size;
+    delete_file(number, file_path);
+    if (overflow_size <= 0) {
+      break;
+    }
+  }
 }
 
 #endif  // ROCKSDB_LITE

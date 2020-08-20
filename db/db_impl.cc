@@ -1279,6 +1279,9 @@ void DBImpl::BackgroundCallPurge() {
 
       mutex_.Unlock();
       DeleteObsoleteFileImpl(job_id, fname, dir_to_sync, type, number);
+#ifndef ROCKSDB_LITE
+      wal_manager_.PurgeObsoleteWALFiles();
+#endif  // ROCKSDB_LITE
       mutex_.Lock();
     }
   }

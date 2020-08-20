@@ -35,7 +35,8 @@ class WalManager {
       : db_options_(db_options),
         env_options_(env_options),
         env_(db_options.env),
-        purge_wal_files_last_run_(0),
+        purge_wal_files_last_run_{0},
+        purge_wal_files_running_{false},
         seq_per_batch_(seq_per_batch),
         guard_seqno_{SequenceNumber(-1)} {}
 
@@ -86,6 +87,8 @@ class WalManager {
   Status ReadFirstLine(const std::string& fname, const uint64_t number,
                        SequenceNumber* sequence);
 
+  void PurgeObsoleteWALFilesImpl(uint64_t now_seconds);
+
   // ------- state from DBImpl ------
   const ImmutableDBOptions& db_options_;
   const EnvOptions& env_options_;
@@ -98,13 +101,13 @@ class WalManager {
   port::Mutex read_first_record_cache_mutex_;
 
   // last time when PurgeObsoleteWALFiles ran.
-  uint64_t purge_wal_files_last_run_;
-
+  std::atomic<uint64_t> purge_wal_files_last_run_;
+  std::atomic<bool> purge_wal_files_running_;
   bool seq_per_batch_;
 
   // obsolete files will be deleted every this seconds if ttl deletion is
   // enabled and archive size_limit is disabled.
-  static const uint64_t kDefaultIntervalToDeleteObsoleteWAL = 600;
+  static const uint64_t kDefaultIntervalToDeleteObsoleteWAL = 30;
 
   std::atomic<SequenceNumber> guard_seqno_;
 };
