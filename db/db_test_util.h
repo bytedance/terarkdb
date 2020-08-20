@@ -976,6 +976,20 @@ class DBTestBase : public testing::Test {
   uint64_t TestGetTickerCount(const Options& options, Tickers ticker_type) {
     return options.statistics->getTickerCount(ticker_type);
   }
+
+  uint64_t TestGetAndResetTickerCount(const Options& options,
+                                      Tickers ticker_type) {
+    return options.statistics->getAndResetTickerCount(ticker_type);
+  }
+
+  // Note: reverting this setting within the same test run is not yet
+  // supported
+  void SetTimeElapseOnlySleepOnReopen(DBOptions* options);
+
+ private:  // Prone to error on direct use
+  void MaybeInstallTimeElapseOnlySleep(const DBOptions& options);
+
+  bool time_elapse_only_sleep_on_reopen_ = false;
 };
 
 }  // namespace TERARKDB_NAMESPACE
