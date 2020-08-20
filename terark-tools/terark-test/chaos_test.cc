@@ -21,63 +21,40 @@ class ChaosTest {
   std::vector<std::shared_ptr<const Snapshot>> snapshot;
   std::atomic<bool> has_error{false};
   std::mutex snapshot_mutex;
-  uint8_t flags_;
+  uint16_t flags_;
   DBOptions dbo;
   std::atomic<uint64_t> atomic_count{1};
   Status s;
   InstrumentedMutex mutex_;
   ErrorHandler error_handler_;
+  bool exit_;
 
-  ChaosTest(uint8_t flags)
+  ChaosTest(uint16_t flags)
       : dbname_("chaosdb"),
         db_options_(),
         shutting_down_(false),
         preserve_deletes_seqnum_(0),
-        error_handler_(nullptr, db_options_, &mutex_) {
+        error_handler_(nullptr, db_options_, &mutex_),
+        exit_(false) {
     flags_ = flags;
-    set_options();
-    cfDescriptors.emplace_back(rocksdb::kDefaultColumnFamilyName, options);
-    cfDescriptors.emplace_back("universal", options);
-    cfDescriptors.emplace_back("level", options);
-    if (flags & TestWorker) {
-      options.compaction_dispatcher.reset(
-          new AsyncCompactionDispatcher(options));
-      options.enable_lazy_compaction = false;
-      cfDescriptors.emplace_back("async", options);
-    }
-
-    dbo = options;
-    if (flags & ReadOnly) {
-      s = DB::OpenForReadOnly(dbo, dbname_, cfDescriptors, &hs, &db);
-      if (!s.ok()) {
-        printf("ReadOnly Open Error! %s\n", s.getState());
-        assert(false);
-      }
-    } else {
-      s = DB::Open(dbo, dbname_, cfDescriptors, &hs, &db);
-      if (!s.ok()) {
-        printf("Open Error! %s\n", s.getState());
-        assert(false);
-      }
-    }
   }
 
   ~ChaosTest() {}
 
   void set_options() {
     options.atomic_flush = false;
-    options.allow_mmap_reads = true;
+    options.allow_mmap_reads = false;
     options.max_open_files = 8192;
     options.allow_fallocate = true;
     options.writable_file_max_buffer_size = 1048576;
     options.allow_mmap_writes = false;
     options.allow_concurrent_memtable_write = true;
-    options.use_direct_reads = false;
+    options.use_direct_reads = true;
     options.max_background_garbage_collections = 8;
     options.WAL_size_limit_MB = 0;
     options.use_aio_reads = true;
     options.max_background_jobs = 32;
-    options.max_task_per_thread = 4;
+    options.max_task_per_thread = 1;
     options.WAL_ttl_seconds = 0;
     options.enable_thread_tracking = true;
     options.error_if_exists = false;
@@ -138,7 +115,6 @@ class ChaosTest {
                                       rocksdb::Env::HIGH);
     options.env->SetMaxTaskPerThread(options.max_task_per_thread,
                                      rocksdb::Env::LOW);
-
     bbto.pin_top_level_index_and_filter = true;
     bbto.pin_l0_filter_and_index_blocks_in_cache = true;
     bbto.filter_policy.reset(NewBloomFilterPolicy(10, true));
@@ -150,7 +126,6 @@ class ChaosTest {
 
     static TestCompactionFilter filter;
 
-    // options.comparator = &c;
     options.compaction_filter = &filter;
 
     options.merge_operator.reset(new TestMergeOperator(','));
@@ -167,8 +142,7 @@ class ChaosTest {
     options.num_levels = 5;
     options.min_write_buffer_number_to_merge = 1;
     options.max_write_buffer_number_to_maintain = 16;
-    options.max_write_buffer_number = 16;
-    options.compaction_filter = nullptr;
+    options.max_write_buffer_number = 8;
     options.max_compaction_bytes = file_size_base * 2;
     options.memtable_prefix_bloom_size_ratio = 0.000000;
     options.hard_pending_compaction_bytes_limit = 274877906944;
@@ -202,7 +176,7 @@ class ChaosTest {
     options.blob_gc_ratio = 0.1;
     options.create_if_missing = true;
     options.create_missing_column_families = true;
-    // options.use_aio_reads = (flags_ & TestAsync) ? true : false;
+    options.use_aio_reads = (flags_ & TestAsync) ? true : false;
     options.table_factory.reset(rocksdb::NewBlockBasedTableFactory(bbto));
     if (flags_ & TestTerark) {
       tzto.localTempDir = dbname_;
@@ -226,21 +200,21 @@ class ChaosTest {
       tzto.hardZipWorkingMemLimit = 256ull << 30;
       tzto.smallTaskMemory = 1200 << 20;  // 1.2G
       tzto.minDictZipValueSize = 32;
-      tzto.keyPrefixLen = 0; // for IndexID
+      tzto.keyPrefixLen = 0;  // for IndexID
       tzto.indexCacheRatio = 0.001;
       tzto.singleIndexMinSize = 8ULL << 20;
       tzto.singleIndexMaxSize = 0x1E0000000;  // 7.5G
       tzto.singleIndexMinSize = 8ULL << 20;
       tzto.singleIndexMaxSize = 64ULL << 20;
       tzto.minPreadLen = 0;
-      tzto.cacheShards = 257;        // to reduce lock competition
-      tzto.cacheCapacityBytes = 4ULL << 30;  // non-zero implies direct io read
+      tzto.cacheShards = 257;                 // to reduce lock competition
+      tzto.cacheCapacityBytes = 16ULL << 30;  // non-zero implies direct io read
       tzto.disableCompressDict = false;
       tzto.optimizeCpuL3Cache = false;
       tzto.forceMetaInMemory = false;
       options.table_factory.reset(
           rocksdb::NewTerarkZipTableFactory(tzto, options.table_factory));
-   }
+    }
   }
 
   std::pair<std::string, std::string> get_ran_range_pair(
@@ -286,7 +260,8 @@ class ChaosTest {
   }
 
   void RunWorkerCompaction() {
-    ColumnFamilyData *cfd = static_cast<ColumnFamilyHandleImpl *>(hs[3])->cfd();
+    ColumnFamilyData *cfd =
+        static_cast<ColumnFamilyHandleImpl *>(hs[hs.size() - 1])->cfd();
     VersionStorageInfo *vstorage = cfd->current()->storage_info();
     const std::vector<SequenceNumber> &snapshots = {};
     SequenceNumber earliest_write_conflict_snapshot = kMaxSequenceNumber;
@@ -332,13 +307,12 @@ class ChaosTest {
         cfd->current()->version_set(), &shutting_down_,
         preserve_deletes_seqnum_, &log_buffer, nullptr, nullptr, nullptr,
         &mutex_, &error_handler_, snapshots, earliest_write_conflict_snapshot,
-        snapshot_checker, table_cache, &event_logger, false, false, dbname_,
-        &compaction_job_stats_, 8);
+        snapshot_checker, nullptr, &event_logger, false, false, dbname_,
+        &compaction_job_stats_, 8 /* max_task_per_thread */);
     int sub_compaction_used =
         compaction_job.Prepare(0 /* sub_compaction_slots */);
     s = compaction_job.Run();
     compaction_job.Install(*cfd->GetLatestMutableCFOptions());
-    printf("--------------\n");
     if (!s.ok()) {
       fprintf(stderr, "Worker Compaction Error! %s\n", s.getState());
       assert(false);
@@ -369,12 +343,11 @@ class ChaosTest {
       if (flags_ & TestWorker) {
         if (mt() % (1ull << 15) == 0) {
           RunWorkerCompaction();
-          fprintf(stderr, "Worker Compaction\n");
         }
       }
-      value = get_value(count);
       size_t r = uid(mt);
       key = gen_key(r);
+      value = get_value(count, key);
       if (count % 2 == 0) {
         for (auto &h : hs) {
           b.Put(h, key, value);
@@ -423,6 +396,13 @@ class ChaosTest {
                   keys.second.c_str());
           for (auto &h : hs) {
             b.DeleteRange(h, slice0, slice1);
+          }
+        }
+        if (count % 50019 == 0) {
+          fprintf(stderr, "RangeDel [MinKey, MaxKey+1), [%s, %s)\n",
+                  MinKey.c_str(), MaxKey.c_str());
+          for (auto &h : hs) {
+            b.DeleteRange(h, MinKey, MaxKey + "1");
           }
         }
       }
@@ -515,28 +495,28 @@ class ChaosTest {
             IsSame(ctx.iter,
                    [](auto &l, auto &r) { return l->value() == r->value(); }),
             "Iter Seek Next Value");
+      }
 
-        for (auto &it : ctx.iter) {
-          it->Prev();
-        }
-        if (IsAny(ctx.iter, [](auto &it) { return !it->Valid(); })) {
-          CheckAssert(ctx, IsAll(ctx.iter, [](auto &it) { return !it->Valid(); }),
-                      "Iter Seek Next Prev Valid");
-          CheckAssert(ctx,
-                      IsAll(ctx.iter, [](auto &it) { return it->status().ok(); }),
-                      "Iter Seek Next Prev Status");
-        } else {
-          CheckAssert(
-              ctx,
-              IsSame(ctx.iter,
-                     [](auto &l, auto &r) { return l->key() == r->key(); }),
-              "Iter Seek Next Prev Key");
-          CheckAssert(
-              ctx,
-              IsSame(ctx.iter,
-                     [](auto &l, auto &r) { return l->value() == r->value(); }),
-              "Iter Seek Next Prev Value");
-        }
+      for (auto &it : ctx.iter) {
+        it->Prev();
+      }
+      if (IsAny(ctx.iter, [](auto &it) { return !it->Valid(); })) {
+        CheckAssert(ctx, IsAll(ctx.iter, [](auto &it) { return !it->Valid(); }),
+                    "Iter Seek Next Prev Valid");
+        CheckAssert(ctx,
+                    IsAll(ctx.iter, [](auto &it) { return it->status().ok(); }),
+                    "Iter Seek Next Prev Status");
+      } else {
+        CheckAssert(
+            ctx,
+            IsSame(ctx.iter,
+                   [](auto &l, auto &r) { return l->key() == r->key(); }),
+            "Iter Seek Next Prev Key");
+        CheckAssert(
+            ctx,
+            IsSame(ctx.iter,
+                   [](auto &l, auto &r) { return l->value() == r->value(); }),
+            "Iter Seek Next Prev Value");
       }
     }
 
@@ -661,8 +641,8 @@ class ChaosTest {
     }
   }
 
-  void AsyncTest(ReadContext &ctx, std::mt19937_64 mt,
-                 std::uniform_int_distribution<uint64_t> uid) {
+  void AsyncTest(ReadContext &ctx, std::mt19937_64 &mt,
+                 std::uniform_int_distribution<uint64_t> &uid) {
     auto snapshot = get_snapshot(mt);
     for (int i = 0; i < 4; ++i) {
       ctx.values.clear();
@@ -694,7 +674,7 @@ class ChaosTest {
         ctx.futures[i] = db->GetFuture(ctx.ro, hs[i], ctx.key);
 #endif
       }
-      db->WaitAsync();      
+      db->WaitAsync();
       if (IsAny(ctx.ss, [](auto &s) { return s.IsNotFound(); })) {
         CheckAssert(ctx, IsAll(ctx.ss, [](auto &s) { return s.IsNotFound(); }),
                     "Get Status");
@@ -703,9 +683,11 @@ class ChaosTest {
             IsAll(ctx.async_status, [](auto &s) { return s.IsNotFound(); }),
             "GetAsync Status");
 #if defined(TERARKDB_WITH_AIO_FUTURE)
-        CheckAssert(ctx, IsAll(ctx.futures, [](auto &fu) {
-                      return std::get<0>(fu.get()).IsNotFound();
-                    }), "GetFuture Status");
+        CheckAssert(
+            ctx,
+            IsAll(ctx.futures,
+                  [](auto &fu) { return std::get<0>(fu.get()).IsNotFound(); }),
+            "GetFuture Status");
 #endif
       } else {
         CheckAssert(ctx,
@@ -713,6 +695,7 @@ class ChaosTest {
                             [](auto &l, auto &r) { return l == r; }),
                     "Get vs GetAsync");
 #if defined(TERARKDB_WITH_AIO_FUTURE)
+
         CheckAssert(ctx,
                     AllSame(ctx.values, ctx.futures,
                             [](auto &l, auto &r) {
@@ -742,6 +725,87 @@ class ChaosTest {
     ctx.values.resize(hs.size());
     CheckAssert(ctx, false, "TEST");
     db->ReleaseSnapshot(ctx.ro.snapshot);
+  }
+
+  void HashTest(ReadContext &ctx, std::mt19937_64 &mt,
+                std::uniform_int_distribution<uint64_t> &uid) {
+    auto snapshot = get_snapshot(mt);
+    std::vector<rocksdb::Iterator *> iter_for_new;
+    ctx.ro.snapshot = snapshot.get();
+    if (ctx.ro.snapshot == nullptr) {
+      ctx.seqno = uint64_t(-1);
+    } else {
+      ctx.seqno = get_snapshot_seqno(ctx.ro.snapshot);
+    }
+    for (size_t i = 0; i < hs.size(); ++i) {
+      ctx.ss[i] = db->Get(ctx.ro, hs[i], ctx.keys[i], &(ctx.values[i]));
+      if (ctx.ss[i].ok()) {
+        size_t pos = ctx.values[i].rfind("#");
+        assert(pos != std::string::npos);
+        auto sub_str = ctx.values[i].substr(pos + 1);
+        assert(h(ctx.key) == sub_str);
+      }
+    }
+  }
+
+  bool HaveLevelFiles(int level) {
+    std::vector<LiveFileMetaData> metadata;
+    db->GetLiveFilesMetaData(&metadata);
+    for (auto &lfmd : metadata) {
+      if (lfmd.level >= 2) return true;
+    }
+    return false;
+  }
+
+  void SetExit() { exit_ = true; }
+
+  void Close() {
+    for (auto h : hs) {
+      if (h) {
+        db->DestroyColumnFamilyHandle(h);
+      }
+    }
+    hs.clear();
+    cfDescriptors.clear();
+    snapshot.clear();
+    delete db;
+    db = nullptr;
+  }
+
+  void Open(int cf_num) {
+    set_options();
+    exit_ = false;
+    for (int i = 0; i < cf_num; ++i) {
+      cfDescriptors.emplace_back(rocksdb::kDefaultColumnFamilyName, options);
+      options.compaction_style = rocksdb::kCompactionStyleUniversal;
+      options.write_buffer_size = size_t(file_size_base * 1.1);
+      options.enable_lazy_compaction = true;
+      cfDescriptors.emplace_back("universal", options);
+      options.compaction_style = rocksdb::kCompactionStyleLevel;
+      options.write_buffer_size = size_t(file_size_base / 1.1);
+      options.enable_lazy_compaction = true;
+      cfDescriptors.emplace_back("level", options);
+    }
+    if (flags_ & TestWorker) {
+      options.compaction_dispatcher.reset(
+          new AsyncCompactionDispatcher(options));
+      options.enable_lazy_compaction = false;
+      cfDescriptors.emplace_back("async", options);
+    }
+    dbo = options;
+    if (flags_ & ReadOnly) {
+      s = DB::OpenForReadOnly(dbo, dbname_, cfDescriptors, &hs, &db);
+      if (!s.ok()) {
+        printf("ReadOnly Open Error! %s\n", s.getState());
+        assert(false);
+      }
+    } else {
+      s = DB::Open(dbo, dbname_, cfDescriptors, &hs, &db);
+      if (!s.ok()) {
+        printf("Open Error! %s\n", s.getState());
+        assert(false);
+      }
+    }
   }
 
   void ReadFunc(int seed) {
@@ -776,6 +840,9 @@ class ChaosTest {
       if ((flags_ & TestAsync) && (ctx.count % 13 == 0)) {
         AsyncTest(ctx, mt, uid);
       }
+      if ((flags_ & TestHash) && (ctx.count % 2 == 0)) {
+        HashTest(ctx, mt, uid);
+      }
     }
   }
 
@@ -809,6 +876,7 @@ class ChaosTest {
       if (flags_ & TestAsync) {
         fprintf(stderr, "Async:\n");
         for (size_t i = 0; i < hs.size(); ++i) {
+          const auto &tmp_tuple = ctx.futures[i].get();
           fprintf(stderr, "Get : s%zd = %s, k%zd = %s, v%zd = %s\n", i,
                   ctx.ss.size() > i ? ctx.ss[i].ToString().c_str() : "null", i,
                   ctx.key.c_str(), i,
@@ -832,52 +900,68 @@ class ChaosTest {
 };  // ChaosTest
 }  // namespace rocksdb
 
-int main(int argc, const char *argv[]) {
-  uint8_t flags = 0;
-  for (int i = 0; i < argc; ++i) {
-    if (strcmp(argv[i], "Iter") == 0) {
-      flags |= TestIter;
-      continue;
-    }
-    if (strcmp(argv[i], "Get") == 0) {
-      flags |= TestGet;
-      continue;
-    }
-    if (strcmp(argv[i], "Async") == 0) {
-      flags |= TestAsync;
-      continue;
-    }
-    if (strcmp(argv[i], "Worker") == 0) {
-      flags |= TestWorker;
-      continue;
-    }
-    if (strcmp(argv[i], "ReadOnly") == 0) {
-      flags |= ReadOnly;
-      continue;
-    }
-    if (strcmp(argv[i], "Terark") == 0) {
-      flags |= TestTerark;
-      continue;
-    }
-    if (strcmp(argv[i], "Compaction") == 0) {
-      flags |= TestCompaction;
-      continue;
-    }
-    if (strcmp(argv[i], "RangeDel") == 0) {
-      flags |= TestRangeDel;
-      continue;
-    }
+int main(int argc, char **argv) {
+  google::ParseCommandLineFlags(&argc, &argv, true);
+  uint16_t flags = 0;
+  if (FLAGS_get) {
+    flags |= TestGet;
+    fprintf(stderr, "Test Get\n");
   }
-  rocksdb::ChaosTest test(flags);
+
+  if (FLAGS_iter) {
+    flags |= TestIter;
+    fprintf(stderr, "Test Iterator\n");
+  }
+
+  if (FLAGS_async) {
+    flags |= TestAsync;
+    fprintf(stderr, "Test GetAsync and GetFuture\n");
+  }
+
+  if (FLAGS_worker) {
+    flags |= TestWorker;
+    fprintf(stderr, "Test Worker Compaction\n");
+  }
+
+  if (FLAGS_hash) {
+    flags |= TestHash;
+    fprintf(stderr, "Test Hash(key) after Compaction\n");
+  }
+
+  if (FLAGS_readonly) {
+    flags |= ReadOnly;
+    fprintf(stderr, "Test ReadOnly Open\n");
+  }
+
+  if (FLAGS_compactrange) {
+    flags |= TestCompaction;
+    fprintf(stderr, "Test CompactRange\n");
+  }
+
+  if (FLAGS_terark) {
+    flags |= TestTerark;
+    fprintf(stderr, "Test Terark Table\n");
+  }
+
+  if (FLAGS_rangedel) {
+    flags |= TestRangeDel;
+    fprintf(stderr, "Test RangeDel\n");
+  }
+  int write_thread = FLAGS_write_thread;
+  int read_thread = FLAGS_read_thread;
+  int cf_num = FLAGS_cf_num;
   std::vector<std::thread> thread_vec;
-  for (int j = 0; j < 4; ++j) {
+  rocksdb::ChaosTest test(flags);
+  test.Open(cf_num);
+  for (int j = 0; j < write_thread; ++j) {
     thread_vec.emplace_back(&rocksdb::ChaosTest::ReadFunc, std::ref(test), j);
   }
-  for (int j = 0; j < 2; ++j) {
+  for (int j = 0; j < read_thread; ++j) {
     thread_vec.emplace_back(&rocksdb::ChaosTest::WriteFunc, std::ref(test), j);
   }
   for (auto &t : thread_vec) {
     t.join();
   }
+  test.Close();
   return 0;
 }

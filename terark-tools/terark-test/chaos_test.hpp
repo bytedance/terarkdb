@@ -1,9 +1,11 @@
+#include <gflags/gflags.h>
 #include <sys/epoll.h>
 #include <cctype>
 #include <chrono>
 #include <cinttypes>
 #include <cstdlib>
 #include <fstream>
+#include <functional>
 #include <iomanip>
 #include <iostream>
 #include <iterator>
@@ -16,7 +18,6 @@ namespace gujia {
 typedef struct epoll_event Event;
 }
 
-#include <db/memtable.h>
 #include <rocksdb/compaction_filter.h>
 #include <rocksdb/convenience.h>
 #include <rocksdb/db.h>
@@ -55,20 +56,42 @@ typedef struct epoll_event Event;
 #include "db/compaction_job.h"
 #include "db/db_impl.h"
 #include "db/error_handler.h"
+#include "db/memtable.h"
 
 // terark test
 #include <table/terark_zip_common.h>
 #include <table/terark_zip_table.h>
 #include <terark/idx/terark_zip_index.hpp>
 
+DEFINE_bool(get, true, "test Get");
+DEFINE_bool(iter, false, "test Iterator");
+DEFINE_bool(async, false, "test GetFuture and GetAsync");
+DEFINE_bool(worker, false, "test Worker Compaction");
+DEFINE_bool(readonly, false, "test ReadOnly Open");
+DEFINE_bool(terark, false, "test Terark Table");
+DEFINE_bool(compactrange, false, "test CompactRange");
+DEFINE_bool(rangedel, false, "test RangeDel");
+DEFINE_bool(hash, false, "test Hash(key) after Compaction");
+DEFINE_int32(write_thread, 1, "the number of write thread.");
+DEFINE_int32(read_thread, 1, "the number of read thread.");
+DEFINE_int32(cf_num, 1, "the number of column family");
+DEFINE_int32(value_avg_size, 2048, "the average size of value");
+DEFINE_int32(key_avg_size, 64, "the average size of key");
+
 const size_t file_size_base = 64ull << 20;
 const size_t blob_size = 2048;
-const size_t value_avg_size = 2048;
-const size_t rand_key_times = 500;
 const size_t key_mode_nums = 2;
-
+const size_t value_avg_size = FLAGS_value_avg_size;
+const size_t key_avg_size = FLAGS_key_avg_size;
+const size_t rand_key_times = 500;
 const char *READ_ONLY_TEST_KEY = "FF7EAC449F56EB1E9A9A0D43195";
 const size_t READ_ONLY_TEST_SEQ = 12983622;
+std::string MinKey;
+std::string MaxKey;
+
+static thread_local std::mt19937_64 mt;
+std::hash<std::string> h1;
+std::string h(rocksdb::Slice key) { return std::to_string(h1(key.ToString())); }
 enum {
   TestIter = 1ULL << 0,
   TestTerark = 1ULL << 1,
@@ -78,6 +101,7 @@ enum {
   TestAsync = 1ULL << 5,
   TestWorker = 1ULL << 6,
   ReadOnly = 1ULL << 7,
+  TestHash = 1ULL << 8,
 };
 class ComparatorRename : public rocksdb::Comparator {
  public:
@@ -109,10 +133,22 @@ class ComparatorRename : public rocksdb::Comparator {
 };
 
 class TestCompactionFilter : public rocksdb::CompactionFilter {
-  bool Filter(int /*level*/, const rocksdb::Slice & /*key*/,
-              const rocksdb::Slice & /*existing_value*/,
-              std::string * /*new_value*/,
-              bool * /*value_changed*/) const override {
+  bool Filter(int /*level*/, const rocksdb::Slice &key,
+              const rocksdb::Slice &existing_value, std::string *new_value,
+              bool *value_changed) const override {
+    assert(!existing_value.empty());
+    // filter random
+    // std::uniform_int_distribution<size_t> dis(0, 100);
+    // if (dis(mt) < 5) return true;
+    auto value = existing_value.ToString();
+    size_t pos = value.rfind("#");
+    if (value.size() % 3 == 0) {
+      *value_changed = true;
+      new_value->assign(value.data(), value.size());
+    }
+    assert(pos != std::string::npos);
+    auto sub_str = value.substr(pos + 1);
+    assert(h(key) == sub_str);
     return false;
   }
   const char *Name() const override { return "TestCompactionFilter"; }
@@ -232,21 +268,22 @@ std::string get_rnd_key(size_t r) {
 }
 
 std::string gen_key(size_t mode) {
+  std::string key;
   switch (mode % key_mode_nums) {
     case 0:
-      return get_seq_key(mode);
+      key = get_seq_key(mode);
       break;
     case 1:
-      return get_rnd_key(mode);
+      key = get_rnd_key(mode);
     default:
       break;
   }
-  assert(false);
-  return "";
+  MinKey = std::min(MinKey, key);
+  MaxKey = std::max(MaxKey, key);
+  return key;
 }
 
-
-std::string get_value(size_t i) {
+std::string get_value(size_t i, std::string &key) {
   static std::string str = [] {
     std::string s =
         "qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM1234567890";
@@ -275,6 +312,7 @@ std::string get_value(size_t i) {
   value.append("#");
   value.append(str.data() + pos, str.data() + pos + size);
   value.append("#");
+  value.append(h(rocksdb::Slice(key)));
   return value;
 }
 
