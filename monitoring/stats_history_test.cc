@@ -250,7 +250,6 @@ TEST_F(StatsHistoryTest, InMemoryStatsHistoryPurging) {
     dbfull()->TEST_WaitForStatsDumpRun(
         [&] { mock_env_->MockSleepForSeconds(kPeriodSec); });
   }
-
   ASSERT_OK(db_->GetStatsHistory(0, mock_env_->NowSeconds() + 1, &stats_iter));
   ASSERT_TRUE(stats_iter != nullptr);
   size_t stats_count_reopen = 0;
