@@ -903,6 +903,13 @@ TEST_F(WriteBatchTest, MemoryLimitTest) {
   ASSERT_TRUE(s.IsMemoryLimit());
 }
 
+TEST_F(WriteBatchTest, PhysicalOffsetTest) {
+  // TODO test of wal physicaloffset and logicaloffset calculation
+}
+
+TEST_F(WriteBatchTest, PhysicalLengthTest) {
+  // TODO test of wal physical length and logical length calculation
+}
 }  // namespace rocksdb
 
 int main(int argc, char** argv) {

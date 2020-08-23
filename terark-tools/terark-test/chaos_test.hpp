@@ -87,7 +87,7 @@ DEFINE_int32(value_avg_size, 2048, "the average size of value");
 DEFINE_int32(key_avg_size, 64, "the average size of key");
 
 const size_t file_size_base = 64ull << 20;
-const size_t blob_size = 2048;
+const size_t blob_size = 512;
 const size_t key_mode_nums = 2;
 const size_t value_avg_size = FLAGS_value_avg_size;
 const size_t key_avg_size = FLAGS_key_avg_size;

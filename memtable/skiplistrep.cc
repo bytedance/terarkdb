@@ -39,7 +39,7 @@ class SkipListRep : public MemTableRep {
   }
 
   virtual bool InsertKeyValue(const Slice& internal_key,
-                              const Slice& value) override {
+                              const SliceParts& value) override {
     size_t buf_size = EncodeKeyValueSize(internal_key, value);
     char* buf;
     KeyHandle handle = Allocate(buf_size, &buf);
@@ -48,7 +48,7 @@ class SkipListRep : public MemTableRep {
   }
 
   virtual bool InsertKeyValueWithHint(const Slice& internal_key,
-                                      const Slice& value,
+                                      const SliceParts& value,
                                       void** hint) override {
     size_t buf_size = EncodeKeyValueSize(internal_key, value);
     char* buf;
@@ -58,7 +58,7 @@ class SkipListRep : public MemTableRep {
   }
 
   bool InsertKeyValueConcurrently(const Slice& internal_key,
-                                  const Slice& value) override {
+                                  const SliceParts& value) override {
     size_t buf_size = EncodeKeyValueSize(internal_key, value);
     char* buf;
     KeyHandle handle = Allocate(buf_size, &buf);

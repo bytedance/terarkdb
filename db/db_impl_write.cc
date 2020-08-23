@@ -145,7 +145,8 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
       w.status = WriteBatchInternal::InsertInto(
           &w, w.sequence, &column_family_memtables, &flush_scheduler_,
           write_options.ignore_missing_column_families, 0 /*log_number*/, this,
-          true /*concurrent_memtable_writes*/, seq_per_batch_, w.batch_cnt);
+          true /*concurrent_memtable_writes*/, seq_per_batch_, w.batch_cnt,
+          write_options.blob_size);
 
       PERF_TIMER_START(write_pre_and_post_process_time);
     }
@@ -297,7 +298,7 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
       if (status.ok() && !write_options.disableWAL) {
         PERF_TIMER_GUARD(write_wal_time);
         status = WriteToWAL(write_group, log_writer, log_used, need_log_sync,
-                            need_log_dir_sync, last_sequence + 1);
+                            need_log_dir_sync, last_sequence + 1, w);
       }
     } else {
       if (status.ok() && !write_options.disableWAL) {
@@ -305,7 +306,7 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
         // LastAllocatedSequence is increased inside WriteToWAL under
         // wal_write_mutex_ to ensure ordered events in WAL
         status = ConcurrentWriteToWAL(write_group, log_used, &last_sequence,
-                                      seq_inc);
+                                      seq_inc, w);
       } else {
         // Otherwise we inc seq number for memtable writes
         last_sequence = versions_->FetchAddLastAllocatedSequence(seq_inc);
@@ -324,7 +325,7 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
             write_group, current_sequence, column_family_memtables_.get(),
             &flush_scheduler_, write_options.ignore_missing_column_families,
             0 /*recovery_log_number*/, this, parallel, seq_per_batch_,
-            batch_per_txn_);
+            batch_per_txn_, write_options.blob_size);
       } else {
         SequenceNumber next_sequence = current_sequence;
         // Note: the logic for advancing seq here must be consistent with the
@@ -357,7 +358,7 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
               &w, w.sequence, &column_family_memtables, &flush_scheduler_,
               write_options.ignore_missing_column_families, 0 /*log_number*/,
               this, true /*concurrent_memtable_writes*/, seq_per_batch_,
-              w.batch_cnt, batch_per_txn_);
+              w.batch_cnt, batch_per_txn_, write_options.blob_size);
         }
       }
       if (seq_used != nullptr) {
@@ -490,8 +491,9 @@ Status DBImpl::PipelinedWriteImpl(const WriteOptions& write_options,
                           wal_write_group.size - 1);
         RecordTick(stats_, WRITE_DONE_BY_OTHER, wal_write_group.size - 1);
       }
-      w.status = WriteToWAL(wal_write_group, log_writer, log_used,
-                            need_log_sync, need_log_dir_sync, current_sequence);
+      w.status =
+          WriteToWAL(wal_write_group, log_writer, log_used, need_log_sync,
+                     need_log_dir_sync, current_sequence, w);
     }
 
     if (!w.CallbackFailed()) {
@@ -520,7 +522,7 @@ Status DBImpl::PipelinedWriteImpl(const WriteOptions& write_options,
           memtable_write_group, w.sequence, column_family_memtables_.get(),
           &flush_scheduler_, write_options.ignore_missing_column_families,
           0 /*log_number*/, this, false /*concurrent_memtable_writes*/,
-          seq_per_batch_, batch_per_txn_);
+          seq_per_batch_, batch_per_txn_, write_options.blob_size);
       versions_->SetLastSequence(memtable_write_group.last_sequence);
       write_thread_.ExitAsMemTableWriter(&w, memtable_write_group);
     }
@@ -533,7 +535,7 @@ Status DBImpl::PipelinedWriteImpl(const WriteOptions& write_options,
     w.status = WriteBatchInternal::InsertInto(
         &w, w.sequence, &column_family_memtables, &flush_scheduler_,
         write_options.ignore_missing_column_families, 0 /*log_number*/, this,
-        true /*concurrent_memtable_writes*/);
+        true /*concurrent_memtable_writes*/, write_options.blob_size);
     if (write_thread_.CompleteParallelMemTableWriter(&w)) {
       MemTableInsertStatusCheck(w.status);
       versions_->SetLastSequence(w.write_group->last_sequence);
@@ -626,7 +628,7 @@ Status DBImpl::WriteImplWALOnly(const WriteOptions& write_options,
   }
   if (!write_options.disableWAL) {
     status =
-        ConcurrentWriteToWAL(write_group, log_used, &last_sequence, seq_inc);
+        ConcurrentWriteToWAL(write_group, log_used, &last_sequence, seq_inc, w);
   } else {
     // Otherwise we inc seq number to do solely the seq allocation
     last_sequence = versions_->FetchAddLastAllocatedSequence(seq_inc);
@@ -826,13 +828,34 @@ WriteBatch* DBImpl::MergeBatch(const WriteThread::WriteGroup& write_group,
   return merged_batch;
 }
 
+static void UnpackBatchInfo(WriteThread::WriteGroup& write_group,
+                            bool wal_only) {
+  size_t cur_offset = write_group.leader->wal_offset_of_wb_content_;
+  assert(write_group.leader == *(write_group.begin()));
+  for (auto writer : write_group) {
+    writer->wal_offset_of_wb_content_ = cur_offset;
+
+    // set WriteBatchInternal::Append
+    if (wal_only) {
+      const SavePoint& batch_end = writer->batch->GetWalTerminationPoint();
+      size_t src_len = batch_end.size - WriteBatchInternal::kHeader;
+      cur_offset += src_len;
+    } else {
+      assert(writer->batch->GetDataSize() >= WriteBatchInternal::kHeader);
+      size_t src_len =
+          writer->batch->GetDataSize() - WriteBatchInternal::kHeader;
+      cur_offset += src_len;
+    }
+  }
+}
 // When two_write_queues_ is disabled, this function is called from the only
 // write thread. Otherwise this must be called holding log_write_mutex_.
 Status DBImpl::WriteToWAL(const WriteBatch& merged_batch,
                           log::Writer* log_writer, uint64_t* log_used,
-                          uint64_t* log_size) {
+                          uint64_t* log_size, WriteThread::Writer& w) {
   assert(log_size != nullptr);
   Slice log_entry = WriteBatchInternal::Contents(&merged_batch);
+  size_t num_entries = merged_batch.Count();
   *log_size = log_entry.size();
   // When two_write_queues_ WriteToWAL has to be protected from concurretn calls
   // from the two queues anyway and log_write_mutex_ is already held. Otherwise
@@ -845,7 +868,7 @@ Status DBImpl::WriteToWAL(const WriteBatch& merged_batch,
   if (UNLIKELY(needs_locking)) {
     log_write_mutex_.Lock();
   }
-  Status status = log_writer->AddRecord(log_entry);
+  Status status = log_writer->AddRecord(log_entry, num_entries, &w);
   if (UNLIKELY(needs_locking)) {
     log_write_mutex_.Unlock();
   }
@@ -863,7 +886,7 @@ Status DBImpl::WriteToWAL(const WriteBatch& merged_batch,
 Status DBImpl::WriteToWAL(const WriteThread::WriteGroup& write_group,
                           log::Writer* log_writer, uint64_t* log_used,
                           bool need_log_sync, bool need_log_dir_sync,
-                          SequenceNumber sequence) {
+                          SequenceNumber sequence, WriteThread::Writer& w) {
   Status status;
 
   assert(!write_group.leader->disable_wal);
@@ -886,7 +909,11 @@ Status DBImpl::WriteToWAL(const WriteThread::WriteGroup& write_group,
   WriteBatchInternal::SetSequence(merged_batch, sequence);
 
   uint64_t log_size;
-  status = WriteToWAL(*merged_batch, log_writer, log_used, &log_size);
+  status = WriteToWAL(*merged_batch, log_writer, log_used, &log_size, w);
+  if (status.ok() && write_with_wal > 1) {
+    assert(!merged_batch->GetWalTerminationPoint().is_cleared());
+    UnpackBatchInfo(const_cast<WriteThread::WriteGroup&>(write_group), true);
+  }
   if (to_be_cached_state) {
     cached_recoverable_state_ = *to_be_cached_state;
     cached_recoverable_state_empty_ = false;
@@ -935,7 +962,7 @@ Status DBImpl::WriteToWAL(const WriteThread::WriteGroup& write_group,
 Status DBImpl::ConcurrentWriteToWAL(const WriteThread::WriteGroup& write_group,
                                     uint64_t* log_used,
                                     SequenceNumber* last_sequence,
-                                    size_t seq_inc) {
+                                    size_t seq_inc, WriteThread::Writer& w) {
   Status status;
 
   assert(!write_group.leader->disable_wal);
@@ -962,7 +989,11 @@ Status DBImpl::ConcurrentWriteToWAL(const WriteThread::WriteGroup& write_group,
 
   log::Writer* log_writer = logs_.back().writer;
   uint64_t log_size;
-  status = WriteToWAL(*merged_batch, log_writer, log_used, &log_size);
+  status = WriteToWAL(*merged_batch, log_writer, log_used, &log_size, w);
+  if (status.ok() && write_with_wal > 1) {
+    assert(!merged_batch->GetWalTerminationPoint().is_cleared());
+    UnpackBatchInfo(const_cast<WriteThread::WriteGroup&>(write_group), true);
+  }
   if (to_be_cached_state) {
     cached_recoverable_state_ = *to_be_cached_state;
     cached_recoverable_state_empty_ = false;
@@ -1417,6 +1448,8 @@ Status DBImpl::NewLogWriter(std::unique_ptr<log::Writer>* new_log,
       LogFileName(immutable_db_options_.wal_dir, new_log_number);
   EnvOptions opt_env_opt = env_->OptimizeForLogWrite(env_options_, db_options);
   Status s;
+  // if (recycle_log_number && LogNotDepended(recycle_log_number)) {
+  // Not Support recycle_log_file_num>0 temporarily
   if (recycle_log_number) {
     ROCKS_LOG_INFO(immutable_db_options_.info_log,
                    "reusing log %" PRIu64 " from recycle list\n",
@@ -1432,9 +1465,10 @@ Status DBImpl::NewLogWriter(std::unique_ptr<log::Writer>* new_log,
     std::unique_ptr<WritableFileWriter> file_writer(new WritableFileWriter(
         std::move(lfile), log_fname, opt_env_opt, nullptr /* stats */,
         immutable_db_options_.listeners));
-    new_log->reset(new log::Writer(
-        std::move(file_writer), new_log_number,
-        immutable_db_options_.recycle_log_file_num > 0, manual_wal_flush_));
+    new_log->reset(
+        new log::Writer(std::move(file_writer), new_log_number,
+                        immutable_db_options_.recycle_log_file_num > 0,
+                        versions_.get(), manual_wal_flush_));
   }
   return s;
 }
@@ -1635,6 +1669,9 @@ Status DBImpl::SwitchMemtable(ColumnFamilyData* cfd, WriteContext* context) {
       // Alway flush the buffer of the last log before switching to a new one
       log::Writer* cur_log_writer = logs_.back().writer;
       s = cur_log_writer->WriteBuffer();
+
+      versions_->PutBlobMeta(cur_log_writer->get_log_number(),
+                             cur_log_writer->get_num_entries());
       if (!s.ok()) {
         ROCKS_LOG_WARN(immutable_db_options_.info_log,
                        "[%s] Failed to switch from #%" PRIu64 " to #%" PRIu64

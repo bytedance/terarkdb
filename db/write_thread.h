@@ -122,8 +122,11 @@ class WriteThread {
     PreReleaseCallback* pre_release_callback;
     uint64_t log_used;  // log number that this batch was inserted into
     uint64_t log_ref;   // log number that memtable insert should reference
+    uint64_t wal_offset_of_wb_content_ = uint64_t(-1);
     WriteCallback* callback;
     bool made_waitable;          // records lazy construction of mutex and cv
+    bool is_recycle;  // kHeaderSize or kRecyclableHeaderSize ( maybe not need
+                      // if disable recycle logs
     std::atomic<uint8_t> state;  // write under StateMutex() or pre-link
     WriteGroup* write_group;
     SequenceNumber sequence;  // the sequence number to use for the first key

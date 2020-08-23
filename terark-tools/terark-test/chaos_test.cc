@@ -212,8 +212,8 @@ class ChaosTest {
       tzto.forceMetaInMemory = false;
       options.table_factory.reset(
           rocksdb::NewTerarkZipTableFactory(tzto, options.table_factory));
-    }
-#endif
+   }
+    wo.blob_size = 512;
   }
 
   std::pair<std::string, std::string> get_ran_range_pair(
@@ -861,9 +861,10 @@ class ChaosTest {
               ctx.count, ctx.seqno, ctx.key.c_str(), err);
       fprintf(stderr, "Get:\n");
       for (size_t i = 0; i < hs.size(); ++i) {
-        fprintf(stderr, "s%zd = %s, v%zd = %s\n", i,
+        fprintf(stderr, "s%zd = %s, k%zd = %s, v%zd = %s\n", i,
                 ctx.ss.size() > i ? ctx.ss[i].ToString().c_str() : "null", i,
-                ctx.values.size() > i ? ctx.values[i].c_str() : "null");
+                ctx.keys.size() > i ? ctx.keys[i].ToString().c_str() : "null",
+                i, ctx.values.size() > i ? ctx.values[i].c_str() : "null");
       }
       if (flags_ & TestIter) {
         fprintf(stderr, "Iter:\n");

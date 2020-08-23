@@ -52,6 +52,7 @@
 #include "monitoring/perf_context_imp.h"
 #include "monitoring/statistics.h"
 #include "rocksdb/merge_operator.h"
+#include "terark/util/crc.hpp"
 #include "util/coding.h"
 #include "util/duplicate_detector.h"
 #include "util/string_util.h"
@@ -1008,9 +1009,13 @@ class MemTableInserter : public WriteBatch::Handler {
   const uint64_t recovering_log_number_;
   // log number that all Memtables inserted into should reference
   uint64_t log_number_ref_;
+  uint64_t log_used_;
   DBImpl* db_;
   const bool concurrent_memtable_writes_;
   bool post_info_created_;
+  uint64_t wal_offset_of_wb_content_;
+  uint64_t wal_record_header_size_;
+  const char* batch_content_;
 
   bool* has_valid_writes_;
   // On some (!) platforms just default creating
@@ -1036,6 +1041,7 @@ class MemTableInserter : public WriteBatch::Handler {
   using DupDetector = std::aligned_storage<sizeof(DuplicateDetector)>::type;
   DupDetector duplicate_detector_;
   bool dup_dectector_on_;
+  size_t blob_size_=-1;
 
   MemPostInfoMap& GetPostMap() {
     assert(concurrent_memtable_writes_);
@@ -1081,6 +1087,9 @@ class MemTableInserter : public WriteBatch::Handler {
         db_(reinterpret_cast<DBImpl*>(db)),
         concurrent_memtable_writes_(concurrent_memtable_writes),
         post_info_created_(false),
+        wal_offset_of_wb_content_(-1),
+        wal_record_header_size_(-1),
+        batch_content_(nullptr),
         has_valid_writes_(has_valid_writes),
         rebuilding_trx_(nullptr),
         rebuilding_trx_seq_(0),
@@ -1129,6 +1138,14 @@ class MemTableInserter : public WriteBatch::Handler {
   }
 
   void set_log_number_ref(uint64_t log) { log_number_ref_ = log; }
+  void SetContext(size_t wo, size_t hs, const std::string& br, size_t blob_size,
+                  uint64_t log) {
+    wal_offset_of_wb_content_ = wo;
+    wal_record_header_size_ = hs;
+    batch_content_ = br.data() + WriteBatchInternal::kHeader;
+    blob_size_ = blob_size;
+    log_used_ = log;
+  }
 
   SequenceNumber sequence() const { return sequence_; }
 
@@ -1183,6 +1200,76 @@ class MemTableInserter : public WriteBatch::Handler {
     return true;
   }
 
+  struct ValueIndexBuf {
+    ValueIndexBuf() {}
+    ~ValueIndexBuf() {}
+    void Fill(const Slice& value, uint64_t wal_offset_of_wb_content,
+              uint64_t wal_record_header_size, const char* batch_content,
+              uint64_t log_number) {
+      // add value index in front of data,
+      assert(log_number >> 62 == 0);
+      assert(batch_content);
+      assert(wal_record_header_size != uint64_t(-1));
+
+      // AddPackedLogNumber
+      uint64_t packed_log_number = (log_number | rocksdb::ValueIndex::kDefault);
+      EncodeFixed64(buf_, packed_log_number);
+
+      // Add value offset and logical length
+      uint64_t physical_offset =
+          GetPhysicalOffset(wal_offset_of_wb_content, wal_record_header_size,
+                            value.data() - batch_content);
+      EncodeFixed64(buf_ + 8, physical_offset);
+      assert(value.size() < size_t{port::kMaxUint32});
+      EncodeFixed32(buf_ + 16, (uint32_t)value.size());
+
+      // Add crc of head&tail
+      size_t head_size, tail_size;
+      size_t first_block_remain_size =
+          log::kBlockSize - physical_offset % log::kBlockSize;
+      if (value.size() <= first_block_remain_size) {
+        head_size = tail_size = 0;
+      } else {
+        size_t kBlockAvailSize = log::kBlockSize - wal_record_header_size;
+        head_size = first_block_remain_size;
+        tail_size = (value.size() - head_size) % kBlockAvailSize;
+      }
+      uint16_t head_crc = terark::Crc16c_update(0, value.data(), head_size);
+      uint16_t tail_crc = terark::Crc16c_update(
+          0, value.data() + value.size() - tail_size, tail_size);
+
+      EncodeFixed16(buf_ + 20, head_crc);
+      EncodeFixed16(buf_ + 22, tail_crc);
+    }
+
+    char buf_[ValueIndex::kDefaultLogIndexSize];
+
+   private:
+    size_t GetPhysicalOffset(uint64_t wal_offset_of_wb_content,
+                             uint64_t wal_record_header_size,
+                             size_t data_size_before_cur_value) {
+      // TODO add test for this calculation
+      assert(wal_record_header_size == log::kHeaderSize);
+      assert(wal_offset_of_wb_content != uint64_t(-1));
+
+      size_t kBlockAvailSize =
+          log::kBlockSize - wal_record_header_size;  // for middle type
+      size_t first_block_remain_size =
+          log::kBlockSize - wal_offset_of_wb_content % log::kBlockSize;
+
+      if (data_size_before_cur_value < first_block_remain_size) {
+        // first block have some unused space
+        return wal_offset_of_wb_content + data_size_before_cur_value;
+      }
+
+      size_t crossed_blocks = (data_size_before_cur_value -
+                               first_block_remain_size + kBlockAvailSize) /
+                              kBlockAvailSize;
+      return wal_offset_of_wb_content + data_size_before_cur_value +
+             wal_record_header_size * crossed_blocks;
+    }
+  };
+
   Status PutCFImpl(uint32_t column_family_id, const Slice& key,
                    const Slice& value, ValueType value_type) {
     // optimize for non-recovery mode
@@ -1213,16 +1300,34 @@ class MemTableInserter : public WriteBatch::Handler {
     // any kind of transactions including the ones that use seq_per_batch
     assert(!seq_per_batch_ || !moptions->inplace_update_support);
     if (!moptions->inplace_update_support) {
-      bool mem_res =
-          mem->Add(sequence_, value_type, key, value,
-                   concurrent_memtable_writes_, get_post_process_info(mem));
+      // now separate kv only happen on non-inplace-update-support
+      ValueIndexBuf tv;
+      bool mem_res = false;
+      if (value.size() > blob_size_) {
+        tv.Fill(value, wal_offset_of_wb_content_, wal_record_header_size_,
+                batch_content_, log_used_);
+        Slice parts[] = {Slice(tv.buf_, ValueIndex::kDefaultLogIndexSize),
+                         value};
+        SliceParts value_parts(parts, 2);
+        mem_res =
+            mem->Add(sequence_, kTypeValueIndex, key, value_parts,
+                     concurrent_memtable_writes_, get_post_process_info(mem));
+      } else {
+        Slice parts[] = {value};
+        SliceParts value_parts(parts, 1);
+        mem_res =
+            mem->Add(sequence_, kTypeValue, key, value_parts,
+                     concurrent_memtable_writes_, get_post_process_info(mem));
+      }
       if (UNLIKELY(!mem_res)) {
         assert(seq_per_batch_);
         ret_status = Status::TryAgain("key+seq exists");
         const bool BATCH_BOUNDRY = true;
         MaybeAdvanceSeq(BATCH_BOUNDRY);
       }
-    } else if (moptions->inplace_callback == nullptr) {
+    }
+    // TODO(liuyangming) support inplace_update and inplace_callback
+    else if (moptions->inplace_callback == nullptr) {
       assert(!concurrent_memtable_writes_);
       mem->Update(sequence_, key, value);
     } else {
@@ -1532,8 +1637,20 @@ class MemTableInserter : public WriteBatch::Handler {
     }
 
     if (!perform_merge) {
+      ValueIndexBuf tv;
+      bool mem_res = false;
+      if (value.size() > blob_size_) {
+        tv.Fill(value, wal_offset_of_wb_content_, wal_record_header_size_,
+                batch_content_, log_used_);
+        Slice parts[] = {Slice(tv.buf_, ValueIndex::kDefaultLogIndexSize), value};
+        SliceParts value_parts(parts, 2);
+        mem_res = mem->Add(sequence_, kTypeMergeIndex, key, value_parts);
+      } else {
+        Slice parts[] = {value};
+        SliceParts value_parts(parts, 1);
+        mem_res = mem->Add(sequence_, kTypeMerge, key, value_parts);
+      }
       // Add merge operator to memtable
-      bool mem_res = mem->Add(sequence_, kTypeMerge, key, value);
       if (UNLIKELY(!mem_res)) {
         assert(seq_per_batch_);
         ret_status = Status::TryAgain("key+seq exists");
@@ -1712,42 +1829,48 @@ class MemTableInserter : public WriteBatch::Handler {
     }
     return &GetPostMap()[mem];
   }
-};
+  };
 
 // This function can only be called in these conditions:
 // 1) During Recovery()
 // 2) During Write(), in a single-threaded write thread
 // 3) During Write(), in a concurrent context where memtables has been cloned
 // The reason is that it calls memtables->Seek(), which has a stateful cache
-Status WriteBatchInternal::InsertInto(
-    WriteThread::WriteGroup& write_group, SequenceNumber sequence,
-    ColumnFamilyMemTables* memtables, FlushScheduler* flush_scheduler,
-    bool ignore_missing_column_families, uint64_t recovery_log_number, DB* db,
-    bool concurrent_memtable_writes, bool seq_per_batch, bool batch_per_txn) {
-  MemTableInserter inserter(
-      sequence, memtables, flush_scheduler, ignore_missing_column_families,
-      recovery_log_number, db, concurrent_memtable_writes,
-      nullptr /*has_valid_writes*/, seq_per_batch, batch_per_txn);
-  for (auto w : write_group) {
-    if (w->CallbackFailed()) {
-      continue;
+  Status WriteBatchInternal::InsertInto(
+      WriteThread::WriteGroup& write_group, SequenceNumber sequence,
+      ColumnFamilyMemTables* memtables, FlushScheduler* flush_scheduler,
+      bool ignore_missing_column_families, uint64_t recovery_log_number, DB* db,
+      bool concurrent_memtable_writes, bool seq_per_batch, bool batch_per_txn,
+      uint64_t blob_size) {
+    MemTableInserter inserter(
+        sequence, memtables, flush_scheduler, ignore_missing_column_families,
+        recovery_log_number, db, concurrent_memtable_writes,
+        nullptr /*has_valid_writes*/, seq_per_batch, batch_per_txn);
+    for (auto w : write_group) {
+      if (w->CallbackFailed()) {
+        continue;
+      }
+      w->sequence = inserter.sequence();
+      if (!w->ShouldWriteToMemtable()) {
+        // In seq_per_batch_ mode this advances the seq by one.
+        inserter.MaybeAdvanceSeq(true);
+        continue;
+      }
+      SetSequence(w->batch, inserter.sequence());
+      inserter.set_log_number_ref(w->log_ref);
+      inserter.SetContext(
+          w->wal_offset_of_wb_content_,
+          w->is_recycle ? log::kRecyclableHeaderSize : log::kHeaderSize,
+          w->batch->Data(), blob_size, w->log_used);
+      w->status = w->batch->Iterate(&inserter);
+      if (!w->status.ok()) {
+        return w->status;
+      }
+      assert(!seq_per_batch || w->batch_cnt != 0);
+      assert(!seq_per_batch ||
+             inserter.sequence() - w->sequence == w->batch_cnt);
     }
-    w->sequence = inserter.sequence();
-    if (!w->ShouldWriteToMemtable()) {
-      // In seq_per_batch_ mode this advances the seq by one.
-      inserter.MaybeAdvanceSeq(true);
-      continue;
-    }
-    SetSequence(w->batch, inserter.sequence());
-    inserter.set_log_number_ref(w->log_ref);
-    w->status = w->batch->Iterate(&inserter);
-    if (!w->status.ok()) {
-      return w->status;
-    }
-    assert(!seq_per_batch || w->batch_cnt != 0);
-    assert(!seq_per_batch || inserter.sequence() - w->sequence == w->batch_cnt);
-  }
-  return Status::OK();
+    return Status::OK();
 }
 
 Status WriteBatchInternal::InsertInto(
@@ -1755,7 +1878,7 @@ Status WriteBatchInternal::InsertInto(
     ColumnFamilyMemTables* memtables, FlushScheduler* flush_scheduler,
     bool ignore_missing_column_families, uint64_t log_number, DB* db,
     bool concurrent_memtable_writes, bool seq_per_batch, size_t batch_cnt,
-    bool batch_per_txn) {
+    bool batch_per_txn, uint64_t blob_size) {
 #ifdef NDEBUG
   (void)batch_cnt;
 #endif
@@ -1766,6 +1889,10 @@ Status WriteBatchInternal::InsertInto(
       seq_per_batch, batch_per_txn);
   SetSequence(writer->batch, sequence);
   inserter.set_log_number_ref(writer->log_ref);
+  inserter.SetContext(
+      writer->wal_offset_of_wb_content_,
+      writer->is_recycle ? log::kRecyclableHeaderSize : log::kHeaderSize,
+      writer->batch->Data(), blob_size, writer->log_used);
   Status s = writer->batch->Iterate(&inserter);
   assert(!seq_per_batch || batch_cnt != 0);
   assert(!seq_per_batch || inserter.sequence() - sequence == batch_cnt);
@@ -1780,11 +1907,14 @@ Status WriteBatchInternal::InsertInto(
     FlushScheduler* flush_scheduler, bool ignore_missing_column_families,
     uint64_t log_number, DB* db, bool concurrent_memtable_writes,
     SequenceNumber* next_seq, bool* has_valid_writes, bool seq_per_batch,
-    bool batch_per_txn) {
+    bool batch_per_txn, size_t batch_content_wal_offset,
+    size_t wal_header_size, uint64_t blob_size) {
   MemTableInserter inserter(Sequence(batch), memtables, flush_scheduler,
                             ignore_missing_column_families, log_number, db,
                             concurrent_memtable_writes, has_valid_writes,
                             seq_per_batch, batch_per_txn);
+  inserter.SetContext(batch_content_wal_offset, wal_header_size, batch->rep_,
+                      blob_size, log_number);  // XXXX log_number maybe wrong
   Status s = batch->Iterate(&inserter);
   if (next_seq != nullptr) {
     *next_seq = inserter.sequence();
@@ -1814,10 +1944,12 @@ Status WriteBatchInternal::Append(WriteBatch* dst, const WriteBatch* src,
     src_len = batch_end.size - WriteBatchInternal::kHeader;
     src_count = batch_end.count;
     src_flags = batch_end.content_flags;
+    dst->merge_batch_of_wal = true;
   } else {
     src_len = src->rep_.size() - WriteBatchInternal::kHeader;
     src_count = Count(src);
     src_flags = src->content_flags_.load(std::memory_order_relaxed);
+    dst->merge_batch_of_wal = false;
   }
 
   SetCount(dst, Count(dst) + src_count);

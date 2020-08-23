@@ -3,12 +3,15 @@
 //  COPYING file in the root directory) and Apache 2.0 License
 //  (found in the LICENSE.Apache file in the root directory).
 
+#include <iostream>
 #include "db/compaction_iterator.h"
 
+#include <boost/range/algorithm.hpp>
 #include "db/snapshot_checker.h"
 #include "port/likely.h"
 #include "rocksdb/listener.h"
 #include "table/internal_iterator.h"
+#include "db/log_writer.h"
 
 namespace rocksdb {
 
@@ -71,7 +74,7 @@ void CompactionIteratorToInternalIterator::Seek(const Slice& target) {
 
     c_iter_->current_user_key_sequence_ = 0;
     c_iter_->current_user_key_snapshot_ = 0;
-    c_iter_->merge_out_iter_ = MergeOutputIterator(c_iter_->merge_helper_);
+    c_iter_->merge_out_iter_ = std::move(*c_iter_->merge_helper_).NewIterator();
     c_iter_->current_key_committed_ = false;
     for (auto& v : c_iter_->level_ptrs_) {
       v = 0;
@@ -155,7 +158,7 @@ CompactionIterator::CompactionIterator(
       ignore_snapshots_(false),
       current_user_key_sequence_(0),
       current_user_key_snapshot_(0),
-      merge_out_iter_(merge_helper_),
+      merge_out_iter_(std::move(*merge_helper_).NewIterator()),
       current_key_committed_(false) {
   assert(compaction_filter_ == nullptr || compaction_ != nullptr);
   bottommost_level_ =
@@ -216,8 +219,7 @@ void CompactionIterator::Next() {
     // Check if we returned all records of the merge output.
     if (merge_out_iter_.Valid()) {
       key_ = merge_out_iter_.key();
-      value_ = LazyBufferReference(merge_out_iter_.value());
-      value_meta_.clear();
+      value_ = std::move(merge_out_iter_).value();
       bool valid_key __attribute__((__unused__));
       valid_key = ParseInternalKey(key_, &ikey_);
       // MergeUntil stops when it encounters a corrupt key and does not
@@ -268,10 +270,13 @@ void CompactionIterator::InvokeFilterIfNeeded(bool* need_skip,
     compaction_filter_value_.clear();
     compaction_filter_skip_until_.Clear();
     auto doFilter = [&]() {
+      std::string meta = input_.separate_helper()->GetValueMeta(
+          current_key_.GetInternalKey(), value_);
       filter = compaction_filter_->FilterV2(
           compaction_->level(), ikey_.user_key,
-          CompactionFilter::ValueType::kValue, value_meta_, value_,
-          &compaction_filter_value_, compaction_filter_skip_until_.rep());
+          CompactionFilter::ValueType::kValue, Slice(meta.data(), meta.size()),
+          value_, &compaction_filter_value_,
+          compaction_filter_skip_until_.rep());
     };
     auto sample = filter_sample_interval_;
     if (env_ && sample && (filter_hit_count_ & (sample - 1)) == 0) {
@@ -373,7 +378,7 @@ void CompactionIterator::NextFromInput() {
       // First occurrence of this user key
       // Copy key for output
       key_ = current_key_.SetInternalKey(key_, &ikey_);
-      value_ = input_.value(current_key_.GetUserKey(), &value_meta_);
+      value_ = input_.value(current_key_.GetUserKey());
       current_user_key_ = ikey_.user_key;
       has_current_user_key_ = true;
       has_outputted_key_ = false;
@@ -396,7 +401,7 @@ void CompactionIterator::NextFromInput() {
       // if we have versions on both sides of a snapshot
       current_key_.UpdateInternalKey(ikey_.sequence, ikey_.type);
       key_ = current_key_.GetInternalKey();
-      value_ = input_.value(current_key_.GetUserKey(), &value_meta_);
+      value_ = input_.value(current_key_.GetUserKey());
       ikey_.user_key = current_key_.GetUserKey();
 
       // Note that newer version of a key is ordered before older versions. If a
@@ -664,17 +669,16 @@ void CompactionIterator::NextFromInput() {
       Status s = merge_helper_->MergeUntil(current_key_.GetUserKey(), &input_,
                                            range_del_agg_, prev_snapshot,
                                            bottommost_level_);
-      merge_out_iter_.SeekToFirst();
 
       if (!s.ok() && !s.IsMergeInProgress()) {
         status_ = s;
         return;
-      } else if (merge_out_iter_.Valid()) {
+      } else if (!merge_helper_->Empty()) {
+        merge_out_iter_ = std::move(*merge_helper_).NewIterator();
         // NOTE: key, value, and ikey_ refer to old entries.
         //       These will be correctly set below.
         key_ = merge_out_iter_.key();
-        value_ = LazyBufferReference(merge_out_iter_.value());
-        value_meta_.clear();
+        value_ = std::move(merge_out_iter_).value();
         bool valid_key __attribute__((__unused__));
         valid_key = ParseInternalKey(key_, &ikey_);
         // MergeUntil stops when it encounters a corrupt key and does not
@@ -734,6 +738,7 @@ void CompactionIterator::PrepareOutput() {
   // KeyNotExistsBeyondOutputLevel() return true?
   if (blob_config_.blob_size < size_t(-1) &&
       (ikey_.type == kTypeValue || ikey_.type == kTypeMerge)) {
+    // only separate kTypeValue or kTypeMerge
     auto s = value_.fetch();
     if (!s.ok()) {
       valid_ = false;
@@ -747,11 +752,13 @@ void CompactionIterator::PrepareOutput() {
         (current_user_key_.size() << 16) <=
             value_.size() * blob_large_key_ratio_lsh16_) {
       if (value_.file_number() != uint64_t(-1)) {
+        // this is a value from input sst file in compaction, just leave it
+        // there. set is_index=false, to get its value meta
         ikey_.type =
             ikey_.type == kTypeValue ? kTypeValueIndex : kTypeMergeIndex;
         current_key_.UpdateInternalKey(ikey_.sequence, ikey_.type);
         s = input_.separate_helper()->TransToSeparate(
-            current_key_.GetInternalKey(), value_, value_meta_,
+            current_key_.GetInternalKey(), value_,
             ikey_.type == kTypeMergeIndex, false);
         if (!s.ok()) {
           valid_ = false;
@@ -763,7 +770,7 @@ void CompactionIterator::PrepareOutput() {
           current_key_.GetInternalKey(), value_);
       if (s.ok()) {
         ikey_.type =
-            ikey_.type == kTypeValue ? kTypeValueIndex : kTypeMergeIndex;
+            (ikey_.type == kTypeValue) ? kTypeValueIndex : kTypeMergeIndex;
         current_key_.UpdateInternalKey(ikey_.sequence, ikey_.type);
         return;
       }
@@ -775,10 +782,12 @@ void CompactionIterator::PrepareOutput() {
     }
   }
   if (ikey_.type == kTypeValueIndex || ikey_.type == kTypeMergeIndex) {
+    // in the upper if-scope, we separate big value, and get value_meta_, here
+    // just do package. for the value that is IndexType already
     assert(value_.file_number() != uint64_t(-1));
     auto s = input_.separate_helper()->TransToSeparate(
-        current_key_.GetInternalKey(), value_, value_meta_,
-        ikey_.type == kTypeMergeIndex, true);
+        current_key_.GetInternalKey(), value_, ikey_.type == kTypeMergeIndex,
+        true);
     if (!s.ok()) {
       valid_ = false;
       status_ = std::move(s);
@@ -828,4 +837,139 @@ inline bool CompactionIterator::ikeyNotNeededForIncrementalSnapshot() {
          (ikey_.sequence < preserve_deletes_seqnum_);
 }
 
+std::string BuilderSeparateHelper::GetValueMeta(const Slice& internal_key,
+                                                const LazyBuffer& value) {
+  std::string value_meta;
+  bool value_is_separated = value.file_number() != uint64_t(-1);
+  if (value_is_separated) {
+    // only separated value need value meta
+    assert(dynamic_cast<const BuilderLazyBufferState*>(value.state()) !=
+           nullptr);
+    LazyBuffer& value_from_iter =
+        static_cast<const BuilderLazyBufferState*>(value.state())->value();
+    assert(value_from_iter.valid());
+
+    ValueIndex value_index(value_from_iter.slice());
+
+    bool value_in_log = value_index.log_type == ValueIndex::kDefault;
+    bool value_from_memtable = value_from_iter.file_number() == uint64_t(-1);
+    if (value_in_log && value_from_memtable) {
+      return "";  // no meta
+    }
+
+    // extractor value meta of current value
+    auto s = value_meta_extractor->Extract(
+        ExtractUserKey(internal_key),
+        Slice(value.slice().data(), value.slice().size()), &value_meta);
+    assert(s.ok());
+  }
+  return value_meta;
+}
+
+Status BuilderSeparateHelper::TransToSeparate(const Slice& internal_key,
+                                              LazyBuffer& value, bool is_merge,
+                                              bool is_index) {
+  assert(GetInternalKeyType(internal_key) == kTypeValueIndex ||
+         GetInternalKeyType(internal_key) == kTypeMergeIndex);
+  assert(value.file_number() == uint64_t(-1) ||
+         dynamic_cast<const BuilderLazyBufferState*>(value.state()) != nullptr);
+  if (value.file_number() == uint64_t(-1)) {
+    assert(false);
+    return TransToSeparate(internal_key, value);
+  }
+
+  LazyBuffer value_from_iter = std::move(
+      static_cast<const BuilderLazyBufferState*>(value.state())->value());
+  assert(value_from_iter.valid());
+  ValueIndex value_index(value_from_iter.slice());
+
+  bool value_from_memtable = value_from_iter.file_number() == uint64_t(-1);
+  std::string value_meta_storage;
+  Slice value_meta;
+  Slice log_handle = Slice::Invalid();
+  if (value_from_memtable) {
+    // for flush_job
+    assert(value.slice() == value_index.meta_or_value);
+    if (nullptr != value_meta_extractor) {
+      auto s = value_meta_extractor->Extract(
+          ExtractUserKey(internal_key), value.slice(), &value_meta_storage);
+      if (!s.ok()) {
+        return s;
+      }
+      value_meta = value_meta_storage;
+    }
+    log_handle = value_index.log_handle;
+  } else {
+    // for compaction job
+    if (value.file_number() != value_index.file_number) {
+      // file number is updated by transtocombined, it cann't be anothor blob
+      // wal, so that log_handle is empty, only keep value meta here
+      value_meta = value_index.meta_or_value;
+    } else {
+      // value_from_iter is a lazybuffer pointing to input sst, here we need
+      // lazybuffer pointing to blob-sst or blob-wal
+      auto s = value_from_iter.fetch();
+      if (!s.ok()) {
+        return s;
+      }
+      ValueIndex value_index(value_from_iter.slice());
+      if (value_index.log_type == ValueIndex::kDefault) {
+        log_handle = value_index.log_handle;
+        value_meta = value_index.meta_or_value;
+      } else {
+        value_meta = value_index.meta_or_value;
+      }
+    }
+  }
+
+  if (log_handle.valid()) {
+    assert(log_handle.size() == sizeof(ValueIndex::DefaultLogHandle));
+    uint64_t packed_file_no = value.file_number() | ValueIndex::kDefault;
+    Slice parts[] = {EncodeFileNumber(packed_file_no), log_handle, value_meta};
+    value.reset(SliceParts(parts, 3), value.file_number());
+  } else {
+    assert(!value_from_memtable);
+    uint64_t file_no = value.file_number();
+    Slice parts[] = {EncodeFileNumber(file_no), value_meta};
+    value.reset(SliceParts(parts, 2), value.file_number());
+  }
+  return Status::OK();
+}
+
+LazyBuffer BuilderSeparateHelper::TransToCombined(
+    const Slice& user_key, uint64_t sequence,
+    LazyBuffer&& original_value) const {
+  // move original value into new value's state
+  auto self = const_cast<BuilderSeparateHelper*>(this);
+  auto state = self->AllocState();
+  state->value() = std::move(original_value);
+  state->value().pin(LazyBufferPinLevel::Internal);
+
+  LazyBuffer combined_value;
+  if (state->value().file_number() == uint64_t(-1)) {
+    // value in memtable, this is in flush job's building level0 table
+    auto s = state->value().fetch();
+    if (!s.ok()) {
+      return LazyBuffer(std::move(s));
+    }
+
+    // decode value with index in memtable
+    ValueIndex value_index(state->value().slice());
+    combined_value.reset(value_index.meta_or_value, Cleanable(),
+                         value_index.file_number);
+  } else {
+    // compaction job just use input version as separate_helper
+    assert(separate_helper);
+    combined_value = separate_helper->TransToCombined(
+        user_key, sequence, LazyBufferReference(state->value()));
+    // combined_value is a lazybuffer pointing to blob-sst or blob-wal
+    auto s = combined_value.fetch();
+    if (!s.ok()) {
+      combined_value.reset(std::move(s));
+    }
+  }
+
+  combined_value.wrap_state(state);
+  return combined_value;
+}
 }  // namespace rocksdb

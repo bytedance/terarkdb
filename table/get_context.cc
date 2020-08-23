@@ -201,7 +201,7 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
           return Finish();
         }
         value = separate_helper_->TransToCombined(user_key_,
-                                                  parsed_key.sequence, value);
+                                                  parsed_key.sequence, LazyBufferReference(value));
         FALLTHROUGH_INTENDED;
       case kTypeValue:
         assert(state_ == kNotFound || state_ == kMerge);
@@ -264,7 +264,7 @@ bool GetContext::SaveValue(const ParsedInternalKey& parsed_key,
           return Finish();
         }
         value = separate_helper_->TransToCombined(user_key_,
-                                                  parsed_key.sequence, value);
+                                                  parsed_key.sequence, LazyBufferReference(value));
         FALLTHROUGH_INTENDED;
       case kTypeMerge:
         assert(state_ == kNotFound || state_ == kMerge);

@@ -103,6 +103,7 @@ struct TablePropertyCache {
   std::vector<uint64_t> inheritance_chain;  // inheritance chain
 
   bool is_map_sst() const { return purpose == kMapSst; }
+  bool is_blob_wal() const { return purpose == kLogSst; }
   bool has_range_deletions() const { return (flags & kNoRangeDeletions) == 0; }
   bool map_handle_range_deletions() const {
     return (flags & kMapHandleRangeDeletions) != 0;
@@ -211,6 +212,8 @@ struct FileMetaData {
   void set_gc_candidate() { gc_status = kGarbageCollectionCandidate; }
 };
 
+typedef std::unordered_map<uint64_t, FileMetaData*> DependenceMap;
+
 // A compressed copy of file meta data that just contain minimum data needed
 // to server read operations, while still keeping the pointer to full metadata
 // of the file in case it is needed.
@@ -290,7 +293,7 @@ class VersionEdit {
                const InternalKey& largest, const SequenceNumber& smallest_seqno,
                const SequenceNumber& largest_seqno, bool marked_for_compaction,
                const TablePropertyCache& prop) {
-    assert(smallest_seqno <= largest_seqno);
+    assert(smallest_seqno <= largest_seqno || prop.purpose == kLogSst);
     FileMetaData f;
     f.fd = FileDescriptor(file, file_path_id, file_size, smallest_seqno,
                           largest_seqno);

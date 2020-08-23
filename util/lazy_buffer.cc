@@ -307,7 +307,7 @@ void LazyBufferState::uninitialized_resize(LazyBuffer* buffer,
   if (size <= sizeof(LazyBufferContext)) {
     LightLazyBufferState::Context tmp_context{};
     ::memcpy(tmp_context.data, buffer->data_, copy_size);
-    destroy(buffer);
+    buffer->destroy();
     buffer->state_ = light_state();
     auto context = union_cast<LightLazyBufferState::Context>(&buffer->context_);
     *context = tmp_context;
@@ -319,7 +319,7 @@ void LazyBufferState::uninitialized_resize(LazyBuffer* buffer,
     if (context->status.ok() && copy_size > 0) {
       ::memcpy(tmp.data_, buffer->data_, copy_size);
     }
-    destroy(buffer);
+    buffer->destroy();
     buffer->slice_ = tmp.slice_;
     buffer->state_ = tmp.state_;
     tmp.state_ = nullptr;
@@ -329,7 +329,7 @@ void LazyBufferState::uninitialized_resize(LazyBuffer* buffer,
 
 void LazyBufferState::assign_slice(LazyBuffer* buffer,
                                    const Slice& slice) const {
-  buffer->state_->destroy(buffer);
+  buffer->destroy();
   auto data = slice.data();
   auto size = slice.size();
   if (reserve_buffer(buffer, size)) {
@@ -362,7 +362,7 @@ Status LazyBufferState::dump_buffer(LazyBuffer* buffer,
   target->state_->assign_slice(target, buffer->slice_);
   assert(target->slice_ == buffer->slice_);
   target->file_number_ = buffer->file_number_;
-  destroy(buffer);
+  buffer->destroy();
   return Status::OK();
 }
 

@@ -26,7 +26,28 @@ class Comparator;
 class Iterator;
 class Logger;
 class MergeOperator;
+class MergeHelper;
 class Statistics;
+
+// MergeOutputIterator can be used to iterate over the result of a merge.
+class MergeOutputIterator {
+  friend class MergeHelper;
+
+ public:
+  // Advances to the next record in the output.
+  void Next() {
+    ++it_keys_;
+    ++it_values_;
+  }
+
+  Slice key() { return *it_keys_; }
+  LazyBuffer&& value() { return *it_values_; }
+  bool Valid() { return it_keys_ != it_end_; }
+
+ private:
+  std::deque<std::string>::const_reverse_iterator it_keys_, it_end_;
+  std::move_iterator<std::vector<LazyBuffer>::reverse_iterator> it_values_;
+};
 
 class MergeHelper {
  public:
@@ -78,17 +99,17 @@ class MergeHelper {
   // - ShutdownInProgress: interrupted by shutdown (*shutting_down == true).
   //
   // REQUIRED: The first key in the input is not corrupted.
-  Status MergeUntil(
-      const Slice& user_key, CombinedInternalIterator* iter,
-      CompactionRangeDelAggregator* range_del_agg = nullptr,
-      const SequenceNumber stop_before = 0, const bool at_bottom = false);
+  Status MergeUntil(const Slice& user_key, CombinedInternalIterator* iter,
+                    CompactionRangeDelAggregator* range_del_agg = nullptr,
+                    const SequenceNumber stop_before = 0,
+                    const bool at_bottom = false);
 
   // Filters a merge operand using the compaction filter specified
   // in the constructor. Returns the decision that the filter made.
   // Uses compaction_filter_value_ and compaction_filter_skip_until_ for the
   // optional outputs of compaction filter.
-  CompactionFilter::Decision FilterMerge(
-      const Slice& user_key, const LazyBuffer& value);
+  CompactionFilter::Decision FilterMerge(const Slice& user_key,
+                                         const LazyBuffer& value);
 
   // Query the merge result
   // These are valid until the next MergeUntil call
@@ -119,6 +140,10 @@ class MergeHelper {
   const std::vector<LazyBuffer>& values() const {
     return merge_context_.GetOperands();
   }
+
+  bool Empty() const { return keys_.empty(); }
+  MergeOutputIterator NewIterator() &&;
+
   uint64_t TotalFilterTime() const { return total_filter_time_; }
   bool HasOperator() const { return user_merge_operator_ != nullptr; }
 
@@ -150,7 +175,7 @@ class MergeHelper {
   const CompactionFilter* compaction_filter_;
   const std::atomic<bool>* shutting_down_;
   Logger* logger_;
-  bool assert_valid_internal_key_; // enforce no internal key corruption?
+  bool assert_valid_internal_key_;  // enforce no internal key corruption?
   bool allow_single_operand_;
   SequenceNumber latest_snapshot_;
   const SnapshotChecker* const snapshot_checker_;
@@ -178,25 +203,4 @@ class MergeHelper {
   }
 };
 
-// MergeOutputIterator can be used to iterate over the result of a merge.
-class MergeOutputIterator {
- public:
-  // The MergeOutputIterator is bound to a MergeHelper instance.
-  explicit MergeOutputIterator(const MergeHelper* merge_helper);
-
-  // Seeks to the first record in the output.
-  void SeekToFirst();
-  // Advances to the next record in the output.
-  void Next();
-
-  Slice key() { return *it_keys_; }
-  const LazyBuffer& value() { return *it_values_; }
-  bool Valid() { return it_keys_ != merge_helper_->keys().rend(); }
-
- private:
-  const MergeHelper* merge_helper_;
-  std::deque<std::string>::const_reverse_iterator it_keys_;
-  std::vector<LazyBuffer>::const_reverse_iterator it_values_;
-};
-
-} // namespace rocksdb
+}  // namespace rocksdb

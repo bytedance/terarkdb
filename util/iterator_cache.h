@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <unordered_map>
 
+#include "db/version_edit.h"
 #include "table/internal_iterator.h"
 #include "util/arena.h"
 
@@ -15,8 +16,6 @@ namespace rocksdb {
 struct FileMetaData;
 class RangeDelAggregator;
 class TableReader;
-
-typedef std::unordered_map<uint64_t, FileMetaData*> DependenceMap;
 
 class IteratorCache {
  public:

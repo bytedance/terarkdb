@@ -26,8 +26,8 @@ class LazyBufferBuilder;
 
 enum class LazyBufferPinLevel {
   Internal,  // detach life cycle from iterator or temporary object, still
-             // depend SuperVersion
-  DB,        // detach life cycle from SuperVersion, still depend DB
+  // depend SuperVersion
+  DB,  // detach life cycle from SuperVersion, still depend DB
 };
 
 struct LazyBufferContext {
@@ -47,7 +47,7 @@ class LazyBufferState {
   virtual void destroy(LazyBuffer* buffer) const = 0;
 
   // Resize buffer
-  virtual void uninitialized_resize(LazyBuffer* _buffer, size_t size) const;
+  virtual void uninitialized_resize(LazyBuffer* buffer, size_t size) const;
 
   // Save slice into buffer
   virtual void assign_slice(LazyBuffer* buffer, const Slice& slice) const;
@@ -96,6 +96,36 @@ class LazyBufferState {
 
   // Get &buffer->context_
   static LazyBufferContext* get_context(LazyBuffer* buffer);
+};
+
+class LazyBufferStateWrapper : public LazyBufferState {
+  // if LazyBuffer use StateWrapper as its state, buffer can replace it state
+  // with another, see BuilderSeparateHelper which inherit this class , store
+  // its origin value and replace original lazybuffer's state
+ public:
+  void set_state(const LazyBufferState* state) { state_ = state; }
+  const LazyBufferState* get_state() const { return state_; }
+
+ protected:
+  const LazyBufferState* state_ = nullptr;
+
+  void destroy(LazyBuffer* buffer) const override {
+    if (buffer != nullptr) {
+      state_->destroy(buffer);
+    }
+  }
+
+  void uninitialized_resize(LazyBuffer* buffer, size_t size) const override;
+
+  void assign_slice(LazyBuffer* buffer, const Slice& slice) const override;
+
+  void assign_error(LazyBuffer* buffer, Status&& status) const override;
+
+  Status pin_buffer(LazyBuffer* buffer) const override;
+
+  Status dump_buffer(LazyBuffer* buffer, LazyBuffer* target) const override;
+
+  Status fetch_buffer(LazyBuffer* buffer) const override;
 };
 
 class LazyBuffer {
@@ -317,8 +347,17 @@ class LazyBuffer {
   // Fetch buffer
   Status fetch() const;
 
+  // Wrap current state
+  const LazyBufferState* wrap_state(LazyBufferStateWrapper* wrapper);
+
+  // Unwrap current state
+  void unwrap_state(LazyBufferStateWrapper* wrapper) {
+    assert(state_ == wrapper);
+    state_ = wrapper->get_state();
+  }
+
   // For test
-  const LazyBufferState* TEST_state() const { return state_; }
+  const LazyBufferState* state() const { return state_; }
 
   // For test
   const LazyBufferContext* TEST_context() const { return &context_; }
@@ -349,6 +388,66 @@ inline void LazyBufferState::set_slice(LazyBuffer* buffer, const Slice& slice) {
 
 inline LazyBufferContext* LazyBufferState::get_context(LazyBuffer* buffer) {
   return &buffer->context_;
+}
+
+inline void LazyBufferStateWrapper::uninitialized_resize(LazyBuffer* buffer,
+                                                         size_t size) const {
+  buffer->unwrap_state(const_cast<LazyBufferStateWrapper*>(this));
+  state_->uninitialized_resize(buffer, size);
+  assert(buffer->file_number() == uint64_t(-1));
+  destroy(nullptr);
+}
+
+inline void LazyBufferStateWrapper::assign_slice(LazyBuffer* buffer,
+                                                 const Slice& slice) const {
+  buffer->unwrap_state(const_cast<LazyBufferStateWrapper*>(this));
+  state_->assign_slice(buffer, slice);
+  assert(buffer->file_number() == uint64_t(-1));
+  destroy(nullptr);
+}
+
+inline void LazyBufferStateWrapper::assign_error(LazyBuffer* buffer,
+                                                 Status&& status) const {
+  buffer->unwrap_state(const_cast<LazyBufferStateWrapper*>(this));
+  state_->assign_error(buffer, std::move(status));
+  assert(buffer->file_number() == uint64_t(-1));
+  destroy(nullptr);
+}
+
+inline Status LazyBufferStateWrapper::pin_buffer(LazyBuffer* buffer) const {
+  auto self = const_cast<LazyBufferStateWrapper*>(this);
+  buffer->unwrap_state(self);
+  auto s = state_->pin_buffer(buffer);
+  if (s.IsNotSupported()) {
+    LazyBuffer tmp;
+    s = state_->dump_buffer(buffer, &tmp);
+    if (s.ok()) {
+      *buffer = std::move(tmp);
+    }
+  }
+  if (!s.ok() || buffer->wrap_state(self) == nullptr) {
+    destroy(nullptr);
+  }
+  return s;
+}
+
+inline Status LazyBufferStateWrapper::dump_buffer(LazyBuffer* buffer,
+                                                  LazyBuffer* target) const {
+  buffer->unwrap_state(const_cast<LazyBufferStateWrapper*>(this));
+  auto s = state_->dump_buffer(buffer, target);
+  destroy(nullptr);
+  buffer->reset();
+  return s;
+}
+
+inline Status LazyBufferStateWrapper::fetch_buffer(LazyBuffer* buffer) const {
+  auto self = const_cast<LazyBufferStateWrapper*>(this);
+  buffer->unwrap_state(self);
+  auto s = state_->fetch_buffer(buffer);
+  if (!s.ok() || buffer->wrap_state(self) == nullptr) {
+    destroy(nullptr);
+  }
+  return s;
 }
 
 #ifdef __GNUC__
@@ -416,6 +515,7 @@ inline LazyBuffer::LazyBuffer(const LazyBufferState* _state,
 inline void LazyBuffer::destroy() {
   if (state_ != nullptr) {
     state_->destroy(this);
+    state_ = nullptr;
   }
 }
 
@@ -439,10 +539,7 @@ inline void LazyBuffer::clear() {
 }
 
 inline void LazyBuffer::reset() {
-  if (state_ != nullptr) {
-    state_->destroy(this);
-    state_ = nullptr;
-  }
+  destroy();
   slice_ = Slice::Invalid();
   file_number_ = uint64_t(-1);
 }
@@ -504,6 +601,17 @@ inline Status LazyBuffer::fetch() const {
     return Status::OK();
   }
   return state_->fetch_buffer(const_cast<LazyBuffer*>(this));
+}
+
+inline const LazyBufferState* LazyBuffer::wrap_state(
+    LazyBufferStateWrapper* wrapper) {
+  if (state_ == nullptr) {
+    return nullptr;
+  }
+  auto state_backup = state_;
+  wrapper->set_state(state_);
+  state_ = wrapper;
+  return state_backup;
 }
 
 // make a slice reference

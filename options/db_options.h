@@ -74,6 +74,8 @@ struct ImmutableDBOptions {
   WALRecoveryMode wal_recovery_mode;
   bool allow_2pc;
   std::shared_ptr<Cache> row_cache;
+  size_t blob_cache_size;
+  std::shared_ptr<Cache> blob_cache;  // <file_no, offset> -> value
 #ifndef ROCKSDB_LITE
   WalFilter* wal_filter;
 #endif  // ROCKSDB_LITE

@@ -155,6 +155,8 @@ DBOptions SanitizeOptions(const std::string& dbname, const DBOptions& src) {
     result.sst_file_manager = sst_file_manager;
   }
 #endif
+  result.blob_cache = NewLRUCache(src.blob_cache_size);
+
   return result;
 }
 
@@ -260,7 +262,7 @@ Status DBImpl::NewDB() {
     std::unique_ptr<WritableFileWriter> file_writer(new WritableFileWriter(
         std::move(file), manifest, env_options, nullptr /* stats */,
         immutable_db_options_.listeners));
-    log::Writer log(std::move(file_writer), 0, false);
+    log::Writer log(std::move(file_writer), 0, false, versions_.get());
     std::string record;
     new_db.EncodeTo(&record);
     s = log.AddRecord(record);
@@ -1248,6 +1250,7 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
             new log::Writer(
                 std::move(file_writer), new_log_number,
                 impl->immutable_db_options_.recycle_log_file_num > 0,
+                impl->versions_.get(),
                 impl->immutable_db_options_.manual_wal_flush));
       }
 

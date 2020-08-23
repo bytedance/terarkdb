@@ -3,11 +3,12 @@
 //  COPYING file in the root directory) and Apache 2.0 License
 //  (found in the LICENSE.Apache file in the root directory).
 
+#include "db/merge_helper.h"
+
 #include <algorithm>
 #include <string>
 #include <vector>
 
-#include "db/merge_helper.h"
 #include "rocksdb/comparator.h"
 #include "table/iterator_wrapper.h"
 #include "util/coding.h"
@@ -32,9 +33,8 @@ class MergeHelperTest : public testing::Test {
                                         false, latest_snapshot));
     user_key_ = ExtractUserKey(iter_->key()).ToString();
     CombinedInternalIterator iter(iter_.get(), nullptr);
-    auto merge_result = merge_helper_->MergeUntil(user_key_, &iter,
-                                                  nullptr /* range_del_agg */,
-                                                  stop_before, at_bottom);
+    auto merge_result = merge_helper_->MergeUntil(
+        user_key_, &iter, nullptr /* range_del_agg */, stop_before, at_bottom);
     if (merge_result.ok() || merge_result.IsMergeInProgress()) {
       for (auto& v : merge_helper_->values()) {
         auto s = v.fetch();
@@ -198,8 +198,8 @@ TEST_F(MergeHelperTest, FilterMergeOperands) {
 
   ASSERT_TRUE(Run(15, false).ok());
   ASSERT_FALSE(iter_->Valid());
-  MergeOutputIterator merge_output_iter(merge_helper_.get());
-  merge_output_iter.SeekToFirst();
+  MergeOutputIterator merge_output_iter =
+      std::move(*merge_helper_).NewIterator();
   ASSERT_EQ(test::KeyStr("a", 30, kTypeValue),
             merge_output_iter.key().ToString());
   ASSERT_EQ(test::EncodeInt(8U), merge_output_iter.value().ToString());
@@ -221,17 +221,16 @@ TEST_F(MergeHelperTest, FilterAllMergeOperands) {
   // filtered out all
   ASSERT_TRUE(Run(15, false).ok());
   ASSERT_FALSE(iter_->Valid());
-  MergeOutputIterator merge_output_iter(merge_helper_.get());
-  merge_output_iter.SeekToFirst();
+  MergeOutputIterator merge_output_iter =
+      std::move(*merge_helper_).NewIterator();
   ASSERT_FALSE(merge_output_iter.Valid());
 
   // we have one operand that will survive because it's a delete
   AddKeyVal("a", 24, kTypeDeletion, test::EncodeInt(5U));
   AddKeyVal("b", 23, kTypeValue, test::EncodeInt(5U));
   ASSERT_TRUE(Run(15, true).ok());
-  merge_output_iter = MergeOutputIterator(merge_helper_.get());
+  merge_output_iter = std::move(*merge_helper_).NewIterator();
   ASSERT_TRUE(iter_->Valid());
-  merge_output_iter.SeekToFirst();
   ASSERT_FALSE(merge_output_iter.Valid());
 
   // when all merge operands are filtered out, we leave the iterator pointing to
@@ -256,8 +255,8 @@ TEST_F(MergeHelperTest, FilterFirstMergeOperand) {
 
   ASSERT_OK(Run(15, true));
   ASSERT_TRUE(iter_->Valid());
-  MergeOutputIterator merge_output_iter(merge_helper_.get());
-  merge_output_iter.SeekToFirst();
+  MergeOutputIterator merge_output_iter =
+      std::move(*merge_helper_).NewIterator();
   // sequence number is 29 here, because the first merge operand got filtered
   // out
   ASSERT_EQ(test::KeyStr("a", 29, kTypeValue),
@@ -287,8 +286,8 @@ TEST_F(MergeHelperTest, DontFilterMergeOperandsBeforeSnapshotTest) {
 
   ASSERT_OK(Run(15, true, 32));
   ASSERT_TRUE(iter_->Valid());
-  MergeOutputIterator merge_output_iter(merge_helper_.get());
-  merge_output_iter.SeekToFirst();
+  MergeOutputIterator merge_output_iter =
+      std::move(*merge_helper_).NewIterator();
   ASSERT_EQ(test::KeyStr("a", 31, kTypeValue),
             merge_output_iter.key().ToString());
   ASSERT_EQ(test::EncodeInt(26U), merge_output_iter.value().ToString());

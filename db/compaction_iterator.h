@@ -22,7 +22,7 @@ namespace rocksdb {
 
 class CompactionIterator {
  public:
-    friend class CompactionIteratorToInternalIterator;
+  friend class CompactionIteratorToInternalIterator;
 
   // A wrapper around Compaction. Has a much smaller interface, only what
   // CompactionIterator uses. Tests can override it.
@@ -64,29 +64,29 @@ class CompactionIterator {
       InternalIterator* input, SeparateHelper* separate_helper,
       const Slice* end, const Comparator* cmp, MergeHelper* merge_helper,
       SequenceNumber last_sequence, std::vector<SequenceNumber>* snapshots,
-      SequenceNumber earliest_write_conflict_snapshot,
-      const SnapshotChecker* snapshot_checker, Env* env,
-      bool report_detailed_time, bool expect_valid_internal_key,
-      CompactionRangeDelAggregator* range_del_agg,
-      const Compaction* compaction = nullptr,
-      BlobConfig blob_config = BlobConfig{size_t(-1), 0.0},
-      const CompactionFilter* compaction_filter = nullptr,
-      const std::atomic<bool>* shutting_down = nullptr,
-      const SequenceNumber preserve_deletes_seqnum = 0);
+                     SequenceNumber earliest_write_conflict_snapshot,
+                     const SnapshotChecker* snapshot_checker, Env* env,
+                     bool report_detailed_time, bool expect_valid_internal_key,
+                     CompactionRangeDelAggregator* range_del_agg,
+                     const Compaction* compaction = nullptr,
+                     BlobConfig blob_config = BlobConfig{size_t(-1), 0.0},
+                     const CompactionFilter* compaction_filter = nullptr,
+                     const std::atomic<bool>* shutting_down = nullptr,
+                     const SequenceNumber preserve_deletes_seqnum = 0);
 
   // Constructor with custom CompactionProxy, used for tests.
   CompactionIterator(
       InternalIterator* input, SeparateHelper* separate_helper,
       const Slice* end, const Comparator* cmp, MergeHelper* merge_helper,
       SequenceNumber last_sequence, std::vector<SequenceNumber>* snapshots,
-      SequenceNumber earliest_write_conflict_snapshot,
-      const SnapshotChecker* snapshot_checker, Env* env,
-      bool report_detailed_time, bool expect_valid_internal_key,
-      CompactionRangeDelAggregator* range_del_agg,
+                     SequenceNumber earliest_write_conflict_snapshot,
+                     const SnapshotChecker* snapshot_checker, Env* env,
+                     bool report_detailed_time, bool expect_valid_internal_key,
+                     CompactionRangeDelAggregator* range_del_agg,
       std::unique_ptr<CompactionProxy> compaction, BlobConfig blob_config,
-      const CompactionFilter* compaction_filter = nullptr,
-      const std::atomic<bool>* shutting_down = nullptr,
-      const SequenceNumber preserve_deletes_seqnum = 0);
+                     const CompactionFilter* compaction_filter = nullptr,
+                     const std::atomic<bool>* shutting_down = nullptr,
+                     const SequenceNumber preserve_deletes_seqnum = 0);
 
   ~CompactionIterator();
 
@@ -146,7 +146,7 @@ class CompactionIterator {
   const SequenceNumber earliest_write_conflict_snapshot_;
   const SnapshotChecker* const snapshot_checker_;
   Env* env_;
-  //bool report_detailed_time_;
+  // bool report_detailed_time_;
   bool expect_valid_internal_key_;
   CompactionRangeDelAggregator* range_del_agg_;
   std::unique_ptr<CompactionProxy> compaction_;
@@ -170,7 +170,6 @@ class CompactionIterator {
   // Points to the value in the underlying iterator that corresponds to the
   // current output.
   LazyBuffer value_;
-  std::string value_meta_;
   // The status is OK unless compaction iterator encounters a merge operand
   // while not having a merge operator defined.
   Status status_;
@@ -222,7 +221,67 @@ class CompactionIterator {
 };
 
 InternalIterator* NewCompactionIterator(
-    CompactionIterator*(*new_compaction_iter_callback)(void*), void* arg,
+    CompactionIterator* (*new_compaction_iter_callback)(void*), void* arg,
     const Slice* start_user_key = nullptr);
 
+struct BuilderSeparateHelper : public SeparateHelper {
+  class BuilderLazyBufferState : public LazyBufferStateWrapper {
+    BuilderSeparateHelper* helper_;
+    mutable LazyBuffer value_;
+
+    void destroy(LazyBuffer* buffer) const override {
+      LazyBufferStateWrapper::destroy(buffer);
+      auto self = const_cast<BuilderLazyBufferState*>(this);
+      helper_->FreeState(self);
+    }
+
+   public:
+    BuilderLazyBufferState(BuilderSeparateHelper* h) : helper_(h) {}
+    LazyBuffer& value() const { return value_; }
+  };
+
+  BuilderLazyBufferState* AllocState() {
+    if (state_wrapper_free_.empty()) {
+      state_wrapper_storage_.emplace_back(this);
+      return &state_wrapper_storage_.back();
+    } else {
+      auto state = state_wrapper_free_.back();
+      state_wrapper_free_.pop_back();
+      state->set_state(nullptr);
+      return state;
+    }
+  }
+  void FreeState(BuilderLazyBufferState* state) {
+    state->value().reset();
+    state_wrapper_free_.emplace_back(state);
+  }
+
+  std::string GetValueMeta(const Slice& internal_key,
+                           const LazyBuffer& value) override;
+  Status TransToSeparate(const Slice& internal_key, LazyBuffer& value,
+                         bool is_merge, bool is_index) override;
+  Status TransToSeparate(const Slice& key, LazyBuffer& value) override {
+    if (trans_to_separate_callback == nullptr) {
+      return Status::NotSupported();
+    }
+    return trans_to_separate_callback(trans_to_separate_callback_args, key,
+                                      value);
+  }
+
+  LazyBuffer TransToCombined(const Slice& user_key, uint64_t sequence,
+                             LazyBuffer&& value) const override;
+  SeparateHelper* separate_helper = nullptr;
+  std::vector<FileMetaData>* output = nullptr;
+  std::string fname;
+  std::unique_ptr<WritableFileWriter> file_writer = nullptr;
+  std::unique_ptr<TableBuilder> builder = nullptr;
+  FileMetaData* current_output = nullptr;
+
+  std::unique_ptr<ValueExtractor> value_meta_extractor = nullptr;
+  std::deque<BuilderLazyBufferState> state_wrapper_storage_;
+  std::vector<BuilderLazyBufferState*> state_wrapper_free_;
+  Status (*trans_to_separate_callback)(void* args, const Slice& key,
+                                       LazyBuffer& value) = nullptr;
+  void* trans_to_separate_callback_args = nullptr;
+};
 }  // namespace rocksdb

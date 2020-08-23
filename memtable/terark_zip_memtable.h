@@ -116,11 +116,11 @@ class PatriciaTrieRep : public MemTableRep {
 
   // Return true if insertion successed.
   virtual bool InsertKeyValue(const Slice& internal_key,
-                              const Slice& value) override;
+                              const SliceParts& value) override;
 
   // Concurrent write is supported by default.
   virtual bool InsertKeyValueConcurrently(const Slice& internal_key,
-                                          const Slice& value) override {
+                                          const SliceParts& value) override {
     return InsertKeyValue(internal_key, value);
   }
 

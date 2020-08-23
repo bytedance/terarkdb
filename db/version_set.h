@@ -508,6 +508,7 @@ class VersionStorageInfo {
   std::vector<FileMetaData*>* files_;
 
   // Dependence files both in files[-1] and dependence_map
+  // since each file dependence itself, dependence_map_ has all db files
   DependenceMap dependence_map_;
 
   // Level that L0 data should be compacted to. All levels < base_level_ should
@@ -798,7 +799,7 @@ class Version : public SeparateHelper, private LazyBufferState {
   Status fetch_buffer(LazyBuffer* buffer) const override;
 
   LazyBuffer TransToCombined(const Slice& user_key, uint64_t sequence,
-                             const LazyBuffer& value) const override;
+                             LazyBuffer&& value) const override;
 
   // No copying allowed
   Version(const Version&);
@@ -1011,13 +1012,17 @@ class VersionSet {
   // In non-2PC mode, all the log numbers smaller than this number can be safely
   // deleted.
   uint64_t MinLogNumberWithUnflushedData() const {
-    return PreComputeMinLogNumberWithUnflushedData(nullptr);
+    return PreComputeMinLogNumberBeingDepended(nullptr);
   }
-  // Returns the minimum log number which still has data not flushed to any SST
-  // file, except data from `cfd_to_skip`.
-  uint64_t PreComputeMinLogNumberWithUnflushedData(
+
+  uint64_t PreComputeMinLogNumberBeingDepended(
       const ColumnFamilyData* cfd_to_skip) const {
+    // 1. corresponding memtable has not flushed
+    // 2. some key sst separate its value into this, depend it
     uint64_t min_log_num = std::numeric_limits<uint64_t>::max();
+
+    // Returns the minimum log number which still has data not flushed to any
+    // SST file, except data from `cfd_to_skip`.
     for (auto cfd : *column_family_set_) {
       if (cfd == cfd_to_skip) {
         continue;
@@ -1028,6 +1033,16 @@ class VersionSet {
         min_log_num = cfd->GetLogNumber();
       }
     }
+
+    // alive_logs_entries_ only delete when it become garbage, adding after its
+    // memtables switch
+    uint64_t cur_min = alive_logs_entries_.begin()->first;
+    min_log_num = std::min(cur_min, min_log_num);
+    //auto self = const_cast<VersionSet*>(this);
+    //for (uint64_t i = cur_min; i < min_log_num; ++i) {
+    //  // remove out-of-date blob wal in alive_logs_entries_
+    //  self->alive_logs_entries_.erase(i);
+    //}
     return min_log_num;
   }
 
@@ -1174,6 +1189,14 @@ class VersionSet {
   std::vector<ObsoleteFileInfo> obsolete_files_;
   std::vector<std::string> obsolete_manifests_;
 
+  std::map<uint64_t, uint64_t>
+      alive_logs_entries_;  // wal may be some sst's dependence, can not be
+                            // remove if still used; now, we only need
+                            // num_entries of wal, need more may change uint64_t
+                            // to FileMetaData
+  std::unordered_map<uint64_t, uint64_t>
+      used_entries_of_wal_;  // collect used entries of every wal for gc
+
   const bool seq_per_batch_;
 
   // env options for all reads and writes except compactions
@@ -1186,9 +1209,15 @@ class VersionSet {
   void LogAndApplyCFHelper(VersionEdit* edit);
 
  public:
+  std::unordered_map<uint64_t, uint64_t>* GetMapOfUsedEntries() {
+    return &used_entries_of_wal_;
+  }
   void LogAndApplyHelper(ColumnFamilyData* cfd, VersionBuilder* b, Version* v,
                          VersionEdit* edit, InstrumentedMutex* mu,
                          bool apply = true);
+  Status PutBlobMeta(uint64_t log_no,
+                     uint64_t num_entries /*maybe add more meta*/);
+  uint64_t GetWalEntryNumber(uint64_t log_no);
 };
 
 }  // namespace rocksdb

@@ -2,6 +2,7 @@
 #include <rocksdb/memtablerep.h>
 
 #include "util/string_util.h"
+#include "db/log_writer.h"
 
 namespace rocksdb {
 
@@ -22,19 +23,26 @@ Slice MemTableRep::UserKey(const char* key) const {
   return Slice(slice.data(), slice.size() - 8);
 }
 
-size_t MemTableRep::EncodeKeyValueSize(const Slice& key, const Slice& value) {
+size_t MemTableRep::EncodeKeyValueSize(const Slice& key,
+                                       const SliceParts& value) {
   size_t buf_size = 0;
   buf_size += VarintLength(key.size()) + key.size();
   buf_size += VarintLength(value.size()) + value.size();
   return buf_size;
 }
 
-void MemTableRep::EncodeKeyValue(const Slice& key, const Slice& value,
+void MemTableRep::EncodeKeyValue(const Slice& key, const SliceParts& value,
                                  char* buf) {
+  // size of this buf already allocate according to EncodeKeyValueSize
+  assert(value.num_parts <= 2);
+
   char* p = EncodeVarint32(buf, (uint32_t)key.size());
   memcpy(p, key.data(), key.size());
   p = EncodeVarint32(p + key.size(), (uint32_t)value.size());
-  memcpy(p, value.data(), value.size());
+  for (int i = 0; i < value.num_parts; ++i) {
+    memcpy(p, value.parts[i].data(), value.parts[i].size());
+    p += value.parts[i].size();
+  }
 }
 
 LazyBuffer MemTableRep::DecodeToLazyBuffer(const char* key) {
@@ -66,7 +74,7 @@ const char* MemTableRep::LengthPrefixedValue(const char* key) {
 }
 
 bool MemTableRep::InsertKeyValue(const Slice& internal_key,
-                                 const Slice& value) {
+                                 const SliceParts& value) {
   size_t buf_size = EncodeKeyValueSize(internal_key, value);
   char* buf;
   KeyHandle handle = Allocate(buf_size, &buf);
@@ -76,7 +84,7 @@ bool MemTableRep::InsertKeyValue(const Slice& internal_key,
 }
 
 bool MemTableRep::InsertKeyValueWithHint(const Slice& internal_key,
-                                         const Slice& value, void** hint) {
+                                         const SliceParts& value, void** hint) {
   size_t buf_size = EncodeKeyValueSize(internal_key, value);
   char* buf;
   KeyHandle handle = Allocate(buf_size, &buf);
@@ -86,7 +94,7 @@ bool MemTableRep::InsertKeyValueWithHint(const Slice& internal_key,
 }
 
 bool MemTableRep::InsertKeyValueConcurrently(const Slice& internal_key,
-                                             const Slice& value) {
+                                             const SliceParts& value) {
   size_t buf_size = EncodeKeyValueSize(internal_key, value);
   char* buf;
   KeyHandle handle = Allocate(buf_size, &buf);

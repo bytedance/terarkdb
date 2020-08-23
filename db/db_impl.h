@@ -736,6 +736,12 @@ class DBImpl : public DB {
   static Status CreateAndNewDirectory(Env* env, const std::string& dirname,
                                       std::unique_ptr<Directory>* directory);
 
+  const MutableCFOptions* GetMutableCfOption(uint64_t cf_id) {
+    return versions_->GetColumnFamilySet()
+        ->GetColumnFamily(cf_id)
+        ->GetLatestMutableCFOptions();
+  }
+
  protected:
   Env* const env_;
   const std::string dbname_;
@@ -1058,16 +1064,17 @@ class DBImpl : public DB {
                          WriteBatch** to_be_cached_state);
 
   Status WriteToWAL(const WriteBatch& merged_batch, log::Writer* log_writer,
-                    uint64_t* log_used, uint64_t* log_size);
+                    uint64_t* log_used, uint64_t* log_size,
+                    WriteThread::Writer& w);
 
   Status WriteToWAL(const WriteThread::WriteGroup& write_group,
                     log::Writer* log_writer, uint64_t* log_used,
                     bool need_log_sync, bool need_log_dir_sync,
-                    SequenceNumber sequence);
+                    SequenceNumber sequence, WriteThread::Writer& w);
 
   Status ConcurrentWriteToWAL(const WriteThread::WriteGroup& write_group,
                               uint64_t* log_used, SequenceNumber* last_sequence,
-                              size_t seq_inc);
+                              size_t seq_inc, WriteThread::Writer& w);
 
   // Used by WriteImpl to update bg_error_ if paranoid check is enabled.
   void WriteStatusCheck(const Status& status);

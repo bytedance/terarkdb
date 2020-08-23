@@ -162,12 +162,21 @@ class Slice {
 // A set of Slices that are virtually concatenated together.  'parts' points
 // to an array of Slices.  The number of elements in the array is 'num_parts'.
 struct SliceParts {
+  SliceParts(const Slice& slice)
+      : parts(&slice), num_parts(1), total_size(slice.size()) {}
+
   SliceParts(const Slice* _parts, int _num_parts)
-      : parts(_parts), num_parts(_num_parts) {}
+      : parts(_parts), num_parts(_num_parts), total_size(0) {
+    for (int i = 0; i < num_parts; ++i) {
+      total_size += parts[i].size();
+    }
+  }
   SliceParts() : parts(nullptr), num_parts(0) {}
 
+  size_t size() const { return total_size; };
   const Slice* parts;
   int num_parts;
+  size_t total_size;
 };
 
 inline bool operator==(const Slice& x, const Slice& y) {

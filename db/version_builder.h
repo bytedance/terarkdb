@@ -8,6 +8,7 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 //
 #pragma once
+#include <unordered_map>
 #include "rocksdb/env.h"
 #include "rocksdb/slice_transform.h"
 
@@ -16,6 +17,7 @@ namespace rocksdb {
 class TableCache;
 class VersionStorageInfo;
 class VersionEdit;
+class VersionSet;
 struct FileMetaData;
 class InternalStats;
 struct VersionBuilderDebugger;
@@ -42,6 +44,8 @@ class VersionBuilder {
                          bool load_essence_sst, int max_threads = 1);
   void UpgradeFileMetaData(const SliceTransform* prefix_extractor,
                            int max_threads = 1);
+
+  void SetContext(VersionSet*);
 
  private:
   class Rep;

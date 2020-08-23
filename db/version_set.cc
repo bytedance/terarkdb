@@ -16,6 +16,7 @@
 #include <inttypes.h>
 #include <stdio.h>
 
+#include <iostream>
 #include <algorithm>
 #include <list>
 #include <map>
@@ -703,7 +704,10 @@ class BaseReferencedVersionBuilder {
     versions->LogAndApplyHelper(version_->cfd(), version_builder_, version_,
                                 edit, mu, false);
   }
-  void DoApplyAndSaveTo(VersionStorageInfo* vstorage) {
+  void DoApplyAndSaveTo(VersionStorageInfo* vstorage, VersionSet* vset) {
+    // in Apply, collect each blob wal's used_entries,
+    // in SaveTo, use num_entries - used_entries to get num_antiquation
+    version_builder_->SetContext(vset);
     for (auto edit : edit_list_) {
       version_builder_->Apply(edit);
     }
@@ -1230,35 +1234,66 @@ Version::Version(ColumnFamilyData* column_family_data, VersionSet* vset,
 
 Status Version::fetch_buffer(LazyBuffer* buffer) const {
   auto context = get_context(buffer);
-  Slice user_key(reinterpret_cast<const char*>(context->data[0]),
-                 context->data[1]);
-  uint64_t sequence = context->data[2];
   auto pair = *reinterpret_cast<DependenceMap::value_type*>(context->data[3]);
-  bool value_found = false;
-  SequenceNumber context_seq;
-  GetContext get_context(cfd_->internal_comparator().user_comparator(), nullptr,
-                         cfd_->ioptions()->info_log, db_statistics_,
-                         GetContext::kNotFound, user_key, buffer, &value_found,
-                         nullptr, nullptr, nullptr, env_, &context_seq);
-  IterKey iter_key;
-  iter_key.SetInternalKey(user_key, sequence, kValueTypeForSeek);
-  auto s = table_cache_->Get(
-      ReadOptions(), cfd_->internal_comparator(), *pair.second,
-      storage_info_.dependence_map(), iter_key.GetInternalKey(), &get_context,
-      mutable_cf_options_.prefix_extractor.get(), nullptr, true);
-  if (!s.ok()) {
-    return s;
-  }
-  if (context_seq != sequence || (get_context.State() != GetContext::kFound &&
-                                  get_context.State() != GetContext::kMerge)) {
-    if (get_context.State() == GetContext::kCorrupt) {
-      return std::move(get_context).CorruptReason();
-    } else {
-      char buf[128];
-      snprintf(buf, sizeof buf,
-               "file number = %" PRIu64 "(%" PRIu64 "), sequence = %" PRIu64,
-               pair.second->fd.GetNumber(), pair.first, sequence);
-      return Status::Corruption("Separate value missing", buf);
+
+  Status s;
+  if (!pair.second->prop.is_blob_wal()) {
+    // normal value
+    Slice user_key(reinterpret_cast<const char*>(context->data[0]),
+                   context->data[1]);
+    uint64_t sequence = context->data[2];
+    bool value_found = false;
+    SequenceNumber context_seq;
+    GetContext get_context(cfd_->internal_comparator().user_comparator(),
+                           nullptr, cfd_->ioptions()->info_log, db_statistics_,
+                           GetContext::kNotFound, user_key, buffer,
+                           &value_found, nullptr, nullptr, nullptr, env_,
+                           &context_seq);
+    IterKey iter_key;
+    iter_key.SetInternalKey(user_key, sequence, kValueTypeForSeek);
+    s = table_cache_->Get(
+        ReadOptions(), cfd_->internal_comparator(), *pair.second,
+        storage_info_.dependence_map(), iter_key.GetInternalKey(), &get_context,
+        mutable_cf_options_.prefix_extractor.get(), nullptr, true);
+    if (!s.ok()) {
+      return s;
+    }
+    if (context_seq != sequence ||
+        (get_context.State() != GetContext::kFound &&
+         get_context.State() != GetContext::kMerge)) {
+      if (get_context.State() == GetContext::kCorrupt) {
+        return std::move(get_context).CorruptReason();
+      } else {
+        char buf[128];
+        snprintf(buf, sizeof buf,
+                 "file number = %" PRIu64 "(%" PRIu64 "), sequence = %" PRIu64,
+                 pair.second->fd.GetNumber(), pair.first, sequence);
+        return Status::Corruption("Separate value missing", buf);
+      }
+    }
+  } else {
+    // blob wal value
+    Slice value_content(reinterpret_cast<const char*>(context->data[0]),
+                        context->data[1]);
+    bool value_found = false;
+    GetContext get_context(cfd_->internal_comparator().user_comparator(),
+                           nullptr, cfd_->ioptions()->info_log, db_statistics_,
+                           GetContext::kNotFound, value_content, buffer,
+                           &value_found, nullptr, nullptr, nullptr, env_);
+    s = table_cache_->Get(
+        ReadOptions(), cfd_->internal_comparator(), *pair.second,
+        storage_info_.dependence_map(), value_content, &get_context,
+        mutable_cf_options_.prefix_extractor.get(), nullptr, true);
+    if (get_context.State() != GetContext::kFound &&
+        get_context.State() != GetContext::kMerge) {
+      if (get_context.State() == GetContext::kCorrupt) {
+        return std::move(get_context).CorruptReason();
+      } else {
+        char buf[128];
+        snprintf(buf, sizeof buf, "file number = %" PRIu64 "(%" PRIu64 ")",
+                 pair.second->fd.GetNumber(), pair.first);
+        return Status::Corruption("Separate value missing", buf);
+      }
     }
   }
   assert(buffer->file_number() == pair.second->fd.GetNumber());
@@ -1266,23 +1301,36 @@ Status Version::fetch_buffer(LazyBuffer* buffer) const {
 }
 
 LazyBuffer Version::TransToCombined(const Slice& user_key, uint64_t sequence,
-                                    const LazyBuffer& value) const {
+                                    LazyBuffer&& value) const {
   auto s = value.fetch();
   if (!s.ok()) {
     return LazyBuffer(std::move(s));
   }
-  uint64_t file_number = SeparateHelper::DecodeFileNumber(value.slice());
+  ValueIndex value_index(value.slice());
   auto& dependence_map = storage_info_.dependence_map();
-  auto find = dependence_map.find(file_number);
+  auto find = dependence_map.find(value_index.file_number);
   if (find == dependence_map.end()) {
+    assert(false); // debug
     return LazyBuffer(Status::Corruption("Separate value dependence missing"));
-  } else {
-    return LazyBuffer(
-        this,
-        {reinterpret_cast<uint64_t>(user_key.data()), user_key.size(), sequence,
-         reinterpret_cast<uint64_t>(&*find)},
-        Slice::Invalid(), find->second->fd.GetNumber());
   }
+  LazyBufferContext context;
+  if (find->second->fd.GetNumber() == value_index.file_number &&
+      value_index.log_handle.valid()) {
+    ValueIndex::DefaultLogHandle content(value_index.log_handle);
+    // has value index content, fetch buffer use handle in value index content
+    context.data[0] = reinterpret_cast<uint64_t>(value_index.log_handle.data());
+    context.data[1] = value_index.log_handle.size();
+    context.data[2] = SequenceNumber(-1);
+    context.data[3] = reinterpret_cast<uint64_t>(&*find);
+  } else {
+    // no content in value index, use key to fetch buffer
+    context.data[0] = reinterpret_cast<uint64_t>(user_key.data());
+    context.data[1] = user_key.size();
+    context.data[2] = sequence;
+    context.data[3] = reinterpret_cast<uint64_t>(&*find);
+  }
+  return LazyBuffer(this, context, Slice::Invalid(),
+                    find->second->fd.GetNumber());
 }
 
 void Version::Get(const ReadOptions& read_options, const Slice& user_key,
@@ -2960,6 +3008,7 @@ Status VersionSet::ProcessManifestWrites(
     std::deque<ManifestWriter>& writers, InstrumentedMutex* mu,
     Directory* db_directory, bool new_descriptor_log,
     const ColumnFamilyOptions* new_cf_options) {
+  // TODO: need summarize used entries of every blob wal to get num_antiquation
   assert(!writers.empty());
   ManifestWriter& first_writer = writers.front();
   ManifestWriter* last_writer = &first_writer;
@@ -3127,7 +3176,7 @@ Status VersionSet::ProcessManifestWrites(
       for (int i = 0; i < static_cast<int>(versions.size()); ++i) {
         assert(!builder_guards.empty() &&
                builder_guards.size() == versions.size());
-        builder_guards[i]->DoApplyAndSaveTo(versions[i]->storage_info());
+        builder_guards[i]->DoApplyAndSaveTo(versions[i]->storage_info(), this);
       }
     }
 
@@ -3554,6 +3603,7 @@ Status VersionSet::ApplyOneVersionEdit(
     // to builder
     auto builder = builders.find(edit.column_family_);
     assert(builder != builders.end());
+    builder->second->version_builder()->SetContext(this);
     builder->second->version_builder()->Apply(&edit);
   }
 
@@ -4695,6 +4745,11 @@ void VersionSet::GetObsoleteFiles(std::vector<ObsoleteFileInfo>* files,
   obsolete_manifests_.swap(*manifest_filenames);
   std::vector<ObsoleteFileInfo> pending_files;
   for (auto& f : obsolete_files_) {
+    if (f.metadata->prop.is_blob_wal() &&
+        alive_logs_entries_.find(f.metadata->fd.GetNumber()) !=
+            alive_logs_entries_.end()) {
+      continue;
+    }
     if (f.metadata->fd.GetNumber() < min_pending_output) {
       files->push_back(std::move(f));
     } else {
@@ -4756,6 +4811,19 @@ uint64_t VersionSet::GetTotalSstFilesSize(Version* dummy_versions) {
     }
   }
   return total_files_size;
+}
+
+Status VersionSet::PutBlobMeta(uint64_t log_no,
+                               uint64_t num_entries /*maybe add more meta*/) {
+  assert(alive_logs_entries_.find(log_no) == alive_logs_entries_.end());
+  alive_logs_entries_[log_no] = num_entries;
+  return Status::OK();
+}
+
+uint64_t VersionSet::GetWalEntryNumber(uint64_t log_no) {
+  auto find = alive_logs_entries_.find(log_no);
+  assert(find != alive_logs_entries_.end());
+  return find->second;
 }
 
 }  // namespace rocksdb

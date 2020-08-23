@@ -13,10 +13,10 @@
 #include "port/likely.h"
 #include "rocksdb/comparator.h"
 #include "rocksdb/db.h"
-#include "table/iterator_wrapper.h"
 #include "rocksdb/merge_operator.h"
 #include "table/format.h"
 #include "table/internal_iterator.h"
+#include "table/iterator_wrapper.h"
 
 namespace rocksdb {
 
@@ -115,10 +115,11 @@ Status MergeHelper::TimedFullMerge(const MergeOperator* merge_operator,
 //
 // TODO: Avoid the snapshot stripe map lookup in CompactionRangeDelAggregator
 // and just pass the StripeRep corresponding to the stripe being merged.
-Status MergeHelper::MergeUntil(
-    const Slice& user_key, CombinedInternalIterator* iter,
-    CompactionRangeDelAggregator* range_del_agg,
-    const SequenceNumber stop_before, const bool at_bottom) {
+Status MergeHelper::MergeUntil(const Slice& user_key,
+                               CombinedInternalIterator* iter,
+                               CompactionRangeDelAggregator* range_del_agg,
+                               const SequenceNumber stop_before,
+                               const bool at_bottom) {
   // Get a copy of the internal key, before it's invalidated by iter->Next()
   // Also maintain the list of merge operands seen.
   assert(HasOperator());
@@ -177,13 +178,12 @@ Status MergeHelper::MergeUntil(
       // hit an entry that's visible by the previous snapshot, can't touch that
       break;
     }
-    LazyBuffer val = iter->value(user_key, nullptr);
+    LazyBuffer val = iter->value(user_key);
 
     // At this point we are guaranteed that we need to process this key.
 
     assert(IsValueType(ikey.type));
     if (ikey.type != kTypeMerge && ikey.type != kTypeMergeIndex) {
-
       // hit a put/delete/single delete
       //   => merge the put value or a nullptr with operands_
       //   => store result in operands_.back() (and update keys_.back())
@@ -212,8 +212,8 @@ Status MergeHelper::MergeUntil(
       }
       LazyBuffer merge_result;
       s = TimedFullMerge(user_merge_operator_, ikey.user_key, val_ptr,
-                         merge_context_.GetOperands(), &merge_result,
-                         logger_, stats_, env_);
+                         merge_context_.GetOperands(), &merge_result, logger_,
+                         stats_, env_);
 
       // We store the result in keys_.back() and operands_.back()
       // if nothing went wrong (i.e.: no operand corruption on disk)
@@ -370,25 +370,6 @@ Status MergeHelper::MergeUntil(
   return s;
 }
 
-MergeOutputIterator::MergeOutputIterator(const MergeHelper* merge_helper)
-    : merge_helper_(merge_helper) {
-  it_keys_ = merge_helper_->keys().rend();
-  it_values_ = merge_helper_->values().rend();
-}
-
-void MergeOutputIterator::SeekToFirst() {
-  const auto& keys = merge_helper_->keys();
-  const auto& values = merge_helper_->values();
-  assert(keys.size() == values.size());
-  it_keys_ = keys.rbegin();
-  it_values_ = values.rbegin();
-}
-
-void MergeOutputIterator::Next() {
-  ++it_keys_;
-  ++it_values_;
-}
-
 CompactionFilter::Decision MergeHelper::FilterMerge(
     const Slice& user_key, const LazyBuffer& value_slice) {
   if (compaction_filter_ == nullptr) {
@@ -418,4 +399,13 @@ CompactionFilter::Decision MergeHelper::FilterMerge(
   return ret;
 }
 
-} // namespace rocksdb
+MergeOutputIterator MergeHelper::NewIterator() && {
+  MergeOutputIterator it;
+  it.it_keys_ = keys_.rbegin();
+  it.it_end_ = keys_.rend();
+  it.it_values_ =
+      std::make_move_iterator(merge_context_.GetOperands().rbegin());
+  return it;
+}
+
+}  // namespace rocksdb

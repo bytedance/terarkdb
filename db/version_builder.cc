@@ -162,6 +162,7 @@ class VersionBuilder::Rep {
   // on invalid levels. The version is not consistent if in the end the files
   // on invalid levels don't cancel out.
   std::map<int, std::unordered_set<uint64_t>> invalid_levels_;
+  std::unordered_map<uint64_t, uint64_t>* used_entries_ = nullptr;
   // Whether there are invalid new files or invalid deletion on levels larger
   // than num_levels_.
   bool has_invalid_levels_;
@@ -239,6 +240,7 @@ class VersionBuilder::Rep {
   }
 
   void PutSst(FileMetaData* f, int level) {
+    // not just sst include blob wal
     auto ib = dependence_map_.emplace(f->fd.GetNumber(),
                                       DependenceItem{0, 0, false, level, f, 0});
     f->Ref();
@@ -303,6 +305,7 @@ class VersionBuilder::Rep {
 
   void CalculateDependence(bool finish, bool is_open_db = false) {
     if (!finish && (!is_open_db || new_deleted_files_ < 65536)) {
+      // TODO
       return;
     }
     ++dependence_version_;
@@ -373,13 +376,18 @@ class VersionBuilder::Rep {
 
   void CheckDependence(VersionStorageInfo* vstorage, FileMetaData* f,
                        bool is_map) {
+    // there are 2 kind of file may have dependence
+    // 1. map sst depend hiden sst
+    // 2. key sst depend blob sst/wal
     for (auto& dependence : f->prop.dependence) {
+      (*used_entries_)[dependence.file_number] += dependence.entry_count;
       auto item = TransFileNumber(dependence.file_number);
       if (item == nullptr) {
         fprintf(stderr, "Missing dependence files");
         abort();
       }
       if (is_map && !item->f->prop.dependence.empty()) {
+        // hiden sst of a map sst also depend others, check recursively
         CheckDependence(vstorage, item->f, item->f->prop.is_map_sst());
       }
     }
@@ -537,8 +545,12 @@ class VersionBuilder::Rep {
     }
   }
 
+  void SetContext(VersionSet* vset) {
+    used_entries_ = vset->GetMapOfUsedEntries();
+  }
   // Apply all of the edits in *edit to the current state.
   void Apply(VersionEdit* edit) {
+    assert(used_entries_);
     Init();
     CheckConsistency(base_vstorage_, false);
     if (debugger_) {
@@ -573,6 +585,8 @@ class VersionBuilder::Rep {
         FileMetaData* f = new FileMetaData(pair.second);
         assert(f->table_reader_handle == nullptr);
         assert(level < 0 || levels_[level].count(f->fd.GetNumber()) == 0);
+        assert(!f->prop.is_blob_wal() ||
+               (f->prop.is_blob_wal() && level == -1));  // all blob wal in -1
         PutSst(f, level);
       } else {
         uint64_t number = pair.second.fd.GetNumber();
@@ -654,6 +668,8 @@ class VersionBuilder::Rep {
     }
     for (auto& pair : dependence_map_) {
       auto& item = pair.second;
+      item.f->num_antiquation =
+          item.f->prop.num_entries - (*used_entries_)[pair.first];
       if (item.level == -1) {
         if (item.f->is_gc_forbidden()) {
           push_old_file(item.f);
@@ -813,6 +829,10 @@ bool VersionBuilder::CheckConsistencyForNumLevels() {
   return rep_->CheckConsistencyForNumLevels();
 }
 
+void VersionBuilder::SetContext(VersionSet* vset) {
+  // now context of versionbuider only has used_entries
+  rep_->SetContext(vset);
+}
 void VersionBuilder::Apply(VersionEdit* edit) { rep_->Apply(edit); }
 
 void VersionBuilder::SaveTo(VersionStorageInfo* vstorage) {

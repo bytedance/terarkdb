@@ -944,6 +944,12 @@ struct DBOptions {
   // Not supported in ROCKSDB_LITE mode!
   std::shared_ptr<Cache> row_cache = nullptr;
 
+  size_t blob_cache_size = 1024;
+
+  // A global cache for blob in wal which is shared across CF.
+  // Default: nullptr (disabled)
+  std::shared_ptr<Cache> blob_cache = nullptr;
+
   std::shared_ptr<MetricsReporterFactory> metrics_reporter_factory = nullptr;
 
 #ifndef ROCKSDB_LITE
@@ -1263,12 +1269,16 @@ struct WriteOptions {
   // Default: false
   bool low_pri;
 
+  // Default: -1, disable KV separation
+  size_t blob_size;
+
   WriteOptions()
       : sync(false),
         disableWAL(false),
         ignore_missing_column_families(false),
         no_slowdown(false),
-        low_pri(false) {}
+        low_pri(false),
+        blob_size(-1) {}
 };
 
 // Options that control flush operations

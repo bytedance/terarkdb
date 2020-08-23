@@ -266,15 +266,16 @@ class WorkerSeparateHelper : public SeparateHelper, public LazyBufferState {
 
   using SeparateHelper::TransToSeparate;
   Status TransToSeparate(const Slice& internal_key, LazyBuffer& value,
-                         const Slice& meta, bool is_merge,
-                         bool is_index) override {
+                         bool is_merge, bool is_index) override {
+    std::string meta = GetValueMeta(internal_key, value);
     return SeparateHelper::TransToSeparate(
-        internal_key, value, value.file_number(), meta, is_merge, is_index,
+        internal_key, value, value.file_number(),
+        Slice(meta.data(), meta.size()), is_merge, is_index,
         value_meta_extractor_.get());
   }
 
   LazyBuffer TransToCombined(const Slice& user_key, uint64_t sequence,
-                             const LazyBuffer& value) const override {
+                             LazyBuffer&& value) const override {
     auto s = value.fetch();
     if (!s.ok()) {
       return LazyBuffer(std::move(s));

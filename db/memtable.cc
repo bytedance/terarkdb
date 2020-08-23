@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <limits>
 #include <memory>
+#include <iostream>
 
 #include "db/dbformat.h"
 #include "db/merge_context.h"
@@ -36,6 +37,7 @@
 #include "util/memory_usage.h"
 #include "util/murmurhash.h"
 #include "util/mutexlock.h"
+#include "db/log_writer.h"
 #include "util/util.h"
 
 namespace rocksdb {
@@ -520,7 +522,7 @@ MemTable::MemTableStats MemTable::ApproximateStats(const Slice& start_ikey,
 
 bool MemTable::Add(SequenceNumber s, ValueType type,
                    const Slice& key, /* user key */
-                   const Slice& value, bool allow_concurrent,
+                   const SliceParts& value, bool allow_concurrent,
                    MemTablePostProcessInfo* post_process_info) {
   std::unique_ptr<MemTableRep>& table =
       type == kTypeRangeDeletion ? range_del_table_ : table_;
@@ -644,6 +646,17 @@ struct Saver {
 }  // namespace
 
 static bool SaveValue(void* arg, const Slice& internal_key, const char* value) {
+  auto GetIndexPrefixedValue = [](const char* value_p) -> Slice {
+    Slice value_with_index = GetLengthPrefixedSlice(value_p);
+
+    ValueIndex value_index(value_with_index);
+    // currently, we only has one log handle type, you can add more and remove
+    // this assert
+    assert(value_index.log_type == ValueIndex::kDefault);
+
+    value_with_index.remove_prefix(ValueIndex::kDefaultLogIndexSize);
+    return value_with_index;
+  };
   Saver* s = reinterpret_cast<Saver*>(arg);
   MergeContext* merge_context = s->merge_context;
   SequenceNumber max_covering_tombstone_seq = s->max_covering_tombstone_seq;
@@ -676,8 +689,6 @@ static bool SaveValue(void* arg, const Slice& internal_key, const char* value) {
     }
     switch (type) {
       case kTypeValueIndex:
-        assert(false);
-        FALLTHROUGH_INTENDED;
       case kTypeValue: {
         if (s->inplace_update_support) {
           s->mem->GetLock(s->key->user_key())->ReadLock();
@@ -685,7 +696,10 @@ static bool SaveValue(void* arg, const Slice& internal_key, const char* value) {
         *s->status = Status::OK();
         if (*s->merge_in_progress) {
           if (s->value != nullptr) {
-            LazyBuffer lazy_val(GetLengthPrefixedSlice(value), false);
+            LazyBuffer lazy_val(type == kTypeValueIndex
+                                    ? GetIndexPrefixedValue(value)
+                                    : GetLengthPrefixedSlice(value),
+                                false);
             *s->status = MergeHelper::TimedFullMerge(
                 merge_operator, s->key->user_key(), &lazy_val,
                 merge_context->GetOperands(), s->value, s->logger,
@@ -695,7 +709,9 @@ static bool SaveValue(void* arg, const Slice& internal_key, const char* value) {
             }
           }
         } else if (s->value != nullptr) {
-          s->value->reset(GetLengthPrefixedSlice(value),
+          s->value->reset(type == kTypeValueIndex
+                              ? GetIndexPrefixedValue(value)
+                              : GetLengthPrefixedSlice(value),
                           s->inplace_update_support);
         }
         if (s->inplace_update_support) {
@@ -724,8 +740,6 @@ static bool SaveValue(void* arg, const Slice& internal_key, const char* value) {
         return false;
       }
       case kTypeMergeIndex:
-        assert(false);
-        FALLTHROUGH_INTENDED;
       case kTypeMerge: {
         if (!merge_operator) {
           *s->status = Status::InvalidArgument(
@@ -739,7 +753,9 @@ static bool SaveValue(void* arg, const Slice& internal_key, const char* value) {
         }
         *s->merge_in_progress = true;
         merge_context->PushOperand(
-            LazyBuffer(GetLengthPrefixedSlice(value), Cleanable()));
+            LazyBuffer(type == kTypeMergeIndex ? GetIndexPrefixedValue(value)
+                                               : GetLengthPrefixedSlice(value),
+                       Cleanable()));
         if (merge_operator->ShouldMerge(
                 merge_context->GetOperandsDirectionBackward())) {
           *s->status = MergeHelper::TimedFullMerge(
@@ -869,7 +885,10 @@ void MemTable::Update(SequenceNumber seq, const Slice& key,
 
   // key doesn't exist
   bool add_res __attribute__((__unused__));
-  add_res = Add(seq, kTypeValue, key, value);
+  Slice parts[] = {value};
+  add_res =
+      Add(seq, kTypeValue, key,
+          SliceParts(parts, 1));  // when inplace update, do not separate kv
   // We already checked unused != seq above. In that case, Add should not fail.
   assert(add_res);
 }
@@ -922,7 +941,7 @@ bool MemTable::UpdateCallback(SequenceNumber seq, const Slice& key,
           UpdateFlushState();
           return true;
         } else if (status == UpdateStatus::UPDATED) {
-          Add(seq, kTypeValue, key, Slice(merged_value));
+          Add(seq, kTypeValue, key, SliceParts(Slice(merged_value)));
           RecordTick(moptions_.statistics, NUMBER_KEYS_WRITTEN);
           UpdateFlushState();
           return true;

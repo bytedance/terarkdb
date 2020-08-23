@@ -10,6 +10,7 @@
 #include "db/table_cache.h"
 
 #include "db/dbformat.h"
+#include "db/log_writer.h"
 #include "db/range_tombstone_fragmenter.h"
 #include "db/version_edit.h"
 #include "monitoring/perf_context_imp.h"
@@ -111,8 +112,10 @@ class LazyCreateIterator : public Snapshot {
 }  // namespace
 
 TableCache::TableCache(const ImmutableCFOptions& ioptions,
+                       const ImmutableDBOptions& db_options,
                        const EnvOptions& env_options, Cache* const cache)
     : ioptions_(ioptions),
+      idb_options_(db_options),
       env_options_(env_options),
       cache_(cache),
       immortal_tables_(false) {
@@ -221,7 +224,7 @@ Status TableCache::FindTable(const EnvOptions& env_options,
                              const bool no_io, bool record_read_stats,
                              HistogramImpl* file_read_hist, bool skip_filters,
                              int level, bool prefetch_index_and_filter_in_cache,
-                             bool force_memory) {
+                             bool force_memory, bool is_wal) {
   PERF_TIMER_GUARD(find_table_nanos);
   Status s;
   uint64_t number = fd.GetNumber();
@@ -234,13 +237,27 @@ Status TableCache::FindTable(const EnvOptions& env_options,
     if (no_io) {  // Don't do IO and return a not-found status
       return Status::Incomplete("Table not found in table_cache, no_io is set");
     }
+
     std::unique_ptr<TableReader> table_reader;
-    s = GetTableReader(env_options, internal_comparator, fd,
-                       false /* sequential mode */, 0 /* readahead */,
-                       record_read_stats, file_read_hist, &table_reader,
-                       prefix_extractor, skip_filters, level,
-                       prefetch_index_and_filter_in_cache,
-                       false /* for_compaction */, force_memory);
+    if (is_wal) {
+      std::string file_name = LogFileName(idb_options_.wal_dir, number);
+
+      std::unique_ptr<RandomAccessFile> file;
+      EnvOptions env_opt_for_wal;
+      assert(!env_opt_for_wal.use_mmap_reads);
+      s = ioptions_.env->NewRandomAccessFile(file_name, &file, env_opt_for_wal);
+      if (s.ok()) {
+        table_reader.reset(
+            new log::WalBlobReader(std::move(file), number, idb_options_));
+      }
+    } else {
+      s = GetTableReader(env_options, internal_comparator, fd,
+                         false /* sequential mode */, 0 /* readahead */,
+                         record_read_stats, file_read_hist, &table_reader,
+                         prefix_extractor, skip_filters, level,
+                         prefetch_index_and_filter_in_cache,
+                         false /* for_compaction */, force_memory);
+    }
     if (!s.ok()) {
       assert(table_reader == nullptr);
       RecordTick(ioptions_.statistics, NO_FILE_ERRORS);
@@ -277,10 +294,12 @@ InternalIterator* TableCache::NewIterator(
   }
   size_t readahead = 0;
   bool record_stats = !for_compaction;
-  if (file_meta.prop.is_map_sst()) {
+  if (file_meta.prop.is_map_sst() || file_meta.prop.is_blob_wal()) {
     record_stats = false;
   } else {
-    // MapSST don't handle these
+    // these code is an optimization for seq-read to change random read to
+    // sequential read, such as compaction and readahead
+    // MapSST and blob-wal don't handle these
     if (for_compaction) {
 #ifndef NDEBUG
       bool use_direct_reads_for_compaction = env_options.use_direct_reads;
@@ -318,7 +337,7 @@ InternalIterator* TableCache::NewIterator(
                     options.read_tier == kBlockCacheTier /* no_io */,
                     record_stats, file_read_hist, skip_filters, level,
                     true /* prefetch_index_and_filter_in_cache */,
-                    file_meta.prop.is_map_sst());
+                    file_meta.prop.is_map_sst(), file_meta.prop.is_blob_wal());
       if (s.ok()) {
         table_reader = GetTableReaderFromHandle(handle);
       }
@@ -440,7 +459,8 @@ Status TableCache::Get(const ReadOptions& options,
                   options.read_tier == kBlockCacheTier /* no_io */,
                   true /* record_read_stats */, file_read_hist, skip_filters,
                   level, true /* prefetch_index_and_filter_in_cache */,
-                  file_meta.prop.is_map_sst());
+                  file_meta.prop.is_map_sst() /* force_in_mem */,
+                  file_meta.prop.is_blob_wal());
     if (s.ok()) {
       t = GetTableReaderFromHandle(handle);
     }
@@ -448,11 +468,15 @@ Status TableCache::Get(const ReadOptions& options,
   if (s.ok()) {
     t->UpdateMaxCoveringTombstoneSeq(options, ExtractUserKey(k),
                                      get_context->max_covering_tombstone_seq());
-    if (!file_meta.prop.is_map_sst()) {
+    if (!file_meta.prop.is_map_sst() && !file_meta.prop.is_blob_wal()) {
       s = t->Get(options, k, get_context, prefix_extractor, skip_filters);
     } else if (dependence_map.empty()) {
       s = Status::Corruption(
           "TableCache::Get: Composite sst depend files missing");
+    } else if (file_meta.prop.is_blob_wal()) {
+      // value in wal
+      log::WalBlobReader* wr = reinterpret_cast<log::WalBlobReader*>(t);
+      s = wr->GetBlob(k /*value content*/, get_context);
     } else {
       // Forward query to target sst
       ReadOptions forward_options = options;
@@ -590,7 +614,7 @@ Status TableCache::GetTableProperties(
                 prefix_extractor, no_io, true /* record_read_stats */,
                 nullptr /* file_read_hist */, false /* skip_filters */,
                 -1 /* level */, true /* prefetch_index_and_filter_in_cache */,
-                file_meta.prop.is_map_sst());
+                file_meta.prop.is_map_sst(), file_meta.prop.is_blob_wal());
   if (!s.ok()) {
     return s;
   }

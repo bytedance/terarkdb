@@ -243,4 +243,27 @@ Slice ArenaPinInternalKey(const Slice& user_key, SequenceNumber seq,
   return Slice(buf, key_size);
 }
 
+ValueIndex::ValueIndex(const Slice& slice) {
+  assert(slice.size() >= sizeof(uint64_t));
+  uint64_t packed_log_number = DecodeFixed64(slice.data());
+  log_type = (ValueIndex::LogHandleType)(packed_log_number & kLogHandleTypeMask);
+  file_number = packed_log_number & kFileNumberMask;
+
+  switch (log_type) {
+    case kEmpty:
+      meta_or_value = Slice(slice.data() + 8, slice.size() - 8);
+      break;
+    case kDefault: {
+      size_t default_value_index_size = 8 + sizeof(DefaultLogHandle);
+      assert(slice.size() >= default_value_index_size);
+      log_handle = Slice(slice.data() + 8, sizeof(DefaultLogHandle));
+      meta_or_value = Slice(slice.data() + default_value_index_size,
+                            slice.size() - default_value_index_size);
+    } break;
+    case kReverse0:
+    case kReverse1: {
+      assert(false);
+    } break;
+  }
+}
 }  // namespace rocksdb

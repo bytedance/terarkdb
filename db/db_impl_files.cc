@@ -678,7 +678,7 @@ uint64_t PrecomputeMinLogNumberToKeep(
 
   // Get min log number containing unflushed data for other column families.
   uint64_t min_log_number_to_keep =
-      vset->PreComputeMinLogNumberWithUnflushedData(&cfd_to_flush);
+      vset->PreComputeMinLogNumberBeingDepended(&cfd_to_flush);
   if (cf_min_log_number_to_keep != 0) {
     min_log_number_to_keep =
         std::min(cf_min_log_number_to_keep, min_log_number_to_keep);

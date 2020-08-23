@@ -327,6 +327,7 @@ class WriteBatch : public WriteBatchBase {
   const SavePoint& GetWalTerminationPoint() const { return wal_term_point_; }
 
   void SetMaxBytes(size_t max_bytes) override { max_bytes_ = max_bytes; }
+  bool merge_batch_of_wal = false;
 
  private:
   friend class WriteBatchInternal;

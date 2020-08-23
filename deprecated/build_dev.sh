@@ -45,7 +45,7 @@ fi
 #      DEBUG_LEVEL=0 shared_lib -j $cpuNum
 
 make LINK_TERARK=static \
-     EXTRA_CXXFLAGS="-DROCKSDB_VALGRIND_RUN=$VALGRIND" \
+     EXTRA_CXXFLAGS="-DROCKSDB_VALGRIND_RUN=$VALGRIND -Wfatal-errors" \
      BMI2=$WITH_BMI2 \
      DISABLE_WARNING_AS_ERROR=1 \
      DEBUG_LEVEL=2 shared_lib -j $cpuNum
@@ -97,3 +97,4 @@ PLATFORM_DIR=$SYSTEM-$COMPILER-bmi2-$WITH_BMI2
 cp -a shared-objects/build/$PLATFORM_DIR/dbg-2/librocksdb* $pkgdir/lib
 
 echo "build and package successful!"
+

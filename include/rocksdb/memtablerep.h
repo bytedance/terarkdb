@@ -88,8 +88,9 @@ class MemTableRep {
     virtual ~KeyComparator() {}
   };
 
-  static size_t EncodeKeyValueSize(const Slice& key, const Slice& value);
-  static void EncodeKeyValue(const Slice& key, const Slice& value, char* buf);
+  static size_t EncodeKeyValueSize(const Slice& key, const SliceParts& value);
+  static void EncodeKeyValue(const Slice& key, const SliceParts& value,
+                             char* buf);
   static LazyBuffer DecodeToLazyBuffer(const char* key);
   static const char* LengthPrefixedValue(const char* key);
 
@@ -98,19 +99,19 @@ class MemTableRep {
   // Same as ::Insert
   // Returns false if MemTableRepFactory::CanHandleDuplicatedKey() is true and
   // the <key, seq> already exists.
-  virtual bool InsertKeyValue(const Slice& internal_key, const Slice& value);
+  virtual bool InsertKeyValue(const Slice& internal_key, const SliceParts& value);
 
   // Same as ::InsertWithHint
   // Returns false if MemTableRepFactory::CanHandleDuplicatedKey() is true and
   // the <key, seq> already exists.
   virtual bool InsertKeyValueWithHint(const Slice& internal_key,
-                                      const Slice& value, void** hint);
+                                      const SliceParts& value, void** hint);
 
   // Same as ::InsertConcurrently
   // Returns false if MemTableRepFactory::CanHandleDuplicatedKey() is true and
   // the <key, seq> already exists.
   virtual bool InsertKeyValueConcurrently(const Slice& internal_key,
-                                          const Slice& value);
+                                          const SliceParts& value);
 
   // Allocate a buf of len size for storing key. The idea is that a
   // specific memtable representation knows its underlying data structure

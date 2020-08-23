@@ -11,12 +11,14 @@
 
 #include <algorithm>
 #include <deque>
+#include <map>
 #include <vector>
 
 #include "db/compaction_iterator.h"
 #include "db/dbformat.h"
 #include "db/event_helpers.h"
 #include "db/internal_stats.h"
+#include "db/log_writer.h"
 #include "db/merge_helper.h"
 #include "db/range_del_aggregator.h"
 #include "db/table_cache.h"
@@ -154,44 +156,7 @@ Status BuildTable(
                       snapshots.empty() ? 0 : snapshots.back(),
                       snapshot_checker);
 
-    struct BuilderSeparateHelper : public SeparateHelper {
-      std::vector<FileMetaData>* output = nullptr;
-      std::vector<TableProperties>* prop = nullptr;
-      std::string fname;
-      TableProperties tp;
-      std::unique_ptr<WritableFileWriter> file_writer;
-      std::unique_ptr<TableBuilder> builder;
-      FileMetaData* current_output = nullptr;
-      TableProperties* current_prop = nullptr;
-      std::unique_ptr<ValueExtractor> value_meta_extractor;
-      Status (*trans_to_separate_callback)(void* args, const Slice& key,
-                                           LazyBuffer& value) = nullptr;
-      void* trans_to_separate_callback_args = nullptr;
-
-      Status TransToSeparate(const Slice& internal_key, LazyBuffer& value,
-                             const Slice& meta, bool is_merge,
-                             bool is_index) override {
-        return SeparateHelper::TransToSeparate(
-            internal_key, value, value.file_number(), meta, is_merge, is_index,
-            value_meta_extractor.get());
-      }
-
-      Status TransToSeparate(const Slice& internal_key,
-                             LazyBuffer& value) override {
-        if (trans_to_separate_callback == nullptr) {
-          return Status::NotSupported();
-        }
-        return trans_to_separate_callback(trans_to_separate_callback_args,
-                                          internal_key, value);
-      }
-
-      LazyBuffer TransToCombined(const Slice& /*user_key*/,
-                                 uint64_t /*sequence*/,
-                                 const LazyBuffer& /*value*/) const override {
-        assert(false);
-        return LazyBuffer();
-      }
-    } separate_helper;
+    BuilderSeparateHelper separate_helper;
     if (ioptions.value_meta_extractor_factory != nullptr) {
       ValueExtractorContext context = {column_family_id};
       separate_helper.value_meta_extractor =
@@ -359,9 +324,13 @@ Status BuildTable(
         ioptions.merge_operator->IsStableMerge()) {
       builder->SetSecondPassIterator(second_pass_iter.get());
     }
+    std::unordered_map<uint64_t, uint64_t> dependence;
     c_iter.SeekToFirst();
     for (; s.ok() && c_iter.Valid(); c_iter.Next()) {
       s = builder->Add(c_iter.key(), c_iter.value());
+      if (c_iter.value().file_number() != uint64_t(-1)) {
+        ++dependence[c_iter.value().file_number()];
+      }
       sst_meta()->UpdateBoundaries(c_iter.key(), c_iter.ikey().sequence);
 
       // TODO(noetzli): Update stats after flush, too.
@@ -397,12 +366,33 @@ Status BuildTable(
     } else {
       for (size_t i = 1; i < meta_vec->size(); ++i) {
         auto& blob = (*meta_vec)[i];
-        assert(sst_meta()->prop.dependence.empty() ||
-               blob.fd.GetNumber() >
-                   sst_meta()->prop.dependence.back().file_number);
         sst_meta()->prop.dependence.emplace_back(
             Dependence{blob.fd.GetNumber(), blob.prop.num_entries});
+        assert(dependence.find(blob.fd.GetNumber()) != dependence.end());
+        assert(dependence[blob.fd.GetNumber()] == blob.prop.num_entries);
+        dependence.erase(blob.fd.GetNumber());
       }
+      // construct filemetadata of depended blob wal
+      for (auto& d : dependence) {
+        sst_meta()->prop.dependence.emplace_back(Dependence{d.first, d.second});
+
+        FileMetaData bm;
+        bm.fd.packed_number_and_path_id =
+            PackFileNumberAndPathId(d.first, 0);  // XXX path id of wal
+        bm.prop.num_entries = versions_->GetWalEntryNumber(d.first);
+        bm.prop.purpose = kLogSst;
+        bm.smallest.SetMinPossibleForUserKey(Slice());
+        bm.largest.SetMaxPossibleForUserKey(Slice());
+        bm.fd.smallest_seqno = 0;
+        bm.fd.largest_seqno = kMaxSequenceNumber;
+
+        meta_vec->push_back(std::move(bm));
+      }
+      auto& prop_dependence = sst_meta()->prop.dependence;
+      std::sort(prop_dependence.begin(), prop_dependence.end(),
+                [](const Dependence& left, const Dependence& right) {
+                  return left.file_number < right.file_number;
+                });
       auto shrinked_snapshots = sst_meta()->ShrinkSnapshot(snapshots);
       s = builder->Finish(&sst_meta()->prop, &shrinked_snapshots);
       sst_meta()->prop.num_deletions = tp.num_deletions;
