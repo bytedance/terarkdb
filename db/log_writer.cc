@@ -288,25 +288,41 @@ Status WalBlobReader::GetBlob(const Slice& value_content,
   }
 
   // read log file and check checksum
-  Blob* b = new Blob(blob_physical_length);
-  src_->Read(content.offset, blob_physical_length, &(b->slice_), b->buf_);
+  Blob* blob = new Blob(blob_physical_length);
+  src_->Read(content.offset, blob_physical_length, &(blob->slice_), blob->buf_);
   if (head_size != 0) {
-    uint32_t head_crc = terark::Crc16c_update(0, b->slice_.data(), head_size);
+    uint32_t head_crc =
+        terark::Crc16c_update(0, blob->slice_.data(), head_size);
     assert(content.head_crc == head_crc);
   }
   if (tail_size != 0) {
     uint32_t tail_crc = terark::Crc16c_update(
-        0, b->slice_.data() + b->slice_.size() - tail_size, tail_size);
+        0, blob->slice_.data() + blob->slice_.size() - tail_size, tail_size);
     assert(tail_crc == content.tail_crc);
   }
-  // TODO checkout middletype crc
+  // check middletype crc
+  char* header = const_cast<char*>(blob->slice_.data()) + head_size;
+  const char* tailer = blob->slice_.data() - tail_size;
+  while (header <= tailer - kBlockSize) {
+    const uint32_t a = static_cast<uint32_t>(header[4]) & 0xff;
+    const uint32_t b = static_cast<uint32_t>(header[5]) & 0xff;
+    const unsigned int type = header[6];
+    const uint32_t length = a | (b << 8);
+    assert(type == kMiddleType);
+
+    uint32_t expected_crc = crc32c::Unmask(DecodeFixed32(header));
+    uint32_t actual_crc =
+        crc32c::Value(header + 6, length + wal_header_size_ - 6);
+    assert(actual_crc == expected_crc);
+    header += kBlockSize;
+  }
 
   // insert into blob_cache, and return
   if (head_size) {
     // cross more than one block, need remove middle log record header
-    b->Shrink(head_size, wal_header_size_);
+    blob->Shrink(head_size, wal_header_size_);
   }
-  auto s = blob_cache_->Insert(value_content, b, 1, &DeleteCachedEntry<Blob>,
+  auto s = blob_cache_->Insert(value_content, blob, 1, &DeleteCachedEntry<Blob>,
                                &handle);
   set_value(blob_cache_->Value(handle));
   return Status::OK();
