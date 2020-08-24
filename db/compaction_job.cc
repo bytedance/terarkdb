@@ -1182,7 +1182,6 @@ void CompactionJob::ProcessCompaction(SubcompactionState* sub_compact) {
       assert(false);
       break;
     case kGarbageCollection:
-#warning "for test"
       //ProcessGarbageCollection(sub_compact);
       break;
     default:

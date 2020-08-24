@@ -10,10 +10,11 @@
 #pragma once
 #include <vector>
 #include "db/write_thread.h"
-#include "rocksdb/types.h"
-#include "rocksdb/write_batch.h"
 #include "rocksdb/db.h"
 #include "rocksdb/options.h"
+#include "rocksdb/types.h"
+#include "rocksdb/write_batch.h"
+#include "terark/util/crc.hpp"
 #include "util/autovector.h"
 
 namespace rocksdb {

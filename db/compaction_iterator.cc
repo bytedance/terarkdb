@@ -3,10 +3,10 @@
 //  COPYING file in the root directory) and Apache 2.0 License
 //  (found in the LICENSE.Apache file in the root directory).
 
-#include <iostream>
 #include "db/compaction_iterator.h"
 
 #include <boost/range/algorithm.hpp>
+
 #include "db/snapshot_checker.h"
 #include "port/likely.h"
 #include "rocksdb/listener.h"
@@ -738,7 +738,6 @@ void CompactionIterator::PrepareOutput() {
   // KeyNotExistsBeyondOutputLevel() return true?
   if (blob_config_.blob_size < size_t(-1) &&
       (ikey_.type == kTypeValue || ikey_.type == kTypeMerge)) {
-    // only separate kTypeValue or kTypeMerge
     auto s = value_.fetch();
     if (!s.ok()) {
       valid_ = false;
@@ -840,7 +839,9 @@ inline bool CompactionIterator::ikeyNotNeededForIncrementalSnapshot() {
 std::string BuilderSeparateHelper::GetValueMeta(const Slice& internal_key,
                                                 const LazyBuffer& value) {
   std::string value_meta;
-  bool value_is_separated = value.file_number() != uint64_t(-1);
+  bool value_is_separated =
+      (GetInternalKeyType(internal_key) == kTypeValueIndex ||
+       GetInternalKeyType(internal_key) == kTypeMergeIndex);
   if (value_is_separated) {
     // only separated value need value meta
     assert(dynamic_cast<const BuilderLazyBufferState*>(value.state()) !=
@@ -853,7 +854,8 @@ std::string BuilderSeparateHelper::GetValueMeta(const Slice& internal_key,
 
     bool value_in_log = value_index.log_type == ValueIndex::kDefault;
     bool value_from_memtable = value_from_iter.file_number() == uint64_t(-1);
-    if (value_in_log && value_from_memtable) {
+    if ((value_in_log && value_from_memtable) ||
+        value_meta_extractor == nullptr) {
       return "";  // no meta
     }
 
@@ -871,25 +873,27 @@ Status BuilderSeparateHelper::TransToSeparate(const Slice& internal_key,
                                               bool is_index) {
   assert(GetInternalKeyType(internal_key) == kTypeValueIndex ||
          GetInternalKeyType(internal_key) == kTypeMergeIndex);
-  assert(value.file_number() == uint64_t(-1) ||
-         dynamic_cast<const BuilderLazyBufferState*>(value.state()) != nullptr);
+  assert(dynamic_cast<const BuilderLazyBufferState*>(value.state()) != nullptr);
+  assert(value.valid());
   if (value.file_number() == uint64_t(-1)) {
     assert(false);
     return TransToSeparate(internal_key, value);
   }
 
+  assert(dynamic_cast<const BuilderLazyBufferState*>(value.state()) != nullptr);
   LazyBuffer value_from_iter = std::move(
       static_cast<const BuilderLazyBufferState*>(value.state())->value());
   assert(value_from_iter.valid());
   ValueIndex value_index(value_from_iter.slice());
+  // this func is to recovery value to original valueindex
 
-  bool value_from_memtable = value_from_iter.file_number() == uint64_t(-1);
   std::string value_meta_storage;
   Slice value_meta;
   Slice log_handle = Slice::Invalid();
+  bool value_from_memtable = value_from_iter.file_number() == uint64_t(-1);
   if (value_from_memtable) {
-    // for flush_job
     assert(value.slice() == value_index.meta_or_value);
+    // for flush_job
     if (nullptr != value_meta_extractor) {
       auto s = value_meta_extractor->Extract(
           ExtractUserKey(internal_key), value.slice(), &value_meta_storage);
@@ -902,18 +906,17 @@ Status BuilderSeparateHelper::TransToSeparate(const Slice& internal_key,
   } else {
     // for compaction job
     if (value.file_number() != value_index.file_number) {
-      // file number is updated by transtocombined, it cann't be anothor blob
-      // wal, so that log_handle is empty, only keep value meta here
+      // file number is updated to the latest blob-sst according to gc
+      // inheritance-chain by transtocombined, it cann't be anothor blob wal, so
+      // that log_handle is empty, only keep value meta here
+      assert(false);  // gc is forbiden, for test
       value_meta = value_index.meta_or_value;
     } else {
       // value_from_iter is a lazybuffer pointing to input sst, here we need
       // lazybuffer pointing to blob-sst or blob-wal
-      auto s = value_from_iter.fetch();
-      if (!s.ok()) {
-        return s;
-      }
-      ValueIndex value_index(value_from_iter.slice());
       if (value_index.log_type == ValueIndex::kDefault) {
+        ValueIndex::DefaultLogHandle vh(value_index.log_handle);
+        assert(vh.length == value.slice().size());
         log_handle = value_index.log_handle;
         value_meta = value_index.meta_or_value;
       } else {
@@ -962,13 +965,13 @@ LazyBuffer BuilderSeparateHelper::TransToCombined(
     assert(separate_helper);
     combined_value = separate_helper->TransToCombined(
         user_key, sequence, LazyBufferReference(state->value()));
-    // combined_value is a lazybuffer pointing to blob-sst or blob-wal
     auto s = combined_value.fetch();
     if (!s.ok()) {
       combined_value.reset(std::move(s));
     }
   }
-
+  // combined_value is a lazybuffer pointing to blob-sst or blob-wal, if it from
+  // blob-wal, state save the original value's log_handle for latter separating
   combined_value.wrap_state(state);
   return combined_value;
 }

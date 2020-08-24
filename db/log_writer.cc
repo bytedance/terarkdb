@@ -209,7 +209,7 @@ class Blob {
   }
 
   void Shrink(size_t head_size, size_t record_header_size) {
-    assert(head_size != 0 && size_ != 0);
+    assert(head_size != 0 && size_ == slice_.size() && buf_ == slice_.data());
     size_t kBlockAvailSize = kBlockSize - record_header_size;
 
     char* cur_offset = buf_ + head_size;
@@ -283,22 +283,29 @@ Status WalBlobReader::GetBlob(const Slice& value_content,
     tail_size = (content.length - head_size) % kBlockAvailSize;
     blob_physical_length =
         content.length +
-        wal_header_size_ *
-            ((content.length - head_size + kBlockAvailSize) / kBlockAvailSize);
+        wal_header_size_ * ((content.length - head_size + kBlockAvailSize - 1) /
+                            kBlockAvailSize);
   }
 
   // read log file and check checksum
   Blob* blob = new Blob(blob_physical_length);
   src_->Read(content.offset, blob_physical_length, &(blob->slice_), blob->buf_);
+  assert(blob->slice_.size() == blob_physical_length);
   if (head_size != 0) {
     uint32_t head_crc =
         terark::Crc16c_update(0, blob->slice_.data(), head_size);
-    assert(content.head_crc == head_crc);
+    // assert(content.head_crc == head_crc);
+    if (content.head_crc != head_crc) {
+      std::cout << "head crc wrong" << std::endl;
+    }
   }
   if (tail_size != 0) {
     uint32_t tail_crc = terark::Crc16c_update(
         0, blob->slice_.data() + blob->slice_.size() - tail_size, tail_size);
-    assert(tail_crc == content.tail_crc);
+    // assert(tail_crc == content.tail_crc);
+    if (tail_crc != content.tail_crc) {
+      std::cout << "tail crc wrong" << std::endl;
+    }
   }
   // check middletype crc
   char* header = const_cast<char*>(blob->slice_.data()) + head_size;
@@ -328,11 +335,15 @@ Status WalBlobReader::GetBlob(const Slice& value_content,
   return Status::OK();
 }
 
-InternalIterator* WalBlobReader::NewIterator(const ReadOptions&,
-                                             const SliceTransform*, Arena*,
-                                             bool, bool) {
-  assert(false);
-  return nullptr;
+InternalIterator* WalBlobReader::NewIterator(
+    const ReadOptions& read_options, const SliceTransform* /*prefix_extractor*/,
+    Arena* arena, bool /*skip_filters*/, bool /*for_compaction*/) {
+  if (arena == nullptr) {
+    return new BlobWalIterator();
+  } else {
+    auto* mem = arena->AllocateAligned(sizeof(BlobWalIterator));
+    return new (mem) BlobWalIterator();
+  }
 }
 }  // namespace log
 }  // namespace rocksdb

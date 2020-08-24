@@ -72,6 +72,35 @@ namespace log {
  * records written by the most recent log writer vs a previous one.
  */
 
+class BlobWalIterator : public InternalIteratorBase<LazyBuffer>,
+                        public LazyBufferState {
+ public:
+  virtual void destroy(LazyBuffer* /*buffer*/) const override {}
+
+  virtual Status pin_buffer(LazyBuffer* buffer) const override {
+    return Status::OK();
+  }
+
+  virtual Status fetch_buffer(LazyBuffer* /*buffer*/) const override {
+    return Status::OK();
+  }
+
+  LazyBuffer value() const {
+    assert(false);
+    return LazyBuffer(this, {}, Slice(), uint64_t(-1));
+  }
+  // TODO SeekToFirst
+  bool Valid() const override { return false; }
+  void SeekToFirst() override {}
+  void SeekToLast() override{};
+  void Seek(const Slice& target) override{};
+  void SeekForPrev(const Slice& target) override{};
+  void Next() override{};
+  void Prev() override{};
+  Slice key() const override { return Slice::Invalid(); }
+  Status status() const override { return Status::OK(); }
+};
+
 class WalBlobReader : public TableReader {
  public:
   explicit WalBlobReader(std::unique_ptr<RandomAccessFile>&& src,
@@ -79,7 +108,7 @@ class WalBlobReader : public TableReader {
   ~WalBlobReader() {}
 
   InternalIterator* NewIterator(const ReadOptions&, const SliceTransform*,
-                                Arena*, bool, bool) override ;
+                                Arena*, bool, bool) override;
 
   void RangeScan(const Slice*, const SliceTransform*, void*,
                  bool (*)(void* arg, const Slice& key,
@@ -120,86 +149,6 @@ class WalBlobReader : public TableReader {
   uint64_t log_number_;
   std::unique_ptr<RandomAccessFile> src_;
 };
-
-//using InternalIterator = InternalIteratorBase<LazyBuffer>;
-//class WalBlobIterator : public InternalIterator {
-// public:
-//  WalBlobIterator() {}
-//  virtual ~WalBlobIterator() {}
-//
-//  // An iterator is either positioned at a key/value pair, or
-//  // not valid.  This method returns true iff the iterator is valid.
-//  // Always returns false if !status().ok().
-//  virtual bool Valid() const = 0;
-//
-//  // Position at the first key in the source.  The iterator is Valid()
-//  // after this call iff the source is not empty.
-//  virtual void SeekToFirst() = 0;
-//
-//  // Position at the last key in the source.  The iterator is
-//  // Valid() after this call iff the source is not empty.
-//  virtual void SeekToLast() = 0;
-//
-//  // Position at the first key in the source that at or past target
-//  // The iterator is Valid() after this call iff the source contains
-//  // an entry that comes at or past target.
-//  // All Seek*() methods clear any error status() that the iterator had prior to
-//  // the call; after the seek, status() indicates only the error (if any) that
-//  // happened during the seek, not any past errors.
-//  virtual void Seek(const Slice& target) = 0;
-//
-//  // Position at the first key in the source that at or before target
-//  // The iterator is Valid() after this call iff the source contains
-//  // an entry that comes at or before target.
-//  virtual void SeekForPrev(const Slice& target) = 0;
-//
-//  // Moves to the next entry in the source.  After this call, Valid() is
-//  // true iff the iterator was not positioned at the last entry in the source.
-//  // REQUIRES: Valid()
-//  virtual void Next() = 0;
-//
-//  // Moves to the previous entry in the source.  After this call, Valid() is
-//  // true iff the iterator was not positioned at the first entry in source.
-//  // REQUIRES: Valid()
-//  virtual void Prev() = 0;
-//
-//  // Return the key for the current entry.  The underlying storage for
-//  // the returned slice is valid only until the next modification of
-//  // the iterator.
-//  // REQUIRES: Valid()
-//  virtual Slice key() const = 0;
-//
-//  // If an error has occurred, return it.  Else return an ok status.
-//  // If non-blocking IO is requested and this operation cannot be
-//  // satisfied without doing some IO, then this returns Status::Incomplete().
-//  virtual Status status() const = 0;
-//
-//  // True if the iterator is invalidated because it is out of the iterator
-//  // upper bound
-//  virtual bool IsOutOfBound() { return false; }
-//
-//  virtual Status GetProperty(std::string /*prop_name*/, std::string* /*prop*/) {
-//    return Status::NotSupported("");
-//  }
-//
-// protected:
-//  void SeekForPrevImpl(const Slice& target, const Comparator* cmp) {
-//    Seek(target);
-//    if (!Valid()) {
-//      SeekToLast();
-//    }
-//    while (Valid() && cmp->Compare(target, key()) < 0) {
-//      Prev();
-//    }
-//  }
-//
-// private:
-//  // No copying allowed
-//  InternalIteratorCommon(const InternalIteratorCommon&) = delete;
-//  InternalIteratorCommon& operator=(const InternalIteratorCommon&) = delete;
-//};
-
-
 
 class Writer {
  public:

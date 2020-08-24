@@ -52,7 +52,6 @@
 #include "monitoring/perf_context_imp.h"
 #include "monitoring/statistics.h"
 #include "rocksdb/merge_operator.h"
-#include "terark/util/crc.hpp"
 #include "util/coding.h"
 #include "util/duplicate_detector.h"
 #include "util/string_util.h"
@@ -77,6 +76,52 @@ enum ContentFlags : uint32_t {
   HAS_BEGIN_UNPREPARE = 1 << 10,
 };
 
+struct ValueIndexBuf {
+  ValueIndexBuf() {}
+  ~ValueIndexBuf() {}
+  void Fill(const Slice& value, uint64_t wal_offset_of_wb_content,
+            uint64_t wal_record_header_size, const char* batch_content,
+            uint64_t log_number) {
+    // add value index in front of data,
+    assert(log_number >> 62 == 0);
+    assert(batch_content);
+    assert(wal_record_header_size != uint64_t(-1));
+
+    // AddPackedLogNumber
+    uint64_t packed_log_number = (log_number | rocksdb::ValueIndex::kDefault);
+    EncodeFixed64(buf_, packed_log_number);
+
+    // Add value offset and logical length
+    uint64_t physical_offset =
+        GetPhysicalOffset(wal_offset_of_wb_content, wal_record_header_size,
+                          value.data() - batch_content);
+    EncodeFixed64(buf_ + 8, physical_offset);
+    assert(value.size() < size_t{port::kMaxUint32});
+    EncodeFixed32(buf_ + 16, (uint32_t)value.size());
+
+    // Add crc of head&tail
+    size_t head_size, tail_size;
+    size_t first_block_remain_size =
+        log::kBlockSize - physical_offset % log::kBlockSize;
+    if (value.size() <= first_block_remain_size) {
+      head_size = tail_size = 0;
+    } else {
+      size_t kBlockAvailSize = log::kBlockSize - wal_record_header_size;
+      head_size = first_block_remain_size;
+      tail_size = (value.size() - head_size) % kBlockAvailSize;
+    }
+    uint16_t head_crc = terark::Crc16c_update(0, value.data(), head_size);
+    uint16_t tail_crc = terark::Crc16c_update(
+        0, value.data() + value.size() - tail_size, tail_size);
+
+    EncodeFixed16(buf_ + 20, head_crc);
+    EncodeFixed16(buf_ + 22, tail_crc);
+  }
+  const char* Data() { return buf_; }
+
+ private:
+  char buf_[ValueIndex::kDefaultLogIndexSize];
+};
 struct BatchContentClassifier : public WriteBatch::Handler {
   uint32_t content_flags = 0;
 
@@ -1200,76 +1245,6 @@ class MemTableInserter : public WriteBatch::Handler {
     return true;
   }
 
-  struct ValueIndexBuf {
-    ValueIndexBuf() {}
-    ~ValueIndexBuf() {}
-    void Fill(const Slice& value, uint64_t wal_offset_of_wb_content,
-              uint64_t wal_record_header_size, const char* batch_content,
-              uint64_t log_number) {
-      // add value index in front of data,
-      assert(log_number >> 62 == 0);
-      assert(batch_content);
-      assert(wal_record_header_size != uint64_t(-1));
-
-      // AddPackedLogNumber
-      uint64_t packed_log_number = (log_number | rocksdb::ValueIndex::kDefault);
-      EncodeFixed64(buf_, packed_log_number);
-
-      // Add value offset and logical length
-      uint64_t physical_offset =
-          GetPhysicalOffset(wal_offset_of_wb_content, wal_record_header_size,
-                            value.data() - batch_content);
-      EncodeFixed64(buf_ + 8, physical_offset);
-      assert(value.size() < size_t{port::kMaxUint32});
-      EncodeFixed32(buf_ + 16, (uint32_t)value.size());
-
-      // Add crc of head&tail
-      size_t head_size, tail_size;
-      size_t first_block_remain_size =
-          log::kBlockSize - physical_offset % log::kBlockSize;
-      if (value.size() <= first_block_remain_size) {
-        head_size = tail_size = 0;
-      } else {
-        size_t kBlockAvailSize = log::kBlockSize - wal_record_header_size;
-        head_size = first_block_remain_size;
-        tail_size = (value.size() - head_size) % kBlockAvailSize;
-      }
-      uint16_t head_crc = terark::Crc16c_update(0, value.data(), head_size);
-      uint16_t tail_crc = terark::Crc16c_update(
-          0, value.data() + value.size() - tail_size, tail_size);
-
-      EncodeFixed16(buf_ + 20, head_crc);
-      EncodeFixed16(buf_ + 22, tail_crc);
-    }
-
-    char buf_[ValueIndex::kDefaultLogIndexSize];
-
-   private:
-    size_t GetPhysicalOffset(uint64_t wal_offset_of_wb_content,
-                             uint64_t wal_record_header_size,
-                             size_t data_size_before_cur_value) {
-      // TODO add test for this calculation
-      assert(wal_record_header_size == log::kHeaderSize);
-      assert(wal_offset_of_wb_content != uint64_t(-1));
-
-      size_t kBlockAvailSize =
-          log::kBlockSize - wal_record_header_size;  // for middle type
-      size_t first_block_remain_size =
-          log::kBlockSize - wal_offset_of_wb_content % log::kBlockSize;
-
-      if (data_size_before_cur_value < first_block_remain_size) {
-        // first block have some unused space
-        return wal_offset_of_wb_content + data_size_before_cur_value;
-      }
-
-      size_t crossed_blocks = (data_size_before_cur_value -
-                               first_block_remain_size + kBlockAvailSize) /
-                              kBlockAvailSize;
-      return wal_offset_of_wb_content + data_size_before_cur_value +
-             wal_record_header_size * crossed_blocks;
-    }
-  };
-
   Status PutCFImpl(uint32_t column_family_id, const Slice& key,
                    const Slice& value, ValueType value_type) {
     // optimize for non-recovery mode
@@ -1306,7 +1281,7 @@ class MemTableInserter : public WriteBatch::Handler {
       if (value.size() > blob_size_) {
         tv.Fill(value, wal_offset_of_wb_content_, wal_record_header_size_,
                 batch_content_, log_used_);
-        Slice parts[] = {Slice(tv.buf_, ValueIndex::kDefaultLogIndexSize),
+        Slice parts[] = {Slice(tv.Data(), ValueIndex::kDefaultLogIndexSize),
                          value};
         SliceParts value_parts(parts, 2);
         mem_res =
@@ -1642,7 +1617,8 @@ class MemTableInserter : public WriteBatch::Handler {
       if (value.size() > blob_size_) {
         tv.Fill(value, wal_offset_of_wb_content_, wal_record_header_size_,
                 batch_content_, log_used_);
-        Slice parts[] = {Slice(tv.buf_, ValueIndex::kDefaultLogIndexSize), value};
+        Slice parts[] = {Slice(tv.Data(), ValueIndex::kDefaultLogIndexSize),
+                         value};
         SliceParts value_parts(parts, 2);
         mem_res = mem->Add(sequence_, kTypeMergeIndex, key, value_parts);
       } else {

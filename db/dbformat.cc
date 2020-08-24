@@ -15,6 +15,7 @@
 #include <inttypes.h>
 #include <stdio.h>
 
+#include "db/log_writer.h"
 #include "monitoring/perf_context_imp.h"
 #include "port/port.h"
 #include "util/coding.h"
@@ -266,4 +267,45 @@ ValueIndex::ValueIndex(const Slice& slice) {
     } break;
   }
 }
+
+uint64_t GetPhysicalOffset(uint64_t wal_offset_of_wb_content,
+                                 uint64_t wal_record_header_size,
+                                 size_t ahead_data_size) {
+  // TODO add test for this calculation
+  using namespace log;
+  assert(wal_record_header_size == log::kHeaderSize);  // forbid recycle log
+  assert(wal_offset_of_wb_content != uint64_t(-1) &&
+         wal_offset_of_wb_content % log::kBlockSize != 0);
+
+  size_t first_block_remain_size =
+      log::kBlockSize - wal_offset_of_wb_content % log::kBlockSize;
+  if (ahead_data_size < first_block_remain_size) {
+    // first block has space for current value
+    return wal_offset_of_wb_content + ahead_data_size;
+  }
+
+  size_t kBlockAvailSize = log::kBlockSize - wal_record_header_size;
+  size_t cur_value_offset = ahead_data_size + 1;
+  size_t ahead_crossed_blocks =
+      (ahead_data_size - first_block_remain_size + kBlockAvailSize - 1) /
+      kBlockAvailSize;
+  size_t ahead_physical_offset = wal_offset_of_wb_content + ahead_data_size +
+                                 wal_record_header_size * ahead_crossed_blocks;
+  uint64_t cur_physical_offset = ahead_physical_offset;
+  if (cur_physical_offset % log::kBlockSize == 0) {
+    cur_physical_offset += wal_record_header_size;
+  }
+  return cur_physical_offset;
+}
+
+uint32_t GetPhysicalLength(uint32_t logical_length,
+                                 uint32_t first_block_remain_size,
+                                 size_t wal_header_size) {
+  size_t kBlockAvailSize = log::kBlockSize - wal_header_size;
+  return logical_length +
+         wal_header_size *
+             ((logical_length - first_block_remain_size + kBlockAvailSize - 1) /
+              kBlockAvailSize);
+}
+
 }  // namespace rocksdb
