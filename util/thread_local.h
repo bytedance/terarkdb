@@ -10,6 +10,7 @@
 #pragma once
 
 #include <functional>
+
 #include "util/autovector.h"
 
 namespace rocksdb {
@@ -83,7 +84,7 @@ class ThreadLocalPtr {
   // initialized will be no-op.
   static void InitSingletons();
 
-private:
+ private:
   const uint32_t id_;
 };
 
