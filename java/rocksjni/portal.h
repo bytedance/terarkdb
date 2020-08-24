@@ -3677,8 +3677,10 @@ class HistogramTypeJni {
         return 0x20;
       case rocksdb::Histograms::PICK_GARBAGE_COLLECTION_TIME:
         return 0x21;
-      case rocksdb::Histograms::HISTOGRAM_ENUM_MAX:
+      case rocksdb::Histograms::INSTALL_SUPER_VERSION_TIME:
         return 0x22;
+      case rocksdb::Histograms::HISTOGRAM_ENUM_MAX:
+        return 0x23;
 
       default:
         // undefined/default
@@ -3759,6 +3761,8 @@ class HistogramTypeJni {
       case 0x21:
         return rocksdb::Histograms::PICK_GARBAGE_COLLECTION_TIME;
       case 0x22:
+        return rocksdb::Histograms::INSTALL_SUPER_VERSION_TIME;
+      case 0x23:
         return rocksdb::Histograms::HISTOGRAM_ENUM_MAX;
 
       default:

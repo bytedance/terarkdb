@@ -171,6 +171,7 @@ const std::vector<std::pair<Histograms, std::string>> HistogramsNameMap = {
     {FLUSH_TIME, "rocksdb.db.flush.micros"},
     {PICK_COMPACTION_TIME, "rocksdb.pick.compaction.micros"},
     {PICK_GARBAGE_COLLECTION_TIME, "rocksdb.pick.gc.micros"},
+    {INSTALL_SUPER_VERSION_TIME, "rocksdb.install.super.version.micros"},
 };
 
 std::shared_ptr<Statistics> CreateDBStatistics() {

@@ -1216,6 +1216,7 @@ void ColumnFamilyData::InstallSuperVersion(SuperVersionContext* sv_context,
 void ColumnFamilyData::InstallSuperVersion(
     SuperVersionContext* sv_context, InstrumentedMutex* db_mutex,
     const MutableCFOptions& mutable_cf_options) {
+  StopWatch sw(ioptions_.env, ioptions_.statistics, INSTALL_SUPER_VERSION_TIME);
   SuperVersion* new_superversion = sv_context->new_superversion.release();
   new_superversion->db_mutex = db_mutex;
   new_superversion->mutable_cf_options = mutable_cf_options;
