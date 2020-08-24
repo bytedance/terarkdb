@@ -245,6 +245,7 @@ class ColumnFamilyData {
   MemTableList* imm() { return &imm_; }
   MemTable* mem() { return mem_; }
   Version* current() { return current_; }
+  void ForEachVersionList(void (*callback)(void*, Version*), void* args);
   Version* dummy_versions() { return dummy_versions_; }
   void SetCurrent(Version* _current);
   uint64_t GetNumLiveVersions() const;    // REQUIRE: DB mutex held

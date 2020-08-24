@@ -216,8 +216,6 @@ void DBImpl::FindObsoleteFiles(JobContext* job_context, bool force,
   job_context->log_number = MinLogNumberToKeep();
   job_context->prev_log_number = versions_->prev_log_number();
 
-  versions_->AddLiveFiles(&job_context->sst_live);
-
   // logs_ is empty when called during recovery, in which case there can't yet
   // be any tracked obsolete logs
   if (!alive_log_files_.empty() && !logs_.empty()) {
@@ -276,6 +274,18 @@ void DBImpl::FindObsoleteFiles(JobContext* job_context, bool force,
   job_context->log_recycle_files.assign(log_recycle_files_.begin(),
                                         log_recycle_files_.end());
   if (job_context->HaveSomethingToDelete()) {
+    // Ref all version
+    for (auto cfd : *versions_->GetColumnFamilySet()) {
+      if (!cfd->initialized()) {
+        continue;
+      }
+      cfd->ForEachVersionList(
+          [](void* arg, Version* v) {
+            v->Ref();
+            static_cast<JobContext*>(arg)->version_ref.emplace_back(v);
+          },
+          job_context);
+    }
     files_grabbed_for_purge_.emplace(&job_context->files_grabbed_for_purge);
     for (auto listener : candidate_file_listener_) {
       listener->insert(listener->end(),
@@ -343,9 +353,14 @@ void DBImpl::PurgeObsoleteFiles(JobContext& state, bool schedule_only) {
 
   // Now, convert live list to an unordered map, WITHOUT mutex held;
   // set is slow.
-  std::unordered_map<uint64_t, const FileDescriptor*> sst_live_map;
-  for (const FileDescriptor& fd : state.sst_live) {
-    sst_live_map[fd.GetNumber()] = &fd;
+  std::unordered_set<uint64_t> sst_live;
+  for (auto v : state.version_ref) {
+    auto vstorage = v->storage_info();
+    for (int i = -1; i < vstorage->num_levels(); ++i) {
+      for (auto f : vstorage->LevelFiles(i)) {
+        sst_live.emplace(f->fd.GetNumber());
+      }
+    }
   }
   std::unordered_set<uint64_t> log_recycle_files_set(
       state.log_recycle_files.begin(), state.log_recycle_files.end());
@@ -454,7 +469,7 @@ void DBImpl::PurgeObsoleteFiles(JobContext& state, bool schedule_only) {
       case kTableFile:
         // If the second condition is not there, this makes
         // DontDeletePendingOutputs fail
-        keep = (sst_live_map.find(number) != sst_live_map.end()) ||
+        keep = (sst_live.find(number) != sst_live.end()) ||
                number >= state.min_pending_output;
         break;
       case kTempFile:
@@ -466,7 +481,7 @@ void DBImpl::PurgeObsoleteFiles(JobContext& state, bool schedule_only) {
         //
         // TODO(yhchiang): carefully modify the third condition to safely
         //                 remove the temp options files.
-        keep = (sst_live_map.find(number) != sst_live_map.end()) ||
+        keep = (sst_live.find(number) != sst_live.end()) ||
                (number == state.pending_manifest_file_number) ||
                (to_delete.find(kOptionsFileNamePrefix) != std::string::npos);
         break;
@@ -588,6 +603,7 @@ void DBImpl::PurgeObsoleteFiles(JobContext& state, bool schedule_only) {
   if (pending_purge_obsolete_files_ == 0) {
     bg_cv_.SignalAll();
   }
+  state.CleanVersionRef(&mutex_);
   TEST_SYNC_POINT("DBImpl::PurgeObsoleteFiles:End");
 }
 
@@ -600,7 +616,7 @@ void DBImpl::DeleteObsoleteFiles() {
   if (job_context.HaveSomethingToDelete()) {
     PurgeObsoleteFiles(job_context);
   }
-  job_context.Clean();
+  job_context.Clean(&mutex_);
   mutex_.Lock();
 }
 

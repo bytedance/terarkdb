@@ -78,7 +78,7 @@ ColumnFamilyHandleImpl::~ColumnFamilyHandleImpl() {
         mutex_->Unlock();
       }
     }
-    job_context.Clean();
+    job_context.Clean(mutex_);
   }
 }
 
@@ -554,7 +554,7 @@ ColumnFamilyData::~ColumnFamilyData() {
 
   if (dummy_versions_ != nullptr) {
     // List must be empty
-    assert(dummy_versions_->TEST_Next() == dummy_versions_);
+    assert(dummy_versions_->Next() == dummy_versions_);
     bool deleted __attribute__((__unused__));
     deleted = dummy_versions_->Unref();
     assert(deleted);
@@ -945,6 +945,14 @@ const EnvOptions* ColumnFamilyData::soptions() const {
 
 void ColumnFamilyData::SetCurrent(Version* current_version) {
   current_ = current_version;
+}
+
+void ColumnFamilyData::ForEachVersionList(void (*callback)(void*, Version*),
+                                          void* arg) {
+  for (Version* v = dummy_versions_->Next(); v != dummy_versions_;
+       v = v->Next()) {
+    callback(arg, v);
+  }
 }
 
 uint64_t ColumnFamilyData::GetNumLiveVersions() const {

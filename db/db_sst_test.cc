@@ -65,7 +65,7 @@ TEST_F(DBSSTTest, DontDeletePendingOutputs) {
     dbfull()->FindObsoleteFiles(&job_context, true /*force*/);
     dbfull()->TEST_UnlockMutex();
     dbfull()->PurgeObsoleteFiles(job_context);
-    job_context.Clean();
+    job_context.Clean(dbfull()->mutex());
   };
 
   env_->table_write_callback_ = &purge_obsolete_files_function;

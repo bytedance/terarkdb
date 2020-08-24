@@ -145,8 +145,8 @@ struct JobContext {
   // (filled only if we're doing full scan)
   std::vector<CandidateFileInfo> full_scan_candidate_files;
 
-  // the list of all live sst files that cannot be deleted
-  std::vector<FileDescriptor> sst_live;
+  // the list of all versions. for get live sst files that cannot be deleted
+  std::vector<Version*> version_ref;
 
   // a list of sst files that we need to delete
   std::vector<ObsoleteFileInfo> sst_delete_files;
@@ -200,7 +200,8 @@ struct JobContext {
   // before destruction (see asserts in ~JobContext()). Should be called with
   // unlocked DB mutex. Destructor doesn't call Clean() to avoid accidentally
   // doing potentially slow Clean() with locked DB mutex.
-  void Clean() {
+  // mutex == nullptr if in Locking
+  void Clean(InstrumentedMutex* mutex) {
     // free superversions
     for (auto& sv_context : superversion_contexts) {
       sv_context.Clean();
@@ -212,14 +213,36 @@ struct JobContext {
     for (auto l : logs_to_free) {
       delete l;
     }
+    if (!version_ref.empty()) {
+      if (mutex != nullptr) {
+        mutex->Lock();
+      }
+      for (auto v : version_ref) {
+        v->Unref();
+      }
+      if (mutex != nullptr) {
+        mutex->Unlock();
+      }
+    }
 
     memtables_to_free.clear();
     logs_to_free.clear();
+    version_ref.clear();
+  }
+
+  void CleanVersionRef(InstrumentedMutex* mutex) {
+    mutex->AssertHeld();
+    (void)mutex;
+    for (auto v : version_ref) {
+      v->Unref();
+    }
+    version_ref.clear();
   }
 
   ~JobContext() {
-    assert(memtables_to_free.size() == 0);
-    assert(logs_to_free.size() == 0);
+    assert(memtables_to_free.empty());
+    assert(logs_to_free.empty());
+    assert(version_ref.empty());
   }
 };
 

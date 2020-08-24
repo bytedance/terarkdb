@@ -81,7 +81,8 @@ Status DBImpl::PromoteL0(ColumnFamilyHandle* column_family, int target_level) {
       ROCKS_LOG_INFO(immutable_db_options_.info_log,
                      "PromoteL0 FAILED. Target level %d does not exist\n",
                      target_level);
-      job_context.Clean();
+      mutex_.AssertHeld();
+      job_context.Clean(&mutex_);
       return Status::InvalidArgument("Target level does not exist");
     }
 
@@ -98,7 +99,8 @@ Status DBImpl::PromoteL0(ColumnFamilyHandle* column_family, int target_level) {
         ROCKS_LOG_INFO(immutable_db_options_.info_log,
                        "PromoteL0 FAILED. File %" PRIu64 " being compacted\n",
                        f->fd.GetNumber());
-        job_context.Clean();
+        mutex_.AssertHeld();
+        job_context.Clean(&mutex_);
         return Status::InvalidArgument("PromoteL0 called during L0 compaction");
       }
 
@@ -109,7 +111,8 @@ Status DBImpl::PromoteL0(ColumnFamilyHandle* column_family, int target_level) {
                        "PromoteL0 FAILED. Files %" PRIu64 " and %" PRIu64
                        " have overlapping ranges\n",
                        prev_f->fd.GetNumber(), f->fd.GetNumber());
-        job_context.Clean();
+        mutex_.AssertHeld();
+        job_context.Clean(&mutex_);
         return Status::InvalidArgument("L0 has overlapping files");
       }
     }
@@ -119,7 +122,8 @@ Status DBImpl::PromoteL0(ColumnFamilyHandle* column_family, int target_level) {
       if (vstorage->NumLevelFiles(level) > 0) {
         ROCKS_LOG_INFO(immutable_db_options_.info_log,
                        "PromoteL0 FAILED. Level %d not empty\n", level);
-        job_context.Clean();
+        mutex_.AssertHeld();
+        job_context.Clean(&mutex_);
         return Status::InvalidArgument(
             "All levels up to target_level "
             "must be empty");
@@ -144,7 +148,7 @@ Status DBImpl::PromoteL0(ColumnFamilyHandle* column_family, int target_level) {
     }
   }  // lock released here
   LogFlush(immutable_db_options_.info_log);
-  job_context.Clean();
+  job_context.Clean(&mutex_);
 
   return status;
 }

@@ -194,7 +194,7 @@ TEST_F(ObsoleteFilesTest, RaceForObsoleteFileDeletion) {
     if (jobCxt.HaveSomethingToDelete()) {
       dbi->PurgeObsoleteFiles(jobCxt);
     }
-    jobCxt.Clean();
+    jobCxt.Clean(dbi->mutex());
   });
 
   user_thread.join();

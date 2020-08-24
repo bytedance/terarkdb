@@ -219,7 +219,7 @@ void ForwardIterator::SVCleanup(DBImpl* db, SuperVersion* sv,
     if (job_context.HaveSomethingToDelete()) {
       db->PurgeObsoleteFiles(job_context, background_purge_on_iterator_cleanup);
     }
-    job_context.Clean();
+    job_context.Clean(&db->mutex_);
   }
 }
 

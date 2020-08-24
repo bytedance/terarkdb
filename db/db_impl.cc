@@ -452,7 +452,7 @@ Status DBImpl::ResumeImpl() {
   if (job_context.HaveSomethingToDelete()) {
     PurgeObsoleteFiles(job_context);
   }
-  job_context.Clean();
+  job_context.Clean(&mutex_);
 
   if (s.ok()) {
     ROCKS_LOG_INFO(immutable_db_options_.info_log, "Successfully resumed DB");
@@ -635,7 +635,7 @@ Status DBImpl::CloseHelper() {
     if (job_context.HaveSomethingToDelete()) {
       PurgeObsoleteFiles(job_context);
     }
-    job_context.Clean();
+    job_context.Clean(&mutex_);
     mutex_.Lock();
   }
 
@@ -1341,7 +1341,7 @@ static void CleanupIteratorState(void* arg1, void* /*arg2*/) {
         state->db->PurgeObsoleteFiles(job_context);
       }
     }
-    job_context.Clean();
+    job_context.Clean(state->mu);
   }
 
   delete state;
@@ -2706,7 +2706,8 @@ Status DBImpl::DeleteFile(std::string name) {
     if (!status.ok()) {
       ROCKS_LOG_WARN(immutable_db_options_.info_log,
                      "DeleteFile %s failed. File not found\n", name.c_str());
-      job_context.Clean();
+      mutex_.AssertHeld();
+      job_context.Clean(nullptr);
       return Status::InvalidArgument("File not found");
     }
     assert(level < cfd->NumberLevels());
@@ -2716,7 +2717,8 @@ Status DBImpl::DeleteFile(std::string name) {
       ROCKS_LOG_INFO(immutable_db_options_.info_log,
                      "DeleteFile %s Skipped. File about to be compacted\n",
                      name.c_str());
-      job_context.Clean();
+      mutex_.AssertHeld();
+      job_context.Clean(nullptr);
       return Status::OK();
     }
 
@@ -2729,7 +2731,8 @@ Status DBImpl::DeleteFile(std::string name) {
         ROCKS_LOG_WARN(immutable_db_options_.info_log,
                        "DeleteFile %s FAILED. File not in last level\n",
                        name.c_str());
-        job_context.Clean();
+        mutex_.AssertHeld();
+        job_context.Clean(nullptr);
         return Status::InvalidArgument("File not in last level");
       }
     }
@@ -2740,7 +2743,8 @@ Status DBImpl::DeleteFile(std::string name) {
                      "DeleteFile %s failed ---"
                      " target file in level 0 must be the oldest.",
                      name.c_str());
-      job_context.Clean();
+      mutex_.AssertHeld();
+      job_context.Clean(nullptr);
       return Status::InvalidArgument("File in level 0, but not oldest");
     }
     edit.SetColumnFamily(cfd->GetID());
@@ -2761,7 +2765,7 @@ Status DBImpl::DeleteFile(std::string name) {
     // Call PurgeObsoleteFiles() without holding mutex.
     PurgeObsoleteFiles(job_context);
   }
-  job_context.Clean();
+  job_context.Clean(&mutex_);
   return status;
 }
 
@@ -2849,7 +2853,8 @@ Status DBImpl::DeleteFilesInRanges(ColumnFamilyHandle* column_family,
       }
       if (nullptr_start == nullptr || nullptr_limit == nullptr) {
         // empty vstorage ...
-        job_context.Clean();
+        mutex_.AssertHeld();
+        job_context.Clean(nullptr);
         return Status::OK();
       }
       // fix user_key to [ ... )
@@ -3060,7 +3065,8 @@ Status DBImpl::DeleteFilesInRanges(ColumnFamilyHandle* column_family,
     }
     if (!status.ok() ||
         (edit.GetNewFiles().empty() && edit.GetDeletedFiles().empty())) {
-      job_context.Clean();
+      mutex_.AssertHeld();
+      job_context.Clean(nullptr);
       return status;
     }
     status = versions_->LogAndApply(cfd, *cfd->GetLatestMutableCFOptions(),
@@ -3082,7 +3088,7 @@ Status DBImpl::DeleteFilesInRanges(ColumnFamilyHandle* column_family,
     // Call PurgeObsoleteFiles() without holding mutex.
     PurgeObsoleteFiles(job_context);
   }
-  job_context.Clean();
+  job_context.Clean(&mutex_);
   return status;
 }
 

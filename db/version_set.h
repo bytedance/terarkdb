@@ -714,8 +714,10 @@ class Version : public SeparateHelper, private LazyBufferState {
 
   ColumnFamilyData* cfd() const { return cfd_; }
 
-  // Return the next Version in the linked list. Used for debug only
-  Version* TEST_Next() const { return next_; }
+  void ForEachVersionList(void (*callback)(Version*), void* args);
+
+  // Return the next Version in the linked list.
+  Version* Next() const { return next_; }
 
   int TEST_refs() const { return refs_; }
 

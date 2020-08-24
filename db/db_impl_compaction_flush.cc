@@ -840,7 +840,7 @@ Status DBImpl::CompactFiles(const CompactionOptions& compact_options,
       // no mutex is locked here.  No need to Unlock() and Lock() here.
       PurgeObsoleteFiles(job_context);
     }
-    job_context.Clean();
+    job_context.Clean(&mutex_);
   }
 
   return s;
@@ -2254,7 +2254,7 @@ void DBImpl::BackgroundCallFlush() {
       if (job_context.HaveSomethingToDelete()) {
         PurgeObsoleteFiles(job_context);
       }
-      job_context.Clean();
+      job_context.Clean(&mutex_);
       mutex_.Lock();
     }
     TEST_SYNC_POINT("DBImpl::BackgroundCallFlush:ContextCleanedUp");
@@ -2339,7 +2339,7 @@ void DBImpl::BackgroundCallCompaction(PrepickedCompaction* prepicked_compaction,
         PurgeObsoleteFiles(job_context);
         TEST_SYNC_POINT("DBImpl::BackgroundCallCompaction:PurgedObsoleteFiles");
       }
-      job_context.Clean();
+      job_context.Clean(&mutex_);
       mutex_.Lock();
     }
 
@@ -2440,7 +2440,7 @@ void DBImpl::BackgroundCallGarbageCollection() {
         TEST_SYNC_POINT(
             "DBImpl::BackgroundCallGarbageCollection:PurgedObsoleteFiles");
       }
-      job_context.Clean();
+      job_context.Clean(&mutex_);
       mutex_.Lock();
     }
 

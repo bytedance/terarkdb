@@ -575,7 +575,7 @@ static void assert_candidate_files_empty(DBImpl* dbfull, const bool empty) {
     // afterwards; otherwise the test may hang on shutdown
     dbfull->PurgeObsoleteFiles(job_context);
   }
-  job_context.Clean();
+  job_context.Clean(dbfull->mutex());
 }
 
 TEST_F(DBOptionsTest, DeleteObsoleteFilesPeriodChange) {

@@ -132,7 +132,7 @@ TEST_F(FlushJobTest, Empty) {
     flush_job.PickMemTable();
     ASSERT_OK(flush_job.Run());
   }
-  job_context.Clean();
+  job_context.Clean(&mutex_);
 }
 
 TEST_F(FlushJobTest, NonEmpty) {
@@ -194,7 +194,7 @@ TEST_F(FlushJobTest, NonEmpty) {
   ASSERT_EQ(1, file_meta.fd.smallest_seqno);
   ASSERT_EQ(10000, file_meta.fd.largest_seqno);  // range tombstone seqnum 10000
   mock_table_factory_->AssertSingleFile(inserted_keys, range_del_keys);
-  job_context.Clean();
+  job_context.Clean(&mutex_);
 }
 
 TEST_F(FlushJobTest, FlushMemTablesSingleColumnFamily) {
@@ -261,7 +261,7 @@ TEST_F(FlushJobTest, FlushMemTablesSingleColumnFamily) {
     delete m;
   }
   to_delete.clear();
-  job_context.Clean();
+  job_context.Clean(&mutex_);
 }
 
 TEST_F(FlushJobTest, FlushMemtablesMultipleColumnFamilies) {
@@ -371,7 +371,7 @@ TEST_F(FlushJobTest, FlushMemtablesMultipleColumnFamilies) {
     delete m;
   }
   to_delete.clear();
-  job_context.Clean();
+  job_context.Clean(&mutex_);
 }
 
 TEST_F(FlushJobTest, Snapshots) {
@@ -439,7 +439,7 @@ TEST_F(FlushJobTest, Snapshots) {
   HistogramData hist;
   db_options_.statistics->histogramData(FLUSH_TIME, &hist);
   ASSERT_GT(hist.average, 0.0);
-  job_context.Clean();
+  job_context.Clean(&mutex_);
 }
 
 }  // namespace rocksdb

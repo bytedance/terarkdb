@@ -67,7 +67,7 @@ Status DBImpl::EnableFileDeletions(bool force) {
                    "File Deletions Enable, but not really enabled. Counter: %d",
                    disable_delete_obsolete_files_);
   }
-  job_context.Clean();
+  job_context.Clean(&mutex_);
   LogFlush(immutable_db_options_.info_log);
   return Status::OK();
 }
