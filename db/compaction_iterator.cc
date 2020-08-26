@@ -946,7 +946,7 @@ LazyBuffer BuilderSeparateHelper::TransToCombined(
   auto self = const_cast<BuilderSeparateHelper*>(this);
   auto state = self->AllocState();
   state->value() = std::move(original_value);
-  state->value().pin(LazyBufferPinLevel::Internal);
+  state->value().pin(LazyBufferPinLevel::DB);
 
   LazyBuffer combined_value;
   if (state->value().file_number() == uint64_t(-1)) {
@@ -971,7 +971,10 @@ LazyBuffer BuilderSeparateHelper::TransToCombined(
     }
   }
   // combined_value is a lazybuffer pointing to blob-sst or blob-wal, if it from
-  // blob-wal, state save the original value's log_handle for latter separating
+  // blob-wal, state save the original value's log_handle for latter separating.
+  // once combined value returned, its state may be destory by others. so we
+  // keep current separate helper in state so that when state destoryed, helper
+  // can reclaim state
   combined_value.wrap_state(state);
   return combined_value;
 }

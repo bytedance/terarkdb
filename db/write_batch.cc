@@ -93,21 +93,19 @@ struct ValueIndexBuf {
 
     // Add value offset and logical length
     uint64_t physical_offset =
-        GetPhysicalOffset(wal_offset_of_wb_content, wal_record_header_size,
-                          value.data() - batch_content);
+        GetPhysicalOffset(wal_offset_of_wb_content,
+                          value.data() - batch_content, wal_record_header_size);
+    assert(physical_offset < 1000000000);
     EncodeFixed64(buf_ + 8, physical_offset);
     assert(value.size() < size_t{port::kMaxUint32});
     EncodeFixed32(buf_ + 16, (uint32_t)value.size());
 
     // Add crc of head&tail
-    size_t head_size, tail_size;
-    size_t first_block_remain_size =
-        log::kBlockSize - physical_offset % log::kBlockSize;
-    if (value.size() <= first_block_remain_size) {
-      head_size = tail_size = 0;
-    } else {
+    size_t head_size = std::min(
+        log::kBlockSize - physical_offset % log::kBlockSize, value.size());
+    size_t tail_size = 0;
+    if (value.size() > head_size) {
       size_t kBlockAvailSize = log::kBlockSize - wal_record_header_size;
-      head_size = first_block_remain_size;
       tail_size = (value.size() - head_size) % kBlockAvailSize;
     }
     uint16_t head_crc = terark::Crc16c_update(0, value.data(), head_size);

@@ -830,21 +830,25 @@ WriteBatch* DBImpl::MergeBatch(const WriteThread::WriteGroup& write_group,
 
 static void UnpackBatchInfo(WriteThread::WriteGroup& write_group,
                             bool wal_only) {
-  size_t cur_offset = write_group.leader->wal_offset_of_wb_content_;
+  std::cout << "Unpack Batch Info, size= " << write_group.size << std::endl;
+  assert(!write_group.leader->is_recycle);  // forbid recycle
   assert(write_group.leader == *(write_group.begin()));
-  for (auto writer : write_group) {
-    writer->wal_offset_of_wb_content_ = cur_offset;
 
-    // set WriteBatchInternal::Append
-    if (wal_only) {
+  size_t ahead_offset = write_group.leader->wal_offset_of_wb_content_;
+  size_t ahead_batch_size = 0;
+  for (auto writer : write_group) {
+    writer->wal_offset_of_wb_content_ =
+        GetPhysicalOffset(ahead_offset, ahead_batch_size, log::kHeaderSize);
+    assert(writer != write_group.leader ||
+           writer->wal_offset_of_wb_content_ == ahead_offset);
+
+    if (wal_only && (!writer->batch->GetWalTerminationPoint().is_cleared())) {
       const SavePoint& batch_end = writer->batch->GetWalTerminationPoint();
-      size_t src_len = batch_end.size - WriteBatchInternal::kHeader;
-      cur_offset += src_len;
+      ahead_batch_size += batch_end.size - WriteBatchInternal::kHeader;
     } else {
       assert(writer->batch->GetDataSize() >= WriteBatchInternal::kHeader);
-      size_t src_len =
+      ahead_batch_size +=
           writer->batch->GetDataSize() - WriteBatchInternal::kHeader;
-      cur_offset += src_len;
     }
   }
 }
@@ -911,7 +915,6 @@ Status DBImpl::WriteToWAL(const WriteThread::WriteGroup& write_group,
   uint64_t log_size;
   status = WriteToWAL(*merged_batch, log_writer, log_used, &log_size, w);
   if (status.ok() && write_with_wal > 1) {
-    assert(!merged_batch->GetWalTerminationPoint().is_cleared());
     UnpackBatchInfo(const_cast<WriteThread::WriteGroup&>(write_group), true);
   }
   if (to_be_cached_state) {
@@ -991,7 +994,6 @@ Status DBImpl::ConcurrentWriteToWAL(const WriteThread::WriteGroup& write_group,
   uint64_t log_size;
   status = WriteToWAL(*merged_batch, log_writer, log_used, &log_size, w);
   if (status.ok() && write_with_wal > 1) {
-    assert(!merged_batch->GetWalTerminationPoint().is_cleared());
     UnpackBatchInfo(const_cast<WriteThread::WriteGroup&>(write_group), true);
   }
   if (to_be_cached_state) {

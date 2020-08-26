@@ -71,6 +71,7 @@ Status Writer::AddRecord(const Slice& slice, size_t num_entries,
   const char* ptr = slice.data();
   size_t left = slice.size();
 
+  assert(recycle_log_files_==0); // Forbiden
   // Header size varies depending on whether we are recycling or not.
   const int header_size =
       recycle_log_files_ ? kRecyclableHeaderSize : kHeaderSize;
@@ -120,13 +121,23 @@ Status Writer::AddRecord(const Slice& slice, size_t num_entries,
       type = recycle_log_files_ ? kRecyclableMiddleType : kMiddleType;
     }
 
-    if (wt!=nullptr && wt->wal_offset_of_wb_content_ == uint64_t(-1)) {
+    if (wt != nullptr && wt->wal_offset_of_wb_content_ == uint64_t(-1)) {
       // writebatch's content and set writebatch_content_offset only once.
-      assert(dest_->GetFileSize() == block_counts_ * kBlockSize + block_offset_);
-      wt->wal_offset_of_wb_content_ =
-          block_counts_ * kBlockSize + block_offset_ +
-          // + WriteBatchInternal::kHeader;
-          header_size /*log record head */ + WriteBatchInternal::kHeader;
+      assert(dest_->GetFileSize() ==
+             block_counts_ * kBlockSize + block_offset_);
+      if (WriteBatchInternal::kHeader >= fragment_length) {
+        // write batch's header cross blocks, so it makes we need add two header
+        // before first value in this write batch
+        wt->wal_offset_of_wb_content_ = dest_->GetFileSize() +
+                                        WriteBatchInternal::kHeader +
+                                        2 * header_size;
+      } else {
+        wt->wal_offset_of_wb_content_ =
+            dest_->GetFileSize() + WriteBatchInternal::kHeader + header_size;
+      }
+
+      assert(wt->wal_offset_of_wb_content_ % kBlockSize >=
+             (uint64_t)header_size);
     }
     s = EmitPhysicalRecord(type, ptr, fragment_length);
     ptr += fragment_length;
@@ -247,50 +258,60 @@ void DeleteCachedEntry(const Slice& /*key*/, void* Blob) {
   delete entry;
 }
 
-Status WalBlobReader::GetBlob(const Slice& value_content,
+// generate an id from the file
+void WalBlobReader::GenerateCacheUniqueId(const Slice& log_handle, std::string& uid) {
+  char prefix_id[kMaxCacheKeyPrefixSize];
+  size_t prefix_length =
+      src_->GetUniqueId(&prefix_id[0], kMaxCacheKeyPrefixSize);
+
+  uid.append(&prefix_id[0], prefix_length);
+  assert(prefix_length == uid.size() &&
+         memcmp(uid.data(), prefix_id, prefix_length) == 0);
+  uid.append(log_handle.data(), log_handle.size());
+}
+
+Status WalBlobReader::GetBlob(const Slice& log_handle,
                               GetContext* get_context) {
   auto set_value = [&](void* blob_addr) {
     Blob* b = (Blob*)blob_addr;
     bool matched;
     get_context->SaveValue(
-        ParsedInternalKey(value_content, kMaxSequenceNumber, kTypeValue),
+        ParsedInternalKey(log_handle, kMaxSequenceNumber, kTypeValue),
         LazyBuffer(b->slice_, false, log_number_), &matched);
     assert(matched);
     get_context->MarkKeyMayExist();
   };
 
   // checkout blob_cache
-  Cache::Handle* handle = blob_cache_->Lookup(value_content);
+  assert(log_handle.size() == sizeof(ValueIndex::DefaultLogHandle));
+  std::string blob_uid;
+  GenerateCacheUniqueId(log_handle, blob_uid);
+  Cache::Handle* handle = blob_cache_->Lookup(blob_uid);
   if (handle) {
     set_value(blob_cache_->Value(handle));
     return Status::OK();
   }
 
   // decode and calculate sizes
-  ValueIndex::DefaultLogHandle content(value_content);
-  size_t head_size, tail_size, blob_physical_length;
-  size_t first_block_remain_size = kBlockSize - content.offset % kBlockSize;
-  size_t kBlockAvailSize = kBlockSize - wal_header_size_;
-  if (content.length <= first_block_remain_size) {
-    // kFullType
-    head_size = tail_size = 0;
-    assert(content.head_crc == 0 && content.tail_crc == 0);
-    blob_physical_length = content.length;
-  } else {
-    // kFirstType
-    head_size = first_block_remain_size;
-    // kLastType
+  ValueIndex::DefaultLogHandle content(log_handle);
+  size_t blob_physical_length =
+      GetPhysicalLength(content.length, content.offset, wal_header_size_);
+  size_t head_size = content.length;
+  size_t tail_size = 0;
+  if (blob_physical_length > content.length) {
+    head_size = kBlockSize - content.offset % kBlockSize;
+    assert(head_size != 0 && head_size != kBlockSize);
+    size_t kBlockAvailSize = kBlockSize - wal_header_size_;
     tail_size = (content.length - head_size) % kBlockAvailSize;
-    blob_physical_length =
-        content.length +
-        wal_header_size_ * ((content.length - head_size + kBlockAvailSize - 1) /
-                            kBlockAvailSize);
   }
 
   // read log file and check checksum
   Blob* blob = new Blob(blob_physical_length);
-  src_->Read(content.offset, blob_physical_length, &(blob->slice_), blob->buf_);
-  assert(blob->slice_.size() == blob_physical_length);
+  Status s = src_->Read(content.offset, blob_physical_length, &(blob->slice_),
+                        blob->buf_);
+  assert(s.ok()); // TODO return statsu
+  assert(blob->slice_.size() != 0 &&
+         blob->slice_.size() == blob_physical_length);
   if (head_size != 0) {
     uint32_t head_crc =
         terark::Crc16c_update(0, blob->slice_.data(), head_size);
@@ -329,8 +350,8 @@ Status WalBlobReader::GetBlob(const Slice& value_content,
     // cross more than one block, need remove middle log record header
     blob->Shrink(head_size, wal_header_size_);
   }
-  auto s = blob_cache_->Insert(value_content, blob, 1, &DeleteCachedEntry<Blob>,
-                               &handle);
+  s = blob_cache_->Insert(blob_uid, blob, 1, &DeleteCachedEntry<Blob>, &handle);
+  assert(s.ok());
   set_value(blob_cache_->Value(handle));
   return Status::OK();
 }

@@ -410,7 +410,8 @@ class ChaosTest {
           }
         }
       }
-      if (std::uniform_int_distribution<uint64_t>(0, 1 << 10)(mt) == 0) {
+//      if (std::uniform_int_distribution<uint64_t>(0, 1 << 10)(mt) == 0) {
+      if (true) {
         auto s = db->Write(wo, b.GetWriteBatch());
         if (!s.ok()) {
           printf("%s\n", s.getState());

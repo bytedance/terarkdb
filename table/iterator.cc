@@ -115,7 +115,7 @@ LazyBuffer CombinedInternalIterator::value() const {
     return iter_->value();
   }
   LazyBuffer v = separate_helper_->TransToCombined(
-      pikey.user_key, pikey.sequence, LazyBufferReference(iter_->value()));
+      pikey.user_key, pikey.sequence, std::move(iter_->value()));
   auto s = v.fetch();
   if (!s.ok()) {
     v.reset(std::move(s));
@@ -135,7 +135,7 @@ LazyBuffer CombinedInternalIterator::value(const Slice& user_key) const {
     return iter_->value();
   }
   return separate_helper_->TransToCombined(user_key, pikey.sequence,
-                                           LazyBufferReference(iter_->value()));
+                                           std::move(iter_->value()));
 }
 
 namespace {

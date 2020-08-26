@@ -1272,17 +1272,18 @@ Status Version::fetch_buffer(LazyBuffer* buffer) const {
       }
     }
   } else {
+    assert(pair.second->prop.is_blob_wal());
     // blob wal value
-    Slice value_content(reinterpret_cast<const char*>(context->data[0]),
-                        context->data[1]);
+    Slice log_handle(reinterpret_cast<const char*>(&context->data[0]),
+                     sizeof(ValueIndex::DefaultLogHandle));
     bool value_found = false;
     GetContext get_context(cfd_->internal_comparator().user_comparator(),
                            nullptr, cfd_->ioptions()->info_log, db_statistics_,
-                           GetContext::kNotFound, value_content, buffer,
+                           GetContext::kNotFound, log_handle, buffer,
                            &value_found, nullptr, nullptr, nullptr, env_);
     s = table_cache_->Get(
         ReadOptions(), cfd_->internal_comparator(), *pair.second,
-        storage_info_.dependence_map(), value_content, &get_context,
+        storage_info_.dependence_map(), log_handle, &get_context,
         mutable_cf_options_.prefix_extractor.get(), nullptr, true);
     if (get_context.State() != GetContext::kFound &&
         get_context.State() != GetContext::kMerge) {
@@ -1316,10 +1317,9 @@ LazyBuffer Version::TransToCombined(const Slice& user_key, uint64_t sequence,
   LazyBufferContext context;
   if (find->second->fd.GetNumber() == value_index.file_number &&
       value_index.log_handle.valid()) {
-    ValueIndex::DefaultLogHandle content(value_index.log_handle);
     // has value index content, fetch buffer use handle in value index content
-    context.data[0] = reinterpret_cast<uint64_t>(value_index.log_handle.data());
-    context.data[1] = value_index.log_handle.size();
+    assert(value_index.log_handle.size() == 16);
+    memcpy(&context.data, value_index.log_handle.data(), 16);
     context.data[2] = SequenceNumber(-1);
     context.data[3] = reinterpret_cast<uint64_t>(&*find);
   } else {

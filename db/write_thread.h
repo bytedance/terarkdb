@@ -125,7 +125,7 @@ class WriteThread {
     uint64_t wal_offset_of_wb_content_ = uint64_t(-1);
     WriteCallback* callback;
     bool made_waitable;          // records lazy construction of mutex and cv
-    bool is_recycle;  // kHeaderSize or kRecyclableHeaderSize ( maybe not need
+    bool is_recycle = false;  // kHeaderSize or kRecyclableHeaderSize ( maybe not need
                       // if disable recycle logs
     std::atomic<uint8_t> state;  // write under StateMutex() or pre-link
     WriteGroup* write_group;

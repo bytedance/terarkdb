@@ -257,7 +257,7 @@ class DBIter final : public Iterator {
     } else {
       return separate_helper_->TransToCombined(
           saved_key_.GetUserKey(), ikey.sequence,
-          LazyBufferReference(iter_->value()));
+          std::move(iter_->value()));
     }
   }
 

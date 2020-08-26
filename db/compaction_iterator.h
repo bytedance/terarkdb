@@ -270,13 +270,13 @@ struct BuilderSeparateHelper : public SeparateHelper {
 
   LazyBuffer TransToCombined(const Slice& user_key, uint64_t sequence,
                              LazyBuffer&& value) const override;
+
   SeparateHelper* separate_helper = nullptr;
   std::vector<FileMetaData>* output = nullptr;
   std::string fname;
   std::unique_ptr<WritableFileWriter> file_writer = nullptr;
   std::unique_ptr<TableBuilder> builder = nullptr;
   FileMetaData* current_output = nullptr;
-
   std::unique_ptr<ValueExtractor> value_meta_extractor = nullptr;
   std::deque<BuilderLazyBufferState> state_wrapper_storage_;
   std::vector<BuilderLazyBufferState*> state_wrapper_free_;

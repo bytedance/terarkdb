@@ -247,7 +247,7 @@ Slice ArenaPinInternalKey(const Slice& user_key, SequenceNumber seq,
 ValueIndex::ValueIndex(const Slice& slice) {
   assert(slice.size() >= sizeof(uint64_t));
   uint64_t packed_log_number = DecodeFixed64(slice.data());
-  log_type = (ValueIndex::LogHandleType)(packed_log_number & kLogHandleTypeMask);
+  log_type = (LogHandleType)(packed_log_number & kLogHandleTypeMask);
   file_number = packed_log_number & kFileNumberMask;
 
   switch (log_type) {
@@ -255,11 +255,10 @@ ValueIndex::ValueIndex(const Slice& slice) {
       meta_or_value = Slice(slice.data() + 8, slice.size() - 8);
       break;
     case kDefault: {
-      size_t default_value_index_size = 8 + sizeof(DefaultLogHandle);
-      assert(slice.size() >= default_value_index_size);
+      assert(slice.size() >= kDefaultLogIndexSize);
       log_handle = Slice(slice.data() + 8, sizeof(DefaultLogHandle));
-      meta_or_value = Slice(slice.data() + default_value_index_size,
-                            slice.size() - default_value_index_size);
+      meta_or_value = Slice(slice.data() + kDefaultLogIndexSize,
+                            slice.size() - kDefaultLogIndexSize);
     } break;
     case kReverse0:
     case kReverse1: {
@@ -268,44 +267,37 @@ ValueIndex::ValueIndex(const Slice& slice) {
   }
 }
 
-uint64_t GetPhysicalOffset(uint64_t wal_offset_of_wb_content,
-                                 uint64_t wal_record_header_size,
-                                 size_t ahead_data_size) {
-  // TODO add test for this calculation
-  using namespace log;
-  assert(wal_record_header_size == log::kHeaderSize);  // forbid recycle log
-  assert(wal_offset_of_wb_content != uint64_t(-1) &&
-         wal_offset_of_wb_content % log::kBlockSize != 0);
-
+size_t GetPhysicalLength(uint32_t logical_length, uint64_t physical_offset,
+                           size_t wal_header_size) {
+  // physical_offset is data size ahead of current data, it can end at tail of
+  // last block exactly which make it be zero. when it is 0, first block has no
+  // remain space
+  assert(physical_offset >= wal_header_size);
+  if (logical_length == 0) {
+    return 0;
+  }
   size_t first_block_remain_size =
-      log::kBlockSize - wal_offset_of_wb_content % log::kBlockSize;
-  if (ahead_data_size < first_block_remain_size) {
-    // first block has space for current value
-    return wal_offset_of_wb_content + ahead_data_size;
-  }
+      (log::kBlockSize - physical_offset % log::kBlockSize) % log::kBlockSize;
 
-  size_t kBlockAvailSize = log::kBlockSize - wal_record_header_size;
-  size_t cur_value_offset = ahead_data_size + 1;
-  size_t ahead_crossed_blocks =
-      (ahead_data_size - first_block_remain_size + kBlockAvailSize - 1) /
-      kBlockAvailSize;
-  size_t ahead_physical_offset = wal_offset_of_wb_content + ahead_data_size +
-                                 wal_record_header_size * ahead_crossed_blocks;
-  uint64_t cur_physical_offset = ahead_physical_offset;
-  if (cur_physical_offset % log::kBlockSize == 0) {
-    cur_physical_offset += wal_record_header_size;
-  }
-  return cur_physical_offset;
-}
-
-uint32_t GetPhysicalLength(uint32_t logical_length,
-                                 uint32_t first_block_remain_size,
-                                 size_t wal_header_size) {
-  size_t kBlockAvailSize = log::kBlockSize - wal_header_size;
+  size_t block_avail_size = log::kBlockSize - wal_header_size;
   return logical_length +
-         wal_header_size *
-             ((logical_length - first_block_remain_size + kBlockAvailSize - 1) /
-              kBlockAvailSize);
+         wal_header_size * ((block_avail_size - 1 + logical_length -
+                             first_block_remain_size) /
+                            block_avail_size);
 }
 
+uint64_t GetPhysicalOffset(uint64_t ahead_data_offset, size_t ahead_data_size,
+                           size_t header_size) {
+  assert(header_size == log::kHeaderSize);  // forbid recycle log
+
+  size_t ahead_data_physical_size =
+      GetPhysicalLength(ahead_data_size, ahead_data_offset, header_size);
+  uint64_t result = ahead_data_offset + ahead_data_physical_size;
+  if (0 == (ahead_data_offset + ahead_data_physical_size) % log::kBlockSize) {
+    // ahead value data end exactly at one block's tail, current value need a
+    // header
+    result += header_size;
+  }
+  return result;
+}
 }  // namespace rocksdb

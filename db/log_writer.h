@@ -11,7 +11,9 @@
 #include <stdint.h>
 
 #include <memory>
+#include <string>
 
+#include "db/dbformat.h"
 #include "db/log_format.h"
 //#include "db/version_set.h"
 #include "db/write_thread.h"
@@ -137,7 +139,9 @@ class WalBlobReader : public TableReader {
     return Status::OK();
   }
 
+  void GenerateCacheUniqueId(const Slice& log_handle, std::string& );
   Status GetBlob(const Slice& value_content, GetContext* get_context);
+  static const size_t kMaxCacheKeyPrefixSize = kMaxVarint64Length * 3 + 1;
 
  protected:
   TableProperties table_properties_;

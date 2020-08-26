@@ -886,12 +886,10 @@ struct ValueIndex {
   Slice meta_or_value = Slice();
 };
 
-uint64_t GetPhysicalOffset(uint64_t wal_offset_of_wb_content,
-                                 uint64_t wal_record_header_size,
-                                 size_t ahead_data_size);
+uint64_t GetPhysicalOffset(uint64_t ahead_data_offset, size_t ahead_data_size,
+                           size_t header_size);
 
-uint32_t GetPhysicalLength(uint32_t logical_length,
-                                 uint32_t first_block_remain_size,
-                                 size_t wal_header_size) ;
+size_t GetPhysicalLength(uint32_t logical_length, uint64_t physical_offset,
+                           size_t wal_header_size);
 
 }  // namespace rocksdb
