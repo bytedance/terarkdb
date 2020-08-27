@@ -2201,6 +2201,10 @@ void rocksdb_options_set_max_file_opening_threads(rocksdb_options_t* opt, int n)
   opt->rep.max_file_opening_threads = n;
 }
 
+void rocksdb_options_set_max_wal_size(rocksdb_options_t* opt, uint64_t n) {
+  opt->rep.max_wal_size = n;
+}
+
 void rocksdb_options_set_max_total_wal_size(rocksdb_options_t* opt, uint64_t n) {
   opt->rep.max_total_wal_size = n;
 }

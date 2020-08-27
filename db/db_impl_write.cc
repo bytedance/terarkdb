@@ -728,7 +728,10 @@ Status DBImpl::PreprocessWrite(const WriteOptions& write_options,
     status = SwitchWAL(write_context);
   }
 
-  if (UNLIKELY(status.ok() && write_buffer_manager_->ShouldFlush())) {
+  if (UNLIKELY(status.ok() &&
+               ((!single_column_family_mode_ &&
+                 alive_log_files_.back().size > GetMaxWalSize()) ||
+                write_buffer_manager_->ShouldFlush()))) {
     // Before a new memtable is added in SwitchMemtable(),
     // write_buffer_manager_->ShouldFlush() will keep returning true. If another
     // thread is writing to another DB with the same write buffer, they may also
@@ -1141,12 +1144,25 @@ Status DBImpl::HandleWriteBufferFull(WriteContext* write_context) {
   // thread is writing to another DB with the same write buffer, they may also
   // be flushed. We may end up with flushing much more DBs than needed. It's
   // suboptimal but still correct.
-  ROCKS_LOG_INFO(
-      immutable_db_options_.info_log,
-      "Flushing column family with largest mem table size. Write buffer is "
-      "using %" PRIu64 " bytes out of a total of %" PRIu64 ".",
-      write_buffer_manager_->memory_usage(),
-      write_buffer_manager_->buffer_size());
+  WriteBufferFlushPri flush_pri = immutable_db_options_.write_buffer_flush_pri;
+  FlushReason flush_reason;
+  if (alive_log_files_.back().size > GetMaxWalSize()) {
+    flush_pri = kFlushOldest;
+    flush_reason = FlushReason::kWriteBufferManager;
+    ROCKS_LOG_INFO(immutable_db_options_.info_log,
+                   "Flushing column family with oldest sequence number. Latest "
+                   "log size is %" PRIu64 " while max_wal_size is %" PRIu64,
+                   alive_log_files_.back().size, GetMaxWalSize());
+  } else {
+    flush_reason = FlushReason::kWriteBufferFull;
+    ROCKS_LOG_INFO(immutable_db_options_.info_log,
+                   "Flushing column family with %s. Write buffer is "
+                   "using %" PRIu64 " bytes out of a total of %" PRIu64 ".",
+                   flush_pri == kFlushLargest ? "largest mem table size"
+                                              : "oldest sequence number",
+                   write_buffer_manager_->memory_usage(),
+                   write_buffer_manager_->buffer_size());
+  }
   // no need to refcount because drop is happening in write thread, so can't
   // happen while we're in the write thread
   autovector<ColumnFamilyData*> cfds;
@@ -1205,10 +1221,17 @@ Status DBImpl::HandleWriteBufferFull(WriteContext* write_context) {
     }
     FlushRequest flush_req;
     GenerateFlushRequest(cfds, &flush_req);
-    SchedulePendingFlush(flush_req, FlushReason::kWriteBufferFull);
+    SchedulePendingFlush(flush_req, flush_reason);
     MaybeScheduleFlushOrCompaction();
   }
   return status;
+}
+
+uint64_t DBImpl::GetMaxWalSize() const {
+  mutex_.AssertHeld();
+  return mutable_db_options_.max_wal_size == 0
+             ? max_total_in_memory_state_
+             : mutable_db_options_.max_wal_size;
 }
 
 uint64_t DBImpl::GetMaxTotalWalSize() const {
@@ -1672,7 +1695,10 @@ size_t DBImpl::GetWalPreallocateBlockSize(uint64_t write_buffer_size) const {
       static_cast<size_t>(write_buffer_size / 10 + write_buffer_size);
   // Some users might set very high write_buffer_size and rely on
   // max_total_wal_size or other parameters to control the WAL size.
-  if (mutable_db_options_.max_total_wal_size > 0) {
+  if (mutable_db_options_.max_wal_size > 0) {
+    bsize = std::min<size_t>(
+        bsize, static_cast<size_t>(mutable_db_options_.max_wal_size));
+  } else if (mutable_db_options_.max_total_wal_size > 0) {
     bsize = std::min<size_t>(
         bsize, static_cast<size_t>(mutable_db_options_.max_total_wal_size));
   }

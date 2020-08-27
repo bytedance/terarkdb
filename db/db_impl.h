@@ -1173,6 +1173,7 @@ class DBImpl : public DB {
 
   SnapshotImpl* GetSnapshotImpl(bool is_write_conflict_boundary);
 
+  uint64_t GetMaxWalSize() const;
   uint64_t GetMaxTotalWalSize() const;
 
   Directory* GetDataDir(ColumnFamilyData* cfd, size_t path_id) const;

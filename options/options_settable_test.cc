@@ -246,6 +246,7 @@ TEST_F(OptionsSettableTest, DBOptionsAllFieldsSettable) {
                              "max_background_garbage_collections=333;"
                              "use_fsync=true;"
                              "use_adaptive_mutex=false;"
+                             "max_wal_size=4295005604;"
                              "max_total_wal_size=4295005604;"
                              "compaction_readahead_size=0;"
                              "new_table_reader_for_compaction_inputs=false;"

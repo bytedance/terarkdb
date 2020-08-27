@@ -97,6 +97,10 @@ DBOptions SanitizeOptions(const std::string& dbname, const DBOptions& src) {
   if (result.WAL_ttl_seconds > 0 || result.WAL_size_limit_MB > 0) {
     result.recycle_log_file_num = false;
   }
+  if (result.max_total_wal_size > 0 &&
+      result.max_wal_size > result.max_total_wal_size) {
+    result.max_wal_size = result.max_total_wal_size / 4;
+  }
 
   if (result.recycle_log_file_num &&
       (result.wal_recovery_mode == WALRecoveryMode::kPointInTimeRecovery ||

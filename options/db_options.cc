@@ -257,6 +257,7 @@ MutableDBOptions::MutableDBOptions()
       avoid_flush_during_shutdown(false),
       writable_file_max_buffer_size(1024 * 1024),
       delayed_write_rate(2 * 1024U * 1024U),
+      max_wal_size(0),
       max_total_wal_size(0),
       delete_obsolete_files_period_micros(6ULL * 60 * 60 * 1000000),
       stats_dump_period_sec(600),
@@ -275,6 +276,7 @@ MutableDBOptions::MutableDBOptions(const DBOptions& options)
       avoid_flush_during_shutdown(options.avoid_flush_during_shutdown),
       writable_file_max_buffer_size(options.writable_file_max_buffer_size),
       delayed_write_rate(options.delayed_write_rate),
+      max_wal_size(options.max_wal_size),
       max_total_wal_size(options.max_total_wal_size),
       delete_obsolete_files_period_micros(
           options.delete_obsolete_files_period_micros),
@@ -300,6 +302,8 @@ void MutableDBOptions::Dump(Logger* log) const {
       writable_file_max_buffer_size);
   ROCKS_LOG_HEADER(log, "            Options.delayed_write_rate : %" PRIu64,
                    delayed_write_rate);
+  ROCKS_LOG_HEADER(log, "                  Options.max_wal_size: %" PRIu64,
+                   max_wal_size);
   ROCKS_LOG_HEADER(log, "            Options.max_total_wal_size: %" PRIu64,
                    max_total_wal_size);
   ROCKS_LOG_HEADER(

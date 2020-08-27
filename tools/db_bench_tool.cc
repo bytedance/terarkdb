@@ -947,6 +947,7 @@ DEFINE_double(blob_gc_ratio, 0.2, "Blob SST gc ratio");
 DEFINE_uint64(wal_ttl_seconds, 0, "Set the TTL for the WAL Files in seconds.");
 DEFINE_uint64(wal_size_limit_MB, 0, "Set the size limit for the WAL Files"
               " in MB.");
+DEFINE_uint64(max_wal_size, 0, "Set total max WAL size");
 DEFINE_uint64(max_total_wal_size, 0, "Set total max WAL size");
 
 DEFINE_bool(mmap_read, true,
@@ -3435,6 +3436,7 @@ void VerifyDBFromDB(std::string& truth_db_name) {
     options.compression = FLAGS_compression_type_e;
     options.WAL_ttl_seconds = FLAGS_wal_ttl_seconds;
     options.WAL_size_limit_MB = FLAGS_wal_size_limit_MB;
+    options.max_wal_size = FLAGS_max_wal_size;
     options.max_total_wal_size = FLAGS_max_total_wal_size;
 
     if (FLAGS_min_level_to_compress >= 0) {

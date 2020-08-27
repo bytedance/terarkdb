@@ -1006,7 +1006,8 @@ Status DBImpl::SetDBOptions(
           mutable_db_options_.compaction_readahead_size;
       WriteThread::Writer w;
       write_thread_.EnterUnbatched(&w, &mutex_);
-      if (total_log_size_ > GetMaxTotalWalSize() || wal_changed) {
+      if (alive_log_files_.back().size > GetMaxWalSize() ||
+          total_log_size_ > GetMaxTotalWalSize() || wal_changed) {
         Status purge_wal_status = SwitchWAL(&write_context);
         if (!purge_wal_status.ok()) {
           ROCKS_LOG_WARN(immutable_db_options_.info_log,

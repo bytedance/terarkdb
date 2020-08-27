@@ -85,6 +85,7 @@ int main(int argc, char** argv) {
     options.target_file_size_base = file_size_base;
     options.blob_gc_ratio = 0.1;
     options.db_write_buffer_size = 1UL << 30;
+    options.max_wal_size = 512UL << 20;
     options.max_total_wal_size = 1UL << 30;
 
 /*---------------------{ Terark Zip Table Options Details }-------------------*/

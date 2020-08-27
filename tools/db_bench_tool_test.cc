@@ -183,6 +183,7 @@ const std::string options_file_content = R"OPTIONS_FILE(
   max_background_compactions=5
   use_fsync=false
   use_adaptive_mutex=false
+  max_wal_size=4294967296
   max_total_wal_size=18446744073709551615
   compaction_readahead_size=0
   new_table_reader_for_compaction_inputs=false
