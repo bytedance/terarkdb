@@ -635,8 +635,8 @@ Status DBImpl::CloseHelper() {
     if (job_context.HaveSomethingToDelete()) {
       PurgeObsoleteFiles(job_context);
     }
-    job_context.Clean(&mutex_);
     mutex_.Lock();
+    job_context.Clean(nullptr);
   }
 
   for (auto l : logs_to_free_) {

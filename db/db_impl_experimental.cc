@@ -82,7 +82,7 @@ Status DBImpl::PromoteL0(ColumnFamilyHandle* column_family, int target_level) {
                      "PromoteL0 FAILED. Target level %d does not exist\n",
                      target_level);
       mutex_.AssertHeld();
-      job_context.Clean(&mutex_);
+      job_context.Clean(nullptr);
       return Status::InvalidArgument("Target level does not exist");
     }
 
@@ -100,7 +100,7 @@ Status DBImpl::PromoteL0(ColumnFamilyHandle* column_family, int target_level) {
                        "PromoteL0 FAILED. File %" PRIu64 " being compacted\n",
                        f->fd.GetNumber());
         mutex_.AssertHeld();
-        job_context.Clean(&mutex_);
+        job_context.Clean(nullptr);
         return Status::InvalidArgument("PromoteL0 called during L0 compaction");
       }
 
@@ -112,7 +112,7 @@ Status DBImpl::PromoteL0(ColumnFamilyHandle* column_family, int target_level) {
                        " have overlapping ranges\n",
                        prev_f->fd.GetNumber(), f->fd.GetNumber());
         mutex_.AssertHeld();
-        job_context.Clean(&mutex_);
+        job_context.Clean(nullptr);
         return Status::InvalidArgument("L0 has overlapping files");
       }
     }
@@ -123,7 +123,7 @@ Status DBImpl::PromoteL0(ColumnFamilyHandle* column_family, int target_level) {
         ROCKS_LOG_INFO(immutable_db_options_.info_log,
                        "PromoteL0 FAILED. Level %d not empty\n", level);
         mutex_.AssertHeld();
-        job_context.Clean(&mutex_);
+        job_context.Clean(nullptr);
         return Status::InvalidArgument(
             "All levels up to target_level "
             "must be empty");
