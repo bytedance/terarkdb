@@ -21,12 +21,12 @@ build:
   tags: 
     - terark
 
-unittest:
-  stage: unittest
-  script:
-    - cd /data00/builds/terarkdb/ && ./run_all_ut_tests.py
-  tags:
-    - terark
+# unittest:
+#   stage: unittest
+#   script:
+#     - cd /data00/builds/terarkdb/ && ./run_all_ut_tests.py
+#   tags:
+#     - terark
 
 # benchmarks are built and executed on another disk with limited CPUs
 # Since the benchmark is too slow, we will do it manully on the test server
