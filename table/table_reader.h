@@ -121,7 +121,7 @@ class TableReader {
   }
 
   virtual void SetTableCacheHandle(Cache* /*table_cache*/,
-                                   Cache::Handle */*handle*/) {}
+                                   Cache::Handle* /*handle*/) {}
 
   void UpdateMaxCoveringTombstoneSeq(
       const ReadOptions& readOptions, const Slice& user_key,

@@ -241,6 +241,10 @@ class Blob {
     slice_ = Slice(buf_, size_);  // tailing unused space just wasted
   }
 
+  uint64_t DataSize() {
+    return size_;
+  }
+
   Slice slice_;
   char* buf_ = nullptr;
   uint64_t size_;
@@ -272,12 +276,20 @@ void WalBlobReader::GenerateCacheUniqueId(const Slice& log_handle, std::string& 
 
 Status WalBlobReader::GetBlob(const Slice& log_handle,
                               GetContext* get_context) {
-  auto set_value = [&](void* blob_addr) {
-    Blob* b = (Blob*)blob_addr;
+  auto set_value = [&](Cache::Handle* handle) {
+    Blob* b = (Blob*)blob_cache_->Value(handle);
     bool matched;
     get_context->SaveValue(
         ParsedInternalKey(log_handle, kMaxSequenceNumber, kTypeValue),
-        LazyBuffer(b->slice_, false, log_number_), &matched);
+        LazyBuffer(b->slice_,
+                   std::move(Cleanable(
+                       [](void* c, void* h) {
+                         static_cast<Cache*>(c)->Release(
+                             static_cast<Cache::Handle*>(h), true);
+                       },
+                       blob_cache_.get(), handle)),
+                   log_number_),
+        &matched);
     assert(matched);
     get_context->MarkKeyMayExist();
   };
@@ -288,7 +300,7 @@ Status WalBlobReader::GetBlob(const Slice& log_handle,
   GenerateCacheUniqueId(log_handle, blob_uid);
   Cache::Handle* handle = blob_cache_->Lookup(blob_uid);
   if (handle) {
-    set_value(blob_cache_->Value(handle));
+    set_value(handle);
     return Status::OK();
   }
 
@@ -309,7 +321,7 @@ Status WalBlobReader::GetBlob(const Slice& log_handle,
   Blob* blob = new Blob(blob_physical_length);
   Status s = src_->Read(content.offset, blob_physical_length, &(blob->slice_),
                         blob->buf_);
-  assert(s.ok()); // TODO return statsu
+  assert(s.ok()); // TODO return status
   assert(blob->slice_.size() != 0 &&
          blob->slice_.size() == blob_physical_length);
   if (head_size != 0) {
@@ -350,9 +362,10 @@ Status WalBlobReader::GetBlob(const Slice& log_handle,
     // cross more than one block, need remove middle log record header
     blob->Shrink(head_size, wal_header_size_);
   }
-  s = blob_cache_->Insert(blob_uid, blob, 1, &DeleteCachedEntry<Blob>, &handle);
+  s = blob_cache_->Insert(blob_uid, blob, sizeof(Blob) + blob->DataSize(),
+                          &DeleteCachedEntry<Blob>, &handle);
   assert(s.ok());
-  set_value(blob_cache_->Value(handle));
+  set_value(handle);
   return Status::OK();
 }
 

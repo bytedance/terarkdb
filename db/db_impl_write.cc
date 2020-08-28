@@ -830,7 +830,6 @@ WriteBatch* DBImpl::MergeBatch(const WriteThread::WriteGroup& write_group,
 
 static void UnpackBatchInfo(WriteThread::WriteGroup& write_group,
                             bool wal_only) {
-  std::cout << "Unpack Batch Info, size= " << write_group.size << std::endl;
   assert(!write_group.leader->is_recycle);  // forbid recycle
   assert(write_group.leader == *(write_group.begin()));
 

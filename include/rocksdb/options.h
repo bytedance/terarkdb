@@ -944,7 +944,7 @@ struct DBOptions {
   // Not supported in ROCKSDB_LITE mode!
   std::shared_ptr<Cache> row_cache = nullptr;
 
-  size_t blob_cache_size = 1024;
+  size_t blob_cache_size = 32768;
 
   // A global cache for blob in wal which is shared across CF.
   // Default: nullptr (disabled)
