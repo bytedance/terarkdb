@@ -412,9 +412,8 @@ class Repairer {
         continue;
       }
 
-      FileMetaData meta;
-      std::vector<FileMetaData> blob_meta;
-      meta.fd = FileDescriptor(next_file_number_++, 0, 0);
+      std::vector<FileMetaData> meta(1);
+      meta[0].fd = FileDescriptor(next_file_number_++, 0, 0);
       ReadOptions ro;
       ro.total_order_seek = true;
       int64_t _current_time = 0;
@@ -441,22 +440,21 @@ class Repairer {
           *cfd->GetLatestMutableCFOptions(), env_options_, table_cache_,
           c_style_callback(get_arena_input_iter), &get_arena_input_iter,
           c_style_callback(get_range_del_iters), &get_range_del_iters, &meta,
-          &blob_meta, cfd->internal_comparator(),
-          cfd->int_tbl_prop_collector_factories(), cfd->GetID(), cfd->GetName(),
-          {}, kMaxSequenceNumber, snapshot_checker, kNoCompression,
-          CompressionOptions(), false, nullptr /* internal_stats */,
-          TableFileCreationReason::kRecovery, nullptr /* event_logger */,
-          0 /* job_id */, Env::IO_HIGH, nullptr /* table_properties */,
-          -1 /* level */, current_time, write_hint);
+          cfd->internal_comparator(), cfd->int_tbl_prop_collector_factories(),
+          cfd->GetID(), cfd->GetName(), {}, kMaxSequenceNumber,
+          snapshot_checker, kNoCompression, CompressionOptions(), false,
+          nullptr /* internal_stats */, TableFileCreationReason::kRecovery,
+          nullptr /* event_logger */, 0 /* job_id */, Env::IO_HIGH,
+          nullptr /* table_properties */, -1 /* level */, current_time,
+          write_hint);
       ROCKS_LOG_INFO(db_options_.info_log,
                      "Log #%" PRIu64 ": %d ops saved to Table #%" PRIu64 " %s",
-                     log, counter, meta.fd.GetNumber(),
+                     log, counter, meta[0].fd.GetNumber(),
                      status.ToString().c_str());
       if (status.ok()) {
-        if (meta.fd.GetFileSize() > 0) {
-          table_fds_.push_back(meta.fd);
-          for (auto& blob : blob_meta) {
-            table_fds_.push_back(blob.fd);
+        if (meta[0].fd.GetFileSize() > 0) {
+          for (auto& f : meta) {
+            table_fds_.push_back(f.fd);
           }
         }
       } else {

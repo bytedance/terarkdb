@@ -139,16 +139,13 @@ Status DBImpl::FlushMemTableToOutputFile(
       &event_logger_, mutable_cf_options.report_bg_io_stats,
       true /* sync_output_directory */, true /* write_manifest */, flush_load);
 
-  FileMetaData file_meta;
-
   TEST_SYNC_POINT("DBImpl::FlushMemTableToOutputFile:BeforePickMemtables");
   flush_job.PickMemTable();
   TEST_SYNC_POINT("DBImpl::FlushMemTableToOutputFile:AfterPickMemtables");
 
 #ifndef ROCKSDB_LITE
   // may temporarily unlock and lock the mutex.
-  NotifyOnFlushBegin(cfd, &file_meta, mutable_cf_options, job_context->job_id,
-                     flush_job.GetTableProperties());
+  NotifyOnFlushBegin(cfd, mutable_cf_options, job_context->job_id);
 #endif  // ROCKSDB_LITE
 
   Status s;
@@ -172,7 +169,7 @@ Status DBImpl::FlushMemTableToOutputFile(
   // and EventListener callback will be called when the db_mutex
   // is unlocked by the current thread.
   if (s.ok()) {
-    s = flush_job.Run(&logs_with_prep_tracker_, &file_meta);
+    s = flush_job.Run(&logs_with_prep_tracker_);
   } else {
     flush_job.Cancel();
   }
@@ -196,22 +193,25 @@ Status DBImpl::FlushMemTableToOutputFile(
   if (s.ok()) {
 #ifndef ROCKSDB_LITE
     // may temporarily unlock and lock the mutex.
-    NotifyOnFlushCompleted(cfd, &file_meta, mutable_cf_options,
+    NotifyOnFlushCompleted(cfd, flush_job.GetFileMetas(), mutable_cf_options,
                            job_context->job_id, flush_job.GetTableProperties());
     auto sfm = static_cast<SstFileManagerImpl*>(
         immutable_db_options_.sst_file_manager.get());
     if (sfm) {
       // Notify sst_file_manager that a new file was added
-      std::string file_path = MakeTableFileName(
-          cfd->ioptions()->cf_paths[0].path, file_meta.fd.GetNumber());
-      sfm->OnAddFile(file_path);
-      if (sfm->IsMaxAllowedSpaceReached()) {
-        Status new_bg_error =
-            Status::SpaceLimit("Max allowed space was reached");
-        TEST_SYNC_POINT_CALLBACK(
-            "DBImpl::FlushMemTableToOutputFile:MaxAllowedSpaceReached",
-            &new_bg_error);
-        error_handler_.SetBGError(new_bg_error, BackgroundErrorReason::kFlush);
+      for (auto file_meta : flush_job.GetFileMetas()) {
+        std::string file_path = MakeTableFileName(
+            cfd->ioptions()->cf_paths[0].path, file_meta.fd.GetNumber());
+        sfm->OnAddFile(file_path);
+        if (sfm->IsMaxAllowedSpaceReached()) {
+          Status new_bg_error =
+              Status::SpaceLimit("Max allowed space was reached");
+          TEST_SYNC_POINT_CALLBACK(
+              "DBImpl::FlushMemTableToOutputFile:MaxAllowedSpaceReached",
+              &new_bg_error);
+          error_handler_.SetBGError(new_bg_error,
+                                    BackgroundErrorReason::kFlush);
+        }
       }
     }
 #endif  // ROCKSDB_LITE
@@ -322,7 +322,6 @@ Status DBImpl::AtomicFlushMemTablesToOutputFiles(
     jobs.back().PickMemTable();
   }
 
-  std::vector<FileMetaData> file_meta(num_cfs);
   Status s;
   assert(num_cfs == static_cast<int>(jobs.size()));
 
@@ -330,8 +329,7 @@ Status DBImpl::AtomicFlushMemTablesToOutputFiles(
   for (int i = 0; i != num_cfs; ++i) {
     const MutableCFOptions& mutable_cf_options = all_mutable_cf_options.at(i);
     // may temporarily unlock and lock the mutex.
-    NotifyOnFlushBegin(cfds[i], &file_meta[i], mutable_cf_options,
-                       job_context->job_id, jobs[i].GetTableProperties());
+    NotifyOnFlushBegin(cfds[i], mutable_cf_options, job_context->job_id);
   }
 #endif /* !ROCKSDB_LITE */
 
@@ -352,8 +350,7 @@ Status DBImpl::AtomicFlushMemTablesToOutputFiles(
   if (s.ok()) {
     // TODO (yanqin): parallelize jobs with threads.
     for (int i = 1; i != num_cfs; ++i) {
-      exec_status[i].second =
-          jobs[i].Run(&logs_with_prep_tracker_, &file_meta[i]);
+      exec_status[i].second = jobs[i].Run(&logs_with_prep_tracker_);
       exec_status[i].first = true;
     }
     if (num_cfs > 1) {
@@ -362,8 +359,7 @@ Status DBImpl::AtomicFlushMemTablesToOutputFiles(
       TEST_SYNC_POINT(
           "DBImpl::AtomicFlushMemTablesToOutputFiles:SomeFlushJobsComplete:2");
     }
-    exec_status[0].second =
-        jobs[0].Run(&logs_with_prep_tracker_, &file_meta[0]);
+    exec_status[0].second = jobs[0].Run(&logs_with_prep_tracker_);
     exec_status[0].first = true;
 
     Status error_status;
@@ -437,14 +433,14 @@ Status DBImpl::AtomicFlushMemTablesToOutputFiles(
     autovector<ColumnFamilyData*> tmp_cfds;
     autovector<const autovector<MemTable*>*> mems_list;
     autovector<const MutableCFOptions*> mutable_cf_options_list;
-    autovector<FileMetaData*> tmp_file_meta;
+    autovector<const FileMetaData*> tmp_file_meta;
     for (int i = 0; i != num_cfs; ++i) {
       const auto& mems = jobs[i].GetMemTables();
       if (!cfds[i]->IsDropped() && !mems.empty()) {
         tmp_cfds.emplace_back(cfds[i]);
         mems_list.emplace_back(&mems);
         mutable_cf_options_list.emplace_back(&all_mutable_cf_options[i]);
-        tmp_file_meta.emplace_back(&file_meta[i]);
+        tmp_file_meta.emplace_back(&jobs[i].GetFileMetas()[0]);
       }
     }
 
@@ -479,18 +475,21 @@ Status DBImpl::AtomicFlushMemTablesToOutputFiles(
       if (cfds[i]->IsDropped()) {
         continue;
       }
-      NotifyOnFlushCompleted(cfds[i], &file_meta[i], all_mutable_cf_options[i],
-                             job_context->job_id, jobs[i].GetTableProperties());
+      NotifyOnFlushCompleted(cfds[i], jobs[i].GetFileMetas(),
+                             all_mutable_cf_options[i], job_context->job_id,
+                             jobs[i].GetTableProperties());
       if (sfm) {
-        std::string file_path = MakeTableFileName(
-            cfds[i]->ioptions()->cf_paths[0].path, file_meta[i].fd.GetNumber());
-        sfm->OnAddFile(file_path);
-        if (sfm->IsMaxAllowedSpaceReached() &&
-            error_handler_.GetBGError().ok()) {
-          Status new_bg_error =
-              Status::SpaceLimit("Max allowed space was reached");
-          error_handler_.SetBGError(new_bg_error,
-                                    BackgroundErrorReason::kFlush);
+        for (auto file_meta : jobs[i].GetFileMetas()) {
+          std::string file_path = MakeTableFileName(
+              cfds[i]->ioptions()->cf_paths[0].path, file_meta.fd.GetNumber());
+          sfm->OnAddFile(file_path);
+          if (sfm->IsMaxAllowedSpaceReached() &&
+              error_handler_.GetBGError().ok()) {
+            Status new_bg_error =
+                Status::SpaceLimit("Max allowed space was reached");
+            error_handler_.SetBGError(new_bg_error,
+                                      BackgroundErrorReason::kFlush);
+          }
         }
       }
     }
@@ -510,8 +509,10 @@ Status DBImpl::AtomicFlushMemTablesToOutputFiles(
     for (int i = 0; i != num_cfs; ++i) {
       if (exec_status[i].first && exec_status[i].second.ok()) {
         auto& mems = jobs[i].GetMemTables();
-        cfds[i]->imm()->RollbackMemtableFlush(mems,
-                                              file_meta[i].fd.GetNumber());
+        uint64_t file_number = jobs[i].GetFileMetas().empty()
+                                   ? 0
+                                   : jobs[i].GetFileMetas()[0].fd.GetNumber();
+        cfds[i]->imm()->RollbackMemtableFlush(mems, file_number);
       }
     }
     Status new_bg_error = s;
@@ -521,9 +522,9 @@ Status DBImpl::AtomicFlushMemTablesToOutputFiles(
   return s;
 }
 
-void DBImpl::NotifyOnFlushBegin(ColumnFamilyData* cfd, FileMetaData* file_meta,
+void DBImpl::NotifyOnFlushBegin(ColumnFamilyData* cfd,
                                 const MutableCFOptions& mutable_cf_options,
-                                int job_id, TableProperties prop) {
+                                int job_id) {
 #ifndef ROCKSDB_LITE
   if (immutable_db_options_.listeners.size() == 0U) {
     return;
@@ -545,15 +546,13 @@ void DBImpl::NotifyOnFlushBegin(ColumnFamilyData* cfd, FileMetaData* file_meta,
     info.cf_name = cfd->GetName();
     // TODO(yhchiang): make db_paths dynamic in case flush does not
     //                 go to L0 in the future.
-    info.file_path = MakeTableFileName(cfd->ioptions()->cf_paths[0].path,
-                                       file_meta->fd.GetNumber());
+    info.file_path = MakeTableFileName(cfd->ioptions()->cf_paths[0].path, 0);
     info.thread_id = env_->GetThreadID();
     info.job_id = job_id;
     info.triggered_writes_slowdown = triggered_writes_slowdown;
     info.triggered_writes_stop = triggered_writes_stop;
-    info.smallest_seqno = file_meta->fd.smallest_seqno;
-    info.largest_seqno = file_meta->fd.largest_seqno;
-    info.table_properties = prop;
+    info.smallest_seqno = 0;
+    info.largest_seqno = 0;
     info.flush_reason = cfd->GetFlushReason();
     for (auto listener : immutable_db_options_.listeners) {
       listener->OnFlushBegin(this, info);
@@ -571,10 +570,10 @@ void DBImpl::NotifyOnFlushBegin(ColumnFamilyData* cfd, FileMetaData* file_meta,
 #endif  // ROCKSDB_LITE
 }
 
-void DBImpl::NotifyOnFlushCompleted(ColumnFamilyData* cfd,
-                                    FileMetaData* file_meta,
-                                    const MutableCFOptions& mutable_cf_options,
-                                    int job_id, TableProperties prop) {
+void DBImpl::NotifyOnFlushCompleted(
+    ColumnFamilyData* cfd, const std::vector<FileMetaData>& file_meta_vec,
+    const MutableCFOptions& mutable_cf_options, int job_id,
+    const std::vector<TableProperties>& prop_vec) {
 #ifndef ROCKSDB_LITE
   if (immutable_db_options_.listeners.size() == 0U) {
     return;
@@ -592,22 +591,27 @@ void DBImpl::NotifyOnFlushCompleted(ColumnFamilyData* cfd,
   // release lock while notifying events
   mutex_.Unlock();
   {
+    assert(file_meta_vec.size() == prop_vec.size());
     FlushJobInfo info;
-    info.cf_name = cfd->GetName();
-    // TODO(yhchiang): make db_paths dynamic in case flush does not
-    //                 go to L0 in the future.
-    info.file_path = MakeTableFileName(cfd->ioptions()->cf_paths[0].path,
-                                       file_meta->fd.GetNumber());
-    info.thread_id = env_->GetThreadID();
-    info.job_id = job_id;
-    info.triggered_writes_slowdown = triggered_writes_slowdown;
-    info.triggered_writes_stop = triggered_writes_stop;
-    info.smallest_seqno = file_meta->fd.smallest_seqno;
-    info.largest_seqno = file_meta->fd.largest_seqno;
-    info.table_properties = prop;
-    info.flush_reason = cfd->GetFlushReason();
-    for (auto listener : immutable_db_options_.listeners) {
-      listener->OnFlushCompleted(this, info);
+    for (size_t i = 0; i < file_meta_vec.size(); ++i) {
+      auto file_meta = &file_meta_vec[i];
+      auto& prop = prop_vec[i];
+      info.cf_name = cfd->GetName();
+      // TODO(yhchiang): make db_paths dynamic in case flush does not
+      //                 go to L0 in the future.
+      info.file_path = MakeTableFileName(cfd->ioptions()->cf_paths[0].path,
+                                         file_meta->fd.GetNumber());
+      info.thread_id = env_->GetThreadID();
+      info.job_id = job_id;
+      info.triggered_writes_slowdown = triggered_writes_slowdown;
+      info.triggered_writes_stop = triggered_writes_stop;
+      info.smallest_seqno = file_meta->fd.smallest_seqno;
+      info.largest_seqno = file_meta->fd.largest_seqno;
+      info.table_properties = prop;
+      info.flush_reason = cfd->GetFlushReason();
+      for (auto listener : immutable_db_options_.listeners) {
+        listener->OnFlushCompleted(this, info);
+      }
     }
   }
   mutex_.Lock();

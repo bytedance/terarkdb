@@ -182,14 +182,15 @@ void FlushJob::PickMemTable() {
   edit_->SetColumnFamily(cfd_->GetID());
 
   // path 0 for level 0 file.
-  meta_.fd = FileDescriptor(versions_->NewFileNumber(), 0, 0);
+  assert(meta_.empty());
+  meta_.emplace_back();
+  meta_.front().fd = FileDescriptor(versions_->NewFileNumber(), 0, 0);
 
   base_ = cfd_->current();
   base_->Ref();  // it is likely that we do not need this reference
 }
 
-Status FlushJob::Run(LogsWithPrepTracker* prep_tracker,
-                     FileMetaData* file_meta) {
+Status FlushJob::Run(LogsWithPrepTracker* prep_tracker) {
   TEST_SYNC_POINT("FlushJob::Start");
   db_mutex_->AssertHeld();
   assert(pick_memtable_called);
@@ -225,19 +226,16 @@ Status FlushJob::Run(LogsWithPrepTracker* prep_tracker,
   }
 
   if (!s.ok()) {
-    cfd_->imm()->RollbackMemtableFlush(mems_, meta_.fd.GetNumber());
+    cfd_->imm()->RollbackMemtableFlush(mems_, meta_[0].fd.GetNumber());
   } else if (write_manifest_) {
     TEST_SYNC_POINT("FlushJob::InstallResults");
     // Replace immutable memtable with the generated Table
     s = cfd_->imm()->TryInstallMemtableFlushResults(
         cfd_, mutable_cf_options_, mems_, prep_tracker, versions_, db_mutex_,
-        meta_.fd.GetNumber(), &job_context_->memtables_to_free, db_directory_,
-        log_buffer_);
+        meta_[0].fd.GetNumber(), &job_context_->memtables_to_free,
+        db_directory_, log_buffer_);
   }
 
-  if (s.ok() && file_meta != nullptr) {
-    *file_meta = meta_;
-  }
   RecordFlushIOStats();
 
   auto stream = event_logger_->LogToBuffer(log_buffer_);
@@ -323,7 +321,7 @@ Status FlushJob::WriteLevel0Table() {
       ROCKS_LOG_INFO(db_options_.info_log,
                      "[%s] [JOB %d] Level-0 flush table #%" PRIu64 ": started",
                      cfd_->GetName().c_str(), job_context_->job_id,
-                     meta_.fd.GetNumber());
+                     meta_[0].fd.GetNumber());
 
       TEST_SYNC_POINT_CALLBACK("FlushJob::WriteLevel0Table:output_compression",
                                &output_compression_);
@@ -377,9 +375,8 @@ Status FlushJob::WriteLevel0Table() {
           mutable_cf_options_, env_options_, cfd_->table_cache(),
           c_style_callback(get_arena_input_iter), &get_arena_input_iter,
           c_style_callback(get_range_del_iters), &get_range_del_iters, &meta_,
-          &blob_meta_, cfd_->internal_comparator(),
-          cfd_->int_tbl_prop_collector_factories(), cfd_->GetID(),
-          cfd_->GetName(), existing_snapshots_,
+          cfd_->internal_comparator(), cfd_->int_tbl_prop_collector_factories(),
+          cfd_->GetID(), cfd_->GetName(), existing_snapshots_,
           earliest_write_conflict_snapshot_, snapshot_checker_,
           output_compression_, cfd_->ioptions()->compression_opts,
           mutable_cf_options_.paranoid_file_checks, cfd_->internal_stats(),
@@ -393,9 +390,9 @@ Status FlushJob::WriteLevel0Table() {
                    " bytes %s"
                    "%s",
                    cfd_->GetName().c_str(), job_context_->job_id,
-                   meta_.fd.GetNumber(), meta_.fd.GetFileSize(),
+                   meta_[0].fd.GetNumber(), meta_[0].fd.GetFileSize(),
                    s.ToString().c_str(),
-                   meta_.marked_for_compaction ? " (needs compaction)" : "");
+                   meta_[0].marked_for_compaction ? " (needs compaction)" : "");
 
     if (s.ok() && output_file_directory_ != nullptr && sync_output_directory_) {
       s = output_file_directory_->Fsync();
@@ -407,37 +404,31 @@ Status FlushJob::WriteLevel0Table() {
 
   // Note that if file_size is zero, the file has been deleted and
   // should not be added to the manifest.
-  if (s.ok() && meta_.fd.GetFileSize() > 0) {
+  if (s.ok() && meta_[0].fd.GetFileSize() > 0) {
     // if we have more than 1 background thread, then we cannot
     // insert files directly into higher levels because some other
     // threads could be concurrently producing compacted files for
     // that key range.
     // Add file to L0
-    edit_->AddFile(0 /* level */, meta_.fd.GetNumber(), meta_.fd.GetPathId(),
-                   meta_.fd.GetFileSize(), meta_.smallest, meta_.largest,
-                   meta_.fd.smallest_seqno, meta_.fd.largest_seqno,
-                   meta_.marked_for_compaction, meta_.prop);
-    for (auto& blob : blob_meta_) {
-      edit_->AddFile(-1 /* level */, blob.fd.GetNumber(), blob.fd.GetPathId(),
-                     blob.fd.GetFileSize(), blob.smallest, blob.largest,
-                     blob.fd.smallest_seqno, blob.fd.largest_seqno,
-                     blob.marked_for_compaction, blob.prop);
+    for (size_t i = 0; i < meta_.size(); ++i) {
+      auto& f = meta_[i];
+      edit_->AddFile(i == 0 ? 0 : -1, f.fd.GetNumber(), f.fd.GetPathId(),
+                     f.fd.GetFileSize(), f.smallest, f.largest,
+                     f.fd.smallest_seqno, f.fd.largest_seqno,
+                     f.marked_for_compaction, f.prop);
     }
   }
 
   // Note that here we treat flush as level 0 compaction in internal stats
   InternalStats::CompactionStats stats(CompactionReason::kFlush, 1);
   stats.micros = db_options_.env->NowMicros() - start_micros;
-  stats.bytes_written = meta_.fd.GetFileSize();
-  for (auto& blob : blob_meta_) {
-    stats.bytes_written += blob.fd.GetFileSize();
+  for (auto& f : meta_) {
+    stats.bytes_written += f.fd.GetFileSize();
     cfd_->internal_stats()->AddCFStats(InternalStats::BYTES_FLUSHED,
-                                       blob.fd.GetFileSize());
+                                       f.fd.GetFileSize());
   }
   MeasureTime(stats_, FLUSH_TIME, stats.micros);
   cfd_->internal_stats()->AddCompactionStats(0 /* level */, stats);
-  cfd_->internal_stats()->AddCFStats(InternalStats::BYTES_FLUSHED,
-                                     meta_.fd.GetFileSize());
   RecordFlushIOStats();
   return s;
 }

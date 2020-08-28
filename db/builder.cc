@@ -74,8 +74,7 @@ Status BuildTable(
     void* get_input_iter_arg,
     std::vector<std::unique_ptr<FragmentedRangeTombstoneIterator>> (
         *get_range_del_iters_callback)(void*),
-    void* get_range_del_iters_arg, FileMetaData* meta,
-    std::vector<FileMetaData>* blob_meta,
+    void* get_range_del_iters_arg, std::vector<FileMetaData>* meta_vec,
     const InternalKeyComparator& internal_comparator,
     const std::vector<std::unique_ptr<IntTblPropCollectorFactory>>*
         int_tbl_prop_collector_factories,
@@ -86,16 +85,20 @@ Status BuildTable(
     const CompressionOptions& compression_opts, bool paranoid_file_checks,
     InternalStats* internal_stats, TableFileCreationReason reason,
     EventLogger* event_logger, int job_id, const Env::IOPriority io_priority,
-    TableProperties* table_properties, int level, double compaction_load,
-    const uint64_t creation_time, const uint64_t oldest_key_time,
-    Env::WriteLifeTimeHint write_hint) {
+    std::vector<TableProperties>* table_properties_vec, int level,
+    double compaction_load, const uint64_t creation_time,
+    const uint64_t oldest_key_time, Env::WriteLifeTimeHint write_hint) {
   assert((column_family_id ==
           TablePropertiesCollectorFactory::Context::kUnknownColumnFamily) ==
          column_family_name.empty());
   // Reports the IOStats for flush for every following bytes.
   const size_t kReportFlushIOStatsEvery = 1048576;
   Status s;
-  meta->fd.file_size = 0;
+  assert(meta_vec->size() == 1);
+  if (table_properties_vec != nullptr) {
+    table_properties_vec->emplace_back();
+  }
+  auto sst_meta = [meta_vec] { return &meta_vec->front(); };
   Arena arena;
   ScopedArenaIterator iter(get_input_iter_callback(get_input_iter_arg, arena));
   iter->SeekToFirst();
@@ -106,8 +109,9 @@ Status BuildTable(
     range_del_agg->AddTombstones(std::move(range_del_iter));
   }
 
-  std::string fname = TableFileName(ioptions.cf_paths, meta->fd.GetNumber(),
-                                    meta->fd.GetPathId());
+  std::string fname =
+      TableFileName(ioptions.cf_paths, sst_meta()->fd.GetNumber(),
+                    sst_meta()->fd.GetPathId());
 #ifndef ROCKSDB_LITE
   EventHelpers::NotifyTableFileCreationStarted(
       ioptions.listeners, dbname, column_family_name, fname, job_id, reason);
@@ -127,7 +131,7 @@ Status BuildTable(
       if (!s.ok()) {
         EventHelpers::LogAndNotifyTableFileCreationFinished(
             event_logger, ioptions.listeners, dbname, column_family_name, fname,
-            job_id, meta->fd, tp, reason, s);
+            job_id, sst_meta()->fd, tp, reason, s);
         return s;
       }
       file->SetIOPriority(io_priority);
@@ -152,10 +156,13 @@ Status BuildTable(
 
     struct BuilderSeparateHelper : public SeparateHelper {
       std::vector<FileMetaData>* output = nullptr;
+      std::vector<TableProperties>* prop = nullptr;
       std::string fname;
+      TableProperties tp;
       std::unique_ptr<WritableFileWriter> file_writer;
       std::unique_ptr<TableBuilder> builder;
       FileMetaData* current_output = nullptr;
+      TableProperties* current_prop = nullptr;
       std::unique_ptr<ValueExtractor> value_meta_extractor;
       Status (*trans_to_separate_callback)(void* args, const Slice& key,
                                            LazyBuffer& value) = nullptr;
@@ -201,7 +208,7 @@ Status BuildTable(
       blob_meta->prop.flags |= TablePropertyCache::kNoRangeDeletions;
       status = blob_builder->Finish(&blob_meta->prop, nullptr);
       blob_meta->marked_for_compaction = blob_builder->NeedCompact();
-      TableProperties tp;
+      TableProperties& tp = *separate_helper.current_prop;
       if (status.ok()) {
         blob_meta->fd.file_size = blob_builder->FileSize();
         tp = blob_builder->GetTableProperties();
@@ -242,10 +249,17 @@ Status BuildTable(
         separate_helper.output->emplace_back();
         blob_meta = separate_helper.current_output =
             &separate_helper.output->back();
-        blob_meta->fd =
-            FileDescriptor(versions_->NewFileNumber(), meta->fd.GetPathId(), 0);
-        separate_helper.fname = TableFileName(
-            ioptions.cf_paths, blob_meta->fd.GetNumber(), meta->fd.GetPathId());
+        if (separate_helper.prop == nullptr) {
+          separate_helper.current_prop = &separate_helper.tp;
+        } else {
+          separate_helper.prop->emplace_back();
+          separate_helper.current_prop = &separate_helper.prop->back();
+        }
+        blob_meta->fd = FileDescriptor(versions_->NewFileNumber(),
+                                       sst_meta()->fd.GetPathId(), 0);
+        separate_helper.fname =
+            TableFileName(ioptions.cf_paths, blob_meta->fd.GetNumber(),
+                          blob_meta->fd.GetPathId());
         status = NewWritableFile(env, separate_helper.fname, &blob_file,
                                  env_options);
         if (!status.ok()) {
@@ -281,7 +295,8 @@ Status BuildTable(
       return status;
     };
 
-    separate_helper.output = blob_meta;
+    separate_helper.output = meta_vec;
+    separate_helper.prop = table_properties_vec;
     BlobConfig blob_config = mutable_cf_options.get_blob_config();
     if (ioptions.table_factory->IsBuilderNeedSecondPass()) {
       blob_config.blob_size = size_t(-1);
@@ -347,7 +362,7 @@ Status BuildTable(
     c_iter.SeekToFirst();
     for (; s.ok() && c_iter.Valid(); c_iter.Next()) {
       s = builder->Add(c_iter.key(), c_iter.value());
-      meta->UpdateBoundaries(c_iter.key(), c_iter.ikey().sequence);
+      sst_meta()->UpdateBoundaries(c_iter.key(), c_iter.ikey().sequence);
 
       // TODO(noetzli): Update stats after flush, too.
       if (io_priority == Env::IO_HIGH &&
@@ -363,8 +378,9 @@ Status BuildTable(
       auto tombstone = range_del_it->Tombstone();
       auto kv = tombstone.Serialize();
       s = builder->AddTombstone(kv.first.Encode(), LazyBuffer(kv.second));
-      meta->UpdateBoundariesForRange(kv.first, tombstone.SerializeEndKey(),
-                                     tombstone.seq_, internal_comparator);
+      sst_meta()->UpdateBoundariesForRange(kv.first,
+                                           tombstone.SerializeEndKey(),
+                                           tombstone.seq_, internal_comparator);
     }
 
     // Finish and check for builder errors
@@ -379,34 +395,37 @@ Status BuildTable(
     if (!s.ok() || empty) {
       builder->Abandon();
     } else {
-      for (auto& blob : *blob_meta) {
-        assert(meta->prop.dependence.empty() ||
-               blob.fd.GetNumber() > meta->prop.dependence.back().file_number);
-        meta->prop.dependence.emplace_back(
+      for (size_t i = 1; i < meta_vec->size(); ++i) {
+        auto& blob = (*meta_vec)[i];
+        assert(sst_meta()->prop.dependence.empty() ||
+               blob.fd.GetNumber() >
+                   sst_meta()->prop.dependence.back().file_number);
+        sst_meta()->prop.dependence.emplace_back(
             Dependence{blob.fd.GetNumber(), blob.prop.num_entries});
       }
-      auto shrinked_snapshots = meta->ShrinkSnapshot(snapshots);
-      s = builder->Finish(&meta->prop, &shrinked_snapshots);
-      meta->prop.num_deletions = tp.num_deletions;
-      meta->prop.raw_key_size = tp.raw_key_size;
-      meta->prop.raw_value_size = tp.raw_value_size;
-      meta->prop.flags |= tp.num_range_deletions > 0
-                              ? 0
-                              : TablePropertyCache::kNoRangeDeletions;
-      meta->prop.flags |=
+      auto shrinked_snapshots = sst_meta()->ShrinkSnapshot(snapshots);
+      s = builder->Finish(&sst_meta()->prop, &shrinked_snapshots);
+      sst_meta()->prop.num_deletions = tp.num_deletions;
+      sst_meta()->prop.raw_key_size = tp.raw_key_size;
+      sst_meta()->prop.raw_value_size = tp.raw_value_size;
+      sst_meta()->prop.flags |= tp.num_range_deletions > 0
+                                    ? 0
+                                    : TablePropertyCache::kNoRangeDeletions;
+      sst_meta()->prop.flags |=
           tp.snapshots.empty() ? 0 : TablePropertyCache::kHasSnapshots;
     }
 
     if (s.ok() && !empty) {
       uint64_t file_size = builder->FileSize();
-      meta->fd.file_size = file_size;
-      meta->marked_for_compaction = builder->NeedCompact();
-      meta->prop.num_entries = builder->NumEntries();
-      assert(meta->fd.GetFileSize() > 0);
+      sst_meta()->fd.file_size = file_size;
+      sst_meta()->marked_for_compaction = builder->NeedCompact();
+      sst_meta()->prop.num_entries = builder->NumEntries();
+      assert(sst_meta()->fd.GetFileSize() > 0);
       // refresh now that builder is finished
       tp = builder->GetTableProperties();
-      if (table_properties) {
-        *table_properties = tp;
+      if (table_properties_vec != nullptr) {
+        assert(table_properties_vec->size() >= 1);
+        table_properties_vec->front() = tp;
       }
     }
     delete builder;
@@ -423,7 +442,7 @@ Status BuildTable(
     if (s.ok() && !empty) {
       // this sst has no depend ...
       DependenceMap empty_dependence_map;
-      assert(!meta->prop.is_map_sst());
+      assert(!sst_meta()->prop.is_map_sst());
       // Verify that the table is usable
       // We set for_compaction to false and don't OptimizeForCompactionTableRead
       // here because this is a special case after we finish the table building
@@ -431,7 +450,7 @@ Status BuildTable(
       // we will regrad this verification as user reads since the goal is
       // to cache it here for further user reads
       std::unique_ptr<InternalIterator> it(table_cache->NewIterator(
-          ReadOptions(), env_options, internal_comparator, *meta,
+          ReadOptions(), env_options, internal_comparator, *sst_meta(),
           empty_dependence_map, nullptr /* range_del_agg */,
           mutable_cf_options.prefix_extractor.get(), nullptr,
           (internal_stats == nullptr) ? nullptr
@@ -452,14 +471,14 @@ Status BuildTable(
     s = iter->status();
   }
 
-  if (!s.ok() || meta->fd.GetFileSize() == 0) {
+  if (!s.ok() || sst_meta()->fd.GetFileSize() == 0) {
     env->DeleteFile(fname);
   }
 
   // Output to event logger and fire events.
   EventHelpers::LogAndNotifyTableFileCreationFinished(
       event_logger, ioptions.listeners, dbname, column_family_name, fname,
-      job_id, meta->fd, tp, reason, s);
+      job_id, sst_meta()->fd, tp, reason, s);
 
   return s;
 }

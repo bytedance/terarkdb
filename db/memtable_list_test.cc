@@ -169,7 +169,7 @@ class MemTableListTest : public testing::Test {
       meta.fd = FileDescriptor(file_num, 0, 0);
       file_metas.emplace_back(meta);
     }
-    autovector<FileMetaData*> file_meta_ptrs;
+    autovector<const FileMetaData*> file_meta_ptrs;
     for (auto& meta : file_metas) {
       file_meta_ptrs.push_back(&meta);
     }

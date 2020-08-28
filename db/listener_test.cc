@@ -236,6 +236,7 @@ TEST_F(EventListenerTest, OnSingleDBFlushTest) {
   Options options;
   options.env = CurrentOptions().env;
   options.write_buffer_size = k110KB;
+  options.blob_size = -1;
 #ifdef ROCKSDB_USING_THREAD_STATUS
   options.enable_thread_tracking = true;
 #endif  // ROCKSDB_USING_THREAD_STATUS
@@ -276,6 +277,7 @@ TEST_F(EventListenerTest, MultiCF) {
 #ifdef ROCKSDB_USING_THREAD_STATUS
   options.enable_thread_tracking = true;
 #endif  // ROCKSDB_USING_THREAD_STATUS
+  options.blob_size = -1;
   TestFlushListener* listener = new TestFlushListener(options.env);
   options.listeners.emplace_back(listener);
   options.table_properties_collector_factories.push_back(
@@ -394,6 +396,7 @@ TEST_F(EventListenerTest, DisableBGCompaction) {
 #ifdef ROCKSDB_USING_THREAD_STATUS
   options.enable_thread_tracking = true;
 #endif  // ROCKSDB_USING_THREAD_STATUS
+  options.blob_size = -1;
   TestFlushListener* listener = new TestFlushListener(options.env);
   const int kCompactionTrigger = 1;
   const int kSlowdownTrigger = 5;

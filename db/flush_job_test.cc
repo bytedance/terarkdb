@@ -182,11 +182,12 @@ TEST_F(FlushJobTest, NonEmpty) {
   FileMetaData file_meta;
   mutex_.Lock();
   flush_job.PickMemTable();
-  ASSERT_OK(flush_job.Run(nullptr /* prep_tracker */, &file_meta));
+  ASSERT_OK(flush_job.Run(nullptr /* prep_tracker */));
   mutex_.Unlock();
   db_options_.statistics->histogramData(FLUSH_TIME, &hist);
   ASSERT_GT(hist.average, 0.0);
 
+  file_meta = flush_job.GetFileMetas()[0];
   ASSERT_EQ(ToString(0), file_meta.smallest.user_key().ToString());
   ASSERT_EQ(
       "9999a",
@@ -246,11 +247,12 @@ TEST_F(FlushJobTest, FlushMemTablesSingleColumnFamily) {
   FileMetaData file_meta;
   mutex_.Lock();
   flush_job.PickMemTable();
-  ASSERT_OK(flush_job.Run(nullptr /* prep_tracker */, &file_meta));
+  ASSERT_OK(flush_job.Run(nullptr /* prep_tracker */));
   mutex_.Unlock();
   db_options_.statistics->histogramData(FLUSH_TIME, &hist);
   ASSERT_GT(hist.average, 0.0);
 
+  file_meta = flush_job.GetFileMetas()[0];
   ASSERT_EQ(ToString(0), file_meta.smallest.user_key().ToString());
   ASSERT_EQ("99", file_meta.largest.user_key().ToString());
   ASSERT_EQ(0, file_meta.fd.smallest_seqno);
@@ -317,23 +319,18 @@ TEST_F(FlushJobTest, FlushMemtablesMultipleColumnFamilies) {
     k++;
   }
   HistogramData hist;
-  std::vector<FileMetaData> file_metas;
-  // Call reserve to avoid auto-resizing
-  file_metas.reserve(flush_jobs.size());
+  ;
+  autovector<const FileMetaData*> file_meta_ptrs;
   mutex_.Lock();
   for (auto& job : flush_jobs) {
     job.PickMemTable();
   }
   for (auto& job : flush_jobs) {
-    FileMetaData meta;
     // Run will release and re-acquire  mutex
-    ASSERT_OK(job.Run(nullptr /**/, &meta));
-    file_metas.emplace_back(meta);
+    ASSERT_OK(job.Run(nullptr /**/));
+    file_meta_ptrs.push_back(&job.GetFileMetas()[0]);
   }
-  autovector<FileMetaData*> file_meta_ptrs;
-  for (auto& meta : file_metas) {
-    file_meta_ptrs.push_back(&meta);
-  }
+
   autovector<const autovector<MemTable*>*> mems_list;
   for (size_t i = 0; i != all_cfds.size(); ++i) {
     const auto& mems = flush_jobs[i].GetMemTables();
@@ -354,7 +351,8 @@ TEST_F(FlushJobTest, FlushMemtablesMultipleColumnFamilies) {
   db_options_.statistics->histogramData(FLUSH_TIME, &hist);
   ASSERT_GT(hist.average, 0.0);
   k = 0;
-  for (const auto& file_meta : file_metas) {
+  for (auto& job : flush_jobs) {
+    const auto& file_meta = job.GetFileMetas()[0];
     ASSERT_EQ(ToString(0), file_meta.smallest.user_key().ToString());
     ASSERT_EQ("999", file_meta.largest.user_key()
                          .ToString());  // max key by bytewise comparator

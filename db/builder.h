@@ -73,8 +73,7 @@ extern Status BuildTable(
     void* get_input_iter_arg,
     std::vector<std::unique_ptr<FragmentedRangeTombstoneIterator>> (
         *get_range_del_iters_callback)(void*),
-    void* get_range_del_iters_arg, FileMetaData* meta,
-    std::vector<FileMetaData>* blob_meta,
+    void* get_range_del_iters_arg, std::vector<FileMetaData>* meta,
     const InternalKeyComparator& internal_comparator,
     const std::vector<std::unique_ptr<IntTblPropCollectorFactory>>*
         int_tbl_prop_collector_factories,
@@ -86,7 +85,7 @@ extern Status BuildTable(
     InternalStats* internal_stats, TableFileCreationReason reason,
     EventLogger* event_logger = nullptr, int job_id = 0,
     const Env::IOPriority io_priority = Env::IO_HIGH,
-    TableProperties* table_properties = nullptr, int level = -1,
+    std::vector<TableProperties>* table_properties = nullptr, int level = -1,
     double compaction_load = 0, const uint64_t creation_time = 0,
     const uint64_t oldest_key_time = 0,
     Env::WriteLifeTimeHint write_hint = Env::WLTH_NOT_SET);

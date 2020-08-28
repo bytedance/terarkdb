@@ -118,7 +118,7 @@ class MemTableListVersion {
       const autovector<const MutableCFOptions*>& mutable_cf_options_list,
       const autovector<const autovector<MemTable*>*>& mems_list,
       VersionSet* vset, InstrumentedMutex* mu,
-      const autovector<FileMetaData*>& file_meta,
+      const autovector<const FileMetaData*>& file_meta,
       autovector<MemTable*>* to_delete, Directory* db_directory,
       LogBuffer* log_buffer);
 
@@ -295,7 +295,7 @@ class MemTableList {
       const autovector<const MutableCFOptions*>& mutable_cf_options_list,
       const autovector<const autovector<MemTable*>*>& mems_list,
       VersionSet* vset, InstrumentedMutex* mu,
-      const autovector<FileMetaData*>& file_meta,
+      const autovector<const FileMetaData*>& file_meta,
       autovector<MemTable*>* to_delete, Directory* db_directory,
       LogBuffer* log_buffer);
 
@@ -331,7 +331,7 @@ extern Status InstallMemtableAtomicFlushResults(
     const autovector<ColumnFamilyData*>& cfds,
     const autovector<const MutableCFOptions*>& mutable_cf_options_list,
     const autovector<const autovector<MemTable*>*>& mems_list, VersionSet* vset,
-    InstrumentedMutex* mu, const autovector<FileMetaData*>& file_meta,
+    InstrumentedMutex* mu, const autovector<const FileMetaData*>& file_meta,
     autovector<MemTable*>* to_delete, Directory* db_directory,
     LogBuffer* log_buffer);
 }  // namespace rocksdb

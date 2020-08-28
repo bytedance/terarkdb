@@ -12,9 +12,9 @@
 #include <deque>
 #include <limits>
 #include <set>
+#include <string>
 #include <utility>
 #include <vector>
-#include <string>
 
 #include "db/column_family.h"
 #include "db/dbformat.h"
@@ -75,10 +75,12 @@ class FlushJob {
   // Require db_mutex held.
   // Once PickMemTable() is called, either Run() or Cancel() has to be called.
   void PickMemTable();
-  Status Run(LogsWithPrepTracker* prep_tracker = nullptr,
-             FileMetaData* file_meta = nullptr);
+  Status Run(LogsWithPrepTracker* prep_tracker = nullptr);
   void Cancel();
-  TableProperties GetTableProperties() const { return table_properties_; }
+  const std::vector<FileMetaData>& GetFileMetas() const { return meta_; }
+  const std::vector<TableProperties>& GetTableProperties() const {
+    return table_properties_;
+  }
   const autovector<MemTable*>& GetMemTables() const { return mems_; }
 
  private:
@@ -111,7 +113,7 @@ class FlushJob {
   CompressionType output_compression_;
   Statistics* stats_;
   EventLogger* event_logger_;
-  TableProperties table_properties_;
+  std::vector<TableProperties> table_properties_;
   bool measure_io_stats_;
   // True if this flush job should call fsync on the output directory. False
   // otherwise.
@@ -135,8 +137,7 @@ class FlushJob {
   const double flush_load_;
 
   // Variables below are set by PickMemTable():
-  FileMetaData meta_;
-  std::vector<FileMetaData> blob_meta_;
+  std::vector<FileMetaData> meta_;
   autovector<MemTable*> mems_;
   VersionEdit* edit_;
   Version* base_;

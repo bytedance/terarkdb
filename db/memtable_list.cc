@@ -554,7 +554,7 @@ Status InstallMemtableAtomicFlushResults(
     const autovector<ColumnFamilyData*>& cfds,
     const autovector<const MutableCFOptions*>& mutable_cf_options_list,
     const autovector<const autovector<MemTable*>*>& mems_list, VersionSet* vset,
-    InstrumentedMutex* mu, const autovector<FileMetaData*>& file_metas,
+    InstrumentedMutex* mu, const autovector<const FileMetaData*>& file_metas,
     autovector<MemTable*>* to_delete, Directory* db_directory,
     LogBuffer* log_buffer) {
   AutoThreadOperationStageUpdater stage_updater(

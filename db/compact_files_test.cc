@@ -170,6 +170,7 @@ TEST_F(CompactFilesTest, NotCutOutputOnLevel0) {
   options.max_write_buffer_number = 2;
   options.compression = kNoCompression;
   options.max_compaction_bytes = 5000;
+  options.blob_size = -1;
 
   // Add listener
   FlushedFileCollector* collector = new FlushedFileCollector();

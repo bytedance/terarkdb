@@ -1035,20 +1035,19 @@ Status DBImpl::WriteLevel0TableForRecovery(int job_id, ColumnFamilyData* cfd,
                                            MemTable* mem, VersionEdit* edit) {
   mutex_.AssertHeld();
   const uint64_t start_micros = env_->NowMicros();
-  FileMetaData meta;
-  std::vector<FileMetaData> blob_meta;
+  std::vector<FileMetaData> meta_vec(1);
   auto pending_outputs_inserted_elem =
       CaptureCurrentFileNumberInPendingOutputs();
-  meta.fd = FileDescriptor(versions_->NewFileNumber(), 0, 0);
+  meta_vec[0].fd = FileDescriptor(versions_->NewFileNumber(), 0, 0);
   ReadOptions ro;
   ro.total_order_seek = true;
   Status s;
-  TableProperties table_properties;
+  std::vector<TableProperties> table_properties_vec;
   {
     ROCKS_LOG_DEBUG(immutable_db_options_.info_log,
                     "[%s] [WriteLevel0TableForRecovery]"
                     " Level-0 table #%" PRIu64 ": started",
-                    cfd->GetName().c_str(), meta.fd.GetNumber());
+                    cfd->GetName().c_str(), meta_vec[0].fd.GetNumber());
 
     // Get the latest mutable cf options while the mutex is still locked
     const MutableCFOptions mutable_cf_options =
@@ -1088,8 +1087,8 @@ Status DBImpl::WriteLevel0TableForRecovery(int job_id, ColumnFamilyData* cfd,
           dbname_, versions_.get(), env_, *cfd->ioptions(), mutable_cf_options,
           env_options_for_compaction_, cfd->table_cache(),
           c_style_callback(get_arena_input_iter), &get_arena_input_iter,
-          c_style_callback(get_range_del_iters), &get_range_del_iters, &meta,
-          &blob_meta, cfd->internal_comparator(),
+          c_style_callback(get_range_del_iters), &get_range_del_iters,
+          &meta_vec, cfd->internal_comparator(),
           cfd->int_tbl_prop_collector_factories(), cfd->GetID(), cfd->GetName(),
           snapshot_seqs, earliest_write_conflict_snapshot, snapshot_checker,
           GetCompressionFlush(*cfd->ioptions(), mutable_cf_options),
@@ -1101,8 +1100,8 @@ Status DBImpl::WriteLevel0TableForRecovery(int job_id, ColumnFamilyData* cfd,
       ROCKS_LOG_DEBUG(immutable_db_options_.info_log,
                       "[%s] [WriteLevel0TableForRecovery]"
                       " Level-0 table #%" PRIu64 ": %" PRIu64 " bytes %s",
-                      cfd->GetName().c_str(), meta.fd.GetNumber(),
-                      meta.fd.GetFileSize(), s.ToString().c_str());
+                      cfd->GetName().c_str(), meta_vec[0].fd.GetNumber(),
+                      meta_vec[0].fd.GetFileSize(), s.ToString().c_str());
       mutex_.Lock();
     }
   }
@@ -1111,33 +1110,26 @@ Status DBImpl::WriteLevel0TableForRecovery(int job_id, ColumnFamilyData* cfd,
   // Note that if file_size is zero, the file has been deleted and
   // should not be added to the manifest.
   int level = 0;
-  if (s.ok() && meta.fd.GetFileSize() > 0) {
-    edit->AddFile(level, meta.fd.GetNumber(), meta.fd.GetPathId(),
-                  meta.fd.GetFileSize(), meta.smallest, meta.largest,
-                  meta.fd.smallest_seqno, meta.fd.largest_seqno,
-                  meta.marked_for_compaction, meta.prop);
-    for (auto& blob : blob_meta) {
-      edit->AddFile(-1 /* level */, blob.fd.GetNumber(), blob.fd.GetPathId(),
-                    blob.fd.GetFileSize(), blob.smallest, blob.largest,
-                    blob.fd.smallest_seqno, blob.fd.largest_seqno,
-                    blob.marked_for_compaction, blob.prop);
+  if (s.ok() && meta_vec[0].fd.GetFileSize() > 0) {
+    for (size_t i = 0; i < meta_vec.size(); ++i) {
+      auto& meta = meta_vec[i];
+      edit->AddFile(i == 0 ? level : -1, meta.fd.GetNumber(),
+                    meta.fd.GetPathId(), meta.fd.GetFileSize(), meta.smallest,
+                    meta.largest, meta.fd.smallest_seqno, meta.fd.largest_seqno,
+                    meta.marked_for_compaction, meta.prop);
     }
   }
 
   InternalStats::CompactionStats stats(CompactionReason::kFlush, 1);
   stats.micros = env_->NowMicros() - start_micros;
-  stats.bytes_written = meta.fd.GetFileSize();
-  for (auto& blob : blob_meta) {
-    stats.bytes_written += blob.fd.GetFileSize();
+  for (auto& meta : meta_vec) {
+    stats.bytes_written += meta.fd.GetFileSize();
     cfd->internal_stats()->AddCFStats(InternalStats::BYTES_FLUSHED,
-                                      blob.fd.GetFileSize());
-    RecordTick(stats_, COMPACT_WRITE_BYTES, blob.fd.GetFileSize());
+                                      meta.fd.GetFileSize());
+    RecordTick(stats_, COMPACT_WRITE_BYTES, meta.fd.GetFileSize());
   }
-  stats.num_output_files = 1 + int(blob_meta.size());
+  stats.num_output_files = int(meta_vec.size());
   cfd->internal_stats()->AddCompactionStats(level, stats);
-  cfd->internal_stats()->AddCFStats(InternalStats::BYTES_FLUSHED,
-                                    meta.fd.GetFileSize());
-  RecordTick(stats_, COMPACT_WRITE_BYTES, meta.fd.GetFileSize());
   return s;
 }
 
