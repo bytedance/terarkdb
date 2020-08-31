@@ -776,15 +776,18 @@ class ChaosTest {
     set_options();
     exit_ = false;
     for (int i = 0; i < cf_num; ++i) {
-      cfDescriptors.emplace_back(rocksdb::kDefaultColumnFamilyName, options);
+      options.compaction_style = rocksdb::kCompactionStyleFIFO;
+      options.write_buffer_size = size_t(file_size_base * 1.2);
+      options.enable_lazy_compaction = true;
+      cfDescriptors.emplace_back("fifo" + std::to_string(i), options);
       options.compaction_style = rocksdb::kCompactionStyleUniversal;
       options.write_buffer_size = size_t(file_size_base * 1.1);
       options.enable_lazy_compaction = true;
-      cfDescriptors.emplace_back("universal", options);
+      cfDescriptors.emplace_back("universal" + std::to_string(i), options);
       options.compaction_style = rocksdb::kCompactionStyleLevel;
       options.write_buffer_size = size_t(file_size_base / 1.1);
       options.enable_lazy_compaction = true;
-      cfDescriptors.emplace_back("level", options);
+      cfDescriptors.emplace_back("level" + std::to_string(i), options);
     }
     if (flags_ & TestWorker) {
       options.compaction_dispatcher.reset(
@@ -953,10 +956,10 @@ int main(int argc, char **argv) {
   std::vector<std::thread> thread_vec;
   rocksdb::ChaosTest test(flags);
   test.Open(cf_num);
-  for (int j = 0; j < write_thread; ++j) {
+  for (int j = 0; j < read_thread; ++j) {
     thread_vec.emplace_back(&rocksdb::ChaosTest::ReadFunc, std::ref(test), j);
   }
-  for (int j = 0; j < read_thread; ++j) {
+  for (int j = 0; j < write_thread; ++j) {
     thread_vec.emplace_back(&rocksdb::ChaosTest::WriteFunc, std::ref(test), j);
   }
   for (auto &t : thread_vec) {
